@@ -61,6 +61,7 @@ type Container struct {
 	OpenTSDB   OpenTSDB
 	ScyllaDB   ScyllaDB
 	SurrealDB  SurrealDB
+	ArangoDB   ArangoDB
 
 	KVStore KVStore
 
@@ -129,7 +130,7 @@ func (c *Container) Create(conf config.Config) {
 			batchBytes, _ := strconv.Atoi(conf.GetOrDefault("KAFKA_BATCH_BYTES", strconv.Itoa(kafka.DefaultBatchBytes)))
 			batchTimeout, _ := strconv.Atoi(conf.GetOrDefault("KAFKA_BATCH_TIMEOUT", strconv.Itoa(kafka.DefaultBatchTimeout)))
 
-			c.PubSub = kafka.New(kafka.Config{
+			c.PubSub = kafka.New(&kafka.Config{
 				Broker:          conf.Get("PUBSUB_BROKER"),
 				Partition:       partition,
 				ConsumerGroupID: conf.Get("CONSUMER_ID"),
@@ -137,6 +138,9 @@ func (c *Container) Create(conf config.Config) {
 				BatchSize:       batchSize,
 				BatchBytes:      batchBytes,
 				BatchTimeout:    batchTimeout,
+				SASLMechanism:   conf.Get("KAFKA_SASL_MECHANISM"),
+				SASLUser:        conf.Get("KAFKA_SASL_USERNAME"),
+				SASLPassword:    conf.Get("KAFKA_SASL_PASSWORD"),
 			}, c.Logger, c.metricsManager)
 		}
 	case "GOOGLE":

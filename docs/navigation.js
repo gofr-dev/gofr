@@ -108,11 +108,6 @@ export const navigation = [
                 desc: "Discover how to gofr seamlessly allows to integrate different Pub/Sub systems in your application for effective messaging and event-driven architectures."
             },
             {
-                title: 'Injecting Databases',
-                href: '/docs/advanced-guide/injecting-databases-drivers',
-                desc: "Learn how to inject database drivers into your GoFR application for seamless data management and operations."
-            },
-            {
                 title: 'Key Value Store',
                 href: '/docs/advanced-guide/key-value-store',
                 desc: "Explore how to implement and manage a key-value store in your GoFR application for fast and efficient data retrieval."
@@ -147,6 +142,61 @@ export const navigation = [
                 href: '/docs/advanced-guide/serving-static-files',
                 desc: "Know how GoFr automatically serves static content from a static folder in the application directory."
             }
+        ],
+    },
+    {
+        title: 'Datasources',
+        links: [
+            {
+                title: "Getting Started",
+                href: "/docs/datasources/getting-started",
+                desc: "Learn how to connect to and interact with multiple databases in GoFr."
+            },
+            {
+                title: "ArangoDB",
+                href: "/docs/datasources/arangodb",
+                desc: "Learn how to connect to and interact with arango database in GoFr."
+            },
+            {
+                title: "Cassandra",
+                href: "/docs/datasources/cassandra",
+                desc: "Learn how to connect to and interact with cassandra database in GoFr."
+            },
+            {
+                title: "ClickHouse",
+                href: "/docs/datasources/clickhouse",
+                desc: "Learn how to connect to and interact with clickhouse database in GoFr."
+            },
+            {
+                title: "DGraph",
+                href: "/docs/datasources/dgraph",
+                desc: "Learn how to connect to and interact with dgraph database in GoFr."
+            },
+            {
+                title: "MongoDB",
+                href: "/docs/datasources/mongodb",
+                desc: "Learn how to connect to and interact with mongo database in GoFr."
+            },
+            {
+                title: "OpenTSDB",
+                href: "/docs/datasources/opentsdb",
+                desc: "Learn how to connect to and interact with opentsdb database in GoFr."
+            },
+            {
+                title: "ScyllaDB",
+                href: "/docs/datasources/scylladb",
+                desc: "Learn how to connect to and interact with scylla database in GoFr."
+            },
+            {
+                title: "Solr",
+                href: "/docs/datasources/solr",
+                desc: "Learn how to connect to and interact with solr database in GoFr."
+            },
+            {
+                title: "SurrealDB",
+                href: "/docs/datasources/surrealdb",
+                desc: "Learn how to connect to and interact with surreal database in GoFr."
+            },
         ],
     },
     {

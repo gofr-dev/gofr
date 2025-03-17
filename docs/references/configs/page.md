@@ -101,6 +101,13 @@ This document lists all the configuration options supported by the GoFr framewor
 -  CMD_LOGS_FILE
 -  File to save the logs in case of a CMD application
 
+---
+
+-  SHUTDOWN_GRACE_PERIOD
+-  Timeout duration for server shutdown process
+-  30s
+
+
 {% /table %}
 
 ## HTTP
@@ -289,6 +296,25 @@ This document lists all the configuration options supported by the GoFr framewor
 -  CONSUMER_ID
 -  Unique identifier for this consumer
 -  gofr-consumer
+
+---
+
+
+- KAFKA_SASL_MECHANISM
+- SASL mechanism for authentication (e.g. PLAIN, SCRAM-SHA-256, SCRAM-SHA-512)
+- None
+
+---
+
+- KAFKA_SASL_USERNAME
+- Username for SASL authentication
+- None
+
+---
+
+- KAFKA_SASL_PASSWORD
+- Password for SASL authentication
+- None
 
 {% /table %}
 

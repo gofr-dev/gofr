@@ -71,6 +71,54 @@ func TestGoFr_isPortAvailable(t *testing.T) {
 	}
 }
 
+// mockRoundTripper is a mock implementation of http.RoundTripper.
+type mockRoundTripper struct {
+	lastRequest  *http.Request // Store the last request for assertions
+	mockResponse *http.Response
+	mockError    error
+}
+
+// RoundTrip mocks the HTTP request and stores the request for verification.
+func (m *mockRoundTripper) RoundTrip(req *http.Request) (*http.Response, error) {
+	m.lastRequest = req // Store the request for assertions
+	return m.mockResponse, m.mockError
+}
+
+func TestPingGoFr(t *testing.T) {
+	tests := []struct {
+		name        string
+		input       bool
+		expectedURL string
+	}{
+		{"Ping Start Server", true, gofrHost + startServerPing},
+		{"Ping Shut Server", false, gofrHost + shutServerPing},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			mockTransport := &mockRoundTripper{
+				mockResponse: &http.Response{
+					StatusCode: http.StatusOK,
+					Body:       http.NoBody,
+				},
+				mockError: nil,
+			}
+
+			mockClient := &http.Client{Transport: mockTransport}
+
+			_ = testutil.NewServerConfigs(t)
+
+			a := New()
+
+			a.sendTelemetry(mockClient, tt.input)
+
+			assert.NotNil(t, mockTransport.lastRequest, "Request should not be nil")
+			assert.Equal(t, tt.expectedURL, mockTransport.lastRequest.URL.String(), "Unexpected request URL")
+			assert.Equal(t, http.MethodPost, mockTransport.lastRequest.Method, "Unexpected HTTP method")
+		})
+	}
+}
+
 func TestGofr_ServerRoutes(t *testing.T) {
 	_ = testutil.NewServerConfigs(t)
 
@@ -642,7 +690,10 @@ func Test_UseMiddleware(t *testing.T) {
 			port:   port,
 		},
 		container: c,
-		Config:    config.NewMockConfig(map[string]string{"REQUEST_TIMEOUT": "5"}),
+		Config: config.NewMockConfig(map[string]string{
+			"REQUEST_TIMEOUT":       "5",
+			"SHUTDOWN_GRACE_PERIOD": "1s",
+		}),
 	}
 
 	app.UseMiddleware(testMiddleware)
