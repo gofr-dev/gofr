@@ -181,7 +181,7 @@ type PublicKeyProvider interface {
 }
 
 // OAuth is a middleware function that validates JWT access tokens using a provided PublicKeyProvider.
-func OAuth(key PublicKeyProvider, config *ClaimConfig) func(inner http.Handler) http.Handler {
+func OAuth(key PublicKeyProvider, config *ClaimConfig) func(http.Handler) http.Handler {
 	return func(inner http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			if isWellKnown(r.URL.Path) {
@@ -189,215 +189,39 @@ func OAuth(key PublicKeyProvider, config *ClaimConfig) func(inner http.Handler) 
 				return
 			}
 
-			tokenString, err := extractToken(r.Header.Get("Authorization"))
+			claims, err := processToken(r.Header.Get("Authorization"), key, config)
 			if err != nil {
 				http.Error(w, err.Error(), http.StatusUnauthorized)
 				return
 			}
 
-			token, err := parseToken(tokenString, key)
-			if err != nil {
-				http.Error(w, err.Error(), http.StatusUnauthorized)
-				return
-			}
-
-			claims, ok := token.Claims.(jwt.MapClaims)
-			if !ok {
-				http.Error(w, "invalid claims", http.StatusUnauthorized)
-				return
-			}
-
-			if err := validateClaims(claims, config); err != nil {
-				http.Error(w, err.Error(), http.StatusForbidden)
-				return
-			}
-
-			ctx := context.WithValue(r.Context(), JWTClaim, token.Claims)
-			*r = *r.Clone(ctx)
-
-			inner.ServeHTTP(w, r)
+			ctx := context.WithValue(r.Context(), JWTClaim, claims)
+			inner.ServeHTTP(w, r.Clone(ctx))
 		})
 	}
 }
 
-func validateClaims(claims jwt.MapClaims, config *ClaimConfig) error {
-	if err := validateIssuer(claims, config); err != nil {
-		return err
+func processToken(authHeader string, key PublicKeyProvider, config *ClaimConfig) (jwt.Claims, error) {
+	tokenString, err := extractToken(authHeader)
+	if err != nil {
+		return nil, err
 	}
 
-	if err := validateAudience(claims, config); err != nil {
-		return err
+	token, err := parseToken(tokenString, key)
+	if err != nil {
+		return nil, err
 	}
 
-	if err := validateSubject(claims, config); err != nil {
-		return err
+	claims, ok := token.Claims.(jwt.MapClaims)
+	if !ok {
+		return nil, errors.New("invalid claims")
 	}
 
-	if err := validateExpiry(claims, config); err != nil {
-		return err
+	if err := validateClaims(claims, config); err != nil {
+		return nil, err
 	}
 
-	if err := validateNotBefore(claims, config); err != nil {
-		return err
-	}
-
-	if err := validateIssuedAt(claims, config); err != nil {
-		return err
-	}
-
-	if err := validateJTI(claims, config); err != nil {
-		return err
-	}
-
-	if err := validateRoles(claims, config); err != nil {
-		return err
-	}
-
-	return nil
-}
-
-func validateIssuer(claims jwt.MapClaims, config *ClaimConfig) error {
-	if len(config.TrustedIssuers) == 0 {
-		return nil
-	}
-
-	iss, ok := claims["iss"].(string)
-	if !ok || !contains(config.TrustedIssuers, iss) {
-		return errInvalidIssuer
-	}
-
-	return nil
-}
-
-func validateAudience(claims jwt.MapClaims, config *ClaimConfig) error {
-	if len(config.ValidAudiences) == 0 {
-		return nil
-	}
-
-	switch aud := claims["aud"].(type) {
-	case string:
-		if !contains(config.ValidAudiences, aud) {
-			return errInvalidAudience
-		}
-	case []any:
-		if !containsAny(config.ValidAudiences, aud) {
-			return errInvalidAudience
-		}
-	default:
-		return errInvalidAudience
-	}
-
-	return nil
-}
-
-func validateSubject(claims jwt.MapClaims, config *ClaimConfig) error {
-	if len(config.AllowedSubjects) == 0 {
-		return nil
-	}
-
-	sub, ok := claims["sub"].(string)
-	if !ok || !contains(config.AllowedSubjects, sub) {
-		return errInvalidSubject
-	}
-
-	return nil
-}
-
-func validateExpiry(claims jwt.MapClaims, config *ClaimConfig) error {
-	if !config.CheckExpiry {
-		return nil
-	}
-
-	exp, ok := claims["exp"].(float64)
-	if !ok || time.Now().Unix() > int64(exp) {
-		return errTokenExpired
-	}
-
-	return nil
-}
-
-func validateNotBefore(claims jwt.MapClaims, config *ClaimConfig) error {
-	if !config.CheckNotBefore {
-		return nil
-	}
-
-	nbf, ok := claims["nbf"].(float64)
-	if ok && time.Now().Unix() < int64(nbf) {
-		return errTokenNotActive
-	}
-
-	return nil
-}
-
-func validateIssuedAt(claims jwt.MapClaims, config *ClaimConfig) error {
-	if !config.CheckIssuedAt {
-		return nil
-	}
-
-	iat, ok := claims["iat"].(float64)
-	if !ok || time.Now().Unix() < int64(iat) {
-		return errInvalidIssuedAt
-	}
-
-	return nil
-}
-
-func validateJTI(claims jwt.MapClaims, config *ClaimConfig) error {
-	if config.ValidateJTI == nil {
-		return nil
-	}
-
-	jti, ok := claims["jti"].(string)
-	if !ok || !config.ValidateJTI(jti) {
-		return errInvalidJTI
-	}
-
-	return nil
-}
-
-func validateRoles(claims jwt.MapClaims, config *ClaimConfig) error {
-	if len(config.RequiredRoles) == 0 {
-		return nil
-	}
-
-	roles, _ := claims["roles"].([]any)
-	if !hasRequiredRole(roles, config.RequiredRoles) {
-		return errInvalidRole
-	}
-
-	return nil
-}
-
-func hasRequiredRole(roles []any, required []string) bool {
-	for _, r := range required {
-		for _, role := range roles {
-			if roleStr, ok := role.(string); ok && roleStr == r {
-				return true
-			}
-		}
-	}
-
-	return false
-}
-
-func contains(s []string, str string) bool {
-	for _, v := range s {
-		if v == str {
-			return true
-		}
-	}
-
-	return false
-}
-
-func containsAny(s []string, items []any) bool {
-	for _, item := range items {
-		if str, ok := item.(string); ok && contains(s, str) {
-			return true
-		}
-	}
-
-	return false
+	return claims, nil
 }
 
 func extractToken(authHeader string) (string, error) {
