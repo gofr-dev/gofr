@@ -34,6 +34,10 @@ const (
 	DefaultBatchBytes   = 1048576
 	DefaultBatchTimeout = 1000
 	defaultRetryTimeout = 10 * time.Second
+	protocolPlainText   = "PLAINTEXT"
+	protocolSASL        = "SASL_PLAINTEXT"
+	protocolSSL         = "SSL"
+	protocolSASLSSL     = "SASL_SSL"
 )
 
 type Config struct {
@@ -106,50 +110,62 @@ func New(conf *Config, logger pubsub.Logger, metrics Metrics) *kafkaClient {
 }
 
 func validateConfigs(conf *Config) error {
-	// Validate required fields
+	if err := validateRequiredFields(conf); err != nil {
+		return err
+	}
+
+	setDefaultSecurityProtocol(conf)
+
+	if err := validateSASLConfigs(conf); err != nil {
+		return err
+	}
+
+	if err := validateTLSConfigs(conf); err != nil {
+		return err
+	}
+
+	if err := validateSecurityProtocol(conf); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func validateRequiredFields(conf *Config) error {
 	if conf.Broker == "" {
 		return errBrokerNotProvided
 	}
+
 	if conf.BatchSize <= 0 {
 		return fmt.Errorf("batch size must be greater than 0: %w", errBatchSize)
 	}
+
 	if conf.BatchBytes <= 0 {
 		return fmt.Errorf("batch bytes must be greater than 0: %w", errBatchBytes)
 	}
+
 	if conf.BatchTimeout <= 0 {
 		return fmt.Errorf("batch timeout must be greater than 0: %w", errBatchTimeout)
 	}
 
-	// Default to PLAINTEXT if no protocol is specified
-	if conf.SecurityProtocol == "" {
-		conf.SecurityProtocol = "PLAINTEXT"
-	}
+	return nil
+}
 
+func setDefaultSecurityProtocol(conf *Config) {
+	if conf.SecurityProtocol == "" {
+		conf.SecurityProtocol = protocolPlainText
+	}
+}
+
+func validateSecurityProtocol(conf *Config) error {
 	protocol := strings.ToUpper(conf.SecurityProtocol)
 
-	// Validate SASL configurations
-	if protocol == "SASL_PLAINTEXT" || protocol == "SASL_SSL" {
-		if conf.SASLMechanism == "" || conf.SASLUser == "" || conf.SASLPassword == "" {
-			return fmt.Errorf("SASL credentials missing: %w", errSASLCredentialsMissing)
-		}
-	}
-
-	// Validate TLS configurations for SSL/SASL_SSL
-	if protocol == "SSL" || protocol == "SASL_SSL" {
-		if conf.TLS.CACertFile == "" && !conf.TLS.InsecureSkipVerify && conf.TLS.CertFile == "" {
-			return fmt.Errorf("for %s, provide either CA cert, client certs, or enable insecure mode: %w",
-				protocol, errUnsupportedSecurityProtocol)
-		}
-	}
-
-	// Validate unsupported protocols
 	switch protocol {
-	case "PLAINTEXT", "SASL_PLAINTEXT", "SASL_SSL", "SSL":
+	case protocolPlainText, protocolSASL, protocolSASLSSL, protocolSSL:
+		return nil
 	default:
 		return fmt.Errorf("unsupported security protocol: %s: %w", protocol, errUnsupportedSecurityProtocol)
 	}
-
-	return nil
 }
 
 func (k *kafkaClient) Publish(ctx context.Context, topic string, message []byte) error {
@@ -282,7 +298,7 @@ func initializeKafkaClient(conf *Config, logger pubsub.Logger) (*kafka.Dialer, C
 		DualStack: true,
 	}
 
-	if conf.SecurityProtocol == "SASL_PLAINTEXT" || conf.SecurityProtocol == "SASL_SSL" {
+	if conf.SecurityProtocol == protocolSASL || conf.SecurityProtocol == protocolSASLSSL {
 		mechanism, err := getSASLMechanism(conf.SASLMechanism, conf.SASLUser, conf.SASLPassword)
 		if err != nil {
 			return nil, nil, nil, nil, err

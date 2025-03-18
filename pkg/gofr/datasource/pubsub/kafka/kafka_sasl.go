@@ -28,3 +28,15 @@ func getSASLMechanism(mechanism, username, password string) (sasl.Mechanism, err
 		return nil, fmt.Errorf("%w: %s", errUnsupportedSASLMechanism, mechanism)
 	}
 }
+
+func validateSASLConfigs(conf *Config) error {
+	protocol := strings.ToUpper(conf.SecurityProtocol)
+
+	if protocol == protocolSASL || protocol == protocolSASLSSL {
+		if conf.SASLMechanism == "" || conf.SASLUser == "" || conf.SASLPassword == "" {
+			return fmt.Errorf("SASL credentials missing: %w", errSASLCredentialsMissing)
+		}
+	}
+
+	return nil
+}

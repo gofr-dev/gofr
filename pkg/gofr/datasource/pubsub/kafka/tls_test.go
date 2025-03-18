@@ -20,7 +20,6 @@ func createTempFile(content string) (string, error) {
 	return tmpFile.Name(), nil
 }
 
-// Test success cases
 func TestCreateTLSConfig_Success(t *testing.T) {
 	// Valid CA Certificate
 	caCertContent := `-----BEGIN CERTIFICATE-----
@@ -60,6 +59,7 @@ IFi4oUxW0wLNUmTJFSIrFRE3eYWy56XiI8jPs7U94It8YwjhDSeHwslMKbGwogqI
 Om59HA==
 -----END CERTIFICATE-----`
 
+	//nolint:gosec // This is a test certificate
 	clientKeyContent := `-----BEGIN RSA PRIVATE KEY-----
 MIIEogIBAAKCAQEAsAUmtRCpuhnlYVOQJutQXDc2duyFVll5xg3PERRdz3iThkDn
 w+sSRWa3vxUEnKsWVHFNYK41P3xUV01ktHnzJ3hHjxDnB2t8GeSHDZvJzWfX1yBb
@@ -92,6 +92,7 @@ Q1k1WBr5rFlCp0GK2DbAkuCrLj0GghVAFYhxN19XRT/Dax1vgFo=
 	caFile, _ := createTempFile(caCertContent)
 	clientCertFile, _ := createTempFile(clientCertContent)
 	clientKeyFile, _ := createTempFile(clientKeyContent)
+
 	defer os.Remove(caFile)
 	defer os.Remove(clientCertFile)
 	defer os.Remove(clientKeyFile)
@@ -124,7 +125,6 @@ Q1k1WBr5rFlCp0GK2DbAkuCrLj0GghVAFYhxN19XRT/Dax1vgFo=
 	}
 }
 
-// Test failure cases separately
 func TestCreateTLSConfig_Errors(t *testing.T) {
 	invalidFile := filepath.Join(os.TempDir(), "nonexistent_file.pem")
 
