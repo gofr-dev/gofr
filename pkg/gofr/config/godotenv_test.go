@@ -10,6 +10,11 @@ import (
 	"gofr.dev/pkg/gofr/logging"
 )
 
+func TestMain(m *testing.M) {
+	os.Setenv("GOFR_TELEMETRY", "false")
+	m.Run()
+}
+
 func Test_EnvSuccess(t *testing.T) {
 	envData := map[string]string{
 		"DATABASE_URL": "localhost:5432",
