@@ -73,6 +73,8 @@ func (rou *Router) AddStaticFiles(logger logging.Logger, endpoint, dirName strin
 	}
 
 	rou.Router.NewRoute().PathPrefix(endpoint).Handler(http.StripPrefix(endpoint, cfg.staticHandler(fileServer)))
+
+	logger.Logf("registered static files at endpoint %v from directory %v", endpoint, dirName)
 }
 
 func (staticConfig staticFileConfig) staticHandler(fileServer http.Handler) http.Handler {
