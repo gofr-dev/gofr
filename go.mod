@@ -3,7 +3,7 @@ module gofr.dev
 go 1.24
 
 require (
-	cloud.google.com/go/pubsub v1.47.0
+	cloud.google.com/go/pubsub v1.48.0
 	github.com/DATA-DOG/go-sqlmock v1.5.2
 	github.com/XSAM/otelsql v0.37.0
 	github.com/alicebob/miniredis/v2 v2.34.0
@@ -35,8 +35,8 @@ require (
 	go.opentelemetry.io/otel/sdk/metric v1.35.0
 	go.opentelemetry.io/otel/trace v1.35.0
 	go.uber.org/mock v0.5.0
-	golang.org/x/oauth2 v0.27.0
-	golang.org/x/sync v0.11.0
+	golang.org/x/oauth2 v0.28.0
+	golang.org/x/sync v0.12.0
 	golang.org/x/term v0.29.0
 	golang.org/x/text v0.22.0
 	google.golang.org/api v0.224.0
@@ -46,11 +46,11 @@ require (
 )
 
 require (
-	cloud.google.com/go v0.118.1 // indirect
+	cloud.google.com/go v0.119.0 // indirect
 	cloud.google.com/go/auth v0.15.0 // indirect
 	cloud.google.com/go/auth/oauth2adapt v0.2.7 // indirect
 	cloud.google.com/go/compute/metadata v0.6.0 // indirect
-	cloud.google.com/go/iam v1.3.1 // indirect
+	cloud.google.com/go/iam v1.4.1 // indirect
 	filippo.io/edwards25519 v1.1.0 // indirect
 	github.com/alicebob/gopher-json v0.0.0-20230218143504-906a9b012302 // indirect
 	github.com/beorn7/perks v1.0.1 // indirect
@@ -95,9 +95,9 @@ require (
 	golang.org/x/exp v0.0.0-20250106191152-7588d65b2ba8 // indirect
 	golang.org/x/net v0.36.0 // indirect
 	golang.org/x/sys v0.30.0 // indirect
-	golang.org/x/time v0.10.0 // indirect
-	google.golang.org/genproto v0.0.0-20250122153221-138b5a5a4fd4 // indirect
-	google.golang.org/genproto/googleapis/api v0.0.0-20250218202821-56aae31c358a // indirect
+	golang.org/x/time v0.11.0 // indirect
+	google.golang.org/genproto v0.0.0-20250303144028-a0af3efb3deb // indirect
+	google.golang.org/genproto/googleapis/api v0.0.0-20250303144028-a0af3efb3deb // indirect
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20250227231956-55c901821b1e // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 	modernc.org/libc v1.61.13 // indirect
