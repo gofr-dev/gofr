@@ -8,6 +8,7 @@ import (
 
 	"gofr.dev/pkg/gofr/cmd/terminal"
 	"gofr.dev/pkg/gofr/container"
+	"gofr.dev/pkg/gofr/http/middleware"
 	"gofr.dev/pkg/gofr/logging"
 )
 
@@ -37,7 +38,7 @@ func New() *App {
 		port = defaultHTTPPort
 	}
 
-	app.httpServer = newHTTPServer(port)
+	app.httpServer = newHTTPServer(app.container, port, middleware.GetConfigs(app.Config))
 	app.httpServer.certFile = app.Config.GetOrDefault("CERT_FILE", "")
 	app.httpServer.keyFile = app.Config.GetOrDefault("KEY_FILE", "")
 	app.httpServer.staticFiles = make(map[string]string)
