@@ -299,6 +299,14 @@ This document lists all the configuration options supported by the GoFr framewor
 
 ---
 
+---
+
+- KAFKA_SECURITY_PROTOCOL
+- Security protocol used to communicate with Kafka (e.g., PLAINTEXT, SSL, SASL_PLAINTEXT, SASL_SSL)
+- PLAINTEXT
+
+---
+
 
 - KAFKA_SASL_MECHANISM
 - SASL mechanism for authentication (e.g. PLAIN, SCRAM-SHA-256, SCRAM-SHA-512)
@@ -315,6 +323,30 @@ This document lists all the configuration options supported by the GoFr framewor
 - KAFKA_SASL_PASSWORD
 - Password for SASL authentication
 - None
+
+---
+
+- KAFKA_TLS_CERT_FILE
+- Path to the TLS certificate file
+- None
+
+---
+
+- KAFKA_TLS_KEY_FILE
+- Path to the TLS key file
+- None
+
+---
+
+- KAFKA_TLS_CA_CERT_FILE
+- Path to the TLS CA certificate file
+- None
+
+---
+
+- KAFKA_TLS_INSECURE_SKIP_VERIFY
+- Skip TLS certificate verification
+- false
 
 {% /table %}
 

@@ -5,6 +5,7 @@ package kafka
 import (
 	"context"
 	"errors"
+	"fmt"
 	"sync"
 	"time"
 
@@ -15,15 +16,16 @@ import (
 )
 
 var (
-	ErrConsumerGroupNotProvided = errors.New("consumer group id not provided")
-	errBrokerNotProvided        = errors.New("kafka broker address not provided")
-	errPublisherNotConfigured   = errors.New("can't publish message. Publisher not configured or topic is empty")
-	errBatchSize                = errors.New("KAFKA_BATCH_SIZE must be greater than 0")
-	errBatchBytes               = errors.New("KAFKA_BATCH_BYTES must be greater than 0")
-	errBatchTimeout             = errors.New("KAFKA_BATCH_TIMEOUT must be greater than 0")
-	errClientNotConnected       = errors.New("kafka client not connected")
-	errUnsupportedSASLMechanism = errors.New("unsupported SASL mechanism")
-	errSASLCredentialsMissing   = errors.New("SASL credentials missing")
+	ErrConsumerGroupNotProvided    = errors.New("consumer group id not provided")
+	errBrokerNotProvided           = errors.New("kafka broker address not provided")
+	errPublisherNotConfigured      = errors.New("can't publish message. Publisher not configured or topic is empty")
+	errBatchSize                   = errors.New("KAFKA_BATCH_SIZE must be greater than 0")
+	errBatchBytes                  = errors.New("KAFKA_BATCH_BYTES must be greater than 0")
+	errBatchTimeout                = errors.New("KAFKA_BATCH_TIMEOUT must be greater than 0")
+	errClientNotConnected          = errors.New("kafka client not connected")
+	errUnsupportedSASLMechanism    = errors.New("unsupported SASL mechanism")
+	errSASLCredentialsMissing      = errors.New("SASL credentials missing")
+	errUnsupportedSecurityProtocol = errors.New("unsupported security protocol")
 )
 
 const (
@@ -31,20 +33,26 @@ const (
 	DefaultBatchBytes   = 1048576
 	DefaultBatchTimeout = 1000
 	defaultRetryTimeout = 10 * time.Second
+	protocolPlainText   = "PLAINTEXT"
+	protocolSASL        = "SASL_PLAINTEXT"
+	protocolSSL         = "SSL"
+	protocolSASLSSL     = "SASL_SSL"
 )
 
 type Config struct {
-	Broker          string
-	Partition       int
-	ConsumerGroupID string
-	OffSet          int
-	BatchSize       int
-	BatchBytes      int
-	BatchTimeout    int
-	RetryTimeout    time.Duration
-	SASLMechanism   string
-	SASLUser        string
-	SASLPassword    string
+	Broker           string
+	Partition        int
+	ConsumerGroupID  string
+	OffSet           int
+	BatchSize        int
+	BatchBytes       int
+	BatchTimeout     int
+	RetryTimeout     time.Duration
+	SASLMechanism    string
+	SASLUser         string
+	SASLPassword     string
+	SecurityProtocol string
+	TLS              TLSConfig
 }
 
 type kafkaClient struct {
@@ -101,26 +109,42 @@ func New(conf *Config, logger pubsub.Logger, metrics Metrics) *kafkaClient {
 }
 
 func validateConfigs(conf *Config) error {
+	if err := validateRequiredFields(conf); err != nil {
+		return err
+	}
+
+	setDefaultSecurityProtocol(conf)
+
+	if err := validateSASLConfigs(conf); err != nil {
+		return err
+	}
+
+	if err := validateTLSConfigs(conf); err != nil {
+		return err
+	}
+
+	if err := validateSecurityProtocol(conf); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func validateRequiredFields(conf *Config) error {
 	if conf.Broker == "" {
 		return errBrokerNotProvided
 	}
 
 	if conf.BatchSize <= 0 {
-		return errBatchSize
+		return fmt.Errorf("batch size must be greater than 0: %w", errBatchSize)
 	}
 
 	if conf.BatchBytes <= 0 {
-		return errBatchBytes
+		return fmt.Errorf("batch bytes must be greater than 0: %w", errBatchBytes)
 	}
 
 	if conf.BatchTimeout <= 0 {
-		return errBatchTimeout
-	}
-
-	if conf.SASLMechanism != "" {
-		if conf.SASLUser == "" || conf.SASLPassword == "" {
-			return errSASLCredentialsMissing
-		}
+		return fmt.Errorf("batch timeout must be greater than 0: %w", errBatchTimeout)
 	}
 
 	return nil
@@ -256,13 +280,22 @@ func initializeKafkaClient(conf *Config, logger pubsub.Logger) (*kafka.Dialer, C
 		DualStack: true,
 	}
 
-	if conf.SASLMechanism != "" {
+	if conf.SecurityProtocol == protocolSASL || conf.SecurityProtocol == protocolSASLSSL {
 		mechanism, err := getSASLMechanism(conf.SASLMechanism, conf.SASLUser, conf.SASLPassword)
 		if err != nil {
 			return nil, nil, nil, nil, err
 		}
 
 		dialer.SASLMechanism = mechanism
+	}
+
+	if conf.SecurityProtocol == "SSL" || conf.SecurityProtocol == "SASL_SSL" {
+		tlsConfig, err := createTLSConfig(&conf.TLS)
+		if err != nil {
+			return nil, nil, nil, nil, err
+		}
+
+		dialer.TLS = tlsConfig
 	}
 
 	conn, err := dialer.DialContext(context.Background(), "tcp", conf.Broker)

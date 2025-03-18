@@ -5,6 +5,7 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -13,6 +14,11 @@ import (
 
 	"gofr.dev/pkg/gofr/logging"
 )
+
+func TestMain(m *testing.M) {
+	os.Setenv("GOFR_TELEMETRY", "false")
+	m.Run()
+}
 
 func Test_APIKeyAuthProvider_Get(t *testing.T) {
 	ctrl := gomock.NewController(t)

@@ -17,7 +17,6 @@ import (
 	"gofr.dev/pkg/gofr/config"
 	"gofr.dev/pkg/gofr/container"
 	gofrHTTP "gofr.dev/pkg/gofr/http"
-	"gofr.dev/pkg/gofr/http/middleware"
 	"gofr.dev/pkg/gofr/logging"
 	"gofr.dev/pkg/gofr/testutil"
 )
@@ -57,7 +56,7 @@ func TestRun_ServerStartsListening(t *testing.T) {
 	}
 
 	// Start the server
-	go server.run(c, middleware.GetConfigs(getConfigs(t)))
+	go server.run(c)
 
 	// Wait for the server to start listening
 	time.Sleep(100 * time.Millisecond)
@@ -104,7 +103,7 @@ func TestRegisterProfillingRoutes(t *testing.T) {
 
 	server.RegisterProfilingRoutes()
 
-	go server.run(c, middleware.GetConfigs(getConfigs(t)))
+	go server.run(c)
 
 	// Test if the expected handlers are registered for the pprof endpoints
 	expectedRoutes := []string{
@@ -143,7 +142,7 @@ func TestShutdown_ServerStopsListening(t *testing.T) {
 	}
 
 	// Start the server
-	go server.run(c, middleware.GetConfigs(getConfigs(t)))
+	go server.run(c)
 
 	// Create a context with a timeout to test the shutdown
 	ctx, cancel := context.WithTimeout(context.Background(), 150*time.Millisecond)
@@ -179,7 +178,7 @@ func TestShutdown_ServerContextDeadline(t *testing.T) {
 	}
 
 	// Start the server
-	go server.run(c, middleware.GetConfigs(getConfigs(t)))
+	go server.run(c)
 
 	// Create a context with a timeout to test the shutdown
 	ctx, cancel := context.WithTimeout(context.Background(), 50*time.Millisecond)

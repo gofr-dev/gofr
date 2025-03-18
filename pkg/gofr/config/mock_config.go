@@ -5,6 +5,13 @@ type mockConfig struct {
 }
 
 func NewMockConfig(configMap map[string]string) Config {
+	if configMap == nil {
+		configMap = make(map[string]string)
+	}
+
+	// setting telemetry false for running tests
+	configMap["GOFR_TELEMETRY"] = "false"
+
 	return &mockConfig{
 		conf: configMap,
 	}

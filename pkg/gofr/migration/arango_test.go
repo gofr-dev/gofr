@@ -2,6 +2,7 @@ package migration
 
 import (
 	"context"
+	"os"
 	"testing"
 	"time"
 
@@ -11,6 +12,11 @@ import (
 	"gofr.dev/pkg/gofr/container"
 	"gofr.dev/pkg/gofr/testutil"
 )
+
+func TestMain(m *testing.M) {
+	os.Setenv("GOFR_TELEMETRY", "false")
+	m.Run()
+}
 
 func arangoSetup(t *testing.T) (migrator, *container.MockArangoDBProvider, *container.Container) {
 	t.Helper()
