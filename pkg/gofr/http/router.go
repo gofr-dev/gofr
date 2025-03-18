@@ -128,7 +128,7 @@ func (staticFileConfig) validateFile(absPath string) error {
 // Handles different file-related errors.
 func (staticConfig staticFileConfig) respondWithFileError(w http.ResponseWriter, r *http.Request, absPath string, err error) {
 	if os.IsNotExist(err) {
-		staticConfig.logger.Errorf("requested file not found: %s", absPath)
+		staticConfig.logger.Debugf("requested file not found: %s", absPath)
 
 		w.WriteHeader(http.StatusNotFound)
 
@@ -155,7 +155,7 @@ func (staticConfig staticFileConfig) respondWithError(w http.ResponseWriter, mes
 	if err != nil {
 		staticConfig.logger.Errorf("%s: %s, error: %v", message, url, err)
 	} else {
-		staticConfig.logger.Warnf("%s: %s", message, url)
+		staticConfig.logger.Debugf("%s: %s", message, url)
 	}
 
 	w.WriteHeader(status)
