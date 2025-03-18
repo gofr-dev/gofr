@@ -6,7 +6,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"strings"
 	"sync"
 	"time"
 
@@ -149,23 +148,6 @@ func validateRequiredFields(conf *Config) error {
 	}
 
 	return nil
-}
-
-func setDefaultSecurityProtocol(conf *Config) {
-	if conf.SecurityProtocol == "" {
-		conf.SecurityProtocol = protocolPlainText
-	}
-}
-
-func validateSecurityProtocol(conf *Config) error {
-	protocol := strings.ToUpper(conf.SecurityProtocol)
-
-	switch protocol {
-	case protocolPlainText, protocolSASL, protocolSASLSSL, protocolSSL:
-		return nil
-	default:
-		return fmt.Errorf("unsupported security protocol: %s: %w", protocol, errUnsupportedSecurityProtocol)
-	}
 }
 
 func (k *kafkaClient) Publish(ctx context.Context, topic string, message []byte) error {

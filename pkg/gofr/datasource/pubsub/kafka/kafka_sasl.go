@@ -9,6 +9,23 @@ import (
 	"github.com/segmentio/kafka-go/sasl/scram"
 )
 
+func setDefaultSecurityProtocol(conf *Config) {
+	if conf.SecurityProtocol == "" {
+		conf.SecurityProtocol = protocolPlainText
+	}
+}
+
+func validateSecurityProtocol(conf *Config) error {
+	protocol := strings.ToUpper(conf.SecurityProtocol)
+
+	switch protocol {
+	case protocolPlainText, protocolSASL, protocolSASLSSL, protocolSSL:
+		return nil
+	default:
+		return fmt.Errorf("unsupported security protocol: %s: %w", protocol, errUnsupportedSecurityProtocol)
+	}
+}
+
 func getSASLMechanism(mechanism, username, password string) (sasl.Mechanism, error) {
 	switch strings.ToUpper(mechanism) {
 	case "PLAIN":
