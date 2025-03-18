@@ -1,6 +1,7 @@
 package http
 
 import (
+	"fmt"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -16,6 +17,8 @@ const (
 	DefaultSwaggerFileName       = "openapi.json"
 	staticServerNotFoundFileName = "404.html"
 )
+
+var errReadPermissionDenied = fmt.Errorf("file does not have read permission")
 
 // Router is responsible for routing HTTP request.
 type Router struct {
@@ -76,65 +79,21 @@ func (staticConfig staticFileConfig) staticHandler(fileServer http.Handler) http
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		url := r.URL.Path
 
-		filePath := strings.Split(url, "/")
-
-		fileName := filePath[len(filePath)-1]
-
 		absPath, err := filepath.Abs(filepath.Join(staticConfig.directoryName, url))
 		if err != nil {
-			staticConfig.logger.Errorf("failed to resolve absolute path for URL: %s, error: %v", url, err)
-
-			w.WriteHeader(http.StatusInternalServerError)
-			_, _ = w.Write([]byte("500 Internal Server Error"))
-
+			staticConfig.respondWithError(w, "failed to resolve absolute path", url, err, http.StatusInternalServerError)
 			return
 		}
 
 		// Restrict direct access to openapi.json via static routes.
 		// Allow access only through /.well-known/swagger or /.well-known/openapi.json.
-		if !strings.HasPrefix(absPath, staticConfig.directoryName) ||
-			(fileName == DefaultSwaggerFileName) {
-			staticConfig.logger.Warnf("unauthorized attempt to access restricted file: %s", url)
-
-			w.WriteHeader(http.StatusForbidden)
-			_, _ = w.Write([]byte("403 Forbidden"))
-
+		if staticConfig.isRestrictedFile(url, absPath) {
+			staticConfig.respondWithError(w, "unauthorized attempt to access restricted file", url, nil, http.StatusForbidden)
 			return
 		}
 
-		// checking the file permissions
-		fileinfo, err := os.Stat(absPath)
-		if err != nil {
-			if os.IsNotExist(err) {
-				staticConfig.logger.Warnf("requested file not found: %s", absPath)
-				w.WriteHeader(http.StatusNotFound)
-
-				// Serve custom 404.html if available
-				notFoundPath, _ := filepath.Abs(filepath.Join(staticConfig.directoryName, staticServerNotFoundFileName))
-				if _, err = os.Stat(notFoundPath); err == nil {
-					staticConfig.logger.Debugf("serving custom 404 page: %s", notFoundPath)
-
-					http.ServeFile(w, r, notFoundPath)
-
-					return
-				}
-
-				_, _ = w.Write([]byte("404 Not Found"))
-
-				return
-			}
-
-			staticConfig.logger.Errorf("error accessing file %s: %v", absPath, err)
-			http.Error(w, "500 Internal Server Error", http.StatusInternalServerError)
-
-			return
-		}
-
-		// Ensure file has at least read (`r--`) permission
-		if fileinfo.Mode().Perm()&0444 == 0 {
-			staticConfig.logger.Errorf("file does not have read permission: %s", absPath)
-			http.Error(w, "500 Internal Server Error", http.StatusInternalServerError)
-
+		if err := staticConfig.validateFile(absPath); err != nil {
+			staticConfig.respondWithFileError(w, r, absPath, err)
 			return
 		}
 
@@ -142,4 +101,64 @@ func (staticConfig staticFileConfig) staticHandler(fileServer http.Handler) http
 
 		fileServer.ServeHTTP(w, r)
 	})
+}
+
+// Checks if the file is restricted.
+func (staticConfig staticFileConfig) isRestrictedFile(url, absPath string) bool {
+	fileName := filepath.Base(url)
+
+	return !strings.HasPrefix(absPath, staticConfig.directoryName) || fileName == DefaultSwaggerFileName
+}
+
+// Validates file existence and permissions.
+func (staticFileConfig) validateFile(absPath string) error {
+	fileInfo, err := os.Stat(absPath)
+	if err != nil {
+		return err
+	}
+
+	// Ensure file has at least read (`r--`) permission
+	if fileInfo.Mode().Perm()&0444 == 0 {
+		return errReadPermissionDenied
+	}
+
+	return nil
+}
+
+// Handles different file-related errors.
+func (staticConfig staticFileConfig) respondWithFileError(w http.ResponseWriter, r *http.Request, absPath string, err error) {
+	if os.IsNotExist(err) {
+		staticConfig.logger.Errorf("requested file not found: %s", absPath)
+
+		w.WriteHeader(http.StatusNotFound)
+
+		// Serve custom 404.html if available
+		notFoundPath, _ := filepath.Abs(filepath.Join(staticConfig.directoryName, staticServerNotFoundFileName))
+		if _, err = os.Stat(notFoundPath); err == nil {
+			staticConfig.logger.Debugf("serving custom 404 page: %s", notFoundPath)
+
+			http.ServeFile(w, r, notFoundPath)
+
+			return
+		}
+
+		_, _ = w.Write([]byte("404 Not Found"))
+
+		return
+	}
+
+	staticConfig.respondWithError(w, "error accessing file", absPath, err, http.StatusInternalServerError)
+}
+
+// Generic error response handler.
+func (staticConfig staticFileConfig) respondWithError(w http.ResponseWriter, message, url string, err error, status int) {
+	if err != nil {
+		staticConfig.logger.Errorf("%s: %s, error: %v", message, url, err)
+	} else {
+		staticConfig.logger.Warnf("%s: %s", message, url)
+	}
+
+	w.WriteHeader(status)
+
+	fmt.Fprintf(w, "%d %s", status, http.StatusText(status))
 }

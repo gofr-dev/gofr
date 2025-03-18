@@ -8,7 +8,7 @@ import (
 func main() {
 	app := gofr.New()
 	app.GET("/list", listHandler)
-	app.AddStaticFiles("/", "./static")
+	app.AddStaticFiles("/static", "./static")
 	app.Run()
 }
 
