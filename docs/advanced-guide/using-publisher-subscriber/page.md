@@ -96,7 +96,79 @@ that are specific for the type of message broker user wants to use.
 - `-`
 - `1000`
 - `300`
-- Positive int 
+- Positive int
+
+---
+
+- `KAFKA_SECURITY_PROTOCOL`
+- Security protocol used to communicate with Kafka (e.g., PLAINTEXT, SSL, SASL_PLAINTEXT, SASL_SSL).
+- `-`
+- `PLAINTEXT`
+- `SASL_SSL`
+- String
+
+---
+
+- `KAFKA_SASL_MECHANISM`
+- SASL mechanism for authentication (e.g., PLAIN, SCRAM-SHA-256, SCRAM-SHA-512).
+- `-`
+- `""`
+- `PLAIN`
+- String
+
+---
+
+- `KAFKA_SASL_USERNAME`
+- Username for SASL authentication.
+- `-`
+- `""`
+- `user`
+- String
+
+---
+
+- `KAFKA_SASL_PASSWORD`
+- Password for SASL authentication.
+- `-`
+- `""`
+- `password`
+- String
+
+---
+
+- `KAFKA_TLS_CERT_FILE`
+- Path to the TLS certificate file.
+- `-`
+- `""`
+- `/path/to/cert.pem`
+- Path
+
+---
+
+- `KAFKA_TLS_KEY_FILE`
+- Path to the TLS key file.
+- `-`
+- `""`
+- `/path/to/key.pem`
+- Path
+
+---
+
+- `KAFKA_TLS_CA_CERT_FILE`
+- Path to the TLS CA certificate file.
+- `-`
+- `""`
+- `/path/to/ca.pem`
+- Path
+
+---
+
+- `KAFKA_TLS_INSECURE_SKIP_VERIFY`
+- Skip TLS certificate verification.
+- `-`
+- `false`
+- `true`
+- Boolean
 
 {% /table %}
 
@@ -107,7 +179,13 @@ CONSUMER_ID=order-consumer
 KAFKA_BATCH_SIZE=1000
 KAFKA_BATCH_BYTES=1048576
 KAFKA_BATCH_TIMEOUT=300
-```
+KAFKA_SASL_MECHANISM=PLAIN
+KAFKA_SASL_USERNAME=user
+KAFKA_SASL_PASSWORD=password
+KAFKA_TLS_CERT_FILE=/path/to/cert.pem
+KAFKA_TLS_KEY_FILE=/path/to/key.pem
+KAFKA_TLS_CA_CERT_FILE=/path/to/ca.pem
+KAFKA_TLS_INSECURE_SKIP_VERIFY=true
 
 #### Docker setup
 ```shell
