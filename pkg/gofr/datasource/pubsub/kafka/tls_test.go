@@ -20,8 +20,32 @@ func createTempFile(content string) (string, error) {
 	return tmpFile.Name(), nil
 }
 
-// Test success cases
-func TestCreateTLSConfig_Success(t *testing.T) {
+func Test_CreateTLSConfig_Success(t *testing.T) {
+	caFile, clientCertFile, clientKeyFile := createTestFiles(t)
+	defer os.Remove(caFile)
+	defer os.Remove(clientCertFile)
+	defer os.Remove(clientKeyFile)
+
+	tests := []struct {
+		name     string
+		tlsConf  TLSConfig
+		wantCert bool
+	}{
+		{"Only CA Cert", TLSConfig{CACertFile: caFile}, false},
+		{"CA Cert + Client Cert/Key", TLSConfig{CACertFile: caFile, CertFile: clientCertFile, KeyFile: clientKeyFile}, true},
+		{"Only Client Cert/Key", TLSConfig{CertFile: clientCertFile, KeyFile: clientKeyFile}, true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			validateTLSConfig(t, &tt.tlsConf, tt.wantCert)
+		})
+	}
+}
+
+func createTestFiles(t *testing.T) (caFile, clientCertFile, clientKeyFile string) {
+	t.Helper()
+
 	// Valid CA Certificate
 	caCertContent := `-----BEGIN CERTIFICATE-----
 MIICojCCAYoCCQDUMM9AFXkWaDANBgkqhkiG9w0BAQsFADATMREwDwYDVQQDDAhL
@@ -60,6 +84,7 @@ IFi4oUxW0wLNUmTJFSIrFRE3eYWy56XiI8jPs7U94It8YwjhDSeHwslMKbGwogqI
 Om59HA==
 -----END CERTIFICATE-----`
 
+	//nolint:gosec // This is a test certificate
 	clientKeyContent := `-----BEGIN RSA PRIVATE KEY-----
 MIIEogIBAAKCAQEAsAUmtRCpuhnlYVOQJutQXDc2duyFVll5xg3PERRdz3iThkDn
 w+sSRWa3vxUEnKsWVHFNYK41P3xUV01ktHnzJ3hHjxDnB2t8GeSHDZvJzWfX1yBb
@@ -88,43 +113,44 @@ s18fZGQi04zDLMx72bYHG/9SdtcKLdwKgQcpHLLwDvAtXXyRE7YTvy6ziChf25lX
 Q1k1WBr5rFlCp0GK2DbAkuCrLj0GghVAFYhxN19XRT/Dax1vgFo=
 -----END RSA PRIVATE KEY-----`
 
-	// Create temporary files
-	caFile, _ := createTempFile(caCertContent)
-	clientCertFile, _ := createTempFile(clientCertContent)
-	clientKeyFile, _ := createTempFile(clientKeyContent)
-	defer os.Remove(caFile)
-	defer os.Remove(clientCertFile)
-	defer os.Remove(clientKeyFile)
+	var err error
 
-	tests := []struct {
-		name     string
-		tlsConf  TLSConfig
-		wantCert bool
-	}{
-		{"Only CA Cert", TLSConfig{CACertFile: caFile}, false},
-		{"CA Cert + Client Cert/Key", TLSConfig{CACertFile: caFile, CertFile: clientCertFile, KeyFile: clientKeyFile}, true},
-		{"Only Client Cert/Key", TLSConfig{CertFile: clientCertFile, KeyFile: clientKeyFile}, true},
+	// Create temporary files
+	caFile, err = createTempFile(caCertContent)
+	if err != nil {
+		t.Fatalf("Failed to create temp CA cert file: %v", err)
 	}
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			cfg, err := createTLSConfig(&tt.tlsConf)
-			if err != nil {
-				t.Fatalf("Unexpected error: %v", err)
-			}
+	clientCertFile, err = createTempFile(clientCertContent)
+	if err != nil {
+		t.Fatalf("Failed to create temp client cert file: %v", err)
+	}
 
-			if tt.wantCert && len(cfg.Certificates) == 0 {
-				t.Errorf("Expected TLS certificate, but got none")
-			}
+	clientKeyFile, err = createTempFile(clientKeyContent)
+	if err != nil {
+		t.Fatalf("Failed to create temp client key file: %v", err)
+	}
 
-			if !tt.wantCert && len(cfg.Certificates) > 0 {
-				t.Errorf("Expected no TLS certificate, but found one")
-			}
-		})
+	return caFile, clientCertFile, clientKeyFile
+}
+
+func validateTLSConfig(t *testing.T, tlsConf *TLSConfig, wantCert bool) {
+	t.Helper()
+
+	cfg, err := createTLSConfig(tlsConf)
+	if err != nil {
+		t.Fatalf("Unexpected error: %v", err)
+	}
+
+	if wantCert && len(cfg.Certificates) == 0 {
+		t.Errorf("Expected TLS certificate, but got none")
+	}
+
+	if !wantCert && len(cfg.Certificates) > 0 {
+		t.Errorf("Expected no TLS certificate, but found one")
 	}
 }
 
-// Test failure cases separately
 func TestCreateTLSConfig_Errors(t *testing.T) {
 	invalidFile := filepath.Join(os.TempDir(), "nonexistent_file.pem")
 
