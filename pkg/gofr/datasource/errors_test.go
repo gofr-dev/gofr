@@ -2,12 +2,18 @@ package datasource
 
 import (
 	"net/http"
+	"os"
 	"testing"
 
 	"github.com/pkg/errors"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
+
+func TestMain(m *testing.M) {
+	os.Setenv("GOFR_TELEMETRY", "false")
+	m.Run()
+}
 
 func Test_ErrorDB(t *testing.T) {
 	wrappedErr := errors.New("underlying error")

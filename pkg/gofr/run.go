@@ -7,8 +7,6 @@ import (
 	"os/signal"
 	"sync"
 	"syscall"
-
-	"gofr.dev/pkg/gofr/http/middleware"
 )
 
 // Run starts the application. If it is an HTTP server, it will start the server.
@@ -70,7 +68,7 @@ func (a *App) Run() {
 
 		go func(s *httpServer) {
 			defer wg.Done()
-			s.run(a.container, middleware.GetConfigs(a.Config))
+			s.run(a.container)
 		}(a.httpServer)
 	}
 

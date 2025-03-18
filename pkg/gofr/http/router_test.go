@@ -6,13 +6,14 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
-	"time"
 
 	"github.com/stretchr/testify/assert"
 
 	"gofr.dev/pkg/gofr/config"
 	"gofr.dev/pkg/gofr/container"
+	"gofr.dev/pkg/gofr/logging"
 	"gofr.dev/pkg/gofr/testutil"
 )
 
@@ -76,70 +77,120 @@ func TestRouterWithMiddleware(t *testing.T) {
 	assert.Equal(t, "applied", testHeaderValue, "Test_UseMiddleware Failed! header value mismatch.")
 }
 
-func TestRouter_AddStaticFiles(t *testing.T) {
-	port := testutil.GetFreePort(t)
+func Test_StaticFileServing_Static(t *testing.T) {
+	tempDir := t.TempDir()
 
-	cfg := map[string]string{"HTTP_PORT": fmt.Sprint(port), "LOG_LEVEL": "INFO"}
-	_ = container.NewContainer(config.NewMockConfig(cfg))
+	testCases := []struct {
+		name             string
+		setupFiles       func() error
+		path             string
+		staticServerPath string
+		expectedCode     int
+		expectedBody     string
+	}{
+		{
+			name: "Serve existing file from /static",
+			setupFiles: func() error {
+				return os.WriteFile(filepath.Join(tempDir, "test.txt"), []byte("Hello, World!"), 0600)
+			},
+			path:             "/static/test.txt",
+			staticServerPath: "/static",
+			expectedCode:     http.StatusOK,
+			expectedBody:     "Hello, World!",
+		},
+		{
+			name: "Serve existing file from /",
+			setupFiles: func() error {
+				return os.WriteFile(filepath.Join(tempDir, "test.txt"), []byte("Hello, Root!"), 0600)
+			},
+			path:             "/test.txt",
+			staticServerPath: "/",
+			expectedCode:     http.StatusOK,
+			expectedBody:     "Hello, Root!",
+		},
+		{
+			name: "Serve existing file from /public",
+			setupFiles: func() error {
+				return os.WriteFile(filepath.Join(tempDir, "test.txt"), []byte("Hello, Public!"), 0600)
+			},
+			path:             "/public/test.txt",
+			staticServerPath: "/public",
+			expectedCode:     http.StatusOK,
+			expectedBody:     "Hello, Public!",
+		},
+		{
+			name: "Serve 404.html for non-existent file",
+			setupFiles: func() error {
+				return os.WriteFile(filepath.Join(tempDir, "404.html"), []byte("<html>404 Not Found</html>"), 0600)
+			},
+			path:             "/static/nonexistent.html",
+			staticServerPath: "/static",
+			expectedCode:     http.StatusNotFound,
+			expectedBody:     "<html>404 Not Found</html>",
+		},
+		{
+			name: "Serve default 404 message when 404.html is missing",
+			setupFiles: func() error {
+				return os.Remove(filepath.Join(tempDir, "404.html"))
+			},
+			path:             "/static/nonexistent.html",
+			staticServerPath: "/static",
+			expectedCode:     http.StatusNotFound,
+			expectedBody:     "404 Not Found",
+		},
+		{
+			name: "Access forbidden OpenAPI JSON",
+			setupFiles: func() error {
+				return os.WriteFile(filepath.Join(tempDir, DefaultSwaggerFileName), []byte(`{"openapi": "3.0.0"}`), 0600)
+			},
+			path:             "/static/openapi.json",
+			staticServerPath: "/static",
+			expectedCode:     http.StatusForbidden,
+			expectedBody:     "403 Forbidden",
+		},
+		{
+			name: "Serving File with no Read permission",
+			setupFiles: func() error {
+				return os.WriteFile(filepath.Join(tempDir, "restricted.txt"), []byte("Restricted content"), 0000)
+			},
+			path:             "/static/restricted.txt",
+			staticServerPath: "/static",
+			expectedCode:     http.StatusInternalServerError,
+			expectedBody:     "500 Internal Server Error",
+		},
+	}
 
-	createTestFileAndDirectory(t, "testDir")
-
-	defer os.RemoveAll("testDir")
-
-	time.Sleep(100 * time.Millisecond)
-
-	currentWorkingDir, _ := os.Getwd()
-
-	// Create a new router instance using the mock container
-	router := NewRouter()
-	router.AddStaticFiles("/gofr", currentWorkingDir+"/testDir")
-
-	// Send a request to the test handler
-	req := httptest.NewRequest(http.MethodGet, "/gofr/indexTest.html", http.NoBody)
-	rec := httptest.NewRecorder()
-	router.ServeHTTP(rec, req)
-
-	// Verify the response
-	assert.Equal(t, http.StatusOK, rec.Code)
-
-	// Send a request to the test handler
-	req = httptest.NewRequest(http.MethodGet, "/gofr/openapi.json", http.NoBody)
-	rec = httptest.NewRecorder()
-	router.ServeHTTP(rec, req)
-
-	// Verify the response
-	assert.Equal(t, http.StatusForbidden, rec.Code)
+	runStaticFileTests(t, tempDir, testCases)
 }
 
-func createTestFileAndDirectory(t *testing.T, dirName string) {
+func runStaticFileTests(t *testing.T, tempDir string, testCases []struct {
+	name             string
+	setupFiles       func() error
+	path             string
+	staticServerPath string
+	expectedCode     int
+	expectedBody     string
+}) {
 	t.Helper()
 
-	htmlContent := []byte("<html><head><title>Test Static File</title></head><body><p>Testing Static File</p></body></html>")
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			if err := tc.setupFiles(); err != nil {
+				t.Fatalf("Failed to set up files: %v", err)
+			}
 
-	const indexHTML = "indexTest.html"
+			logger := logging.NewMockLogger(logging.DEBUG)
 
-	directory := "./" + dirName
+			router := NewRouter()
+			router.AddStaticFiles(logger, tc.staticServerPath, tempDir)
 
-	if err := os.Mkdir("./"+dirName, os.ModePerm); err != nil {
-		t.Fatalf("Couldn't create a "+dirName+" directory, error: %s", err)
+			req := httptest.NewRequest(http.MethodGet, tc.path, http.NoBody)
+			w := httptest.NewRecorder()
+
+			router.ServeHTTP(w, req)
+
+			assert.Equal(t, tc.expectedCode, w.Code)
+			assert.Equal(t, tc.expectedBody, strings.TrimSpace(w.Body.String()))
+		})
 	}
-
-	file, err := os.Create(filepath.Join(directory, indexHTML))
-	if err != nil {
-		t.Fatalf("Couldn't create %s file", indexHTML)
-	}
-
-	_, err = file.Write(htmlContent)
-	if err != nil {
-		t.Fatalf("Couldn't write to %s file", indexHTML)
-	}
-
-	file.Close()
-
-	file, err = os.Create(filepath.Join(directory, "openapi.json"))
-	if err != nil {
-		t.Fatalf("Couldn't create %s file", indexHTML)
-	}
-
-	file.Close()
 }

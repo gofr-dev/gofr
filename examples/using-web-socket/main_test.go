@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"os"
 	"testing"
 	"time"
 
@@ -10,6 +11,11 @@ import (
 
 	"gofr.dev/pkg/gofr/testutil"
 )
+
+func TestMain(m *testing.M) {
+	os.Setenv("GOFR_TELEMETRY", "false")
+	m.Run()
+}
 
 func Test_WebSocket_Success(t *testing.T) {
 	configs := testutil.NewServerConfigs(t)
