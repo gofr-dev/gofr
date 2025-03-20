@@ -2,8 +2,9 @@ package migration
 
 import (
 	"context"
-	"gofr.dev/pkg/gofr/container"
 	"time"
+
+	"gofr.dev/pkg/gofr/container"
 )
 
 type surrealDS struct {
@@ -54,7 +55,8 @@ const (
 
 	getLastSurrealDBGoFrMigration = `SELECT version FROM gofr_migrations ORDER BY version DESC LIMIT 1;`
 
-	insertSurrealDBGoFrMigrationRow = `CREATE gofr_migrations SET version = $version, method = $method, start_time = $start_time, duration = $duration;`
+	insertSurrealDBGoFrMigrationRow = `CREATE gofr_migrations SET version = $version, method = $method, ` +
+		`start_time = $start_time, duration = $duration;`
 )
 
 func (s surrealMigrator) checkAndCreateMigrationTable(c *container.Container) error {

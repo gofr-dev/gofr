@@ -419,6 +419,59 @@ func (*Client) convertValue(v any) any {
 	}
 }
 
+// executeQuery is a helper function that encapsulates common query execution logic.
+func (c *Client) executeQuery(ctx context.Context, operation, entity, query string) error {
+	span := c.addTrace(ctx, operation, query)
+	defer func() {
+		if span != nil {
+			span.End()
+		}
+	}()
+
+	if c.db == nil {
+		return errNotConnected
+	}
+
+	logMessage := fmt.Sprintf("%s %q", operation, entity)
+
+	startTime := time.Now()
+	defer c.sendOperationStats(&QueryLog{
+		Query:         logMessage,
+		OperationName: strings.ToLower(operation),
+		Namespace:     c.config.Namespace,
+		Database:      c.config.Database,
+		Span:          span,
+	}, startTime)
+
+	_, err := c.Query(ctx, query, nil)
+
+	return err
+}
+
+// CreateNamespace creates a new namespace in the SurrealDB instance.
+func (c *Client) CreateNamespace(ctx context.Context, namespace string) error {
+	query := fmt.Sprintf("DEFINE NAMESPACE %s;", namespace)
+	return c.executeQuery(ctx, "Creating", namespace, query)
+}
+
+// CreateDatabase creates a new database in the SurrealDB instance.
+func (c *Client) CreateDatabase(ctx context.Context, database string) error {
+	query := fmt.Sprintf("DEFINE DATABASE %s;", database)
+	return c.executeQuery(ctx, "Creating", database, query)
+}
+
+// DropNamespace deletes a namespace from the SurrealDB instance.
+func (c *Client) DropNamespace(ctx context.Context, namespace string) error {
+	query := fmt.Sprintf("REMOVE NAMESPACE %s;", namespace)
+	return c.executeQuery(ctx, "Dropping", namespace, query)
+}
+
+// DropDatabase deletes a database from the SurrealDB instance.
+func (c *Client) DropDatabase(ctx context.Context, database string) error {
+	query := fmt.Sprintf("REMOVE DATABASE %s;", database)
+	return c.executeQuery(ctx, "Dropping", database, query)
+}
+
 // Select retrieves all records from the specified table in the SurrealDB database.
 func (c *Client) Select(ctx context.Context, table string) ([]map[string]any, error) {
 	query := fmt.Sprintf("SELECT * FROM %s", table)

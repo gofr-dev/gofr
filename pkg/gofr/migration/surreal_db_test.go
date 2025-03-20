@@ -2,11 +2,11 @@ package migration
 
 import (
 	"context"
-	"github.com/stretchr/testify/mock"
 	"testing"
 	"time"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"gofr.dev/pkg/gofr/container"
 	"gofr.dev/pkg/gofr/testutil"
@@ -116,19 +116,64 @@ func Test_SurrealBeginTransaction(t *testing.T) {
 }
 
 func TestSurrealDS_Query(t *testing.T) {
-	_, mocks := container.NewMockContainer(t)
-
-	mockSurreal := mocks.SurrealDB
-
-	ds := Datasource{SurrealDB: mockSurreal}
+	_, mockSurreal, _ := surrealSetup(t)
 
 	query := "SELECT * FROM table"
 	vars := map[string]any{"key": "value"}
 	expectedResult := []any{"result"}
-	mockSurreal.EXPECT().Query(mock.Anything, query, vars).Return(expectedResult, nil)
+	mockSurreal.EXPECT().Query(context.Background(), query, vars).Return(expectedResult, nil)
 
-	result, err := ds.SurrealDB.Query(context.Background(), query, vars)
+	surreal := surrealDS{client: mockSurreal}
+	result, err := surreal.Query(context.Background(), query, vars)
+
+	require.NoError(t, err)
+	assert.Equal(t, expectedResult, result)
+}
+
+func TestSurrealDS_CreateNamespace(t *testing.T) {
+	_, mockSurreal, _ := surrealSetup(t)
+
+	namespace := "test_namespace"
+	mockSurreal.EXPECT().CreateNamespace(context.Background(), namespace).Return(nil)
+
+	surreal := surrealDS{client: mockSurreal}
+	err := surreal.CreateNamespace(context.Background(), namespace)
 
 	assert.NoError(t, err)
-	assert.Equal(t, expectedResult, result)
+}
+
+func TestSurrealDS_CreateDatabase(t *testing.T) {
+	_, mockSurreal, _ := surrealSetup(t)
+
+	database := "test_database"
+	mockSurreal.EXPECT().CreateDatabase(context.Background(), database).Return(nil)
+
+	surreal := surrealDS{client: mockSurreal}
+	err := surreal.CreateDatabase(context.Background(), database)
+
+	assert.NoError(t, err)
+}
+
+func TestSurrealDS_DropNamespace(t *testing.T) {
+	_, mockSurreal, _ := surrealSetup(t)
+
+	namespace := "test_namespace"
+	mockSurreal.EXPECT().DropNamespace(context.Background(), namespace).Return(nil)
+
+	surreal := surrealDS{client: mockSurreal}
+	err := surreal.DropNamespace(context.Background(), namespace)
+
+	assert.NoError(t, err)
+}
+
+func TestSurrealDS_DropDatabase(t *testing.T) {
+	_, mockSurreal, _ := surrealSetup(t)
+
+	database := "test_database"
+	mockSurreal.EXPECT().DropDatabase(context.Background(), database).Return(nil)
+
+	surreal := surrealDS{client: mockSurreal}
+	err := surreal.DropDatabase(context.Background(), database)
+
+	assert.NoError(t, err)
 }
