@@ -7,6 +7,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"go.uber.org/mock/gomock"
 
 	"gofr.dev/pkg/gofr/container"
 	"gofr.dev/pkg/gofr/testutil"
@@ -41,7 +42,7 @@ func Test_SurrealCheckAndCreateMigrationTable(t *testing.T) {
 	}
 
 	for i, tc := range testCases {
-		mockSurreal.EXPECT().Query(context.Background(), checkAndCreateSurrealDBMigrationTable, nil).Return([]any{}, tc.err)
+		mockSurreal.EXPECT().Query(context.Background(), gomock.Any(), nil).Return([]any{}, tc.err).MaxTimes(8)
 
 		err := migratorWithSurreal.checkAndCreateMigrationTable(mockContainer)
 

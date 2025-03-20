@@ -2,10 +2,14 @@ package migration
 
 import (
 	"context"
+	"errors"
+	"fmt"
 	"time"
 
 	"gofr.dev/pkg/gofr/container"
 )
+
+var errExecuteQuery = errors.New("failed to execute migration query")
 
 type surrealDS struct {
 	client SurrealDB
@@ -44,28 +48,36 @@ func (s surrealDS) apply(m migrator) migrator {
 }
 
 const (
-	checkAndCreateSurrealDBMigrationTable = `
-		DEFINE TABLE gofr_migrations SCHEMALESS;
-		DEFINE FIELD version ON gofr_migrations TYPE int;
-		DEFINE FIELD method ON gofr_migrations TYPE string;
-		DEFINE FIELD start_time ON gofr_migrations TYPE datetime;
-		DEFINE FIELD duration ON gofr_migrations TYPE duration;
-		DEFINE INDEX version_method ON gofr_migrations FIELDS version, method UNIQUE;
-	`
-
-	getLastSurrealDBGoFrMigration = `SELECT version FROM gofr_migrations ORDER BY version DESC LIMIT 1;`
-
+	getLastSurrealDBGoFrMigration   = `SELECT version FROM gofr_migrations ORDER BY version DESC LIMIT 1;`
 	insertSurrealDBGoFrMigrationRow = `CREATE gofr_migrations SET version = $version, method = $method, ` +
 		`start_time = $start_time, duration = $duration;`
 )
 
-func (s surrealMigrator) checkAndCreateMigrationTable(c *container.Container) error {
-	_, err := s.SurrealDB.Query(context.Background(), checkAndCreateSurrealDBMigrationTable, nil)
-	if err != nil {
+func getMigrationTableQueries() []string {
+	return []string{
+		"DEFINE TABLE gofr_migrations SCHEMAFULL;",
+		"DEFINE FIELD id ON gofr_migrations TYPE string;",
+		"DEFINE FIELD version ON gofr_migrations TYPE number;",
+		"DEFINE FIELD method ON gofr_migrations TYPE string;",
+		"DEFINE FIELD start_time ON gofr_migrations TYPE datetime;",
+		"DEFINE FIELD duration ON gofr_migrations TYPE number;",
+		"DEFINE INDEX version_method ON gofr_migrations COLUMNS version, method UNIQUE;",
+	}
+}
+
+func (s surrealMigrator) checkAndCreateMigrationTable(*container.Container) error {
+	if _, err := s.SurrealDB.Query(context.Background(), "USE NS test DB test", nil); err != nil {
 		return err
 	}
 
-	return s.migrator.checkAndCreateMigrationTable(c)
+	// Create migration table directly
+	for _, q := range getMigrationTableQueries() {
+		if _, err := s.SurrealDB.Query(context.Background(), q, nil); err != nil {
+			return fmt.Errorf("%w: %s: %w", errExecuteQuery, q, err)
+		}
+	}
+
+	return nil
 }
 
 func (s surrealMigrator) getLastMigration(c *container.Container) int64 {

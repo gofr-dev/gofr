@@ -6,6 +6,7 @@ import (
 	"regexp"
 	"strings"
 
+	"github.com/surrealdb/surrealdb.go/pkg/models"
 	"go.opentelemetry.io/otel/trace"
 )
 
@@ -73,4 +74,101 @@ func (ql *QueryLog) PrettyPrint(writer io.Writer) {
 		ql.Namespace,
 		clean(ql.Query),
 	)
+}
+
+func isAdministrativeOperation(query string) bool {
+	return strings.HasPrefix(query, "DEFINE") ||
+		strings.HasPrefix(query, "REMOVE") ||
+		strings.Contains(query, "NAMESPACE") ||
+		strings.Contains(query, "DATABASE")
+}
+
+// processResults processes and extracts meaningful data from query results.
+func (c *Client) processResults(query string, results *[]QueryResult) ([]any, error) {
+	var resp []any
+
+	if len(*results) > 0 {
+		resp = make([]any, 0, len(*results))
+	}
+
+	for _, r := range *results {
+		if err := c.processResult(query, r, &resp); err != nil {
+			return nil, err
+		}
+	}
+
+	return resp, nil
+}
+
+// processResult handles individual query result.
+func (c *Client) processResult(query string, r QueryResult, resp *[]any) error {
+	if r.Status != statusOK {
+		return c.handleNonOKStatus(query, r, resp)
+	}
+
+	return c.handleOKStatus(r, resp)
+}
+
+// handleNonOKStatus handles non-OK status results.
+func (c *Client) handleNonOKStatus(query string, r QueryResult, resp *[]any) error {
+	if !isAdministrativeOperation(query) {
+		c.logger.Errorf("query result error: %v", r.Result)
+		return nil
+	}
+
+	if c.handleAdminError(r.Result, resp) {
+		return nil
+	}
+
+	return c.processResultRecords(r.Result, resp)
+}
+
+// handleOKStatus handles OK status results.
+func (c *Client) handleOKStatus(r QueryResult, resp *[]any) error {
+	if isCustomNil(r.Result) {
+		*resp = append(*resp, true)
+		return nil
+	}
+
+	return c.processResultRecords(r.Result, resp)
+}
+
+// handleAdminError handles administrative operation errors.
+func (*Client) handleAdminError(result any, resp *[]any) bool {
+	if strErr, ok := result.(string); ok && strings.Contains(strErr, "already exists") {
+		*resp = append(*resp, true)
+		return true
+	}
+
+	if result == nil {
+		*resp = append(*resp, true)
+		return true
+	}
+
+	return false
+}
+
+// processResultRecords processes valid result records.
+func (c *Client) processResultRecords(result any, resp *[]any) error {
+	recordList, ok := result.([]any)
+	if !ok {
+		return errInvalidResult
+	}
+
+	for _, record := range recordList {
+		extracted, err := c.extractRecord(record)
+		if err != nil {
+			return fmt.Errorf("failed to extract record: %w", err)
+		}
+
+		*resp = append(*resp, extracted)
+	}
+
+	return nil
+}
+
+// isCustomNil checks for CustomNil type.
+func isCustomNil(result any) bool {
+	_, ok := result.(models.CustomNil)
+	return ok
 }

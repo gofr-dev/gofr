@@ -327,39 +327,7 @@ func (c *Client) Query(ctx context.Context, query string, vars map[string]any) (
 		return nil, errNoResult
 	}
 
-	return c.processResults(res.Result)
-}
-
-// processResults processes and extracts meaningful data from query results.
-func (c *Client) processResults(results *[]QueryResult) ([]any, error) {
-	var resp []any
-
-	if len(*results) > 0 {
-		resp = make([]any, 0, len(*results))
-	}
-
-	for _, r := range *results {
-		if r.Status != statusOK {
-			c.logger.Errorf("query result error: %v", r.Status)
-			continue
-		}
-
-		recordList, ok := r.Result.([]any)
-		if !ok {
-			return nil, errInvalidResult
-		}
-
-		for _, record := range recordList {
-			extracted, err := c.extractRecord(record)
-			if err != nil {
-				return nil, fmt.Errorf("failed to extract record: %w", err)
-			}
-
-			resp = append(resp, extracted)
-		}
-	}
-
-	return resp, nil
+	return c.processResults(query, res.Result)
 }
 
 // extractRecord extracts and processes a single record into a map[string]any}.
