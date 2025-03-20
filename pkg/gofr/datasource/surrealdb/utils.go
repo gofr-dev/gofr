@@ -1,6 +1,7 @@
 package surrealdb
 
 import (
+	"errors"
 	"fmt"
 	"io"
 	"regexp"
@@ -11,6 +12,11 @@ import (
 )
 
 var rgx = regexp.MustCompile(`\s+`)
+
+var (
+	errAlreadyExists    = errors.New("resource already exists")
+	errUnexpectedFormat = errors.New("unexpected result format")
+)
 
 // clean takes a string query as input and performs two operations to clean it up:
 // 1. It replaces multiple consecutive whitespace characters with a single space.
@@ -116,7 +122,12 @@ func (c *Client) handleNonOKStatus(query string, r QueryResult, resp *[]any) err
 		return nil
 	}
 
-	if c.handleAdminError(r.Result, resp) {
+	handled, err := c.handleAdminError(r.Result, resp)
+	if err != nil {
+		return err
+	}
+
+	if handled {
 		return nil
 	}
 
@@ -134,18 +145,21 @@ func (c *Client) handleOKStatus(r QueryResult, resp *[]any) error {
 }
 
 // handleAdminError handles administrative operation errors.
-func (*Client) handleAdminError(result any, resp *[]any) bool {
-	if strErr, ok := result.(string); ok && strings.Contains(strErr, "already exists") {
-		*resp = append(*resp, true)
-		return true
+func (*Client) handleAdminError(result any, resp *[]any) (bool, error) {
+	if strErr, ok := result.(string); ok {
+		if strings.Contains(strErr, "already exists") {
+			return false, errAlreadyExists
+		}
+
+		return false, fmt.Errorf("%w: %s", errUnexpectedFormat, strErr)
 	}
 
 	if result == nil {
 		*resp = append(*resp, true)
-		return true
+		return true, nil
 	}
 
-	return false
+	return false, nil
 }
 
 // processResultRecords processes valid result records.
