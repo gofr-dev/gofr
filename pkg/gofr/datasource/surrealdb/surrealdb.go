@@ -303,11 +303,6 @@ func (c *Client) Query(ctx context.Context, query string, vars map[string]any) (
 	logMessage := fmt.Sprintf("Fetching record with ID %q from table %q", id, table)
 
 	span := c.addTrace(ctx, "Query", query)
-	defer func() {
-		if span != nil {
-			span.End()
-		}
-	}()
 
 	if c.db == nil {
 		return nil, errNotConnected
@@ -422,11 +417,6 @@ func (*Client) convertValue(v any) any {
 // executeQuery is a helper function that encapsulates common query execution logic.
 func (c *Client) executeQuery(ctx context.Context, operation, entity, query string) error {
 	span := c.addTrace(ctx, operation, query)
-	defer func() {
-		if span != nil {
-			span.End()
-		}
-	}()
 
 	if c.db == nil {
 		return errNotConnected
@@ -476,12 +466,6 @@ func (c *Client) DropDatabase(ctx context.Context, database string) error {
 func (c *Client) Select(ctx context.Context, table string) ([]map[string]any, error) {
 	query := fmt.Sprintf("SELECT * FROM %s", table)
 	span := c.addTrace(ctx, "Select", query)
-
-	defer func() {
-		if span != nil {
-			span.End()
-		}
-	}()
 
 	if c.db == nil {
 		return nil, errNotConnected
@@ -533,12 +517,6 @@ func (c *Client) Create(ctx context.Context, table string, data any) (map[string
 	query := fmt.Sprintf("CREATE INTO %s SET", table)
 	span := c.addTrace(ctx, "Create", query)
 
-	defer func() {
-		if span != nil {
-			span.End()
-		}
-	}()
-
 	if c.db == nil {
 		return nil, errNotConnected
 	}
@@ -572,10 +550,6 @@ func (c *Client) Update(ctx context.Context, table, id string, data any) (any, e
 
 	query := fmt.Sprintf("UPDATE %s SET", table)
 	span := c.addTrace(ctx, "Update", query)
-
-	if span != nil {
-		defer span.End()
-	}
 
 	logMessage := fmt.Sprintf("Updating record with ID %q in table %q", id, table)
 
@@ -623,10 +597,6 @@ func (c *Client) Insert(ctx context.Context, table string, data any) ([]map[stri
 	query := fmt.Sprintf("INSERT INTO %s", table)
 	span := c.addTrace(ctx, "Insert", query)
 
-	if span != nil {
-		defer span.End()
-	}
-
 	if c.db == nil {
 		return nil, errNotConnected
 	}
@@ -666,12 +636,6 @@ func (c *Client) Insert(ctx context.Context, table string, data any) ([]map[stri
 func (c *Client) Delete(ctx context.Context, table, id string) (any, error) {
 	query := fmt.Sprintf("DELETE FROM %s:%s RETURN BEFORE;", table, id)
 	span := c.addTrace(ctx, "Delete", query)
-
-	defer func() {
-		if span != nil {
-			span.End()
-		}
-	}()
 
 	if c.db == nil {
 		return nil, errNotConnected
@@ -730,6 +694,8 @@ func (c *Client) sendOperationStats(ql *QueryLog, startTime time.Time) {
 		return
 	}
 
+	defer ql.Span.End()
+
 	ql.Span.SetAttributes(
 		attribute.Int64("surrealdb.duration", duration),
 		attribute.String("surrealdb.query", ql.Query),
@@ -754,11 +720,6 @@ func (c *Client) HealthCheck(ctx context.Context) (any, error) {
 	logMessage := fmt.Sprintf("Database health at \"%s:%d\"", c.config.Host, c.config.Port)
 
 	span := c.addTrace(ctx, "HealthCheck", "info")
-	defer func() {
-		if span != nil {
-			span.End()
-		}
-	}()
 
 	startTime := time.Now()
 	defer c.sendOperationStats(&QueryLog{
