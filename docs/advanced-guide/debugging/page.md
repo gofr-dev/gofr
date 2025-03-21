@@ -122,8 +122,8 @@ go tool trace trace.out
 
 1. **Set Environment Variables**:
    ```bash
-   export APP_ENV=DEBUG
-   export METRICS_PORT=2121
+   APP_ENV=DEBUG
+   METRICS_PORT=2121
    ```
 
 2. **Run Your GoFr Application**:
