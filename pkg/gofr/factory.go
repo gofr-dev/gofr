@@ -51,7 +51,7 @@ func New() *App {
 	app.checkAndAddOpenAPIDocumentation()
 
 	if app.Config.Get("APP_ENV") == "DEBUG" {
-		app.httpServer.RegisterProfilingRoutes()
+		app.metricServer.profilingEnabled = true
 	}
 
 	// gRPC Server

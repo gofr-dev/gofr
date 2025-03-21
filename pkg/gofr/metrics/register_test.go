@@ -28,7 +28,7 @@ func Test_NewMetricsManagerSuccess(t *testing.T) {
 	metrics.DeltaUpDownCounter(context.Background(), "up-down-counter", 10)
 	metrics.RecordHistogram(context.Background(), "histogram-test", 1)
 
-	server := httptest.NewServer(GetHandler(metrics))
+	server := httptest.NewServer(GetHandler(metrics, false))
 
 	req, _ := http.NewRequestWithContext(context.Background(), http.MethodGet, server.URL+"/metrics", http.NoBody)
 
