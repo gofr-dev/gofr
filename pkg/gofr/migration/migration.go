@@ -184,6 +184,16 @@ func getMigrator(c *container.Container) (Datasource, migrator, bool) {
 		c.Debug("initialized data source for ArangoDB")
 	}
 
+	if !isNil(c.SurrealDB) {
+		ok = true
+
+		ds.SurrealDB = surrealDS{c.SurrealDB}
+
+		mg = surrealDS{c.SurrealDB}.apply(mg)
+
+		c.Debug("initialized data source for surrealDB")
+	}
+
 	return ds, mg, ok
 }
 

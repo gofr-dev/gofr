@@ -81,6 +81,24 @@ type ArangoDB interface {
 	DropGraph(ctx context.Context, database, graph string) error
 }
 
+type SurrealDB interface {
+	// Query executes a Surreal query with the provided variables and returns the query results as a slice of interfaces{}.
+	// It returns an error if the query execution fails.
+	Query(ctx context.Context, query string, vars map[string]any) ([]any, error)
+
+	// CreateNamespace creates a new namespace in the SurrealDB instance.
+	CreateNamespace(ctx context.Context, namespace string) error
+
+	// CreateDatabase creates a new database in the SurrealDB instance.
+	CreateDatabase(ctx context.Context, database string) error
+
+	// DropNamespace deletes a namespace from the SurrealDB instance.
+	DropNamespace(ctx context.Context, namespace string) error
+
+	// DropDatabase deletes a database from the SurrealDB instance.
+	DropDatabase(ctx context.Context, database string) error
+}
+
 // keeping the migrator interface unexported as, right now it is not being implemented directly, by the externalDB drivers.
 // keeping the implementations for externalDB at one place such that if any change in migration logic, we would change directly here.
 type migrator interface {

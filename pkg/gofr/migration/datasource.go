@@ -14,6 +14,7 @@ type Datasource struct {
 	Cassandra  Cassandra
 	Mongo      Mongo
 	ArangoDB   ArangoDB
+	SurrealDB  SurrealDB
 }
 
 // It is a base implementation for migration manager, on this other database drivers have been wrapped.

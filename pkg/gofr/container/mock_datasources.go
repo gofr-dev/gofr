@@ -9791,6 +9791,34 @@ func (mr *MockSurrealDBMockRecorder) Create(ctx, table, data any) *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Create", reflect.TypeOf((*MockSurrealDB)(nil).Create), ctx, table, data)
 }
 
+// CreateDatabase mocks base method.
+func (m *MockSurrealDB) CreateDatabase(ctx context.Context, database string) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "CreateDatabase", ctx, database)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// CreateDatabase indicates an expected call of CreateDatabase.
+func (mr *MockSurrealDBMockRecorder) CreateDatabase(ctx, database any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CreateDatabase", reflect.TypeOf((*MockSurrealDB)(nil).CreateDatabase), ctx, database)
+}
+
+// CreateNamespace mocks base method.
+func (m *MockSurrealDB) CreateNamespace(ctx context.Context, namespace string) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "CreateNamespace", ctx, namespace)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// CreateNamespace indicates an expected call of CreateNamespace.
+func (mr *MockSurrealDBMockRecorder) CreateNamespace(ctx, namespace any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CreateNamespace", reflect.TypeOf((*MockSurrealDB)(nil).CreateNamespace), ctx, namespace)
+}
+
 // Delete mocks base method.
 func (m *MockSurrealDB) Delete(ctx context.Context, table, id string) (any, error) {
 	m.ctrl.T.Helper()
@@ -9804,6 +9832,34 @@ func (m *MockSurrealDB) Delete(ctx context.Context, table, id string) (any, erro
 func (mr *MockSurrealDBMockRecorder) Delete(ctx, table, id any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Delete", reflect.TypeOf((*MockSurrealDB)(nil).Delete), ctx, table, id)
+}
+
+// DropDatabase mocks base method.
+func (m *MockSurrealDB) DropDatabase(ctx context.Context, database string) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "DropDatabase", ctx, database)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// DropDatabase indicates an expected call of DropDatabase.
+func (mr *MockSurrealDBMockRecorder) DropDatabase(ctx, database any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DropDatabase", reflect.TypeOf((*MockSurrealDB)(nil).DropDatabase), ctx, database)
+}
+
+// DropNamespace mocks base method.
+func (m *MockSurrealDB) DropNamespace(ctx context.Context, namespace string) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "DropNamespace", ctx, namespace)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// DropNamespace indicates an expected call of DropNamespace.
+func (mr *MockSurrealDBMockRecorder) DropNamespace(ctx, namespace any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DropNamespace", reflect.TypeOf((*MockSurrealDB)(nil).DropNamespace), ctx, namespace)
 }
 
 // HealthCheck mocks base method.
@@ -9917,6 +9973,34 @@ func (mr *MockSurrealBDProviderMockRecorder) Create(ctx, table, data any) *gomoc
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Create", reflect.TypeOf((*MockSurrealBDProvider)(nil).Create), ctx, table, data)
 }
 
+// CreateDatabase mocks base method.
+func (m *MockSurrealBDProvider) CreateDatabase(ctx context.Context, database string) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "CreateDatabase", ctx, database)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// CreateDatabase indicates an expected call of CreateDatabase.
+func (mr *MockSurrealBDProviderMockRecorder) CreateDatabase(ctx, database any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CreateDatabase", reflect.TypeOf((*MockSurrealBDProvider)(nil).CreateDatabase), ctx, database)
+}
+
+// CreateNamespace mocks base method.
+func (m *MockSurrealBDProvider) CreateNamespace(ctx context.Context, namespace string) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "CreateNamespace", ctx, namespace)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// CreateNamespace indicates an expected call of CreateNamespace.
+func (mr *MockSurrealBDProviderMockRecorder) CreateNamespace(ctx, namespace any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CreateNamespace", reflect.TypeOf((*MockSurrealBDProvider)(nil).CreateNamespace), ctx, namespace)
+}
+
 // Delete mocks base method.
 func (m *MockSurrealBDProvider) Delete(ctx context.Context, table, id string) (any, error) {
 	m.ctrl.T.Helper()
@@ -9930,6 +10014,34 @@ func (m *MockSurrealBDProvider) Delete(ctx context.Context, table, id string) (a
 func (mr *MockSurrealBDProviderMockRecorder) Delete(ctx, table, id any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Delete", reflect.TypeOf((*MockSurrealBDProvider)(nil).Delete), ctx, table, id)
+}
+
+// DropDatabase mocks base method.
+func (m *MockSurrealBDProvider) DropDatabase(ctx context.Context, database string) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "DropDatabase", ctx, database)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// DropDatabase indicates an expected call of DropDatabase.
+func (mr *MockSurrealBDProviderMockRecorder) DropDatabase(ctx, database any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DropDatabase", reflect.TypeOf((*MockSurrealBDProvider)(nil).DropDatabase), ctx, database)
+}
+
+// DropNamespace mocks base method.
+func (m *MockSurrealBDProvider) DropNamespace(ctx context.Context, namespace string) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "DropNamespace", ctx, namespace)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// DropNamespace indicates an expected call of DropNamespace.
+func (mr *MockSurrealBDProviderMockRecorder) DropNamespace(ctx, namespace any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DropNamespace", reflect.TypeOf((*MockSurrealBDProvider)(nil).DropNamespace), ctx, namespace)
 }
 
 // HealthCheck mocks base method.
