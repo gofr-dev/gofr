@@ -4,9 +4,7 @@ import (
 	"context"
 	"fmt"
 	"net/http"
-	"net/http/httptest"
 	"os"
-	"strconv"
 	"testing"
 	"time"
 
@@ -87,40 +85,6 @@ func getConfigs(t *testing.T) config.Config {
 	}
 
 	return config.NewEnvFile(configLocation, logging.NewLogger(logging.INFO))
-}
-
-func TestRegisterProfillingRoutes(t *testing.T) {
-	port := testutil.GetFreePort(t)
-
-	c := &container.Container{
-		Logger: logging.NewLogger(logging.INFO),
-	}
-
-	server := &httpServer{
-		router: gofrHTTP.NewRouter(),
-		port:   port,
-	}
-
-	server.RegisterProfilingRoutes()
-
-	go server.run(c)
-
-	// Test if the expected handlers are registered for the pprof endpoints
-	expectedRoutes := []string{
-		"/debug/pprof/",
-		"/debug/pprof/cmdline",
-		"/debug/pprof/symbol",
-	}
-
-	serverURL := "http://localhost:" + strconv.Itoa(8000)
-
-	for _, route := range expectedRoutes {
-		r := httptest.NewRequest(http.MethodGet, serverURL+route, http.NoBody)
-		rr := httptest.NewRecorder()
-		server.router.ServeHTTP(rr, r)
-
-		assert.Equal(t, http.StatusOK, rr.Code)
-	}
 }
 
 func TestShutdown_ServerStopsListening(t *testing.T) {

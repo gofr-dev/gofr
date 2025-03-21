@@ -12,8 +12,9 @@ import (
 )
 
 type metricServer struct {
-	port int
-	srv  *http.Server
+	port             int
+	srv              *http.Server
+	profilingEnabled bool
 }
 
 func newMetricServer(port int) *metricServer {
@@ -26,7 +27,7 @@ func (m *metricServer) Run(c *container.Container) {
 
 		m.srv = &http.Server{
 			Addr:              fmt.Sprintf(":%d", m.port),
-			Handler:           metrics.GetHandler(c.Metrics()),
+			Handler:           metrics.GetHandler(c.Metrics(), m.profilingEnabled),
 			ReadHeaderTimeout: 5 * time.Second,
 		}
 
