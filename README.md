@@ -109,7 +109,7 @@ Explore a variety of ready-to-run examples in the [GoFr examples directory](http
 
 ---
 
-## 👍 **Contribute**
+## 🤝 **Contribute**
 
 Help us make GoFr even better:
 
