@@ -131,6 +131,11 @@ func newDB(connectionURL string) (con connection.Connection, err error) {
 func (c *Client) Connect() {
 	c.logger.Debugf("connecting to SurrealDB at %v:%v to database %v", c.config.Host, c.config.Port, c.config.Database)
 
+	surrealDBBuckets := []float64{.05, .075, .1, .125, .15, .2, .3, .5, .75, 1, 2, 3, 4, 5, 7.5, 10}
+
+	c.metrics.NewHistogram("app_surrealdb_stats", "Response time of SurrealDB operations in microseconds.", surrealDBBuckets...)
+	c.metrics.NewGauge("app_surrealdb_open_connections", "Number of open SurrealDB connections.")
+
 	endpoint := c.buildEndpoint()
 	err := c.connectToDatabase(endpoint)
 
@@ -672,6 +677,17 @@ func (c *Client) sendOperationStats(ql *QueryLog, startTime time.Time) {
 	c.logger.Debug(ql)
 	ql.Namespace = c.config.Namespace
 	ql.Database = c.config.Database
+
+	c.metrics.RecordHistogram(context.Background(), "app_surrealdb_stats", float64(duration),
+		"namespace", ql.Namespace,
+		"database", ql.Database,
+		"operation", ql.OperationName)
+
+	if c.db != nil {
+		c.metrics.SetGauge("app_surrealdb_open_connections", 1)
+	} else {
+		c.metrics.SetGauge("app_surrealdb_open_connections", 0)
+	}
 
 	if ql.Span == nil {
 		return
