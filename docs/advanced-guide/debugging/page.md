@@ -9,16 +9,12 @@ This guide explains how to enable and use `pprof` in GoFr applications.
 ## Enabling `pprof` in GoFr
 
 ### Prerequisites
-1. Set the environment variable `APP_ENV` to `DEBUG` in your `/configs/*.env` file:
-   ```bash
-   APP_ENV=DEBUG
-   ```
-2. Ensure the `METRICS_PORT` is set (default is `2121`):
+Ensure the `METRICS_PORT` is set (default is `2121`):
    ```bash
    METRICS_PORT=2121
    ```
 
-When `APP_ENV=DEBUG`, GoFr automatically registers the following `pprof` routes:
+GoFr automatically registers the following `pprof` routes:
 - `/debug/pprof/cmdline`
 - `/debug/pprof/profile`
 - `/debug/pprof/symbol`
@@ -122,7 +118,6 @@ go tool trace trace.out
 
 1. **Set Environment Variables**:
    ```bash
-   APP_ENV=DEBUG
    METRICS_PORT=2121
    ```
 
