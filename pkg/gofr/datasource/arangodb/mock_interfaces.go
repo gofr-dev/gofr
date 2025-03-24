@@ -12,9 +12,10 @@ package arangodb
 import (
 	"context"
 	"fmt"
-	"github.com/arangodb/go-driver/v2/connection"
 	reflect "reflect"
 	"strings"
+
+	"github.com/arangodb/go-driver/v2/connection"
 
 	arangodb "github.com/arangodb/go-driver/v2/arangodb"
 	gomock "go.uber.org/mock/gomock"

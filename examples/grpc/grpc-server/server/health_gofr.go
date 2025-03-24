@@ -3,8 +3,9 @@ package server
 
 import (
 	"fmt"
-	"google.golang.org/grpc"
 	"time"
+
+	"google.golang.org/grpc"
 
 	"gofr.dev/pkg/gofr"
 
