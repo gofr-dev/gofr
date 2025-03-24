@@ -1,6 +1,8 @@
 package middleware
 
 import (
+	"fmt"
+	"slices"
 	"time"
 
 	"github.com/golang-jwt/jwt/v5"
@@ -14,8 +16,6 @@ func validateClaims(claims jwt.MapClaims, config *ClaimConfig) error {
 		validateExpiry,
 		validateNotBefore,
 		validateIssuedAt,
-		validateJTI,
-		validateRoles,
 	}
 
 	for _, validate := range validators {
@@ -28,54 +28,83 @@ func validateClaims(claims jwt.MapClaims, config *ClaimConfig) error {
 }
 
 func validateIssuer(claims jwt.MapClaims, config *ClaimConfig) error {
-	if len(config.TrustedIssuers) == 0 {
+	if config.trustedIssuer == "" {
 		return nil
 	}
 
 	iss, ok := claims["iss"].(string)
-	if !ok || !contains(config.TrustedIssuers, iss) {
+	if !ok || iss != config.trustedIssuer {
 		return errInvalidIssuer
 	}
-
 	return nil
 }
 
 func validateAudience(claims jwt.MapClaims, config *ClaimConfig) error {
-	if len(config.ValidAudiences) == 0 {
+	if len(config.validAudiences) == 0 {
 		return nil
 	}
 
-	switch aud := claims["aud"].(type) {
+	audClaim, exists := claims["aud"]
+	if !exists {
+		return errInvalidAudience
+	}
+
+	switch aud := audClaim.(type) {
 	case string:
-		if !contains(config.ValidAudiences, aud) {
+		if !slices.Contains(config.validAudiences, aud) {
 			return errInvalidAudience
 		}
-	case []any:
-		if !containsAny(config.ValidAudiences, aud) {
+	case []interface{}:
+		found := false
+		for _, a := range aud {
+			if aStr, ok := a.(string); ok && slices.Contains(config.validAudiences, aStr) {
+				found = true
+				break
+			}
+		}
+		if !found {
 			return errInvalidAudience
 		}
 	default:
 		return errInvalidAudience
 	}
-
 	return nil
 }
 
 func validateSubject(claims jwt.MapClaims, config *ClaimConfig) error {
-	if len(config.AllowedSubjects) == 0 {
+	if len(config.allowedSubjects) == 0 {
 		return nil
 	}
 
-	sub, ok := claims["sub"].(string)
-	if !ok || !contains(config.AllowedSubjects, sub) {
-		return errInvalidSubject
+	subClaim, exists := claims["sub"]
+	if !exists {
+		return errInvalidSubjects
 	}
 
+	switch sub := subClaim.(type) {
+	case string:
+		if !slices.Contains(config.allowedSubjects, sub) {
+			return errInvalidSubjects
+		}
+	case []interface{}:
+		found := false
+		for _, a := range sub {
+			if aStr, ok := a.(string); ok && slices.Contains(config.allowedSubjects, aStr) {
+				found = true
+				break
+			}
+		}
+		if !found {
+			return errInvalidSubjects
+		}
+	default:
+		return errInvalidSubjects
+	}
 	return nil
 }
 
 func validateExpiry(claims jwt.MapClaims, config *ClaimConfig) error {
-	if !config.CheckExpiry {
+	if !config.checkExpiry {
 		return nil
 	}
 
@@ -88,7 +117,7 @@ func validateExpiry(claims jwt.MapClaims, config *ClaimConfig) error {
 }
 
 func validateNotBefore(claims jwt.MapClaims, config *ClaimConfig) error {
-	if !config.CheckNotBefore {
+	if !config.checkNotBefore {
 		return nil
 	}
 
@@ -101,72 +130,36 @@ func validateNotBefore(claims jwt.MapClaims, config *ClaimConfig) error {
 }
 
 func validateIssuedAt(claims jwt.MapClaims, config *ClaimConfig) error {
-	if !config.CheckIssuedAt {
+	if config == nil || !config.issuedAtRule.enabled {
 		return nil
 	}
 
-	iat, ok := claims["iat"].(float64)
-	if !ok || time.Now().Unix() < int64(iat) {
+	iatFloat, ok := claims["iat"].(float64)
+	if !ok {
 		return errInvalidIssuedAt
 	}
 
-	return nil
-}
+	issuedAt := time.Unix(int64(iatFloat), 0)
+	rule := config.issuedAtRule
 
-func validateJTI(claims jwt.MapClaims, config *ClaimConfig) error {
-	if config.ValidateJTI == nil {
+	// Check all constraints in order of strictness
+	if rule.exact != nil {
+		if !issuedAt.Equal(*rule.exact) {
+			return fmt.Errorf("token issued at %v does not match exact required time %v",
+				issuedAt.Format(time.RFC3339), rule.exact.Format(time.RFC3339))
+		}
 		return nil
 	}
 
-	jti, ok := claims["jti"].(string)
-	if !ok || !config.ValidateJTI(jti) {
-		return errInvalidJTI
+	if rule.before != nil && !issuedAt.Before(*rule.before) {
+		return fmt.Errorf("token issued at %v is not before %v",
+			issuedAt.Format(time.RFC3339), rule.before.Format(time.RFC3339))
+	}
+
+	if rule.after != nil && !issuedAt.After(*rule.after) {
+		return fmt.Errorf("token issued at %v is not after %v",
+			issuedAt.Format(time.RFC3339), rule.after.Format(time.RFC3339))
 	}
 
 	return nil
-}
-
-func validateRoles(claims jwt.MapClaims, config *ClaimConfig) error {
-	if len(config.RequiredRoles) == 0 {
-		return nil
-	}
-
-	roles, _ := claims["roles"].([]any)
-	if !hasRequiredRole(roles, config.RequiredRoles) {
-		return errInvalidRole
-	}
-
-	return nil
-}
-
-func hasRequiredRole(roles []any, required []string) bool {
-	for _, r := range required {
-		for _, role := range roles {
-			if roleStr, ok := role.(string); ok && roleStr == r {
-				return true
-			}
-		}
-	}
-
-	return false
-}
-
-func contains(s []string, str string) bool {
-	for _, v := range s {
-		if v == str {
-			return true
-		}
-	}
-
-	return false
-}
-
-func containsAny(s []string, items []any) bool {
-	for _, item := range items {
-		if str, ok := item.(string); ok && contains(s, str) {
-			return true
-		}
-	}
-
-	return false
 }

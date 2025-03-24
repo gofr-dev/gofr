@@ -23,10 +23,8 @@ var (
 	errInvalidAudience             = errors.New("invalid audience")
 	errTokenExpired                = errors.New("token has expired")
 	errTokenNotActive              = errors.New("token is not active yet")
-	errInvalidRole                 = errors.New("insufficient permissions")
-	errInvalidSubject              = errors.New("invalid subject")
+	errInvalidSubjects             = errors.New("invalid subjects")
 	errInvalidIssuedAt             = errors.New("invalid issued at time")
-	errInvalidJTI                  = errors.New("invalid JWT ID")
 )
 
 // authMethod represents a custom type to define the different authentication methods supported.
@@ -70,61 +68,79 @@ type OauthConfigs struct {
 type ClaimOption func(*ClaimConfig)
 
 type ClaimConfig struct {
-	RequiredRoles   []string
-	TrustedIssuers  []string
-	ValidAudiences  []string
-	AllowedSubjects []string
-	CheckExpiry     bool
-	CheckNotBefore  bool
-	CheckIssuedAt   bool
-	ValidateJTI     func(string) bool
+	trustedIssuer   string
+	validAudiences  []string
+	allowedSubjects []string
+	checkExpiry     bool
+	checkNotBefore  bool
+	issuedAtRule    IssuedAtConstraint
 }
 
-func WithRequiredRoles(roles ...string) ClaimOption {
-	return func(cfg *ClaimConfig) {
-		cfg.RequiredRoles = roles
-	}
+type IssuedAtConstraint struct {
+	enabled bool
+	before  *time.Time
+	after   *time.Time
+	exact   *time.Time
 }
 
-func WithTrustedIssuers(issuers ...string) ClaimOption {
+// **Claim Configuration Functions**
+func WithTrustedIssuer(issuer string) ClaimOption {
 	return func(cfg *ClaimConfig) {
-		cfg.TrustedIssuers = issuers
+		cfg.trustedIssuer = issuer
 	}
 }
 
 func WithValidAudiences(audiences ...string) ClaimOption {
 	return func(cfg *ClaimConfig) {
-		cfg.ValidAudiences = audiences
+		cfg.validAudiences = audiences
 	}
 }
 
 func WithAllowedSubjects(subjects ...string) ClaimOption {
 	return func(cfg *ClaimConfig) {
-		cfg.AllowedSubjects = subjects
+		cfg.allowedSubjects = subjects
 	}
 }
 
-func WithCheckExpiry() ClaimOption {
+func EnforceExpiryCheck() ClaimOption {
 	return func(cfg *ClaimConfig) {
-		cfg.CheckExpiry = true
+		cfg.checkExpiry = true
 	}
 }
 
-func WithCheckNotBefore() ClaimOption {
+func EnforceNotBeforeCheck() ClaimOption {
 	return func(cfg *ClaimConfig) {
-		cfg.CheckNotBefore = true
+		cfg.checkNotBefore = true
 	}
 }
 
-func WithCheckIssuedAt() ClaimOption {
+func IssuedBefore(t time.Time) ClaimOption {
 	return func(cfg *ClaimConfig) {
-		cfg.CheckIssuedAt = true
+		t = t.Truncate(time.Second)
+		cfg.issuedAtRule = IssuedAtConstraint{
+			enabled: true,
+			before:  &t,
+		}
 	}
 }
 
-func WithJTIValidator(fn func(string) bool) ClaimOption {
+func IssuedAfter(t time.Time) ClaimOption {
 	return func(cfg *ClaimConfig) {
-		cfg.ValidateJTI = fn
+		t = t.Truncate(time.Second)
+		cfg.issuedAtRule = IssuedAtConstraint{
+			enabled: true,
+			after:   &t,
+		}
+	}
+}
+
+func IssuedAt(t time.Time) ClaimOption {
+	return func(cfg *ClaimConfig) {
+		t = t.Truncate(time.Second)
+		cfg.issuedAtRule = IssuedAtConstraint{
+			enabled: true,
+			exact:   &t,
+		}
 	}
 }
 
@@ -182,13 +198,17 @@ type PublicKeyProvider interface {
 	Get(kid string) *rsa.PublicKey
 }
 
-// OAuth is a middleware function that validates JWT access tokens using a provided PublicKeyProvider.
-func OAuth(key PublicKeyProvider, config *ClaimConfig) func(http.Handler) http.Handler {
+func OAuth(key PublicKeyProvider, opts ...ClaimOption) func(http.Handler) http.Handler {
 	return func(inner http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			if isWellKnown(r.URL.Path) {
 				inner.ServeHTTP(w, r)
 				return
+			}
+
+			config := &ClaimConfig{}
+			for _, opt := range opts {
+				opt(config)
 			}
 
 			claims, err := processToken(r.Header.Get("Authorization"), key, config)
@@ -242,7 +262,7 @@ func extractToken(authHeader string) (string, error) {
 	return token, nil
 }
 
-// ParseToken parses the JWT token using the provided key provider.
+// parseToken parses the JWT token using the provided key provider.
 func parseToken(tokenString string, key PublicKeyProvider) (*jwt.Token, error) {
 	return jwt.Parse(tokenString, func(token *jwt.Token) (any, error) {
 		kid := token.Header["kid"]
