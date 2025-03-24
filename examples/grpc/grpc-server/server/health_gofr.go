@@ -52,7 +52,7 @@ func (h *healthServer) Check(ctx *gofr.Context, req *healthpb.HealthCheckRequest
 	res, err := h.Server.Check(ctx.Context, req)
 	logger := gofrGRPC.NewgRPCLogger()
 	logger.DocumentRPCLog(ctx.Context, ctx.Logger, ctx.Metrics(), start, err,
-	fmt.Sprintf("/grpc.health.v1.Health/Check	Service: %q", req.Service), "app_gRPC-Server_stats")
+		fmt.Sprintf("/grpc.health.v1.Health/Check	Service: %q", req.Service), "app_gRPC-Server_stats")
 	span.End()
 	return res, err
 }
@@ -63,7 +63,7 @@ func (h *healthServer) Watch(ctx *gofr.Context, in *healthpb.HealthCheckRequest,
 	err := h.Server.Watch(in, stream)
 	logger := gofrGRPC.NewgRPCLogger()
 	logger.DocumentRPCLog(ctx.Context, ctx.Logger, ctx.Metrics(), start, err,
-	fmt.Sprintf("/grpc.health.v1.Health/Watch	Service: %q", in.Service), "app_gRPC-Server_stats")
+		fmt.Sprintf("/grpc.health.v1.Health/Watch	Service: %q", in.Service), "app_gRPC-Server_stats")
 	span.End()
 	return err
 }
@@ -74,7 +74,7 @@ func (h *healthServer) SetServingStatus(ctx *gofr.Context, service string, servi
 	h.Server.SetServingStatus(service, servingStatus)
 	logger := gofrGRPC.NewgRPCLogger()
 	logger.DocumentRPCLog(ctx.Context, ctx.Logger, ctx.Metrics(), start, nil,
-	fmt.Sprintf("/grpc.health.v1.Health/SetServingStatus	Service: %q", service), "app_gRPC-Server_stats")
+		fmt.Sprintf("/grpc.health.v1.Health/SetServingStatus	Service: %q", service), "app_gRPC-Server_stats")
 	span.End()
 }
 
@@ -84,7 +84,7 @@ func (h *healthServer) Shutdown(ctx *gofr.Context) {
 	h.Server.Shutdown()
 	logger := gofrGRPC.NewgRPCLogger()
 	logger.DocumentRPCLog(ctx.Context, ctx.Logger, ctx.Metrics(), start, nil,
-	"/grpc.health.v1.Health/Shutdown", "app_gRPC-Server_stats")
+		"/grpc.health.v1.Health/Shutdown", "app_gRPC-Server_stats")
 	span.End()
 }
 
@@ -94,6 +94,6 @@ func (h *healthServer) Resume(ctx *gofr.Context) {
 	h.Server.Resume()
 	logger := gofrGRPC.NewgRPCLogger()
 	logger.DocumentRPCLog(ctx.Context, ctx.Logger, ctx.Metrics(), start, nil,
-	"/grpc.health.v1.Health/Resume", "app_gRPC-Server_stats")
+		"/grpc.health.v1.Health/Resume", "app_gRPC-Server_stats")
 	span.End()
 }

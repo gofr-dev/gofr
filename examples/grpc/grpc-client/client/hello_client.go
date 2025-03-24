@@ -34,12 +34,12 @@ func NewHelloGoFrClient(host string, metrics metrics.Manager) (HelloGoFrClient, 
 	healthClient := NewHealthClient(conn)
 
 	return &HelloClientWrapper{
-		client: res,
+		client:       res,
 		HealthClient: healthClient,
 	}, nil
 }
-func (h *HelloClientWrapper) SayHello(ctx *gofr.Context, req *HelloRequest, 
-opts ...grpc.CallOption) (*HelloResponse, error) {
+func (h *HelloClientWrapper) SayHello(ctx *gofr.Context, req *HelloRequest,
+	opts ...grpc.CallOption) (*HelloResponse, error) {
 	result, err := invokeRPC(ctx, "/Hello/SayHello", func() (interface{}, error) {
 		return h.client.SayHello(ctx.Context, req, opts...)
 	})
