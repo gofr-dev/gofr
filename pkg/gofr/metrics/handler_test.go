@@ -28,7 +28,7 @@ func Test_MetricsGetHandler_MetricsNotRegistered(t *testing.T) {
 		manager := NewMetricsManager(exporters.Prometheus("test-app", "v1.0.0"),
 			logging.NewMockLogger(logging.INFO))
 
-		handler := GetHandler(manager, false)
+		handler := GetHandler(manager)
 
 		server = httptest.NewServer(handler)
 
@@ -56,7 +56,7 @@ func Test_MetricsGetHandler_SystemMetricsRegistered(t *testing.T) {
 	manager.NewGauge("app_go_numGC", "Number of completed Garbage Collector cycles.")
 	manager.NewGauge("app_go_sys", "Number of total bytes of memory.")
 
-	handler := GetHandler(manager, false)
+	handler := GetHandler(manager)
 
 	server := httptest.NewServer(handler)
 
@@ -89,7 +89,7 @@ func Test_MetricsGetHandler_RegisteredProfilingRoutes(t *testing.T) {
 	manager.NewGauge("app_go_numGC", "Number of completed Garbage Collector cycles.")
 	manager.NewGauge("app_go_sys", "Number of total bytes of memory.")
 
-	handler := GetHandler(manager, true)
+	handler := GetHandler(manager)
 
 	server := httptest.NewServer(handler)
 

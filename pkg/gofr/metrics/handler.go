@@ -10,7 +10,7 @@ import (
 )
 
 // GetHandler creates a new HTTP handler that serves metrics collected by the provided metrics manager to '/metrics' route`.
-func GetHandler(m Manager, profilingEnabled bool) http.Handler {
+func GetHandler(m Manager) http.Handler {
 	var router = mux.NewRouter()
 
 	// Prometheus
@@ -25,14 +25,12 @@ func GetHandler(m Manager, profilingEnabled bool) http.Handler {
 	// These endpoints provide various profiling information for the application,
 	// such as command-line arguments, memory profiles, symbol information, and
 	// execution traces.
-	if profilingEnabled {
-		router.HandleFunc("/debug/pprof/cmdline", pprof.Cmdline)
-		router.HandleFunc("/debug/pprof/profile", pprof.Profile)
-		router.HandleFunc("/debug/pprof/symbol", pprof.Symbol)
-		router.HandleFunc("/debug/pprof/trace", pprof.Trace)
+	router.HandleFunc("/debug/pprof/cmdline", pprof.Cmdline)
+	router.HandleFunc("/debug/pprof/profile", pprof.Profile)
+	router.HandleFunc("/debug/pprof/symbol", pprof.Symbol)
+	router.HandleFunc("/debug/pprof/trace", pprof.Trace)
 
-		router.NewRoute().Methods(http.MethodGet).PathPrefix("/debug/pprof/").HandlerFunc(pprof.Index)
-	}
+	router.NewRoute().Methods(http.MethodGet).PathPrefix("/debug/pprof/").HandlerFunc(pprof.Index)
 
 	return router
 }
