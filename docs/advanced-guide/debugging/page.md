@@ -1,6 +1,6 @@
 # Using `pprof` in GoFr Applications
 
-In GoFr applications, `pprof` profiling is automatically enabled when the environment variable `APP_ENV` is set to `DEBUG`. The profiling endpoints are served on the internal `METRICS_PORT`, which defaults to `2121` if not specified.
+In GoFr applications, `pprof` profiling is automatically enabled. The profiling endpoints are served on the internal `METRICS_PORT`, which defaults to `2121` if not specified.
 
 This guide explains how to enable and use `pprof` in GoFr applications.
 
