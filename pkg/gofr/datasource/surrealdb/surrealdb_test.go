@@ -128,7 +128,6 @@ func Test_Query(t *testing.T) {
 	client := New(&Config{})
 	client.UseLogger(mockLogger)
 	client.UseMetrics(mockMetrics)
-	client.UseMetrics(mockMetrics)
 	client.db = mockConn
 
 	t.Run("successful query", func(t *testing.T) {
