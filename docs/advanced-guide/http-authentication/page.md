@@ -138,15 +138,78 @@ It involves sending the prefix `Bearer` trailed by the encoded token within the 
 GoFr supports authenticating tokens encoded by algorithm `RS256/384/512`. 
 
 ### App level Authentication
-Enable OAuth 2.0 with three-legged flow to authenticate requests
+Enable OAuth 2.0 with three-legged flow to authenticate requests. Use `EnableOAuth(jwks-endpoint,refresh_interval, opts ...jwt.ParserOption)` to configure GoFr with pre-defined credentials.
 
-Use `EnableOAuth(jwks-endpoint,refresh_interval)` to configure GoFr with pre-defined credentials.
+### Description
+`EnableOAuth` configures OAuth authentication middleware for the application.
+
+- It registers a new HTTP service to fetch **JSON Web Key Sets (JWKS)**, which are used to verify JWTs.
+- The JWKS endpoint is periodically refreshed based on the specified refresh interval.
+- Additional JWT validation options can be passed using `jwt.ParserOption`, allowing fine-grained control over claim validation.
+
+### Parameters
+| Parameter         | Type                | Description |
+|------------------|-------------------|-------------|
+| `jwksEndpoint`   | `string`           | URL of the JWKS endpoint used to retrieve signing keys for token verification. |
+| `refreshInterval` | `int`              | Interval (in seconds) at which the JWKS cache is refreshed. |
+| `opts`           | `...jwt.ParserOption` | Optional JWT claim validation configurations, such as issuer, audience, and expiration requirements. |
+
+### Available JWT Claim Validations
+
+#### Issued At (`iat`) Validation
+Ensures that tokens are not accepted before their issuance time.
+
+```go
+jwt.WithIssuedAt()
+```
+
+#### Expiration (`exp`) Validation
+If the `exp` claim is present, it is always validated to ensure the token has not expired. To make the `exp` claim mandatory in tokens, use:
+
+```go
+jwt.WithExpirationRequired()
+```
+
+> This ensures that every token must include the `exp` claim, making expiration validation a strict requirement.
+
+#### Not Before (`nbf`) Validation
+If the `nbf` claim is present, it is always validated to ensure that a JWT is only valid after a certain time. No additional configuration is needed for this validation.
+
+#### Audience (`aud`) Validation
+Verifies that the token is intended for the expected audience.
+
+```go
+jwt.WithAudience("https://api.example.com")
+```
+
+#### Subject (`sub`) Validation
+Ensures the token is associated with the expected subject.
+
+```go
+jwt.WithSubject("user@example.com")
+```
+
+#### Issuer (`iss`) Validation
+Ensures the token is issued by a trusted authority.
+
+```go
+jwt.WithIssuer("https://auth.example.com")
+```
+
+### Example
 
 ```go
 func main() {
 	app := gofr.New()
 
-	app.EnableOAuth("http://jwks-endpoint", 20)
+	app.EnableOAuth(
+		"http://jwks-endpoint", 
+		20,
+        jwt.WithIssuedAt(),
+        jwt.WithExpirationRequired(),
+        jwt.WithAudience("https://api.example.com"),
+        jwt.WithIssuer("https://auth.example.com")
+		)
 
 	app.GET("/protected-resource", func(c *gofr.Context) (interface{}, error) {
 		// Handle protected resource access

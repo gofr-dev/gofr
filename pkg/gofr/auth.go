@@ -3,6 +3,8 @@ package gofr
 import (
 	"time"
 
+	"github.com/golang-jwt/jwt/v5"
+
 	"gofr.dev/pkg/gofr/container"
 	"gofr.dev/pkg/gofr/http/middleware"
 )
@@ -86,7 +88,7 @@ func (a *App) EnableAPIKeyAuthWithValidator(validateFunc func(c *container.Conta
 // The refresh interval specifies how often to refresh the token cache.
 func (a *App) EnableOAuth(jwksEndpoint string,
 	refreshInterval int,
-	opts ...middleware.ClaimOption,
+	opts ...jwt.ParserOption,
 ) {
 	a.AddHTTPService("gofr_oauth", jwksEndpoint)
 

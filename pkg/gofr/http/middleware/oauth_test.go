@@ -3,21 +3,15 @@ package middleware
 import (
 	"bytes"
 	"context"
-	"crypto/rand"
-	"crypto/rsa"
-	"encoding/base64"
 	"encoding/json"
-	"fmt"
-	"github.com/golang-jwt/jwt/v5"
-	"github.com/stretchr/testify/mock"
 	"io"
-	"math/big"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
 	"time"
 
+	"github.com/golang-jwt/jwt/v5"
 	"github.com/gorilla/mux"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -416,606 +410,82 @@ func (*MockJSONResponseErrorProvider) GetWithHeaders(context.Context, string, ma
 	return response, nil
 }
 
-func Test_validateIssuer(t *testing.T) {
-	tests := []struct {
-		name        string
-		claims      jwt.MapClaims
-		config      ClaimConfig
-		expectedErr error
-	}{
-		{
-			name: "valid issuer",
-			claims: jwt.MapClaims{
-				"iss": "trusted-issuer",
-			},
-			config:      ClaimConfig{trustedIssuer: "trusted-issuer"},
-			expectedErr: nil,
-		},
-		{
-			name: "invalid issuer",
-			claims: jwt.MapClaims{
-				"iss": "untrusted-issuer",
-			},
-			config:      ClaimConfig{trustedIssuer: "trusted-issuer"},
-			expectedErr: errInvalidIssuer,
-		},
-		{
-			name:        "missing issuer claim",
-			claims:      jwt.MapClaims{},
-			config:      ClaimConfig{trustedIssuer: "trusted-issuer"},
-			expectedErr: errInvalidIssuer,
-		},
-		{
-			name: "no issuer config",
-			claims: jwt.MapClaims{
-				"iss": "any-issuer",
-			},
-			config:      ClaimConfig{},
-			expectedErr: nil,
-		},
-	}
+func Test_OAuthFailureInvalidAudience(t *testing.T) {
+	router := mux.NewRouter()
 
-	for _, tc := range tests {
-		t.Run(tc.name, func(t *testing.T) {
-			err := validateIssuer(tc.claims, &tc.config)
-			if tc.expectedErr != nil {
-				assert.ErrorIs(t, err, tc.expectedErr)
-			} else {
-				assert.NoError(t, err)
-			}
-		})
-	}
-}
-
-func Test_validateAudience(t *testing.T) {
-	validAudiences := []string{"aud1", "aud2"}
-
-	tests := []struct {
-		name        string
-		claims      jwt.MapClaims
-		config      ClaimConfig
-		expectedErr error
-	}{
-		{
-			name: "valid string audience",
-			claims: jwt.MapClaims{
-				"aud": "aud1",
-			},
-			config:      ClaimConfig{validAudiences: validAudiences},
-			expectedErr: nil,
-		},
-		{
-			name: "valid array audience",
-			claims: jwt.MapClaims{
-				"aud": []any{"aud3", "aud1"},
-			},
-			config:      ClaimConfig{validAudiences: validAudiences},
-			expectedErr: nil,
-		},
-		{
-			name: "invalid string audience",
-			claims: jwt.MapClaims{
-				"aud": "aud3",
-			},
-			config:      ClaimConfig{validAudiences: validAudiences},
-			expectedErr: errInvalidAudience,
-		},
-		{
-			name: "invalid array audience",
-			claims: jwt.MapClaims{
-				"aud": []any{"aud3", "aud4"},
-			},
-			config:      ClaimConfig{validAudiences: validAudiences},
-			expectedErr: errInvalidAudience,
-		},
-		{
-			name: "invalid audience type",
-			claims: jwt.MapClaims{
-				"aud": 123,
-			},
-			config:      ClaimConfig{validAudiences: validAudiences},
-			expectedErr: errInvalidAudience,
-		},
-		{
-			name:        "missing audience claim",
-			claims:      jwt.MapClaims{},
-			config:      ClaimConfig{validAudiences: validAudiences},
-			expectedErr: errInvalidAudience,
-		},
-	}
-
-	for _, tc := range tests {
-		t.Run(tc.name, func(t *testing.T) {
-			err := validateAudience(tc.claims, &tc.config)
-			if tc.expectedErr != nil {
-				assert.ErrorIs(t, err, tc.expectedErr)
-			} else {
-				assert.NoError(t, err)
-			}
-		})
-	}
-}
-
-func Test_validateSubject(t *testing.T) {
-	allowedSubjects := []string{"sub1", "sub2"}
-
-	tests := []struct {
-		name        string
-		claims      jwt.MapClaims
-		config      ClaimConfig
-		expectedErr error
-	}{
-		{
-			name: "valid string subject",
-			claims: jwt.MapClaims{
-				"sub": "sub1",
-			},
-			config:      ClaimConfig{allowedSubjects: allowedSubjects},
-			expectedErr: nil,
-		},
-		{
-			name: "valid array subject",
-			claims: jwt.MapClaims{
-				"sub": []any{"sub1", "sub3"},
-			},
-			config:      ClaimConfig{allowedSubjects: allowedSubjects},
-			expectedErr: nil,
-		},
-		{
-			name: "invalid string subject",
-			claims: jwt.MapClaims{
-				"sub": "sub3",
-			},
-			config:      ClaimConfig{allowedSubjects: allowedSubjects},
-			expectedErr: errInvalidSubjects,
-		},
-		{
-			name: "invalid array subject",
-			claims: jwt.MapClaims{
-				"sub": []any{"sub3", "sub4"},
-			},
-			config:      ClaimConfig{allowedSubjects: allowedSubjects},
-			expectedErr: errInvalidSubjects,
-		},
-		{
-			name: "invalid subject type",
-			claims: jwt.MapClaims{
-				"sub": 123,
-			},
-			config:      ClaimConfig{allowedSubjects: allowedSubjects},
-			expectedErr: errInvalidSubjects,
-		},
-		{
-			name:        "missing subject claim",
-			claims:      jwt.MapClaims{},
-			config:      ClaimConfig{allowedSubjects: allowedSubjects},
-			expectedErr: errInvalidSubjects,
-		},
-	}
-
-	for _, tc := range tests {
-		t.Run(tc.name, func(t *testing.T) {
-			err := validateSubject(tc.claims, &tc.config)
-			if tc.expectedErr != nil {
-				assert.ErrorIs(t, err, tc.expectedErr)
-			} else {
-				assert.NoError(t, err)
-			}
-		})
-	}
-}
-
-func Test_validateExpiry(t *testing.T) {
-	now := time.Now().Unix()
-
-	tests := []struct {
-		name        string
-		claims      jwt.MapClaims
-		config      ClaimConfig
-		expectedErr error
-	}{
-		{
-			name: "valid expiry",
-			claims: jwt.MapClaims{
-				"exp": float64(now + 1000),
-			},
-			config:      ClaimConfig{checkExpiry: true},
-			expectedErr: nil,
-		},
-		{
-			name: "expired token",
-			claims: jwt.MapClaims{
-				"exp": float64(now - 1000),
-			},
-			config:      ClaimConfig{checkExpiry: true},
-			expectedErr: errTokenExpired,
-		},
-		{
-			name:        "missing exp claim",
-			claims:      jwt.MapClaims{},
-			config:      ClaimConfig{checkExpiry: true},
-			expectedErr: errTokenExpired,
-		},
-		{
-			name: "expiry check disabled",
-			claims: jwt.MapClaims{
-				"exp": float64(now - 1000),
-			},
-			config:      ClaimConfig{},
-			expectedErr: nil,
-		},
-	}
-
-	for _, tc := range tests {
-		t.Run(tc.name, func(t *testing.T) {
-			err := validateExpiry(tc.claims, &tc.config)
-			if tc.expectedErr != nil {
-				assert.ErrorIs(t, err, tc.expectedErr)
-			} else {
-				assert.NoError(t, err)
-			}
-		})
-	}
-}
-
-func Test_validateNotBefore(t *testing.T) {
-	now := time.Now().Unix()
-
-	tests := []struct {
-		name        string
-		claims      jwt.MapClaims
-		config      ClaimConfig
-		expectedErr error
-	}{
-		{
-			name: "valid not before",
-			claims: jwt.MapClaims{
-				"nbf": float64(now - 1000),
-			},
-			config:      ClaimConfig{checkNotBefore: true},
-			expectedErr: nil,
-		},
-		{
-			name: "token not active",
-			claims: jwt.MapClaims{
-				"nbf": float64(now + 1000),
-			},
-			config:      ClaimConfig{checkNotBefore: true},
-			expectedErr: errTokenNotActive,
-		},
-		{
-			name:        "missing nbf claim",
-			claims:      jwt.MapClaims{},
-			config:      ClaimConfig{checkNotBefore: true},
-			expectedErr: nil,
-		},
-		{
-			name: "not before check disabled",
-			claims: jwt.MapClaims{
-				"nbf": float64(now + 1000),
-			},
-			config:      ClaimConfig{},
-			expectedErr: nil,
-		},
-	}
-
-	for _, tc := range tests {
-		t.Run(tc.name, func(t *testing.T) {
-			err := validateNotBefore(tc.claims, &tc.config)
-			if tc.expectedErr != nil {
-				assert.ErrorIs(t, err, tc.expectedErr)
-			} else {
-				assert.NoError(t, err)
-			}
-		})
-	}
-}
-
-func Test_validateIssuedAt(t *testing.T) {
-	now := time.Now().Truncate(time.Second)
-	earlier := now.Add(-1 * time.Hour)
-	later := now.Add(1 * time.Hour)
-
-	tests := []struct {
-		name        string
-		claims      jwt.MapClaims
-		config      ClaimConfig
-		expectedErr string
-	}{
-		{
-			name: "valid exact time",
-			claims: jwt.MapClaims{
-				"iat": float64(now.Unix()),
-			},
-			config: ClaimConfig{
-				issuedAtRule: IssuedAtConstraint{
-					enabled: true,
-					exact:   &now,
-				},
-			},
-		},
-		{
-			name: "invalid exact time",
-			claims: jwt.MapClaims{
-				"iat": float64(earlier.Unix()),
-			},
-			config: ClaimConfig{
-				issuedAtRule: IssuedAtConstraint{
-					enabled: true,
-					exact:   &now,
-				},
-			},
-			expectedErr: fmt.Sprintf("token issued at %s does not match exact required time %s",
-				earlier.Format(time.RFC3339), now.Format(time.RFC3339)),
-		},
-		{
-			name: "valid before constraint",
-			claims: jwt.MapClaims{
-				"iat": float64(earlier.Unix()),
-			},
-			config: ClaimConfig{
-				issuedAtRule: IssuedAtConstraint{
-					enabled: true,
-					before:  &now,
-				},
-			},
-		},
-		{
-			name: "invalid before constraint",
-			claims: jwt.MapClaims{
-				"iat": float64(now.Unix()),
-			},
-			config: ClaimConfig{
-				issuedAtRule: IssuedAtConstraint{
-					enabled: true,
-					before:  &earlier,
-				},
-			},
-			expectedErr: fmt.Sprintf("token issued at %s is not before %s",
-				now.Format(time.RFC3339), earlier.Format(time.RFC3339)),
-		},
-		{
-			name: "valid after constraint",
-			claims: jwt.MapClaims{
-				"iat": float64(later.Unix()),
-			},
-			config: ClaimConfig{
-				issuedAtRule: IssuedAtConstraint{
-					enabled: true,
-					after:   &now,
-				},
-			},
-		},
-		{
-			name: "invalid after constraint",
-			claims: jwt.MapClaims{
-				"iat": float64(now.Unix()),
-			},
-			config: ClaimConfig{
-				issuedAtRule: IssuedAtConstraint{
-					enabled: true,
-					after:   &later,
-				},
-			},
-			expectedErr: fmt.Sprintf("token issued at %s is not after %s",
-				now.Format(time.RFC3339), later.Format(time.RFC3339)),
-		},
-		{
-			name: "multiple constraints - exact takes precedence",
-			claims: jwt.MapClaims{
-				"iat": float64(now.Unix()),
-			},
-			config: ClaimConfig{
-				issuedAtRule: IssuedAtConstraint{
-					enabled: true,
-					exact:   &now,
-					before:  &later,
-					after:   &earlier,
-				},
-			},
-		},
-		{
-			name:   "missing iat claim",
-			claims: jwt.MapClaims{},
-			config: ClaimConfig{
-				issuedAtRule: IssuedAtConstraint{enabled: true},
-			},
-			expectedErr: "invalid issued at time",
-		},
-	}
-
-	for _, tc := range tests {
-		t.Run(tc.name, func(t *testing.T) {
-			err := validateIssuedAt(tc.claims, &tc.config)
-
-			if tc.expectedErr != "" {
-				require.Error(t, err)
-				assert.Contains(t, err.Error(), tc.expectedErr)
-			} else {
-				assert.NoError(t, err)
-			}
-		})
-	}
-}
-
-func TestClaimOptions(t *testing.T) {
-	t.Run("WithTrustedIssuer", func(t *testing.T) {
-		cfg := &ClaimConfig{}
-		option := WithTrustedIssuer("trusted-issuer")
-		option(cfg)
-
-		assert.Equal(t, "trusted-issuer", cfg.trustedIssuer)
-	})
-
-	t.Run("WithValidAudiences", func(t *testing.T) {
-		cfg := &ClaimConfig{}
-		option := WithValidAudiences("aud1", "aud2")
-		option(cfg)
-
-		assert.ElementsMatch(t, []string{"aud1", "aud2"}, cfg.validAudiences)
-	})
-
-	t.Run("WithAllowedSubjects", func(t *testing.T) {
-		cfg := &ClaimConfig{}
-		option := WithAllowedSubjects("sub1", "sub2")
-		option(cfg)
-
-		assert.ElementsMatch(t, []string{"sub1", "sub2"}, cfg.allowedSubjects)
-	})
-
-	t.Run("EnforceExpiryCheck", func(t *testing.T) {
-		cfg := &ClaimConfig{}
-		option := EnforceExpiryCheck()
-		option(cfg)
-
-		assert.True(t, cfg.checkExpiry)
-	})
-
-	t.Run("EnforceNotBeforeCheck", func(t *testing.T) {
-		cfg := &ClaimConfig{}
-		option := EnforceNotBeforeCheck()
-		option(cfg)
-
-		assert.True(t, cfg.checkNotBefore)
-	})
-
-	t.Run("IssuedBefore", func(t *testing.T) {
-		cfg := &ClaimConfig{}
-		beforeTime := time.Now().Add(-time.Hour)
-		option := IssuedBefore(beforeTime)
-		option(cfg)
-
-		assert.True(t, cfg.issuedAtRule.enabled)
-		assert.NotNil(t, cfg.issuedAtRule.before)
-		assert.True(t, cfg.issuedAtRule.before.Before(time.Now()))
-	})
-
-	t.Run("IssuedAfter", func(t *testing.T) {
-		cfg := &ClaimConfig{}
-		afterTime := time.Now().Add(time.Hour)
-		option := IssuedAfter(afterTime)
-		option(cfg)
-
-		assert.True(t, cfg.issuedAtRule.enabled)
-		assert.NotNil(t, cfg.issuedAtRule.after)
-		assert.True(t, cfg.issuedAtRule.after.After(time.Now().Add(-time.Hour)))
-	})
-
-	t.Run("IssuedAt", func(t *testing.T) {
-		cfg := &ClaimConfig{}
-		exactTime := time.Now()
-		option := IssuedAt(exactTime)
-		option(cfg)
-
-		assert.True(t, cfg.issuedAtRule.enabled)
-		assert.NotNil(t, cfg.issuedAtRule.exact)
-		assert.Equal(t, exactTime.Truncate(time.Second), *cfg.issuedAtRule.exact)
-	})
-}
-
-type mockJWKSProvider struct {
-	mock.Mock
-}
-
-func (m *mockJWKSProvider) GetWithHeaders(ctx context.Context, path string, queryParams map[string]any, headers map[string]string) (*http.Response, error) {
-	args := m.Called(ctx, path, queryParams, headers)
-	return args.Get(0).(*http.Response), args.Error(1)
-}
-
-func TestOAuthMiddleware(t *testing.T) {
-	// Generate proper RSA key pair
-	privateKey, err := rsa.GenerateKey(rand.Reader, 2048)
-	if err != nil {
-		t.Fatalf("Failed to generate RSA key: %v", err)
-	}
-
-	// Create valid JWKS response with the public key
-	jwks := createJWKSResponse(privateKey.PublicKey)
-	mockProvider := new(mockJWKSProvider)
-	resp := &http.Response{
-		StatusCode: http.StatusOK,
-		Body:       io.NopCloser(strings.NewReader(jwks)),
-	}
-	mockProvider.On("GetWithHeaders", mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(resp, nil)
-
-	config := OauthConfigs{
-		Provider:        mockProvider,
-		RefreshInterval: time.Minute,
-	}
-
-	keyProvider := NewOAuth(config)
-
-	issuedAtPast := time.Now().Add(-10 * time.Minute)
-	issuedAtFuture := time.Now().Add(10 * time.Minute)
-
-	opts := []ClaimOption{
-		WithTrustedIssuer("test-issuer"),
-		WithValidAudiences("test-audience"),
-		EnforceExpiryCheck(),
-		IssuedAfter(issuedAtPast),
-		IssuedBefore(issuedAtFuture),
-	}
-
-	middlewareFn := OAuth(keyProvider, opts...)
-	handler := middlewareFn(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	router.HandleFunc("/test", func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusOK)
-		w.Write([]byte("Success"))
-	}))
+	}).Methods(http.MethodGet)
 
-	t.Run("Valid token", func(t *testing.T) {
-		token := createValidJWT("test-kid", "test-issuer", "test-audience",
-			issuedAtPast.Add(1*time.Minute), privateKey)
-		req := httptest.NewRequest("GET", "/", nil)
-		req.Header.Set("Authorization", "Bearer "+token)
-
-		w := httptest.NewRecorder()
-		handler.ServeHTTP(w, req)
-
-		assert.Equal(t, http.StatusOK, w.Code)
-	})
-
-	t.Run("Expired token", func(t *testing.T) {
-		token := createValidJWT("test-kid", "test-issuer", "test-audience",
-			time.Now().Add(-20*time.Minute), privateKey)
-		req := httptest.NewRequest("GET", "/", nil)
-		req.Header.Set("Authorization", "Bearer "+token)
-
-		w := httptest.NewRecorder()
-		handler.ServeHTTP(w, req)
-
-		assert.Equal(t, http.StatusUnauthorized, w.Code)
-	})
-}
-
-func createValidJWT(kid, issuer, audience string, issuedAt time.Time, key *rsa.PrivateKey) string {
-	token := jwt.NewWithClaims(jwt.SigningMethodRS256, jwt.MapClaims{
-		"iss": issuer,
-		"aud": audience,
-		"iat": issuedAt.Unix(),
-		"exp": time.Now().Add(5 * time.Minute).Unix(),
-	})
-	token.Header["kid"] = kid
-
-	signedToken, _ := token.SignedString(key)
-	return signedToken
-}
-
-func createJWKSResponse(publicKey rsa.PublicKey) string {
-	// Convert public key to JWKS format
-	n := base64.RawURLEncoding.EncodeToString(publicKey.N.Bytes())
-	e := base64.RawURLEncoding.EncodeToString(big.NewInt(int64(publicKey.E)).Bytes())
-
-	jwk := map[string]string{
-		"kid": "test-kid",
-		"kty": "RSA",
-		"n":   n,
-		"e":   string(e),
+	mockProvider := &MockProvider{}
+	parserOpts := []jwt.ParserOption{
+		jwt.WithIssuer("GOOGLE"),
+		jwt.WithAudience("stagekopsdev"),
+		jwt.WithValidMethods([]string{"RS256"}),
+		jwt.WithExpirationRequired(),
+		jwt.WithIssuedAt(),
 	}
 
-	jwks := map[string][]map[string]string{
-		"keys": {jwk},
+	router.Use(OAuth(NewOAuth(OauthConfigs{
+		Provider:        mockProvider,
+		RefreshInterval: 10,
+	}), parserOpts...))
+
+	server := httptest.NewServer(router)
+	defer server.Close()
+
+	// Create request with valid token
+	req, _ := http.NewRequestWithContext(context.Background(), http.MethodGet, server.URL+"/test", http.NoBody)
+	req.Header.Set("Authorization", "Bearer eyJhbGciOiJSUzI1NiIsImtpZCI6IjAwVFEwdlRpNVB1UnZscUZGY3dCeUc0WjBM"+
+		"dGREcUtJX0JWUFRrdnpleEUiLCJ0eXAiOiJKV1QifQ.eyJhdWQiOiJzdGFnZS5rb3BzLmRldiIsImlhdCI6MTI1Nzg5NDAwMCwib3JpZyI6IkdP"+
+		"T0dMRSIsInBpY3R1cmUiOiJodHRwczovL2xoMy5nb29nbGV1c2VyY29udGVudC5jb20vYS9BQ2c4b2NLSjVEREE0enJ1ekZsc1E5S3ZMakhEdG"+
+		"JPVF9ocFZ6MGhFTzhqU2wybTdNeWs9czk2LWMiLCJzdWIiOiJyYWtzaGl0LnNpbmdoQHpvcHNtYXJ0LmNvbSIsInN1Yi1pZCI6ImE2NTczZTFkL"+
+		"WFiZWEtNDg2My1hY2RiLTZjZjM2MjZhNDQxNCIsInR5cCI6InJlZnJlc2hfdG9rZW4ifQ.NkYSi6KJtGA3js9dcN3UqJWfeJdB88p7cxclrc6"+
+		"fxJODlCalsbbwIr3QL4AR9i0ucJjmoTIipCwpdM1IYDjCd-ilf2mTp11Wba31XoH--8YLI9Ju0wbpYhtF3wa00NF1Ijt48ze09IJ6QtE-etm"+
+		"AN8T7izsXbPeSrFiN3NVQU87eGxc3bEQhEsV5u3E6j8EdVDv8xbwisETY-N0mDftZp0w8UCkQ7MarOrA5IaXs2MHyCETy5y9QFd4djppH9oFo"+
+		"y5-AtEZqzyHKfGMlerjtJp8uOgFso9FycGuO0TFhR4AaZGVZxB072Hu-71tbx7atXp3zmDdkK_jkg5aVepoU_Q")
+
+	client := http.Client{}
+	resp, err := client.Do(req)
+	require.NoError(t, err)
+
+	defer resp.Body.Close()
+
+	assert.Equal(t, http.StatusUnauthorized, resp.StatusCode)
+}
+
+func Test_OAuthSuccessWithValidation(t *testing.T) {
+	router := mux.NewRouter()
+	router.HandleFunc("/test", func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}).Methods(http.MethodGet).Name("/test")
+
+	parserOpts := []jwt.ParserOption{
+		jwt.WithAudience("stage.kops.dev"),
+		jwt.WithValidMethods([]string{"RS256"}),
+		jwt.WithIssuedAt(),
 	}
 
-	jsonData, _ := json.Marshal(jwks)
-	return string(jsonData)
+	router.Use(OAuth(NewOAuth(OauthConfigs{Provider: &MockProvider{}, RefreshInterval: 10}), parserOpts...))
+
+	server := httptest.NewServer(router)
+
+	req, _ := http.NewRequestWithContext(context.Background(), http.MethodGet, server.URL+"/test", http.NoBody)
+	req.Header.Set("Authorization", "Bearer eyJhbGciOiJSUzI1NiIsImtpZCI6IjAwVFEwdlRpNVB1UnZscUZGY3dCeUc0WjBM"+
+		"dGREcUtJX0JWUFRrdnpleEUiLCJ0eXAiOiJKV1QifQ.eyJhdWQiOiJzdGFnZS5rb3BzLmRldiIsImlhdCI6MTI1Nzg5NDAwMCwib3JpZyI6IkdP"+
+		"T0dMRSIsInBpY3R1cmUiOiJodHRwczovL2xoMy5nb29nbGV1c2VyY29udGVudC5jb20vYS9BQ2c4b2NLSjVEREE0enJ1ekZsc1E5S3ZMakhEdG"+
+		"JPVF9ocFZ6MGhFTzhqU2wybTdNeWs9czk2LWMiLCJzdWIiOiJyYWtzaGl0LnNpbmdoQHpvcHNtYXJ0LmNvbSIsInN1Yi1pZCI6ImE2NTczZTFkL"+
+		"WFiZWEtNDg2My1hY2RiLTZjZjM2MjZhNDQxNCIsInR5cCI6InJlZnJlc2hfdG9rZW4ifQ.NkYSi6KJtGA3js9dcN3UqJWfeJdB88p7cxclrc6"+
+		"fxJODlCalsbbwIr3QL4AR9i0ucJjmoTIipCwpdM1IYDjCd-ilf2mTp11Wba31XoH--8YLI9Ju0wbpYhtF3wa00NF1Ijt48ze09IJ6QtE-etm"+
+		"AN8T7izsXbPeSrFiN3NVQU87eGxc3bEQhEsV5u3E6j8EdVDv8xbwisETY-N0mDftZp0w8UCkQ7MarOrA5IaXs2MHyCETy5y9QFd4djppH9oFo"+
+		"y5-AtEZqzyHKfGMlerjtJp8uOgFso9FycGuO0TFhR4AaZGVZxB072Hu-71tbx7atXp3zmDdkK_jkg5aVepoU_Q")
+
+	client := http.Client{}
+
+	resp, err := client.Do(req)
+
+	require.NoError(t, err)
+	assert.Equal(t, http.StatusOK, resp.StatusCode)
+
+	resp.Body.Close()
 }
