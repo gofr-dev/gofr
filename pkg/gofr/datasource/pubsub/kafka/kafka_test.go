@@ -16,7 +16,7 @@ import (
 	"gofr.dev/pkg/gofr/testutil"
 )
 
-func TestValidateConfigs(t *testing.T) {
+func TestValidateConfigs_ValidCases(t *testing.T) {
 	testCases := []struct {
 		name     string
 		config   Config
@@ -24,35 +24,158 @@ func TestValidateConfigs(t *testing.T) {
 	}{
 		{
 			name: "Valid Config",
-			config: Config{Broker: "kafkabroker", BatchSize: 1, BatchBytes: 1, BatchTimeout: 1,
-				SASLMechanism: "PLAIN", SASLUser: "user", SASLPassword: "password"},
+			config: Config{
+				Broker:           "kafkabroker",
+				BatchSize:        1,
+				BatchBytes:       1,
+				BatchTimeout:     1,
+				SASLMechanism:    "PLAIN",
+				SASLUser:         "user",
+				SASLPassword:     "password",
+				SecurityProtocol: "SASL_PLAINTEXT",
+			},
 			expected: nil,
 		},
 		{
-			name:     "Empty Broker",
-			config:   Config{BatchSize: 1, BatchBytes: 1, BatchTimeout: 1},
+			name: "Valid PLAINTEXT Protocol",
+			config: Config{
+				Broker:           "kafkabroker",
+				BatchSize:        1,
+				BatchBytes:       1,
+				BatchTimeout:     1,
+				SecurityProtocol: protocolPlainText,
+			},
+			expected: nil,
+		},
+		{
+			name: "Valid SSL Protocol with TLS Configs",
+			config: Config{
+				Broker:           "kafkabroker",
+				BatchSize:        1,
+				BatchBytes:       1,
+				BatchTimeout:     1,
+				SecurityProtocol: "SSL",
+				TLS: TLSConfig{
+					CACertFile: "ca.pem",
+					CertFile:   "cert.pem",
+					KeyFile:    "key.pem",
+				},
+			},
+			expected: nil,
+		},
+		{
+			name: "Valid SASL_SSL Protocol with TLS and SASL Configs",
+			config: Config{
+				Broker:           "kafkabroker",
+				BatchSize:        1,
+				BatchBytes:       1,
+				BatchTimeout:     1,
+				SecurityProtocol: "SASL_SSL",
+				SASLMechanism:    "PLAIN",
+				SASLUser:         "user",
+				SASLPassword:     "password",
+				TLS: TLSConfig{
+					CACertFile: "ca.pem",
+					CertFile:   "cert.pem",
+					KeyFile:    "key.pem",
+				},
+			},
+			expected: nil,
+		},
+		{
+			name: "Valid SSL Protocol with InsecureSkipVerify",
+			config: Config{
+				Broker:           "kafkabroker",
+				BatchSize:        1,
+				BatchBytes:       1,
+				BatchTimeout:     1,
+				SecurityProtocol: "SSL",
+				TLS: TLSConfig{
+					InsecureSkipVerify: true,
+				},
+			},
+			expected: nil,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			err := validateConfigs(&tc.config)
+			if !errors.Is(err, tc.expected) {
+				t.Errorf("Expected error %v, but got %v", tc.expected, err)
+			}
+		})
+	}
+}
+
+func TestValidateConfigs_InvalidCases(t *testing.T) {
+	testCases := []struct {
+		name     string
+		config   Config
+		expected error
+	}{
+		{
+			name: "Empty Broker",
+			config: Config{
+				BatchSize:    1,
+				BatchBytes:   1,
+				BatchTimeout: 1,
+			},
 			expected: errBrokerNotProvided,
 		},
 		{
-			name:     "Zero BatchSize",
-			config:   Config{Broker: "kafkabroker", BatchSize: 0, BatchBytes: 1, BatchTimeout: 1},
+			name: "Zero BatchSize",
+			config: Config{
+				Broker:       "kafkabroker",
+				BatchSize:    0,
+				BatchBytes:   1,
+				BatchTimeout: 1,
+			},
 			expected: errBatchSize,
 		},
 		{
-			name:     "Zero BatchBytes",
-			config:   Config{Broker: "kafkabroker", BatchSize: 1, BatchBytes: 0, BatchTimeout: 1},
+			name: "Zero BatchBytes",
+			config: Config{
+				Broker:       "kafkabroker",
+				BatchSize:    1,
+				BatchBytes:   0,
+				BatchTimeout: 1,
+			},
 			expected: errBatchBytes,
 		},
 		{
-			name:     "Zero BatchTimeout",
-			config:   Config{Broker: "kafkabroker", BatchSize: 1, BatchBytes: 1, BatchTimeout: 0},
+			name: "Zero BatchTimeout",
+			config: Config{
+				Broker:       "kafkabroker",
+				BatchSize:    1,
+				BatchBytes:   1,
+				BatchTimeout: 0,
+			},
 			expected: errBatchTimeout,
 		},
 		{
-			name: "Empty SASL Password",
-			config: Config{Broker: "kafkabroker", BatchSize: 1, BatchBytes: 1, BatchTimeout: 1,
-				SASLMechanism: "PLAIN", SASLUser: "user"},
+			name: "SASL_PLAINTEXT with Missing SASLMechanism",
+			config: Config{
+				Broker:           "kafkabroker",
+				BatchSize:        1,
+				BatchBytes:       1,
+				BatchTimeout:     1,
+				SecurityProtocol: "SASL_PLAINTEXT",
+				SASLUser:         "user",
+				SASLPassword:     "password",
+			},
 			expected: errSASLCredentialsMissing,
+		},
+		{
+			name: "Unsupported Security Protocol",
+			config: Config{
+				Broker:           "kafkabroker",
+				BatchSize:        1,
+				BatchBytes:       1,
+				BatchTimeout:     1,
+				SecurityProtocol: "Invalid",
+			},
+			expected: errUnsupportedSecurityProtocol,
 		},
 	}
 
@@ -394,11 +517,15 @@ func TestNewKafkaClient(t *testing.T) {
 		{
 			desc: "successful initialization",
 			config: Config{
-				Broker:          "kafka-broker",
-				ConsumerGroupID: "consumer",
-				BatchBytes:      1,
-				BatchSize:       1,
-				BatchTimeout:    1,
+				Broker:           "kafka-broker",
+				ConsumerGroupID:  "consumer",
+				BatchBytes:       1,
+				BatchSize:        1,
+				BatchTimeout:     1,
+				SecurityProtocol: "SASL_PLAINTEXT",
+				SASLMechanism:    "PLAIN",
+				SASLUser:         "user",
+				SASLPassword:     "password",
 			},
 			expectNil: false,
 		},

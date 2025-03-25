@@ -11,6 +11,11 @@ import (
 	"gofr.dev/pkg/gofr/testutil"
 )
 
+func TestMain(m *testing.M) {
+	os.Setenv("GOFR_TELEMETRY", "false")
+	m.Run()
+}
+
 func TestRPCLog_String(t *testing.T) {
 	l := gRPCLog{
 		ID:         "123",

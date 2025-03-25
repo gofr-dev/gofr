@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
-	"net/http/pprof"
 	"os"
 	"time"
 
@@ -30,9 +29,16 @@ var (
 	errInvalidKeyFile         = errors.New("invalid key file")
 )
 
-func newHTTPServer(port int) *httpServer {
+func newHTTPServer(c *container.Container, port int, middlewareConfigs map[string]string) *httpServer {
 	r := gofrHTTP.NewRouter()
 	wsManager := websocket.New()
+
+	r.Use(
+		middleware.Tracer,
+		middleware.Logging(c.Logger),
+		middleware.CORS(middlewareConfigs, r.RegisteredRoutes),
+		middleware.Metrics(c.Metrics()),
+	)
 
 	return &httpServer{
 		router: r,
@@ -41,41 +47,15 @@ func newHTTPServer(port int) *httpServer {
 	}
 }
 
-// RegisterProfilingRoutes registers pprof endpoints on the HTTP server.
-//
-// This method adds the following routes to the server's router:
-//
-//   - /debug/pprof/cmdline
-//   - /debug/pprof/profile
-//   - /debug/pprof/symbol
-//   - /debug/pprof/trace
-//   - /debug/pprof/ (index)
-//
-// These endpoints provide various profiling information for the application,
-// such as command-line arguments, memory profiles, symbol information, and
-// execution traces.
-func (s *httpServer) RegisterProfilingRoutes() {
-	s.router.HandleFunc("/debug/pprof/cmdline", pprof.Cmdline)
-	s.router.HandleFunc("/debug/pprof/profile", pprof.Profile)
-	s.router.HandleFunc("/debug/pprof/symbol", pprof.Symbol)
-	s.router.HandleFunc("/debug/pprof/trace", pprof.Trace)
-
-	s.router.NewRoute().Methods(http.MethodGet).PathPrefix("/debug/pprof/").HandlerFunc(pprof.Index)
-}
-
-func (s *httpServer) run(c *container.Container, middlewareConfigs map[string]string) {
+func (s *httpServer) run(c *container.Container) {
 	// Developer Note:
 	//	WebSocket connections do not inherently support authentication mechanisms.
 	//	It is recommended to authenticate users before upgrading to a WebSocket connection.
-	//	Hence, we are registering middlewares here, to ensure that authentication or other
+	//	Hence, we are registering websocket middleware here, to ensure that authentication or other
 	//	middleware logic is executed during the initial HTTP handshake request, prior to upgrading
 	//	the connection to WebSocket, if any.
 	s.router.Use(
 		middleware.WSHandlerUpgrade(c, s.ws),
-		middleware.Tracer,
-		middleware.CORS(middlewareConfigs, s.router.RegisteredRoutes),
-		middleware.Logging(c.Logger),
-		middleware.Metrics(c.Metrics()),
 	)
 
 	if s.srv != nil {

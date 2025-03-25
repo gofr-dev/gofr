@@ -4,9 +4,7 @@ import (
 	"context"
 	"fmt"
 	"net/http"
-	"net/http/httptest"
 	"os"
-	"strconv"
 	"testing"
 	"time"
 
@@ -17,7 +15,6 @@ import (
 	"gofr.dev/pkg/gofr/config"
 	"gofr.dev/pkg/gofr/container"
 	gofrHTTP "gofr.dev/pkg/gofr/http"
-	"gofr.dev/pkg/gofr/http/middleware"
 	"gofr.dev/pkg/gofr/logging"
 	"gofr.dev/pkg/gofr/testutil"
 )
@@ -57,7 +54,7 @@ func TestRun_ServerStartsListening(t *testing.T) {
 	}
 
 	// Start the server
-	go server.run(c, middleware.GetConfigs(getConfigs(t)))
+	go server.run(c)
 
 	// Wait for the server to start listening
 	time.Sleep(100 * time.Millisecond)
@@ -90,40 +87,6 @@ func getConfigs(t *testing.T) config.Config {
 	return config.NewEnvFile(configLocation, logging.NewLogger(logging.INFO))
 }
 
-func TestRegisterProfillingRoutes(t *testing.T) {
-	port := testutil.GetFreePort(t)
-
-	c := &container.Container{
-		Logger: logging.NewLogger(logging.INFO),
-	}
-
-	server := &httpServer{
-		router: gofrHTTP.NewRouter(),
-		port:   port,
-	}
-
-	server.RegisterProfilingRoutes()
-
-	go server.run(c, middleware.GetConfigs(getConfigs(t)))
-
-	// Test if the expected handlers are registered for the pprof endpoints
-	expectedRoutes := []string{
-		"/debug/pprof/",
-		"/debug/pprof/cmdline",
-		"/debug/pprof/symbol",
-	}
-
-	serverURL := "http://localhost:" + strconv.Itoa(8000)
-
-	for _, route := range expectedRoutes {
-		r := httptest.NewRequest(http.MethodGet, serverURL+route, http.NoBody)
-		rr := httptest.NewRecorder()
-		server.router.ServeHTTP(rr, r)
-
-		assert.Equal(t, http.StatusOK, rr.Code)
-	}
-}
-
 func TestShutdown_ServerStopsListening(t *testing.T) {
 	// Create a mock router and add a new route
 	router := &gofrHTTP.Router{}
@@ -143,7 +106,7 @@ func TestShutdown_ServerStopsListening(t *testing.T) {
 	}
 
 	// Start the server
-	go server.run(c, middleware.GetConfigs(getConfigs(t)))
+	go server.run(c)
 
 	// Create a context with a timeout to test the shutdown
 	ctx, cancel := context.WithTimeout(context.Background(), 150*time.Millisecond)
@@ -179,7 +142,7 @@ func TestShutdown_ServerContextDeadline(t *testing.T) {
 	}
 
 	// Start the server
-	go server.run(c, middleware.GetConfigs(getConfigs(t)))
+	go server.run(c)
 
 	// Create a context with a timeout to test the shutdown
 	ctx, cancel := context.WithTimeout(context.Background(), 50*time.Millisecond)
