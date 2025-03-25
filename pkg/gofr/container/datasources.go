@@ -278,6 +278,17 @@ type MongoProvider interface {
 
 // SurrealDB defines an interface representing a SurrealDB client with common database operations.
 type SurrealDB interface {
+	// CreateNamespace creates a new namespace in the SurrealDB instance.
+	CreateNamespace(ctx context.Context, namespace string) error
+
+	// CreateDatabase creates a new database in the SurrealDB instance.
+	CreateDatabase(ctx context.Context, database string) error
+
+	// DropNamespace deletes a namespace from the SurrealDB instance.
+	DropNamespace(ctx context.Context, namespace string) error
+
+	// DropDatabase deletes a database from the SurrealDB instance.
+	DropDatabase(ctx context.Context, database string) error
 
 	// Query executes a Surreal query with the provided variables and returns the query results as a slice of interfaces{}.
 	// It returns an error if the query execution fails.
