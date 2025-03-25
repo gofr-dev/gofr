@@ -4,18 +4,11 @@ Just like Redis GoFr also supports connection to SQL (MySQL, MariaDB, and Postgr
 
 ## Setup
 
-Users can run MySQL and create a database locally using the following Docker command:
+Users can run MySQL/MariaDB  and create a database locally using the following Docker command:
 
 ```bash
-docker run --name gofr-mysql -e MYSQL_ROOT_PASSWORD=root123 -e MYSQL_DATABASE=test_db -p 3306:3306 -d mysql:8.0.30
+docker run --name gofr-db -e MYSQL_ROOT_PASSWORD=root123 -e MYSQL_DATABASE=test_db -p 3306:3306 -d mysql:8.0.30
 ```
-
-For MariaDB, you would run:
-
-```bash
-docker run --name gofr-mariadb -e MYSQL_ROOT_PASSWORD=root123 -e MYSQL_DATABASE=test_db -p 3306:3306 -d mariadb:latest
-```
-
 
 Access `test_db` database and create table customer with columns `id` and `name`. Change mysql to mariadb as needed: 
 
@@ -43,11 +36,7 @@ DB_PASSWORD=root123
 DB_NAME=test_db
 DB_PORT=3306
 DB_DIALECT=mysql
-DB_CHARSET=
-
-# DB_CHARSET: The character set for database connection (default: utf8).
-# The `DB_CHARSET` defaults to utf8, but setting it to utf8mb4 is recommended if you need full Unicode support,
-# including emojis and special characters.
+DB_CHARSET=utf8 #(optional)
 ```
 
 Now in the following example, we'll store customer data using **POST** `/customer` and then use **GET** `/customer` to retrieve the same.
