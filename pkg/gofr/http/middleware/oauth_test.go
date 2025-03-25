@@ -26,19 +26,9 @@ func TestOAuthSuccess(t *testing.T) {
 
 	server := httptest.NewServer(router)
 
-	req, _ := http.NewRequestWithContext(context.Background(), http.MethodGet, server.URL+"/test", http.NoBody)
-	req.Header.Set("Authorization", "Bearer eyJhbGciOiJSUzI1NiIsImtpZCI6IjAwVFEwdlRpNVB1UnZscUZGY3dCeUc0WjBM"+
-		"dGREcUtJX0JWUFRrdnpleEUiLCJ0eXAiOiJKV1QifQ.eyJhdWQiOiJzdGFnZS5rb3BzLmRldiIsImlhdCI6MTI1Nzg5NDAwMCwib3JpZyI6IkdP"+
-		"T0dMRSIsInBpY3R1cmUiOiJodHRwczovL2xoMy5nb29nbGV1c2VyY29udGVudC5jb20vYS9BQ2c4b2NLSjVEREE0enJ1ekZsc1E5S3ZMakhEdG"+
-		"JPVF9ocFZ6MGhFTzhqU2wybTdNeWs9czk2LWMiLCJzdWIiOiJyYWtzaGl0LnNpbmdoQHpvcHNtYXJ0LmNvbSIsInN1Yi1pZCI6ImE2NTczZTFkL"+
-		"WFiZWEtNDg2My1hY2RiLTZjZjM2MjZhNDQxNCIsInR5cCI6InJlZnJlc2hfdG9rZW4ifQ.NkYSi6KJtGA3js9dcN3UqJWfeJdB88p7cxclrc6"+
-		"fxJODlCalsbbwIr3QL4AR9i0ucJjmoTIipCwpdM1IYDjCd-ilf2mTp11Wba31XoH--8YLI9Ju0wbpYhtF3wa00NF1Ijt48ze09IJ6QtE-etm"+
-		"AN8T7izsXbPeSrFiN3NVQU87eGxc3bEQhEsV5u3E6j8EdVDv8xbwisETY-N0mDftZp0w8UCkQ7MarOrA5IaXs2MHyCETy5y9QFd4djppH9oFo"+
-		"y5-AtEZqzyHKfGMlerjtJp8uOgFso9FycGuO0TFhR4AaZGVZxB072Hu-71tbx7atXp3zmDdkK_jkg5aVepoU_Q")
-
 	client := http.Client{}
 
-	resp, err := client.Do(req)
+	resp, err := client.Do(getRequest(t, server.URL))
 
 	require.NoError(t, err)
 	assert.Equal(t, http.StatusOK, resp.StatusCode)
@@ -72,19 +62,9 @@ func TestGetJwtClaims(t *testing.T) {
 
 	server := httptest.NewServer(router)
 
-	req, _ := http.NewRequestWithContext(context.Background(), http.MethodGet, server.URL+"/test", http.NoBody)
-	req.Header.Set("Authorization", "Bearer eyJhbGciOiJSUzI1NiIsImtpZCI6IjAwVFEwdlRpNVB1UnZscUZGY3dCeUc0WjBM"+
-		"dGREcUtJX0JWUFRrdnpleEUiLCJ0eXAiOiJKV1QifQ.eyJhdWQiOiJzdGFnZS5rb3BzLmRldiIsImlhdCI6MTI1Nzg5NDAwMCwib3JpZyI6IkdP"+
-		"T0dMRSIsInBpY3R1cmUiOiJodHRwczovL2xoMy5nb29nbGV1c2VyY29udGVudC5jb20vYS9BQ2c4b2NLSjVEREE0enJ1ekZsc1E5S3ZMakhEdG"+
-		"JPVF9ocFZ6MGhFTzhqU2wybTdNeWs9czk2LWMiLCJzdWIiOiJyYWtzaGl0LnNpbmdoQHpvcHNtYXJ0LmNvbSIsInN1Yi1pZCI6ImE2NTczZTFkL"+
-		"WFiZWEtNDg2My1hY2RiLTZjZjM2MjZhNDQxNCIsInR5cCI6InJlZnJlc2hfdG9rZW4ifQ.NkYSi6KJtGA3js9dcN3UqJWfeJdB88p7cxclrc6"+
-		"fxJODlCalsbbwIr3QL4AR9i0ucJjmoTIipCwpdM1IYDjCd-ilf2mTp11Wba31XoH--8YLI9Ju0wbpYhtF3wa00NF1Ijt48ze09IJ6QtE-etm"+
-		"AN8T7izsXbPeSrFiN3NVQU87eGxc3bEQhEsV5u3E6j8EdVDv8xbwisETY-N0mDftZp0w8UCkQ7MarOrA5IaXs2MHyCETy5y9QFd4djppH9oFo"+
-		"y5-AtEZqzyHKfGMlerjtJp8uOgFso9FycGuO0TFhR4AaZGVZxB072Hu-71tbx7atXp3zmDdkK_jkg5aVepoU_Q")
-
 	client := http.Client{}
 
-	resp, err := client.Do(req)
+	resp, err := client.Do(getRequest(t, server.URL))
 	result := make([]byte, len(claims))
 	_, _ = resp.Body.Read(result)
 
@@ -235,20 +215,9 @@ func TestOAuthHTTPCallFailed(t *testing.T) {
 
 	server := httptest.NewServer(router)
 
-	req, _ := http.NewRequestWithContext(context.Background(), http.MethodGet, server.URL+"/test", http.NoBody)
-	req.Header.Set("Authorization", "Bearer eyJhbGciOiJSUzI1NiIsImtpZCI6IklDbmFZdEwtSDExckl0WlJ4VVlLVElzbm"+
-		"5ybm1wWUp6cGFWRHVDRWN0Ukk9IiwidHlwIjoiSldUIn0.eyJhdWQiOiJzdGFnZS5rb3BzLmRldiIsImV4cCI6MTcxODc5MjQ2NiwiaWF0Ij"+
-		"oxNzEwMTUyNDY2LCJpc3MiOiJzdGFnZS5hdXRoLnpvcHNtYXJ0LmNvbSIsIm5hbWUiOiJSYWtzaGl0IFNpbmdoIiwib3JpZyI6IkdPT0dMRSI"+
-		"sInBpY3R1cmUiOiJodHRwczovL2xoMy5nb29nbGV1c2VyY29udGVudC5jb20vYS9BQ2c4b2NLSjVEREE0enJ1ekZsc1E5S3ZMakhEdGJPVF9o"+
-		"cFZ6MGhFTzhqU2wybTdNeWs9czk2LWMiLCJzdWIiOiJyYWtzaGl0LnNpbmdoQHpvcHNtYXJ0LmNvbSIsInN1Yi1pZCI6ImE2NTczZTFkLWFiZW"+
-		"EtNDg2My1hY2RiLTZjZjM2MjZhNDQxNCIsInR5cCI6InJlZnJlc2hfdG9rZW4ifQ.eoRVSFcyvbWk-fUSlACI4pWwHcuwjA1BbKlYA_aEJA6T"+
-		"BRcnM0HoaxL_GcF0Q-95Z6Medk9l5Fe-zuY4xmLX0XRnA9y9KEsXvyhxsmLJTV32C2kirDh6TR5FIep3EKV0VdWKJT6LziBjrCP-F0pKb34em"+
-		"Ua7gsyi5OnkX12_ZcGpQpSbL3mcZpEEGUmKijlg1VspK4G9dTmNSUXofxStokxacLwa3hiFfkd7vtegkF79bfWPVm0hlJDGDcU7szUaIyHjdW"+
-		"rlUGqQ0A8-8dYQ-Z1o5STZITcxvSv6SaZNo08r_szi-TDLXRhASP3ojEjFCqFBmPw9HPxHG4JmV3SX2A")
-
 	client := http.Client{}
 
-	resp, err := client.Do(req)
+	resp, err := client.Do(getRequest(t, server.URL))
 
 	require.NoError(t, err)
 	assert.Equal(t, http.StatusUnauthorized, resp.StatusCode)
@@ -265,20 +234,9 @@ func TestOAuthReadError(t *testing.T) {
 
 	server := httptest.NewServer(router)
 
-	req, _ := http.NewRequestWithContext(context.Background(), http.MethodGet, server.URL+"/test", http.NoBody)
-	req.Header.Set("Authorization", "Bearer eyJhbGciOiJSUzI1NiIsImtpZCI6IklDbmFZdEwtSDExckl0WlJ4VVlLVElzbm"+
-		"5ybm1wWUp6cGFWRHVDRWN0Ukk9IiwidHlwIjoiSldUIn0.eyJhdWQiOiJzdGFnZS5rb3BzLmRldiIsImV4cCI6MTcxODc5MjQ2NiwiaWF0Ij"+
-		"oxNzEwMTUyNDY2LCJpc3MiOiJzdGFnZS5hdXRoLnpvcHNtYXJ0LmNvbSIsIm5hbWUiOiJSYWtzaGl0IFNpbmdoIiwib3JpZyI6IkdPT0dMRSI"+
-		"sInBpY3R1cmUiOiJodHRwczovL2xoMy5nb29nbGV1c2VyY29udGVudC5jb20vYS9BQ2c4b2NLSjVEREE0enJ1ekZsc1E5S3ZMakhEdGJPVF9o"+
-		"cFZ6MGhFTzhqU2wybTdNeWs9czk2LWMiLCJzdWIiOiJyYWtzaGl0LnNpbmdoQHpvcHNtYXJ0LmNvbSIsInN1Yi1pZCI6ImE2NTczZTFkLWFiZW"+
-		"EtNDg2My1hY2RiLTZjZjM2MjZhNDQxNCIsInR5cCI6InJlZnJlc2hfdG9rZW4ifQ.eoRVSFcyvbWk-fUSlACI4pWwHcuwjA1BbKlYA_aEJA6T"+
-		"BRcnM0HoaxL_GcF0Q-95Z6Medk9l5Fe-zuY4xmLX0XRnA9y9KEsXvyhxsmLJTV32C2kirDh6TR5FIep3EKV0VdWKJT6LziBjrCP-F0pKb34em"+
-		"Ua7gsyi5OnkX12_ZcGpQpSbL3mcZpEEGUmKijlg1VspK4G9dTmNSUXofxStokxacLwa3hiFfkd7vtegkF79bfWPVm0hlJDGDcU7szUaIyHjdW"+
-		"rlUGqQ0A8-8dYQ-Z1o5STZITcxvSv6SaZNo08r_szi-TDLXRhASP3ojEjFCqFBmPw9HPxHG4JmV3SX2A")
-
 	client := http.Client{}
 
-	resp, err := client.Do(req)
+	resp, err := client.Do(getRequest(t, server.URL))
 
 	require.NoError(t, err)
 	assert.Equal(t, http.StatusUnauthorized, resp.StatusCode)
@@ -295,20 +253,9 @@ func TestOAuthJSONUnmarshalError(t *testing.T) {
 
 	server := httptest.NewServer(router)
 
-	req, _ := http.NewRequestWithContext(context.Background(), http.MethodGet, server.URL+"/test", http.NoBody)
-	req.Header.Set("Authorization", "Bearer eyJhbGciOiJSUzI1NiIsImtpZCI6IklDbmFZdEwtSDExckl0WlJ4VVlLVElzbm"+
-		"5ybm1wWUp6cGFWRHVDRWN0Ukk9IiwidHlwIjoiSldUIn0.eyJhdWQiOiJzdGFnZS5rb3BzLmRldiIsImV4cCI6MTcxODc5MjQ2NiwiaWF0Ij"+
-		"oxNzEwMTUyNDY2LCJpc3MiOiJzdGFnZS5hdXRoLnpvcHNtYXJ0LmNvbSIsIm5hbWUiOiJSYWtzaGl0IFNpbmdoIiwib3JpZyI6IkdPT0dMRSI"+
-		"sInBpY3R1cmUiOiJodHRwczovL2xoMy5nb29nbGV1c2VyY29udGVudC5jb20vYS9BQ2c4b2NLSjVEREE0enJ1ekZsc1E5S3ZMakhEdGJPVF9o"+
-		"cFZ6MGhFTzhqU2wybTdNeWs9czk2LWMiLCJzdWIiOiJyYWtzaGl0LnNpbmdoQHpvcHNtYXJ0LmNvbSIsInN1Yi1pZCI6ImE2NTczZTFkLWFiZW"+
-		"EtNDg2My1hY2RiLTZjZjM2MjZhNDQxNCIsInR5cCI6InJlZnJlc2hfdG9rZW4ifQ.eoRVSFcyvbWk-fUSlACI4pWwHcuwjA1BbKlYA_aEJA6T"+
-		"BRcnM0HoaxL_GcF0Q-95Z6Medk9l5Fe-zuY4xmLX0XRnA9y9KEsXvyhxsmLJTV32C2kirDh6TR5FIep3EKV0VdWKJT6LziBjrCP-F0pKb34em"+
-		"Ua7gsyi5OnkX12_ZcGpQpSbL3mcZpEEGUmKijlg1VspK4G9dTmNSUXofxStokxacLwa3hiFfkd7vtegkF79bfWPVm0hlJDGDcU7szUaIyHjdW"+
-		"rlUGqQ0A8-8dYQ-Z1o5STZITcxvSv6SaZNo08r_szi-TDLXRhASP3ojEjFCqFBmPw9HPxHG4JmV3SX2A")
-
 	client := http.Client{}
 
-	resp, err := client.Do(req)
+	resp, err := client.Do(getRequest(t, server.URL))
 
 	require.NoError(t, err)
 	assert.Equal(t, http.StatusUnauthorized, resp.StatusCode)
@@ -434,19 +381,10 @@ func Test_OAuthFailureInvalidAudience(t *testing.T) {
 	server := httptest.NewServer(router)
 	defer server.Close()
 
-	// Create request with valid token
-	req, _ := http.NewRequestWithContext(context.Background(), http.MethodGet, server.URL+"/test", http.NoBody)
-	req.Header.Set("Authorization", "Bearer eyJhbGciOiJSUzI1NiIsImtpZCI6IjAwVFEwdlRpNVB1UnZscUZGY3dCeUc0WjBM"+
-		"dGREcUtJX0JWUFRrdnpleEUiLCJ0eXAiOiJKV1QifQ.eyJhdWQiOiJzdGFnZS5rb3BzLmRldiIsImlhdCI6MTI1Nzg5NDAwMCwib3JpZyI6IkdP"+
-		"T0dMRSIsInBpY3R1cmUiOiJodHRwczovL2xoMy5nb29nbGV1c2VyY29udGVudC5jb20vYS9BQ2c4b2NLSjVEREE0enJ1ekZsc1E5S3ZMakhEdG"+
-		"JPVF9ocFZ6MGhFTzhqU2wybTdNeWs9czk2LWMiLCJzdWIiOiJyYWtzaGl0LnNpbmdoQHpvcHNtYXJ0LmNvbSIsInN1Yi1pZCI6ImE2NTczZTFkL"+
-		"WFiZWEtNDg2My1hY2RiLTZjZjM2MjZhNDQxNCIsInR5cCI6InJlZnJlc2hfdG9rZW4ifQ.NkYSi6KJtGA3js9dcN3UqJWfeJdB88p7cxclrc6"+
-		"fxJODlCalsbbwIr3QL4AR9i0ucJjmoTIipCwpdM1IYDjCd-ilf2mTp11Wba31XoH--8YLI9Ju0wbpYhtF3wa00NF1Ijt48ze09IJ6QtE-etm"+
-		"AN8T7izsXbPeSrFiN3NVQU87eGxc3bEQhEsV5u3E6j8EdVDv8xbwisETY-N0mDftZp0w8UCkQ7MarOrA5IaXs2MHyCETy5y9QFd4djppH9oFo"+
-		"y5-AtEZqzyHKfGMlerjtJp8uOgFso9FycGuO0TFhR4AaZGVZxB072Hu-71tbx7atXp3zmDdkK_jkg5aVepoU_Q")
-
 	client := http.Client{}
-	resp, err := client.Do(req)
+
+	resp, err := client.Do(getRequest(t, server.URL))
+
 	require.NoError(t, err)
 
 	defer resp.Body.Close()
@@ -470,7 +408,20 @@ func Test_OAuthSuccessWithValidation(t *testing.T) {
 
 	server := httptest.NewServer(router)
 
-	req, _ := http.NewRequestWithContext(context.Background(), http.MethodGet, server.URL+"/test", http.NoBody)
+	client := http.Client{}
+
+	resp, err := client.Do(getRequest(t, server.URL))
+
+	require.NoError(t, err)
+	assert.Equal(t, http.StatusOK, resp.StatusCode)
+
+	resp.Body.Close()
+}
+
+func getRequest(t *testing.T, url string) *http.Request {
+	t.Helper()
+
+	req, _ := http.NewRequestWithContext(context.Background(), http.MethodGet, url+"/test", http.NoBody)
 	req.Header.Set("Authorization", "Bearer eyJhbGciOiJSUzI1NiIsImtpZCI6IjAwVFEwdlRpNVB1UnZscUZGY3dCeUc0WjBM"+
 		"dGREcUtJX0JWUFRrdnpleEUiLCJ0eXAiOiJKV1QifQ.eyJhdWQiOiJzdGFnZS5rb3BzLmRldiIsImlhdCI6MTI1Nzg5NDAwMCwib3JpZyI6IkdP"+
 		"T0dMRSIsInBpY3R1cmUiOiJodHRwczovL2xoMy5nb29nbGV1c2VyY29udGVudC5jb20vYS9BQ2c4b2NLSjVEREE0enJ1ekZsc1E5S3ZMakhEdG"+
@@ -480,12 +431,5 @@ func Test_OAuthSuccessWithValidation(t *testing.T) {
 		"AN8T7izsXbPeSrFiN3NVQU87eGxc3bEQhEsV5u3E6j8EdVDv8xbwisETY-N0mDftZp0w8UCkQ7MarOrA5IaXs2MHyCETy5y9QFd4djppH9oFo"+
 		"y5-AtEZqzyHKfGMlerjtJp8uOgFso9FycGuO0TFhR4AaZGVZxB072Hu-71tbx7atXp3zmDdkK_jkg5aVepoU_Q")
 
-	client := http.Client{}
-
-	resp, err := client.Do(req)
-
-	require.NoError(t, err)
-	assert.Equal(t, http.StatusOK, resp.StatusCode)
-
-	resp.Body.Close()
+	return req
 }
