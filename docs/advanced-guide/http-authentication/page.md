@@ -148,16 +148,16 @@ Enable OAuth 2.0 with three-legged flow to authenticate requests. Use `EnableOAu
 - Additional JWT validation options can be passed using `jwt.ParserOption`, allowing fine-grained control over claim validation.
 
 ### Parameters
-| Parameter         | Type                | Description |
+| Parameter        | Type                | Description |
 |------------------|-------------------|-------------|
 | `jwksEndpoint`   | `string`           | URL of the JWKS endpoint used to retrieve signing keys for token verification. |
 | `refreshInterval` | `int`              | Interval (in seconds) at which the JWKS cache is refreshed. |
-| `opts`           | `...jwt.ParserOption` | Optional JWT claim validation configurations, such as issuer, audience, and expiration requirements. |
+| `options`        | `...jwt.ParserOption` | Optional JWT claim validation configurations, such as issuer, audience, and expiration requirements. |
 
 ### Available JWT Claim Validations
 
 #### Expiration (`exp`) Validation
-If the `exp` claim is present, it is always validated to ensure the token has not expired. However, to make the `exp` claim mandatory in our jwt tokens, we can use:
+If the `exp` claim is present, it is always validated to ensure the token has not expired. However, to make the `exp` claim mandatory in our JWT tokens, we can use:
 
 ```go
 jwt.WithExpirationRequired()

@@ -114,7 +114,7 @@ type PublicKeyProvider interface {
 }
 
 // OAuth is a middleware function that validates JWT access tokens using a provided PublicKeyProvider.
-func OAuth(key PublicKeyProvider, opts ...jwt.ParserOption) func(http.Handler) http.Handler {
+func OAuth(key PublicKeyProvider, options ...jwt.ParserOption) func(http.Handler) http.Handler {
 	return func(inner http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			if isWellKnown(r.URL.Path) {
@@ -122,9 +122,9 @@ func OAuth(key PublicKeyProvider, opts ...jwt.ParserOption) func(http.Handler) h
 				return
 			}
 
-			opts = append(opts, jwt.WithIssuedAt())
+			options = append(options, jwt.WithIssuedAt())
 
-			claims, err := processToken(r.Header.Get("Authorization"), key, opts...)
+			claims, err := processToken(r.Header.Get("Authorization"), key, options...)
 			if err != nil {
 				http.Error(w, err.Error(), http.StatusUnauthorized)
 				return
