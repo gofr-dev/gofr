@@ -8,6 +8,7 @@ on:
     branches:
       - main
       - development
+      - en/update_linter_to_v1.64.0
     paths-ignore:
       - 'docs/**'  # Ignore changes to docs folder
   # Run on pull requests to main or development branches
@@ -329,7 +330,7 @@ jobs:
       # Install the linting tool
       - name: Install golangci-lint
         run: |
-          go install github.com/golangci/golangci-lint/cmd/golangci-lint@v1.62
+          go install github.com/golangci/golangci-lint/cmd/golangci-lint@v1.64
 
       - name: Get dependencies
         run: |
