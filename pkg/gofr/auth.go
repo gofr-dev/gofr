@@ -90,6 +90,12 @@ func (a *App) EnableOAuth(jwksEndpoint string,
 	refreshInterval int,
 	opts ...jwt.ParserOption,
 ) {
+	cnf := &middleware.ClaimConfig{}
+
+	for _, opt := range opts {
+		opt(cnf)
+	}
+
 	a.AddHTTPService("gofr_oauth", jwksEndpoint)
 
 	oauthOption := middleware.OauthConfigs{
@@ -97,5 +103,5 @@ func (a *App) EnableOAuth(jwksEndpoint string,
 		RefreshInterval: time.Second * time.Duration(refreshInterval),
 	}
 
-	a.httpServer.router.Use(middleware.OAuth(middleware.NewOAuth(oauthOption), opts...))
+	a.httpServer.router.Use(middleware.OAuth(middleware.NewOAuth(oauthOption), cnf))
 }
