@@ -122,6 +122,8 @@ func OAuth(key PublicKeyProvider, opts ...jwt.ParserOption) func(http.Handler) h
 				return
 			}
 
+			opts = append(opts, jwt.WithIssuedAt())
+
 			claims, err := processToken(r.Header.Get("Authorization"), key, opts...)
 			if err != nil {
 				http.Error(w, err.Error(), http.StatusUnauthorized)

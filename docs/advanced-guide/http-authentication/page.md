@@ -156,21 +156,16 @@ Enable OAuth 2.0 with three-legged flow to authenticate requests. Use `EnableOAu
 
 ### Available JWT Claim Validations
 
-#### Issued At (`iat`) Validation
-Ensures that tokens are not accepted before their issuance time.
-
-```go
-jwt.WithIssuedAt()
-```
-
 #### Expiration (`exp`) Validation
-If the `exp` claim is present, it is always validated to ensure the token has not expired. To make the `exp` claim mandatory in tokens, use:
+If the `exp` claim is present, it is always validated to ensure the token has not expired. However, to make the `exp` claim mandatory in our jwt tokens, we can use:
 
 ```go
 jwt.WithExpirationRequired()
 ```
-
 > This ensures that every token must include the `exp` claim, making expiration validation a strict requirement.
+
+#### Issued At (`iat`) Validation
+If the `iat` claim is present, it is ensured that tokens are not accepted before their issuance time. No additional configuration is needed for this validation.
 
 #### Not Before (`nbf`) Validation
 If the `nbf` claim is present, it is always validated to ensure that a JWT is only valid after a certain time. No additional configuration is needed for this validation.
