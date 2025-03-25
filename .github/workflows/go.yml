@@ -329,7 +329,7 @@ jobs:
       # Install the linting tool
       - name: Install golangci-lint
         run: |
-          go install github.com/golangci/golangci-lint/cmd/golangci-lint@v1.62
+          go install github.com/golangci/golangci-lint/cmd/golangci-lint@v1.64
 
       - name: Get dependencies
         run: |
