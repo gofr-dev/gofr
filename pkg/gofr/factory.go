@@ -50,10 +50,6 @@ func New() *App {
 
 	app.checkAndAddOpenAPIDocumentation()
 
-	if app.Config.Get("APP_ENV") == "DEBUG" {
-		app.httpServer.RegisterProfilingRoutes()
-	}
-
 	// gRPC Server
 	port, err = strconv.Atoi(app.Config.Get("GRPC_PORT"))
 	if err != nil || port <= 0 {
