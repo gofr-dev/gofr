@@ -19,14 +19,6 @@ import (
 var (
 	errAuthorizationHeaderRequired = errors.New("authorization header is required")
 	errInvalidAuthorizationHeader  = errors.New("authorization header format must be Bearer {token}")
-	errInvalidIssuer               = errors.New("invalid issuer")
-	errInvalidAudience             = errors.New("invalid audience")
-	errTokenExpired                = errors.New("token has expired")
-	errTokenNotActive              = errors.New("token is not active yet")
-	errInvalidRole                 = errors.New("insufficient permissions")
-	errInvalidSubject              = errors.New("invalid subject")
-	errInvalidIssuedAt             = errors.New("invalid issued at time")
-	errInvalidJTI                  = errors.New("invalid JWT ID")
 )
 
 // authMethod represents a custom type to define the different authentication methods supported.
@@ -65,67 +57,6 @@ type JWKSProvider interface {
 type OauthConfigs struct {
 	Provider        JWKSProvider
 	RefreshInterval time.Duration
-}
-
-type ClaimOption func(*ClaimConfig)
-
-type ClaimConfig struct {
-	RequiredRoles   []string
-	TrustedIssuers  []string
-	ValidAudiences  []string
-	AllowedSubjects []string
-	CheckExpiry     bool
-	CheckNotBefore  bool
-	CheckIssuedAt   bool
-	ValidateJTI     func(string) bool
-}
-
-func WithRequiredRoles(roles ...string) ClaimOption {
-	return func(cfg *ClaimConfig) {
-		cfg.RequiredRoles = roles
-	}
-}
-
-func WithTrustedIssuers(issuers ...string) ClaimOption {
-	return func(cfg *ClaimConfig) {
-		cfg.TrustedIssuers = issuers
-	}
-}
-
-func WithValidAudiences(audiences ...string) ClaimOption {
-	return func(cfg *ClaimConfig) {
-		cfg.ValidAudiences = audiences
-	}
-}
-
-func WithAllowedSubjects(subjects ...string) ClaimOption {
-	return func(cfg *ClaimConfig) {
-		cfg.AllowedSubjects = subjects
-	}
-}
-
-func WithCheckExpiry() ClaimOption {
-	return func(cfg *ClaimConfig) {
-		cfg.CheckExpiry = true
-	}
-}
-
-func WithCheckNotBefore() ClaimOption {
-	return func(cfg *ClaimConfig) {
-		cfg.CheckNotBefore = true
-	}
-}
-
-func WithCheckIssuedAt() ClaimOption {
-	return func(cfg *ClaimConfig) {
-		cfg.CheckIssuedAt = true
-	}
-}
-
-func WithJTIValidator(fn func(string) bool) ClaimOption {
-	return func(cfg *ClaimConfig) {
-		cfg.ValidateJTI = fn
-	}
 }
 
 // NewOAuth creates a PublicKeyProvider that periodically fetches and updates public keys from a JWKS endpoint.
@@ -183,7 +114,7 @@ type PublicKeyProvider interface {
 }
 
 // OAuth is a middleware function that validates JWT access tokens using a provided PublicKeyProvider.
-func OAuth(key PublicKeyProvider, config *ClaimConfig) func(http.Handler) http.Handler {
+func OAuth(key PublicKeyProvider, opts ...jwt.ParserOption) func(http.Handler) http.Handler {
 	return func(inner http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			if isWellKnown(r.URL.Path) {
@@ -191,7 +122,7 @@ func OAuth(key PublicKeyProvider, config *ClaimConfig) func(http.Handler) http.H
 				return
 			}
 
-			claims, err := processToken(r.Header.Get("Authorization"), key, config)
+			claims, err := processToken(r.Header.Get("Authorization"), key, opts...)
 			if err != nil {
 				http.Error(w, err.Error(), http.StatusUnauthorized)
 				return
@@ -203,13 +134,13 @@ func OAuth(key PublicKeyProvider, config *ClaimConfig) func(http.Handler) http.H
 	}
 }
 
-func processToken(authHeader string, key PublicKeyProvider, config *ClaimConfig) (jwt.Claims, error) {
+func processToken(authHeader string, key PublicKeyProvider, opts ...jwt.ParserOption) (jwt.Claims, error) {
 	tokenString, err := extractToken(authHeader)
 	if err != nil {
 		return nil, err
 	}
 
-	token, err := parseToken(tokenString, key)
+	token, err := parseToken(tokenString, key, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -217,10 +148,6 @@ func processToken(authHeader string, key PublicKeyProvider, config *ClaimConfig)
 	claims, ok := token.Claims.(jwt.MapClaims)
 	if !ok {
 		return nil, jwt.ErrTokenInvalidClaims
-	}
-
-	if err := validateClaims(claims, config); err != nil {
-		return nil, err
 	}
 
 	return claims, nil
@@ -243,7 +170,7 @@ func extractToken(authHeader string) (string, error) {
 }
 
 // ParseToken parses the JWT token using the provided key provider.
-func parseToken(tokenString string, key PublicKeyProvider) (*jwt.Token, error) {
+func parseToken(tokenString string, key PublicKeyProvider, opts ...jwt.ParserOption) (*jwt.Token, error) {
 	return jwt.Parse(tokenString, func(token *jwt.Token) (any, error) {
 		kid := token.Header["kid"]
 		jwks := key.Get(fmt.Sprint(kid))
@@ -253,7 +180,7 @@ func parseToken(tokenString string, key PublicKeyProvider) (*jwt.Token, error) {
 		}
 
 		return jwks, nil
-	})
+	}, opts...)
 }
 
 // JWKS represents a JSON Web Key Set.
