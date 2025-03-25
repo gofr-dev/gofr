@@ -76,7 +76,7 @@ curl -o trace.out http://localhost:2121/debug/pprof/trace
 
 ## Analyzing Profiling Data
 
-### Using `go tool pprof`
+### 1. Using go tool pprof
 To analyze CPU, memory, or goroutine profiles:
 ```bash
 go tool pprof <profile_file>
@@ -84,29 +84,29 @@ go tool pprof <profile_file>
 
 #### **`top`**
 Shows the functions consuming the most resources (e.g., CPU or memory).
-```bash
-go tool pprof cpu.pprof
-(pprof) top
-```
+   ```bash
+   go tool pprof cpu.pprof
+   (pprof) top
+   ```
 
 #### **`list`**
 Displays the source code of a specific function, along with resource usage.
-```bash
-(pprof) list <function_name>
-```
+   ```bash
+   (pprof) list <function_name>
+   ```
 Example:
-```bash
-(pprof) list main.myFunction
-```
+   ```bash
+   (pprof) list main.myFunction
+   ```
 
 #### **`web`**
 Generates a visual representation of the profile in your browser. This requires Graphviz to be installed.
-```bash
-(pprof) web
-```
+   ```bash
+   (pprof) web
+   ```
 
 
-### Using `go tool trace`
+### 2. Using go tool trace
 To analyze execution traces:
 ```bash
 go tool trace trace.out
