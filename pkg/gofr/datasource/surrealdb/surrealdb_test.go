@@ -160,6 +160,8 @@ func Test_Query(t *testing.T) {
 
 		mockLogger.EXPECT().Debug(gomock.Any()).AnyTimes()
 		mockLogger.EXPECT().Errorf(gomock.Any(), gomock.Any()).AnyTimes()
+		mockMetrics.EXPECT().RecordHistogram(gomock.Any(), "app_surrealdb_stats", gomock.Any(), gomock.Any())
+		mockMetrics.EXPECT().SetGauge("app_surrealdb_open_connections", float64(1))
 
 		results, err := client.Query(ctx, query, nil)
 		require.NoError(t, err)
@@ -181,6 +183,8 @@ func Test_Query(t *testing.T) {
 			Return(errInvalidQuery)
 
 		mockLogger.EXPECT().Debug(gomock.Any()).AnyTimes()
+		mockMetrics.EXPECT().RecordHistogram(gomock.Any(), "app_surrealdb_stats", gomock.Any(), gomock.Any())
+		mockMetrics.EXPECT().SetGauge("app_surrealdb_open_connections", float64(1))
 
 		results, err := client.Query(ctx, query, nil)
 		require.Error(t, err)
@@ -217,6 +221,8 @@ func Test_Create(t *testing.T) {
 		}
 
 		mockLogger.EXPECT().Debug(gomock.Any()).AnyTimes()
+		mockMetrics.EXPECT().RecordHistogram(gomock.Any(), "app_surrealdb_stats", gomock.Any(), gomock.Any())
+		mockMetrics.EXPECT().SetGauge("app_surrealdb_open_connections", float64(1))
 
 		mockConn.EXPECT().
 			Send(gomock.Any(), "create", "users", data).
@@ -238,6 +244,8 @@ func Test_Create(t *testing.T) {
 		mockConn.EXPECT().
 			Send(gomock.Any(), "create", "users", data).
 			Return(errorDatabase)
+		mockMetrics.EXPECT().RecordHistogram(gomock.Any(), "app_surrealdb_stats", gomock.Any(), gomock.Any())
+		mockMetrics.EXPECT().SetGauge("app_surrealdb_open_connections", float64(1))
 
 		result, err := client.Create(ctx, "users", data)
 		require.Error(t, err)
@@ -285,6 +293,8 @@ func Test_Update(t *testing.T) {
 		}
 
 		mockLogger.EXPECT().Debug(gomock.Any()).AnyTimes()
+		mockMetrics.EXPECT().RecordHistogram(gomock.Any(), "app_surrealdb_stats", gomock.Any(), gomock.Any())
+		mockMetrics.EXPECT().SetGauge("app_surrealdb_open_connections", float64(1))
 
 		mockConn.EXPECT().
 			Send(gomock.Any(), "query", expectedQuery, data).
@@ -329,6 +339,7 @@ func Test_Select(t *testing.T) {
 	client := New(&Config{})
 	client.UseLogger(mockLogger)
 	client.UseMetrics(mockMetrics)
+	client.UseTracer(otel.GetTracerProvider().Tracer("gofr-surrealdb"))
 	client.db = mockConn
 
 	t.Run("successful select", func(t *testing.T) {
@@ -346,6 +357,8 @@ func Test_Select(t *testing.T) {
 		}
 
 		mockLogger.EXPECT().Debug(gomock.Any()).AnyTimes()
+		mockMetrics.EXPECT().RecordHistogram(gomock.Any(), "app_surrealdb_stats", gomock.Any(), gomock.Any())
+		mockMetrics.EXPECT().SetGauge("app_surrealdb_open_connections", float64(1))
 
 		mockConn.EXPECT().
 			Send(gomock.Any(), "select", "users").
@@ -367,6 +380,8 @@ func Test_Select(t *testing.T) {
 		}
 
 		mockLogger.EXPECT().Debug(gomock.Any()).AnyTimes()
+		mockMetrics.EXPECT().RecordHistogram(gomock.Any(), "app_surrealdb_stats", gomock.Any(), gomock.Any())
+		mockMetrics.EXPECT().SetGauge("app_surrealdb_open_connections", float64(1))
 
 		mockConn.EXPECT().
 			Send(gomock.Any(), "select", "users").
