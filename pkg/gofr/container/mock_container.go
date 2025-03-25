@@ -24,6 +24,7 @@ type Mocks struct {
 	DGraph      *MockDgraph
 	ArangoDB    *MockArangoDBProvider
 	OpenTSDB    *MockOpenTSDBProvider
+	SurrealDB   *MockSurrealDB
 	File        *file.MockFileSystemProvider
 	HTTPService *service.MockHTTP
 	Metrics     *MockMetrics
@@ -89,6 +90,9 @@ func NewMockContainer(t *testing.T, options ...options) (*Container, *Mocks) {
 	arangoMock := NewMockArangoDBProvider(ctrl)
 	container.ArangoDB = arangoMock
 
+	surrealMock := NewMockSurrealDB(ctrl)
+	container.SurrealDB = surrealMock
+
 	var httpMock *service.MockHTTP
 
 	container.Services = make(map[string]service.HTTP)
@@ -119,6 +123,7 @@ func NewMockContainer(t *testing.T, options ...options) (*Container, *Mocks) {
 		DGraph:      dgraphMock,
 		OpenTSDB:    opentsdbMock,
 		ArangoDB:    arangoMock,
+		SurrealDB:   surrealMock,
 		Metrics:     mockMetrics,
 	}
 

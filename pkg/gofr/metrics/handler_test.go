@@ -77,3 +77,37 @@ func Test_MetricsGetHandler_SystemMetricsRegistered(t *testing.T) {
 	assert.Contains(t, bodyString, `app_sys_total_alloc{otel_scope_name="test-app",otel_scope_version="v1.0.0"}`)
 	assert.Contains(t, bodyString, `app_go_numGC{otel_scope_name="test-app",otel_scope_version="v1.0.0"}`)
 }
+
+func Test_MetricsGetHandler_RegisteredProfilingRoutes(t *testing.T) {
+	manager := NewMetricsManager(exporters.Prometheus("test-app", "v1.0.0"),
+		logging.NewMockLogger(logging.INFO))
+
+	// Registering the metrics because the values are being set in the GetHandler function.
+	manager.NewGauge("app_go_routines", "Number of Go routines running.")
+	manager.NewGauge("app_sys_memory_alloc", "Number of bytes allocated for heap objects.")
+	manager.NewGauge("app_sys_total_alloc", "Number of cumulative bytes allocated for heap objects.")
+	manager.NewGauge("app_go_numGC", "Number of completed Garbage Collector cycles.")
+	manager.NewGauge("app_go_sys", "Number of total bytes of memory.")
+
+	handler := GetHandler(manager)
+
+	server := httptest.NewServer(handler)
+
+	// Test if the expected handlers are registered for the pprof endpoints
+	expectedRoutes := []string{
+		"/debug/pprof/",
+		"/debug/pprof/cmdline",
+		"/debug/pprof/symbol",
+	}
+
+	for _, route := range expectedRoutes {
+		req, _ := http.NewRequestWithContext(context.Background(), http.MethodGet, server.URL+route, http.NoBody)
+		resp, err := server.Client().Do(req)
+
+		require.NotNil(t, resp)
+		require.Equal(t, http.StatusOK, resp.StatusCode)
+		require.NoError(t, err)
+
+		resp.Body.Close()
+	}
+}

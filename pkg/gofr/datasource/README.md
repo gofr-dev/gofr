@@ -85,7 +85,7 @@ Therefore, GoFr utilizes a pluggable approach for new datasources by separating 
 | DGraph           |      ✅       |  ✅   |    ✅    |   ✅    |           |
 | Azure Event Hubs |              |  ✅   |    ✅    |        |     ✅     |
 | OpenTSDB         |      ✅       |  ✅   |         |   ✅    |     ✅     |
-| SurrealDB        |      ✅       |  ✅   |         |   ✅    |     ✅     |
+| SurrealDB        |      ✅       |  ✅   |    ✅    |   ✅    |     ✅     |
 | ArangoDB         |      ✅       |  ✅   |    ✅    |   ✅    |     ✅     |
 | NATS-KV          |      ✅       |  ✅   |    ✅    |   ✅    |     ✅     |
 | ScyllaDB         |      ✅       |  ✅   |    ✅    |   ✅    |           |
