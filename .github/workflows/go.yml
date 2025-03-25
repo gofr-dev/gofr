@@ -8,7 +8,6 @@ on:
     branches:
       - main
       - development
-      - en/update_linter_to_v1.64.0
     paths-ignore:
       - 'docs/**'  # Ignore changes to docs folder
   # Run on pull requests to main or development branches
