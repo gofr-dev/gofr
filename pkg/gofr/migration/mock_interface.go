@@ -24,6 +24,7 @@ import (
 type MockRedis struct {
 	ctrl     *gomock.Controller
 	recorder *MockRedisMockRecorder
+	isgomock struct{}
 }
 
 // MockRedisMockRecorder is the mock recorder for MockRedis.
@@ -108,6 +109,7 @@ func (mr *MockRedisMockRecorder) Set(ctx, key, value, expiration any) *gomock.Ca
 type MockSQL struct {
 	ctrl     *gomock.Controller
 	recorder *MockSQLMockRecorder
+	isgomock struct{}
 }
 
 // MockSQLMockRecorder is the mock recorder for MockSQL.
@@ -229,6 +231,7 @@ func (mr *MockSQLMockRecorder) QueryRowContext(ctx, query any, args ...any) *gom
 type MockPubSub struct {
 	ctrl     *gomock.Controller
 	recorder *MockPubSubMockRecorder
+	isgomock struct{}
 }
 
 // MockPubSubMockRecorder is the mock recorder for MockPubSub.
@@ -280,6 +283,7 @@ func (mr *MockPubSubMockRecorder) DeleteTopic(context, name any) *gomock.Call {
 type MockClickhouse struct {
 	ctrl     *gomock.Controller
 	recorder *MockClickhouseMockRecorder
+	isgomock struct{}
 }
 
 // MockClickhouseMockRecorder is the mock recorder for MockClickhouse.
@@ -375,6 +379,7 @@ func (mr *MockClickhouseMockRecorder) Select(ctx, dest, query any, args ...any) 
 type MockCassandra struct {
 	ctrl     *gomock.Controller
 	recorder *MockCassandraMockRecorder
+	isgomock struct{}
 }
 
 // MockCassandraMockRecorder is the mock recorder for MockCassandra.
@@ -479,6 +484,7 @@ func (mr *MockCassandraMockRecorder) NewBatch(name, batchType any) *gomock.Call 
 type MockMongo struct {
 	ctrl     *gomock.Controller
 	recorder *MockMongoMockRecorder
+	isgomock struct{}
 }
 
 // MockMongoMockRecorder is the mock recorder for MockMongo.
@@ -677,6 +683,7 @@ func (mr *MockMongoMockRecorder) UpdateOne(ctx, collection, filter, update any) 
 type MockArangoDB struct {
 	ctrl     *gomock.Controller
 	recorder *MockArangoDBMockRecorder
+	isgomock struct{}
 }
 
 // MockArangoDBMockRecorder is the mock recorder for MockArangoDB.
@@ -780,10 +787,106 @@ func (mr *MockArangoDBMockRecorder) DropGraph(ctx, database, graph any) *gomock.
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DropGraph", reflect.TypeOf((*MockArangoDB)(nil).DropGraph), ctx, database, graph)
 }
 
+// MockSurrealDB is a mock of SurrealDB interface.
+type MockSurrealDB struct {
+	ctrl     *gomock.Controller
+	recorder *MockSurrealDBMockRecorder
+	isgomock struct{}
+}
+
+// MockSurrealDBMockRecorder is the mock recorder for MockSurrealDB.
+type MockSurrealDBMockRecorder struct {
+	mock *MockSurrealDB
+}
+
+// NewMockSurrealDB creates a new mock instance.
+func NewMockSurrealDB(ctrl *gomock.Controller) *MockSurrealDB {
+	mock := &MockSurrealDB{ctrl: ctrl}
+	mock.recorder = &MockSurrealDBMockRecorder{mock}
+	return mock
+}
+
+// EXPECT returns an object that allows the caller to indicate expected use.
+func (m *MockSurrealDB) EXPECT() *MockSurrealDBMockRecorder {
+	return m.recorder
+}
+
+// CreateDatabase mocks base method.
+func (m *MockSurrealDB) CreateDatabase(ctx context.Context, database string) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "CreateDatabase", ctx, database)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// CreateDatabase indicates an expected call of CreateDatabase.
+func (mr *MockSurrealDBMockRecorder) CreateDatabase(ctx, database any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CreateDatabase", reflect.TypeOf((*MockSurrealDB)(nil).CreateDatabase), ctx, database)
+}
+
+// CreateNamespace mocks base method.
+func (m *MockSurrealDB) CreateNamespace(ctx context.Context, namespace string) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "CreateNamespace", ctx, namespace)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// CreateNamespace indicates an expected call of CreateNamespace.
+func (mr *MockSurrealDBMockRecorder) CreateNamespace(ctx, namespace any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CreateNamespace", reflect.TypeOf((*MockSurrealDB)(nil).CreateNamespace), ctx, namespace)
+}
+
+// DropDatabase mocks base method.
+func (m *MockSurrealDB) DropDatabase(ctx context.Context, database string) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "DropDatabase", ctx, database)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// DropDatabase indicates an expected call of DropDatabase.
+func (mr *MockSurrealDBMockRecorder) DropDatabase(ctx, database any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DropDatabase", reflect.TypeOf((*MockSurrealDB)(nil).DropDatabase), ctx, database)
+}
+
+// DropNamespace mocks base method.
+func (m *MockSurrealDB) DropNamespace(ctx context.Context, namespace string) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "DropNamespace", ctx, namespace)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// DropNamespace indicates an expected call of DropNamespace.
+func (mr *MockSurrealDBMockRecorder) DropNamespace(ctx, namespace any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DropNamespace", reflect.TypeOf((*MockSurrealDB)(nil).DropNamespace), ctx, namespace)
+}
+
+// Query mocks base method.
+func (m *MockSurrealDB) Query(ctx context.Context, query string, vars map[string]any) ([]any, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Query", ctx, query, vars)
+	ret0, _ := ret[0].([]any)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// Query indicates an expected call of Query.
+func (mr *MockSurrealDBMockRecorder) Query(ctx, query, vars any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Query", reflect.TypeOf((*MockSurrealDB)(nil).Query), ctx, query, vars)
+}
+
 // Mockmigrator is a mock of migrator interface.
 type Mockmigrator struct {
 	ctrl     *gomock.Controller
 	recorder *MockmigratorMockRecorder
+	isgomock struct{}
 }
 
 // MockmigratorMockRecorder is the mock recorder for Mockmigrator.

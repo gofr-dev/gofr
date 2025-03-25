@@ -3,10 +3,12 @@ package surrealdb
 import (
 	"context"
 	"errors"
+	"math"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"go.opentelemetry.io/otel"
 	"go.uber.org/mock/gomock"
 )
 
@@ -127,6 +129,7 @@ func Test_Query(t *testing.T) {
 	client := New(&Config{})
 	client.UseLogger(mockLogger)
 	client.UseMetrics(mockMetrics)
+	client.UseTracer(otel.GetTracerProvider().Tracer("gofr-surrealdb"))
 	client.db = mockConn
 
 	t.Run("successful query", func(t *testing.T) {
@@ -157,6 +160,8 @@ func Test_Query(t *testing.T) {
 
 		mockLogger.EXPECT().Debug(gomock.Any()).AnyTimes()
 		mockLogger.EXPECT().Errorf(gomock.Any(), gomock.Any()).AnyTimes()
+		mockMetrics.EXPECT().RecordHistogram(gomock.Any(), "app_surrealdb_stats", gomock.Any(), gomock.Any())
+		mockMetrics.EXPECT().SetGauge("app_surrealdb_open_connections", float64(1))
 
 		results, err := client.Query(ctx, query, nil)
 		require.NoError(t, err)
@@ -178,6 +183,8 @@ func Test_Query(t *testing.T) {
 			Return(errInvalidQuery)
 
 		mockLogger.EXPECT().Debug(gomock.Any()).AnyTimes()
+		mockMetrics.EXPECT().RecordHistogram(gomock.Any(), "app_surrealdb_stats", gomock.Any(), gomock.Any())
+		mockMetrics.EXPECT().SetGauge("app_surrealdb_open_connections", float64(1))
 
 		results, err := client.Query(ctx, query, nil)
 		require.Error(t, err)
@@ -214,6 +221,8 @@ func Test_Create(t *testing.T) {
 		}
 
 		mockLogger.EXPECT().Debug(gomock.Any()).AnyTimes()
+		mockMetrics.EXPECT().RecordHistogram(gomock.Any(), "app_surrealdb_stats", gomock.Any(), gomock.Any())
+		mockMetrics.EXPECT().SetGauge("app_surrealdb_open_connections", float64(1))
 
 		mockConn.EXPECT().
 			Send(gomock.Any(), "create", "users", data).
@@ -235,6 +244,8 @@ func Test_Create(t *testing.T) {
 		mockConn.EXPECT().
 			Send(gomock.Any(), "create", "users", data).
 			Return(errorDatabase)
+		mockMetrics.EXPECT().RecordHistogram(gomock.Any(), "app_surrealdb_stats", gomock.Any(), gomock.Any())
+		mockMetrics.EXPECT().SetGauge("app_surrealdb_open_connections", float64(1))
 
 		result, err := client.Create(ctx, "users", data)
 		require.Error(t, err)
@@ -282,6 +293,8 @@ func Test_Update(t *testing.T) {
 		}
 
 		mockLogger.EXPECT().Debug(gomock.Any()).AnyTimes()
+		mockMetrics.EXPECT().RecordHistogram(gomock.Any(), "app_surrealdb_stats", gomock.Any(), gomock.Any())
+		mockMetrics.EXPECT().SetGauge("app_surrealdb_open_connections", float64(1))
 
 		mockConn.EXPECT().
 			Send(gomock.Any(), "query", expectedQuery, data).
@@ -326,6 +339,7 @@ func Test_Select(t *testing.T) {
 	client := New(&Config{})
 	client.UseLogger(mockLogger)
 	client.UseMetrics(mockMetrics)
+	client.UseTracer(otel.GetTracerProvider().Tracer("gofr-surrealdb"))
 	client.db = mockConn
 
 	t.Run("successful select", func(t *testing.T) {
@@ -343,6 +357,8 @@ func Test_Select(t *testing.T) {
 		}
 
 		mockLogger.EXPECT().Debug(gomock.Any()).AnyTimes()
+		mockMetrics.EXPECT().RecordHistogram(gomock.Any(), "app_surrealdb_stats", gomock.Any(), gomock.Any())
+		mockMetrics.EXPECT().SetGauge("app_surrealdb_open_connections", float64(1))
 
 		mockConn.EXPECT().
 			Send(gomock.Any(), "select", "users").
@@ -364,6 +380,8 @@ func Test_Select(t *testing.T) {
 		}
 
 		mockLogger.EXPECT().Debug(gomock.Any()).AnyTimes()
+		mockMetrics.EXPECT().RecordHistogram(gomock.Any(), "app_surrealdb_stats", gomock.Any(), gomock.Any())
+		mockMetrics.EXPECT().SetGauge("app_surrealdb_open_connections", float64(1))
 
 		mockConn.EXPECT().
 			Send(gomock.Any(), "select", "users").
@@ -373,5 +391,408 @@ func Test_Select(t *testing.T) {
 		results, err := client.Select(ctx, "users")
 		require.NoError(t, err)
 		assert.Empty(t, results)
+	})
+}
+
+func Test_Insert(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	mockLogger := NewMockLogger(ctrl)
+	mockConn := NewMockConnection(ctrl)
+	mockMetrics := NewMockMetrics(ctrl)
+
+	client := New(&Config{
+		Namespace: "test_ns",
+		Database:  "test_db",
+	})
+	client.UseLogger(mockLogger)
+	client.UseMetrics(mockMetrics)
+	client.db = mockConn
+
+	t.Run("successful insert", func(t *testing.T) {
+		ctx := context.Background()
+		data := map[string]any{
+			"name":  "test",
+			"email": "test@example.com",
+		}
+
+		mockResponse := DBResponse{
+			Result: []any{
+				map[string]any{
+					"id":    "user:1",
+					"name":  "test",
+					"email": "test@example.com",
+				},
+			},
+		}
+
+		mockLogger.EXPECT().Debug(gomock.Any()).AnyTimes()
+		mockConn.EXPECT().
+			Send(gomock.Any(), "insert", "users", data).
+			Return(nil).
+			SetArg(0, mockResponse)
+
+		result, err := client.Insert(ctx, "users", data)
+		require.NoError(t, err)
+		require.Len(t, result, 1)
+		assert.Equal(t, "test", result[0]["name"])
+		assert.Equal(t, "test@example.com", result[0]["email"])
+	})
+
+	t.Run("not connected error", func(t *testing.T) {
+		ctx := context.Background()
+		client.db = nil
+
+		mockLogger.EXPECT().Debug(gomock.Any()).AnyTimes()
+
+		result, err := client.Insert(ctx, "users", nil)
+		require.ErrorIs(t, err, errNotConnected)
+		require.Nil(t, result)
+
+		client.db = mockConn
+	})
+
+	t.Run("unexpected result type error", func(t *testing.T) {
+		ctx := context.Background()
+		data := map[string]any{"name": "test"}
+
+		mockResponse := DBResponse{
+			Result: "invalid result type",
+		}
+
+		mockLogger.EXPECT().Debug(gomock.Any()).AnyTimes()
+		mockConn.EXPECT().
+			Send(gomock.Any(), "insert", "users", data).
+			Return(nil).
+			SetArg(0, mockResponse)
+
+		result, err := client.Insert(ctx, "users", data)
+		require.ErrorIs(t, err, errUnexpectedResultType)
+		require.Nil(t, result)
+	})
+}
+
+func Test_Delete(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	mockLogger := NewMockLogger(ctrl)
+	mockConn := NewMockConnection(ctrl)
+	mockMetrics := NewMockMetrics(ctrl)
+
+	client := New(&Config{
+		Namespace: "test_ns",
+		Database:  "test_db",
+	})
+	client.UseLogger(mockLogger)
+	client.UseMetrics(mockMetrics)
+	client.db = mockConn
+
+	t.Run("successful delete", func(t *testing.T) {
+		ctx := context.Background()
+		expectedQuery := "DELETE FROM users:123 RETURN BEFORE;"
+
+		mockResponse := DBResponse{
+			Result: []any{
+				map[any]any{
+					"id":    "user:123",
+					"name":  "test",
+					"email": "test@example.com",
+				},
+			},
+		}
+
+		mockLogger.EXPECT().Debug(gomock.Any()).AnyTimes()
+		mockConn.EXPECT().
+			Send(gomock.Any(), "query", expectedQuery, nil).
+			Return(nil).
+			SetArg(0, mockResponse)
+
+		result, err := client.Delete(ctx, "users", "123")
+		require.NoError(t, err)
+
+		resultMap, ok := result.(map[string]any)
+		require.True(t, ok)
+		assert.Equal(t, "test", resultMap["name"])
+		assert.Equal(t, "test@example.com", resultMap["email"])
+	})
+
+	t.Run("not connected error", func(t *testing.T) {
+		ctx := context.Background()
+		client.db = nil
+
+		mockLogger.EXPECT().Debug(gomock.Any()).AnyTimes()
+
+		result, err := client.Delete(ctx, "users", "123")
+		require.ErrorIs(t, err, errNotConnected)
+		require.Nil(t, result)
+
+		client.db = mockConn
+	})
+
+	t.Run("no results", func(t *testing.T) {
+		ctx := context.Background()
+		expectedQuery := "DELETE FROM users:123 RETURN BEFORE;"
+
+		mockResponse := DBResponse{
+			Result: []any{},
+		}
+
+		mockLogger.EXPECT().Debug(gomock.Any()).AnyTimes()
+		mockConn.EXPECT().
+			Send(gomock.Any(), "query", expectedQuery, nil).
+			Return(nil).
+			SetArg(0, mockResponse)
+
+		result, err := client.Delete(ctx, "users", "123")
+		require.NoError(t, err)
+		require.Nil(t, result)
+	})
+}
+
+func Test_convertValue(t *testing.T) {
+	client := &Client{}
+
+	t.Run("float64 conversion", func(t *testing.T) {
+		tests := []struct {
+			name     string
+			input    float64
+			expected any
+		}{
+			{"valid float64", 42.0, 42},
+			{"too large float64", math.MaxFloat64, nil},
+			{"too small float64", -math.MaxFloat64, nil},
+		}
+
+		for _, tt := range tests {
+			t.Run(tt.name, func(t *testing.T) {
+				result := client.convertValue(tt.input)
+				assert.Equal(t, tt.expected, result)
+			})
+		}
+	})
+
+	t.Run("uint64 conversion", func(t *testing.T) {
+		tests := []struct {
+			name     string
+			input    uint64
+			expected any
+		}{
+			{"valid uint64", uint64(42), 42},
+			{"too large uint64", uint64(math.MaxInt + 1), nil},
+		}
+
+		for _, tt := range tests {
+			t.Run(tt.name, func(t *testing.T) {
+				result := client.convertValue(tt.input)
+				assert.Equal(t, tt.expected, result)
+			})
+		}
+	})
+
+	t.Run("int64 conversion", func(t *testing.T) {
+		tests := []struct {
+			name     string
+			input    int64
+			expected any
+		}{
+			{"valid int64", int64(42), 42},
+			{"at max boundary", int64(math.MaxInt), int(math.MaxInt)},
+			{"at min boundary", int64(math.MinInt), int(math.MinInt)},
+		}
+
+		for _, tt := range tests {
+			t.Run(tt.name, func(t *testing.T) {
+				result := client.convertValue(tt.input)
+				assert.Equal(t, tt.expected, result)
+			})
+		}
+	})
+	t.Run("string conversion", func(t *testing.T) {
+		input := "test string"
+		result := client.convertValue(input)
+		assert.Equal(t, input, result)
+	})
+
+	t.Run("default case", func(t *testing.T) {
+		input := []int{1, 2, 3}
+		result := client.convertValue(input)
+		assert.Equal(t, input, result)
+	})
+}
+
+func Test_executeQuery(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	mockLogger := NewMockLogger(ctrl)
+	mockConn := NewMockConnection(ctrl)
+	mockMetrics := NewMockMetrics(ctrl)
+
+	client := New(&Config{
+		Namespace: "test_ns",
+		Database:  "test_db",
+	})
+	client.UseLogger(mockLogger)
+	client.UseMetrics(mockMetrics)
+	client.db = mockConn
+
+	t.Run("successful query execution", func(t *testing.T) {
+		ctx := context.Background()
+		queryResult := []QueryResult{{
+			Status: statusOK,
+			Result: []any{},
+		}}
+
+		mockLogger.EXPECT().Debug(gomock.Any()).AnyTimes()
+		mockConn.EXPECT().
+			Send(gomock.Any(), "query", "TEST QUERY", nil).
+			Return(nil).
+			SetArg(0, QueryResponse{Result: &queryResult})
+
+		err := client.executeQuery(ctx, "Test", "entity", "TEST QUERY")
+		require.NoError(t, err)
+	})
+
+	t.Run("not connected error", func(t *testing.T) {
+		ctx := context.Background()
+		client.db = nil
+
+		mockLogger.EXPECT().Debug(gomock.Any()).AnyTimes()
+
+		err := client.executeQuery(ctx, "Test", "entity", "TEST QUERY")
+		require.ErrorIs(t, err, errNotConnected)
+
+		client.db = mockConn
+	})
+
+	t.Run("query execution error", func(t *testing.T) {
+		ctx := context.Background()
+
+		mockLogger.EXPECT().Debug(gomock.Any()).AnyTimes()
+		mockConn.EXPECT().
+			Send(gomock.Any(), "query", "TEST QUERY", nil).
+			Return(errorDatabase)
+
+		err := client.executeQuery(ctx, "Test", "entity", "TEST QUERY")
+		require.Error(t, err)
+	})
+}
+
+func Test_NamespaceOperations(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	mockLogger := NewMockLogger(ctrl)
+	mockConn := NewMockConnection(ctrl)
+	mockMetrics := NewMockMetrics(ctrl)
+
+	client := New(&Config{
+		Namespace: "test_ns",
+		Database:  "test_db",
+	})
+	client.UseLogger(mockLogger)
+	client.UseMetrics(mockMetrics)
+	client.db = mockConn
+
+	t.Run("create namespace success", func(t *testing.T) {
+		ctx := context.Background()
+		queryResult := []QueryResult{{
+			Status: statusOK,
+			Result: []any{},
+		}}
+
+		mockLogger.EXPECT().Debug(gomock.Any()).AnyTimes()
+		mockConn.EXPECT().
+			Send(gomock.Any(), "query", "DEFINE NAMESPACE test_namespace;", nil).
+			Return(nil).
+			SetArg(0, QueryResponse{Result: &queryResult})
+
+		err := client.CreateNamespace(ctx, "test_namespace")
+		require.NoError(t, err)
+	})
+
+	t.Run("drop namespace success", func(t *testing.T) {
+		ctx := context.Background()
+		queryResult := []QueryResult{{
+			Status: statusOK,
+			Result: []any{},
+		}}
+
+		mockLogger.EXPECT().Debug(gomock.Any()).AnyTimes()
+		mockConn.EXPECT().
+			Send(gomock.Any(), "query", "REMOVE NAMESPACE test_namespace;", nil).
+			Return(nil).
+			SetArg(0, QueryResponse{Result: &queryResult})
+
+		err := client.DropNamespace(ctx, "test_namespace")
+		require.NoError(t, err)
+	})
+}
+
+func Test_DatabaseOperations(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	mockLogger := NewMockLogger(ctrl)
+	mockConn := NewMockConnection(ctrl)
+	mockMetrics := NewMockMetrics(ctrl)
+
+	client := New(&Config{
+		Namespace: "test_ns",
+		Database:  "test_db",
+	})
+	client.UseLogger(mockLogger)
+	client.UseMetrics(mockMetrics)
+	client.db = mockConn
+
+	t.Run("create database success", func(t *testing.T) {
+		ctx := context.Background()
+		queryResult := []QueryResult{{
+			Status: statusOK,
+			Result: []any{},
+		}}
+
+		mockLogger.EXPECT().Debug(gomock.Any()).AnyTimes()
+		mockConn.EXPECT().
+			Send(gomock.Any(), "query", "DEFINE DATABASE test_database;", nil).
+			Return(nil).
+			SetArg(0, QueryResponse{Result: &queryResult})
+
+		err := client.CreateDatabase(ctx, "test_database")
+		require.NoError(t, err)
+	})
+
+	t.Run("drop database success", func(t *testing.T) {
+		ctx := context.Background()
+		queryResult := []QueryResult{{
+			Status: statusOK,
+			Result: []any{},
+		}}
+
+		mockLogger.EXPECT().Debug(gomock.Any()).AnyTimes()
+		mockConn.EXPECT().
+			Send(gomock.Any(), "query", "REMOVE DATABASE test_database;", nil).
+			Return(nil).
+			SetArg(0, QueryResponse{Result: &queryResult})
+
+		err := client.DropDatabase(ctx, "test_database")
+		require.NoError(t, err)
+	})
+
+	t.Run("database operations when not connected", func(t *testing.T) {
+		ctx := context.Background()
+		client.db = nil
+
+		mockLogger.EXPECT().Debug(gomock.Any()).AnyTimes()
+
+		err := client.CreateDatabase(ctx, "test_database")
+		require.ErrorIs(t, err, errNotConnected)
+
+		err = client.DropDatabase(ctx, "test_database")
+		require.ErrorIs(t, err, errNotConnected)
+
+		client.db = mockConn
 	})
 }
