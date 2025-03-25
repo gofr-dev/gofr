@@ -138,7 +138,7 @@ It involves sending the prefix `Bearer` trailed by the encoded token within the 
 GoFr supports authenticating tokens encoded by algorithm `RS256/384/512`. 
 
 ### App level Authentication
-Enable OAuth 2.0 with three-legged flow to authenticate requests. Use `EnableOAuth(jwks-endpoint,refresh_interval, opts ...jwt.ParserOption)` to configure GoFr with pre-defined credentials.
+Enable OAuth 2.0 with three-legged flow to authenticate requests. Use `EnableOAuth(jwks-endpoint,refresh_interval, options ...jwt.ParserOption)` to configure GoFr with pre-defined credentials.
 
 ### Description
 `EnableOAuth` configures OAuth authentication middleware for the application.
@@ -200,8 +200,7 @@ func main() {
 	app.EnableOAuth(
 		"http://jwks-endpoint", 
 		20,
-        jwt.WithIssuedAt(),
-        jwt.WithExpirationRequired(),
+        jwt.WithExpirationRequired(), // to enforce presence of exp claim in every token
         jwt.WithAudience("https://api.example.com"),
         jwt.WithIssuer("https://auth.example.com")
 		)
