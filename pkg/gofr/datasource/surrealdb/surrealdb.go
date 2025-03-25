@@ -683,11 +683,12 @@ func (c *Client) sendOperationStats(ql *QueryLog, startTime time.Time) {
 		"database", ql.Database,
 		"operation", ql.OperationName)
 
+	var nbConnection float64
 	if c.db != nil {
-		c.metrics.SetGauge("app_surrealdb_open_connections", 1)
-	} else {
-		c.metrics.SetGauge("app_surrealdb_open_connections", 0)
+		nbConnection = 1
 	}
+
+	c.metrics.SetGauge("app_surrealdb_open_connections", nbConnection)
 
 	if ql.Span == nil {
 		return
