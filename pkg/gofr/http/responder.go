@@ -90,10 +90,27 @@ func handleSuccess(method string, data any) (statusCode int, err any) {
 	}
 }
 
+// ResponseMarshaller defines an interface for errors that can provide custom fields.
+// This enables errors to extend the error response with additional fields.
+type ResponseMarshaller interface {
+	Response() map[string]any
+}
+
+// createErrorResponse returns an error response that always contains a "message" field,
+// and if the error implements ResponseMarshaller, it merges custom fields into the response.
 func createErrorResponse(err error) map[string]any {
-	return map[string]any{
-		"message": err.Error(),
+	resp := map[string]any{"message": err.Error()}
+
+	if rm, ok := err.(ResponseMarshaller); ok {
+		for k, v := range rm.Response() {
+			if k == "message" {
+				continue // Skip to avoid overriding the Error() message
+			}
+			resp[k] = v
+		}
 	}
+
+	return resp
 }
 
 // response represents an HTTP response.
