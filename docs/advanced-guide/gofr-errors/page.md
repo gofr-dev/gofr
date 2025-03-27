@@ -64,3 +64,35 @@ func (c customError) LogLevel() logging.Level {
 	return logging.WARN
 }
 ```
+
+## Extended Error Responses
+
+For RFC 7807-style error responses with additional fields, implement the ResponseMarshaller interface:
+
+```go
+type ResponseMarshaler interface {
+    Response() map[string]any
+}
+```
+
+#### Usage:
+```go
+type ValidationError struct {
+    Field   string
+    Message string
+    Code    int
+}
+
+func (e ValidationError) Error() string    { return e.Message }
+func (e ValidationError) StatusCode() int  { return e.Code }
+
+func (e ValidationError) Response() map[string]any {
+    return map[string]any{
+        "field":   e.Field,
+        "type":    "validation_error",
+        "details": "Invalid input format",
+    }
+}
+```
+
+> NOTE: The `message` field is reserved and always populated from `Error()` method. Avoid using message as a key in the response map
