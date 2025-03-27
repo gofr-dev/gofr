@@ -212,13 +212,13 @@ func TestResponder_CustomErrorWithResponse(t *testing.T) {
 	w := httptest.NewRecorder()
 	responder := NewResponder(w, http.MethodGet)
 
-	err := &CustomError{
+	customErr := &CustomError{
 		Code:    http.StatusNotFound,
 		Message: "resource not found",
 		Title:   "Custom Error",
 	}
 
-	responder.Respond(nil, err)
+	responder.Respond(nil, customErr)
 
 	resp := w.Result()
 	defer resp.Body.Close()
@@ -226,12 +226,13 @@ func TestResponder_CustomErrorWithResponse(t *testing.T) {
 	assert.Equal(t, http.StatusNotFound, resp.StatusCode)
 
 	var body map[string]any
-	json.NewDecoder(resp.Body).Decode(&body)
+	err := json.NewDecoder(resp.Body).Decode(&body)
+	require.NoError(t, err)
 
 	errorObj := body["error"].(map[string]any)
 
 	assert.Equal(t, "resource not found", errorObj["message"])
-	assert.Equal(t, float64(http.StatusNotFound), errorObj["code"])
+	assert.Equal(t, int(http.StatusNotFound), int(errorObj["code"].(float64)))
 	assert.Equal(t, "Custom Error", errorObj["title"])
 }
 
@@ -251,17 +252,18 @@ func TestResponder_ReservedMessageField(t *testing.T) {
 	w := httptest.NewRecorder()
 	responder := NewResponder(w, http.MethodGet)
 
-	err := &MessageOverrideError{
+	msgErr := &MessageOverrideError{
 		Msg: "original message",
 	}
 
-	responder.Respond(nil, err)
+	responder.Respond(nil, msgErr)
 
 	resp := w.Result()
 	defer resp.Body.Close()
 
 	var body map[string]any
-	json.NewDecoder(resp.Body).Decode(&body)
+	err := json.NewDecoder(resp.Body).Decode(&body)
+	require.NoError(t, err)
 
 	errorObj := body["error"].(map[string]any)
 	assert.Equal(t, "original message", errorObj["message"])
@@ -273,7 +275,7 @@ type MessageOverrideError struct {
 }
 
 func (e *MessageOverrideError) Error() string { return e.Msg }
-func (e *MessageOverrideError) Response() map[string]any {
+func (*MessageOverrideError) Response() map[string]any {
 	return map[string]any{
 		"message": "trying to override",
 		"info":    "additional info",

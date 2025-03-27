@@ -106,6 +106,7 @@ func createErrorResponse(err error) map[string]any {
 			if k == "message" {
 				continue // Skip to avoid overriding the Error() message
 			}
+
 			resp[k] = v
 		}
 	}
