@@ -3,11 +3,14 @@ package response
 import (
 	"html/template"
 	"io"
+	"net/http"
 )
 
 type Template struct { // Named as such to avoid conflict with imported template
-	Data any
-	Name string
+	Cookie  *http.Cookie
+	Headers map[string]string
+	Data    any
+	Name    string
 }
 
 func (t *Template) Render(w io.Writer) {

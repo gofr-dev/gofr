@@ -128,3 +128,15 @@ func (r *Request) Bind(i any) error {
 
 	return nil
 }
+
+func (r *Request) Header(string) string {
+	return ""
+}
+
+func (r *Request) GetClaims() map[string]interface{} {
+	return nil
+}
+
+func (r *Request) GetClaim(string) interface{} {
+	return nil
+}

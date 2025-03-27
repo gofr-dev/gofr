@@ -123,3 +123,15 @@ func (h *HelloRequestWrapper) HostName() string {
 func (h *HelloRequestWrapper) Params(s string) []string {
 	return nil
 }
+
+func (h *HelloRequestWrapper) Header(string) string {
+	return ""
+}
+
+func (h *HelloRequestWrapper) GetClaims() map[string]interface{} {
+	return nil
+}
+		
+func (h *HelloRequestWrapper) GetClaim(string) interface{} {
+		return nil
+}

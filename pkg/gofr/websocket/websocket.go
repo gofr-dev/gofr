@@ -141,3 +141,15 @@ func (ws *Manager) CloseConnection(connID string) {
 func (*Connection) Params(string) []string {
 	return nil
 }
+
+func (*Connection) Header(string) string {
+	return ""
+}
+
+func (*Connection) GetClaims() map[string]interface{} {
+	return nil
+}
+
+func (*Connection) GetClaim(string) interface{} {
+	return nil
+}

@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"net/http"
 	"sync"
 	"time"
 
@@ -12,6 +13,7 @@ import (
 
 	"gofr.dev/pkg/gofr"
 	"gofr.dev/pkg/gofr/datasource"
+	"gofr.dev/pkg/gofr/http/response"
 )
 
 func main() {
@@ -27,6 +29,7 @@ func main() {
 	a.GET("/redis", RedisHandler)
 	a.GET("/trace", TraceHandler)
 	a.GET("/mysql", MysqlHandler)
+	a.GET("/mpa", MultiPageHandler)
 
 	// Run the application
 	a.Run()
@@ -105,4 +108,29 @@ func MysqlHandler(c *gofr.Context) (any, error) {
 	}
 
 	return value, nil
+}
+
+func MultiPageHandler(c *gofr.Context) (any, error) {
+	var (
+		headers map[string]string
+		cookie  *http.Cookie
+		buf     []byte
+	)
+
+	headers = map[string]string{
+		"HxRedirect": "/dashboard",
+	}
+	cookie = &http.Cookie{
+		Name:     "Authorization",
+		Value:    "cookievalue",
+		Path:     "/",
+		MaxAge:   3600,
+		HttpOnly: true,
+		Secure:   true,
+		SameSite: http.SameSiteLaxMode,
+	}
+
+	buf = []byte("<html>Sample html page from gofr!</html>")
+
+	return response.File{Content: buf, ContentType: "text/html", Cookie: cookie, Headers: headers}, nil
 }

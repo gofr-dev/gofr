@@ -1,5 +1,9 @@
 package response
 
+import "net/http"
+
 type Raw struct {
-	Data any
+	Cookie  *http.Cookie
+	Headers map[string]string
+	Data    any
 }

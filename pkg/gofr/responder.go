@@ -4,4 +4,5 @@ package gofr
 // cmd and HTTP server application.
 type Responder interface {
 	Respond(data any, err error)
+	Header(key, value string)
 }

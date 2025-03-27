@@ -390,3 +390,15 @@ func (noopRequest) Bind(any) error {
 func (noopRequest) Params(string) []string {
 	return nil
 }
+
+func (noopRequest) Header(string) string {
+	return ""
+}
+
+func (noopRequest) GetClaims() map[string]interface{} {
+	return nil
+}
+
+func (noopRequest) GetClaim(string) interface{} {
+	return nil
+}

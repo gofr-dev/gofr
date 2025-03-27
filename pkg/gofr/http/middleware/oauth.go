@@ -77,6 +77,10 @@ func NewOAuth(config OauthConfigs) PublicKeyProvider {
 		}
 	}()
 
+	if keys, err := updateKeys(config); err == nil {
+		return keys
+	}
+
 	return &publicKeys
 }
 

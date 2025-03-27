@@ -11,7 +11,9 @@ import (
 	"reflect"
 	"strings"
 
+	"github.com/golang-jwt/jwt/v5"
 	"github.com/gorilla/mux"
+	"gofr.dev/pkg/gofr/http/middleware"
 )
 
 const (
@@ -178,4 +180,28 @@ func (r *Request) bindBinary(raw any) error {
 	*byteSlicePtr = body
 
 	return nil
+}
+
+func (r *Request) Header(key string) string {
+	return r.req.Header.Get(key)
+}
+
+func (r *Request) GetClaims() map[string]interface{} {
+	claims, ok := r.req.Context().Value(middleware.JWTClaim).(jwt.MapClaims)
+	if !ok {
+		return nil
+	}
+
+	return claims
+}
+
+func (r *Request) GetClaim(claimKey string) interface{} {
+	claims := r.GetClaims()
+
+	val, ok := claims[claimKey]
+	if !ok {
+		return nil
+	}
+
+	return val
 }

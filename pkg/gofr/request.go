@@ -14,4 +14,7 @@ type Request interface {
 	Bind(any) error
 	HostName() string
 	Params(string) []string
+	Header(string) string
+	GetClaims() map[string]interface{}
+	GetClaim(string) interface{}
 }
