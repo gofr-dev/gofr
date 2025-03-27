@@ -5,9 +5,9 @@
     "role": "Senior Developer | Open Source Enthusiast"
   },
   {
-    "quote": "GoFr has helped me monitor my applications so easily for which I would have written more than 100 lines of code, and integrating everything together would have been a nightmare.",
-    "author": "Shridhar Vijay Kumar",
-    "role": "Software Engineer, Doceree"
+    "quote": "I've used GoFr for both personal and professional projects and found it to be quite effective. While I haven't explored all its features yet, the ones I have used—such as REST API, observability (metrics and logging), and middleware—work seamlessly.",
+    "author": "Aditya Joshi",
+    "role": "Senior Software Engineer, Walmart"
   },
   {
     "quote": "We want to express our appreciation for the excellent framework you have developed. Integrating NATS into this package has significantly streamlined our application development process and accelerated implementation timelines.",
@@ -19,6 +19,12 @@
     "author": "Praveen Kumar",
     "role": "Founder, apnerve labs"
   },
+  {
+    "quote": "GoFr has helped me monitor my applications so easily for which I would have written more than 100 lines of code, and integrating everything together would have been a nightmare.",
+    "author": "Shridhar Vijay Kumar",
+    "role": "Software Engineer, Doceree"
+  },
+
   {
     "quote": "The strong opinions embedded in GoFr.dev make it incredibly efficient and straightforward to work with. It's like having a trusted expert guiding your every move. The framework's Golang foundation ensures exceptional performance and reliability. If you're serious about microservices, this is a must-try",
     "author": "Vineet Dwivedi",
