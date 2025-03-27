@@ -2,6 +2,7 @@ package http
 
 import (
 	"bytes"
+	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -205,6 +206,80 @@ func TestResponder_TemplateResponse(t *testing.T) {
 
 	assert.Equal(t, "text/html", contentType)
 	assert.Equal(t, expectedBody, responseBody)
+}
+
+func TestResponder_CustomErrorWithResponse(t *testing.T) {
+	w := httptest.NewRecorder()
+	responder := NewResponder(w, http.MethodGet)
+
+	customErr := &CustomError{
+		Code:    http.StatusNotFound,
+		Message: "resource not found",
+		Title:   "Custom Error",
+	}
+
+	responder.Respond(nil, customErr)
+
+	resp := w.Result()
+	defer resp.Body.Close()
+
+	assert.Equal(t, http.StatusNotFound, resp.StatusCode)
+
+	var body map[string]any
+	err := json.NewDecoder(resp.Body).Decode(&body)
+	require.NoError(t, err)
+
+	errorObj := body["error"].(map[string]any)
+
+	assert.Equal(t, "resource not found", errorObj["message"])
+	assert.Equal(t, int(http.StatusNotFound), int(errorObj["code"].(float64)))
+	assert.Equal(t, "Custom Error", errorObj["title"])
+}
+
+type CustomError struct {
+	Code    int
+	Message string
+	Title   string
+}
+
+func (e *CustomError) Error() string   { return e.Message }
+func (e *CustomError) StatusCode() int { return e.Code }
+func (e *CustomError) Response() map[string]any {
+	return map[string]any{"title": e.Title, "code": e.Code}
+}
+
+func TestResponder_ReservedMessageField(t *testing.T) {
+	w := httptest.NewRecorder()
+	responder := NewResponder(w, http.MethodGet)
+
+	msgErr := &MessageOverrideError{
+		Msg: "original message",
+	}
+
+	responder.Respond(nil, msgErr)
+
+	resp := w.Result()
+	defer resp.Body.Close()
+
+	var body map[string]any
+	err := json.NewDecoder(resp.Body).Decode(&body)
+	require.NoError(t, err)
+
+	errorObj := body["error"].(map[string]any)
+	assert.Equal(t, "original message", errorObj["message"])
+	assert.Equal(t, "additional info", errorObj["info"])
+}
+
+type MessageOverrideError struct {
+	Msg string
+}
+
+func (e *MessageOverrideError) Error() string { return e.Msg }
+func (*MessageOverrideError) Response() map[string]any {
+	return map[string]any{
+		"message": "trying to override",
+		"info":    "additional info",
+	}
 }
 
 func createTemplateFile(t *testing.T, path, content string) {
