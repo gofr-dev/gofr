@@ -3,6 +3,8 @@ package gofr
 import (
 	"time"
 
+	"github.com/golang-jwt/jwt/v5"
+
 	"gofr.dev/pkg/gofr/container"
 	"gofr.dev/pkg/gofr/http/middleware"
 )
@@ -84,7 +86,13 @@ func (a *App) EnableAPIKeyAuthWithValidator(validateFunc func(c *container.Conta
 //
 // The JWKS endpoint is used to retrieve JSON Web Key Sets for verifying tokens.
 // The refresh interval specifies how often to refresh the token cache.
-func (a *App) EnableOAuth(jwksEndpoint string, refreshInterval int) {
+// We can define optional JWT claim validation settings, including issuer, audience, and expiration checks.
+// Accepts jwt.ParserOption for additional parsing options:
+// https://pkg.go.dev/github.com/golang-jwt/jwt/v4#ParserOption
+func (a *App) EnableOAuth(jwksEndpoint string,
+	refreshInterval int,
+	options ...jwt.ParserOption,
+) {
 	a.AddHTTPService("gofr_oauth", jwksEndpoint)
 
 	oauthOption := middleware.OauthConfigs{
@@ -92,5 +100,5 @@ func (a *App) EnableOAuth(jwksEndpoint string, refreshInterval int) {
 		RefreshInterval: time.Second * time.Duration(refreshInterval),
 	}
 
-	a.httpServer.router.Use(middleware.OAuth(middleware.NewOAuth(oauthOption)))
+	a.httpServer.router.Use(middleware.OAuth(middleware.NewOAuth(oauthOption), options...))
 }
