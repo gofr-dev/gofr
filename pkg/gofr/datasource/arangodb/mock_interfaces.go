@@ -10,11 +10,12 @@
 package arangodb
 
 import (
-	 "context"
+	"context"
 	"fmt"
-	"github.com/arangodb/go-driver/v2/connection"
 	reflect "reflect"
 	"strings"
+
+	"github.com/arangodb/go-driver/v2/connection"
 
 	arangodb "github.com/arangodb/go-driver/v2/arangodb"
 	gomock "go.uber.org/mock/gomock"
@@ -123,10 +124,10 @@ func (mr *MockArangoMockRecorder) Patch(ctx, output, input interface{}, urlParts
 func (m *MockArango) CreateDatabase(ctx context.Context, name string, options *arangodb.CreateDatabaseOptions) (arangodb.Database, error) {
 	db := NewMockDatabase(m.ctrl)
 	if strings.Contains(name, "error") {
-		return nil,fmt.Errorf("database not found")
+		return nil, fmt.Errorf("database not found")
 	}
 
-	return db,nil
+	return db, nil
 }
 
 func (mr *MockArangoMockRecorder) CreateDatabase(ctx, name, options interface{}) *gomock.Call {
@@ -156,7 +157,6 @@ func (m *MockArango) AccessibleDatabases(ctx context.Context) ([]arangodb.Databa
 	//TODO implement me
 	panic("implement me")
 }
-
 
 func (m *MockArango) UserExists(ctx context.Context, name string) (bool, error) {
 	//TODO implement me
@@ -192,7 +192,6 @@ func (mr *MockArangoMockRecorder) UpdateUser(ctx, name, options interface{}) *go
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UpdateUser", reflect.TypeOf((*MockArango)(nil).UpdateUser), ctx, name, options)
 }
 
-
 func (m *MockArango) RemoveUser(ctx context.Context, name string) error {
 	return m.DropUser(ctx, name)
 }
@@ -208,7 +207,6 @@ func (mr *MockArangoMockRecorder) VersionWithOptions(ctx, opts interface{}) *gom
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "VersionWithOptions", reflect.TypeOf((*MockArango)(nil).VersionWithOptions), ctx, opts)
 }
-
 
 func (m *MockArango) ServerRole(ctx context.Context) (arangodb.ServerRole, error) {
 	//TODO implement me
@@ -434,8 +432,8 @@ func (mr *MockArangoMockRecorder) CreateGraph(ctx, database, graph, edgeDefiniti
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CreateGraph", reflect.TypeOf((*MockArango)(nil).CreateGraph), ctx, database, graph, edgeDefinitions)
 }
 
-func (m *MockArango) CreateUser(ctx context. Context, name string, options *arangodb.UserOptions) (arangodb.User, error){
-	return nil,m.AddUser(ctx, name, options)
+func (m *MockArango) CreateUser(ctx context.Context, name string, options *arangodb.UserOptions) (arangodb.User, error) {
+	return nil, m.AddUser(ctx, name, options)
 }
 
 // CreateUser mocks base method.

@@ -19,6 +19,8 @@ const WSConnectionKey WSKey = "ws-connection-key"
 // Connection is a wrapper for gorilla websocket connection.
 type Connection struct {
 	*websocket.Conn
+
+	writeMutex sync.Mutex // Mutex to prevent race condition on write operations
 }
 
 // ErrorConnection is the connection error that occurs when webscoket connection cannot be established.
@@ -74,6 +76,24 @@ func (w *Connection) Bind(v any) error {
 	}
 
 	return nil
+}
+
+// WriteMessage writes the data on the underlying ws connection.
+//
+// This method is thread-safe and be called concurrently with WriteJSON
+func (w *Connection) WriteMessage(messageType int, data []byte) error {
+	w.writeMutex.Lock()
+	defer w.writeMutex.Unlock()
+	return w.Conn.WriteMessage(messageType, data)
+}
+
+// WriteJSON writes the JSON encoding of data as a message.
+//
+// This method is thread-safe and be called concurrently with WriteMessage
+func (w *Connection) WriteJSON(data interface{}) error {
+	w.writeMutex.Lock()
+	defer w.writeMutex.Unlock()
+	return w.Conn.WriteJSON(data)
 }
 
 func (*Connection) HostName() string {
