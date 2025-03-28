@@ -194,6 +194,16 @@ func getMigrator(c *container.Container) (Datasource, migrator, bool) {
 		c.Debug("initialized data source for surrealDB")
 	}
 
+	if !isNil(c.DGraph) {
+		ok = true
+
+		ds.DGraph = dgraphDS{c.DGraph}
+
+		mg = surrealDS{c.SurrealDB}.apply(mg)
+
+		c.Debug("initialized data source for dgraph")
+	}
+
 	return ds, mg, ok
 }
 
