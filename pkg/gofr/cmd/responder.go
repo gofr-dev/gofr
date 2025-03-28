@@ -18,4 +18,4 @@ func (*Responder) Respond(data any, err error) {
 	}
 }
 
-func (*Responder) Header(key, value string) {}
+func (*Responder) Header(string, string) {}

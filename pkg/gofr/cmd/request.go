@@ -129,14 +129,14 @@ func (r *Request) Bind(i any) error {
 	return nil
 }
 
-func (r *Request) Header(string) string {
+func (Request) Header(string) string {
 	return ""
 }
 
-func (r *Request) GetClaims() map[string]interface{} {
+func (Request) GetClaims() any {
 	return nil
 }
 
-func (r *Request) GetClaim(string) interface{} {
+func (Request) GetClaim(string) any {
 	return nil
 }

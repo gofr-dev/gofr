@@ -146,10 +146,10 @@ func (*Connection) Header(string) string {
 	return ""
 }
 
-func (*Connection) GetClaims() map[string]interface{} {
+func (*Connection) GetClaims() any {
 	return nil
 }
 
-func (*Connection) GetClaim(string) interface{} {
+func (*Connection) GetClaim(string) any {
 	return nil
 }

@@ -13,6 +13,7 @@ import (
 
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/gorilla/mux"
+
 	"gofr.dev/pkg/gofr/http/middleware"
 )
 
@@ -186,7 +187,7 @@ func (r *Request) Header(key string) string {
 	return r.req.Header.Get(key)
 }
 
-func (r *Request) GetClaims() map[string]interface{} {
+func (r *Request) GetClaims() any {
 	claims, ok := r.req.Context().Value(middleware.JWTClaim).(jwt.MapClaims)
 	if !ok {
 		return nil
@@ -195,8 +196,8 @@ func (r *Request) GetClaims() map[string]interface{} {
 	return claims
 }
 
-func (r *Request) GetClaim(claimKey string) interface{} {
-	claims := r.GetClaims()
+func (r *Request) GetClaim(claimKey string) any {
+	claims := r.GetClaims().(map[string]any)
 
 	val, ok := claims[claimKey]
 	if !ok {

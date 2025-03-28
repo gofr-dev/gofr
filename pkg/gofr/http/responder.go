@@ -25,28 +25,17 @@ func (r Responder) Respond(data any, err error) {
 	statusCode, errorObj := getStatusCode(r.method, data, err)
 
 	var resp any
+
 	switch v := data.(type) {
 	case resTypes.Raw:
-		if d, ok := data.(resTypes.Raw); ok {
-			if d.Cookie != nil {
-				http.SetCookie(r.w, d.Cookie)
-			}
-		}
-
+		v.SetCookie(r.w)
+		v.SetCustomHeaders(r.w)
 		resp = v.Data
 	case resTypes.Response:
 		resp = response{Data: v.Data, Metadata: v.Metadata, Error: errorObj}
 	case resTypes.File:
-		if d, ok := data.(resTypes.File); ok {
-			if d.Cookie != nil {
-				http.SetCookie(r.w, d.Cookie)
-			}
-			if len(d.Headers) > 0 {
-				for k, v := range d.Headers {
-					r.w.Header().Set(k, v)
-				}
-			}
-		}
+		v.SetCookie(r.w)
+		v.SetCustomHeaders(r.w)
 
 		r.w.Header().Set("Content-Type", v.ContentType)
 		r.w.WriteHeader(statusCode)
@@ -55,16 +44,8 @@ func (r Responder) Respond(data any, err error) {
 
 		return
 	case resTypes.Template:
-		if d, ok := data.(resTypes.File); ok {
-			if d.Cookie != nil {
-				http.SetCookie(r.w, d.Cookie)
-			}
-			if len(d.Headers) > 0 {
-				for k, v := range d.Headers {
-					r.w.Header().Set(k, v)
-				}
-			}
-		}
+		v.SetCookie(r.w)
+		v.SetCustomHeaders(r.w)
 
 		r.w.Header().Set("Content-Type", "text/html")
 		v.Render(r.w)

@@ -118,10 +118,10 @@ func (*Message) Header(string) string {
 	return ""
 }
 
-func (*Message) GetClaims() map[string]interface{} {
+func (*Message) GetClaims() any {
 	return nil
 }
 
-func (*Message) GetClaim(string) interface{} {
+func (*Message) GetClaim(string) any {
 	return nil
 }

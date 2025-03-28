@@ -128,10 +128,10 @@ func (h *HelloRequestWrapper) Header(string) string {
 	return ""
 }
 
-func (h *HelloRequestWrapper) GetClaims() map[string]interface{} {
+func (h *HelloRequestWrapper) GetClaims() any {
 	return nil
 }
 		
-func (h *HelloRequestWrapper) GetClaim(string) interface{} {
+func (h *HelloRequestWrapper) GetClaim(string) any {
 		return nil
 }

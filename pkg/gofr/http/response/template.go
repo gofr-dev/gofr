@@ -17,3 +17,13 @@ func (t *Template) Render(w io.Writer) {
 	tmpl := template.Must(template.ParseFiles("./templates/" + t.Name))
 	_ = tmpl.Execute(w, t.Data)
 }
+
+func (t *Template) SetCustomHeaders(w http.ResponseWriter) {
+	for key, value := range t.Headers {
+		w.Header().Set(key, value)
+	}
+}
+
+func (t *Template) SetCookie(w http.ResponseWriter) {
+	http.SetCookie(w, t.Cookie)
+}
