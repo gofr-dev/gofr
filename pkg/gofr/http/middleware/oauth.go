@@ -114,7 +114,7 @@ type PublicKeyProvider interface {
 }
 
 // OAuth is a middleware function that validates JWT access tokens using a provided PublicKeyProvider.
-func OAuth(key PublicKeyProvider) func(inner http.Handler) http.Handler {
+func OAuth(key PublicKeyProvider, options ...jwt.ParserOption) func(http.Handler) http.Handler {
 	return func(inner http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			if isWellKnown(r.URL.Path) {
@@ -122,27 +122,40 @@ func OAuth(key PublicKeyProvider) func(inner http.Handler) http.Handler {
 				return
 			}
 
-			tokenString, err := extractToken(r.Header.Get("Authorization"))
+			options = append(options, jwt.WithIssuedAt())
+
+			claims, err := processToken(r.Header.Get("Authorization"), key, options...)
 			if err != nil {
 				http.Error(w, err.Error(), http.StatusUnauthorized)
 				return
 			}
 
-			token, err := parseToken(tokenString, key)
-			if err != nil {
-				http.Error(w, err.Error(), http.StatusUnauthorized)
-				return
-			}
-
-			ctx := context.WithValue(r.Context(), JWTClaim, token.Claims)
-			*r = *r.Clone(ctx)
-
-			inner.ServeHTTP(w, r)
+			ctx := context.WithValue(r.Context(), JWTClaim, claims)
+			inner.ServeHTTP(w, r.Clone(ctx))
 		})
 	}
 }
 
-// ExtractToken validates the Authorization header and extracts the JWT token.
+func processToken(authHeader string, key PublicKeyProvider, opts ...jwt.ParserOption) (jwt.Claims, error) {
+	tokenString, err := extractToken(authHeader)
+	if err != nil {
+		return nil, err
+	}
+
+	token, err := parseToken(tokenString, key, opts...)
+	if err != nil {
+		return nil, err
+	}
+
+	claims, ok := token.Claims.(jwt.MapClaims)
+	if !ok {
+		return nil, jwt.ErrTokenInvalidClaims
+	}
+
+	return claims, nil
+}
+
+// extractToken validates the Authorization header and extracts the JWT token.
 func extractToken(authHeader string) (string, error) {
 	if authHeader == "" {
 		return "", errAuthorizationHeaderRequired
@@ -159,7 +172,7 @@ func extractToken(authHeader string) (string, error) {
 }
 
 // ParseToken parses the JWT token using the provided key provider.
-func parseToken(tokenString string, key PublicKeyProvider) (*jwt.Token, error) {
+func parseToken(tokenString string, key PublicKeyProvider, opts ...jwt.ParserOption) (*jwt.Token, error) {
 	return jwt.Parse(tokenString, func(token *jwt.Token) (any, error) {
 		kid := token.Header["kid"]
 		jwks := key.Get(fmt.Sprint(kid))
@@ -169,7 +182,7 @@ func parseToken(tokenString string, key PublicKeyProvider) (*jwt.Token, error) {
 		}
 
 		return jwks, nil
-	})
+	}, opts...)
 }
 
 // JWKS represents a JSON Web Key Set.
