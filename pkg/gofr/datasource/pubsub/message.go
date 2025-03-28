@@ -113,3 +113,15 @@ func (*Message) HostName() string {
 func (*Message) Params(string) []string {
 	return nil
 }
+
+func (*Message) Header(string) string {
+	return ""
+}
+
+func (*Message) GetClaims() any {
+	return nil
+}
+
+func (*Message) GetClaim(string) any {
+	return nil
+}

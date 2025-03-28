@@ -25,12 +25,18 @@ func (r Responder) Respond(data any, err error) {
 	statusCode, errorObj := getStatusCode(r.method, data, err)
 
 	var resp any
+
 	switch v := data.(type) {
 	case resTypes.Raw:
+		v.SetCookie(r.w)
+		v.SetCustomHeaders(r.w)
 		resp = v.Data
 	case resTypes.Response:
 		resp = response{Data: v.Data, Metadata: v.Metadata, Error: errorObj}
 	case resTypes.File:
+		v.SetCookie(r.w)
+		v.SetCustomHeaders(r.w)
+
 		r.w.Header().Set("Content-Type", v.ContentType)
 		r.w.WriteHeader(statusCode)
 
@@ -38,6 +44,9 @@ func (r Responder) Respond(data any, err error) {
 
 		return
 	case resTypes.Template:
+		v.SetCookie(r.w)
+		v.SetCustomHeaders(r.w)
+
 		r.w.Header().Set("Content-Type", "text/html")
 		v.Render(r.w)
 
@@ -118,4 +127,8 @@ func isNil(i any) bool {
 	v := reflect.ValueOf(i)
 
 	return v.Kind() == reflect.Ptr && v.IsNil()
+}
+
+func (r Responder) Header(key, value string) {
+	r.w.Header().Set(key, value)
 }
