@@ -79,7 +79,7 @@ func NewConnectionManager(
 
 // Connect establishes a connection to NATS and sets up JetStream.
 func (cm *ConnectionManager) Connect() error {
-	go cm.retryConnect()
+	cm.retryConnect()
 
 	return nil
 }
