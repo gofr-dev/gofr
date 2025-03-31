@@ -8,6 +8,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials/insecure"
 
 	"gofr.dev/pkg/gofr/container"
 	"gofr.dev/pkg/gofr/logging"
@@ -166,12 +167,12 @@ func TestGRPC_ServerRun_WithInterceptorsAndOptions(t *testing.T) {
 	logger := logging.NewLogger(logging.DEBUG)
 	c := &container.Container{Logger: logger}
 
-	interceptor1 := func(ctx context.Context, req interface{}, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (interface{}, error) {
+	interceptor1 := func(ctx context.Context, req any, _ *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (any, error) {
 		logger.Info("Interceptor 1 executed")
 		return handler(ctx, req)
 	}
 
-	interceptor2 := func(ctx context.Context, req interface{}, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (interface{}, error) {
+	interceptor2 := func(ctx context.Context, req any, _ *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (any, error) {
 		logger.Info("Interceptor 2 executed")
 		return handler(ctx, req)
 	}
@@ -189,8 +190,8 @@ func TestGRPC_ServerRun_WithInterceptorsAndOptions(t *testing.T) {
 
 	// Verify the server is listening
 	addr := "127.0.0.1:9999"
-	conn, err := grpc.Dial(addr, grpc.WithInsecure())
-	assert.NoError(t, err, "Failed to connect to gRPC server")
+	conn, err := grpc.NewClient(addr, grpc.WithTransportCredentials(insecure.NewCredentials()))
+	require.NoError(t, err, "Failed to connect to gRPC server")
 	assert.NotNil(t, conn, "Expected a valid gRPC connection")
 	_ = conn.Close()
 
