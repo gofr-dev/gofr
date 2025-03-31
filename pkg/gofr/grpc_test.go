@@ -26,13 +26,12 @@ func TestNewGRPCServer(t *testing.T) {
 
 func TestGRPC_ServerRun(t *testing.T) {
 	testCases := []struct {
-		desc       string
-		grcpServer *grpc.Server
-		port       int
-		expLog     string
+		desc   string
+		port   int
+		expLog string
 	}{
-		{"net.Listen() error", nil, 99999, "error in starting gRPC server"},
-		{"server.Serve() error", new(grpc.Server), 10000, "error in starting gRPC server"},
+		{"net.Listen() error", 99999, "error in starting gRPC server"},
+		{"server.Serve() error", 10000, "error in starting gRPC server"},
 	}
 
 	for i, tc := range testCases {
@@ -42,8 +41,7 @@ func TestGRPC_ServerRun(t *testing.T) {
 			}
 
 			g := &grpcServer{
-				server: tc.grcpServer,
-				port:   tc.port,
+				port: tc.port,
 			}
 
 			g.Run(c)
@@ -162,4 +160,57 @@ func Test_injectContainer(t *testing.T) {
 
 	require.NoError(t, err)
 	require.NotNil(t, srv3.C)
+}
+
+func TestGRPC_ServerRun_WithInterceptorsAndOptions(t *testing.T) {
+	logger := logging.NewLogger(logging.DEBUG)
+	c := &container.Container{Logger: logger}
+
+	interceptor1 := func(ctx context.Context, req interface{}, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (interface{}, error) {
+		logger.Info("Interceptor 1 executed")
+		return handler(ctx, req)
+	}
+
+	interceptor2 := func(ctx context.Context, req interface{}, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (interface{}, error) {
+		logger.Info("Interceptor 2 executed")
+		return handler(ctx, req)
+	}
+
+	serverOptions := grpc.ConnectionTimeout(5 * time.Second)
+
+	g := newGRPCServer(c, 9999)
+	g.interceptors = append(g.interceptors, interceptor1, interceptor2)
+	g.options = append(g.options, serverOptions)
+
+	go g.Run(c)
+
+	// Allow time for the server to start
+	time.Sleep(100 * time.Millisecond)
+
+	// Verify the server is listening
+	addr := "127.0.0.1:9999"
+	conn, err := grpc.Dial(addr, grpc.WithInsecure())
+	assert.NoError(t, err, "Failed to connect to gRPC server")
+	assert.NotNil(t, conn, "Expected a valid gRPC connection")
+	_ = conn.Close()
+
+	// Shutdown the server
+	ctx, cancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
+	defer cancel()
+
+	err = g.Shutdown(ctx)
+	assert.NoError(t, err, "Failed to shutdown gRPC server")
+}
+
+func TestGRPC_Shutdown_BeforeStart(t *testing.T) {
+	logger := logging.NewLogger(logging.DEBUG)
+	c := &container.Container{Logger: logger}
+
+	g := newGRPCServer(c, 9999)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
+	defer cancel()
+
+	err := g.Shutdown(ctx)
+	assert.NoError(t, err, "Expected shutdown to succeed even if server was not started")
 }

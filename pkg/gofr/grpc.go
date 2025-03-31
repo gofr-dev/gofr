@@ -16,22 +16,38 @@ import (
 )
 
 type grpcServer struct {
-	server *grpc.Server
-	port   int
+	server       *grpc.Server
+	interceptors []grpc.UnaryServerInterceptor
+	options      []grpc.ServerOption
+	port         int
+}
+
+func (a *App) AddGRPCServerOptions(grpcOpts []grpc.ServerOption) {
+	a.grpcServer.options = append(a.grpcServer.options, grpcOpts...)
+}
+
+func (a *App) AddGRPCUnaryInterceptors(grpcInterceptor grpc.UnaryServerInterceptor) {
+	a.grpcServer.interceptors = append(a.grpcServer.interceptors, grpcInterceptor)
 }
 
 func newGRPCServer(c *container.Container, port int) *grpcServer {
+	middleware := make([]grpc.UnaryServerInterceptor, 0)
+	middleware = append(middleware,
+		grpc_recovery.UnaryServerInterceptor(),
+		gofr_grpc.ObservabilityInterceptor(c.Logger, c.Metrics()))
+
 	return &grpcServer{
-		server: grpc.NewServer(
-			grpc.UnaryInterceptor(grpc_middleware.ChainUnaryServer(
-				grpc_recovery.UnaryServerInterceptor(),
-				gofr_grpc.ObservabilityInterceptor(c.Logger, c.Metrics()),
-			))),
-		port: port,
+		port:         port,
+		interceptors: middleware,
 	}
 }
 
 func (g *grpcServer) Run(c *container.Container) {
+	interceptorOption := grpc.UnaryInterceptor(grpc_middleware.ChainUnaryServer(g.interceptors...))
+	g.options = append(g.options, interceptorOption)
+
+	g.server = grpc.NewServer(g.options...)
+
 	addr := ":" + strconv.Itoa(g.port)
 
 	c.Logger.Infof("starting gRPC server at %s", addr)
@@ -50,7 +66,9 @@ func (g *grpcServer) Run(c *container.Container) {
 
 func (g *grpcServer) Shutdown(ctx context.Context) error {
 	return ShutdownWithContext(ctx, func(_ context.Context) error {
-		g.server.GracefulStop()
+		if g.server != nil {
+			g.server.GracefulStop()
+		}
 
 		return nil
 	}, func() error {
