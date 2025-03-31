@@ -39,7 +39,7 @@ require (
 	golang.org/x/sync v0.12.0
 	golang.org/x/term v0.30.0
 	golang.org/x/text v0.23.0
-	google.golang.org/api v0.227.0
+	google.golang.org/api v0.228.0
 	google.golang.org/grpc v1.71.0
 	google.golang.org/protobuf v1.36.6
 	modernc.org/sqlite v1.36.2
@@ -48,7 +48,7 @@ require (
 require (
 	cloud.google.com/go v0.119.0 // indirect
 	cloud.google.com/go/auth v0.15.0 // indirect
-	cloud.google.com/go/auth/oauth2adapt v0.2.7 // indirect
+	cloud.google.com/go/auth/oauth2adapt v0.2.8 // indirect
 	cloud.google.com/go/compute/metadata v0.6.0 // indirect
 	cloud.google.com/go/iam v1.4.1 // indirect
 	filippo.io/edwards25519 v1.1.0 // indirect
