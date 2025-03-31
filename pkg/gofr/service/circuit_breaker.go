@@ -39,8 +39,6 @@ type circuitBreaker struct {
 }
 
 // NewCircuitBreaker creates a new circuitBreaker instance based on the provided config.
-//
-//nolint:revive // We do not want anyone using the circuit breaker without initialization steps.
 func NewCircuitBreaker(config CircuitBreakerConfig, h HTTP) *circuitBreaker {
 	cb := &circuitBreaker{
 		state:     ClosedState,
