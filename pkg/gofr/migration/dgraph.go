@@ -2,61 +2,51 @@ package migration
 
 import (
 	"context"
-	"fmt"
-	"github.com/dgraph-io/dgo/v210/protos/api"
+	"encoding/json"
 	"time"
+
+	"github.com/dgraph-io/dgo/v210/protos/api"
 
 	"gofr.dev/pkg/gofr/container"
 )
 
-// dgraphDS is the adapter struct that implements migration operations
+// dgraphDS is the adapter struct that implements migration operations.
 type dgraphDS struct {
 	client DGraph
 }
 
-// dgraphMigrator struct implements the migrator interface
+// dgraphMigrator struct implements the migrator interface.
 type dgraphMigrator struct {
 	DGraph
 	migrator
 }
 
 const (
+	// dgraphSchema defines the migration schema with fully qualified predicate names.
 	dgraphSchema = `
 		migrations.version: int @index(int) .
 		migrations.method: string .
 		migrations.start_time: datetime .
 		migrations.duration: int .
 		type Migration {
-			version: int
-			method: string
-			start_time: datetime
-			duration: int
+			migrations.version
+			migrations.method
+			migrations.start_time
+			migrations.duration
 		}
 	`
-	dgraphInsertMigrationMutation = `
-		mutation {
-			addMigration(input: [{
-				version: %d,
-				method: "%s",
-				start_time: "%s",
-				duration: %d
-			}]) {
-				migration {
-					version
-				}
-			}
-		}
-	`
+
+	// getLastMigrationQuery fetches the most recent migration version.
 	getLastMigrationQuery = `
 		{
 			migrations(func: type(Migration), orderdesc: migrations.version, first: 1) {
-				version: migrations.version
+				migrations.version
 			}
 		}
 	`
 )
 
-// apply creates a new dgraphMigrator
+// apply creates a new dgraphMigrator.
 func (ds dgraphDS) apply(m migrator) migrator {
 	return dgraphMigrator{
 		DGraph:   ds,
@@ -76,7 +66,7 @@ func (ds dgraphDS) DropField(ctx context.Context, fieldName string) error {
 	return ds.client.DropField(ctx, fieldName)
 }
 
-// checkAndCreateMigrationTable ensures migration schema exists
+// checkAndCreateMigrationTable ensures migration schema exists.
 func (dm dgraphMigrator) checkAndCreateMigrationTable(c *container.Container) error {
 	err := dm.ApplySchema(context.Background(), dgraphSchema)
 	if err != nil {
@@ -86,11 +76,11 @@ func (dm dgraphMigrator) checkAndCreateMigrationTable(c *container.Container) er
 	return dm.migrator.checkAndCreateMigrationTable(c)
 }
 
-// getLastMigration retrieves the last applied migration version
+// getLastMigration retrieves the last applied migration version.
 func (dm dgraphMigrator) getLastMigration(c *container.Container) int64 {
 	var response struct {
 		Migrations []struct {
-			Version int64 `json:"version"`
+			Version int64 `json:"migrations.version"`
 		} `json:"migrations"`
 	}
 
@@ -100,8 +90,22 @@ func (dm dgraphMigrator) getLastMigration(c *container.Container) int64 {
 		return 0
 	}
 
+	// If a response is returned, marshal it to JSON bytes then unmarshal into our response struct.
 	if resp != nil {
-		return response.Migrations[0].Version
+		b, err := json.Marshal(resp)
+		if err != nil {
+			c.Debug("Error marshaling response:", err)
+			return 0
+		}
+
+		if err := json.Unmarshal(b, &response); err != nil {
+			c.Debug("Error unmarshalling migration response:", err)
+			return 0
+		}
+
+		if len(response.Migrations) > 0 {
+			return response.Migrations[0].Version
+		}
 	}
 
 	lm2 := dm.migrator.getLastMigration(c)
@@ -112,7 +116,7 @@ func (dm dgraphMigrator) getLastMigration(c *container.Container) int64 {
 	return 0
 }
 
-// beginTransaction starts a new migration transaction
+// beginTransaction starts a new migration transaction.
 func (dm dgraphMigrator) beginTransaction(c *container.Container) transactionData {
 	data := dm.migrator.beginTransaction(c)
 
@@ -121,17 +125,27 @@ func (dm dgraphMigrator) beginTransaction(c *container.Container) transactionDat
 	return data
 }
 
-// commitMigration commits the migration and records its metadata
+// commitMigration commits the migration and records its metadata.
 func (dm dgraphMigrator) commitMigration(c *container.Container, data transactionData) error {
-	query := fmt.Sprintf(dgraphInsertMigrationMutation,
-		data.MigrationNumber,
-		"UP",
-		data.StartTime.Format(time.RFC3339),
-		time.Since(data.StartTime).Milliseconds(),
-	)
+	// Build the JSON payload for the migration record.
+	payload := map[string]any{
+		"migrations": []map[string]any{
+			{
+				"migrations.version":    data.MigrationNumber,
+				"migrations.method":     "UP",
+				"migrations.start_time": data.StartTime.Format(time.RFC3339),
+				"migrations.duration":   time.Since(data.StartTime).Milliseconds(),
+			},
+		},
+	}
 
-	_, err := c.DGraph.Mutate(context.Background(), &api.Mutation{
-		SetJson: []byte(query),
+	jsonPayload, err := json.Marshal(payload)
+	if err != nil {
+		return err
+	}
+
+	_, err = c.DGraph.Mutate(context.Background(), &api.Mutation{
+		SetJson: jsonPayload,
 	})
 	if err != nil {
 		return err
@@ -142,7 +156,7 @@ func (dm dgraphMigrator) commitMigration(c *container.Container, data transactio
 	return dm.migrator.commitMigration(c, data)
 }
 
-// rollback handles migration failure and rollback
+// rollback handles migration failure and rollback.
 func (dm dgraphMigrator) rollback(c *container.Container, data transactionData) {
 	dm.migrator.rollback(c, data)
 

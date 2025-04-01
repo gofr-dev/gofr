@@ -199,7 +199,7 @@ func getMigrator(c *container.Container) (Datasource, migrator, bool) {
 
 		ds.DGraph = dgraphDS{c.DGraph}
 
-		mg = surrealDS{c.SurrealDB}.apply(mg)
+		mg = dgraphDS{c.DGraph}.apply(mg)
 
 		c.Debug("initialized data source for dgraph")
 	}
