@@ -22,12 +22,35 @@ type grpcServer struct {
 	port         int
 }
 
-func (a *App) AddGRPCServerOptions(grpcOpts []grpc.ServerOption) {
+// AddGRPCServerOptions allows users to add custom gRPC server options such as TLS configuration,
+// timeouts, interceptors, and other server-specific settings in a single call.
+//
+// Example:
+//
+//	// Add TLS credentials and connection timeout in one call
+//	creds, _ := credentials.NewServerTLSFromFile("server-cert.pem", "server-key.pem")
+//	app.AddGRPCServerOptions(
+//		grpc.Creds(creds),
+//		grpc.ConnectionTimeout(10 * time.Second),
+//	)
+//
+// This function accepts a variadic list of gRPC server options (grpc.ServerOption) and appends them
+// to the server's configuration. It allows fine-tuning of the gRPC server's behavior during its initialization.
+func (a *App) AddGRPCServerOptions(grpcOpts ...grpc.ServerOption) {
 	a.grpcServer.options = append(a.grpcServer.options, grpcOpts...)
 }
 
-func (a *App) AddGRPCUnaryInterceptors(grpcInterceptor grpc.UnaryServerInterceptor) {
-	a.grpcServer.interceptors = append(a.grpcServer.interceptors, grpcInterceptor)
+// AddGRPCUnaryInterceptors allows users to add custom gRPC interceptors.
+// Example:
+//
+//	func loggingInterceptor(ctx context.Context, req interface{}, info *grpc.UnaryServerInfo,
+//	handler grpc.UnaryHandler) (interface{}, error) {
+//		log.Printf("Received gRPC request: %s", info.FullMethod)
+//		return handler(ctx, req)
+//	}
+//	app.AddGRPCUnaryInterceptors(loggingInterceptor)
+func (a *App) AddGRPCUnaryInterceptors(grpcInterceptors ...grpc.UnaryServerInterceptor) {
+	a.grpcServer.interceptors = append(a.grpcServer.interceptors, grpcInterceptors...)
 }
 
 func newGRPCServer(c *container.Container, port int) *grpcServer {
@@ -42,11 +65,17 @@ func newGRPCServer(c *container.Container, port int) *grpcServer {
 	}
 }
 
-func (g *grpcServer) Run(c *container.Container) {
+func (g *grpcServer) createServer() {
 	interceptorOption := grpc.UnaryInterceptor(grpc_middleware.ChainUnaryServer(g.interceptors...))
 	g.options = append(g.options, interceptorOption)
 
 	g.server = grpc.NewServer(g.options...)
+}
+
+func (g *grpcServer) Run(c *container.Container) {
+	if g.server == nil {
+		g.createServer()
+	}
 
 	addr := ":" + strconv.Itoa(g.port)
 

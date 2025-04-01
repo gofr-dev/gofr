@@ -146,6 +146,55 @@ func main() {
 
 >Note: By default, gRPC server will run on port 9000, to customize the port users can set `GRPC_PORT` config in the .env
 
+## Adding gRPC Server Options
+
+To customize your gRPC server, use `AddGRPCServerOptions()`.
+
+### Example: Enabling TLS & other ServerOptions
+```go
+func main() {
+    app := gofr.New()
+
+    // Add TLS credentials and connection timeout in one call
+    creds, _ := credentials.NewServerTLSFromFile("server-cert.pem", "server-key.pem")
+    app.AddGRPCServerOptions(
+		grpc.Creds(creds),
+    	grpc.ConnectionTimeout(10 * time.Second),
+    )
+
+    packageName.Register{serviceName}ServerWithGofr(app, &{packageName}.New{serviceName}GoFrServer())
+
+    app.Run()
+}
+```
+
+## Adding Custom Unary Interceptors
+
+Interceptors help in implementing authentication, validation, request transformation, and error handling.
+
+### Example: Authentication Interceptor
+```go
+func authInterceptor(ctx context.Context, req any, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (any, error) {
+    if !isAuthenticated(ctx) {
+        return nil, status.Errorf(codes.Unauthenticated, "authentication failed")
+    }
+	
+    return handler(ctx, req)
+}
+
+func main() {
+    app := gofr.New()
+
+    app.AddGRPCUnaryInterceptors(authInterceptor)
+
+    packageName.Register{serviceName}ServerWithGofr(app, &{packageName}.New{serviceName}GoFrServer())
+
+    app.Run()
+}
+```
+
+For more details on adding additional interceptors and server options, refer to the [official gRPC Go package](https://pkg.go.dev/google.golang.org/grpc#ServerOption).
+
 ## Generating gRPC Client using `gofr wrap grpc client`
 
 **1. Use the `gofr wrap grpc client` Command:**
