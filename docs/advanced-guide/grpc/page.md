@@ -180,9 +180,107 @@ return res, nil
 }
 ```
 
-## Adding gRPC DialOptions
-To customize your gRPC Client, we can pass an optional parameter in our client creation functions as :
+## Customizing gRPC Client with DialOptions
 
+GoFr provides flexibility to customize your gRPC client connections using gRPC DialOptions. This allows users to configure aspects such as transport security, interceptors, and load balancing policies.
+You can pass optional parameters while creating your gRPC client to tailor the connection to your needs. Here’s an example of a Unary Interceptor that sets metadata on outgoing requests:
+
+```go
+// MetadataUnaryInterceptor sets a custom metadata value on outgoing requests
+func MetadataUnaryInterceptor(ctx context.Context, method string, req, reply interface{}, cc *grpc.ClientConn, invoker grpc.UnaryInvoker, opts ...grpc.CallOption) error {
+    md := metadata.Pairs("client-id", "GoFr-Client-123")
+    ctx = metadata.NewOutgoingContext(ctx, md)
+
+    err := invoker(ctx, method, req, reply, cc, opts...)
+    if err != nil {
+        return fmt.Errorf("Error in %s: %v", method, err)
+    }
+	
+    return err
+}
+
+func main() {
+    app := gofr.New()
+
+    // Create a gRPC client for the service
+    gRPCClient, err := client.New{serviceName}GoFrClient(
+        app.Config.Get("GRPC_SERVER_HOST"),
+        app.Metrics(),
+        grpc.WithChainUnaryInterceptor(MetadataUnaryInterceptor),
+    )
+    if err != nil {
+        app.Logger().Errorf("Failed to create gRPC client: %v", err)
+        return
+    }
+
+    greet := NewGreetHandler(gRPCClient)
+
+    app.GET("/hello", greet.Hello)
+
+    app.Run()
+}
+```
+
+This interceptor sets a metadata key `client-id` with a value of `GoFr-Client-123` for each request. Metadata can be used for authentication, tracing, or custom behaviors.
+
+### Using TLS Credentials and Advanced Service Config
+By default, gRPC connections in GoFr are made over insecure connections, which is not recommended for production. You can override this behavior using TLS credentials. Additionally, a more comprehensive service configuration can define retry policies and other settings:
+
+```go
+import (
+    "google.golang.org/grpc"
+    "google.golang.org/grpc/credentials"
+)
+
+// The default serviceConfig in GoFr only sets the loadBalancingPolicy to "round_robin".
+const serviceConfig = `{
+    "loadBalancingPolicy": "round_robin", 
+    "methodConfig": [{
+        "name": [{"service": "HelloService"}],
+        "retryPolicy": {
+            "maxAttempts": 4,
+            "initialBackoff": "0.1s",
+            "maxBackoff": "1s",
+            "backoffMultiplier": 2.0,
+            "retryableStatusCodes": ["UNAVAILABLE", "RESOURCE_EXHAUSTED"]
+        }
+    }]
+}`
+
+func main() {
+    app := gofr.New()
+
+    creds, err := credentials.NewClientTLSFromFile("path/to/cert.pem", "")
+    if err != nil {
+        app.Logger().Errorf("Failed to load TLS certificate: %v", err)
+        return
+    }
+
+    gRPCClient, err := client.New{serviceName}GoFrClient(
+        app.Config.Get("GRPC_SERVER_HOST"),
+        app.Metrics(),
+        grpc.WithTransportCredentials(creds),
+        grpc.WithDefaultServiceConfig(serviceConfig),
+    )
+    if err != nil {
+        app.Logger().Errorf("Failed to create gRPC client: %v", err)
+        return
+    }
+
+    greet := NewGreetHandler(gRPCClient)
+
+    app.GET("/hello", greet.Hello)
+
+    app.Run()
+}
+```
+
+In this example:
+- `WithTransportCredentials` sets up TLS security.
+- `WithDefaultServiceConfig` defines retry policies with exponential backoff and specific retryable status codes.
+
+### Further Reading
+For more details on configurable DialOptions, refer to the [official gRPC package for Go](https://pkg.go.dev/google.golang.org/grpc#DialOption).
 
 ## HealthChecks in GoFr's gRPC Service/Clients
 Health Checks in GoFr's gRPC Services
