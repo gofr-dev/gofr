@@ -329,7 +329,7 @@ jobs:
       # Install the linting tool
       - name: Install golangci-lint
         run: |
-          go install github.com/golangci/golangci-lint/cmd/golangci-lint@v1.62
+          go install github.com/golangci/golangci-lint/cmd/golangci-lint@v1.64
 
       - name: Get dependencies
         run: |
@@ -374,6 +374,6 @@ jobs:
 
       # Check file naming conventions using ls-lint
       - name: Check for file names errors
-        uses: ls-lint/action@v2.2.3
+        uses: ls-lint/action@v2.3.0
         with:
           config: .ls-lint.yml
