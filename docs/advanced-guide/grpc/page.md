@@ -180,6 +180,10 @@ return res, nil
 }
 ```
 
+## Adding gRPC DialOptions
+To customize your gRPC Client, we can pass an optional parameter in our client creation functions as :
+
+
 ## HealthChecks in GoFr's gRPC Service/Clients
 Health Checks in GoFr's gRPC Services
 
