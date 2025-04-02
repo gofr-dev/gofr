@@ -117,6 +117,10 @@ func (a *App) RegisterService(desc *grpc.ServiceDesc, impl any) {
 		a.container.Logger.Fatalf("gRPC port %d is blocked or unreachable", a.grpcServer.port)
 	}
 
+	if !a.grpcRegistered {
+		a.grpcServer.createServer()
+	}
+
 	a.container.Logger.Infof("registering gRPC Server: %s", desc.ServiceName)
 	a.grpcServer.server.RegisterService(desc, impl)
 
