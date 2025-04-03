@@ -2,10 +2,16 @@ package http
 
 import (
 	"encoding/json"
+	"errors"
 	"net/http"
 	"reflect"
 
 	resTypes "gofr.dev/pkg/gofr/http/response"
+)
+
+var (
+	errEmptyResponse     = errors.New("internal server error: empty response")
+	errMissingStatusCode = errors.New("internal server error: missing status code")
 )
 
 // NewResponder creates a new Responder instance from the given http.ResponseWriter..
@@ -22,7 +28,7 @@ type Responder struct {
 // Respond sends a response with the given data and handles potential errors, setting appropriate
 // status codes and formatting responses as JSON or raw data as needed.
 func (r Responder) Respond(data any, err error) {
-	statusCode, errorObj := getStatusCode(r.method, data, err)
+	statusCode, errorObj := r.determineResponse(data, err)
 
 	var resp any
 	switch v := data.(type) {
@@ -56,6 +62,51 @@ func (r Responder) Respond(data any, err error) {
 	r.w.WriteHeader(statusCode)
 
 	_ = json.NewEncoder(r.w).Encode(resp)
+}
+
+func (r Responder) determineResponse(data any, err error) (int, any) {
+	// Handle empty struct case first
+	if err == nil && isEmptyStruct(data) {
+		return http.StatusInternalServerError, createErrorResponse(errEmptyResponse)
+	}
+
+	statusCode, errorObj := getStatusCode(r.method, data, err)
+
+	// Ensure valid status code
+	if statusCode == 0 {
+		statusCode = http.StatusInternalServerError
+		if errorObj == nil {
+			errorObj = createErrorResponse(errMissingStatusCode)
+		}
+	}
+
+	return statusCode, errorObj
+}
+
+// isEmptyStruct checks if a value is a struct with all zero/empty fields
+func isEmptyStruct(data any) bool {
+	if data == nil {
+		return false
+	}
+
+	v := reflect.ValueOf(data)
+
+	// Handle pointers by dereferencing them
+	if v.Kind() == reflect.Ptr {
+		if v.IsNil() {
+			return false // nil pointer isn't an empty struct
+		}
+		v = v.Elem()
+	}
+
+	// Only check actual struct types
+	if v.Kind() != reflect.Struct {
+		return false
+	}
+
+	// Compare against a zero value of the same type
+	zero := reflect.Zero(v.Type()).Interface()
+	return reflect.DeepEqual(data, zero)
 }
 
 // getStatusCode returns corresponding HTTP status codes.
