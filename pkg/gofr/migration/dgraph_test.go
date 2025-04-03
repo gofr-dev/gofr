@@ -54,7 +54,7 @@ func Test_DGraphGetLastMigration(t *testing.T) {
 			mockResp: map[string]any{
 				"migrations": []map[string]any{
 					{
-						"migrations.version": float64(10),
+						"version": float64(10),
 					},
 				},
 			},

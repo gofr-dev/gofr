@@ -17,7 +17,7 @@ type dgraphDS struct {
 
 // dgraphMigrator struct implements the migrator interface.
 type dgraphMigrator struct {
-	DGraph
+	dgraphDS
 	migrator
 }
 
@@ -49,19 +49,35 @@ const (
 // apply creates a new dgraphMigrator.
 func (ds dgraphDS) apply(m migrator) migrator {
 	return dgraphMigrator{
-		DGraph:   ds,
+		dgraphDS: ds,
 		migrator: m,
 	}
 }
 
+// ApplySchema applies the given schema to DGraph. It takes a context and schema string as parameters
+// and returns an error if the schema application fails.
 func (ds dgraphDS) ApplySchema(ctx context.Context, schema string) error {
 	return ds.client.ApplySchema(ctx, schema)
 }
 
+// AddOrUpdateField adds a new field or updates an existing field in DGraph schema.
+// Parameters:
+//   - ctx: The context for the operation
+//   - fieldName: Name of the field to add or update
+//   - fieldType: Data type of the field
+//   - directives: Additional DGraph directives for the field
+//
+// Returns an error if the operation fails.
 func (ds dgraphDS) AddOrUpdateField(ctx context.Context, fieldName, fieldType, directives string) error {
 	return ds.client.AddOrUpdateField(ctx, fieldName, fieldType, directives)
 }
 
+// DropField removes a field from DGraph schema.
+// Parameters:
+//   - ctx: The context for the operation
+//   - fieldName: Name of the field to remove
+//
+// Returns an error if the field deletion fails.
 func (ds dgraphDS) DropField(ctx context.Context, fieldName string) error {
 	return ds.client.DropField(ctx, fieldName)
 }
@@ -80,7 +96,7 @@ func (dm dgraphMigrator) checkAndCreateMigrationTable(c *container.Container) er
 func (dm dgraphMigrator) getLastMigration(c *container.Container) int64 {
 	var response struct {
 		Migrations []struct {
-			Version int64 `json:"migrations.version"`
+			Version int64 `json:"version"`
 		} `json:"migrations"`
 	}
 
