@@ -155,14 +155,8 @@ func (c *Client) Publish(ctx context.Context, subject string, message []byte) er
 // Subscribe subscribes to a topic and returns a single message.
 func (c *Client) Subscribe(ctx context.Context, topic string) (*pubsub.Message, error) {
 	for {
-		if c == nil {
-			time.Sleep(defaultRetryTimeout + 1)
-
-			return nil, errClientNotConnected
-		}
-
-		if c.connManager == nil || !c.connManager.isConnected() {
-			time.Sleep(defaultRetryTimeout + 1)
+		if err := checkClient(c); err != nil {
+			time.Sleep(defaultRetryTimeout)
 
 			return nil, errClientNotConnected
 		}
@@ -308,16 +302,8 @@ func (c *Client) Close(ctx context.Context) error {
 
 // CreateTopic creates a new topic (stream) in NATS jStream.
 func (c *Client) CreateTopic(ctx context.Context, name string) error {
-	if c == nil {
-		return errClientNotConnected
-	}
-
-	if c.connManager == nil {
-		return errClientNotConnected
-	}
-
-	if !c.connManager.isConnected() {
-		return errClientNotConnected
+	if err := checkClient(c); err != nil {
+		return err
 	}
 
 	return c.streamManager.CreateStream(ctx, StreamConfig{
@@ -328,8 +314,8 @@ func (c *Client) CreateTopic(ctx context.Context, name string) error {
 
 // DeleteTopic deletes a topic (stream) in NATS jStream.
 func (c *Client) DeleteTopic(ctx context.Context, name string) error {
-	if !c.connManager.isConnected() {
-		return errClientNotConnected
+	if err := checkClient(c); err != nil {
+		return err
 	}
 
 	return c.streamManager.DeleteStream(ctx, name)
@@ -337,8 +323,8 @@ func (c *Client) DeleteTopic(ctx context.Context, name string) error {
 
 // CreateStream creates a new stream in NATS jStream.
 func (c *Client) CreateStream(ctx context.Context, cfg StreamConfig) error {
-	if !c.connManager.isConnected() {
-		return errClientNotConnected
+	if err := checkClient(c); err != nil {
+		return err
 	}
 
 	return c.streamManager.CreateStream(ctx, cfg)
@@ -346,8 +332,8 @@ func (c *Client) CreateStream(ctx context.Context, cfg StreamConfig) error {
 
 // DeleteStream deletes a stream in NATS jStream.
 func (c *Client) DeleteStream(ctx context.Context, name string) error {
-	if !c.connManager.isConnected() {
-		return errClientNotConnected
+	if err := checkClient(c); err != nil {
+		return err
 	}
 
 	return c.streamManager.DeleteStream(ctx, name)
@@ -355,8 +341,8 @@ func (c *Client) DeleteStream(ctx context.Context, name string) error {
 
 // CreateOrUpdateStream creates or updates a stream in NATS jStream.
 func (c *Client) CreateOrUpdateStream(ctx context.Context, cfg *jetstream.StreamConfig) (jetstream.Stream, error) {
-	if !c.connManager.isConnected() {
-		return nil, errClientNotConnected
+	if err := checkClient(c); err != nil {
+		return nil, err
 	}
 
 	return c.streamManager.CreateOrUpdateStream(ctx, cfg)
@@ -370,4 +356,20 @@ func GetJetStreamStatus(ctx context.Context, js jetstream.JetStream) (string, er
 	}
 
 	return jetStreamStatusOK, nil
+}
+
+func checkClient(c *Client) error {
+	if c == nil {
+		return errClientNotConnected
+	}
+
+	if c.connManager == nil {
+		return errClientNotConnected
+	}
+
+	if !c.connManager.isConnected() {
+		return errClientNotConnected
+	}
+
+	return nil
 }
