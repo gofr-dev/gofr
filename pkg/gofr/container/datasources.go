@@ -384,6 +384,32 @@ type SolrProvider interface {
 
 // Dgraph defines the methods for interacting with a Dgraph database.
 type Dgraph interface {
+	// ApplySchema applies or updates the complete database schema.
+	// Parameters:
+	// - ctx: Context for request cancellation and timeouts
+	// - schema: Schema definition in Dgraph Schema Definition Language (SDL) format
+	// Returns:
+	// - error: An error if the schema application fails
+	ApplySchema(ctx context.Context, schema string) error
+
+	// AddOrUpdateField atomically creates or updates a single field definition.
+	// Parameters:
+	// - ctx: Context for request cancellation and timeouts
+	// - fieldName: Name of the field/predicate to create or update
+	// - fieldType: Dgraph data type (e.g., string, int, datetime)
+	// - directives: Space-separated Dgraph directives (e.g., "@index(hash) @upsert")
+	// Returns:
+	// - error: An error if the field operation fails
+	AddOrUpdateField(ctx context.Context, fieldName, fieldType, directives string) error
+
+	// DropField permanently removes a field/predicate and all its associated data.
+	// Parameters:
+	// - ctx: Context for request cancellation and timeouts
+	// - fieldName: Name of the field/predicate to remove
+	// Returns:
+	// - error: An error if the field removal fails
+	DropField(ctx context.Context, fieldName string) error
+
 	// Query executes a read-only query in the Dgraph database and returns the result.
 	// Parameters:
 	// - ctx: The context for the query, used for controlling timeouts, cancellation, etc.
