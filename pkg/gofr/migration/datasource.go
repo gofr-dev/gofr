@@ -15,6 +15,7 @@ type Datasource struct {
 	Mongo      Mongo
 	ArangoDB   ArangoDB
 	SurrealDB  SurrealDB
+	DGraph     DGraph
 }
 
 // It is a base implementation for migration manager, on this other database drivers have been wrapped.
