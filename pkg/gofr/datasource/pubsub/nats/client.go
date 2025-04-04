@@ -137,16 +137,8 @@ func (c *Client) UseMetrics(metrics any) {
 
 // Publish publishes a message to a topic.
 func (c *Client) Publish(ctx context.Context, subject string, message []byte) error {
-	if c == nil {
-		return errClientNotConnected
-	}
-
-	if c.connManager == nil {
-		return errClientNotConnected
-	}
-
-	if !c.connManager.isConnected() {
-		return errClientNotConnected
+	if err := checkClient(c); err != nil {
+		return err
 	}
 
 	return c.connManager.Publish(ctx, subject, message, c.metrics)
