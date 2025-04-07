@@ -31,6 +31,7 @@ var (
 	errNoResult                 = errors.New("no result found in query response")
 	errInvalidResult            = errors.New("unexpected result format: expected []any")
 	errUnexpectedResult         = errors.New("unexpected result type: expected []any")
+	errSurrealDBUpdate          = errors.New("surrealdb update operation failed")
 )
 
 const (
@@ -515,17 +516,18 @@ func (c *Client) Create(ctx context.Context, table string, data any) (map[string
 	return c.extractRecord(res.Result)
 }
 
-// Update modifies an existing record in the specified table.
+// Update modifies an existing record in the specified table using a generic MERGE update.
+// It constructs an update query with a RETURN * clause so that the updated record is returned.
 func (c *Client) Update(ctx context.Context, table, id string, data any) (any, error) {
 	if c.db == nil {
 		return nil, errNotConnected
 	}
 
-	query := fmt.Sprintf("UPDATE %s SET", table)
-	span := c.addTrace(ctx, "Update", query)
+	// Build a generic update query that uses MERGE to update with arbitrary fields.
+	updateQuery := fmt.Sprintf("UPDATE %s:%s MERGE $data RETURN *", table, id)
+	span := c.addTrace(ctx, "Update", fmt.Sprintf("%s:%s", table, id))
 
 	logMessage := fmt.Sprintf("Updating record with ID %q in table %q", id, table)
-
 	startTime := time.Now()
 	defer c.sendOperationStats(&QueryLog{
 		Query:         logMessage,
@@ -534,35 +536,26 @@ func (c *Client) Update(ctx context.Context, table, id string, data any) (any, e
 		Database:      c.config.Database,
 		Collection:    table,
 		Data:          data,
-		Update:        data,
 		Span:          span,
 	}, startTime)
 
-	dataMap := data.(map[string]any)
-
 	var updateResult DBResponse
-
-	updateQuery := fmt.Sprintf(`
-        UPDATE %s:%s SET 
-        name = $name, 
-        age = $age, 
-        email = $email
-        RETURN *`, table, id)
-
-	if err := c.db.Send(&updateResult, "query", updateQuery, map[string]any{
-		"name":  dataMap["name"],
-		"age":   dataMap["age"],
-		"email": dataMap["email"],
-	}); err != nil {
-		return nil, err
+	// Use the "query" action to run our update query.
+	if err := c.db.Send(&updateResult, "query", updateQuery, map[string]any{"data": data}); err != nil {
+		return nil, fmt.Errorf("update operation failed: %w", err)
 	}
 
+	if updateResult.Error != nil {
+		return nil, fmt.Errorf("%w: %s", errSurrealDBUpdate, updateResult.Error.Message)
+	}
+
+	// SurrealDB returns the updated record in a slice.
 	resultSlice, ok := updateResult.Result.([]any)
 	if !ok || len(resultSlice) == 0 {
 		return nil, errNoRecord
 	}
 
-	return resultSlice[0], nil
+	return c.extractRecord(resultSlice[0])
 }
 
 // Insert inserts a new record into the specified table in SurrealDB.
