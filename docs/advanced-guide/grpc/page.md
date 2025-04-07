@@ -56,7 +56,7 @@ syntax = "proto3";
 option go_package = "path/to/your/proto/file";
 
 service {serviceName}Service {
-rpc {serviceMethod} ({serviceRequest}) returns ({serviceResponse}) {}
+  rpc {serviceMethod} ({serviceRequest}) returns ({serviceResponse}) {}
         }
 ```
 
@@ -67,16 +67,16 @@ procedure call. Below is a generic representation for services' gRPC messages ty
 
 ```protobuf
 message {serviceRequest} {
-int64 id = 1;
-        string name = 2;
-// other fields that can be passed
+    int64 id = 1;
+    string name = 2;
+    // other fields that can be passed
         }
 
 message {serviceResponse} {
-int64 id = 1;
-        string name = 2;
-string address = 3;
-// other customer related fields
+    int64 id = 1;
+    string name = 2;
+    string address = 3;
+    // other customer related fields
         }
 ```
 
@@ -157,6 +157,7 @@ func main() {
 
     // Add TLS credentials and connection timeout in one call
     creds, _ := credentials.NewServerTLSFromFile("server-cert.pem", "server-key.pem")
+	
     app.AddGRPCServerOptions(
 		grpc.Creds(creds),
     	grpc.ConnectionTimeout(10 * time.Second),
@@ -174,14 +175,6 @@ Interceptors help in implementing authentication, validation, request transforma
 
 ### Example: Authentication Interceptor
 ```go
-func authInterceptor(ctx context.Context, req any, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (any, error) {
-    if !isAuthenticated(ctx) {
-        return nil, status.Errorf(codes.Unauthenticated, "authentication failed")
-    }
-	
-    return handler(ctx, req)
-}
-
 func main() {
     app := gofr.New()
 
@@ -190,6 +183,14 @@ func main() {
     packageName.Register{serviceName}ServerWithGofr(app, &{packageName}.New{serviceName}GoFrServer())
 
     app.Run()
+}
+
+func authInterceptor(ctx context.Context, req any, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (any, error) {
+    if !isAuthenticated(ctx) {
+        return nil, status.Errorf(codes.Unauthenticated, "authentication failed")
+    }
+
+    return handler(ctx, req)
 }
 ```
 
@@ -208,26 +209,131 @@ This command leverages the `gofr-cli` to generate a `{serviceName}_client.go` fi
    ```go
 // gRPC Handler with context support
 func {serviceMethod}(ctx *gofr.Context) (*{serviceResponse}, error) {
-// Create the gRPC client
-srv, err := New{serviceName}GoFrClient("your-grpc-server-host", ctx.Metrics())
-if err != nil {
-return nil, err
-}
+	// Create the gRPC client
+    srv, err := New{serviceName}GoFrClient("your-grpc-server-host", ctx.Metrics())
+    if err != nil {
+        return nil, err
+    }
 
-// Prepare the request
-req := &{serviceRequest}{
-// populate fields as necessary
-}
+    // Prepare the request
+    req := &{serviceRequest}{
+    // populate fields as necessary
+    }
 
-// Call the gRPC method with tracing/metrics enabled
-res, err := srv.{serviceMethod}(ctx, req)
-if err != nil {
-return nil, err
-}
+	// Call the gRPC method with tracing/metrics enabled
+    res, err := srv.{serviceMethod}(ctx, req)
+    if err != nil {
+        return nil, err
+    }
 
-return res, nil
+    return res, nil
 }
 ```
+
+
+## Customizing gRPC Client with DialOptions
+
+GoFr provides flexibility to customize your gRPC client connections using gRPC `DialOptions`. This allows users to configure aspects such as transport security, interceptors, and load balancing policies.
+You can pass optional parameters while creating your gRPC client to tailor the connection to your needs. Here’s an example of a Unary Interceptor that sets metadata on outgoing requests:
+
+```go
+func main() {
+    app := gofr.New()
+
+    // Create a gRPC client for the service
+    gRPCClient, err := client.New{serviceName}GoFrClient(
+        app.Config.Get("GRPC_SERVER_HOST"),
+        app.Metrics(),
+        grpc.WithChainUnaryInterceptor(MetadataUnaryInterceptor),
+    )
+	
+    if err != nil {
+        app.Logger().Errorf("Failed to create gRPC client: %v", err)
+        return
+    }
+
+    greet := NewGreetHandler(gRPCClient)
+
+    app.GET("/hello", greet.Hello)
+
+    app.Run()
+}
+
+// MetadataUnaryInterceptor sets a custom metadata value on outgoing requests
+func MetadataUnaryInterceptor(ctx context.Context, method string, req, reply any, cc *grpc.ClientConn, invoker grpc.UnaryInvoker, opts ...grpc.CallOption) error {
+    md := metadata.Pairs("client-id", "GoFr-Client-123")
+    ctx = metadata.NewOutgoingContext(ctx, md)
+
+    err := invoker(ctx, method, req, reply, cc, opts...)
+    if err != nil {
+        return fmt.Errorf("Error in %s: %v", method, err)
+	}
+	
+	return err
+}
+```
+
+This interceptor sets a metadata key `client-id` with a value of `GoFr-Client-123` for each request. Metadata can be used for authentication, tracing, or custom behaviors.
+
+### Using TLS Credentials and Advanced Service Config
+By default, gRPC connections in GoFr are made over insecure connections, which is not recommended for production. You can override this behavior using TLS credentials. Additionally, a more comprehensive service configuration can define retry policies and other settings:
+
+```go
+import (
+    "google.golang.org/grpc"
+    "google.golang.org/grpc/credentials"
+)
+
+// The default serviceConfig in GoFr only sets the loadBalancingPolicy to "round_robin".
+const serviceConfig = `{
+    "loadBalancingPolicy": "round_robin", 
+    "methodConfig": [{
+        "name": [{"service": "HelloService"}],
+        "retryPolicy": {
+            "maxAttempts": 4,
+            "initialBackoff": "0.1s",
+            "maxBackoff": "1s",
+            "backoffMultiplier": 2.0,
+            "retryableStatusCodes": ["UNAVAILABLE", "RESOURCE_EXHAUSTED"]
+        }
+    }]
+}`
+
+func main() {
+    app := gofr.New()
+
+    creds, err := credentials.NewClientTLSFromFile("path/to/cert.pem", "")
+    if err != nil {
+        app.Logger().Errorf("Failed to load TLS certificate: %v", err)
+        return
+    }
+
+    gRPCClient, err := client.New{serviceName}GoFrClient(
+        app.Config.Get("GRPC_SERVER_HOST"),
+        app.Metrics(),
+        grpc.WithTransportCredentials(creds),
+        grpc.WithDefaultServiceConfig(serviceConfig),
+    )
+	
+    if err != nil {
+        app.Logger().Errorf("Failed to create gRPC client: %v", err)
+        return
+    }
+
+    greet := NewGreetHandler(gRPCClient)
+
+    app.GET("/hello", greet.Hello)
+
+    app.Run()
+}
+```
+
+In this example:
+- `WithTransportCredentials` sets up TLS security.
+- `WithDefaultServiceConfig` defines retry policies with exponential backoff and specific retryable status codes.
+
+### Further Reading
+For more details on configurable DialOptions, refer to the [official gRPC package for Go](https://pkg.go.dev/google.golang.org/grpc#DialOption).
 
 ## HealthChecks in GoFr's gRPC Service/Clients
 Health Checks in GoFr's gRPC Services
@@ -238,20 +344,20 @@ GoFr provides built-in health checks for gRPC services, enabling observability, 
 
 ```go
 type {serviceName}GoFrClient interface {
-SayHello(*gofr.Context, *HelloRequest, ...grpc.CallOption) (*HelloResponse, error)
-health
+    SayHello(*gofr.Context, *HelloRequest, ...grpc.CallOption) (*HelloResponse, error)
+    health
 }
 
 type health interface {
-Check(ctx *gofr.Context, in *grpc_health_v1.HealthCheckRequest, opts ...grpc.CallOption) (*grpc_health_v1.HealthCheckResponse, error)
-Watch(ctx *gofr.Context, in *grpc_health_v1.HealthCheckRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[grpc_health_v1.HealthCheckResponse], error)
+    Check(ctx *gofr.Context, in *grpc_health_v1.HealthCheckRequest, opts ...grpc.CallOption) (*grpc_health_v1.HealthCheckResponse, error)
+    Watch(ctx *gofr.Context, in *grpc_health_v1.HealthCheckRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[grpc_health_v1.HealthCheckResponse], error)
 }
 ```
 
 ### Server Integration
 ```go
 type {serviceName}GoFrServer struct {
-health *healthServer
+    health *healthServer
 }
 ```
 Supported Methods for HealthCheck :
