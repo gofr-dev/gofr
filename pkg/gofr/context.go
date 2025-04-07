@@ -82,14 +82,14 @@ func (c *Context) WriteMessageToSocket(data any) error {
 	if err != nil {
 		return err
 	}
+
 	return conn.WriteMessage(websocket.TextMessage, message)
 }
 
 // WriteJSONToSocket writes a JSON message to the WebSocket connection associated with the context.
-//
 // It retrieves the WebSocket connection from the context
 // and writes the JSON encoding of data as a message.
-func (c *Context) WriteJsonToSocket(data interface{}) error {
+func (c *Context) WriteJSONToSocket(data any) error {
 	// Retrieve connection from context based on connectionID
 	conn := c.Container.GetConnectionFromContext(c.Context)
 

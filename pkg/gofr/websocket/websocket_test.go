@@ -154,9 +154,12 @@ func dereference(v any) any {
 
 func TestConcurrentWriteMessageCalls(t *testing.T) {
 	upgrader := websocket.Upgrader{}
-	const message = "this is a test messsage"
+
+	const message = "this is a test message"
+
 	loop := 10
 	workers := 10
+
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		conn, err := upgrader.Upgrade(w, r, nil)
 		assert.NoError(t, err)
@@ -165,11 +168,14 @@ func TestConcurrentWriteMessageCalls(t *testing.T) {
 		wc := &Connection{Conn: conn}
 
 		wg := sync.WaitGroup{}
+
 		for range loop {
 			for range workers {
 				wg.Add(1)
+
 				go func() {
 					defer wg.Done()
+
 					if err := wc.WriteMessage(websocket.TextMessage, []byte(message)); err != nil {
 						t.Errorf("concurrently wc.WriteMessage() returned %v", err)
 					}
@@ -179,15 +185,18 @@ func TestConcurrentWriteMessageCalls(t *testing.T) {
 
 		wg.Wait()
 	}))
-	defer server.Close()
+
+	server.Close()
 }
 
 func TestConcurrentWriteJSONCalls(t *testing.T) {
 	upgrader := websocket.Upgrader{}
+
 	var jsonMsg struct {
 		A int
 		B string
 	}
+
 	jsonMsg.A = 1
 	jsonMsg.B = "test message"
 	loop := 10
@@ -200,11 +209,14 @@ func TestConcurrentWriteJSONCalls(t *testing.T) {
 		wc := &Connection{Conn: conn}
 
 		wg := sync.WaitGroup{}
+
 		for range loop {
 			for range workers {
 				wg.Add(1)
+
 				go func() {
 					defer wg.Done()
+
 					if err := wc.WriteJSON(jsonMsg); err != nil {
 						t.Errorf("concurrently wc.WriteJSON() returned %v", err)
 					}
@@ -214,15 +226,18 @@ func TestConcurrentWriteJSONCalls(t *testing.T) {
 
 		wg.Wait()
 	}))
-	defer server.Close()
+
+	server.Close()
 }
 
 func TestConcurrentWriteMessageAndJSON(t *testing.T) {
 	upgrader := websocket.Upgrader{}
+
 	var jsonMsg struct {
 		A int
 		B string
 	}
+
 	jsonMsg.A = 1
 	jsonMsg.B = "test message"
 	textMsg := "hello world"
@@ -237,12 +252,15 @@ func TestConcurrentWriteMessageAndJSON(t *testing.T) {
 		wc := &Connection{Conn: conn}
 
 		wg := sync.WaitGroup{}
+
 		for range loop {
 			// Test WriteMessage concurrently
 			for range workers {
 				wg.Add(1)
+
 				go func() {
 					defer wg.Done()
+
 					if err := wc.WriteMessage(websocket.TextMessage, []byte(textMsg)); err != nil {
 						t.Errorf("concurrently wc.WriteMessage() returned %v", err)
 					}
@@ -252,8 +270,10 @@ func TestConcurrentWriteMessageAndJSON(t *testing.T) {
 			// Test WriteJSON concurrently
 			for range workers {
 				wg.Add(1)
+
 				go func() {
 					defer wg.Done()
+
 					if err := wc.WriteJSON(jsonMsg); err != nil {
 						t.Errorf("concurrently wc.WriteJSON() returned %v", err)
 					}
@@ -263,5 +283,6 @@ func TestConcurrentWriteMessageAndJSON(t *testing.T) {
 
 		wg.Wait()
 	}))
-	defer server.Close()
+
+	server.Close()
 }

@@ -79,20 +79,20 @@ func (w *Connection) Bind(v any) error {
 }
 
 // WriteMessage writes the data on the underlying ws connection.
-//
-// This method is thread-safe and be called concurrently with WriteJSON
+// This method is thread-safe and be called concurrently with WriteJSON.
 func (w *Connection) WriteMessage(messageType int, data []byte) error {
 	w.writeMutex.Lock()
 	defer w.writeMutex.Unlock()
+
 	return w.Conn.WriteMessage(messageType, data)
 }
 
 // WriteJSON writes the JSON encoding of data as a message.
-//
-// This method is thread-safe and be called concurrently with WriteMessage
-func (w *Connection) WriteJSON(data interface{}) error {
+// This method is thread-safe and be called concurrently with WriteMessage.
+func (w *Connection) WriteJSON(data any) error {
 	w.writeMutex.Lock()
 	defer w.writeMutex.Unlock()
+
 	return w.Conn.WriteJSON(data)
 }
 
