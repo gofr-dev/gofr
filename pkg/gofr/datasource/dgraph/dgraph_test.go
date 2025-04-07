@@ -30,6 +30,7 @@ func setupDB(t *testing.T) (*Client, *MockDgraphClient, *MockLogger, *MockMetric
 	client := New(config)
 	client.UseLogger(mockLogger)
 	client.UseMetrics(mockMetrics)
+	client.UseTracer(otel.GetTracerProvider().Tracer("gofr-dgraph"))
 
 	mockDgraphClient := NewMockDgraphClient(ctrl)
 	client.client = mockDgraphClient
@@ -289,4 +290,96 @@ func Test_HealthCheck_Error(t *testing.T) {
 	_, err := client.HealthCheck(context.Background())
 
 	require.EqualError(t, err, errHealthCheckFailed.Error(), "Test_HealthCheck_Error Failed!")
+}
+
+func Test_ApplySchema_Success(t *testing.T) {
+	client, mockDgraphClient, mockLogger, mockMetrics := setupDB(t)
+
+	schema := "name: string @index(exact) ."
+	expectedOp := &api.Operation{Schema: schema}
+
+	mockDgraphClient.EXPECT().Alter(gomock.Any(), expectedOp).Return(nil)
+
+	mockLogger.EXPECT().Debug(gomock.Any())
+	mockLogger.EXPECT().Log(gomock.Any()).Times(1)
+	mockLogger.EXPECT().Debugf("dgraph alter succeeded in %dµs", gomock.Any())
+	mockMetrics.EXPECT().RecordHistogram(gomock.Any(), "dgraph_alter_duration", gomock.Any())
+
+	err := client.ApplySchema(context.Background(), schema)
+
+	require.NoError(t, err, "Test_ApplySchema_Success Failed!")
+}
+
+func Test_ApplySchema_EmptySchema(t *testing.T) {
+	config := Config{Host: "localhost", Port: "9080"}
+	client := New(config)
+
+	err := client.ApplySchema(context.Background(), "")
+
+	require.Equal(t, err, errEmptySchema, "Test_ApplySchema_EmptySchema Failed!")
+}
+
+func Test_AddOrUpdateField_Success(t *testing.T) {
+	client, mockDgraphClient, mockLogger, mockMetrics := setupDB(t)
+
+	fieldName := "email"
+	fieldType := "string"
+	directives := "@index(hash)"
+	expectedSchema := "email: string @index(hash)."
+	expectedOp := &api.Operation{Schema: expectedSchema}
+
+	mockDgraphClient.EXPECT().Alter(gomock.Any(), expectedOp).Return(nil)
+
+	mockLogger.EXPECT().Debug(gomock.Any())
+	mockLogger.EXPECT().Log(gomock.Any()).Times(1)
+	mockLogger.EXPECT().Debugf("dgraph alter succeeded in %dµs", gomock.Any())
+	mockMetrics.EXPECT().RecordHistogram(gomock.Any(), "dgraph_alter_duration", gomock.Any())
+
+	err := client.AddOrUpdateField(context.Background(), fieldName, fieldType, directives)
+
+	require.NoError(t, err, "Test_AddOrUpdateField_Success Failed!")
+}
+
+func Test_AddOrUpdateField_EmptyFieldName(t *testing.T) {
+	config := Config{Host: "localhost", Port: "9080"}
+	client := New(config)
+
+	err := client.AddOrUpdateField(context.Background(), "", "string", "@index(hash)")
+
+	require.Equal(t, err, errEmptyField, "Test_AddOrUpdateField_EmptyFieldName Failed!")
+}
+
+func Test_DropField_Success(t *testing.T) {
+	client, mockDgraphClient, mockLogger, mockMetrics := setupDB(t)
+
+	fieldName := "email"
+	expectedOp := &api.Operation{DropAttr: fieldName}
+
+	mockDgraphClient.EXPECT().Alter(gomock.Any(), expectedOp).Return(nil)
+
+	mockLogger.EXPECT().Debug(gomock.Any())
+	mockLogger.EXPECT().Log(gomock.Any()).Times(1)
+	mockLogger.EXPECT().Debugf("dgraph alter succeeded in %dµs", gomock.Any())
+	mockMetrics.EXPECT().RecordHistogram(gomock.Any(), "dgraph_alter_duration", gomock.Any())
+
+	err := client.DropField(context.Background(), fieldName)
+
+	require.NoError(t, err, "Test_DropField_Success Failed!")
+}
+
+func Test_DropField_Error(t *testing.T) {
+	client, mockDgraphClient, mockLogger, _ := setupDB(t)
+
+	fieldName := "email"
+	expectedOp := &api.Operation{DropAttr: fieldName}
+
+	mockDgraphClient.EXPECT().Alter(gomock.Any(), expectedOp).Return(errAlterFailed)
+
+	mockLogger.EXPECT().Debug(gomock.Any())
+	mockLogger.EXPECT().Log(gomock.Any()).Times(1)
+	mockLogger.EXPECT().Error("dgraph alter failed: ", errAlterFailed)
+
+	err := client.DropField(context.Background(), fieldName)
+
+	require.ErrorIs(t, err, errAlterFailed, "Test_DropField_Error Failed!")
 }
