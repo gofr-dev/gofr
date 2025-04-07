@@ -34,6 +34,26 @@ func WSHandler(ctx *gofr.Context) (any, error) {
 	}
 
 	ctx.Logger.Infof("Received message: %s", message)
+	
+	// Send a text message
+	err = ctx.WriteMessageToSocket("Hello! GoFr")
+	if err != nil {
+		return nil, err
+	}
+
+	// Send a JSON message
+	jsonData := struct {
+		Greeting string `json:"greeting"`
+		From    string `json:"from"`
+	}{
+		Greeting: "Hello!",
+		From:     "GoFr",
+	}
+	
+	err = ctx.WriteJSONToSocket(jsonData)
+	if err != nil {
+		return nil, err
+	}
 
 	return message, nil
 }
@@ -50,6 +70,12 @@ GoFr allows us to customize the WebSocket upgrader with several options. We can 
 - `Error (WithError)`:  Sets a custom error handler.
 - `CheckOrigin (WithCheckOrigin)`: Sets a custom origin check function.
 - `Compression (WithCompression)`:  Enables compression.
+
+## Writing Messages
+GoFr provides two methods to write messages to WebSocket connections:
+
+- `WriteMessageToSocket`: Writes text messages to the WebSocket connection. The data parameter can be a string, []byte, or any struct that can be marshaled to JSON.
+- `WriteJSONToSocket`: Writes JSON messages to the WebSocket connection. Automatically handles JSON encoding of the provided data structure.
 
 ## Example:
 We can configure the Upgrader by creating a chain of option functions provided by GoFr.
