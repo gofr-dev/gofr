@@ -11040,6 +11040,20 @@ func (m *MockDgraph) EXPECT() *MockDgraphMockRecorder {
 	return m.recorder
 }
 
+// AddOrUpdateField mocks base method.
+func (m *MockDgraph) AddOrUpdateField(ctx context.Context, fieldName, fieldType, directives string) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "AddOrUpdateField", ctx, fieldName, fieldType, directives)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// AddOrUpdateField indicates an expected call of AddOrUpdateField.
+func (mr *MockDgraphMockRecorder) AddOrUpdateField(ctx, fieldName, fieldType, directives any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AddOrUpdateField", reflect.TypeOf((*MockDgraph)(nil).AddOrUpdateField), ctx, fieldName, fieldType, directives)
+}
+
 // Alter mocks base method.
 func (m *MockDgraph) Alter(ctx context.Context, op any) error {
 	m.ctrl.T.Helper()
@@ -11052,6 +11066,34 @@ func (m *MockDgraph) Alter(ctx context.Context, op any) error {
 func (mr *MockDgraphMockRecorder) Alter(ctx, op any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Alter", reflect.TypeOf((*MockDgraph)(nil).Alter), ctx, op)
+}
+
+// ApplySchema mocks base method.
+func (m *MockDgraph) ApplySchema(ctx context.Context, schema string) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "ApplySchema", ctx, schema)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// ApplySchema indicates an expected call of ApplySchema.
+func (mr *MockDgraphMockRecorder) ApplySchema(ctx, schema any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ApplySchema", reflect.TypeOf((*MockDgraph)(nil).ApplySchema), ctx, schema)
+}
+
+// DropField mocks base method.
+func (m *MockDgraph) DropField(ctx context.Context, fieldName string) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "DropField", ctx, fieldName)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// DropField indicates an expected call of DropField.
+func (mr *MockDgraphMockRecorder) DropField(ctx, fieldName any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DropField", reflect.TypeOf((*MockDgraph)(nil).DropField), ctx, fieldName)
 }
 
 // HealthCheck mocks base method.
@@ -11166,6 +11208,20 @@ func (m *MockDgraphProvider) EXPECT() *MockDgraphProviderMockRecorder {
 	return m.recorder
 }
 
+// AddOrUpdateField mocks base method.
+func (m *MockDgraphProvider) AddOrUpdateField(ctx context.Context, fieldName, fieldType, directives string) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "AddOrUpdateField", ctx, fieldName, fieldType, directives)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// AddOrUpdateField indicates an expected call of AddOrUpdateField.
+func (mr *MockDgraphProviderMockRecorder) AddOrUpdateField(ctx, fieldName, fieldType, directives any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AddOrUpdateField", reflect.TypeOf((*MockDgraphProvider)(nil).AddOrUpdateField), ctx, fieldName, fieldType, directives)
+}
+
 // Alter mocks base method.
 func (m *MockDgraphProvider) Alter(ctx context.Context, op any) error {
 	m.ctrl.T.Helper()
@@ -11180,6 +11236,20 @@ func (mr *MockDgraphProviderMockRecorder) Alter(ctx, op any) *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Alter", reflect.TypeOf((*MockDgraphProvider)(nil).Alter), ctx, op)
 }
 
+// ApplySchema mocks base method.
+func (m *MockDgraphProvider) ApplySchema(ctx context.Context, schema string) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "ApplySchema", ctx, schema)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// ApplySchema indicates an expected call of ApplySchema.
+func (mr *MockDgraphProviderMockRecorder) ApplySchema(ctx, schema any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ApplySchema", reflect.TypeOf((*MockDgraphProvider)(nil).ApplySchema), ctx, schema)
+}
+
 // Connect mocks base method.
 func (m *MockDgraphProvider) Connect() {
 	m.ctrl.T.Helper()
@@ -11190,6 +11260,20 @@ func (m *MockDgraphProvider) Connect() {
 func (mr *MockDgraphProviderMockRecorder) Connect() *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Connect", reflect.TypeOf((*MockDgraphProvider)(nil).Connect))
+}
+
+// DropField mocks base method.
+func (m *MockDgraphProvider) DropField(ctx context.Context, fieldName string) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "DropField", ctx, fieldName)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// DropField indicates an expected call of DropField.
+func (mr *MockDgraphProviderMockRecorder) DropField(ctx, fieldName any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DropField", reflect.TypeOf((*MockDgraphProvider)(nil).DropField), ctx, fieldName)
 }
 
 // HealthCheck mocks base method.

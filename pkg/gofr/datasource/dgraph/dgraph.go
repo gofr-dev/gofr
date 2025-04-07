@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/dgraph-io/dgo/v210"
@@ -40,6 +41,8 @@ var (
 	errInvalidMutation   = errors.New("invalid mutation type")
 	errInvalidOperation  = errors.New("invalid operation type")
 	errHealthCheckFailed = errors.New("dgraph health check failed")
+	errEmptySchema       = errors.New("schema cannot be empty")
+	errEmptyField        = errors.New("field name cannot be empty")
 )
 
 // New creates a new Dgraph client with the given configuration.
@@ -100,6 +103,39 @@ func (d *Client) UseTracer(tracer any) {
 	if tracer, ok := tracer.(trace.Tracer); ok {
 		d.tracer = tracer
 	}
+}
+
+// ApplySchema applies a validated Dgraph schema.
+// The provided schema must be non-empty; otherwise, an error is returned.
+func (d *Client) ApplySchema(ctx context.Context, schema string) error {
+	if schema == "" {
+		return errEmptySchema
+	}
+
+	op := &api.Operation{Schema: schema}
+
+	return d.Alter(ctx, op)
+}
+
+// AddOrUpdateField creates or updates a field (predicate) definition in the Dgraph schema.
+// It adds a new field if it does not exist, or updates the field's type and/or directives if it does.
+func (d *Client) AddOrUpdateField(ctx context.Context, fieldName, fieldType, directives string) error {
+	if strings.TrimSpace(fieldName) == "" {
+		return errEmptyField
+	}
+
+	// Construct the field definition in the format: "<fieldName>: <fieldType> <directives>."
+	newDef := fmt.Sprintf("%s: %s %s.", fieldName, fieldType, directives)
+
+	return d.ApplySchema(ctx, newDef)
+}
+
+// DropField removes a specific field (predicate) and its associated data from the Dgraph schema.
+// It does so by creating an operation that instructs Dgraph to drop the given attribute.
+// An error is returned if the operation fails.
+func (d *Client) DropField(ctx context.Context, fieldName string) error {
+	op := &api.Operation{DropAttr: fieldName}
+	return d.Alter(ctx, op)
 }
 
 // Query executes a read-only query in the Dgraph database and returns the result.
