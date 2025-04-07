@@ -95,9 +95,10 @@ func TestNATSClient_PublishError(t *testing.T) {
 		{name: "nil client", client: nil, mockCall: func(_ *MockConnectionManagerInterface) {}, expErr: errClientNotConnected},
 		{name: "nil connManager", client: &Client{connManager: nil}, mockCall: func(_ *MockConnectionManagerInterface) {},
 			expErr: errClientNotConnected},
-		{name: "not connected to NATS server", client: &Client{connManager: mockConnManager}, mockCall: func(mockConn *MockConnectionManagerInterface) {
-			mockConn.EXPECT().IsConnected().Return(false)
-		}, expErr: errClientNotConnected},
+		{name: "not connected to NATS server", client: &Client{connManager: mockConnManager},
+			mockCall: func(mockConn *MockConnectionManagerInterface) {
+				mockConn.EXPECT().IsConnected().Return(false)
+			}, expErr: errClientNotConnected},
 		{name: "err in publishing", client: client, mockCall: func(mockConn *MockConnectionManagerInterface) {
 			mockConn.EXPECT().IsConnected().Return(true)
 			mockConn.EXPECT().Publish(gomock.Any(), subject, message, mockMetrics).Return(errPublishError)
@@ -396,54 +397,6 @@ func TestClient_Connect(t *testing.T) {
 		"Successfully connected to NATS server at nats://localhost:4222\n")
 }
 
-func TestClient_ConnectError(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
-
-	mockNATSConnector := NewMockNATSConnector(ctrl)
-	mockJSCreator := NewMockJetStreamCreator(ctrl)
-
-	config := &Config{
-		Server: "nats://localhost:4222",
-		Stream: StreamConfig{
-			Stream:   "test-stream",
-			Subjects: []string{"test-subject"},
-		},
-		Consumer: "test-consumer",
-	}
-
-	client := &Client{
-		Config:           config,
-		logger:           logging.NewMockLogger(logging.DEBUG),
-		natsConnector:    mockNATSConnector,
-		jetStreamCreator: mockJSCreator,
-	}
-
-	// Simulate a connection error
-	expectedErr := errJetStreamNotConfigured
-
-	mockNATSConnector.EXPECT().
-		Connect(config.Server, gomock.Any()).
-		Return(nil, expectedErr).MaxTimes(2)
-
-	// Capture stderr output
-	output := testutil.StderrOutputForFunc(func() {
-		client.logger = logging.NewMockLogger(logging.DEBUG)
-		err := client.Connect()
-
-		time.Sleep(100 * time.Millisecond)
-
-		require.Error(t, err)
-		assert.Equal(t, expectedErr, err)
-	})
-
-	// Check for the error log
-	assert.Contains(t, output, "failed to connect to NATS server")
-
-	assert.Nil(t, client.streamManager)
-	assert.Nil(t, client.subManager)
-}
-
 func TestClient_ValidateAndPrepare(t *testing.T) {
 	client := &Client{
 		Config: &Config{},
@@ -464,6 +417,28 @@ func TestClient_ValidateAndPrepare(t *testing.T) {
 
 	err = client.validateAndPrepare()
 	assert.NoError(t, err)
+}
+
+func TestClient_ValidateAndPrepareError(t *testing.T) {
+	client := &Client{
+		Config: &Config{},
+		logger: logging.NewMockLogger(logging.DEBUG),
+	}
+
+	err := client.validateAndPrepare()
+	require.Error(t, err)
+
+	client.Config = &Config{
+		Server: "",
+		Stream: StreamConfig{
+			Stream:   "test-stream",
+			Subjects: []string{"test-subject"},
+		},
+		Consumer: "test-consumer",
+	}
+
+	err = client.validateAndPrepare()
+	assert.Error(t, err)
 }
 
 func TestClient_LogSuccessfulConnection(t *testing.T) {
@@ -773,6 +748,7 @@ func TestClient_CreateStream(t *testing.T) {
 		Stream:   "test-stream",
 		Subjects: []string{"test-subject"},
 	}
+
 	mockConnManager.EXPECT().IsConnected().Return(true)
 	mockStreamManager.EXPECT().CreateStream(gomock.Any(), cfg).Return(nil)
 
@@ -851,88 +827,118 @@ func Test_checkClient(t *testing.T) {
 	}
 }
 
-// func TestClient_retryConnect(t *testing.T) {
-// 	ctrl := gomock.NewController(t)
-// 	defer ctrl.Finish()
+func TestClient_retryConnect(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
 
-// 	mockNATSConnector := NewMockNATSConnector(ctrl)
-// 	mockJSCreator := NewMockJetStreamCreator(ctrl)
-// 	mockConn := NewMockConnInterface(ctrl)
-// 	mockJS := NewMockJetStream(ctrl)
-// 	logger := logging.NewMockLogger(logging.DEBUG)
-// 	subs := make(map[string]context.CancelFunc)
-// 	cfg := Config{Server: "nats://localhost:4222",
-// 		Stream:   StreamConfig{Stream: "test_stream", Subjects: []string{"test_subject"}},
-// 		Consumer: "test_consumer",
-// 	}
+	mockNATSConnector := NewMockNATSConnector(ctrl)
+	mockJSCreator := NewMockJetStreamCreator(ctrl)
+	mockConn := NewMockConnInterface(ctrl)
+	mockJS := NewMockJetStream(ctrl)
+	logger := logging.NewMockLogger(logging.DEBUG)
+	subs := make(map[string]context.CancelFunc)
+	cfg := Config{Server: "nats://localhost:4222",
+		Stream:   StreamConfig{Stream: "test_stream", Subjects: []string{"test_subject"}},
+		Consumer: "test_consumer",
+	}
 
-// 	tests := []struct {
-// 		name        string
-// 		setupMocks  func(*Client, *MockNATSConnector, *MockJetStreamCreator, *MockConnInterface, *MockJetStream)
-// 		connSuccess bool
-// 	}{
-// 		{
-// 			name: "successful connection on first attempt",
-// 			setupMocks: func(client *Client, mockNATSConnector *MockNATSConnector, mockJSCreator *MockJetStreamCreator,
-// 				mockConn *MockConnInterface, mockJS *MockJetStream) {
-// 				gomock.InOrder(
-// 					mockNATSConnector.EXPECT().Connect(client.Config.Server, gomock.Any()).
-// 						Return(mockConn, nil).MaxTimes(1),
-// 					mockJSCreator.EXPECT().New(mockConn).Return(mockJS, nil).MaxTimes(1),
-// 				)
-// 			},
-// 			connSuccess: true,
-// 		},
-// 		// {
-// 		// 	name: "successful connection after retries",
-// 		// 	setupMocks: func(client *Client, mockNATSConnector *MockNATSConnector, mockJSCreator *MockJetStreamCreator, mockConn *MockConnInterface, mockJS *MockJetStream) {
-// 		// 		gomock.InOrder(
-// 		// 			// First attempt fails
-// 		// 			mockNATSConnector.EXPECT().Connect(client.Config.Server, gomock.Any()).
-// 		// 				Return(nil, errConnectionError).MaxTimes(1),
-// 		// 			// Second attempt succeeds
-// 		// 			mockNATSConnector.EXPECT().Connect(client.Config.Server, gomock.Any()).
-// 		// 				Return(mockConn, nil).MaxTimes(1),
-// 		// 			mockJSCreator.EXPECT().New(mockConn).
-// 		// 				Return(mockJS, nil),
-// 		// 		)
-// 		// 	},
-// 		// },
-// 		// {
-// 		// 	name: "JetStream creation fails after successful connection",
-// 		// 	setupMocks: func(client *Client, mockNATSConnector *MockNATSConnector, mockJSCreator *MockJetStreamCreator, mockConn *MockConnInterface, mockJS *MockJetStream) {
-// 		// 		gomock.InOrder(
-// 		// 			// Connection succeeds but JetStream creation fails
-// 		// 			mockNATSConnector.EXPECT().Connect(client.Config.Server, gomock.Any()).Return(mockConn, nil),
-// 		// 			mockJSCreator.EXPECT().New(mockConn).Return(nil, errConnectionError),
-// 		// 			mockConn.EXPECT().Close(),
-// 		// 			// Retry succeeds
-// 		// 			mockNATSConnector.EXPECT().Connect(client.Config.Server, gomock.Any()).Return(mockConn, nil),
-// 		// 			mockJSCreator.EXPECT().New(mockConn).Return(mockJS, nil),
-// 		// 		)
-// 		// 	},
-// 		// },
-// 	}
+	tests := []struct {
+		name        string
+		setupMocks  func(*Client, *MockNATSConnector, *MockJetStreamCreator, *MockConnInterface, *MockJetStream)
+		connSuccess bool
+	}{
+		{
+			name: "successful connection on first attempt",
+			setupMocks: func(client *Client, mockNATSConnector *MockNATSConnector, mockJSCreator *MockJetStreamCreator,
+				mockConn *MockConnInterface, mockJS *MockJetStream) {
+				gomock.InOrder(
+					mockNATSConnector.EXPECT().Connect(client.Config.Server, gomock.Any()).
+						Return(mockConn, nil).MaxTimes(1),
+					mockJSCreator.EXPECT().New(mockConn).Return(mockJS, nil).MaxTimes(1),
+				)
+			},
+			connSuccess: true,
+		},
+		{
+			name: "successful connection after retries",
+			setupMocks: func(client *Client, mockNATSConnector *MockNATSConnector, mockJSCreator *MockJetStreamCreator,
+				mockConn *MockConnInterface, mockJS *MockJetStream) {
+				gomock.InOrder(
+					// First attempt fails
+					mockNATSConnector.EXPECT().Connect(client.Config.Server, gomock.Any()).
+						Return(nil, errConnectionError).MaxTimes(1),
+					// Second attempt succeeds
+					mockNATSConnector.EXPECT().Connect(client.Config.Server, gomock.Any()).
+						Return(mockConn, nil).MaxTimes(1),
+					mockJSCreator.EXPECT().New(mockConn).
+						Return(mockJS, nil),
+				)
+			},
+		},
+		{
+			name: "JetStream creation fails after successful connection",
+			setupMocks: func(client *Client, mockNATSConnector *MockNATSConnector, mockJSCreator *MockJetStreamCreator,
+				mockConn *MockConnInterface, mockJS *MockJetStream) {
+				gomock.InOrder(
+					// Connection succeeds but JetStream creation fails
+					mockNATSConnector.EXPECT().Connect(client.Config.Server, gomock.Any()).Return(mockConn, nil),
+					mockJSCreator.EXPECT().New(mockConn).Return(nil, errConnectionError),
+					mockConn.EXPECT().Close(),
+					// Retry succeeds
+					mockNATSConnector.EXPECT().Connect(client.Config.Server, gomock.Any()).Return(mockConn, nil),
+					mockJSCreator.EXPECT().New(mockConn).Return(mockJS, nil),
+				)
+			},
+		},
+	}
 
-// 	for _, tt := range tests {
-// 		t.Run(tt.name, func(t *testing.T) {
-// 			client := &Client{
-// 				Config:           &cfg,
-// 				logger:           logger,
-// 				natsConnector:    mockNATSConnector,
-// 				jetStreamCreator: mockJSCreator,
-// 				subscriptions:    subs,
-// 			}
+	for _, tt := range tests {
+		client := &Client{
+			Config:           &cfg,
+			logger:           logger,
+			natsConnector:    mockNATSConnector,
+			jetStreamCreator: mockJSCreator,
+			subscriptions:    subs,
+		}
 
-// 			tt.setupMocks(client, mockNATSConnector, mockJSCreator, mockConn, mockJS)
-// 			client.retryConnect()
-// 			time.Sleep(500 * time.Millisecond)
+		tt.setupMocks(client, mockNATSConnector, mockJSCreator, mockConn, mockJS)
+		client.retryConnect()
+		time.Sleep(500 * time.Millisecond)
 
-// 			if tt.connSuccess {
-// 				assert.NotNil(t, client.connManager)
-// 				assert.NotNil(t, client.streamManager)
-// 				assert.NotNil(t, client.subManager)
-// 			}
-// 		})
-// 	}
-// }
+		if tt.connSuccess {
+			assert.NotNil(t, client.connManager)
+			assert.NotNil(t, client.streamManager)
+			assert.NotNil(t, client.subManager)
+		}
+	}
+}
+
+func TestGetJetStreamStatus(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	jStream := NewMockJetStream(ctrl)
+
+	tests := []struct {
+		name     string
+		mockCall *gomock.Call
+		want     string
+		wantErr  error
+	}{
+		{name: "status OK", want: jetStreamStatusOK,
+			mockCall: jStream.EXPECT().AccountInfo(gomock.Any()).Return(nil, nil)},
+		{name: "error in jetstream", want: jetStreamStatusError, wantErr: errJetStream,
+			mockCall: jStream.EXPECT().AccountInfo(gomock.Any()).Return(nil, errJetStream)},
+	}
+
+	for i, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ctx := context.Background()
+
+			got, err := GetJetStreamStatus(ctx, jStream)
+
+			assert.Equalf(t, tt.wantErr, err, "Test[%d] failed- %s", i, tt.name)
+			assert.Equalf(t, tt.want, got, "Test[%d] failed- %s", i, tt.name)
+		})
+	}
+}
