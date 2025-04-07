@@ -32,6 +32,7 @@ var (
 	errInvalidResult            = errors.New("unexpected result format: expected []any")
 	errUnexpectedResult         = errors.New("unexpected result type: expected []any")
 	errSurrealDBUpdate          = errors.New("surrealdb update operation failed")
+	errQueryFailed              = errors.New("query failed with unexpected status")
 )
 
 const (
@@ -523,7 +524,6 @@ func (c *Client) Update(ctx context.Context, table, id string, data any) (any, e
 		return nil, errNotConnected
 	}
 
-	// Build a generic update query that uses MERGE to update with arbitrary fields.
 	updateQuery := fmt.Sprintf("UPDATE %s:%s MERGE $data RETURN *", table, id)
 	span := c.addTrace(ctx, "Update", fmt.Sprintf("%s:%s", table, id))
 
@@ -540,7 +540,6 @@ func (c *Client) Update(ctx context.Context, table, id string, data any) (any, e
 	}, startTime)
 
 	var updateResult DBResponse
-	// Use the "query" action to run our update query.
 	if err := c.db.Send(&updateResult, "query", updateQuery, map[string]any{"data": data}); err != nil {
 		return nil, fmt.Errorf("update operation failed: %w", err)
 	}
@@ -549,13 +548,88 @@ func (c *Client) Update(ctx context.Context, table, id string, data any) (any, e
 		return nil, fmt.Errorf("%w: %s", errSurrealDBUpdate, updateResult.Error.Message)
 	}
 
-	// SurrealDB returns the updated record in a slice.
-	resultSlice, ok := updateResult.Result.([]any)
-	if !ok || len(resultSlice) == 0 {
+	// Handle the nested response structure
+	return c.processUpdateResult(updateResult.Result)
+}
+
+// processUpdateResult handles the processing of update operation results.
+func (c *Client) processUpdateResult(result any) (any, error) {
+	resultSlice, err := validateResultSlice(result)
+	if err != nil {
+		return nil, err
+	}
+
+	responseItem, err := validateResponseItem(resultSlice[0])
+	if err != nil {
+		return nil, err
+	}
+
+	resultData, err := validateAndExtractResult(responseItem)
+	if err != nil {
+		return nil, err
+	}
+
+	return c.processResultData(resultData)
+}
+
+// validateResultSlice validates the initial result slice.
+func validateResultSlice(result any) ([]any, error) {
+	resultSlice, ok := result.([]any)
+	if !ok {
+		return nil, fmt.Errorf("%w: expected []any, got %T", errUnexpectedResult, result)
+	}
+
+	if len(resultSlice) == 0 {
 		return nil, errNoRecord
 	}
 
-	return c.extractRecord(resultSlice[0])
+	return resultSlice, nil
+}
+
+// validateResponseItem validates the response item and converts it to a string map.
+func validateResponseItem(item any) (map[string]any, error) {
+	responseItem, ok := item.(map[any]any)
+	if !ok {
+		return nil, fmt.Errorf("%w: expected map[any]any in response", errUnexpectedResult)
+	}
+
+	response := make(map[string]any)
+
+	for k, v := range responseItem {
+		if keyStr, ok := k.(string); ok {
+			response[keyStr] = v
+		}
+	}
+
+	if status, ok := response["status"].(string); !ok || status != statusOK {
+		return nil, fmt.Errorf("%w: %v", errQueryFailed, response["status"])
+	}
+
+	return response, nil
+}
+
+// validateAndExtractResult validates and extracts the result data.
+func validateAndExtractResult(response map[string]any) (any, error) {
+	resultData, exists := response["result"]
+	if !exists {
+		return nil, errNoRecord
+	}
+
+	return resultData, nil
+}
+
+// processResultData handles both single record and array responses.
+func (c *Client) processResultData(resultData any) (any, error) {
+	switch data := resultData.(type) {
+	case []any:
+		if len(data) == 0 {
+			return nil, errNoRecord
+		}
+
+		return c.extractRecord(data[0])
+	default:
+		return c.extractRecord(data)
+	}
 }
 
 // Insert inserts a new record into the specified table in SurrealDB.
@@ -585,7 +659,6 @@ func (c *Client) Insert(ctx context.Context, table string, data any) ([]map[stri
 		return nil, err
 	}
 
-	fmt.Printf("%T", res.Result)
 	result, ok := res.Result.([]any)
 	if !ok {
 		return nil, fmt.Errorf("%w: %T", errUnexpectedResultType, res.Result)
