@@ -585,6 +585,7 @@ func (c *Client) Insert(ctx context.Context, table string, data any) ([]map[stri
 		return nil, err
 	}
 
+	fmt.Printf("%T", res.Result)
 	result, ok := res.Result.([]any)
 	if !ok {
 		return nil, fmt.Errorf("%w: %T", errUnexpectedResultType, res.Result)
