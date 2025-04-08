@@ -1,3 +1,3 @@
 package version
 
-const Framework = "v1.36.0"
+const Framework = "v1.37.0"
