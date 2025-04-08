@@ -3,6 +3,7 @@ package surrealdb
 import (
 	"context"
 	"errors"
+	"fmt"
 	"math"
 	"testing"
 
@@ -274,20 +275,22 @@ func Test_Update(t *testing.T) {
 			"email": "test@example.com",
 		}
 
-		expectedQuery := `
-        UPDATE users:123 SET 
-        name = $name, 
-        age = $age, 
-        email = $email
-        RETURN *`
+		expectedQuery := fmt.Sprintf("UPDATE %s:%s MERGE $data RETURN *", "users", "123")
+
+		queryVars := map[string]any{
+			"data": data,
+		}
 
 		updateResponse := DBResponse{
 			Result: []any{
 				map[any]any{
-					"id":    "user:123",
-					"name":  "updated",
-					"age":   25,
-					"email": "test@example.com",
+					"status": statusOK,
+					"result": map[any]any{
+						"id":    "user:123",
+						"name":  "updated",
+						"age":   25,
+						"email": "test@example.com",
+					},
 				},
 			},
 		}
@@ -297,14 +300,14 @@ func Test_Update(t *testing.T) {
 		mockMetrics.EXPECT().SetGauge("app_surrealdb_open_connections", float64(1))
 
 		mockConn.EXPECT().
-			Send(gomock.Any(), "query", expectedQuery, data).
+			Send(gomock.Any(), "query", expectedQuery, queryVars).
 			Return(nil).
 			SetArg(0, updateResponse)
 
 		result, err := client.Update(ctx, "users", "123", data)
 		require.NoError(t, err)
 
-		resultMap, ok := result.(map[any]any)
+		resultMap, ok := result.(map[string]any)
 		require.True(t, ok)
 		assert.Equal(t, "updated", resultMap["name"])
 		assert.Equal(t, 25, resultMap["age"])
@@ -428,6 +431,8 @@ func Test_Insert(t *testing.T) {
 		}
 
 		mockLogger.EXPECT().Debug(gomock.Any()).AnyTimes()
+		mockMetrics.EXPECT().RecordHistogram(gomock.Any(), "app_surrealdb_stats", gomock.Any(), gomock.Any())
+		mockMetrics.EXPECT().SetGauge("app_surrealdb_open_connections", float64(1))
 		mockConn.EXPECT().
 			Send(gomock.Any(), "insert", "users", data).
 			Return(nil).
@@ -462,6 +467,8 @@ func Test_Insert(t *testing.T) {
 		}
 
 		mockLogger.EXPECT().Debug(gomock.Any()).AnyTimes()
+		mockMetrics.EXPECT().RecordHistogram(gomock.Any(), "app_surrealdb_stats", gomock.Any(), gomock.Any())
+		mockMetrics.EXPECT().SetGauge("app_surrealdb_open_connections", float64(1))
 		mockConn.EXPECT().
 			Send(gomock.Any(), "insert", "users", data).
 			Return(nil).
@@ -504,6 +511,8 @@ func Test_Delete(t *testing.T) {
 		}
 
 		mockLogger.EXPECT().Debug(gomock.Any()).AnyTimes()
+		mockMetrics.EXPECT().RecordHistogram(gomock.Any(), "app_surrealdb_stats", gomock.Any(), gomock.Any())
+		mockMetrics.EXPECT().SetGauge("app_surrealdb_open_connections", float64(1))
 		mockConn.EXPECT().
 			Send(gomock.Any(), "query", expectedQuery, nil).
 			Return(nil).
@@ -540,6 +549,8 @@ func Test_Delete(t *testing.T) {
 		}
 
 		mockLogger.EXPECT().Debug(gomock.Any()).AnyTimes()
+		mockMetrics.EXPECT().RecordHistogram(gomock.Any(), "app_surrealdb_stats", gomock.Any(), gomock.Any())
+		mockMetrics.EXPECT().SetGauge("app_surrealdb_open_connections", float64(1))
 		mockConn.EXPECT().
 			Send(gomock.Any(), "query", expectedQuery, nil).
 			Return(nil).
@@ -642,10 +653,18 @@ func Test_executeQuery(t *testing.T) {
 		ctx := context.Background()
 		queryResult := []QueryResult{{
 			Status: statusOK,
-			Result: []any{},
+			Result: []any{
+				map[any]any{
+					"id":    "test:1",
+					"name":  "test",
+					"email": "test@example.com",
+				},
+			},
 		}}
 
 		mockLogger.EXPECT().Debug(gomock.Any()).AnyTimes()
+		mockMetrics.EXPECT().SetGauge("app_surrealdb_open_connections", float64(1)).MaxTimes(2)
+		mockMetrics.EXPECT().RecordHistogram(gomock.Any(), "app_surrealdb_stats", gomock.Any(), gomock.Any()).MaxTimes(2)
 		mockConn.EXPECT().
 			Send(gomock.Any(), "query", "TEST QUERY", nil).
 			Return(nil).
@@ -671,6 +690,8 @@ func Test_executeQuery(t *testing.T) {
 		ctx := context.Background()
 
 		mockLogger.EXPECT().Debug(gomock.Any()).AnyTimes()
+		mockMetrics.EXPECT().SetGauge("app_surrealdb_open_connections", float64(1)).MaxTimes(2)
+		mockMetrics.EXPECT().RecordHistogram(gomock.Any(), "app_surrealdb_stats", gomock.Any(), gomock.Any()).MaxTimes(2)
 		mockConn.EXPECT().
 			Send(gomock.Any(), "query", "TEST QUERY", nil).
 			Return(errorDatabase)
@@ -700,10 +721,18 @@ func Test_NamespaceOperations(t *testing.T) {
 		ctx := context.Background()
 		queryResult := []QueryResult{{
 			Status: statusOK,
-			Result: []any{},
+			Result: []any{
+				map[any]any{
+					"id":    "test:1",
+					"name":  "test",
+					"email": "test@example.com",
+				},
+			},
 		}}
 
 		mockLogger.EXPECT().Debug(gomock.Any()).AnyTimes()
+		mockMetrics.EXPECT().SetGauge("app_surrealdb_open_connections", float64(1)).MaxTimes(2)
+		mockMetrics.EXPECT().RecordHistogram(gomock.Any(), "app_surrealdb_stats", gomock.Any(), gomock.Any()).MaxTimes(2)
 		mockConn.EXPECT().
 			Send(gomock.Any(), "query", "DEFINE NAMESPACE test_namespace;", nil).
 			Return(nil).
@@ -721,6 +750,8 @@ func Test_NamespaceOperations(t *testing.T) {
 		}}
 
 		mockLogger.EXPECT().Debug(gomock.Any()).AnyTimes()
+		mockMetrics.EXPECT().SetGauge("app_surrealdb_open_connections", float64(1)).MaxTimes(2)
+		mockMetrics.EXPECT().RecordHistogram(gomock.Any(), "app_surrealdb_stats", gomock.Any(), gomock.Any()).MaxTimes(2)
 		mockConn.EXPECT().
 			Send(gomock.Any(), "query", "REMOVE NAMESPACE test_namespace;", nil).
 			Return(nil).
@@ -751,10 +782,18 @@ func Test_DatabaseOperations(t *testing.T) {
 		ctx := context.Background()
 		queryResult := []QueryResult{{
 			Status: statusOK,
-			Result: []any{},
+			Result: []any{
+				map[any]any{
+					"id":    "test:1",
+					"name":  "test",
+					"email": "test@example.com",
+				},
+			},
 		}}
 
 		mockLogger.EXPECT().Debug(gomock.Any()).AnyTimes()
+		mockMetrics.EXPECT().SetGauge("app_surrealdb_open_connections", float64(1)).MaxTimes(2)
+		mockMetrics.EXPECT().RecordHistogram(gomock.Any(), "app_surrealdb_stats", gomock.Any(), gomock.Any()).MaxTimes(2)
 		mockConn.EXPECT().
 			Send(gomock.Any(), "query", "DEFINE DATABASE test_database;", nil).
 			Return(nil).
@@ -772,6 +811,8 @@ func Test_DatabaseOperations(t *testing.T) {
 		}}
 
 		mockLogger.EXPECT().Debug(gomock.Any()).AnyTimes()
+		mockMetrics.EXPECT().SetGauge("app_surrealdb_open_connections", float64(1)).MaxTimes(2)
+		mockMetrics.EXPECT().RecordHistogram(gomock.Any(), "app_surrealdb_stats", gomock.Any(), gomock.Any()).MaxTimes(2)
 		mockConn.EXPECT().
 			Send(gomock.Any(), "query", "REMOVE DATABASE test_database;", nil).
 			Return(nil).
