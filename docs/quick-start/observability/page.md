@@ -137,6 +137,17 @@ For example: When running application locally, we can access /metrics endpoint o
 
 GoFr also supports creating {% new-tab-link newtab=false title="custom metrics" href="/docs/advanced-guide/publishing-custom-metrics" /%}.
 
+### Example Dashboard
+
+These metrics can be easily consumed by monitoring systems like {% new-tab-link title="Prometheus" href="https://prometheus.io/" /%}
+and visualized in dashboards using tools like {% new-tab-link title="Grafana" href="https://grafana.com/" /%}.
+
+Here's a sample Grafana dashboard utilizing GoFr's metrics:
+
+{% figure src="/metrics-dashboard.png" alt="Grafana Dashboard showing GoFr metrics including HTTP request rates, 
+response times etc." caption="Example monitoring dashboard using GoFr's built-in metrics" /%}
+
+
 ## Tracing
 
 {% new-tab-link title="Tracing" href="https://opentelemetry.io/docs/concepts/signals/#traces" /%} is a powerful tool for gaining insights into your application's behavior, identifying bottlenecks, and improving
