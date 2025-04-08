@@ -822,6 +822,7 @@ func Test_checkClient(t *testing.T) {
 	for i, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			err := checkClient(tt.client)
+
 			assert.Equalf(t, tt.expErr, err, "Test[%d] failed - %s", i, tt.name)
 		})
 	}
@@ -913,7 +914,7 @@ func TestClient_retryConnect(t *testing.T) {
 	}
 }
 
-func TestGetJetStreamStatus(t *testing.T) {
+func TestClient_GetJetStreamStatus(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
@@ -939,6 +940,71 @@ func TestGetJetStreamStatus(t *testing.T) {
 
 			assert.Equalf(t, tt.wantErr, err, "Test[%d] failed- %s", i, tt.name)
 			assert.Equalf(t, tt.want, got, "Test[%d] failed- %s", i, tt.name)
+		})
+	}
+}
+
+func TestClient_establishConnection(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	mockNATSConnector := NewMockNATSConnector(ctrl)
+	mockJSCreator := NewMockJetStreamCreator(ctrl)
+	mockConn := NewMockConnInterface(ctrl)
+	mockJS := NewMockJetStream(ctrl)
+	logger := logging.NewMockLogger(logging.DEBUG)
+	cfg := Config{
+		Server: "nats://localhost:4222",
+		Stream: StreamConfig{
+			Stream:   "test_stream",
+			Subjects: []string{"test_subject"},
+		},
+		Consumer: "test_consumer",
+	}
+
+	tests := []struct {
+		name       string
+		client     *Client
+		setupMocks func(*Client, *MockNATSConnector, *MockJetStreamCreator, *MockConnInterface, *MockJetStream)
+		wantErr    error
+	}{
+		{
+			name: "successful connection",
+			setupMocks: func(client *Client, mockNATSConnector *MockNATSConnector, _ *MockJetStreamCreator,
+				_ *MockConnInterface, mockJS *MockJetStream) {
+				gomock.InOrder(
+					mockNATSConnector.EXPECT().Connect(client.Config.Server, gomock.Any()).
+						Return(mockConn, nil),
+					mockJSCreator.EXPECT().New(mockConn).Return(mockJS, nil),
+				)
+			},
+			wantErr: nil,
+		},
+		{
+			name: "connection failure",
+			setupMocks: func(client *Client, mockNATSConnector *MockNATSConnector, _ *MockJetStreamCreator,
+				_ *MockConnInterface, _ *MockJetStream) {
+				mockNATSConnector.EXPECT().Connect(client.Config.Server, gomock.Any()).
+					Return(nil, errConnectionError)
+			},
+			wantErr: errConnectionError,
+		},
+	}
+
+	for i, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			client := &Client{
+				Config:           &cfg,
+				logger:           logger,
+				natsConnector:    mockNATSConnector,
+				jetStreamCreator: mockJSCreator,
+			}
+
+			tt.setupMocks(client, mockNATSConnector, mockJSCreator, mockConn, mockJS)
+
+			err := client.establishConnection()
+
+			assert.Equalf(t, tt.wantErr, err, "Test[%d] failed - %s", i, tt.name)
 		})
 	}
 }
