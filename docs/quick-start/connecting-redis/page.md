@@ -6,13 +6,7 @@ GoFr simplifies the process of connecting to Redis.
 
 Ensure we have Redis installed on our system.
 
-Optionally, We can use Docker to set up a development environment as described below.
-
-```bash
-docker run --name gofr-redis -p 6379:6379 -d redis
-```
-
-We can also set up a development environment with password authentication as described below.
+Optionally, We can use Docker to set up a development environment with password authentication  as described below.
 
 ```bash
 docker run --name gofr-redis -p 2002:6379 -d \
