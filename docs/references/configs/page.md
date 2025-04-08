@@ -193,6 +193,12 @@ This document lists all the configuration options supported by the GoFr framewor
 -  Currently supported only for PostgreSQL, with Default certificate file.
 -  disable
 
+---
+
+- DB_CHARSET
+- The character set for database connection
+- utf8
+
 {% /table %}
 
 ### Redis
