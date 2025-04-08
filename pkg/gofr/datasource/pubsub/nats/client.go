@@ -8,7 +8,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/nats-io/nats.go"
 	"github.com/nats-io/nats.go/jetstream"
 	"go.opentelemetry.io/otel/trace"
 	"gofr.dev/pkg/gofr/datasource/pubsub"
@@ -16,7 +15,7 @@ import (
 
 //go:generate mockgen -destination=mock_tracer.go -package=nats go.opentelemetry.io/otel/trace Tracer
 
-const defaultRetryTimeout = nats.DefaultTimeout
+const defaultRetryTimeout = 2 * time.Second
 
 var errClientNotConnected = errors.New("nats client not connected")
 
@@ -45,12 +44,21 @@ func (c *Client) Connect() error {
 		return err
 	}
 
-	connManager := NewConnectionManager(c.Config, c.logger, c.natsConnector, c.jetStreamCreator)
-	if err := connManager.Connect(); err != nil {
+	if err := c.establishConnection(); err != nil {
 		c.logger.Errorf("failed to connect to NATS server at %v: %v", c.Config.Server, err)
 
 		go c.retryConnect()
 
+		return err
+	}
+
+	return nil
+}
+
+// establishConnection handles the actual connection process to NATS and sets up jStream.
+func (c *Client) establishConnection() error {
+	connManager := NewConnectionManager(c.Config, c.logger, c.natsConnector, c.jetStreamCreator)
+	if err := connManager.Connect(); err != nil {
 		return err
 	}
 
@@ -72,29 +80,15 @@ func (c *Client) retryConnect() {
 	for {
 		c.logger.Debugf("connecting to NATS server at %v", c.Config.Server)
 
-		connManager := NewConnectionManager(c.Config, c.logger, c.natsConnector, c.jetStreamCreator)
-		if err := connManager.Connect(); err != nil {
+		if err := c.establishConnection(); err != nil {
 			c.logger.Errorf("failed to connect to NATS server at %v: %v", c.Config.Server, err)
+
 			time.Sleep(defaultRetryTimeout)
 
 			continue
 		}
 
-		c.connManager = connManager
-
-		js, err := c.connManager.jetStream()
-		if err != nil {
-			time.Sleep(defaultRetryTimeout)
-			c.logger.Debugf("Failed to create jStream context: %v", err)
-
-			continue
-		}
-
-		c.streamManager = newStreamManager(js, c.logger)
-		c.subManager = newSubscriptionManager(batchSize)
-		c.logSuccessfulConnection()
-
-		break
+		return
 	}
 }
 
