@@ -16,22 +16,67 @@ import (
 )
 
 type grpcServer struct {
-	server *grpc.Server
-	port   int
+	server       *grpc.Server
+	interceptors []grpc.UnaryServerInterceptor
+	options      []grpc.ServerOption
+	port         int
+}
+
+// AddGRPCServerOptions allows users to add custom gRPC server options such as TLS configuration,
+// timeouts, interceptors, and other server-specific settings in a single call.
+//
+// Example:
+//
+//	// Add TLS credentials and connection timeout in one call
+//	creds, _ := credentials.NewServerTLSFromFile("server-cert.pem", "server-key.pem")
+//	app.AddGRPCServerOptions(
+//		grpc.Creds(creds),
+//		grpc.ConnectionTimeout(10 * time.Second),
+//	)
+//
+// This function accepts a variadic list of gRPC server options (grpc.ServerOption) and appends them
+// to the server's configuration. It allows fine-tuning of the gRPC server's behavior during its initialization.
+func (a *App) AddGRPCServerOptions(grpcOpts ...grpc.ServerOption) {
+	a.grpcServer.options = append(a.grpcServer.options, grpcOpts...)
+}
+
+// AddGRPCUnaryInterceptors allows users to add custom gRPC interceptors.
+// Example:
+//
+//	func loggingInterceptor(ctx context.Context, req interface{}, info *grpc.UnaryServerInfo,
+//	handler grpc.UnaryHandler) (interface{}, error) {
+//		log.Printf("Received gRPC request: %s", info.FullMethod)
+//		return handler(ctx, req)
+//	}
+//	app.AddGRPCUnaryInterceptors(loggingInterceptor)
+func (a *App) AddGRPCUnaryInterceptors(grpcInterceptors ...grpc.UnaryServerInterceptor) {
+	a.grpcServer.interceptors = append(a.grpcServer.interceptors, grpcInterceptors...)
 }
 
 func newGRPCServer(c *container.Container, port int) *grpcServer {
+	middleware := make([]grpc.UnaryServerInterceptor, 0)
+	middleware = append(middleware,
+		grpc_recovery.UnaryServerInterceptor(),
+		gofr_grpc.ObservabilityInterceptor(c.Logger, c.Metrics()))
+
 	return &grpcServer{
-		server: grpc.NewServer(
-			grpc.UnaryInterceptor(grpc_middleware.ChainUnaryServer(
-				grpc_recovery.UnaryServerInterceptor(),
-				gofr_grpc.ObservabilityInterceptor(c.Logger, c.Metrics()),
-			))),
-		port: port,
+		port:         port,
+		interceptors: middleware,
 	}
 }
 
+func (g *grpcServer) createServer() {
+	interceptorOption := grpc.UnaryInterceptor(grpc_middleware.ChainUnaryServer(g.interceptors...))
+	g.options = append(g.options, interceptorOption)
+
+	g.server = grpc.NewServer(g.options...)
+}
+
 func (g *grpcServer) Run(c *container.Container) {
+	if g.server == nil {
+		g.createServer()
+	}
+
 	addr := ":" + strconv.Itoa(g.port)
 
 	c.Logger.Infof("starting gRPC server at %s", addr)
@@ -50,7 +95,9 @@ func (g *grpcServer) Run(c *container.Container) {
 
 func (g *grpcServer) Shutdown(ctx context.Context) error {
 	return ShutdownWithContext(ctx, func(_ context.Context) error {
-		g.server.GracefulStop()
+		if g.server != nil {
+			g.server.GracefulStop()
+		}
 
 		return nil
 	}, func() error {
@@ -68,6 +115,10 @@ var (
 func (a *App) RegisterService(desc *grpc.ServiceDesc, impl any) {
 	if !a.grpcRegistered && !isPortAvailable(a.grpcServer.port) {
 		a.container.Logger.Fatalf("gRPC port %d is blocked or unreachable", a.grpcServer.port)
+	}
+
+	if !a.grpcRegistered {
+		a.grpcServer.createServer()
 	}
 
 	a.container.Logger.Infof("registering gRPC Server: %s", desc.ServiceName)
