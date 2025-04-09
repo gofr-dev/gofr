@@ -10,7 +10,7 @@ import (
 )
 
 var (
-	errEmptyResponse     = errors.New("internal server error: empty response")
+	errEmptyResponse     = errors.New("internal server error")
 	errMissingStatusCode = errors.New("internal server error: missing status code")
 )
 
@@ -64,7 +64,7 @@ func (r Responder) Respond(data any, err error) {
 	_ = json.NewEncoder(r.w).Encode(resp)
 }
 
-func (r Responder) determineResponse(data any, err error) (int, any) {
+func (r Responder) determineResponse(data any, err error) (statusCode int, errObj any) {
 	// Handle empty struct case first
 	if err == nil && isEmptyStruct(data) {
 		return http.StatusInternalServerError, createErrorResponse(errEmptyResponse)
@@ -75,6 +75,7 @@ func (r Responder) determineResponse(data any, err error) (int, any) {
 	// Ensure valid status code
 	if statusCode == 0 {
 		statusCode = http.StatusInternalServerError
+
 		if errorObj == nil {
 			errorObj = createErrorResponse(errMissingStatusCode)
 		}
@@ -83,7 +84,7 @@ func (r Responder) determineResponse(data any, err error) (int, any) {
 	return statusCode, errorObj
 }
 
-// isEmptyStruct checks if a value is a struct with all zero/empty fields
+// isEmptyStruct checks if a value is a struct with all zero/empty fields.
 func isEmptyStruct(data any) bool {
 	if data == nil {
 		return false
@@ -96,6 +97,7 @@ func isEmptyStruct(data any) bool {
 		if v.IsNil() {
 			return false // nil pointer isn't an empty struct
 		}
+
 		v = v.Elem()
 	}
 
@@ -106,6 +108,7 @@ func isEmptyStruct(data any) bool {
 
 	// Compare against a zero value of the same type
 	zero := reflect.Zero(v.Type()).Interface()
+
 	return reflect.DeepEqual(data, zero)
 }
 

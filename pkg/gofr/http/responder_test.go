@@ -270,6 +270,48 @@ func TestResponder_ReservedMessageField(t *testing.T) {
 	assert.Equal(t, "additional info", errorObj["info"])
 }
 
+// EmptyError represents an error as an empty struct.
+// It implements the error interface.
+type emptyError struct{}
+
+// Error implements the error interface.
+func (emptyError) Error() string {
+	return "error occurred"
+}
+
+func TestResponder_EmptyErrorStruct(t *testing.T) {
+	recorder := httptest.NewRecorder()
+	responder := Responder{w: recorder, method: http.MethodGet}
+
+	statusCode, errObj := responder.determineResponse(nil, emptyError{})
+
+	assert.Equal(t, http.StatusInternalServerError, statusCode,
+		"TestResponder_EmptyErrorStruct Failed!")
+	assert.Equal(t, map[string]any{"message": "error occurred"}, errObj,
+		"TestResponder_EmptyErrorStruct Failed!")
+}
+
+func TestIsEmptyStruct(t *testing.T) {
+	tests := []struct {
+		desc     string
+		data     any
+		expected bool
+	}{
+		{"nil value", nil, false},
+		{"empty struct", struct{}{}, true},
+		{"non-empty struct", struct{ ID int }{ID: 1}, false},
+		{"nil pointer to struct", (*struct{})(nil), false},
+		{"pointer to non-empty struct", &struct{ ID int }{ID: 1}, false},
+		{"non-struct type", 42, false},
+	}
+
+	for i, tc := range tests {
+		result := isEmptyStruct(tc.data)
+
+		assert.Equal(t, tc.expected, result, "TEST[%d] Failed: %s", i, tc.desc)
+	}
+}
+
 type MessageOverrideError struct {
 	Msg string
 }
