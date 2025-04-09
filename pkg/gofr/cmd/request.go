@@ -128,3 +128,15 @@ func (r *Request) Bind(i any) error {
 
 	return nil
 }
+
+func (Request) Header(string) string {
+	return ""
+}
+
+func (Request) GetClaims() any {
+	return nil
+}
+
+func (Request) GetClaim(string) any {
+	return nil
+}
