@@ -72,7 +72,8 @@ Response example:
 ```
 
 ## Rendering Templates
-GoFr allows rendering HTML/HTMX templates in handlers using the response.Template type.
+GoFr makes it easy to render HTML and HTMX templates directly from your handlers using the response.Template type.
+By convention, all template files—whether HTML or HTMX—should be placed inside a templates directory located at the root of your project.
 
 ### Example
 ```go
