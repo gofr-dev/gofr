@@ -229,10 +229,13 @@ func TestResponder_CustomErrorWithResponse(t *testing.T) {
 	err := json.NewDecoder(resp.Body).Decode(&body)
 	require.NoError(t, err)
 
-	errorObj := body["error"].(map[string]any)
+	errorObj, ok := body["error"].(map[string]any)
+	if !ok {
+		t.Fatalf("Expected error object to be of type map[string]any, got %T", body["error"])
+	}
 
 	assert.Equal(t, "resource not found", errorObj["message"])
-	assert.Equal(t, int(http.StatusNotFound), int(errorObj["code"].(float64)))
+	assert.EqualValues(t, http.StatusNotFound, int(errorObj["code"].(float64)))
 	assert.Equal(t, "Custom Error", errorObj["title"])
 }
 
@@ -265,7 +268,11 @@ func TestResponder_ReservedMessageField(t *testing.T) {
 	err := json.NewDecoder(resp.Body).Decode(&body)
 	require.NoError(t, err)
 
-	errorObj := body["error"].(map[string]any)
+	errorObj, ok := body["error"].(map[string]any)
+	if !ok {
+		t.Fatalf("Expected error object to be of type map[string]any, got %T", body["error"])
+	}
+
 	assert.Equal(t, "original message", errorObj["message"])
 	assert.Equal(t, "additional info", errorObj["info"])
 }
