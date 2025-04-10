@@ -29,26 +29,8 @@ func (r Responder) Respond(data any, err error) {
 	switch v := data.(type) {
 	case resTypes.Raw:
 		resp = v.Data
-		//r.w.Header().Set("Content-Type", "application/json")
-		//r.w.WriteHeader(statusCode)
-		//_ = json.NewEncoder(r.w).Encode(v.Data)
-		//
-
-		//return
-
 	case resTypes.Response:
 		resp = response{Data: v.Data, Metadata: v.Metadata, Error: errorObj}
-		//r.w.Header().Set("Content-Type", "application/json")
-		//r.w.WriteHeader(statusCode)
-		//_ = json.NewEncoder(r.w).Encode(response{
-		//	Data:     v.Data,
-		//	Metadata: v.Metadata,
-		//	Error:    errorObj,
-		//})
-		//
-
-		//return
-
 	case resTypes.File:
 		r.w.Header().Set("Content-Type", v.ContentType)
 		r.w.WriteHeader(statusCode)
@@ -56,13 +38,11 @@ func (r Responder) Respond(data any, err error) {
 		_, _ = r.w.Write(v.Content)
 
 		return
-
 	case resTypes.Template:
 		r.w.Header().Set("Content-Type", "text/html")
 		v.Render(r.w)
 
 		return
-
 	case *resTypes.Redirect:
 		r.w.Header().Set("Location", v.URL)
 		r.w.WriteHeader(v.StatusCode)
