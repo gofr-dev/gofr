@@ -33,6 +33,7 @@ func (r Responder) Respond(data any, err error) {
 		//r.w.WriteHeader(statusCode)
 		//_ = json.NewEncoder(r.w).Encode(v.Data)
 		//
+
 		//return
 
 	case resTypes.Response:
@@ -45,6 +46,7 @@ func (r Responder) Respond(data any, err error) {
 		//	Error:    errorObj,
 		//})
 		//
+
 		//return
 
 	case resTypes.File:
