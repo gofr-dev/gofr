@@ -142,8 +142,9 @@ func (a *authInfo) GetAPIKey() string {
 // If not specified (0), it defaults to 302 (Found).
 //
 // Example usage:
-//   return c.Redirect("https://example.com", http.StatusFound)
-func (c *Context) Redirect(url string, statusCode int) (any, error) {
+//
+//	return c.Redirect("https://example.com", http.StatusFound)
+func (*Context) Redirect(url string, statusCode int) (any, error) {
 	return response.NewRedirect(url, statusCode), nil
 }
 
