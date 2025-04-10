@@ -2,7 +2,6 @@ package http
 
 import (
 	"encoding/json"
-	"fmt"
 	"net/http"
 	"reflect"
 
@@ -25,53 +24,63 @@ type Responder struct {
 func (r Responder) Respond(data any, err error) {
 	statusCode, errorObj := getStatusCode(r.method, data, err)
 
-	fmt.Printf("Data type: %T\n", data)
+	var resp any
 
 	switch v := data.(type) {
 	case resTypes.Raw:
-		r.w.Header().Set("Content-Type", "application/json")
-		r.w.WriteHeader(statusCode)
-		_ = json.NewEncoder(r.w).Encode(v.Data)
-		return
+		resp = v.Data
+		//r.w.Header().Set("Content-Type", "application/json")
+		//r.w.WriteHeader(statusCode)
+		//_ = json.NewEncoder(r.w).Encode(v.Data)
+		//
+		//return
 
-	case *resTypes.Response:
-		r.w.Header().Set("Content-Type", "application/json")
-		r.w.WriteHeader(statusCode)
-		_ = json.NewEncoder(r.w).Encode(response{
-			Data:     v.Data,
-			Metadata: v.Metadata,
-			Error:    errorObj,
-		})
-		return
+	case resTypes.Response:
+		resp = response{Data: v.Data, Metadata: v.Metadata, Error: errorObj}
+		//r.w.Header().Set("Content-Type", "application/json")
+		//r.w.WriteHeader(statusCode)
+		//_ = json.NewEncoder(r.w).Encode(response{
+		//	Data:     v.Data,
+		//	Metadata: v.Metadata,
+		//	Error:    errorObj,
+		//})
+		//
+		//return
 
 	case resTypes.File:
 		r.w.Header().Set("Content-Type", v.ContentType)
 		r.w.WriteHeader(statusCode)
+
 		_, _ = r.w.Write(v.Content)
+
 		return
 
 	case resTypes.Template:
 		r.w.Header().Set("Content-Type", "text/html")
 		v.Render(r.w)
+
 		return
 
 	case *resTypes.Redirect:
 		r.w.Header().Set("Location", v.URL)
 		r.w.WriteHeader(v.StatusCode)
+
 		return
 
 	default:
+		// handling where an interface contains a nullable type with a nil value.
 		if isNil(data) {
 			data = nil
 		}
 
-		r.w.Header().Set("Content-Type", "application/json")
-		r.w.WriteHeader(statusCode)
-		_ = json.NewEncoder(r.w).Encode(response{
-			Data:  data,
-			Error: errorObj,
-		})
+		resp = response{Data: data, Error: errorObj}
 	}
+
+	r.w.Header().Set("Content-Type", "application/json")
+
+	r.w.WriteHeader(statusCode)
+
+	_ = json.NewEncoder(r.w).Encode(resp)
 }
 
 // getStatusCode returns corresponding HTTP status codes.
