@@ -66,7 +66,7 @@ func (r Responder) Respond(data any, err error) {
 
 func (r Responder) determineResponse(data any, err error) (statusCode int, errObj any) {
 	// Handle empty struct case first
-	if err == nil && isEmptyStruct(data) {
+	if err != nil && isEmptyStruct(data) {
 		return http.StatusInternalServerError, createErrorResponse(errEmptyResponse)
 	}
 
