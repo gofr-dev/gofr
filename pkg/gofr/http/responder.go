@@ -25,6 +25,7 @@ func (r Responder) Respond(data any, err error) {
 	statusCode, errorObj := getStatusCode(r.method, data, err)
 
 	var resp any
+
 	switch v := data.(type) {
 	case resTypes.Raw:
 		resp = v.Data
@@ -42,6 +43,12 @@ func (r Responder) Respond(data any, err error) {
 		v.Render(r.w)
 
 		return
+	case *resTypes.Redirect:
+		r.w.Header().Set("Location", v.URL)
+		r.w.WriteHeader(v.StatusCode)
+
+		return
+
 	default:
 		// handling where an interface contains a nullable type with a nil value.
 		if isNil(data) {
