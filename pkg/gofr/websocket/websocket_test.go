@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"sync"
 	"testing"
 	"time"
 
@@ -149,4 +150,41 @@ func dereference(v any) any {
 	default:
 		return v
 	}
+}
+
+func TestConcurrentWriteMessageCalls(t *testing.T) {
+	upgrader := websocket.Upgrader{}
+
+	const message = "this is a test message"
+
+	loop := 10
+	workers := 10
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		conn, err := upgrader.Upgrade(w, r, nil)
+		assert.NoError(t, err)
+		defer conn.Close()
+
+		wc := &Connection{Conn: conn}
+
+		wg := sync.WaitGroup{}
+
+		for range loop {
+			for range workers {
+				wg.Add(1)
+
+				go func() {
+					defer wg.Done()
+
+					if err := wc.WriteMessage(websocket.TextMessage, []byte(message)); err != nil {
+						t.Errorf("concurrently wc.WriteMessage() returned %v", err)
+					}
+				}()
+			}
+		}
+
+		wg.Wait()
+	}))
+
+	server.Close()
 }
