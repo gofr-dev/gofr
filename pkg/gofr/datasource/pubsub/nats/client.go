@@ -15,7 +15,7 @@ import (
 
 //go:generate mockgen -destination=mock_tracer.go -package=nats go.opentelemetry.io/otel/trace Tracer
 
-const defaultRetryTimeout = 10 * time.Second
+const defaultRetryTimeout = 2 * time.Second
 
 var errClientNotConnected = errors.New("nats client not connected")
 
@@ -44,9 +44,21 @@ func (c *Client) Connect() error {
 		return err
 	}
 
+	if err := c.establishConnection(); err != nil {
+		c.logger.Errorf("failed to connect to NATS server at %v: %v", c.Config.Server, err)
+
+		go c.retryConnect()
+
+		return err
+	}
+
+	return nil
+}
+
+// establishConnection handles the actual connection process to NATS and sets up jStream.
+func (c *Client) establishConnection() error {
 	connManager := NewConnectionManager(c.Config, c.logger, c.natsConnector, c.jetStreamCreator)
 	if err := connManager.Connect(); err != nil {
-		c.logger.Errorf("failed to connect to NATS server at %v: %v", c.Config.Server, err)
 		return err
 	}
 
@@ -62,6 +74,22 @@ func (c *Client) Connect() error {
 	c.logSuccessfulConnection()
 
 	return nil
+}
+
+func (c *Client) retryConnect() {
+	for {
+		c.logger.Debugf("connecting to NATS server at %v", c.Config.Server)
+
+		if err := c.establishConnection(); err != nil {
+			c.logger.Errorf("failed to connect to NATS server at %v: %v", c.Config.Server, err)
+
+			time.Sleep(defaultRetryTimeout)
+
+			continue
+		}
+
+		return
+	}
 }
 
 func (c *Client) validateAndPrepare() error {
@@ -103,13 +131,17 @@ func (c *Client) UseMetrics(metrics any) {
 
 // Publish publishes a message to a topic.
 func (c *Client) Publish(ctx context.Context, subject string, message []byte) error {
+	if err := checkClient(c); err != nil {
+		return err
+	}
+
 	return c.connManager.Publish(ctx, subject, message, c.metrics)
 }
 
 // Subscribe subscribes to a topic and returns a single message.
 func (c *Client) Subscribe(ctx context.Context, topic string) (*pubsub.Message, error) {
 	for {
-		if !c.connManager.isConnected() {
+		if err := checkClient(c); err != nil {
 			time.Sleep(defaultRetryTimeout)
 
 			return nil, errClientNotConnected
@@ -256,6 +288,10 @@ func (c *Client) Close(ctx context.Context) error {
 
 // CreateTopic creates a new topic (stream) in NATS jStream.
 func (c *Client) CreateTopic(ctx context.Context, name string) error {
+	if err := checkClient(c); err != nil {
+		return err
+	}
+
 	return c.streamManager.CreateStream(ctx, StreamConfig{
 		Stream:   name,
 		Subjects: []string{name},
@@ -264,21 +300,37 @@ func (c *Client) CreateTopic(ctx context.Context, name string) error {
 
 // DeleteTopic deletes a topic (stream) in NATS jStream.
 func (c *Client) DeleteTopic(ctx context.Context, name string) error {
+	if err := checkClient(c); err != nil {
+		return err
+	}
+
 	return c.streamManager.DeleteStream(ctx, name)
 }
 
 // CreateStream creates a new stream in NATS jStream.
 func (c *Client) CreateStream(ctx context.Context, cfg StreamConfig) error {
+	if err := checkClient(c); err != nil {
+		return err
+	}
+
 	return c.streamManager.CreateStream(ctx, cfg)
 }
 
 // DeleteStream deletes a stream in NATS jStream.
 func (c *Client) DeleteStream(ctx context.Context, name string) error {
+	if err := checkClient(c); err != nil {
+		return err
+	}
+
 	return c.streamManager.DeleteStream(ctx, name)
 }
 
 // CreateOrUpdateStream creates or updates a stream in NATS jStream.
 func (c *Client) CreateOrUpdateStream(ctx context.Context, cfg *jetstream.StreamConfig) (jetstream.Stream, error) {
+	if err := checkClient(c); err != nil {
+		return nil, err
+	}
+
 	return c.streamManager.CreateOrUpdateStream(ctx, cfg)
 }
 
@@ -290,4 +342,20 @@ func GetJetStreamStatus(ctx context.Context, js jetstream.JetStream) (string, er
 	}
 
 	return jetStreamStatusOK, nil
+}
+
+func checkClient(c *Client) error {
+	if c == nil {
+		return errClientNotConnected
+	}
+
+	if c.connManager == nil {
+		return errClientNotConnected
+	}
+
+	if !c.connManager.isConnected() {
+		return errClientNotConnected
+	}
+
+	return nil
 }
