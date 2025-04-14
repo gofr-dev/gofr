@@ -81,8 +81,10 @@ func TestConnectionManager_Publish(t *testing.T) {
 
 	mockJS := NewMockJetStream(ctrl)
 	mockMetrics := NewMockMetrics(ctrl)
+	mockConn := NewMockConnInterface(ctrl)
 
 	cm := &ConnectionManager{
+		conn:    mockConn,
 		jStream: mockJS,
 		logger:  logging.NewMockLogger(logging.DEBUG),
 	}
@@ -91,9 +93,12 @@ func TestConnectionManager_Publish(t *testing.T) {
 	subject := "test.subject"
 	message := []byte("test message")
 
-	mockMetrics.EXPECT().IncrementCounter(ctx, "app_pubsub_publish_total_count", "subject", subject)
-	mockJS.EXPECT().Publish(ctx, subject, message).Return(&jetstream.PubAck{}, nil)
-	mockMetrics.EXPECT().IncrementCounter(ctx, "app_pubsub_publish_success_count", "subject", subject)
+	gomock.InOrder(
+		mockMetrics.EXPECT().IncrementCounter(ctx, "app_pubsub_publish_total_count", "subject", subject),
+		mockConn.EXPECT().Status().Return(nats.CONNECTED),
+		mockJS.EXPECT().Publish(ctx, subject, message).Return(&jetstream.PubAck{}, nil),
+		mockMetrics.EXPECT().IncrementCounter(ctx, "app_pubsub_publish_success_count", "subject", subject),
+	)
 
 	err := cm.Publish(ctx, subject, message, mockMetrics)
 	require.NoError(t, err)
@@ -228,86 +233,4 @@ func TestNatsConnWrapper_NatsConn(t *testing.T) {
 	wrapper := &natsConnWrapper{mockConn}
 
 	assert.Equal(t, mockConn, wrapper.NATSConn())
-}
-
-func TestConnectionManager_RetryConnect_Success(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
-
-	mockConn := NewMockConnInterface(ctrl)
-	mockJS := NewMockJetStream(ctrl)
-	mockNATSConnector := NewMockNATSConnector(ctrl)
-	mockJSCreator := NewMockJetStreamCreator(ctrl)
-	logger := logging.NewMockLogger(logging.DEBUG)
-
-	cm := &ConnectionManager{
-		config:           &Config{Server: "nats://localhost:4222"},
-		logger:           logger,
-		natsConnector:    mockNATSConnector,
-		jetStreamCreator: mockJSCreator,
-	}
-
-	mockNATSConnector.EXPECT().Connect(gomock.Any(), gomock.Any()).Return(mockConn, nil)
-
-	mockJSCreator.EXPECT().New(mockConn).Return(mockJS, nil)
-
-	go cm.retryConnect()
-	time.Sleep(100 * time.Millisecond) // Wait for goroutine to execute.
-
-	assert.Equal(t, mockConn, cm.conn)
-	assert.Equal(t, mockJS, cm.jStream)
-}
-
-func TestConnectionManager_RetryConnect_ConnectionFailure(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
-
-	mockNATSConnector := NewMockNATSConnector(ctrl)
-	logger := logging.NewMockLogger(logging.DEBUG)
-
-	cm := &ConnectionManager{
-		config:           &Config{Server: "nats://localhost:4222"},
-		logger:           logger,
-		natsConnector:    mockNATSConnector,
-		jetStreamCreator: NewMockJetStreamCreator(ctrl),
-	}
-
-	mockNATSConnector.EXPECT().Connect(gomock.Any(), gomock.Any()).
-		Return(nil, errConnectionError).AnyTimes()
-
-	go cm.retryConnect()
-	time.Sleep(500 * time.Millisecond) // Wait for goroutine to execute
-
-	assert.Nil(t, cm.conn)
-	assert.Nil(t, cm.jStream)
-}
-
-func TestConnectionManager_RetryConnect_JetStreamCreationFailure(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
-
-	mockConn := NewMockConnInterface(ctrl)
-	mockNATSConnector := NewMockNATSConnector(ctrl)
-	mockJSCreator := NewMockJetStreamCreator(ctrl)
-	logger := logging.NewMockLogger(logging.DEBUG)
-
-	cm := &ConnectionManager{
-		config:           &Config{Server: "nats://localhost:4222"},
-		logger:           logger,
-		natsConnector:    mockNATSConnector,
-		jetStreamCreator: mockJSCreator,
-	}
-
-	mockConn.EXPECT().Close()
-	mockNATSConnector.EXPECT().Connect(gomock.Any(), gomock.Any()).
-		Return(mockConn, nil).AnyTimes()
-
-	mockJSCreator.EXPECT().New(mockConn).
-		Return(nil, errJetStreamNotConfigured).AnyTimes()
-
-	go cm.retryConnect()
-	time.Sleep(500 * time.Millisecond)
-
-	assert.Nil(t, cm.conn)
-	assert.Nil(t, cm.jStream)
 }
