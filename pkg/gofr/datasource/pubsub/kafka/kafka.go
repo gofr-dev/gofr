@@ -40,7 +40,7 @@ const (
 )
 
 type Config struct {
-	Broker           string
+	Broker           []string
 	Partition        int
 	ConsumerGroupID  string
 	OffSet           int
@@ -78,7 +78,15 @@ func New(conf *Config, logger pubsub.Logger, metrics Metrics) *kafkaClient {
 		return nil
 	}
 
-	logger.Debugf("connecting to Kafka broker '%s'", conf.Broker)
+	var brokers any
+
+	if len(conf.Broker) > 1 {
+		brokers = conf.Broker
+	} else {
+		brokers = conf.Broker[0]
+	}
+
+	logger.Debugf("connecting to Kafka broker '%s'", brokers)
 
 	dialer, conn, writer, reader, err := initializeKafkaClient(conf, logger)
 	if err != nil {
@@ -131,7 +139,7 @@ func validateConfigs(conf *Config) error {
 }
 
 func validateRequiredFields(conf *Config) error {
-	if conf.Broker == "" {
+	if len(conf.Broker) == 0 {
 		return errBrokerNotProvided
 	}
 
@@ -175,12 +183,20 @@ func (k *kafkaClient) Publish(ctx context.Context, topic string, message []byte)
 		return err
 	}
 
+	var hostName string
+
+	if len(k.config.Broker) > 1 {
+		hostName = "multiple brokers"
+	} else {
+		hostName = k.config.Broker[0]
+	}
+
 	k.logger.Debug(&pubsub.Log{
 		Mode:          "PUB",
 		CorrelationID: span.SpanContext().TraceID().String(),
 		MessageValue:  string(message),
 		Topic:         topic,
-		Host:          k.config.Broker,
+		Host:          hostName,
 		PubSubBackend: "KAFKA",
 		Time:          end.Microseconds(),
 	})
@@ -242,12 +258,20 @@ func (k *kafkaClient) Subscribe(ctx context.Context, topic string) (*pubsub.Mess
 
 	end := time.Since(start)
 
+	var hostName string
+
+	if len(k.config.Broker) > 1 {
+		hostName = "multiple brokers"
+	} else {
+		hostName = k.config.Broker[0]
+	}
+
 	k.logger.Debug(&pubsub.Log{
 		Mode:          "SUB",
 		CorrelationID: span.SpanContext().TraceID().String(),
 		MessageValue:  string(msg.Value),
 		Topic:         topic,
-		Host:          k.config.Broker,
+		Host:          hostName,
 		PubSubBackend: "KAFKA",
 		Time:          end.Microseconds(),
 	})
@@ -298,22 +322,35 @@ func initializeKafkaClient(conf *Config, logger pubsub.Logger) (*kafka.Dialer, C
 		dialer.TLS = tlsConfig
 	}
 
-	conn, err := dialer.DialContext(context.Background(), "tcp", conf.Broker)
+	if len(conf.Broker) == 0 {
+		return nil, nil, nil, nil, errBrokerNotProvided
+	}
+
+	conn, err := dialer.DialContext(context.Background(), "tcp", conf.Broker[0])
 	if err != nil {
 		return nil, nil, nil, nil, err
 	}
 
 	writer := kafka.NewWriter(kafka.WriterConfig{
-		Brokers:      []string{conf.Broker},
+		Brokers:      conf.Broker,
 		Dialer:       dialer,
 		BatchSize:    conf.BatchSize,
 		BatchBytes:   conf.BatchBytes,
 		BatchTimeout: time.Duration(conf.BatchTimeout),
+		Logger:       kafka.LoggerFunc(logger.Debugf),
 	})
 
 	reader := make(map[string]Reader)
 
-	logger.Logf("connected to Kafka broker '%s'", conf.Broker)
+	var brokers any
+
+	if len(conf.Broker) > 1 {
+		brokers = conf.Broker
+	} else {
+		brokers = conf.Broker[0]
+	}
+
+	logger.Logf("connected to Kafka broker '%s'", brokers)
 
 	return dialer, conn, writer, reader, nil
 }
@@ -321,7 +358,7 @@ func initializeKafkaClient(conf *Config, logger pubsub.Logger) (*kafka.Dialer, C
 func (k *kafkaClient) getNewReader(topic string) Reader {
 	reader := kafka.NewReader(kafka.ReaderConfig{
 		GroupID:     k.config.ConsumerGroupID,
-		Brokers:     []string{k.config.Broker},
+		Brokers:     k.config.Broker,
 		Topic:       topic,
 		MinBytes:    10e3,
 		MaxBytes:    10e6,
@@ -354,11 +391,20 @@ func (k *kafkaClient) CreateTopic(_ context.Context, name string) error {
 // retryConnect handles the retry mechanism for connecting to the Kafka broker.
 func retryConnect(client *kafkaClient, conf *Config, logger pubsub.Logger) {
 	for {
+
+		var brokers any
+
+		if len(conf.Broker) > 1 {
+			brokers = conf.Broker
+		} else {
+			brokers = conf.Broker[0]
+		}
+
 		time.Sleep(defaultRetryTimeout)
 
 		dialer, conn, writer, reader, err := initializeKafkaClient(conf, logger)
 		if err != nil {
-			logger.Errorf("could not connect to Kafka at '%v', error: %v", conf.Broker, err)
+			logger.Errorf("could not connect to Kafka at '%v', error: %v", brokers, err)
 			continue
 		}
 
