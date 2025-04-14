@@ -230,12 +230,10 @@ func TestResponder_CustomErrorWithResponse(t *testing.T) {
 	require.NoError(t, err)
 
 	errorObj, ok := body["error"].(map[string]any)
-	if !ok {
-		t.Fatalf("Expected error object to be of type map[string]any, got %T", body["error"])
-	}
+	require.Truef(t, ok, "Expected error object to be of type map[string]any, got %T", body["error"])
 
 	assert.Equal(t, "resource not found", errorObj["message"])
-	assert.EqualValues(t, http.StatusNotFound, int(errorObj["code"].(float64)))
+	assert.EqualValues(t, http.StatusNotFound, errorObj["code"])
 	assert.Equal(t, "Custom Error", errorObj["title"])
 }
 
@@ -269,9 +267,7 @@ func TestResponder_ReservedMessageField(t *testing.T) {
 	require.NoError(t, err)
 
 	errorObj, ok := body["error"].(map[string]any)
-	if !ok {
-		t.Fatalf("Expected error object to be of type map[string]any, got %T", body["error"])
-	}
+	require.Truef(t, ok, "Expected error object to be of type map[string]any, got %T", body["error"])
 
 	assert.Equal(t, "original message", errorObj["message"])
 	assert.Equal(t, "additional info", errorObj["info"])
@@ -292,10 +288,8 @@ func TestResponder_EmptyErrorStruct(t *testing.T) {
 
 	statusCode, errObj := responder.determineResponse(nil, emptyError{})
 
-	assert.Equal(t, http.StatusInternalServerError, statusCode,
-		"TestResponder_EmptyErrorStruct Failed!")
-	assert.Equal(t, map[string]any{"message": "error occurred"}, errObj,
-		"TestResponder_EmptyErrorStruct Failed!")
+	assert.Equal(t, http.StatusInternalServerError, statusCode)
+	assert.Equal(t, map[string]any{"message": "error occurred"}, errObj)
 }
 
 func TestIsEmptyStruct(t *testing.T) {
