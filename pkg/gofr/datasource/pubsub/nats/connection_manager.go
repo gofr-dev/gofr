@@ -2,7 +2,6 @@ package nats
 
 import (
 	"context"
-	"time"
 
 	"github.com/nats-io/nats.go"
 	"github.com/nats-io/nats.go/jetstream"
@@ -79,42 +78,31 @@ func NewConnectionManager(
 
 // Connect establishes a connection to NATS and sets up JetStream.
 func (cm *ConnectionManager) Connect() error {
-	go cm.retryConnect()
-
-	return nil
-}
-
-func (cm *ConnectionManager) retryConnect() {
 	opts := []nats.Option{nats.Name("GoFr NATS JetStreamClient")}
 
 	if cm.config.CredsFile != "" {
 		opts = append(opts, nats.UserCredentials(cm.config.CredsFile))
 	}
 
-	for {
-		connInterface, err := cm.natsConnector.Connect(cm.config.Server, opts...)
-		if err != nil {
-			cm.logger.Errorf("Failed to connect to NATS server at %v: %v", cm.config.Server, err)
-			time.Sleep(defaultRetryTimeout)
-
-			continue
-		}
-
-		js, err := cm.jetStreamCreator.New(connInterface)
-		if err != nil {
-			connInterface.Close()
-			cm.logger.Debugf("Failed to create jStream context: %v", err)
-			time.Sleep(defaultRetryTimeout)
-
-			continue
-		}
-
-		cm.conn = connInterface
-		cm.jStream = js
-		cm.logger.Logf("Successfully connected to NATS server at %v", cm.config.Server)
-
-		return
+	connInterface, err := cm.natsConnector.Connect(cm.config.Server, opts...)
+	if err != nil {
+		cm.logger.Debugf("Failed to connect to NATS server at %v: %v", cm.config.Server, err)
+		return err
 	}
+
+	js, err := cm.jetStreamCreator.New(connInterface)
+	if err != nil {
+		connInterface.Close()
+		cm.logger.Debugf("Failed to create jStream context: %v", err)
+
+		return err
+	}
+
+	cm.conn = connInterface
+	cm.jStream = js
+	cm.logger.Logf("Successfully connected to NATS server at %v", cm.config.Server)
+
+	return nil
 }
 
 func (cm *ConnectionManager) Close(_ context.Context) {
@@ -125,6 +113,10 @@ func (cm *ConnectionManager) Close(_ context.Context) {
 
 func (cm *ConnectionManager) Publish(ctx context.Context, subject string, message []byte, metrics Metrics) error {
 	metrics.IncrementCounter(ctx, "app_pubsub_publish_total_count", "subject", subject)
+
+	if !cm.isConnected() {
+		return errClientNotConnected
+	}
 
 	if err := cm.validateJetStream(subject); err != nil {
 		return err
