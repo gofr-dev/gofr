@@ -6,6 +6,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"net"
+	"strconv"
 	"sync"
 	"time"
 
@@ -26,6 +28,7 @@ var (
 	errUnsupportedSASLMechanism    = errors.New("unsupported SASL mechanism")
 	errSASLCredentialsMissing      = errors.New("SASL credentials missing")
 	errUnsupportedSecurityProtocol = errors.New("unsupported security protocol")
+	errNoActiveConnections         = errors.New("no active connections to brokers")
 )
 
 const (
@@ -86,7 +89,7 @@ func New(conf *Config, logger pubsub.Logger, metrics Metrics) *kafkaClient {
 		brokers = conf.Broker[0]
 	}
 
-	logger.Debugf("connecting to Kafka broker '%s'", brokers)
+	logger.Debugf("connecting to Kafka brokers: '%v'", brokers)
 
 	dialer, conn, writer, reader, err := initializeKafkaClient(conf, logger)
 	if err != nil {
@@ -326,9 +329,24 @@ func initializeKafkaClient(conf *Config, logger pubsub.Logger) (*kafka.Dialer, C
 		return nil, nil, nil, nil, errBrokerNotProvided
 	}
 
-	conn, err := dialer.DialContext(context.Background(), "tcp", conf.Broker[0])
-	if err != nil {
-		return nil, nil, nil, nil, err
+	var conns []*kafka.Conn
+	for _, broker := range conf.Broker {
+		conn, err := dialer.DialContext(context.Background(), "tcp", broker)
+		if err != nil {
+			logger.Errorf("failed to connect to broker %s: %v", broker, err)
+			continue
+		}
+		conns = append(conns, conn)
+	}
+
+	if len(conns) == 0 {
+		return nil, nil, nil, nil, errNoActiveConnections
+	}
+
+	// Create multiConn wrapper
+	multi := &multiConn{
+		conns:  conns,
+		dialer: dialer,
 	}
 
 	writer := kafka.NewWriter(kafka.WriterConfig{
@@ -342,17 +360,8 @@ func initializeKafkaClient(conf *Config, logger pubsub.Logger) (*kafka.Dialer, C
 
 	reader := make(map[string]Reader)
 
-	var brokers any
-
-	if len(conf.Broker) > 1 {
-		brokers = conf.Broker
-	} else {
-		brokers = conf.Broker[0]
-	}
-
-	logger.Logf("connected to Kafka broker '%s'", brokers)
-
-	return dialer, conn, writer, reader, nil
+	logger.Logf("connected to %d Kafka brokers", len(conns))
+	return dialer, multi, writer, reader, nil
 }
 
 func (k *kafkaClient) getNewReader(topic string) Reader {
@@ -391,29 +400,24 @@ func (k *kafkaClient) CreateTopic(_ context.Context, name string) error {
 // retryConnect handles the retry mechanism for connecting to the Kafka broker.
 func retryConnect(client *kafkaClient, conf *Config, logger pubsub.Logger) {
 	for {
-
-		var brokers any
-
-		if len(conf.Broker) > 1 {
-			brokers = conf.Broker
-		} else {
-			brokers = conf.Broker[0]
-		}
-
 		time.Sleep(defaultRetryTimeout)
 
 		dialer, conn, writer, reader, err := initializeKafkaClient(conf, logger)
 		if err != nil {
+			var brokers any
+			if len(conf.Broker) > 1 {
+				brokers = conf.Broker
+			} else {
+				brokers = conf.Broker[0]
+			}
 			logger.Errorf("could not connect to Kafka at '%v', error: %v", brokers, err)
 			continue
 		}
 
-		client.mu.Lock()
 		client.conn = conn
 		client.dialer = dialer
 		client.writer = writer
 		client.reader = reader
-		client.mu.Unlock()
 
 		return
 	}
@@ -427,4 +431,94 @@ func (k *kafkaClient) isConnected() bool {
 	_, err := k.conn.Controller()
 
 	return err == nil
+}
+
+type multiConn struct {
+	conns  []*kafka.Conn
+	dialer *kafka.Dialer
+	mu     sync.RWMutex
+}
+
+func (m *multiConn) Controller() (kafka.Broker, error) {
+	if len(m.conns) == 0 {
+		return kafka.Broker{}, errNoActiveConnections
+	}
+
+	// Try all connections until we find one that works
+	for _, conn := range m.conns {
+		if conn == nil {
+			continue
+		}
+
+		controller, err := conn.Controller()
+		if err == nil {
+			return controller, nil
+		}
+	}
+
+	return kafka.Broker{}, errNoActiveConnections
+}
+
+func (m *multiConn) CreateTopics(topics ...kafka.TopicConfig) error {
+	controller, err := m.Controller()
+	if err != nil {
+		return err
+	}
+
+	addr := net.JoinHostPort(controller.Host, strconv.Itoa(controller.Port))
+
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+
+	// Find existing connection to controller
+	for _, conn := range m.conns {
+		if conn != nil && conn.RemoteAddr().String() == addr {
+			return conn.CreateTopics(topics...)
+		}
+	}
+
+	// If not found, create a new connection
+	conn, err := m.dialer.DialContext(context.Background(), "tcp", addr)
+	if err != nil {
+		return err
+	}
+
+	m.conns = append(m.conns, conn)
+
+	return conn.CreateTopics(topics...)
+}
+
+func (m *multiConn) DeleteTopics(topics ...string) error {
+	controller, err := m.Controller()
+	if err != nil {
+		return err
+	}
+
+	addr := net.JoinHostPort(controller.Host, strconv.Itoa(controller.Port))
+
+	for _, conn := range m.conns {
+		if conn != nil && conn.RemoteAddr().String() == addr {
+			return conn.DeleteTopics(topics...)
+		}
+	}
+
+	// If not found, create a new connection
+	conn, err := m.dialer.DialContext(context.Background(), "tcp", addr)
+	if err != nil {
+		return err
+	}
+
+	m.conns = append(m.conns, conn)
+
+	return conn.DeleteTopics(topics...)
+}
+
+func (m *multiConn) Close() error {
+	var err error
+	for _, conn := range m.conns {
+		if conn != nil {
+			err = errors.Join(err, conn.Close())
+		}
+	}
+	return err
 }
