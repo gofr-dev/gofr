@@ -51,6 +51,10 @@ GoFr allows us to customize the WebSocket upgrader with several options. We can 
 - `CheckOrigin (WithCheckOrigin)`: Sets a custom origin check function.
 - `Compression (WithCompression)`:  Enables compression.
 
+## Writing Messages
+
+GoFr provides the `WriteMessageToSocket` method to send messages to the underlying websocket connection in a thread-safe way. The data parameter can be a string, []byte, or any struct that can be marshaled to JSON.
+
 ## Example:
 We can configure the Upgrader by creating a chain of option functions provided by GoFr.
 
