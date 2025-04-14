@@ -287,7 +287,7 @@ func (k *kafkaClient) Close() (err error) {
 	}
 
 	if k.writer != nil {
-		err = k.writer.Close()
+		err = errors.Join(err, k.writer.Close())
 	}
 
 	if k.conn != nil {
