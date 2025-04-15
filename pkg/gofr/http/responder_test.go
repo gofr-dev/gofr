@@ -2,7 +2,6 @@ package http
 
 import (
 	"bytes"
-	"encoding/json"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -265,15 +264,19 @@ func TestResponder_ReservedMessageField(t *testing.T) {
 	resp := w.Result()
 	defer resp.Body.Close()
 
-	var body map[string]any
-	err := json.NewDecoder(resp.Body).Decode(&body)
+	assert.Equal(t, http.StatusInternalServerError, resp.StatusCode)
+
+	bodyBytes, err := io.ReadAll(resp.Body)
 	require.NoError(t, err)
 
-	errorObj, ok := body["error"].(map[string]any)
-	require.Truef(t, ok, "Expected error object to be of type map[string]any, got %T", body["error"])
+	expectedJSON := `{
+		"error": {
+			"message": "original message",
+			"info": "additional info"
+		}
+	}`
 
-	assert.Equal(t, "original message", errorObj["message"])
-	assert.Equal(t, "additional info", errorObj["info"])
+	assert.JSONEq(t, expectedJSON, string(bodyBytes))
 }
 
 // EmptyError represents an error as an empty struct.
