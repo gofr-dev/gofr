@@ -74,6 +74,7 @@ func (r Responder) determineResponse(data any, err error) (statusCode int, errOb
 	if statusCode == 0 {
 		statusCode = http.StatusInternalServerError
 	}
+
 	return statusCode, errorObj
 }
 
