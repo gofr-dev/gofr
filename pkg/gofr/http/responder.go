@@ -44,11 +44,11 @@ func (r Responder) Respond(data any, err error) {
 
 		return
 	case *resTypes.Redirect:
-		statusCode = http.StatusFound // 302 by default
-
-		if r.method == http.MethodPost || r.method == http.MethodPut ||
-			r.method == http.MethodPatch {
-			statusCode = http.StatusSeeOther
+		switch r.method {
+		case http.MethodPost, http.MethodPut, http.MethodPatch:
+			statusCode = http.StatusSeeOther // 303
+		default:
+			statusCode = http.StatusFound // 302 by default
 		}
 
 		r.w.Header().Set("Location", v.URL)
