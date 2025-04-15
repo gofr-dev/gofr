@@ -144,8 +144,8 @@ func (a *authInfo) GetAPIKey() string {
 // Example usage:
 //
 //	return c.Redirect("https://example.com", http.StatusFound)
-func (*Context) Redirect(url string, statusCode int) (any, error) {
-	return response.NewRedirect(url, statusCode), nil
+func (*Context) Redirect(url string) (any, error) {
+	return response.NewRedirect(url), nil
 }
 
 func newContext(w Responder, r Request, c *container.Container) *Context {
