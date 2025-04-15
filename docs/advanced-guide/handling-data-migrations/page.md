@@ -14,7 +14,17 @@ It is recommended to maintain a `migrations` directory in your project root to e
 It is recommended that each migration file should be numbered in the format of _YYYYMMDDHHMMSS_ when the migration was created.
 This helps prevent numbering conflicts and allows for maintaining the correct sort order by name in different filesystem views.
 
-Create the following file in `migrations` directory.
+Run the following commands to create a migration file
+
+```shell
+  # Install GoFr CLI
+  go install gofr.dev/cli/gofr@latest
+
+  # Create migration
+  gofr migrate create -name=create_employee_table
+```
+
+Add the `createTableEmployee` function given below in the created file in `migrations` directory.
 
 **Filename : 20240226153000_create_employee_table.go**
 
