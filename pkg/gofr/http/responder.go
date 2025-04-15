@@ -10,8 +10,7 @@ import (
 )
 
 var (
-	errEmptyResponse     = errors.New("internal server error")
-	errMissingStatusCode = errors.New("internal server error: missing status code")
+	errEmptyResponse = errors.New("internal server error")
 )
 
 // NewResponder creates a new Responder instance from the given http.ResponseWriter..
@@ -71,15 +70,6 @@ func (r Responder) determineResponse(data any, err error) (statusCode int, errOb
 	}
 
 	statusCode, errorObj := getStatusCode(r.method, data, err)
-
-	// Ensure valid status code
-	if statusCode == 0 {
-		statusCode = http.StatusInternalServerError
-
-		if errorObj == nil {
-			errorObj = createErrorResponse(errMissingStatusCode)
-		}
-	}
 
 	return statusCode, errorObj
 }

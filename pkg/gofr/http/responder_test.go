@@ -3,6 +3,7 @@ package http
 import (
 	"bytes"
 	"encoding/json"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -225,16 +226,18 @@ func TestResponder_CustomErrorWithResponse(t *testing.T) {
 
 	assert.Equal(t, http.StatusNotFound, resp.StatusCode)
 
-	var body map[string]any
-	err := json.NewDecoder(resp.Body).Decode(&body)
+	bodyBytes, err := io.ReadAll(resp.Body)
 	require.NoError(t, err)
 
-	errorObj, ok := body["error"].(map[string]any)
-	require.Truef(t, ok, "Expected error object to be of type map[string]any, got %T", body["error"])
+	expectedJSON := `{
+		"error": {
+			"code": 404,
+			"title": "Custom Error",
+			"message": "resource not found"
+		}
+	}`
 
-	assert.Equal(t, "resource not found", errorObj["message"])
-	assert.EqualValues(t, http.StatusNotFound, errorObj["code"])
-	assert.Equal(t, "Custom Error", errorObj["title"])
+	assert.JSONEq(t, expectedJSON, string(bodyBytes))
 }
 
 type CustomError struct {
