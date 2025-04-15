@@ -1,5 +1,10 @@
 package server
 
+// versions:
+// 	gofr-cli v0.6.0
+// 	gofr.dev v1.37.0
+// 	source: hello.proto
+
 import (
 	"fmt"
 	"gofr.dev/pkg/gofr"
