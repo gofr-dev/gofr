@@ -135,7 +135,7 @@ func main() {
 	app := gofr.New()
 
 	app.GET("/old-page", func(ctx *gofr.Context) (any, error) {
-		// Redirect to a new URL with 301 Moved Permanently status
+		// Redirect to a new URL
 		return response.Redirect{URL: "https://example.com/new-page"}, nil
 	})
 
