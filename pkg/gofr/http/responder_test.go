@@ -231,9 +231,9 @@ func TestResponder_RedirectResponse(t *testing.T) {
 
 	// Set up redirect with specific URL and status code
 	redirectURL := "/new-location"
-	statusCode := http.StatusMovedPermanently // 301
+	statusCode := http.StatusFound // 301
 
-	redirect := resTypes.NewRedirect(redirectURL, statusCode)
+	redirect := resTypes.NewRedirect(redirectURL)
 
 	r.Respond(redirect, nil)
 

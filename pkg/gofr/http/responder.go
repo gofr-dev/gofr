@@ -44,9 +44,10 @@ func (r Responder) Respond(data any, err error) {
 
 		return
 	case *resTypes.Redirect:
-		statusCode := http.StatusFound // 302 by default
+		statusCode = http.StatusFound // 302 by default
 
-		if r.method == http.MethodPost {
+		if r.method == http.MethodPost || r.method == http.MethodPut ||
+			r.method == http.MethodPatch {
 			statusCode = http.StatusSeeOther
 		}
 
