@@ -2,6 +2,7 @@ package http
 
 import (
 	"bytes"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -205,6 +206,129 @@ func TestResponder_TemplateResponse(t *testing.T) {
 
 	assert.Equal(t, "text/html", contentType)
 	assert.Equal(t, expectedBody, responseBody)
+}
+
+func TestResponder_CustomErrorWithResponse(t *testing.T) {
+	w := httptest.NewRecorder()
+	responder := NewResponder(w, http.MethodGet)
+
+	customErr := &CustomError{
+		Code:    http.StatusNotFound,
+		Message: "resource not found",
+		Title:   "Custom Error",
+	}
+
+	responder.Respond(nil, customErr)
+
+	resp := w.Result()
+	defer resp.Body.Close()
+
+	assert.Equal(t, http.StatusNotFound, resp.StatusCode)
+
+	bodyBytes, err := io.ReadAll(resp.Body)
+	require.NoError(t, err)
+
+	expectedJSON := `{
+		"error": {
+			"code": 404,
+			"title": "Custom Error",
+			"message": "resource not found"
+		}
+	}`
+
+	assert.JSONEq(t, expectedJSON, string(bodyBytes))
+}
+
+type CustomError struct {
+	Code    int
+	Message string
+	Title   string
+}
+
+func (e *CustomError) Error() string   { return e.Message }
+func (e *CustomError) StatusCode() int { return e.Code }
+func (e *CustomError) Response() map[string]any {
+	return map[string]any{"title": e.Title, "code": e.Code}
+}
+
+func TestResponder_ReservedMessageField(t *testing.T) {
+	w := httptest.NewRecorder()
+	responder := NewResponder(w, http.MethodGet)
+
+	msgErr := &MessageOverrideError{
+		Msg: "original message",
+	}
+
+	responder.Respond(nil, msgErr)
+
+	resp := w.Result()
+	defer resp.Body.Close()
+
+	assert.Equal(t, http.StatusInternalServerError, resp.StatusCode)
+
+	bodyBytes, err := io.ReadAll(resp.Body)
+	require.NoError(t, err)
+
+	expectedJSON := `{
+		"error": {
+			"message": "original message",
+			"info": "additional info"
+		}
+	}`
+
+	assert.JSONEq(t, expectedJSON, string(bodyBytes))
+}
+
+// EmptyError represents an error as an empty struct.
+// It implements the error interface.
+type emptyError struct{}
+
+// Error implements the error interface.
+func (emptyError) Error() string {
+	return "error occurred"
+}
+
+func TestResponder_EmptyErrorStruct(t *testing.T) {
+	recorder := httptest.NewRecorder()
+	responder := Responder{w: recorder, method: http.MethodGet}
+
+	statusCode, errObj := responder.determineResponse(nil, emptyError{})
+
+	assert.Equal(t, http.StatusInternalServerError, statusCode)
+	assert.Equal(t, map[string]any{"message": "error occurred"}, errObj)
+}
+
+func TestIsEmptyStruct(t *testing.T) {
+	tests := []struct {
+		desc     string
+		data     any
+		expected bool
+	}{
+		{"nil value", nil, false},
+		{"empty struct", struct{}{}, true},
+		{"non-empty struct", struct{ ID int }{ID: 1}, false},
+		{"nil pointer to struct", (*struct{})(nil), false},
+		{"pointer to non-empty struct", &struct{ ID int }{ID: 1}, false},
+		{"non-struct type", 42, false},
+	}
+
+	for i, tc := range tests {
+		result := isEmptyStruct(tc.data)
+
+		assert.Equal(t, tc.expected, result, "TEST[%d] Failed: %s", i, tc.desc)
+	}
+}
+
+type MessageOverrideError struct {
+	Msg string
+}
+
+func (e *MessageOverrideError) Error() string { return e.Msg }
+func (*MessageOverrideError) Response() map[string]any {
+	return map[string]any{
+		"message": "trying to override",
+		"info":    "additional info",
+	}
 }
 
 func createTemplateFile(t *testing.T, path, content string) {
