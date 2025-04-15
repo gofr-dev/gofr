@@ -70,8 +70,8 @@ func (c customError) LogLevel() logging.Level {
 For [RFC 9457](https://www.rfc-editor.org/rfc/rfc9457.html) style error responses with additional fields, implement the ResponseMarshaller interface:
 
 ```go
-type ResponseMarshaler interface {
-    Response() map[string]any
+type ResponseMarshaller interface {
+	Response() map[string]any
 }
 ```
 
