@@ -6,6 +6,15 @@ database. Any driver that implements the following interface can be added using 
 ```go
 // Dgraph defines the methods for interacting with a Dgraph database.
 type Dgraph interface {
+    // ApplySchema applies or updates the complete database schema.
+    ApplySchema(ctx context.Context, schema string) error
+
+    // AddOrUpdateField atomically creates or updates a single field definition.
+    AddOrUpdateField(ctx context.Context, fieldName, fieldType, directives string) error
+
+    // DropField permanently removes a field/predicate and all its associated data.
+    DropField(ctx context.Context, fieldName string) error
+
 	// Query executes a read-only query in the Dgraph database and returns the result.
 	Query(ctx context.Context, query string) (any, error)
 
