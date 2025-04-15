@@ -11,7 +11,6 @@ import (
 	"gofr.dev/pkg/gofr/cmd/terminal"
 	"gofr.dev/pkg/gofr/container"
 	"gofr.dev/pkg/gofr/http/middleware"
-	"gofr.dev/pkg/gofr/http/response"
 )
 
 type Context struct {
@@ -136,17 +135,6 @@ func (a *authInfo) GetAPIKey() string {
 //	c.Context = nil
 //	// c.Logger = nil // For now, all loggers are same. So, no need to set nil.
 // }
-
-// Redirect returns a response that will redirect the client to the specified URL.
-// The statusCode should be a valid HTTP redirect status code (301, 302, 303, 307, or 308).
-// If not specified (0), it defaults to 302 (Found).
-//
-// Example usage:
-//
-//	return c.Redirect("https://example.com", http.StatusFound)
-func (*Context) Redirect(url string) (any, error) {
-	return response.NewRedirect(url), nil
-}
 
 func newContext(w Responder, r Request, c *container.Container) *Context {
 	return &Context{
