@@ -32,14 +32,15 @@ var (
 )
 
 const (
-	DefaultBatchSize    = 100
-	DefaultBatchBytes   = 1048576
-	DefaultBatchTimeout = 1000
-	defaultRetryTimeout = 10 * time.Second
-	protocolPlainText   = "PLAINTEXT"
-	protocolSASL        = "SASL_PLAINTEXT"
-	protocolSSL         = "SSL"
-	protocolSASLSSL     = "SASL_SSL"
+	DefaultBatchSize       = 100
+	DefaultBatchBytes      = 1048576
+	DefaultBatchTimeout    = 1000
+	defaultRetryTimeout    = 10 * time.Second
+	protocolPlainText      = "PLAINTEXT"
+	protocolSASL           = "SASL_PLAINTEXT"
+	protocolSSL            = "SSL"
+	protocolSASLSSL        = "SASL_SSL"
+	MessageMultipleBrokers = "MULTIPLE_BROKERS"
 )
 
 type Config struct {
@@ -189,7 +190,7 @@ func (k *kafkaClient) Publish(ctx context.Context, topic string, message []byte)
 	var hostName string
 
 	if len(k.config.Broker) > 1 {
-		hostName = "multiple brokers"
+		hostName = MessageMultipleBrokers
 	} else {
 		hostName = k.config.Broker[0]
 	}
@@ -333,13 +334,15 @@ func initializeKafkaClient(conf *Config, logger pubsub.Logger) (*kafka.Dialer, *
 		return nil, nil, nil, nil, errBrokerNotProvided
 	}
 
-	var conns []Connection
+	conns := make([]Connection, 0)
+
 	for _, broker := range conf.Broker {
 		conn, err := dialer.DialContext(context.Background(), "tcp", broker)
 		if err != nil {
 			logger.Errorf("failed to connect to broker %s: %v", broker, err)
 			continue
 		}
+
 		conns = append(conns, conn)
 	}
 
@@ -365,6 +368,7 @@ func initializeKafkaClient(conf *Config, logger pubsub.Logger) (*kafka.Dialer, *
 	reader := make(map[string]Reader)
 
 	logger.Logf("connected to %d Kafka brokers", len(conns))
+
 	return dialer, multi, writer, reader, nil
 }
 
@@ -409,12 +413,15 @@ func retryConnect(client *kafkaClient, conf *Config, logger pubsub.Logger) {
 		dialer, conn, writer, reader, err := initializeKafkaClient(conf, logger)
 		if err != nil {
 			var brokers any
+
 			if len(conf.Broker) > 1 {
 				brokers = conf.Broker
 			} else {
 				brokers = conf.Broker[0]
 			}
+
 			logger.Errorf("could not connect to Kafka at '%v', error: %v", brokers, err)
+
 			continue
 		}
 
@@ -470,6 +477,7 @@ func (m *multiConn) CreateTopics(topics ...kafka.TopicConfig) error {
 	}
 
 	controllerAddr := net.JoinHostPort(controller.Host, strconv.Itoa(controller.Port))
+
 	controllerResolvedAddr, err := net.ResolveTCPAddr("tcp", controllerAddr)
 	if err != nil {
 		return err
@@ -508,6 +516,7 @@ func (m *multiConn) DeleteTopics(topics ...string) error {
 	}
 
 	controllerAddr := net.JoinHostPort(controller.Host, strconv.Itoa(controller.Port))
+
 	controllerResolvedAddr, err := net.ResolveTCPAddr("tcp", controllerAddr)
 	if err != nil {
 		return err
@@ -539,10 +548,12 @@ func (m *multiConn) DeleteTopics(topics ...string) error {
 
 func (m *multiConn) Close() error {
 	var err error
+
 	for _, conn := range m.conns {
 		if conn != nil {
 			err = errors.Join(err, conn.Close())
 		}
 	}
+
 	return err
 }

@@ -2,8 +2,9 @@ package kafka
 
 import (
 	"context"
-	"github.com/segmentio/kafka-go"
 	"net"
+
+	"github.com/segmentio/kafka-go"
 )
 
 //go:generate go run go.uber.org/mock/mockgen -source=interfaces.go -destination=mock_interfaces.go -package=kafka

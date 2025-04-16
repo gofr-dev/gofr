@@ -666,10 +666,10 @@ func TestKafkaClient_CreateTopic(t *testing.T) {
 	})
 
 	t.Run("controller returns error", func(t *testing.T) {
-		mockConn.EXPECT().Controller().Return(kafka.Broker{}, errors.New("no active connections to brokers"))
+		mockConn.EXPECT().Controller().Return(kafka.Broker{}, errNoActiveConnections)
 
 		err := client.CreateTopic(context.Background(), "test")
-		require.EqualError(t, err, "no active connections to brokers")
+		require.EqualError(t, err, errNoActiveConnections.Error())
 	})
 }
 

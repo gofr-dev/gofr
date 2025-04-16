@@ -12,7 +12,7 @@ import (
 func (k *kafkaClient) Health() datasource.Health {
 	health := datasource.Health{
 		Status:  datasource.StatusDown, // Default to DOWN
-		Details: make(map[string]interface{}),
+		Details: make(map[string]any),
 	}
 
 	if k.conn == nil {
@@ -24,7 +24,7 @@ func (k *kafkaClient) Health() datasource.Health {
 	defer k.conn.mu.RUnlock()
 
 	var (
-		brokerStatus   []map[string]any
+		brokerStatus   = make([]map[string]any, 0)
 		allDown        = true
 		controllerAddr string
 	)
@@ -35,7 +35,7 @@ func (k *kafkaClient) Health() datasource.Health {
 		}
 
 		brokerAddr := conn.RemoteAddr().String()
-		status := map[string]interface{}{
+		status := map[string]any{
 			"broker":       brokerAddr,
 			"status":       "DOWN",
 			"isController": false,
@@ -47,6 +47,7 @@ func (k *kafkaClient) Health() datasource.Health {
 		if err != nil {
 			status["error"] = err.Error()
 			brokerStatus = append(brokerStatus, status)
+
 			continue
 		}
 

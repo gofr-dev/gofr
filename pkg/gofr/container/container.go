@@ -137,10 +137,10 @@ func (c *Container) Create(conf config.Config) {
 				InsecureSkipVerify: conf.Get("KAFKA_TLS_INSECURE_SKIP_VERIFY") == "true",
 			}
 
-			pubsub_brokers := strings.Split(conf.Get("PUBSUB_BROKER"), ",")
+			pubsubBrokers := strings.Split(conf.Get("PUBSUB_BROKER"), ",")
 
 			c.PubSub = kafka.New(&kafka.Config{
-				Broker:           pubsub_brokers,
+				Broker:           pubsubBrokers,
 				Partition:        partition,
 				ConsumerGroupID:  conf.Get("CONSUMER_ID"),
 				OffSet:           offSet,
