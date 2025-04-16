@@ -25,7 +25,7 @@ func (m *mockMetrics) IncrementCounter(ctx context.Context, name string, labels 
 
 func initializeTest(t *testing.T) {
 	c := kafka.New(&kafka.Config{
-		Broker:       "localhost:9092",
+		Broker:       []string{"localhost:9092"},
 		OffSet:       1,
 		BatchSize:    kafka.DefaultBatchSize,
 		BatchBytes:   kafka.DefaultBatchBytes,

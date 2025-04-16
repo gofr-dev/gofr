@@ -7,9 +7,9 @@ import (
 	"testing"
 
 	"github.com/segmentio/kafka-go"
-
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
+
 	"gofr.dev/pkg/gofr/datasource"
 )
 
@@ -34,6 +34,7 @@ func (m *MockConn) ReadPartitions(...string) ([]kafka.Partition, error) {
 	if m.isHealthy {
 		return []kafka.Partition{{}}, nil
 	}
+
 	return nil, errUnreachable
 }
 
@@ -76,7 +77,7 @@ func TestKafkaHealth_AllBrokersUp(t *testing.T) {
 
 	assert.Equal(t, datasource.StatusUp, health.Status)
 	assert.Len(t, health.Details["brokers"], 2)
-	assert.Contains(t, health.Details["brokers"], map[string]interface{}{
+	assert.Contains(t, health.Details["brokers"], map[string]any{
 		"broker":       "127.0.0.1:9092",
 		"status":       "UP",
 		"isController": true,
@@ -102,7 +103,7 @@ func TestKafkaHealth_SomeBrokersUpSomeDown(t *testing.T) {
 
 	assert.Equal(t, datasource.StatusUp, health.Status) // Because at least one broker is down
 
-	brokers := health.Details["brokers"].([]map[string]interface{})
+	brokers := health.Details["brokers"].([]map[string]any)
 	assert.Len(t, brokers, 3)
 
 	statusMap := map[string]string{}
@@ -135,7 +136,7 @@ func TestKafkaHealth_AllBrokersDown(t *testing.T) {
 	assert.Equal(t, datasource.StatusDown, health.Status)
 	assert.Len(t, health.Details["brokers"], 1)
 
-	brokerInfo := health.Details["brokers"].([]map[string]interface{})[0]
+	brokerInfo := health.Details["brokers"].([]map[string]any)[0]
 
 	assert.Equal(t, "DOWN", brokerInfo["status"])
 	assert.NotNil(t, brokerInfo["error"])
@@ -171,12 +172,6 @@ func (*mockWriter) Stats() kafka.WriterStats {
 
 func (*mockWriter) WriteMessages(context.Context, ...kafka.Message) error { return nil }
 func (*mockWriter) Close() error                                          { return nil }
-
-type mockReader struct{}
-
-func (*mockReader) Stats() any                      { return map[string]string{"reader": "value"} }
-func (*mockReader) FetchMessage(_ any) (any, error) { return nil, nil }
-func (*mockReader) Close() error                    { return nil }
 
 type mockLogger struct{}
 

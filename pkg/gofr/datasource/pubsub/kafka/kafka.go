@@ -301,12 +301,36 @@ func (k *kafkaClient) Close() (err error) {
 	return err
 }
 
+//nolint:unused // We need this wrap around for testing purposes.
 type Conn struct {
 	conns []*kafka.Conn
 }
 
-func initializeKafkaClient(conf *Config, logger pubsub.Logger) (*kafka.Dialer, *multiConn,
-	Writer, map[string]Reader, error) {
+func initializeKafkaClient(conf *Config, logger pubsub.Logger) (*kafka.Dialer, *multiConn, Writer, map[string]Reader, error) {
+	dialer, err := setupDialer(conf)
+	if err != nil {
+		return nil, nil, nil, nil, err
+	}
+
+	conns, err := connectToBrokers(conf.Broker, dialer, logger)
+	if err != nil {
+		return nil, nil, nil, nil, err
+	}
+
+	multi := &multiConn{
+		conns:  conns,
+		dialer: dialer,
+	}
+
+	writer := createKafkaWriter(conf, dialer, logger)
+	reader := make(map[string]Reader)
+
+	logger.Logf("connected to %d Kafka brokers", len(conns))
+
+	return dialer, multi, writer, reader, nil
+}
+
+func setupDialer(conf *Config) (*kafka.Dialer, error) {
 	dialer := &kafka.Dialer{
 		Timeout:   10 * time.Second,
 		DualStack: true,
@@ -315,7 +339,7 @@ func initializeKafkaClient(conf *Config, logger pubsub.Logger) (*kafka.Dialer, *
 	if conf.SecurityProtocol == protocolSASL || conf.SecurityProtocol == protocolSASLSSL {
 		mechanism, err := getSASLMechanism(conf.SASLMechanism, conf.SASLUser, conf.SASLPassword)
 		if err != nil {
-			return nil, nil, nil, nil, err
+			return nil, err
 		}
 
 		dialer.SASLMechanism = mechanism
@@ -324,19 +348,23 @@ func initializeKafkaClient(conf *Config, logger pubsub.Logger) (*kafka.Dialer, *
 	if conf.SecurityProtocol == "SSL" || conf.SecurityProtocol == "SASL_SSL" {
 		tlsConfig, err := createTLSConfig(&conf.TLS)
 		if err != nil {
-			return nil, nil, nil, nil, err
+			return nil, err
 		}
 
 		dialer.TLS = tlsConfig
 	}
 
-	if len(conf.Broker) == 0 {
-		return nil, nil, nil, nil, errBrokerNotProvided
+	return dialer, nil
+}
+
+func connectToBrokers(brokers []string, dialer *kafka.Dialer, logger pubsub.Logger) ([]Connection, error) {
+	if len(brokers) == 0 {
+		return nil, errBrokerNotProvided
 	}
 
 	conns := make([]Connection, 0)
 
-	for _, broker := range conf.Broker {
+	for _, broker := range brokers {
 		conn, err := dialer.DialContext(context.Background(), "tcp", broker)
 		if err != nil {
 			logger.Errorf("failed to connect to broker %s: %v", broker, err)
@@ -347,16 +375,14 @@ func initializeKafkaClient(conf *Config, logger pubsub.Logger) (*kafka.Dialer, *
 	}
 
 	if len(conns) == 0 {
-		return nil, nil, nil, nil, errNoActiveConnections
+		return nil, errNoActiveConnections
 	}
 
-	// Create multiConn wrapper
-	multi := &multiConn{
-		conns:  conns,
-		dialer: dialer,
-	}
+	return conns, nil
+}
 
-	writer := kafka.NewWriter(kafka.WriterConfig{
+func createKafkaWriter(conf *Config, dialer *kafka.Dialer, logger pubsub.Logger) Writer {
+	return kafka.NewWriter(kafka.WriterConfig{
 		Brokers:      conf.Broker,
 		Dialer:       dialer,
 		BatchSize:    conf.BatchSize,
@@ -364,12 +390,6 @@ func initializeKafkaClient(conf *Config, logger pubsub.Logger) (*kafka.Dialer, *
 		BatchTimeout: time.Duration(conf.BatchTimeout),
 		Logger:       kafka.LoggerFunc(logger.Debugf),
 	})
-
-	reader := make(map[string]Reader)
-
-	logger.Logf("connected to %d Kafka brokers", len(conns))
-
-	return dialer, multi, writer, reader, nil
 }
 
 func (k *kafkaClient) getNewReader(topic string) Reader {
