@@ -24,7 +24,7 @@ In this section we will walk through what GoFr is, what problems it solves, and 
 ## Principles
 
 - Promote simple and clean code.
-- Favor compile-time checked code over dynamic code.
+- Favour compile-time checked code over dynamic code.
 - Create a solid foundation for the integration of application modules.
 - Encourage a more functional way of programming.
 - Avoid code duplication.
