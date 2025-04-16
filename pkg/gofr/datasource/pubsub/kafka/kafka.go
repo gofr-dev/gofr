@@ -73,7 +73,7 @@ type kafkaClient struct {
 	metrics Metrics
 }
 
-//nolint:revive // Allow returning unexported types as intended.
+//nolint:revive // New allow returning unexported types as intended.
 func New(conf *Config, logger pubsub.Logger, metrics Metrics) *kafkaClient {
 	err := validateConfigs(conf)
 	if err != nil {
