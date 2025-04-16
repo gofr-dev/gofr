@@ -60,7 +60,7 @@ type Config struct {
 
 type kafkaClient struct {
 	dialer *kafka.Dialer
-	conn   Connection
+	conn   *multiConn
 
 	writer Writer
 	reader map[string]Reader
@@ -300,7 +300,11 @@ func (k *kafkaClient) Close() (err error) {
 	return err
 }
 
-func initializeKafkaClient(conf *Config, logger pubsub.Logger) (*kafka.Dialer, Connection,
+type Conn struct {
+	conns []*kafka.Conn
+}
+
+func initializeKafkaClient(conf *Config, logger pubsub.Logger) (*kafka.Dialer, *multiConn,
 	Writer, map[string]Reader, error) {
 	dialer := &kafka.Dialer{
 		Timeout:   10 * time.Second,
@@ -329,7 +333,7 @@ func initializeKafkaClient(conf *Config, logger pubsub.Logger) (*kafka.Dialer, C
 		return nil, nil, nil, nil, errBrokerNotProvided
 	}
 
-	var conns []*kafka.Conn
+	var conns []Connection
 	for _, broker := range conf.Broker {
 		conn, err := dialer.DialContext(context.Background(), "tcp", broker)
 		if err != nil {
@@ -434,7 +438,7 @@ func (k *kafkaClient) isConnected() bool {
 }
 
 type multiConn struct {
-	conns  []*kafka.Conn
+	conns  []Connection
 	dialer *kafka.Dialer
 	mu     sync.RWMutex
 }
@@ -465,20 +469,29 @@ func (m *multiConn) CreateTopics(topics ...kafka.TopicConfig) error {
 		return err
 	}
 
-	addr := net.JoinHostPort(controller.Host, strconv.Itoa(controller.Port))
+	controllerAddr := net.JoinHostPort(controller.Host, strconv.Itoa(controller.Port))
+	controllerResolvedAddr, err := net.ResolveTCPAddr("tcp", controllerAddr)
+	if err != nil {
+		return err
+	}
 
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 
-	// Find existing connection to controller
 	for _, conn := range m.conns {
-		if conn != nil && conn.RemoteAddr().String() == addr {
-			return conn.CreateTopics(topics...)
+		if conn == nil {
+			continue
+		}
+
+		if tcpAddr, ok := conn.RemoteAddr().(*net.TCPAddr); ok {
+			if tcpAddr.IP.Equal(controllerResolvedAddr.IP) && tcpAddr.Port == controllerResolvedAddr.Port {
+				return conn.CreateTopics(topics...)
+			}
 		}
 	}
 
 	// If not found, create a new connection
-	conn, err := m.dialer.DialContext(context.Background(), "tcp", addr)
+	conn, err := m.dialer.DialContext(context.Background(), "tcp", controllerAddr)
 	if err != nil {
 		return err
 	}
@@ -494,16 +507,27 @@ func (m *multiConn) DeleteTopics(topics ...string) error {
 		return err
 	}
 
-	addr := net.JoinHostPort(controller.Host, strconv.Itoa(controller.Port))
+	controllerAddr := net.JoinHostPort(controller.Host, strconv.Itoa(controller.Port))
+	controllerResolvedAddr, err := net.ResolveTCPAddr("tcp", controllerAddr)
+	if err != nil {
+		return err
+	}
 
 	for _, conn := range m.conns {
-		if conn != nil && conn.RemoteAddr().String() == addr {
-			return conn.DeleteTopics(topics...)
+		if conn == nil {
+			continue
+		}
+
+		if tcpAddr, ok := conn.RemoteAddr().(*net.TCPAddr); ok {
+			// Match IP (after resolution) and Port
+			if tcpAddr.IP.Equal(controllerResolvedAddr.IP) && tcpAddr.Port == controllerResolvedAddr.Port {
+				return conn.DeleteTopics(topics...)
+			}
 		}
 	}
 
 	// If not found, create a new connection
-	conn, err := m.dialer.DialContext(context.Background(), "tcp", addr)
+	conn, err := m.dialer.DialContext(context.Background(), "tcp", controllerAddr)
 	if err != nil {
 		return err
 	}

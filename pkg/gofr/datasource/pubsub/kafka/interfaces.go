@@ -2,8 +2,8 @@ package kafka
 
 import (
 	"context"
-
 	"github.com/segmentio/kafka-go"
+	"net"
 )
 
 //go:generate go run go.uber.org/mock/mockgen -source=interfaces.go -destination=mock_interfaces.go -package=kafka
@@ -26,5 +26,7 @@ type Connection interface {
 	Controller() (broker kafka.Broker, err error)
 	CreateTopics(topics ...kafka.TopicConfig) error
 	DeleteTopics(topics ...string) error
+	RemoteAddr() net.Addr
+	ReadPartitions(topics ...string) (partitions []kafka.Partition, err error)
 	Close() error
 }
