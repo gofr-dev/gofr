@@ -1,5 +1,5 @@
 # Build stage
-FROM golang:1.22 AS build
+FROM golang:1.24 AS build
 
 WORKDIR /src
 COPY . .
