@@ -206,8 +206,8 @@ TRACER_RATIO=0.1
 LOG_LEVEL=DEBUG
 ```
 
-> **NOTE:** If the value of `TRACER_PORT` is not
-> provided, GoFr uses  port `9411` by default.
+> [!NOTE]
+> If the value of `TRACER_PORT` is not provided, GoFr uses port `9411` by default.
 
 Open {% new-tab-link title="zipkin" href="http://localhost:2005/zipkin/" /%} and search by TraceID (correlationID) to see the trace.
 {% figure src="/quick-start-trace.png" alt="Zipkin traces" /%}
@@ -268,6 +268,7 @@ TRACE_EXPORTER=gofr
 TRACER_RATIO=0.1
 ```
 
-> NOTE: `TRACER_RATIO` refers to the proportion of traces that are exported through sampling. It ranges between 0 and 1. By default, this ratio is set to 1, meaning all traces are exported.
-
-Open {% new-tab-link title="gofr-tracer" href="https://tracer.gofr.dev/" /%} and search by TraceID (correlationID) to see the trace.
+> [!NOTE]
+> `TRACER_RATIO` refers to the proportion of traces that are exported through sampling. It ranges between 0 and 1. By default, this ratio is set to 1, meaning all traces are exported.
+>
+> Open {% new-tab-link title="gofr-tracer" href="https://tracer.gofr.dev/" /%} and search by TraceID (correlationID) to see the trace.

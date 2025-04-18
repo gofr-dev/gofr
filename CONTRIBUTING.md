@@ -48,14 +48,14 @@ func TestFunctionName(t *testing.T) {
 
 -   Consider using table-driven tests for testing multiple scenarios.
 
-**NOTE:**
-```go
-Some services will be required to pass the entire test suite. We recommend using docker for running those services.
+> [!NOTE]
+> Some services will be required to pass the entire test suite. We recommend using docker for running those services.
 
+```console
 docker run --name mongodb -d -p 27017:27017 -e MONGO_INITDB_ROOT_USERNAME=user -e MONGO_INITDB_ROOT_PASSWORD=password mongodb/mongodb-community-server:latest
 docker run -d -p 21:21 -p 21000-21010:21000-21010 -e USERS='user|password' delfer/alpine-ftp-server
-// the docker image is relatively unstable. Alternatively, refer to official guide of OpenTSDB to locally setup OpenTSDB env.
-// http://opentsdb.net/docs/build/html/installation.html#id1
+# the docker image is relatively unstable. Alternatively, refer to official guide of OpenTSDB to locally setup OpenTSDB env.
+# http://opentsdb.net/docs/build/html/installation.html#id1
 docker run -d --name gofr-opentsdb -p 4242:4242 petergrace/opentsdb-docker:latest
 docker run --name gofr-mysql -e MYSQL_ROOT_PASSWORD=password -e MYSQL_DATABASE=test -p 2001:3306 -d mysql:8.0.30
 docker run --name gofr-redis -p 2002:6379 -d redis:7.0.5
@@ -89,11 +89,11 @@ docker run -d --name arangodb \
   -e ARANGO_ROOT_PASSWORD=rootpassword \
   --pull always \
   arangodb:latest
-
-
-
-Please note that the recommended local port for the services are different than the actual ports. This is done to avoid conflict with the local installation on developer machines. This method also allows a developer to work on multiple projects which uses the same services but bound on different ports. One can choose to change the port for these services. Just remember to add the same in configs/.local.env, if you decide to do that.
 ```
+
+> [!NOTE]
+> Please note that the recommended local port for the services are different from the actual ports. This is done to avoid conflict with the local installation on developer machines. This method also allows a developer to work on multiple projects which uses the same services but bound on different ports. One can choose to change the port for these services. Just remember to add the same in configs/.local.env, if you decide to do that.
+
 
 ### Coding Guidelines
 * Use only what is given to you as part of function parameter or receiver. No globals. Inject all dependencies including

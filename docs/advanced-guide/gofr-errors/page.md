@@ -95,4 +95,5 @@ func (e ValidationError) Response() map[string]any {
 }
 ```
 
-> NOTE: The `message` field is automatically populated from the `Error()` method. Custom fields with the name "message" in the `Response()` map should not be used as they will be ignored in favor of the `Error()` value.
+> [!NOTE]
+> The `message` field is automatically populated from the `Error()` method. Custom fields with the name "message" in the `Response()` map should not be used as they will be ignored in favor of the `Error()` value.

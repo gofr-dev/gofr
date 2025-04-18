@@ -25,7 +25,8 @@ REMOTE_LOG_FETCH_INTERVAL=<Interval in seconds> (default: 15)
 - **REMOTE_LOG_URL:** Specifies the URL of the remote log level endpoint.
 - **REMOTE_LOG_FETCH_INTERVAL:** Defines the time interval (in seconds) at which GoFr fetches log level configurations from the endpoint.
 
-> NOTE: If not provided the default interval between the request to fetch log level is **15 seconds**.
+> [!NOTE]
+> If not provided the default interval between the request to fetch log level is **15 seconds**.
 
 ## Remote Log Level Endpoint
 
