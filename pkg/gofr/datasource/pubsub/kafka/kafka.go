@@ -5,7 +5,8 @@ package kafka
 import (
 	"context"
 	"errors"
-	"fmt"
+	"net"
+	"strconv"
 	"sync"
 	"time"
 
@@ -26,21 +27,24 @@ var (
 	errUnsupportedSASLMechanism    = errors.New("unsupported SASL mechanism")
 	errSASLCredentialsMissing      = errors.New("SASL credentials missing")
 	errUnsupportedSecurityProtocol = errors.New("unsupported security protocol")
+	errNoActiveConnections         = errors.New("no active connections to brokers")
 )
 
 const (
-	DefaultBatchSize    = 100
-	DefaultBatchBytes   = 1048576
-	DefaultBatchTimeout = 1000
-	defaultRetryTimeout = 10 * time.Second
-	protocolPlainText   = "PLAINTEXT"
-	protocolSASL        = "SASL_PLAINTEXT"
-	protocolSSL         = "SSL"
-	protocolSASLSSL     = "SASL_SSL"
+	DefaultBatchSize       = 100
+	DefaultBatchBytes      = 1048576
+	DefaultBatchTimeout    = 1000
+	defaultRetryTimeout    = 10 * time.Second
+	protocolPlainText      = "PLAINTEXT"
+	protocolSASL           = "SASL_PLAINTEXT"
+	protocolSSL            = "SSL"
+	protocolSASLSSL        = "SASL_SSL"
+	MessageMultipleBrokers = "MULTIPLE_BROKERS"
+	BrokerStatusUp         = "UP"
 )
 
 type Config struct {
-	Broker           string
+	Broker           []string
 	Partition        int
 	ConsumerGroupID  string
 	OffSet           int
@@ -57,7 +61,7 @@ type Config struct {
 
 type kafkaClient struct {
 	dialer *kafka.Dialer
-	conn   Connection
+	conn   *multiConn
 
 	writer Writer
 	reader map[string]Reader
@@ -78,7 +82,15 @@ func New(conf *Config, logger pubsub.Logger, metrics Metrics) *kafkaClient {
 		return nil
 	}
 
-	logger.Debugf("connecting to Kafka broker '%s'", conf.Broker)
+	var brokers any
+
+	if len(conf.Broker) > 1 {
+		brokers = conf.Broker
+	} else {
+		brokers = conf.Broker[0]
+	}
+
+	logger.Debugf("connecting to Kafka brokers: '%v'", brokers)
 
 	dialer, conn, writer, reader, err := initializeKafkaClient(conf, logger)
 	if err != nil {
@@ -108,48 +120,6 @@ func New(conf *Config, logger pubsub.Logger, metrics Metrics) *kafkaClient {
 	}
 }
 
-func validateConfigs(conf *Config) error {
-	if err := validateRequiredFields(conf); err != nil {
-		return err
-	}
-
-	setDefaultSecurityProtocol(conf)
-
-	if err := validateSASLConfigs(conf); err != nil {
-		return err
-	}
-
-	if err := validateTLSConfigs(conf); err != nil {
-		return err
-	}
-
-	if err := validateSecurityProtocol(conf); err != nil {
-		return err
-	}
-
-	return nil
-}
-
-func validateRequiredFields(conf *Config) error {
-	if conf.Broker == "" {
-		return errBrokerNotProvided
-	}
-
-	if conf.BatchSize <= 0 {
-		return fmt.Errorf("batch size must be greater than 0: %w", errBatchSize)
-	}
-
-	if conf.BatchBytes <= 0 {
-		return fmt.Errorf("batch bytes must be greater than 0: %w", errBatchBytes)
-	}
-
-	if conf.BatchTimeout <= 0 {
-		return fmt.Errorf("batch timeout must be greater than 0: %w", errBatchTimeout)
-	}
-
-	return nil
-}
-
 func (k *kafkaClient) Publish(ctx context.Context, topic string, message []byte) error {
 	ctx, span := otel.GetTracerProvider().Tracer("gofr").Start(ctx, "kafka-publish")
 	defer span.End()
@@ -175,12 +145,20 @@ func (k *kafkaClient) Publish(ctx context.Context, topic string, message []byte)
 		return err
 	}
 
+	var hostName string
+
+	if len(k.config.Broker) > 1 {
+		hostName = MessageMultipleBrokers
+	} else {
+		hostName = k.config.Broker[0]
+	}
+
 	k.logger.Debug(&pubsub.Log{
 		Mode:          "PUB",
 		CorrelationID: span.SpanContext().TraceID().String(),
 		MessageValue:  string(message),
 		Topic:         topic,
-		Host:          k.config.Broker,
+		Host:          hostName,
 		PubSubBackend: "KAFKA",
 		Time:          end.Microseconds(),
 	})
@@ -242,12 +220,20 @@ func (k *kafkaClient) Subscribe(ctx context.Context, topic string) (*pubsub.Mess
 
 	end := time.Since(start)
 
+	var hostName string
+
+	if len(k.config.Broker) > 1 {
+		hostName = "multiple brokers"
+	} else {
+		hostName = k.config.Broker[0]
+	}
+
 	k.logger.Debug(&pubsub.Log{
 		Mode:          "SUB",
 		CorrelationID: span.SpanContext().TraceID().String(),
 		MessageValue:  string(msg.Value),
 		Topic:         topic,
-		Host:          k.config.Broker,
+		Host:          hostName,
 		PubSubBackend: "KAFKA",
 		Time:          end.Microseconds(),
 	})
@@ -263,7 +249,7 @@ func (k *kafkaClient) Close() (err error) {
 	}
 
 	if k.writer != nil {
-		err = k.writer.Close()
+		err = errors.Join(err, k.writer.Close())
 	}
 
 	if k.conn != nil {
@@ -271,114 +257,4 @@ func (k *kafkaClient) Close() (err error) {
 	}
 
 	return err
-}
-
-func initializeKafkaClient(conf *Config, logger pubsub.Logger) (*kafka.Dialer, Connection,
-	Writer, map[string]Reader, error) {
-	dialer := &kafka.Dialer{
-		Timeout:   10 * time.Second,
-		DualStack: true,
-	}
-
-	if conf.SecurityProtocol == protocolSASL || conf.SecurityProtocol == protocolSASLSSL {
-		mechanism, err := getSASLMechanism(conf.SASLMechanism, conf.SASLUser, conf.SASLPassword)
-		if err != nil {
-			return nil, nil, nil, nil, err
-		}
-
-		dialer.SASLMechanism = mechanism
-	}
-
-	if conf.SecurityProtocol == "SSL" || conf.SecurityProtocol == "SASL_SSL" {
-		tlsConfig, err := createTLSConfig(&conf.TLS)
-		if err != nil {
-			return nil, nil, nil, nil, err
-		}
-
-		dialer.TLS = tlsConfig
-	}
-
-	conn, err := dialer.DialContext(context.Background(), "tcp", conf.Broker)
-	if err != nil {
-		return nil, nil, nil, nil, err
-	}
-
-	writer := kafka.NewWriter(kafka.WriterConfig{
-		Brokers:      []string{conf.Broker},
-		Dialer:       dialer,
-		BatchSize:    conf.BatchSize,
-		BatchBytes:   conf.BatchBytes,
-		BatchTimeout: time.Duration(conf.BatchTimeout),
-	})
-
-	reader := make(map[string]Reader)
-
-	logger.Logf("connected to Kafka broker '%s'", conf.Broker)
-
-	return dialer, conn, writer, reader, nil
-}
-
-func (k *kafkaClient) getNewReader(topic string) Reader {
-	reader := kafka.NewReader(kafka.ReaderConfig{
-		GroupID:     k.config.ConsumerGroupID,
-		Brokers:     []string{k.config.Broker},
-		Topic:       topic,
-		MinBytes:    10e3,
-		MaxBytes:    10e6,
-		Dialer:      k.dialer,
-		StartOffset: int64(k.config.OffSet),
-	})
-
-	return reader
-}
-
-func (k *kafkaClient) DeleteTopic(_ context.Context, name string) error {
-	return k.conn.DeleteTopics(name)
-}
-
-func (k *kafkaClient) Controller() (broker kafka.Broker, err error) {
-	return k.conn.Controller()
-}
-
-func (k *kafkaClient) CreateTopic(_ context.Context, name string) error {
-	topics := kafka.TopicConfig{Topic: name, NumPartitions: 1, ReplicationFactor: 1}
-
-	err := k.conn.CreateTopics(topics)
-	if err != nil {
-		return err
-	}
-
-	return nil
-}
-
-// retryConnect handles the retry mechanism for connecting to the Kafka broker.
-func retryConnect(client *kafkaClient, conf *Config, logger pubsub.Logger) {
-	for {
-		time.Sleep(defaultRetryTimeout)
-
-		dialer, conn, writer, reader, err := initializeKafkaClient(conf, logger)
-		if err != nil {
-			logger.Errorf("could not connect to Kafka at '%v', error: %v", conf.Broker, err)
-			continue
-		}
-
-		client.mu.Lock()
-		client.conn = conn
-		client.dialer = dialer
-		client.writer = writer
-		client.reader = reader
-		client.mu.Unlock()
-
-		return
-	}
-}
-
-func (k *kafkaClient) isConnected() bool {
-	if k.conn == nil {
-		return false
-	}
-
-	_, err := k.conn.Controller()
-
-	return err == nil
 }
