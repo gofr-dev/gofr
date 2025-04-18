@@ -354,7 +354,7 @@ func TestResponder_RedirectResponse(t *testing.T) {
 	r := NewResponder(recorder, http.MethodGet)
 
 	// Set up redirect with specific URL and status code
-	redirectURL := "/new-location"
+	redirectURL := "/new-location?from=start"
 	statusCode := http.StatusFound // 301
 
 	redirect := resTypes.NewRedirect(redirectURL)

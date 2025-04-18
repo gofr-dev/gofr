@@ -5,8 +5,8 @@ type Redirect struct {
 }
 
 // NewRedirect creates a redirect response with the specified URL and status code.
-func NewRedirect(url string) *Redirect {
-	return &Redirect{
+func NewRedirect(url string) Redirect {
+	return Redirect{
 		URL: url,
 	}
 }

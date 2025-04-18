@@ -48,7 +48,7 @@ func (r Responder) Respond(data any, err error) {
 		v.Render(r.w)
 
 		return
-	case *resTypes.Redirect:
+	case resTypes.Redirect:
 		switch r.method {
 		case http.MethodPost, http.MethodPut, http.MethodPatch:
 			statusCode = http.StatusSeeOther // 303
