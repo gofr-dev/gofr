@@ -40,6 +40,7 @@ const (
 	protocolSSL            = "SSL"
 	protocolSASLSSL        = "SASL_SSL"
 	MessageMultipleBrokers = "MULTIPLE_BROKERS"
+	BrokerStatusUp         = "UP"
 )
 
 type Config struct {

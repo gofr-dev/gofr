@@ -39,7 +39,7 @@ func (k *kafkaClient) Health() datasource.Health {
 
 func (k *kafkaClient) evaluateBrokerHealth() ([]map[string]any, bool) {
 	var (
-		statusList     []map[string]any
+		statusList     = make([]map[string]any, 0)
 		controllerAddr string
 		allDown        = true
 	)
@@ -48,17 +48,20 @@ func (k *kafkaClient) evaluateBrokerHealth() ([]map[string]any, bool) {
 		if conn == nil {
 			continue
 		}
-		status := k.checkBroker(conn, &controllerAddr)
-		if status["status"] == "UP" {
+
+		status := checkBroker(conn, &controllerAddr)
+
+		if status["status"] == BrokerStatusUp {
 			allDown = false
 		}
+
 		statusList = append(statusList, status)
 	}
 
 	return statusList, allDown
 }
 
-func (k *kafkaClient) checkBroker(conn Connection, controllerAddr *string) map[string]any {
+func checkBroker(conn Connection, controllerAddr *string) map[string]any {
 	brokerAddr := conn.RemoteAddr().String()
 	status := map[string]any{
 		"broker":       brokerAddr,
@@ -73,7 +76,7 @@ func (k *kafkaClient) checkBroker(conn Connection, controllerAddr *string) map[s
 		return status
 	}
 
-	status["status"] = "UP"
+	status["status"] = BrokerStatusUp
 
 	if *controllerAddr == "" {
 		controller, err := conn.Controller()

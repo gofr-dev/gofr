@@ -3,9 +3,11 @@ package kafka
 import (
 	"context"
 	"fmt"
-	"github.com/segmentio/kafka-go"
-	"gofr.dev/pkg/gofr/datasource/pubsub"
 	"time"
+
+	"github.com/segmentio/kafka-go"
+
+	"gofr.dev/pkg/gofr/datasource/pubsub"
 )
 
 func validateConfigs(conf *Config) error {
