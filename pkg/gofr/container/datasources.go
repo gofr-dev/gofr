@@ -679,3 +679,41 @@ type ArangoDBProvider interface {
 
 	provider
 }
+
+// ElasticSearch defines all the operations GoFr users need.
+type ElasticSearch interface {
+	// CreateIndex creates a new index with optional mapping/settings.
+	CreateIndex(ctx context.Context, index string, settings map[string]interface{}) error
+
+	// DeleteIndex deletes an existing index.
+	DeleteIndex(ctx context.Context, index string) error
+
+	// IndexDocument indexes (creates or replaces) a single document.
+	IndexDocument(ctx context.Context, index, id string, document interface{}) error
+
+	// GetDocument retrieves a single document by ID.
+	// Returns the raw JSON as a map.
+	GetDocument(ctx context.Context, index, id string) (map[string]interface{}, error)
+
+	// UpdateDocument applies a partial update to an existing document.
+	UpdateDocument(ctx context.Context, index, id string, update map[string]interface{}) error
+
+	// DeleteDocument removes a document by ID.
+	DeleteDocument(ctx context.Context, index, id string) error
+
+	// Search executes a query against one or more indices.
+	// Returns the entire response JSON as a map.
+	Search(ctx context.Context, indices []string, query map[string]interface{}) (map[string]interface{}, error)
+
+	// Bulk executes multiple indexing/updating/deleting operations in one request.
+	// Each entry in `operations` should be a JSON‑serializable object
+	// following the Elasticsearch bulk API format.
+	Bulk(ctx context.Context, operations []map[string]interface{}) (map[string]interface{}, error)
+}
+
+// ElasticSearchProvider is an interface that extends ElasticSearch with additional methods for logging, metrics, and connection management.
+type ElasticSearchProvider interface {
+	ElasticSearch
+
+	provider
+}
