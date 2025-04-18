@@ -348,3 +348,21 @@ func removeTemplateDir(t *testing.T) {
 
 	require.NoError(t, err)
 }
+
+func TestResponder_RedirectResponse(t *testing.T) {
+	recorder := httptest.NewRecorder()
+	r := NewResponder(recorder, http.MethodGet)
+
+	// Set up redirect with specific URL and status code
+	redirectURL := "/new-location"
+	statusCode := http.StatusFound // 301
+
+	redirect := resTypes.NewRedirect(redirectURL)
+
+	r.Respond(redirect, nil)
+
+	assert.Equal(t, statusCode, recorder.Code, "Redirect should set the correct status code")
+	assert.Equal(t, redirectURL, recorder.Header().Get("Location"),
+		"Redirect should set the Location header")
+	assert.Empty(t, recorder.Body.String(), "Redirect response should not have a body")
+}
