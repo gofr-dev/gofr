@@ -2,10 +2,15 @@ package http
 
 import (
 	"encoding/json"
+	"errors"
 	"net/http"
 	"reflect"
 
 	resTypes "gofr.dev/pkg/gofr/http/response"
+)
+
+var (
+	errEmptyResponse = errors.New("internal server error")
 )
 
 // NewResponder creates a new Responder instance from the given http.ResponseWriter..
@@ -22,7 +27,7 @@ type Responder struct {
 // Respond sends a response with the given data and handles potential errors, setting appropriate
 // status codes and formatting responses as JSON or raw data as needed.
 func (r Responder) Respond(data any, err error) {
-	statusCode, errorObj := getStatusCode(r.method, data, err)
+	statusCode, errorObj := r.determineResponse(data, err)
 
 	var resp any
 	switch v := data.(type) {
@@ -58,6 +63,49 @@ func (r Responder) Respond(data any, err error) {
 	_ = json.NewEncoder(r.w).Encode(resp)
 }
 
+func (r Responder) determineResponse(data any, err error) (statusCode int, errObj any) {
+	// Handle empty struct case first
+	if err != nil && isEmptyStruct(data) {
+		return http.StatusInternalServerError, createErrorResponse(errEmptyResponse)
+	}
+
+	statusCode, errorObj := getStatusCode(r.method, data, err)
+
+	if statusCode == 0 {
+		statusCode = http.StatusInternalServerError
+	}
+
+	return statusCode, errorObj
+}
+
+// isEmptyStruct checks if a value is a struct with all zero/empty fields.
+func isEmptyStruct(data any) bool {
+	if data == nil {
+		return false
+	}
+
+	v := reflect.ValueOf(data)
+
+	// Handle pointers by dereferencing them
+	if v.Kind() == reflect.Ptr {
+		if v.IsNil() {
+			return false // nil pointer isn't an empty struct
+		}
+
+		v = v.Elem()
+	}
+
+	// Only check actual struct types
+	if v.Kind() != reflect.Struct {
+		return false
+	}
+
+	// Compare against a zero value of the same type
+	zero := reflect.Zero(v.Type()).Interface()
+
+	return reflect.DeepEqual(data, zero)
+}
+
 // getStatusCode returns corresponding HTTP status codes.
 func getStatusCode(method string, data any, err error) (statusCode int, errResp any) {
 	if err == nil {
@@ -90,10 +138,28 @@ func handleSuccess(method string, data any) (statusCode int, err any) {
 	}
 }
 
+// ResponseMarshaller defines an interface for errors that can provide custom fields.
+// This enables errors to extend the error response with additional fields.
+type ResponseMarshaller interface {
+	Response() map[string]any
+}
+
+// createErrorResponse returns an error response that always contains a "message" field,
+// and if the error implements ResponseMarshaller, it merges custom fields into the response.
 func createErrorResponse(err error) map[string]any {
-	return map[string]any{
-		"message": err.Error(),
+	resp := map[string]any{"message": err.Error()}
+
+	if rm, ok := err.(ResponseMarshaller); ok {
+		for k, v := range rm.Response() {
+			if k == "message" {
+				continue // Skip to avoid overriding the Error() message
+			}
+
+			resp[k] = v
+		}
 	}
+
+	return resp
 }
 
 // response represents an HTTP response.
