@@ -131,4 +131,4 @@ docker run -d --name arangodb \
     - Use trailing white space or the <br> HTML tag at the end of the line.
     - Use "`" sign to add single line code and "```" to add multi-line code block.
     - Use relative references to images (in `public` folder as mentioned above.)
-* The [gofr.dev documentation]([url](https://gofr.dev/docs)) site is updated upon push to `/docs` path in the repo. Verify your changes are live after next GoFr version.
+* The [gofr.dev documentation](https://gofr.dev/docs) site is updated upon push to `/docs` path in the repo. Verify your changes are live after next GoFr version.
