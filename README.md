@@ -49,7 +49,7 @@ GoFr is designed to **simplify microservice development**, with key focuses on *
 ## 🚀 **Getting Started**
 
 ### **Prerequisites**
-- GoFr requires **[Go](https://go.dev/)** version **[1.21](https://go.dev/doc/devel/release#go1.21.0)** or above.
+- GoFr requires **[Go](https://go.dev/)** version **[1.24](https://go.dev/doc/devel/release#go1.24.0)** or above.
 
 ### **Installation**
 To get started with GoFr, add the following import to your code and use Go’s module support to automatically fetch dependencies:
