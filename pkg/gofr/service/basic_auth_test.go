@@ -1,7 +1,6 @@
 package service
 
 import (
-	"context"
 	"encoding/base64"
 	"io"
 	"net/http"

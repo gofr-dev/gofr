@@ -2,7 +2,6 @@ package container
 
 import (
 	"bytes"
-	"context"
 	"net/http/httptest"
 	"testing"
 

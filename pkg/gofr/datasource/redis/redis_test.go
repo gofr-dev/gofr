@@ -1,7 +1,6 @@
 package redis
 
 import (
-	"context"
 	"testing"
 	"time"
 

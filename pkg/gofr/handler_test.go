@@ -1,7 +1,6 @@
 package gofr
 
 import (
-	"context"
 	"errors"
 	"fmt"
 	"net/http"

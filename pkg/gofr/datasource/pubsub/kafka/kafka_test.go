@@ -1,7 +1,6 @@
 package kafka
 
 import (
-	"context"
 	"errors"
 	"sync"
 	"testing"

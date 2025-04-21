@@ -1,7 +1,6 @@
 package service
 
 import (
-	"context"
 	"fmt"
 	"io"
 	"net/http"

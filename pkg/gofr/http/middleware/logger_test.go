@@ -3,7 +3,6 @@ package middleware
 import (
 	"bufio"
 	"bytes"
-	"context"
 	"net"
 	"net/http"
 	"net/http/httptest"

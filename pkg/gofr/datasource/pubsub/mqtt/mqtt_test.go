@@ -1,7 +1,6 @@
 package mqtt
 
 import (
-	"context"
 	"errors"
 	"net/url"
 	"sync"

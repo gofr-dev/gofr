@@ -1,7 +1,6 @@
 package service
 
 import (
-	"context"
 	"net/http"
 	"net/http/httptest"
 	"strings"

@@ -1,7 +1,6 @@
 package cmd
 
 import (
-	"context"
 	"os"
 	"testing"
 

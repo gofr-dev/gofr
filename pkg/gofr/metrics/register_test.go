@@ -1,7 +1,6 @@
 package metrics
 
 import (
-	"context"
 	"io"
 	"net/http"
 	"net/http/httptest"
