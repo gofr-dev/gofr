@@ -5,8 +5,6 @@ package kafka
 import (
 	"context"
 	"errors"
-	"net"
-	"strconv"
 	"sync"
 	"time"
 
@@ -73,8 +71,8 @@ type kafkaClient struct {
 	metrics Metrics
 }
 
-//nolint:revive // New allow returning unexported types as intended.
-func New(conf *Config, logger pubsub.Logger, metrics Metrics) *kafkaClient {
+func New(conf *Config, logger pubsub.Logger, metrics Metrics) *kafkaClient { //nolint:revive // New allows
+	// returning unexported types as intended.
 	err := validateConfigs(conf)
 	if err != nil {
 		logger.Errorf("could not initialize kafka, error: %v", err)
