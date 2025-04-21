@@ -100,7 +100,10 @@ func (c *Client) Connect() {
 
 	c.metrics.NewHistogram("es_request_duration_ms", "Duration of Elasticsearch requests in ms", responseTimeBuckets...)
 
-	// TODO: verify the connectivity here by HealthCheck or something else
+	if _, err := c.HealthCheck(context.Background()); err != nil {
+		c.logger.Errorf("Elasticsearch health check failed: %v", err)
+		return
+	}
 
 	c.logger.Logf("connected to Elasticsearch successfullt at : %v", c.config.Addresses)
 }
