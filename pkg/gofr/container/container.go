@@ -53,15 +53,16 @@ type Container struct {
 	Redis Redis
 	SQL   DB
 
-	Cassandra  CassandraWithContext
-	Clickhouse Clickhouse
-	Mongo      Mongo
-	Solr       Solr
-	DGraph     Dgraph
-	OpenTSDB   OpenTSDB
-	ScyllaDB   ScyllaDB
-	SurrealDB  SurrealDB
-	ArangoDB   ArangoDB
+	Cassandra     CassandraWithContext
+	Clickhouse    Clickhouse
+	Mongo         Mongo
+	Solr          Solr
+	DGraph        Dgraph
+	OpenTSDB      OpenTSDB
+	ScyllaDB      ScyllaDB
+	SurrealDB     SurrealDB
+	ArangoDB      ArangoDB
+	ElasticSearch ElasticSearch
 
 	KVStore KVStore
 
