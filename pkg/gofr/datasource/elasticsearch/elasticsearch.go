@@ -15,12 +15,18 @@ import (
 	"go.opentelemetry.io/otel/trace"
 )
 
-var (
-	errEmptyIndex      = errors.New("index name cannot be empty")
-	errEmptyDocumentID = errors.New("document ID cannot be empty")
-	errEmptyQuery      = errors.New("query cannot be empty")
-	errEmptyOperations = errors.New("operations cannot be empty")
+const (
+	statusDown     = "DOWN"
+	statusUp       = "UP"
+	defaultTimeout = 5 * time.Second
+)
 
+var (
+	errEmptyIndex        = errors.New("index name cannot be empty")
+	errEmptyDocumentID   = errors.New("document ID cannot be empty")
+	errEmptyQuery        = errors.New("query cannot be empty")
+	errEmptyOperations   = errors.New("operations cannot be empty")
+	errHealthCheckFailed = errors.New("elasticsearch health check failed")
 	errOperation         = errors.New("elasticsearch operation error")
 	errMarshaling        = errors.New("error marshaling data")
 	errParsingResponse   = errors.New("error parsing response")
@@ -65,6 +71,13 @@ func (c *Client) UseTracer(tracer any) {
 	}
 }
 
+// New creates a new Elasticsearch client with the provided configuration.
+func New(config Config) *Client {
+	return &Client{
+		config: config,
+	}
+}
+
 func (c *Client) Connect() {
 	cfg := es.Config{
 		Addresses: c.config.Addresses,
@@ -101,7 +114,6 @@ func (c *Client) CreateIndex(ctx context.Context, index string, settings map[str
 	start := time.Now()
 
 	tracedCtx, span := c.addTrace(ctx, "create-index", []string{index}, "")
-	defer span.End()
 
 	body, err := json.Marshal(settings)
 	if err != nil {
@@ -137,7 +149,6 @@ func (c *Client) DeleteIndex(ctx context.Context, index string) error {
 	start := time.Now()
 
 	tracedCtx, span := c.addTrace(ctx, "delete-index", []string{index}, "")
-	defer span.End()
 
 	req := esapi.IndicesDeleteRequest{
 		Index: []string{index},
@@ -172,7 +183,6 @@ func (c *Client) IndexDocument(ctx context.Context, index, id string, document a
 	start := time.Now()
 
 	tracedCtx, span := c.addTrace(ctx, "index-document", []string{index}, id)
-	defer span.End()
 
 	body, err := json.Marshal(document)
 	if err != nil {
@@ -215,7 +225,6 @@ func (c *Client) GetDocument(ctx context.Context, index, id string) (map[string]
 	start := time.Now()
 
 	tracedCtx, span := c.addTrace(ctx, "get-document", []string{index}, id)
-	defer span.End()
 
 	req := esapi.GetRequest{
 		Index:      index,
@@ -260,7 +269,6 @@ func (c *Client) UpdateDocument(ctx context.Context, index, id string, update ma
 	start := time.Now()
 
 	tracedCtx, span := c.addTrace(ctx, "update-document", []string{index}, id)
-	defer span.End()
 
 	body, err := json.Marshal(map[string]any{"doc": update})
 	if err != nil {
@@ -287,7 +295,7 @@ func (c *Client) UpdateDocument(ctx context.Context, index, id string, update ma
 	}
 
 	c.sendOperationStats(tracedCtx, start, fmt.Sprintf("UPDATE DOCUMENT %s/%s", index, id),
-		[]string{index}, id, body, span)
+		[]string{index}, id, map[string]any{"doc": update}, span)
 
 	return nil
 }
@@ -305,7 +313,6 @@ func (c *Client) DeleteDocument(ctx context.Context, index, id string) error {
 	start := time.Now()
 
 	tracedCtx, span := c.addTrace(ctx, "delete-document", []string{index}, id)
-	defer span.End()
 
 	req := esapi.DeleteRequest{
 		Index:      index,
@@ -344,7 +351,6 @@ func (c *Client) Search(ctx context.Context, indices []string, query map[string]
 	start := time.Now()
 
 	tracedCtx, span := c.addTrace(ctx, "search", indices, "")
-	defer span.End()
 
 	body, err := json.Marshal(query)
 	if err != nil {
@@ -388,8 +394,6 @@ func (c *Client) Bulk(ctx context.Context, operations []map[string]any) (map[str
 	start := time.Now()
 	tracedCtx, span := c.addTrace(ctx, "bulk", nil, "")
 
-	defer span.End()
-
 	var buf bytes.Buffer
 	for _, op := range operations {
 		if err := json.NewEncoder(&buf).Encode(op); err != nil {
@@ -421,6 +425,63 @@ func (c *Client) Bulk(ctx context.Context, operations []map[string]any) (map[str
 	c.sendOperationStats(tracedCtx, start, "BULK", nil, "", operations, span)
 
 	return result, nil
+}
+
+// Health represents the health status of Elasticsearch connection.
+type Health struct {
+	Status  string         `json:"status"`            // "UP" or "DOWN"
+	Details map[string]any `json:"details,omitempty"` // extra metadata
+}
+
+// HealthCheck verifies connectivity via Ping, then enriches via Info().
+func (c *Client) HealthCheck(ctx context.Context) (any, error) {
+	h := Health{Details: make(map[string]any)}
+	h.Details["addresses"] = c.config.Addresses
+	h.Details["username"] = c.config.Username
+
+	// 1) Ping with a 2s timeout
+	pingCtx, cancel := context.WithTimeout(ctx, defaultTimeout)
+	defer cancel()
+
+	pingRes, err := c.client.Ping(
+		c.client.Ping.WithContext(pingCtx),
+	)
+	if err != nil {
+		h.Status = statusDown
+		h.Details["error"] = err.Error()
+
+		return &h, errHealthCheckFailed
+	}
+	defer pingRes.Body.Close()
+
+	if pingRes.IsError() {
+		h.Status = statusDown
+		h.Details["error"] = pingRes.String()
+
+		return &h, errHealthCheckFailed
+	}
+
+	// 2) Fetch cluster info for more details
+	infoRes, err := c.client.Info()
+	if err == nil {
+		defer infoRes.Body.Close()
+
+		var clusterInfo struct {
+			ClusterName string `json:"cluster_name"`
+			Version     struct {
+				Number string `json:"number"`
+			} `json:"version"`
+		}
+
+		if err := json.NewDecoder(infoRes.Body).Decode(&clusterInfo); err == nil {
+			h.Details["cluster_name"] = clusterInfo.ClusterName
+			h.Details["version"] = clusterInfo.Version.Number
+		}
+	}
+
+	h.Status = statusUp
+
+	return &h, nil
 }
 
 func (c *Client) addTrace(ctx context.Context, method string, indices []string,
@@ -463,8 +524,7 @@ func (c *Client) sendOperationStats(ctx context.Context, start time.Time,
 		span.End()
 	}
 
-	metricName := fmt.Sprintf("elasticsearch.%v.duration_ms", strings.ToLower(operation))
-	c.metrics.RecordHistogram(ctx, metricName, float64(duration))
+	c.metrics.RecordHistogram(ctx, "es_request_duration_ms", float64(duration))
 
 	// Structured log
 	ql := QueryLog{

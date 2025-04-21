@@ -61,7 +61,7 @@ func (ql *QueryLog) PrettyPrint(logger Logger) {
 
 	// Format: [Operation] [ELASTIC] Duration µs Context Payload
 	formatted := fmt.Sprintf(
-		"\u001B[38;5;8m%-20s \u001B[38;5;208mELASTIC\u001B[0m %8dµs %-30s %s",
+		"\u001B[38;5;8m%-15s \u001B[38;5;208mELASTIC\u001B[0m %8dµs %-15s %s",
 		op, ql.Duration, contextStr, pl,
 	)
 	logger.Debug(formatted)
