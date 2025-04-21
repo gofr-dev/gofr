@@ -95,7 +95,7 @@ func TestQueryRow(t *testing.T) {
 }
 
 func TestQueryRowContext(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 
 	t.Run("successful query row context", func(t *testing.T) {
 		var id int
@@ -158,7 +158,7 @@ func TestExec(t *testing.T) {
 }
 
 func TestExecContext(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 
 	t.Run("successful exec context", func(t *testing.T) {
 		mockContainer, mocks := container.NewMockContainer(t)

@@ -79,7 +79,7 @@ func TestMigrationRunClickhouseSuccess(t *testing.T) {
 	logs := testutil.StdoutOutputForFunc(func() {
 		migrationMap := map[int64]Migrate{
 			1: {UP: func(d Datasource) error {
-				err := d.Clickhouse.Exec(context.Background(), "SELECT * FROM users")
+				err := d.Clickhouse.Exec(t.Context(), "SELECT * FROM users")
 				if err != nil {
 					return err
 				}
@@ -111,7 +111,7 @@ func TestMigrationRunClickhouseMigrationFailure(t *testing.T) {
 
 		migrationMap := map[int64]Migrate{
 			1: {UP: func(d Datasource) error {
-				err := d.Clickhouse.Exec(context.Background(), "SELECT * FROM users")
+				err := d.Clickhouse.Exec(t.Context(), "SELECT * FROM users")
 				if err != nil {
 					return err
 				}
@@ -138,7 +138,7 @@ func TestMigrationRunClickhouseMigrationFailureWhileCheckingTable(t *testing.T) 
 	testutil.StderrOutputForFunc(func() {
 		migrationMap := map[int64]Migrate{
 			1: {UP: func(d Datasource) error {
-				err := d.Clickhouse.Exec(context.Background(), "SELECT * FROM users")
+				err := d.Clickhouse.Exec(t.Context(), "SELECT * FROM users")
 				if err != nil {
 					return err
 				}
@@ -159,7 +159,7 @@ func TestMigrationRunClickhouseCurrentMigrationEqualLastMigration(t *testing.T) 
 	logs := testutil.StdoutOutputForFunc(func() {
 		migrationMap := map[int64]Migrate{
 			0: {UP: func(d Datasource) error {
-				err := d.Clickhouse.Exec(context.Background(), "SELECT * FROM users")
+				err := d.Clickhouse.Exec(t.Context(), "SELECT * FROM users")
 				if err != nil {
 					return err
 				}
@@ -183,7 +183,7 @@ func TestMigrationRunClickhouseCommitError(t *testing.T) {
 	logs := testutil.StderrOutputForFunc(func() {
 		migrationMap := map[int64]Migrate{
 			1: {UP: func(d Datasource) error {
-				err := d.Clickhouse.Exec(context.Background(), "SELECT * FROM users")
+				err := d.Clickhouse.Exec(t.Context(), "SELECT * FROM users")
 				if err != nil {
 					return err
 				}

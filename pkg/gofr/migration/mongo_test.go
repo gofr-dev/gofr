@@ -42,7 +42,7 @@ func Test_MongoCheckAndCreateMigrationTable(t *testing.T) {
 	}
 
 	for i, tc := range testCases {
-		mockMongo.EXPECT().CreateCollection(context.Background(), mongoMigrationCollection).Return(tc.err)
+		mockMongo.EXPECT().CreateCollection(t.Context(), mongoMigrationCollection).Return(tc.err)
 		err := migratorWithMongo.checkAndCreateMigrationTable(mockContainer)
 
 		assert.Equal(t, tc.err, err, "TEST[%v]\n %v Failed! ", i, tc.desc)
@@ -68,7 +68,7 @@ func Test_MongoGetLastMigration(t *testing.T) {
 	filter := make(map[string]any)
 
 	for i, tc := range testCases {
-		mockMongo.EXPECT().Find(context.Background(), mongoMigrationCollection, filter, &migrations).Return(tc.err)
+		mockMongo.EXPECT().Find(t.Context(), mongoMigrationCollection, filter, &migrations).Return(tc.err)
 
 		resp := migratorWithMongo.getLastMigration(mockContainer)
 
@@ -106,7 +106,7 @@ func Test_MongoCommitMigration(t *testing.T) {
 	}
 
 	for i, tc := range testCases {
-		mockMongo.EXPECT().InsertOne(context.Background(), mongoMigrationCollection, migrationDoc).Return(mockResult, tc.err)
+		mockMongo.EXPECT().InsertOne(t.Context(), mongoMigrationCollection, migrationDoc).Return(mockResult, tc.err)
 
 		err := migratorWithMongo.commitMigration(mockContainer, td)
 

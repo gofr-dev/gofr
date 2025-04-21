@@ -42,7 +42,7 @@ func Test_SurrealCheckAndCreateMigrationTable(t *testing.T) {
 	}
 
 	for i, tc := range testCases {
-		mockSurreal.EXPECT().Query(context.Background(), gomock.Any(), nil).Return([]any{}, tc.err).MaxTimes(8)
+		mockSurreal.EXPECT().Query(t.Context(), gomock.Any(), nil).Return([]any{}, tc.err).MaxTimes(8)
 
 		err := migratorWithSurreal.checkAndCreateMigrationTable(mockContainer)
 
@@ -63,7 +63,7 @@ func Test_SurrealGetLastMigration(t *testing.T) {
 	}
 
 	for i, tc := range testCases {
-		mockSurreal.EXPECT().Query(context.Background(), getLastSurrealDBGoFrMigration, nil).Return([]any{
+		mockSurreal.EXPECT().Query(t.Context(), getLastSurrealDBGoFrMigration, nil).Return([]any{
 			map[string]any{"version": float64(tc.resp)},
 		}, tc.err)
 
@@ -99,7 +99,7 @@ func Test_SurrealCommitMigration(t *testing.T) {
 			"duration":   time.Since(td.StartTime).Milliseconds(),
 		}
 
-		mockSurreal.EXPECT().Query(context.Background(), insertSurrealDBGoFrMigrationRow, bindVars).Return([]any{}, tc.err)
+		mockSurreal.EXPECT().Query(t.Context(), insertSurrealDBGoFrMigrationRow, bindVars).Return([]any{}, tc.err)
 
 		err := migratorWithSurreal.commitMigration(mockContainer, td)
 
@@ -122,10 +122,10 @@ func TestSurrealDS_Query(t *testing.T) {
 	query := "SELECT * FROM table"
 	vars := map[string]any{"key": "value"}
 	expectedResult := []any{"result"}
-	mockSurreal.EXPECT().Query(context.Background(), query, vars).Return(expectedResult, nil)
+	mockSurreal.EXPECT().Query(t.Context(), query, vars).Return(expectedResult, nil)
 
 	surreal := surrealDS{client: mockSurreal}
-	result, err := surreal.Query(context.Background(), query, vars)
+	result, err := surreal.Query(t.Context(), query, vars)
 
 	require.NoError(t, err)
 	assert.Equal(t, expectedResult, result)
@@ -135,10 +135,10 @@ func TestSurrealDS_CreateNamespace(t *testing.T) {
 	_, mockSurreal, _ := surrealSetup(t)
 
 	namespace := "test_namespace"
-	mockSurreal.EXPECT().CreateNamespace(context.Background(), namespace).Return(nil)
+	mockSurreal.EXPECT().CreateNamespace(t.Context(), namespace).Return(nil)
 
 	surreal := surrealDS{client: mockSurreal}
-	err := surreal.CreateNamespace(context.Background(), namespace)
+	err := surreal.CreateNamespace(t.Context(), namespace)
 
 	assert.NoError(t, err)
 }
@@ -147,10 +147,10 @@ func TestSurrealDS_CreateDatabase(t *testing.T) {
 	_, mockSurreal, _ := surrealSetup(t)
 
 	database := "test_database"
-	mockSurreal.EXPECT().CreateDatabase(context.Background(), database).Return(nil)
+	mockSurreal.EXPECT().CreateDatabase(t.Context(), database).Return(nil)
 
 	surreal := surrealDS{client: mockSurreal}
-	err := surreal.CreateDatabase(context.Background(), database)
+	err := surreal.CreateDatabase(t.Context(), database)
 
 	assert.NoError(t, err)
 }
@@ -159,10 +159,10 @@ func TestSurrealDS_DropNamespace(t *testing.T) {
 	_, mockSurreal, _ := surrealSetup(t)
 
 	namespace := "test_namespace"
-	mockSurreal.EXPECT().DropNamespace(context.Background(), namespace).Return(nil)
+	mockSurreal.EXPECT().DropNamespace(t.Context(), namespace).Return(nil)
 
 	surreal := surrealDS{client: mockSurreal}
-	err := surreal.DropNamespace(context.Background(), namespace)
+	err := surreal.DropNamespace(t.Context(), namespace)
 
 	assert.NoError(t, err)
 }
@@ -171,10 +171,10 @@ func TestSurrealDS_DropDatabase(t *testing.T) {
 	_, mockSurreal, _ := surrealSetup(t)
 
 	database := "test_database"
-	mockSurreal.EXPECT().DropDatabase(context.Background(), database).Return(nil)
+	mockSurreal.EXPECT().DropDatabase(t.Context(), database).Return(nil)
 
 	surreal := surrealDS{client: mockSurreal}
-	err := surreal.DropDatabase(context.Background(), database)
+	err := surreal.DropDatabase(t.Context(), database)
 
 	assert.NoError(t, err)
 }

@@ -38,11 +38,11 @@ func Test_HttpServiceMock(t *testing.T) {
 	result := res.Result()
 
 	// Setting mock expectations
-	mock.HTTPService.EXPECT().Get(context.Background(), "fact", map[string]any{
+	mock.HTTPService.EXPECT().Get(t.Context(), "fact", map[string]any{
 		"max_length": 20,
 	}).Return(result, nil)
 
-	resp, err := mock.HTTPService.Get(context.Background(), "fact", map[string]any{
+	resp, err := mock.HTTPService.Get(t.Context(), "fact", map[string]any{
 		"max_length": 20,
 	})
 
@@ -64,9 +64,9 @@ func TestExpectSelect_ValidCases(t *testing.T) {
 
 		expectedIDs := []string{"1", "2"}
 
-		mock.SQL.ExpectSelect(context.Background(), &passedResultSlice, "SELECT id FROM users").ReturnsResponse(expectedIDs)
+		mock.SQL.ExpectSelect(t.Context(), &passedResultSlice, "SELECT id FROM users").ReturnsResponse(expectedIDs)
 
-		mockContainer.SQL.Select(context.Background(), &actualResultSlice, "SELECT id FROM users")
+		mockContainer.SQL.Select(t.Context(), &actualResultSlice, "SELECT id FROM users")
 		require.Equal(t, expectedIDs, actualResultSlice)
 	})
 
@@ -76,11 +76,11 @@ func TestExpectSelect_ValidCases(t *testing.T) {
 		expectedIDs := []string{"1", "2"}
 		expectedIDs2 := []string{"1", "3"}
 
-		mock.SQL.ExpectSelect(context.Background(), &passedResultSlice, "SELECT id FROM users").ReturnsResponse(expectedIDs)
-		mock.SQL.ExpectSelect(context.Background(), &passedResultSlice, "SELECT id FROM users").ReturnsResponse(expectedIDs2)
+		mock.SQL.ExpectSelect(t.Context(), &passedResultSlice, "SELECT id FROM users").ReturnsResponse(expectedIDs)
+		mock.SQL.ExpectSelect(t.Context(), &passedResultSlice, "SELECT id FROM users").ReturnsResponse(expectedIDs2)
 
-		mockContainer.SQL.Select(context.Background(), &actualResultSlice, "SELECT id FROM users")
-		mockContainer.SQL.Select(context.Background(), &actualResultSlice2, "SELECT id FROM users")
+		mockContainer.SQL.Select(t.Context(), &actualResultSlice, "SELECT id FROM users")
+		mockContainer.SQL.Select(t.Context(), &actualResultSlice2, "SELECT id FROM users")
 
 		require.Equal(t, expectedIDs, actualResultSlice)
 		require.Equal(t, expectedIDs2, actualResultSlice2)
@@ -96,9 +96,9 @@ func TestExpectSelect_ValidCases(t *testing.T) {
 
 		expectedUser := User{ID: 1, Name: "John"}
 
-		mock.SQL.ExpectSelect(context.Background(), &passedUser, "SELECT * FROM users WHERE id = ?", 1).ReturnsResponse(expectedUser)
+		mock.SQL.ExpectSelect(t.Context(), &passedUser, "SELECT * FROM users WHERE id = ?", 1).ReturnsResponse(expectedUser)
 
-		mockContainer.SQL.Select(context.Background(), &actualUser, "SELECT * FROM users WHERE id = ?", 1)
+		mockContainer.SQL.Select(t.Context(), &actualUser, "SELECT * FROM users WHERE id = ?", 1)
 		require.Equal(t, expectedUser, actualUser)
 	})
 
@@ -107,9 +107,9 @@ func TestExpectSelect_ValidCases(t *testing.T) {
 
 		expectedSettings := map[string]int{"a": 1, "b": 2}
 
-		mock.SQL.ExpectSelect(context.Background(), &passedSettings, "SELECT * FROM settings").ReturnsResponse(expectedSettings)
+		mock.SQL.ExpectSelect(t.Context(), &passedSettings, "SELECT * FROM settings").ReturnsResponse(expectedSettings)
 
-		mockContainer.SQL.Select(context.Background(), &actualSettings, "SELECT * FROM settings")
+		mockContainer.SQL.Select(t.Context(), &actualSettings, "SELECT * FROM settings")
 		require.Equal(t, expectedSettings, actualSettings)
 	})
 }
@@ -130,9 +130,9 @@ func TestExpectSelect_ErrorCases(t *testing.T) {
 
 		expectedVal := 123
 
-		sqlMockWrapper.ExpectSelect(context.Background(), uninitializedVal, "SELECT * FROM test WHERE id=?", 1).ReturnsResponse(expectedVal)
+		sqlMockWrapper.ExpectSelect(t.Context(), uninitializedVal, "SELECT * FROM test WHERE id=?", 1).ReturnsResponse(expectedVal)
 
-		sqlDB.Select(context.Background(), &resultVal, "SELECT * FROM test WHERE id=?", 1)
+		sqlDB.Select(t.Context(), &resultVal, "SELECT * FROM test WHERE id=?", 1)
 		assert.Zero(t, resultVal)
 	})
 
@@ -143,9 +143,9 @@ func TestExpectSelect_ErrorCases(t *testing.T) {
 
 		expectedVal := 123
 
-		sqlMockWrapper.ExpectSelect(context.Background(), &uninitializedVal, "SELECT * FROM test WHERE id=?", 1).ReturnsResponse(&expectedVal)
+		sqlMockWrapper.ExpectSelect(t.Context(), &uninitializedVal, "SELECT * FROM test WHERE id=?", 1).ReturnsResponse(&expectedVal)
 
-		sqlDB.Select(context.Background(), &resultVal, "SELECT * FROM test WHERE id=?", 1)
+		sqlDB.Select(t.Context(), &resultVal, "SELECT * FROM test WHERE id=?", 1)
 		assert.Zero(t, resultVal)
 	})
 
@@ -154,9 +154,9 @@ func TestExpectSelect_ErrorCases(t *testing.T) {
 
 		var expectedVal, resultVal []string
 
-		sqlMockWrapper.ExpectSelect(context.Background(), &expectedVal, "SELECT * FROM test WHERE id=?", 1).ReturnsResponse(123)
+		sqlMockWrapper.ExpectSelect(t.Context(), &expectedVal, "SELECT * FROM test WHERE id=?", 1).ReturnsResponse(123)
 
-		sqlDB.Select(context.Background(), &resultVal, "SELECT * FROM test WHERE id=?", 1)
+		sqlDB.Select(t.Context(), &resultVal, "SELECT * FROM test WHERE id=?", 1)
 		assert.Empty(t, resultVal)
 	})
 
@@ -165,7 +165,7 @@ func TestExpectSelect_ErrorCases(t *testing.T) {
 
 		var val []string
 
-		sqlDB.Select(context.Background(), &val, "SELECT * FROM test WHERE id=?", 1)
+		sqlDB.Select(t.Context(), &val, "SELECT * FROM test WHERE id=?", 1)
 		assert.Empty(t, val)
 	})
 }

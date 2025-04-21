@@ -144,10 +144,10 @@ func TestBind_NoContentType(t *testing.T) {
 }
 
 func Test_GetContext(t *testing.T) {
-	req, _ := http.NewRequestWithContext(context.Background(), http.MethodGet, "test/hello", http.NoBody)
+	req, _ := http.NewRequestWithContext(t.Context(), http.MethodGet, "test/hello", http.NoBody)
 	r := Request{req: req, pathParams: map[string]string{"key": "hello"}}
 
-	assert.Equal(t, context.Background(), r.Context())
+	assert.Equal(t, t.Context(), r.Context())
 	assert.Equal(t, "http://", r.HostName())
 	assert.Equal(t, "hello", r.PathParam("key"))
 }

@@ -65,7 +65,7 @@ func TestRedis_QueryLogging(t *testing.T) {
 
 		require.NoError(t, err)
 
-		result, err := client.Set(context.TODO(), "key", "value", 1*time.Minute).Result()
+		result, err := client.Set(t.Context(), "key", "value", 1*time.Minute).Result()
 
 		require.NoError(t, err)
 		assert.Equal(t, "OK", result)
@@ -102,11 +102,11 @@ func TestRedis_PipelineQueryLogging(t *testing.T) {
 
 		// Pipeline execution
 		pipe := client.Pipeline()
-		setCmd := pipe.Set(context.TODO(), "key1", "value1", 1*time.Minute)
-		getCmd := pipe.Get(context.TODO(), "key1")
+		setCmd := pipe.Set(t.Context(), "key1", "value1", 1*time.Minute)
+		getCmd := pipe.Get(t.Context(), "key1")
 
 		// Pipeline Exec should return a non-nil error
-		_, err = pipe.Exec(context.TODO())
+		_, err = pipe.Exec(t.Context())
 		require.NoError(t, err)
 
 		// Retrieve results

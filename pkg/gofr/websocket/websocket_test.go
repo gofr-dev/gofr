@@ -120,7 +120,7 @@ func Test_Upgrade(t *testing.T) {
 
 	wsUpgrader := WSUpgrader{Upgrader: mockUpgrader}
 
-	req, err := http.NewRequestWithContext(context.TODO(), http.MethodGet, "/", http.NoBody)
+	req, err := http.NewRequestWithContext(t.Context(), http.MethodGet, "/", http.NoBody)
 	require.NoError(t, err)
 
 	w := httptest.NewRecorder()

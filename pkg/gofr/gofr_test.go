@@ -216,7 +216,7 @@ func TestGofr_ServerRun(t *testing.T) {
 		Timeout: 200 * time.Millisecond,
 	}
 
-	re, _ := http.NewRequestWithContext(context.Background(), http.MethodGet,
+	re, _ := http.NewRequestWithContext(t.Context(), http.MethodGet,
 		"http://localhost:"+fmt.Sprint(configs.HTTPPort)+"/hello", http.NoBody)
 	resp, err := netClient.Do(re)
 
@@ -241,7 +241,7 @@ func Test_AddHTTPService(t *testing.T) {
 	g.AddHTTPService("test-service", server.URL)
 
 	resp, _ := g.container.GetHTTPService("test-service").
-		Get(context.Background(), "test", nil)
+		Get(t.Context(), "test", nil)
 
 	defer resp.Body.Close()
 
@@ -378,7 +378,7 @@ func TestEnableBasicAuthWithFunc(t *testing.T) {
 	client := server.Client()
 
 	// Create a mock HTTP request
-	req, err := http.NewRequestWithContext(context.Background(), http.MethodGet, server.URL, http.NoBody)
+	req, err := http.NewRequestWithContext(t.Context(), http.MethodGet, server.URL, http.NoBody)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -470,7 +470,7 @@ func Test_EnableBasicAuth(t *testing.T) {
 			client := server.Client()
 
 			// Create a mock HTTP request
-			req, err := http.NewRequestWithContext(context.Background(), http.MethodGet, server.URL, http.NoBody)
+			req, err := http.NewRequestWithContext(t.Context(), http.MethodGet, server.URL, http.NoBody)
 			require.NoError(t, err)
 
 			// Add a basic authorization header
@@ -541,7 +541,7 @@ func Test_EnableBasicAuthWithValidator(t *testing.T) {
 			client := server.Client()
 
 			// Create a mock HTTP request
-			req, err := http.NewRequestWithContext(context.Background(), http.MethodGet, server.URL, http.NoBody)
+			req, err := http.NewRequestWithContext(t.Context(), http.MethodGet, server.URL, http.NoBody)
 			require.NoError(t, err)
 
 			// Add a basic authorization header
@@ -714,7 +714,7 @@ func Test_UseMiddleware(t *testing.T) {
 		Timeout: 200 * time.Millisecond,
 	}
 
-	req, _ := http.NewRequestWithContext(context.Background(), http.MethodGet,
+	req, _ := http.NewRequestWithContext(t.Context(), http.MethodGet,
 		fmt.Sprintf("http://localhost:%d", port)+"/test", http.NoBody)
 
 	resp, err := netClient.Do(req)
@@ -819,7 +819,7 @@ func Test_APIKeyAuthMiddleware(t *testing.T) {
 		Timeout: 200 * time.Millisecond,
 	}
 
-	req, _ := http.NewRequestWithContext(context.Background(), http.MethodGet,
+	req, _ := http.NewRequestWithContext(t.Context(), http.MethodGet,
 		fmt.Sprintf("http://localhost:%d", port)+"/test", http.NoBody)
 	req.Header.Set("X-Api-Key", "test-key")
 
@@ -865,7 +865,7 @@ func Test_SwaggerEndpoints(t *testing.T) {
 		Timeout: 200 * time.Millisecond,
 	}
 
-	re, _ := http.NewRequestWithContext(context.Background(), http.MethodGet,
+	re, _ := http.NewRequestWithContext(t.Context(), http.MethodGet,
 		configs.HTTPHost+"/.well-known/swagger", http.NoBody)
 	resp, err := netClient.Do(re)
 
@@ -981,7 +981,7 @@ func TestStaticHandler(t *testing.T) {
 	}
 
 	for i, tc := range tests {
-		request, err := http.NewRequestWithContext(context.Background(), tc.method, host+tc.path, http.NoBody)
+		request, err := http.NewRequestWithContext(t.Context(), tc.method, host+tc.path, http.NoBody)
 		if err != nil {
 			t.Fatalf("TEST[%d], Failed to create request, error: %s", i, err)
 		}
@@ -1078,7 +1078,7 @@ func Test_Shutdown(t *testing.T) {
 		go g.Run()
 		time.Sleep(10 * time.Millisecond)
 
-		err := g.Shutdown(context.Background())
+		err := g.Shutdown(t.Context())
 
 		require.NoError(t, err, "Test_Shutdown Failed!")
 	})
