@@ -138,7 +138,7 @@ func (c *Client) CreateIndex(ctx context.Context, index string, settings map[str
 		return fmt.Errorf("%w: %s", errResponse, res.String())
 	}
 
-	c.sendOperationStats(tracedCtx, start, fmt.Sprintf("CREATE INDEX %s", index),
+	c.sendOperationStats(start, fmt.Sprintf("CREATE INDEX %s", index),
 		[]string{index}, "", body, span)
 
 	return nil
@@ -167,175 +167,8 @@ func (c *Client) DeleteIndex(ctx context.Context, index string) error {
 		return fmt.Errorf("%w: %s", errResponse, res.String())
 	}
 
-	c.sendOperationStats(tracedCtx, start, fmt.Sprintf("DELETE INDEX %s", index),
+	c.sendOperationStats(start, fmt.Sprintf("DELETE INDEX %s", index),
 		[]string{index}, "", nil, span)
-
-	return nil
-}
-
-// IndexDocument indexes (creates or replaces) a single document.
-func (c *Client) IndexDocument(ctx context.Context, index, id string, document any) error {
-	if strings.TrimSpace(index) == "" {
-		return errEmptyIndex
-	}
-
-	if strings.TrimSpace(id) == "" {
-		return errEmptyDocumentID
-	}
-
-	start := time.Now()
-
-	tracedCtx, span := c.addTrace(ctx, "index-document", []string{index}, id)
-
-	body, err := json.Marshal(document)
-	if err != nil {
-		return fmt.Errorf("%w: document: %w", errMarshaling, err)
-	}
-
-	req := esapi.IndexRequest{
-		Index:      index,
-		DocumentID: id,
-		Body:       bytes.NewReader(body),
-		Refresh:    "true",
-	}
-
-	res, err := req.Do(tracedCtx, c.client)
-	if err != nil {
-		return fmt.Errorf("%w: indexing document: %w", errOperation, err)
-	}
-	defer res.Body.Close()
-
-	if res.IsError() {
-		return fmt.Errorf("%w: %s", errResponse, res.String())
-	}
-
-	c.sendOperationStats(tracedCtx, start, fmt.Sprintf("INDEX %s/%s", index, id), []string{id},
-		"", document, span)
-
-	return nil
-}
-
-// GetDocument retrieves a document by its ID.
-func (c *Client) GetDocument(ctx context.Context, index, id string) (map[string]any, error) {
-	if strings.TrimSpace(index) == "" {
-		return nil, errEmptyIndex
-	}
-
-	if strings.TrimSpace(id) == "" {
-		return nil, errEmptyDocumentID
-	}
-
-	start := time.Now()
-
-	tracedCtx, span := c.addTrace(ctx, "get-document", []string{index}, id)
-
-	req := esapi.GetRequest{
-		Index:      index,
-		DocumentID: id,
-	}
-
-	res, err := req.Do(tracedCtx, c.client)
-	if err != nil {
-		return nil, fmt.Errorf("%w: getting document: %w", errOperation, err)
-	}
-	defer res.Body.Close()
-
-	if res.IsError() {
-		return nil, fmt.Errorf("%w: %s", errResponse, res.String())
-	}
-
-	var result map[string]any
-	if err := json.NewDecoder(res.Body).Decode(&result); err != nil {
-		return nil, fmt.Errorf("%w: %w", errParsingResponse, err)
-	}
-
-	c.sendOperationStats(tracedCtx, start, fmt.Sprintf("GET %s/%s", index, id),
-		[]string{index}, id, nil, span)
-
-	return result, nil
-}
-
-// UpdateDocument applies a partial update to an existing document.
-func (c *Client) UpdateDocument(ctx context.Context, index, id string, update map[string]any) error {
-	if strings.TrimSpace(index) == "" {
-		return errEmptyIndex
-	}
-
-	if strings.TrimSpace(id) == "" {
-		return errEmptyDocumentID
-	}
-
-	if len(update) == 0 {
-		return errEmptyQuery
-	}
-
-	start := time.Now()
-
-	tracedCtx, span := c.addTrace(ctx, "update-document", []string{index}, id)
-
-	body, err := json.Marshal(map[string]any{"doc": update})
-	if err != nil {
-		return fmt.Errorf("%w: update: %w", errMarshaling, err)
-	}
-
-	req := esapi.UpdateRequest{
-		Index:      index,
-		DocumentID: id,
-		Body:       bytes.NewReader(body),
-		Refresh:    "true",
-	}
-
-	res, err := req.Do(tracedCtx, c.client)
-
-	if err != nil {
-		return fmt.Errorf("%w: updating document: %w", errOperation, err)
-	}
-
-	defer res.Body.Close()
-
-	if res.IsError() {
-		return fmt.Errorf("%w: %s", errResponse, res.String())
-	}
-
-	c.sendOperationStats(tracedCtx, start, fmt.Sprintf("UPDATE DOCUMENT %s/%s", index, id),
-		[]string{index}, id, map[string]any{"doc": update}, span)
-
-	return nil
-}
-
-// DeleteDocument removes a document by ID.
-func (c *Client) DeleteDocument(ctx context.Context, index, id string) error {
-	if strings.TrimSpace(index) == "" {
-		return errEmptyIndex
-	}
-
-	if strings.TrimSpace(id) == "" {
-		return errEmptyDocumentID
-	}
-
-	start := time.Now()
-
-	tracedCtx, span := c.addTrace(ctx, "delete-document", []string{index}, id)
-
-	req := esapi.DeleteRequest{
-		Index:      index,
-		DocumentID: id,
-	}
-
-	res, err := req.Do(tracedCtx, c.client)
-
-	if err != nil {
-		return fmt.Errorf("%w: deleting document: %w", errOperation, err)
-	}
-
-	defer res.Body.Close()
-
-	if res.IsError() {
-		return fmt.Errorf("%w: %s", errResponse, res.String())
-	}
-
-	c.sendOperationStats(tracedCtx, start, fmt.Sprintf("DELETE %s/%s", index, id),
-		[]string{index}, id, nil, span)
 
 	return nil
 }
@@ -381,7 +214,7 @@ func (c *Client) Search(ctx context.Context, indices []string, query map[string]
 		return nil, fmt.Errorf("%w: %w", errParsingResponse, err)
 	}
 
-	c.sendOperationStats(tracedCtx, start, "SEARCH", indices, "", query, span)
+	c.sendOperationStats(start, "SEARCH", indices, "", query, span)
 
 	return result, nil
 }
@@ -425,7 +258,7 @@ func (c *Client) Bulk(ctx context.Context, operations []map[string]any) (map[str
 		return nil, fmt.Errorf("%w: %w", errParsingResponse, err)
 	}
 
-	c.sendOperationStats(tracedCtx, start, "BULK", nil, "", operations, span)
+	c.sendOperationStats(start, "BULK", nil, "", operations, span)
 
 	return result, nil
 }
@@ -509,7 +342,7 @@ func (c *Client) addTrace(ctx context.Context, method string, indices []string,
 	return tracedCtx, span
 }
 
-func (c *Client) sendOperationStats(ctx context.Context, start time.Time,
+func (c *Client) sendOperationStats(start time.Time,
 	operation string, indices []string, documentID string, request any, span trace.Span) {
 	duration := time.Since(start).Microseconds()
 
@@ -527,7 +360,7 @@ func (c *Client) sendOperationStats(ctx context.Context, start time.Time,
 		span.End()
 	}
 
-	c.metrics.RecordHistogram(ctx, "es_request_duration_ms", float64(duration))
+	c.metrics.RecordHistogram(context.Background(), "es_request_duration_ms", float64(duration))
 
 	// Structured log
 	ql := QueryLog{
