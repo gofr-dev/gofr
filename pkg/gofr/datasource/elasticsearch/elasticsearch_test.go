@@ -102,6 +102,9 @@ func TestClient_CreateIndex_Success(t *testing.T) {
 }
 
 func TestClient_CreateIndex_Errors(t *testing.T) {
+	resp := createMockResponse(400, `{"error": "index already exists"}`)
+	defer resp.Body.Close()
+
 	tests := []struct {
 		name       string
 		index      string
@@ -127,7 +130,7 @@ func TestClient_CreateIndex_Errors(t *testing.T) {
 			name:       "elasticsearch response error",
 			index:      "test-index",
 			settings:   map[string]any{},
-			resp:       createMockResponse(400, `{"error": "index already exists"}`),
+			resp:       resp,
 			errMessage: "invalid elasticsearch response",
 		},
 	}
@@ -152,11 +155,16 @@ func TestClient_DeleteIndex_Success(t *testing.T) {
 	transport.response = createMockResponse(200, `{"acknowledged": true}`)
 	transport.err = nil
 
+	defer transport.response.Body.Close()
+
 	err := client.DeleteIndex(context.Background(), "test-index")
 	require.NoError(t, err)
 }
 
 func TestClient_DeleteIndex_Errors(t *testing.T) {
+	resp := createMockResponse(404, `{"error": "index not found"}`)
+	defer resp.Body.Close()
+
 	tests := []struct {
 		name       string
 		index      string
@@ -178,7 +186,7 @@ func TestClient_DeleteIndex_Errors(t *testing.T) {
 		{
 			name:       "elasticsearch response error",
 			index:      "test-index",
-			resp:       createMockResponse(404, `{"error": "index not found"}`),
+			resp:       resp,
 			errMessage: "invalid elasticsearch response",
 		},
 	}
@@ -203,6 +211,8 @@ func TestClient_IndexDocument_Success(t *testing.T) {
 	transport.response = createMockResponse(201, `{"result":"created"}`)
 	transport.err = nil
 
+	defer transport.response.Body.Close()
+
 	document := map[string]any{
 		"title": "Test Document",
 	}
@@ -212,6 +222,9 @@ func TestClient_IndexDocument_Success(t *testing.T) {
 }
 
 func TestClient_IndexDocument_Errors(t *testing.T) {
+	resp := createMockResponse(400, `{"error":"bad request"}`)
+	defer resp.Body.Close()
+
 	tests := []struct {
 		name       string
 		index      string
@@ -255,7 +268,7 @@ func TestClient_IndexDocument_Errors(t *testing.T) {
 			index:      "test-index",
 			id:         "123",
 			document:   map[string]any{},
-			resp:       createMockResponse(400, `{"error":"bad request"}`),
+			resp:       resp,
 			errMessage: "invalid elasticsearch response",
 		},
 	}
@@ -281,6 +294,8 @@ func TestClient_GetDocument_Success(t *testing.T) {
 	transport.response = createMockResponse(200, responseBody)
 	transport.err = nil
 
+	defer transport.response.Body.Close()
+
 	result, err := client.GetDocument(context.Background(), "test-index", "123")
 	require.NoError(t, err)
 	require.Equal(t, "123", result["_id"])
@@ -288,6 +303,12 @@ func TestClient_GetDocument_Success(t *testing.T) {
 }
 
 func TestClient_GetDocument_Errors(t *testing.T) {
+	invalidJSONResp := createMockResponse(200, `{"_source":`)
+	defer invalidJSONResp.Body.Close()
+
+	notFoundResp := createMockResponse(404, `{"error":"not found"}`)
+	defer notFoundResp.Body.Close()
+
 	tests := []struct {
 		name       string
 		index      string
@@ -326,7 +347,7 @@ func TestClient_GetDocument_Errors(t *testing.T) {
 			name:       "json decoding error",
 			index:      "test-index",
 			id:         "123",
-			resp:       createMockResponse(200, `{"_source":`), // invalid JSON
+			resp:       invalidJSONResp,
 			errMessage: "error parsing response",
 		},
 	}
@@ -351,6 +372,8 @@ func TestClient_UpdateDocument_Success(t *testing.T) {
 	transport.response = createMockResponse(200, `{"result":"updated"}`)
 	transport.err = nil
 
+	defer transport.response.Body.Close()
+
 	err := client.UpdateDocument(context.Background(), "test-index", "123", map[string]any{
 		"name": "updated name",
 	})
@@ -358,6 +381,9 @@ func TestClient_UpdateDocument_Success(t *testing.T) {
 }
 
 func TestClient_UpdateDocument_Errors(t *testing.T) {
+	errResp := createMockResponse(500, `{"error":"internal error"}`)
+	defer errResp.Body.Close()
+
 	tests := []struct {
 		name        string
 		index       string
@@ -408,7 +434,7 @@ func TestClient_UpdateDocument_Errors(t *testing.T) {
 			index:       "test-index",
 			id:          "123",
 			update:      map[string]any{"field": "value"},
-			response:    createMockResponse(500, `{"error":"internal error"}`),
+			response:    errResp,
 			expectedMsg: "invalid elasticsearch response: [500 Internal Server Error]",
 		},
 	}
@@ -434,11 +460,16 @@ func TestClient_DeleteDocument_Success(t *testing.T) {
 	transport.response = createMockResponse(200, `{"result":"deleted"}`)
 	transport.err = nil
 
+	defer transport.response.Body.Close()
+
 	err := client.DeleteDocument(context.Background(), "test-index", "123")
 	require.NoError(t, err)
 }
 
 func TestClient_DeleteDocument_Errors(t *testing.T) {
+	notFoundResp := createMockResponse(500, `{"error":"not found"}`)
+	defer notFoundResp.Body.Close()
+
 	tests := []struct {
 		name        string
 		index       string
@@ -503,6 +534,8 @@ func TestClient_Search_Success(t *testing.T) {
 	transport.response = createMockResponse(200, responseBody)
 	transport.err = nil
 
+	defer transport.response.Body.Close()
+
 	query := map[string]any{
 		"query": map[string]any{
 			"match_all": map[string]any{},
@@ -516,6 +549,12 @@ func TestClient_Search_Success(t *testing.T) {
 }
 
 func TestClient_Search_Errors(t *testing.T) {
+	internalServerErrorResp := createMockResponse(500, `{"error": "internal server error"}`)
+	defer internalServerErrorResp.Body.Close()
+
+	invalidJSONResp := createMockResponse(200, `{"invalid": json`)
+	defer invalidJSONResp.Body.Close()
+
 	tests := []struct {
 		name        string
 		indices     []string
@@ -547,14 +586,14 @@ func TestClient_Search_Errors(t *testing.T) {
 			name:        "elasticsearch error response",
 			indices:     []string{"test-index"},
 			query:       map[string]any{"query": map[string]any{}},
-			response:    createMockResponse(500, `{"error": "internal server error"}`),
+			response:    internalServerErrorResp,
 			expectedMsg: "invalid elasticsearch response",
 		},
 		{
 			name:        "invalid json response",
 			indices:     []string{"test-index"},
 			query:       map[string]any{"query": map[string]any{}},
-			response:    createMockResponse(200, `{"invalid": json`),
+			response:    invalidJSONResp,
 			expectedMsg: "error parsing response",
 		},
 	}
@@ -588,6 +627,8 @@ func TestClient_Bulk_Success(t *testing.T) {
 	transport.response = createMockResponse(200, responseBody)
 	transport.err = nil
 
+	defer transport.response.Body.Close()
+
 	operations := []map[string]any{
 		{"index": map[string]any{"_index": "test-index", "_id": "1"}},
 		{"title": "Document 1"},
@@ -603,6 +644,12 @@ func TestClient_Bulk_Success(t *testing.T) {
 }
 
 func TestClient_Bulk_Errors(t *testing.T) {
+	invalidJSONResp := createMockResponse(200, `{"invalid": json`)
+	defer invalidJSONResp.Body.Close()
+
+	badRequestResp := createMockResponse(400, `{"error": "bad request"}`)
+	defer badRequestResp.Body.Close()
+
 	tests := []struct {
 		name        string
 		operations  []map[string]any
@@ -629,13 +676,13 @@ func TestClient_Bulk_Errors(t *testing.T) {
 		{
 			name:        "elasticsearch error response",
 			operations:  []map[string]any{{"index": map[string]any{"_index": "test-index"}}},
-			response:    createMockResponse(400, `{"error": "bad request"}`),
+			response:    badRequestResp,
 			expectedMsg: "invalid elasticsearch response",
 		},
 		{
 			name:        "invalid json response",
 			operations:  []map[string]any{{"index": map[string]any{"_index": "test-index"}}},
-			response:    createMockResponse(200, `{"invalid": json`),
+			response:    invalidJSONResp,
 			expectedMsg: "error parsing response",
 		},
 	}
