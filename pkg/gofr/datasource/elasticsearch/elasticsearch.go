@@ -105,7 +105,7 @@ func (c *Client) Connect() {
 		return
 	}
 
-	c.logger.Logf("connected to Elasticsearch successfullt at : %v", c.config.Addresses)
+	c.logger.Logf("connected to Elasticsearch successfully at : %v", c.config.Addresses)
 }
 
 // CreateIndex creates an index in Elasticsearch with the specified settings.
