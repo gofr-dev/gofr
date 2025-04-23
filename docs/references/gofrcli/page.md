@@ -202,4 +202,4 @@ func main() {
 }
 ```
 For detailed instruction on setting up a gRPC server with GoFr see the [gRPC Client Documentation](https://gofr.dev/docs/advanced-guide/grpc#generating-tracing-enabled-g-rpc-client-using)
-For more examples refer [gRPC Examples](https://github.com/gofr-dev/gofr/tree/main/examples/grpc)
+
