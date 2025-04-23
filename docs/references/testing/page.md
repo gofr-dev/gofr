@@ -187,6 +187,75 @@ func TestAdd(t *testing.T) {
 }
 
 ```
+
+## Example of Unit Testing an HTTP Service Using GoFr
+
+The example below demonstrates how to mock and test HTTP services created from `AddHTTPService()` method on your app.
+
+```go
+import (
+	"context"
+	"io"
+	"net/http"
+	"strings"
+	"testing"
+
+	"github.com/stretchr/testify/assert"
+	"go.uber.org/mock/gomock"
+
+	"gofr.dev/pkg/gofr"
+	"gofr.dev/pkg/gofr/container"
+)
+
+func TestHTTPServiceEndpoint(t *testing.T) {
+	httpService := container.WithMockHTTPService("ABCService")
+	mockContainer, mocks := container.NewMockContainer(t, httpService)
+
+	mocks.HTTPService.EXPECT().Post(
+		gomock.Any(),
+		"/api/Product", 
+		gomock.Any(),
+		gomock.Any()
+	).Return(&http.Response{
+		StatusCode: http.StatusOK,
+		Body: io.NopCloser(strings.NewReader(`{
+			"id": 1,
+			"description": "Test Product",
+			"weight": 1.0
+		}`)),
+	}, nil)
+
+	var req *http.Request
+
+	req = httptest.NewRequest(
+		http.MethodPost,
+		"/api/Product",
+		io.NopCloser(strings.NewReader(`{
+			"description": "Test Product",
+		}`)),
+	)
+
+	req.Header.Set("Content-Type", "application/json")
+
+	request := gofrHttp.NewRequest(req)
+
+	ctx := &gofr.Context{
+		Context:   context.Background(),
+		Request:   req,
+		Container: mockContainer,
+	}
+
+	createProductResponse, err := CreateProduct(ctx, createProductsRequest)
+
+	assert.NoError(t, err)
+	assert.Equal(t, int64(123), product.ID)
+	assert.Equal(t, "Test Product", product.Description)
+}
+```
+
+- Tests will fail if the mocked HTTPService is not called as expected.
+- `WithMockHTTPService` is passed to `NewMockContainer`, allowing us to configure expected HTTP requests and corresponding responses.
+
 ### Summary
 
 - **Mocking Database Interactions**: Use GoFr mock container to simulate database interactions.
