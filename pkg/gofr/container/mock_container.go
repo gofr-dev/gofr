@@ -25,7 +25,7 @@ type Mocks struct {
 	ArangoDB      *MockArangoDBProvider
 	OpenTSDB      *MockOpenTSDBProvider
 	SurrealDB     *MockSurrealDB
-	ElasticSearch *MockElasticSearch
+	Elasticsearch *MockElasticsearch
 	File          *file.MockFileSystemProvider
 	HTTPService   *service.MockHTTP
 	Metrics       *MockMetrics
@@ -95,7 +95,7 @@ func NewMockContainer(t *testing.T, options ...options) (*Container, *Mocks) {
 	container.SurrealDB = surrealMock
 
 	elasticSearchMock := NewMockElasticSearch(ctrl)
-	container.ElasticSearch = elasticSearchMock
+	container.Elasticsearch = elasticSearchMock
 
 	var httpMock *service.MockHTTP
 
@@ -128,7 +128,7 @@ func NewMockContainer(t *testing.T, options ...options) (*Container, *Mocks) {
 		OpenTSDB:      opentsdbMock,
 		ArangoDB:      arangoMock,
 		SurrealDB:     surrealMock,
-		ElasticSearch: elasticSearchMock,
+		Elasticsearch: elasticSearchMock,
 		Metrics:       mockMetrics,
 	}
 

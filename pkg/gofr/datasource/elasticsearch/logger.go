@@ -9,7 +9,7 @@ import (
 
 var whitespaceRegex = regexp.MustCompile(`\s+`)
 
-// Logger interface with required methods for ElasticSearch logging.
+// Logger interface with required methods for Elasticsearch logging.
 type Logger interface {
 	Debug(args ...any)
 	Debugf(pattern string, args ...any)

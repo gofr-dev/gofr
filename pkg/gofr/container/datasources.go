@@ -680,8 +680,8 @@ type ArangoDBProvider interface {
 	provider
 }
 
-// ElasticSearch defines all the operations GoFr users need.
-type ElasticSearch interface {
+// Elasticsearch defines all the operations GoFr users need.
+type Elasticsearch interface {
 	// CreateIndex creates a new index with optional mapping/settings.
 	CreateIndex(ctx context.Context, index string, settings map[string]any) error
 
@@ -713,9 +713,9 @@ type ElasticSearch interface {
 	HealthChecker
 }
 
-// ElasticSearchProvider is an interface that extends ElasticSearch with additional methods for logging, metrics, and connection management.
-type ElasticSearchProvider interface {
-	ElasticSearch
+// ElasticsearchProvider an interface that extends Elasticsearch with additional methods for logging, metrics, and connection management.
+type ElasticsearchProvider interface {
+	Elasticsearch
 
 	provider
 }

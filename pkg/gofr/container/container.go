@@ -62,7 +62,7 @@ type Container struct {
 	ScyllaDB      ScyllaDB
 	SurrealDB     SurrealDB
 	ArangoDB      ArangoDB
-	ElasticSearch ElasticSearch
+	Elasticsearch Elasticsearch
 
 	KVStore KVStore
 
