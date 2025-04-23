@@ -42,7 +42,7 @@ GoFr is designed to **simplify microservice development**, with key focuses on *
 12. **Support for [Changing Log Level](https://gofr.dev/docs/advanced-guide/remote-log-level-change) Without Restarting**
 13. **[Swagger Rendering](https://gofr.dev/docs/advanced-guide/swagger-documentation)**
 14. **[Abstracted File Systems](https://gofr.dev/docs/advanced-guide/handling-file)**
-15. **[Websockets](https://gofr.dev/docs/advanced-guide/handling-file)**
+15. **[Websockets](https://gofr.dev/docs/advanced-guide/websocket)**
 
 ---
 
