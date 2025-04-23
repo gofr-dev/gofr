@@ -184,7 +184,7 @@ func (a *App) AddSurrealDB(db container.SurrealBDProvider) {
 	a.container.SurrealDB = db
 }
 
-func (a *App) AddElasticSearch(db container.ElasticsearchProvider) {
+func (a *App) AddElasticsearch(db container.ElasticsearchProvider) {
 	db.UseLogger(a.Logger())
 	db.UseMetrics(a.Metrics())
 
