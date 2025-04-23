@@ -47,7 +47,7 @@ func (c *Client) IndexDocument(ctx context.Context, index, id string, document a
 		return fmt.Errorf("%w: %s", errResponse, res.String())
 	}
 
-	c.sendOperationStats(start, fmt.Sprintf("INDEX %s/%s", index, id), []string{id},
+	c.sendOperationStats(start, fmt.Sprintf("INDEX DOCUMENT %s/%s", index, id), []string{id},
 		"", document, span)
 
 	return nil
@@ -87,7 +87,7 @@ func (c *Client) GetDocument(ctx context.Context, index, id string) (map[string]
 		return nil, fmt.Errorf("%w: %w", errParsingResponse, err)
 	}
 
-	c.sendOperationStats(start, fmt.Sprintf("GET %s/%s", index, id),
+	c.sendOperationStats(start, fmt.Sprintf("GET DOCUMENT %s/%s", index, id),
 		[]string{index}, id, nil, span)
 
 	return result, nil
@@ -172,7 +172,7 @@ func (c *Client) DeleteDocument(ctx context.Context, index, id string) error {
 		return fmt.Errorf("%w: %s", errResponse, res.String())
 	}
 
-	c.sendOperationStats(start, fmt.Sprintf("DELETE %s/%s", index, id),
+	c.sendOperationStats(start, fmt.Sprintf("DELETE DOCUMENT %s/%s", index, id),
 		[]string{index}, id, nil, span)
 
 	return nil
