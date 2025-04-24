@@ -4,9 +4,9 @@ GoFr simplifies the complexity of working with different file stores by offering
 
 ## USAGE
 
-By default, local file-store is initialised and user can access it from the context.
+By default, local file-store is initialized and user can access it from the context.
 
-GoFr also supports FTP/SFTP file-store. Developers can also connect and use their AWS S3 bucket as a file-store. The file-store can be initialised as follows:
+GoFr also supports FTP/SFTP file-store. Developers can also connect and use their AWS S3 bucket as a file-store. The file-store can be initialized as follows:
 
 ### FTP file-store
 ```go

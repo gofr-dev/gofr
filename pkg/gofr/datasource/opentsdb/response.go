@@ -246,9 +246,9 @@ func (c *Client) sendRequest(ctx context.Context, method, url, reqBodyCnt string
 	if parser == nil {
 		// Use the default JSON unmarshaller if no custom parser is provided.
 		if err = json.Unmarshal(jsonBytes, parsedResp); err != nil {
-			errUnmarshaling := fmt.Errorf("failed to unmarshal response body for %s %s: %w", method, url, err)
+			errUnmarshalling := fmt.Errorf("failed to unmarshal response body for %s %s: %w", method, url, err)
 
-			return errUnmarshaling
+			return errUnmarshalling
 		}
 	} else {
 		// Use the custom parser if available.
