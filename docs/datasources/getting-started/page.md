@@ -153,6 +153,15 @@ as unnecessary database drivers are not being compiled and added to the build.
 - ✅
 ---
 
+-  Elasticsearch
+- ✅
+- ✅
+- ✅
+- ✅
+- 
+
+---
+
 
 
 
