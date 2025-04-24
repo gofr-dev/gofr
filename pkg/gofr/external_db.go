@@ -183,3 +183,14 @@ func (a *App) AddSurrealDB(db container.SurrealBDProvider) {
 	db.Connect()
 	a.container.SurrealDB = db
 }
+
+func (a *App) AddElasticsearch(db container.ElasticsearchProvider) {
+	db.UseLogger(a.Logger())
+	db.UseMetrics(a.Metrics())
+
+	tracer := otel.GetTracerProvider().Tracer("gofr-elasticsearch")
+	db.UseTracer(tracer)
+	db.Connect()
+
+	a.container.Elasticsearch = db
+}
