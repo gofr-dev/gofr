@@ -77,7 +77,7 @@ func TestRetryProvider_Get(t *testing.T) {
 	retryHTTP := retryConfig.AddOption(mockHTTP)
 
 	// Make the GET request
-	resp, err := retryHTTP.Get(context.Background(), "/test", nil)
+	resp, err := retryHTTP.Get(t.Context(), "/test", nil)
 	require.NoError(t, err)
 
 	defer resp.Body.Close()
@@ -91,7 +91,7 @@ func TestRetryProvider_GetWithHeaders(t *testing.T) {
 	retryHTTP := retryConfig.AddOption(mockHTTP)
 
 	// Make the GET request with headers
-	resp, err := retryHTTP.GetWithHeaders(context.Background(), "/test", nil,
+	resp, err := retryHTTP.GetWithHeaders(t.Context(), "/test", nil,
 		map[string]string{"Content-Type": "application/json"})
 	require.NoError(t, err)
 
@@ -106,7 +106,7 @@ func TestRetryProvider_Post(t *testing.T) {
 	retryHTTP := retryConfig.AddOption(mockHTTP)
 
 	// Make the POST request
-	resp, err := retryHTTP.Post(context.Background(), "/test", nil, []byte("body"))
+	resp, err := retryHTTP.Post(t.Context(), "/test", nil, []byte("body"))
 	require.NoError(t, err)
 
 	defer resp.Body.Close()
@@ -120,7 +120,7 @@ func TestRetryProvider_PostWithHeaders(t *testing.T) {
 	retryHTTP := retryConfig.AddOption(mockHTTP)
 
 	// Make the POST request with headers
-	resp, err := retryHTTP.PostWithHeaders(context.Background(), "/test", nil, []byte("body"),
+	resp, err := retryHTTP.PostWithHeaders(t.Context(), "/test", nil, []byte("body"),
 		map[string]string{"Content-Type": "application/json"})
 	require.NoError(t, err)
 
@@ -135,7 +135,7 @@ func TestRetryProvider_Put(t *testing.T) {
 	retryHTTP := retryConfig.AddOption(mockHTTP)
 
 	// Make the PUT request
-	resp, err := retryHTTP.Put(context.Background(), "/test", nil, []byte("body"))
+	resp, err := retryHTTP.Put(t.Context(), "/test", nil, []byte("body"))
 	require.NoError(t, err)
 
 	defer resp.Body.Close()
@@ -149,7 +149,7 @@ func TestRetryProvider_PutWithHeaders(t *testing.T) {
 	retryHTTP := retryConfig.AddOption(mockHTTP)
 
 	// Make the PUT request with headers
-	resp, err := retryHTTP.PutWithHeaders(context.Background(), "/test", nil, []byte("body"),
+	resp, err := retryHTTP.PutWithHeaders(t.Context(), "/test", nil, []byte("body"),
 		map[string]string{"Content-Type": "application/json"})
 	require.NoError(t, err)
 
@@ -173,7 +173,7 @@ func TestRetryProvider_Patch_WithError(t *testing.T) {
 		&RetryConfig{MaxRetries: 5})
 
 	// Make the PATCH request
-	resp, err := httpService.Patch(context.Background(), "/test", nil, []byte("body"))
+	resp, err := httpService.Patch(t.Context(), "/test", nil, []byte("body"))
 	require.NoError(t, err)
 
 	defer resp.Body.Close()
@@ -187,7 +187,7 @@ func TestRetryProvider_PatchWithHeaders(t *testing.T) {
 	retryHTTP := retryConfig.AddOption(mockHTTP)
 
 	// Make the PATCH request with headers
-	resp, err := retryHTTP.PatchWithHeaders(context.Background(), "/test", nil, []byte("body"),
+	resp, err := retryHTTP.PatchWithHeaders(t.Context(), "/test", nil, []byte("body"),
 		map[string]string{"Content-Type": "application/json"})
 	require.NoError(t, err)
 
@@ -202,7 +202,7 @@ func TestRetryProvider_Delete(t *testing.T) {
 	retryHTTP := retryConfig.AddOption(mockHTTP)
 
 	// Make the DELETE request
-	resp, err := retryHTTP.Delete(context.Background(), "/test", nil)
+	resp, err := retryHTTP.Delete(t.Context(), "/test", nil)
 	require.NoError(t, err)
 
 	defer resp.Body.Close()
@@ -215,7 +215,7 @@ func TestRetryProvider_DeleteWithHeaders(t *testing.T) {
 	retryHTTP := retryConfig.AddOption(mockHTTP)
 
 	// Make the DELETE request with headers
-	resp, err := retryHTTP.DeleteWithHeaders(context.Background(), "/test", []byte("body"),
+	resp, err := retryHTTP.DeleteWithHeaders(t.Context(), "/test", []byte("body"),
 		map[string]string{"Content-Type": "application/json"})
 	require.NoError(t, err)
 

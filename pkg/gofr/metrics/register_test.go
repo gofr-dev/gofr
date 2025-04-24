@@ -1,7 +1,6 @@
 package metrics
 
 import (
-	"context"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -24,13 +23,13 @@ func Test_NewMetricsManagerSuccess(t *testing.T) {
 	metrics.NewHistogram("histogram-test", "this is metric to test histogram")
 
 	metrics.SetGauge("gauge-test", 50)
-	metrics.IncrementCounter(context.Background(), "counter-test")
-	metrics.DeltaUpDownCounter(context.Background(), "up-down-counter", 10)
-	metrics.RecordHistogram(context.Background(), "histogram-test", 1)
+	metrics.IncrementCounter(t.Context(), "counter-test")
+	metrics.DeltaUpDownCounter(t.Context(), "up-down-counter", 10)
+	metrics.RecordHistogram(t.Context(), "histogram-test", 1)
 
 	server := httptest.NewServer(GetHandler(metrics))
 
-	req, _ := http.NewRequestWithContext(context.Background(), http.MethodGet, server.URL+"/metrics", http.NoBody)
+	req, _ := http.NewRequestWithContext(t.Context(), http.MethodGet, server.URL+"/metrics", http.NoBody)
 
 	resp, _ := server.Client().Do(req)
 
@@ -72,9 +71,9 @@ func Test_NewMetricsManagerMetricsNotRegistered(t *testing.T) {
 			logging.NewMockLogger(logging.INFO))
 
 		metrics.SetGauge("gauge-test", 50)
-		metrics.IncrementCounter(context.Background(), "counter-test")
-		metrics.DeltaUpDownCounter(context.Background(), "up-down-counter", 10)
-		metrics.RecordHistogram(context.Background(), "histogram-test", 1)
+		metrics.IncrementCounter(t.Context(), "counter-test")
+		metrics.DeltaUpDownCounter(t.Context(), "up-down-counter", 10)
+		metrics.RecordHistogram(t.Context(), "histogram-test", 1)
 	}
 
 	log := testutil.StderrOutputForFunc(logs)
@@ -135,7 +134,7 @@ func Test_NewMetricsManagerInvalidLabelPairErrors(t *testing.T) {
 
 		metrics.NewCounter("counter-test", "this is metric to test counter")
 
-		metrics.IncrementCounter(context.Background(), "counter-test",
+		metrics.IncrementCounter(t.Context(), "counter-test",
 			"label1", "value1", "label2", "value2", "label3")
 	}
 
@@ -151,7 +150,7 @@ func Test_NewMetricsManagerLabelHighCardinality(t *testing.T) {
 
 		metrics.NewCounter("counter-test", "this is metric to test counter")
 
-		metrics.IncrementCounter(context.Background(), "counter-test",
+		metrics.IncrementCounter(t.Context(), "counter-test",
 			"label1", "value1", "label2", "value2", "label3", "value3", "label4", "value4", "label5", "value5", "label6", "value6",
 			"label7", "value7", "label8", "value8", "label9", "value9", "label10", "value10", "label11", "value11", "label12", "value12")
 	}
