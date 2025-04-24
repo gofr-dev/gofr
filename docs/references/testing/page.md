@@ -201,7 +201,6 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
-	"go.uber.org/mock/gomock"
 
 	"gofr.dev/pkg/gofr"
 	"gofr.dev/pkg/gofr/container"
@@ -212,7 +211,7 @@ func TestHTTPServiceEndpoint(t *testing.T) {
 	mockContainer, mocks := container.NewMockContainer(t, httpService)
 
 	mocks.HTTPService.EXPECT().Post(
-		context.Background(),
+		t.Context(),
 		"/api/Product", 
 		nil,
 		map[string]any{"description": "Test Product"},
@@ -240,7 +239,7 @@ func TestHTTPServiceEndpoint(t *testing.T) {
 	request := gofrHttp.NewRequest(req)
 
 	ctx := &gofr.Context{
-		Context:   context.Background(),
+		Context:   t.Context(),
 		Request:   req,
 		Container: mockContainer,
 	}
@@ -248,10 +247,9 @@ func TestHTTPServiceEndpoint(t *testing.T) {
 	createProductResponse, err := CreateProduct(ctx, createProductsRequest)
 
 	assert.NoError(t, err)
-	assert.Equal(t, int64(123), product.ID)
+	assert.Equal(t, 1, product.ID)
 	assert.Equal(t, "Test Product", product.Description)
 }
-```
 
 - Tests will fail if the mocked HTTPService is not called as expected.
 - `WithMockHTTPService` is passed to `NewMockContainer`, allowing us to configure expected HTTP requests and corresponding responses.
