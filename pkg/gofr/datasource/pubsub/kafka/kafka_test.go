@@ -660,7 +660,7 @@ func TestKafkaClient_CreateTopic(t *testing.T) {
 			},
 		}).Return(nil)
 
-		err := client.CreateTopic(context.Background(), "test")
+		err := client.CreateTopic(t.Context(), "test")
 		require.NoError(t, err)
 	})
 
