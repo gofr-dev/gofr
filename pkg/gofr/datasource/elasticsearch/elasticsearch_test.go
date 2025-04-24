@@ -2,7 +2,6 @@ package elasticsearch
 
 import (
 	"bytes"
-	"context"
 	"errors"
 	"io"
 	"net/http"
@@ -97,7 +96,7 @@ func TestClient_CreateIndex_Success(t *testing.T) {
 		},
 	}
 
-	err := client.CreateIndex(context.Background(), "test-index", settings)
+	err := client.CreateIndex(t.Context(), "test-index", settings)
 	require.NoError(t, err)
 }
 
@@ -141,7 +140,7 @@ func TestClient_CreateIndex_Errors(t *testing.T) {
 			transport.response = tt.resp
 			transport.err = tt.httpErr
 
-			err := client.CreateIndex(context.Background(), tt.index, tt.settings)
+			err := client.CreateIndex(t.Context(), tt.index, tt.settings)
 
 			require.Error(t, err)
 			require.Contains(t, err.Error(), tt.errMessage)
@@ -157,7 +156,7 @@ func TestClient_DeleteIndex_Success(t *testing.T) {
 
 	defer transport.response.Body.Close()
 
-	err := client.DeleteIndex(context.Background(), "test-index")
+	err := client.DeleteIndex(t.Context(), "test-index")
 	require.NoError(t, err)
 }
 
@@ -197,7 +196,7 @@ func TestClient_DeleteIndex_Errors(t *testing.T) {
 			transport.response = tt.resp
 			transport.err = tt.httpErr
 
-			err := client.DeleteIndex(context.Background(), tt.index)
+			err := client.DeleteIndex(t.Context(), tt.index)
 
 			require.Error(t, err)
 			require.Contains(t, err.Error(), tt.errMessage)
@@ -217,7 +216,7 @@ func TestClient_IndexDocument_Success(t *testing.T) {
 		"title": "Test Document",
 	}
 
-	err := client.IndexDocument(context.Background(), "test-index", "123", document)
+	err := client.IndexDocument(t.Context(), "test-index", "123", document)
 	require.NoError(t, err)
 }
 
@@ -279,7 +278,7 @@ func TestClient_IndexDocument_Errors(t *testing.T) {
 			transport.response = tt.resp
 			transport.err = tt.httpErr
 
-			err := client.IndexDocument(context.Background(), tt.index, tt.id, tt.document)
+			err := client.IndexDocument(t.Context(), tt.index, tt.id, tt.document)
 
 			require.Error(t, err)
 			require.Contains(t, err.Error(), tt.errMessage)
@@ -296,7 +295,7 @@ func TestClient_GetDocument_Success(t *testing.T) {
 
 	defer transport.response.Body.Close()
 
-	result, err := client.GetDocument(context.Background(), "test-index", "123")
+	result, err := client.GetDocument(t.Context(), "test-index", "123")
 	require.NoError(t, err)
 	require.Equal(t, "123", result["_id"])
 	require.Equal(t, map[string]any{"title": "Test Document"}, result["_source"])
@@ -358,7 +357,7 @@ func TestClient_GetDocument_Errors(t *testing.T) {
 			transport.response = tt.resp
 			transport.err = tt.httpErr
 
-			_, err := client.GetDocument(context.Background(), tt.index, tt.id)
+			_, err := client.GetDocument(t.Context(), tt.index, tt.id)
 
 			require.Error(t, err)
 			require.Contains(t, err.Error(), tt.errMessage)
@@ -374,7 +373,7 @@ func TestClient_UpdateDocument_Success(t *testing.T) {
 
 	defer transport.response.Body.Close()
 
-	err := client.UpdateDocument(context.Background(), "test-index", "123", map[string]any{
+	err := client.UpdateDocument(t.Context(), "test-index", "123", map[string]any{
 		"name": "updated name",
 	})
 	require.NoError(t, err)
@@ -446,7 +445,7 @@ func TestClient_UpdateDocument_Errors(t *testing.T) {
 			transport.response = tt.response
 			transport.err = tt.err
 
-			err := client.UpdateDocument(context.Background(), tt.index, tt.id, tt.update)
+			err := client.UpdateDocument(t.Context(), tt.index, tt.id, tt.update)
 
 			require.Error(t, err)
 			require.Contains(t, err.Error(), tt.expectedMsg)
@@ -462,7 +461,7 @@ func TestClient_DeleteDocument_Success(t *testing.T) {
 
 	defer transport.response.Body.Close()
 
-	err := client.DeleteDocument(context.Background(), "test-index", "123")
+	err := client.DeleteDocument(t.Context(), "test-index", "123")
 	require.NoError(t, err)
 }
 
@@ -513,7 +512,7 @@ func TestClient_DeleteDocument_Errors(t *testing.T) {
 			transport.response = tt.response
 			transport.err = tt.err
 
-			err := client.DeleteDocument(context.Background(), tt.index, tt.id)
+			err := client.DeleteDocument(t.Context(), tt.index, tt.id)
 
 			require.Error(t, err)
 			require.Contains(t, err.Error(), tt.expectedMsg)
@@ -542,7 +541,7 @@ func TestClient_Search_Success(t *testing.T) {
 		},
 	}
 
-	result, err := client.Search(context.Background(), []string{"test-index"}, query)
+	result, err := client.Search(t.Context(), []string{"test-index"}, query)
 
 	require.NoError(t, err)
 	require.InDelta(t, 1.0, result["hits"].(map[string]any)["total"].(map[string]any)["value"], 0.0001)
@@ -605,7 +604,7 @@ func TestClient_Search_Errors(t *testing.T) {
 			transport.response = tt.response
 			transport.err = tt.err
 
-			_, err := client.Search(context.Background(), tt.indices, tt.query)
+			_, err := client.Search(t.Context(), tt.indices, tt.query)
 
 			require.Error(t, err)
 			require.Contains(t, err.Error(), tt.expectedMsg)
@@ -636,7 +635,7 @@ func TestClient_Bulk_Success(t *testing.T) {
 		{"title": "Document 2"},
 	}
 
-	result, err := client.Bulk(context.Background(), operations)
+	result, err := client.Bulk(t.Context(), operations)
 
 	require.NoError(t, err)
 	require.False(t, result["errors"].(bool))
@@ -694,7 +693,7 @@ func TestClient_Bulk_Errors(t *testing.T) {
 			transport.response = tt.response
 			transport.err = tt.err
 
-			_, err := client.Bulk(context.Background(), tt.operations)
+			_, err := client.Bulk(t.Context(), tt.operations)
 
 			require.Error(t, err)
 			require.Contains(t, err.Error(), tt.expectedMsg)

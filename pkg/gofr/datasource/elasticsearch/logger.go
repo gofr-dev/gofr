@@ -39,8 +39,10 @@ func (ql *QueryLog) PrettyPrint(logger Logger) {
 		}
 	}
 
-	// Build context parts: indices, document ID, target, status
-	ctxParts := []string{}
+	op := clean(ql.Operation)
+	pl := clean(payload)
+
+	var ctxParts []string
 	if len(ql.Indices) > 0 {
 		ctxParts = append(ctxParts, strings.Join(ql.Indices, ","))
 	}
@@ -55,14 +57,9 @@ func (ql *QueryLog) PrettyPrint(logger Logger) {
 
 	contextStr := clean(strings.Join(ctxParts, " "))
 
-	// Clean operation and payload strings
-	op := clean(ql.Operation)
-	pl := clean(payload)
-
-	// Format: [Operation] [ELASTIC] Duration µs Context Payload
 	formatted := fmt.Sprintf(
-		"\u001B[38;5;8m%-15s \u001B[38;5;208mELASTIC\u001B[0m %8dµs %-15s %s",
-		op, ql.Duration, contextStr, pl,
+		"\u001B[38;5;8m%-32s \u001B[38;5;208m%-5s\u001B[0m %8d\u001B[38;5;8mµs\u001B[0m %-20s %s",
+		op, "ELASTIC", ql.Duration, contextStr, pl,
 	)
 	logger.Debug(formatted)
 }
