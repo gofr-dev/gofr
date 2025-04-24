@@ -147,6 +147,9 @@ linters:
     - usestdlibvars
     - whitespace
     - wsl
+    - usetesting
+  
+  
 
   # don't enable:
   # - godox  # Disabling because we need TODO lines at this stage of project.

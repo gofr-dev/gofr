@@ -1,7 +1,6 @@
 package service
 
 import (
-	"context"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -40,7 +39,7 @@ func Test_CustomDomainProvider_Get(t *testing.T) {
 			},
 		})
 
-	resp, err := customHeaderService.Get(context.Background(), "/path", queryParams)
+	resp, err := customHeaderService.Get(t.Context(), "/path", queryParams)
 	require.NoError(t, err)
 
 	defer resp.Body.Close()
@@ -73,7 +72,7 @@ func Test_CustomDomainProvider_Post(t *testing.T) {
 				"TEST_KEY": "test_value",
 			}})
 
-	resp, err := customHeaderService.Post(context.Background(), "/path", queryParams, body)
+	resp, err := customHeaderService.Post(t.Context(), "/path", queryParams, body)
 	require.NoError(t, err)
 
 	defer resp.Body.Close()
@@ -102,7 +101,7 @@ func TestCustomDomainProvider_Put(t *testing.T) {
 				"TEST_KEY": "test_value",
 			}})
 
-	resp, err := customHeaderService.Put(context.Background(), "/path", queryParams, body)
+	resp, err := customHeaderService.Put(t.Context(), "/path", queryParams, body)
 	require.NoError(t, err)
 
 	defer resp.Body.Close()
@@ -131,7 +130,7 @@ func TestCustomDomainProvider_Patch(t *testing.T) {
 				"TEST_KEY": "test_value",
 			}})
 
-	resp, err := customHeaderService.Patch(context.Background(), "/path", queryParams, body)
+	resp, err := customHeaderService.Patch(t.Context(), "/path", queryParams, body)
 	require.NoError(t, err)
 
 	defer resp.Body.Close()
@@ -159,7 +158,7 @@ func TestCustomDomainProvider_Delete(t *testing.T) {
 				"TEST_KEY": "test_value",
 			}})
 
-	resp, err := customHeaderService.Delete(context.Background(), "/path", body)
+	resp, err := customHeaderService.Delete(t.Context(), "/path", body)
 	require.NoError(t, err)
 
 	defer resp.Body.Close()

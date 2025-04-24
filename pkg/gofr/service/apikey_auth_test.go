@@ -1,7 +1,6 @@
 package service
 
 import (
-	"context"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -43,7 +42,7 @@ func Test_APIKeyAuthProvider_Get(t *testing.T) {
 	httpService := NewHTTPService(server.URL, logging.NewMockLogger(logging.INFO), nil,
 		&APIKeyConfig{"valid-key"})
 
-	resp, err := httpService.Get(context.Background(), path, queryParams)
+	resp, err := httpService.Get(t.Context(), path, queryParams)
 	require.NoError(t, err)
 
 	defer resp.Body.Close()
@@ -74,7 +73,7 @@ func Test_APIKeyAuthProvider_Post(t *testing.T) {
 	httpService := NewHTTPService(server.URL, logging.NewMockLogger(logging.INFO), nil,
 		&APIKeyConfig{"valid-key"})
 
-	resp, err := httpService.Post(context.Background(), path, queryParams, body)
+	resp, err := httpService.Post(t.Context(), path, queryParams, body)
 	require.NoError(t, err)
 
 	defer resp.Body.Close()
@@ -101,7 +100,7 @@ func TestApiKeyProvider_Put(t *testing.T) {
 	httpService := NewHTTPService(server.URL, logging.NewMockLogger(logging.INFO), nil,
 		&APIKeyConfig{"valid-key"})
 
-	resp, err := httpService.Put(context.Background(), path, queryParams, body)
+	resp, err := httpService.Put(t.Context(), path, queryParams, body)
 	require.NoError(t, err)
 
 	defer resp.Body.Close()
@@ -128,7 +127,7 @@ func TestApiKeyAuthProvider_Patch(t *testing.T) {
 	httpService := NewHTTPService(server.URL, logging.NewMockLogger(logging.INFO), nil,
 		&APIKeyConfig{"valid-key"})
 
-	resp, err := httpService.Patch(context.Background(), path, queryParams, body)
+	resp, err := httpService.Patch(t.Context(), path, queryParams, body)
 	require.NoError(t, err)
 
 	defer resp.Body.Close()
@@ -154,7 +153,7 @@ func TestApiKeyAuthProvider_Delete(t *testing.T) {
 	httpService := NewHTTPService(server.URL, logging.NewMockLogger(logging.INFO), nil,
 		&APIKeyConfig{"valid-key"})
 
-	resp, err := httpService.Delete(context.Background(), path, body)
+	resp, err := httpService.Delete(t.Context(), path, body)
 	require.NoError(t, err)
 
 	defer resp.Body.Close()
