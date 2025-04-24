@@ -212,10 +212,10 @@ func TestHTTPServiceEndpoint(t *testing.T) {
 	mockContainer, mocks := container.NewMockContainer(t, httpService)
 
 	mocks.HTTPService.EXPECT().Post(
-		gomock.Any(),
+		context.Background(),
 		"/api/Product", 
-		gomock.Any(),
-		gomock.Any()
+		nil,
+		map[string]any{"description": "Test Product"},
 	).Return(&http.Response{
 		StatusCode: http.StatusOK,
 		Body: io.NopCloser(strings.NewReader(`{
