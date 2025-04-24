@@ -1,7 +1,6 @@
 package pubsub
 
 import (
-	"context"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -9,7 +8,7 @@ import (
 )
 
 func TestMessage_Context(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	m := NewMessage(ctx)
 
 	out := m.Context()
@@ -85,7 +84,7 @@ func TestMessage_Bind(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.desc, func(t *testing.T) {
-			m := NewMessage(context.Background())
+			m := NewMessage(t.Context())
 			m.Value = tc.value
 
 			err := m.Bind(tc.input)
@@ -191,7 +190,7 @@ func TestMessage_Param(t *testing.T) {
 		{desc: "any other param is fetched", input: "path", expectedOut: ""},
 	}
 
-	m := NewMessage(context.TODO())
+	m := NewMessage(t.Context())
 	m.Topic = "test-topic"
 
 	for _, tc := range testCases {
@@ -211,7 +210,7 @@ func TestMessage_PathParam(t *testing.T) {
 		{desc: "other path param is fetched", input: "path", expectedOut: ""},
 	}
 
-	m := NewMessage(context.TODO())
+	m := NewMessage(t.Context())
 	m.Topic = "test-topic"
 
 	for _, tc := range testCases {

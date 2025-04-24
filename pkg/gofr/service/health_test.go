@@ -1,7 +1,6 @@
 package service
 
 import (
-	"context"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -24,7 +23,7 @@ func TestHTTPService_HealthCheck(t *testing.T) {
 		"method", http.MethodGet, "status", fmt.Sprintf("%v", http.StatusOK)).Times(1)
 
 	// when params value is of type []string then last value is sent in request
-	resp := service.HealthCheck(context.Background())
+	resp := service.HealthCheck(t.Context())
 
 	assert.Equal(t, &Health{Status: serviceUp, Details: map[string]any{"host": server.URL[7:]}},
 		resp, "TEST[%d], Failed.\n%s")
@@ -38,7 +37,7 @@ func TestHTTPService_HealthCheckCustomURL(t *testing.T) {
 		"method", http.MethodGet, "status", fmt.Sprintf("%v", http.StatusOK)).Times(1)
 
 	// when params value is of type []string then last value is sent in request
-	resp := service.HealthCheck(context.Background())
+	resp := service.HealthCheck(t.Context())
 
 	assert.Equal(t, &Health{Status: serviceUp, Details: map[string]any{"host": server.URL[7:]}},
 		resp, "TEST[%d], Failed.\n%s")
@@ -54,7 +53,7 @@ func TestHTTPService_HealthCheckErrorResponse(t *testing.T) {
 	service := NewHTTPService("http://test", logging.NewMockLogger(logging.INFO), metrics)
 
 	// when params value is of type []string then last value is sent in request
-	resp := service.HealthCheck(context.Background())
+	resp := service.HealthCheck(t.Context())
 
 	body, _ := json.Marshal(&resp)
 
@@ -69,7 +68,7 @@ func TestHTTPService_HealthCheckDifferentStatusCode(t *testing.T) {
 		"method", http.MethodGet, "status", fmt.Sprintf("%v", http.StatusBadRequest)).AnyTimes()
 
 	// when params value is of type []string then last value is sent in request
-	resp := service.HealthCheck(context.Background())
+	resp := service.HealthCheck(t.Context())
 
 	assert.Equal(t, &Health{Status: serviceDown,
 		Details: map[string]any{"host": server.URL[7:], "error": "service down"}},
@@ -92,7 +91,7 @@ func TestHTTPService_HealthCheckTimeout(t *testing.T) {
 		service := NewHTTPService(server.URL, logging.NewMockLogger(logging.INFO), metrics,
 			&HealthConfig{HealthEndpoint: ".well-known/alive", Timeout: 1})
 
-		resp := service.HealthCheck(context.Background())
+		resp := service.HealthCheck(t.Context())
 
 		assert.Equal(t, &Health{Status: serviceDown,
 			Details: map[string]any{"error": "Get \"" + server.URL + "/.well-known/alive\": context deadline exceeded"}},

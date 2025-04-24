@@ -1,7 +1,6 @@
 package service
 
 import (
-	"context"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -84,7 +83,7 @@ func TestHttpService_GetSuccessRequestsOAuth(t *testing.T) {
 
 	service := setupHTTPServiceTestServerForOAuth(server)
 
-	resp, err := service.Get(context.Background(), "test", nil)
+	resp, err := service.Get(t.Context(), "test", nil)
 
 	assert.Equal(t, http.StatusOK, resp.StatusCode)
 	require.NoError(t, err)
@@ -97,7 +96,7 @@ func TestHttpService_PostSuccessRequestsOAuth(t *testing.T) {
 
 	service := setupHTTPServiceTestServerForOAuth(server)
 
-	resp, err := service.Post(context.Background(), "test", nil, nil)
+	resp, err := service.Post(t.Context(), "test", nil, nil)
 
 	assert.Equal(t, http.StatusOK, resp.StatusCode)
 	require.NoError(t, err)
@@ -110,7 +109,7 @@ func TestHttpService_PatchSuccessRequestsOAuth(t *testing.T) {
 
 	service := setupHTTPServiceTestServerForOAuth(server)
 
-	resp, err := service.Patch(context.Background(), "test", nil, nil)
+	resp, err := service.Patch(t.Context(), "test", nil, nil)
 
 	assert.Equal(t, http.StatusOK, resp.StatusCode)
 	require.NoError(t, err)
@@ -123,7 +122,7 @@ func TestHttpService_PutSuccessRequestsOAuth(t *testing.T) {
 
 	service := setupHTTPServiceTestServerForOAuth(server)
 
-	resp, err := service.Put(context.Background(), "test", nil, nil)
+	resp, err := service.Put(t.Context(), "test", nil, nil)
 
 	assert.Equal(t, http.StatusOK, resp.StatusCode)
 	require.NoError(t, err)
@@ -136,7 +135,7 @@ func TestHttpService_DeleteSuccessRequestsOAuth(t *testing.T) {
 
 	service := setupHTTPServiceTestServerForOAuth(server)
 
-	resp, err := service.Delete(context.Background(), "test", nil)
+	resp, err := service.Delete(t.Context(), "test", nil)
 
 	assert.Equal(t, http.StatusOK, resp.StatusCode)
 	require.NoError(t, err)
@@ -147,7 +146,7 @@ func TestHttpService_DeleteSuccessRequestsOAuth(t *testing.T) {
 func TestHttpService_DeleteRequestsOAuthError(t *testing.T) {
 	service := setupHTTPServiceTestServerForOAuthWithUnSupportedMethod()
 
-	resp, err := service.Delete(context.Background(), "test", nil)
+	resp, err := service.Delete(t.Context(), "test", nil)
 
 	assert.Nil(t, resp)
 	require.ErrorContains(t, err, `unsupported protocol scheme`)
@@ -160,7 +159,7 @@ func TestHttpService_DeleteRequestsOAuthError(t *testing.T) {
 func TestHttpService_PutRequestsOAuthError(t *testing.T) {
 	service := setupHTTPServiceTestServerForOAuthWithUnSupportedMethod()
 
-	resp, err := service.Put(context.Background(), "test", nil, nil)
+	resp, err := service.Put(t.Context(), "test", nil, nil)
 
 	assert.Nil(t, resp)
 	require.ErrorContains(t, err, `unsupported protocol scheme`)
@@ -173,7 +172,7 @@ func TestHttpService_PutRequestsOAuthError(t *testing.T) {
 func TestHttpService_PatchRequestsOAuthError(t *testing.T) {
 	service := setupHTTPServiceTestServerForOAuthWithUnSupportedMethod()
 
-	resp, err := service.Patch(context.Background(), "test", nil, nil)
+	resp, err := service.Patch(t.Context(), "test", nil, nil)
 
 	assert.Nil(t, resp)
 	require.ErrorContains(t, err, `unsupported protocol scheme`)
@@ -186,7 +185,7 @@ func TestHttpService_PatchRequestsOAuthError(t *testing.T) {
 func TestHttpService_PostRequestsOAuthError(t *testing.T) {
 	service := setupHTTPServiceTestServerForOAuthWithUnSupportedMethod()
 
-	resp, err := service.Post(context.Background(), "test", nil, nil)
+	resp, err := service.Post(t.Context(), "test", nil, nil)
 
 	assert.Nil(t, resp)
 	require.ErrorContains(t, err, `unsupported protocol scheme`)
@@ -199,7 +198,7 @@ func TestHttpService_PostRequestsOAuthError(t *testing.T) {
 func TestHttpService_GetRequestsOAuthError(t *testing.T) {
 	service := setupHTTPServiceTestServerForOAuthWithUnSupportedMethod()
 
-	resp, err := service.Get(context.Background(), "test", nil)
+	resp, err := service.Get(t.Context(), "test", nil)
 
 	assert.Nil(t, resp)
 	require.ErrorContains(t, err, `unsupported protocol scheme`)

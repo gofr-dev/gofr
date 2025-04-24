@@ -1,7 +1,6 @@
 package service
 
 import (
-	"context"
 	"encoding/base64"
 	"io"
 	"net/http"
@@ -43,7 +42,7 @@ func TestBasicAuthProvider_Get(t *testing.T) {
 		&BasicAuthConfig{UserName: "user", Password: "cGFzc3dvcmQ="})
 
 	// Make the GET request
-	resp, err := httpService.Get(context.Background(), path, queryParams)
+	resp, err := httpService.Get(t.Context(), path, queryParams)
 	require.NoError(t, err)
 
 	defer resp.Body.Close()
@@ -79,7 +78,7 @@ func TestBasicAuthProvider_Post(t *testing.T) {
 		&BasicAuthConfig{UserName: "user", Password: "cGFzc3dvcmQ="})
 
 	// Make the POST request
-	resp, err := httpService.Post(context.Background(), path, queryParams, body)
+	resp, err := httpService.Post(t.Context(), path, queryParams, body)
 	require.NoError(t, err)
 
 	defer resp.Body.Close()
@@ -111,7 +110,7 @@ func TestBasicAuthProvider_Put(t *testing.T) {
 		&BasicAuthConfig{UserName: "user", Password: "cGFzc3dvcmQ="})
 
 	// Make the PUT request
-	resp, err := httpService.Put(context.Background(), path, queryParams, body)
+	resp, err := httpService.Put(t.Context(), path, queryParams, body)
 	require.NoError(t, err)
 
 	defer resp.Body.Close()
@@ -143,7 +142,7 @@ func TestBasicAuthProvider_Patch(t *testing.T) {
 		&BasicAuthConfig{UserName: "user", Password: "cGFzc3dvcmQ="})
 
 	// Make the PATCH request
-	resp, err := httpService.Patch(context.Background(), path, queryParams, body)
+	resp, err := httpService.Patch(t.Context(), path, queryParams, body)
 	require.NoError(t, err)
 
 	defer resp.Body.Close()
@@ -174,7 +173,7 @@ func TestBasicAuthProvider_Delete(t *testing.T) {
 		&BasicAuthConfig{UserName: "user", Password: "cGFzc3dvcmQ="})
 
 	// Make the DELETE request
-	resp, err := httpService.Delete(context.Background(), path, body)
+	resp, err := httpService.Delete(t.Context(), path, body)
 	require.NoError(t, err)
 
 	defer resp.Body.Close()

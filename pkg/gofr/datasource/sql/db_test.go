@@ -53,7 +53,7 @@ func TestDB_SelectSingleColumnFromIntToString(t *testing.T) {
 		gomock.Any(), "hostname", gomock.Any(), "database", gomock.Any(), "type", gomock.Any())
 
 	ids := make([]string, 0)
-	db.Select(context.TODO(), &ids, "select id from users")
+	db.Select(t.Context(), &ids, "select id from users")
 
 	assert.Equal(t, []string{"1", "2"}, ids, "TEST Failed.\n")
 }
@@ -75,7 +75,7 @@ func TestDB_SelectSingleColumnFromStringToString(t *testing.T) {
 		gomock.Any(), "hostname", gomock.Any(), "database", gomock.Any(), "type", gomock.Any())
 
 	ids := make([]string, 0)
-	db.Select(context.TODO(), &ids, "select id from users")
+	db.Select(t.Context(), &ids, "select id from users")
 
 	assert.Equal(t, []string{"1", "2"}, ids, "TEST Failed.\n")
 }
@@ -97,7 +97,7 @@ func TestDB_SelectSingleColumnFromIntToInt(t *testing.T) {
 		gomock.Any(), "hostname", gomock.Any(), "database", gomock.Any(), "type", gomock.Any())
 
 	ids := make([]int, 0)
-	db.Select(context.TODO(), &ids, "select id from users")
+	db.Select(t.Context(), &ids, "select id from users")
 
 	assert.Equal(t, []int{1, 2}, ids, "TEST Failed.\n")
 }
@@ -122,7 +122,7 @@ func TestDB_SelectSingleColumnFromIntToCustomInt(t *testing.T) {
 
 	ids := make([]CustomInt, 0)
 
-	db.Select(context.TODO(), &ids, "select id from users")
+	db.Select(t.Context(), &ids, "select id from users")
 
 	assert.Equal(t, []CustomInt{1, 2}, ids, "TEST Failed.\n")
 }
@@ -147,13 +147,13 @@ func TestDB_SelectSingleColumnFromStringToCustomInt(t *testing.T) {
 
 	ids := make([]CustomInt, 0)
 
-	db.Select(context.TODO(), &ids, "select id from users")
+	db.Select(t.Context(), &ids, "select id from users")
 
 	assert.Equal(t, []CustomInt{1, 2}, ids, "TEST Failed.\n")
 }
 
 func TestDB_SelectContextError(t *testing.T) {
-	ctx, cancel := context.WithDeadline(context.Background(), time.Now().Add(time.Microsecond))
+	ctx, cancel := context.WithDeadline(t.Context(), time.Now().Add(time.Microsecond))
 	time.Sleep(1 * time.Millisecond)
 
 	defer cancel()
@@ -170,7 +170,7 @@ func TestDB_SelectDataPointerError(t *testing.T) {
 		db, _ := getDB(t, logging.INFO)
 		defer db.DB.Close()
 
-		db.Select(context.Background(), nil, "select 1")
+		db.Select(t.Context(), nil, "select 1")
 	})
 
 	assert.Contains(t, out, "we did not get a pointer. data is not settable.", "TEST Failed.\n")
@@ -196,7 +196,7 @@ func TestDB_SelectSingleColumnFromStringToCustomString(t *testing.T) {
 
 	ids := make([]CustomStr, 0)
 
-	db.Select(context.TODO(), &ids, "select id from users")
+	db.Select(t.Context(), &ids, "select id from users")
 
 	assert.Equal(t, []CustomStr{"1", "2"}, ids, "TEST Failed.\n")
 }
@@ -224,7 +224,7 @@ func TestDB_SelectSingleRowMultiColumn(t *testing.T) {
 
 	u := user{}
 
-	db.Select(context.TODO(), &u, "select 1 user")
+	db.Select(t.Context(), &u, "select 1 user")
 
 	assert.Equal(t, user{
 		Name:  "Vikash",
@@ -256,7 +256,7 @@ func TestDB_SelectSingleRowMultiColumnWithTags(t *testing.T) {
 
 	u := user{}
 
-	db.Select(context.TODO(), &u, "select 1 user")
+	db.Select(t.Context(), &u, "select 1 user")
 
 	assert.Equal(t, user{
 		Name:  "Vikash",
@@ -289,7 +289,7 @@ func TestDB_SelectMultiRowMultiColumnWithTags(t *testing.T) {
 
 	users := []user{}
 
-	db.Select(context.TODO(), &users, "select users")
+	db.Select(t.Context(), &users, "select users")
 
 	assert.Equal(t, []user{
 		{
@@ -320,7 +320,7 @@ func TestDB_SelectSingleColumnError(t *testing.T) {
 		mockMetrics.EXPECT().RecordHistogram(gomock.Any(), "app_sql_stats",
 			gomock.Any(), "hostname", gomock.Any(), "database", gomock.Any(), "type", gomock.Any())
 
-		db.Select(context.TODO(), &ids, "select id from users")
+		db.Select(t.Context(), &ids, "select id from users")
 	})
 
 	assert.Contains(t, out, "DB error", "TEST Failed.\n")
@@ -335,7 +335,7 @@ func TestDB_SelectDataPointerNotExpected(t *testing.T) {
 		db, _ := getDB(t, logging.DEBUG)
 		defer db.DB.Close()
 
-		db.Select(context.Background(), &m, "select id from users")
+		db.Select(t.Context(), &m, "select id from users")
 	})
 
 	assert.Contains(t, out, "a pointer to map was not expected.", "TEST Failed.\n")
@@ -422,7 +422,7 @@ func TestDB_QueryContext(t *testing.T) {
 		mockMetrics.EXPECT().RecordHistogram(gomock.Any(), "app_sql_stats",
 			gomock.Any(), "hostname", gomock.Any(), "database", gomock.Any(), "type", "SELECT")
 
-		rows, err = db.QueryContext(context.Background(), "SELECT 1")
+		rows, err = db.QueryContext(t.Context(), "SELECT 1")
 		require.NoError(t, err)
 		require.NoError(t, rows.Err())
 		assert.NotNil(t, rows)
@@ -451,7 +451,7 @@ func TestDB_QueryContextError(t *testing.T) {
 		mockMetrics.EXPECT().RecordHistogram(gomock.Any(), "app_sql_stats",
 			gomock.Any(), "hostname", gomock.Any(), "database", gomock.Any(), "type", "SELECT")
 
-		rows, err = db.QueryContext(context.Background(), "SELECT")
+		rows, err = db.QueryContext(t.Context(), "SELECT")
 		if !assert.Nil(t, rows) {
 			require.NoError(t, rows.Err())
 		}
@@ -507,7 +507,7 @@ func TestDB_QueryRowContext(t *testing.T) {
 		mockMetrics.EXPECT().RecordHistogram(gomock.Any(), "app_sql_stats",
 			gomock.Any(), "hostname", gomock.Any(), "database", gomock.Any(), "type", "SELECT")
 
-		row = db.QueryRowContext(context.Background(), "SELECT name FROM employee WHERE id = ?", 1)
+		row = db.QueryRowContext(t.Context(), "SELECT name FROM employee WHERE id = ?", 1)
 		assert.NotNil(t, row)
 	})
 
@@ -591,7 +591,7 @@ func TestDB_ExecContext(t *testing.T) {
 		mockMetrics.EXPECT().RecordHistogram(gomock.Any(), "app_sql_stats",
 			gomock.Any(), "hostname", gomock.Any(), "database", gomock.Any(), "type", "INSERT")
 
-		res, err = db.ExecContext(context.Background(), "INSERT INTO employee VALUES(?, ?)", 2, "doe")
+		res, err = db.ExecContext(t.Context(), "INSERT INTO employee VALUES(?, ?)", 2, "doe")
 		require.NoError(t, err)
 		assert.NotNil(t, res)
 	})
@@ -619,7 +619,7 @@ func TestDB_ExecContextError(t *testing.T) {
 		mockMetrics.EXPECT().RecordHistogram(gomock.Any(), "app_sql_stats",
 			gomock.Any(), "hostname", gomock.Any(), "database", gomock.Any(), "type", "INSERT")
 
-		res, err = db.ExecContext(context.Background(), "INSERT INTO employee VALUES(?, ?)", 2, "doe")
+		res, err = db.ExecContext(t.Context(), "INSERT INTO employee VALUES(?, ?)", 2, "doe")
 		require.NoError(t, err)
 		assert.NotNil(t, res)
 	})
@@ -834,7 +834,7 @@ func TestTx_QueryRowContext(t *testing.T) {
 		mockMetrics.EXPECT().RecordHistogram(gomock.Any(), "app_sql_stats",
 			gomock.Any(), "hostname", gomock.Any(), "database", gomock.Any(), "type", "SELECT")
 
-		row = tx.QueryRowContext(context.Background(), "SELECT name FROM employee WHERE id = ?", 1)
+		row = tx.QueryRowContext(t.Context(), "SELECT name FROM employee WHERE id = ?", 1)
 		assert.NotNil(t, row)
 	})
 
@@ -924,7 +924,7 @@ func TestTx_ExecContext(t *testing.T) {
 		mockMetrics.EXPECT().RecordHistogram(gomock.Any(), "app_sql_stats",
 			gomock.Any(), "hostname", gomock.Any(), "database", gomock.Any(), "type", "INSERT")
 
-		res, err = tx.ExecContext(context.Background(), "INSERT INTO employee VALUES(?, ?)", 2, "doe")
+		res, err = tx.ExecContext(t.Context(), "INSERT INTO employee VALUES(?, ?)", 2, "doe")
 		require.NoError(t, err)
 		assert.NotNil(t, res)
 	})
@@ -954,7 +954,7 @@ func TestTx_ExecContextError(t *testing.T) {
 		mockMetrics.EXPECT().RecordHistogram(gomock.Any(), "app_sql_stats",
 			gomock.Any(), "hostname", gomock.Any(), "database", gomock.Any(), "type", "INSERT")
 
-		res, err = tx.ExecContext(context.Background(), "INSERT INTO employee VALUES(?, ?)", 2, "doe")
+		res, err = tx.ExecContext(t.Context(), "INSERT INTO employee VALUES(?, ?)", 2, "doe")
 		require.NoError(t, err)
 		assert.NotNil(t, res)
 	})

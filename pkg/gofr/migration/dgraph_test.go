@@ -32,7 +32,7 @@ func dgraphSetup(t *testing.T) (migrator, *container.MockDgraph, *container.Cont
 func Test_DGraphCheckAndCreateMigrationTable(t *testing.T) {
 	migratorWithDGraph, mockDGraph, mockContainer := dgraphSetup(t)
 
-	mockDGraph.EXPECT().ApplySchema(context.Background(), dgraphSchema).Return(nil)
+	mockDGraph.EXPECT().ApplySchema(t.Context(), dgraphSchema).Return(nil)
 
 	err := migratorWithDGraph.checkAndCreateMigrationTable(mockContainer)
 
@@ -77,7 +77,7 @@ func Test_DGraphGetLastMigration(t *testing.T) {
 	for i, tc := range testCases {
 		t.Run(tc.desc, func(t *testing.T) {
 			// Set up mock expectation for the main query
-			mockDGraph.EXPECT().Query(context.Background(), getLastMigrationQuery).
+			mockDGraph.EXPECT().Query(t.Context(), getLastMigrationQuery).
 				Return(tc.mockResp, tc.err)
 
 			resp := migratorWithDGraph.getLastMigration(mockContainer)
@@ -106,7 +106,7 @@ func Test_DGraphCommitMigration(t *testing.T) {
 	}
 
 	for i, tc := range testCases {
-		mockDGraph.EXPECT().Mutate(context.Background(), gomock.Any()).Return(nil, tc.err)
+		mockDGraph.EXPECT().Mutate(t.Context(), gomock.Any()).Return(nil, tc.err)
 
 		err := migratorWithDGraph.commitMigration(mockContainer, td)
 
@@ -127,7 +127,7 @@ func Test_DGraphDS_ApplySchema(t *testing.T) {
 	_, mockDGraph, _ := dgraphSetup(t)
 
 	ds := dgraphDS{client: mockDGraph}
-	ctx := context.Background()
+	ctx := t.Context()
 	schema := "test schema"
 
 	testCases := []struct {
@@ -151,7 +151,7 @@ func Test_DGraphDS_AddOrUpdateField(t *testing.T) {
 	_, mockDGraph, _ := dgraphSetup(t)
 
 	ds := dgraphDS{client: mockDGraph}
-	ctx := context.Background()
+	ctx := t.Context()
 	fieldName := "test"
 	fieldType := "string"
 	directives := "@index(exact)"
@@ -177,7 +177,7 @@ func Test_DGraphDS_DropField(t *testing.T) {
 	_, mockDGraph, _ := dgraphSetup(t)
 
 	ds := dgraphDS{client: mockDGraph}
-	ctx := context.Background()
+	ctx := t.Context()
 	fieldName := "test"
 
 	testCases := []struct {

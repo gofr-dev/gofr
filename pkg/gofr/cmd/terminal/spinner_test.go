@@ -13,7 +13,7 @@ import (
 func TestSpinner(t *testing.T) {
 	var (
 		waitTime = 1 * time.Second
-		ctx      = context.TODO()
+		ctx      = t.Context()
 	)
 
 	// Testing Dot spinner
@@ -76,7 +76,7 @@ func TestSpinner_contextDone(t *testing.T) {
 	b := &bytes.Buffer{}
 	out := &Out{out: b}
 	spinner := NewDotSpinner(out)
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(t.Context())
 
 	// start the spinner
 	spinner.Spin(ctx)

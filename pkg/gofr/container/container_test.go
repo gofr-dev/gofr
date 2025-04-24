@@ -192,17 +192,17 @@ func Test_GetConnectionFromContext(t *testing.T) {
 	}{
 		{
 			name:     "no connection in context",
-			ctx:      context.Background(),
+			ctx:      t.Context(),
 			expected: nil,
 		},
 		{
 			name:     "connection in context",
-			ctx:      context.WithValue(context.Background(), ws.WSConnectionKey, &ws.Connection{Conn: &websocket.Conn{}}),
+			ctx:      context.WithValue(t.Context(), ws.WSConnectionKey, &ws.Connection{Conn: &websocket.Conn{}}),
 			expected: &ws.Connection{Conn: &websocket.Conn{}},
 		},
 		{
 			name:     "wrong type in context",
-			ctx:      context.WithValue(context.Background(), ws.WSConnectionKey, "wrong-type"),
+			ctx:      context.WithValue(t.Context(), ws.WSConnectionKey, "wrong-type"),
 			expected: nil,
 		},
 	}
