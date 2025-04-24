@@ -10,7 +10,7 @@ GoFr inherently provides the functionality, it can be enabled by passing circuit
 
 ## How It Works:
 
-The circuit breaker tracks consecutive failed requests to a downstream service:
+The circuit breaker tracks consecutive failed requests for a downstream service.
 
 - **Threshold:** The number of consecutive failed requests after which the circuit breaker transitions to an open state. While open, all requests to that service will fail immediately without making any actual outbound calls, effectively preventing request overflow to an already failing service.
 
@@ -19,8 +19,9 @@ The circuit breaker tracks consecutive failed requests to a downstream service:
 - **Interval:** Once the circuit is open, GoFr starts a background goroutine that periodically checks the health of the service by making requests to its aliveness endpoint (by default: /.well-known/alive) at the specified interval. When the service is deemed healthy again, the circuit breaker closes, allowing requests to resume.
 
 
->  NOTE: Retries only occur when the target service responds with a 500 Internal Server Error. Errors like 400 Bad Request or 404 Not Found are considered non-transient and will not trigger retries.
 
+> [!NOTE]
+> Retries only occur when the target service responds with a 500 Internal Server Error. Errors like 400 Bad Request or 404 Not Found are considered non-transient and will not trigger retries.
 ## Usage
 
 ```go
