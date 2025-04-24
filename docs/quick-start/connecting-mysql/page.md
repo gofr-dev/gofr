@@ -61,7 +61,7 @@ type Customer struct {
 }
 
 func main() {
-	// initialise gofr object
+	// initialize gofr object
 	app := gofr.New()
 
 	app.GET("/redis", func(ctx *gofr.Context) (any, error) {

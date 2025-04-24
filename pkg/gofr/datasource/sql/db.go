@@ -292,7 +292,7 @@ func (*DB) rowsToStruct(rows *sql.Rows, vo reflect.Value) {
 		v = vo.Elem()
 	}
 
-	// Map fields and their indexes by normalised name
+	// Map fields and their indexes by normalized name
 	fieldNameIndex := map[string]int{}
 
 	for i := 0; i < v.Type().NumField(); i++ {
