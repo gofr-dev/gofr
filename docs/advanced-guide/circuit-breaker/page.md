@@ -20,8 +20,7 @@ The circuit breaker tracks consecutive failed requests for a downstream service.
 
 
 
-> [!NOTE]
-> Retries only occur when the target service responds with a 500 Internal Server Error. Errors like 400 Bad Request or 404 Not Found are considered non-transient and will not trigger retries.
+> NOTE: Retries only occur when the target service responds with a 500 Internal Server Error. Errors like 400 Bad Request or 404 Not Found are considered non-transient and will not trigger retries.
 ## Usage
 
 ```go
