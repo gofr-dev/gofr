@@ -90,7 +90,7 @@ func New(conf *Config, logger pubsub.Logger, metrics Metrics) *kafkaClient { //n
 
 	logger.Debugf("connecting to Kafka brokers: '%v'", brokers)
 
-	dialer, conn, writer, reader, err := initializeKafkaClient(conf, logger)
+	helper, err := initializeKafkaClient(context.Background(), conf, logger)
 	if err != nil {
 		logger.Errorf("failed to connect to kafka at %v, error: %v", conf.Broker, err)
 
@@ -108,11 +108,11 @@ func New(conf *Config, logger pubsub.Logger, metrics Metrics) *kafkaClient { //n
 
 	return &kafkaClient{
 		config:  *conf,
-		dialer:  dialer,
-		reader:  reader,
-		conn:    conn,
+		dialer:  helper.Dialer,
+		reader:  helper.Reader,
+		conn:    helper.Conn,
 		logger:  logger,
-		writer:  writer,
+		writer:  helper.Writer,
 		mu:      &sync.RWMutex{},
 		metrics: metrics,
 	}

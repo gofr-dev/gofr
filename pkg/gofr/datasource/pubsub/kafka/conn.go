@@ -12,20 +12,31 @@ import (
 	"gofr.dev/pkg/gofr/datasource/pubsub"
 )
 
+var errFailedToConnectBrokers = errors.New("failed to connect to any kafka brokers")
+
+// clientHelper bundles all Kafka components for better organization.
+type clientHelper struct {
+	Dialer *kafka.Dialer
+	Conn   *multiConn
+	Writer Writer
+	Reader map[string]Reader
+}
+
 //nolint:unused // We need this wrap around for testing purposes.
 type Conn struct {
 	conns []*kafka.Conn
 }
 
-func initializeKafkaClient(conf *Config, logger pubsub.Logger) (*kafka.Dialer, *multiConn, Writer, map[string]Reader, error) {
+// initializeKafkaClient creates and configures all Kafka client components.
+func initializeKafkaClient(ctx context.Context, conf *Config, logger pubsub.Logger) (*clientHelper, error) {
 	dialer, err := setupDialer(conf)
 	if err != nil {
-		return nil, nil, nil, nil, err
+		return nil, err
 	}
 
-	conns, err := connectToBrokers(conf.Broker, dialer, logger)
+	conns, err := connectToBrokers(ctx, conf.Broker, dialer, logger)
 	if err != nil {
-		return nil, nil, nil, nil, err
+		return nil, err
 	}
 
 	multi := &multiConn{
@@ -38,7 +49,7 @@ func initializeKafkaClient(conf *Config, logger pubsub.Logger) (*kafka.Dialer, *
 
 	logger.Logf("connected to %d Kafka brokers", len(conns))
 
-	return dialer, multi, writer, reader, nil
+	return &clientHelper{Dialer: dialer, Conn: multi, Writer: writer, Reader: reader}, nil
 }
 
 func (k *kafkaClient) getNewReader(topic string) Reader {
@@ -66,12 +77,7 @@ func (k *kafkaClient) Controller() (broker kafka.Broker, err error) {
 func (k *kafkaClient) CreateTopic(_ context.Context, name string) error {
 	topics := kafka.TopicConfig{Topic: name, NumPartitions: 1, ReplicationFactor: 1}
 
-	err := k.conn.CreateTopics(topics)
-	if err != nil {
-		return err
-	}
-
-	return nil
+	return k.conn.CreateTopics(topics)
 }
 
 type multiConn struct {

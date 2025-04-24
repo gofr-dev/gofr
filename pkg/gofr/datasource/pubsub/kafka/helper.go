@@ -57,7 +57,9 @@ func retryConnect(client *kafkaClient, conf *Config, logger pubsub.Logger) {
 	for {
 		time.Sleep(defaultRetryTimeout)
 
-		dialer, conn, writer, reader, err := initializeKafkaClient(conf, logger)
+		ctx := context.Background()
+
+		helper, err := initializeKafkaClient(ctx, conf, logger)
 		if err != nil {
 			var brokers any
 
@@ -72,10 +74,10 @@ func retryConnect(client *kafkaClient, conf *Config, logger pubsub.Logger) {
 			continue
 		}
 
-		client.conn = conn
-		client.dialer = dialer
-		client.writer = writer
-		client.reader = reader
+		client.conn = helper.Conn
+		client.dialer = helper.Dialer
+		client.writer = helper.Writer
+		client.reader = helper.Reader
 
 		return
 	}
@@ -118,15 +120,16 @@ func setupDialer(conf *Config) (*kafka.Dialer, error) {
 	return dialer, nil
 }
 
-func connectToBrokers(brokers []string, dialer *kafka.Dialer, logger pubsub.Logger) ([]Connection, error) {
+// connectToBrokers connects to Kafka brokers with context support.
+func connectToBrokers(ctx context.Context, brokers []string, dialer *kafka.Dialer, logger pubsub.Logger) ([]Connection, error) {
+	conns := make([]Connection, 0)
+
 	if len(brokers) == 0 {
 		return nil, errBrokerNotProvided
 	}
 
-	conns := make([]Connection, 0)
-
 	for _, broker := range brokers {
-		conn, err := dialer.DialContext(context.Background(), "tcp", broker)
+		conn, err := dialer.DialContext(ctx, "tcp", broker)
 		if err != nil {
 			logger.Errorf("failed to connect to broker %s: %v", broker, err)
 			continue
@@ -136,7 +139,7 @@ func connectToBrokers(brokers []string, dialer *kafka.Dialer, logger pubsub.Logg
 	}
 
 	if len(conns) == 0 {
-		return nil, errNoActiveConnections
+		return nil, errFailedToConnectBrokers
 	}
 
 	return conns, nil
