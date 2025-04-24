@@ -1,4 +1,4 @@
-go 1.24
+go 1.24.0
 
 toolchain go1.24.0
 
@@ -9,6 +9,7 @@ use (
 	./pkg/gofr/datasource/cassandra
 	./pkg/gofr/datasource/clickhouse
 	./pkg/gofr/datasource/dgraph
+	./pkg/gofr/datasource/elasticsearch
 	./pkg/gofr/datasource/file/ftp
 	./pkg/gofr/datasource/file/s3
 	./pkg/gofr/datasource/file/sftp

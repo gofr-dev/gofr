@@ -84,7 +84,7 @@ func TestOAuthInvalidTokenFormat(t *testing.T) {
 
 	server := httptest.NewServer(router)
 
-	req, _ := http.NewRequestWithContext(context.Background(), http.MethodGet, server.URL+"/test", http.NoBody)
+	req, _ := http.NewRequestWithContext(t.Context(), http.MethodGet, server.URL+"/test", http.NoBody)
 	req.Header.Set("Authorization", "eyJhb")
 
 	client := http.Client{}
@@ -109,7 +109,7 @@ func TestOAuthEmptyAuthHeader(t *testing.T) {
 
 	server := httptest.NewServer(router)
 
-	req, _ := http.NewRequestWithContext(context.Background(), http.MethodGet, server.URL+"/test", http.NoBody)
+	req, _ := http.NewRequestWithContext(t.Context(), http.MethodGet, server.URL+"/test", http.NoBody)
 
 	client := http.Client{}
 
@@ -133,7 +133,7 @@ func TestOAuthMalformedToken(t *testing.T) {
 
 	server := httptest.NewServer(router)
 
-	req, _ := http.NewRequestWithContext(context.Background(), http.MethodGet, server.URL+"/test", http.NoBody)
+	req, _ := http.NewRequestWithContext(t.Context(), http.MethodGet, server.URL+"/test", http.NoBody)
 	req.Header.Set("Authorization", "Bearer eyJh")
 
 	client := http.Client{}
@@ -158,7 +158,7 @@ func TestOAuthJWKSKeyNotFound(t *testing.T) {
 
 	server := httptest.NewServer(router)
 
-	req, _ := http.NewRequestWithContext(context.Background(), http.MethodGet, server.URL+"/test", http.NoBody)
+	req, _ := http.NewRequestWithContext(t.Context(), http.MethodGet, server.URL+"/test", http.NoBody)
 	req.Header.Set("Authorization", "Bearer eyJhbGciOiJSUzI1NiIsImtpZCI6IjhaOV9RQTBSa0Y3RHM3TUFNaDFxLTl6dVJZ"+
 		"TklSTThHV3BZdXdyb0ZkTjg9IiwidHlwIjoiSldUIn0.eyJhdWQiOiJzdGFnZS5hdXRoLnpvcHNtYXJ0LmNvbSIsImV4cCI6MTcxODc5MDQ2My"+
 		"wiaWF0IjoxNzEwMTUwNDYzLCJpc3MiOiJzdGFnZS5hdXRoLnpvcHNtYXJ0LmNvbSIsIm5hbWUiOiJSYWtzaGl0IFNpbmdoIiwib3JpZyI6IkdP"+
@@ -421,7 +421,7 @@ func Test_OAuthSuccessWithValidation(t *testing.T) {
 func getRequest(t *testing.T, url string) *http.Request {
 	t.Helper()
 
-	req, _ := http.NewRequestWithContext(context.Background(), http.MethodGet, url+"/test", http.NoBody)
+	req, _ := http.NewRequestWithContext(t.Context(), http.MethodGet, url+"/test", http.NoBody)
 	req.Header.Set("Authorization", "Bearer eyJhbGciOiJSUzI1NiIsImtpZCI6IjAwVFEwdlRpNVB1UnZscUZGY3dCeUc0WjBM"+
 		"dGREcUtJX0JWUFRrdnpleEUiLCJ0eXAiOiJKV1QifQ.eyJhdWQiOiJzdGFnZS5rb3BzLmRldiIsImlhdCI6MTI1Nzg5NDAwMCwib3JpZyI6IkdP"+
 		"T0dMRSIsInBpY3R1cmUiOiJodHRwczovL2xoMy5nb29nbGV1c2VyY29udGVudC5jb20vYS9BQ2c4b2NLSjVEREE0enJ1ekZsc1E5S3ZMakhEdG"+

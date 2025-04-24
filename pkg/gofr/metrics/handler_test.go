@@ -1,7 +1,6 @@
 package metrics
 
 import (
-	"context"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -32,7 +31,7 @@ func Test_MetricsGetHandler_MetricsNotRegistered(t *testing.T) {
 
 		server = httptest.NewServer(handler)
 
-		req, _ := http.NewRequestWithContext(context.Background(), http.MethodGet, server.URL+"/metrics", http.NoBody)
+		req, _ := http.NewRequestWithContext(t.Context(), http.MethodGet, server.URL+"/metrics", http.NoBody)
 
 		resp, _ := server.Client().Do(req)
 		if resp != nil {
@@ -60,7 +59,7 @@ func Test_MetricsGetHandler_SystemMetricsRegistered(t *testing.T) {
 
 	server := httptest.NewServer(handler)
 
-	req, _ := http.NewRequestWithContext(context.Background(), http.MethodGet, server.URL+"/metrics", http.NoBody)
+	req, _ := http.NewRequestWithContext(t.Context(), http.MethodGet, server.URL+"/metrics", http.NoBody)
 
 	resp, err := server.Client().Do(req)
 
@@ -101,7 +100,7 @@ func Test_MetricsGetHandler_RegisteredProfilingRoutes(t *testing.T) {
 	}
 
 	for _, route := range expectedRoutes {
-		req, _ := http.NewRequestWithContext(context.Background(), http.MethodGet, server.URL+route, http.NoBody)
+		req, _ := http.NewRequestWithContext(t.Context(), http.MethodGet, server.URL+route, http.NoBody)
 		resp, err := server.Client().Do(req)
 
 		require.NotNil(t, resp)

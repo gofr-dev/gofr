@@ -1,7 +1,6 @@
 package gofr
 
 import (
-	"context"
 	"fmt"
 	"testing"
 	"time"
@@ -326,7 +325,7 @@ func TestJob_tick(t *testing.T) {
 func Test_noopRequest(t *testing.T) {
 	noop := noopRequest{}
 
-	assert.Equal(t, context.Background(), noop.Context())
+	assert.Equal(t, t.Context(), noop.Context())
 	assert.Equal(t, "", noop.Param(""))
 	assert.Empty(t, noop.PathParam(""))
 	assert.Equal(t, "gofr", noop.HostName())

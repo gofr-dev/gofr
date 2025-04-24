@@ -100,7 +100,7 @@ type SubQuery struct {
 	// An optional value used to filter the time series emitted in the results.
 	// Note that if no filters are specified, all time series for the given
 	// metric will be aggregated into the results.
-	Fiters []Filter `json:"filters,omitempty"`
+	Filters []Filter `json:"filters,omitempty"`
 }
 
 // Filter is the structure used to hold the filter parameters when calling /api/query.

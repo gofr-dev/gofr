@@ -80,7 +80,7 @@ func TestSubscriptionManager_HandlerError(t *testing.T) {
 
 		// Run the subscriber in a goroutine
 		go func() {
-			err := subscriptionManager.startSubscriber(context.Background(), "test-topic",
+			err := subscriptionManager.startSubscriber(t.Context(), "test-topic",
 				func(*Context) error {
 					return handleError("error in test-topic")
 				})
@@ -112,7 +112,7 @@ func TestSubscriptionManager_SubscribeError(t *testing.T) {
 
 		// Run the subscriber in a goroutine
 		go func() {
-			err := subscriptionManager.startSubscriber(context.Background(), "abc",
+			err := subscriptionManager.startSubscriber(t.Context(), "abc",
 				func(*Context) error {
 					return handleError("error in abc")
 				})
@@ -144,7 +144,7 @@ func TestSubscriptionManager_PanicRecovery(t *testing.T) {
 
 		// Run the subscriber in a goroutine
 		go func() {
-			_ = subscriptionManager.startSubscriber(context.Background(), "abc",
+			_ = subscriptionManager.startSubscriber(t.Context(), "abc",
 				func(*Context) error {
 					panic("test panic")
 				})
@@ -163,7 +163,7 @@ func TestSubscriptionManager_PanicRecovery(t *testing.T) {
 }
 
 func TestSubscriptionManager_ShouldStopOnCtxDone(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(t.Context())
 
 	mockContainer := container.Container{
 		Logger: logging.NewLogger(logging.ERROR),
