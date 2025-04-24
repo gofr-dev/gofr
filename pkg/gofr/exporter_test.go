@@ -33,7 +33,7 @@ func Test_ExportSpans(t *testing.T) {
 	}
 
 	for i, tc := range tests {
-		err := exporter.ExportSpans(context.Background(), tc.spans)
+		err := exporter.ExportSpans(t.Context(), tc.spans)
 
 		require.NoError(t, err, "TEST[%d], Failed.\n%s", i, tc.desc)
 	}
@@ -46,7 +46,7 @@ func Test_ExportSpansError(t *testing.T) {
 
 	exporter := NewExporter(server.URL, logging.NewLogger(logging.INFO))
 
-	err := exporter.ExportSpans(context.Background(), provideSampleSpan(t))
+	err := exporter.ExportSpans(t.Context(), provideSampleSpan(t))
 	require.Error(t, err, "Expected error for failed request")
 }
 
@@ -60,13 +60,13 @@ func provideSampleSpan(t *testing.T) []sdktrace.ReadOnlySpan {
 		if err != nil {
 			t.Error(err)
 		}
-	}(tp, context.Background())
+	}(tp, t.Context())
 
 	otel.SetTracerProvider(tp)
 
 	tracer := otel.Tracer("test-tracer")
 
-	_, span := tracer.Start(context.Background(), "test-span")
+	_, span := tracer.Start(t.Context(), "test-span")
 	span.End()
 
 	ro := span.(sdktrace.ReadOnlySpan)

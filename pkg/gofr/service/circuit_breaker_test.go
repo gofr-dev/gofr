@@ -68,7 +68,7 @@ func TestHttpService_GetSuccessRequests(t *testing.T) {
 		Interval:  1,
 	})
 
-	resp, err := service.Get(context.Background(), "test", nil)
+	resp, err := service.Get(t.Context(), "test", nil)
 
 	require.NoError(t, err)
 	assert.Equal(t, http.StatusOK, resp.StatusCode)
@@ -90,7 +90,7 @@ func TestHttpService_GetWithHeaderSuccessRequests(t *testing.T) {
 		Interval:  1,
 	})
 
-	resp, err := service.GetWithHeaders(context.Background(), "test", nil, nil)
+	resp, err := service.GetWithHeaders(t.Context(), "test", nil, nil)
 
 	require.NoError(t, err)
 	assert.Equal(t, http.StatusOK, resp.StatusCode)
@@ -116,7 +116,7 @@ func TestHttpService_GetCBOpenRequests(t *testing.T) {
 
 	// Perform test cases
 	for _, tc := range testCases {
-		resp, err := service.Get(context.Background(), tc.path, nil)
+		resp, err := service.Get(t.Context(), tc.path, nil)
 
 		if tc.expectErr {
 			require.Error(t, err)
@@ -147,7 +147,7 @@ func TestHttpService_GetWithHeaderCBOpenRequests(t *testing.T) {
 
 	// Perform test cases
 	for _, tc := range testCases {
-		resp, err := service.GetWithHeaders(context.Background(), tc.path, nil, nil)
+		resp, err := service.GetWithHeaders(t.Context(), tc.path, nil, nil)
 
 		if tc.expectErr {
 			require.Error(t, err)
@@ -174,7 +174,7 @@ func TestHttpService_PutSuccessRequests(t *testing.T) {
 		Interval:  1,
 	})
 
-	resp, err := service.Put(context.Background(), "test", nil, nil)
+	resp, err := service.Put(t.Context(), "test", nil, nil)
 
 	require.NoError(t, err)
 	assert.Equal(t, http.StatusOK, resp.StatusCode)
@@ -196,7 +196,7 @@ func TestHttpService_PutWithHeaderSuccessRequests(t *testing.T) {
 		Interval:  1,
 	})
 
-	resp, err := service.PutWithHeaders(context.Background(), "test", nil, nil, nil)
+	resp, err := service.PutWithHeaders(t.Context(), "test", nil, nil, nil)
 
 	require.NoError(t, err)
 	assert.Equal(t, http.StatusOK, resp.StatusCode)
@@ -222,7 +222,7 @@ func TestHttpService_PutCBOpenRequests(t *testing.T) {
 
 	// Perform test cases
 	for _, tc := range testCases {
-		resp, err := service.Put(context.Background(), tc.path, nil, nil)
+		resp, err := service.Put(t.Context(), tc.path, nil, nil)
 
 		if tc.expectErr {
 			require.Error(t, err)
@@ -253,7 +253,7 @@ func TestHttpService_PutWithHeaderCBOpenRequests(t *testing.T) {
 
 	// Perform test cases
 	for _, tc := range testCases {
-		resp, err := service.PutWithHeaders(context.Background(), tc.path, nil, nil, nil)
+		resp, err := service.PutWithHeaders(t.Context(), tc.path, nil, nil, nil)
 
 		if tc.expectErr {
 			require.Error(t, err)
@@ -280,7 +280,7 @@ func TestHttpService_PatchSuccessRequests(t *testing.T) {
 		Interval:  1,
 	})
 
-	resp, err := service.Get(context.Background(), "test", nil)
+	resp, err := service.Get(t.Context(), "test", nil)
 
 	require.NoError(t, err)
 	assert.Equal(t, http.StatusOK, resp.StatusCode)
@@ -302,7 +302,7 @@ func TestHttpService_PatchWithHeaderSuccessRequests(t *testing.T) {
 		Interval:  1,
 	})
 
-	resp, err := service.GetWithHeaders(context.Background(), "test", nil, nil)
+	resp, err := service.GetWithHeaders(t.Context(), "test", nil, nil)
 
 	require.NoError(t, err)
 	assert.Equal(t, http.StatusOK, resp.StatusCode)
@@ -328,7 +328,7 @@ func TestHttpService_PatchCBOpenRequests(t *testing.T) {
 
 	// Perform test cases
 	for _, tc := range testCases {
-		resp, err := service.Patch(context.Background(), tc.path, nil, nil)
+		resp, err := service.Patch(t.Context(), tc.path, nil, nil)
 
 		if tc.expectErr {
 			require.Error(t, err)
@@ -359,7 +359,7 @@ func TestHttpService_PatchWithHeaderCBOpenRequests(t *testing.T) {
 
 	// Perform test cases
 	for _, tc := range testCases {
-		resp, err := service.PatchWithHeaders(context.Background(), tc.path, nil, nil, nil)
+		resp, err := service.PatchWithHeaders(t.Context(), tc.path, nil, nil, nil)
 
 		if tc.expectErr {
 			require.Error(t, err)
@@ -386,7 +386,7 @@ func TestHttpService_PostSuccessRequests(t *testing.T) {
 		Interval:  1,
 	})
 
-	resp, err := service.Post(context.Background(), "test", nil, nil)
+	resp, err := service.Post(t.Context(), "test", nil, nil)
 
 	require.NoError(t, err)
 	assert.Equal(t, http.StatusOK, resp.StatusCode)
@@ -408,7 +408,7 @@ func TestHttpService_PostWithHeaderSuccessRequests(t *testing.T) {
 		Interval:  1,
 	})
 
-	resp, err := service.PostWithHeaders(context.Background(), "test", nil, nil, nil)
+	resp, err := service.PostWithHeaders(t.Context(), "test", nil, nil, nil)
 
 	require.NoError(t, err)
 	assert.Equal(t, http.StatusOK, resp.StatusCode)
@@ -434,7 +434,7 @@ func TestHttpService_PostCBOpenRequests(t *testing.T) {
 
 	// Perform test cases
 	for _, tc := range testCases {
-		resp, err := service.Post(context.Background(), tc.path, nil, nil)
+		resp, err := service.Post(t.Context(), tc.path, nil, nil)
 
 		if tc.expectErr {
 			require.Error(t, err)
@@ -465,7 +465,7 @@ func TestHttpService_PostWithHeaderCBOpenRequests(t *testing.T) {
 
 	// Perform test cases
 	for _, tc := range testCases {
-		resp, err := service.PostWithHeaders(context.Background(), tc.path, nil, nil, nil)
+		resp, err := service.PostWithHeaders(t.Context(), tc.path, nil, nil, nil)
 
 		if tc.expectErr {
 			require.Error(t, err)
@@ -492,7 +492,7 @@ func TestHttpService_DeleteSuccessRequests(t *testing.T) {
 		Interval:  1,
 	})
 
-	resp, err := service.Delete(context.Background(), "test", nil)
+	resp, err := service.Delete(t.Context(), "test", nil)
 
 	require.NoError(t, err)
 	assert.Equal(t, http.StatusOK, resp.StatusCode)
@@ -514,7 +514,7 @@ func TestHttpService_DeleteWithHeaderSuccessRequests(t *testing.T) {
 		Interval:  1,
 	})
 
-	resp, err := service.DeleteWithHeaders(context.Background(), "test", nil, nil)
+	resp, err := service.DeleteWithHeaders(t.Context(), "test", nil, nil)
 
 	require.NoError(t, err)
 	assert.Equal(t, http.StatusOK, resp.StatusCode)
@@ -540,7 +540,7 @@ func TestHttpService_DeleteCBOpenRequests(t *testing.T) {
 
 	// Perform test cases
 	for _, tc := range testCases {
-		resp, err := service.Delete(context.Background(), tc.path, nil)
+		resp, err := service.Delete(t.Context(), tc.path, nil)
 
 		if tc.expectErr {
 			require.Error(t, err)
@@ -571,7 +571,7 @@ func TestHttpService_DeleteWithHeaderCBOpenRequests(t *testing.T) {
 
 	// Perform test cases
 	for _, tc := range testCases {
-		resp, err := service.DeleteWithHeaders(context.Background(), tc.path, nil, nil)
+		resp, err := service.DeleteWithHeaders(t.Context(), tc.path, nil, nil)
 
 		if tc.expectErr {
 			require.Error(t, err)
