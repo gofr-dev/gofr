@@ -108,7 +108,7 @@ func TestContainer_Health(t *testing.T) {
 		c.Services = make(map[string]service.HTTP)
 		c.Services["test-service"] = service.NewHTTPService(srv.URL, logger, nil)
 
-		healthData := c.Health(context.Background())
+		healthData := c.Health(t.Context())
 
 		jsonData, _ := json.Marshal(healthData)
 

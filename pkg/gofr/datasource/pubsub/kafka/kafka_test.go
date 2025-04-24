@@ -1,7 +1,6 @@
 package kafka
 
 import (
-	"context"
 	"errors"
 	"net"
 	"sync"
@@ -202,7 +201,7 @@ func TestKafkaClient_PublishError(t *testing.T) {
 	mockWriter := NewMockWriter(ctrl)
 	mockMetrics := NewMockMetrics(ctrl)
 	k := &kafkaClient{writer: mockWriter, metrics: mockMetrics}
-	ctx := context.TODO()
+	ctx := t.Context()
 
 	testCases := []struct {
 		desc      string
@@ -261,7 +260,7 @@ func TestKafkaClient_Publish(t *testing.T) {
 	mockMetrics := NewMockMetrics(ctrl)
 
 	logs := testutil.StdoutOutputForFunc(func() {
-		ctx := context.TODO()
+		ctx := t.Context()
 		logger := logging.NewMockLogger(logging.DEBUG)
 		k := &kafkaClient{
 			writer:  mockWriter,
@@ -295,7 +294,7 @@ func TestKafkaClient_SubscribeSuccess(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
-	ctx := context.TODO()
+	ctx := t.Context()
 	mockReader := NewMockReader(ctrl)
 	mockMetrics := NewMockMetrics(ctrl)
 	mockConnection := NewMockConnection(ctrl)
@@ -375,7 +374,7 @@ func TestKafkaClient_Subscribe_ErrConsumerGroupID(t *testing.T) {
 
 	mockConnection.EXPECT().Controller().Return(kafka.Broker{}, nil)
 
-	msg, err := k.Subscribe(context.TODO(), "test")
+	msg, err := k.Subscribe(t.Context(), "test")
 	assert.NotNil(t, msg)
 	assert.Equal(t, ErrConsumerGroupNotProvided, err)
 }
@@ -390,7 +389,7 @@ func TestKafkaClient_SubscribeError(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
-	ctx := context.TODO()
+	ctx := t.Context()
 	mockReader := NewMockReader(ctrl)
 	mockMetrics := NewMockMetrics(ctrl)
 	mockConnection := NewMockConnection(ctrl)
@@ -617,7 +616,7 @@ func TestKafkaClient_DeleteTopic(t *testing.T) {
 
 	mockClient.EXPECT().DeleteTopics("test").Return(nil)
 
-	err := client.DeleteTopic(context.Background(), "test")
+	err := client.DeleteTopic(t.Context(), "test")
 
 	require.NoError(t, err)
 }
@@ -668,7 +667,7 @@ func TestKafkaClient_CreateTopic(t *testing.T) {
 	t.Run("controller returns error", func(t *testing.T) {
 		mockConn.EXPECT().Controller().Return(kafka.Broker{}, errNoActiveConnections)
 
-		err := client.CreateTopic(context.Background(), "test")
+		err := client.CreateTopic(t.Context(), "test")
 		require.EqualError(t, err, errNoActiveConnections.Error())
 	})
 }
@@ -682,7 +681,7 @@ func TestKafkaClient_Subscribe_NotConnected(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
-	ctx := context.TODO()
+	ctx := t.Context()
 	mockConnection := NewMockConnection(ctrl)
 
 	k := &kafkaClient{

@@ -1,7 +1,6 @@
 package gofr
 
 import (
-	"context"
 	"errors"
 	"fmt"
 	"net/http"
@@ -166,7 +165,7 @@ func TestHandler_ServeHTTP_WithHeaders(t *testing.T) {
 
 func TestHandler_faviconHandlerError(t *testing.T) {
 	c := Context{
-		Context: context.Background(),
+		Context: t.Context(),
 	}
 
 	d, _ := os.ReadFile("static/favicon.ico")
@@ -202,7 +201,7 @@ func TestHandler_faviconHandlerError(t *testing.T) {
 
 func TestHandler_faviconHandler(t *testing.T) {
 	c := Context{
-		Context: context.Background(),
+		Context: t.Context(),
 	}
 
 	d, _ := os.ReadFile("static/favicon.ico")
@@ -218,7 +217,7 @@ func TestHandler_faviconHandler(t *testing.T) {
 
 func TestHandler_catchAllHandler(t *testing.T) {
 	c := Context{
-		Context: context.Background(),
+		Context: t.Context(),
 	}
 
 	data, err := catchAllHandler(&c)
@@ -248,7 +247,7 @@ func TestHandler_healthHandler(t *testing.T) {
 
 	a.AddHTTPService("test-service", server.URL)
 
-	req, _ := http.NewRequestWithContext(context.Background(), http.MethodGet, "", http.NoBody)
+	req, _ := http.NewRequestWithContext(t.Context(), http.MethodGet, "", http.NoBody)
 
 	r := gofrHTTP.NewRequest(req)
 

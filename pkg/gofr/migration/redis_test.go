@@ -1,7 +1,6 @@
 package migration
 
 import (
-	"context"
 	"testing"
 	"time"
 
@@ -18,10 +17,10 @@ func TestRedis_Get(t *testing.T) {
 	defer ctrl.Finish()
 
 	mockCmd := NewMockRedis(ctrl)
-	mockCmd.EXPECT().Get(context.Background(), "test_key").Return(&goRedis.StringCmd{})
+	mockCmd.EXPECT().Get(t.Context(), "test_key").Return(&goRedis.StringCmd{})
 
 	r := redisDS{mockCmd}
-	_, err := r.Get(context.Background(), "test_key").Result()
+	_, err := r.Get(t.Context(), "test_key").Result()
 
 	require.NoError(t, err, "TEST Failed.\n")
 }
@@ -31,10 +30,10 @@ func TestRedis_Set(t *testing.T) {
 	defer ctrl.Finish()
 
 	mockCmd := NewMockRedis(ctrl)
-	mockCmd.EXPECT().Set(context.Background(), "test_key", "test_value", time.Duration(0)).Return(&goRedis.StatusCmd{})
+	mockCmd.EXPECT().Set(t.Context(), "test_key", "test_value", time.Duration(0)).Return(&goRedis.StatusCmd{})
 
 	r := redisDS{mockCmd}
-	_, err := r.Set(context.Background(), "test_key", "test_value", 0).Result()
+	_, err := r.Set(t.Context(), "test_key", "test_value", 0).Result()
 
 	require.NoError(t, err, "TEST Failed.\n")
 }
@@ -44,10 +43,10 @@ func TestRedis_Del(t *testing.T) {
 	defer ctrl.Finish()
 
 	mockCmd := NewMockRedis(ctrl)
-	mockCmd.EXPECT().Del(context.Background(), "test_key").Return(&goRedis.IntCmd{})
+	mockCmd.EXPECT().Del(t.Context(), "test_key").Return(&goRedis.IntCmd{})
 
 	r := redisDS{mockCmd}
-	_, err := r.Del(context.Background(), "test_key").Result()
+	_, err := r.Del(t.Context(), "test_key").Result()
 
 	require.NoError(t, err, "TEST Failed.\n")
 }
@@ -57,10 +56,10 @@ func TestRedis_Rename(t *testing.T) {
 	defer ctrl.Finish()
 
 	mockCmd := NewMockRedis(ctrl)
-	mockCmd.EXPECT().Rename(context.Background(), "test_key", "test_new_key").Return(&goRedis.StatusCmd{})
+	mockCmd.EXPECT().Rename(t.Context(), "test_key", "test_new_key").Return(&goRedis.StatusCmd{})
 
 	r := redisDS{mockCmd}
-	_, err := r.Rename(context.Background(), "test_key", "test_new_key").Result()
+	_, err := r.Rename(t.Context(), "test_key", "test_new_key").Result()
 
 	require.NoError(t, err, "TEST Failed.\n")
 }
@@ -119,7 +118,7 @@ func TestRedisMigrator_GetLastMigration(t *testing.T) {
 	}
 
 	for i, tc := range tests {
-		mocks.Redis.EXPECT().HGetAll(context.Background(), "gofr_migrations").Return(
+		mocks.Redis.EXPECT().HGetAll(t.Context(), "gofr_migrations").Return(
 			goRedis.NewMapStringStringResult(tc.mockedData, tc.redisErr))
 
 		mockMigrator.EXPECT().getLastMigration(gomock.Any()).Return(tc.migratorLastMigration).MaxTimes(2)
