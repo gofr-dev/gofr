@@ -53,31 +53,24 @@ func validateRequiredFields(conf *Config) error {
 }
 
 // retryConnect handles the retry mechanism for connecting to the Kafka broker.
-func retryConnect(client *kafkaClient, conf *Config, logger pubsub.Logger) {
+func (k *kafkaClient) retryConnect(ctx context.Context) {
 	for {
 		time.Sleep(defaultRetryTimeout)
 
-		ctx := context.Background()
-
-		helper, err := initializeKafkaClient(ctx, conf, logger)
+		err := k.initialize(ctx)
 		if err != nil {
 			var brokers any
 
-			if len(conf.Broker) > 1 {
-				brokers = conf.Broker
+			if len(k.config.Broker) > 1 {
+				brokers = k.config.Broker
 			} else {
-				brokers = conf.Broker[0]
+				brokers = k.config.Broker[0]
 			}
 
-			logger.Errorf("could not connect to Kafka at '%v', error: %v", brokers, err)
+			k.logger.Errorf("could not connect to Kafka at '%v', error: %v", brokers, err)
 
 			continue
 		}
-
-		client.conn = helper.Conn
-		client.dialer = helper.Dialer
-		client.writer = helper.Writer
-		client.reader = helper.Reader
 
 		return
 	}

@@ -90,32 +90,25 @@ func New(conf *Config, logger pubsub.Logger, metrics Metrics) *kafkaClient { //n
 
 	logger.Debugf("connecting to Kafka brokers: '%v'", brokers)
 
-	helper, err := initializeKafkaClient(context.Background(), conf, logger)
+	client := &kafkaClient{
+		logger:  logger,
+		config:  *conf,
+		metrics: metrics,
+		mu:      &sync.RWMutex{},
+	}
+	ctx := context.Background()
+
+	err = client.initialize(ctx)
+
 	if err != nil {
 		logger.Errorf("failed to connect to kafka at %v, error: %v", conf.Broker, err)
 
-		client := &kafkaClient{
-			logger:  logger,
-			config:  *conf,
-			metrics: metrics,
-			mu:      &sync.RWMutex{},
-		}
-
-		go retryConnect(client, conf, logger)
+		go client.retryConnect(ctx)
 
 		return client
 	}
 
-	return &kafkaClient{
-		config:  *conf,
-		dialer:  helper.Dialer,
-		reader:  helper.Reader,
-		conn:    helper.Conn,
-		logger:  logger,
-		writer:  helper.Writer,
-		mu:      &sync.RWMutex{},
-		metrics: metrics,
-	}
+	return client
 }
 
 func (k *kafkaClient) Publish(ctx context.Context, topic string, message []byte) error {

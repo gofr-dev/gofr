@@ -8,35 +8,25 @@ import (
 	"sync"
 
 	"github.com/segmentio/kafka-go"
-
-	"gofr.dev/pkg/gofr/datasource/pubsub"
 )
 
 var errFailedToConnectBrokers = errors.New("failed to connect to any kafka brokers")
-
-// clientHelper bundles all Kafka components for better organization.
-type clientHelper struct {
-	Dialer *kafka.Dialer
-	Conn   *multiConn
-	Writer Writer
-	Reader map[string]Reader
-}
 
 //nolint:unused // We need this wrap around for testing purposes.
 type Conn struct {
 	conns []*kafka.Conn
 }
 
-// initializeKafkaClient creates and configures all Kafka client components.
-func initializeKafkaClient(ctx context.Context, conf *Config, logger pubsub.Logger) (*clientHelper, error) {
-	dialer, err := setupDialer(conf)
+// initialize creates and configures all Kafka client components.
+func (k *kafkaClient) initialize(ctx context.Context) error {
+	dialer, err := setupDialer(&k.config)
 	if err != nil {
-		return nil, err
+		return err
 	}
 
-	conns, err := connectToBrokers(ctx, conf.Broker, dialer, logger)
+	conns, err := connectToBrokers(ctx, k.config.Broker, dialer, k.logger)
 	if err != nil {
-		return nil, err
+		return err
 	}
 
 	multi := &multiConn{
@@ -44,12 +34,17 @@ func initializeKafkaClient(ctx context.Context, conf *Config, logger pubsub.Logg
 		dialer: dialer,
 	}
 
-	writer := createKafkaWriter(conf, dialer, logger)
+	writer := createKafkaWriter(&k.config, dialer, k.logger)
 	reader := make(map[string]Reader)
 
-	logger.Logf("connected to %d Kafka brokers", len(conns))
+	k.logger.Logf("connected to %d Kafka brokers", len(conns))
 
-	return &clientHelper{Dialer: dialer, Conn: multi, Writer: writer, Reader: reader}, nil
+	k.dialer = dialer
+	k.conn = multi
+	k.writer = writer
+	k.reader = reader
+
+	return nil
 }
 
 func (k *kafkaClient) getNewReader(topic string) Reader {
