@@ -4,6 +4,12 @@ extend-ignore-re=[
 	# UID and equivalent
 	"[A-Za-z0-9=_-]{30,}",
 
+	# False positive managements with inline comments
+	#
+	# disable spellchecker for current line with a comment mentioning "spellchecker:disable-line"
+	"(?Rm)^.*(<!--|#|//)\\s*spellchecker:disable-line(-->|\n)?$",
+	# disable a block from a "spellchecker:on" comment to "spellchecker:off" one
+  	"(?s)(<!--|#|//)\\s*spellchecker:off\\s*([^-\n]*-->|[^\n]*\n).*?(<!--|#|//)\\s*spellchecker:on",
 ]
 
 # List of words that are ignored
@@ -13,6 +19,8 @@ extend-ignore-re=[
 datas = "datas" 		# common errors on datum/data plural, but too many to fix
 mosquitto = "mosquitto" # this is a MQQT broker
 IIT = "IIT" 			# Indian Institute of Technology
+# WARNING: Before adding new words here
+# Consider false-positive managements with inline comments as mentioned above
 
 [files]
 # excluded file
