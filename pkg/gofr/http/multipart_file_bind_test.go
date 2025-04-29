@@ -187,8 +187,10 @@ func TestSetStructValue_Success(t *testing.T) {
 			wantField2: 456,
 		},
 		{
-			name:       "Mixed Case and invalid field names",
-			data:       `{"FielD1":"value4", "invalidField":"ignored", "FiEld2":789}`,
+			name: "Mixed Case and invalid field names",
+			// spellchecker:off # using field with case sensitive variations would be reported as a typo otherwise
+			data: `{"FielD1":"value4", "invalidField":"ignored", "FiEld2":789}`,
+			// spellchecker:on
 			wantField1: "value4",
 			wantField2: 789,
 		},
