@@ -64,7 +64,7 @@ func TestGRPC_ServerRun(t *testing.T) {
 			// Give some time for the server to attempt startup
 			time.Sleep(500 * time.Millisecond)
 
-			_ = g.Shutdown(context.Background()) // Ensure shutdown
+			_ = g.Shutdown(t.Context()) // Ensure shutdown
 		}
 
 		out := testutil.StderrOutputForFunc(f)
@@ -85,7 +85,7 @@ func TestGRPC_ServerShutdown(t *testing.T) {
 	time.Sleep(10 * time.Millisecond)
 
 	// Create a context with a timeout to test the shutdown
-	ctx, cancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
+	ctx, cancel := context.WithTimeout(t.Context(), 500*time.Millisecond)
 	defer cancel()
 
 	err := g.Shutdown(ctx)
@@ -105,7 +105,7 @@ func TestGRPC_ServerShutdown_ContextCanceled(t *testing.T) {
 	time.Sleep(10 * time.Millisecond)
 
 	// Create a context that can be canceled
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(t.Context())
 
 	errChan := make(chan error, 1)
 	go func() {
@@ -187,7 +187,7 @@ func TestGRPC_Shutdown_BeforeStart(t *testing.T) {
 
 	g := newGRPCServer(c, 9999)
 
-	ctx, cancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
+	ctx, cancel := context.WithTimeout(t.Context(), 500*time.Millisecond)
 	defer cancel()
 
 	err := g.Shutdown(ctx)
@@ -233,7 +233,7 @@ func TestGRPC_ServerRun_WithInterceptorAndOptions(t *testing.T) {
 	go app.grpcServer.Run(&c)
 
 	defer func() {
-		_ = app.Shutdown(context.Background())
+		_ = app.Shutdown(t.Context())
 	}()
 
 	// Set the health status
@@ -248,7 +248,7 @@ func TestGRPC_ServerRun_WithInterceptorAndOptions(t *testing.T) {
 
 	// Test Health Check directly
 	healthClient := grpc_health_v1.NewHealthClient(conn)
-	healthResp, err := healthClient.Check(context.Background(), &grpc_health_v1.HealthCheckRequest{Service: "healthCheck"})
+	healthResp, err := healthClient.Check(t.Context(), &grpc_health_v1.HealthCheckRequest{Service: "healthCheck"})
 	require.NoError(t, err)
 	assert.Equal(t, grpc_health_v1.HealthCheckResponse_SERVING, healthResp.Status)
 

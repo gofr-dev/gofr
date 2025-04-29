@@ -60,12 +60,13 @@ func checkExternalDBHealth(ctx context.Context, c *Container, healthMap map[stri
 	services := map[string]interface {
 		HealthCheck(context.Context) (any, error)
 	}{
-		"mongo":      c.Mongo,
-		"cassandra":  c.Cassandra,
-		"clickHouse": c.Clickhouse,
-		"kv-store":   c.KVStore,
-		"dgraph":     c.DGraph,
-		"opentsdb":   c.OpenTSDB,
+		"mongo":         c.Mongo,
+		"cassandra":     c.Cassandra,
+		"clickHouse":    c.Clickhouse,
+		"kv-store":      c.KVStore,
+		"dgraph":        c.DGraph,
+		"opentsdb":      c.OpenTSDB,
+		"elasticsearch": c.Elasticsearch,
 	}
 
 	for name, service := range services {

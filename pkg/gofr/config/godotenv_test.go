@@ -95,11 +95,7 @@ func Test_EnvSuccess_SystemEnv_Override(t *testing.T) {
 	// Create the override file
 	createEnvFile(t, dir, ".local.env", map[string]string{"TEST_ENV": "local"})
 
-	// Set system environment variables
-	err := os.Setenv("TEST_ENV", "system")
-	if err != nil {
-		return
-	}
+	t.Setenv("TEST_ENV", "system")
 
 	logger := logging.NewMockLogger(logging.DEBUG)
 
