@@ -105,9 +105,9 @@ func TestSetFieldValue_InvalidKinds(t *testing.T) {
 	uf := &formData{}
 
 	tests := []struct {
-		kind reflect.Kind
-		data string
-		typ  reflect.Type
+		kind     reflect.Kind
+		data     string
+		destType reflect.Type
 	}{
 		{reflect.Complex64, "foo", reflect.TypeOf(complex64(0))},
 		{reflect.Complex128, "bar", reflect.TypeOf(complex128(0))},
@@ -118,7 +118,7 @@ func TestSetFieldValue_InvalidKinds(t *testing.T) {
 	}
 
 	for _, tt := range tests {
-		value := reflect.New(tt.typ).Elem()
+		value := reflect.New(tt.destType).Elem()
 		ok, err := uf.setFieldValue(value, tt.data)
 
 		require.False(t, ok, "expected false, got true for kind %v", tt.kind)
