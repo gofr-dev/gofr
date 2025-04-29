@@ -183,7 +183,7 @@ func (t *Tx) Rollback() error {
 }
 
 // Select runs a query with args and binds the result of the query to the data.
-// data should ba a point to a slice, struct or any type. Slice will return multiple
+// data should be a point to a slice, struct or any type. Slice will return multiple
 // objects whereas struct will return a single object.
 //
 // Example Usages:
