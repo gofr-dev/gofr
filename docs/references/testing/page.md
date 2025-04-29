@@ -250,6 +250,7 @@ func TestHTTPServiceEndpoint(t *testing.T) {
 	assert.Equal(t, 1, product.ID)
 	assert.Equal(t, "Test Product", product.Description)
 }
+```
 
 - Tests will fail if the mocked HTTPService is not called as expected.
 - `WithMockHTTPService` is passed to `NewMockContainer`, allowing us to configure expected HTTP requests and corresponding responses.
