@@ -61,3 +61,50 @@ func (h *HelloRequestWrapper) HostName() string {
 func (h *HelloRequestWrapper) Params(s string) []string {
 	return nil
 }
+type RequestWrapper struct {
+	ctx context.Context
+	*Request
+}
+
+func (h *RequestWrapper) Context() context.Context {
+	return h.ctx
+}
+
+func (h *RequestWrapper) Param(s string) string {
+	return ""
+}
+
+func (h *RequestWrapper) PathParam(s string) string {
+	return ""
+}
+
+func (h *RequestWrapper) Bind(p interface{}) error {
+	ptr := reflect.ValueOf(p)
+	if ptr.Kind() != reflect.Ptr {
+		return fmt.Errorf("expected a pointer, got %T", p)
+	}
+
+	hValue := reflect.ValueOf(h.Request).Elem()
+	ptrValue := ptr.Elem()
+
+	for i := 0; i < hValue.NumField(); i++ {
+		field := hValue.Type().Field(i)
+		if field.Name == "state" || field.Name == "sizeCache" || field.Name == "unknownFields" {
+			continue
+		}
+
+		if field.IsExported() {
+			ptrValue.Field(i).Set(hValue.Field(i))
+		}
+	}
+
+	return nil
+}
+
+func (h *RequestWrapper) HostName() string {
+	return ""
+}
+
+func (h *RequestWrapper) Params(s string) []string {
+	return nil
+}

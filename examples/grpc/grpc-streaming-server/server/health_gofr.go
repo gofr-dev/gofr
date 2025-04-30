@@ -2,7 +2,7 @@
 // versions:
 // 	gofr-cli v0.6.0
 // 	gofr.dev v1.37.0
-// 	source: hello.proto
+// 	source: chat.proto
 
 package server
 
@@ -41,6 +41,7 @@ func registerServerWithGofr(app *gofr.App, srv any, registerFunc func(grpc.Servi
 	if !healthServerRegistered {
 		gRPCBuckets := []float64{0.005, 0.01, .05, .075, .1, .125, .15, .2, .3, .5, .75, 1, 2, 3, 4, 5, 7.5, 10}
 		app.Metrics().NewHistogram("app_gRPC-Server_stats", "Response time of gRPC server in milliseconds.", gRPCBuckets...)
+		app.Metrics().NewHistogram("app_gRPC-Stream_stats", "Duration of gRPC stream in milliseconds.", gRPCBuckets...)
 
 		healthpb.RegisterHealthServer(s, h.Server)
 		h.Server.SetServingStatus("", healthpb.HealthCheckResponse_SERVING)

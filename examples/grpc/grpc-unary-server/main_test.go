@@ -2,32 +2,19 @@ package main
 
 import (
 	"context"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+	"google.golang.org/grpc/credentials/insecure"
 	"os"
 	"testing"
 	"time"
 
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
+	"gofr.dev/examples/grpc/grpc-unary-server/server"
 	"google.golang.org/grpc"
-	"google.golang.org/grpc/credentials/insecure"
-
-	"gofr.dev/examples/grpc/grpc-server/server"
-	"gofr.dev/pkg/gofr/testutil"
 )
 
-func TestMain(m *testing.M) {
-	os.Setenv("GOFR_TELEMETRY", "false")
-	m.Run()
-}
-
 func TestGRPCServer(t *testing.T) {
-	configs := testutil.NewServerConfigs(t)
-	host := configs.GRPCHost
-
-	go main()
-	time.Sleep(100 * time.Millisecond)
-
-	client, conn := createGRPCClient(t, host)
+	client, conn := createGRPCClient(t)
 	defer conn.Close()
 
 	tests := []struct {
@@ -62,8 +49,8 @@ func TestGRPCServer(t *testing.T) {
 	assert.Equal(t, "rpc error: code = Canceled desc = context canceled", err.Error())
 }
 
-func createGRPCClient(t *testing.T, host string) (server.HelloClient, *grpc.ClientConn) {
-	conn, err := grpc.Dial(host, grpc.WithTransportCredentials(insecure.NewCredentials()))
+func createGRPCClient(t *testing.T) (server.HelloClient, *grpc.ClientConn) {
+	conn, err := grpc.Dial(":9000", grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
 		t.Errorf("did not connect: %s", err)
 	}
@@ -81,4 +68,13 @@ func TestHelloProtoMethods(t *testing.T) {
 	resp := &server.HelloResponse{Message: "Hello World"}
 	assert.Equal(t, "Hello World", resp.GetMessage())
 	assert.Equal(t, "message:\"Hello World\"", resp.String())
+}
+
+func TestMain(m *testing.M) {
+	os.Setenv("GOFR_TELEMETRY", "false")
+
+	go main()
+	time.Sleep(300 * time.Millisecond) // wait for server to boot
+
+	os.Exit(m.Run())
 }

@@ -8,12 +8,12 @@ package server
 
 import (
 	"context"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 
 	"gofr.dev/pkg/gofr"
 	"gofr.dev/pkg/gofr/container"
 	"google.golang.org/grpc"
-	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/status"
 
 	healthpb "google.golang.org/grpc/health/grpc_health_v1"
 )
@@ -25,12 +25,12 @@ func NewHelloGoFrServer() *HelloGoFrServer {
 	}
 }
 
-// HelloServerWithGofr is the interface for the server implementation
-type HelloServerWithGofr interface {
-	SayHello(*gofr.Context) (any, error)
-}
+ // HelloServerWithGofr is the interface for the server implementation
+    type HelloServerWithGofr interface {
+        SayHello(*gofr.Context) (any, error)
+    }
 
-// HelloServerWrapper wraps the server and handles request and response logic
+	// HelloServerWrapper wraps the server and handles request and response logic
 type HelloServerWrapper struct {
 	HelloServer
 	*healthServer
@@ -38,23 +38,22 @@ type HelloServerWrapper struct {
 	server    HelloServerWithGofr
 }
 
-//
-// SayHello wraps the method and handles its execution
-func (h *HelloServerWrapper) SayHello(ctx context.Context, req *HelloRequest) (*HelloResponse, error) {
-	gctx := h.getGofrContext(ctx, &HelloRequestWrapper{ctx: ctx, HelloRequest: req})
-
-	res, err := h.server.SayHello(gctx)
-	if err != nil {
-		return nil, err
-	}
-
-	resp, ok := res.(*HelloResponse)
-	if !ok {
-		return nil, status.Errorf(codes.Unknown, "unexpected response type %T", res)
-	}
-
-	return resp, nil
-}
+        // Unary method handler for SayHello
+        func (h *HelloServerWrapper) SayHello(ctx context.Context, req *HelloRequest) (*HelloResponse, error) {
+            gctx := h.getGofrContext(ctx, &HelloRequestWrapper{ctx: ctx, HelloRequest: req})
+            
+            res, err := h.server.SayHello(gctx)
+            if err != nil {
+                return nil, err
+            }
+            
+            resp, ok := res.(*HelloResponse)
+            if !ok {
+                return nil, status.Errorf(codes.Unknown, "unexpected response type %T", res)
+            }
+            
+            return resp, nil
+        }
 
 // mustEmbedUnimplementedHelloServer ensures that the server implements all required methods
 func (h *HelloServerWrapper) mustEmbedUnimplementedHelloServer() {}

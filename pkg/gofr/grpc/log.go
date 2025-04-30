@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"strings"
 	"time"
 
 	"go.opentelemetry.io/otel"
@@ -21,6 +22,7 @@ const (
 	responseTimeWidth         = 11
 	nanosecondsPerMillisecond = 1e6
 	debugMethod               = "/grpc.health.v1.Health/SetServingStatus"
+	gRPCStreamMethod          = "stream"
 	healthCheck               = "/grpc.health.v1.Health/Check"
 )
 
@@ -72,6 +74,53 @@ func colorForGRPCCode(s int32) int {
 func (l gRPCLog) String() string {
 	line, _ := json.Marshal(l)
 	return string(line)
+}
+
+// StreamObservabilityInterceptor handles logging, metrics, and tracing for streaming RPCs.
+func StreamObservabilityInterceptor(logger Logger, metrics Metrics) grpc.StreamServerInterceptor {
+	tracer := otel.GetTracerProvider().Tracer("gofr-stream", trace.WithInstrumentationVersion("v0.1"))
+
+	return func(srv interface{}, ss grpc.ServerStream, info *grpc.StreamServerInfo, handler grpc.StreamHandler) error {
+		start := time.Now()
+
+		// Initialize tracing context from incoming metadata
+		ctx, _ := initializeSpanContext(ss.Context())
+		ctx, span := tracer.Start(ctx, info.FullMethod)
+		defer span.End()
+
+		// Wrap the stream to propagate context with tracing
+		wrappedStream := &wrappedServerStream{
+			ServerStream: ss,
+			ctx:          ctx,
+		}
+
+		// Process the stream
+		err := handler(srv, wrappedStream)
+
+		fullMethod := info.FullMethod
+		if info.IsClientStream && info.IsServerStream {
+			fullMethod += " [BI-DIRECTION_STREAM]"
+		} else if info.IsClientStream {
+			fullMethod += " [CLIENT-STREAM]"
+		} else if info.IsServerStream {
+			fullMethod += " [SERVER-STREAM]"
+		}
+
+		// Log and record metrics
+		logRPC(ctx, logger, metrics, start, err, fullMethod, "app_gRPC-Stream_stats")
+
+		return err
+	}
+}
+
+// wrappedServerStream propagates context with tracing for streaming RPCs.
+type wrappedServerStream struct {
+	grpc.ServerStream
+	ctx context.Context
+}
+
+func (w *wrappedServerStream) Context() context.Context {
+	return w.ctx
 }
 
 func ObservabilityInterceptor(logger Logger, metrics Metrics) grpc.UnaryServerInterceptor {
@@ -134,6 +183,7 @@ func (gRPCLog) DocumentRPCLog(ctx context.Context, logger Logger, metrics Metric
 
 func logRPC(ctx context.Context, logger Logger, metrics Metrics, start time.Time, err error, method, name string) {
 	duration := time.Since(start)
+
 	logEntry := gRPCLog{
 		ID:           trace.SpanFromContext(ctx).SpanContext().TraceID().String(),
 		StartTime:    start.Format("2006-01-02T15:04:05.999999999-07:00"),
@@ -150,7 +200,7 @@ func logRPC(ctx context.Context, logger Logger, metrics Metrics, start time.Time
 	}
 
 	if logger != nil {
-		if method == debugMethod {
+		if method == debugMethod || strings.Contains(method, "/Send") || strings.Contains(method, "/Recv") || strings.Contains(method, "/SendAndClose") {
 			logger.Debug(logEntry)
 		} else {
 			logger.Info(logEntry)

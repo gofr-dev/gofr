@@ -16,10 +16,11 @@ import (
 )
 
 type grpcServer struct {
-	server       *grpc.Server
-	interceptors []grpc.UnaryServerInterceptor
-	options      []grpc.ServerOption
-	port         int
+	server             *grpc.Server
+	interceptors       []grpc.UnaryServerInterceptor
+	streamInterceptors []grpc.StreamServerInterceptor
+	options            []grpc.ServerOption
+	port               int
 }
 
 // AddGRPCServerOptions allows users to add custom gRPC server options such as TLS configuration,
@@ -53,21 +54,32 @@ func (a *App) AddGRPCUnaryInterceptors(grpcInterceptors ...grpc.UnaryServerInter
 	a.grpcServer.interceptors = append(a.grpcServer.interceptors, grpcInterceptors...)
 }
 
+func (a *App) AddGRPCServerStreamInterceptors(grpcInterceptors ...grpc.StreamServerInterceptor) {
+	a.grpcServer.streamInterceptors = append(a.grpcServer.streamInterceptors, grpcInterceptors...)
+}
+
 func newGRPCServer(c *container.Container, port int) *grpcServer {
 	middleware := make([]grpc.UnaryServerInterceptor, 0)
 	middleware = append(middleware,
 		grpc_recovery.UnaryServerInterceptor(),
 		gofr_grpc.ObservabilityInterceptor(c.Logger, c.Metrics()))
 
+	streamMiddleware := make([]grpc.StreamServerInterceptor, 0)
+	streamMiddleware = append(streamMiddleware,
+		grpc_recovery.StreamServerInterceptor(),
+		gofr_grpc.StreamObservabilityInterceptor(c.Logger, c.Metrics()))
+
 	return &grpcServer{
-		port:         port,
-		interceptors: middleware,
+		port:               port,
+		interceptors:       middleware,
+		streamInterceptors: streamMiddleware,
 	}
 }
 
 func (g *grpcServer) createServer() {
 	interceptorOption := grpc.UnaryInterceptor(grpc_middleware.ChainUnaryServer(g.interceptors...))
-	g.options = append(g.options, interceptorOption)
+	streamOpt := grpc.StreamInterceptor(grpc_middleware.ChainStreamServer(g.streamInterceptors...))
+	g.options = append(g.options, interceptorOption, streamOpt)
 
 	g.server = grpc.NewServer(g.options...)
 }
