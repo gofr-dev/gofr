@@ -72,6 +72,48 @@ func Test_LoggingMiddlewareError(t *testing.T) {
 	assert.Contains(t, logs, "GET    500")
 }
 
+func Test_LoggingSkipHealthCheck(t *testing.T) {
+	logs := testutil.StdoutOutputForFunc(func() {
+		req, _ := http.NewRequestWithContext(t.Context(), http.MethodGet, "http://dummy", http.NoBody)
+
+		rr := httptest.NewRecorder()
+
+		handler := LoggingSkipHealthCheck(logging.NewMockLogger(logging.DEBUG))(http.HandlerFunc(testHandler))
+
+		handler.ServeHTTP(rr, req)
+	})
+
+	assert.Contains(t, logs, "GET    200")
+}
+
+func Test_LoggingSkipHealthCheckError(t *testing.T) {
+	logs := testutil.StderrOutputForFunc(func() {
+		req, _ := http.NewRequestWithContext(t.Context(), http.MethodGet, "http://dummy", http.NoBody)
+
+		rr := httptest.NewRecorder()
+
+		handler := LoggingSkipHealthCheck(logging.NewMockLogger(logging.ERROR))(http.HandlerFunc(testHandlerError))
+
+		handler.ServeHTTP(rr, req)
+	})
+
+	assert.Contains(t, logs, "GET    500")
+}
+
+func Test_LoggingSkipHealthCheckAliveEndpoint(t *testing.T) {
+	logs := testutil.StdoutOutputForFunc(func() {
+		req, _ := http.NewRequestWithContext(t.Context(), http.MethodGet, "http://dummy/.well-known/alive", http.NoBody)
+
+		rr := httptest.NewRecorder()
+
+		handler := LoggingSkipHealthCheck(logging.NewMockLogger(logging.DEBUG))(http.HandlerFunc(testHandlerError))
+
+		handler.ServeHTTP(rr, req)
+	})
+
+	assert.Empty(t, logs)
+}
+
 // Test handler that uses the middleware.
 func testHandler(w http.ResponseWriter, _ *http.Request) {
 	w.WriteHeader(http.StatusOK)
