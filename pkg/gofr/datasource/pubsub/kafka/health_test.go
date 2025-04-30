@@ -2,7 +2,6 @@ package kafka
 
 import (
 	"context"
-	"errors"
 	"net"
 	"testing"
 
@@ -11,11 +10,6 @@ import (
 	"github.com/stretchr/testify/mock"
 
 	"gofr.dev/pkg/gofr/datasource"
-)
-
-var (
-	errNotController = errors.New("not a controller")
-	errUnreachable   = errors.New("unreachable")
 )
 
 // MockConn simulates a Kafka connection.

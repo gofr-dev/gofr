@@ -51,7 +51,7 @@ func (k *kafkaClient) evaluateBrokerHealth() ([]map[string]any, bool) {
 
 		status := checkBroker(conn, &controllerAddr)
 
-		if status["status"] == BrokerStatusUp {
+		if status["status"] == brokerStatusUp {
 			allDown = false
 		}
 
@@ -76,7 +76,7 @@ func checkBroker(conn Connection, controllerAddr *string) map[string]any {
 		return status
 	}
 
-	status["status"] = BrokerStatusUp
+	status["status"] = brokerStatusUp
 
 	if *controllerAddr == "" {
 		controller, err := conn.Controller()

@@ -25,7 +25,7 @@ func TestValidateConfigs_ValidCases(t *testing.T) {
 		{
 			name: "Valid Config",
 			config: Config{
-				Broker:           []string{"kafkabroker"},
+				Brokers:          []string{"kafkabroker"},
 				BatchSize:        1,
 				BatchBytes:       1,
 				BatchTimeout:     1,
@@ -39,7 +39,7 @@ func TestValidateConfigs_ValidCases(t *testing.T) {
 		{
 			name: "Valid PLAINTEXT Protocol",
 			config: Config{
-				Broker:           []string{"kafkabroker"},
+				Brokers:          []string{"kafkabroker"},
 				BatchSize:        1,
 				BatchBytes:       1,
 				BatchTimeout:     1,
@@ -50,7 +50,7 @@ func TestValidateConfigs_ValidCases(t *testing.T) {
 		{
 			name: "Valid SSL Protocol with TLS Configs",
 			config: Config{
-				Broker:           []string{"kafkabroker"},
+				Brokers:          []string{"kafkabroker"},
 				BatchSize:        1,
 				BatchBytes:       1,
 				BatchTimeout:     1,
@@ -66,7 +66,7 @@ func TestValidateConfigs_ValidCases(t *testing.T) {
 		{
 			name: "Valid SASL_SSL Protocol with TLS and SASL Configs",
 			config: Config{
-				Broker:           []string{"kafkabroker"},
+				Brokers:          []string{"kafkabroker"},
 				BatchSize:        1,
 				BatchBytes:       1,
 				BatchTimeout:     1,
@@ -85,7 +85,7 @@ func TestValidateConfigs_ValidCases(t *testing.T) {
 		{
 			name: "Valid SSL Protocol with InsecureSkipVerify",
 			config: Config{
-				Broker:           []string{"kafkabroker"},
+				Brokers:          []string{"kafkabroker"},
 				BatchSize:        1,
 				BatchBytes:       1,
 				BatchTimeout:     1,
@@ -126,7 +126,7 @@ func TestValidateConfigs_InvalidCases(t *testing.T) {
 		{
 			name: "Zero BatchSize",
 			config: Config{
-				Broker:       []string{"kafkabroker"},
+				Brokers:      []string{"kafkabroker"},
 				BatchSize:    0,
 				BatchBytes:   1,
 				BatchTimeout: 1,
@@ -136,7 +136,7 @@ func TestValidateConfigs_InvalidCases(t *testing.T) {
 		{
 			name: "Zero BatchBytes",
 			config: Config{
-				Broker:       []string{"kafkabroker"},
+				Brokers:      []string{"kafkabroker"},
 				BatchSize:    1,
 				BatchBytes:   0,
 				BatchTimeout: 1,
@@ -146,7 +146,7 @@ func TestValidateConfigs_InvalidCases(t *testing.T) {
 		{
 			name: "Zero BatchTimeout",
 			config: Config{
-				Broker:       []string{"kafkabroker"},
+				Brokers:      []string{"kafkabroker"},
 				BatchSize:    1,
 				BatchBytes:   1,
 				BatchTimeout: 0,
@@ -156,7 +156,7 @@ func TestValidateConfigs_InvalidCases(t *testing.T) {
 		{
 			name: "SASL_PLAINTEXT with Missing SASLMechanism",
 			config: Config{
-				Broker:           []string{"kafkabroker"},
+				Brokers:          []string{"kafkabroker"},
 				BatchSize:        1,
 				BatchBytes:       1,
 				BatchTimeout:     1,
@@ -169,7 +169,7 @@ func TestValidateConfigs_InvalidCases(t *testing.T) {
 		{
 			name: "Unsupported Security Protocol",
 			config: Config{
-				Broker:           []string{"kafkabroker"},
+				Brokers:          []string{"kafkabroker"},
 				BatchSize:        1,
 				BatchBytes:       1,
 				BatchTimeout:     1,
@@ -267,7 +267,7 @@ func TestKafkaClient_Publish(t *testing.T) {
 			logger:  logger,
 			metrics: mockMetrics,
 			config: Config{
-				Broker: []string{"localhost:9092"}, // Make sure Broker is not empty
+				Brokers: []string{"localhost:9092"}, // Make sure Broker is not empty
 			},
 		}
 
@@ -313,7 +313,7 @@ func TestKafkaClient_SubscribeSuccess(t *testing.T) {
 		logger: nil,
 		config: Config{
 			ConsumerGroupID: "consumer",
-			Broker:          []string{"kafkabroker"},
+			Brokers:         []string{"kafkabroker"},
 			OffSet:          -1,
 		},
 		mu:      &sync.RWMutex{},
@@ -365,8 +365,8 @@ func TestKafkaClient_Subscribe_ErrConsumerGroupID(t *testing.T) {
 	k := &kafkaClient{
 		dialer: &kafka.Dialer{},
 		config: Config{
-			Broker: []string{"kafkabroker"},
-			OffSet: -1,
+			Brokers: []string{"kafkabroker"},
+			OffSet:  -1,
 		},
 		conn:   m,
 		logger: logging.NewMockLogger(logging.INFO),
@@ -410,7 +410,7 @@ func TestKafkaClient_SubscribeError(t *testing.T) {
 		logger: logging.NewMockLogger(logging.INFO),
 		config: Config{
 			ConsumerGroupID: "consumer",
-			Broker:          []string{"kafkabroker"},
+			Brokers:         []string{"kafkabroker"},
 			OffSet:          -1,
 		},
 		mu:      &sync.RWMutex{},
@@ -486,7 +486,7 @@ func TestKafkaClient_getNewReader(t *testing.T) {
 	k := &kafkaClient{
 		dialer: &kafka.Dialer{},
 		config: Config{
-			Broker:          []string{"kafka-broker"},
+			Brokers:         []string{"kafka-broker"},
 			ConsumerGroupID: "consumer",
 			OffSet:          -1,
 		},
@@ -509,14 +509,14 @@ func TestNewKafkaClient(t *testing.T) {
 		{
 			desc: "validation of configs fail (Empty Broker)",
 			config: Config{
-				Broker: []string{""},
+				Brokers: []string{""},
 			},
 			expectNil: true,
 		},
 		{
 			desc: "validation of configs fail (Zero Batch Bytes)",
 			config: Config{
-				Broker:     []string{"kafka-broker"},
+				Brokers:    []string{"kafka-broker"},
 				BatchBytes: 0,
 			},
 			expectNil: true,
@@ -524,7 +524,7 @@ func TestNewKafkaClient(t *testing.T) {
 		{
 			desc: "validation of configs fail (Zero Batch Size)",
 			config: Config{
-				Broker:     []string{"kafka-broker"},
+				Brokers:    []string{"kafka-broker"},
 				BatchBytes: 1,
 				BatchSize:  0,
 			},
@@ -533,7 +533,7 @@ func TestNewKafkaClient(t *testing.T) {
 		{
 			desc: "validation of configs fail (Zero Batch Timeout)",
 			config: Config{
-				Broker:       []string{"kafka-broker"},
+				Brokers:      []string{"kafka-broker"},
 				BatchBytes:   1,
 				BatchSize:    1,
 				BatchTimeout: 0,
@@ -543,7 +543,7 @@ func TestNewKafkaClient(t *testing.T) {
 		{
 			desc: "successful initialization",
 			config: Config{
-				Broker:           []string{"kafka-broker"},
+				Brokers:          []string{"kafka-broker"},
 				ConsumerGroupID:  "consumer",
 				BatchBytes:       1,
 				BatchSize:        1,

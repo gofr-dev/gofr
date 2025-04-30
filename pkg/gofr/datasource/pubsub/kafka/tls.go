@@ -3,16 +3,12 @@ package kafka
 import (
 	"crypto/tls"
 	"crypto/x509"
-	"errors"
 	"fmt"
 	"os"
 	"strings"
 )
 
-var (
-	errCACertFileRead = errors.New("failed to read CA certificate file")
-	errClientCertLoad = errors.New("failed to load client certificate")
-)
+var ()
 
 type TLSConfig struct {
 	CertFile           string

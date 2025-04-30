@@ -14,20 +14,6 @@ import (
 	"gofr.dev/pkg/gofr/datasource/pubsub"
 )
 
-var (
-	ErrConsumerGroupNotProvided    = errors.New("consumer group id not provided")
-	errBrokerNotProvided           = errors.New("kafka broker address not provided")
-	errPublisherNotConfigured      = errors.New("can't publish message. Publisher not configured or topic is empty")
-	errBatchSize                   = errors.New("KAFKA_BATCH_SIZE must be greater than 0")
-	errBatchBytes                  = errors.New("KAFKA_BATCH_BYTES must be greater than 0")
-	errBatchTimeout                = errors.New("KAFKA_BATCH_TIMEOUT must be greater than 0")
-	errClientNotConnected          = errors.New("kafka client not connected")
-	errUnsupportedSASLMechanism    = errors.New("unsupported SASL mechanism")
-	errSASLCredentialsMissing      = errors.New("SASL credentials missing")
-	errUnsupportedSecurityProtocol = errors.New("unsupported security protocol")
-	errNoActiveConnections         = errors.New("no active connections to brokers")
-)
-
 const (
 	DefaultBatchSize       = 100
 	DefaultBatchBytes      = 1048576
@@ -37,12 +23,12 @@ const (
 	protocolSASL           = "SASL_PLAINTEXT"
 	protocolSSL            = "SSL"
 	protocolSASLSSL        = "SASL_SSL"
-	MessageMultipleBrokers = "MULTIPLE_BROKERS"
-	BrokerStatusUp         = "UP"
+	messageMultipleBrokers = "MULTIPLE_BROKERS"
+	brokerStatusUp         = "UP"
 )
 
 type Config struct {
-	Broker           []string
+	Brokers          []string
 	Partition        int
 	ConsumerGroupID  string
 	OffSet           int
@@ -80,15 +66,11 @@ func New(conf *Config, logger pubsub.Logger, metrics Metrics) *kafkaClient { //n
 		return nil
 	}
 
-	var brokers any
-
-	if len(conf.Broker) > 1 {
-		brokers = conf.Broker
+	if len(conf.Brokers) == 1 {
+		logger.Debugf("connecting to Kafka broker: '%s'", conf.Brokers[0])
 	} else {
-		brokers = conf.Broker[0]
+		logger.Debugf("connecting to Kafka brokers: %v", conf.Brokers)
 	}
-
-	logger.Debugf("connecting to Kafka brokers: '%v'", brokers)
 
 	client := &kafkaClient{
 		logger:  logger,
@@ -101,7 +83,7 @@ func New(conf *Config, logger pubsub.Logger, metrics Metrics) *kafkaClient { //n
 	err = client.initialize(ctx)
 
 	if err != nil {
-		logger.Errorf("failed to connect to kafka at %v, error: %v", conf.Broker, err)
+		logger.Errorf("failed to connect to kafka at %v, error: %v", conf.Brokers, err)
 
 		go client.retryConnect(ctx)
 
@@ -138,10 +120,10 @@ func (k *kafkaClient) Publish(ctx context.Context, topic string, message []byte)
 
 	var hostName string
 
-	if len(k.config.Broker) > 1 {
-		hostName = MessageMultipleBrokers
+	if len(k.config.Brokers) > 1 {
+		hostName = messageMultipleBrokers
 	} else {
-		hostName = k.config.Broker[0]
+		hostName = k.config.Brokers[0]
 	}
 
 	k.logger.Debug(&pubsub.Log{
@@ -213,10 +195,10 @@ func (k *kafkaClient) Subscribe(ctx context.Context, topic string) (*pubsub.Mess
 
 	var hostName string
 
-	if len(k.config.Broker) > 1 {
+	if len(k.config.Brokers) > 1 {
 		hostName = "multiple brokers"
 	} else {
-		hostName = k.config.Broker[0]
+		hostName = k.config.Brokers[0]
 	}
 
 	k.logger.Debug(&pubsub.Log{

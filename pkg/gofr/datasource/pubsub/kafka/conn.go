@@ -10,8 +10,6 @@ import (
 	"github.com/segmentio/kafka-go"
 )
 
-var errFailedToConnectBrokers = errors.New("failed to connect to any kafka brokers")
-
 //nolint:unused // We need this wrap around for testing purposes.
 type Conn struct {
 	conns []*kafka.Conn
@@ -24,7 +22,7 @@ func (k *kafkaClient) initialize(ctx context.Context) error {
 		return err
 	}
 
-	conns, err := connectToBrokers(ctx, k.config.Broker, dialer, k.logger)
+	conns, err := connectToBrokers(ctx, k.config.Brokers, dialer, k.logger)
 	if err != nil {
 		return err
 	}
@@ -50,7 +48,7 @@ func (k *kafkaClient) initialize(ctx context.Context) error {
 func (k *kafkaClient) getNewReader(topic string) Reader {
 	reader := kafka.NewReader(kafka.ReaderConfig{
 		GroupID:     k.config.ConsumerGroupID,
-		Brokers:     k.config.Broker,
+		Brokers:     k.config.Brokers,
 		Topic:       topic,
 		MinBytes:    10e3,
 		MaxBytes:    10e6,

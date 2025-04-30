@@ -33,7 +33,7 @@ func validateConfigs(conf *Config) error {
 }
 
 func validateRequiredFields(conf *Config) error {
-	if len(conf.Broker) == 0 {
+	if len(conf.Brokers) == 0 {
 		return errBrokerNotProvided
 	}
 
@@ -61,10 +61,10 @@ func (k *kafkaClient) retryConnect(ctx context.Context) {
 		if err != nil {
 			var brokers any
 
-			if len(k.config.Broker) > 1 {
-				brokers = k.config.Broker
+			if len(k.config.Brokers) > 1 {
+				brokers = k.config.Brokers
 			} else {
-				brokers = k.config.Broker[0]
+				brokers = k.config.Brokers[0]
 			}
 
 			k.logger.Errorf("could not connect to Kafka at '%v', error: %v", brokers, err)
@@ -140,7 +140,7 @@ func connectToBrokers(ctx context.Context, brokers []string, dialer *kafka.Diale
 
 func createKafkaWriter(conf *Config, dialer *kafka.Dialer, logger pubsub.Logger) Writer {
 	return kafka.NewWriter(kafka.WriterConfig{
-		Brokers:      conf.Broker,
+		Brokers:      conf.Brokers,
 		Dialer:       dialer,
 		BatchSize:    conf.BatchSize,
 		BatchBytes:   conf.BatchBytes,
