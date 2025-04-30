@@ -8,8 +8,6 @@ import (
 	"strings"
 )
 
-var ()
-
 type TLSConfig struct {
 	CertFile           string
 	KeyFile            string
