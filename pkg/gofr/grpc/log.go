@@ -79,12 +79,14 @@ func (l gRPCLog) String() string {
 func StreamObservabilityInterceptor(logger Logger, metrics Metrics) grpc.StreamServerInterceptor {
 	tracer := otel.GetTracerProvider().Tracer("gofr-stream", trace.WithInstrumentationVersion("v0.1"))
 
-	return func(srv interface{}, ss grpc.ServerStream, info *grpc.StreamServerInfo, handler grpc.StreamHandler) error {
+	return func(srv any, ss grpc.ServerStream, info *grpc.StreamServerInfo, handler grpc.StreamHandler) error {
 		start := time.Now()
 
 		// Initialize tracing context from incoming metadata
-		ctx, _ := initializeSpanContext(ss.Context())
+		ctx := initializeSpanContext(ss.Context())
+
 		ctx, span := tracer.Start(ctx, info.FullMethod)
+
 		defer span.End()
 
 		// Wrap the stream to propagate context with tracing
@@ -128,7 +130,7 @@ func ObservabilityInterceptor(logger Logger, metrics Metrics) grpc.UnaryServerIn
 	return func(ctx context.Context, req any, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (any, error) {
 		start := time.Now()
 
-		ctx, _ = initializeSpanContext(ctx)
+		ctx = initializeSpanContext(ctx)
 		ctx, span := tracer.Start(ctx, info.FullMethod)
 
 		resp, err := handler(ctx, req)
@@ -151,14 +153,14 @@ func ObservabilityInterceptor(logger Logger, metrics Metrics) grpc.UnaryServerIn
 	}
 }
 
-func initializeSpanContext(ctx context.Context) (context.Context, trace.SpanContext) {
+func initializeSpanContext(ctx context.Context) context.Context {
 	md, _ := metadata.FromIncomingContext(ctx)
 
 	traceIDHex := getMetadataValue(md, "x-gofr-traceid")
 	spanIDHex := getMetadataValue(md, "x-gofr-spanid")
 
 	if traceIDHex == "" || spanIDHex == "" {
-		return ctx, trace.SpanContext{}
+		return ctx
 	}
 
 	traceID, _ := trace.TraceIDFromHex(traceIDHex)
@@ -173,7 +175,7 @@ func initializeSpanContext(ctx context.Context) (context.Context, trace.SpanCont
 
 	ctx = trace.ContextWithRemoteSpanContext(ctx, spanContext)
 
-	return ctx, spanContext
+	return ctx
 }
 
 func (gRPCLog) DocumentRPCLog(ctx context.Context, logger Logger, metrics Metrics, start time.Time, err error, method, name string) {
@@ -199,7 +201,8 @@ func logRPC(ctx context.Context, logger Logger, metrics Metrics, start time.Time
 	}
 
 	if logger != nil {
-		if method == debugMethod || strings.Contains(method, "/Send") || strings.Contains(method, "/Recv") || strings.Contains(method, "/SendAndClose") {
+		if method == debugMethod || strings.Contains(method, "/Send") ||
+			strings.Contains(method, "/Recv") || strings.Contains(method, "/SendAndClose") {
 			logger.Debug(logEntry)
 		} else {
 			logger.Info(logEntry)
