@@ -11,7 +11,6 @@ import (
 	"time"
 
 	"github.com/gorilla/websocket"
-	"go.opentelemetry.io/otel/trace"
 
 	"gofr.dev/pkg/gofr/container"
 	gofrHTTP "gofr.dev/pkg/gofr/http"
@@ -44,17 +43,15 @@ type handler struct {
 }
 
 type ErrorLogEntry struct {
-	TraceID string `json:"trace_id,omitempty"`
-	Error   string `json:"error,omitempty"`
+	Error string `json:"error,omitempty"`
 }
 
 func (el *ErrorLogEntry) PrettyPrint(writer io.Writer) {
-	fmt.Fprintf(writer, "\u001B[38;5;8m%s \u001B[38;5;%dm%s \n", el.TraceID, colorCodeError, el.Error)
+	fmt.Fprintf(writer, "\u001B[38;5;%dm%s\n", colorCodeError, el.Error)
 }
 
 func (h handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	c := newContext(gofrHTTP.NewResponder(w, r.Method), gofrHTTP.NewRequest(r), h.container)
-	traceID := trace.SpanFromContext(r.Context()).SpanContext().TraceID().String()
 
 	if cl, ok := c.Container.Logger.(*logging.ContextLogger); ok {
 		cl.SetContext(c.Context) // Add a SetContext method to ContextLogger to update context
@@ -86,7 +83,7 @@ func (h handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		}()
 		// Execute the handler function
 		result, err = h.function(c)
-		h.logError(c.Container.Logger, traceID, err)
+		h.logError(c.Container.Logger, err)
 		close(done)
 	}()
 
@@ -150,9 +147,9 @@ func panicRecoveryHandler(re any, log logging.Logger, panicked chan struct{}) {
 }
 
 // Log the error(if any) with traceID and errorMessage.
-func (handler) logError(logger logging.Logger, traceID string, err error) {
+func (handler) logError(logger logging.Logger, err error) {
 	if err != nil {
-		errorLog := &ErrorLogEntry{TraceID: traceID, Error: err.Error()}
+		errorLog := &ErrorLogEntry{Error: err.Error()}
 
 		// define the default log level for error
 		loggerHelper := logger.Error
