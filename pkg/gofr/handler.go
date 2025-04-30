@@ -56,6 +56,8 @@ func (h handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	c := newContext(gofrHTTP.NewResponder(w, r.Method), gofrHTTP.NewRequest(r), h.container)
 	traceID := trace.SpanFromContext(r.Context()).SpanContext().TraceID().String()
 
+	h.container.Logger = logging.NewContextLogger(c.Context, c.Container.Logger)
+
 	if websocket.IsWebSocketUpgrade(r) {
 		// If the request is a WebSocket upgrade, do not apply the timeout
 		c.Context = r.Context()

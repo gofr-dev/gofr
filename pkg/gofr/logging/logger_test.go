@@ -222,7 +222,7 @@ func TestPrettyPrint(t *testing.T) {
 	l := &logger{isTerminal: true, lock: make(chan struct{}, 1)}
 
 	// case PrettyPrint is implemented
-	l.prettyPrint(logEntry{
+	l.prettyPrint(&logEntry{
 		Level:   INFO,
 		Message: m,
 	}, out)
@@ -237,7 +237,7 @@ func TestPrettyPrint(t *testing.T) {
 	// case pretty print is not implemented
 	out.Reset()
 
-	l.prettyPrint(logEntry{
+	l.prettyPrint(&logEntry{
 		Level:   DEBUG,
 		Message: "test log for normal log",
 	}, out)
