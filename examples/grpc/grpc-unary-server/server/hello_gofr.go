@@ -10,11 +10,13 @@ import (
 	"context"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
-
+	"time"
+	
 	"gofr.dev/pkg/gofr"
 	"gofr.dev/pkg/gofr/container"
+	gofrgRPC "gofr.dev/pkg/gofr/grpc"
 	"google.golang.org/grpc"
-
+	
 	healthpb "google.golang.org/grpc/health/grpc_health_v1"
 )
 
@@ -25,12 +27,12 @@ func NewHelloGoFrServer() *HelloGoFrServer {
 	}
 }
 
- // HelloServerWithGofr is the interface for the server implementation
-    type HelloServerWithGofr interface {
-        SayHello(*gofr.Context) (any, error)
-    }
+// HelloServerWithGofr is the interface for the server implementation
+type HelloServerWithGofr interface {
+	SayHello(*gofr.Context) (any, error)
+}
 
-	// HelloServerWrapper wraps the server and handles request and response logic
+// HelloServerWrapper wraps the server and handles request and response logic
 type HelloServerWrapper struct {
 	HelloServer
 	*healthServer
@@ -38,36 +40,82 @@ type HelloServerWrapper struct {
 	server    HelloServerWithGofr
 }
 
-        // Unary method handler for SayHello
-        func (h *HelloServerWrapper) SayHello(ctx context.Context, req *HelloRequest) (*HelloResponse, error) {
-            gctx := h.getGofrContext(ctx, &HelloRequestWrapper{ctx: ctx, HelloRequest: req})
-            
-            res, err := h.server.SayHello(gctx)
-            if err != nil {
-                return nil, err
-            }
-            
-            resp, ok := res.(*HelloResponse)
-            if !ok {
-                return nil, status.Errorf(codes.Unknown, "unexpected response type %T", res)
-            }
-            
-            return resp, nil
-        }
+// Base instrumented stream
+type instrumentedStream struct {
+	grpc.ServerStream
+	ctx    *gofr.Context
+	method string
+}
 
-// mustEmbedUnimplementedHelloServer ensures that the server implements all required methods
+func (s *instrumentedStream) Context() context.Context {
+	return s.ctx
+}
+
+func (s *instrumentedStream) SendMsg(m interface{}) error {
+	start := time.Now()
+	span := s.ctx.Trace(s.method + "/SendMsg")
+	defer span.End()
+
+	err := s.ServerStream.SendMsg(m)
+
+	logger := gofrgRPC.NewgRPCLogger()
+	logger.DocumentRPCLog(s.ctx, s.ctx.Logger, s.ctx.Metrics(), start, err,
+		s.method+"/SendMsg", "app_gRPC-Stream_stats")
+
+	return err
+}
+
+func (s *instrumentedStream) RecvMsg(m interface{}) error {
+	start := time.Now()
+	span := s.ctx.Trace(s.method + "/RecvMsg")
+	defer span.End()
+
+	err := s.ServerStream.RecvMsg(m)
+
+	logger := gofrgRPC.NewgRPCLogger()
+	logger.DocumentRPCLog(s.ctx, s.ctx.Logger, s.ctx.Metrics(), start, err,
+		s.method+"/RecvMsg", "app_gRPC-Stream_stats")
+
+	return err
+}
+
+
+
+// Unary method handler for SayHello
+func (h *HelloServerWrapper) SayHello(ctx context.Context, req *HelloRequest) (*HelloResponse, error) {
+	gctx := h.getGofrContext(ctx, &HelloRequestWrapper{ctx: ctx, HelloRequest: req})
+	
+	res, err := h.server.SayHello(gctx)
+	if err != nil {
+		return nil, err
+	}
+
+	resp, ok := res.(*HelloResponse)
+	if !ok {
+		return nil, status.Errorf(codes.Unknown, "unexpected response type %T", res)
+	}
+	
+	return resp, nil
+}
+
+// mustEmbedUnimplementedHelloServer ensures implementation
 func (h *HelloServerWrapper) mustEmbedUnimplementedHelloServer() {}
 
-// RegisterHelloServerWithGofr registers the server with the application
+// RegisterHelloServerWithGofr registers the server
 func RegisterHelloServerWithGofr(app *gofr.App, srv HelloServerWithGofr) {
 	registerServerWithGofr(app, srv, func(s grpc.ServiceRegistrar, srv any) {
-		wrapper := &HelloServerWrapper{server: srv.(HelloServerWithGofr), healthServer: getOrCreateHealthServer()}
+		wrapper := &HelloServerWrapper{
+			server: srv.(HelloServerWithGofr),
+			healthServer: getOrCreateHealthServer(),
+		}
+
 		RegisterHelloServer(s, wrapper)
+
 		wrapper.Server.SetServingStatus("Hello", healthpb.HealthCheckResponse_SERVING)
 	})
 }
 
-// getGofrContext extracts the GoFr context from the original context
+// getGofrContext creates GoFr context
 func (h *HelloServerWrapper) getGofrContext(ctx context.Context, req gofr.Request) *gofr.Context {
 	return &gofr.Context{
 		Context:   ctx,
