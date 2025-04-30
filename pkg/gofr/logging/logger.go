@@ -69,23 +69,7 @@ func (l *logger) logf(level Level, format string, args ...any) {
 		GofrVersion: version.Framework,
 	}
 
-	// Extract traceID if present
-	traceID := ""
-	filteredArgs := make([]any, 0, len(args))
-
-	for _, arg := range args {
-		if m, ok := arg.(map[string]any); ok {
-			if tid, exists := m["__trace_id__"]; exists {
-				if s, ok := tid.(string); ok {
-					traceID = s
-					continue
-				}
-			}
-		}
-
-		filteredArgs = append(filteredArgs, arg)
-	}
-
+	traceID, filteredArgs := extractTraceIDAndFilterArgs(args)
 	entry.TraceID = traceID
 
 	switch {
@@ -259,4 +243,23 @@ func GetLogLevelForError(err error) Level {
 	}
 
 	return level
+}
+
+func extractTraceIDAndFilterArgs(args []any) (traceID string, filteredArgs []any) {
+	filteredArgs = make([]any, 0, len(args))
+
+	for _, arg := range args {
+		if m, ok := arg.(map[string]any); ok {
+			if tid, exists := m["__trace_id__"]; exists {
+				if s, ok := tid.(string); ok && traceID == "" {
+					traceID = s
+					continue
+				}
+			}
+		}
+
+		filteredArgs = append(filteredArgs, arg)
+	}
+
+	return traceID, filteredArgs
 }

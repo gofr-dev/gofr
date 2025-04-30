@@ -20,6 +20,10 @@ func (l *ContextLogger) withTraceInfo(args ...any) []any {
 	return append(args, map[string]any{"__trace_id__": traceID})
 }
 
+func (l *ContextLogger) SetContext(ctx context.Context) {
+	l.ctx = ctx
+}
+
 func (l *ContextLogger) Debug(args ...any)            { l.base.Debug(l.withTraceInfo(args...)...) }
 func (l *ContextLogger) Debugf(f string, args ...any) { l.base.Debugf(f, l.withTraceInfo(args...)...) }
 func (l *ContextLogger) Log(args ...any)              { l.base.Log(l.withTraceInfo(args...)...) }

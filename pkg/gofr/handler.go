@@ -56,7 +56,11 @@ func (h handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	c := newContext(gofrHTTP.NewResponder(w, r.Method), gofrHTTP.NewRequest(r), h.container)
 	traceID := trace.SpanFromContext(r.Context()).SpanContext().TraceID().String()
 
-	h.container.Logger = logging.NewContextLogger(c.Context, c.Container.Logger)
+	if cl, ok := c.Container.Logger.(*logging.ContextLogger); ok {
+		cl.SetContext(c.Context) // Add a SetContext method to ContextLogger to update context
+	} else {
+		c.Container.Logger = logging.NewContextLogger(c.Context, c.Container.Logger)
+	}
 
 	if websocket.IsWebSocketUpgrade(r) {
 		// If the request is a WebSocket upgrade, do not apply the timeout
@@ -78,11 +82,11 @@ func (h handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	go func() {
 		defer func() {
-			panicRecoveryHandler(recover(), h.container, panicked)
+			panicRecoveryHandler(recover(), c.Container.Logger, panicked)
 		}()
 		// Execute the handler function
 		result, err = h.function(c)
-		h.logError(traceID, err)
+		h.logError(c.Container.Logger, traceID, err)
 		close(done)
 	}()
 
@@ -146,26 +150,26 @@ func panicRecoveryHandler(re any, log logging.Logger, panicked chan struct{}) {
 }
 
 // Log the error(if any) with traceID and errorMessage.
-func (h handler) logError(traceID string, err error) {
+func (handler) logError(logger logging.Logger, traceID string, err error) {
 	if err != nil {
 		errorLog := &ErrorLogEntry{TraceID: traceID, Error: err.Error()}
 
 		// define the default log level for error
-		loggerHelper := h.container.Logger.Error
+		loggerHelper := logger.Error
 
 		switch logging.GetLogLevelForError(err) {
 		case logging.ERROR:
 			// we use the default log level for error
 		case logging.INFO:
-			loggerHelper = h.container.Logger.Info
+			loggerHelper = logger.Info
 		case logging.NOTICE:
-			loggerHelper = h.container.Logger.Notice
+			loggerHelper = logger.Notice
 		case logging.DEBUG:
-			loggerHelper = h.container.Logger.Debug
+			loggerHelper = logger.Debug
 		case logging.WARN:
-			loggerHelper = h.container.Logger.Warn
+			loggerHelper = logger.Warn
 		case logging.FATAL:
-			loggerHelper = h.container.Logger.Fatal
+			loggerHelper = logger.Fatal
 		}
 
 		loggerHelper(errorLog)
