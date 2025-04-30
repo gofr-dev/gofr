@@ -9,6 +9,8 @@ import (
 	"gofr.dev/pkg/gofr/config"
 )
 
+const LogDisableProbeKey = "LOG_DISABLE_PROBES"
+
 func GetConfigs(c config.Config) map[string]string {
 	middlewareConfigs := make(map[string]string)
 
@@ -24,6 +26,10 @@ func GetConfigs(c config.Config) map[string]string {
 		if val := c.Get(v); val != "" {
 			middlewareConfigs[convertHeaderNames(v)] = val
 		}
+	}
+
+	if val := strings.TrimSpace(c.Get(LogDisableProbeKey)); val != "" {
+		middlewareConfigs[LogDisableProbeKey] = val
 	}
 
 	return middlewareConfigs
