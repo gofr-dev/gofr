@@ -2,26 +2,94 @@ package kafka
 
 import (
 	"encoding/json"
+	"fmt"
+	"net"
+	"strconv"
 
 	"gofr.dev/pkg/gofr/datasource"
 )
 
-func (k *kafkaClient) Health() (health datasource.Health) {
-	health = datasource.Health{Details: make(map[string]any)}
-
-	health.Status = datasource.StatusUp
-
-	_, err := k.conn.Controller()
-	if err != nil {
-		health.Status = datasource.StatusDown
+func (k *kafkaClient) Health() datasource.Health {
+	health := datasource.Health{
+		Status:  datasource.StatusDown,
+		Details: make(map[string]any),
 	}
 
-	health.Details["host"] = k.config.Broker
+	if k.conn == nil {
+		health.Details["error"] = "invalid connection type"
+		return health
+	}
+
+	k.conn.mu.RLock()
+	defer k.conn.mu.RUnlock()
+
+	brokerStatus, allDown := k.evaluateBrokerHealth()
+
+	if !allDown {
+		health.Status = datasource.StatusUp
+	}
+
+	health.Details["brokers"] = brokerStatus
 	health.Details["backend"] = "KAFKA"
-	health.Details["writers"] = k.getWriterStatsAsMap()
+	health.Details["writer"] = k.getWriterStatsAsMap()
 	health.Details["readers"] = k.getReaderStatsAsMap()
 
 	return health
+}
+
+func (k *kafkaClient) evaluateBrokerHealth() ([]map[string]any, bool) {
+	var (
+		statusList     = make([]map[string]any, 0)
+		controllerAddr string
+		allDown        = true
+	)
+
+	for _, conn := range k.conn.conns {
+		if conn == nil {
+			continue
+		}
+
+		status := checkBroker(conn, &controllerAddr)
+
+		if status["status"] == brokerStatusUp {
+			allDown = false
+		}
+
+		statusList = append(statusList, status)
+	}
+
+	return statusList, allDown
+}
+
+func checkBroker(conn Connection, controllerAddr *string) map[string]any {
+	brokerAddr := conn.RemoteAddr().String()
+	status := map[string]any{
+		"broker":       brokerAddr,
+		"status":       "DOWN",
+		"isController": false,
+		"error":        nil,
+	}
+
+	_, err := conn.ReadPartitions()
+	if err != nil {
+		status["error"] = err.Error()
+		return status
+	}
+
+	status["status"] = brokerStatusUp
+
+	if *controllerAddr == "" {
+		controller, err := conn.Controller()
+		if err != nil {
+			status["error"] = fmt.Sprintf("controller lookup failed: %v", err)
+		} else if controller.Host != "" {
+			*controllerAddr = net.JoinHostPort(controller.Host, strconv.Itoa(controller.Port))
+		}
+	}
+
+	status["isController"] = brokerAddr == *controllerAddr
+
+	return status
 }
 
 func (k *kafkaClient) getReaderStatsAsMap() []any {

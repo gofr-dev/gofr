@@ -11,6 +11,7 @@ package kafka
 
 import (
 	context "context"
+	net "net"
 	reflect "reflect"
 
 	kafka "github.com/segmentio/kafka-go"
@@ -21,6 +22,7 @@ import (
 type MockReader struct {
 	ctrl     *gomock.Controller
 	recorder *MockReaderMockRecorder
+	isgomock struct{}
 }
 
 // MockReaderMockRecorder is the mock recorder for MockReader.
@@ -121,6 +123,7 @@ func (mr *MockReaderMockRecorder) Stats() *gomock.Call {
 type MockWriter struct {
 	ctrl     *gomock.Controller
 	recorder *MockWriterMockRecorder
+	isgomock struct{}
 }
 
 // MockWriterMockRecorder is the mock recorder for MockWriter.
@@ -191,6 +194,7 @@ func (mr *MockWriterMockRecorder) WriteMessages(ctx any, msg ...any) *gomock.Cal
 type MockConnection struct {
 	ctrl     *gomock.Controller
 	recorder *MockConnectionMockRecorder
+	isgomock struct{}
 }
 
 // MockConnectionMockRecorder is the mock recorder for MockConnection.
@@ -273,4 +277,37 @@ func (m *MockConnection) DeleteTopics(topics ...string) error {
 func (mr *MockConnectionMockRecorder) DeleteTopics(topics ...any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeleteTopics", reflect.TypeOf((*MockConnection)(nil).DeleteTopics), topics...)
+}
+
+// ReadPartitions mocks base method.
+func (m *MockConnection) ReadPartitions(topics ...string) ([]kafka.Partition, error) {
+	m.ctrl.T.Helper()
+	varargs := []any{}
+	for _, a := range topics {
+		varargs = append(varargs, a)
+	}
+	ret := m.ctrl.Call(m, "ReadPartitions", varargs...)
+	ret0, _ := ret[0].([]kafka.Partition)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// ReadPartitions indicates an expected call of ReadPartitions.
+func (mr *MockConnectionMockRecorder) ReadPartitions(topics ...any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ReadPartitions", reflect.TypeOf((*MockConnection)(nil).ReadPartitions), topics...)
+}
+
+// RemoteAddr mocks base method.
+func (m *MockConnection) RemoteAddr() net.Addr {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "RemoteAddr")
+	ret0, _ := ret[0].(net.Addr)
+	return ret0
+}
+
+// RemoteAddr indicates an expected call of RemoteAddr.
+func (mr *MockConnectionMockRecorder) RemoteAddr() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "RemoteAddr", reflect.TypeOf((*MockConnection)(nil).RemoteAddr))
 }
