@@ -141,7 +141,7 @@ func (c *Container) Create(conf config.Config) {
 			pubsubBrokers := strings.Split(conf.Get("PUBSUB_BROKER"), ",")
 
 			c.PubSub = kafka.New(&kafka.Config{
-				Broker:           pubsubBrokers,
+				Brokers:          pubsubBrokers,
 				Partition:        partition,
 				ConsumerGroupID:  conf.Get("CONSUMER_ID"),
 				OffSet:           offSet,
