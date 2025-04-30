@@ -26,7 +26,6 @@ type ChatServiceGoFrServer struct {
 	health *healthServer
 }
 
-// Server-Side Streaming Implementation
 func (s *ChatServiceGoFrServer) ServerStream(ctx *gofr.Context, stream ChatService_ServerStreamServer) error {
 	req := Request{}
 	err := ctx.Bind(&req)
@@ -44,7 +43,6 @@ func (s *ChatServiceGoFrServer) ServerStream(ctx *gofr.Context, stream ChatServi
 	return nil
 }
 
-// Client-Side Streaming Implementation
 func (s *ChatServiceGoFrServer) ClientStream(ctx *gofr.Context, stream ChatService_ClientStreamServer) error {
 	var messageCount int
 	var finalMessage strings.Builder
@@ -65,7 +63,6 @@ func (s *ChatServiceGoFrServer) ClientStream(ctx *gofr.Context, stream ChatServi
 	}
 }
 
-// Bidirectional Streaming Implementation
 func (s *ChatServiceGoFrServer) BiDiStream(ctx *gofr.Context, stream ChatService_BiDiStreamServer) error {
 	// Handle incoming messages in a goroutine
 	errChan := make(chan error)

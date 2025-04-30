@@ -22,7 +22,6 @@ const (
 	responseTimeWidth         = 11
 	nanosecondsPerMillisecond = 1e6
 	debugMethod               = "/grpc.health.v1.Health/SetServingStatus"
-	gRPCStreamMethod          = "stream"
 	healthCheck               = "/grpc.health.v1.Health/Check"
 )
 
