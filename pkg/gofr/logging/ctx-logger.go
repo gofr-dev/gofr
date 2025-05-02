@@ -2,51 +2,36 @@ package logging
 
 import (
 	"context"
+
 	"go.opentelemetry.io/otel/trace"
 )
 
+// ContextLogger is a wrapper around a base Logger that injects the current
+// trace ID (if present in the context) into log messages automatically.
+//
+// It is intended for use within request-scoped contexts where OpenTelemetry
+// trace information is available.
 type ContextLogger struct {
-	base    Logger
-	ctx     context.Context
-	traceID string
-	Dynamic bool
+	base Logger
+	ctx  context.Context
 }
 
+// NewContextLogger creates a new ContextLogger that wraps the provided base logger
+// and automatically appends OpenTelemetry trace information (trace ID) to log output
+// when available in the context.
 func NewContextLogger(ctx context.Context, base Logger) *ContextLogger {
-	l := &ContextLogger{
-		base:    base,
-		ctx:     ctx,
-		Dynamic: true,
-	}
-
-	if span := trace.SpanFromContext(ctx); span.IsRecording() {
-		l.traceID = span.SpanContext().TraceID().String()
-	}
-
-	return l
+	return &ContextLogger{base: base, ctx: ctx}
 }
 
+// withTraceInfo appends the trace ID from the context (if available).
+// This allows trace IDs to be extracted later during formatting or filtering.
 func (l *ContextLogger) withTraceInfo(args ...any) []any {
-	var traceID string
-
-	if l.Dynamic {
-		if span := trace.SpanFromContext(l.ctx); span.IsRecording() {
-			traceID = span.SpanContext().TraceID().String()
-		}
-	} else {
-		traceID = l.traceID
+	sc := trace.SpanFromContext(l.ctx).SpanContext()
+	if sc.IsValid() {
+		return append(args, map[string]any{"__trace_id__": sc.TraceID().String()})
 	}
 
-	if traceID != "" {
-		return append(args, map[string]any{"__trace_id__": traceID})
-	}
 	return args
-}
-
-func (l *ContextLogger) SetContext(ctx context.Context) {
-	if l.Dynamic {
-		l.ctx = ctx
-	}
 }
 
 func (l *ContextLogger) Debug(args ...any)            { l.base.Debug(l.withTraceInfo(args...)...) }

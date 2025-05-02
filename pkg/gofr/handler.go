@@ -51,14 +51,7 @@ func (el *ErrorLogEntry) PrettyPrint(writer io.Writer) {
 }
 
 func (h handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	requestLogger := logging.NewContextLogger(r.Context(), h.container.Logger)
-	requestLogger.Dynamic = false // Freeze trace ID at creation
-
-	// Clone container (cheap shallow copy)
-	reqContainer := *h.container
-	reqContainer.Logger = requestLogger
-
-	c := newContext(gofrHTTP.NewResponder(w, r.Method), gofrHTTP.NewRequest(r), &reqContainer)
+	c := newContext(gofrHTTP.NewResponder(w, r.Method), gofrHTTP.NewRequest(r), h.container)
 
 	if websocket.IsWebSocketUpgrade(r) {
 		// If the request is a WebSocket upgrade, do not apply the timeout
@@ -68,11 +61,18 @@ func (h handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		defer cancel()
 
 		c.Context = ctx
-
-		if cl, ok := reqContainer.Logger.(*logging.ContextLogger); ok {
-			cl.SetContext(ctx) // Only context changes, trace ID remains frozen
-		}
 	}
+
+	// Developer Note:
+	// We temporarily wrap the container's logger with a ContextLogger that injects the trace ID
+	// (from the current request's context) into all logs made during this request's lifecycle.
+	//
+	// After the request is served, we restore the original logger to avoid leaking context across requests.
+	origLogger := h.container.Logger
+	ctxLogger := logging.NewContextLogger(c.Context, origLogger)
+	h.container.Logger = ctxLogger
+
+	defer func() { h.container.Logger = origLogger }()
 
 	done := make(chan struct{})
 	panicked := make(chan struct{})
@@ -84,11 +84,11 @@ func (h handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	go func() {
 		defer func() {
-			panicRecoveryHandler(recover(), c.Container.Logger, panicked)
+			panicRecoveryHandler(recover(), h.container.Logger, panicked)
 		}()
 		// Execute the handler function
 		result, err = h.function(c)
-		h.logError(c.Container.Logger, err)
+		h.logError(h.container.Logger, err)
 		close(done)
 	}()
 

@@ -245,21 +245,23 @@ func GetLogLevelForError(err error) Level {
 	return level
 }
 
-func extractTraceIDAndFilterArgs(args []any) (traceID string, filteredArgs []any) {
-	filteredArgs = make([]any, 0, len(args))
+// extractTraceIDAndFilterArgs scans log arguments for a trace ID map and
+// returns the extracted trace ID (if found) and a filtered list of log arguments
+// excluding the trace metadata.
+func extractTraceIDAndFilterArgs(args []any) (traceID string, filtered []any) {
+	filtered = make([]any, 0, len(args))
 
 	for _, arg := range args {
 		if m, ok := arg.(map[string]any); ok {
-			if tid, exists := m["__trace_id__"]; exists {
-				if s, ok := tid.(string); ok && traceID == "" {
-					traceID = s
-					continue
-				}
+			if tid, exists := m["__trace_id__"].(string); exists && traceID == "" {
+				traceID = tid
+
+				continue
 			}
 		}
 
-		filteredArgs = append(filteredArgs, arg)
+		filtered = append(filtered, arg)
 	}
 
-	return traceID, filteredArgs
+	return traceID, filtered
 }
