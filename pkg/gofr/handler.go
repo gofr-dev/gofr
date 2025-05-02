@@ -53,12 +53,6 @@ func (el *ErrorLogEntry) PrettyPrint(writer io.Writer) {
 func (h handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	c := newContext(gofrHTTP.NewResponder(w, r.Method), gofrHTTP.NewRequest(r), h.container)
 
-	if cl, ok := c.Container.Logger.(*logging.ContextLogger); ok {
-		cl.SetContext(c.Context) // Add a SetContext method to ContextLogger to update context
-	} else {
-		c.Container.Logger = logging.NewContextLogger(c.Context, c.Container.Logger)
-	}
-
 	if websocket.IsWebSocketUpgrade(r) {
 		// If the request is a WebSocket upgrade, do not apply the timeout
 		c.Context = r.Context()
@@ -68,6 +62,16 @@ func (h handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 		c.Context = ctx
 	}
+
+	originalLogger := h.container.Logger
+
+	// Create and set request logger
+	requestLogger := logging.NewContextLogger(r.Context(), originalLogger)
+	requestLogger.Dynamic = false
+	h.container.Logger = requestLogger
+
+	// Ensure we restore original logger
+	defer func() { h.container.Logger = originalLogger }()
 
 	done := make(chan struct{})
 	panicked := make(chan struct{})

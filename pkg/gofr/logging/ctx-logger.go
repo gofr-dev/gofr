@@ -2,26 +2,40 @@ package logging
 
 import (
 	"context"
-
 	"go.opentelemetry.io/otel/trace"
 )
 
 type ContextLogger struct {
-	base Logger
-	ctx  context.Context
+	base    Logger
+	ctx     context.Context
+	Dynamic bool
 }
 
 func NewContextLogger(ctx context.Context, base Logger) *ContextLogger {
-	return &ContextLogger{base: base, ctx: ctx}
+	return &ContextLogger{base: base, ctx: ctx, Dynamic: true}
 }
 
 func (l *ContextLogger) withTraceInfo(args ...any) []any {
-	traceID := trace.SpanFromContext(l.ctx).SpanContext().TraceID().String()
-	return append(args, map[string]any{"__trace_id__": traceID})
+	var traceID string
+
+	if l.Dynamic {
+		if span := trace.SpanFromContext(l.ctx); span.IsRecording() {
+			traceID = span.SpanContext().TraceID().String()
+		}
+	} else if l.ctx != nil {
+		traceID = trace.SpanFromContext(l.ctx).SpanContext().TraceID().String()
+	}
+
+	if traceID != "" {
+		return append(args, map[string]any{"__trace_id__": traceID})
+	}
+	return args
 }
 
 func (l *ContextLogger) SetContext(ctx context.Context) {
-	l.ctx = ctx
+	if l.Dynamic {
+		l.ctx = ctx
+	}
 }
 
 func (l *ContextLogger) Debug(args ...any)            { l.base.Debug(l.withTraceInfo(args...)...) }
