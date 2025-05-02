@@ -8,11 +8,22 @@ import (
 type ContextLogger struct {
 	base    Logger
 	ctx     context.Context
+	traceID string
 	Dynamic bool
 }
 
 func NewContextLogger(ctx context.Context, base Logger) *ContextLogger {
-	return &ContextLogger{base: base, ctx: ctx, Dynamic: true}
+	l := &ContextLogger{
+		base:    base,
+		ctx:     ctx,
+		Dynamic: true,
+	}
+
+	if span := trace.SpanFromContext(ctx); span.IsRecording() {
+		l.traceID = span.SpanContext().TraceID().String()
+	}
+
+	return l
 }
 
 func (l *ContextLogger) withTraceInfo(args ...any) []any {
@@ -22,8 +33,8 @@ func (l *ContextLogger) withTraceInfo(args ...any) []any {
 		if span := trace.SpanFromContext(l.ctx); span.IsRecording() {
 			traceID = span.SpanContext().TraceID().String()
 		}
-	} else if l.ctx != nil {
-		traceID = trace.SpanFromContext(l.ctx).SpanContext().TraceID().String()
+	} else {
+		traceID = l.traceID
 	}
 
 	if traceID != "" {

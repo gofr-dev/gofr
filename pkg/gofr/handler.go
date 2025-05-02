@@ -51,7 +51,14 @@ func (el *ErrorLogEntry) PrettyPrint(writer io.Writer) {
 }
 
 func (h handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	c := newContext(gofrHTTP.NewResponder(w, r.Method), gofrHTTP.NewRequest(r), h.container)
+	requestLogger := logging.NewContextLogger(r.Context(), h.container.Logger)
+	requestLogger.Dynamic = false // Freeze trace ID at creation
+
+	// Clone container (cheap shallow copy)
+	reqContainer := *h.container
+	reqContainer.Logger = requestLogger
+
+	c := newContext(gofrHTTP.NewResponder(w, r.Method), gofrHTTP.NewRequest(r), &reqContainer)
 
 	if websocket.IsWebSocketUpgrade(r) {
 		// If the request is a WebSocket upgrade, do not apply the timeout
@@ -61,17 +68,11 @@ func (h handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		defer cancel()
 
 		c.Context = ctx
+
+		if cl, ok := reqContainer.Logger.(*logging.ContextLogger); ok {
+			cl.SetContext(ctx) // Only context changes, trace ID remains frozen
+		}
 	}
-
-	originalLogger := h.container.Logger
-
-	// Create and set request logger
-	requestLogger := logging.NewContextLogger(r.Context(), originalLogger)
-	requestLogger.Dynamic = false
-	h.container.Logger = requestLogger
-
-	// Ensure we restore original logger
-	defer func() { h.container.Logger = originalLogger }()
 
 	done := make(chan struct{})
 	panicked := make(chan struct{})
