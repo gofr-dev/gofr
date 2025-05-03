@@ -36,7 +36,8 @@ type Redis struct {
 	config *Config
 }
 
-// NewClient return a redis client if connection is successful based on Config.
+// NewClient returns a redis client if connection is successful based on Config.
+// Supports both plain and TLS connections. TLS is configured via REDIS_TLS_ENABLED and related environment variables.
 // In case of error, it returns an error as second parameter.
 func NewClient(c config.Config, logger datasource.Logger, metrics Metrics) *Redis {
 	redisConfig := getRedisConfig(c, logger)
@@ -76,6 +77,15 @@ func (r *Redis) Close() error {
 	return nil
 }
 
+// getRedisConfig builds the Redis Config struct from the provided config and logger.
+// It supports TLS configuration using the following environment variables:
+//
+//	REDIS_TLS_ENABLED: set to "true" to enable TLS
+//	REDIS_TLS_CA_CERT: PEM-encoded CA certificate (string)
+//	REDIS_TLS_CERT:    PEM-encoded client certificate (string or file path)
+//	REDIS_TLS_KEY:     PEM-encoded client private key (string or file path)
+//
+// If TLS is enabled, the function sets up the TLS config for the Redis client.
 func getRedisConfig(c config.Config, logger datasource.Logger) *Config {
 	var redisConfig = &Config{}
 
@@ -87,12 +97,14 @@ func getRedisConfig(c config.Config, logger datasource.Logger) *Config {
 	if err != nil {
 		port = defaultRedisPort
 	}
+
 	redisConfig.Port = port
 
 	db, err := strconv.Atoi(c.Get("REDIS_DB"))
 	if err != nil {
 		db = 0 // default to DB 0 if not specified
 	}
+
 	redisConfig.DB = db
 
 	options := new(redis.Options)
@@ -101,33 +113,35 @@ func getRedisConfig(c config.Config, logger datasource.Logger) *Config {
 	options.Password = redisConfig.Password
 	options.DB = redisConfig.DB
 
-	if c.Get("REDIS_TLS_ENABLED") == "true" {
-		tlsConfig := &tls.Config{
-			MinVersion: tls.VersionTLS12,
-		}
-
-		if caCert := c.Get("REDIS_TLS_CA_CERT"); caCert != "" {
-			caCertPool := x509.NewCertPool()
-			if !caCertPool.AppendCertsFromPEM([]byte(caCert)) {
-				logger.Errorf("failed to append CA cert to pool")
-			}
-			tlsConfig.RootCAs = caCertPool
-		}
-
-		if certFile := c.Get("REDIS_TLS_CERT"); certFile != "" && c.Get("REDIS_TLS_KEY") != "" {
-			cert, err := tls.LoadX509KeyPair(certFile, c.Get("REDIS_TLS_KEY"))
-			if err != nil {
-				logger.Errorf("failed to load client cert/key pair: %v", err)
-			} else {
-				tlsConfig.Certificates = []tls.Certificate{cert}
-			}
-		}
-
-		options.TLSConfig = tlsConfig
-		redisConfig.TLS = tlsConfig
+	if c.Get("REDIS_TLS_ENABLED") != "true" {
+		redisConfig.Options = options
+		return redisConfig
 	}
 
+	tlsConfig := &tls.Config{MinVersion: tls.VersionTLS12}
+
+	if caCert := c.Get("REDIS_TLS_CA_CERT"); caCert != "" {
+		caCertPool := x509.NewCertPool()
+		if !caCertPool.AppendCertsFromPEM([]byte(caCert)) {
+			logger.Errorf("failed to append CA cert to pool")
+		}
+
+		tlsConfig.RootCAs = caCertPool
+	}
+
+	if certFile := c.Get("REDIS_TLS_CERT"); certFile != "" && c.Get("REDIS_TLS_KEY") != "" {
+		cert, err := tls.LoadX509KeyPair(certFile, c.Get("REDIS_TLS_KEY"))
+		if err != nil {
+			logger.Errorf("failed to load client cert/key pair: %v", err)
+		} else {
+			tlsConfig.Certificates = []tls.Certificate{cert}
+		}
+	}
+
+	options.TLSConfig = tlsConfig
+	redisConfig.TLS = tlsConfig
 	redisConfig.Options = options
+
 	return redisConfig
 }
 

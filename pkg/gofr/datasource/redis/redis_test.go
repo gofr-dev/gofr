@@ -168,19 +168,32 @@ func Test_TLSConfigWithDummyPEM(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
-	const dummyPEM = `-----BEGIN CERTIFICATE-----\nMIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAnzQw\n-----END CERTIFICATE-----`
-	const dummyKey = `-----BEGIN RSA PRIVATE KEY-----\nMIIEpAIBAAKCAQEAnzQw\n-----END RSA PRIVATE KEY-----`
+	mockPEM := getMockPEM()
+	mockKey := getMockKey()
 
 	mockLogger := logging.NewMockLogger(logging.ERROR)
 	mockConfig := config.NewMockConfig(map[string]string{
 		"REDIS_HOST":        "localhost",
 		"REDIS_TLS_ENABLED": "true",
-		"REDIS_TLS_CA_CERT": dummyPEM,
-		"REDIS_TLS_CERT":    dummyPEM,
-		"REDIS_TLS_KEY":     dummyKey,
+		"REDIS_TLS_CA_CERT": mockPEM,
+		"REDIS_TLS_CERT":    mockPEM,
+		"REDIS_TLS_KEY":     mockKey,
 	})
 
 	conf := getRedisConfig(mockConfig, mockLogger)
 	assert.NotNil(t, conf.TLS, "Expected TLS config to be set")
 	assert.EqualValues(t, tls.VersionTLS12, conf.TLS.MinVersion, "Expected TLS 1.2")
+}
+
+func getMockPEM() string {
+	const mockPEM = `-----BEGIN CERTIFICATE-----\nMIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAnzQw\n-----END CERTIFICATE-----`
+
+	return mockPEM
+}
+
+func getMockKey() string {
+	//nolint:gosec // dummy private key for test only, not used in production
+	const mockKey = `-----BEGIN RSA PRIVATE KEY-----\nMIIEpAIBAAKCAQEAnzQw\n-----END RSA PRIVATE KEY-----`
+
+	return mockKey
 }
