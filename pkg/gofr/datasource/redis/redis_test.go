@@ -1,6 +1,7 @@
 package redis
 
 import (
+	"crypto/tls"
 	"testing"
 	"time"
 
@@ -146,4 +147,40 @@ func TestRedis_Close(t *testing.T) {
 	err = client.Close()
 
 	require.NoError(t, err)
+}
+
+func Test_TLSConfig(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	mockLogger := logging.NewMockLogger(logging.ERROR)
+	mockConfig := config.NewMockConfig(map[string]string{
+		"REDIS_HOST":        "localhost",
+		"REDIS_TLS_ENABLED": "true",
+	})
+
+	conf := getRedisConfig(mockConfig, mockLogger)
+	assert.NotNil(t, conf.TLS, "Expected TLS config to be set")
+	assert.EqualValues(t, tls.VersionTLS12, conf.TLS.MinVersion, "Expected TLS 1.2")
+}
+
+func Test_TLSConfigWithDummyPEM(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	const dummyPEM = `-----BEGIN CERTIFICATE-----\nMIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAnzQw\n-----END CERTIFICATE-----`
+	const dummyKey = `-----BEGIN RSA PRIVATE KEY-----\nMIIEpAIBAAKCAQEAnzQw\n-----END RSA PRIVATE KEY-----`
+
+	mockLogger := logging.NewMockLogger(logging.ERROR)
+	mockConfig := config.NewMockConfig(map[string]string{
+		"REDIS_HOST":        "localhost",
+		"REDIS_TLS_ENABLED": "true",
+		"REDIS_TLS_CA_CERT": dummyPEM,
+		"REDIS_TLS_CERT":    dummyPEM,
+		"REDIS_TLS_KEY":     dummyKey,
+	})
+
+	conf := getRedisConfig(mockConfig, mockLogger)
+	assert.NotNil(t, conf.TLS, "Expected TLS config to be set")
+	assert.EqualValues(t, tls.VersionTLS12, conf.TLS.MinVersion, "Expected TLS 1.2")
 }
