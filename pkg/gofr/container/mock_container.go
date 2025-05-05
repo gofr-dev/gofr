@@ -33,8 +33,8 @@ type Mocks struct {
 
 type options func(c *Container, ctrl *gomock.Controller) any
 
-//nolint:revive // WithMockHTTPService returns an exported type intentionally; options are internal and subject to change.
-func WithMockHTTPService(httpServiceNames ...string) options {
+func WithMockHTTPService(httpServiceNames ...string) options { //nolint:revive // WithMockHTTPService returns an
+	// exported type intentionally; options are internal and subject to change.
 	return func(c *Container, ctrl *gomock.Controller) any {
 		mockservice := service.NewMockHTTP(ctrl)
 		for _, s := range httpServiceNames {
