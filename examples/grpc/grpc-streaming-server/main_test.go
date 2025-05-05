@@ -19,7 +19,7 @@ func TestMain(m *testing.M) {
 	go main()
 	time.Sleep(300 * time.Millisecond) // wait for server to boot
 
-	os.Exit(m.Run())
+	m.Run()
 }
 
 func TestServerStream(t *testing.T) {

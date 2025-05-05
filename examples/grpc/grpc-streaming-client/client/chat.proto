@@ -1,17 +1,5 @@
 syntax = "proto3";
-option go_package = "gofr.dev/examples/grpc/grpc-client/client";
-
-message HelloRequest {
-  string name = 1;
-}
-
-message HelloResponse {
-  string message = 1;
-}
-
-service Hello {
-  rpc SayHello(HelloRequest) returns (HelloResponse) {}
-}
+option go_package = "gofr.dev/examples/grpc/grpc-streaming-client/client";
 
 message Request {
   string message = 1;

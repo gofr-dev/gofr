@@ -2,13 +2,13 @@ package main
 
 import (
 	"context"
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 	"google.golang.org/grpc/credentials/insecure"
 	"os"
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"gofr.dev/examples/grpc/grpc-unary-server/server"
 	"google.golang.org/grpc"
 )
