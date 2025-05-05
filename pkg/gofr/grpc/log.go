@@ -201,10 +201,13 @@ func logRPC(ctx context.Context, logger Logger, metrics Metrics, start time.Time
 	}
 
 	if logger != nil {
-		if method == debugMethod || strings.Contains(method, "/Send") ||
-			strings.Contains(method, "/Recv") || strings.Contains(method, "/SendAndClose") {
+		switch {
+		case method == debugMethod,
+			strings.Contains(method, "/Send"),
+			strings.Contains(method, "/Recv"),
+			strings.Contains(method, "/SendAndClose"):
 			logger.Debug(logEntry)
-		} else {
+		default:
 			logger.Info(logEntry)
 		}
 	}

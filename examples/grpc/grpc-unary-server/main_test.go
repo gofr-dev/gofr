@@ -2,15 +2,16 @@ package main
 
 import (
 	"context"
-	"google.golang.org/grpc/credentials/insecure"
 	"os"
 	"testing"
 	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"gofr.dev/examples/grpc/grpc-unary-server/server"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials/insecure"
+
+	"gofr.dev/examples/grpc/grpc-unary-server/server"
 )
 
 func TestGRPCServer(t *testing.T) {
@@ -76,5 +77,5 @@ func TestMain(m *testing.M) {
 	go main()
 	time.Sleep(300 * time.Millisecond) // wait for server to boot
 
-	os.Exit(m.Run())
+	m.Run()
 }

@@ -12,7 +12,7 @@ import (
 func main() {
 	app := gofr.New()
 
-	//Create a gRPC client for the Chat Streaming service
+	// Create a gRPC client for the Chat Streaming service
 	chatClient, err := client.NewChatServiceGoFrClient(app.Config.Get("GRPC_SERVER_HOST"), app.Metrics())
 	if err != nil {
 		app.Logger().Errorf("Failed to create Chat client: %v", err)
@@ -145,78 +145,28 @@ func (c *ChatHandler) ClientStreamHandler(ctx *gofr.Context) (interface{}, error
 // BiDiStreamHandler handles bidirectional streaming with detailed tracking
 func (c *ChatHandler) BiDiStreamHandler(ctx *gofr.Context) (interface{}, error) {
 	startTime := time.Now()
-	var streamLog []StreamResponse
+	streamLog := make([]StreamResponse, 0)
 
-	// Create bidirectional stream
 	stream, err := c.chatClient.BiDiStream(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("failed to initiate bidirectional stream: %v", err)
 	}
 
-	// Channel to collect responses
-	respChan := make(chan StreamResponse)
-	errChan := make(chan error)
+	respChan, errChan := make(chan StreamResponse), make(chan error)
+	go c.receiveBiDiResponses(ctx, stream, respChan, errChan)
 
-	// Receive messages from server in goroutine
-	go func() {
-		for {
-			res, err := stream.Recv()
-			if err != nil {
-				if errors.Is(err, io.EOF) {
-					errChan <- nil
-					return
-				}
-				errChan <- fmt.Errorf("receive error: %v", err)
-				return
-			}
-
-			resp := StreamResponse{
-				Message:   res.Message,
-				Timestamp: time.Now(),
-				Direction: "received",
-			}
-			ctx.Logger.Infof("Received bidirectional message: %s at %v", res.Message, resp.Timestamp)
-			respChan <- resp
-		}
-	}()
-
-	// Send multiple messages to server
-	messages := []string{"message 1", "message 2", "message 3"}
-	for _, msg := range messages {
-		sendTime := time.Now()
-		if err := stream.Send(&client.Request{Message: msg}); err != nil {
-			return nil, fmt.Errorf("failed to send message %q: %v", msg, err)
-		}
-
-		streamLog = append(streamLog, StreamResponse{
-			Message:   msg,
-			Timestamp: sendTime,
-			Direction: "sent",
-		})
-		ctx.Logger.Infof("Sent bidirectional message: %s at %v", msg, sendTime)
+	sentMessages, err := c.sendBiDiMessages(ctx, stream, &streamLog)
+	if err != nil {
+		return nil, err
 	}
 
-	// Close sending side
 	if err := stream.CloseSend(); err != nil {
 		return nil, fmt.Errorf("failed to close send: %v", err)
 	}
 
-	// Collect responses
-	var receivedMessages []string
-	done := false
-	for !done {
-		select {
-		case err := <-errChan:
-			if err != nil {
-				return nil, err
-			}
-			done = true
-		case resp := <-respChan:
-			streamLog = append(streamLog, resp)
-			receivedMessages = append(receivedMessages, resp.Message)
-		case <-time.After(5 * time.Second): // timeout to prevent hanging
-			return nil, errors.New("bidirectional stream timeout")
-		}
+	receivedMessages, err := c.collectBiDiResponses(respChan, errChan, &streamLog)
+	if err != nil {
+		return nil, err
 	}
 
 	return map[string]interface{}{
@@ -224,8 +174,68 @@ func (c *ChatHandler) BiDiStreamHandler(ctx *gofr.Context) (interface{}, error) 
 		"start_time":        startTime,
 		"end_time":          time.Now(),
 		"duration_sec":      time.Since(startTime).Seconds(),
-		"sent_messages":     messages,
+		"sent_messages":     sentMessages,
 		"received_messages": receivedMessages,
 		"detailed_log":      streamLog,
 	}, nil
+}
+
+// receiveBiDiResponses receives messages in a goroutine
+func (c *ChatHandler) receiveBiDiResponses(ctx *gofr.Context, stream client.ChatService_BiDiStreamClient, respChan chan<- StreamResponse, errChan chan<- error) {
+	for {
+		res, err := stream.Recv()
+		if err != nil {
+			if errors.Is(err, io.EOF) {
+				errChan <- nil
+			} else {
+				errChan <- fmt.Errorf("receive error: %v", err)
+			}
+			return
+		}
+		timestamp := time.Now()
+		ctx.Logger.Infof("Received bidirectional message: %s at %v", res.Message, timestamp)
+		respChan <- StreamResponse{
+			Message:   res.Message,
+			Timestamp: timestamp,
+			Direction: "received",
+		}
+	}
+}
+
+// sendBiDiMessages sends predefined messages
+func (c *ChatHandler) sendBiDiMessages(ctx *gofr.Context, stream client.ChatService_BiDiStreamClient, streamLog *[]StreamResponse) ([]string, error) {
+	messages := []string{"message 1", "message 2", "message 3"}
+
+	for _, msg := range messages {
+		timestamp := time.Now()
+		if err := stream.Send(&client.Request{Message: msg}); err != nil {
+			return nil, fmt.Errorf("failed to send message %q: %v", msg, err)
+		}
+		ctx.Logger.Infof("Sent bidirectional message: %s at %v", msg, timestamp)
+		*streamLog = append(*streamLog, StreamResponse{
+			Message:   msg,
+			Timestamp: timestamp,
+			Direction: "sent",
+		})
+	}
+
+	return messages, nil
+}
+
+// collectBiDiResponses waits and aggregates received responses
+func (c *ChatHandler) collectBiDiResponses(respChan <-chan StreamResponse, errChan <-chan error, streamLog *[]StreamResponse) ([]string, error) {
+	var received []string
+
+	timeout := time.After(5 * time.Second)
+	for {
+		select {
+		case err := <-errChan:
+			return received, err
+		case resp := <-respChan:
+			received = append(received, resp.Message)
+			*streamLog = append(*streamLog, resp)
+		case <-timeout:
+			return nil, errors.New("bidirectional stream timeout")
+		}
+	}
 }

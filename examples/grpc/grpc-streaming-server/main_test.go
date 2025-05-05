@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -113,9 +114,10 @@ func TestBiDiStream(t *testing.T) {
 	var responses []string
 	for {
 		resp, err := stream.Recv()
-		if err == io.EOF {
+		if errors.Is(err, io.EOF) {
 			break
 		}
+
 		if err != nil {
 			t.Fatalf("Recv failed: %v", err)
 		}
