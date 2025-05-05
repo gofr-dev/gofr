@@ -18,7 +18,7 @@ func main() {
 		return
 	}
 
-	chatClient, err := client.NewChatGoFrClient(app.Config.Get("GRPC_SERVER_HOST"), app.Metrics())
+	chatClient, err := client.NewChatServiceGoFrClient(app.Config.Get("GRPC_SERVER_HOST"), app.Metrics())
 	if err != nil {
 		app.Logger().Errorf("Failed to create Chat client: %v", err)
 	}
@@ -72,10 +72,10 @@ func (g GreetHandler) Hello(ctx *gofr.Context) (interface{}, error) {
 
 // Add ChatHandler struct and methods
 type ChatHandler struct {
-	chatClient client.ChatGoFrClient
+	chatClient client.ChatServiceGoFrClient
 }
 
-func NewChatHandler(chatClient client.ChatGoFrClient) *ChatHandler {
+func NewChatHandler(chatClient client.ChatServiceGoFrClient) *ChatHandler {
 	return &ChatHandler{chatClient: chatClient}
 }
 
