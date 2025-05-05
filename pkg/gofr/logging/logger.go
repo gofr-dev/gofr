@@ -164,7 +164,7 @@ func (l *logger) prettyPrint(e *logEntry, out io.Writer) {
 	fmt.Fprintf(out, "\u001B[38;5;%dm%s\u001B[0m [%s]", e.Level.color(), e.Level.String()[0:4], e.Time.Format(time.TimeOnly))
 
 	if e.TraceID != "" {
-		fmt.Fprintf(out, " %s", e.TraceID)
+		fmt.Fprintf(out, " \u001B[38;5;8m%s\u001B[0m", e.TraceID)
 	}
 
 	fmt.Fprint(out, " ")
