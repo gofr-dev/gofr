@@ -2,7 +2,7 @@
 // versions:
 // 	gofr-cli v0.6.0
 // 	gofr.dev v1.37.0
-// 	source: hello.proto
+// 	source: chat.proto
 
 package client
 
@@ -62,7 +62,7 @@ func createGRPCConn(host string, serviceName string, dialOptions ...grpc.DialOpt
 	return conn, nil
 }
 
-func invokeRPC(ctx *gofr.Context, rpcName string, rpcFunc func() (interface{}, error)) (interface{}, error) {
+func invokeRPC(ctx *gofr.Context, rpcName string, rpcFunc func() (interface{}, error), metricName string) (interface{}, error) {
 	span := ctx.Trace("gRPC-srv-call: " + rpcName)
 	defer span.End()
 
@@ -75,8 +75,7 @@ func invokeRPC(ctx *gofr.Context, rpcName string, rpcFunc func() (interface{}, e
 
 	res, err := rpcFunc()
 	logger := gofrgRPC.NewgRPCLogger()
-	logger.DocumentRPCLog(ctx.Context, ctx.Logger, ctx.Metrics(), transactionStartTime, err,
-	rpcName, "app_gRPC-Client_stats")
+	logger.DocumentRPCLog(ctx.Context, ctx.Logger, ctx.Metrics(), transactionStartTime, err, rpcName, metricName)
 
 	return res, err
 }
@@ -85,7 +84,7 @@ func (h *HealthClientWrapper) Check(ctx *gofr.Context, in *grpc_health_v1.Health
 	opts ...grpc.CallOption) (*grpc_health_v1.HealthCheckResponse, error) {
 	result, err := invokeRPC(ctx, fmt.Sprintf("/grpc.health.v1.Health/Check	Service: %q", in.Service), func() (interface{}, error) {
 		return h.client.Check(ctx, in, opts...)
-	})
+	}, "app_gRPC-Client_stats")
 
 	if err != nil {
 		return nil, err
@@ -97,7 +96,7 @@ func (h *HealthClientWrapper) Watch(ctx *gofr.Context, in *grpc_health_v1.Health
 	opts ...grpc.CallOption) (grpc.ServerStreamingClient[grpc_health_v1.HealthCheckResponse], error) {
 	result, err := invokeRPC(ctx, fmt.Sprintf("/grpc.health.v1.Health/Watch	Service: %q", in.Service), func() (interface{}, error) {
 		return h.client.Watch(ctx, in, opts...)
-	})
+	}, "app_gRPC-Stream_stats")
 
 	if err != nil {
 		return nil, err
