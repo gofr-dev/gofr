@@ -15,25 +15,26 @@ import (
 )
 
 type Mocks struct {
-	Redis       *MockRedis
-	SQL         *mockSQL
-	Clickhouse  *MockClickhouse
-	Cassandra   *MockCassandraWithContext
-	Mongo       *MockMongo
-	KVStore     *MockKVStore
-	DGraph      *MockDgraph
-	ArangoDB    *MockArangoDBProvider
-	OpenTSDB    *MockOpenTSDBProvider
-	SurrealDB   *MockSurrealDB
-	File        *file.MockFileSystemProvider
-	HTTPService *service.MockHTTP
-	Metrics     *MockMetrics
+	Redis         *MockRedis
+	SQL           *mockSQL
+	Clickhouse    *MockClickhouse
+	Cassandra     *MockCassandraWithContext
+	Mongo         *MockMongo
+	KVStore       *MockKVStore
+	DGraph        *MockDgraph
+	ArangoDB      *MockArangoDBProvider
+	OpenTSDB      *MockOpenTSDBProvider
+	SurrealDB     *MockSurrealDB
+	Elasticsearch *MockElasticsearch
+	File          *file.MockFileSystemProvider
+	HTTPService   *service.MockHTTP
+	Metrics       *MockMetrics
 }
 
 type options func(c *Container, ctrl *gomock.Controller) any
 
-//nolint:revive // WithMockHTTPService returns an exported type intentionally; options are internal and subject to change.
-func WithMockHTTPService(httpServiceNames ...string) options {
+func WithMockHTTPService(httpServiceNames ...string) options { //nolint:revive // WithMockHTTPService returns an
+	// exported type intentionally; options are internal and subject to change.
 	return func(c *Container, ctrl *gomock.Controller) any {
 		mockservice := service.NewMockHTTP(ctrl)
 		for _, s := range httpServiceNames {
@@ -93,6 +94,9 @@ func NewMockContainer(t *testing.T, options ...options) (*Container, *Mocks) {
 	surrealMock := NewMockSurrealDB(ctrl)
 	container.SurrealDB = surrealMock
 
+	elasticsearchMock := NewMockElasticSearch(ctrl)
+	container.Elasticsearch = elasticsearchMock
+
 	var httpMock *service.MockHTTP
 
 	container.Services = make(map[string]service.HTTP)
@@ -112,19 +116,20 @@ func NewMockContainer(t *testing.T, options ...options) (*Container, *Mocks) {
 	container.metricsManager = mockMetrics
 
 	mocks := Mocks{
-		Redis:       redisMock,
-		SQL:         sqlMockWrapper,
-		Clickhouse:  clickhouseMock,
-		Cassandra:   cassandraMock,
-		Mongo:       mongoMock,
-		KVStore:     kvStoreMock,
-		File:        fileStoreMock,
-		HTTPService: httpMock,
-		DGraph:      dgraphMock,
-		OpenTSDB:    opentsdbMock,
-		ArangoDB:    arangoMock,
-		SurrealDB:   surrealMock,
-		Metrics:     mockMetrics,
+		Redis:         redisMock,
+		SQL:           sqlMockWrapper,
+		Clickhouse:    clickhouseMock,
+		Cassandra:     cassandraMock,
+		Mongo:         mongoMock,
+		KVStore:       kvStoreMock,
+		File:          fileStoreMock,
+		HTTPService:   httpMock,
+		DGraph:        dgraphMock,
+		OpenTSDB:      opentsdbMock,
+		ArangoDB:      arangoMock,
+		SurrealDB:     surrealMock,
+		Elasticsearch: elasticsearchMock,
+		Metrics:       mockMetrics,
 	}
 
 	// TODO: Remove this expectation from mock container (previous generalisation) to the actual tests where their expectations are being set.

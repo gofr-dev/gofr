@@ -53,15 +53,16 @@ type Container struct {
 	Redis Redis
 	SQL   DB
 
-	Cassandra  CassandraWithContext
-	Clickhouse Clickhouse
-	Mongo      Mongo
-	Solr       Solr
-	DGraph     Dgraph
-	OpenTSDB   OpenTSDB
-	ScyllaDB   ScyllaDB
-	SurrealDB  SurrealDB
-	ArangoDB   ArangoDB
+	Cassandra     CassandraWithContext
+	Clickhouse    Clickhouse
+	Mongo         Mongo
+	Solr          Solr
+	DGraph        Dgraph
+	OpenTSDB      OpenTSDB
+	ScyllaDB      ScyllaDB
+	SurrealDB     SurrealDB
+	ArangoDB      ArangoDB
+	Elasticsearch Elasticsearch
 
 	KVStore KVStore
 
@@ -137,8 +138,10 @@ func (c *Container) Create(conf config.Config) {
 				InsecureSkipVerify: conf.Get("KAFKA_TLS_INSECURE_SKIP_VERIFY") == "true",
 			}
 
+			pubsubBrokers := strings.Split(conf.Get("PUBSUB_BROKER"), ",")
+
 			c.PubSub = kafka.New(&kafka.Config{
-				Broker:           conf.Get("PUBSUB_BROKER"),
+				Brokers:          pubsubBrokers,
 				Partition:        partition,
 				ConsumerGroupID:  conf.Get("CONSUMER_ID"),
 				OffSet:           offSet,

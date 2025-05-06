@@ -1,8 +1,8 @@
 package kafka
 
 import (
-	"context"
 	"errors"
+	"net"
 	"sync"
 	"testing"
 
@@ -25,7 +25,7 @@ func TestValidateConfigs_ValidCases(t *testing.T) {
 		{
 			name: "Valid Config",
 			config: Config{
-				Broker:           "kafkabroker",
+				Brokers:          []string{"kafkabroker"},
 				BatchSize:        1,
 				BatchBytes:       1,
 				BatchTimeout:     1,
@@ -39,7 +39,7 @@ func TestValidateConfigs_ValidCases(t *testing.T) {
 		{
 			name: "Valid PLAINTEXT Protocol",
 			config: Config{
-				Broker:           "kafkabroker",
+				Brokers:          []string{"kafkabroker"},
 				BatchSize:        1,
 				BatchBytes:       1,
 				BatchTimeout:     1,
@@ -50,7 +50,7 @@ func TestValidateConfigs_ValidCases(t *testing.T) {
 		{
 			name: "Valid SSL Protocol with TLS Configs",
 			config: Config{
-				Broker:           "kafkabroker",
+				Brokers:          []string{"kafkabroker"},
 				BatchSize:        1,
 				BatchBytes:       1,
 				BatchTimeout:     1,
@@ -66,7 +66,7 @@ func TestValidateConfigs_ValidCases(t *testing.T) {
 		{
 			name: "Valid SASL_SSL Protocol with TLS and SASL Configs",
 			config: Config{
-				Broker:           "kafkabroker",
+				Brokers:          []string{"kafkabroker"},
 				BatchSize:        1,
 				BatchBytes:       1,
 				BatchTimeout:     1,
@@ -85,7 +85,7 @@ func TestValidateConfigs_ValidCases(t *testing.T) {
 		{
 			name: "Valid SSL Protocol with InsecureSkipVerify",
 			config: Config{
-				Broker:           "kafkabroker",
+				Brokers:          []string{"kafkabroker"},
 				BatchSize:        1,
 				BatchBytes:       1,
 				BatchTimeout:     1,
@@ -126,7 +126,7 @@ func TestValidateConfigs_InvalidCases(t *testing.T) {
 		{
 			name: "Zero BatchSize",
 			config: Config{
-				Broker:       "kafkabroker",
+				Brokers:      []string{"kafkabroker"},
 				BatchSize:    0,
 				BatchBytes:   1,
 				BatchTimeout: 1,
@@ -136,7 +136,7 @@ func TestValidateConfigs_InvalidCases(t *testing.T) {
 		{
 			name: "Zero BatchBytes",
 			config: Config{
-				Broker:       "kafkabroker",
+				Brokers:      []string{"kafkabroker"},
 				BatchSize:    1,
 				BatchBytes:   0,
 				BatchTimeout: 1,
@@ -146,7 +146,7 @@ func TestValidateConfigs_InvalidCases(t *testing.T) {
 		{
 			name: "Zero BatchTimeout",
 			config: Config{
-				Broker:       "kafkabroker",
+				Brokers:      []string{"kafkabroker"},
 				BatchSize:    1,
 				BatchBytes:   1,
 				BatchTimeout: 0,
@@ -156,7 +156,7 @@ func TestValidateConfigs_InvalidCases(t *testing.T) {
 		{
 			name: "SASL_PLAINTEXT with Missing SASLMechanism",
 			config: Config{
-				Broker:           "kafkabroker",
+				Brokers:          []string{"kafkabroker"},
 				BatchSize:        1,
 				BatchBytes:       1,
 				BatchTimeout:     1,
@@ -169,7 +169,7 @@ func TestValidateConfigs_InvalidCases(t *testing.T) {
 		{
 			name: "Unsupported Security Protocol",
 			config: Config{
-				Broker:           "kafkabroker",
+				Brokers:          []string{"kafkabroker"},
 				BatchSize:        1,
 				BatchBytes:       1,
 				BatchTimeout:     1,
@@ -201,7 +201,7 @@ func TestKafkaClient_PublishError(t *testing.T) {
 	mockWriter := NewMockWriter(ctrl)
 	mockMetrics := NewMockMetrics(ctrl)
 	k := &kafkaClient{writer: mockWriter, metrics: mockMetrics}
-	ctx := context.TODO()
+	ctx := t.Context()
 
 	testCases := []struct {
 		desc      string
@@ -260,12 +260,18 @@ func TestKafkaClient_Publish(t *testing.T) {
 	mockMetrics := NewMockMetrics(ctrl)
 
 	logs := testutil.StdoutOutputForFunc(func() {
-		ctx := context.TODO()
+		ctx := t.Context()
 		logger := logging.NewMockLogger(logging.DEBUG)
-		k := &kafkaClient{writer: mockWriter, logger: logger, metrics: mockMetrics}
+		k := &kafkaClient{
+			writer:  mockWriter,
+			logger:  logger,
+			metrics: mockMetrics,
+			config: Config{
+				Brokers: []string{"localhost:9092"}, // Make sure Broker is not empty
+			},
+		}
 
-		mockWriter.EXPECT().WriteMessages(gomock.Any(), gomock.Any()).
-			Return(nil)
+		mockWriter.EXPECT().WriteMessages(gomock.Any(), gomock.Any()).Return(nil)
 		mockMetrics.EXPECT().IncrementCounter(gomock.Any(), "app_pubsub_publish_total_count", "topic", "test")
 		mockMetrics.EXPECT().IncrementCounter(gomock.Any(), "app_pubsub_publish_success_count", "topic", "test")
 
@@ -288,7 +294,7 @@ func TestKafkaClient_SubscribeSuccess(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
-	ctx := context.TODO()
+	ctx := t.Context()
 	mockReader := NewMockReader(ctrl)
 	mockMetrics := NewMockMetrics(ctrl)
 	mockConnection := NewMockConnection(ctrl)
@@ -299,11 +305,15 @@ func TestKafkaClient_SubscribeSuccess(t *testing.T) {
 		reader: map[string]Reader{
 			"test": mockReader,
 		},
-		conn:   mockConnection,
+		conn: &multiConn{
+			conns: []Connection{
+				mockConnection,
+			},
+		},
 		logger: nil,
 		config: Config{
 			ConsumerGroupID: "consumer",
-			Broker:          "kafkabroker",
+			Brokers:         []string{"kafkabroker"},
 			OffSet:          -1,
 		},
 		mu:      &sync.RWMutex{},
@@ -346,19 +356,25 @@ func TestKafkaClient_Subscribe_ErrConsumerGroupID(t *testing.T) {
 
 	mockConnection := NewMockConnection(ctrl)
 
+	m := &multiConn{
+		conns: []Connection{
+			mockConnection,
+		},
+	}
+
 	k := &kafkaClient{
 		dialer: &kafka.Dialer{},
 		config: Config{
-			Broker: "kafkabroker",
-			OffSet: -1,
+			Brokers: []string{"kafkabroker"},
+			OffSet:  -1,
 		},
-		conn:   mockConnection,
+		conn:   m,
 		logger: logging.NewMockLogger(logging.INFO),
 	}
 
 	mockConnection.EXPECT().Controller().Return(kafka.Broker{}, nil)
 
-	msg, err := k.Subscribe(context.TODO(), "test")
+	msg, err := k.Subscribe(t.Context(), "test")
 	assert.NotNil(t, msg)
 	assert.Equal(t, ErrConsumerGroupNotProvided, err)
 }
@@ -373,10 +389,16 @@ func TestKafkaClient_SubscribeError(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
-	ctx := context.TODO()
+	ctx := t.Context()
 	mockReader := NewMockReader(ctrl)
 	mockMetrics := NewMockMetrics(ctrl)
 	mockConnection := NewMockConnection(ctrl)
+
+	m := &multiConn{
+		conns: []Connection{
+			mockConnection,
+		},
+	}
 
 	k := &kafkaClient{
 		dialer: &kafka.Dialer{},
@@ -384,11 +406,11 @@ func TestKafkaClient_SubscribeError(t *testing.T) {
 		reader: map[string]Reader{
 			"test": mockReader,
 		},
-		conn:   mockConnection,
+		conn:   m,
 		logger: logging.NewMockLogger(logging.INFO),
 		config: Config{
 			ConsumerGroupID: "consumer",
-			Broker:          "kafkabroker",
+			Brokers:         []string{"kafkabroker"},
 			OffSet:          -1,
 		},
 		mu:      &sync.RWMutex{},
@@ -422,7 +444,11 @@ func TestKafkaClient_Close(t *testing.T) {
 	mockReader := NewMockReader(ctrl)
 	mockConn := NewMockConnection(ctrl)
 
-	k := kafkaClient{reader: map[string]Reader{"test-topic": mockReader}, writer: mockWriter, conn: mockConn}
+	k := kafkaClient{reader: map[string]Reader{"test-topic": mockReader}, writer: mockWriter, conn: &multiConn{
+		conns: []Connection{
+			mockConn,
+		},
+	}}
 
 	mockWriter.EXPECT().Close().Return(nil)
 	mockReader.EXPECT().Close().Return(nil)
@@ -453,14 +479,14 @@ func TestKafkaClient_CloseError(t *testing.T) {
 	err = k.Close()
 
 	require.Error(t, err)
-	assert.Equal(t, errClose, err)
+	assert.ErrorIs(t, err, errClose)
 }
 
 func TestKafkaClient_getNewReader(t *testing.T) {
 	k := &kafkaClient{
 		dialer: &kafka.Dialer{},
 		config: Config{
-			Broker:          "kafka-broker",
+			Brokers:         []string{"kafka-broker"},
 			ConsumerGroupID: "consumer",
 			OffSet:          -1,
 		},
@@ -483,14 +509,14 @@ func TestNewKafkaClient(t *testing.T) {
 		{
 			desc: "validation of configs fail (Empty Broker)",
 			config: Config{
-				Broker: "",
+				Brokers: []string{""},
 			},
 			expectNil: true,
 		},
 		{
 			desc: "validation of configs fail (Zero Batch Bytes)",
 			config: Config{
-				Broker:     "kafka-broker",
+				Brokers:    []string{"kafka-broker"},
 				BatchBytes: 0,
 			},
 			expectNil: true,
@@ -498,7 +524,7 @@ func TestNewKafkaClient(t *testing.T) {
 		{
 			desc: "validation of configs fail (Zero Batch Size)",
 			config: Config{
-				Broker:     "kafka-broker",
+				Brokers:    []string{"kafka-broker"},
 				BatchBytes: 1,
 				BatchSize:  0,
 			},
@@ -507,7 +533,7 @@ func TestNewKafkaClient(t *testing.T) {
 		{
 			desc: "validation of configs fail (Zero Batch Timeout)",
 			config: Config{
-				Broker:       "kafka-broker",
+				Brokers:      []string{"kafka-broker"},
 				BatchBytes:   1,
 				BatchSize:    1,
 				BatchTimeout: 0,
@@ -517,7 +543,7 @@ func TestNewKafkaClient(t *testing.T) {
 		{
 			desc: "successful initialization",
 			config: Config{
-				Broker:           "kafka-broker",
+				Brokers:          []string{"kafka-broker"},
 				ConsumerGroupID:  "consumer",
 				BatchBytes:       1,
 				BatchSize:        1,
@@ -549,7 +575,11 @@ func TestKafkaClient_Controller(t *testing.T) {
 	mockClient := NewMockConnection(ctrl)
 
 	client := kafkaClient{
-		conn: mockClient,
+		conn: &multiConn{
+			conns: []Connection{
+				mockClient,
+			},
+		},
 	}
 
 	mockClient.EXPECT().Controller().Return(kafka.Broker{}, nil)
@@ -566,40 +596,80 @@ func TestKafkaClient_DeleteTopic(t *testing.T) {
 	mockClient := NewMockConnection(ctrl)
 
 	client := kafkaClient{
-		conn: mockClient,
+		conn: &multiConn{
+			conns: []Connection{
+				mockClient,
+			},
+			dialer: &kafka.Dialer{}, // Needed if fallback dialing is triggered
+		},
 	}
+
+	mockClient.EXPECT().Controller().Return(kafka.Broker{
+		Host: "localhost",
+		Port: 9092,
+	}, nil).AnyTimes()
+
+	mockClient.EXPECT().RemoteAddr().Return(&net.TCPAddr{
+		IP:   net.ParseIP("127.0.0.1"),
+		Port: 9092,
+	}).AnyTimes()
 
 	mockClient.EXPECT().DeleteTopics("test").Return(nil)
 
-	err := client.DeleteTopic(context.Background(), "test")
+	err := client.DeleteTopic(t.Context(), "test")
 
 	require.NoError(t, err)
 }
 
 func TestKafkaClient_CreateTopic(t *testing.T) {
 	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
 
-	mockClient := NewMockConnection(ctrl)
+	mockConn := NewMockConnection(ctrl)
+
+	// IP: 127.0.0.1 Port: 9092 -> controller's resolved address
+	controllerHost := "localhost"
+	controllerPort := 9092
 
 	client := kafkaClient{
-		conn: mockClient,
+		conn: &multiConn{
+			conns: []Connection{
+				mockConn,
+			},
+			dialer: &kafka.Dialer{}, // Only used if fallback occurs
+		},
 	}
 
-	testCases := []struct {
-		desc string
-		err  error
-	}{
-		{"create success", nil},
-		{"delete success", testutil.CustomError{ErrorMessage: "custom error"}},
-	}
+	t.Run("successfully creates topic", func(t *testing.T) {
+		mockConn.EXPECT().Controller().Return(kafka.Broker{
+			Host: controllerHost,
+			Port: controllerPort,
+		}, nil)
 
-	for _, tc := range testCases {
-		mockClient.EXPECT().CreateTopics(gomock.Any()).Return(tc.err)
+		// RemoteAddr should return IP resolved version of controller
+		mockConn.EXPECT().RemoteAddr().Return(&net.TCPAddr{
+			IP:   net.ParseIP("127.0.0.1"),
+			Port: 9092,
+		})
 
-		err := client.CreateTopic(context.Background(), "test")
+		mockConn.EXPECT().CreateTopics([]kafka.TopicConfig{
+			{
+				Topic:             "test",
+				NumPartitions:     1,
+				ReplicationFactor: 1,
+			},
+		}).Return(nil)
 
-		assert.Equal(t, tc.err, err)
-	}
+		err := client.CreateTopic(t.Context(), "test")
+		require.NoError(t, err)
+	})
+
+	t.Run("controller returns error", func(t *testing.T) {
+		mockConn.EXPECT().Controller().Return(kafka.Broker{}, errNoActiveConnections)
+
+		err := client.CreateTopic(t.Context(), "test")
+		require.EqualError(t, err, errNoActiveConnections.Error())
+	})
 }
 
 func TestKafkaClient_Subscribe_NotConnected(t *testing.T) {
@@ -611,12 +681,16 @@ func TestKafkaClient_Subscribe_NotConnected(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
-	ctx := context.TODO()
+	ctx := t.Context()
 	mockConnection := NewMockConnection(ctrl)
 
 	k := &kafkaClient{
 		dialer: &kafka.Dialer{},
-		conn:   mockConnection,
+		conn: &multiConn{
+			conns: []Connection{
+				mockConnection,
+			},
+		},
 		logger: logging.NewMockLogger(logging.DEBUG),
 	}
 
