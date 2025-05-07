@@ -105,9 +105,9 @@ func TestSetFieldValue_InvalidKinds(t *testing.T) {
 	uf := &formData{}
 
 	tests := []struct {
-		kind reflect.Kind
-		data string
-		typ  reflect.Type
+		kind     reflect.Kind
+		data     string
+		destType reflect.Type
 	}{
 		{reflect.Complex64, "foo", reflect.TypeOf(complex64(0))},
 		{reflect.Complex128, "bar", reflect.TypeOf(complex128(0))},
@@ -118,7 +118,7 @@ func TestSetFieldValue_InvalidKinds(t *testing.T) {
 	}
 
 	for _, tt := range tests {
-		value := reflect.New(tt.typ).Elem()
+		value := reflect.New(tt.destType).Elem()
 		ok, err := uf.setFieldValue(value, tt.data)
 
 		require.False(t, ok, "expected false, got true for kind %v", tt.kind)
@@ -187,8 +187,10 @@ func TestSetStructValue_Success(t *testing.T) {
 			wantField2: 456,
 		},
 		{
-			name:       "Mixed Case and invalid field names",
-			data:       `{"FielD1":"value4", "invalidField":"ignored", "FiEld2":789}`,
+			name: "Mixed Case and invalid field names",
+			// spellchecker:off # using field with case sensitive variations would be reported as a typo otherwise
+			data: `{"FielD1":"value4", "invalidField":"ignored", "FiEld2":789}`,
+			// spellchecker:on
 			wantField1: "value4",
 			wantField2: 789,
 		},
