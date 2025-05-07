@@ -29,7 +29,7 @@ func Test_newContainerSuccessWithLogger(t *testing.T) {
 
 	container := NewContainer(cfg)
 
-	assert.NotNil(t, container.Logger, "TEST, Failed.\nlogger initialisation")
+	assert.NotNil(t, container.Logger, "TEST, Failed.\nlogger initialization")
 }
 
 func Test_newContainerDBInitializationFail(t *testing.T) {

@@ -183,7 +183,7 @@ func (t *Tx) Rollback() error {
 }
 
 // Select runs a query with args and binds the result of the query to the data.
-// data should ba a point to a slice, struct or any type. Slice will return multiple
+// data should be a point to a slice, struct or any type. Slice will return multiple
 // objects whereas struct will return a single object.
 //
 // Example Usages:
@@ -292,7 +292,7 @@ func (*DB) rowsToStruct(rows *sql.Rows, vo reflect.Value) {
 		v = vo.Elem()
 	}
 
-	// Map fields and their indexes by normalised name
+	// Map fields and their indexes by normalized name
 	fieldNameIndex := map[string]int{}
 
 	for i := 0; i < v.Type().NumField(); i++ {

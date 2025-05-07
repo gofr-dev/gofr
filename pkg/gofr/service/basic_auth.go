@@ -26,97 +26,97 @@ type basicAuthProvider struct {
 	HTTP
 }
 
-func (ba *basicAuthProvider) addAuthorizationHeader(headers map[string]string) error {
-	decodedPassword, err := b64.StdEncoding.DecodeString(ba.password)
+func (bap *basicAuthProvider) addAuthorizationHeader(headers map[string]string) error {
+	decodedPassword, err := b64.StdEncoding.DecodeString(bap.password)
 	if err != nil {
 		return err
 	}
 
-	encodedAuth := b64.StdEncoding.EncodeToString([]byte(ba.userName + ":" + string(decodedPassword)))
+	encodedAuth := b64.StdEncoding.EncodeToString([]byte(bap.userName + ":" + string(decodedPassword)))
 
 	headers["Authorization"] = "basic " + encodedAuth
 
 	return nil
 }
 
-func (ba *basicAuthProvider) Get(ctx context.Context, path string, queryParams map[string]any) (*http.Response, error) {
-	return ba.GetWithHeaders(ctx, path, queryParams, nil)
+func (bap *basicAuthProvider) Get(ctx context.Context, path string, queryParams map[string]any) (*http.Response, error) {
+	return bap.GetWithHeaders(ctx, path, queryParams, nil)
 }
 
-func (ba *basicAuthProvider) GetWithHeaders(ctx context.Context, path string, queryParams map[string]any,
+func (bap *basicAuthProvider) GetWithHeaders(ctx context.Context, path string, queryParams map[string]any,
 	headers map[string]string) (*http.Response, error) {
-	err := ba.populateHeaders(headers)
+	err := bap.populateHeaders(headers)
 	if err != nil {
 		return nil, err
 	}
 
-	return ba.HTTP.GetWithHeaders(ctx, path, queryParams, headers)
+	return bap.HTTP.GetWithHeaders(ctx, path, queryParams, headers)
 }
 
-func (ba *basicAuthProvider) Post(ctx context.Context, path string, queryParams map[string]any,
+func (bap *basicAuthProvider) Post(ctx context.Context, path string, queryParams map[string]any,
 	body []byte) (*http.Response, error) {
-	return ba.PostWithHeaders(ctx, path, queryParams, body, nil)
+	return bap.PostWithHeaders(ctx, path, queryParams, body, nil)
 }
 
-func (ba *basicAuthProvider) PostWithHeaders(ctx context.Context, path string, queryParams map[string]any,
+func (bap *basicAuthProvider) PostWithHeaders(ctx context.Context, path string, queryParams map[string]any,
 	body []byte, headers map[string]string) (*http.Response, error) {
-	err := ba.populateHeaders(headers)
+	err := bap.populateHeaders(headers)
 	if err != nil {
 		return nil, err
 	}
 
-	return ba.HTTP.PostWithHeaders(ctx, path, queryParams, body, headers)
+	return bap.HTTP.PostWithHeaders(ctx, path, queryParams, body, headers)
 }
 
-func (ba *basicAuthProvider) Put(ctx context.Context, api string, queryParams map[string]any, body []byte) (*http.Response, error) {
-	return ba.PutWithHeaders(ctx, api, queryParams, body, nil)
+func (bap *basicAuthProvider) Put(ctx context.Context, api string, queryParams map[string]any, body []byte) (*http.Response, error) {
+	return bap.PutWithHeaders(ctx, api, queryParams, body, nil)
 }
 
-func (ba *basicAuthProvider) PutWithHeaders(ctx context.Context, path string, queryParams map[string]any,
+func (bap *basicAuthProvider) PutWithHeaders(ctx context.Context, path string, queryParams map[string]any,
 	body []byte, headers map[string]string) (*http.Response, error) {
-	err := ba.populateHeaders(headers)
+	err := bap.populateHeaders(headers)
 	if err != nil {
 		return nil, err
 	}
 
-	return ba.HTTP.PutWithHeaders(ctx, path, queryParams, body, headers)
+	return bap.HTTP.PutWithHeaders(ctx, path, queryParams, body, headers)
 }
 
-func (ba *basicAuthProvider) Patch(ctx context.Context, path string, queryParams map[string]any,
+func (bap *basicAuthProvider) Patch(ctx context.Context, path string, queryParams map[string]any,
 	body []byte) (*http.Response, error) {
-	return ba.PatchWithHeaders(ctx, path, queryParams, body, nil)
+	return bap.PatchWithHeaders(ctx, path, queryParams, body, nil)
 }
 
-func (ba *basicAuthProvider) PatchWithHeaders(ctx context.Context, path string, queryParams map[string]any,
+func (bap *basicAuthProvider) PatchWithHeaders(ctx context.Context, path string, queryParams map[string]any,
 	body []byte, headers map[string]string) (*http.Response, error) {
-	err := ba.populateHeaders(headers)
+	err := bap.populateHeaders(headers)
 	if err != nil {
 		return nil, err
 	}
 
-	return ba.HTTP.PatchWithHeaders(ctx, path, queryParams, body, headers)
+	return bap.HTTP.PatchWithHeaders(ctx, path, queryParams, body, headers)
 }
 
-func (ba *basicAuthProvider) Delete(ctx context.Context, path string, body []byte) (*http.Response, error) {
-	return ba.DeleteWithHeaders(ctx, path, body, nil)
+func (bap *basicAuthProvider) Delete(ctx context.Context, path string, body []byte) (*http.Response, error) {
+	return bap.DeleteWithHeaders(ctx, path, body, nil)
 }
 
-func (ba *basicAuthProvider) DeleteWithHeaders(ctx context.Context, path string, body []byte,
+func (bap *basicAuthProvider) DeleteWithHeaders(ctx context.Context, path string, body []byte,
 	headers map[string]string) (*http.Response, error) {
-	err := ba.populateHeaders(headers)
+	err := bap.populateHeaders(headers)
 	if err != nil {
 		return nil, err
 	}
 
-	return ba.HTTP.DeleteWithHeaders(ctx, path, body, headers)
+	return bap.HTTP.DeleteWithHeaders(ctx, path, body, headers)
 }
 
-func (ba *basicAuthProvider) populateHeaders(headers map[string]string) error {
+func (bap *basicAuthProvider) populateHeaders(headers map[string]string) error {
 	if headers == nil {
 		headers = make(map[string]string)
 	}
 
-	err := ba.addAuthorizationHeader(headers)
+	err := bap.addAuthorizationHeader(headers)
 	if err != nil {
 		return err
 	}
