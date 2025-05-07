@@ -47,7 +47,7 @@ that are specific for the type of message broker user wants to use.
 ---
 
 - `PUBSUB_BROKER`
-- Address to connect to kafka broker. Multiple brokers can be added as comma seperated values.
+- Address to connect to kafka broker. Multiple brokers can be added as comma separated values.
 - `+`
 -
 - `localhost:9092` or `localhost:8087,localhost:8088,localhost:8089`

@@ -28,7 +28,7 @@ package main
 import "gofr.dev/pkg/gofr"
 
 func main() {
-	// initialise gofr object
+	// initialize gofr object
 	app := gofr.New()
 
 	// register route greet

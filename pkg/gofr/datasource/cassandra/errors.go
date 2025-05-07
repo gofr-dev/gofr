@@ -9,7 +9,7 @@ var (
 	errDestinationIsNotPointer = errors.New("destination is not pointer")
 	errUnexpectedMap           = errors.New("a map was not expected")
 	errUnsupportedBatchType    = errors.New("batch type not supported")
-	errBatchNotInitialised     = errors.New("batch not initialized")
+	errBatchNotInitialized     = errors.New("batch not initialized")
 )
 
 type errUnexpectedPointer struct {

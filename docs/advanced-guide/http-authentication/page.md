@@ -85,7 +85,7 @@ GoFr offers two ways to implement API Keys authentication.
 package main
 
 func main() {
-	// initialise gofr object
+	// initialize gofr object
 	app := gofr.New()
 
 	app.EnableAPIKeyAuth("9221e451-451f-4cd6-a23d-2b2d3adea9cf", "0d98ecfe-4677-48aa-b463-d43505766915")
@@ -109,7 +109,7 @@ func apiKeyValidator(c *container.Container, apiKey string) bool {
 }
 
 func main() {
-	// initialise gofr object
+	// initialize gofr object
 	app := gofr.New()
 
 	app.EnableAPIKeyAuthWithValidator(apiKeyValidator)

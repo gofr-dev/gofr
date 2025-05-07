@@ -28,7 +28,7 @@ import (
 )
 
 func main() {
-	// initialise gofr object
+	// initialize gofr object
 	app := gofr.New()
 
 	app.Metrics().NewCounter("transaction_success", "used to track the count of successful transactions")
@@ -58,7 +58,7 @@ import (
 )
 
 func main() {
-	// initialise gofr object
+	// initialize gofr object
 	app := gofr.New()
 
 	app.Metrics().NewUpDownCounter("total_credit_day_sale", "used to track the total credit sales in a day")
@@ -88,7 +88,7 @@ import (
 )
 
 func main() {
-	// initialise gofr object
+	// initialize gofr object
 	app := gofr.New()
 
 	app.Metrics().NewHistogram("transaction_time", "used to track the time taken by a transaction",
@@ -124,7 +124,7 @@ import (
 )
 
 func main() {
-	// initialise gofr object
+	// initialize gofr object
 	app := gofr.New()
 
 	app.Metrics().NewGauge("product_stock", "used to track the number of products in stock")
@@ -178,7 +178,7 @@ import (
 )
 
 func main() {
-	// Initialise gofr object
+	// Initialize gofr object
 	a := gofr.New()
 
 	// Add custom metrics
@@ -222,7 +222,7 @@ When a registered metrics has to be used 3 key pieces of information are require
 - A set of key-value pairs called tags or labels.
 
 A permutation of these key-value values provides the metric cardinality.
-Lower the cardinality, faster the query performance and lower the monitoring resource utilisation.
+Lower the cardinality, faster the query performance and lower the monitoring resource utilization.
 ```
 
 > #### Check out the example on how to publish custom metrics in GoFr: [Visit GitHub](https://github.com/gofr-dev/gofr/blob/main/examples/using-custom-metrics/main.go)
