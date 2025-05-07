@@ -315,7 +315,7 @@ func Test_BatchQuery(t *testing.T) {
 		{"batch is not initialized", func() {
 			mockDeps.mockLogger.EXPECT().Debug(gomock.AssignableToTypeOf(&QueryLog{}))
 			client.scylla.batches = nil
-		}, errBatchNotInitialised},
+		}, errBatchNotInitialized},
 	}
 
 	for i, tc := range testCases {
@@ -355,7 +355,7 @@ func Test_ExecuteBatchCAS(t *testing.T) {
 		{"failure case: batch not initialized", &mockStructSlice, func() {
 			mockDeps.mockLogger.EXPECT().Debug(gomock.AssignableToTypeOf(&QueryLog{}))
 			client.scylla.batches = nil
-		}, &mockStructSlice, errBatchNotInitialised},
+		}, &mockStructSlice, errBatchNotInitialized},
 	}
 
 	for i, tc := range testCases {
@@ -458,7 +458,7 @@ func TestClient_ExecuteBatchCASWithCtx(t *testing.T) {
 				mockDeps.mockSession.EXPECT().executeBatch(mockDeps.mockBatch).Return(nil).Times(1)
 			},
 			expRes: &mockStructSlice,
-			expErr: errBatchNotInitialised,
+			expErr: errBatchNotInitialized,
 		},
 		{
 			desc:      "failure case: executeBatch returns error",
@@ -469,7 +469,7 @@ func TestClient_ExecuteBatchCASWithCtx(t *testing.T) {
 				mockDeps.mockSession.EXPECT().executeBatch(mockDeps.mockBatch).Return(assert.AnError).Times(1)
 			},
 			expRes: &mockStructSlice,
-			expErr: errBatchNotInitialised,
+			expErr: errBatchNotInitialized,
 		},
 		{
 			desc:      "failure case: batch not initialized",
@@ -480,7 +480,7 @@ func TestClient_ExecuteBatchCASWithCtx(t *testing.T) {
 				client.scylla.batches = nil
 			},
 			expRes: &mockStructSlice,
-			expErr: errBatchNotInitialised,
+			expErr: errBatchNotInitialized,
 		},
 	}
 
@@ -513,7 +513,7 @@ func Test_ExecuteBatch(t *testing.T) {
 		{"batch not initialized", func() {
 			mockDeps.mockLogger.EXPECT().Debug(gomock.AssignableToTypeOf(&QueryLog{}))
 			client.scylla.batches = nil
-		}, errBatchNotInitialised},
+		}, errBatchNotInitialized},
 	}
 
 	for i, tc := range testCases {
