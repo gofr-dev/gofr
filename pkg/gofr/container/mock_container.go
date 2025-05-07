@@ -94,7 +94,7 @@ func NewMockContainer(t *testing.T, options ...options) (*Container, *Mocks) {
 	surrealMock := NewMockSurrealDB(ctrl)
 	container.SurrealDB = surrealMock
 
-	elasticsearchMock := NewMockElasticSearch(ctrl)
+	elasticsearchMock := NewMockElasticsearch(ctrl)
 	container.Elasticsearch = elasticsearchMock
 
 	var httpMock *service.MockHTTP
