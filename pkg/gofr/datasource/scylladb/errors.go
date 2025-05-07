@@ -8,7 +8,7 @@ import (
 var (
 	errUnsupportedBatchType    = errors.New("batch type not supported")
 	errDestinationIsNotPointer = errors.New("destination is not pointer")
-	errBatchNotInitialised     = errors.New("batch not initialized")
+	errBatchNotInitialized     = errors.New("batch not initialized")
 	errUnexpectedMap           = errors.New("a map was not expected")
 )
 

@@ -50,7 +50,7 @@ func Add(ctx *gofr.Context) (any, error) {
 }
 
 func main() {
-	// initialise gofr object
+	// initialize gofr object
 	app := gofr.New()
 
 	app.POST("/book", Add)
