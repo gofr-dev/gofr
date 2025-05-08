@@ -49,8 +49,8 @@ func createGRPCConn(host string, serviceName string, dialOptions ...grpc.DialOpt
 		grpc.WithTransportCredentials(insecure.NewCredentials()),
 	}
 
-	// Developer Note: If the user provides custom DialOptions, they will override the default options due to
-	// the ordering of dialOptions. This behavior is intentional to ensure the gRPC client connection is properly
+	// Developer Note: If the user provides custom DialOptions, they will override the default options due to 
+	// the ordering of dialOptions. This behavior is intentional to ensure the gRPC client connection is properly 
 	// configured even when the user does not specify any DialOptions.
 	dialOptions = append(defaultOpts, dialOptions...)
 
@@ -76,13 +76,11 @@ func invokeRPC(ctx *gofr.Context, rpcName string, rpcFunc func() (interface{}, e
 	res, err := rpcFunc()
 	logger := gofrgRPC.NewgRPCLogger()
 	logger.DocumentRPCLog(ctx.Context, ctx.Logger, ctx.Metrics(), transactionStartTime, err, rpcName, metricName)
-	logger.DocumentRPCLog(ctx.Context, ctx.Logger, ctx.Metrics(), transactionStartTime, err,
-		rpcName, "app_gRPC-Client_stats")
 
 	return res, err
 }
 
-func (h *HealthClientWrapper) Check(ctx *gofr.Context, in *grpc_health_v1.HealthCheckRequest,
+func (h *HealthClientWrapper) Check(ctx *gofr.Context, in *grpc_health_v1.HealthCheckRequest, 
 	opts ...grpc.CallOption) (*grpc_health_v1.HealthCheckResponse, error) {
 	result, err := invokeRPC(ctx, fmt.Sprintf("/grpc.health.v1.Health/Check	Service: %q", in.Service), func() (interface{}, error) {
 		return h.client.Check(ctx, in, opts...)
