@@ -27,26 +27,64 @@ These variables are stored in a `.env` file located within the `configs` directo
 
 ### Required Environment Variables:
 
-| Key              | Description |
-|------------------|-------------|
-| `REDIS_HOST`      | Hostname or IP address of your Redis server |
-| `REDIS_PORT`      | Port number your Redis server listens on (default: `6379`) |
-| `REDIS_USER`      | Redis username; multiple users with ACLs can be configured. [See official docs](https://redis.io/docs/latest/operate/oss_and_stack/management/security/acl/) |
-| `REDIS_PASSWORD`  | Redis password (required only if authentication is enabled) |
-| `REDIS_DB`        | Redis database number (default: `0`) |
+{% table %}
+
+- Key
+- Description
+
+---
+
+- REDIS_HOST
+- Hostname or IP address of your Redis server
+
+---
+
+- REDIS_PORT
+- Port number your Redis server listens on (default: `6379`)
+
+---
+
+- REDIS_USER
+- Redis username; multiple users with ACLs can be configured. [See official docs](https://redis.io/docs/latest/operate/oss_and_stack/management/security/acl/)
+
+---
+
+- REDIS_PASSWORD
+- Redis password (required only if authentication is enabled)
+
+---
+
+- REDIS_DB
+- Redis database number (default: `0`)
 
 ---
 
 ## TLS Support (Optional):
 
-If your Redis server requires a secure TLS connection, the following optional keys should be used:
+{% table %}
 
-| Key                       | Description |
-|---------------------------|-------------|
-| `REDIS_TLS_ENABLED`        | Set to `"true"` to enable TLS |
-| `REDIS_TLS_CA_CERT_PATH`   | File path to the CA certificate used to verify the Redis server |
-| `REDIS_TLS_CERT_PATH`      | File path to the client certificate (for mTLS) |
-| `REDIS_TLS_KEY_PATH`       | File path to the client private key (for mTLS) |
+- Key
+- Description
+
+---
+
+- REDIS_TLS_ENABLED
+- Set to `"true"` to enable TLS
+
+---
+
+- REDIS_TLS_CA_CERT_PATH
+- File path to the CA certificate used to verify the Redis server
+
+---
+
+- REDIS_TLS_CERT_PATH
+- File path to the client certificate (for mTLS)
+
+---
+
+- REDIS_TLS_KEY_PATH
+- File path to the client private key (for mTLS)
 
 ---
 
