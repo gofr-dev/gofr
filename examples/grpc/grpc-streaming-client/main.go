@@ -43,7 +43,7 @@ type StreamResponse struct {
 }
 
 // ServerStreamHandler handles server-side streaming with detailed response tracking
-func (c *ChatHandler) ServerStreamHandler(ctx *gofr.Context) (interface{}, error) {
+func (c *ChatHandler) ServerStreamHandler(ctx *gofr.Context) (any, error) {
 	startTime := time.Now()
 	var responses []StreamResponse
 
@@ -90,7 +90,7 @@ func (c *ChatHandler) ServerStreamHandler(ctx *gofr.Context) (interface{}, error
 }
 
 // ClientStreamHandler handles client-side streaming with detailed tracking
-func (c *ChatHandler) ClientStreamHandler(ctx *gofr.Context) (interface{}, error) {
+func (c *ChatHandler) ClientStreamHandler(ctx *gofr.Context) (any, error) {
 	startTime := time.Now()
 	var streamLog []StreamResponse
 
@@ -144,7 +144,7 @@ func (c *ChatHandler) ClientStreamHandler(ctx *gofr.Context) (interface{}, error
 }
 
 // BiDiStreamHandler handles bidirectional streaming with detailed tracking
-func (c *ChatHandler) BiDiStreamHandler(ctx *gofr.Context) (interface{}, error) {
+func (c *ChatHandler) BiDiStreamHandler(ctx *gofr.Context) (any, error) {
 	startTime := time.Now()
 	streamLog := make([]StreamResponse, 0)
 

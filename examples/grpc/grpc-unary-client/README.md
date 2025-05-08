@@ -1,4 +1,4 @@
-# GRPC Client Example
+# gRPC Unary Client Example
 
 This GoFr example demonstrates a simple gRPC unary client connection that communicates with another gRPC service hosted on a different machine. It serves as a client for another gRPC example included in this examples folder.
 Refer to the documentation for setup.
@@ -11,7 +11,7 @@ Refer to the documentation for setup.
    go run main.go
    ```
 
-2. Once the `grpc-server` is running, start this server using a similar command:
+2. Once the `grpc-unary-server` is running, start this server using a similar command:
    ```console
    go run main.go
    ```

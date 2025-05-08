@@ -1,4 +1,4 @@
-# GRPC Client Example
+# gRPC Client Example
 
 This GoFr example demonstrates a simple gRPC streaming client that communicates with another gRPC service hosted on a different machine. It serves as a client for another gRPC example included in this examples folder.
 Refer to the documentation for setup.
