@@ -35,6 +35,7 @@ func NewChatServiceGoFrClient(host string, metrics metrics.Manager, dialOptions 
 
 	metricsOnce.Do(func() {
 		metrics.NewHistogram("app_gRPC-Client_stats", "Response time of gRPC client in milliseconds.", gRPCBuckets...)
+		metrics.NewHistogram("app_gRPC-Client-Stream_stats", "Response time of gRPC streaming client in milliseconds.", gRPCBuckets...)
 	})
 
 	res := NewChatServiceClient(conn)
@@ -50,7 +51,7 @@ func NewChatServiceGoFrClient(host string, metrics metrics.Manager, dialOptions 
 func (h *ChatServiceClientWrapper) ServerStream(ctx *gofr.Context, req *Request, opts ...grpc.CallOption) (grpc.ServerStreamingClient[Response], error) {
 	result, err := invokeRPC(ctx, "/ChatService/ServerStream", func() (interface{}, error) {
 		return h.client.ServerStream(ctx.Context, req, opts...)
-	}, "app_gRPC-Stream_stats")
+	}, "app_gRPC-Client-Stream_stats")
 
 	if err != nil {
 		return nil, err
@@ -60,7 +61,7 @@ func (h *ChatServiceClientWrapper) ServerStream(ctx *gofr.Context, req *Request,
 func (h *ChatServiceClientWrapper) ClientStream(ctx *gofr.Context, opts ...grpc.CallOption) (grpc.ClientStreamingClient[Request, Response], error) {
 	result, err := invokeRPC(ctx, "/ChatService/ClientStream", func() (interface{}, error) {
 		return h.client.ClientStream(ctx.Context, opts...)
-	}, "app_gRPC-Stream_stats")
+	}, "app_gRPC-Client-Stream_stats")
 
 	if err != nil {
 		return nil, err
@@ -70,7 +71,7 @@ func (h *ChatServiceClientWrapper) ClientStream(ctx *gofr.Context, opts ...grpc.
 func (h *ChatServiceClientWrapper) BiDiStream(ctx *gofr.Context, opts ...grpc.CallOption) (grpc.BidiStreamingClient[Request, Response], error) {
 	result, err := invokeRPC(ctx, "/ChatService/BiDiStream", func() (interface{}, error) {
 		return h.client.BiDiStream(ctx.Context, opts...)
-	}, "app_gRPC-Stream_stats")
+	}, "app_gRPC-Client-Stream_stats")
 
 	if err != nil {
 		return nil, err

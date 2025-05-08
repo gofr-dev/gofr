@@ -96,7 +96,7 @@ func (h *HealthClientWrapper) Watch(ctx *gofr.Context, in *grpc_health_v1.Health
 	opts ...grpc.CallOption) (grpc.ServerStreamingClient[grpc_health_v1.HealthCheckResponse], error) {
 	result, err := invokeRPC(ctx, fmt.Sprintf("/grpc.health.v1.Health/Watch	Service: %q", in.Service), func() (interface{}, error) {
 		return h.client.Watch(ctx, in, opts...)
-	}, "app_gRPC-Stream_stats")
+	}, "app_gRPC-Client-Stream_stats")
 
 	if err != nil {
 		return nil, err
