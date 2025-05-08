@@ -100,39 +100,42 @@ func Logging(probes LogProbes, logger logger) func(inner http.Handler) http.Hand
 
 			start := time.Now()
 			srw := &StatusResponseWriter{ResponseWriter: w}
-			traceID := trace.SpanFromContext(r.Context()).SpanContext().TraceID().String()
-			spanID := trace.SpanFromContext(r.Context()).SpanContext().SpanID().String()
+			traceID, spanID := getTraceAndSpanIDs(r)
 
 			srw.Header().Set("X-Correlation-ID", traceID)
 
-			defer func(res *StatusResponseWriter, req *http.Request) {
-				l := &RequestLog{
-					TraceID:      traceID,
-					SpanID:       spanID,
-					StartTime:    start.Format("2006-01-02T15:04:05.999999999-07:00"),
-					ResponseTime: time.Since(start).Nanoseconds() / 1000,
-					Method:       req.Method,
-					UserAgent:    req.UserAgent(),
-					IP:           getIPAddress(req),
-					URI:          req.RequestURI,
-					Response:     res.status,
-				}
-
-				if logger != nil {
-					if res.status >= http.StatusInternalServerError {
-						logger.Error(l)
-					} else {
-						logger.Log(l)
-					}
-				}
-			}(srw, r)
-
-			defer func() {
-				panicRecovery(recover(), srw, logger)
-			}()
+			defer handleRequestLog(srw, r, start, traceID, spanID, logger)
+			defer func() { panicRecovery(recover(), srw, logger) }()
 
 			inner.ServeHTTP(srw, r)
 		})
+	}
+}
+
+func getTraceAndSpanIDs(r *http.Request) (string, string) {
+	spanContext := trace.SpanFromContext(r.Context()).SpanContext()
+	return spanContext.TraceID().String(), spanContext.SpanID().String()
+}
+
+func handleRequestLog(srw *StatusResponseWriter, r *http.Request, start time.Time, traceID, spanID string, logger logger) {
+	l := &RequestLog{
+		TraceID:      traceID,
+		SpanID:       spanID,
+		StartTime:    start.Format("2006-01-02T15:04:05.999999999-07:00"),
+		ResponseTime: time.Since(start).Nanoseconds() / 1000,
+		Method:       r.Method,
+		UserAgent:    r.UserAgent(),
+		IP:           getIPAddress(r),
+		URI:          r.RequestURI,
+		Response:     srw.status,
+	}
+
+	if logger != nil {
+		if srw.status >= http.StatusInternalServerError {
+			logger.Error(l)
+		} else {
+			logger.Log(l)
+		}
 	}
 }
 
