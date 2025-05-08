@@ -201,10 +201,10 @@ func checkAuthHeaders(t *testing.T, r *http.Request) {
 }
 
 func Test_addAuthorizationHeader_Error(t *testing.T) {
-	ba := &basicAuthProvider{password: "invalid_password"}
+	bap := &basicAuthProvider{password: "invalid_password"}
 
 	headers := make(map[string]string)
-	err := ba.addAuthorizationHeader(headers)
+	err := bap.addAuthorizationHeader(headers)
 
 	if err == nil {
 		t.Error("Expected error, got nil")
