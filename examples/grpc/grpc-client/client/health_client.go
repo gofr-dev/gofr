@@ -28,7 +28,7 @@ var (
 type HealthClient interface {
 	Check(ctx *gofr.Context, in *grpc_health_v1.HealthCheckRequest, opts ...grpc.CallOption) (*grpc_health_v1.HealthCheckResponse, error)
 	Watch(ctx *gofr.Context, in *grpc_health_v1.HealthCheckRequest, opts ...grpc.CallOption) (
-	grpc.ServerStreamingClient[grpc_health_v1.HealthCheckResponse], error)
+		grpc.ServerStreamingClient[grpc_health_v1.HealthCheckResponse], error)
 }
 
 type HealthClientWrapper struct {
@@ -67,12 +67,12 @@ func invokeRPC(ctx *gofr.Context, rpcName string, rpcFunc func() (interface{}, e
 	res, err := rpcFunc()
 	logger := gofrgRPC.NewgRPCLogger()
 	logger.DocumentRPCLog(ctx.Context, ctx.Logger, ctx.Metrics(), transactionStartTime, err,
-	rpcName, "app_gRPC-Client_stats")
+		rpcName, "app_gRPC-Client_stats")
 
 	return res, err
 }
 
-func (h *HealthClientWrapper) Check(ctx *gofr.Context, in *grpc_health_v1.HealthCheckRequest, 
+func (h *HealthClientWrapper) Check(ctx *gofr.Context, in *grpc_health_v1.HealthCheckRequest,
 	opts ...grpc.CallOption) (*grpc_health_v1.HealthCheckResponse, error) {
 	result, err := invokeRPC(ctx, fmt.Sprintf("/grpc.health.v1.Health/Check	Service: %q", in.Service), func() (interface{}, error) {
 		return h.client.Check(ctx, in, opts...)
@@ -84,7 +84,7 @@ func (h *HealthClientWrapper) Check(ctx *gofr.Context, in *grpc_health_v1.Health
 	return result.(*grpc_health_v1.HealthCheckResponse), nil
 }
 
-func (h *HealthClientWrapper) Watch(ctx *gofr.Context, in *grpc_health_v1.HealthCheckRequest, 
+func (h *HealthClientWrapper) Watch(ctx *gofr.Context, in *grpc_health_v1.HealthCheckRequest,
 	opts ...grpc.CallOption) (grpc.ServerStreamingClient[grpc_health_v1.HealthCheckResponse], error) {
 	result, err := invokeRPC(ctx, fmt.Sprintf("/grpc.health.v1.Health/Watch	Service: %q", in.Service), func() (interface{}, error) {
 		return h.client.Watch(ctx, in, opts...)
