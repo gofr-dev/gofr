@@ -10,6 +10,9 @@ const (
 	serviceUp      = "UP"
 	serviceDown    = "DOWN"
 	defaultTimeout = 5
+
+	AlivePath  = "/.well-known/alive"
+	HealthPath = "/.well-known/health"
 )
 
 type Health struct {
@@ -18,7 +21,7 @@ type Health struct {
 }
 
 func (h *httpService) HealthCheck(ctx context.Context) *Health {
-	return h.getHealthResponseForEndpoint(ctx, ".well-known/alive", defaultTimeout)
+	return h.getHealthResponseForEndpoint(ctx, AlivePath, defaultTimeout)
 }
 
 func (h *httpService) getHealthResponseForEndpoint(ctx context.Context, endpoint string, timeout int) *Health {

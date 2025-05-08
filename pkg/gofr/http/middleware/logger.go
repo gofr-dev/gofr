@@ -90,9 +90,14 @@ type logger interface {
 }
 
 // Logging is a middleware which logs response status and time in milliseconds along with other data.
-func Logging(logger logger) func(inner http.Handler) http.Handler {
+func Logging(probes LogProbes, logger logger) func(inner http.Handler) http.Handler {
 	return func(inner http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if isLogProbeDisabled(probes, r.URL.Path) {
+				inner.ServeHTTP(w, r)
+				return
+			}
+
 			start := time.Now()
 			srw := &StatusResponseWriter{ResponseWriter: w}
 			traceID := trace.SpanFromContext(r.Context()).SpanContext().TraceID().String()
@@ -129,6 +134,24 @@ func Logging(logger logger) func(inner http.Handler) http.Handler {
 			inner.ServeHTTP(srw, r)
 		})
 	}
+}
+
+// isLogProbeDisabled checks if probes are disabled to skip logging for default probe paths
+// and additional health check paths of services.
+func isLogProbeDisabled(probes LogProbes, urlPath string) bool {
+	// if probes is not disabled, dont need to check for default probe paths
+	if !probes.Disabled {
+		return false
+	}
+
+	// check if urlPath is in the list of default probe paths and matches any of the values in the map
+	for _, path := range probes.Paths {
+		if urlPath == path && probes.Disabled {
+			return true
+		}
+	}
+
+	return false
 }
 
 func getIPAddress(r *http.Request) string {
