@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"go.opentelemetry.io/otel/trace"
 	"io"
 	"net/http"
 	"os"
@@ -43,15 +44,18 @@ type handler struct {
 }
 
 type ErrorLogEntry struct {
-	Error string `json:"error,omitempty"`
+	TraceID string `json:"trace_id,omitempty"`
+	Error   string `json:"error,omitempty"`
 }
 
 func (el *ErrorLogEntry) PrettyPrint(writer io.Writer) {
-	fmt.Fprintf(writer, "\u001B[38;5;%dm%s\n", colorCodeError, el.Error)
+	fmt.Fprintf(writer, "\u001B[38;5;8m%s \u001B[38;5;%dm%s \n", el.TraceID, colorCodeError, el.Error)
 }
 
 func (h handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	c := newContext(gofrHTTP.NewResponder(w, r.Method), gofrHTTP.NewRequest(r), h.container)
+
+	traceID := trace.SpanFromContext(r.Context()).SpanContext().TraceID().String()
 
 	if websocket.IsWebSocketUpgrade(r) {
 		// If the request is a WebSocket upgrade, do not apply the timeout
@@ -63,16 +67,8 @@ func (h handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		c.Context = ctx
 	}
 
-	// Developer Note:
-	// We temporarily wrap the container's logger with a ContextLogger that injects the trace ID
-	// (from the current request's context) into all logs made during this request's lifecycle.
-	//
-	// After the request is served, we restore the original logger to avoid leaking context across requests.
-	origLogger := h.container.Logger
-	ctxLogger := logging.NewContextLogger(c.Context, origLogger)
-	h.container.Logger = ctxLogger
-
-	defer func() { h.container.Logger = origLogger }()
+	reqLogger := logging.NewContextLogger(c, h.container.Logger)
+	c.ContextLogger = *reqLogger
 
 	done := make(chan struct{})
 	panicked := make(chan struct{})
@@ -88,7 +84,7 @@ func (h handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		}()
 		// Execute the handler function
 		result, err = h.function(c)
-		h.logError(h.container.Logger, err)
+		h.logError(traceID, err)
 		close(done)
 	}()
 
@@ -152,26 +148,26 @@ func panicRecoveryHandler(re any, log logging.Logger, panicked chan struct{}) {
 }
 
 // Log the error(if any) with traceID and errorMessage.
-func (handler) logError(logger logging.Logger, err error) {
+func (h handler) logError(traceID string, err error) {
 	if err != nil {
-		errorLog := &ErrorLogEntry{Error: err.Error()}
+		errorLog := &ErrorLogEntry{TraceID: traceID, Error: err.Error()}
 
 		// define the default log level for error
-		loggerHelper := logger.Error
+		loggerHelper := h.container.Logger.Error
 
 		switch logging.GetLogLevelForError(err) {
 		case logging.ERROR:
 			// we use the default log level for error
 		case logging.INFO:
-			loggerHelper = logger.Info
+			loggerHelper = h.container.Logger.Info
 		case logging.NOTICE:
-			loggerHelper = logger.Notice
+			loggerHelper = h.container.Logger.Notice
 		case logging.DEBUG:
-			loggerHelper = logger.Debug
+			loggerHelper = h.container.Logger.Debug
 		case logging.WARN:
-			loggerHelper = logger.Warn
+			loggerHelper = h.container.Logger.Warn
 		case logging.FATAL:
-			loggerHelper = logger.Fatal
+			loggerHelper = h.container.Logger.Fatal
 		}
 
 		loggerHelper(errorLog)
