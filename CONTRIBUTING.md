@@ -5,6 +5,9 @@
 * (Optional) If you want to discuss your implementation with the users of GoFr, use the GitHub discussions of this repo.
 * Configure your editor to use goimport and golangci-lint on file changes. Any code which is not formatted using these
   tools, will fail on the pipeline.
+<!-- spellchecker:off "favour" have to be ignored here -->
+* We follow **American English** conventions in this project (e.g., *"favor"* instead of *"favour"*). Please keep this consistent across all code comments, documentation, etc.
+<!-- spellchecker:on -->
 * All code contributions should have associated tests and all new line additions should be covered in those testcases.
   No PR should ever decrease the overall code coverage.
 * Once your code changes are done along with the testcases, submit a PR to development branch. Please note that all PRs

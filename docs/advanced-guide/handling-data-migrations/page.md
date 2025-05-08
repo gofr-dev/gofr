@@ -78,7 +78,7 @@ func All() map[int64]migration.Migrate {
 
 Migrations run in ascending order of keys in this map.
 
-### Initialisation from main.go
+### Initialization from main.go
 
 ```go
 package main

@@ -40,7 +40,7 @@ func TestGetJwtClaims(t *testing.T) {
 	claims := []byte(`{"aud":"stage.kops.dev","iat":1257894000,"orig":"GOOGLE",` +
 		`"picture":"https://lh3.googleusercontent.com/a/ACg8ocKJ5DDA4zruzFlsQ9KvL` +
 		`jHDtbOT_hpVz0hEO8jSl2m7Myk=s96-c","sub":"rakshit.singh@zopsmart.com","sub-id"` +
-		`:"a6573e1d-abea-4863-acdb-6cf3626a4414","typ":"refresh_token"}`)
+		`:"a6573e1d-abea-4863-acdb-6cf3626a4414","type":"refresh_token"}`)
 
 	router := mux.NewRouter()
 	router.HandleFunc("/test", func(w http.ResponseWriter, r *http.Request) {

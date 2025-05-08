@@ -116,6 +116,33 @@ func listHandler(ctx *gofr.Context) (any, error) {
 }
 ```
 
+## HTTP Redirects
+
+GoFr allows redirecting HTTP requests to other URLs using the `response.Redirect` type.
+
+### Example
+
+```go
+package main
+
+import (
+	"gofr.dev/pkg/gofr"
+
+	"gofr.dev/pkg/gofr/http/response"
+)
+
+func main() {
+	app := gofr.New()
+
+	app.GET("/old-page", func(ctx *gofr.Context) (any, error) {
+		// Redirect to a new URL
+		return response.Redirect{URL: "https://example.com/new-page"}, nil
+	})
+
+	app.Run()
+}
+```
+
 ## Favicon.ico
 
 By default, GoFr load its own `favicon.ico` present in root directory for an application. To override `favicon.ico` user
