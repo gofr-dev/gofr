@@ -20,26 +20,50 @@ We can set a sample key `greeting` using the following command:
 docker exec -it gofr-redis bash -c 'redis-cli SET greeting "Hello from Redis."'
 ```
 
-## Configuration & Usage
+## Configuration & Usage:
 
-GoFr applications relies on environment variables to configure and connect to a Redis server. 
-These variables are stored in a file named `.env` located within the configs directory in your project root.
+GoFr applications rely on environment variables to configure and connect to a Redis server.  
+These variables are stored in a `.env` file located within the `configs` directory at your project root.
 
-Following configuration keys are required for Redis connectivity:
+### Required Environment Variables:
 
-* `REDIS_HOST`: It specifies the hostname or IP address of your Redis server.
-* `REDIS_PORT`: It specifies the port number on which your Redis server is listening. The default Redis port is 6379.
-* `REDIS_USER` : This is the user we'll use to connect to your Redis server. We can configure multiple users with different permissions in a single Redis container. For more details, refer to the [official docs](https://redis.io/docs/latest/operate/oss_and_stack/management/security/acl/)
-* `REDIS_PASSWORD`: The password is required only if your Redis server is configured for authentication; if authentication is not enabled, no password is necessary.
-* `REDIS_DB`: The database number to use for the Redis server. The default value is 0.
-```dotenv
-APP_NAME=test-service
-HTTP_PORT=9000
+| Key              | Description |
+|------------------|-------------|
+| `REDIS_HOST`      | Hostname or IP address of your Redis server |
+| `REDIS_PORT`      | Port number your Redis server listens on (default: `6379`) |
+| `REDIS_USER`      | Redis username; multiple users with ACLs can be configured. [See official docs](https://redis.io/docs/latest/operate/oss_and_stack/management/security/acl/) |
+| `REDIS_PASSWORD`  | Redis password (required only if authentication is enabled) |
+| `REDIS_DB`        | Redis database number (default: `0`) |
 
-REDIS_HOST=localhost
+---
+
+## TLS Support (Optional):
+
+If your Redis server requires a secure TLS connection, the following optional keys should be used:
+
+| Key                       | Description |
+|---------------------------|-------------|
+| `REDIS_TLS_ENABLED`        | Set to `"true"` to enable TLS |
+| `REDIS_TLS_CA_CERT_PATH`   | File path to the CA certificate used to verify the Redis server |
+| `REDIS_TLS_CERT_PATH`      | File path to the client certificate (for mTLS) |
+| `REDIS_TLS_KEY_PATH`       | File path to the client private key (for mTLS) |
+
+---
+
+## ✅ Example `.env` File
+
+```env
+REDIS_HOST=redis.example.com
 REDIS_PORT=6379
-REDIS_PASSWORD=password
-REDIS_DB=2
+REDIS_USER=appuser
+REDIS_PASSWORD=securepassword
+REDIS_DB=0
+
+# TLS settings (optional)
+REDIS_TLS_ENABLED=true
+REDIS_TLS_CA_CERT_PATH=./configs/certs/ca.pem
+REDIS_TLS_CERT_PATH=./configs/certs/client.crt
+REDIS_TLS_KEY_PATH=./configs/certs/client.key
 ```
 
 The following code snippet demonstrates how to retrieve data from a Redis key named "greeting":
