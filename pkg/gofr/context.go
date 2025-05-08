@@ -11,6 +11,7 @@ import (
 	"gofr.dev/pkg/gofr/cmd/terminal"
 	"gofr.dev/pkg/gofr/container"
 	"gofr.dev/pkg/gofr/http/middleware"
+	"gofr.dev/pkg/gofr/logging"
 )
 
 type Context struct {
@@ -31,6 +32,8 @@ type Context struct {
 
 	// Terminal needs to be public as CMD applications need to access various terminal user interface(TUI) features.
 	Out terminal.Output
+
+	logging.ContextLogger
 }
 
 type AuthInfo interface {
