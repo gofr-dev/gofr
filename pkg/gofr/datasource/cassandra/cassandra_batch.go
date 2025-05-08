@@ -28,7 +28,7 @@ func (c *Client) BatchQueryWithCtx(ctx context.Context, name, stmt string, value
 
 	b, ok := c.cassandra.batches[name]
 	if !ok {
-		return errBatchNotInitialised
+		return errBatchNotInitialized
 	}
 
 	b.Query(stmt, values...)
@@ -47,7 +47,7 @@ func (c *Client) ExecuteBatchWithCtx(ctx context.Context, name string) error {
 
 	b, ok := c.cassandra.batches[name]
 	if !ok {
-		return errBatchNotInitialised
+		return errBatchNotInitialized
 	}
 
 	return c.cassandra.session.executeBatch(b)
@@ -64,7 +64,7 @@ func (c *Client) ExecuteBatchCASWithCtx(ctx context.Context, name string, dest .
 
 	b, ok := c.cassandra.batches[name]
 	if !ok {
-		return false, errBatchNotInitialised
+		return false, errBatchNotInitialized
 	}
 
 	return c.cassandra.session.executeBatchCAS(b, dest...)
