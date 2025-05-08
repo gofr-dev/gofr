@@ -77,7 +77,7 @@ func (l gRPCLog) String() string {
 
 // StreamObservabilityInterceptor handles logging, metrics, and tracing for streaming RPCs.
 func StreamObservabilityInterceptor(logger Logger, metrics Metrics) grpc.StreamServerInterceptor {
-	tracer := otel.GetTracerProvider().Tracer("gofr-stream", trace.WithInstrumentationVersion("v0.1"))
+	tracer := otel.GetTracerProvider().Tracer("gofr-gRPC-stream", trace.WithInstrumentationVersion("v0.1"))
 
 	return func(srv any, ss grpc.ServerStream, info *grpc.StreamServerInfo, handler grpc.StreamHandler) error {
 		start := time.Now()
@@ -98,17 +98,17 @@ func StreamObservabilityInterceptor(logger Logger, metrics Metrics) grpc.StreamS
 		// Process the stream
 		err := handler(srv, wrappedStream)
 
-		fullMethod := info.FullMethod
+		grpcMethodName := info.FullMethod
 		if info.IsClientStream && info.IsServerStream {
-			fullMethod += " [BI-DIRECTION_STREAM]"
+			grpcMethodName += " [BI-DIRECTION_STREAM]"
 		} else if info.IsClientStream {
-			fullMethod += " [CLIENT-STREAM]"
+			grpcMethodName += " [CLIENT-STREAM]"
 		} else if info.IsServerStream {
-			fullMethod += " [SERVER-STREAM]"
+			grpcMethodName += " [SERVER-STREAM]"
 		}
 
 		// Log and record metrics
-		logRPC(ctx, logger, metrics, start, err, fullMethod, "app_gRPC-Stream_stats")
+		logRPC(ctx, logger, metrics, start, err, grpcMethodName, "app_gRPC-Stream_stats")
 
 		return err
 	}

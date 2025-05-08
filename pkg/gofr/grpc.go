@@ -7,8 +7,8 @@ import (
 	"reflect"
 	"strconv"
 
-	grpc_middleware "github.com/grpc-ecosystem/go-grpc-middleware"
-	grpc_recovery "github.com/grpc-ecosystem/go-grpc-middleware/recovery"
+	"github.com/grpc-ecosystem/go-grpc-middleware"
+	"github.com/grpc-ecosystem/go-grpc-middleware/recovery"
 	"google.golang.org/grpc"
 
 	"gofr.dev/pkg/gofr/container"
@@ -50,12 +50,12 @@ func (a *App) AddGRPCServerOptions(grpcOpts ...grpc.ServerOption) {
 //		return handler(ctx, req)
 //	}
 //	app.AddGRPCUnaryInterceptors(loggingInterceptor)
-func (a *App) AddGRPCUnaryInterceptors(grpcInterceptors ...grpc.UnaryServerInterceptor) {
-	a.grpcServer.interceptors = append(a.grpcServer.interceptors, grpcInterceptors...)
+func (a *App) AddGRPCUnaryInterceptors(interceptors ...grpc.UnaryServerInterceptor) {
+	a.grpcServer.interceptors = append(a.grpcServer.interceptors, interceptors...)
 }
 
-func (a *App) AddGRPCServerStreamInterceptors(grpcInterceptors ...grpc.StreamServerInterceptor) {
-	a.grpcServer.streamInterceptors = append(a.grpcServer.streamInterceptors, grpcInterceptors...)
+func (a *App) AddGRPCServerStreamInterceptors(interceptors ...grpc.StreamServerInterceptor) {
+	a.grpcServer.streamInterceptors = append(a.grpcServer.streamInterceptors, interceptors...)
 }
 
 func newGRPCServer(c *container.Container, port int) *grpcServer {
