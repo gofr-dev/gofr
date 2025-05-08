@@ -37,7 +37,7 @@ type Redis struct {
 	config *Config
 }
 
-// NewClient returns a redis client if connection is successful based on Config.
+// NewClient returns a [Redis] client if connection is successful based on [Config].
 // Supports both plain and TLS connections. TLS is configured via REDIS_TLS_ENABLED and related environment variables.
 // In case of error, it returns an error as second parameter.
 func NewClient(c config.Config, logger datasource.Logger, metrics Metrics) *Redis {
@@ -78,7 +78,7 @@ func (r *Redis) Close() error {
 	return nil
 }
 
-// getRedisConfig builds the Redis Config struct from the provided config and logger.
+// getRedisConfig builds the Redis Config struct from the provided [Config].
 // It supports TLS configuration using the following environment variables:
 //
 //	REDIS_TLS_ENABLED: set to "true" to enable TLS
@@ -86,7 +86,7 @@ func (r *Redis) Close() error {
 //	REDIS_TLS_CERT:    PEM-encoded client certificate (string or file path)
 //	REDIS_TLS_KEY:     PEM-encoded client private key (string or file path)
 //
-// If TLS is enabled, the function sets up the TLS config for the Redis client.
+// If TLS is enabled, the function sets up the [tls.Config] for the [Redis] client.
 func getRedisConfig(c config.Config, logger datasource.Logger) *Config {
 	var redisConfig = &Config{}
 
