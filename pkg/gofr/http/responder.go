@@ -27,18 +27,12 @@ type Responder struct {
 // Respond sends a response with the given data and handles potential errors, setting appropriate
 // status codes and formatting responses as JSON or raw data as needed.
 func (r Responder) Respond(data any, err error) {
-	statusCode, errorObj := r.determineResponse(data, err)
-
 	var resp any
 
 	switch v := data.(type) {
-	case resTypes.Raw:
-		resp = v.Data
-	case resTypes.Response:
-		resp = response{Data: v.Data, Metadata: v.Metadata, Error: errorObj}
 	case resTypes.File:
 		r.w.Header().Set("Content-Type", v.ContentType)
-		r.w.WriteHeader(statusCode)
+		r.w.WriteHeader(http.StatusOK)
 
 		_, _ = r.w.Write(v.Content)
 
@@ -49,18 +43,28 @@ func (r Responder) Respond(data any, err error) {
 
 		return
 	case resTypes.Redirect:
+		// HTTP 302 by default
+		statusCode := http.StatusFound
+
 		switch r.method {
 		case http.MethodPost, http.MethodPut, http.MethodPatch:
-			statusCode = http.StatusSeeOther // 303
-		default:
-			statusCode = http.StatusFound // 302 by default
+			// HTTP 303
+			statusCode = http.StatusSeeOther
 		}
 
 		r.w.Header().Set("Location", v.URL)
 		r.w.WriteHeader(statusCode)
 
 		return
+	}
 
+	statusCode, errorObj := r.determineResponse(data, err)
+
+	switch v := data.(type) {
+	case resTypes.Raw:
+		resp = v.Data
+	case resTypes.Response:
+		resp = response{Data: v.Data, Metadata: v.Metadata, Error: errorObj}
 	default:
 		// handling where an interface contains a nullable type with a nil value.
 		if isNil(data) {

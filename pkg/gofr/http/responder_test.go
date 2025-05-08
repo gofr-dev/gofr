@@ -357,7 +357,7 @@ func TestResponder_RedirectResponse_Post(t *testing.T) {
 	redirectURL := "/new-location?from=start"
 	statusCode := http.StatusSeeOther // 303
 
-	redirect := resTypes.NewRedirect(redirectURL)
+	redirect := resTypes.Redirect{URL: redirectURL}
 
 	r.Respond(redirect, nil)
 
@@ -375,7 +375,7 @@ func TestResponder_RedirectResponse_Head(t *testing.T) {
 	redirectURL := "/new-location?from=start"
 	statusCode := http.StatusFound // 302
 
-	redirect := resTypes.NewRedirect(redirectURL)
+	redirect := resTypes.Redirect{URL: redirectURL}
 
 	r.Respond(redirect, nil)
 
