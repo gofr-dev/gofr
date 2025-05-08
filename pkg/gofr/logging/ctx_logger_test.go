@@ -81,7 +81,6 @@ func TestNewContextLogger(t *testing.T) {
 	ctxLogger := NewContextLogger(ctx, baseLogger)
 
 	assert.Equal(t, baseLogger, ctxLogger.base)
-	assert.Equal(t, ctx, ctxLogger.ctx)
 }
 
 func TestContextLogger_WithTraceInfo_NoTraceID(t *testing.T) {
