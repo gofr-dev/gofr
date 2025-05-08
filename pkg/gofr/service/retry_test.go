@@ -21,10 +21,6 @@ func (*mockHTTP) HealthCheck(_ context.Context) *Health {
 	}
 }
 
-func (*mockHTTP) HealthCheckPath() string {
-	return "/.well-known/alive"
-}
-
 func (*mockHTTP) getHealthResponseForEndpoint(_ context.Context, _ string, _ int) *Health {
 	return &Health{
 		Status:  "UP",

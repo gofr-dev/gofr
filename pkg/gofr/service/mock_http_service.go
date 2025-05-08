@@ -108,11 +108,6 @@ func (m *MockHTTP) HealthCheck(ctx context.Context) *Health {
 	return ret0
 }
 
-// HealthCheckPath mocks endpoint.
-func (m *MockHTTP) HealthCheckPath() string {
-	return "/.well-known/alive"
-}
-
 // HealthCheck indicates an expected call of HealthCheck.
 func (mr *MockHTTPMockRecorder) HealthCheck(ctx any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
