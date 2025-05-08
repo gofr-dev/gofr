@@ -100,8 +100,8 @@ func Logging(probes LogProbes, logger logger) func(inner http.Handler) http.Hand
 
 			start := time.Now()
 			srw := &StatusResponseWriter{ResponseWriter: w}
-			traceID, spanID := getTraceAndSpanIDs(r)
-
+			traceID := trace.SpanFromContext(r.Context()).SpanContext().TraceID().String()
+			spanID := trace.SpanFromContext(r.Context()).SpanContext().SpanID().String()
 			srw.Header().Set("X-Correlation-ID", traceID)
 
 			defer handleRequestLog(srw, r, start, traceID, spanID, logger)
@@ -110,11 +110,6 @@ func Logging(probes LogProbes, logger logger) func(inner http.Handler) http.Hand
 			inner.ServeHTTP(srw, r)
 		})
 	}
-}
-
-func getTraceAndSpanIDs(r *http.Request) (string, string) {
-	spanContext := trace.SpanFromContext(r.Context()).SpanContext()
-	return spanContext.TraceID().String(), spanContext.SpanID().String()
 }
 
 func handleRequestLog(srw *StatusResponseWriter, r *http.Request, start time.Time, traceID, spanID string, logger logger) {
