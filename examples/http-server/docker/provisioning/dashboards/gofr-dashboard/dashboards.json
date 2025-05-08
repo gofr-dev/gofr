@@ -532,7 +532,7 @@
           "refId": "B"
         }
       ],
-      "title": "Memory Utilisation",
+      "title": "Memory Utilization",
       "type": "timeseries"
     },
     {
