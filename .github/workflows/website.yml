@@ -1,4 +1,7 @@
 name: Build and Deploy
+permissions:
+  contents: read
+
 on:
   push:
     tags:
@@ -17,6 +20,9 @@ env:
   NAMESPACE_STAGE: gofr-dev-stg
 jobs:
   dockerize:
+    permissions:
+      contents: read
+      packages: write
     runs-on: ubuntu-latest
     outputs:
       image: ${{ steps.output-image.outputs.image }}

@@ -1,5 +1,7 @@
 ---
 name: Workflow-Pipeline
+permissions:
+  contents: read
 
 # Define when this workflow should run
 on:
