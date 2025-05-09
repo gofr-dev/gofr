@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"net/http"
+	"strings"
 	"time"
 )
 
@@ -21,7 +22,7 @@ type Health struct {
 }
 
 func (h *httpService) HealthCheck(ctx context.Context) *Health {
-	return h.getHealthResponseForEndpoint(ctx, AlivePath, defaultTimeout)
+	return h.getHealthResponseForEndpoint(ctx, strings.TrimPrefix(AlivePath, "/"), defaultTimeout)
 }
 
 func (h *httpService) getHealthResponseForEndpoint(ctx context.Context, endpoint string, timeout int) *Health {
