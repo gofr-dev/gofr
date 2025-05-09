@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/http"
 	"os"
+	"strconv"
 	"time"
 
 	"gofr.dev/pkg/gofr/container"
@@ -33,9 +34,15 @@ func newHTTPServer(c *container.Container, port int, middlewareConfigs map[strin
 	r := gofrHTTP.NewRouter()
 	wsManager := websocket.New()
 
+	r.Use(middleware.Tracer)
+
+	if ok, _ := strconv.ParseBool(middlewareConfigs[middleware.LogDisableProbeKey]); !ok {
+		r.Use(middleware.Logging(c.Logger))
+	} else {
+		r.Use(middleware.LoggingSkipHealthCheck(c.Logger))
+	}
+
 	r.Use(
-		middleware.Tracer,
-		middleware.Logging(c.Logger),
 		middleware.CORS(middlewareConfigs, r.RegisteredRoutes),
 		middleware.Metrics(c.Metrics()),
 	)

@@ -1162,3 +1162,39 @@ func TestApp_Subscribe(t *testing.T) {
 		assert.False(t, ok)
 	})
 }
+
+func Test_NewDisableHealthCheckLog(t *testing.T) {
+	port := testutil.GetFreePort(t)
+
+	t.Setenv("HTTP_PORT", strconv.Itoa(port))
+	t.Setenv("LOG_DISABLE_PROBES", "true")
+
+	log := testutil.StdoutOutputForFunc(func() {
+		logger := logging.NewLogger(logging.DEBUG)
+
+		app := New()
+		app.container.Logger = logger
+
+		app.GET("/test", func(*Context) (any, error) {
+			return "success", nil
+		})
+
+		go app.Run()
+		time.Sleep(1000 * time.Millisecond)
+
+		var netClient = &http.Client{
+			Timeout: 200 * time.Millisecond,
+		}
+
+		req, _ := http.NewRequestWithContext(t.Context(), http.MethodGet,
+			fmt.Sprintf("http://localhost:%d", port)+"/.well-known/alive", http.NoBody)
+
+		_, err := netClient.Do(req)
+		if err != nil {
+			t.Errorf("error while making HTTP request in Test_NewDisableHealthCheckLog. err : %v", err)
+			return
+		}
+	})
+
+	assert.NotContains(t, log, `"uri":"/.well-known/alive"`, "Test_NewDisableHealthCheckLog")
+}

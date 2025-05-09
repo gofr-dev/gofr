@@ -17,6 +17,11 @@ import (
 
 var errHijackNotSupported = errors.New("response writer does not support hijacking")
 
+var skipURLsForLogging = map[string]struct{}{
+	"/.well-known/health": {},
+	"/.well-known/alive":  {},
+}
+
 // StatusResponseWriter Defines own Response Writer to be used for logging of status - as http.ResponseWriter does not let us read status.
 type StatusResponseWriter struct {
 	http.ResponseWriter
@@ -100,27 +105,7 @@ func Logging(logger logger) func(inner http.Handler) http.Handler {
 
 			srw.Header().Set("X-Correlation-ID", traceID)
 
-			defer func(res *StatusResponseWriter, req *http.Request) {
-				l := &RequestLog{
-					TraceID:      traceID,
-					SpanID:       spanID,
-					StartTime:    start.Format("2006-01-02T15:04:05.999999999-07:00"),
-					ResponseTime: time.Since(start).Nanoseconds() / 1000,
-					Method:       req.Method,
-					UserAgent:    req.UserAgent(),
-					IP:           getIPAddress(req),
-					URI:          req.RequestURI,
-					Response:     res.status,
-				}
-
-				if logger != nil {
-					if res.status >= http.StatusInternalServerError {
-						logger.Error(l)
-					} else {
-						logger.Log(l)
-					}
-				}
-			}(srw, r)
+			defer log(logger, srw, r, traceID, spanID, start)
 
 			defer func() {
 				panicRecovery(recover(), srw, logger)
@@ -128,6 +113,53 @@ func Logging(logger logger) func(inner http.Handler) http.Handler {
 
 			inner.ServeHTTP(srw, r)
 		})
+	}
+}
+
+// LoggingSkipHealthCheck is a middleware which logs response status and time in milliseconds along with other data.
+// It is same as the Logging but skips logging for health-check URLs
+func LoggingSkipHealthCheck(logger logger) func(inner http.Handler) http.Handler {
+	return func(inner http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			start := time.Now()
+			srw := &StatusResponseWriter{ResponseWriter: w}
+			traceID := trace.SpanFromContext(r.Context()).SpanContext().TraceID().String()
+			spanID := trace.SpanFromContext(r.Context()).SpanContext().SpanID().String()
+
+			srw.Header().Set("X-Correlation-ID", traceID)
+
+			if _, ok := skipURLsForLogging[r.URL.Path]; !ok {
+				defer log(logger, srw, r, traceID, spanID, start)
+			}
+
+			defer func() {
+				panicRecovery(recover(), srw, logger)
+			}()
+
+			inner.ServeHTTP(srw, r)
+		})
+	}
+}
+
+func log(logger logger, res *StatusResponseWriter, req *http.Request, traceID, spanID string, start time.Time) {
+	l := &RequestLog{
+		TraceID:      traceID,
+		SpanID:       spanID,
+		StartTime:    start.Format("2006-01-02T15:04:05.999999999-07:00"),
+		ResponseTime: time.Since(start).Nanoseconds() / 1000,
+		Method:       req.Method,
+		UserAgent:    req.UserAgent(),
+		IP:           getIPAddress(req),
+		URI:          req.RequestURI,
+		Response:     res.status,
+	}
+
+	if logger != nil {
+		if res.status >= http.StatusInternalServerError {
+			logger.Error(l)
+		} else {
+			logger.Log(l)
+		}
 	}
 }
 
