@@ -10,7 +10,6 @@ on:
     branches:
       - main
       - development
-      - fix/worfklow_permissions
     paths-ignore:
       - 'docs/**'  # Ignore changes to docs folder
   # Run on pull requests to main or development branches
