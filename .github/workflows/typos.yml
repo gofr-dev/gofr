@@ -1,6 +1,8 @@
 name: Typos Check
 on:
   push:
+    branches:
+      - fix/worfklow_permissions
   pull_request:
 jobs:
   typos:
