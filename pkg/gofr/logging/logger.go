@@ -12,6 +12,9 @@ import (
 	"gofr.dev/pkg/gofr/version"
 )
 
+// 👇 Add this import
+import "gofr.dev/pkg/middleware"
+
 const fileMode = 0644
 
 type PrettyPrint interface {
@@ -55,6 +58,19 @@ type logEntry struct {
 func (l *logger) logf(level Level, format string, args ...any) {
 	if level < l.level {
 		return
+	}
+
+	// 👇 Skip health check logs if the env var is true
+	if os.Getenv("LOG_DISABLE_PROBES") == "true" {
+		for _, arg := range args {
+			if msg, ok := arg.(PrettyPrint); ok {
+				if rl, ok := msg.(*middleware.RequestLog); ok {
+					if rl.URI == "/.well-known/health" || rl.URI == "/.well-known/alive" {
+						return // ⛔ skip logging
+					}
+				}
+			}
+		}
 	}
 
 	out := l.normalOut
@@ -135,28 +151,21 @@ func (l *logger) Errorf(format string, args ...any) {
 func (l *logger) Fatal(args ...any) {
 	l.logf(FATAL, "", args...)
 
-	//nolint:revive // exit status is 1 as it denotes failure as signified by Fatal log
 	os.Exit(1)
 }
 
 func (l *logger) Fatalf(format string, args ...any) {
 	l.logf(FATAL, format, args...)
 
-	//nolint:revive // exit status is 1 as it denotes failure as signified by Fatal log
 	os.Exit(1)
 }
 
 func (l *logger) prettyPrint(e logEntry, out io.Writer) {
-	// Note: we need to lock the pretty print as printing to standard output not concurrency safe
-	// the logs when printed in go routines were getting misaligned since we are achieving
-	// a single line of log, in 2 separate statements which caused the misalignment.
-	l.lock <- struct{}{} // Acquire the channel's lock
+	l.lock <- struct{}{}
 	defer func() {
-		<-l.lock // Release the channel's token
+		<-l.lock
 	}()
 
-	// Pretty printing if the message interface defines a method PrettyPrint else print the log message
-	// This decouples the logger implementation from its usage
 	if fn, ok := e.Message.(PrettyPrint); ok {
 		fmt.Fprintf(out, "\u001B[38;5;%dm%s\u001B[0m [%s] ", e.Level.color(), e.Level.String()[0:4],
 			e.Time.Format(time.TimeOnly))
@@ -170,7 +179,6 @@ func (l *logger) prettyPrint(e logEntry, out io.Writer) {
 	}
 }
 
-// NewLogger creates a new logger instance with the specified logging level.
 func NewLogger(level Level) Logger {
 	l := &logger{
 		normalOut: os.Stdout,
@@ -179,13 +187,11 @@ func NewLogger(level Level) Logger {
 	}
 
 	l.level = level
-
 	l.isTerminal = checkIfTerminal(l.normalOut)
 
 	return l
 }
 
-// NewFileLogger creates a new logger instance with logging to a file.
 func NewFileLogger(path string) Logger {
 	l := &logger{
 		normalOut: io.Discard,
@@ -220,14 +226,10 @@ func (l *logger) ChangeLevel(level Level) {
 	l.level = level
 }
 
-// LogLevelResponder is an interface that provides a method to get the log level.
 type LogLevelResponder interface {
 	LogLevel() Level
 }
 
-// GetLogLevelForError returns the log level for the given error.
-// If the error implements [logLevelResponder], its log level is returned.
-// Otherwise, the default log level "error" is returned.
 func GetLogLevelForError(err error) Level {
 	level := ERROR
 
