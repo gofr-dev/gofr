@@ -45,6 +45,11 @@ linters:
     - usetesting
     - whitespace
     - wsl
+
+    # don't enable:
+    # - godox  # Disabling because we need TODO lines at this stage of project.
+    # - testpackage # We also need to do unit test for unexported functions. And adding _internal in all files is cumbersome.
+
   settings:
     dupl:
       threshold: 100
@@ -58,7 +63,7 @@ linters:
       min-occurrences: 2
     gocritic:
       disabled-checks:
-        - dupImport
+        - dupImport # https://github.com/go-critic/go-critic/issues/845
         - ifElseChain
         - octalLiteral
         - whyNoLint
@@ -90,9 +95,9 @@ linters:
         - condition
         - return
     nolintlint:
-      require-explanation: true
-      require-specific: true
-      allow-unused: false
+      require-explanation: true # require an explanation for nolint directives
+      require-specific: true # require nolint directives to be specific about which linter is being skipped
+      allow-unused: false # report any unused nolint directives
     revive:
       rules:
         - name: blank-imports
@@ -106,7 +111,9 @@ linters:
         - name: errorf
         - name: exported
           arguments:
+             # enables checking public methods of private types
             - checkPrivateReceivers
+            # make error messages clearer
             - sayRepetitiveInsteadOfStutters
         - name: increment-decrement
         - name: indent-error-flow
