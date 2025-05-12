@@ -150,9 +150,7 @@ linters:
           - mnd
         path: _test\.go
     paths:
-      - third_party$
-      - builtin$
-      - examples$
+      - examples  # TODO remove this line and fix reported errors
 formatters:
   enable:
     - gci
@@ -168,7 +166,3 @@ formatters:
         - github.com/golangci/golangci-lint
   exclusions:
     generated: lax
-    paths:
-      - third_party$
-      - builtin$
-      - examples$
