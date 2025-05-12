@@ -48,7 +48,7 @@ func Test_Client_CreateDocument_Error(t *testing.T) {
 	docName, err := client.CreateDocument(context.Background(), "testDB",
 		"testCollection", "testDocument")
 	require.Empty(t, docName)
-	require.ErrorIs(t, err, errDocumentNotFound, err, "Expected error when document not found")
+	require.ErrorIs(t, err, errDocumentNotFound, "Expected error when document not found")
 }
 
 func Test_Client_GetDocument(t *testing.T) {
@@ -84,7 +84,7 @@ func Test_Client_GetDocument_Error(t *testing.T) {
 
 	err := client.GetDocument(context.Background(), "testDB",
 		"testCollection", "testDocument", "")
-	require.ErrorIs(t, err, errDocumentNotFound, err, "Expected error when document not found")
+	require.ErrorIs(t, err, errDocumentNotFound, "Expected error when document not found")
 }
 
 func Test_Client_UpdateDocument(t *testing.T) {
