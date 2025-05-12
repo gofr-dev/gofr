@@ -47,7 +47,7 @@ func Test_Client_CreateDocument_Error(t *testing.T) {
 
 	docName, err := client.CreateDocument(context.Background(), "testDB",
 		"testCollection", "testDocument")
-	require.Equal(t, "", docName)
+	require.Empty(t, docName)
 	require.ErrorIs(t, err, errDocumentNotFound, err, "Expected error when document not found")
 }
 

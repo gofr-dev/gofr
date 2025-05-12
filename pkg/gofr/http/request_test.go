@@ -114,7 +114,7 @@ func TestBind_FileSuccess(t *testing.T) {
 	assert.Nil(t, x.Skip)
 
 	// Assert incompatible
-	assert.Equal(t, "", x.Incompatible)
+	assert.Empty(t, x.Incompatible)
 
 	// Assert file not present
 	assert.Nil(t, x.FileNotPresent)
