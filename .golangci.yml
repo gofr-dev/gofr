@@ -135,6 +135,12 @@ linters:
         - name: deep-exit
         - name: unused-receiver
         - name: use-any
+    staticcheck:
+      checks:
+        - all
+        - -QF1001 # TODO remove this line and fix reported errors
+        - -QF1003 # TODO remove this line and fix reported errors
+        - -QF1008 # TODO remove this line and fix reported errors
     usestdlibvars:
       time-layout: true
   exclusions:
