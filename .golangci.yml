@@ -1,105 +1,6 @@
----
-linters-settings:
-  dupl:
-    threshold: 100
-  exhaustive:
-    default-signifies-exhaustive: false
-  funlen:
-    lines: 100
-    statements: 50
-  gci:
-    sections:
-      - standard
-      - default
-      - localmodule
-  goconst:
-    min-len: 2
-    min-occurrences: 2
-  gocritic:
-    enabled-tags:
-      - diagnostic
-      - experimental
-      - opinionated
-      - performance
-      - style
-    disabled-checks:
-      - dupImport # https://github.com/go-critic/go-critic/issues/845
-      - ifElseChain
-      - octalLiteral
-      - whyNoLint
-      - wrapperFunc
-  gocyclo:
-    min-complexity: 10
-  goimports:
-    local-prefixes: github.com/golangci/golangci-lint
-  mnd:
-    checks:
-      - argument
-      - case
-      - condition
-      - return
-  govet:
-    enable:
-      - shadow
-    settings:
-      printf:
-        funcs:
-          - (gofr.dev/pkg/gofr/Logger).Logf
-          - (gofr.dev/pkg/gofr/Logger).Errorf
-  lll:
-    line-length: 140
-  misspell:
-    locale: US
-  nolintlint:
-    allow-unused: false # report any unused nolint directives
-    require-explanation: true # require an explanation for nolint directives
-    require-specific: true # require nolint directives to be specific about which linter is being skipped
-  usestdlibvars:
-    time-layout: true # Suggest the use of constants available in time package
-  revive:
-    rules:
-    # default revive rules, they have to be present otherwise they are disabled
-      - name: blank-imports
-      - name: context-as-argument
-      - name: context-keys-type
-      - name: dot-imports
-      - name: empty-block
-      - name: error-naming
-      - name: error-return
-      - name: error-strings
-      - name: errorf
-      - name: exported
-        arguments:
-          # enables checking public methods of private types
-          - "checkPrivateReceivers"
-          # make error messages clearer
-          - "sayRepetitiveInsteadOfStutters"
-      - name: increment-decrement
-      - name: indent-error-flow
-      - name: range
-      - name: receiver-naming
-      - name: redefines-builtin-id
-      - name: superfluous-else
-      - name: time-naming
-      - name: unexported-return
-      - name: unreachable-code
-      - name: unused-parameter
-      - name: var-declaration
-      - name: var-naming
-    # additional revive rules
-      - name: bare-return
-      - name: bool-literal-in-expr
-      - name: comment-spacings
-      - name: early-return
-      - name: defer
-      - name: deep-exit
-      - name: unused-receiver
-      - name: use-any
-
+version: "2"
 linters:
-  # please, do not use `enable-all`: it's deprecated and will be removed soon.
-  # inverted configuration with `enable-all` and `disable` is not scalable during updates of golangci-lint
-  disable-all: true
+  default: none
   enable:
     - asciicheck
     - bodyclose
@@ -112,7 +13,6 @@ linters:
     - errorlint
     - exhaustive
     - funlen
-    - gci
     - gochecknoglobals
     - gochecknoinits
     - gocognit
@@ -120,10 +20,8 @@ linters:
     - gocritic
     - gocyclo
     - godot
-    - gofmt
     - goprintffuncname
     - gosec
-    - gosimple
     - govet
     - ineffassign
     - lll
@@ -138,33 +36,132 @@ linters:
     - revive
     - rowserrcheck
     - staticcheck
-    - stylecheck
     - testifylint
     - thelper
     - unconvert
     - unparam
     - unused
     - usestdlibvars
+    - usetesting
     - whitespace
     - wsl
-    - usetesting
-  
-  
-
-  # don't enable:
-  # - godox  # Disabling because we need TODO lines at this stage of project.
-  # - testpackage # We also need to do unit test for unexported functions. And adding _internal in all files is cumbersome.
-
-issues:
-  include:
-    - EXC0014
-
-  # exclude-use-default: false
-  # exclude-use-default: false # By default, golangci-lint does not enforce comments on exported types. We want it.
-  # Excluding configuration per-path, per-linter, per-text and per-source
-  exclude-rules:
-    - path: _test\.go
-      linters:
-        - gomnd
-        - dupl
-        - goconst
+  settings:
+    dupl:
+      threshold: 100
+    exhaustive:
+      default-signifies-exhaustive: false
+    funlen:
+      lines: 100
+      statements: 50
+    goconst:
+      min-len: 2
+      min-occurrences: 2
+    gocritic:
+      disabled-checks:
+        - dupImport
+        - ifElseChain
+        - octalLiteral
+        - whyNoLint
+        - wrapperFunc
+      enabled-tags:
+        - diagnostic
+        - experimental
+        - opinionated
+        - performance
+        - style
+    gocyclo:
+      min-complexity: 10
+    govet:
+      enable:
+        - shadow
+      settings:
+        printf:
+          funcs:
+            - (gofr.dev/pkg/gofr/Logger).Logf
+            - (gofr.dev/pkg/gofr/Logger).Errorf
+    lll:
+      line-length: 140
+    misspell:
+      locale: US
+    mnd:
+      checks:
+        - argument
+        - case
+        - condition
+        - return
+    nolintlint:
+      require-explanation: true
+      require-specific: true
+      allow-unused: false
+    revive:
+      rules:
+        - name: blank-imports
+        - name: context-as-argument
+        - name: context-keys-type
+        - name: dot-imports
+        - name: empty-block
+        - name: error-naming
+        - name: error-return
+        - name: error-strings
+        - name: errorf
+        - name: exported
+          arguments:
+            - checkPrivateReceivers
+            - sayRepetitiveInsteadOfStutters
+        - name: increment-decrement
+        - name: indent-error-flow
+        - name: range
+        - name: receiver-naming
+        - name: redefines-builtin-id
+        - name: superfluous-else
+        - name: time-naming
+        - name: unexported-return
+        - name: unreachable-code
+        - name: unused-parameter
+        - name: var-declaration
+        - name: var-naming
+        - name: bare-return
+        - name: bool-literal-in-expr
+        - name: comment-spacings
+        - name: early-return
+        - name: defer
+        - name: deep-exit
+        - name: unused-receiver
+        - name: use-any
+    usestdlibvars:
+      time-layout: true
+  exclusions:
+    generated: lax
+    presets:
+      - common-false-positives
+      - legacy
+      - std-error-handling
+    rules:
+      - linters:
+          - dupl
+          - goconst
+          - mnd
+        path: _test\.go
+    paths:
+      - third_party$
+      - builtin$
+      - examples$
+formatters:
+  enable:
+    - gci
+    - gofmt
+  settings:
+    gci:
+      sections:
+        - standard
+        - default
+        - localmodule
+    goimports:
+      local-prefixes:
+        - github.com/golangci/golangci-lint
+  exclusions:
+    generated: lax
+    paths:
+      - third_party$
+      - builtin$
+      - examples$
