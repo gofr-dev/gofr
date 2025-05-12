@@ -139,9 +139,9 @@ linters:
       time-layout: true
   exclusions:
     presets:
-      - common-false-positives
-      - legacy
-      - std-error-handling
+      - common-false-positives # TODO fix errors reported by this and remove this line
+      - legacy                 # TODO fix errors reported by this and remove this line
+      - std-error-handling     # TODO remove this line, configure errcheck, and fix reported errors
     rules:
       - linters:
           - dupl
