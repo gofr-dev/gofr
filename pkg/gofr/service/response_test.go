@@ -19,7 +19,7 @@ func TestResponse_GetHeader(t *testing.T) {
 	headerNotFound := response.GetHeader("key")
 
 	assert.Equal(t, "application/json", result)
-	assert.Equal(t, "", headerNotFound)
+	assert.Empty(t, headerNotFound)
 }
 
 func TestResponse_GetHeaderNil(t *testing.T) {
@@ -28,5 +28,5 @@ func TestResponse_GetHeaderNil(t *testing.T) {
 
 	result := response.GetHeader("Content-Type")
 
-	assert.Equal(t, "", result)
+	assert.Empty(t, result)
 }
