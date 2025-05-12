@@ -10,8 +10,9 @@ import (
 	"testing"
 	"time"
 
-	"gofr.dev/examples/grpc/grpc-streaming-server/server"
 	"google.golang.org/grpc"
+
+	"gofr.dev/examples/grpc/grpc-streaming-server/server"
 )
 
 func TestMain(m *testing.M) {
