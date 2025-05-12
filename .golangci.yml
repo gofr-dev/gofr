@@ -138,7 +138,6 @@ linters:
     usestdlibvars:
       time-layout: true
   exclusions:
-    generated: lax
     presets:
       - common-false-positives
       - legacy
@@ -164,5 +163,3 @@ formatters:
     goimports:
       local-prefixes:
         - github.com/golangci/golangci-lint
-  exclusions:
-    generated: lax
