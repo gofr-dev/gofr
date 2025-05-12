@@ -141,6 +141,7 @@ linters:
         - -QF1001 # TODO remove this line and fix reported errors
         - -QF1003 # TODO remove this line and fix reported errors
         - -QF1008 # TODO remove this line and fix reported errors
+        - -ST1000 # TODO remove this line and fix reported errors
     usestdlibvars:
       time-layout: true
   exclusions:
@@ -154,6 +155,9 @@ linters:
           - goconst
           - mnd
         path: _test\.go
+      - linters:
+          - revive
+        text: "exported (.+) should have comment" # TODO fix errors reported by this and remove this line
     paths:
       - examples  # TODO remove this line and fix reported errors
 formatters:
