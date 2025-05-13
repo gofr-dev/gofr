@@ -167,7 +167,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: PKG-Coverage-Report
-          path: profile_new.cov
+          path: ../profile_new.cov
 
   # Job for analyzing and reporting code coverage
   parse_coverage:
