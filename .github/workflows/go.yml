@@ -159,7 +159,7 @@ jobs:
             grep -v '/mock_' package_new.cov > profile_new.cov
             mv profile_new.cov ../profile_new.cov
             # Display coverage statistics
-            go tool cover -func ../profile.cov
+            go tool cover -func ../profile_new.cov
 
       # Upload coverage report for the 1.24 Go version only
       - name: Upload Test Coverage
@@ -167,7 +167,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: PKG-Coverage-Report
-          path: profile.cov
+          path: profile_new.cov
 
   # Job for analyzing and reporting code coverage
   parse_coverage:
@@ -302,7 +302,7 @@ jobs:
         run: |
           echo "mode: set" > merged_profile.cov
           tail -n +2 ./Example-Test-Report/profile.cov >> merged_profile.cov
-          tail -n +2 ./PKG-Coverage-Report/profile.cov >> merged_profile.cov
+          tail -n +2 ./PKG-Coverage-Report/profile_new.cov >> merged_profile.cov
 
           # Generate and print total coverage percentage
           echo "Total Coverage:"
