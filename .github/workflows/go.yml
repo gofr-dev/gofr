@@ -202,6 +202,8 @@ jobs:
           codeCoverage=$(go tool cover -func=merged_profile.cov | grep total | awk '{print $3}')
           codeCoverage=${codeCoverage%?}
           echo "CODE_COVERAGE=$codeCoverage" >> $GITHUB_ENV
+          
+          echo "Calculated Code Coverage: $codeCoverage"
   #      - name: Check if code-coverage is greater than threshold
   #        run: |
   #          codeCoverage=${{ env.CODE_COVERAGE }}
