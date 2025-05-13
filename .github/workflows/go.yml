@@ -10,6 +10,7 @@ on:
     branches:
       - main
       - development
+      - fix/coverage
     paths-ignore:
       - 'docs/**'  # Ignore changes to docs folder
   # Run on pull requests to main or development branches
@@ -100,11 +101,14 @@ jobs:
           command: |
             export APP_ENV=test
             # Run tests for the examples directory with coverage
-            go test gofr.dev/examples/... -v -short -coverprofile packageWithpbgo.cov -coverpkg=gofr.dev/examples/...
+            go test gofr.dev/examples/... -v -short -coverprofile raw.cov -coverpkg=gofr.dev/examples/...
              # Filter out auto-generated files by protobuf and gofr framework from coverage report
-            grep -vE '^gofr\.dev\/.*(\.pb\.go|hello\.proto|hello_grpc\.pb\.go|health_client\.go|hello_client\.go|hello_gofr\.go|health_gofr\.go)' packageWithpbgo.cov > profile.cov
+            grep -vE '^gofr\.dev/examples/.*(\.pb\.go|\.proto|_grpc\.pb\.go|_client\.go|_gofr\.go|grpc-)' raw.cov > filtered_examples.cov
             # Display coverage statistics
-            go tool cover -func profile.cov
+            echo "=== Coverage Report ==="
+            echo -n "Filtered Examples Coverage (Excluding gRPC): "
+            go tool cover -func filtered_examples.cov | grep total | awk '{print $3}'
+           
 
       # Upload coverage report for the 1.24 Go version only
       - name: Upload Test Coverage
@@ -149,11 +153,11 @@ jobs:
           command: |
             export APP_ENV=test
             # Run tests for the pkg directory with coverage
-            cd pkg
-            go test ./... -v -short -coverprofile package.cov -coverpkg=./...
+            cd pkg/gofr
+            go test gofr.dev/pkg/gofr/... -v -short -coverprofile=package_new.cov -coverpkg=gofr.dev/pkg/gofr/...
             # Filter out mock files from coverage report
-            grep -v '/mock_' package.cov > profile.cov
-            mv profile.cov ../profile.cov
+            grep -v '/mock_' package_new.cov > profile_new.cov
+            mv profile_new.cov ../profile_new.cov
             # Display coverage statistics
             go tool cover -func ../profile.cov
 
@@ -185,8 +189,8 @@ jobs:
       - name: Merge Coverage Files
         working-directory: artifacts
         run: |
-          awk '!/^mode: / && FNR==1{print "mode: set"} {print}' ./Example-Test-Report/profile.cov > merged_profile.cov
-          tail -n +2 ./PKG-Coverage-Report/profile.cov >> merged_profile.cov
+          awk '!/^mode: / && FNR==1{print "mode: set"} {print}' ./Example-Test-Report/filtered_examples.cov > merged_profile.cov
+          tail -n +2 ./PKG-Coverage-Report/profile_new.cov >> merged_profile.cov
 
       # Calculate and output the total code coverage percentage
       - name: Parse code-coverage value
