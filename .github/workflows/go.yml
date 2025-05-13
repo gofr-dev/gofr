@@ -116,7 +116,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: Example-Test-Report
-          path: profile.cov
+          path: filtered_examples.cov
 
   # Job for testing the pkg directory
   PKG-Unit-Testing:
@@ -184,6 +184,9 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           path: artifacts
+
+      - name: List Artifacts
+        run: ls -R artifacts
 
       # Merge the coverage reports from Example and PKG tests
       - name: Merge Coverage Files
