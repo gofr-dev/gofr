@@ -157,9 +157,9 @@ jobs:
             go test gofr.dev/pkg/gofr/... -v -short -coverprofile=package_new.cov -coverpkg=gofr.dev/pkg/gofr/...
             # Filter out mock files from coverage report
             grep -v '/mock_' package_new.cov > profile_new.cov
-            mv profile_new.cov ../profile_new.cov
+            mv profile_new.cov ../../profile_new.cov
             # Display coverage statistics
-            go tool cover -func ../profile_new.cov
+            go tool cover -func ../../profile_new.cov
 
       # Upload coverage report for the 1.24 Go version only
       - name: Upload Test Coverage
@@ -167,7 +167,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: PKG-Coverage-Report
-          path: ../profile_new.cov
+          path: profile_new.cov
 
   # Job for analyzing and reporting code coverage
   parse_coverage:
