@@ -48,7 +48,7 @@ func TestLogger_LevelError(t *testing.T) {
 	infoLog := testutil.StdoutOutputForFunc(printLog)
 	errLog := testutil.StderrOutputForFunc(printLog)
 
-	assert.Equal(t, "", infoLog) // Since log level is ERROR we will not get any INFO logs.
+	assert.Empty(t, infoLog) // Since log level is ERROR we will not get any INFO logs.
 	assertMessageInJSONLog(t, errLog, "Test Error Log")
 }
 
@@ -205,7 +205,7 @@ func Test_NewSilentLoggerSTDOutput(t *testing.T) {
 		l.Warnf("%v Logs", "warnf")
 	})
 
-	assert.Equal(t, "", logs)
+	assert.Empty(t, logs)
 }
 
 type mockLog struct {
