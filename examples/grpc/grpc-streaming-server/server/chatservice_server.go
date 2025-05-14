@@ -7,12 +7,14 @@ package server
 
 import (
 	"fmt"
-	"gofr.dev/pkg/gofr"
-	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/status"
 	"io"
 	"strings"
 	"time"
+
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
+
+	"gofr.dev/pkg/gofr"
 )
 
 // Register the gRPC service in your app using the following code in your main.go:

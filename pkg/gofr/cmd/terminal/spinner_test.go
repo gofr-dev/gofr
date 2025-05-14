@@ -32,7 +32,7 @@ func TestSpinner(t *testing.T) {
 
 	// Check if output contains spinner frames
 	outputStr := b.String()
-	assert.NotZero(t, outputStr)
+	assert.NotEmpty(t, outputStr)
 
 	// Testing Globe Spinner
 	b = &bytes.Buffer{}
@@ -50,7 +50,7 @@ func TestSpinner(t *testing.T) {
 
 	// Check if output contains spinner frames
 	outputStr = b.String()
-	assert.NotZero(t, outputStr)
+	assert.NotEmpty(t, outputStr)
 
 	// Testing Pulse Spinner
 	b = &bytes.Buffer{}
@@ -69,7 +69,7 @@ func TestSpinner(t *testing.T) {
 	// Check if output contains spinner frames
 	outputStr = b.String()
 	fmt.Println(outputStr)
-	assert.NotZero(t, outputStr)
+	assert.NotEmpty(t, outputStr)
 }
 
 func TestSpinner_contextDone(t *testing.T) {
