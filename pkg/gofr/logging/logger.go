@@ -49,6 +49,7 @@ type logEntry struct {
 	Level       Level     `json:"level"`
 	Time        time.Time `json:"time"`
 	Message     any       `json:"message"`
+	TraceID     string    `json:"trace_id,omitempty"`
 	GofrVersion string    `json:"gofrVersion"`
 }
 
@@ -68,17 +69,20 @@ func (l *logger) logf(level Level, format string, args ...any) {
 		GofrVersion: version.Framework,
 	}
 
+	traceID, filteredArgs := extractTraceIDAndFilterArgs(args)
+	entry.TraceID = traceID
+
 	switch {
-	case len(args) == 1 && format == "":
-		entry.Message = args[0]
-	case len(args) != 1 && format == "":
-		entry.Message = args
+	case len(filteredArgs) == 1 && format == "":
+		entry.Message = filteredArgs[0]
+	case len(filteredArgs) != 1 && format == "":
+		entry.Message = filteredArgs
 	case format != "":
-		entry.Message = fmt.Sprintf(format+"", args...) // TODO - this is stupid. We should not need empty string.
+		entry.Message = fmt.Sprintf(format, filteredArgs...)
 	}
 
 	if l.isTerminal {
-		l.prettyPrint(entry, out)
+		l.prettyPrint(&entry, out)
 	} else {
 		_ = json.NewEncoder(out).Encode(entry)
 	}
@@ -146,7 +150,7 @@ func (l *logger) Fatalf(format string, args ...any) {
 	os.Exit(1)
 }
 
-func (l *logger) prettyPrint(e logEntry, out io.Writer) {
+func (l *logger) prettyPrint(e *logEntry, out io.Writer) {
 	// Note: we need to lock the pretty print as printing to standard output not concurrency safe
 	// the logs when printed in go routines were getting misaligned since we are achieving
 	// a single line of log, in 2 separate statements which caused the misalignment.
@@ -157,15 +161,18 @@ func (l *logger) prettyPrint(e logEntry, out io.Writer) {
 
 	// Pretty printing if the message interface defines a method PrettyPrint else print the log message
 	// This decouples the logger implementation from its usage
-	if fn, ok := e.Message.(PrettyPrint); ok {
-		fmt.Fprintf(out, "\u001B[38;5;%dm%s\u001B[0m [%s] ", e.Level.color(), e.Level.String()[0:4],
-			e.Time.Format(time.TimeOnly))
+	fmt.Fprintf(out, "\u001B[38;5;%dm%s\u001B[0m [%s]", e.Level.color(), e.Level.String()[0:4], e.Time.Format(time.TimeOnly))
 
+	if e.TraceID != "" {
+		fmt.Fprintf(out, " \u001B[38;5;8m%s\u001B[0m", e.TraceID)
+	}
+
+	fmt.Fprint(out, " ")
+
+	// Print the message
+	if fn, ok := e.Message.(PrettyPrint); ok {
 		fn.PrettyPrint(out)
 	} else {
-		fmt.Fprintf(out, "\u001B[38;5;%dm%s\u001B[0m [%s] ", e.Level.color(), e.Level.String()[0:4],
-			e.Time.Format(time.TimeOnly))
-
 		fmt.Fprintf(out, "%v\n", e.Message)
 	}
 }
@@ -236,4 +243,25 @@ func GetLogLevelForError(err error) Level {
 	}
 
 	return level
+}
+
+// extractTraceIDAndFilterArgs scans log arguments for a trace ID map and
+// returns the extracted trace ID (if found) and a filtered list of log arguments
+// excluding the trace metadata.
+func extractTraceIDAndFilterArgs(args []any) (traceID string, filtered []any) {
+	filtered = make([]any, 0, len(args))
+
+	for _, arg := range args {
+		if m, ok := arg.(map[string]any); ok {
+			if tid, exists := m["__trace_id__"].(string); exists && traceID == "" {
+				traceID = tid
+
+				continue
+			}
+		}
+
+		filtered = append(filtered, arg)
+	}
+
+	return traceID, filtered
 }
