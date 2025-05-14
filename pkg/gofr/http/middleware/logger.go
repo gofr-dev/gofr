@@ -93,11 +93,6 @@ type logger interface {
 func Logging(probes LogProbes, logger logger) func(inner http.Handler) http.Handler {
 	return func(inner http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			if isLogProbeDisabled(probes, r.URL.Path) {
-				inner.ServeHTTP(w, r)
-				return
-			}
-
 			start := time.Now()
 			srw := &StatusResponseWriter{ResponseWriter: w}
 			traceID := trace.SpanFromContext(r.Context()).SpanContext().TraceID().String()
@@ -105,9 +100,15 @@ func Logging(probes LogProbes, logger logger) func(inner http.Handler) http.Hand
 
 			srw.Header().Set("X-Correlation-ID", traceID)
 
-			defer handleRequestLog(srw, r, start, traceID, spanID, logger)
 			defer func() { panicRecovery(recover(), srw, logger) }()
 
+			// Skip logging for default probe paths if log probes are disabled
+			if isLogProbeDisabled(probes, r.URL.Path) {
+				inner.ServeHTTP(w, r)
+				return
+			}
+
+			defer handleRequestLog(srw, r, start, traceID, spanID, logger)
 			inner.ServeHTTP(srw, r)
 		})
 	}
