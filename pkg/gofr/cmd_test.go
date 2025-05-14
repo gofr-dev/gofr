@@ -148,7 +148,7 @@ func Test_Run_ErrorParamNotReadWithoutHyphen(t *testing.T) {
 
 	c.addRoute("log",
 		func(c *Context) (any, error) {
-			assert.Equal(t, "", c.Request.Param("hello"))
+			assert.Empty(t, c.Request.Param("hello"))
 			c.Logger.Info("handler called")
 
 			return nil, nil

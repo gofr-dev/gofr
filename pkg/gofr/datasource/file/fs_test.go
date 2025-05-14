@@ -221,7 +221,7 @@ func Test_ReadFromCSVScanError(t *testing.T) {
 		err := reader.Scan(content)
 
 		require.Error(t, err)
-		assert.Equal(t, "", content)
+		assert.Empty(t, content)
 	}
 }
 
