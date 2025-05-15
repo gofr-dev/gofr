@@ -2,6 +2,7 @@ package arangodb
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"time"
@@ -153,6 +154,8 @@ func (c *Client) validateConfig() error {
 	return nil
 }
 
+type QueryOptions map[string]any
+
 // Query executes an AQL query and binds the results.
 //
 // Parameters:
@@ -164,7 +167,7 @@ func (c *Client) validateConfig() error {
 //
 // Returns an error if the database connection fails, the query execution fails, or the
 // result parameter is not a pointer to a slice of maps.
-func (c *Client) Query(ctx context.Context, dbName, query string, bindVars map[string]any, result any) error {
+func (c *Client) Query(ctx context.Context, dbName, query string, bindVars map[string]any, result any, options ...QueryOptions) error {
 	tracerCtx, span := c.addTrace(ctx, "query", map[string]string{"DB": dbName})
 	startTime := time.Now()
 
@@ -176,7 +179,31 @@ func (c *Client) Query(ctx context.Context, dbName, query string, bindVars map[s
 		return err
 	}
 
-	cursor, err := db.Query(tracerCtx, query, &arangodb.QueryOptions{BindVars: bindVars})
+	var queryOptions arangodb.QueryOptions
+
+	if len(options) > 0 {
+		// Merge all options into a single map
+		mergedOpts := make(QueryOptions)
+		for _, opts := range options {
+			for k, v := range opts {
+				mergedOpts[k] = v
+			}
+		}
+
+		bytes, err := json.Marshal(mergedOpts)
+		if err != nil {
+			return err
+		}
+
+		if err := json.Unmarshal(bytes, &queryOptions); err != nil {
+			return err
+		}
+	}
+
+	queryOptions.BindVars = bindVars
+
+	cursor, err := db.Query(tracerCtx, query, &queryOptions)
+
 	if err != nil {
 		return err
 	}
