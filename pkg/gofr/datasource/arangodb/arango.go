@@ -248,7 +248,7 @@ func (c *Client) Query(ctx context.Context, dbName, query string, bindVars map[s
 
 	var queryOptions arangodb.QueryOptions
 
-	err = bindQueryOptions(queryOptions, options)
+	err = bindQueryOptions(&queryOptions, options)
 	if err != nil {
 		return err
 	}
@@ -286,10 +286,11 @@ func (c *Client) Query(ctx context.Context, dbName, query string, bindVars map[s
 	return nil
 }
 
-func bindQueryOptions(queryOptions arangodb.QueryOptions, options []QueryOptions) error {
+func bindQueryOptions(queryOptions *arangodb.QueryOptions, options []QueryOptions) error {
 	if len(options) > 0 {
 		// Merge all options into a single map
 		mergedOpts := make(QueryOptions)
+
 		for _, opts := range options {
 			for k, v := range opts {
 				mergedOpts[k] = v
