@@ -284,7 +284,7 @@ func TestClient_Query_WithBatchSizeAndFullCount(t *testing.T) {
 
 	test.MockDB.EXPECT().
 		Query(test.Ctx, query, gomock.Any()).
-		DoAndReturn(func(_ context.Context, q string, opts *arangodb.QueryOptions) (arangodb.Cursor, error) {
+		DoAndReturn(func(_ context.Context, _ string, opts *arangodb.QueryOptions) (arangodb.Cursor, error) {
 			require.NotNil(t, opts)
 			require.Equal(t, 50, opts.BatchSize)
 			require.True(t, opts.Options.FullCount)
@@ -323,7 +323,7 @@ func TestClient_Query_WithMaxPlans(t *testing.T) {
 
 	test.MockDB.EXPECT().
 		Query(test.Ctx, query, gomock.Any()).
-		DoAndReturn(func(_ context.Context, q string, opts *arangodb.QueryOptions) (arangodb.Cursor, error) {
+		DoAndReturn(func(_ context.Context, _ string, opts *arangodb.QueryOptions) (arangodb.Cursor, error) {
 			require.NotNil(t, opts)
 			require.Equal(t, 5, opts.Options.MaxPlans)
 
