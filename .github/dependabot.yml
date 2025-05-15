@@ -18,3 +18,111 @@ updates:
         update-types:
           - "minor"
           - "patch"
+
+  - package-ecosystem: "gomod"
+    open-pull-requests-limit: 10
+    directory: "/examples/using-add-filestore"
+    schedule:
+      interval: "weekly"
+
+  - package-ecosystem: "gomod"
+    open-pull-requests-limit: 10
+    directory: "/pkg/gofr/datasource/elasticsearch"
+    schedule:
+      interval: "weekly"
+
+  - package-ecosystem: "gomod"
+    open-pull-requests-limit: 10
+    directory: "/pkg/gofr/datasource/file/s3"
+    schedule:
+      interval: "weekly"
+
+  - package-ecosystem: "gomod"
+    open-pull-requests-limit: 10
+    directory: "/pkg/gofr/datasource/file/sftp"
+    schedule:
+      interval: "weekly"
+
+  - package-ecosystem: "gomod"
+    open-pull-requests-limit: 10
+    directory: "/pkg/gofr/datasource/file/ftp"
+    schedule:
+      interval: "weekly"
+
+  - package-ecosystem: "gomod"
+    open-pull-requests-limit: 10
+    directory: "/pkg/gofr/datasource/mongo"
+    schedule:
+      interval: "weekly"
+
+  - package-ecosystem: "gomod"
+    open-pull-requests-limit: 10
+    directory: "/pkg/gofr/datasource/opentsdb"
+    schedule:
+      interval: "weekly"
+
+  - package-ecosystem: "gomod"
+    open-pull-requests-limit: 10
+    directory: "/pkg/gofr/datasource/cassandra"
+    schedule:
+      interval: "weekly"
+
+  - package-ecosystem: "gomod"
+    open-pull-requests-limit: 10
+    directory: "/pkg/gofr/datasource/dgraph"
+    schedule:
+      interval: "weekly"
+
+  - package-ecosystem: "gomod"
+    open-pull-requests-limit: 10
+    directory: "/pkg/gofr/datasource/kv-store/badger"
+    schedule:
+      interval: "weekly"
+
+  - package-ecosystem: "gomod"
+    open-pull-requests-limit: 10
+    directory: "/pkg/gofr/datasource/kv-store/nats"
+    schedule:
+      interval: "weekly"
+
+  - package-ecosystem: "gomod"
+    open-pull-requests-limit: 10
+    directory: "/pkg/gofr/datasource/solr"
+    schedule:
+      interval: "weekly"
+
+  - package-ecosystem: "gomod"
+    open-pull-requests-limit: 10
+    directory: "/pkg/gofr/datasource/clickhouse"
+    schedule:
+      interval: "weekly"
+
+  - package-ecosystem: "gomod"
+    open-pull-requests-limit: 10
+    directory: "/pkg/gofr/datasource/surrealdb"
+    schedule:
+      interval: "weekly"
+
+  - package-ecosystem: "gomod"
+    open-pull-requests-limit: 10
+    directory: "/pkg/gofr/datasource/scylladb"
+    schedule:
+      interval: "weekly"
+
+  - package-ecosystem: "gomod"
+    open-pull-requests-limit: 10
+    directory: "/pkg/gofr/datasource/arangodb"
+    schedule:
+      interval: "weekly"
+
+  - package-ecosystem: "gomod"
+    open-pull-requests-limit: 10
+    directory: "/pkg/gofr/datasource/pubsub/eventhub"
+    schedule:
+      interval: "weekly"
+
+  - package-ecosystem: "gomod"
+    open-pull-requests-limit: 10
+    directory: "/pkg/gofr/datasource/pubsub/nats"
+    schedule:
+      interval: "weekly"
