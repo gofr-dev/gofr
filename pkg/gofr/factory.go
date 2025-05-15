@@ -10,6 +10,7 @@ import (
 	"gofr.dev/pkg/gofr/container"
 	"gofr.dev/pkg/gofr/http/middleware"
 	"gofr.dev/pkg/gofr/logging"
+	"gofr.dev/pkg/gofr/service"
 )
 
 // New creates an HTTP Server Application and returns that App.
@@ -44,8 +45,8 @@ func New() *App {
 	app.httpServer.staticFiles = make(map[string]string)
 
 	// Add Default routes
-	app.add(http.MethodGet, "/.well-known/health", healthHandler)
-	app.add(http.MethodGet, "/.well-known/alive", liveHandler)
+	app.add(http.MethodGet, service.HealthPath, healthHandler)
+	app.add(http.MethodGet, service.AlivePath, liveHandler)
 	app.add(http.MethodGet, "/favicon.ico", faviconHandler)
 
 	app.checkAndAddOpenAPIDocumentation()
