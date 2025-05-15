@@ -24,6 +24,16 @@ func TestGetConfigs(t *testing.T) {
 		"Access-Control-Allow-Credentials": "true",
 	}
 
-	assert.Equal(t, expectedConfigs, middlewareConfigs, "TestGetConfigs Failed!")
-	assert.NotContains(t, middlewareConfigs, "Access-Control-Allow-CustomHeader", "TestGetConfigs Failed!")
+	assert.Equal(t, expectedConfigs, middlewareConfigs.CorsHeaders, "TestGetConfigs Failed!")
+	assert.NotContains(t, middlewareConfigs.CorsHeaders, "Access-Control-Allow-CustomHeader", "TestGetConfigs Failed!")
+}
+
+func TestLogDisableProbesConfig(t *testing.T) {
+	mockConfig := config.NewMockConfig(map[string]string{
+		"LOG_DISABLE_PROBES": "true",
+	})
+
+	middlewareConfigs := GetConfigs(mockConfig)
+
+	assert.True(t, middlewareConfigs.LogProbes.Disabled, "TestLogDisableProbesConfig Failed!")
 }
