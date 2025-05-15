@@ -1140,5 +1140,5 @@ func TestClean(t *testing.T) {
 
 	out := clean(query)
 
-	assert.Equal(t, "", out)
+	assert.Empty(t, out)
 }

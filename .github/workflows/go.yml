@@ -1,5 +1,7 @@
 ---
 name: Workflow-Pipeline
+permissions:
+  contents: read
 
 # Define when this workflow should run
 on:
@@ -329,7 +331,7 @@ jobs:
       # Install the linting tool
       - name: Install golangci-lint
         run: |
-          go install github.com/golangci/golangci-lint/cmd/golangci-lint@v1.64
+          go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.1
 
       - name: Get dependencies
         run: |
@@ -338,7 +340,7 @@ jobs:
       # Run linter on the root module
       - name: Lint Root Module
         run: |
-          golangci-lint run --out-format=colored-line-number --timeout=5m
+          golangci-lint run --output.text.print-issued-lines --output.text.colors=true --show-stats=false --timeout=5m
 
       # Run linter on each submodule
       - name: Lint Submodules
@@ -350,7 +352,7 @@ jobs:
             # Change directory to the submodule and run golangci-lint
             cd $module
             go mod tidy
-            golangci-lint run --timeout 9m0s || total_errors=$((total_errors + 1))
+            golangci-lint run --output.text.print-issued-lines --output.text.colors=true --show-stats=false --timeout 9m0s || total_errors=$((total_errors + 1))
             cd -  # Return to the root directory
           done
           echo "Total submodule lint errors: $total_errors"

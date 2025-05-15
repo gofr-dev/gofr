@@ -54,6 +54,7 @@ func (el *ErrorLogEntry) PrettyPrint(writer io.Writer) {
 
 func (h handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	c := newContext(gofrHTTP.NewResponder(w, r.Method), gofrHTTP.NewRequest(r), h.container)
+
 	traceID := trace.SpanFromContext(r.Context()).SpanContext().TraceID().String()
 
 	if websocket.IsWebSocketUpgrade(r) {
@@ -66,6 +67,9 @@ func (h handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		c.Context = ctx
 	}
 
+	reqLogger := logging.NewContextLogger(c, h.container.Logger)
+	c.ContextLogger = *reqLogger
+
 	done := make(chan struct{})
 	panicked := make(chan struct{})
 
@@ -76,7 +80,7 @@ func (h handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	go func() {
 		defer func() {
-			panicRecoveryHandler(recover(), h.container, panicked)
+			panicRecoveryHandler(recover(), h.container.Logger, panicked)
 		}()
 		// Execute the handler function
 		result, err = h.function(c)
