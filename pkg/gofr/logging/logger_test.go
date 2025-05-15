@@ -48,7 +48,7 @@ func TestLogger_LevelError(t *testing.T) {
 	infoLog := testutil.StdoutOutputForFunc(printLog)
 	errLog := testutil.StderrOutputForFunc(printLog)
 
-	assert.Equal(t, "", infoLog) // Since log level is ERROR we will not get any INFO logs.
+	assert.Empty(t, infoLog) // Since log level is ERROR we will not get any INFO logs.
 	assertMessageInJSONLog(t, errLog, "Test Error Log")
 }
 
@@ -205,7 +205,7 @@ func Test_NewSilentLoggerSTDOutput(t *testing.T) {
 		l.Warnf("%v Logs", "warnf")
 	})
 
-	assert.Equal(t, "", logs)
+	assert.Empty(t, logs)
 }
 
 type mockLog struct {
@@ -222,7 +222,7 @@ func TestPrettyPrint(t *testing.T) {
 	l := &logger{isTerminal: true, lock: make(chan struct{}, 1)}
 
 	// case PrettyPrint is implemented
-	l.prettyPrint(logEntry{
+	l.prettyPrint(&logEntry{
 		Level:   INFO,
 		Message: m,
 	}, out)
@@ -237,7 +237,7 @@ func TestPrettyPrint(t *testing.T) {
 	// case pretty print is not implemented
 	out.Reset()
 
-	l.prettyPrint(logEntry{
+	l.prettyPrint(&logEntry{
 		Level:   DEBUG,
 		Message: "test log for normal log",
 	}, out)

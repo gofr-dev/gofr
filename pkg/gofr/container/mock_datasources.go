@@ -12481,17 +12481,22 @@ func (mr *MockArangoDBMockRecorder) HealthCheck(arg0 any) *gomock.Call {
 }
 
 // Query mocks base method.
-func (m *MockArangoDB) Query(ctx context.Context, dbName, query string, bindVars map[string]any, result any) error {
+func (m *MockArangoDB) Query(ctx context.Context, dbName, query string, bindVars map[string]any, result any, options ...map[string]any) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "Query", ctx, dbName, query, bindVars, result)
+	varargs := []any{ctx, dbName, query, bindVars, result}
+	for _, a := range options {
+		varargs = append(varargs, a)
+	}
+	ret := m.ctrl.Call(m, "Query", varargs...)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // Query indicates an expected call of Query.
-func (mr *MockArangoDBMockRecorder) Query(ctx, dbName, query, bindVars, result any) *gomock.Call {
+func (mr *MockArangoDBMockRecorder) Query(ctx, dbName, query, bindVars, result any, options ...any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Query", reflect.TypeOf((*MockArangoDB)(nil).Query), ctx, dbName, query, bindVars, result)
+	varargs := append([]any{ctx, dbName, query, bindVars, result}, options...)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Query", reflect.TypeOf((*MockArangoDB)(nil).Query), varargs...)
 }
 
 // UpdateDocument mocks base method.
@@ -12701,17 +12706,22 @@ func (mr *MockArangoDBProviderMockRecorder) HealthCheck(arg0 any) *gomock.Call {
 }
 
 // Query mocks base method.
-func (m *MockArangoDBProvider) Query(ctx context.Context, dbName, query string, bindVars map[string]any, result any) error {
+func (m *MockArangoDBProvider) Query(ctx context.Context, dbName, query string, bindVars map[string]any, result any, options ...map[string]any) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "Query", ctx, dbName, query, bindVars, result)
+	varargs := []any{ctx, dbName, query, bindVars, result}
+	for _, a := range options {
+		varargs = append(varargs, a)
+	}
+	ret := m.ctrl.Call(m, "Query", varargs...)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // Query indicates an expected call of Query.
-func (mr *MockArangoDBProviderMockRecorder) Query(ctx, dbName, query, bindVars, result any) *gomock.Call {
+func (mr *MockArangoDBProviderMockRecorder) Query(ctx, dbName, query, bindVars, result any, options ...any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Query", reflect.TypeOf((*MockArangoDBProvider)(nil).Query), ctx, dbName, query, bindVars, result)
+	varargs := append([]any{ctx, dbName, query, bindVars, result}, options...)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Query", reflect.TypeOf((*MockArangoDBProvider)(nil).Query), varargs...)
 }
 
 // UpdateDocument mocks base method.

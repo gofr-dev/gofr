@@ -5,8 +5,10 @@ on:
 jobs:
   typos:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     steps:
       - name: Checkout Code
         uses: actions/checkout@v4
       - name: typos-action
-        uses: crate-ci/typos@v1.31.2
+        uses: crate-ci/typos@v1.32.0

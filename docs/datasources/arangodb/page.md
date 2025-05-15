@@ -33,7 +33,7 @@ type ArangoDB interface {
 	GetEdges(ctx context.Context, dbName, graphName, edgeCollection, vertexID string, resp any) error
 
 	// Query executes an AQL query and binds the results
-	Query(ctx context.Context, dbName string, query string, bindVars map[string]any, result any) error
+	Query(ctx context.Context, dbName string, query string, bindVars map[string]any, result any, options ...map[string]any) error
 
    HealthCheck(context.Context) (any, error)
 }

@@ -90,7 +90,7 @@ type logger interface {
 }
 
 // Logging is a middleware which logs response status and time in milliseconds along with other data.
-func Logging(logger logger) func(inner http.Handler) http.Handler {
+func Logging(probes LogProbes, logger logger) func(inner http.Handler) http.Handler {
 	return func(inner http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			start := time.Now()
@@ -100,35 +100,58 @@ func Logging(logger logger) func(inner http.Handler) http.Handler {
 
 			srw.Header().Set("X-Correlation-ID", traceID)
 
-			defer func(res *StatusResponseWriter, req *http.Request) {
-				l := &RequestLog{
-					TraceID:      traceID,
-					SpanID:       spanID,
-					StartTime:    start.Format("2006-01-02T15:04:05.999999999-07:00"),
-					ResponseTime: time.Since(start).Nanoseconds() / 1000,
-					Method:       req.Method,
-					UserAgent:    req.UserAgent(),
-					IP:           getIPAddress(req),
-					URI:          req.RequestURI,
-					Response:     res.status,
-				}
+			defer func() { panicRecovery(recover(), srw, logger) }()
 
-				if logger != nil {
-					if res.status >= http.StatusInternalServerError {
-						logger.Error(l)
-					} else {
-						logger.Log(l)
-					}
-				}
-			}(srw, r)
+			// Skip logging for default probe paths if log probes are disabled
+			if isLogProbeDisabled(probes, r.URL.Path) {
+				inner.ServeHTTP(w, r)
+				return
+			}
 
-			defer func() {
-				panicRecovery(recover(), srw, logger)
-			}()
-
+			defer handleRequestLog(srw, r, start, traceID, spanID, logger)
 			inner.ServeHTTP(srw, r)
 		})
 	}
+}
+
+func handleRequestLog(srw *StatusResponseWriter, r *http.Request, start time.Time, traceID, spanID string, logger logger) {
+	l := &RequestLog{
+		TraceID:      traceID,
+		SpanID:       spanID,
+		StartTime:    start.Format("2006-01-02T15:04:05.999999999-07:00"),
+		ResponseTime: time.Since(start).Nanoseconds() / 1000,
+		Method:       r.Method,
+		UserAgent:    r.UserAgent(),
+		IP:           getIPAddress(r),
+		URI:          r.RequestURI,
+		Response:     srw.status,
+	}
+
+	if logger != nil {
+		if srw.status >= http.StatusInternalServerError {
+			logger.Error(l)
+		} else {
+			logger.Log(l)
+		}
+	}
+}
+
+// isLogProbeDisabled checks if probes are disabled to skip logging for default probe paths
+// and additional health check paths of services.
+func isLogProbeDisabled(probes LogProbes, urlPath string) bool {
+	// if probes is not disabled, dont need to check for default probe paths
+	if !probes.Disabled {
+		return false
+	}
+
+	// check if urlPath is in the list of default probe paths and matches any of the values in the map
+	for _, path := range probes.Paths {
+		if urlPath == path && probes.Disabled {
+			return true
+		}
+	}
+
+	return false
 }
 
 func getIPAddress(r *http.Request) string {
