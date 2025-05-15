@@ -154,8 +154,6 @@ func (c *Client) validateConfig() error {
 	return nil
 }
 
-type QueryOptions map[string]any
-
 // Query executes an AQL (ArangoDB Query Language) query on the specified database and stores the result.
 //
 // Parameters:
@@ -234,7 +232,7 @@ type QueryOptions map[string]any
 //	for _, doc := range results {
 //	    fmt.Printf("User: %+v\n", doc)
 //	}
-func (c *Client) Query(ctx context.Context, dbName, query string, bindVars map[string]any, result any, options ...QueryOptions) error {
+func (c *Client) Query(ctx context.Context, dbName, query string, bindVars map[string]any, result any, options ...map[string]any) error {
 	tracerCtx, span := c.addTrace(ctx, "query", map[string]string{"DB": dbName})
 	startTime := time.Now()
 
@@ -286,10 +284,10 @@ func (c *Client) Query(ctx context.Context, dbName, query string, bindVars map[s
 	return nil
 }
 
-func bindQueryOptions(queryOptions *arangodb.QueryOptions, options []QueryOptions) error {
+func bindQueryOptions(queryOptions *arangodb.QueryOptions, options []map[string]any) error {
 	if len(options) > 0 {
 		// Merge all options into a single map
-		mergedOpts := make(QueryOptions)
+		mergedOpts := make(map[string]any)
 
 		for _, opts := range options {
 			for k, v := range opts {

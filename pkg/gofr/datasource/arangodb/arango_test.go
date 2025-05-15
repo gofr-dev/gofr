@@ -273,7 +273,7 @@ func TestClient_Query_WithBatchSizeAndFullCount(t *testing.T) {
 	}
 
 	// Define QueryOptions with batchSize and fullCount
-	queryOpts := QueryOptions{
+	queryOpts := map[string]any{
 		"batchSize": 50,
 		"options": map[string]any{
 			"fullCount": true,
@@ -313,7 +313,7 @@ func TestClient_Query_WithMaxPlans(t *testing.T) {
 	}
 
 	// Define QueryOptions with maxPlans sub-option
-	queryOpts := QueryOptions{
+	queryOpts := map[string]any{
 		"options": map[string]any{
 			"maxPlans": 5,
 		},
