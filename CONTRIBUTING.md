@@ -8,9 +8,9 @@
 <!-- spellchecker:off "favour" have to be ignored here -->
 * We follow **American English** conventions in this project (e.g., *"favor"* instead of *"favour"*). Please keep this consistent across all code comments, documentation, etc.
 <!-- spellchecker:on -->
-* All code contributions should have associated tests and all new line additions should be covered in those testcases.
+* All code contributions should have associated tests and all new line additions should be covered in those test cases.
   No PR should ever decrease the overall code coverage.
-* Once your code changes are done along with the testcases, submit a PR to development branch. Please note that all PRs
+* Once your code changes are done along with the test cases, submit a PR to development branch. Please note that all PRs
   are merged from feature branches to development first.
 * PR should be raised only when development is complete and the code is ready for review. This approach helps reduce the number of open pull requests and facilitates a more efficient review process for the team.
 * All PRs need to be reviewed by at least 2 GoFr developers. They might reach out to you for any clarification.
@@ -135,3 +135,5 @@ docker run -d --name arangodb \
     - Use "`" sign to add single line code and "```" to add multi-line code block.
     - Use relative references to images (in `public` folder as mentioned above.)
 * The [gofr.dev documentation](https://gofr.dev/docs) site is updated upon push to `/docs` path in the repo. Verify your changes are live after next GoFr version.
+
+
