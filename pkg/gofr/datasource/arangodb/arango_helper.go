@@ -16,14 +16,6 @@ func (c *Client) database(ctx context.Context, name string) (arangodb.Database, 
 	return c.client.Database(ctx, name)
 }
 
-func (c *Client) databases(ctx context.Context) ([]arangodb.Database, error) {
-	return c.client.Databases(ctx)
-}
-
-func (c *Client) version(ctx context.Context) (arangodb.VersionInfo, error) {
-	return c.client.Version(ctx)
-}
-
 // createUser creates a new user in ArangoDB.
 func (c *Client) createUser(ctx context.Context, username string, options any) error {
 	tracerCtx, span := c.addTrace(ctx, "createUser", map[string]string{"user": username})
