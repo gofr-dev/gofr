@@ -665,10 +665,12 @@ type ArangoDB interface {
 	//   - query: AQL query string to be executed.
 	//   - bindVars: Map of bind variables to be used in the query.
 	//   - result: Pointer to a slice of maps where the query results will be stored.
+	//	 - options : A flexible map[string]any to customize query behavior. Keys should be in camelCase
+	//     and correspond to fields in ArangoDB’s QueryOptions and QuerySubOptions structs.
 	//
 	// Returns an error if the database connection fails, the query execution fails, or
 	// the result parameter is not a pointer to a slice of maps.
-	Query(ctx context.Context, dbName string, query string, bindVars map[string]any, result any) error
+	Query(ctx context.Context, dbName string, query string, bindVars map[string]any, result any, options ...map[string]any) error
 
 	HealthChecker
 }
