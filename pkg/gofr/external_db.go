@@ -194,3 +194,4 @@ func (a *App) AddElasticsearch(db container.ElasticsearchProvider) {
 
 	a.container.Elasticsearch = db
 }
+
