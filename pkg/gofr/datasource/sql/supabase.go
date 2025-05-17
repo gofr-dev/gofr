@@ -1,0 +1,132 @@
+package sql
+
+import (
+	"fmt"
+	"strings"
+
+	"gofr.dev/pkg/gofr/config"
+	"gofr.dev/pkg/gofr/datasource"
+)
+
+const (
+	supabaseDialect       = "supabase"
+	supabaseDirectHost    = "db.%s.supabase.co"
+	supabasePoolerHost    = "aws-0-%s.pooler.supabase.co"
+	directPort            = "5432"
+	sessionPoolerPort     = "5432"
+	transactionPoolerPort = "6543"
+)
+
+// extends DBConfig to include Supabase-specific configuration
+type SupabaseConfig struct {
+	*DBConfig
+	ConnectionType string // direct, session, transaction
+	ProjectRef     string // Supabase project reference
+	Region         string // Supabase region
+}
+
+// GetSupabaseConfig builds a Supabase configuration from general config
+func GetSupabaseConfig(configs config.Config) *SupabaseConfig {
+	dbConfig := getDBConfig(configs)
+
+	if dbConfig.Dialect != supabaseDialect {
+		return nil
+	}
+	dbConfig.SSLMode = configs.GetOrDefault("DB_SSL_MODE", "require")
+
+	connectionType := strings.ToLower(configs.GetOrDefault("SUPABASE_CONNECTION_TYPE", "direct"))
+	projectRef := configs.Get("SUPABASE_PROJECT_REF")
+	region := configs.GetOrDefault("SUPABASE_REGION", "")
+
+	// If a direct connection string is provided, we'll use that instead
+	connStr := configs.Get("DATABASE_URL")
+	if connStr != "" {
+		if projectRef == "" {
+			projectRef = extractProjectRefFromConnStr(connStr)
+		}
+	}
+
+	return &SupabaseConfig{
+		DBConfig:       dbConfig,
+		ConnectionType: connectionType,
+		ProjectRef:     projectRef,
+		Region:         region,
+	}
+}
+
+func NewSupabaseSQL(configs config.Config, logger datasource.Logger, metrics Metrics) *DB {
+	supaConfig := GetSupabaseConfig(configs)
+	if supaConfig == nil {
+		return nil
+	}
+	configureSupabaseConnection(supaConfig, logger)
+
+	return NewSQL(configs, logger, metrics)
+}
+
+func configureSupabaseConnection(config *SupabaseConfig, logger datasource.Logger) {
+	connStr := config.User
+	if strings.HasPrefix(connStr, "postgresql://") || strings.HasPrefix(connStr, "postgres://") {
+		// User field might contain the full connection string
+		// In this case, we'll keep it as is and return (NewSQL will handle it)
+		return
+	}
+
+	if config.SSLMode != "require" {
+		logger.Warnf("Supabase connections require SSL. Setting DB_SSL_MODE to 'require'")
+		config.SSLMode = "require"
+	}
+
+	switch config.ConnectionType {
+	case "direct":
+		// Format: db.[PROJECT_REF].supabase.co
+		config.HostName = fmt.Sprintf(supabaseDirectHost, config.ProjectRef)
+		config.Port = directPort
+		logger.Debugf("Configured direct connection to Supabase at %s:%s", config.HostName, config.Port)
+
+	case "session":
+		// Format: postgres.[PROJECT_REF]@aws-0-[REGION].pooler.supabase.co
+		config.HostName = fmt.Sprintf(supabasePoolerHost, config.Region)
+		config.User = fmt.Sprintf("postgres.%s", config.ProjectRef)
+		config.Port = sessionPoolerPort
+		logger.Debugf("Configured session pooler connection to Supabase at %s:%s", config.HostName, config.Port)
+
+	case "transaction":
+		// Format: postgres.[PROJECT_REF]@aws-0-[REGION].pooler.supabase.co
+		config.HostName = fmt.Sprintf(supabasePoolerHost, config.Region)
+		config.User = fmt.Sprintf("postgres.%s", config.ProjectRef)
+		config.Port = transactionPoolerPort
+		logger.Debugf("Configured transaction pooler connection to Supabase at %s:%s", config.HostName, config.Port)
+
+	default:
+		logger.Warnf("Unknown Supabase connection type '%s', defaulting to direct connection", config.ConnectionType)
+		config.HostName = fmt.Sprintf(supabaseDirectHost, config.ProjectRef)
+		config.Port = directPort
+	}
+
+	if config.Database == "" {
+		config.Database = "postgres"
+	}
+}
+
+func extractProjectRefFromConnStr(connStr string) string {
+	// Expecting format like: postgresql://postgres:[PASSWORD]@db.[PROJECT_REF].supabase.co:5432/postgres
+	parts := strings.Split(connStr, "@")
+	if len(parts) < 2 {
+		return ""
+	}
+
+	hostPart := strings.Split(parts[1], ":")[0]
+	hostSegments := strings.Split(hostPart, ".")
+
+	// Looking for the segment between "db." and ".supabase.co"
+	if len(hostSegments) >= 3 && hostSegments[0] == "db" && strings.Contains(hostPart, "supabase.co") {
+		return hostSegments[1]
+	}
+
+	return ""
+}
+
+func IsSupabaseDialect(dialect string) bool {
+	return dialect == supabaseDialect
+}

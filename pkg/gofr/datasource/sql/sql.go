@@ -20,7 +20,7 @@ const (
 	defaultDBPort = 3306
 )
 
-var errUnsupportedDialect = fmt.Errorf("unsupported db dialect; supported dialects are - mysql, postgres, sqlite")
+var errUnsupportedDialect = fmt.Errorf("unsupported db dialect; supported dialects are - mysql, postgres, supabase, sqlite")
 
 // DBConfig has those members which are necessary variables while connecting to database.
 type DBConfig struct {
@@ -49,12 +49,28 @@ func NewSQL(configs config.Config, logger datasource.Logger, metrics Metrics) *D
 		return nil
 	}
 
+	// For Supabase, enforce SSL mode as "require"
+	if dbConfig.Dialect == "supabase" && dbConfig.SSLMode != "require" {
+		logger.Warnf("Supabase connections require SSL. Setting DB_SSL_MODE to 'require'")
+		dbConfig.SSLMode = "require"
+		
+		if dbConfig.Port == strconv.Itoa(defaultDBPort) {
+			dbConfig.Port = "5432"
+		}
+	}
+
 	logger.Debugf("generating database connection string for '%s'", dbConfig.Dialect)
 
 	dbConnectionString, err := getDBConnectionString(dbConfig)
 	if err != nil {
 		logger.Error(errUnsupportedDialect)
 		return nil
+	}
+
+	// Map supabase dialect to postgres for driver compatibility
+	driverDialect := dbConfig.Dialect
+	if dbConfig.Dialect == "supabase" {
+		driverDialect = "postgres"
 	}
 
 	logger.Debugf("registering sql dialect '%s' for traces", dbConfig.Dialect)
@@ -181,7 +197,7 @@ func getDBConnectionString(dbConfig *DBConfig) (string, error) {
 			dbConfig.Database,
 			dbConfig.Charset,
 		), nil
-	case "postgres":
+	case "postgres", "supabase":
 		return fmt.Sprintf("host=%s port=%s user=%s password=%s dbname=%s sslmode=%s",
 			dbConfig.HostName, dbConfig.Port, dbConfig.User, dbConfig.Password, dbConfig.Database, dbConfig.SSLMode), nil
 	case sqlite:
