@@ -6,6 +6,8 @@ import (
 	"errors"
 	"fmt"
 	"net"
+	"net/http"
+	"time"
 
 	gWebsocket "github.com/gorilla/websocket"
 
@@ -40,6 +42,31 @@ func (a *App) WebSocket(route string, handler Handler) {
 
 		return nil, nil
 	})
+}
+
+// AddWSService registers a WebSocket service, establishes a persistent connection, and optionally handles reconnection.
+func (a *App) AddWSService(serviceName string, url string, headers http.Header, enableReconnection bool, retryInterval time.Duration) error {
+	conn, _, err := gWebsocket.DefaultDialer.Dial(url, headers)
+	if err != nil {
+		if enableReconnection {
+			go func() {
+				for {
+					conn, _, err = gWebsocket.DefaultDialer.Dial(url, headers)
+					if err == nil {
+						a.container.AddConnection(serviceName, &websocket.Connection{Conn: conn})
+						return
+					}
+					
+					time.Sleep(retryInterval)
+				}
+			}()
+			return nil
+		}
+		return err
+	}
+
+	a.container.AddConnection(serviceName, &websocket.Connection{Conn: conn})
+	return nil
 }
 
 func handleWebSocketConnection(ctx *Context, conn *websocket.Connection, handler Handler) {
