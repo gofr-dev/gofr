@@ -21,6 +21,7 @@ import (
 	"gofr.dev/pkg/gofr/metrics"
 	"gofr.dev/pkg/gofr/migration"
 	"gofr.dev/pkg/gofr/service"
+	gofrWebRTC "gofr.dev/pkg/gofr/webrtc"
 )
 
 const (
@@ -295,4 +296,17 @@ func (a *App) AddStaticFiles(endpoint, filePath string) {
 	}
 
 	a.httpServer.staticFiles[filePath] = endpoint
+}
+
+// WebRTC registers a handler function for a WebRTC route. This method allows you to define a route handler for
+// WebRTC connections. It internally handles the WebRTC offer/answer exchange and provides a `webrtc.PeerConnection` object
+// within the handler context. User can access the underlying PeerConnection using the handler.
+func (a *App) WebRTC(route string, handler func(ctx *Context, pc any) error, config any) {
+	cfg, ok := config.(*gofrWebRTC.Config)
+	if !ok {
+		cfg = &gofrWebRTC.Config{}
+	}
+	gofrWebRTC.Register(a, route, func(ctx *Context, pc *webrtc.PeerConnection) error {
+		return handler(ctx, pc)
+	}, cfg)
 }
