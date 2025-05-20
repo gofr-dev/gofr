@@ -2,7 +2,7 @@ package gofr
 
 import (
 	"context"
-	"errors"
+	"fmt"
 
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/gorilla/websocket"
@@ -96,7 +96,7 @@ func (c *Context) WriteMessageToService(serviceName string, data any) error {
 	// Retrieve connection using serviceName
 	conn := c.Container.GetWSConnectionByServiceName(serviceName)
 	if conn == nil {
-		return errors.New("connection not found for service: " + serviceName)
+		return fmt.Errorf("%w: %s", ErrConnectionNotFound, serviceName)
 	}
 
 	message, err := serializeMessage(data)

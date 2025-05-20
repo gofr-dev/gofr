@@ -14,7 +14,10 @@ import (
 	"gofr.dev/pkg/gofr/websocket"
 )
 
-var ErrMarshalingResponse = errors.New("error marshaling response")
+var (
+	ErrMarshalingResponse = errors.New("error marshaling response")
+	ErrConnectionNotFound = errors.New("connection not found for service")
+)
 
 func (a *App) OverrideWebsocketUpgrader(wsUpgrader websocket.Upgrader) {
 	a.httpServer.ws.WebSocketUpgrader.Upgrader = wsUpgrader
@@ -45,23 +48,34 @@ func (a *App) WebSocket(route string, handler Handler) {
 }
 
 // AddWSService registers a WebSocket service, establishes a persistent connection, and optionally handles reconnection.
-func (a *App) AddWSService(serviceName string, url string, headers http.Header, enableReconnection bool, retryInterval time.Duration) error {
-	conn, _, err := gWebsocket.DefaultDialer.Dial(url, headers)
+func (a *App) AddWSService(serviceName, url string, headers http.Header, enableReconnection bool, retryInterval time.Duration) error {
+	conn, resp, err := gWebsocket.DefaultDialer.Dial(url, headers)
+	if resp != nil {
+		resp.Body.Close()
+	}
+
 	if err != nil {
 		if enableReconnection {
 			go func() {
 				for {
 					conn, _, err = gWebsocket.DefaultDialer.Dial(url, headers)
+					if resp != nil {
+						resp.Body.Close()
+					}
+
 					if err == nil {
 						a.container.AddConnection(serviceName, &websocket.Connection{Conn: conn})
+
 						return
 					}
-					
+
 					time.Sleep(retryInterval)
 				}
 			}()
+
 			return nil
 		}
+
 		return err
 	}
 

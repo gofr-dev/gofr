@@ -123,6 +123,7 @@ func TestContext_WriteMessageToService(t *testing.T) {
 		conn := ctx.GetWSConnectionByServiceName("test-service")
 
 		messageToSend := "Hello, WebSocket!"
+
 		err := ctx.WriteMessageToService("test-service", messageToSend)
 		if err != nil {
 			return nil, err
@@ -142,16 +143,17 @@ func TestContext_WriteMessageToService(t *testing.T) {
 
 	wsURL := fmt.Sprintf("ws://localhost:%d/ws", port)
 
-	// Use app.AddWSService to register the WebSocket connection
 	serviceName := "test-service"
 	retryInterval := 50 * time.Millisecond
 	err := app.AddWSService(serviceName, wsURL, http.Header{}, true, retryInterval)
 	require.NoError(t, err, "AddWSService should not return an error")
 
 	// Establish a WebSocket connection
-	ws, _, err := websocket.DefaultDialer.Dial(wsURL, nil)
-	require.NoError(t, err, "WebSocket handshake failed")
+	ws, resp, err := websocket.DefaultDialer.Dial(wsURL, nil)
 	defer ws.Close()
+	defer resp.Body.Close()
+
+	require.NoError(t, err, "WebSocket handshake failed")
 }
 
 func TestGetAuthInfo_BasicAuth(t *testing.T) {
