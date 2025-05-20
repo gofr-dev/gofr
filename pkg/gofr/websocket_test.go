@@ -3,6 +3,7 @@ package gofr
 import (
 	"encoding/json"
 	"fmt"
+	"net/http"
 	"net/http/httptest"
 	"reflect"
 	"testing"
@@ -63,6 +64,33 @@ func Test_WebSocket_Success(t *testing.T) {
 	// Close the client connection
 	err = ws.Close()
 	require.NoError(t, err)
+}
+
+func Test_AddWSService(t *testing.T) {
+	port := testutil.GetFreePort(t)
+	t.Setenv("HTTP_PORT", fmt.Sprint(port))
+
+	app := New()
+
+	app.WebSocket("/ws", func(ctx *Context) (any, error) {
+		conn := ctx.GetConnectionFromContext(ctx)
+		defer conn.Close()
+
+		return "Service Response", nil
+	})
+
+	go app.Run()
+	time.Sleep(100 * time.Millisecond)
+
+	wsURL := fmt.Sprintf("ws://localhost:%d/ws", port)
+
+	serviceName := "test-service"
+	err := app.AddWSService(serviceName, wsURL, http.Header{}, true, 100*time.Millisecond)
+	require.NoError(t, err, "Failed to add WebSocket service")
+
+	// Verify the connection is registered
+	conn := app.container.WSManager.GetConnectionByServiceName(serviceName)
+	require.NotNil(t, conn, "Connection should be registered")
 }
 
 func TestSerializeMessage(t *testing.T) {
