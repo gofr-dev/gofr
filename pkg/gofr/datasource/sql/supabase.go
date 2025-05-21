@@ -41,7 +41,7 @@ func GetSupabaseConfig(configs config.Config) *SupabaseConfig {
 	region := configs.GetOrDefault("SUPABASE_REGION", "")
 
 	// If a direct connection string is provided, we'll use that instead
-	connStr := configs.Get("DATABASE_URL")
+	connStr := configs.Get("DB_URL")
 	if connStr != "" {
 		if projectRef == "" {
 			projectRef = extractProjectRefFromConnStr(connStr)

@@ -57,12 +57,12 @@ func TestGetSupabaseConfig(t *testing.T) {
 			expected: nil,
 		},
 		{
-			name: "With DATABASE_URL",
+			name: "With DB_URL",
 			configs: map[string]string{
 				"DB_DIALECT":  "supabase",
 				"DB_PASSWORD": "password",
 				"DB_SSL_MODE": "disable", // should be overridden to require
-				"DATABASE_URL": "postgresql://postgres:password@db.xyz123.supabase.co:5432/postgres",
+				"DB_URL": "postgresql://postgres:password@db.xyz123.supabase.co:5432/postgres",
 			},
 			expected: &SupabaseConfig{
 				DBConfig: &DBConfig{
@@ -392,7 +392,7 @@ func TestSupabaseWithConnectionString(t *testing.T) {
 	mockConfig := config.NewMockConfig(map[string]string{
 		"DB_DIALECT":   "supabase",
 		"DB_USER":      "postgresql://postgres:password@db.abc123.supabase.co:5432/postgres",
-		"DATABASE_URL": "postgresql://postgres:password@db.xyz789.supabase.co:5432/postgres",
+		"DB_URL": "postgresql://postgres:password@db.xyz789.supabase.co:5432/postgres",
 		"SUPABASE_PROJECT_REF": "should-be-ignored", // Should extract from connection string instead
 	})
 	

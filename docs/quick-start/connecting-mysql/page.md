@@ -126,7 +126,7 @@ Alternatively, you can provide a full connection string:
 
 ```dotenv
 DB_DIALECT=supabase
-DATABASE_URL=postgresql://postgres:your_password@db.your_project_ref.supabase.co:5432/postgres
+DB_URL=postgresql://postgres:your_password@db.your_project_ref.supabase.co:5432/postgres
 ```
 
 #### Connection Types
