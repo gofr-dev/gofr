@@ -56,22 +56,7 @@ func (a *App) AddWSService(serviceName, url string, headers http.Header, enableR
 
 	if err != nil {
 		if enableReconnection {
-			go func() {
-				for {
-					conn, _, err = gWebsocket.DefaultDialer.Dial(url, headers)
-					if resp != nil {
-						resp.Body.Close()
-					}
-
-					if err == nil {
-						a.container.AddConnection(serviceName, &websocket.Connection{Conn: conn})
-
-						return
-					}
-
-					time.Sleep(retryInterval)
-				}
-			}()
+			a.handleReconnection(serviceName, url, headers, retryInterval)
 
 			return nil
 		}
@@ -80,7 +65,27 @@ func (a *App) AddWSService(serviceName, url string, headers http.Header, enableR
 	}
 
 	a.container.AddConnection(serviceName, &websocket.Connection{Conn: conn})
+
 	return nil
+}
+
+func (a *App) handleReconnection(serviceName, url string, headers http.Header, retryInterval time.Duration) {
+	go func() {
+		for {
+			conn, resp, err := gWebsocket.DefaultDialer.Dial(url, headers)
+			if resp != nil {
+				resp.Body.Close()
+			}
+
+			if err == nil {
+				a.container.AddConnection(serviceName, &websocket.Connection{Conn: conn})
+
+				return
+			}
+
+			time.Sleep(retryInterval)
+		}
+	}()
 }
 
 func handleWebSocketConnection(ctx *Context, conn *websocket.Connection, handler Handler) {

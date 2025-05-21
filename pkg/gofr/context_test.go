@@ -135,6 +135,7 @@ func TestContext_WriteMessageToService(t *testing.T) {
 		}
 
 		assert.Equal(t, messageToSend, string(receivedMessage))
+
 		return nil, nil
 	})
 
@@ -150,6 +151,8 @@ func TestContext_WriteMessageToService(t *testing.T) {
 
 	// Establish a WebSocket connection
 	ws, resp, err := websocket.DefaultDialer.Dial(wsURL, nil)
+	assert.NoError(t, err, "Dial should not return an error")
+
 	defer ws.Close()
 	defer resp.Body.Close()
 
