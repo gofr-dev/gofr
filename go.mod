@@ -23,7 +23,7 @@ require (
 	github.com/prometheus/client_golang v1.22.0
 	github.com/redis/go-redis/extra/redisotel/v9 v9.8.0
 	github.com/redis/go-redis/v9 v9.8.0
-	github.com/segmentio/kafka-go v0.4.47
+	github.com/segmentio/kafka-go v0.4.48
 	github.com/stretchr/testify v1.10.0
 	go.opentelemetry.io/contrib/instrumentation/net/http/httptrace/otelhttptrace v0.60.0
 	go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp v0.60.0
@@ -41,7 +41,7 @@ require (
 	golang.org/x/term v0.32.0
 	golang.org/x/text v0.25.0
 	google.golang.org/api v0.232.0
-	google.golang.org/grpc v1.72.0
+	google.golang.org/grpc v1.72.1
 	google.golang.org/protobuf v1.36.6
 	modernc.org/sqlite v1.37.0
 )
