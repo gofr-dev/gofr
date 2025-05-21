@@ -55,6 +55,8 @@ func (a *App) AddWSService(serviceName, url string, headers http.Header, enableR
 	}
 
 	if err != nil {
+		a.Logger().Errorf("Failed to establish WebSocket connection to %s: %v", url, err)
+
 		if enableReconnection {
 			a.handleReconnection(serviceName, url, headers, retryInterval)
 
@@ -65,6 +67,8 @@ func (a *App) AddWSService(serviceName, url string, headers http.Header, enableR
 	}
 
 	a.container.AddConnection(serviceName, &websocket.Connection{Conn: conn})
+
+	a.Logger().Infof("Successfully connected to WebSocket service: %s", serviceName)
 
 	return nil
 }
@@ -78,12 +82,16 @@ func (a *App) handleReconnection(serviceName, url string, headers http.Header, r
 			}
 
 			if err == nil {
+				a.Logger().Infof("Successfully connected to WebSocket service: %s", serviceName)
+
 				a.container.AddConnection(serviceName, &websocket.Connection{Conn: conn})
 
 				return
 			}
 
 			time.Sleep(retryInterval)
+
+			a.Logger().Debugf("Reconnecting to WebSocket service: %s. Retry interval: %v", url, retryInterval)
 		}
 	}()
 }
