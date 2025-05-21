@@ -1,4 +1,4 @@
-# Connecting to SQL-Compatible Databases
+# Connecting to MySQL
 
 Just like Redis, GoFr supports connection to various SQL-compatible databases (MySQL, MariaDB, PostgreSQL, and Supabase) based on configuration variables.
 

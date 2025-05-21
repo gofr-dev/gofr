@@ -17,7 +17,7 @@ const (
 	transactionPoolerPort = "6543"
 )
 
-// extends DBConfig to include Supabase-specific configuration
+// SupabaseConfig extends DBConfig to include Supabase-specific configuration
 type SupabaseConfig struct {
 	*DBConfig
 	ConnectionType string // direct, session, transaction
@@ -25,7 +25,9 @@ type SupabaseConfig struct {
 	Region         string // Supabase region
 }
 
-// GetSupabaseConfig builds a Supabase configuration from general config
+// GetSupabaseConfig builds a Supabase configuration from general config.
+// It extracts Supabase-specific settings from the provided configs object.
+// If the database dialect is not supabase, it returns nil.
 func GetSupabaseConfig(configs config.Config) *SupabaseConfig {
 	dbConfig := getDBConfig(configs)
 
@@ -54,6 +56,9 @@ func GetSupabaseConfig(configs config.Config) *SupabaseConfig {
 	}
 }
 
+// NewSupabaseSQL creates a new DB instance configured for Supabase connectivity.
+// It initializes a DB with Supabase-specific settings based on the provided configs.
+// If Supabase dialect is not specified, it returns nil.
 func NewSupabaseSQL(configs config.Config, logger datasource.Logger, metrics Metrics) *DB {
 	supaConfig := GetSupabaseConfig(configs)
 	if supaConfig == nil {
@@ -64,6 +69,9 @@ func NewSupabaseSQL(configs config.Config, logger datasource.Logger, metrics Met
 	return NewSQL(configs, logger, metrics)
 }
 
+// configureSupabaseConnection sets up connection parameters based on the Supabase connection type.
+// It configures the host, port, and user fields of the SupabaseConfig according to the 
+// connection type (direct, session, or transaction) and logs debug information.
 func configureSupabaseConnection(config *SupabaseConfig, logger datasource.Logger) {
 	connStr := config.User
 	if strings.HasPrefix(connStr, "postgresql://") || strings.HasPrefix(connStr, "postgres://") {
@@ -109,6 +117,10 @@ func configureSupabaseConnection(config *SupabaseConfig, logger datasource.Logge
 	}
 }
 
+// extractProjectRefFromConnStr extracts the Supabase project reference from a connection string.
+// Connection string format is expected to be: 
+// postgresql://postgres:[PASSWORD]@db.[PROJECT_REF].supabase.co:5432/postgres
+// It returns the project reference, or an empty string if it cannot be extracted.
 func extractProjectRefFromConnStr(connStr string) string {
 	// Expecting format like: postgresql://postgres:[PASSWORD]@db.[PROJECT_REF].supabase.co:5432/postgres
 	parts := strings.Split(connStr, "@")
@@ -127,6 +139,8 @@ func extractProjectRefFromConnStr(connStr string) string {
 	return ""
 }
 
+// IsSupabaseDialect checks if the provided dialect is the Supabase dialect.
+// Returns true if the dialect is "supabase", false otherwise.
 func IsSupabaseDialect(dialect string) bool {
 	return dialect == supabaseDialect
 }
