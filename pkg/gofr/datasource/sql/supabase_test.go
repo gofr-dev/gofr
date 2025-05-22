@@ -20,16 +20,16 @@ func TestGetSupabaseConfig(t *testing.T) {
 		{
 			name: "Complete Supabase Config",
 			configs: map[string]string{
-				"DB_DIALECT":              "supabase",
-				"DB_HOST":                 "db.xyz.supabase.co",
-				"DB_USER":                 "postgres",
-				"DB_PASSWORD":             "password",
-				"DB_PORT":                 "5432",
-				"DB_NAME":                 "postgres",
-				"DB_SSL_MODE":             "require",
-				"SUPABASE_PROJECT_REF":    "xyz",
+				"DB_DIALECT":               "supabase",
+				"DB_HOST":                  "db.xyz.supabase.co",
+				"DB_USER":                  "postgres",
+				"DB_PASSWORD":              "password",
+				"DB_PORT":                  "5432",
+				"DB_NAME":                  "postgres",
+				"DB_SSL_MODE":              "require",
+				"SUPABASE_PROJECT_REF":     "xyz",
 				"SUPABASE_CONNECTION_TYPE": "direct",
-				"SUPABASE_REGION":         "us-east-1",
+				"SUPABASE_REGION":          "us-east-1",
 			},
 			expected: &SupabaseConfig{
 				DBConfig: &DBConfig{
@@ -40,8 +40,8 @@ func TestGetSupabaseConfig(t *testing.T) {
 					Port:        "5432",
 					Database:    "postgres",
 					SSLMode:     "require",
-					MaxIdleConn: 2,  // default value
-					MaxOpenConn: 0,  // default value
+					MaxIdleConn: 2, // default value
+					MaxOpenConn: 0, // default value
 				},
 				ConnectionType: "direct",
 				ProjectRef:     "xyz",
@@ -62,7 +62,7 @@ func TestGetSupabaseConfig(t *testing.T) {
 				"DB_DIALECT":  "supabase",
 				"DB_PASSWORD": "password",
 				"DB_SSL_MODE": "disable", // should be overridden to require
-				"DB_URL": "postgresql://postgres:password@db.xyz123.supabase.co:5432/postgres",
+				"DB_URL":      "postgresql://postgres:password@db.xyz123.supabase.co:5432/postgres",
 			},
 			expected: &SupabaseConfig{
 				DBConfig: &DBConfig{
@@ -117,14 +117,38 @@ func TestGetSupabaseConfig(t *testing.T) {
 }
 
 func TestConfigureSupabaseConnection(t *testing.T) {
-	testCases := []struct {
-		name           string
-		config         *SupabaseConfig
-		expectedHost   string
-		expectedPort   string
-		expectedUser   string
+	testCases := getSupabaseConnectionTestCases()
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			mockLogger := logging.NewMockLogger(logging.DEBUG)
+
+			logs := testutil.StdoutOutputForFunc(func() {
+				configureSupabaseConnection(tc.config, mockLogger)
+			})
+
+			assertSupabaseConnectionConfig(t, &tc, logs)
+		})
+	}
+}
+
+func getSupabaseConnectionTestCases() []struct {
+	name            string
+	config          *SupabaseConfig
+	expectedHost    string
+	expectedPort    string
+	expectedUser    string
+	expectedSSLMode string
+	logContains     string
+} {
+	return []struct {
+		name            string
+		config          *SupabaseConfig
+		expectedHost    string
+		expectedPort    string
+		expectedUser    string
 		expectedSSLMode string
-		logContains    string
+		logContains     string
 	}{
 		{
 			name: "Direct Connection",
@@ -138,11 +162,11 @@ func TestConfigureSupabaseConnection(t *testing.T) {
 				ConnectionType: "direct",
 				ProjectRef:     "xyz",
 			},
-			expectedHost:   "db.xyz.supabase.co",
-			expectedPort:   "5432",
-			expectedUser:   "postgres",
+			expectedHost:    "db.xyz.supabase.co",
+			expectedPort:    "5432",
+			expectedUser:    "postgres",
 			expectedSSLMode: "require",
-			logContains:    "Configured direct connection to Supabase",
+			logContains:     "Configured direct connection to Supabase",
 		},
 		{
 			name: "Session Pooler Connection",
@@ -157,11 +181,11 @@ func TestConfigureSupabaseConnection(t *testing.T) {
 				ProjectRef:     "xyz",
 				Region:         "us-east-1",
 			},
-			expectedHost:   "aws-0-us-east-1.pooler.supabase.co",
-			expectedPort:   "5432",
-			expectedUser:   "postgres.xyz",
+			expectedHost:    "aws-0-us-east-1.pooler.supabase.co",
+			expectedPort:    "5432",
+			expectedUser:    "postgres.xyz",
 			expectedSSLMode: "require",
-			logContains:    "Configured session pooler connection to Supabase",
+			logContains:     "Configured session pooler connection to Supabase",
 		},
 		{
 			name: "Transaction Pooler Connection",
@@ -176,11 +200,11 @@ func TestConfigureSupabaseConnection(t *testing.T) {
 				ProjectRef:     "xyz",
 				Region:         "us-east-1",
 			},
-			expectedHost:   "aws-0-us-east-1.pooler.supabase.co",
-			expectedPort:   "6543",
-			expectedUser:   "postgres.xyz",
+			expectedHost:    "aws-0-us-east-1.pooler.supabase.co",
+			expectedPort:    "6543",
+			expectedUser:    "postgres.xyz",
 			expectedSSLMode: "require",
-			logContains:    "Configured transaction pooler connection to Supabase",
+			logContains:     "Configured transaction pooler connection to Supabase",
 		},
 		{
 			name: "Unknown Connection Type",
@@ -194,11 +218,11 @@ func TestConfigureSupabaseConnection(t *testing.T) {
 				ConnectionType: "unknown",
 				ProjectRef:     "xyz",
 			},
-			expectedHost:   "db.xyz.supabase.co",
-			expectedPort:   "5432",
-			expectedUser:   "postgres",
+			expectedHost:    "db.xyz.supabase.co",
+			expectedPort:    "5432",
+			expectedUser:    "postgres",
 			expectedSSLMode: "require",
-			logContains:    "Unknown Supabase connection type 'unknown', defaulting to direct connection",
+			logContains:     "Unknown Supabase connection type 'unknown', defaulting to direct connection",
 		},
 		{
 			name: "Default Database For Empty Database Name",
@@ -213,11 +237,11 @@ func TestConfigureSupabaseConnection(t *testing.T) {
 				ConnectionType: "direct",
 				ProjectRef:     "xyz",
 			},
-			expectedHost:   "db.xyz.supabase.co",
-			expectedPort:   "5432",
-			expectedUser:   "postgres",
+			expectedHost:    "db.xyz.supabase.co",
+			expectedPort:    "5432",
+			expectedUser:    "postgres",
 			expectedSSLMode: "require",
-			logContains:    "Configured direct connection to Supabase",
+			logContains:     "Configured direct connection to Supabase",
 		},
 		{
 			name: "Direct Connection With Non-Require SSL Mode",
@@ -231,37 +255,33 @@ func TestConfigureSupabaseConnection(t *testing.T) {
 				ConnectionType: "direct",
 				ProjectRef:     "xyz",
 			},
-			expectedHost:   "db.xyz.supabase.co",
-			expectedPort:   "5432",
-			expectedUser:   "postgres",
+			expectedHost:    "db.xyz.supabase.co",
+			expectedPort:    "5432",
+			expectedUser:    "postgres",
 			expectedSSLMode: "require", // Should be forced to require
-			logContains:    "Supabase connections require SSL. Setting DB_SSL_MODE to 'require'",
+			logContains:     "Supabase connections require SSL. Setting DB_SSL_MODE to 'require'",
 		},
 	}
+}
 
-	for _, tc := range testCases {
-		t.Run(tc.name, func(t *testing.T) {
-			mockLogger := logging.NewMockLogger(logging.DEBUG)
-			
-			logs := testutil.StdoutOutputForFunc(func() {
-				configureSupabaseConnection(tc.config, mockLogger)
-			})
+func assertSupabaseConnectionConfig(t *testing.T, tc *struct {
+	name            string
+	config          *SupabaseConfig
+	expectedHost    string
+	expectedPort    string
+	expectedUser    string
+	expectedSSLMode string
+	logContains     string
+}, logs string) {
+	assert.Equal(t, tc.expectedHost, tc.config.DBConfig.HostName)
+	assert.Equal(t, tc.expectedPort, tc.config.DBConfig.Port)
+	assert.Equal(t, tc.expectedSSLMode, tc.config.DBConfig.SSLMode)
 
-			assert.Equal(t, tc.expectedHost, tc.config.DBConfig.HostName)
-			assert.Equal(t, tc.expectedPort, tc.config.DBConfig.Port)
-			assert.Equal(t, tc.expectedSSLMode, tc.config.DBConfig.SSLMode)
-			
-			if tc.config.DBConfig.Database == "" {
-				assert.Equal(t, "postgres", tc.config.DBConfig.Database)
-			}
-			
-			if tc.expectedUser != tc.config.DBConfig.User {
-				assert.Equal(t, tc.expectedUser, tc.config.DBConfig.User)
-			}
-			
-			assert.Contains(t, logs, tc.logContains)
-		})
+	if tc.expectedUser != tc.config.DBConfig.User {
+		assert.Equal(t, tc.expectedUser, tc.config.DBConfig.User)
 	}
+
+	assert.Contains(t, logs, tc.logContains)
 }
 
 func TestExtractProjectRefFromConnStr(t *testing.T) {
@@ -308,24 +328,24 @@ func TestExtractProjectRefFromConnStr(t *testing.T) {
 func TestNewSupabaseSQL(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
-	
+
 	testCases := []struct {
-		name       string
-		configs    map[string]string
-		expectNil  bool
+		name        string
+		configs     map[string]string
+		expectNil   bool
 		logContains string
 	}{
 		{
 			name: "Valid Supabase Config",
 			configs: map[string]string{
-				"DB_DIALECT":              "supabase",
-				"DB_USER":                 "postgres",
-				"DB_PASSWORD":             "password",
-				"DB_SSL_MODE":             "require",
-				"SUPABASE_PROJECT_REF":    "abc123",
+				"DB_DIALECT":               "supabase",
+				"DB_USER":                  "postgres",
+				"DB_PASSWORD":              "password",
+				"DB_SSL_MODE":              "require",
+				"SUPABASE_PROJECT_REF":     "abc123",
 				"SUPABASE_CONNECTION_TYPE": "direct",
 			},
-			expectNil:  false,
+			expectNil:   false,
 			logContains: "Configured direct connection to Supabase",
 		},
 		{
@@ -334,19 +354,19 @@ func TestNewSupabaseSQL(t *testing.T) {
 				"DB_DIALECT": "postgres",
 				"DB_HOST":    "localhost",
 			},
-			expectNil:  true,
+			expectNil:   true,
 			logContains: "",
 		},
 		{
 			name: "Empty DB_HOST with automatic configuration",
 			configs: map[string]string{
-				"DB_DIALECT":              "supabase",
-				"DB_USER":                 "postgres",
-				"DB_PASSWORD":             "password",
-				"SUPABASE_PROJECT_REF":    "abc123",
+				"DB_DIALECT":               "supabase",
+				"DB_USER":                  "postgres",
+				"DB_PASSWORD":              "password",
+				"SUPABASE_PROJECT_REF":     "abc123",
 				"SUPABASE_CONNECTION_TYPE": "direct",
 			},
-			expectNil:  false,
+			expectNil:   false,
 			logContains: "connecting to 'postgres' user to 'postgres' database at 'db.abc123.supabase.co:5432'",
 		},
 	}
@@ -359,17 +379,17 @@ func TestNewSupabaseSQL(t *testing.T) {
 
 			// We expect metrics to be set regardless of the result
 			mockMetrics.EXPECT().SetGauge(gomock.Any(), gomock.Any()).AnyTimes()
-			
+
 			logs := testutil.StdoutOutputForFunc(func() {
 				result := NewSupabaseSQL(mockConfig, mockLogger, mockMetrics)
-				
+
 				if tc.expectNil {
 					assert.Nil(t, result)
 				} else {
 					assert.NotNil(t, result)
 				}
 			})
-			
+
 			if tc.logContains != "" {
 				assert.Contains(t, logs, tc.logContains)
 			}
@@ -387,37 +407,37 @@ func TestIsSupabaseDialect(t *testing.T) {
 func TestSupabaseWithConnectionString(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
-	
+
 	// Test that full connection strings are preserved
 	mockConfig := config.NewMockConfig(map[string]string{
-		"DB_DIALECT":   "supabase",
-		"DB_USER":      "postgresql://postgres:password@db.abc123.supabase.co:5432/postgres",
-		"DB_URL": "postgresql://postgres:password@db.xyz789.supabase.co:5432/postgres",
+		"DB_DIALECT":           "supabase",
+		"DB_USER":              "postgresql://postgres:password@db.abc123.supabase.co:5432/postgres",
+		"DB_URL":               "postgresql://postgres:password@db.xyz789.supabase.co:5432/postgres",
 		"SUPABASE_PROJECT_REF": "should-be-ignored", // Should extract from connection string instead
 	})
-	
+
 	mockLogger := logging.NewMockLogger(logging.DEBUG)
 	mockMetrics := NewMockMetrics(ctrl)
-	
+
 	// We expect metrics to be set
 	mockMetrics.EXPECT().SetGauge(gomock.Any(), gomock.Any()).AnyTimes()
-	
+
 	supaConfig := GetSupabaseConfig(mockConfig)
 	assert.NotNil(t, supaConfig)
-	
+
 	// When DB_USER contains a full connection string, it should be preserved
 	assert.Equal(t, "postgresql://postgres:password@db.abc123.supabase.co:5432/postgres", supaConfig.DBConfig.User)
-	
+
 	// Project ref should be extracted from the connection string
 	assert.Equal(t, "xyz789", supaConfig.ProjectRef)
-	
+
 	logs := testutil.StdoutOutputForFunc(func() {
 		configureSupabaseConnection(supaConfig, mockLogger)
 	})
-	
+
 	// Should not modify the connection string
 	assert.Equal(t, "postgresql://postgres:password@db.abc123.supabase.co:5432/postgres", supaConfig.DBConfig.User)
-	
+
 	// No host/port configuration should happen
 	assert.NotContains(t, logs, "Configured direct connection to Supabase")
 }
