@@ -150,117 +150,237 @@ func getSupabaseConnectionTestCases() []struct {
 		expectedSSLMode string
 		logContains     string
 	}{
-		{
-			name: "Direct Connection",
-			config: &SupabaseConfig{
-				DBConfig: &DBConfig{
-					Dialect:  "supabase",
-					User:     "postgres",
-					Password: "password",
-					SSLMode:  "require",
-				},
-				ConnectionType: "direct",
-				ProjectRef:     "xyz",
+		getDirectConnectionCase(),
+		getSessionPoolerCase(),
+		getTransactionPoolerCase(),
+		getUnknownConnectionCase(),
+		getEmptyDBNameCase(),
+		getNonRequireSSLCase(),
+	}
+}
+
+func getDirectConnectionCase() struct {
+	name            string
+	config          *SupabaseConfig
+	expectedHost    string
+	expectedPort    string
+	expectedUser    string
+	expectedSSLMode string
+	logContains     string
+} {
+	return struct {
+		name            string
+		config          *SupabaseConfig
+		expectedHost    string
+		expectedPort    string
+		expectedUser    string
+		expectedSSLMode string
+		logContains     string
+	}{
+		name: "Direct Connection",
+		config: &SupabaseConfig{
+			DBConfig: &DBConfig{
+				Dialect:  "supabase",
+				User:     "postgres",
+				Password: "password",
+				SSLMode:  "require",
 			},
-			expectedHost:    "db.xyz.supabase.co",
-			expectedPort:    "5432",
-			expectedUser:    "postgres",
-			expectedSSLMode: "require",
-			logContains:     "Configured direct connection to Supabase",
+			ConnectionType: "direct",
+			ProjectRef:     "xyz",
 		},
-		{
-			name: "Session Pooler Connection",
-			config: &SupabaseConfig{
-				DBConfig: &DBConfig{
-					Dialect:  "supabase",
-					User:     "postgres",
-					Password: "password",
-					SSLMode:  "require",
-				},
-				ConnectionType: "session",
-				ProjectRef:     "xyz",
-				Region:         "us-east-1",
+		expectedHost:    "db.xyz.supabase.co",
+		expectedPort:    "5432",
+		expectedUser:    "postgres",
+		expectedSSLMode: "require",
+		logContains:     "Configured direct connection to Supabase",
+	}
+}
+
+func getSessionPoolerCase() struct {
+	name            string
+	config          *SupabaseConfig
+	expectedHost    string
+	expectedPort    string
+	expectedUser    string
+	expectedSSLMode string
+	logContains     string
+} {
+	return struct {
+		name            string
+		config          *SupabaseConfig
+		expectedHost    string
+		expectedPort    string
+		expectedUser    string
+		expectedSSLMode string
+		logContains     string
+	}{
+		name: "Session Pooler Connection",
+		config: &SupabaseConfig{
+			DBConfig: &DBConfig{
+				Dialect:  "supabase",
+				User:     "postgres",
+				Password: "password",
+				SSLMode:  "require",
 			},
-			expectedHost:    "aws-0-us-east-1.pooler.supabase.co",
-			expectedPort:    "5432",
-			expectedUser:    "postgres.xyz",
-			expectedSSLMode: "require",
-			logContains:     "Configured session pooler connection to Supabase",
+			ConnectionType: "session",
+			ProjectRef:     "xyz",
+			Region:         "us-east-1",
 		},
-		{
-			name: "Transaction Pooler Connection",
-			config: &SupabaseConfig{
-				DBConfig: &DBConfig{
-					Dialect:  "supabase",
-					User:     "postgres",
-					Password: "password",
-					SSLMode:  "require",
-				},
-				ConnectionType: "transaction",
-				ProjectRef:     "xyz",
-				Region:         "us-east-1",
+		expectedHost:    "aws-0-us-east-1.pooler.supabase.co",
+		expectedPort:    "5432",
+		expectedUser:    "postgres.xyz",
+		expectedSSLMode: "require",
+		logContains:     "Configured session pooler connection to Supabase",
+	}
+}
+
+func getTransactionPoolerCase() struct {
+	name            string
+	config          *SupabaseConfig
+	expectedHost    string
+	expectedPort    string
+	expectedUser    string
+	expectedSSLMode string
+	logContains     string
+} {
+	return struct {
+		name            string
+		config          *SupabaseConfig
+		expectedHost    string
+		expectedPort    string
+		expectedUser    string
+		expectedSSLMode string
+		logContains     string
+	}{
+		name: "Transaction Pooler Connection",
+		config: &SupabaseConfig{
+			DBConfig: &DBConfig{
+				Dialect:  "supabase",
+				User:     "postgres",
+				Password: "password",
+				SSLMode:  "require",
 			},
-			expectedHost:    "aws-0-us-east-1.pooler.supabase.co",
-			expectedPort:    "6543",
-			expectedUser:    "postgres.xyz",
-			expectedSSLMode: "require",
-			logContains:     "Configured transaction pooler connection to Supabase",
+			ConnectionType: "transaction",
+			ProjectRef:     "xyz",
+			Region:         "us-east-1",
 		},
-		{
-			name: "Unknown Connection Type",
-			config: &SupabaseConfig{
-				DBConfig: &DBConfig{
-					Dialect:  "supabase",
-					User:     "postgres",
-					Password: "password",
-					SSLMode:  "require",
-				},
-				ConnectionType: "unknown",
-				ProjectRef:     "xyz",
+		expectedHost:    "aws-0-us-east-1.pooler.supabase.co",
+		expectedPort:    "6543",
+		expectedUser:    "postgres.xyz",
+		expectedSSLMode: "require",
+		logContains:     "Configured transaction pooler connection to Supabase",
+	}
+}
+
+func getUnknownConnectionCase() struct {
+	name            string
+	config          *SupabaseConfig
+	expectedHost    string
+	expectedPort    string
+	expectedUser    string
+	expectedSSLMode string
+	logContains     string
+} {
+	return struct {
+		name            string
+		config          *SupabaseConfig
+		expectedHost    string
+		expectedPort    string
+		expectedUser    string
+		expectedSSLMode string
+		logContains     string
+	}{
+		name: "Unknown Connection Type",
+		config: &SupabaseConfig{
+			DBConfig: &DBConfig{
+				Dialect:  "supabase",
+				User:     "postgres",
+				Password: "password",
+				SSLMode:  "require",
 			},
-			expectedHost:    "db.xyz.supabase.co",
-			expectedPort:    "5432",
-			expectedUser:    "postgres",
-			expectedSSLMode: "require",
-			logContains:     "Unknown Supabase connection type 'unknown', defaulting to direct connection",
+			ConnectionType: "unknown",
+			ProjectRef:     "xyz",
 		},
-		{
-			name: "Default Database For Empty Database Name",
-			config: &SupabaseConfig{
-				DBConfig: &DBConfig{
-					Dialect:  "supabase",
-					User:     "postgres",
-					Password: "password",
-					SSLMode:  "require",
-					Database: "",
-				},
-				ConnectionType: "direct",
-				ProjectRef:     "xyz",
+		expectedHost:    "db.xyz.supabase.co",
+		expectedPort:    "5432",
+		expectedUser:    "postgres",
+		expectedSSLMode: "require",
+		logContains:     "Unknown Supabase connection type 'unknown', defaulting to direct connection",
+	}
+}
+
+func getEmptyDBNameCase() struct {
+	name            string
+	config          *SupabaseConfig
+	expectedHost    string
+	expectedPort    string
+	expectedUser    string
+	expectedSSLMode string
+	logContains     string
+} {
+	return struct {
+		name            string
+		config          *SupabaseConfig
+		expectedHost    string
+		expectedPort    string
+		expectedUser    string
+		expectedSSLMode string
+		logContains     string
+	}{
+		name: "Default Database For Empty Database Name",
+		config: &SupabaseConfig{
+			DBConfig: &DBConfig{
+				Dialect:  "supabase",
+				User:     "postgres",
+				Password: "password",
+				SSLMode:  "require",
+				Database: "",
 			},
-			expectedHost:    "db.xyz.supabase.co",
-			expectedPort:    "5432",
-			expectedUser:    "postgres",
-			expectedSSLMode: "require",
-			logContains:     "Configured direct connection to Supabase",
+			ConnectionType: "direct",
+			ProjectRef:     "xyz",
 		},
-		{
-			name: "Direct Connection With Non-Require SSL Mode",
-			config: &SupabaseConfig{
-				DBConfig: &DBConfig{
-					Dialect:  "supabase",
-					User:     "postgres",
-					Password: "password",
-					SSLMode:  "disable",
-				},
-				ConnectionType: "direct",
-				ProjectRef:     "xyz",
+		expectedHost:    "db.xyz.supabase.co",
+		expectedPort:    "5432",
+		expectedUser:    "postgres",
+		expectedSSLMode: "require",
+		logContains:     "Configured direct connection to Supabase",
+	}
+}
+
+func getNonRequireSSLCase() struct {
+	name            string
+	config          *SupabaseConfig
+	expectedHost    string
+	expectedPort    string
+	expectedUser    string
+	expectedSSLMode string
+	logContains     string
+} {
+	return struct {
+		name            string
+		config          *SupabaseConfig
+		expectedHost    string
+		expectedPort    string
+		expectedUser    string
+		expectedSSLMode string
+		logContains     string
+	}{
+		name: "Direct Connection With Non-Require SSL Mode",
+		config: &SupabaseConfig{
+			DBConfig: &DBConfig{
+				Dialect:  "supabase",
+				User:     "postgres",
+				Password: "password",
+				SSLMode:  "disable",
 			},
-			expectedHost:    "db.xyz.supabase.co",
-			expectedPort:    "5432",
-			expectedUser:    "postgres",
-			expectedSSLMode: "require", // Should be forced to require
-			logContains:     "Supabase connections require SSL. Setting DB_SSL_MODE to 'require'",
+			ConnectionType: "direct",
+			ProjectRef:     "xyz",
 		},
+		expectedHost:    "db.xyz.supabase.co",
+		expectedPort:    "5432",
+		expectedUser:    "postgres",
+		expectedSSLMode: "require", // Should be forced to require
+		logContains:     "Supabase connections require SSL. Setting DB_SSL_MODE to 'require'",
 	}
 }
 
@@ -273,6 +393,7 @@ func assertSupabaseConnectionConfig(t *testing.T, tc *struct {
 	expectedSSLMode string
 	logContains     string
 }, logs string) {
+	t.Helper()
 	assert.Equal(t, tc.expectedHost, tc.config.DBConfig.HostName)
 	assert.Equal(t, tc.expectedPort, tc.config.DBConfig.Port)
 	assert.Equal(t, tc.expectedSSLMode, tc.config.DBConfig.SSLMode)
