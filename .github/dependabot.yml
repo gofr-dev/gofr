@@ -3,7 +3,13 @@ version: 2
 updates:
   - package-ecosystem: "gomod"
     open-pull-requests-limit: 10  # avoid spam, if no one reacts
-    directory: "/"
+    directories:
+      - "/"
+      - "/examples/*"
+      - "/pkg/gofr/datasource/*"
+      - "/pkg/gofr/datasource/file/*"
+      - "/pkg/gofr/datasource/kv-store/*"
+      - "/pkg/gofr/datasource/pubsub/*"
     schedule:
       interval: "weekly"
 
@@ -18,3 +24,4 @@ updates:
         update-types:
           - "minor"
           - "patch"
+
