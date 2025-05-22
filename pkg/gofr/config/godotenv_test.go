@@ -17,9 +17,9 @@ func TestMain(m *testing.M) {
 
 func Test_EnvSuccess(t *testing.T) {
 	envData := map[string]string{
-		"DB_URL": "localhost:5432",
-		"API_KEY":      "your_api_key_here",
-		"small_case":   "small_case_value",
+		"DB_URL":     "localhost:5432",
+		"API_KEY":    "your_api_key_here",
+		"small_case": "small_case_value",
 	}
 
 	logger := logging.NewMockLogger(logging.DEBUG)
