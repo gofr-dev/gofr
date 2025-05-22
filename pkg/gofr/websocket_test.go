@@ -80,17 +80,39 @@ func Test_AddWSService(t *testing.T) {
 	})
 
 	go app.Run()
-	time.Sleep(100 * time.Millisecond)
 
 	wsURL := fmt.Sprintf("ws://localhost:%d/ws", port)
 
+	// Use readiness check instead of sleep
+	err := waitForWebSocketReady(wsURL, 3*time.Second)
+	require.NoError(t, err, "WebSocket server did not become ready in time")
+
 	serviceName := "test-service"
-	err := app.AddWSService(serviceName, wsURL, http.Header{}, true, 100*time.Millisecond)
+	err = app.AddWSService(serviceName, wsURL, http.Header{}, true, 100*time.Millisecond)
 	require.NoError(t, err, "Failed to add WebSocket service")
 
 	// Verify the connection is registered
 	conn := app.container.WSManager.GetConnectionByServiceName(serviceName)
 	require.NotNil(t, conn, "Connection should be registered")
+}
+
+func waitForWebSocketReady(wsURL string, timeout time.Duration) error {
+	deadline := time.Now().Add(timeout)
+
+	for time.Now().Before(deadline) {
+		dialer := websocket.Dialer{}
+
+		conn, _, err := dialer.Dial(wsURL, nil)
+		if err == nil {
+			conn.Close()
+
+			return nil
+		}
+
+		time.Sleep(50 * time.Millisecond)
+	}
+
+	return fmt.Errorf("websocket server not ready after %s", timeout)
 }
 
 func TestSerializeMessage(t *testing.T) {

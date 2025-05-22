@@ -124,7 +124,7 @@ This method registers a WebSocket service and establishes a persistent connectio
 - `url (string)`: The WebSocket URL of the target service.
 - `headers ( map[string][]string)`: HTTP headers to include in the WebSocket handshake.
 -  `enableReconnection (bool)`: A boolean to enable automatic reconnection.
-- `retryInterval (time.Duation)`: The interval between reconnection attempts.
+- `retryInterval (time.Duration)`: The interval between reconnection attempts.
 
 2. **WriteMessageToService**
 This method sends a message to a WebSocket connection associated with a specific service.
