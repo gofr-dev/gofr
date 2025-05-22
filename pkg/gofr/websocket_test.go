@@ -2,6 +2,7 @@ package gofr
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -15,6 +16,8 @@ import (
 
 	"gofr.dev/pkg/gofr/testutil"
 )
+
+var errWebSocketNotReady = errors.New("websocket server not ready")
 
 func Test_WebSocket_Success(t *testing.T) {
 	testutil.NewServerConfigs(t)
@@ -102,7 +105,11 @@ func waitForWebSocketReady(wsURL string, timeout time.Duration) error {
 	for time.Now().Before(deadline) {
 		dialer := websocket.Dialer{}
 
-		conn, _, err := dialer.Dial(wsURL, nil)
+		conn, resp, err := dialer.Dial(wsURL, nil)
+		if resp != nil {
+			resp.Body.Close()
+		}
+
 		if err == nil {
 			conn.Close()
 
@@ -112,7 +119,7 @@ func waitForWebSocketReady(wsURL string, timeout time.Duration) error {
 		time.Sleep(50 * time.Millisecond)
 	}
 
-	return fmt.Errorf("websocket server not ready after %s", timeout)
+	return fmt.Errorf("%w after %s", errWebSocketNotReady, timeout)
 }
 
 func TestSerializeMessage(t *testing.T) {
