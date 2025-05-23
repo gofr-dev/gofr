@@ -109,6 +109,28 @@ func (ErrorRequestTimeout) LogLevel() logging.Level {
 	return logging.INFO
 }
 
+type ErrorServiceUnavailable struct {
+	Dependency   string
+	ErrorMessage string
+}
+
+func (e ErrorServiceUnavailable) Error() string {
+	if e.ErrorMessage != "" {
+		return fmt.Sprintf("Service unavaiable due to error: %v from depedency %v", e.ErrorMessage, e.Dependency)
+	} else {
+		return http.StatusText(http.StatusServiceUnavailable)
+
+	}
+}
+
+func (ErrorServiceUnavailable) StatusCode() int {
+	return http.StatusServiceUnavailable
+}
+
+func (ErrorServiceUnavailable) LogLevel() logging.Level {
+	return logging.ERROR
+}
+
 // ErrorPanicRecovery represents an error for request which panicked.
 type ErrorPanicRecovery struct{}
 
@@ -133,6 +155,7 @@ var (
 	_ statusCodeResponder = ErrorInvalidRoute{}
 	_ statusCodeResponder = ErrorRequestTimeout{}
 	_ statusCodeResponder = ErrorPanicRecovery{}
+	_ statusCodeResponder = ErrorServiceUnavailable{}
 
 	_ logging.LogLevelResponder = ErrorEntityNotFound{}
 	_ logging.LogLevelResponder = ErrorEntityAlreadyExist{}
@@ -141,4 +164,5 @@ var (
 	_ logging.LogLevelResponder = ErrorInvalidRoute{}
 	_ logging.LogLevelResponder = ErrorRequestTimeout{}
 	_ logging.LogLevelResponder = ErrorPanicRecovery{}
+	_ logging.LogLevelResponder = ErrorServiceUnavailable{}
 )
