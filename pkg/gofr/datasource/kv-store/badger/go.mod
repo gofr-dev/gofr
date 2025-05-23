@@ -7,8 +7,8 @@ toolchain go1.24.1
 require (
 	github.com/dgraph-io/badger/v4 v4.5.0
 	github.com/stretchr/testify v1.10.0
-	go.opentelemetry.io/otel v1.34.0
-	go.opentelemetry.io/otel/trace v1.34.0
+	go.opentelemetry.io/otel v1.36.0
+	go.opentelemetry.io/otel/trace v1.36.0
 	go.uber.org/mock v0.5.0
 )
 
