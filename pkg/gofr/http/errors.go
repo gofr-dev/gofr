@@ -116,7 +116,7 @@ type ErrorServiceUnavailable struct {
 
 func (e ErrorServiceUnavailable) Error() string {
 	if e.ErrorMessage != "" {
-		return fmt.Sprintf("Service unavaiable due to error: %v from depedency %v", e.ErrorMessage, e.Dependency)
+		return fmt.Sprintf("Service unavailable due to error: %v from dependency %v", e.ErrorMessage, e.Dependency)
 	} else {
 		return http.StatusText(http.StatusServiceUnavailable)
 
