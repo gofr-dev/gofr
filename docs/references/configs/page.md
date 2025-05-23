@@ -148,7 +148,7 @@ This document lists all the configuration options supported by the GoFr framewor
 ---
 
 -  DB_DIALECT
--  Database dialect. Supported values: mysql, postgres
+-  Database dialect. Supported values: mysql, postgres, supabase
 
 ---
 
@@ -198,6 +198,27 @@ This document lists all the configuration options supported by the GoFr framewor
 - DB_CHARSET
 - The character set for database connection
 - utf8
+
+---
+
+- SUPABASE_CONNECTION_TYPE 
+- Connection type to Supabase. Supported values: direct, session, transaction 
+- direct
+
+---
+
+- SUPABASE_PROJECT_REF 
+- Supabase project reference ID
+
+---
+
+- SUPABASE_REGION 
+- Supabase region for pooled connections
+
+---
+
+- DB_URL 
+- Full PostgreSQL connection string for Supabase (alternative to separate config parameters)
 
 {% /table %}
 
