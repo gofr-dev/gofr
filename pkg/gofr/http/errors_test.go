@@ -2,13 +2,13 @@ package http
 
 import (
 	"fmt"
-	"gofr.dev/pkg/gofr/logging"
 	"net/http"
 	"os"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"gofr.dev/pkg/gofr/logging"
 )
 
 func TestMain(m *testing.M) {
@@ -121,7 +121,7 @@ func Test_ErrorErrorPanicRecovery(t *testing.T) {
 }
 
 func Test_ServiceUnavailable(t *testing.T) {
-
+	code503 := http.StatusServiceUnavailable
 	testCases := []struct {
 		message      string
 		dependency   string
@@ -129,10 +129,10 @@ func Test_ServiceUnavailable(t *testing.T) {
 		statusCode   int
 		logLevel     logging.Level
 	}{
-		{message: "", dependency: "", errorMessage: http.StatusText(http.StatusServiceUnavailable), statusCode: http.StatusServiceUnavailable, logLevel: logging.ERROR},
-		{message: "Connection Error", dependency: "", errorMessage: http.StatusText(http.StatusServiceUnavailable), statusCode: http.StatusServiceUnavailable, logLevel: logging.ERROR},
-		{message: "", dependency: "DB", errorMessage: http.StatusText(http.StatusServiceUnavailable), statusCode: http.StatusServiceUnavailable, logLevel: logging.ERROR},
-		{message: "Connection Error", dependency: "DB", errorMessage: "Service unavailable due to error: Connection Error from dependency DB", statusCode: http.StatusServiceUnavailable, logLevel: logging.ERROR},
+		{"", "", http.StatusText(code503), code503, logging.ERROR},
+		{"Connection Error", "", http.StatusText(code503), code503, logging.ERROR},
+		{"", "DB", http.StatusText(code503), code503, logging.ERROR},
+		{"Connection Error", "DB", "Service unavailable due to error: Connection Error from dependency DB", code503, logging.ERROR},
 	}
 
 	for _, tc := range testCases {

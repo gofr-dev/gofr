@@ -118,6 +118,7 @@ func (e ErrorServiceUnavailable) Error() string {
 	if e.ErrorMessage != "" && e.Dependency != "" {
 		return fmt.Sprintf("Service unavailable due to error: %v from dependency %v", e.ErrorMessage, e.Dependency)
 	}
+
 	return http.StatusText(http.StatusServiceUnavailable)
 }
 
