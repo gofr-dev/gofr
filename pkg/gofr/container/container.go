@@ -50,6 +50,8 @@ type Container struct {
 	metricsManager metrics.Manager
 	PubSub         pubsub.Client
 
+	WSManager *websocket.Manager
+
 	Redis Redis
 	SQL   DB
 
@@ -165,6 +167,8 @@ func (c *Container) Create(conf config.Config) {
 	}
 
 	c.File = file.New(c.Logger)
+
+	c.WSManager = websocket.New()
 }
 
 func (c *Container) Close() error {
@@ -180,6 +184,10 @@ func (c *Container) Close() error {
 
 	if !isNil(c.PubSub) {
 		err = errors.Join(err, c.PubSub.Close())
+	}
+
+	for _, conn := range c.WSManager.ListConnections() {
+		c.WSManager.CloseConnection(conn)
 	}
 
 	return err
@@ -283,11 +291,27 @@ func (c *Container) GetSubscriber() pubsub.Subscriber {
 	return c.PubSub
 }
 
-func (*Container) GetConnectionFromContext(ctx context.Context) *websocket.Connection {
-	conn, ok := ctx.Value(websocket.WSConnectionKey).(*websocket.Connection)
+// GetConnectionFromContext retrieves a WebSocket connection from the context using the Manager.
+func (c *Container) GetConnectionFromContext(ctx context.Context) *websocket.Connection {
+	connID, ok := ctx.Value(websocket.WSConnectionKey).(string)
 	if !ok {
 		return nil
 	}
 
-	return conn
+	return c.WSManager.GetWebsocketConnection(connID)
+}
+
+// GetWSConnectionByServiceName retrieves a WebSocket connection by its service name.
+func (c *Container) GetWSConnectionByServiceName(serviceName string) *websocket.Connection {
+	return c.WSManager.GetConnectionByServiceName(serviceName)
+}
+
+// AddConnection adds a WebSocket connection to the Manager.
+func (c *Container) AddConnection(connID string, conn *websocket.Connection) {
+	c.WSManager.AddWebsocketConnection(connID, conn)
+}
+
+// RemoveConnection removes a WebSocket connection from the Manager.
+func (c *Container) RemoveConnection(connID string) {
+	c.WSManager.CloseConnection(connID)
 }

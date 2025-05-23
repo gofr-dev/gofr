@@ -187,3 +187,45 @@ func TestConcurrentWriteMessageCalls(t *testing.T) {
 
 	server.Close()
 }
+
+func TestManager_ListConnections(t *testing.T) {
+	manager := New()
+
+	// Add mock connections
+	manager.AddWebsocketConnection("conn1", &Connection{Conn: &websocket.Conn{}})
+	manager.AddWebsocketConnection("conn2", &Connection{Conn: &websocket.Conn{}})
+	manager.AddWebsocketConnection("conn3", &Connection{Conn: &websocket.Conn{}})
+
+	// Get the list of connections
+	connections := manager.ListConnections()
+
+	assert.ElementsMatch(t, []string{"conn1", "conn2", "conn3"}, connections)
+}
+
+func TestManager_GetConnectionByServiceName(t *testing.T) {
+	manager := New()
+
+	mockConn := &Connection{Conn: &websocket.Conn{}}
+	manager.AddWebsocketConnection("testService", mockConn)
+
+	retrievedConn := manager.GetConnectionByServiceName("testService")
+
+	assert.Equal(t, mockConn, retrievedConn)
+}
+
+func TestManager_CloseConnection(t *testing.T) {
+	manager := New()
+
+	mockConn := &Connection{
+		Conn: &websocket.Conn{},
+	}
+	mockConn.Conn = nil
+
+	manager.AddWebsocketConnection("testConn", mockConn)
+
+	assert.NotNil(t, manager.GetWebsocketConnection("testConn"))
+
+	manager.CloseConnection("testConn")
+
+	assert.Nil(t, manager.GetWebsocketConnection("testConn"))
+}
