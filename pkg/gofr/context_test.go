@@ -112,6 +112,53 @@ func TestContext_WriteMessageToSocket(t *testing.T) {
 	assert.Equal(t, "Hello! GoFr", string(message))
 }
 
+func TestContext_WriteMessageToService(t *testing.T) {
+	port := testutil.GetFreePort(t)
+	t.Setenv("HTTP_PORT", fmt.Sprint(port))
+
+	app := New()
+
+	// Start a WebSocket server
+	app.WebSocket("/ws", func(ctx *Context) (any, error) {
+		conn := ctx.GetWSConnectionByServiceName("test-service")
+
+		messageToSend := "Hello, WebSocket!"
+
+		err := ctx.WriteMessageToService("test-service", messageToSend)
+		if err != nil {
+			return nil, err
+		}
+
+		_, receivedMessage, err := conn.ReadMessage()
+		if err != nil {
+			return nil, err
+		}
+
+		assert.Equal(t, messageToSend, string(receivedMessage))
+
+		return nil, nil
+	})
+
+	go app.Run()
+	time.Sleep(100 * time.Millisecond)
+
+	wsURL := fmt.Sprintf("ws://localhost:%d/ws", port)
+
+	serviceName := "test-service"
+	retryInterval := 50 * time.Millisecond
+	err := app.AddWSService(serviceName, wsURL, http.Header{}, true, retryInterval)
+	require.NoError(t, err, "AddWSService should not return an error")
+
+	// Establish a WebSocket connection
+	ws, resp, err := websocket.DefaultDialer.Dial(wsURL, nil)
+	require.NoError(t, err, "Dial should not return an error")
+
+	defer ws.Close()
+	defer resp.Body.Close()
+
+	require.NoError(t, err, "WebSocket handshake failed")
+}
+
 func TestGetAuthInfo_BasicAuth(t *testing.T) {
 	req := httptest.NewRequest(http.MethodGet, "/", http.NoBody)
 
