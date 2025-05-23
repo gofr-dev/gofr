@@ -2,7 +2,9 @@ package gofr
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
+	"net/http"
 	"net/http/httptest"
 	"reflect"
 	"testing"
@@ -14,6 +16,8 @@ import (
 
 	"gofr.dev/pkg/gofr/testutil"
 )
+
+var errWebSocketNotReady = errors.New("websocket server not ready")
 
 func Test_WebSocket_Success(t *testing.T) {
 	testutil.NewServerConfigs(t)
@@ -63,6 +67,59 @@ func Test_WebSocket_Success(t *testing.T) {
 	// Close the client connection
 	err = ws.Close()
 	require.NoError(t, err)
+}
+
+func Test_AddWSService(t *testing.T) {
+	port := testutil.GetFreePort(t)
+	t.Setenv("HTTP_PORT", fmt.Sprint(port))
+
+	app := New()
+
+	app.WebSocket("/ws", func(ctx *Context) (any, error) {
+		conn := ctx.GetConnectionFromContext(ctx)
+		defer conn.Close()
+
+		return "Service Response", nil
+	})
+
+	go app.Run()
+
+	wsURL := fmt.Sprintf("ws://localhost:%d/ws", port)
+
+	// Use readiness check instead of sleep
+	err := waitForWebSocketReady(wsURL, 3*time.Second)
+	require.NoError(t, err, "WebSocket server did not become ready in time")
+
+	serviceName := "test-service"
+	err = app.AddWSService(serviceName, wsURL, http.Header{}, true, 100*time.Millisecond)
+	require.NoError(t, err, "Failed to add WebSocket service")
+
+	// Verify the connection is registered
+	conn := app.container.WSManager.GetConnectionByServiceName(serviceName)
+	require.NotNil(t, conn, "Connection should be registered")
+}
+
+func waitForWebSocketReady(wsURL string, timeout time.Duration) error {
+	deadline := time.Now().Add(timeout)
+
+	for time.Now().Before(deadline) {
+		dialer := websocket.Dialer{}
+
+		conn, resp, err := dialer.Dial(wsURL, nil)
+		if resp != nil {
+			resp.Body.Close()
+		}
+
+		if err == nil {
+			conn.Close()
+
+			return nil
+		}
+
+		time.Sleep(50 * time.Millisecond)
+	}
+
+	return fmt.Errorf("%w after %s", errWebSocketNotReady, timeout)
 }
 
 func TestSerializeMessage(t *testing.T) {

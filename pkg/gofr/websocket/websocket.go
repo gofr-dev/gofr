@@ -119,7 +119,8 @@ func New() *Manager {
 }
 
 // Upgrade calls the upgrader to upgrade an http connection to a websocket connection.
-func (u *WSUpgrader) Upgrade(w http.ResponseWriter, r *http.Request, responseHeader http.Header) (*websocket.Conn, error) {
+func (u *WSUpgrader) Upgrade(w http.ResponseWriter, r *http.Request,
+	responseHeader http.Header) (*websocket.Conn, error) {
 	return u.Upgrader.Upgrade(w, r, responseHeader)
 }
 
@@ -129,6 +130,27 @@ func (ws *Manager) GetWebsocketConnection(connID string) *Connection {
 	defer ws.mu.Unlock()
 
 	return ws.WebSocketConnections[connID]
+}
+
+// ListConnections returns a list of all active WebSocket connection IDs.
+func (ws *Manager) ListConnections() []string {
+	ws.mu.RLock()
+	defer ws.mu.RUnlock()
+
+	connections := make([]string, 0, len(ws.WebSocketConnections))
+	for connID := range ws.WebSocketConnections {
+		connections = append(connections, connID)
+	}
+
+	return connections
+}
+
+// GetConnectionByServiceName retrieves a WebSocket connection by its service name.
+func (ws *Manager) GetConnectionByServiceName(serviceName string) *Connection {
+	ws.mu.RLock()
+	defer ws.mu.RUnlock()
+
+	return ws.WebSocketConnections[serviceName]
 }
 
 // AddWebsocketConnection add a new connection with the connection id key.
@@ -145,7 +167,9 @@ func (ws *Manager) CloseConnection(connID string) {
 	defer ws.mu.Unlock()
 
 	if conn, ok := ws.WebSocketConnections[connID]; ok {
-		conn.Close()
+		if conn.Conn != nil {
+			conn.Close()
+		}
 
 		delete(ws.WebSocketConnections, connID)
 	}
