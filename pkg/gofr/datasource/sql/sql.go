@@ -16,11 +16,12 @@ import (
 )
 
 const (
-	sqlite        = "sqlite"
-	defaultDBPort = 3306
+	sqlite         = "sqlite"
+	defaultDBPort  = 3306
+	requireSSLMode = "require"
 )
 
-var errUnsupportedDialect = fmt.Errorf("unsupported db dialect; supported dialects are - mysql, postgres, sqlite")
+var errUnsupportedDialect = fmt.Errorf("unsupported db dialect; supported dialects are - mysql, postgres, supabase, sqlite")
 
 // DBConfig has those members which are necessary variables while connecting to database.
 type DBConfig struct {
@@ -47,6 +48,17 @@ func NewSQL(configs config.Config, logger datasource.Logger, metrics Metrics) *D
 	if dbConfig.Dialect != sqlite && dbConfig.HostName == "" {
 		logger.Errorf("connection to %s failed: host name is empty.", dbConfig.Dialect)
 		return nil
+	}
+
+	// For Supabase, enforce SSL mode as "require"
+	if dbConfig.Dialect == supabaseDialect && dbConfig.SSLMode != requireSSLMode {
+		logger.Warnf("Supabase connections require SSL. Setting DB_SSL_MODE to 'require'")
+
+		dbConfig.SSLMode = requireSSLMode
+
+		if dbConfig.Port == strconv.Itoa(defaultDBPort) {
+			dbConfig.Port = "5432"
+		}
 	}
 
 	logger.Debugf("generating database connection string for '%s'", dbConfig.Dialect)
@@ -181,7 +193,7 @@ func getDBConnectionString(dbConfig *DBConfig) (string, error) {
 			dbConfig.Database,
 			dbConfig.Charset,
 		), nil
-	case "postgres":
+	case dialectPostgres, supabaseDialect:
 		return fmt.Sprintf("host=%s port=%s user=%s password=%s dbname=%s sslmode=%s",
 			dbConfig.HostName, dbConfig.Port, dbConfig.User, dbConfig.Password, dbConfig.Database, dbConfig.SSLMode), nil
 	case sqlite:
