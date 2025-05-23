@@ -146,6 +146,11 @@ export const navigation = [
                 title: 'Profiling in GoFr Applications',
                 href: '/docs/advanced-guide/debugging',
                 desc: "Discover GoFr auto-enables pprof profiling by leveraging its built-in configurations."
+            },
+            {
+                title: 'WebRTC',
+                href: '/docs/advanced-guide/webrtc',
+                desc: "Integrate peer-to-peer, real-time streaming (video/audio/data) in GoFr with built-in observability."
             }
         ],
     },
