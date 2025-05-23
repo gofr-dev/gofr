@@ -73,7 +73,7 @@ app.AddHTTPService("order", "https://localhost:2000",
 ```
 
 ## 2. API Keys Auth
-*API Key Authentication* is an HTTP authentication scheme where a unique API key is included in the request header for validation against a store of authorized keys.
+*API Key Authentication* is an HTTP authentication scheme where a unique API key is included in the request header `X-Api-Key` for validation against a store of authorized keys.
 
 ### Usage:
 GoFr offers two ways to implement API Keys authentication.
