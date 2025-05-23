@@ -2,6 +2,7 @@ package http
 
 import (
 	"fmt"
+	"gofr.dev/pkg/gofr/logging"
 	"net/http"
 	"os"
 	"testing"
@@ -117,4 +118,30 @@ func Test_ErrorErrorPanicRecovery(t *testing.T) {
 	require.ErrorContainsf(t, err, http.StatusText(http.StatusInternalServerError), "TEST Failed.\n")
 
 	assert.Equal(t, http.StatusInternalServerError, err.StatusCode(), "TEST Failed.\n")
+}
+
+func Test_ServiceUnavailable(t *testing.T) {
+
+	testCases := []struct {
+		message      string
+		dependency   string
+		errorMessage string
+		statusCode   int
+		logLevel     logging.Level
+	}{
+		{message: "", dependency: "", errorMessage: http.StatusText(http.StatusServiceUnavailable), statusCode: http.StatusServiceUnavailable, logLevel: logging.ERROR},
+		{message: "Connection Error", dependency: "", errorMessage: http.StatusText(http.StatusServiceUnavailable), statusCode: http.StatusServiceUnavailable, logLevel: logging.ERROR},
+		{message: "", dependency: "DB", errorMessage: http.StatusText(http.StatusServiceUnavailable), statusCode: http.StatusServiceUnavailable, logLevel: logging.ERROR},
+		{message: "Connection Error", dependency: "DB", errorMessage: "Service unavailable due to error: Connection Error from dependency DB", statusCode: http.StatusServiceUnavailable, logLevel: logging.ERROR},
+	}
+
+	for _, tc := range testCases {
+		err := ErrorServiceUnavailable{
+			Dependency:   tc.dependency,
+			ErrorMessage: tc.message,
+		}
+		assert.Equal(t, tc.statusCode, err.StatusCode())
+		assert.Equal(t, tc.errorMessage, err.Error())
+		assert.Equal(t, tc.logLevel, err.LogLevel())
+	}
 }
