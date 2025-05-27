@@ -1,13 +1,13 @@
 module gofr.dev/pkg/gofr/datasource/file/ftp
 
-go 1.22.7
+go 1.23
 
 toolchain go1.23.4
 
 require (
 	github.com/jlaffaye/ftp v0.2.0
 	github.com/stretchr/testify v1.10.0
-	go.uber.org/mock v0.5.0
+	go.uber.org/mock v0.5.2
 	gofr.dev v1.33.0
 )
 
