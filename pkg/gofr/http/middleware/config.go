@@ -1,16 +1,30 @@
 package middleware
 
 import (
+	"strconv"
 	"strings"
 
 	"golang.org/x/text/cases"
 	"golang.org/x/text/language"
 
 	"gofr.dev/pkg/gofr/config"
+	"gofr.dev/pkg/gofr/service"
 )
 
-func GetConfigs(c config.Config) map[string]string {
-	middlewareConfigs := make(map[string]string)
+type Config struct {
+	CorsHeaders map[string]string
+	LogProbes   LogProbes
+}
+
+type LogProbes struct {
+	Disabled bool
+	Paths    []string
+}
+
+func GetConfigs(c config.Config) Config {
+	middlewareConfigs := Config{
+		CorsHeaders: make(map[string]string),
+	}
 
 	allowedCORSHeaders := []string{
 		"ACCESS_CONTROL_ALLOW_ORIGIN",
@@ -22,8 +36,18 @@ func GetConfigs(c config.Config) map[string]string {
 
 	for _, v := range allowedCORSHeaders {
 		if val := c.Get(v); val != "" {
-			middlewareConfigs[convertHeaderNames(v)] = val
+			middlewareConfigs.CorsHeaders[convertHeaderNames(v)] = val
 		}
+	}
+
+	// Config values for Log Probes
+	logDisableProbes := c.GetOrDefault("LOG_DISABLE_PROBES", "false")
+	middlewareConfigs.LogProbes.Paths = []string{service.HealthPath, service.AlivePath}
+
+	// Convert the string value to a boolean
+	value, err := strconv.ParseBool(logDisableProbes)
+	if err == nil {
+		middlewareConfigs.LogProbes.Disabled = value
 	}
 
 	return middlewareConfigs
