@@ -9,7 +9,7 @@ require (
 	github.com/Azure/azure-sdk-for-go/sdk/storage/azblob v1.5.0
 	github.com/stretchr/testify v1.10.0
 	go.opentelemetry.io/otel/trace v1.36.0
-	go.uber.org/mock v0.5.0
+	go.uber.org/mock v0.5.2
 	gofr.dev v1.29.0
 	nhooyr.io/websocket v1.8.11
 )
