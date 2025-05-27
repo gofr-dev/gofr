@@ -148,14 +148,12 @@ jobs:
           max_attempts: 2
           command: |
             export APP_ENV=test
-            # Run tests for the pkg directory with coverage
-            cd pkg
-            go test ./... -v -short -coverprofile package.cov -coverpkg=./...
-            # Filter out mock files from coverage report
+          # Run tests for the pkg directory (run from root, not cd into pkg)
+            go test ./pkg/... -v -short -coverprofile=package.cov -coverpkg=./pkg/...
+          # Filter out mock files from coverage report
             grep -v '/mock_' package.cov > profile.cov
-            mv profile.cov ../profile.cov
-            # Display coverage statistics
-            go tool cover -func ../profile.cov
+          # Display coverage statistics
+            go tool cover -func profile.cov
 
       # Upload coverage report for the 1.24 Go version only
       - name: Upload Test Coverage
