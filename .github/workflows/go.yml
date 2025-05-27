@@ -148,12 +148,11 @@ jobs:
           max_attempts: 2
           command: |
             export APP_ENV=test
-            MODULE=$(go list -m)
             
             # Run tests with module-qualified coverage
             go test ./pkg/... -v -short \
               -coverprofile=package.cov \
-              -coverpkg=$MODULE/pkg/...
+              -coverpkg=.,./pkg/...
             
             # Filter and display coverage
             grep -vE '(mock_|pb\.go)' package.cov > profile.cov
