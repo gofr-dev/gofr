@@ -1,6 +1,7 @@
 package datasource
 
 import (
+	"database/sql"
 	"net/http"
 
 	"github.com/pkg/errors"
@@ -29,6 +30,10 @@ func (e ErrorDB) WithStack() ErrorDB {
 	return e
 }
 
-func (ErrorDB) StatusCode() int {
+func (e ErrorDB) StatusCode() int {
+	if errors.Is(e.Err, sql.ErrNoRows) {
+		return http.StatusNotFound
+	}
+
 	return http.StatusInternalServerError
 }
