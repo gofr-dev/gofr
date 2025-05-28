@@ -3,6 +3,7 @@ package datasource
 import (
 	"database/sql"
 	"github.com/gocql/gocql"
+	"go.mongodb.org/mongo-driver/mongo"
 	"net/http"
 
 	"github.com/pkg/errors"
@@ -32,7 +33,9 @@ func (e ErrorDB) WithStack() ErrorDB {
 }
 
 func (e ErrorDB) StatusCode() int {
-	if errors.Is(e.Err, sql.ErrNoRows) || errors.Is(e.Err, gocql.ErrNotFound) {
+	if errors.Is(e.Err, sql.ErrNoRows) ||
+		errors.Is(e.Err, gocql.ErrNotFound) ||
+		errors.Is(e.Err, mongo.ErrNoDocuments) {
 		return http.StatusNotFound
 	}
 

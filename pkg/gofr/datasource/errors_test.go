@@ -3,6 +3,7 @@ package datasource
 import (
 	"database/sql"
 	"github.com/gocql/gocql"
+	"go.mongodb.org/mongo-driver/mongo"
 	"net/http"
 	"os"
 	"testing"
@@ -45,6 +46,7 @@ func TestErrorDB_StatusCode(t *testing.T) {
 		{"", nil, http.StatusInternalServerError},
 		{"custom message", sql.ErrNoRows, http.StatusNotFound},
 		{"custom message", gocql.ErrNotFound, http.StatusNotFound},
+		{"custom message", mongo.ErrNoDocuments, http.StatusNotFound},
 	}
 	for i, testCase := range testCases {
 		errorDB := ErrorDB{
