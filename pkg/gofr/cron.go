@@ -13,6 +13,7 @@ import (
 	"go.opentelemetry.io/otel"
 
 	"gofr.dev/pkg/gofr/container"
+	"gofr.dev/pkg/gofr/logging"
 	"gofr.dev/pkg/gofr/version"
 )
 
@@ -277,11 +278,26 @@ func (j *job) run(cntnr *container.Container) {
 		Start(context.Background(), j.name)
 	defer span.End()
 
-	j.fn(&Context{
-		Context:   ctx,
-		Container: cntnr,
-		Request:   noopRequest{},
-	})
+	logger := logging.NewContextLogger(ctx, cntnr.Logger)
+
+	c := &Context{
+		Context:       ctx,
+		Container:     cntnr,
+		Request:       noopRequest{},
+		ContextLogger: *logger,
+	}
+
+	c.Infof("Starting cron job: %s", j.name)
+
+	start := time.Now()
+	defer func() {
+		if r := recover(); r != nil {
+			c.Errorf("Panic in cron job %s: %v", j.name, r)
+		}
+		c.Infof("Finished cron job: %s in %s", j.name, time.Since(start))
+	}()
+
+	j.fn(c)
 }
 
 func (j *job) tick(t *tick) bool {
