@@ -1,6 +1,7 @@
 package datasource
 
 import (
+	"database/sql"
 	"net/http"
 	"os"
 	"testing"
@@ -34,9 +35,20 @@ func Test_ErrorDB(t *testing.T) {
 }
 
 func TestErrorDB_StatusCode(t *testing.T) {
-	dbErr := ErrorDB{Message: "custom message"}
-
-	expectedCode := http.StatusInternalServerError
-
-	assert.Equal(t, expectedCode, dbErr.StatusCode(), "TEST Failed.\n")
+	testCases := []struct {
+		message    string
+		err        error
+		statusCode int
+	}{
+		{"custom message", errors.New("some error"), http.StatusInternalServerError},
+		{"", nil, http.StatusInternalServerError},
+		{"custom message", sql.ErrNoRows, http.StatusNotFound},
+	}
+	for i, testCase := range testCases {
+		errorDB := ErrorDB{
+			Err:     testCase.err,
+			Message: testCase.message,
+		}
+		assert.Equal(t, testCase.statusCode, errorDB.StatusCode(), "Failed test case #%d", i)
+	}
 }
