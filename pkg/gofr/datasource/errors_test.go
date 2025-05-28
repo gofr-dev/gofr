@@ -2,15 +2,15 @@ package datasource
 
 import (
 	"database/sql"
-	"github.com/gocql/gocql"
-	"go.mongodb.org/mongo-driver/mongo"
 	"net/http"
 	"os"
 	"testing"
 
+	"github.com/gocql/gocql"
 	"github.com/pkg/errors"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"go.mongodb.org/mongo-driver/mongo"
 )
 
 func TestMain(m *testing.M) {

@@ -2,11 +2,11 @@ package datasource
 
 import (
 	"database/sql"
-	"github.com/gocql/gocql"
-	"go.mongodb.org/mongo-driver/mongo"
 	"net/http"
 
+	"github.com/gocql/gocql"
 	"github.com/pkg/errors"
+	"go.mongodb.org/mongo-driver/mongo"
 )
 
 // ErrorDB represents an error specific to database operations.
