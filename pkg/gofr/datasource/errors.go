@@ -2,6 +2,7 @@ package datasource
 
 import (
 	"database/sql"
+	"github.com/gocql/gocql"
 	"net/http"
 
 	"github.com/pkg/errors"
@@ -31,7 +32,7 @@ func (e ErrorDB) WithStack() ErrorDB {
 }
 
 func (e ErrorDB) StatusCode() int {
-	if errors.Is(e.Err, sql.ErrNoRows) {
+	if errors.Is(e.Err, sql.ErrNoRows) || errors.Is(e.Err, gocql.ErrNotFound) {
 		return http.StatusNotFound
 	}
 

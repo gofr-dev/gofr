@@ -2,6 +2,7 @@ package datasource
 
 import (
 	"database/sql"
+	"github.com/gocql/gocql"
 	"net/http"
 	"os"
 	"testing"
@@ -43,6 +44,7 @@ func TestErrorDB_StatusCode(t *testing.T) {
 		{"custom message", errors.New("some error"), http.StatusInternalServerError},
 		{"", nil, http.StatusInternalServerError},
 		{"custom message", sql.ErrNoRows, http.StatusNotFound},
+		{"custom message", gocql.ErrNotFound, http.StatusNotFound},
 	}
 	for i, testCase := range testCases {
 		errorDB := ErrorDB{
