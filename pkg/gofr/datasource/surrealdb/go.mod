@@ -9,7 +9,7 @@ require (
 	github.com/surrealdb/surrealdb.go v0.3.2
 	go.opentelemetry.io/otel v1.36.0
 	go.opentelemetry.io/otel/trace v1.36.0
-	go.uber.org/mock v0.5.0
+	go.uber.org/mock v0.5.2
 )
 
 require (
