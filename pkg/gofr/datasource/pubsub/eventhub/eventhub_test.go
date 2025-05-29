@@ -123,7 +123,7 @@ func TestPublish_FailedBatchCreation(t *testing.T) {
 	mockLogger.EXPECT().Debug("Event Hub processor setup success")
 	mockLogger.EXPECT().Debug("Event Hub processor running successfully").AnyTimes()
 
-	mockMetrics.EXPECT().IncrementCounter(context.Background(), "app_pubsub_publish_total_count", "topic", client.cfg.EventhubName)
+	mockMetrics.EXPECT().IncrementCounter(t.Context(), "app_pubsub_publish_total_count", "topic", client.cfg.EventhubName)
 
 	mockLogger.EXPECT().Errorf(gomock.Any(), gomock.Any()).AnyTimes()
 
