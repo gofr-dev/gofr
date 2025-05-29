@@ -44,7 +44,7 @@ func TestNATSClient_Publish(t *testing.T) {
 		metrics:     mockMetrics,
 	}
 
-	ctx := context.Background()
+	ctx := t.Context()
 	subject := "test-subject"
 	message := []byte("test-message")
 
@@ -66,7 +66,7 @@ func TestNATSClient_PublishError(t *testing.T) {
 	mockMetrics := NewMockMetrics(ctrl)
 	mockConnManager := NewMockConnectionManagerInterface(ctrl)
 
-	ctx := context.TODO()
+	ctx := t.Context()
 	subject := "test"
 	message := []byte("test-message")
 
@@ -141,7 +141,7 @@ func TestNATSClient_SubscribeSuccess(t *testing.T) {
 		logger:  logging.NewMockLogger(logging.DEBUG),
 	}
 
-	ctx := context.Background()
+	ctx := t.Context()
 	expectedMsg := &pubsub.Message{
 		Topic: "test-subject",
 		Value: []byte("test message"),
@@ -183,7 +183,7 @@ func TestNATSClient_SubscribeError(t *testing.T) {
 		logger:  logging.NewMockLogger(logging.DEBUG),
 	}
 
-	ctx := context.Background()
+	ctx := t.Context()
 	expectedErr := errSubscriptionError
 
 	mockConnManager.EXPECT().IsConnected().Return(true)
@@ -218,7 +218,7 @@ func TestNATSClient_Close(t *testing.T) {
 		},
 	}
 
-	ctx := context.Background()
+	ctx := t.Context()
 
 	mockSubManager.EXPECT().Close()
 	mockConnManager.EXPECT().Close(ctx)
@@ -282,7 +282,7 @@ func TestNATSClient_DeleteTopic(t *testing.T) {
 		Config:        &Config{},
 	}
 
-	ctx := context.Background()
+	ctx := t.Context()
 	gomock.InOrder(
 		mockConnManager.EXPECT().IsConnected().Return(true),
 		mockStreamManager.EXPECT().DeleteStream(ctx, "test-topic").Return(nil),
@@ -305,7 +305,7 @@ func TestNATSClient_DeleteTopic_Error(t *testing.T) {
 		Config:        &Config{},
 	}
 
-	ctx := context.Background()
+	ctx := t.Context()
 
 	expectedErr := errFailedToDeleteStream
 
@@ -332,7 +332,7 @@ func TestNATSClient_CreateTopic(t *testing.T) {
 		Config:        &Config{},
 	}
 
-	ctx := context.Background()
+	ctx := t.Context()
 
 	mockConnManager.EXPECT().IsConnected().Return(true)
 	mockStreamManager.EXPECT().
@@ -509,7 +509,7 @@ func TestClient_SubscribeWithHandler(t *testing.T) {
 
 	waitForHandlersToComplete(t, &wg)
 
-	err := client.Close(context.Background())
+	err := client.Close(t.Context())
 	require.NoError(t, err)
 }
 
@@ -568,7 +568,7 @@ func testFirstSubscription(t *testing.T, client *Client, mocks *testMocks, wg *s
 	firstHandlerCalled := make(chan bool, 1)
 	firstHandler := createFirstHandler(t, firstHandlerCalled, wg)
 
-	err := client.SubscribeWithHandler(context.Background(), "test-subject", firstHandler)
+	err := client.SubscribeWithHandler(t.Context(), "test-subject", firstHandler)
 	require.NoError(t, err)
 
 	mocks.messageChan1 <- mocks.msg1
@@ -585,7 +585,7 @@ func testSecondSubscription(t *testing.T, client *Client, mocks *testMocks, wg *
 	errorHandlerCalled := make(chan bool, 1)
 	errorHandler := createErrorHandler(t, errorHandlerCalled, wg)
 
-	err := client.SubscribeWithHandler(context.Background(), "test-subject", errorHandler)
+	err := client.SubscribeWithHandler(t.Context(), "test-subject", errorHandler)
 	require.NoError(t, err)
 
 	mocks.messageChan2 <- mocks.msg2
@@ -752,7 +752,7 @@ func TestClient_CreateStream(t *testing.T) {
 	mockConnManager.EXPECT().IsConnected().Return(true)
 	mockStreamManager.EXPECT().CreateStream(gomock.Any(), cfg).Return(nil)
 
-	err := client.CreateStream(context.Background(), cfg)
+	err := client.CreateStream(t.Context(), cfg)
 	require.NoError(t, err)
 }
 
@@ -770,7 +770,7 @@ func TestClient_DeleteStream(t *testing.T) {
 	mockConnManager.EXPECT().IsConnected().Return(true)
 	mockStreamManager.EXPECT().DeleteStream(gomock.Any(), "test-stream").Return(nil)
 
-	err := client.DeleteStream(context.Background(), "test-stream")
+	err := client.DeleteStream(t.Context(), "test-stream")
 	require.NoError(t, err)
 }
 
@@ -794,7 +794,7 @@ func TestClient_CreateOrUpdateStream(t *testing.T) {
 	mockConnManager.EXPECT().IsConnected().Return(true)
 	mockStreamManager.EXPECT().CreateOrUpdateStream(gomock.Any(), &cfg).Return(mockStream, nil)
 
-	stream, err := client.CreateOrUpdateStream(context.Background(), &cfg)
+	stream, err := client.CreateOrUpdateStream(t.Context(), &cfg)
 	require.NoError(t, err)
 	assert.Equal(t, mockStream, stream)
 }
@@ -934,7 +934,7 @@ func TestClient_GetJetStreamStatus(t *testing.T) {
 
 	for i, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			ctx := context.Background()
+			ctx := t.Context()
 
 			got, err := GetJetStreamStatus(ctx, jStream)
 
