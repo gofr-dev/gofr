@@ -123,7 +123,7 @@ func TestPublish_FailedBatchCreation(t *testing.T) {
 	mockLogger.EXPECT().Debug("Event Hub processor setup success")
 	mockLogger.EXPECT().Debug("Event Hub processor running successfully").AnyTimes()
 
-	mockMetrics.EXPECT().IncrementCounter(context.Background(), "app_pubsub_publish_total_count", "topic", client.cfg.EventhubName)
+	mockMetrics.EXPECT().IncrementCounter(t.Context(), "app_pubsub_publish_total_count", "topic", client.cfg.EventhubName)
 
 	mockLogger.EXPECT().Errorf(gomock.Any(), gomock.Any()).AnyTimes()
 
@@ -132,7 +132,7 @@ func TestPublish_FailedBatchCreation(t *testing.T) {
 
 	client.Connect()
 
-	err := client.Publish(context.Background(), client.cfg.EventhubName, []byte("my-message"))
+	err := client.Publish(t.Context(), client.cfg.EventhubName, []byte("my-message"))
 
 	require.ErrorContains(t, err, "failed to WebSocket dial: failed to send handshake request: ",
 		"Eventhub Publish Failed Batch Creation")
@@ -161,7 +161,7 @@ func TestPublish_FailedInvalidTopic(t *testing.T) {
 
 	client.Connect()
 
-	err := client.Publish(context.Background(), "random topic", []byte("my-message"))
+	err := client.Publish(t.Context(), "random topic", []byte("my-message"))
 
 	require.Equal(t, "topic should be same as Event Hub name", err.Error(), "Event Hub Publish Failed Invalid Topic")
 
@@ -190,7 +190,7 @@ func Test_CreateTopic(t *testing.T) {
 
 	client.Connect()
 
-	err := client.DeleteTopic(context.Background(), "random-topic")
+	err := client.DeleteTopic(t.Context(), "random-topic")
 
 	require.NoError(t, err, "Event Hub Topic Creation not allowed failed")
 
@@ -219,7 +219,7 @@ func Test_DeleteTopic(t *testing.T) {
 
 	client.Connect()
 
-	err := client.CreateTopic(context.Background(), "random-topic")
+	err := client.CreateTopic(t.Context(), "random-topic")
 
 	require.NoError(t, err, "Event Hub Topic Deletion not allowed failed")
 

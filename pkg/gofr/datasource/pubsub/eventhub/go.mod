@@ -1,6 +1,6 @@
 module gofr.dev/pkg/gofr/datasource/pubsub/eventhub
 
-go 1.23.0
+go 1.24
 
 toolchain go1.24.1
 
@@ -10,7 +10,7 @@ require (
 	github.com/stretchr/testify v1.10.0
 	go.opentelemetry.io/otel/trace v1.36.0
 	go.uber.org/mock v0.5.2
-	gofr.dev v1.29.0
+	gofr.dev v1.40.0
 	nhooyr.io/websocket v1.8.11
 )
 
@@ -24,7 +24,7 @@ require (
 	github.com/pmezard/go-difflib v1.0.0 // indirect
 	github.com/rogpeppe/go-internal v1.13.1 // indirect
 	go.opentelemetry.io/otel v1.36.0 // indirect
-	golang.org/x/net v0.38.0 // indirect
-	golang.org/x/text v0.23.0 // indirect
+	golang.org/x/net v0.40.0 // indirect
+	golang.org/x/text v0.25.0 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 )
