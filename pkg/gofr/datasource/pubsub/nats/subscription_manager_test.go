@@ -40,7 +40,7 @@ func TestSubscriptionManager_Subscribe(t *testing.T) {
 		MaxWait: time.Second,
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	ctx, cancel := context.WithTimeout(t.Context(), 2*time.Second)
 	defer cancel()
 
 	topic := "test.topic"
@@ -72,7 +72,7 @@ func TestSubscriptionManager_Subscribe_Error(t *testing.T) {
 		},
 	}
 
-	ctx := context.Background()
+	ctx := t.Context()
 	topic := "test.topic"
 
 	expectedErr := errConsumerCreationError
@@ -130,7 +130,7 @@ func TestSubscriptionManager_createOrUpdateConsumer(t *testing.T) {
 		},
 	}
 
-	ctx := context.Background()
+	ctx := t.Context()
 	topic := "test.topic"
 
 	mockJS.EXPECT().CreateOrUpdateConsumer(ctx, cfg.Stream.Stream, gomock.Any()).Return(mockConsumer, nil)
@@ -152,7 +152,7 @@ func TestSubscriptionManager_consumeMessages(t *testing.T) {
 	topic := "test.topic"
 	buffer := make(chan *pubsub.Message, 1)
 
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(t.Context())
 	defer cancel()
 
 	mockBatch := createMockMessageBatch(ctrl)
@@ -191,7 +191,7 @@ func TestSubscriptionManager_Close(t *testing.T) {
 	topic := "test.topic"
 
 	// Create a subscription and buffer
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(t.Context())
 	sm.subscriptions[topic] = &subscription{cancel: cancel}
 	sm.topicBuffers[topic] = make(chan *pubsub.Message, 1)
 
