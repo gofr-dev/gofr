@@ -1,9 +1,12 @@
 package datasource
 
 import (
+	"database/sql"
 	"net/http"
 
+	"github.com/gocql/gocql"
 	"github.com/pkg/errors"
+	"go.mongodb.org/mongo-driver/mongo"
 )
 
 // ErrorDB represents an error specific to database operations.
@@ -29,6 +32,12 @@ func (e ErrorDB) WithStack() ErrorDB {
 	return e
 }
 
-func (ErrorDB) StatusCode() int {
+func (e ErrorDB) StatusCode() int {
+	if errors.Is(e.Err, sql.ErrNoRows) ||
+		errors.Is(e.Err, gocql.ErrNotFound) ||
+		errors.Is(e.Err, mongo.ErrNoDocuments) {
+		return http.StatusNotFound
+	}
+
 	return http.StatusInternalServerError
 }

@@ -1,13 +1,16 @@
 package datasource
 
 import (
+	"database/sql"
 	"net/http"
 	"os"
 	"testing"
 
+	"github.com/gocql/gocql"
 	"github.com/pkg/errors"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"go.mongodb.org/mongo-driver/mongo"
 )
 
 func TestMain(m *testing.M) {
@@ -34,9 +37,22 @@ func Test_ErrorDB(t *testing.T) {
 }
 
 func TestErrorDB_StatusCode(t *testing.T) {
-	dbErr := ErrorDB{Message: "custom message"}
-
-	expectedCode := http.StatusInternalServerError
-
-	assert.Equal(t, expectedCode, dbErr.StatusCode(), "TEST Failed.\n")
+	testCases := []struct {
+		message    string
+		err        error
+		statusCode int
+	}{
+		{"custom message", errors.New("some error"), http.StatusInternalServerError},
+		{"", nil, http.StatusInternalServerError},
+		{"custom message", sql.ErrNoRows, http.StatusNotFound},
+		{"custom message", gocql.ErrNotFound, http.StatusNotFound},
+		{"custom message", mongo.ErrNoDocuments, http.StatusNotFound},
+	}
+	for i, testCase := range testCases {
+		errorDB := ErrorDB{
+			Err:     testCase.err,
+			Message: testCase.message,
+		}
+		assert.Equal(t, testCase.statusCode, errorDB.StatusCode(), "Failed test case #%d", i)
+	}
 }

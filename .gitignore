@@ -22,3 +22,5 @@ vendor/
 # IDE Cache
 .vscode
 .DS_Store
+go.work
+go.work.sum
