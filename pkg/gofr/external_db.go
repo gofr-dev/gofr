@@ -194,3 +194,20 @@ func (a *App) AddElasticsearch(db container.ElasticsearchProvider) {
 
 	a.container.Elasticsearch = db
 }
+
+// AddPinecone sets the Pinecone vector database in the app's container.
+func (a *App) AddPinecone(db container.PineconeProvider) {
+	// Set up logger, metrics, and tracer
+	db.UseLogger(a.Logger())
+	db.UseMetrics(a.Metrics())
+
+	// Get tracer from OpenTelemetry
+	tracer := otel.GetTracerProvider().Tracer("gofr-pinecone")
+	db.UseTracer(tracer)
+
+	// Connect to Pinecone
+	db.Connect()
+
+	// Add the Pinecone provider to the container
+	a.container.Pinecone = db
+}

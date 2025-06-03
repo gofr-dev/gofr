@@ -69,6 +69,9 @@ type Container struct {
 	KVStore KVStore
 
 	File file.FileSystem
+
+	// Pinecone is the vector database client for interacting with Pinecone
+	Pinecone Pinecone
 }
 
 func NewContainer(conf config.Config) *Container {
