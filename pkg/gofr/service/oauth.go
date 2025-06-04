@@ -5,10 +5,13 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
+	"strings"
 
 	"golang.org/x/oauth2"
 	"golang.org/x/oauth2/clientcredentials"
 )
+
+const AuthorisationHeader = "Authorization"
 
 // OAuthConfig describes a 2-legged OAuth2 flow, with both the
 // client application information and the server's endpoint URLs.
@@ -28,6 +31,50 @@ type OAuthConfig struct {
 
 	// EndpointParams specifies additional parameters for requests to the token endpoint.
 	EndpointParams url.Values
+}
+
+func NewOAuthConfig(clientID, clientSecret, tokenURL string, scopes []string, params url.Values) (Options, error) {
+	if clientID == "" {
+		return nil, OAuthErr{nil, "client id is mandatory"}
+	}
+
+	if clientSecret == "" {
+		return nil, OAuthErr{nil, "client secret is mandatory"}
+	}
+
+	if err := validateTokenURL(tokenURL); err != nil {
+		return nil, err
+	}
+
+	config := OAuthConfig{
+		ClientID:       clientID,
+		ClientSecret:   clientSecret,
+		TokenURL:       tokenURL,
+		Scopes:         scopes,
+		EndpointParams: params,
+	}
+
+	return &config, nil
+}
+
+func validateTokenURL(tokenURL string) error {
+	if tokenURL == "" {
+		return OAuthErr{nil, "token url is mandatory"}
+	}
+
+	if u, err2 := url.Parse(tokenURL); err2 != nil {
+		return OAuthErr{err2, "error in token URL"}
+	} else if u.Host == "" || u.Scheme == "" {
+		return OAuthErr{err2, "empty host"}
+	} else if strings.Contains(u.Host, "..") {
+		return OAuthErr{nil, "invalid host pattern, contains `..`"}
+	} else if strings.HasSuffix(u.Host, ".") {
+		return OAuthErr{nil, "invalid host pattern, ends with `.`"}
+	} else if u.Scheme != "http" && u.Scheme != "https" {
+		return OAuthErr{nil, "invalid scheme, allowed http and https only"}
+	}
+
+	return nil
 }
 
 func (h *OAuthConfig) AddOption(svc HTTP) HTTP {
@@ -55,6 +102,8 @@ func (o *oAuth) addAuthorizationHeader(ctx context.Context, headers map[string]s
 
 	if headers == nil {
 		headers = make(map[string]string)
+	} else if authHeader, ok := headers[AuthorisationHeader]; ok && authHeader != "" {
+		return nil, OAuthErr{Message: "auth header already exists " + authHeader}
 	}
 
 	token, err := o.TokenSource(ctx).Token()
@@ -62,7 +111,7 @@ func (o *oAuth) addAuthorizationHeader(ctx context.Context, headers map[string]s
 		return nil, err
 	}
 
-	headers["Authorization"] = fmt.Sprintf("%v %v", token.TokenType, token.AccessToken)
+	headers[AuthorisationHeader] = fmt.Sprintf("%v %v", token.Type(), token.AccessToken)
 
 	return headers, nil
 }

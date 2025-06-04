@@ -1,8 +1,11 @@
 package service
 
 import (
+	"context"
+	"errors"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"strings"
 	"testing"
 
@@ -13,6 +16,19 @@ import (
 
 	"gofr.dev/pkg/gofr/logging"
 )
+
+// #nosec G101
+const clientID = "0iyeGcLYWudLGqZfD6HvOdZHZ5TlciAJ"
+
+// #nosec G101
+const clientSecret = "GQXTY2f9186nUS3C9WWi7eJz8-iVEsxq7lKxdjfhOJbsEPPtEszL3AxFn8k_NAER"
+
+// #nosec G101
+const tokenURL = "https://dev-zq6tvaxf3v7p0g7j.us.auth0.com/oauth/token"
+
+var err1 = errors.New("unsupported protocol scheme \"\"")
+
+var err2 = errors.New("unsupported protocol scheme \"abc\"")
 
 func oAuthHTTPServer(t *testing.T) *httptest.Server {
 	t.Helper()
@@ -36,174 +52,273 @@ func oAuthHTTPServer(t *testing.T) *httptest.Server {
 	return server
 }
 
-func setupHTTPServiceTestServerForOAuth(server *httptest.Server) HTTP {
-	// Initialize HTTP service with custom transport, URL, tracer, logger, and metrics
-	service := httpService{
+func setupHTTPService(serviceURL string) httpService {
+	return httpService{
 		Client: &http.Client{},
-		url:    server.URL,
+		url:    serviceURL,
 		Tracer: otel.Tracer("gofr-http-client"),
 		Logger: logging.NewMockLogger(logging.DEBUG),
 	}
+}
 
-	// Circuit breaker configuration
+func setupHTTPServiceTestServerForOAuth(server *httptest.Server, tokenURL string) HTTP {
+	// Initialize HTTP service with custom transport, URL, tracer, logger, and metrics
+	service := setupHTTPService(server.URL)
+
+	// oAuth configuration
 	oauthConfig := OAuthConfig{
-		ClientID:     "0iyeGcLYWudLGqZfD6HvOdZHZ5TlciAJ",
-		ClientSecret: "GQXTY2f9186nUS3C9WWi7eJz8-iVEsxq7lKxdjfhOJbsEPPtEszL3AxFn8k_NAER",
-		TokenURL:     "https://dev-zq6tvaxf3v7p0g7j.us.auth0.com/oauth/token",
+		ClientID:     clientID,
+		ClientSecret: clientSecret,
+		TokenURL:     tokenURL,
 		EndpointParams: map[string][]string{
 			"audience": {"https://dev-zq6tvaxf3v7p0g7j.us.auth0.com/api/v2/"},
 		},
 	}
 
-	// Apply circuit breaker option to the HTTP service
+	// Apply oAuth option to the HTTP service
 	httpSvc := oauthConfig.AddOption(&service)
 
 	return httpSvc
 }
 
-func setupHTTPServiceTestServerForOAuthWithUnSupportedMethod() HTTP {
-	// Initialize HTTP service with custom transport, URL, tracer, logger, and metrics
-	service := httpService{
-		Client: &http.Client{},
-		Tracer: otel.Tracer("gofr-http-client"),
-		Logger: logging.NewMockLogger(logging.DEBUG),
+func TestHttpService_RequestsOAuth(t *testing.T) {
+	server := oAuthHTTPServer(t)
+	defer server.Close()
+
+	invalidURL := "abc://invalid-url"
+
+	testCases := []struct {
+		method     string
+		headers    bool
+		tokenURL   string
+		err        error
+		statusCode int
+	}{
+		{http.MethodGet, false, tokenURL, nil, http.StatusOK},
+		{http.MethodPost, false, tokenURL, nil, http.StatusOK},
+		{http.MethodPut, false, tokenURL, nil, http.StatusOK},
+		{http.MethodDelete, false, tokenURL, nil, http.StatusOK},
+		{http.MethodPatch, false, tokenURL, nil, http.StatusOK},
+		{http.MethodGet, false, "", &url.Error{Op: "Post", URL: "", Err: err1}, http.StatusOK},
+		{http.MethodPost, false, "", &url.Error{Op: "Post", URL: "", Err: err1}, http.StatusOK},
+		{http.MethodPut, false, "", &url.Error{Op: "Post", URL: "", Err: err1}, http.StatusOK},
+		{http.MethodDelete, false, "", &url.Error{Op: "Post", URL: "", Err: err1}, http.StatusOK},
+		{http.MethodPatch, false, "", &url.Error{Op: "Post", URL: "", Err: err1}, http.StatusOK},
+		{http.MethodGet, false, invalidURL, &url.Error{Op: "Post", URL: invalidURL, Err: err2}, http.StatusOK},
+		{http.MethodPost, false, invalidURL, &url.Error{Op: "Post", URL: invalidURL, Err: err2}, http.StatusOK},
+		{http.MethodPut, false, invalidURL, &url.Error{Op: "Post", URL: invalidURL, Err: err2}, http.StatusOK},
+		{http.MethodDelete, false, invalidURL, &url.Error{Op: "Post", URL: invalidURL, Err: err2}, http.StatusOK},
+		{http.MethodPatch, false, invalidURL, &url.Error{Op: "Post", URL: invalidURL, Err: err2}, http.StatusOK},
+		{http.MethodGet, true, tokenURL, nil, http.StatusOK},
+		{http.MethodPost, true, tokenURL, nil, http.StatusOK},
+		{http.MethodPut, true, tokenURL, nil, http.StatusOK},
+		{http.MethodDelete, true, tokenURL, nil, http.StatusOK},
+		{http.MethodPatch, true, tokenURL, nil, http.StatusOK},
+		{http.MethodGet, true, "", &url.Error{Op: "Post", URL: "", Err: err1}, http.StatusOK},
+		{http.MethodPost, true, "", &url.Error{Op: "Post", URL: "", Err: err1}, http.StatusOK},
+		{http.MethodPut, true, "", &url.Error{Op: "Post", URL: "", Err: err1}, http.StatusOK},
+		{http.MethodDelete, true, "", &url.Error{Op: "Post", URL: "", Err: err1}, http.StatusOK},
+		{http.MethodPatch, true, "", &url.Error{Op: "Post", URL: "", Err: err1}, http.StatusOK},
+		{http.MethodGet, true, invalidURL, &url.Error{Op: "Post", URL: invalidURL, Err: err2}, http.StatusOK},
+		{http.MethodPost, true, invalidURL, &url.Error{Op: "Post", URL: invalidURL, Err: err2}, http.StatusOK},
+		{http.MethodPut, true, invalidURL, &url.Error{Op: "Post", URL: invalidURL, Err: err2}, http.StatusOK},
+		{http.MethodDelete, true, invalidURL, &url.Error{Op: "Post", URL: invalidURL, Err: err2}, http.StatusOK},
+		{http.MethodPatch, true, invalidURL, &url.Error{Op: "Post", URL: invalidURL, Err: err2}, http.StatusOK},
 	}
 
-	// Circuit breaker configuration
-	oauthConfig := OAuthConfig{}
+	for i, tc := range testCases {
+		var resp *http.Response
 
-	// Apply circuit breaker option to the HTTP service
-	httpSvc := oauthConfig.AddOption(&service)
+		var err error
 
-	return httpSvc
-}
+		oauthConfig := OAuthConfig{
+			ClientID:     clientID,
+			ClientSecret: clientSecret,
+			TokenURL:     tc.tokenURL,
+			EndpointParams: map[string][]string{
+				"audience": {"https://dev-zq6tvaxf3v7p0g7j.us.auth0.com/api/v2/"},
+			},
+		}
 
-func TestHttpService_GetSuccessRequestsOAuth(t *testing.T) {
-	server := oAuthHTTPServer(t)
+		httpService := setupHTTPService(server.URL)
+		// Apply oAuth option to the HTTP service
+		service := oauthConfig.AddOption(&httpService)
 
-	service := setupHTTPServiceTestServerForOAuth(server)
+		switch tc.method {
+		case http.MethodGet:
+			resp, err = callHTTPServiceGet(t.Context(), service, tc.headers)
+		case http.MethodPost:
+			resp, err = callHTTPServicePost(t.Context(), service, tc.headers)
 
-	resp, err := service.Get(t.Context(), "test", nil)
+		case http.MethodDelete:
+			resp, err = callHTTPServiceDelete(t.Context(), service, tc.headers)
 
-	assert.Equal(t, http.StatusOK, resp.StatusCode)
-	require.NoError(t, err)
+		case http.MethodPut:
+			resp, err = callHTTPServicePut(t.Context(), service, tc.headers)
 
-	_ = resp.Body.Close()
-}
+		case http.MethodPatch:
+			resp, err = callHTTPServicePatch(t.Context(), service, tc.headers)
+		}
 
-func TestHttpService_PostSuccessRequestsOAuth(t *testing.T) {
-	server := oAuthHTTPServer(t)
+		require.Equal(t, tc.err, err)
 
-	service := setupHTTPServiceTestServerForOAuth(server)
-
-	resp, err := service.Post(t.Context(), "test", nil, nil)
-
-	assert.Equal(t, http.StatusOK, resp.StatusCode)
-	require.NoError(t, err)
-
-	_ = resp.Body.Close()
-}
-
-func TestHttpService_PatchSuccessRequestsOAuth(t *testing.T) {
-	server := oAuthHTTPServer(t)
-
-	service := setupHTTPServiceTestServerForOAuth(server)
-
-	resp, err := service.Patch(t.Context(), "test", nil, nil)
-
-	assert.Equal(t, http.StatusOK, resp.StatusCode)
-	require.NoError(t, err)
-
-	_ = resp.Body.Close()
-}
-
-func TestHttpService_PutSuccessRequestsOAuth(t *testing.T) {
-	server := oAuthHTTPServer(t)
-
-	service := setupHTTPServiceTestServerForOAuth(server)
-
-	resp, err := service.Put(t.Context(), "test", nil, nil)
-
-	assert.Equal(t, http.StatusOK, resp.StatusCode)
-	require.NoError(t, err)
-
-	_ = resp.Body.Close()
-}
-
-func TestHttpService_DeleteSuccessRequestsOAuth(t *testing.T) {
-	server := oAuthHTTPServer(t)
-
-	service := setupHTTPServiceTestServerForOAuth(server)
-
-	resp, err := service.Delete(t.Context(), "test", nil)
-
-	assert.Equal(t, http.StatusOK, resp.StatusCode)
-	require.NoError(t, err)
-
-	_ = resp.Body.Close()
-}
-
-func TestHttpService_DeleteRequestsOAuthError(t *testing.T) {
-	service := setupHTTPServiceTestServerForOAuthWithUnSupportedMethod()
-
-	resp, err := service.Delete(t.Context(), "test", nil)
-
-	assert.Nil(t, resp)
-	require.ErrorContains(t, err, `unsupported protocol scheme`)
-
-	if resp != nil {
-		resp.Body.Close()
+		if err == nil {
+			assert.Equal(t, tc.statusCode, resp.StatusCode, "failed test case #%d", i)
+			_ = resp.Body.Close()
+		}
 	}
 }
 
-func TestHttpService_PutRequestsOAuthError(t *testing.T) {
-	service := setupHTTPServiceTestServerForOAuthWithUnSupportedMethod()
+func callHTTPServiceGet(ctx context.Context, service HTTP, headers bool) (resp *http.Response, err error) {
+	if headers {
+		resp, err = service.GetWithHeaders(ctx, "test", nil, nil)
+	} else {
+		resp, err = service.Get(ctx, "test", nil)
+	}
 
-	resp, err := service.Put(t.Context(), "test", nil, nil)
+	return resp, err
+}
 
-	assert.Nil(t, resp)
-	require.ErrorContains(t, err, `unsupported protocol scheme`)
+func callHTTPServicePost(ctx context.Context, service HTTP, headers bool) (resp *http.Response, err error) {
+	if headers {
+		resp, err = service.PostWithHeaders(ctx, "test", nil, nil, nil)
+	} else {
+		resp, err = service.Post(ctx, "test", nil, nil)
+	}
 
-	if resp != nil {
-		resp.Body.Close()
+	return resp, err
+}
+
+func callHTTPServicePut(ctx context.Context, service HTTP, headers bool) (resp *http.Response, err error) {
+	if headers {
+		resp, err = service.PutWithHeaders(ctx, "test", nil, nil, nil)
+	} else {
+		resp, err = service.Put(ctx, "test", nil, nil)
+	}
+
+	return resp, err
+}
+
+func callHTTPServicePatch(ctx context.Context, service HTTP, headers bool) (resp *http.Response, err error) {
+	if headers {
+		resp, err = service.PatchWithHeaders(ctx, "test", nil, nil, nil)
+	} else {
+		resp, err = service.Patch(ctx, "test", nil, nil)
+	}
+
+	return resp, err
+}
+
+func callHTTPServiceDelete(ctx context.Context, service HTTP, headers bool) (resp *http.Response, err error) {
+	if headers {
+		resp, err = service.DeleteWithHeaders(ctx, "test", nil, nil)
+	} else {
+		resp, err = service.Delete(ctx, "test", nil)
+	}
+
+	return resp, err
+}
+
+func TestHttpService_NewOAuthConfig(t *testing.T) {
+	testCases := []struct {
+		clientID     string
+		clientSecret string
+		tokenURL     string
+		scopes       []string
+		params       url.Values
+		err          error
+	}{
+		{"", "", "", nil, nil, OAuthErr{nil, "client id is mandatory"}},
+		{clientID, "", "", nil, nil, OAuthErr{nil, "client secret is mandatory"}},
+		{clientID, "", tokenURL, nil, nil, OAuthErr{nil, "client secret is mandatory"}},
+		{clientID, clientSecret, "", nil, nil, OAuthErr{nil, "token url is mandatory"}},
+		{clientID, clientSecret, tokenURL, nil, nil, nil},
+		{clientID, "some_random_client_secret", tokenURL, nil, nil, nil},
+		{"some_random_client_id", clientSecret, tokenURL, nil, nil, nil},
+		{clientID, clientSecret, "invalid_url_format", nil, nil, OAuthErr{nil, "empty host"}},
+	}
+
+	for i, tc := range testCases {
+		config, err := NewOAuthConfig(tc.clientID, tc.clientSecret, tc.tokenURL, tc.scopes, tc.params)
+		assert.Equal(t, tc.err, err, "failed test case #%d", i)
+
+		if tc.err == nil {
+			oAuthConfig, ok := config.(*OAuthConfig)
+			assert.True(t, ok, "failed to get OAuthConfig for testcase #%d", i)
+			assert.Equal(t, tc.clientID, oAuthConfig.ClientID, "failed test case #%d", i)
+			assert.Equal(t, tc.clientSecret, oAuthConfig.ClientSecret, "failed test case #%d", i)
+			assert.Equal(t, tc.tokenURL, oAuthConfig.TokenURL, "failed test case #%d", i)
+			assert.Equal(t, tc.params, oAuthConfig.EndpointParams, "failed test case #%d", i)
+			assert.Equal(t, tc.scopes, oAuthConfig.Scopes, "failed test case #%d", i)
+		}
 	}
 }
 
-func TestHttpService_PatchRequestsOAuthError(t *testing.T) {
-	service := setupHTTPServiceTestServerForOAuthWithUnSupportedMethod()
+func TestHttpService_validateTokenURL(t *testing.T) {
+	testCases := []struct {
+		tokenURL string
+		errMsg   string
+	}{
+		{"https://www.example.com", ""},
+		{"https://www.example.com.", "invalid host pattern, ends with `.`"},
+		{"https://www.192.168.1.1.com", ""},
+		{"https://www.192.168.1.1..com", "invalid host pattern, contains `..`"},
+		{"ftp://www.192.168.1.1..com", "invalid host pattern, contains `..`"},
+		{"ftp://www.192.168.1.1.com", "invalid scheme, allowed http and https only"},
+		{"www.192.168.1.1.com", "empty host"},
+		{"https://www.example.", "invalid host pattern, ends with `.`"},
+		{"", "token url is mandatory"},
+		{"invalid_url_format", "empty host"},
+	}
 
-	resp, err := service.Patch(t.Context(), "test", nil, nil)
-
-	assert.Nil(t, resp)
-	require.ErrorContains(t, err, `unsupported protocol scheme`)
-
-	if resp != nil {
-		resp.Body.Close()
+	for i, tc := range testCases {
+		err := validateTokenURL(tc.tokenURL)
+		if tc.errMsg != "" {
+			assert.ErrorContainsf(t, err, tc.errMsg, "failed test case #%d", i)
+		}
 	}
 }
 
-func TestHttpService_PostRequestsOAuthError(t *testing.T) {
-	service := setupHTTPServiceTestServerForOAuthWithUnSupportedMethod()
-
-	resp, err := service.Post(t.Context(), "test", nil, nil)
-
-	assert.Nil(t, resp)
-	require.ErrorContains(t, err, `unsupported protocol scheme`)
-
-	if resp != nil {
-		resp.Body.Close()
+func TestHttpService_addAuthorizationHeader(t *testing.T) {
+	emptyHeaders := map[string]string{}
+	headerWithAuth := map[string]string{AuthorisationHeader: "Value"}
+	headerWithEmptyAuth := map[string]string{AuthorisationHeader: ""}
+	headerWithoutAuth := map[string]string{"Content Type": "Value"}
+	headerWithEmptyAuthAndOtherValues := map[string]string{"Content Type": "Value", AuthorisationHeader: ""}
+	tokenURLError := &url.Error{Op: "Post", URL: "", Err: err1}
+	authHeaderExistsError := OAuthErr{Message: "auth header already exists Value"}
+	testCases := []struct {
+		ctx      context.Context
+		tokenURL string
+		headers  map[string]string
+		response map[string]string
+		err      error
+	}{
+		{t.Context(), "", headerWithAuth, nil, authHeaderExistsError},
+		{t.Context(), "", nil, nil, tokenURLError},
+		{t.Context(), tokenURL, headerWithAuth, nil, authHeaderExistsError},
+		{t.Context(), tokenURL, headerWithEmptyAuth, emptyHeaders, nil},
+		{t.Context(), tokenURL, headerWithoutAuth, headerWithoutAuth, nil},
+		{t.Context(), tokenURL, headerWithEmptyAuthAndOtherValues, headerWithoutAuth, nil},
 	}
-}
 
-func TestHttpService_GetRequestsOAuthError(t *testing.T) {
-	service := setupHTTPServiceTestServerForOAuthWithUnSupportedMethod()
+	server := oAuthHTTPServer(t)
+	defer server.Close()
 
-	resp, err := service.Get(t.Context(), "test", nil)
+	for i, tc := range testCases {
+		service, ok := setupHTTPServiceTestServerForOAuth(server, tc.tokenURL).(*oAuth)
+		assert.True(t, ok, "unable to get oAuth object for test case #%d", i)
 
-	assert.Nil(t, resp)
-	require.ErrorContains(t, err, `unsupported protocol scheme`)
+		headers, err := service.addAuthorizationHeader(tc.ctx, tc.headers)
+		assert.Equal(t, tc.err, err, "failed test case #%d", i)
 
-	if resp != nil {
-		resp.Body.Close()
+		if err == nil {
+			authHeader, ok := headers[AuthorisationHeader]
+			assert.True(t, ok, "failed test case #%d", i)
+			assert.NotEmptyf(t, authHeader, "failed test case #%d", i)
+			assert.True(t, strings.HasPrefix(authHeader, "Bearer"))
+			delete(headers, AuthorisationHeader)
+			assert.Equal(t, tc.response, headers, "failed test case #%d", i)
+		}
 	}
 }
