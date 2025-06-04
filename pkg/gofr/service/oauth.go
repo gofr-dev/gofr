@@ -11,7 +11,7 @@ import (
 	"golang.org/x/oauth2/clientcredentials"
 )
 
-const AuthorisationHeader = "Authorization"
+const AuthHeader = "Authorization"
 
 // OAuthConfig describes a 2-legged OAuth2 flow, with both the
 // client application information and the server's endpoint URLs.
@@ -102,7 +102,7 @@ func (o *oAuth) addAuthorizationHeader(ctx context.Context, headers map[string]s
 
 	if headers == nil {
 		headers = make(map[string]string)
-	} else if authHeader, ok := headers[AuthorisationHeader]; ok && authHeader != "" {
+	} else if authHeader, ok := headers[AuthHeader]; ok && authHeader != "" {
 		return nil, OAuthErr{Message: "auth header already exists " + authHeader}
 	}
 
@@ -111,7 +111,7 @@ func (o *oAuth) addAuthorizationHeader(ctx context.Context, headers map[string]s
 		return nil, err
 	}
 
-	headers[AuthorisationHeader] = fmt.Sprintf("%v %v", token.Type(), token.AccessToken)
+	headers[AuthHeader] = fmt.Sprintf("%v %v", token.Type(), token.AccessToken)
 
 	return headers, nil
 }

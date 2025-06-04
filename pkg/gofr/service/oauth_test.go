@@ -281,10 +281,10 @@ func TestHttpService_validateTokenURL(t *testing.T) {
 
 func TestHttpService_addAuthorizationHeader(t *testing.T) {
 	emptyHeaders := map[string]string{}
-	headerWithAuth := map[string]string{AuthorisationHeader: "Value"}
-	headerWithEmptyAuth := map[string]string{AuthorisationHeader: ""}
+	headerWithAuth := map[string]string{AuthHeader: "Value"}
+	headerWithEmptyAuth := map[string]string{AuthHeader: ""}
 	headerWithoutAuth := map[string]string{"Content Type": "Value"}
-	headerWithEmptyAuthAndOtherValues := map[string]string{"Content Type": "Value", AuthorisationHeader: ""}
+	headerWithEmptyAuthAndOtherValues := map[string]string{"Content Type": "Value", AuthHeader: ""}
 	tokenURLError := &url.Error{Op: "Post", URL: "", Err: err1}
 	authHeaderExistsError := OAuthErr{Message: "auth header already exists Value"}
 	testCases := []struct {
@@ -313,11 +313,11 @@ func TestHttpService_addAuthorizationHeader(t *testing.T) {
 		assert.Equal(t, tc.err, err, "failed test case #%d", i)
 
 		if err == nil {
-			authHeader, ok := headers[AuthorisationHeader]
+			authHeader, ok := headers[AuthHeader]
 			assert.True(t, ok, "failed test case #%d", i)
 			assert.NotEmptyf(t, authHeader, "failed test case #%d", i)
 			assert.True(t, strings.HasPrefix(authHeader, "Bearer"))
-			delete(headers, AuthorisationHeader)
+			delete(headers, AuthHeader)
 			assert.Equal(t, tc.response, headers, "failed test case #%d", i)
 		}
 	}
