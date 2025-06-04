@@ -256,7 +256,8 @@ func TestGRPC_ServerRun_WithInterceptorAndOptions(t *testing.T) {
 	assert.Equal(t, []string{"interceptor1", "interceptor2"}, interceptorExecutions)
 }
 
-func TestApp_GetGRPCServer(t *testing.T) {
+func TestApp_WithReflection(t *testing.T) {
+
 	c := &container.Container{
 		Logger: logging.NewLogger(logging.DEBUG),
 	}
@@ -265,6 +266,10 @@ func TestApp_GetGRPCServer(t *testing.T) {
 	app.grpcServer = newGRPCServer(c, 9999)
 	app.grpcServer.createServer()
 
-	server := app.GetGRPCServer()
-	require.NotNil(t, server, "GetGRPCServer should return a non-nil *grpc.Server instance")
+	// Should not panic or error
+	app.WithReflection()
+
+	services := app.grpcServer.server.GetServiceInfo()
+	_, ok := services["grpc.reflection.v1alpha.ServerReflection"]
+	assert.True(t, ok, "reflection service should be registered")
 }

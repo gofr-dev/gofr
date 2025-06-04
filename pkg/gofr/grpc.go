@@ -10,6 +10,7 @@ import (
 	grpc_middleware "github.com/grpc-ecosystem/go-grpc-middleware"
 	grpc_recovery "github.com/grpc-ecosystem/go-grpc-middleware/recovery"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/reflection"
 
 	"gofr.dev/pkg/gofr/container"
 	gofr_grpc "gofr.dev/pkg/gofr/grpc"
@@ -58,20 +59,17 @@ func (a *App) AddGRPCServerStreamInterceptors(interceptors ...grpc.StreamServerI
 	a.grpcServer.streamInterceptors = append(a.grpcServer.streamInterceptors, interceptors...)
 }
 
-// GetGRPCServer returns the gRPC server instance.
-// This is useful for accessing the server directly, for example, to register services or perform custom operations.
-// Note: This should be used with caution as it exposes the internal gRPC server instance.
-// It is recommended to use RegisterService method for registering gRPC services instead of directly manipulating the server.
+// WithReflection enables gRPC server reflection for the application's gRPC server.
+// This allows tools like grpcurl or Postman to discover and interact with the server's services at runtime.
+//
 // Example usage:
-// grpcServer := app.GetGRPCServer()
-// grpcServer.RegisterService(&myServiceDesc, myServiceImpl)
-// For adding reflection
-// support, you can use the reflection package:
-// import "google.golang.org/grpc/reflection"
-// reflection.Register(grpcServer)
+//   app.WithReflection()
 
-func (a *App) GetGRPCServer() *grpc.Server {
-	return a.grpcServer.server
+func (a *App) WithReflection() {
+	if a.grpcServer.server == nil {
+		a.grpcServer.createServer()
+	}
+	reflection.Register(a.grpcServer.server)
 }
 
 func newGRPCServer(c *container.Container, port int) *grpcServer {
