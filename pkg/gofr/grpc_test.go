@@ -257,7 +257,6 @@ func TestGRPC_ServerRun_WithInterceptorAndOptions(t *testing.T) {
 }
 
 func TestApp_GetGRPCServer(t *testing.T) {
-
 	c := &container.Container{
 		Logger: logging.NewLogger(logging.DEBUG),
 	}
