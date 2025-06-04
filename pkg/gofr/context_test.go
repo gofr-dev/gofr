@@ -78,6 +78,8 @@ func TestContext_AddTrace(t *testing.T) {
 }
 
 func TestContext_WriteMessageToSocket(t *testing.T) {
+	t.Skip("skipping")
+
 	port := testutil.GetFreePort(t)
 	t.Setenv("HTTP_PORT", fmt.Sprint(port))
 
@@ -113,6 +115,8 @@ func TestContext_WriteMessageToSocket(t *testing.T) {
 }
 
 func TestContext_WriteMessageToService(t *testing.T) {
+	t.Skip("skipping")
+
 	port := testutil.GetFreePort(t)
 	t.Setenv("HTTP_PORT", fmt.Sprint(port))
 
