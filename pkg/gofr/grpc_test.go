@@ -255,3 +255,17 @@ func TestGRPC_ServerRun_WithInterceptorAndOptions(t *testing.T) {
 	// Verify interceptors were called in order
 	assert.Equal(t, []string{"interceptor1", "interceptor2"}, interceptorExecutions)
 }
+
+func TestApp_GetGRPCServer(t *testing.T) {
+
+	c := &container.Container{
+		Logger: logging.NewLogger(logging.DEBUG),
+	}
+	app := New()
+	app.container = c
+	app.grpcServer = newGRPCServer(c, 9999)
+	app.grpcServer.createServer()
+
+	server := app.GetGRPCServer()
+	require.NotNil(t, server, "GetGRPCServer should return a non-nil *grpc.Server instance")
+}
