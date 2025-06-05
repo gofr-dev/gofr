@@ -239,7 +239,7 @@ func (c *Client) Query(ctx context.Context, dbName, query string, bindVars map[s
 	defer c.sendOperationStats(&QueryLog{Operation: "query",
 		Database: dbName, Query: query}, startTime, "query", span)
 
-	db, err := c.client.Database(tracerCtx, dbName)
+	db, err := c.client.GetDatabase(tracerCtx, dbName, nil)
 	if err != nil {
 		return err
 	}
