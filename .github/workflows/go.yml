@@ -150,7 +150,7 @@ jobs:
           command: |
             export APP_ENV=test
             # Run tests with coverage for root gofr package only
-            go test -v -covermode=atomic -coverpkg=./pkg/gofr -coverprofile=gofr_only.cov ./pkg/gofr
+            go test -v -short -covermode=atomic -coverpkg=./pkg/gofr -coverprofile=gofr_only.cov ./pkg/gofr
             # Run tests for all sub-packages under gofr
             go test -v -covermode=atomic -coverpkg=./pkg/gofr -coverprofile=submodules.cov ./pkg/gofr/...
             # Combine coverage profiles
