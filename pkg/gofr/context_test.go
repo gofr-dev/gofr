@@ -115,12 +115,17 @@ func TestContext_WriteMessageToSocket(t *testing.T) {
 }
 
 func TestContext_WriteMessageToService(t *testing.T) {
-	t.Skip("skipping")
-
 	port := testutil.GetFreePort(t)
 	t.Setenv("HTTP_PORT", fmt.Sprint(port))
 
 	app := New()
+
+	wsURL := fmt.Sprintf("ws://localhost:%d/ws", port)
+
+	serviceName := "test-service"
+	retryInterval := 50 * time.Millisecond
+	err := app.AddWSService(serviceName, wsURL, http.Header{}, true, retryInterval)
+	require.NoError(t, err, "AddWSService should not return an error")
 
 	// Start a WebSocket server
 	app.WebSocket("/ws", func(ctx *Context) (any, error) {
@@ -145,13 +150,6 @@ func TestContext_WriteMessageToService(t *testing.T) {
 
 	go app.Run()
 	time.Sleep(100 * time.Millisecond)
-
-	wsURL := fmt.Sprintf("ws://localhost:%d/ws", port)
-
-	serviceName := "test-service"
-	retryInterval := 50 * time.Millisecond
-	err := app.AddWSService(serviceName, wsURL, http.Header{}, true, retryInterval)
-	require.NoError(t, err, "AddWSService should not return an error")
 
 	// Establish a WebSocket connection
 	ws, resp, err := websocket.DefaultDialer.Dial(wsURL, nil)
