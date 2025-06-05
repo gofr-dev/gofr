@@ -103,7 +103,7 @@ jobs:
             # Run tests for the examples directory with coverage
             go test gofr.dev/examples/... -v -short -coverprofile packageWithpbgo.cov -coverpkg=gofr.dev/examples/...
              # Filter out auto-generated files by protobuf and gofr framework from coverage report
-            grep -vE '^gofr\.dev/.*(_client\.go|_gofr\.go|_grpc\.pb\.go|\.pb\.go|\.proto)' packageWithpbgo.cov > profile.cov
+            grep -vE '(/client/|grpc-.+-client/main\.go|_client\.go|_gofr\.go|_grpc\.pb\.go|\.pb\.go|\.proto|health_.*\.go)' packageWithpbgo.cov > profile.cov
             # Display coverage statistics
             go tool cover -func profile.cov
 

@@ -193,13 +193,13 @@ func Test_GetConnectionFromContext(t *testing.T) {
 	}{
 		{
 			name:     "no connection in context",
-			ctx:      context.Background(),
+			ctx:      t.Context(),
 			setup:    func(*Container) {},
 			expected: nil,
 		},
 		{
 			name: "connection in context",
-			ctx:  context.WithValue(context.Background(), ws.WSConnectionKey, "test-conn-id"),
+			ctx:  context.WithValue(t.Context(), ws.WSConnectionKey, "test-conn-id"),
 			setup: func(c *Container) {
 				c.WSManager = ws.New()
 				c.WSManager.AddWebsocketConnection("test-conn-id", &ws.Connection{Conn: &websocket.Conn{}})
@@ -208,7 +208,7 @@ func Test_GetConnectionFromContext(t *testing.T) {
 		},
 		{
 			name:     "wrong type in context",
-			ctx:      context.WithValue(context.Background(), ws.WSConnectionKey, 12345),
+			ctx:      context.WithValue(t.Context(), ws.WSConnectionKey, 12345),
 			setup:    func(c *Container) {},
 			expected: nil,
 		},
