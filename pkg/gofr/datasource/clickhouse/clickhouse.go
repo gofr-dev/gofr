@@ -1,3 +1,9 @@
+// Package clickhouse provides a client for interacting with ClickHouse databases,
+// supporting query execution, asynchronous inserts, and observability integration
+// through logging, metrics, and tracing.
+//
+// It is designed to be used with the GoFr framework and allows configuration
+// of connection parameters, observability tools, and health checks.
 package clickhouse
 
 import (
@@ -13,12 +19,14 @@ import (
 )
 
 type Config struct {
-	Hosts    string
-	Username string
-	Password string
-	Database string
+	Hosts    string // Comma-separated list of ClickHouse server addresses.
+	Username string // Username used for authentication.
+	Password string // Password used for authentication.
+	Database string // Name of the database to connect to.
 }
 
+// Client is a ClickHouse client implementation that wraps a Conn interface.
+// It provides methods for executing queries, performing inserts, and collecting metrics.
 type Client struct {
 	conn    Conn
 	config  Config
@@ -29,7 +37,7 @@ type Client struct {
 
 var errStatusDown = errors.New("status down")
 
-// New initializes Clickhouse client with the provided configuration.
+// New initializes ClickHouse client with the provided configuration.
 // Metrics, Logger has to be initialized before calling the Connect method.
 // Usage:
 //
@@ -41,28 +49,28 @@ func New(config Config) *Client {
 	return &Client{config: config}
 }
 
-// UseLogger sets the logger for the Clickhouse client.
+// UseLogger sets the logger for the ClickHouse client.
 func (c *Client) UseLogger(logger any) {
 	if l, ok := logger.(Logger); ok {
 		c.logger = l
 	}
 }
 
-// UseMetrics sets the metrics for the Clickhouse client.
+// UseMetrics sets the metrics for the ClickHouse client.
 func (c *Client) UseMetrics(metrics any) {
 	if m, ok := metrics.(Metrics); ok {
 		c.metrics = m
 	}
 }
 
-// UseTracer sets the tracer for Clickhouse client.
+// UseTracer sets the tracer for ClickHouse client.
 func (c *Client) UseTracer(tracer any) {
 	if t, ok := tracer.(trace.Tracer); ok {
 		c.tracer = t
 	}
 }
 
-// Connect establishes a connection to Clickhouse and registers metrics using the provided configuration when the client was Created.
+// Connect establishes a connection to ClickHouse and registers metrics using the provided configuration when the client was Created.
 func (c *Client) Connect() {
 	var err error
 
@@ -163,6 +171,8 @@ func (c *Client) AsyncInsert(ctx context.Context, query string, wait bool, args 
 	return err
 }
 
+// sendOperationStats records the duration of a database operation and logs the query context.
+// It also attaches metrics and trace attributes if enabled.
 func (c *Client) sendOperationStats(start time.Time, methodType, query string, method string,
 	span trace.Span, args ...any) {
 	duration := time.Since(start).Microseconds()
@@ -183,6 +193,7 @@ func (c *Client) sendOperationStats(start time.Time, methodType, query string, m
 		"database", c.config.Database, "type", getOperationType(query))
 }
 
+// getOperationType extracts the operation type (e.g., SELECT, INSERT) from a query.
 func getOperationType(query string) string {
 	query = strings.TrimSpace(query)
 	words := strings.Split(query, " ")
@@ -216,6 +227,7 @@ func (c *Client) HealthCheck(ctx context.Context) (any, error) {
 	return &h, nil
 }
 
+// addTrace starts a new trace span for the given operation and query.
 func (c *Client) addTrace(ctx context.Context, method, query string) (context.Context, trace.Span) {
 	if c.tracer != nil {
 		contextWithTrace, span := c.tracer.Start(ctx, fmt.Sprintf("clickhouse-%v", method))
