@@ -209,7 +209,7 @@ func Test_GetConnectionFromContext(t *testing.T) {
 		{
 			name:     "wrong type in context",
 			ctx:      context.WithValue(t.Context(), ws.WSConnectionKey, 12345),
-			setup:    func(c *Container) {},
+			setup:    func(*Container) {},
 			expected: nil,
 		},
 	}

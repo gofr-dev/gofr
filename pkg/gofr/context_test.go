@@ -122,20 +122,13 @@ func TestContext_WriteMessageToService(t *testing.T) {
 
 	app := New()
 
-	wsURL := fmt.Sprintf("ws://localhost:%d/ws", port)
-
-	serviceName := "test-service"
-	retryInterval := 50 * time.Millisecond
-	err := app.AddWSService(serviceName, wsURL, http.Header{}, true, retryInterval)
-	require.NoError(t, err, "AddWSService should not return an error")
-
 	// Start a WebSocket server
 	app.WebSocket("/ws", func(ctx *Context) (any, error) {
 		conn := ctx.GetWSConnectionByServiceName("test-service")
 
 		messageToSend := "Hello, WebSocket!"
 
-		err = ctx.WriteMessageToService("test-service", messageToSend)
+		err := ctx.WriteMessageToService("test-service", messageToSend)
 		if err != nil {
 			return nil, err
 		}
@@ -152,6 +145,13 @@ func TestContext_WriteMessageToService(t *testing.T) {
 
 	go app.Run()
 	time.Sleep(100 * time.Millisecond)
+
+	wsURL := fmt.Sprintf("ws://localhost:%d/ws", port)
+
+	serviceName := "test-service"
+	retryInterval := 50 * time.Millisecond
+	err := app.AddWSService(serviceName, wsURL, http.Header{}, true, retryInterval)
+	require.NoError(t, err, "AddWSService should not return an error")
 
 	// Establish a WebSocket connection
 	ws, resp, err := websocket.DefaultDialer.Dial(wsURL, nil)
