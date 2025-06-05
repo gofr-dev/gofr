@@ -69,6 +69,7 @@ func (a *App) WithReflection() {
 	if a.grpcServer.server == nil {
 		a.grpcServer.createServer()
 	}
+
 	reflection.Register(a.grpcServer.server)
 }
 
