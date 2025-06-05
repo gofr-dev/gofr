@@ -200,7 +200,7 @@ func TestClient_Database(t *testing.T) {
 		err = db.Remove(ctx)
 		require.NoError(t, err)
 
-		coll, err := db.Collection(ctx, "testCollection")
+		coll, err := db.GetCollection(ctx, "testCollection", nil)
 		require.NoError(t, err)
 		require.Nil(t, coll)
 	})
