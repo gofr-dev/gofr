@@ -194,7 +194,7 @@ func Test_GetConnectionFromContext(t *testing.T) {
 		{
 			name:     "no connection in context",
 			ctx:      context.Background(),
-			setup:    func(c *Container) {},
+			setup:    func(*Container) {},
 			expected: nil,
 		},
 		{

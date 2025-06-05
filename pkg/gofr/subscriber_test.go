@@ -4,16 +4,11 @@ import (
 	"context"
 	"errors"
 	"fmt"
+
 	"gofr.dev/pkg/gofr/datasource"
 	"gofr.dev/pkg/gofr/datasource/pubsub"
 	"gofr.dev/pkg/gofr/datasource/pubsub/kafka"
 )
-
-var errHandler = errors.New("error in subscribing")
-
-func handleError(err string) error {
-	return fmt.Errorf("%w: %s", errHandler, err)
-}
 
 var errSubscription = errors.New("subscription error")
 

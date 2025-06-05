@@ -135,7 +135,7 @@ func TestContext_WriteMessageToService(t *testing.T) {
 
 		messageToSend := "Hello, WebSocket!"
 
-		err := ctx.WriteMessageToService("test-service", messageToSend)
+		err = ctx.WriteMessageToService("test-service", messageToSend)
 		if err != nil {
 			return nil, err
 		}

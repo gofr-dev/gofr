@@ -3,7 +3,6 @@ package gofr
 import (
 	"bytes"
 	"errors"
-	"gofr.dev/pkg/gofr/logging"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -18,6 +17,7 @@ import (
 	"gofr.dev/pkg/gofr/container"
 	gofrHTTP "gofr.dev/pkg/gofr/http"
 	"gofr.dev/pkg/gofr/http/response"
+	"gofr.dev/pkg/gofr/logging"
 )
 
 func TestOpenAPIHandler(t *testing.T) {
