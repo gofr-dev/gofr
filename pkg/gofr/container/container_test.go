@@ -188,28 +188,38 @@ func Test_GetConnectionFromContext(t *testing.T) {
 	tests := []struct {
 		name     string
 		ctx      context.Context
+		setup    func(c *Container)
 		expected *ws.Connection
 	}{
 		{
 			name:     "no connection in context",
 			ctx:      t.Context(),
+			setup:    func(*Container) {},
 			expected: nil,
 		},
 		{
-			name:     "connection in context",
-			ctx:      context.WithValue(t.Context(), ws.WSConnectionKey, &ws.Connection{Conn: &websocket.Conn{}}),
+			name: "connection in context",
+			ctx:  context.WithValue(t.Context(), ws.WSConnectionKey, "test-conn-id"),
+			setup: func(c *Container) {
+				c.WSManager = ws.New()
+				c.WSManager.AddWebsocketConnection("test-conn-id", &ws.Connection{Conn: &websocket.Conn{}})
+			},
 			expected: &ws.Connection{Conn: &websocket.Conn{}},
 		},
 		{
 			name:     "wrong type in context",
-			ctx:      context.WithValue(t.Context(), ws.WSConnectionKey, "wrong-type"),
+			ctx:      context.WithValue(t.Context(), ws.WSConnectionKey, 12345),
+			setup:    func(*Container) {},
 			expected: nil,
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			conn := (&Container{}).GetConnectionFromContext(tt.ctx)
+			container := &Container{}
+			tt.setup(container)
+
+			conn := container.GetConnectionFromContext(tt.ctx)
 
 			assert.Equal(t, tt.expected, conn)
 		})
