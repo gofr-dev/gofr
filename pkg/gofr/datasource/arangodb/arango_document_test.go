@@ -97,7 +97,7 @@ func Test_Client_UpdateDocument(t *testing.T) {
 	mockDB.EXPECT().Collection(gomock.Any(), "testCollection").Return(mockCollection, nil)
 	mockCollection.EXPECT().UpdateDocument(gomock.Any(), "testDocument", testDocument).
 		Return(arangodb.CollectionDocumentUpdateResponse{
-			DocumentMeta: arangodb.DocumentMeta{Key: "testKey", ID: "1", Rev: ""}}, nil)
+			DocumentMetaWithOldRev: arangodb.DocumentMetaWithOldRev{DocumentMeta: arangodb.DocumentMeta{Key: "testKey", ID: "1", Rev: ""}}}, nil)
 	mockLogger.EXPECT().Debug(gomock.Any()).AnyTimes()
 	mockMetrics.EXPECT().RecordHistogram(gomock.Any(), "app_arango_stats", gomock.Any(),
 		gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
