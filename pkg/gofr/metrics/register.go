@@ -42,7 +42,6 @@ type metricsManager struct {
 // and otel/metric supports only asynchronous gauge (Float64ObservableGauge).
 // And if we use the otel/metric, we would not be able to have support for labels, Hence created a custom type to implement it.
 type float64Gauge struct {
-	mu           sync.RWMutex
 	observations map[attribute.Set]float64
 }
 
@@ -146,9 +145,6 @@ func (m *metricsManager) NewGauge(name, desc string) {
 // callbackFunc implements the callback function for the underlying asynchronous gauge
 // it observes the current state of all previous set() calls.
 func (f *float64Gauge) callbackFunc(_ context.Context, o metric.Float64Observer) error {
-	f.mu.RLock()
-	defer f.mu.RUnlock()
-
 	for attrs, val := range f.observations {
 		o.Observe(val, metric.WithAttributeSet(attrs))
 	}
@@ -246,9 +242,7 @@ func (m *metricsManager) SetGauge(name string, value float64, labels ...string) 
 }
 
 func (f *float64Gauge) set(val float64, attrs attribute.Set) {
-	f.mu.Lock()
 	f.observations[attrs] = val
-	f.mu.Unlock()
 }
 
 // getAttributes validates the given labels and convert them to corresponding otel attributes.
