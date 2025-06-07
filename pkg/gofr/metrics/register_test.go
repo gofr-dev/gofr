@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+	"sync"
 
 	"github.com/stretchr/testify/assert"
 
@@ -158,4 +159,22 @@ func Test_NewMetricsManagerLabelHighCardinality(t *testing.T) {
 	log := testutil.StdoutOutputForFunc(logs)
 
 	assert.Contains(t, log, `metrics counter-test has high cardinality: 24`, "TEST Failed. high cardinality of metrics")
+}
+
+func Test_SetGauge_Concurrent(t *testing.T) {
+	manager := NewMetricsManager(exporters.Prometheus("test-app", "v1.0.0"),
+		logging.NewMockLogger(logging.INFO))
+
+	manager.NewGauge("conc-gauge", "concurrent gauge test")
+
+	var wg sync.WaitGroup
+	for i := 0; i < 100; i++ {
+		wg.Add(1)
+		go func(v int) {
+			defer wg.Done()
+			manager.SetGauge("conc-gauge", float64(v))
+		}(i)
+	}
+
+	wg.Wait()
 }
