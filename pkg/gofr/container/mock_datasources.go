@@ -9240,6 +9240,394 @@ func (mr *MockClickhouseProviderMockRecorder) UseTracer(tracer any) *gomock.Call
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UseTracer", reflect.TypeOf((*MockClickhouseProvider)(nil).UseTracer), tracer)
 }
 
+// MockPinecone is a mock of Pinecone interface.
+type MockPinecone struct {
+	ctrl     *gomock.Controller
+	recorder *MockPineconeMockRecorder
+	isgomock struct{}
+}
+
+// MockPineconeMockRecorder is the mock recorder for MockPinecone.
+type MockPineconeMockRecorder struct {
+	mock *MockPinecone
+}
+
+// NewMockPinecone creates a new mock instance.
+func NewMockPinecone(ctrl *gomock.Controller) *MockPinecone {
+	mock := &MockPinecone{ctrl: ctrl}
+	mock.recorder = &MockPineconeMockRecorder{mock}
+	return mock
+}
+
+// EXPECT returns an object that allows the caller to indicate expected use.
+func (m *MockPinecone) EXPECT() *MockPineconeMockRecorder {
+	return m.recorder
+}
+
+// CreateIndex mocks base method.
+func (m *MockPinecone) CreateIndex(ctx context.Context, indexName string, dimension int, metric string, options map[string]any) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "CreateIndex", ctx, indexName, dimension, metric, options)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// CreateIndex indicates an expected call of CreateIndex.
+func (mr *MockPineconeMockRecorder) CreateIndex(ctx, indexName, dimension, metric, options any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CreateIndex", reflect.TypeOf((*MockPinecone)(nil).CreateIndex), ctx, indexName, dimension, metric, options)
+}
+
+// Delete mocks base method.
+func (m *MockPinecone) Delete(ctx context.Context, indexName, namespace string, ids []string) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Delete", ctx, indexName, namespace, ids)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// Delete indicates an expected call of Delete.
+func (mr *MockPineconeMockRecorder) Delete(ctx, indexName, namespace, ids any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Delete", reflect.TypeOf((*MockPinecone)(nil).Delete), ctx, indexName, namespace, ids)
+}
+
+// DeleteAll mocks base method.
+func (m *MockPinecone) DeleteAll(ctx context.Context, indexName, namespace string) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "DeleteAll", ctx, indexName, namespace)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// DeleteAll indicates an expected call of DeleteAll.
+func (mr *MockPineconeMockRecorder) DeleteAll(ctx, indexName, namespace any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeleteAll", reflect.TypeOf((*MockPinecone)(nil).DeleteAll), ctx, indexName, namespace)
+}
+
+// DeleteIndex mocks base method.
+func (m *MockPinecone) DeleteIndex(ctx context.Context, indexName string) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "DeleteIndex", ctx, indexName)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// DeleteIndex indicates an expected call of DeleteIndex.
+func (mr *MockPineconeMockRecorder) DeleteIndex(ctx, indexName any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeleteIndex", reflect.TypeOf((*MockPinecone)(nil).DeleteIndex), ctx, indexName)
+}
+
+// DescribeIndex mocks base method.
+func (m *MockPinecone) DescribeIndex(ctx context.Context, indexName string) (map[string]any, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "DescribeIndex", ctx, indexName)
+	ret0, _ := ret[0].(map[string]any)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// DescribeIndex indicates an expected call of DescribeIndex.
+func (mr *MockPineconeMockRecorder) DescribeIndex(ctx, indexName any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DescribeIndex", reflect.TypeOf((*MockPinecone)(nil).DescribeIndex), ctx, indexName)
+}
+
+// Fetch mocks base method.
+func (m *MockPinecone) Fetch(ctx context.Context, indexName, namespace string, ids []string) (map[string]any, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Fetch", ctx, indexName, namespace, ids)
+	ret0, _ := ret[0].(map[string]any)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// Fetch indicates an expected call of Fetch.
+func (mr *MockPineconeMockRecorder) Fetch(ctx, indexName, namespace, ids any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Fetch", reflect.TypeOf((*MockPinecone)(nil).Fetch), ctx, indexName, namespace, ids)
+}
+
+// HealthCheck mocks base method.
+func (m *MockPinecone) HealthCheck(arg0 context.Context) (any, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "HealthCheck", arg0)
+	ret0, _ := ret[0].(any)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// HealthCheck indicates an expected call of HealthCheck.
+func (mr *MockPineconeMockRecorder) HealthCheck(arg0 any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "HealthCheck", reflect.TypeOf((*MockPinecone)(nil).HealthCheck), arg0)
+}
+
+// ListIndexes mocks base method.
+func (m *MockPinecone) ListIndexes(ctx context.Context) ([]string, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "ListIndexes", ctx)
+	ret0, _ := ret[0].([]string)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// ListIndexes indicates an expected call of ListIndexes.
+func (mr *MockPineconeMockRecorder) ListIndexes(ctx any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListIndexes", reflect.TypeOf((*MockPinecone)(nil).ListIndexes), ctx)
+}
+
+// Query mocks base method.
+func (m *MockPinecone) Query(ctx context.Context, params map[string]any) ([]any, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Query", ctx, params)
+	ret0, _ := ret[0].([]any)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// Query indicates an expected call of Query.
+func (mr *MockPineconeMockRecorder) Query(ctx, params any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Query", reflect.TypeOf((*MockPinecone)(nil).Query), ctx, params)
+}
+
+// Upsert mocks base method.
+func (m *MockPinecone) Upsert(ctx context.Context, indexName, namespace string, vectors []any) (int, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Upsert", ctx, indexName, namespace, vectors)
+	ret0, _ := ret[0].(int)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// Upsert indicates an expected call of Upsert.
+func (mr *MockPineconeMockRecorder) Upsert(ctx, indexName, namespace, vectors any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Upsert", reflect.TypeOf((*MockPinecone)(nil).Upsert), ctx, indexName, namespace, vectors)
+}
+
+// MockPineconeProvider is a mock of PineconeProvider interface.
+type MockPineconeProvider struct {
+	ctrl     *gomock.Controller
+	recorder *MockPineconeProviderMockRecorder
+	isgomock struct{}
+}
+
+// MockPineconeProviderMockRecorder is the mock recorder for MockPineconeProvider.
+type MockPineconeProviderMockRecorder struct {
+	mock *MockPineconeProvider
+}
+
+// NewMockPineconeProvider creates a new mock instance.
+func NewMockPineconeProvider(ctrl *gomock.Controller) *MockPineconeProvider {
+	mock := &MockPineconeProvider{ctrl: ctrl}
+	mock.recorder = &MockPineconeProviderMockRecorder{mock}
+	return mock
+}
+
+// EXPECT returns an object that allows the caller to indicate expected use.
+func (m *MockPineconeProvider) EXPECT() *MockPineconeProviderMockRecorder {
+	return m.recorder
+}
+
+// Connect mocks base method.
+func (m *MockPineconeProvider) Connect() {
+	m.ctrl.T.Helper()
+	m.ctrl.Call(m, "Connect")
+}
+
+// Connect indicates an expected call of Connect.
+func (mr *MockPineconeProviderMockRecorder) Connect() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Connect", reflect.TypeOf((*MockPineconeProvider)(nil).Connect))
+}
+
+// CreateIndex mocks base method.
+func (m *MockPineconeProvider) CreateIndex(ctx context.Context, indexName string, dimension int, metric string, options map[string]any) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "CreateIndex", ctx, indexName, dimension, metric, options)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// CreateIndex indicates an expected call of CreateIndex.
+func (mr *MockPineconeProviderMockRecorder) CreateIndex(ctx, indexName, dimension, metric, options any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CreateIndex", reflect.TypeOf((*MockPineconeProvider)(nil).CreateIndex), ctx, indexName, dimension, metric, options)
+}
+
+// Delete mocks base method.
+func (m *MockPineconeProvider) Delete(ctx context.Context, indexName, namespace string, ids []string) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Delete", ctx, indexName, namespace, ids)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// Delete indicates an expected call of Delete.
+func (mr *MockPineconeProviderMockRecorder) Delete(ctx, indexName, namespace, ids any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Delete", reflect.TypeOf((*MockPineconeProvider)(nil).Delete), ctx, indexName, namespace, ids)
+}
+
+// DeleteAll mocks base method.
+func (m *MockPineconeProvider) DeleteAll(ctx context.Context, indexName, namespace string) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "DeleteAll", ctx, indexName, namespace)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// DeleteAll indicates an expected call of DeleteAll.
+func (mr *MockPineconeProviderMockRecorder) DeleteAll(ctx, indexName, namespace any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeleteAll", reflect.TypeOf((*MockPineconeProvider)(nil).DeleteAll), ctx, indexName, namespace)
+}
+
+// DeleteIndex mocks base method.
+func (m *MockPineconeProvider) DeleteIndex(ctx context.Context, indexName string) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "DeleteIndex", ctx, indexName)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// DeleteIndex indicates an expected call of DeleteIndex.
+func (mr *MockPineconeProviderMockRecorder) DeleteIndex(ctx, indexName any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeleteIndex", reflect.TypeOf((*MockPineconeProvider)(nil).DeleteIndex), ctx, indexName)
+}
+
+// DescribeIndex mocks base method.
+func (m *MockPineconeProvider) DescribeIndex(ctx context.Context, indexName string) (map[string]any, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "DescribeIndex", ctx, indexName)
+	ret0, _ := ret[0].(map[string]any)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// DescribeIndex indicates an expected call of DescribeIndex.
+func (mr *MockPineconeProviderMockRecorder) DescribeIndex(ctx, indexName any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DescribeIndex", reflect.TypeOf((*MockPineconeProvider)(nil).DescribeIndex), ctx, indexName)
+}
+
+// Fetch mocks base method.
+func (m *MockPineconeProvider) Fetch(ctx context.Context, indexName, namespace string, ids []string) (map[string]any, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Fetch", ctx, indexName, namespace, ids)
+	ret0, _ := ret[0].(map[string]any)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// Fetch indicates an expected call of Fetch.
+func (mr *MockPineconeProviderMockRecorder) Fetch(ctx, indexName, namespace, ids any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Fetch", reflect.TypeOf((*MockPineconeProvider)(nil).Fetch), ctx, indexName, namespace, ids)
+}
+
+// HealthCheck mocks base method.
+func (m *MockPineconeProvider) HealthCheck(arg0 context.Context) (any, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "HealthCheck", arg0)
+	ret0, _ := ret[0].(any)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// HealthCheck indicates an expected call of HealthCheck.
+func (mr *MockPineconeProviderMockRecorder) HealthCheck(arg0 any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "HealthCheck", reflect.TypeOf((*MockPineconeProvider)(nil).HealthCheck), arg0)
+}
+
+// ListIndexes mocks base method.
+func (m *MockPineconeProvider) ListIndexes(ctx context.Context) ([]string, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "ListIndexes", ctx)
+	ret0, _ := ret[0].([]string)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// ListIndexes indicates an expected call of ListIndexes.
+func (mr *MockPineconeProviderMockRecorder) ListIndexes(ctx any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListIndexes", reflect.TypeOf((*MockPineconeProvider)(nil).ListIndexes), ctx)
+}
+
+// Query mocks base method.
+func (m *MockPineconeProvider) Query(ctx context.Context, params map[string]any) ([]any, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Query", ctx, params)
+	ret0, _ := ret[0].([]any)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// Query indicates an expected call of Query.
+func (mr *MockPineconeProviderMockRecorder) Query(ctx, params any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Query", reflect.TypeOf((*MockPineconeProvider)(nil).Query), ctx, params)
+}
+
+// Upsert mocks base method.
+func (m *MockPineconeProvider) Upsert(ctx context.Context, indexName, namespace string, vectors []any) (int, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Upsert", ctx, indexName, namespace, vectors)
+	ret0, _ := ret[0].(int)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// Upsert indicates an expected call of Upsert.
+func (mr *MockPineconeProviderMockRecorder) Upsert(ctx, indexName, namespace, vectors any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Upsert", reflect.TypeOf((*MockPineconeProvider)(nil).Upsert), ctx, indexName, namespace, vectors)
+}
+
+// UseLogger mocks base method.
+func (m *MockPineconeProvider) UseLogger(logger any) {
+	m.ctrl.T.Helper()
+	m.ctrl.Call(m, "UseLogger", logger)
+}
+
+// UseLogger indicates an expected call of UseLogger.
+func (mr *MockPineconeProviderMockRecorder) UseLogger(logger any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UseLogger", reflect.TypeOf((*MockPineconeProvider)(nil).UseLogger), logger)
+}
+
+// UseMetrics mocks base method.
+func (m *MockPineconeProvider) UseMetrics(metrics any) {
+	m.ctrl.T.Helper()
+	m.ctrl.Call(m, "UseMetrics", metrics)
+}
+
+// UseMetrics indicates an expected call of UseMetrics.
+func (mr *MockPineconeProviderMockRecorder) UseMetrics(metrics any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UseMetrics", reflect.TypeOf((*MockPineconeProvider)(nil).UseMetrics), metrics)
+}
+
+// UseTracer mocks base method.
+func (m *MockPineconeProvider) UseTracer(tracer any) {
+	m.ctrl.T.Helper()
+	m.ctrl.Call(m, "UseTracer", tracer)
+}
+
+// UseTracer indicates an expected call of UseTracer.
+func (mr *MockPineconeProviderMockRecorder) UseTracer(tracer any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UseTracer", reflect.TypeOf((*MockPineconeProvider)(nil).UseTracer), tracer)
+}
+
 // MockMongo is a mock of Mongo interface.
 type MockMongo struct {
 	ctrl     *gomock.Controller
@@ -10586,31 +10974,31 @@ func (mr *MockPubSubProviderMockRecorder) Connect() *gomock.Call {
 }
 
 // CreateTopic mocks base method.
-func (m *MockPubSubProvider) CreateTopic(context context.Context, name string) error {
+func (m *MockPubSubProvider) CreateTopic(arg0 context.Context, name string) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "CreateTopic", context, name)
+	ret := m.ctrl.Call(m, "CreateTopic", arg0, name)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // CreateTopic indicates an expected call of CreateTopic.
-func (mr *MockPubSubProviderMockRecorder) CreateTopic(context, name any) *gomock.Call {
+func (mr *MockPubSubProviderMockRecorder) CreateTopic(arg0, name any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CreateTopic", reflect.TypeOf((*MockPubSubProvider)(nil).CreateTopic), context, name)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CreateTopic", reflect.TypeOf((*MockPubSubProvider)(nil).CreateTopic), arg0, name)
 }
 
 // DeleteTopic mocks base method.
-func (m *MockPubSubProvider) DeleteTopic(context context.Context, name string) error {
+func (m *MockPubSubProvider) DeleteTopic(arg0 context.Context, name string) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "DeleteTopic", context, name)
+	ret := m.ctrl.Call(m, "DeleteTopic", arg0, name)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // DeleteTopic indicates an expected call of DeleteTopic.
-func (mr *MockPubSubProviderMockRecorder) DeleteTopic(context, name any) *gomock.Call {
+func (mr *MockPubSubProviderMockRecorder) DeleteTopic(arg0, name any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeleteTopic", reflect.TypeOf((*MockPubSubProvider)(nil).DeleteTopic), context, name)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeleteTopic", reflect.TypeOf((*MockPubSubProvider)(nil).DeleteTopic), arg0, name)
 }
 
 // Health mocks base method.

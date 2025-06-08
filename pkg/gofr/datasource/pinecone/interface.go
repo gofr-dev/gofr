@@ -54,9 +54,6 @@ type Pinecone interface {
 
 	// DeleteAll removes all vectors from a namespace
 	DeleteAll(ctx context.Context, indexName, namespace string) error
-
-	// HealthCheck performs a health check on the Pinecone connection
-	HealthCheck(ctx context.Context) (any, error)
 }
 
 // QueryParams represents parameters for querying vectors

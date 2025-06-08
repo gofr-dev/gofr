@@ -206,6 +206,45 @@ type ClickhouseProvider interface {
 	provider
 }
 
+// Pinecone defines the methods for interacting with Pinecone vector database.
+type Pinecone interface {
+	// ListIndexes returns all available indexes in the Pinecone project
+	ListIndexes(ctx context.Context) ([]string, error)
+
+	// DescribeIndex retrieves detailed information about a specific index
+	DescribeIndex(ctx context.Context, indexName string) (map[string]any, error)
+
+	// CreateIndex creates a new Pinecone index with the given parameters
+	CreateIndex(ctx context.Context, indexName string, dimension int, metric string, options map[string]any) error
+
+	// DeleteIndex deletes a Pinecone index
+	DeleteIndex(ctx context.Context, indexName string) error
+
+	// Upsert adds or updates vectors in a specific namespace of an index
+	Upsert(ctx context.Context, indexName, namespace string, vectors []any) (int, error)
+
+	// Query searches for similar vectors in the index using grouped parameters
+	Query(ctx context.Context, params map[string]any) ([]any, error)
+
+	// Fetch retrieves vectors by their IDs
+	Fetch(ctx context.Context, indexName, namespace string, ids []string) (map[string]any, error)
+
+	// Delete removes vectors from the index
+	Delete(ctx context.Context, indexName, namespace string, ids []string) error
+
+	// DeleteAll removes all vectors from a namespace
+	DeleteAll(ctx context.Context, indexName, namespace string) error
+
+	HealthChecker
+}
+
+// PineconeProvider is an interface that extends Pinecone with additional methods for logging, metrics, and connection management.
+type PineconeProvider interface {
+	Pinecone
+
+	provider
+}
+
 // Mongo is an interface representing a MongoDB database client with common CRUD operations.
 type Mongo interface {
 	// Find executes a query to find documents in a collection based on a filter and stores the results
