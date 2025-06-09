@@ -1,7 +1,7 @@
 package service
 
 import (
-	"errors"
+	"github.com/pkg/errors"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -18,7 +18,7 @@ func TestHttpService_OAuthError(t *testing.T) {
 		{nil, "", "unknown error"},
 		{nil, "error message", "error message"},
 		{errTest, "", "message inside error"},
-		{errTest, "error message", "error message\nmessage inside error"},
+		{errTest, "error message", errors.Wrap(errTest, "error message").Error()},
 	}
 
 	for i, tc := range testCases {

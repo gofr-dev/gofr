@@ -1,5 +1,7 @@
 package service
 
+import "github.com/pkg/errors"
+
 type OAuthErr struct {
 	Err     error
 	Message string
@@ -14,5 +16,5 @@ func (o OAuthErr) Error() string {
 		return o.Message
 	}
 
-	return o.Message + "\n" + o.Err.Error()
+	return errors.Wrap(o.Err, o.Message).Error()
 }
