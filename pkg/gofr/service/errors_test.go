@@ -1,9 +1,9 @@
 package service
 
 import (
-	"github.com/pkg/errors"
 	"testing"
 
+	"github.com/pkg/errors"
 	"github.com/stretchr/testify/assert"
 )
 
