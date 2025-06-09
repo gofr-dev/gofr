@@ -64,6 +64,22 @@ func (m *MockDatabase) Analyzers(ctx context.Context) (arangodb.AnalyzersRespons
 	return ret0, ret1
 }
 
+// EnsureCreatedAnalyzer mocks base method.
+func (m *MockDatabase) EnsureCreatedAnalyzer(ctx context.Context, analyzer *arangodb.AnalyzerDefinition) (arangodb.Analyzer, bool, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "EnsureCreatedAnalyzer", ctx, analyzer)
+	ret0, _ := ret[0].(arangodb.Analyzer)
+	ret1, _ := ret[1].(bool)
+	ret2, _ := ret[2].(error)
+	return ret0, ret1, ret2
+}
+
+// EnsureCreatedAnalyzer indicates an expected call of EnsureCreatedAnalyzer.
+func (mr *MockDatabaseMockRecorder) EnsureCreatedAnalyzer(ctx, analyzer any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "EnsureCreatedAnalyzer", reflect.TypeOf((*MockDatabase)(nil).EnsureCreatedAnalyzer), ctx, analyzer)
+}
+
 // Analyzers indicates an expected call of Analyzers.
 func (mr *MockDatabaseMockRecorder) Analyzers(ctx any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
