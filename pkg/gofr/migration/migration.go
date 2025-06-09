@@ -204,6 +204,16 @@ func getMigrator(c *container.Container) (Datasource, migrator, bool) {
 		c.Debug("initialized data source for dgraph")
 	}
 
+	if !isNil(c.PubSub) {
+		ok = true
+
+		ds.PubSub = pubsubDS{c.PubSub}
+
+		mg = pubsubDS{c.PubSub}.apply(mg)
+
+		c.Debug("initialized data source for pubsub")
+	}
+
 	return ds, mg, ok
 }
 
