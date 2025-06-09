@@ -39,7 +39,7 @@ func (g *Graph) CreateGraph(ctx context.Context, database, graph string, edgeDef
 	defer g.client.sendOperationStats(&QueryLog{Operation: "createGraph",
 		Database: database, Collection: graph}, startTime, "createGraph", span)
 
-	db, err := g.client.client.Database(tracerCtx, database)
+	db, err := g.client.client.GetDatabase(tracerCtx, database, nil)
 	if err != nil {
 		return err
 	}
@@ -96,7 +96,7 @@ func (g *Graph) DropGraph(ctx context.Context, database, graphName string) error
 	defer g.client.sendOperationStats(&QueryLog{Operation: "dropGraph",
 		Database: database}, startTime, "dropGraph", span)
 
-	db, err := g.client.client.Database(tracerCtx, database)
+	db, err := g.client.client.GetDatabase(tracerCtx, database, nil)
 	if err != nil {
 		return err
 	}
@@ -148,7 +148,7 @@ func (c *Client) GetEdges(ctx context.Context, dbName, graphName, edgeCollection
 		Collection: edgeCollection,
 	}, startTime, "getEdges", span)
 
-	db, err := c.client.Database(tracerCtx, dbName)
+	db, err := c.client.GetDatabase(tracerCtx, dbName, nil)
 	if err != nil {
 		return err
 	}
