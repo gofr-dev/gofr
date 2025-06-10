@@ -88,7 +88,7 @@ func (k *kafkaClient) isConnected() bool {
 
 func setupDialer(conf *Config) (*kafka.Dialer, error) {
 	dialer := &kafka.Dialer{
-		Timeout:   10 * time.Second,
+		Timeout:   defaultRetryTimeout,
 		DualStack: true,
 	}
 

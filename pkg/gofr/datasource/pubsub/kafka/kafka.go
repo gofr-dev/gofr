@@ -7,7 +7,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"strings"
 	"sync"
 	"time"
 
@@ -21,7 +20,10 @@ const (
 	DefaultBatchSize       = 100
 	DefaultBatchBytes      = 1048576
 	DefaultBatchTimeout    = 1000
+	defaultMaxBytes        = 10e6 // 10MB
+	defaultMinBytes        = 10e3
 	defaultRetryTimeout    = 10 * time.Second
+	defaultReadTimeout     = 30 * time.Second
 	protocolPlainText      = "PLAINTEXT"
 	protocolSASL           = "SASL_PLAINTEXT"
 	protocolSSL            = "SSL"
@@ -29,6 +31,8 @@ const (
 	messageMultipleBrokers = "MULTIPLE_BROKERS"
 	brokerStatusUp         = "UP"
 )
+
+var errEmptyTopicName = errors.New("topic name cannot be empty")
 
 type Config struct {
 	Brokers          []string
@@ -150,15 +154,13 @@ func (k *kafkaClient) Query(ctx context.Context, query string, args ...any) ([]b
 	}
 
 	if query == "" {
-		return nil, errors.New("topic name cannot be empty")
+		return nil, errEmptyTopicName
 	}
 
-	// Extract offset and limit from args
 	var (
-		offset       int64 = 0
-		limit              = 10
-		result       []byte
-		messageCount int
+		offset int64
+		limit  = 10
+		result []byte
 	)
 
 	if len(args) > 0 {
@@ -178,7 +180,7 @@ func (k *kafkaClient) Query(ctx context.Context, query string, args ...any) ([]b
 		Topic:       query,
 		Partition:   k.config.Partition,
 		MinBytes:    1,
-		MaxBytes:    10e6, // 10MB
+		MaxBytes:    defaultMaxBytes,
 		StartOffset: kafka.FirstOffset,
 	})
 
@@ -189,18 +191,24 @@ func (k *kafkaClient) Query(ctx context.Context, query string, args ...any) ([]b
 		return nil, fmt.Errorf("failed to set offset: %w", err)
 	}
 
-	readCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
-	defer cancel()
+	// Add default timeout if context has no deadline
+	readCtx := ctx
 
-	for messageCount < limit {
+	if _, hasDeadline := ctx.Deadline(); !hasDeadline {
+		var cancel context.CancelFunc
+
+		readCtx, cancel = context.WithTimeout(ctx, defaultReadTimeout)
+
+		defer cancel()
+	}
+
+	for i := 0; i < limit; i++ {
 		msg, err := reader.ReadMessage(readCtx)
 		if err != nil {
-			if errors.Is(err, context.DeadlineExceeded) ||
-				errors.Is(err, io.EOF) ||
-				strings.Contains(err.Error(), "no messages") {
-
+			if errors.Is(err, context.DeadlineExceeded) || errors.Is(err, io.EOF) {
 				break
 			}
+
 			return nil, fmt.Errorf("failed to read message: %w", err)
 		}
 
@@ -209,7 +217,6 @@ func (k *kafkaClient) Query(ctx context.Context, query string, args ...any) ([]b
 		}
 
 		result = append(result, msg.Value...)
-		messageCount++
 	}
 
 	return result, nil
