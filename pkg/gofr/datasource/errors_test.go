@@ -1,6 +1,8 @@
 package datasource
 
 import (
+	"github.com/stretchr/testify/assert"
+	"net/http"
 	"os"
 	"testing"
 
@@ -29,4 +31,12 @@ func Test_ErrorDB(t *testing.T) {
 	for i, tc := range tests {
 		require.ErrorContains(t, tc.err, tc.expectedMsg, "TEST[%d], Failed.\n%s", i, tc.desc)
 	}
+}
+
+func TestErrorDB_StatusCode(t *testing.T) {
+	dbErr := ErrorDB{Message: "custom message"}
+
+	expectedCode := http.StatusInternalServerError
+
+	assert.Equal(t, expectedCode, dbErr.StatusCode(), "TEST Failed.\n")
 }
