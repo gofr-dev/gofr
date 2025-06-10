@@ -15,7 +15,7 @@ type pubsubDS struct {
 
 const (
 	pubsubMigrationTopic = "gofr_migrations"
-	migrationTimeout     = 30 * time.Second // Increased timeout
+	migrationTimeout     = 10 * time.Second // Increased timeout
 	maxRetries           = 3
 )
 
@@ -66,9 +66,16 @@ func (pm pubsubMigrator) getLastMigration(c *container.Container) int64 {
 	ctx, cancel := context.WithTimeout(context.Background(), migrationTimeout)
 	defer cancel()
 
-	result, err := c.PubSub.Query(ctx, pubsubMigrationTopic)
+	result, err := c.PubSub.Query(ctx, pubsubMigrationTopic, int64(0), 100)
 	if err != nil {
 		c.Errorf("Error querying migration topic: %v", err)
+
+		return lastVersion
+	}
+
+	if len(result) == 0 {
+		c.Debug("No previous migrations found - this appears to be the first run")
+
 		return lastVersion
 	}
 
@@ -91,11 +98,7 @@ func (pm pubsubMigrator) getLastMigration(c *container.Container) int64 {
 		}
 	}
 
-	if lastVersion > 0 {
-		c.Debugf("Last completed migration version: %d", lastVersion)
-	} else {
-		c.Debug("No previous migrations found - this appears to be the first run")
-	}
+	c.Debugf("Last completed migration version: %d", lastVersion)
 
 	return lastVersion
 }

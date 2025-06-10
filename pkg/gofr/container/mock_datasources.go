@@ -10542,6 +10542,22 @@ type MockPubSubProvider struct {
 	isgomock struct{}
 }
 
+func (m *MockPubSubProvider) Query(ctx context.Context, query string, args ...any) ([]byte, error) {
+	m.ctrl.T.Helper()
+	callArgs := append([]any{ctx, query}, args...)
+	ret := m.ctrl.Call(m, "Query", callArgs...)
+	ret0, _ := ret[0].([]byte)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// Query indicates an expected call of Query.
+func (mr *MockPubSubProviderMockRecorder) Query(ctx, query any, args ...any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	varargs := append([]any{query}, args...)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Query", reflect.TypeOf((*MockPubSubProvider)(nil).Query), ctx, query, varargs)
+}
+
 // MockPubSubProviderMockRecorder is the mock recorder for MockPubSubProvider.
 type MockPubSubProviderMockRecorder struct {
 	mock *MockPubSubProvider
