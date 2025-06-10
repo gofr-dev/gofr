@@ -1,9 +1,9 @@
 package migration
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
-	"errors"
 	"time"
 
 	"gofr.dev/pkg/gofr/container"
@@ -40,6 +40,10 @@ func (ds pubsubDS) DeleteTopic(ctx context.Context, name string) error {
 	return ds.client.DeleteTopic(ctx, name)
 }
 
+func (ds pubsubDS) Query(ctx context.Context, query string, args ...any) ([]byte, error) {
+	return ds.client.Query(ctx, query, args...)
+}
+
 func (ds pubsubDS) apply(m migrator) migrator {
 	return pubsubMigrator{
 		PubSub:   ds,
@@ -59,34 +63,38 @@ func (pm pubsubMigrator) checkAndCreateMigrationTable(c *container.Container) er
 func (pm pubsubMigrator) getLastMigration(c *container.Container) int64 {
 	var lastVersion int64
 
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), migrationTimeout)
 	defer cancel()
 
-	for {
-		msg, err := c.PubSub.Subscribe(ctx, pubsubMigrationTopic)
-		if err != nil {
-			if errors.Is(err, context.DeadlineExceeded) {
-				c.Debug("No new messages in migration topic within timeout")
-				break
-			}
+	result, err := c.PubSub.Query(ctx, pubsubMigrationTopic)
+	if err != nil {
+		c.Errorf("Error querying migration topic: %v", err)
+		return lastVersion
+	}
 
-			c.Debug("Error subscribing to migration topic:", err)
-			continue
+	var records []migrationRecord
+	decoder := json.NewDecoder(bytes.NewReader(result))
+
+	for decoder.More() {
+		var rec migrationRecord
+		if err := decoder.Decode(&rec); err != nil {
+			c.Errorf("Error decoding JSON stream: %v", err)
+			break
 		}
+		records = append(records, rec)
+	}
 
-		var record migrationRecord
-		if err := json.Unmarshal(msg.Value, &record); err != nil {
-			c.Debug("Error unmarshalling migration record:", err)
-			continue
-		}
-
-		if lastVersion > 0 {
-			c.Debugf("PubSub last migration fetched value is: %v", lastVersion)
-		}
-
-		if record.Version > lastVersion {
+	// Process the records
+	for _, record := range records {
+		if record.Method == "UP" && record.Version > lastVersion {
 			lastVersion = record.Version
 		}
+	}
+
+	if lastVersion > 0 {
+		c.Debugf("Last completed migration version: %d", lastVersion)
+	} else {
+		c.Debug("No previous migrations found - this appears to be the first run")
 	}
 
 	return lastVersion

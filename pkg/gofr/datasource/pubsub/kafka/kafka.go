@@ -5,6 +5,7 @@ package kafka
 import (
 	"context"
 	"errors"
+	"fmt"
 	"sync"
 	"time"
 
@@ -139,6 +140,60 @@ func (k *kafkaClient) Publish(ctx context.Context, topic string, message []byte)
 	k.metrics.IncrementCounter(ctx, "app_pubsub_publish_success_count", "topic", topic)
 
 	return nil
+}
+
+func (k *kafkaClient) Query(ctx context.Context, query string, args ...any) ([]byte, error) {
+	if !k.isConnected() {
+		return nil, errClientNotConnected
+	}
+
+	if query == "" {
+		return nil, errors.New("topic name cannot be empty")
+	}
+
+	// Extract offset and limit from args
+	var offset int64 = 0
+	var limit int = 10
+	if len(args) > 0 {
+		if val, ok := args[0].(int64); ok {
+			offset = val
+		}
+	}
+	if len(args) > 1 {
+		if val, ok := args[1].(int); ok {
+			limit = val
+		}
+	}
+
+	reader := kafka.NewReader(kafka.ReaderConfig{
+		Brokers:   k.config.Brokers,
+		Topic:     query,
+		Partition: k.config.Partition,
+		MinBytes:  1,
+		MaxBytes:  10e6, // 10MB
+	})
+
+	defer reader.Close()
+
+	// Set the offset to start reading from
+	if err := reader.SetOffset(offset); err != nil {
+		return nil, fmt.Errorf("failed to set offset: %w", err)
+	}
+
+	var result []byte
+	for i := 0; i < limit; i++ {
+		msg, err := reader.ReadMessage(ctx)
+		if err != nil {
+			if errors.Is(err, context.DeadlineExceeded) {
+				break
+			}
+			return nil, fmt.Errorf("failed to read message: %w", err)
+		}
+
+		result = append(result, msg.Value...)
+	}
+
+	return result, nil
 }
 
 func (k *kafkaClient) Subscribe(ctx context.Context, topic string) (*pubsub.Message, error) {

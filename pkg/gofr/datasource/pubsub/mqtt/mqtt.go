@@ -40,6 +40,11 @@ type MQTT struct {
 	mu            *sync.RWMutex
 }
 
+func (m *MQTT) Query(ctx context.Context, query string, args ...any) ([]byte, error) {
+	//TODO implement me
+	panic("implement me")
+}
+
 type Config struct {
 	Protocol         string
 	Hostname         string

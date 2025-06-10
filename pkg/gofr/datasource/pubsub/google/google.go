@@ -40,6 +40,11 @@ type googleClient struct {
 	mu          sync.RWMutex
 }
 
+func (g *googleClient) Query(ctx context.Context, query string, args ...any) ([]byte, error) {
+	//TODO implement me
+	panic("implement me")
+}
+
 //nolint:revive // We do not want anyone using the client without initialization steps.
 func New(conf Config, logger pubsub.Logger, metrics Metrics) *googleClient {
 	err := validateConfigs(&conf)
