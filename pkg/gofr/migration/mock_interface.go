@@ -279,6 +279,26 @@ func (mr *MockPubSubMockRecorder) DeleteTopic(context, name any) *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeleteTopic", reflect.TypeOf((*MockPubSub)(nil).DeleteTopic), context, name)
 }
 
+// Query mocks base method.
+func (m *MockPubSub) Query(ctx context.Context, query string, args ...any) ([]byte, error) {
+	m.ctrl.T.Helper()
+	varargs := []any{ctx, query}
+	for _, a := range args {
+		varargs = append(varargs, a)
+	}
+	ret := m.ctrl.Call(m, "Query", varargs...)
+	ret0, _ := ret[0].([]byte)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// Query indicates an expected call of Query.
+func (mr *MockPubSubMockRecorder) Query(ctx, query any, args ...any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	varargs := append([]any{ctx, query}, args...)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Query", reflect.TypeOf((*MockPubSub)(nil).Query), varargs...)
+}
+
 // MockClickhouse is a mock of Clickhouse interface.
 type MockClickhouse struct {
 	ctrl     *gomock.Controller
@@ -880,6 +900,72 @@ func (m *MockSurrealDB) Query(ctx context.Context, query string, vars map[string
 func (mr *MockSurrealDBMockRecorder) Query(ctx, query, vars any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Query", reflect.TypeOf((*MockSurrealDB)(nil).Query), ctx, query, vars)
+}
+
+// MockDGraph is a mock of DGraph interface.
+type MockDGraph struct {
+	ctrl     *gomock.Controller
+	recorder *MockDGraphMockRecorder
+	isgomock struct{}
+}
+
+// MockDGraphMockRecorder is the mock recorder for MockDGraph.
+type MockDGraphMockRecorder struct {
+	mock *MockDGraph
+}
+
+// NewMockDGraph creates a new mock instance.
+func NewMockDGraph(ctrl *gomock.Controller) *MockDGraph {
+	mock := &MockDGraph{ctrl: ctrl}
+	mock.recorder = &MockDGraphMockRecorder{mock}
+	return mock
+}
+
+// EXPECT returns an object that allows the caller to indicate expected use.
+func (m *MockDGraph) EXPECT() *MockDGraphMockRecorder {
+	return m.recorder
+}
+
+// AddOrUpdateField mocks base method.
+func (m *MockDGraph) AddOrUpdateField(ctx context.Context, fieldName, fieldType, directives string) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "AddOrUpdateField", ctx, fieldName, fieldType, directives)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// AddOrUpdateField indicates an expected call of AddOrUpdateField.
+func (mr *MockDGraphMockRecorder) AddOrUpdateField(ctx, fieldName, fieldType, directives any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AddOrUpdateField", reflect.TypeOf((*MockDGraph)(nil).AddOrUpdateField), ctx, fieldName, fieldType, directives)
+}
+
+// ApplySchema mocks base method.
+func (m *MockDGraph) ApplySchema(ctx context.Context, schema string) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "ApplySchema", ctx, schema)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// ApplySchema indicates an expected call of ApplySchema.
+func (mr *MockDGraphMockRecorder) ApplySchema(ctx, schema any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ApplySchema", reflect.TypeOf((*MockDGraph)(nil).ApplySchema), ctx, schema)
+}
+
+// DropField mocks base method.
+func (m *MockDGraph) DropField(ctx context.Context, fieldName string) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "DropField", ctx, fieldName)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// DropField indicates an expected call of DropField.
+func (mr *MockDGraphMockRecorder) DropField(ctx, fieldName any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DropField", reflect.TypeOf((*MockDGraph)(nil).DropField), ctx, fieldName)
 }
 
 // Mockmigrator is a mock of migrator interface.

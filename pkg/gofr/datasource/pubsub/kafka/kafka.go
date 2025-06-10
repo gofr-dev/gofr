@@ -6,6 +6,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
+	"strings"
 	"sync"
 	"time"
 
@@ -152,13 +154,19 @@ func (k *kafkaClient) Query(ctx context.Context, query string, args ...any) ([]b
 	}
 
 	// Extract offset and limit from args
-	var offset int64 = 0
-	var limit int = 10
+	var (
+		offset       int64 = 0
+		limit              = 10
+		result       []byte
+		messageCount int
+	)
+
 	if len(args) > 0 {
 		if val, ok := args[0].(int64); ok {
 			offset = val
 		}
 	}
+
 	if len(args) > 1 {
 		if val, ok := args[1].(int); ok {
 			limit = val
@@ -166,11 +174,12 @@ func (k *kafkaClient) Query(ctx context.Context, query string, args ...any) ([]b
 	}
 
 	reader := kafka.NewReader(kafka.ReaderConfig{
-		Brokers:   k.config.Brokers,
-		Topic:     query,
-		Partition: k.config.Partition,
-		MinBytes:  1,
-		MaxBytes:  10e6, // 10MB
+		Brokers:     k.config.Brokers,
+		Topic:       query,
+		Partition:   k.config.Partition,
+		MinBytes:    1,
+		MaxBytes:    10e6, // 10MB
+		StartOffset: kafka.FirstOffset,
 	})
 
 	defer reader.Close()
@@ -180,17 +189,27 @@ func (k *kafkaClient) Query(ctx context.Context, query string, args ...any) ([]b
 		return nil, fmt.Errorf("failed to set offset: %w", err)
 	}
 
-	var result []byte
-	for i := 0; i < limit; i++ {
-		msg, err := reader.ReadMessage(ctx)
+	readCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
+	defer cancel()
+
+	for messageCount < limit {
+		msg, err := reader.ReadMessage(readCtx)
 		if err != nil {
-			if errors.Is(err, context.DeadlineExceeded) {
+			if errors.Is(err, context.DeadlineExceeded) ||
+				errors.Is(err, io.EOF) ||
+				strings.Contains(err.Error(), "no messages") {
+
 				break
 			}
 			return nil, fmt.Errorf("failed to read message: %w", err)
 		}
 
+		if len(result) > 0 {
+			result = append(result, '\n')
+		}
+
 		result = append(result, msg.Value...)
+		messageCount++
 	}
 
 	return result, nil
