@@ -16,7 +16,7 @@ type pubsubDS struct {
 const (
 	pubsubMigrationTopic = "gofr_migrations"
 	migrationTimeout     = 10 * time.Second // Increased timeout
-	maxRetries           = 3
+	defaultQueryLimit    = 100
 )
 
 type migrationRecord struct {
@@ -66,7 +66,7 @@ func (pm pubsubMigrator) getLastMigration(c *container.Container) int64 {
 	ctx, cancel := context.WithTimeout(context.Background(), migrationTimeout)
 	defer cancel()
 
-	result, err := c.PubSub.Query(ctx, pubsubMigrationTopic, int64(0), 100)
+	result, err := c.PubSub.Query(ctx, pubsubMigrationTopic, int64(0), defaultQueryLimit)
 	if err != nil {
 		c.Errorf("Error querying migration topic: %v", err)
 
@@ -80,6 +80,7 @@ func (pm pubsubMigrator) getLastMigration(c *container.Container) int64 {
 	}
 
 	var records []migrationRecord
+
 	decoder := json.NewDecoder(bytes.NewReader(result))
 
 	for decoder.More() {
@@ -88,6 +89,7 @@ func (pm pubsubMigrator) getLastMigration(c *container.Container) int64 {
 			c.Errorf("Error decoding JSON stream: %v", err)
 			break
 		}
+
 		records = append(records, rec)
 	}
 
@@ -122,5 +124,6 @@ func (pm pubsubMigrator) commitMigration(c *container.Container, data transactio
 	}
 
 	c.Debugf("Inserted record for migration %v in PubSub gofr_migrations topic", data.MigrationNumber)
+
 	return pm.migrator.commitMigration(c, data)
 }
