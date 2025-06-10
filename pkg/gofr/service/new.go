@@ -215,7 +215,7 @@ func encodeQueryParameters(req *http.Request, queryParams map[string]any) {
 		switch vt := v.(type) {
 		case []string:
 			for _, val := range vt {
-				q.Set(k, val)
+				q.Add(k, val)
 			}
 		default:
 			q.Set(k, fmt.Sprintf("%v", v))

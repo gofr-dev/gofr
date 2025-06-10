@@ -47,13 +47,13 @@ func TestHTTPService_createAndSendRequest(t *testing.T) {
 		expContentType string
 	}{
 		{"with query params, body and header", map[string]any{"key": "value", "name": []string{"gofr", "test"}},
-			[]byte("{Test Body}"), map[string]string{"header1": "value1"}, "key=value&name=test", "application/json"},
+			[]byte("{Test Body}"), map[string]string{"header1": "value1"}, "key=value&name=gofr&name=test", "application/json"},
 		{"with query params, body, header and content type", map[string]any{"key": "value", "name": []string{"gofr", "test"}},
 			[]byte("{Test Body}"), map[string]string{"header1": "value1", "content-type": "application/json"},
-			"key=value&name=test", "application/json"},
+			"key=value&name=gofr&name=test", "application/json"},
 		{"with query params, body, header and content type xml", map[string]any{"key": "value", "name": []string{"gofr", "test"}},
 			[]byte("{Test Body}"), map[string]string{"header1": "value1", "content-type": "application/xml"},
-			"key=value&name=test", "application/xml"},
+			"key=value&name=gofr&name=test", "application/xml"},
 		{"without query params, body, header and content type", nil, []byte("{Test Body}"),
 			map[string]string{"header1": "value1", "content-type": "application/json"},
 			"", "application/json"},
@@ -112,7 +112,7 @@ func TestHTTPService_Get(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		assert.Equal(t, http.MethodGet, r.Method)
 		assert.Equal(t, "/test-path", r.URL.Path)
-		assert.Equal(t, "key=value&name=test", r.URL.RawQuery)
+		assert.Equal(t, "key=value&name=gofr&name=test", r.URL.RawQuery)
 
 		w.WriteHeader(http.StatusOK)
 	}))
@@ -143,7 +143,7 @@ func TestHTTPService_GetWithHeaders(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		assert.Equal(t, http.MethodGet, r.Method)
 		assert.Equal(t, "/test-path", r.URL.Path)
-		assert.Equal(t, "key=value&name=test", r.URL.RawQuery)
+		assert.Equal(t, "key=value&name=gofr&name=test", r.URL.RawQuery)
 		assert.Contains(t, "value1", r.Header.Get("Header1"))
 
 		w.WriteHeader(http.StatusOK)
@@ -184,7 +184,7 @@ func TestHTTPService_Put(t *testing.T) {
 
 		assert.Equal(t, http.MethodPut, r.Method)
 		assert.Equal(t, "/test-path", r.URL.Path)
-		assert.Equal(t, "key=value&name=test", r.URL.RawQuery)
+		assert.Equal(t, "key=value&name=gofr&name=test", r.URL.RawQuery)
 		assert.Contains(t, "Test Body", string(body))
 
 		w.WriteHeader(http.StatusOK)
@@ -224,7 +224,7 @@ func TestHTTPService_PutWithHeaders(t *testing.T) {
 
 		assert.Equal(t, http.MethodPut, r.Method)
 		assert.Equal(t, "/test-path", r.URL.Path)
-		assert.Equal(t, "key=value&name=test", r.URL.RawQuery)
+		assert.Equal(t, "key=value&name=gofr&name=test", r.URL.RawQuery)
 		assert.Contains(t, "value1", r.Header.Get("Header1"))
 		assert.Contains(t, "Test Body", string(body))
 
@@ -266,7 +266,7 @@ func TestHTTPService_Patch(t *testing.T) {
 
 		assert.Equal(t, http.MethodPatch, r.Method)
 		assert.Equal(t, "/test-path", r.URL.Path)
-		assert.Equal(t, "key=value&name=test", r.URL.RawQuery)
+		assert.Equal(t, "key=value&name=gofr&name=test", r.URL.RawQuery)
 		assert.Contains(t, "Test Body", string(body))
 
 		w.WriteHeader(http.StatusOK)
@@ -306,7 +306,7 @@ func TestHTTPService_PatchWithHeaders(t *testing.T) {
 
 		assert.Equal(t, http.MethodPut, r.Method)
 		assert.Equal(t, "/test-path", r.URL.Path)
-		assert.Equal(t, "key=value&name=test", r.URL.RawQuery)
+		assert.Equal(t, "key=value&name=gofr&name=test", r.URL.RawQuery)
 		assert.Contains(t, "value1", r.Header.Get("Header1"))
 		assert.Contains(t, "Test Body", string(body))
 
@@ -348,7 +348,7 @@ func TestHTTPService_Post(t *testing.T) {
 
 		assert.Equal(t, http.MethodPost, r.Method)
 		assert.Equal(t, "/test-path", r.URL.Path)
-		assert.Equal(t, "key=value&name=test", r.URL.RawQuery)
+		assert.Equal(t, "key=value&name=gofr&name=test", r.URL.RawQuery)
 		assert.Contains(t, "Test Body", string(body))
 
 		w.WriteHeader(http.StatusOK)
@@ -388,7 +388,7 @@ func TestHTTPService_PostWithHeaders(t *testing.T) {
 
 		assert.Equal(t, http.MethodPost, r.Method)
 		assert.Equal(t, "/test-path", r.URL.Path)
-		assert.Equal(t, "key=value&name=test", r.URL.RawQuery)
+		assert.Equal(t, "key=value&name=gofr&name=test", r.URL.RawQuery)
 		assert.Contains(t, "value1", r.Header.Get("Header1"))
 		assert.Contains(t, "Test Body", string(body))
 
