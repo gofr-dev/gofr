@@ -29,7 +29,7 @@ func (e ErrorDB) WithStack() ErrorDB {
 	return e
 }
 
-func (e ErrorDB) StatusCode() int {
+func (ErrorDB) StatusCode() int {
 	return http.StatusInternalServerError
 }
 
