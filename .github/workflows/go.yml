@@ -10,6 +10,7 @@ on:
     branches:
       - main
       - development
+      - fix/test_coverage
     paths-ignore:
       - 'docs/**'  # Ignore changes to docs folder
   # Run on pull requests to main or development branches
@@ -102,7 +103,7 @@ jobs:
             # Run tests for the examples directory with coverage
             go test gofr.dev/examples/... -v -short -coverprofile packageWithpbgo.cov -coverpkg=gofr.dev/examples/...
              # Filter out auto-generated files by protobuf and gofr framework from coverage report
-            grep -vE '^gofr\.dev\/.*(\.pb\.go|hello\.proto|hello_grpc\.pb\.go|health_client\.go|hello_client\.go|hello_gofr\.go|health_gofr\.go)' packageWithpbgo.cov > profile.cov
+            grep -vE '(/client/|grpc-.+-client/main\.go|_client\.go|_gofr\.go|_grpc\.pb\.go|\.pb\.go|\.proto|health_.*\.go)' packageWithpbgo.cov > profile.cov
             # Display coverage statistics
             go tool cover -func profile.cov
 
@@ -148,14 +149,14 @@ jobs:
           max_attempts: 2
           command: |
             export APP_ENV=test
-            # Run tests for the pkg directory with coverage
-            cd pkg
-            go test ./... -v -short -coverprofile package.cov -coverpkg=./...
-            # Filter out mock files from coverage report
-            grep -v '/mock_' package.cov > profile.cov
-            mv profile.cov ../profile.cov
-            # Display coverage statistics
-            go tool cover -func ../profile.cov
+            # Run tests with coverage for root gofr package only
+            go test -v -short -covermode=atomic -coverpkg=./pkg/gofr -coverprofile=gofr_only.cov ./pkg/gofr
+            # Run tests for all sub-packages under gofr
+            go test -v -covermode=atomic -coverpkg=./pkg/gofr -coverprofile=submodules.cov ./pkg/gofr/...
+            # Combine coverage profiles
+            echo "mode: atomic" > profile.cov
+            grep -h -v "mode:" gofr_only.cov submodules.cov | grep -v '/mock_' >> profile.cov
+            go tool cover -func profile.cov
 
       # Upload coverage report for the 1.24 Go version only
       - name: Upload Test Coverage
@@ -195,6 +196,7 @@ jobs:
           codeCoverage=$(go tool cover -func=merged_profile.cov | grep total | awk '{print $3}')
           codeCoverage=${codeCoverage%?}
           echo "CODE_COVERAGE=$codeCoverage" >> $GITHUB_ENV
+          echo "✅ Total Code Coverage: $codeCoverage%"
   #      - name: Check if code-coverage is greater than threshold
   #        run: |
   #          codeCoverage=${{ env.CODE_COVERAGE }}
@@ -376,6 +378,6 @@ jobs:
 
       # Check file naming conventions using ls-lint
       - name: Check for file names errors
-        uses: ls-lint/action@v2.3.0
+        uses: ls-lint/action@v2.3.1
         with:
           config: .ls-lint.yml

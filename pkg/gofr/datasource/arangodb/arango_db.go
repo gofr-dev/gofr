@@ -43,7 +43,7 @@ func (d *DB) DropDB(ctx context.Context, database string) error {
 
 	defer d.client.sendOperationStats(&QueryLog{Operation: "dropDB", Database: database}, startTime, "dropDB", span)
 
-	db, err := d.client.client.Database(tracerCtx, database)
+	db, err := d.client.client.GetDatabase(tracerCtx, database, nil)
 	if err != nil {
 		return err
 	}
@@ -66,7 +66,7 @@ func (d *DB) CreateCollection(ctx context.Context, database, collection string, 
 	defer d.client.sendOperationStats(&QueryLog{Operation: "createCollection", Database: database,
 		Collection: collection, Filter: isEdge}, startTime, "createCollection", span)
 
-	db, err := d.client.client.Database(tracerCtx, database)
+	db, err := d.client.client.GetDatabase(tracerCtx, database, nil)
 	if err != nil {
 		return err
 	}
@@ -100,12 +100,12 @@ func (d *DB) DropCollection(ctx context.Context, database, collectionName string
 }
 
 func (d *DB) getCollection(ctx context.Context, dbName, collectionName string) (arangodb.Collection, error) {
-	db, err := d.client.client.Database(ctx, dbName)
+	db, err := d.client.client.GetDatabase(ctx, dbName, nil)
 	if err != nil {
 		return nil, err
 	}
 
-	collection, err := db.Collection(ctx, collectionName)
+	collection, err := db.GetCollection(ctx, collectionName, nil)
 	if err != nil {
 		return nil, err
 	}
