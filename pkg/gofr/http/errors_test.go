@@ -8,6 +8,8 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"gofr.dev/pkg/gofr/logging"
 )
 
 func TestMain(m *testing.M) {
@@ -117,4 +119,30 @@ func Test_ErrorErrorPanicRecovery(t *testing.T) {
 	require.ErrorContainsf(t, err, http.StatusText(http.StatusInternalServerError), "TEST Failed.\n")
 
 	assert.Equal(t, http.StatusInternalServerError, err.StatusCode(), "TEST Failed.\n")
+}
+
+func Test_ServiceUnavailable(t *testing.T) {
+	code503 := http.StatusServiceUnavailable
+	testCases := []struct {
+		message      string
+		dependency   string
+		errorMessage string
+		statusCode   int
+		logLevel     logging.Level
+	}{
+		{"", "", http.StatusText(code503), code503, logging.ERROR},
+		{"Connection Error", "", http.StatusText(code503), code503, logging.ERROR},
+		{"", "DB", http.StatusText(code503), code503, logging.ERROR},
+		{"Connection Error", "DB", "Service unavailable due to error: Connection Error from dependency DB", code503, logging.ERROR},
+	}
+
+	for _, tc := range testCases {
+		err := ErrorServiceUnavailable{
+			Dependency:   tc.dependency,
+			ErrorMessage: tc.message,
+		}
+		assert.Equal(t, tc.statusCode, err.StatusCode())
+		assert.Equal(t, tc.errorMessage, err.Error())
+		assert.Equal(t, tc.logLevel, err.LogLevel())
+	}
 }

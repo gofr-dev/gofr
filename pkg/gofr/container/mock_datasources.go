@@ -6837,6 +6837,258 @@ func (mr *MockRedisMockRecorder) Unlink(ctx any, keys ...any) *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Unlink", reflect.TypeOf((*MockRedis)(nil).Unlink), varargs...)
 }
 
+// VAdd mocks base method.
+func (m *MockRedis) VAdd(ctx context.Context, key, element string, val redis.Vector) *redis.BoolCmd {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "VAdd", ctx, key, element, val)
+	ret0, _ := ret[0].(*redis.BoolCmd)
+	return ret0
+}
+
+// VAdd indicates an expected call of VAdd.
+func (mr *MockRedisMockRecorder) VAdd(ctx, key, element, val any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "VAdd", reflect.TypeOf((*MockRedis)(nil).VAdd), ctx, key, element, val)
+}
+
+// VAddWithArgs mocks base method.
+func (m *MockRedis) VAddWithArgs(ctx context.Context, key, element string, val redis.Vector, addArgs *redis.VAddArgs) *redis.BoolCmd {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "VAddWithArgs", ctx, key, element, val, addArgs)
+	ret0, _ := ret[0].(*redis.BoolCmd)
+	return ret0
+}
+
+// VAddWithArgs indicates an expected call of VAddWithArgs.
+func (mr *MockRedisMockRecorder) VAddWithArgs(ctx, key, element, val, addArgs any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "VAddWithArgs", reflect.TypeOf((*MockRedis)(nil).VAddWithArgs), ctx, key, element, val, addArgs)
+}
+
+// VCard mocks base method.
+func (m *MockRedis) VCard(ctx context.Context, key string) *redis.IntCmd {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "VCard", ctx, key)
+	ret0, _ := ret[0].(*redis.IntCmd)
+	return ret0
+}
+
+// VCard indicates an expected call of VCard.
+func (mr *MockRedisMockRecorder) VCard(ctx, key any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "VCard", reflect.TypeOf((*MockRedis)(nil).VCard), ctx, key)
+}
+
+// VClearAttributes mocks base method.
+func (m *MockRedis) VClearAttributes(ctx context.Context, key, element string) *redis.BoolCmd {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "VClearAttributes", ctx, key, element)
+	ret0, _ := ret[0].(*redis.BoolCmd)
+	return ret0
+}
+
+// VClearAttributes indicates an expected call of VClearAttributes.
+func (mr *MockRedisMockRecorder) VClearAttributes(ctx, key, element any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "VClearAttributes", reflect.TypeOf((*MockRedis)(nil).VClearAttributes), ctx, key, element)
+}
+
+// VDim mocks base method.
+func (m *MockRedis) VDim(ctx context.Context, key string) *redis.IntCmd {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "VDim", ctx, key)
+	ret0, _ := ret[0].(*redis.IntCmd)
+	return ret0
+}
+
+// VDim indicates an expected call of VDim.
+func (mr *MockRedisMockRecorder) VDim(ctx, key any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "VDim", reflect.TypeOf((*MockRedis)(nil).VDim), ctx, key)
+}
+
+// VEmb mocks base method.
+func (m *MockRedis) VEmb(ctx context.Context, key, element string, raw bool) *redis.SliceCmd {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "VEmb", ctx, key, element, raw)
+	ret0, _ := ret[0].(*redis.SliceCmd)
+	return ret0
+}
+
+// VEmb indicates an expected call of VEmb.
+func (mr *MockRedisMockRecorder) VEmb(ctx, key, element, raw any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "VEmb", reflect.TypeOf((*MockRedis)(nil).VEmb), ctx, key, element, raw)
+}
+
+// VGetAttr mocks base method.
+func (m *MockRedis) VGetAttr(ctx context.Context, key, element string) *redis.StringCmd {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "VGetAttr", ctx, key, element)
+	ret0, _ := ret[0].(*redis.StringCmd)
+	return ret0
+}
+
+// VGetAttr indicates an expected call of VGetAttr.
+func (mr *MockRedisMockRecorder) VGetAttr(ctx, key, element any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "VGetAttr", reflect.TypeOf((*MockRedis)(nil).VGetAttr), ctx, key, element)
+}
+
+// VInfo mocks base method.
+func (m *MockRedis) VInfo(ctx context.Context, key string) *redis.MapStringInterfaceCmd {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "VInfo", ctx, key)
+	ret0, _ := ret[0].(*redis.MapStringInterfaceCmd)
+	return ret0
+}
+
+// VInfo indicates an expected call of VInfo.
+func (mr *MockRedisMockRecorder) VInfo(ctx, key any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "VInfo", reflect.TypeOf((*MockRedis)(nil).VInfo), ctx, key)
+}
+
+// VLinks mocks base method.
+func (m *MockRedis) VLinks(ctx context.Context, key, element string) *redis.StringSliceCmd {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "VLinks", ctx, key, element)
+	ret0, _ := ret[0].(*redis.StringSliceCmd)
+	return ret0
+}
+
+// VLinks indicates an expected call of VLinks.
+func (mr *MockRedisMockRecorder) VLinks(ctx, key, element any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "VLinks", reflect.TypeOf((*MockRedis)(nil).VLinks), ctx, key, element)
+}
+
+// VLinksWithScores mocks base method.
+func (m *MockRedis) VLinksWithScores(ctx context.Context, key, element string) *redis.VectorScoreSliceCmd {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "VLinksWithScores", ctx, key, element)
+	ret0, _ := ret[0].(*redis.VectorScoreSliceCmd)
+	return ret0
+}
+
+// VLinksWithScores indicates an expected call of VLinksWithScores.
+func (mr *MockRedisMockRecorder) VLinksWithScores(ctx, key, element any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "VLinksWithScores", reflect.TypeOf((*MockRedis)(nil).VLinksWithScores), ctx, key, element)
+}
+
+// VRandMember mocks base method.
+func (m *MockRedis) VRandMember(ctx context.Context, key string) *redis.StringCmd {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "VRandMember", ctx, key)
+	ret0, _ := ret[0].(*redis.StringCmd)
+	return ret0
+}
+
+// VRandMember indicates an expected call of VRandMember.
+func (mr *MockRedisMockRecorder) VRandMember(ctx, key any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "VRandMember", reflect.TypeOf((*MockRedis)(nil).VRandMember), ctx, key)
+}
+
+// VRandMemberCount mocks base method.
+func (m *MockRedis) VRandMemberCount(ctx context.Context, key string, count int) *redis.StringSliceCmd {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "VRandMemberCount", ctx, key, count)
+	ret0, _ := ret[0].(*redis.StringSliceCmd)
+	return ret0
+}
+
+// VRandMemberCount indicates an expected call of VRandMemberCount.
+func (mr *MockRedisMockRecorder) VRandMemberCount(ctx, key, count any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "VRandMemberCount", reflect.TypeOf((*MockRedis)(nil).VRandMemberCount), ctx, key, count)
+}
+
+// VRem mocks base method.
+func (m *MockRedis) VRem(ctx context.Context, key, element string) *redis.BoolCmd {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "VRem", ctx, key, element)
+	ret0, _ := ret[0].(*redis.BoolCmd)
+	return ret0
+}
+
+// VRem indicates an expected call of VRem.
+func (mr *MockRedisMockRecorder) VRem(ctx, key, element any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "VRem", reflect.TypeOf((*MockRedis)(nil).VRem), ctx, key, element)
+}
+
+// VSetAttr mocks base method.
+func (m *MockRedis) VSetAttr(ctx context.Context, key, element string, attr any) *redis.BoolCmd {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "VSetAttr", ctx, key, element, attr)
+	ret0, _ := ret[0].(*redis.BoolCmd)
+	return ret0
+}
+
+// VSetAttr indicates an expected call of VSetAttr.
+func (mr *MockRedisMockRecorder) VSetAttr(ctx, key, element, attr any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "VSetAttr", reflect.TypeOf((*MockRedis)(nil).VSetAttr), ctx, key, element, attr)
+}
+
+// VSim mocks base method.
+func (m *MockRedis) VSim(ctx context.Context, key string, val redis.Vector) *redis.StringSliceCmd {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "VSim", ctx, key, val)
+	ret0, _ := ret[0].(*redis.StringSliceCmd)
+	return ret0
+}
+
+// VSim indicates an expected call of VSim.
+func (mr *MockRedisMockRecorder) VSim(ctx, key, val any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "VSim", reflect.TypeOf((*MockRedis)(nil).VSim), ctx, key, val)
+}
+
+// VSimWithArgs mocks base method.
+func (m *MockRedis) VSimWithArgs(ctx context.Context, key string, val redis.Vector, args *redis.VSimArgs) *redis.StringSliceCmd {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "VSimWithArgs", ctx, key, val, args)
+	ret0, _ := ret[0].(*redis.StringSliceCmd)
+	return ret0
+}
+
+// VSimWithArgs indicates an expected call of VSimWithArgs.
+func (mr *MockRedisMockRecorder) VSimWithArgs(ctx, key, val, args any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "VSimWithArgs", reflect.TypeOf((*MockRedis)(nil).VSimWithArgs), ctx, key, val, args)
+}
+
+// VSimWithArgsWithScores mocks base method.
+func (m *MockRedis) VSimWithArgsWithScores(ctx context.Context, key string, val redis.Vector, args *redis.VSimArgs) *redis.VectorScoreSliceCmd {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "VSimWithArgsWithScores", ctx, key, val, args)
+	ret0, _ := ret[0].(*redis.VectorScoreSliceCmd)
+	return ret0
+}
+
+// VSimWithArgsWithScores indicates an expected call of VSimWithArgsWithScores.
+func (mr *MockRedisMockRecorder) VSimWithArgsWithScores(ctx, key, val, args any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "VSimWithArgsWithScores", reflect.TypeOf((*MockRedis)(nil).VSimWithArgsWithScores), ctx, key, val, args)
+}
+
+// VSimWithScores mocks base method.
+func (m *MockRedis) VSimWithScores(ctx context.Context, key string, val redis.Vector) *redis.VectorScoreSliceCmd {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "VSimWithScores", ctx, key, val)
+	ret0, _ := ret[0].(*redis.VectorScoreSliceCmd)
+	return ret0
+}
+
+// VSimWithScores indicates an expected call of VSimWithScores.
+func (mr *MockRedisMockRecorder) VSimWithScores(ctx, key, val any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "VSimWithScores", reflect.TypeOf((*MockRedis)(nil).VSimWithScores), ctx, key, val)
+}
+
 // XAck mocks base method.
 func (m *MockRedis) XAck(ctx context.Context, stream, group string, ids ...string) *redis.IntCmd {
 	m.ctrl.T.Helper()
@@ -10586,31 +10838,31 @@ func (mr *MockPubSubProviderMockRecorder) Connect() *gomock.Call {
 }
 
 // CreateTopic mocks base method.
-func (m *MockPubSubProvider) CreateTopic(context context.Context, name string) error {
+func (m *MockPubSubProvider) CreateTopic(arg0 context.Context, name string) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "CreateTopic", context, name)
+	ret := m.ctrl.Call(m, "CreateTopic", arg0, name)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // CreateTopic indicates an expected call of CreateTopic.
-func (mr *MockPubSubProviderMockRecorder) CreateTopic(context, name any) *gomock.Call {
+func (mr *MockPubSubProviderMockRecorder) CreateTopic(arg0, name any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CreateTopic", reflect.TypeOf((*MockPubSubProvider)(nil).CreateTopic), context, name)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CreateTopic", reflect.TypeOf((*MockPubSubProvider)(nil).CreateTopic), arg0, name)
 }
 
 // DeleteTopic mocks base method.
-func (m *MockPubSubProvider) DeleteTopic(context context.Context, name string) error {
+func (m *MockPubSubProvider) DeleteTopic(arg0 context.Context, name string) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "DeleteTopic", context, name)
+	ret := m.ctrl.Call(m, "DeleteTopic", arg0, name)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // DeleteTopic indicates an expected call of DeleteTopic.
-func (mr *MockPubSubProviderMockRecorder) DeleteTopic(context, name any) *gomock.Call {
+func (mr *MockPubSubProviderMockRecorder) DeleteTopic(arg0, name any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeleteTopic", reflect.TypeOf((*MockPubSubProvider)(nil).DeleteTopic), context, name)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeleteTopic", reflect.TypeOf((*MockPubSubProvider)(nil).DeleteTopic), arg0, name)
 }
 
 // Health mocks base method.
@@ -12481,17 +12733,22 @@ func (mr *MockArangoDBMockRecorder) HealthCheck(arg0 any) *gomock.Call {
 }
 
 // Query mocks base method.
-func (m *MockArangoDB) Query(ctx context.Context, dbName, query string, bindVars map[string]any, result any) error {
+func (m *MockArangoDB) Query(ctx context.Context, dbName, query string, bindVars map[string]any, result any, options ...map[string]any) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "Query", ctx, dbName, query, bindVars, result)
+	varargs := []any{ctx, dbName, query, bindVars, result}
+	for _, a := range options {
+		varargs = append(varargs, a)
+	}
+	ret := m.ctrl.Call(m, "Query", varargs...)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // Query indicates an expected call of Query.
-func (mr *MockArangoDBMockRecorder) Query(ctx, dbName, query, bindVars, result any) *gomock.Call {
+func (mr *MockArangoDBMockRecorder) Query(ctx, dbName, query, bindVars, result any, options ...any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Query", reflect.TypeOf((*MockArangoDB)(nil).Query), ctx, dbName, query, bindVars, result)
+	varargs := append([]any{ctx, dbName, query, bindVars, result}, options...)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Query", reflect.TypeOf((*MockArangoDB)(nil).Query), varargs...)
 }
 
 // UpdateDocument mocks base method.
@@ -12701,17 +12958,22 @@ func (mr *MockArangoDBProviderMockRecorder) HealthCheck(arg0 any) *gomock.Call {
 }
 
 // Query mocks base method.
-func (m *MockArangoDBProvider) Query(ctx context.Context, dbName, query string, bindVars map[string]any, result any) error {
+func (m *MockArangoDBProvider) Query(ctx context.Context, dbName, query string, bindVars map[string]any, result any, options ...map[string]any) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "Query", ctx, dbName, query, bindVars, result)
+	varargs := []any{ctx, dbName, query, bindVars, result}
+	for _, a := range options {
+		varargs = append(varargs, a)
+	}
+	ret := m.ctrl.Call(m, "Query", varargs...)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // Query indicates an expected call of Query.
-func (mr *MockArangoDBProviderMockRecorder) Query(ctx, dbName, query, bindVars, result any) *gomock.Call {
+func (mr *MockArangoDBProviderMockRecorder) Query(ctx, dbName, query, bindVars, result any, options ...any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Query", reflect.TypeOf((*MockArangoDBProvider)(nil).Query), ctx, dbName, query, bindVars, result)
+	varargs := append([]any{ctx, dbName, query, bindVars, result}, options...)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Query", reflect.TypeOf((*MockArangoDBProvider)(nil).Query), varargs...)
 }
 
 // UpdateDocument mocks base method.

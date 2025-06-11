@@ -106,3 +106,70 @@ func WSHandler(ctx *gofr.Context) (any, error) {
 }
 ```
 > #### Check out the example on how to read/write through a WebSocket in GoFr: [Visit GitHub](https://github.com/gofr-dev/gofr/blob/main/examples/using-web-socket/main.go)
+
+## Inter-Service WebSocket Communication
+
+GoFr also supports Inter-Service WebSocket Communication, enabling seamless communication between services using WebSocket connections. 
+This feature is particularly useful for microservices architectures where services need to exchange real-time data.
+
+## Key Methods: 
+
+1. **AddWSService**
+This method registers a WebSocket service and establishes a persistent connection to the specified service. It also supports automatic reconnection in case of connection failures.
+
+**Parameters:**
+
+
+- `serviceName (string)`: A unique name for the WebSocket service.
+- `url (string)`: The WebSocket URL of the target service.
+- `headers ( map[string][]string)`: HTTP headers to include in the WebSocket handshake.
+-  `enableReconnection (bool)`: A boolean to enable automatic reconnection.
+- `retryInterval (time.Duration)`: The interval between reconnection attempts.
+
+2. **WriteMessageToService**
+This method sends a message to a WebSocket connection associated with a specific service.
+
+**Parameters:**
+
+- `serviceName (string)`: The name of the WebSocket service.
+- `data (any)`: The message to send. It can be a string, []byte, or any struct that can be marshaled to JSON.
+
+## Usage in GoFr
+
+```go
+package main
+
+import (
+	"time"
+	"gofr.dev/pkg/gofr"
+)
+
+func main() {
+	app := gofr.New()
+
+	// Add a WebSocket service
+	err := app.AddWSService("notification-service", "ws://notifications.example.com/ws", nil, true, 5*time.Second)
+	if err != nil {
+		app.Logger.Errorf("Failed to add WebSocket service: %v", err)
+		return
+	}
+
+	// Example route to send a message to the notification service
+	app.POST("/send-notification", func(ctx *gofr.Context) (any, error) {
+		message := map[string]string{
+			"title":   "New Message",
+			"content": "You have a new notification!",
+		}
+
+		err := ctx.WriteMessageToService("notification-service", message)
+		if err != nil {
+			ctx.Logger.Errorf("Failed to send message: %v", err)
+			return nil, err
+		}
+
+		return "Notification sent successfully!", nil
+	})
+
+	app.Run()
+}
+```

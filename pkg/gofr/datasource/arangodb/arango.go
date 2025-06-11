@@ -2,6 +2,7 @@ package arangodb
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"time"
@@ -153,30 +154,107 @@ func (c *Client) validateConfig() error {
 	return nil
 }
 
-// Query executes an AQL query and binds the results.
+// Query executes an AQL (ArangoDB Query Language) query on the specified database and stores the result.
 //
 // Parameters:
-//   - ctx: Request context for tracing and cancellation.
-//   - dbName: Name of the database where the query will be executed.
-//   - query: AQL query string to be executed.
-//   - bindVars: Map of bind variables to be used in the query.
-//   - result: Pointer to a slice of maps where the query results will be stored.
+//   - ctx: Context for request-scoped values, cancellation, and tracing.
+//   - dbName: Name of the ArangoDB database where the query will be executed.
+//   - query: The AQL query string to execute.
+//   - bindVars: Map of bind parameters used in the AQL query.
+//   - result: Pointer to a slice of maps where the query results will be unmarshaled.
+//     Must be a valid pointer to avoid runtime errors.
+//   - options: A flexible map[string]any to customize query behavior. Keys should be in camelCase
+//     and correspond to fields in ArangoDB’s QueryOptions and QuerySubOptions structs.
 //
-// Returns an error if the database connection fails, the query execution fails, or the
-// result parameter is not a pointer to a slice of maps.
-func (c *Client) Query(ctx context.Context, dbName, query string, bindVars map[string]any, result any) error {
+// Available option keys include (but are not limited to):
+//
+// QueryOptions:
+//   - count (bool): Include the total number of results in the result set.
+//   - batchSize (int): Number of results to return per batch.
+//   - cache (bool): Whether to cache the query results.
+//   - memoryLimit (int64): Maximum memory in bytes for query execution.
+//   - ttl (float64): Time-to-live for the cursor in seconds.
+//   - options (map[string]any): Nested options from QuerySubOptions.
+//
+// QuerySubOptions:
+//   - allowDirtyReads (bool)
+//   - allowRetry (bool)
+//   - failOnWarning (*bool)
+//   - fullCount (bool): Return full count ignoring LIMIT clause.
+//   - optimizer (map[string]any): Optimizer-specific directives.
+//   - maxRuntime (float64): Maximum query runtime in seconds.
+//   - stream (bool): Enable streaming cursor.
+//   - profile (uint): Enable query profiling (0-2).
+//   - skipInaccessibleCollections (*bool)
+//   - intermediateCommitCount (*int)
+//   - intermediateCommitSize (*int)
+//   - maxDNFConditionMembers (*int)
+//   - maxNodesPerCallstack (*int)
+//   - maxNumberOfPlans (*int)
+//   - maxTransactionSize (*int)
+//   - maxWarningCount (*int)
+//   - satelliteSyncWait (float64)
+//   - spillOverThresholdMemoryUsage (*int)
+//   - spillOverThresholdNumRows (*int)
+//   - maxPlans (int)
+//   - shardIds ([]string)
+//   - forceOneShardAttributeValue (*string)
+//
+// Returns an error if:
+//   - The database connection fails.
+//   - The query execution fails.
+//   - The result parameter is not a valid pointer to a slice of maps.
+//
+// Example:
+//
+//	var results []map[string]interface{}
+//
+//	query := `FOR u IN users FILTER u.age > @minAge RETURN u`
+//
+//	bindVars := map[string]interface{}{
+//	    "minAge": 21,
+//	}
+//
+//	options := map[string]any{
+//	    "count":     true,
+//	    "batchSize": 100,
+//	    "options": map[string]any{
+//	        "fullCount": true,
+//	        "profile":   2,
+//	    },
+//	}
+//
+//	err := Query(ctx, "myDatabase", query, bindVars, &results, options)
+//	if err != nil {
+//	    log.Fatalf("Query failed: %v", err)
+//	}
+//
+//	for _, doc := range results {
+//	    fmt.Printf("User: %+v\n", doc)
+//	}
+func (c *Client) Query(ctx context.Context, dbName, query string, bindVars map[string]any, result any, options ...map[string]any) error {
 	tracerCtx, span := c.addTrace(ctx, "query", map[string]string{"DB": dbName})
 	startTime := time.Now()
 
 	defer c.sendOperationStats(&QueryLog{Operation: "query",
 		Database: dbName, Query: query}, startTime, "query", span)
 
-	db, err := c.client.Database(tracerCtx, dbName)
+	db, err := c.client.GetDatabase(tracerCtx, dbName, nil)
 	if err != nil {
 		return err
 	}
 
-	cursor, err := db.Query(tracerCtx, query, &arangodb.QueryOptions{BindVars: bindVars})
+	var queryOptions arangodb.QueryOptions
+
+	err = bindQueryOptions(&queryOptions, options)
+	if err != nil {
+		return err
+	}
+
+	queryOptions.BindVars = bindVars
+
+	cursor, err := db.Query(tracerCtx, query, &queryOptions)
+
 	if err != nil {
 		return err
 	}
@@ -201,6 +279,30 @@ func (c *Client) Query(ctx context.Context, dbName, query string, bindVars map[s
 		}
 
 		*resultSlice = append(*resultSlice, doc)
+	}
+
+	return nil
+}
+
+func bindQueryOptions(queryOptions *arangodb.QueryOptions, options []map[string]any) error {
+	if len(options) > 0 {
+		// Merge all options into a single map
+		mergedOpts := make(map[string]any)
+
+		for _, opts := range options {
+			for k, v := range opts {
+				mergedOpts[k] = v
+			}
+		}
+
+		bytes, err := json.Marshal(mergedOpts)
+		if err != nil {
+			return err
+		}
+
+		if err := json.Unmarshal(bytes, &queryOptions); err != nil {
+			return err
+		}
 	}
 
 	return nil
