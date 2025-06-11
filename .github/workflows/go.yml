@@ -4,7 +4,7 @@ permissions:
 
 on:
   push:
-    branches: [main, development, fix/test_coverage]
+    branches: [main, development, test_coverage]
     paths-ignore: ['docs/**']
   pull_request:
     branches: [main, development]
