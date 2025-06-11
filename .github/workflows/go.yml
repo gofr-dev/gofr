@@ -7,7 +7,7 @@ on:
     branches: [main, development, test_coverage]
     paths-ignore: ['docs/**']
   pull_request:
-    branches: [main, development]
+    branches: [main, development, test_coverage]
     paths-ignore: ['docs/**']
 
 env:
