@@ -1,10 +1,13 @@
 package metrics
 
 import (
+	"sync"
+
 	"go.opentelemetry.io/otel/metric"
 )
 
 type store struct {
+	mu            sync.RWMutex
 	counter       map[string]metric.Int64Counter
 	upDownCounter map[string]metric.Float64UpDownCounter
 	histogram     map[string]metric.Float64Histogram
@@ -34,6 +37,9 @@ func newOtelStore() Store {
 }
 
 func (s *store) getCounter(name string) (metric.Int64Counter, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
 	m, ok := s.counter[name]
 	if !ok {
 		return nil, metricsNotRegistered{metricsName: name}
@@ -43,6 +49,9 @@ func (s *store) getCounter(name string) (metric.Int64Counter, error) {
 }
 
 func (s *store) getUpDownCounter(name string) (metric.Float64UpDownCounter, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
 	m, ok := s.upDownCounter[name]
 	if !ok {
 		return nil, metricsNotRegistered{metricsName: name}
@@ -52,6 +61,9 @@ func (s *store) getUpDownCounter(name string) (metric.Float64UpDownCounter, erro
 }
 
 func (s *store) getHistogram(name string) (metric.Float64Histogram, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
 	m, ok := s.histogram[name]
 	if !ok {
 		return nil, metricsNotRegistered{metricsName: name}
@@ -61,6 +73,9 @@ func (s *store) getHistogram(name string) (metric.Float64Histogram, error) {
 }
 
 func (s *store) getGauge(name string) (*float64Gauge, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
 	m, ok := s.gauge[name]
 	if !ok {
 		return m, metricsNotRegistered{metricsName: name}
@@ -70,6 +85,9 @@ func (s *store) getGauge(name string) (*float64Gauge, error) {
 }
 
 func (s *store) setCounter(name string, m metric.Int64Counter) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
 	_, ok := s.counter[name]
 	if !ok {
 		s.counter[name] = m
@@ -81,6 +99,9 @@ func (s *store) setCounter(name string, m metric.Int64Counter) error {
 }
 
 func (s *store) setUpDownCounter(name string, m metric.Float64UpDownCounter) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
 	_, ok := s.upDownCounter[name]
 	if !ok {
 		s.upDownCounter[name] = m
@@ -92,6 +113,9 @@ func (s *store) setUpDownCounter(name string, m metric.Float64UpDownCounter) err
 }
 
 func (s *store) setHistogram(name string, m metric.Float64Histogram) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
 	_, ok := s.histogram[name]
 	if !ok {
 		s.histogram[name] = m
@@ -103,6 +127,9 @@ func (s *store) setHistogram(name string, m metric.Float64Histogram) error {
 }
 
 func (s *store) setGauge(name string, m *float64Gauge) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
 	_, ok := s.gauge[name]
 	if !ok {
 		s.gauge[name] = m
