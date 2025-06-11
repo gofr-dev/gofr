@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+	"sync"
 
 	"github.com/stretchr/testify/assert"
 
@@ -12,6 +13,8 @@ import (
 	"gofr.dev/pkg/gofr/metrics/exporters"
 	"gofr.dev/pkg/gofr/testutil"
 )
+
+
 
 func Test_NewMetricsManagerSuccess(t *testing.T) {
 	metrics := NewMetricsManager(exporters.Prometheus("testing-app", "v1.0.0"),
@@ -83,6 +86,51 @@ func Test_NewMetricsManagerMetricsNotRegistered(t *testing.T) {
 	assert.Contains(t, log, `Metrics up-down-counter is not registered`, "TEST Failed. up-down-counter metrics registered")
 	assert.Contains(t, log, `Metrics histogram-test is not registered`, "TEST Failed. histogram-test metrics registered")
 }
+
+func Test_NewMetricsManagerConcurrency(t *testing.T) {
+	metrics := NewMetricsManager(exporters.Prometheus("concurrency-test", "v1.0.0"),
+		logging.NewMockLogger(logging.INFO))
+
+	metrics.NewGauge("gauge-test", "metric to test concurrent gauge access")
+	metrics.NewCounter("counter-test", "metric to test concurrent counter access")
+
+	const workers = 100
+	var wg sync.WaitGroup
+
+	for i := 0; i < workers; i++ {
+		wg.Add(2)
+
+		go func(i int) {
+			defer wg.Done()
+			metrics.SetGauge("gauge-test", float64(i))
+		}(i)
+
+		go func() {
+			defer wg.Done()
+			metrics.IncrementCounter(t.Context(), "counter-test")
+		}()
+	}
+
+	wg.Wait()
+
+	// Ensure metrics respond without panic/race when scraped
+	server := httptest.NewServer(GetHandler(metrics))
+	defer server.Close()
+
+	req, err := http.NewRequestWithContext(t.Context(), http.MethodGet, server.URL+"/metrics", nil)
+	assert.NoError(t, err)
+
+	resp, err := server.Client().Do(req)
+	assert.NoError(t, err)
+
+	body, err := io.ReadAll(resp.Body)
+	defer resp.Body.Close()
+	assert.NoError(t, err)
+
+	assert.Contains(t, string(body), `gauge_test`, "Gauge metric missing after concurrency test")
+	assert.Contains(t, string(body), `counter_test_total`, "Counter metric missing after concurrency test")
+}
+
 
 func Test_NewMetricsManagerInvalidMetricsName(t *testing.T) {
 	logs := func() {
