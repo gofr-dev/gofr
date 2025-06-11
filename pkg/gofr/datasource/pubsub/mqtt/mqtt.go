@@ -327,7 +327,7 @@ func (m *MQTT) Publish(ctx context.Context, topic string, message []byte) error 
 
 	s := time.Now()
 
-	token := m.Client.Publish(topic, m.config.QoS, true, message)
+	token := m.Client.Publish(topic, m.config.QoS, m.config.RetrieveRetained, message)
 
 	// Check for errors during publishing (More on error reporting
 	// https://pkg.go.dev/github.com/eclipse/paho.mqtt.golang#readme-error-handling)
