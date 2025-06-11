@@ -1,8 +1,10 @@
 package mqtt
 
 import (
+	"bytes"
 	"context"
 	"errors"
+	"fmt"
 	"math"
 	"strconv"
 	"sync"
@@ -16,13 +18,22 @@ import (
 )
 
 const (
-	publicBroker        = "broker.emqx.io"
-	messageBuffer       = 10
-	defaultRetryTimeout = 10 * time.Second
-	maxRetryTimeout     = 1 * time.Minute
+	publicBroker               = "broker.emqx.io"
+	messageBuffer              = 10
+	defaultRetryTimeout        = 10 * time.Second
+	maxRetryTimeout            = 1 * time.Minute
+	defaultQueryMessageLimit   = 10
+	defaultQueryCollectTimeout = 5 * time.Second
+	unsubscribeOpTimeout       = 2 * time.Second
 )
 
-var errClientNotConnected = errors.New("mqtt client not connected")
+var (
+	errClientNotConnected  = errors.New("mqtt client not connected")
+	errEmptyTopicName      = errors.New("empty topic name")
+	errSubscriptionTimeout = errors.New("timed out waiting for MQTT subscription")
+	errSubscriptionFailed  = errors.New("failed to subscribe to MQTT topic")
+	errQueryCancelled      = errors.New("query cancelled")
+)
 
 type SubscribeFunc func(*pubsub.Message) error
 
@@ -38,11 +49,6 @@ type MQTT struct {
 	config        *Config
 	subscriptions map[string]subscription
 	mu            *sync.RWMutex
-}
-
-func (m *MQTT) Query(ctx context.Context, query string, args ...any) ([]byte, error) {
-	//TODO implement me
-	panic("implement me")
 }
 
 type Config struct {
@@ -132,6 +138,154 @@ func (m *MQTT) Subscribe(ctx context.Context, topic string) (*pubsub.Message, er
 	}
 }
 
+// Query retrieves messages from a topic, waiting up to a specified duration and message limit.
+func (m *MQTT) Query(ctx context.Context, query string, args ...any) ([]byte, error) {
+	if !m.Client.IsConnected() {
+		return nil, errClientNotConnected
+	}
+
+	if query == "" {
+		return nil, errEmptyTopicName
+	}
+
+	collectTimeout, messageLimit := parseQueryArgs(args...)
+
+	msgChan := make(chan *pubsub.Message, messageBuffer)
+	handler := m.createQueryMessageHandler(ctx, msgChan, query)
+
+	if err := m.subscribeToTopicForQuery(ctx, query, collectTimeout, handler); err != nil {
+		return nil, err
+	}
+
+	defer func() {
+		unsubToken := m.Client.Unsubscribe(query)
+		if !unsubToken.WaitTimeout(unsubscribeOpTimeout) {
+			m.logger.Warnf("Query: timed out unsubscribing from topic %s", query)
+		}
+	}()
+
+	queryCtx, cancel := context.WithTimeout(ctx, collectTimeout)
+	defer cancel()
+
+	resultBuffer, messagesCollected, collectionErr := m.collectMessages(queryCtx, msgChan, messageLimit, query)
+	if collectionErr != nil {
+		return nil, collectionErr
+	}
+
+	if resultBuffer.Len() == 0 && messagesCollected == 0 {
+		m.logger.Debugf("Query: no messages collected for topic %s within timeout/limit", query)
+	}
+
+	return resultBuffer.Bytes(), nil
+}
+
+// parseQueryArgs extracts collectTimeout and messageLimit from variadic arguments.
+// This can be a package-level function as it doesn't depend on *MQTT state.
+func parseQueryArgs(args ...any) (time.Duration, int) {
+	collectTimeout := defaultQueryCollectTimeout
+	messageLimit := defaultQueryMessageLimit
+
+	if len(args) > 0 {
+		if val, ok := args[0].(time.Duration); ok {
+			collectTimeout = val
+		}
+	}
+
+	if len(args) > 1 {
+		if val, ok := args[1].(int); ok {
+			messageLimit = val
+		}
+	}
+
+	return collectTimeout, messageLimit
+}
+
+// createQueryMessageHandler creates the MQTT message handler for the Query method.
+func (m *MQTT) createQueryMessageHandler(ctx context.Context, msgChan chan<- *pubsub.Message, topicForLogging string) mqtt.MessageHandler {
+	return func(_ mqtt.Client, msg mqtt.Message) {
+		// Use context.WithoutCancel to ensure the message processing isn't prematurely stopped
+		// if the handler's parent context (original Query ctx) is cancelled while the message is in flight.
+		messageCtx := context.WithoutCancel(ctx)
+		message := pubsub.NewMessage(messageCtx)
+
+		message.Topic = msg.Topic()
+		message.Value = msg.Payload()
+		message.MetaData = map[string]string{
+			"qos":       string(msg.Qos()),
+			"retained":  strconv.FormatBool(msg.Retained()),
+			"messageID": strconv.Itoa(int(msg.MessageID())),
+		}
+
+		select {
+		case msgChan <- message:
+		default:
+			m.logger.Debugf("Query: msgChan full for topic %s, message dropped during collection", topicForLogging)
+		}
+	}
+}
+
+// subscribeToTopicForQuery handles the MQTT subscription logic for the Query method.
+func (m *MQTT) subscribeToTopicForQuery(ctx context.Context, topicName string, timeout time.Duration, handler mqtt.MessageHandler) error {
+	token := m.Client.Subscribe(topicName, m.config.QoS, handler)
+
+	if !token.WaitTimeout(timeout) {
+		if ctxErr := ctx.Err(); ctxErr != nil {
+			return fmt.Errorf("context error during MQTT subscription to '%s': %w", topicName, ctxErr)
+		}
+
+		// If token has an error, it means WaitTimeout likely hit its own timeout AND there was an underlying subscription error.
+		if tokenErr := token.Error(); tokenErr != nil {
+			return fmt.Errorf("%w to topic '%s' (timed out with underlying error): %w", errSubscriptionFailed, topicName, tokenErr)
+		}
+
+		// Fallback: WaitTimeout returned false, context is fine, token.Error() is nil. This is the direct timeout.
+		return fmt.Errorf("%w for topic '%s'", errSubscriptionTimeout, topicName)
+	}
+
+	if tokenErr := token.Error(); tokenErr != nil {
+		return fmt.Errorf("%w to '%s': %w", errSubscriptionFailed, topicName, tokenErr)
+	}
+
+	return nil
+}
+
+// collectMessages handles the message collection loop for the Query method.
+func (m *MQTT) collectMessages(queryCtx context.Context, msgChan <-chan *pubsub.Message, messageLimit int, topicName string) (*bytes.Buffer, int, error) {
+	var resultBuffer bytes.Buffer
+
+	messagesCollected := 0
+
+loop:
+	for {
+		if messageLimit > 0 && messagesCollected >= messageLimit {
+			break loop
+		}
+
+		select {
+		case msg, ok := <-msgChan:
+			if !ok {
+				m.logger.Debugf("Query: msgChan closed unexpectedly while collecting for topic %s", topicName)
+				break loop
+			}
+
+			if resultBuffer.Len() > 0 {
+				resultBuffer.WriteByte('\n')
+			}
+
+			resultBuffer.Write(msg.Value)
+			messagesCollected++
+		case <-queryCtx.Done():
+			if !errors.Is(queryCtx.Err(), context.DeadlineExceeded) {
+				return &resultBuffer, messagesCollected, fmt.Errorf("%w for topic '%s': %w", errQueryCancelled, topicName, queryCtx.Err())
+			}
+
+			break loop
+		}
+	}
+
+	return &resultBuffer, messagesCollected, nil
+}
+
 func (m *MQTT) createMqttHandler(_ context.Context, topic string, msgs chan *pubsub.Message) mqtt.MessageHandler {
 	return func(_ mqtt.Client, msg mqtt.Message) {
 		ctx := context.Background()
@@ -173,7 +327,7 @@ func (m *MQTT) Publish(ctx context.Context, topic string, message []byte) error 
 
 	s := time.Now()
 
-	token := m.Client.Publish(topic, m.config.QoS, m.config.RetrieveRetained, message)
+	token := m.Client.Publish(topic, m.config.QoS, true, message)
 
 	// Check for errors during publishing (More on error reporting
 	// https://pkg.go.dev/github.com/eclipse/paho.mqtt.golang#readme-error-handling)
@@ -228,7 +382,7 @@ func (m *MQTT) Health() datasource.Health {
 }
 
 func (m *MQTT) CreateTopic(_ context.Context, topic string) error {
-	token := m.Client.Publish(topic, m.config.QoS, m.config.RetrieveRetained, []byte("topic creation"))
+	token := m.Client.Publish(topic, m.config.QoS, false, []byte("topic creation"))
 	token.Wait()
 
 	if token.Error() != nil {
