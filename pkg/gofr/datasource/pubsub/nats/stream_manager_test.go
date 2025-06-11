@@ -1,7 +1,6 @@
 package nats
 
 import (
-	"context"
 	"testing"
 
 	"github.com/nats-io/nats.go/jetstream"
@@ -34,7 +33,7 @@ func TestStreamManager_CreateStream(t *testing.T) {
 
 	sm := newStreamManager(mockJS, logger)
 
-	ctx := context.Background()
+	ctx := t.Context()
 	cfg := StreamConfig{
 		Stream:   "test-stream",
 		Subjects: []string{"test.subject"},
@@ -55,7 +54,7 @@ func TestStreamManager_CreateStream_Error(t *testing.T) {
 
 	sm := newStreamManager(mockJS, logger)
 
-	ctx := context.Background()
+	ctx := t.Context()
 	cfg := StreamConfig{
 		Stream:   "test-stream",
 		Subjects: []string{"test.subject"},
@@ -78,7 +77,7 @@ func TestStreamManager_DeleteStream(t *testing.T) {
 
 	sm := newStreamManager(mockJS, logger)
 
-	ctx := context.Background()
+	ctx := t.Context()
 	streamName := "test-stream"
 
 	mockJS.EXPECT().DeleteStream(ctx, streamName).Return(nil)
@@ -96,7 +95,7 @@ func TestStreamManager_DeleteStream_NotFound(t *testing.T) {
 
 	sm := newStreamManager(mockJS, logger)
 
-	ctx := context.Background()
+	ctx := t.Context()
 	streamName := "test-stream"
 
 	mockJS.EXPECT().DeleteStream(ctx, streamName).Return(jetstream.ErrStreamNotFound)
@@ -114,7 +113,7 @@ func TestStreamManager_DeleteStream_Error(t *testing.T) {
 
 	sm := newStreamManager(mockJS, logger)
 
-	ctx := context.Background()
+	ctx := t.Context()
 	streamName := "test-stream"
 
 	expectedErr := errDeleteStream
@@ -134,7 +133,7 @@ func TestStreamManager_CreateOrUpdateStream(t *testing.T) {
 
 	sm := newStreamManager(mockJS, logger)
 
-	ctx := context.Background()
+	ctx := t.Context()
 	cfg := &jetstream.StreamConfig{
 		Name:     "test-stream",
 		Subjects: []string{"test.subject"},
@@ -157,7 +156,7 @@ func TestStreamManager_CreateOrUpdateStream_Error(t *testing.T) {
 
 	sm := newStreamManager(mockJS, logger)
 
-	ctx := context.Background()
+	ctx := t.Context()
 	cfg := &jetstream.StreamConfig{
 		Name:     "test-stream",
 		Subjects: []string{"test.subject"},
@@ -181,7 +180,7 @@ func TestStreamManager_GetStream(t *testing.T) {
 
 	sm := newStreamManager(mockJS, logger)
 
-	ctx := context.Background()
+	ctx := t.Context()
 	streamName := "test-stream"
 
 	mockStream := NewMockStream(ctrl)
@@ -201,7 +200,7 @@ func TestStreamManager_GetStream_NotFound(t *testing.T) {
 
 	sm := newStreamManager(mockJS, logger)
 
-	ctx := context.Background()
+	ctx := t.Context()
 	streamName := "test-stream"
 
 	mockJS.EXPECT().Stream(ctx, streamName).Return(nil, jetstream.ErrStreamNotFound)
@@ -221,7 +220,7 @@ func TestStreamManager_GetStream_Error(t *testing.T) {
 
 	sm := newStreamManager(mockJS, logger)
 
-	ctx := context.Background()
+	ctx := t.Context()
 	streamName := "test-stream"
 
 	expectedErr := errGetStream

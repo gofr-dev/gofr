@@ -13,15 +13,7 @@ func (c *Client) user(ctx context.Context, username string) (arangodb.User, erro
 }
 
 func (c *Client) database(ctx context.Context, name string) (arangodb.Database, error) {
-	return c.client.Database(ctx, name)
-}
-
-func (c *Client) databases(ctx context.Context) ([]arangodb.Database, error) {
-	return c.client.Databases(ctx)
-}
-
-func (c *Client) version(ctx context.Context) (arangodb.VersionInfo, error) {
-	return c.client.Version(ctx)
+	return c.client.GetDatabase(ctx, name, nil)
 }
 
 // createUser creates a new user in ArangoDB.

@@ -7,6 +7,7 @@ on:
     branches:
       - main
       - development
+      - fix/test_coverage
     paths-ignore:
       - 'docs/**'
   pull_request:
@@ -334,6 +335,6 @@ jobs:
           go-version: 1.24
 
       - name: Check for file names errors
-        uses: ls-lint/action@v2.3.0
+        uses: ls-lint/action@v2.3.1
         with:
           config: .ls-lint.yml

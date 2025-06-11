@@ -1,7 +1,6 @@
 package nats
 
 import (
-	"context"
 	"testing"
 	"time"
 
@@ -71,7 +70,7 @@ func TestConnectionManager_Close(t *testing.T) {
 
 	mockConn.EXPECT().Close()
 
-	ctx := context.Background()
+	ctx := t.Context()
 	cm.Close(ctx)
 }
 
@@ -89,7 +88,7 @@ func TestConnectionManager_Publish(t *testing.T) {
 		logger:  logging.NewMockLogger(logging.DEBUG),
 	}
 
-	ctx := context.Background()
+	ctx := t.Context()
 	subject := "test.subject"
 	message := []byte("test message")
 
