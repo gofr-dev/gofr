@@ -66,6 +66,10 @@ func (a *App) AddGRPCServerStreamInterceptors(interceptors ...grpc.StreamServerI
 //   app.WithReflection()
 
 func (a *App) WithReflection() {
+	enabled := strings.ToLower(a.Config.GetOrDefault("GRPC_ENABLE_REFLECTION", "false"))
+	if enabled != "true" {
+	        return
+	}
 	if a.grpcServer.server == nil {
 		a.grpcServer.createServer()
 	}
