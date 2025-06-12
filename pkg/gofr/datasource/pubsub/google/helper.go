@@ -20,9 +20,9 @@ func validateConfigs(conf *Config) error {
 	return nil
 }
 
-func parseQueryArgs(args ...any) (time.Duration, int) {
-	timeout := defaultQueryTimeout
-	limit := defaultMessageLimit
+func parseQueryArgs(args ...any) (timeout time.Duration, limit int) {
+	timeout = defaultQueryTimeout
+	limit = defaultMessageLimit
 
 	if len(args) > 1 {
 		if val, ok := args[1].(int); ok {
@@ -59,11 +59,7 @@ func (g *googleClient) collectMessages(ctx context.Context, msgChan <-chan []byt
 
 	collected := 0
 
-	for {
-		if limit > 0 && collected >= limit {
-			break
-		}
-
+	for limit <= 0 || collected < limit {
 		select {
 		case msg, ok := <-msgChan:
 			if !ok {

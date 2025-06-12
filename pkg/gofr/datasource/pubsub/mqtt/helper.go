@@ -18,9 +18,9 @@ import (
 
 // parseQueryArgs extracts collectTimeout and messageLimit from variadic arguments.
 // This can be a package-level function as it doesn't depend on *MQTT state.
-func parseQueryArgs(args ...any) (time.Duration, int) {
-	collectTimeout := defaultQueryCollectTimeout
-	messageLimit := defaultQueryMessageLimit
+func parseQueryArgs(args ...any) (collectTimeout time.Duration, messageLimit int) {
+	collectTimeout = defaultQueryCollectTimeout
+	messageLimit = defaultQueryMessageLimit
 
 	if len(args) > 0 {
 		if val, ok := args[0].(time.Duration); ok {
@@ -41,7 +41,7 @@ func parseQueryArgs(args ...any) (time.Duration, int) {
 func (m *MQTT) createQueryMessageHandler(ctx context.Context, msgChan chan<- *pubsub.Message, topicForLogging string) mqtt.MessageHandler {
 	return func(_ mqtt.Client, msg mqtt.Message) {
 		// Use context.WithoutCancel to ensure the message processing isn't prematurely stopped
-		// if the handler's parent context (original Query ctx) is cancelled while the message is in flight.
+		// if the handler's parent context (original Query ctx) is canceled while the message is in flight.
 		messageCtx := context.WithoutCancel(ctx)
 		message := pubsub.NewMessage(messageCtx)
 
@@ -87,7 +87,8 @@ func (m *MQTT) subscribeToTopicForQuery(ctx context.Context, topicName string, t
 }
 
 // collectMessages handles the message collection loop for the Query method.
-func (m *MQTT) collectMessages(queryCtx context.Context, msgChan <-chan *pubsub.Message, messageLimit int, topicName string) (*bytes.Buffer, int, error) {
+func (m *MQTT) collectMessages(queryCtx context.Context, msgChan <-chan *pubsub.Message,
+	messageLimit int, topicName string) (*bytes.Buffer, int, error) {
 	var resultBuffer bytes.Buffer
 
 	messagesCollected := 0
@@ -115,7 +116,7 @@ func (m *MQTT) collectMessages(queryCtx context.Context, msgChan <-chan *pubsub.
 	}
 }
 
-func (m *MQTT) addMessageToBuffer(buffer *bytes.Buffer, msg *pubsub.Message) {
+func (*MQTT) addMessageToBuffer(buffer *bytes.Buffer, msg *pubsub.Message) {
 	if buffer.Len() > 0 {
 		buffer.WriteByte('\n')
 	}
@@ -123,7 +124,7 @@ func (m *MQTT) addMessageToBuffer(buffer *bytes.Buffer, msg *pubsub.Message) {
 	buffer.Write(msg.Value)
 }
 
-func (m *MQTT) handleContextDone(queryCtx context.Context, topicName string, buffer *bytes.Buffer, collected int) (*bytes.Buffer, int, error) {
+func (*MQTT) handleContextDone(queryCtx context.Context, topicName string, buffer *bytes.Buffer, collected int) (*bytes.Buffer, int, error) {
 	if !errors.Is(queryCtx.Err(), context.DeadlineExceeded) {
 		err := fmt.Errorf("%w for topic '%s': %w", errQueryCancelled, topicName, queryCtx.Err())
 

@@ -60,7 +60,7 @@ func (pm pubsubMigrator) checkAndCreateMigrationTable(c *container.Container) er
 	return pm.migrator.checkAndCreateMigrationTable(c)
 }
 
-func (pm pubsubMigrator) getLastMigration(c *container.Container) int64 {
+func (pubsubMigrator) getLastMigration(c *container.Container) int64 {
 	var lastVersion int64
 
 	ctx, cancel := context.WithTimeout(context.Background(), migrationTimeout)
