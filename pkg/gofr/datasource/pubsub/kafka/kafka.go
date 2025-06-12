@@ -5,8 +5,6 @@ package kafka
 import (
 	"context"
 	"errors"
-	"fmt"
-	"io"
 	"sync"
 	"time"
 
@@ -157,69 +155,17 @@ func (k *kafkaClient) Query(ctx context.Context, query string, args ...any) ([]b
 		return nil, errEmptyTopicName
 	}
 
-	var (
-		offset int64
-		limit  = 10
-		result []byte
-	)
+	offset, limit := k.parseQueryArgs(args...)
 
-	if len(args) > 0 {
-		if val, ok := args[0].(int64); ok {
-			offset = val
-		}
+	reader, err := k.createReader(query, offset)
+	if err != nil {
+		return nil, err
 	}
-
-	if len(args) > 1 {
-		if val, ok := args[1].(int); ok {
-			limit = val
-		}
-	}
-
-	reader := kafka.NewReader(kafka.ReaderConfig{
-		Brokers:     k.config.Brokers,
-		Topic:       query,
-		Partition:   k.config.Partition,
-		MinBytes:    1,
-		MaxBytes:    defaultMaxBytes,
-		StartOffset: kafka.FirstOffset,
-	})
-
 	defer reader.Close()
 
-	// Set the offset to start reading from
-	if err := reader.SetOffset(offset); err != nil {
-		return nil, fmt.Errorf("failed to set offset: %w", err)
-	}
+	readCtx := k.getReadContext(ctx)
 
-	// Add default timeout if context has no deadline
-	readCtx := ctx
-
-	if _, hasDeadline := ctx.Deadline(); !hasDeadline {
-		var cancel context.CancelFunc
-
-		readCtx, cancel = context.WithTimeout(ctx, defaultReadTimeout)
-
-		defer cancel()
-	}
-
-	for i := 0; i < limit; i++ {
-		msg, err := reader.ReadMessage(readCtx)
-		if err != nil {
-			if errors.Is(err, context.DeadlineExceeded) || errors.Is(err, io.EOF) {
-				break
-			}
-
-			return nil, fmt.Errorf("failed to read message: %w", err)
-		}
-
-		if len(result) > 0 {
-			result = append(result, '\n')
-		}
-
-		result = append(result, msg.Value...)
-	}
-
-	return result, nil
+	return k.readMessages(readCtx, reader, limit)
 }
 
 func (k *kafkaClient) Subscribe(ctx context.Context, topic string) (*pubsub.Message, error) {
