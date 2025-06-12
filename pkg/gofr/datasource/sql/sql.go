@@ -21,7 +21,7 @@ const (
 	requireSSLMode = "require"
 )
 
-var errUnsupportedDialect = fmt.Errorf("unsupported db dialect; supported dialects are - mysql, postgres, supabase, sqlite")
+var errUnsupportedDialect = fmt.Errorf("unsupported db dialect; supported dialects are - mysql, postgres, supabase, sqlite, cockroachdb")
 
 // DBConfig has those members which are necessary variables while connecting to database.
 type DBConfig struct {
@@ -193,7 +193,7 @@ func getDBConnectionString(dbConfig *DBConfig) (string, error) {
 			dbConfig.Database,
 			dbConfig.Charset,
 		), nil
-	case dialectPostgres, supabaseDialect:
+	case dialectPostgres, supabaseDialect, "cockroachdb":
 		return fmt.Sprintf("host=%s port=%s user=%s password=%s dbname=%s sslmode=%s",
 			dbConfig.HostName, dbConfig.Port, dbConfig.User, dbConfig.Password, dbConfig.Database, dbConfig.SSLMode), nil
 	case sqlite:
