@@ -117,12 +117,12 @@ func getMigrator(c *container.Container) (Datasource, migrator, bool) {
 		ok bool
 	)
 
-	ok = initializeDatasources(c, &ds, mg)
+	mg, ok = initializeDatasources(c, &ds, mg)
 
 	return ds, mg, ok
 }
 
-func initializeDatasources(c *container.Container, ds *Datasource, mg migrator) bool {
+func initializeDatasources(c *container.Container, ds *Datasource, mg migrator) (migrator, bool) {
 	var initialized bool
 
 	if !isNil(c.SQL) {
@@ -139,6 +139,15 @@ func initializeDatasources(c *container.Container, ds *Datasource, mg migrator) 
 		mg = redisDS{ds.Redis}.apply(mg)
 
 		c.Debug("initialized data source for Redis")
+
+		initialized = true
+	}
+
+	if !isNil(c.DGraph) {
+		ds.DGraph = dgraphDS{c.DGraph}
+		mg = dgraphDS{c.DGraph}.apply(mg)
+
+		c.Debug("initialized data source for DGraph")
 
 		initialized = true
 	}
@@ -197,16 +206,7 @@ func initializeDatasources(c *container.Container, ds *Datasource, mg migrator) 
 		initialized = true
 	}
 
-	if !isNil(c.DGraph) {
-		ds.DGraph = dgraphDS{c.DGraph}
-		mg = dgraphDS{c.DGraph}.apply(mg)
-
-		c.Debug("initialized data source for DGraph")
-
-		initialized = true
-	}
-
-	return initialized
+	return mg, initialized
 }
 
 func isNil(i any) bool {
