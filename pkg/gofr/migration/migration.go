@@ -120,15 +120,23 @@ func getMigrator(c *container.Container) (Datasource, migrator, bool) {
 		available func() bool
 		apply     func()
 	}{
-		"SQL":        {func() bool { return !isNil(c.SQL) }, func() { ds.SQL = c.SQL; mg = (&sqlDS{ds.SQL}).apply(mg) }},
-		"Redis":      {func() bool { return !isNil(c.Redis) }, func() { ds.Redis = c.Redis; mg = redisDS{ds.Redis}.apply(mg) }},
-		"Clickhouse": {func() bool { return !isNil(c.Clickhouse) }, func() { ds.Clickhouse = c.Clickhouse; mg = clickHouseDS{ds.Clickhouse}.apply(mg) }},
-		"PubSub":     {func() bool { return c.PubSub != nil }, func() { ds.PubSub = c.PubSub; mg = pubsubDS{c.PubSub}.apply(mg) }},
-		"Cassandra":  {func() bool { return !isNil(c.Cassandra) }, func() { ds.Cassandra = cassandraDS{c.Cassandra}; mg = cassandraDS{c.Cassandra}.apply(mg) }},
-		"Mongo":      {func() bool { return !isNil(c.Mongo) }, func() { ds.Mongo = mongoDS{c.Mongo}; mg = mongoDS{c.Mongo}.apply(mg) }},
-		"ArangoDB":   {func() bool { return !isNil(c.ArangoDB) }, func() { ds.ArangoDB = arangoDS{c.ArangoDB}; mg = arangoDS{c.ArangoDB}.apply(mg) }},
-		"SurrealDB":  {func() bool { return !isNil(c.SurrealDB) }, func() { ds.SurrealDB = surrealDS{c.SurrealDB}; mg = surrealDS{c.SurrealDB}.apply(mg) }},
-		"DGraph":     {func() bool { return !isNil(c.DGraph) }, func() { ds.DGraph = dgraphDS{c.DGraph}; mg = dgraphDS{c.DGraph}.apply(mg) }},
+		"SQL": {func() bool { return !isNil(c.SQL) },
+			func() { ds.SQL = c.SQL; mg = (&sqlDS{ds.SQL}).apply(mg) }},
+		"Redis": {func() bool { return !isNil(c.Redis) },
+			func() { ds.Redis = c.Redis; mg = redisDS{ds.Redis}.apply(mg) }},
+		"Clickhouse": {func() bool { return !isNil(c.Clickhouse) },
+			func() { ds.Clickhouse = c.Clickhouse; mg = clickHouseDS{ds.Clickhouse}.apply(mg) }},
+		"PubSub": {func() bool { return c.PubSub != nil },
+			func() { ds.PubSub = c.PubSub; mg = pubsubDS{c.PubSub}.apply(mg) }},
+		"Cassandra": {func() bool { return !isNil(c.Cassandra) },
+			func() { ds.Cassandra = cassandraDS{c.Cassandra}; mg = cassandraDS{c.Cassandra}.apply(mg) }},
+		"Mongo": {func() bool { return !isNil(c.Mongo) }, func() { ds.Mongo = mongoDS{c.Mongo}; mg = mongoDS{c.Mongo}.apply(mg) }},
+		"ArangoDB": {func() bool { return !isNil(c.ArangoDB) },
+			func() { ds.ArangoDB = arangoDS{c.ArangoDB}; mg = arangoDS{c.ArangoDB}.apply(mg) }},
+		"SurrealDB": {func() bool { return !isNil(c.SurrealDB) },
+			func() { ds.SurrealDB = surrealDS{c.SurrealDB}; mg = surrealDS{c.SurrealDB}.apply(mg) }},
+		"DGraph": {func() bool { return !isNil(c.DGraph) },
+			func() { ds.DGraph = dgraphDS{c.DGraph}; mg = dgraphDS{c.DGraph}.apply(mg) }},
 	}
 
 	// Iterate over the available datasources and initialize them
