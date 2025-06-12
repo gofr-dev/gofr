@@ -118,6 +118,7 @@ func getMigrator(c *container.Container) (Datasource, migrator, bool) {
 	)
 
 	ok = initializeDatasources(c, &ds, &mg)
+
 	return ds, mg, ok
 }
 
@@ -127,63 +128,81 @@ func initializeDatasources(c *container.Container, ds *Datasource, mg *migrator)
 	if !isNil(c.SQL) {
 		ds.SQL = c.SQL
 		*mg = (&sqlDS{ds.SQL}).apply(*mg)
+
 		c.Debug("initialized data source for SQL")
+
 		initialized = true
 	}
 
 	if !isNil(c.Redis) {
 		ds.Redis = c.Redis
 		*mg = redisDS{ds.Redis}.apply(*mg)
+
 		c.Debug("initialized data source for Redis")
+
 		initialized = true
 	}
 
 	if !isNil(c.Clickhouse) {
 		ds.Clickhouse = c.Clickhouse
 		*mg = clickHouseDS{ds.Clickhouse}.apply(*mg)
+
 		c.Debug("initialized data source for Clickhouse")
+
 		initialized = true
 	}
 
 	if c.PubSub != nil {
 		ds.PubSub = c.PubSub
 		*mg = pubsubDS{c.PubSub}.apply(*mg)
+
 		c.Debug("initialized data source for PubSub")
+
 		initialized = true
 	}
 
 	if !isNil(c.Cassandra) {
 		ds.Cassandra = cassandraDS{c.Cassandra}
 		*mg = cassandraDS{c.Cassandra}.apply(*mg)
+
 		c.Debug("initialized data source for Cassandra")
+
 		initialized = true
 	}
 
 	if !isNil(c.Mongo) {
 		ds.Mongo = mongoDS{c.Mongo}
 		*mg = mongoDS{c.Mongo}.apply(*mg)
+
 		c.Debug("initialized data source for Mongo")
+
 		initialized = true
 	}
 
 	if !isNil(c.ArangoDB) {
 		ds.ArangoDB = arangoDS{c.ArangoDB}
 		*mg = arangoDS{c.ArangoDB}.apply(*mg)
+
 		c.Debug("initialized data source for ArangoDB")
+
 		initialized = true
 	}
 
 	if !isNil(c.SurrealDB) {
 		ds.SurrealDB = surrealDS{c.SurrealDB}
 		*mg = surrealDS{c.SurrealDB}.apply(*mg)
+
 		c.Debug("initialized data source for SurrealDB")
+
 		initialized = true
 	}
 
 	if !isNil(c.DGraph) {
 		ds.DGraph = dgraphDS{c.DGraph}
 		*mg = dgraphDS{c.DGraph}.apply(*mg)
+
 		c.Debug("initialized data source for DGraph")
+
 		initialized = true
 	}
 
