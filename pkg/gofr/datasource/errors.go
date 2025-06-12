@@ -32,3 +32,12 @@ func (e ErrorDB) WithStack() ErrorDB {
 func (ErrorDB) StatusCode() int {
 	return http.StatusInternalServerError
 }
+
+// ErrorRecordNotFound represents the scenario where no records are found in the DB for the given ID.
+type ErrorRecordNotFound ErrorDB
+
+// StatusCode implementation on the ErrorRecordNotFound is an aberration
+// since the errors in datasource package should not have anything to do with HTTP status codes.
+func (ErrorRecordNotFound) StatusCode() int {
+	return http.StatusNotFound
+}
