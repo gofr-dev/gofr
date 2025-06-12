@@ -3,10 +3,26 @@ package google
 import (
 	"bytes"
 	"context"
+	"errors"
 	"time"
 
 	gcPubSub "cloud.google.com/go/pubsub"
+	"google.golang.org/api/iterator"
 )
+
+func (g *googleClient) isConnected() bool {
+	if g.client == nil {
+		return false
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), defaultRetryInterval)
+	defer cancel()
+
+	it := g.client.Topics(ctx)
+	_, err := it.Next()
+
+	return err == nil || errors.Is(err, iterator.Done)
+}
 
 func validateConfigs(conf *Config) error {
 	if conf.ProjectID == "" {

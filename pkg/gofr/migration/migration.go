@@ -109,103 +109,36 @@ func getKeys(migrationsMap map[int64]Migrate) (invalidKey, keys []int64) {
 
 	return invalidKey, keys
 }
-
 func getMigrator(c *container.Container) (Datasource, migrator, bool) {
 	var (
-		ok bool
 		ds Datasource
 		mg migrator = &ds
+		ok bool
 	)
 
-	// Define datasource initializers in a single slice
-	datasources := []struct {
-		isAvailable func() bool
-		initialize  func()
-		name        string
+	datasourceMap := map[string]struct {
+		available func() bool
+		apply     func()
 	}{
-		{
-			isAvailable: func() bool { return !isNil(c.SQL) },
-			initialize: func() {
-				ds.SQL = c.SQL
-				s := &sqlDS{ds.SQL}
-				mg = s.apply(mg)
-			},
-			name: "SQL",
-		},
-		{
-			isAvailable: func() bool { return !isNil(c.Redis) },
-			initialize: func() {
-				ds.Redis = c.Redis
-				mg = redisDS{ds.Redis}.apply(mg)
-			},
-			name: "redis",
-		},
-		{
-			isAvailable: func() bool { return !isNil(c.Clickhouse) },
-			initialize: func() {
-				ds.Clickhouse = c.Clickhouse
-				mg = clickHouseDS{ds.Clickhouse}.apply(mg)
-			},
-			name: "Clickhouse",
-		},
-		{
-			isAvailable: func() bool { return c.PubSub != nil },
-			initialize: func() {
-				ds.PubSub = c.PubSub
-				mg = pubsubDS{c.PubSub}.apply(mg)
-			},
-			name: "pubsub",
-		},
-		{
-			isAvailable: func() bool { return !isNil(c.Cassandra) },
-			initialize: func() {
-				ds.Cassandra = cassandraDS{c.Cassandra}
-				mg = cassandraDS{c.Cassandra}.apply(mg)
-			},
-			name: "Cassandra",
-		},
-		{
-			isAvailable: func() bool { return !isNil(c.Mongo) },
-			initialize: func() {
-				ds.Mongo = mongoDS{c.Mongo}
-				mg = mongoDS{c.Mongo}.apply(mg)
-			},
-			name: "Mongo",
-		},
-		{
-			isAvailable: func() bool { return !isNil(c.ArangoDB) },
-			initialize: func() {
-				ds.ArangoDB = arangoDS{c.ArangoDB}
-				mg = arangoDS{c.ArangoDB}.apply(mg)
-			},
-			name: "ArangoDB",
-		},
-		{
-			isAvailable: func() bool { return !isNil(c.SurrealDB) },
-			initialize: func() {
-				ds.SurrealDB = surrealDS{c.SurrealDB}
-				mg = surrealDS{c.SurrealDB}.apply(mg)
-			},
-			name: "surrealDB",
-		},
-		{
-			isAvailable: func() bool { return !isNil(c.DGraph) },
-			initialize: func() {
-				ds.DGraph = dgraphDS{c.DGraph}
-				mg = dgraphDS{c.DGraph}.apply(mg)
-			},
-			name: "dgraph",
-		},
+		"SQL":        {func() bool { return !isNil(c.SQL) }, func() { ds.SQL = c.SQL; mg = (&sqlDS{ds.SQL}).apply(mg) }},
+		"Redis":      {func() bool { return !isNil(c.Redis) }, func() { ds.Redis = c.Redis; mg = redisDS{ds.Redis}.apply(mg) }},
+		"Clickhouse": {func() bool { return !isNil(c.Clickhouse) }, func() { ds.Clickhouse = c.Clickhouse; mg = clickHouseDS{ds.Clickhouse}.apply(mg) }},
+		"PubSub":     {func() bool { return c.PubSub != nil }, func() { ds.PubSub = c.PubSub; mg = pubsubDS{c.PubSub}.apply(mg) }},
+		"Cassandra":  {func() bool { return !isNil(c.Cassandra) }, func() { ds.Cassandra = cassandraDS{c.Cassandra}; mg = cassandraDS{c.Cassandra}.apply(mg) }},
+		"Mongo":      {func() bool { return !isNil(c.Mongo) }, func() { ds.Mongo = mongoDS{c.Mongo}; mg = mongoDS{c.Mongo}.apply(mg) }},
+		"ArangoDB":   {func() bool { return !isNil(c.ArangoDB) }, func() { ds.ArangoDB = arangoDS{c.ArangoDB}; mg = arangoDS{c.ArangoDB}.apply(mg) }},
+		"SurrealDB":  {func() bool { return !isNil(c.SurrealDB) }, func() { ds.SurrealDB = surrealDS{c.SurrealDB}; mg = surrealDS{c.SurrealDB}.apply(mg) }},
+		"DGraph":     {func() bool { return !isNil(c.DGraph) }, func() { ds.DGraph = dgraphDS{c.DGraph}; mg = dgraphDS{c.DGraph}.apply(mg) }},
 	}
 
-	// Initialize each available datasource
-	for _, ds := range datasources {
-		if ds.isAvailable() {
+	// Iterate over the available datasources and initialize them
+	for name, ds := range datasourceMap {
+		if ds.available() {
 			ok = true
 
-			ds.initialize()
+			ds.apply()
 
-			c.Debug("initialized data source for " + ds.name)
+			c.Debug("initialized data source for " + name)
 		}
 	}
 
