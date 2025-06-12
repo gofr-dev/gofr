@@ -74,7 +74,6 @@ func (pubsubMigrator) getLastMigration(c *container.Container) int64 {
 	}
 
 	if len(result) == 0 {
-		c.Debug("No previous migrations found - this appears to be the first run")
 
 		return lastVersion
 	}
