@@ -40,3 +40,9 @@ func TestErrorDB_StatusCode(t *testing.T) {
 
 	assert.Equal(t, expectedCode, dbErr.StatusCode(), "TEST Failed.\n")
 }
+
+func TestErrorRecordNotFound_StatusCode(t *testing.T) {
+	dbErr := ErrorRecordNotFound{Message: "custom message"}
+
+	assert.Equal(t, http.StatusNotFound, dbErr.StatusCode(), "TEST Failed.\n")
+}
