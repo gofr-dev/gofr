@@ -147,6 +147,10 @@ func NewMockContainer(t *testing.T, options ...options) (*Container, *Mocks) {
 type MockPubSub struct {
 }
 
+func (s *MockPubSub) Query(_ context.Context, _ string, _ ...any) ([]byte, error) {
+	return nil, nil
+}
+
 func (*MockPubSub) CreateTopic(_ context.Context, _ string) error {
 	return nil
 }
