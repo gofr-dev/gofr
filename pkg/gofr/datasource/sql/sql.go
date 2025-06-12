@@ -71,15 +71,7 @@ func NewSQL(configs config.Config, logger datasource.Logger, metrics Metrics) *D
 
 	logger.Debugf("registering sql dialect '%s' for traces", dbConfig.Dialect)
 
-	// Supabase uses the PostgreSQL driver, so we register it as the "postgres" dialect
-	// to ensure compatibility with OpenTelemetry instrumentation.
-	otelSupportedDialect := dbConfig.Dialect
-
-	if dbConfig.Dialect == supabaseDialect {
-		otelSupportedDialect = dialectPostgres
-	}
-
-	otelRegisteredDialect, err := otelsql.Register(otelSupportedDialect)
+	otelRegisteredDialect, err := registerOtel(dbConfig.Dialect)
 
 	if err != nil {
 		logger.Errorf("could not register sql dialect '%s' for traces, error: %s", dbConfig.Dialect, err)
@@ -112,6 +104,18 @@ func NewSQL(configs config.Config, logger datasource.Logger, metrics Metrics) *D
 	go pushDBMetrics(database.DB, metrics)
 
 	return database
+}
+
+func registerOtel(dialect string) (string, error) {
+	// Supabase uses the PostgreSQL driver, so we register it as the "postgres" dialect
+	// to ensure compatibility with OpenTelemetry instrumentation.
+	otelSupportedDialect := dialect
+
+	if dialect == supabaseDialect {
+		otelSupportedDialect = dialectPostgres
+	}
+
+	return otelsql.Register(otelSupportedDialect)
 }
 
 func pingToTestConnection(database *DB) *DB {
