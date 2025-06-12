@@ -874,14 +874,14 @@ func TestKafkaClient_Query_ContextHandling(t *testing.T) {
 			description: "Should add 30 second timeout",
 		},
 		{
-			name: "Cancelled context",
+			name: "Canceled context",
 			setupCtx: func(t *testing.T) (context.Context, context.CancelFunc) {
 				t.Helper()
 				ctx, cancel := context.WithCancel(t.Context())
 				cancel()
 				return ctx, func() {}
 			},
-			description: "Should handle cancelled context",
+			description: "Should handle canceled context",
 		},
 	}
 

@@ -693,7 +693,7 @@ func TestMQTT_subscribeToTopicForQuery_ContextError(t *testing.T) {
 
 	var dummyHandler mqtt.MessageHandler = func(_ mqtt.Client, _ mqtt.Message) {}
 
-	t.Run("error_context_cancelled_during_wait", func(t *testing.T) {
+	t.Run("error_context_canceled_during_wait", func(t *testing.T) {
 		ctrl, mq, mockClient, _, mockToken := getMockMQTT(t, mockConfigs)
 		defer ctrl.Finish()
 

@@ -28,7 +28,7 @@ var (
 	errEmptyTopicName      = errors.New("empty topic name")
 	errSubscriptionTimeout = errors.New("timed out waiting for MQTT subscription")
 	errSubscriptionFailed  = errors.New("failed to subscribe to MQTT topic")
-	errQueryCancelled      = errors.New("query cancelled")
+	errQueryCancelled      = errors.New("query canceled")
 )
 
 type SubscribeFunc func(*pubsub.Message) error
