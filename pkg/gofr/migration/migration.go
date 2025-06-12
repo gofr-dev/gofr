@@ -117,17 +117,17 @@ func getMigrator(c *container.Container) (Datasource, migrator, bool) {
 		ok bool
 	)
 
-	ok = initializeDatasources(c, &ds, &mg)
+	ok = initializeDatasources(c, &ds, mg)
 
 	return ds, mg, ok
 }
 
-func initializeDatasources(c *container.Container, ds *Datasource, mg *migrator) bool {
+func initializeDatasources(c *container.Container, ds *Datasource, mg migrator) bool {
 	var initialized bool
 
 	if !isNil(c.SQL) {
 		ds.SQL = c.SQL
-		*mg = (&sqlDS{ds.SQL}).apply(*mg)
+		mg = (&sqlDS{ds.SQL}).apply(mg)
 
 		c.Debug("initialized data source for SQL")
 
@@ -136,7 +136,7 @@ func initializeDatasources(c *container.Container, ds *Datasource, mg *migrator)
 
 	if !isNil(c.Redis) {
 		ds.Redis = c.Redis
-		*mg = redisDS{ds.Redis}.apply(*mg)
+		mg = redisDS{ds.Redis}.apply(mg)
 
 		c.Debug("initialized data source for Redis")
 
@@ -145,7 +145,7 @@ func initializeDatasources(c *container.Container, ds *Datasource, mg *migrator)
 
 	if !isNil(c.Clickhouse) {
 		ds.Clickhouse = c.Clickhouse
-		*mg = clickHouseDS{ds.Clickhouse}.apply(*mg)
+		mg = clickHouseDS{ds.Clickhouse}.apply(mg)
 
 		c.Debug("initialized data source for Clickhouse")
 
@@ -154,7 +154,7 @@ func initializeDatasources(c *container.Container, ds *Datasource, mg *migrator)
 
 	if c.PubSub != nil {
 		ds.PubSub = c.PubSub
-		*mg = pubsubDS{c.PubSub}.apply(*mg)
+		mg = pubsubDS{c.PubSub}.apply(mg)
 
 		c.Debug("initialized data source for PubSub")
 
@@ -163,7 +163,7 @@ func initializeDatasources(c *container.Container, ds *Datasource, mg *migrator)
 
 	if !isNil(c.Cassandra) {
 		ds.Cassandra = cassandraDS{c.Cassandra}
-		*mg = cassandraDS{c.Cassandra}.apply(*mg)
+		mg = cassandraDS{c.Cassandra}.apply(mg)
 
 		c.Debug("initialized data source for Cassandra")
 
@@ -172,7 +172,7 @@ func initializeDatasources(c *container.Container, ds *Datasource, mg *migrator)
 
 	if !isNil(c.Mongo) {
 		ds.Mongo = mongoDS{c.Mongo}
-		*mg = mongoDS{c.Mongo}.apply(*mg)
+		mg = mongoDS{c.Mongo}.apply(mg)
 
 		c.Debug("initialized data source for Mongo")
 
@@ -181,7 +181,7 @@ func initializeDatasources(c *container.Container, ds *Datasource, mg *migrator)
 
 	if !isNil(c.ArangoDB) {
 		ds.ArangoDB = arangoDS{c.ArangoDB}
-		*mg = arangoDS{c.ArangoDB}.apply(*mg)
+		mg = arangoDS{c.ArangoDB}.apply(mg)
 
 		c.Debug("initialized data source for ArangoDB")
 
@@ -190,7 +190,7 @@ func initializeDatasources(c *container.Container, ds *Datasource, mg *migrator)
 
 	if !isNil(c.SurrealDB) {
 		ds.SurrealDB = surrealDS{c.SurrealDB}
-		*mg = surrealDS{c.SurrealDB}.apply(*mg)
+		mg = surrealDS{c.SurrealDB}.apply(mg)
 
 		c.Debug("initialized data source for SurrealDB")
 
@@ -199,7 +199,7 @@ func initializeDatasources(c *container.Container, ds *Datasource, mg *migrator)
 
 	if !isNil(c.DGraph) {
 		ds.DGraph = dgraphDS{c.DGraph}
-		*mg = dgraphDS{c.DGraph}.apply(*mg)
+		mg = dgraphDS{c.DGraph}.apply(mg)
 
 		c.Debug("initialized data source for DGraph")
 
