@@ -151,7 +151,7 @@ func createKafkaWriter(conf *Config, dialer *kafka.Dialer, logger pubsub.Logger)
 	})
 }
 
-func (k *kafkaClient) parseQueryArgs(args ...any) (int64, int) {
+func (*kafkaClient) parseQueryArgs(args ...any) (int64, int) {
 	var offset int64
 
 	limit := 10
@@ -189,7 +189,7 @@ func (k *kafkaClient) createReader(topic string, offset int64) (*kafka.Reader, e
 	return reader, nil
 }
 
-func (k *kafkaClient) getReadContext(ctx context.Context) context.Context {
+func (*kafkaClient) getReadContext(ctx context.Context) context.Context {
 	if _, hasDeadline := ctx.Deadline(); !hasDeadline {
 		readCtx, cancel := context.WithTimeout(ctx, defaultReadTimeout)
 		_ = cancel // We can't defer here, but timeout will handle cleanup
@@ -223,6 +223,6 @@ func (k *kafkaClient) readMessages(ctx context.Context, reader *kafka.Reader, li
 	return result, nil
 }
 
-func (k *kafkaClient) isExpectedError(err error) bool {
+func (*kafkaClient) isExpectedError(err error) bool {
 	return errors.Is(err, context.DeadlineExceeded) || errors.Is(err, io.EOF)
 }
