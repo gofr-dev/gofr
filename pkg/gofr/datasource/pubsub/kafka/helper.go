@@ -153,6 +153,7 @@ func createKafkaWriter(conf *Config, dialer *kafka.Dialer, logger pubsub.Logger)
 
 func (k *kafkaClient) parseQueryArgs(args ...any) (int64, int) {
 	var offset int64
+
 	limit := 10
 
 	if len(args) > 0 {
@@ -192,8 +193,10 @@ func (k *kafkaClient) getReadContext(ctx context.Context) context.Context {
 	if _, hasDeadline := ctx.Deadline(); !hasDeadline {
 		readCtx, cancel := context.WithTimeout(ctx, defaultReadTimeout)
 		_ = cancel // We can't defer here, but timeout will handle cleanup
+
 		return readCtx
 	}
+
 	return ctx
 }
 
@@ -206,12 +209,14 @@ func (k *kafkaClient) readMessages(ctx context.Context, reader *kafka.Reader, li
 			if k.isExpectedError(err) {
 				break
 			}
+
 			return nil, fmt.Errorf("failed to read message: %w", err)
 		}
 
 		if len(result) > 0 {
 			result = append(result, '\n')
 		}
+
 		result = append(result, msg.Value...)
 	}
 
