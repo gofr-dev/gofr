@@ -2,10 +2,11 @@ package migration
 
 import (
 	"errors"
-	"github.com/stretchr/testify/assert"
-	"go.uber.org/mock/gomock"
 	"testing"
 	"time"
+
+	"github.com/stretchr/testify/assert"
+	"go.uber.org/mock/gomock"
 
 	"gofr.dev/pkg/gofr/container"
 )

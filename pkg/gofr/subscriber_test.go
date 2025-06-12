@@ -19,7 +19,7 @@ func subscriptionError(err string) error {
 type mockSubscriber struct {
 }
 
-func (s mockSubscriber) Query(_ context.Context, _ string, _ ...any) ([]byte, error) {
+func (mockSubscriber) Query(_ context.Context, _ string, _ ...any) ([]byte, error) {
 	return nil, nil
 }
 
