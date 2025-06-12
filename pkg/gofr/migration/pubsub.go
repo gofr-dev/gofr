@@ -74,7 +74,6 @@ func (pubsubMigrator) getLastMigration(c *container.Container) int64 {
 	}
 
 	if len(result) == 0 {
-
 		return lastVersion
 	}
 
