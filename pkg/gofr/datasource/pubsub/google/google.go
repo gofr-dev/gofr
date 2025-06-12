@@ -3,8 +3,10 @@
 package google
 
 import (
+	"bytes"
 	"context"
 	"errors"
+	"fmt"
 	"strings"
 	"sync"
 	"time"
@@ -20,9 +22,13 @@ var (
 	errProjectIDNotProvided    = errors.New("google project id not provided")
 	errSubscriptionNotProvided = errors.New("subscription name not provided")
 	errClientNotConnected      = errors.New("google pubsub client is not connected")
+	errTopicName               = errors.New("empty topic name")
 )
 
-const defaultRetryInterval = 10 * time.Second
+const (
+	defaultRetryInterval = 10 * time.Second
+	messageBufferSize    = 100
+)
 
 type Config struct {
 	ProjectID        string
@@ -40,10 +46,10 @@ type googleClient struct {
 	mu          sync.RWMutex
 }
 
-func (g *googleClient) Query(ctx context.Context, query string, args ...any) ([]byte, error) {
-	//TODO implement me
-	panic("implement me")
-}
+const (
+	defaultQueryTimeout = 30 * time.Second
+	defaultMessageLimit = 10
+)
 
 //nolint:revive // We do not want anyone using the client without initialization steps.
 func New(conf Config, logger pubsub.Logger, metrics Metrics) *googleClient {
@@ -239,6 +245,132 @@ func (g *googleClient) Subscribe(ctx context.Context, topic string) (*pubsub.Mes
 	case <-ctx.Done():
 		return nil, nil
 	}
+}
+
+func (g *googleClient) Query(ctx context.Context, query string, args ...any) ([]byte, error) {
+	if !g.isConnected() {
+		return nil, errClientNotConnected
+	}
+
+	if query == "" {
+		return nil, errTopicName
+	}
+
+	timeout, limit := parseQueryArgs(args...)
+
+	// Get topic and subscription
+	topic, err := g.getTopic(ctx, query)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get topic: %w", err)
+	}
+
+	subscription, err := g.getQuerySubscription(ctx, topic)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get subscription: %w", err)
+	}
+
+	msgChan := make(chan []byte, messageBufferSize)
+	queryCtx, cancel := context.WithTimeout(ctx, timeout)
+
+	defer cancel()
+
+	// Start receiving messages
+	go func() {
+		defer close(msgChan)
+
+		receiveCtx, receiveCancel := context.WithTimeout(queryCtx, timeout)
+		defer receiveCancel()
+
+		err := subscription.Receive(receiveCtx, func(_ context.Context, msg *gcPubSub.Message) {
+			defer msg.Ack()
+
+			select {
+			case msgChan <- msg.Data:
+			case <-receiveCtx.Done():
+				return
+			default:
+				// Channel might be full, try non-blocking send
+				g.logger.Debugf("Query: message channel full for topic %s", query)
+			}
+		})
+
+		if err != nil && !errors.Is(err, context.Canceled) && !errors.Is(err, context.DeadlineExceeded) {
+			g.logger.Debugf("Query: receive ended for topic %s: %v", query, err)
+		}
+	}()
+
+	// Collect messages
+	return g.collectMessages(queryCtx, msgChan, limit), nil
+}
+
+func parseQueryArgs(args ...any) (time.Duration, int) {
+	timeout := defaultQueryTimeout
+	limit := defaultMessageLimit
+
+	if len(args) > 1 {
+		if val, ok := args[1].(int); ok {
+			limit = val
+		}
+	}
+
+	return timeout, limit
+}
+
+func (g *googleClient) getQuerySubscription(ctx context.Context, topic *gcPubSub.Topic) (*gcPubSub.Subscription, error) {
+	subName := g.SubscriptionName + "-query-" + topic.ID()
+	subscription := g.client.Subscription(subName)
+
+	exists, err := subscription.Exists(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	if !exists {
+		subscription, err = g.client.CreateSubscription(ctx, subName, gcPubSub.SubscriptionConfig{
+			Topic: topic,
+		})
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	return subscription, nil
+}
+
+func (g *googleClient) collectMessages(ctx context.Context, msgChan <-chan []byte, limit int) []byte {
+	var result bytes.Buffer
+
+	collected := 0
+
+	for {
+		if limit > 0 && collected >= limit {
+			break
+		}
+
+		select {
+		case msg, ok := <-msgChan:
+			if !ok {
+				g.logger.Debugf("Query: message channel closed, collected %d messages", collected)
+
+				return result.Bytes()
+			}
+
+			if result.Len() > 0 {
+				result.WriteByte('\n')
+			}
+
+			result.Write(msg)
+
+			collected++
+
+			g.logger.Debugf("Query: collected message %d", collected)
+
+		case <-ctx.Done():
+			return result.Bytes()
+		}
+	}
+
+	return result.Bytes()
 }
 
 func (g *googleClient) getTopic(ctx context.Context, topic string) (*gcPubSub.Topic, error) {
