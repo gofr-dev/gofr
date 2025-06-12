@@ -71,7 +71,16 @@ func NewSQL(configs config.Config, logger datasource.Logger, metrics Metrics) *D
 
 	logger.Debugf("registering sql dialect '%s' for traces", dbConfig.Dialect)
 
-	otelRegisteredDialect, err := otelsql.Register(dbConfig.Dialect)
+	// Supabase uses the PostgreSQL driver, so we register it as the "postgres" dialect
+	// to ensure compatibility with OpenTelemetry instrumentation.
+	otelSupportedDialect := dbConfig.Dialect
+
+	if dbConfig.Dialect == supabaseDialect {
+		otelSupportedDialect = dialectPostgres
+	}
+
+	otelRegisteredDialect, err := otelsql.Register(otelSupportedDialect)
+
 	if err != nil {
 		logger.Errorf("could not register sql dialect '%s' for traces, error: %s", dbConfig.Dialect, err)
 		return nil
