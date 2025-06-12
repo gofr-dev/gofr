@@ -227,14 +227,28 @@ func Test_GetConnectionFromContext(t *testing.T) {
 }
 
 func TestContainer_CreateSetsAppNameAndVersion(t *testing.T) {
-	cfg := config.NewMockConfig(map[string]string{
-		"APP_NAME":    "test-app",
-		"APP_VERSION": "v1.0.0",
+	// Test case: Explicit values are provided
+	t.Run("explicit config values", func(t *testing.T) {
+		cfg := config.NewMockConfig(map[string]string{
+			"APP_NAME":    "test-app",
+			"APP_VERSION": "v1.0.0",
+		})
+
+		c := &Container{}
+		c.Create(cfg)
+
+		assert.Equal(t, "test-app", c.GetAppName())
+		assert.Equal(t, "v1.0.0", c.GetAppVersion())
 	})
 
-	c := &Container{}
-	c.Create(cfg)
+	// Test case: Empty config should use default values
+	t.Run("empty config uses defaults", func(t *testing.T) {
+		cfg := config.NewMockConfig(map[string]string{}) // No values provided
 
-	assert.Equal(t, "test-app", c.GetAppName())
-	assert.Equal(t, "v1.0.0", c.GetAppVersion())
+		c := &Container{}
+		c.Create(cfg)
+
+		assert.Equal(t, "gofr-app", c.GetAppName())
+		assert.Equal(t, "dev", c.GetAppVersion())
+	})
 }
