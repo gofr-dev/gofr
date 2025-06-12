@@ -57,12 +57,12 @@ func Run(migrationsMap map[int64]Migrate, c *container.Container) {
 
 	for _, currentMigration := range keys {
 		if currentMigration <= lastMigration {
-			c.Debugf("skipping migration %v", currentMigration)
+			c.Infof("skipping migration %v", currentMigration)
 
 			continue
 		}
 
-		c.Logger.Debugf("running migration %v", currentMigration)
+		c.Logger.Infof("running migration %v", currentMigration)
 
 		migrationInfo := mg.beginTransaction(c)
 

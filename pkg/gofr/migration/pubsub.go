@@ -15,7 +15,7 @@ type pubsubDS struct {
 
 const (
 	pubsubMigrationTopic = "gofr_migrations"
-	migrationTimeout     = 10 * time.Second // Increased timeout
+	migrationTimeout     = 10 * time.Second
 	defaultQueryLimit    = 100
 )
 
