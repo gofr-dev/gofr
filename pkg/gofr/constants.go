@@ -13,4 +13,5 @@ const (
 	shutServerPing         = "/api/ping/down"
 	pingTimeout            = 5 * time.Second
 	defaultTelemetry       = "true"
+	defaultReflection      = "false"
 )

@@ -6,10 +6,12 @@ import (
 	"net"
 	"reflect"
 	"strconv"
+	"strings"
 
-	"github.com/grpc-ecosystem/go-grpc-middleware"
-	"github.com/grpc-ecosystem/go-grpc-middleware/recovery"
+	grpc_middleware "github.com/grpc-ecosystem/go-grpc-middleware"
+	grpc_recovery "github.com/grpc-ecosystem/go-grpc-middleware/recovery"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/reflection"
 
 	"gofr.dev/pkg/gofr/container"
 	gofr_grpc "gofr.dev/pkg/gofr/grpc"
@@ -56,6 +58,25 @@ func (a *App) AddGRPCUnaryInterceptors(interceptors ...grpc.UnaryServerIntercept
 
 func (a *App) AddGRPCServerStreamInterceptors(interceptors ...grpc.StreamServerInterceptor) {
 	a.grpcServer.streamInterceptors = append(a.grpcServer.streamInterceptors, interceptors...)
+}
+
+// WithReflection enables gRPC server reflection for the application's gRPC server.
+// This allows tools like grpcurl or Postman to discover and interact with the server's services at runtime.
+//
+// Example usage:
+//   app.WithReflection()
+
+func (a *App) WithReflection() {
+	enabled := strings.ToLower(a.Config.GetOrDefault("GRPC_ENABLE_REFLECTION", "false"))
+	if enabled == defaultReflection {
+		return
+	}
+
+	if a.grpcServer.server == nil {
+		a.grpcServer.createServer()
+	}
+
+	reflection.Register(a.grpcServer.server)
 }
 
 func newGRPCServer(c *container.Container, port int) *grpcServer {

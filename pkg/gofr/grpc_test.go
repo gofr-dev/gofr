@@ -255,3 +255,20 @@ func TestGRPC_ServerRun_WithInterceptorAndOptions(t *testing.T) {
 	// Verify interceptors were called in order
 	assert.Equal(t, []string{"interceptor1", "interceptor2"}, interceptorExecutions)
 }
+
+func TestApp_WithReflection(t *testing.T) {
+	c := &container.Container{
+		Logger: logging.NewLogger(logging.DEBUG),
+	}
+	app := New()
+	app.container = c
+	app.grpcServer = newGRPCServer(c, 9999)
+	app.grpcServer.createServer()
+
+	// Should not panic or error
+	app.WithReflection()
+
+	services := app.grpcServer.server.GetServiceInfo()
+	_, ok := services["grpc.reflection.v1alpha.ServerReflection"]
+	assert.True(t, ok, "reflection service should be registered")
+}
