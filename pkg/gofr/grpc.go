@@ -6,9 +6,10 @@ import (
 	"net"
 	"reflect"
 	"strconv"
+	"strings"
 
-	"github.com/grpc-ecosystem/go-grpc-middleware"
-	"github.com/grpc-ecosystem/go-grpc-middleware/recovery"
+	grpc_middleware "github.com/grpc-ecosystem/go-grpc-middleware"
+	grpc_recovery "github.com/grpc-ecosystem/go-grpc-middleware/recovery"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/reflection"
 
@@ -67,9 +68,10 @@ func (a *App) AddGRPCServerStreamInterceptors(interceptors ...grpc.StreamServerI
 
 func (a *App) WithReflection() {
 	enabled := strings.ToLower(a.Config.GetOrDefault("GRPC_ENABLE_REFLECTION", "false"))
-	if enabled != "true" {
-	        return
+	if enabled == defaultReflection {
+		return
 	}
+
 	if a.grpcServer.server == nil {
 		a.grpcServer.createServer()
 	}
