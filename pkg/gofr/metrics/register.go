@@ -2,6 +2,7 @@ package metrics
 
 import (
 	"context"
+	"sync"
 
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/metric"
@@ -43,6 +44,7 @@ type metricsManager struct {
 // And if we use the otel/metric, we would not be able to have support for labels, Hence created a custom type to implement it.
 type float64Gauge struct {
 	observations map[attribute.Set]float64
+	mu           sync.RWMutex
 }
 
 // NewMetricsManager creates a new metrics manager instance with the provided metric  meter and logger.
@@ -127,7 +129,7 @@ func (m *metricsManager) NewHistogram(name, desc string, buckets ...float64) {
 //	Usage:
 //	m.NewGauge("memory_usage", "Current memory usage in bytes")
 func (m *metricsManager) NewGauge(name, desc string) {
-	gauge := float64Gauge{observations: make(map[attribute.Set]float64)}
+	gauge := &float64Gauge{observations: make(map[attribute.Set]float64)}
 
 	_, err := m.meter.Float64ObservableGauge(name, metric.WithDescription(desc), metric.WithFloat64Callback(gauge.callbackFunc))
 	if err != nil {
@@ -145,6 +147,9 @@ func (m *metricsManager) NewGauge(name, desc string) {
 // callbackFunc implements the callback function for the underlying asynchronous gauge
 // it observes the current state of all previous set() calls.
 func (f *float64Gauge) callbackFunc(_ context.Context, o metric.Float64Observer) error {
+	f.mu.RLock()
+	defer f.mu.RUnlock()
+
 	for attrs, val := range f.observations {
 		o.Observe(val, metric.WithAttributeSet(attrs))
 	}
@@ -242,6 +247,9 @@ func (m *metricsManager) SetGauge(name string, value float64, labels ...string) 
 }
 
 func (f *float64Gauge) set(val float64, attrs attribute.Set) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+
 	f.observations[attrs] = val
 }
 
