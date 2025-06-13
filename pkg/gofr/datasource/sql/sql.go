@@ -37,17 +37,23 @@ type DBConfig struct {
 	Charset     string
 }
 
-func NewSQL(configs config.Config, logger datasource.Logger, metrics Metrics) *DB {
-	dbConfig := getDBConfig(configs)
-	if dbConfig.Dialect == supabaseDialect && dbConfig.HostName == "" {
+func setupSupabaseDefaults(dbConfig *DBConfig, configs config.Config) {
+	if dbConfig.HostName == "" {
 		projectRef := configs.Get("SUPABASE_PROJECT_REF")
 		if projectRef != "" {
 			dbConfig.HostName = fmt.Sprintf("db.%s.supabase.co", projectRef)
 		}
 	}
-
-	if dbConfig.Dialect == supabaseDialect && dbConfig.Database == "" {
+	if dbConfig.Database == "" {
 		dbConfig.Database = "postgres"
+	}
+}
+
+func NewSQL(configs config.Config, logger datasource.Logger, metrics Metrics) *DB {
+	dbConfig := getDBConfig(configs)
+
+	if dbConfig.Dialect == supabaseDialect {
+		setupSupabaseDefaults(dbConfig, configs)
 	}
 
 	if dbConfig.Dialect == "" {
