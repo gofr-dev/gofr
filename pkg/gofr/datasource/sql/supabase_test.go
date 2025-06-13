@@ -1,6 +1,7 @@
 package sql
 
 import (
+	"os"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -124,6 +125,9 @@ func TestConfigureSupabaseConnection(t *testing.T) {
 			mockLogger := logging.NewMockLogger(logging.DEBUG)
 
 			logs := testutil.StdoutOutputForFunc(func() {
+				if mockLogger, ok := mockLogger.(*logging.MockLogger); ok {
+					mockLogger.SetOut(os.Stdout)
+				}
 				configureSupabaseConnection(tc.config, mockLogger)
 			})
 
@@ -501,8 +505,9 @@ func TestNewSupabaseSQL(t *testing.T) {
 			// We expect metrics to be set regardless of the result
 			mockMetrics.EXPECT().SetGauge(gomock.Any(), gomock.Any()).AnyTimes()
 
+			var result *DB
 			logs := testutil.StdoutOutputForFunc(func() {
-				result := NewSupabaseSQL(mockConfig, mockLogger, mockMetrics)
+				result = NewSupabaseSQL(mockConfig, mockLogger, mockMetrics)
 
 				if tc.expectNil {
 					assert.Nil(t, result)
