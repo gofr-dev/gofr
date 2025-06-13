@@ -20,6 +20,9 @@ func NewMockLogger(level Level) Logger {
 	}
 }
 
+func (m *MockLogger) SetOut(w io.Writer) {
+	m.out = w
+}
 func (m *MockLogger) logf(level Level, format string, args ...any) {
 	if level < m.level {
 		return

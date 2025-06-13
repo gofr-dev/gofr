@@ -37,16 +37,26 @@ type DBConfig struct {
 	Charset     string
 }
 
+func setupSupabaseDefaults(dbConfig *DBConfig, configs config.Config) {
+	if dbConfig.HostName == "" {
+		projectRef := configs.Get("SUPABASE_PROJECT_REF")
+		if projectRef != "" {
+			dbConfig.HostName = fmt.Sprintf("db.%s.supabase.co", projectRef)
+		}
+	}
+	if dbConfig.Database == "" {
+		dbConfig.Database = "postgres"
+	}
+}
+
 func NewSQL(configs config.Config, logger datasource.Logger, metrics Metrics) *DB {
 	dbConfig := getDBConfig(configs)
 
-	if dbConfig.Dialect == "" {
-		return nil
+	if dbConfig.Dialect == supabaseDialect {
+		setupSupabaseDefaults(dbConfig, configs)
 	}
 
-	// if Hostname is not provided, we won't try to connect to DB
-	if dbConfig.Dialect != sqlite && dbConfig.HostName == "" {
-		logger.Errorf("connection to %s failed: host name is empty.", dbConfig.Dialect)
+	if dbConfig.Dialect == "" {
 		return nil
 	}
 
