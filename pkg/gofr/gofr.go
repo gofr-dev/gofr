@@ -302,3 +302,5 @@ func (a *App) AddStaticFiles(endpoint, filePath string) {
 func (a *App) OnStart(hook func(*App) error) {
 	a.startupHooks = append(a.startupHooks, hook)
 }
+
+

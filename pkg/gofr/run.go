@@ -11,17 +11,7 @@ import (
 
 // Run starts the application. If it is an HTTP server, it will start the server.
 func (a *App) Run() {
-	// Run all startup hooks before starting the server
-	for _, hook := range a.startupHooks {
-		if err := hook(a); err != nil {
-			a.Logger().Errorf("startup hook failed: %v", err)
-			os.Exit(1) // or handle error as you see fit
-		}
-	}
-
-	if a.cmd != nil {
-		a.cmd.Run(a.container)
-	}
+	a.runStartupHooks()
 
 	// Create a context that is canceled on receiving termination signals
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGINT, syscall.SIGTERM)
@@ -102,4 +92,14 @@ func (a *App) Run() {
 	}()
 
 	wg.Wait()
+}
+
+// runStartupHooks executes all registered startup hooks before the server starts.
+func (a *App) runStartupHooks() {
+	for _, hook := range a.startupHooks {
+		if err := hook(a); err != nil {
+			a.Logger().Errorf("startup hook failed: %v", err)
+			os.Exit(1) // or handle error as you see fit
+		}
+	}
 }
