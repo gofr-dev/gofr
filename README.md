@@ -52,7 +52,7 @@ GoFr is designed to **simplify microservice development**, with key focuses on *
 - GoFr requires **[Go](https://go.dev/)** version **[1.24](https://go.dev/doc/devel/release#go1.24.0)** or above.
 
 ### **Installation**
-To get started with GoFr, add the following import to your code and use Go’s module support to automatically fetch dependencies:
+To get started with GoFr, add the following import to your code and use Go's module support to automatically fetch dependencies:
 
 ```go
 import "gofr.dev/pkg/gofr"
@@ -77,6 +77,12 @@ import "gofr.dev/pkg/gofr"
 
 func main() {
 	app := gofr.New()
+
+	app.OnStart(func(a *gofr.App) error {
+		// Do your synchronous startup work here
+		// e.g., initialize cache, make API calls, etc.
+		return nil
+	})
 
 	app.GET("/greet", func(ctx *gofr.Context) (any, error) {
 		return "Hello World!", nil
