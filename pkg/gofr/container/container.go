@@ -58,6 +58,7 @@ type Container struct {
 	Cassandra     CassandraWithContext
 	Clickhouse    Clickhouse
 	Mongo         Mongo
+	Pinecone      Pinecone
 	Solr          Solr
 	DGraph        Dgraph
 	OpenTSDB      OpenTSDB

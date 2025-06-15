@@ -227,3 +227,21 @@ func TestApp_AddArangoDB(t *testing.T) {
 		assert.Equal(t, mock, app.container.ArangoDB)
 	})
 }
+
+func TestApp_AddPinecone(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	mockPinecone := container.NewMockPineconeProvider(ctrl)
+
+	mockPinecone.EXPECT().UseLogger(gomock.Any()).Times(1)
+	mockPinecone.EXPECT().UseMetrics(gomock.Any()).Times(1)
+	mockPinecone.EXPECT().UseTracer(gomock.Any()).Times(1)
+	mockPinecone.EXPECT().Connect().Times(1)
+
+	app := New()
+
+	app.AddPinecone(mockPinecone)
+
+	assert.Equal(t, mockPinecone, app.container.Pinecone)
+}
