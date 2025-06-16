@@ -194,3 +194,17 @@ func (a *App) AddElasticsearch(db container.ElasticsearchProvider) {
 
 	a.container.Elasticsearch = db
 }
+
+// AddPinecone sets the Pinecone datasource in the app's container.
+func (a *App) AddPinecone(db container.PineconeProvider) {
+	db.UseLogger(a.Logger())
+	db.UseMetrics(a.Metrics())
+
+	tracer := otel.GetTracerProvider().Tracer("gofr-pinecone")
+
+	db.UseTracer(tracer)
+
+	db.Connect()
+
+	a.container.Pinecone = db
+}
