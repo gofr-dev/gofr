@@ -71,7 +71,7 @@ func NewSQL(configs config.Config, logger datasource.Logger, metrics Metrics) *D
 
 	logger.Debugf("registering sql dialect '%s' for traces", dbConfig.Dialect)
 
-	otelRegisteredDialect, err := registerOtel(dbConfig.Dialect)
+	otelRegisteredDialect, err := registerOtel(dbConfig.Dialect, logger)
 
 	if err != nil {
 		logger.Errorf("could not register sql dialect '%s' for traces, error: %s", dbConfig.Dialect, err)
@@ -106,12 +106,13 @@ func NewSQL(configs config.Config, logger datasource.Logger, metrics Metrics) *D
 	return database
 }
 
-func registerOtel(dialect string) (string, error) {
-	// Supabase uses the PostgreSQL driver, so we register it as the "postgres" dialect
+func registerOtel(dialect string, logger datasource.Logger) (string, error) {
+	// Supabase and CockroachDB use the PostgreSQL driver, so we register them as the "postgres" dialect
 	// to ensure compatibility with OpenTelemetry instrumentation.
 	otelSupportedDialect := dialect
 
-	if dialect == supabaseDialect {
+	if dialect == supabaseDialect || dialect == "cockroachdb" {
+		logger.Debugf("using '%s' as an alias for '%s' for otel-sql registration", dialectPostgres, dialect)
 		otelSupportedDialect = dialectPostgres
 	}
 
