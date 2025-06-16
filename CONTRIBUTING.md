@@ -5,6 +5,10 @@
 * (Optional) If you want to discuss your implementation with the users of GoFr, use the GitHub discussions of this repo.
 * Configure your editor to use goimport and golangci-lint on file changes. Any code which is not formatted using these
   tools, will fail on the pipeline.
+* Contributors should begin working on an issue only after it has been assigned to them. To get an issue assigned, please comment on the GitHub thread
+  and request assignment from a maintainer. This helps avoid duplicate or conflicting pull requests from multiple contributors.
+* Issues labeled triage are not open for direct contributions. If you're interested in working on a triage issue, please reach out to the maintainers
+  to discuss it before proceeding in the Github thread.
 <!-- spellchecker:off "favour" have to be ignored here -->
 * We follow **American English** conventions in this project (e.g., *"favor"* instead of *"favour"*). Please keep this consistent across all code comments, documentation, etc.
 <!-- spellchecker:on -->
