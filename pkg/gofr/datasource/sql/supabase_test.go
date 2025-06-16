@@ -123,9 +123,6 @@ func TestConfigureSupabaseConnection(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 
 			logs := testutil.StdoutOutputForFunc(func() {
-				// if mockLogger, ok := mockLogger.(*logging.MockLogger); ok {
-				// 	mockLogger.SetOut(os.Stdout)
-				// }
 				mockLogger := logging.NewMockLogger(logging.DEBUG)
 
 				configureSupabaseConnection(tc.config, mockLogger)
