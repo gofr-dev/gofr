@@ -1,7 +1,6 @@
 package sql
 
 import (
-	"os"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -122,12 +121,13 @@ func TestConfigureSupabaseConnection(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			mockLogger := logging.NewMockLogger(logging.DEBUG)
 
 			logs := testutil.StdoutOutputForFunc(func() {
-				if mockLogger, ok := mockLogger.(*logging.MockLogger); ok {
-					mockLogger.SetOut(os.Stdout)
-				}
+				// if mockLogger, ok := mockLogger.(*logging.MockLogger); ok {
+				// 	mockLogger.SetOut(os.Stdout)
+				// }
+				mockLogger := logging.NewMockLogger(logging.DEBUG)
+
 				configureSupabaseConnection(tc.config, mockLogger)
 			})
 
@@ -499,7 +499,6 @@ func TestNewSupabaseSQL(t *testing.T) {
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			mockConfig := config.NewMockConfig(tc.configs)
-			mockLogger := logging.NewMockLogger(logging.DEBUG)
 			mockMetrics := NewMockMetrics(ctrl)
 
 			// We expect metrics to be set regardless of the result
@@ -507,6 +506,7 @@ func TestNewSupabaseSQL(t *testing.T) {
 
 			var result *DB
 			logs := testutil.StdoutOutputForFunc(func() {
+				mockLogger := logging.NewMockLogger(logging.DEBUG)
 				result = NewSupabaseSQL(mockConfig, mockLogger, mockMetrics)
 
 				if tc.expectNil {
