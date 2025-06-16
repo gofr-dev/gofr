@@ -383,9 +383,11 @@ func TestNewSQL_CockroachDB(t *testing.T) {
 	mockMetrics := NewMockMetrics(ctrl)
 
 	mockMetrics.EXPECT().SetGauge(gomock.Any(), gomock.Any()).AnyTimes()
+
 	testLogs := testutil.StderrOutputForFunc(func() {
 		db := NewSQL(mockConfig, mockLogger, mockMetrics)
 		assert.NotNil(t, db, "Expected a non-nil DB object for cockroachdb")
+
 		if db != nil {
 			assert.Equal(t, "cockroachdb", db.Dialect(), "Expected dialect to be cockroachdb")
 		}
