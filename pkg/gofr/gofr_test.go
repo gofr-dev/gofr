@@ -34,7 +34,7 @@ func TestMain(m *testing.M) {
 func TestNewCMD(t *testing.T) {
 	a := NewCMD()
 	// Without args we should get error on stderr.
-	outputWithoutArgs := testutil.StderrOutputForFunc(a.Run)
+	outputWithoutArgs := testutil.StderrOutputForFunc(func() { _ = a.Run() })
 
 	assert.Equal(t, "No Command Found!\n", outputWithoutArgs, "TEST Failed.\n%s", "Stderr output mismatch")
 }

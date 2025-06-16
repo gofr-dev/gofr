@@ -10,10 +10,10 @@ import (
 )
 
 // Run starts the application. If it is an HTTP server, it will start the server.
-func (a *App) Run() {
+func (a *App) Run() error {
 	if err := a.runStartupHooks(); err != nil {
 		a.Logger().Errorf("startup hook failed: %v", err)
-		os.Exit(1)
+		return err
 	}
 
 	// Create a context that is canceled on receiving termination signals
@@ -95,6 +95,8 @@ func (a *App) Run() {
 	}()
 
 	wg.Wait()
+
+	return nil
 }
 
 // runStartupHooks executes all registered startup hooks before the server starts.
