@@ -2,12 +2,11 @@ package sql
 
 import (
 	"fmt"
-	"os"
+
 	"strings"
 
 	"gofr.dev/pkg/gofr/config"
 	"gofr.dev/pkg/gofr/datasource"
-	"gofr.dev/pkg/gofr/logging"
 )
 
 const (
@@ -66,9 +65,7 @@ func NewSupabaseSQL(configs config.Config, logger datasource.Logger, metrics Met
 	if supaConfig == nil {
 		return nil
 	}
-	if logger, ok := logger.(*logging.MockLogger); ok {
-		logger.SetOut(os.Stdout)
-	}
+
 	configureSupabaseConnection(supaConfig, logger)
 
 	return NewSQL(configs, logger, metrics)
