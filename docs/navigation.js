@@ -43,6 +43,11 @@ export const navigation = [
                 desc: "Learn how to schedule and manage cron jobs in your application for automated tasks and background processes with GoFr's CRON job management."
             },
             {
+                title: "Running Startup Jobs",
+                href: "/docs/advanced-guide/startup-jobs",
+                desc: "Execute initialization logic before serving traffic by registering synchronous startup jobs."
+            },
+            {
                 title: 'Overriding Default',
                 href: '/docs/advanced-guide/overriding-default',
                 desc: "Understand how to override default configurations and behaviors in GoFr to tailor framework to your specific needs."

@@ -1162,3 +1162,30 @@ func TestApp_Subscribe(t *testing.T) {
 		assert.False(t, ok)
 	})
 }
+
+func Test_runStartJobs(t *testing.T) {
+	c := container.NewContainer(config.NewMockConfig(nil))
+	app := &App{container: c}
+
+	count := 0
+	app.AddStartJob("init", func(ctx *Context) error {
+		count = 42
+		return nil
+	})
+
+	err := app.runStartJobs()
+	require.NoError(t, err)
+	assert.Equal(t, 42, count)
+}
+
+func Test_runStartJobs_Error(t *testing.T) {
+	c := container.NewContainer(config.NewMockConfig(nil))
+	app := &App{container: c}
+
+	app.AddStartJob("fail", func(ctx *Context) error {
+		return fmt.Errorf("boom")
+	})
+
+	err := app.runStartJobs()
+	assert.Error(t, err)
+}

@@ -39,6 +39,8 @@ type App struct {
 	cmd  *cmd
 	cron *Crontab
 
+	startJobs []startJob
+
 	// container is unexported because this is an internal implementation and applications are provided access to it via Context
 	container *container.Container
 

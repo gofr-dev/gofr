@@ -48,6 +48,10 @@ func (a *App) Run() {
 		go a.sendTelemetry(http.DefaultClient, true)
 	}
 
+	if err := a.runStartJobs(); err != nil {
+		a.Logger().Fatal(err)
+	}
+
 	wg := sync.WaitGroup{}
 
 	// Start Metrics Server
