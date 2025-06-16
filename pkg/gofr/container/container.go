@@ -87,11 +87,11 @@ func NewContainer(conf config.Config) *Container {
 }
 
 func (c *Container) Create(conf config.Config) {
-	if c.appName != "" {
+	if c.appName == "" {
 		c.appName = conf.GetOrDefault("APP_NAME", "gofr-app")
 	}
 
-	if c.appVersion != "" {
+	if c.appVersion == "" {
 		c.appVersion = conf.GetOrDefault("APP_VERSION", "dev")
 	}
 
