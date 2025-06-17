@@ -37,12 +37,12 @@ type OAuthConfig struct {
 	AuthStyle oauth2.AuthStyle
 }
 
-func NewOAuthConfig(clientID, clientSecret, tokenURL string, scopes []string, params url.Values, authStyle oauth2.AuthStyle) (Options, error) {
+func NewOAuthConfig(clientID, secret, tokenURL string, scopes []string, params url.Values, authStyle oauth2.AuthStyle) (Options, error) {
 	if clientID == "" {
 		return nil, OAuthErr{nil, "client id is mandatory"}
 	}
 
-	if clientSecret == "" {
+	if secret == "" {
 		return nil, OAuthErr{nil, "client secret is mandatory"}
 	}
 
@@ -52,7 +52,7 @@ func NewOAuthConfig(clientID, clientSecret, tokenURL string, scopes []string, pa
 
 	config := OAuthConfig{
 		ClientID:       clientID,
-		ClientSecret:   clientSecret,
+		ClientSecret:   secret,
 		TokenURL:       tokenURL,
 		Scopes:         scopes,
 		EndpointParams: params,

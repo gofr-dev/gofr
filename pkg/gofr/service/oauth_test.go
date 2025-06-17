@@ -3,7 +3,6 @@ package service
 import (
 	"context"
 	"errors"
-	"golang.org/x/oauth2"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -14,6 +13,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.opentelemetry.io/otel"
+	"golang.org/x/oauth2"
 
 	"gofr.dev/pkg/gofr/logging"
 )
@@ -260,7 +260,6 @@ func TestHttpService_NewOAuthConfig(t *testing.T) {
 		assert.Equal(t, tc.params, oAuthConfig.EndpointParams, "failed test case #%d", i)
 		assert.Equal(t, tc.scopes, oAuthConfig.Scopes, "failed test case #%d", i)
 		assert.Equal(t, tc.authStyle, oAuthConfig.AuthStyle, "failed test case #%d", i)
-
 	}
 }
 
