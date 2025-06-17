@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"gofr.dev/pkg/gofr/datasource/pubsub/eventhub"
 	"time"
 
 	"gofr.dev/pkg/gofr/container"
@@ -52,6 +53,13 @@ func (ds pubsubDS) apply(m migrator) migrator {
 }
 
 func (pm pubsubMigrator) checkAndCreateMigrationTable(c *container.Container) error {
+	// Check if we're using Event Hub
+	if _, isEventHub := c.PubSub.(*eventhub.Client); isEventHub {
+		// For Event Hub, we don't create topics as it's not supported
+		c.Debug("Using existing Event Hub for migrations, topic creation skipped")
+		return pm.migrator.checkAndCreateMigrationTable(c)
+	}
+
 	err := pm.CreateTopic(context.Background(), pubsubMigrationTopic)
 	if err != nil {
 		c.Debug("Migration topic might already exist:", err)
@@ -62,11 +70,18 @@ func (pm pubsubMigrator) checkAndCreateMigrationTable(c *container.Container) er
 
 func (pubsubMigrator) getLastMigration(c *container.Container) int64 {
 	var lastVersion int64
+	var queryTopic string
+
+	if client, isEventHub := c.PubSub.(*eventhub.Client); isEventHub {
+		queryTopic = client.GetEventHubName() // You'll need to add this method to your Client
+	} else {
+		queryTopic = pubsubMigrationTopic
+	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), migrationTimeout)
 	defer cancel()
 
-	result, err := c.PubSub.Query(ctx, pubsubMigrationTopic, int64(0), defaultQueryLimit)
+	result, err := c.PubSub.Query(ctx, queryTopic, int64(0), defaultQueryLimit)
 	if err != nil {
 		c.Errorf("Error querying migration topic: %v", err)
 
@@ -77,15 +92,18 @@ func (pubsubMigrator) getLastMigration(c *container.Container) int64 {
 		return lastVersion
 	}
 
+	lines := bytes.Split(result, []byte("\n"))
 	var records []migrationRecord
 
-	decoder := json.NewDecoder(bytes.NewReader(result))
+	for _, line := range lines {
+		if len(line) == 0 {
+			continue
+		}
 
-	for decoder.More() {
 		var rec migrationRecord
-		if err := decoder.Decode(&rec); err != nil {
-			c.Errorf("Error decoding JSON stream: %v", err)
-			break
+		if err := json.Unmarshal(line, &rec); err != nil {
+			c.Errorf("Error decoding JSON: %v for line: %s", err, string(line))
+			continue
 		}
 
 		records = append(records, rec)
@@ -116,7 +134,12 @@ func (pm pubsubMigrator) commitMigration(c *container.Container, data transactio
 		return err
 	}
 
-	err = c.PubSub.Publish(context.Background(), pubsubMigrationTopic, recordBytes)
+	publishTopic := pubsubMigrationTopic
+	if client, isEventHub := c.PubSub.(*eventhub.Client); isEventHub {
+		publishTopic = client.GetEventHubName()
+	}
+
+	err = c.PubSub.Publish(context.Background(), publishTopic, recordBytes)
 	if err != nil {
 		return err
 	}

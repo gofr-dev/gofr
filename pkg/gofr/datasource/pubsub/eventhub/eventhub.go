@@ -22,7 +22,10 @@ var (
 	ErrNoMsgReceived      = errors.New("no message received")
 	ErrTopicMismatch      = errors.New("topic should be same as Event Hub name")
 	errClientNotConnected = errors.New("eventhub client not connected")
+	errEmptyTopic         = errors.New("topic name cannot be empty")
 )
+
+const defaultQueryTimeout = 30 * time.Second
 
 type Config struct {
 	ConnectionString          string
@@ -349,8 +352,13 @@ func (c *Client) Health() datasource.Health {
 	return datasource.Health{}
 }
 
-func (c *Client) CreateTopic(context.Context, string) error {
-	c.logger.Error("topic creation is not supported in Event Hub")
+func (c *Client) CreateTopic(_ context.Context, name string) error {
+	// For Event Hub, creating topics is not supported, but we don't want to fail migrations
+	if name == "gofr_migrations" {
+		return nil
+	}
+
+	c.logger.Debug("topic creation is not supported in Event Hub")
 
 	return nil
 }
@@ -359,6 +367,38 @@ func (c *Client) DeleteTopic(context.Context, string) error {
 	c.logger.Error("topic deletion is not supported in Event Hub")
 
 	return nil
+}
+
+// Query retrieves messages from Azure Event Hub.
+func (c *Client) Query(ctx context.Context, query string, args ...any) ([]byte, error) {
+	if c.consumer == nil {
+		return nil, errClientNotConnected
+	}
+
+	if query == "" {
+		return nil, errEmptyTopic
+	}
+
+	if query != c.cfg.EventhubName {
+		return nil, ErrTopicMismatch
+	}
+
+	startPosition, limit := c.parseQueryArgs(args...)
+
+	// Use provided context or add default timeout
+	readCtx := ctx
+
+	if _, hasDeadline := ctx.Deadline(); !hasDeadline {
+		var cancel context.CancelFunc
+		readCtx, cancel = context.WithTimeout(ctx, defaultQueryTimeout)
+		defer cancel()
+	}
+
+	return c.readMessages(readCtx, startPosition, limit)
+}
+
+func (c *Client) GetEventHubName() string {
+	return c.cfg.EventhubName
 }
 
 func (c *Client) Close() error {
