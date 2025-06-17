@@ -67,19 +67,22 @@ func validateTokenURL(tokenURL string) error {
 		return OAuthErr{nil, "token url is mandatory"}
 	}
 
-	if u, err2 := url.Parse(tokenURL); err2 != nil {
-		return OAuthErr{err2, "error in token URL"}
-	} else if u.Host == "" || u.Scheme == "" {
-		return OAuthErr{err2, "empty host"}
-	} else if strings.Contains(u.Host, "..") {
-		return OAuthErr{nil, "invalid host pattern, contains `..`"}
-	} else if strings.HasSuffix(u.Host, ".") {
-		return OAuthErr{nil, "invalid host pattern, ends with `.`"}
-	} else if u.Scheme != "http" && u.Scheme != "https" {
-		return OAuthErr{nil, "invalid scheme, allowed http and https only"}
-	}
+	u, err2 := url.Parse(tokenURL)
 
-	return nil
+	switch {
+	case err2 != nil:
+		return OAuthErr{err2, "error in token URL"}
+	case u.Host == "" || u.Scheme == "":
+		return OAuthErr{err2, "empty host"}
+	case strings.Contains(u.Host, ".."):
+		return OAuthErr{nil, "invalid host pattern, contains `..`"}
+	case strings.HasSuffix(u.Host, "."):
+		return OAuthErr{nil, "invalid host pattern, ends with `.`"}
+	case u.Scheme != "http" && u.Scheme != "https":
+		return OAuthErr{nil, "invalid scheme, allowed http and https only"}
+	default:
+		return nil
+	}
 }
 
 func (h *OAuthConfig) AddOption(svc HTTP) HTTP {
