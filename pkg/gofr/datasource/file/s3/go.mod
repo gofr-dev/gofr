@@ -9,7 +9,7 @@ require (
 	github.com/aws/aws-sdk-go-v2/service/s3 v1.80.0
 	github.com/stretchr/testify v1.10.0
 	go.uber.org/mock v0.5.2
-	gofr.dev v1.40.0
+	gofr.dev v1.41.0
 )
 
 require (
