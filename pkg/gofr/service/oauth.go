@@ -32,7 +32,7 @@ type OAuthConfig struct {
 	// EndpointParams specifies additional parameters for requests to the token endpoint.
 	EndpointParams url.Values
 
-	// AuthStyle specifies the method for passing the auth information to retrieve the token.
+	// AuthStyle represents how requests for tokens are authenticated to the server
 	// Defaults to oauth2.AuthStyleAutoDetect
 	AuthStyle oauth2.AuthStyle
 }
