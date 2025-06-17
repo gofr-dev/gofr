@@ -249,8 +249,8 @@ go.uber.org/multierr v1.6.0/go.mod h1:cdWPpRnG4AhwMwsgIHip0KRBQjJy5kYEpYjJxpXp9i
 go.uber.org/zap v1.18.1/go.mod h1:xg/QME4nWcxGxrpdeYfq7UvYrLh66cuVKdrbD1XF/NI=
 gofr.dev v1.41.0 h1:n/7uhDerYUqYmNC5qul4qRlJY+rIpS56DV7mRM4QSCA=
 gofr.dev v1.41.0/go.mod h1:3C6iPCnJw3kWkv1mbyWEtOHS/ECzQm4bHO7GlFvFONc=
-gofr.dev/pkg/gofr/datasource/file/ftp v0.2.0 h1:ShKboF8CSEKyYPGGpIv9+Z0dpckO0iNdkUjkfKMASuA=
-gofr.dev/pkg/gofr/datasource/file/ftp v0.2.0/go.mod h1:8UJ0I3+4wtzjOVf54QDVCGnkLzh3VfInWCVhdoNFqDU=
+gofr.dev/pkg/gofr/datasource/file/ftp v0.2.1 h1:yQSUXbapNcQRFg2Po73/6N4pu15FIxTGHQhAIqbmSCU=
+gofr.dev/pkg/gofr/datasource/file/ftp v0.2.1/go.mod h1:KPYuFBGSajIsooC6aiHDg41/+gO+5NKzkIG8D+h1RhM=
 golang.org/x/crypto v0.0.0-20190308221718-c2843e01d9a2/go.mod h1:djNgcEr1/C05ACkg1iLfiJU5Ep61QUkGW8qpdssI0+w=
 golang.org/x/crypto v0.0.0-20191011191535-87dc89f01550/go.mod h1:yigFU9vqHzYiE8UmvKecakEJjdnWj3jj499lnFckfCI=
 golang.org/x/crypto v0.0.0-20200622213623-75b288015ac9/go.mod h1:LzIPMQfyMNhhGPhUkYOs5KpL4U8rLKemX1yGLhDgUto=
