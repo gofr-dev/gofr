@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"errors"
+	"golang.org/x/oauth2"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -35,7 +36,7 @@ func oAuthHTTPServer(t *testing.T) *httptest.Server {
 
 	// Start a test HTTP server
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		header := r.Header.Get("Authorization")
+		header := r.Header.Get(AuthHeader)
 		token := strings.Split(header, " ")
 
 		parsedToken, _ := jwt.Parse(token[1], func(*jwt.Token) (any, error) {
@@ -226,31 +227,40 @@ func TestHttpService_NewOAuthConfig(t *testing.T) {
 		tokenURL     string
 		scopes       []string
 		params       url.Values
+		authStyle    oauth2.AuthStyle
 		err          error
 	}{
-		{"", "", "", nil, nil, OAuthErr{nil, "client id is mandatory"}},
-		{clientID, "", "", nil, nil, OAuthErr{nil, "client secret is mandatory"}},
-		{clientID, "", tokenURL, nil, nil, OAuthErr{nil, "client secret is mandatory"}},
-		{clientID, clientSecret, "", nil, nil, OAuthErr{nil, "token url is mandatory"}},
-		{clientID, clientSecret, tokenURL, nil, nil, nil},
-		{clientID, "some_random_client_secret", tokenURL, nil, nil, nil},
-		{"some_random_client_id", clientSecret, tokenURL, nil, nil, nil},
-		{clientID, clientSecret, "invalid_url_format", nil, nil, OAuthErr{nil, "empty host"}},
+		{"", "", "", nil, nil, 0, OAuthErr{nil, "client id is mandatory"}},
+		{clientID, "", "", nil, nil, 0, OAuthErr{nil, "client secret is mandatory"}},
+		{clientID, "", tokenURL, nil, nil, 0, OAuthErr{nil, "client secret is mandatory"}},
+		{clientID, clientSecret, "", nil, nil, 0, OAuthErr{nil, "token url is mandatory"}},
+		{clientID, clientSecret, "invalid_url_format", nil, nil, 0, OAuthErr{nil, "empty host"}},
+		{clientID, clientSecret, tokenURL, nil, nil, 0, nil},
+		{clientID, "some_random_client_secret", tokenURL, nil, nil, 0, nil},
+		{"some_random_client_id", clientSecret, tokenURL, nil, nil, 0, nil},
+		{clientID, clientSecret, tokenURL, nil, nil, 1, nil},
+		{clientID, "some_random_client_secret", tokenURL, nil, nil, 1, nil},
+		{"some_random_client_id", clientSecret, tokenURL, nil, nil, 2, nil},
 	}
 
 	for i, tc := range testCases {
-		config, err := NewOAuthConfig(tc.clientID, tc.clientSecret, tc.tokenURL, tc.scopes, tc.params)
+		config, err := NewOAuthConfig(tc.clientID, tc.clientSecret, tc.tokenURL, tc.scopes, tc.params, tc.authStyle)
 		assert.Equal(t, tc.err, err, "failed test case #%d", i)
 
-		if tc.err == nil {
-			oAuthConfig, ok := config.(*OAuthConfig)
-			assert.True(t, ok, "failed to get OAuthConfig for testcase #%d", i)
-			assert.Equal(t, tc.clientID, oAuthConfig.ClientID, "failed test case #%d", i)
-			assert.Equal(t, tc.clientSecret, oAuthConfig.ClientSecret, "failed test case #%d", i)
-			assert.Equal(t, tc.tokenURL, oAuthConfig.TokenURL, "failed test case #%d", i)
-			assert.Equal(t, tc.params, oAuthConfig.EndpointParams, "failed test case #%d", i)
-			assert.Equal(t, tc.scopes, oAuthConfig.Scopes, "failed test case #%d", i)
+		if tc.err != nil {
+			assert.Empty(t, config, "failed test case #%d", i)
+			continue
 		}
+
+		oAuthConfig, ok := config.(*OAuthConfig)
+		assert.True(t, ok, "failed to get OAuthConfig for testcase #%d", i)
+		assert.Equal(t, tc.clientID, oAuthConfig.ClientID, "failed test case #%d", i)
+		assert.Equal(t, tc.clientSecret, oAuthConfig.ClientSecret, "failed test case #%d", i)
+		assert.Equal(t, tc.tokenURL, oAuthConfig.TokenURL, "failed test case #%d", i)
+		assert.Equal(t, tc.params, oAuthConfig.EndpointParams, "failed test case #%d", i)
+		assert.Equal(t, tc.scopes, oAuthConfig.Scopes, "failed test case #%d", i)
+		assert.Equal(t, tc.authStyle, oAuthConfig.AuthStyle, "failed test case #%d", i)
+
 	}
 }
 

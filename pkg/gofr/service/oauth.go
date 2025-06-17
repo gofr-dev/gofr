@@ -31,9 +31,13 @@ type OAuthConfig struct {
 
 	// EndpointParams specifies additional parameters for requests to the token endpoint.
 	EndpointParams url.Values
+
+	// AuthStyle specifies the method for passing the auth information to retrieve the token.
+	// Defaults to oauth2.AuthStyleAutoDetect
+	AuthStyle oauth2.AuthStyle
 }
 
-func NewOAuthConfig(clientID, clientSecret, tokenURL string, scopes []string, params url.Values) (Options, error) {
+func NewOAuthConfig(clientID, clientSecret, tokenURL string, scopes []string, params url.Values, authStyle oauth2.AuthStyle) (Options, error) {
 	if clientID == "" {
 		return nil, OAuthErr{nil, "client id is mandatory"}
 	}
@@ -52,6 +56,7 @@ func NewOAuthConfig(clientID, clientSecret, tokenURL string, scopes []string, pa
 		TokenURL:       tokenURL,
 		Scopes:         scopes,
 		EndpointParams: params,
+		AuthStyle:      authStyle,
 	}
 
 	return &config, nil
@@ -85,7 +90,7 @@ func (h *OAuthConfig) AddOption(svc HTTP) HTTP {
 			TokenURL:       h.TokenURL,
 			Scopes:         h.Scopes,
 			EndpointParams: h.EndpointParams,
-			AuthStyle:      oauth2.AuthStyleInHeader,
+			AuthStyle:      h.AuthStyle,
 		},
 		HTTP: svc,
 	}
