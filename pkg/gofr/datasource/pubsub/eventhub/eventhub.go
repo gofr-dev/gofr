@@ -358,7 +358,7 @@ func (c *Client) CreateTopic(_ context.Context, name string) error {
 		return nil
 	}
 
-	c.logger.Debug("topic creation is not supported in Event Hub")
+	c.logger.Error("topic creation is not supported in Event Hub")
 
 	return nil
 }
