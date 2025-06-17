@@ -13,7 +13,7 @@ const createTable = `CREATE TABLE IF NOT EXISTS employee
     contact_number varchar(10) not null
 );`
 
-const employee_date = `INSERT INTO employee (id, name, gender, contact_number) VALUES (1, 'Umang', "M", "0987654321");`
+const employee_date = `INSERT INTO employee (id, name, gender, contact_number) VALUES (1, 'Umang', 'M', '0987654321');`
 
 func createTableEmployee() migration.Migrate {
 	return migration.Migrate{
