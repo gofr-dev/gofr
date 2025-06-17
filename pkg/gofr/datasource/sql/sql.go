@@ -56,6 +56,11 @@ func NewSQL(configs config.Config, logger datasource.Logger, metrics Metrics) *D
 		setupSupabaseDefaults(dbConfig, configs)
 	}
 
+	// if Hostname is not provided, we won't try to connect to DB
+	if dbConfig.Dialect != sqlite && dbConfig.HostName == "" {
+		logger.Errorf("connection to %s failed: host name is empty.", dbConfig.Dialect)
+	}
+
 	if dbConfig.Dialect == "" {
 		return nil
 	}
