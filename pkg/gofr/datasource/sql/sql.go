@@ -17,11 +17,13 @@ import (
 
 const (
 	sqlite         = "sqlite"
+	cockroachDB    = "cockroachdb"
 	defaultDBPort  = 3306
 	requireSSLMode = "require"
 )
 
-var errUnsupportedDialect = fmt.Errorf("unsupported db dialect; supported dialects are - mysql, postgres, supabase, sqlite, cockroachdb")
+var errUnsupportedDialect = fmt.Errorf(
+	"unsupported db dialect; supported dialects are - mysql, postgres, supabase, sqlite, %s", cockroachDB)
 
 // DBConfig has those members which are necessary variables while connecting to database.
 type DBConfig struct {
@@ -111,7 +113,7 @@ func registerOtel(dialect string, logger datasource.Logger) (string, error) {
 	// to ensure compatibility with OpenTelemetry instrumentation.
 	otelSupportedDialect := dialect
 
-	if dialect == supabaseDialect || dialect == "cockroachdb" {
+	if dialect == supabaseDialect || dialect == cockroachDB {
 		logger.Debugf("using '%s' as an alias for '%s' for otel-sql registration", dialectPostgres, dialect)
 		otelSupportedDialect = dialectPostgres
 	}
@@ -207,7 +209,7 @@ func getDBConnectionString(dbConfig *DBConfig) (string, error) {
 			dbConfig.Database,
 			dbConfig.Charset,
 		), nil
-	case dialectPostgres, supabaseDialect, "cockroachdb":
+	case dialectPostgres, supabaseDialect, cockroachDB:
 		return fmt.Sprintf("host=%s port=%s user=%s password=%s dbname=%s sslmode=%s",
 			dbConfig.HostName, dbConfig.Port, dbConfig.User, dbConfig.Password, dbConfig.Database, dbConfig.SSLMode), nil
 	case sqlite:
