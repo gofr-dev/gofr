@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"go.opentelemetry.io/otel"
 
 	"gofr.dev/pkg/gofr/datasource"
 	"gofr.dev/pkg/gofr/logging"
@@ -14,12 +15,6 @@ func TestHealth_HealthCheck(t *testing.T) {
 	defer db.DB.Close()
 
 	mock.ExpectPing()
-
-	db.config = &DBConfig{
-		HostName: "host",
-		Port:     "3306",
-		Database: "test",
-	}
 
 	expected := &datasource.Health{
 		Status: "UP",
@@ -40,28 +35,22 @@ func TestHealth_HealthCheck(t *testing.T) {
 	}
 
 	out := db.HealthCheck()
-
 	assert.Equal(t, expected, out)
 }
 
 func TestHealth_HealthCheckDBNotConnected(t *testing.T) {
 	db := &DB{
-		config: &DBConfig{
-			HostName: "host",
-			Port:     "3306",
-			Database: "test",
-		},
+		config: &DBConfig{HostName: "host", Port: "3306", Database: "test"},
+		logger: logging.NewMockLogger(logging.INFO),
+		tracer: otel.Tracer("test-sql"),
 	}
 
 	expected := &datasource.Health{
-		Status: "DOWN",
-		Details: map[string]any{
-			"host": "host:3306/test",
-		},
+		Status:  "DOWN",
+		Details: map[string]any{"host": "host:3306/test"},
 	}
 
 	out := db.HealthCheck()
-
 	assert.Equal(t, expected, out)
 }
 
@@ -71,20 +60,11 @@ func TestHealth_HealthCheckDBPingFailed(t *testing.T) {
 
 	mock.ExpectPing().WillReturnError(errDB)
 
-	db.config = &DBConfig{
-		HostName: "host",
-		Port:     "3306",
-		Database: "test",
-	}
-
 	expected := &datasource.Health{
-		Status: "DOWN",
-		Details: map[string]any{
-			"host": "host:3306/test",
-		},
+		Status:  "DOWN",
+		Details: map[string]any{"host": "host:3306/test"},
 	}
 
 	out := db.HealthCheck()
-
 	assert.Equal(t, expected, out)
 }

@@ -31,35 +31,43 @@ func (d *DB) HealthCheck() *datasource.Health {
 	h.Details["host"] = d.config.HostName + ":" + d.config.Port + "/" + d.config.Database
 
 	if d.DB == nil {
+		d.logger.Warn("HealthCheck: DB connection is nil")
 		h.Status = datasource.StatusDown
-
 		return &h
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 	defer cancel()
 
-	err := d.PingContext(ctx)
-	if err != nil {
-		h.Status = datasource.StatusDown
+	ctx, span := d.tracer.Start(ctx, "DB.HealthCheck")
+	defer span.End()
 
+	d.logger.Debug("HealthCheck: pinging database...")
+
+	if err := d.PingContext(ctx); err != nil {
+		d.logger.Errorf("HealthCheck: DB ping failed, error: %v", err)
+		h.Status = datasource.StatusDown
 		return &h
 	}
 
+	d.logger.Debug("HealthCheck: ping successful. Collecting stats.")
+
 	h.Status = datasource.StatusUp
 
-	dbStats := d.Stats()
+	stats := d.Stats()
 	h.Details["stats"] = DBStats{
-		MaxOpenConnections: dbStats.MaxOpenConnections,
-		OpenConnections:    dbStats.OpenConnections,
-		InUse:              dbStats.InUse,
-		Idle:               dbStats.Idle,
-		WaitCount:          dbStats.WaitCount,
-		WaitDuration:       dbStats.WaitDuration,
-		MaxIdleClosed:      dbStats.MaxIdleClosed,
-		MaxIdleTimeClosed:  dbStats.MaxIdleTimeClosed,
-		MaxLifetimeClosed:  dbStats.MaxLifetimeClosed,
+		MaxOpenConnections: stats.MaxOpenConnections,
+		OpenConnections:    stats.OpenConnections,
+		InUse:              stats.InUse,
+		Idle:               stats.Idle,
+		WaitCount:          stats.WaitCount,
+		WaitDuration:       stats.WaitDuration,
+		MaxIdleClosed:      stats.MaxIdleClosed,
+		MaxIdleTimeClosed:  stats.MaxIdleTimeClosed,
+		MaxLifetimeClosed:  stats.MaxLifetimeClosed,
 	}
+
+	d.logger.Debugf("HealthCheck: stats collected: %+v", h.Details["stats"])
 
 	return &h
 }
