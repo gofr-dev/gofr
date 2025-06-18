@@ -35,12 +35,12 @@ type ServiceConfigs struct {
 }
 
 // Get implements config.Config.
-func (s *ServiceConfigs) Get(string) string {
+func (*ServiceConfigs) Get(string) string {
 	return ""
 }
 
 // GetOrDefault implements config.Config.
-func (s *ServiceConfigs) GetOrDefault(string, string) string {
+func (*ServiceConfigs) GetOrDefault(string, string) string {
 	return ""
 }
 
