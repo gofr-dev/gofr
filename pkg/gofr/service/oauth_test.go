@@ -4,87 +4,23 @@ import (
 	"context"
 	"errors"
 	"net/http"
-	"net/http/httptest"
 	"net/url"
 	"strings"
 	"testing"
 
-	"github.com/golang-jwt/jwt/v5"
 	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
-	"go.opentelemetry.io/otel"
 	"golang.org/x/oauth2"
-
-	"gofr.dev/pkg/gofr/logging"
 )
-
-// #nosec G101
-const clientID = "0iyeGcLYWudLGqZfD6HvOdZHZ5TlciAJ"
-
-// #nosec G101
-const clientSecret = "GQXTY2f9186nUS3C9WWi7eJz8-iVEsxq7lKxdjfhOJbsEPPtEszL3AxFn8k_NAER"
-
-// #nosec G101
-const tokenURL = "https://dev-zq6tvaxf3v7p0g7j.us.auth0.com/oauth/token"
 
 var err1 = errors.New("unsupported protocol scheme \"\"")
 
 var err2 = errors.New("unsupported protocol scheme \"abc\"")
 
-func oAuthHTTPServer(t *testing.T) *httptest.Server {
-	t.Helper()
-
-	// Start a test HTTP server
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		header := r.Header.Get(AuthHeader)
-		token := strings.Split(header, " ")
-
-		parsedToken, _ := jwt.Parse(token[1], func(*jwt.Token) (any, error) {
-			return []byte("my-secret-key"), nil
-		})
-
-		claims, _ := parsedToken.Claims.GetAudience()
-
-		assert.Equal(t, "https://dev-zq6tvaxf3v7p0g7j.us.auth0.com/api/v2/", claims[0])
-
-		w.WriteHeader(http.StatusOK)
-	}))
-
-	return server
-}
-
-func setupHTTPService(serviceURL string) httpService {
-	return httpService{
-		Client: &http.Client{},
-		url:    serviceURL,
-		Tracer: otel.Tracer("gofr-http-client"),
-		Logger: logging.NewMockLogger(logging.DEBUG),
-	}
-}
-
-func setupHTTPServiceTestServerForOAuth(server *httptest.Server, tokenURL string) HTTP {
-	// Initialize HTTP service with custom transport, URL, tracer, logger, and metrics
-	service := setupHTTPService(server.URL)
-
-	// oAuth configuration
-	oauthConfig := OAuthConfig{
-		ClientID:     clientID,
-		ClientSecret: clientSecret,
-		TokenURL:     tokenURL,
-		EndpointParams: map[string][]string{
-			"audience": {"https://dev-zq6tvaxf3v7p0g7j.us.auth0.com/api/v2/"},
-		},
-	}
-
-	// Apply oAuth option to the HTTP service
-	httpSvc := oauthConfig.AddOption(&service)
-
-	return httpSvc
-}
-
 func TestHttpService_RequestsOAuth(t *testing.T) {
-	server := oAuthHTTPServer(t)
-	defer server.Close()
+	server := setupOAuthHTTPServer(t)
+	defer server.httpServer.Close()
+
+	tokenURL := server.getTokenURL()
 
 	invalidURL := "abc://invalid-url"
 
@@ -132,18 +68,8 @@ func TestHttpService_RequestsOAuth(t *testing.T) {
 
 		var err error
 
-		oauthConfig := OAuthConfig{
-			ClientID:     clientID,
-			ClientSecret: clientSecret,
-			TokenURL:     tc.tokenURL,
-			EndpointParams: map[string][]string{
-				"audience": {"https://dev-zq6tvaxf3v7p0g7j.us.auth0.com/api/v2/"},
-			},
-		}
-
-		httpService := setupHTTPService(server.URL)
-		// Apply oAuth option to the HTTP service
-		service := oauthConfig.AddOption(&httpService)
+		service := server.httpService()
+		service = getOAuthService(service, server.clientID, server.clientSecret, tc.tokenURL, server.audienceClaim)
 
 		switch tc.method {
 		case http.MethodGet:
@@ -161,11 +87,14 @@ func TestHttpService_RequestsOAuth(t *testing.T) {
 			resp, err = callHTTPServicePatch(t.Context(), service, tc.headers)
 		}
 
-		require.Equal(t, tc.err, err)
+		assert.Equalf(t, tc.err, err, "failed test case #%d", i)
 
-		if err == nil {
-			assert.Equal(t, tc.statusCode, resp.StatusCode, "failed test case #%d", i)
-			_ = resp.Body.Close()
+		if resp != nil {
+			assert.Equalf(t, tc.statusCode, resp.StatusCode, "failed test case #%d", i)
+
+			if err = resp.Body.Close(); err != nil {
+				t.Logf("error in closing response %v", err)
+			}
 		}
 	}
 }
@@ -221,6 +150,13 @@ func callHTTPServiceDelete(ctx context.Context, service HTTP, headers bool) (res
 }
 
 func TestHttpService_NewOAuthConfig(t *testing.T) {
+	server := setupOAuthHTTPServer(t)
+	defer server.httpServer.Close()
+
+	tokenURL := server.getTokenURL()
+	clientID := server.clientID
+	clientSecret := server.clientSecret
+
 	testCases := []struct {
 		clientID     string
 		clientSecret string
@@ -289,6 +225,11 @@ func TestHttpService_validateTokenURL(t *testing.T) {
 }
 
 func TestHttpService_addAuthorizationHeader(t *testing.T) {
+	server := setupOAuthHTTPServer(t)
+	defer server.httpServer.Close()
+
+	tokenURL := server.getTokenURL()
+
 	emptyHeaders := map[string]string{}
 	headerWithAuth := map[string]string{AuthHeader: "Value"}
 	headerWithEmptyAuth := map[string]string{AuthHeader: ""}
@@ -296,6 +237,7 @@ func TestHttpService_addAuthorizationHeader(t *testing.T) {
 	headerWithEmptyAuthAndOtherValues := map[string]string{"Content Type": "Value", AuthHeader: ""}
 	tokenURLError := &url.Error{Op: "Post", URL: "", Err: err1}
 	authHeaderExistsError := OAuthErr{Message: "auth header already exists Value"}
+
 	testCases := []struct {
 		ctx      context.Context
 		tokenURL string
@@ -311,11 +253,8 @@ func TestHttpService_addAuthorizationHeader(t *testing.T) {
 		{t.Context(), tokenURL, headerWithEmptyAuthAndOtherValues, headerWithoutAuth, nil},
 	}
 
-	server := oAuthHTTPServer(t)
-	defer server.Close()
-
 	for i, tc := range testCases {
-		service, ok := setupHTTPServiceTestServerForOAuth(server, tc.tokenURL).(*oAuth)
+		service, ok := getOAuthService(server.httpService(), server.clientID, server.clientSecret, tc.tokenURL, server.audienceClaim).(*oAuth)
 		assert.True(t, ok, "unable to get oAuth object for test case #%d", i)
 
 		headers, err := service.addAuthorizationHeader(tc.ctx, tc.headers)
