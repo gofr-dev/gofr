@@ -10,6 +10,7 @@ import (
 	"github.com/DATA-DOG/go-sqlmock"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"go.opentelemetry.io/otel"
 	"go.uber.org/mock/gomock"
 
 	"gofr.dev/pkg/gofr/logging"
@@ -30,8 +31,12 @@ func getDB(t *testing.T, logLevel logging.Level) (*DB, sqlmock.Sqlmock) {
 		t.Fatalf("an error '%s' was not expected when opening a stub database connection", err)
 	}
 
-	db := &DB{mockDB, logging.NewMockLogger(logLevel), nil, nil}
-	db.config = &DBConfig{}
+	db := &DB{
+		DB:     mockDB,
+		logger: logging.NewMockLogger(logLevel),
+		tracer: otel.Tracer("test-sql"),
+		config: &DBConfig{HostName: "host", Port: "3306", Database: "test"},
+	}
 
 	return db, mock
 }

@@ -13,6 +13,7 @@ import (
 	"strings"
 	"time"
 
+	"go.opentelemetry.io/otel/trace"
 	"gofr.dev/pkg/gofr/datasource"
 )
 
@@ -23,6 +24,7 @@ type DB struct {
 	logger  datasource.Logger
 	config  *DBConfig
 	metrics Metrics
+	tracer  trace.Tracer
 }
 
 type Log struct {
