@@ -2,7 +2,6 @@ package sql
 
 import (
 	"fmt"
-
 	"strings"
 
 	"gofr.dev/pkg/gofr/config"

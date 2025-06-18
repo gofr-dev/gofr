@@ -121,7 +121,6 @@ func TestConfigureSupabaseConnection(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-
 			logs := testutil.StdoutOutputForFunc(func() {
 				mockLogger := logging.NewMockLogger(logging.DEBUG)
 
@@ -501,10 +500,9 @@ func TestNewSupabaseSQL(t *testing.T) {
 			// We expect metrics to be set regardless of the result
 			mockMetrics.EXPECT().SetGauge(gomock.Any(), gomock.Any()).AnyTimes()
 
-			var result *DB
 			logs := testutil.StdoutOutputForFunc(func() {
 				mockLogger := logging.NewMockLogger(logging.DEBUG)
-				result = NewSupabaseSQL(mockConfig, mockLogger, mockMetrics)
+				result := NewSupabaseSQL(mockConfig, mockLogger, mockMetrics)
 
 				if tc.expectNil {
 					assert.Nil(t, result)
