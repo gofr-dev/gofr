@@ -8,7 +8,7 @@ require (
 	github.com/stretchr/testify v1.10.0
 	go.uber.org/mock v0.5.2
 	gofr.dev v1.41.0
-	gofr.dev/pkg/gofr/datasource/file/ftp v0.2.0
+	gofr.dev/pkg/gofr/datasource/file/ftp v0.2.1
 )
 
 require (
