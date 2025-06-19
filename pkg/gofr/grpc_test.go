@@ -23,8 +23,8 @@ func TestNewGRPCServer(t *testing.T) {
 	c := container.Container{
 		Logger: logging.NewLogger(logging.DEBUG),
 	}
-
-	g := newGRPCServer(&c, 9999)
+	cfg := testutil.NewServerConfigs(t)
+	g := newGRPCServer(&c, 9999, cfg)
 
 	assert.NotNil(t, g, "TEST Failed.\n")
 }
@@ -76,8 +76,8 @@ func TestGRPC_ServerShutdown(t *testing.T) {
 	c := container.Container{
 		Logger: logging.NewLogger(logging.DEBUG),
 	}
-
-	g := newGRPCServer(&c, 9999)
+	cfg := testutil.NewServerConfigs(t)
+	g := newGRPCServer(&c, 9999, cfg)
 
 	go g.Run(&c)
 
@@ -96,8 +96,8 @@ func TestGRPC_ServerShutdown_ContextCanceled(t *testing.T) {
 	c := container.Container{
 		Logger: logging.NewLogger(logging.DEBUG),
 	}
-
-	g := newGRPCServer(&c, 9999)
+	cfg := testutil.NewServerConfigs(t)
+	g := newGRPCServer(&c, 9999, cfg)
 
 	go g.Run(&c)
 
@@ -185,7 +185,8 @@ func TestGRPC_Shutdown_BeforeStart(t *testing.T) {
 	logger := logging.NewLogger(logging.DEBUG)
 	c := &container.Container{Logger: logger}
 
-	g := newGRPCServer(c, 9999)
+	cfg := testutil.NewServerConfigs(t)
+	g := newGRPCServer(c, 9999, cfg)
 
 	ctx, cancel := context.WithTimeout(t.Context(), 500*time.Millisecond)
 	defer cancel()
@@ -254,4 +255,19 @@ func TestGRPC_ServerRun_WithInterceptorAndOptions(t *testing.T) {
 
 	// Verify interceptors were called in order
 	assert.Equal(t, []string{"interceptor1", "interceptor2"}, interceptorExecutions)
+}
+
+func TestApp_WithReflection(t *testing.T) {
+	c := &container.Container{
+		Logger: logging.NewLogger(logging.DEBUG),
+	}
+	app := New()
+	app.container = c
+	cfg := testutil.NewServerConfigs(t)
+	app.grpcServer = newGRPCServer(c, 9999, cfg)
+	app.grpcServer.createServer()
+
+	services := app.grpcServer.server.GetServiceInfo()
+	_, ok := services["grpc.reflection.v1alpha.ServerReflection"]
+	assert.True(t, ok, "reflection service should be registered")
 }
