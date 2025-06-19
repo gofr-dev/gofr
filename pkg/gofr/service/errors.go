@@ -8,13 +8,14 @@ type OAuthErr struct {
 }
 
 func (o OAuthErr) Error() string {
-	if o.Message == "" && o.Err == nil {
+	switch {
+	case o.Message == "" && o.Err == nil:
 		return "unknown error"
-	} else if o.Message == "" {
+	case o.Message == "":
 		return o.Err.Error()
-	} else if o.Err == nil {
+	case o.Err == nil:
 		return o.Message
+	default:
+		return errors.Wrap(o.Err, o.Message).Error()
 	}
-
-	return errors.Wrap(o.Err, o.Message).Error()
 }
