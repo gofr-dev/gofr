@@ -36,7 +36,7 @@ func GetSupabaseConfig(configs config.Config) *SupabaseConfig {
 		return nil
 	}
 
-	dbConfig.SSLMode = configs.GetOrDefault("DB_SSL_MODE", "require")
+	dbConfig.SSLMode = requireSSLMode // Enforce SSL mode for Supabase
 
 	connectionType := strings.ToLower(configs.GetOrDefault("SUPABASE_CONNECTION_TYPE", "direct"))
 	projectRef := configs.Get("SUPABASE_PROJECT_REF")
@@ -45,9 +45,7 @@ func GetSupabaseConfig(configs config.Config) *SupabaseConfig {
 	// If a direct connection string is provided, we'll use that instead
 	connStr := configs.Get("DB_URL")
 	if connStr != "" {
-		if projectRef == "" {
-			projectRef = extractProjectRefFromConnStr(connStr)
-		}
+		projectRef = extractProjectRefFromConnStr(connStr)
 	}
 
 	return &SupabaseConfig{
