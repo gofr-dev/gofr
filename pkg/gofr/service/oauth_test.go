@@ -12,9 +12,9 @@ import (
 	"golang.org/x/oauth2"
 )
 
-var err1 = errors.New("unsupported protocol scheme \"\"")
+var err1 = errors.New(`unsupported protocol scheme ""`)
 
-var err2 = errors.New("unsupported protocol scheme \"abc\"")
+var err2 = errors.New(`unsupported protocol scheme "abc"`)
 
 func TestHttpService_RequestsOAuth(t *testing.T) {
 	server := setupOAuthHTTPServer(t)

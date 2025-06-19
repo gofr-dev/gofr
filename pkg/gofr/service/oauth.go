@@ -33,7 +33,7 @@ type OAuthConfig struct {
 	EndpointParams url.Values
 
 	// AuthStyle represents how requests for tokens are authenticated to the server
-	// Defaults to oauth2.AuthStyleAutoDetect
+	// Defaults to [oauth2.AuthStyleAutoDetect]
 	AuthStyle oauth2.AuthStyle
 }
 
@@ -67,13 +67,13 @@ func validateTokenURL(tokenURL string) error {
 		return OAuthErr{nil, "token url is mandatory"}
 	}
 
-	u, err2 := url.Parse(tokenURL)
+	u, err := url.Parse(tokenURL)
 
 	switch {
-	case err2 != nil:
-		return OAuthErr{err2, "error in token URL"}
+	case err != nil:
+		return OAuthErr{err, "error in token URL"}
 	case u.Host == "" || u.Scheme == "":
-		return OAuthErr{err2, "empty host"}
+		return OAuthErr{err, "empty host"}
 	case strings.Contains(u.Host, ".."):
 		return OAuthErr{nil, "invalid host pattern, contains `..`"}
 	case strings.HasSuffix(u.Host, "."):
