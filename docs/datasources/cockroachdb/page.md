@@ -21,7 +21,6 @@ package main
 
 import (
 	"context"
-	"fmt"
 
 	"gofr.dev/pkg/gofr"
 )
@@ -29,19 +28,22 @@ import (
 func main() {
 	// Create a new GoFr app
 	app := gofr.New()
+	
+	app.GET("/user", GetUser)
+	
+	app.Run()
+}
 
+func GetUser(ctx *gofr.Context)(any, error){
 	// Example: Performing a simple query
-	rows, err := app.SQL.QueryContext(context.Background(), "SELECT 1")
+	rows, err := ctx.SQL.QueryContext(context.Background(), "SELECT 1")
 	if err != nil {
-		fmt.Println("Error querying database:", err)
-		return
+		return nil, err
 	}
+	
 	defer rows.Close()
-
-	fmt.Println("Successfully connected to CockroachDB and executed query.")
-
-	// Start the server (optional, if you only need DB interaction)
-	// app.Server.Start()
+	
+	return "Connection to cockroachDB Successful.", nil
 }
 ```
 For more detailed examples and advanced usage, please refer to the [SQL usage guide](/advanced-guide/dealing-with-sql/).
