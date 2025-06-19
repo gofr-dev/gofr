@@ -17,7 +17,10 @@ import (
 
 const defaultRetryTimeout = 2 * time.Second
 
-var errClientNotConnected = errors.New("nats client not connected")
+var (
+	errClientNotConnected = errors.New("nats client not connected")
+	errEmptySubject       = errors.New("subject name cannot be empty")
+)
 
 // Client represents a Client for NATS jStream operations.
 type Client struct {
@@ -286,10 +289,182 @@ func (c *Client) Close(ctx context.Context) error {
 	return nil
 }
 
+// Query retrieves messages from a NATS stream/subject
+func (c *Client) Query(ctx context.Context, query string, args ...any) ([]byte, error) {
+	if err := checkClient(c); err != nil {
+		return nil, err
+	}
+
+	if query == "" {
+		return nil, errEmptySubject
+	}
+
+	// Parse optional arguments
+	timeout, limit := c.parseQueryArgs(args...)
+
+	// Use provided context or add default timeout
+	queryCtx := ctx
+	if _, hasDeadline := ctx.Deadline(); !hasDeadline {
+		var cancel context.CancelFunc
+		queryCtx, cancel = context.WithTimeout(ctx, timeout)
+		defer cancel()
+	}
+
+	js, err := c.connManager.jetStream()
+	if err != nil {
+		return nil, err
+	}
+
+	streamName := c.Config.Stream.Stream
+	if query == "gofr_migrations" {
+		streamName = "gofr_migrations"
+	}
+
+	consumerName := fmt.Sprintf("query_%s_%d", c.generateConsumerName(query), time.Now().UnixNano())
+
+	// Configure consumer to read from beginning of stream
+	cons, err := js.CreateOrUpdateConsumer(queryCtx, streamName, jetstream.ConsumerConfig{
+		Durable:       consumerName,
+		AckPolicy:     jetstream.AckExplicitPolicy,
+		FilterSubject: query,
+		DeliverPolicy: jetstream.DeliverAllPolicy,
+		AckWait:       c.Config.MaxWait,
+	})
+	if err != nil {
+		c.logger.Errorf("failed to create consumer for query: %v", err)
+		return nil, err
+	}
+
+	defer func() {
+		// Clean up the temporary consumer
+		if deleteCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second); cancel != nil {
+			defer cancel()
+			info, err := cons.Info(deleteCtx)
+			if err != nil {
+				c.logger.Debugf("failed to delete temporary consumer: %v", err)
+			}
+
+			// Delete consumer using JetStream interface
+			if err := js.DeleteConsumer(deleteCtx, streamName, info.Name); err != nil {
+				c.logger.Debugf("failed to delete temporary consumer: %v", err)
+			}
+		}
+	}()
+
+	return c.collectMessages(queryCtx, cons, limit)
+}
+
+// parseQueryArgs parses the query arguments
+func (c *Client) parseQueryArgs(args ...any) (timeout time.Duration, limit int) {
+	// Default values
+	timeout = 30 * time.Second
+	limit = 100
+
+	if len(args) > 0 {
+		// First argument can be a custom timeout
+		if val, ok := args[0].(time.Duration); ok && val > 0 {
+			timeout = val
+		} else if val, ok := args[0].(int64); ok && val > 0 {
+			// Treat as offset, not needed in this implementation
+		} else if val, ok := args[0].(string); ok && val == "latest" {
+			// Not relevant for NATS implementation
+		}
+	}
+
+	if len(args) > 1 {
+		// Second argument is the message limit
+		if val, ok := args[1].(int); ok && val > 0 {
+			limit = val
+		}
+	}
+
+	return timeout, limit
+}
+
+// collectMessages fetches messages from the consumer and combines them
+func (c *Client) collectMessages(ctx context.Context, cons jetstream.Consumer, limit int) ([]byte, error) {
+	var result []byte
+	messagesCollected := 0
+
+	for messagesCollected < limit {
+		// Fetch messages with a batch size based on remaining needed messages
+		fetchSize := min(batchSize, limit-messagesCollected)
+		if fetchSize <= 0 {
+			break
+		}
+
+		msgs, err := cons.Fetch(fetchSize, jetstream.FetchMaxWait(c.Config.MaxWait))
+		if err != nil {
+			if errors.Is(err, context.DeadlineExceeded) || errors.Is(err, context.Canceled) {
+				break
+			}
+
+			c.logger.Errorf("Error fetching messages: %v", err)
+			return result, err
+		}
+
+		receivedAny := false
+
+		for msg := range msgs.Messages() {
+			receivedAny = true
+
+			// Add newline separator between messages
+			if len(result) > 0 {
+				result = append(result, '\n')
+			}
+
+			// Append message data
+			result = append(result, msg.Data()...)
+
+			// Acknowledge the message
+			if err := msg.Ack(); err != nil {
+				c.logger.Debugf("Error acknowledging message: %v", err)
+			}
+
+			messagesCollected++
+			if messagesCollected >= limit {
+				break
+			}
+		}
+
+		if !receivedAny || errors.Is(ctx.Err(), context.DeadlineExceeded) || errors.Is(ctx.Err(), context.Canceled) {
+			break
+		}
+	}
+
+	if strings.Contains(cons.CachedInfo().Config.FilterSubject, "gofr_migrations") {
+		if len(result) == 0 {
+			c.logger.Debugf("No migration records found in stream %s", c.Config.Stream.Stream)
+		}
+	}
+
+	return result, nil
+}
+
+// Helper function for Go versions < 1.21
+func min(a, b int) int {
+	if a < b {
+		return a
+	}
+	return b
+}
+
 // CreateTopic creates a new topic (stream) in NATS jStream.
 func (c *Client) CreateTopic(ctx context.Context, name string) error {
 	if err := checkClient(c); err != nil {
 		return err
+	}
+
+	// For migrations stream, use special configuration with max bytes
+	if name == "gofr_migrations" {
+		return c.streamManager.CreateStream(ctx, StreamConfig{
+			Stream:    name,
+			Subjects:  []string{name},
+			MaxBytes:  100 * 1024 * 1024,
+			Storage:   "file",
+			Retention: "limits",
+			MaxAge:    365 * 24 * time.Hour,
+		})
 	}
 
 	return c.streamManager.CreateStream(ctx, StreamConfig{
