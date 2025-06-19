@@ -37,28 +37,43 @@ type DBConfig struct {
 	Charset     string
 }
 
+func setupSupabaseDefaults(dbConfig *DBConfig, configs config.Config, logger datasource.Logger) {
+	if dbConfig.HostName == "" {
+		projectRef := configs.Get("SUPABASE_PROJECT_REF")
+		if projectRef != "" {
+			dbConfig.HostName = fmt.Sprintf("db.%s.supabase.co", projectRef)
+		}
+	}
+
+	if dbConfig.Database == "" {
+		dbConfig.Database = dialectPostgres
+	}
+
+	if dbConfig.SSLMode != requireSSLMode {
+		logger.Warnf("Supabase connections require SSL. Setting DB_SSL_MODE to 'require'")
+
+		dbConfig.SSLMode = requireSSLMode // Enforce SSL mode for Supabase
+	}
+
+	if dbConfig.Port == strconv.Itoa(defaultDBPort) {
+		dbConfig.Port = "5432"
+	}
+}
+
 func NewSQL(configs config.Config, logger datasource.Logger, metrics Metrics) *DB {
 	dbConfig := getDBConfig(configs)
 
-	if dbConfig.Dialect == "" {
-		return nil
+	if dbConfig.Dialect == supabaseDialect {
+		setupSupabaseDefaults(dbConfig, configs, logger)
 	}
 
 	// if Hostname is not provided, we won't try to connect to DB
 	if dbConfig.Dialect != sqlite && dbConfig.HostName == "" {
 		logger.Errorf("connection to %s failed: host name is empty.", dbConfig.Dialect)
-		return nil
 	}
 
-	// For Supabase, enforce SSL mode as "require"
-	if dbConfig.Dialect == supabaseDialect && dbConfig.SSLMode != requireSSLMode {
-		logger.Warnf("Supabase connections require SSL. Setting DB_SSL_MODE to 'require'")
-
-		dbConfig.SSLMode = requireSSLMode
-
-		if dbConfig.Port == strconv.Itoa(defaultDBPort) {
-			dbConfig.Port = "5432"
-		}
+	if dbConfig.Dialect == "" {
+		return nil
 	}
 
 	logger.Debugf("generating database connection string for '%s'", dbConfig.Dialect)
