@@ -154,16 +154,68 @@ jobs:
           coverageLocations: merged.cov:gocov
           prefix: gofr.dev
 
-  lint:
-    name: Lint and Validate
+  # Job for code quality checks
+  code_quality:
+    name: Code Quality🎖️
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-go@v5
+      - name: Check out code into the Go module directory
+        uses: actions/checkout@v4
+
+      - name: Set up Go environment
+        uses: actions/setup-go@v5
         with:
           go-version: '1.24'
+          cache: false
 
-      - name: Run linters
+      # Install the linting tool
+      - name: Install golangci-lint
         run: |
-          golangci-lint run --timeout 5m ./...
-          ls-lint --config .ls-lint.yml
+          go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.1
+
+      - name: Get dependencies
+        run: |
+          go mod tidy
+
+      # Run linter on the root module
+      - name: Lint Root Module
+        run: |
+          golangci-lint run --output.text.print-issued-lines --output.text.colors=true --show-stats=false --timeout=5m
+
+      # Run linter on each submodule
+      - name: Lint Submodules
+        run: |
+          echo "Searching for submodules..."
+          total_errors=0  # Initialize error counter
+          for module in $(find pkg -name "go.mod" -exec dirname {} \;); do
+            echo "Linting submodule: $module"
+            # Change directory to the submodule and run golangci-lint
+            cd $module
+            go mod tidy
+            golangci-lint run --output.text.print-issued-lines --output.text.colors=true --show-stats=false --timeout 9m0s || total_errors=$((total_errors + 1))
+            cd -  # Return to the root directory
+          done
+          echo "Total submodule lint errors: $total_errors"
+          if [ $total_errors -gt 0 ]; then
+            echo "Linting failed for $total_errors submodule(s)."
+            exit 1  # Fail the job if there are linting errors in submodules
+          fi
+
+  # Job for checking filename conventions
+  linting_party:
+    name: Linting Party🥳
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out code
+        uses: actions/checkout@v4
+
+      - name: Set up Go environment
+        uses: actions/setup-go@v5
+        with:
+          go-version: 1.24
+
+      # Check file naming conventions using ls-lint
+      - name: Check for file names errors
+        uses: ls-lint/action@v2.3.1
+        with:
+          config: .ls-lint.yml
