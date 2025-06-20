@@ -1,6 +1,8 @@
 package service
 
-import "github.com/pkg/errors"
+import (
+	"fmt"
+)
 
 type OAuthErr struct {
 	Err     error
@@ -16,6 +18,6 @@ func (o OAuthErr) Error() string {
 	case o.Err == nil:
 		return o.Message
 	default:
-		return errors.Wrap(o.Err, o.Message).Error()
+		return fmt.Sprintf("%v: %v", o.Message, o.Err)
 	}
 }
