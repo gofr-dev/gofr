@@ -164,7 +164,7 @@ func TestClient_Database(t *testing.T) {
 
 	t.Run("Get database Success", func(t *testing.T) {
 		mockArango.EXPECT().
-			Database(ctx, dbName).
+			GetDatabase(ctx, dbName, &arangodb.GetDatabaseOptions{}).
 			Return(mockDatabase, nil)
 		mockDatabase.EXPECT().Name().Return(dbName)
 
@@ -176,7 +176,7 @@ func TestClient_Database(t *testing.T) {
 
 	t.Run("Get database Error", func(t *testing.T) {
 		mockArango.EXPECT().
-			Database(ctx, dbName).
+			GetDatabase(ctx, dbName, &arangodb.GetDatabaseOptions{}).
 			Return(nil, errDBNotFound)
 
 		db, err := client.database(ctx, dbName)
@@ -187,7 +187,7 @@ func TestClient_Database(t *testing.T) {
 	// Test database operations
 	t.Run("database Operations", func(t *testing.T) {
 		mockArango.EXPECT().
-			Database(ctx, dbName).
+			GetDatabase(ctx, dbName, &arangodb.GetDatabaseOptions{}).
 			Return(mockDatabase, nil)
 		mockDatabase.EXPECT().Name().Return(dbName)
 		mockDatabase.EXPECT().Remove(ctx).Return(nil)

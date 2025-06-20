@@ -135,8 +135,25 @@ func (mr *MockArangoMockRecorder) CreateDatabase(ctx, name, options interface{})
 
 func (m *MockArango) GetDatabase(ctx context.Context, name string, options *arangodb.GetDatabaseOptions) (arangodb.Database, error) {
 	m.ctrl.T.Helper()
+
+	if options == nil {
+		options = &arangodb.GetDatabaseOptions{}
+	}
+
 	ret := m.ctrl.Call(m, "GetDatabase", ctx, name, options)
-	return ret[0].(arangodb.Database), ret[1].(error)
+
+	var db arangodb.Database
+	var err error
+
+	if ret[0] != nil {
+		db = ret[0].(arangodb.Database)
+	}
+
+	if ret[1] != nil {
+		err = ret[1].(error)
+	}
+
+	return db, err
 }
 
 func (mr *MockArangoMockRecorder) GetDatabase(ctx, name, options interface{}) *gomock.Call {
