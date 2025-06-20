@@ -84,7 +84,7 @@ jobs:
           command: |
             set -eo pipefail
             export APP_ENV=test
-            chmod +x ./test_pkg.sh
+            chmod +x ./test_package.sh
             ./test_pkg.sh
 
       - name: Upload coverage
