@@ -191,7 +191,8 @@ func TestClient_Database(t *testing.T) {
 			Return(mockDatabase, nil)
 		mockDatabase.EXPECT().Name().Return(dbName)
 		mockDatabase.EXPECT().Remove(ctx).Return(nil)
-		mockDatabase.EXPECT().Collection(ctx, "testCollection").Return(nil, nil)
+		mockDatabase.EXPECT().GetCollection(ctx, "testCollection", nil).
+			Return(nil, nil)
 
 		db, err := client.database(ctx, dbName)
 		require.NoError(t, err)

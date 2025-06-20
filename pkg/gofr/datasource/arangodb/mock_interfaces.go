@@ -393,6 +393,16 @@ func (mr *MockArangoMockRecorder) CreateCollection(ctx, database, collection, is
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CreateCollection", reflect.TypeOf((*MockArango)(nil).CreateCollection), ctx, database, collection, isEdge)
 }
 
+// GetCollection mocks base method.
+func (m *MockArangoMockRecorder) GetCollection(ctx context.Context, name string, options *arangodb.GetCollectionOptions) (arangodb.Collection, error) {
+	m.mock.ctrl.T.Helper()
+
+	ret := m.mock.ctrl.Call(m, "GetCollection", ctx, name, options)
+	ret0, _ := ret[0].(arangodb.Collection)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
 // CreateDB mocks base method.
 func (m *MockArango) CreateDB(ctx context.Context, database string) error {
 	m.ctrl.T.Helper()

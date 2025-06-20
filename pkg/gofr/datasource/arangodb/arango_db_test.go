@@ -167,7 +167,7 @@ func Test_Client_DropCollection(t *testing.T) {
 
 	mockArango.EXPECT().GetDatabase(gomock.Any(), "testDB", &arangodb.GetDatabaseOptions{}).
 		Return(mockDB, nil)
-	mockDB.EXPECT().Collection(gomock.Any(), "testCollection").Return(mockCollection, nil)
+	mockDB.EXPECT().GetCollection(gomock.Any(), "testCollection", nil).Return(mockCollection, nil)
 	mockCollection.EXPECT().Remove(gomock.Any()).Return(nil)
 	mockLogger.EXPECT().Debug(gomock.Any()).AnyTimes()
 	mockMetrics.EXPECT().RecordHistogram(gomock.Any(), "app_arango_stats",
@@ -184,7 +184,8 @@ func Test_Client_DropCollection_Error(t *testing.T) {
 
 	mockArango.EXPECT().GetDatabase(gomock.Any(), "testDB", &arangodb.GetDatabaseOptions{}).
 		Return(mockDB, nil)
-	mockDB.EXPECT().Collection(gomock.Any(), "testCollection").Return(nil, errCollectionNotFound)
+	mockDB.EXPECT().GetCollection(gomock.Any(), "testCollection", nil).
+		Return(nil, errCollectionNotFound)
 	mockLogger.EXPECT().Debug(gomock.Any()).AnyTimes()
 	mockMetrics.EXPECT().RecordHistogram(gomock.Any(), "app_arango_stats", gomock.Any(),
 		gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
