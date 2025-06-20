@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"testing"
+	"time"
 
 	gcPubSub "cloud.google.com/go/pubsub"
 	"cloud.google.com/go/pubsub/pstest"
@@ -314,4 +315,51 @@ func TestGoogleClient_DeleteTopic_EmptyClient(t *testing.T) {
 	err := g.DeleteTopic(t.Context(), "test-topic")
 
 	require.ErrorIs(t, err, errClientNotConnected, "expected client-error but got different error")
+}
+
+func TestGoogleClient_Query(t *testing.T) {
+	client := getGoogleClient(t)
+	defer client.Close()
+
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	mockMetrics := NewMockMetrics(ctrl)
+	logger := logging.NewMockLogger(logging.DEBUG)
+
+	topic := "test-topic-query"
+	message := []byte("test message")
+
+	g := &googleClient{
+		client:  client,
+		logger:  logger,
+		metrics: mockMetrics,
+		Config: Config{
+			ProjectID:        "test",
+			SubscriptionName: "sub",
+		},
+	}
+
+	topicObj, err := client.CreateTopic(t.Context(), topic)
+	require.NoError(t, err)
+
+	subName := "sub-query-" + topic
+	_, err = client.CreateSubscription(t.Context(), subName, gcPubSub.SubscriptionConfig{
+		Topic: topicObj,
+	})
+	require.NoError(t, err)
+
+	result := topicObj.Publish(t.Context(), &gcPubSub.Message{Data: message})
+	_, err = result.Get(t.Context())
+	require.NoError(t, err)
+
+	ctx, cancel := context.WithTimeout(t.Context(), 1*time.Second)
+	defer cancel()
+
+	queryResult, err := g.Query(ctx, topic)
+	require.NoError(t, err)
+	assert.Equal(t, message, queryResult)
+
+	err = topicObj.Delete(t.Context())
+	require.NoError(t, err)
 }

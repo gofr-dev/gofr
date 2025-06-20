@@ -50,8 +50,8 @@ func (k *kafkaClient) getNewReader(topic string) Reader {
 		GroupID:     k.config.ConsumerGroupID,
 		Brokers:     k.config.Brokers,
 		Topic:       topic,
-		MinBytes:    10e3,
-		MaxBytes:    10e6,
+		MinBytes:    defaultMinBytes,
+		MaxBytes:    defaultMaxBytes,
 		Dialer:      k.dialer,
 		StartOffset: int64(k.config.OffSet),
 	})

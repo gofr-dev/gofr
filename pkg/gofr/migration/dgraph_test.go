@@ -32,7 +32,7 @@ func dgraphSetup(t *testing.T) (migrator, *container.MockDgraph, *container.Cont
 func Test_DGraphCheckAndCreateMigrationTable(t *testing.T) {
 	migratorWithDGraph, mockDGraph, mockContainer := dgraphSetup(t)
 
-	mockDGraph.EXPECT().ApplySchema(t.Context(), dgraphSchema).Return(nil)
+	mockDGraph.EXPECT().ApplySchema(gomock.Any(), dgraphSchema).Return(nil)
 
 	err := migratorWithDGraph.checkAndCreateMigrationTable(mockContainer)
 
@@ -77,7 +77,7 @@ func Test_DGraphGetLastMigration(t *testing.T) {
 	for i, tc := range testCases {
 		t.Run(tc.desc, func(t *testing.T) {
 			// Set up mock expectation for the main query
-			mockDGraph.EXPECT().Query(t.Context(), getLastMigrationQuery).
+			mockDGraph.EXPECT().Query(gomock.Any(), getLastMigrationQuery).
 				Return(tc.mockResp, tc.err)
 
 			resp := migratorWithDGraph.getLastMigration(mockContainer)
@@ -106,7 +106,7 @@ func Test_DGraphCommitMigration(t *testing.T) {
 	}
 
 	for i, tc := range testCases {
-		mockDGraph.EXPECT().Mutate(t.Context(), gomock.Any()).Return(nil, tc.err)
+		mockDGraph.EXPECT().Mutate(gomock.Any(), gomock.Any()).Return(nil, tc.err)
 
 		err := migratorWithDGraph.commitMigration(mockContainer, td)
 

@@ -18,7 +18,10 @@ const (
 	DefaultBatchSize       = 100
 	DefaultBatchBytes      = 1048576
 	DefaultBatchTimeout    = 1000
+	defaultMaxBytes        = 10e6 // 10MB
+	defaultMinBytes        = 10e3
 	defaultRetryTimeout    = 10 * time.Second
+	defaultReadTimeout     = 30 * time.Second
 	protocolPlainText      = "PLAINTEXT"
 	protocolSASL           = "SASL_PLAINTEXT"
 	protocolSSL            = "SSL"
@@ -26,6 +29,8 @@ const (
 	messageMultipleBrokers = "MULTIPLE_BROKERS"
 	brokerStatusUp         = "UP"
 )
+
+var errEmptyTopicName = errors.New("topic name cannot be empty")
 
 type Config struct {
 	Brokers          []string
@@ -139,6 +144,28 @@ func (k *kafkaClient) Publish(ctx context.Context, topic string, message []byte)
 	k.metrics.IncrementCounter(ctx, "app_pubsub_publish_success_count", "topic", topic)
 
 	return nil
+}
+
+func (k *kafkaClient) Query(ctx context.Context, query string, args ...any) ([]byte, error) {
+	if !k.isConnected() {
+		return nil, errClientNotConnected
+	}
+
+	if query == "" {
+		return nil, errEmptyTopicName
+	}
+
+	offset, limit := k.parseQueryArgs(args...)
+
+	reader, err := k.createReader(query, offset)
+	if err != nil {
+		return nil, err
+	}
+	defer reader.Close()
+
+	readCtx := k.getReadContext(ctx)
+
+	return k.readMessages(readCtx, reader, limit)
 }
 
 func (k *kafkaClient) Subscribe(ctx context.Context, topic string) (*pubsub.Message, error) {
