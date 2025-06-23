@@ -114,6 +114,10 @@ func setupOAuthHTTPServer(t *testing.T) *oAuthTestSever {
 
 	server.httpServer = httptest.NewServer(mux)
 
+	t.Cleanup(func() {
+		server.httpServer.Close()
+	})
+
 	return &server
 }
 
