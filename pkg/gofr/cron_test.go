@@ -9,6 +9,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"gofr.dev/pkg/gofr/container"
 	"gofr.dev/pkg/gofr/testutil"
 )
 
@@ -225,7 +226,8 @@ func TestCronTab_runScheduled(t *testing.T) {
 
 	// can make container nil as we are not testing the internal working of
 	// dependency function as it is user defined
-	c := NewCron(nil)
+	mockContainer, _ := container.NewMockContainer(t)
+	c := NewCron(mockContainer)
 
 	// Populate the job array for cron table
 	c.jobs = []*job{j}
