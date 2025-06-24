@@ -1,11 +1,6 @@
 package middleware
 
 import (
-	"context"
-	"net/http"
-	"strings"
-
-	"github.com/golang-jwt/jwt/v5"
 	"gofr.dev/pkg/gofr"
 )
 
