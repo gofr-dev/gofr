@@ -6,7 +6,7 @@ toolchain go1.23.4
 
 require (
 	github.com/gocql/gocql v1.7.0
-	github.com/stoewer/go-strcase v1.3.0
+	github.com/stoewer/go-strcase v1.3.1
 	github.com/stretchr/testify v1.10.0
 	go.opentelemetry.io/otel v1.36.0
 	go.opentelemetry.io/otel/trace v1.36.0
