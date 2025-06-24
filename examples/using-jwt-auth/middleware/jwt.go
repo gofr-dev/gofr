@@ -9,35 +9,40 @@ import (
 	"gofr.dev/pkg/gofr"
 )
 
-// JWTAuth is a placeholder for JWT middleware.  This won't work until GoFr exposes header access.
-// Once supported, this middleware will extract a Bearer token from the Authorization header,
-// validate it, and attach the claims to the context.
+// JWTAuth is a placeholder middleware for securing routes via JWT authentication.
+// Currently non-functional due to GoFr not yet exposing header access.
+// When supported, this middleware will:
+//   - Read the Authorization header
+//   - Extract and validate the Bearer token
+//   - Attach user claims to the context for downstream access
 func JWTAuth(secret string) func(gofr.Handler) gofr.Handler {
 	return func(next gofr.Handler) gofr.Handler {
 		return func(ctx *gofr.Context) (interface{}, error) {
 
-			// ❌ Currently not supported — ctx.Request.GetHeader() doesn't exist
-			/*
-				authHeader := ctx.Request.GetHeader("Authorization")
-				if !strings.HasPrefix(authHeader, "Bearer ") {
-					ctx.Error(http.StatusUnauthorized, "Missing or malformed token")
-					return nil, nil
-				}
+			/* 
+			// ❌ Not supported yet — ctx.Request.GetHeader() is unavailable
 
-				tokenStr := strings.TrimPrefix(authHeader, "Bearer ")
-				token, err := jwt.Parse(tokenStr, func(token *jwt.Token) (interface{}, error) {
-					return []byte(secret), nil
-				})
+			authHeader := ctx.Request.GetHeader("Authorization")
+			if !strings.HasPrefix(authHeader, "Bearer ") {
+				ctx.Error(http.StatusUnauthorized, "Missing or malformed token")
+				return nil, nil
+			}
 
-				if err != nil || !token.Valid {
-					ctx.Error(http.StatusUnauthorized, "Invalid token")
-					return nil, nil
-				}
+			tokenStr := strings.TrimPrefix(authHeader, "Bearer ")
+			token, err := jwt.Parse(tokenStr, func(token *jwt.Token) (interface{}, error) {
+				return []byte(secret), nil
+			})
 
-				ctx.Context = context.WithValue(ctx.Context, "user", token.Claims)
+			if err != nil || !token.Valid {
+				ctx.Error(http.StatusUnauthorized, "Invalid token")
+				return nil, nil
+			}
+
+			// Attach user claims to context if needed in future handlers
+			ctx.Context = context.WithValue(ctx.Context, "user", token.Claims)
 			*/
 
-			// Middleware disabled — just call next handler directly
+			// Temporary: Skip auth check until header access is supported
 			return next(ctx)
 		}
 	}
