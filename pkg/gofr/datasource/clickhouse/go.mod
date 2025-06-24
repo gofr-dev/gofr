@@ -5,7 +5,7 @@ go 1.23.0
 toolchain go1.24.0
 
 require (
-	github.com/ClickHouse/clickhouse-go/v2 v2.37.0
+	github.com/ClickHouse/clickhouse-go/v2 v2.37.1
 	github.com/stretchr/testify v1.10.0
 	go.opentelemetry.io/otel v1.36.0
 	go.opentelemetry.io/otel/trace v1.36.0
