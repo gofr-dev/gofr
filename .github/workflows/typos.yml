@@ -1,0 +1,14 @@
+name: Typos Check
+on:
+  push:
+  pull_request:
+jobs:
+  typos:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+      - name: typos-action
+        uses: crate-ci/typos@v1.33.1

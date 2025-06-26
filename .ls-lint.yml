@@ -1,0 +1,4 @@
+---
+ls:
+  .go: snake_case
+  .pb.go: snake_case

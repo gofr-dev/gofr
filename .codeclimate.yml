@@ -1,0 +1,48 @@
+version: "2"
+
+checks:
+  argument-count:
+    enabled: true
+    config:
+      threshold: 6
+  complex-logic:
+    enabled: true
+    config:
+      threshold: 10
+  file-lines:
+    enabled: true
+    config:
+      threshold: 300
+  method-complexity:
+    enabled: true
+    config:
+      threshold: 12
+  method-count:
+    enabled: true
+    config:
+      threshold: 25
+  method-lines:
+    enabled: true
+    config:
+      threshold: 100
+  nested-control-flow:
+    enabled: true
+    config:
+      threshold: 4
+  return-statements:
+    enabled: true
+    config:
+      threshold: 8
+  similar-code:
+    enabled: false
+  identical-code:
+    enabled: false
+
+# plugins:
+#   eslint:
+#     enabled: true
+#     channel: "eslint-6"
+
+exclude_patterns:
+  - "**/mock_*"
+  - "**/*_test.go"
