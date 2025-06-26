@@ -183,7 +183,7 @@ To see the traces install zipkin image using the following Docker command:
 docker run --name gofr-zipkin -p 2005:9411 -d openzipkin/zipkin:latest
 ```
 
-Add Tracer configs in `.env` file, your .env will be updated to
+Add TracingWrapper configs in `.env` file, your .env will be updated to
 
 ```dotenv
 APP_NAME=test-service
@@ -225,7 +225,7 @@ docker run -d --name jaeger \
 	jaegertracing/all-in-one:1.41
 ```
 
-Add Jaeger Tracer configs in `.env` file, your .env will be updated to
+Add Jaeger TracingWrapper configs in `.env` file, your .env will be updated to
 ```dotenv
 # ... no change in other env variables
 
@@ -254,12 +254,12 @@ TRACER_RATIO=0.1
 
 
 
-#### 4. [GoFr Tracer](https://tracer.gofr.dev/):
+#### 4. [GoFr TracingWrapper](https://tracer.gofr.dev/):
 
 GoFr tracer is GoFr's own custom trace exporter as well as collector. User can search a trace by its TraceID (correlationID)
 in GoFr's own tracer service available anywhere, anytime.
 
-Add GoFr Tracer configs in `.env` file, your .env will be updated to
+Add GoFr TracingWrapper configs in `.env` file, your .env will be updated to
 ```dotenv
 # ... no change in other env variables
 

@@ -158,4 +158,4 @@ go tool trace trace.out
 ## References
 - [Go `pprof` Documentation](https://pkg.go.dev/net/http/pprof)
 - [Profiling Go Programs](https://blog.golang.org/profiling-go-programs)
-- [Go Execution Tracer](https://golang.org/doc/diagnostics.html#tracing)
+- [Go Execution TracingWrapper](https://golang.org/doc/diagnostics.html#tracing)

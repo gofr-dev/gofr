@@ -18,7 +18,7 @@ func main() {
 	// Create a new application
 	a := gofr.New()
 
-	//HTTP service with default health check endpoint
+	// HTTP service with default health check endpoint
 	a.AddHTTPService("anotherService", "http://localhost:9000")
 
 	// Add all the routes
@@ -48,7 +48,7 @@ func ErrorHandler(c *gofr.Context) (any, error) {
 
 func RedisHandler(c *gofr.Context) (any, error) {
 	val, err := c.Redis.Get(c, "test").Result()
-	if err != nil && err != redis.Nil { // If key is not found, we are not considering this an error and returning "".
+	if err != nil && !errors.Is(err, redis.Nil) { // If key is not found, we are not considering this an error and returning "".
 		return nil, datasource.ErrorDB{Err: err, Message: "error from redis db"}
 	}
 
@@ -75,7 +75,7 @@ func TraceHandler(c *gofr.Context) (any, error) {
 	}
 	wg.Wait()
 
-	//Call to Another service
+	// Call to Another service
 	resp, err := c.GetHTTPService("anotherService").Get(c, "redis", nil)
 	if err != nil {
 		return nil, err
