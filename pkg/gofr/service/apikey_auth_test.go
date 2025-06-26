@@ -30,20 +30,20 @@ func TestSetXApiKey(t *testing.T) {
 			name:           "existing header empty",
 			headers:        nil,
 			apiKey:         "valid-key",
-			expectedHeader: map[string]string{apiKeyHeader: "valid-key"},
+			expectedHeader: map[string]string{xAPIKeyHeader: "valid-key"},
 		},
 		{
 			name:           "existing header non empty",
 			headers:        map[string]string{"header": "value"},
 			apiKey:         "valid-key",
-			expectedHeader: map[string]string{"header": "value", apiKeyHeader: "valid-key"},
+			expectedHeader: map[string]string{"header": "value", xAPIKeyHeader: "valid-key"},
 		},
 
 		{
 			name:           "existing header containing api key",
-			headers:        map[string]string{apiKeyHeader: "value"},
+			headers:        map[string]string{xAPIKeyHeader: "value"},
 			apiKey:         "valid-key",
-			expectedHeader: map[string]string{apiKeyHeader: "valid-key"},
+			expectedHeader: map[string]string{xAPIKeyHeader: "valid-key"},
 		},
 	}
 
@@ -60,6 +60,7 @@ func TestNewAPIKeyConfig(t *testing.T) {
 		err          error
 	}{
 		{apiKey: "valid", apiKeyOption: &APIKeyConfig{APIKey: "valid"}, err: nil},
+		{apiKey: "  valid  ", apiKeyOption: &APIKeyConfig{APIKey: "valid"}, err: nil},
 		{apiKey: "", apiKeyOption: nil, err: AuthErr{Message: "non empty api key is required"}},
 		{apiKey: "  ", apiKeyOption: nil, err: AuthErr{Message: "non empty api key is required"}},
 	}
@@ -75,16 +76,26 @@ func TestAPIKeyAuthProvider(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
+	const (
+		validHeader   = "valid-value"
+		invalidHeader = "invalid-value"
+	)
+
 	testCases := []struct {
 		httpMethod string
+		apiKey     string
 		statusCode int
 	}{
-
-		{httpMethod: http.MethodPost, statusCode: http.StatusCreated},
-		{httpMethod: http.MethodGet, statusCode: http.StatusOK},
-		{httpMethod: http.MethodDelete, statusCode: http.StatusNoContent},
-		{httpMethod: http.MethodPatch, statusCode: http.StatusOK},
-		{httpMethod: http.MethodPut, statusCode: http.StatusOK},
+		{httpMethod: http.MethodPost, apiKey: validHeader, statusCode: http.StatusCreated},
+		{httpMethod: http.MethodGet, apiKey: validHeader, statusCode: http.StatusOK},
+		{httpMethod: http.MethodDelete, apiKey: validHeader, statusCode: http.StatusNoContent},
+		{httpMethod: http.MethodPatch, apiKey: validHeader, statusCode: http.StatusOK},
+		{httpMethod: http.MethodPut, apiKey: validHeader, statusCode: http.StatusOK},
+		{httpMethod: http.MethodPost, apiKey: invalidHeader, statusCode: http.StatusUnauthorized},
+		{httpMethod: http.MethodGet, apiKey: invalidHeader, statusCode: http.StatusUnauthorized},
+		{httpMethod: http.MethodDelete, apiKey: invalidHeader, statusCode: http.StatusUnauthorized},
+		{httpMethod: http.MethodPatch, apiKey: invalidHeader, statusCode: http.StatusUnauthorized},
+		{httpMethod: http.MethodPut, apiKey: invalidHeader, statusCode: http.StatusUnauthorized},
 	}
 
 	path := "/path"
@@ -93,10 +104,10 @@ func TestAPIKeyAuthProvider(t *testing.T) {
 
 	for i, tc := range testCases {
 		t.Run(fmt.Sprintf("Test Case #%d", i), func(t *testing.T) {
-			server := httpServerSetup(t, tc.httpMethod, tc.statusCode)
+			server := setupAPIKeyHTTPServer(t, validHeader, tc.apiKey, tc.statusCode)
 
-			httpService := NewHTTPService(server.URL, logging.NewMockLogger(logging.INFO), nil,
-				&APIKeyConfig{"valid-key"})
+			option, _ := NewAPIKeyConfig(tc.apiKey)
+			httpService := NewHTTPService(server.URL, logging.NewMockLogger(logging.INFO), nil, option)
 
 			var (
 				resp *http.Response
@@ -117,9 +128,7 @@ func TestAPIKeyAuthProvider(t *testing.T) {
 			}
 
 			require.NoError(t, err)
-
 			assert.Equal(t, tc.statusCode, resp.StatusCode)
-			require.NoError(t, err)
 
 			err = resp.Body.Close()
 			if err != nil {
@@ -129,11 +138,15 @@ func TestAPIKeyAuthProvider(t *testing.T) {
 	}
 }
 
-func httpServerSetup(t *testing.T, method string, responseCode int) *httptest.Server {
+func setupAPIKeyHTTPServer(t *testing.T, apiKey, headerAPIKey string, responseCode int) *httptest.Server {
 	t.Helper()
 
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assert.Equal(t, method, r.Method)
+		assert.Equal(t, headerAPIKey, r.Header.Get(xAPIKeyHeader), "received different api-key")
+
+		if apiKey != r.Header.Get(xAPIKeyHeader) {
+			responseCode = http.StatusUnauthorized
+		}
 
 		w.WriteHeader(responseCode)
 	}))

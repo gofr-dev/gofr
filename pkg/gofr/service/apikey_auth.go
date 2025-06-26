@@ -8,14 +8,16 @@ import (
 	"strings"
 )
 
-const apiKeyHeader = "X-API-KEY"
+// #nosec G101
+const xAPIKeyHeader = "X-Api-Key"
 
 type APIKeyConfig struct {
 	APIKey string
 }
 
 func NewAPIKeyConfig(apiKey string) (Options, error) {
-	if strings.TrimSpace(apiKey) == "" {
+	apiKey = strings.TrimSpace(apiKey)
+	if apiKey == "" {
 		return nil, AuthErr{Message: "non empty api key is required"}
 	}
 
@@ -98,7 +100,7 @@ func setXApiKey(headers map[string]string, apiKey string) map[string]string {
 		headers = make(map[string]string)
 	}
 
-	headers[apiKeyHeader] = apiKey
+	headers[xAPIKeyHeader] = apiKey
 
 	return headers
 }
