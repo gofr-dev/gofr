@@ -15,16 +15,11 @@ package container
 import (
 	"context"
 	"errors"
-	"gofr.dev/pkg/cache"
 	"strconv"
 	"strings"
 	"time"
 
 	_ "github.com/go-sql-driver/mysql" // This is required to be blank import
-
-	"gofr.dev/pkg/cache"
-	"gofr.dev/pkg/cache/memory"
-	rdbCache "gofr.dev/pkg/cache/redis"
 
 	"gofr.dev/pkg/gofr/config"
 	"gofr.dev/pkg/gofr/datasource/file"
@@ -59,7 +54,6 @@ type Container struct {
 
 	Redis Redis
 	SQL   DB
-	Cache cache.Cache
 
 	Cassandra     CassandraWithContext
 	Clickhouse    Clickhouse
@@ -126,13 +120,8 @@ func (c *Container) Create(conf config.Config) {
 	c.Metrics().SetGauge("app_info", 1,
 		"app_name", c.GetAppName(), "app_version", c.GetAppVersion(), "framework_version", version.Framework)
 
-	redisDB := redis.NewClient(conf, c.Logger, c.metricsManager)
-	c.Redis = redisDB
+	c.Redis = redis.NewClient(conf, c.Logger, c.metricsManager)
 
-	c.Cache = func() cache.Cache {
-		rdbCache := rdbCache.NewRedisConfig(redisDB.Client)
-		memory.NewInMemoryCache()
-	}()
 	c.SQL = sql.NewSQL(conf, c.Logger, c.metricsManager)
 
 	switch strings.ToUpper(conf.Get("PUBSUB_BACKEND")) {
