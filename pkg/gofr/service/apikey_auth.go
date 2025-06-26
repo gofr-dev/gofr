@@ -5,10 +5,21 @@ package service
 import (
 	"context"
 	"net/http"
+	"strings"
 )
+
+const apiKeyHeader = "X-API-KEY"
 
 type APIKeyConfig struct {
 	APIKey string
+}
+
+func NewAPIKeyConfig(apiKey string) (Options, error) {
+	if strings.TrimSpace(apiKey) == "" {
+		return nil, AuthErr{Message: "non empty api key is required"}
+	}
+
+	return &APIKeyConfig{APIKey: apiKey}, nil
 }
 
 func (a *APIKeyConfig) AddOption(h HTTP) HTTP {
@@ -87,7 +98,7 @@ func setXApiKey(headers map[string]string, apiKey string) map[string]string {
 		headers = make(map[string]string)
 	}
 
-	headers["X-API-KEY"] = apiKey
+	headers[apiKeyHeader] = apiKey
 
 	return headers
 }
