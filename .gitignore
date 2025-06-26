@@ -3,8 +3,11 @@
 *.exe~
 *.dll
 *.so
+<<<<<<< HEAD
 *.env
 
+=======
+>>>>>>> upstream/development
 *.dylib
 
 # Test binary, built with `go test -c`
