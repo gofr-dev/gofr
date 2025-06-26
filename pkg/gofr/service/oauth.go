@@ -39,11 +39,11 @@ type OAuthConfig struct {
 
 func NewOAuthConfig(clientID, secret, tokenURL string, scopes []string, params url.Values, authStyle oauth2.AuthStyle) (Options, error) {
 	if clientID == "" {
-		return nil, OAuthErr{nil, "client id is mandatory"}
+		return nil, AuthErr{nil, "client id is mandatory"}
 	}
 
 	if secret == "" {
-		return nil, OAuthErr{nil, "client secret is mandatory"}
+		return nil, AuthErr{nil, "client secret is mandatory"}
 	}
 
 	if err := validateTokenURL(tokenURL); err != nil {
@@ -64,22 +64,22 @@ func NewOAuthConfig(clientID, secret, tokenURL string, scopes []string, params u
 
 func validateTokenURL(tokenURL string) error {
 	if tokenURL == "" {
-		return OAuthErr{nil, "token url is mandatory"}
+		return AuthErr{nil, "token url is mandatory"}
 	}
 
 	u, err := url.Parse(tokenURL)
 
 	switch {
 	case err != nil:
-		return OAuthErr{err, "error in token URL"}
+		return AuthErr{err, "error in token URL"}
 	case u.Host == "" || u.Scheme == "":
-		return OAuthErr{err, "empty host"}
+		return AuthErr{err, "empty host"}
 	case strings.Contains(u.Host, ".."):
-		return OAuthErr{nil, "invalid host pattern, contains `..`"}
+		return AuthErr{nil, "invalid host pattern, contains `..`"}
 	case strings.HasSuffix(u.Host, "."):
-		return OAuthErr{nil, "invalid host pattern, ends with `.`"}
+		return AuthErr{nil, "invalid host pattern, ends with `.`"}
 	case u.Scheme != "http" && u.Scheme != "https":
-		return OAuthErr{nil, "invalid scheme, allowed http and https only"}
+		return AuthErr{nil, "invalid scheme, allowed http and https only"}
 	default:
 		return nil
 	}
@@ -111,7 +111,7 @@ func (o *oAuth) addAuthorizationHeader(ctx context.Context, headers map[string]s
 	if headers == nil {
 		headers = make(map[string]string)
 	} else if authHeader, ok := headers[AuthHeader]; ok && authHeader != "" {
-		return nil, OAuthErr{Message: "auth header already exists " + authHeader}
+		return nil, AuthErr{Message: "auth header already exists " + authHeader}
 	}
 
 	token, err := o.TokenSource(ctx).Token()

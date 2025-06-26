@@ -163,11 +163,11 @@ func TestHttpService_NewOAuthConfig(t *testing.T) {
 		authStyle    oauth2.AuthStyle
 		err          error
 	}{
-		{err: OAuthErr{nil, "client id is mandatory"}},
-		{clientID: clientID, err: OAuthErr{nil, "client secret is mandatory"}},
-		{clientID: clientID, tokenURL: tokenURL, err: OAuthErr{nil, "client secret is mandatory"}},
-		{clientID: clientID, clientSecret: clientSecret, err: OAuthErr{nil, "token url is mandatory"}},
-		{clientID: clientID, clientSecret: clientSecret, tokenURL: "invalid_url_format", err: OAuthErr{nil, "empty host"}},
+		{err: AuthErr{nil, "client id is mandatory"}},
+		{clientID: clientID, err: AuthErr{nil, "client secret is mandatory"}},
+		{clientID: clientID, tokenURL: tokenURL, err: AuthErr{nil, "client secret is mandatory"}},
+		{clientID: clientID, clientSecret: clientSecret, err: AuthErr{nil, "token url is mandatory"}},
+		{clientID: clientID, clientSecret: clientSecret, tokenURL: "invalid_url_format", err: AuthErr{nil, "empty host"}},
 		{clientID: clientID, clientSecret: clientSecret, tokenURL: tokenURL},
 		{clientID: clientID, clientSecret: "some_random_client_secret", tokenURL: tokenURL},
 		{clientID: "some_random_client_id", clientSecret: clientSecret, tokenURL: tokenURL},
@@ -241,7 +241,7 @@ func TestHttpService_addAuthorizationHeader(t *testing.T) {
 	headerWithEmptyAuth := map[string]string{AuthHeader: ""}
 	headerWithoutAuth := map[string]string{"Content Type": "Value"}
 	headerWithEmptyAuthAndOtherValues := map[string]string{"Content Type": "Value", AuthHeader: ""}
-	authHeaderExistsError := OAuthErr{Message: "auth header already exists Value"}
+	authHeaderExistsError := AuthErr{Message: "auth header already exists Value"}
 
 	testCases := []struct {
 		tokenURL string
