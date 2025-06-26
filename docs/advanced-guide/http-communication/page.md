@@ -100,7 +100,7 @@ GoFr provides its user with additional configurational options while registering
 
 ```go
 a.AddHTTPService("cat-facts", "https://catfact.ninja",
-    &service.APIKeyConfig{APIKey: "some-random-key"},
+	service.NewAPIKeyConfig("some-random-key"),
 
     &service.BasicAuthConfig{
        UserName: "gofr",
