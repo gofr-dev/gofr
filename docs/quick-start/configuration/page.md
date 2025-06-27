@@ -1,7 +1,7 @@
 # Configurations
 
 GoFr simplifies configuration management by reading configuration via environment variables.
-Application code is decoupled from how configuration is managed as per the {%new-tab-link title="12-factor" href="https://12factor.net/config" %}.
+Application code is decoupled from how configuration is managed as per the [12-factor](https://12factor.net/config).
 Configs in GoFr can be used to initialize datasources, tracing, setting log levels, changing default HTTP or metrics port.
 This abstraction provides a user-friendly interface for configuring user's application without modifying the code itself.
 
