@@ -3,7 +3,7 @@ package gofr
 import (
 	"context"
 	"runtime/debug"
-
+	"time"
 	"gofr.dev/pkg/gofr/container"
 	"gofr.dev/pkg/gofr/logging"
 )
@@ -33,6 +33,8 @@ func (s *SubscriptionManager) startSubscriber(ctx context.Context, topic string,
 			err := s.handleSubscription(ctx, topic, handler)
 			if err != nil {
 				s.container.Logger.Errorf("error in subscription for topic %s: %v", topic, err)
+				// Add delay to prevent tight retry loop
+				time.sleep(2 * time.second)
 			}
 		}
 	}
