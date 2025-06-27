@@ -286,7 +286,7 @@ func (c *Client) Close(ctx context.Context) error {
 	return nil
 }
 
-func (c *Client) Query(ctx context.Context, query string, args ...any) ([]byte, error) {
+func (c *Client) Query(_ context.Context, _ string, _ ...any) ([]byte, error) {
 	//TODO:  Implement query for Query
 
 	return nil, nil
