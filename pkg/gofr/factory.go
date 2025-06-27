@@ -57,7 +57,7 @@ func New() *App {
 		port = defaultGRPCPort
 	}
 
-	app.grpcServer = newGRPCServer(app.container, port)
+	app.grpcServer = newGRPCServer(app.container, port, app.Config)
 
 	app.subscriptionManager = newSubscriptionManager(app.container)
 
