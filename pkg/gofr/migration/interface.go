@@ -26,6 +26,7 @@ type SQL interface {
 }
 
 type PubSub interface {
+	Query(ctx context.Context, query string, args ...any) ([]byte, error)
 	CreateTopic(context context.Context, name string) error
 	DeleteTopic(context context.Context, name string) error
 }

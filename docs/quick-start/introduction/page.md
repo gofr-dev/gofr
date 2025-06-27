@@ -1,7 +1,7 @@
 # Prerequisite
 
 - Go 1.24 or above.
-  To check Go version use the following command `go version`.
+  To check the Go version, use the following command `go version`.
 
 - Prior familiarity with Golang syntax is essential. {% new-tab-link title="Golang Tour" href="https://tour.golang.org/" /%} is highly recommended as it has an excellent guided tour.
 
@@ -50,7 +50,7 @@ Once the dependencies are synchronized, start the GoFr server using the followin
 
 `go run main.go`
 
-This would start the server at 8000 port, `/greet` endpoint can be accessed from your browser at {% new-tab-link title="http://localhost:8000/greet" href="http://localhost:8000/greet" /%} , you would be able to see the output as following with _Status Code 200_ as per REST Standard.
+This would start the server at 8000 port, `/greet` endpoint can be accessed from your browser at {% new-tab-link title="http://localhost:8000/greet" href="http://localhost:8000/greet" /%}, you would be able to see the output as following with _Status Code 200_ as per REST Standard.
 
 ```json
 { "data": "Hello World!" }
@@ -62,7 +62,7 @@ The `hello-world` server involves three essential steps:
 
 1. **Creating GoFr Server:**
 
-   When `gofr.New()` is called, it initializes the framework and handles various setup tasks like initializing logger, metrics, datasources, etc. based on the configs.
+   When `gofr.New()` is called, it initializes the framework and handles various setup tasks like initializing logger, metrics, datasources, etc., based on the configs.
 
    _This single line is a standard part of all GoFr servers._
 
@@ -80,4 +80,4 @@ GoFr {% new-tab-link  newtab=false title="context" href="/docs/references/contex
 
 3. **Starting the server**
 
-   When `app.Run()` is called, it configures, initiates and runs the HTTP server, middlewares. It manages essential features such as routes for health check endpoints, metrics server, favicon etc. It starts the server on the default port 8000.
+   When `app.Run()` is called, it configures, initiates, and runs the HTTP server, middlewares. It manages essential features such as routes for health check endpoints, metrics server, favicon etc. It starts the server on the default port 8000.
