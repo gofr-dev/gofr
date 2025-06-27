@@ -13,163 +13,25 @@ as unnecessary database drivers are not being compiled and added to the build.
 
 ## Supported Databases
 
-{% table %}
-
-- Datasource
-- Health-Check
-- Logs
-- Metrics
-- Traces
-- Version-Migrations
-
----
-
--  MySQL
-- ✅
-- ✅
-- ✅
-- ✅
-- ✅
-
----
-
--  REDIS
-- ✅
-- ✅
-- ✅
-- ✅
-- ✅
-
----
-
--  PostgreSQL
-- ✅
-- ✅
-- ✅
-- ✅
-- ✅
-
----
-
--  CockroachDB
-- ✅
-- ✅
-- ✅
-- ✅
-- ✅
-
----
-
--  ArangoDB
-- ✅
-- ✅
-- ✅
-- ✅
-- ✅
-
----
-
-
--  BadgerDB
-- ✅
-- ✅
-- ✅
-- ✅
--
-
----
-
--  Cassandra
-- ✅
-- ✅
-- ✅
-- ✅
-- ✅
-
----
-
--  ClickHouse
--
-- ✅
-- ✅
-- ✅
-- ✅
-
----
-
--  DGraph
-- ✅
-- ✅
-- ✅
-- ✅
-- ✅
-
----
-
--  MongoDB
-- ✅
-- ✅
-- ✅
-- ✅
-- ✅
-
----
--  NATS KV
-- ✅
-- ✅
-- ✅
-- ✅
--
----
-
--  OpenTSDB
-- ✅
-- ✅
--
-- ✅
--
----
-
--  ScyllaDB
-- ✅
-- ✅
-- ✅
-- ✅
--
----
-
--  Solr
--
-- ✅
-- ✅
-- ✅
--
----
-
--  SQLite
-- ✅
-- ✅
-- ✅
-- ✅
-- ✅
----
-
--  SurrealDB
-- ✅
-- ✅
-- ✅
-- ✅
-- ✅
----
-
--  Elasticsearch
-- ✅
-- ✅
-- ✅
-- ✅
-- 
-
----
+| Datasource | Health-Check | Logs | Metrics | Traces | Version-Migrations |
+|------------|--------------|------|---------|--------|-------------------|
+| MySQL | ✅ | ✅ | ✅ | ✅ | ✅ |
+| REDIS | ✅ | ✅ | ✅ | ✅ | ✅ |
+| PostgreSQL | ✅ | ✅ | ✅ | ✅ | ✅ |
+| CockroachDB | ✅ | ✅ | ✅ | ✅ | ✅ |
+| ArangoDB | ✅ | ✅ | ✅ | ✅ | ✅ |
+| BadgerDB | ✅ | ✅ | ✅ | ✅ | |
+| Cassandra | ✅ | ✅ | ✅ | ✅ | ✅ |
+| ClickHouse | | ✅ | ✅ | ✅ | ✅ |
+| DGraph | ✅ | ✅ | ✅ | ✅ | ✅ |
+| MongoDB | ✅ | ✅ | ✅ | ✅ | ✅ |
+| NATS KV | ✅ | ✅ | ✅ | ✅ | |
+| OpenTSDB | ✅ | ✅ | | ✅ | |
+| ScyllaDB | ✅ | ✅ | ✅ | ✅ | |
+| Solr | | ✅ | ✅ | ✅ | |
+| SQLite | ✅ | ✅ | ✅ | ✅ | ✅ |
+| SurrealDB | ✅ | ✅ | ✅ | ✅ | ✅ |
+| Elasticsearch | ✅ | ✅ | ✅ | ✅ | |
 
 
 
