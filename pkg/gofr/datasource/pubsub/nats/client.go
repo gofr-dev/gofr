@@ -286,6 +286,12 @@ func (c *Client) Close(ctx context.Context) error {
 	return nil
 }
 
+func (c *Client) Query(ctx context.Context, query string, args ...any) ([]byte, error) {
+	//TODO:  Implement query for Query
+
+	return nil, nil
+}
+
 // CreateTopic creates a new topic (stream) in NATS jStream.
 func (c *Client) CreateTopic(ctx context.Context, name string) error {
 	if err := checkClient(c); err != nil {
