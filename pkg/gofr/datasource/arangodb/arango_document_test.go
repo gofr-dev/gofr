@@ -15,8 +15,10 @@ func Test_Client_CreateDocument(t *testing.T) {
 	mockDB := NewMockDatabase(gomock.NewController(t))
 	mockCollection := NewMockCollection(gomock.NewController(t))
 
-	mockArango.EXPECT().Database(gomock.Any(), "testDB").Return(mockDB, nil).AnyTimes()
-	mockDB.EXPECT().Collection(gomock.Any(), "testCollection").Return(mockCollection, nil).AnyTimes()
+	mockArango.EXPECT().GetDatabase(gomock.Any(), "testDB", &arangodb.GetDatabaseOptions{}).
+		Return(mockDB, nil).AnyTimes()
+	mockDB.EXPECT().GetCollection(gomock.Any(), "testCollection", nil).
+		Return(mockCollection, nil).AnyTimes()
 	mockCollection.EXPECT().Properties(gomock.Any()).Return(arangodb.CollectionProperties{}, nil)
 	mockCollection.EXPECT().CreateDocument(gomock.Any(), "testDocument").
 		Return(arangodb.CollectionDocumentCreateResponse{DocumentMeta: arangodb.DocumentMeta{
@@ -36,8 +38,10 @@ func Test_Client_CreateDocument_Error(t *testing.T) {
 	mockDB := NewMockDatabase(gomock.NewController(t))
 	mockCollection := NewMockCollection(gomock.NewController(t))
 
-	mockArango.EXPECT().Database(gomock.Any(), "testDB").Return(mockDB, nil).AnyTimes()
-	mockDB.EXPECT().Collection(gomock.Any(), "testCollection").Return(mockCollection, nil).AnyTimes()
+	mockArango.EXPECT().GetDatabase(gomock.Any(), "testDB", &arangodb.GetDatabaseOptions{}).
+		Return(mockDB, nil).AnyTimes()
+	mockDB.EXPECT().GetCollection(gomock.Any(), "testCollection", nil).
+		Return(mockCollection, nil).AnyTimes()
 	mockCollection.EXPECT().Properties(gomock.Any()).Return(arangodb.CollectionProperties{}, nil)
 	mockCollection.EXPECT().CreateDocument(gomock.Any(), "testDocument").
 		Return(arangodb.CollectionDocumentCreateResponse{}, errDocumentNotFound)
@@ -56,8 +60,10 @@ func Test_Client_GetDocument(t *testing.T) {
 	mockDB := NewMockDatabase(gomock.NewController(t))
 	mockCollection := NewMockCollection(gomock.NewController(t))
 
-	mockArango.EXPECT().Database(gomock.Any(), "testDB").Return(mockDB, nil)
-	mockDB.EXPECT().Collection(gomock.Any(), "testCollection").Return(mockCollection, nil)
+	mockArango.EXPECT().GetDatabase(gomock.Any(), "testDB", &arangodb.GetDatabaseOptions{}).
+		Return(mockDB, nil).AnyTimes()
+	mockDB.EXPECT().GetCollection(gomock.Any(), "testCollection", nil).
+		Return(mockCollection, nil).AnyTimes()
 	mockCollection.EXPECT().ReadDocument(gomock.Any(), "testDocument", "").Return(arangodb.DocumentMeta{
 		Key: "testKey", ID: "1"}, nil)
 	mockLogger.EXPECT().Debug(gomock.Any()).AnyTimes()
@@ -74,8 +80,10 @@ func Test_Client_GetDocument_Error(t *testing.T) {
 	mockDB := NewMockDatabase(gomock.NewController(t))
 	mockCollection := NewMockCollection(gomock.NewController(t))
 
-	mockArango.EXPECT().Database(gomock.Any(), "testDB").Return(mockDB, nil)
-	mockDB.EXPECT().Collection(gomock.Any(), "testCollection").Return(mockCollection, nil)
+	mockArango.EXPECT().GetDatabase(gomock.Any(), "testDB", &arangodb.GetDatabaseOptions{}).
+		Return(mockDB, nil).AnyTimes()
+	mockDB.EXPECT().GetCollection(gomock.Any(), "testCollection", nil).
+		Return(mockCollection, nil).AnyTimes()
 	mockCollection.EXPECT().ReadDocument(gomock.Any(), "testDocument", "").
 		Return(arangodb.DocumentMeta{}, errDocumentNotFound)
 	mockLogger.EXPECT().Debug(gomock.Any())
@@ -93,8 +101,10 @@ func Test_Client_UpdateDocument(t *testing.T) {
 	mockCollection := NewMockCollection(gomock.NewController(t))
 	testDocument := map[string]any{"field": "value"}
 
-	mockArango.EXPECT().Database(gomock.Any(), "testDB").Return(mockDB, nil)
-	mockDB.EXPECT().Collection(gomock.Any(), "testCollection").Return(mockCollection, nil)
+	mockArango.EXPECT().GetDatabase(gomock.Any(), "testDB", &arangodb.GetDatabaseOptions{}).
+		Return(mockDB, nil).AnyTimes()
+	mockDB.EXPECT().GetCollection(gomock.Any(), "testCollection", nil).
+		Return(mockCollection, nil).AnyTimes()
 	mockCollection.EXPECT().UpdateDocument(gomock.Any(), "testDocument", testDocument).
 		Return(arangodb.CollectionDocumentUpdateResponse{
 			DocumentMetaWithOldRev: arangodb.DocumentMetaWithOldRev{DocumentMeta: arangodb.DocumentMeta{Key: "testKey", ID: "1", Rev: ""}}}, nil)
@@ -113,8 +123,10 @@ func Test_Client_UpdateDocument_Error(t *testing.T) {
 	mockCollection := NewMockCollection(gomock.NewController(t))
 	testDocument := map[string]any{"field": "value"}
 
-	mockArango.EXPECT().Database(gomock.Any(), "testDB").Return(mockDB, nil)
-	mockDB.EXPECT().Collection(gomock.Any(), "testCollection").Return(mockCollection, nil)
+	mockArango.EXPECT().GetDatabase(gomock.Any(), "testDB", &arangodb.GetDatabaseOptions{}).
+		Return(mockDB, nil).AnyTimes()
+	mockDB.EXPECT().GetCollection(gomock.Any(), "testCollection", nil).
+		Return(mockCollection, nil).AnyTimes()
 	mockCollection.EXPECT().UpdateDocument(gomock.Any(), "testDocument", testDocument).
 		Return(arangodb.CollectionDocumentUpdateResponse{}, errDocumentNotFound)
 	mockLogger.EXPECT().Debug(gomock.Any()).AnyTimes()
@@ -130,8 +142,10 @@ func Test_Client_DeleteDocument(t *testing.T) {
 	mockDB := NewMockDatabase(gomock.NewController(t))
 	mockCollection := NewMockCollection(gomock.NewController(t))
 
-	mockArango.EXPECT().Database(gomock.Any(), "testDB").Return(mockDB, nil)
-	mockDB.EXPECT().Collection(gomock.Any(), "testCollection").Return(mockCollection, nil)
+	mockArango.EXPECT().GetDatabase(gomock.Any(), "testDB", &arangodb.GetDatabaseOptions{}).
+		Return(mockDB, nil).AnyTimes()
+	mockDB.EXPECT().GetCollection(gomock.Any(), "testCollection", nil).
+		Return(mockCollection, nil).AnyTimes()
 	mockCollection.EXPECT().DeleteDocument(gomock.Any(), "testDocument").
 		Return(arangodb.CollectionDocumentDeleteResponse{
 			DocumentMeta: arangodb.DocumentMeta{Key: "testKey", ID: "1", Rev: ""}}, nil)
@@ -149,8 +163,10 @@ func Test_Client_DeleteDocument_Error(t *testing.T) {
 	mockDB := NewMockDatabase(gomock.NewController(t))
 	mockCollection := NewMockCollection(gomock.NewController(t))
 
-	mockArango.EXPECT().Database(gomock.Any(), "testDB").Return(mockDB, nil)
-	mockDB.EXPECT().Collection(gomock.Any(), "testCollection").Return(mockCollection, nil)
+	mockArango.EXPECT().GetDatabase(gomock.Any(), "testDB", &arangodb.GetDatabaseOptions{}).
+		Return(mockDB, nil).AnyTimes()
+	mockDB.EXPECT().GetCollection(gomock.Any(), "testCollection", nil).
+		Return(mockCollection, nil).AnyTimes()
 	mockCollection.EXPECT().DeleteDocument(gomock.Any(), "testDocument").
 		Return(arangodb.CollectionDocumentDeleteResponse{}, errDocumentNotFound)
 	mockLogger.EXPECT().Debug(gomock.Any()).AnyTimes()
@@ -185,8 +201,10 @@ func TestExecuteCollectionOperation(t *testing.T) {
 	operation := "createDocument"
 	documentID := "doc123"
 
-	mockArango.EXPECT().Database(ctx, dbName).Return(mockDatabase, nil)
-	mockDatabase.EXPECT().Collection(ctx, collectionName).Return(mockCollection, nil)
+	mockArango.EXPECT().GetDatabase(gomock.Any(), "testDB", &arangodb.GetDatabaseOptions{}).
+		Return(mockDatabase, nil).AnyTimes()
+	mockDatabase.EXPECT().GetCollection(gomock.Any(), "testCollection", nil).
+		Return(mockCollection, nil).AnyTimes()
 	mockLogger.EXPECT().Debug(gomock.Any())
 	mockMetrics.EXPECT().RecordHistogram(ctx, "app_arango_stats", gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any())
 
