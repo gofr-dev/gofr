@@ -1,0 +1,19 @@
+:root {
+  --docs-bg: #f8fafc;
+  --docs-text: #23272f;
+  --docs-link: #388e3c;
+  --docs-header: #23272f;
+}
+[data-theme="dark"] {
+  --docs-bg: #181a20;
+  --docs-text: #e5e7eb;
+  --docs-link: #4caf50;
+  --docs-header: #e5e7eb;
+}
+body {
+  background: var(--docs-bg);
+  color: var(--docs-text);
+  transition: background 0.2s, color 0.2s;
+}
+a { color: var(--docs-link); }
+h1, h2, h3, h4, h5, h6 { color: var(--docs-header); }

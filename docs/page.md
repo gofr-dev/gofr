@@ -1,5 +1,11 @@
 # Getting started
 
+<div id="theme-toggle-container" style="text-align:right; margin-bottom:1rem;">
+  <button id="theme-toggle-btn" aria-label="Toggle dark mode" style="padding:0.4rem 1rem; border-radius:6px; border:none; background:#23272f; color:#fff; cursor:pointer;">
+    🌙 Dark Mode
+  </button>
+</div>
+
 GoFr is Opinionated Web Framework written in Go (Golang). It helps in building robust and scalable applications. This framework is designed to offer a user-friendly and familiar abstraction for all the developers. We prioritize simplicity over complexity.
 
 In this section we will walk through what GoFr is, what problems it solves, and how it can help in building your project.
@@ -29,3 +35,5 @@ In this section we will walk through what GoFr is, what problems it solves, and 
 - Encourage a more functional way of programming.
 - Avoid code duplication.
 - Log and store data for analysis purposes.
+
+<link rel="stylesheet" href="/docs/public/docs-theme.css" />

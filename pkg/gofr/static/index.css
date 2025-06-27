@@ -12,5 +12,55 @@ html {
 
 body {
     margin: 0;
-    background: #fafafa;
+    background: #f8fafc;
+    font-family: 'Segoe UI', 'Roboto', Arial, sans-serif;
+    color: #23272f;
 }
+
+.gofr-swagger-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    background: linear-gradient(90deg, #23272f 0%, #4caf50 100%);
+    padding: 1rem 2rem;
+    box-shadow: 0 2px 8px rgba(44, 62, 80, 0.07);
+}
+
+.gofr-logo {
+    height: 48px;
+    margin-right: 1rem;
+    border-radius: 8px;
+    background: #fff;
+    padding: 2px;
+}
+
+.gofr-title {
+    font-size: 1.7rem;
+    font-weight: 600;
+    color: #fff;
+    flex: 1;
+}
+
+.gofr-docs-link {
+    color: #fff;
+    background: #388e3c;
+    padding: 0.5rem 1.2rem;
+    border-radius: 6px;
+    text-decoration: none;
+    font-weight: 500;
+    transition: background 0.2s;
+}
+.gofr-docs-link:hover {
+    background: #256029;
+}
+
+/* Improve contrast and accessibility for Swagger UI */
+.swagger-ui .topbar { display: none; }
+.swagger-ui .info { background: #e8f5e9; border-radius: 8px; }
+.swagger-ui .scheme-container { background: #f1f8e9; }
+.swagger-ui .opblock { border-radius: 8px; }
+.swagger-ui .opblock-summary { font-size: 1.1rem; }
+.swagger-ui .opblock.opblock-get { border-left: 5px solid #4caf50; }
+.swagger-ui .opblock.opblock-post { border-left: 5px solid #388e3c; }
+.swagger-ui .opblock.opblock-delete { border-left: 5px solid #e53935; }
+.swagger-ui .opblock.opblock-put { border-left: 5px solid #fbc02d; }

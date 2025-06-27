@@ -235,3 +235,23 @@ export const navigation = [
         ],
     },
 ]
+
+(function() {
+  const btn = document.getElementById('theme-toggle-btn');
+  if (!btn) return;
+  const root = document.documentElement;
+  const saved = localStorage.getItem('docs-theme');
+  if (saved) root.setAttribute('data-theme', saved);
+
+  function updateBtn(theme) {
+    btn.textContent = theme === 'dark' ? '☀️ Light Mode' : '🌙 Dark Mode';
+  }
+  updateBtn(root.getAttribute('data-theme') || 'light');
+
+  btn.onclick = function() {
+    const current = root.getAttribute('data-theme') === 'dark' ? 'light' : 'dark';
+    root.setAttribute('data-theme', current);
+    localStorage.setItem('docs-theme', current);
+    updateBtn(current);
+  };
+})();
