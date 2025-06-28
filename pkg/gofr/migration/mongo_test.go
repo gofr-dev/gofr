@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/assert"
+	"go.uber.org/mock/gomock"
 
 	"gofr.dev/pkg/gofr/container"
 )
@@ -41,7 +42,7 @@ func Test_MongoCheckAndCreateMigrationTable(t *testing.T) {
 	}
 
 	for i, tc := range testCases {
-		mockMongo.EXPECT().CreateCollection(t.Context(), mongoMigrationCollection).Return(tc.err)
+		mockMongo.EXPECT().CreateCollection(gomock.Any(), mongoMigrationCollection).Return(tc.err)
 		err := migratorWithMongo.checkAndCreateMigrationTable(mockContainer)
 
 		assert.Equal(t, tc.err, err, "TEST[%v]\n %v Failed! ", i, tc.desc)
@@ -67,7 +68,7 @@ func Test_MongoGetLastMigration(t *testing.T) {
 	filter := make(map[string]any)
 
 	for i, tc := range testCases {
-		mockMongo.EXPECT().Find(t.Context(), mongoMigrationCollection, filter, &migrations).Return(tc.err)
+		mockMongo.EXPECT().Find(gomock.Any(), mongoMigrationCollection, filter, &migrations).Return(tc.err)
 
 		resp := migratorWithMongo.getLastMigration(mockContainer)
 
@@ -105,7 +106,7 @@ func Test_MongoCommitMigration(t *testing.T) {
 	}
 
 	for i, tc := range testCases {
-		mockMongo.EXPECT().InsertOne(t.Context(), mongoMigrationCollection, migrationDoc).Return(mockResult, tc.err)
+		mockMongo.EXPECT().InsertOne(gomock.Any(), mongoMigrationCollection, migrationDoc).Return(mockResult, tc.err)
 
 		err := migratorWithMongo.commitMigration(mockContainer, td)
 
