@@ -8,7 +8,7 @@ In this section we will walk through what GoFr is, what problems it solves, and 
 
 ### 🚀 Quick Start
 Step-by-step guides to setting up your system and installing the library.
-[Get Started →](/docs/quick-start/introduction)
+[Get Started →](/docs/quick-start/introduction/page.md)
 
 ### 📚 Examples
 Our guides break down how to perform common tasks in GoFr.
