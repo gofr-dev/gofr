@@ -24,17 +24,27 @@ func newSubscriptionManager(c *container.Container) SubscriptionManager {
 
 // startSubscriber continuously subscribes to a topic and handles messages using the provided handler.
 func (s *SubscriptionManager) startSubscriber(ctx context.Context, topic string, handler SubscribeFunc) error {
+	var delay time.duration = 2 * time.second
+	
 	for {
 		select {
 		case <-ctx.Done():
 			s.container.Logger.Infof("shutting down subscriber for topic %s", topic)
 			return nil
-		default:
+		case <-time.after(delay): 
 			err := s.handleSubscription(ctx, topic, handler)
+			
 			if err != nil {
 				s.container.Logger.Errorf("error in subscription for topic %s: %v", topic, err)
-				// Add delay to prevent tight retry loop
-				time.sleep(2 * time.second)
+
+                               // Exponential backoff: slow down retry after repeated failures
+				delay += 2 * time.second
+				if(delay > 30*time.second {
+				delay = 30 * time.second // capture max delay
+			       }
+				   else{
+					   // reset delay after success
+					   delay = 2 * time.second
 			}
 		}
 	}
