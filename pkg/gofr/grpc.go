@@ -6,11 +6,14 @@ import (
 	"net"
 	"reflect"
 	"strconv"
+	"strings"
 
-	"github.com/grpc-ecosystem/go-grpc-middleware"
-	"github.com/grpc-ecosystem/go-grpc-middleware/recovery"
+	grpc_middleware "github.com/grpc-ecosystem/go-grpc-middleware"
+	grpc_recovery "github.com/grpc-ecosystem/go-grpc-middleware/recovery"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/reflection"
 
+	"gofr.dev/pkg/gofr/config"
 	"gofr.dev/pkg/gofr/container"
 	gofr_grpc "gofr.dev/pkg/gofr/grpc"
 )
@@ -21,6 +24,7 @@ type grpcServer struct {
 	streamInterceptors []grpc.StreamServerInterceptor
 	options            []grpc.ServerOption
 	port               int
+	config             config.Config
 }
 
 // AddGRPCServerOptions allows users to add custom gRPC server options such as TLS configuration,
@@ -58,7 +62,7 @@ func (a *App) AddGRPCServerStreamInterceptors(interceptors ...grpc.StreamServerI
 	a.grpcServer.streamInterceptors = append(a.grpcServer.streamInterceptors, interceptors...)
 }
 
-func newGRPCServer(c *container.Container, port int) *grpcServer {
+func newGRPCServer(c *container.Container, port int, cfg config.Config) *grpcServer {
 	middleware := make([]grpc.UnaryServerInterceptor, 0)
 	middleware = append(middleware,
 		grpc_recovery.UnaryServerInterceptor(),
@@ -73,6 +77,7 @@ func newGRPCServer(c *container.Container, port int) *grpcServer {
 		port:               port,
 		interceptors:       middleware,
 		streamInterceptors: streamMiddleware,
+		config:             cfg,
 	}
 }
 
@@ -82,6 +87,11 @@ func (g *grpcServer) createServer() {
 	g.options = append(g.options, interceptorOption, streamOpt)
 
 	g.server = grpc.NewServer(g.options...)
+
+	enabled := strings.ToLower(g.config.GetOrDefault("GRPC_ENABLE_REFLECTION", "false"))
+	if enabled != defaultReflection {
+		reflection.Register(g.server)
+	}
 }
 
 func (g *grpcServer) Run(c *container.Container) {
