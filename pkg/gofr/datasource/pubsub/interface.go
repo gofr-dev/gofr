@@ -23,6 +23,7 @@ type Client interface {
 
 	CreateTopic(context context.Context, name string) error
 	DeleteTopic(context context.Context, name string) error
+	Query(ctx context.Context, query string, args ...any) ([]byte, error)
 
 	Close() error
 }

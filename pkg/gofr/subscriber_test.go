@@ -19,6 +19,10 @@ func subscriptionError(err string) error {
 type mockSubscriber struct {
 }
 
+func (mockSubscriber) Query(_ context.Context, _ string, _ ...any) ([]byte, error) {
+	return nil, nil
+}
+
 func (mockSubscriber) CreateTopic(_ context.Context, _ string) error {
 	return nil
 }
