@@ -193,6 +193,16 @@ export const navigation = [
                 desc: "Learn how to connect to and interact with opentsdb database in GoFr."
             },
             {
+                title: "PostgreSQL",
+                href: "/docs/datasources/postgresql",
+                desc: "Learn how to connect to and interact with PostgreSQL database in GoFr."
+            },
+            {
+                title: "Redis",
+                href: "/docs/datasources/redis",
+                desc: "Learn how to connect to and interact with Redis in GoFr."
+            },
+            {
                 title: "ScyllaDB",
                 href: "/docs/datasources/scylladb",
                 desc: "Learn how to connect to and interact with scylla database in GoFr."
