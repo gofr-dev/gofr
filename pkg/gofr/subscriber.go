@@ -32,7 +32,7 @@ func (s *SubscriptionManager) startSubscriber(ctx context.Context, topic string,
 		case <-ctx.Done():
 			s.container.Logger.Infof("shutting down subscriber for topic %s", topic)
 			return nil
-		case <-time.after(delay): 
+		 default:
 			err := s.handleSubscription(ctx, topic, handler)
 			
 			 if err == nil {
@@ -44,6 +44,8 @@ func (s *SubscriptionManager) startSubscriber(ctx context.Context, topic string,
 			// Exponential backoff: slow down retry after repeated failures
 			delay += 2 * time.second
 			delay = time.Duration(math.Min(float64(delay), float64(30*time.Second)))
+			// actually wait before retrying
+			time.sleep(delay)
 			}
 		}
 	}
