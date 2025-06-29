@@ -6,6 +6,7 @@ import (
 	"time"
 	"gofr.dev/pkg/gofr/container"
 	"gofr.dev/pkg/gofr/logging"
+	"math"
 )
 
 type SubscribeFunc func(c *Context) error
@@ -24,7 +25,7 @@ func newSubscriptionManager(c *container.Container) SubscriptionManager {
 
 // startSubscriber continuously subscribes to a topic and handles messages using the provided handler.
 func (s *SubscriptionManager) startSubscriber(ctx context.Context, topic string, handler SubscribeFunc) error {
-	var delay time.duration = 2 * time.second
+	var delay time.Duration = 2 * time.second
 	
 	for {
 		select {
@@ -34,17 +35,15 @@ func (s *SubscriptionManager) startSubscriber(ctx context.Context, topic string,
 		case <-time.after(delay): 
 			err := s.handleSubscription(ctx, topic, handler)
 			
-			if err != nil {
-				s.container.Logger.Errorf("error in subscription for topic %s: %v", topic, err)
-
-                               // Exponential backoff: slow down retry after repeated failures
-				delay += 2 * time.second
-				if(delay > 30*time.second {
-				delay = 30 * time.second // capture max delay
-			       }
-				   else{
-					   // reset delay after success
-					   delay = 2 * time.second
+			 if err == nil {
+				// reset delay after success
+				delay = 2 * time.second
+				continue
+			}
+ 			s.container.Logger.Errorf("error in subscription for topic %s: %v", topic, err)
+			// Exponential backoff: slow down retry after repeated failures
+			delay += 2 * time.second
+			delay = time.Duration(math.Min(float64(delay), float64(30*time.Second)))
 			}
 		}
 	}
