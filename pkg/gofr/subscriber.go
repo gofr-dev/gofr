@@ -46,11 +46,9 @@ func (s *SubscriptionManager) startSubscriber(ctx context.Context, topic string,
 			delay = time.Duration(math.Min(float64(delay), float64(30*time.Second)))
 			// actually wait before retrying
 			time.sleep(delay)
-			}
-		}
-	}
+		  }
+	  }
 }
-
 func (s *SubscriptionManager) handleSubscription(ctx context.Context, topic string, handler SubscribeFunc) error {
 	msg, err := s.container.GetSubscriber().Subscribe(ctx, topic)
 
