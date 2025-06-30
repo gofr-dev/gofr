@@ -235,8 +235,7 @@ func (l *logger) ChangeLevel(level Level) {
 	l.level = level
 }
 
-// Level represents the severity of a log message.
-// It is used to categorize logs into different levels such as Debug, Info, Warn, Error, and Fatal.
+// LogLevelResponder represents an interface that provides a method to get the log level.
 type LogLevelResponder interface {
 	LogLevel() Level
 }
