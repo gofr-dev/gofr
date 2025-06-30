@@ -1,6 +1,8 @@
 package service
 
 import (
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"testing"
 
@@ -18,10 +20,10 @@ func TestNewAPIKeyConfig(t *testing.T) {
 		apiKeyOption Options
 		err          error
 	}{
-		{apiKey: "valid", apiKeyOption: &APIKeyConfig{APIKey: "valid"}, err: nil},
-		{apiKey: "  valid  ", apiKeyOption: &APIKeyConfig{APIKey: "valid"}, err: nil},
-		{apiKey: "", apiKeyOption: nil, err: AuthErr{Message: "non empty api key is required"}},
-		{apiKey: "  ", apiKeyOption: nil, err: AuthErr{Message: "non empty api key is required"}},
+		{apiKey: "valid", apiKeyOption: &APIKeyConfig{APIKey: "valid"}},
+		{apiKey: "  valid  ", apiKeyOption: &APIKeyConfig{APIKey: "valid"}},
+		{apiKey: "", err: AuthErr{Message: "non empty api key is required"}},
+		{apiKey: "  ", err: AuthErr{Message: "non empty api key is required"}},
 	}
 
 	for i, tc := range testCases {
@@ -32,7 +34,6 @@ func TestNewAPIKeyConfig(t *testing.T) {
 }
 
 func TestAddAuthorizationHeader_APIKey(t *testing.T) {
-
 	testCases := []struct {
 		apiKey   string
 		headers  map[string]string
@@ -41,28 +42,43 @@ func TestAddAuthorizationHeader_APIKey(t *testing.T) {
 	}{
 		{
 			apiKey:   "valid",
-			headers:  nil,
 			response: map[string]string{xAPIKeyHeader: "valid"},
 		},
 		{
 			apiKey:   "valid",
 			headers:  map[string]string{xAPIKeyHeader: "existing-value"},
 			response: map[string]string{xAPIKeyHeader: "existing-value"},
-			err:      AuthErr{Message: "value existing-value already exists for header X-Api-Key"},
+			err:      AuthErr{Message: `value existing-value already exists for header X-Api-Key`},
 		},
 		{
 			apiKey:   "valid",
 			headers:  map[string]string{"header-key": "existing-value"},
 			response: map[string]string{"header-key": "existing-value", xAPIKeyHeader: "valid"},
-			err:      nil,
 		},
 	}
 	for i, tc := range testCases {
-		apiKeyAuthProvider := apiKeyAuthProvider{
-			apiKey: tc.apiKey,
-		}
-		response, err := apiKeyAuthProvider.addAuthorizationHeader(t.Context(), tc.headers)
+		config := APIKeyConfig{APIKey: tc.apiKey}
+		response, err := config.addAuthorizationHeader(t.Context(), tc.headers)
 		assert.Equal(t, tc.response, response, "failed test case #%d", i)
 		assert.Equal(t, tc.err, err, "failed test case #%d", i)
 	}
+}
+
+func setupAPIKeyAuthHTTPServer(t *testing.T, config *APIKeyConfig) *httptest.Server {
+	t.Helper()
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		statusCode := http.StatusOK
+		if r.Header.Get(xAPIKeyHeader) != config.APIKey {
+			statusCode = http.StatusUnauthorized
+		}
+
+		w.WriteHeader(statusCode)
+	}))
+
+	t.Cleanup(func() {
+		server.Close()
+	})
+
+	return server
 }

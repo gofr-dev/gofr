@@ -34,24 +34,8 @@ type OAuthConfig struct {
 	AuthStyle oauth2.AuthStyle
 }
 
-func (h *OAuthConfig) AddOption(svc HTTP) HTTP {
-	return &oAuth{
-		Config: clientcredentials.Config{
-			ClientID:       h.ClientID,
-			ClientSecret:   h.ClientSecret,
-			TokenURL:       h.TokenURL,
-			Scopes:         h.Scopes,
-			EndpointParams: h.EndpointParams,
-			AuthStyle:      h.AuthStyle,
-		},
-		authProvider: authProvider{svc},
-	}
-}
-
-type oAuth struct {
-	clientcredentials.Config
-
-	authProvider
+func (c *OAuthConfig) AddOption(svc HTTP) HTTP {
+	return &authProvider{auth: c.addAuthorizationHeader, HTTP: svc}
 }
 
 func NewOAuthConfig(clientID, secret, tokenURL string, scopes []string, params url.Values, authStyle oauth2.AuthStyle) (Options, error) {
@@ -102,7 +86,7 @@ func validateTokenURL(tokenURL string) error {
 	}
 }
 
-func (o *oAuth) addAuthorizationHeader(ctx context.Context, headers map[string]string) (map[string]string, error) {
+func (c *OAuthConfig) addAuthorizationHeader(ctx context.Context, headers map[string]string) (map[string]string, error) {
 	var err error
 
 	if headers == nil {
@@ -113,7 +97,16 @@ func (o *oAuth) addAuthorizationHeader(ctx context.Context, headers map[string]s
 		return nil, AuthErr{Message: fmt.Sprintf("value %v already exists for header %v", authHeader, AuthHeader)}
 	}
 
-	token, err := o.TokenSource(ctx).Token()
+	clientCredentials := clientcredentials.Config{
+		ClientID:       c.ClientID,
+		ClientSecret:   c.ClientSecret,
+		TokenURL:       c.TokenURL,
+		Scopes:         c.Scopes,
+		EndpointParams: c.EndpointParams,
+		AuthStyle:      c.AuthStyle,
+	}
+
+	token, err := clientCredentials.TokenSource(ctx).Token()
 	if err != nil {
 		return nil, err
 	}

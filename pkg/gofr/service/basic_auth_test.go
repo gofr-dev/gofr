@@ -4,10 +4,10 @@ import (
 	"encoding/base64"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
-	"go.uber.org/mock/gomock"
 )
 
 func TestNewBasicAuthConfig(t *testing.T) {
@@ -35,7 +35,6 @@ func TestNewBasicAuthConfig(t *testing.T) {
 }
 
 func TestAddAuthorizationHeader_BasicAuth(t *testing.T) {
-
 	testCases := []struct {
 		username string
 		password string
@@ -45,49 +44,53 @@ func TestAddAuthorizationHeader_BasicAuth(t *testing.T) {
 	}{
 		{
 			username: "username",
-			password: "password",
+			password: "cGFzc3dvcmQ=",
 			headers:  nil,
 			response: map[string]string{AuthHeader: "basic dXNlcm5hbWU6cGFzc3dvcmQ="},
 		},
 		{
 			username: "username",
-			password: "password",
+			password: "cGFzc3dvcmQ=",
 			headers:  map[string]string{AuthHeader: "existing value"},
 			response: map[string]string{AuthHeader: "existing value"},
 			err:      AuthErr{Message: "value existing value already exists for header Authorization"},
 		},
 		{
 			username: "username",
-			password: "password",
+			password: "cGFzc3dvcmQ=",
 			headers:  map[string]string{"header-key": "existing-value"},
 			response: map[string]string{"header-key": "existing-value", AuthHeader: "basic dXNlcm5hbWU6cGFzc3dvcmQ="},
 			err:      nil,
 		},
 	}
 	for i, tc := range testCases {
-		authProvider := basicAuthProvider{userName: tc.username, password: tc.password}
-		response, err := authProvider.addAuthorizationHeader(t.Context(), tc.headers)
+		config, err := NewBasicAuthConfig(tc.username, tc.password)
+		if err != nil {
+			t.Fatalf("unable to get basicAuthConfig for test case #%d", i)
+		}
+
+		basicAuthConfig, ok := config.(*BasicAuthConfig)
+		if !ok {
+			t.Fatalf("unable to get basicAuthConfig for test case #%d", i)
+		}
+
+		response, err := basicAuthConfig.addAuthorizationHeader(t.Context(), tc.headers)
 		assert.Equal(t, tc.response, response, "failed test case #%d", i)
 		assert.Equal(t, tc.err, err, "failed test case #%d", i)
 	}
 }
 
-func TestBasicAuthProvider(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
-
-	// separate mock servers having their own validations
-}
-
-func setupBasicAuthHTTPServer(t *testing.T, apiKey, headerAPIKey string, responseCode int) *httptest.Server {
+func setupBasicAuthHTTPServer(t *testing.T, config *BasicAuthConfig) *httptest.Server {
 	t.Helper()
 
+	validHeader := "basic " + base64.StdEncoding.EncodeToString([]byte(config.UserName+":"+config.Password))
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		// TODO add assertion for valid credentials being passed
+		statusCode := http.StatusOK
+		if r.Header.Get(AuthHeader) != validHeader {
+			statusCode = http.StatusUnauthorized
+		}
 
-		// TODO add check for valid credentials and update responseCode
-
-		w.WriteHeader(responseCode)
+		w.WriteHeader(statusCode)
 	}))
 
 	t.Cleanup(func() {
@@ -95,4 +98,21 @@ func setupBasicAuthHTTPServer(t *testing.T, apiKey, headerAPIKey string, respons
 	})
 
 	return server
+}
+
+func checkAuthHeaders(t *testing.T, r *http.Request) {
+	t.Helper()
+
+	authHeader := r.Header.Get(AuthHeader)
+
+	if authHeader == "" {
+		return
+	}
+
+	authParts := strings.Split(authHeader, " ")
+	payload, _ := base64.StdEncoding.DecodeString(authParts[1])
+	credentials := strings.Split(string(payload), ":")
+
+	assert.Equal(t, "user", credentials[0])
+	assert.Equal(t, "password", credentials[1])
 }
