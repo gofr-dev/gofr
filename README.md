@@ -1,14 +1,11 @@
 <h1 style="text-align: center; font-size: 100px; font-weight: 500;">
     <i>Go</i>Fr
 </h1>
-
+<div align="center">
 <p align="center">
 <img align="center" width="300" alt="logo" src="https://github.com/gofr-dev/gofr/assets/44036979/916fe7b1-42fb-4af1-9e0b-4a7a064c243c">
-</p>
-
 <h2 align="center" style="font-size: 28px;"><b>GoFr: An Opinionated Microservice Development Framework</b></h2>
-
-<div align="center">
+</p>
 <a href="https://pkg.go.dev/gofr.dev"><img src="https://img.shields.io/badge/GoDoc-Read%20Documentation-blue?style=for-the-badge" alt="godoc"></a>
 <a href="https://gofr.dev/docs"><img src="https://img.shields.io/badge/GoFr-Docs-orange?style=for-the-badge" alt="gofr-docs"></a>
 <a href="https://codeclimate.com/github/gofr-dev/gofr/maintainability"><img src="https://img.shields.io/codeclimate/maintainability/gofr-dev/gofr?style=for-the-badge" alt="maintainability"></a>
