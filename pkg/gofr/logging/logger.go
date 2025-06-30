@@ -235,7 +235,7 @@ func (l *logger) ChangeLevel(level Level) {
 	l.level = level
 }
 
-// LogLevelResponder represents an interface that provides a method to get the log level.
+// LogLevelResponder provides a method to get the log level.
 type LogLevelResponder interface {
 	LogLevel() Level
 }
