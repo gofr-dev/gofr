@@ -23,7 +23,7 @@ func TestHttpService_OAuthError(t *testing.T) {
 	}
 
 	for i, tc := range testCases {
-		oAuthError := OAuthErr{tc.err, tc.message}
+		oAuthError := AuthErr{tc.err, tc.message}
 		assert.Equal(t, tc.response, oAuthError.Error(), "failed test case #%d", i)
 	}
 }
