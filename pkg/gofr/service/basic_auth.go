@@ -2,7 +2,7 @@ package service
 
 import (
 	"context"
-	b64 "encoding/base64"
+	"encoding/base64"
 	"fmt"
 	"strings"
 )
@@ -12,24 +12,14 @@ type BasicAuthConfig struct {
 	Password string
 }
 
-func (a *BasicAuthConfig) AddOption(h HTTP) HTTP {
-	return &basicAuthProvider{
-		userName:     a.UserName,
-		password:     a.Password,
-		authProvider: authProvider{h},
-	}
-}
-
-type basicAuthProvider struct {
-	userName string
-	password string
-
-	authProvider
+func (c *BasicAuthConfig) AddOption(h HTTP) HTTP {
+	return &authProvider{auth: c.addAuthorizationHeader, HTTP: h}
 }
 
 func NewBasicAuthConfig(username, password string) (Options, error) {
 	username = strings.TrimSpace(username)
 	password = strings.TrimSpace(password)
+
 	if username == "" {
 		return nil, AuthErr{Message: "username is required"}
 	}
@@ -38,22 +28,25 @@ func NewBasicAuthConfig(username, password string) (Options, error) {
 		return nil, AuthErr{Message: "password is required"}
 	}
 
-	decodedPassword, err := b64.StdEncoding.DecodeString(password)
-	if err != nil {
+	decodedPassword, err := base64.StdEncoding.DecodeString(password)
+	if err != nil || string(decodedPassword) == password {
 		return nil, AuthErr{Err: err, Message: "password should be base64 encoded"}
 	}
 
 	return &BasicAuthConfig{username, string(decodedPassword)}, nil
 }
 
-func (a *basicAuthProvider) addAuthorizationHeader(ctx context.Context, headers map[string]string) (map[string]string, error) {
+func (c *BasicAuthConfig) addAuthorizationHeader(_ context.Context, headers map[string]string) (map[string]string, error) {
 	if headers == nil {
 		headers = make(map[string]string)
 	}
+
 	if value, exists := headers[AuthHeader]; exists {
 		return headers, AuthErr{Message: fmt.Sprintf("value %v already exists for header %v", value, AuthHeader)}
 	}
-	encodedAuth := b64.StdEncoding.EncodeToString([]byte(a.userName + ":" + a.password))
+
+	encodedAuth := base64.StdEncoding.EncodeToString([]byte(c.UserName + ":" + c.Password))
 	headers[AuthHeader] = "basic " + encodedAuth
+
 	return headers, nil
 }

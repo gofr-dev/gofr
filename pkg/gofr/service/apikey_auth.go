@@ -8,6 +8,7 @@ import (
 	"strings"
 )
 
+// #nosec G101
 const xAPIKeyHeader = "X-Api-Key"
 
 type APIKeyConfig struct {
@@ -15,16 +16,7 @@ type APIKeyConfig struct {
 }
 
 func (a *APIKeyConfig) AddOption(h HTTP) HTTP {
-	return &apiKeyAuthProvider{
-		apiKey:       a.APIKey,
-		authProvider: authProvider{h},
-	}
-}
-
-type apiKeyAuthProvider struct {
-	apiKey string
-
-	authProvider
+	return &authProvider{auth: a.addAuthorizationHeader, HTTP: h}
 }
 
 func NewAPIKeyConfig(apiKey string) (Options, error) {
@@ -36,7 +28,7 @@ func NewAPIKeyConfig(apiKey string) (Options, error) {
 	return &APIKeyConfig{APIKey: apiKey}, nil
 }
 
-func (a *apiKeyAuthProvider) addAuthorizationHeader(ctx context.Context, headers map[string]string) (map[string]string, error) {
+func (a *APIKeyConfig) addAuthorizationHeader(_ context.Context, headers map[string]string) (map[string]string, error) {
 	if headers == nil {
 		headers = make(map[string]string)
 	}
@@ -45,7 +37,7 @@ func (a *apiKeyAuthProvider) addAuthorizationHeader(ctx context.Context, headers
 		return headers, AuthErr{Message: fmt.Sprintf("value %v already exists for header %v", value, xAPIKeyHeader)}
 	}
 
-	headers[xAPIKeyHeader] = a.apiKey
+	headers[xAPIKeyHeader] = a.APIKey
 
 	return headers, nil
 }

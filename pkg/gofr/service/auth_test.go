@@ -1,109 +1,162 @@
 package service
 
 import (
+	"context"
+	"errors"
 	"fmt"
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
-	"go.uber.org/mock/gomock"
-	"gofr.dev/pkg/gofr/logging"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
+	"go.uber.org/mock/gomock"
+	"golang.org/x/oauth2"
+
+	"gofr.dev/pkg/gofr/logging"
 )
 
 func TestAuthProvider(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
-	validBasicAuth, invalidBasicAuth := "username:password", "username:wrong-password"
-	basicAuthConfig := &BasicAuthConfig{UserName: "username", Password: "password"}
-	oAuthConfig := &OAuthConfig{ClientID: "client-id", ClientSecret: "clientSecret"}
+	validBasicAuthConfig := &BasicAuthConfig{UserName: "username", Password: "password"}
+	basicAuthServer := setupBasicAuthHTTPServer(t, validBasicAuthConfig)
+	invalidBasicAuthConfig := &BasicAuthConfig{UserName: "username", Password: "wrong-password"}
 
-	validAPIKey, invalidAPIKey := "valid-value", "invalid-value"
-	apiKeyConfig := &APIKeyConfig{validAPIKey}
+	validOAuthConfig := oAuthConfigForTests(t, "")
+	oAuthServer := setupOAuthHTTPServer(t, validOAuthConfig)
+	validOAuthConfig.TokenURL = oAuthServer.URL + "/token"
+
+	invalidOAuthConfig := oAuthConfigForTests(t, oAuthServer.URL+"/token")
+	invalidOAuthConfig2 := oAuthConfigForTests(t, "")
+	invalidOAuthConfig3 := oAuthConfigForTests(t, invalidURL)
+
+	validAPIKeyConfig := &APIKeyConfig{"valid-value"}
+	apiKeyAuthServer := setupAPIKeyAuthHTTPServer(t, validAPIKeyConfig)
+	invalidAPIKeyConfig := &APIKeyConfig{"invalid-value"}
 
 	testCases := []struct {
-		headers    bool
 		authOption Options
-		httpMethod string
-		authHeader string
+		headers    map[string]string
 		statusCode int
+		err        error
 	}{
-		{authOption: basicAuthConfig, httpMethod: http.MethodPost, authHeader: validBasicAuth, statusCode: http.StatusCreated},
-		{authOption: basicAuthConfig, httpMethod: http.MethodGet, authHeader: validBasicAuth, statusCode: http.StatusOK},
-		{authOption: basicAuthConfig, httpMethod: http.MethodDelete, authHeader: validBasicAuth, statusCode: http.StatusNoContent},
-		{authOption: basicAuthConfig, httpMethod: http.MethodPatch, authHeader: validBasicAuth, statusCode: http.StatusOK},
-		{authOption: basicAuthConfig, httpMethod: http.MethodPut, authHeader: validBasicAuth, statusCode: http.StatusOK},
-		{authOption: basicAuthConfig, httpMethod: http.MethodPost, authHeader: invalidBasicAuth, statusCode: http.StatusUnauthorized},
-		{authOption: basicAuthConfig, httpMethod: http.MethodGet, authHeader: invalidBasicAuth, statusCode: http.StatusUnauthorized},
-		{authOption: basicAuthConfig, httpMethod: http.MethodDelete, authHeader: invalidBasicAuth, statusCode: http.StatusUnauthorized},
-		{authOption: basicAuthConfig, httpMethod: http.MethodPatch, authHeader: invalidBasicAuth, statusCode: http.StatusUnauthorized},
-		{authOption: basicAuthConfig, httpMethod: http.MethodPut, authHeader: invalidBasicAuth, statusCode: http.StatusUnauthorized},
+		{authOption: validBasicAuthConfig, statusCode: http.StatusOK},
+		{authOption: invalidBasicAuthConfig, statusCode: http.StatusUnauthorized},
 
-		{authOption: oAuthConfig, httpMethod: http.MethodPost, authHeader: "", statusCode: http.StatusCreated},
-		{authOption: oAuthConfig, httpMethod: http.MethodGet, authHeader: "", statusCode: http.StatusOK},
-		{authOption: oAuthConfig, httpMethod: http.MethodDelete, authHeader: "", statusCode: http.StatusNoContent},
-		{authOption: oAuthConfig, httpMethod: http.MethodPatch, authHeader: "", statusCode: http.StatusOK},
-		{authOption: oAuthConfig, httpMethod: http.MethodPut, authHeader: "", statusCode: http.StatusOK},
-		{authOption: oAuthConfig, httpMethod: http.MethodPost, authHeader: "", statusCode: http.StatusUnauthorized},
-		{authOption: oAuthConfig, httpMethod: http.MethodGet, authHeader: "", statusCode: http.StatusUnauthorized},
-		{authOption: oAuthConfig, httpMethod: http.MethodDelete, authHeader: "", statusCode: http.StatusUnauthorized},
-		{authOption: oAuthConfig, httpMethod: http.MethodPatch, authHeader: "", statusCode: http.StatusUnauthorized},
-		{authOption: oAuthConfig, httpMethod: http.MethodPut, authHeader: "", statusCode: http.StatusUnauthorized},
+		{authOption: validAPIKeyConfig, statusCode: http.StatusOK},
+		{authOption: invalidAPIKeyConfig, statusCode: http.StatusUnauthorized},
 
-		{authOption: apiKeyConfig, httpMethod: http.MethodPost, authHeader: validAPIKey, statusCode: http.StatusCreated},
-		{authOption: apiKeyConfig, httpMethod: http.MethodGet, authHeader: validAPIKey, statusCode: http.StatusOK},
-		{authOption: apiKeyConfig, httpMethod: http.MethodDelete, authHeader: validAPIKey, statusCode: http.StatusNoContent},
-		{authOption: apiKeyConfig, httpMethod: http.MethodPatch, authHeader: validAPIKey, statusCode: http.StatusOK},
-		{authOption: apiKeyConfig, httpMethod: http.MethodPut, authHeader: validAPIKey, statusCode: http.StatusOK},
-		{authOption: apiKeyConfig, httpMethod: http.MethodPost, authHeader: invalidAPIKey, statusCode: http.StatusUnauthorized},
-		{authOption: apiKeyConfig, httpMethod: http.MethodGet, authHeader: invalidAPIKey, statusCode: http.StatusUnauthorized},
-		{authOption: apiKeyConfig, httpMethod: http.MethodDelete, authHeader: invalidAPIKey, statusCode: http.StatusUnauthorized},
-		{authOption: apiKeyConfig, httpMethod: http.MethodPatch, authHeader: invalidAPIKey, statusCode: http.StatusUnauthorized},
-		{authOption: apiKeyConfig, httpMethod: http.MethodPut, authHeader: invalidAPIKey, statusCode: http.StatusUnauthorized},
+		{authOption: validOAuthConfig, statusCode: http.StatusOK},
+		{authOption: invalidOAuthConfig, statusCode: http.StatusUnauthorized, err: errInvalidCredentials},
+		{authOption: invalidOAuthConfig2, statusCode: http.StatusUnauthorized, err: errMissingTokenURL},
+		{authOption: invalidOAuthConfig3, statusCode: http.StatusUnauthorized, err: errIncorrectProtocol},
 	}
+
+	httpMethods := []string{http.MethodGet, http.MethodPost, http.MethodPut, http.MethodPatch, http.MethodDelete}
 
 	for i, tc := range testCases {
 		t.Run(fmt.Sprintf("Test Case #%d", i), func(t *testing.T) {
-
-			server := setupHTTPServer(t, tc.authOption)
+			var server *httptest.Server
+			switch tc.authOption.(type) {
+			case *OAuthConfig:
+				server = oAuthServer
+			case *BasicAuthConfig:
+				server = basicAuthServer
+			case *APIKeyConfig:
+				server = apiKeyAuthServer
+			}
 
 			httpService := NewHTTPService(server.URL, logging.NewMockLogger(logging.INFO), nil, tc.authOption)
 
-			var (
-				resp *http.Response
-				err  error
-			)
-			if tc.headers {
-				resp, err = callHTTPServiceWithHeaders(t.Context(), httpService, tc.httpMethod)
-			} else {
-				resp, err = callHTTPServiceWithoutHeaders(t.Context(), httpService, tc.httpMethod)
-			}
+			for _, method := range httpMethods {
+				resp, err := callHTTPService(t.Context(), httpService, method, tc.headers)
 
-			require.NoError(t, err)
-			assert.Equal(t, tc.statusCode, resp.StatusCode)
+				validateOAuthError(t, err, tc.err, tc.statusCode)
 
-			err = resp.Body.Close()
-			if err != nil {
-				t.Errorf("error closing response body %v", err)
+				if err != nil {
+					return
+				}
+
+				assert.Equal(t, tc.statusCode, resp.StatusCode)
+
+				err = resp.Body.Close()
+				if err != nil {
+					t.Errorf("error closing response body %v", err)
+				}
 			}
 		})
 	}
 }
 
-func setupHTTPServer(t *testing.T, authOption Options) *httptest.Server {
-	switch authOption.(type) {
-	case *BasicAuthConfig:
-		return nil
-	case *OAuthConfig:
-		return nil
-	case *APIKeyConfig:
-		return nil
-	default:
-		return nil
+func validateOAuthError(t *testing.T, err, expectedError error, statusCode int) {
+	t.Helper()
+
+	retrieveError := &oauth2.RetrieveError{}
+	URLError := &url.Error{}
+
+	if errors.As(err, &retrieveError) {
+		assert.Equal(t, statusCode, retrieveError.Response.StatusCode)
+	} else if errors.As(err, &URLError) {
+		assert.Equal(t, expectedError, URLError.Err)
+		// TODO Fix this
+		// assert.Equal(t, tc.tokenURL, URLError.URL)
+	} else if err != nil {
+		t.Errorf("Unknown error type encountered %v", err)
 	}
 }
 
-func checkAuthHeaders(t *testing.T, r *http.Request) {
+func callHTTPService(ctx context.Context, service HTTP, method string,
+	headers map[string]string) (resp *http.Response, err error) {
+	if headers != nil {
+		resp, err = callHTTPServiceWithHeaders(ctx, service, method, headers)
+	} else {
+		resp, err = callHTTPServiceWithoutHeaders(ctx, service, method)
+	}
 
+	return resp, err
+}
+
+func callHTTPServiceWithHeaders(ctx context.Context, service HTTP, method string,
+	headers map[string]string) (resp *http.Response, err error) {
+	path := "test"
+	queryParams := map[string]any{"key": "value"}
+	body := []byte("body")
+
+	switch method {
+	case http.MethodGet:
+		return service.GetWithHeaders(ctx, path, queryParams, headers)
+	case http.MethodPost:
+		return service.PostWithHeaders(ctx, path, queryParams, body, headers)
+	case http.MethodPut:
+		return service.PutWithHeaders(ctx, path, queryParams, body, headers)
+	case http.MethodPatch:
+		return service.PatchWithHeaders(ctx, path, queryParams, body, headers)
+	case http.MethodDelete:
+		return service.DeleteWithHeaders(ctx, path, body, headers)
+	default:
+		return nil, AuthErr{Message: "unknown method"}
+	}
+}
+
+func callHTTPServiceWithoutHeaders(ctx context.Context, service HTTP, method string) (resp *http.Response, err error) {
+	path := "test"
+	queryParams := map[string]any{"key": "value"}
+	body := []byte("body")
+
+	switch method {
+	case http.MethodGet:
+		return service.Get(ctx, path, queryParams)
+	case http.MethodPost:
+		return service.Post(ctx, path, queryParams, body)
+	case http.MethodPut:
+		return service.Put(ctx, path, queryParams, body)
+	case http.MethodPatch:
+		return service.Patch(ctx, path, queryParams, body)
+	case http.MethodDelete:
+		return service.Delete(ctx, path, body)
+	default:
+		return nil, AuthErr{Message: "unknown method"}
+	}
 }
