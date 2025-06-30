@@ -3,7 +3,8 @@ package service
 import (
 	"context"
 	b64 "encoding/base64"
-	"net/http"
+	"fmt"
+	"strings"
 )
 
 type BasicAuthConfig struct {
@@ -13,9 +14,9 @@ type BasicAuthConfig struct {
 
 func (a *BasicAuthConfig) AddOption(h HTTP) HTTP {
 	return &basicAuthProvider{
-		userName: a.UserName,
-		password: a.Password,
-		HTTP:     h,
+		userName:     a.UserName,
+		password:     a.Password,
+		authProvider: authProvider{h},
 	}
 }
 
@@ -23,103 +24,36 @@ type basicAuthProvider struct {
 	userName string
 	password string
 
-	HTTP
+	authProvider
 }
 
-func (bap *basicAuthProvider) addAuthorizationHeader(headers map[string]string) error {
-	decodedPassword, err := b64.StdEncoding.DecodeString(bap.password)
-	if err != nil {
-		return err
+func NewBasicAuthConfig(username, password string) (Options, error) {
+	username = strings.TrimSpace(username)
+	password = strings.TrimSpace(password)
+	if username == "" {
+		return nil, AuthErr{Message: "username is required"}
 	}
 
-	encodedAuth := b64.StdEncoding.EncodeToString([]byte(bap.userName + ":" + string(decodedPassword)))
-
-	headers["Authorization"] = "basic " + encodedAuth
-
-	return nil
-}
-
-func (bap *basicAuthProvider) Get(ctx context.Context, path string, queryParams map[string]any) (*http.Response, error) {
-	return bap.GetWithHeaders(ctx, path, queryParams, nil)
-}
-
-func (bap *basicAuthProvider) GetWithHeaders(ctx context.Context, path string, queryParams map[string]any,
-	headers map[string]string) (*http.Response, error) {
-	err := bap.populateHeaders(headers)
-	if err != nil {
-		return nil, err
+	if password == "" {
+		return nil, AuthErr{Message: "password is required"}
 	}
 
-	return bap.HTTP.GetWithHeaders(ctx, path, queryParams, headers)
-}
-
-func (bap *basicAuthProvider) Post(ctx context.Context, path string, queryParams map[string]any,
-	body []byte) (*http.Response, error) {
-	return bap.PostWithHeaders(ctx, path, queryParams, body, nil)
-}
-
-func (bap *basicAuthProvider) PostWithHeaders(ctx context.Context, path string, queryParams map[string]any,
-	body []byte, headers map[string]string) (*http.Response, error) {
-	err := bap.populateHeaders(headers)
+	decodedPassword, err := b64.StdEncoding.DecodeString(password)
 	if err != nil {
-		return nil, err
+		return nil, AuthErr{Err: err, Message: "password should be base64 encoded"}
 	}
 
-	return bap.HTTP.PostWithHeaders(ctx, path, queryParams, body, headers)
+	return &BasicAuthConfig{username, string(decodedPassword)}, nil
 }
 
-func (bap *basicAuthProvider) Put(ctx context.Context, api string, queryParams map[string]any, body []byte) (*http.Response, error) {
-	return bap.PutWithHeaders(ctx, api, queryParams, body, nil)
-}
-
-func (bap *basicAuthProvider) PutWithHeaders(ctx context.Context, path string, queryParams map[string]any,
-	body []byte, headers map[string]string) (*http.Response, error) {
-	err := bap.populateHeaders(headers)
-	if err != nil {
-		return nil, err
-	}
-
-	return bap.HTTP.PutWithHeaders(ctx, path, queryParams, body, headers)
-}
-
-func (bap *basicAuthProvider) Patch(ctx context.Context, path string, queryParams map[string]any,
-	body []byte) (*http.Response, error) {
-	return bap.PatchWithHeaders(ctx, path, queryParams, body, nil)
-}
-
-func (bap *basicAuthProvider) PatchWithHeaders(ctx context.Context, path string, queryParams map[string]any,
-	body []byte, headers map[string]string) (*http.Response, error) {
-	err := bap.populateHeaders(headers)
-	if err != nil {
-		return nil, err
-	}
-
-	return bap.HTTP.PatchWithHeaders(ctx, path, queryParams, body, headers)
-}
-
-func (bap *basicAuthProvider) Delete(ctx context.Context, path string, body []byte) (*http.Response, error) {
-	return bap.DeleteWithHeaders(ctx, path, body, nil)
-}
-
-func (bap *basicAuthProvider) DeleteWithHeaders(ctx context.Context, path string, body []byte,
-	headers map[string]string) (*http.Response, error) {
-	err := bap.populateHeaders(headers)
-	if err != nil {
-		return nil, err
-	}
-
-	return bap.HTTP.DeleteWithHeaders(ctx, path, body, headers)
-}
-
-func (bap *basicAuthProvider) populateHeaders(headers map[string]string) error {
+func (a *basicAuthProvider) addAuthorizationHeader(ctx context.Context, headers map[string]string) (map[string]string, error) {
 	if headers == nil {
 		headers = make(map[string]string)
 	}
-
-	err := bap.addAuthorizationHeader(headers)
-	if err != nil {
-		return err
+	if value, exists := headers[AuthHeader]; exists {
+		return headers, AuthErr{Message: fmt.Sprintf("value %v already exists for header %v", value, AuthHeader)}
 	}
-
-	return nil
+	encodedAuth := b64.StdEncoding.EncodeToString([]byte(a.userName + ":" + a.password))
+	headers[AuthHeader] = "basic " + encodedAuth
+	return headers, nil
 }
