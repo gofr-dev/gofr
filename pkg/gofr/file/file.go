@@ -1,3 +1,4 @@
+// Package file provides a simple representation of a file and its metadata.
 package file
 
 type file struct {
