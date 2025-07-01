@@ -1,10 +1,12 @@
 package kafka
 
 import (
+	"context"
 	"errors"
 	"net"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/segmentio/kafka-go"
 	"github.com/stretchr/testify/assert"
@@ -701,4 +703,213 @@ func TestKafkaClient_Subscribe_NotConnected(t *testing.T) {
 	require.Error(t, err)
 	assert.Nil(t, msg)
 	assert.Equal(t, errClientNotConnected, err)
+}
+
+func TestKafkaClient_Query_Failures(t *testing.T) {
+	testCases := []struct {
+		name        string
+		setupClient func() *kafkaClient
+		topic       string
+		args        []any
+		expectedErr string
+	}{
+		{
+			name: "Client not connected",
+			setupClient: func() *kafkaClient {
+				ctrl := gomock.NewController(t)
+				mockConnection := NewMockConnection(ctrl)
+				mockConnection.EXPECT().Controller().Return(kafka.Broker{}, errClientNotConnected)
+
+				return &kafkaClient{
+					conn: &multiConn{
+						conns: []Connection{mockConnection},
+					},
+				}
+			},
+			topic:       "test-topic",
+			expectedErr: errClientNotConnected.Error(),
+		},
+		{
+			name: "Empty topic name",
+			setupClient: func() *kafkaClient {
+				ctrl := gomock.NewController(t)
+				mockConnection := NewMockConnection(ctrl)
+				mockConnection.EXPECT().Controller().Return(kafka.Broker{}, nil)
+
+				return &kafkaClient{
+					conn: &multiConn{
+						conns: []Connection{mockConnection},
+					},
+				}
+			},
+			topic:       "",
+			expectedErr: "topic name cannot be empty",
+		},
+		{
+			name: "ReadMessage fails with non-EOF error",
+			setupClient: func() *kafkaClient {
+				ctrl := gomock.NewController(t)
+				mockConnection := NewMockConnection(ctrl)
+				mockConnection.EXPECT().Controller().Return(kafka.Broker{}, nil)
+
+				return &kafkaClient{
+					conn: &multiConn{
+						conns: []Connection{mockConnection},
+					},
+					config: Config{
+						Brokers:   []string{"localhost:9092"},
+						Partition: 0,
+					},
+				}
+			},
+			topic:       "test-topic",
+			expectedErr: "failed to read message",
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			client := tc.setupClient()
+
+			result, err := client.Query(t.Context(), tc.topic, tc.args...)
+
+			require.Error(t, err)
+			assert.Contains(t, err.Error(), tc.expectedErr)
+			assert.Nil(t, result)
+		})
+	}
+}
+
+func TestKafkaClient_Query_ArgumentParsing(t *testing.T) {
+	testCases := []struct {
+		name           string
+		args           []any
+		expectedOffset int64
+		expectedLimit  int
+	}{
+		{
+			name:           "No arguments - defaults",
+			args:           []any{},
+			expectedOffset: 0,
+			expectedLimit:  10,
+		},
+		{
+			name:           "Only offset provided",
+			args:           []any{int64(100)},
+			expectedOffset: 100,
+			expectedLimit:  10,
+		},
+		{
+			name:           "Offset and limit provided",
+			args:           []any{int64(50), 5},
+			expectedOffset: 50,
+			expectedLimit:  5,
+		},
+		{
+			name:           "Invalid offset type - ignored",
+			args:           []any{"invalid", 5},
+			expectedOffset: 0,
+			expectedLimit:  5,
+		},
+		{
+			name:           "Invalid limit type - ignored",
+			args:           []any{int64(25), "invalid"},
+			expectedOffset: 25,
+			expectedLimit:  10,
+		},
+		{
+			name:           "Both invalid types - defaults",
+			args:           []any{"invalid1", "invalid2"},
+			expectedOffset: 0,
+			expectedLimit:  10,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+			defer ctrl.Finish()
+
+			mockConnection := NewMockConnection(ctrl)
+
+			k := &kafkaClient{
+				conn: &multiConn{
+					conns: []Connection{mockConnection},
+				},
+				config: Config{
+					Brokers:   []string{"localhost:9092"},
+					Partition: 0,
+				},
+			}
+
+			mockConnection.EXPECT().Controller().Return(kafka.Broker{}, nil)
+
+			_, err := k.Query(t.Context(), "test-topic", tc.args...)
+
+			assert.Error(t, err)
+		})
+	}
+}
+
+func TestKafkaClient_Query_ContextHandling(t *testing.T) {
+	testCases := []struct {
+		name        string
+		setupCtx    func(t *testing.T) (context.Context, context.CancelFunc)
+		description string
+	}{
+		{
+			name: "Context with existing deadline",
+			setupCtx: func(t *testing.T) (context.Context, context.CancelFunc) {
+				t.Helper()
+				return context.WithTimeout(t.Context(), 3*time.Second)
+			},
+			description: "Should use existing context deadline",
+		},
+		{
+			name: "Context without deadline",
+			setupCtx: func(t *testing.T) (context.Context, context.CancelFunc) {
+				t.Helper()
+				return context.WithCancel(t.Context())
+			},
+			description: "Should add 30 second timeout",
+		},
+		{
+			name: "Canceled context",
+			setupCtx: func(t *testing.T) (context.Context, context.CancelFunc) {
+				t.Helper()
+				ctx, cancel := context.WithCancel(t.Context())
+				cancel()
+				return ctx, func() {}
+			},
+			description: "Should handle canceled context",
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+			defer ctrl.Finish()
+
+			mockConnection := NewMockConnection(ctrl)
+
+			k := &kafkaClient{
+				conn: &multiConn{
+					conns: []Connection{mockConnection},
+				},
+				config: Config{
+					Brokers:   []string{"localhost:9092"},
+					Partition: 0,
+				},
+			}
+
+			mockConnection.EXPECT().Controller().Return(kafka.Broker{}, nil)
+
+			ctx, cancel := tc.setupCtx(t)
+			defer cancel()
+
+			_, err := k.Query(ctx, "test-topic")
+
+			assert.Error(t, err)
+		})
+	}
 }
