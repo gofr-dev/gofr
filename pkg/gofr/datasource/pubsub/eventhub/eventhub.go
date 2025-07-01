@@ -346,12 +346,6 @@ func (c *Client) Publish(ctx context.Context, topic string, message []byte) erro
 	return nil
 }
 
-// Query retrieves messages from Azure Event Hub.
-func (*Client) Query(_ context.Context, _ string, _ ...any) ([]byte, error) {
-	// TODO: Implement query for Query
-	return nil, nil
-}
-
 func (c *Client) Health() datasource.Health {
 	c.logger.Error("health-check not implemented for Event Hub")
 

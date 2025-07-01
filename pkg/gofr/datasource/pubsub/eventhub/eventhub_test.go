@@ -2,16 +2,19 @@ package eventhub
 
 import (
 	"context"
-	"go.opentelemetry.io/otel"
 	"net"
 	"testing"
 	"time"
 
+	"go.opentelemetry.io/otel"
+
 	"github.com/Azure/azure-sdk-for-go/sdk/messaging/azeventhubs"
 	"github.com/stretchr/testify/require"
-	"go.uber.org/mock/gomock"
-	"gofr.dev/pkg/gofr/testutil"
 	"nhooyr.io/websocket"
+
+	"go.uber.org/mock/gomock"
+	"gofr.dev/pkg/gofr/datasource"
+	"gofr.dev/pkg/gofr/testutil"
 )
 
 func TestConnect(t *testing.T) {
@@ -186,14 +189,14 @@ func Test_CreateTopic(t *testing.T) {
 	mockLogger.EXPECT().Debug("Event Hub consumer client setup success")
 	mockLogger.EXPECT().Debug("Event Hub processor setup success")
 	mockLogger.EXPECT().Debug("Event Hub processor running successfully").AnyTimes()
-	mockLogger.EXPECT().Error("topic deletion is not supported in Event Hub")
+	mockLogger.EXPECT().Error("topic creation is not supported in Event Hub")
 
 	client.UseLogger(mockLogger)
 	client.UseMetrics(mockMetrics)
 
 	client.Connect()
 
-	err := client.DeleteTopic(t.Context(), "random-topic")
+	err := client.CreateTopic(t.Context(), "random-topic")
 
 	require.NoError(t, err, "Event Hub Topic Creation not allowed failed")
 
@@ -215,14 +218,14 @@ func Test_DeleteTopic(t *testing.T) {
 	mockLogger.EXPECT().Debug("Event Hub consumer client setup success")
 	mockLogger.EXPECT().Debug("Event Hub processor setup success")
 	mockLogger.EXPECT().Debug("Event Hub processor running successfully").AnyTimes()
-	mockLogger.EXPECT().Error("topic creation is not supported in Event Hub")
+	mockLogger.EXPECT().Error("topic deletion is not supported in Event Hub")
 
 	client.UseLogger(mockLogger)
 	client.UseMetrics(mockMetrics)
 
 	client.Connect()
 
-	err := client.CreateTopic(t.Context(), "random-topic")
+	err := client.DeleteTopic(t.Context(), "random-topic")
 
 	require.NoError(t, err, "Event Hub Topic Deletion not allowed failed")
 
@@ -382,17 +385,60 @@ func TestQuery_ContextWithDeadline(t *testing.T) {
 	require.True(t, mockLogger.ctrl.Satisfied())
 }
 
-func TestCreateTopic_ForMigrations(t *testing.T) {
+func Test_ValidConfigs(t *testing.T) {
 	ctrl := gomock.NewController(t)
-
-	client := New(getTestConfigs())
+	defer ctrl.Finish()
 
 	mockLogger := NewMockLogger(ctrl)
+	client := New(Config{})
+	client.UseLogger(mockLogger)
 
+	mockLogger.EXPECT().Error("eventhubName cannot be an empty")
+	mockLogger.EXPECT().Error("connectionString cannot be an empty")
+	mockLogger.EXPECT().Error("storageServiceURL cannot be an empty")
+	mockLogger.EXPECT().Error("storageContainerName cannot be an empty")
+	mockLogger.EXPECT().Error("containerConnectionString cannot be an empty")
+
+	valid := client.validConfigs(Config{})
+
+	require.False(t, valid, "validConfigs should return false for invalid configuration")
+}
+
+func Test_Health(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	mockLogger := NewMockLogger(ctrl)
+	client := New(getTestConfigs())
+	client.UseLogger(mockLogger)
+
+	mockLogger.EXPECT().Error("health-check not implemented for Event Hub")
+
+	health := client.Health()
+
+	require.Equal(t, datasource.Health{}, health, "Health should return an empty datasource.Health struct")
+}
+
+func TestCreateTopic_ForMigrations(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	mockLogger := NewMockLogger(ctrl)
+	client := New(getTestConfigs())
 	client.UseLogger(mockLogger)
 
 	err := client.CreateTopic(t.Context(), "gofr_migrations")
 
-	require.NoError(t, err, "Creating gofr_migrations topic should not return error")
-	require.True(t, mockLogger.ctrl.Satisfied())
+	require.NoError(t, err, "CreateTopic should not return an error for 'gofr_migrations'")
+}
+
+func Test_GetEventHubName(t *testing.T) {
+	expectedName := "test-event-hub"
+	client := New(Config{
+		EventhubName: expectedName,
+	})
+
+	actualName := client.GetEventHubName()
+
+	require.Equal(t, expectedName, actualName, "GetEventHubName should return the configured EventhubName")
 }
