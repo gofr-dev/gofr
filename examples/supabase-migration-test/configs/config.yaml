@@ -1,0 +1,19 @@
+# Supabase Migration Test Configuration
+APP_NAME: supabase-migration-test
+HTTP_PORT: 9000
+
+# Supabase Database Configuration
+DB_DIALECT: supabase
+DB_HOST: db.test-project.supabase.co
+DB_USER: postgres
+DB_PASSWORD: test-password-123
+DB_NAME: postgres
+DB_PORT: 5432
+DB_SSL_MODE: require
+
+# Supabase Specific Configuration
+SUPABASE_PROJECT_REF: test-project
+SUPABASE_CONNECTION_TYPE: direct
+SUPABASE_REGION: us-east-1
+
+LOG_LEVEL: DEBUG 
