@@ -20,6 +20,10 @@ func Test_BindType(t *testing.T) {
 			expected: DOLLAR,
 		},
 		{
+			dialect:  "supabase",
+			expected: DOLLAR,
+		},
+		{
 			dialect:  "any-other-dialect",
 			expected: UNKNOWN,
 		},
@@ -42,6 +46,12 @@ func Test_BindVar(t *testing.T) {
 		{
 			name:     "Postgres bind var",
 			dialect:  dialectPostgres,
+			position: 1,
+			expected: "$1",
+		},
+		{
+			name:     "Supabase bind var",
+			dialect:  "supabase",
 			position: 1,
 			expected: "$1",
 		},
@@ -76,6 +86,11 @@ func Test_Quote(t *testing.T) {
 		{
 			name:     "Postgres quote",
 			dialect:  dialectPostgres,
+			expected: quoteDouble,
+		},
+		{
+			name:     "Supabase quote",
+			dialect:  "supabase",
 			expected: quoteDouble,
 		},
 		{

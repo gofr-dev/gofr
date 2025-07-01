@@ -25,7 +25,7 @@ func bindType(dialect string) BindVarType {
 	switch dialect {
 	case dialectMysql:
 		return QUESTION
-	case dialectPostgres:
+	case dialectPostgres, "supabase":
 		return DOLLAR
 	default:
 		return UNKNOWN
@@ -40,7 +40,7 @@ func bindVar(dialect string, position int) string {
 	return "?"
 }
 func quote(dialect string) string {
-	if dialectPostgres == dialect {
+	if dialectPostgres == dialect || dialect == "supabase" {
 		return quoteDouble
 	}
 
