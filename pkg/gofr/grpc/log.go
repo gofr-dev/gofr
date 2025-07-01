@@ -1,3 +1,4 @@
+// Package grpc provides functionality for creating and running gRPC servers within the GoFr framework.
 package grpc
 
 import (
