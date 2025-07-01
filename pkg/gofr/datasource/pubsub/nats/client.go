@@ -22,6 +22,14 @@ var (
 	errEmptySubject       = errors.New("subject name cannot be empty")
 )
 
+const (
+	goFrNatsStreamName   = "gofr_migrations"
+	defaultDeleteTimeout = 5 * time.Second
+	defaultQueryTimeout  = 30 * time.Second
+	defaultMaxBytes      = 100 * 1024 * 1024
+	defaultAckWait       = 30 * time.Second
+)
+
 // Client represents a Client for NATS jStream operations.
 type Client struct {
 	connManager      ConnectionManagerInterface
@@ -289,7 +297,7 @@ func (c *Client) Close(ctx context.Context) error {
 	return nil
 }
 
-// Query retrieves messages from a NATS stream/subject
+// Query retrieves messages from a NATS stream/subject.
 func (c *Client) Query(ctx context.Context, query string, args ...any) ([]byte, error) {
 	if err := checkClient(c); err != nil {
 		return nil, err
@@ -304,8 +312,10 @@ func (c *Client) Query(ctx context.Context, query string, args ...any) ([]byte, 
 
 	// Use provided context or add default timeout
 	queryCtx := ctx
+
 	if _, hasDeadline := ctx.Deadline(); !hasDeadline {
 		var cancel context.CancelFunc
+
 		queryCtx, cancel = context.WithTimeout(ctx, timeout)
 		defer cancel()
 	}
@@ -316,8 +326,8 @@ func (c *Client) Query(ctx context.Context, query string, args ...any) ([]byte, 
 	}
 
 	streamName := c.Config.Stream.Stream
-	if query == "gofr_migrations" {
-		streamName = "gofr_migrations"
+	if query == goFrNatsStreamName {
+		streamName = goFrNatsStreamName
 	}
 
 	consumerName := fmt.Sprintf("query_%s_%d", c.generateConsumerName(query), time.Now().UnixNano())
@@ -337,9 +347,11 @@ func (c *Client) Query(ctx context.Context, query string, args ...any) ([]byte, 
 
 	defer func() {
 		// Clean up the temporary consumer
-		if deleteCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second); cancel != nil {
+		if deleteCtx, cancel := context.WithTimeout(context.Background(), defaultDeleteTimeout); cancel != nil {
 			defer cancel()
+
 			info, err := cons.Info(deleteCtx)
+
 			if err != nil {
 				c.logger.Debugf("failed to delete temporary consumer: %v", err)
 			}
@@ -354,20 +366,16 @@ func (c *Client) Query(ctx context.Context, query string, args ...any) ([]byte, 
 	return c.collectMessages(queryCtx, cons, limit)
 }
 
-// parseQueryArgs parses the query arguments
+// parseQueryArgs parses the query arguments.
 func (c *Client) parseQueryArgs(args ...any) (timeout time.Duration, limit int) {
 	// Default values
-	timeout = 30 * time.Second
+	timeout = defaultQueryTimeout
 	limit = 100
 
 	if len(args) > 0 {
 		// First argument can be a custom timeout
 		if val, ok := args[0].(time.Duration); ok && val > 0 {
 			timeout = val
-		} else if val, ok := args[0].(int64); ok && val > 0 {
-			// Treat as offset, not needed in this implementation
-		} else if val, ok := args[0].(string); ok && val == "latest" {
-			// Not relevant for NATS implementation
 		}
 	}
 
@@ -381,14 +389,15 @@ func (c *Client) parseQueryArgs(args ...any) (timeout time.Duration, limit int) 
 	return timeout, limit
 }
 
-// collectMessages fetches messages from the consumer and combines them
+// collectMessages fetches messages from the consumer and combines them.
 func (c *Client) collectMessages(ctx context.Context, cons jetstream.Consumer, limit int) ([]byte, error) {
 	var result []byte
+
 	messagesCollected := 0
 
 	for messagesCollected < limit {
 		// Fetch messages with a batch size based on remaining needed messages
-		fetchSize := min(batchSize, limit-messagesCollected)
+		fetchSize := minInt(batchSize, limit-messagesCollected)
 		if fetchSize <= 0 {
 			break
 		}
@@ -400,6 +409,7 @@ func (c *Client) collectMessages(ctx context.Context, cons jetstream.Consumer, l
 			}
 
 			c.logger.Errorf("Error fetching messages: %v", err)
+
 			return result, err
 		}
 
@@ -432,7 +442,7 @@ func (c *Client) collectMessages(ctx context.Context, cons jetstream.Consumer, l
 		}
 	}
 
-	if strings.Contains(cons.CachedInfo().Config.FilterSubject, "gofr_migrations") {
+	if strings.Contains(cons.CachedInfo().Config.FilterSubject, goFrNatsStreamName) {
 		if len(result) == 0 {
 			c.logger.Debugf("No migration records found in stream %s", c.Config.Stream.Stream)
 		}
@@ -441,11 +451,12 @@ func (c *Client) collectMessages(ctx context.Context, cons jetstream.Consumer, l
 	return result, nil
 }
 
-// Helper function for Go versions < 1.21
-func min(a, b int) int {
+// Helper function for Go versions < 1.21.
+func minInt(a, b int) int {
 	if a < b {
 		return a
 	}
+
 	return b
 }
 
@@ -456,11 +467,11 @@ func (c *Client) CreateTopic(ctx context.Context, name string) error {
 	}
 
 	// For migrations stream, use special configuration with max bytes
-	if name == "gofr_migrations" {
+	if name == goFrNatsStreamName {
 		return c.streamManager.CreateStream(ctx, StreamConfig{
 			Stream:    name,
 			Subjects:  []string{name},
-			MaxBytes:  100 * 1024 * 1024,
+			MaxBytes:  defaultMaxBytes,
 			Storage:   "file",
 			Retention: "limits",
 			MaxAge:    365 * 24 * time.Hour,

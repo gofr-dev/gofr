@@ -58,6 +58,7 @@ func (sm *StreamManager) CreateStream(ctx context.Context, cfg StreamConfig) err
 		}
 
 		sm.logger.Errorf("failed to create stream: %v", err)
+
 		return err
 	}
 
