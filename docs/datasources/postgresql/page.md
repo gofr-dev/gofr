@@ -48,18 +48,6 @@ type SQL interface {
 	// - *sql.Row containing the query result.
 	QueryRowContext(ctx context.Context, query string, args ...interface{}) *sql.Row
 
-	// PrepareContext creates a prepared statement for later queries or executions.
-	// Multiple queries or executions may be run concurrently from the returned statement.
-	//
-	// Parameters:
-	// - ctx: Context for managing request lifetime.
-	// - query: SQL statement to prepare.
-	//
-	// Returns:
-	// - *sql.Stmt representing the prepared statement.
-	// - Error if preparation fails or connectivity issues occur.
-	PrepareContext(ctx context.Context, query string) (*sql.Stmt, error)
-
 	// BeginTx starts a transaction with the provided context and transaction options.
 	//
 	// Parameters:
@@ -543,24 +531,17 @@ func configureDatabase(app *gofr.App) {
 }
 ```
 
-### 2. Prepared Statements
+### 2. Optimized Query Execution
 
-Use prepared statements for better performance with repeated queries:
+Use QueryContext for better performance with repeated queries:
 
 ```go
 func getCustomersByEmailDomain(c *gofr.Context) (any, error) {
 	domain := c.Param("domain")
 	
-	// Prepare statement
-	stmt, err := c.SQL.PrepareContext(c.Context, 
-		"SELECT id, name, email FROM customers WHERE email LIKE $1")
-	if err != nil {
-		return nil, err
-	}
-	defer stmt.Close()
-	
-	// Execute prepared statement
-	rows, err := stmt.QueryContext(c.Context, "%@"+domain)
+	// Execute query directly with QueryContext
+	query := "SELECT id, name, email FROM customers WHERE email LIKE $1"
+	rows, err := c.SQL.QueryContext(c.Context, query, "%@"+domain)
 	if err != nil {
 		return nil, err
 	}
@@ -707,7 +688,7 @@ func down(c *gofr.Context) error {
 
 1. **Use Connection Pooling**: Configure appropriate pool sizes based on your application load.
 
-2. **Prepare Statements**: Use prepared statements for frequently executed queries.
+2. **Direct Query Execution**: Use QueryContext directly for frequently executed queries instead of prepared statements for better compatibility.
 
 3. **Use Transactions**: Group related operations in transactions for consistency and performance.
 
