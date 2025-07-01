@@ -100,8 +100,6 @@ func validateOAuthError(t *testing.T, err, expectedError error, statusCode int) 
 		assert.Equal(t, statusCode, retrieveError.Response.StatusCode)
 	} else if errors.As(err, &URLError) {
 		assert.Equal(t, expectedError, URLError.Err)
-		// TODO Fix this
-		// assert.Equal(t, tc.tokenURL, URLError.URL)
 	} else if err != nil {
 		t.Errorf("Unknown error type encountered %v", err)
 	}
