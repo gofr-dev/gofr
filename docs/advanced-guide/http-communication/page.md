@@ -117,14 +117,8 @@ a.AddHTTPService("cat-facts", "https://catfact.ninja",
    &service.HealthConfig{
        HealthEndpoint: "breeds",
   },
-
-   &service.OAuthConfig{
-       ClientID:       "abc",
-       ClientSecret:   "abc",
-       TokenURL:       "http://test.com",
-       Scopes:         nil,
-       EndpointParams: nil,
-  },
+   service.NewOAuthConfig("clientID", "clientSecret",
+	   "https://tokenurl.com", nil, nil, 0),
 
   &service.RetryConfig{
       MaxRetries: 5
