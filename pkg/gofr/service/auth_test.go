@@ -36,6 +36,9 @@ func TestAuthProvider(t *testing.T) {
 	apiKeyAuthServer := setupAPIKeyAuthHTTPServer(t, validAPIKeyConfig)
 	invalidAPIKeyConfig := &APIKeyConfig{"invalid-value"}
 
+	authHeaderExistsErr := AuthErr{Message: "value auth-string already exists for header " + AuthHeader}
+	apiHeaderExistsErr := AuthErr{Message: "value auth-string already exists for header " + xAPIKeyHeader}
+
 	testCases := []struct {
 		authOption Options
 		headers    map[string]string
@@ -44,14 +47,17 @@ func TestAuthProvider(t *testing.T) {
 	}{
 		{authOption: validBasicAuthConfig, statusCode: http.StatusOK},
 		{authOption: invalidBasicAuthConfig, statusCode: http.StatusUnauthorized},
+		{authOption: validOAuthConfig, headers: map[string]string{AuthHeader: "auth-string"}, err: authHeaderExistsErr},
 
 		{authOption: validAPIKeyConfig, statusCode: http.StatusOK},
 		{authOption: invalidAPIKeyConfig, statusCode: http.StatusUnauthorized},
+		{authOption: validAPIKeyConfig, headers: map[string]string{xAPIKeyHeader: "auth-string"}, err: apiHeaderExistsErr},
 
 		{authOption: validOAuthConfig, statusCode: http.StatusOK},
 		{authOption: invalidOAuthConfig, statusCode: http.StatusUnauthorized, err: errInvalidCredentials},
 		{authOption: invalidOAuthConfig2, statusCode: http.StatusUnauthorized, err: errMissingTokenURL},
 		{authOption: invalidOAuthConfig3, statusCode: http.StatusUnauthorized, err: errIncorrectProtocol},
+		{authOption: validOAuthConfig, headers: map[string]string{AuthHeader: "auth-string"}, err: authHeaderExistsErr},
 	}
 
 	httpMethods := []string{http.MethodGet, http.MethodPost, http.MethodPut, http.MethodPatch, http.MethodDelete}
@@ -95,11 +101,14 @@ func validateOAuthError(t *testing.T, err, expectedError error, statusCode int) 
 
 	retrieveError := &oauth2.RetrieveError{}
 	URLError := &url.Error{}
+	authErr := AuthErr{}
 
 	if errors.As(err, &retrieveError) {
 		assert.Equal(t, statusCode, retrieveError.Response.StatusCode)
 	} else if errors.As(err, &URLError) {
 		assert.Equal(t, expectedError, URLError.Err)
+	} else if errors.As(err, &authErr) {
+		assert.Equal(t, expectedError, err)
 	} else if err != nil {
 		t.Errorf("Unknown error type encountered %v", err)
 	}
