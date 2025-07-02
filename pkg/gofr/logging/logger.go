@@ -14,11 +14,15 @@ import (
 
 const fileMode = 0644
 
+// PrettyPrint defines an interface for objects that can render
+// themselves in a human-readable format to the provided writer.
 type PrettyPrint interface {
 	PrettyPrint(writer io.Writer)
 }
 
-// Logger represents a logging interface.
+// Logger defines the interface for structured logging across
+// different log levels such as Debug, Info, Warn, Error, and Fatal.
+// It allows formatted logs and log level control.
 type Logger interface {
 	Debug(args ...any)
 	Debugf(format string, args ...any)
@@ -177,7 +181,8 @@ func (l *logger) prettyPrint(e *logEntry, out io.Writer) {
 	}
 }
 
-// NewLogger creates a new logger instance with the specified logging level.
+// NewLogger creates a new Logger instance configured with the given log level.
+// Logs will be printed to stdout and stderr depending on the level.
 func NewLogger(level Level) Logger {
 	l := &logger{
 		normalOut: os.Stdout,
@@ -192,7 +197,8 @@ func NewLogger(level Level) Logger {
 	return l
 }
 
-// NewFileLogger creates a new logger instance with logging to a file.
+// NewFileLogger creates a new Logger instance that writes logs to the specified file.
+// If the file cannot be opened or created, logs are discarded.
 func NewFileLogger(path string) Logger {
 	l := &logger{
 		normalOut: io.Discard,
@@ -223,18 +229,20 @@ func checkIfTerminal(w io.Writer) bool {
 	}
 }
 
+// ChangeLevel changes the log level of the logger.
+// This allows dynamic adjustment of the logging verbosity.
 func (l *logger) ChangeLevel(level Level) {
 	l.level = level
 }
 
-// LogLevelResponder is an interface that provides a method to get the log level.
+// LogLevelResponder provides a method to get the log level.
 type LogLevelResponder interface {
 	LogLevel() Level
 }
 
-// GetLogLevelForError returns the log level for the given error.
-// If the error implements [logLevelResponder], its log level is returned.
-// Otherwise, the default log level "error" is returned.
+// GetLogLevelForError extracts the log level from an error if it implements LogLevelResponder.
+// If the error does not implement this interface, it defaults to ERROR level.
+// This is useful for determining the appropriate log level when handling errors.
 func GetLogLevelForError(err error) Level {
 	level := ERROR
 
@@ -245,9 +253,9 @@ func GetLogLevelForError(err error) Level {
 	return level
 }
 
-// extractTraceIDAndFilterArgs scans log arguments for a trace ID map and
-// returns the extracted trace ID (if found) and a filtered list of log arguments
-// excluding the trace metadata.
+// extractTraceIDAndFilterArgs checks if any of the arguments contain a trace ID
+// under the key "__trace_id__" and returns the extracted trace ID along with
+// the remaining arguments excluding the trace metadata.
 func extractTraceIDAndFilterArgs(args []any) (traceID string, filtered []any) {
 	filtered = make([]any, 0, len(args))
 
