@@ -24,7 +24,7 @@ func newStreamManager(js jetstream.JetStream, logger pubsub.Logger) *StreamManag
 }
 
 // CreateStream creates a new jStream stream.
-func (sm *StreamManager) CreateStream(ctx context.Context, cfg StreamConfig) error {
+func (sm *StreamManager) CreateStream(ctx context.Context, cfg *StreamConfig) error {
 	jsCfg := jetstream.StreamConfig{
 		Name:     cfg.Stream,
 		Subjects: cfg.Subjects,

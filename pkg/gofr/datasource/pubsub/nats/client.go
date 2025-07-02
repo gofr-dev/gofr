@@ -367,7 +367,7 @@ func (c *Client) Query(ctx context.Context, query string, args ...any) ([]byte, 
 }
 
 // parseQueryArgs parses the query arguments.
-func (c *Client) parseQueryArgs(args ...any) (timeout time.Duration, limit int) {
+func (*Client) parseQueryArgs(args ...any) (timeout time.Duration, limit int) {
 	// Default values
 	timeout = defaultQueryTimeout
 	limit = 100
@@ -402,53 +402,74 @@ func (c *Client) collectMessages(ctx context.Context, cons jetstream.Consumer, l
 			break
 		}
 
-		msgs, err := cons.Fetch(fetchSize, jetstream.FetchMaxWait(c.Config.MaxWait))
+		msgs, err := c.fetchBatch(cons, fetchSize)
 		if err != nil {
-			if errors.Is(err, context.DeadlineExceeded) || errors.Is(err, context.Canceled) {
-				break
-			}
-
-			c.logger.Errorf("Error fetching messages: %v", err)
-
 			return result, err
 		}
 
-		receivedAny := false
-
-		for msg := range msgs.Messages() {
-			receivedAny = true
-
-			// Add newline separator between messages
-			if len(result) > 0 {
-				result = append(result, '\n')
-			}
-
-			// Append message data
-			result = append(result, msg.Data()...)
-
-			// Acknowledge the message
-			if err := msg.Ack(); err != nil {
-				c.logger.Debugf("Error acknowledging message: %v", err)
-			}
-
-			messagesCollected++
-			if messagesCollected >= limit {
-				break
-			}
+		collected, err := c.processBatch(ctx, msgs, &result, &messagesCollected, limit)
+		if err != nil {
+			return result, err
 		}
 
-		if !receivedAny || errors.Is(ctx.Err(), context.DeadlineExceeded) || errors.Is(ctx.Err(), context.Canceled) {
+		if !collected {
 			break
 		}
 	}
 
-	if strings.Contains(cons.CachedInfo().Config.FilterSubject, goFrNatsStreamName) {
-		if len(result) == 0 {
-			c.logger.Debugf("No migration records found in stream %s", c.Config.Stream.Stream)
-		}
+	if strings.Contains(cons.CachedInfo().Config.FilterSubject, goFrNatsStreamName) && len(result) == 0 {
+		c.logger.Debugf("No migration records found in stream %s", c.Config.Stream.Stream)
 	}
 
 	return result, nil
+}
+
+func (c *Client) fetchBatch(cons jetstream.Consumer, fetchSize int) (jetstream.MessageBatch, error) {
+	msgs, err := cons.Fetch(fetchSize, jetstream.FetchMaxWait(c.Config.MaxWait))
+	if err != nil {
+		if errors.Is(err, context.DeadlineExceeded) || errors.Is(err, context.Canceled) {
+			return nil, nil
+		}
+
+		c.logger.Errorf("Error fetching messages: %v", err)
+
+		return nil, err
+	}
+
+	return msgs, nil
+}
+
+func (c *Client) processBatch(ctx context.Context, msgs jetstream.MessageBatch,
+	result *[]byte, messagesCollected *int, limit int) (bool, error) {
+	receivedAny := false
+
+	for msg := range msgs.Messages() {
+		receivedAny = true
+
+		// Add newline separator between messages
+		if len(*result) > 0 {
+			*result = append(*result, '\n')
+		}
+
+		// Append message data
+		*result = append(*result, msg.Data()...)
+
+		// Acknowledge the message
+		if err := msg.Ack(); err != nil {
+			c.logger.Debugf("Error acknowledging message: %v", err)
+		}
+
+		*messagesCollected++
+		if *messagesCollected >= limit {
+			break
+		}
+	}
+
+	if !receivedAny || errors.Is(ctx.Err(), context.DeadlineExceeded) || errors.Is(ctx.Err(), context.Canceled) {
+		return false, nil
+	}
+
+	return true, nil
 }
 
 // Helper function for Go versions < 1.21.
@@ -468,7 +489,7 @@ func (c *Client) CreateTopic(ctx context.Context, name string) error {
 
 	// For migrations stream, use special configuration with max bytes
 	if name == goFrNatsStreamName {
-		return c.streamManager.CreateStream(ctx, StreamConfig{
+		return c.streamManager.CreateStream(ctx, &StreamConfig{
 			Stream:    name,
 			Subjects:  []string{name},
 			MaxBytes:  defaultMaxBytes,
@@ -478,7 +499,7 @@ func (c *Client) CreateTopic(ctx context.Context, name string) error {
 		})
 	}
 
-	return c.streamManager.CreateStream(ctx, StreamConfig{
+	return c.streamManager.CreateStream(ctx, &StreamConfig{
 		Stream:   name,
 		Subjects: []string{name},
 	})
@@ -494,7 +515,7 @@ func (c *Client) DeleteTopic(ctx context.Context, name string) error {
 }
 
 // CreateStream creates a new stream in NATS jStream.
-func (c *Client) CreateStream(ctx context.Context, cfg StreamConfig) error {
+func (c *Client) CreateStream(ctx context.Context, cfg *StreamConfig) error {
 	if err := checkClient(c); err != nil {
 		return err
 	}

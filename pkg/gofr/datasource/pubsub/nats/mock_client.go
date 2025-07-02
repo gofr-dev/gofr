@@ -504,7 +504,7 @@ func (mr *MockStreamManagerInterfaceMockRecorder) CreateOrUpdateStream(ctx, cfg 
 }
 
 // CreateStream mocks base method.
-func (m *MockStreamManagerInterface) CreateStream(ctx context.Context, cfg StreamConfig) error {
+func (m *MockStreamManagerInterface) CreateStream(ctx context.Context, cfg *StreamConfig) error {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "CreateStream", ctx, cfg)
 	ret0, _ := ret[0].(error)

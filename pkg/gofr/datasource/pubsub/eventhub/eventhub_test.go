@@ -6,10 +6,9 @@ import (
 	"testing"
 	"time"
 
-	"go.opentelemetry.io/otel"
-
 	"github.com/Azure/azure-sdk-for-go/sdk/messaging/azeventhubs"
 	"github.com/stretchr/testify/require"
+	"go.opentelemetry.io/otel"
 	"nhooyr.io/websocket"
 
 	"go.uber.org/mock/gomock"

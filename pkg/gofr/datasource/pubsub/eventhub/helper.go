@@ -8,7 +8,7 @@ import (
 )
 
 // parseQueryArgs parses the query arguments.
-func (c *Client) parseQueryArgs(args ...any) (startPosition azeventhubs.StartPosition, limit int) {
+func (*Client) parseQueryArgs(args ...any) (startPosition azeventhubs.StartPosition, limit int) {
 	// Default to earliest
 	earliest := true
 	startPosition = azeventhubs.StartPosition{
@@ -87,7 +87,8 @@ func (c *Client) readMessages(ctx context.Context, startPosition azeventhubs.Sta
 }
 
 // readFromPartition reads messages from a single partition.
-func (c *Client) readFromPartition(ctx context.Context, partitionID string, startPosition azeventhubs.StartPosition, maxMessages int) [][]byte {
+func (c *Client) readFromPartition(ctx context.Context, partitionID string,
+	startPosition azeventhubs.StartPosition, maxMessages int) [][]byte {
 	partitionClient, err := c.consumer.NewPartitionClient(partitionID, &azeventhubs.PartitionClientOptions{
 		StartPosition: startPosition,
 	})
