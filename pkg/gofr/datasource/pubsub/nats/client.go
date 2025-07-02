@@ -407,11 +407,7 @@ func (c *Client) collectMessages(ctx context.Context, cons jetstream.Consumer, l
 			return result, err
 		}
 
-		collected, err := c.processBatch(ctx, msgs, &result, &messagesCollected, limit)
-		if err != nil {
-			return result, err
-		}
-
+		collected := c.processBatch(ctx, msgs, &result, &messagesCollected, limit)
 		if !collected {
 			break
 		}
@@ -440,7 +436,7 @@ func (c *Client) fetchBatch(cons jetstream.Consumer, fetchSize int) (jetstream.M
 }
 
 func (c *Client) processBatch(ctx context.Context, msgs jetstream.MessageBatch,
-	result *[]byte, messagesCollected *int, limit int) (bool, error) {
+	result *[]byte, messagesCollected *int, limit int) bool {
 	receivedAny := false
 
 	for msg := range msgs.Messages() {
@@ -466,10 +462,10 @@ func (c *Client) processBatch(ctx context.Context, msgs jetstream.MessageBatch,
 	}
 
 	if !receivedAny || errors.Is(ctx.Err(), context.DeadlineExceeded) || errors.Is(ctx.Err(), context.Canceled) {
-		return false, nil
+		return false
 	}
 
-	return true, nil
+	return true
 }
 
 // Helper function for Go versions < 1.21.

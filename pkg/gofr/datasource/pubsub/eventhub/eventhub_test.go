@@ -9,9 +9,9 @@ import (
 	"github.com/Azure/azure-sdk-for-go/sdk/messaging/azeventhubs"
 	"github.com/stretchr/testify/require"
 	"go.opentelemetry.io/otel"
+	"go.uber.org/mock/gomock"
 	"nhooyr.io/websocket"
 
-	"go.uber.org/mock/gomock"
 	"gofr.dev/pkg/gofr/datasource"
 	"gofr.dev/pkg/gofr/testutil"
 )
