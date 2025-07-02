@@ -4,10 +4,10 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
-	"gofr.dev/pkg/gofr/datasource/pubsub/eventhub"
 	"time"
 
 	"gofr.dev/pkg/gofr/container"
+	"gofr.dev/pkg/gofr/datasource/pubsub/eventhub"
 )
 
 type pubsubDS struct {
@@ -69,8 +69,10 @@ func (pm pubsubMigrator) checkAndCreateMigrationTable(c *container.Container) er
 }
 
 func (pubsubMigrator) getLastMigration(c *container.Container) int64 {
-	var lastVersion int64
-	var queryTopic string
+	var (
+		lastVersion int64
+		queryTopic  string
+	)
 
 	if client, isEventHub := c.PubSub.(*eventhub.Client); isEventHub {
 		queryTopic = client.GetEventHubName() // You'll need to add this method to your Client
@@ -93,7 +95,7 @@ func (pubsubMigrator) getLastMigration(c *container.Container) int64 {
 	}
 
 	lines := bytes.Split(result, []byte("\n"))
-	var records []migrationRecord
+	records := make([]migrationRecord, 0, len(lines))
 
 	for _, line := range lines {
 		if len(line) == 0 {
