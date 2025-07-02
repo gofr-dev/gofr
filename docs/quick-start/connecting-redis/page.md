@@ -1,140 +1,154 @@
-# Connecting to Redis
+# Redis
 
-GoFr simplifies the process of connecting to Redis.
+Redis is an open source, in-memory data structure store, used as a database, cache, and message broker.
 
-## Setup:
+## Docker
 
-Ensure we have Redis installed on our system.
-
-Optionally, we can use Docker to set up a development environment with password authentication as described below.
+To run Redis using Docker, use the following command:
 
 ```bash
-docker run --name gofr-redis -p 2002:6379 -d \
-	-e REDIS_PASSWORD=password \
-	redis:7.0.5 --requirepass password
+docker run --name gofr-redis -p 6379:6379 -d redis:7-alpine
 ```
 
-We can set a sample key `greeting` using the following command:
+## Connecting to Redis
+
+GoFr provides built-in Redis support. You need to provide the following environment variables:
 
 ```bash
-docker exec -it gofr-redis bash -c 'redis-cli SET greeting "Hello from Redis."'
-```
-
-## Configuration & Usage:
-
-GoFr applications rely on environment variables to configure and connect to a Redis server.  
-These variables are stored in a `.env` file located within the `configs` directory at your project root.
-
-### Required Environment Variables:
-
-{% table %}
-
-- Key
-- Description
-
----
-
-- REDIS_HOST
-- Hostname or IP address of your Redis server
-
----
-
-- REDIS_PORT
-- Port number your Redis server listens on (default: `6379`)
-
----
-
-- REDIS_USER
-- Redis username; multiple users with ACLs can be configured. [See official docs](https://redis.io/docs/latest/operate/oss_and_stack/management/security/acl/)
-
----
-
-- REDIS_PASSWORD
-- Redis password (required only if authentication is enabled)
-
----
-
-- REDIS_DB
-- Redis database number (default: `0`)
-
----
-
-## TLS Support (Optional):
-
-{% table %}
-
-- Key
-- Description
-
----
-
-- REDIS_TLS_ENABLED
-- Set to `"true"` to enable TLS
-
----
-
-- REDIS_TLS_CA_CERT_PATH
-- File path to the CA certificate used to verify the Redis server
-
----
-
-- REDIS_TLS_CERT_PATH
-- File path to the client certificate (for mTLS)
-
----
-
-- REDIS_TLS_KEY_PATH
-- File path to the client private key (for mTLS)
-
----
-
-## ✅ Example `.env` File
-
-```env
-REDIS_HOST=redis.example.com
+REDIS_HOST=localhost
 REDIS_PORT=6379
-REDIS_USER=appuser
-REDIS_PASSWORD=securepassword
-REDIS_DB=0
-
-# TLS settings (optional)
-REDIS_TLS_ENABLED=true
-REDIS_TLS_CA_CERT_PATH=./configs/certs/ca.pem
-REDIS_TLS_CERT_PATH=./configs/certs/client.crt
-REDIS_TLS_KEY_PATH=./configs/certs/client.key
 ```
 
-The following code snippet demonstrates how to retrieve data from a Redis key named "greeting":
+### Example
 
 ```go
 package main
 
-import (
-	"errors"
-
-	"github.com/redis/go-redis/v9"
-
-	"gofr.dev/pkg/gofr"
-)
+import "gofr.dev/pkg/gofr"
 
 func main() {
-	// Initialize GoFr object
-	app := gofr.New()
+    app := gofr.New()
 
-	app.GET("/redis", func(ctx *gofr.Context) (any, error) {
-		// Get the value using the Redis instance
+    app.GET("/redis", func(ctx *gofr.Context) (interface{}, error) {
+        val := ctx.Redis.Get(ctx, "test-key")
+        return val.Val(), val.Err()
+    })
 
-		val, err := ctx.Redis.Get(ctx.Context, "greeting").Result()
-		if err != nil && !errors.Is(err, redis.Nil) {
-			// If the key is not found, we are not considering this an error and returning ""
-			return nil, err
-		}
-
-		return val, nil
-	})
-
-	// Run the application
-
-	app.Run()
+    app.Start()
 }
+```
+
+## Operations
+
+### String Operations
+
+```go
+// SET
+err := ctx.Redis.Set(ctx, "key", "value", 0).Err()
+
+// GET
+val, err := ctx.Redis.Get(ctx, "key").Result()
+
+// INCR
+newVal, err := ctx.Redis.Incr(ctx, "counter").Result()
+```
+
+### List Operations
+
+```go
+// LPUSH
+err := ctx.Redis.LPush(ctx, "mylist", "value1").Err()
+
+// RPOP
+val, err := ctx.Redis.RPop(ctx, "mylist").Result()
+
+// LRANGE
+vals, err := ctx.Redis.LRange(ctx, "mylist", 0, -1).Result()
+```
+
+### Hash Operations
+
+```go
+// HSET
+err := ctx.Redis.HSet(ctx, "myhash", "field1", "value1").Err()
+
+// HGET
+val, err := ctx.Redis.HGet(ctx, "myhash", "field1").Result()
+
+// HGETALL
+vals, err := ctx.Redis.HGetAll(ctx, "myhash").Result()
+```
+
+### Set Operations
+
+```go
+// SADD
+err := ctx.Redis.SAdd(ctx, "myset", "member1").Err()
+
+// SMEMBERS
+members, err := ctx.Redis.SMembers(ctx, "myset").Result()
+
+// SISMEMBER
+exists, err := ctx.Redis.SIsMember(ctx, "myset", "member1").Result()
+```
+
+## Pub/Sub
+
+Redis supports publish/subscribe messaging:
+
+```go
+// Publisher
+func publisher(ctx *gofr.Context) (interface{}, error) {
+    err := ctx.Redis.Publish(ctx, "mychannel", "message").Err()
+    return "Published", err
+}
+
+// Subscriber
+func subscriber(ctx *gofr.Context) (interface{}, error) {
+    pubsub := ctx.Redis.Subscribe(ctx, "mychannel")
+    defer pubsub.Close()
+    
+    msg, err := pubsub.ReceiveMessage(ctx)
+    if err != nil {
+        return nil, err
+    }
+    
+    return map[string]string{
+        "channel": msg.Channel,
+        "payload": msg.Payload,
+    }, nil
+}
+```
+
+## Pipeline
+
+For bulk operations, use Redis pipeline:
+
+```go
+func pipelineExample(ctx *gofr.Context) (interface{}, error) {
+    pipe := ctx.Redis.Pipeline()
+    
+    incr := pipe.Incr(ctx, "pipeline_counter")
+    pipe.Expire(ctx, "pipeline_counter", time.Hour)
+    
+    _, err := pipe.Exec(ctx)
+    if err != nil {
+        return nil, err
+    }
+    
+    return incr.Val(), nil
+}
+```
+
+## Configuration
+
+Additional Redis configuration options:
+
+```bash
+REDIS_HOST=localhost
+REDIS_PORT=6379
+REDIS_PASSWORD=          # Optional
+REDIS_DB=0              # Optional
+REDIS_MAX_RETRIES=3     # Optional
+REDIS_POOL_SIZE=10      # Optional
 ```
