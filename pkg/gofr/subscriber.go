@@ -25,7 +25,7 @@ func newSubscriptionManager(c *container.Container) SubscriptionManager {
 
 // startSubscriber continuously subscribes to a topic and handles messages using the provided handler.
 func (s *SubscriptionManager) startSubscriber(ctx context.Context, topic string, handler SubscribeFunc) error {
-	var delay time.Duration = 2 * time.second
+	var delay time.Duration = 2 * time.Second
 	
 	for {
 		select {
@@ -37,15 +37,15 @@ func (s *SubscriptionManager) startSubscriber(ctx context.Context, topic string,
 			
 			 if err == nil {
 				// reset delay after success
-				delay = 2 * time.second
+				delay = 2 * time.Second
 				continue
 			}
  			s.container.Logger.Errorf("error in subscription for topic %s: %v", topic, err)
 			// Exponential backoff: slow down retry after repeated failures
-			delay += 2 * time.second
+			delay += 2 * time.Second
 			delay = time.Duration(math.Min(float64(delay), float64(30*time.Second)))
 			// actually wait before retrying
-			time.sleep(delay)
+			time.Sleep(delay)
 		  }
 	  }
 }
