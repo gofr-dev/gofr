@@ -399,7 +399,7 @@ func TestClient_ValidateAndPrepare(t *testing.T) {
 		logger: logging.NewMockLogger(logging.DEBUG),
 	}
 
-	err := client.validateAndPrepare()
+	err := validateAndPrepare(client.Config, client.logger)
 	require.Error(t, err)
 
 	client.Config = &Config{
@@ -411,7 +411,7 @@ func TestClient_ValidateAndPrepare(t *testing.T) {
 		Consumer: "test-consumer",
 	}
 
-	err = client.validateAndPrepare()
+	err = validateAndPrepare(client.Config, client.logger)
 	assert.NoError(t, err)
 }
 
@@ -421,7 +421,7 @@ func TestClient_ValidateAndPrepareError(t *testing.T) {
 		logger: logging.NewMockLogger(logging.DEBUG),
 	}
 
-	err := client.validateAndPrepare()
+	err := validateAndPrepare(client.Config, client.logger)
 	require.Error(t, err)
 
 	client.Config = &Config{
@@ -433,23 +433,8 @@ func TestClient_ValidateAndPrepareError(t *testing.T) {
 		Consumer: "test-consumer",
 	}
 
-	err = client.validateAndPrepare()
+	err = validateAndPrepare(client.Config, client.logger)
 	assert.Error(t, err)
-}
-
-func TestClient_LogSuccessfulConnection(t *testing.T) {
-	mockLogger := logging.NewMockLogger(logging.DEBUG)
-	client := &Client{
-		Config: &Config{Server: "nats://localhost:4222"},
-		logger: mockLogger,
-	}
-
-	logs := testutil.StdoutOutputForFunc(func() {
-		client.logger = logging.NewMockLogger(logging.DEBUG)
-		client.logSuccessfulConnection()
-	})
-
-	assert.Contains(t, logs, "connected to NATS server 'nats://localhost:4222'")
 }
 
 func TestClient_UseLogger(t *testing.T) {

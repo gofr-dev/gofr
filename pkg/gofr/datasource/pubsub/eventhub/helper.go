@@ -2,50 +2,64 @@ package eventhub
 
 import (
 	"context"
-	"time"
-
 	"github.com/Azure/azure-sdk-for-go/sdk/messaging/azeventhubs"
+	"time"
 )
 
 // parseQueryArgs parses the query arguments.
 func (*Client) parseQueryArgs(args ...any) (startPosition azeventhubs.StartPosition, limit int) {
-	// Default to earliest
-	earliest := true
-	startPosition = azeventhubs.StartPosition{
-		Earliest: &earliest,
-	}
+	startPosition = defaultStartPosition()
 	limit = 10
 
 	if len(args) > 0 {
-		switch v := args[0].(type) {
-		case int64:
-			if v > 0 {
-				startPosition = azeventhubs.StartPosition{
-					SequenceNumber: &v,
-					Inclusive:      true,
-				}
-			}
-		case string:
-			if v == "latest" {
-				latest := true
-				startPosition = azeventhubs.StartPosition{
-					Latest: &latest,
-				}
-			}
-		case time.Time:
-			startPosition = azeventhubs.StartPosition{
-				EnqueuedTime: &v,
-			}
-		}
+		startPosition = parseStartPositionArg(args[0])
 	}
 
 	if len(args) > 1 {
-		if val, ok := args[1].(int); ok && val > 0 {
-			limit = val
-		}
+		limit = parseLimitArg(args[1], limit)
 	}
 
 	return startPosition, limit
+}
+
+func defaultStartPosition() azeventhubs.StartPosition {
+	earliest := true
+
+	return azeventhubs.StartPosition{Earliest: &earliest}
+}
+
+func parseStartPositionArg(arg any) azeventhubs.StartPosition {
+	switch v := arg.(type) {
+	case int64:
+		if v > 0 {
+			return azeventhubs.StartPosition{
+				SequenceNumber: &v,
+				Inclusive:      true,
+			}
+		}
+	case string:
+		if v == "latest" {
+			latest := true
+
+			return azeventhubs.StartPosition{
+				Latest: &latest,
+			}
+		}
+	case time.Time:
+		return azeventhubs.StartPosition{
+			EnqueuedTime: &v,
+		}
+	}
+
+	return defaultStartPosition()
+}
+
+func parseLimitArg(arg any, limit int) int {
+	if val, ok := arg.(int); ok && val > 0 {
+		return val
+	}
+
+	return limit
 }
 
 // readMessages reads messages from Event Hub partitions.
