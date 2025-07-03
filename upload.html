@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Student Drive Portal</title>
+
+  <!-- Bootstrap 5 CDN -->
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet" />
+  
+  <!-- SweetAlert2 CDN -->
+  <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+
+  <!-- FontAwesome (for icons) -->
+  <script src="https://kit.fontawesome.com/a076d05399.js" crossorigin="anonymous"></script>
+
+  <style>
+    body {
+      background-color: #f0f2f5;
+      padding-top: 40px;
+    }
+    .container {
+      max-width: 600px;
+    }
+    .card {
+      border-radius: 15px;
+    }
+    ul {
+      list-style: none;
+      padding-left: 0;
+    }
+    li {
+      margin-bottom: 8px;
+    }
+    .action-links a {
+      margin-right: 10px;
+    }
+  </style>
+</head>
+
+<body>
+  <div class="container">
+    <div class="card shadow p-4 mb-5 bg-white">
+      <h3 class="text-center mb-4">📤 Upload Student Document</h3>
+      <form id="uploadForm" action="/upload" method="POST" enctype="multipart/form-data">
+        <div class="mb-3">
+          <label for="student_id" class="form-label">Student ID</label>
+          <input type="text" class="form-control" name="student_id" required />
+        </div>
+
+        <div class="mb-3">
+          <label for="folder" class="form-label">Folder (optional)</label>
+          <input type="text" class="form-control" name="folder" placeholder="e.g., resume, assignments" />
+        </div>
+
+        <div class="mb-3">
+          <label for="file" class="form-label">Select File</label>
+          <input type="file" class="form-control" name="file" required />
+        </div>
+
+        <button type="submit" class="btn btn-primary w-100">Upload Document</button>
+      </form>
+    </div>
+
+    <div class="card shadow p-4 bg-white">
+      <h4 class="text-center mb-3">📂 View Uploaded Documents</h4>
+      <form action="/list" method="GET" class="d-flex">
+        <input type="text" class="form-control me-2" name="student_id" placeholder="Enter Student ID" required />
+        <button type="submit" class="btn btn-success">View</button>
+      </form>
+    </div>
+  </div>
+
+  <script>
+    const form = document.getElementById("uploadForm");
+    form.addEventListener("submit", function (e) {
+      e.preventDefault();
+      const formData = new FormData(form);
+
+      fetch("/upload", {
+        method: "POST",
+        body: formData
+      })
+      .then(response => response.text())
+      .then(data => {
+        Swal.fire({
+          icon: 'success',
+          title: 'Uploaded!',
+          text: data,
+          showConfirmButton: true,
+        });
+        form.reset();
+      })
+      .catch(error => {
+        Swal.fire({
+          icon: 'error',
+          title: 'Upload Failed',
+          text: 'Something went wrong!',
+        });
+      });
+    });
+  </script>
+</body>
+</html>
