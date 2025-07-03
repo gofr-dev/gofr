@@ -179,7 +179,7 @@ func (c *Client) Query(ctx context.Context, query string, args ...any) ([]byte, 
 	timeout, limit := parseQueryArgs(args...)
 
 	// Create a query context with timeout
-	queryCtx, cancel := c.createQueryContext(ctx, timeout)
+	queryCtx, cancel := createQueryContext(ctx, timeout)
 	defer cancel()
 
 	js, err := c.connManager.jetStream()

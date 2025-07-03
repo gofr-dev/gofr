@@ -7,7 +7,6 @@ import (
 	"time"
 
 	"github.com/nats-io/nats.go/jetstream"
-
 	"gofr.dev/pkg/gofr/datasource/pubsub"
 )
 
@@ -263,7 +262,7 @@ func checkClient(c *Client) error {
 	return nil
 }
 
-func (c *Client) createQueryContext(ctx context.Context, timeout time.Duration) (context.Context, context.CancelFunc) {
+func createQueryContext(ctx context.Context, timeout time.Duration) (context.Context, context.CancelFunc) {
 	if _, hasDeadline := ctx.Deadline(); hasDeadline {
 		return ctx, func() {}
 	}

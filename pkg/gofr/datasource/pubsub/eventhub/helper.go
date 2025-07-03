@@ -2,8 +2,9 @@ package eventhub
 
 import (
 	"context"
-	"github.com/Azure/azure-sdk-for-go/sdk/messaging/azeventhubs"
 	"time"
+
+	"github.com/Azure/azure-sdk-for-go/sdk/messaging/azeventhubs"
 )
 
 // parseQueryArgs parses the query arguments.
