@@ -6,7 +6,6 @@ import (
 	"time"
 	"gofr.dev/pkg/gofr/container"
 	"gofr.dev/pkg/gofr/logging"
-	"math"
 )
 
 type SubscribeFunc func(c *Context) error
@@ -32,7 +31,7 @@ func (s *SubscriptionManager) startSubscriber(ctx context.Context, topic string,
 		case <-ctx.Done():
 			s.container.Logger.Infof("shutting down subscriber for topic %s", topic)
 			return nil
-		case <-time.Ater(delay):
+		case <-time.After(delay):
 			err := s.handleSubscription(ctx, topic, handler)
 			
 			 if err == nil {
@@ -43,7 +42,7 @@ func (s *SubscriptionManager) startSubscriber(ctx context.Context, topic string,
  			s.container.Logger.Errorf("error in subscription for topic %s: %v", topic, err)
 			// Exponential backoff: slow down retry after repeated failures
 			delay += 2 * time.Second
-			if delay >= 30 * Second {
+			if delay >= 30 * time.Second {
 		           delay = 30 * time.Second
 			}
 		  }
