@@ -101,37 +101,53 @@ func (c *Client) readMessages(ctx context.Context, startPosition azeventhubs.Sta
 	return result, nil
 }
 
-// readFromPartition reads messages from a single partition.
 func (c *Client) readFromPartition(ctx context.Context, partitionID string,
 	startPosition azeventhubs.StartPosition, maxMessages int) [][]byte {
-	partitionClient, err := c.consumer.NewPartitionClient(partitionID, &azeventhubs.PartitionClientOptions{
-		StartPosition: startPosition,
-	})
+
+	pc, err := c.createPartitionClient(ctx, partitionID, startPosition)
 	if err != nil {
 		return nil
 	}
-	defer partitionClient.Close(ctx)
+	defer pc.Close(ctx)
+
+	return c.receiveMessages(ctx, pc, maxMessages)
+}
+
+func (c *Client) createPartitionClient(ctx context.Context, partitionID string,
+	startPosition azeventhubs.StartPosition) (*azeventhubs.PartitionClient, error) {
+
+	return c.consumer.NewPartitionClient(partitionID, &azeventhubs.PartitionClientOptions{
+		StartPosition: startPosition,
+	})
+}
+
+func (c *Client) receiveMessages(ctx context.Context, pc *azeventhubs.PartitionClient,
+	maxMessages int) [][]byte {
 
 	var messages [][]byte
 
 	for len(messages) < maxMessages {
-		select {
-		case <-ctx.Done():
-			return messages
-		default:
-			events, err := partitionClient.ReceiveEvents(ctx, maxMessages-len(messages), nil)
-			if err != nil || len(events) == 0 {
-				return messages
-			}
-
-			for _, event := range events {
-				messages = append(messages, event.Body)
-				if len(messages) >= maxMessages {
-					break
-				}
-			}
+		if ctx.Err() != nil {
+			break
 		}
+
+		events, err := pc.ReceiveEvents(ctx, maxMessages-len(messages), nil)
+		if err != nil || len(events) == 0 {
+			break
+		}
+
+		messages = appendMessages(messages, events, maxMessages)
 	}
 
+	return messages
+}
+
+func appendMessages(messages [][]byte, events []*azeventhubs.ReceivedEventData, max int) [][]byte {
+	for _, e := range events {
+		messages = append(messages, e.Body)
+		if len(messages) >= max {
+			break
+		}
+	}
 	return messages
 }
