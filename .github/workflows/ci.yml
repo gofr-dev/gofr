@@ -1,0 +1,32 @@
+name: Go CI
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  build-test-lint:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: 📥 Checkout code
+      uses: actions/checkout@v3
+
+    - name: ⚙️ Set up Go
+      uses: actions/setup-go@v4
+      with:
+        go-version: '1.22'
+
+    - name: 📦 Install dependencies
+      run: go mod download
+
+    - name: ✅ Lint code
+      run: go fmt ./...
+
+    - name: 🧪 Run Tests
+      run: go test ./... -v
+
+    - name: 🚀 Build
+      run: go build ./cmd
