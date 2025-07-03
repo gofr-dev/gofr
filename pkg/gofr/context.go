@@ -145,7 +145,7 @@ func (a *authInfo) GetUsername() string {
 }
 
 // GetAPIKey returns the APIKey when APIKey auth is enabled.
-// It returns an empty strung if called, when APIKey auth is not enabled.
+// It returns an empty string if called, when APIKey auth is not enabled.
 func (a *authInfo) GetAPIKey() string {
 	return a.apiKey
 }
