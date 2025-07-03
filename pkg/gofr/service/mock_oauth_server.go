@@ -15,10 +15,6 @@ import (
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"go.opentelemetry.io/otel"
-	"golang.org/x/oauth2"
-
-	"gofr.dev/pkg/gofr/logging"
 )
 
 const clientIDLength = 10
@@ -35,24 +31,17 @@ type oAuthTestSever struct {
 	httpServer    *httptest.Server
 }
 
-func setupOAuthHTTPServer(t *testing.T) *oAuthTestSever {
+func setupOAuthHTTPServer(t *testing.T, config *OAuthConfig) *httptest.Server {
 	t.Helper()
 
 	server := oAuthTestSever{
 		tokenURL:      "/token",
 		testURL:       "/test",
-		audienceClaim: "some-random-audience",
+		audienceClaim: config.EndpointParams.Get("aud"),
 	}
 
-	clientID, err := generateRandomString(clientIDLength)
-	require.NoError(t, err, "failed to generate client ID, aborting")
-
-	server.clientID = clientID
-
-	clientSecret, err := generateRandomString(clientSecretLength)
-	require.NoError(t, err, "failed to generate client secret, aborting")
-
-	server.clientSecret = clientSecret
+	server.clientID = config.ClientID
+	server.clientSecret = config.ClientSecret
 
 	privateKey, err := rsa.GenerateKey(rand.Reader, privateKeyBits)
 	require.NoError(t, err, "failed to generate private key, aborting")
@@ -61,7 +50,7 @@ func setupOAuthHTTPServer(t *testing.T) *oAuthTestSever {
 
 	mux := http.NewServeMux()
 
-	mux.HandleFunc("/token", func(w http.ResponseWriter, r *http.Request) {
+	mux.HandleFunc(server.tokenURL, func(w http.ResponseWriter, r *http.Request) {
 		errMessage, statusCode := server.validateCredentials(r)
 
 		if statusCode != http.StatusOK {
@@ -91,7 +80,7 @@ func setupOAuthHTTPServer(t *testing.T) *oAuthTestSever {
 		_ = json.NewEncoder(w).Encode(tokenResponse)
 	})
 
-	mux.HandleFunc("/test", func(w http.ResponseWriter, r *http.Request) {
+	mux.HandleFunc(server.testURL, func(w http.ResponseWriter, r *http.Request) {
 		header := r.Header.Get(AuthHeader)
 		token := strings.Split(header, " ")
 
@@ -118,7 +107,7 @@ func setupOAuthHTTPServer(t *testing.T) *oAuthTestSever {
 		server.httpServer.Close()
 	})
 
-	return &server
+	return server.httpServer
 }
 
 func (s *oAuthTestSever) validateCredentials(r *http.Request) (errMessage string, statusCode int) {
@@ -152,10 +141,6 @@ func (s *oAuthTestSever) generateToken(claims jwt.MapClaims) (string, error) {
 	return t.SignedString(s.privateKey)
 }
 
-func (s *oAuthTestSever) getTokenURL() string {
-	return s.httpServer.URL + s.tokenURL
-}
-
 func getClaims(r *http.Request) map[string]any {
 	claims := make(map[string]any, 0)
 
@@ -182,30 +167,4 @@ func generateRandomString(length int) (token string, err error) {
 
 	// Encode to base64 to make it URL-safe and human-readable (for tokens)
 	return base64.URLEncoding.EncodeToString(b), nil
-}
-
-func (s *oAuthTestSever) httpService() HTTP {
-	service := &httpService{
-		Client: &http.Client{},
-		url:    s.httpServer.URL,
-		Tracer: otel.Tracer("gofr-http-client"),
-		Logger: logging.NewMockLogger(logging.DEBUG),
-	}
-
-	return service
-}
-
-func getOAuthService(service HTTP, clientID, clientSecret, tokenURL, audienceClaim string) HTTP {
-	oauthConfig := OAuthConfig{
-		ClientID:     clientID,
-		ClientSecret: clientSecret,
-		TokenURL:     tokenURL,
-		EndpointParams: map[string][]string{
-			"aud": {audienceClaim},
-		},
-		AuthStyle: oauth2.AuthStyleInParams,
-	}
-
-	// Apply oAuth option to the HTTP service
-	return oauthConfig.AddOption(service)
 }
