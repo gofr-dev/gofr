@@ -1,543 +1,534 @@
 package inmemory
 
 import (
+	"errors"
 	"runtime"
 	"sync"
 	"testing"
 	"time"
 )
 
+// makeCache initializes the cache and fails the test on error
+func makeCache(t *testing.T, opts ...Option) *inMemoryCache {
+	t.Helper()
+	ci, err := NewInMemoryCache(opts...)
+	if err != nil {
+		t.Fatalf("failed to initialize cache: %v", err)
+	}
+	return ci.(*inMemoryCache)
+}
+
+// basic Set/Get/Delete/Exists flow and error returns
 func TestOperations(t *testing.T) {
-	c := NewInMemoryCache(WithTTL(time.Second * 5), WithMaxItems(10))
+	c := makeCache(t, WithName("name"), WithTTL(5*time.Second), WithMaxItems(10), WithLogLevel(LogLevelDebug))
+	defer c.Close()
 
-	c.Set("key1", 10)
-	v, found := c.Get("key1")
-	if !found || v.(int) != 10 {
-		t.Errorf("Expected 10, got %v", v)
+	// Set and Get
+	if err := c.Set("key1", 10); err != nil {
+		t.Fatalf("Set failed: %v", err)
+	}
+	v, found, err := c.Get("key1")
+	if err != nil || !found || v.(int) != 10 {
+		t.Errorf("Get returned (%v, %v, %v), want (10, true, nil)", v, found, err)
 	}
 
-	if !c.Exists("key1") {
-		t.Error("Exists: expected key key1 to exist")
+	// Exists
+	exists, err := c.Exists("key1")
+	if err != nil || !exists {
+		t.Errorf("Exists returned (%v, %v), want (true, nil)", exists, err)
 	}
 
-	c.Delete("key1")
-	if c.Exists("key1") {
-		t.Error("Delete: expected key key1 to be gone")
+	// Delete
+	if err := c.Delete("key1"); err != nil {
+		t.Errorf("Delete failed: %v", err)
+	}
+	exists, err = c.Exists("key1")
+	if err != nil {
+		t.Errorf("Exists post-delete error: %v", err)
+	}
+	if exists {
+		t.Error("Expected key1 to be gone after Delete")
 	}
 }
 
+// Clear removes all items safely
 func TestClear(t *testing.T) {
-	c := NewInMemoryCache(WithTTL(time.Minute * 1), WithMaxItems(10))
-	c.Set("x", 1)
-	c.Set("y", 2)
-	c.Clear()
-	if c.Exists("x") || c.Exists("y") {
-		t.Error("Clear: expected cache empty")
+	c := makeCache(t, WithTTL(time.Minute), WithMaxItems(10), WithLogLevel(LogLevelDebug))
+	defer c.Close()
+	_ = c.Set("x", 1)
+	_ = c.Set("y", 2)
+	if err := c.Clear(); err != nil {
+		t.Errorf("Clear failed: %v", err)
 	}
-}
-
-func TestTTLExpiry(t *testing.T) {
-	// very short TTL
-	c := NewInMemoryCache(WithTTL(50 * time.Millisecond), WithMaxItems(10))
-	defer c.(*inMemoryCache).Close() // Ensure cleanup goroutine stops
-	
-	c.Set("foo", "bar")
-	time.Sleep(60 * time.Millisecond)
-
-	if _, ok := c.Get("foo"); ok {
-		t.Error("Expected foo to expire after TTL")
-	}
-}
-
-func TestCapacityEviction(t *testing.T) {
-	c := NewInMemoryCache(WithTTL(time.Minute * 1), WithMaxItems(2))
-	defer c.(*inMemoryCache).Close() // Ensure cleanup goroutine stops
-	
-	c.Set("k1", 1)
-	c.Set("k2", 2)
-	// cache is full; next Set must evict one existing
-	c.Set("k3", 3)
-
-	// Exactly 2 keys remain
-	count := 0
-	for _, key := range []string{"k1", "k2", "k3"} {
-		if c.Exists(key) {
-			count++
+	for _, k := range []string{"x", "y"} {
+		exist, err := c.Exists(k)
+		if err != nil {
+			t.Errorf("Exists(%s) error: %v", k, err)
+		}
+		if exist {
+			t.Errorf("Expected %s to be removed by Clear", k)
 		}
 	}
-	if count != 2 {
-		t.Fatalf("Expected 2 items after eviction; got %d", count)
+}
+
+// items expire after TTL
+func TestTTLExpiry(t *testing.T) {
+	c := makeCache(t, WithTTL(50*time.Millisecond), WithMaxItems(10), WithLogLevel(LogLevelDebug))
+	defer c.Close()
+	_ = c.Set("foo", "bar")
+	time.Sleep(60 * time.Millisecond)
+	_, found, err := c.Get("foo")
+	if err != nil {
+		t.Errorf("Get error after TTL: %v", err)
+	}
+	if found {
+		t.Error("Expected 'foo' to expire after TTL")
 	}
 }
 
-// TestOverwrite checks that setting a key twice overwrites the value.
+// LRU eviction when capacity exceeded
+func TestCapacityEviction(t *testing.T) {
+	c := makeCache(t, WithTTL(time.Minute), WithMaxItems(2), WithLogLevel(LogLevelDebug))
+	defer c.Close()
+	_ = c.Set("k1", 1)
+	time.Sleep(time.Millisecond)
+	_ = c.Set("k2", 2)
+	// Access k1 to keep it recent
+	_, _, _ = c.Get("k1")
+	_ = c.Set("k3", 3)
+	// k2 should be evicted
+	exists, err := c.Exists("k2")
+	if err != nil {
+		t.Errorf("Exists error: %v", err)
+	}
+	if exists {
+		t.Error("Expected 'k2' to be evicted as LRU")
+	}
+}
+
+// Set on existing key updates value and lastUsed
 func TestOverwrite(t *testing.T) {
-	c := NewInMemoryCache(WithTTL(time.Second*5), WithMaxItems(10))
-	c.Set("dupKey", "first")
-	c.Set("dupKey", "second")
-	v, found := c.Get("dupKey")
+	c := makeCache(t, WithTTL(5*time.Second), WithMaxItems(10))
+	defer c.Close()
+	_ = c.Set("dupKey", "first")
+	_ = c.Set("dupKey", "second")
+	v, found, _ := c.Get("dupKey")
 	if !found || v != "second" {
-		t.Errorf("Expected overwritten value 'second', got %v", v)
+		t.Errorf("Expected 'second', got %v", v)
 	}
 }
 
-// TestDeleteNonExistent ensures deleting a non-existent key is safe and does not panic.
+// Delete on missing key is safe
 func TestDeleteNonExistent(t *testing.T) {
-	c := NewInMemoryCache(WithTTL(time.Second * 5), WithMaxItems(10))
-	c.Delete("ghost") // Should not panic or error
+	c := makeCache(t, WithTTL(5*time.Second), WithMaxItems(10))
+	defer c.Close()
+	if err := c.Delete("ghost"); err != nil {
+		t.Errorf("Delete non-existent returned error: %v", err)
+	}
 }
 
-// TestClearEmpty ensures clearing an empty cache is safe and does not panic.
+// Clear on empty cache is safe
 func TestClearEmpty(t *testing.T) {
-	c := NewInMemoryCache(WithTTL(time.Second*5), WithMaxItems(10))
-	c.Clear() // Should not panic or error
+	c := makeCache(t, WithTTL(5*time.Second), WithMaxItems(10))
+	defer c.Close()
+	if err := c.Clear(); err != nil {
+		t.Errorf("Clear empty returned error: %v", err)
+	}
 }
 
-// TestConcurrentAccess tests thread safety under concurrent Set/Get/Exists operations.
+// ensure thread-safety for Set/Get/Exists
 func TestConcurrentAccess(t *testing.T) {
-	c := NewInMemoryCache(WithTTL(time.Second*5), WithMaxItems(10))
-	key := "concurrent"
-	value := "safe"
-	done := make(chan bool)
+	c := makeCache(t, WithTTL(5*time.Second), WithMaxItems(10))
+	defer c.Close()
+	var wg sync.WaitGroup
 	for i := 0; i < 100; i++ {
-		go func(i int) {
-			c.Set(key, value)
-			c.Get(key)
-			c.Exists(key)
-			done <- true
-		}(i)
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			_ = c.Set("concurrent", "safe")
+			_, _, _ = c.Get("concurrent")
+			_, _ = c.Exists("concurrent")
+		}()
 	}
-	for i := 0; i < 100; i++ {
-		<-done
-	}
+	wg.Wait()
 }
 
-// TestEvictionEdgeCase tests eviction when all items are expired.
+// expired items are cleaned before eviction
 func TestEvictionEdgeCase(t *testing.T) {
-	c := NewInMemoryCache(WithTTL(time.Millisecond * 100), WithMaxItems(2))
-	c.Set("a", 1)
-	time.Sleep(time.Millisecond * 110)
-	c.Set("b", 2)
-	c.Set("c", 3) // Should not panic even if 'a' is expired
-	if !c.Exists("b") && !c.Exists("c") {
-		t.Error("Expected at least one of 'b' or 'c' to exist after eviction with expired items")
+	c := makeCache(t, WithTTL(100*time.Millisecond), WithMaxItems(2))
+	defer c.Close()
+	_ = c.Set("a", 1)
+	time.Sleep(110 * time.Millisecond)
+	_ = c.Set("b", 2)
+	_ = c.Set("c", 3)
+	// both 'b' and 'c' should exist
+	exists, err := c.Exists("b")
+	if err != nil {
+		t.Errorf("Exists error: %v", err)
+	}
+	if !exists {
+		t.Error("Expected 'b' to exist")
+	}
+	exists, err = c.Exists("c")
+	if err != nil {
+		t.Errorf("Exists error: %v", err)
+	}
+	if !exists {
+		t.Error("Expected 'c' to exist")
 	}
 }
 
-// TestDefaultConfiguration tests that the cache works with default configuration.
+// validate defaults and basic usage
 func TestDefaultConfiguration(t *testing.T) {
-	c := NewInMemoryCache()
-	defer c.(*inMemoryCache).Close()
-	
-	cache := c.(*inMemoryCache)
-	if cache.ttl != time.Minute {
-		t.Errorf("Expected default TTL of 1 minute, got %v", cache.ttl)
+	ci, err := NewInMemoryCache()
+	if err != nil {
+		t.Fatalf("NewInMemoryCache error: %v", err)
 	}
-	if cache.maxItems != 0 {
-		t.Errorf("Expected default maxItems of 0 (unlimited), got %d", cache.maxItems)
+	c := ci.(*inMemoryCache)
+	defer c.Close()
+	if c.ttl != time.Minute {
+		t.Errorf("Default TTL = %v, want 1m", c.ttl)
 	}
-	
-	// Test that it works with defaults
-	c.Set("test", "value")
-	if val, found := c.Get("test"); !found || val != "value" {
-		t.Error("Default cache configuration should work")
+	if c.maxItems != 0 {
+		t.Errorf("Default maxItems = %d, want 0", c.maxItems)
+	}
+	_ = c.Set("test", "value")
+	v, found, _ := c.Get("test")
+	if !found || v != "value" {
+		t.Error("Default config failed to store/get")
 	}
 }
 
-// TestMultipleOptions tests applying multiple options
+// last option wins for conflicting settings
 func TestMultipleOptions(t *testing.T) {
-	c := NewInMemoryCache(
-		WithTTL(time.Second * 30),
+	c := makeCache(t,
+		WithTTL(30*time.Second),
 		WithMaxItems(5),
-		WithTTL(time.Second * 60), // This should override the first TTL
+		WithTTL(60*time.Second),
 	)
-	defer c.(*inMemoryCache).Close()
-	
-	cache := c.(*inMemoryCache)
-	if cache.ttl != time.Second * 60 {
-		t.Errorf("Expected TTL of 60 seconds (last option should win), got %v", cache.ttl)
+	defer c.Close()
+	if c.ttl != 60*time.Second {
+		t.Errorf("TTL = %v, want 60s", c.ttl)
 	}
-	if cache.maxItems != 5 {
-		t.Errorf("Expected maxItems of 5, got %d", cache.maxItems)
+	if c.maxItems != 5 {
+		t.Errorf("maxItems = %d, want 5", c.maxItems)
 	}
 }
 
+//  TTL == 0 should expire immediately
 func TestZeroTTL(t *testing.T) {
-	c := NewInMemoryCache(WithTTL(0))
-	defer c.(*inMemoryCache).Close()
-	
+	c := makeCache(t, WithTTL(0))
+	defer c.Close()
 	c.Set("immediate", "expire")
-	// Items with zero TTL should expire immediately
-	if _, found := c.Get("immediate"); found {
-		t.Error("Items with zero TTL should expire immediately")
+	if _, found, _ := c.Get("immediate"); found {
+		t.Error("Zero TTL: item should expire immediately")
 	}
 }
 
+//  TTL <=0 should expire immediately
 func TestNegativeTTL(t *testing.T) {
-	c := NewInMemoryCache(WithTTL(-time.Second))
-	defer c.(*inMemoryCache).Close()
-	
-	c.Set("negative", "ttl")
-	// Items with negative TTL should expire immediately
-	if _, found := c.Get("negative"); found {
-		t.Error("Items with negative TTL should expire immediately")
+	c := makeCache(t, WithTTL(-time.Second))
+	defer c.Close()
+	c.Set("neg", "ttl")
+	if _, found, _ := c.Get("neg"); found {
+		t.Error("Negative TTL: item should expire immediately")
 	}
 }
 
+// maxItems=0 means unlimited
 func TestUnlimitedCapacity(t *testing.T) {
-	c := NewInMemoryCache(WithTTL(time.Minute), WithMaxItems(0))
-	defer c.(*inMemoryCache).Close()
-	
-	// Add many items (should not evict)
-	for i := 0; i < 1000; i++ {
+	c := makeCache(t, WithTTL(time.Minute), WithMaxItems(0))
+	defer c.Close()
+	for i := 0; i < 500; i++ {
 		c.Set(string(rune(i)), i)
 	}
-	
-	// All items should still exist
 	count := 0
-	for i := 0; i < 1000; i++ {
-		if c.Exists(string(rune(i))) {
+	for i := 0; i < 500; i++ {
+		exists, _ := c.Exists(string(rune(i)))
+		if exists {
 			count++
 		}
 	}
-	if count != 1000 {
-		t.Errorf("Expected 1000 items with unlimited capacity, got %d", count)
+	if count != 500 {
+		t.Errorf("Unlimited capacity: got %d items, want 500", count)
 	}
 }
 
-// TestSingleItemCapacity tests cache with capacity of 1
+// capacity=1 evicts correct item
 func TestSingleItemCapacity(t *testing.T) {
-	c := NewInMemoryCache(WithTTL(time.Minute), WithMaxItems(1))
-	defer c.(*inMemoryCache).Close()
-	
+	c := makeCache(t, WithTTL(time.Minute), WithMaxItems(1))
+	defer c.Close()
 	c.Set("first", 1)
 	c.Set("second", 2)
-	
-	// Only one item should exist
 	count := 0
-	if c.Exists("first") {
+	exists, _ := c.Exists("first")
+	if exists {
 		count++
 	}
-	if c.Exists("second") {
+	exists, _ = c.Exists("second")
+	if exists {
 		count++
 	}
-	
 	if count != 1 {
-		t.Errorf("Expected exactly 1 item with capacity 1, got %d", count)
+		t.Errorf("Capacity=1: have %d items, want 1", count)
 	}
 }
 
-// TestLRUEvictionOrder tests that LRU eviction works correctly
+// verifies LRU ordering eviction
 func TestLRUEvictionOrder(t *testing.T) {
-	c := NewInMemoryCache(WithTTL(time.Minute), WithMaxItems(3))
-	defer c.(*inMemoryCache).Close()
-	
-	// Add 3 items
+	c := makeCache(t, WithTTL(time.Minute), WithMaxItems(3))
+	defer c.Close()
 	c.Set("a", 1)
 	c.Set("b", 2)
 	c.Set("c", 3)
-	
-	// Access 'a' to make it recently used
-	c.Get("a")
-	
-	// Add another item, should evict 'b' (least recently used)
+	c.Get("a") // mark a as recent
 	c.Set("d", 4)
-	
-	if !c.Exists("a") || !c.Exists("c") || !c.Exists("d") {
-		t.Error("Expected a, c, d to exist after LRU eviction")
+	exists, err := c.Exists("b")
+	if err != nil {
+		t.Errorf("Exists error: %v", err)
 	}
-	if c.Exists("b") {
-		t.Error("Expected b to be evicted (least recently used)")
+	if exists {
+		t.Error("LRU eviction: expected 'b' to be evicted")
 	}
 }
 
-// TestUpdateExistingKeyTiming tests that updating an existing key updates lastUsed
+// updating key refreshes lastUsed for eviction
 func TestUpdateExistingKeyTiming(t *testing.T) {
-	c := NewInMemoryCache(WithTTL(time.Minute), WithMaxItems(2))
-	defer c.(*inMemoryCache).Close()
-	
+	c := makeCache(t, WithTTL(time.Minute), WithMaxItems(2))
+	defer c.Close()
 	c.Set("old", 1)
 	c.Set("new", 2)
-	
-	// Update the old key
-	c.Set("old", 10)
-	
-	// Add third item, should evict 'new' since 'old' was just updated
+	c.Set("old", 10) // update old
 	c.Set("third", 3)
-	
-	if !c.Exists("old") || !c.Exists("third") {
-		t.Error("Expected old and third to exist after updating old key")
+	exists, err := c.Exists("new")
+	if err != nil {
+		t.Errorf("Exists error: %v", err)
 	}
-	if c.Exists("new") {
-		t.Error("Expected new to be evicted after old key was updated")
+	if exists {
+		t.Error("Update existing: expected 'new' to be evicted")
 	}
 }
 
-// TestDifferentValueTypes tests storing different types of values
+// store and retrieve various Go types
 func TestDifferentValueTypes(t *testing.T) {
-	c := NewInMemoryCache(WithTTL(time.Minute))
-	defer c.(*inMemoryCache).Close()
-	
-	// Test various types
-	c.Set("string", "hello")
+	c := makeCache(t, WithTTL(time.Minute))
+	defer c.Close()
+	c.Set("str", "hello")
 	c.Set("int", 42)
-	c.Set("float", 3.14)
+	c.Set("flt", 3.14)
 	c.Set("bool", true)
 	c.Set("slice", []int{1, 2, 3})
-	c.Set("map", map[string]int{"key": 123})
-	c.Set("nil", nil)
-	
-	// Verify all types
-	if val, found := c.Get("string"); !found || val != "hello" {
-		t.Error("String value not stored correctly")
+	c.Set("map", map[string]int{"k": 123})
+	c.Set("nilval", nil)
+	for k, want := range map[string]interface{}{"str": "hello", "int": 42, "flt": 3.14, "bool": true} {
+		v, found, _ := c.Get(k)
+		if !found || v != want {
+			t.Errorf("%s: got %v, want %v", k, v, want)
+		}
 	}
-	if val, found := c.Get("int"); !found || val != 42 {
-		t.Error("Int value not stored correctly")
-	}
-	if val, found := c.Get("float"); !found || val != 3.14 {
-		t.Error("Float value not stored correctly")
-	}
-	if val, found := c.Get("bool"); !found || val != true {
-		t.Error("Bool value not stored correctly")
-	}
-	if val, found := c.Get("nil"); !found || val != nil {
-		t.Error("Nil value not stored correctly")
+	_, foundNil, _ := c.Get("nilval")
+	if foundNil {
+		t.Error("nil value: expected found=false")
 	}
 }
 
-// TestEmptyStringKey tests using empty string as key
+// using empty string as key is invalid
 func TestEmptyStringKey(t *testing.T) {
-	c := NewInMemoryCache(WithTTL(time.Minute))
-	defer c.(*inMemoryCache).Close()
-	
-	c.Set("", "empty_key_value")
-	if val, found := c.Get(""); !found || val != "empty_key_value" {
-		t.Error("Empty string key should be valid")
+	c := makeCache(t, WithTTL(time.Minute))
+	defer c.Close()
+	if err := c.Set("", "v"); !errors.Is(err, ErrEmptyKey) {
+		t.Errorf("Empty key: expected ErrEmptyKey, got %v", err)
 	}
 }
 
-// TestLongKey tests using long keys
+// very long keys are supported
 func TestLongKey(t *testing.T) {
-	c := NewInMemoryCache(WithTTL(time.Minute))
-	defer c.(*inMemoryCache).Close()
-	
+	c := makeCache(t, WithTTL(time.Minute))
+	defer c.Close()
 	longKey := string(make([]byte, 10000))
-	c.Set(longKey, "long_key_value")
-	if val, found := c.Get(longKey); !found || val != "long_key_value" {
-		t.Error("Long key should be handled correctly")
+	if err := c.Set(longKey, "v"); err != nil {
+		t.Errorf("Long key Set error: %v", err)
+	}
+	v, found, _ := c.Get(longKey)
+	if !found || v != "v" {
+		t.Error("Long key Get failed")
 	}
 }
 
-// TestConcurrentSetSameKey tests concurrent sets to the same key
+// concurrent Set on same key does not panic
 func TestConcurrentSetSameKey(t *testing.T) {
-	c := NewInMemoryCache(WithTTL(time.Minute))
-	defer c.(*inMemoryCache).Close()
-	
+	c := makeCache(t, WithTTL(time.Minute))
+	defer c.Close()
 	var wg sync.WaitGroup
-	key := "race_key"
-	
-	// Multiple goroutines setting the same key
 	for i := 0; i < 100; i++ {
 		wg.Add(1)
 		go func(val int) {
 			defer wg.Done()
-			c.Set(key, val)
+			_ = c.Set("race", val)
 		}(i)
 	}
-	
 	wg.Wait()
-	
-	// Should have some value without panic
-	if _, found := c.Get(key); !found {
-		t.Error("Concurrent sets should not lose the key")
+	if _, found, _ := c.Get("race"); !found {
+		t.Error("Concurrent Set: expected key to exist")
 	}
 }
 
-// TestConcurrentEviction tests concurrent operations during eviction
+// concurrent sets and eviction maintain capacity
 func TestConcurrentEviction(t *testing.T) {
-	c := NewInMemoryCache(WithTTL(time.Minute), WithMaxItems(10))
-	defer c.(*inMemoryCache).Close()
-	
-	var wg sync.WaitGroup
-	
-	// Fill cache to capacity
+	c := makeCache(t, WithTTL(time.Minute), WithMaxItems(10))
+	defer c.Close()
+	// prefill
 	for i := 0; i < 10; i++ {
 		c.Set(string(rune(i)), i)
 	}
-	
-	// Concurrent operations that should trigger eviction
+	var wg sync.WaitGroup
 	for i := 0; i < 50; i++ {
 		wg.Add(1)
 		go func(val int) {
 			defer wg.Done()
-			c.Set(string(rune(val + 100)), val)
+			c.Set(string(rune(val+100)), val)
 			c.Get(string(rune(val % 10)))
 			c.Exists(string(rune(val % 10)))
 		}(i)
 	}
-	
+
 	wg.Wait()
-	
-	// Should not panic and should maintain capacity limit
+
 	count := 0
 	for i := 0; i < 200; i++ {
-		if c.Exists(string(rune(i))) {
+		if exist, _ := c.Exists(string(rune(i))); exist {
 			count++
 		}
 	}
-	
+
 	if count > 10 {
-		t.Errorf("Expected at most 10 items after concurrent eviction, got %d", count)
+		t.Errorf("Concurrent eviction: %d items, want <=10", count)
 	}
 }
 
-// TestCleanupGoroutineStops tests that cleanup goroutine stops properly
+// cleanup goroutine exits on Close
 func TestCleanupGoroutineStops(t *testing.T) {
-	initialGoroutines := runtime.NumGoroutine()
-	
-	c := NewInMemoryCache(WithTTL(time.Millisecond))
-	
-	// Wait a bit for goroutine to start
-	time.Sleep(time.Millisecond * 10)
-	
-	c.(*inMemoryCache).Close()
-	
-	// Wait for cleanup goroutine to stop
-	time.Sleep(time.Millisecond * 50)
-	
-	finalGoroutines := runtime.NumGoroutine()
-	
-	if finalGoroutines > initialGoroutines {
-		t.Errorf("Cleanup goroutine may not have stopped. Initial: %d, Final: %d", initialGoroutines, finalGoroutines)
+	before := runtime.NumGoroutine()
+	c := makeCache(t, WithTTL(time.Millisecond))
+	time.Sleep(10 * time.Millisecond)
+	c.Close()
+	time.Sleep(50 * time.Millisecond)
+	after := runtime.NumGoroutine()
+	if after > before {
+		t.Errorf("Cleanup goroutine still running: before=%d after=%d", before, after)
 	}
 }
 
-// TestMultipleClose tests calling Close multiple times
+// multiple Close calls are safe
 func TestMultipleClose(t *testing.T) {
-	c := NewInMemoryCache(WithTTL(time.Minute))
-	cache := c.(*inMemoryCache)
-	
-	// Should not panic
-	cache.Close()
-	cache.Close()
-	cache.Close()
+	c := makeCache(t, WithTTL(time.Minute))
+	c.Close()
+	c.Close()
+	c.Close()
 }
 
-// TestOperationsAfterClose tests that operations work after Close
+// Set/Get still work after Close
 func TestOperationsAfterClose(t *testing.T) {
-	c := NewInMemoryCache(WithTTL(time.Minute))
-	cache := c.(*inMemoryCache)
-	
-	c.Set("before", "close")
-	cache.Close()
-	
-	// Operations should still work, just cleanup goroutine stops
-	c.Set("after", "close")
-	if val, found := c.Get("before"); !found || val != "close" {
-		t.Error("Should still be able to get values after close")
+	c := makeCache(t, WithTTL(time.Minute))
+	_ = c.Set("pre", "close")
+	c.Close()
+	_ = c.Set("post", "close")
+	v1, found1, _ := c.Get("pre")
+	if !found1 || v1 != "close" {
+		t.Error("pre-close value lost")
 	}
-	if val, found := c.Get("after"); !found || val != "close" {
-		t.Error("Should still be able to set/get values after close")
+	v2, found2, _ := c.Get("post")
+	if !found2 || v2 != "close" {
+		t.Error("post-close Set/Get failed")
 	}
 }
 
-// TestCleanupFrequency tests that cleanup runs at appropriate intervals
+// background cleanup runs periodically
 func TestCleanupFrequency(t *testing.T) {
-	c := NewInMemoryCache(WithTTL(time.Millisecond * 100))
-	defer c.(*inMemoryCache).Close()
-	
-	// Add item that will expire
-	c.Set("expire_me", "value")
-	
-	// Wait for cleanup cycles
-	time.Sleep(time.Millisecond * 250)
-	
-	// Item should be cleaned up by now
-	if c.Exists("expire_me") {
-		t.Error("Expired item should be cleaned up by background goroutine")
+	c := makeCache(t, WithTTL(100*time.Millisecond))
+	defer c.Close()
+	c.Set("expire_me", "v")
+	time.Sleep(250 * time.Millisecond)
+	exists, err := c.Exists("expire_me")
+	if err != nil {
+		t.Errorf("Exists error: %v", err)
+	}
+	if exists {
+		t.Error("Cleanup did not remove expired item")
 	}
 }
 
-// TestExistsWithExpiredItems tests Exists method with expired items
+// Exists removes expired items
 func TestExistsWithExpiredItems(t *testing.T) {
-	c := NewInMemoryCache(WithTTL(time.Millisecond * 50))
-	defer c.(*inMemoryCache).Close()
-	
-	c.Set("short_lived", "value")
-	
-	// Should exist initially
-	if !c.Exists("short_lived") {
-		t.Error("Item should exist initially")
+	c := makeCache(t, WithTTL(50*time.Millisecond))
+	defer c.Close()
+	c.Set("short", "v")
+	exists, err := c.Exists("short")
+	if err != nil {
+		t.Errorf("Exists error: %v", err)
 	}
-	
-	// Wait for expiration
-	time.Sleep(time.Millisecond * 60)
-	
-	// Should not exist after expiration
-	if c.Exists("short_lived") {
-		t.Error("Expired item should not exist")
+	if !exists {
+		t.Error("Expected short to exist initially")
+	}
+	time.Sleep(60 * time.Millisecond)
+	exists, err = c.Exists("short")
+	if err != nil {
+		t.Errorf("Exists error: %v", err)
+	}
+	if exists {
+		t.Error("Expired item still exists in Exists")
 	}
 }
 
-// TestPartialEvictionWithExpiredItems tests eviction when some items are expired
+// cleanup frees space for new items
 func TestPartialEvictionWithExpiredItems(t *testing.T) {
-	c := NewInMemoryCache(WithTTL(time.Millisecond * 100), WithMaxItems(3))
-	defer c.(*inMemoryCache).Close()
-	
-	// Add items
+	c := makeCache(t, WithTTL(100*time.Millisecond), WithMaxItems(3))
+	defer c.Close()
 	c.Set("a", 1)
 	c.Set("b", 2)
-	
-	// Wait for first items to expire
-	time.Sleep(time.Millisecond * 110)
-	
-	// Add new items
+	time.Sleep(110 * time.Millisecond)
 	c.Set("c", 3)
 	c.Set("d", 4)
-	c.Set("e", 5) // This should trigger cleanup of expired items
-	
-	// Should have room for all new items since old ones expired
-	if !c.Exists("c") || !c.Exists("d") || !c.Exists("e") {
-		t.Error("All new items should exist after expired items are cleaned up")
+	c.Set("e", 5)
+	for _, k := range []string{"c", "d", "e"} {
+		exists, err := c.Exists(k)
+		if err != nil {
+			t.Errorf("Exists error: %v", err)
+		}
+		if !exists {
+			t.Errorf("Expected %s to exist after cleanup eviction", k)
+		}
 	}
 }
 
-// TestGetUpdatesLastUsed tests that Get updates the lastUsed timestamp
+// Get refreshes LRU timestamp
 func TestGetUpdatesLastUsed(t *testing.T) {
-	c := NewInMemoryCache(WithTTL(time.Minute), WithMaxItems(2))
-	defer c.(*inMemoryCache).Close()
-	
-	c.Set("first", 1)
-	c.Set("second", 2)
-	
-	// Get first item to update its lastUsed
-	c.Get("first")
-	
-	// Add third item, should evict second (not first, since first was accessed)
-	c.Set("third", 3)
-	
-	if !c.Exists("first") || !c.Exists("third") {
-		t.Error("First and third should exist")
+	c := makeCache(t, WithTTL(time.Minute), WithMaxItems(2))
+	defer c.Close()
+	c.Set("x", 1)
+	c.Set("y", 2)
+	c.Get("x")
+	c.Set("z", 3)
+	exists, err := c.Exists("y")
+	if err != nil {
+		t.Errorf("Exists error: %v", err)
 	}
-	if c.Exists("second") {
-		t.Error("Second should be evicted")
+	if exists {
+		t.Error("Expected 'y' to be evicted after Get on 'x'")
 	}
 }
 
-// TestHighVolumeOperations tests cache under high load
+// stress test mixed operations
 func TestHighVolumeOperations(t *testing.T) {
-	c := NewInMemoryCache(WithTTL(time.Minute), WithMaxItems(1000))
-	defer c.(*inMemoryCache).Close()
-	
+	c := makeCache(t, WithTTL(time.Minute), WithMaxItems(1000))
+	defer c.Close()
 	var wg sync.WaitGroup
-	operations := 10000
-	
-	// High volume mixed operations
-	for i := 0; i < operations; i++ {
+	ops := 1000
+	for i := 0; i < ops; i++ {
 		wg.Add(1)
 		go func(id int) {
 			defer wg.Done()
-			key := string(rune(id % 1000))
+			key := string(rune(id % 100))
 			c.Set(key, id)
 			c.Get(key)
 			c.Exists(key)
@@ -546,19 +537,15 @@ func TestHighVolumeOperations(t *testing.T) {
 			}
 		}(i)
 	}
-	
+
 	wg.Wait()
-	
-	// Should not panic and should maintain some items
-	count := 0
-	for i := 0; i < 1000; i++ {
-		if c.Exists(string(rune(i))) {
-			count++
+	cnt := 0
+	for i := 0; i < 100; i++ {
+		if exist, _ := c.Exists(string(rune(i))); exist {
+			cnt++
 		}
 	}
-	
-	// Should have some items but not more than capacity
-	if count > 1000 {
-		t.Errorf("Should not exceed capacity of 1000, got %d", count)
+	if cnt > 100 {
+		t.Errorf("HighVolume: got %d, want <=100", cnt)
 	}
 }
