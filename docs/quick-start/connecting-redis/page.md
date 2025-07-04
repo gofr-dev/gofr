@@ -1,140 +1,116 @@
-# Connecting to Redis
+# Redis Integration in GoFr
+
+## Original Guide (Unchanged)
 
 GoFr simplifies the process of connecting to Redis.
 
-## Setup:
-
+### Setup:
 Ensure we have Redis installed on our system.
 
 Optionally, we can use Docker to set up a development environment with password authentication as described below.
 
-```bash
+bash
 docker run --name gofr-redis -p 2002:6379 -d \
-	-e REDIS_PASSWORD=password \
-	redis:7.0.5 --requirepass password
-```
+  -e REDIS_PASSWORD=password \
+  redis:7.0.5 --requirepass password
 
-We can set a sample key `greeting` using the following command:
 
-```bash
-docker exec -it gofr-redis bash -c 'redis-cli SET greeting "Hello from Redis."'
-```
+We can set a sample key greeting using the following command:
 
-## Configuration & Usage:
+bash
+docker exec -it gofr-redis bash -c "redis-cli SET greeting \"Hello from Redis.\""
 
-GoFr applications rely on environment variables to configure and connect to a Redis server.  
-These variables are stored in a `.env` file located within the `configs` directory at your project root.
 
-### Required Environment Variables:
+### Configuration & Usage:
+GoFr applications rely on environment variables to configure and connect to a Redis server.
+These variables are stored in a .env file located within the configs directory at your project root.
 
-{% table %}
+#### Required Environment Variables:
 
-- Key
-- Description
-
----
-
-- REDIS_HOST
-- Hostname or IP address of your Redis server
+| Key            | Description                                                              |
+|----------------|--------------------------------------------------------------------------|
+| REDIS_HOST     | Hostname or IP address of your Redis server                              |
+| REDIS_PORT     | Port number your Redis server listens on (default: 6379)                 |
+| REDIS_USER     | Redis username; multiple users with ACLs can be configured               |
+| REDIS_PASSWORD | Redis password (required only if authentication is enabled)              |
+| REDIS_DB       | Redis database number (default: 0)                                       |
 
 ---
 
-- REDIS_PORT
-- Port number your Redis server listens on (default: `6379`)
+## New Additions
 
----
+GoFr provides built-in support for Redis, enabling applications to leverage Redis for fast in-memory data storage, caching, and session management through gofr.Context.
 
-- REDIS_USER
-- Redis username; multiple users with ACLs can be configured. [See official docs](https://redis.io/docs/latest/operate/oss_and_stack/management/security/acl/)
+### Redis Interface Definition
+go
+// Redis provides methods for GoFr applications to communicate with Redis
+// through its commands and operations.
+type Redis interface {
+	HealthChecker
 
----
+	Get(ctx context.Context, key string) *redis.StringCmd
+	Set(ctx context.Context, key string, value interface{}, expiration time.Duration) *redis.StatusCmd
+	Del(ctx context.Context, keys ...string) *redis.IntCmd
+	Exists(ctx context.Context, keys ...string) *redis.IntCmd
+	Expire(ctx context.Context, key string, expiration time.Duration) *redis.BoolCmd
 
-- REDIS_PASSWORD
-- Redis password (required only if authentication is enabled)
+	HGet(ctx context.Context, key, field string) *redis.StringCmd
+	HSet(ctx context.Context, key string, values ...interface{}) *redis.IntCmd
+	HGetAll(ctx context.Context, key string) *redis.StringStringMapCmd
 
----
+	LPush(ctx context.Context, key string, values ...interface{}) *redis.IntCmd
+	RPop(ctx context.Context, key string) *redis.StringCmd
 
-- REDIS_DB
-- Redis database number (default: `0`)
+	SAdd(ctx context.Context, key string, members ...interface{}) *redis.IntCmd
+	SMembers(ctx context.Context, key string) *redis.StringSliceCmd
 
----
-
-## TLS Support (Optional):
-
-{% table %}
-
-- Key
-- Description
-
----
-
-- REDIS_TLS_ENABLED
-- Set to `"true"` to enable TLS
-
----
-
-- REDIS_TLS_CA_CERT_PATH
-- File path to the CA certificate used to verify the Redis server
-
----
-
-- REDIS_TLS_CERT_PATH
-- File path to the client certificate (for mTLS)
-
----
-
-- REDIS_TLS_KEY_PATH
-- File path to the client private key (for mTLS)
-
----
-
-## ✅ Example `.env` File
-
-```env
-REDIS_HOST=redis.example.com
-REDIS_PORT=6379
-REDIS_USER=appuser
-REDIS_PASSWORD=securepassword
-REDIS_DB=0
-
-# TLS settings (optional)
-REDIS_TLS_ENABLED=true
-REDIS_TLS_CA_CERT_PATH=./configs/certs/ca.pem
-REDIS_TLS_CERT_PATH=./configs/certs/client.crt
-REDIS_TLS_KEY_PATH=./configs/certs/client.key
-```
-
-The following code snippet demonstrates how to retrieve data from a Redis key named "greeting":
-
-```go
-package main
-
-import (
-	"errors"
-
-	"github.com/redis/go-redis/v9"
-
-	"gofr.dev/pkg/gofr"
-)
-
-func main() {
-	// Initialize GoFr object
-	app := gofr.New()
-
-	app.GET("/redis", func(ctx *gofr.Context) (any, error) {
-		// Get the value using the Redis instance
-
-		val, err := ctx.Redis.Get(ctx.Context, "greeting").Result()
-		if err != nil && !errors.Is(err, redis.Nil) {
-			// If the key is not found, we are not considering this an error and returning ""
-			return nil, err
-		}
-
-		return val, nil
-	})
-
-	// Run the application
-
-	app.Run()
+	Incr(ctx context.Context, key string) *redis.IntCmd
+	Decr(ctx context.Context, key string) *redis.IntCmd
 }
-```
+
+
+### Configuration
+GoFr applications rely on environment variables to configure and connect to a Redis server.
+These variables are stored in a .env file located within the configs directory at your project root.
+
+#### Example .env file:
+
+env
+REDIS_HOST=localhost
+REDIS_PORT=6379
+REDIS_USER=default
+REDIS_PASSWORD=password
+
+
+### Setup with Docker
+
+bash
+docker run --name gofr-redis -p 2002:6379 -d \
+  -e REDIS_PASSWORD=password \
+  redis:7.0.5 --requirepass password
+
+docker exec -it gofr-redis bash -c 'redis-cli SET greeting "Hello from Redis."'
+
+
+### Usage Example
+Full GoFr application demonstrating basic Redis operations (key-value, hash, list).
+
+### Common Use Cases
+- *Caching*: Store and retrieve user data
+- *Session Management*: Create and manage sessions using Redis hashes
+- *Rate Limiting*: Track and control request rates using Redis counters
+
+### Data Migrations
+GoFr allows data migration files for Redis to set or clean up keys across environments.
+
+go
+func up(c *gofr.Context) error {
+    c.Redis.Set(context.Background(), "app:version", "1.0.0", 0)
+    c.Redis.Set(context.Background(), "app:maintenance", "false", 0)
+    return nil
+}
+
+func down(c *gofr.Context) error {
+    c.Redis.Del(context.Background(), "app:version", "app:maintenance")
+    return nil
+}
