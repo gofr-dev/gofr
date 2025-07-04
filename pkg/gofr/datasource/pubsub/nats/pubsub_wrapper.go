@@ -12,6 +12,10 @@ type PubSubWrapper struct {
 	Client *Client
 }
 
+func (w *PubSubWrapper) Query(ctx context.Context, query string, args ...any) ([]byte, error) {
+	return w.Client.Query(ctx, query, args...)
+}
+
 // Publish publishes a message to a topic.
 func (w *PubSubWrapper) Publish(ctx context.Context, topic string, message []byte) error {
 	return w.Client.Publish(ctx, topic, message)
