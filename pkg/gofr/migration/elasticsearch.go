@@ -1,0 +1,157 @@
+package migration
+
+import (
+	"context"
+	"fmt"
+	"time"
+
+	"gofr.dev/pkg/gofr/container"
+)
+
+// elasticsearchDS is the adapter struct that implements migration operations for Elasticsearch.
+type elasticsearchDS struct {
+	client Elasticsearch
+}
+
+// elasticsearchMigrator struct implements the migrator interface for Elasticsearch.
+type elasticsearchMigrator struct {
+	elasticsearchDS
+	migrator
+}
+
+const (
+	// elasticsearchMigrationIndex is the index used to track migrations
+	elasticsearchMigrationIndex = "gofr_migrations"
+)
+
+// getLastElasticsearchMigrationQuery fetches the most recent migration version
+var getLastElasticsearchMigrationQuery = map[string]any{
+	"size": 1,
+	"sort": []map[string]any{
+		{"version": map[string]any{"order": "desc"}},
+	},
+	"_source": []string{"version"},
+}
+
+// apply creates a new elasticsearchMigrator.
+func (ds elasticsearchDS) apply(m migrator) migrator {
+	return elasticsearchMigrator{
+		elasticsearchDS: ds,
+		migrator:        m,
+	}
+}
+
+// checkAndCreateMigrationTable creates the migration tracking index if it doesn't exist.
+func (mg elasticsearchMigrator) checkAndCreateMigrationTable(c *container.Container) error {
+	// Check if the migration index exists
+	query := map[string]any{
+		"query": map[string]any{
+			"match_all": map[string]any{},
+		},
+		"size": 0,
+	}
+
+	_, err := c.Elasticsearch.Search(context.Background(), []string{elasticsearchMigrationIndex}, query)
+	if err != nil {
+		// Index doesn't exist, create it
+		settings := map[string]any{
+			"settings": map[string]any{
+				"number_of_shards":   1,
+				"number_of_replicas": 0,
+			},
+			"mappings": map[string]any{
+				"properties": map[string]any{
+					"version": map[string]any{
+						"type": "long",
+					},
+					"method": map[string]any{
+						"type": "keyword",
+					},
+					"start_time": map[string]any{
+						"type": "date",
+					},
+					"duration": map[string]any{
+						"type": "long",
+					},
+				},
+			},
+		}
+
+		err = c.Elasticsearch.CreateIndex(context.Background(), elasticsearchMigrationIndex, settings)
+		if err != nil {
+			return fmt.Errorf("failed to create migration index: %w", err)
+		}
+
+		c.Debugf("Created Elasticsearch migration index: %s", elasticsearchMigrationIndex)
+	}
+
+	return mg.migrator.checkAndCreateMigrationTable(c)
+}
+
+// getLastMigration retrieves the latest migration version from Elasticsearch.
+func (mg elasticsearchMigrator) getLastMigration(c *container.Container) int64 {
+	var lastMigration int64
+
+	// Search for the latest migration
+	result, err := c.Elasticsearch.Search(context.Background(), []string{elasticsearchMigrationIndex}, getLastElasticsearchMigrationQuery)
+	if err != nil {
+		c.Errorf("Failed to fetch migrations from Elasticsearch: %v", err)
+		return 0
+	}
+
+	// Parse the response to get the latest version
+	if hits, ok := result["hits"].(map[string]any); ok {
+		if hitsList, ok := hits["hits"].([]any); ok && len(hitsList) > 0 {
+			if firstHit, ok := hitsList[0].(map[string]any); ok {
+				if source, ok := firstHit["_source"].(map[string]any); ok {
+					if version, ok := source["version"].(float64); ok {
+						lastMigration = int64(version)
+					}
+				}
+			}
+		}
+	}
+
+	c.Debugf("Elasticsearch last migration fetched value is: %v", lastMigration)
+
+	lm2 := mg.migrator.getLastMigration(c)
+
+	if lm2 > lastMigration {
+		return lm2
+	}
+
+	return lastMigration
+}
+
+// beginTransaction starts a new transaction (Elasticsearch doesn't support traditional transactions).
+func (mg elasticsearchMigrator) beginTransaction(c *container.Container) transactionData {
+	return mg.migrator.beginTransaction(c)
+}
+
+// commitMigration records the migration in the tracking index.
+func (mg elasticsearchMigrator) commitMigration(c *container.Container, data transactionData) error {
+	migrationDoc := map[string]any{
+		"version":    data.MigrationNumber,
+		"method":     "UP",
+		"start_time": data.StartTime.Format(time.RFC3339),
+		"duration":   time.Since(data.StartTime).Milliseconds(),
+	}
+
+	// Use the migration number as the document ID for idempotency
+	docID := fmt.Sprintf("%d", data.MigrationNumber)
+
+	err := c.Elasticsearch.IndexDocument(context.Background(), elasticsearchMigrationIndex, docID, migrationDoc)
+	if err != nil {
+		return fmt.Errorf("failed to record migration: %w", err)
+	}
+
+	c.Debugf("Inserted record for migration %v in Elasticsearch gofr_migrations index", data.MigrationNumber)
+
+	return mg.migrator.commitMigration(c, data)
+}
+
+// rollback is a no-op for Elasticsearch migrations.
+func (mg elasticsearchMigrator) rollback(c *container.Container, data transactionData) {
+	mg.migrator.rollback(c, data)
+	c.Fatalf("Migration %v failed.", data.MigrationNumber)
+}
