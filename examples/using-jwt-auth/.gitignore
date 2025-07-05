@@ -1,0 +1,35 @@
+# Binaries
+*.exe
+*.out
+*.o
+*.so
+
+# Go build artifacts
+bin/
+vendor/
+*.test
+
+# IDE/editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Logs and temp files
+*.log
+*.tmp
+*.cache
+
+# Environment configs
+.env
+
+# Keys and sensitive data
+keys/private.pem
+keys/public.pem
+
+# OS-specific
+.DS_Store
+Thumbs.db
+
+# Dependency modules (if vendoring is not used)
+go.sum
