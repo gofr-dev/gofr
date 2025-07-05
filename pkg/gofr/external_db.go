@@ -194,3 +194,9 @@ func (a *App) AddElasticsearch(db container.ElasticsearchProvider) {
 
 	a.container.Elasticsearch = db
 }
+
+func (a *App) AddInfluxDB(db container.InfluxDBProvider) {
+	db.UseLogger(a.Logger())
+	db.Connect()
+	a.container.InfluxDB = db
+}
