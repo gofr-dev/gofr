@@ -31,21 +31,11 @@ type entry struct {
 	node      *node
 }
 
-type cacheStats struct {
-	hits        int64
-	misses      int64
-	sets        int64
-	deletes     int64
-	evictions   int64
-	cleanupRuns int64
-	errors      int64
-}
-
 type inMemoryCache struct {
 	mu       sync.RWMutex
 	items    map[string]entry
 	ttl      time.Duration
-	maxItems int64
+	maxItems int
 	quit     chan struct{}
 	closed   bool
 
@@ -54,7 +44,6 @@ type inMemoryCache struct {
 
 	name   string
 	logger cache.Logger
-	stats  cacheStats
 }
 
 // Option configures the cache
@@ -69,7 +58,7 @@ func WithTTL(ttl time.Duration) Option {
 }
 
 // WithMaxItems sets the maximum number of items in the cache
-func WithMaxItems(maxItems int64) Option {
+func WithMaxItems(maxItems int) Option {
 	return func(c *inMemoryCache) error {
 		if maxItems < 0 {
 			return ErrInvalidMaxItems
@@ -137,12 +126,10 @@ func NewInMemoryCache(opts ...Option) (cache.Cache, error) {
 func (c *inMemoryCache) Set(key string, value interface{}) error {
 	if err := c.validateKey(key); err != nil {
 		c.logger.Errorf("Set failed: %v", err)
-		c.stats.errors++
 		return err
 	}
 	if value == nil {
 		c.logger.Errorf("Set failed: %v", ErrNilValue)
-		c.stats.errors++
 		return ErrNilValue
 	}
 
@@ -163,12 +150,11 @@ func (c *inMemoryCache) Set(key string, value interface{}) error {
 		c.items[key] = ent
 		// O(1) move-to-front
 		c.moveToFront(ent.node)
-		c.stats.sets++
 		return nil
 	}
 
 	// Evict if at capacity (O(1) eviction)
-	if c.maxItems > 0 && int64(len(c.items)) >= c.maxItems {
+	if c.maxItems > 0 && int(len(c.items)) >= c.maxItems {
 		c.evictTail()
 	}
 
@@ -177,7 +163,6 @@ func (c *inMemoryCache) Set(key string, value interface{}) error {
 	// O(1) insert at front
 	c.insertAtFront(nd)
 	c.items[key] = entry{value: value, expiresAt: c.computeExpiry(now), node: nd}
-	c.stats.sets++
 	c.logger.Debugf("Set key '%s'", key)
 	return nil
 }
@@ -186,7 +171,6 @@ func (c *inMemoryCache) Set(key string, value interface{}) error {
 func (c *inMemoryCache) Get(key string) (interface{}, bool, error) {
 	if err := c.validateKey(key); err != nil {
 		c.logger.Errorf("Get failed: %v", err)
-		c.stats.errors++
 		return nil, false, err
 	}
 
@@ -200,14 +184,12 @@ func (c *inMemoryCache) Get(key string) (interface{}, bool, error) {
 			c.removeNode(ent.node)
 			delete(c.items, key)
 		}
-		c.stats.misses++
 		c.logger.Debugf("Cache miss for key '%s'", key)
 		return nil, false, nil
 	}
 
 	// Hit: move node to front to mark as most recently used (O(1))
 	c.moveToFront(ent.node)
-	c.stats.hits++
 	c.logger.Debugf("Cache hit for key '%s'", key)
 	return ent.value, true, nil
 }
@@ -215,7 +197,6 @@ func (c *inMemoryCache) Get(key string) (interface{}, bool, error) {
 func (c *inMemoryCache) Delete(key string) error {
 	if err := c.validateKey(key); err != nil {
 		c.logger.Errorf("Delete failed: %v", err)
-		c.stats.errors++
 		return err
 	}
 
@@ -226,7 +207,6 @@ func (c *inMemoryCache) Delete(key string) error {
 		// O(1) removal from LRU list
 		c.removeNode(ent.node)
 		delete(c.items, key)
-		c.stats.deletes++
 		c.logger.Debugf("Deleted key '%s'", key)
 	}
 	return nil
@@ -235,7 +215,6 @@ func (c *inMemoryCache) Delete(key string) error {
 func (c *inMemoryCache) Exists(key string) (bool, error) {
 	if err := c.validateKey(key); err != nil {
 		c.logger.Errorf("Exists failed: %v", err)
-		c.stats.errors++
 		return false, err
 	}
 	c.mu.RLock()
@@ -254,7 +233,6 @@ func (c *inMemoryCache) Clear() error {
 	count := len(c.items)
 	c.items = make(map[string]entry)
 	c.head, c.tail = nil, nil
-	c.stats.deletes += int64(count)
 	c.logger.Infof("Cleared cache '%s', removed %d items", c.name, count)
 	return nil
 }
@@ -293,9 +271,6 @@ func (c *inMemoryCache) cleanupExpired(now time.Time) int {
 			removed++
 		}
 	}
-	if removed > 0 {
-		c.stats.cleanupRuns++
-	}
 	return removed
 }
 
@@ -309,7 +284,6 @@ func (c *inMemoryCache) evictTail() {
 	// O(1) remove from list
 	c.removeNode(c.tail)
 	delete(c.items, key)
-	c.stats.evictions++
 	c.logger.Debugf("Evicted key '%s'", key)
 }
 
@@ -402,7 +376,7 @@ func NewDebugCache(name string) (cache.Cache, error) {
 	)
 }
 
-func NewProductionCache(name string, ttl time.Duration, maxItems int64) (cache.Cache, error) {
+func NewProductionCache(name string, ttl time.Duration, maxItems int) (cache.Cache, error) {
 	return NewInMemoryCache(
 		WithName(name),
 		WithTTL(ttl),
