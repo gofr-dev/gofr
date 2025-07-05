@@ -65,6 +65,7 @@ type Container struct {
 	SurrealDB     SurrealDB
 	ArangoDB      ArangoDB
 	Elasticsearch Elasticsearch
+	InfluxDB      InfluxDB
 
 	KVStore KVStore
 
