@@ -1,145 +1,129 @@
 package inmemory
 
 import (
-	"errors"
 	"runtime"
 	"sync"
 	"testing"
 	"time"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 // makeCache initializes the cache and fails the test on error
 func makeCache(t *testing.T, opts ...Option) *inMemoryCache {
 	t.Helper()
 	ci, err := NewInMemoryCache(opts...)
-	if err != nil {
-		t.Fatalf("failed to initialize cache: %v", err)
-	}
+	require.NoError(t, err, "failed to initialize cache")
 	return ci.(*inMemoryCache)
 }
 
-// basic Set/Get/Delete/Exists flow and error returns
+// Test basic Set/Get/Delete/Exists operations
 func TestOperations(t *testing.T) {
 	c := makeCache(t, WithName("name"), WithTTL(5*time.Second), WithMaxItems(10))
 	defer c.Close()
 
-	// Set and Get
-	if err := c.Set("key1", 10); err != nil {
-		t.Fatalf("Set failed: %v", err)
-	}
+	require.NoError(t, c.Set("key1", 10))
+
 	v, found, err := c.Get("key1")
-	if err != nil || !found || v.(int) != 10 {
-		t.Errorf("Get returned (%v, %v, %v), want (10, true, nil)", v, found, err)
-	}
+	assert.NoError(t, err)
+	assert.True(t, found)
+	assert.Equal(t, 10, v)
 
-	// Exists
 	exists, err := c.Exists("key1")
-	if err != nil || !exists {
-		t.Errorf("Exists returned (%v, %v), want (true, nil)", exists, err)
-	}
+	assert.NoError(t, err)
+	assert.True(t, exists)
 
-	// Delete
-	if err := c.Delete("key1"); err != nil {
-		t.Errorf("Delete failed: %v", err)
-	}
+	assert.NoError(t, c.Delete("key1"))
+
 	exists, err = c.Exists("key1")
-	if err != nil {
-		t.Errorf("Exists post-delete error: %v", err)
-	}
-	if exists {
-		t.Error("Expected key1 to be gone after Delete")
-	}
+	assert.NoError(t, err)
+	assert.False(t, exists)
 }
 
-// Clear removes all items safely
+// Test Clear method
 func TestClear(t *testing.T) {
 	c := makeCache(t, WithTTL(time.Minute), WithMaxItems(10))
 	defer c.Close()
+
 	_ = c.Set("x", 1)
 	_ = c.Set("y", 2)
-	if err := c.Clear(); err != nil {
-		t.Errorf("Clear failed: %v", err)
-	}
+
+	assert.NoError(t, c.Clear())
+
 	for _, k := range []string{"x", "y"} {
 		exist, err := c.Exists(k)
-		if err != nil {
-			t.Errorf("Exists(%s) error: %v", k, err)
-		}
-		if exist {
-			t.Errorf("Expected %s to be removed by Clear", k)
-		}
+		assert.NoError(t, err)
+		assert.False(t, exist)
 	}
 }
 
-// items expire after TTL
+// Test TTL expiration
 func TestTTLExpiry(t *testing.T) {
 	c := makeCache(t, WithTTL(50*time.Millisecond), WithMaxItems(10))
 	defer c.Close()
+
 	_ = c.Set("foo", "bar")
 	time.Sleep(60 * time.Millisecond)
+
 	_, found, err := c.Get("foo")
-	if err != nil {
-		t.Errorf("Get error after TTL: %v", err)
-	}
-	if found {
-		t.Error("Expected 'foo' to expire after TTL")
-	}
+	assert.NoError(t, err)
+	assert.False(t, found)
 }
 
-// LRU eviction when capacity exceeded
+// Test eviction due to capacity
 func TestCapacityEviction(t *testing.T) {
 	c := makeCache(t, WithTTL(time.Minute), WithMaxItems(2))
 	defer c.Close()
+
 	_ = c.Set("k1", 1)
 	time.Sleep(time.Millisecond)
 	_ = c.Set("k2", 2)
-	// Access k1 to keep it recent
-	_, _, _ = c.Get("k1")
+	_, _, _ = c.Get("k1") // Access to keep recent
 	_ = c.Set("k3", 3)
-	// k2 should be evicted
+
 	exists, err := c.Exists("k2")
-	if err != nil {
-		t.Errorf("Exists error: %v", err)
-	}
-	if exists {
-		t.Error("Expected 'k2' to be evicted as LRU")
-	}
+	assert.NoError(t, err)
+	assert.False(t, exists)
 }
 
-// Set on existing key updates value and lastUsed
+// Test overwriting existing key
 func TestOverwrite(t *testing.T) {
 	c := makeCache(t, WithTTL(5*time.Second), WithMaxItems(10))
 	defer c.Close()
+
 	_ = c.Set("dupKey", "first")
 	_ = c.Set("dupKey", "second")
-	v, found, _ := c.Get("dupKey")
-	if !found || v != "second" {
-		t.Errorf("Expected 'second', got %v", v)
-	}
+
+	v, found, err := c.Get("dupKey")
+	assert.NoError(t, err)
+	assert.True(t, found)
+	assert.Equal(t, "second", v)
 }
 
-// Delete on missing key is safe
+// Test deleting non-existent key
 func TestDeleteNonExistent(t *testing.T) {
 	c := makeCache(t, WithTTL(5*time.Second), WithMaxItems(10))
 	defer c.Close()
-	if err := c.Delete("ghost"); err != nil {
-		t.Errorf("Delete non-existent returned error: %v", err)
-	}
+
+	err := c.Delete("ghost")
+	assert.NoError(t, err)
 }
 
-// Clear on empty cache is safe
+// Test clearing empty cache
 func TestClearEmpty(t *testing.T) {
 	c := makeCache(t, WithTTL(5*time.Second), WithMaxItems(10))
 	defer c.Close()
-	if err := c.Clear(); err != nil {
-		t.Errorf("Clear empty returned error: %v", err)
-	}
+
+	err := c.Clear()
+	assert.NoError(t, err)
 }
 
-// ensure thread-safety for Set/Get/Exists
+// Test concurrent Set/Get/Exists
 func TestConcurrentAccess(t *testing.T) {
 	c := makeCache(t, WithTTL(5*time.Second), WithMaxItems(10))
 	defer c.Close()
+
 	var wg sync.WaitGroup
 	for i := 0; i < 100; i++ {
 		wg.Add(1)
@@ -153,53 +137,43 @@ func TestConcurrentAccess(t *testing.T) {
 	wg.Wait()
 }
 
-// expired items are cleaned before eviction
+// Test cleanup removes expired before eviction
 func TestEvictionEdgeCase(t *testing.T) {
 	c := makeCache(t, WithTTL(100*time.Millisecond), WithMaxItems(2))
 	defer c.Close()
+
 	_ = c.Set("a", 1)
 	time.Sleep(110 * time.Millisecond)
 	_ = c.Set("b", 2)
 	_ = c.Set("c", 3)
-	// both 'b' and 'c' should exist
-	exists, err := c.Exists("b")
-	if err != nil {
-		t.Errorf("Exists error: %v", err)
-	}
-	if !exists {
-		t.Error("Expected 'b' to exist")
-	}
-	exists, err = c.Exists("c")
-	if err != nil {
-		t.Errorf("Exists error: %v", err)
-	}
-	if !exists {
-		t.Error("Expected 'c' to exist")
-	}
+
+	existsB, err := c.Exists("b")
+	assert.NoError(t, err)
+	assert.True(t, existsB)
+
+	existsC, err := c.Exists("c")
+	assert.NoError(t, err)
+	assert.True(t, existsC)
 }
 
-// validate defaults and basic usage
+// Test default configuration values
 func TestDefaultConfiguration(t *testing.T) {
 	ci, err := NewInMemoryCache()
-	if err != nil {
-		t.Fatalf("NewInMemoryCache error: %v", err)
-	}
+	require.NoError(t, err)
 	c := ci.(*inMemoryCache)
 	defer c.Close()
-	if c.ttl != time.Minute {
-		t.Errorf("Default TTL = %v, want 1m", c.ttl)
-	}
-	if c.maxItems != 0 {
-		t.Errorf("Default maxItems = %d, want 0", c.maxItems)
-	}
+
+	assert.Equal(t, time.Minute, c.ttl)
+	assert.Equal(t, int(0), c.maxItems)
+
 	_ = c.Set("test", "value")
-	v, found, _ := c.Get("test")
-	if !found || v != "value" {
-		t.Error("Default config failed to store/get")
-	}
+	v, found, err := c.Get("test")
+	assert.NoError(t, err)
+	assert.True(t, found)
+	assert.Equal(t, "value", v)
 }
 
-// last option wins for conflicting settings
+// Last option wins
 func TestMultipleOptions(t *testing.T) {
 	c := makeCache(t,
 		WithTTL(30*time.Second),
@@ -207,158 +181,150 @@ func TestMultipleOptions(t *testing.T) {
 		WithTTL(60*time.Second),
 	)
 	defer c.Close()
-	if c.ttl != 60*time.Second {
-		t.Errorf("TTL = %v, want 60s", c.ttl)
-	}
-	if c.maxItems != 5 {
-		t.Errorf("maxItems = %d, want 5", c.maxItems)
-	}
+
+	assert.Equal(t, 60*time.Second, c.ttl)
+	assert.Equal(t, 5, c.maxItems)
 }
 
-// TTL == 0 should expire immediately
+// TTL=0 should expire immediately
 func TestZeroTTL(t *testing.T) {
 	c := makeCache(t, WithTTL(0))
 	defer c.Close()
-	c.Set("immediate", "expire")
-	if _, found, _ := c.Get("immediate"); found {
-		t.Error("Zero TTL: item should expire immediately")
-	}
+
+	_ = c.Set("immediate", "expire")
+	_, found, _ := c.Get("immediate")
+	assert.False(t, found)
 }
 
-// TTL <=0 should expire immediately
+// TTL<0 should expire immediately
 func TestNegativeTTL(t *testing.T) {
 	c := makeCache(t, WithTTL(-time.Second))
 	defer c.Close()
-	c.Set("neg", "ttl")
-	if _, found, _ := c.Get("neg"); found {
-		t.Error("Negative TTL: item should expire immediately")
-	}
+
+	_ = c.Set("neg", "ttl")
+	_, found, _ := c.Get("neg")
+	assert.False(t, found)
 }
 
 // maxItems=0 means unlimited
 func TestUnlimitedCapacity(t *testing.T) {
 	c := makeCache(t, WithTTL(time.Minute), WithMaxItems(0))
 	defer c.Close()
+
 	for i := 0; i < 500; i++ {
 		c.Set(string(rune(i)), i)
 	}
 	count := 0
 	for i := 0; i < 500; i++ {
-		exists, _ := c.Exists(string(rune(i)))
-		if exists {
+		exist, _ := c.Exists(string(rune(i)))
+		if exist {
 			count++
 		}
 	}
-	if count != 500 {
-		t.Errorf("Unlimited capacity: got %d items, want 500", count)
-	}
+	assert.Equal(t, 500, count)
 }
 
-// capacity=1 evicts correct item
+// maxItems=1 should only allow one item
 func TestSingleItemCapacity(t *testing.T) {
 	c := makeCache(t, WithTTL(time.Minute), WithMaxItems(1))
 	defer c.Close()
+
 	c.Set("first", 1)
 	c.Set("second", 2)
-	count := 0
-	exists, _ := c.Exists("first")
-	if exists {
-		count++
-	}
-	exists, _ = c.Exists("second")
-	if exists {
-		count++
-	}
-	if count != 1 {
-		t.Errorf("Capacity=1: have %d items, want 1", count)
-	}
+
+	exist1, _ := c.Exists("first")
+	exist2, _ := c.Exists("second")
+
+	assert.NotEqual(t, exist1, exist2)
 }
 
-// verifies LRU ordering eviction
+// Test LRU eviction order
 func TestLRUEvictionOrder(t *testing.T) {
 	c := makeCache(t, WithTTL(time.Minute), WithMaxItems(3))
 	defer c.Close()
+
 	c.Set("a", 1)
 	c.Set("b", 2)
 	c.Set("c", 3)
-	c.Get("a") // mark a as recent
+	c.Get("a")
 	c.Set("d", 4)
-	exists, err := c.Exists("b")
-	if err != nil {
-		t.Errorf("Exists error: %v", err)
-	}
-	if exists {
-		t.Error("LRU eviction: expected 'b' to be evicted")
-	}
+
+	existB, _ := c.Exists("b")
+	assert.False(t, existB)
 }
 
-// updating key refreshes lastUsed for eviction
+// Updating key should refresh its usage
 func TestUpdateExistingKeyTiming(t *testing.T) {
 	c := makeCache(t, WithTTL(time.Minute), WithMaxItems(2))
 	defer c.Close()
+
 	c.Set("old", 1)
 	c.Set("new", 2)
-	c.Set("old", 10) // update old
+	c.Set("old", 10)
 	c.Set("third", 3)
-	exists, err := c.Exists("new")
-	if err != nil {
-		t.Errorf("Exists error: %v", err)
-	}
-	if exists {
-		t.Error("Update existing: expected 'new' to be evicted")
-	}
+
+	existNew, _ := c.Exists("new")
+	assert.False(t, existNew)
 }
 
-// store and retrieve various Go types
+// Support for multiple Go types
 func TestDifferentValueTypes(t *testing.T) {
 	c := makeCache(t, WithTTL(time.Minute))
 	defer c.Close()
-	c.Set("str", "hello")
-	c.Set("int", 42)
-	c.Set("flt", 3.14)
-	c.Set("bool", true)
-	c.Set("slice", []int{1, 2, 3})
-	c.Set("map", map[string]int{"k": 123})
-	c.Set("nilval", nil)
-	for k, want := range map[string]interface{}{"str": "hello", "int": 42, "flt": 3.14, "bool": true} {
-		v, found, _ := c.Get(k)
-		if !found || v != want {
-			t.Errorf("%s: got %v, want %v", k, v, want)
-		}
+
+	values := map[string]interface{}{
+		"str":    "hello",
+		"int":    42,
+		"flt":    3.14,
+		"bool":   true,
+		"slice":  []int{1, 2, 3},
+		"map":    map[string]int{"k": 123},
+		"nilval": nil,
 	}
-	_, foundNil, _ := c.Get("nilval")
-	if foundNil {
-		t.Error("nil value: expected found=false")
+
+	for k, val := range values {
+		_ = c.Set(k, val)
+	}
+
+	for k, expected := range values {
+		v, found, _ := c.Get(k)
+		if k == "nilval" {
+			assert.False(t, found)
+		} else {
+			assert.True(t, found)
+			assert.Equal(t, expected, v)
+		}
 	}
 }
 
-// using empty string as key is invalid
+// Using empty key should error
 func TestEmptyStringKey(t *testing.T) {
 	c := makeCache(t, WithTTL(time.Minute))
 	defer c.Close()
-	if err := c.Set("", "v"); !errors.Is(err, ErrEmptyKey) {
-		t.Errorf("Empty key: expected ErrEmptyKey, got %v", err)
-	}
+
+	err := c.Set("", "v")
+	assert.ErrorIs(t, err, ErrEmptyKey)
 }
 
-// very long keys are supported
+// Long keys are supported
 func TestLongKey(t *testing.T) {
 	c := makeCache(t, WithTTL(time.Minute))
 	defer c.Close()
+
 	longKey := string(make([]byte, 10000))
-	if err := c.Set(longKey, "v"); err != nil {
-		t.Errorf("Long key Set error: %v", err)
-	}
+	err := c.Set(longKey, "v")
+	assert.NoError(t, err)
+
 	v, found, _ := c.Get(longKey)
-	if !found || v != "v" {
-		t.Error("Long key Get failed")
-	}
+	assert.True(t, found)
+	assert.Equal(t, "v", v)
 }
 
-// concurrent Set on same key does not panic
+// Concurrent Set on same key
 func TestConcurrentSetSameKey(t *testing.T) {
 	c := makeCache(t, WithTTL(time.Minute))
 	defer c.Close()
+
 	var wg sync.WaitGroup
 	for i := 0; i < 100; i++ {
 		wg.Add(1)
@@ -368,30 +334,30 @@ func TestConcurrentSetSameKey(t *testing.T) {
 		}(i)
 	}
 	wg.Wait()
-	if _, found, _ := c.Get("race"); !found {
-		t.Error("Concurrent Set: expected key to exist")
-	}
+
+	_, found, _ := c.Get("race")
+	assert.True(t, found)
 }
 
-// concurrent sets and eviction maintain capacity
+// Concurrent eviction should maintain capacity
 func TestConcurrentEviction(t *testing.T) {
 	c := makeCache(t, WithTTL(time.Minute), WithMaxItems(10))
 	defer c.Close()
-	// prefill
+
 	for i := 0; i < 10; i++ {
 		c.Set(string(rune(i)), i)
 	}
+
 	var wg sync.WaitGroup
 	for i := 0; i < 50; i++ {
 		wg.Add(1)
 		go func(val int) {
 			defer wg.Done()
-			c.Set(string(rune(val+100)), val)
-			c.Get(string(rune(val % 10)))
-			c.Exists(string(rune(val % 10)))
+			_ = c.Set(string(rune(val+100)), val)
+			_, _, _ = c.Get(string(rune(val % 10)))
+			_, _ = c.Exists(string(rune(val % 10)))
 		}(i)
 	}
-
 	wg.Wait()
 
 	count := 0
@@ -400,13 +366,10 @@ func TestConcurrentEviction(t *testing.T) {
 			count++
 		}
 	}
-
-	if count > 10 {
-		t.Errorf("Concurrent eviction: %d items, want <=10", count)
-	}
+	assert.LessOrEqual(t, count, 10)
 }
 
-// cleanup goroutine exits on Close
+// Cleanup goroutine should stop after Close
 func TestCleanupGoroutineStops(t *testing.T) {
 	before := runtime.NumGoroutine()
 	c := makeCache(t, WithTTL(time.Millisecond))
@@ -414,12 +377,11 @@ func TestCleanupGoroutineStops(t *testing.T) {
 	c.Close()
 	time.Sleep(50 * time.Millisecond)
 	after := runtime.NumGoroutine()
-	if after > before {
-		t.Errorf("Cleanup goroutine still running: before=%d after=%d", before, after)
-	}
+
+	assert.LessOrEqual(t, after, before)
 }
 
-// multiple Close calls are safe
+// Calling Close multiple times is safe
 func TestMultipleClose(t *testing.T) {
 	c := makeCache(t, WithTTL(time.Minute))
 	c.Close()
@@ -433,97 +395,89 @@ func TestOperationsAfterClose(t *testing.T) {
 	_ = c.Set("pre", "close")
 	c.Close()
 	_ = c.Set("post", "close")
+
 	v1, found1, _ := c.Get("pre")
-	if !found1 || v1 != "close" {
-		t.Error("pre-close value lost")
-	}
+	assert.True(t, found1)
+	assert.Equal(t, "close", v1)
+
 	v2, found2, _ := c.Get("post")
-	if !found2 || v2 != "close" {
-		t.Error("post-close Set/Get failed")
-	}
+	assert.True(t, found2)
+	assert.Equal(t, "close", v2)
 }
 
-// background cleanup runs periodically
+// Expired items should be cleaned in background
 func TestCleanupFrequency(t *testing.T) {
 	c := makeCache(t, WithTTL(100*time.Millisecond))
 	defer c.Close()
+
 	c.Set("expire_me", "v")
 	time.Sleep(250 * time.Millisecond)
+
 	exists, err := c.Exists("expire_me")
-	if err != nil {
-		t.Errorf("Exists error: %v", err)
-	}
-	if exists {
-		t.Error("Cleanup did not remove expired item")
-	}
+	assert.NoError(t, err)
+	assert.False(t, exists)
 }
 
-// Exists removes expired items
+// Exists should clean expired keys
 func TestExistsWithExpiredItems(t *testing.T) {
 	c := makeCache(t, WithTTL(50*time.Millisecond))
 	defer c.Close()
+
 	c.Set("short", "v")
+
 	exists, err := c.Exists("short")
-	if err != nil {
-		t.Errorf("Exists error: %v", err)
-	}
-	if !exists {
-		t.Error("Expected short to exist initially")
-	}
+	assert.NoError(t, err)
+	assert.True(t, exists)
+
 	time.Sleep(60 * time.Millisecond)
+
 	exists, err = c.Exists("short")
-	if err != nil {
-		t.Errorf("Exists error: %v", err)
-	}
-	if exists {
-		t.Error("Expired item still exists in Exists")
-	}
+	assert.NoError(t, err)
+	assert.False(t, exists)
 }
 
-// cleanup frees space for new items
+// Cleanup should free space for new items
 func TestPartialEvictionWithExpiredItems(t *testing.T) {
 	c := makeCache(t, WithTTL(100*time.Millisecond), WithMaxItems(3))
 	defer c.Close()
+
 	c.Set("a", 1)
 	c.Set("b", 2)
 	time.Sleep(110 * time.Millisecond)
 	c.Set("c", 3)
 	c.Set("d", 4)
 	c.Set("e", 5)
+
 	for _, k := range []string{"c", "d", "e"} {
 		exists, err := c.Exists(k)
-		if err != nil {
-			t.Errorf("Exists error: %v", err)
-		}
-		if !exists {
-			t.Errorf("Expected %s to exist after cleanup eviction", k)
-		}
+		assert.NoError(t, err)
+		assert.True(t, exists)
 	}
 }
 
-// Get refreshes LRU timestamp
+// Get should update lastUsed for LRU
 func TestGetUpdatesLastUsed(t *testing.T) {
 	c := makeCache(t, WithTTL(time.Minute), WithMaxItems(2))
 	defer c.Close()
+
 	c.Set("x", 1)
 	c.Set("y", 2)
 	c.Get("x")
 	c.Set("z", 3)
+
 	exists, err := c.Exists("y")
-	if err != nil {
-		t.Errorf("Exists error: %v", err)
-	}
-	if exists {
-		t.Error("Expected 'y' to be evicted after Get on 'x'")
-	}
+	assert.NoError(t, err)
+	assert.False(t, exists)
 }
 
-// stress test mixed operations
+// Stress test with mixed operations
 func TestHighVolumeOperations(t *testing.T) {
 	c := makeCache(t, WithTTL(time.Minute), WithMaxItems(1000))
 	defer c.Close()
+
 	var wg sync.WaitGroup
 	ops := 1000
+
 	for i := 0; i < ops; i++ {
 		wg.Add(1)
 		go func(id int) {
@@ -537,15 +491,13 @@ func TestHighVolumeOperations(t *testing.T) {
 			}
 		}(i)
 	}
-
 	wg.Wait()
+
 	cnt := 0
 	for i := 0; i < 100; i++ {
 		if exist, _ := c.Exists(string(rune(i))); exist {
 			cnt++
 		}
 	}
-	if cnt > 100 {
-		t.Errorf("HighVolume: got %d, want <=100", cnt)
-	}
+	assert.LessOrEqual(t, cnt, 100)
 }
