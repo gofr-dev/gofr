@@ -20,7 +20,7 @@ func makeCache(t *testing.T, opts ...Option) *inMemoryCache {
 
 // basic Set/Get/Delete/Exists flow and error returns
 func TestOperations(t *testing.T) {
-	c := makeCache(t, WithName("name"), WithTTL(5*time.Second), WithMaxItems(10), WithLogLevel(LogLevelDebug))
+	c := makeCache(t, WithName("name"), WithTTL(5*time.Second), WithMaxItems(10))
 	defer c.Close()
 
 	// Set and Get
@@ -53,7 +53,7 @@ func TestOperations(t *testing.T) {
 
 // Clear removes all items safely
 func TestClear(t *testing.T) {
-	c := makeCache(t, WithTTL(time.Minute), WithMaxItems(10), WithLogLevel(LogLevelDebug))
+	c := makeCache(t, WithTTL(time.Minute), WithMaxItems(10))
 	defer c.Close()
 	_ = c.Set("x", 1)
 	_ = c.Set("y", 2)
@@ -73,7 +73,7 @@ func TestClear(t *testing.T) {
 
 // items expire after TTL
 func TestTTLExpiry(t *testing.T) {
-	c := makeCache(t, WithTTL(50*time.Millisecond), WithMaxItems(10), WithLogLevel(LogLevelDebug))
+	c := makeCache(t, WithTTL(50*time.Millisecond), WithMaxItems(10))
 	defer c.Close()
 	_ = c.Set("foo", "bar")
 	time.Sleep(60 * time.Millisecond)
@@ -88,7 +88,7 @@ func TestTTLExpiry(t *testing.T) {
 
 // LRU eviction when capacity exceeded
 func TestCapacityEviction(t *testing.T) {
-	c := makeCache(t, WithTTL(time.Minute), WithMaxItems(2), WithLogLevel(LogLevelDebug))
+	c := makeCache(t, WithTTL(time.Minute), WithMaxItems(2))
 	defer c.Close()
 	_ = c.Set("k1", 1)
 	time.Sleep(time.Millisecond)
@@ -215,7 +215,7 @@ func TestMultipleOptions(t *testing.T) {
 	}
 }
 
-//  TTL == 0 should expire immediately
+// TTL == 0 should expire immediately
 func TestZeroTTL(t *testing.T) {
 	c := makeCache(t, WithTTL(0))
 	defer c.Close()
@@ -225,7 +225,7 @@ func TestZeroTTL(t *testing.T) {
 	}
 }
 
-//  TTL <=0 should expire immediately
+// TTL <=0 should expire immediately
 func TestNegativeTTL(t *testing.T) {
 	c := makeCache(t, WithTTL(-time.Second))
 	defer c.Close()
