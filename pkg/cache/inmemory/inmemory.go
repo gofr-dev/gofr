@@ -3,7 +3,6 @@ package inmemory
 import (
 	"errors"
 	"fmt"
-	"log"
 	"sync"
 	"time"
 
@@ -17,34 +16,6 @@ var (
 	ErrNilValue        = errors.New("value cannot be nil")
 	ErrInvalidMaxItems = errors.New("maxItems must be non-negative")
 )
-
-// defines the logging level
-type LogLevel int
-
-const (
-	LogLevelSilent LogLevel = iota
-	LogLevelError
-	LogLevelWarn
-	LogLevelInfo
-	LogLevelDebug
-)
-
-func (l LogLevel) String() string {
-	switch l {
-	case LogLevelSilent:
-		return "SILENT"
-	case LogLevelError:
-		return "ERROR"
-	case LogLevelWarn:
-		return "WARN"
-	case LogLevelInfo:
-		return "INFO"
-	case LogLevelDebug:
-		return "DEBUG"
-	default:
-		return "UNKNOWN"
-	}
-}
 
 // node represents an element in the LRU doubly linked list
 // Used for O(1) insert, remove, and move-to-front operations
@@ -70,7 +41,6 @@ type cacheStats struct {
 	errors      int64
 }
 
-
 type inMemoryCache struct {
 	mu       sync.RWMutex
 	items    map[string]entry
@@ -82,9 +52,9 @@ type inMemoryCache struct {
 	// LRU list head and tail
 	head, tail *node
 
-	name     string
-	logLevel LogLevel
-	stats    cacheStats
+	name   string
+	logger cache.Logger
+	stats  cacheStats
 }
 
 // Option configures the cache
@@ -119,20 +89,22 @@ func WithName(name string) Option {
 	}
 }
 
-// WithLogLevel sets the logging level
-func WithLogLevel(level LogLevel) Option {
+// WithLogger sets the logger for the cache
+func WithLogger(logger cache.Logger) Option {
 	return func(c *inMemoryCache) error {
-		c.logLevel = level
+		if logger != nil {
+			c.logger = logger
+		}
 		return nil
 	}
 }
 
 // validateKey ensures key is non-empty
 func (c *inMemoryCache) validateKey(key string) error {
-    if key == "" {
-        return ErrEmptyKey
-    }
-    return nil
+	if key == "" {
+		return ErrEmptyKey
+	}
+	return nil
 }
 
 // NewInMemoryCache creates a new cache instance
@@ -143,20 +115,20 @@ func NewInMemoryCache(opts ...Option) (cache.Cache, error) {
 		maxItems: 0,
 		quit:     make(chan struct{}),
 		name:     "default",
-		logLevel: LogLevelInfo,
+		logger:   cache.NewStdLogger(),
 	}
 	for _, opt := range opts {
 		if err := opt(c); err != nil {
 			return nil, fmt.Errorf("failed to configure cache: %w", err)
 		}
 	}
-	c.logInfo("Cache '%s' initialized with TTL=%v, MaxItems=%d", c.name, c.ttl, c.maxItems)
+	c.logger.Infof("Cache '%s' initialized with TTL=%v, MaxItems=%d", c.name, c.ttl, c.maxItems)
 
 	// Start periodic cleanup if TTL > 0
 	if c.ttl > 0 {
 		go c.startCleanup()
 	} else {
-		c.logWarn("TTL disabled; items will not expire automatically")
+		c.logger.Warnf("TTL disabled; items will not expire automatically")
 	}
 	return c, nil
 }
@@ -164,12 +136,12 @@ func NewInMemoryCache(opts ...Option) (cache.Cache, error) {
 // Set inserts or updates a cache entry and marks it as most recently used
 func (c *inMemoryCache) Set(key string, value interface{}) error {
 	if err := c.validateKey(key); err != nil {
-		c.logError("Set failed: %v", err)
+		c.logger.Errorf("Set failed: %v", err)
 		c.stats.errors++
 		return err
 	}
 	if value == nil {
-		c.logError("Set failed: %v", ErrNilValue)
+		c.logger.Errorf("Set failed: %v", ErrNilValue)
 		c.stats.errors++
 		return ErrNilValue
 	}
@@ -181,7 +153,7 @@ func (c *inMemoryCache) Set(key string, value interface{}) error {
 	// Clean up expired entries (O(n) TTL scan)
 	removed := c.cleanupExpired(now)
 	if removed > 0 {
-		c.logDebug("Cleaned %d expired items during Set", removed)
+		c.logger.Debugf("Cleaned %d expired items during Set", removed)
 	}
 
 	// If present, update value and move node to front (most recently used)
@@ -206,14 +178,14 @@ func (c *inMemoryCache) Set(key string, value interface{}) error {
 	c.insertAtFront(nd)
 	c.items[key] = entry{value: value, expiresAt: c.computeExpiry(now), node: nd}
 	c.stats.sets++
-	c.logDebug("Set key '%s'", key)
+	c.logger.Debugf("Set key '%s'", key)
 	return nil
 }
 
 // Get retrieves a cache entry and updates its recency
 func (c *inMemoryCache) Get(key string) (interface{}, bool, error) {
 	if err := c.validateKey(key); err != nil {
-		c.logError("Get failed: %v", err)
+		c.logger.Errorf("Get failed: %v", err)
 		c.stats.errors++
 		return nil, false, err
 	}
@@ -229,20 +201,20 @@ func (c *inMemoryCache) Get(key string) (interface{}, bool, error) {
 			delete(c.items, key)
 		}
 		c.stats.misses++
-		c.logDebug("Cache miss for key '%s'", key)
+		c.logger.Debugf("Cache miss for key '%s'", key)
 		return nil, false, nil
 	}
 
 	// Hit: move node to front to mark as most recently used (O(1))
 	c.moveToFront(ent.node)
 	c.stats.hits++
-	c.logDebug("Cache hit for key '%s'", key)
+	c.logger.Debugf("Cache hit for key '%s'", key)
 	return ent.value, true, nil
 }
 
 func (c *inMemoryCache) Delete(key string) error {
 	if err := c.validateKey(key); err != nil {
-		c.logError("Delete failed: %v", err)
+		c.logger.Errorf("Delete failed: %v", err)
 		c.stats.errors++
 		return err
 	}
@@ -255,14 +227,14 @@ func (c *inMemoryCache) Delete(key string) error {
 		c.removeNode(ent.node)
 		delete(c.items, key)
 		c.stats.deletes++
-		c.logDebug("Deleted key '%s'", key)
+		c.logger.Debugf("Deleted key '%s'", key)
 	}
 	return nil
 }
 
 func (c *inMemoryCache) Exists(key string) (bool, error) {
 	if err := c.validateKey(key); err != nil {
-		c.logError("Exists failed: %v", err)
+		c.logger.Errorf("Exists failed: %v", err)
 		c.stats.errors++
 		return false, err
 	}
@@ -283,7 +255,7 @@ func (c *inMemoryCache) Clear() error {
 	c.items = make(map[string]entry)
 	c.head, c.tail = nil, nil
 	c.stats.deletes += int64(count)
-	c.logInfo("Cleared cache '%s', removed %d items", c.name, count)
+	c.logger.Infof("Cleared cache '%s', removed %d items", c.name, count)
 	return nil
 }
 
@@ -292,12 +264,12 @@ func (c *inMemoryCache) Close() error {
 	defer c.mu.Unlock()
 
 	if c.closed {
-		c.logWarn("Close called on already closed cache '%s'", c.name)
+		c.logger.Warnf("Close called on already closed cache '%s'", c.name)
 		return ErrCacheClosed
 	}
 	close(c.quit)
 	c.closed = true
-	c.logInfo("Cache '%s' closed", c.name)
+	c.logger.Infof("Cache '%s' closed", c.name)
 	return nil
 }
 
@@ -338,7 +310,7 @@ func (c *inMemoryCache) evictTail() {
 	c.removeNode(c.tail)
 	delete(c.items, key)
 	c.stats.evictions++
-	c.logDebug("Evicted key '%s'", key)
+	c.logger.Debugf("Evicted key '%s'", key)
 }
 
 // places n at the head
@@ -392,7 +364,7 @@ func (c *inMemoryCache) startCleanup() {
 	ticker := time.NewTicker(interval)
 	defer ticker.Stop()
 
-	c.logInfo("Started cleanup every %v for cache '%s'", interval, c.name)
+	c.logger.Infof("Started cleanup every %v for cache '%s'", interval, c.name)
 	for {
 		select {
 		case <-ticker.C:
@@ -400,36 +372,14 @@ func (c *inMemoryCache) startCleanup() {
 			if !c.closed {
 				removed := c.cleanupExpired(time.Now())
 				if removed > 0 {
-					c.logDebug("Cleanup removed %d items, remaining %d", removed, len(c.items))
+					c.logger.Debugf("Cleanup removed %d items, remaining %d", removed, len(c.items))
 				}
 			}
 			c.mu.Unlock()
 		case <-c.quit:
-			c.logInfo("Stopping cleanup for cache '%s'", c.name)
+			c.logger.Infof("Stopping cleanup for cache '%s'", c.name)
 			return
 		}
-	}
-}
-
-// Logging helpers
-func (c *inMemoryCache) logError(fmtStr string, args ...interface{}) {
-	if c.logLevel >= LogLevelError {
-		log.Printf("[CACHE:%s] ERROR: "+fmtStr, append([]interface{}{c.name}, args...)...)
-	}
-}
-func (c *inMemoryCache) logWarn(fmtStr string, args ...interface{}) {
-	if c.logLevel >= LogLevelWarn {
-		log.Printf("[CACHE:%s] WARN: "+fmtStr, append([]interface{}{c.name}, args...)...)
-	}
-}
-func (c *inMemoryCache) logInfo(fmtStr string, args ...interface{}) {
-	if c.logLevel >= LogLevelInfo {
-		log.Printf("[CACHE:%s] INFO: "+fmtStr, append([]interface{}{c.name}, args...)...)
-	}
-}
-func (c *inMemoryCache) logDebug(fmtStr string, args ...interface{}) {
-	if c.logLevel >= LogLevelDebug {
-		log.Printf("[CACHE:%s] DEBUG: "+fmtStr, append([]interface{}{c.name}, args...)...)
 	}
 }
 
@@ -439,7 +389,7 @@ func NewDefaultCache() (cache.Cache, error) {
 		WithName("default"),
 		WithTTL(5*time.Minute),
 		WithMaxItems(1000),
-		WithLogLevel(LogLevelInfo),
+		WithLogger(cache.NewStdLogger()),
 	)
 }
 
@@ -448,7 +398,7 @@ func NewDebugCache(name string) (cache.Cache, error) {
 		WithName(name),
 		WithTTL(1*time.Minute),
 		WithMaxItems(100),
-		WithLogLevel(LogLevelDebug),
+		WithLogger(cache.NewStdLogger()),
 	)
 }
 
@@ -457,6 +407,6 @@ func NewProductionCache(name string, ttl time.Duration, maxItems int64) (cache.C
 		WithName(name),
 		WithTTL(ttl),
 		WithMaxItems(maxItems),
-		WithLogLevel(LogLevelWarn),
+		WithLogger(cache.NewStdLogger()),
 	)
 }
