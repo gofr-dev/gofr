@@ -206,6 +206,15 @@ func initializeDatasources(c *container.Container, ds *Datasource, mg migrator) 
 		initialized = true
 	}
 
+	if !isNil(c.Elasticsearch) {
+		ds.Elasticsearch = c.Elasticsearch
+		mg = elasticsearchDS{c.Elasticsearch}.apply(mg)
+
+		c.Debug("initialized data source for Elasticsearch")
+
+		initialized = true
+	}
+
 	return mg, initialized
 }
 
