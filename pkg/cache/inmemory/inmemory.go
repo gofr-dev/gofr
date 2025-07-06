@@ -1,12 +1,22 @@
+/*
+TODO:
+look for tracing and metrics (prome...)
+make changes reqd.
+priority: dev experiecne
+docs about usage
+*/
+
 package inmemory
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"sync"
 	"time"
 
 	"gofr.dev/pkg/cache"
+	"gofr.dev/pkg/cache/observability"
 )
 
 // Common errors
@@ -43,7 +53,7 @@ type inMemoryCache struct {
 	head, tail *node
 
 	name   string
-	logger cache.Logger
+	logger observability.Logger
 }
 
 // Option configures the cache
@@ -79,7 +89,7 @@ func WithName(name string) Option {
 }
 
 // WithLogger sets the logger for the cache
-func WithLogger(logger cache.Logger) Option {
+func WithLogger(logger observability.Logger) Option {
 	return func(c *inMemoryCache) error {
 		if logger != nil {
 			c.logger = logger
@@ -104,7 +114,7 @@ func NewInMemoryCache(opts ...Option) (cache.Cache, error) {
 		maxItems: 0,
 		quit:     make(chan struct{}),
 		name:     "default",
-		logger:   cache.NewStdLogger(),
+		logger:   observability.NewStdLogger(),
 	}
 	for _, opt := range opts {
 		if err := opt(c); err != nil {
@@ -123,7 +133,7 @@ func NewInMemoryCache(opts ...Option) (cache.Cache, error) {
 }
 
 // Set inserts or updates a cache entry and marks it as most recently used
-func (c *inMemoryCache) Set(key string, value interface{}) error {
+func (c *inMemoryCache) Set(ctx context.Context, key string, value interface{}) error {
 	if err := c.validateKey(key); err != nil {
 		c.logger.Errorf("Set failed: %v", err)
 		return err
@@ -168,7 +178,7 @@ func (c *inMemoryCache) Set(key string, value interface{}) error {
 }
 
 // Get retrieves a cache entry and updates its recency
-func (c *inMemoryCache) Get(key string) (interface{}, bool, error) {
+func (c *inMemoryCache) Get(ctx context.Context, key string) (interface{}, bool, error) {
 	if err := c.validateKey(key); err != nil {
 		c.logger.Errorf("Get failed: %v", err)
 		return nil, false, err
@@ -194,7 +204,7 @@ func (c *inMemoryCache) Get(key string) (interface{}, bool, error) {
 	return ent.value, true, nil
 }
 
-func (c *inMemoryCache) Delete(key string) error {
+func (c *inMemoryCache) Delete(ctx context.Context, key string) error {
 	if err := c.validateKey(key); err != nil {
 		c.logger.Errorf("Delete failed: %v", err)
 		return err
@@ -212,7 +222,7 @@ func (c *inMemoryCache) Delete(key string) error {
 	return nil
 }
 
-func (c *inMemoryCache) Exists(key string) (bool, error) {
+func (c *inMemoryCache) Exists(ctx context.Context, key string) (bool, error) {
 	if err := c.validateKey(key); err != nil {
 		c.logger.Errorf("Exists failed: %v", err)
 		return false, err
@@ -226,7 +236,7 @@ func (c *inMemoryCache) Exists(key string) (bool, error) {
 	return false, nil
 }
 
-func (c *inMemoryCache) Clear() error {
+func (c *inMemoryCache) Clear(ctx context.Context) error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
@@ -237,7 +247,7 @@ func (c *inMemoryCache) Clear() error {
 	return nil
 }
 
-func (c *inMemoryCache) Close() error {
+func (c *inMemoryCache) Close(ctx context.Context) error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
@@ -363,7 +373,7 @@ func NewDefaultCache() (cache.Cache, error) {
 		WithName("default"),
 		WithTTL(5*time.Minute),
 		WithMaxItems(1000),
-		WithLogger(cache.NewStdLogger()),
+		WithLogger(observability.NewStdLogger()),
 	)
 }
 
@@ -372,7 +382,7 @@ func NewDebugCache(name string) (cache.Cache, error) {
 		WithName(name),
 		WithTTL(1*time.Minute),
 		WithMaxItems(100),
-		WithLogger(cache.NewStdLogger()),
+		WithLogger(observability.NewStdLogger()),
 	)
 }
 
@@ -381,6 +391,6 @@ func NewProductionCache(name string, ttl time.Duration, maxItems int) (cache.Cac
 		WithName(name),
 		WithTTL(ttl),
 		WithMaxItems(maxItems),
-		WithLogger(cache.NewStdLogger()),
+		WithLogger(observability.NewStdLogger()),
 	)
 }
