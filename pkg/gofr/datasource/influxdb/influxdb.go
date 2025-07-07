@@ -2,6 +2,7 @@ package influxdb
 
 import (
 	"context"
+	"gofr.dev/pkg/gofr/datasource"
 	"time"
 
 	influxdb2 "github.com/influxdata/influxdb-client-go/v2"
@@ -26,6 +27,13 @@ type Client struct {
 	tracer  trace.Tracer
 }
 
+type HealthInflux struct {
+	Url      string
+	Token    string
+	Username string
+	Password string
+}
+
 // CreateBucket implements container.InfluxDBProvider.
 func (c *Client) CreateBucket(ctx context.Context, org string, bucket string, retentionPeriod time.Duration) error {
 	panic("unimplemented")
@@ -37,8 +45,25 @@ func (c *Client) DeleteBucket(ctx context.Context, org string, bucket string) er
 }
 
 // HealthCheck implements container.InfluxDBProvider.
-func (c *Client) HealthCheck(context.Context) (any, error) {
-	panic("unimplemented")
+func (c *Client) HealthCheck(ctx context.Context) (any, error) {
+	h := datasource.Health{Details: make(map[string]any)}
+
+	h.Details["Username"] = c.config.Username
+	h.Details["Url"] = c.config.Url
+
+	health, err := c.client.Health(ctx)
+	if err != nil {
+		h.Status = datasource.StatusDown
+		return h, err
+	}
+	h.Status = datasource.StatusUp
+	h.Details["Name"] = health.Name
+	h.Details["Commit"] = health.Commit
+	h.Details["Version"] = health.Version
+	h.Details["Message"] = health.Message
+	h.Details["Checks"] = health.Checks
+	h.Details["Status"] = health.Status
+	return h, nil
 }
 
 // ListBuckets implements container.InfluxDBProvider.
@@ -90,10 +115,15 @@ func (c *Client) Connect() {
 	c.logger.Debugf("connecting to influxdb at %v", c.config.Url)
 
 	// Create a new client using an InfluxDB server base URL and an authentication token
-	client := influxdb2.NewClient(
+	c.client = influxdb2.NewClient(
 		c.config.Url,
 		c.config.Token,
 	)
-	c.client = client
-	c.logger.Logf("connected to influxdb successfully at : %v", c.config.Url)
+
+	if _, err := c.HealthCheck(context.Background()); err != nil {
+		c.logger.Errorf("InfluxDB health check failed: %v", err)
+		return
+	}
+
+	c.logger.Logf("connected to influxdb at : %v", c.config.Url)
 }
