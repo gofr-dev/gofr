@@ -43,6 +43,7 @@ go get gofr.dev/pkg/gofr/datasource/cassandra@latest
 package main
 
 import (
+	"context"
 	"gofr.dev/pkg/gofr"
 	cassandraPkg "gofr.dev/pkg/gofr/datasource/cassandra"
 )
@@ -61,7 +62,7 @@ func main() {
 	config := cassandraPkg.Config{
 		Hosts:    "localhost",
 		Keyspace: "test",
-		Port:     2003,
+		Port:     9042, // default CQL native-protocol port
 		Username: "cassandra",
 		Password: "cassandra",
 	}
