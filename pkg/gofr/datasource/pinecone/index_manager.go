@@ -7,17 +7,17 @@ import (
 	"github.com/pinecone-io/go-pinecone/v3/pinecone"
 )
 
-// indexManager handles index operations
+// indexManager handles index operations.
 type indexManager struct {
 	client *Client
 }
 
-// newIndexManager creates a new index manager
+// newIndexManager creates a new index manager.
 func newIndexManager(client *Client) *indexManager {
 	return &indexManager{client: client}
 }
 
-// listIndexes returns all available indexes in the Pinecone project
+// listIndexes returns all available indexes in the Pinecone project.
 func (im *indexManager) listIndexes(ctx context.Context) ([]string, error) {
 	opCtx := im.client.spanManager.setupOperation(ctx, "list_indexes")
 	defer im.client.spanManager.cleanup(opCtx)
@@ -34,12 +34,12 @@ func (im *indexManager) listIndexes(ctx context.Context) ([]string, error) {
 	return im.extractIndexNames(indexes), nil
 }
 
-// describeIndex retrieves detailed information about a specific index
+// describeIndex retrieves detailed information about a specific index.
 func (im *indexManager) describeIndex(ctx context.Context, indexName string) (map[string]any, error) {
 	opCtx := im.client.spanManager.setupOperation(ctx, "describe_index")
 	defer im.client.spanManager.cleanup(opCtx)
 
-	im.client.spanManager.setSpanAttributes(opCtx.span, SpanAttributes{Index: indexName})
+	im.client.spanManager.setSpanAttributes(opCtx.span, &SpanAttributes{Index: indexName})
 
 	if err := im.client.validateConnection(); err != nil {
 		return nil, err
@@ -53,12 +53,12 @@ func (im *indexManager) describeIndex(ctx context.Context, indexName string) (ma
 	return im.buildIndexDescription(index), nil
 }
 
-// createIndex creates a new Pinecone index with the given parameters
+// createIndex creates a new Pinecone index with the given parameters.
 func (im *indexManager) createIndex(ctx context.Context, indexName string, dimension int, metric string, options map[string]any) error {
 	opCtx := im.client.spanManager.setupOperation(ctx, "create_index")
 	defer im.client.spanManager.cleanup(opCtx)
 
-	im.client.spanManager.setSpanAttributes(opCtx.span, SpanAttributes{
+	im.client.spanManager.setSpanAttributes(opCtx.span, &SpanAttributes{
 		Index:     indexName,
 		Dimension: dimension,
 		Metric:    metric,
@@ -81,12 +81,12 @@ func (im *indexManager) createIndex(ctx context.Context, indexName string, dimen
 	return nil
 }
 
-// deleteIndex deletes a Pinecone index
+// deleteIndex deletes a Pinecone index.
 func (im *indexManager) deleteIndex(ctx context.Context, indexName string) error {
 	opCtx := im.client.spanManager.setupOperation(ctx, "delete_index")
 	defer im.client.spanManager.cleanup(opCtx)
 
-	im.client.spanManager.setSpanAttributes(opCtx.span, SpanAttributes{Index: indexName})
+	im.client.spanManager.setSpanAttributes(opCtx.span, &SpanAttributes{Index: indexName})
 
 	if err := im.client.validateConnection(); err != nil {
 		return err
@@ -102,17 +102,18 @@ func (im *indexManager) deleteIndex(ctx context.Context, indexName string) error
 
 // Helper methods
 
-// extractIndexNames extracts index names from the index objects
-func (im *indexManager) extractIndexNames(indexes []*pinecone.Index) []string {
+// extractIndexNames extracts index names from the index objects.
+func (*indexManager) extractIndexNames(indexes []*pinecone.Index) []string {
 	indexNames := make([]string, 0, len(indexes))
 	for _, index := range indexes {
 		indexNames = append(indexNames, index.Name)
 	}
+
 	return indexNames
 }
 
-// buildIndexDescription builds a description map from the index object
-func (im *indexManager) buildIndexDescription(index *pinecone.Index) map[string]any {
+// buildIndexDescription builds a description map from the index object.
+func (*indexManager) buildIndexDescription(index *pinecone.Index) map[string]any {
 	return map[string]any{
 		"name":      index.Name,
 		"dimension": index.Dimension,
@@ -123,15 +124,22 @@ func (im *indexManager) buildIndexDescription(index *pinecone.Index) map[string]
 	}
 }
 
-// buildCreateIndexRequest creates a request for index creation
-func (im *indexManager) buildCreateIndexRequest(indexName string, dimension int, metric string, options map[string]any) (*pinecone.CreateServerlessIndexRequest, error) {
+// buildCreateIndexRequest creates a request for index creation.
+func (im *indexManager) buildCreateIndexRequest(
+	indexName string, dimension int, metric string, options map[string]any,
+) (*pinecone.CreateServerlessIndexRequest, error) {
 	indexMetric, err := im.convertMetricType(metric)
 	if err != nil {
 		return nil, err
 	}
 
 	cloud, region := im.extractCloudOptions(options)
-	dimension32 := int32(dimension)
+
+	if dimension > int(^uint32(0)>>1) {
+		return nil, ErrDimensionOverflow
+	}
+
+	dimension32 := int32(dimension) // #nosec G115 -- checked above
 
 	return &pinecone.CreateServerlessIndexRequest{
 		Name:      indexName,
@@ -142,8 +150,8 @@ func (im *indexManager) buildCreateIndexRequest(indexName string, dimension int,
 	}, nil
 }
 
-// convertMetricType converts string metric to SDK metric type
-func (im *indexManager) convertMetricType(metric string) (pinecone.IndexMetric, error) {
+// convertMetricType converts string metric to SDK metric type.
+func (*indexManager) convertMetricType(metric string) (pinecone.IndexMetric, error) {
 	switch metric {
 	case metricCosine:
 		return pinecone.Cosine, nil
@@ -152,17 +160,17 @@ func (im *indexManager) convertMetricType(metric string) (pinecone.IndexMetric, 
 	case metricDotProduct:
 		return pinecone.Dotproduct, nil
 	default:
-		return "", fmt.Errorf("unsupported metric: %s", metric)
+		return "", ErrUnsupportedMetric
 	}
 }
 
-// extractCloudOptions extracts cloud and region from options
-func (im *indexManager) extractCloudOptions(options map[string]any) (pinecone.Cloud, string) {
-	cloud := pinecone.Aws
-	region := defaultRegion
+// extractCloudOptions extracts cloud and region from options.
+func (*indexManager) extractCloudOptions(options map[string]any) (cloud pinecone.Cloud, region string) {
+	cloud = pinecone.Aws
+	region = defaultRegion
 
 	if cloudStr, ok := options["cloud"].(string); ok {
-		cloud = im.convertCloudType(cloudStr)
+		cloud = convertCloudType(cloudStr)
 	}
 
 	if regionStr, ok := options["region"].(string); ok {
@@ -172,8 +180,8 @@ func (im *indexManager) extractCloudOptions(options map[string]any) (pinecone.Cl
 	return cloud, region
 }
 
-// convertCloudType converts string cloud to SDK cloud type
-func (im *indexManager) convertCloudType(cloudStr string) pinecone.Cloud {
+// convertCloudType converts string cloud to SDK cloud type.
+func convertCloudType(cloudStr string) pinecone.Cloud {
 	switch cloudStr {
 	case cloudGCP:
 		return pinecone.Gcp

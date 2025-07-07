@@ -44,7 +44,7 @@ type Pinecone interface {
 	Upsert(ctx context.Context, indexName, namespace string, vectors []any) (int, error)
 
 	// Query searches for similar vectors in the index using grouped parameters
-	Query(ctx context.Context, params QueryParams) ([]any, error)
+	Query(ctx context.Context, params *QueryParams) ([]any, error)
 
 	// Fetch retrieves vectors by their IDs
 	Fetch(ctx context.Context, indexName, namespace string, ids []string) (map[string]any, error)
@@ -56,7 +56,7 @@ type Pinecone interface {
 	DeleteAll(ctx context.Context, indexName, namespace string) error
 }
 
-// QueryParams represents parameters for querying vectors
+// QueryParams represents parameters for querying vectors.
 type QueryParams struct {
 	IndexName       string
 	Namespace       string
@@ -67,7 +67,7 @@ type QueryParams struct {
 	Filter          map[string]any
 }
 
-// Vector represents a vector in Pinecone
+// Vector represents a vector in Pinecone.
 type Vector struct {
 	ID         string            `json:"id"`
 	Values     []float32         `json:"values"`
@@ -75,13 +75,13 @@ type Vector struct {
 	SparseData *SparseVectorData `json:"sparseValues,omitempty"`
 }
 
-// SparseVectorData represents sparse vector data
+// SparseVectorData represents sparse vector data.
 type SparseVectorData struct {
 	Indices []int32   `json:"indices"`
 	Values  []float32 `json:"values"`
 }
 
-// ScoredVector represents a vector with a similarity score returned from a query
+// ScoredVector represents a vector with a similarity score returned from a query.
 type ScoredVector struct {
 	ID         string            `json:"id"`
 	Score      float32           `json:"score"`

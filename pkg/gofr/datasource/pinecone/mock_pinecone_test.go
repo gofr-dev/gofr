@@ -6,6 +6,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
+	"github.com/stretchr/testify/require"
 )
 
 func TestMockPineconeClient_Connect(t *testing.T) {
@@ -27,10 +28,10 @@ func TestMockPineconeClient_HealthCheck(t *testing.T) {
 	}
 
 	mockClient.On("HealthCheck", mock.Anything).Return(expectedHealth, nil)
+	ctx := context.Background()
+	health, err := mockClient.HealthCheck(ctx)
 
-	health, err := mockClient.HealthCheck(context.Background())
-
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.Equal(t, expectedHealth, health)
 	mockClient.AssertExpectations(t)
 }
@@ -73,10 +74,10 @@ func TestMockPineconeClient_ListIndexes(t *testing.T) {
 	expectedIndexes := []string{"index1", "index2", "index3"}
 
 	mockClient.On("ListIndexes", mock.Anything).Return(expectedIndexes, nil)
+	ctx := context.Background()
+	indexes, err := mockClient.ListIndexes(ctx)
 
-	indexes, err := mockClient.ListIndexes(context.Background())
-
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.Equal(t, expectedIndexes, indexes)
 	mockClient.AssertExpectations(t)
 }
@@ -91,10 +92,10 @@ func TestMockPineconeClient_DescribeIndex(t *testing.T) {
 	}
 
 	mockClient.On("DescribeIndex", mock.Anything, indexName).Return(expectedDescription, nil)
+	ctx := context.Background()
+	description, err := mockClient.DescribeIndex(ctx, indexName)
 
-	description, err := mockClient.DescribeIndex(context.Background(), indexName)
-
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.Equal(t, expectedDescription, description)
 	mockClient.AssertExpectations(t)
 }
@@ -107,10 +108,10 @@ func TestMockPineconeClient_CreateIndex(t *testing.T) {
 	options := map[string]any{"cloud": "aws", "region": "us-east-1"}
 
 	mockClient.On("CreateIndex", mock.Anything, indexName, dimension, metric, options).Return(nil)
+	ctx := context.Background()
+	err := mockClient.CreateIndex(ctx, indexName, dimension, metric, options)
 
-	err := mockClient.CreateIndex(context.Background(), indexName, dimension, metric, options)
-
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	mockClient.AssertExpectations(t)
 }
 
@@ -119,10 +120,10 @@ func TestMockPineconeClient_DeleteIndex(t *testing.T) {
 	indexName := "test-index"
 
 	mockClient.On("DeleteIndex", mock.Anything, indexName).Return(nil)
+	ctx := context.Background()
+	err := mockClient.DeleteIndex(ctx, indexName)
 
-	err := mockClient.DeleteIndex(context.Background(), indexName)
-
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	mockClient.AssertExpectations(t)
 }
 
@@ -138,10 +139,10 @@ func TestMockPineconeClient_Upsert(t *testing.T) {
 	}
 
 	mockClient.On("Upsert", mock.Anything, indexName, namespace, vectors).Return(1, nil)
+	ctx := context.Background()
+	count, err := mockClient.Upsert(ctx, indexName, namespace, vectors)
 
-	count, err := mockClient.Upsert(context.Background(), indexName, namespace, vectors)
-
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.Equal(t, 1, count)
 	mockClient.AssertExpectations(t)
 }
@@ -162,11 +163,11 @@ func TestMockPineconeClient_Query(t *testing.T) {
 		},
 	}
 
-	mockClient.On("Query", mock.Anything, params).Return(expectedResults, nil)
+	mockClient.On("Query", mock.Anything, &params).Return(expectedResults, nil)
+	ctx := context.Background()
+	results, err := mockClient.Query(ctx, &params)
 
-	results, err := mockClient.Query(context.Background(), params)
-
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.Equal(t, expectedResults, results)
 	mockClient.AssertExpectations(t)
 }
@@ -186,10 +187,10 @@ func TestMockPineconeClient_Fetch(t *testing.T) {
 	}
 
 	mockClient.On("Fetch", mock.Anything, indexName, namespace, ids).Return(expectedResult, nil)
+	ctx := context.Background()
+	result, err := mockClient.Fetch(ctx, indexName, namespace, ids)
 
-	result, err := mockClient.Fetch(context.Background(), indexName, namespace, ids)
-
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.Equal(t, expectedResult, result)
 	mockClient.AssertExpectations(t)
 }
@@ -201,10 +202,10 @@ func TestMockPineconeClient_Delete(t *testing.T) {
 	ids := []string{"vec1", "vec2"}
 
 	mockClient.On("Delete", mock.Anything, indexName, namespace, ids).Return(nil)
+	ctx := context.Background()
+	err := mockClient.Delete(ctx, indexName, namespace, ids)
 
-	err := mockClient.Delete(context.Background(), indexName, namespace, ids)
-
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	mockClient.AssertExpectations(t)
 }
 

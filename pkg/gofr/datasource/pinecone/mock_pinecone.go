@@ -6,7 +6,7 @@ import (
 	"github.com/stretchr/testify/mock"
 )
 
-// MockPineconeClient is a mock implementation of the Pinecone interface
+// MockPineconeClient is a mock implementation of the Pinecone interface.
 type MockPineconeClient struct {
 	mock.Mock
 }
@@ -41,8 +41,13 @@ func (m *MockPineconeClient) DescribeIndex(ctx context.Context, indexName string
 	args := m.Called(ctx, indexName)
 	return args.Get(0).(map[string]any), args.Error(1)
 }
-
-func (m *MockPineconeClient) CreateIndex(ctx context.Context, indexName string, dimension int, metric string, options map[string]any) error {
+func (m *MockPineconeClient) CreateIndex(
+	ctx context.Context,
+	indexName string,
+	dimension int,
+	metric string,
+	options map[string]any,
+) error {
 	args := m.Called(ctx, indexName, dimension, metric, options)
 	return args.Error(0)
 }
@@ -57,14 +62,10 @@ func (m *MockPineconeClient) Upsert(ctx context.Context, indexName, namespace st
 	return args.Int(0), args.Error(1)
 }
 
-func (m *MockPineconeClient) Query(ctx context.Context, params QueryParams) ([]any, error) {
+func (m *MockPineconeClient) Query(ctx context.Context, params *QueryParams) ([]any, error) {
 	args := m.Called(ctx, params)
-	if args.Get(0) == nil {
-		return nil, args.Error(1)
-	}
 	return args.Get(0).([]any), args.Error(1)
 }
-
 func (m *MockPineconeClient) Fetch(ctx context.Context, indexName, namespace string, ids []string) (map[string]any, error) {
 	args := m.Called(ctx, indexName, namespace, ids)
 	return args.Get(0).(map[string]any), args.Error(1)
@@ -75,7 +76,7 @@ func (m *MockPineconeClient) Delete(ctx context.Context, indexName, namespace st
 	return args.Error(0)
 }
 
-// MockLogger for testing
+// MockLogger for testing.
 type MockLogger struct {
 	mock.Mock
 }

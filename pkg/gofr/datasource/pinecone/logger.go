@@ -9,16 +9,16 @@ import (
 )
 
 const (
-	// Display limits for logging
+	// Display limits for logging.
 	maxFilterDisplayLength = 100
-	maxIDsToDisplay       = 5
+	maxIDsToDisplay        = 5
 	filterTruncationSuffix = "..."
 
-	// Time formatting constants
+	// Time formatting constants.
 	microsecondsPerSecond = 1_000_000
 	millisecondsPerSecond = 1_000
 
-	// Color codes for console output
+	// Color codes for console output.
 	colorTimestamp = "\x1b[36m"
 	colorOperation = "\x1b[32m"
 	colorDuration  = "\x1b[33m"
@@ -64,6 +64,7 @@ func (q *QueryLog) buildDetailsString() string {
 	if len(details) > 0 {
 		return " " + strings.Join(details, " ")
 	}
+
 	return ""
 }
 
@@ -72,9 +73,11 @@ func (q *QueryLog) addIndexDetails(details []string) []string {
 	if q.Index != "" {
 		details = append(details, fmt.Sprintf("index:%s", q.Index))
 	}
+
 	if q.Namespace != "" {
 		details = append(details, fmt.Sprintf("namespace:%s", q.Namespace))
 	}
+
 	return details
 }
 
@@ -83,12 +86,15 @@ func (q *QueryLog) addVectorDetails(details []string) []string {
 	if q.VectorCount > 0 {
 		details = append(details, fmt.Sprintf("vectors:%d", q.VectorCount))
 	}
+
 	if q.TopK > 0 {
 		details = append(details, fmt.Sprintf("topK:%d", q.TopK))
 	}
+
 	if len(q.IDs) > 0 {
 		details = append(details, q.formatIDs())
 	}
+
 	return details
 }
 
@@ -99,6 +105,7 @@ func (q *QueryLog) addFilterDetails(details []string) []string {
 			details = append(details, fmt.Sprintf("filter:%s", filterStr))
 		}
 	}
+
 	return details
 }
 
@@ -113,6 +120,7 @@ func (q *QueryLog) getIDsForDisplay() []string {
 	if len(q.IDs) <= maxIDsToDisplay {
 		return q.IDs
 	}
+
 	return q.IDs[:maxIDsToDisplay]
 }
 
@@ -127,12 +135,13 @@ func (q *QueryLog) formatFilter() string {
 }
 
 // truncateFilterString truncates filter string if it exceeds maximum length.
-func (q *QueryLog) truncateFilterString(filterStr string) string {
+func (*QueryLog) truncateFilterString(filterStr string) string {
 	if len(filterStr) <= maxFilterDisplayLength {
 		return filterStr
 	}
 
 	truncateIndex := maxFilterDisplayLength - len(filterTruncationSuffix)
+
 	return filterStr[:truncateIndex] + filterTruncationSuffix
 }
 
@@ -156,5 +165,6 @@ func (q *QueryLog) formatError() string {
 	if q.Error != "" {
 		return fmt.Sprintf(" %serror:%s%s", colorError, q.Error, colorReset)
 	}
+
 	return ""
 }

@@ -2,7 +2,6 @@ package pinecone
 
 import (
 	"context"
-	"fmt"
 	"time"
 
 	"github.com/pinecone-io/go-pinecone/v3/pinecone"
@@ -10,32 +9,32 @@ import (
 )
 
 const (
-	// Status constants for health checks
+	// Status constants for health checks.
 	statusDown = "DOWN"
 	statusUp   = "UP"
 
-	// Metric constants
+	// Metric constants.
 	metricCosine     = "cosine"
 	metricEuclidean  = "euclidean"
 	metricDotProduct = "dotproduct"
 
-	// Cloud provider constants
+	// Cloud provider constants.
 	cloudAWS   = "aws"
 	cloudGCP   = "gcp"
 	cloudAzure = "azure"
 
-	// Default values
+	// Default values.
 	defaultRegion   = "us-east-1"
 	maxIndexDisplay = 5
 
-	// Metrics configuration
+	// Metrics configuration.
 	metricsHistogramName = "app_pinecone_stats"
 	metricsGaugeName     = "app_pinecone_operations"
 	metricsDescription   = "Response time of Pinecone operations in seconds."
 	gaugeDescription     = "Number of Pinecone operations."
 )
 
-// MetricsConfig holds configuration for metrics setup
+// MetricsConfig holds configuration for metrics setup.
 type MetricsConfig struct {
 	histogramBuckets []float64
 }
@@ -70,10 +69,11 @@ func New(config *Config) *Client {
 	}
 
 	c.initializeComponents()
+
 	return c
 }
 
-// initializeComponents sets up the client's composed components
+// initializeComponents sets up the client's composed components.
 func (c *Client) initializeComponents() {
 	c.connector = newConnectionManager(c)
 	c.healthChecker = newHealthChecker(c)
@@ -105,7 +105,7 @@ func (c *Client) UseTracer(tracer any) {
 
 // Connect establishes a connection to Pinecone using the official SDK.
 func (c *Client) Connect() {
-	c.connector.connect()
+	_ = c.connector.connect(context.Background())
 }
 
 // HealthCheck performs a health check on the Pinecone connection.
@@ -139,7 +139,7 @@ func (c *Client) Upsert(ctx context.Context, indexName, namespace string, vector
 }
 
 // Query searches for similar vectors in the index.
-func (c *Client) Query(ctx context.Context, params QueryParams) ([]any, error) {
+func (c *Client) Query(ctx context.Context, params *QueryParams) ([]any, error) {
 	return c.vectorManager.query(ctx, params)
 }
 
@@ -166,14 +166,15 @@ func (c *Client) IsConnected() bool {
 // Ping performs a quick connectivity test to Pinecone.
 func (c *Client) Ping(ctx context.Context) error {
 	if !c.IsConnected() {
-		return fmt.Errorf("pinecone client not connected")
+		return ErrClientNotConnected
 	}
 
 	_, err := c.client.ListIndexes(ctx)
+
 	return err
 }
 
-// getDefaultMetricsConfig returns the default metrics configuration
+// getDefaultMetricsConfig returns the default metrics configuration.
 func getDefaultMetricsConfig() MetricsConfig {
 	return MetricsConfig{
 		histogramBuckets: []float64{.05, .1, .25, .5, .75, 1, 1.5, 2, 3, 5, 7.5, 10, 15, 30},
@@ -189,12 +190,11 @@ func (c *Client) recordMetrics(start time.Time, operation string) {
 	}
 }
 
-// validateConnection checks if the client is connected
+// validateConnection checks if the client is connected.
 func (c *Client) validateConnection() error {
 	if !c.connected || c.client == nil {
-		return fmt.Errorf("pinecone client not connected")
+		return ErrClientNotConnected
 	}
+
 	return nil
 }
-
-

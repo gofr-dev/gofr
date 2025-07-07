@@ -2,11 +2,11 @@ package pinecone
 
 import (
 	"context"
-	"errors"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
+	"github.com/stretchr/testify/require"
 )
 
 func TestPineconeClient_Connect_Success(t *testing.T) {
@@ -64,11 +64,11 @@ func TestPineconeClient_Query_Success(t *testing.T) {
 		},
 	}
 
-	mockClient.On("Query", mock.Anything, params).Return(expectedResults, nil)
+	mockClient.On("Query", mock.Anything, &params).Return(expectedResults, nil)
+	ctx := context.Background()
+	results, err := mockClient.Query(ctx, &params)
 
-	results, err := mockClient.Query(context.Background(), params)
-
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.Equal(t, expectedResults, results)
 	// Assert that all expected calls were made
 	mockClient.AssertExpectations(t)
@@ -83,12 +83,13 @@ func TestPineconeClient_Query_Error(t *testing.T) {
 		Vector:    []float32{0.1, 0.2, 0.3},
 		TopK:      10,
 	}
+	ctx := context.Background()
 
-	mockClient.On("Query", mock.Anything, params).Return(nil, errors.New("query error"))
+	mockClient.On("Query", mock.Anything, &params).Return(nil, ErrQuery)
 
-	results, err := mockClient.Query(context.Background(), params)
+	results, err := mockClient.Query(ctx, &params)
 
-	assert.Error(t, err)
+	require.Error(t, err)
 	assert.Nil(t, results)
 	// Assert that all expected calls were made
 	mockClient.AssertExpectations(t)
@@ -98,7 +99,7 @@ func TestPineconeClient_Query_InvalidParams(t *testing.T) {
 	config := &Config{
 		APIKey: "test-api-key",
 	}
-
+	ctx := context.Background()
 	client := New(config)
 	mockLogger := &MockLogger{}
 	client.UseLogger(mockLogger)
@@ -112,9 +113,9 @@ func TestPineconeClient_Query_InvalidParams(t *testing.T) {
 
 	mockLogger.On("Errorf", mock.AnythingOfType("string"), mock.Anything).Return()
 
-	results, err := client.Query(context.Background(), params)
+	results, err := client.Query(ctx, &params)
 
-	assert.Error(t, err)
+	require.Error(t, err)
 	assert.Nil(t, results)
 	assert.Contains(t, err.Error(), "not connected")
 }
@@ -130,10 +131,10 @@ func TestPineconeClient_Upsert_Success(t *testing.T) {
 	}
 
 	mockClient.On("Upsert", mock.Anything, "test-index", "test-namespace", vectors).Return(1, nil)
+	ctx := context.Background()
+	count, err := mockClient.Upsert(ctx, "test-index", "test-namespace", vectors)
 
-	count, err := mockClient.Upsert(context.Background(), "test-index", "test-namespace", vectors)
-
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.Equal(t, 1, count)
 	mockClient.AssertExpectations(t)
 }
@@ -147,12 +148,11 @@ func TestPineconeClient_HealthCheck_Success(t *testing.T) {
 			"connection_state": "connected",
 		},
 	}
-
+	ctx := context.Background()
 	mockClient.On("HealthCheck", mock.Anything).Return(expectedHealth, nil)
+	health, err := mockClient.HealthCheck(ctx)
 
-	health, err := mockClient.HealthCheck(context.Background())
-
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.Equal(t, expectedHealth, health)
 	mockClient.AssertExpectations(t)
 }

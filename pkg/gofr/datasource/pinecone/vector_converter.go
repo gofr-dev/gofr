@@ -1,21 +1,19 @@
 package pinecone
 
 import (
-	"fmt"
-
 	"github.com/pinecone-io/go-pinecone/v3/pinecone"
 	"google.golang.org/protobuf/types/known/structpb"
 )
 
-// vectorConverter handles vector format conversions
+// vectorConverter handles vector format conversions.
 type vectorConverter struct{}
 
-// newVectorConverter creates a new vector converter
+// newVectorConverter creates a new vector converter.
 func newVectorConverter() *vectorConverter {
 	return &vectorConverter{}
 }
 
-// convertVectorsToSDK converts interface vectors to SDK format
+// convertVectorsToSDK converts interface vectors to SDK format.
 func (vc *vectorConverter) convertVectorsToSDK(vectors []any) ([]*pinecone.Vector, error) {
 	sdkVectors := make([]*pinecone.Vector, 0, len(vectors))
 
@@ -24,17 +22,18 @@ func (vc *vectorConverter) convertVectorsToSDK(vectors []any) ([]*pinecone.Vecto
 		if err != nil {
 			return nil, err
 		}
+
 		sdkVectors = append(sdkVectors, sdkVector)
 	}
 
 	return sdkVectors, nil
 }
 
-// convertSingleVector converts a single vector to SDK format
-func (vc *vectorConverter) convertSingleVector(v any) (*pinecone.Vector, error) {
+// convertSingleVector converts a single vector to SDK format.
+func (*vectorConverter) convertSingleVector(v any) (*pinecone.Vector, error) {
 	vec, ok := v.(Vector)
 	if !ok {
-		return nil, fmt.Errorf("invalid vector format")
+		return nil, ErrInvalidVectorFormat
 	}
 
 	sdkVector := &pinecone.Vector{
@@ -51,8 +50,8 @@ func (vc *vectorConverter) convertSingleVector(v any) (*pinecone.Vector, error) 
 	return sdkVector, nil
 }
 
-// convertFetchResponse converts the SDK fetch response to the expected format
-func (vc *vectorConverter) convertFetchResponse(resp *pinecone.FetchVectorsResponse) map[string]any {
+// convertFetchResponse converts the SDK fetch response to the expected format.
+func (*vectorConverter) convertFetchResponse(resp *pinecone.FetchVectorsResponse) map[string]any {
 	results := make(map[string]any)
 
 	for id, vector := range resp.Vectors {
@@ -72,7 +71,7 @@ func (vc *vectorConverter) convertFetchResponse(resp *pinecone.FetchVectorsRespo
 	return results
 }
 
-// processQueryResponse processes the query response and returns results
+// processQueryResponse processes the query response and returns results.
 func (vc *vectorConverter) processQueryResponse(resp *pinecone.QueryVectorsResponse) []any {
 	results := make([]any, 0, len(resp.Matches))
 
@@ -84,8 +83,8 @@ func (vc *vectorConverter) processQueryResponse(resp *pinecone.QueryVectorsRespo
 	return results
 }
 
-// buildMatchResult builds a result from a match
-func (vc *vectorConverter) buildMatchResult(match *pinecone.ScoredVector) map[string]any {
+// buildMatchResult builds a result from a match.
+func (*vectorConverter) buildMatchResult(match *pinecone.ScoredVector) map[string]any {
 	result := map[string]any{
 		"id":    match.Vector.Id,
 		"score": match.Score,

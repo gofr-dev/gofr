@@ -20,7 +20,9 @@ func TestQueryLogPrettyPrint_WithData(t *testing.T) {
 	}
 
 	var buf bytes.Buffer
+
 	queryLog.PrettyPrint(&buf)
+
 	output := buf.String()
 
 	// Verify expected information is in the output
@@ -42,7 +44,9 @@ func TestQueryLogPrettyPrint_Minimal(t *testing.T) {
 	}
 
 	var buf bytes.Buffer
+
 	queryLog.PrettyPrint(&buf)
+
 	output := buf.String()
 
 	// Verify expected information is in the output
@@ -65,8 +69,12 @@ func TestQueryLogPrettyPrint_WithError(t *testing.T) {
 	}
 
 	var buf bytes.Buffer
+
 	queryLog.PrettyPrint(&buf)
+
 	output := buf.String()
+
+	// Verify expected information is in the output
 
 	// Verify expected information is in the output
 	assert.Contains(t, output, "PINECONE")

@@ -8,13 +8,13 @@ import (
 	"google.golang.org/protobuf/types/known/structpb"
 )
 
-// vectorOperations handles the actual vector operations implementation
+// vectorOperations handles the actual vector operations implementation.
 type vectorOperations struct {
 	client    *Client
 	converter *vectorConverter
 }
 
-// newVectorOperations creates a new vector operations handler
+// newVectorOperations creates a new vector operations handler.
 func newVectorOperations(client *Client) *vectorOperations {
 	return &vectorOperations{
 		client:    client,
@@ -22,7 +22,7 @@ func newVectorOperations(client *Client) *vectorOperations {
 	}
 }
 
-// performUpsert handles the actual upsert operation
+// performUpsert handles the actual upsert operation.
 func (vo *vectorOperations) performUpsert(ctx context.Context, indexName, namespace string, vectors []any) (int, error) {
 	indexConn, err := vo.getIndexConnection(ctx, indexName, namespace)
 	if err != nil {
@@ -43,16 +43,18 @@ func (vo *vectorOperations) performUpsert(ctx context.Context, indexName, namesp
 	return int(count), nil
 }
 
-// performQuery handles the actual query operation
-func (vo *vectorOperations) performQuery(ctx context.Context, params QueryParams) ([]any, error) {
+// performQuery handles the actual query operation.
+func (vo *vectorOperations) performQuery(ctx context.Context, params *QueryParams) ([]any, error) {
 	indexConn, err := vo.getIndexConnection(ctx, params.IndexName, params.Namespace)
 	if err != nil {
 		return nil, err
 	}
+
 	defer indexConn.Close()
 
 	req := vo.buildQueryRequest(params)
 	resp, err := indexConn.QueryByVectorValues(ctx, req)
+
 	if err != nil {
 		return nil, fmt.Errorf("failed to query index %s: %w", params.IndexName, err)
 	}
@@ -60,7 +62,7 @@ func (vo *vectorOperations) performQuery(ctx context.Context, params QueryParams
 	return vo.converter.processQueryResponse(resp), nil
 }
 
-// performFetch handles the actual fetch operation
+// performFetch handles the actual fetch operation.
 func (vo *vectorOperations) performFetch(ctx context.Context, indexName, namespace string, ids []string) (map[string]any, error) {
 	indexConn, err := vo.getIndexConnection(ctx, indexName, namespace)
 	if err != nil {
@@ -76,7 +78,7 @@ func (vo *vectorOperations) performFetch(ctx context.Context, indexName, namespa
 	return vo.converter.convertFetchResponse(resp), nil
 }
 
-// performDelete handles the actual delete operation
+// performDelete handles the actual delete operation.
 func (vo *vectorOperations) performDelete(ctx context.Context, indexName, namespace string, ids []string) error {
 	indexConn, err := vo.getIndexConnection(ctx, indexName, namespace)
 	if err != nil {
@@ -92,7 +94,7 @@ func (vo *vectorOperations) performDelete(ctx context.Context, indexName, namesp
 	return nil
 }
 
-// performDeleteAll handles the actual delete all operation
+// performDeleteAll handles the actual delete all operation.
 func (vo *vectorOperations) performDeleteAll(ctx context.Context, indexName, namespace string) error {
 	indexConn, err := vo.getIndexConnection(ctx, indexName, namespace)
 	if err != nil {
@@ -108,7 +110,7 @@ func (vo *vectorOperations) performDeleteAll(ctx context.Context, indexName, nam
 	return nil
 }
 
-// getIndexConnection creates and returns an index connection
+// getIndexConnection creates and returns an index connection.
 func (vo *vectorOperations) getIndexConnection(ctx context.Context, indexName, namespace string) (*pinecone.IndexConnection, error) {
 	indexDesc, err := vo.client.client.DescribeIndex(ctx, indexName)
 	if err != nil {
@@ -126,11 +128,16 @@ func (vo *vectorOperations) getIndexConnection(ctx context.Context, indexName, n
 	return indexConn, nil
 }
 
-// buildQueryRequest creates a query request from parameters
-func (vo *vectorOperations) buildQueryRequest(params QueryParams) *pinecone.QueryByVectorValuesRequest {
+// buildQueryRequest creates a query request from parameters.
+func (*vectorOperations) buildQueryRequest(params *QueryParams) *pinecone.QueryByVectorValuesRequest {
+	topK := uint32(params.TopK) // #nosec G115 -- TopK is validated by caller
+	if params.TopK > int(^uint32(0)>>1) {
+		topK = ^uint32(0) >> 1 // Use max safe value
+	}
+
 	req := &pinecone.QueryByVectorValuesRequest{
 		Vector: params.Vector,
-		TopK:   uint32(params.TopK),
+		TopK:   topK,
 	}
 
 	if params.Filter != nil {

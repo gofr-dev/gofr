@@ -11,7 +11,7 @@ import (
 	"go.opentelemetry.io/otel/trace/embedded"
 )
 
-// SpanAttributes represents common span attributes for operations
+// SpanAttributes represents common span attributes for operations.
 type SpanAttributes struct {
 	Index     string
 	Namespace string
@@ -21,7 +21,7 @@ type SpanAttributes struct {
 	Metric    string
 }
 
-// OperationContext encapsulates common operation setup
+// OperationContext encapsulates common operation setup.
 type OperationContext struct {
 	ctx       context.Context
 	span      trace.Span
@@ -29,19 +29,20 @@ type OperationContext struct {
 	operation string
 }
 
-// spanManager handles tracing and span management
+// spanManager handles tracing and span management.
 type spanManager struct {
 	client *Client
 }
 
-// newSpanManager creates a new span manager
+// newSpanManager creates a new span manager.
 func newSpanManager(client *Client) *spanManager {
 	return &spanManager{client: client}
 }
 
-// setupOperation creates a common operation context to reduce duplication
+// setupOperation creates a common operation context to reduce duplication.
 func (sm *spanManager) setupOperation(ctx context.Context, operation string) OperationContext {
 	ctx, span := sm.startSpan(ctx, operation)
+
 	return OperationContext{
 		ctx:       ctx,
 		span:      span,
@@ -50,13 +51,13 @@ func (sm *spanManager) setupOperation(ctx context.Context, operation string) Ope
 	}
 }
 
-// cleanup handles common operation cleanup
+// cleanup handles common operation cleanup.
 func (sm *spanManager) cleanup(opCtx OperationContext) {
-	defer opCtx.span.End()
-	defer sm.client.recordMetrics(opCtx.startTime, opCtx.operation)
+	opCtx.span.End()
+	sm.client.recordMetrics(opCtx.startTime, opCtx.operation)
 }
 
-// startSpan starts a new trace span with the given name
+// startSpan starts a new trace span with the given name.
 func (sm *spanManager) startSpan(ctx context.Context, name string) (context.Context, trace.Span) {
 	if sm.client.tracer != nil {
 		return sm.client.tracer.Start(ctx, fmt.Sprintf("pinecone.%s", name))
@@ -65,26 +66,30 @@ func (sm *spanManager) startSpan(ctx context.Context, name string) (context.Cont
 	return ctx, noopSpan{}
 }
 
-// setSpanAttributes sets common span attributes to reduce duplication
-func (sm *spanManager) setSpanAttributes(span trace.Span, attrs SpanAttributes) {
+// setSpanAttributes sets common span attributes to reduce duplication.
+func (*spanManager) setSpanAttributes(span trace.Span, attrs *SpanAttributes) {
 	if attrs.Index != "" {
 		span.SetAttributes(attribute.String("index", attrs.Index))
 	}
+
 	if attrs.Namespace != "" {
 		span.SetAttributes(attribute.String("namespace", attrs.Namespace))
 	}
+
 	if attrs.Count > 0 {
 		span.SetAttributes(attribute.Int("count", attrs.Count))
 	}
+
 	if attrs.Dimension > 0 {
 		span.SetAttributes(attribute.Int("dimension", attrs.Dimension))
 	}
+
 	if attrs.Metric != "" {
 		span.SetAttributes(attribute.String("metric", attrs.Metric))
 	}
 }
 
-// noopSpan implements a no-op span for tracing when tracer is not available
+// noopSpan implements a no-op span for tracing when tracer is not available.
 type noopSpan struct {
 	embedded.Span
 }
