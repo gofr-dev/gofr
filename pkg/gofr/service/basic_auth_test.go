@@ -2,191 +2,108 @@ package service
 
 import (
 	"encoding/base64"
-	"io"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
-	"go.uber.org/mock/gomock"
-
-	"gofr.dev/pkg/gofr/logging"
 )
 
-func TestBasicAuthProvider_Get(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
+func TestNewBasicAuthConfig(t *testing.T) {
+	badPasswordErr := AuthErr{Err: base64.CorruptInputError(12), Message: "password should be base64 encoded"}
+	testCases := []struct {
+		username string
+		password string
+		option   Options
+		err      error
+	}{
+		{username: "value", password: "", option: nil, err: AuthErr{Message: "password is required"}},
+		{username: "", password: "", option: nil, err: AuthErr{Message: "username is required"}},
+		{username: "  ", password: "", option: nil, err: AuthErr{Message: "username is required"}},
+		{username: "value", password: "cGFzc3dvcmQ===", option: nil, err: badPasswordErr},
+		{username: "value", password: "cGFzc3dvcmQ=", option: &BasicAuthConfig{"value", "password"}, err: nil},
+		{username: "  value ", password: "cGFzc3dvcmQ=", option: &BasicAuthConfig{"value", "password"}, err: nil},
+		{username: "  value ", password: "  cGFzc3dvcmQ=", option: &BasicAuthConfig{"value", "password"}, err: nil},
+	}
 
-	path := "/path"
-	queryParams := map[string]any{"key": "value"}
-	body := []byte("body")
+	for i, tc := range testCases {
+		result, err := NewBasicAuthConfig(tc.username, tc.password)
+		assert.Equal(t, tc.option, result, "failed test case #%d", i)
+		assert.Equal(t, tc.err, err, "failed test case #%d", i)
+	}
+}
 
-	// Create a mock HTTP server
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		checkAuthHeaders(t, r)
-		assert.Equal(t, http.MethodGet, r.Method)
-
-		w.WriteHeader(http.StatusOK)
-
-		_, err := w.Write(body)
+func TestAddAuthorizationHeader_BasicAuth(t *testing.T) {
+	testCases := []struct {
+		username string
+		password string
+		headers  map[string]string
+		response map[string]string
+		err      error
+	}{
+		{
+			username: "username",
+			password: "cGFzc3dvcmQ=",
+			headers:  nil,
+			response: map[string]string{AuthHeader: "basic dXNlcm5hbWU6cGFzc3dvcmQ="},
+		},
+		{
+			username: "username",
+			password: "cGFzc3dvcmQ=",
+			headers:  map[string]string{AuthHeader: "existing value"},
+			response: map[string]string{AuthHeader: "existing value"},
+			err:      AuthErr{Message: "value existing value already exists for header Authorization"},
+		},
+		{
+			username: "username",
+			password: "cGFzc3dvcmQ=",
+			headers:  map[string]string{"header-key": "existing-value"},
+			response: map[string]string{"header-key": "existing-value", AuthHeader: "basic dXNlcm5hbWU6cGFzc3dvcmQ="},
+			err:      nil,
+		},
+	}
+	for i, tc := range testCases {
+		config, err := NewBasicAuthConfig(tc.username, tc.password)
 		if err != nil {
-			return
+			t.Fatalf("unable to get basicAuthConfig for test case #%d", i)
 		}
-	}))
-	defer server.Close()
 
-	// Create a new HTTP service instance with basic auth
-	httpService := NewHTTPService(server.URL, logging.NewMockLogger(logging.INFO), nil,
-		&BasicAuthConfig{UserName: "user", Password: "cGFzc3dvcmQ="})
+		basicAuthConfig, ok := config.(*BasicAuthConfig)
+		if !ok {
+			t.Fatalf("unable to get basicAuthConfig for test case #%d", i)
+		}
 
-	// Make the GET request
-	resp, err := httpService.Get(t.Context(), path, queryParams)
-	require.NoError(t, err)
-
-	defer resp.Body.Close()
-
-	// Check response status code and body (if applicable)
-	assert.Equal(t, http.StatusOK, resp.StatusCode)
-	require.NoError(t, err)
-
-	bodyBytes, _ := io.ReadAll(resp.Body)
-
-	assert.Equal(t, string(body), string(bodyBytes))
+		response, err := basicAuthConfig.addAuthorizationHeader(t.Context(), tc.headers)
+		assert.Equal(t, tc.response, response, "failed test case #%d", i)
+		assert.Equal(t, tc.err, err, "failed test case #%d", i)
+	}
 }
 
-func TestBasicAuthProvider_Post(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
+func setupBasicAuthHTTPServer(t *testing.T, config *BasicAuthConfig) *httptest.Server {
+	t.Helper()
 
-	path := "/path"
-	queryParams := map[string]any{"key": "value"}
-	body := []byte("body")
-
-	// Create a mock HTTP server (verify POST method)
+	validHeader := "basic " + base64.StdEncoding.EncodeToString([]byte(config.UserName+":"+config.Password))
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		checkAuthHeaders(t, r)
-		assert.Equal(t, http.MethodPost, r.Method)
+		statusCode := http.StatusOK
+		if r.Header.Get(AuthHeader) != validHeader {
+			statusCode = http.StatusUnauthorized
+		}
 
-		w.WriteHeader(http.StatusCreated)
+		w.WriteHeader(statusCode)
 	}))
-	defer server.Close()
 
-	// Create a new HTTP service instance with basic auth
-	httpService := NewHTTPService(server.URL, logging.NewMockLogger(logging.INFO), nil,
-		&BasicAuthConfig{UserName: "user", Password: "cGFzc3dvcmQ="})
+	t.Cleanup(func() {
+		server.Close()
+	})
 
-	// Make the POST request
-	resp, err := httpService.Post(t.Context(), path, queryParams, body)
-	require.NoError(t, err)
-
-	defer resp.Body.Close()
-
-	// Check response status code (no body assertion for POST)
-	assert.Equal(t, http.StatusCreated, resp.StatusCode)
-	require.NoError(t, err)
-}
-
-func TestBasicAuthProvider_Put(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
-
-	path := "/path"
-	queryParams := map[string]any{"key": "value"}
-	body := []byte("body")
-
-	// Create a mock HTTP server (verify PUT method)
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		checkAuthHeaders(t, r)
-		assert.Equal(t, http.MethodPut, r.Method)
-
-		w.WriteHeader(http.StatusOK)
-	}))
-	defer server.Close()
-
-	// Create a new HTTP service instance with basic auth
-	httpService := NewHTTPService(server.URL, logging.NewMockLogger(logging.INFO), nil,
-		&BasicAuthConfig{UserName: "user", Password: "cGFzc3dvcmQ="})
-
-	// Make the PUT request
-	resp, err := httpService.Put(t.Context(), path, queryParams, body)
-	require.NoError(t, err)
-
-	defer resp.Body.Close()
-
-	// Check response status code
-	assert.Equal(t, http.StatusOK, resp.StatusCode)
-	require.NoError(t, err)
-}
-
-func TestBasicAuthProvider_Patch(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
-
-	path := "/path"
-	queryParams := map[string]any{"key": "value"}
-	body := []byte("body")
-
-	// Create a mock HTTP server (verify PATCH method)
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		checkAuthHeaders(t, r)
-		assert.Equal(t, http.MethodPatch, r.Method)
-
-		w.WriteHeader(http.StatusOK)
-	}))
-	defer server.Close()
-
-	// Create a new HTTP service instance with basic auth
-	httpService := NewHTTPService(server.URL, logging.NewMockLogger(logging.INFO), nil,
-		&BasicAuthConfig{UserName: "user", Password: "cGFzc3dvcmQ="})
-
-	// Make the PATCH request
-	resp, err := httpService.Patch(t.Context(), path, queryParams, body)
-	require.NoError(t, err)
-
-	defer resp.Body.Close()
-
-	// Check response status code
-	assert.Equal(t, http.StatusOK, resp.StatusCode)
-	require.NoError(t, err)
-}
-
-func TestBasicAuthProvider_Delete(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
-
-	path := "/path"
-	body := []byte("body")
-
-	// Create a mock HTTP server (verify DELETE method)
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		checkAuthHeaders(t, r)
-		assert.Equal(t, http.MethodDelete, r.Method)
-
-		w.WriteHeader(http.StatusNoContent)
-	}))
-	defer server.Close()
-
-	// Create a new HTTP service instance with basic auth
-	httpService := NewHTTPService(server.URL, logging.NewMockLogger(logging.INFO), nil,
-		&BasicAuthConfig{UserName: "user", Password: "cGFzc3dvcmQ="})
-
-	// Make the DELETE request
-	resp, err := httpService.Delete(t.Context(), path, body)
-	require.NoError(t, err)
-
-	defer resp.Body.Close()
-
-	// Check response status code (no body assertion for DELETE)
-	assert.Equal(t, http.StatusNoContent, resp.StatusCode)
-	require.NoError(t, err)
+	return server
 }
 
 func checkAuthHeaders(t *testing.T, r *http.Request) {
 	t.Helper()
 
-	authHeader := r.Header.Get("Authorization")
+	authHeader := r.Header.Get(AuthHeader)
 
 	if authHeader == "" {
 		return
@@ -198,18 +115,4 @@ func checkAuthHeaders(t *testing.T, r *http.Request) {
 
 	assert.Equal(t, "user", credentials[0])
 	assert.Equal(t, "password", credentials[1])
-}
-
-func Test_addAuthorizationHeader_Error(t *testing.T) {
-	bap := &basicAuthProvider{password: "invalid_password"}
-
-	headers := make(map[string]string)
-	err := bap.addAuthorizationHeader(headers)
-
-	if err == nil {
-		t.Error("Expected error, got nil")
-	}
-
-	expectedErrMsg := "illegal base64 data at input byte 7"
-	require.ErrorContains(t, err, expectedErrMsg, "Test_addAuthorizationHeader_Error Failed!")
 }
