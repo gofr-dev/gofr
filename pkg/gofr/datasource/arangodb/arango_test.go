@@ -75,7 +75,8 @@ func TestClient_Query_Success(t *testing.T) {
 		{"_key": "doc2", "value": "test2"},
 	}
 
-	test.MockArango.EXPECT().Database(test.Ctx, dbName).Return(test.MockDB, nil)
+	test.MockArango.EXPECT().GetDatabase(test.Ctx, dbName, &arangodb.GetDatabaseOptions{}).
+		Return(test.MockDB, nil)
 	test.MockDB.EXPECT().Query(test.Ctx, query, &arangodb.QueryOptions{BindVars: bindVars}).
 		Return(NewMockQueryCursor(test.Ctrl, expectedResult), nil)
 
@@ -280,7 +281,8 @@ func TestClient_Query_WithBatchSizeAndFullCount(t *testing.T) {
 		},
 	}
 
-	test.MockArango.EXPECT().Database(test.Ctx, dbName).Return(test.MockDB, nil)
+	test.MockArango.EXPECT().GetDatabase(test.Ctx, dbName, &arangodb.GetDatabaseOptions{}).
+		Return(test.MockDB, nil)
 
 	test.MockDB.EXPECT().
 		Query(test.Ctx, query, gomock.Any()).
@@ -319,7 +321,8 @@ func TestClient_Query_WithMaxPlans(t *testing.T) {
 		},
 	}
 
-	test.MockArango.EXPECT().Database(test.Ctx, dbName).Return(test.MockDB, nil)
+	test.MockArango.EXPECT().GetDatabase(test.Ctx, dbName, &arangodb.GetDatabaseOptions{}).
+		Return(test.MockDB, nil)
 
 	test.MockDB.EXPECT().
 		Query(test.Ctx, query, gomock.Any()).
@@ -345,7 +348,8 @@ func TestClient_Query_InvalidResultType(t *testing.T) {
 
 	var result int // Incorrect type
 
-	test.MockArango.EXPECT().Database(test.Ctx, dbName).Return(test.MockDB, nil)
+	test.MockArango.EXPECT().GetDatabase(test.Ctx, dbName, &arangodb.GetDatabaseOptions{}).
+		Return(test.MockDB, nil)
 	test.MockDB.EXPECT().Query(test.Ctx, query, gomock.Any()).Return(NewMockQueryCursor(test.Ctrl, nil), nil)
 
 	err := test.Client.Query(test.Ctx, dbName, query, bindVars, &result)

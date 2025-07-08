@@ -87,11 +87,11 @@ func NewContainer(conf config.Config) *Container {
 }
 
 func (c *Container) Create(conf config.Config) {
-	if c.appName != "" {
+	if c.appName == "" {
 		c.appName = conf.GetOrDefault("APP_NAME", "gofr-app")
 	}
 
-	if c.appVersion != "" {
+	if c.appVersion == "" {
 		c.appVersion = conf.GetOrDefault("APP_VERSION", "dev")
 	}
 
@@ -199,6 +199,8 @@ func (c *Container) createMqttPubSub(conf config.Config) pubsub.Client {
 	port, _ := strconv.Atoi(conf.Get("MQTT_PORT"))
 	order, _ := strconv.ParseBool(conf.GetOrDefault("MQTT_MESSAGE_ORDER", "false"))
 
+	retrieveRetained, _ := strconv.ParseBool(conf.GetOrDefault("MQTT_RETRIEVE_RETAINED", "false"))
+
 	keepAlive, err := time.ParseDuration(conf.Get("MQTT_KEEP_ALIVE"))
 	if err != nil {
 		keepAlive = 30 * time.Second
@@ -216,16 +218,17 @@ func (c *Container) createMqttPubSub(conf config.Config) pubsub.Client {
 	}
 
 	configs := &mqtt.Config{
-		Protocol:     conf.GetOrDefault("MQTT_PROTOCOL", "tcp"), // using tcp as default method to connect to broker
-		Hostname:     conf.Get("MQTT_HOST"),
-		Port:         port,
-		Username:     conf.Get("MQTT_USER"),
-		Password:     conf.Get("MQTT_PASSWORD"),
-		ClientID:     conf.Get("MQTT_CLIENT_ID_SUFFIX"),
-		QoS:          qos,
-		Order:        order,
-		KeepAlive:    keepAlive,
-		CloseTimeout: 0 * time.Millisecond,
+		Protocol:         conf.GetOrDefault("MQTT_PROTOCOL", "tcp"), // using tcp as default method to connect to broker
+		Hostname:         conf.Get("MQTT_HOST"),
+		Port:             port,
+		Username:         conf.Get("MQTT_USER"),
+		Password:         conf.Get("MQTT_PASSWORD"),
+		ClientID:         conf.Get("MQTT_CLIENT_ID_SUFFIX"),
+		QoS:              qos,
+		Order:            order,
+		RetrieveRetained: retrieveRetained,
+		KeepAlive:        keepAlive,
+		CloseTimeout:     0 * time.Millisecond,
 	}
 
 	return mqtt.New(configs, c.Logger, c.metricsManager)

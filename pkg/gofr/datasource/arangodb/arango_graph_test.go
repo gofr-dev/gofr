@@ -72,7 +72,8 @@ func TestGraph_CreateGraph_Success(t *testing.T) {
 	mockGraph := NewMockGraph(test.Ctrl)
 	graphInterface := arangodb.Graph(mockGraph)
 
-	test.MockArango.EXPECT().Database(test.Ctx, test.DBName).Return(test.MockDB, nil)
+	test.MockArango.EXPECT().GetDatabase(test.Ctx, test.DBName, &arangodb.GetDatabaseOptions{}).
+		Return(test.MockDB, nil)
 	test.MockDB.EXPECT().GraphExists(test.Ctx, test.GraphName).Return(false, nil)
 	test.MockDB.EXPECT().CreateGraph(
 		test.Ctx, test.GraphName, gomock.Any(), nil,
@@ -87,7 +88,8 @@ func TestGraph_CreateGraph_AlreadyExists(t *testing.T) {
 	test := setupGraphTest(t)
 	defer test.Ctrl.Finish()
 
-	test.MockArango.EXPECT().Database(test.Ctx, test.DBName).Return(test.MockDB, nil)
+	test.MockArango.EXPECT().GetDatabase(test.Ctx, test.DBName, &arangodb.GetDatabaseOptions{}).
+		Return(test.MockDB, nil)
 	test.MockDB.EXPECT().GraphExists(test.Ctx, test.GraphName).Return(true, nil)
 	test.MockLogger.EXPECT().Debugf("graph %s already exists in database %s", test.GraphName, test.DBName)
 
@@ -106,7 +108,8 @@ func TestGraph_CreateGraph_Error(t *testing.T) {
 		To:         []string{"toColl"},
 	}}}
 
-	test.MockArango.EXPECT().Database(test.Ctx, test.DBName).Return(test.MockDB, nil)
+	test.MockArango.EXPECT().GetDatabase(test.Ctx, test.DBName, &arangodb.GetDatabaseOptions{}).
+		Return(test.MockDB, nil)
 	test.MockDB.EXPECT().GraphExists(test.Ctx, test.GraphName).Return(false, nil)
 	test.MockDB.EXPECT().CreateGraph(test.Ctx, test.GraphName, options, nil).Return(nil, errInvalidEdgeDocumentType)
 
@@ -123,7 +126,8 @@ func TestGraph_DropGraph_Success(t *testing.T) {
 	mockGraph := NewMockGraph(test.Ctrl)
 	graphInterface := arangodb.Graph(mockGraph)
 
-	test.MockArango.EXPECT().Database(test.Ctx, test.DBName).Return(test.MockDB, nil)
+	test.MockArango.EXPECT().GetDatabase(test.Ctx, test.DBName, &arangodb.GetDatabaseOptions{}).
+		Return(test.MockDB, nil)
 	test.MockDB.EXPECT().Graph(test.Ctx, test.GraphName, nil).Return(graphInterface, nil)
 	mockGraph.EXPECT().Remove(test.Ctx, &arangodb.RemoveGraphOptions{DropCollections: true}).Return(nil)
 
@@ -136,7 +140,8 @@ func TestGraph_DropGraph_DBError(t *testing.T) {
 	test := setupGraphTest(t)
 	defer test.Ctrl.Finish()
 
-	test.MockArango.EXPECT().Database(test.Ctx, test.DBName).Return(nil, errDBNotFound)
+	test.MockArango.EXPECT().GetDatabase(test.Ctx, test.DBName, &arangodb.GetDatabaseOptions{}).
+		Return(nil, errDBNotFound)
 
 	err := test.Graph.DropGraph(test.Ctx, test.DBName, test.GraphName)
 
@@ -150,7 +155,8 @@ func TestGraph_DropGraph_Error(t *testing.T) {
 	mockGraph := NewMockGraph(test.Ctrl)
 	graphInterface := arangodb.Graph(mockGraph)
 
-	test.MockArango.EXPECT().Database(test.Ctx, test.DBName).Return(test.MockDB, nil)
+	test.MockArango.EXPECT().GetDatabase(test.Ctx, test.DBName, &arangodb.GetDatabaseOptions{}).
+		Return(test.MockDB, nil)
 	test.MockDB.EXPECT().Graph(test.Ctx, test.GraphName, nil).Return(graphInterface, nil)
 	mockGraph.EXPECT().Remove(test.Ctx, &arangodb.RemoveGraphOptions{DropCollections: true}).Return(errStatusDown)
 
@@ -174,7 +180,8 @@ func TestClient_GetEdges_Success(t *testing.T) {
 
 	var resp EdgeDetails
 
-	test.MockArango.EXPECT().Database(test.Ctx, test.DBName).Return(test.MockDB, nil)
+	test.MockArango.EXPECT().GetDatabase(test.Ctx, test.DBName, &arangodb.GetDatabaseOptions{}).
+		Return(test.MockDB, nil)
 	test.MockDB.EXPECT().GetEdges(test.Ctx, edgeCollection, vertexID, nil).Return(expectedEdges, nil)
 
 	err := test.Client.GetEdges(test.Ctx, test.DBName, test.GraphName, edgeCollection, vertexID, &resp)
@@ -193,7 +200,8 @@ func TestClient_GetEdges_DBError(t *testing.T) {
 
 	var resp EdgeDetails
 
-	test.MockArango.EXPECT().Database(test.Ctx, test.DBName).Return(nil, errDBNotFound)
+	test.MockArango.EXPECT().GetDatabase(test.Ctx, test.DBName, &arangodb.GetDatabaseOptions{}).
+		Return(nil, errDBNotFound)
 
 	err := test.Client.GetEdges(test.Ctx, test.DBName, test.GraphName, edgeCollection, vertexID, &resp)
 

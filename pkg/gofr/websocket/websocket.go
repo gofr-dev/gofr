@@ -24,7 +24,7 @@ type Connection struct {
 	writeMutex sync.Mutex
 }
 
-// ErrorConnection is the connection error that occurs when webscoket connection cannot be established.
+// ErrorConnection is the connection error that occurs when websocket connection cannot be established.
 var ErrorConnection = errors.New("couldn't establish connection to web socket")
 
 // The message types are defined in RFC 6455, section 11.8.
@@ -38,7 +38,7 @@ type WSUpgrader struct {
 	Upgrader Upgrader
 }
 
-// NewWSUpgrader initialize a new websocket upgarder that upgrades an incoming http request
+// NewWSUpgrader initialize a new websocket upgrader that upgrades an incoming http request
 // to a websocket connection. It takes in Options that can be used to customize the upgraded connections.
 func NewWSUpgrader(opts ...Options) *WSUpgrader {
 	defaultUpgrader := &websocket.Upgrader{}

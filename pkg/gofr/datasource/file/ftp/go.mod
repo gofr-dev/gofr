@@ -6,7 +6,7 @@ require (
 	github.com/jlaffaye/ftp v0.2.0
 	github.com/stretchr/testify v1.10.0
 	go.uber.org/mock v0.5.2
-	gofr.dev v1.40.0
+	gofr.dev v1.42.2
 )
 
 require (

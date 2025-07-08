@@ -47,7 +47,7 @@ func Test_ArangoCheckAndCreateMigrationTable(t *testing.T) {
 	}
 
 	for i, tc := range testCases {
-		mockArango.EXPECT().CreateCollection(t.Context(), arangoMigrationDB, arangoMigrationCollection, false).Return(tc.err)
+		mockArango.EXPECT().CreateCollection(gomock.Any(), arangoMigrationDB, arangoMigrationCollection, false).Return(tc.err)
 
 		err := migratorWithArango.checkAndCreateMigrationTable(mockContainer)
 
@@ -70,7 +70,7 @@ func Test_ArangoGetLastMigration(t *testing.T) {
 	var lastMigrations []int64
 
 	for i, tc := range testCases {
-		mockArango.EXPECT().Query(t.Context(), arangoMigrationDB, getLastArangoMigration, nil, &lastMigrations).Return(tc.err)
+		mockArango.EXPECT().Query(gomock.Any(), arangoMigrationDB, getLastArangoMigration, nil, &lastMigrations).Return(tc.err)
 
 		resp := migratorWithArango.getLastMigration(mockContainer)
 
@@ -104,7 +104,7 @@ func Test_ArangoCommitMigration(t *testing.T) {
 			"duration":   time.Since(td.StartTime).Milliseconds(),
 		}
 
-		mockArango.EXPECT().Query(t.Context(), arangoMigrationDB, insertArangoMigrationRecord, bindVars, gomock.Any()).Return(tc.err)
+		mockArango.EXPECT().Query(gomock.Any(), arangoMigrationDB, insertArangoMigrationRecord, bindVars, gomock.Any()).Return(tc.err)
 
 		err := migratorWithArango.commitMigration(mockContainer, td)
 
