@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
-	"fmt"
 	"time"
 
 	"gofr.dev/pkg/gofr/container"
@@ -85,8 +84,6 @@ func resolveMigrationTopic(c *container.Container) string {
 			return topicName
 		}
 	}
-
-	fmt.Println("Falling back to default migration topic: gofr_migrations")
 
 	return pubsubMigrationTopic
 }
