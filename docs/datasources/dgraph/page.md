@@ -71,7 +71,7 @@ func main() {
 		Port: "8080",
 	})
 
-	// Connect to Dgraph running on localhost:9080
+	// Connect to Dgraph running on localhost:8080
 	app.AddDgraph(db)
 
 	// Add routes for Dgraph operations
