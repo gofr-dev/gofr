@@ -1,8 +1,10 @@
 package gofr
 
 import (
+	"context"
 	"encoding/base64"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -914,6 +916,50 @@ func Test_AddCronJob_Success(t *testing.T) {
 	}
 
 	assert.Truef(t, pass, "unable to add cron job to cron table")
+}
+
+func TestOnStart_HookRunsAndErrorHandling(t *testing.T) {
+	app := New()
+
+	called := false
+	app.OnStart(func(ctx *StartupContext) error {
+		called = true
+		return nil
+	})
+
+	// Simulate Run, but only run startup hooks
+	sc := &StartupContext{
+		Context:       context.Background(),
+		Container:     app.container,
+		ContextLogger: *logging.NewContextLogger(context.Background(), app.Logger()),
+	}
+
+	for _, hook := range app.startupHooks {
+		err := hook(sc)
+		if err != nil {
+			t.Fatalf("unexpected error from startup hook: %v", err)
+		}
+	}
+
+	if !called {
+		t.Error("expected startup hook to be called")
+	}
+
+	// Test error handling
+	errorApp := New()
+	errorApp.OnStart(func(ctx *StartupContext) error {
+		return errors.New("fail")
+	})
+
+	errCalled := false
+	for _, hook := range errorApp.startupHooks {
+		if hook(sc) != nil {
+			errCalled = true
+		}
+	}
+	if !errCalled {
+		t.Error("expected error from startup hook to be handled")
+	}
 }
 
 func setupTestEnvironment(t *testing.T) (host string, htmlContent []byte) {

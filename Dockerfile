@@ -1,7 +1,9 @@
-FROM golang:1.24
+FROM golang:1.22
 
 RUN mkdir -p /go/src/gofr.dev
 WORKDIR /go/src/gofr.dev
+
+ENV GOTOOLCHAIN=go1.24.0
 COPY . .
 
 RUN go build -ldflags "-linkmode external -extldflags -static" -a examples/http-server/main.go

@@ -27,6 +27,23 @@ const (
 	configLocation = "./configs"
 )
 
+// Example usage:
+//
+//	app := gofr.New()
+//
+//	app.OnStart(func(ctx *gofr.StartupContext) error {
+//	    // Use ctx.Container to access DB, Redis, HTTP clients, etc.
+//	    // e.g., preload cache, run migrations, etc.
+//	    return nil // or return error to abort startup
+//	})
+//
+//	app.GET("/greet", func(ctx *gofr.Context) (any, error) {
+//	    return "Hello World!", nil
+//	})
+//
+//	app.Run()
+//
+// All startup hooks are executed in order before the server starts. If any hook returns an error, the app logs the error and exits.
 // App is the main application in the GoFr framework.
 type App struct {
 	// Config can be used by applications to fetch custom configurations from environment or file.
@@ -46,7 +63,7 @@ type App struct {
 	httpRegistered bool
 
 	subscriptionManager SubscriptionManager
-	startupHooks        []func(*App) error
+	startupHooks        []func(*StartupContext) error
 }
 
 // Shutdown stops the service(s) and close the application.
@@ -299,6 +316,6 @@ func (a *App) AddStaticFiles(endpoint, filePath string) {
 }
 
 // OnStart registers a function to be run synchronously before the server starts.
-func (a *App) OnStart(hook func(*App) error) {
+func (a *App) OnStart(hook func(*StartupContext) error) {
 	a.startupHooks = append(a.startupHooks, hook)
 }

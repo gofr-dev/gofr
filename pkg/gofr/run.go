@@ -7,13 +7,22 @@ import (
 	"os/signal"
 	"sync"
 	"syscall"
+
+	"gofr.dev/pkg/gofr/logging"
 )
 
 // Run starts the application. If it is an HTTP server, it will start the server.
 func (a *App) Run() {
+	// Create a StartupContext for startup hooks
+	sc := &StartupContext{
+		Context:       context.Background(),
+		Container:     a.container,
+		ContextLogger: *logging.NewContextLogger(context.Background(), a.Logger()),
+	}
+
 	// Run all startup hooks before starting the server
 	for _, hook := range a.startupHooks {
-		if err := hook(a); err != nil {
+		if err := hook(sc); err != nil {
 			a.Logger().Errorf("startup hook failed: %v", err)
 			os.Exit(1) // or handle error as you see fit
 		}
