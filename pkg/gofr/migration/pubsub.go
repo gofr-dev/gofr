@@ -4,10 +4,10 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"fmt"
 	"time"
 
 	"gofr.dev/pkg/gofr/container"
-	"gofr.dev/pkg/gofr/datasource/pubsub/eventhub"
 )
 
 type pubsubDS struct {
@@ -53,13 +53,6 @@ func (ds pubsubDS) apply(m migrator) migrator {
 }
 
 func (pm pubsubMigrator) checkAndCreateMigrationTable(c *container.Container) error {
-	// Check if we're using Event Hub
-	if _, isEventHub := c.PubSub.(*eventhub.Client); isEventHub {
-		// For Event Hub, we don't create topics as it's not supported
-		c.Debug("Using existing Event Hub for migrations, topic creation skipped")
-		return pm.migrator.checkAndCreateMigrationTable(c)
-	}
-
 	err := pm.CreateTopic(context.Background(), pubsubMigrationTopic)
 	if err != nil {
 		c.Debug("Migration topic might already exist:", err)
@@ -85,9 +78,15 @@ func (pubsubMigrator) getLastMigration(c *container.Container) int64 {
 }
 
 func resolveMigrationTopic(c *container.Container) string {
-	if client, isEventHub := c.PubSub.(*eventhub.Client); isEventHub {
-		return client.GetEventHubName()
+	// Check if the PubSub client provides a GetTopicName method
+	if topicResolver, ok := c.PubSub.(interface{ GetEventHubName() string }); ok {
+		topicName := topicResolver.GetEventHubName()
+		if topicName != "" {
+			return topicName
+		}
 	}
+
+	fmt.Println("Falling back to default migration topic: gofr_migrations")
 
 	return pubsubMigrationTopic
 }
@@ -137,10 +136,7 @@ func (pm pubsubMigrator) commitMigration(c *container.Container, data transactio
 		return err
 	}
 
-	publishTopic := pubsubMigrationTopic
-	if client, isEventHub := c.PubSub.(*eventhub.Client); isEventHub {
-		publishTopic = client.GetEventHubName()
-	}
+	publishTopic := resolveMigrationTopic(c)
 
 	err = c.PubSub.Publish(context.Background(), publishTopic, recordBytes)
 	if err != nil {
