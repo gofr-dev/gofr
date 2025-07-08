@@ -22,20 +22,21 @@ require (
 	github.com/pkg/errors v0.9.1
 	github.com/prometheus/client_golang v1.22.0
 	github.com/redis/go-redis/extra/redisotel/v9 v9.10.0
-	github.com/redis/go-redis/v9 v9.10.0
+	github.com/redis/go-redis/v9 v9.11.0
 	github.com/segmentio/kafka-go v0.4.48
 	github.com/stretchr/testify v1.10.0
-	go.opentelemetry.io/contrib/instrumentation/net/http/httptrace/otelhttptrace v0.61.0
+	go.opentelemetry.io/contrib/instrumentation/net/http/httptrace/otelhttptrace v0.62.0
 	go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp v0.62.0
 	go.opentelemetry.io/otel v1.37.0
 	go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc v1.37.0
-	go.opentelemetry.io/otel/exporters/prometheus v0.58.0
+	go.opentelemetry.io/otel/exporters/prometheus v0.59.0
 	go.opentelemetry.io/otel/exporters/zipkin v1.36.0
 	go.opentelemetry.io/otel/metric v1.37.0
 	go.opentelemetry.io/otel/sdk v1.37.0
 	go.opentelemetry.io/otel/sdk/metric v1.37.0
 	go.opentelemetry.io/otel/trace v1.37.0
 	go.uber.org/mock v0.5.2
+	gofr.dev/pkg/gofr/datasource/pubsub/eventhub v0.3.1
 	golang.org/x/oauth2 v0.30.0
 	golang.org/x/sync v0.15.0
 	golang.org/x/term v0.32.0
@@ -53,6 +54,11 @@ require (
 	cloud.google.com/go/compute/metadata v0.7.0 // indirect
 	cloud.google.com/go/iam v1.5.2 // indirect
 	filippo.io/edwards25519 v1.1.0 // indirect
+	github.com/Azure/azure-sdk-for-go/sdk/azcore v1.17.0 // indirect
+	github.com/Azure/azure-sdk-for-go/sdk/internal v1.10.0 // indirect
+	github.com/Azure/azure-sdk-for-go/sdk/messaging/azeventhubs v1.2.3 // indirect
+	github.com/Azure/azure-sdk-for-go/sdk/storage/azblob v1.5.0 // indirect
+	github.com/Azure/go-amqp v1.3.0 // indirect
 	github.com/beorn7/perks v1.0.1 // indirect
 	github.com/cenkalti/backoff/v5 v5.0.2 // indirect
 	github.com/cespare/xxhash/v2 v2.3.0 // indirect
@@ -76,7 +82,7 @@ require (
 	github.com/pierrec/lz4/v4 v4.1.22 // indirect
 	github.com/pmezard/go-difflib v1.0.0 // indirect
 	github.com/prometheus/client_model v0.6.2 // indirect
-	github.com/prometheus/common v0.64.0 // indirect
+	github.com/prometheus/common v0.65.0 // indirect
 	github.com/prometheus/procfs v0.16.1 // indirect
 	github.com/redis/go-redis/extra/rediscmd/v9 v9.10.0 // indirect
 	github.com/remyoudompheng/bigfft v0.0.0-20230129092748-24d4a6f8daec // indirect
