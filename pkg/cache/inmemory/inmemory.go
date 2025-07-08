@@ -52,8 +52,9 @@ type inMemoryCache struct {
 	// LRU list head and tail
 	head, tail *node
 
-	name   string
-	logger observability.Logger
+	name    string
+	logger  observability.Logger
+	metrics *observability.Metrics
 }
 
 // Option configures the cache
@@ -98,6 +99,16 @@ func WithLogger(logger observability.Logger) Option {
 	}
 }
 
+// WithMetrics sets the metrics for the cache
+func WithMetrics(m *observability.Metrics) Option {
+	return func(c *inMemoryCache) error {
+		if m != nil {
+			c.metrics = m
+		}
+		return nil
+	}
+}
+
 // validateKey ensures key is non-empty
 func (c *inMemoryCache) validateKey(key string) error {
 	if key == "" {
@@ -115,6 +126,7 @@ func NewInMemoryCache(opts ...Option) (cache.Cache, error) {
 		quit:     make(chan struct{}),
 		name:     "default",
 		logger:   observability.NewStdLogger(),
+		metrics:  observability.NewMetrics("gofr", "inmemory_cache"),
 	}
 	for _, opt := range opts {
 		if err := opt(c); err != nil {
@@ -160,6 +172,9 @@ func (c *inMemoryCache) Set(ctx context.Context, key string, value interface{}) 
 		c.items[key] = ent
 		// O(1) move-to-front
 		c.moveToFront(ent.node)
+		c.metrics.Sets().WithLabelValues(c.name).Inc()
+		c.metrics.Items().WithLabelValues(c.name).Set(float64(len(c.items)))
+		c.metrics.Latency().WithLabelValues(c.name, "set").Observe(time.Since(now).Seconds())
 		return nil
 	}
 
@@ -173,6 +188,9 @@ func (c *inMemoryCache) Set(ctx context.Context, key string, value interface{}) 
 	// O(1) insert at front
 	c.insertAtFront(nd)
 	c.items[key] = entry{value: value, expiresAt: c.computeExpiry(now), node: nd}
+	c.metrics.Sets().WithLabelValues(c.name).Inc()
+	c.metrics.Items().WithLabelValues(c.name).Set(float64(len(c.items)))
+	c.metrics.Latency().WithLabelValues(c.name, "set").Observe(time.Since(now).Seconds())
 	c.logger.Debugf("Set key '%s'", key)
 	return nil
 }
@@ -195,12 +213,16 @@ func (c *inMemoryCache) Get(ctx context.Context, key string) (interface{}, bool,
 			delete(c.items, key)
 		}
 		c.logger.Debugf("Cache miss for key '%s'", key)
+		c.metrics.Misses().WithLabelValues(c.name).Inc()
+		c.metrics.Latency().WithLabelValues(c.name, "get").Observe(time.Since(time.Now()).Seconds())
 		return nil, false, nil
 	}
 
 	// Hit: move node to front to mark as most recently used (O(1))
 	c.moveToFront(ent.node)
 	c.logger.Debugf("Cache hit for key '%s'", key)
+	c.metrics.Hits().WithLabelValues(c.name).Inc()
+	c.metrics.Latency().WithLabelValues(c.name, "get").Observe(time.Since(time.Now()).Seconds())
 	return ent.value, true, nil
 }
 
@@ -218,7 +240,10 @@ func (c *inMemoryCache) Delete(ctx context.Context, key string) error {
 		c.removeNode(ent.node)
 		delete(c.items, key)
 		c.logger.Debugf("Deleted key '%s'", key)
+		c.metrics.Deletes().WithLabelValues(c.name).Inc()
+		c.metrics.Items().WithLabelValues(c.name).Set(float64(len(c.items)))
 	}
+	c.metrics.Latency().WithLabelValues(c.name, "delete").Observe(time.Since(time.Now()).Seconds())
 	return nil
 }
 
@@ -244,6 +269,8 @@ func (c *inMemoryCache) Clear(ctx context.Context) error {
 	c.items = make(map[string]entry)
 	c.head, c.tail = nil, nil
 	c.logger.Infof("Cleared cache '%s', removed %d items", c.name, count)
+	c.metrics.Items().WithLabelValues(c.name).Set(0)
+	c.metrics.Latency().WithLabelValues(c.name, "clear").Observe(0)
 	return nil
 }
 
@@ -295,6 +322,8 @@ func (c *inMemoryCache) evictTail() {
 	c.removeNode(c.tail)
 	delete(c.items, key)
 	c.logger.Debugf("Evicted key '%s'", key)
+	c.metrics.Evicts().WithLabelValues(c.name).Inc()
+	c.metrics.Items().WithLabelValues(c.name).Set(float64(len(c.items)))
 }
 
 // places n at the head
@@ -374,6 +403,7 @@ func NewDefaultCache() (cache.Cache, error) {
 		WithTTL(5*time.Minute),
 		WithMaxItems(1000),
 		WithLogger(observability.NewStdLogger()),
+		WithMetrics(observability.NewMetrics("gofr", "inmemory_cache")),
 	)
 }
 
@@ -383,6 +413,7 @@ func NewDebugCache(name string) (cache.Cache, error) {
 		WithTTL(1*time.Minute),
 		WithMaxItems(100),
 		WithLogger(observability.NewStdLogger()),
+		WithMetrics(observability.NewMetrics("gofr", "inmemory_cache")),
 	)
 }
 
@@ -392,5 +423,7 @@ func NewProductionCache(name string, ttl time.Duration, maxItems int) (cache.Cac
 		WithTTL(ttl),
 		WithMaxItems(maxItems),
 		WithLogger(observability.NewStdLogger()),
+		WithMetrics(observability.NewMetrics("gofr", "inmemory_cache")),
 	)
 }
+
