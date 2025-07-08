@@ -1,7 +1,7 @@
 /*
-Package datasource provides an interface for registering datasources with the gofr framework.
-A datasource is a componentc that provides access to data, such as a database or a message queue.
-The Datasource interface defines a method for registering a datasource with the gofr framework.
+Package datasource provides a way to add external datasources to the application.
+A datasource is a component that provides access to data, such as a database or message queue.
+The core framework includes built-in support for SQL and Redis datasources.
 */
 package datasource
 
