@@ -76,7 +76,7 @@ import "gofr.dev/pkg/gofr"
 func main() {
 	app := gofr.New()
 
-	app.OnStart(func(a *gofr.App) error {
+	app.OnStart(func(ctx *gofr.StartupContext) error {
 		// Do your synchronous startup work here
 		// e.g., initialize cache, make API calls, etc.
 		return nil
