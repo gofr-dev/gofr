@@ -68,10 +68,10 @@ func main() {
 
 	db := dgraph.New(dgraph.Config{
 		Host: "localhost",
-		Port: "8080",
+		Port: "9080",
 	})
 
-	// Connect to Dgraph running on localhost:8080
+	// Connect to Dgraph running on localhost:9080
 	app.AddDgraph(db)
 
 	// Add routes for Dgraph operations
