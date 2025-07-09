@@ -3,7 +3,8 @@ package gofr
 import (
 	"context"
 	"runtime/debug"
-
+	"time"
+	
 	"gofr.dev/pkg/gofr/container"
 	"gofr.dev/pkg/gofr/logging"
 )
@@ -24,20 +25,30 @@ func newSubscriptionManager(c *container.Container) SubscriptionManager {
 
 // startSubscriber continuously subscribes to a topic and handles messages using the provided handler.
 func (s *SubscriptionManager) startSubscriber(ctx context.Context, topic string, handler SubscribeFunc) error {
+	var delay time.Duration // zero delay by default
+	
 	for {
 		select {
 		case <-ctx.Done():
 			s.container.Logger.Infof("shutting down subscriber for topic %s", topic)
 			return nil
-		default:
+		case <-time.After(delay):
 			err := s.handleSubscription(ctx, topic, handler)
-			if err != nil {
-				s.container.Logger.Errorf("error in subscription for topic %s: %v", topic, err)
+			
+			 if err == nil {
+				// reset delay after success
+				delay = 0
+				continue
 			}
-		}
-	}
+ 			s.container.Logger.Errorf("error in subscription for topic %s: %v", topic, err)
+			// Exponential backoff: slow down retry after repeated failures
+			delay += 2 * time.Second
+			if delay >= 30 * time.Second {
+		           delay = 30 * time.Second
+			}
+		  }
+	  }
 }
-
 func (s *SubscriptionManager) handleSubscription(ctx context.Context, topic string, handler SubscribeFunc) error {
 	msg, err := s.container.GetSubscriber().Subscribe(ctx, topic)
 
