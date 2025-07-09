@@ -1,9 +1,6 @@
 /*
 TODO:
-look for tracing and metrics (prome...)
-make changes reqd.
-priority: dev experiecne
-docs about usage
+look for tracing
 */
 
 package inmemory
