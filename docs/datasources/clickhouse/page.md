@@ -25,14 +25,13 @@ package main
 
 import (
 	"gofr.dev/pkg/gofr"
-
 	"gofr.dev/pkg/gofr/datasource/clickhouse"
 )
 
 type User struct {
 	Id   string `ch:"id"`
 	Name string `ch:"name"`
-	Age  string `ch:"age"`
+	Age  int    `ch:"age"`
 }
 
 func main() {
@@ -52,12 +51,12 @@ func main() {
 }
 
 func Post(ctx *gofr.Context) (any, error) {
-	err := ctx.Clickhouse.Exec(ctx, "INSERT INTO users (id, name, age) VALUES (?, ?, ?)", "8f165e2d-feef-416c-95f6-913ce3172e15", "aryan", "10")
+	err := ctx.Clickhouse.Exec(ctx, "INSERT INTO users (id, name, age) VALUES (?, ?, ?)", "8f165e2d-feef-416c-95f6-913ce3172e15", "aryan", 10)
 	if err != nil {
 		return nil, err
 	}
 
-	return "successful inserted", nil
+	return "successfully inserted", nil
 }
 
 func Get(ctx *gofr.Context) (any, error) {
