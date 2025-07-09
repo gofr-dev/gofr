@@ -30,7 +30,7 @@ go run main.go
 ### 2. Run with Docker Compose (Prometheus + Grafana)
 
 ```sh
-docker-compose up --build
+docker-compose up -d
 ```
 
 - Prometheus: [http://localhost:9090](http://localhost:9090)
