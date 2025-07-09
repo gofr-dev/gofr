@@ -19,7 +19,7 @@ import (
 
 const clientIDLength = 10
 const clientSecretLength = 24
-const privateKeyBits = 1024
+const privateKeyBits = 2048
 
 type oAuthTestSever struct {
 	tokenURL      string
