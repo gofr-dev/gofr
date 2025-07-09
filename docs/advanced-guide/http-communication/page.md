@@ -63,7 +63,7 @@ svc := ctx.GetHTTPService(<service_name>)
 ```
 
 ```go  
-func Customer(ctx *gofr.Context) (interface{}, error) {
+func Customer(ctx *gofr.Context) (any, error) {
 	// Get the payment service client
 	paymentSvc := ctx.GetHTTPService("payment")
 
