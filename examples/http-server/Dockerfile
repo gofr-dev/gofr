@@ -2,10 +2,8 @@
 FROM golang:1.24 AS build
 
 WORKDIR /src
-
 COPY . .
 RUN go get ./...
-# Build the application
 RUN go build -ldflags "-linkmode external -extldflags -static" -a -o /app/main main.go
 
 # Final stage
