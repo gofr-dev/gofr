@@ -1,4 +1,7 @@
-// Package file provides a simple representation of a file and its metadata.
+/*
+Package file is a simple representation of a file and its metadata.
+A file interface provides unified access to various file operations, such as reading and writing files.
+*/
 package file
 
 type file struct {
