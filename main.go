@@ -10,7 +10,7 @@ func main() {
 	app := gofr.New()
 
 	// Register a startup hook
-	app.OnStart(func(a *gofr.App) error {
+	app.OnStart(func(ctx *gofr.StartupContext) error {
 		fmt.Println(">>> Startup hook executed!")
 		// You can do any initialization here
 		return nil // or return an error to test error handling
