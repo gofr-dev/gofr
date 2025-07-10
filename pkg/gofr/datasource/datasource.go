@@ -1,7 +1,5 @@
 /*
-Package datasource provides a way to add external datasources to the application.
-A datasource is a component that provides access to data, such as a database or message queue.
-The core framework includes built-in support for SQL and Redis datasources.
+Package datasource contains all the supported data sources in GoFr. A datasource refers to any component that provides access to data — such as databases or message queues. GoFr comes with built-in support for SQL and Redis data sources out of the box.
 */
 package datasource
 
