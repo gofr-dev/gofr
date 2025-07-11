@@ -224,6 +224,7 @@ func initializeOracleRunMocks(t *testing.T) (*MockOracle, *container.Container) 
     mockContainer.Clickhouse = nil
     mockContainer.Oracle = mockOracle
     mockContainer.Logger = logging.NewMockLogger(logging.DEBUG)
+	
     return mockOracle, mockContainer
 }
 

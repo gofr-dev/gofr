@@ -72,9 +72,13 @@ func (a *App) AddClickhouse(db container.ClickhouseProvider) {
 func (a *App) AddOracle(db container.OracleProvider) {
     db.UseLogger(a.Logger())
     db.UseMetrics(a.Metrics())
+
     tracer := otel.GetTracerProvider().Tracer("gofr-oracle")
+
     db.UseTracer(tracer)
+
     db.Connect()
+	
     a.container.Oracle = db
 }
 
