@@ -168,7 +168,7 @@ func (h *httpService) createAndSendRequest(ctx context.Context, method string, p
 
 	// encode the query parameters on the request.
 	encodeQueryParameters(req, queryParams)
-
+	fmt.Println(uri)
 	log := &Log{
 		Timestamp:     time.Now(),
 		CorrelationID: trace.SpanFromContext(clientTraceCtx).SpanContext().TraceID().String(),
@@ -197,7 +197,8 @@ func (h *httpService) createAndSendRequest(ctx context.Context, method string, p
 	log.ResponseCode = resp.StatusCode
 
 	h.Log(log)
-
+	// bs, _ := io.ReadAll(resp.Body)
+	// fmt.Println(string(bs))
 	return resp, nil
 }
 
