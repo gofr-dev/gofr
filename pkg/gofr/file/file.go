@@ -1,6 +1,9 @@
 /*
-Package file is a simple representation of a file and its metadata.
-A file interface provides unified access to various file operations, such as reading and writing files.
+Package file provides unified access to various file operations, such as creating, reading, writing files across :
+- S3
+- FTP
+- SFTP
+- Local FileSystem
 */
 package file
 
