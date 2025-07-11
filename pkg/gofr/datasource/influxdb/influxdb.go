@@ -2,7 +2,9 @@ package influxdb
 
 import (
 	"context"
+	"fmt"
 	"gofr.dev/pkg/gofr/datasource"
+	"log"
 	"time"
 
 	influxdb2 "github.com/influxdata/influxdb-client-go/v2"
@@ -68,7 +70,32 @@ func (c *Client) HealthCheck(ctx context.Context) (any, error) {
 
 // ListBuckets implements container.InfluxDBProvider.
 func (c *Client) ListBuckets(ctx context.Context, org string) ([]string, error) {
-	panic("unimplemented")
+	// Validate input
+	if org == "" {
+		return nil, fmt.Errorf("organization name must not be empty")
+	}
+
+	bucketsAPI := c.client.BucketsAPI()
+	bucketsDomain, err := bucketsAPI.FindBucketsByOrgName(ctx, org)
+	if err != nil {
+		// Consider logging the error with context for observability
+		log.Printf("failed to find buckets for org %q: %v", org, err)
+		return nil, fmt.Errorf("failed to list buckets for organization %q: %w", org, err)
+	}
+
+	if bucketsDomain == nil {
+		// Defensive: treat nil response as empty result
+		return []string{}, nil
+	}
+
+	// Pre-allocate slice for performance if count is known
+	buckets := make([]string, 0, len(*bucketsDomain))
+	for _, bucket := range *bucketsDomain {
+		if bucket.Name != "" {
+			buckets = append(buckets, bucket.Name)
+		}
+	}
+	return buckets, nil
 }
 
 // Ping implements container.InfluxDBProvider.
