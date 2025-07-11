@@ -161,6 +161,13 @@ func initializeDatasources(c *container.Container, ds *Datasource, mg migrator) 
 		initialized = true
 	}
 
+	if !isNil(c.Oracle) {
+        ds.Oracle = c.Oracle
+        mg = oracleDS{c.Oracle}.apply(mg)
+        c.Debug("initialized data source for OracleDB")
+        initialized = true
+    }
+
 	if c.PubSub != nil {
 		ds.PubSub = c.PubSub
 		mg = pubsubDS{c.PubSub}.apply(mg)

@@ -30,6 +30,7 @@ type Mocks struct {
 	File          *file.MockFileSystemProvider
 	HTTPService   *service.MockHTTP
 	Metrics       *MockMetrics
+	Oracle 		  *MockOracleDB
 }
 
 type options func(c *Container, ctrl *gomock.Controller) any
@@ -73,6 +74,10 @@ func NewMockContainer(t *testing.T, options ...options) (*Container, *Mocks) {
 
 	clickhouseMock := NewMockClickhouse(ctrl)
 	container.Clickhouse = clickhouseMock
+
+	oracleMock := NewMockOracleDB(ctrl)
+	container.Oracle = oracleMock
+
 
 	mongoMock := NewMockMongo(ctrl)
 	container.Mongo = mongoMock
@@ -135,6 +140,7 @@ func NewMockContainer(t *testing.T, options ...options) (*Container, *Mocks) {
 		Elasticsearch: elasticsearchMock,
 		PubSub:        pubsubMock,
 		Metrics:       mockMetrics,
+		Oracle: oracleMock,
 	}
 
 	// TODO: Remove this expectation from mock container (previous generalization) to the actual tests where their expectations are being set.
