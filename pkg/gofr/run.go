@@ -19,6 +19,12 @@ func (a *App) Run() {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
 
+	for _, hook := range a.onStartHooks {
+		if err := hook(&Context{}); err != nil {
+			a.Logger().Errorf("OnStart hook failed: %v", err)
+			os.Exit(1)
+		}
+	}
 	timeout, err := getShutdownTimeoutFromConfig(a.Config)
 	if err != nil {
 		a.Logger().Errorf("error parsing value of shutdown timeout from config: %v. Setting default timeout of 30 sec.", err)
