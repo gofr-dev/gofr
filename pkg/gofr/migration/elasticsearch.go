@@ -92,35 +92,45 @@ func (mg elasticsearchMigrator) checkAndCreateMigrationTable(c *container.Contai
 func (mg elasticsearchMigrator) getLastMigration(c *container.Container) int64 {
 	var lastMigration int64
 
-	// Search for the latest migration
 	result, err := c.Elasticsearch.Search(context.Background(), []string{elasticsearchMigrationIndex}, getLastElasticsearchMigrationQuery)
 	if err != nil {
 		c.Errorf("Failed to fetch migrations from Elasticsearch: %v", err)
 		return 0
 	}
 
-	// Parse the response to get the latest version
-	if hits, ok := result["hits"].(map[string]any); ok {
-		if hitsList, ok := hits["hits"].([]any); ok && len(hitsList) > 0 {
-			if firstHit, ok := hitsList[0].(map[string]any); ok {
-				if source, ok := firstHit["_source"].(map[string]any); ok {
-					if version, ok := source["version"].(float64); ok {
-						lastMigration = int64(version)
-					}
-				}
-			}
-		}
-	}
-
+	lastMigration = extractLastMigrationVersion(result)
 	c.Debugf("Elasticsearch last migration fetched value is: %v", lastMigration)
 
 	lm2 := mg.migrator.getLastMigration(c)
-
 	if lm2 > lastMigration {
 		return lm2
 	}
-
 	return lastMigration
+}
+
+// extractLastMigrationVersion extracts the latest migration version from the Elasticsearch search result.
+func extractLastMigrationVersion(result map[string]any) int64 {
+	hits, ok := result["hits"].(map[string]any)
+	if !ok {
+		return 0
+	}
+	hitsList, ok := hits["hits"].([]any)
+	if !ok || len(hitsList) == 0 {
+		return 0
+	}
+	firstHit, ok := hitsList[0].(map[string]any)
+	if !ok {
+		return 0
+	}
+	source, ok := firstHit["_source"].(map[string]any)
+	if !ok {
+		return 0
+	}
+	version, ok := source["version"].(float64)
+	if !ok {
+		return 0
+	}
+	return int64(version)
 }
 
 // beginTransaction starts a new transaction (Elasticsearch doesn't support traditional transactions).
