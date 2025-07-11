@@ -58,6 +58,14 @@ func TestContainer_Health(t *testing.T) {
 					"error": "clickhouse not connected",
 				},
 			},
+
+			"oracle": datasource.Health{
+    		    Status: tc.datasourceHealth, Details: map[string]any{
+    		        "host": "localhost:1521",
+    		        "error": "oracle not connected",
+    		    },
+    		},
+			
 			"cassandra": datasource.Health{
 				Status: tc.datasourceHealth, Details: map[string]any{
 					"host":  "localhost:6379",
@@ -159,6 +167,15 @@ func registerMocks(mocks *Mocks, health string) {
 			"error": "clickhouse not connected",
 		},
 	}, nil)
+
+	mocks.Oracle.EXPECT().HealthCheck(context.Background()).Return(datasource.Health{
+	    Status: health,
+	    Details: map[string]any{
+	        "host": "localhost:1521",
+	        "error": "oracle not connected",
+	    },
+	}, nil)
+
 
 	mocks.KVStore.EXPECT().HealthCheck(context.Background()).Return(datasource.Health{
 		Status: health,

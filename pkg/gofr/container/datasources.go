@@ -206,6 +206,22 @@ type ClickhouseProvider interface {
 	provider
 }
 
+type OracleDB interface {
+    Exec(ctx context.Context, query string, args ...any) error
+    Select(ctx context.Context, dest any, query string, args ...any) error
+    AsyncInsert(ctx context.Context, query string, wait bool, args ...any) error
+    
+	HealthChecker
+}
+
+type OracleProvider interface {
+    OracleDB
+    
+	provider
+}
+
+
+
 // Mongo is an interface representing a MongoDB database client with common CRUD operations.
 type Mongo interface {
 	// Find executes a query to find documents in a collection based on a filter and stores the results

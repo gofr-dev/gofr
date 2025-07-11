@@ -252,31 +252,31 @@ func (m *MockPubSub) EXPECT() *MockPubSubMockRecorder {
 }
 
 // CreateTopic mocks base method.
-func (m *MockPubSub) CreateTopic(context context.Context, name string) error {
+func (m *MockPubSub) CreateTopic(arg0 context.Context, name string) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "CreateTopic", context, name)
+	ret := m.ctrl.Call(m, "CreateTopic", arg0, name)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // CreateTopic indicates an expected call of CreateTopic.
-func (mr *MockPubSubMockRecorder) CreateTopic(context, name any) *gomock.Call {
+func (mr *MockPubSubMockRecorder) CreateTopic(arg0, name any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CreateTopic", reflect.TypeOf((*MockPubSub)(nil).CreateTopic), context, name)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CreateTopic", reflect.TypeOf((*MockPubSub)(nil).CreateTopic), arg0, name)
 }
 
 // DeleteTopic mocks base method.
-func (m *MockPubSub) DeleteTopic(context context.Context, name string) error {
+func (m *MockPubSub) DeleteTopic(arg0 context.Context, name string) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "DeleteTopic", context, name)
+	ret := m.ctrl.Call(m, "DeleteTopic", arg0, name)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // DeleteTopic indicates an expected call of DeleteTopic.
-func (mr *MockPubSubMockRecorder) DeleteTopic(context, name any) *gomock.Call {
+func (mr *MockPubSubMockRecorder) DeleteTopic(arg0, name any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeleteTopic", reflect.TypeOf((*MockPubSub)(nil).DeleteTopic), context, name)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeleteTopic", reflect.TypeOf((*MockPubSub)(nil).DeleteTopic), arg0, name)
 }
 
 // Query mocks base method.
@@ -393,6 +393,102 @@ func (mr *MockClickhouseMockRecorder) Select(ctx, dest, query any, args ...any) 
 	mr.mock.ctrl.T.Helper()
 	varargs := append([]any{ctx, dest, query}, args...)
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Select", reflect.TypeOf((*MockClickhouse)(nil).Select), varargs...)
+}
+
+// MockOracle is a mock of Oracle interface.
+type MockOracle struct {
+	ctrl     *gomock.Controller
+	recorder *MockOracleMockRecorder
+	isgomock struct{}
+}
+
+// MockOracleMockRecorder is the mock recorder for MockOracle.
+type MockOracleMockRecorder struct {
+	mock *MockOracle
+}
+
+// NewMockOracle creates a new mock instance.
+func NewMockOracle(ctrl *gomock.Controller) *MockOracle {
+	mock := &MockOracle{ctrl: ctrl}
+	mock.recorder = &MockOracleMockRecorder{mock}
+	return mock
+}
+
+// EXPECT returns an object that allows the caller to indicate expected use.
+func (m *MockOracle) EXPECT() *MockOracleMockRecorder {
+	return m.recorder
+}
+
+// AsyncInsert mocks base method.
+func (m *MockOracle) AsyncInsert(ctx context.Context, query string, wait bool, args ...any) error {
+	m.ctrl.T.Helper()
+	varargs := []any{ctx, query, wait}
+	for _, a := range args {
+		varargs = append(varargs, a)
+	}
+	ret := m.ctrl.Call(m, "AsyncInsert", varargs...)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// AsyncInsert indicates an expected call of AsyncInsert.
+func (mr *MockOracleMockRecorder) AsyncInsert(ctx, query, wait any, args ...any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	varargs := append([]any{ctx, query, wait}, args...)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AsyncInsert", reflect.TypeOf((*MockOracle)(nil).AsyncInsert), varargs...)
+}
+
+// Exec mocks base method.
+func (m *MockOracle) Exec(ctx context.Context, query string, args ...any) error {
+	m.ctrl.T.Helper()
+	varargs := []any{ctx, query}
+	for _, a := range args {
+		varargs = append(varargs, a)
+	}
+	ret := m.ctrl.Call(m, "Exec", varargs...)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// Exec indicates an expected call of Exec.
+func (mr *MockOracleMockRecorder) Exec(ctx, query any, args ...any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	varargs := append([]any{ctx, query}, args...)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Exec", reflect.TypeOf((*MockOracle)(nil).Exec), varargs...)
+}
+
+// HealthCheck mocks base method.
+func (m *MockOracle) HealthCheck(ctx context.Context) (any, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "HealthCheck", ctx)
+	ret0, _ := ret[0].(any)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// HealthCheck indicates an expected call of HealthCheck.
+func (mr *MockOracleMockRecorder) HealthCheck(ctx any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "HealthCheck", reflect.TypeOf((*MockOracle)(nil).HealthCheck), ctx)
+}
+
+// Select mocks base method.
+func (m *MockOracle) Select(ctx context.Context, dest any, query string, args ...any) error {
+	m.ctrl.T.Helper()
+	varargs := []any{ctx, dest, query}
+	for _, a := range args {
+		varargs = append(varargs, a)
+	}
+	ret := m.ctrl.Call(m, "Select", varargs...)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// Select indicates an expected call of Select.
+func (mr *MockOracleMockRecorder) Select(ctx, dest, query any, args ...any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	varargs := append([]any{ctx, dest, query}, args...)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Select", reflect.TypeOf((*MockOracle)(nil).Select), varargs...)
 }
 
 // MockCassandra is a mock of Cassandra interface.
