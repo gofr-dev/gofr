@@ -118,7 +118,7 @@ func TestRedisMigrator_GetLastMigration(t *testing.T) {
 	}
 
 	for i, tc := range tests {
-		mocks.Redis.EXPECT().HGetAll(t.Context(), "gofr_migrations").Return(
+		mocks.Redis.EXPECT().HGetAll(gomock.Any(), "gofr_migrations").Return(
 			goRedis.NewMapStringStringResult(tc.mockedData, tc.redisErr))
 
 		mockMigrator.EXPECT().getLastMigration(gomock.Any()).Return(tc.migratorLastMigration).MaxTimes(2)

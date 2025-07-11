@@ -172,7 +172,7 @@ func NewGreetHandler(helloClient client.HelloGoFrClient) *GreetHandler {
     }
 }
 
-func (g GreetHandler) Hello(ctx *gofr.Context) (interface{}, error) {
+func (g GreetHandler) Hello(ctx *gofr.Context) (any, error) {
     userName := ctx.Param("name")
     helloResponse, err := g.helloGRPCClient.SayHello(ctx, &client.HelloRequest{Name: userName})
     if err != nil {

@@ -41,7 +41,7 @@ func TestStreamManager_CreateStream(t *testing.T) {
 
 	mockJS.EXPECT().CreateStream(ctx, gomock.Any()).Return(nil, nil)
 
-	err := sm.CreateStream(ctx, cfg)
+	err := sm.CreateStream(ctx, &cfg)
 	require.NoError(t, err)
 }
 
@@ -63,7 +63,7 @@ func TestStreamManager_CreateStream_Error(t *testing.T) {
 	expectedErr := errCreateStream
 	mockJS.EXPECT().CreateStream(ctx, gomock.Any()).Return(nil, expectedErr)
 
-	err := sm.CreateStream(ctx, cfg)
+	err := sm.CreateStream(ctx, &cfg)
 	require.Error(t, err)
 	assert.Equal(t, expectedErr, err)
 }
