@@ -46,6 +46,7 @@ type App struct {
 	httpRegistered bool
 
 	subscriptionManager SubscriptionManager
+	onStartHooks        []func(ctx *Context) error
 }
 
 // Shutdown stops the service(s) and close the application.
@@ -295,4 +296,8 @@ func (a *App) AddStaticFiles(endpoint, filePath string) {
 	}
 
 	a.httpServer.staticFiles[filePath] = endpoint
+}
+
+func (a *App) OnStart(hook func(ctx *Context) error) {
+	a.onStartHooks = append(a.onStartHooks, hook)
 }

@@ -94,6 +94,23 @@ Visit [`localhost:8000/greet`](http://localhost:8000/greet) to see the result.
 
 ---
 
+## 🚀 Registering Synchronous Startup Jobs with OnStart
+
+You can register a synchronous job to run when your GoFr application starts by using the `OnStart` method. This is useful for tasks like initializing in-memory caches, performing critical setup, or making API calls before your server begins handling requests.
+
+```go
+app.OnStart(func(ctx *gofr.Context) error {
+    // Your synchronous startup logic here
+    // For example: initialize cache, make API calls, etc.
+    return nil
+})
+```
+
+- The function you provide will be called with a `*gofr.Context` before any servers are started.
+- If your function returns an error, the application will log the error and exit.
+
+---
+
 ## 📂 **More Examples**
 
 Explore a variety of ready-to-run examples in the [GoFr examples directory](https://github.com/gofr-dev/gofr/tree/development/examples).
