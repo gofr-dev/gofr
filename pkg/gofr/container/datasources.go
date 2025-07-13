@@ -732,6 +732,16 @@ type InfluxPoint struct {
 
 // InfluxDB defines the operations required to interact with an InfluxDB instance.
 type InfluxDB interface {
+
+	// CreateOrganization create new bucket in the influxdb
+	CreateOrganization(ctx context.Context, org string) (string, error)
+
+	// DeleteOrganization deletes a organization under the specified organization.
+	DeleteOrganization(ctx context.Context, orgId string) error
+
+	// ListOrganization list all the available organization
+	ListOrganization(ctx context.Context) (orgs map[string]string, err error)
+
 	// WritePoints writes one or more time-series points to a bucket.
 	// 'points' should follow the line protocol format or structured map format.
 	WritePoints(ctx context.Context, bucket, org string, points []InfluxPoint) error
@@ -741,16 +751,16 @@ type InfluxDB interface {
 	Query(ctx context.Context, org, fluxQuery string) ([]map[string]any, error)
 
 	// CreateBucket creates a new bucket under the specified organization.
-	CreateBucket(ctx context.Context, org, bucket string, retentionPeriod time.Duration) error
+	CreateBucket(ctx context.Context, org, bucket string, retentionPeriod time.Duration) (string, error)
 
 	// DeleteBucket deletes a bucket under the specified organization.
 	DeleteBucket(ctx context.Context, org, bucket string) error
 
 	// ListBuckets lists all buckets under the specified organization.
-	ListBuckets(ctx context.Context, org string) ([]string, error)
+	ListBuckets(ctx context.Context, org string) (map[string]string, error)
 
 	// Ping checks if the InfluxDB instance is reachable and healthy.
-	Ping(ctx context.Context) error
+	Ping(ctx context.Context) (bool, error)
 
 	HealthChecker
 }
