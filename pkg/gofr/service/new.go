@@ -24,50 +24,35 @@ type httpService struct {
 }
 
 type HTTP interface {
-	// HTTP is embedded as HTTP would be able to access it's clients method
 	httpClient
 
-	// HealthCheck to get the service health and report it to the current application
 	HealthCheck(ctx context.Context) *Health
 	getHealthResponseForEndpoint(ctx context.Context, endpoint string, timeout int) *Health
 }
 
 type httpClient interface {
-	// Get performs an HTTP GET request.
 	Get(ctx context.Context, api string, queryParams map[string]any) (*http.Response, error)
-	// GetWithHeaders performs an HTTP GET request with custom headers.
 	GetWithHeaders(ctx context.Context, path string, queryParams map[string]any,
 		headers map[string]string) (*http.Response, error)
 
-	// Post performs an HTTP POST request.
 	Post(ctx context.Context, path string, queryParams map[string]any, body []byte) (*http.Response, error)
-	// PostWithHeaders performs an HTTP POST request with custom headers.
 	PostWithHeaders(ctx context.Context, path string, queryParams map[string]any, body []byte,
 		headers map[string]string) (*http.Response, error)
 
-	// Put performs an HTTP PUT request.
 	Put(ctx context.Context, api string, queryParams map[string]any, body []byte) (*http.Response, error)
-	// PutWithHeaders performs an HTTP PUT request with custom headers.
 	PutWithHeaders(ctx context.Context, api string, queryParams map[string]any, body []byte,
 		headers map[string]string) (*http.Response, error)
 
-	// Patch performs an HTTP PATCH request.
 	Patch(ctx context.Context, api string, queryParams map[string]any, body []byte) (*http.Response, error)
-	// PatchWithHeaders performs an HTTP PATCH request with custom headers.
 	PatchWithHeaders(ctx context.Context, api string, queryParams map[string]any, body []byte,
 		headers map[string]string) (*http.Response, error)
 
-	// Delete performs an HTTP DELETE request.
 	Delete(ctx context.Context, api string, body []byte) (*http.Response, error)
-	// DeleteWithHeaders performs an HTTP DELETE request with custom headers.
 	DeleteWithHeaders(ctx context.Context, api string, body []byte, headers map[string]string) (*http.Response, error)
 }
 
-// NewHTTPService function creates a new instance of the httpService struct, which implements the HTTP interface.
-// It initializes the http.Client, url, Tracer, and Logger fields of the httpService struct with the provided values.
 func NewHTTPService(serviceAddress string, logger Logger, metrics Metrics, options ...Options) HTTP {
 	h := &httpService{
-		// using default HTTP client to do HTTP communication
 		Client:  &http.Client{},
 		url:     serviceAddress,
 		Tracer:  otel.Tracer("gofr-http-client"),
@@ -78,8 +63,12 @@ func NewHTTPService(serviceAddress string, logger Logger, metrics Metrics, optio
 	var svc HTTP
 	svc = h
 
-	// if options are given, then add them to the httpService struct
 	for _, o := range options {
+		if rlOption, ok := o.(*WithRateLimiter); ok {
+			rlOption.Logger = logger
+			rlOption.Metrics = metrics
+			rlOption.ServiceURL = serviceAddress
+		}
 		svc = o.AddOption(svc)
 	}
 
@@ -163,10 +152,8 @@ func (h *httpService) createAndSendRequest(ctx context.Context, method string, p
 		req.Header.Set("Content-Type", "application/json")
 	}
 
-	// Inject tracing information into the request headers.
 	otel.GetTextMapPropagator().Inject(clientTraceCtx, propagation.HeaderCarrier(req.Header))
 
-	// encode the query parameters on the request.
 	encodeQueryParameters(req, queryParams)
 
 	log := &Log{
