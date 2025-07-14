@@ -59,11 +59,11 @@ func TestContainer_Health(t *testing.T) {
 				},
 			},
 			"oracle": datasource.Health{
-    		    Status: tc.datasourceHealth, Details: map[string]any{
-    		        "host": "localhost:1521",
-    		        "error": "oracle not connected",
-    		    },
-    		},
+				Status: tc.datasourceHealth, Details: map[string]any{
+					"host":  "localhost:1521",
+					"error": "oracle not connected",
+				},
+			},
 			"cassandra": datasource.Health{
 				Status: tc.datasourceHealth, Details: map[string]any{
 					"host":  "localhost:6379",
@@ -164,13 +164,12 @@ func registerMocks(mocks *Mocks, health string) {
 	}, nil)
 
 	mocks.Oracle.EXPECT().HealthCheck(context.Background()).Return(datasource.Health{
-	    Status: health,
-	    Details: map[string]any{
-	        "host": "localhost:1521",
-	        "error": "oracle not connected",
-	    },
+		Status: health,
+		Details: map[string]any{
+			"host":  "localhost:1521",
+			"error": "oracle not connected",
+		},
 	}, nil)
-
 
 	mocks.KVStore.EXPECT().HealthCheck(context.Background()).Return(datasource.Health{
 		Status: health,

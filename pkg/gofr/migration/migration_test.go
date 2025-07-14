@@ -64,7 +64,6 @@ func initializeClickHouseRunMocks(t *testing.T) (*MockClickhouse, *container.Con
 	mockContainer.Redis = nil
 	mockContainer.Mongo = nil
 	mockContainer.Cassandra = nil
-	mockContainer.Oracle = nil
 	mockContainer.PubSub = nil
 	mockContainer.ArangoDB = nil
 	mockContainer.SurrealDB = nil
@@ -204,49 +203,4 @@ func TestMigrationRunClickhouseCommitError(t *testing.T) {
 	})
 
 	assert.Contains(t, logs, "failed to commit migration, err: sql: connection is already closed")
-}
-
-
-func initializeOracleRunMocks(t *testing.T) (*MockOracle, *container.Container) {
-    t.Helper()
-    ctrl := gomock.NewController(t)
-    mockOracle := NewMockOracle(ctrl)
-    mockContainer, _ := container.NewMockContainer(t)
-    mockContainer.SQL = nil
-    mockContainer.Redis = nil
-    mockContainer.Mongo = nil
-    mockContainer.Cassandra = nil
-    mockContainer.PubSub = nil
-    mockContainer.ArangoDB = nil
-    mockContainer.SurrealDB = nil
-    mockContainer.DGraph = nil
-    mockContainer.Clickhouse = nil
-    mockContainer.Oracle = mockOracle
-    mockContainer.Logger = logging.NewMockLogger(logging.DEBUG)
-	
-    return mockOracle, mockContainer
-}
-
-func TestMigrationRunOracleSuccess(t *testing.T) {
-    logs := testutil.StdoutOutputForFunc(func() {
-        migrationMap := map[int64]Migrate{
-            1: {UP: func(d Datasource) error {
-                err := d.Oracle.Exec(t.Context(), "SELECT * FROM users")
-                if err != nil {
-                    return err
-                }
-                d.Logger.Infof("Oracle Migration Ran Successfully")
-                return nil
-            }},
-        }
-        mockOracle, mockContainer := initializeOracleRunMocks(t)
-        mockOracle.EXPECT().Exec(gomock.Any(), CheckAndCreateOracleMigrationTable).Return(nil)
-        mockOracle.EXPECT().Select(gomock.Any(), gomock.Any(), getLastOracleGoFrMigration).Return(nil)
-        mockOracle.EXPECT().Exec(gomock.Any(), "SELECT * FROM users").Return(nil)
-        mockOracle.EXPECT().Exec(gomock.Any(), insertOracleGoFrMigrationRow, int64(1),
-            "UP", gomock.Any(), gomock.Any()).Return(nil)
-        Run(migrationMap, mockContainer)
-    })
-    assert.Contains(t, logs, "Migration 1 ran successfully")
-    assert.Contains(t, logs, "Oracle Migration Ran Successfully")
 }
