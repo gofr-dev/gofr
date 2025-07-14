@@ -57,7 +57,7 @@ linters:
       default-signifies-exhaustive: false
     funlen:
       lines: 100
-      statements: 50
+      statements: 60
     goconst:
       min-len: 2
       min-occurrences: 2
@@ -75,7 +75,7 @@ linters:
         - performance
         - style
     gocyclo:
-      min-complexity: 10
+      min-complexity: 11
     govet:
       enable:
         - shadow

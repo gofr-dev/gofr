@@ -1,7 +1,6 @@
 package migration
 
 import (
-	"context"
 	"database/sql"
 	"testing"
 
@@ -232,7 +231,7 @@ func TestMigrationRunOracleSuccess(t *testing.T) {
     logs := testutil.StdoutOutputForFunc(func() {
         migrationMap := map[int64]Migrate{
             1: {UP: func(d Datasource) error {
-                err := d.Oracle.Exec(context.Background(), "SELECT * FROM users")
+                err := d.Oracle.Exec(t.Context(), "SELECT * FROM users")
                 if err != nil {
                     return err
                 }
