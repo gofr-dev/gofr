@@ -169,10 +169,10 @@ github.com/prometheus/common v0.65.0 h1:QDwzd+G1twt//Kwj/Ww6E9FQq1iVMmODnILtW1t2
 github.com/prometheus/common v0.65.0/go.mod h1:0gZns+BLRQ3V6NdaerOhMbwwRbNh9hkGINtQAsP5GS8=
 github.com/prometheus/procfs v0.16.1 h1:hZ15bTNuirocR6u0JZ6BAHHmwS1p8B4P6MRqxtzMyRg=
 github.com/prometheus/procfs v0.16.1/go.mod h1:teAbpZRB1iIAJYREa1LsoWUXykVXA1KlTmWl8x/U+Is=
-github.com/redis/go-redis/extra/rediscmd/v9 v9.10.0 h1:uTiEyEyfLhkw678n6EulHVto8AkcXVr8zUcBJNZ0ark=
-github.com/redis/go-redis/extra/rediscmd/v9 v9.10.0/go.mod h1:eFYL/99JvdLP4T9/3FZ5t2pClnv7mMskc+WstTcyVr4=
-github.com/redis/go-redis/extra/redisotel/v9 v9.10.0 h1:4z7/hCJ9Jft8EBb2tDmK38p2WjyIEJ1ShhhwAhjOCps=
-github.com/redis/go-redis/extra/redisotel/v9 v9.10.0/go.mod h1:B0thqLh4hB8MvvcUKSwyP5YiIcCCp8UrQ0cA9gEqyjk=
+github.com/redis/go-redis/extra/rediscmd/v9 v9.11.0 h1:vP5CH2rJ3L4yk3o8FdXqiPL1lGl5APjHcxk5/OT6H0Q=
+github.com/redis/go-redis/extra/rediscmd/v9 v9.11.0/go.mod h1:/2yj0RD4xjZQ7wOg9u7gVoBM0IgMGrHunAql1hr1NDg=
+github.com/redis/go-redis/extra/redisotel/v9 v9.11.0 h1:dMNmusapfQefntfUqAYAvaVJMrJCdKUaQoPSZtd99WU=
+github.com/redis/go-redis/extra/redisotel/v9 v9.11.0/go.mod h1:Yy5oaeVwWj7KMu6Mga/i4imlXFvgitQWN5HFiT5JqoE=
 github.com/redis/go-redis/v9 v9.11.0 h1:E3S08Gl/nJNn5vkxd2i78wZxWAPNZgUNTp8WIJUAiIs=
 github.com/redis/go-redis/v9 v9.11.0/go.mod h1:huWgSWd8mW6+m0VPhJjSSQ+d6Nh1VICQ6Q5lHuCH/Iw=
 github.com/remyoudompheng/bigfft v0.0.0-20230129092748-24d4a6f8daec h1:W09IVJc94icq4NjY3clb7Lk8O1qJ8BdBEF8z0ibU0rE=
