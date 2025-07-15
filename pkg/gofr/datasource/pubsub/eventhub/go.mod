@@ -11,7 +11,7 @@ require (
 	go.opentelemetry.io/otel v1.37.0
 	go.opentelemetry.io/otel/trace v1.37.0
 	go.uber.org/mock v0.5.2
-	gofr.dev v1.42.2
+	gofr.dev v1.42.3
 	nhooyr.io/websocket v1.8.11
 )
 
