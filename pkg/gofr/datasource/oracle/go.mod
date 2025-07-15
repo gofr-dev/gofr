@@ -1,6 +1,6 @@
 module gofr.dev/pkg/gofr/datasource/oracle
 
-go 1.24.4
+go 1.24.0
 
 require (
 	github.com/godror/godror v0.49.0

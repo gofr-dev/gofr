@@ -65,7 +65,7 @@ type Container struct {
 	SurrealDB     SurrealDB
 	ArangoDB      ArangoDB
 	Elasticsearch Elasticsearch
-	Oracle OracleDB
+	Oracle        OracleDB
 
 	KVStore KVStore
 

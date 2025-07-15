@@ -11,7 +11,6 @@ type Datasource struct {
 	Redis      Redis
 	PubSub     PubSub
 	Clickhouse Clickhouse
-	Oracle     Oracle
 	Cassandra  Cassandra
 	Mongo      Mongo
 	ArangoDB   ArangoDB

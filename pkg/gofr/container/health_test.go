@@ -58,21 +58,18 @@ func TestContainer_Health(t *testing.T) {
 					"error": "clickhouse not connected",
 				},
 			},
-
 			"oracle": datasource.Health{
-    		    Status: tc.datasourceHealth, Details: map[string]any{
-    		        "host": "localhost:1521",
-    		        "error": "oracle not connected",
-    		    },
-    		},
-			
+				Status: tc.datasourceHealth, Details: map[string]any{
+					"host":  "localhost:1521",
+					"error": "oracle not connected",
+				},
+			},
 			"cassandra": datasource.Health{
 				Status: tc.datasourceHealth, Details: map[string]any{
 					"host":  "localhost:6379",
 					"error": "cassandra not connected",
 				},
 			},
-
 			"sql": &datasource.Health{
 				Status: tc.datasourceHealth, Details: map[string]any{
 					"host": "localhost:3306/test",
@@ -105,14 +102,12 @@ func TestContainer_Health(t *testing.T) {
 		}
 
 		expectedJSONdata, _ := json.Marshal(expected)
-
 		c, mocks := NewMockContainer(t)
 
 		registerMocks(mocks, tc.datasourceHealth)
 
 		c.appName = "test-app"
 		c.appVersion = "test"
-
 		c.Services = make(map[string]service.HTTP)
 		c.Services["test-service"] = service.NewHTTPService(srv.URL, logger, nil)
 
@@ -169,13 +164,12 @@ func registerMocks(mocks *Mocks, health string) {
 	}, nil)
 
 	mocks.Oracle.EXPECT().HealthCheck(context.Background()).Return(datasource.Health{
-	    Status: health,
-	    Details: map[string]any{
-	        "host": "localhost:1521",
-	        "error": "oracle not connected",
-	    },
+		Status: health,
+		Details: map[string]any{
+			"host":  "localhost:1521",
+			"error": "oracle not connected",
+		},
 	}, nil)
-
 
 	mocks.KVStore.EXPECT().HealthCheck(context.Background()).Return(datasource.Health{
 		Status: health,
