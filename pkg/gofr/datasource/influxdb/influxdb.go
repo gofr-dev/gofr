@@ -36,6 +36,12 @@ type HealthInflux struct {
 	Password string
 }
 
+const (
+	statusDown     = "DOWN"
+	statusUp       = "UP"
+	defaultTimeout = 5 * time.Second
+)
+
 // CreateOrganization implements container.InfluxDBProvider.
 func (c *Client) CreateOrganization(ctx context.Context, orgName string) (string, error) {
 	if orgName == "" {
@@ -113,25 +119,38 @@ func (c *Client) DeleteBucket(ctx context.Context, org, bucketID string) error {
 	return nil
 }
 
+type Health struct {
+	Status  string         `json:"status"`            // "UP" or "DOWN"
+	Details map[string]any `json:"details,omitempty"` // extra metadata
+}
+
 // HealthCheck implements container.InfluxDBProvider.
 func (c *Client) HealthCheck(ctx context.Context) (any, error) {
-	h := datasource.Health{Details: make(map[string]any)}
-
-	h.Details["Username"] = c.config.Username
-	h.Details["Url"] = c.config.Url
-
 	health, err := c.client.Health(ctx)
 	if err != nil {
-		h.Status = datasource.StatusDown
-		return h, err
+		return datasource.Health{
+			Status:  datasource.StatusDown,
+			Details: make(map[string]any),
+		}, err
 	}
-	h.Status = datasource.StatusUp
-	h.Details["Name"] = health.Name
-	h.Details["Commit"] = health.Commit
-	h.Details["Version"] = health.Version
-	h.Details["Message"] = health.Message
-	h.Details["Checks"] = health.Checks
-	h.Details["Status"] = health.Status
+
+	h := datasource.Health{
+		Status: datasource.StatusUp,
+		Details: map[string]any{
+			"Username": c.config.Username,
+			"Url":      c.config.Url,
+		},
+	}
+
+	if health != nil {
+		h.Details["Name"] = health.Name
+		h.Details["Commit"] = health.Commit
+		h.Details["Version"] = health.Version
+		h.Details["Message"] = health.Message
+		h.Details["Checks"] = health.Checks
+		h.Details["Status"] = health.Status
+	}
+
 	return h, nil
 }
 
@@ -190,21 +209,25 @@ func (c *Client) Query(ctx context.Context, org string, fluxQuery string) ([]map
 	panic("unimplemented")
 }
 
-// UseLogger sets the logger for the Elasticsearch client.
+// UseLogger sets the logger for the InfluxDB client.
 func (c *Client) UseLogger(logger any) {
 	if l, ok := logger.(Logger); ok {
 		c.logger = l
 	}
 }
 
-// UseMetrics implements container.InfluxDBProvider.
+// UseMetrics sets the metrics for the InfluxDB client.
 func (c *Client) UseMetrics(metrics any) {
-	panic("unimplemented")
+	if m, ok := metrics.(Metrics); ok {
+		c.metrics = m
+	}
 }
 
-// UseTracer implements container.InfluxDBProvider.
+// UseTracer sets the tracer for InfluxDB client.
 func (c *Client) UseTracer(tracer any) {
-	panic("unimplemented")
+	if tracer, ok := tracer.(trace.Tracer); ok {
+		c.tracer = tracer
+	}
 }
 
 // WritePoints implements container.InfluxDBProvider.
