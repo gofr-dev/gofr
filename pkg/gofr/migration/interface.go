@@ -139,3 +139,14 @@ type migrator interface {
 	commitMigration(c *container.Container, data transactionData) error
 	rollback(c *container.Container, data transactionData)
 }
+
+type OpenTSDB interface {
+	PutDataPoints(ctx context.Context, data any, queryParam string, res any) error
+	QueryDataPoints(ctx context.Context, param any, res any) error
+	QueryLatestDataPoints(ctx context.Context, param any, res any) error
+	GetAggregators(ctx context.Context, res any) error
+	QueryAnnotation(ctx context.Context, queryAnnoParam map[string]any, res any) error
+	PostAnnotation(ctx context.Context, annotation any, res any) error
+	PutAnnotation(ctx context.Context, annotation any, res any) error
+	DeleteAnnotation(ctx context.Context, annotation any, res any) error
+}

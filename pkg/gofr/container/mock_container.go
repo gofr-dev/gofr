@@ -23,7 +23,7 @@ type Mocks struct {
 	KVStore       *MockKVStore
 	DGraph        *MockDgraph
 	ArangoDB      *MockArangoDBProvider
-	OpenTSDB      *MockOpenTSDBProvider
+	OpenTSDB      *MockOpenTSDB
 	SurrealDB     *MockSurrealDB
 	Elasticsearch *MockElasticsearch
 	PubSub        *MockPubSubProvider
@@ -86,7 +86,7 @@ func NewMockContainer(t *testing.T, options ...options) (*Container, *Mocks) {
 	dgraphMock := NewMockDgraph(ctrl)
 	container.DGraph = dgraphMock
 
-	opentsdbMock := NewMockOpenTSDBProvider(ctrl)
+	opentsdbMock := NewMockOpenTSDB(ctrl)
 	container.OpenTSDB = opentsdbMock
 
 	arangoMock := NewMockArangoDBProvider(ctrl)
@@ -101,6 +101,9 @@ func NewMockContainer(t *testing.T, options ...options) (*Container, *Mocks) {
 	pubsubMock := NewMockPubSubProvider(ctrl)
 	container.PubSub = pubsubMock
 
+	OpenTSDBMock := NewMockOpenTSDBProvider(ctrl)
+	container.OpenTSDB = OpenTSDBMock
+	
 	var httpMock *service.MockHTTP
 
 	container.Services = make(map[string]service.HTTP)
