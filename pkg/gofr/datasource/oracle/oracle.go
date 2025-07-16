@@ -18,7 +18,7 @@ type Config struct {
 	Port     int
 	Username string
 	Password string
-	Service  string // or SID
+	Service  string // or SID.
 }
 
 type Client struct {
