@@ -100,9 +100,6 @@ func NewMockContainer(t *testing.T, options ...options) (*Container, *Mocks) {
 
 	pubsubMock := NewMockPubSubProvider(ctrl)
 	container.PubSub = pubsubMock
-
-	OpenTSDBMock := NewMockOpenTSDBProvider(ctrl)
-	container.OpenTSDB = OpenTSDBMock
 	
 	var httpMock *service.MockHTTP
 
