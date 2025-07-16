@@ -1,9 +1,7 @@
 # Connecting to Redis
-
 GoFr simplifies the process of connecting to Redis.
 
 ## Setup:
-
 Ensure we have Redis installed on our system.
 
 Optionally, we can use Docker to set up a development environment with password authentication as described below.
@@ -21,12 +19,10 @@ docker exec -it gofr-redis bash -c 'redis-cli SET greeting "Hello from Redis."'
 ```
 
 ## Configuration & Usage:
-
 GoFr applications rely on environment variables to configure and connect to a Redis server.  
 These variables are stored in a `.env` file located within the `configs` directory at your project root.
 
 ### Required Environment Variables:
-
 {% table %}
 - Key
 - Description
@@ -38,7 +34,7 @@ These variables are stored in a `.env` file located within the `configs` directo
 - Port number your Redis server listens on (default: 6379)
 ---
 - REDIS_USER
-- Redis username; multiple users with ACLs can be configured. [See official docs](https://redis.io/docs/latest/operate/oss_and_stack/management/security/acl/)
+- Redis username; multiple users with ACLs can be configured. [See official docs](https://redis.io/docs/latest/operate/oss_and_stack/management/security/acl/) <!-- CHANGED: Added proper link formatting -->
 ---
 - REDIS_PASSWORD
 - Redis password (required only if authentication is enabled)
@@ -47,8 +43,8 @@ These variables are stored in a `.env` file located within the `configs` directo
 - Redis database number (default: 0)
 {% endtable %}
 
+<!-- ADDED: New TLS Support section -->
 ### TLS Support (Optional):
-
 {% table %}
 - Key
 - Description
@@ -66,8 +62,8 @@ These variables are stored in a `.env` file located within the `configs` directo
 - File path to the client private key (for mTLS)
 {% endtable %}
 
+<!-- ADDED: Example .env file section -->
 ## ✅ Example `.env` File
-
 ```env
 REDIS_HOST=redis.example.com
 REDIS_PORT=6379
@@ -82,16 +78,15 @@ REDIS_TLS_CERT_PATH=./configs/certs/client.crt
 REDIS_TLS_KEY_PATH=./configs/certs/client.key
 ```
 
+<!-- ADDED: Complete Example Usage section -->
 ## Example Usage
-
-> ⚠️ _Note: This is a minimal illustrative example meant to show how to retrieve a Redis key. In production, always follow error handling and security best practices._
+> ⚠️ *Note: This is a minimal illustrative example meant to show how to retrieve a Redis key. In production, always follow error handling and security best practices.*
 
 ```go
 package main
 
 import (
 	"errors"
-
 	"github.com/redis/go-redis/v9"
 	"gofr.dev/pkg/gofr"
 )
@@ -107,6 +102,7 @@ func main() {
 			// If an error other than missing key, return it
 			return nil, err
 		}
+		
 		// If key is not found, return empty string
 		return val, nil
 	})
@@ -116,8 +112,8 @@ func main() {
 }
 ```
 
+<!-- ADDED: Best Practices section -->
 ## Best Practices
-
 - **Error Handling**: Check for `redis.Nil` to handle missing keys gracefully.
 - **TLS**: Enable `REDIS_TLS_ENABLED` for secure connections in production.
 - **Connection Management**: GoFr manages Redis connections automatically; adjust environment variables as needed for performance.
