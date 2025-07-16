@@ -9,24 +9,28 @@ import (
 	"os"
 )
 
+// RequestPayload is the structure sent to OpenAI API
 type RequestPayload struct {
 	Model    string         `json:"model"`
 	Messages []MessageEntry `json:"messages"`
 }
 
+// MessageEntry represents each message in chat
 type MessageEntry struct {
 	Role    string `json:"role"`
 	Content string `json:"content"`
 }
 
+// ResponsePayload is the structure received from OpenAI
 type ResponsePayload struct {
 	Choices []struct {
 		Message MessageEntry `json:"message"`
 	} `json:"choices"`
 }
 
+// ChatCompletion calls OpenAI's Chat API
 func ChatCompletion(prompt string) (string, error) {
-	apiKey := os.Getenv("OPENAI_API_KEY")
+	apiKey := os.Getenv("OPENAI_API_KEY") // Make sure to export this before running
 	if apiKey == "" {
 		return "", fmt.Errorf("OPENAI_API_KEY is not set")
 	}
