@@ -20,17 +20,19 @@ type elasticsearchMigrator struct {
 }
 
 const (
-	// elasticsearchMigrationIndex is the index used to track migrations
+	// elasticsearchMigrationIndex is the index used to track migrations.
 	elasticsearchMigrationIndex = "gofr_migrations"
 )
 
-// getLastElasticsearchMigrationQuery fetches the most recent migration version
-var getLastElasticsearchMigrationQuery = map[string]any{
-	"size": 1,
-	"sort": []map[string]any{
-		{"version": map[string]any{"order": "desc"}},
-	},
-	"_source": []string{"version"},
+// getLastElasticsearchMigrationQuery fetches the most recent migration version.
+func getLastElasticsearchMigrationQuery() map[string]any {
+	return map[string]any{
+		"size": 1,
+		"sort": []map[string]any{
+			{"version": map[string]any{"order": "desc"}},
+		},
+		"_source": []string{"version"},
+	}
 }
 
 // apply creates a new elasticsearchMigrator.
@@ -92,7 +94,7 @@ func (mg elasticsearchMigrator) checkAndCreateMigrationTable(c *container.Contai
 func (mg elasticsearchMigrator) getLastMigration(c *container.Container) int64 {
 	var lastMigration int64
 
-	result, err := c.Elasticsearch.Search(context.Background(), []string{elasticsearchMigrationIndex}, getLastElasticsearchMigrationQuery)
+	result, err := c.Elasticsearch.Search(context.Background(), []string{elasticsearchMigrationIndex}, getLastElasticsearchMigrationQuery())
 	if err != nil {
 		c.Errorf("Failed to fetch migrations from Elasticsearch: %v", err)
 		return 0
@@ -105,6 +107,7 @@ func (mg elasticsearchMigrator) getLastMigration(c *container.Container) int64 {
 	if lm2 > lastMigration {
 		return lm2
 	}
+
 	return lastMigration
 }
 
@@ -114,22 +117,27 @@ func extractLastMigrationVersion(result map[string]any) int64 {
 	if !ok {
 		return 0
 	}
+
 	hitsList, ok := hits["hits"].([]any)
 	if !ok || len(hitsList) == 0 {
 		return 0
 	}
+
 	firstHit, ok := hitsList[0].(map[string]any)
 	if !ok {
 		return 0
 	}
+
 	source, ok := firstHit["_source"].(map[string]any)
 	if !ok {
 		return 0
 	}
+
 	version, ok := source["version"].(float64)
 	if !ok {
 		return 0
 	}
+
 	return int64(version)
 }
 
