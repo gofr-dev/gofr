@@ -7,7 +7,7 @@ import (
 	"fmt"
 	"time"
 
-	// Import for Oracle driver registration
+	// Import for Oracle driver registration.
 	_ "github.com/godror/godror"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/trace"
@@ -207,7 +207,7 @@ func (s *sqlConn) Select(ctx context.Context, dest any, query string, args ...an
 		return err
 	}
 
-	// Set the result to dest (must be *[]map[string]any)
+	// Set the result to dest (must be *[]map[string]any).
 	p, ok := dest.(*[]map[string]any)
 	if !ok {
 		return errInvalidDestType
