@@ -202,8 +202,8 @@ func initializeDatasources(c *container.Container, ds *Datasource, mg migrator) 
 
 		init.setDS()
 		mg = init.apply(mg)
-		c.Debugf("initialized data source for %s", init.debugName)
 		initialized = true
+		c.Debugf("initialized data source for %s", init.debugName)
 	}
 
 	return mg, initialized
