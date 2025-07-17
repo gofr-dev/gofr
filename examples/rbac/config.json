@@ -1,0 +1,7 @@
+{
+    "roles": {
+      "admin": ["*"],
+      "editor": ["/posts/*", "/dashboard"],
+      "user": ["/profile", "/home", "/sayhello*"]
+    }
+  } 
