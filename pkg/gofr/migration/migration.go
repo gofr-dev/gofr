@@ -123,10 +123,10 @@ func getMigrator(c *container.Container) (Datasource, migrator, bool) {
 }
 
 type datasourceInitializer struct {
-	condition func() bool
-	setDS     func()
-	apply     func(m migrator) migrator
-	debugName string
+	condition     func() bool
+	setDS         func()
+	apply         func(m migrator) migrator
+	logIdentifier string
 }
 
 func initializeDatasources(c *container.Container, ds *Datasource, mg migrator) (migrator, bool) {
@@ -134,64 +134,64 @@ func initializeDatasources(c *container.Container, ds *Datasource, mg migrator) 
 
 	initializers := []datasourceInitializer{
 		{
-			condition: func() bool { return !isNil(c.SQL) },
-			setDS:     func() { ds.SQL = c.SQL },
-			apply:     func(m migrator) migrator { return (&sqlDS{ds.SQL}).apply(m) },
-			debugName: "SQL",
+			condition:     func() bool { return !isNil(c.SQL) },
+			setDS:         func() { ds.SQL = c.SQL },
+			apply:         func(m migrator) migrator { return (&sqlDS{ds.SQL}).apply(m) },
+			logIdentifier: "SQL",
 		},
 		{
-			condition: func() bool { return !isNil(c.Redis) },
-			setDS:     func() { ds.Redis = c.Redis },
-			apply:     func(m migrator) migrator { return redisDS{ds.Redis}.apply(m) },
-			debugName: "Redis",
+			condition:     func() bool { return !isNil(c.Redis) },
+			setDS:         func() { ds.Redis = c.Redis },
+			apply:         func(m migrator) migrator { return redisDS{ds.Redis}.apply(m) },
+			logIdentifier: "Redis",
 		},
 		{
-			condition: func() bool { return !isNil(c.DGraph) },
-			setDS:     func() { ds.DGraph = dgraphDS{c.DGraph} },
-			apply:     func(m migrator) migrator { return dgraphDS{c.DGraph}.apply(m) },
-			debugName: "DGraph",
+			condition:     func() bool { return !isNil(c.DGraph) },
+			setDS:         func() { ds.DGraph = dgraphDS{c.DGraph} },
+			apply:         func(m migrator) migrator { return dgraphDS{c.DGraph}.apply(m) },
+			logIdentifier: "DGraph",
 		},
 		{
-			condition: func() bool { return !isNil(c.Clickhouse) },
-			setDS:     func() { ds.Clickhouse = c.Clickhouse },
-			apply:     func(m migrator) migrator { return clickHouseDS{ds.Clickhouse}.apply(m) },
-			debugName: "Clickhouse",
+			condition:     func() bool { return !isNil(c.Clickhouse) },
+			setDS:         func() { ds.Clickhouse = c.Clickhouse },
+			apply:         func(m migrator) migrator { return clickHouseDS{ds.Clickhouse}.apply(m) },
+			logIdentifier: "Clickhouse",
 		},
 		{
-			condition: func() bool { return c.PubSub != nil },
-			setDS:     func() { ds.PubSub = c.PubSub },
-			apply:     func(m migrator) migrator { return pubsubDS{c.PubSub}.apply(m) },
-			debugName: "PubSub",
+			condition:     func() bool { return c.PubSub != nil },
+			setDS:         func() { ds.PubSub = c.PubSub },
+			apply:         func(m migrator) migrator { return pubsubDS{c.PubSub}.apply(m) },
+			logIdentifier: "PubSub",
 		},
 		{
-			condition: func() bool { return !isNil(c.Cassandra) },
-			setDS:     func() { ds.Cassandra = cassandraDS{c.Cassandra} },
-			apply:     func(m migrator) migrator { return cassandraDS{c.Cassandra}.apply(m) },
-			debugName: "Cassandra",
+			condition:     func() bool { return !isNil(c.Cassandra) },
+			setDS:         func() { ds.Cassandra = cassandraDS{c.Cassandra} },
+			apply:         func(m migrator) migrator { return cassandraDS{c.Cassandra}.apply(m) },
+			logIdentifier: "Cassandra",
 		},
 		{
-			condition: func() bool { return !isNil(c.Mongo) },
-			setDS:     func() { ds.Mongo = mongoDS{c.Mongo} },
-			apply:     func(m migrator) migrator { return mongoDS{c.Mongo}.apply(m) },
-			debugName: "Mongo",
+			condition:     func() bool { return !isNil(c.Mongo) },
+			setDS:         func() { ds.Mongo = mongoDS{c.Mongo} },
+			apply:         func(m migrator) migrator { return mongoDS{c.Mongo}.apply(m) },
+			logIdentifier: "Mongo",
 		},
 		{
-			condition: func() bool { return !isNil(c.ArangoDB) },
-			setDS:     func() { ds.ArangoDB = arangoDS{c.ArangoDB} },
-			apply:     func(m migrator) migrator { return arangoDS{c.ArangoDB}.apply(m) },
-			debugName: "ArangoDB",
+			condition:     func() bool { return !isNil(c.ArangoDB) },
+			setDS:         func() { ds.ArangoDB = arangoDS{c.ArangoDB} },
+			apply:         func(m migrator) migrator { return arangoDS{c.ArangoDB}.apply(m) },
+			logIdentifier: "ArangoDB",
 		},
 		{
-			condition: func() bool { return !isNil(c.SurrealDB) },
-			setDS:     func() { ds.SurrealDB = surrealDS{c.SurrealDB} },
-			apply:     func(m migrator) migrator { return surrealDS{c.SurrealDB}.apply(m) },
-			debugName: "SurrealDB",
+			condition:     func() bool { return !isNil(c.SurrealDB) },
+			setDS:         func() { ds.SurrealDB = surrealDS{c.SurrealDB} },
+			apply:         func(m migrator) migrator { return surrealDS{c.SurrealDB}.apply(m) },
+			logIdentifier: "SurrealDB",
 		},
 		{
-			condition: func() bool { return !isNil(c.Elasticsearch) },
-			setDS:     func() { ds.Elasticsearch = c.Elasticsearch },
-			apply:     func(m migrator) migrator { return elasticsearchDS{c.Elasticsearch}.apply(m) },
-			debugName: "Elasticsearch",
+			condition:     func() bool { return !isNil(c.Elasticsearch) },
+			setDS:         func() { ds.Elasticsearch = c.Elasticsearch },
+			apply:         func(m migrator) migrator { return elasticsearchDS{c.Elasticsearch}.apply(m) },
+			logIdentifier: "Elasticsearch",
 		},
 	}
 
@@ -203,7 +203,8 @@ func initializeDatasources(c *container.Container, ds *Datasource, mg migrator) 
 		init.setDS()
 		mg = init.apply(mg)
 		initialized = true
-		c.Debugf("initialized data source for %s", init.debugName)
+
+		c.Debugf("initialized data source for %s", init.logIdentifier)
 	}
 
 	return mg, initialized
