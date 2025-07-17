@@ -41,6 +41,7 @@ type AuthInfo interface {
 	GetClaims() jwt.MapClaims
 	GetUsername() string
 	GetAPIKey() string
+	GetRole() string
 }
 
 /*
@@ -111,6 +112,7 @@ type authInfo struct {
 	claims   jwt.MapClaims
 	username string
 	apiKey   string
+	role     string
 }
 
 // GetAuthInfo is a method on context, to access different methods to retrieve authentication info.
@@ -118,6 +120,7 @@ type authInfo struct {
 // GetAuthInfo().GetClaims() : retrieves the jwt claims.
 // GetAuthInfo().GetUsername() : retrieves the username while basic authentication.
 // GetAuthInfo().GetAPIKey() : retrieves the APIKey being used for authentication.
+// GetAuthInfo().GetRole() : retrieves the role being used for authentication.
 func (c *Context) GetAuthInfo() AuthInfo {
 	claims, _ := c.Request.Context().Value(middleware.JWTClaim).(jwt.MapClaims)
 
@@ -125,10 +128,13 @@ func (c *Context) GetAuthInfo() AuthInfo {
 
 	username, _ := c.Request.Context().Value(middleware.Username).(string)
 
+	role, _ := c.Request.Context().Value(4).(string)
+
 	return &authInfo{
 		claims:   claims,
 		username: username,
 		apiKey:   APIKey,
+		role:     role,
 	}
 }
 
@@ -148,6 +154,12 @@ func (a *authInfo) GetUsername() string {
 // It returns an empty string if called, when APIKey auth is not enabled.
 func (a *authInfo) GetAPIKey() string {
 	return a.apiKey
+}
+
+// GetRole returns the role when RBAC is enabled.
+// It returns an empty string if called, when RBAC is not enabled.
+func (a *authInfo) GetRole() string {
+	return a.role
 }
 
 // func (c *Context) reset(w Responder, r Request) {
