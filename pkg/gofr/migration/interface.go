@@ -139,3 +139,5 @@ type migrator interface {
 	commitMigration(c *container.Container, data transactionData) error
 	rollback(c *container.Container, data transactionData)
 }
+
+type OpenTSDB any

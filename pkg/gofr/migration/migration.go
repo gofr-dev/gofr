@@ -205,6 +205,15 @@ func initializeDatasources(c *container.Container, ds *Datasource, mg migrator) 
 
 		initialized = true
 	}
+	
+	if !isNil(c.OpenTSDB) {
+		ds.OpenTSDB = openTSDBDS{c.OpenTSDB, "gofr_migrations.json"}
+		mg = openTSDBDS{c.OpenTSDB, "gofr_migrations.json"}.apply(mg)
+
+		c.Debug("initialized data source for OpenTSDB")
+
+		initialized = true
+	}
 
 	return mg, initialized
 }
