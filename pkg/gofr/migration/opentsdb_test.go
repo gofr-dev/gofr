@@ -15,14 +15,12 @@ import (
 	"gofr.dev/pkg/gofr/container"
 )
 
-const dirPerm = 0755
-
 var (
 	ErrFailedToCreateMigrationDir        = errors.New("failed to create migration directory")
 	ErrCheckAndCreateMigrationTablePanic = errors.New("panic occurred during checkAndCreateMigrationTable")
 )
 
-// openTSDBSetup creates a test setup for OpenTSDB migration tests
+// openTSDBSetup creates a test setup for OpenTSDB migration tests.
 func openTSDBSetup(t *testing.T) (migrator, *container.Container, string) {
 	t.Helper()
 
@@ -37,8 +35,8 @@ func openTSDBSetup(t *testing.T) (migrator, *container.Container, string) {
 	filePath := filepath.Join(tmpDir, "test_migrations.json")
 
 	ds := Datasource{OpenTSDB: mockOpenTSDB}
-	openTSDBDS := openTSDBDS{OpenTSDB: mockOpenTSDB, filePath: filePath}
-	migratorWithOpenTSDB := openTSDBDS.apply(&ds)
+	openTSDBInstance  := openTSDBDS{OpenTSDB: mockOpenTSDB, filePath: filePath}
+	migratorWithOpenTSDB := openTSDBInstance.apply(&ds)
 
 	if migratorWithOpenTSDB == nil {
 		t.Fatal("migratorWithOpenTSDB is nil - check openTsdbDS.apply implementation")
@@ -59,16 +57,20 @@ func findMigrationFile(t *testing.T, baseDir string) string {
 			if os.IsNotExist(err) {
 				return nil
 			}
+
 			return err
 		}
+
 		if !info.IsDir() && filepath.Ext(path) == ".json" {
 			migrationFile = path
 			return filepath.SkipDir
 		}
+
 		return nil
 	})
 	require.NoError(t, err)
 	require.NotEmpty(t, migrationFile, "Migration file should exist")
+
 	return migrationFile
 }
 
@@ -87,7 +89,7 @@ func Test_OpenTSDBCheckAndCreateMigrationTable(t *testing.T) {
 	}{
 		{
 			desc: "creates new migration file successfully",
-			setupFunc: func(_ *testing.T, filePath string) {
+			setupFunc: func(_ *testing.T, _ string) {
 				// No setup
 			},
 			expectedErr:     nil,
@@ -226,7 +228,6 @@ func Test_OpenTSDBGetLastMigration(t *testing.T) {
 		})
 	}
 }
-
 func Test_OpenTSDBCommitMigration(t *testing.T) {
 	migratorWithOpenTSDB, mockContainer, filePath := openTSDBSetup(t)
 
@@ -243,21 +244,24 @@ func Test_OpenTSDBCommitMigration(t *testing.T) {
 
 				actualPath := getActualMigrationFilePath(filePath)
 				dir := filepath.Dir(actualPath)
-				os.MkdirAll(dir, dirPerm)
-				err := os.WriteFile(actualPath, []byte("[]"), 0600)
+				err := os.MkdirAll(dir, dirPerm)
+				require.NoError(t, err)
+
+				err = os.WriteFile(actualPath, []byte("[]"), 0600)
 				require.NoError(t, err)
 			},
 			expectedErr: nil,
 			verifyFunc: func(t *testing.T) {
-				// Find the actual migration file
+				t.Helper()
+
 				actualFile := findMigrationFile(t, filepath.Dir(filePath))
 				content, err := os.ReadFile(actualFile)
 				require.NoError(t, err)
-				
+
 				var migrations []tsdbMigrationRecord
 				err = json.Unmarshal(content, &migrations)
 				require.NoError(t, err)
-				
+
 				assert.Len(t, migrations, 1)
 				assert.Equal(t, int64(10), migrations[0].Version)
 				assert.Equal(t, "UP", migrations[0].Method)
@@ -266,36 +270,36 @@ func Test_OpenTSDBCommitMigration(t *testing.T) {
 		{
 			desc: "commit to file with existing migrations",
 			setupFunc: func(t *testing.T, filePath string) {
-    err := os.MkdirAll(filepath.Dir(filePath), dirPerm)
-    require.NoError(t, err)
+				t.Helper()
 
-    // Prepopulate with one migration
-    migrations := []tsdbMigrationRecord{
-    {
-        Version:   1,
-        Method:    "UP",
-        StartTime: time.Now().UTC().Format(time.RFC3339),
-        Duration:  0,
-    },
-}
+				err := os.MkdirAll(filepath.Dir(filePath), dirPerm)
+				require.NoError(t, err)
 
+				migrations := []tsdbMigrationRecord{
+					{
+						Version:   1,
+						Method:    "UP",
+						StartTime: time.Now().UTC().Format(time.RFC3339),
+						Duration:  0,
+					},
+				}
 
-    data, _ := json.MarshalIndent(migrations, "", "  ")
-    err = os.WriteFile(filePath, data, 0600)
-    require.NoError(t, err)
-},
-
+				data, _ := json.MarshalIndent(migrations, "", "  ")
+				err = os.WriteFile(filePath, data, 0600)
+				require.NoError(t, err)
+			},
 			expectedErr: nil,
 			verifyFunc: func(t *testing.T) {
-				// Find the actual migration file
+				t.Helper()
+
 				actualFile := findMigrationFile(t, filepath.Dir(filePath))
 				content, err := os.ReadFile(actualFile)
 				require.NoError(t, err)
-				
+
 				var migrations []tsdbMigrationRecord
 				err = json.Unmarshal(content, &migrations)
 				require.NoError(t, err)
-				
+
 				assert.Len(t, migrations, 2)
 				assert.Equal(t, int64(1), migrations[0].Version)
 				assert.Equal(t, int64(10), migrations[1].Version)
@@ -308,7 +312,9 @@ func Test_OpenTSDBCommitMigration(t *testing.T) {
 
 				actualPath := getActualMigrationFilePath(filePath)
 				dir := filepath.Dir(actualPath)
-				os.MkdirAll(dir, dirPerm)
+				err := os.MkdirAll(dir, dirPerm)
+				require.NoError(t, err)
+
 				existing := []tsdbMigrationRecord{
 					{Version: 10, Method: "UP", StartTime: "2025-07-14T13:06:27Z", Duration: 0},
 				}
@@ -319,16 +325,16 @@ func Test_OpenTSDBCommitMigration(t *testing.T) {
 			},
 			expectedErr: nil,
 			verifyFunc: func(t *testing.T) {
-				// Find the actual migration file
+				t.Helper()
+
 				actualFile := findMigrationFile(t, filepath.Dir(filePath))
 				content, err := os.ReadFile(actualFile)
 				require.NoError(t, err)
-				
+
 				var migrations []tsdbMigrationRecord
 				err = json.Unmarshal(content, &migrations)
 				require.NoError(t, err)
-				
-				// Should still have only one migration (duplicate not added)
+
 				assert.Len(t, migrations, 1)
 				assert.Equal(t, int64(10), migrations[0].Version)
 			},
@@ -336,26 +342,26 @@ func Test_OpenTSDBCommitMigration(t *testing.T) {
 		{
 			desc: "file doesn't exist initially",
 			setupFunc: func(t *testing.T, filePath string) {
-				// Just ensure the base directory exists for the test
 				t.Helper()
 
 				baseDir := filepath.Dir(filePath)
-				os.MkdirAll(baseDir, dirPerm)
+				err := os.MkdirAll(baseDir, dirPerm)
+				require.NoError(t, err)
 			},
 			expectedErr: nil,
 			verifyFunc: func(t *testing.T) {
-				// The migration system should create the file, so let's wait a bit and check
+				t.Helper()
+
 				time.Sleep(10 * time.Millisecond)
-				
-				// Find the actual migration file
+
 				actualFile := findMigrationFile(t, filepath.Dir(filePath))
 				content, err := os.ReadFile(actualFile)
 				require.NoError(t, err)
-				
+
 				var migrations []tsdbMigrationRecord
 				err = json.Unmarshal(content, &migrations)
 				require.NoError(t, err)
-				
+
 				assert.Len(t, migrations, 1)
 				assert.Equal(t, int64(10), migrations[0].Version)
 			},
@@ -370,28 +376,42 @@ func Test_OpenTSDBCommitMigration(t *testing.T) {
 
 	for i, tc := range testCases {
 		t.Run(tc.desc, func(t *testing.T) {
-			// Clean up before each test
-			os.RemoveAll(filepath.Dir(filePath))
-			
-			tc.setupFunc(t, filePath)
-
-			// First ensure the migration table exists
-			err := migratorWithOpenTSDB.checkAndCreateMigrationTable(mockContainer)
-			require.NoError(t, err, "Setup should create migration table")
-			
-			// Now run the actual test
-			err = migratorWithOpenTSDB.commitMigration(mockContainer, td)
-
-			if tc.expectedErr != nil {
-				assert.Contains(t, err.Error(), tc.expectedErr.Error(), "TEST[%v] %v Failed!", i, tc.desc)
-			} else {
-				require.NoError(t, err, "TEST[%v] %v Failed!", i, tc.desc)
-			}
-
-			if tc.verifyFunc != nil {
-				tc.verifyFunc(t)
-			}
+			runCommitMigrationTestCase(t, i, tc, migratorWithOpenTSDB, mockContainer, filePath, td)
 		})
+	}
+}
+
+func runCommitMigrationTestCase(
+	t *testing.T,
+	i int,
+	tc struct {
+		desc        string
+		setupFunc   func(t *testing.T, filePath string)
+		expectedErr error
+		verifyFunc  func(t *testing.T)
+	},
+	migratorWithOpenTSDB migrator,
+	mockContainer *container.Container,
+	filePath string,
+	td transactionData,
+) {
+	os.RemoveAll(filepath.Dir(filePath))
+
+	tc.setupFunc(t, filePath)
+
+	err := migratorWithOpenTSDB.checkAndCreateMigrationTable(mockContainer)
+	require.NoError(t, err, "Setup should create migration table")
+
+	err = migratorWithOpenTSDB.commitMigration(mockContainer, td)
+
+	if tc.expectedErr != nil {
+		assert.Contains(t, err.Error(), tc.expectedErr.Error(), "TEST[%v] %v Failed!", i, tc.desc)
+	} else {
+		require.NoError(t, err, "TEST[%v] %v Failed!", i, tc.desc)
+	}
+
+	if tc.verifyFunc != nil {
+		tc.verifyFunc(t)
 	}
 }
 
@@ -446,18 +466,20 @@ func Test_OpenTSDBRollback(t *testing.T) {
 			cmd.Env = append(os.Environ(), "BE_CRASHER=1")
 			err := cmd.Run()
 
-			if e, ok := err.(*exec.ExitError); ok && !e.Success() {
-				    return
+			var exitErr *exec.ExitError
+			if errors.As(err, &exitErr) && !exitErr.Success() {
 
-			} else {
-				t.Fatalf("TEST[%v] %v Failed! Process did not exit as expected", i, tc.desc)
+				return
 			}
+			t.Fatalf("TEST[%v] %v Failed! Process did not exit as expected", i, tc.desc)
+
 
 			tmpFiles := []string{}
 			err = filepath.Walk(filepath.Dir(filePath), func(path string, info os.FileInfo, err error) error {
 				if err != nil {
 					return err
 				}
+				
 				if !info.IsDir() && filepath.Ext(path) == ".tmp" {
 					tmpFiles = append(tmpFiles, path)
 				}
@@ -465,7 +487,7 @@ func Test_OpenTSDBRollback(t *testing.T) {
 			})
 			require.NoError(t, err)
 
-			require.Equal(t, 0, len(tmpFiles), "TEST[%v] %v Failed! Temporary file should be cleaned up", i, tc.desc)
+			require.Empty(t, tmpFiles, "TEST[%v] %v Failed! Temporary file should be cleaned up", i, tc.desc)
 		})
 	}
 }
