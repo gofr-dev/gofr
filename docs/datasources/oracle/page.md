@@ -4,15 +4,15 @@ GoFr supports injecting OracleDB as a relational datasource through a clean, ext
 
 ```go
 type Oracle interface {
-	Exec(ctx context.Context, query string, args ...any) error
-	Select(ctx context.Context, dest any, query string, args ...any) error
-	AsyncInsert(ctx context.Context, query string, wait bool, args ...any) error
+ Exec(ctx context.Context, query string, args ...any) error
+ Select(ctx context.Context, dest any, query string, args ...any) error
+ AsyncInsert(ctx context.Context, query string, wait bool, args ...any) error
 }
 ```
 
 This approach allows users to easily inject any compatible Oracle driver, providing both usability and the flexibility to use multiple databases in a GoFr application.
 
-### ⚠️ Important: Oracle Database Must Exist
+## ⚠️ Important: Oracle Database Must Exist
 
 **Before running your GoFr application, you must ensure that the Oracle database and the required schema (such as the `users` table) are already created.**
 
@@ -92,9 +92,9 @@ Based on the Go struct:
 
 ```go
 type User struct {
-	Id   string `db:"ID"`
-	Name string `db:"NAME"`
-	Age  int    `db:"AGE"`
+ Id   string `db:"ID"`
+ Name string `db:"NAME"`
+ Age  int    `db:"AGE"`
 }
 ```
 
@@ -102,9 +102,9 @@ Run the following SQL command in SQL\*Plus:
 
 ```sql
 CREATE TABLE users (
-	id   VARCHAR2(36) PRIMARY KEY,
-	name VARCHAR2(100),
-	age  NUMBER
+ id   VARCHAR2(36) PRIMARY KEY,
+ name VARCHAR2(100),
+ age  NUMBER
 );
 ```
 
@@ -132,48 +132,64 @@ go get gofr.dev/pkg/gofr/datasource/oracle@latest
 package main
 
 import (
-	"gofr.dev/pkg/gofr"
-	"gofr.dev/pkg/gofr/datasource/oracle"
+ "gofr.dev/pkg/gofr"
+ "gofr.dev/pkg/gofr/datasource/oracle"
 )
 
 type User struct {
-	Id   string `db:"ID"`
-	Name string `db:"NAME"`
-	Age  int    `db:"AGE"`
+ Id   string `db:"ID"`
+ Name string `db:"NAME"`
+ Age  int    `db:"AGE"`
 }
 
 func main() {
-	app := gofr.New()
+ app := gofr.New()
 
-	app.AddOracle(oracle.New(oracle.Config{
-		Host:     "localhost",
-		Port:     1521,
-		Username: "system",
-		Password: "YourPasswordHere", // Replace with actual password
-		Service:  "FREEPDB1",
-	}))
+ app.AddOracle(oracle.New(oracle.Config{
+  Host:     "localhost",
+  Port:     1521,
+  Username: "system",
+  Password: "YourPasswordHere", // Replace with actual password
+  Service:  "FREEPDB1",
+ }))
 
-	app.POST("/user", Post)
-	app.GET("/user", Get)
+ app.POST("/user", Post)
+ app.GET("/user", Get)
 
-	app.Run()
+ app.Run()
 }
 
 func Post(ctx *gofr.Context) (any, error) {
-	err := ctx.Oracle.Exec(ctx, "INSERT INTO users (id, name, age) VALUES (:1, :2, :3)",
-		"8f165e2d-feef-416c-95f6-913ce3172e15", "aryan", 10)
-	if err != nil {
-		return nil, err
-	}
-	return "successfully inserted", nil
+ err := ctx.Oracle.Exec(ctx, "INSERT INTO users (id, name, age) VALUES (:1, :2, :3)",
+  "8f165e2d-feef-416c-95f6-913ce3172e15", "aryan", 10)
+ if err != nil {
+  return nil, err
+ }
+ return "successfully inserted", nil
 }
 
 func Get(ctx *gofr.Context) (any, error) {
-	var users []map[string]interface{}
-	err := ctx.Oracle.Select(ctx, &users, "SELECT id, name, age FROM users")
-	if err != nil {
-		return nil, err
-	}
-	return users, nil
+ var users []map[string]interface{}
+ err := ctx.Oracle.Select(ctx, &users, "SELECT id, name, age FROM users")
+ if err != nil {
+  return nil, err
+ }
+ return users, nil
 }
+```
+
+## Example API Usage
+
+You can create a user and get users using the following commands on the command prompt:
+
+- **Create a user:**
+
+```sh
+curl -X POST http://localhost:8000/user
+```
+
+- **Get all users:**
+
+```sh
+curl http://localhost:8000/user
 ```
