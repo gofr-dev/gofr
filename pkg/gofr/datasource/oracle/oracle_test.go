@@ -13,12 +13,12 @@ import (
 	"go.uber.org/mock/gomock"
 )
 
-func getOracleTestConnection(t *testing.T) (*MockConn, *MockLogger, Client) {
+func getOracleTestConnection(t *testing.T) (*MockOracleConnection, *MockLogger, Client) {
 	t.Helper()
 
 	ctrl := gomock.NewController(t)
 
-	mockConn := NewMockConn(ctrl)
+	mockConn := NewMockOracleConnection(ctrl)
 	mockMetric := NewMockMetrics(ctrl)
 	mockLogger := NewMockLogger(ctrl)
 
@@ -555,4 +555,92 @@ func Test_Oracle_ConnectionError(t *testing.T) {
 	mockLogger.EXPECT().Errorf(gomock.Any(), gomock.Any()).AnyTimes()
 
 	c.Connect()
+}
+
+func Test_Connect_InvalidHost(t *testing.T) {
+	ctrl := gomock.NewController(t)
+
+	defer ctrl.Finish()
+
+	c := New(Config{Host: "", Port: 1521, Username: "u", Password: "p", Service: "s"})
+	
+	mockLogger := NewMockLogger(ctrl)
+	
+	c.UseLogger(mockLogger)
+
+	mockLogger.EXPECT().Errorf("invalid OracleDB host: host is empty")
+	
+	c.Connect()
+}
+
+func Test_Connect_InvalidPort(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	
+	defer ctrl.Finish()
+
+	c := New(Config{Host: "h", Port: 0, Username: "u", Password: "p", Service: "s"})
+	
+	mockLogger := NewMockLogger(ctrl)
+	
+	c.UseLogger(mockLogger)
+
+	mockLogger.EXPECT().Errorf("invalid OracleDB port: %v", 0)
+	
+	c.Connect()
+}
+
+func Test_sqlConn_Exec_Errors(t *testing.T) {
+	db, mock, _ := sqlmock.New()
+	
+	defer db.Close()
+	
+	s := &sqlConn{db: db}
+	
+	mock.ExpectExec("BAD QUERY").WillReturnError(fmt.Errorf("some error"))
+	
+	err := s.Exec(t.Context(), "BAD QUERY")
+	
+	require.Error(t, err)
+}
+
+func Test_sqlConn_Select_ColumnsError(t *testing.T) {
+	db, mock, _ := sqlmock.New()
+	
+	defer db.Close()
+	
+	s := &sqlConn{db: db}
+	
+	mock.ExpectQuery("SELECT").WillReturnError(fmt.Errorf("query error"))
+	
+	var dest []map[string]any
+	
+	err := s.Select(t.Context(), &dest, "SELECT * FROM dual")
+	
+	require.Error(t, err)
+}
+
+func Test_sqlConn_Ping(t *testing.T) {
+	db, _, _ := sqlmock.New()
+	
+	defer db.Close()
+	
+	s := &sqlConn{db: db}
+	
+	err := s.Ping(t.Context())
+	
+	require.NoError(t, err)
+}
+
+func Test_sqlConn_Stats_ReturnsDBStats(t *testing.T) {
+	db, _, _ := sqlmock.New()
+	
+	defer db.Close()
+	
+	s := &sqlConn{db: db}
+	
+	stats := s.Stats()
+	
+	_, ok := stats.(sql.DBStats)
+	
+	assert.True(t, ok)
 }

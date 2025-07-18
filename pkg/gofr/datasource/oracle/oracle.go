@@ -23,7 +23,7 @@ type Config struct {
 }
 
 type Client struct {
-	conn    Conn
+	conn    OracleConnection
 	config  Config
 	logger  Logger
 	metrics Metrics
@@ -58,6 +58,18 @@ func (c *Client) UseTracer(tracer any) {
 }
 
 func (c *Client) Connect() {
+	// Validation: check if host is non-empty.
+	if c.config.Host == "" {
+		c.logger.Errorf("invalid OracleDB host: host is empty")
+		return
+	}
+
+	// Validation: check if port is within a valid range.
+	if c.config.Port <= 0 || c.config.Port > 65535 {
+		c.logger.Errorf("invalid OracleDB port: %v", c.config.Port)
+		return
+	}
+
 	c.logger.Debugf("connecting to OracleDB at %v:%v/%v", c.config.Host, c.config.Port, c.config.Service)
 	dsn := fmt.Sprintf(`user=%q password=%q connectString=%q`,
 		c.config.Username, c.config.Password, fmt.Sprintf("%s:%d/%s", c.config.Host, c.config.Port, c.config.Service))
@@ -79,6 +91,11 @@ func (c *Client) Connect() {
 	}
 }
 
+// Exec executes a non-query SQL statement (such as INSERT, UPDATE, or DELETE) against the Oracle database.
+// It enables callers to run statements that modify data or schema without returning any result sets.
+// This includes common operations like data mutation, transaction management, or schema changes (DDL).
+// The method provides a standardized entry point for write and schema operations across gofr’s supported databases,
+// ensuring consistent usage patterns and compatibility with the gofr datasource interface conventions.
 func (c *Client) Exec(ctx context.Context, query string, args ...any) error {
 	tracedCtx, span := c.addTrace(ctx, "exec", query)
 
@@ -201,15 +218,15 @@ func (s *sqlConn) Select(ctx context.Context, dest any, query string, args ...an
 		}
 
 		rowMap := make(map[string]any)
-		for i, col := range columns {
-			rowMap[col] = values[i]
+		for columnIndex, columnName := range columns {
+			rowMap[columnName] = values[columnIndex]
 		}
 
 		results = append(results, rowMap)
 	}
 
-	if err := rows.Err(); err != nil {
-		return err
+	if rows.Err() != nil {
+		return rows.Err()
 	}
 
 	// Set the result to dest (must be *[]map[string]any).
