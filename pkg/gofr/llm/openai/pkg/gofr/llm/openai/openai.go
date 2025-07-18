@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"io/ioutil"
 	"net/http"
-	"os"
 )
 
 // RequestPayload is the structure sent to OpenAI API
@@ -29,10 +28,9 @@ type ResponsePayload struct {
 }
 
 // ChatCompletion calls OpenAI's Chat API
-func ChatCompletion(prompt string) (string, error) {
-	apiKey := os.Getenv("OPENAI_API_KEY") // Make sure to export this before running
+func ChatCompletion(prompt string, apiKey string) (string, error) {
 	if apiKey == "" {
-		return "", fmt.Errorf("OPENAI_API_KEY is not set")
+		return "", fmt.Errorf("API key is required")
 	}
 
 	payload := RequestPayload{
