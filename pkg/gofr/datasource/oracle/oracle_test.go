@@ -467,3 +467,92 @@ func Test_sqlConn_Stats(t *testing.T) {
 
 	assert.True(t, ok)
 }
+
+func Test_Oracle_InvalidHostName(t *testing.T) {
+	ctrl := gomock.NewController(t)
+
+	defer ctrl.Finish()
+
+	c := New(Config{
+		Host:     "invalid.hostname",
+		Port:     1521,
+		Username: "system",
+		Password: "password",
+		Service:  "FREEPDB1",
+	})
+
+	mockLogger := NewMockLogger(ctrl)
+
+	c.UseLogger(mockLogger)
+
+	mockLogger.EXPECT().Debugf(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any())
+	mockLogger.EXPECT().Errorf(gomock.Any(), gomock.Any()).AnyTimes()
+
+	c.Connect()
+}
+
+func Test_sqlConn_InvalidInsertQuery(t *testing.T) {
+	db, mock, err := sqlmock.New()
+
+	require.NoError(t, err)
+
+	defer db.Close()
+
+	s := &sqlConn{db: db}
+
+	mock.ExpectExec("INSERT INTO bad_table").WillReturnError(fmt.Errorf("ORA-00942: table or view does not exist"))
+
+	err = s.Exec(t.Context(), "INSERT INTO bad_table (id) VALUES (?)", 1)
+
+	require.Error(t, err)
+
+	assert.Contains(t, err.Error(), "table or view does not exist")
+
+	assert.NoError(t, mock.ExpectationsWereMet())
+}
+
+func Test_Oracle_ConnectionTimeout(t *testing.T) {
+	ctrl := gomock.NewController(t)
+
+	defer ctrl.Finish()
+
+	c := New(Config{
+		Host:     "10.255.255.1", // unreachable IP
+		Port:     1521,
+		Username: "system",
+		Password: "password",
+		Service:  "FREEPDB1",
+	})
+
+	mockLogger := NewMockLogger(ctrl)
+
+	c.UseLogger(mockLogger)
+
+	mockLogger.EXPECT().Debugf(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any())
+	mockLogger.EXPECT().Errorf(gomock.Any(), gomock.Any()).AnyTimes()
+
+	c.Connect()
+}
+
+func Test_Oracle_ConnectionError(t *testing.T) {
+	ctrl := gomock.NewController(t)
+
+	defer ctrl.Finish()
+
+	c := New(Config{
+		Host:     "localhost",
+		Port:     1521,
+		Username: "wrong_user",
+		Password: "wrong_pass",
+		Service:  "FREEPDB1",
+	})
+
+	mockLogger := NewMockLogger(ctrl)
+
+	c.UseLogger(mockLogger)
+
+	mockLogger.EXPECT().Debugf(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any())
+	mockLogger.EXPECT().Errorf(gomock.Any(), gomock.Any()).AnyTimes()
+
+	c.Connect()
+}
