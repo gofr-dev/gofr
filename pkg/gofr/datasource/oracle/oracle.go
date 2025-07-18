@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	reflect "reflect"
 	"time"
 
 	// Import for Oracle driver registration.
@@ -90,6 +91,10 @@ func (c *Client) Exec(ctx context.Context, query string, args ...any) error {
 
 func (c *Client) Select(ctx context.Context, dest any, query string, args ...any) error {
 	tracedCtx, span := c.addTrace(ctx, "select", query)
+
+	if reflect.TypeOf(dest).Kind() != reflect.Ptr || reflect.TypeOf(dest).Elem().Kind() != reflect.Slice {
+		return errInvalidDestType
+	}
 
 	err := c.conn.Select(tracedCtx, dest, query, args...)
 
