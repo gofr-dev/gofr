@@ -245,20 +245,20 @@ func (s *Scope) Collection(name string) *Collection {
 	}
 }
 
-// Upsert performs an upsert operation on the collection.
-func (c *Collection) Upsert(ctx context.Context, key string, document, result any) error {
+func (c *Collection) mutationOperation(ctx context.Context, opName, key string, document, result any,
+	op func(tracerCtx context.Context) (*gocb.MutationResult, error)) error {
 	if c.collection == nil {
 		return errBucketNotInitialized
 	}
 
-	tracerCtx, span := c.client.addTrace(ctx, "Upsert", key)
+	tracerCtx, span := c.client.addTrace(ctx, opName, key)
 
-	mr, err := c.collection.Upsert(key, document, &gocb.UpsertOptions{Context: tracerCtx})
+	defer c.client.sendOperationStats(&QueryLog{Query: opName, Key: key, Parameters: document}, time.Now(), opName, span)
 
-	defer c.client.sendOperationStats(&QueryLog{Query: "Upsert", Key: key, Parameters: document}, time.Now(), "Upsert", span)
+	mr, err := op(tracerCtx)
 
 	if err != nil {
-		return fmt.Errorf("failed to Upsert document with key %s: %w", key, err)
+		return fmt.Errorf("failed to %s document with key %s: %w", opName, key, err)
 	}
 
 	switch r := result.(type) {
@@ -273,32 +273,18 @@ func (c *Collection) Upsert(ctx context.Context, key string, document, result an
 	return nil
 }
 
+// Upsert performs an upsert operation on the collection.
+func (c *Collection) Upsert(ctx context.Context, key string, document, result any) error {
+	return c.mutationOperation(ctx, "Upsert", key, document, result, func(tracerCtx context.Context) (*gocb.MutationResult, error) {
+		return c.collection.Upsert(key, document, &gocb.UpsertOptions{Context: tracerCtx})
+	})
+}
+
 // Insert inserts a new document in the collection.
 func (c *Collection) Insert(ctx context.Context, key string, document, result any) error {
-	if c.collection == nil {
-		return errBucketNotInitialized
-	}
-
-	tracerCtx, span := c.client.addTrace(ctx, "Insert", key)
-
-	mr, err := c.collection.Insert(key, document, &gocb.InsertOptions{Context: tracerCtx})
-
-	defer c.client.sendOperationStats(&QueryLog{Query: "Insert", Key: key, Parameters: document}, time.Now(), "Insert", span)
-
-	if err != nil {
-		return fmt.Errorf("failed to Insert document with key %s: %w", key, err)
-	}
-
-	switch r := result.(type) {
-	case *gocb.MutationResult:
-		*r = *mr
-	case **gocb.MutationResult:
-		*r = mr
-	default:
-		return errWrongResultType
-	}
-
-	return nil
+	return c.mutationOperation(ctx, "Insert", key, document, result, func(tracerCtx context.Context) (*gocb.MutationResult, error) {
+		return c.collection.Insert(key, document, &gocb.InsertOptions{Context: tracerCtx})
+	})
 }
 
 // Get performs a get operation on the collection.
