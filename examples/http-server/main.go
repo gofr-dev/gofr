@@ -28,6 +28,14 @@ func main() {
 	a.GET("/trace", TraceHandler)
 	a.GET("/mysql", MysqlHandler)
 
+	// Register an OnStart Hook
+	a.OnStart(func(ctx *gofr.Context) error {
+		// Try accessing a DI-managed service, e.g., DB or HTTPService
+		fmt.Println("OnStart hook executed!")
+		fmt.Printf("DB: %#v\n", ctx.Container.SQL)
+		return nil
+	})
+
 	// Run the application
 	a.Run()
 }
