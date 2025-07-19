@@ -58,6 +58,7 @@ These variables are stored in a `.env` file located within the `configs` directo
 - Redis database number (default: `0`)
 
 ---
+{% /table %}
 
 ## TLS Support (Optional):
 
@@ -87,6 +88,7 @@ These variables are stored in a `.env` file located within the `configs` directo
 - File path to the client private key (for mTLS)
 
 ---
+{% /table %}
 
 ## ✅ Example `.env` File
 
