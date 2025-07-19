@@ -20,7 +20,7 @@ GoFr supports building command-line interface (CLI) applications using the same 
 - *Format:* Each log message includes a timestamp, level, and message content.
 - *Customization:* By default, logs go to stdout. Advanced users can redirect logs using Go's logging configuration tools if required, though this is not necessary for standard usage.
 
----
+ ---
 
 ## Configuration and Environment
 
@@ -37,4 +37,4 @@ GoFr supports building command-line interface (CLI) applications using the same 
 - Prefer using the provided logger over direct output for consistency and structure.
 - Structure commands with single-responsibility to simplify usage and maintenance.
 
----
+ ---
