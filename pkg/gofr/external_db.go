@@ -194,3 +194,14 @@ func (a *App) AddElasticsearch(db container.ElasticsearchProvider) {
 
 	a.container.Elasticsearch = db
 }
+
+func (a *App) AddCouchbase(db container.CouchbaseProvider) {
+	db.UseLogger(a.Logger())
+	db.UseMetrics(a.Metrics())
+
+	tracer := otel.GetTracerProvider().Tracer("gofr-couchbase")
+	db.UseTracer(tracer)
+	db.Connect()
+
+	a.container.Couchbase = db
+}
