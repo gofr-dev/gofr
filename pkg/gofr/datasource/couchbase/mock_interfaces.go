@@ -71,17 +71,45 @@ func (mr *MockCouchbaseMockRecorder) Close(opts any) *gomock.Call {
 }
 
 // Get mocks base method.
-func (m *MockCouchbase) Get(ctx context.Context, bucket, key string, result any) error {
+func (m *MockCouchbase) Get(ctx context.Context, key string, result any) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "Get", ctx, bucket, key, result)
+	ret := m.ctrl.Call(m, "Get", ctx, key, result)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // Get indicates an expected call of Get.
-func (mr *MockCouchbaseMockRecorder) Get(ctx, bucket, key, result any) *gomock.Call {
+func (mr *MockCouchbaseMockRecorder) Get(ctx, key, result any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Get", reflect.TypeOf((*MockCouchbase)(nil).Get), ctx, bucket, key, result)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Get", reflect.TypeOf((*MockCouchbase)(nil).Get), ctx, key, result)
+}
+
+// InsertMany mocks base method.
+func (m *MockCouchbase) InsertMany(ctx context.Context, documents map[string]any, results any) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "InsertMany", ctx, documents, results)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// InsertMany indicates an expected call of InsertMany.
+func (mr *MockCouchbaseMockRecorder) InsertMany(ctx, documents, results any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "InsertMany", reflect.TypeOf((*MockCouchbase)(nil).InsertMany), ctx, documents, results)
+}
+
+// InsertOne mocks base method.
+func (m *MockCouchbase) InsertOne(ctx context.Context, key string, document, result any) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "InsertOne", ctx, key, document, result)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// InsertOne indicates an expected call of InsertOne.
+func (mr *MockCouchbaseMockRecorder) InsertOne(ctx, key, document, result any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "InsertOne", reflect.TypeOf((*MockCouchbase)(nil).InsertOne), ctx, key, document, result)
 }
 
 // Query mocks base method.
@@ -99,31 +127,46 @@ func (mr *MockCouchbaseMockRecorder) Query(ctx, statement, params, result any) *
 }
 
 // Remove mocks base method.
-func (m *MockCouchbase) Remove(ctx context.Context, bucket, key string) error {
+func (m *MockCouchbase) Remove(ctx context.Context, key string) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "Remove", ctx, bucket, key)
+	ret := m.ctrl.Call(m, "Remove", ctx, key)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // Remove indicates an expected call of Remove.
-func (mr *MockCouchbaseMockRecorder) Remove(ctx, bucket, key any) *gomock.Call {
+func (mr *MockCouchbaseMockRecorder) Remove(ctx, key any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Remove", reflect.TypeOf((*MockCouchbase)(nil).Remove), ctx, bucket, key)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Remove", reflect.TypeOf((*MockCouchbase)(nil).Remove), ctx, key)
+}
+
+// RunTransaction mocks base method.
+func (m *MockCouchbase) RunTransaction(ctx context.Context, logic func(*gocb.TransactionAttemptContext) error) (*gocb.TransactionResult, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "RunTransaction", ctx, logic)
+	ret0, _ := ret[0].(*gocb.TransactionResult)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// RunTransaction indicates an expected call of RunTransaction.
+func (mr *MockCouchbaseMockRecorder) RunTransaction(ctx, logic any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "RunTransaction", reflect.TypeOf((*MockCouchbase)(nil).RunTransaction), ctx, logic)
 }
 
 // Upsert mocks base method.
-func (m *MockCouchbase) Upsert(ctx context.Context, bucket, key string, document, result any) error {
+func (m *MockCouchbase) Upsert(ctx context.Context, key string, document, result any) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "Upsert", ctx, bucket, key, document, result)
+	ret := m.ctrl.Call(m, "Upsert", ctx, key, document, result)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // Upsert indicates an expected call of Upsert.
-func (mr *MockCouchbaseMockRecorder) Upsert(ctx, bucket, key, document, result any) *gomock.Call {
+func (mr *MockCouchbaseMockRecorder) Upsert(ctx, key, document, result any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Upsert", reflect.TypeOf((*MockCouchbase)(nil).Upsert), ctx, bucket, key, document, result)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Upsert", reflect.TypeOf((*MockCouchbase)(nil).Upsert), ctx, key, document, result)
 }
 
 // MockclusterProvider is a mock of clusterProvider interface.
@@ -221,6 +264,20 @@ func (m *MockclusterProvider) Query(statement string, opts *gocb.QueryOptions) (
 func (mr *MockclusterProviderMockRecorder) Query(statement, opts any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Query", reflect.TypeOf((*MockclusterProvider)(nil).Query), statement, opts)
+}
+
+// Transactions mocks base method.
+func (m *MockclusterProvider) Transactions() transactionsProvider {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Transactions")
+	ret0, _ := ret[0].(transactionsProvider)
+	return ret0
+}
+
+// Transactions indicates an expected call of Transactions.
+func (mr *MockclusterProviderMockRecorder) Transactions() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Transactions", reflect.TypeOf((*MockclusterProvider)(nil).Transactions))
 }
 
 // WaitUntilReady mocks base method.
@@ -369,6 +426,20 @@ func (mr *MockbucketProviderMockRecorder) DefaultCollection() *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DefaultCollection", reflect.TypeOf((*MockbucketProvider)(nil).DefaultCollection))
 }
 
+// Scope mocks base method.
+func (m *MockbucketProvider) Scope(name string) scopeProvider {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Scope", name)
+	ret0, _ := ret[0].(scopeProvider)
+	return ret0
+}
+
+// Scope indicates an expected call of Scope.
+func (mr *MockbucketProviderMockRecorder) Scope(name any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Scope", reflect.TypeOf((*MockbucketProvider)(nil).Scope), name)
+}
+
 // WaitUntilReady mocks base method.
 func (m *MockbucketProvider) WaitUntilReady(timeout time.Duration, opts *gocb.WaitUntilReadyOptions) error {
 	m.ctrl.T.Helper()
@@ -420,6 +491,51 @@ func (m *MockcollectionProvider) Get(key string, opts *gocb.GetOptions) (getResu
 func (mr *MockcollectionProviderMockRecorder) Get(key, opts any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Get", reflect.TypeOf((*MockcollectionProvider)(nil).Get), key, opts)
+}
+
+// Insert mocks base method.
+func (m *MockcollectionProvider) Insert(key string, value any, opts *gocb.InsertOptions) (*gocb.MutationResult, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Insert", key, value, opts)
+	ret0, _ := ret[0].(*gocb.MutationResult)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// Insert indicates an expected call of Insert.
+func (mr *MockcollectionProviderMockRecorder) Insert(key, value, opts any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Insert", reflect.TypeOf((*MockcollectionProvider)(nil).Insert), key, value, opts)
+}
+
+// LookupIn mocks base method.
+func (m *MockcollectionProvider) LookupIn(key string, specs []gocb.LookupInSpec, opts *gocb.LookupInOptions) (*gocb.LookupInResult, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "LookupIn", key, specs, opts)
+	ret0, _ := ret[0].(*gocb.LookupInResult)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// LookupIn indicates an expected call of LookupIn.
+func (mr *MockcollectionProviderMockRecorder) LookupIn(key, specs, opts any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "LookupIn", reflect.TypeOf((*MockcollectionProvider)(nil).LookupIn), key, specs, opts)
+}
+
+// MutateIn mocks base method.
+func (m *MockcollectionProvider) MutateIn(key string, specs []gocb.MutateInSpec, opts *gocb.MutateInOptions) (*gocb.MutateInResult, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "MutateIn", key, specs, opts)
+	ret0, _ := ret[0].(*gocb.MutateInResult)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// MutateIn indicates an expected call of MutateIn.
+func (mr *MockcollectionProviderMockRecorder) MutateIn(key, specs, opts any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "MutateIn", reflect.TypeOf((*MockcollectionProvider)(nil).MutateIn), key, specs, opts)
 }
 
 // Remove mocks base method.
@@ -488,4 +604,81 @@ func (m *MockgetResultProvider) Content(value any) error {
 func (mr *MockgetResultProviderMockRecorder) Content(value any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Content", reflect.TypeOf((*MockgetResultProvider)(nil).Content), value)
+}
+
+// MockscopeProvider is a mock of scopeProvider interface.
+type MockscopeProvider struct {
+	ctrl     *gomock.Controller
+	recorder *MockscopeProviderMockRecorder
+	isgomock struct{}
+}
+
+// MockscopeProviderMockRecorder is the mock recorder for MockscopeProvider.
+type MockscopeProviderMockRecorder struct {
+	mock *MockscopeProvider
+}
+
+// NewMockscopeProvider creates a new mock instance.
+func NewMockscopeProvider(ctrl *gomock.Controller) *MockscopeProvider {
+	mock := &MockscopeProvider{ctrl: ctrl}
+	mock.recorder = &MockscopeProviderMockRecorder{mock}
+	return mock
+}
+
+// EXPECT returns an object that allows the caller to indicate expected use.
+func (m *MockscopeProvider) EXPECT() *MockscopeProviderMockRecorder {
+	return m.recorder
+}
+
+// Collection mocks base method.
+func (m *MockscopeProvider) Collection(name string) collectionProvider {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Collection", name)
+	ret0, _ := ret[0].(collectionProvider)
+	return ret0
+}
+
+// Collection indicates an expected call of Collection.
+func (mr *MockscopeProviderMockRecorder) Collection(name any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Collection", reflect.TypeOf((*MockscopeProvider)(nil).Collection), name)
+}
+
+// MocktransactionsProvider is a mock of transactionsProvider interface.
+type MocktransactionsProvider struct {
+	ctrl     *gomock.Controller
+	recorder *MocktransactionsProviderMockRecorder
+	isgomock struct{}
+}
+
+// MocktransactionsProviderMockRecorder is the mock recorder for MocktransactionsProvider.
+type MocktransactionsProviderMockRecorder struct {
+	mock *MocktransactionsProvider
+}
+
+// NewMocktransactionsProvider creates a new mock instance.
+func NewMocktransactionsProvider(ctrl *gomock.Controller) *MocktransactionsProvider {
+	mock := &MocktransactionsProvider{ctrl: ctrl}
+	mock.recorder = &MocktransactionsProviderMockRecorder{mock}
+	return mock
+}
+
+// EXPECT returns an object that allows the caller to indicate expected use.
+func (m *MocktransactionsProvider) EXPECT() *MocktransactionsProviderMockRecorder {
+	return m.recorder
+}
+
+// Run mocks base method.
+func (m *MocktransactionsProvider) Run(logic func(*gocb.TransactionAttemptContext) error, opts *gocb.TransactionOptions) (*gocb.TransactionResult, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Run", logic, opts)
+	ret0, _ := ret[0].(*gocb.TransactionResult)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// Run indicates an expected call of Run.
+func (mr *MocktransactionsProviderMockRecorder) Run(logic, opts any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Run", reflect.TypeOf((*MocktransactionsProvider)(nil).Run), logic, opts)
 }

@@ -8,27 +8,13 @@ import (
 )
 
 type Couchbase interface {
-	// Get retrieves a document by its key from the specified bucket.
-	// The result parameter should be a pointer to the struct where the document will be unmarshaled.
-	Get(ctx context.Context, bucket, key string, result any) error
-
-	// Upsert inserts a new document or replaces an existing one in the specified bucket.
-	// The document parameter can be any Go type that can be marshaled into JSON.
-	Upsert(ctx context.Context, bucket, key string, document any, result any) error
-
-	// Remove deletes a document by its key from the specified bucket.
-	Remove(ctx context.Context, bucket, key string) error
-
-	// Query executes a N1QL query against the Couchbase cluster.
-	// The statement is the N1QL query string, and params are any query parameters.
-	// The result parameter should be a pointer to a slice of structs or maps where the query results will be unmarshaled.
+	Get(ctx context.Context, key string, result any) error
+	Insert(ctx context.Context, key string, document, result any) error
+	Upsert(ctx context.Context, key string, document any, result any) error
+	Remove(ctx context.Context, key string) error
 	Query(ctx context.Context, statement string, params map[string]any, result any) error
-
-	// AnalyticsQuery executes an Analytics query against the Couchbase Analytics service.
-	// The statement is the Analytics query string, and params are any query parameters.
-	// The result parameter should be a pointer to a slice of structs or maps where the query results will be unmarshaled.
 	AnalyticsQuery(ctx context.Context, statement string, params map[string]any, result any) error
-
+	RunTransaction(ctx context.Context, logic func(attempt *gocb.TransactionAttemptContext) error) (*gocb.TransactionResult, error)
 	Close(opts any) error
 }
 
@@ -40,6 +26,7 @@ type clusterProvider interface {
 	WaitUntilReady(timeout time.Duration, opts *gocb.WaitUntilReadyOptions) error
 	Ping(opts *gocb.PingOptions) (*gocb.PingResult, error)
 	Close(opts *gocb.ClusterCloseOptions) error
+	Transactions() transactionsProvider
 }
 
 // resultProvider is an interface that abstracts gocb.QueryResult and gocb.AnalyticsResult for easier testing.
@@ -55,15 +42,29 @@ type bucketProvider interface {
 	Collection(collectionName string) collectionProvider
 	DefaultCollection() collectionProvider
 	WaitUntilReady(timeout time.Duration, opts *gocb.WaitUntilReadyOptions) error
+	Scope(name string) scopeProvider
 }
 
 // collectionProvider is an interface that abstracts the gocb.Collection for easier testing.
 type collectionProvider interface {
 	Upsert(key string, value any, opts *gocb.UpsertOptions) (*gocb.MutationResult, error)
+	Insert(key string, value any, opts *gocb.InsertOptions) (*gocb.MutationResult, error)
 	Get(key string, opts *gocb.GetOptions) (getResultProvider, error)
 	Remove(key string, opts *gocb.RemoveOptions) (*gocb.MutationResult, error)
+	LookupIn(key string, specs []gocb.LookupInSpec, opts *gocb.LookupInOptions) (*gocb.LookupInResult, error)
+	MutateIn(key string, specs []gocb.MutateInSpec, opts *gocb.MutateInOptions) (*gocb.MutateInResult, error)
 }
 
 type getResultProvider interface {
 	Content(value any) error
+}
+
+// scopeProvider is an interface that abstracts the gocb.Scope for easier testing.
+type scopeProvider interface {
+	Collection(name string) collectionProvider
+}
+
+// transactionsProvider is an interface that abstracts the gocb.Transactions for easier testing.
+type transactionsProvider interface {
+	Run(logic func(*gocb.TransactionAttemptContext) error, opts *gocb.TransactionOptions) (*gocb.TransactionResult, error)
 }

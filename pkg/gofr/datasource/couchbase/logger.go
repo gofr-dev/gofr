@@ -12,19 +12,37 @@ type Logger interface {
 	Debug(args ...any)
 	Debugf(pattern string, args ...any)
 	Logf(pattern string, args ...any)
+	Error(pattern string)
 	Errorf(pattern string, args ...any)
 }
 
 // QueryLog represents a log entry for a Couchbase query.
 type QueryLog struct {
-	Query    string `json:"query"`
-	Duration int64  `json:"duration"`
+	Query      string `json:"query"`
+	Duration   int64  `json:"duration"`
+	Key        string `json:"key,omitempty"`
+	Statement  string `json:"statement,omitempty"`
+	Parameters any    `json:"parameters,omitempty"`
 }
 
 // PrettyPrint prints the query log in a human-readable format.
 func (ql *QueryLog) PrettyPrint(writer io.Writer) {
-	fmt.Fprintf(writer, "\u001b[38;5;8m%-32s \u001b[38;5;207m%-6s\u001b[0m %8d\u001b[38;5;8mµs\u001b[0m %s\n",
-		clean(ql.Query), "COUCHBASE", ql.Duration, "")
+	if ql.Key == "" && ql.Statement == "" {
+		return
+	}
+
+	if ql.Parameters == nil {
+		ql.Parameters = ""
+	}
+
+	query := ql.Query
+	if query == "" {
+		query = ql.Statement
+	}
+
+	fmt.Fprintf(writer, "\u001B[38;5;8m%-32s \u001B[38;5;207m%-6s\u001B[0m %8d\u001B[38;5;8m5s\u001B[0m %s\n",
+		clean(query), "COUCHBASE", ql.Duration,
+		clean(strings.Join([]string{ql.Key + " " + fmt.Sprint(ql.Parameters)}, " ")))
 }
 
 // clean takes a string query as input and performs two operations to clean it up:

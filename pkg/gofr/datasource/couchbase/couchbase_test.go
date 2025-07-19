@@ -3,15 +3,50 @@ package couchbase
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"testing"
 	"time"
 
 	"github.com/couchbase/gocb/v2"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"go.opencensus.io/trace"
+	"go.opentelemetry.io/otel/trace/noop"
 	"go.uber.org/mock/gomock"
 )
+
+var (
+	errMockTransaction = errors.New("transaction failed")
+	errLogic           = errors.New("logic error")
+)
+
+type testMocks struct {
+	logger       *MockLogger
+	metrics      *MockMetrics
+	cluster      *MockclusterProvider
+	bucket       *MockbucketProvider
+	transactions *MocktransactionsProvider
+	collection   *MockcollectionProvider
+	getResult    *MockgetResultProvider
+	scope        *MockscopeProvider
+	queryResult  *MockresultProvider
+}
+
+func newTestMocks(t *testing.T) *testMocks {
+	t.Helper()
+	ctrl := gomock.NewController(t)
+
+	return &testMocks{
+		logger:       NewMockLogger(ctrl),
+		metrics:      NewMockMetrics(ctrl),
+		cluster:      NewMockclusterProvider(ctrl),
+		bucket:       NewMockbucketProvider(ctrl),
+		transactions: NewMocktransactionsProvider(ctrl),
+		collection:   NewMockcollectionProvider(ctrl),
+		getResult:    NewMockgetResultProvider(ctrl),
+		scope:        NewMockscopeProvider(ctrl),
+		queryResult:  NewMockresultProvider(ctrl),
+	}
+}
 
 func TestClient_New(t *testing.T) {
 	client := New(&Config{
@@ -20,171 +55,242 @@ func TestClient_New(t *testing.T) {
 		Password:          "password",
 		Bucket:            "gofr",
 		ConnectionTimeout: time.Second * 5,
+		URI:               "",
 	})
 
 	require.NotNil(t, client)
 }
 
 func TestClient_Upsert(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	logger := NewMockLogger(ctrl)
-	metrics := NewMockMetrics(ctrl)
-	cluster := NewMockclusterProvider(ctrl)
-
 	tests := []struct {
-		name       string
-		key        string
-		document   any
-		result     any
-		setupMocks func(*MockbucketProvider, *MockcollectionProvider)
-		client     *Client
-		wantErr    error
+		name     string
+		key      string
+		document any
+		result   any
+		setup    func(mocks *testMocks) *Client
+		wantErr  error
 	}{
 		{
 			name:     "success: upsert document with *gocb.MutationResult",
 			key:      "test-key",
 			document: map[string]string{"key": "value"},
 			result:   &gocb.MutationResult{},
-			setupMocks: func(bucket *MockbucketProvider, collection *MockcollectionProvider) {
-				gomock.InOrder(bucket.EXPECT().DefaultCollection().Return(collection),
-					collection.EXPECT().Upsert("test-key", gomock.Any(), gomock.Any()).Return(&gocb.MutationResult{}, nil))
+			setup: func(mocks *testMocks) *Client {
+				gomock.InOrder(mocks.bucket.EXPECT().DefaultCollection().Return(mocks.collection),
+					mocks.collection.EXPECT().Upsert("test-key", gomock.Any(), gomock.Any()).Return(&gocb.MutationResult{}, nil),
+					mocks.logger.EXPECT().Debug(gomock.Any()),
+					mocks.metrics.EXPECT().RecordHistogram(gomock.Any(), "app_couchbase_stats", gomock.Any(), gomock.Any()).AnyTimes(),
+					mocks.logger.EXPECT().Debugf(gomock.Any(), gomock.Any()).AnyTimes())
+				return &Client{
+					cluster: mocks.cluster, bucket: mocks.bucket, config: &Config{}, logger: mocks.logger, metrics: mocks.metrics,
+				}
 			},
-			wantErr: nil,
 		},
 		{
 			name:     "success: upsert document with **gocb.MutationResult",
 			key:      "test-key",
 			document: map[string]string{"key": "value"},
-			result:   new(*gocb.MutationResult),
-			setupMocks: func(bucket *MockbucketProvider, collection *MockcollectionProvider) {
-				gomock.InOrder(bucket.EXPECT().DefaultCollection().Return(collection),
-					collection.EXPECT().Upsert("test-key", gomock.Any(), gomock.Any()).Return(&gocb.MutationResult{}, nil))
+			result:   func() **gocb.MutationResult { var res *gocb.MutationResult; return &res }(),
+			setup: func(mocks *testMocks) *Client {
+				gomock.InOrder(mocks.bucket.EXPECT().DefaultCollection().Return(mocks.collection),
+					mocks.collection.EXPECT().Upsert("test-key", gomock.Any(), gomock.Any()).Return(&gocb.MutationResult{}, nil),
+					mocks.logger.EXPECT().Debug(gomock.Any()))
+				mocks.metrics.EXPECT().RecordHistogram(gomock.Any(), "app_couchbase_stats", gomock.Any(), gomock.Any()).AnyTimes()
+				mocks.logger.EXPECT().Debugf(gomock.Any(), gomock.Any()).AnyTimes()
+				return &Client{
+					cluster: mocks.cluster, bucket: mocks.bucket, config: &Config{}, logger: mocks.logger, metrics: mocks.metrics,
+				}
 			},
-			wantErr: nil,
 		},
 		{
 			name:     "error: from collection.Upsert",
 			key:      "test-key",
 			document: map[string]string{"key": "value"},
 			result:   &gocb.MutationResult{},
-			setupMocks: func(bucket *MockbucketProvider, collection *MockcollectionProvider) {
-				gomock.InOrder(bucket.EXPECT().DefaultCollection().Return(collection),
-					collection.EXPECT().Upsert("test-key", gomock.Any(), gomock.Any()).Return(nil, assert.AnError))
+			setup: func(mocks *testMocks) *Client {
+				gomock.InOrder(mocks.bucket.EXPECT().DefaultCollection().Return(mocks.collection),
+					mocks.collection.EXPECT().Upsert("test-key", gomock.Any(), gomock.Any()).Return(nil, gocb.ErrDocumentExists),
+					mocks.logger.EXPECT().Debug(gomock.Any()),
+					mocks.metrics.EXPECT().RecordHistogram(gomock.Any(), "app_couchbase_stats", gomock.Any(), gomock.Any()).AnyTimes(),
+					mocks.logger.EXPECT().Errorf(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes())
+				return &Client{
+					cluster: mocks.cluster, bucket: mocks.bucket, config: &Config{}, logger: mocks.logger, metrics: mocks.metrics,
+				}
 			},
-			wantErr: assert.AnError,
+			wantErr: gocb.ErrDocumentExists,
 		},
 		{
 			name:     "error: wrong result type",
 			key:      "test-key",
 			document: map[string]string{"key": "value"},
 			result:   &struct{}{},
-			setupMocks: func(bucket *MockbucketProvider, collection *MockcollectionProvider) {
-				gomock.InOrder(bucket.EXPECT().DefaultCollection().Return(collection),
-					collection.EXPECT().Upsert("test-key", gomock.Any(), gomock.Any()).Return(&gocb.MutationResult{}, nil))
+			setup: func(mocks *testMocks) *Client {
+				gomock.InOrder(mocks.bucket.EXPECT().DefaultCollection().Return(mocks.collection),
+					mocks.collection.EXPECT().Upsert("test-key", gomock.Any(), gomock.Any()).Return(&gocb.MutationResult{}, nil),
+					mocks.logger.EXPECT().Debug(gomock.Any()),
+					mocks.metrics.EXPECT().RecordHistogram(gomock.Any(), "app_couchbase_stats", gomock.Any(), gomock.Any()).AnyTimes(),
+					mocks.logger.EXPECT().Debugf(gomock.Any(), gomock.Any()).AnyTimes())
+				return &Client{
+					cluster: mocks.cluster, bucket: mocks.bucket, config: &Config{}, logger: mocks.logger, metrics: mocks.metrics,
+				}
 			},
 			wantErr: errWrongResultType,
-		},
-		{
-			name:       "error: bucket not initialized",
-			key:        "test-key",
-			document:   map[string]string{"key": "value"},
-			result:     &gocb.MutationResult{},
-			setupMocks: func(_ *MockbucketProvider, _ *MockcollectionProvider) {},
-			client: &Client{
-				bucket: nil,
-			},
-			wantErr: errBucketNotInitialized,
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			bucket := NewMockbucketProvider(ctrl)
-			collection := NewMockcollectionProvider(ctrl)
-
-			tt.setupMocks(bucket, collection)
-
-			client := tt.client
-			if client == nil {
-				client = &Client{
-					cluster: cluster,
-					bucket:  bucket,
-					config:  &Config{},
-					logger:  logger,
-					metrics: metrics,
-				}
-			}
-
+			mocks := newTestMocks(t)
+			client := tt.setup(mocks)
 			err := client.Upsert(context.Background(), tt.key, tt.document, tt.result)
 
-			if tt.wantErr != nil {
-				assert.ErrorIs(t, err, tt.wantErr)
-			} else {
-				assert.NoError(t, err)
-			}
+			assert.ErrorIs(t, err, tt.wantErr)
+		})
+	}
+}
+
+func TestClient_Insert(t *testing.T) {
+	tests := []struct {
+		name     string
+		key      string
+		document any
+		result   any
+		setup    func(mocks *testMocks) *Client
+		wantErr  error
+	}{
+		{
+			name:     "success: insert document with *gocb.MutationResult",
+			key:      "test-key",
+			document: map[string]string{"key": "value"},
+			result:   &gocb.MutationResult{},
+			setup: func(mocks *testMocks) *Client {
+				gomock.InOrder(mocks.bucket.EXPECT().DefaultCollection().Return(mocks.collection),
+					mocks.collection.EXPECT().Insert("test-key", gomock.Any(), gomock.Any()).Return(&gocb.MutationResult{}, nil),
+					mocks.logger.EXPECT().Debug(gomock.Any()),
+					mocks.metrics.EXPECT().RecordHistogram(gomock.Any(), "app_couchbase_stats", gomock.Any(), gomock.Any()).AnyTimes(),
+					mocks.logger.EXPECT().Debugf(gomock.Any(), gomock.Any()).AnyTimes())
+				return &Client{
+					cluster: mocks.cluster, bucket: mocks.bucket, config: &Config{}, logger: mocks.logger, metrics: mocks.metrics,
+				}
+			},
+		},
+		{
+			name:     "error: from collection.Insert",
+			key:      "test-key",
+			document: map[string]string{"key": "value"},
+			result:   &gocb.MutationResult{},
+			setup: func(mocks *testMocks) *Client {
+				gomock.InOrder(mocks.bucket.EXPECT().DefaultCollection().Return(mocks.collection),
+					mocks.collection.EXPECT().Insert("test-key", gomock.Any(), gomock.Any()).Return(nil, gocb.ErrDocumentExists),
+					mocks.logger.EXPECT().Debug(gomock.Any()),
+					mocks.metrics.EXPECT().RecordHistogram(gomock.Any(), "app_couchbase_stats", gomock.Any(), gomock.Any()).AnyTimes(),
+					mocks.logger.EXPECT().Errorf(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes())
+				return &Client{
+					cluster: mocks.cluster, bucket: mocks.bucket, config: &Config{}, logger: mocks.logger, metrics: mocks.metrics,
+				}
+			},
+			wantErr: gocb.ErrDocumentExists,
+		},
+		{
+			name:     "error: wrong result type",
+			key:      "test-key",
+			document: map[string]string{"key": "value"},
+			result:   &struct{}{},
+			setup: func(mocks *testMocks) *Client {
+				gomock.InOrder(mocks.bucket.EXPECT().DefaultCollection().Return(mocks.collection),
+					mocks.collection.EXPECT().Insert("test-key", gomock.Any(), gomock.Any()).Return(&gocb.MutationResult{}, nil),
+					mocks.logger.EXPECT().Debug(gomock.Any()),
+					mocks.metrics.EXPECT().RecordHistogram(gomock.Any(), "app_couchbase_stats", gomock.Any(), gomock.Any()).AnyTimes(),
+					mocks.logger.EXPECT().Debugf(gomock.Any(), gomock.Any()).AnyTimes())
+				return &Client{
+					cluster: mocks.cluster, bucket: mocks.bucket, config: &Config{}, logger: mocks.logger, metrics: mocks.metrics,
+				}
+			},
+			wantErr: errWrongResultType,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			mocks := newTestMocks(t)
+			client := tt.setup(mocks)
+			err := client.Insert(context.Background(), tt.key, tt.document, tt.result)
+
+			assert.ErrorIs(t, err, tt.wantErr)
 		})
 	}
 }
 
 func TestClient_Get(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	logger := NewMockLogger(ctrl)
-	metrics := NewMockMetrics(ctrl)
-	cluster := NewMockclusterProvider(ctrl)
-
 	tests := []struct {
-		name       string
-		key        string
-		result     any
-		setupMocks func(*MockbucketProvider, *MockcollectionProvider, *MockgetResultProvider)
-		client     *Client
-		wantErr    error
+		name    string
+		key     string
+		result  any
+		setup   func(mocks *testMocks) *Client
+		wantErr error
 	}{
 		{
 			name:   "success: get document",
 			key:    "test-key",
 			result: &struct{}{},
-			setupMocks: func(bucket *MockbucketProvider, collection *MockcollectionProvider, getResult *MockgetResultProvider) {
-				gomock.InOrder(
-					bucket.EXPECT().DefaultCollection().Return(collection),
-					collection.EXPECT().Get("test-key", gomock.Any()).Return(getResult, nil),
-					getResult.EXPECT().Content(gomock.Any()).Return(nil),
-				)
+			setup: func(mocks *testMocks) *Client {
+				mocks.bucket.EXPECT().DefaultCollection().Return(mocks.collection)
+				mocks.collection.EXPECT().Get("test-key", gomock.Any()).Return(mocks.getResult, nil)
+				mocks.logger.EXPECT().Debug(gomock.Any())
+				mocks.getResult.EXPECT().Content(gomock.Any()).Return(nil)
+				mocks.metrics.EXPECT().RecordHistogram(gomock.Any(), "app_couchbase_stats", gomock.Any(), gomock.Any()).AnyTimes()
+				mocks.logger.EXPECT().Debugf(gomock.Any(), gomock.Any()).AnyTimes()
+				return &Client{
+					cluster: mocks.cluster, bucket: mocks.bucket, config: &Config{}, logger: mocks.logger, metrics: mocks.metrics,
+				}
 			},
-			wantErr: nil,
 		},
 		{
 			name:   "error: from collection.Get",
 			key:    "test-key",
 			result: &struct{}{},
-			setupMocks: func(bucket *MockbucketProvider, collection *MockcollectionProvider, _ *MockgetResultProvider) {
+			setup: func(mocks *testMocks) *Client {
 				gomock.InOrder(
-					bucket.EXPECT().DefaultCollection().Return(collection),
-					collection.EXPECT().Get("test-key", gomock.Any()).Return(nil, assert.AnError),
+					mocks.bucket.EXPECT().DefaultCollection().Return(mocks.collection),
+					mocks.collection.EXPECT().Get("test-key", gomock.Any()).Return(nil, gocb.ErrDocumentNotFound),
+					mocks.logger.EXPECT().Debug(gomock.Any()),
 				)
+				mocks.metrics.EXPECT().RecordHistogram(gomock.Any(), "app_couchbase_stats", gomock.Any(), gomock.Any()).AnyTimes()
+				mocks.logger.EXPECT().Errorf(gomock.Any(), gomock.Any(), gomock.Any())
+				return &Client{
+					cluster: mocks.cluster, bucket: mocks.bucket, config: &Config{}, logger: mocks.logger, metrics: mocks.metrics,
+				}
 			},
-			wantErr: assert.AnError,
+			wantErr: gocb.ErrDocumentNotFound,
 		},
 		{
 			name:   "error: from getResult.Content",
 			key:    "test-key",
 			result: &struct{}{},
-			setupMocks: func(bucket *MockbucketProvider, collection *MockcollectionProvider, getResult *MockgetResultProvider) {
+			setup: func(mocks *testMocks) *Client {
 				gomock.InOrder(
-					bucket.EXPECT().DefaultCollection().Return(collection),
-					collection.EXPECT().Get("test-key", gomock.Any()).Return(getResult, nil),
-					getResult.EXPECT().Content(gomock.Any()).Return(assert.AnError),
+					mocks.bucket.EXPECT().DefaultCollection().Return(mocks.collection),
+					mocks.collection.EXPECT().Get("test-key", gomock.Any()).Return(mocks.getResult, nil),
+					mocks.getResult.EXPECT().Content(gomock.Any()).Return(gocb.ErrDecodingFailure),
 				)
+				mocks.logger.EXPECT().Debug(gomock.Any())
+				mocks.metrics.EXPECT().RecordHistogram(gomock.Any(), "app_couchbase_stats", gomock.Any(), gomock.Any()).AnyTimes()
+				mocks.logger.EXPECT().Debugf(gomock.Any(), gomock.Any()).AnyTimes()
+				return &Client{
+					cluster: mocks.cluster, bucket: mocks.bucket, config: &Config{}, logger: mocks.logger, metrics: mocks.metrics,
+				}
 			},
-			wantErr: assert.AnError,
+			wantErr: gocb.ErrDecodingFailure,
 		},
 		{
-			name:       "error: bucket not initialized",
-			key:        "test-key",
-			result:     nil,
-			setupMocks: func(_ *MockbucketProvider, _ *MockcollectionProvider, _ *MockgetResultProvider) {},
-			client: &Client{
-				bucket: nil,
+			name:   "error: bucket not initialized",
+			key:    "test-key",
+			result: nil,
+			setup: func(mocks *testMocks) *Client {
+				mocks.logger.EXPECT().Error("bucket not initialized")
+				client := &Client{bucket: nil}
+				client.UseLogger(mocks.logger)
+				return client
 			},
 			wantErr: errBucketNotInitialized,
 		},
@@ -192,75 +298,63 @@ func TestClient_Get(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			bucket := NewMockbucketProvider(ctrl)
-			collection := NewMockcollectionProvider(ctrl)
-			getResult := NewMockgetResultProvider(ctrl)
-
-			tt.setupMocks(bucket, collection, getResult)
-
-			client := tt.client
-			if client == nil {
-				client = &Client{
-					cluster: cluster,
-					bucket:  bucket,
-					config:  &Config{},
-					logger:  logger,
-					metrics: metrics,
-				}
-			}
-
+			mocks := newTestMocks(t)
+			client := tt.setup(mocks)
 			err := client.Get(context.Background(), tt.key, tt.result)
 
-			if tt.wantErr != nil {
-				assert.ErrorIs(t, err, tt.wantErr)
-			} else {
-				assert.NoError(t, err)
-			}
+			assert.ErrorIs(t, err, tt.wantErr)
 		})
 	}
 }
 
 func TestClient_Remove(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	logger := NewMockLogger(ctrl)
-	metrics := NewMockMetrics(ctrl)
-	cluster := NewMockclusterProvider(ctrl)
-
 	tests := []struct {
-		name       string
-		key        string
-		setupMocks func(*MockbucketProvider, *MockcollectionProvider)
-		client     *Client
-		wantErr    error
+		name    string
+		key     string
+		setup   func(mocks *testMocks) *Client
+		wantErr error
 	}{
 		{
 			name: "success: remove document",
 			key:  "test-key",
-			setupMocks: func(bucket *MockbucketProvider, collection *MockcollectionProvider) {
+			setup: func(mocks *testMocks) *Client {
 				gomock.InOrder(
-					bucket.EXPECT().DefaultCollection().Return(collection),
-					collection.EXPECT().Remove("test-key", gomock.Any()).Return(&gocb.MutationResult{}, nil),
+					mocks.bucket.EXPECT().DefaultCollection().Return(mocks.collection),
+					mocks.collection.EXPECT().Remove("test-key", gomock.Any()).Return(&gocb.MutationResult{}, nil),
+					mocks.logger.EXPECT().Debug(gomock.Any()),
 				)
+				mocks.metrics.EXPECT().RecordHistogram(gomock.Any(), "app_couchbase_stats", gomock.Any(), gomock.Any()).AnyTimes()
+				mocks.logger.EXPECT().Debugf(gomock.Any(), gomock.Any()).AnyTimes()
+				return &Client{
+					cluster: mocks.cluster, bucket: mocks.bucket, config: &Config{}, logger: mocks.logger, metrics: mocks.metrics,
+				}
 			},
-			wantErr: nil,
 		},
 		{
 			name: "error: from collection.Remove",
 			key:  "test-key",
-			setupMocks: func(bucket *MockbucketProvider, collection *MockcollectionProvider) {
+			setup: func(mocks *testMocks) *Client {
 				gomock.InOrder(
-					bucket.EXPECT().DefaultCollection().Return(collection),
-					collection.EXPECT().Remove("test-key", gomock.Any()).Return(nil, assert.AnError),
+					mocks.bucket.EXPECT().DefaultCollection().Return(mocks.collection),
+					mocks.collection.EXPECT().Remove("test-key", gomock.Any()).Return(nil, gocb.ErrDocumentNotFound),
+					mocks.logger.EXPECT().Debug(gomock.Any()),
 				)
+				mocks.metrics.EXPECT().RecordHistogram(gomock.Any(), "app_couchbase_stats", gomock.Any(), gomock.Any()).AnyTimes()
+				return &Client{
+					cluster: mocks.cluster, bucket: mocks.bucket, config: &Config{}, logger: mocks.logger, metrics: mocks.metrics,
+				}
 			},
-			wantErr: assert.AnError,
+			wantErr: gocb.ErrDocumentNotFound,
 		},
 		{
-			name:       "error: bucket not initialized",
-			key:        "test-key",
-			setupMocks: func(_ *MockbucketProvider, _ *MockcollectionProvider) {},
-			client: &Client{
-				bucket: nil,
+			name: "error: bucket not initialized",
+			key:  "test-key",
+			setup: func(mocks *testMocks) *Client {
+				mocks.logger.EXPECT().Error("bucket not initialized")
+				client := &Client{bucket: nil}
+				client.UseLogger(mocks.logger)
+
+				return client
 			},
 			wantErr: errBucketNotInitialized,
 		},
@@ -268,103 +362,271 @@ func TestClient_Remove(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			bucket := NewMockbucketProvider(ctrl)
-			collection := NewMockcollectionProvider(ctrl)
-
-			tt.setupMocks(bucket, collection)
-
-			client := tt.client
-			if client == nil {
-				client = &Client{
-					cluster: cluster,
-					bucket:  bucket,
-					config:  &Config{},
-					logger:  logger,
-					metrics: metrics,
-				}
-			}
-
+			mocks := newTestMocks(t)
+			client := tt.setup(mocks)
 			err := client.Remove(context.Background(), tt.key)
 
 			if tt.wantErr != nil {
 				assert.ErrorIs(t, err, tt.wantErr)
 			} else {
-				assert.NoError(t, err)
+				require.NoError(t, err)
+			}
+		})
+	}
+}
+
+func TestClient_DefaultCollection(t *testing.T) {
+	tests := []struct {
+		name           string
+		setup          func(mocks *testMocks) *Client
+		wantCollection *Collection
+	}{
+		{
+			name: "success: default collection returned",
+			setup: func(mocks *testMocks) *Client {
+				mocks.bucket.EXPECT().DefaultCollection().Return(mocks.collection)
+				return &Client{
+					bucket:  mocks.bucket,
+					logger:  mocks.logger,
+					metrics: mocks.metrics,
+					tracer:  noop.NewTracerProvider().Tracer("test"),
+				}
+			},
+			wantCollection: &Collection{
+				collection: NewMockcollectionProvider(gomock.NewController(t)),
+			},
+		},
+		{
+			name: "error: bucket not initialized",
+			setup: func(mocks *testMocks) *Client {
+				mocks.logger.EXPECT().Error("bucket not initialized")
+				return &Client{
+					bucket: nil,
+					logger: mocks.logger,
+				}
+			},
+			wantCollection: &Collection{},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			mocks := newTestMocks(t)
+			client := tt.setup(mocks)
+			got := client.DefaultCollection()
+
+			// We cannot directly compare the collection, so we check for nil and non-nil cases.
+			if tt.wantCollection == nil {
+				assert.Nil(t, got)
+			} else {
+				assert.NotNil(t, got)
+			}
+		})
+	}
+}
+
+func TestClient_Scope(t *testing.T) {
+	tests := []struct {
+		name      string
+		scopeName string
+		setup     func(mocks *testMocks) *Client
+		wantScope *Scope
+	}{
+		{
+			name:      "success: scope returned",
+			scopeName: "test-scope",
+			setup: func(mocks *testMocks) *Client {
+				mocks.bucket.EXPECT().Scope("test-scope").Return(mocks.scope)
+				return &Client{
+					bucket:  mocks.bucket,
+					logger:  mocks.logger,
+					metrics: mocks.metrics,
+					tracer:  noop.NewTracerProvider().Tracer("test"),
+				}
+			},
+			wantScope: &Scope{
+				scope: NewMockscopeProvider(gomock.NewController(t)),
+			},
+		},
+		{
+			name:      "error: bucket not initialized",
+			scopeName: "test-scope",
+			setup: func(mocks *testMocks) *Client {
+				mocks.logger.EXPECT().Error("bucket not initialized")
+				return &Client{
+					bucket: nil,
+					logger: mocks.logger,
+				}
+			},
+			wantScope: &Scope{},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			mocks := newTestMocks(t)
+			client := tt.setup(mocks)
+			got := client.Scope(tt.scopeName)
+
+			if tt.wantScope == nil {
+				assert.Nil(t, got)
+			} else {
+				assert.NotNil(t, got)
+			}
+		})
+	}
+}
+
+func TestClient_RunTransaction(t *testing.T) {
+	tests := []struct {
+		name    string
+		setup   func(mocks *testMocks) *Client
+		logic   func(t *gocb.TransactionAttemptContext) error
+		wantErr error
+	}{
+		{
+			name: "success: transaction runs",
+			setup: func(mocks *testMocks) *Client {
+				mocks.cluster.EXPECT().Transactions().Return(mocks.transactions)
+				mocks.transactions.EXPECT().Run(gomock.Any(), gomock.Any()).Return(&gocb.TransactionResult{}, nil)
+				mocks.logger.EXPECT().Debug(gomock.Any())
+				mocks.logger.EXPECT().Logf(gomock.Any(), gomock.Any()).AnyTimes()
+				mocks.metrics.EXPECT().RecordHistogram(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
+
+				return &Client{
+					bucket:  mocks.bucket,
+					cluster: mocks.cluster,
+					logger:  mocks.logger,
+					metrics: mocks.metrics,
+					config:  &Config{Bucket: "bucket"},
+					tracer:  noop.NewTracerProvider().Tracer("test"),
+				}
+			},
+			logic: func(*gocb.TransactionAttemptContext) error {
+				return nil
+			},
+		},
+		{
+			name: "error: cluster not initialized",
+			setup: func(*testMocks) *Client {
+				return &Client{cluster: nil}
+			},
+			logic: func(*gocb.TransactionAttemptContext) error {
+				return nil
+			},
+			wantErr: errClustertNotInitialized,
+		},
+		{
+			name: "error: transaction fails",
+			setup: func(mocks *testMocks) *Client {
+				mocks.cluster.EXPECT().Transactions().Return(mocks.transactions)
+				mocks.transactions.EXPECT().Run(gomock.Any(), gomock.Any()).Return(nil, errMockTransaction)
+				mocks.logger.EXPECT().Debug(gomock.Any())
+				mocks.logger.EXPECT().Logf(gomock.Any(), gomock.Any()).AnyTimes()
+				mocks.logger.EXPECT().Errorf(gomock.Any(), gomock.Any()).AnyTimes()
+				mocks.metrics.EXPECT().RecordHistogram(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
+
+				return &Client{
+					cluster: mocks.cluster,
+					config:  &Config{Bucket: "bucket"},
+					logger:  mocks.logger,
+					metrics: mocks.metrics,
+					tracer:  noop.NewTracerProvider().Tracer("test"),
+				}
+			},
+			logic: func(*gocb.TransactionAttemptContext) error {
+				return errLogic
+			},
+			wantErr: errMockTransaction,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			mocks := newTestMocks(t)
+			client := tt.setup(mocks)
+
+			_, err := client.RunTransaction(context.Background(), tt.logic)
+			if tt.wantErr != nil {
+				assert.ErrorContains(t, err, tt.wantErr.Error())
+			} else {
+				require.NoError(t, err)
 			}
 		})
 	}
 }
 
 func TestClient_Query(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	logger := NewMockLogger(ctrl)
-	metrics := NewMockMetrics(ctrl)
-
 	tests := []struct {
-		name       string
-		statement  string
-		params     map[string]any
-		result     any
-		setupMocks func(*MockclusterProvider, *MockresultProvider)
-		client     *Client
-		wantErr    error
+		name      string
+		statement string
+		params    map[string]any
+		result    any
+		setup     func(mocks *testMocks) *Client
+		wantErr   error
 	}{
 		{
 			name:      "success: N1QL query",
 			statement: "SELECT * FROM `bucket`",
 			params:    nil,
 			result:    &[]map[string]any{},
-			setupMocks: func(cluster *MockclusterProvider, queryResult *MockresultProvider) {
-				gomock.InOrder(cluster.EXPECT().Query(gomock.Any(), gomock.Any()).Return(queryResult, nil),
-					queryResult.EXPECT().Next().Return(true),
-					queryResult.EXPECT().Row(gomock.Any()).DoAndReturn(func(arg any) error {
+			setup: func(mocks *testMocks) *Client {
+				gomock.InOrder(mocks.cluster.EXPECT().Query(gomock.Any(), gomock.Any()).Return(mocks.queryResult, nil),
+					mocks.queryResult.EXPECT().Next().Return(true),
+					mocks.queryResult.EXPECT().Row(gomock.Any()).DoAndReturn(func(arg any) error {
 						data := `{"id": "1", "name": "test"}`
 						return json.Unmarshal([]byte(data), arg)
 					}),
-					queryResult.EXPECT().Next().Return(false),
-					queryResult.EXPECT().Err().Return(nil),
-					queryResult.EXPECT().Close().Return(nil))
+					mocks.queryResult.EXPECT().Next().Return(false),
+					mocks.queryResult.EXPECT().Err().Return(nil),
+					mocks.queryResult.EXPECT().Close().Return(nil))
+				mocks.metrics.EXPECT().RecordHistogram(gomock.Any(), "app_couchbase_stats", gomock.Any(), gomock.Any()).AnyTimes()
+				mocks.logger.EXPECT().Debug(gomock.Any())
+				mocks.logger.EXPECT().Logf(gomock.Any(), gomock.Any()).AnyTimes()
+				return &Client{
+					cluster: mocks.cluster, config: &Config{}, logger: mocks.logger, metrics: mocks.metrics,
+				}
 			},
-			wantErr: nil,
 		},
 		{
 			name:      "error: from cluster.Query",
 			statement: "SELECT * FROM `bucket`",
 			params:    nil,
 			result:    &[]map[string]any{},
-			setupMocks: func(cluster *MockclusterProvider, _ *MockresultProvider) {
-				cluster.EXPECT().Query(gomock.Any(), gomock.Any()).Return(nil, assert.AnError)
+			setup: func(mocks *testMocks) *Client {
+				mocks.cluster.EXPECT().Query(gomock.Any(), gomock.Any()).Return(nil, gocb.ErrPlanningFailure)
+				mocks.logger.EXPECT().Debug(gomock.Any())
+				mocks.metrics.EXPECT().RecordHistogram(gomock.Any(), "app_couchbase_stats", gomock.Any(), gomock.Any()).AnyTimes()
+				mocks.logger.EXPECT().Logf(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
+				mocks.logger.EXPECT().Errorf(gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
+				return &Client{
+					cluster: mocks.cluster, config: &Config{}, logger: mocks.logger, metrics: mocks.metrics,
+				}
 			},
-			wantErr: assert.AnError,
-		},
-		{
-			name:      "error: N1QL query iteration error",
-			statement: "SELECT * FROM `bucket`",
-			params:    nil,
-			result:    &[]map[string]any{},
-			setupMocks: func(cluster *MockclusterProvider, queryResult *MockresultProvider) {
-				gomock.InOrder(cluster.EXPECT().Query(gomock.Any(), gomock.Any()).Return(queryResult, nil),
-					queryResult.EXPECT().Next().Return(false),
-					queryResult.EXPECT().Err().Return(assert.AnError),
-					queryResult.EXPECT().Close().Return(nil))
-			},
-			wantErr: assert.AnError,
+			wantErr: gocb.ErrPlanningFailure,
 		},
 		{
 			name:      "error: failed to unmarshal N1QL results into target",
 			statement: "SELECT * FROM `bucket`",
 			params:    nil,
-			result:    &struct{}{}, // This will cause unmarshal error if tempResults is not compatible
-			setupMocks: func(cluster *MockclusterProvider, queryResult *MockresultProvider) {
-				gomock.InOrder(cluster.EXPECT().Query(gomock.Any(), gomock.Any()).Return(queryResult, nil),
-					queryResult.EXPECT().Next().Return(true),
-					queryResult.EXPECT().Row(gomock.Any()).DoAndReturn(func(arg any) error {
+			result:    &struct{}{},
+			setup: func(mocks *testMocks) *Client {
+				gomock.InOrder(mocks.cluster.EXPECT().Query(gomock.Any(), gomock.Any()).Return(mocks.queryResult, nil),
+					mocks.queryResult.EXPECT().Next().Return(true),
+					mocks.queryResult.EXPECT().Row(gomock.Any()).DoAndReturn(func(arg any) error {
 						data := `{"id": "1", "name": "test"}`
 						return json.Unmarshal([]byte(data), arg)
 					}),
-					queryResult.EXPECT().Next().Return(false),
-					queryResult.EXPECT().Err().Return(nil),
-					queryResult.EXPECT().Close().Return(nil))
+					mocks.queryResult.EXPECT().Next().Return(false),
+					mocks.queryResult.EXPECT().Err().Return(nil),
+					mocks.queryResult.EXPECT().Close().Return(nil))
+				mocks.metrics.EXPECT().RecordHistogram(gomock.Any(), "app_couchbase_stats", gomock.Any(), gomock.Any()).AnyTimes()
+				mocks.logger.EXPECT().Debug(gomock.Any())
+				mocks.logger.EXPECT().Logf(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
+				mocks.logger.EXPECT().Errorf(gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
+				return &Client{
+					cluster: mocks.cluster, config: &Config{}, logger: mocks.logger, metrics: mocks.metrics,
+				}
 			},
 			wantErr: errFailedToUnmarshalN1QL,
 		},
@@ -372,27 +634,14 @@ func TestClient_Query(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			cluster := NewMockclusterProvider(ctrl)
-			queryResult := NewMockresultProvider(ctrl)
-
-			tt.setupMocks(cluster, queryResult)
-
-			client := tt.client
-			if client == nil {
-				client = &Client{
-					cluster: cluster,
-					config:  &Config{},
-					logger:  logger,
-					metrics: metrics,
-				}
-			}
-
+			mocks := newTestMocks(t)
+			client := tt.setup(mocks)
 			err := client.Query(context.Background(), tt.statement, tt.params, tt.result)
 
 			if tt.wantErr != nil {
 				assert.ErrorContains(t, err, tt.wantErr.Error())
 			} else {
-				assert.NoError(t, err)
+				require.NoError(t, err)
 			}
 		})
 	}
@@ -416,47 +665,43 @@ func TestClient_UseMetrics(t *testing.T) {
 
 func TestClient_UseTracer(t *testing.T) {
 	client := New(&Config{})
-	client.UseTracer(trace.DefaultTracer)
-	assert.NotNil(t, client.tracer)
+	provider := noop.NewTracerProvider()
+	tracer := provider.Tracer("test")
+	client.UseTracer(tracer)
+	assert.Equal(t, tracer, client.tracer)
 }
 
 func TestClient_Close(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
-
-	cluster := NewMockclusterProvider(ctrl)
-	cluster.EXPECT().Close(nil).Return(nil)
+	mocks := newTestMocks(t)
+	mocks.cluster.EXPECT().Close(&gocb.ClusterCloseOptions{}).Return(nil)
 
 	client := &Client{
-		cluster: cluster,
+		cluster: mocks.cluster,
 	}
 
-	err := client.Close(nil)
-	assert.NoError(t, err)
+	err := client.Close(&gocb.ClusterCloseOptions{})
+	require.NoError(t, err)
 }
 
 func TestClient_HealthCheck(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
-
 	tests := []struct {
 		name       string
-		setupMocks func(*MockclusterProvider)
+		setupMocks func(mocks *testMocks)
 		wantStatus string
 		wantErr    error
 	}{
 		{
 			name: "success: cluster is up",
-			setupMocks: func(cluster *MockclusterProvider) {
-				cluster.EXPECT().Ping(nil).Return(&gocb.PingResult{}, nil)
+			setupMocks: func(mocks *testMocks) {
+				mocks.cluster.EXPECT().Ping(nil).Return(&gocb.PingResult{}, nil)
 			},
 			wantStatus: "UP",
 			wantErr:    nil,
 		},
 		{
 			name: "error: cluster is down",
-			setupMocks: func(cluster *MockclusterProvider) {
-				cluster.EXPECT().Ping(nil).Return(nil, assert.AnError)
+			setupMocks: func(mocks *testMocks) {
+				mocks.cluster.EXPECT().Ping(nil).Return(nil, gocb.ErrUnambiguousTimeout)
 			},
 			wantStatus: "DOWN",
 			wantErr:    errStatusDown,
@@ -465,18 +710,18 @@ func TestClient_HealthCheck(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			cluster := NewMockclusterProvider(ctrl)
-			tt.setupMocks(cluster)
+			mocks := newTestMocks(t)
+			tt.setupMocks(mocks)
 
 			client := &Client{
-				cluster: cluster,
+				cluster: mocks.cluster,
 				config: &Config{
 					Host:   "localhost",
 					Bucket: "gofr",
 				},
 			}
 
-			health, err := client.HealthCheck()
+			health, err := client.HealthCheck(context.Background())
 
 			require.ErrorIs(t, err, tt.wantErr)
 			assert.Equal(t, tt.wantStatus, health.(*Health).Status)
@@ -516,7 +761,9 @@ func Test_generateCouchbaseURI(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := generateCouchbaseURI(tt.config)
+			c := &Client{config: tt.config}
+			got, err := c.generateCouchbaseURI()
+
 			if (err != nil) != tt.wantErr {
 				t.Errorf("generateCouchbaseURI() error = %v, wantErr %v", err, tt.wantErr)
 				return
@@ -530,75 +777,79 @@ func Test_generateCouchbaseURI(t *testing.T) {
 }
 
 func TestClient_AnalyticsQuery(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	logger := NewMockLogger(ctrl)
-	metrics := NewMockMetrics(ctrl)
-
 	tests := []struct {
-		name       string
-		statement  string
-		params     map[string]any
-		result     any
-		setupMocks func(*MockclusterProvider, *MockresultProvider)
-		client     *Client
-		wantErr    error
+		name      string
+		statement string
+		params    map[string]any
+		result    any
+		setup     func(mocks *testMocks) *Client
+		wantErr   error
 	}{
 		{
 			name:      "success: Analytics query",
 			statement: "SELECT * FROM `bucket`",
 			params:    nil,
 			result:    &[]map[string]any{},
-			setupMocks: func(cluster *MockclusterProvider, analyticsResult *MockresultProvider) {
-				gomock.InOrder(cluster.EXPECT().AnalyticsQuery(gomock.Any(), gomock.Any()).Return(analyticsResult, nil),
-					analyticsResult.EXPECT().Next().Return(true),
-					analyticsResult.EXPECT().Row(gomock.Any()).DoAndReturn(func(arg any) error {
+			setup: func(mocks *testMocks) *Client {
+				gomock.InOrder(mocks.cluster.EXPECT().AnalyticsQuery(gomock.Any(), gomock.Any()).Return(mocks.queryResult, nil),
+					mocks.queryResult.EXPECT().Next().Return(true),
+					mocks.queryResult.EXPECT().Row(gomock.Any()).DoAndReturn(func(arg any) error {
 						data := `{"id": "1", "name": "test_analytics"}`
 						return json.Unmarshal([]byte(data), arg)
 					}),
-					analyticsResult.EXPECT().Next().Return(false),
-					analyticsResult.EXPECT().Err().Return(nil),
-					analyticsResult.EXPECT().Close().Return(nil))
+					mocks.queryResult.EXPECT().Next().Return(false),
+					mocks.queryResult.EXPECT().Err().Return(nil),
+					mocks.queryResult.EXPECT().Close().Return(nil))
+				mocks.metrics.EXPECT().RecordHistogram(gomock.Any(), "app_couchbase_stats", gomock.Any(), gomock.Any()).AnyTimes()
+				mocks.logger.EXPECT().Debug(gomock.Any())
+				mocks.logger.EXPECT().Logf(gomock.Any(), gomock.Any()).AnyTimes()
+				return &Client{
+					cluster: mocks.cluster, config: &Config{}, logger: mocks.logger, metrics: mocks.metrics,
+				}
 			},
-			wantErr: nil,
-		},
-		{
-			name:      "error: from cluster.AnalyticsQuery",
-			statement: "SELECT * FROM `bucket`",
-			params:    nil,
-			result:    &[]map[string]any{},
-			setupMocks: func(cluster *MockclusterProvider, _ *MockresultProvider) {
-				cluster.EXPECT().AnalyticsQuery(gomock.Any(), gomock.Any()).Return(nil, assert.AnError)
-			},
-			wantErr: assert.AnError,
 		},
 		{
 			name:      "error: failed to unmarshal Analytics query row",
 			statement: "SELECT * FROM `bucket`",
 			params:    nil,
 			result:    &[]map[string]any{},
-			setupMocks: func(cluster *MockclusterProvider, analyticsResult *MockresultProvider) {
-				gomock.InOrder(cluster.EXPECT().AnalyticsQuery(gomock.Any(), gomock.Any()).Return(analyticsResult, nil),
-					analyticsResult.EXPECT().Next().Return(true),
-					analyticsResult.EXPECT().Row(gomock.Any()).Return(assert.AnError),
-					analyticsResult.EXPECT().Close().Return(nil))
+			setup: func(mocks *testMocks) *Client {
+				gomock.InOrder(mocks.cluster.EXPECT().AnalyticsQuery(gomock.Any(), gomock.Any()).Return(mocks.queryResult, nil),
+					mocks.queryResult.EXPECT().Next().Return(true),
+					mocks.queryResult.EXPECT().Row(gomock.Any()).Return(gocb.ErrDecodingFailure),
+					mocks.queryResult.EXPECT().Close().Return(nil))
+				mocks.metrics.EXPECT().RecordHistogram(gomock.Any(), "app_couchbase_stats", gomock.Any(), gomock.Any()).AnyTimes()
+				mocks.logger.EXPECT().Debug(gomock.Any())
+				mocks.logger.EXPECT().Logf(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
+				mocks.logger.EXPECT().Errorf(gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
+				return &Client{
+					cluster: mocks.cluster, config: &Config{}, logger: mocks.logger, metrics: mocks.metrics,
+				}
 			},
-			wantErr: assert.AnError,
+			wantErr: gocb.ErrDecodingFailure,
 		},
 		{
 			name:      "error: failed to unmarshal analytics results into target",
 			statement: "SELECT * FROM `bucket`",
 			params:    nil,
-			result:    &struct{}{}, // This will cause unmarshal error if tempResults is not compatible
-			setupMocks: func(cluster *MockclusterProvider, analyticsResult *MockresultProvider) {
-				gomock.InOrder(cluster.EXPECT().AnalyticsQuery(gomock.Any(), gomock.Any()).Return(analyticsResult, nil),
-					analyticsResult.EXPECT().Next().Return(true),
-					analyticsResult.EXPECT().Row(gomock.Any()).DoAndReturn(func(arg any) error {
+			result:    &struct{}{},
+			setup: func(mocks *testMocks) *Client {
+				gomock.InOrder(mocks.cluster.EXPECT().AnalyticsQuery(gomock.Any(), gomock.Any()).Return(mocks.queryResult, nil),
+					mocks.queryResult.EXPECT().Next().Return(true),
+					mocks.queryResult.EXPECT().Row(gomock.Any()).DoAndReturn(func(arg any) error {
 						data := `{"id": "1", "name": "test_analytics"}`
 						return json.Unmarshal([]byte(data), arg)
 					}),
-					analyticsResult.EXPECT().Next().Return(false),
-					analyticsResult.EXPECT().Err().Return(nil),
-					analyticsResult.EXPECT().Close().Return(nil))
+					mocks.queryResult.EXPECT().Next().Return(false),
+					mocks.queryResult.EXPECT().Err().Return(nil),
+					mocks.queryResult.EXPECT().Close().Return(nil))
+				mocks.metrics.EXPECT().RecordHistogram(gomock.Any(), "app_couchbase_stats", gomock.Any(), gomock.Any()).AnyTimes()
+				mocks.logger.EXPECT().Debug(gomock.Any())
+				mocks.logger.EXPECT().Logf(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
+				mocks.logger.EXPECT().Errorf(gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
+				return &Client{
+					cluster: mocks.cluster, config: &Config{}, logger: mocks.logger, metrics: mocks.metrics,
+				}
 			},
 			wantErr: errFailedToUnmarshalAnalytics,
 		},
@@ -606,27 +857,14 @@ func TestClient_AnalyticsQuery(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			cluster := NewMockclusterProvider(ctrl)
-			analyticsResult := NewMockresultProvider(ctrl)
-
-			tt.setupMocks(cluster, analyticsResult)
-
-			client := tt.client
-			if client == nil {
-				client = &Client{
-					cluster: cluster,
-					config:  &Config{},
-					logger:  logger,
-					metrics: metrics,
-				}
-			}
-
+			mocks := newTestMocks(t)
+			client := tt.setup(mocks)
 			err := client.AnalyticsQuery(context.Background(), tt.statement, tt.params, tt.result)
 
 			if tt.wantErr != nil {
 				assert.ErrorContains(t, err, tt.wantErr.Error())
 			} else {
-				assert.NoError(t, err)
+				require.NoError(t, err)
 			}
 		})
 	}

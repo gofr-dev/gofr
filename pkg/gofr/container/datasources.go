@@ -726,14 +726,17 @@ type ElasticsearchProvider interface {
 type Couchbase interface {
 	// Get retrieves a document by its key from the specified bucket.
 	// The result parameter should be a pointer to the struct where the document will be unmarshaled.
-	Get(ctx context.Context, bucket, key string, result any) error
+	Get(ctx context.Context, key string, result any) error
+
+	// InsertOne inserts a new document in the collection.
+	Insert(ctx context.Context, key string, document, result any) error
 
 	// Upsert inserts a new document or replaces an existing one in the specified bucket.
 	// The document parameter can be any Go type that can be marshaled into JSON.
-	Upsert(ctx context.Context, bucket, key string, document any, result any) error
+	Upsert(ctx context.Context, key string, document any, result any) error
 
 	// Remove deletes a document by its key from the specified bucket.
-	Remove(ctx context.Context, bucket, key string) error
+	Remove(ctx context.Context, key string) error
 
 	// Query executes a N1QL query against the Couchbase cluster.
 	// The statement is the N1QL query string, and params are any query parameters.
@@ -744,6 +747,8 @@ type Couchbase interface {
 	// The statement is the Analytics query string, and params are any query parameters.
 	// The result parameter should be a pointer to a slice of structs or maps where the query results will be unmarshaled.
 	AnalyticsQuery(ctx context.Context, statement string, params map[string]any, result any) error
+
+	RunTransaction(ctx context.Context, logic func(attempt any) error) (any, error)
 
 	Close(opts any) error
 
