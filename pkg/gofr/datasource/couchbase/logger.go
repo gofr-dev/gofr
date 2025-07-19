@@ -40,7 +40,7 @@ func (ql *QueryLog) PrettyPrint(writer io.Writer) {
 		query = ql.Statement
 	}
 
-	fmt.Fprintf(writer, "\u001B[38;5;8m%-32s \u001B[38;5;207m%-6s\u001B[0m %8d\u001B[38;5;8m5s\u001B[0m %s\n",
+	fmt.Fprintf(writer, "\u001B[38;5;8m%-32s \u001B[38;5;207m%-6s\u001B[0m %8d\u001B[38;5;8m\b 5s\u001B[0m %s\n",
 		clean(query), "COUCHBASE", ql.Duration,
 		clean(strings.Join([]string{ql.Key + " " + fmt.Sprint(ql.Parameters)}, " ")))
 }

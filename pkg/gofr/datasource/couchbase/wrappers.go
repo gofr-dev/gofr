@@ -149,7 +149,9 @@ func (sw *scopeWrapper) Collection(name string) collectionProvider {
 	return &collectionWrapper{sw.Scope.Collection(name)}
 }
 
-func (tw *transactionsWrapper) Run(logic func(*gocb.TransactionAttemptContext) error, opts *gocb.TransactionOptions) (*gocb.TransactionResult, error) {
+func (tw *transactionsWrapper) Run(
+	logic func(*gocb.TransactionAttemptContext) error, opts *gocb.TransactionOptions,
+) (*gocb.TransactionResult, error) {
 	return tw.Transactions.Run(logic, opts)
 }
 
@@ -179,12 +181,4 @@ func (cw *collectionWrapper) Remove(key string, opts *gocb.RemoveOptions) (*gocb
 
 func (cw *collectionWrapper) Insert(key string, value any, opts *gocb.InsertOptions) (*gocb.MutationResult, error) {
 	return cw.Collection.Insert(key, value, opts)
-}
-
-func (cw *collectionWrapper) LookupIn(key string, specs []gocb.LookupInSpec, opts *gocb.LookupInOptions) (*gocb.LookupInResult, error) {
-	return cw.Collection.LookupIn(key, specs, opts)
-}
-
-func (cw *collectionWrapper) MutateIn(key string, specs []gocb.MutateInSpec, opts *gocb.MutateInOptions) (*gocb.MutateInResult, error) {
-	return cw.Collection.MutateIn(key, specs, opts)
 }

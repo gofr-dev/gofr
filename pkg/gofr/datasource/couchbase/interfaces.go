@@ -51,8 +51,6 @@ type collectionProvider interface {
 	Insert(key string, value any, opts *gocb.InsertOptions) (*gocb.MutationResult, error)
 	Get(key string, opts *gocb.GetOptions) (getResultProvider, error)
 	Remove(key string, opts *gocb.RemoveOptions) (*gocb.MutationResult, error)
-	LookupIn(key string, specs []gocb.LookupInSpec, opts *gocb.LookupInOptions) (*gocb.LookupInResult, error)
-	MutateIn(key string, specs []gocb.MutateInSpec, opts *gocb.MutateInOptions) (*gocb.MutateInResult, error)
 }
 
 type getResultProvider interface {

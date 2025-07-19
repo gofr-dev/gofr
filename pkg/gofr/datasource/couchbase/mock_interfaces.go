@@ -84,32 +84,18 @@ func (mr *MockCouchbaseMockRecorder) Get(ctx, key, result any) *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Get", reflect.TypeOf((*MockCouchbase)(nil).Get), ctx, key, result)
 }
 
-// InsertMany mocks base method.
-func (m *MockCouchbase) InsertMany(ctx context.Context, documents map[string]any, results any) error {
+// Insert mocks base method.
+func (m *MockCouchbase) Insert(ctx context.Context, key string, document, result any) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "InsertMany", ctx, documents, results)
+	ret := m.ctrl.Call(m, "Insert", ctx, key, document, result)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
-// InsertMany indicates an expected call of InsertMany.
-func (mr *MockCouchbaseMockRecorder) InsertMany(ctx, documents, results any) *gomock.Call {
+// Insert indicates an expected call of Insert.
+func (mr *MockCouchbaseMockRecorder) Insert(ctx, key, document, result any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "InsertMany", reflect.TypeOf((*MockCouchbase)(nil).InsertMany), ctx, documents, results)
-}
-
-// InsertOne mocks base method.
-func (m *MockCouchbase) InsertOne(ctx context.Context, key string, document, result any) error {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "InsertOne", ctx, key, document, result)
-	ret0, _ := ret[0].(error)
-	return ret0
-}
-
-// InsertOne indicates an expected call of InsertOne.
-func (mr *MockCouchbaseMockRecorder) InsertOne(ctx, key, document, result any) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "InsertOne", reflect.TypeOf((*MockCouchbase)(nil).InsertOne), ctx, key, document, result)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Insert", reflect.TypeOf((*MockCouchbase)(nil).Insert), ctx, key, document, result)
 }
 
 // Query mocks base method.
@@ -506,36 +492,6 @@ func (m *MockcollectionProvider) Insert(key string, value any, opts *gocb.Insert
 func (mr *MockcollectionProviderMockRecorder) Insert(key, value, opts any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Insert", reflect.TypeOf((*MockcollectionProvider)(nil).Insert), key, value, opts)
-}
-
-// LookupIn mocks base method.
-func (m *MockcollectionProvider) LookupIn(key string, specs []gocb.LookupInSpec, opts *gocb.LookupInOptions) (*gocb.LookupInResult, error) {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "LookupIn", key, specs, opts)
-	ret0, _ := ret[0].(*gocb.LookupInResult)
-	ret1, _ := ret[1].(error)
-	return ret0, ret1
-}
-
-// LookupIn indicates an expected call of LookupIn.
-func (mr *MockcollectionProviderMockRecorder) LookupIn(key, specs, opts any) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "LookupIn", reflect.TypeOf((*MockcollectionProvider)(nil).LookupIn), key, specs, opts)
-}
-
-// MutateIn mocks base method.
-func (m *MockcollectionProvider) MutateIn(key string, specs []gocb.MutateInSpec, opts *gocb.MutateInOptions) (*gocb.MutateInResult, error) {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "MutateIn", key, specs, opts)
-	ret0, _ := ret[0].(*gocb.MutateInResult)
-	ret1, _ := ret[1].(error)
-	return ret0, ret1
-}
-
-// MutateIn indicates an expected call of MutateIn.
-func (mr *MockcollectionProviderMockRecorder) MutateIn(key, specs, opts any) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "MutateIn", reflect.TypeOf((*MockcollectionProvider)(nil).MutateIn), key, specs, opts)
 }
 
 // Remove mocks base method.

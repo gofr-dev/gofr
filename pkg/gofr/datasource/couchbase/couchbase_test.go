@@ -1,7 +1,6 @@
 package couchbase
 
 import (
-	"context"
 	"encoding/json"
 	"errors"
 	"testing"
@@ -142,7 +141,7 @@ func TestClient_Upsert(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			mocks := newTestMocks(t)
 			client := tt.setup(mocks)
-			err := client.Upsert(context.Background(), tt.key, tt.document, tt.result)
+			err := client.Upsert(t.Context(), tt.key, tt.document, tt.result)
 
 			assert.ErrorIs(t, err, tt.wantErr)
 		})
@@ -214,7 +213,7 @@ func TestClient_Insert(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			mocks := newTestMocks(t)
 			client := tt.setup(mocks)
-			err := client.Insert(context.Background(), tt.key, tt.document, tt.result)
+			err := client.Insert(t.Context(), tt.key, tt.document, tt.result)
 
 			assert.ErrorIs(t, err, tt.wantErr)
 		})
@@ -300,7 +299,7 @@ func TestClient_Get(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			mocks := newTestMocks(t)
 			client := tt.setup(mocks)
-			err := client.Get(context.Background(), tt.key, tt.result)
+			err := client.Get(t.Context(), tt.key, tt.result)
 
 			assert.ErrorIs(t, err, tt.wantErr)
 		})
@@ -364,7 +363,7 @@ func TestClient_Remove(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			mocks := newTestMocks(t)
 			client := tt.setup(mocks)
-			err := client.Remove(context.Background(), tt.key)
+			err := client.Remove(t.Context(), tt.key)
 
 			if tt.wantErr != nil {
 				assert.ErrorIs(t, err, tt.wantErr)
@@ -546,7 +545,7 @@ func TestClient_RunTransaction(t *testing.T) {
 			mocks := newTestMocks(t)
 			client := tt.setup(mocks)
 
-			_, err := client.RunTransaction(context.Background(), tt.logic)
+			_, err := client.RunTransaction(t.Context(), tt.logic)
 			if tt.wantErr != nil {
 				assert.ErrorContains(t, err, tt.wantErr.Error())
 			} else {
@@ -636,7 +635,7 @@ func TestClient_Query(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			mocks := newTestMocks(t)
 			client := tt.setup(mocks)
-			err := client.Query(context.Background(), tt.statement, tt.params, tt.result)
+			err := client.Query(t.Context(), tt.statement, tt.params, tt.result)
 
 			if tt.wantErr != nil {
 				assert.ErrorContains(t, err, tt.wantErr.Error())
@@ -721,7 +720,7 @@ func TestClient_HealthCheck(t *testing.T) {
 				},
 			}
 
-			health, err := client.HealthCheck(context.Background())
+			health, err := client.HealthCheck(t.Context())
 
 			require.ErrorIs(t, err, tt.wantErr)
 			assert.Equal(t, tt.wantStatus, health.(*Health).Status)
@@ -859,7 +858,7 @@ func TestClient_AnalyticsQuery(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			mocks := newTestMocks(t)
 			client := tt.setup(mocks)
-			err := client.AnalyticsQuery(context.Background(), tt.statement, tt.params, tt.result)
+			err := client.AnalyticsQuery(t.Context(), tt.statement, tt.params, tt.result)
 
 			if tt.wantErr != nil {
 				assert.ErrorContains(t, err, tt.wantErr.Error())
