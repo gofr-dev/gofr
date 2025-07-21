@@ -7,7 +7,6 @@ import (
 	"os/signal"
 	"sync"
 	"syscall"
-
 )
 
 // Run starts the application. If it is an HTTP server, it will start the server.
@@ -16,13 +15,14 @@ func (a *App) Run() {
 		a.cmd.Run(a.container)
 	}
 
-	
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
 
-	onStartCtx := context.WithoutCancel(ctx)
-    a.runOnStartHooks(onStartCtx)
-	
+	// Running startup hooks and exit if they fail.
+	// Using the main app context to ensure proper lifecycle management.
+	if err := a.runOnStartHooks(ctx); err != nil {
+		os.Exit(1)
+	}
 
 	timeout, err := getShutdownTimeoutFromConfig(a.Config)
 	if err != nil {

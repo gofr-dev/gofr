@@ -1,8 +1,10 @@
 package gofr
 
 import (
+	"context"
 	"encoding/base64"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -1160,5 +1162,37 @@ func TestApp_Subscribe(t *testing.T) {
 		_, ok := app.subscriptionManager.subscriptions["Hello"]
 
 		assert.False(t, ok)
+	})
+}
+
+func TestApp_OnStart(t *testing.T) {
+	// Test case 1: Hook executes successfully
+	t.Run("success", func(t *testing.T) {
+		var hookCalled bool
+		app := New()
+
+		app.OnStart(func(ctx *Context) error {
+			hookCalled = true
+			return nil
+		})
+
+		err := app.runOnStartHooks(context.Background())
+
+		assert.Nil(t, err, "Expected no error from runOnStartHooks")
+		assert.True(t, hookCalled, "Expected the OnStart hook to be called")
+	})
+
+	// Test case 2: Hook returns an error
+	t.Run("error", func(t *testing.T) {
+		expectedErr := errors.New("hook failed")
+		app := New()
+
+		app.OnStart(func(ctx *Context) error {
+			return expectedErr
+		})
+
+		err := app.runOnStartHooks(context.Background())
+
+		assert.Equal(t, expectedErr, err, "Expected an error from runOnStartHooks")
 	})
 }

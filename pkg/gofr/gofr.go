@@ -59,14 +59,17 @@ func (a *App) newContextForHooks(ctx context.Context) *Context {
 	}
 }
 
-func (a *App) runOnStartHooks(ctx context.Context) {
+func (a *App) runOnStartHooks(ctx context.Context) error {
 	gofrCtx := a.newContextForHooks(ctx)
 	for _, hook := range a.onStartHooks {
 		if err := hook(gofrCtx); err != nil {
+			// Log the error and return it
 			a.Logger().Errorf("OnStart hook failed: %v", err)
-			os.Exit(1)
+			return err
 		}
 	}
+	// Return nil if all hooks succeed
+	return nil
 }
 
 // Shutdown stops the service(s) and close the application.
