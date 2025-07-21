@@ -78,9 +78,14 @@ func NewCMD() *App {
 	app.readConfig(true)
 	app.container = container.NewContainer(nil)
 	app.container.Logger = logging.NewFileLogger(app.Config.Get("CMD_LOGS_FILE"))
+
+	cmdCtx := newContext(nil, &noopRequest{}, app.container)
+
 	app.cmd = &cmd{
 		out: terminal.New(),
+		ctx: *cmdCtx,
 	}
+
 	app.container.Create(app.Config)
 	app.initTracer()
 
