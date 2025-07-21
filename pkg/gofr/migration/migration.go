@@ -207,8 +207,6 @@ func initializeDatasources(c *container.Container, ds *Datasource, mg migrator) 
 	}
 
 	if !isNil(c.ScyllaDB) {
-		ok = true
-
 		ds.ScyllaDB = scyllaDS{c.ScyllaDB}
 
 		mg = scyllaDS{c.ScyllaDB}.apply(mg)
