@@ -15,54 +15,51 @@ import (
 
 var errScyllaConn = errors.New("error connecting to ScyllaDB")
 
-
 type panicLogger struct{}
 
-func (p *panicLogger) Fatalf(format string, args ...interface{}) {
+func (*panicLogger) Fatalf(format string, args ...any) {
 	panic(fmt.Sprintf(format, args...))
 }
 
-func (p *panicLogger) Fatal(args ...interface{}) {
+func (*panicLogger) Fatal(args ...any) {
 	panic(fmt.Sprint(args...))
 }
 
-func (p *panicLogger) Errorf(format string, args ...interface{})  {}
-func (p *panicLogger) Error(args ...interface{})                  {}
-func (p *panicLogger) Debugf(format string, args ...interface{})  {}
-func (p *panicLogger) Noticef(format string, args ...interface{}) {}
-func (p *panicLogger) Debug(args ...interface{})                  {}
-func (p *panicLogger) Infof(format string, args ...interface{})   {}
-func (p *panicLogger) Info(args ...interface{})                   {}
-func (p *panicLogger) Notice(args ...interface{})                 {}
-func (p *panicLogger) Warn(args ...interface{})                   {}
-func (p *panicLogger) Warnf(format string, args ...interface{})   {}
-func (p *panicLogger) Log(args ...interface{})                    {}
-func (p *panicLogger) Logf(format string, args ...interface{})    {}
-func (p *panicLogger) ChangeLevel(_ logging.Level)                {}
-
+func (*panicLogger) Errorf(_ string, _ ...any)  {}
+func (*panicLogger) Error(_ ...any)            {}
+func (*panicLogger) Debugf(_ string, _ ...any) {}
+func (*panicLogger) Noticef(_ string, _ ...any) {}
+func (*panicLogger) Debug(_ ...any)            {}
+func (*panicLogger) Infof(_ string, _ ...any)  {}
+func (*panicLogger) Info(_ ...any)             {}
+func (*panicLogger) Notice(_ ...any)           {}
+func (*panicLogger) Warn(_ ...any)             {}
+func (*panicLogger) Warnf(_ string, _ ...any)  {}
+func (*panicLogger) Log(_ ...any)              {}
+func (*panicLogger) Logf(_ string, _ ...any)   {}
+func (*panicLogger) ChangeLevel(_ logging.Level) {}
 
 type NoopLogger struct{}
 
-func (n *NoopLogger) Fatalf(format string, args ...interface{}) {
+func (*NoopLogger) Fatalf(format string, args ...any) {
 	panic(fmt.Sprintf(format, args...))
 }
-func (n *NoopLogger) Fatal(args ...interface{}) {
+func (*NoopLogger) Fatal(args ...any) {
 	panic(fmt.Sprint(args...))
 }
-func (n *NoopLogger) Errorf(format string, args ...interface{})  {} 
-func (n *NoopLogger) Error(args ...interface{})                  {} 
-func (n *NoopLogger) Debugf(format string, args ...interface{})  {}
-func (n *NoopLogger) Noticef(format string, args ...interface{}) {}
-func (n *NoopLogger) Debug(args ...interface{})                  {}
-func (n *NoopLogger) Infof(format string, args ...interface{})   {}
-func (n *NoopLogger) Info(args ...interface{})                   {}
-func (n *NoopLogger) Notice(args ...interface{})                 {}
-func (n *NoopLogger) Warn(args ...interface{})                   {}
-func (n *NoopLogger) Warnf(format string, args ...interface{})   {}
-func (n *NoopLogger) Log(args ...interface{})                    {}
-func (n *NoopLogger) Logf(format string, args ...interface{})    {}
-func (n *NoopLogger) ChangeLevel(_ logging.Level)                {}
-
+func (*NoopLogger) Errorf(_ string, _ ...any)  {}
+func (*NoopLogger) Error(_ ...any)            {}
+func (*NoopLogger) Debugf(_ string, _ ...any) {}
+func (*NoopLogger) Noticef(_ string, _ ...any) {}
+func (*NoopLogger) Debug(_ ...any)            {}
+func (*NoopLogger) Infof(_ string, _ ...any)  {}
+func (*NoopLogger) Info(_ ...any)             {}
+func (*NoopLogger) Notice(_ ...any)           {}
+func (*NoopLogger) Warn(_ ...any)             {}
+func (*NoopLogger) Warnf(_ string, _ ...any)  {}
+func (*NoopLogger) Log(_ ...any)              {}
+func (*NoopLogger) Logf(_ string, _ ...any)   {}
+func (*NoopLogger) ChangeLevel(_ logging.Level) {}
 
 func scyllaSetup(t *testing.T) (migrator, *container.MockScyllaDB, *container.Container) {
 	t.Helper()
@@ -76,7 +73,7 @@ func scyllaSetup(t *testing.T) (migrator, *container.MockScyllaDB, *container.Co
 	scylla := scyllaDS{ScyllaDB: mockScylla}
 	migratorWithScylla := scylla.apply(&ds)
 
-	mockContainer.ScyllaDB = mockScylla 
+	mockContainer.ScyllaDB = mockScylla
 
 	return migratorWithScylla, mockScylla, mockContainer
 }
@@ -129,8 +126,10 @@ func TestScyllaGetLastMigration(t *testing.T) {
 				if tc.err != nil {
 					return tc.err
 				}
+
 				ptr := dest.(*[]migrationRow)
 				*ptr = rows
+
 				return nil
 			})
 
@@ -138,7 +137,6 @@ func TestScyllaGetLastMigration(t *testing.T) {
 
 		assert.Equal(t, tc.expectedV, got, "TEST[%v] %s failed", i, tc.desc)
 	}
-
 }
 
 func TestScyllaCommitMigration(t *testing.T) {
@@ -181,13 +179,13 @@ func TestScyllaMigrator_Rollback(t *testing.T) {
 	defer ctrl.Finish()
 
 	mockContainer := &container.Container{
-		Logger: &panicLogger{}, 
+		Logger: &panicLogger{},
 	}
 
 	mockMigrator := NewMockmigrator(ctrl)
 
 	s := scyllaMigrator{
-		ScyllaDB: nil, 
+		ScyllaDB: nil,
 		migrator: mockMigrator,
 	}
 

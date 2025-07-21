@@ -71,6 +71,7 @@ func (s scyllaMigrator) getLastMigration(c *container.Container) int64 {
 	c.Debugf("ScyllaDB last migration fetched value is: %v", lastVersion)
 
 	lm2 := s.migrator.getLastMigration(c)
+	
 	return max(lastVersion, lm2)
 }
 

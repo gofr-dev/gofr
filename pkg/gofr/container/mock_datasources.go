@@ -10807,7 +10807,7 @@ func (m *MockPubSubProvider) Query(ctx context.Context, query string, args ...an
 func (mr *MockPubSubProviderMockRecorder) Query(ctx, query any, args ...any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Query", reflect.TypeOf((*MockPubSubProvider)(nil).Query),
-		append([]any{ctx, query}, args...)..., )
+		append([]any{ctx, query}, args...)...)
 }
 
 // MockPubSubProviderMockRecorder is the mock recorder for MockPubSubProvider.
