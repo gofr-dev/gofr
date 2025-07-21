@@ -1,7 +1,6 @@
 package container
 
 import (
-	"context"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -9,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"go.uber.org/mock/gomock"
 
 	"gofr.dev/pkg/gofr/datasource"
 	"gofr.dev/pkg/gofr/datasource/sql"
@@ -86,6 +86,18 @@ func TestContainer_Health(t *testing.T) {
 					"error": "opentsdb not connected",
 				},
 			},
+			"elasticsearch": datasource.Health{
+				Status: tc.datasourceHealth, Details: map[string]any{
+					"host":  "localhost:9200",
+					"error": "elasticsearch not connected",
+				},
+			},
+			"pubsub": datasource.Health{
+				Status: tc.datasourceHealth, Details: map[string]any{
+					"host":  "localhost:pubsub",
+					"error": nil,
+				},
+			},
 			"test-service": &service.Health{
 				Status: "UP", Details: map[string]any{
 					"host": strings.TrimPrefix(srv.URL, "http://"),
@@ -136,7 +148,7 @@ func registerMocks(mocks *Mocks, health string) {
 		},
 	})
 
-	mocks.Mongo.EXPECT().HealthCheck(context.Background()).Return(datasource.Health{
+	mocks.Mongo.EXPECT().HealthCheck(gomock.Any()).Return(datasource.Health{
 		Status: health,
 		Details: map[string]any{
 			"host":  "localhost:6379",
@@ -144,7 +156,7 @@ func registerMocks(mocks *Mocks, health string) {
 		},
 	}, nil)
 
-	mocks.Cassandra.EXPECT().HealthCheck(context.Background()).Return(datasource.Health{
+	mocks.Cassandra.EXPECT().HealthCheck(gomock.Any()).Return(datasource.Health{
 		Status: health,
 		Details: map[string]any{
 			"host":  "localhost:6379",
@@ -152,7 +164,7 @@ func registerMocks(mocks *Mocks, health string) {
 		},
 	}, nil)
 
-	mocks.Clickhouse.EXPECT().HealthCheck(context.Background()).Return(datasource.Health{
+	mocks.Clickhouse.EXPECT().HealthCheck(gomock.Any()).Return(datasource.Health{
 		Status: health,
 		Details: map[string]any{
 			"host":  "localhost:6379",
@@ -160,7 +172,7 @@ func registerMocks(mocks *Mocks, health string) {
 		},
 	}, nil)
 
-	mocks.KVStore.EXPECT().HealthCheck(context.Background()).Return(datasource.Health{
+	mocks.KVStore.EXPECT().HealthCheck(gomock.Any()).Return(datasource.Health{
 		Status: health,
 		Details: map[string]any{
 			"host":  "localhost:1234",
@@ -168,7 +180,7 @@ func registerMocks(mocks *Mocks, health string) {
 		},
 	}, nil)
 
-	mocks.DGraph.EXPECT().HealthCheck(context.Background()).Return(datasource.Health{
+	mocks.DGraph.EXPECT().HealthCheck(gomock.Any()).Return(datasource.Health{
 		Status: health,
 		Details: map[string]any{
 			"host":  "localhost:8000",
@@ -176,11 +188,27 @@ func registerMocks(mocks *Mocks, health string) {
 		},
 	}, nil)
 
-	mocks.OpenTSDB.EXPECT().HealthCheck(context.Background()).Return(datasource.Health{
+	mocks.OpenTSDB.EXPECT().HealthCheck(gomock.Any()).Return(datasource.Health{
 		Status: health,
 		Details: map[string]any{
 			"host":  "localhost:8000",
 			"error": "opentsdb not connected",
+		},
+	}, nil)
+
+	mocks.PubSub.EXPECT().Health().Return(datasource.Health{
+		Status: health,
+		Details: map[string]any{
+			"host":  "localhost:pubsub",
+			"error": nil,
+		},
+	}).Times(1)
+
+	mocks.Elasticsearch.EXPECT().HealthCheck(gomock.Any()).Return(datasource.Health{
+		Status: health,
+		Details: map[string]any{
+			"host":  "localhost:9200",
+			"error": "elasticsearch not connected",
 		},
 	}, nil)
 }
