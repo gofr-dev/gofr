@@ -49,7 +49,7 @@ type ScyllaDB interface {
 go get gofr.dev/pkg/gofr/datasource/scylladb
 ```
 
-#### Example Usage
+#### Examples Usage
 
 ```go
 package main
