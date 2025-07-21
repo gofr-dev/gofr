@@ -49,6 +49,26 @@ type App struct {
 	onStartHooks        []func(ctx *Context) error
 }
 
+func (a *App) newContextForHooks(ctx context.Context) *Context {
+	logger := logging.NewContextLogger(ctx, a.container.Logger)
+	return &Context{
+		Context:       ctx,
+		Container:     a.container,
+		Request:       noopRequest{},
+		ContextLogger: *logger,
+	}
+}
+
+func (a *App) runOnStartHooks(ctx context.Context) {
+	gofrCtx := a.newContextForHooks(ctx)
+	for _, hook := range a.onStartHooks {
+		if err := hook(gofrCtx); err != nil {
+			a.Logger().Errorf("OnStart hook failed: %v", err)
+			os.Exit(1)
+		}
+	}
+}
+
 // Shutdown stops the service(s) and close the application.
 // It shuts down the HTTP, gRPC, Metrics servers and closes the container's active connections to datasources.
 func (a *App) Shutdown(ctx context.Context) error {

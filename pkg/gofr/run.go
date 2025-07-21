@@ -8,9 +8,6 @@ import (
 	"sync"
 	"syscall"
 
-	"go.opentelemetry.io/otel"
-
-	"gofr.dev/pkg/gofr/logging"
 )
 
 // Run starts the application. If it is an HTTP server, it will start the server.
@@ -19,30 +16,13 @@ func (a *App) Run() {
 		a.cmd.Run(a.container)
 	}
 
-	// Create a context that is canceled on receiving termination signals
+	
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
 
-	// --- Add this block for OnStart hooks ---
-	onStartCtx, span := otel.GetTracerProvider().Tracer("gofr-onstart").Start(context.Background(), "OnStart")
-	defer span.End()
-
-	logger := logging.NewContextLogger(onStartCtx, a.container.Logger)
-
-	gofrCtx := &Context{
-		Context:       onStartCtx,
-		Container:     a.container,
-		Request:       noopRequest{}, // Make sure noopRequest{} is available
-		ContextLogger: *logger,
-	}
-
-	for _, hook := range a.onStartHooks {
-		if err := hook(gofrCtx); err != nil {
-			a.Logger().Errorf("OnStart hook failed: %v", err)
-			os.Exit(1)
-		}
-	}
-	// --- End OnStart block ---
+	onStartCtx := context.WithoutCancel(ctx)
+    a.runOnStartHooks(onStartCtx)
+	
 
 	timeout, err := getShutdownTimeoutFromConfig(a.Config)
 	if err != nil {

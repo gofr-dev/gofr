@@ -28,11 +28,11 @@ func main() {
 	a.GET("/trace", TraceHandler)
 	a.GET("/mysql", MysqlHandler)
 
-	// Register an OnStart Hook
 	a.OnStart(func(ctx *gofr.Context) error {
-		// Try accessing a DI-managed service, e.g., DB or HTTPService
+
 		fmt.Println("OnStart hook executed!")
-		fmt.Printf("DB: %#v\n", ctx.Container.SQL)
+		fmt.Printf("SQL: %#v\n", ctx.Container.SQL)
+		fmt.Printf("Redis: %#v\n", ctx.Container.Redis)
 		return nil
 	})
 
