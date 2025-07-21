@@ -127,6 +127,24 @@ type DGraph interface {
 	DropField(ctx context.Context, fieldName string) error
 }
 
+type ScyllaDB interface {
+	Query(dest any, stmt string, values ...any) error
+	QueryWithCtx(ctx context.Context, dest any, stmt string, values ...any) error
+
+	Exec(stmt string, values ...any) error
+	ExecWithCtx(ctx context.Context, stmt string, values ...any) error
+
+	ExecCAS(dest any, stmt string, values ...any) (bool, error)
+
+	NewBatch(name string, batchType int) error
+	NewBatchWithCtx(ctx context.Context, name string, batchType int) error
+
+	BatchQuery(name, stmt string, values ...any) error
+	BatchQueryWithCtx(ctx context.Context, name, stmt string, values ...any) error
+
+	ExecuteBatchWithCtx(ctx context.Context, name string) error
+}
+
 // keeping the migrator interface unexported as, right now it is not being implemented directly, by the externalDB drivers.
 // keeping the implementations for externalDB at one place such that if any change in migration logic, we would change directly here.
 type migrator interface {

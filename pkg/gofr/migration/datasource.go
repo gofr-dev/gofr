@@ -16,6 +16,7 @@ type Datasource struct {
 	ArangoDB   ArangoDB
 	SurrealDB  SurrealDB
 	DGraph     DGraph
+	ScyllaDB   ScyllaDB
 }
 
 // It is a base implementation for migration manager, on this other database drivers have been wrapped.

@@ -29,6 +29,7 @@ type Mocks struct {
 	File          *file.MockFileSystemProvider
 	HTTPService   *service.MockHTTP
 	Metrics       *MockMetrics
+	ScyllaDB      *MockScyllaDB
 }
 
 type options func(c *Container, ctrl *gomock.Controller) any
@@ -97,6 +98,9 @@ func NewMockContainer(t *testing.T, options ...options) (*Container, *Mocks) {
 	elasticsearchMock := NewMockElasticsearch(ctrl)
 	container.Elasticsearch = elasticsearchMock
 
+	scyllaMock := NewMockScyllaDB(ctrl)
+	container.ScyllaDB = scyllaMock
+
 	var httpMock *service.MockHTTP
 
 	container.Services = make(map[string]service.HTTP)
@@ -130,6 +134,7 @@ func NewMockContainer(t *testing.T, options ...options) (*Container, *Mocks) {
 		SurrealDB:     surrealMock,
 		Elasticsearch: elasticsearchMock,
 		Metrics:       mockMetrics,
+		ScyllaDB:      scyllaMock,
 	}
 
 	// TODO: Remove this expectation from mock container (previous generalization) to the actual tests where their expectations are being set.

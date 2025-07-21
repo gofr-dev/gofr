@@ -204,6 +204,16 @@ func getMigrator(c *container.Container) (Datasource, migrator, bool) {
 		c.Debug("initialized data source for dgraph")
 	}
 
+	if !isNil(c.ScyllaDB) {
+		ok = true
+
+		ds.ScyllaDB = scyllaDS{c.ScyllaDB}
+
+		mg = scyllaDS{c.ScyllaDB}.apply(mg)
+
+		c.Debug("initialized data source for scyllaDB")
+	}
+
 	return ds, mg, ok
 }
 
