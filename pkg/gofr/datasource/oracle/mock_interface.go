@@ -16,51 +16,32 @@ import (
 	gomock "go.uber.org/mock/gomock"
 )
 
-// MockOracleConnection is a mock of OracleConnection interface.
-type MockOracleConnection struct {
+// MockConnection is a mock of Connection interface.
+type MockConnection struct {
 	ctrl     *gomock.Controller
-	recorder *MockOracleConnectionMockRecorder
+	recorder *MockConnectionMockRecorder
 	isgomock struct{}
 }
 
-// MockOracleConnectionMockRecorder is the mock recorder for MockOracleConnection.
-type MockOracleConnectionMockRecorder struct {
-	mock *MockOracleConnection
+// MockConnectionMockRecorder is the mock recorder for MockConnection.
+type MockConnectionMockRecorder struct {
+	mock *MockConnection
 }
 
-// NewMockOracleConnection creates a new mock instance.
-func NewMockOracleConnection(ctrl *gomock.Controller) *MockOracleConnection {
-	mock := &MockOracleConnection{ctrl: ctrl}
-	mock.recorder = &MockOracleConnectionMockRecorder{mock}
+// NewMockConnection creates a new mock instance.
+func NewMockConnection(ctrl *gomock.Controller) *MockConnection {
+	mock := &MockConnection{ctrl: ctrl}
+	mock.recorder = &MockConnectionMockRecorder{mock}
 	return mock
 }
 
 // EXPECT returns an object that allows the caller to indicate expected use.
-func (m *MockOracleConnection) EXPECT() *MockOracleConnectionMockRecorder {
+func (m *MockConnection) EXPECT() *MockConnectionMockRecorder {
 	return m.recorder
 }
 
-// AsyncInsert mocks base method.
-func (m *MockOracleConnection) AsyncInsert(ctx context.Context, query string, wait bool, args ...any) error {
-	m.ctrl.T.Helper()
-	varargs := []any{ctx, query, wait}
-	for _, a := range args {
-		varargs = append(varargs, a)
-	}
-	ret := m.ctrl.Call(m, "AsyncInsert", varargs...)
-	ret0, _ := ret[0].(error)
-	return ret0
-}
-
-// AsyncInsert indicates an expected call of AsyncInsert.
-func (mr *MockOracleConnectionMockRecorder) AsyncInsert(ctx, query, wait any, args ...any) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	varargs := append([]any{ctx, query, wait}, args...)
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AsyncInsert", reflect.TypeOf((*MockOracleConnection)(nil).AsyncInsert), varargs...)
-}
-
 // Exec mocks base method.
-func (m *MockOracleConnection) Exec(ctx context.Context, query string, args ...any) error {
+func (m *MockConnection) Exec(ctx context.Context, query string, args ...any) error {
 	m.ctrl.T.Helper()
 	varargs := []any{ctx, query}
 	for _, a := range args {
@@ -72,14 +53,14 @@ func (m *MockOracleConnection) Exec(ctx context.Context, query string, args ...a
 }
 
 // Exec indicates an expected call of Exec.
-func (mr *MockOracleConnectionMockRecorder) Exec(ctx, query any, args ...any) *gomock.Call {
+func (mr *MockConnectionMockRecorder) Exec(ctx, query any, args ...any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	varargs := append([]any{ctx, query}, args...)
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Exec", reflect.TypeOf((*MockOracleConnection)(nil).Exec), varargs...)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Exec", reflect.TypeOf((*MockConnection)(nil).Exec), varargs...)
 }
 
 // Ping mocks base method.
-func (m *MockOracleConnection) Ping(ctx context.Context) error {
+func (m *MockConnection) Ping(ctx context.Context) error {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "Ping", ctx)
 	ret0, _ := ret[0].(error)
@@ -87,13 +68,13 @@ func (m *MockOracleConnection) Ping(ctx context.Context) error {
 }
 
 // Ping indicates an expected call of Ping.
-func (mr *MockOracleConnectionMockRecorder) Ping(ctx any) *gomock.Call {
+func (mr *MockConnectionMockRecorder) Ping(ctx any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Ping", reflect.TypeOf((*MockOracleConnection)(nil).Ping), ctx)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Ping", reflect.TypeOf((*MockConnection)(nil).Ping), ctx)
 }
 
 // Select mocks base method.
-func (m *MockOracleConnection) Select(ctx context.Context, dest any, query string, args ...any) error {
+func (m *MockConnection) Select(ctx context.Context, dest any, query string, args ...any) error {
 	m.ctrl.T.Helper()
 	varargs := []any{ctx, dest, query}
 	for _, a := range args {
@@ -105,14 +86,14 @@ func (m *MockOracleConnection) Select(ctx context.Context, dest any, query strin
 }
 
 // Select indicates an expected call of Select.
-func (mr *MockOracleConnectionMockRecorder) Select(ctx, dest, query any, args ...any) *gomock.Call {
+func (mr *MockConnectionMockRecorder) Select(ctx, dest, query any, args ...any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	varargs := append([]any{ctx, dest, query}, args...)
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Select", reflect.TypeOf((*MockOracleConnection)(nil).Select), varargs...)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Select", reflect.TypeOf((*MockConnection)(nil).Select), varargs...)
 }
 
 // Stats mocks base method.
-func (m *MockOracleConnection) Stats() any {
+func (m *MockConnection) Stats() any {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "Stats")
 	ret0, _ := ret[0].(any)
@@ -120,7 +101,7 @@ func (m *MockOracleConnection) Stats() any {
 }
 
 // Stats indicates an expected call of Stats.
-func (mr *MockOracleConnectionMockRecorder) Stats() *gomock.Call {
+func (mr *MockConnectionMockRecorder) Stats() *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Stats", reflect.TypeOf((*MockOracleConnection)(nil).Stats))
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Stats", reflect.TypeOf((*MockConnection)(nil).Stats))
 }

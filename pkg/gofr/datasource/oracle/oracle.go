@@ -23,7 +23,7 @@ type Config struct {
 }
 
 type Client struct {
-	conn    OracleConnection
+	conn    Connection
 	config  Config
 	logger  Logger
 	metrics Metrics
@@ -116,16 +116,6 @@ func (c *Client) Select(ctx context.Context, dest any, query string, args ...any
 	err := c.conn.Select(tracedCtx, dest, query, args...)
 
 	defer c.sendOperationStats(time.Now(), "Select", query, "select", span, args...)
-
-	return err
-}
-
-func (c *Client) AsyncInsert(ctx context.Context, query string, wait bool, args ...any) error {
-	tracedCtx, span := c.addTrace(ctx, "async-insert", query)
-
-	err := c.conn.AsyncInsert(tracedCtx, query, wait, args...)
-
-	defer c.sendOperationStats(time.Now(), "AsyncInsert", query, "async-insert", span, args...)
 
 	return err
 }
@@ -238,10 +228,6 @@ func (s *sqlConn) Select(ctx context.Context, dest any, query string, args ...an
 	*p = results
 
 	return nil
-}
-
-func (s *sqlConn) AsyncInsert(ctx context.Context, query string, _ bool, args ...any) error {
-	return s.Exec(ctx, query, args...)
 }
 
 func (s *sqlConn) Ping(ctx context.Context) error { return s.db.PingContext(ctx) }

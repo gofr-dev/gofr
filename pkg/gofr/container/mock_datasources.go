@@ -9516,25 +9516,6 @@ func (m *MockOracleDB) EXPECT() *MockOracleDBMockRecorder {
 	return m.recorder
 }
 
-// AsyncInsert mocks base method.
-func (m *MockOracleDB) AsyncInsert(ctx context.Context, query string, wait bool, args ...any) error {
-	m.ctrl.T.Helper()
-	varargs := []any{ctx, query, wait}
-	for _, a := range args {
-		varargs = append(varargs, a)
-	}
-	ret := m.ctrl.Call(m, "AsyncInsert", varargs...)
-	ret0, _ := ret[0].(error)
-	return ret0
-}
-
-// AsyncInsert indicates an expected call of AsyncInsert.
-func (mr *MockOracleDBMockRecorder) AsyncInsert(ctx, query, wait any, args ...any) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	varargs := append([]any{ctx, query, wait}, args...)
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AsyncInsert", reflect.TypeOf((*MockOracleDB)(nil).AsyncInsert), varargs...)
-}
-
 // Exec mocks base method.
 func (m *MockOracleDB) Exec(ctx context.Context, query string, args ...any) error {
 	m.ctrl.T.Helper()
@@ -9610,25 +9591,6 @@ func NewMockOracleProvider(ctrl *gomock.Controller) *MockOracleProvider {
 // EXPECT returns an object that allows the caller to indicate expected use.
 func (m *MockOracleProvider) EXPECT() *MockOracleProviderMockRecorder {
 	return m.recorder
-}
-
-// AsyncInsert mocks base method.
-func (m *MockOracleProvider) AsyncInsert(ctx context.Context, query string, wait bool, args ...any) error {
-	m.ctrl.T.Helper()
-	varargs := []any{ctx, query, wait}
-	for _, a := range args {
-		varargs = append(varargs, a)
-	}
-	ret := m.ctrl.Call(m, "AsyncInsert", varargs...)
-	ret0, _ := ret[0].(error)
-	return ret0
-}
-
-// AsyncInsert indicates an expected call of AsyncInsert.
-func (mr *MockOracleProviderMockRecorder) AsyncInsert(ctx, query, wait any, args ...any) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	varargs := append([]any{ctx, query, wait}, args...)
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AsyncInsert", reflect.TypeOf((*MockOracleProvider)(nil).AsyncInsert), varargs...)
 }
 
 // Connect mocks base method.

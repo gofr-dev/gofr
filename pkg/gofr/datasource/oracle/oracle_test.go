@@ -2,7 +2,7 @@ package oracle
 
 import (
 	"database/sql"
-	"fmt"
+	"errors"
 	"testing"
 	"time"
 
@@ -13,12 +13,21 @@ import (
 	"go.uber.org/mock/gomock"
 )
 
-func getOracleTestConnection(t *testing.T) (*MockOracleConnection, *MockLogger, Client) {
+var (
+	errExecTest      = errors.New("exec err")
+	errSelectTest    = errors.New("select err")
+	errPingTest      = errors.New("ping error")
+	errTableNotExist = errors.New("ORA-00942: table or view does not exist")
+	errSomeTest      = errors.New("some error")
+	errQueryTest     = errors.New("query error")
+)
+
+func getOracleTestConnection(t *testing.T) (*MockConnection, *MockLogger, Client) {
 	t.Helper()
 
 	ctrl := gomock.NewController(t)
 
-	mockConn := NewMockOracleConnection(ctrl)
+	mockConn := NewMockConnection(ctrl)
 	mockMetric := NewMockMetrics(ctrl)
 	mockLogger := NewMockLogger(ctrl)
 
@@ -94,20 +103,6 @@ func Test_Oracle_Select(t *testing.T) {
 	mockLogger.EXPECT().Debug(gomock.Any())
 
 	err := c.Select(ctx, &users, "SELECT * FROM users")
-
-	require.NoError(t, err)
-}
-
-func Test_Oracle_AsyncInsert(t *testing.T) {
-	mockConn, mockLogger, c := getOracleTestConnection(t)
-
-	ctx := t.Context()
-
-	mockConn.EXPECT().AsyncInsert(ctx, "INSERT INTO users (id, name) VALUES (?, ?)", true, 1, "user").Return(nil)
-
-	mockLogger.EXPECT().Debug(gomock.Any())
-
-	err := c.AsyncInsert(ctx, "INSERT INTO users (id, name) VALUES (?, ?)", true, 1, "user")
 
 	require.NoError(t, err)
 }
@@ -211,13 +206,13 @@ func Test_Exec_ErrorPropagation(t *testing.T) {
 
 	mockLogger.EXPECT().Debug(gomock.Any())
 
-	mockConn.EXPECT().Exec(ctx, "QUERY", gomock.Any()).Return(fmt.Errorf("exec err"))
+	mockConn.EXPECT().Exec(ctx, "QUERY", gomock.Any()).Return(errExecTest)
 
 	err := c.Exec(ctx, "QUERY", 123)
 
 	require.Error(t, err)
 
-	assert.Contains(t, err.Error(), "exec err")
+	assert.Contains(t, err.Error(), errExecTest.Error())
 }
 
 func Test_Select_InvalidDestType(t *testing.T) {
@@ -237,7 +232,7 @@ func Test_Select_ErrorPropagation(t *testing.T) {
 
 	mockLogger.EXPECT().Debug(gomock.Any())
 
-	mockConn.EXPECT().Select(ctx, gomock.Any(), "QUERY", gomock.Any()).Return(fmt.Errorf("select err"))
+	mockConn.EXPECT().Select(ctx, gomock.Any(), "QUERY", gomock.Any()).Return(errSelectTest)
 
 	var result []map[string]any
 
@@ -245,23 +240,7 @@ func Test_Select_ErrorPropagation(t *testing.T) {
 
 	require.Error(t, err)
 
-	assert.Contains(t, err.Error(), "select err")
-}
-
-func Test_AsyncInsert_ErrorPropagation(t *testing.T) {
-	mockConn, mockLogger, c := getOracleTestConnection(t)
-
-	ctx := t.Context()
-
-	mockLogger.EXPECT().Debug(gomock.Any())
-
-	mockConn.EXPECT().AsyncInsert(ctx, "QUERY", true, gomock.Any()).Return(fmt.Errorf("async err"))
-
-	err := c.AsyncInsert(ctx, "QUERY", true, 123)
-
-	require.Error(t, err)
-
-	assert.Contains(t, err.Error(), "async err")
+	assert.Contains(t, err.Error(), errSelectTest.Error())
 }
 
 func Test_addTrace_WithAndWithoutTracer(t *testing.T) {
@@ -331,7 +310,7 @@ func Test_Ping_ReturnsErrorOrNil(t *testing.T) {
 
 	require.NoError(t, err)
 
-	mockConn.EXPECT().Ping(ctx).Return(fmt.Errorf("ping error"))
+	mockConn.EXPECT().Ping(ctx).Return(errPingTest)
 
 	err = c.conn.Ping(ctx)
 
@@ -433,24 +412,6 @@ func Test_sqlConn_Select(t *testing.T) {
 	assert.NoError(t, mock.ExpectationsWereMet())
 }
 
-func Test_sqlConn_AsyncInsert(t *testing.T) {
-	db, mock, err := sqlmock.New()
-
-	require.NoError(t, err)
-
-	defer db.Close()
-
-	s := &sqlConn{db: db}
-
-	mock.ExpectExec("INSERT INTO logs").WithArgs("event").WillReturnResult(sqlmock.NewResult(1, 1))
-
-	err = s.AsyncInsert(t.Context(), "INSERT INTO logs (message) VALUES (?)", true, "event")
-
-	require.NoError(t, err)
-
-	assert.NoError(t, mock.ExpectationsWereMet())
-}
-
 func Test_sqlConn_Stats(t *testing.T) {
 	db, _, err := sqlmock.New()
 
@@ -500,7 +461,7 @@ func Test_sqlConn_InvalidInsertQuery(t *testing.T) {
 
 	s := &sqlConn{db: db}
 
-	mock.ExpectExec("INSERT INTO bad_table").WillReturnError(fmt.Errorf("ORA-00942: table or view does not exist"))
+	mock.ExpectExec("INSERT INTO bad_table").WillReturnError(errTableNotExist)
 
 	err = s.Exec(t.Context(), "INSERT INTO bad_table (id) VALUES (?)", 1)
 
@@ -563,84 +524,84 @@ func Test_Connect_InvalidHost(t *testing.T) {
 	defer ctrl.Finish()
 
 	c := New(Config{Host: "", Port: 1521, Username: "u", Password: "p", Service: "s"})
-	
+
 	mockLogger := NewMockLogger(ctrl)
-	
+
 	c.UseLogger(mockLogger)
 
 	mockLogger.EXPECT().Errorf("invalid OracleDB host: host is empty")
-	
+
 	c.Connect()
 }
 
 func Test_Connect_InvalidPort(t *testing.T) {
 	ctrl := gomock.NewController(t)
-	
+
 	defer ctrl.Finish()
 
 	c := New(Config{Host: "h", Port: 0, Username: "u", Password: "p", Service: "s"})
-	
+
 	mockLogger := NewMockLogger(ctrl)
-	
+
 	c.UseLogger(mockLogger)
 
 	mockLogger.EXPECT().Errorf("invalid OracleDB port: %v", 0)
-	
+
 	c.Connect()
 }
 
 func Test_sqlConn_Exec_Errors(t *testing.T) {
 	db, mock, _ := sqlmock.New()
-	
+
 	defer db.Close()
-	
+
 	s := &sqlConn{db: db}
-	
-	mock.ExpectExec("BAD QUERY").WillReturnError(fmt.Errorf("some error"))
-	
+
+	mock.ExpectExec("BAD QUERY").WillReturnError(errSomeTest)
+
 	err := s.Exec(t.Context(), "BAD QUERY")
-	
+
 	require.Error(t, err)
 }
 
 func Test_sqlConn_Select_ColumnsError(t *testing.T) {
 	db, mock, _ := sqlmock.New()
-	
+
 	defer db.Close()
-	
+
 	s := &sqlConn{db: db}
-	
-	mock.ExpectQuery("SELECT").WillReturnError(fmt.Errorf("query error"))
-	
+
+	mock.ExpectQuery("SELECT").WillReturnError(errQueryTest)
+
 	var dest []map[string]any
-	
+
 	err := s.Select(t.Context(), &dest, "SELECT * FROM dual")
-	
+
 	require.Error(t, err)
 }
 
 func Test_sqlConn_Ping(t *testing.T) {
 	db, _, _ := sqlmock.New()
-	
+
 	defer db.Close()
-	
+
 	s := &sqlConn{db: db}
-	
+
 	err := s.Ping(t.Context())
-	
+
 	require.NoError(t, err)
 }
 
 func Test_sqlConn_Stats_ReturnsDBStats(t *testing.T) {
 	db, _, _ := sqlmock.New()
-	
+
 	defer db.Close()
-	
+
 	s := &sqlConn{db: db}
-	
+
 	stats := s.Stats()
-	
+
 	_, ok := stats.(sql.DBStats)
-	
+
 	assert.True(t, ok)
 }
