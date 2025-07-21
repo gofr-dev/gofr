@@ -26,6 +26,7 @@ type Mocks struct {
 	OpenTSDB      *MockOpenTSDBProvider
 	SurrealDB     *MockSurrealDB
 	Elasticsearch *MockElasticsearch
+	PubSub        *MockPubSubProvider
 	File          *file.MockFileSystemProvider
 	HTTPService   *service.MockHTTP
 	Metrics       *MockMetrics
@@ -100,6 +101,8 @@ func NewMockContainer(t *testing.T, options ...options) (*Container, *Mocks) {
 
 	scyllaMock := NewMockScyllaDB(ctrl)
 	container.ScyllaDB = scyllaMock
+	pubsubMock := NewMockPubSubProvider(ctrl)
+	container.PubSub = pubsubMock
 
 	var httpMock *service.MockHTTP
 
@@ -133,6 +136,7 @@ func NewMockContainer(t *testing.T, options ...options) (*Container, *Mocks) {
 		ArangoDB:      arangoMock,
 		SurrealDB:     surrealMock,
 		Elasticsearch: elasticsearchMock,
+		PubSub:        pubsubMock,
 		Metrics:       mockMetrics,
 		ScyllaDB:      scyllaMock,
 	}
@@ -145,6 +149,10 @@ func NewMockContainer(t *testing.T, options ...options) (*Container, *Mocks) {
 }
 
 type MockPubSub struct {
+}
+
+func (*MockPubSub) Query(_ context.Context, _ string, _ ...any) ([]byte, error) {
+	return nil, nil
 }
 
 func (*MockPubSub) CreateTopic(_ context.Context, _ string) error {

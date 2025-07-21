@@ -42,7 +42,7 @@ func Test_SurrealCheckAndCreateMigrationTable(t *testing.T) {
 	}
 
 	for i, tc := range testCases {
-		mockSurreal.EXPECT().Query(t.Context(), gomock.Any(), nil).Return([]any{}, tc.err).MaxTimes(8)
+		mockSurreal.EXPECT().Query(gomock.Any(), gomock.Any(), nil).Return([]any{}, tc.err).MaxTimes(8)
 
 		err := migratorWithSurreal.checkAndCreateMigrationTable(mockContainer)
 
@@ -63,7 +63,7 @@ func Test_SurrealGetLastMigration(t *testing.T) {
 	}
 
 	for i, tc := range testCases {
-		mockSurreal.EXPECT().Query(t.Context(), getLastSurrealDBGoFrMigration, nil).Return([]any{
+		mockSurreal.EXPECT().Query(gomock.Any(), getLastSurrealDBGoFrMigration, nil).Return([]any{
 			map[string]any{"version": float64(tc.resp)},
 		}, tc.err)
 
@@ -99,7 +99,7 @@ func Test_SurrealCommitMigration(t *testing.T) {
 			"duration":   time.Since(td.StartTime).Milliseconds(),
 		}
 
-		mockSurreal.EXPECT().Query(t.Context(), insertSurrealDBGoFrMigrationRow, bindVars).Return([]any{}, tc.err)
+		mockSurreal.EXPECT().Query(gomock.Any(), insertSurrealDBGoFrMigrationRow, bindVars).Return([]any{}, tc.err)
 
 		err := migratorWithSurreal.commitMigration(mockContainer, td)
 

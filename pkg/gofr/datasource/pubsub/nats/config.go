@@ -25,6 +25,9 @@ type StreamConfig struct {
 	MaxDeliver int
 	MaxWait    time.Duration
 	MaxBytes   int64
+	Storage    string
+	Retention  string
+	MaxAge     time.Duration
 }
 
 // New creates a new Client.

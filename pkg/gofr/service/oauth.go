@@ -3,8 +3,8 @@ package service
 import (
 	"context"
 	"fmt"
-	"net/http"
 	"net/url"
+	"strings"
 
 	"golang.org/x/oauth2"
 	"golang.org/x/oauth2/clientcredentials"
@@ -28,123 +28,90 @@ type OAuthConfig struct {
 
 	// EndpointParams specifies additional parameters for requests to the token endpoint.
 	EndpointParams url.Values
+
+	// AuthStyle represents how requests for tokens are authenticated to the server
+	// Defaults to [oauth2.AuthStyleAutoDetect]
+	AuthStyle oauth2.AuthStyle
 }
 
-func (h *OAuthConfig) AddOption(svc HTTP) HTTP {
-	return &oAuth{
-		Config: clientcredentials.Config{
-			ClientID:       h.ClientID,
-			ClientSecret:   h.ClientSecret,
-			TokenURL:       h.TokenURL,
-			Scopes:         h.Scopes,
-			EndpointParams: h.EndpointParams,
-			AuthStyle:      oauth2.AuthStyleInHeader,
-		},
-		HTTP: svc,
+func (c *OAuthConfig) AddOption(svc HTTP) HTTP {
+	return &authProvider{auth: c.addAuthorizationHeader, HTTP: svc}
+}
+
+func NewOAuthConfig(clientID, secret, tokenURL string, scopes []string, params url.Values, authStyle oauth2.AuthStyle) (Options, error) {
+	if clientID == "" {
+		return nil, AuthErr{nil, "client id is mandatory"}
+	}
+
+	if secret == "" {
+		return nil, AuthErr{nil, "client secret is mandatory"}
+	}
+
+	if err := validateTokenURL(tokenURL); err != nil {
+		return nil, err
+	}
+
+	config := OAuthConfig{
+		ClientID:       clientID,
+		ClientSecret:   secret,
+		TokenURL:       tokenURL,
+		Scopes:         scopes,
+		EndpointParams: params,
+		AuthStyle:      authStyle,
+	}
+
+	return &config, nil
+}
+
+func validateTokenURL(tokenURL string) error {
+	if tokenURL == "" {
+		return AuthErr{nil, "token url is mandatory"}
+	}
+
+	u, err := url.Parse(tokenURL)
+
+	switch {
+	case err != nil:
+		return AuthErr{err, "error in token URL"}
+	case u.Host == "" || u.Scheme == "":
+		return AuthErr{err, "empty host"}
+	case strings.Contains(u.Host, ".."):
+		return AuthErr{nil, "invalid host pattern, contains `..`"}
+	case strings.HasSuffix(u.Host, "."):
+		return AuthErr{nil, "invalid host pattern, ends with `.`"}
+	case u.Scheme != "http" && u.Scheme != "https":
+		return AuthErr{nil, "invalid scheme, allowed http and https only"}
+	default:
+		return nil
 	}
 }
 
-type oAuth struct {
-	clientcredentials.Config
-
-	HTTP
-}
-
-func (o *oAuth) addAuthorizationHeader(ctx context.Context, headers map[string]string) (map[string]string, error) {
+func (c *OAuthConfig) addAuthorizationHeader(ctx context.Context, headers map[string]string) (map[string]string, error) {
 	var err error
 
 	if headers == nil {
 		headers = make(map[string]string)
 	}
 
-	token, err := o.TokenSource(ctx).Token()
+	if authHeader, ok := headers[AuthHeader]; ok && authHeader != "" {
+		return nil, AuthErr{Message: fmt.Sprintf("value %v already exists for header %v", authHeader, AuthHeader)}
+	}
+
+	clientCredentials := clientcredentials.Config{
+		ClientID:       c.ClientID,
+		ClientSecret:   c.ClientSecret,
+		TokenURL:       c.TokenURL,
+		Scopes:         c.Scopes,
+		EndpointParams: c.EndpointParams,
+		AuthStyle:      c.AuthStyle,
+	}
+
+	token, err := clientCredentials.TokenSource(ctx).Token()
 	if err != nil {
 		return nil, err
 	}
 
-	headers["Authorization"] = fmt.Sprintf("%v %v", token.TokenType, token.AccessToken)
+	headers[AuthHeader] = fmt.Sprintf("%v %v", token.Type(), token.AccessToken)
 
 	return headers, nil
-}
-
-func (o *oAuth) GetWithHeaders(ctx context.Context, path string, queryParams map[string]any,
-	headers map[string]string) (*http.Response, error) {
-	headers, err := o.addAuthorizationHeader(ctx, headers)
-	if err != nil {
-		return nil, err
-	}
-
-	return o.HTTP.GetWithHeaders(ctx, path, queryParams, headers)
-}
-
-// PostWithHeaders is a wrapper for doRequest with the POST method and headers.
-func (o *oAuth) PostWithHeaders(ctx context.Context, path string, queryParams map[string]any,
-	body []byte, headers map[string]string) (*http.Response, error) {
-	headers, err := o.addAuthorizationHeader(ctx, headers)
-	if err != nil {
-		return nil, err
-	}
-
-	return o.HTTP.PostWithHeaders(ctx, path, queryParams, body, headers)
-}
-
-// PatchWithHeaders is a wrapper for doRequest with the PATCH method and headers.
-func (o *oAuth) PatchWithHeaders(ctx context.Context, path string, queryParams map[string]any,
-	body []byte, headers map[string]string) (*http.Response, error) {
-	headers, err := o.addAuthorizationHeader(ctx, headers)
-	if err != nil {
-		return nil, err
-	}
-
-	return o.HTTP.PatchWithHeaders(ctx, path, queryParams, body, headers)
-}
-
-// PutWithHeaders is a wrapper for doRequest with the PUT method and headers.
-func (o *oAuth) PutWithHeaders(ctx context.Context, path string, queryParams map[string]any,
-	body []byte, headers map[string]string) (*http.Response, error) {
-	headers, err := o.addAuthorizationHeader(ctx, headers)
-	if err != nil {
-		return nil, err
-	}
-
-	return o.HTTP.PutWithHeaders(ctx, path, queryParams, body, headers)
-}
-
-// DeleteWithHeaders is a wrapper for doRequest with the DELETE method and headers.
-func (o *oAuth) DeleteWithHeaders(ctx context.Context, path string, body []byte, headers map[string]string) (
-	*http.Response, error) {
-	headers, err := o.addAuthorizationHeader(ctx, headers)
-	if err != nil {
-		return nil, err
-	}
-
-	return o.HTTP.DeleteWithHeaders(ctx, path, body, headers)
-}
-
-func (o *oAuth) Get(ctx context.Context, path string, queryParams map[string]any) (*http.Response, error) {
-	return o.GetWithHeaders(ctx, path, queryParams, nil)
-}
-
-// Post is a wrapper for doRequest with the POST method and headers.
-func (o *oAuth) Post(ctx context.Context, path string, queryParams map[string]any,
-	body []byte) (*http.Response, error) {
-	return o.PostWithHeaders(ctx, path, queryParams, body, nil)
-}
-
-// Patch is a wrapper for doRequest with the PATCH method and headers.
-func (o *oAuth) Patch(ctx context.Context, path string, queryParams map[string]any,
-	body []byte) (*http.Response, error) {
-	return o.PatchWithHeaders(ctx, path, queryParams, body, nil)
-}
-
-// Put is a wrapper for doRequest with the PUT method and headers.
-func (o *oAuth) Put(ctx context.Context, path string, queryParams map[string]any,
-	body []byte) (*http.Response, error) {
-	return o.PutWithHeaders(ctx, path, queryParams, body, nil)
-}
-
-// Delete is a wrapper for doRequest with the DELETE method and headers.
-func (o *oAuth) Delete(ctx context.Context, path string, body []byte) (
-	*http.Response, error) {
-	return o.DeleteWithHeaders(ctx, path, body, nil)
 }
