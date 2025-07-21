@@ -1,8 +1,3 @@
-/*
-TODO:
-look for tracing
-*/
-
 package inmemory
 
 import (
@@ -18,9 +13,13 @@ import (
 
 // Common errors
 var (
-	ErrCacheClosed     = errors.New("cache is closed")
-	ErrEmptyKey        = errors.New("key cannot be empty")
-	ErrNilValue        = errors.New("value cannot be nil")
+	// ErrCacheClosed is returned when an operation is attempted on a closed cache.
+	ErrCacheClosed = errors.New("cache is closed")
+	// ErrEmptyKey is returned when an operation is attempted with an empty key.
+	ErrEmptyKey = errors.New("key cannot be empty")
+	// ErrNilValue is returned when a nil value is provided to Set.
+	ErrNilValue = errors.New("value cannot be nil")
+	// ErrInvalidMaxItems is returned when a negative value is provided for maxItems.
 	ErrInvalidMaxItems = errors.New("maxItems must be non-negative")
 )
 
@@ -31,7 +30,6 @@ type node struct {
 	prev, next *node
 }
 
-// entry holds the cache value, expiry, and its node in the LRU list
 type entry struct {
 	value     interface{}
 	expiresAt time.Time
@@ -54,10 +52,11 @@ type inMemoryCache struct {
 	metrics *observability.Metrics
 }
 
-// Option configures the cache
 type Option func(*inMemoryCache) error
 
-// WithTTL sets the TTL for the cache
+// WithTTL sets the default time-to-live (TTL) for all entries in the cache.
+// Items will be automatically removed after this duration has passed since they were last set.
+// A TTL of zero or less disables automatic expiration.
 func WithTTL(ttl time.Duration) Option {
 	return func(c *inMemoryCache) error {
 		c.ttl = ttl
@@ -65,7 +64,9 @@ func WithTTL(ttl time.Duration) Option {
 	}
 }
 
-// WithMaxItems sets the maximum number of items in the cache
+// WithMaxItems sets the maximum number of items the cache can hold.
+// When this limit is reached, the least recently used (LRU) item is evicted
+// to make space for a new one. A value of 0 means no limit.
 func WithMaxItems(maxItems int) Option {
 	return func(c *inMemoryCache) error {
 		if maxItems < 0 {
@@ -76,7 +77,8 @@ func WithMaxItems(maxItems int) Option {
 	}
 }
 
-// WithName sets a friendly name for the cache instance
+// WithName sets a descriptive name for the cache instance.
+// This name is used in logs and metrics to identify the cache.
 func WithName(name string) Option {
 	return func(c *inMemoryCache) error {
 		if name != "" {
@@ -86,7 +88,8 @@ func WithName(name string) Option {
 	}
 }
 
-// WithLogger sets the logger for the cache
+// WithLogger provides a custom logger for the cache.
+// If not provided, a default standard library logger is used.
 func WithLogger(logger observability.Logger) Option {
 	return func(c *inMemoryCache) error {
 		if logger != nil {
@@ -96,7 +99,8 @@ func WithLogger(logger observability.Logger) Option {
 	}
 }
 
-// WithMetrics sets the metrics for the cache
+// WithMetrics provides a metrics collector for the cache.
+// If provided, the cache will record metrics for operations like hits, misses, and sets.
 func WithMetrics(m *observability.Metrics) Option {
 	return func(c *inMemoryCache) error {
 		if m != nil {
@@ -114,7 +118,10 @@ func (c *inMemoryCache) validateKey(key string) error {
 	return nil
 }
 
-// NewInMemoryCache creates a new cache instance
+// NewInMemoryCache creates and returns a new in-memory cache instance.
+// It takes zero or more Option functions to customize its configuration.
+// By default, it creates a cache with a 1-minute TTL and no item limit.
+// It also starts a background goroutine for periodic cleanup of expired items.
 func NewInMemoryCache(opts ...Option) (cache.Cache, error) {
 	c := &inMemoryCache{
 		items:    make(map[string]entry),
@@ -141,7 +148,10 @@ func NewInMemoryCache(opts ...Option) (cache.Cache, error) {
 	return c, nil
 }
 
-// Set inserts or updates a cache entry and marks it as most recently used
+// Set adds or updates a key-value pair in the cache.
+// If the key already exists, its value is updated, and it's marked as the most recently used item.
+// If the cache is at capacity, the least recently used item is evicted.
+// This operation is thread-safe.
 func (c *inMemoryCache) Set(ctx context.Context, key string, value interface{}) error {
 	if err := c.validateKey(key); err != nil {
 		c.logger.Errorf("Set failed: %v", err)
@@ -192,7 +202,11 @@ func (c *inMemoryCache) Set(ctx context.Context, key string, value interface{}) 
 	return nil
 }
 
-// Get retrieves a cache entry and updates its recency
+// Get retrieves the value for a given key.
+// If the key is found and not expired, it returns the value and true.
+// It also marks the accessed item as the most recently used.
+// If the key is not found or has expired, it returns nil and false.
+// This operation is thread-safe.
 func (c *inMemoryCache) Get(ctx context.Context, key string) (interface{}, bool, error) {
 	if err := c.validateKey(key); err != nil {
 		c.logger.Errorf("Get failed: %v", err)
@@ -223,6 +237,9 @@ func (c *inMemoryCache) Get(ctx context.Context, key string) (interface{}, bool,
 	return ent.value, true, nil
 }
 
+// Delete removes a key from the cache.
+// If the key does not exist, the operation is a no-op.
+// This operation is thread-safe.
 func (c *inMemoryCache) Delete(ctx context.Context, key string) error {
 	if err := c.validateKey(key); err != nil {
 		c.logger.Errorf("Delete failed: %v", err)
@@ -244,6 +261,10 @@ func (c *inMemoryCache) Delete(ctx context.Context, key string) error {
 	return nil
 }
 
+// Exists checks if a key exists in the cache and has not expired.
+// It returns true if the key is present and valid, false otherwise.
+// This operation does not update the item's recency.
+// This operation is thread-safe.
 func (c *inMemoryCache) Exists(ctx context.Context, key string) (bool, error) {
 	if err := c.validateKey(key); err != nil {
 		c.logger.Errorf("Exists failed: %v", err)
@@ -258,6 +279,8 @@ func (c *inMemoryCache) Exists(ctx context.Context, key string) (bool, error) {
 	return false, nil
 }
 
+// Clear removes all items from the cache.
+// This operation is thread-safe.
 func (c *inMemoryCache) Clear(ctx context.Context) error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
@@ -271,6 +294,10 @@ func (c *inMemoryCache) Clear(ctx context.Context) error {
 	return nil
 }
 
+// Close stops the background cleanup goroutine and marks the cache as closed.
+// Subsequent operations on the cache may fail. Calling Close on an already closed
+// cache returns ErrCacheClosed.
+// This operation is thread-safe.
 func (c *inMemoryCache) Close(ctx context.Context) error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
@@ -393,7 +420,8 @@ func (c *inMemoryCache) startCleanup() {
 	}
 }
 
-// Convenience constructors
+// NewDefaultCache creates a cache with sensible default settings for general use.
+// It is configured with a 5-minute TTL and a 1000-item limit.
 func NewDefaultCache() (cache.Cache, error) {
 	return NewInMemoryCache(
 		WithName("default"),
@@ -404,6 +432,8 @@ func NewDefaultCache() (cache.Cache, error) {
 	)
 }
 
+// NewDebugCache creates a cache with settings suitable for debugging.
+// It has a short TTL (1 minute) and a small capacity (100 items).
 func NewDebugCache(name string) (cache.Cache, error) {
 	return NewInMemoryCache(
 		WithName(name),
@@ -414,6 +444,8 @@ func NewDebugCache(name string) (cache.Cache, error) {
 	)
 }
 
+// NewProductionCache creates a cache with settings suitable for production environments.
+// It requires explicit configuration for TTL and maximum item count.
 func NewProductionCache(name string, ttl time.Duration, maxItems int) (cache.Cache, error) {
 	return NewInMemoryCache(
 		WithName(name),

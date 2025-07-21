@@ -15,8 +15,11 @@ import (
 
 // Common errors
 var (
-	ErrEmptyKey  = errors.New("key cannot be empty")
-	ErrNilValue  = errors.New("value cannot be nil")
+	// ErrEmptyKey is returned when an operation is attempted with an empty key.
+	ErrEmptyKey = errors.New("key cannot be empty")
+	// ErrNilValue is returned when a nil value is provided to Set.
+	ErrNilValue = errors.New("value cannot be nil")
+	// ErrNilClient is returned when the Redis client is not initialized.
 	ErrNilClient = errors.New("redis client is nil")
 )
 
@@ -28,10 +31,9 @@ type redisCache struct {
 	metrics *observability.Metrics
 }
 
-// Option configures the Redis cache
 type Option func(*redisCache) error
 
-// WithAddr sets the Redis server address
+// WithAddr sets the network address of the Redis server (e.g., "localhost:6379").
 func WithAddr(addr string) Option {
 	return func(c *redisCache) error {
 		if addr == "" {
@@ -44,7 +46,7 @@ func WithAddr(addr string) Option {
 	}
 }
 
-// WithPassword sets the Redis server password
+// WithPassword sets the password for authenticating with the Redis server.
 func WithPassword(password string) Option {
 	return func(c *redisCache) error {
 		opts := c.client.Options()
@@ -54,11 +56,12 @@ func WithPassword(password string) Option {
 	}
 }
 
-// WithDB sets the Redis database number
+// WithDB sets the Redis database number to use.
+// The database number must be between 0 and 255.
 func WithDB(db int) Option {
 	return func(c *redisCache) error {
-		if db < 0 || db > 15 {
-			return errors.New("database number must be between 0 and 15")
+		if db < 0 || db > 255 {
+			return errors.New("database number must be between 0 and 255")
 		}
 		opts := c.client.Options()
 		opts.DB = db
@@ -67,7 +70,9 @@ func WithDB(db int) Option {
 	}
 }
 
-// WithTTL sets the default TTL for cache entries
+// WithTTL sets the default time-to-live (TTL) for all entries in the cache.
+// Redis will automatically remove items after this duration.
+// A TTL of zero means items will not expire.
 func WithTTL(ttl time.Duration) Option {
 	return func(c *redisCache) error {
 		if ttl < 0 {
@@ -78,7 +83,8 @@ func WithTTL(ttl time.Duration) Option {
 	}
 }
 
-// WithName sets a friendly name for the cache instance
+// WithName sets a descriptive name for the cache instance.
+// This name is used in logs and metrics to identify the cache.
 func WithName(name string) Option {
 	return func(c *redisCache) error {
 		if name != "" {
@@ -88,7 +94,8 @@ func WithName(name string) Option {
 	}
 }
 
-// WithLogger sets the logger for the cache
+// WithLogger provides a custom logger for the cache.
+// If not provided, a default standard library logger is used.
 func WithLogger(logger observability.Logger) Option {
 	return func(c *redisCache) error {
 		if logger != nil {
@@ -98,7 +105,8 @@ func WithLogger(logger observability.Logger) Option {
 	}
 }
 
-// WithMetrics sets the metrics for the cache
+// WithMetrics provides a metrics collector for the cache.
+// If provided, the cache will record metrics for its operations.
 func WithMetrics(m *observability.Metrics) Option {
 	return func(c *redisCache) error {
 		if m != nil {
@@ -108,7 +116,10 @@ func WithMetrics(m *observability.Metrics) Option {
 	}
 }
 
-// NewRedisCache creates a new Redis-backed cache instance
+// NewRedisCache creates and returns a new Redis-backed cache instance.
+// It establishes a connection to the Redis server and pings it to ensure connectivity.
+// It takes zero or more Option functions to customize its configuration.
+// By default, it connects to "localhost:6379" with a 1-minute TTL.
 func NewRedisCache(ctx context.Context, opts ...Option) (cache.Cache, error) {
 	// Default client connects to localhost:6379
 	defaultClient := redis.NewClient(&redis.Options{})
@@ -171,7 +182,10 @@ func (c *redisCache) serializeValue(value interface{}) (string, error) {
 	}
 }
 
-// Set inserts or updates a cache entry with the default TTL
+// Set adds or updates a key-value pair in the Redis cache with the default TTL.
+// The value is serialized before being stored. Simple types are stored as strings,
+// while complex types are JSON-marshaled.
+// This operation is thread-safe.
 func (c *redisCache) Set(ctx context.Context, key string, value interface{}) error {
 	start := time.Now()
 	if err := c.validateKey(key); err != nil {
@@ -202,7 +216,11 @@ func (c *redisCache) Set(ctx context.Context, key string, value interface{}) err
 	return nil
 }
 
-// Get retrieves a cache entry
+// Get retrieves an item from the Redis cache.
+// If the key is found, it returns the stored value and true.
+// The caller is responsible for deserializing it if necessary.
+// If the key is not found, it returns nil and false.
+// This operation is thread-safe.
 func (c *redisCache) Get(ctx context.Context, key string) (interface{}, bool, error) {
 	start := time.Now()
 	if err := c.validateKey(key); err != nil {
@@ -232,7 +250,9 @@ func (c *redisCache) Get(ctx context.Context, key string) (interface{}, bool, er
 	return val, true, nil
 }
 
-// Delete removes a cache entry
+// Delete removes a key from the Redis cache.
+// If the key does not exist, the operation is a no-op.
+// This operation is thread-safe.
 func (c *redisCache) Delete(ctx context.Context, key string) error {
 	start := time.Now()
 	if err := c.validateKey(key); err != nil {
@@ -253,7 +273,9 @@ func (c *redisCache) Delete(ctx context.Context, key string) error {
 	return nil
 }
 
-// Exists checks if a key is in the cache
+// Exists checks if a key exists in the Redis cache.
+// It returns true if the key is present, false otherwise.
+// This operation is thread-safe.
 func (c *redisCache) Exists(ctx context.Context, key string) (bool, error) {
 	start := time.Now()
 	if err := c.validateKey(key); err != nil {
@@ -272,7 +294,9 @@ func (c *redisCache) Exists(ctx context.Context, key string) (bool, error) {
 	return res > 0, nil
 }
 
-// Clear removes all keys from the current database
+// Clear removes all keys from the current Redis database (using FLUSHDB).
+// This is a destructive operation and should be used with caution.
+// This operation is thread-safe.
 func (c *redisCache) Clear(ctx context.Context) error {
 	start := time.Now()
 	c.logger.Warnf("Clearing redis cache '%s' (FLUSHDB)", c.name)
@@ -287,7 +311,8 @@ func (c *redisCache) Clear(ctx context.Context) error {
 	return nil
 }
 
-// Close terminates the connection to the Redis server
+// Close closes the connection to the Redis server.
+// It's important to call Close to release network resources.
 func (c *redisCache) Close(ctx context.Context) error {
 	if c.client == nil {
 		return ErrNilClient
