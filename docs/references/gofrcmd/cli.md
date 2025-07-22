@@ -133,7 +133,7 @@ func main() {
 > ./calculator calc div 12 3    # Output: Result: 4
 > ```
 
-*** Snippet of Running Calculator.go***
+ ** Snippet of Running Calculator.go**
 ![GoFr CLI calculator performing addition and divison](docs/references/gofrcmd/calculator.png)
 
  **Ending Note:**
