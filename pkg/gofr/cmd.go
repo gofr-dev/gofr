@@ -13,7 +13,6 @@ import (
 type cmd struct {
 	routes []route
 	out    terminal.Output
-	ctx    Context
 }
 
 type route struct {
