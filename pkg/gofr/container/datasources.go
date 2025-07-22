@@ -751,7 +751,7 @@ type InfluxDB interface {
 	Query(ctx context.Context, org, fluxQuery string) ([]map[string]any, error)
 
 	// CreateBucket creates a new bucket under the specified organization.
-	CreateBucket(ctx context.Context, org, bucket string, retentionPeriod time.Duration) (string, error)
+	CreateBucket(ctx context.Context, org, bucket string) (string, error)
 
 	// DeleteBucket deletes a bucket under the specified organization.
 	DeleteBucket(ctx context.Context, org, bucket string) error

@@ -1,6 +1,4 @@
-go 1.24.0
-
-toolchain go1.24.0
+go 1.24.2
 
 use (
 	.
@@ -22,4 +20,5 @@ use (
 	./pkg/gofr/datasource/scylladb
 	./pkg/gofr/datasource/solr
 	./pkg/gofr/datasource/surrealdb
+	pkg/gofr/datasource/influxdb
 )
