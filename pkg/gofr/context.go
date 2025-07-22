@@ -159,19 +159,21 @@ func (a *authInfo) GetAPIKey() string {
 
 func newContext(w Responder, r Request, c *container.Container) *Context {
 	return &Context{
-		Context:   r.Context(),
-		Request:   r,
-		responder: w,
-		Container: c,
+		Context:       r.Context(),
+		Request:       r,
+		responder:     w,
+		Container:     c,
+		ContextLogger: *logging.NewContextLogger(r.Context(), c.Logger),
 	}
 }
 
 func newCMDContext(w Responder, r Request, c *container.Container, out terminal.Output) *Context {
 	return &Context{
-		Context:   r.Context(),
-		responder: w,
-		Request:   r,
-		Container: c,
-		Out:       out,
+		Context:       r.Context(),
+		responder:     w,
+		Request:       r,
+		Container:     c,
+		Out:           out,
+		ContextLogger: *logging.NewContextLogger(r.Context(), c.Logger),
 	}
 }
