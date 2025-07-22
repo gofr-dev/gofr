@@ -1,25 +1,22 @@
 package migration
 
-import (
-	"gofr.dev/pkg/gofr/container"
-	"gofr.dev/pkg/gofr/service"
-)
+import "gofr.dev/pkg/gofr/container"
 
 type Datasource struct {
 	// TODO Logger should not be embedded rather it should be a field.
 	// Need to think it through as it will bring breaking changes.
 	Logger
 
-	Services   map[string]service.HTTP
-	SQL        SQL
-	Redis      Redis
-	PubSub     PubSub
-	Clickhouse Clickhouse
-	Cassandra  Cassandra
-	Mongo      Mongo
-	ArangoDB   ArangoDB
-	SurrealDB  SurrealDB
-	DGraph     DGraph
+	SQL           SQL
+	Redis         Redis
+	PubSub        PubSub
+	Clickhouse    Clickhouse
+	Cassandra     Cassandra
+	Mongo         Mongo
+	ArangoDB      ArangoDB
+	SurrealDB     SurrealDB
+	DGraph        DGraph
+	Elasticsearch Elasticsearch
 }
 
 // It is a base implementation for migration manager, on this other database drivers have been wrapped.
