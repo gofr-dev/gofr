@@ -104,12 +104,9 @@ func main() {
 
 	app.Run()
 }
+```
 
-
-
- ---
-
- >  **Note**
+ >  **Note:**
 
 > Create the file: Save the above code in a file named `calculator.go`.  
 >  
@@ -133,8 +130,8 @@ func main() {
 > ./calculator calc div 12 3    # Output: Result: 4
 > ```
 
- ** Snippet of Running Calculator.go**
-![GoFr CLI calculator performing addition and divison](docs/references/gofrcmd/calculator.png)
+ <p><strong>Snippet of Running Calculator.go</strong></p>
+<img src="./calculator.png" alt="GoFr CLI calculator performing addition and division" width="500"/>
 
  **Ending Note:**
    
