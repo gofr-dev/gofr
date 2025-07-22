@@ -144,6 +144,12 @@ type Elasticsearch interface {
 	// DeleteDocument removes a document by ID.
 	// Useful for removing specific documents during migrations.
 	DeleteDocument(ctx context.Context, index, id string) error
+
+	// Bulk executes multiple indexing/updating/deleting operations in one request.
+	// Each entry in `operations` should be a JSON‑serializable object
+	// following the Elasticsearch bulk API format.
+	// Useful for bulk operations during migrations.
+	Bulk(ctx context.Context, operations []map[string]any) (map[string]any, error)
 }
 
 // keeping the migrator interface unexported as, right now it is not being implemented directly, by the externalDB drivers.
