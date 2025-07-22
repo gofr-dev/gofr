@@ -716,14 +716,14 @@ type Elasticsearch interface {
 	// DeleteDocument removes a document by ID.
 	DeleteDocument(ctx context.Context, index, id string) error
 
-	// Search executes a query against one or more indices.
-	// Returns the entire response JSON as a map.
-	Search(ctx context.Context, indices []string, query map[string]any) (map[string]any, error)
-
 	// Bulk executes multiple indexing/updating/deleting operations in one request.
 	// Each entry in `operations` should be a JSON‑serializable object
 	// following the Elasticsearch bulk API format.
 	Bulk(ctx context.Context, operations []map[string]any) (map[string]any, error)
+
+	// Search executes a query against one or more indices.
+	// Returns the entire response JSON as a map.
+	Search(ctx context.Context, indices []string, query map[string]any) (map[string]any, error)
 
 	HealthChecker
 }
