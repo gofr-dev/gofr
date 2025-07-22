@@ -2,6 +2,7 @@ package gofr
 
 import (
 	"context"
+	"errors"
 	"net/http"
 	"os"
 	"os/signal"
@@ -18,9 +19,16 @@ func (a *App) Run() {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
 
-	// Running startup hooks and exit if they fail.
+	// Run startup hooks and exit if they fail for reasons other than context cancellation.
 	// Using the main app context to ensure proper lifecycle management.
 	if err := a.runOnStartHooks(ctx); err != nil {
+		// If the error is due to context cancellation, allow graceful shutdown.
+		if errors.Is(err, context.Canceled) {
+			a.Logger().Info("Startup canceled by context, shutting down gracefully.")
+			return
+		}
+		// For any other error, log and exit.
+		a.Logger().Errorf("Startup failed: %v", err)
 		os.Exit(1)
 	}
 
