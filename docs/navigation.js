@@ -234,7 +234,7 @@ export const navigation = [
             },
             {
                 title: 'CLI Usage',
-                href: '/docs/references/gofr/cmd/cli',
+                href: '/docs/references/gofrcmd/cli',
                 desc: 'Learn how to build and run CLI applications in GoFR. Includes practical code snippets and instructions to create and execute a simple calculator app from the terminal.',
             }
 
