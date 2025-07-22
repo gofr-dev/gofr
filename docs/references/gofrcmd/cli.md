@@ -134,7 +134,7 @@ func main() {
 > ```
 
 *** Snippet of Running Calculator.go***
-![GoFr CLI calculator performing addition and divison](./calculator.png)
+![GoFr CLI calculator performing addition and divison](docs/references/gofrcmd/calculator.png)
 
  **Ending Note:**
    
