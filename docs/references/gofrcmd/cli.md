@@ -38,6 +38,12 @@ GoFr supports building command-line interface (CLI) applications using the same 
 - Structure commands with single-responsibility to simplify usage and maintenance.
 
  ---
+ > **Note**  
+> This document provides details about the **GoFr CLI**, a lightweight command-line utility built using the **GoFr framework itself**.  
+> It serves as a practical example of how developers can leverage GoFr for building their own CLI applications.  
+>  
+> For existing reference documentation, see [GoFr CLI Docs](https://gofr.dev/docs/references/gofrcli).
+
 
  ## Sample CLI App in GoFr
 
@@ -49,51 +55,57 @@ Here's a simple yet useful CLI calculator built with GoFr. It supports operation
 package main
 
 import (
-    "errors"
-    "fmt"
-    "strconv"
+	"errors"
+	"fmt"
+	"strconv"
 
-    "gofr.dev/pkg/gofr"
+	"gofr.dev/pkg/gofr"
 )
 
 func main() {
-    app := gofr.NewCMD()
+	app := gofr.NewCMD()
 
-    app.Command("calc", "Performs basic arithmetic", func(ctx *gofr.Context) error {
-        if len(ctx.Args) < 3 {
-            return errors.New("usage: calc <add|sub|mul|div> <num1> <num2>")
-        }
+	app.SubCommand("calc", "Performs basic arithmetic", func(ctx *gofr.Context) error {
+		op := ctx.Flag("op")
+		aStr := ctx.Flag("a")
+		bStr := ctx.Flag("b")
 
-        op := ctx.Args[0]
-        num1, err1 := strconv.Atoi(ctx.Args[1])
-        num2, err2 := strconv.Atoi(ctx.Args[2])
+		if op == "" || aStr == "" || bStr == "" {
+			return errors.New("usage: ./calc-cli calc --op=<add|sub|mul|div> --a=<num1> --b=<num2>")
+		}
 
-        if err1 != nil || err2 != nil {
-            return errors.New("both arguments must be valid integers")
-        }
+		a, err1 := strconv.Atoi(aStr)
+		b, err2 := strconv.Atoi(bStr)
+		if err1 != nil || err2 != nil {
+			return errors.New("both --a and --b must be valid integers")
+		}
 
-        switch op {
-        case "add":
-            fmt.Println("Result:", num1+num2)
-        case "sub":
-            fmt.Println("Result:", num1-num2)
-        case "mul":
-            fmt.Println("Result:", num1*num2)
-        case "div":
-            if num2 == 0 {
-                return errors.New("cannot divide by zero")
-            }
-            fmt.Println("Result:", num1/num2)
-        default:
-            return fmt.Errorf("unsupported operation: %s", op)
-        }
+		var result int
+		switch op {
+		case "add":
+			result = a + b
+		case "sub":
+			result = a - b
+		case "mul":
+			result = a * b
+		case "div":
+			if b == 0 {
+				return errors.New("cannot divide by zero")
+			}
+			result = a / b
+		default:
+			return fmt.Errorf("unsupported operation: %s", op)
+		}
 
-        ctx.Logger.Info("Calculation completed successfully")
-        return nil
-    })
+		fmt.Printf("Result: %d\n", result)
+		ctx.Logger.Infof("Performed %s on %d and %d", op, a, b)
+		return nil
+	})
 
-    app.Run()
+	app.Run()
 }
+
+
 
  ---
 
@@ -121,6 +133,13 @@ func main() {
 > ./calculator calc div 12 3    # Output: Result: 4
 > ```
 
+*** Snippet of Running Calculator.go***
+![GoFr CLI calculator performing addition and divison](./calculator.png)
+
  **Ending Note:**
    
 > This CLI app demonstrates how to structure and run basic command-line utilities using Go. You can enhance it further by adding error handling, more operations, or using third-party CLI libraries like Cobra for advanced features.
+
+>  **Did you know?**  
+> The GoFr CLI itself is a utility built entirely using the **GoFr framework**.  
+> This demonstrates how GoFr can be used not just for web services, but also for building powerful command-line tools.
