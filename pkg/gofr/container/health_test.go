@@ -33,80 +33,7 @@ func TestContainer_Health(t *testing.T) {
 	}
 
 	for i, tc := range tests {
-		expected := map[string]any{
-			"kv-store": datasource.Health{
-				Status: tc.datasourceHealth, Details: map[string]any{
-					"host":  "localhost:1234",
-					"error": "kv-store not connected",
-				},
-			},
-			"redis": datasource.Health{
-				Status: tc.datasourceHealth, Details: map[string]any{
-					"host":  "localhost:6379",
-					"error": "redis not connected",
-				},
-			},
-			"mongo": datasource.Health{
-				Status: tc.datasourceHealth, Details: map[string]any{
-					"host":  "localhost:6379",
-					"error": "mongo not connected",
-				},
-			},
-			"clickHouse": datasource.Health{
-				Status: tc.datasourceHealth, Details: map[string]any{
-					"host":  "localhost:6379",
-					"error": "clickhouse not connected",
-				},
-			},
-			"cassandra": datasource.Health{
-				Status: tc.datasourceHealth, Details: map[string]any{
-					"host":  "localhost:6379",
-					"error": "cassandra not connected",
-				},
-			},
-
-			"sql": &datasource.Health{
-				Status: tc.datasourceHealth, Details: map[string]any{
-					"host": "localhost:3306/test",
-					"stats": sql.DBStats{
-						MaxOpenConnections: 0, OpenConnections: 1, InUse: 0, Idle: 1, WaitCount: 0,
-						WaitDuration: 0, MaxIdleClosed: 0, MaxIdleTimeClosed: 0, MaxLifetimeClosed: 0,
-					},
-				},
-			},
-			"dgraph": datasource.Health{
-				Status: tc.datasourceHealth, Details: map[string]any{
-					"host":  "localhost:8000",
-					"error": "dgraph not connected",
-				},
-			},
-			"opentsdb": datasource.Health{
-				Status: tc.datasourceHealth, Details: map[string]any{
-					"host":  "localhost:8000",
-					"error": "opentsdb not connected",
-				},
-			},
-			"elasticsearch": datasource.Health{
-				Status: tc.datasourceHealth, Details: map[string]any{
-					"host":  "localhost:9200",
-					"error": "elasticsearch not connected",
-				},
-			},
-			"pubsub": datasource.Health{
-				Status: tc.datasourceHealth, Details: map[string]any{
-					"host":  "localhost:pubsub",
-					"error": nil,
-				},
-			},
-			"test-service": &service.Health{
-				Status: "UP", Details: map[string]any{
-					"host": strings.TrimPrefix(srv.URL, "http://"),
-				},
-			},
-			"name":    "test-app",
-			"status":  tc.appHealth,
-			"version": "test",
-		}
+		expected := getExpectedData(tc.datasourceHealth, tc.appHealth, srv.URL)
 
 		expectedJSONdata, _ := json.Marshal(expected)
 
@@ -211,4 +138,81 @@ func registerMocks(mocks *Mocks, health string) {
 			"error": "elasticsearch not connected",
 		},
 	}, nil)
+}
+
+func getExpectedData(datasourceHealth, appHealth, srvURL string) map[string]any {
+	return map[string]any{
+		"kv-store": datasource.Health{
+			Status: datasourceHealth, Details: map[string]any{
+				"host":  "localhost:1234",
+				"error": "kv-store not connected",
+			},
+		},
+		"redis": datasource.Health{
+			Status: datasourceHealth, Details: map[string]any{
+				"host":  "localhost:6379",
+				"error": "redis not connected",
+			},
+		},
+		"mongo": datasource.Health{
+			Status: datasourceHealth, Details: map[string]any{
+				"host":  "localhost:6379",
+				"error": "mongo not connected",
+			},
+		},
+		"clickHouse": datasource.Health{
+			Status: datasourceHealth, Details: map[string]any{
+				"host":  "localhost:6379",
+				"error": "clickhouse not connected",
+			},
+		},
+		"cassandra": datasource.Health{
+			Status: datasourceHealth, Details: map[string]any{
+				"host":  "localhost:6379",
+				"error": "cassandra not connected",
+			},
+		},
+
+		"sql": &datasource.Health{
+			Status: datasourceHealth, Details: map[string]any{
+				"host": "localhost:3306/test",
+				"stats": sql.DBStats{
+					MaxOpenConnections: 0, OpenConnections: 1, InUse: 0, Idle: 1, WaitCount: 0,
+					WaitDuration: 0, MaxIdleClosed: 0, MaxIdleTimeClosed: 0, MaxLifetimeClosed: 0,
+				},
+			},
+		},
+		"dgraph": datasource.Health{
+			Status: datasourceHealth, Details: map[string]any{
+				"host":  "localhost:8000",
+				"error": "dgraph not connected",
+			},
+		},
+		"opentsdb": datasource.Health{
+			Status: datasourceHealth, Details: map[string]any{
+				"host":  "localhost:8000",
+				"error": "opentsdb not connected",
+			},
+		},
+		"elasticsearch": datasource.Health{
+			Status: datasourceHealth, Details: map[string]any{
+				"host":  "localhost:9200",
+				"error": "elasticsearch not connected",
+			},
+		},
+		"pubsub": datasource.Health{
+			Status: datasourceHealth, Details: map[string]any{
+				"host":  "localhost:pubsub",
+				"error": nil,
+			},
+		},
+		"test-service": &service.Health{
+			Status: "UP", Details: map[string]any{
+				"host": strings.TrimPrefix(srvURL, "http://"),
+			},
+		},
+		"name":    "test-app",
+		"status":  appHealth,
+		"version": "test",
+	}
 }
