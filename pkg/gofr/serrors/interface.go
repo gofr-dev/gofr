@@ -1,18 +1,18 @@
 package serrors
 
-type IError interface {
+type ErrorSchema interface {
 	Code() string
 	SubCode() string
 	Level() string
 	Retryable() bool
 	ExternalStatus() int
 	ExternalMessage() string
-	WithStatusCode(string) IError
-	WithSubCode(string) IError
-	WithLevel(Level) IError
-	WithRetryable(bool) IError
-	WithMeta(string, any) IError
-	WithMetaMulti(map[string]any) IError
-	WithExternalStatus(int) IError
-	WithExternalMessage(string) IError
+	WithStatusCode(string) ErrorSchema
+	WithSubCode(string) ErrorSchema
+	WithLevel(Level) ErrorSchema
+	WithRetryable(bool) ErrorSchema
+	WithMeta(string, any) ErrorSchema
+	WithMetaMulti(map[string]any) ErrorSchema
+	WithExternalStatus(int) ErrorSchema
+	WithExternalMessage(string) ErrorSchema
 }

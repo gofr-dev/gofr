@@ -10,5 +10,5 @@ type Error struct {
 	retryable          bool           // Indicates if the operation can be safely retried
 	externalStatusCode int            // External facing status code: could be HTTP status, gRPC status code, WebSocket close code, etc.
 	externalMessage    string         // User friendly client facing error message
-	IError
+	ErrorSchema
 }

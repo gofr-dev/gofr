@@ -28,44 +28,44 @@ func (err *Error) ExternalMessage() string {
 	return err.externalMessage
 }
 
-func (err *Error) WithStatusCode(value string) IError {
+func (err *Error) WithStatusCode(value string) ErrorSchema {
 	err.statusCode = value
 	return err
 }
 
-func (err *Error) WithSubCode(value string) IError {
+func (err *Error) WithSubCode(value string) ErrorSchema {
 	err.subStatusCode = value
 	return err
 }
 
-func (err *Error) WithLevel(level Level) IError {
+func (err *Error) WithLevel(level Level) ErrorSchema {
 	err.level = level
 	return err
 }
 
-func (err *Error) WithRetryable(retryable bool) IError {
+func (err *Error) WithRetryable(retryable bool) ErrorSchema {
 	err.retryable = retryable
 	return err
 }
 
-func (err *Error) WithMeta(key string, value any) IError {
+func (err *Error) WithMeta(key string, value any) ErrorSchema {
 	err.meta[key] = value
 	return err
 }
 
-func (err *Error) WithMetaMulti(input map[string]any) IError {
+func (err *Error) WithMetaMulti(input map[string]any) ErrorSchema {
 	for key, value := range input {
 		err.meta[key] = value
 	}
 	return err
 }
 
-func (err *Error) WithExternalStatus(code int) IError {
+func (err *Error) WithExternalStatus(code int) ErrorSchema {
 	err.externalStatusCode = code
 	return err
 }
 
-func (err *Error) WithExternalMessage(msg string) IError {
+func (err *Error) WithExternalMessage(msg string) ErrorSchema {
 	err.externalMessage = msg
 	return err
 }
