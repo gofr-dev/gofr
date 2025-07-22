@@ -231,7 +231,13 @@ export const navigation = [
                 title: 'GoFr CLI',
                 href: '/docs/references/gofrcli',
                 desc: "GoFr CLI is the command line tool for initializing projects and performing tasks in accordance with GoFr framework."
+            },
+            {
+                title: 'CLI Usage',
+                href: '/docs/references/gofr/cmd/cli',
+                desc: 'Learn how to build and run CLI applications in GoFR. Includes practical code snippets and instructions to create and execute a simple calculator app from the terminal.',
             }
+
         ],
     },
 ]
