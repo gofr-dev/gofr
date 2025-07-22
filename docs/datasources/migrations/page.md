@@ -162,7 +162,6 @@ UP: func(d migration.Datasource) error {
 
 ### Recovery Strategies
 
-1. **Manual Rollback**: Use DOWN migrations to revert changes
-2. **Data Backup**: Always backup before running migrations
-3. **Incremental Approach**: Break large migrations into smaller steps
-4. **Testing Environment**: Test migrations in staging first
+- **Data Backup**: Always backup before running migrations
+- **Incremental Approach**: Break large migrations into smaller steps
+- **Testing Environment**: Test migrations in staging first
