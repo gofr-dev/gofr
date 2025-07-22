@@ -3,13 +3,10 @@ package influxdb
 import (
 	"context"
 	"fmt"
-	"gofr.dev/pkg/gofr/datasource"
-	"log"
-	"time"
-
 	influxdb2 "github.com/influxdata/influxdb-client-go/v2"
 	"go.opencensus.io/trace"
 	"gofr.dev/pkg/gofr/container"
+	"gofr.dev/pkg/gofr/datasource"
 )
 
 // Config holds the configuration for connecting to InfluxDB.
@@ -37,12 +34,20 @@ type HealthInflux struct {
 }
 
 const (
-	statusDown     = "DOWN"
-	statusUp       = "UP"
-	defaultTimeout = 5 * time.Second
+	statusDown = "DOWN"
+	statusUp   = "UP"
 )
 
-// CreateOrganization implements container.InfluxDBProvider.
+// CreateOrganization creates a new organization in InfluxDB with the specified name.
+// It implements the container.InfluxDBProvider interface.
+//
+// Parameters:
+// - ctx: Context for request cancellation and timeouts.
+// - orgName: The name of the organization to be created. Must not be empty.
+//
+// Returns:
+// - string: The ID of the newly created organization.
+// - error: Error if organization creation fails or if orgName is empty.
 func (c *Client) CreateOrganization(ctx context.Context, orgName string) (string, error) {
 	if orgName == "" {
 		return "", fmt.Errorf("org Name name must not be empty")
@@ -55,7 +60,15 @@ func (c *Client) CreateOrganization(ctx context.Context, orgName string) (string
 	return *newOrg.Id, nil
 }
 
-// DeleteOrganization implements container.InfluxDBProvider.
+// DeleteOrganization deletes an organization in InfluxDB using its ID.
+// It implements the container.InfluxDBProvider interface.
+//
+// Parameters:
+// - ctx: Context for request cancellation and timeouts.
+// - orgId: The ID of the organization to be deleted. Must not be empty.
+//
+// Returns:
+// - err: Error if the organization deletion fails or if orgId is empty.
 func (c *Client) DeleteOrganization(ctx context.Context, orgId string) error {
 	if orgId == "" {
 		return fmt.Errorf("orgId name must not be empty")
@@ -68,6 +81,15 @@ func (c *Client) DeleteOrganization(ctx context.Context, orgId string) error {
 	return nil
 }
 
+// ListOrganization retrieves all organizations from InfluxDB and returns their IDs and names.
+// It implements the container.InfluxDBProvider interface.
+//
+// Parameters:
+// - ctx: Context for request cancellation and timeouts.
+//
+// Returns:
+// - orgs: A map of organization IDs to their corresponding names.
+// - err: Error if the API call fails or the organizations cannot be retrieved.
 func (c *Client) ListOrganization(ctx context.Context) (orgs map[string]string, err error) {
 	orgAPI := c.client.OrganizationsAPI()
 	allOrgs, err := orgAPI.GetOrganizations(ctx)
@@ -84,8 +106,16 @@ func (c *Client) ListOrganization(ctx context.Context) (orgs map[string]string, 
 	return orgs, nil
 }
 
-// CreateBucket implements container.InfluxDBProvider.
-func (c *Client) CreateBucket(ctx context.Context, orgId string, bucketName string, retentionPeriod time.Duration) (bucketId string, err error) {
+// CreateBucket creates a new bucket in InfluxDB for the specified organization.
+// Parameters:
+// - ctx: Context for request cancellation and timeouts.
+// - orgId: The ID of the organization in which the bucket will be created.
+// - bucketName: The name of the bucket to be created.
+//
+// Returns:
+// - bucketId: The ID of the newly created bucket.
+// - err: Error if bucket creation fails.
+func (c *Client) CreateBucket(ctx context.Context, orgId string, bucketName string) (bucketId string, err error) {
 
 	// Validate input
 	if orgId == "" {
@@ -106,7 +136,14 @@ func (c *Client) CreateBucket(ctx context.Context, orgId string, bucketName stri
 	return *newBucket.Id, nil
 }
 
-// DeleteBucket -=implements container.InfluxDBProvider.
+// DeleteBucket deletes a bucket from InfluxDB by its ID.
+// Parameters:
+// - ctx: Context for request cancellation and timeouts.
+// - org: The ID or name of the organization (not used directly in this implementation).
+// - bucketID: The ID of the bucket to be deleted. Must not be empty.
+//
+// Returns:
+// - err: Error if the bucket deletion fails or if bucketID is empty.
 func (c *Client) DeleteBucket(ctx context.Context, org, bucketID string) error {
 	if bucketID == "" {
 		return fmt.Errorf("bucket name must not be empty")
@@ -124,18 +161,26 @@ type Health struct {
 	Details map[string]any `json:"details,omitempty"` // extra metadata
 }
 
-// HealthCheck implements container.InfluxDBProvider.
+// HealthCheck retrieves the health status of the InfluxDB instance.
+// It implements the container.InfluxDBProvider interface.
+//
+// Parameters:
+// - ctx: Context for request cancellation and timeouts.
+//
+// Returns:
+// - any: A datasource.Health object containing the status and details of the InfluxDB service.
+// - err: Error if the health check request fails or the InfluxDB client returns an error.
 func (c *Client) HealthCheck(ctx context.Context) (any, error) {
 	health, err := c.client.Health(ctx)
 	if err != nil {
 		return datasource.Health{
-			Status:  datasource.StatusDown,
+			Status:  statusDown,
 			Details: make(map[string]any),
 		}, err
 	}
 
 	h := datasource.Health{
-		Status: datasource.StatusUp,
+		Status: statusUp,
 		Details: map[string]any{
 			"Username": c.config.Username,
 			"Url":      c.config.Url,
@@ -150,7 +195,6 @@ func (c *Client) HealthCheck(ctx context.Context) (any, error) {
 		h.Details["Checks"] = health.Checks
 		h.Details["Status"] = health.Status
 	}
-
 	return h, nil
 }
 
@@ -169,33 +213,39 @@ Returns:
 func (c *Client) ListBuckets(ctx context.Context, org string) (buckets map[string]string, err error) {
 	// Validate input
 	if org == "" {
+		c.logger.Errorf("organization name must not be empty")
 		return nil, fmt.Errorf("organization name must not be empty")
 	}
 
 	bucketsAPI := c.client.BucketsAPI()
 	bucketsDomain, err := bucketsAPI.FindBucketsByOrgName(ctx, org)
 	if err != nil {
-		// Consider logging the error with context for observability
-		log.Printf("failed to find buckets for org %q: %v", org, err)
+		c.logger.Errorf("failed to find buckets for org %q: %v", org, err)
 		return nil, fmt.Errorf("failed to list buckets for organization %q: %w", org, err)
 	}
 
 	if bucketsDomain == nil {
-		// Defensive: treat nil response as empty result
 		return nil, nil
 	}
 
 	buckets = make(map[string]string) // Initialize the map
 	for _, bucket := range *bucketsDomain {
 		if bucket.Name != "" {
-			//buckets = append(buckets, bucket.Name)
 			buckets[*bucket.Id] = bucket.Name
 		}
 	}
 	return buckets, nil
 }
 
-// Ping implements container.InfluxDBProvider.
+// Ping pings the InfluxDB server to check its availability.
+// It implements the container.InfluxDBProvider interface.
+//
+// Parameters:
+// - ctx: Context for request cancellation and timeouts.
+//
+// Returns:
+// - bool: True if the InfluxDB server is reachable; false otherwise.
+// - err: Error if the ping request fails.
 func (c *Client) Ping(ctx context.Context) (bool, error) {
 	ping, err := c.client.Ping(ctx)
 	if err != nil {
@@ -204,19 +254,16 @@ func (c *Client) Ping(ctx context.Context) (bool, error) {
 	return ping, nil
 }
 
-// Query implements container.InfluxDBProvider.
 func (c *Client) Query(ctx context.Context, org string, fluxQuery string) ([]map[string]any, error) {
 	panic("unimplemented")
 }
 
-// UseLogger sets the logger for the InfluxDB client.
 func (c *Client) UseLogger(logger any) {
 	if l, ok := logger.(Logger); ok {
 		c.logger = l
 	}
 }
 
-// UseMetrics sets the metrics for the InfluxDB client.
 func (c *Client) UseMetrics(metrics any) {
 	if m, ok := metrics.(Metrics); ok {
 		c.metrics = m
@@ -230,7 +277,6 @@ func (c *Client) UseTracer(tracer any) {
 	}
 }
 
-// WritePoints implements container.InfluxDBProvider.
 func (c *Client) WritePoints(ctx context.Context, bucket string, org string, points []container.InfluxPoint) error {
 	panic("unimplemented")
 }
@@ -242,6 +288,11 @@ func New(config Config) *Client {
 	}
 }
 
+// Connect initializes a new InfluxDB client using the configured URL and authentication token.
+// It logs the connection status and performs a health check to verify connectivity.
+//
+// If the health check fails, it logs an error and exits early without returning an error.
+// No parameters or return values.
 func (c *Client) Connect() {
 
 	c.logger.Debugf("connecting to influxdb at %v", c.config.Url)
