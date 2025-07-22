@@ -2,11 +2,10 @@ package influxdb
 
 import (
 	"context"
-	"fmt"
+	"errors"
 	influxdb2 "github.com/influxdata/influxdb-client-go/v2"
 	"go.opencensus.io/trace"
 	"gofr.dev/pkg/gofr/container"
-	"gofr.dev/pkg/gofr/datasource"
 )
 
 // Config holds the configuration for connecting to InfluxDB.
@@ -38,6 +37,16 @@ const (
 	statusUp   = "UP"
 )
 
+var (
+	errEmptyOrganizationName = errors.New("organization name must not be empty")
+	errEmptyOrganizationId   = errors.New("organization id must not be empty")
+	errEmptyBucketId         = errors.New("bucket id must not be empty")
+	errEmptyBucketName       = errors.New("bucket name must not be empty")
+	errFindingBuckets        = errors.New("failed in finding buckets")
+	errFetchOrganization     = errors.New("failed to fetch all organizations")
+	errHealthCheckFailed     = errors.New("influxdb health check failed")
+)
+
 // CreateOrganization creates a new organization in InfluxDB with the specified name.
 // It implements the container.InfluxDBProvider interface.
 //
@@ -50,7 +59,7 @@ const (
 // - error: Error if organization creation fails or if orgName is empty.
 func (c *Client) CreateOrganization(ctx context.Context, orgName string) (string, error) {
 	if orgName == "" {
-		return "", fmt.Errorf("org Name name must not be empty")
+		return "", errEmptyOrganizationName
 	}
 	orgAPI := c.client.OrganizationsAPI()
 	newOrg, err := orgAPI.CreateOrganizationWithName(ctx, orgName)
@@ -71,7 +80,7 @@ func (c *Client) CreateOrganization(ctx context.Context, orgName string) (string
 // - err: Error if the organization deletion fails or if orgId is empty.
 func (c *Client) DeleteOrganization(ctx context.Context, orgId string) error {
 	if orgId == "" {
-		return fmt.Errorf("orgId name must not be empty")
+		return errEmptyOrganizationId
 	}
 	orgAPI := c.client.OrganizationsAPI()
 	err := orgAPI.DeleteOrganizationWithID(ctx, orgId)
@@ -90,18 +99,23 @@ func (c *Client) DeleteOrganization(ctx context.Context, orgId string) error {
 // Returns:
 // - orgs: A map of organization IDs to their corresponding names.
 // - err: Error if the API call fails or the organizations cannot be retrieved.
-func (c *Client) ListOrganization(ctx context.Context) (orgs map[string]string, err error) {
+func (c *Client) ListOrganization(ctx context.Context) (map[string]string, error) {
+
 	orgAPI := c.client.OrganizationsAPI()
-	allOrgs, err := orgAPI.GetOrganizations(ctx)
+	allOrg, err := orgAPI.GetOrganizations(ctx)
 	if err != nil {
-		return nil, err
+		return nil, errFetchOrganization
 	}
-	orgs = make(map[string]string) // Initialize the map
-	if allOrgs == nil {
-		return orgs, nil
+
+	if allOrg == nil || len(*allOrg) == 0 {
+		return map[string]string{}, nil
 	}
-	for _, org := range *allOrgs {
-		orgs[*org.Id] = org.Name
+
+	orgs := make(map[string]string, len(*allOrg))
+	for _, org := range *allOrg {
+		if org.Id != nil {
+			orgs[*org.Id] = org.Name
+		}
 	}
 	return orgs, nil
 }
@@ -119,11 +133,11 @@ func (c *Client) CreateBucket(ctx context.Context, orgId string, bucketName stri
 
 	// Validate input
 	if orgId == "" {
-		err = fmt.Errorf("organization id must not be empty")
+		err = errEmptyOrganizationId
 		return
 	}
 	if bucketName == "" {
-		err = fmt.Errorf("bucket name must not be empty")
+		err = errEmptyBucketName
 		return
 	}
 
@@ -146,7 +160,7 @@ func (c *Client) CreateBucket(ctx context.Context, orgId string, bucketName stri
 // - err: Error if the bucket deletion fails or if bucketID is empty.
 func (c *Client) DeleteBucket(ctx context.Context, org, bucketID string) error {
 	if bucketID == "" {
-		return fmt.Errorf("bucket name must not be empty")
+		return errEmptyBucketId
 	}
 	bucketsAPI := c.client.BucketsAPI()
 	err := bucketsAPI.DeleteBucketWithID(ctx, bucketID)
@@ -171,30 +185,24 @@ type Health struct {
 // - any: A datasource.Health object containing the status and details of the InfluxDB service.
 // - err: Error if the health check request fails or the InfluxDB client returns an error.
 func (c *Client) HealthCheck(ctx context.Context) (any, error) {
+	h := Health{Details: make(map[string]any)}
+	h.Details["Username"] = c.config.Username
+	h.Details["Url"] = c.config.Url
+
 	health, err := c.client.Health(ctx)
 	if err != nil {
-		return datasource.Health{
-			Status:  statusDown,
-			Details: make(map[string]any),
-		}, err
+		h.Status = statusDown
+		h.Details["error"] = err.Error()
+		return &h, errHealthCheckFailed
 	}
 
-	h := datasource.Health{
-		Status: statusUp,
-		Details: map[string]any{
-			"Username": c.config.Username,
-			"Url":      c.config.Url,
-		},
-	}
-
-	if health != nil {
-		h.Details["Name"] = health.Name
-		h.Details["Commit"] = health.Commit
-		h.Details["Version"] = health.Version
-		h.Details["Message"] = health.Message
-		h.Details["Checks"] = health.Checks
-		h.Details["Status"] = health.Status
-	}
+	h.Status = statusUp
+	h.Details["Name"] = health.Name
+	h.Details["Commit"] = health.Commit
+	h.Details["Version"] = health.Version
+	h.Details["Message"] = health.Message
+	h.Details["Checks"] = health.Checks
+	h.Details["Status"] = health.Status
 	return h, nil
 }
 
@@ -213,21 +221,17 @@ Returns:
 func (c *Client) ListBuckets(ctx context.Context, org string) (buckets map[string]string, err error) {
 	// Validate input
 	if org == "" {
-		c.logger.Errorf("organization name must not be empty")
-		return nil, fmt.Errorf("organization name must not be empty")
+		return nil, errEmptyOrganizationId
 	}
 
 	bucketsAPI := c.client.BucketsAPI()
 	bucketsDomain, err := bucketsAPI.FindBucketsByOrgName(ctx, org)
 	if err != nil {
-		c.logger.Errorf("failed to find buckets for org %q: %v", org, err)
-		return nil, fmt.Errorf("failed to list buckets for organization %q: %w", org, err)
+		return nil, errFindingBuckets
 	}
-
 	if bucketsDomain == nil {
 		return nil, nil
 	}
-
 	buckets = make(map[string]string) // Initialize the map
 	for _, bucket := range *bucketsDomain {
 		if bucket.Name != "" {
@@ -249,6 +253,7 @@ func (c *Client) ListBuckets(ctx context.Context, org string) (buckets map[strin
 func (c *Client) Ping(ctx context.Context) (bool, error) {
 	ping, err := c.client.Ping(ctx)
 	if err != nil {
+		c.logger.Errorf("%v", err)
 		return false, err
 	}
 	return ping, nil
@@ -304,7 +309,7 @@ func (c *Client) Connect() {
 	)
 
 	if _, err := c.HealthCheck(context.Background()); err != nil {
-		c.logger.Errorf("InfluxDB health check failed: %v", err)
+		c.logger.Errorf("InfluxDB health check failed: %v", err.Error())
 		return
 	}
 
