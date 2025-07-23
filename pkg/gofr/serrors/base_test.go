@@ -8,7 +8,7 @@ func TestErrorGetters(t *testing.T) {
 	err := &Error{
 		statusCode:         "E100",
 		subStatusCode:      "E101",
-		level:              Level(WARNING),
+		level:              WARNING,
 		retryable:          true,
 		externalStatusCode: 400,
 		externalMessage:    "Bad Request",
@@ -40,7 +40,7 @@ func TestErrorWithSetters(t *testing.T) {
 	err.
 		WithStatusCode("E200").
 		WithSubCode("E201").
-		WithLevel(Level(ERROR)).
+		WithLevel(ERROR).
 		WithRetryable(false).
 		WithMeta("requestID", "abc123").
 		WithMetaMulti(map[string]any{"traceID": "xyz789", "count": 3}).
@@ -59,14 +59,20 @@ func TestErrorWithSetters(t *testing.T) {
 	if err.retryable != false {
 		t.Errorf("WithRetryable failed, got %v", err.retryable)
 	}
-	if v := err.meta["requestID"]; v != "abc123" {
-		t.Errorf("WithMeta failed, got %v", v)
+
+	requestID := err.meta["requestID"]
+	if requestID != "abc123" {
+		t.Errorf("WithMeta failed, got %v", requestID)
 	}
-	if v := err.meta["traceID"]; v != "xyz789" {
-		t.Errorf("WithMetaMulti failed for traceID, got %v", v)
+
+	traceID := err.meta["traceID"]
+	if traceID != "xyz789" {
+		t.Errorf("WithMetaMulti failed for traceID, got %v", traceID)
 	}
-	if v := err.meta["count"]; v != 3 {
-		t.Errorf("WithMetaMulti failed for count, got %v", v)
+
+	count := err.meta["count"]
+	if count != 3 {
+		t.Errorf("WithMetaMulti failed for count, got %v", count)
 	}
 	if err.externalStatusCode != 502 {
 		t.Errorf("WithExternalStatus failed, got %d", err.externalStatusCode)
