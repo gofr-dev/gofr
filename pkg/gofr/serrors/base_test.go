@@ -17,18 +17,23 @@ func TestErrorGetters(t *testing.T) {
 	if err.Code() != "E100" {
 		t.Errorf("Code() = %s; want %s", err.Code(), "E100")
 	}
+
 	if err.SubCode() != "E101" {
 		t.Errorf("SubCode() = %s; want %s", err.SubCode(), "E101")
 	}
+
 	if err.Level() != "WARNING" {
 		t.Errorf("Level() = %s; want %s", err.Level(), "WARN")
 	}
+
 	if !err.Retryable() {
 		t.Errorf("Retryable() = %v; want %v", err.Retryable(), true)
 	}
+
 	if err.ExternalStatus() != 400 {
 		t.Errorf("ExternalStatus() = %d; want %d", err.ExternalStatus(), 400)
 	}
+
 	if err.ExternalMessage() != "Bad Request" {
 		t.Errorf("ExternalMessage() = %s; want %s", err.ExternalMessage(), "Bad Request")
 	}
@@ -50,12 +55,15 @@ func TestErrorWithSetters(t *testing.T) {
 	if err.statusCode != "E200" {
 		t.Errorf("WithStatusCode failed, got %s", err.statusCode)
 	}
+
 	if err.subStatusCode != "E201" {
 		t.Errorf("WithSubCode failed, got %s", err.subStatusCode)
 	}
+
 	if err.level.GetErrorLevel() != "ERROR" {
 		t.Errorf("WithLevel failed, got %s", err.level.GetErrorLevel())
 	}
+
 	if !err.retryable {
 		t.Errorf("WithRetryable failed, got %v", err.retryable)
 	}

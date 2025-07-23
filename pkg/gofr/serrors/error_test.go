@@ -88,7 +88,7 @@ func TestGetInternalError_AllCases(t *testing.T) {
 		{
 			name: "Full input with meta",
 			err: &Error{
-				cause:         errors.New("db timeout"), //nolint:err113
+				cause:         errors.New("db timeout"), //nolint:err113 // appears due to the nature of table tests
 				message:       "Database error",
 				statusCode:    "E100",
 				subStatusCode: "E101",
@@ -104,7 +104,7 @@ func TestGetInternalError_AllCases(t *testing.T) {
 		{
 			name: "Full input without meta",
 			err: &Error{
-				cause:         errors.New("error"), //nolint:err113
+				cause:         errors.New("error"), //nolint:err113 // appears due to the nature of table tests
 				message:       "Error occurred",
 				statusCode:    "X001",
 				subStatusCode: "X002",
@@ -133,7 +133,7 @@ func TestGetInternalError_AllCases(t *testing.T) {
 		{
 			name: "Nil meta with addMeta=true",
 			err: &Error{
-				cause:         errors.New("oops"), //nolint:err113
+				cause:         errors.New("oops"), //nolint:err113 // appears due to the nature of table tests
 				message:       "Something",
 				statusCode:    "Z001",
 				subStatusCode: "Z002",
@@ -149,7 +149,7 @@ func TestGetInternalError_AllCases(t *testing.T) {
 		{
 			name: "Unknown level value",
 			err: &Error{
-				cause:         errors.New("bad"), //nolint:err113
+				cause:         errors.New("bad"), //nolint:err113 // appears due to the nature of table tests
 				message:       "Corrupt",
 				statusCode:    "U001",
 				subStatusCode: "U002",
