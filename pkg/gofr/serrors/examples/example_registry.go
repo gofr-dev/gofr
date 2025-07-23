@@ -28,7 +28,7 @@ var registry = map[string]serrors.Registry{
 	},
 }
 
-func ReadRegistry() {
+func CreateRegistry() {
 	for name, _ := range registry {
 		err := serrors.NewFromRegistry(nil, name, registry)
 		fmt.Println(serrors.GetInternalError(err, true))

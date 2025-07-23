@@ -54,9 +54,11 @@ func (err *Error) WithMeta(key string, value any) ErrorSchema {
 }
 
 func (err *Error) WithMetaMulti(input map[string]any) ErrorSchema {
+
 	for key, value := range input {
 		err.meta[key] = value
 	}
+
 	return err
 }
 
@@ -72,8 +74,10 @@ func (err *Error) WithExternalMessage(msg string) ErrorSchema {
 
 func getMetaString(meta map[string]any) string {
 	jsonBytes, err := json.Marshal(meta)
+
 	if err != nil {
 		panic("failed to marshal map to JSON: " + err.Error())
 	}
+
 	return string(jsonBytes)
 }

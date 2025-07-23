@@ -48,7 +48,7 @@ func New(err error, message string) *Error {
 		message:            message, // Add contextual message
 		statusCode:         UNSET,   // Default unclassified status
 		subStatusCode:      UNSET,   // Default unclassified sub-status
-		level:              ERROR,   // Default error severity
+		level:              0,       // Default error severity
 		retryable:          false,   // Default non retryable
 		meta:               meta,    // Metadata with timestamp
 		externalStatusCode: 0,       // Unset external status code
@@ -56,7 +56,7 @@ func New(err error, message string) *Error {
 	}
 }
 
-// GetInternalError used when logging errors
+// GetInternalError used when logging errors.
 func GetInternalError(err *Error, addMeta bool) string {
 	var errorCause string
 
