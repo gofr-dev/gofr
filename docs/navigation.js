@@ -207,6 +207,11 @@ export const navigation = [
                 href: "/docs/datasources/surrealdb",
                 desc: "Learn how to connect to and interact with surreal database in GoFr."
             },
+        ],
+    },
+    {
+        title: 'Migrations',
+        links: [
             {
                 title: "Migrations",
                 href: "/docs/datasources/migrations",
@@ -217,7 +222,8 @@ export const navigation = [
                 href: "/docs/datasources/migrations/elasticsearch",
                 desc: "Comprehensive guide to managing Elasticsearch indices, mappings, and data using GoFr's migration system."
             },
-        ],
+        ]
+
     },
     {
         title: 'References',
