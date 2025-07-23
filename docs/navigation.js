@@ -207,6 +207,11 @@ export const navigation = [
                 href: "/docs/datasources/surrealdb",
                 desc: "Learn how to connect to and interact with surreal database in GoFr."
             },
+            {
+                title: "Elasticsearch",
+                href: "/docs/datasources/elasticsearch",
+                desc: "Learn how to connect to and interact with elasticsearch in GoFr."
+            },
         ],
     },
     {
