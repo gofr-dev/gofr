@@ -46,7 +46,7 @@ func TestNewFromRegistry_Positive(t *testing.T) {
 		t.Errorf("Expected externalMessage 'Service Unavailable', got '%s'", result.externalMessage)
 	}
 
-	if result.level.GetErrorLevel() != "ERROR" {
+	if result.level.GetErrorLevel() != TestError {
 		t.Errorf("Expected level 'ERROR', got '%s'", result.level.GetErrorLevel())
 	}
 
