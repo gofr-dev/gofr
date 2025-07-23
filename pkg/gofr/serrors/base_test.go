@@ -22,7 +22,7 @@ func TestErrorGetters(t *testing.T) {
 		t.Errorf("SubCode() = %s; want %s", err.SubCode(), "E101")
 	}
 
-	if err.Level() != "WARNING" {
+	if err.Level() != TestWarning {
 		t.Errorf("Level() = %s; want %s", err.Level(), "WARN")
 	}
 
