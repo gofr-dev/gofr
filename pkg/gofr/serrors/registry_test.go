@@ -6,8 +6,10 @@ import (
 	"testing"
 )
 
+var errBase = errors.New("base")
+
 func TestNewFromRegistry_Positive(t *testing.T) {
-	mockErr := errors.New("base error")
+	errBase = errors.New("base error")
 	statusCode := "E100"
 
 	reg := map[string]Registry{
@@ -22,7 +24,7 @@ func TestNewFromRegistry_Positive(t *testing.T) {
 		},
 	}
 
-	result := NewFromRegistry(mockErr, statusCode, reg)
+	result := NewFromRegistry(errBase, statusCode, reg)
 
 	if result == nil {
 		t.Fatal("Expected non-nil Error")
@@ -52,7 +54,7 @@ func TestNewFromRegistry_Positive(t *testing.T) {
 }
 
 func TestNewFromRegistry_Negative(t *testing.T) {
-	mockErr := errors.New("base error")
+	errBase = errors.New("base error")
 	statusCode := "UNKNOWN"
 
 	reg := map[string]Registry{
@@ -61,7 +63,7 @@ func TestNewFromRegistry_Negative(t *testing.T) {
 		},
 	}
 
-	result := NewFromRegistry(mockErr, statusCode, reg)
+	result := NewFromRegistry(errBase, statusCode, reg)
 
 	if result == nil {
 		t.Fatal("Expected non-nil Error")
