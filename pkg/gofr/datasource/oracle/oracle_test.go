@@ -317,16 +317,6 @@ func Test_Ping_ReturnsErrorOrNil(t *testing.T) {
 	require.Error(t, err)
 }
 
-func Test_Stats_ReturnsValue(t *testing.T) {
-	mockConn, _, c := getOracleTestConnection(t)
-
-	mockConn.EXPECT().Stats().Return("stats")
-
-	result := c.conn.Stats()
-
-	assert.Equal(t, "stats", result)
-}
-
 func Test_LoggingWithDebugf_Errorf_Logf(t *testing.T) {
 	ctrl := gomock.NewController(t)
 
@@ -410,23 +400,6 @@ func Test_sqlConn_Select(t *testing.T) {
 	assert.Equal(t, int64(2), result[1]["id"])
 
 	assert.NoError(t, mock.ExpectationsWereMet())
-}
-
-func Test_sqlConn_Stats(t *testing.T) {
-	db, _, err := sqlmock.New()
-
-	require.NoError(t, err)
-
-	defer db.Close()
-
-	s := &sqlConn{db: db}
-
-	stats := s.Stats()
-
-	// Check that it returns non-nil and is of correct type.
-	_, ok := stats.(sql.DBStats)
-
-	assert.True(t, ok)
 }
 
 func Test_Oracle_InvalidHostName(t *testing.T) {
@@ -590,18 +563,4 @@ func Test_sqlConn_Ping(t *testing.T) {
 	err := s.Ping(t.Context())
 
 	require.NoError(t, err)
-}
-
-func Test_sqlConn_Stats_ReturnsDBStats(t *testing.T) {
-	db, _, _ := sqlmock.New()
-
-	defer db.Close()
-
-	s := &sqlConn{db: db}
-
-	stats := s.Stats()
-
-	_, ok := stats.(sql.DBStats)
-
-	assert.True(t, ok)
 }

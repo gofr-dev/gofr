@@ -91,17 +91,3 @@ func (mr *MockConnectionMockRecorder) Select(ctx, dest, query any, args ...any) 
 	varargs := append([]any{ctx, dest, query}, args...)
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Select", reflect.TypeOf((*MockConnection)(nil).Select), varargs...)
 }
-
-// Stats mocks base method.
-func (m *MockConnection) Stats() any {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "Stats")
-	ret0, _ := ret[0].(any)
-	return ret0
-}
-
-// Stats indicates an expected call of Stats.
-func (mr *MockConnectionMockRecorder) Stats() *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Stats", reflect.TypeOf((*MockConnection)(nil).Stats))
-}

@@ -231,5 +231,3 @@ func (s *sqlConn) Select(ctx context.Context, dest any, query string, args ...an
 }
 
 func (s *sqlConn) Ping(ctx context.Context) error { return s.db.PingContext(ctx) }
-
-func (s *sqlConn) Stats() any { return s.db.Stats() }
