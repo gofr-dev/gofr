@@ -22,14 +22,13 @@ func (a *App) Run() {
 	// Run startup hooks and exit if they fail for reasons other than context cancellation.
 	// Using the main app context to ensure proper lifecycle management.
 	if err := a.runOnStartHooks(ctx); err != nil {
-		// If the error is due to context cancellation, allow graceful shutdown.
-		if errors.Is(err, context.Canceled) {
-			a.Logger().Info("Startup canceled by context, shutting down gracefully.")
+		if !errors.Is(err, context.Canceled) {
+			a.Logger().Errorf("Startup failed: %v", err)
 			return
 		}
-		// For any other error, log and exit.
-		a.Logger().Errorf("Startup failed: %v", err)
-		os.Exit(1)
+		// If the error is context.Canceled, do not exit; allow graceful shutdown.
+		a.Logger().Info("Startup canceled by context, shutting down gracefully.")
+		return
 	}
 
 	timeout, err := getShutdownTimeoutFromConfig(a.Config)
