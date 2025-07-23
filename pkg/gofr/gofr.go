@@ -51,6 +51,7 @@ type App struct {
 
 func (a *App) newContextForHooks(ctx context.Context) *Context {
 	logger := logging.NewContextLogger(ctx, a.container.Logger)
+	
 	return &Context{
 		Context:       ctx,
 		Container:     a.container,
