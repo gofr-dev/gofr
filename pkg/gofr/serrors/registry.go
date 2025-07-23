@@ -23,7 +23,8 @@ type Registry struct {
 //
 // Behavior:
 //   - If the statusCode exists in the registry, the function creates a new *Error using the associated internal message
-//     and populates it with additional metadata from the registry entry (e.g., external status, message, level, sub-status code, retryable flag).
+//     and populates it with additional metadata from the registry entry (e.g., external status, message, level,
+//     sub-status code, retryable flag).
 //   - If the statusCode is not found in the registry, it returns a generic *Error indicating the status code is unknown.
 //
 // Returns:
