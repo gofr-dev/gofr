@@ -60,7 +60,7 @@ func TestErrorWithSetters(t *testing.T) {
 		t.Errorf("WithSubCode failed, got %s", err.subStatusCode)
 	}
 
-	if err.level.GetErrorLevel() != "ERROR" {
+	if err.level.GetErrorLevel() != TestError {
 		t.Errorf("WithLevel failed, got %s", err.level.GetErrorLevel())
 	}
 

@@ -44,7 +44,7 @@ func TestErrorStructFields(t *testing.T) {
 		t.Errorf("expected subStatusCode to be 'E101', got %s", err.subStatusCode)
 	}
 
-	if err.level.GetErrorLevel() != "ERROR" {
+	if err.level.GetErrorLevel() != TestError {
 		t.Errorf("expected level to be 'ERROR', got %s", err.level.GetErrorLevel())
 	}
 

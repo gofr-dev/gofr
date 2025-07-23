@@ -61,7 +61,7 @@ func TestNewFromRegistry_Positive(t *testing.T) {
 
 func TestNewFromRegistry_Negative(t *testing.T) {
 	errBase = errors.New("base error") //nolint:err113 // error pkg tests
-	statusCode := "UNKNOWN"
+	statusCode := TestUnknown
 
 	reg := map[string]Registry{
 		"E100": {
@@ -88,7 +88,7 @@ func TestNewFromRegistry_Negative(t *testing.T) {
 		t.Errorf("Expected default externalStatusCode 0, got %d", result.externalStatusCode)
 	}
 
-	if result.level.GetErrorLevel() != "UNKNOWN" {
+	if result.level.GetErrorLevel() != TestUnknown {
 		t.Errorf("Expected UNKNOWN level, got %+v", result.level)
 	}
 }
