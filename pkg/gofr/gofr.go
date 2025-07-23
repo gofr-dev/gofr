@@ -49,27 +49,16 @@ type App struct {
 	onStartHooks        []func(ctx *Context) error
 }
 
-func (a *App) newContextForHooks(ctx context.Context) *Context {
-	logger := logging.NewContextLogger(ctx, a.container.Logger)
-	
-	return &Context{
-		Context:       ctx,
-		Container:     a.container,
-		Request:       noopRequest{},
-		ContextLogger: *logger,
-	}
-}
-
 func (a *App) runOnStartHooks(ctx context.Context) error {
-	gofrCtx := a.newContextForHooks(ctx)
+	// Use the existing newContext function with noopRequest
+	gofrCtx := newContext(nil, noopRequest{}, a.container)
+
 	for _, hook := range a.onStartHooks {
 		if err := hook(gofrCtx); err != nil {
-			// Log the error and return it
 			a.Logger().Errorf("OnStart hook failed: %v", err)
 			return err
 		}
 	}
-	// Return nil if all hooks succeed
 	return nil
 }
 
