@@ -20,7 +20,7 @@ GoFr automatically creates a `gofr_migrations` index in Elasticsearch to track a
 The index stores:
 
 - Migration version (timestamp)
-- Execution method (UP/DOWN)
+- Execution method (UP)
 - Start time and duration
 - Migration status
 
