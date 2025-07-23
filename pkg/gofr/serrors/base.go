@@ -54,7 +54,6 @@ func (err *Error) WithMeta(key string, value any) ErrorSchema {
 }
 
 func (err *Error) WithMetaMulti(input map[string]any) ErrorSchema {
-
 	for key, value := range input {
 		err.meta[key] = value
 	}

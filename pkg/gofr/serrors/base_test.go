@@ -14,23 +14,23 @@ func TestErrorGetters(t *testing.T) {
 		externalMessage:    "Bad Request",
 	}
 
-	if got := err.Code(); got != "E100" {
-		t.Errorf("Code() = %s; want %s", got, "E100")
+	if err.Code() != "E100" {
+		t.Errorf("Code() = %s; want %s", err.Code(), "E100")
 	}
-	if got := err.SubCode(); got != "E101" {
-		t.Errorf("SubCode() = %s; want %s", got, "E101")
+	if err.SubCode() != "E101" {
+		t.Errorf("SubCode() = %s; want %s", err.SubCode(), "E101")
 	}
-	if got := err.Level(); got != "WARNING" {
-		t.Errorf("Level() = %s; want %s", got, "WARN")
+	if err.Level() != "WARNING" {
+		t.Errorf("Level() = %s; want %s", err.Level(), "WARN")
 	}
-	if got := err.Retryable(); got != true {
-		t.Errorf("Retryable() = %v; want %v", got, true)
+	if !err.Retryable() {
+		t.Errorf("Retryable() = %v; want %v", err.Retryable(), true)
 	}
-	if got := err.ExternalStatus(); got != 400 {
-		t.Errorf("ExternalStatus() = %d; want %d", got, 400)
+	if err.ExternalStatus() != 400 {
+		t.Errorf("ExternalStatus() = %d; want %d", err.ExternalStatus(), 400)
 	}
-	if got := err.ExternalMessage(); got != "Bad Request" {
-		t.Errorf("ExternalMessage() = %s; want %s", got, "Bad Request")
+	if err.ExternalMessage() != "Bad Request" {
+		t.Errorf("ExternalMessage() = %s; want %s", err.ExternalMessage(), "Bad Request")
 	}
 }
 
@@ -56,7 +56,7 @@ func TestErrorWithSetters(t *testing.T) {
 	if err.level.GetErrorLevel() != "ERROR" {
 		t.Errorf("WithLevel failed, got %s", err.level.GetErrorLevel())
 	}
-	if err.retryable != false {
+	if !err.retryable {
 		t.Errorf("WithRetryable failed, got %v", err.retryable)
 	}
 

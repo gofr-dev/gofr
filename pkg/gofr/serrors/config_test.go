@@ -46,7 +46,7 @@ func TestErrorStructFields(t *testing.T) {
 	if !reflect.DeepEqual(err.meta, metaData) {
 		t.Errorf("expected meta to match, got %+v", err.meta)
 	}
-	if err.retryable != true {
+	if !err.retryable {
 		t.Errorf("expected retryable to be true, got %v", err.retryable)
 	}
 	if err.externalStatusCode != 503 {

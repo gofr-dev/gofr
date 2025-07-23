@@ -16,7 +16,7 @@ func TestNewFromRegistry_Positive(t *testing.T) {
 			InternalMessage: "Internal Failure",
 			ExternalStatus:  503,
 			ExternalMessage: "Service Unavailable",
-			Level:           Level(ERROR),
+			Level:           ERROR,
 			SubStatusCode:   "E101",
 			Retryable:       true,
 		},
