@@ -55,55 +55,71 @@ Here's a simple yet useful CLI calculator built with GoFr. It supports operation
 package main
 
 import (
-	"errors"
-	"fmt"
-	"strconv"
+    "errors"
+    "flag"
+    "fmt"
+    "os"
+    "strconv"
 
-	"gofr.dev/pkg/gofr"
+    "gofr.dev/pkg/gofr"
 )
 
 func main() {
-	app := gofr.NewCMD()
+    var cliMode bool
+    flag.BoolVar(&cliMode, "cli", false, "Run in CLI mode")
+    var op string
+    var a, b int
+    flag.StringVar(&op, "op", "", "Operation to perform (add|sub|mul|div)")
+    flag.IntVar(&a, "a", 0, "First number")
+    flag.IntVar(&b, "b", 0, "Second number")
+    flag.Parse()
 
-	app.SubCommand("calc", "Performs basic arithmetic", func(ctx *gofr.Context) error {
-		op := ctx.Flag("op")
-		aStr := ctx.Flag("a")
-		bStr := ctx.Flag("b")
+    if cliMode {
+        // Run CLI logic
+        if op == "" || a == 0 && b == 0 {
+            flag.Usage()
+            os.Exit(1)
+        }
+        result, err := calculate(op, a, b)
+        if err != nil {
+            fmt.Println("Error:", err)
+            os.Exit(1)
+        }
+        fmt.Println("Result:", result)
+        os.Exit(0)
+    }
 
-		if op == "" || aStr == "" || bStr == "" {
-			return errors.New("usage: ./calc-cli calc --op=<add|sub|mul|div> --a=<num1> --b=<num2>")
-		}
-
-		a, err1 := strconv.Atoi(aStr)
-		b, err2 := strconv.Atoi(bStr)
-		if err1 != nil || err2 != nil {
-			return errors.New("both --a and --b must be valid integers")
-		}
-
-		var result int
-		switch op {
-		case "add":
-			result = a + b
-		case "sub":
-			result = a - b
-		case "mul":
-			result = a * b
-		case "div":
-			if b == 0 {
-				return errors.New("cannot divide by zero")
-			}
-			result = a / b
-		default:
-			return fmt.Errorf("unsupported operation: %s", op)
-		}
-
-		fmt.Printf("Result: %d\n", result)
-		ctx.Logger.Infof("Performed %s on %d and %d", op, a, b)
-		return nil
-	})
-
-	app.Run()
+    // Otherwise, start the GoFr web app as usual
+    app := gofr.New()
+    app.GET("/calculate", CalculateHandler)
+    app.Run()
 }
+
+func calculate(op string, a int, b int) (int, error) {
+    switch op {
+    case "add":
+        return a + b, nil
+    case "sub":
+        return a - b, nil
+    case "mul":
+        return a * b, nil
+    case "div":
+        if b == 0 {
+            return 0, errors.New("cannot divide by zero")
+        }
+        return a / b, nil
+    default:
+        return 0, fmt.Errorf("unknown operation: %s", op)
+    }
+}
+
+func CalculateHandler(ctx *gofr.Context) (interface{}, error) {
+    op := ctx.PathParam("op")
+    a, _ := strconv.Atoi(ctx.PathParam("a"))
+    b, _ := strconv.Atoi(ctx.PathParam("b"))
+    return calculate(op, a, b)
+}
+
 ```
 
  >  **Note:**
