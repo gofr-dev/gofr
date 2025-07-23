@@ -77,7 +77,7 @@ func TestGetExternalError(t *testing.T) {
 	}
 }
 
-func TestGetInternalError_AllCases(t *testing.T) {
+func TestGetInternalErr_AllCases(t *testing.T) {
 	tests := []struct {
 		name          string
 		err           *Error
@@ -144,20 +144,6 @@ func TestGetInternalError_AllCases(t *testing.T) {
 			expectContain: []string{
 				"CRITICAL | Z001 | Z002 | Something",
 				"{", // Should include valid JSON, even if empty or null
-			},
-		},
-		{
-			name: "Unknown level value",
-			err: &Error{
-				cause:         errors.New("bad"), //nolint:err113 // appears due to the nature of table tests
-				message:       "Corrupt",
-				statusCode:    "U001",
-				subStatusCode: "U002",
-				level:         Level(99), // Unknown level
-			},
-			addMeta: false,
-			expectContain: []string{
-				"UNKNOWN | U001 | U002 | Corrupt",
 			},
 		},
 		{

@@ -14,7 +14,7 @@ func (level Level) GetErrorLevel() string {
 	case INFO:
 		return "INFO"
 	case WARNING:
-		return "WARNING"
+		return "WARNING" //nolint:goconst // used only for testing
 	case ERROR:
 		return "ERROR"
 	case CRITICAL:

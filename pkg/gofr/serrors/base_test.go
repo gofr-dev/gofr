@@ -82,9 +82,11 @@ func TestErrorWithSetters(t *testing.T) {
 	if count != 3 {
 		t.Errorf("WithMetaMulti failed for count, got %v", count)
 	}
+
 	if err.externalStatusCode != 502 {
 		t.Errorf("WithExternalStatus failed, got %d", err.externalStatusCode)
 	}
+
 	if err.externalMessage != "Bad Gateway" {
 		t.Errorf("WithExternalMessage failed, got %s", err.externalMessage)
 	}

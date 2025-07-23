@@ -13,7 +13,7 @@ func TestErrorStructFields(t *testing.T) {
 		"nested":    map[string]any{"inner": "value"},
 	}
 
-	errCause := errors.New("underlying error")
+	errCause := errors.New("underlying error") //nolint:err113 // error pkg tests
 
 	err := Error{
 		cause:              errCause,
@@ -31,27 +31,35 @@ func TestErrorStructFields(t *testing.T) {
 	if err.cause.Error() != "underlying error" {
 		t.Errorf("expected cause to be 'underlying error', got %v", err.cause)
 	}
+
 	if err.message != "Top-level message" {
 		t.Errorf("expected message to be 'Top-level message', got %s", err.message)
 	}
+
 	if err.statusCode != "E100" {
 		t.Errorf("expected statusCode to be 'E100', got %s", err.statusCode)
 	}
+
 	if err.subStatusCode != "E101" {
 		t.Errorf("expected subStatusCode to be 'E101', got %s", err.subStatusCode)
 	}
+
 	if err.level.GetErrorLevel() != "ERROR" {
 		t.Errorf("expected level to be 'ERROR', got %s", err.level.GetErrorLevel())
 	}
+
 	if !reflect.DeepEqual(err.meta, metaData) {
 		t.Errorf("expected meta to match, got %+v", err.meta)
 	}
+
 	if !err.retryable {
 		t.Errorf("expected retryable to be true, got %v", err.retryable)
 	}
+
 	if err.externalStatusCode != 503 {
 		t.Errorf("expected externalStatusCode to be 503, got %d", err.externalStatusCode)
 	}
+
 	if err.externalMessage != "Service Unavailable" {
 		t.Errorf("expected externalMessage to be 'Service Unavailable', got %s", err.externalMessage)
 	}
