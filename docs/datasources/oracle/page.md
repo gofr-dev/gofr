@@ -169,7 +169,7 @@ func Post(ctx *gofr.Context) (any, error) {
 }
 
 func Get(ctx *gofr.Context) (any, error) {
- var users []map[string]interface{}
+ var users []map[string]any
  err := ctx.Oracle.Select(ctx, &users, "SELECT id, name, age FROM users")
  if err != nil {
   return nil, err

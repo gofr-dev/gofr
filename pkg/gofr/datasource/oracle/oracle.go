@@ -35,6 +35,11 @@ var (
 	errInvalidDestType = errors.New("dest must be *[]map[string]any")
 )
 
+const (
+	StatusUp   = "UP"
+	StatusDown = "DOWN"
+)
+
 func New(config Config) *Client {
 	return &Client{config: config}
 }
@@ -137,7 +142,8 @@ func (c *Client) sendOperationStats(start time.Time, methodType, query, method s
 }
 
 type Health struct {
-	Status  string         `json:"status,omitempty"`
+	Status string `json:"status,omitempty"`
+	// Details provide additional runtime metadata (host, service) to aid debugging.
 	Details map[string]any `json:"details,omitempty"`
 }
 
@@ -151,11 +157,11 @@ func (c *Client) HealthCheck(ctx context.Context) (any, error) {
 
 	err := c.conn.Ping(ctx)
 	if err != nil {
-		h.Status = "DOWN"
+		h.Status = StatusDown
 		return &h, errStatusDown
 	}
 
-	h.Status = "UP"
+	h.Status = StatusUp
 
 	return &h, nil
 }
@@ -220,7 +226,9 @@ func (s *sqlConn) Select(ctx context.Context, dest any, query string, args ...an
 	}
 
 	// Set the result to dest (must be *[]map[string]any).
-	p, ok := dest.(*[]map[string]any)
+	type Destination = []map[string]any
+
+	p, ok := dest.(*Destination)
 	if !ok {
 		return errInvalidDestType
 	}
