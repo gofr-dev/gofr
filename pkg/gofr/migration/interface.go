@@ -146,6 +146,31 @@ type ScyllaDB interface {
 	ExecuteBatchWithCtx(ctx context.Context, name string) error
 }
 
+// Elasticsearch is an interface representing an Elasticsearch client for migration operations.
+// It includes only the essential methods needed for schema changes and migrations.
+type Elasticsearch interface {
+	// CreateIndex creates a new index with optional mapping/settings.
+	CreateIndex(ctx context.Context, index string, settings map[string]any) error
+
+	// DeleteIndex deletes an existing index.
+	DeleteIndex(ctx context.Context, index string) error
+
+	// IndexDocument indexes (creates or replaces) a single document.
+	// Useful for seeding data or adding configuration documents during migrations.
+	IndexDocument(ctx context.Context, index, id string, document any) error
+
+	// DeleteDocument removes a document by ID.
+	// Useful for removing specific documents during migrations.
+	DeleteDocument(ctx context.Context, index, id string) error
+
+	// Bulk executes multiple indexing/updating/deleting operations in one request.
+	// Each entry in `operations` should be a JSON‑serializable object
+	// following the Elasticsearch bulk API format.
+	// Useful for bulk operations during migrations.
+	Bulk(ctx context.Context, operations []map[string]any) (map[string]any, error)
+}
+
+
 // keeping the migrator interface unexported as, right now it is not being implemented directly, by the externalDB drivers.
 // keeping the implementations for externalDB at one place such that if any change in migration logic, we would change directly here.
 type migrator interface {
