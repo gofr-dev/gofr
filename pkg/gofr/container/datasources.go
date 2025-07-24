@@ -753,8 +753,8 @@ type InfluxDB interface {
 	// CreateBucket creates a new bucket under the specified organization.
 	CreateBucket(ctx context.Context, org, bucket string) (string, error)
 
-	// DeleteBucket deletes a bucket under the specified organization.
-	DeleteBucket(ctx context.Context, org, bucket string) error
+	// DeleteBucket deletes a bucketId with bucketId
+	DeleteBucket(ctx context.Context, bucketId string) error
 
 	// ListBuckets lists all buckets under the specified organization.
 	ListBuckets(ctx context.Context, org string) (map[string]string, error)
