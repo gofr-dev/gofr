@@ -2,6 +2,7 @@ package serrors
 
 import (
 	"encoding/json"
+	"fmt"
 )
 
 func (err *Error) Code() string {
@@ -75,7 +76,7 @@ func getMetaString(meta map[string]any) string {
 	jsonBytes, err := json.Marshal(meta)
 
 	if err != nil {
-		panic("failed to marshal map to JSON: " + err.Error())
+		fmt.Println("failed to marshal map to JSON", err.Error())
 	}
 
 	return string(jsonBytes)
