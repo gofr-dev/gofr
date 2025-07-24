@@ -17,6 +17,7 @@ func (a *App) Run() {
 		a.cmd.Run(a.container)
 	}
 
+	// Create a context that is canceled on receiving termination signals
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
 
