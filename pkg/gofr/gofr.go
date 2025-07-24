@@ -49,7 +49,7 @@ type App struct {
 	onStartHooks        []func(ctx *Context) error
 }
 
-func (a *App) runOnStartHooks(ctx context.Context) error {
+func (a *App) runOnStartHooks(_ context.Context) error {
 	// Use the existing newContext function with noopRequest
 	gofrCtx := newContext(nil, noopRequest{}, a.container)
 
@@ -59,6 +59,7 @@ func (a *App) runOnStartHooks(ctx context.Context) error {
 			return err
 		}
 	}
+
 	return nil
 }
 

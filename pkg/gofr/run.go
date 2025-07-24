@@ -8,6 +8,7 @@ import (
 	"os/signal"
 	"sync"
 	"syscall"
+	"time"
 )
 
 // Run starts the application. If it is an HTTP server, it will start the server.
@@ -19,15 +20,7 @@ func (a *App) Run() {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
 
-	// Run startup hooks and exit if they fail for reasons other than context cancellation.
-	// Using the main app context to ensure proper lifecycle management.
-	if err := a.runOnStartHooks(ctx); err != nil {
-		if !errors.Is(err, context.Canceled) {
-			a.Logger().Errorf("Startup failed: %v", err)
-			return
-		}
-		// If the error is context.Canceled, do not exit; allow graceful shutdown.
-		a.Logger().Info("Startup canceled by context, shutting down gracefully.")
+	if !a.handleStartupHooks(ctx) {
 		return
 	}
 
@@ -36,7 +29,27 @@ func (a *App) Run() {
 		a.Logger().Errorf("error parsing value of shutdown timeout from config: %v. Setting default timeout of 30 sec.", err)
 	}
 
-	// Goroutine to handle shutdown when context is canceled
+	a.startShutdownHandler(ctx, timeout)
+	a.startTelemetryIfEnabled()
+	a.startAllServers(ctx)
+}
+
+// handleStartupHooks runs the startup hooks and returns false if the application should exit
+func (a *App) handleStartupHooks(ctx context.Context) bool {
+	if err := a.runOnStartHooks(ctx); err != nil {
+		if !errors.Is(err, context.Canceled) {
+			a.Logger().Errorf("Startup failed: %v", err)
+			return false
+		}
+		// If the error is context.Canceled, do not exit; allow graceful shutdown.
+		a.Logger().Info("Startup canceled by context, shutting down gracefully.")
+		return false
+	}
+	return true
+}
+
+// startShutdownHandler starts a goroutine to handle graceful shutdown
+func (a *App) startShutdownHandler(ctx context.Context, timeout time.Duration) {
 	go func() {
 		<-ctx.Done()
 
@@ -55,15 +68,29 @@ func (a *App) Run() {
 			a.Logger().Debugf("Server shutdown failed: %v", shutdownErr)
 		}
 	}()
+}
 
+// startTelemetryIfEnabled starts telemetry if it's enabled
+func (a *App) startTelemetryIfEnabled() {
 	if a.hasTelemetry() {
 		go a.sendTelemetry(http.DefaultClient, true)
 	}
+}
 
+// startAllServers starts all registered servers concurrently
+func (a *App) startAllServers(ctx context.Context) {
 	wg := sync.WaitGroup{}
 
-	// Start Metrics Server
-	// running metrics server before HTTP and gRPC
+	a.startMetricsServer(&wg)
+	a.startHTTPServer(&wg)
+	a.startGRPCServer(&wg)
+	a.startSubscriptionManager(ctx, &wg)
+
+	wg.Wait()
+}
+
+// startMetricsServer starts the metrics server if configured
+func (a *App) startMetricsServer(wg *sync.WaitGroup) {
 	if a.metricServer != nil {
 		wg.Add(1)
 
@@ -72,8 +99,10 @@ func (a *App) Run() {
 			m.Run(a.container)
 		}(a.metricServer)
 	}
+}
 
-	// Start HTTP Server
+// startHTTPServer starts the HTTP server if registered
+func (a *App) startHTTPServer(wg *sync.WaitGroup) {
 	if a.httpRegistered {
 		wg.Add(1)
 		a.httpServerSetup()
@@ -83,8 +112,10 @@ func (a *App) Run() {
 			s.run(a.container)
 		}(a.httpServer)
 	}
+}
 
-	// Start gRPC Server only if a service is registered
+// startGRPCServer starts the gRPC server if registered
+func (a *App) startGRPCServer(wg *sync.WaitGroup) {
 	if a.grpcRegistered {
 		wg.Add(1)
 
@@ -93,7 +124,10 @@ func (a *App) Run() {
 			s.Run(a.container)
 		}(a.grpcServer)
 	}
+}
 
+// startSubscriptionManager starts the subscription manager
+func (a *App) startSubscriptionManager(ctx context.Context, wg *sync.WaitGroup) {
 	wg.Add(1)
 
 	go func() {
@@ -104,6 +138,4 @@ func (a *App) Run() {
 			a.Logger().Errorf("Subscription Error : %v", err)
 		}
 	}()
-
-	wg.Wait()
 }

@@ -1165,6 +1165,9 @@ func TestApp_Subscribe(t *testing.T) {
 }
 
 func TestApp_OnStart(t *testing.T) {
+	// Define static error for testing
+	var hookFailedErr = errors.New("hook failed")
+
 	// Test case 1: Hook executes successfully
 	t.Run("success", func(t *testing.T) {
 		var hookCalled bool
@@ -1178,21 +1181,21 @@ func TestApp_OnStart(t *testing.T) {
 
 		err := app.runOnStartHooks(t.Context())
 
-		assert.NoError(t, err, "Expected no error from runOnStartHooks")
+		require.NoError(t, err, "Expected no error from runOnStartHooks")
 		assert.True(t, hookCalled, "Expected the OnStart hook to be called")
 	})
 
 	// Test case 2: Hook returns an error
 	t.Run("error", func(t *testing.T) {
-		var expectedErr = errors.New("hook failed")
+
 		app := New()
 
 		app.OnStart(func(_ *Context) error {
-			return expectedErr
+			return hookFailedErr
 		})
 
 		err := app.runOnStartHooks(t.Context())
 
-		assert.Equal(t, expectedErr, err, "Expected an error from runOnStartHooks")
+		require.Equal(t, hookFailedErr, err, "Expected an error from runOnStartHooks")
 	})
 }
