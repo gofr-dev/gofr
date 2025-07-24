@@ -6,7 +6,6 @@ GoFr supports injecting OracleDB as a relational datasource through a clean, ext
 type Oracle interface {
  Exec(ctx context.Context, query string, args ...any) error
  Select(ctx context.Context, dest any, query string, args ...any) error
- AsyncInsert(ctx context.Context, query string, wait bool, args ...any) error
 }
 ```
 

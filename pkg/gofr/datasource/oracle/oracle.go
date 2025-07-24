@@ -5,7 +5,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
-	reflect "reflect"
+	"reflect"
 	"time"
 
 	// Import for Oracle driver registration.
@@ -111,6 +111,9 @@ func (c *Client) Exec(ctx context.Context, query string, args ...any) error {
 	return err
 }
 
+// Select executes a SELECT query and scans the resulting rows into dest.
+// The dest parameter should be a pointer to a slice or other suitable container.
+// Query parameters can be passed via args to replace placeholders.
 func (c *Client) Select(ctx context.Context, dest any, query string, args ...any) error {
 	tracedCtx, span := c.addTrace(ctx, "select", query)
 
@@ -125,6 +128,8 @@ func (c *Client) Select(ctx context.Context, dest any, query string, args ...any
 	return err
 }
 
+// sendOperationStats collects and sends operation metrics for monitoring purposes.
+// It tracks execution times, counts, and error occurrences related to database operations.
 func (c *Client) sendOperationStats(start time.Time, methodType, query, method string, span trace.Span, args ...any) {
 	duration := time.Since(start).Microseconds()
 
@@ -166,6 +171,8 @@ func (c *Client) HealthCheck(ctx context.Context) (any, error) {
 	return &h, nil
 }
 
+// addTrace adds tracing information to the current context or operation.
+// It records metadata such as correlation IDs or span details for distributed tracing.
 func (c *Client) addTrace(ctx context.Context, method, query string) (context.Context, trace.Span) {
 	if c.tracer != nil {
 		ctxWithTrace, span := c.tracer.Start(ctx, fmt.Sprintf("oracle-%v", method))
