@@ -193,6 +193,12 @@ func initializeDatasources(c *container.Container, ds *Datasource, mg migrator) 
 			apply:         func(m migrator) migrator { return elasticsearchDS{c.Elasticsearch}.apply(m) },
 			logIdentifier: "Elasticsearch",
 		},
+		{
+			condition:     func() bool { return !isNil(c.OpenTSDB) },
+			setDS:         func() { ds.OpenTSDB = c.OpenTSDB },
+			apply:         func(m migrator) migrator { return openTSDBDS{c.OpenTSDB, "gofr_migrations.json"}.apply(m) },
+			logIdentifier: "OpenTSDB",
+		},
 	}
 
 	for _, init := range initializers {
@@ -205,15 +211,6 @@ func initializeDatasources(c *container.Container, ds *Datasource, mg migrator) 
 		initialized = true
 
 		c.Debugf("initialized data source for %s", init.logIdentifier)
-	}
-
-	if !isNil(c.OpenTSDB) {
-		ds.OpenTSDB = openTSDBDS{c.OpenTSDB, "gofr_migrations.json"}
-		mg = openTSDBDS{c.OpenTSDB, "gofr_migrations.json"}.apply(mg)
-
-		c.Debug("initialized data source for OpenTSDB")
-
-		initialized = true
 	}
 
 	return mg, initialized
