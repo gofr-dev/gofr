@@ -41,7 +41,7 @@ func New(err error, message string) *Error {
 	meta := make(map[string]any)
 
 	// Capture precise timestamp for error tracing
-	meta["timestamp"] = fmt.Sprintf("%d", (time.Now().UTC()).UnixNano())
+	meta["timestamp"] = fmt.Sprint(time.Now().UnixNano())
 
 	return &Error{
 		cause:              err,     // Preserve original error
