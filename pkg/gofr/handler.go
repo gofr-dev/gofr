@@ -67,9 +67,6 @@ func (h handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		c.Context = ctx
 	}
 
-	reqLogger := logging.NewContextLogger(c, h.container.Logger)
-	c.ContextLogger = *reqLogger
-
 	done := make(chan struct{})
 	panicked := make(chan struct{})
 

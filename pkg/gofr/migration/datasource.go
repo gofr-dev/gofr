@@ -7,15 +7,16 @@ type Datasource struct {
 	// Need to think it through as it will bring breaking changes.
 	Logger
 
-	SQL        SQL
-	Redis      Redis
-	PubSub     PubSub
-	Clickhouse Clickhouse
-	Cassandra  Cassandra
-	Mongo      Mongo
-	ArangoDB   ArangoDB
-	SurrealDB  SurrealDB
-	DGraph     DGraph
+	SQL           SQL
+	Redis         Redis
+	PubSub        PubSub
+	Clickhouse    Clickhouse
+	Cassandra     Cassandra
+	Mongo         Mongo
+	ArangoDB      ArangoDB
+	SurrealDB     SurrealDB
+	DGraph        DGraph
+	Elasticsearch Elasticsearch
 	OpenTSDB   OpenTSDB
 }
 
