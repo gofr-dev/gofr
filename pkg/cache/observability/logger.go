@@ -19,15 +19,20 @@ const (
 	Gray   = "\033[90m"
 )
 
+const (
+	INFO = "INFO"
+	WARN = "WARN"
+	ERROR = "ERRO"
+	DEBUG = "DEBU"
+)
+
 // Logger defines a standard interface for logging.
 type Logger interface {
-	// Methods for simple, single-line logs.
 	Errorf(format string, args ...interface{})
 	Warnf(format string, args ...interface{})
 	Infof(format string, args ...interface{})
 	Debugf(format string, args ...interface{})
 
-	// Methods for structured operational logs (e.g., cache, HTTP, SQL).
 	Hitf(message string, duration time.Duration, operation string)
 	Missf(message string, duration time.Duration, operation string)
 
@@ -39,8 +44,6 @@ type Logger interface {
 	// operation: The final operation string (e.g., "GET /hello", "select 2+2").
 	LogRequest(level, message string, tag interface{}, duration time.Duration, operation string)
 }
-
-// --- No-Op Logger ---
 
 type nopLogger struct{}
 
@@ -54,8 +57,6 @@ func (n *nopLogger) Hitf(_ string, _ time.Duration, _ string)                   
 func (n *nopLogger) Missf(_ string, _ time.Duration, _ string)                                         {}
 func (n *nopLogger) LogRequest(_ string, _ string, _ interface{}, _ time.Duration, _ string) {}
 
-// --- Standard Styled Logger ---
-
 type styledLogger struct {
 	useColors bool
 }
@@ -66,55 +67,46 @@ func NewStdLogger() Logger {
 	}
 }
 
-// --- Public Methods ---
-
 func (l *styledLogger) Errorf(format string, args ...interface{}) {
-	l.logSimple("ERRO", Red, format, args...)
+	l.logSimple(ERROR, Red, format, args...)
 }
 
 func (l *styledLogger) Warnf(format string, args ...interface{}) {
-	l.logSimple("WARN", Yellow, format, args...)
+	l.logSimple(WARN, Yellow, format, args...)
 }
 
 func (l *styledLogger) Infof(format string, args ...interface{}) {
-	l.logSimple("INFO", Green, format, args...)
+	l.logSimple(INFO, Green, format, args...)
 }
 
 func (l *styledLogger) Debugf(format string, args ...interface{}) {
-	l.logSimple("DEBU", Gray, format, args...)
+	l.logSimple(DEBUG, Gray, format, args...)
 }
 
 func (l *styledLogger) Hitf(message string, duration time.Duration, operation string) {
-	l.LogRequest("DEBU", "Cache hit", "HIT", duration, operation)
+	l.LogRequest(INFO, "Cache hit", "HIT", duration, operation)
 }
 
 func (l *styledLogger) Missf(message string, duration time.Duration, operation string) {
 	// A miss isn't an error, but we'll color its tag yellow for attention.
-	l.LogRequest("DEBU", "Cache miss", "MISS", duration, operation)
+	l.LogRequest(INFO, "Cache miss", "MISS", duration, operation)
 }
 
 func (l *styledLogger) LogRequest(level, message string, tag interface{}, duration time.Duration, operation string) {
-	// Column start positions for alignment. Adjust these values to your preference.
 	const tagColumnStart = 45
 	const durationColumnStart = 60
 
-	// 1. Build the first part of the log: LEVEL [TIMESTAMP] MESSAGE
 	levelStr, levelColor := l.getLevelStyle(level)
 	ts := l.applyColor(Gray, "["+time.Now().Format("15:04:05")+"]")
 	initialPart := fmt.Sprintf("%s %s %s", l.applyColor(levelColor, levelStr), ts, message)
 
-	// 2. Format the tag (status code or string) with appropriate colors.
 	tagStr := l.formatTag(tag)
 
-	// 3. Format the duration.
 	durationStr := l.applyColor(Gray, fmt.Sprintf("%dµs", duration.Microseconds()))
 
-	// 4. Calculate padding to align the columns.
-	// This requires stripping ANSI color codes to get the true visual length.
 	padding1 := l.getPadding(tagColumnStart, len(stripAnsi(initialPart)))
 	padding2 := l.getPadding(durationColumnStart, tagColumnStart+len(stripAnsi(tagStr)))
 
-	// 5. Print the fully assembled and aligned log line.
 	fmt.Printf("%s%s%s%s%s %s\n",
 		initialPart,
 		padding1,
@@ -125,9 +117,6 @@ func (l *styledLogger) LogRequest(level, message string, tag interface{}, durati
 	)
 }
 
-// --- Private Helpers ---
-
-// logSimple handles basic, unstructured log messages.
 func (l *styledLogger) logSimple(level, color, format string, args ...interface{}) {
 	levelStr := l.applyColor(color, level)
 	ts := l.applyColor(Gray, "["+time.Now().Format("15:04:05")+"]")
@@ -184,12 +173,11 @@ func (l *styledLogger) formatTag(tag interface{}) string {
 	}
 }
 
-// getPadding calculates the spaces needed to align text in columns.
 func (l *styledLogger) getPadding(columnTarget, currentLength int) string {
 	if padLen := columnTarget - currentLength; padLen > 0 {
 		return strings.Repeat(" ", padLen)
 	}
-	return " " // Return at least one space if the message is too long.
+	return " "
 }
 
 func (l *styledLogger) applyColor(color, text string) string {
