@@ -158,12 +158,12 @@ func (c *Client) CreateBucket(ctx context.Context, orgId string, bucketName stri
 //
 // Returns:
 // - err: Error if the bucket deletion fails or if bucketID is empty.
-func (c *Client) DeleteBucket(ctx context.Context, org, bucketID string) error {
-	if bucketID == "" {
+func (c *Client) DeleteBucket(ctx context.Context, bucketId string) error {
+	if bucketId == "" {
 		return errEmptyBucketId
 	}
 	bucketsAPI := c.client.BucketsAPI()
-	err := bucketsAPI.DeleteBucketWithID(ctx, bucketID)
+	err := bucketsAPI.DeleteBucketWithID(ctx, bucketId)
 	if err != nil {
 		return err
 	}
