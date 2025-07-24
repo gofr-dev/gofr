@@ -54,6 +54,7 @@ func (a *App) handleStartupHooks(ctx context.Context) bool {
 
 // startShutdownHandler starts a goroutine to handle graceful shutdown.
 func (a *App) startShutdownHandler(ctx context.Context, timeout time.Duration) {
+	   // Goroutine to handle shutdown when context is canceled
 	go func() {
 		<-ctx.Done()
 
