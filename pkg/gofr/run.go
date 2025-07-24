@@ -17,6 +17,7 @@ func (a *App) Run() {
 		a.cmd.Run(a.container)
 	}
 
+	// Create a context that is canceled on receiving termination signals
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
 
@@ -53,6 +54,7 @@ func (a *App) handleStartupHooks(ctx context.Context) bool {
 
 // startShutdownHandler starts a goroutine to handle graceful shutdown.
 func (a *App) startShutdownHandler(ctx context.Context, timeout time.Duration) {
+	// Goroutine to handle shutdown when context is canceled
 	go func() {
 		<-ctx.Done()
 
