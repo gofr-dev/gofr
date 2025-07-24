@@ -1164,7 +1164,7 @@ func TestApp_Subscribe(t *testing.T) {
 	})
 }
 
-// Define static error for testing
+// Define static error for testing.
 var errHookFailed = errors.New("hook failed")
 
 func TestApp_OnStart(t *testing.T) {

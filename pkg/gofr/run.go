@@ -34,21 +34,24 @@ func (a *App) Run() {
 	a.startAllServers(ctx)
 }
 
-// handleStartupHooks runs the startup hooks and returns false if the application should exit
+// handleStartupHooks runs the startup hooks and returns false if the application should exit.
 func (a *App) handleStartupHooks(ctx context.Context) bool {
 	if err := a.runOnStartHooks(ctx); err != nil {
 		if !errors.Is(err, context.Canceled) {
 			a.Logger().Errorf("Startup failed: %v", err)
+
 			return false
 		}
 		// If the error is context.Canceled, do not exit; allow graceful shutdown.
 		a.Logger().Info("Startup canceled by context, shutting down gracefully.")
+
 		return false
 	}
+
 	return true
 }
 
-// startShutdownHandler starts a goroutine to handle graceful shutdown
+// startShutdownHandler starts a goroutine to handle graceful shutdown.
 func (a *App) startShutdownHandler(ctx context.Context, timeout time.Duration) {
 	go func() {
 		<-ctx.Done()
@@ -70,14 +73,14 @@ func (a *App) startShutdownHandler(ctx context.Context, timeout time.Duration) {
 	}()
 }
 
-// startTelemetryIfEnabled starts telemetry if it's enabled
+// startTelemetryIfEnabled starts telemetry if it's enabled.
 func (a *App) startTelemetryIfEnabled() {
 	if a.hasTelemetry() {
 		go a.sendTelemetry(http.DefaultClient, true)
 	}
 }
 
-// startAllServers starts all registered servers concurrently
+// startAllServers starts all registered servers concurrently.
 func (a *App) startAllServers(ctx context.Context) {
 	wg := sync.WaitGroup{}
 
@@ -89,7 +92,7 @@ func (a *App) startAllServers(ctx context.Context) {
 	wg.Wait()
 }
 
-// startMetricsServer starts the metrics server if configured
+// startMetricsServer starts the metrics server if configured.
 func (a *App) startMetricsServer(wg *sync.WaitGroup) {
 	if a.metricServer != nil {
 		wg.Add(1)
@@ -101,7 +104,7 @@ func (a *App) startMetricsServer(wg *sync.WaitGroup) {
 	}
 }
 
-// startHTTPServer starts the HTTP server if registered
+// startHTTPServer starts the HTTP server if registered.
 func (a *App) startHTTPServer(wg *sync.WaitGroup) {
 	if a.httpRegistered {
 		wg.Add(1)
@@ -114,7 +117,7 @@ func (a *App) startHTTPServer(wg *sync.WaitGroup) {
 	}
 }
 
-// startGRPCServer starts the gRPC server if registered
+// startGRPCServer starts the gRPC server if registered.
 func (a *App) startGRPCServer(wg *sync.WaitGroup) {
 	if a.grpcRegistered {
 		wg.Add(1)
@@ -126,7 +129,7 @@ func (a *App) startGRPCServer(wg *sync.WaitGroup) {
 	}
 }
 
-// startSubscriptionManager starts the subscription manager
+// startSubscriptionManager starts the subscription manager.
 func (a *App) startSubscriptionManager(ctx context.Context, wg *sync.WaitGroup) {
 	wg.Add(1)
 
