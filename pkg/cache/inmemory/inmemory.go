@@ -179,9 +179,11 @@ func (c *inMemoryCache) Set(ctx context.Context, key string, value interface{}) 
 		c.items[key] = ent
 		// O(1) move-to-front
 		c.moveToFront(ent.node)
+		duration := time.Since(now)
+		c.logger.LogRequest("INFO", "SET", "UPDATE", duration, key)
 		c.metrics.Sets().WithLabelValues(c.name).Inc()
 		c.metrics.Items().WithLabelValues(c.name).Set(float64(len(c.items)))
-		c.metrics.Latency().WithLabelValues(c.name, "set").Observe(time.Since(now).Seconds())
+		c.metrics.Latency().WithLabelValues(c.name, "set").Observe(duration.Seconds())
 		return nil
 	}
 
@@ -195,10 +197,11 @@ func (c *inMemoryCache) Set(ctx context.Context, key string, value interface{}) 
 	// O(1) insert at front
 	c.insertAtFront(nd)
 	c.items[key] = entry{value: value, expiresAt: c.computeExpiry(now), node: nd}
+	duration := time.Since(now)
+	c.logger.LogRequest("INFO", "SET", "CREATE", duration, key)
 	c.metrics.Sets().WithLabelValues(c.name).Inc()
 	c.metrics.Items().WithLabelValues(c.name).Set(float64(len(c.items)))
-	c.metrics.Latency().WithLabelValues(c.name, "set").Observe(time.Since(now).Seconds())
-	c.logger.Debugf("Set key '%s'", key)
+	c.metrics.Latency().WithLabelValues(c.name, "set").Observe(duration.Seconds())
 	return nil
 }
 
@@ -223,17 +226,19 @@ func (c *inMemoryCache) Get(ctx context.Context, key string) (interface{}, bool,
 			c.removeNode(ent.node)
 			delete(c.items, key)
 		}
-		c.logger.Debugf("Cache miss for key '%s'", key)
+		duration := time.Since(time.Now())
+		c.logger.Missf("GET", duration, key)
 		c.metrics.Misses().WithLabelValues(c.name).Inc()
-		c.metrics.Latency().WithLabelValues(c.name, "get").Observe(time.Since(time.Now()).Seconds())
+		c.metrics.Latency().WithLabelValues(c.name, "get").Observe(duration.Seconds())
 		return nil, false, nil
 	}
 
 	// Hit: move node to front to mark as most recently used (O(1))
+	duration := time.Since(time.Now())
 	c.moveToFront(ent.node)
-	c.logger.Debugf("Cache hit for key '%s'", key)
+	c.logger.Hitf("GET", duration, key)
 	c.metrics.Hits().WithLabelValues(c.name).Inc()
-	c.metrics.Latency().WithLabelValues(c.name, "get").Observe(time.Since(time.Now()).Seconds())
+	c.metrics.Latency().WithLabelValues(c.name, "get").Observe(duration.Seconds())
 	return ent.value, true, nil
 }
 
@@ -455,4 +460,3 @@ func NewProductionCache(name string, ttl time.Duration, maxItems int) (cache.Cac
 		WithMetrics(observability.NewMetrics("gofr", "inmemory_cache")),
 	)
 }
-

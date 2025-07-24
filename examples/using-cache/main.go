@@ -16,25 +16,25 @@ func main() {
 
 	metrics := observability.NewMetrics("gofr", "cache")
 
-	// Simple, explicit configuration - exactly as you wanted
-	// c, err := factory.NewInMemoryCache(ctx, 
-	// 	"default", 
-	// 	5*time.Minute, 
-	// 	1000, 
-	// 	factory.WithLogger(observability.NewStdLogger()), 
-	// 	metrics)
-	// if err != nil {
-	// 	panic(fmt.Sprintf("Failed to create cache: %v", err))
-	// }
-
-	// Alternative: Redis cache with same pattern
-	c, err := factory.NewRedisCache(ctx, "default", 5*time.Minute, 
+	c, err := factory.NewInMemoryCache(ctx, 
+		"default", 
+		5*time.Minute, 
+		1000, 
 		factory.WithLogger(observability.NewStdLogger()), 
 		metrics)
-
 	if err != nil {
-		panic(err)
+		panic(fmt.Sprintf("Failed to create cache: %v", err))
 	}
+
+	// Alternative: Redis cache with same pattern
+	// to disable logs, use NewNopLogger()
+	// c, err := factory.NewRedisCache(ctx, "default", 5*time.Minute, 
+	// 	factory.WithLogger(observability.NewStdLogger()), 
+	// 	metrics)
+	
+	// if err != nil {
+	// 	panic(err)
+	// }
 
 	// Alternative: Dynamic cache type
 	// cacheType := "inmemory" // or "redis"

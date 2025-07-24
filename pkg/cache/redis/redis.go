@@ -207,11 +207,12 @@ func (c *redisCache) Set(ctx context.Context, key string, value interface{}) err
 		c.logger.Errorf("Redis Set failed for key '%s': %v", key, err)
 		return err
 	}
-	c.logger.Debugf("Set key '%s'", key)
+	duration := time.Since(start)
+		c.logger.LogRequest("DEBU", "Set new cache key", "SUCCESS", duration, key)
 	if c.metrics != nil {
 		c.metrics.Sets().WithLabelValues(c.name).Inc()
 		c.metrics.Items().WithLabelValues(c.name).Set(float64(c.countKeys(ctx)))
-		c.metrics.Latency().WithLabelValues(c.name, "set").Observe(time.Since(start).Seconds())
+		c.metrics.Latency().WithLabelValues(c.name, "set").Observe(duration.Seconds())
 	}
 	return nil
 }
@@ -231,10 +232,11 @@ func (c *redisCache) Get(ctx context.Context, key string) (interface{}, bool, er
 	val, err := c.client.Get(ctx, key).Result()
 	if err != nil {
 		if errors.Is(err, redis.Nil) {
-			c.logger.Debugf("Cache miss for key '%s'", key)
+			duration := time.Since(start)
+			c.logger.Missf("GET", duration, key)
 			if c.metrics != nil {
 				c.metrics.Misses().WithLabelValues(c.name).Inc()
-				c.metrics.Latency().WithLabelValues(c.name, "get").Observe(time.Since(start).Seconds())
+				c.metrics.Latency().WithLabelValues(c.name, "get").Observe(duration.Seconds())
 			}
 			return nil, false, nil // Key does not exist
 		}
@@ -242,10 +244,11 @@ func (c *redisCache) Get(ctx context.Context, key string) (interface{}, bool, er
 		return nil, false, err
 	}
 
-	c.logger.Debugf("Cache hit for key '%s'", key)
+	duration := time.Since(start)
+	c.logger.Hitf("GET", duration, key)
 	if c.metrics != nil {
 		c.metrics.Hits().WithLabelValues(c.name).Inc()
-		c.metrics.Latency().WithLabelValues(c.name, "get").Observe(time.Since(start).Seconds())
+		c.metrics.Latency().WithLabelValues(c.name, "get").Observe(duration.Seconds())
 	}
 	return val, true, nil
 }
@@ -260,15 +263,16 @@ func (c *redisCache) Delete(ctx context.Context, key string) error {
 		return err
 	}
 
+	duration := time.Since(start)
 	if err := c.client.Del(ctx, key).Err(); err != nil {
 		c.logger.Errorf("Redis Del failed for key '%s': %v", key, err)
 		return err
 	}
-	c.logger.Debugf("Deleted key '%s'", key)
+		c.logger.LogRequest("DEBU", "Deleted cache key", "SUCCESS", duration, key)
 	if c.metrics != nil {
 		c.metrics.Deletes().WithLabelValues(c.name).Inc()
 		c.metrics.Items().WithLabelValues(c.name).Set(float64(c.countKeys(ctx)))
-		c.metrics.Latency().WithLabelValues(c.name, "delete").Observe(time.Since(start).Seconds())
+		c.metrics.Latency().WithLabelValues(c.name, "delete").Observe(duration.Seconds())
 	}
 	return nil
 }
@@ -299,14 +303,15 @@ func (c *redisCache) Exists(ctx context.Context, key string) (bool, error) {
 // This operation is thread-safe.
 func (c *redisCache) Clear(ctx context.Context) error {
 	start := time.Now()
-	c.logger.Warnf("Clearing redis cache '%s' (FLUSHDB)", c.name)
 	if err := c.client.FlushDB(ctx).Err(); err != nil {
 		c.logger.Errorf("Redis FlushDB failed: %v", err)
 		return err
 	}
+	duration := time.Since(start)
+		c.logger.LogRequest("WARN", "Cleared all keys", "SUCCESS", duration, c.name)
 	if c.metrics != nil {
 		c.metrics.Items().WithLabelValues(c.name).Set(0)
-		c.metrics.Latency().WithLabelValues(c.name, "clear").Observe(time.Since(start).Seconds())
+		c.metrics.Latency().WithLabelValues(c.name, "clear").Observe(duration.Seconds())
 	}
 	return nil
 }
