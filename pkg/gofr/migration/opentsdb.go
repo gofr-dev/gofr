@@ -12,7 +12,6 @@ import (
 	"gofr.dev/pkg/gofr/container"
 )
 
-
 type openTSDBDS struct {
 	container.OpenTSDB
 	filePath string
@@ -21,7 +20,7 @@ type openTSDBDS struct {
 type openTSDBMigrator struct {
 	filePath string
 	migrator
-	mu sync.Mutex 
+	mu sync.Mutex
 }
 
 type tsdbMigrationRecord struct {
@@ -36,14 +35,12 @@ const dirPerm = 0755
 var errNilFileHandle = errors.New("failed to create migration file: received nil file handle")
 
 // apply initializes openTSDBMigrator using the openTsdbDS.
-func (ds openTSDBDS ) apply(m migrator) migrator {
-
+func (ds openTSDBDS) apply(m migrator) migrator {
 	return &openTSDBMigrator{ // Return pointer to avoid copying the mutex
 		filePath: ds.filePath,
 		migrator: m,
 	}
 }
-
 
 // checkAndCreateMigrationTable ensures the JSON file exists (creates if not).
 func (om *openTSDBMigrator) checkAndCreateMigrationTable(c *container.Container) error {
@@ -54,7 +51,6 @@ func (om *openTSDBMigrator) checkAndCreateMigrationTable(c *container.Container)
 	dir := filepath.Dir(om.filePath)
 	if dir != "." {
 		if err := os.MkdirAll(dir, dirPerm); err != nil {
-
 			return fmt.Errorf("failed to create migration directory %q: %w", dir, err)
 		}
 	}
@@ -64,7 +60,7 @@ func (om *openTSDBMigrator) checkAndCreateMigrationTable(c *container.Container)
 		// File already exists
 		return nil
 	}
-	
+
 	if !os.IsNotExist(statErr) {
 		// Some other error accessing the file
 		return fmt.Errorf("unexpected error stating migration file: %w", statErr)
@@ -74,6 +70,7 @@ func (om *openTSDBMigrator) checkAndCreateMigrationTable(c *container.Container)
 	if err != nil {
 		return fmt.Errorf("failed to create migration file: %w", err)
 	}
+
 	if f == nil {
 		return errNilFileHandle
 	}
@@ -132,7 +129,6 @@ func (om *openTSDBMigrator) getLastMigration(c *container.Container) int64 {
 
 // beginTransaction delegates to base migrator.
 func (om *openTSDBMigrator) beginTransaction(c *container.Container) transactionData {
-	
 	return om.migrator.beginTransaction(c)
 }
 
@@ -150,7 +146,7 @@ func (om *openTSDBMigrator) commitMigration(c *container.Container, data transac
 	}
 
 	// Skip if migration already exists
-	if om.migrationExists(migrations, data.MigrationNumber) {
+	if migrationExists(migrations, data.MigrationNumber) {
 		c.Debugf("Migration %v already exists in JSON file, skipping", data.MigrationNumber)
 		return om.migrator.commitMigration(c, data)
 	}
@@ -170,6 +166,7 @@ func (om *openTSDBMigrator) commitMigration(c *container.Container, data transac
 	}
 
 	c.Debugf("Committed migration %v to JSON file", data.MigrationNumber)
+
 	return om.migrator.commitMigration(c, data)
 }
 
@@ -184,6 +181,7 @@ func (om *openTSDBMigrator) loadMigrations() ([]tsdbMigrationRecord, error) {
 			// File does not exist yet, return empty list
 			return migrations, nil
 		}
+
 		return nil, fmt.Errorf("failed to open migration file: %w", err)
 	}
 	defer file.Close()
@@ -197,12 +195,13 @@ func (om *openTSDBMigrator) loadMigrations() ([]tsdbMigrationRecord, error) {
 }
 
 // migrationExists checks if a given migration version already exists in the list.
-func (om *openTSDBMigrator) migrationExists(migrations []tsdbMigrationRecord, version int64) bool {
+func migrationExists(migrations []tsdbMigrationRecord, version int64) bool {
 	for _, existing := range migrations {
 		if existing.Version == version {
 			return true
 		}
 	}
+
 	return false
 }
 
@@ -215,8 +214,10 @@ func (om *openTSDBMigrator) writeMigrationsAtomically(migrations []tsdbMigration
 	if err != nil {
 		return fmt.Errorf("failed to create temporary file: %w", err)
 	}
+
 	defer func() {
 		tmpFile.Close()
+
 		if err != nil {
 			os.Remove(tmpFilePath) // Clean up temp file on failure
 		}
@@ -225,6 +226,7 @@ func (om *openTSDBMigrator) writeMigrationsAtomically(migrations []tsdbMigration
 	// Write JSON with indentation
 	enc := json.NewEncoder(tmpFile)
 	enc.SetIndent("", "  ")
+
 	if err = enc.Encode(migrations); err != nil {
 		return fmt.Errorf("failed to encode migrations to JSON: %w", err)
 	}
@@ -241,7 +243,6 @@ func (om *openTSDBMigrator) writeMigrationsAtomically(migrations []tsdbMigration
 
 	return nil
 }
-
 
 // rollback logs the failure and handles cleanup.
 func (om *openTSDBMigrator) rollback(c *container.Container, data transactionData) {
@@ -267,12 +268,10 @@ func (om *openTSDBMigrator) GetMigrationHistory(_ *container.Container) ([]tsdbM
 
 	file, err := os.Open(om.filePath)
 	if err != nil {
-
 		if os.IsNotExist(err) {
-			
 			return []tsdbMigrationRecord{}, nil
 		}
-		
+
 		return nil, fmt.Errorf("failed to open migration file: %w", err)
 	}
 
@@ -280,7 +279,6 @@ func (om *openTSDBMigrator) GetMigrationHistory(_ *container.Container) ([]tsdbM
 
 	var migrations []tsdbMigrationRecord
 	if err = json.NewDecoder(file).Decode(&migrations); err != nil {
-		
 		return nil, fmt.Errorf("failed to decode migration file: %w", err)
 	}
 
@@ -296,10 +294,9 @@ func (om *openTSDBMigrator) ValidateMigrationFile(c *container.Container) error 
 	file, err := os.Open(om.filePath)
 	if err != nil {
 		if os.IsNotExist(err) {
-			
 			return nil // File doesn't exist yet, that's ok
 		}
-		
+
 		return fmt.Errorf("failed to open migration file: %w", err)
 	}
 
@@ -307,11 +304,10 @@ func (om *openTSDBMigrator) ValidateMigrationFile(c *container.Container) error 
 
 	var migrations []tsdbMigrationRecord
 	if err = json.NewDecoder(file).Decode(&migrations); err != nil {
-		
 		return fmt.Errorf("migration file contains invalid JSON: %w", err)
 	}
 
 	c.Debugf("Migration file validation successful, contains %d migrations", len(migrations))
-	
+
 	return nil
 }

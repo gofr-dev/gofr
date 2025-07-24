@@ -100,7 +100,7 @@ func NewMockContainer(t *testing.T, options ...options) (*Container, *Mocks) {
 
 	pubsubMock := NewMockPubSubProvider(ctrl)
 	container.PubSub = pubsubMock
-	
+
 	var httpMock *service.MockHTTP
 
 	container.Services = make(map[string]service.HTTP)

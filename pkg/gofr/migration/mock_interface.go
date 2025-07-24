@@ -17,6 +17,7 @@ import (
 
 	redis "github.com/redis/go-redis/v9"
 	gomock "go.uber.org/mock/gomock"
+
 	container "gofr.dev/pkg/gofr/container"
 )
 
@@ -967,6 +968,7 @@ func (mr *MockDGraphMockRecorder) DropField(ctx, fieldName any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DropField", reflect.TypeOf((*MockDGraph)(nil).DropField), ctx, fieldName)
 }
+
 // mockopentsdb is a mock of migrator interface for opentsdb.
 type MockOpenTSDB struct {
 	ctrl     *gomock.Controller
@@ -1176,6 +1178,7 @@ func (mr *MockOpenTSDBMockRecorder) UpdateTags(ctx, metric, oldTags, newTags any
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UpdateTags", reflect.TypeOf((*MockOpenTSDB)(nil).UpdateTags), ctx, metric, oldTags, newTags)
 }
+
 // DataPoint represents a time series data point (helper struct for OpenTSDB operations)
 type DataPoint struct {
 	Metric    string            `json:"metric"`

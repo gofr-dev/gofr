@@ -140,4 +140,7 @@ type migrator interface {
 	rollback(c *container.Container, data transactionData)
 }
 
-type OpenTSDB any
+type OpenTSDB interface {
+	// PutDataPoints can be used for seeding initial metrics during migration
+	PutDataPoints(ctx context.Context, data any, queryParam string, res any) error
+}
