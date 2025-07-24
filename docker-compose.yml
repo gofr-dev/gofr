@@ -1,0 +1,142 @@
+version: "3.8"
+
+services:
+  mongodb:
+    image: mongodb/mongodb-community-server:latest
+    container_name: mongodb
+    ports:
+      - "27017:27017"
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: user
+      MONGO_INITDB_ROOT_PASSWORD: password
+
+  ftp-server:
+    image: delfer/alpine-ftp-server
+    ports:
+      - "21:21"
+      - "21000-21010:21000-21010"
+    environment:
+      USERS: "user|password"
+
+  opentsdb:
+    image: petergrace/opentsdb-docker:latest
+    container_name: gofr-opentsdb
+    ports:
+      - "4242:4242"
+
+  mysql:
+    image: mysql:8.0.30
+    container_name: gofr-mysql
+    environment:
+      MYSQL_ROOT_PASSWORD: password
+      MYSQL_DATABASE: test
+    ports:
+      - "2001:3306"
+
+  redis:
+    image: redis:7.0.5
+    container_name: gofr-redis
+    ports:
+      - "2002:6379"
+
+  solr:
+    image: solr
+    container_name: gofr-solr
+    command: solr -DzkRun
+    ports:
+      - "2020:8983"
+
+  zipkin:
+    image: openzipkin/zipkin:2
+    container_name: gofr-zipkin
+    ports:
+      - "2005:9411"
+
+  localstack:
+    image: localstack/localstack
+    ports:
+      - "4566:4566"
+      - "4510-4559:4510-4559"
+    tty: true
+    stdin_open: true
+    restart: unless-stopped
+
+  cassandra:
+    image: cassandra:latest
+    container_name: cassandra-node
+    ports:
+      - "9042:9042"
+    volumes:
+      - cassandra_data:/var/lib/cassandra
+
+  postgres:
+    image: postgres:15.1
+    container_name: gofr-pgsql
+    environment:
+      POSTGRES_DB: customers
+      POSTGRES_PASSWORD: root123
+    ports:
+      - "2006:5432"
+
+  mssql:
+    image: mcr.microsoft.com/azure-sql-edge
+    container_name: gofr-mssql
+    environment:
+      ACCEPT_EULA: "Y"
+      SA_PASSWORD: "reallyStrongPwd123"
+    ports:
+      - "2007:1433"
+
+  kafka:
+    image: bitnami/kafka:3.4
+    container_name: kafka-1
+    ports:
+      - "9092:9092"
+    environment:
+      KAFKA_ENABLE_KRAFT: "yes"
+      KAFKA_CFG_PROCESS_ROLES: "broker,controller"
+      KAFKA_CFG_CONTROLLER_LISTENER_NAMES: "CONTROLLER"
+      KAFKA_CFG_LISTENERS: "PLAINTEXT://:9092,CONTROLLER://:9093"
+      KAFKA_CFG_LISTENER_SECURITY_PROTOCOL_MAP: "CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT"
+      KAFKA_CFG_ADVERTISED_LISTENERS: "PLAINTEXT://127.0.0.1:9092"
+      KAFKA_CFG_AUTO_CREATE_TOPICS_ENABLE: "true"
+      KAFKA_BROKER_ID: "1"
+      KAFKA_CFG_CONTROLLER_QUORUM_VOTERS: "1@127.0.0.1:9093"
+      ALLOW_PLAINTEXT_LISTENER: "yes"
+      KAFKA_CFG_NODE_ID: "1"
+    volumes:
+      - kafka_data:/bitnami
+
+  scylla:
+    image: scylladb/scylla
+    container_name: scylla
+    ports:
+      - "2025:9042"
+
+  nats:
+    image: nats:latest
+    container_name: nats-server
+    command: -js
+    ports:
+      - "4222:4222"
+      - "8222:8222"
+
+  surrealdb:
+    image: surrealdb/surrealdb:latest
+    container_name: surrealdb
+    command: start --bind 0.0.0.0:8000
+    ports:
+      - "8000:8000"
+
+  arangodb:
+    image: arangodb:latest
+    container_name: arangodb
+    ports:
+      - "8529:8529"
+    environment:
+      ARANGO_ROOT_PASSWORD: rootpassword
+    pull_policy: always
+
+volumes:
+  cassandra_data:
+  kafka_data:
