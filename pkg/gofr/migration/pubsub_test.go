@@ -135,6 +135,38 @@ func Test_PubSubCheckAndCreateMigrationTable(t *testing.T) {
 	}
 }
 
+func Test_PubSubCommitMigration_Success(t *testing.T) {
+	migratorWithPubSub, mockPubSub, mockContainer := pubsubTestSetup(t)
+
+	fixedTime := time.Date(2023, 1, 1, 12, 0, 0, 0, time.UTC)
+	data := transactionData{
+		MigrationNumber: 123,
+		StartTime:       fixedTime,
+	}
+
+	mockPubSub.EXPECT().Publish(gomock.Any(), pubsubMigrationTopic, gomock.Any()).Return(nil)
+
+	err := migratorWithPubSub.commitMigration(mockContainer, data)
+
+	assert.NoError(t, err, "Successful migration commit should not return an error")
+}
+
+func Test_PubSubCommitMigration_PublishError(t *testing.T) {
+	migratorWithPubSub, mockPubSub, mockContainer := pubsubTestSetup(t)
+
+	fixedTime := time.Date(2023, 1, 1, 12, 0, 0, 0, time.UTC)
+	data := transactionData{
+		MigrationNumber: 123,
+		StartTime:       fixedTime,
+	}
+
+	mockPubSub.EXPECT().Publish(gomock.Any(), pubsubMigrationTopic, gomock.Any()).Return(errTopic)
+
+	err := migratorWithPubSub.commitMigration(mockContainer, data)
+
+	assert.Equal(t, errTopic, err, "Publish error should be returned")
+}
+
 func Test_PubSubGetLastMigration(t *testing.T) {
 	migratorWithPubSub, mockPubSub, mockContainer := pubsubTestSetup(t)
 
@@ -148,7 +180,7 @@ func Test_PubSubGetLastMigration(t *testing.T) {
 			expectedResult: 3,
 			setupMocks: func(mockPubSub *container.MockPubSubProvider) {
 				mockPubSub.EXPECT().
-					Query(gomock.Any(), pubsubMigrationTopic, int64(0), 100).
+					Query(gomock.Any(), pubsubMigrationTopic, int64(0), defaultQueryLimit).
 					Return([]byte(`{"version":1,"method":"UP","start_time":1625000000000,"duration":100}
 {"version":3,"method":"UP","start_time":1625000200000,"duration":150}`), nil)
 			},
@@ -199,36 +231,4 @@ func Test_PubSubGetLastMigration(t *testing.T) {
 
 		assert.Equal(t, tc.expectedResult, result, "TEST[%v] %v Failed!", i, tc.desc)
 	}
-}
-
-func Test_PubSubCommitMigration_Success(t *testing.T) {
-	migratorWithPubSub, mockPubSub, mockContainer := pubsubTestSetup(t)
-
-	fixedTime := time.Date(2023, 1, 1, 12, 0, 0, 0, time.UTC)
-	data := transactionData{
-		MigrationNumber: 123,
-		StartTime:       fixedTime,
-	}
-
-	mockPubSub.EXPECT().Publish(gomock.Any(), pubsubMigrationTopic, gomock.Any()).Return(nil)
-
-	err := migratorWithPubSub.commitMigration(mockContainer, data)
-
-	assert.NoError(t, err, "Successful migration commit should not return an error")
-}
-
-func Test_PubSubCommitMigration_PublishError(t *testing.T) {
-	migratorWithPubSub, mockPubSub, mockContainer := pubsubTestSetup(t)
-
-	fixedTime := time.Date(2023, 1, 1, 12, 0, 0, 0, time.UTC)
-	data := transactionData{
-		MigrationNumber: 123,
-		StartTime:       fixedTime,
-	}
-
-	mockPubSub.EXPECT().Publish(gomock.Any(), pubsubMigrationTopic, gomock.Any()).Return(errTopic)
-
-	err := migratorWithPubSub.commitMigration(mockContainer, data)
-
-	assert.Equal(t, errTopic, err, "Publish error should be returned")
 }
