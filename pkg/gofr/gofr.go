@@ -46,6 +46,21 @@ type App struct {
 	httpRegistered bool
 
 	subscriptionManager SubscriptionManager
+	onStartHooks        []func(ctx *Context) error
+}
+
+func (a *App) runOnStartHooks(_ context.Context) error {
+	// Use the existing newContext function with noopRequest
+	gofrCtx := newContext(nil, noopRequest{}, a.container)
+
+	for _, hook := range a.onStartHooks {
+		if err := hook(gofrCtx); err != nil {
+			a.Logger().Errorf("OnStart hook failed: %v", err)
+			return err
+		}
+	}
+
+	return nil
 }
 
 // Shutdown stops the service(s) and close the application.
@@ -295,4 +310,8 @@ func (a *App) AddStaticFiles(endpoint, filePath string) {
 	}
 
 	a.httpServer.staticFiles[filePath] = endpoint
+}
+
+func (a *App) OnStart(hook func(ctx *Context) error) {
+	a.onStartHooks = append(a.onStartHooks, hook)
 }
