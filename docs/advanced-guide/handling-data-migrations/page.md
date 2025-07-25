@@ -238,54 +238,6 @@ func createTableEmployeeCassandra() migration.Migrate {
 }
 ```
 
-
-Here’s a **compact version** with **functions for SQL and Elasticsearch (single & bulk)** included:
-
----
-
-# GoFr Migrations
-
-## Handling Data Migrations (SQL/Redis/Cassandra)
-
-GoFr supports data migrations for **MySQL, Postgres, Redis, ClickHouse, and Cassandra**, allowing schema changes (e.g., adding columns, modifying types, setting/removing keys).
-
-**Steps to create a migration:**
-
-```bash
-go install gofr.dev/cli/gofr@latest
-gofr migrate create -name=create_employee_table
-```
-
-**Migration Example (SQL):**
-
-```go
-package migrations
-
-import "gofr.dev/pkg/gofr/migration"
-
-const createTable = `CREATE TABLE IF NOT EXISTS employee (
-    id   int PRIMARY KEY,
-    name varchar(50) NOT NULL,
-    gender varchar(6) NOT NULL,
-    contact_number varchar(10) NOT NULL
-);`
-
-func createTableEmployee() migration.Migrate {
-    return migration.Migrate{
-        UP: func(d migration.Datasource) error {
-            _, err := d.SQL.Exec(createTable)
-            return err
-        },
-    }
-}
-
-func All() map[int64]migration.Migrate {
-    return map[int64]migration.Migrate{
-        20240226153000: createTableEmployee(),
-    }
-}
-```
-
 ## Migrations in ElasticSearch
 
 GoFr allows Elasticsearch document migrations, focusing on **single document** and **bulk operations**.
