@@ -10,20 +10,20 @@ Import the package and create the client instance:
 import (
     "context"
 
-    "gofr.dev/pkg/gofr/datasource/kv/dynamo" // Adjust path as needed
+    "gofr.dev/pkg/gofr/datasource/kv/dynamodb" // Adjust path as needed
 )
 
 func main() {
-    configs := dynamo.Configs{
+    configs := dynamodb.Configs{
         Table:            "your-table-name",
         Region:           "us-east-1",
         Endpoint:         "", // Leave empty for real AWS; set for local (e.g., "http://localhost:8000")
         PartitionKeyName: "pk", // Default is "pk" if not specified
     }
 
-    client := dynamo.New(configs)
-    client.UseLogger(yourLogger)   // Implement dynamo.Logger interface
-    client.UseMetrics(yourMetrics) // Implement dynamo.Metrics interface
+    client := dynamodb.New(configs)
+    client.UseLogger(yourLogger)   // Implement dynamodb.Logger interface
+    client.UseMetrics(yourMetrics) // Implement dynamodb.Metrics interface
     // client.UseTracer(yourTracer) // Optional: trace.Tracer
 
     if err := client.Connect(); err != nil {
