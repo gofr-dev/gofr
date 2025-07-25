@@ -18,8 +18,7 @@ import (
 )
 
 var (
-	ErrFailedToCreateMigrationDir        = errors.New("failed to create migration directory")
-	ErrCheckAndCreateMigrationTablePanic = errors.New("panic occurred during checkAndCreateMigrationTable")
+	errCheckAndCreateMigrationTablePanic = errors.New("panic occurred during checkAndCreateMigrationTable")
 )
 
 // openTSDBSetup creates a test setup for OpenTSDB migration tests.
@@ -405,7 +404,7 @@ func runEnhancedTestCase(t *testing.T, tc struct {
 	err := func() (err error) {
 		defer func() {
 			if r := recover(); r != nil {
-				err = ErrCheckAndCreateMigrationTablePanic
+				err = errCheckAndCreateMigrationTablePanic
 			}
 		}()
 
