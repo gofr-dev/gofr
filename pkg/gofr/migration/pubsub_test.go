@@ -226,7 +226,9 @@ func Test_PubSubGetLastMigration(t *testing.T) {
 
 	for i, tc := range testCases {
 		tc.setupMocks(mockPubSub)
+
 		result := migratorWithPubSub.getLastMigration(mockContainer)
+
 		assert.Equal(t, tc.expectedResult, result, "TEST[%v] %v Failed!", i, tc.desc)
 	}
 }
