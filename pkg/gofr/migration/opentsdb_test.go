@@ -95,6 +95,31 @@ func getEnhancedTestCases() []struct {
 	verifyFunc      func(t *testing.T, filePath string)
 	cleanupFunc     func(t *testing.T, filePath string)
 } {
+	var cases []struct {
+		desc            string
+		setupFunc       func(t *testing.T, filePath string)
+		expectedErr     string
+		shouldFileExist bool
+		verifyFunc      func(t *testing.T, filePath string)
+		cleanupFunc     func(t *testing.T, filePath string)
+	}
+
+	cases = append(cases, getSuccessTestCases()...)
+	cases = append(cases, getFilePermissionTestCases()...)
+	cases = append(cases, getDirectoryTestCases()...)
+	cases = append(cases, getEdgeCaseTestCases()...)
+
+	return cases
+}
+
+func getSuccessTestCases() []struct {
+	desc            string
+	setupFunc       func(t *testing.T, filePath string)
+	expectedErr     string
+	shouldFileExist bool
+	verifyFunc      func(t *testing.T, filePath string)
+	cleanupFunc     func(t *testing.T, filePath string)
+} {
 	return []struct {
 		desc            string
 		setupFunc       func(t *testing.T, filePath string)
@@ -148,6 +173,25 @@ func getEnhancedTestCases() []struct {
 				assert.Equal(t, int64(1), migrations[0].Version)
 			},
 		},
+	}
+}
+
+func getFilePermissionTestCases() []struct {
+	desc            string
+	setupFunc       func(t *testing.T, filePath string)
+	expectedErr     string
+	shouldFileExist bool
+	verifyFunc      func(t *testing.T, filePath string)
+	cleanupFunc     func(t *testing.T, filePath string)
+} {
+	return []struct {
+		desc            string
+		setupFunc       func(t *testing.T, filePath string)
+		expectedErr     string
+		shouldFileExist bool
+		verifyFunc      func(t *testing.T, filePath string)
+		cleanupFunc     func(t *testing.T, filePath string)
+	}{
 		{
 			desc: "file exists but contains invalid JSON",
 			setupFunc: func(t *testing.T, filePath string) {
@@ -181,6 +225,44 @@ func getEnhancedTestCases() []struct {
 				_ = os.Chmod(filePath, 0600)
 			},
 		},
+		{
+			desc: "file creation fails due to permission denied on directory",
+			setupFunc: func(t *testing.T, filePath string) {
+				t.Helper()
+				dir := filepath.Dir(filePath)
+				// Create directory with no write permissions
+				err := os.MkdirAll(dir, dirPerm)
+				require.NoError(t, err)
+				err = os.Chmod(dir, 0555) // Read and execute only
+				require.NoError(t, err)
+			},
+			expectedErr:     "failed to create migration file",
+			shouldFileExist: false,
+			cleanupFunc: func(_ *testing.T, filePath string) {
+				// Restore permissions for cleanup
+				dir := filepath.Dir(filePath)
+				_ = os.Chmod(dir, 0755)
+			},
+		},
+	}
+}
+
+func getDirectoryTestCases() []struct {
+	desc            string
+	setupFunc       func(t *testing.T, filePath string)
+	expectedErr     string
+	shouldFileExist bool
+	verifyFunc      func(t *testing.T, filePath string)
+	cleanupFunc     func(t *testing.T, filePath string)
+} {
+	return []struct {
+		desc            string
+		setupFunc       func(t *testing.T, filePath string)
+		expectedErr     string
+		shouldFileExist bool
+		verifyFunc      func(t *testing.T, filePath string)
+		cleanupFunc     func(t *testing.T, filePath string)
+	}{
 		{
 			desc: "directory creation fails due to existing file with same name",
 			setupFunc: func(t *testing.T, filePath string) {
@@ -218,25 +300,25 @@ func getEnhancedTestCases() []struct {
 				_ = os.Chmod(parentDir, 0755)
 			},
 		},
-		{
-			desc: "file creation fails due to permission denied on directory",
-			setupFunc: func(t *testing.T, filePath string) {
-				t.Helper()
-				dir := filepath.Dir(filePath)
-				// Create directory with no write permissions
-				err := os.MkdirAll(dir, dirPerm)
-				require.NoError(t, err)
-				err = os.Chmod(dir, 0555) // Read and execute only
-				require.NoError(t, err)
-			},
-			expectedErr:     "failed to create migration file",
-			shouldFileExist: false,
-			cleanupFunc: func(_ *testing.T, filePath string) {
-				// Restore permissions for cleanup
-				dir := filepath.Dir(filePath)
-				_ = os.Chmod(dir, 0755)
-			},
-		},
+	}
+}
+
+func getEdgeCaseTestCases() []struct {
+	desc            string
+	setupFunc       func(t *testing.T, filePath string)
+	expectedErr     string
+	shouldFileExist bool
+	verifyFunc      func(t *testing.T, filePath string)
+	cleanupFunc     func(t *testing.T, filePath string)
+} {
+	return []struct {
+		desc            string
+		setupFunc       func(t *testing.T, filePath string)
+		expectedErr     string
+		shouldFileExist bool
+		verifyFunc      func(t *testing.T, filePath string)
+		cleanupFunc     func(t *testing.T, filePath string)
+	}{
 		{
 			desc: "migration file path is a directory",
 			setupFunc: func(t *testing.T, filePath string) {
@@ -283,7 +365,9 @@ func runEnhancedTestCase(t *testing.T, tc struct {
 
 	// Setup test environment
 	var migratorWithOpenTSDB migrator
+
 	var mockContainer *container.Container
+
 	var filePath string
 
 	if tc.desc == "empty file path directory (current directory)" {
@@ -540,6 +624,7 @@ func setupDeepPath(t *testing.T) (migrator, *container.Container, string) {
 	for i := 0; i < 10; i++ {
 		deepPath = filepath.Join(deepPath, fmt.Sprintf("level%d", i))
 	}
+
 	deepPath = filepath.Join(deepPath, "migrations.json")
 
 	openTSDBInstance := openTSDBDS{OpenTSDB: mocks.OpenTSDB, filePath: deepPath}
@@ -889,6 +974,30 @@ func getValidateExistingFileTestCases() []struct {
 	shouldLogDebug bool
 	debugMessage   string
 } {
+	var cases []struct {
+		desc           string
+		setupFunc      func(t *testing.T, filePath string)
+		expectedErr    string
+		shouldLogError bool
+		shouldLogDebug bool
+		debugMessage   string
+	}
+
+	cases = append(cases, getValidJSONTestCases()...)
+	cases = append(cases, getInvalidJSONTestCases()...)
+	cases = append(cases, getFileAccessTestCases()...)
+
+	return cases
+}
+
+func getValidJSONTestCases() []struct {
+	desc           string
+	setupFunc      func(t *testing.T, filePath string)
+	expectedErr    string
+	shouldLogError bool
+	shouldLogDebug bool
+	debugMessage   string
+} {
 	return []struct {
 		desc           string
 		setupFunc      func(t *testing.T, filePath string)
@@ -927,6 +1036,33 @@ func getValidateExistingFileTestCases() []struct {
 			shouldLogDebug: true,
 			debugMessage:   "Found existing migration file with 3 migrations",
 		},
+		{
+			desc:           "valid JSON with mixed field types",
+			setupFunc:      setupMixedFieldTypes,
+			expectedErr:    "",
+			shouldLogError: false,
+			shouldLogDebug: true,
+			debugMessage:   "Found existing migration file with 2 migrations",
+		},
+	}
+}
+
+func getInvalidJSONTestCases() []struct {
+	desc           string
+	setupFunc      func(t *testing.T, filePath string)
+	expectedErr    string
+	shouldLogError bool
+	shouldLogDebug bool
+	debugMessage   string
+} {
+	return []struct {
+		desc           string
+		setupFunc      func(t *testing.T, filePath string)
+		expectedErr    string
+		shouldLogError bool
+		shouldLogDebug bool
+		debugMessage   string
+	}{
 		{
 			desc: "invalid JSON - malformed",
 			setupFunc: func(t *testing.T, filePath string) {
@@ -979,6 +1115,25 @@ func getValidateExistingFileTestCases() []struct {
 			shouldLogError: true,
 			shouldLogDebug: false,
 		},
+	}
+}
+
+func getFileAccessTestCases() []struct {
+	desc           string
+	setupFunc      func(t *testing.T, filePath string)
+	expectedErr    string
+	shouldLogError bool
+	shouldLogDebug bool
+	debugMessage   string
+} {
+	return []struct {
+		desc           string
+		setupFunc      func(t *testing.T, filePath string)
+		expectedErr    string
+		shouldLogError bool
+		shouldLogDebug bool
+		debugMessage   string
+	}{
 		{
 			desc: "file exists but cannot be opened (permission denied)",
 			setupFunc: func(t *testing.T, filePath string) {
@@ -992,19 +1147,12 @@ func getValidateExistingFileTestCases() []struct {
 			shouldLogError: false,
 			shouldLogDebug: false,
 		},
-		{
-			desc:           "valid JSON with mixed field types",
-			setupFunc:      setupMixedFieldTypes,
-			expectedErr:    "",
-			shouldLogError: false,
-			shouldLogDebug: true,
-			debugMessage:   "Found existing migration file with 2 migrations",
-		},
 	}
 }
 
 func setupSingleMigration(t *testing.T, filePath string) {
 	t.Helper()
+
 	err := os.MkdirAll(filepath.Dir(filePath), dirPerm)
 	require.NoError(t, err)
 
@@ -1024,6 +1172,7 @@ func setupSingleMigration(t *testing.T, filePath string) {
 
 func setupMultipleMigrations(t *testing.T, filePath string) {
 	t.Helper()
+
 	err := os.MkdirAll(filepath.Dir(filePath), dirPerm)
 	require.NoError(t, err)
 
@@ -1040,6 +1189,7 @@ func setupMultipleMigrations(t *testing.T, filePath string) {
 
 func setupMixedFieldTypes(t *testing.T, filePath string) {
 	t.Helper()
+
 	err := os.MkdirAll(filepath.Dir(filePath), dirPerm)
 	require.NoError(t, err)
 
