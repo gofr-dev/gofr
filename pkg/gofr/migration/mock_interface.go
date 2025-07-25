@@ -252,31 +252,31 @@ func (m *MockPubSub) EXPECT() *MockPubSubMockRecorder {
 }
 
 // CreateTopic mocks base method.
-func (m *MockPubSub) CreateTopic(context context.Context, name string) error {
+func (m *MockPubSub) CreateTopic(arg0 context.Context, name string) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "CreateTopic", context, name)
+	ret := m.ctrl.Call(m, "CreateTopic", arg0, name)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // CreateTopic indicates an expected call of CreateTopic.
-func (mr *MockPubSubMockRecorder) CreateTopic(context, name any) *gomock.Call {
+func (mr *MockPubSubMockRecorder) CreateTopic(arg0, name any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CreateTopic", reflect.TypeOf((*MockPubSub)(nil).CreateTopic), context, name)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CreateTopic", reflect.TypeOf((*MockPubSub)(nil).CreateTopic), arg0, name)
 }
 
 // DeleteTopic mocks base method.
-func (m *MockPubSub) DeleteTopic(context context.Context, name string) error {
+func (m *MockPubSub) DeleteTopic(arg0 context.Context, name string) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "DeleteTopic", context, name)
+	ret := m.ctrl.Call(m, "DeleteTopic", arg0, name)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // DeleteTopic indicates an expected call of DeleteTopic.
-func (mr *MockPubSubMockRecorder) DeleteTopic(context, name any) *gomock.Call {
+func (mr *MockPubSubMockRecorder) DeleteTopic(arg0, name any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeleteTopic", reflect.TypeOf((*MockPubSub)(nil).DeleteTopic), context, name)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeleteTopic", reflect.TypeOf((*MockPubSub)(nil).DeleteTopic), arg0, name)
 }
 
 // Query mocks base method.
@@ -966,6 +966,160 @@ func (m *MockDGraph) DropField(ctx context.Context, fieldName string) error {
 func (mr *MockDGraphMockRecorder) DropField(ctx, fieldName any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DropField", reflect.TypeOf((*MockDGraph)(nil).DropField), ctx, fieldName)
+}
+
+// MockElasticsearch is a mock of Elasticsearch interface.
+type MockElasticsearch struct {
+	ctrl     *gomock.Controller
+	recorder *MockElasticsearchMockRecorder
+	isgomock struct{}
+}
+
+// MockElasticsearchMockRecorder is the mock recorder for MockElasticsearch.
+type MockElasticsearchMockRecorder struct {
+	mock *MockElasticsearch
+}
+
+// NewMockElasticsearch creates a new mock instance.
+func NewMockElasticsearch(ctrl *gomock.Controller) *MockElasticsearch {
+	mock := &MockElasticsearch{ctrl: ctrl}
+	mock.recorder = &MockElasticsearchMockRecorder{mock}
+	return mock
+}
+
+// EXPECT returns an object that allows the caller to indicate expected use.
+func (m *MockElasticsearch) EXPECT() *MockElasticsearchMockRecorder {
+	return m.recorder
+}
+
+// Bulk mocks base method.
+func (m *MockElasticsearch) Bulk(ctx context.Context, operations []map[string]any) (map[string]any, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Bulk", ctx, operations)
+	ret0, _ := ret[0].(map[string]any)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// Bulk indicates an expected call of Bulk.
+func (mr *MockElasticsearchMockRecorder) Bulk(ctx, operations any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Bulk", reflect.TypeOf((*MockElasticsearch)(nil).Bulk), ctx, operations)
+}
+
+// CreateIndex mocks base method.
+func (m *MockElasticsearch) CreateIndex(ctx context.Context, index string, settings map[string]any) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "CreateIndex", ctx, index, settings)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// CreateIndex indicates an expected call of CreateIndex.
+func (mr *MockElasticsearchMockRecorder) CreateIndex(ctx, index, settings any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CreateIndex", reflect.TypeOf((*MockElasticsearch)(nil).CreateIndex), ctx, index, settings)
+}
+
+// DeleteDocument mocks base method.
+func (m *MockElasticsearch) DeleteDocument(ctx context.Context, index, id string) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "DeleteDocument", ctx, index, id)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// DeleteDocument indicates an expected call of DeleteDocument.
+func (mr *MockElasticsearchMockRecorder) DeleteDocument(ctx, index, id any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeleteDocument", reflect.TypeOf((*MockElasticsearch)(nil).DeleteDocument), ctx, index, id)
+}
+
+// DeleteIndex mocks base method.
+func (m *MockElasticsearch) DeleteIndex(ctx context.Context, index string) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "DeleteIndex", ctx, index)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// DeleteIndex indicates an expected call of DeleteIndex.
+func (mr *MockElasticsearchMockRecorder) DeleteIndex(ctx, index any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeleteIndex", reflect.TypeOf((*MockElasticsearch)(nil).DeleteIndex), ctx, index)
+}
+
+// GetDocument mocks base method.
+func (m *MockElasticsearch) GetDocument(ctx context.Context, index, id string) (map[string]any, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetDocument", ctx, index, id)
+	ret0, _ := ret[0].(map[string]any)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetDocument indicates an expected call of GetDocument.
+func (mr *MockElasticsearchMockRecorder) GetDocument(ctx, index, id any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetDocument", reflect.TypeOf((*MockElasticsearch)(nil).GetDocument), ctx, index, id)
+}
+
+// HealthCheck mocks base method.
+func (m *MockElasticsearch) HealthCheck(ctx context.Context) (any, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "HealthCheck", ctx)
+	ret0, _ := ret[0].(any)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// HealthCheck indicates an expected call of HealthCheck.
+func (mr *MockElasticsearchMockRecorder) HealthCheck(ctx any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "HealthCheck", reflect.TypeOf((*MockElasticsearch)(nil).HealthCheck), ctx)
+}
+
+// IndexDocument mocks base method.
+func (m *MockElasticsearch) IndexDocument(ctx context.Context, index, id string, document any) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "IndexDocument", ctx, index, id, document)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// IndexDocument indicates an expected call of IndexDocument.
+func (mr *MockElasticsearchMockRecorder) IndexDocument(ctx, index, id, document any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "IndexDocument", reflect.TypeOf((*MockElasticsearch)(nil).IndexDocument), ctx, index, id, document)
+}
+
+// Search mocks base method.
+func (m *MockElasticsearch) Search(ctx context.Context, indices []string, query map[string]any) (map[string]any, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Search", ctx, indices, query)
+	ret0, _ := ret[0].(map[string]any)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// Search indicates an expected call of Search.
+func (mr *MockElasticsearchMockRecorder) Search(ctx, indices, query any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Search", reflect.TypeOf((*MockElasticsearch)(nil).Search), ctx, indices, query)
+}
+
+// UpdateDocument mocks base method.
+func (m *MockElasticsearch) UpdateDocument(ctx context.Context, index, id string, update map[string]any) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "UpdateDocument", ctx, index, id, update)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// UpdateDocument indicates an expected call of UpdateDocument.
+func (mr *MockElasticsearchMockRecorder) UpdateDocument(ctx, index, id, update any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UpdateDocument", reflect.TypeOf((*MockElasticsearch)(nil).UpdateDocument), ctx, index, id, update)
 }
 
 // Mockmigrator is a mock of migrator interface.
