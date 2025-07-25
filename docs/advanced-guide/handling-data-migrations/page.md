@@ -238,4 +238,89 @@ func createTableEmployeeCassandra() migration.Migrate {
 }
 ```
 
+
+Here’s a **compact version** with **functions for SQL and Elasticsearch (single & bulk)** included:
+
+---
+
+# GoFr Migrations
+
+## Handling Data Migrations (SQL/Redis/Cassandra)
+
+GoFr supports data migrations for **MySQL, Postgres, Redis, ClickHouse, and Cassandra**, allowing schema changes (e.g., adding columns, modifying types, setting/removing keys).
+
+**Steps to create a migration:**
+
+```bash
+go install gofr.dev/cli/gofr@latest
+gofr migrate create -name=create_employee_table
+```
+
+**Migration Example (SQL):**
+
+```go
+package migrations
+
+import "gofr.dev/pkg/gofr/migration"
+
+const createTable = `CREATE TABLE IF NOT EXISTS employee (
+    id   int PRIMARY KEY,
+    name varchar(50) NOT NULL,
+    gender varchar(6) NOT NULL,
+    contact_number varchar(10) NOT NULL
+);`
+
+func createTableEmployee() migration.Migrate {
+    return migration.Migrate{
+        UP: func(d migration.Datasource) error {
+            _, err := d.SQL.Exec(createTable)
+            return err
+        },
+    }
+}
+
+func All() map[int64]migration.Migrate {
+    return map[int64]migration.Migrate{
+        20240226153000: createTableEmployee(),
+    }
+}
+```
+
+## Migrations in ElasticSearch
+
+GoFr allows Elasticsearch document migrations, focusing on **single document** and **bulk operations**.
+
+### Single Document Migration
+
+```go  
+func addSingleProduct() migration.Migrate {  
+ return migration.Migrate{ 
+	 UP: func(d migration.Datasource) error { 
+			 product := map[string]any{ 
+			 "title": "Laptop", 
+			 "price": 999.99, 
+			 "category": "electronics", 
+			 } 
+			 
+		return d.Elasticsearch.IndexDocument( context.Background(), "products", "1", product, ) }, }
+		}  
+```  
+
+### Bulk Operation Migration
+
+```go  
+func bulkProducts() migration.Migrate {  
+ return migration.Migrate{ 
+ UP: func(d migration.Datasource) error { 
+		operations := []map[string]any{ 
+			{"index": map[string]any{"_index": "products", "_id": "1"}}, 
+			{"title": "Phone", "price": 699.99, "category": "electronics"}, 
+			{"index": map[string]any{"_index": "products", "_id": "2"}}, 
+			{"title": "Mug", "price": 12.99, "category": "kitchen"}, 
+			 }
+		
+		_, err := d.Elasticsearch.Bulk(context.Background(), operations) return err },}
+	}  
+``` 
+
 > ##### Check out the example to add and run migrations in GoFr: [Visit GitHub](https://github.com/gofr-dev/gofr/blob/main/examples/using-migrations/main.go)

@@ -135,86 +135,6 @@ func Test_PubSubCheckAndCreateMigrationTable(t *testing.T) {
 	}
 }
 
-func Test_PubSubGetLastMigration(t *testing.T) {
-	migratorWithPubSub, mockPubSub, mockContainer := pubsubTestSetup(t)
-
-	testCases := []struct {
-		desc           string
-		mockResponse   []byte
-		mockError      error
-		expectedResult int64
-		setupMocks     func(*container.MockPubSubProvider)
-	}{
-		{
-			desc: "successful query with migrations",
-			mockResponse: []byte(`{"version":1,"method":"UP","start_time":1625000000000,"duration":100}` +
-				`{"version":3,"method":"UP","start_time":1625000200000,"duration":150}`),
-			mockError:      nil,
-			expectedResult: 3,
-			setupMocks: func(mockPubSub *container.MockPubSubProvider) {
-				mockPubSub.EXPECT().
-					Query(gomock.Any(), pubsubMigrationTopic, int64(0), 100).
-					Return([]byte(`{"version":1,"method":"UP","start_time":1625000000000,"duration":100}`+
-						`{"version":3,"method":"UP","start_time":1625000200000,"duration":150}`), nil)
-			},
-		},
-		{
-			desc:           "query error",
-			mockResponse:   nil,
-			mockError:      errQuery,
-			expectedResult: 0,
-			setupMocks: func(mockPubSub *container.MockPubSubProvider) {
-				mockPubSub.EXPECT().
-					Query(gomock.Any(), pubsubMigrationTopic, int64(0), defaultQueryLimit).
-					Return(nil, errQuery)
-			},
-		},
-		{
-			desc:           "empty result",
-			mockResponse:   []byte{},
-			mockError:      nil,
-			expectedResult: 0,
-			setupMocks: func(mockPubSub *container.MockPubSubProvider) {
-				mockPubSub.EXPECT().
-					Query(gomock.Any(), pubsubMigrationTopic, int64(0), defaultQueryLimit).
-					Return([]byte{}, nil)
-			},
-		},
-		{
-			desc:           "invalid JSON",
-			mockResponse:   []byte(`{"invalid json`),
-			mockError:      nil,
-			expectedResult: 0,
-			setupMocks: func(mockPubSub *container.MockPubSubProvider) {
-				mockPubSub.EXPECT().
-					Query(gomock.Any(), pubsubMigrationTopic, int64(0), defaultQueryLimit).
-					Return([]byte(`{"invalid json`), nil)
-			},
-		},
-		{
-			desc: "mixed migration methods",
-			mockResponse: []byte(`{"version":1,"method":"UP","start_time":1625000000000,"duration":100}` +
-				`{"version":2,"method":"DOWN","start_time":1625000100000,"duration":120}`),
-			mockError:      nil,
-			expectedResult: 1,
-			setupMocks: func(mockPubSub *container.MockPubSubProvider) {
-				mockPubSub.EXPECT().
-					Query(gomock.Any(), pubsubMigrationTopic, int64(0), defaultQueryLimit).
-					Return([]byte(`{"version":1,"method":"UP","start_time":1625000000000,"duration":100}`+
-						`{"version":2,"method":"DOWN","start_time":1625000100000,"duration":120}`), nil)
-			},
-		},
-	}
-
-	for i, tc := range testCases {
-		tc.setupMocks(mockPubSub)
-
-		result := migratorWithPubSub.getLastMigration(mockContainer)
-
-		assert.Equal(t, tc.expectedResult, result, "TEST[%v] %v Failed!", i, tc.desc)
-	}
-}
-
 func Test_PubSubCommitMigration_Success(t *testing.T) {
 	migratorWithPubSub, mockPubSub, mockContainer := pubsubTestSetup(t)
 
@@ -245,4 +165,68 @@ func Test_PubSubCommitMigration_PublishError(t *testing.T) {
 	err := migratorWithPubSub.commitMigration(mockContainer, data)
 
 	assert.Equal(t, errTopic, err, "Publish error should be returned")
+}
+
+func Test_PubSubGetLastMigration(t *testing.T) {
+	migratorWithPubSub, mockPubSub, mockContainer := pubsubTestSetup(t)
+
+	testCases := []struct {
+		desc           string
+		expectedResult int64
+		setupMocks     func(*container.MockPubSubProvider)
+	}{
+		{
+			desc:           "successful query with migrations",
+			expectedResult: 3,
+			setupMocks: func(mockPubSub *container.MockPubSubProvider) {
+				mockPubSub.EXPECT().
+					Query(gomock.Any(), pubsubMigrationTopic, int64(0), defaultQueryLimit).
+					Return([]byte(`{"version":1,"method":"UP","start_time":1625000000000,"duration":100}
+{"version":3,"method":"UP","start_time":1625000200000,"duration":150}`), nil)
+			},
+		},
+		{
+			desc:           "query error",
+			expectedResult: 0,
+			setupMocks: func(mockPubSub *container.MockPubSubProvider) {
+				mockPubSub.EXPECT().
+					Query(gomock.Any(), pubsubMigrationTopic, int64(0), defaultQueryLimit).
+					Return(nil, errQuery)
+			},
+		},
+		{
+			desc:           "empty result",
+			expectedResult: 0,
+			setupMocks: func(mockPubSub *container.MockPubSubProvider) {
+				mockPubSub.EXPECT().
+					Query(gomock.Any(), pubsubMigrationTopic, int64(0), defaultQueryLimit).
+					Return([]byte{}, nil)
+			},
+		},
+		{
+			desc:           "invalid JSON",
+			expectedResult: 0,
+			setupMocks: func(mockPubSub *container.MockPubSubProvider) {
+				mockPubSub.EXPECT().
+					Query(gomock.Any(), pubsubMigrationTopic, int64(0), defaultQueryLimit).
+					Return([]byte(`{"invalid json`), nil)
+			},
+		},
+		{
+			desc:           "mixed migration methods",
+			expectedResult: 1,
+			setupMocks: func(mockPubSub *container.MockPubSubProvider) {
+				mockPubSub.EXPECT().
+					Query(gomock.Any(), pubsubMigrationTopic, int64(0), defaultQueryLimit).
+					Return([]byte(`{"version":1,"method":"UP","start_time":1625000000000,"duration":100}
+{"version":2,"method":"DOWN","start_time":1625000100000,"duration":120}`), nil)
+			},
+		},
+	}
+
+	for i, tc := range testCases {
+		tc.setupMocks(mockPubSub)
+		result := migratorWithPubSub.getLastMigration(mockContainer)
+		assert.Equal(t, tc.expectedResult, result, "TEST[%v] %v Failed!", i, tc.desc)
+	}
 }
