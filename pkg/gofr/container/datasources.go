@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"database/sql"
+	"time"
 
 	"github.com/redis/go-redis/v9"
 
@@ -718,6 +719,55 @@ type Elasticsearch interface {
 // ElasticsearchProvider an interface that extends Elasticsearch with additional methods for logging, metrics, and connection management.
 type ElasticsearchProvider interface {
 	Elasticsearch
+
+	provider
+}
+
+type InfluxPoint struct {
+	Measurement string
+	Tags        map[string]string
+	Fields      map[string]any
+	Timestamp   time.Time
+}
+
+// InfluxDB defines the operations required to interact with an InfluxDB instance.
+type InfluxDB interface {
+
+	// CreateOrganization create new bucket in the influxdb
+	CreateOrganization(ctx context.Context, org string) (string, error)
+
+	// DeleteOrganization deletes a organization under the specified organization.
+	DeleteOrganization(ctx context.Context, orgId string) error
+
+	// ListOrganization list all the available organization
+	ListOrganization(ctx context.Context) (orgs map[string]string, err error)
+
+	// WritePoints writes one or more time-series points to a bucket.
+	// 'points' should follow the line protocol format or structured map format.
+	WritePoints(ctx context.Context, bucket, org string, points []InfluxPoint) error
+
+	// Query runs a Flux query and returns the result as a slice of maps,
+	// where each map is a row with column name-value pairs.
+	Query(ctx context.Context, org, fluxQuery string) ([]map[string]any, error)
+
+	// CreateBucket creates a new bucket under the specified organization.
+	CreateBucket(ctx context.Context, org, bucket string) (string, error)
+
+	// DeleteBucket deletes a bucketId with bucketId
+	DeleteBucket(ctx context.Context, bucketId string) error
+
+	// ListBuckets lists all buckets under the specified organization.
+	ListBuckets(ctx context.Context, org string) (map[string]string, error)
+
+	// Ping checks if the InfluxDB instance is reachable and healthy.
+	Ping(ctx context.Context) (bool, error)
+
+	HealthChecker
+}
+
+// InfluxDBProvider an interface that extends InfluxDB with additional methods for logging, metrics, and connection management.
+type InfluxDBProvider interface {
+	InfluxDB
 
 	provider
 }
