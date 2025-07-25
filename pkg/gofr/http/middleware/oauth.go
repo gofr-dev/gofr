@@ -80,7 +80,7 @@ func NewOAuth(config OauthConfigs) PublicKeyProvider {
 	return &publicKeys
 }
 
-// updateKeys provides updated set of PublicKeys.
+// updateKeys updates keys using PublicKeyProvider.
 func (p *PublicKeys) updateKeys(config OauthConfigs) {
 	jwks, err := getPublicKeys(context.Background(), config.Provider, config.Path)
 	if err != nil {
