@@ -190,15 +190,6 @@ func (om *openTSDBMigrator) commitMigration(c *container.Container, data transac
 	return nil
 }
 
-// loadMigrations loads all previously committed migration records from a JSON file.
-// Returns an empty list if the file does not exist. This is the thread-safe version.
-func (om *openTSDBMigrator) loadMigrations() ([]tsdbMigrationRecord, error) {
-	om.mu.Lock()
-	defer om.mu.Unlock()
-
-	return om.loadMigrationsUnsafe()
-}
-
 // loadMigrationsUnsafe loads migrations without acquiring the mutex.
 // Should only be called when the mutex is already held.
 func (om *openTSDBMigrator) loadMigrationsUnsafe() ([]tsdbMigrationRecord, error) {
@@ -234,7 +225,7 @@ func migrationExists(migrations []tsdbMigrationRecord, version int64) bool {
 	return false
 }
 
-// writeMigrationsAtomically writes the migration list to disk using a temp file,
+// writeMigrationsAtomically writes the migration list to disk using a temp file.
 // ensuring that the operation is atomic and safe against partial writes.
 func (om *openTSDBMigrator) writeMigrationsAtomically(migrations []tsdbMigrationRecord) error {
 	tmpFilePath := om.filePath + ".tmp"
@@ -288,24 +279,4 @@ func (om *openTSDBMigrator) rollback(c *container.Container, data transactionDat
 	// Delegate to base migrator
 	om.migrator.rollback(c, data)
 	c.Fatalf("Migration %v failed.", data.MigrationNumber)
-}
-
-// GetMigrationHistory returns all applied migrations from the JSON file.
-func (om *openTSDBMigrator) GetMigrationHistory(_ *container.Container) ([]tsdbMigrationRecord, error) {
-	return om.loadMigrations()
-}
-
-// ValidateMigrationFile checks if the migration file is valid JSON.
-func (om *openTSDBMigrator) ValidateMigrationFile(c *container.Container) error {
-	om.mu.Lock()
-	defer om.mu.Unlock()
-
-	migrations, err := om.loadMigrationsUnsafe()
-	if err != nil {
-		return err
-	}
-
-	c.Debugf("Migration file validation successful, contains %d migrations", len(migrations))
-
-	return nil
 }
