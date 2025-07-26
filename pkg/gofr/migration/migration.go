@@ -207,6 +207,14 @@ func initializeDatasources(c *container.Container, ds *Datasource, mg migrator) 
 		c.Debugf("initialized data source for %s", init.logIdentifier)
 	}
 
+	if !isNil(c.ScyllaDB) {
+		ds.ScyllaDB = scyllaDS{c.ScyllaDB}
+
+		mg = scyllaDS{c.ScyllaDB}.apply(mg)
+
+		c.Debug("initialized data source for scyllaDB")
+	}
+
 	return mg, initialized
 }
 

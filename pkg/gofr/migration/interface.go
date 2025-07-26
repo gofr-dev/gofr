@@ -128,6 +128,24 @@ type DGraph interface {
 	DropField(ctx context.Context, fieldName string) error
 }
 
+type ScyllaDB interface {
+	Query(dest any, stmt string, values ...any) error
+	QueryWithCtx(ctx context.Context, dest any, stmt string, values ...any) error
+
+	Exec(stmt string, values ...any) error
+	ExecWithCtx(ctx context.Context, stmt string, values ...any) error
+
+	ExecCAS(dest any, stmt string, values ...any) (bool, error)
+
+	NewBatch(name string, batchType int) error
+	NewBatchWithCtx(ctx context.Context, name string, batchType int) error
+
+	BatchQuery(name, stmt string, values ...any) error
+	BatchQueryWithCtx(ctx context.Context, name, stmt string, values ...any) error
+
+	ExecuteBatchWithCtx(ctx context.Context, name string) error
+}
+
 // Elasticsearch is an interface representing an Elasticsearch client for migration operations.
 // It includes only the essential methods needed for schema changes and migrations.
 type Elasticsearch interface {
@@ -151,6 +169,7 @@ type Elasticsearch interface {
 	// Useful for bulk operations during migrations.
 	Bulk(ctx context.Context, operations []map[string]any) (map[string]any, error)
 }
+
 
 // keeping the migrator interface unexported as, right now it is not being implemented directly, by the externalDB drivers.
 // keeping the implementations for externalDB at one place such that if any change in migration logic, we would change directly here.
