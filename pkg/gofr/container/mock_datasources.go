@@ -10794,22 +10794,6 @@ type MockPubSubProvider struct {
 	isgomock struct{}
 }
 
-func (m *MockPubSubProvider) Query(ctx context.Context, query string, args ...any) ([]byte, error) {
-	m.ctrl.T.Helper()
-	callArgs := append([]any{ctx, query}, args...)
-	ret := m.ctrl.Call(m, "Query", callArgs...)
-	ret0, _ := ret[0].([]byte)
-	ret1, _ := ret[1].(error)
-	return ret0, ret1
-}
-
-// Query indicates an expected call of Query.
-func (mr *MockPubSubProviderMockRecorder) Query(ctx, query any, args ...any) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Query", reflect.TypeOf((*MockPubSubProvider)(nil).Query),
-		append([]any{ctx, query}, args...)...)
-}
-
 // MockPubSubProviderMockRecorder is the mock recorder for MockPubSubProvider.
 type MockPubSubProviderMockRecorder struct {
 	mock *MockPubSubProvider
@@ -10907,6 +10891,26 @@ func (m *MockPubSubProvider) Publish(ctx context.Context, topic string, message 
 func (mr *MockPubSubProviderMockRecorder) Publish(ctx, topic, message any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Publish", reflect.TypeOf((*MockPubSubProvider)(nil).Publish), ctx, topic, message)
+}
+
+// Query mocks base method.
+func (m *MockPubSubProvider) Query(ctx context.Context, query string, args ...any) ([]byte, error) {
+	m.ctrl.T.Helper()
+	varargs := []any{ctx, query}
+	for _, a := range args {
+		varargs = append(varargs, a)
+	}
+	ret := m.ctrl.Call(m, "Query", varargs...)
+	ret0, _ := ret[0].([]byte)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// Query indicates an expected call of Query.
+func (mr *MockPubSubProviderMockRecorder) Query(ctx, query any, args ...any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	varargs := append([]any{ctx, query}, args...)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Query", reflect.TypeOf((*MockPubSubProvider)(nil).Query), varargs...)
 }
 
 // Subscribe mocks base method.

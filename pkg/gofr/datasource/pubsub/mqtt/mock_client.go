@@ -20,6 +20,7 @@ import (
 type MockClient struct {
 	ctrl     *gomock.Controller
 	recorder *MockClientMockRecorder
+	isgomock struct{}
 }
 
 // MockClientMockRecorder is the mock recorder for MockClient.
@@ -40,15 +41,15 @@ func (m *MockClient) EXPECT() *MockClientMockRecorder {
 }
 
 // AddRoute mocks base method.
-func (m *MockClient) AddRoute(arg0 string, arg1 mqtt.MessageHandler) {
+func (m *MockClient) AddRoute(topic string, callback mqtt.MessageHandler) {
 	m.ctrl.T.Helper()
-	m.ctrl.Call(m, "AddRoute", arg0, arg1)
+	m.ctrl.Call(m, "AddRoute", topic, callback)
 }
 
 // AddRoute indicates an expected call of AddRoute.
-func (mr *MockClientMockRecorder) AddRoute(arg0, arg1 any) *gomock.Call {
+func (mr *MockClientMockRecorder) AddRoute(topic, callback any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AddRoute", reflect.TypeOf((*MockClient)(nil).AddRoute), arg0, arg1)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AddRoute", reflect.TypeOf((*MockClient)(nil).AddRoute), topic, callback)
 }
 
 // Connect mocks base method.
@@ -66,21 +67,21 @@ func (mr *MockClientMockRecorder) Connect() *gomock.Call {
 }
 
 // Disconnect mocks base method.
-func (m *MockClient) Disconnect(arg0 uint) {
+func (m *MockClient) Disconnect(quiesce uint) {
 	m.ctrl.T.Helper()
-	m.ctrl.Call(m, "Disconnect", arg0)
+	m.ctrl.Call(m, "Disconnect", quiesce)
 }
 
 // Disconnect indicates an expected call of Disconnect.
-func (mr *MockClientMockRecorder) Disconnect(arg0 any) *gomock.Call {
+func (mr *MockClientMockRecorder) Disconnect(quiesce any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Disconnect", reflect.TypeOf((*MockClient)(nil).Disconnect), arg0)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Disconnect", reflect.TypeOf((*MockClient)(nil).Disconnect), quiesce)
 }
 
 // IsConnected mocks base method.
 func (m *MockClient) IsConnected() bool {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "isConnected")
+	ret := m.ctrl.Call(m, "IsConnected")
 	ret0, _ := ret[0].(bool)
 	return ret0
 }
@@ -88,7 +89,7 @@ func (m *MockClient) IsConnected() bool {
 // IsConnected indicates an expected call of IsConnected.
 func (mr *MockClientMockRecorder) IsConnected() *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "isConnected", reflect.TypeOf((*MockClient)(nil).IsConnected))
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "IsConnected", reflect.TypeOf((*MockClient)(nil).IsConnected))
 }
 
 // IsConnectionOpen mocks base method.
@@ -120,52 +121,52 @@ func (mr *MockClientMockRecorder) OptionsReader() *gomock.Call {
 }
 
 // Publish mocks base method.
-func (m *MockClient) Publish(arg0 string, arg1 byte, arg2 bool, arg3 any) mqtt.Token {
+func (m *MockClient) Publish(topic string, qos byte, retained bool, payload any) mqtt.Token {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "Publish", arg0, arg1, arg2, arg3)
+	ret := m.ctrl.Call(m, "Publish", topic, qos, retained, payload)
 	ret0, _ := ret[0].(mqtt.Token)
 	return ret0
 }
 
 // Publish indicates an expected call of Publish.
-func (mr *MockClientMockRecorder) Publish(arg0, arg1, arg2, arg3 any) *gomock.Call {
+func (mr *MockClientMockRecorder) Publish(topic, qos, retained, payload any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Publish", reflect.TypeOf((*MockClient)(nil).Publish), arg0, arg1, arg2, arg3)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Publish", reflect.TypeOf((*MockClient)(nil).Publish), topic, qos, retained, payload)
 }
 
 // Subscribe mocks base method.
-func (m *MockClient) Subscribe(arg0 string, arg1 byte, arg2 mqtt.MessageHandler) mqtt.Token {
+func (m *MockClient) Subscribe(topic string, qos byte, callback mqtt.MessageHandler) mqtt.Token {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "Subscribe", arg0, arg1, arg2)
+	ret := m.ctrl.Call(m, "Subscribe", topic, qos, callback)
 	ret0, _ := ret[0].(mqtt.Token)
 	return ret0
 }
 
 // Subscribe indicates an expected call of Subscribe.
-func (mr *MockClientMockRecorder) Subscribe(arg0, arg1, arg2 any) *gomock.Call {
+func (mr *MockClientMockRecorder) Subscribe(topic, qos, callback any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Subscribe", reflect.TypeOf((*MockClient)(nil).Subscribe), arg0, arg1, arg2)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Subscribe", reflect.TypeOf((*MockClient)(nil).Subscribe), topic, qos, callback)
 }
 
 // SubscribeMultiple mocks base method.
-func (m *MockClient) SubscribeMultiple(arg0 map[string]byte, arg1 mqtt.MessageHandler) mqtt.Token {
+func (m *MockClient) SubscribeMultiple(filters map[string]byte, callback mqtt.MessageHandler) mqtt.Token {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "SubscribeMultiple", arg0, arg1)
+	ret := m.ctrl.Call(m, "SubscribeMultiple", filters, callback)
 	ret0, _ := ret[0].(mqtt.Token)
 	return ret0
 }
 
 // SubscribeMultiple indicates an expected call of SubscribeMultiple.
-func (mr *MockClientMockRecorder) SubscribeMultiple(arg0, arg1 any) *gomock.Call {
+func (mr *MockClientMockRecorder) SubscribeMultiple(filters, callback any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SubscribeMultiple", reflect.TypeOf((*MockClient)(nil).SubscribeMultiple), arg0, arg1)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SubscribeMultiple", reflect.TypeOf((*MockClient)(nil).SubscribeMultiple), filters, callback)
 }
 
 // Unsubscribe mocks base method.
-func (m *MockClient) Unsubscribe(arg0 ...string) mqtt.Token {
+func (m *MockClient) Unsubscribe(topics ...string) mqtt.Token {
 	m.ctrl.T.Helper()
 	varargs := []any{}
-	for _, a := range arg0 {
+	for _, a := range topics {
 		varargs = append(varargs, a)
 	}
 	ret := m.ctrl.Call(m, "Unsubscribe", varargs...)
@@ -174,7 +175,7 @@ func (m *MockClient) Unsubscribe(arg0 ...string) mqtt.Token {
 }
 
 // Unsubscribe indicates an expected call of Unsubscribe.
-func (mr *MockClientMockRecorder) Unsubscribe(arg0 ...any) *gomock.Call {
+func (mr *MockClientMockRecorder) Unsubscribe(topics ...any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Unsubscribe", reflect.TypeOf((*MockClient)(nil).Unsubscribe), arg0...)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Unsubscribe", reflect.TypeOf((*MockClient)(nil).Unsubscribe), topics...)
 }
