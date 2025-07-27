@@ -5,7 +5,7 @@ import (
 	"errors"
 	influxdb2 "github.com/influxdata/influxdb-client-go/v2"
 	"go.opencensus.io/trace"
-	"gofr.dev/pkg/gofr/container"
+	"time"
 )
 
 // Config holds the configuration for connecting to InfluxDB.
@@ -64,8 +64,10 @@ func (c *Client) CreateOrganization(ctx context.Context, orgName string) (string
 	orgAPI := c.client.OrganizationsAPI()
 	newOrg, err := orgAPI.CreateOrganizationWithName(ctx, orgName)
 	if err != nil {
+		c.logger.Errorf("failed to create new organization with name '%v' %v", orgName, err)
 		return "", err
 	}
+	c.logger.Debugf("organization created with name '%v'", orgName)
 	return *newOrg.Id, nil
 }
 
@@ -145,8 +147,10 @@ func (c *Client) CreateBucket(ctx context.Context, orgId string, bucketName stri
 	newBucket, err := bucketsAPI.CreateBucketWithNameWithID(ctx, orgId, bucketName)
 
 	if err != nil {
+		c.logger.Errorf("failed to create new bucket with name '%v' %v", bucketName, err)
 		return
 	}
+	c.logger.Debugf("bucket created with name '%v'", bucketName)
 	return *newBucket.Id, nil
 }
 
@@ -260,7 +264,33 @@ func (c *Client) Ping(ctx context.Context) (bool, error) {
 }
 
 func (c *Client) Query(ctx context.Context, org string, fluxQuery string) ([]map[string]any, error) {
-	panic("unimplemented")
+	queryAPI := c.client.QueryAPI(org)
+	result, err := queryAPI.Query(ctx, fluxQuery)
+	if err != nil {
+		c.logger.Errorf("InfluxDB Flux Query '%v' failed: %v", fluxQuery, err.Error())
+		return nil, err
+	}
+
+	var records []map[string]any
+	for result.Next() {
+		if result.Err() != nil {
+			c.logger.Errorf("Error processing InfluxDB Flux Query result: %v", result.Err().Error())
+			return nil, result.Err()
+		}
+		record := make(map[string]any)
+		for k, v := range result.Record().Values() {
+			record[k] = v
+		}
+		records = append(records, record)
+	}
+
+	// Check for any final errors after iteration.
+	if result.Err() != nil {
+		c.logger.Errorf("Final error in InfluxDB Flux Query result: %v", result.Err().Error())
+		return nil, result.Err()
+	}
+
+	return records, nil
 }
 
 func (c *Client) UseLogger(logger any) {
@@ -282,8 +312,15 @@ func (c *Client) UseTracer(tracer any) {
 	}
 }
 
-func (c *Client) WritePoints(ctx context.Context, bucket string, org string, points []container.InfluxPoint) error {
-	panic("unimplemented")
+func (c *Client) WritePoint(ctx context.Context, org, bucket string, measurement string, tags map[string]string, fields map[string]interface{}, timestamp time.Time) error {
+	writeAPI := c.client.WriteAPIBlocking(org, bucket)
+	p := influxdb2.NewPoint(measurement, tags, fields, timestamp)
+	err := writeAPI.WritePoint(ctx, p)
+	if err != nil {
+		c.logger.Errorf("Failed to write point to influxdb: %v", err.Error())
+		return err
+	}
+	return nil
 }
 
 // New creates a new InfluxDB client with the provided configuration.
