@@ -4,9 +4,8 @@ import (
 	"bytes"
 	"context"
 	"database/sql"
-	"time"
-
 	"github.com/redis/go-redis/v9"
+	"time"
 
 	"gofr.dev/pkg/gofr/datasource"
 	"gofr.dev/pkg/gofr/datasource/pubsub"
@@ -723,13 +722,6 @@ type ElasticsearchProvider interface {
 	provider
 }
 
-type InfluxPoint struct {
-	Measurement string
-	Tags        map[string]string
-	Fields      map[string]any
-	Timestamp   time.Time
-}
-
 // InfluxDB defines the operations required to interact with an InfluxDB instance.
 type InfluxDB interface {
 
@@ -742,9 +734,13 @@ type InfluxDB interface {
 	// ListOrganization list all the available organization
 	ListOrganization(ctx context.Context) (orgs map[string]string, err error)
 
-	// WritePoints writes one or more time-series points to a bucket.
+	// WritePoint writes one time-series points to a bucket.
 	// 'points' should follow the line protocol format or structured map format.
-	WritePoints(ctx context.Context, bucket, org string, points []InfluxPoint) error
+	WritePoint(ctx context.Context, org, bucket string,
+		measurement string,
+		tags map[string]string,
+		fields map[string]interface{},
+		timestamp time.Time) error
 
 	// Query runs a Flux query and returns the result as a slice of maps,
 	// where each map is a row with column name-value pairs.
