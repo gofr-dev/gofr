@@ -5,6 +5,7 @@ import (
 	"github.com/stretchr/testify/require"
 	"gofr.dev/pkg/gofr"
 	"testing"
+	"time"
 )
 
 var (
@@ -12,8 +13,9 @@ var (
 	Username       = "admin"
 	Password       = "admin1234"
 	Token          = "F-QFQpmCL9UkR3qyoXnLkzWj03s6m4eCvYgDl1ePfHBf9ph7yxaSgQ6WN0i9giNgRTfONwVMK1f977r_g71oNQ=="
-	testOrgName    = "org4ddssd2f3"
-	testBucketName = "bucksddsdet42f3"
+	testOrgName    = "org-test2"
+	testBucketName = "bucket-test2"
+	testFluxQuery  = "from(bucket:\"bucket-test2\")|> range(start: -1h) |> filter(fn: (r) => r._measurement == \"stat\")"
 )
 
 func setupInflux(t *testing.T) *Client {
@@ -108,7 +110,7 @@ func deleteBucket(t *testing.T, client *Client, bucketId string) {
 }
 
 func TestOrganizationOperations(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	client := setupInflux(t)
 
 	beforeOrgList := listOrganizations(t, ctx, client) // before create the new organization
@@ -120,7 +122,7 @@ func TestOrganizationOperations(t *testing.T) {
 
 func TestBucketOperations(t *testing.T) {
 
-	ctx := context.Background()
+	ctx := t.Context()
 	client := setupInflux(t)
 	orgId := creatOrganization(t, client, testOrgName)
 
@@ -128,6 +130,32 @@ func TestBucketOperations(t *testing.T) {
 	bucketId := createNewBucket(t, client, orgId, testBucketName)
 	afterBucketList := listBuckets(t, ctx, client, testOrgName) // before create the new organization
 	require.Greater(t, len(afterBucketList), len(beforeBucketList))
+
+	deleteBucket(t, client, bucketId)
+	deleteOrganization(t, client, orgId)
+}
+
+func TestWritePoints(t *testing.T) {
+	ctx := t.Context()
+	client := setupInflux(t)
+	orgId := creatOrganization(t, client, testOrgName)
+	bucketId := createNewBucket(t, client, orgId, testBucketName)
+
+	err := client.WritePoint(
+		ctx,
+		orgId,
+		bucketId,
+		"stat",
+		map[string]string{"unit": "temperature"},
+		map[string]interface{}{"avg": 24.5, "max": 45.0},
+		time.Now(),
+	)
+
+	require.NoError(t, err)
+
+	result, err := client.Query(ctx, orgId, testFluxQuery)
+	require.NoError(t, err)
+	require.NotEmpty(t, result)
 
 	deleteBucket(t, client, bucketId)
 	deleteOrganization(t, client, orgId)
