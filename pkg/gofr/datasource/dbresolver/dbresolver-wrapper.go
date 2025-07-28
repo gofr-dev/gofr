@@ -46,23 +46,33 @@ func (r *ResolverWrapper) Connect() {
 	// No-op - we don't create connections, we use existing ones
 }
 
+// createStrategy creates a Strategy instance from string name
+func (r *ResolverWrapper) createStrategy(replicaCount int) Strategy {
+	switch r.strategy {
+	case "round-robin":
+		return NewRoundRobinStrategy(replicaCount)
+	case "random":
+		return NewRandomStrategy()
+	default:
+		// Default to round-robin if unknown strategy
+		return NewRoundRobinStrategy(replicaCount)
+	}
+}
+
 // Build creates a resolver with the given primary and replicas
 func (r *ResolverWrapper) Build(primary container.DB, replicas []container.DB) container.DB {
 	if primary == nil {
 		panic("primary database cannot be nil")
 	}
 
+	// Create strategy instance based on string name
+	strategy := r.createStrategy(len(replicas))
+
 	// Create options for the resolver
 	opts := []Option{
-		WithStrategy(r.strategy),
-		WithReadFallback(r.readFallback),
+		WithStrategy(strategy),
+		WithFallback(r.readFallback),
 	}
-
-	// Add strategy option
-	opts = append(opts, WithStrategy(r.strategy))
-
-	// Add read fallback option
-	opts = append(opts, WithReadFallback(r.readFallback))
 
 	// Create and return the resolver
 	return New(primary, replicas, r.logger, r.metrics, opts...)
