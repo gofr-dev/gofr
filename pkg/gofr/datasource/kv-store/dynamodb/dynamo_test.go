@@ -16,31 +16,46 @@ import (
 
 var errDynamoFailure = errors.New("dynamodb error")
 
-func setupTest(t *testing.T) (
-	ctx context.Context,
-	client *Client,
-	mockDB *MockdynamoDBInterface,
-	mockLogger *MockLogger,
-	mockMetrics *MockMetrics,
-	finish func(),
-) {
+type testDeps struct {
+	ctx         context.Context
+	client      *Client
+	mockDB      *MockdynamoDBInterface
+	mockLogger  *MockLogger
+	mockMetrics *MockMetrics
+	finish      func()
+}
+
+func setupTest(t *testing.T) testDeps {
 	ctrl := gomock.NewController(t)
-	mockDB = NewMockdynamoDBInterface(ctrl)
-	mockLogger = NewMockLogger(ctrl)
-	mockMetrics = NewMockMetrics(ctrl)
-	client = &Client{
+	mockDB := NewMockdynamoDBInterface(ctrl)
+	mockLogger := NewMockLogger(ctrl)
+	mockMetrics := NewMockMetrics(ctrl)
+
+	client := &Client{
 		db:      mockDB,
 		configs: &Configs{Table: "test-table", Region: "us-east-1", PartitionKeyName: "pk"},
 		logger:  mockLogger,
 		metrics: mockMetrics,
 	}
-	ctx = context.Background()
-	finish = func() { ctrl.Finish() }
-	return
+
+	return testDeps{
+		ctx:         t.Context(),
+		client:      client,
+		mockDB:      mockDB,
+		mockLogger:  mockLogger,
+		mockMetrics: mockMetrics,
+		finish:      ctrl.Finish,
+	}
 }
 
 func Test_ClientSet(t *testing.T) {
-	ctx, client, mockDB, mockLogger, mockMetrics, finish := setupTest(t)
+	deps := setupTest(t)
+	ctx := deps.ctx
+	client := deps.client
+	mockDB := deps.mockDB
+	mockLogger := deps.mockLogger
+	mockMetrics := deps.mockMetrics
+	finish := deps.finish
 	defer finish()
 
 	key := "test-key"
@@ -69,7 +84,13 @@ func Test_ClientSet(t *testing.T) {
 }
 
 func Test_ClientSetError(t *testing.T) {
-	ctx, client, mockDB, mockLogger, mockMetrics, finish := setupTest(t)
+	deps := setupTest(t)
+	ctx := deps.ctx
+	client := deps.client
+	mockDB := deps.mockDB
+	mockLogger := deps.mockLogger
+	mockMetrics := deps.mockMetrics
+	finish := deps.finish
 	defer finish()
 
 	key := "test-key"
@@ -93,7 +114,13 @@ func Test_ClientSetError(t *testing.T) {
 }
 
 func Test_ClientGet(t *testing.T) {
-	ctx, client, mockDB, mockLogger, mockMetrics, finish := setupTest(t)
+	deps := setupTest(t)
+	ctx := deps.ctx
+	client := deps.client
+	mockDB := deps.mockDB
+	mockLogger := deps.mockLogger
+	mockMetrics := deps.mockMetrics
+	finish := deps.finish
 	defer finish()
 
 	key := "test-key"
@@ -131,7 +158,13 @@ func Test_ClientGet(t *testing.T) {
 }
 
 func Test_ClientGetError(t *testing.T) {
-	ctx, client, mockDB, mockLogger, mockMetrics, finish := setupTest(t)
+	deps := setupTest(t)
+	ctx := deps.ctx
+	client := deps.client
+	mockDB := deps.mockDB
+	mockLogger := deps.mockLogger
+	mockMetrics := deps.mockMetrics
+	finish := deps.finish
 	defer finish()
 
 	key := "test-key"
@@ -163,7 +196,13 @@ func Test_ClientGetError(t *testing.T) {
 }
 
 func Test_ClientDelete(t *testing.T) {
-	ctx, client, mockDB, mockLogger, mockMetrics, finish := setupTest(t)
+	deps := setupTest(t)
+	ctx := deps.ctx
+	client := deps.client
+	mockDB := deps.mockDB
+	mockLogger := deps.mockLogger
+	mockMetrics := deps.mockMetrics
+	finish := deps.finish
 	defer finish()
 
 	key := "test-key"
@@ -188,7 +227,13 @@ func Test_ClientDelete(t *testing.T) {
 }
 
 func Test_ClientDeleteError(t *testing.T) {
-	ctx, client, mockDB, mockLogger, mockMetrics, finish := setupTest(t)
+	deps := setupTest(t)
+	ctx := deps.ctx
+	client := deps.client
+	mockDB := deps.mockDB
+	mockLogger := deps.mockLogger
+	mockMetrics := deps.mockMetrics
+	finish := deps.finish
 	defer finish()
 
 	key := "test-key"
@@ -218,7 +263,11 @@ func Test_ClientDeleteError(t *testing.T) {
 }
 
 func Test_ClientHealthCheckSuccess(t *testing.T) {
-	ctx, client, mockDB, _, _, finish := setupTest(t)
+	deps := setupTest(t)
+	ctx := deps.ctx
+	client := deps.client
+	mockDB := deps.mockDB
+	finish := deps.finish
 	defer finish()
 
 	expectedInput := &dynamodb.DescribeTableInput{
@@ -240,7 +289,11 @@ func Test_ClientHealthCheckSuccess(t *testing.T) {
 }
 
 func Test_ClientHealthCheckFailure(t *testing.T) {
-	ctx, client, mockDB, _, _, finish := setupTest(t)
+	deps := setupTest(t)
+	ctx := deps.ctx
+	client := deps.client
+	mockDB := deps.mockDB
+	finish := deps.finish
 	defer finish()
 
 	expectedErr := errors.New("dynamodb error")
