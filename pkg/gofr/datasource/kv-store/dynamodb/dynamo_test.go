@@ -14,6 +14,8 @@ import (
 	"go.uber.org/mock/gomock"
 )
 
+var errDynamoFailure = errors.New("dynamodb error")
+
 func setupTest(t *testing.T) (
 	ctx context.Context,
 	client *Client,
@@ -72,7 +74,7 @@ func Test_ClientSetError(t *testing.T) {
 
 	key := "test-key"
 	attributes := map[string]any{"field1": "value1", "field2": "value2"}
-	expectedErr := errors.New("dynamodb error")
+	expectedErr := errDynamoFailure
 
 	mockDB.EXPECT().PutItem(ctx, gomock.Any(), gomock.Any()).Return(nil, expectedErr)
 	mockLogger.EXPECT().Errorf("error while setting data for key: %v, error: %v", key, expectedErr)
@@ -133,7 +135,7 @@ func Test_ClientGetError(t *testing.T) {
 	defer finish()
 
 	key := "test-key"
-	expectedErr := errors.New("dynamodb error")
+	expectedErr := errDynamoFailure
 
 	expectedInput := &dynamodb.GetItemInput{
 		TableName: aws.String("test-table"),
@@ -190,7 +192,7 @@ func Test_ClientDeleteError(t *testing.T) {
 	defer finish()
 
 	key := "test-key"
-	expectedErr := errors.New("dynamodb error")
+	expectedErr := errDynamoFailure
 
 	expectedInput := &dynamodb.DeleteItemInput{
 		TableName: aws.String("test-table"),

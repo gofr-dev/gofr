@@ -12,12 +12,12 @@ import (
 	"github.com/aws/aws-sdk-go-v2/feature/dynamodb/attributevalue"
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb"
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb/types"
-
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/trace"
 )
 
 var errStatusDown = errors.New("status down")
+var errKeyNotFound = errors.New("key not found")
 
 type Configs struct {
 	Table            string
@@ -114,7 +114,7 @@ func (c *Client) Get(ctx context.Context, key string) (map[string]any, error) {
 	}
 
 	if out.Item == nil {
-		return nil, fmt.Errorf("key not found")
+		return nil, errKeyNotFound
 	}
 
 	var result map[string]any
