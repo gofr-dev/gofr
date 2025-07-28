@@ -8,7 +8,6 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"go.uber.org/mock/gomock"
-
 	"gofr.dev/pkg/gofr/container"
 	"gofr.dev/pkg/gofr/logging"
 )
@@ -25,18 +24,18 @@ func (*panicLogger) Fatal(args ...any) {
 	panic(fmt.Sprint(args...))
 }
 
-func (*panicLogger) Errorf(_ string, _ ...any)  {}
-func (*panicLogger) Error(_ ...any)            {}
-func (*panicLogger) Debugf(_ string, _ ...any) {}
-func (*panicLogger) Noticef(_ string, _ ...any) {}
-func (*panicLogger) Debug(_ ...any)            {}
-func (*panicLogger) Infof(_ string, _ ...any)  {}
-func (*panicLogger) Info(_ ...any)             {}
-func (*panicLogger) Notice(_ ...any)           {}
-func (*panicLogger) Warn(_ ...any)             {}
-func (*panicLogger) Warnf(_ string, _ ...any)  {}
-func (*panicLogger) Log(_ ...any)              {}
-func (*panicLogger) Logf(_ string, _ ...any)   {}
+func (*panicLogger) Errorf(_ string, _ ...any)   {}
+func (*panicLogger) Error(_ ...any)              {}
+func (*panicLogger) Debugf(_ string, _ ...any)   {}
+func (*panicLogger) Noticef(_ string, _ ...any)  {}
+func (*panicLogger) Debug(_ ...any)              {}
+func (*panicLogger) Infof(_ string, _ ...any)    {}
+func (*panicLogger) Info(_ ...any)               {}
+func (*panicLogger) Notice(_ ...any)             {}
+func (*panicLogger) Warn(_ ...any)               {}
+func (*panicLogger) Warnf(_ string, _ ...any)    {}
+func (*panicLogger) Log(_ ...any)                {}
+func (*panicLogger) Logf(_ string, _ ...any)     {}
 func (*panicLogger) ChangeLevel(_ logging.Level) {}
 
 type NoopLogger struct{}
@@ -47,18 +46,18 @@ func (*NoopLogger) Fatalf(format string, args ...any) {
 func (*NoopLogger) Fatal(args ...any) {
 	panic(fmt.Sprint(args...))
 }
-func (*NoopLogger) Errorf(_ string, _ ...any)  {}
-func (*NoopLogger) Error(_ ...any)            {}
-func (*NoopLogger) Debugf(_ string, _ ...any) {}
-func (*NoopLogger) Noticef(_ string, _ ...any) {}
-func (*NoopLogger) Debug(_ ...any)            {}
-func (*NoopLogger) Infof(_ string, _ ...any)  {}
-func (*NoopLogger) Info(_ ...any)             {}
-func (*NoopLogger) Notice(_ ...any)           {}
-func (*NoopLogger) Warn(_ ...any)             {}
-func (*NoopLogger) Warnf(_ string, _ ...any)  {}
-func (*NoopLogger) Log(_ ...any)              {}
-func (*NoopLogger) Logf(_ string, _ ...any)   {}
+func (*NoopLogger) Errorf(_ string, _ ...any)   {}
+func (*NoopLogger) Error(_ ...any)              {}
+func (*NoopLogger) Debugf(_ string, _ ...any)   {}
+func (*NoopLogger) Noticef(_ string, _ ...any)  {}
+func (*NoopLogger) Debug(_ ...any)              {}
+func (*NoopLogger) Infof(_ string, _ ...any)    {}
+func (*NoopLogger) Info(_ ...any)               {}
+func (*NoopLogger) Notice(_ ...any)             {}
+func (*NoopLogger) Warn(_ ...any)               {}
+func (*NoopLogger) Warnf(_ string, _ ...any)    {}
+func (*NoopLogger) Log(_ ...any)                {}
+func (*NoopLogger) Logf(_ string, _ ...any)     {}
 func (*NoopLogger) ChangeLevel(_ logging.Level) {}
 
 func scyllaSetup(t *testing.T) (migrator, *container.MockScyllaDB, *container.Container) {

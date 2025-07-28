@@ -6,7 +6,6 @@ import (
 	"time"
 
 	goRedis "github.com/redis/go-redis/v9"
-
 	"gofr.dev/pkg/gofr/container"
 )
 
@@ -169,7 +168,6 @@ type Elasticsearch interface {
 	// Useful for bulk operations during migrations.
 	Bulk(ctx context.Context, operations []map[string]any) (map[string]any, error)
 }
-
 
 // keeping the migrator interface unexported as, right now it is not being implemented directly, by the externalDB drivers.
 // keeping the implementations for externalDB at one place such that if any change in migration logic, we would change directly here.
