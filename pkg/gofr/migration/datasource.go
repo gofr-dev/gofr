@@ -18,6 +18,7 @@ type Datasource struct {
 	DGraph        DGraph
 	ScyllaDB      ScyllaDB
 	Elasticsearch Elasticsearch
+	OpenTSDB      OpenTSDB
 }
 
 // It is a base implementation for migration manager, on this other database drivers have been wrapped.
