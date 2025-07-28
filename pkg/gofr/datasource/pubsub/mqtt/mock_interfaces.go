@@ -21,7 +21,6 @@ import (
 type MockLogger struct {
 	ctrl     *gomock.Controller
 	recorder *MockLoggerMockRecorder
-	isgomock struct{}
 }
 
 // MockLoggerMockRecorder is the mock recorder for MockLogger.
@@ -129,7 +128,6 @@ func (mr *MockLoggerMockRecorder) Warnf(format any, args ...any) *gomock.Call {
 type MockMetrics struct {
 	ctrl     *gomock.Controller
 	recorder *MockMetricsMockRecorder
-	isgomock struct{}
 }
 
 // MockMetricsMockRecorder is the mock recorder for MockMetrics.
@@ -170,7 +168,6 @@ func (mr *MockMetricsMockRecorder) IncrementCounter(ctx, name any, labels ...any
 type MockPubSub struct {
 	ctrl     *gomock.Controller
 	recorder *MockPubSubMockRecorder
-	isgomock struct{}
 }
 
 // MockPubSubMockRecorder is the mock recorder for MockPubSub.
