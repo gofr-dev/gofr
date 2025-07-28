@@ -60,6 +60,7 @@ func New(configs Configs) *Client {
 	if configs.PartitionKeyName == "" {
 		configs.PartitionKeyName = "pk"
 	}
+
 	return &Client{configs: &configs}
 }
 
@@ -135,6 +136,7 @@ func (c *Client) Get(ctx context.Context, key string) (map[string]any, error) {
 
 	var result map[string]any
 	err = attributevalue.UnmarshalMap(out.Item, &result)
+
 	if err != nil {
 		c.logger.Errorf("error unmarshalling item for key: %v, error: %v", key, err)
 		return nil, err
@@ -151,7 +153,7 @@ func (c *Client) Set(ctx context.Context, key string, attributes map[string]any)
 
 	itemAV, err := attributevalue.MarshalMap(attributes)
 	if err != nil {
-		c.logger.Errorf("error marshalling attributes for key: %v, error: %v", key, err)
+		c.logger.Errorf("error marshaling attributes for key: %v, error: %v", key, err)
 		return err
 	}
 
@@ -182,8 +184,10 @@ func (c *Client) Delete(ctx context.Context, key string) error {
 	}
 
 	_, err := c.db.DeleteItem(ctx, input)
+
 	if err != nil {
 		c.logger.Errorf("error while deleting data for key: %v, error: %v", key, err)
+
 		return err
 	}
 
@@ -204,13 +208,16 @@ func (c *Client) HealthCheck(ctx context.Context) (any, error) {
 	h.Details["region"] = c.configs.Region
 
 	input := &dynamodb.DescribeTableInput{TableName: aws.String(c.configs.Table)}
+
 	_, err := c.db.DescribeTable(ctx, input)
 	if err != nil {
 		h.Status = "DOWN"
+
 		return &h, errStatusDown
 	}
 
 	h.Status = "UP"
+
 	return &h, nil
 }
 
@@ -240,7 +247,9 @@ func (c *Client) addTrace(ctx context.Context, method, key string) trace.Span {
 			attribute.String("dynamodb.method", method),
 			attribute.String("dynamodb.key", key),
 		)
+
 		return span
 	}
+
 	return nil
 }
