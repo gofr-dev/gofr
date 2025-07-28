@@ -96,6 +96,8 @@ func (a *App) startAllServers(ctx context.Context) {
 
 // startMetricsServer starts the metrics server if configured.
 func (a *App) startMetricsServer(wg *sync.WaitGroup) {
+	// Start Metrics Server
+	// running metrics server before HTTP and gRPC
 	if a.metricServer != nil {
 		wg.Add(1)
 

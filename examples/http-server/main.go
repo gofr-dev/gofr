@@ -21,14 +21,8 @@ func main() {
 	//HTTP service with default health check endpoint
 	a.AddHTTPService("anotherService", "http://localhost:9000")
 
-	// Add all the routes
-	a.GET("/hello", HelloHandler)
-	a.GET("/error", ErrorHandler)
-	a.GET("/redis", RedisHandler)
-	a.GET("/trace", TraceHandler)
-	a.GET("/mysql", MysqlHandler)
-
 	// Register an OnStart hook to warm up a cache.
+	// This runs before route registration as intended.
 	a.OnStart(func(ctx *gofr.Context) error {
 		ctx.Container.Logger.Info("Warming up the cache...")
 
@@ -47,6 +41,13 @@ func main() {
 
 		return nil
 	})
+
+	// Add all the routes
+	a.GET("/hello", HelloHandler)
+	a.GET("/error", ErrorHandler)
+	a.GET("/redis", RedisHandler)
+	a.GET("/trace", TraceHandler)
+	a.GET("/mysql", MysqlHandler)
 
 	// Run the application
 	a.Run()
