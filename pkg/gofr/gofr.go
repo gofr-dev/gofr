@@ -312,6 +312,24 @@ func (a *App) AddStaticFiles(endpoint, filePath string) {
 	a.httpServer.staticFiles[filePath] = endpoint
 }
 
+// OnStart registers a startup hook that will be executed when the application starts.
+// The hook function receives a Context that provides access to the application's
+// container, logger, and configuration. This is useful for performing initialization
+// tasks such as database connections, service registrations, or other setup operations
+// that need to be completed before the application begins serving requests.
+//
+// Example usage:
+//
+//	app := gofr.New()
+//	app.OnStart(func(ctx *gofr.Context) error {
+//	    // Initialize database connection
+//	    db, err := database.Connect(ctx.Config.Get("DB_URL"))
+//	    if err != nil {
+//	        return err
+//	    }
+//	    ctx.Container.SQL = db
+//	    return nil
+//	})
 func (a *App) OnStart(hook func(ctx *Context) error) {
 	a.onStartHooks = append(a.onStartHooks, hook)
 }
