@@ -120,7 +120,7 @@ func (c *Client) Get(ctx context.Context, key string) (map[string]any, error) {
 	var result map[string]any
 	err = attributevalue.UnmarshalMap(out.Item, &result)
 	if err != nil {
-		c.logger.Errorf("error unmarshaling item for key: %v, error: %v", key, err)
+		c.logger.Errorf("error unmarshalling item for key: %v, error: %v", key, err)
 		return nil, err
 	}
 
@@ -135,7 +135,7 @@ func (c *Client) Set(ctx context.Context, key string, attributes map[string]any)
 
 	itemAV, err := attributevalue.MarshalMap(attributes)
 	if err != nil {
-		c.logger.Errorf("error marshaling attributes for key: %v, error: %v", key, err)
+		c.logger.Errorf("error marshalling attributes for key: %v, error: %v", key, err)
 		return err
 	}
 
