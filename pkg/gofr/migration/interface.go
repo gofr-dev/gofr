@@ -163,3 +163,14 @@ type migrator interface {
 	commitMigration(c *container.Container, data transactionData) error
 	rollback(c *container.Container, data transactionData)
 }
+
+type OpenTSDB interface {
+	// PutDataPoints can be used for seeding initial metrics during migration
+	PutDataPoints(ctx context.Context, data any, queryParam string, res any) error
+	// PostAnnotation creates or updates an annotation in OpenTSDB using the 'POST /api/annotation' endpoint.
+	PostAnnotation(ctx context.Context, annotation any, res any) error
+	// PutAnnotation creates or replaces an annotation in OpenTSDB using the 'PUT /api/annotation' endpoint.
+	PutAnnotation(ctx context.Context, annotation any, res any) error
+	// DeleteAnnotation removes an annotation from OpenTSDB using the 'DELETE /api/annotation' endpoint.
+	DeleteAnnotation(ctx context.Context, annotation any, res any) error
+}
