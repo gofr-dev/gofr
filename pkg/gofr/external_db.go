@@ -2,6 +2,9 @@ package gofr
 
 import (
 	"go.opentelemetry.io/otel"
+	"gofr.dev/pkg/gofr/config"
+	"gofr.dev/pkg/gofr/datasource/sql"
+	"strings"
 
 	"gofr.dev/pkg/gofr/container"
 	"gofr.dev/pkg/gofr/datasource/file"
@@ -193,4 +196,103 @@ func (a *App) AddElasticsearch(db container.ElasticsearchProvider) {
 	db.Connect()
 
 	a.container.Elasticsearch = db
+}
+
+// AddDBResolver sets up read/write splitting for SQL databases
+func (a *App) AddDBResolver(resolver container.DBResolverProvider) {
+	// Exit if SQL is not configured
+	if a.container.SQL == nil {
+		a.Logger().Errorf("Cannot set up DB resolver: SQL is not configured")
+		return
+	}
+
+	// Set up logger, metrics, tracer
+	resolver.UseLogger(a.Logger())
+	resolver.UseMetrics(a.Metrics())
+
+	tracer := otel.GetTracerProvider().Tracer("gofr.dbresolver")
+	resolver.UseTracer(tracer)
+
+	// Connect (no-op for resolver)
+	resolver.Connect()
+
+	// Create replica connections
+	replicas := a.createReplicaConnections()
+	if len(replicas) == 0 {
+		a.Logger().Debugf("No replicas configured, skipping DB resolver setup")
+		return
+	}
+
+	// Build resolver with primary and replicas
+	a.container.SQL = resolver.Build(a.container.SQL, replicas)
+
+	a.Logger().Logf("DB read/write splitting enabled with %d replicas", len(replicas))
+}
+
+// createReplicaConnections creates DB connections to replicas
+func (a *App) createReplicaConnections() []container.DB {
+	// Get replica hosts
+	replicaHostsStr := a.Config.Get("DB_REPLICA_HOSTS")
+	if replicaHostsStr == "" {
+		return nil
+	}
+
+	replicaHosts := strings.Split(replicaHostsStr, ",")
+	var replicas []container.DB
+
+	// For each host, create a replica connection
+	for _, host := range replicaHosts {
+		host = strings.TrimSpace(host)
+		if host == "" {
+			continue
+		}
+
+		// Create a config wrapper for this replica
+		replicaConfig := newReplicaConfig(a.Config, host)
+
+		// Create a new SQL connection using the replica config
+		replica := sql.NewSQL(replicaConfig, a.Logger(), a.Metrics())
+		if replica != nil {
+			replicas = append(replicas, replica)
+			a.Logger().Logf("Created DB replica connection to %s", host)
+		}
+	}
+
+	return replicas
+}
+
+// newReplicaConfig creates a config wrapper that overrides the host and optional settings
+func newReplicaConfig(baseConfig config.Config, host string) config.Config {
+	return &replicaConfigWrapper{
+		Config: baseConfig,
+		host:   host,
+	}
+}
+
+// replicaConfigWrapper wraps a config and overrides DB_HOST and optional replica settings
+type replicaConfigWrapper struct {
+	config.Config
+	host string
+}
+
+// Get overrides the config.Get method to provide replica-specific values
+func (c *replicaConfigWrapper) Get(key string) string {
+	switch key {
+	case "DB_HOST":
+		return c.host
+	case "DB_USER":
+		if replicaUser := c.Config.Get("DB_REPLICA_USER"); replicaUser != "" {
+			return replicaUser
+		}
+	case "DB_PASSWORD":
+		if replicaPass := c.Config.Get("DB_REPLICA_PASSWORD"); replicaPass != "" {
+			return replicaPass
+		}
+	case "DB_PORT":
+		if replicaPort := c.Config.Get("DB_REPLICA_PORT"); replicaPort != "" {
+			return replicaPort
+		}
+	}
+
+	return c.Config.Get(key)
 }
