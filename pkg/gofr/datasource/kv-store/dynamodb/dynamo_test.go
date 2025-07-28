@@ -26,6 +26,8 @@ type testDeps struct {
 }
 
 func setupTest(t *testing.T) testDeps {
+	t.Helper()
+
 	ctrl := gomock.NewController(t)
 	mockDB := NewMockdynamoDBInterface(ctrl)
 	mockLogger := NewMockLogger(ctrl)
@@ -56,13 +58,16 @@ func Test_ClientSet(t *testing.T) {
 	mockLogger := deps.mockLogger
 	mockMetrics := deps.mockMetrics
 	finish := deps.finish
+
 	defer finish()
 
 	key := "test-key"
 	attributes := map[string]any{"field1": "value1", "field2": "value2"}
 
 	itemAV, err := attributevalue.MarshalMap(attributes)
+
 	require.NoError(t, err)
+
 	itemAV["pk"] = &types.AttributeValueMemberS{Value: key}
 
 	expectedInput := &dynamodb.PutItemInput{
@@ -91,6 +96,7 @@ func Test_ClientSetError(t *testing.T) {
 	mockLogger := deps.mockLogger
 	mockMetrics := deps.mockMetrics
 	finish := deps.finish
+
 	defer finish()
 
 	key := "test-key"
@@ -121,6 +127,7 @@ func Test_ClientGet(t *testing.T) {
 	mockLogger := deps.mockLogger
 	mockMetrics := deps.mockMetrics
 	finish := deps.finish
+
 	defer finish()
 
 	key := "test-key"
@@ -128,6 +135,7 @@ func Test_ClientGet(t *testing.T) {
 
 	itemAV, err := attributevalue.MarshalMap(expectedAttributes)
 	require.NoError(t, err)
+
 	itemAV["pk"] = &types.AttributeValueMemberS{Value: key}
 
 	expectedInput := &dynamodb.GetItemInput{
@@ -165,6 +173,7 @@ func Test_ClientGetError(t *testing.T) {
 	mockLogger := deps.mockLogger
 	mockMetrics := deps.mockMetrics
 	finish := deps.finish
+
 	defer finish()
 
 	key := "test-key"
@@ -203,6 +212,7 @@ func Test_ClientDelete(t *testing.T) {
 	mockLogger := deps.mockLogger
 	mockMetrics := deps.mockMetrics
 	finish := deps.finish
+
 	defer finish()
 
 	key := "test-key"
@@ -234,6 +244,7 @@ func Test_ClientDeleteError(t *testing.T) {
 	mockLogger := deps.mockLogger
 	mockMetrics := deps.mockMetrics
 	finish := deps.finish
+
 	defer finish()
 
 	key := "test-key"
@@ -268,6 +279,7 @@ func Test_ClientHealthCheckSuccess(t *testing.T) {
 	client := deps.client
 	mockDB := deps.mockDB
 	finish := deps.finish
+
 	defer finish()
 
 	expectedInput := &dynamodb.DescribeTableInput{
@@ -279,7 +291,9 @@ func Test_ClientHealthCheckSuccess(t *testing.T) {
 	res, err := client.HealthCheck(ctx)
 
 	require.NoError(t, err)
+
 	h, ok := res.(*Health)
+
 	require.True(t, ok)
 	assert.Equal(t, "UP", h.Status)
 	assert.Equal(t, map[string]any{
@@ -294,9 +308,10 @@ func Test_ClientHealthCheckFailure(t *testing.T) {
 	client := deps.client
 	mockDB := deps.mockDB
 	finish := deps.finish
+
 	defer finish()
 
-	expectedErr := errors.New("dynamodb error")
+	expectedErr := errDynamoFailure
 	expectedInput := &dynamodb.DescribeTableInput{
 		TableName: aws.String("test-table"),
 	}
@@ -307,7 +322,9 @@ func Test_ClientHealthCheckFailure(t *testing.T) {
 
 	require.Error(t, err)
 	assert.Equal(t, errStatusDown, err)
+
 	h, ok := res.(*Health)
+
 	require.True(t, ok)
 	assert.Equal(t, "DOWN", h.Status)
 	assert.Equal(t, map[string]any{
