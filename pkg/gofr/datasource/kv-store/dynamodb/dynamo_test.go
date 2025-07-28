@@ -274,7 +274,7 @@ func Test_ClientHealthCheckSuccess(t *testing.T) {
 		TableName: aws.String("test-table"),
 	}
 
-	mockDB.EXPECT().DescribeTable(context.Background(), expectedInput, gomock.Any()).Return(&dynamodb.DescribeTableOutput{}, nil)
+	mockDB.EXPECT().DescribeTable(t.Context(), expectedInput, gomock.Any()).Return(&dynamodb.DescribeTableOutput{}, nil)
 
 	res, err := client.HealthCheck(ctx)
 
@@ -301,7 +301,7 @@ func Test_ClientHealthCheckFailure(t *testing.T) {
 		TableName: aws.String("test-table"),
 	}
 
-	mockDB.EXPECT().DescribeTable(context.Background(), expectedInput, gomock.Any()).Return(nil, expectedErr)
+	mockDB.EXPECT().DescribeTable(t.Context(), expectedInput, gomock.Any()).Return(nil, expectedErr)
 
 	res, err := client.HealthCheck(ctx)
 

@@ -195,7 +195,7 @@ type Health struct {
 	Details map[string]any `json:"details,omitempty"`
 }
 
-func (c *Client) HealthCheck(context.Context) (any, error) {
+func (c *Client) HealthCheck(ctx context.Context) (any, error) {
 	h := Health{
 		Details: make(map[string]any),
 	}
@@ -204,7 +204,7 @@ func (c *Client) HealthCheck(context.Context) (any, error) {
 	h.Details["region"] = c.configs.Region
 
 	input := &dynamodb.DescribeTableInput{TableName: aws.String(c.configs.Table)}
-	_, err := c.db.DescribeTable(context.Background(), input)
+	_, err := c.db.DescribeTable(ctx, input)
 	if err != nil {
 		h.Status = "DOWN"
 		return &h, errStatusDown
