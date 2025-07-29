@@ -238,4 +238,41 @@ func createTableEmployeeCassandra() migration.Migrate {
 }
 ```
 
+## Migrations in ElasticSearch
+
+GoFr allows Elasticsearch document migrations, focusing on **single document** and **bulk operations**.
+
+### Single Document Migration
+
+```go  
+func addSingleProduct() migration.Migrate {  
+ return migration.Migrate{ 
+	 UP: func(d migration.Datasource) error { 
+			 product := map[string]any{ 
+			 "title": "Laptop", 
+			 "price": 999.99, 
+			 "category": "electronics", 
+			 } 
+			 
+		return d.Elasticsearch.IndexDocument( context.Background(), "products", "1", product, ) }, }
+		}  
+```  
+
+### Bulk Operation Migration
+
+```go  
+func bulkProducts() migration.Migrate {  
+ return migration.Migrate{ 
+ UP: func(d migration.Datasource) error { 
+		operations := []map[string]any{ 
+			{"index": map[string]any{"_index": "products", "_id": "1"}}, 
+			{"title": "Phone", "price": 699.99, "category": "electronics"}, 
+			{"index": map[string]any{"_index": "products", "_id": "2"}}, 
+			{"title": "Mug", "price": 12.99, "category": "kitchen"}, 
+			 }
+		
+		_, err := d.Elasticsearch.Bulk(context.Background(), operations) return err },}
+	}  
+``` 
+
 > ##### Check out the example to add and run migrations in GoFr: [Visit GitHub](https://github.com/gofr-dev/gofr/blob/main/examples/using-migrations/main.go)
