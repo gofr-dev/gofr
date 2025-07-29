@@ -10,7 +10,7 @@ import (
 )
 
 const (
-	Url            = "http://localhost:8086"
+	URL            = "http://localhost:8086"
 	Username       = "admin"
 	Password       = "admin1234"
 	Token          = "F-QFQpmCL9UkR3qyoXnLkzWj03s6m4eCvYgDl1ePfHBf9ph7yxaSgQ6WN0i9giNgRTfONwVMK1f977r_g71oNQ=="
@@ -23,16 +23,16 @@ func setupInflux(t *testing.T) *Client {
 	t.Helper()
 	app := gofr.New()
 	client := New(Config{
-		Url:      Url,
+		URL:      URL,
 		Username: Username,
 		Password: Password,
 		Token:    Token,
 	})
 	app.AddInfluxDB(client)
-	require.Equal(t, client.config.Url, Url)
-	require.Equal(t, client.config.Username, Username)
-	require.Equal(t, client.config.Password, Password)
-	require.Equal(t, client.config.Token, Token)
+	require.Equal(t, URL, client.config.URL)
+	require.Equal(t, Username, client.config.Username)
+	require.Equal(t, Password, client.config.Password, Password)
+	require.Equal(t, Token, client.config.Token)
 	return client
 }
 
