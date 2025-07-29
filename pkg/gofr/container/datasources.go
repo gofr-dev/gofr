@@ -739,7 +739,7 @@ type InfluxDB interface {
 	WritePoint(ctx context.Context, org, bucket string,
 		measurement string,
 		tags map[string]string,
-		fields map[string]interface{},
+		fields map[string]any,
 		timestamp time.Time) error
 
 	// Query runs a Flux query and returns the result as a slice of maps,

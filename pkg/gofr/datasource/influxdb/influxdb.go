@@ -3,9 +3,10 @@ package influxdb
 import (
 	"context"
 	"errors"
+	"time"
+
 	influxdb2 "github.com/influxdata/influxdb-client-go/v2"
 	"go.opencensus.io/trace"
-	"time"
 )
 
 // Config holds the configuration for connecting to InfluxDB.
@@ -39,8 +40,8 @@ const (
 
 var (
 	errEmptyOrganizationName = errors.New("organization name must not be empty")
-	errEmptyOrganizationId   = errors.New("organization id must not be empty")
-	errEmptyBucketId         = errors.New("bucket id must not be empty")
+	errEmptyOrganizationID   = errors.New("organization id must not be empty")
+	errEmptyBucketID         = errors.New("bucket id must not be empty")
 	errEmptyBucketName       = errors.New("bucket name must not be empty")
 	errFindingBuckets        = errors.New("failed in finding buckets")
 	errFetchOrganization     = errors.New("failed to fetch all organizations")
@@ -76,16 +77,16 @@ func (c *Client) CreateOrganization(ctx context.Context, orgName string) (string
 //
 // Parameters:
 // - ctx: Context for request cancellation and timeouts.
-// - orgId: The ID of the organization to be deleted. Must not be empty.
+// - orgID: The ID of the organization to be deleted. Must not be empty.
 //
 // Returns:
-// - err: Error if the organization deletion fails or if orgId is empty.
-func (c *Client) DeleteOrganization(ctx context.Context, orgId string) error {
-	if orgId == "" {
-		return errEmptyOrganizationId
+// - err: Error if the organization deletion fails or if orgID is empty.
+func (c *Client) DeleteOrganization(ctx context.Context, orgID string) error {
+	if orgID == "" {
+		return errEmptyOrganizationID
 	}
 	orgAPI := c.client.OrganizationsAPI()
-	err := orgAPI.DeleteOrganizationWithID(ctx, orgId)
+	err := orgAPI.DeleteOrganizationWithID(ctx, orgID)
 	if err != nil {
 		return err
 	}
@@ -102,7 +103,6 @@ func (c *Client) DeleteOrganization(ctx context.Context, orgId string) error {
 // - orgs: A map of organization IDs to their corresponding names.
 // - err: Error if the API call fails or the organizations cannot be retrieved.
 func (c *Client) ListOrganization(ctx context.Context) (map[string]string, error) {
-
 	orgAPI := c.client.OrganizationsAPI()
 	allOrg, err := orgAPI.GetOrganizations(ctx)
 	if err != nil {
@@ -125,30 +125,26 @@ func (c *Client) ListOrganization(ctx context.Context) (map[string]string, error
 // CreateBucket creates a new bucket in InfluxDB for the specified organization.
 // Parameters:
 // - ctx: Context for request cancellation and timeouts.
-// - orgId: The ID of the organization in which the bucket will be created.
+// - orgID: The ID of the organization in which the bucket will be created.
 // - bucketName: The name of the bucket to be created.
 //
 // Returns:
-// - bucketId: The ID of the newly created bucket.
+// - bucketID: The ID of the newly created bucket.
 // - err: Error if bucket creation fails.
-func (c *Client) CreateBucket(ctx context.Context, orgId string, bucketName string) (bucketId string, err error) {
-
-	// Validate input
-	if orgId == "" {
-		err = errEmptyOrganizationId
-		return
+func (c *Client) CreateBucket(ctx context.Context, orgID string, bucketName string) (bucketID string, err error) {
+	if orgID == "" {
+		return "", errEmptyOrganizationID
 	}
 	if bucketName == "" {
-		err = errEmptyBucketName
-		return
+		return "", errEmptyBucketName
 	}
 
 	bucketsAPI := c.client.BucketsAPI()
-	newBucket, err := bucketsAPI.CreateBucketWithNameWithID(ctx, orgId, bucketName)
+	newBucket, err := bucketsAPI.CreateBucketWithNameWithID(ctx, orgID, bucketName)
 
 	if err != nil {
 		c.logger.Errorf("failed to create new bucket with name '%v' %v", bucketName, err)
-		return
+		return "", err
 	}
 	c.logger.Debugf("bucket created with name '%v'", bucketName)
 	return *newBucket.Id, nil
@@ -162,12 +158,12 @@ func (c *Client) CreateBucket(ctx context.Context, orgId string, bucketName stri
 //
 // Returns:
 // - err: Error if the bucket deletion fails or if bucketID is empty.
-func (c *Client) DeleteBucket(ctx context.Context, bucketId string) error {
-	if bucketId == "" {
-		return errEmptyBucketId
+func (c *Client) DeleteBucket(ctx context.Context, bucketID string) error {
+	if bucketID == "" {
+		return errEmptyBucketID
 	}
 	bucketsAPI := c.client.BucketsAPI()
-	err := bucketsAPI.DeleteBucketWithID(ctx, bucketId)
+	err := bucketsAPI.DeleteBucketWithID(ctx, bucketID)
 	if err != nil {
 		return err
 	}
@@ -225,7 +221,7 @@ Returns:
 func (c *Client) ListBuckets(ctx context.Context, org string) (buckets map[string]string, err error) {
 	// Validate input
 	if org == "" {
-		return nil, errEmptyOrganizationId
+		return nil, errEmptyOrganizationID
 	}
 
 	bucketsAPI := c.client.BucketsAPI()
@@ -312,7 +308,7 @@ func (c *Client) UseTracer(tracer any) {
 	}
 }
 
-func (c *Client) WritePoint(ctx context.Context, org, bucket string, measurement string, tags map[string]string, fields map[string]interface{}, timestamp time.Time) error {
+func (c *Client) WritePoint(ctx context.Context, org, bucket string, measurement string, tags map[string]string, fields map[string]any, timestamp time.Time) error {
 	writeAPI := c.client.WriteAPIBlocking(org, bucket)
 	p := influxdb2.NewPoint(measurement, tags, fields, timestamp)
 	err := writeAPI.WritePoint(ctx, p)
@@ -336,7 +332,6 @@ func New(config Config) *Client {
 // If the health check fails, it logs an error and exits early without returning an error.
 // No parameters or return values.
 func (c *Client) Connect() {
-
 	c.logger.Debugf("connecting to influxdb at %v", c.config.Url)
 
 	// Create a new client using an InfluxDB server base URL and an authentication token

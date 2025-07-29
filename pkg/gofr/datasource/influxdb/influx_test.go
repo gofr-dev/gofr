@@ -2,13 +2,14 @@ package influxdb
 
 import (
 	"context"
-	"github.com/stretchr/testify/require"
-	"gofr.dev/pkg/gofr"
 	"testing"
 	"time"
+
+	"github.com/stretchr/testify/require"
+	"gofr.dev/pkg/gofr"
 )
 
-var (
+const (
 	Url            = "http://localhost:8086"
 	Username       = "admin"
 	Password       = "admin1234"
@@ -19,6 +20,7 @@ var (
 )
 
 func setupInflux(t *testing.T) *Client {
+	t.Helper()
 	app := gofr.New()
 	client := New(Config{
 		Url:      Url,
@@ -39,38 +41,41 @@ func TestPing(t *testing.T) {
 	config := setupInflux(t)
 	health, err := config.Ping(ctx)
 	require.NoError(t, err) // empty organization name
-	require.Equal(t, health, true)
+	require.True(t, health)
 }
 
-func creatOrganization(t *testing.T, client *Client, orgName string) (orgId string) {
+func creatOrganization(t *testing.T, client *Client, orgName string) (orgID string) {
+	t.Helper()
 	ctx := context.Background()
-
 	// try creating organization without name
-	orgId, err := client.CreateOrganization(ctx, "")
+	orgID, err := client.CreateOrganization(ctx, "")
 	require.Error(t, err) // empty organization name
-	require.Equal(t, "", orgId)
+	require.Empty(t, orgID)
 
 	// actually creating organization
-	orgId, err = client.CreateOrganization(ctx, orgName)
+	orgID, err = client.CreateOrganization(ctx, orgName)
 	require.NoError(t, err)
-	require.NotEmpty(t, orgId)
+	require.NotEmpty(t, orgID)
 
-	return orgId
+	return orgID
 }
 
-func listOrganizations(t *testing.T, ctx context.Context, client *Client) map[string]string {
+func listOrganizations(ctx context.Context, t *testing.T, client *Client) map[string]string {
+	t.Helper()
 	orgs, err := client.ListOrganization(ctx)
 	require.NoError(t, err)
 	return orgs
 }
 
-func listBuckets(t *testing.T, ctx context.Context, client *Client, orgId string) map[string]string {
-	buckets, err := client.ListBuckets(ctx, orgId)
+func listBuckets(ctx context.Context, t *testing.T, client *Client, orgID string) map[string]string {
+	t.Helper()
+	buckets, err := client.ListBuckets(ctx, orgID)
 	require.NoError(t, err)
 	return buckets
 }
 
-func deleteOrganization(t *testing.T, client *Client, orgId string) {
+func deleteOrganization(t *testing.T, client *Client, orgID string) {
+	t.Helper()
 	ctx := context.Background()
 
 	// try deleting empty id organization
@@ -78,34 +83,36 @@ func deleteOrganization(t *testing.T, client *Client, orgId string) {
 	require.Error(t, err)
 
 	// actually deleting the organization
-	err = client.DeleteOrganization(ctx, orgId)
+	err = client.DeleteOrganization(ctx, orgID)
 	require.NoError(t, err)
 }
 
-func createNewBucket(t *testing.T, client *Client, orgId string, name string) (bucketId string) {
+func createNewBucket(t *testing.T, client *Client, orgID, name string) (bucketID string) {
+	t.Helper()
 	ctx := context.Background()
 
 	// try creating organization without name
-	bucketId, err := client.CreateBucket(ctx, orgId, "")
+	bucketID, err := client.CreateBucket(ctx, orgID, "")
 	require.Error(t, err) // empty organization name
-	require.Empty(t, bucketId)
+	require.Empty(t, bucketID)
 
 	// actually creating organization
-	bucketId, err = client.CreateBucket(ctx, orgId, name)
+	bucketID, err = client.CreateBucket(ctx, orgID, name)
 	require.NoError(t, err)
-	require.NotEmpty(t, bucketId)
+	require.NotEmpty(t, bucketID)
 
-	return bucketId
+	return bucketID
 }
 
-func deleteBucket(t *testing.T, client *Client, bucketId string) {
+func deleteBucket(t *testing.T, client *Client, bucketID string) {
+	t.Helper()
 	ctx := context.Background()
 
 	// try creating delete empty bucket id
 	err := client.DeleteBucket(ctx, "")
 	require.Error(t, err)
 
-	err = client.DeleteBucket(ctx, bucketId)
+	err = client.DeleteBucket(ctx, bucketID)
 	require.NoError(t, err)
 }
 
@@ -113,50 +120,49 @@ func TestOrganizationOperations(t *testing.T) {
 	ctx := t.Context()
 	client := setupInflux(t)
 
-	beforeOrgList := listOrganizations(t, ctx, client) // before create the new organization
-	orgId := creatOrganization(t, client, testOrgName)
-	afterOrgList := listOrganizations(t, ctx, client) // after create the new organization
+	beforeOrgList := listOrganizations(ctx, t, client) // before create the new organization
+	orgID := creatOrganization(t, client, testOrgName)
+	afterOrgList := listOrganizations(ctx, t, client) // after create the new organization
 	require.Greater(t, len(afterOrgList), len(beforeOrgList))
-	deleteOrganization(t, client, orgId)
+	deleteOrganization(t, client, orgID)
 }
 
 func TestBucketOperations(t *testing.T) {
-
 	ctx := t.Context()
 	client := setupInflux(t)
-	orgId := creatOrganization(t, client, testOrgName)
+	orgID := creatOrganization(t, client, testOrgName)
 
-	beforeBucketList := listBuckets(t, ctx, client, testOrgName) // before create the new organization
-	bucketId := createNewBucket(t, client, orgId, testBucketName)
-	afterBucketList := listBuckets(t, ctx, client, testOrgName) // before create the new organization
+	beforeBucketList := listBuckets(ctx, t, client, testOrgName) // before create the new organization
+	bucketID := createNewBucket(t, client, orgID, testBucketName)
+	afterBucketList := listBuckets(ctx, t, client, testOrgName) // before create the new organization
 	require.Greater(t, len(afterBucketList), len(beforeBucketList))
 
-	deleteBucket(t, client, bucketId)
-	deleteOrganization(t, client, orgId)
+	deleteBucket(t, client, bucketID)
+	deleteOrganization(t, client, orgID)
 }
 
 func TestWritePoints(t *testing.T) {
 	ctx := t.Context()
 	client := setupInflux(t)
-	orgId := creatOrganization(t, client, testOrgName)
-	bucketId := createNewBucket(t, client, orgId, testBucketName)
+	orgID := creatOrganization(t, client, testOrgName)
+	bucketID := createNewBucket(t, client, orgID, testBucketName)
 
 	err := client.WritePoint(
 		ctx,
-		orgId,
-		bucketId,
+		orgID,
+		bucketID,
 		"stat",
 		map[string]string{"unit": "temperature"},
-		map[string]interface{}{"avg": 24.5, "max": 45.0},
+		map[string]any{"avg": 24.5, "max": 45.0},
 		time.Now(),
 	)
 
 	require.NoError(t, err)
 
-	result, err := client.Query(ctx, orgId, testFluxQuery)
+	result, err := client.Query(ctx, orgID, testFluxQuery)
 	require.NoError(t, err)
 	require.NotEmpty(t, result)
 
-	deleteBucket(t, client, bucketId)
-	deleteOrganization(t, client, orgId)
+	deleteBucket(t, client, bucketID)
+	deleteOrganization(t, client, orgID)
 }
