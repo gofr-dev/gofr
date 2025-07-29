@@ -41,7 +41,7 @@ require (
 	golang.org/x/term v0.33.0
 	golang.org/x/text v0.27.0
 	google.golang.org/api v0.241.0
-	google.golang.org/grpc v1.73.0
+	google.golang.org/grpc v1.74.2
 	google.golang.org/protobuf v1.36.6
 	modernc.org/sqlite v1.38.0
 )
