@@ -44,7 +44,6 @@ func setupInflux(t *testing.T) *Client {
 	require.Equal(t, Username, client.config.Username)
 	require.Equal(t, Password, client.config.Password, Password)
 	require.Equal(t, token, client.config.Token)
-
 	return client
 }
 
