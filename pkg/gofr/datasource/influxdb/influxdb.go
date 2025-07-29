@@ -11,7 +11,7 @@ import (
 
 // Config holds the configuration for connecting to InfluxDB.
 type Config struct {
-	Url      string
+	URL      string
 	Token    string
 	Username string
 	Password string
@@ -27,7 +27,7 @@ type Client struct {
 }
 
 type HealthInflux struct {
-	Url      string
+	URL      string
 	Token    string
 	Username string
 	Password string
@@ -64,10 +64,12 @@ func (c *Client) CreateOrganization(ctx context.Context, orgName string) (string
 	}
 	orgAPI := c.client.OrganizationsAPI()
 	newOrg, err := orgAPI.CreateOrganizationWithName(ctx, orgName)
+
 	if err != nil {
 		c.logger.Errorf("failed to create new organization with name '%v' %v", orgName, err)
 		return "", err
 	}
+
 	c.logger.Debugf("organization created with name '%v'", orgName)
 	return *newOrg.Id, nil
 }
@@ -112,7 +114,6 @@ func (c *Client) ListOrganization(ctx context.Context) (map[string]string, error
 	if allOrg == nil || len(*allOrg) == 0 {
 		return map[string]string{}, nil
 	}
-
 	orgs := make(map[string]string, len(*allOrg))
 	for _, org := range *allOrg {
 		if org.Id != nil {
@@ -131,7 +132,7 @@ func (c *Client) ListOrganization(ctx context.Context) (map[string]string, error
 // Returns:
 // - bucketID: The ID of the newly created bucket.
 // - err: Error if bucket creation fails.
-func (c *Client) CreateBucket(ctx context.Context, orgID string, bucketName string) (bucketID string, err error) {
+func (c *Client) CreateBucket(ctx context.Context, orgID, bucketName string) (bucketID string, err error) {
 	if orgID == "" {
 		return "", errEmptyOrganizationID
 	}
@@ -163,8 +164,7 @@ func (c *Client) DeleteBucket(ctx context.Context, bucketID string) error {
 		return errEmptyBucketID
 	}
 	bucketsAPI := c.client.BucketsAPI()
-	err := bucketsAPI.DeleteBucketWithID(ctx, bucketID)
-	if err != nil {
+	if err := bucketsAPI.DeleteBucketWithID(ctx, bucketID); err != nil {
 		return err
 	}
 	return nil
@@ -187,7 +187,7 @@ type Health struct {
 func (c *Client) HealthCheck(ctx context.Context) (any, error) {
 	h := Health{Details: make(map[string]any)}
 	h.Details["Username"] = c.config.Username
-	h.Details["Url"] = c.config.Url
+	h.Details["Url"] = c.config.URL
 
 	health, err := c.client.Health(ctx)
 	if err != nil {
@@ -259,7 +259,7 @@ func (c *Client) Ping(ctx context.Context) (bool, error) {
 	return ping, nil
 }
 
-func (c *Client) Query(ctx context.Context, org string, fluxQuery string) ([]map[string]any, error) {
+func (c *Client) Query(ctx context.Context, org, fluxQuery string) ([]map[string]any, error) {
 	queryAPI := c.client.QueryAPI(org)
 	result, err := queryAPI.Query(ctx, fluxQuery)
 	if err != nil {
@@ -308,11 +308,14 @@ func (c *Client) UseTracer(tracer any) {
 	}
 }
 
-func (c *Client) WritePoint(ctx context.Context, org, bucket string, measurement string, tags map[string]string, fields map[string]any, timestamp time.Time) error {
+func (c *Client) WritePoint(ctx context.Context,
+	org, bucket, measurement string,
+	tags map[string]string, fields map[string]any, timestamp time.Time,
+) error {
 	writeAPI := c.client.WriteAPIBlocking(org, bucket)
 	p := influxdb2.NewPoint(measurement, tags, fields, timestamp)
-	err := writeAPI.WritePoint(ctx, p)
-	if err != nil {
+
+	if err := writeAPI.WritePoint(ctx, p); err != nil {
 		c.logger.Errorf("Failed to write point to influxdb: %v", err.Error())
 		return err
 	}
@@ -332,11 +335,11 @@ func New(config Config) *Client {
 // If the health check fails, it logs an error and exits early without returning an error.
 // No parameters or return values.
 func (c *Client) Connect() {
-	c.logger.Debugf("connecting to influxdb at %v", c.config.Url)
+	c.logger.Debugf("connecting to influxdb at %v", c.config.URL)
 
 	// Create a new client using an InfluxDB server base URL and an authentication token
 	c.client = influxdb2.NewClient(
-		c.config.Url,
+		c.config.URL,
 		c.config.Token,
 	)
 
@@ -345,5 +348,5 @@ func (c *Client) Connect() {
 		return
 	}
 
-	c.logger.Logf("connected to influxdb at : %v", c.config.Url)
+	c.logger.Logf("connected to influxdb at : %v", c.config.URL)
 }
