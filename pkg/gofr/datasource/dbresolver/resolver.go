@@ -11,7 +11,6 @@ import (
 
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/trace"
-
 	"gofr.dev/pkg/gofr/container"
 	"gofr.dev/pkg/gofr/datasource"
 	gofrSQL "gofr.dev/pkg/gofr/datasource/sql"
@@ -21,7 +20,16 @@ var (
 	readQueryPrefixRegex = regexp.MustCompile(`(?i)^\s*(SELECT|SHOW|DESCRIBE|EXPLAIN)`)
 )
 
-// Config holds configuration for DB resolver
+const (
+	healthStatusUP      = "UP"
+	healthStatusDOWN    = "DOWN"
+	roundRobinStrategy  = "round-robin"
+	randomStrategy      = "random"
+	metricsPushInterval = 10 * time.Second
+	cleanupInterval     = 10 * time.Second
+)
+
+// Config holds configuration for DB resolver.
 type Config struct {
 	ReplicaHosts   []string
 	StrategyName   string
@@ -31,31 +39,31 @@ type Config struct {
 	ReplicaPort    string
 }
 
-// Option is a function type for configuring the resolver
+// Option is a function type for configuring the resolver.
 type Option func(*Resolver)
 
-// WithStrategy sets the strategy for the resolver
+// WithStrategy sets the strategy for the resolver.
 func WithStrategy(strategy Strategy) Option {
 	return func(r *Resolver) {
 		r.strategy = strategy
 	}
 }
 
-// WithFallback sets whether to fallback to primary on replica failure
+// WithFallback sets whether to fallback to primary on replica failure.
 func WithFallback(fallback bool) Option {
 	return func(r *Resolver) {
 		r.readFallback = fallback
 	}
 }
 
-// WithTracer sets the tracer for the resolver
+// WithTracer sets the tracer for the resolver.
 func WithTracer(tracer trace.Tracer) Option {
 	return func(r *Resolver) {
 		r.tracer = tracer
 	}
 }
 
-// Resolver implements the DB interface and routes queries to primary or replicas
+// Resolver implements the DB interface and routes queries to primary or replicas.
 type Resolver struct {
 	primary      container.DB
 	replicas     []container.DB
@@ -76,7 +84,7 @@ type statistics struct {
 	totalQueries     atomic.Uint64
 }
 
-// New creates a new resolver with the given primary and replicas
+// New creates a new resolver with the given primary and replicas.
 func New(primary container.DB, replicas []container.DB, logger Logger,
 	metrics Metrics, opts ...Option) container.DB {
 	if primary == nil {
@@ -112,13 +120,14 @@ func New(primary container.DB, replicas []container.DB, logger Logger,
 	return r
 }
 
-// initializeMetrics sets up all DB resolver metrics following GoFr patterns
+// initializeMetrics sets up all DB resolver metrics following GoFr patterns.
+
 func (r *Resolver) initializeMetrics() {
 	if r.metrics == nil {
 		return
 	}
 
-	// Histogram for query response times (following GoFr SQL pattern)
+	// Histogram for query response times (following GoFr SQL pattern).
 	dbResolverBuckets := []float64{.05, .075, .1, .125, .15, .2, .3, .5, .75, 1, 2, 3, 4, 5, 7.5, 10}
 	r.metrics.NewHistogram("app_dbresolve_stats",
 		"Response time of DB resolver operations in microseconds", dbResolverBuckets...)
@@ -131,13 +140,13 @@ func (r *Resolver) initializeMetrics() {
 	r.metrics.NewGauge("app_dbresolve_replica_failures", "Total number of replica failures")
 	r.metrics.NewGauge("app_dbresolve_total_queries", "Total number of queries processed")
 
-	// Start metrics collection goroutine
+	// Start metrics collection goroutine.
 	go r.pushMetrics()
 }
 
-// pushMetrics continuously updates gauge metrics
+// pushMetrics continuously updates gauge metrics.
 func (r *Resolver) pushMetrics() {
-	ticker := time.NewTicker(10 * time.Second)
+	ticker := time.NewTicker(metricsPushInterval)
 	defer ticker.Stop()
 
 	for range ticker.C {
@@ -152,7 +161,7 @@ func (r *Resolver) pushMetrics() {
 	}
 }
 
-// addTrace starts a new trace span following GoFr patterns
+// addTrace starts a new trace span following GoFr patterns.
 func (r *Resolver) addTrace(ctx context.Context, method, query string) (context.Context, trace.Span) {
 	if r.tracer != nil {
 		tracedCtx, span := r.tracer.Start(ctx, fmt.Sprintf("dbresolve-%s", method))
@@ -168,17 +177,17 @@ func (r *Resolver) addTrace(ctx context.Context, method, query string) (context.
 	return ctx, nil
 }
 
-// IsReadQuery determines if a query is a read operation
+// IsReadQuery determines if a query is a read operation.
 func IsReadQuery(query string) bool {
 	return readQueryPrefixRegex.MatchString(query)
 }
 
-// Dialect returns the database dialect (required by container.DB interface)
+// Dialect returns the database dialect (required by container.DB interface).
 func (r *Resolver) Dialect() string {
 	return r.primary.Dialect()
 }
 
-// Close closes all database connections (required by container.DB interface)
+// Close closes all database connections (required by container.DB interface).
 func (r *Resolver) Close() error {
 	var lastErr error
 
@@ -197,13 +206,15 @@ func (r *Resolver) Close() error {
 	return lastErr
 }
 
-// Query routes to a replica if it's a read query, otherwise to primary
+// Query routes to a replica if it's a read query, otherwise to primary.
 func (r *Resolver) Query(query string, args ...any) (*sql.Rows, error) {
 	startTime := time.Now()
 	isRead := IsReadQuery(query)
+
 	r.stats.totalQueries.Add(1)
 
 	ctx := context.Background()
+
 	tracedCtx, span := r.addTrace(ctx, "query", query)
 	defer r.sendOperationStats(startTime, "Query", query, "query", span, isRead, args...)
 
@@ -225,23 +236,28 @@ func (r *Resolver) Query(query string, args ...any) (*sql.Rows, error) {
 		}
 
 		r.stats.replicaReads.Add(1)
+
 		if span != nil {
 			span.SetAttributes(attribute.String("dbresolve.target", "replica"))
 		}
+
 		return rows, err
 	}
 
 	r.stats.primaryWrites.Add(1)
+
 	if span != nil {
 		span.SetAttributes(attribute.String("dbresolve.target", "primary"))
 	}
+
 	return r.primary.QueryContext(tracedCtx, query, args...)
 }
 
-// QueryContext routes to a replica if it's a read query, otherwise to primary
+// QueryContext routes to a replica if it's a read query, otherwise to primary.
 func (r *Resolver) QueryContext(ctx context.Context, query string, args ...any) (*sql.Rows, error) {
 	startTime := time.Now()
 	isRead := IsReadQuery(query)
+
 	r.stats.totalQueries.Add(1)
 
 	tracedCtx, span := r.addTrace(ctx, "query-context", query)
@@ -265,26 +281,32 @@ func (r *Resolver) QueryContext(ctx context.Context, query string, args ...any) 
 		}
 
 		r.stats.replicaReads.Add(1)
+
 		if span != nil {
 			span.SetAttributes(attribute.String("dbresolve.target", "replica"))
 		}
+
 		return rows, err
 	}
 
 	r.stats.primaryWrites.Add(1)
+
 	if span != nil {
 		span.SetAttributes(attribute.String("dbresolve.target", "primary"))
 	}
+
 	return r.primary.QueryContext(tracedCtx, query, args...)
 }
 
-// QueryRow routes to a replica if it's a read query, otherwise to primary
+// QueryRow routes to a replica if it's a read query, otherwise to primary.
 func (r *Resolver) QueryRow(query string, args ...any) *sql.Row {
 	startTime := time.Now()
 	isRead := IsReadQuery(query)
+
 	r.stats.totalQueries.Add(1)
 
 	ctx := context.Background()
+
 	tracedCtx, span := r.addTrace(ctx, "query-row", query)
 	defer r.sendOperationStats(startTime, "QueryRow", query, "query", span, isRead, args...)
 
@@ -300,16 +322,19 @@ func (r *Resolver) QueryRow(query string, args ...any) *sql.Row {
 	}
 
 	r.stats.primaryWrites.Add(1)
+
 	if span != nil {
 		span.SetAttributes(attribute.String("dbresolve.target", "primary"))
 	}
+
 	return r.primary.QueryRowContext(tracedCtx, query, args...)
 }
 
-// QueryRowContext routes to a replica if it's a read query, otherwise to primary
+// QueryRowContext routes to a replica if it's a read query, otherwise to primary.
 func (r *Resolver) QueryRowContext(ctx context.Context, query string, args ...any) *sql.Row {
 	startTime := time.Now()
 	isRead := IsReadQuery(query)
+
 	r.stats.totalQueries.Add(1)
 
 	tracedCtx, span := r.addTrace(ctx, "query-row-context", query)
@@ -327,15 +352,18 @@ func (r *Resolver) QueryRowContext(ctx context.Context, query string, args ...an
 	}
 
 	r.stats.primaryWrites.Add(1)
+
 	if span != nil {
 		span.SetAttributes(attribute.String("dbresolve.target", "primary"))
 	}
+
 	return r.primary.QueryRowContext(tracedCtx, query, args...)
 }
 
-// ExecContext always routes to primary as it's a write operation
+// ExecContext always routes to primary as it's a write operation.
 func (r *Resolver) ExecContext(ctx context.Context, query string, args ...any) (sql.Result, error) {
 	startTime := time.Now()
+
 	r.stats.primaryWrites.Add(1)
 	r.stats.totalQueries.Add(1)
 
@@ -349,13 +377,15 @@ func (r *Resolver) ExecContext(ctx context.Context, query string, args ...any) (
 	return r.primary.ExecContext(tracedCtx, query, args...)
 }
 
-// Exec always routes to primary as it's a write operation
+// Exec always routes to primary as it's a write operation.
 func (r *Resolver) Exec(query string, args ...any) (sql.Result, error) {
 	startTime := time.Now()
+
 	r.stats.primaryWrites.Add(1)
 	r.stats.totalQueries.Add(1)
 
 	ctx := context.Background()
+
 	tracedCtx, span := r.addTrace(ctx, "exec", query)
 	defer r.sendOperationStats(startTime, "Exec", query, "exec", span, false, args...)
 
@@ -366,10 +396,11 @@ func (r *Resolver) Exec(query string, args ...any) (sql.Result, error) {
 	return r.primary.ExecContext(tracedCtx, query, args...)
 }
 
-// Select routes to a replica if it's a read query, otherwise to primary
+// Select routes to a replica if it's a read query, otherwise to primary.
 func (r *Resolver) Select(ctx context.Context, data any, query string, args ...any) {
 	startTime := time.Now()
 	isRead := IsReadQuery(query)
+
 	r.stats.totalQueries.Add(1)
 
 	tracedCtx, span := r.addTrace(ctx, "select", query)
@@ -384,22 +415,27 @@ func (r *Resolver) Select(ctx context.Context, data any, query string, args ...a
 		}
 
 		db.Select(tracedCtx, data, query, args...)
+
 		return
 	}
 
 	r.stats.primaryWrites.Add(1)
+
 	if span != nil {
 		span.SetAttributes(attribute.String("dbresolve.target", "primary"))
 	}
+
 	r.primary.Select(tracedCtx, data, query, args...)
 }
 
-// Prepare routes to primary (prepared statements should be consistent)
+// Prepare routes to primary (prepared statements should be consistent).
 func (r *Resolver) Prepare(query string) (*sql.Stmt, error) {
 	startTime := time.Now()
+
 	r.stats.totalQueries.Add(1)
 
 	ctx := context.Background()
+
 	_, span := r.addTrace(ctx, "prepare", query)
 	defer r.sendOperationStats(startTime, "Prepare", query, "prepare", span, false)
 
@@ -410,9 +446,10 @@ func (r *Resolver) Prepare(query string) (*sql.Stmt, error) {
 	return r.primary.Prepare(query)
 }
 
-// PrepareContext routes to primary (prepared statements should be consistent)
+// PrepareContext routes to primary (prepared statements should be consistent).
 func (r *Resolver) PrepareContext(ctx context.Context, query string) (*sql.Stmt, error) {
 	startTime := time.Now()
+
 	r.stats.totalQueries.Add(1)
 
 	_, span := r.addTrace(ctx, "prepare-context", query)
@@ -425,12 +462,14 @@ func (r *Resolver) PrepareContext(ctx context.Context, query string) (*sql.Stmt,
 	return r.primary.Prepare(query)
 }
 
-// Begin always routes to primary as transactions should be on primary
+// Begin always routes to primary as transactions should be on primary.
 func (r *Resolver) Begin() (*gofrSQL.Tx, error) {
 	startTime := time.Now()
+
 	r.stats.totalQueries.Add(1)
 
 	ctx := context.Background()
+
 	_, span := r.addTrace(ctx, "begin", "BEGIN")
 	defer r.sendOperationStats(startTime, "Begin", "BEGIN", "transaction", span, false)
 
@@ -441,9 +480,10 @@ func (r *Resolver) Begin() (*gofrSQL.Tx, error) {
 	return r.primary.Begin()
 }
 
-// BeginTx always routes to primary as transactions should be on primary
-func (r *Resolver) BeginTx(ctx context.Context, opts *sql.TxOptions) (*gofrSQL.Tx, error) {
+// BeginTx always routes to primary as transactions should be on primary.
+func (r *Resolver) BeginTx(ctx context.Context) (*gofrSQL.Tx, error) {
 	startTime := time.Now()
+
 	r.stats.totalQueries.Add(1)
 
 	_, span := r.addTrace(ctx, "begin-tx", "BEGIN")
@@ -456,16 +496,16 @@ func (r *Resolver) BeginTx(ctx context.Context, opts *sql.TxOptions) (*gofrSQL.T
 	return r.primary.Begin()
 }
 
-// HealthCheck returns comprehensive health information
+// HealthCheck returns comprehensive health information.
 func (r *Resolver) HealthCheck() *datasource.Health {
 	primaryHealth := r.primary.HealthCheck()
 
 	health := &datasource.Health{
 		Status: primaryHealth.Status,
-		Details: map[string]interface{}{
+		Details: map[string]any{
 			"primary":  primaryHealth,
-			"replicas": make([]interface{}, 0, len(r.replicas)),
-			"stats": map[string]interface{}{
+			"replicas": make([]any, 0, len(r.replicas)),
+			"stats": map[string]any{
 				"primaryReads":     r.stats.primaryReads.Load(),
 				"primaryWrites":    r.stats.primaryWrites.Load(),
 				"replicaReads":     r.stats.replicaReads.Load(),
@@ -476,26 +516,28 @@ func (r *Resolver) HealthCheck() *datasource.Health {
 		},
 	}
 
-	replicaDetails := make([]interface{}, 0, len(r.replicas))
+	replicaDetails := make([]any, 0, len(r.replicas))
+
 	for i, replica := range r.replicas {
 		replicaHealth := replica.HealthCheck()
-		replicaDetails = append(replicaDetails, map[string]interface{}{
+
+		replicaDetails = append(replicaDetails, map[string]any{
 			"index":  i,
 			"health": replicaHealth,
 		})
 	}
+
 	health.Details["replicas"] = replicaDetails
 
 	return health
 }
 
-// sendOperationStats records metrics and logs following GoFr patterns
+// sendOperationStats records metrics and logs following GoFr patterns.
 func (r *Resolver) sendOperationStats(startTime time.Time, methodType, query string,
 	method string, span trace.Span, isRead bool, args ...any) {
-
 	duration := time.Since(startTime).Microseconds()
 
-	// Log following GoFr pattern
+	// Log following GoFr pattern.
 	r.logger.Debug(&Log{
 		Type:     methodType,
 		Query:    query,
@@ -504,7 +546,7 @@ func (r *Resolver) sendOperationStats(startTime time.Time, methodType, query str
 		Args:     args,
 	})
 
-	// Set trace attributes
+	// Set trace attributes.
 	if span != nil {
 		defer span.End()
 		span.SetAttributes(
@@ -513,7 +555,7 @@ func (r *Resolver) sendOperationStats(startTime time.Time, methodType, query str
 		)
 	}
 
-	// Record histogram metrics
+	// Record histogram metrics.
 	if r.metrics != nil {
 		target := "primary"
 		if isRead && len(r.replicas) > 0 {
@@ -528,17 +570,19 @@ func (r *Resolver) sendOperationStats(startTime time.Time, methodType, query str
 	}
 }
 
-// getOperationType extracts operation type from query
+// getOperationType extracts operation type from query.
 func getOperationType(query string) string {
 	query = strings.TrimSpace(query)
 	words := strings.Split(query, " ")
+
 	if len(words) > 0 {
 		return strings.ToUpper(words[0])
 	}
+
 	return "UNKNOWN"
 }
 
-// Log structure following GoFr patterns
+// Log structure following GoFr patterns.
 type Log struct {
 	Type     string `json:"type"`
 	Query    string `json:"query"`
@@ -547,9 +591,9 @@ type Log struct {
 	Args     []any  `json:"args,omitempty"`
 }
 
-// monitorHealth continuously monitors the health of all connections
+// monitorHealth continuously monitors the health of all connections.
 func (r *Resolver) monitorHealth(ctx context.Context) {
-	ticker := time.NewTicker(30 * time.Second)
+	ticker := time.NewTicker(cleanupInterval)
 	defer ticker.Stop()
 
 	for {
@@ -557,16 +601,16 @@ func (r *Resolver) monitorHealth(ctx context.Context) {
 		case <-ctx.Done():
 			return
 		case <-ticker.C:
-			// Check primary health
+			// Check primary health.
 			primaryHealth := r.primary.HealthCheck()
-			if primaryHealth.Status != "UP" {
+			if primaryHealth.Status != healthStatusUP {
 				r.logger.Logf("Primary database health check failed: %v", primaryHealth)
 			}
 
-			// Check replica health
+			// Check replica health.
 			for i, replica := range r.replicas {
 				replicaHealth := replica.HealthCheck()
-				if replicaHealth.Status != "UP" {
+				if replicaHealth.Status != healthStatusUP {
 					r.logger.Logf("Replica %d health check failed: %v", i, replicaHealth)
 				}
 			}

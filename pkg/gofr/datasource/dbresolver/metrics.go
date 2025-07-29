@@ -4,7 +4,7 @@ import (
 	"context"
 )
 
-// Metrics interface for metrics operations
+// Metrics interface for metrics operations.
 type Metrics interface {
 	NewHistogram(name, description string, buckets ...float64)
 	NewGauge(name, description string)

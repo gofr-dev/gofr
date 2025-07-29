@@ -7,7 +7,7 @@ import (
 	"strings"
 )
 
-// Logger defines the logging interface for dbresolver
+// Logger defines the logging interface for dbresolver.
 type Logger interface {
 	Debug(args ...any)
 	Debugf(pattern string, args ...any)
@@ -16,7 +16,7 @@ type Logger interface {
 	Warnf(pattern string, args ...any)
 }
 
-// QueryLog contains information about a SQL query
+// QueryLog contains information about a SQL query.
 type QueryLog struct {
 	Query     string `json:"query"`
 	Duration  int64  `json:"duration"`
@@ -25,7 +25,7 @@ type QueryLog struct {
 	QueryType string `json:"queryType"`
 }
 
-// PrettyPrint formats the QueryLog for output
+// PrettyPrint formats the QueryLog for output.
 func (ql *QueryLog) PrettyPrint(writer io.Writer) {
 	fmt.Fprintf(writer, "\u001B[38;5;8m%-32s \u001B[38;5;206m%-6s\u001B[0m %8d\u001B[38;5;8mµs\u001B[0m %s %s\n",
 		clean(ql.Operation), "SQLROUTER", ql.Duration,

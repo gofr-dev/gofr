@@ -1,13 +1,13 @@
 package gofr
 
 import (
-	"go.opentelemetry.io/otel"
-	"gofr.dev/pkg/gofr/config"
-	"gofr.dev/pkg/gofr/datasource/sql"
 	"strings"
 
+	"go.opentelemetry.io/otel"
+	"gofr.dev/pkg/gofr/config"
 	"gofr.dev/pkg/gofr/container"
 	"gofr.dev/pkg/gofr/datasource/file"
+	"gofr.dev/pkg/gofr/datasource/sql"
 )
 
 // AddMongo sets the Mongo datasource in the app's container.
