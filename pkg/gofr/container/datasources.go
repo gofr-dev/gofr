@@ -4,8 +4,9 @@ import (
 	"bytes"
 	"context"
 	"database/sql"
-	"github.com/redis/go-redis/v9"
 	"time"
+
+	"github.com/redis/go-redis/v9"
 
 	"gofr.dev/pkg/gofr/datasource"
 	"gofr.dev/pkg/gofr/datasource/pubsub"
@@ -729,7 +730,7 @@ type InfluxDB interface {
 	CreateOrganization(ctx context.Context, org string) (string, error)
 
 	// DeleteOrganization deletes a organization under the specified organization.
-	DeleteOrganization(ctx context.Context, orgId string) error
+	DeleteOrganization(ctx context.Context, orgID string) error
 
 	// ListOrganization list all the available organization
 	ListOrganization(ctx context.Context) (orgs map[string]string, err error)
@@ -749,8 +750,8 @@ type InfluxDB interface {
 	// CreateBucket creates a new bucket under the specified organization.
 	CreateBucket(ctx context.Context, org, bucket string) (string, error)
 
-	// DeleteBucket deletes a bucketId with bucketId
-	DeleteBucket(ctx context.Context, bucketId string) error
+	// DeleteBucket deletes a bucketId with bucketID
+	DeleteBucket(ctx context.Context, bucketID string) error
 
 	// ListBuckets lists all buckets under the specified organization.
 	ListBuckets(ctx context.Context, org string) (map[string]string, error)
