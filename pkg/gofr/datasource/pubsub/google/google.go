@@ -313,22 +313,25 @@ func (g *googleClient) getSubscription(ctx context.Context, topic *gcPubSub.Topi
 		return nil, errClientNotConnected
 	}
 
-	subscription := g.client.Subscription(g.SubscriptionName + "-" + topic.ID())
+	if topic == nil {
+		return nil, errors.New("topic is nil")
+	}
 
-	// check if subscription already exists or not
-	ok, err := subscription.Exists(context.Background())
+	subID := g.SubscriptionName + "-" + topic.ID()
+	subscription := g.client.Subscription(subID)
+
+	// Check if subscription exists
+	ok, err := subscription.Exists(ctx)
 	if err != nil {
-		g.logger.Errorf("unable to check the existence of subscription, error: %v", err.Error())
-
+		g.logger.Errorf("unable to check the existence of subscription, error: %v", err)
 		return nil, err
 	}
 
-	// if subscription is not present, create a new
+	// Create subscription if not present
 	if !ok {
-		subscription, err = g.client.CreateSubscription(ctx, g.SubscriptionName+"-"+topic.ID(), gcPubSub.SubscriptionConfig{
+		subscription, err = g.client.CreateSubscription(ctx, subID, gcPubSub.SubscriptionConfig{
 			Topic: topic,
 		})
-
 		if err != nil {
 			return nil, err
 		}
@@ -336,6 +339,7 @@ func (g *googleClient) getSubscription(ctx context.Context, topic *gcPubSub.Topi
 
 	return subscription, nil
 }
+
 
 func (g *googleClient) DeleteTopic(ctx context.Context, name string) error {
 	if g.client == nil {

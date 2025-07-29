@@ -263,3 +263,24 @@ func TestRollbackNoTransaction(t *testing.T) {
 	migrator := sqlMigrator{}
 	migrator.rollback(mockContainer, transactionData{})
 }
+func TestRollbackWithTransaction(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	mockMigrator := NewMockmigrator(ctrl)
+	mockContainer, mocks := container.NewMockContainer(t)
+
+	mocks.SQL.ExpectBegin()
+	mocks.SQL.ExpectRollback() // We expect a rollback to happen
+
+	migrator := sqlMigrator{
+		SQL:      mockContainer.SQL,
+		migrator: mockMigrator,
+	}
+
+	// Begin a transaction using the public method
+	data := migrator.beginTransaction(mockContainer)
+
+	require.NotNil(t, data.SQLTx, "SQLTx should not be nil before rollback")
+
+	migrator.rollback(mockContainer, data)
+}
+

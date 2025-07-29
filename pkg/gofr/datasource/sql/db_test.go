@@ -1142,3 +1142,70 @@ func TestClean(t *testing.T) {
 
 	assert.Empty(t, out)
 }
+func TestDB_PrepareContext(t *testing.T) {
+	db, mock := getDB(t, logging.DEBUG)
+	defer db.DB.Close()
+
+	ctrl := gomock.NewController(t)
+	mockMetrics := NewMockMetrics(ctrl)
+	db.metrics = mockMetrics
+
+	mock.ExpectPrepare("SELECT * FROM test_table")
+	mockMetrics.EXPECT().RecordHistogram(gomock.Any(), "app_sql_stats",
+		gomock.Any(), "hostname", gomock.Any(), "database", gomock.Any(), "type", "SELECT")
+
+	stmt, err := db.PrepareContext(t.Context(), "SELECT * FROM test_table")
+	require.NoError(t, err)
+	assert.NotNil(t, stmt)
+}
+func TestDB_CloseWhenNil(t *testing.T) {
+	db := &DB{}
+	err := db.Close()
+	assert.NoError(t, err)
+}
+func TestDB_BeginTx(t *testing.T) {
+	db, mock := getDB(t, logging.DEBUG)
+	defer db.DB.Close()
+
+	ctrl := gomock.NewController(t)
+	db.metrics = NewMockMetrics(ctrl)
+
+	mock.ExpectBegin()
+
+	tx, err := db.BeginTx(t.Context(), &sql.TxOptions{Isolation: sql.LevelReadCommitted})
+	require.NoError(t, err)
+	assert.NotNil(t, tx)
+}
+func TestDB_PingSuccess(t *testing.T) {
+	db, mock := getDB(t, logging.DEBUG)
+	defer db.DB.Close()
+
+	ctrl := gomock.NewController(t)
+	db.metrics = NewMockMetrics(ctrl)
+
+	mock.ExpectPing()
+	mock.ExpectPing().WillReturnError(nil)
+
+	err := db.Ping()
+	assert.NoError(t, err)
+}
+
+func TestDB_PingFailure(t *testing.T) {
+	db, mock := getDB(t, logging.DEBUG)
+	defer db.DB.Close()
+
+	mock.ExpectPing().WillReturnError(sql.ErrConnDone)
+
+	err := db.Ping()
+	assert.Equal(t, sql.ErrConnDone, err)
+}
+func TestDB_ExecContextCancelled(t *testing.T) {
+	db, _ := getDB(t, logging.DEBUG)
+	defer db.DB.Close()
+
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel() // cancel immediately
+
+	_, err := db.ExecContext(ctx, "INSERT INTO dummy VALUES(1)")
+	assert.Error(t, err)
+}

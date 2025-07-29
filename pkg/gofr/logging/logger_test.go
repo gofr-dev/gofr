@@ -7,6 +7,7 @@ import (
 	"io"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -248,4 +249,35 @@ func TestPrettyPrint(t *testing.T) {
 	for _, v := range expOut {
 		assert.Contains(t, outputLog, v)
 	}
+}
+func TestNewFileLogger_ValidPath(t *testing.T) {
+	tmpFile := filepath.Join(t.TempDir(), "test.log")
+
+	l := NewFileLogger(tmpFile)
+	logger, ok := l.(*logger)
+	require.True(t, ok, "Expected *logger type")
+
+	logger.Info("Hello Logger!")
+
+	data, err := os.ReadFile(tmpFile)
+	require.NoError(t, err)
+	assert.Contains(t, string(data), "Hello Logger!")
+}
+
+func TestNewFileLogger_UnwritablePath(t *testing.T) {
+	l := NewFileLogger("/root/invalid.log")
+	logger, ok := l.(*logger)
+	require.True(t, ok)
+
+	assert.Equal(t, io.Discard, logger.normalOut)
+	assert.Equal(t, io.Discard, logger.errorOut)
+}
+
+func TestNewFileLogger_NilPath(t *testing.T) {
+	l := NewFileLogger("")
+	logger, ok := l.(*logger)
+	require.True(t, ok)
+
+	assert.Equal(t, io.Discard, logger.normalOut)
+	assert.Equal(t, io.Discard, logger.errorOut)
 }

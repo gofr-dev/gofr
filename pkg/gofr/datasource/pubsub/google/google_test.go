@@ -363,3 +363,87 @@ func TestGoogleClient_Query(t *testing.T) {
 	err = topicObj.Delete(t.Context())
 	require.NoError(t, err)
 }
+func TestGoogleClient_getSubscription_TopicNil(t *testing.T) {
+	g := &googleClient{client: getGoogleClient(t)}
+	defer g.client.Close()
+
+	sub, err := g.getSubscription(t.Context(), nil)
+
+	require.Error(t, err)
+	assert.Nil(t, sub)
+}
+func TestGoogleClient_Query_EmptySubscription(t *testing.T) {
+	client := getGoogleClient(t)
+	defer client.Close()
+
+	g := &googleClient{
+		client: client,
+		Config: Config{
+			ProjectID:        "test",
+			SubscriptionName: "sub-query-empty",
+		},
+	}
+
+	_, err := client.CreateTopic(t.Context(), "test-topic-query-empty")
+	require.NoError(t, err)
+
+	ctx, cancel := context.WithTimeout(t.Context(), 1*time.Second)
+	defer cancel()
+
+	_, err = g.Query(ctx, "test-topic-query-empty")
+	require.ErrorContains(t, err, "context deadline exceeded")
+}
+func TestGoogleClient_getTopic_CreateFailure(t *testing.T) {
+	client := getGoogleClient(t)
+	defer client.Close()
+
+	// Delete the server to simulate failure in CreateTopic
+	client.Close()
+
+	g := &googleClient{client: client, Config: Config{
+		ProjectID:        "test",
+		SubscriptionName: "sub",
+	}}
+
+	_, err := g.getTopic(t.Context(), "test-topic")
+	require.Error(t, err)
+}
+func TestGoogleClient_collectMessages_LimitReached(t *testing.T) {
+	logger := logging.NewMockLogger(logging.DEBUG)
+
+	g := &googleClient{
+		logger: logger,
+	}
+
+	msgChan := make(chan []byte, 3)
+	msgChan <- []byte("message1")
+	msgChan <- []byte("message2")
+	close(msgChan)
+
+	ctx := context.Background()
+	result := g.collectMessages(ctx, msgChan, 2)
+
+	expected := []byte("message1\nmessage2")
+	assert.Equal(t, expected, result)
+}
+func TestGoogleClient_getQuerySubscription_CreateFails(t *testing.T) {
+	client := getGoogleClient(t)
+	defer client.Close()
+
+	g := &googleClient{
+		client: client,
+		Config: Config{ProjectID: "test", SubscriptionName: "sub"},
+	}
+
+	topic, err := client.CreateTopic(t.Context(), "test-topic-bad")
+	require.NoError(t, err)
+
+	// simulate failure by closing client
+	client.Close()
+
+	sub, err := g.getQuerySubscription(t.Context(), topic)
+	assert.Error(t, err)
+	assert.Nil(t, sub)
+}
+
+
