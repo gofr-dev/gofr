@@ -12,9 +12,6 @@ import (
 func main() {
 	a := gofr.New()
 
-	// HTTP service with Circuit Breaker config given, uses custom health check
-	// either of circuit breaker or health can be used as well, as both implement service.Options interface.
-	// Note: /breeds is not an actual health check endpoint for "https://catfact.ninja"
 	a.AddHTTPService("cat-facts", "https://catfact.ninja",
 		&service.CircuitBreakerConfig{
 			Threshold: 4,
@@ -23,9 +20,17 @@ func main() {
 		&service.HealthConfig{
 			HealthEndpoint: "breeds",
 		},
+		// ADDED: RateLimiterConfig for the "cat-facts" service
+		// Set a low RPS and Burst to easily trigger the rate limit for testing
+		&service.WithRateLimiter{
+			Config: service.RateLimiterConfig{
+				RequestsPerSecond: 1, // Allow 1 request per second
+				Burst:             1, // Allow a burst of 1 request
+			},
+			// Logger, Metrics, and ServiceURL will be injected by NewHTTPService
+		},
 	)
 
-	// service with improper health-check to test health check
 	a.AddHTTPService("fact-checker", "https://catfact.ninja",
 		&service.HealthConfig{
 			HealthEndpoint: "breed",
