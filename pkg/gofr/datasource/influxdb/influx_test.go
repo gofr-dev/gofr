@@ -2,6 +2,7 @@ package influxdb
 
 import (
 	"context"
+	"os"
 	"testing"
 	"time"
 
@@ -13,26 +14,37 @@ const (
 	URL            = "http://localhost:8086"
 	Username       = "admin"
 	Password       = "admin1234"
-	Token          = "F-QFQpmCL9UkR3qyoXnLkzWj03s6m4eCvYgDl1ePfHBf9ph7yxaSgQ6WN0i9giNgRTfONwVMK1f977r_g71oNQ=="
 	testOrgName    = "org-test2"
 	testBucketName = "bucket-test2"
 	testFluxQuery  = "from(bucket:\"bucket-test2\")|> range(start: -1h) |> filter(fn: (r) => r._measurement == \"stat\")"
 )
 
+func getEnv(key, fallback string) string {
+	if val := os.Getenv(key); val != "" {
+		return val
+	}
+
+	return fallback
+}
+
 func setupInflux(t *testing.T) *Client {
 	t.Helper()
+
+	token := getEnv("INFLUXDB_TOKEN", "")
+
 	app := gofr.New()
 	client := New(Config{
 		URL:      URL,
 		Username: Username,
 		Password: Password,
-		Token:    Token,
+		Token:    token,
 	})
 	app.AddInfluxDB(client)
 	require.Equal(t, URL, client.config.URL)
 	require.Equal(t, Username, client.config.Username)
 	require.Equal(t, Password, client.config.Password, Password)
-	require.Equal(t, Token, client.config.Token)
+	require.Equal(t, token, client.config.Token)
+
 	return client
 }
 
@@ -46,6 +58,7 @@ func TestPing(t *testing.T) {
 
 func creatOrganization(t *testing.T, client *Client, orgName string) (orgID string) {
 	t.Helper()
+
 	ctx := context.Background()
 	// try creating organization without name
 	orgID, err := client.CreateOrganization(ctx, "")
@@ -62,20 +75,25 @@ func creatOrganization(t *testing.T, client *Client, orgName string) (orgID stri
 
 func listOrganizations(ctx context.Context, t *testing.T, client *Client) map[string]string {
 	t.Helper()
+
 	orgs, err := client.ListOrganization(ctx)
 	require.NoError(t, err)
+
 	return orgs
 }
 
 func listBuckets(ctx context.Context, t *testing.T, client *Client, orgID string) map[string]string {
 	t.Helper()
+
 	buckets, err := client.ListBuckets(ctx, orgID)
 	require.NoError(t, err)
+
 	return buckets
 }
 
 func deleteOrganization(t *testing.T, client *Client, orgID string) {
 	t.Helper()
+
 	ctx := context.Background()
 
 	// try deleting empty id organization
@@ -89,6 +107,7 @@ func deleteOrganization(t *testing.T, client *Client, orgID string) {
 
 func createNewBucket(t *testing.T, client *Client, orgID, name string) (bucketID string) {
 	t.Helper()
+
 	ctx := context.Background()
 
 	// try creating organization without name
@@ -106,6 +125,7 @@ func createNewBucket(t *testing.T, client *Client, orgID, name string) (bucketID
 
 func deleteBucket(t *testing.T, client *Client, bucketID string) {
 	t.Helper()
+
 	ctx := context.Background()
 
 	// try creating delete empty bucket id

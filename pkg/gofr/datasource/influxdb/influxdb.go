@@ -62,6 +62,7 @@ func (c *Client) CreateOrganization(ctx context.Context, orgName string) (string
 	if orgName == "" {
 		return "", errEmptyOrganizationName
 	}
+
 	orgAPI := c.client.OrganizationsAPI()
 	newOrg, err := orgAPI.CreateOrganizationWithName(ctx, orgName)
 
@@ -71,6 +72,7 @@ func (c *Client) CreateOrganization(ctx context.Context, orgName string) (string
 	}
 
 	c.logger.Debugf("organization created with name '%v'", orgName)
+
 	return *newOrg.Id, nil
 }
 
@@ -87,11 +89,14 @@ func (c *Client) DeleteOrganization(ctx context.Context, orgID string) error {
 	if orgID == "" {
 		return errEmptyOrganizationID
 	}
+
 	orgAPI := c.client.OrganizationsAPI()
+
 	err := orgAPI.DeleteOrganizationWithID(ctx, orgID)
 	if err != nil {
 		return err
 	}
+
 	return nil
 }
 
@@ -106,6 +111,7 @@ func (c *Client) DeleteOrganization(ctx context.Context, orgID string) error {
 // - err: Error if the API call fails or the organizations cannot be retrieved.
 func (c *Client) ListOrganization(ctx context.Context) (map[string]string, error) {
 	orgAPI := c.client.OrganizationsAPI()
+
 	allOrg, err := orgAPI.GetOrganizations(ctx)
 	if err != nil {
 		return nil, errFetchOrganization
@@ -114,12 +120,15 @@ func (c *Client) ListOrganization(ctx context.Context) (map[string]string, error
 	if allOrg == nil || len(*allOrg) == 0 {
 		return map[string]string{}, nil
 	}
+
 	orgs := make(map[string]string, len(*allOrg))
+
 	for _, org := range *allOrg {
 		if org.Id != nil {
 			orgs[*org.Id] = org.Name
 		}
 	}
+
 	return orgs, nil
 }
 
@@ -136,18 +145,18 @@ func (c *Client) CreateBucket(ctx context.Context, orgID, bucketName string) (bu
 	if orgID == "" {
 		return "", errEmptyOrganizationID
 	}
+
 	if bucketName == "" {
 		return "", errEmptyBucketName
 	}
 
 	bucketsAPI := c.client.BucketsAPI()
-	newBucket, err := bucketsAPI.CreateBucketWithNameWithID(ctx, orgID, bucketName)
 
+	newBucket, err := bucketsAPI.CreateBucketWithNameWithID(ctx, orgID, bucketName)
 	if err != nil {
-		c.logger.Errorf("failed to create new bucket with name '%v' %v", bucketName, err)
 		return "", err
 	}
-	c.logger.Debugf("bucket created with name '%v'", bucketName)
+
 	return *newBucket.Id, nil
 }
 
@@ -163,10 +172,12 @@ func (c *Client) DeleteBucket(ctx context.Context, bucketID string) error {
 	if bucketID == "" {
 		return errEmptyBucketID
 	}
+
 	bucketsAPI := c.client.BucketsAPI()
 	if err := bucketsAPI.DeleteBucketWithID(ctx, bucketID); err != nil {
 		return err
 	}
+
 	return nil
 }
 
@@ -193,6 +204,7 @@ func (c *Client) HealthCheck(ctx context.Context) (any, error) {
 	if err != nil {
 		h.Status = statusDown
 		h.Details["error"] = err.Error()
+
 		return &h, errHealthCheckFailed
 	}
 
@@ -203,6 +215,7 @@ func (c *Client) HealthCheck(ctx context.Context) (any, error) {
 	h.Details["Message"] = health.Message
 	h.Details["Checks"] = health.Checks
 	h.Details["Status"] = health.Status
+
 	return h, nil
 }
 
@@ -225,19 +238,24 @@ func (c *Client) ListBuckets(ctx context.Context, org string) (buckets map[strin
 	}
 
 	bucketsAPI := c.client.BucketsAPI()
+
 	bucketsDomain, err := bucketsAPI.FindBucketsByOrgName(ctx, org)
 	if err != nil {
 		return nil, errFindingBuckets
 	}
+
 	if bucketsDomain == nil {
 		return nil, nil
 	}
+
 	buckets = make(map[string]string) // Initialize the map
+
 	for _, bucket := range *bucketsDomain {
 		if bucket.Name != "" {
 			buckets[*bucket.Id] = bucket.Name
 		}
 	}
+
 	return buckets, nil
 }
 
@@ -256,11 +274,13 @@ func (c *Client) Ping(ctx context.Context) (bool, error) {
 		c.logger.Errorf("%v", err)
 		return false, err
 	}
+
 	return ping, nil
 }
 
 func (c *Client) Query(ctx context.Context, org, fluxQuery string) ([]map[string]any, error) {
 	queryAPI := c.client.QueryAPI(org)
+
 	result, err := queryAPI.Query(ctx, fluxQuery)
 	if err != nil {
 		c.logger.Errorf("InfluxDB Flux Query '%v' failed: %v", fluxQuery, err.Error())
@@ -268,18 +288,20 @@ func (c *Client) Query(ctx context.Context, org, fluxQuery string) ([]map[string
 	}
 
 	var records []map[string]any
+
 	for result.Next() {
 		if result.Err() != nil {
 			c.logger.Errorf("Error processing InfluxDB Flux Query result: %v", result.Err().Error())
 			return nil, result.Err()
 		}
+
 		record := make(map[string]any)
 		for k, v := range result.Record().Values() {
 			record[k] = v
 		}
+
 		records = append(records, record)
 	}
-
 	// Check for any final errors after iteration.
 	if result.Err() != nil {
 		c.logger.Errorf("Final error in InfluxDB Flux Query result: %v", result.Err().Error())
@@ -312,13 +334,14 @@ func (c *Client) WritePoint(ctx context.Context,
 	org, bucket, measurement string,
 	tags map[string]string, fields map[string]any, timestamp time.Time,
 ) error {
-	writeAPI := c.client.WriteAPIBlocking(org, bucket)
 	p := influxdb2.NewPoint(measurement, tags, fields, timestamp)
+	writeAPI := c.client.WriteAPIBlocking(org, bucket)
 
 	if err := writeAPI.WritePoint(ctx, p); err != nil {
 		c.logger.Errorf("Failed to write point to influxdb: %v", err.Error())
 		return err
 	}
+
 	return nil
 }
 
