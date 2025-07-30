@@ -157,12 +157,12 @@ func initializeDatasources(c *container.Container, ds *Datasource, mg migrator) 
 			apply:         func(m migrator) migrator { return clickHouseDS{ds.Clickhouse}.apply(m) },
 			logIdentifier: "Clickhouse",
 		},
-		{
-			condition:     func() bool { return c.PubSub != nil },
-			setDS:         func() { ds.PubSub = c.PubSub },
-			apply:         func(m migrator) migrator { return pubsubDS{c.PubSub}.apply(m) },
-			logIdentifier: "PubSub",
-		},
+		//{
+		//	condition:     func() bool { return c.PubSub != nil },
+		//	setDS:         func() { ds.PubSub = c.PubSub },
+		//	apply:         func(m migrator) migrator { return pubsubDS{c.PubSub}.apply(m) },
+		//	logIdentifier: "PubSub",
+		//},
 		{
 			condition:     func() bool { return !isNil(c.Cassandra) },
 			setDS:         func() { ds.Cassandra = cassandraDS{c.Cassandra} },
