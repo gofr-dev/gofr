@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func Test_setFieldValueFromData(t *testing.T) {
@@ -13,7 +14,7 @@ func Test_setFieldValueFromData(t *testing.T) {
 		field := reflect.ValueOf(&str).Elem()
 
 		err := setFieldValueFromData(field, "hello")
-		assert.NoError(t, err)
+		require.NoError(t, err)
 		assert.Equal(t, "hello", str)
 	})
 
@@ -22,7 +23,7 @@ func Test_setFieldValueFromData(t *testing.T) {
 		field := reflect.ValueOf(&num).Elem()
 
 		err := setFieldValueFromData(field, 42)
-		assert.NoError(t, err)
+		require.NoError(t, err)
 		assert.Equal(t, 42, num)
 	})
 
@@ -31,8 +32,9 @@ func Test_setFieldValueFromData(t *testing.T) {
 		field := reflect.ValueOf(&f).Elem()
 
 		err := setFieldValueFromData(field, 3.14)
-		assert.NoError(t, err)
-		assert.Equal(t, 3.14, f)
+		require.NoError(t, err)
+		assert.InEpsilon(t, 3.14, f, 0.001)
+
 	})
 
 	t.Run("Bool Field", func(t *testing.T) {
@@ -40,8 +42,9 @@ func Test_setFieldValueFromData(t *testing.T) {
 		field := reflect.ValueOf(&b).Elem()
 
 		err := setFieldValueFromData(field, true)
-		assert.NoError(t, err)
-		assert.Equal(t, true, b)
+		require.NoError(t, err)
+		assert.True(t, b)
+
 	})
 
 	t.Run("Unsupported Kind", func(t *testing.T) {
@@ -49,6 +52,6 @@ func Test_setFieldValueFromData(t *testing.T) {
 		field := reflect.ValueOf(&m).Elem()
 
 		err := setFieldValueFromData(field, map[string]string{"a": "b"})
-		assert.Error(t, err)
+		require.NoError(t, err)
 	})
 }

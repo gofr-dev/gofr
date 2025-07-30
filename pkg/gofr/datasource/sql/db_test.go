@@ -1203,7 +1203,8 @@ func TestDB_ExecContextCancelled(t *testing.T) {
 	db, _ := getDB(t, logging.DEBUG)
 	defer db.DB.Close()
 
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(t.Context())
+
 	cancel() // cancel immediately
 
 	_, err := db.ExecContext(ctx, "INSERT INTO dummy VALUES(1)")
