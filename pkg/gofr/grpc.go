@@ -3,6 +3,7 @@ package gofr
 import (
 	"context"
 	"errors"
+	"fmt"
 	"net"
 	"reflect"
 	"strconv"
@@ -42,10 +43,15 @@ type grpcServer struct {
 // This function accepts a variadic list of gRPC server options (grpc.ServerOption) and appends them
 // to the server's configuration. It allows fine-tuning of the gRPC server's behavior during its initialization.
 func (a *App) AddGRPCServerOptions(grpcOpts ...grpc.ServerOption) {
+	if len(grpcOpts) == 0 {
+        a.container.Logger.Debug("no gRPC server options provided")
+        return
+    }
+	a.container.Logger.Debugf("adding %d gRPC server options", len(grpcOpts))
 	a.grpcServer.options = append(a.grpcServer.options, grpcOpts...)
 }
 
-// AddGRPCUnaryInterceptors allows users to add custom gRPC interceptors.
+// AddGRPCUnaryInterceptors allows users to add custom gRPC interceptors. 
 // Example:
 //
 //	func loggingInterceptor(ctx context.Context, req interface{}, info *grpc.UnaryServerInfo,
@@ -55,14 +61,34 @@ func (a *App) AddGRPCServerOptions(grpcOpts ...grpc.ServerOption) {
 //	}
 //	app.AddGRPCUnaryInterceptors(loggingInterceptor)
 func (a *App) AddGRPCUnaryInterceptors(interceptors ...grpc.UnaryServerInterceptor) {
-	a.grpcServer.interceptors = append(a.grpcServer.interceptors, interceptors...)
+	if len(interceptors) == 0 {
+        a.container.Logger.Debug("no unary interceptors provided")
+        return
+    }
+	
+	a.container.Logger.Debugf("adding %d valid unary interceptors", len(interceptors))
+    a.grpcServer.interceptors = append(a.grpcServer.interceptors, interceptors...)
 }
 
 func (a *App) AddGRPCServerStreamInterceptors(interceptors ...grpc.StreamServerInterceptor) {
+	if len(interceptors) == 0 {
+		a.container.Logger.Debug("no stream interceptors provided")
+		return
+	}
+
+	a.container.Logger.Debugf("adding %d stream interceptors", len(interceptors))
 	a.grpcServer.streamInterceptors = append(a.grpcServer.streamInterceptors, interceptors...)
 }
 
-func newGRPCServer(c *container.Container, port int, cfg config.Config) *grpcServer {
+func newGRPCServer(c *container.Container, port int, cfg config.Config) (*grpcServer, error) {
+    if port <= 0 || port > 65535 {
+        return nil, fmt.Errorf("invalid port number: %d", port)
+    }
+
+	c.Logger.Infof("creating new gRPC server on port %d", port)
+	
+	registerGRPCMetrics(c)
+
 	middleware := make([]grpc.UnaryServerInterceptor, 0)
 	middleware = append(middleware,
 		grpc_recovery.UnaryServerInterceptor(),
@@ -72,32 +98,51 @@ func newGRPCServer(c *container.Container, port int, cfg config.Config) *grpcSer
 	streamMiddleware = append(streamMiddleware,
 		grpc_recovery.StreamServerInterceptor(),
 		gofr_grpc.StreamObservabilityInterceptor(c.Logger, c.Metrics()))
-
+	
+	c.Logger.Debugf("gRPC server created successfully on port %d", port)
+	
 	return &grpcServer{
 		port:               port,
 		interceptors:       middleware,
 		streamInterceptors: streamMiddleware,
 		config:             cfg,
-	}
+	}, nil
 }
 
-func (g *grpcServer) createServer() {
+// registerGRPCMetrics registers essential gRPC metrics
+func registerGRPCMetrics(c *container.Container) {
+	c.Metrics().NewGauge("grpc_server_status", "gRPC server status (1=running, 0=stopped)")
+	c.Metrics().NewCounter("grpc_server_errors_total", "Total gRPC server errors")
+	c.Metrics().NewCounter("grpc_services_registered_total", "Total gRPC services registered")
+}
+
+func (g *grpcServer) createServer() error{
 	interceptorOption := grpc.UnaryInterceptor(grpc_middleware.ChainUnaryServer(g.interceptors...))
 	streamOpt := grpc.StreamInterceptor(grpc_middleware.ChainStreamServer(g.streamInterceptors...))
 	g.options = append(g.options, interceptorOption, streamOpt)
 
 	g.server = grpc.NewServer(g.options...)
+	if g.server == nil {
+        return errors.New("failed to create gRPC server")
+    }
 
 	enabled := strings.ToLower(g.config.GetOrDefault("GRPC_ENABLE_REFLECTION", "false"))
-	if enabled != defaultReflection {
-		reflection.Register(g.server)
-	}
+	if enabled == "true" {
+        reflection.Register(g.server)
+    }
+
+	return nil
 }
 
 func (g *grpcServer) Run(c *container.Container) {
+	
 	if g.server == nil {
-		g.createServer()
-	}
+        if err := g.createServer(); err != nil {
+            c.Logger.Fatalf("failed to create gRPC server: %v", err)
+			c.Metrics().NewCounter("grpc_server_errors_total", "").Inc()
+            return
+        }
+    }
 
 	addr := ":" + strconv.Itoa(g.port)
 
@@ -106,13 +151,22 @@ func (g *grpcServer) Run(c *container.Container) {
 	listener, err := net.Listen("tcp", addr)
 	if err != nil {
 		c.Logger.Errorf("error in starting gRPC server at %s: %s", addr, err)
+		c.Metrics().NewCounter("grpc_server_errors_total", "").Inc()
+		c.Metrics().NewGauge("grpc_server_status", "").Set(0)
 		return
 	}
+	
+	c.Metrics().NewGauge("grpc_server_status", "").Set(1)
 
 	if err := g.server.Serve(listener); err != nil {
 		c.Logger.Errorf("error in starting gRPC server at %s: %s", addr, err)
+		c.Metrics().NewCounter("grpc_server_errors_total", "").Inc()
+		c.Metrics().NewGauge("grpc_server_status", "").Set(0)
 		return
 	}
+	
+	c.Logger.Infof("gRPC server stopped on %s", addr)
+	c.Metrics().NewGauge("grpc_server_status", "").Set(0)
 }
 
 func (g *grpcServer) Shutdown(ctx context.Context) error {
@@ -130,28 +184,35 @@ func (g *grpcServer) Shutdown(ctx context.Context) error {
 }
 
 var (
-	errNonAddressable = errors.New("cannot inject container as it is not addressable or is fail")
+	errNonAddressable = errors.New("cannot inject container as it is not addressable or is nil")
 )
 
 // RegisterService adds a gRPC service to the GoFr application.
 func (a *App) RegisterService(desc *grpc.ServiceDesc, impl any) {
+	
 	if !a.grpcRegistered && !isPortAvailable(a.grpcServer.port) {
 		a.container.Logger.Fatalf("gRPC port %d is blocked or unreachable", a.grpcServer.port)
 	}
 
-	if !a.grpcRegistered {
-		a.grpcServer.createServer()
-	}
+    if !a.grpcRegistered {
+        if err := a.grpcServer.createServer(); err != nil {
+            a.container.Logger.Errorf("failed to create gRPC server for service %s: %v", desc.ServiceName, err)
+            return
+        }
+    }
 
 	a.container.Logger.Infof("registering gRPC Server: %s", desc.ServiceName)
 	a.grpcServer.server.RegisterService(desc, impl)
 
+	a.container.Metrics().NewCounter("grpc_services_registered_total", "").Inc()
+
 	err := injectContainer(impl, a.container)
 	if err != nil {
-		return
+		a.container.Logger.Fatalf("failed to inject container into gRPC service %s: %v", desc.ServiceName, err)
 	}
 
 	a.grpcRegistered = true
+	a.container.Logger.Debugf("successfully registered gRPC service: %s", desc.ServiceName)
 }
 
 func injectContainer(impl any, c *container.Container) error {

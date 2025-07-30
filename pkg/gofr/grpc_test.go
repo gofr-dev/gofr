@@ -19,6 +19,21 @@ import (
 	"gofr.dev/pkg/gofr/testutil"
 )
 
+func (g *grpcServer) addServerOptions(opts ...grpc.ServerOption) {
+    g.options = append(g.options, opts...)
+}
+
+func (g *grpcServer) addUnaryInterceptors(interceptors ...grpc.UnaryServerInterceptor) {
+    g.interceptors = append(g.interceptors, interceptors...)
+}
+
+func (g *grpcServer) registerService(desc *grpc.ServiceDesc, impl any) {
+    if g.server == nil {
+        g.createServer()
+    }
+    g.server.RegisterService(desc, impl)
+}
+
 func TestNewGRPCServer(t *testing.T) {
 	c := container.Container{
 		Logger: logging.NewLogger(logging.DEBUG),
@@ -28,6 +43,74 @@ func TestNewGRPCServer(t *testing.T) {
 
 	assert.NotNil(t, g, "TEST Failed.\n")
 }
+func TestGRPCServer_AddServerOptions(t *testing.T) {
+	c := container.Container{
+		Logger: logging.NewLogger(logging.DEBUG),
+	}
+	cfg := testutil.NewServerConfigs(t)
+	g := newGRPCServer(&c, 9999, cfg)
+
+	option1 := grpc.ConnectionTimeout(5 * time.Second)
+	option2 := grpc.MaxRecvMsgSize(1024 * 1024)
+
+	g.addServerOptions(option1, option2)
+
+	assert.Len(t, g.options, 2)
+}
+
+func TestGRPCServer_AddUnaryInterceptors(t *testing.T) {
+	c := container.Container{
+		Logger: logging.NewLogger(logging.DEBUG),
+	}
+	cfg := testutil.NewServerConfigs(t)
+	g := newGRPCServer(&c, 9999, cfg)
+
+	interceptor1 := func(ctx context.Context, req any, _ *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (any, error) {
+		return handler(ctx, req)
+	}
+
+	interceptor2 := func(ctx context.Context, req any, _ *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (any, error) {
+		return handler(ctx, req)
+	}
+
+	g.addUnaryInterceptors(interceptor1, interceptor2)
+
+	assert.Len(t, g.interceptors, 4)
+}
+
+func TestGRPCServer_CreateServer(t *testing.T) {
+	c := container.Container{
+		Logger: logging.NewLogger(logging.DEBUG),
+	}
+	cfg := testutil.NewServerConfigs(t)
+	g := newGRPCServer(&c, 9999, cfg)
+	require.NoError(t, err)
+
+	g.createServer()
+	err = g.createServer()
+    require.NoError(t, err) 
+
+	assert.NotNil(t, g.server)
+}
+
+func TestGRPCServer_RegisterService(t *testing.T) {
+	c := container.Container{
+		Logger: logging.NewLogger(logging.DEBUG),
+	}
+	cfg := testutil.NewServerConfigs(t)
+	g := newGRPCServer(&c, 9999, cfg)
+	g.createServer()
+
+	healthServer := health.NewServer()
+	desc := &grpc_health_v1.Health_ServiceDesc
+	
+	g.registerService(desc, healthServer)
+
+	services := g.server.GetServiceInfo()
+	_, ok := services["grpc.health.v1.Health"]
+	assert.True(t, ok, "health service should be registered")
+}
+
 func TestGRPC_ServerRun(t *testing.T) {
 	testCases := []struct {
 		desc   string
@@ -55,7 +138,7 @@ func TestGRPC_ServerRun(t *testing.T) {
 
 			g := &grpcServer{
 				port:   tc.port,
-				config: getConfigs(t),
+				cconfig: testutil.NewServerConfigs(t),
 			}
 
 			go func() {
