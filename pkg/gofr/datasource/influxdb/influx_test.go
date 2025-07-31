@@ -44,11 +44,12 @@ func setupInflux(t *testing.T) *Client {
 	require.Equal(t, Username, client.config.Username)
 	require.Equal(t, Password, client.config.Password, Password)
 	require.Equal(t, token, client.config.Token)
+
 	return client
 }
 
 func TestPing(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	config := setupInflux(t)
 	health, err := config.Ping(ctx)
 	require.NoError(t, err) // empty organization name
@@ -58,7 +59,7 @@ func TestPing(t *testing.T) {
 func creatOrganization(t *testing.T, client *Client, orgName string) (orgID string) {
 	t.Helper()
 
-	ctx := context.Background()
+	ctx := t.Context()
 	// try creating organization without name
 	orgID, err := client.CreateOrganization(ctx, "")
 	require.Error(t, err) // empty organization name
@@ -93,7 +94,7 @@ func listBuckets(ctx context.Context, t *testing.T, client *Client, orgID string
 func deleteOrganization(t *testing.T, client *Client, orgID string) {
 	t.Helper()
 
-	ctx := context.Background()
+	ctx := t.Context()
 
 	// try deleting empty id organization
 	err := client.DeleteOrganization(ctx, "")
@@ -107,7 +108,7 @@ func deleteOrganization(t *testing.T, client *Client, orgID string) {
 func createNewBucket(t *testing.T, client *Client, orgID, name string) (bucketID string) {
 	t.Helper()
 
-	ctx := context.Background()
+	ctx := t.Context()
 
 	// try creating organization without name
 	bucketID, err := client.CreateBucket(ctx, orgID, "")
@@ -124,8 +125,7 @@ func createNewBucket(t *testing.T, client *Client, orgID, name string) (bucketID
 
 func deleteBucket(t *testing.T, client *Client, bucketID string) {
 	t.Helper()
-
-	ctx := context.Background()
+	ctx := t.Context()
 
 	// try creating delete empty bucket id
 	err := client.DeleteBucket(ctx, "")
