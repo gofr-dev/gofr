@@ -205,8 +205,8 @@ func (c *Client) HealthCheck(_ context.Context) (any, error) {
 	return &h, nil
 }
 
-// DefaultCollection returns a handle for the default collection.
-func (c *Client) DefaultCollection() *Collection {
+// defaultCollection returns a handle for the default collection.
+func (c *Client) defaultCollection() *Collection {
 	if c.bucket == nil {
 		c.logger.Error("bucket not initialized")
 
@@ -219,8 +219,8 @@ func (c *Client) DefaultCollection() *Collection {
 	}
 }
 
-// Scope returns a handle for a specific scope.
-func (c *Client) Scope(name string) *Scope {
+// scope returns a handle for a specific scope.
+func (c *Client) scope(name string) *Scope {
 	if c.bucket == nil {
 		c.logger.Error("bucket not initialized")
 
@@ -233,20 +233,9 @@ func (c *Client) Scope(name string) *Scope {
 	}
 }
 
-// Collection returns a handle for a specific collection within the scope.
-func (s *Scope) Collection(name string) *Collection {
-	if s.scope == nil {
-		return &Collection{client: s.client}
-	}
-
-	return &Collection{
-		collection: s.scope.Collection(name),
-		client:     s.client,
-	}
-}
-
 func (c *Collection) mutationOperation(ctx context.Context, opName, key string, document, result any,
-	op func(tracerCtx context.Context) (*gocb.MutationResult, error)) error {
+	op func(tracerCtx context.Context) (*gocb.MutationResult, error),
+) error {
 	if c.collection == nil {
 		return errBucketNotInitialized
 	}
@@ -453,22 +442,22 @@ func (c *Client) RunTransaction(ctx context.Context, logic func(t *gocb.Transact
 
 // Get performs a get operation on the default collection.
 func (c *Client) Get(ctx context.Context, key string, result any) error {
-	return c.DefaultCollection().Get(ctx, key, result)
+	return c.defaultCollection().Get(ctx, key, result)
 }
 
 // Insert inserts a new document in the default collection.
 func (c *Client) Insert(ctx context.Context, key string, document, result any) error {
-	return c.DefaultCollection().Insert(ctx, key, document, result)
+	return c.defaultCollection().Insert(ctx, key, document, result)
 }
 
 // Upsert performs an upsert operation on the default collection.
 func (c *Client) Upsert(ctx context.Context, key string, document, result any) error {
-	return c.DefaultCollection().Upsert(ctx, key, document, result)
+	return c.defaultCollection().Upsert(ctx, key, document, result)
 }
 
 // Remove performs a remove operation on the default collection.
 func (c *Client) Remove(ctx context.Context, key string) error {
-	return c.DefaultCollection().Remove(ctx, key)
+	return c.defaultCollection().Remove(ctx, key)
 }
 
 // Close closes the connection to the Couchbase cluster.

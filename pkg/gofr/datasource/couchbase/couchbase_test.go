@@ -412,7 +412,7 @@ func TestClient_DefaultCollection(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			mocks := newTestMocks(t)
 			client := tt.setup(mocks)
-			got := client.DefaultCollection()
+			got := client.defaultCollection()
 
 			// We cannot directly compare the collection, so we check for nil and non-nil cases.
 			if tt.wantCollection == nil {
@@ -465,7 +465,7 @@ func TestClient_Scope(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			mocks := newTestMocks(t)
 			client := tt.setup(mocks)
-			got := client.Scope(tt.scopeName)
+			got := client.scope(tt.scopeName)
 
 			if tt.wantScope == nil {
 				assert.Nil(t, got)
@@ -480,7 +480,7 @@ func TestClient_RunTransaction(t *testing.T) {
 	tests := []struct {
 		name    string
 		setup   func(mocks *testMocks) *Client
-		logic   func(t *gocb.TransactionAttemptContext) error
+		logic   func(any) error
 		wantErr error
 	}{
 		{
@@ -501,7 +501,7 @@ func TestClient_RunTransaction(t *testing.T) {
 					tracer:  noop.NewTracerProvider().Tracer("test"),
 				}
 			},
-			logic: func(*gocb.TransactionAttemptContext) error {
+			logic: func(any) error {
 				return nil
 			},
 		},
@@ -510,7 +510,7 @@ func TestClient_RunTransaction(t *testing.T) {
 			setup: func(*testMocks) *Client {
 				return &Client{cluster: nil}
 			},
-			logic: func(*gocb.TransactionAttemptContext) error {
+			logic: func(any) error {
 				return nil
 			},
 			wantErr: errClustertNotInitialized,
@@ -533,7 +533,7 @@ func TestClient_RunTransaction(t *testing.T) {
 					tracer:  noop.NewTracerProvider().Tracer("test"),
 				}
 			},
-			logic: func(*gocb.TransactionAttemptContext) error {
+			logic: func(any) error {
 				return errLogic
 			},
 			wantErr: errMockTransaction,
