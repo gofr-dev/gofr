@@ -39,7 +39,8 @@ func TestNewGRPCServer(t *testing.T) {
 		Logger: logging.NewLogger(logging.DEBUG),
 	}
 	cfg := testutil.NewServerConfigs(t)
-	g := newGRPCServer(&c, 9999, cfg)
+	g, err := newGRPCServer(&c, 9999, cfg)
+	require.NoError(t, err)
 
 	assert.NotNil(t, g, "TEST Failed.\n")
 }
@@ -48,7 +49,8 @@ func TestGRPCServer_AddServerOptions(t *testing.T) {
 		Logger: logging.NewLogger(logging.DEBUG),
 	}
 	cfg := testutil.NewServerConfigs(t)
-	g := newGRPCServer(&c, 9999, cfg)
+	g, err := newGRPCServer(&c, 9999, cfg)
+	require.NoError(t, err)
 
 	option1 := grpc.ConnectionTimeout(5 * time.Second)
 	option2 := grpc.MaxRecvMsgSize(1024 * 1024)
@@ -63,7 +65,8 @@ func TestGRPCServer_AddUnaryInterceptors(t *testing.T) {
 		Logger: logging.NewLogger(logging.DEBUG),
 	}
 	cfg := testutil.NewServerConfigs(t)
-	g := newGRPCServer(&c, 9999, cfg)
+	g, err := newGRPCServer(&c, 9999, cfg)
+	require.NoError(t, err)
 
 	interceptor1 := func(ctx context.Context, req any, _ *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (any, error) {
 		return handler(ctx, req)
@@ -83,7 +86,7 @@ func TestGRPCServer_CreateServer(t *testing.T) {
 		Logger: logging.NewLogger(logging.DEBUG),
 	}
 	cfg := testutil.NewServerConfigs(t)
-	g := newGRPCServer(&c, 9999, cfg)
+	g, err := newGRPCServer(&c, 9999, cfg)
 	require.NoError(t, err)
 
 	g.createServer()
@@ -98,7 +101,8 @@ func TestGRPCServer_RegisterService(t *testing.T) {
 		Logger: logging.NewLogger(logging.DEBUG),
 	}
 	cfg := testutil.NewServerConfigs(t)
-	g := newGRPCServer(&c, 9999, cfg)
+	g, err := newGRPCServer(&c, 9999, cfg)
+	require.NoError(t, err)
 	g.createServer()
 
 	healthServer := health.NewServer()
@@ -138,7 +142,7 @@ func TestGRPC_ServerRun(t *testing.T) {
 
 			g := &grpcServer{
 				port:   tc.port,
-				cconfig: testutil.NewServerConfigs(t),
+				cconfig: getConfigs(t),
 			}
 
 			go func() {
@@ -161,7 +165,8 @@ func TestGRPC_ServerShutdown(t *testing.T) {
 		Logger: logging.NewLogger(logging.DEBUG),
 	}
 	cfg := testutil.NewServerConfigs(t)
-	g := newGRPCServer(&c, 9999, cfg)
+	g, err := newGRPCServer(&c, 9999, cfg)
+	require.NoError(t, err)
 
 	go g.Run(&c)
 
@@ -181,7 +186,8 @@ func TestGRPC_ServerShutdown_ContextCanceled(t *testing.T) {
 		Logger: logging.NewLogger(logging.DEBUG),
 	}
 	cfg := testutil.NewServerConfigs(t)
-	g := newGRPCServer(&c, 9999, cfg)
+	g, err := newGRPCServer(&c, 9999, cfg)
+	require.NoError(t, err)
 
 	go g.Run(&c)
 
@@ -270,7 +276,8 @@ func TestGRPC_Shutdown_BeforeStart(t *testing.T) {
 	c := &container.Container{Logger: logger}
 
 	cfg := testutil.NewServerConfigs(t)
-	g := newGRPCServer(c, 9999, cfg)
+	g, err := newGRPCServer(c, 9999, cfg)
+	require.NoError(t, err)
 
 	ctx, cancel := context.WithTimeout(t.Context(), 500*time.Millisecond)
 	defer cancel()
@@ -348,7 +355,8 @@ func TestApp_WithReflection(t *testing.T) {
 	app := New()
 	app.container = c
 	cfg := testutil.NewServerConfigs(t)
-	app.grpcServer = newGRPCServer(c, 9999, cfg)
+	app.grpcServer, err = newGRPCServer(c, 9999, cfg)
+	require.NoError(t, err)
 	app.grpcServer.createServer()
 
 	services := app.grpcServer.server.GetServiceInfo()

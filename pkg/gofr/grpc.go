@@ -139,7 +139,7 @@ func (g *grpcServer) Run(c *container.Container) {
 	if g.server == nil {
         if err := g.createServer(); err != nil {
             c.Logger.Fatalf("failed to create gRPC server: %v", err)
-			c.Metrics().NewCounter("grpc_server_errors_total", "").Inc()
+			c.Metrics().IncrementCounter(ctx, "grpc_server_errors_total")
             return
         }
     }
@@ -151,22 +151,22 @@ func (g *grpcServer) Run(c *container.Container) {
 	listener, err := net.Listen("tcp", addr)
 	if err != nil {
 		c.Logger.Errorf("error in starting gRPC server at %s: %s", addr, err)
-		c.Metrics().NewCounter("grpc_server_errors_total", "").Inc()
-		c.Metrics().NewGauge("grpc_server_status", "").Set(0)
+		c.Metrics().IncrementCounter(ctx, "grpc_server_errors_total")
+		c.Metrics().SetGauge("grpc_server_status", 0)
 		return
 	}
 	
-	c.Metrics().NewGauge("grpc_server_status", "").Set(1)
+	c.Metrics().SetGauge("grpc_server_status", 1)
 
 	if err := g.server.Serve(listener); err != nil {
 		c.Logger.Errorf("error in starting gRPC server at %s: %s", addr, err)
-		c.Metrics().NewCounter("grpc_server_errors_total", "").Inc()
-		c.Metrics().NewGauge("grpc_server_status", "").Set(0)
+		c.Metrics().IncrementCounter(ctx, "grpc_server_errors_total")
+		c.Metrics().SetGauge("grpc_server_status", 0)
 		return
 	}
 	
 	c.Logger.Infof("gRPC server stopped on %s", addr)
-	c.Metrics().NewGauge("grpc_server_status", "").Set(0)
+	c.Metrics().SetGauge("grpc_server_status", 0)
 }
 
 func (g *grpcServer) Shutdown(ctx context.Context) error {
@@ -203,8 +203,8 @@ func (a *App) RegisterService(desc *grpc.ServiceDesc, impl any) {
 
 	a.container.Logger.Infof("registering gRPC Server: %s", desc.ServiceName)
 	a.grpcServer.server.RegisterService(desc, impl)
-
-	a.container.Metrics().NewCounter("grpc_services_registered_total", "").Inc()
+	
+	a.container.Metrics().IncrementCounter(ctx, "grpc_services_registered_total")
 
 	err := injectContainer(impl, a.container)
 	if err != nil {

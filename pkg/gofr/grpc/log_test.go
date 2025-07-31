@@ -94,6 +94,7 @@ func TestRPCLog_PrettyPrint(t *testing.T) {
 	// Check if ID is coming
 	assert.Contains(t, log, `1`)
 }
+
 func TestRPCLog_PrettyPrintWithStreamType(t *testing.T) {
 	var buf bytes.Buffer
 	
