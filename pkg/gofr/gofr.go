@@ -49,14 +49,22 @@ type App struct {
 	onStartHooks        []func(ctx *Context) error
 }
 
-func (a *App) runOnStartHooks(_ context.Context) error {
+func (a *App) runOnStartHooks(ctx context.Context) error {
 	// Use the existing newContext function with noopRequest
 	gofrCtx := newContext(nil, noopRequest{}, a.container)
+
+	// Set the context for cancellation support
+	gofrCtx.Context = ctx
 
 	for _, hook := range a.onStartHooks {
 		if err := hook(gofrCtx); err != nil {
 			a.Logger().Errorf("OnStart hook failed: %v", err)
 			return err
+		}
+
+		// Check if context was cancelled
+		if ctx.Err() != nil {
+			return ctx.Err()
 		}
 	}
 
