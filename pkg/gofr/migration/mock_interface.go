@@ -1122,6 +1122,7 @@ func (mr *MockElasticsearchMockRecorder) UpdateDocument(ctx, index, id, update a
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UpdateDocument", reflect.TypeOf((*MockElasticsearch)(nil).UpdateDocument), ctx, index, id, update)
 }
+
 // MockScyllaDB is a mock of ScyllaDB interface.
 type MockScyllaDB struct {
 	ctrl     *gomock.Controller
@@ -1513,7 +1514,7 @@ func (m *MockOpenTSDB) QueryRange(ctx context.Context, query string, start, end 
 }
 
 // QueryRange indicates an expected call of QueryRange.
-func (mr *OpenTSDBMockRecorder) QueryRange(ctx, query, start, end any) *gomock.Call {
+func (mr *MockOpenTSDBMockRecorder) QueryRange(ctx, query, start, end any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "QueryRange", reflect.TypeOf((*MockOpenTSDB)(nil).QueryRange), ctx, query, start, end)
 }
