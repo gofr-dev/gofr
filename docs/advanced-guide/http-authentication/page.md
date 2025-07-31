@@ -28,7 +28,7 @@ func main() {
 
 	app.EnableBasicAuth("admin", "secret_password") // Replace with your credentials
 
-	app.GET("/protected-resource", func(c *gofr.Context) (interface{}, error) {
+	app.GET("/protected-resource", func(c *gofr.Context) (any, error) {
 		// Handle protected resource access
 		return nil, nil
 	})
@@ -54,7 +54,7 @@ func main() {
 
 	app.EnableBasicAuthWithValidator(validateUser)
 
-	app.GET("/secure-data", func(c *gofr.Context) (interface{}, error) {
+	app.GET("/secure-data", func(c *gofr.Context) (any, error) {
 		// Handle access to secure data
 		return nil, nil
 	})
@@ -205,7 +205,7 @@ func main() {
         jwt.WithIssuer("https://auth.example.com")
 		)
 
-	app.GET("/protected-resource", func(c *gofr.Context) (interface{}, error) {
+	app.GET("/protected-resource", func(c *gofr.Context) (any, error) {
 		// Handle protected resource access
 		return nil, nil
 	})

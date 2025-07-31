@@ -114,7 +114,7 @@ func (*SubscriptionManager) createOrUpdateConsumer(
 		FilterSubject: topic,
 		MaxDeliver:    cfg.Stream.MaxDeliver,
 		DeliverPolicy: jetstream.DeliverNewPolicy,
-		AckWait:       30 * time.Second,
+		AckWait:       defaultAckWait,
 	})
 
 	return cons, err
