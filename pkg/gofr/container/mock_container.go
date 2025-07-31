@@ -27,6 +27,7 @@ type Mocks struct {
 	SurrealDB     *MockSurrealDB
 	Elasticsearch *MockElasticsearch
 	PubSub        *MockPubSubProvider
+	Couchbase     *MockCouchbase
 	File          *file.MockFileSystemProvider
 	HTTPService   *service.MockHTTP
 	Metrics       *MockMetrics
@@ -101,6 +102,9 @@ func NewMockContainer(t *testing.T, options ...options) (*Container, *Mocks) {
 	pubsubMock := NewMockPubSubProvider(ctrl)
 	container.PubSub = pubsubMock
 
+	couchbaseMock := NewMockCouchbase(ctrl)
+	container.Couchbase = couchbaseMock
+
 	var httpMock *service.MockHTTP
 
 	container.Services = make(map[string]service.HTTP)
@@ -134,6 +138,7 @@ func NewMockContainer(t *testing.T, options ...options) (*Container, *Mocks) {
 		SurrealDB:     surrealMock,
 		Elasticsearch: elasticsearchMock,
 		PubSub:        pubsubMock,
+		Couchbase:     couchbaseMock,
 		Metrics:       mockMetrics,
 	}
 
@@ -144,8 +149,7 @@ func NewMockContainer(t *testing.T, options ...options) (*Container, *Mocks) {
 	return container, &mocks
 }
 
-type MockPubSub struct {
-}
+type MockPubSub struct{}
 
 func (*MockPubSub) Query(_ context.Context, _ string, _ ...any) ([]byte, error) {
 	return nil, nil
