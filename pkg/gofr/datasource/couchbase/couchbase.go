@@ -105,38 +105,36 @@ func (c *Client) sendOperationStats(ql *QueryLog, startTime time.Time, method st
 	}
 }
 
-func (c *Client) Connect() error {
+func (c *Client) Connect() {
 	uri, err := c.generateCouchbaseURI()
 	if err != nil {
 		c.logger.Errorf("error generating Couchbase URI: %v", err)
-		return err
+		return
 	}
 
 	c.logger.Debugf("connecting to Couchbase at %v to bucket %v", c.config.Host, c.config.Bucket)
 
 	if err := c.establishConnection(uri); err != nil {
 		c.logger.Errorf("error while connecting to Couchbase, err:%v", err)
-		return err
+		return
 	}
 
 	if err := c.waitForClusterReady(); err != nil {
 		c.logger.Errorf("could not connect to Couchbase at %v due to err: %v", c.config.Host, err)
-		return err
+		return
 	}
 
 	c.bucket = c.cluster.Bucket(c.config.Bucket)
 
 	if err := c.waitForBucketReady(); err != nil {
 		c.logger.Errorf("could not connect to bucket %v at %v due to err: %v", c.config.Bucket, c.config.Host, err)
-		return err
+		return
 	}
 
 	couchbaseBuckets := []float64{.05, .075, .1, .125, .15, .2, .3, .5, .75, 1, 2, 3, 4, 5, 7.5, 10}
 	c.metrics.NewHistogram("app_couchbase_stats", "Response time of Couchbase queries in milliseconds.", couchbaseBuckets...)
 
 	c.logger.Logf("connected to Couchbase at %v to bucket %v", c.config.Host, c.config.Bucket)
-
-	return nil
 }
 
 func (c *Client) generateCouchbaseURI() (string, error) {
@@ -245,7 +243,6 @@ func (c *Collection) mutationOperation(ctx context.Context, opName, key string, 
 	defer c.client.sendOperationStats(&QueryLog{Query: opName, Key: key, Parameters: document}, time.Now(), opName, span)
 
 	mr, err := op(tracerCtx)
-
 	if err != nil {
 		return fmt.Errorf("failed to %s document with key %s: %w", opName, key, err)
 	}
@@ -418,7 +415,7 @@ func executeQuery(queryFn func() (resultProvider, error), queryType string, resu
 }
 
 // RunTransaction executes a transaction.
-func (c *Client) RunTransaction(ctx context.Context, logic func(t *gocb.TransactionAttemptContext) error) (*gocb.TransactionResult, error) {
+func (c *Client) RunTransaction(ctx context.Context, logic func(any) error) (any, error) {
 	if c.cluster == nil {
 		return nil, errClustertNotInitialized
 	}
@@ -427,9 +424,14 @@ func (c *Client) RunTransaction(ctx context.Context, logic func(t *gocb.Transact
 
 	startTime := time.Now()
 
+	// Wrap the generic logic function to match the expected signature
+	wrappedLogic := func(t *gocb.TransactionAttemptContext) error {
+		return logic(t)
+	}
+
 	// gocb transactions are not directly context-aware in the Run method signature in the same way as other operations.
 	// The context is passed down to operations within the transaction lambda.
-	result, err := c.cluster.Transactions().Run(logic, nil)
+	result, err := c.cluster.Transactions().Run(wrappedLogic, nil)
 
 	defer c.sendOperationStats(&QueryLog{Query: "RunTransaction"}, startTime, "RunTransaction", span)
 
