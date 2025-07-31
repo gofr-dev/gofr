@@ -86,7 +86,7 @@ func main() {
 }
 
 // Setup demonstrates database and collection creation
-func Setup(ctx *gofr.Context) (interface{}, error) {
+func Setup(ctx *gofr.Context) (any, error) {
 	_, err := ctx.ArangoDB.CreateDocument(ctx, "social_network", "", nil)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create database: %w", err)
@@ -122,7 +122,7 @@ func createCollection(ctx *gofr.Context, dbName, collectionName string) error {
 }
 
 // CreateUserHandler demonstrates user management and document creation
-func CreateUserHandler(ctx *gofr.Context) (interface{}, error) {
+func CreateUserHandler(ctx *gofr.Context) (any, error) {
 	name := ctx.PathParam("name")
 
 	// Create a person document
@@ -142,7 +142,7 @@ func CreateUserHandler(ctx *gofr.Context) (interface{}, error) {
 }
 
 // CreateFriendship demonstrates edge document creation
-func CreateFriendship(ctx *gofr.Context) (interface{}, error) {
+func CreateFriendship(ctx *gofr.Context) (any, error) {
 	var req struct {
 		From      string `json:"from"`
 		To        string `json:"to"`
@@ -172,7 +172,7 @@ func CreateFriendship(ctx *gofr.Context) (interface{}, error) {
 }
 
 // GetEdgesHandler demonstrates fetching edges connected to a vertex
-func GetEdgesHandler(ctx *gofr.Context) (interface{}, error) {
+func GetEdgesHandler(ctx *gofr.Context) (any, error) {
 	collection := ctx.PathParam("collection")
 	vertexID := ctx.PathParam("vertexID")
 
@@ -188,7 +188,7 @@ func GetEdgesHandler(ctx *gofr.Context) (interface{}, error) {
 		return nil, fmt.Errorf("failed to get edges: %w", err)
 	}
 
-	return map[string]interface{}{
+	return map[string]any{
 		"vertexID": vertexID,
 		"edges":    edges,
 	}, nil

@@ -4,12 +4,12 @@ import (
 	"fmt"
 )
 
-type OAuthErr struct {
+type AuthErr struct {
 	Err     error
 	Message string
 }
 
-func (o OAuthErr) Error() string {
+func (o AuthErr) Error() string {
 	switch {
 	case o.Message == "" && o.Err == nil:
 		return "unknown error"

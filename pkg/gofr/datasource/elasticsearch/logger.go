@@ -58,8 +58,8 @@ func (ql *QueryLog) PrettyPrint(logger Logger) {
 	contextStr := clean(strings.Join(ctxParts, " "))
 
 	formatted := fmt.Sprintf(
-		"\u001B[38;5;8m%-32s \u001B[38;5;208m%-5s\u001B[0m %8d\u001B[38;5;8mµs\u001B[0m %-20s %s",
-		op, "ELSTIC", ql.Duration, contextStr, pl,
+		"\u001B[38;5;8m%-32s \u001B[38;5;208m%-7s\u001B[0m %8d\u001B[38;5;8mµs\u001B[0m %-20s %s",
+		op, "ELASTIC", ql.Duration, contextStr, pl,
 	)
 	logger.Debug(formatted)
 }

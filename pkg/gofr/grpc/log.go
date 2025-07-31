@@ -1,3 +1,4 @@
+// Package grpc provides gRPC-related additions within the GoFr framework.
 package grpc
 
 import (
