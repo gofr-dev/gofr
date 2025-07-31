@@ -64,7 +64,7 @@ type SubscriptionManagerInterface interface {
 
 // StreamManagerInterface represents the main Stream Manager.
 type StreamManagerInterface interface {
-	CreateStream(ctx context.Context, cfg StreamConfig) error
+	CreateStream(ctx context.Context, cfg *StreamConfig) error
 	DeleteStream(ctx context.Context, name string) error
 	CreateOrUpdateStream(ctx context.Context, cfg *jetstream.StreamConfig) (jetstream.Stream, error)
 }
