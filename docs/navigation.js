@@ -146,6 +146,11 @@ export const navigation = [
                 title: 'Profiling in GoFr Applications',
                 href: '/docs/advanced-guide/debugging',
                 desc: "Discover GoFr auto-enables pprof profiling by leveraging its built-in configurations."
+            },
+            {
+                title: 'Error Handling Package in GoFr Applications',
+                href: '/docs/advanced-guide/serrors',
+                desc: "Structured error handling in gofr that aims to unifying the language of errors"
             }
         ],
     },
