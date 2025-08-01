@@ -62,7 +62,7 @@ func (a *App) runOnStartHooks(ctx context.Context) error {
 			return err
 		}
 
-		// Check if context was cancelled
+		// Check if context was canceled
 		if ctx.Err() != nil {
 			return ctx.Err()
 		}
