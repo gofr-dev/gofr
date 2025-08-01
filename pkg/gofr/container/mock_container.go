@@ -30,6 +30,7 @@ type Mocks struct {
 	File          *file.MockFileSystemProvider
 	HTTPService   *service.MockHTTP
 	Metrics       *MockMetrics
+	Oracle        *MockOracleDB
 	ScyllaDB      *MockScyllaDB
 }
 
@@ -74,6 +75,9 @@ func NewMockContainer(t *testing.T, options ...options) (*Container, *Mocks) {
 
 	clickhouseMock := NewMockClickhouse(ctrl)
 	container.Clickhouse = clickhouseMock
+
+	oracleMock := NewMockOracleDB(ctrl)
+	container.Oracle = oracleMock
 
 	mongoMock := NewMockMongo(ctrl)
 	container.Mongo = mongoMock
@@ -138,6 +142,7 @@ func NewMockContainer(t *testing.T, options ...options) (*Container, *Mocks) {
 		Elasticsearch: elasticsearchMock,
 		PubSub:        pubsubMock,
 		Metrics:       mockMetrics,
+		Oracle:        oracleMock,
 		ScyllaDB:      scyllaMock,
 	}
 
