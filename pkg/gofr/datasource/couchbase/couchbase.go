@@ -91,6 +91,7 @@ func (c *Client) UseTracer(tracer any) {
 	}
 }
 
+// sendOperationStats sends statistics about a Couchbase operation.
 func (c *Client) sendOperationStats(ql *QueryLog, startTime time.Time, method string) {
 	duration := time.Since(startTime).Microseconds()
 
@@ -102,6 +103,7 @@ func (c *Client) sendOperationStats(ql *QueryLog, startTime time.Time, method st
 		"bucket", c.config.Bucket, "type", method)
 }
 
+// Connect establishes a connection to the Couchbase cluster.
 func (c *Client) Connect() {
 	uri, err := c.generateCouchbaseURI()
 	if err != nil {
@@ -134,6 +136,7 @@ func (c *Client) Connect() {
 	c.logger.Logf("connected to Couchbase at %v to bucket %v", c.config.Host, c.config.Bucket)
 }
 
+// generateCouchbaseURI generates the Couchbase connection URI.
 func (c *Client) generateCouchbaseURI() (string, error) {
 	if c.config.URI != "" {
 		return c.config.URI, nil
@@ -146,6 +149,7 @@ func (c *Client) generateCouchbaseURI() (string, error) {
 	return fmt.Sprintf("couchbase://%s", c.config.Host), nil
 }
 
+// establishConnection establishes a connection to the Couchbase cluster.
 func (c *Client) establishConnection(uri string) error {
 	cluster, err := gocb.Connect(uri, gocb.ClusterOptions{
 		Authenticator: gocb.PasswordAuthenticator{
@@ -162,16 +166,19 @@ func (c *Client) establishConnection(uri string) error {
 	return nil
 }
 
+// waitForClusterReady waits for the Couchbase cluster to be ready.
 func (c *Client) waitForClusterReady() error {
 	timeout := c.getTimeout()
 	return c.cluster.WaitUntilReady(timeout, nil)
 }
 
+// waitForBucketReady waits for the Couchbase bucket to be ready.
 func (c *Client) waitForBucketReady() error {
 	timeout := c.getTimeout()
 	return c.bucket.WaitUntilReady(timeout, nil)
 }
 
+// getTimeout returns the connection timeout.
 func (c *Client) getTimeout() time.Duration {
 	if c.config.ConnectionTimeout == 0 {
 		return defaultTimeout
@@ -180,7 +187,7 @@ func (c *Client) getTimeout() time.Duration {
 	return c.config.ConnectionTimeout
 }
 
-// HealthCheck performs a health check on the Couchbase cluster.
+// HealthCheck performs a health check on the Couchbase connection.
 func (c *Client) HealthCheck(_ context.Context) (any, error) {
 	h := Health{
 		Details: make(map[string]any),
@@ -228,6 +235,7 @@ func (c *Client) scope(name string) *Scope {
 	}
 }
 
+// mutationOperation performs a mutation operation on the collection.
 func (c *Collection) mutationOperation(ctx context.Context, opName, key string, document, result any,
 	op func(tracerCtx context.Context) (*gocb.MutationResult, error),
 ) error {
@@ -276,6 +284,7 @@ func (c *Collection) Insert(ctx context.Context, key string, document, result an
 	})
 }
 
+// Remove removes a document from the collection.
 func (c *Collection) Remove(ctx context.Context, key string) error {
 	if c.collection == nil {
 		return errBucketNotInitialized
@@ -298,6 +307,7 @@ func (c *Collection) Remove(ctx context.Context, key string) error {
 	return nil
 }
 
+// executeTracedQuery executes a traced query.
 func (c *Client) executeTracedQuery(
 	ctx context.Context,
 	statement string,
@@ -365,6 +375,7 @@ func (c *Client) AnalyticsQuery(ctx context.Context, statement string, params ma
 	return c.executeTracedQuery(ctx, statement, params, result, "AnalyticsQuery", "Analytics", queryFn)
 }
 
+// executeQuery executes a query and processes the results.
 func executeQuery(queryFn func() (resultProvider, error), queryType string, result any) error {
 	rows, err := queryFn()
 	if err != nil {
@@ -462,6 +473,7 @@ func (c *Client) Close(opts any) error {
 	return nil
 }
 
+// addTrace adds a trace to the context.
 func (c *Client) addTrace(ctx context.Context, method, statement string) (context.Context, trace.Span) {
 	if c.tracer == nil {
 		// Return a no-op span when tracer is not available
@@ -492,17 +504,19 @@ func (c *Client) addTrace(ctx context.Context, method, statement string) (contex
 	return ctx, span
 }
 
-func (c *Client) finishSpan(span trace.Span, err error) {
+// finishSpan finishes a trace span.
+func (*Client) finishSpan(span trace.Span, err error) {
 	if err != nil {
 		span.RecordError(err)
 		span.SetStatus(codes.Error, err.Error())
 	} else {
 		span.SetStatus(codes.Ok, "")
 	}
+
 	span.End()
 }
 
-// Updated Get method with proper tracing
+// Get performs a get operation on the collection.
 func (c *Collection) Get(ctx context.Context, key string, result any) error {
 	if c.collection == nil {
 		return errBucketNotInitialized

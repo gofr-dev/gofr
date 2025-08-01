@@ -20,7 +20,7 @@ type Couchbase interface {
 ```
 
 Users can easily inject a driver that supports this interface, providing usability without compromising the extensibility to use multiple databases.<br>
-Don't forget to serup the Couchbase cluster in Couchbase Web Concole first. [Follow for more details](https://docs.couchbase.com/server/current/install/getting-started-docker.html#section_jvt_zvj_42b).<br>
+Don't forget to serup the Couchbase cluster in Couchbase Web Console first. [Follow for more details](https://docs.couchbase.com/server/current/install/getting-started-docker.html#section_jvt_zvj_42b).<br>
 To begin using Couchbase in your GoFr application, you need to import the Couchbase datasource package:
 
 ```shell
