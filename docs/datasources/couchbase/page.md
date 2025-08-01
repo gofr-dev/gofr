@@ -1,8 +1,7 @@
 ## Couchbase
 
-GoFr provides first-class support for Couchbase, one of the leading NoSQL databases in the industry. This integration allows developers to seamlessly connect their applications with Couchbase and leverage its powerful features for data management.
-
-The Couchbase interface in GoFr is designed to be intuitive and easy to use, abstracting away the complexities of the underlying driver. This allows developers to focus on their application logic without worrying about the boilerplate code for database interactions.
+GoFr supports injecting `Couchbase` that implements the following interface. Any driver that implements the interface can be
+added using the `app.AddCouchbase()` method, and users can use Couchbase across the application with `gofr.Context`.
 
 ```go
 type Couchbase interface {
@@ -20,6 +19,8 @@ type Couchbase interface {
 }
 ```
 
+Users can easily inject a driver that supports this interface, providing usability without compromising the extensibility to use multiple databases.<br>
+Don't forget to serup the Couchbase cluster in Couchbase Web Concole first. [Follow for more details](https://docs.couchbase.com/server/current/install/getting-started-docker.html#section_jvt_zvj_42b).<br>
 To begin using Couchbase in your GoFr application, you need to import the Couchbase datasource package:
 
 ```shell
@@ -63,6 +64,7 @@ func main() {
     // Add the routes
     a.GET("/users/{id}", getUser)
     a.POST("/users", createUser)
+	a.DELETE("/users/{id}", deleteUser)
 
     // Run the application
     a.Run()
@@ -94,5 +96,17 @@ func createUser(c *gofr.Context) (any, error) {
     }
 
     return "user created successfully", nil
+}
+
+func deleteUser(c *gofr.Context) (any, error) {
+	// Get the user ID from the URL path
+	id := c.PathParam("id")
+
+	// Remove the user from Couchbase
+	if err := c.Couchbase.Remove(c, id); err != nil {
+		return nil, err
+	}
+
+	return "user deleted successfully", nil
 }
 ```
