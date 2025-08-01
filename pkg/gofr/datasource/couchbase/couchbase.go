@@ -252,6 +252,7 @@ func (c *Collection) mutationOperation(ctx context.Context, opName, key string, 
 		*r = *mr
 	case **gocb.MutationResult:
 		*r = mr
+	case nil:
 	default:
 		return errWrongResultType
 	}
