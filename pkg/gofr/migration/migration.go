@@ -199,6 +199,12 @@ func initializeDatasources(c *container.Container, ds *Datasource, mg migrator) 
 			apply:         func(m migrator) migrator { return openTSDBDS{c.OpenTSDB, "gofr_migrations.json"}.apply(m) },
 			logIdentifier: "OpenTSDB",
 		},
+		{
+			condition:     func() bool { return !isNil(c.ScyllaDB) },
+			setDS:         func() { ds.ScyllaDB = c.ScyllaDB },
+			apply:         func(m migrator) migrator { return scyllaDS{c.ScyllaDB}.apply(m) },
+			logIdentifier: "ScyllaDB",
+		},
 	}
 
 	for _, init := range initializers {
@@ -211,14 +217,6 @@ func initializeDatasources(c *container.Container, ds *Datasource, mg migrator) 
 		initialized = true
 
 		c.Debugf("initialized data source for %s", init.logIdentifier)
-	}
-
-	if !isNil(c.ScyllaDB) {
-		ds.ScyllaDB = scyllaDS{c.ScyllaDB}
-
-		mg = scyllaDS{c.ScyllaDB}.apply(mg)
-
-		c.Debug("initialized data source for scyllaDB")
 	}
 
 	return mg, initialized
