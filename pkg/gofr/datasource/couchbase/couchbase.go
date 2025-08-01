@@ -5,10 +5,12 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/couchbase/gocb/v2"
 	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/codes"
 	"go.opentelemetry.io/otel/trace"
 )
 
@@ -89,7 +91,7 @@ func (c *Client) UseTracer(tracer any) {
 	}
 }
 
-func (c *Client) sendOperationStats(ql *QueryLog, startTime time.Time, method string, span trace.Span) {
+func (c *Client) sendOperationStats(ql *QueryLog, startTime time.Time, method string) {
 	duration := time.Since(startTime).Microseconds()
 
 	ql.Duration = duration
@@ -98,11 +100,6 @@ func (c *Client) sendOperationStats(ql *QueryLog, startTime time.Time, method st
 
 	c.metrics.RecordHistogram(context.Background(), "app_couchbase_stats", float64(duration), "hostname", c.config.Host,
 		"bucket", c.config.Bucket, "type", method)
-
-	if span != nil {
-		defer span.End()
-		span.SetAttributes(attribute.Int64(fmt.Sprintf("couchbase.%v.duration", method), duration))
-	}
 }
 
 func (c *Client) Connect() {
@@ -239,10 +236,15 @@ func (c *Collection) mutationOperation(ctx context.Context, opName, key string, 
 	}
 
 	tracerCtx, span := c.client.addTrace(ctx, opName, key)
-
-	defer c.client.sendOperationStats(&QueryLog{Query: opName, Key: key, Parameters: document}, time.Now(), opName, span)
+	startTime := time.Now()
 
 	mr, err := op(tracerCtx)
+
+	// Finish span with error status
+	c.client.finishSpan(span, err)
+
+	defer c.client.sendOperationStats(&QueryLog{Query: opName, Key: key, Parameters: document}, startTime, opName)
+
 	if err != nil {
 		return fmt.Errorf("failed to %s document with key %s: %w", opName, key, err)
 	}
@@ -274,42 +276,20 @@ func (c *Collection) Insert(ctx context.Context, key string, document, result an
 	})
 }
 
-// Get performs a get operation on the collection.
-func (c *Collection) Get(ctx context.Context, key string, result any) error {
-	if c.collection == nil {
-		return errBucketNotInitialized
-	}
-
-	tracerCtx, span := c.client.addTrace(ctx, "Get", key)
-
-	res, err := c.collection.Get(key, &gocb.GetOptions{Context: tracerCtx})
-
-	defer c.client.sendOperationStats(&QueryLog{Query: "Get", Key: key}, time.Now(), "Get", span)
-
-	if err != nil {
-		c.client.logger.Errorf("failed to get document with key %s: %w", key, err)
-
-		return fmt.Errorf("failed to get document with key %s: %w", key, err)
-	}
-
-	if err = res.Content(result); err != nil {
-		return fmt.Errorf("failed to unmarshal document content for key %s: %w", key, err)
-	}
-
-	return nil
-}
-
-// Remove performs a remove operation on the collection.
 func (c *Collection) Remove(ctx context.Context, key string) error {
 	if c.collection == nil {
 		return errBucketNotInitialized
 	}
 
 	tracerCtx, span := c.client.addTrace(ctx, "Remove", key)
+	startTime := time.Now()
 
 	_, err := c.collection.Remove(key, &gocb.RemoveOptions{Context: tracerCtx})
 
-	defer c.client.sendOperationStats(&QueryLog{Query: "Remove", Key: key}, time.Now(), "Remove", span)
+	// Finish span with error status
+	c.client.finishSpan(span, err)
+
+	defer c.client.sendOperationStats(&QueryLog{Query: "Remove", Key: key}, startTime, "Remove")
 
 	if err != nil {
 		return fmt.Errorf("failed to remove document with key %s: %w", key, err)
@@ -333,13 +313,22 @@ func (c *Client) executeTracedQuery(
 
 	tracerCtx, span := c.addTrace(ctx, operation, statement)
 
+	// Add query parameters as span attributes if they exist
+	if len(params) > 0 && c.tracer != nil {
+		// Only add a count of parameters to avoid sensitive data leakage
+		span.SetAttributes(attribute.Int("db.couchbase.parameter_count", len(params)))
+	}
+
 	startTime := time.Now()
 
 	err := executeQuery(func() (resultProvider, error) {
 		return queryFn(tracerCtx)
 	}, queryType, result)
 
-	defer c.sendOperationStats(&QueryLog{Query: operation, Statement: statement, Parameters: params}, startTime, operation, span)
+	// Finish span with error status
+	c.finishSpan(span, err)
+
+	defer c.sendOperationStats(&QueryLog{Query: operation, Statement: statement, Parameters: params}, startTime, operation)
 
 	if err != nil {
 		c.logger.Errorf("%s query failed: %v", queryType, err)
@@ -422,6 +411,7 @@ func (c *Client) RunTransaction(ctx context.Context, logic func(any) error) (any
 	}
 
 	_, span := c.addTrace(ctx, "RunTransaction", "transaction")
+	defer span.End()
 
 	startTime := time.Now()
 
@@ -434,7 +424,7 @@ func (c *Client) RunTransaction(ctx context.Context, logic func(any) error) (any
 	// The context is passed down to operations within the transaction lambda.
 	result, err := c.cluster.Transactions().Run(wrappedLogic, nil)
 
-	defer c.sendOperationStats(&QueryLog{Query: "RunTransaction"}, startTime, "RunTransaction", span)
+	defer c.sendOperationStats(&QueryLog{Query: "RunTransaction"}, startTime, "RunTransaction")
 
 	if err != nil {
 		c.logger.Errorf("Transaction failed: %v", err)
@@ -473,15 +463,69 @@ func (c *Client) Close(opts any) error {
 }
 
 func (c *Client) addTrace(ctx context.Context, method, statement string) (context.Context, trace.Span) {
-	if c.tracer != nil {
-		contextWithTrace, span := c.tracer.Start(ctx, fmt.Sprintf("couchbase-%v", method))
-
-		span.SetAttributes(
-			attribute.String("couchbase.statement", statement),
-		)
-
-		return contextWithTrace, span
+	if c.tracer == nil {
+		// Return a no-op span when tracer is not available
+		return ctx, trace.SpanFromContext(ctx)
 	}
 
-	return ctx, nil
+	// Set the span attributes following OpenTelemetry semantic conventions
+	attrs := []attribute.KeyValue{
+		attribute.String("db.system", "couchbase"),
+		attribute.String("db.operation", method),
+		attribute.String("db.name", c.config.Bucket),
+		attribute.String("server.address", c.config.Host),
+	}
+
+	// Add statement/key information based on the operation
+	if statement != "" {
+		if method == "Get" || method == "Insert" || method == "Upsert" || method == "Remove" {
+			attrs = append(attrs, attribute.String("db.couchbase.document_key", statement))
+		} else {
+			attrs = append(attrs, attribute.String("db.statement", statement))
+		}
+	}
+
+	// Create a new span with proper naming
+	spanName := fmt.Sprintf("couchbase.%s", strings.ToLower(method))
+	ctx, span := c.tracer.Start(ctx, spanName, trace.WithAttributes(attrs...))
+
+	return ctx, span
+}
+
+func (c *Client) finishSpan(span trace.Span, err error) {
+	if err != nil {
+		span.RecordError(err)
+		span.SetStatus(codes.Error, err.Error())
+	} else {
+		span.SetStatus(codes.Ok, "")
+	}
+	span.End()
+}
+
+// Updated Get method with proper tracing
+func (c *Collection) Get(ctx context.Context, key string, result any) error {
+	if c.collection == nil {
+		return errBucketNotInitialized
+	}
+
+	tracerCtx, span := c.client.addTrace(ctx, "Get", key)
+	startTime := time.Now()
+
+	res, err := c.collection.Get(key, &gocb.GetOptions{Context: tracerCtx})
+
+	// Finish span with error status
+	c.client.finishSpan(span, err)
+
+	defer c.client.sendOperationStats(&QueryLog{Query: "Get", Key: key}, startTime, "Get")
+
+	if err != nil {
+		c.client.logger.Errorf("failed to get document with key %s: %v", key, err)
+		return fmt.Errorf("failed to get document with key %s: %w", key, err)
+	}
+
+	if err = res.Content(result); err != nil {
+		return fmt.Errorf("failed to unmarshal document content for key %s: %w", key, err)
+	}
+
+	return nil
 }
