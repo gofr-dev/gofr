@@ -69,11 +69,9 @@ func scyllaSetup(t *testing.T) (migrator, *container.MockScyllaDB, *container.Co
 
 	mockContainer.Logger = &NoopLogger{}
 
-	ds := Datasource{ScyllaDB: mockScylla}
-	scylla := scyllaDS{ScyllaDB: mockScylla}
+	ds := Datasource{ScyllaDB: mockContainer.ScyllaDB}
+	scylla := scyllaDS{ScyllaDB: mockContainer.ScyllaDB}
 	migratorWithScylla := scylla.apply(&ds)
-
-	mockContainer.ScyllaDB = mockScylla
 
 	return migratorWithScylla, mockScylla, mockContainer
 }
