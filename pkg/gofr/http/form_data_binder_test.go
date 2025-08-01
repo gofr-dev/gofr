@@ -50,8 +50,8 @@ func Test_setFieldValueFromData(t *testing.T) {
 	t.Run("Unsupported Kind", func(t *testing.T) {
 		var m map[string]string
 		field := reflect.ValueOf(&m).Elem()
-
 		err := setFieldValueFromData(field, map[string]string{"a": "b"})
-		require.NoError(t, err)
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "unsupported type for field")
 	})
 }

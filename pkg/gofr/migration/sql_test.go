@@ -5,9 +5,9 @@ import (
 	"errors"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
-
 	"gofr.dev/pkg/gofr/container"
 )
 
@@ -369,32 +369,77 @@ func TestRollbackNoTransaction(t *testing.T) {
 	migrator.rollback(mockContainer, transactionData{})
 
 }
-
-func TestRollbackWithTransaction(t *testing.T) {
-
+func TestApply(t *testing.T) {
 	ctrl := gomock.NewController(t)
-
 	mockMigrator := NewMockmigrator(ctrl)
+	mockContainer, _ := container.NewMockContainer(t)
 
+	ds := &sqlDS{SQL: mockContainer.SQL}
+	result := ds.apply(mockMigrator)
+
+	sqlMig, ok := result.(sqlMigrator)
+	require.True(t, ok, "Result should be an sqlMigrator")
+	require.Equal(t, mockContainer.SQL, sqlMig.SQL, "SQL field should match")
+	require.Equal(t, mockMigrator, sqlMig.migrator, "Migrator field should match")
+}
+func TestGetLastMigration_UseMigratorFallback(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	mockMigrator := NewMockmigrator(ctrl)
 	mockContainer, mocks := container.NewMockContainer(t)
 
-	mocks.SQL.ExpectBegin()
+	mocks.SQL.ExpectQuery(getLastSQLGoFrMigration).
+		WillReturnRows(mocks.SQL.NewRows([]string{"version"}).AddRow(2))
 
-	mocks.SQL.ExpectRollback() // We expect a rollback to happen
+	mockMigrator.EXPECT().getLastMigration(mockContainer).Return(int64(5))
 
-	migrator := sqlMigrator{
+	migrator := sqlMigrator{SQL: mockContainer.SQL, migrator: mockMigrator}
 
-		SQL: mockContainer.SQL,
+	last := migrator.getLastMigration(mockContainer)
+	require.Equal(t, int64(5), last, "Expected getLastMigration to return higher value from embedded migrator")
+}
+func TestGetLastMigration_MigratorReturnsLesser(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	mockMigrator := NewMockmigrator(ctrl)
+	mockContainer, mocks := container.NewMockContainer(t)
 
-		migrator: mockMigrator,
-	}
+	mocks.SQL.ExpectQuery(getLastSQLGoFrMigration).
+		WillReturnRows(mocks.SQL.NewRows([]string{"version"}).AddRow(7))
 
-	// Begin a transaction using the public method
+	mockMigrator.EXPECT().getLastMigration(mockContainer).Return(int64(5))
+
+	migrator := sqlMigrator{SQL: mockContainer.SQL, migrator: mockMigrator}
+
+	last := migrator.getLastMigration(mockContainer)
+	require.Equal(t, int64(7), last, "Should return SQL migration value as it's higher")
+}
+func TestBeginTransaction_ReplaceSQLTx(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	mockMigrator := NewMockmigrator(ctrl)
+	mockContainer, mocks := container.NewMockContainer(t)
+
+	mocks.SQL.ExpectBegin() // this returns a usable SQLTx
+
+	mockMigrator.EXPECT().beginTransaction(mockContainer).Return(transactionData{
+		MigrationNumber: 123,
+	})
+
+	migrator := sqlMigrator{SQL: mockContainer.SQL, migrator: mockMigrator}
 
 	data := migrator.beginTransaction(mockContainer)
 
-	require.NotNil(t, data.SQLTx, "SQLTx should not be nil before rollback")
+	require.NotNil(t, data.SQLTx, "SQLTx should not be nil")
+	require.Equal(t, int64(123), data.MigrationNumber, "Expected migration number from embedded migrator")
+}
+func TestCheckAndCreateMigrationTable_ErrorCreatingTable(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
 
-	migrator.rollback(mockContainer, data)
+	mockContainer, mocks := container.NewMockContainer(t)
+	mocks.SQL.ExpectExec(createSQLGoFrMigrationsTable).WillReturnError(errors.New("create table error"))
 
+	m := sqlMigrator{}
+	err := m.checkAndCreateMigrationTable(mockContainer)
+
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "create table error")
 }

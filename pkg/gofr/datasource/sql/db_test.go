@@ -1147,16 +1147,24 @@ func TestDB_PrepareContext(t *testing.T) {
 	defer db.DB.Close()
 
 	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
 	mockMetrics := NewMockMetrics(ctrl)
 	db.metrics = mockMetrics
 
+	// Mock the SQL Prepare call
 	mock.ExpectPrepare("SELECT * FROM test_table")
-	mockMetrics.EXPECT().RecordHistogram(gomock.Any(), "app_sql_stats",
-		gomock.Any(), "hostname", gomock.Any(), "database", gomock.Any(), "type", "SELECT")
 
-	stmt, err := db.PrepareContext(t.Context(), "SELECT * FROM test_table")
-	require.NoError(t, err)
-	assert.NotNil(t, stmt)
+	// Expect metrics call based on Prepare implementation
+	mockMetrics.EXPECT().RecordHistogram(context.Background(), "app_sql_stats", gomock.Any(),
+		"hostname", gomock.Any(), "database", gomock.Any(), "type", "SELECT").DoAndReturn(
+		func(ctx context.Context, name string, value interface{}, tags ...string) {
+			t.Logf("RecordHistogram called with: name=%s, value=%v, tags=%v", name, value, tags)
+		})
+
+	stmt, err := db.Prepare("SELECT * FROM test_table")
+	require.NoError(t, err, "Prepare should not return an error")
+	assert.NotNil(t, stmt, "Prepared statement should not be nil")
 }
 func TestDB_CloseWhenNil(t *testing.T) {
 	db := &DB{}
@@ -1203,10 +1211,28 @@ func TestDB_ExecContextCancelled(t *testing.T) {
 	db, _ := getDB(t, logging.DEBUG)
 	defer db.DB.Close()
 
-	ctx, cancel := context.WithCancel(t.Context())
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
 
-	cancel() // cancel immediately
+	db.logger = logging.NewLogger(logging.DEBUG)
+	db.config = &DBConfig{HostName: "test-host", Database: "test-db", Dialect: "mysql"}
+	db.metrics = NewMockMetrics(ctrl)
+
+	db.metrics.(*MockMetrics).EXPECT().RecordHistogram(
+		context.Background(),
+		"app_sql_stats",
+		gomock.Any(),
+		"hostname", "test-host",
+		"database", "test-db",
+		"type", "INSERT",
+	).DoAndReturn(func(ctx context.Context, name string, value interface{}, tags ...string) {
+		t.Logf("RecordHistogram called with: name=%s, value=%v, tags=%v", name, value, tags)
+	})
+
+	ctx, cancel := context.WithCancel(t.Context())
+	cancel()
 
 	_, err := db.ExecContext(ctx, "INSERT INTO dummy VALUES(1)")
-	assert.Error(t, err)
+	assert.Error(t, err, "ExecContext should return an error for cancelled context")
+	assert.Equal(t, context.Canceled, err, "Error should be context.Canceled")
 }

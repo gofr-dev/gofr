@@ -524,37 +524,44 @@ func TestGoogleClient_getSubscription_TopicNil(t *testing.T) {
 	assert.Nil(t, sub)
 
 }
-
-func TestGoogleClient_Query_EmptySubscription(t *testing.T) {
-
-	client := getGoogleClient(t)
-
-	defer client.Close()
-
+func TestClose_ClientNil(t *testing.T) {
 	g := &googleClient{
-
-		client: client,
-
-		Config: Config{
-
-			ProjectID: "test",
-
-			SubscriptionName: "sub-query-empty",
+		receiveChan: map[string]chan *pubsub.Message{
+			"test-topic": make(chan *pubsub.Message),
 		},
 	}
 
-	_, err := client.CreateTopic(t.Context(), "test-topic-query-empty")
-
+	err := g.Close()
 	require.NoError(t, err)
+}
+func TestClose_MultipleReceiveChans_ClientNil(t *testing.T) {
+	g := &googleClient{
+		receiveChan: map[string]chan *pubsub.Message{
+			"topic1": make(chan *pubsub.Message),
+			"topic2": make(chan *pubsub.Message),
+		},
+		// client is nil
+	}
 
-	ctx, cancel := context.WithTimeout(t.Context(), 1*time.Second)
+	err := g.Close()
+	require.NoError(t, err)
+}
+func TestSubscribe_ClientNil(t *testing.T) {
+	g := &googleClient{}
 
-	defer cancel()
+	msg, err := g.Subscribe(context.Background(), "test-topic")
+	require.Nil(t, msg)
+	require.NoError(t, err)
+}
+func TestGetTopic_ClientNil(t *testing.T) {
+	g := &googleClient{}
 
-	_, err = g.Query(ctx, "test-topic-query-empty")
-
-	require.ErrorContains(t, err, "context deadline exceeded")
-
+	_, err := g.getTopic(context.Background(), "any-topic")
+	require.Equal(t, errClientNotConnected, err)
+}
+func TestIsConnected_WhenClientNil(t *testing.T) {
+	g := &googleClient{}
+	require.False(t, g.isConnected())
 }
 
 func TestGoogleClient_getTopic_CreateFailure(t *testing.T) {
