@@ -11,8 +11,9 @@ import (
 type Logger interface {
 	Debug(args ...any)
 	Debugf(pattern string, args ...any)
+	Log(args ...any)
 	Logf(pattern string, args ...any)
-	Error(pattern string)
+	Error(args ...any)
 	Errorf(pattern string, args ...any)
 }
 
