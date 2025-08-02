@@ -189,8 +189,7 @@ func (f *FileSystem) ChDir(_ string) error {
 	return errors.New("changing directory is not supported in GCS")
 }
 func (f *FileSystem) Getwd() (string, error) {
-	// Optional: If you track working directory, return it
-	// For now return root
+
 	const op = "GETWD"
 	st := statusSuccess
 	start := time.Now()
@@ -228,9 +227,7 @@ func (f *FileSystem) Stat(name string) (file.FileInfo, error) {
 	msg = fmt.Sprintf("Directory with path %q info retrieved successfully", name)
 
 	return &GCSFile{
-		// conn: f.conn,
-		name: name,
-		// body:         reader,
+		name:         name,
 		logger:       f.logger,
 		metrics:      f.metrics,
 		size:         attr.Size,

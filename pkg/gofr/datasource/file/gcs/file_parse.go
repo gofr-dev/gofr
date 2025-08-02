@@ -135,38 +135,6 @@ func (f *textReader) Scan(i any) error {
 	return errStringNotPointer
 }
 
-// ====== FileInfo interface methods ======
-
-// func (g *GCSFile) Name() string {
-// 	return g.name
-// }
-
-// func (g *GCSFile) Size() int64 {
-// 	return g.size
-// }
-
-// func (g *GCSFile) ModTime() time.Time {
-// 	return g.lastModified
-// }
-
-// // func (g *GCSFile) Mode() os.FileMode {
-// // 	return 0
-// // }
-
-// func (f *GCSFile) Mode() fs.FileMode {
-// 	if f.isDir {
-// 		return fs.ModeDir
-// 	}
-// 	return 0
-// }
-
-// func (g *GCSFile) IsDir() bool {
-// 	return strings.HasSuffix(g.name, "/")
-// }
-
-//	func (f *GCSFile) Sys() interface{} {
-//		return nil
-//	}
 func (g *GCSFile) Name() string {
 	return g.name
 }
