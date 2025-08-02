@@ -13,12 +13,12 @@ import (
 	"gofr.dev/pkg/cache/redis"
 )
 
-type Option func() interface{}
+type Option func() any
 
 // WithLogger returns an Option that sets a custom logger for a cache.
 // The provided logger must implement the observability.Logger interface.
 func WithLogger(logger observability.Logger) Option {
-	return func() interface{} {
+	return func() any {
 		return logger
 	}
 }
@@ -33,12 +33,10 @@ func WithLogger(logger observability.Logger) Option {
 //   - opts: Optional configurations, such as a custom logger or metrics collector.
 //
 // Returns a cache.Cache instance or an error if initialization fails.
-func NewInMemoryCache(ctx context.Context, name string, ttl time.Duration, maxItems int, opts ...interface{}) (cache.Cache, error) {
+func NewInMemoryCache(_ context.Context, name string, ttl time.Duration, maxItems int, opts ...any) (cache.Cache, error) {
 	var inMemoryOpts []inmemory.Option
 
-	inMemoryOpts = append(inMemoryOpts, inmemory.WithName(name))
-	inMemoryOpts = append(inMemoryOpts, inmemory.WithTTL(ttl))
-	inMemoryOpts = append(inMemoryOpts, inmemory.WithMaxItems(maxItems))
+	inMemoryOpts = append(inMemoryOpts, inmemory.WithName(name), inmemory.WithTTL(ttl), inmemory.WithMaxItems(maxItems))
 
 	for _, opt := range opts {
 		switch v := opt.(type) {
@@ -65,11 +63,10 @@ func NewInMemoryCache(ctx context.Context, name string, ttl time.Duration, maxIt
 //   - opts: Optional configurations, such as a custom logger, metrics collector, or Redis connection details (address, password, DB).
 //
 // Returns a cache.Cache instance or an error if the connection to Redis fails.
-func NewRedisCache(ctx context.Context, name string, ttl time.Duration, opts ...interface{}) (cache.Cache, error) {
+func NewRedisCache(ctx context.Context, name string, ttl time.Duration, opts ...any) (cache.Cache, error) {
 	var redisOpts []redis.Option
 
-	redisOpts = append(redisOpts, redis.WithName(name))
-	redisOpts = append(redisOpts, redis.WithTTL(ttl))
+	redisOpts = append(redisOpts, redis.WithName(name), redis.WithTTL(ttl))
 
 	for _, opt := range opts {
 		switch v := opt.(type) {
@@ -101,7 +98,7 @@ func NewRedisCache(ctx context.Context, name string, ttl time.Duration, opts ...
 //   - opts: Optional configurations passed to the underlying cache constructor.
 //
 // Returns a cache.Cache instance or an error if initialization fails.
-func NewCache(ctx context.Context, cacheType string, name string, ttl time.Duration, maxItems int, opts ...interface{}) (cache.Cache, error) {
+func NewCache(ctx context.Context, cacheType, name string, ttl time.Duration, maxItems int, opts ...any) (cache.Cache, error) {
 	switch cacheType {
 	case "redis":
 		return NewRedisCache(ctx, name, ttl, opts...)

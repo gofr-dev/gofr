@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"gofr.dev/pkg/cache/observability"
 )
@@ -21,40 +22,40 @@ func TestWithLogger(t *testing.T) {
 
 func TestNewInMemoryCache(t *testing.T) {
 	tests := []struct {
-		name     string
-		ctx      context.Context
+		name      string
+		ctx       context.Context
 		cacheName string
-		ttl      time.Duration
-		maxItems int
-		opts     []interface{}
-		expErr   bool
+		ttl       time.Duration
+		maxItems  int
+		opts      []any
+		expErr    bool
 	}{
 		{
-			name:     "Successful creation with no options",
-			ctx:      context.Background(),
+			name:      "Successful creation with no options",
+			ctx:       context.Background(),
 			cacheName: "test-inmemory",
-			ttl:      5 * time.Minute,
-			maxItems: 100,
-			opts:     nil,
-			expErr:   false,
+			ttl:       5 * time.Minute,
+			maxItems:  100,
+			opts:      nil,
+			expErr:    false,
 		},
 		{
-			name:     "Successful creation with logger option",
-			ctx:      context.Background(),
+			name:      "Successful creation with logger option",
+			ctx:       context.Background(),
 			cacheName: "test-inmemory-with-logger",
-			ttl:      10 * time.Minute,
-			maxItems: 50,
-			opts:     []interface{}{observability.NewStdLogger()},
-			expErr:   false,
+			ttl:       10 * time.Minute,
+			maxItems:  50,
+			opts:      []any{observability.NewStdLogger()},
+			expErr:    false,
 		},
 		{
-			name:     "Successful creation with metrics option",
-			ctx:      context.Background(),
+			name:      "Successful creation with metrics option",
+			ctx:       context.Background(),
 			cacheName: "test-inmemory-with-metrics",
-			ttl:      10 * time.Minute,
-			maxItems: 50,
-			opts:     []interface{}{observability.NewMetrics("test", "inmemory")},
-			expErr:   false,
+			ttl:       10 * time.Minute,
+			maxItems:  50,
+			opts:      []any{observability.NewMetrics("test", "inmemory")},
+			expErr:    false,
 		},
 	}
 
@@ -65,7 +66,7 @@ func TestNewInMemoryCache(t *testing.T) {
 			if tt.expErr {
 				assert.Error(t, err, "Expected an error for %v", tt.name)
 			} else {
-				assert.NoError(t, err, "Did not expect an error for %v", tt.name)
+				require.NoError(t, err, "Did not expect an error for %v", tt.name)
 				assert.NotNil(t, c, "Expected a cache instance for %v", tt.name)
 			}
 		})
@@ -74,28 +75,28 @@ func TestNewInMemoryCache(t *testing.T) {
 
 func TestNewRedisCache(t *testing.T) {
 	tests := []struct {
-		name    string
-		ctx     context.Context
+		name      string
+		ctx       context.Context
 		cacheName string
-		ttl     time.Duration
-		opts    []interface{}
-		expErr  bool
+		ttl       time.Duration
+		opts      []any
+		expErr    bool
 	}{
 		{
-			name:    "Initialization without options",
-			ctx:     context.Background(),
+			name:      "Initialization without options",
+			ctx:       context.Background(),
 			cacheName: "test-redis",
-			ttl:     5 * time.Minute,
-			opts:    nil,
-			expErr:  false,
+			ttl:       5 * time.Minute,
+			opts:      nil,
+			expErr:    false,
 		},
 		{
-			name:    "Initialization with address",
-			ctx:     context.Background(),
+			name:      "Initialization with address",
+			ctx:       context.Background(),
 			cacheName: "test-redis-with-addr",
-			ttl:     10 * time.Minute,
-			opts:    []interface{}{"localhost:6379"},
-			expErr:  false,
+			ttl:       10 * time.Minute,
+			opts:      []any{"localhost:6379"},
+			expErr:    false,
 		},
 	}
 
@@ -106,7 +107,7 @@ func TestNewRedisCache(t *testing.T) {
 			if tt.expErr {
 				assert.Error(t, err, "Expected an error for %v", tt.name)
 			} else {
-				assert.NoError(t, err, "Did not expect an error for %v", tt.name)
+				require.NoError(t, err, "Did not expect an error for %v", tt.name)
 				assert.NotNil(t, c, "Expected a cache instance for %v", tt.name)
 			}
 		})
@@ -148,7 +149,7 @@ func TestNewCache(t *testing.T) {
 			if tt.expErr {
 				assert.Error(t, err, "Expected an error for %v", tt.name)
 			} else {
-				assert.NoError(t, err, "Did not expect an error for %v", tt.name)
+				require.NoError(t, err, "Did not expect an error for %v", tt.name)
 				assert.NotNil(t, c, "Expected a cache instance for %v", tt.name)
 			}
 		})
