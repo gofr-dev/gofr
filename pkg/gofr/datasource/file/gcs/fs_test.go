@@ -2,11 +2,14 @@ package gcs
 
 import (
 	"errors"
+	"fmt"
 	"testing"
+	"time"
 
 	"cloud.google.com/go/storage"
 	"github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/require"
+	"gotest.tools/v3/assert"
 )
 
 func Test_CreateFile(t *testing.T) {
@@ -212,103 +215,138 @@ func TestRenameFile(t *testing.T) {
 	}
 }
 
-// func Test_OpenFile_GCS(t *testing.T) {
-// 	ctrl := gomock.NewController(t)
-// 	defer ctrl.Finish()
+func Test_StatFile_GCS(t *testing.T) {
+	tm := time.Now()
 
-// 	mockGCS := NewMockgcsClient(ctrl)
-// 	mockLogger := NewMockLogger(ctrl)
-// 	mockMetrics := NewMockMetrics(ctrl)
+	type result struct {
+		name  string
+		size  int64
+		isDir bool
+	}
 
-// 	config := &Config{
-// 		BucketName:      "test-bucket",
-// 		CredentialsJSON: "fake-creds",
-// 		ProjectID:       "test-project",
-// 	}
+	tests := []struct {
+		name        string
+		filePath    string
+		mockAttr    *storage.ObjectAttrs
+		mockError   error
+		expected    result
+		expectError bool
+	}{
+		{
+			name:     "Valid file stat",
+			filePath: "abc/efg/file.txt",
+			mockAttr: &storage.ObjectAttrs{
+				Name:        "abc/efg/file.txt",
+				Size:        123,
+				Updated:     tm,
+				ContentType: "text/plain",
+			},
+			expected: result{
+				name:  "abc/efg/file.txt",
+				size:  123,
+				isDir: false,
+			},
+		},
+		{
+			name:        "File not found",
+			filePath:    "notfound.txt",
+			mockAttr:    nil,
+			mockError:   fmt.Errorf("object not found"),
+			expectError: true,
+		},
+	}
 
-// 	fs := &FileSystem{
-// 		conn:    mockGCS,
-// 		logger:  mockLogger,
-// 		config:  config,
-// 		metrics: mockMetrics,
-// 	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+			defer ctrl.Finish()
 
-// 	expectedContent := "Hello, GCS!"
+			mockGCS := NewMockgcsClient(ctrl)
+			mockLogger := NewMockLogger(ctrl)
+			mockMetrics := NewMockMetrics(ctrl)
 
-// 	// 👇 Create a mocked reader that returns your expected content
-// 	mockReader := &storage.Reader{
-// 		reader: io.NopCloser(strings.NewReader("dummy data")), // or fakeReader
-// 	}
+			config := &Config{BucketName: "test-bucket"}
 
-// 	// Set up expectations
-// 	mockLogger.EXPECT().Logf(gomock.Any(), gomock.Any()).AnyTimes()
-// 	mockLogger.EXPECT().Debug(gomock.Any(), gomock.Any()).AnyTimes()
-// 	mockLogger.EXPECT().Errorf(gomock.Any(), gomock.Any()).AnyTimes()
+			fs := &FileSystem{
+				conn:    mockGCS,
+				config:  config,
+				logger:  mockLogger,
+				metrics: mockMetrics,
+			}
 
-// 	mockGCS.EXPECT().
-// 		NewReader(gomock.Any(), "abc/a1.txt").
-// 		Return(mockReader, nil)
+			mockLogger.EXPECT().Logf(gomock.Any(), gomock.Any()).AnyTimes()
+			mockLogger.EXPECT().Debug(gomock.Any()).AnyTimes()
+			mockLogger.EXPECT().Errorf(gomock.Any(), gomock.Any()).AnyTimes()
 
-// 	mockGCS.EXPECT().
-// 		StatObject(gomock.Any(), "abc/a1.txt").
-// 		Return(&storage.ObjectAttrs{}, nil)
+			mockGCS.EXPECT().StatObject(gomock.Any(), tt.filePath).Return(tt.mockAttr, tt.mockError)
 
-// 	// Act
-// 	file, err := fs.OpenFile("abc/a1.txt", 0, os.ModePerm)
-// 	require.NoError(t, err, "Failed to open file")
+			res, err := fs.Stat(tt.filePath)
+			if tt.expectError {
+				require.Error(t, err)
+				return
+			}
 
-// 	content := make([]byte, 200)
-// 	n, err := file.Read(content)
-// 	require.NoError(t, err, "Failed to read file content")
+			require.NoError(t, err)
+			actual := result{
+				name:  res.Name(),
+				size:  res.Size(),
+				isDir: res.IsDir(),
+			}
 
-// 	require.Equal(t, expectedContent, string(content[:n]), "File content does not match")
-// }
+			assert.Equal(t, tt.expected, actual)
+		})
+	}
+}
+func Test_Stat_FileAndDir(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
 
-// func Test_OpenFile_GCS(t *testing.T) {
-// 	ctrl := gomock.NewController(t)
-// 	defer ctrl.Finish()
+	mockGCS := NewMockgcsClient(ctrl)
+	mockLogger := NewMockLogger(ctrl)
+	mockMetrics := NewMockMetrics(ctrl)
 
-// 	mockGCS := NewMockgcsClient(ctrl)
-// 	mockLogger := NewMockLogger(ctrl)
-// 	mockMetrics := NewMockMetrics(ctrl)
+	fs := &FileSystem{
+		conn:    mockGCS,
+		logger:  mockLogger,
+		metrics: mockMetrics,
+		config: &Config{
+			BucketName: "test-bucket",
+		},
+	}
 
-// 	config := &Config{
-// 		BucketName:      "test-bucket",
-// 		CredentialsJSON: "fake-creds",
-// 		ProjectID:       "test-project",
-// 	}
+	mockLogger.EXPECT().Logf(gomock.Any(), gomock.Any()).AnyTimes()
+	mockLogger.EXPECT().Debug(gomock.Any()).AnyTimes()
+	mockLogger.EXPECT().Errorf(gomock.Any(), gomock.Any()).AnyTimes()
 
-// 	fs := &FileSystem{
-// 		conn:    mockGCS,
-// 		logger:  mockLogger,
-// 		config:  config,
-// 		metrics: mockMetrics,
-// 	}
+	fileName := "documents/testfile.txt"
+	fileAttrs := &storage.ObjectAttrs{
+		Name:        fileName,
+		Size:        1024,
+		ContentType: "text/plain",
+		Updated:     time.Now(),
+	}
+	mockGCS.EXPECT().StatObject(gomock.Any(), fileName).Return(fileAttrs, nil)
 
-// 	expectedContent := "Hello, GCS!"
-// 	mockReader := ioutil.NopCloser(strings.NewReader(expectedContent))
+	info, err := fs.Stat(fileName)
+	assert.NilError(t, err)
+	assert.Equal(t, fileName, info.Name())
+	assert.Equal(t, int64(1024), info.Size())
+	assert.Check(t, !info.IsDir())
 
-// 	// Expect logger calls (optional but commonly included)
-// 	mockLogger.EXPECT().Logf(gomock.Any(), gomock.Any()).AnyTimes()
-// 	mockLogger.EXPECT().Debug(gomock.Any(), gomock.Any()).AnyTimes()
-// 	mockLogger.EXPECT().Errorf(gomock.Any(), gomock.Any()).AnyTimes()
+	dirName := "documents/folder/"
+	dirAttrs := &storage.ObjectAttrs{
+		Name:        dirName,
+		Size:        0,
+		ContentType: "application/x-directory",
+		Updated:     time.Now(),
+	}
 
-// 	// Set up mock for GCS client
-// 	mockGCS.EXPECT().
-// 		NewReader(gomock.Any(), "abc/a1.txt").
-// 		Return(mockReader, nil)
+	mockGCS.EXPECT().StatObject(gomock.Any(), dirName).Return(dirAttrs, nil)
 
-// 	mockGCS.EXPECT().
-// 		StatObject(gomock.Any(), "abc/a1.txt").
-// 		Return(&storage.ObjectAttrs{}, nil)
+	info, err = fs.Stat(dirName)
 
-// 	// Act
-// 	file, err := fs.OpenFile("abc/a1.txt", 0, os.ModePerm)
-// 	require.NoError(t, err, "Failed to open file")
-
-// 	content := make([]byte, 200)
-// 	n, err := file.Read(content)
-// 	require.NoError(t, err, "Failed to read file content")
-
-// 	require.Equal(t, expectedContent, string(content[:n]), "File content does not match")
-// }
+	assert.NilError(t, err)
+	assert.Equal(t, dirName, info.Name())
+	assert.Equal(t, int64(0), info.Size())
+	assert.Check(t, info.IsDir())
+}
