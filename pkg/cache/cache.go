@@ -6,12 +6,12 @@ type Cache interface {
 	// Get retrieves the value associated with the given key.
 	// It returns the value, a boolean indicating if the key was found, and an error if any occurred.
 	// If the key is not found, it returns nil, false, nil.
-	Get(ctx context.Context, key string) (interface{}, bool, error)
+	Get(ctx context.Context, key string) (any, bool, error)
 
 	// Set stores a key-value pair in the cache.
 	// If the key already exists, its value is overwritten.
 	// It may also set a time-to-live (TTL) for the entry, depending on the implementation.
-	Set(ctx context.Context, key string, value interface{}) error
+	Set(ctx context.Context, key string, value any) error
 
 	// Delete removes the key-value pair associated with the given key from the cache.
 	// If the key does not exist, it does nothing and returns nil.
