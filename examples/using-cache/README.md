@@ -1,19 +1,10 @@
-# Gofr Cache Example: In-Memory & Redis Cache with Observability
+# Gofr Cache Example: In-Memory & Redis
 
 ## Overview
 
-This example demonstrates a **observable, and extensible cache layer** using the Gofr framework. It supports both **in-memory** and **Redis** backends, exposes rich **Prometheus metrics**, and provides **Grafana dashboards**. The setup is fully containerized for local development and observability.
+This example provides a hands-on demonstration of Gofr's cache layer. It showcases how to instantiate, configure, and use both **in-memory** and **Redis-backed** caches. The cache is designed with a unified interface, making it easy to swap between different backend implementations.
 
----
-
-## Features
-
-- **Unified Cache Interface**: Swap between in-memory and Redis with a single config change.
-- **Pluggable Observability**: Prometheus metrics for hits, misses, sets, deletes, evictions, and latency.
-- **Flexible Configuration**: TTL, max items, custom logger, and metrics.
-- **Production-Ready**: LRU eviction, background cleanup, error handling, and graceful shutdown.
-- **Dockerized Monitoring**: Simple setup for Prometheus and Grafana with pre-provisioned dashboards.
-- **Extensible**: Add new cache backends or observability hooks with minimal effort.
+The example is also fully observable, exposing a rich set of Prometheus metrics for cache performance monitoring. A pre-configured monitoring stack is provided to visualize these metrics with Grafana.
 
 ---
 
@@ -21,58 +12,80 @@ This example demonstrates a **observable, and extensible cache layer** using the
 
 ```
 using-cache/
-├── Dockerfile                # Grafana container
-├── docker-compose.yml        # Orchestrates Prometheus & Grafana
-├── grafana-dashboard.json    # Example dashboard
-├── main.go                   # Example Go application using the cache
-├── prometheus.yml            # Prometheus scrape config
-├── provisioning/
-│   ├── dashboards/
-│   │   ├── cache-metrics.json   # Grafana dashboard
-│   │   └── dashboard.yaml       # Grafana dashboard provisioning
-│   └── datasources/
-│       └── prometheus.yaml      # Grafana datasource provisioning
+├── main.go          # Example Go application using the cache
+├── monitoring.sh    # Script to launch the monitoring stack
+└── README.md        # This file
 ```
 
 ---
 
-## Quick Start
+## Getting Started
 
-### 1. Run Everything with Docker Compose
+### 1. Run the Go Example
 
-```sh
-docker-compose up --build
-```
-- **Grafana**: [http://localhost:3000](http://localhost:3000) (user: `admin`, pass: `admin`)
-- **Prometheus**: [http://localhost:9090](http://localhost:9090)
-- **App Metrics**: [http://localhost:8080/metrics](http://localhost:8080/metrics)
-
-> **Note:** The Go app must be running locally for Prometheus to scrape metrics. See [main.go](./main.go).
-
-### 2. Run the Go Example
+First, run the sample application. It will start an HTTP server to expose Prometheus metrics on port `8080`.
 
 ```sh
 go run main.go
 ```
 
----
+You should see output indicating that the metrics server is running. The application will continuously perform cache operations in the background to generate metrics.
 
-## Usage: Go Cache API
+### 2. Launch the Monitoring Stack
 
-### Unified Cache Interface
+To visualize the cache metrics, open a new terminal and run the `monitoring.sh` script. This will start Prometheus and Grafana in Docker containers.
 
-All caches implement:
-
-```go
-Get(ctx, key) (value, found, error)
-Set(ctx, key, value) error
-Delete(ctx, key) error
-Exists(ctx, key) (bool, error)
-Clear(ctx) error
-Close(ctx) error
+```sh
+./monitoring.sh
 ```
 
-### Example: In-Memory Cache
+This script is a convenience wrapper that navigates to the centralized monitoring setup located in `pkg/cache/monitoring` and starts the Docker Compose stack.
+
+Once the script completes, you can access the following:
+
+- **Application Metrics**: [http://localhost:8080/metrics](http://localhost:8080/metrics)
+- **Grafana Dashboard**: [http://localhost:3000](http://localhost:3000) (user: `admin`, pass: `admin`)
+- **Prometheus UI**: [http://localhost:9090](http://localhost:9090)
+
+---
+
+## The `cache.Cache` Interface
+
+All cache implementations in Gofr adhere to the `cache.Cache` interface, ensuring consistent and predictable behavior regardless of the backend. This interface is defined in `pkg/cache/cache.go`.
+
+```go
+type Cache interface {
+    Get(ctx context.Context, key string) (interface{}, bool, error)
+    Set(ctx context.Context, key string, value interface{}) error
+    Delete(ctx context.Context, key string) error
+    Exists(ctx context.Context, key string) (bool, error)
+    Clear(ctx context.Context) error
+    Close(ctx context.Context) error
+}
+```
+
+- **`Get(key)`**: Retrieves an item. Returns the value, a boolean indicating if the item was found, and an error.
+- **`Set(key, value)`**: Stores an item. This will overwrite an existing item with the same key.
+- **`Delete(key)`**: Removes an item.
+- **`Exists(key)`**: Checks for an item's existence without retrieving it.
+- **`Clear()`**: Removes all items from the cache.
+- **`Close()`**: Releases any resources held by the cache.
+
+---
+
+## Implementation & Usage
+
+The `main.go` file demonstrates how to use the cache `factory` to create cache instances.
+
+### Cache Factory
+
+The `gofr.dev/pkg/cache/factory` package provides a convenient way to create different types of caches.
+
+- **`NewInMemoryCache(...)`**: Creates an in-memory cache.
+- **`NewRedisCache(...)`**: Creates a Redis-backed cache.
+- **`NewCache(...)`**: A generic factory that creates a cache based on a type string (`"inmemory"` or `"redis"`).
+
+### Example: Creating an In-Memory Cache
 
 ```go
 import (
@@ -82,148 +95,79 @@ import (
     "gofr.dev/pkg/cache/observability"
 )
 
-ctx := context.Background()
-
+// 1. Create a metrics collector
 metrics := observability.NewMetrics("gofr", "cache")
 
+// 2. Create a logger
+logger := observability.NewStdLogger()
+
+// 3. Create the cache instance using the factory
 c, err := factory.NewInMemoryCache(ctx, 
-    "default", 
-    5*time.Minute, 
-    1000, 
-    factory.WithLogger(observability.NewStdLogger()), 
-    metrics
+    "my-inmemory-cache", // A unique name for the cache
+    5*time.Minute,       // Default time-to-live for items
+    1000,                // Maximum number of items (for LRU eviction)
+    factory.WithLogger(logger), 
+    metrics,
 )
-
-if err != nil { panic(err) }
-
-c.Set(ctx, "alpha", 42)
-v, found, _ := c.Get(ctx, "alpha")
-c.Delete(ctx, "alpha")
 ```
 
-### Example: Redis Cache
+### Example: Creating a Redis Cache
 
 ```go
 c, err := factory.NewRedisCache(ctx, 
-    "default", 
-    5*time.Minute, 
-    factory.WithLogger(observability.NewStdLogger()), 
-    metrics
-)
-```
-
-### Dynamic Cache Selection
-
-```go
-cacheType := "inmemory" // or "redis"
-c, err := factory.NewCache(ctx, 
-    cacheType, 
-    "default", 
-    5*time.Minute, 
-    1000, 
-    factory.WithLogger(observability.NewStdLogger()), 
-    metrics
+    "my-redis-cache",
+    10*time.Minute,
+    factory.WithLogger(logger),
+    metrics,
+    // You can also provide Redis-specific options
+    // "localhost:6379", // Address
+    // "password",       // Password
+    // 0,                // DB number
 )
 ```
 
 ---
 
-## Configuration Options
+## Configuration & Options
 
-### In-Memory Cache
-- **name**: Logical name for metrics/logging
-- **ttl**: Default time-to-live for entries
-- **maxItems**: Max items before LRU eviction (0 = unlimited)
-- **logger**: Custom logger (optional)
-- **metrics**: Prometheus metrics (optional)
+Both cache types can be configured using functional options.
 
-### Redis Cache
-- **name**: Logical name for metrics/logging
-- **ttl**: Default time-to-live for entries
-- **address**: Redis server address (default: `localhost:6379`)
-- **password**: Redis password (optional)
-- **db**: Redis DB number (optional)
-- **logger**: Custom logger (optional)
-- **metrics**: Prometheus metrics (optional)
+### In-Memory Cache Options
 
----
+- **`WithName(string)`**: A logical name for the cache, used in logs and metrics.
+- **`WithTTL(time.Duration)`**: The default time-to-live for cache entries.
+- **`WithMaxItems(int)`**: The maximum number of items before LRU eviction is triggered. `0` means no limit.
+- **`WithLogger(observability.Logger)`**: A custom logger.
+- **`WithMetrics(*observability.Metrics)`**: A metrics collector.
 
-## Observability & Metrics
+### Redis Cache Options
 
-### Exposed Metrics
-
-- `gofr_cache_hits_total` / `gofr_inmemory_cache_hits_total`
-- `gofr_cache_misses_total` / `gofr_inmemory_cache_misses_total`
-- `gofr_cache_sets_total` / `gofr_inmemory_cache_sets_total`
-- `gofr_cache_deletes_total` / `gofr_inmemory_cache_deletes_total`
-- `gofr_inmemory_cache_evictions_total`
-- `gofr_inmemory_cache_items_current`
-- `gofr_cache_operation_latency_seconds`
-
-All metrics are labeled by `cache_name`.
-
-### Prometheus Setup
-
-`prometheus.yml`:
-```yaml
-global:
-  scrape_interval: 5s
-scrape_configs:
-  - job_name: 'gofr-cache'
-    static_configs:
-      - targets: ['host.docker.internal:8080']
-```
-
-### Grafana Provisioning
-
-- **Datasource**: `provisioning/datasources/prometheus.yaml`
-- **Dashboards**: `provisioning/dashboards/cache-metrics.json`, `dashboard.yaml`
+- **`WithName(string)`**: A logical name for the cache.
+- **`WithTTL(time.Duration)`**: The default time-to-live for entries.
+- **`WithAddr(string)`**: The Redis server address (e.g., `"localhost:6379"`).
+- **`WithPassword(string)`**: The Redis server password.
+- **`WithDB(int)`**: The Redis database number.
+- **`WithLogger(observability.Logger)`**: A custom logger.
+- **`WithMetrics(*observability.Metrics)`**: A metrics collector.
 
 ---
 
-## Docker & Monitoring Stack
-
-### docker-compose.yml
-
-- **Prometheus**: Scrapes Go app metrics
-- **Grafana**: Pre-provisioned with Prometheus datasource and cache dashboard
-
-### Dockerfile (Grafana)
-
-```Dockerfile
-FROM grafana/grafana:latest
-EXPOSE 3000
-# COPY provisioning /etc/grafana/provisioning
-CMD ["/run.sh"]
-```
-
----
-
-## Advanced: Extending & Troubleshooting
-
-### Adding a New Cache Backend
-- Implement the `cache.Cache` interface
-- Add a factory method in `pkg/cache/factory`
-- Register metrics/logging as needed
-
-### Customizing Metrics
-- Use `observability.NewMetrics(namespace, subsystem)`
-- Add custom labels or buckets if needed
+## Observability: Logging & Metrics
 
 ### Logging
-- Use `observability.NewStdLogger()` or implement your own logger
 
-### Common Issues
-- **Prometheus can't scrape metrics**: Ensure Go app is running and accessible at `localhost:8080`
-- **Grafana dashboard empty**: Check Prometheus datasource config and scrape targets
-- **Redis connection errors**: Check address, password, and network
+The cache components produce structured, colored logs for better readability. You can provide your own logger implementation that satisfies the `observability.Logger` interface, or use the provided `NewStdLogger()` or `NewNopLogger()` (to disable logging).
 
----
+### Metrics
 
-## References
-- [main.go](./main.go): Example usage
-- [pkg/cache/factory](../../pkg/cache/factory): Factory methods
-- [pkg/cache/inmemory](../../pkg/cache/inmemory): In-memory implementation
-- [pkg/cache/redis](../../pkg/cache/redis): Redis implementation
-- [pkg/cache/observability](../../pkg/cache/observability): Metrics & logging
+The cache exposes a comprehensive set of Prometheus metrics:
 
+- **`gofr_cache_hits_total`**: Total cache hits.
+- **`gofr_cache_misses_total`**: Total cache misses.
+- **`gofr_cache_sets_total`**: Total set operations.
+- **`gofr_cache_deletes_total`**: Total delete operations.
+- **`gofr_inmemory_cache_evictions_total`**: (In-memory only) Total evictions due to capacity limits.
+- **`gofr_inmemory_cache_items_current`**: (In-memory only) Current number of items.
+- **`gofr_cache_operation_latency_seconds`**: Latency histogram for cache operations.
+
+All metrics are labeled with `cache_name` to distinguish between different cache instances.
