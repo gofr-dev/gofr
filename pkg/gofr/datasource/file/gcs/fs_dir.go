@@ -10,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	"cloud.google.com/go/storage"
 	file "gofr.dev/pkg/gofr/datasource/file"
 	"google.golang.org/api/googleapi"
 )
@@ -50,7 +51,7 @@ func (f *FileSystem) Mkdir(name string, _ os.FileMode) error {
 	writer := f.conn.NewWriter(ctx, objName)
 	defer writer.Close()
 
-	_, err := writer.Write([]byte("dir")) // minimal content
+	_, err := writer.Write([]byte("dir"))
 	if err != nil {
 		if err != nil {
 			msg = fmt.Sprintf("failed to create directory %q on GCS: %v", objName, err)
@@ -67,7 +68,7 @@ func (f *FileSystem) Mkdir(name string, _ os.FileMode) error {
 func (f *FileSystem) MkdirAll(path string, perm os.FileMode) error {
 	cleaned := strings.Trim(path, "/")
 	if cleaned == "" {
-		return nil // root directory
+		return nil
 	}
 
 	dirs := strings.Split(cleaned, "/")
@@ -89,7 +90,7 @@ func pathJoin(parts ...string) string {
 func isAlreadyExistsError(err error) bool {
 	// If using Google Cloud Storage SDK
 	if gErr, ok := err.(*googleapi.Error); ok {
-		return gErr.Code == 409 || gErr.Code == 412 // Conflict or Precondition Failed
+		return gErr.Code == 409 || gErr.Code == 412
 	}
 	// Fallback check
 	return strings.Contains(err.Error(), "already exists")
@@ -205,7 +206,6 @@ func (f *FileSystem) Getwd() (string, error) {
 }
 func (f *FileSystem) Stat(name string) (file.FileInfo, error) {
 	var msg string
-
 	st := statusErr
 
 	defer f.sendOperationStats(&FileLog{
@@ -217,23 +217,54 @@ func (f *FileSystem) Stat(name string) (file.FileInfo, error) {
 
 	ctx := context.TODO()
 
+	// Try to stat the object (file)
 	attr, err := f.conn.StatObject(ctx, name)
-	if err != nil {
-		f.logger.Errorf("Error returning file info: %v", err)
-		return nil, err
+	if err == nil {
+		st = statusSuccess
+		msg = fmt.Sprintf("File with path %q info retrieved successfully", name)
+
+		return &GCSFile{
+			name:         name,
+			logger:       f.logger,
+			metrics:      f.metrics,
+			size:         attr.Size,
+			contentType:  attr.ContentType,
+			lastModified: attr.Updated,
+		}, nil
 	}
 
-	st = statusSuccess
-	msg = fmt.Sprintf("Directory with path %q info retrieved successfully", name)
+	// If not found, check if it's a "directory" by listing with prefix
+	if errors.Is(err, storage.ErrObjectNotExist) {
+		// Ensure the name ends with slash for directories
+		prefix := name
+		if !strings.HasSuffix(prefix, "/") {
+			prefix += "/"
+		}
 
-	return &GCSFile{
-		name:         name,
-		logger:       f.logger,
-		metrics:      f.metrics,
-		size:         attr.Size,
-		contentType:  attr.ContentType,
-		lastModified: attr.Updated,
-	}, nil
+		objs, _, listErr := f.conn.ListDir(ctx, prefix)
+
+		if listErr != nil {
+			f.logger.Errorf("Error checking directory prefix: %v", listErr)
+			return nil, listErr
+		}
+
+		if len(objs) > 0 {
+			st = statusSuccess
+			msg = fmt.Sprintf("Directory with path %q info retrieved successfully", name)
+			return &GCSFile{
+				name:         name,
+				logger:       f.logger,
+				metrics:      f.metrics,
+				size:         0,
+				contentType:  "application/x-directory",
+				lastModified: objs[0].Updated,
+			}, nil
+		}
+
+	}
+
+	f.logger.Errorf("Error returning file or directory info: %v", err)
+	return nil, err
 }
 
 func (f *FileSystem) sendOperationStats(fl *FileLog, startTime time.Time) {

@@ -127,6 +127,7 @@ func (f *textReader) Next() bool {
 
 // Scan scans the next line from the text file into the provided pointer to string.
 func (f *textReader) Scan(i any) error {
+
 	if val, ok := i.(*string); ok {
 		*val = f.scanner.Text()
 		return nil
@@ -136,28 +137,62 @@ func (f *textReader) Scan(i any) error {
 }
 
 func (g *GCSFile) Name() string {
+
+	g.sendOperationStats(&FileLog{
+		Operation: "GET NAME",
+		Location:  g.name,
+	}, time.Now())
+
 	return g.name
 }
 
 func (g *GCSFile) Size() int64 {
+
+	g.sendOperationStats(&FileLog{
+		Operation: "FILE/DIR SIZE",
+		Location:  g.name,
+	}, time.Now())
+
 	return g.size
 }
 
 func (g *GCSFile) ModTime() time.Time {
+
+	g.sendOperationStats(&FileLog{
+		Operation: "LAST MODIFIED",
+		Location:  g.name,
+	}, time.Now())
+
 	return g.lastModified
 }
 
-func (f *GCSFile) Mode() fs.FileMode {
-	if f.isDir {
+func (g *GCSFile) Mode() fs.FileMode {
+	g.sendOperationStats(&FileLog{
+		Operation: "MODE",
+		Location:  g.name,
+	}, time.Now())
+
+	if g.isDir {
 		return fs.ModeDir
 	}
 	return 0
 }
 
 func (g *GCSFile) IsDir() bool {
-	return g.isDir
+
+	g.sendOperationStats(&FileLog{
+		Operation: "IS DIR",
+		Location:  g.name,
+	}, time.Now())
+
+	return g.isDir || g.contentType == "application/x-directory"
 }
 
-func (f *GCSFile) Sys() interface{} {
+func (g *GCSFile) Sys() interface{} {
+
+	g.sendOperationStats(&FileLog{
+		Operation: "SYS",
+		Location:  g.name,
+	}, time.Now())
 	return nil
 }
