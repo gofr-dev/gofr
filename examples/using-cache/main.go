@@ -16,11 +16,11 @@ func main() {
 
 	metrics := observability.NewMetrics("gofr", "cache")
 
-	c, err := factory.NewInMemoryCache(ctx, 
-		"default", 
-		5*time.Minute, 
-		1000, 
-		factory.WithLogger(observability.NewStdLogger()), 
+	c, err := factory.NewInMemoryCache(ctx,
+		"default",
+		5*time.Minute,
+		1000,
+		factory.WithLogger(observability.NewStdLogger()),
 		metrics)
 	if err != nil {
 		panic(fmt.Sprintf("Failed to create cache: %v", err))
@@ -28,10 +28,10 @@ func main() {
 
 	// Alternative: Redis cache with same pattern
 	// to disable logs, use NewNopLogger()
-	// c, err := factory.NewRedisCache(ctx, "default", 5*time.Minute, 
-	// 	factory.WithLogger(observability.NewStdLogger()), 
+	// c, err := factory.NewRedisCache(ctx, "default", 5*time.Minute,
+	// 	factory.WithLogger(observability.NewStdLogger()),
 	// 	metrics)
-	
+
 	// if err != nil {
 	// 	panic(err)
 	// }
@@ -39,7 +39,7 @@ func main() {
 	// Alternative: Dynamic cache type
 	// cacheType := "inmemory" // or "redis"
 	// c, err := factory.NewCache(ctx, cacheType, "default", 5*time.Minute, 1000,
-	// 	factory.WithLogger(observability.NewStdLogger()), 
+	// 	factory.WithLogger(observability.NewStdLogger()),
 	// 	metrics)
 
 	http.Handle("/metrics", promhttp.Handler())
@@ -50,10 +50,10 @@ func main() {
 
 	go func() {
 		for {
-			c.Set(ctx, "alpha", 42)        // triggers sets_total
-			c.Get(ctx, "alpha")            // triggers hits_total
-			c.Get(ctx, "nonexistent")      // triggers misses_total
-			c.Delete(ctx, "alpha")         // triggers deletes_total
+			c.Set(ctx, "alpha", 42)   // triggers sets_total
+			c.Get(ctx, "alpha")       // triggers hits_total
+			c.Get(ctx, "nonexistent") // triggers misses_total
+			c.Delete(ctx, "alpha")    // triggers deletes_total
 			c.Set(ctx, "alpha", 100)
 			time.Sleep(2 * time.Second)
 		}
