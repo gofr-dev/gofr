@@ -21,23 +21,46 @@ type Metrics struct {
 	latency *prometheus.HistogramVec
 }
 
-// metricsRegistry holds the singleton Metrics instances, keyed by namespace and subsystem.
-var (
+type metricsRegistry struct {
 	mtx        sync.Mutex
-	singletons = make(map[string]*Metrics)
-)
+	singletons map[string]*Metrics
+}
+
+// getRegistry returns the singleton metricsRegistry instance.
+// It uses a function-scoped sync.Once and closure to avoid global variables.
+func getRegistry() *metricsRegistry {
+	var (
+		once sync.Once
+		reg  *metricsRegistry
+	)
+
+	get := func() *metricsRegistry {
+		once.Do(func() {
+			reg = &metricsRegistry{
+				singletons: make(map[string]*Metrics),
+			}
+		})
+
+		return reg
+	}
+
+	return get()
+}
 
 // NewMetrics creates or retrieves a singleton Metrics instance for a given namespace and subsystem.
 // This ensures that metrics are registered with Prometheus only once per application lifecycle.
 func NewMetrics(namespace, subsystem string) *Metrics {
 	key := namespace + "/" + subsystem
-	mtx.Lock()
-	defer mtx.Unlock()
-	if m, ok := singletons[key]; ok {
+	reg := getRegistry()
+
+	reg.mtx.Lock()
+	defer reg.mtx.Unlock()
+
+	if m, ok := reg.singletons[key]; ok {
 		return m
 	}
 
-	// Create and register exactly once:
+	// Create and register exactly once.
 	factory := promauto.With(prometheus.DefaultRegisterer)
 	m := &Metrics{
 		hits: factory.NewCounterVec(
@@ -57,7 +80,12 @@ func NewMetrics(namespace, subsystem string) *Metrics {
 			[]string{"cache_name"},
 		),
 		evicts: factory.NewCounterVec(
-			prometheus.CounterOpts{Namespace: namespace, Subsystem: subsystem, Name: "evictions_total", Help: "Total number of items evicted from the cache."},
+			prometheus.CounterOpts{
+				Namespace: namespace,
+				Subsystem: subsystem,
+				Name:      "evictions_total",
+				Help:      "Total number of items evicted from the cache.",
+			},
 			[]string{"cache_name"},
 		),
 		items: factory.NewGaugeVec(
@@ -65,12 +93,19 @@ func NewMetrics(namespace, subsystem string) *Metrics {
 			[]string{"cache_name"},
 		),
 		latency: factory.NewHistogramVec(
-			prometheus.HistogramOpts{Namespace: namespace, Subsystem: subsystem, Name: "operation_latency_seconds", Help: "Latency of cache operations in seconds.", Buckets: prometheus.DefBuckets},
+			prometheus.HistogramOpts{
+				Namespace: namespace,
+				Subsystem: subsystem,
+				Name:      "operation_latency_seconds",
+				Help:      "Latency of cache operations in seconds.",
+				Buckets:   prometheus.DefBuckets,
+			},
 			[]string{"cache_name", "operation"},
 		),
 	}
 
-	singletons[key] = m
+	reg.singletons[key] = m
+
 	return m
 }
 

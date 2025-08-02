@@ -13,7 +13,7 @@ import (
 	"gofr.dev/pkg/cache/observability"
 )
 
-// Common errors
+// Common errors.
 var (
 	// ErrEmptyKey is returned when an operation is attempted with an empty key.
 	ErrEmptyKey = errors.New("key cannot be empty")
@@ -21,6 +21,12 @@ var (
 	ErrNilValue = errors.New("value cannot be nil")
 	// ErrNilClient is returned when the Redis client is not initialized.
 	ErrNilClient = errors.New("redis client is nil")
+	// ErrAddressEmpty is returned when an empty address is provided.
+	ErrAddressEmpty = errors.New("address cannot be empty")
+	// ErrInvalidDatabaseNumber is returned when a database number outside the valid range is provided.
+	ErrInvalidDatabaseNumber = errors.New("database number must be between 0 and 255")
+	// ErrNegativeTTL is returned when a negative TTL is provided.
+	ErrNegativeTTL = errors.New("TTL cannot be negative")
 )
 
 type redisCache struct {
@@ -37,11 +43,13 @@ type Option func(*redisCache) error
 func WithAddr(addr string) Option {
 	return func(c *redisCache) error {
 		if addr == "" {
-			return errors.New("address cannot be empty")
+			return ErrAddressEmpty
 		}
+
 		opts := c.client.Options()
 		opts.Addr = addr
 		c.client = redis.NewClient(opts)
+
 		return nil
 	}
 }
@@ -52,6 +60,7 @@ func WithPassword(password string) Option {
 		opts := c.client.Options()
 		opts.Password = password
 		c.client = redis.NewClient(opts)
+
 		return nil
 	}
 }
@@ -61,11 +70,13 @@ func WithPassword(password string) Option {
 func WithDB(db int) Option {
 	return func(c *redisCache) error {
 		if db < 0 || db > 255 {
-			return errors.New("database number must be between 0 and 255")
+			return ErrInvalidDatabaseNumber
 		}
+
 		opts := c.client.Options()
 		opts.DB = db
 		c.client = redis.NewClient(opts)
+
 		return nil
 	}
 }
@@ -76,9 +87,11 @@ func WithDB(db int) Option {
 func WithTTL(ttl time.Duration) Option {
 	return func(c *redisCache) error {
 		if ttl < 0 {
-			return errors.New("TTL cannot be negative")
+			return ErrNegativeTTL
 		}
+
 		c.ttl = ttl
+
 		return nil
 	}
 }
@@ -90,6 +103,7 @@ func WithName(name string) Option {
 		if name != "" {
 			c.name = name
 		}
+
 		return nil
 	}
 }
@@ -101,6 +115,7 @@ func WithLogger(logger observability.Logger) Option {
 		if logger != nil {
 			c.logger = logger
 		}
+
 		return nil
 	}
 }
@@ -112,6 +127,7 @@ func WithMetrics(m *observability.Metrics) Option {
 		if m != nil {
 			c.metrics = m
 		}
+
 		return nil
 	}
 }
@@ -149,16 +165,17 @@ func NewRedisCache(ctx context.Context, opts ...Option) (cache.Cache, error) {
 	return c, nil
 }
 
-// validateKey ensures key is non-empty
-func (c *redisCache) validateKey(key string) error {
+// validateKey ensures key is non-empty.
+func validateKey(key string) error {
 	if key == "" {
 		return ErrEmptyKey
 	}
+
 	return nil
 }
 
-// serializeValue converts a value to JSON for storage
-func (c *redisCache) serializeValue(value interface{}) (string, error) {
+// serializeValue converts a value to JSON for storage.
+func (*redisCache) serializeValue(value any) (string, error) {
 	// Handle simple types directly to maintain readability in Redis
 	switch v := value.(type) {
 	case string:
@@ -171,6 +188,7 @@ func (c *redisCache) serializeValue(value interface{}) (string, error) {
 		if v {
 			return "true", nil
 		}
+
 		return "false", nil
 	default:
 		// For complex types, use JSON
@@ -178,6 +196,7 @@ func (c *redisCache) serializeValue(value interface{}) (string, error) {
 		if err != nil {
 			return "", fmt.Errorf("failed to serialize value: %w", err)
 		}
+
 		return string(bytes), nil
 	}
 }
@@ -186,12 +205,14 @@ func (c *redisCache) serializeValue(value interface{}) (string, error) {
 // The value is serialized before being stored. Simple types are stored as strings,
 // while complex types are JSON-marshaled.
 // This operation is thread-safe.
-func (c *redisCache) Set(ctx context.Context, key string, value interface{}) error {
+func (c *redisCache) Set(ctx context.Context, key string, value any) error {
 	start := time.Now()
-	if err := c.validateKey(key); err != nil {
+
+	if err := validateKey(key); err != nil {
 		c.logger.Errorf("Set failed: %v", err)
 		return err
 	}
+
 	if value == nil {
 		c.logger.Errorf("Set failed: %v", ErrNilValue)
 		return ErrNilValue
@@ -207,13 +228,16 @@ func (c *redisCache) Set(ctx context.Context, key string, value interface{}) err
 		c.logger.Errorf("Redis Set failed for key '%s': %v", key, err)
 		return err
 	}
+
 	duration := time.Since(start)
-		c.logger.LogRequest("DEBU", "Set new cache key", "SUCCESS", duration, key)
+	c.logger.LogRequest("DEBU", "Set new cache key", "SUCCESS", duration, key)
+
 	if c.metrics != nil {
 		c.metrics.Sets().WithLabelValues(c.name).Inc()
 		c.metrics.Items().WithLabelValues(c.name).Set(float64(c.countKeys(ctx)))
 		c.metrics.Latency().WithLabelValues(c.name, "set").Observe(duration.Seconds())
 	}
+
 	return nil
 }
 
@@ -222,11 +246,12 @@ func (c *redisCache) Set(ctx context.Context, key string, value interface{}) err
 // The caller is responsible for deserializing it if necessary.
 // If the key is not found, it returns nil and false.
 // This operation is thread-safe.
-func (c *redisCache) Get(ctx context.Context, key string) (interface{}, bool, error) {
+func (c *redisCache) Get(ctx context.Context, key string) (value any, found bool, err error) {
 	start := time.Now()
-	if err := c.validateKey(key); err != nil {
-		c.logger.Errorf("Get failed: %v", err)
-		return nil, false, err
+
+	if keyerr := validateKey(key); keyerr != nil {
+		c.logger.Errorf("Get failed: %v", keyerr)
+		return nil, false, keyerr
 	}
 
 	val, err := c.client.Get(ctx, key).Result()
@@ -234,22 +259,28 @@ func (c *redisCache) Get(ctx context.Context, key string) (interface{}, bool, er
 		if errors.Is(err, redis.Nil) {
 			duration := time.Since(start)
 			c.logger.Missf("GET", duration, key)
+
 			if c.metrics != nil {
 				c.metrics.Misses().WithLabelValues(c.name).Inc()
 				c.metrics.Latency().WithLabelValues(c.name, "get").Observe(duration.Seconds())
 			}
+
 			return nil, false, nil // Key does not exist
 		}
+
 		c.logger.Errorf("Redis Get failed for key '%s': %v", key, err)
+
 		return nil, false, err
 	}
 
 	duration := time.Since(start)
 	c.logger.Hitf("GET", duration, key)
+
 	if c.metrics != nil {
 		c.metrics.Hits().WithLabelValues(c.name).Inc()
 		c.metrics.Latency().WithLabelValues(c.name, "get").Observe(duration.Seconds())
 	}
+
 	return val, true, nil
 }
 
@@ -258,22 +289,27 @@ func (c *redisCache) Get(ctx context.Context, key string) (interface{}, bool, er
 // This operation is thread-safe.
 func (c *redisCache) Delete(ctx context.Context, key string) error {
 	start := time.Now()
-	if err := c.validateKey(key); err != nil {
+
+	if err := validateKey(key); err != nil {
 		c.logger.Errorf("Delete failed: %v", err)
 		return err
 	}
 
 	duration := time.Since(start)
+
 	if err := c.client.Del(ctx, key).Err(); err != nil {
 		c.logger.Errorf("Redis Del failed for key '%s': %v", key, err)
 		return err
 	}
-		c.logger.LogRequest("DEBU", "Deleted cache key", "SUCCESS", duration, key)
+
+	c.logger.LogRequest("DEBU", "Deleted cache key", "SUCCESS", duration, key)
+
 	if c.metrics != nil {
 		c.metrics.Deletes().WithLabelValues(c.name).Inc()
 		c.metrics.Items().WithLabelValues(c.name).Set(float64(c.countKeys(ctx)))
 		c.metrics.Latency().WithLabelValues(c.name, "delete").Observe(duration.Seconds())
 	}
+
 	return nil
 }
 
@@ -282,7 +318,8 @@ func (c *redisCache) Delete(ctx context.Context, key string) error {
 // This operation is thread-safe.
 func (c *redisCache) Exists(ctx context.Context, key string) (bool, error) {
 	start := time.Now()
-	if err := c.validateKey(key); err != nil {
+
+	if err := validateKey(key); err != nil {
 		c.logger.Errorf("Exists failed: %v", err)
 		return false, err
 	}
@@ -292,9 +329,11 @@ func (c *redisCache) Exists(ctx context.Context, key string) (bool, error) {
 		c.logger.Errorf("Redis Exists failed for key '%s': %v", key, err)
 		return false, err
 	}
+
 	if c.metrics != nil {
 		c.metrics.Latency().WithLabelValues(c.name, "exists").Observe(time.Since(start).Seconds())
 	}
+
 	return res > 0, nil
 }
 
@@ -303,39 +342,47 @@ func (c *redisCache) Exists(ctx context.Context, key string) (bool, error) {
 // This operation is thread-safe.
 func (c *redisCache) Clear(ctx context.Context) error {
 	start := time.Now()
+
 	if err := c.client.FlushDB(ctx).Err(); err != nil {
 		c.logger.Errorf("Redis FlushDB failed: %v", err)
 		return err
 	}
+
 	duration := time.Since(start)
-		c.logger.LogRequest("WARN", "Cleared all keys", "SUCCESS", duration, c.name)
+	c.logger.LogRequest("WARN", "Cleared all keys", "SUCCESS", duration, c.name)
+
 	if c.metrics != nil {
 		c.metrics.Items().WithLabelValues(c.name).Set(0)
 		c.metrics.Latency().WithLabelValues(c.name, "clear").Observe(duration.Seconds())
 	}
+
 	return nil
 }
 
 // Close closes the connection to the Redis server.
 // It's important to call Close to release network resources.
-func (c *redisCache) Close(ctx context.Context) error {
+func (c *redisCache) Close(_ context.Context) error {
 	if c.client == nil {
 		return ErrNilClient
 	}
+
 	if err := c.client.Close(); err != nil {
 		c.logger.Errorf("Failed to close redis client: %v", err)
 		return err
 	}
+
 	c.logger.Infof("Redis cache '%s' closed", c.name)
+
 	return nil
 }
 
-// countKeys returns the number of keys in the current Redis DB
+// countKeys returns the number of keys in the current Redis DB.
 func (c *redisCache) countKeys(ctx context.Context) int64 {
 	res, err := c.client.DBSize(ctx).Result()
 	if err != nil {
 		c.logger.Errorf("DBSize failed: %v", err)
 		return 0
 	}
+
 	return res
 }
