@@ -235,7 +235,6 @@ func (f *FileSystem) Getwd() (string, error) {
 }
 func (f *FileSystem) Stat(name string) (file.FileInfo, error) {
 	var msg string
-
 	st := statusErr
 
 	defer f.sendOperationStats(&FileLog{
