@@ -10,6 +10,7 @@ use (
 	./pkg/gofr/datasource/dgraph
 	./pkg/gofr/datasource/elasticsearch
 	./pkg/gofr/datasource/file/ftp
+	./pkg/gofr/datasource/file/gcs
 	./pkg/gofr/datasource/file/s3
 	./pkg/gofr/datasource/file/gcs
 	./pkg/gofr/datasource/file/sftp
