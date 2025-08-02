@@ -34,7 +34,7 @@ type FileSystem struct {
 	metrics Metrics
 }
 
-// Config represents the s3 configuration.
+// Config represents the gcs configuration.
 type Config struct {
 	BucketName      string
 	CredentialsJSON string
