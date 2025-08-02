@@ -1142,3 +1142,97 @@ func TestClean(t *testing.T) {
 
 	assert.Empty(t, out)
 }
+func TestDB_PrepareContext(t *testing.T) {
+	db, mock := getDB(t, logging.DEBUG)
+	defer db.DB.Close()
+
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	mockMetrics := NewMockMetrics(ctrl)
+	db.metrics = mockMetrics
+
+	// Mock the SQL Prepare call
+	mock.ExpectPrepare("SELECT * FROM test_table")
+
+	// Expect metrics call based on Prepare implementation
+	mockMetrics.EXPECT().RecordHistogram(t.context(), "app_sql_stats", gomock.Any(),
+		"hostname", gomock.Any(), "database", gomock.Any(), "type", "SELECT").DoAndReturn(
+		func(_ context.Context, name string, value any, tags ...string) {
+			t.Logf("RecordHistogram called with: name=%s, value=%v, tags=%v", name, value, tags)
+		})
+
+	stmt, err := db.Prepare("SELECT * FROM test_table")
+	require.NoError(t, err, "Prepare should not return an error")
+	assert.NotNil(t, stmt, "Prepared statement should not be nil")
+}
+func TestDB_CloseWhenNil(t *testing.T) {
+	db := &DB{}
+	err := db.Close()
+	assert.NoError(t, err)
+}
+func TestDB_BeginTx(t *testing.T) {
+	db, mock := getDB(t, logging.DEBUG)
+	defer db.DB.Close()
+
+	ctrl := gomock.NewController(t)
+	db.metrics = NewMockMetrics(ctrl)
+
+	mock.ExpectBegin()
+
+	tx, err := db.BeginTx(t.Context(), &sql.TxOptions{Isolation: sql.LevelReadCommitted})
+	require.NoError(t, err)
+	assert.NotNil(t, tx)
+}
+func TestDB_PingSuccess(t *testing.T) {
+	db, mock := getDB(t, logging.DEBUG)
+	defer db.DB.Close()
+
+	ctrl := gomock.NewController(t)
+	db.metrics = NewMockMetrics(ctrl)
+
+	mock.ExpectPing()
+	mock.ExpectPing().WillReturnError(nil)
+
+	err := db.Ping()
+	assert.NoError(t, err)
+}
+
+func TestDB_PingFailure(t *testing.T) {
+	db, mock := getDB(t, logging.DEBUG)
+	defer db.DB.Close()
+
+	mock.ExpectPing().WillReturnError(sql.ErrConnDone)
+
+	err := db.Ping()
+	assert.Equal(t, sql.ErrConnDone, err)
+}
+func TestDB_ExecContextCancelled(t *testing.T) {
+	db, _ := getDB(t, logging.DEBUG)
+	defer db.DB.Close()
+
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	db.logger = logging.NewLogger(logging.DEBUG)
+	db.config = &DBConfig{HostName: "test-host", Database: "test-db", Dialect: "mysql"}
+	db.metrics = NewMockMetrics(ctrl)
+
+	db.metrics.(*MockMetrics).EXPECT().RecordHistogram(
+		t.context(),
+		"app_sql_stats",
+		gomock.Any(),
+		"hostname", "test-host",
+		"database", "test-db",
+		"type", "INSERT",
+	).DoAndReturn(func(_ context.Context, name string, value any, tags ...string) {
+		t.Logf("RecordHistogram called with: name=%s, value=%v, tags=%v", name, value, tags)
+	})
+
+	ctx, cancel := context.WithCancel(t.Context())
+	cancel()
+
+	_, err := db.ExecContext(ctx, "INSERT INTO dummy VALUES(1)")
+    require.Error(t, err, "ExecContext should return an error for canceled context")
+	assert.Equal(t, context.Canceled, err, "Error should be context.Canceled")
+}
