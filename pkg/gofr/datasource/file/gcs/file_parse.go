@@ -137,39 +137,44 @@ func (f *textReader) Scan(i any) error {
 }
 
 func (g *GCSFile) Name() string {
+	bucketName := getBucketName(g.name)
 
 	g.sendOperationStats(&FileLog{
 		Operation: "GET NAME",
-		Location:  g.name,
+		Location:  getLocation(bucketName),
 	}, time.Now())
 
 	return g.name
 }
 
 func (g *GCSFile) Size() int64 {
+	bucketName := getBucketName(g.name)
 
 	g.sendOperationStats(&FileLog{
 		Operation: "FILE/DIR SIZE",
-		Location:  g.name,
+		Location:  getLocation(bucketName),
 	}, time.Now())
 
 	return g.size
 }
 
 func (g *GCSFile) ModTime() time.Time {
+	bucketName := getBucketName(g.name)
 
 	g.sendOperationStats(&FileLog{
 		Operation: "LAST MODIFIED",
-		Location:  g.name,
+		Location:  getLocation(bucketName),
 	}, time.Now())
 
 	return g.lastModified
 }
 
 func (g *GCSFile) Mode() fs.FileMode {
+	bucketName := getBucketName(g.name)
+
 	g.sendOperationStats(&FileLog{
 		Operation: "MODE",
-		Location:  g.name,
+		Location:  getLocation(bucketName),
 	}, time.Now())
 
 	if g.isDir {
@@ -179,20 +184,23 @@ func (g *GCSFile) Mode() fs.FileMode {
 }
 
 func (g *GCSFile) IsDir() bool {
+	bucketName := getBucketName(g.name)
 
 	g.sendOperationStats(&FileLog{
 		Operation: "IS DIR",
-		Location:  g.name,
+		Location:  getLocation(bucketName),
 	}, time.Now())
 
 	return g.isDir || g.contentType == "application/x-directory"
 }
 
 func (g *GCSFile) Sys() interface{} {
+	bucketName := getBucketName(g.name)
 
 	g.sendOperationStats(&FileLog{
 		Operation: "SYS",
-		Location:  g.name,
+		Location:  getLocation(bucketName),
 	}, time.Now())
+
 	return nil
 }
