@@ -153,8 +153,10 @@ func (f *FileSystem) ReadDir(dir string) ([]file.FileInfo, error) {
 		trimmedName := strings.TrimSuffix(p, "/")
 		dirName := path.Base(trimmedName)
 		fileinfo = append(fileinfo, &GCSFile{
-			name:  dirName,
-			isDir: true,
+			name:    dirName,
+			isDir:   true,
+			logger:  f.logger,
+			metrics: f.metrics,
 		})
 	}
 
@@ -164,6 +166,8 @@ func (f *FileSystem) ReadDir(dir string) ([]file.FileInfo, error) {
 			size:         o.Size,
 			lastModified: o.Updated,
 			isDir:        false,
+			logger:       f.logger,
+			metrics:      f.metrics,
 		})
 	}
 
