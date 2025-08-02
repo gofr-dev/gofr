@@ -1156,9 +1156,9 @@ func TestDB_PrepareContext(t *testing.T) {
 	mock.ExpectPrepare("SELECT * FROM test_table")
 
 	// Expect metrics call based on Prepare implementation
-	mockMetrics.EXPECT().RecordHistogram(context.Background(), "app_sql_stats", gomock.Any(),
+	mockMetrics.EXPECT().RecordHistogram(t.context(), "app_sql_stats", gomock.Any(),
 		"hostname", gomock.Any(), "database", gomock.Any(), "type", "SELECT").DoAndReturn(
-		func(ctx context.Context, name string, value interface{}, tags ...string) {
+		func(_ context.Context, name string, value any, tags ...string) {
 			t.Logf("RecordHistogram called with: name=%s, value=%v, tags=%v", name, value, tags)
 		})
 
@@ -1219,13 +1219,13 @@ func TestDB_ExecContextCancelled(t *testing.T) {
 	db.metrics = NewMockMetrics(ctrl)
 
 	db.metrics.(*MockMetrics).EXPECT().RecordHistogram(
-		context.Background(),
+		t.context(),
 		"app_sql_stats",
 		gomock.Any(),
 		"hostname", "test-host",
 		"database", "test-db",
 		"type", "INSERT",
-	).DoAndReturn(func(ctx context.Context, name string, value interface{}, tags ...string) {
+	).DoAndReturn(func(_ context.Context, name string, value any, tags ...string) {
 		t.Logf("RecordHistogram called with: name=%s, value=%v, tags=%v", name, value, tags)
 	})
 
@@ -1233,6 +1233,6 @@ func TestDB_ExecContextCancelled(t *testing.T) {
 	cancel()
 
 	_, err := db.ExecContext(ctx, "INSERT INTO dummy VALUES(1)")
-	assert.Error(t, err, "ExecContext should return an error for cancelled context")
+    require.Error(t, err, "ExecContext should return an error for canceled context")
 	assert.Equal(t, context.Canceled, err, "Error should be context.Canceled")
 }

@@ -34,7 +34,6 @@ func Test_setFieldValueFromData(t *testing.T) {
 		err := setFieldValueFromData(field, 3.14)
 		require.NoError(t, err)
 		assert.InEpsilon(t, 3.14, f, 0.001)
-
 	})
 
 	t.Run("Bool Field", func(t *testing.T) {
@@ -44,7 +43,6 @@ func Test_setFieldValueFromData(t *testing.T) {
 		err := setFieldValueFromData(field, true)
 		require.NoError(t, err)
 		assert.True(t, b)
-
 	})
 
 	t.Run("Unsupported Kind", func(t *testing.T) {

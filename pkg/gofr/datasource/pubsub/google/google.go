@@ -233,49 +233,61 @@ func (g *googleClient) Subscribe(ctx context.Context, topic string) (*pubsub.Mes
 		return nil, nil
 	}
 }
+
 func (g *googleClient) Query(ctx context.Context, query string, args ...any) ([]byte, error) {
 	if !g.isConnected() {
 		return nil, errClientNotConnected
 	}
+
 	if query == "" {
 		return nil, errTopicName
 	}
+
 	timeout, limit := parseQueryArgs(args...)
+
+	// Get topic and subscription
 	topic, err := g.getTopic(ctx, query)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get topic: %w", err)
 	}
+
 	subscription, err := g.getQuerySubscription(ctx, topic)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get subscription: %w", err)
 	}
+
 	msgChan := make(chan []byte, messageBufferSize)
 	queryCtx, cancel := context.WithTimeout(ctx, timeout)
+
 	defer cancel()
-	var receiveErr error
+
+	// Start receiving messages
 	go func() {
 		defer close(msgChan)
+
 		receiveCtx, receiveCancel := context.WithTimeout(queryCtx, timeout)
 		defer receiveCancel()
-		receiveErr = subscription.Receive(receiveCtx, func(_ context.Context, msg *gcPubSub.Message) {
+
+		err := subscription.Receive(receiveCtx, func(_ context.Context, msg *gcPubSub.Message) {
 			defer msg.Ack()
+
 			select {
 			case msgChan <- msg.Data:
 			case <-receiveCtx.Done():
 				return
 			default:
+				// Channel might be full, try non-blocking send
 				g.logger.Debugf("Query: message channel full for topic %s", query)
 			}
 		})
-		if receiveErr != nil && !errors.Is(receiveErr, context.Canceled) && !errors.Is(receiveErr, context.DeadlineExceeded) {
-			g.logger.Debugf("Query: receive ended for topic %s: %v", query, receiveErr)
+
+		if err != nil && !errors.Is(err, context.Canceled) && !errors.Is(err, context.DeadlineExceeded) {
+			g.logger.Debugf("Query: receive ended for topic %s: %v", query, err)
 		}
 	}()
-	result := g.collectMessages(queryCtx, msgChan, limit)
-	if receiveErr != nil {
-		return result, receiveErr
-	}
-	return result, nil
+
+	// Collect messages
+	return g.collectMessages(queryCtx, msgChan, limit), nil
 }
 
 func (g *googleClient) getTopic(ctx context.Context, topic string) (*gcPubSub.Topic, error) {
@@ -301,25 +313,22 @@ func (g *googleClient) getSubscription(ctx context.Context, topic *gcPubSub.Topi
 		return nil, errClientNotConnected
 	}
 
-	if topic == nil {
-		return nil, errors.New("topic is nil")
-	}
+	subscription := g.client.Subscription(g.SubscriptionName + "-" + topic.ID())
 
-	subID := g.SubscriptionName + "-" + topic.ID()
-	subscription := g.client.Subscription(subID)
-
-	// Check if subscription exists
-	ok, err := subscription.Exists(ctx)
+	// check if subscription already exists or not
+	ok, err := subscription.Exists(context.Background())
 	if err != nil {
-		g.logger.Errorf("unable to check the existence of subscription, error: %v", err)
+		g.logger.Errorf("unable to check the existence of subscription, error: %v", err.Error())
+
 		return nil, err
 	}
 
-	// Create subscription if not present
+	// if subscription is not present, create a new
 	if !ok {
-		subscription, err = g.client.CreateSubscription(ctx, subID, gcPubSub.SubscriptionConfig{
+		subscription, err = g.client.CreateSubscription(ctx, g.SubscriptionName+"-"+topic.ID(), gcPubSub.SubscriptionConfig{
 			Topic: topic,
 		})
+
 		if err != nil {
 			return nil, err
 		}

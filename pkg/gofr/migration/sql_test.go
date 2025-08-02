@@ -11,22 +11,19 @@ import (
 	"gofr.dev/pkg/gofr/container"
 )
 
+var errCreateTable = errors.New("create table error")
+
 func TestQuery(t *testing.T) {
-
 	t.Run("successful query", func(t *testing.T) {
-
 		var id int
 
 		var name string
 
 		expectedResult := []struct {
-			id int
-
+			id   int
 			name string
 		}{
-
 			{1, "Alex"},
-
 			{2, "John"},
 		}
 
@@ -45,7 +42,6 @@ func TestQuery(t *testing.T) {
 		i := 0
 
 		for rows.Next() {
-
 			require.NoError(t, rows.Err(), "TestQuery: row error")
 
 			err = rows.Scan(&id, &name)
@@ -57,13 +53,10 @@ func TestQuery(t *testing.T) {
 			require.Equal(t, expectedResult[i].name, name, "TestQuery: resultant name & expected name are not same")
 
 			i++
-
 		}
-
 	})
 
 	t.Run("query error", func(t *testing.T) {
-
 		var id int
 
 		var name string
@@ -83,7 +76,6 @@ func TestQuery(t *testing.T) {
 		require.NoError(t, err, "TestQuery : error executing mock query")
 
 		for rows.Next() {
-
 			require.NoError(t, rows.Err(), "TestQuery: row error")
 
 			err = rows.Scan(&id, &name)
@@ -91,17 +83,12 @@ func TestQuery(t *testing.T) {
 			require.Error(t, err, "TestQuery: row scan error")
 
 			require.Equal(t, expectedErr, err, "TestQuery: expected error is not equal to resultant error")
-
 		}
-
 	})
-
 }
 
 func TestQueryRow(t *testing.T) {
-
 	t.Run("successful query row", func(t *testing.T) {
-
 		var name string
 
 		var id int
@@ -121,17 +108,13 @@ func TestQueryRow(t *testing.T) {
 		require.Equal(t, 1, id, "TestQueryRow: expected id to be equal to 1")
 
 		require.Equal(t, "Alex", name, "TestQueryRow: expected name to be equal to 'Alex'")
-
 	})
-
 }
 
 func TestQueryRowContext(t *testing.T) {
-
 	ctx := t.Context()
 
 	t.Run("successful query row context", func(t *testing.T) {
-
 		var id int
 
 		var name string
@@ -151,15 +134,11 @@ func TestQueryRowContext(t *testing.T) {
 		require.Equal(t, 1, id, "TestQueryRowContext: expected id to be equal to 1")
 
 		require.Equal(t, "Alex", name, "TestQueryRowContext: expected name to be equal to 'Alex'")
-
 	})
-
 }
 
 func TestExec(t *testing.T) {
-
 	t.Run("successful exec", func(t *testing.T) {
-
 		mockContainer, mocks := container.NewMockContainer(t)
 
 		expectedResult := mocks.SQL.NewResult(10, 1)
@@ -191,11 +170,9 @@ func TestExec(t *testing.T) {
 		require.Equal(t, expectedLastInserted, resultLastInserted, "TestExec: expected last inserted id to be equal to 10")
 
 		require.Equal(t, expectedRowsAffected, resultRowsAffected, "TestExec: expected rows affected to be equal to 1")
-
 	})
 
 	t.Run("exec error", func(t *testing.T) {
-
 		mockContainer, mocks := container.NewMockContainer(t)
 
 		expectedErr := sql.ErrNoRows
@@ -209,17 +186,13 @@ func TestExec(t *testing.T) {
 		require.Error(t, err, "TestExec: expected error while executing mock query")
 
 		require.Equal(t, expectedErr, err, "TestExec: Exec should return the expected error, got: %v", err)
-
 	})
-
 }
 
 func TestExecContext(t *testing.T) {
-
 	ctx := t.Context()
 
 	t.Run("successful exec context", func(t *testing.T) {
-
 		mockContainer, mocks := container.NewMockContainer(t)
 
 		expectedResult := mocks.SQL.NewResult(10, 1)
@@ -251,13 +224,10 @@ func TestExecContext(t *testing.T) {
 		require.Equal(t, expectedLastInserted, resultLastInserted, "TestExecContext: expected last inserted id to be equal to 10")
 
 		require.Equal(t, expectedRowsAffected, resultRowsAffected, "TestExecContext: expected rows affected to be equal to 1")
-
 	})
-
 }
 
 func TestCheckAndCreateMigrationTableSuccess(t *testing.T) {
-
 	ctrl := gomock.NewController(t)
 
 	mockMigrator := NewMockmigrator(ctrl)
@@ -269,20 +239,16 @@ func TestCheckAndCreateMigrationTableSuccess(t *testing.T) {
 	mocks.SQL.ExpectExec(createSQLGoFrMigrationsTable).WillReturnResult(mocks.SQL.NewResult(1, 1))
 
 	migrator := sqlMigrator{
-
-		SQL: mockContainer.SQL,
-
+		SQL:      mockContainer.SQL,
 		migrator: mockMigrator,
 	}
 
 	err := migrator.checkAndCreateMigrationTable(mockContainer)
 
 	require.NoError(t, err, "TestCheckAndCreateMigrationTable: error while executing mock query")
-
 }
 
 func TestCheckAndCreateMigrationTableExecError(t *testing.T) {
-
 	ctrl := gomock.NewController(t)
 
 	mockMigrator := NewMockmigrator(ctrl)
@@ -294,9 +260,7 @@ func TestCheckAndCreateMigrationTableExecError(t *testing.T) {
 	mocks.SQL.ExpectExec(createSQLGoFrMigrationsTable).WillReturnError(expectedErr)
 
 	migrator := sqlMigrator{
-
-		SQL: mockContainer.SQL,
-
+		SQL:      mockContainer.SQL,
 		migrator: mockMigrator,
 	}
 
@@ -305,11 +269,9 @@ func TestCheckAndCreateMigrationTableExecError(t *testing.T) {
 	require.Error(t, err, "TestCheckAndCreateMigrationTable: expected an error while executing mock query")
 
 	require.Equal(t, expectedErr, err, "TestCheckAndCreateMigrationTable: resultant error is not eual to expected error")
-
 }
 
 func TestBeginTransactionSuccess(t *testing.T) {
-
 	ctrl := gomock.NewController(t)
 
 	mockMigrator := NewMockmigrator(ctrl)
@@ -321,16 +283,13 @@ func TestBeginTransactionSuccess(t *testing.T) {
 	mockMigrator.EXPECT().beginTransaction(mockContainer)
 
 	migrator := sqlMigrator{
-
-		SQL: mockContainer.SQL,
-
+		SQL:      mockContainer.SQL,
 		migrator: mockMigrator,
 	}
 
 	data := migrator.beginTransaction(mockContainer)
 
 	require.NotNil(t, data.SQLTx.Tx, "TestBeginTransaction: SQLTX.tx should not be nil")
-
 }
 
 var (
@@ -338,7 +297,6 @@ var (
 )
 
 func TestBeginTransactionDBError(t *testing.T) {
-
 	ctrl := gomock.NewController(t)
 
 	mockMigrator := NewMockmigrator(ctrl)
@@ -348,27 +306,23 @@ func TestBeginTransactionDBError(t *testing.T) {
 	mocks.SQL.ExpectBegin().WillReturnError(errBeginTx)
 
 	migrator := sqlMigrator{
-
-		SQL: mockContainer.SQL,
-
+		SQL:      mockContainer.SQL,
 		migrator: mockMigrator,
 	}
 
 	data := migrator.beginTransaction(mockContainer)
 
 	require.Nil(t, data.SQLTx, "TestBeginTransaction: beginTransaction should not return a transaction on DB error")
-
 }
 
 func TestRollbackNoTransaction(t *testing.T) {
-
 	mockContainer, _ := container.NewMockContainer(t)
 
 	migrator := sqlMigrator{}
 
 	migrator.rollback(mockContainer, transactionData{})
-
 }
+
 func TestApply(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	mockMigrator := NewMockmigrator(ctrl)
@@ -382,6 +336,7 @@ func TestApply(t *testing.T) {
 	require.Equal(t, mockContainer.SQL, sqlMig.SQL, "SQL field should match")
 	require.Equal(t, mockMigrator, sqlMig.migrator, "Migrator field should match")
 }
+
 func TestGetLastMigration_UseMigratorFallback(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	mockMigrator := NewMockmigrator(ctrl)
@@ -397,6 +352,7 @@ func TestGetLastMigration_UseMigratorFallback(t *testing.T) {
 	last := migrator.getLastMigration(mockContainer)
 	require.Equal(t, int64(5), last, "Expected getLastMigration to return higher value from embedded migrator")
 }
+
 func TestGetLastMigration_MigratorReturnsLesser(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	mockMigrator := NewMockmigrator(ctrl)
@@ -412,6 +368,7 @@ func TestGetLastMigration_MigratorReturnsLesser(t *testing.T) {
 	last := migrator.getLastMigration(mockContainer)
 	require.Equal(t, int64(7), last, "Should return SQL migration value as it's higher")
 }
+
 func TestBeginTransaction_ReplaceSQLTx(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	mockMigrator := NewMockmigrator(ctrl)
@@ -430,16 +387,16 @@ func TestBeginTransaction_ReplaceSQLTx(t *testing.T) {
 	require.NotNil(t, data.SQLTx, "SQLTx should not be nil")
 	require.Equal(t, int64(123), data.MigrationNumber, "Expected migration number from embedded migrator")
 }
+
 func TestCheckAndCreateMigrationTable_ErrorCreatingTable(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
 	mockContainer, mocks := container.NewMockContainer(t)
-	mocks.SQL.ExpectExec(createSQLGoFrMigrationsTable).WillReturnError(errors.New("create table error"))
+	mocks.SQL.ExpectExec(createSQLGoFrMigrationsTable).WillReturnError(errCreateTable)
 
 	m := sqlMigrator{}
 	err := m.checkAndCreateMigrationTable(mockContainer)
-
-	assert.Error(t, err)
+	require.Error(t, err)
 	assert.Contains(t, err.Error(), "create table error")
 }
