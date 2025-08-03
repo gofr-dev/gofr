@@ -123,7 +123,6 @@ func (f *textReader) Next() bool {
 
 // Scan scans the next line from the text file into the provided pointer to strinf.
 func (f *textReader) Scan(i any) error {
-
 	if val, ok := i.(*string); ok {
 		*val = f.scanner.Text()
 		return nil
