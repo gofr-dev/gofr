@@ -12,6 +12,11 @@ import (
 	"gotest.tools/v3/assert"
 )
 
+var (
+	ErrObjectNotFound = errors.New("object not found")
+	ErrMock           = fmt.Errorf("errMock")
+)
+
 func Test_CreateFile(t *testing.T) {
 	type testCase struct {
 		name        string
@@ -42,6 +47,7 @@ func Test_CreateFile(t *testing.T) {
 	}
 
 	mockLogger.EXPECT().Logf(gomock.Any(), gomock.Any()).AnyTimes()
+	mockLogger.EXPECT().Errorf(gomock.Any(), gomock.Any()).AnyTimes()
 	mockLogger.EXPECT().Debug(gomock.Any()).AnyTimes()
 
 	tests := []testCase{
@@ -52,8 +58,8 @@ func Test_CreateFile(t *testing.T) {
 				m.EXPECT().ListObjects(gomock.Any(), ".").Return([]string{}, nil)
 				m.EXPECT().ListObjects(gomock.Any(), "abc.txt").Return([]string{}, nil)
 				m.EXPECT().NewWriter(gomock.Any(), "abc.txt").Return(&storage.Writer{})
-
 			},
+
 			expectError: false,
 			isRoot:      true,
 		},
@@ -61,7 +67,7 @@ func Test_CreateFile(t *testing.T) {
 			name:       "fail when parent directory does not exist",
 			createPath: "abc/abc.txt",
 			setupMocks: func(m *MockgcsClient) {
-				m.EXPECT().ListObjects(gomock.Any(), "abc/").Return(nil, errors.New("errMock"))
+				m.EXPECT().ListObjects(gomock.Any(), "abc/").Return(nil, ErrMock)
 			},
 			expectError: true,
 			isRoot:      false,
@@ -126,6 +132,11 @@ func Test_Remove_GCS(t *testing.T) {
 	require.NoError(t, err)
 }
 
+var (
+	errDeleteFailed = errors.New("delete failed")
+	errCopyFailed   = errors.New("copy failed")
+)
+
 func TestRenameFile(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
@@ -165,7 +176,7 @@ func TestRenameFile(t *testing.T) {
 			initialName: "dir/file.txt",
 			newName:     "dir/file-renamed.txt",
 			setupMocks: func() {
-				mockConn.EXPECT().CopyObject(gomock.Any(), "dir/file.txt", "dir/file-renamed.txt").Return(errors.New("copy failed"))
+				mockConn.EXPECT().CopyObject(gomock.Any(), "dir/file.txt", "dir/file-renamed.txt").Return(errCopyFailed)
 			},
 			expectedError: true,
 		},
@@ -175,7 +186,7 @@ func TestRenameFile(t *testing.T) {
 			newName:     "dir/file-renamed.txt",
 			setupMocks: func() {
 				mockConn.EXPECT().CopyObject(gomock.Any(), "dir/file.txt", "dir/file-renamed.txt").Return(nil)
-				mockConn.EXPECT().DeleteObject(gomock.Any(), "dir/file.txt").Return(errors.New("delete failed"))
+				mockConn.EXPECT().DeleteObject(gomock.Any(), "dir/file.txt").Return(errDeleteFailed)
 			},
 			expectedError: true,
 		},
@@ -251,7 +262,7 @@ func Test_StatFile_GCS(t *testing.T) {
 			name:        "File not found",
 			filePath:    "notfound.txt",
 			mockAttr:    nil,
-			mockError:   fmt.Errorf("object not found"),
+			mockError:   ErrObjectNotFound,
 			expectError: true,
 		},
 	}
@@ -287,6 +298,7 @@ func Test_StatFile_GCS(t *testing.T) {
 			}
 
 			require.NoError(t, err)
+
 			actual := result{
 				name:  res.Name(),
 				size:  res.Size(),
