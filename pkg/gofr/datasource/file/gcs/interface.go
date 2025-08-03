@@ -4,6 +4,7 @@ package gcs
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 
@@ -65,27 +66,34 @@ func (g *gcsClientImpl) CopyObject(ctx context.Context, src, dst string) error {
 	srcObj := g.bucket.Object(src)
 	dstObj := g.bucket.Object(dst)
 	_, err := dstObj.CopierFrom(srcObj).Run(ctx)
+
 	return err
 }
 
 func (g *gcsClientImpl) ListObjects(ctx context.Context, prefix string) ([]string, error) {
 	var objects []string
+
 	it := g.bucket.Objects(ctx, &storage.Query{Prefix: prefix})
+
 	for {
 		obj, err := it.Next()
-		if err == iterator.Done {
+		if errors.Is(err, iterator.Done) {
 			break
 		}
+
 		if err != nil {
 			return nil, err
 		}
+
 		objects = append(objects, obj.Name)
 	}
+
 	return objects, nil
 }
 
 func (g *gcsClientImpl) ListDir(ctx context.Context, prefix string) ([]*storage.ObjectAttrs, []string, error) {
 	var attrs []*storage.ObjectAttrs
+
 	var prefixes []string
 
 	it := g.bucket.Objects(ctx, &storage.Query{
@@ -95,18 +103,20 @@ func (g *gcsClientImpl) ListDir(ctx context.Context, prefix string) ([]*storage.
 
 	for {
 		obj, err := it.Next()
-		if err == iterator.Done {
+
+		if errors.Is(err, iterator.Done) {
 			break
-		}
-		if err != nil {
+		} else if err != nil {
 			return nil, nil, err
 		}
+
 		if obj.Prefix != "" {
 			prefixes = append(prefixes, obj.Prefix)
 		} else {
 			attrs = append(attrs, obj)
 		}
 	}
+
 	return attrs, prefixes, nil
 }
 

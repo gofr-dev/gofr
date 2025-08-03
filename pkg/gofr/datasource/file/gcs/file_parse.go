@@ -125,9 +125,8 @@ func (f *textReader) Next() bool {
 	return f.scanner.Scan()
 }
 
-// Scan scans the next line from the text file into the provided pointer to string.
+// Scan scans the next line from the text file into the provided pointer to strinf.
 func (f *textReader) Scan(i any) error {
-
 	if val, ok := i.(*string); ok {
 		*val = f.scanner.Text()
 		return nil
@@ -136,68 +135,69 @@ func (f *textReader) Scan(i any) error {
 	return errStringNotPointer
 }
 
-func (g *GCSFile) Name() string {
-	bucketName := getBucketName(g.name)
+func (f *GCSFile) Name() string {
+	bucketName := getBucketName(f.name)
 
-	g.sendOperationStats(&FileLog{
+	f.sendOperationStats(&FileLog{
 		Operation: "GET NAME",
 		Location:  getLocation(bucketName),
 	}, time.Now())
 
-	return g.name
+	return f.name
 }
 
-func (g *GCSFile) Size() int64 {
-	bucketName := getBucketName(g.name)
+func (f *GCSFile) Size() int64 {
+	bucketName := getBucketName(f.name)
 
-	g.sendOperationStats(&FileLog{
+	f.sendOperationStats(&FileLog{
 		Operation: "FILE/DIR SIZE",
 		Location:  getLocation(bucketName),
 	}, time.Now())
 
-	return g.size
+	return f.size
 }
 
-func (g *GCSFile) ModTime() time.Time {
-	bucketName := getBucketName(g.name)
+func (f *GCSFile) ModTime() time.Time {
+	bucketName := getBucketName(f.name)
 
-	g.sendOperationStats(&FileLog{
+	f.sendOperationStats(&FileLog{
 		Operation: "LAST MODIFIED",
 		Location:  getLocation(bucketName),
 	}, time.Now())
 
-	return g.lastModified
+	return f.lastModified
 }
 
-func (g *GCSFile) Mode() fs.FileMode {
-	bucketName := getBucketName(g.name)
+func (f *GCSFile) Mode() fs.FileMode {
+	bucketName := getBucketName(f.name)
 
-	g.sendOperationStats(&FileLog{
+	f.sendOperationStats(&FileLog{
 		Operation: "MODE",
 		Location:  getLocation(bucketName),
 	}, time.Now())
 
-	if g.isDir {
+	if f.isDir {
 		return fs.ModeDir
 	}
+
 	return 0
 }
 
-func (g *GCSFile) IsDir() bool {
-	bucketName := getBucketName(g.name)
+func (f *GCSFile) IsDir() bool {
+	bucketName := getBucketName(f.name)
 
-	g.sendOperationStats(&FileLog{
+	f.sendOperationStats(&FileLog{
 		Operation: "IS DIR",
 		Location:  getLocation(bucketName),
 	}, time.Now())
 
-	return g.isDir || g.contentType == "application/x-directory"
+	return f.isDir || f.contentType == "application/x-directory"
 }
 
-func (g *GCSFile) Sys() interface{} {
-	bucketName := getBucketName(g.name)
+func (f *GCSFile) Sys() any {
+	bucketName := getBucketName(f.name)
 
-	g.sendOperationStats(&FileLog{
+	f.sendOperationStats(&FileLog{
 		Operation: "SYS",
 		Location:  getLocation(bucketName),
 	}, time.Now())

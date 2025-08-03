@@ -2,7 +2,7 @@ package gcs
 
 import (
 	"bytes"
-	"fmt"
+	"errors"
 	"testing"
 
 	"cloud.google.com/go/storage"
@@ -14,18 +14,24 @@ type fakeWriteCloser struct {
 	*bytes.Buffer
 }
 
-func (fwc *fakeWriteCloser) Close() error {
+func (*fakeWriteCloser) Close() error {
 	return nil
 }
 
 type errorWriterCloser struct{}
 
-func (e *errorWriterCloser) Write(p []byte) (int, error) {
-	return 0, fmt.Errorf("write error")
+var (
+	ErrWrite       = errors.New("write error")
+	ErrClose       = errors.New("close error")
+	ErrDirNotFound = errors.New("directory not found")
+)
+
+func (*errorWriterCloser) Write(_ []byte) (int, error) {
+	return 0, ErrWrite
 }
 
-func (e *errorWriterCloser) Close() error {
-	return fmt.Errorf("close error")
+func (*errorWriterCloser) Close() error {
+	return ErrClose
 }
 
 type result struct {
@@ -61,6 +67,7 @@ func Test_Mkdir_GCS(t *testing.T) {
 		logger:  mockLogger,
 		metrics: mockMetrics,
 	}
+
 	mockLogger.EXPECT().Logf(gomock.Any(), gomock.Any()).AnyTimes()
 	mockLogger.EXPECT().Debugf(gomock.Any()).AnyTimes()
 	mockLogger.EXPECT().Debug(gomock.Any()).AnyTimes()
@@ -80,7 +87,7 @@ func Test_Mkdir_GCS(t *testing.T) {
 		{
 			name:    "fail when directory name is empty",
 			dirName: "",
-			setupMocks: func(m *MockgcsClient) {
+			setupMocks: func(_ *MockgcsClient) {
 				// No mock needed for empty dir
 			},
 			expectError: true,
@@ -119,13 +126,9 @@ func Test_ReadDir_GCS(t *testing.T) {
 	mockLogger := NewMockLogger(ctrl)
 	mockMetrics := NewMockMetrics(ctrl)
 
-	config := &Config{
-		BucketName: "test-bucket",
-	}
-
 	fs := &FileSystem{
 		conn:    mockGCS,
-		config:  config,
+		config:  &Config{BucketName: "test-bucket"},
 		logger:  mockLogger,
 		metrics: mockMetrics,
 	}
@@ -134,13 +137,37 @@ func Test_ReadDir_GCS(t *testing.T) {
 	mockLogger.EXPECT().Debug(gomock.Any()).AnyTimes()
 	mockLogger.EXPECT().Errorf(gomock.Any(), gomock.Any()).AnyTimes()
 
-	tests := []struct {
-		name            string
-		dirPath         string
-		expectedResults []result
-		setupMock       func()
-		expectError     bool
-	}{
+	for _, tt := range getReadDirTestCases(mockGCS) {
+		t.Run(tt.name, func(t *testing.T) {
+			tt.setupMock()
+			entries, err := fs.ReadDir(tt.dirPath)
+
+			if tt.expectError {
+				require.Error(t, err)
+				return
+			}
+
+			require.NoError(t, err)
+			require.Len(t, entries, len(tt.expectedResults))
+
+			for i, entry := range entries {
+				require.Equal(t, tt.expectedResults[i].Name, entry.Name())
+				require.Equal(t, tt.expectedResults[i].IsDir, entry.IsDir())
+			}
+		})
+	}
+}
+
+type readDirTestCase struct {
+	name            string
+	dirPath         string
+	expectedResults []result
+	setupMock       func()
+	expectError     bool
+}
+
+func getReadDirTestCases(mockGCS *MockgcsClient) []readDirTestCase {
+	return []readDirTestCase{
 		{
 			name:    "Valid directory path with files and subdirectory",
 			dirPath: "abc/efg",
@@ -148,17 +175,12 @@ func Test_ReadDir_GCS(t *testing.T) {
 				{"hij", 0, true},
 				{"file.txt", 1, false},
 			},
-
 			setupMock: func() {
 				mockGCS.EXPECT().ListDir(gomock.Any(), "abc/efg").Return(
-					[]*storage.ObjectAttrs{
-						{Name: "abc/efg/file.txt", Size: 1},
-					},
-					[]string{
-						"abc/efg/hij/",
-					},
-					nil)
-
+					[]*storage.ObjectAttrs{{Name: "abc/efg/file.txt", Size: 1}},
+					[]string{"abc/efg/hij/"},
+					nil,
+				)
 			},
 		},
 		{
@@ -180,7 +202,7 @@ func Test_ReadDir_GCS(t *testing.T) {
 			dirPath:         "does-not-exist",
 			expectedResults: nil,
 			setupMock: func() {
-				mockGCS.EXPECT().ListDir(gomock.Any(), "does-not-exist").Return(nil, nil, fmt.Errorf("directory not found"))
+				mockGCS.EXPECT().ListDir(gomock.Any(), "does-not-exist").Return(nil, nil, ErrDirNotFound)
 			},
 			expectError: true,
 		},
@@ -206,26 +228,5 @@ func Test_ReadDir_GCS(t *testing.T) {
 				}, nil, nil)
 			},
 		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			tt.setupMock()
-
-			entries, err := fs.ReadDir(tt.dirPath)
-			if tt.expectError {
-				require.Error(t, err)
-				return
-			}
-
-			require.NoError(t, err)
-			require.Equal(t, len(tt.expectedResults), len(entries))
-
-			for i, entry := range entries {
-				// fmt.Printf("DEBUG [%d] => Name: %s, IsDir: %v\n", i, entry.Name(), entry.IsDir())
-				require.Equal(t, tt.expectedResults[i].Name, entry.Name(), "entry name mismatch")
-				require.Equal(t, tt.expectedResults[i].IsDir, entry.IsDir(), "entry type mismatch (file/dir)")
-			}
-		})
 	}
 }
