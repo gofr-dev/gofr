@@ -8,11 +8,13 @@ import (
 	"cloud.google.com/go/storage"
 )
 
+// GCSFile represents a file in an GCS bucket.
+//
+//nolint:revive // gcs.GCSFile is repetitive. A better name could have been chosen, but it's too late as it's already exported.
 type GCSFile struct {
 	conn         gcsClient
 	writer       *storage.Writer
 	name         string
-	offset       int64
 	logger       Logger
 	metrics      Metrics
 	size         int64
@@ -22,95 +24,127 @@ type GCSFile struct {
 	isDir        bool
 }
 
+var (
+	ErrNilGCSFileBody      = errors.New("GCS file body is nil")
+	ErrSeekNotSupported    = errors.New("seek not supported on GCSFile")
+	ErrReadAtNotSupported  = errors.New("readAt not supported on GCSFile")
+	ErrWriteAtNotSupported = errors.New("writeAt not supported on GCSFile (read-only)")
+)
+
+const (
+	msgWriterClosed = "Writer closed successfully"
+	msgReaderClosed = "Reader closed successfully"
+)
+
 // ====== File interface methods ======
 
-func (g *GCSFile) Read(p []byte) (int, error) {
-	if g.body == nil {
-		return 0, errors.New("GCS file body is nil")
+func (f *GCSFile) Read(p []byte) (int, error) {
+	if f.body == nil {
+		return 0, ErrNilGCSFileBody
 	}
-	return g.body.Read(p)
+
+	return f.body.Read(p)
 }
-func (g *GCSFile) Write(p []byte) (int, error) {
-	bucketName := getBucketName(g.name)
+func (f *GCSFile) Write(p []byte) (int, error) {
+	bucketName := getBucketName(f.name)
 
 	var msg string
 
 	st := statusErr
 
-	defer g.sendOperationStats(&FileLog{
+	defer f.sendOperationStats(&FileLog{
 		Operation: "WRITE",
 		Location:  getLocation(bucketName),
 		Status:    &st,
 		Message:   &msg,
 	}, time.Now())
 
-	n, err := g.writer.Write(p)
+	n, err := f.writer.Write(p)
+
 	if err != nil {
-		g.logger.Errorf("failed to write: %v", err)
+		f.logger.Errorf("failed to write: %v", err)
 		msg = err.Error()
+
 		return n, err
 	}
+
 	st = statusSuccess
 	msg = "Write successful"
-	return n, nil
+	f.logger.Logf(msg)
 
+	return n, nil
 }
 
-func (g *GCSFile) Close() error {
-	bucketName := getBucketName(g.name)
+func (f *GCSFile) Close() error {
+	bucketName := getBucketName(f.name)
+
 	var msg string
+
 	st := statusErr
 
-	defer g.sendOperationStats(&FileLog{
+	defer f.sendOperationStats(&FileLog{
 		Operation: "CLOSE",
 		Location:  getLocation(bucketName),
 		Status:    &st,
 		Message:   &msg,
 	}, time.Now())
 
-	if g.writer != nil {
-		err := g.writer.Close()
+	if f.writer != nil {
+		err := f.writer.Close()
 		if err != nil {
 			msg = err.Error()
 			return err
 		}
+
 		st = statusSuccess
-		msg = "Writer closed successfully"
+
+		msg = msgWriterClosed
+
+		f.logger.Logf(msg)
+
 		return nil
 	}
 
-	if g.body != nil {
-		err := g.body.Close()
+	if f.body != nil {
+		err := f.body.Close()
 		if err != nil {
 			msg = err.Error()
 			return err
 		}
+
 		st = statusSuccess
-		msg = "Reader closed successfully"
+
+		msg = msgReaderClosed
+
+		f.logger.Logf(msgReaderClosed)
+
 		return nil
 	}
+
 	st = statusSuccess
-	msg = "Writer closed successfully"
+
+	msg = msgWriterClosed
+
 	return nil
 }
 
-func (g *GCSFile) Seek(offset int64, whence int) (int64, error) {
+func (*GCSFile) Seek(_ int64, _ int) (int64, error) {
 	// Not supported: Seek requires reopening with range.
-	return 0, errors.New("Seek not supported on GCSFile")
+	return 0, ErrSeekNotSupported
 }
 
-func (g *GCSFile) ReadAt(_ []byte, _ int64) (int, error) {
-	return 0, errors.New("ReadAt not supported on GCSFile")
+func (*GCSFile) ReadAt(_ []byte, _ int64) (int, error) {
+	return 0, ErrReadAtNotSupported
 }
 
-func (g *GCSFile) WriteAt(_ []byte, _ int64) (int, error) {
-	return 0, errors.New("WriteAt not supported on GCSFile (read-only)")
+func (*GCSFile) WriteAt(_ []byte, _ int64) (int, error) {
+	return 0, ErrWriteAtNotSupported
 }
 
-func (g *GCSFile) sendOperationStats(fl *FileLog, startTime time.Time) {
+func (f *GCSFile) sendOperationStats(fl *FileLog, startTime time.Time) {
 	duration := time.Since(startTime).Microseconds()
 
 	fl.Duration = duration
 
-	g.logger.Debug(fl)
+	f.logger.Debug(fl)
 }

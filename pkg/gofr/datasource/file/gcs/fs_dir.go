@@ -17,6 +17,8 @@ import (
 
 var (
 	ErrOperationNotPermitted = errors.New("operation not permitted")
+	ErrEmptyDirectoryName    = errors.New("directory name cannot be empty")
+	ErrCHNDIRNotSupported    = errors.New("changing directory is not supported in GCS")
 )
 
 func getBucketName(filePath string) string {
@@ -28,7 +30,6 @@ func getLocation(bucket string) string {
 }
 
 func (f *FileSystem) Mkdir(name string, _ os.FileMode) error {
-
 	var msg string
 
 	st := statusErr
@@ -41,8 +42,10 @@ func (f *FileSystem) Mkdir(name string, _ os.FileMode) error {
 	}, time.Now())
 
 	if name == "" {
-		msg = fmt.Sprintf("directory name cannot be empty")
-		return errors.New("directory name cannot be empty")
+		msg = "directory name cannot be empty"
+		f.logger.Errorf(msg)
+
+		return ErrEmptyDirectoryName
 	}
 
 	ctx := context.TODO()
@@ -55,13 +58,18 @@ func (f *FileSystem) Mkdir(name string, _ os.FileMode) error {
 	if err != nil {
 		if err != nil {
 			msg = fmt.Sprintf("failed to create directory %q on GCS: %v", objName, err)
+			f.logger.Errorf(msg)
+
 			return err
 		}
 	}
+
 	st = statusSuccess
+
 	msg = fmt.Sprintf("Directories on path %q created successfully", name)
 
 	f.logger.Logf("Created directories on path %q", name)
+
 	return err
 }
 
@@ -72,15 +80,18 @@ func (f *FileSystem) MkdirAll(path string, perm os.FileMode) error {
 	}
 
 	dirs := strings.Split(cleaned, "/")
+
 	var currentPath string
 
 	for _, dir := range dirs {
 		currentPath = pathJoin(currentPath, dir)
 		err := f.Mkdir(currentPath, perm)
+
 		if err != nil && !isAlreadyExistsError(err) {
 			return err
 		}
 	}
+
 	return nil
 }
 func pathJoin(parts ...string) string {
@@ -88,15 +99,16 @@ func pathJoin(parts ...string) string {
 }
 
 func isAlreadyExistsError(err error) bool {
-	// If using Google Cloud Storage SDK
-	if gErr, ok := err.(*googleapi.Error); ok {
+	var gErr *googleapi.Error
+	if errors.As(err, &gErr) {
 		return gErr.Code == 409 || gErr.Code == 412
 	}
+
 	// Fallback check
 	return strings.Contains(err.Error(), "already exists")
 }
-func (f *FileSystem) RemoveAll(path string) error {
 
+func (f *FileSystem) RemoveAll(path string) error {
 	var msg string
 
 	st := statusErr
@@ -110,6 +122,7 @@ func (f *FileSystem) RemoveAll(path string) error {
 
 	ctx := context.TODO()
 	objects, err := f.conn.ListObjects(ctx, path)
+
 	if err != nil {
 		msg = fmt.Sprintf("Error retrieving objects: %v", err)
 		return err
@@ -121,14 +134,17 @@ func (f *FileSystem) RemoveAll(path string) error {
 			return err
 		}
 	}
+
 	st = statusSuccess
+
 	msg = fmt.Sprintf("Directory with path %q, deleted successfully", path)
 
 	f.logger.Logf("Directory %s deleted.", path)
+
 	return nil
 }
-func (f *FileSystem) ReadDir(dir string) ([]file.FileInfo, error) {
 
+func (f *FileSystem) ReadDir(dir string) ([]file.FileInfo, error) {
 	var msg string
 
 	st := statusErr
@@ -145,10 +161,13 @@ func (f *FileSystem) ReadDir(dir string) ([]file.FileInfo, error) {
 	objects, prefixes, err := f.conn.ListDir(ctx, dir)
 	if err != nil {
 		msg = fmt.Sprintf("Error retrieving objects: %v", err)
+		f.logger.Logf(msg)
+
 		return nil, err
 	}
 
-	var fileinfo []file.FileInfo
+	fileinfo := make([]file.FileInfo, 0, len(prefixes)+len(objects))
+
 	for _, p := range prefixes {
 		trimmedName := strings.TrimSuffix(p, "/")
 		dirName := path.Base(trimmedName)
@@ -175,12 +194,15 @@ func (f *FileSystem) ReadDir(dir string) ([]file.FileInfo, error) {
 	msg = fmt.Sprintf("Directory/Files in directory with path %q retrieved successfully", dir)
 
 	f.logger.Logf("Reading directory/files from GCS at path %q successful.", dir)
+
 	return fileinfo, nil
 }
 
 func (f *FileSystem) ChDir(_ string) error {
 	const op = "CHDIR"
+
 	st := statusErr
+
 	var msg = "Changing directory not supported"
 
 	defer f.sendOperationStats(&FileLog{
@@ -189,15 +211,18 @@ func (f *FileSystem) ChDir(_ string) error {
 		Status:    &st,
 		Message:   &msg,
 	}, time.Now())
+
 	f.logger.Errorf("%s: not supported in GCS", op)
 
-	return errors.New("changing directory is not supported in GCS")
+	return ErrCHNDIRNotSupported
 }
 func (f *FileSystem) Getwd() (string, error) {
-
 	const op = "GETWD"
+
 	st := statusSuccess
+
 	start := time.Now()
+
 	var msg = "Returning simulated root directory"
 
 	defer f.sendOperationStats(&FileLog{
@@ -206,10 +231,12 @@ func (f *FileSystem) Getwd() (string, error) {
 		Status:    &st,
 		Message:   &msg,
 	}, start)
+
 	return getLocation(f.config.BucketName), nil
 }
 func (f *FileSystem) Stat(name string) (file.FileInfo, error) {
 	var msg string
+
 	st := statusErr
 
 	defer f.sendOperationStats(&FileLog{
@@ -255,6 +282,7 @@ func (f *FileSystem) Stat(name string) (file.FileInfo, error) {
 		if len(objs) > 0 {
 			st = statusSuccess
 			msg = fmt.Sprintf("Directory with path %q info retrieved successfully", name)
+
 			return &GCSFile{
 				name:         name,
 				logger:       f.logger,
@@ -264,10 +292,10 @@ func (f *FileSystem) Stat(name string) (file.FileInfo, error) {
 				lastModified: objs[0].Updated,
 			}, nil
 		}
-
 	}
 
 	f.logger.Errorf("Error returning file or directory info: %v", err)
+
 	return nil, err
 }
 

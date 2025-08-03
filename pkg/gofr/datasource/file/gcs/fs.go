@@ -14,18 +14,10 @@ import (
 	"google.golang.org/api/option"
 )
 
-const (
-	typeFile      = "file"
-	typeDirectory = "directory"
-)
-
 var (
-	errIncorrectFileType = errors.New("incorrect file type")
+	ErrWriterTypeAssertion = errors.New("writer is not of type *storage.Writer")
 )
 
-type client struct {
-	*storage.Client
-}
 type FileSystem struct {
 	GCSFile GCSFile
 	conn    gcsClient
@@ -48,6 +40,7 @@ func New(config *Config) file.FileSystemProvider {
 
 func (f *FileSystem) Connect() {
 	var msg string
+
 	st := statusErr
 
 	defer f.sendOperationStats(&FileLog{
@@ -58,19 +51,24 @@ func (f *FileSystem) Connect() {
 	}, time.Now())
 
 	f.logger.Debugf("connecting to GCS bucket: %s", f.config.BucketName)
+
 	ctx := context.TODO()
+
 	client, err := storage.NewClient(ctx, option.WithCredentialsJSON([]byte(f.config.CredentialsJSON)))
 
 	if err != nil {
 		f.logger.Errorf("Failed to connect to GCS: %v", err)
 		return
 	}
+
 	f.conn = &gcsClientImpl{
 		client: client,
 		bucket: client.Bucket(f.config.BucketName),
 	}
+
 	st = statusSuccess
 	msg = "GCS Client connected."
+
 	f.logger.Logf("connected to GCS bucket %s", f.config.BucketName)
 }
 
@@ -93,26 +91,37 @@ func (f *FileSystem) Create(name string) (file.File, error) {
 	// 1. Check if parent directory exists
 	parentPath := path.Dir(name)
 	checkPath := "."
+
 	if parentPath != "." {
 		checkPath = parentPath + "/"
 	}
 
 	if _, err := f.conn.ListObjects(ctx, checkPath); err != nil {
 		msg = "Parent directory does not exist"
+
+		f.logger.Errorf("Failed to list parent directory %q: %v", checkPath, err)
+
 		return nil, err
 	}
 
 	// 2. Resolve file name conflict
 	originalName := name
+
 	for index := 1; ; index++ {
 		objs, err := f.conn.ListObjects(ctx, name)
+
 		if err != nil {
 			msg = "Error checking existing objects"
+
+			f.logger.Errorf("Failed to list objects for name %q: %v", name, err)
+
 			return nil, err
 		}
+
 		if len(objs) == 0 {
 			break // Safe to use
 		}
+
 		name = generateCopyName(originalName, index)
 	}
 
@@ -122,11 +131,16 @@ func (f *FileSystem) Create(name string) (file.File, error) {
 	sw, ok := writer.(*storage.Writer)
 	if !ok {
 		msg = "Failed to assert writer to *storage.Writer"
-		return nil, errors.New(msg)
+
+		f.logger.Errorf("Type assertion failed for writer to *storage.Writer")
+
+		return nil, fmt.Errorf("type assertion failed: %w", ErrWriterTypeAssertion)
 	}
 
 	st = statusSuccess
 	msg = "Write stream opened successfully"
+
+	f.logger.Logf("Write stream successfully opened for file %q", name)
 
 	return &GCSFile{
 		conn:         f.conn,
@@ -138,7 +152,6 @@ func (f *FileSystem) Create(name string) (file.File, error) {
 		logger:       f.logger,
 		metrics:      f.metrics,
 	}, nil
-
 }
 
 func (f *FileSystem) Remove(name string) error {
@@ -155,6 +168,7 @@ func (f *FileSystem) Remove(name string) error {
 
 	ctx := context.TODO()
 	err := f.conn.DeleteObject(ctx, name)
+
 	if err != nil {
 		f.logger.Errorf("Error while deleting file: %v", err)
 		return err
@@ -169,7 +183,6 @@ func (f *FileSystem) Remove(name string) error {
 }
 
 func (f *FileSystem) Open(name string) (file.File, error) {
-
 	var msg string
 
 	st := statusErr
@@ -200,7 +213,9 @@ func (f *FileSystem) Open(name string) (file.File, error) {
 		reader.Close()
 		return nil, err
 	}
+
 	st = statusSuccess
+
 	msg = fmt.Sprintf("File with path %q retrieved successfully", name)
 
 	return &GCSFile{
@@ -216,7 +231,6 @@ func (f *FileSystem) Open(name string) (file.File, error) {
 }
 
 func (f *FileSystem) Rename(oldname, newname string) error {
-
 	var msg string
 
 	st := statusErr
@@ -279,5 +293,6 @@ func (f *FileSystem) UseMetrics(metrics any) {
 func generateCopyName(original string, count int) string {
 	ext := path.Ext(original)
 	base := strings.TrimSuffix(original, ext)
+
 	return fmt.Sprintf("%s copy %d%s", base, count, ext)
 }
