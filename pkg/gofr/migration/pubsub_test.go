@@ -167,68 +167,79 @@ func Test_PubSubCommitMigration_PublishError(t *testing.T) {
 	assert.Equal(t, errTopic, err, "Publish error should be returned")
 }
 
-func Test_PubSubGetLastMigration(t *testing.T) {
-	migratorWithPubSub, mockPubSub, mockContainer := pubsubTestSetup(t)
+type mockNextMigrator struct {
+	migrator
+	version int64
+}
 
+func (m mockNextMigrator) getLastMigration(c *container.Container) int64 {
+	return m.version
+}
+
+func Test_PubSubGetLastMigration(t *testing.T) {
 	testCases := []struct {
 		desc           string
 		expectedResult int64
-		setupMocks     func(*container.MockPubSubProvider)
+		pubsubResult   []byte
+		pubsubError    error
+		nextVersion    int64
 	}{
 		{
-			desc:           "successful query with migrations",
+			desc:           "pubsub has higher version than next migrator",
 			expectedResult: 3,
-			setupMocks: func(mockPubSub *container.MockPubSubProvider) {
-				mockPubSub.EXPECT().
-					Query(gomock.Any(), pubsubMigrationTopic, int64(0), defaultQueryLimit).
-					Return([]byte(`{"version":1,"method":"UP","start_time":1625000000000,"duration":100}
-{"version":3,"method":"UP","start_time":1625000200000,"duration":150}`), nil)
-			},
+			nextVersion:    2,
+			pubsubResult: []byte(`{"version":1,"method":"UP","start_time":1625000000000,"duration":100}
+{"version":3,"method":"UP","start_time":1625000200000,"duration":150}
+{"version":2,"method":"DOWN","start_time":1625000100000,"duration":120}`),
+			pubsubError: nil,
 		},
 		{
-			desc:           "query error",
-			expectedResult: 0,
-			setupMocks: func(mockPubSub *container.MockPubSubProvider) {
-				mockPubSub.EXPECT().
-					Query(gomock.Any(), pubsubMigrationTopic, int64(0), defaultQueryLimit).
-					Return(nil, errQuery)
-			},
+			desc:           "next migrator has higher version than pubsub",
+			expectedResult: 5,
+			nextVersion:    5,
+			pubsubResult: []byte(`{"version":1,"method":"UP","start_time":1625000000000,"duration":100}
+{"version":3,"method":"UP","start_time":1625000200000,"duration":150}`),
+			pubsubError: nil,
 		},
 		{
-			desc:           "empty result",
-			expectedResult: 0,
-			setupMocks: func(mockPubSub *container.MockPubSubProvider) {
-				mockPubSub.EXPECT().
-					Query(gomock.Any(), pubsubMigrationTopic, int64(0), defaultQueryLimit).
-					Return([]byte{}, nil)
-			},
+			desc:           "query error but next migrator has value",
+			expectedResult: 4,
+			nextVersion:    4,
+			pubsubResult:   nil,
+			pubsubError:    errQuery,
 		},
 		{
-			desc:           "invalid JSON",
-			expectedResult: 0,
-			setupMocks: func(mockPubSub *container.MockPubSubProvider) {
-				mockPubSub.EXPECT().
-					Query(gomock.Any(), pubsubMigrationTopic, int64(0), defaultQueryLimit).
-					Return([]byte(`{"invalid json`), nil)
-			},
-		},
-		{
-			desc:           "mixed migration methods",
-			expectedResult: 1,
-			setupMocks: func(mockPubSub *container.MockPubSubProvider) {
-				mockPubSub.EXPECT().
-					Query(gomock.Any(), pubsubMigrationTopic, int64(0), defaultQueryLimit).
-					Return([]byte(`{"version":1,"method":"UP","start_time":1625000000000,"duration":100}
-{"version":2,"method":"DOWN","start_time":1625000100000,"duration":120}`), nil)
-			},
+			desc:           "empty result but next migrator has value",
+			expectedResult: 3,
+			nextVersion:    3,
+			pubsubResult:   []byte{},
+			pubsubError:    nil,
 		},
 	}
 
 	for i, tc := range testCases {
-		tc.setupMocks(mockPubSub)
+		t.Run(tc.desc, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+			defer ctrl.Finish()
 
-		result := migratorWithPubSub.getLastMigration(mockContainer)
+			mockContainer, mocks := container.NewMockContainer(t)
+			mockPubSub := mocks.PubSub
 
-		assert.Equal(t, tc.expectedResult, result, "TEST[%v] %v Failed!", i, tc.desc)
+			mockPubSub.EXPECT().
+				Query(gomock.Any(), pubsubMigrationTopic, int64(0), defaultQueryLimit).
+				Return(tc.pubsubResult, tc.pubsubError)
+
+			next := mockNextMigrator{version: tc.nextVersion}
+
+			pm := pubsubMigrator{
+				PubSub:   pubsubDS{client: mockPubSub},
+				migrator: next,
+			}
+
+			// Call the method under test
+			result := pm.getLastMigration(mockContainer)
+
+			assert.Equal(t, tc.expectedResult, result, "TEST[%v] %v Failed!", i, tc.desc)
+		})
 	}
 }
