@@ -172,7 +172,7 @@ type mockNextMigrator struct {
 	version int64
 }
 
-func (m mockNextMigrator) getLastMigration(c *container.Container) int64 {
+func (m mockNextMigrator) getLastMigration(*container.Container) int64 {
 	return m.version
 }
 
