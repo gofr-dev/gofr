@@ -1,8 +1,12 @@
 package dbresolver
 
 import (
+	"errors"
+
 	"gofr.dev/pkg/gofr/container"
 )
+
+var errPrimaryNil = errors.New("primary database cannot be nil")
 
 // ResolverWrapper implements container.Provider interface
 // and acts as an adapter to the actual Resolver implementation.
@@ -60,9 +64,9 @@ func (r *ResolverWrapper) createStrategy(replicaCount int) Strategy {
 }
 
 // Build creates a resolver with the given primary and replicas.
-func (r *ResolverWrapper) Build(primary container.DB, replicas []container.DB) container.DB {
+func (r *ResolverWrapper) Build(primary container.DB, replicas []container.DB) (container.DB, error) {
 	if primary == nil {
-		panic("primary database cannot be nil")
+		return nil, errPrimaryNil
 	}
 
 	// Create strategy instance based on string name.
@@ -75,5 +79,5 @@ func (r *ResolverWrapper) Build(primary container.DB, replicas []container.DB) c
 	}
 
 	// Create and return the resolver.
-	return New(primary, replicas, r.logger, r.metrics, opts...)
+	return New(primary, replicas, r.logger, r.metrics, opts...), nil
 }

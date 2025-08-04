@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"regexp"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"time"
 
@@ -18,6 +19,7 @@ import (
 
 var (
 	readQueryPrefixRegex = regexp.MustCompile(`(?i)^\s*(SELECT|SHOW|DESCRIBE|EXPLAIN)`)
+	queryTypeCache       = sync.Map{}
 )
 
 const (
@@ -56,13 +58,6 @@ func WithFallback(fallback bool) Option {
 	}
 }
 
-// WithTracer sets the tracer for the resolver.
-func WithTracer(tracer trace.Tracer) Option {
-	return func(r *Resolver) {
-		r.tracer = tracer
-	}
-}
-
 // Resolver implements the DB interface and routes queries to primary or replicas.
 type Resolver struct {
 	primary      container.DB
@@ -87,10 +82,6 @@ type statistics struct {
 // New creates a new resolver with the given primary and replicas.
 func New(primary container.DB, replicas []container.DB, logger Logger,
 	metrics Metrics, opts ...Option) container.DB {
-	if primary == nil {
-		panic("primary database cannot be nil")
-	}
-
 	r := &Resolver{
 		primary:      primary,
 		replicas:     replicas,
@@ -121,7 +112,6 @@ func New(primary container.DB, replicas []container.DB, logger Logger,
 }
 
 // initializeMetrics sets up all DB resolver metrics following GoFr patterns.
-
 func (r *Resolver) initializeMetrics() {
 	if r.metrics == nil {
 		return
@@ -150,14 +140,16 @@ func (r *Resolver) pushMetrics() {
 	defer ticker.Stop()
 
 	for range ticker.C {
-		if r.metrics != nil {
-			r.metrics.SetGauge("app_dbresolve_primary_reads", float64(r.stats.primaryReads.Load()))
-			r.metrics.SetGauge("app_dbresolve_primary_writes", float64(r.stats.primaryWrites.Load()))
-			r.metrics.SetGauge("app_dbresolve_replica_reads", float64(r.stats.replicaReads.Load()))
-			r.metrics.SetGauge("app_dbresolve_fallbacks", float64(r.stats.primaryFallbacks.Load()))
-			r.metrics.SetGauge("app_dbresolve_replica_failures", float64(r.stats.replicaFailures.Load()))
-			r.metrics.SetGauge("app_dbresolve_total_queries", float64(r.stats.totalQueries.Load()))
+		if r.metrics == nil {
+			continue
 		}
+
+		r.metrics.SetGauge("app_dbresolve_primary_reads", float64(r.stats.primaryReads.Load()))
+		r.metrics.SetGauge("app_dbresolve_primary_writes", float64(r.stats.primaryWrites.Load()))
+		r.metrics.SetGauge("app_dbresolve_replica_reads", float64(r.stats.replicaReads.Load()))
+		r.metrics.SetGauge("app_dbresolve_fallbacks", float64(r.stats.primaryFallbacks.Load()))
+		r.metrics.SetGauge("app_dbresolve_replica_failures", float64(r.stats.replicaFailures.Load()))
+		r.metrics.SetGauge("app_dbresolve_total_queries", float64(r.stats.totalQueries.Load()))
 	}
 }
 
@@ -179,7 +171,14 @@ func (r *Resolver) addTrace(ctx context.Context, method, query string) (context.
 
 // IsReadQuery determines if a query is a read operation.
 func IsReadQuery(query string) bool {
-	return readQueryPrefixRegex.MatchString(query)
+	if cached, ok := queryTypeCache.Load(query); ok {
+		return cached.(bool)
+	}
+
+	isRead := readQueryPrefixRegex.MatchString(query)
+	queryTypeCache.Store(query, isRead)
+
+	return isRead
 }
 
 // Dialect returns the database dialect (required by container.DB interface).
@@ -219,7 +218,7 @@ func (r *Resolver) Query(query string, args ...any) (*sql.Rows, error) {
 	defer r.sendOperationStats(startTime, "Query", query, "query", span, isRead, args...)
 
 	if isRead && len(r.replicas) > 0 {
-		db := r.strategy.Choose(r.replicas)
+		db := r.chooseReplicaOrFallback(span)
 
 		rows, err := db.Query(query, args...)
 		if err != nil && r.readFallback {
@@ -264,7 +263,7 @@ func (r *Resolver) QueryContext(ctx context.Context, query string, args ...any) 
 	defer r.sendOperationStats(startTime, "QueryContext", query, "query", span, isRead, args...)
 
 	if isRead && len(r.replicas) > 0 {
-		db := r.strategy.Choose(r.replicas)
+		db := r.chooseReplicaOrFallback(span)
 
 		rows, err := db.QueryContext(tracedCtx, query, args...)
 		if err != nil && r.readFallback {
@@ -311,7 +310,7 @@ func (r *Resolver) QueryRow(query string, args ...any) *sql.Row {
 	defer r.sendOperationStats(startTime, "QueryRow", query, "query", span, isRead, args...)
 
 	if isRead && len(r.replicas) > 0 {
-		db := r.strategy.Choose(r.replicas)
+		db := r.chooseReplicaOrFallback(span)
 		r.stats.replicaReads.Add(1)
 
 		if span != nil {
@@ -341,7 +340,7 @@ func (r *Resolver) QueryRowContext(ctx context.Context, query string, args ...an
 	defer r.sendOperationStats(startTime, "QueryRowContext", query, "query", span, isRead, args...)
 
 	if isRead && len(r.replicas) > 0 {
-		db := r.strategy.Choose(r.replicas)
+		db := r.chooseReplicaOrFallback(span)
 		r.stats.replicaReads.Add(1)
 
 		if span != nil {
@@ -407,7 +406,7 @@ func (r *Resolver) Select(ctx context.Context, data any, query string, args ...a
 	defer r.sendOperationStats(startTime, "Select", query, "select", span, isRead, args...)
 
 	if isRead && len(r.replicas) > 0 {
-		db := r.strategy.Choose(r.replicas)
+		db := r.chooseReplicaOrFallback(span)
 		r.stats.replicaReads.Add(1)
 
 		if span != nil {

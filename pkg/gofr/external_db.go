@@ -224,8 +224,13 @@ func (a *App) AddDBResolver(resolver container.DBResolverProvider) {
 	}
 
 	// Build resolver with primary and replicas
-	a.container.SQL = resolver.Build(a.container.SQL, replicas)
+	resolverDB, err := resolver.Build(a.container.SQL, replicas)
+	if err != nil {
+		a.Logger().Errorf("Failed to build DB resolver: %v", err)
+		return
+	}
 
+	a.container.SQL = resolverDB
 	a.Logger().Logf("DB read/write splitting enabled with %d replicas", len(replicas))
 }
 
