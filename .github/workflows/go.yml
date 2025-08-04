@@ -312,7 +312,7 @@ jobs:
       - name: Upload
         uses: qltysh/qlty-action/coverage@v1
         env:
-          CC_TEST_REPORTER_ID: ${{ secrets.CC_TEST_REPORTER_ID }}
+          QLTY_COVERAGE_TOKEN: ${{ secrets.QLTY_COVERAGE_TOKEN }}
         with:
           files: artifacts/clover.xml
           add-prefix: gofr.dev
