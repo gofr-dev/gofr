@@ -287,6 +287,9 @@ jobs:
       - name: Check out code into the Go module directory
         uses: actions/checkout@v4
 
+      - name: Install qlty CLI
+        run: curl -s https://qlty.sh/install | bash
+
       # Download coverage artifacts
       - name: Download Coverage Report
         uses: actions/download-artifact@v4
@@ -304,18 +307,13 @@ jobs:
           # Generate and print total coverage percentage
           echo "Total Coverage:"
           go tool cover -func=merged_profile.cov | tail -n 1
-          go install github.com/t-yuki/goclover@latest
-          goclover merged_profile.cov > clover.xml
         shell: bash
 
       # Upload merged coverage to CodeClimate for analysis
       - name: Upload
-        uses: qltysh/qlty-action/coverage@v1
+        run: qlty coverage publish --input merged_profile.cov
         env:
-          QLTY_COVERAGE_TOKEN: ${{ secrets.QLTY_COVERAGE_TOKEN }}
-        with:
-          files: artifacts/clover.xml
-          add-prefix: gofr.dev
+          QLTY_TOKEN: ${{ secrets.QLTY_TOKEN }}
 
   # Job for code quality checks
   code_quality:
