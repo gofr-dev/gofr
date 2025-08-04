@@ -1156,13 +1156,13 @@ func TestDB_PrepareContext(t *testing.T) {
 	mock.ExpectPrepare("SELECT * FROM test_table")
 
 	// Expect metrics call based on Prepare implementation
-	mockMetrics.EXPECT().RecordHistogram(t.context(), "app_sql_stats", gomock.Any(),
-		"hostname", gomock.Any(), "database", gomock.Any(), "type", "SELECT").DoAndReturn(
-		func(_ context.Context, name string, value any, tags ...string) {
-			t.Logf("RecordHistogram called with: name=%s, value=%v, tags=%v", name, value, tags)
-		})
+	mockMetrics.EXPECT().RecordHistogram(t.Context(), "app_sql_stats", gomock.Any(),
+    "hostname", gomock.Any(), "database", gomock.Any(), "type", "SELECT").DoAndReturn(
+    func(_ context.Context, name string, value any, tags ...string) {
+        t.Logf("RecordHistogram called with: name=%s, value=%v, tags=%v", name, value, tags)
+    })
 
-	stmt, err := db.Prepare("SELECT * FROM test_table")
+	stmt, err := db.PrepareContext(t.Context(), "SELECT * FROM test_table")
 	require.NoError(t, err, "Prepare should not return an error")
 	assert.NotNil(t, stmt, "Prepared statement should not be nil")
 }
@@ -1219,7 +1219,7 @@ func TestDB_ExecContextCancelled(t *testing.T) {
 	db.metrics = NewMockMetrics(ctrl)
 
 	db.metrics.(*MockMetrics).EXPECT().RecordHistogram(
-		t.context(),
+		t.Context(),
 		"app_sql_stats",
 		gomock.Any(),
 		"hostname", "test-host",
