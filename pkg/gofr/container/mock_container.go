@@ -26,6 +26,7 @@ type Mocks struct {
 	OpenTSDB      *MockOpenTSDB
 	SurrealDB     *MockSurrealDB
 	Elasticsearch *MockElasticsearch
+	InfluxDB	  *MockInfluxDB
 	PubSub        *MockPubSubProvider
 	File          *file.MockFileSystemProvider
 	HTTPService   *service.MockHTTP
@@ -98,6 +99,9 @@ func NewMockContainer(t *testing.T, options ...options) (*Container, *Mocks) {
 	elasticsearchMock := NewMockElasticsearch(ctrl)
 	container.Elasticsearch = elasticsearchMock
 
+	influxdbMock := NewMockInfluxDB(ctrl)
+	container.InfluxDB = influxdbMock
+
 	pubsubMock := NewMockPubSubProvider(ctrl)
 	container.PubSub = pubsubMock
 
@@ -132,6 +136,7 @@ func NewMockContainer(t *testing.T, options ...options) (*Container, *Mocks) {
 		OpenTSDB:      opentsdbMock,
 		ArangoDB:      arangoMock,
 		SurrealDB:     surrealMock,
+		InfluxDB: 	   influxdbMock,
 		Elasticsearch: elasticsearchMock,
 		PubSub:        pubsubMock,
 		Metrics:       mockMetrics,
