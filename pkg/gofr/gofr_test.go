@@ -1195,6 +1195,6 @@ func TestApp_OnStart(t *testing.T) {
 
 		err := app.runOnStartHooks(t.Context())
 
-		require.Equal(t, errHookFailed, err, "Expected an error from runOnStartHooks")
+		require.ErrorIs(t, err, errHookFailed, "Expected an error from runOnStartHooks")
 	})
 }
