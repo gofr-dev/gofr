@@ -267,24 +267,42 @@ func (a *App) createReplicaConnections() []container.DB {
 }
 
 // newReplicaConfig creates a config wrapper that overrides the host and optional settings
-func newReplicaConfig(baseConfig config.Config, host string) config.Config {
+func newReplicaConfig(baseConfig config.Config, hostString string) config.Config {
 	return &replicaConfigWrapper{
-		Config: baseConfig,
-		host:   host,
+		Config:     baseConfig,
+		hostString: hostString,
 	}
 }
 
 // replicaConfigWrapper wraps a config and overrides DB_HOST and optional replica settings
 type replicaConfigWrapper struct {
 	config.Config
-	host string
+	hostString string
 }
 
 // Get overrides the config.Get method to provide replica-specific values
 func (c *replicaConfigWrapper) Get(key string) string {
 	switch key {
 	case "DB_HOST":
-		return c.host
+		// Extract only the hostname part if host contains a port
+		if strings.Contains(c.hostString, ":") {
+			return strings.Split(c.hostString, ":")[0]
+		}
+		return c.hostString
+	case "DB_PORT":
+		// Extract port from host if present, otherwise use the default port
+		if strings.Contains(c.hostString, ":") {
+			parts := strings.Split(c.hostString, ":")
+			if len(parts) > 1 {
+				return parts[1]
+			}
+		}
+		// Check for replica-specific port first
+		if replicaPort := c.Config.Get("DB_REPLICA_PORT"); replicaPort != "" {
+			return replicaPort
+		}
+		// Fall back to default port
+		return c.Config.Get("DB_PORT")
 	case "DB_USER":
 		if replicaUser := c.Config.Get("DB_REPLICA_USER"); replicaUser != "" {
 			return replicaUser
@@ -292,10 +310,6 @@ func (c *replicaConfigWrapper) Get(key string) string {
 	case "DB_PASSWORD":
 		if replicaPass := c.Config.Get("DB_REPLICA_PASSWORD"); replicaPass != "" {
 			return replicaPass
-		}
-	case "DB_PORT":
-		if replicaPort := c.Config.Get("DB_REPLICA_PORT"); replicaPort != "" {
-			return replicaPort
 		}
 	}
 
