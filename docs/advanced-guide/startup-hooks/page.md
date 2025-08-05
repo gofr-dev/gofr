@@ -2,16 +2,19 @@
 
 GoFr provides a way to run synchronous jobs when your application starts, before any servers begin handling requests. This is useful for tasks like seeding a database, warming up a cache, or performing other critical setup procedures.
 
-## `OnStart`
+## OnStart
 
 You can register a startup hook using the `a.OnStart()` method on your `app` instance.
 
-### Usage
+## Usage
+
+The method accepts a function with the signature:
 
 The method accepts a function with the signature `func(ctx *gofr.Context) error`.
 
 - The `*gofr.Context` passed to the hook is fully initialized and provides access to all dependency-injection-managed services (e.g., `ctx.Container.SQL`, `ctx.Container.Redis`).
 - If any `OnStart` hook returns an error, the application will log the error and refuse to start.
+
 
 ### Example: Warming up a Cache
 
@@ -53,3 +56,4 @@ func main() {
 ```
 
 This ensures that critical startup tasks are completed successfully before the application begins accepting traffic.
+
