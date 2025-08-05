@@ -197,7 +197,11 @@ func (a *App) AddElasticsearch(db container.ElasticsearchProvider) {
 
 func (a *App) AddInfluxDB(db container.InfluxDBProvider) {
 	db.UseLogger(a.Logger())
-	db.UseMetrics(a.Logger())
+	db.UseMetrics(a.Metrics())
+
+	tracer := otel.GetTracerProvider().Tracer("gofr-influxdb")
+	db.UseTracer(tracer)
 	db.Connect()
+
 	a.container.InfluxDB = db
 }
