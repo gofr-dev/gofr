@@ -46,6 +46,29 @@ type App struct {
 	httpRegistered bool
 
 	subscriptionManager SubscriptionManager
+	onStartHooks        []func(ctx *Context) error
+}
+
+func (a *App) runOnStartHooks(ctx context.Context) error {
+	// Use the existing newContext function with noopRequest
+	gofrCtx := newContext(nil, noopRequest{}, a.container)
+
+	// Set the context for cancellation support
+	gofrCtx.Context = ctx
+
+	for _, hook := range a.onStartHooks {
+		if err := hook(gofrCtx); err != nil {
+			a.Logger().Errorf("OnStart hook failed: %v", err)
+			return err
+		}
+
+		// Check if context was canceled
+		if ctx.Err() != nil {
+			return ctx.Err()
+		}
+	}
+
+	return nil
 }
 
 // Shutdown stops the service(s) and close the application.
@@ -295,4 +318,26 @@ func (a *App) AddStaticFiles(endpoint, filePath string) {
 	}
 
 	a.httpServer.staticFiles[filePath] = endpoint
+}
+
+// OnStart registers a startup hook that will be executed when the application starts.
+// The hook function receives a Context that provides access to the application's
+// container, logger, and configuration. This is useful for performing initialization
+// tasks such as database connections, service registrations, or other setup operations
+// that need to be completed before the application begins serving requests.
+//
+// Example usage:
+//
+//	app := gofr.New()
+//	app.OnStart(func(ctx *gofr.Context) error {
+//	    // Initialize database connection
+//	    db, err := database.Connect(ctx.Config.Get("DB_URL"))
+//	    if err != nil {
+//	        return err
+//	    }
+//	    ctx.Container.SQL = db
+//	    return nil
+//	})
+func (a *App) OnStart(hook func(ctx *Context) error) {
+	a.onStartHooks = append(a.onStartHooks, hook)
 }
