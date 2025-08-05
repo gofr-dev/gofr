@@ -26,7 +26,9 @@ func (r *Resolver) chooseReplicaOrFallback(span trace.Span) container.DB {
 		if span != nil {
 			span.SetAttributes(attribute.String("dbresolver.target", "primary"))
 		}
+
 		r.stats.primaryReads.Add(1)
+
 		return r.primary
 	}
 
@@ -71,6 +73,7 @@ func (s *RoundRobinStrategy) Choose(replicas []container.DB) (container.DB, erro
 	}
 
 	idx := int(s.current.Add(1)) % len(replicas)
+
 	return replicas[idx], nil
 }
 

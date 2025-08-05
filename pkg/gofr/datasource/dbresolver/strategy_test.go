@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
 	"gofr.dev/pkg/gofr/container"
 )
@@ -24,22 +25,22 @@ func TestRoundRobinStrategy_Choose(t *testing.T) {
 
 	// First call should return first replica
 	db, err := strategy.Choose(replicas)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.Equal(t, mockReplica1, db)
 
 	// Second call should return second replica
 	db, err = strategy.Choose(replicas)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.Equal(t, mockReplica2, db)
 
 	// Third call should return third replica
 	db, err = strategy.Choose(replicas)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.Equal(t, mockReplica3, db)
 
 	// Fourth call should wrap around to first replica
 	db, err = strategy.Choose(replicas)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.Equal(t, mockReplica1, db)
 }
 
@@ -57,7 +58,7 @@ func TestRoundRobinStrategy_Choose_SingleReplica(t *testing.T) {
 	// All calls should return the same replica
 	for i := 0; i < 5; i++ {
 		db, err := strategy.Choose(replicas)
-		assert.NoError(t, err)
+		require.NoError(t, err)
 		assert.Equal(t, mockReplica, db)
 	}
 }
@@ -87,7 +88,7 @@ func TestRandomStrategy_Choose(t *testing.T) {
 	// Verify that multiple calls return one of the replicas
 	for i := 0; i < 10; i++ {
 		result, err := strategy.Choose(replicas)
-		assert.NoError(t, err)
+		require.NoError(t, err)
 		assert.Contains(t, replicas, result)
 	}
 }
@@ -106,7 +107,7 @@ func TestRandomStrategy_Choose_SingleReplica(t *testing.T) {
 	// All calls should return the same replica
 	for i := 0; i < 5; i++ {
 		db, err := strategy.Choose(replicas)
-		assert.NoError(t, err)
+		require.NoError(t, err)
 		assert.Equal(t, mockReplica, db)
 	}
 }
