@@ -100,7 +100,7 @@ func TestGoogleClient_Publish_Success(t *testing.T) {
 			logger: logging.NewMockLogger(logging.DEBUG),
 			client: client,
 			Config: Config{
-				ProjectID: "test",
+				ProjectID:        "test",
 				SubscriptionName: "sub",
 			},
 			metrics: mockMetrics,
@@ -130,7 +130,7 @@ func TestGoogleClient_PublishTopic_Error(t *testing.T) {
 	mockMetrics := NewMockMetrics(ctrl)
 
 	g := &googleClient{client: getGoogleClient(t), Config: Config{
-		ProjectID: "test",
+		ProjectID:        "test",
 		SubscriptionName: "sub",
 	}, metrics: mockMetrics, logger: logging.NewMockLogger(logging.DEBUG)}
 
@@ -149,7 +149,7 @@ func TestGoogleClient_PublishTopic_Error(t *testing.T) {
 
 func TestGoogleClient_getTopic_Success(t *testing.T) {
 	g := &googleClient{client: getGoogleClient(t), Config: Config{
-		ProjectID: "test",
+		ProjectID:        "test",
 		SubscriptionName: "sub",
 	}}
 
@@ -168,7 +168,7 @@ func TestGoogleClient_getTopic_Error(t *testing.T) {
 	cancel()
 
 	g := &googleClient{client: getGoogleClient(t), Config: Config{
-		ProjectID: "test",
+		ProjectID:        "test",
 		SubscriptionName: "sub",
 	}}
 
@@ -183,7 +183,7 @@ func TestGoogleClient_getTopic_Error(t *testing.T) {
 
 func TestGoogleClient_getSubscription(t *testing.T) {
 	g := &googleClient{client: getGoogleClient(t), Config: Config{
-		ProjectID: "test",
+		ProjectID:        "test",
 		SubscriptionName: "sub",
 	}}
 
@@ -200,8 +200,8 @@ func TestGoogleClient_getSubscription(t *testing.T) {
 
 func Test_validateConfigs(t *testing.T) {
 	testCases := []struct {
-		desc string
-		input *Config
+		desc   string
+		input  *Config
 		expErr error
 	}{
 		{desc: "project id not provided", input: &Config{}, expErr: errProjectIDNotProvided},
@@ -217,7 +217,7 @@ func Test_validateConfigs(t *testing.T) {
 
 func TestGoogleClient_CloseReturnsError(t *testing.T) {
 	g := &googleClient{
-		client: getGoogleClient(t),
+		client:      getGoogleClient(t),
 		receiveChan: make(map[string]chan *pubsub.Message),
 	}
 
@@ -243,13 +243,13 @@ func TestGoogleClient_CreateTopic_Success(t *testing.T) {
 	g := &googleClient{client: mockClient, Config: Config{ProjectID: "test", SubscriptionName: "sub"}}
 
 	tests := []struct {
-		name string
-		topicName string
+		name         string
+		topicName    string
 		mockBehavior func()
-		expectedErr error
+		expectedErr  error
 	}{
 		{
-			name: "CreateTopic_Success",
+			name:      "CreateTopic_Success",
 			topicName: "test-topic",
 			mockBehavior: func() {
 				mockClient.EXPECT().CreateTopic(t.Context(), "test-topic").Return(&gcPubSub.Topic{}, nil)
@@ -257,7 +257,7 @@ func TestGoogleClient_CreateTopic_Success(t *testing.T) {
 			expectedErr: nil,
 		},
 		{
-			name: "CreateTopic_AlreadyExists",
+			name:      "CreateTopic_AlreadyExists",
 			topicName: "test-topic",
 			mockBehavior: func() {
 				mockClient.EXPECT().CreateTopic(t.Context(), "test-topic").Return(&gcPubSub.Topic{}, errTopicExists)
@@ -359,11 +359,11 @@ func TestGoogleClient_Query(t *testing.T) {
 	message := []byte("test message")
 
 	g := &googleClient{
-		client: client,
-		logger: logger,
+		client:  client,
+		logger:  logger,
 		metrics: mockMetrics,
 		Config: Config{
-			ProjectID: "test",
+			ProjectID:        "test",
 			SubscriptionName: "sub",
 		},
 	}
@@ -466,7 +466,7 @@ func TestGoogleClient_getTopic_CreateFailure(t *testing.T) {
 	client.Close()
 
 	g := &googleClient{client: client, Config: Config{
-		ProjectID: "test",
+		ProjectID:        "test",
 		SubscriptionName: "sub",
 	}}
 
