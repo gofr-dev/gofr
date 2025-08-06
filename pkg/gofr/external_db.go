@@ -1,13 +1,15 @@
 package gofr
 
 import (
-	"strings"
-
 	"go.opentelemetry.io/otel"
 	"gofr.dev/pkg/gofr/config"
 	"gofr.dev/pkg/gofr/container"
 	"gofr.dev/pkg/gofr/datasource/file"
 	"gofr.dev/pkg/gofr/datasource/sql"
+	"gofr.dev/pkg/gofr/logging"
+	"gofr.dev/pkg/gofr/metrics"
+	"strconv"
+	"strings"
 )
 
 // AddMongo sets the Mongo datasource in the app's container.
@@ -217,7 +219,7 @@ func (a *App) AddDBResolver(resolver container.DBResolverProvider) {
 	resolver.Connect()
 
 	// Create replica connections
-	replicas := a.createReplicaConnections()
+	replicas := createReplicaConnections(a.Config, a.Logger(), a.Metrics())
 	if len(replicas) == 0 {
 		a.Logger().Debugf("No replicas configured, skipping DB resolver setup")
 		return
@@ -234,10 +236,9 @@ func (a *App) AddDBResolver(resolver container.DBResolverProvider) {
 	a.Logger().Logf("DB read/write splitting enabled with %d replicas", len(replicas))
 }
 
-// createReplicaConnections creates DB connections to replicas
-func (a *App) createReplicaConnections() []container.DB {
-	// Get replica hosts
-	replicaHostsStr := a.Config.Get("DB_REPLICA_HOSTS")
+// createReplicaConnections creates optimized DB connections to replicas
+func createReplicaConnections(config config.Config, logger logging.Logger, metrics metrics.Manager) []container.DB {
+	replicaHostsStr := config.Get("DB_REPLICA_HOSTS")
 	if replicaHostsStr == "" {
 		return nil
 	}
@@ -245,63 +246,52 @@ func (a *App) createReplicaConnections() []container.DB {
 	replicaHosts := strings.Split(replicaHostsStr, ",")
 	var replicas []container.DB
 
-	// For each host, create a replica connection
 	for _, host := range replicaHosts {
 		host = strings.TrimSpace(host)
 		if host == "" {
 			continue
 		}
 
-		// Create a config wrapper for this replica
-		replicaConfig := newReplicaConfig(a.Config, host)
+		// Create optimized replica config
+		replicaConfig := &replicaConfigWrapper{
+			Config:     config,
+			hostString: host,
+		}
 
-		// Create a new SQL connection using the replica config
-		replica := sql.NewSQL(replicaConfig, a.Logger(), a.Metrics())
+		replica := sql.NewSQL(replicaConfig, logger, metrics)
 		if replica != nil {
 			replicas = append(replicas, replica)
-			a.Logger().Logf("Created DB replica connection to %s", host)
+			logger.Logf("Created DB replica connection to %s", host)
 		}
 	}
 
 	return replicas
 }
 
-// newReplicaConfig creates a config wrapper that overrides the host and optional settings
-func newReplicaConfig(baseConfig config.Config, hostString string) config.Config {
-	return &replicaConfigWrapper{
-		Config:     baseConfig,
-		hostString: hostString,
-	}
-}
-
-// replicaConfigWrapper wraps a config and overrides DB_HOST and optional replica settings
+// replicaConfigWrapper wraps config and optimizes connection settings for replicas
 type replicaConfigWrapper struct {
 	config.Config
 	hostString string
 }
 
-// Get overrides the config.Get method to provide replica-specific values
+// Get overrides config values for replica optimization
 func (c *replicaConfigWrapper) Get(key string) string {
 	switch key {
 	case "DB_HOST":
-		// Extract only the hostname part if host contains a port
 		if strings.Contains(c.hostString, ":") {
 			return strings.Split(c.hostString, ":")[0]
 		}
 		return c.hostString
 	case "DB_PORT":
-		// Extract port from host if present, otherwise use the default port
 		if strings.Contains(c.hostString, ":") {
 			parts := strings.Split(c.hostString, ":")
 			if len(parts) > 1 {
 				return parts[1]
 			}
 		}
-		// Check for replica-specific port first
 		if replicaPort := c.Config.Get("DB_REPLICA_PORT"); replicaPort != "" {
 			return replicaPort
 		}
-		// Fall back to default port
 		return c.Config.Get("DB_PORT")
 	case "DB_USER":
 		if replicaUser := c.Config.Get("DB_REPLICA_USER"); replicaUser != "" {
@@ -311,6 +301,39 @@ func (c *replicaConfigWrapper) Get(key string) string {
 		if replicaPass := c.Config.Get("DB_REPLICA_PASSWORD"); replicaPass != "" {
 			return replicaPass
 		}
+	case "DB_MAX_IDLE_CONNECTION":
+		// Simple optimization: 4x idle connections for read replicas
+		if primaryIdle := c.Config.Get("DB_MAX_IDLE_CONNECTION"); primaryIdle != "" {
+			if val, err := strconv.Atoi(primaryIdle); err == nil && val > 0 {
+				optimized := val * 4
+				if optimized > 50 { // Cap at 50
+					optimized = 50
+				}
+				if optimized < 10 { // Min of 10 for read performance
+					optimized = 10
+				}
+				return strconv.Itoa(optimized)
+			}
+		}
+		return "10" // Default optimized value
+	case "DB_MAX_OPEN_CONNECTION":
+		// Simple optimization: 2x max connections for read replicas
+		if primaryOpen := c.Config.Get("DB_MAX_OPEN_CONNECTION"); primaryOpen != "" {
+			if val, err := strconv.Atoi(primaryOpen); err == nil {
+				if val == 0 { // Handle unlimited
+					return "100" // Reasonable limit for replicas
+				}
+				optimized := val * 2
+				if optimized > 200 { // Cap at 200
+					optimized = 200
+				}
+				if optimized < 50 { // Min of 50 for read distribution
+					optimized = 50
+				}
+				return strconv.Itoa(optimized)
+			}
+		}
+		return "100" // Default optimized value
 	}
 
 	return c.Config.Get(key)

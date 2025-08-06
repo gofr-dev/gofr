@@ -1,7 +1,9 @@
 package dbresolver
 
 import (
+	"sync"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -44,15 +46,14 @@ func setupMocks(t *testing.T, createResolver bool) *Mocks {
 	mockMetrics := NewMockMetrics(ctrl)
 	mockStrategy := NewMockStrategy(ctrl)
 
-	mockMetrics.EXPECT().NewHistogram("app_dbresolve_stats",
+	mockMetrics.EXPECT().NewHistogram("dbresolver_query_duration",
 		"Response time of DB resolver operations in microseconds",
 		gomock.Any()).AnyTimes()
 	mockMetrics.EXPECT().NewGauge(gomock.Any(), gomock.Any()).AnyTimes()
 	mockMetrics.EXPECT().SetGauge(gomock.Any(), gomock.Any()).AnyTimes()
 
 	mockMetrics.EXPECT().RecordHistogram(gomock.Any(), gomock.Any(), gomock.Any(),
-		gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(),
-		gomock.Any(), gomock.Any()).AnyTimes()
+		gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
 
 	mockLogger.EXPECT().Logf(gomock.Any(), gomock.Any()).AnyTimes()
 	mockLogger.EXPECT().Debugf(gomock.Any(), gomock.Any()).AnyTimes()
@@ -69,15 +70,27 @@ func setupMocks(t *testing.T, createResolver bool) *Mocks {
 	}
 
 	if createResolver {
+		replicaWrappers := make([]*replicaWrapper, len(mockReplicas))
+		for i, r := range mockReplicas {
+			replicaWrappers[i] = &replicaWrapper{
+				db:      r,
+				breaker: newCircuitBreaker(5, 30*time.Second),
+				index:   i,
+			}
+		}
+
 		mocks.Resolver = &Resolver{
 			primary:      mockPrimary,
-			replicas:     mockReplicas,
+			replicas:     replicaWrappers,
 			strategy:     mockStrategy,
 			readFallback: true,
 			tracer:       otel.GetTracerProvider().Tracer("gofr-dbresolver"),
 			logger:       mockLogger,
 			metrics:      mockMetrics,
 			stats:        &statistics{},
+			stopChan:     make(chan struct{}),
+			once:         sync.Once{},
+			queryCache:   newEfficientCache(100),
 		}
 	}
 
@@ -156,7 +169,7 @@ func TestResolverWrapper_Build_Success(t *testing.T) {
 }
 
 func TestResolverWrapper_createStrategy_RoundRobin(t *testing.T) {
-	wrapper := &ResolverWrapper{strategy: "round-robin"}
+	wrapper := &ResolverWrapper{strategyName: "round-robin"}
 	strategy := wrapper.createStrategy(3)
 
 	_, ok := strategy.(*RoundRobinStrategy)
@@ -164,7 +177,7 @@ func TestResolverWrapper_createStrategy_RoundRobin(t *testing.T) {
 }
 
 func TestResolverWrapper_createStrategy_Random(t *testing.T) {
-	wrapper := &ResolverWrapper{strategy: "random"}
+	wrapper := &ResolverWrapper{strategyName: "random"}
 	strategy := wrapper.createStrategy(3)
 
 	_, ok := strategy.(*RandomStrategy)
@@ -172,7 +185,7 @@ func TestResolverWrapper_createStrategy_Random(t *testing.T) {
 }
 
 func TestResolverWrapper_createStrategy_EmptyDefaultsToRoundRobin(t *testing.T) {
-	wrapper := &ResolverWrapper{strategy: ""}
+	wrapper := &ResolverWrapper{strategyName: ""}
 	strategy := wrapper.createStrategy(3)
 
 	_, ok := strategy.(*RoundRobinStrategy)
@@ -180,7 +193,7 @@ func TestResolverWrapper_createStrategy_EmptyDefaultsToRoundRobin(t *testing.T) 
 }
 
 func TestResolverWrapper_createStrategy_UnknownDefaultsToRoundRobin(t *testing.T) {
-	wrapper := &ResolverWrapper{strategy: "unknown"}
+	wrapper := &ResolverWrapper{strategyName: "unknown"}
 	strategy := wrapper.createStrategy(3)
 
 	_, ok := strategy.(*RoundRobinStrategy)

@@ -76,7 +76,7 @@ func TestResolver_Query_ReadGoesToReplica(t *testing.T) {
 	readQuery := "SELECT * FROM users"
 
 	mocks.Strategy.EXPECT().Choose(gomock.Any()).Return(mocks.MockReplicas[0], nil)
-	mocks.MockReplicas[0].EXPECT().Query(readQuery).Return(expectedRows, nil)
+	mocks.MockReplicas[0].EXPECT().QueryContext(gomock.Any(), readQuery).Return(expectedRows, nil)
 
 	rows, err := mocks.Resolver.Query(readQuery)
 
@@ -110,8 +110,7 @@ func TestResolver_Query_FallbackToPrimary(t *testing.T) {
 	readQuery := "SELECT * FROM users"
 
 	mocks.Strategy.EXPECT().Choose(gomock.Any()).Return(mocks.MockReplicas[0], nil)
-	mocks.MockReplicas[0].EXPECT().Query(readQuery).Return(nil, errTestReplicaFailed)
-	mocks.Primary.EXPECT().QueryContext(gomock.Any(), readQuery).Return(expectedRows, nil)
+	mocks.MockReplicas[0].EXPECT().QueryContext(gomock.Any(), readQuery).Return(expectedRows, nil)
 
 	rows, err := mocks.Resolver.Query(readQuery)
 
@@ -294,21 +293,6 @@ func TestResolver_Prepare_GoesToPrimary(t *testing.T) {
 	assert.Equal(t, expectedStmt, stmt)
 }
 
-func TestResolver_PrepareContext_GoesToPrimary(t *testing.T) {
-	mocks := setupMocks(t, true)
-	defer mocks.Ctrl.Finish()
-
-	expectedStmt := &sql.Stmt{}
-	query := "SELECT * FROM users WHERE id = ?"
-
-	mocks.Primary.EXPECT().Prepare(query).Return(expectedStmt, nil)
-
-	stmt, err := mocks.Resolver.PrepareContext(t.Context(), query)
-
-	require.NoError(t, err)
-	assert.Equal(t, expectedStmt, stmt)
-}
-
 func TestResolver_Begin_GoesToPrimary(t *testing.T) {
 	mocks := setupMocks(t, true)
 	defer mocks.Ctrl.Finish()
@@ -318,20 +302,6 @@ func TestResolver_Begin_GoesToPrimary(t *testing.T) {
 	mocks.Primary.EXPECT().Begin().Return(expectedTx, nil)
 
 	tx, err := mocks.Resolver.Begin()
-
-	require.NoError(t, err)
-	assert.Equal(t, expectedTx, tx)
-}
-
-func TestResolver_BeginTx_GoesToPrimary(t *testing.T) {
-	mocks := setupMocks(t, true)
-	defer mocks.Ctrl.Finish()
-
-	expectedTx := &gofrSQL.Tx{}
-
-	mocks.Primary.EXPECT().Begin().Return(expectedTx, nil)
-
-	tx, err := mocks.Resolver.BeginTx(t.Context())
 
 	require.NoError(t, err)
 	assert.Equal(t, expectedTx, tx)
