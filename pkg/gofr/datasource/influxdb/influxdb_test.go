@@ -357,7 +357,7 @@ func Test_CreateBucket(t *testing.T) {
 			err:          errEmptyBucketName,
 		},
 		{
-			name:         "try creating bucket with empty bucket name",
+			name:         "successfully creating a new bucket",
 			orgID:        dummyOrgID,
 			bucketName:   dummyBucketName,
 			expectErr:    false,
@@ -389,6 +389,64 @@ func Test_CreateBucket(t *testing.T) {
 				require.Equal(t, err, tt.err)
 			} else {
 				require.Equal(t, tt.wantBucketID, bucketID)
+				require.NoError(t, err)
+			}
+		})
+	}
+}
+
+func Test_DeleteBucket(t *testing.T) {
+	t.Helper()
+
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	dummyId := "id1"
+
+	testCases := []struct {
+		name      string
+		orgID     string
+		bucketId  string
+		expectErr bool
+		err       error
+	}{
+		{
+			name:      "try deleting bucket with empty bucket id",
+			orgID:     "",
+			bucketId:  "",
+			expectErr: true,
+			err:       errEmptyBucketID,
+		},
+		{
+			name:      "successfully deleting a new bucket",
+			orgID:     "",
+			bucketId:  dummyId,
+			expectErr: false,
+			err:       nil,
+		},
+	}
+
+	for _, tt := range testCases {
+		t.Run(tt.name, func(t *testing.T) {
+			client := *setupDB(t, ctrl)
+			mockInflux := client.client.(*influxdb_mock.MockInfluxClient)
+			mockInfluxBucketAPI := influxdb_mock.NewMockBucketsAPI(ctrl)
+
+			mockInflux.EXPECT().BucketsAPI().
+				Return(mockInfluxBucketAPI).
+				AnyTimes()
+
+			mockInfluxBucketAPI.EXPECT().
+				DeleteBucketWithID(gomock.Any(), tt.bucketId).
+				Return(tt.err).
+				AnyTimes()
+
+			err := client.DeleteBucket(t.Context(), tt.bucketId)
+
+			if tt.expectErr {
+				require.Error(t, err)
+				require.Equal(t, err, tt.err)
+			} else {
 				require.NoError(t, err)
 			}
 		})
