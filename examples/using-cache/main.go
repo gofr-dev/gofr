@@ -59,5 +59,7 @@ func main() {
 		}
 	}()
 
+	// Block forever to keep the example running and simulate continuous cache usage.
+	// In real applications, this infinite loop wouldn't be needed.
 	select {}
 }
