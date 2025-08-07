@@ -1,12 +1,12 @@
 package inmemory
 
 import (
-	"context"
 	"runtime"
 	"sync"
 	"testing"
 	"time"
 
+	"github.com/prometheus/client_golang/prometheus"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -23,7 +23,14 @@ func makeCache(t *testing.T, opts ...Option) *inMemoryCache {
 
 // Test basic Set/Get/Delete/Exists operations.
 func TestOperations(t *testing.T) {
-	ctx := context.Background()
+	originalRegistry := prometheus.DefaultRegisterer
+	prometheus.DefaultRegisterer = prometheus.NewRegistry()
+
+	t.Cleanup(func() {
+		prometheus.DefaultRegisterer = originalRegistry
+	})
+
+	ctx := t.Context()
 	c := makeCache(t, WithName("name"), WithTTL(5*time.Second), WithMaxItems(10))
 	defer c.Close(ctx)
 
@@ -47,7 +54,14 @@ func TestOperations(t *testing.T) {
 
 // Test Clear method.
 func TestClear(t *testing.T) {
-	ctx := context.Background()
+	originalRegistry := prometheus.DefaultRegisterer
+	prometheus.DefaultRegisterer = prometheus.NewRegistry()
+
+	t.Cleanup(func() {
+		prometheus.DefaultRegisterer = originalRegistry
+	})
+
+	ctx := t.Context()
 	c := makeCache(t, WithTTL(time.Minute), WithMaxItems(10))
 	defer c.Close(ctx)
 
@@ -65,7 +79,14 @@ func TestClear(t *testing.T) {
 
 // Test TTL expiration.
 func TestTTLExpiry(t *testing.T) {
-	ctx := context.Background()
+	originalRegistry := prometheus.DefaultRegisterer
+	prometheus.DefaultRegisterer = prometheus.NewRegistry()
+
+	t.Cleanup(func() {
+		prometheus.DefaultRegisterer = originalRegistry
+	})
+
+	ctx := t.Context()
 	c := makeCache(t, WithTTL(50*time.Millisecond), WithMaxItems(10))
 	defer c.Close(ctx)
 
@@ -79,7 +100,14 @@ func TestTTLExpiry(t *testing.T) {
 
 // Test eviction due to capacity.
 func TestCapacityEviction(t *testing.T) {
-	ctx := context.Background()
+	originalRegistry := prometheus.DefaultRegisterer
+	prometheus.DefaultRegisterer = prometheus.NewRegistry()
+
+	t.Cleanup(func() {
+		prometheus.DefaultRegisterer = originalRegistry
+	})
+
+	ctx := t.Context()
 	c := makeCache(t, WithTTL(time.Minute), WithMaxItems(2))
 	defer c.Close(ctx)
 
@@ -97,7 +125,14 @@ func TestCapacityEviction(t *testing.T) {
 
 // Test overwriting existing key.
 func TestOverwrite(t *testing.T) {
-	ctx := context.Background()
+	originalRegistry := prometheus.DefaultRegisterer
+	prometheus.DefaultRegisterer = prometheus.NewRegistry()
+
+	t.Cleanup(func() {
+		prometheus.DefaultRegisterer = originalRegistry
+	})
+
+	ctx := t.Context()
 	c := makeCache(t, WithTTL(5*time.Second), WithMaxItems(10))
 	defer c.Close(ctx)
 
@@ -112,7 +147,14 @@ func TestOverwrite(t *testing.T) {
 
 // Test deleting non-existent key.
 func TestDeleteNonExistent(t *testing.T) {
-	ctx := context.Background()
+	originalRegistry := prometheus.DefaultRegisterer
+	prometheus.DefaultRegisterer = prometheus.NewRegistry()
+
+	t.Cleanup(func() {
+		prometheus.DefaultRegisterer = originalRegistry
+	})
+
+	ctx := t.Context()
 	c := makeCache(t, WithTTL(5*time.Second), WithMaxItems(10))
 	defer c.Close(ctx)
 
@@ -122,7 +164,14 @@ func TestDeleteNonExistent(t *testing.T) {
 
 // Test clearing empty cache.
 func TestClearEmpty(t *testing.T) {
-	ctx := context.Background()
+	originalRegistry := prometheus.DefaultRegisterer
+	prometheus.DefaultRegisterer = prometheus.NewRegistry()
+
+	t.Cleanup(func() {
+		prometheus.DefaultRegisterer = originalRegistry
+	})
+
+	ctx := t.Context()
 	c := makeCache(t, WithTTL(5*time.Second), WithMaxItems(10))
 	defer c.Close(ctx)
 
@@ -132,7 +181,14 @@ func TestClearEmpty(t *testing.T) {
 
 // Test concurrent Set/Get/Exists.
 func TestConcurrentAccess(t *testing.T) {
-	ctx := context.Background()
+	originalRegistry := prometheus.DefaultRegisterer
+	prometheus.DefaultRegisterer = prometheus.NewRegistry()
+
+	t.Cleanup(func() {
+		prometheus.DefaultRegisterer = originalRegistry
+	})
+
+	ctx := t.Context()
 	c := makeCache(t, WithTTL(5*time.Second), WithMaxItems(10))
 	defer c.Close(ctx)
 
@@ -158,7 +214,14 @@ func TestConcurrentAccess(t *testing.T) {
 
 // Test cleanup removes expired before eviction.
 func TestEvictionEdgeCase(t *testing.T) {
-	ctx := context.Background()
+	originalRegistry := prometheus.DefaultRegisterer
+	prometheus.DefaultRegisterer = prometheus.NewRegistry()
+
+	t.Cleanup(func() {
+		prometheus.DefaultRegisterer = originalRegistry
+	})
+
+	ctx := t.Context()
 	c := makeCache(t, WithTTL(100*time.Millisecond), WithMaxItems(2))
 	defer c.Close(ctx)
 
@@ -178,7 +241,14 @@ func TestEvictionEdgeCase(t *testing.T) {
 
 // Test default configuration values.
 func TestDefaultConfiguration(t *testing.T) {
-	ctx := context.Background()
+	originalRegistry := prometheus.DefaultRegisterer
+	prometheus.DefaultRegisterer = prometheus.NewRegistry()
+
+	t.Cleanup(func() {
+		prometheus.DefaultRegisterer = originalRegistry
+	})
+
+	ctx := t.Context()
 	ci, err := NewInMemoryCache()
 	require.NoError(t, err)
 
@@ -197,7 +267,14 @@ func TestDefaultConfiguration(t *testing.T) {
 
 // Last option wins.
 func TestMultipleOptions(t *testing.T) {
-	ctx := context.Background()
+	originalRegistry := prometheus.DefaultRegisterer
+	prometheus.DefaultRegisterer = prometheus.NewRegistry()
+
+	t.Cleanup(func() {
+		prometheus.DefaultRegisterer = originalRegistry
+	})
+
+	ctx := t.Context()
 	c := makeCache(t,
 		WithTTL(30*time.Second),
 		WithMaxItems(5),
@@ -211,7 +288,14 @@ func TestMultipleOptions(t *testing.T) {
 
 // TTL=0 should expire immediately.
 func TestZeroTTL(t *testing.T) {
-	ctx := context.Background()
+	originalRegistry := prometheus.DefaultRegisterer
+	prometheus.DefaultRegisterer = prometheus.NewRegistry()
+
+	t.Cleanup(func() {
+		prometheus.DefaultRegisterer = originalRegistry
+	})
+
+	ctx := t.Context()
 	c := makeCache(t, WithTTL(0))
 	defer c.Close(ctx)
 
@@ -222,7 +306,14 @@ func TestZeroTTL(t *testing.T) {
 
 // TTL<0 should expire immediately.
 func TestNegativeTTL(t *testing.T) {
-	ctx := context.Background()
+	originalRegistry := prometheus.DefaultRegisterer
+	prometheus.DefaultRegisterer = prometheus.NewRegistry()
+
+	t.Cleanup(func() {
+		prometheus.DefaultRegisterer = originalRegistry
+	})
+
+	ctx := t.Context()
 	c := makeCache(t, WithTTL(-time.Second))
 	defer c.Close(ctx)
 
@@ -233,7 +324,14 @@ func TestNegativeTTL(t *testing.T) {
 
 // maxItems=0 means unlimited.
 func TestUnlimitedCapacity(t *testing.T) {
-	ctx := context.Background()
+	originalRegistry := prometheus.DefaultRegisterer
+	prometheus.DefaultRegisterer = prometheus.NewRegistry()
+
+	t.Cleanup(func() {
+		prometheus.DefaultRegisterer = originalRegistry
+	})
+
+	ctx := t.Context()
 	c := makeCache(t, WithTTL(time.Minute), WithMaxItems(0))
 	defer c.Close(ctx)
 
@@ -255,7 +353,14 @@ func TestUnlimitedCapacity(t *testing.T) {
 
 // maxItems=1 should only allow one item.
 func TestSingleItemCapacity(t *testing.T) {
-	ctx := context.Background()
+	originalRegistry := prometheus.DefaultRegisterer
+	prometheus.DefaultRegisterer = prometheus.NewRegistry()
+
+	t.Cleanup(func() {
+		prometheus.DefaultRegisterer = originalRegistry
+	})
+
+	ctx := t.Context()
 	c := makeCache(t, WithTTL(time.Minute), WithMaxItems(1))
 	defer c.Close(ctx)
 
@@ -270,7 +375,14 @@ func TestSingleItemCapacity(t *testing.T) {
 
 // Test LRU eviction order.
 func TestLRUEvictionOrder(t *testing.T) {
-	ctx := context.Background()
+	originalRegistry := prometheus.DefaultRegisterer
+	prometheus.DefaultRegisterer = prometheus.NewRegistry()
+
+	t.Cleanup(func() {
+		prometheus.DefaultRegisterer = originalRegistry
+	})
+
+	ctx := t.Context()
 	c := makeCache(t, WithTTL(time.Minute), WithMaxItems(3))
 	defer c.Close(ctx)
 
@@ -287,7 +399,14 @@ func TestLRUEvictionOrder(t *testing.T) {
 
 // Updating key should refresh its usage.
 func TestUpdateExistingKeyTiming(t *testing.T) {
-	ctx := context.Background()
+	originalRegistry := prometheus.DefaultRegisterer
+	prometheus.DefaultRegisterer = prometheus.NewRegistry()
+
+	t.Cleanup(func() {
+		prometheus.DefaultRegisterer = originalRegistry
+	})
+
+	ctx := t.Context()
 	c := makeCache(t, WithTTL(time.Minute), WithMaxItems(2))
 	defer c.Close(ctx)
 
@@ -302,19 +421,28 @@ func TestUpdateExistingKeyTiming(t *testing.T) {
 
 // Support for multiple Go types.
 func TestDifferentValueTypes(t *testing.T) {
-	ctx := context.Background()
+	originalRegistry := prometheus.DefaultRegisterer
+	prometheus.DefaultRegisterer = prometheus.NewRegistry()
+
+	t.Cleanup(func() {
+		prometheus.DefaultRegisterer = originalRegistry
+	})
+
+	ctx := t.Context()
 	c := makeCache(t, WithTTL(time.Minute))
 	defer c.Close(ctx)
 
 	values := map[string]any{
-		"str":    "hello",
-		"int":    42,
-		"flt":    3.14,
-		"bool":   true,
-		"slice":  []int{1, 2, 3},
-		"map":    map[string]int{"k": 123},
-		"nilval": nil,
+		"str":   "hello",
+		"int":   42,
+		"flt":   3.14,
+		"bool":  true,
+		"slice": []int{1, 2, 3},
+		"map":   map[string]int{"k": 123},
 	}
+
+	err := c.Set(ctx, "nilval", nil)
+	require.Error(t, err, "Expected an error when setting a nil value")
 
 	for k, val := range values {
 		require.NoError(t, c.Set(ctx, k, val))
@@ -322,18 +450,24 @@ func TestDifferentValueTypes(t *testing.T) {
 
 	for k, expected := range values {
 		v, found, _ := c.Get(ctx, k)
-		if k == "nilval" {
-			assert.False(t, found)
-		} else {
-			assert.True(t, found)
-			assert.Equal(t, expected, v)
-		}
+		assert.True(t, found)
+		assert.Equal(t, expected, v)
 	}
+
+	_, found, _ := c.Get(ctx, "nilval")
+	assert.False(t, found)
 }
 
 // Using empty key should error.
 func TestEmptyStringKey(t *testing.T) {
-	ctx := context.Background()
+	originalRegistry := prometheus.DefaultRegisterer
+	prometheus.DefaultRegisterer = prometheus.NewRegistry()
+
+	t.Cleanup(func() {
+		prometheus.DefaultRegisterer = originalRegistry
+	})
+
+	ctx := t.Context()
 	c := makeCache(t, WithTTL(time.Minute))
 	defer c.Close(ctx)
 
@@ -343,7 +477,14 @@ func TestEmptyStringKey(t *testing.T) {
 
 // Long keys are supported.
 func TestLongKey(t *testing.T) {
-	ctx := context.Background()
+	originalRegistry := prometheus.DefaultRegisterer
+	prometheus.DefaultRegisterer = prometheus.NewRegistry()
+
+	t.Cleanup(func() {
+		prometheus.DefaultRegisterer = originalRegistry
+	})
+
+	ctx := t.Context()
 	c := makeCache(t, WithTTL(time.Minute))
 	defer c.Close(ctx)
 
@@ -358,7 +499,14 @@ func TestLongKey(t *testing.T) {
 
 // Concurrent Set on same key.
 func TestConcurrentEviction(t *testing.T) {
-	ctx := context.Background()
+	originalRegistry := prometheus.DefaultRegisterer
+	prometheus.DefaultRegisterer = prometheus.NewRegistry()
+
+	t.Cleanup(func() {
+		prometheus.DefaultRegisterer = originalRegistry
+	})
+
+	ctx := t.Context()
 	c := makeCache(t, WithTTL(time.Minute), WithMaxItems(10))
 	defer c.Close(ctx)
 
@@ -398,7 +546,14 @@ func TestConcurrentEviction(t *testing.T) {
 
 // Cleanup goroutine should stop after Close.
 func TestCleanupGoroutineStops(t *testing.T) {
-	ctx := context.Background()
+	originalRegistry := prometheus.DefaultRegisterer
+	prometheus.DefaultRegisterer = prometheus.NewRegistry()
+
+	t.Cleanup(func() {
+		prometheus.DefaultRegisterer = originalRegistry
+	})
+
+	ctx := t.Context()
 	before := runtime.NumGoroutine()
 	c := makeCache(t, WithTTL(time.Millisecond))
 	time.Sleep(10 * time.Millisecond)
@@ -411,7 +566,14 @@ func TestCleanupGoroutineStops(t *testing.T) {
 
 // Calling Close multiple times is safe.
 func TestMultipleClose(t *testing.T) {
-	ctx := context.Background()
+	originalRegistry := prometheus.DefaultRegisterer
+	prometheus.DefaultRegisterer = prometheus.NewRegistry()
+
+	t.Cleanup(func() {
+		prometheus.DefaultRegisterer = originalRegistry
+	})
+
+	ctx := t.Context()
 	c := makeCache(t, WithTTL(time.Minute))
 	c.Close(ctx)
 	c.Close(ctx)
@@ -420,7 +582,14 @@ func TestMultipleClose(t *testing.T) {
 
 // Set/Get still work after Close.
 func TestOperationsAfterClose(t *testing.T) {
-	ctx := context.Background()
+	originalRegistry := prometheus.DefaultRegisterer
+	prometheus.DefaultRegisterer = prometheus.NewRegistry()
+
+	t.Cleanup(func() {
+		prometheus.DefaultRegisterer = originalRegistry
+	})
+
+	ctx := t.Context()
 	c := makeCache(t, WithTTL(time.Minute))
 	require.NoError(t, c.Set(ctx, "pre", "close"))
 	c.Close(ctx)
@@ -437,7 +606,14 @@ func TestOperationsAfterClose(t *testing.T) {
 
 // Expired items should be cleaned in background.
 func TestCleanupFrequency(t *testing.T) {
-	ctx := context.Background()
+	originalRegistry := prometheus.DefaultRegisterer
+	prometheus.DefaultRegisterer = prometheus.NewRegistry()
+
+	t.Cleanup(func() {
+		prometheus.DefaultRegisterer = originalRegistry
+	})
+
+	ctx := t.Context()
 	c := makeCache(t, WithTTL(100*time.Millisecond))
 	defer c.Close(ctx)
 
@@ -451,7 +627,14 @@ func TestCleanupFrequency(t *testing.T) {
 
 // Exists should clean expired keys.
 func TestExistsWithExpiredItems(t *testing.T) {
-	ctx := context.Background()
+	originalRegistry := prometheus.DefaultRegisterer
+	prometheus.DefaultRegisterer = prometheus.NewRegistry()
+
+	t.Cleanup(func() {
+		prometheus.DefaultRegisterer = originalRegistry
+	})
+
+	ctx := t.Context()
 	c := makeCache(t, WithTTL(50*time.Millisecond))
 	defer c.Close(ctx)
 
@@ -470,7 +653,14 @@ func TestExistsWithExpiredItems(t *testing.T) {
 
 // Cleanup should free space for new items.
 func TestPartialEvictionWithExpiredItems(t *testing.T) {
-	ctx := context.Background()
+	originalRegistry := prometheus.DefaultRegisterer
+	prometheus.DefaultRegisterer = prometheus.NewRegistry()
+
+	t.Cleanup(func() {
+		prometheus.DefaultRegisterer = originalRegistry
+	})
+
+	ctx := t.Context()
 	c := makeCache(t, WithTTL(100*time.Millisecond), WithMaxItems(3))
 	defer c.Close(ctx)
 
@@ -490,7 +680,14 @@ func TestPartialEvictionWithExpiredItems(t *testing.T) {
 
 // Get should update lastUsed for LRU.
 func TestGetUpdatesLastUsed(t *testing.T) {
-	ctx := context.Background()
+	originalRegistry := prometheus.DefaultRegisterer
+	prometheus.DefaultRegisterer = prometheus.NewRegistry()
+
+	t.Cleanup(func() {
+		prometheus.DefaultRegisterer = originalRegistry
+	})
+
+	ctx := t.Context()
 	c := makeCache(t, WithTTL(time.Minute), WithMaxItems(2))
 	defer c.Close(ctx)
 
@@ -507,7 +704,14 @@ func TestGetUpdatesLastUsed(t *testing.T) {
 
 // Stress test with mixed operations.
 func TestHighVolumeOperations(t *testing.T) {
-	ctx := context.Background()
+	originalRegistry := prometheus.DefaultRegisterer
+	prometheus.DefaultRegisterer = prometheus.NewRegistry()
+
+	t.Cleanup(func() {
+		prometheus.DefaultRegisterer = originalRegistry
+	})
+
+	ctx := t.Context()
 	c := makeCache(t, WithTTL(time.Minute), WithMaxItems(1000))
 	defer c.Close(ctx)
 

@@ -1,10 +1,10 @@
 package factory
 
 import (
-	"context"
 	"testing"
 	"time"
 
+	"github.com/prometheus/client_golang/prometheus"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -23,45 +23,50 @@ func TestWithLogger(t *testing.T) {
 func TestNewInMemoryCache(t *testing.T) {
 	tests := []struct {
 		name      string
-		ctx       context.Context
 		cacheName string
 		ttl       time.Duration
 		maxItems  int
-		opts      []any
+		getOpts   func() []any
 		expErr    bool
 	}{
 		{
 			name:      "Successful creation with no options",
-			ctx:       context.Background(),
 			cacheName: "test-inmemory",
 			ttl:       5 * time.Minute,
 			maxItems:  100,
-			opts:      nil,
+			getOpts:   func() []any { return nil },
 			expErr:    false,
 		},
 		{
 			name:      "Successful creation with logger option",
-			ctx:       context.Background(),
 			cacheName: "test-inmemory-with-logger",
 			ttl:       10 * time.Minute,
 			maxItems:  50,
-			opts:      []any{observability.NewStdLogger()},
+			getOpts:   func() []any { return []any{observability.NewStdLogger()} },
 			expErr:    false,
 		},
 		{
 			name:      "Successful creation with metrics option",
-			ctx:       context.Background(),
 			cacheName: "test-inmemory-with-metrics",
 			ttl:       10 * time.Minute,
 			maxItems:  50,
-			opts:      []any{observability.NewMetrics("test", "inmemory")},
+			getOpts:   func() []any { return []any{observability.NewMetrics("test", "inmemory")} },
 			expErr:    false,
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			c, err := NewInMemoryCache(tt.ctx, tt.cacheName, tt.ttl, tt.maxItems, tt.opts...)
+			originalRegistry := prometheus.DefaultRegisterer
+			prometheus.DefaultRegisterer = prometheus.NewRegistry()
+
+			t.Cleanup(func() {
+				prometheus.DefaultRegisterer = originalRegistry
+			})
+
+			opts := tt.getOpts()
+
+			c, err := NewInMemoryCache(t.Context(), tt.cacheName, tt.ttl, tt.maxItems, opts...)
 
 			if tt.expErr {
 				assert.Error(t, err, "Expected an error for %v", tt.name)
@@ -76,7 +81,6 @@ func TestNewInMemoryCache(t *testing.T) {
 func TestNewRedisCache(t *testing.T) {
 	tests := []struct {
 		name      string
-		ctx       context.Context
 		cacheName string
 		ttl       time.Duration
 		opts      []any
@@ -84,7 +88,6 @@ func TestNewRedisCache(t *testing.T) {
 	}{
 		{
 			name:      "Initialization without options",
-			ctx:       context.Background(),
 			cacheName: "test-redis",
 			ttl:       5 * time.Minute,
 			opts:      nil,
@@ -92,7 +95,6 @@ func TestNewRedisCache(t *testing.T) {
 		},
 		{
 			name:      "Initialization with address",
-			ctx:       context.Background(),
 			cacheName: "test-redis-with-addr",
 			ttl:       10 * time.Minute,
 			opts:      []any{"localhost:6379"},
@@ -102,7 +104,14 @@ func TestNewRedisCache(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			c, err := NewRedisCache(tt.ctx, tt.cacheName, tt.ttl, tt.opts...)
+			originalRegistry := prometheus.DefaultRegisterer
+			prometheus.DefaultRegisterer = prometheus.NewRegistry()
+
+			t.Cleanup(func() {
+				prometheus.DefaultRegisterer = originalRegistry
+			})
+
+			c, err := NewRedisCache(t.Context(), tt.cacheName, tt.ttl, tt.opts...)
 
 			if tt.expErr {
 				assert.Error(t, err, "Expected an error for %v", tt.name)
@@ -144,7 +153,14 @@ func TestNewCache(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			c, err := NewCache(context.Background(), tt.cacheType, "test-cache", 5*time.Minute, 100)
+			originalRegistry := prometheus.DefaultRegisterer
+			prometheus.DefaultRegisterer = prometheus.NewRegistry()
+
+			t.Cleanup(func() {
+				prometheus.DefaultRegisterer = originalRegistry
+			})
+
+			c, err := NewCache(t.Context(), tt.cacheType, "test-cache", 5*time.Minute, 100)
 
 			if tt.expErr {
 				assert.Error(t, err, "Expected an error for %v", tt.name)

@@ -1,11 +1,11 @@
 package redis
 
 import (
-	"context"
 	"sync"
 	"testing"
 	"time"
 
+	"github.com/prometheus/client_golang/prometheus"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -14,25 +14,31 @@ import (
 
 func makeRedisCache(t *testing.T, opts ...Option) cache.Cache {
 	t.Helper()
-	// Use a different database for testing to avoid conflicts
+
 	allOpts := append([]Option{WithDB(15)}, opts...)
 
-	c, err := NewRedisCache(context.Background(), allOpts...)
+	c, err := NewRedisCache(t.Context(), allOpts...)
 	if err != nil {
 		t.Skipf("skipping redis tests: could not connect to redis. Error: %v", err)
 	}
 
-	// Cleanup hook to clear the database after each test
 	t.Cleanup(func() {
-		_ = c.Clear(context.Background())
-		_ = c.Close(context.Background())
+		_ = c.Clear(t.Context())
+		_ = c.Close(t.Context())
 	})
 
 	return c
 }
 
 func TestOperations(t *testing.T) {
-	ctx := context.Background()
+	originalRegistry := prometheus.DefaultRegisterer
+	prometheus.DefaultRegisterer = prometheus.NewRegistry()
+
+	t.Cleanup(func() {
+		prometheus.DefaultRegisterer = originalRegistry
+	})
+
+	ctx := t.Context()
 	c := makeRedisCache(t)
 
 	require.NoError(t, c.Set(ctx, "key1", "value10"))
@@ -54,7 +60,14 @@ func TestOperations(t *testing.T) {
 }
 
 func TestClear(t *testing.T) {
-	ctx := context.Background()
+	originalRegistry := prometheus.DefaultRegisterer
+	prometheus.DefaultRegisterer = prometheus.NewRegistry()
+
+	t.Cleanup(func() {
+		prometheus.DefaultRegisterer = originalRegistry
+	})
+
+	ctx := t.Context()
 	c := makeRedisCache(t)
 
 	require.NoError(t, c.Set(ctx, "x", 1))
@@ -70,7 +83,14 @@ func TestClear(t *testing.T) {
 }
 
 func TestTTLExpiry(t *testing.T) {
-	ctx := context.Background()
+	originalRegistry := prometheus.DefaultRegisterer
+	prometheus.DefaultRegisterer = prometheus.NewRegistry()
+
+	t.Cleanup(func() {
+		prometheus.DefaultRegisterer = originalRegistry
+	})
+
+	ctx := t.Context()
 	c := makeRedisCache(t, WithTTL(50*time.Millisecond))
 
 	require.NoError(t, c.Set(ctx, "foo", "bar"))
@@ -83,7 +103,14 @@ func TestTTLExpiry(t *testing.T) {
 }
 
 func TestOverwrite(t *testing.T) {
-	ctx := context.Background()
+	originalRegistry := prometheus.DefaultRegisterer
+	prometheus.DefaultRegisterer = prometheus.NewRegistry()
+
+	t.Cleanup(func() {
+		prometheus.DefaultRegisterer = originalRegistry
+	})
+
+	ctx := t.Context()
 	c := makeRedisCache(t)
 
 	require.NoError(t, c.Set(ctx, "dupKey", "first"))
@@ -96,7 +123,14 @@ func TestOverwrite(t *testing.T) {
 }
 
 func TestDeleteNonExistent(t *testing.T) {
-	ctx := context.Background()
+	originalRegistry := prometheus.DefaultRegisterer
+	prometheus.DefaultRegisterer = prometheus.NewRegistry()
+
+	t.Cleanup(func() {
+		prometheus.DefaultRegisterer = originalRegistry
+	})
+
+	ctx := t.Context()
 	c := makeRedisCache(t)
 
 	err := c.Delete(ctx, "ghost")
@@ -104,7 +138,14 @@ func TestDeleteNonExistent(t *testing.T) {
 }
 
 func TestClearEmpty(t *testing.T) {
-	ctx := context.Background()
+	originalRegistry := prometheus.DefaultRegisterer
+	prometheus.DefaultRegisterer = prometheus.NewRegistry()
+
+	t.Cleanup(func() {
+		prometheus.DefaultRegisterer = originalRegistry
+	})
+
+	ctx := t.Context()
 	c := makeRedisCache(t)
 
 	err := c.Clear(ctx)
@@ -112,7 +153,14 @@ func TestClearEmpty(t *testing.T) {
 }
 
 func TestConcurrentAccess(t *testing.T) {
-	ctx := context.Background()
+	originalRegistry := prometheus.DefaultRegisterer
+	prometheus.DefaultRegisterer = prometheus.NewRegistry()
+
+	t.Cleanup(func() {
+		prometheus.DefaultRegisterer = originalRegistry
+	})
+
+	ctx := t.Context()
 	c := makeRedisCache(t)
 
 	var wg sync.WaitGroup
@@ -133,7 +181,14 @@ func TestConcurrentAccess(t *testing.T) {
 }
 
 func TestMultipleOptions(t *testing.T) {
-	ctx := context.Background()
+	originalRegistry := prometheus.DefaultRegisterer
+	prometheus.DefaultRegisterer = prometheus.NewRegistry()
+
+	t.Cleanup(func() {
+		prometheus.DefaultRegisterer = originalRegistry
+	})
+
+	ctx := t.Context()
 	rc, err := NewRedisCache(ctx,
 		WithTTL(30*time.Second),
 		WithDB(14),
@@ -149,7 +204,14 @@ func TestMultipleOptions(t *testing.T) {
 }
 
 func TestDifferentValueTypes(t *testing.T) {
-	ctx := context.Background()
+	originalRegistry := prometheus.DefaultRegisterer
+	prometheus.DefaultRegisterer = prometheus.NewRegistry()
+
+	t.Cleanup(func() {
+		prometheus.DefaultRegisterer = originalRegistry
+	})
+
+	ctx := t.Context()
 	c := makeRedisCache(t)
 
 	testCases := []struct {
@@ -166,12 +228,10 @@ func TestDifferentValueTypes(t *testing.T) {
 		{"float32", float32(2.5), "2.5"},
 	}
 
-	// Set all values
 	for _, tc := range testCases {
 		require.NoError(t, c.Set(ctx, tc.key, tc.value), "Failed to set key %s", tc.key)
 	}
 
-	// Get and verify all values
 	for _, tc := range testCases {
 		v, found, err := c.Get(ctx, tc.key)
 		require.NoError(t, err, "Failed to get key %s", tc.key)
@@ -181,7 +241,14 @@ func TestDifferentValueTypes(t *testing.T) {
 }
 
 func TestEmptyStringKey(t *testing.T) {
-	ctx := context.Background()
+	originalRegistry := prometheus.DefaultRegisterer
+	prometheus.DefaultRegisterer = prometheus.NewRegistry()
+
+	t.Cleanup(func() {
+		prometheus.DefaultRegisterer = originalRegistry
+	})
+
+	ctx := t.Context()
 	c := makeRedisCache(t)
 
 	err := c.Set(ctx, "", "v")
@@ -198,7 +265,14 @@ func TestEmptyStringKey(t *testing.T) {
 }
 
 func TestNilValue(t *testing.T) {
-	ctx := context.Background()
+	originalRegistry := prometheus.DefaultRegisterer
+	prometheus.DefaultRegisterer = prometheus.NewRegistry()
+
+	t.Cleanup(func() {
+		prometheus.DefaultRegisterer = originalRegistry
+	})
+
+	ctx := t.Context()
 	c := makeRedisCache(t)
 
 	err := c.Set(ctx, "key", nil)
@@ -206,7 +280,14 @@ func TestNilValue(t *testing.T) {
 }
 
 func TestConcurrentSetSameKey(t *testing.T) {
-	ctx := context.Background()
+	originalRegistry := prometheus.DefaultRegisterer
+	prometheus.DefaultRegisterer = prometheus.NewRegistry()
+
+	t.Cleanup(func() {
+		prometheus.DefaultRegisterer = originalRegistry
+	})
+
+	ctx := t.Context()
 	c := makeRedisCache(t)
 
 	var wg sync.WaitGroup
@@ -226,26 +307,66 @@ func TestConcurrentSetSameKey(t *testing.T) {
 }
 
 func TestOptionValidation(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 
-	// Test invalid DB number
-	_, err := NewRedisCache(ctx, WithDB(-1))
-	require.Error(t, err)
+	t.Run("Invalid DB number (-1)", func(t *testing.T) {
+		originalRegistry := prometheus.DefaultRegisterer
+		prometheus.DefaultRegisterer = prometheus.NewRegistry()
 
-	_, err = NewRedisCache(ctx, WithDB(16))
-	require.Error(t, err)
+		t.Cleanup(func() {
+			prometheus.DefaultRegisterer = originalRegistry
+		})
 
-	// Test negative TTL
-	_, err = NewRedisCache(ctx, WithTTL(-1*time.Second))
-	require.Error(t, err)
+		_, err := NewRedisCache(ctx, WithDB(-1))
+		require.Error(t, err)
+	})
 
-	// Test empty address
-	_, err = NewRedisCache(ctx, WithAddr(""))
-	require.Error(t, err)
+	t.Run("Invalid DB number (16)", func(t *testing.T) {
+		originalRegistry := prometheus.DefaultRegisterer
+		prometheus.DefaultRegisterer = prometheus.NewRegistry()
+
+		t.Cleanup(func() {
+			prometheus.DefaultRegisterer = originalRegistry
+		})
+
+		_, err := NewRedisCache(ctx, WithDB(16))
+		require.Error(t, err)
+	})
+
+	t.Run("Negative TTL", func(t *testing.T) {
+		originalRegistry := prometheus.DefaultRegisterer
+		prometheus.DefaultRegisterer = prometheus.NewRegistry()
+
+		t.Cleanup(func() {
+			prometheus.DefaultRegisterer = originalRegistry
+		})
+
+		_, err := NewRedisCache(ctx, WithTTL(-1*time.Second))
+		require.Error(t, err)
+	})
+
+	t.Run("Empty Address", func(t *testing.T) {
+		originalRegistry := prometheus.DefaultRegisterer
+		prometheus.DefaultRegisterer = prometheus.NewRegistry()
+
+		t.Cleanup(func() {
+			prometheus.DefaultRegisterer = originalRegistry
+		})
+
+		_, err := NewRedisCache(ctx, WithAddr(""))
+		require.Error(t, err)
+	})
 }
 
 func TestCacheHitMiss(t *testing.T) {
-	ctx := context.Background()
+	originalRegistry := prometheus.DefaultRegisterer
+	prometheus.DefaultRegisterer = prometheus.NewRegistry()
+
+	t.Cleanup(func() {
+		prometheus.DefaultRegisterer = originalRegistry
+	})
+
+	ctx := t.Context()
 	c := makeRedisCache(t)
 
 	// Test cache miss
@@ -262,7 +383,14 @@ func TestCacheHitMiss(t *testing.T) {
 }
 
 func TestZeroTTL(t *testing.T) {
-	ctx := context.Background()
+	originalRegistry := prometheus.DefaultRegisterer
+	prometheus.DefaultRegisterer = prometheus.NewRegistry()
+
+	t.Cleanup(func() {
+		prometheus.DefaultRegisterer = originalRegistry
+	})
+
+	ctx := t.Context()
 	c := makeRedisCache(t, WithTTL(0))
 
 	require.NoError(t, c.Set(ctx, "permanent", "value"))
