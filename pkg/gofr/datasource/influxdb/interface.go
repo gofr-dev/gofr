@@ -114,3 +114,55 @@ type InfluxOrganizationsAPI interface {
 	// RemoveOwnerWithID removes an owner with id memberID from an organization with orgID.
 	RemoveOwnerWithID(ctx context.Context, orgID, memberID string) error
 }
+
+// BucketsAPI provides methods for managing Buckets in a InfluxDB server.
+type BucketsAPI interface {
+	// GetBuckets returns all buckets.
+	// GetBuckets supports PagingOptions: Offset, Limit, After. Empty pagingOptions means the default paging (first 20 results).
+	GetBuckets(ctx context.Context, pagingOptions ...api.PagingOption) (*[]domain.Bucket, error)
+	// FindBucketByName returns a bucket found using bucketName.
+	FindBucketByName(ctx context.Context, bucketName string) (*domain.Bucket, error)
+	// FindBucketByID returns a bucket found using bucketID.
+	FindBucketByID(ctx context.Context, bucketID string) (*domain.Bucket, error)
+	// FindBucketsByOrgID returns buckets belonging to the organization with ID orgID.
+	// FindBucketsByOrgID supports PagingOptions: Offset, Limit, After. Empty pagingOptions means the default paging (first 20 results).
+	FindBucketsByOrgID(ctx context.Context, orgID string, pagingOptions ...api.PagingOption) (*[]domain.Bucket, error)
+	// FindBucketsByOrgName returns buckets belonging to the organization with name orgName, with the specified paging. Empty pagingOptions means the default paging (first 20 results).
+	FindBucketsByOrgName(ctx context.Context, orgName string, pagingOptions ...api.PagingOption) (*[]domain.Bucket, error)
+	// CreateBucket creates a new bucket.
+	CreateBucket(ctx context.Context, bucket *domain.Bucket) (*domain.Bucket, error)
+	// CreateBucketWithName creates a new bucket with bucketName in organization org, with retention specified in rules. Empty rules means infinite retention.
+	CreateBucketWithName(ctx context.Context, org *domain.Organization, bucketName string, rules ...domain.RetentionRule) (*domain.Bucket, error)
+	// CreateBucketWithNameWithID creates a new bucket with bucketName in organization with orgID, with retention specified in rules. Empty rules means infinite retention.
+	CreateBucketWithNameWithID(ctx context.Context, orgID, bucketName string, rules ...domain.RetentionRule) (*domain.Bucket, error)
+	// UpdateBucket updates a bucket.
+	UpdateBucket(ctx context.Context, bucket *domain.Bucket) (*domain.Bucket, error)
+	// DeleteBucket deletes a bucket.
+	DeleteBucket(ctx context.Context, bucket *domain.Bucket) error
+	// DeleteBucketWithID deletes a bucket with bucketID.
+	DeleteBucketWithID(ctx context.Context, bucketID string) error
+	// GetMembers returns members of a bucket.
+	GetMembers(ctx context.Context, bucket *domain.Bucket) (*[]domain.ResourceMember, error)
+	// GetMembersWithID returns members of a bucket with bucketID.
+	GetMembersWithID(ctx context.Context, bucketID string) (*[]domain.ResourceMember, error)
+	// AddMember adds a member to a bucket.
+	AddMember(ctx context.Context, bucket *domain.Bucket, user *domain.User) (*domain.ResourceMember, error)
+	// AddMemberWithID adds a member with id memberID to a bucket with bucketID.
+	AddMemberWithID(ctx context.Context, bucketID, memberID string) (*domain.ResourceMember, error)
+	// RemoveMember removes a member from a bucket.
+	RemoveMember(ctx context.Context, bucket *domain.Bucket, user *domain.User) error
+	// RemoveMemberWithID removes a member with id memberID from a bucket with bucketID.
+	RemoveMemberWithID(ctx context.Context, bucketID, memberID string) error
+	// GetOwners returns owners of a bucket.
+	GetOwners(ctx context.Context, bucket *domain.Bucket) (*[]domain.ResourceOwner, error)
+	// GetOwnersWithID returns owners of a bucket with bucketID.
+	GetOwnersWithID(ctx context.Context, bucketID string) (*[]domain.ResourceOwner, error)
+	// AddOwner adds an owner to a bucket.
+	AddOwner(ctx context.Context, bucket *domain.Bucket, user *domain.User) (*domain.ResourceOwner, error)
+	// AddOwnerWithID adds an owner with id memberID to a bucket with bucketID.
+	AddOwnerWithID(ctx context.Context, bucketID, memberID string) (*domain.ResourceOwner, error)
+	// RemoveOwner removes an owner from a bucket.
+	RemoveOwner(ctx context.Context, bucket *domain.Bucket, user *domain.User) error
+	// RemoveOwnerWithID removes a member with id memberID from a bucket with bucketID.
+	RemoveOwnerWithID(ctx context.Context, bucketID, memberID string) error
+}

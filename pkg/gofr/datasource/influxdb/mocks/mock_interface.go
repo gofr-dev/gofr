@@ -662,3 +662,390 @@ func (mr *MockInfluxOrganizationsAPIMockRecorder) UpdateOrganization(ctx, org in
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UpdateOrganization", reflect.TypeOf((*MockInfluxOrganizationsAPI)(nil).UpdateOrganization), ctx, org)
 }
+
+// MockBucketsAPI is a mock of BucketsAPI interface.
+type MockBucketsAPI struct {
+	ctrl     *gomock.Controller
+	recorder *MockBucketsAPIMockRecorder
+}
+
+// MockBucketsAPIMockRecorder is the mock recorder for MockBucketsAPI.
+type MockBucketsAPIMockRecorder struct {
+	mock *MockBucketsAPI
+}
+
+// NewMockBucketsAPI creates a new mock instance.
+func NewMockBucketsAPI(ctrl *gomock.Controller) *MockBucketsAPI {
+	mock := &MockBucketsAPI{ctrl: ctrl}
+	mock.recorder = &MockBucketsAPIMockRecorder{mock}
+	return mock
+}
+
+// EXPECT returns an object that allows the caller to indicate expected use.
+func (m *MockBucketsAPI) EXPECT() *MockBucketsAPIMockRecorder {
+	return m.recorder
+}
+
+// AddMember mocks base method.
+func (m *MockBucketsAPI) AddMember(ctx context.Context, bucket *domain.Bucket, user *domain.User) (*domain.ResourceMember, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "AddMember", ctx, bucket, user)
+	ret0, _ := ret[0].(*domain.ResourceMember)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// AddMember indicates an expected call of AddMember.
+func (mr *MockBucketsAPIMockRecorder) AddMember(ctx, bucket, user interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AddMember", reflect.TypeOf((*MockBucketsAPI)(nil).AddMember), ctx, bucket, user)
+}
+
+// AddMemberWithID mocks base method.
+func (m *MockBucketsAPI) AddMemberWithID(ctx context.Context, bucketID, memberID string) (*domain.ResourceMember, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "AddMemberWithID", ctx, bucketID, memberID)
+	ret0, _ := ret[0].(*domain.ResourceMember)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// AddMemberWithID indicates an expected call of AddMemberWithID.
+func (mr *MockBucketsAPIMockRecorder) AddMemberWithID(ctx, bucketID, memberID interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AddMemberWithID", reflect.TypeOf((*MockBucketsAPI)(nil).AddMemberWithID), ctx, bucketID, memberID)
+}
+
+// AddOwner mocks base method.
+func (m *MockBucketsAPI) AddOwner(ctx context.Context, bucket *domain.Bucket, user *domain.User) (*domain.ResourceOwner, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "AddOwner", ctx, bucket, user)
+	ret0, _ := ret[0].(*domain.ResourceOwner)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// AddOwner indicates an expected call of AddOwner.
+func (mr *MockBucketsAPIMockRecorder) AddOwner(ctx, bucket, user interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AddOwner", reflect.TypeOf((*MockBucketsAPI)(nil).AddOwner), ctx, bucket, user)
+}
+
+// AddOwnerWithID mocks base method.
+func (m *MockBucketsAPI) AddOwnerWithID(ctx context.Context, bucketID, memberID string) (*domain.ResourceOwner, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "AddOwnerWithID", ctx, bucketID, memberID)
+	ret0, _ := ret[0].(*domain.ResourceOwner)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// AddOwnerWithID indicates an expected call of AddOwnerWithID.
+func (mr *MockBucketsAPIMockRecorder) AddOwnerWithID(ctx, bucketID, memberID interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AddOwnerWithID", reflect.TypeOf((*MockBucketsAPI)(nil).AddOwnerWithID), ctx, bucketID, memberID)
+}
+
+// CreateBucket mocks base method.
+func (m *MockBucketsAPI) CreateBucket(ctx context.Context, bucket *domain.Bucket) (*domain.Bucket, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "CreateBucket", ctx, bucket)
+	ret0, _ := ret[0].(*domain.Bucket)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// CreateBucket indicates an expected call of CreateBucket.
+func (mr *MockBucketsAPIMockRecorder) CreateBucket(ctx, bucket interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CreateBucket", reflect.TypeOf((*MockBucketsAPI)(nil).CreateBucket), ctx, bucket)
+}
+
+// CreateBucketWithName mocks base method.
+func (m *MockBucketsAPI) CreateBucketWithName(ctx context.Context, org *domain.Organization, bucketName string, rules ...domain.RetentionRule) (*domain.Bucket, error) {
+	m.ctrl.T.Helper()
+	varargs := []interface{}{ctx, org, bucketName}
+	for _, a := range rules {
+		varargs = append(varargs, a)
+	}
+	ret := m.ctrl.Call(m, "CreateBucketWithName", varargs...)
+	ret0, _ := ret[0].(*domain.Bucket)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// CreateBucketWithName indicates an expected call of CreateBucketWithName.
+func (mr *MockBucketsAPIMockRecorder) CreateBucketWithName(ctx, org, bucketName interface{}, rules ...interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	varargs := append([]interface{}{ctx, org, bucketName}, rules...)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CreateBucketWithName", reflect.TypeOf((*MockBucketsAPI)(nil).CreateBucketWithName), varargs...)
+}
+
+// CreateBucketWithNameWithID mocks base method.
+func (m *MockBucketsAPI) CreateBucketWithNameWithID(ctx context.Context, orgID, bucketName string, rules ...domain.RetentionRule) (*domain.Bucket, error) {
+	m.ctrl.T.Helper()
+	varargs := []interface{}{ctx, orgID, bucketName}
+	for _, a := range rules {
+		varargs = append(varargs, a)
+	}
+	ret := m.ctrl.Call(m, "CreateBucketWithNameWithID", varargs...)
+	ret0, _ := ret[0].(*domain.Bucket)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// CreateBucketWithNameWithID indicates an expected call of CreateBucketWithNameWithID.
+func (mr *MockBucketsAPIMockRecorder) CreateBucketWithNameWithID(ctx, orgID, bucketName interface{}, rules ...interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	varargs := append([]interface{}{ctx, orgID, bucketName}, rules...)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CreateBucketWithNameWithID", reflect.TypeOf((*MockBucketsAPI)(nil).CreateBucketWithNameWithID), varargs...)
+}
+
+// DeleteBucket mocks base method.
+func (m *MockBucketsAPI) DeleteBucket(ctx context.Context, bucket *domain.Bucket) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "DeleteBucket", ctx, bucket)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// DeleteBucket indicates an expected call of DeleteBucket.
+func (mr *MockBucketsAPIMockRecorder) DeleteBucket(ctx, bucket interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeleteBucket", reflect.TypeOf((*MockBucketsAPI)(nil).DeleteBucket), ctx, bucket)
+}
+
+// DeleteBucketWithID mocks base method.
+func (m *MockBucketsAPI) DeleteBucketWithID(ctx context.Context, bucketID string) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "DeleteBucketWithID", ctx, bucketID)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// DeleteBucketWithID indicates an expected call of DeleteBucketWithID.
+func (mr *MockBucketsAPIMockRecorder) DeleteBucketWithID(ctx, bucketID interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeleteBucketWithID", reflect.TypeOf((*MockBucketsAPI)(nil).DeleteBucketWithID), ctx, bucketID)
+}
+
+// FindBucketByID mocks base method.
+func (m *MockBucketsAPI) FindBucketByID(ctx context.Context, bucketID string) (*domain.Bucket, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "FindBucketByID", ctx, bucketID)
+	ret0, _ := ret[0].(*domain.Bucket)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// FindBucketByID indicates an expected call of FindBucketByID.
+func (mr *MockBucketsAPIMockRecorder) FindBucketByID(ctx, bucketID interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "FindBucketByID", reflect.TypeOf((*MockBucketsAPI)(nil).FindBucketByID), ctx, bucketID)
+}
+
+// FindBucketByName mocks base method.
+func (m *MockBucketsAPI) FindBucketByName(ctx context.Context, bucketName string) (*domain.Bucket, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "FindBucketByName", ctx, bucketName)
+	ret0, _ := ret[0].(*domain.Bucket)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// FindBucketByName indicates an expected call of FindBucketByName.
+func (mr *MockBucketsAPIMockRecorder) FindBucketByName(ctx, bucketName interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "FindBucketByName", reflect.TypeOf((*MockBucketsAPI)(nil).FindBucketByName), ctx, bucketName)
+}
+
+// FindBucketsByOrgID mocks base method.
+func (m *MockBucketsAPI) FindBucketsByOrgID(ctx context.Context, orgID string, pagingOptions ...api.PagingOption) (*[]domain.Bucket, error) {
+	m.ctrl.T.Helper()
+	varargs := []interface{}{ctx, orgID}
+	for _, a := range pagingOptions {
+		varargs = append(varargs, a)
+	}
+	ret := m.ctrl.Call(m, "FindBucketsByOrgID", varargs...)
+	ret0, _ := ret[0].(*[]domain.Bucket)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// FindBucketsByOrgID indicates an expected call of FindBucketsByOrgID.
+func (mr *MockBucketsAPIMockRecorder) FindBucketsByOrgID(ctx, orgID interface{}, pagingOptions ...interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	varargs := append([]interface{}{ctx, orgID}, pagingOptions...)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "FindBucketsByOrgID", reflect.TypeOf((*MockBucketsAPI)(nil).FindBucketsByOrgID), varargs...)
+}
+
+// FindBucketsByOrgName mocks base method.
+func (m *MockBucketsAPI) FindBucketsByOrgName(ctx context.Context, orgName string, pagingOptions ...api.PagingOption) (*[]domain.Bucket, error) {
+	m.ctrl.T.Helper()
+	varargs := []interface{}{ctx, orgName}
+	for _, a := range pagingOptions {
+		varargs = append(varargs, a)
+	}
+	ret := m.ctrl.Call(m, "FindBucketsByOrgName", varargs...)
+	ret0, _ := ret[0].(*[]domain.Bucket)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// FindBucketsByOrgName indicates an expected call of FindBucketsByOrgName.
+func (mr *MockBucketsAPIMockRecorder) FindBucketsByOrgName(ctx, orgName interface{}, pagingOptions ...interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	varargs := append([]interface{}{ctx, orgName}, pagingOptions...)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "FindBucketsByOrgName", reflect.TypeOf((*MockBucketsAPI)(nil).FindBucketsByOrgName), varargs...)
+}
+
+// GetBuckets mocks base method.
+func (m *MockBucketsAPI) GetBuckets(ctx context.Context, pagingOptions ...api.PagingOption) (*[]domain.Bucket, error) {
+	m.ctrl.T.Helper()
+	varargs := []interface{}{ctx}
+	for _, a := range pagingOptions {
+		varargs = append(varargs, a)
+	}
+	ret := m.ctrl.Call(m, "GetBuckets", varargs...)
+	ret0, _ := ret[0].(*[]domain.Bucket)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetBuckets indicates an expected call of GetBuckets.
+func (mr *MockBucketsAPIMockRecorder) GetBuckets(ctx interface{}, pagingOptions ...interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	varargs := append([]interface{}{ctx}, pagingOptions...)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetBuckets", reflect.TypeOf((*MockBucketsAPI)(nil).GetBuckets), varargs...)
+}
+
+// GetMembers mocks base method.
+func (m *MockBucketsAPI) GetMembers(ctx context.Context, bucket *domain.Bucket) (*[]domain.ResourceMember, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetMembers", ctx, bucket)
+	ret0, _ := ret[0].(*[]domain.ResourceMember)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetMembers indicates an expected call of GetMembers.
+func (mr *MockBucketsAPIMockRecorder) GetMembers(ctx, bucket interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetMembers", reflect.TypeOf((*MockBucketsAPI)(nil).GetMembers), ctx, bucket)
+}
+
+// GetMembersWithID mocks base method.
+func (m *MockBucketsAPI) GetMembersWithID(ctx context.Context, bucketID string) (*[]domain.ResourceMember, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetMembersWithID", ctx, bucketID)
+	ret0, _ := ret[0].(*[]domain.ResourceMember)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetMembersWithID indicates an expected call of GetMembersWithID.
+func (mr *MockBucketsAPIMockRecorder) GetMembersWithID(ctx, bucketID interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetMembersWithID", reflect.TypeOf((*MockBucketsAPI)(nil).GetMembersWithID), ctx, bucketID)
+}
+
+// GetOwners mocks base method.
+func (m *MockBucketsAPI) GetOwners(ctx context.Context, bucket *domain.Bucket) (*[]domain.ResourceOwner, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetOwners", ctx, bucket)
+	ret0, _ := ret[0].(*[]domain.ResourceOwner)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetOwners indicates an expected call of GetOwners.
+func (mr *MockBucketsAPIMockRecorder) GetOwners(ctx, bucket interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetOwners", reflect.TypeOf((*MockBucketsAPI)(nil).GetOwners), ctx, bucket)
+}
+
+// GetOwnersWithID mocks base method.
+func (m *MockBucketsAPI) GetOwnersWithID(ctx context.Context, bucketID string) (*[]domain.ResourceOwner, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetOwnersWithID", ctx, bucketID)
+	ret0, _ := ret[0].(*[]domain.ResourceOwner)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetOwnersWithID indicates an expected call of GetOwnersWithID.
+func (mr *MockBucketsAPIMockRecorder) GetOwnersWithID(ctx, bucketID interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetOwnersWithID", reflect.TypeOf((*MockBucketsAPI)(nil).GetOwnersWithID), ctx, bucketID)
+}
+
+// RemoveMember mocks base method.
+func (m *MockBucketsAPI) RemoveMember(ctx context.Context, bucket *domain.Bucket, user *domain.User) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "RemoveMember", ctx, bucket, user)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// RemoveMember indicates an expected call of RemoveMember.
+func (mr *MockBucketsAPIMockRecorder) RemoveMember(ctx, bucket, user interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "RemoveMember", reflect.TypeOf((*MockBucketsAPI)(nil).RemoveMember), ctx, bucket, user)
+}
+
+// RemoveMemberWithID mocks base method.
+func (m *MockBucketsAPI) RemoveMemberWithID(ctx context.Context, bucketID, memberID string) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "RemoveMemberWithID", ctx, bucketID, memberID)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// RemoveMemberWithID indicates an expected call of RemoveMemberWithID.
+func (mr *MockBucketsAPIMockRecorder) RemoveMemberWithID(ctx, bucketID, memberID interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "RemoveMemberWithID", reflect.TypeOf((*MockBucketsAPI)(nil).RemoveMemberWithID), ctx, bucketID, memberID)
+}
+
+// RemoveOwner mocks base method.
+func (m *MockBucketsAPI) RemoveOwner(ctx context.Context, bucket *domain.Bucket, user *domain.User) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "RemoveOwner", ctx, bucket, user)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// RemoveOwner indicates an expected call of RemoveOwner.
+func (mr *MockBucketsAPIMockRecorder) RemoveOwner(ctx, bucket, user interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "RemoveOwner", reflect.TypeOf((*MockBucketsAPI)(nil).RemoveOwner), ctx, bucket, user)
+}
+
+// RemoveOwnerWithID mocks base method.
+func (m *MockBucketsAPI) RemoveOwnerWithID(ctx context.Context, bucketID, memberID string) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "RemoveOwnerWithID", ctx, bucketID, memberID)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// RemoveOwnerWithID indicates an expected call of RemoveOwnerWithID.
+func (mr *MockBucketsAPIMockRecorder) RemoveOwnerWithID(ctx, bucketID, memberID interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "RemoveOwnerWithID", reflect.TypeOf((*MockBucketsAPI)(nil).RemoveOwnerWithID), ctx, bucketID, memberID)
+}
+
+// UpdateBucket mocks base method.
+func (m *MockBucketsAPI) UpdateBucket(ctx context.Context, bucket *domain.Bucket) (*domain.Bucket, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "UpdateBucket", ctx, bucket)
+	ret0, _ := ret[0].(*domain.Bucket)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// UpdateBucket indicates an expected call of UpdateBucket.
+func (mr *MockBucketsAPIMockRecorder) UpdateBucket(ctx, bucket interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UpdateBucket", reflect.TypeOf((*MockBucketsAPI)(nil).UpdateBucket), ctx, bucket)
+}
