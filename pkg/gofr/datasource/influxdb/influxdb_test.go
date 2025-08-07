@@ -19,8 +19,8 @@ func setupDB(t *testing.T, ctrl *gomock.Controller) *Client {
 
 	config := Config{
 		URL:      "http://localhost:8086",
-		Username: "admin",
-		Password: "admin1234",
+		Username: "username",
+		Password: "password",
 		Token:    "token",
 	}
 
@@ -31,6 +31,8 @@ func setupDB(t *testing.T, ctrl *gomock.Controller) *Client {
 	client.UseTracer(otel.GetTracerProvider().Tracer("gofr-influxdb"))
 
 	mockLogger.EXPECT().Debugf(gomock.Any(), gomock.Any()).AnyTimes()
+	mockLogger.EXPECT().Errorf(gomock.Any(), gomock.Any()).AnyTimes()
+	mockLogger.EXPECT().Errorf(gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
 
 	// Replace the client with our mocked version
 	client.client = mockInfluxClient
@@ -113,4 +115,75 @@ func Test_PingFailed(t *testing.T) {
 
 	require.Error(t, err) // empty organization name
 	require.False(t, health)
+}
+
+func Test_CreatOrganization(t *testing.T) {
+	t.Helper()
+
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	dummyID := "dfdf"
+
+	testCases := []struct {
+		name      string
+		orgName   string
+		resp      *domain.Organization
+		expectErr bool
+		err       error
+	}{
+		{
+			name:      "empty orgainzation name",
+			orgName:   "",
+			resp:      &domain.Organization{},
+			expectErr: true,
+			err:       errEmptyOrganizationName,
+		},
+		{
+			name:    "create new organization",
+			orgName: "testOrg",
+			resp: &domain.Organization{
+				Id: &dummyID,
+			},
+			expectErr: false,
+			err:       nil,
+		},
+		{
+			name:      "create duplicate organization",
+			orgName:   "testOrg",
+			resp:      &domain.Organization{},
+			expectErr: true,
+			err:       errors.New("failed to create new organization"),
+		},
+	}
+
+	for _, tt := range testCases {
+		t.Run(tt.name, func(t *testing.T) {
+
+			client := *setupDB(t, ctrl)
+			mockInflux := client.client.(*MockInfluxClient)
+			mockInfluxOrgApi := NewMockInfluxOrganizationsAPI(ctrl)
+
+			mockInflux.EXPECT().OrganizationsAPI().
+				Return(mockInfluxOrgApi).
+				AnyTimes()
+
+			mockInfluxOrgApi.EXPECT().
+				CreateOrganizationWithName(gomock.Any(), tt.orgName).
+				Return(tt.resp, tt.err).
+				AnyTimes()
+
+			newOrgId, err := client.CreateOrganization(t.Context(), tt.orgName)
+
+			if tt.expectErr {
+				require.Error(t, err)
+				require.Equal(t, err, tt.err)
+				require.Empty(t, newOrgId)
+			} else {
+				require.NoError(t, err)
+			}
+
+			// fmt.Println(orgId, err)
+		})
+	}
 }

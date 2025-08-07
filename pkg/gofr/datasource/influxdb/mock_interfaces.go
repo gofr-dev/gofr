@@ -320,3 +320,345 @@ func (mr *MockInfluxClientMockRecorder) WriteAPIBlocking(org, bucket interface{}
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "WriteAPIBlocking", reflect.TypeOf((*MockInfluxClient)(nil).WriteAPIBlocking), org, bucket)
 }
+
+// MockInfluxOrganizationsAPI is a mock of InfluxOrganizationsAPI interface.
+type MockInfluxOrganizationsAPI struct {
+	ctrl     *gomock.Controller
+	recorder *MockInfluxOrganizationsAPIMockRecorder
+}
+
+// MockInfluxOrganizationsAPIMockRecorder is the mock recorder for MockInfluxOrganizationsAPI.
+type MockInfluxOrganizationsAPIMockRecorder struct {
+	mock *MockInfluxOrganizationsAPI
+}
+
+// NewMockInfluxOrganizationsAPI creates a new mock instance.
+func NewMockInfluxOrganizationsAPI(ctrl *gomock.Controller) *MockInfluxOrganizationsAPI {
+	mock := &MockInfluxOrganizationsAPI{ctrl: ctrl}
+	mock.recorder = &MockInfluxOrganizationsAPIMockRecorder{mock}
+	return mock
+}
+
+// EXPECT returns an object that allows the caller to indicate expected use.
+func (m *MockInfluxOrganizationsAPI) EXPECT() *MockInfluxOrganizationsAPIMockRecorder {
+	return m.recorder
+}
+
+// AddMember mocks base method.
+func (m *MockInfluxOrganizationsAPI) AddMember(ctx context.Context, org *domain.Organization, user *domain.User) (*domain.ResourceMember, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "AddMember", ctx, org, user)
+	ret0, _ := ret[0].(*domain.ResourceMember)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// AddMember indicates an expected call of AddMember.
+func (mr *MockInfluxOrganizationsAPIMockRecorder) AddMember(ctx, org, user interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AddMember", reflect.TypeOf((*MockInfluxOrganizationsAPI)(nil).AddMember), ctx, org, user)
+}
+
+// AddMemberWithID mocks base method.
+func (m *MockInfluxOrganizationsAPI) AddMemberWithID(ctx context.Context, orgID, memberID string) (*domain.ResourceMember, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "AddMemberWithID", ctx, orgID, memberID)
+	ret0, _ := ret[0].(*domain.ResourceMember)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// AddMemberWithID indicates an expected call of AddMemberWithID.
+func (mr *MockInfluxOrganizationsAPIMockRecorder) AddMemberWithID(ctx, orgID, memberID interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AddMemberWithID", reflect.TypeOf((*MockInfluxOrganizationsAPI)(nil).AddMemberWithID), ctx, orgID, memberID)
+}
+
+// AddOwner mocks base method.
+func (m *MockInfluxOrganizationsAPI) AddOwner(ctx context.Context, org *domain.Organization, user *domain.User) (*domain.ResourceOwner, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "AddOwner", ctx, org, user)
+	ret0, _ := ret[0].(*domain.ResourceOwner)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// AddOwner indicates an expected call of AddOwner.
+func (mr *MockInfluxOrganizationsAPIMockRecorder) AddOwner(ctx, org, user interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AddOwner", reflect.TypeOf((*MockInfluxOrganizationsAPI)(nil).AddOwner), ctx, org, user)
+}
+
+// AddOwnerWithID mocks base method.
+func (m *MockInfluxOrganizationsAPI) AddOwnerWithID(ctx context.Context, orgID, memberID string) (*domain.ResourceOwner, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "AddOwnerWithID", ctx, orgID, memberID)
+	ret0, _ := ret[0].(*domain.ResourceOwner)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// AddOwnerWithID indicates an expected call of AddOwnerWithID.
+func (mr *MockInfluxOrganizationsAPIMockRecorder) AddOwnerWithID(ctx, orgID, memberID interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AddOwnerWithID", reflect.TypeOf((*MockInfluxOrganizationsAPI)(nil).AddOwnerWithID), ctx, orgID, memberID)
+}
+
+// CreateOrganization mocks base method.
+func (m *MockInfluxOrganizationsAPI) CreateOrganization(ctx context.Context, org *domain.Organization) (*domain.Organization, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "CreateOrganization", ctx, org)
+	ret0, _ := ret[0].(*domain.Organization)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// CreateOrganization indicates an expected call of CreateOrganization.
+func (mr *MockInfluxOrganizationsAPIMockRecorder) CreateOrganization(ctx, org interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CreateOrganization", reflect.TypeOf((*MockInfluxOrganizationsAPI)(nil).CreateOrganization), ctx, org)
+}
+
+// CreateOrganizationWithName mocks base method.
+func (m *MockInfluxOrganizationsAPI) CreateOrganizationWithName(ctx context.Context, orgName string) (*domain.Organization, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "CreateOrganizationWithName", ctx, orgName)
+	ret0, _ := ret[0].(*domain.Organization)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// CreateOrganizationWithName indicates an expected call of CreateOrganizationWithName.
+func (mr *MockInfluxOrganizationsAPIMockRecorder) CreateOrganizationWithName(ctx, orgName interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CreateOrganizationWithName", reflect.TypeOf((*MockInfluxOrganizationsAPI)(nil).CreateOrganizationWithName), ctx, orgName)
+}
+
+// DeleteOrganization mocks base method.
+func (m *MockInfluxOrganizationsAPI) DeleteOrganization(ctx context.Context, org *domain.Organization) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "DeleteOrganization", ctx, org)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// DeleteOrganization indicates an expected call of DeleteOrganization.
+func (mr *MockInfluxOrganizationsAPIMockRecorder) DeleteOrganization(ctx, org interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeleteOrganization", reflect.TypeOf((*MockInfluxOrganizationsAPI)(nil).DeleteOrganization), ctx, org)
+}
+
+// DeleteOrganizationWithID mocks base method.
+func (m *MockInfluxOrganizationsAPI) DeleteOrganizationWithID(ctx context.Context, orgID string) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "DeleteOrganizationWithID", ctx, orgID)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// DeleteOrganizationWithID indicates an expected call of DeleteOrganizationWithID.
+func (mr *MockInfluxOrganizationsAPIMockRecorder) DeleteOrganizationWithID(ctx, orgID interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeleteOrganizationWithID", reflect.TypeOf((*MockInfluxOrganizationsAPI)(nil).DeleteOrganizationWithID), ctx, orgID)
+}
+
+// FindOrganizationByID mocks base method.
+func (m *MockInfluxOrganizationsAPI) FindOrganizationByID(ctx context.Context, orgID string) (*domain.Organization, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "FindOrganizationByID", ctx, orgID)
+	ret0, _ := ret[0].(*domain.Organization)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// FindOrganizationByID indicates an expected call of FindOrganizationByID.
+func (mr *MockInfluxOrganizationsAPIMockRecorder) FindOrganizationByID(ctx, orgID interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "FindOrganizationByID", reflect.TypeOf((*MockInfluxOrganizationsAPI)(nil).FindOrganizationByID), ctx, orgID)
+}
+
+// FindOrganizationByName mocks base method.
+func (m *MockInfluxOrganizationsAPI) FindOrganizationByName(ctx context.Context, orgName string) (*domain.Organization, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "FindOrganizationByName", ctx, orgName)
+	ret0, _ := ret[0].(*domain.Organization)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// FindOrganizationByName indicates an expected call of FindOrganizationByName.
+func (mr *MockInfluxOrganizationsAPIMockRecorder) FindOrganizationByName(ctx, orgName interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "FindOrganizationByName", reflect.TypeOf((*MockInfluxOrganizationsAPI)(nil).FindOrganizationByName), ctx, orgName)
+}
+
+// FindOrganizationsByUserID mocks base method.
+func (m *MockInfluxOrganizationsAPI) FindOrganizationsByUserID(ctx context.Context, userID string, pagingOptions ...api.PagingOption) (*[]domain.Organization, error) {
+	m.ctrl.T.Helper()
+	varargs := []interface{}{ctx, userID}
+	for _, a := range pagingOptions {
+		varargs = append(varargs, a)
+	}
+	ret := m.ctrl.Call(m, "FindOrganizationsByUserID", varargs...)
+	ret0, _ := ret[0].(*[]domain.Organization)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// FindOrganizationsByUserID indicates an expected call of FindOrganizationsByUserID.
+func (mr *MockInfluxOrganizationsAPIMockRecorder) FindOrganizationsByUserID(ctx, userID interface{}, pagingOptions ...interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	varargs := append([]interface{}{ctx, userID}, pagingOptions...)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "FindOrganizationsByUserID", reflect.TypeOf((*MockInfluxOrganizationsAPI)(nil).FindOrganizationsByUserID), varargs...)
+}
+
+// GetMembers mocks base method.
+func (m *MockInfluxOrganizationsAPI) GetMembers(ctx context.Context, org *domain.Organization) (*[]domain.ResourceMember, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetMembers", ctx, org)
+	ret0, _ := ret[0].(*[]domain.ResourceMember)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetMembers indicates an expected call of GetMembers.
+func (mr *MockInfluxOrganizationsAPIMockRecorder) GetMembers(ctx, org interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetMembers", reflect.TypeOf((*MockInfluxOrganizationsAPI)(nil).GetMembers), ctx, org)
+}
+
+// GetMembersWithID mocks base method.
+func (m *MockInfluxOrganizationsAPI) GetMembersWithID(ctx context.Context, orgID string) (*[]domain.ResourceMember, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetMembersWithID", ctx, orgID)
+	ret0, _ := ret[0].(*[]domain.ResourceMember)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetMembersWithID indicates an expected call of GetMembersWithID.
+func (mr *MockInfluxOrganizationsAPIMockRecorder) GetMembersWithID(ctx, orgID interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetMembersWithID", reflect.TypeOf((*MockInfluxOrganizationsAPI)(nil).GetMembersWithID), ctx, orgID)
+}
+
+// GetOrganizations mocks base method.
+func (m *MockInfluxOrganizationsAPI) GetOrganizations(ctx context.Context, pagingOptions ...api.PagingOption) (*[]domain.Organization, error) {
+	m.ctrl.T.Helper()
+	varargs := []interface{}{ctx}
+	for _, a := range pagingOptions {
+		varargs = append(varargs, a)
+	}
+	ret := m.ctrl.Call(m, "GetOrganizations", varargs...)
+	ret0, _ := ret[0].(*[]domain.Organization)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetOrganizations indicates an expected call of GetOrganizations.
+func (mr *MockInfluxOrganizationsAPIMockRecorder) GetOrganizations(ctx interface{}, pagingOptions ...interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	varargs := append([]interface{}{ctx}, pagingOptions...)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetOrganizations", reflect.TypeOf((*MockInfluxOrganizationsAPI)(nil).GetOrganizations), varargs...)
+}
+
+// GetOwners mocks base method.
+func (m *MockInfluxOrganizationsAPI) GetOwners(ctx context.Context, org *domain.Organization) (*[]domain.ResourceOwner, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetOwners", ctx, org)
+	ret0, _ := ret[0].(*[]domain.ResourceOwner)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetOwners indicates an expected call of GetOwners.
+func (mr *MockInfluxOrganizationsAPIMockRecorder) GetOwners(ctx, org interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetOwners", reflect.TypeOf((*MockInfluxOrganizationsAPI)(nil).GetOwners), ctx, org)
+}
+
+// GetOwnersWithID mocks base method.
+func (m *MockInfluxOrganizationsAPI) GetOwnersWithID(ctx context.Context, orgID string) (*[]domain.ResourceOwner, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetOwnersWithID", ctx, orgID)
+	ret0, _ := ret[0].(*[]domain.ResourceOwner)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetOwnersWithID indicates an expected call of GetOwnersWithID.
+func (mr *MockInfluxOrganizationsAPIMockRecorder) GetOwnersWithID(ctx, orgID interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetOwnersWithID", reflect.TypeOf((*MockInfluxOrganizationsAPI)(nil).GetOwnersWithID), ctx, orgID)
+}
+
+// RemoveMember mocks base method.
+func (m *MockInfluxOrganizationsAPI) RemoveMember(ctx context.Context, org *domain.Organization, user *domain.User) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "RemoveMember", ctx, org, user)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// RemoveMember indicates an expected call of RemoveMember.
+func (mr *MockInfluxOrganizationsAPIMockRecorder) RemoveMember(ctx, org, user interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "RemoveMember", reflect.TypeOf((*MockInfluxOrganizationsAPI)(nil).RemoveMember), ctx, org, user)
+}
+
+// RemoveMemberWithID mocks base method.
+func (m *MockInfluxOrganizationsAPI) RemoveMemberWithID(ctx context.Context, orgID, memberID string) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "RemoveMemberWithID", ctx, orgID, memberID)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// RemoveMemberWithID indicates an expected call of RemoveMemberWithID.
+func (mr *MockInfluxOrganizationsAPIMockRecorder) RemoveMemberWithID(ctx, orgID, memberID interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "RemoveMemberWithID", reflect.TypeOf((*MockInfluxOrganizationsAPI)(nil).RemoveMemberWithID), ctx, orgID, memberID)
+}
+
+// RemoveOwner mocks base method.
+func (m *MockInfluxOrganizationsAPI) RemoveOwner(ctx context.Context, org *domain.Organization, user *domain.User) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "RemoveOwner", ctx, org, user)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// RemoveOwner indicates an expected call of RemoveOwner.
+func (mr *MockInfluxOrganizationsAPIMockRecorder) RemoveOwner(ctx, org, user interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "RemoveOwner", reflect.TypeOf((*MockInfluxOrganizationsAPI)(nil).RemoveOwner), ctx, org, user)
+}
+
+// RemoveOwnerWithID mocks base method.
+func (m *MockInfluxOrganizationsAPI) RemoveOwnerWithID(ctx context.Context, orgID, memberID string) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "RemoveOwnerWithID", ctx, orgID, memberID)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// RemoveOwnerWithID indicates an expected call of RemoveOwnerWithID.
+func (mr *MockInfluxOrganizationsAPIMockRecorder) RemoveOwnerWithID(ctx, orgID, memberID interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "RemoveOwnerWithID", reflect.TypeOf((*MockInfluxOrganizationsAPI)(nil).RemoveOwnerWithID), ctx, orgID, memberID)
+}
+
+// UpdateOrganization mocks base method.
+func (m *MockInfluxOrganizationsAPI) UpdateOrganization(ctx context.Context, org *domain.Organization) (*domain.Organization, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "UpdateOrganization", ctx, org)
+	ret0, _ := ret[0].(*domain.Organization)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// UpdateOrganization indicates an expected call of UpdateOrganization.
+func (mr *MockInfluxOrganizationsAPIMockRecorder) UpdateOrganization(ctx, org interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UpdateOrganization", reflect.TypeOf((*MockInfluxOrganizationsAPI)(nil).UpdateOrganization), ctx, org)
+}
