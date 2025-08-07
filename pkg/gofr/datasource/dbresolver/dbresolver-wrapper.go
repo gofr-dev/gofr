@@ -56,19 +56,6 @@ func (*ResolverWrapper) Connect() {
 	// no-op
 }
 
-// createStrategy creates a Strategy instance from string name.
-func (r *ResolverWrapper) createStrategy(replicaCount int) Strategy {
-	switch r.strategyName {
-	case roundRobinStrategy:
-		return NewRoundRobinStrategy(replicaCount)
-	case randomStrategy:
-		return NewRandomStrategy()
-	default:
-		// Default to round-robin if unknown strategy.
-		return NewRoundRobinStrategy(replicaCount)
-	}
-}
-
 // Build creates a Resolver instance with primary and replica DBs.
 func (r *ResolverWrapper) Build(primary container.DB, replicas []container.DB) (container.DB, error) {
 	if primary == nil {

@@ -90,7 +90,7 @@ func setupMocks(t *testing.T, createResolver bool) *Mocks {
 			stats:        &statistics{},
 			stopChan:     make(chan struct{}),
 			once:         sync.Once{},
-			queryCache:   newEfficientCache(100),
+			queryCache:   newQueryCache(100),
 		}
 	}
 
@@ -166,36 +166,4 @@ func TestResolverWrapper_Build_Success(t *testing.T) {
 			assert.True(t, ok, "Result should be a *Resolver")
 		})
 	}
-}
-
-func TestResolverWrapper_createStrategy_RoundRobin(t *testing.T) {
-	wrapper := &ResolverWrapper{strategyName: "round-robin"}
-	strategy := wrapper.createStrategy(3)
-
-	_, ok := strategy.(*RoundRobinStrategy)
-	assert.True(t, ok, "Expected RoundRobinStrategy")
-}
-
-func TestResolverWrapper_createStrategy_Random(t *testing.T) {
-	wrapper := &ResolverWrapper{strategyName: "random"}
-	strategy := wrapper.createStrategy(3)
-
-	_, ok := strategy.(*RandomStrategy)
-	assert.True(t, ok, "Expected RandomStrategy")
-}
-
-func TestResolverWrapper_createStrategy_EmptyDefaultsToRoundRobin(t *testing.T) {
-	wrapper := &ResolverWrapper{strategyName: ""}
-	strategy := wrapper.createStrategy(3)
-
-	_, ok := strategy.(*RoundRobinStrategy)
-	assert.True(t, ok, "Expected RoundRobinStrategy")
-}
-
-func TestResolverWrapper_createStrategy_UnknownDefaultsToRoundRobin(t *testing.T) {
-	wrapper := &ResolverWrapper{strategyName: "unknown"}
-	strategy := wrapper.createStrategy(3)
-
-	_, ok := strategy.(*RoundRobinStrategy)
-	assert.True(t, ok, "Expected RoundRobinStrategy")
 }

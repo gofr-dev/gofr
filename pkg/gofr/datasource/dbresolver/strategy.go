@@ -18,7 +18,7 @@ type Strategy interface {
 
 // RoundRobinStrategy selects replicas in round-robin order.
 type RoundRobinStrategy struct {
-	current atomic.Uint64
+	current atomic.Int64
 	count   int
 }
 
@@ -30,17 +30,19 @@ func NewRoundRobinStrategy(count int) Strategy {
 }
 
 // Choose selects the next replica in round-robin fashion.
+// Choose selects the next replica in round-robin fashion.
 func (s *RoundRobinStrategy) Choose(replicas []container.DB) (container.DB, error) {
 	if len(replicas) == 0 {
 		return nil, errNoReplicasAvailable
 	}
 
-	current := s.current.Add(1)
-	idx := int(current % uint64(len(replicas)))
+	count := s.current.Add(1)
 
-	if len(replicas) > 0 {
-		idx %= len(replicas)
-	}
+	replicaCount := int64(len(replicas))
+
+	idx64 := count % replicaCount
+
+	idx := int(idx64)
 
 	return replicas[idx], nil
 }

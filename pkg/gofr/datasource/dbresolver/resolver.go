@@ -35,20 +35,20 @@ const (
 // Pre-compiled regex - compiled once at package init.
 var readQueryRegex = regexp.MustCompile(`(?i)^\s*(SELECT|SHOW|DESCRIBE|EXPLAIN)`)
 
-// Efficient query cache using sync.Map (optimized for read-heavy workloads).
-type efficientCache struct {
+// queryCache implements a thread-safe, size-limited cache for query classification.
+type queryCache struct {
 	cache sync.Map
 	size  atomic.Int64
 	max   int64
 }
 
-func newEfficientCache(maxSize int64) *efficientCache {
-	return &efficientCache{
+func newQueryCache(maxSize int64) *queryCache {
+	return &queryCache{
 		max: maxSize,
 	}
 }
 
-func (c *efficientCache) get(key string) (value, exists bool) {
+func (c *queryCache) get(key string) (value, exists bool) {
 	val, found := c.cache.Load(key)
 	if !found {
 		return false, false
@@ -57,7 +57,7 @@ func (c *efficientCache) get(key string) (value, exists bool) {
 	return val.(bool), true
 }
 
-func (c *efficientCache) set(key string, value bool) {
+func (c *queryCache) set(key string, value bool) {
 	// Simple bounded cache - reject if full
 	if c.size.Load() >= c.max {
 		return
@@ -146,7 +146,7 @@ type Resolver struct {
 	metrics Metrics
 	tracer  trace.Tracer
 
-	queryCache *efficientCache
+	queryCache *queryCache
 	stats      *statistics
 
 	// Background task management.
@@ -172,7 +172,7 @@ func WithFallback(fallback bool) Option {
 	}
 }
 
-// NewResolver creates a new resolver with optimized initialization.
+// NewResolver creates a new Resolver instance with the provided primary and replicas.
 func NewResolver(primary container.DB, replicas []container.DB, logger Logger, metrics Metrics, opts ...Option) container.DB {
 	// Wrap replicas with circuit breakers
 	replicaWrappers := make([]*replicaWrapper, len(replicas))
@@ -190,7 +190,7 @@ func NewResolver(primary container.DB, replicas []container.DB, logger Logger, m
 		readFallback: true, // Default to true
 		logger:       logger,
 		metrics:      metrics,
-		queryCache:   newEfficientCache(defaultCacheSize), // Bounded sync.Map cache.
+		queryCache:   newQueryCache(defaultCacheSize), // Bounded sync.Map cache.
 		stats:        &statistics{},
 		stopChan:     make(chan struct{}),
 	}
@@ -344,7 +344,7 @@ func (r *Resolver) selectHealthyReplica() (availableDB container.DB, availableIn
 	return chosenDB, availableIndexes[0]
 }
 
-// Minimal tracing - only create spans when tracer exists.
+// addTrace adds tracing information to the context and returns a span.
 func (r *Resolver) addTrace(ctx context.Context, method, query string) (context.Context, trace.Span) {
 	if r.tracer == nil {
 		return ctx, nil
