@@ -16,6 +16,7 @@ type Datasource struct {
 	ArangoDB      ArangoDB
 	SurrealDB     SurrealDB
 	DGraph        DGraph
+	ScyllaDB      ScyllaDB
 	Elasticsearch Elasticsearch
 	OpenTSDB      OpenTSDB
 }
