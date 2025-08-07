@@ -452,3 +452,75 @@ func Test_DeleteBucket(t *testing.T) {
 		})
 	}
 }
+
+func Test_ListBucket(t *testing.T) {
+	t.Helper()
+
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	dummyOrgName := "orgName"
+	id1, name1 := "id1", "name1"
+	id2, name2 := "id1", "name1"
+
+	testCases := []struct {
+		name        string
+		orgName     string
+		resp        *[]domain.Bucket
+		wantBuckets map[string]string
+		expectErr   bool
+		err         error
+	}{
+		{
+			name:        "try list bucket with empty organization name",
+			orgName:     "",
+			expectErr:   true,
+			wantBuckets: nil,
+			resp:        &[]domain.Bucket{},
+			err:         errEmptyOrganizationName,
+		},
+
+		{
+			name:    "success list organizations",
+			orgName: dummyOrgName,
+			resp: &[]domain.Bucket{
+				{Id: &id1, Name: name1},
+				{Id: &id2, Name: name2},
+			},
+			wantBuckets: map[string]string{
+				id1: name1,
+				id2: name2,
+			},
+			expectErr: false,
+			err:       nil,
+		},
+	}
+
+	for _, tt := range testCases {
+		t.Run(tt.name, func(t *testing.T) {
+			client := *setupDB(t, ctrl)
+			mockInflux := client.client.(*influxdb_mock.MockInfluxClient)
+			mockInfluxBucketAPI := influxdb_mock.NewMockBucketsAPI(ctrl)
+
+			mockInflux.EXPECT().BucketsAPI().
+				Return(mockInfluxBucketAPI).
+				AnyTimes()
+
+			mockInfluxBucketAPI.EXPECT().
+				FindBucketsByOrgName(gomock.Any(), tt.orgName).
+				Return(tt.resp, tt.err).
+				AnyTimes()
+
+			buckets, err := client.ListBuckets(t.Context(), tt.orgName)
+
+			if tt.expectErr {
+				require.Error(t, err)
+				require.Equal(t, err, tt.err)
+			} else {
+				require.NoError(t, err)
+				require.NotEmpty(t, buckets)
+				require.Equal(t, buckets, tt.wantBuckets)
+			}
+		})
+	}
+}
