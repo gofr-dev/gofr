@@ -1,6 +1,9 @@
 package gofr
 
 import (
+	"strconv"
+	"strings"
+
 	"go.opentelemetry.io/otel"
 	"gofr.dev/pkg/gofr/config"
 	"gofr.dev/pkg/gofr/container"
@@ -8,8 +11,15 @@ import (
 	"gofr.dev/pkg/gofr/datasource/sql"
 	"gofr.dev/pkg/gofr/logging"
 	"gofr.dev/pkg/gofr/metrics"
-	"strconv"
-	"strings"
+)
+
+const (
+	maxIdleReplicaCap  = 50
+	minIdleReplica     = 10
+	maxOpenReplicaCap  = 200
+	minOpenReplica     = 50
+	defaultIdleReplica = 10
+	defaultOpenReplica = 100
 )
 
 // AddMongo sets the Mongo datasource in the app's container.
@@ -200,15 +210,15 @@ func (a *App) AddElasticsearch(db container.ElasticsearchProvider) {
 	a.container.Elasticsearch = db
 }
 
-// AddDBResolver sets up read/write splitting for SQL databases
+// AddDBResolver sets up read/write splitting for SQL databases.
 func (a *App) AddDBResolver(resolver container.DBResolverProvider) {
-	// Exit if SQL is not configured
+	// Exit if SQL is not configured.
 	if a.container.SQL == nil {
 		a.Logger().Errorf("Cannot set up DB resolver: SQL is not configured")
 		return
 	}
 
-	// Set up logger, metrics, tracer
+	// Set up logger, metrics, tracer.
 	resolver.UseLogger(a.Logger())
 	resolver.UseMetrics(a.Metrics())
 
@@ -218,14 +228,14 @@ func (a *App) AddDBResolver(resolver container.DBResolverProvider) {
 	// Connect (no-op for resolver)
 	resolver.Connect()
 
-	// Create replica connections
+	// Create replica connections.
 	replicas := createReplicaConnections(a.Config, a.Logger(), a.Metrics())
 	if len(replicas) == 0 {
 		a.Logger().Debugf("No replicas configured, skipping DB resolver setup")
 		return
 	}
 
-	// Build resolver with primary and replicas
+	// Build resolver with primary and replicas.
 	resolverDB, err := resolver.Build(a.container.SQL, replicas)
 	if err != nil {
 		a.Logger().Errorf("Failed to build DB resolver: %v", err)
@@ -236,14 +246,15 @@ func (a *App) AddDBResolver(resolver container.DBResolverProvider) {
 	a.Logger().Logf("DB read/write splitting enabled with %d replicas", len(replicas))
 }
 
-// createReplicaConnections creates optimized DB connections to replicas
-func createReplicaConnections(config config.Config, logger logging.Logger, metrics metrics.Manager) []container.DB {
-	replicaHostsStr := config.Get("DB_REPLICA_HOSTS")
+// createReplicaConnections creates optimized DB connections to replicas.
+func createReplicaConnections(cfg config.Config, logger logging.Logger, metrics metrics.Manager) []container.DB {
+	replicaHostsStr := cfg.Get("DB_REPLICA_HOSTS")
 	if replicaHostsStr == "" {
 		return nil
 	}
 
 	replicaHosts := strings.Split(replicaHostsStr, ",")
+
 	var replicas []container.DB
 
 	for _, host := range replicaHosts {
@@ -252,15 +263,16 @@ func createReplicaConnections(config config.Config, logger logging.Logger, metri
 			continue
 		}
 
-		// Create optimized replica config
+		// Create optimized replica config.
 		replicaConfig := &replicaConfigWrapper{
-			Config:     config,
+			Config:     cfg,
 			hostString: host,
 		}
 
 		replica := sql.NewSQL(replicaConfig, logger, metrics)
 		if replica != nil {
 			replicas = append(replicas, replica)
+
 			logger.Logf("Created DB replica connection to %s", host)
 		}
 	}
@@ -268,73 +280,108 @@ func createReplicaConnections(config config.Config, logger logging.Logger, metri
 	return replicas
 }
 
-// replicaConfigWrapper wraps config and optimizes connection settings for replicas
+// replicaConfigWrapper wraps config and optimizes connection settings for replicas.
 type replicaConfigWrapper struct {
 	config.Config
 	hostString string
 }
 
-// Get overrides config values for replica optimization
+// Get overrides config values for replica optimization.
 func (c *replicaConfigWrapper) Get(key string) string {
 	switch key {
 	case "DB_HOST":
-		if strings.Contains(c.hostString, ":") {
-			return strings.Split(c.hostString, ":")[0]
-		}
-		return c.hostString
+		return c.getHost()
 	case "DB_PORT":
-		if strings.Contains(c.hostString, ":") {
-			parts := strings.Split(c.hostString, ":")
-			if len(parts) > 1 {
-				return parts[1]
-			}
-		}
-		if replicaPort := c.Config.Get("DB_REPLICA_PORT"); replicaPort != "" {
-			return replicaPort
-		}
-		return c.Config.Get("DB_PORT")
+		return c.getPort()
 	case "DB_USER":
-		if replicaUser := c.Config.Get("DB_REPLICA_USER"); replicaUser != "" {
-			return replicaUser
-		}
+		return c.getUser()
 	case "DB_PASSWORD":
-		if replicaPass := c.Config.Get("DB_REPLICA_PASSWORD"); replicaPass != "" {
-			return replicaPass
-		}
+		return c.getPassword()
 	case "DB_MAX_IDLE_CONNECTION":
-		// Simple optimization: 4x idle connections for read replicas
-		if primaryIdle := c.Config.Get("DB_MAX_IDLE_CONNECTION"); primaryIdle != "" {
-			if val, err := strconv.Atoi(primaryIdle); err == nil && val > 0 {
-				optimized := val * 4
-				if optimized > 50 { // Cap at 50
-					optimized = 50
-				}
-				if optimized < 10 { // Min of 10 for read performance
-					optimized = 10
-				}
-				return strconv.Itoa(optimized)
-			}
-		}
-		return "10" // Default optimized value
+		return optimizedIdleConnections(c.Config)
 	case "DB_MAX_OPEN_CONNECTION":
-		// Simple optimization: 2x max connections for read replicas
-		if primaryOpen := c.Config.Get("DB_MAX_OPEN_CONNECTION"); primaryOpen != "" {
-			if val, err := strconv.Atoi(primaryOpen); err == nil {
-				if val == 0 { // Handle unlimited
-					return "100" // Reasonable limit for replicas
-				}
-				optimized := val * 2
-				if optimized > 200 { // Cap at 200
-					optimized = 200
-				}
-				if optimized < 50 { // Min of 50 for read distribution
-					optimized = 50
-				}
-				return strconv.Itoa(optimized)
-			}
-		}
-		return "100" // Default optimized value
+		return optimizedOpenConnections(c.Config)
+	default:
+		return c.Config.Get(key)
+	}
+}
+
+func (c *replicaConfigWrapper) getHost() string {
+	if strings.Contains(c.hostString, ":") {
+		return strings.Split(c.hostString, ":")[0]
 	}
 
-	return c.Config.Get(key)
+	return c.hostString
+}
+
+func (c *replicaConfigWrapper) getPort() string {
+	if strings.Contains(c.hostString, ":") {
+		parts := strings.Split(c.hostString, ":")
+		if len(parts) > 1 {
+			return parts[1]
+		}
+	}
+
+	if replicaPort := c.Config.Get("DB_REPLICA_PORT"); replicaPort != "" {
+		return replicaPort
+	}
+
+	return c.Config.Get("DB_PORT")
+}
+
+func (c *replicaConfigWrapper) getUser() string {
+	if replicaUser := c.Config.Get("DB_REPLICA_USER"); replicaUser != "" {
+		return replicaUser
+	}
+
+	return c.Config.Get("DB_USER")
+}
+
+func (c *replicaConfigWrapper) getPassword() string {
+	if replicaPass := c.Config.Get("DB_REPLICA_PASSWORD"); replicaPass != "" {
+		return replicaPass
+	}
+
+	return c.Config.Get("DB_PASSWORD")
+}
+
+func optimizedIdleConnections(cfg config.Config) string {
+	val, err := strconv.Atoi(cfg.Get("DB_MAX_IDLE_CONNECTION"))
+
+	if err != nil || val <= 0 {
+		return strconv.Itoa(defaultIdleReplica)
+	}
+
+	optimized := val * 4
+
+	switch {
+	case optimized > maxIdleReplicaCap:
+		optimized = maxIdleReplicaCap
+	case optimized < minIdleReplica:
+		optimized = minIdleReplica
+	}
+
+	return strconv.Itoa(optimized)
+}
+
+func optimizedOpenConnections(cfg config.Config) string {
+	val, err := strconv.Atoi(cfg.Get("DB_MAX_OPEN_CONNECTION"))
+	if err != nil {
+		return strconv.Itoa(defaultOpenReplica)
+	}
+
+	if val == 0 {
+		return strconv.Itoa(defaultOpenReplica)
+	}
+
+	optimized := val * 2
+
+	switch {
+	case optimized > maxOpenReplicaCap:
+		optimized = maxOpenReplicaCap
+	case optimized < minOpenReplica:
+		optimized = minOpenReplica
+	}
+
+	return strconv.Itoa(optimized)
 }
