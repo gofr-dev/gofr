@@ -149,7 +149,7 @@ func NewInMemoryCache(opts ...Option) (cache.Cache, error) {
 
 	// Start periodic cleanup if TTL > 0
 	if c.ttl > 0 {
-		go c.startCleanup()
+		go c.startCleanup(context.Background())
 	} else {
 		c.logger.Warnf("TTL disabled; items will not expire automatically")
 	}
@@ -431,7 +431,7 @@ func (c *inMemoryCache) removeNode(n *node) {
 }
 
 // runs periodic TTL cleanup.
-func (c *inMemoryCache) startCleanup() {
+func (c *inMemoryCache) startCleanup(ctx context.Context) {
 	interval := c.ttl / 4
 	if interval < 10*time.Second {
 		interval = 10 * time.Second
@@ -453,8 +453,13 @@ func (c *inMemoryCache) startCleanup() {
 				}
 			}
 			c.mu.Unlock()
+
+		case <-ctx.Done():
+			c.logger.Infof("Context canceled: stopping cleanup for cache '%s'", c.name)
+			return
+
 		case <-c.quit:
-			c.logger.Infof("Stopping cleanup for cache '%s'", c.name)
+			c.logger.Infof("Quit channel closed: stopping cleanup for cache '%s'", c.name)
 			return
 		}
 	}
