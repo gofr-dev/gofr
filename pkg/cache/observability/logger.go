@@ -22,8 +22,8 @@ const (
 const (
 	INFO  = "INFO"
 	WARN  = "WARN"
-	ERROR = "ERRO"
-	DEBUG = "DEBU"
+	ERROR = "ERROR"
+	DEBUG = "DEBUG"
 )
 
 // Logger defines a standard interface for logging.
@@ -37,7 +37,7 @@ type Logger interface {
 	Missf(message string, duration time.Duration, operation string)
 
 	// Generic method for creating structured logs like in the screenshot.
-	// level: "INFO", "DEBU", etc.
+	// level: "INFO", "DEBUG", etc.
 	// message: The initial message string (e.g., request ID, query context).
 	// tag: An int (like HTTP status 200) or string (like "SQL", "REDIS").
 	// duration: The operation's duration.
@@ -128,13 +128,13 @@ func (l *styledLogger) logSimple(level, color, format string, args ...any) {
 func getLevelStyle(level string) (levelStr, color string) {
 	switch level {
 	case ERROR:
-		return "ERRO", Red
+		return "ERROR", Red
 	case WARN:
 		return "WARN", Yellow
 	case INFO:
 		return "INFO", Green
 	case DEBUG:
-		return "DEBU", Gray
+		return "DEBUG", Gray
 	default:
 		return level, Reset
 	}

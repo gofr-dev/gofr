@@ -206,10 +206,10 @@ func (c *inMemoryCache) Set(_ context.Context, key string, value any) error {
 	}
 
 	// Insert new node at head (most recently used)
-	nd := &node{key: key}
+	node := &node{key: key}
 	// O(1) insert at front
-	c.insertAtFront(nd)
-	c.items[key] = entry{value: value, expiresAt: c.computeExpiry(now), node: nd}
+	c.insertAtFront(node)
+	c.items[key] = entry{value: value, expiresAt: c.computeExpiry(now), node: node}
 
 	duration := time.Since(now)
 	c.logger.LogRequest("INFO", "SET", "CREATE", duration, key)

@@ -230,7 +230,7 @@ func (c *redisCache) Set(ctx context.Context, key string, value any) error {
 	}
 
 	duration := time.Since(start)
-	c.logger.LogRequest("DEBU", "Set new cache key", "SUCCESS", duration, key)
+	c.logger.LogRequest("DEBUG", "Set new cache key", "SUCCESS", duration, key)
 
 	if c.metrics != nil {
 		c.metrics.Sets().WithLabelValues(c.name).Inc()
@@ -302,7 +302,7 @@ func (c *redisCache) Delete(ctx context.Context, key string) error {
 		return err
 	}
 
-	c.logger.LogRequest("DEBU", "Deleted cache key", "SUCCESS", duration, key)
+	c.logger.LogRequest("DEBUG", "Deleted cache key", "SUCCESS", duration, key)
 
 	if c.metrics != nil {
 		c.metrics.Deletes().WithLabelValues(c.name).Inc()
