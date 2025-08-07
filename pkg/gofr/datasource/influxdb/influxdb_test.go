@@ -117,13 +117,13 @@ func Test_PingFailed(t *testing.T) {
 	require.False(t, health)
 }
 
-func Test_CreatOrganization(t *testing.T) {
+func Test_CreateOrganization(t *testing.T) {
 	t.Helper()
 
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
-	dummyID := "dfdf"
+	dummyID := "dummyID"
 
 	testCases := []struct {
 		name      string
@@ -182,8 +182,68 @@ func Test_CreatOrganization(t *testing.T) {
 			} else {
 				require.NoError(t, err)
 			}
+		})
+	}
+}
 
-			// fmt.Println(orgId, err)
+func Test_DeleteOrganization(t *testing.T) {
+	t.Helper()
+
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	dummyID := "dummyID"
+
+	testCases := []struct {
+		name      string
+		orgID     string
+		expectErr bool
+		err       error
+	}{
+		{
+			name:      "delete empty orgainzation with id",
+			orgID:     "",
+			expectErr: true,
+			err:       errEmptyOrganizationID,
+		},
+		{
+			name:      "delete organization with id",
+			orgID:     dummyID,
+			expectErr: false,
+			err:       nil,
+		},
+		{
+			name:      "delete invalid organization with id",
+			orgID:     dummyID,
+			expectErr: true,
+			err:       errors.New("invalid organization id"),
+		},
+	}
+
+	for _, tt := range testCases {
+		t.Run(tt.name, func(t *testing.T) {
+
+			client := *setupDB(t, ctrl)
+			mockInflux := client.client.(*MockInfluxClient)
+			mockInfluxOrgApi := NewMockInfluxOrganizationsAPI(ctrl)
+
+			mockInflux.EXPECT().OrganizationsAPI().
+				Return(mockInfluxOrgApi).
+				AnyTimes()
+
+			mockInfluxOrgApi.EXPECT().
+				DeleteOrganizationWithID(gomock.Any(), tt.orgID).
+				Return(tt.err).
+				AnyTimes()
+
+			err := client.DeleteOrganization(t.Context(), tt.orgID)
+
+			if tt.expectErr {
+				require.Error(t, err)
+				require.Equal(t, err, tt.err)
+			} else {
+				require.NoError(t, err)
+			}
 		})
 	}
 }
