@@ -111,7 +111,7 @@ func (c *Client) Query(dest any, stmt string, values ...any) error {
 // Exec executes a CQL (Cassandra Query Language) statement on a ScyllaDB cluster
 // with the provided values, using the default context (context.Background()).
 func (c *Client) Exec(stmt string, values ...any) error {
-	return c.ExecWithCtx(context.Background(), stmt, values)
+	return c.ExecWithCtx(context.Background(), stmt, values...)
 }
 
 // ExecWithCtx executes a CQL statement by using the context,statement,values and returns error.

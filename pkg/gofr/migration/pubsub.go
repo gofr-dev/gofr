@@ -60,7 +60,7 @@ func (pm pubsubMigrator) checkAndCreateMigrationTable(c *container.Container) er
 	return pm.migrator.checkAndCreateMigrationTable(c)
 }
 
-func (pubsubMigrator) getLastMigration(c *container.Container) int64 {
+func (pm pubsubMigrator) getLastMigration(c *container.Container) int64 {
 	queryTopic := resolveMigrationTopic(c)
 
 	ctx, cancel := context.WithTimeout(context.Background(), migrationTimeout)
@@ -69,11 +69,17 @@ func (pubsubMigrator) getLastMigration(c *container.Container) int64 {
 	result, err := c.PubSub.Query(ctx, queryTopic, int64(0), defaultQueryLimit)
 	if err != nil {
 		c.Errorf("Error querying migration topic: %v", err)
-
-		return 0
 	}
 
-	return extractLastVersion(c, result)
+	pubsubLastMigration := extractLastVersion(c, result)
+
+	nextMigratorLastMigration := pm.migrator.getLastMigration(c)
+
+	if nextMigratorLastMigration > pubsubLastMigration {
+		return nextMigratorLastMigration
+	}
+
+	return pubsubLastMigration
 }
 
 func resolveMigrationTopic(c *container.Container) string {
