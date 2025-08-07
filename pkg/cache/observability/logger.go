@@ -26,6 +26,8 @@ const (
 	DEBUG = "DEBUG"
 )
 
+const ansiRegex = "[\u001B\u009B][[\\]()#;?]*.{0,2}(?:(?:;\\d{1,3})*.[a-zA-Z\\d]|(?:\\d{1,4}/?)*[a-zA-Z])"
+
 // Logger defines a standard interface for logging.
 type Logger interface {
 	Errorf(format string, args ...any)
@@ -216,8 +218,5 @@ func isTerminal() bool {
 
 // stripAnsi removes ANSI escape codes from a string.
 func stripAnsi(str string) string {
-	const ansiRegex = "[\u001B\u009B][[\\]()#;?]*.{0,2}(?:(?:;\\d{1,3})*.[a-zA-Z\\d]|(?:\\d{1,4}/?)*[a-zA-Z])"
-	re := regexp.MustCompile(ansiRegex)
-
-	return re.ReplaceAllString(str, "")
+	return regexp.MustCompile(ansiRegex).ReplaceAllString(str, "")
 }
