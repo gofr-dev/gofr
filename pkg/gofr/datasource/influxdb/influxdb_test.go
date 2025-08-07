@@ -36,10 +36,11 @@ func setupDB(t *testing.T, ctrl *gomock.Controller) *Client {
 
 	// Replace the client with our mocked version
 	client.client = mockInfluxClient
+
 	return client
 }
 
-func Test_HelthCheckSuccess(t *testing.T) {
+func Test_HealthCheckSuccess(t *testing.T) {
 	t.Helper()
 
 	ctrl := gomock.NewController(t)
@@ -58,7 +59,7 @@ func Test_HelthCheckSuccess(t *testing.T) {
 	require.NoError(t, err)
 }
 
-func Test_HelthCheckFail(t *testing.T) {
+func Test_HealthCheckFail(t *testing.T) {
 	t.Helper()
 
 	ctrl := gomock.NewController(t)
@@ -133,7 +134,7 @@ func Test_CreateOrganization(t *testing.T) {
 		err       error
 	}{
 		{
-			name:      "empty orgainzation name",
+			name:      "empty organizations name",
 			orgName:   "",
 			resp:      &domain.Organization{},
 			expectErr: true,
@@ -159,26 +160,25 @@ func Test_CreateOrganization(t *testing.T) {
 
 	for _, tt := range testCases {
 		t.Run(tt.name, func(t *testing.T) {
-
 			client := *setupDB(t, ctrl)
 			mockInflux := client.client.(*MockInfluxClient)
-			mockInfluxOrgApi := NewMockInfluxOrganizationsAPI(ctrl)
+			mockInfluxOrgAPI := NewMockInfluxOrganizationsAPI(ctrl)
 
 			mockInflux.EXPECT().OrganizationsAPI().
-				Return(mockInfluxOrgApi).
+				Return(mockInfluxOrgAPI).
 				AnyTimes()
 
-			mockInfluxOrgApi.EXPECT().
+			mockInfluxOrgAPI.EXPECT().
 				CreateOrganizationWithName(gomock.Any(), tt.orgName).
 				Return(tt.resp, tt.err).
 				AnyTimes()
 
-			newOrgId, err := client.CreateOrganization(t.Context(), tt.orgName)
+			newOrgID, err := client.CreateOrganization(t.Context(), tt.orgName)
 
 			if tt.expectErr {
 				require.Error(t, err)
 				require.Equal(t, err, tt.err)
-				require.Empty(t, newOrgId)
+				require.Empty(t, newOrgID)
 			} else {
 				require.NoError(t, err)
 			}
@@ -201,7 +201,7 @@ func Test_DeleteOrganization(t *testing.T) {
 		err       error
 	}{
 		{
-			name:      "delete empty orgainzation with id",
+			name:      "delete empty organizations with id",
 			orgID:     "",
 			expectErr: true,
 			err:       errEmptyOrganizationID,
@@ -222,16 +222,15 @@ func Test_DeleteOrganization(t *testing.T) {
 
 	for _, tt := range testCases {
 		t.Run(tt.name, func(t *testing.T) {
-
 			client := *setupDB(t, ctrl)
 			mockInflux := client.client.(*MockInfluxClient)
-			mockInfluxOrgApi := NewMockInfluxOrganizationsAPI(ctrl)
+			mockInfluxOrgAPI := NewMockInfluxOrganizationsAPI(ctrl)
 
 			mockInflux.EXPECT().OrganizationsAPI().
-				Return(mockInfluxOrgApi).
+				Return(mockInfluxOrgAPI).
 				AnyTimes()
 
-			mockInfluxOrgApi.EXPECT().
+			mockInfluxOrgAPI.EXPECT().
 				DeleteOrganizationWithID(gomock.Any(), tt.orgID).
 				Return(tt.err).
 				AnyTimes()
@@ -246,4 +245,75 @@ func Test_DeleteOrganization(t *testing.T) {
 			}
 		})
 	}
+}
+
+func Test_ListOrganization(t *testing.T) {
+	t.Helper()
+
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	client := *setupDB(t, ctrl)
+	mockInflux := client.client.(*MockInfluxClient)
+	mockInfluxOrgAPI := NewMockInfluxOrganizationsAPI(ctrl)
+
+	t.Run("test zero organization", func(t *testing.T) {
+		allOrgs := []domain.Organization{}
+
+		mockInflux.EXPECT().OrganizationsAPI().Return(mockInfluxOrgAPI).Times(1)
+		mockInfluxOrgAPI.EXPECT().
+			GetOrganizations(gomock.Any()).
+			Return(&allOrgs, nil).
+			Times(1)
+
+		orgs, err := client.ListOrganization(t.Context())
+		require.NoError(t, err)
+		require.Empty(t, orgs)
+	})
+
+	t.Run("testing error in fetching organization", func(t *testing.T) {
+		allOrgs := &[]domain.Organization{}
+
+		mockInflux.EXPECT().OrganizationsAPI().Return(mockInfluxOrgAPI).Times(1)
+		mockInfluxOrgAPI.EXPECT().
+			GetOrganizations(gomock.Any()).
+			Return(allOrgs, errFetchOrganization).
+			Times(1)
+
+		orgs, err := client.ListOrganization(t.Context())
+		require.Empty(t, orgs)
+		require.Error(t, err)
+		require.Equal(t, err, errFetchOrganization)
+	})
+
+	t.Run("testing fetching list of organization", func(t *testing.T) {
+		id1, name1 := "id1", "name1"
+		id2, name2 := "id1", "name1"
+
+		allOrg := &[]domain.Organization{
+			{Id: &id1, Name: name1},
+			{Id: &id2, Name: name2},
+		}
+
+		wantOrg := map[string]string{id1: name1, id2: name2}
+
+		mockInflux.EXPECT().OrganizationsAPI().Return(mockInfluxOrgAPI).Times(1)
+		mockInfluxOrgAPI.EXPECT().
+			GetOrganizations(gomock.Any()).
+			Return(allOrg, nil).
+			Times(1)
+
+		resultOrg, err := client.ListOrganization(t.Context())
+
+		require.NoError(t, err)
+		require.NotEmpty(t, resultOrg)
+
+		orgs := make(map[string]string, len(*allOrg))
+
+		for _, org := range *allOrg {
+			orgs[*org.Id] = org.Name
+		}
+
+		require.Equal(t, wantOrg, orgs)
+	})
 }

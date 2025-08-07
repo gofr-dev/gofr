@@ -4,7 +4,6 @@ import (
 	"context"
 
 	influxdb2 "github.com/influxdata/influxdb-client-go/v2"
-
 	api "github.com/influxdata/influxdb-client-go/v2/api"
 	"github.com/influxdata/influxdb-client-go/v2/api/http"
 	"github.com/influxdata/influxdb-client-go/v2/domain"
@@ -13,14 +12,18 @@ import (
 // InfluxDB defines the operations required to interact with an InfluxDB instance.
 type InfluxClient interface {
 
-	// Setup sends request to initialise new InfluxDB server with user, org and bucket, and data retention period
+	// Setup sends request to initialize new InfluxDB server with user, org and bucket, and data retention period
 	// and returns details about newly created entities along with the authorization object.
 	// Retention period of zero will result to infinite retention.
 	Setup(ctx context.Context, username, password, org, bucket string, retentionPeriodHours int) (*domain.OnboardingResponse, error)
-	// SetupWithToken sends request to initialise new InfluxDB server with user, org and bucket, data retention period and token
+	// SetupWithToken sends request to initialize new InfluxDB server with user, org and bucket, data retention period and token
 	// and returns details about newly created entities along with the authorization object.
 	// Retention period of zero will result to infinite retention.
-	SetupWithToken(ctx context.Context, username, password, org, bucket string, retentionPeriodHours int, token string) (*domain.OnboardingResponse, error)
+	SetupWithToken(
+		ctx context.Context,
+		username, password, org, bucket string,
+		retentionPeriodHours int, token string) (*domain.OnboardingResponse, error)
+
 	// Ready returns InfluxDB uptime info of server. It doesn't validate authentication params.
 	Ready(ctx context.Context) (*domain.Ready, error)
 	// Health returns an InfluxDB server health check result. Read the HealthCheck.Status field to get server status.
