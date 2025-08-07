@@ -8,6 +8,7 @@ import (
 	"github.com/kataras/iris/v12/x/errors"
 	"github.com/stretchr/testify/require"
 	"go.opentelemetry.io/otel"
+
 	influxdb_mock "gofr.dev/pkg/gofr/datasource/influxdb/mocks"
 )
 
@@ -325,7 +326,7 @@ func Test_CreateBucket(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
-	dummyId := "id1"
+	dummyID := "id1"
 	dummyOrgID := "org123"
 	dummyBucketName := "bucket123"
 
@@ -361,8 +362,8 @@ func Test_CreateBucket(t *testing.T) {
 			orgID:        dummyOrgID,
 			bucketName:   dummyBucketName,
 			expectErr:    false,
-			respBucket:   &domain.Bucket{Id: &dummyId},
-			wantBucketID: dummyId,
+			respBucket:   &domain.Bucket{Id: &dummyID},
+			wantBucketID: dummyID,
 			err:          nil,
 		},
 	}
@@ -401,26 +402,26 @@ func Test_DeleteBucket(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
-	dummyId := "id1"
+	dummyID := "id1"
 
 	testCases := []struct {
 		name      string
 		orgID     string
-		bucketId  string
+		bucketID  string
 		expectErr bool
 		err       error
 	}{
 		{
 			name:      "try deleting bucket with empty bucket id",
 			orgID:     "",
-			bucketId:  "",
+			bucketID:  "",
 			expectErr: true,
 			err:       errEmptyBucketID,
 		},
 		{
 			name:      "successfully deleting a new bucket",
 			orgID:     "",
-			bucketId:  dummyId,
+			bucketID:  dummyID,
 			expectErr: false,
 			err:       nil,
 		},
@@ -437,11 +438,11 @@ func Test_DeleteBucket(t *testing.T) {
 				AnyTimes()
 
 			mockInfluxBucketAPI.EXPECT().
-				DeleteBucketWithID(gomock.Any(), tt.bucketId).
+				DeleteBucketWithID(gomock.Any(), tt.bucketID).
 				Return(tt.err).
 				AnyTimes()
 
-			err := client.DeleteBucket(t.Context(), tt.bucketId)
+			err := client.DeleteBucket(t.Context(), tt.bucketID)
 
 			if tt.expectErr {
 				require.Error(t, err)
@@ -519,7 +520,7 @@ func Test_ListBucket(t *testing.T) {
 			} else {
 				require.NoError(t, err)
 				require.NotEmpty(t, buckets)
-				require.Equal(t, buckets, tt.wantBuckets)
+				require.Equal(t, tt.wantBuckets, buckets)
 			}
 		})
 	}

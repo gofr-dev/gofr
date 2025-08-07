@@ -43,7 +43,6 @@ var (
 	errEmptyOrganizationID   = errors.New("organization id must not be empty")
 	errEmptyBucketID         = errors.New("bucket id must not be empty")
 	errEmptyBucketName       = errors.New("bucket name must not be empty")
-	errFindingBuckets        = errors.New("failed in finding buckets")
 	errFetchOrganization     = errors.New("failed to fetch all organizations")
 	errHealthCheckFailed     = errors.New("influxdb health check failed")
 )

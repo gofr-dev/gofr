@@ -9,7 +9,7 @@ import (
 	"github.com/influxdata/influxdb-client-go/v2/domain"
 )
 
-// InfluxDB defines the operations required to interact with an InfluxDB instance.
+// InfluxClient defines the operations required to interact with an InfluxDB instance.
 type InfluxClient interface {
 
 	// Setup sends request to initialize new InfluxDB server with user, org and bucket, and data retention period
@@ -67,7 +67,7 @@ type InfluxClient interface {
 	APIClient() *domain.Client
 }
 
-// OrganizationsAPI provides methods for managing Organizations in a InfluxDB server.
+// InfluxOrganizationsAPI provides methods for managing Organizations in a InfluxDB server.
 type InfluxOrganizationsAPI interface {
 	// GetOrganizations returns all organizations.
 	// GetOrganizations supports PagingOptions: Offset, Limit, Descending
@@ -127,13 +127,17 @@ type BucketsAPI interface {
 	// FindBucketsByOrgID returns buckets belonging to the organization with ID orgID.
 	// FindBucketsByOrgID supports PagingOptions: Offset, Limit, After. Empty pagingOptions means the default paging (first 20 results).
 	FindBucketsByOrgID(ctx context.Context, orgID string, pagingOptions ...api.PagingOption) (*[]domain.Bucket, error)
-	// FindBucketsByOrgName returns buckets belonging to the organization with name orgName, with the specified paging. Empty pagingOptions means the default paging (first 20 results).
+	// FindBucketsByOrgName returns buckets belonging to the organization with name orgName, with the specified paging.
+	//  Empty pagingOptions means the default paging (first 20 results).
 	FindBucketsByOrgName(ctx context.Context, orgName string, pagingOptions ...api.PagingOption) (*[]domain.Bucket, error)
 	// CreateBucket creates a new bucket.
 	CreateBucket(ctx context.Context, bucket *domain.Bucket) (*domain.Bucket, error)
-	// CreateBucketWithName creates a new bucket with bucketName in organization org, with retention specified in rules. Empty rules means infinite retention.
-	CreateBucketWithName(ctx context.Context, org *domain.Organization, bucketName string, rules ...domain.RetentionRule) (*domain.Bucket, error)
-	// CreateBucketWithNameWithID creates a new bucket with bucketName in organization with orgID, with retention specified in rules. Empty rules means infinite retention.
+	// CreateBucketWithName creates a new bucket with bucketName in organization org, with retention specified in rules.
+	// Empty rules means infinite retention.
+	CreateBucketWithName(
+		ctx context.Context, org *domain.Organization, bucketName string, rules ...domain.RetentionRule) (*domain.Bucket, error)
+	// CreateBucketWithNameWithID creates a new bucket with bucketName in organization with orgID, with retention specified in rules.
+	// Empty rules means infinite retention.
 	CreateBucketWithNameWithID(ctx context.Context, orgID, bucketName string, rules ...domain.RetentionRule) (*domain.Bucket, error)
 	// UpdateBucket updates a bucket.
 	UpdateBucket(ctx context.Context, bucket *domain.Bucket) (*domain.Bucket, error)
