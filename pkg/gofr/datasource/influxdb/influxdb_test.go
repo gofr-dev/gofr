@@ -8,6 +8,7 @@ import (
 	"github.com/kataras/iris/v12/x/errors"
 	"github.com/stretchr/testify/require"
 	"go.opentelemetry.io/otel"
+	influxdb_mock "gofr.dev/pkg/gofr/datasource/influxdb/mocks"
 )
 
 func setupDB(t *testing.T, ctrl *gomock.Controller) *Client {
@@ -15,7 +16,7 @@ func setupDB(t *testing.T, ctrl *gomock.Controller) *Client {
 
 	mockLogger := NewMockLogger(ctrl)
 	mockMetrics := NewMockMetrics(ctrl)
-	mockInfluxClient := NewMockInfluxClient(ctrl)
+	mockInfluxClient := influxdb_mock.NewMockInfluxClient(ctrl)
 
 	config := Config{
 		URL:      "http://localhost:8086",
@@ -47,7 +48,7 @@ func Test_HealthCheckSuccess(t *testing.T) {
 	defer ctrl.Finish()
 
 	client := *setupDB(t, ctrl)
-	mockInflux := client.client.(*MockInfluxClient)
+	mockInflux := client.client.(*influxdb_mock.MockInfluxClient)
 
 	expectedHealth := &domain.HealthCheck{Status: "pass"}
 	mockInflux.EXPECT().
@@ -66,7 +67,7 @@ func Test_HealthCheckFail(t *testing.T) {
 	defer ctrl.Finish()
 
 	client := *setupDB(t, ctrl)
-	mockInflux := client.client.(*MockInfluxClient)
+	mockInflux := client.client.(*influxdb_mock.MockInfluxClient)
 
 	expectedHealth := &domain.HealthCheck{Status: "fail"}
 	mockInflux.EXPECT().
@@ -85,7 +86,7 @@ func Test_PingSuccess(t *testing.T) {
 	defer ctrl.Finish()
 
 	client := *setupDB(t, ctrl)
-	mockInflux := client.client.(*MockInfluxClient)
+	mockInflux := client.client.(*influxdb_mock.MockInfluxClient)
 
 	mockInflux.EXPECT().
 		Ping(gomock.Any()).
@@ -105,7 +106,7 @@ func Test_PingFailed(t *testing.T) {
 	defer ctrl.Finish()
 
 	client := *setupDB(t, ctrl)
-	mockInflux := client.client.(*MockInfluxClient)
+	mockInflux := client.client.(*influxdb_mock.MockInfluxClient)
 
 	mockInflux.EXPECT().
 		Ping(gomock.Any()).
@@ -161,8 +162,8 @@ func Test_CreateOrganization(t *testing.T) {
 	for _, tt := range testCases {
 		t.Run(tt.name, func(t *testing.T) {
 			client := *setupDB(t, ctrl)
-			mockInflux := client.client.(*MockInfluxClient)
-			mockInfluxOrgAPI := NewMockInfluxOrganizationsAPI(ctrl)
+			mockInflux := client.client.(*influxdb_mock.MockInfluxClient)
+			mockInfluxOrgAPI := influxdb_mock.NewMockInfluxOrganizationsAPI(ctrl)
 
 			mockInflux.EXPECT().OrganizationsAPI().
 				Return(mockInfluxOrgAPI).
@@ -223,8 +224,8 @@ func Test_DeleteOrganization(t *testing.T) {
 	for _, tt := range testCases {
 		t.Run(tt.name, func(t *testing.T) {
 			client := *setupDB(t, ctrl)
-			mockInflux := client.client.(*MockInfluxClient)
-			mockInfluxOrgAPI := NewMockInfluxOrganizationsAPI(ctrl)
+			mockInflux := client.client.(*influxdb_mock.MockInfluxClient)
+			mockInfluxOrgAPI := influxdb_mock.NewMockInfluxOrganizationsAPI(ctrl)
 
 			mockInflux.EXPECT().OrganizationsAPI().
 				Return(mockInfluxOrgAPI).
@@ -254,8 +255,8 @@ func Test_ListOrganization(t *testing.T) {
 	defer ctrl.Finish()
 
 	client := *setupDB(t, ctrl)
-	mockInflux := client.client.(*MockInfluxClient)
-	mockInfluxOrgAPI := NewMockInfluxOrganizationsAPI(ctrl)
+	mockInflux := client.client.(*influxdb_mock.MockInfluxClient)
+	mockInfluxOrgAPI := influxdb_mock.NewMockInfluxOrganizationsAPI(ctrl)
 
 	t.Run("test zero organization", func(t *testing.T) {
 		allOrgs := []domain.Organization{}
@@ -316,4 +317,80 @@ func Test_ListOrganization(t *testing.T) {
 
 		require.Equal(t, wantOrg, orgs)
 	})
+}
+
+func Test_CreateBucket(t *testing.T) {
+	t.Helper()
+
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	dummyId := "id1"
+	dummyOrgID := "org123"
+	dummyBucketName := "bucket123"
+
+	testCases := []struct {
+		name         string
+		orgID        string
+		bucketName   string
+		respBucket   *domain.Bucket
+		wantBucketID string
+		expectErr    bool
+		err          error
+	}{
+		{
+			name:         "try creating bucket with empty organization id",
+			orgID:        "",
+			bucketName:   dummyBucketName,
+			expectErr:    true,
+			respBucket:   nil,
+			wantBucketID: "",
+			err:          errEmptyOrganizationID,
+		},
+		{
+			name:         "try creating bucket with empty bucket name",
+			orgID:        dummyOrgID,
+			bucketName:   "",
+			expectErr:    true,
+			respBucket:   nil,
+			wantBucketID: "",
+			err:          errEmptyBucketName,
+		},
+		{
+			name:         "try creating bucket with empty bucket name",
+			orgID:        dummyOrgID,
+			bucketName:   dummyBucketName,
+			expectErr:    false,
+			respBucket:   &domain.Bucket{Id: &dummyId},
+			wantBucketID: dummyId,
+			err:          nil,
+		},
+	}
+
+	for _, tt := range testCases {
+		t.Run(tt.name, func(t *testing.T) {
+			client := *setupDB(t, ctrl)
+			mockInflux := client.client.(*influxdb_mock.MockInfluxClient)
+			mockInfluxBucketAPI := influxdb_mock.NewMockBucketsAPI(ctrl)
+
+			mockInflux.EXPECT().BucketsAPI().
+				Return(mockInfluxBucketAPI).
+				AnyTimes()
+
+			mockInfluxBucketAPI.EXPECT().
+				CreateBucketWithNameWithID(gomock.Any(), tt.orgID, tt.bucketName).
+				Return(tt.respBucket, tt.err).
+				AnyTimes()
+
+			bucketID, err := client.CreateBucket(t.Context(), tt.orgID, tt.bucketName)
+
+			if tt.expectErr {
+				require.Error(t, err)
+				require.Equal(t, err, tt.err)
+			} else {
+				require.Equal(t, tt.wantBucketID, bucketID)
+				require.NoError(t, err)
+			}
+		})
+	}
 }
