@@ -234,18 +234,14 @@ Returns:
 func (c *Client) ListBuckets(ctx context.Context, org string) (buckets map[string]string, err error) {
 	// Validate input
 	if org == "" {
-		return nil, errEmptyOrganizationID
+		return nil, errEmptyOrganizationName
 	}
 
 	bucketsAPI := c.client.BucketsAPI()
 
 	bucketsDomain, err := bucketsAPI.FindBucketsByOrgName(ctx, org)
 	if err != nil {
-		return nil, errFindingBuckets
-	}
-
-	if bucketsDomain == nil {
-		return nil, nil
+		return nil, err
 	}
 
 	buckets = make(map[string]string) // Initialize the map
