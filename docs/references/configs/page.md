@@ -195,6 +195,12 @@ This document lists all the configuration options supported by the GoFr framewor
 
 ---
 
+- DB_REPLICA_HOSTS
+- Comma-separated list of replica database hosts. Used for read replicas.
+- None
+
+---
+
 - DB_CHARSET
 - The character set for database connection
 - utf8
