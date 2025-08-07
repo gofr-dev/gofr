@@ -6,7 +6,6 @@ import (
 	"database/sql"
 
 	"github.com/redis/go-redis/v9"
-
 	"gofr.dev/pkg/gofr/datasource"
 	"gofr.dev/pkg/gofr/datasource/pubsub"
 	gofrSQL "gofr.dev/pkg/gofr/datasource/sql"
@@ -722,9 +721,9 @@ type ElasticsearchProvider interface {
 	provider
 }
 
-// DBResolverProvider defines an interface for SQL read/write splitting providers
+// DBResolverProvider defines an interface for SQL read/write splitting providers.
 type DBResolverProvider interface {
-	// Build creates a resolver with the given primary and replicas
+	// Build creates a resolver with the given primary and replicas.
 	Build(primary DB, replicas []DB) (DB, error)
 
 	provider

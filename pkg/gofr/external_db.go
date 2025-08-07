@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"go.opentelemetry.io/otel"
+
 	"gofr.dev/pkg/gofr/config"
 	"gofr.dev/pkg/gofr/container"
 	"gofr.dev/pkg/gofr/datasource/file"
@@ -247,7 +248,7 @@ func (a *App) AddDBResolver(resolver container.DBResolverProvider) {
 }
 
 // createReplicaConnections creates optimized DB connections to replicas.
-func createReplicaConnections(cfg config.Config, logger logging.Logger, metrics metrics.Manager) []container.DB {
+func createReplicaConnections(cfg config.Config, logger logging.Logger, mtrcs metrics.Manager) []container.DB {
 	replicaHostsStr := cfg.Get("DB_REPLICA_HOSTS")
 	if replicaHostsStr == "" {
 		return nil
@@ -269,7 +270,7 @@ func createReplicaConnections(cfg config.Config, logger logging.Logger, metrics 
 			hostString: host,
 		}
 
-		replica := sql.NewSQL(replicaConfig, logger, metrics)
+		replica := sql.NewSQL(replicaConfig, logger, mtrcs)
 		if replica != nil {
 			replicas = append(replicas, replica)
 
