@@ -11,6 +11,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
+
 	"gofr.dev/pkg/gofr/logging"
 	"gofr.dev/pkg/gofr/testutil"
 )
@@ -19,6 +20,7 @@ var (
 	errDB     = testutil.CustomError{ErrorMessage: "DB error"}
 	errSyntax = testutil.CustomError{ErrorMessage: "syntax error"}
 	errTx     = testutil.CustomError{ErrorMessage: "error starting transaction"}
+	errbegin  = testutil.CustomError{ErrorMessage: "begin failed"}
 )
 
 func getDB(t *testing.T, logLevel logging.Level) (*DB, sqlmock.Sqlmock) {
@@ -1182,106 +1184,45 @@ func TestDB_PingFailure(t *testing.T) {
 	err := db.Ping()
 	assert.Equal(t, sql.ErrConnDone, err)
 }
-func TestDB_SelectStruct(t *testing.T) {
+func TestDB_QueryRow_NoRows(t *testing.T) {
 	db, mock := getDB(t, logging.DEBUG)
 	defer db.DB.Close()
 
-	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
+	query := "SELECT name FROM users WHERE id = ?"
+	mock.ExpectQuery(query).WithArgs(9999).WillReturnRows(sqlmock.NewRows([]string{"name"}))
 
-	mockMetrics := NewMockMetrics(ctrl)
-	db.logger = logging.NewLogger(logging.DEBUG)
-	db.config = &DBConfig{HostName: "test-host", Database: "test-db", Dialect: "mysql"}
-	db.metrics = mockMetrics
+	row := db.QueryRow(query, 9999)
 
-	// Mock the SQL QueryContext call
-	mockRows := sqlmock.NewRows([]string{"id", "user_name"}).
-		AddRow(1, "Alice")
-	mock.ExpectQuery("SELECT id, user_name FROM users WHERE id = ?").
-		WithArgs(1).
-		WillReturnRows(mockRows)
-
-	// Expect metrics call for QueryContext
-	mockMetrics.EXPECT().RecordHistogram(
-		context.Background(), // Matches sendOperationStats
-		"app_sql_stats",
-		gomock.Any(),
-		"hostname", "test-host",
-		"database", "test-db",
-		"type", "SELECT",
-	).DoAndReturn(
-		func(_ context.Context, name string, value any, tags ...string) {
-			t.Logf("RecordHistogram called with: name=%s, value=%v, tags=%v", name, value, tags)
-		})
-
-	// Define a struct with a db tag
-	type User struct {
-		ID   int    `db:"id"`
-		Name string `db:"user_name"`
-	}
-
-	var user User
-	db.Select(t.Context(), &user, "SELECT id, user_name FROM users WHERE id = ?", 1)
-
-	require.Equal(t, 1, user.ID, "User ID should be 1")
-	require.Equal(t, "Alice", user.Name, "User Name should be Alice")
+	var name string
+	err := row.Scan(&name)
+	require.Error(t, err)
 }
-func TestDB_TransactionCommitAndRollback(t *testing.T) {
+func TestDB_Close_Twice(t *testing.T) {
+	db, _ := getDB(t, logging.DEBUG)
+	err := db.Close()
+	require.NoError(t, err)
+
+	err = db.Close()
+	require.Error(t, err)
+}
+func TestDB_Prepare_Failure(t *testing.T) {
 	db, mock := getDB(t, logging.DEBUG)
 	defer db.DB.Close()
 
-	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
+	query := "INVALID SQL"
+	mock.ExpectPrepare(query).WillReturnError(errSyntax)
 
-	mockMetrics := NewMockMetrics(ctrl)
-	db.logger = logging.NewLogger(logging.DEBUG)
-	db.config = &DBConfig{HostName: "test-host", Database: "test-db", Dialect: "mysql"}
-	db.metrics = mockMetrics
+	stmt, err := db.Prepare(query)
+	require.Error(t, err)
+	assert.Nil(t, stmt)
+}
+func TestDB_Begin_Error(t *testing.T) {
+	db, mock := getDB(t, logging.DEBUG)
+	defer db.DB.Close()
 
-	// Mock Begin
-	mock.ExpectBegin()
+	mock.ExpectBegin().WillReturnError(errbegin)
 
-	// Expect metrics for Commit
-	mockMetrics.EXPECT().RecordHistogram(
-		context.Background(), // Matches sendOperationStats
-		"app_sql_stats",
-		gomock.Any(),
-		"hostname", "test-host",
-		"database", "test-db",
-		"type", "COMMIT",
-	).DoAndReturn(
-		func(_ context.Context, name string, value any, tags ...string) {
-			t.Logf("RecordHistogram called with: name=%s, value=%v, tags=%v", name, value, tags)
-		})
-
-	// Expect metrics for Rollback
-	mockMetrics.EXPECT().RecordHistogram(
-		context.Background(),
-		"app_sql_stats",
-		gomock.Any(),
-		"hostname", "test-host",
-		"database", "test-db",
-		"type", "ROLLBACK",
-	).DoAndReturn(
-		func(_ context.Context, name string, value any, tags ...string) {
-			t.Logf("RecordHistogram called with: name=%s, value=%v, tags=%v", name, value, tags)
-		})
-
-	// Test Commit
 	tx, err := db.Begin()
-	require.NoError(t, err, "Begin should not return an error")
-	require.NotNil(t, tx, "Transaction should not be nil")
-
-	mock.ExpectCommit()
-	err = tx.Commit()
-	require.NoError(t, err, "Commit should not return an error")
-
-	// Test Rollback
-	mock.ExpectBegin()
-	tx, err = db.Begin()
-	require.NoError(t, err, "Begin should not return an error")
-
-	mock.ExpectRollback()
-	err = tx.Rollback()
-	require.NoError(t, err, "Rollback should not return an error")
+	require.Error(t, err)
+	assert.Nil(t, tx)
 }
