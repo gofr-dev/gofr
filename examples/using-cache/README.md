@@ -75,19 +75,17 @@ type Cache interface {
 
 ## Implementation & Usage
 
-The `main.go` file demonstrates how to use the cache `factory` to create cache instances.
+Gofr provides two main ways to create a cache:
+1.  **Direct Instantiation**: Using the `New...Cache` constructor from the specific implementation package (`inmemory` or `redis`). This gives you full access to all configuration options.
+2.  **Factory**: Using the `factory` package, which provides a convenient, unified way to create caches, especially when the cache type might be determined at runtime.
 
-### Cache Factory
+### Direct Instantiation
 
-The `gofr.dev/pkg/cache/factory` package provides a convenient way to create different types of caches.
+This is the recommended approach when you know the specific cache type you need and want to use all its features.
 
-- **`NewInMemoryCache(...)`**: Creates an in-memory cache.
-- **`NewRedisCache(...)`**: Creates a Redis-backed cache.
-- **`NewCache(...)`**: A generic factory that creates a cache based on a type string (`"inmemory"` or `"redis"`).
+#### Example: Creating an In-Memory Cache
 
-### Example: Creating an In-Memory Cache
-
-The `inmemory` package provides a constructor `NewInMemoryCache` that accepts functional options.
+The `inmemory` package provides a constructor `NewInMemoryCache` that accepts functional options for detailed configuration.
 
 ```go
 import (
@@ -97,13 +95,11 @@ import (
     "gofr.dev/pkg/cache/observability"
 )
 
-// 1. Create a metrics collector
-metrics := observability.NewMetrics("gofr", "cache")
-
-// 2. Create a logger
+// 1. Create a metrics collector and logger
+metrics := observability.NewMetrics("gofr", "inmemory_cache")
 logger := observability.NewStdLogger()
 
-// 3. Create the cache instance using the constructor and options
+// 2. Create the cache instance with detailed options
 c, err := inmemory.NewInMemoryCache(context.Background(),
     inmemory.WithName("my-inmemory-cache"), // A unique name for the cache
     inmemory.WithTTL(5*time.Minute),       // Default time-to-live for items
@@ -113,28 +109,68 @@ c, err := inmemory.NewInMemoryCache(context.Background(),
 )
 ```
 
-### Example: Creating a Redis Cache
+The `inmemory` package also includes convenient presets:
+- **`NewDefaultCache(ctx, name)`**: Creates a cache with a 5-minute TTL and 1000-item limit.
+- **`NewDebugCache(ctx, name)`**: Creates a cache with a 1-minute TTL and 100-item limit, useful for development.
+- **`NewProductionCache(ctx, name, ttl, maxItems)`**: Creates a cache with explicitly defined TTL and size for production use.
+
+#### Example: Creating a Redis Cache
+
+Similarly, the `redis` package provides a constructor for creating a Redis-backed cache.
 
 ```go
-c, err := factory.NewRedisCache(ctx, 
-    "my-redis-cache",
-    10*time.Minute,
-    factory.WithLogger(logger),
-    metrics,
-    // You can also provide Redis-specific options
-    // "localhost:6379", // Address
-    // "password",       // Password
-    // 0,                // DB number
+import (
+    "context"
+    "time"
+    "gofr.dev/pkg/cache/redis"
+    "gofr.dev/pkg/cache/observability"
+)
+
+// 1. Create a metrics collector and logger
+metrics := observability.NewMetrics("gofr", "redis_cache")
+logger := observability.NewStdLogger()
+
+// 2. Create the Redis cache instance
+c, err := redis.NewRedisCache(context.Background(),
+    redis.WithName("my-redis-cache"),
+    redis.WithTTL(10*time.Minute),
+    redis.WithAddr("localhost:6379"),
+    redis.WithPassword("your-password"),
+    redis.WithDB(0),
+    redis.WithLogger(logger),
+    redis.WithMetrics(metrics),
 )
 ```
+
+### Using the Factory
+
+The `gofr.dev/pkg/cache/factory` package is useful for creating a cache when the type might be configured dynamically.
+
+#### Example: Generic Cache Factory
+
+The `NewCache` function creates an instance based on a type string (`"inmemory"` or `"redis"`).
+
+```go
+import "gofr.dev/pkg/cache/factory"
+
+// Create an in-memory cache via the factory
+inMemoryCache, err := factory.NewCache(ctx, "inmemory", "my-inmemory-cache", 5*time.Minute, 1000)
+
+// Create a Redis cache via the factory
+// Note: The generic factory has limited options for Redis.
+// For full control (e.g., password, DB), use direct instantiation.
+redisCache, err := factory.NewCache(ctx, "redis", "my-redis-cache", 10*time.Minute, 0, "localhost:6379")
+```
+
+The factory also provides specific constructors like `factory.NewInMemoryCache` and `factory.NewRedisCache`, which offer a subset of the options available through direct instantiation.
 
 ---
 
 ## Configuration & Options
 
-Both cache types can be configured using functional options.
+Both cache types are configured using functional options passed to their constructors.
 
-### In-Memory Cache Options
+### In-Memory Cache Options (`inmemory.Option`)
 
 - **`ctx`**: A cancellable context.
 - **`WithName(string)`**: A logical name for the cache, used in logs and metrics.
@@ -143,14 +179,14 @@ Both cache types can be configured using functional options.
 - **`WithLogger(observability.Logger)`**: A custom logger.
 - **`WithMetrics(*observability.Metrics)`**: A metrics collector.
 
-### Redis Cache Options
+### Redis Cache Options (`redis.Option`)
 
 - **`ctx`**: A cancellable context.
 - **`WithName(string)`**: A logical name for the cache.
 - **`WithTTL(time.Duration)`**: The default time-to-live for entries.
 - **`WithAddr(string)`**: The Redis server address (e.g., `"localhost:6379"`).
 - **`WithPassword(string)`**: The Redis server password.
-- **`WithDB(int)`**: The Redis database number.
+- **`WithDB(int)`**: The Redis database number (0-15 is the default for most Redis setups).
 - **`WithLogger(observability.Logger)`**: A custom logger.
 - **`WithMetrics(*observability.Metrics)`**: A metrics collector.
 
@@ -164,14 +200,21 @@ The cache components produce structured, colored logs for better readability. Yo
 
 ### Metrics
 
-The cache exposes a comprehensive set of Prometheus metrics:
-
-- **`gofr_cache_hits_total`**: Total cache hits.
-- **`gofr_cache_misses_total`**: Total cache misses.
-- **`gofr_cache_sets_total`**: Total set operations.
-- **`gofr_cache_deletes_total`**: Total delete operations.
-- **`gofr_inmemory_cache_evictions_total`**: (In-memory only) Total evictions due to capacity limits.
-- **`gofr_inmemory_cache_items_current`**: (In-memory only) Current number of items.
-- **`gofr_cache_operation_latency_seconds`**: Latency histogram for cache operations.
+The cache exposes a comprehensive set of Prometheus metrics. The exact metric names depend on the namespace and subsystem provided when creating the `*observability.Metrics` instance (e.g., `observability.NewMetrics("gofr", "inmemory_cache")`).
 
 All metrics are labeled with `cache_name` to distinguish between different cache instances.
+
+#### Common Metrics
+
+These metrics are available for both **in-memory** and **redis** caches. Replace `{backend}` with `inmemory_cache` or `redis_cache`.
+
+- **`gofr_{backend}_hits_total`**: Total cache hits.
+- **`gofr_{backend}_misses_total`**: Total cache misses.
+- **`gofr_{backend}_sets_total`**: Total set operations.
+- **`gofr_{backend}_deletes_total`**: Total delete operations.
+- **`gofr_{backend}_items_current`**: Current number of items in the cache. For Redis, this is the `DBSIZE`.
+- **`gofr_{backend}_operation_latency_seconds`**: Latency histogram for cache operations.
+
+#### In-Memory Only Metrics
+
+- **`gofr_inmemory_cache_evictions_total`**: Total items evicted due to capacity limits.
