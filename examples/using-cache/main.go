@@ -1,9 +1,22 @@
+// DISCLAIMER:
+// This is a simple simulation of using a cache with some seed metrics
+// to demonstrate how the cache factory, metrics, and observability hooks work.
+// It continuously sets, gets, and deletes cache keys in a loop to generate
+// measurable metrics for Prometheus.
+// NOTE:
+// - This is not intended for production use as-is.
+// - Actual implementations may differ significantly depending on requirements,
+//   storage backends, error handling, concurrency, and performance optimizations.
+
 package main
 
 import (
 	"context"
 	"fmt"
 	"net/http"
+	"os"
+	"os/signal"
+	"syscall"
 	"time"
 
 	"github.com/prometheus/client_golang/prometheus/promhttp"
@@ -12,7 +25,17 @@ import (
 )
 
 func main() {
-	ctx := context.Background()
+	// Cancellable context that ends on SIGINT/SIGTERM.
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	go func() {
+		sigCh := make(chan os.Signal, 1)
+		signal.Notify(sigCh, os.Interrupt, syscall.SIGTERM)
+		<-sigCh
+		fmt.Println("\nReceived shutdown signal, exiting...")
+		cancel()
+	}()
 
 	metrics := observability.NewMetrics("gofr", "cache")
 
@@ -26,15 +49,10 @@ func main() {
 		panic(fmt.Sprintf("Failed to create cache: %v", err))
 	}
 
-	// Alternative: Redis cache with same pattern
-	// to disable logs, use NewNopLogger()
+	// Alternative: Redis cache
 	// c, err := factory.NewRedisCache(ctx, "default", 5*time.Minute,
 	// 	factory.WithLogger(observability.NewStdLogger()),
 	// 	metrics)
-
-	// if err != nil {
-	// 	panic(err)
-	// }
 
 	// Alternative: Dynamic cache type
 	// cacheType := "inmemory" // or "redis"
@@ -45,21 +63,29 @@ func main() {
 	http.Handle("/metrics", promhttp.Handler())
 	go func() {
 		fmt.Println("Metrics available at http://localhost:8080/metrics")
-		http.ListenAndServe(":8080", nil)
+		if err := http.ListenAndServe(":8080", nil); err != nil && err != http.ErrServerClosed {
+			fmt.Printf("Metrics server error: %v\n", err)
+			cancel()
+		}
 	}()
 
 	go func() {
 		for {
-			c.Set(ctx, "alpha", 42)   // triggers sets_total
-			c.Get(ctx, "alpha")       // triggers hits_total
-			c.Get(ctx, "nonexistent") // triggers misses_total
-			c.Delete(ctx, "alpha")    // triggers deletes_total
-			c.Set(ctx, "alpha", 100)
-			time.Sleep(2 * time.Second)
+			select {
+			case <-ctx.Done():
+				return
+			default:
+				c.Set(ctx, "alpha", 42)   // triggers sets_total
+				c.Get(ctx, "alpha")       // triggers hits_total
+				c.Get(ctx, "nonexistent") // triggers misses_total
+				c.Delete(ctx, "alpha")    // triggers deletes_total
+				c.Set(ctx, "alpha", 100)
+				time.Sleep(2 * time.Second)
+			}
 		}
 	}()
 
-	// Block forever to keep the example running and simulate continuous cache usage.
-	// In real applications, this infinite loop wouldn't be needed.
-	select {}
+	// Wait until the context is canceled.
+	<-ctx.Done()
+	fmt.Println("Shutdown complete.")
 }

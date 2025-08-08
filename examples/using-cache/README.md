@@ -87,11 +87,13 @@ The `gofr.dev/pkg/cache/factory` package provides a convenient way to create dif
 
 ### Example: Creating an In-Memory Cache
 
+The `inmemory` package provides a constructor `NewInMemoryCache` that accepts functional options.
+
 ```go
 import (
     "context"
     "time"
-    "gofr.dev/pkg/cache/factory"
+    "gofr.dev/pkg/cache/inmemory"
     "gofr.dev/pkg/cache/observability"
 )
 
@@ -101,13 +103,13 @@ metrics := observability.NewMetrics("gofr", "cache")
 // 2. Create a logger
 logger := observability.NewStdLogger()
 
-// 3. Create the cache instance using the factory
-c, err := factory.NewInMemoryCache(ctx, 
-    "my-inmemory-cache", // A unique name for the cache
-    5*time.Minute,       // Default time-to-live for items
-    1000,                // Maximum number of items (for LRU eviction)
-    factory.WithLogger(logger), 
-    metrics,
+// 3. Create the cache instance using the constructor and options
+c, err := inmemory.NewInMemoryCache(context.Background(),
+    inmemory.WithName("my-inmemory-cache"), // A unique name for the cache
+    inmemory.WithTTL(5*time.Minute),       // Default time-to-live for items
+    inmemory.WithMaxItems(1000),           // Maximum number of items (for LRU eviction)
+    inmemory.WithLogger(logger),
+    inmemory.WithMetrics(metrics),
 )
 ```
 
@@ -134,6 +136,7 @@ Both cache types can be configured using functional options.
 
 ### In-Memory Cache Options
 
+- **`ctx`**: A cancellable context.
 - **`WithName(string)`**: A logical name for the cache, used in logs and metrics.
 - **`WithTTL(time.Duration)`**: The default time-to-live for cache entries.
 - **`WithMaxItems(int)`**: The maximum number of items before LRU eviction is triggered. `0` means no limit.
@@ -142,6 +145,7 @@ Both cache types can be configured using functional options.
 
 ### Redis Cache Options
 
+- **`ctx`**: A cancellable context.
 - **`WithName(string)`**: A logical name for the cache.
 - **`WithTTL(time.Duration)`**: The default time-to-live for entries.
 - **`WithAddr(string)`**: The Redis server address (e.g., `"localhost:6379"`).
