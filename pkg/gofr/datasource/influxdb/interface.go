@@ -170,3 +170,10 @@ type BucketsAPI interface {
 	// RemoveOwnerWithID removes a member with id memberID from a bucket with bucketID.
 	RemoveOwnerWithID(ctx context.Context, bucketID, memberID string) error
 }
+
+type InfluxQueryAPI interface {
+	QueryRaw(ctx context.Context, query string, dialect *domain.Dialect) (string, error)
+	QueryRawWithParams(ctx context.Context, query string, dialect *domain.Dialect, params any) (string, error)
+	Query(ctx context.Context, query string) (*api.QueryTableResult, error)
+	QueryWithParams(ctx context.Context, query string, params any) (*api.QueryTableResult, error)
+}

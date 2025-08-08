@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	gomock "github.com/golang/mock/gomock"
+	api "github.com/influxdata/influxdb-client-go/v2/api"
 	"github.com/influxdata/influxdb-client-go/v2/domain"
 	"github.com/kataras/iris/v12/x/errors"
 	"github.com/stretchr/testify/require"
@@ -521,6 +522,60 @@ func Test_ListBucket(t *testing.T) {
 				require.NoError(t, err)
 				require.NotEmpty(t, buckets)
 				require.Equal(t, tt.wantBuckets, buckets)
+			}
+		})
+	}
+}
+
+func Test_Query(t *testing.T) {
+	t.Helper()
+
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	testCases := []struct {
+		name        string
+		resp        *api.QueryTableResult
+		wantResults map[string]any
+		orgName     string
+		inputQuery  string
+		expectErr   bool
+		err         error
+	}{
+		{
+			name:        "failing error query",
+			orgName:     "org1",
+			inputQuery:  "dummyQuery1",
+			expectErr:   true,
+			wantResults: map[string]any{},
+			resp:        &api.QueryTableResult{},
+			err:         errors.New("Something"),
+		},
+	}
+
+	for _, tt := range testCases {
+		t.Run(tt.name, func(t *testing.T) {
+			client := *setupDB(t, ctrl)
+			mockInflux := client.client.(*influxdb_mock.MockInfluxClient)
+			mockInfluxQueryAPI := influxdb_mock.NewMockInfluxQueryAPI(ctrl)
+
+			mockInflux.EXPECT().QueryAPI(tt.orgName).
+				Return(mockInfluxQueryAPI).
+				AnyTimes()
+
+			mockInfluxQueryAPI.EXPECT().
+				Query(gomock.Any(), tt.inputQuery).
+				Return(tt.resp, tt.err).
+				AnyTimes()
+
+			result, err := client.Query(t.Context(), tt.orgName, tt.inputQuery)
+
+			if tt.expectErr {
+				require.Error(t, err)
+				require.Equal(t, err, tt.err)
+				require.Empty(t, result)
+			} else {
+				require.NoError(t, err)
 			}
 		})
 	}

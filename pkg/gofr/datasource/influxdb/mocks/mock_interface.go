@@ -1049,3 +1049,86 @@ func (mr *MockBucketsAPIMockRecorder) UpdateBucket(ctx, bucket interface{}) *gom
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UpdateBucket", reflect.TypeOf((*MockBucketsAPI)(nil).UpdateBucket), ctx, bucket)
 }
+
+// MockInfluxQueryAPI is a mock of InfluxQueryAPI interface.
+type MockInfluxQueryAPI struct {
+	ctrl     *gomock.Controller
+	recorder *MockInfluxQueryAPIMockRecorder
+}
+
+// MockInfluxQueryAPIMockRecorder is the mock recorder for MockInfluxQueryAPI.
+type MockInfluxQueryAPIMockRecorder struct {
+	mock *MockInfluxQueryAPI
+}
+
+// NewMockInfluxQueryAPI creates a new mock instance.
+func NewMockInfluxQueryAPI(ctrl *gomock.Controller) *MockInfluxQueryAPI {
+	mock := &MockInfluxQueryAPI{ctrl: ctrl}
+	mock.recorder = &MockInfluxQueryAPIMockRecorder{mock}
+	return mock
+}
+
+// EXPECT returns an object that allows the caller to indicate expected use.
+func (m *MockInfluxQueryAPI) EXPECT() *MockInfluxQueryAPIMockRecorder {
+	return m.recorder
+}
+
+// Query mocks base method.
+func (m *MockInfluxQueryAPI) Query(ctx context.Context, query string) (*api.QueryTableResult, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Query", ctx, query)
+	ret0, _ := ret[0].(*api.QueryTableResult)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// Query indicates an expected call of Query.
+func (mr *MockInfluxQueryAPIMockRecorder) Query(ctx, query interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Query", reflect.TypeOf((*MockInfluxQueryAPI)(nil).Query), ctx, query)
+}
+
+// QueryRaw mocks base method.
+func (m *MockInfluxQueryAPI) QueryRaw(ctx context.Context, query string, dialect *domain.Dialect) (string, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "QueryRaw", ctx, query, dialect)
+	ret0, _ := ret[0].(string)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// QueryRaw indicates an expected call of QueryRaw.
+func (mr *MockInfluxQueryAPIMockRecorder) QueryRaw(ctx, query, dialect interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "QueryRaw", reflect.TypeOf((*MockInfluxQueryAPI)(nil).QueryRaw), ctx, query, dialect)
+}
+
+// QueryRawWithParams mocks base method.
+func (m *MockInfluxQueryAPI) QueryRawWithParams(ctx context.Context, query string, dialect *domain.Dialect, params interface{}) (string, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "QueryRawWithParams", ctx, query, dialect, params)
+	ret0, _ := ret[0].(string)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// QueryRawWithParams indicates an expected call of QueryRawWithParams.
+func (mr *MockInfluxQueryAPIMockRecorder) QueryRawWithParams(ctx, query, dialect, params interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "QueryRawWithParams", reflect.TypeOf((*MockInfluxQueryAPI)(nil).QueryRawWithParams), ctx, query, dialect, params)
+}
+
+// QueryWithParams mocks base method.
+func (m *MockInfluxQueryAPI) QueryWithParams(ctx context.Context, query string, params interface{}) (*api.QueryTableResult, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "QueryWithParams", ctx, query, params)
+	ret0, _ := ret[0].(*api.QueryTableResult)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// QueryWithParams indicates an expected call of QueryWithParams.
+func (mr *MockInfluxQueryAPIMockRecorder) QueryWithParams(ctx, query, params interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "QueryWithParams", reflect.TypeOf((*MockInfluxQueryAPI)(nil).QueryWithParams), ctx, query, params)
+}
