@@ -6,6 +6,8 @@ import (
 	"strings"
 )
 
+var whitespaceRegex = regexp.MustCompile(`\s+`)
+
 // Logger defines the logging interface for dbresolver.
 type Logger interface {
 	Debug(args ...any)
@@ -35,7 +37,7 @@ func (ql *QueryLog) PrettyPrint(logger Logger) {
 
 func clean(query string) string {
 	// Replace multiple consecutive whitespace characters with a single space
-	query = regexp.MustCompile(`\s+`).ReplaceAllString(query, " ")
+	query = whitespaceRegex.ReplaceAllString(query, " ")
 	// Trim leading and trailing whitespace from the string
 	return strings.TrimSpace(query)
 }

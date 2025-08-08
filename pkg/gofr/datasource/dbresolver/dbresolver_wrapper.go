@@ -65,12 +65,11 @@ func (r *ResolverWrapper) Build(primary container.DB, replicas []container.DB) (
 	// Create options slice
 	var opts []Option
 
-	var strategy Strategy
+	// Default to round-robin
+	strategy := NewRoundRobinStrategy(len(replicas))
+
 	if r.strategyName == "random" {
 		strategy = NewRandomStrategy()
-	} else {
-		// Default to round-robin for any other value including "round-robin"
-		strategy = NewRoundRobinStrategy(len(replicas))
 	}
 
 	// Add options.
