@@ -151,12 +151,14 @@ func (a *App) readConfig(isAppCMD bool) {
 	}
 
 	if isAppCMD {
-		a.Config = config.NewEnvFile(location, logging.NewFileLogger(""))
+		a.Config = config.NewEnvFile(location, logging.NewFileLogger(a.Config.Get("CMD_LOGS_FILE"), logging.GetLevelFromString(a.Config.GetOrDefault("LOG_LEVEL", "INFO"))))
 
 		return
 	}
 
-	a.Config = config.NewEnvFile(location, logging.NewLogger(logging.INFO))
+	logger, _ := logging.NewLogger(logging.INFO)
+
+	a.Config = config.NewEnvFile(location, logger)
 }
 
 // AddHTTPService registers HTTP service in container.

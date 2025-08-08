@@ -50,7 +50,9 @@ func NewMockContainer(t *testing.T, options ...options) (*Container, *Mocks) {
 	t.Helper()
 
 	container := &Container{}
-	container.Logger = logging.NewLogger(logging.DEBUG)
+
+	logger := logging.NewMockLogger(logging.DEBUG)
+	container.Logger = logger
 
 	ctrl := gomock.NewController(t)
 
@@ -60,7 +62,7 @@ func NewMockContainer(t *testing.T, options ...options) (*Container, *Mocks) {
 
 	sqlMockWrapper := &mockSQL{sqlMock, &expectation}
 
-	sqlDB := &sqlMockDB{mockDB, &expectation, logging.NewLogger(logging.DEBUG)}
+	sqlDB := &sqlMockDB{mockDB, &expectation, logger}
 	sqlDB.finish(t)
 
 	container.SQL = sqlDB

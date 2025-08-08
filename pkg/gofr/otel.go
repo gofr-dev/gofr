@@ -141,7 +141,12 @@ func buildGoFrExporter(logger logging.Logger, url string) sdktrace.SpanExporter 
 
 	logger.Infof("Exporting traces to GoFr at %s", gofrTracerURL)
 
-	return NewExporter(url, logging.NewLogger(logging.INFO))
+	l, err := logging.NewLogger(logging.INFO)
+	if err != nil {
+		logger.Error(err)
+	}
+
+	return NewExporter(url, l)
 }
 
 type otelErrorHandler struct {

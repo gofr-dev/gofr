@@ -77,7 +77,7 @@ func NewCMD() *App {
 	app := &App{}
 	app.readConfig(true)
 	app.container = container.NewContainer(nil)
-	app.container.Logger = logging.NewFileLogger(app.Config.Get("CMD_LOGS_FILE"))
+	app.container.Logger = logging.NewFileLogger(app.Config.Get("CMD_LOGS_FILE"), logging.GetLevelFromString(app.Config.GetOrDefault("LOG_LEVEL", "INFO")))
 	app.cmd = &cmd{
 		out: terminal.New(),
 	}

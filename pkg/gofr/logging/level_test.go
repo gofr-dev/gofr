@@ -101,11 +101,10 @@ func TestGetLevelFromString(t *testing.T) {
 }
 
 func Test_changeLevel(t *testing.T) {
-	l := logger{
-		level:      INFO,
-		normalOut:  os.Stdout,
-		errorOut:   os.Stderr,
-		isTerminal: false,
+	l := EnhancedAsyncLogger{
+		level:     INFO,
+		normalOut: os.Stdout,
+		errorOut:  os.Stderr,
 	}
 
 	l.ChangeLevel(ERROR)

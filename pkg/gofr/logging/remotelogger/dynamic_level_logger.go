@@ -21,9 +21,14 @@ The remote configuration URL is expected to be a JSON endpoint that returns the 
 The level fetch interval determines how often the logger checks for updates to the remote configuration.
 */
 func New(level logging.Level, remoteConfigURL string, loggerFetchInterval time.Duration) logging.Logger {
+	CustomprodLogger, err := logging.NewLogger(level)
+	if err != nil {
+		return nil
+	}
+
 	l := remoteLogger{
 		remoteURL:          remoteConfigURL,
-		Logger:             logging.NewLogger(level),
+		Logger:             CustomprodLogger,
 		levelFetchInterval: loggerFetchInterval,
 		currentLevel:       level,
 	}

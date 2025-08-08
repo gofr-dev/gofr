@@ -1,4 +1,3 @@
-// Package logging provides logging functionalities for GoFr applications.
 package logging
 
 import (
@@ -68,7 +67,6 @@ func (l Level) MarshalJSON() ([]byte, error) {
 	buffer := bytes.NewBufferString(`"`)
 	buffer.WriteString(l.String())
 	buffer.WriteString(`"`)
-
 	return buffer.Bytes(), nil
 }
 
