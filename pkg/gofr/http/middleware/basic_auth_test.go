@@ -98,6 +98,8 @@ func TestBasicAuthProvider_getAuthMethod(t *testing.T) {
 }
 
 func TestParseBasicAuth(t *testing.T) {
+	validHeader := base64.StdEncoding.EncodeToString([]byte("user:password"))
+	invalidHeader := base64.StdEncoding.EncodeToString([]byte("userpassword"))
 	testCases := []struct {
 		name         string
 		authHeader   string
@@ -105,49 +107,15 @@ func TestParseBasicAuth(t *testing.T) {
 		expectedPass string
 		expectedOk   bool
 	}{
-		{
-			name:         "Valid Basic Auth",
-			authHeader:   "Basic " + base64.StdEncoding.EncodeToString([]byte("user:password")),
-			expectedUser: "user",
-			expectedPass: "password",
-			expectedOk:   true,
-		},
-		{
-			name:         "Invalid Scheme",
-			authHeader:   "Bearer token",
-			expectedUser: "",
-			expectedPass: "",
-			expectedOk:   false,
-		},
-		{
-			name:         "Invalid Encoding",
-			authHeader:   "Basic invalid_base64",
-			expectedUser: "",
-			expectedPass: "",
-			expectedOk:   false,
-		},
-		{
-			name:         "Missing Colon Separator",
-			authHeader:   "Basic " + base64.StdEncoding.EncodeToString([]byte("user")),
-			expectedUser: "",
-			expectedPass: "",
-			expectedOk:   false,
-		},
-		{
-			name:         "Empty Authorization Header",
-			authHeader:   "",
-			expectedUser: "",
-			expectedPass: "",
-			expectedOk:   false,
-		},
+		{name: "Valid Basic Auth", authHeader: validHeader, expectedUser: "user", expectedPass: "password", expectedOk: true},
+		{name: "Invalid Encoding", authHeader: "invalid_base64", expectedUser: "", expectedPass: "", expectedOk: false},
+		{name: "Missing Colon Separator", authHeader: invalidHeader, expectedUser: "", expectedPass: "", expectedOk: false},
+		{name: "Empty Authorization Header", authHeader: "", expectedUser: "", expectedPass: "", expectedOk: false},
 	}
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			req := httptest.NewRequest(http.MethodGet, "/", http.NoBody)
-			req.Header.Set("Authorization", tc.authHeader)
-
-			username, password, ok := parseBasicAuth(req.Header.Get("Authorization"))
+			username, password, ok := parseBasicAuth(tc.authHeader)
 
 			assert.Equal(t, tc.expectedOk, ok)
 			assert.Equal(t, tc.expectedUser, username)

@@ -75,17 +75,12 @@ func parseBasicAuth(authHeader string) (username, password string, ok bool) {
 		return "", "", false
 	}
 
-	scheme, credentials, found := strings.Cut(authHeader, " ")
-	if !found || scheme != "Basic" {
-		return "", "", false
-	}
-
-	payload, err := base64.StdEncoding.DecodeString(credentials)
+	payload, err := base64.StdEncoding.DecodeString(authHeader)
 	if err != nil {
 		return "", "", false
 	}
 
-	username, password, found = strings.Cut(string(payload), ":")
+	username, password, found := strings.Cut(string(payload), ":")
 	if !found { // Ensure both username and password are returned as empty if colon separator is missing
 		return "", "", false
 	}
