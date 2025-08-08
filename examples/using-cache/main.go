@@ -43,27 +43,28 @@ func main() {
 		"default",
 		5*time.Minute,
 		1000,
-		factory.WithLogger(observability.NewStdLogger()),
-		metrics)
+		factory.WithObservabilityLogger(observability.NewStdLogger()),
+		factory.WithMetrics(metrics))
 	if err != nil {
 		panic(fmt.Sprintf("Failed to create cache: %v", err))
 	}
 
-	// Alternative: Redis cache
+	// Alternative: Redis cache (also updated to use functional options)
 	// c, err := factory.NewRedisCache(ctx, "default", 5*time.Minute,
-	// 	factory.WithLogger(observability.NewStdLogger()),
-	// 	metrics)
+	// 	factory.WithObservabilityLogger(observability.NewStdLogger()),
+	// 	factory.WithMetrics(metrics),
+	//  factory.WithRedisAddr("localhost:6379"))
 
-	// Alternative: Dynamic cache type
+	// Alternative: Dynamic cache type (also updated to use functional options)
 	// cacheType := "inmemory" // or "redis"
 	// c, err := factory.NewCache(ctx, cacheType, "default", 5*time.Minute, 1000,
-	// 	factory.WithLogger(observability.NewStdLogger()),
-	// 	metrics)
+	// 	factory.WithObservabilityLogger(observability.NewStdLogger()),
+	// 	factory.WithMetrics(metrics))
 
 	http.Handle("/metrics", promhttp.Handler())
 	go func() {
 		fmt.Println("Metrics available at http://localhost:8080/metrics")
-		if err := http.ListenAndServe(":8080", nil); err != nil && err != http.ErrServerClosed {
+		if err := http.ListenAndServe(":8080", nil); err != http.ErrServerClosed {
 			fmt.Printf("Metrics server error: %v\n", err)
 			cancel()
 		}
@@ -75,10 +76,10 @@ func main() {
 			case <-ctx.Done():
 				return
 			default:
-				c.Set(ctx, "alpha", 42)   // triggers sets_total
-				c.Get(ctx, "alpha")       // triggers hits_total
-				c.Get(ctx, "nonexistent") // triggers misses_total
-				c.Delete(ctx, "alpha")    // triggers deletes_total
+				c.Set(ctx, "alpha", 42)      // triggers sets_total
+				c.Get(ctx, "alpha")         // triggers hits_total
+				c.Get(ctx, "nonexistent")   // triggers misses_total
+				c.Delete(ctx, "alpha")      // triggers deletes_total
 				c.Set(ctx, "alpha", 100)
 				time.Sleep(2 * time.Second)
 			}

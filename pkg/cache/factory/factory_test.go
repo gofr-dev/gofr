@@ -11,22 +11,13 @@ import (
 	"gofr.dev/pkg/cache/observability"
 )
 
-func TestWithLogger(t *testing.T) {
-	logger := observability.NewStdLogger()
-	opt := WithLogger(logger)
-
-	val := opt()
-
-	assert.Equal(t, logger, val, "WithLogger should return the provided logger")
-}
-
 func TestNewInMemoryCache(t *testing.T) {
 	tests := []struct {
 		name      string
 		cacheName string
 		ttl       time.Duration
 		maxItems  int
-		getOpts   func() []any
+		opts      []Option
 		expErr    bool
 	}{
 		{
@@ -34,7 +25,7 @@ func TestNewInMemoryCache(t *testing.T) {
 			cacheName: "test-inmemory",
 			ttl:       5 * time.Minute,
 			maxItems:  100,
-			getOpts:   func() []any { return nil },
+			opts:      nil,
 			expErr:    false,
 		},
 		{
@@ -42,7 +33,7 @@ func TestNewInMemoryCache(t *testing.T) {
 			cacheName: "test-inmemory-with-logger",
 			ttl:       10 * time.Minute,
 			maxItems:  50,
-			getOpts:   func() []any { return []any{observability.NewStdLogger()} },
+			opts:      []Option{WithObservabilityLogger(observability.NewStdLogger())},
 			expErr:    false,
 		},
 		{
@@ -50,7 +41,7 @@ func TestNewInMemoryCache(t *testing.T) {
 			cacheName: "test-inmemory-with-metrics",
 			ttl:       10 * time.Minute,
 			maxItems:  50,
-			getOpts:   func() []any { return []any{observability.NewMetrics("test", "inmemory")} },
+			opts:      []Option{WithMetrics(observability.NewMetrics("test", "inmemory"))},
 			expErr:    false,
 		},
 	}
@@ -59,14 +50,11 @@ func TestNewInMemoryCache(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			originalRegistry := prometheus.DefaultRegisterer
 			prometheus.DefaultRegisterer = prometheus.NewRegistry()
-
 			t.Cleanup(func() {
 				prometheus.DefaultRegisterer = originalRegistry
 			})
 
-			opts := tt.getOpts()
-
-			c, err := NewInMemoryCache(t.Context(), tt.cacheName, tt.ttl, tt.maxItems, opts...)
+			c, err := NewInMemoryCache(t.Context(), tt.cacheName, tt.ttl, tt.maxItems, tt.opts...)
 
 			if tt.expErr {
 				assert.Error(t, err, "Expected an error for %v", tt.name)
@@ -83,7 +71,7 @@ func TestNewRedisCache(t *testing.T) {
 		name      string
 		cacheName string
 		ttl       time.Duration
-		opts      []any
+		opts      []Option
 		expErr    bool
 	}{
 		{
@@ -97,7 +85,7 @@ func TestNewRedisCache(t *testing.T) {
 			name:      "Initialization with address",
 			cacheName: "test-redis-with-addr",
 			ttl:       10 * time.Minute,
-			opts:      []any{"localhost:6379"},
+			opts:      []Option{WithRedisAddr("localhost:6379")},
 			expErr:    false,
 		},
 	}
@@ -106,7 +94,6 @@ func TestNewRedisCache(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			originalRegistry := prometheus.DefaultRegisterer
 			prometheus.DefaultRegisterer = prometheus.NewRegistry()
-
 			t.Cleanup(func() {
 				prometheus.DefaultRegisterer = originalRegistry
 			})
@@ -127,26 +114,37 @@ func TestNewCache(t *testing.T) {
 	tests := []struct {
 		name      string
 		cacheType string
+		opts      []Option
 		expErr    bool
 	}{
 		{
 			name:      "Create inmemory cache",
 			cacheType: "inmemory",
+			opts:      nil,
 			expErr:    false,
 		},
 		{
 			name:      "Create redis cache",
 			cacheType: "redis",
+			opts:      nil,
 			expErr:    false,
 		},
 		{
 			name:      "Create default cache (inmemory)",
 			cacheType: "unknown",
+			opts:      nil,
 			expErr:    false,
 		},
 		{
 			name:      "Create with empty type (default to inmemory)",
 			cacheType: "",
+			opts:      nil,
+			expErr:    false,
+		},
+		{
+			name:      "Create redis cache with options",
+			cacheType: "redis",
+			opts:      []Option{WithRedisAddr("localhost:6379")},
 			expErr:    false,
 		},
 	}
@@ -155,12 +153,11 @@ func TestNewCache(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			originalRegistry := prometheus.DefaultRegisterer
 			prometheus.DefaultRegisterer = prometheus.NewRegistry()
-
 			t.Cleanup(func() {
 				prometheus.DefaultRegisterer = originalRegistry
 			})
 
-			c, err := NewCache(t.Context(), tt.cacheType, "test-cache", 5*time.Minute, 100)
+			c, err := NewCache(t.Context(), tt.cacheType, "test-cache", 5*time.Minute, 100, tt.opts...)
 
 			if tt.expErr {
 				assert.Error(t, err, "Expected an error for %v", tt.name)
