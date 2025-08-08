@@ -20,6 +20,7 @@ var (
 	errDB     = testutil.CustomError{ErrorMessage: "DB error"}
 	errSyntax = testutil.CustomError{ErrorMessage: "syntax error"}
 	errTx     = testutil.CustomError{ErrorMessage: "error starting transaction"}
+	errbegin  = testutil.CustomError{ErrorMessage: "begin failed"}
 )
 
 func getDB(t *testing.T, logLevel logging.Level) (*DB, sqlmock.Sqlmock) {
@@ -1141,4 +1142,87 @@ func TestClean(t *testing.T) {
 	out := clean(query)
 
 	assert.Empty(t, out)
+}
+func TestDB_CloseWhenNil(t *testing.T) {
+	db := &DB{}
+	err := db.Close()
+	assert.NoError(t, err)
+}
+func TestDB_BeginTx(t *testing.T) {
+	db, mock := getDB(t, logging.DEBUG)
+	defer db.DB.Close()
+
+	ctrl := gomock.NewController(t)
+	db.metrics = NewMockMetrics(ctrl)
+
+	mock.ExpectBegin()
+
+	tx, err := db.BeginTx(t.Context(), &sql.TxOptions{Isolation: sql.LevelReadCommitted})
+	require.NoError(t, err)
+	assert.NotNil(t, tx)
+}
+func TestDB_PingSuccess(t *testing.T) {
+	db, mock := getDB(t, logging.DEBUG)
+	defer db.DB.Close()
+
+	ctrl := gomock.NewController(t)
+	db.metrics = NewMockMetrics(ctrl)
+
+	mock.ExpectPing()
+	mock.ExpectPing().WillReturnError(nil)
+
+	err := db.Ping()
+	assert.NoError(t, err)
+}
+
+func TestDB_PingFailure(t *testing.T) {
+	db, mock := getDB(t, logging.DEBUG)
+	defer db.DB.Close()
+
+	mock.ExpectPing().WillReturnError(sql.ErrConnDone)
+
+	err := db.Ping()
+	assert.Equal(t, sql.ErrConnDone, err)
+}
+func TestDB_QueryRow_NoRows(t *testing.T) {
+	db, mock := getDB(t, logging.DEBUG)
+	defer db.DB.Close()
+
+	query := "SELECT name FROM users WHERE id = ?"
+	mock.ExpectQuery(query).WithArgs(9999).WillReturnRows(sqlmock.NewRows([]string{"name"}))
+
+	row := db.QueryRow(query, 9999)
+
+	var name string
+	err := row.Scan(&name)
+	require.Error(t, err)
+}
+func TestDB_Close_Twice(t *testing.T) {
+	db, _ := getDB(t, logging.DEBUG)
+	err := db.Close()
+	require.NoError(t, err)
+
+	err = db.Close()
+	require.Error(t, err)
+}
+func TestDB_Prepare_Failure(t *testing.T) {
+	db, mock := getDB(t, logging.DEBUG)
+	defer db.DB.Close()
+
+	query := "INVALID SQL"
+	mock.ExpectPrepare(query).WillReturnError(errSyntax)
+
+	stmt, err := db.Prepare(query)
+	require.Error(t, err)
+	assert.Nil(t, stmt)
+}
+func TestDB_Begin_Error(t *testing.T) {
+	db, mock := getDB(t, logging.DEBUG)
+	defer db.DB.Close()
+
+	mock.ExpectBegin().WillReturnError(errbegin)
+
+	tx, err := db.Begin()
+	require.Error(t, err)
+	assert.Nil(t, tx)
 }
