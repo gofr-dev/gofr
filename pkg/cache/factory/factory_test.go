@@ -50,6 +50,7 @@ func TestNewInMemoryCache(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			originalRegistry := prometheus.DefaultRegisterer
 			prometheus.DefaultRegisterer = prometheus.NewRegistry()
+
 			t.Cleanup(func() {
 				prometheus.DefaultRegisterer = originalRegistry
 			})
@@ -94,6 +95,7 @@ func TestNewRedisCache(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			originalRegistry := prometheus.DefaultRegisterer
 			prometheus.DefaultRegisterer = prometheus.NewRegistry()
+
 			t.Cleanup(func() {
 				prometheus.DefaultRegisterer = originalRegistry
 			})
@@ -153,6 +155,7 @@ func TestNewCache(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			originalRegistry := prometheus.DefaultRegisterer
 			prometheus.DefaultRegisterer = prometheus.NewRegistry()
+
 			t.Cleanup(func() {
 				prometheus.DefaultRegisterer = originalRegistry
 			})
