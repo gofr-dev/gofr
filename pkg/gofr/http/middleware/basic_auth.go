@@ -44,8 +44,8 @@ func NewBasicAuthProviderWithValidateFunc(c *container.Container,
 	return &BasicAuthProvider{ValidateFuncWithDatasources: validateFunc, Container: c}, nil
 }
 
-// extractAuthHeader retrieves & returns validated value from auth header.
-func (a *BasicAuthProvider) extractAuthHeader(r *http.Request) (any, ErrorHTTP) {
+// ExtractAuthHeader retrieves & returns validated value from auth header.
+func (a *BasicAuthProvider) ExtractAuthHeader(r *http.Request) (any, ErrorHTTP) {
 	header, err := getAuthHeaderFromRequest(r, headerAuthorization, "Basic")
 	if err != nil {
 		return nil, err
@@ -64,8 +64,8 @@ func (a *BasicAuthProvider) extractAuthHeader(r *http.Request) (any, ErrorHTTP) 
 	return userName, nil
 }
 
-// getAuthMethod returns authMethod Username.
-func (*BasicAuthProvider) getAuthMethod() authMethod {
+// GetAuthMethod returns authMethod Username.
+func (*BasicAuthProvider) GetAuthMethod() AuthMethod {
 	return Username
 }
 

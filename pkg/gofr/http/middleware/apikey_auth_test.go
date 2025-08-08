@@ -99,7 +99,7 @@ func Test_extractAuthHeader(t *testing.T) {
 		t.Run(strconv.Itoa(i), func(t *testing.T) {
 			req := httptest.NewRequest(http.MethodGet, "/", http.NoBody)
 			req.Header.Set(headerXAPIKey, tc.header)
-			response, err := provider.extractAuthHeader(req)
+			response, err := provider.ExtractAuthHeader(req)
 			assert.Equal(t, tc.response, response)
 			assert.Equal(t, tc.err, err)
 		})
@@ -108,7 +108,7 @@ func Test_extractAuthHeader(t *testing.T) {
 
 func Test_authMethod(t *testing.T) {
 	authProvider := APIKeyAuthProvider{}
-	assert.Equal(t, APIKey, authProvider.getAuthMethod())
+	assert.Equal(t, APIKey, authProvider.GetAuthMethod())
 }
 
 func Test_validateAPIKey(t *testing.T) {

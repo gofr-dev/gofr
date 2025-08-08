@@ -234,7 +234,7 @@ func NewOAuthProvider(config OauthConfigs, options ...jwt.ParserOption) (AuthPro
 	}, nil
 }
 
-func (p *OAuthProvider) extractAuthHeader(r *http.Request) (any, ErrorHTTP) {
+func (p *OAuthProvider) ExtractAuthHeader(r *http.Request) (any, ErrorHTTP) {
 	header, err := getAuthHeaderFromRequest(r, headerAuthorization, "Bearer")
 	if err != nil {
 		return nil, err
@@ -267,8 +267,8 @@ func (p *OAuthProvider) extractAuthHeader(r *http.Request) (any, ErrorHTTP) {
 	return claims, nil
 }
 
-// getAuthMethod returns JWTClaim authMethod.
-func (*OAuthProvider) getAuthMethod() authMethod {
+// GetAuthMethod returns JWTClaim authMethod.
+func (*OAuthProvider) GetAuthMethod() AuthMethod {
 	return JWTClaim
 }
 

@@ -85,7 +85,7 @@ func TestBasicAuthMiddleware_extractAuthHeader(t *testing.T) {
 		t.Run(strconv.Itoa(i), func(t *testing.T) {
 			req := httptest.NewRequest(http.MethodGet, "/", http.NoBody)
 			req.Header.Set(headerAuthorization, tc.header)
-			response, err := provider.extractAuthHeader(req)
+			response, err := provider.ExtractAuthHeader(req)
 			assert.Equal(t, tc.response, response)
 			assert.Equal(t, tc.err, err)
 		})
@@ -94,7 +94,7 @@ func TestBasicAuthMiddleware_extractAuthHeader(t *testing.T) {
 
 func TestBasicAuthProvider_getAuthMethod(t *testing.T) {
 	provider := BasicAuthProvider{}
-	assert.Equal(t, Username, provider.getAuthMethod())
+	assert.Equal(t, Username, provider.GetAuthMethod())
 }
 
 func TestParseBasicAuth(t *testing.T) {

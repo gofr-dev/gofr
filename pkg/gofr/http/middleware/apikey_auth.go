@@ -43,7 +43,7 @@ func NewAPIKeyAuthProviderWithValidateFunc(c *container.Container,
 	}
 }
 
-func (a *APIKeyAuthProvider) extractAuthHeader(r *http.Request) (any, ErrorHTTP) {
+func (a *APIKeyAuthProvider) ExtractAuthHeader(r *http.Request) (any, ErrorHTTP) {
 	header, err := getAuthHeaderFromRequest(r, headerXAPIKey, "")
 	if err != nil {
 		return nil, err
@@ -56,7 +56,7 @@ func (a *APIKeyAuthProvider) extractAuthHeader(r *http.Request) (any, ErrorHTTP)
 	return header, nil
 }
 
-func (*APIKeyAuthProvider) getAuthMethod() authMethod {
+func (*APIKeyAuthProvider) GetAuthMethod() AuthMethod {
 	return APIKey
 }
 

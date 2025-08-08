@@ -79,7 +79,7 @@ func TestOAuthProvider_extractAuthHeader(t *testing.T) {
 				options:       tc.options,
 				regex:         regex,
 			}
-			response, err := provider.extractAuthHeader(req)
+			response, err := provider.ExtractAuthHeader(req)
 			assert.Equal(t, tc.response, response)
 			assert.Equal(t, tc.err, err)
 		})
@@ -125,7 +125,7 @@ func Test_NewOAuthProvider(t *testing.T) {
 }
 
 func TestOAuthProvider_getAuthMethod(t *testing.T) {
-	assert.Equal(t, JWTClaim, (&OAuthProvider{}).getAuthMethod())
+	assert.Equal(t, JWTClaim, (&OAuthProvider{}).GetAuthMethod())
 }
 
 func TestJSONWebKey_rsaPublicKey(t *testing.T) {

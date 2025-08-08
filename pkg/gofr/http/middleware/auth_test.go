@@ -91,17 +91,17 @@ func Test_getAuthHeaderValue(t *testing.T) {
 
 type MockAuthProvider struct {
 	success                 bool
-	method                  authMethod
+	method                  AuthMethod
 	authHeader              any
 	extractAuthHeaderCalled bool
 	getAuthMethodCalled     bool
 }
 
-func (p *MockAuthProvider) getAuthMethod() authMethod {
+func (p *MockAuthProvider) GetAuthMethod() AuthMethod {
 	p.getAuthMethodCalled = true
 	return p.method
 }
-func (p *MockAuthProvider) extractAuthHeader(_ *http.Request) (any, ErrorHTTP) {
+func (p *MockAuthProvider) ExtractAuthHeader(_ *http.Request) (any, ErrorHTTP) {
 	p.extractAuthHeaderCalled = true
 	if p.success {
 		return p.authHeader, nil
@@ -113,7 +113,7 @@ func (p *MockAuthProvider) extractAuthHeader(_ *http.Request) (any, ErrorHTTP) {
 type MockHandler struct {
 	t             *testing.T
 	handlerCalled bool
-	authMethod    authMethod
+	authMethod    AuthMethod
 	authHeader    any
 }
 
