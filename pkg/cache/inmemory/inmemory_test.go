@@ -1,6 +1,7 @@
 package inmemory
 
 import (
+	"context"
 	"runtime"
 	"sync"
 	"testing"
@@ -12,10 +13,10 @@ import (
 )
 
 // makeCache initializes the cache and fails the test on error.
-func makeCache(t *testing.T, opts ...Option) *inMemoryCache {
+func makeCache(ctx context.Context, t *testing.T, opts ...Option) *inMemoryCache {
 	t.Helper()
 
-	ci, err := NewInMemoryCache(opts...)
+	ci, err := NewInMemoryCache(ctx, opts...)
 	require.NoError(t, err, "failed to initialize cache")
 
 	return ci.(*inMemoryCache)
@@ -31,7 +32,7 @@ func TestOperations(t *testing.T) {
 	})
 
 	ctx := t.Context()
-	c := makeCache(t, WithName("name"), WithTTL(5*time.Second), WithMaxItems(10))
+	c := makeCache(ctx, t, WithName("name"), WithTTL(5*time.Second), WithMaxItems(10))
 	defer c.Close(ctx)
 
 	require.NoError(t, c.Set(ctx, "key1", 10))
@@ -62,7 +63,7 @@ func TestClear(t *testing.T) {
 	})
 
 	ctx := t.Context()
-	c := makeCache(t, WithTTL(time.Minute), WithMaxItems(10))
+	c := makeCache(ctx, t, WithTTL(time.Minute), WithMaxItems(10))
 	defer c.Close(ctx)
 
 	require.NoError(t, c.Set(ctx, "x", 1))
@@ -87,7 +88,7 @@ func TestTTLExpiry(t *testing.T) {
 	})
 
 	ctx := t.Context()
-	c := makeCache(t, WithTTL(50*time.Millisecond), WithMaxItems(10))
+	c := makeCache(ctx, t, WithTTL(50*time.Millisecond), WithMaxItems(10))
 	defer c.Close(ctx)
 
 	require.NoError(t, c.Set(ctx, "foo", "bar"))
@@ -108,7 +109,7 @@ func TestCapacityEviction(t *testing.T) {
 	})
 
 	ctx := t.Context()
-	c := makeCache(t, WithTTL(time.Minute), WithMaxItems(2))
+	c := makeCache(ctx, t, WithTTL(time.Minute), WithMaxItems(2))
 	defer c.Close(ctx)
 
 	require.NoError(t, c.Set(ctx, "k1", 1))
@@ -133,7 +134,7 @@ func TestOverwrite(t *testing.T) {
 	})
 
 	ctx := t.Context()
-	c := makeCache(t, WithTTL(5*time.Second), WithMaxItems(10))
+	c := makeCache(ctx, t, WithTTL(5*time.Second), WithMaxItems(10))
 	defer c.Close(ctx)
 
 	require.NoError(t, c.Set(ctx, "dupKey", "first"))
@@ -155,7 +156,7 @@ func TestDeleteNonExistent(t *testing.T) {
 	})
 
 	ctx := t.Context()
-	c := makeCache(t, WithTTL(5*time.Second), WithMaxItems(10))
+	c := makeCache(ctx, t, WithTTL(5*time.Second), WithMaxItems(10))
 	defer c.Close(ctx)
 
 	err := c.Delete(ctx, "ghost")
@@ -172,7 +173,7 @@ func TestClearEmpty(t *testing.T) {
 	})
 
 	ctx := t.Context()
-	c := makeCache(t, WithTTL(5*time.Second), WithMaxItems(10))
+	c := makeCache(ctx, t, WithTTL(5*time.Second), WithMaxItems(10))
 	defer c.Close(ctx)
 
 	err := c.Clear(ctx)
@@ -189,7 +190,7 @@ func TestConcurrentAccess(t *testing.T) {
 	})
 
 	ctx := t.Context()
-	c := makeCache(t, WithTTL(5*time.Second), WithMaxItems(10))
+	c := makeCache(ctx, t, WithTTL(5*time.Second), WithMaxItems(10))
 	defer c.Close(ctx)
 
 	var wg sync.WaitGroup
@@ -222,7 +223,7 @@ func TestEvictionEdgeCase(t *testing.T) {
 	})
 
 	ctx := t.Context()
-	c := makeCache(t, WithTTL(100*time.Millisecond), WithMaxItems(2))
+	c := makeCache(ctx, t, WithTTL(100*time.Millisecond), WithMaxItems(2))
 	defer c.Close(ctx)
 
 	require.NoError(t, c.Set(ctx, "a", 1))
@@ -249,7 +250,8 @@ func TestDefaultConfiguration(t *testing.T) {
 	})
 
 	ctx := t.Context()
-	ci, err := NewInMemoryCache()
+
+	ci, err := NewInMemoryCache(ctx)
 	require.NoError(t, err)
 
 	c := ci.(*inMemoryCache)
@@ -275,7 +277,7 @@ func TestMultipleOptions(t *testing.T) {
 	})
 
 	ctx := t.Context()
-	c := makeCache(t,
+	c := makeCache(ctx, t,
 		WithTTL(30*time.Second),
 		WithMaxItems(5),
 		WithTTL(60*time.Second),
@@ -296,7 +298,7 @@ func TestZeroTTL(t *testing.T) {
 	})
 
 	ctx := t.Context()
-	c := makeCache(t, WithTTL(0))
+	c := makeCache(ctx, t, WithTTL(0))
 	defer c.Close(ctx)
 
 	require.NoError(t, c.Set(ctx, "immediate", "expire"))
@@ -314,7 +316,7 @@ func TestNegativeTTL(t *testing.T) {
 	})
 
 	ctx := t.Context()
-	c := makeCache(t, WithTTL(-time.Second))
+	c := makeCache(ctx, t, WithTTL(-time.Second))
 	defer c.Close(ctx)
 
 	require.NoError(t, c.Set(ctx, "neg", "ttl"))
@@ -332,7 +334,7 @@ func TestUnlimitedCapacity(t *testing.T) {
 	})
 
 	ctx := t.Context()
-	c := makeCache(t, WithTTL(time.Minute), WithMaxItems(0))
+	c := makeCache(ctx, t, WithTTL(time.Minute), WithMaxItems(0))
 	defer c.Close(ctx)
 
 	for i := 0; i < 500; i++ {
@@ -361,7 +363,7 @@ func TestSingleItemCapacity(t *testing.T) {
 	})
 
 	ctx := t.Context()
-	c := makeCache(t, WithTTL(time.Minute), WithMaxItems(1))
+	c := makeCache(ctx, t, WithTTL(time.Minute), WithMaxItems(1))
 	defer c.Close(ctx)
 
 	require.NoError(t, c.Set(ctx, "first", 1))
@@ -383,7 +385,7 @@ func TestLRUEvictionOrder(t *testing.T) {
 	})
 
 	ctx := t.Context()
-	c := makeCache(t, WithTTL(time.Minute), WithMaxItems(3))
+	c := makeCache(ctx, t, WithTTL(time.Minute), WithMaxItems(3))
 	defer c.Close(ctx)
 
 	require.NoError(t, c.Set(ctx, "a", 1))
@@ -407,7 +409,7 @@ func TestUpdateExistingKeyTiming(t *testing.T) {
 	})
 
 	ctx := t.Context()
-	c := makeCache(t, WithTTL(time.Minute), WithMaxItems(2))
+	c := makeCache(ctx, t, WithTTL(time.Minute), WithMaxItems(2))
 	defer c.Close(ctx)
 
 	require.NoError(t, c.Set(ctx, "old", 1))
@@ -429,7 +431,7 @@ func TestDifferentValueTypes(t *testing.T) {
 	})
 
 	ctx := t.Context()
-	c := makeCache(t, WithTTL(time.Minute))
+	c := makeCache(ctx, t, WithTTL(time.Minute))
 	defer c.Close(ctx)
 
 	values := map[string]any{
@@ -468,7 +470,7 @@ func TestEmptyStringKey(t *testing.T) {
 	})
 
 	ctx := t.Context()
-	c := makeCache(t, WithTTL(time.Minute))
+	c := makeCache(ctx, t, WithTTL(time.Minute))
 	defer c.Close(ctx)
 
 	err := c.Set(ctx, "", "v")
@@ -485,7 +487,7 @@ func TestLongKey(t *testing.T) {
 	})
 
 	ctx := t.Context()
-	c := makeCache(t, WithTTL(time.Minute))
+	c := makeCache(ctx, t, WithTTL(time.Minute))
 	defer c.Close(ctx)
 
 	longKey := string(make([]byte, 10000))
@@ -507,7 +509,7 @@ func TestConcurrentEviction(t *testing.T) {
 	})
 
 	ctx := t.Context()
-	c := makeCache(t, WithTTL(time.Minute), WithMaxItems(10))
+	c := makeCache(ctx, t, WithTTL(time.Minute), WithMaxItems(10))
 	defer c.Close(ctx)
 
 	for i := 0; i < 10; i++ {
@@ -555,7 +557,7 @@ func TestCleanupGoroutineStops(t *testing.T) {
 
 	ctx := t.Context()
 	before := runtime.NumGoroutine()
-	c := makeCache(t, WithTTL(time.Millisecond))
+	c := makeCache(ctx, t, WithTTL(time.Millisecond))
 	time.Sleep(10 * time.Millisecond)
 	c.Close(ctx)
 	time.Sleep(50 * time.Millisecond)
@@ -574,7 +576,7 @@ func TestMultipleClose(t *testing.T) {
 	})
 
 	ctx := t.Context()
-	c := makeCache(t, WithTTL(time.Minute))
+	c := makeCache(ctx, t, WithTTL(time.Minute))
 	c.Close(ctx)
 	c.Close(ctx)
 	c.Close(ctx)
@@ -590,7 +592,7 @@ func TestOperationsAfterClose(t *testing.T) {
 	})
 
 	ctx := t.Context()
-	c := makeCache(t, WithTTL(time.Minute))
+	c := makeCache(ctx, t, WithTTL(time.Minute))
 	require.NoError(t, c.Set(ctx, "pre", "close"))
 	c.Close(ctx)
 	require.NoError(t, c.Set(ctx, "post", "close"))
@@ -614,7 +616,7 @@ func TestCleanupFrequency(t *testing.T) {
 	})
 
 	ctx := t.Context()
-	c := makeCache(t, WithTTL(100*time.Millisecond))
+	c := makeCache(ctx, t, WithTTL(100*time.Millisecond))
 	defer c.Close(ctx)
 
 	require.NoError(t, c.Set(ctx, "expire_me", "v"))
@@ -635,7 +637,7 @@ func TestExistsWithExpiredItems(t *testing.T) {
 	})
 
 	ctx := t.Context()
-	c := makeCache(t, WithTTL(50*time.Millisecond))
+	c := makeCache(ctx, t, WithTTL(50*time.Millisecond))
 	defer c.Close(ctx)
 
 	require.NoError(t, c.Set(ctx, "short", "v"))
@@ -661,7 +663,7 @@ func TestPartialEvictionWithExpiredItems(t *testing.T) {
 	})
 
 	ctx := t.Context()
-	c := makeCache(t, WithTTL(100*time.Millisecond), WithMaxItems(3))
+	c := makeCache(ctx, t, WithTTL(100*time.Millisecond), WithMaxItems(3))
 	defer c.Close(ctx)
 
 	require.NoError(t, c.Set(ctx, "a", 1))
@@ -688,7 +690,7 @@ func TestGetUpdatesLastUsed(t *testing.T) {
 	})
 
 	ctx := t.Context()
-	c := makeCache(t, WithTTL(time.Minute), WithMaxItems(2))
+	c := makeCache(ctx, t, WithTTL(time.Minute), WithMaxItems(2))
 	defer c.Close(ctx)
 
 	require.NoError(t, c.Set(ctx, "x", 1))
@@ -712,7 +714,7 @@ func TestHighVolumeOperations(t *testing.T) {
 	})
 
 	ctx := t.Context()
-	c := makeCache(t, WithTTL(time.Minute), WithMaxItems(1000))
+	c := makeCache(ctx, t, WithTTL(time.Minute), WithMaxItems(1000))
 	defer c.Close(ctx)
 
 	var wg sync.WaitGroup

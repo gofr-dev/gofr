@@ -128,7 +128,7 @@ func validateKey(key string) error {
 // It takes zero or more Option functions to customize its configuration.
 // By default, it creates a cache with a 1-minute TTL and no item limit.
 // It also starts a background goroutine for periodic cleanup of expired items.
-func NewInMemoryCache(opts ...Option) (cache.Cache, error) {
+func NewInMemoryCache(ctx context.Context, opts ...Option) (cache.Cache, error) {
 	c := &inMemoryCache{
 		items:    make(map[string]entry),
 		ttl:      time.Minute,
@@ -149,7 +149,7 @@ func NewInMemoryCache(opts ...Option) (cache.Cache, error) {
 
 	// Start periodic cleanup if TTL > 0
 	if c.ttl > 0 {
-		go c.startCleanup(context.Background())
+		go c.startCleanup(ctx)
 	} else {
 		c.logger.Warnf("TTL disabled; items will not expire automatically")
 	}
@@ -473,9 +473,10 @@ const (
 
 // NewDefaultCache creates a cache with sensible default settings for general use.
 // It is configured with a 5-minute TTL and a 1000-item limit.
-func NewDefaultCache() (cache.Cache, error) {
+func NewDefaultCache(ctx context.Context, name string) (cache.Cache, error) {
 	return NewInMemoryCache(
-		WithName("default"),
+		ctx,
+		WithName(name),
 		WithTTL(DefaultTTL),
 		WithMaxItems(DefaultMaxItems),
 		WithLogger(observability.NewStdLogger()),
@@ -485,8 +486,9 @@ func NewDefaultCache() (cache.Cache, error) {
 
 // NewDebugCache creates a cache with settings suitable for debugging.
 // It has a short TTL (1 minute) and a small capacity (100 items).
-func NewDebugCache(name string) (cache.Cache, error) {
+func NewDebugCache(ctx context.Context, name string) (cache.Cache, error) {
 	return NewInMemoryCache(
+		ctx,
 		WithName(name),
 		WithTTL(1*time.Minute),
 		WithMaxItems(DebugMaxItems),
@@ -497,8 +499,9 @@ func NewDebugCache(name string) (cache.Cache, error) {
 
 // NewProductionCache creates a cache with settings suitable for production environments.
 // It requires explicit configuration for TTL and maximum item count.
-func NewProductionCache(name string, ttl time.Duration, maxItems int) (cache.Cache, error) {
+func NewProductionCache(ctx context.Context, name string, ttl time.Duration, maxItems int) (cache.Cache, error) {
 	return NewInMemoryCache(
+		ctx,
 		WithName(name),
 		WithTTL(ttl),
 		WithMaxItems(maxItems),

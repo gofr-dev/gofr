@@ -33,7 +33,7 @@ func WithLogger(logger observability.Logger) Option {
 //   - opts: Optional configurations, such as a custom logger or metrics collector.
 //
 // Returns a cache.Cache instance or an error if initialization fails.
-func NewInMemoryCache(_ context.Context, name string, ttl time.Duration, maxItems int, opts ...any) (cache.Cache, error) {
+func NewInMemoryCache(ctx context.Context, name string, ttl time.Duration, maxItems int, opts ...any) (cache.Cache, error) {
 	var inMemoryOpts []inmemory.Option
 
 	inMemoryOpts = append(inMemoryOpts, inmemory.WithName(name), inmemory.WithTTL(ttl), inmemory.WithMaxItems(maxItems))
@@ -51,7 +51,7 @@ func NewInMemoryCache(_ context.Context, name string, ttl time.Duration, maxItem
 		}
 	}
 
-	return inmemory.NewInMemoryCache(inMemoryOpts...)
+	return inmemory.NewInMemoryCache(ctx, inMemoryOpts...)
 }
 
 // NewRedisCache creates a new Redis-backed cache instance.
