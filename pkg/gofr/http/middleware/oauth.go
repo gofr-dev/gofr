@@ -69,6 +69,8 @@ func NewOAuth(config OauthConfigs) PublicKeyProvider {
 	var publicKeys PublicKeys
 
 	go func() {
+		publicKeys.updateKeys(config)
+
 		ticker := time.NewTicker(config.RefreshInterval)
 		defer ticker.Stop()
 
