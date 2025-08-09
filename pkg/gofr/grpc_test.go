@@ -142,7 +142,7 @@ func TestGRPC_ServerRun(t *testing.T) {
 
 			g := &grpcServer{
 				port:   tc.port,
-				cconfig: getConfigs(t),
+				config: getConfigs(t),
 			}
 
 			go func() {
