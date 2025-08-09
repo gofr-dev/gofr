@@ -58,9 +58,6 @@ func New() *App {
 	}
 
 	app.grpcServer, err = newGRPCServer(app.container, port, app.Config)
-	if err != nil {
-    	app.container.Logger.Fatalf("failed to create gRPC server: %v", err)
-	}
 
 	app.subscriptionManager = newSubscriptionManager(app.container)
 
