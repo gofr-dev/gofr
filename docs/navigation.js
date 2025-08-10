@@ -123,6 +123,11 @@ export const navigation = [
                 desc: "Learn how to automatically render SwaggerUI documentation for your GoFr APIs, improving discoverability and usability."
             },
             {
+                title: 'Adding Synchronous Startup Hooks',
+                href: '/docs/advanced-guide/startup-hooks',
+                desc: "Learn how to seed a database, warm up a cache, or perform other critical setup procedures, synchronously before starting your application."
+            },
+            {
                 title: 'Error Handling',
                 href: '/docs/advanced-guide/gofr-errors',
                 desc: "Understand error handling mechanisms in GoFr to ensure robust applications and improved user experience."
