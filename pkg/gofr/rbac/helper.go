@@ -3,8 +3,8 @@ package rbac
 import "gofr.dev/pkg/gofr"
 
 func HasRole(ctx *gofr.Context, role string) bool {
-	authInfo := ctx.GetAuthInfo()
-	return authInfo.GetRole() == role
+	expRole, _ := ctx.Context.Value(userRole).(string)
+	return expRole == role
 }
 
 func IsAdmin(ctx *gofr.Context) bool {
@@ -12,6 +12,6 @@ func IsAdmin(ctx *gofr.Context) bool {
 }
 
 func GetUserRole(ctx *gofr.Context) string {
-	authInfo := ctx.GetAuthInfo()
-	return authInfo.GetRole()
+	role, _ := ctx.Context.Value(userRole).(string)
+	return role
 }
