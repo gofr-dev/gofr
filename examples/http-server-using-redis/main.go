@@ -17,6 +17,27 @@ func main() {
 	app.POST("/redis", RedisSetHandler)
 	app.GET("/redis-pipeline", RedisPipelineHandler)
 
+	// Register an OnStart hook to warm up a cache.
+	// This runs before route registration as intended.
+	app.OnStart(func(ctx *gofr.Context) error {
+		ctx.Logger.Info("Warming up the cache...")
+
+		// Example: Fetch some data and store it in Redis.
+		// In a real app, this might come from a database or another service.
+		cacheKey := "initial-data"
+		cacheValue := "This is some data cached at startup."
+
+		err := ctx.Redis.Set(ctx, cacheKey, cacheValue, 0).Err()
+		if err != nil {
+			ctx.Logger.Errorf("Failed to warm up cache: %v", err)
+			return err // Return the error to halt startup if caching fails.
+		}
+
+		ctx.Logger.Info("Cache warmed up successfully!")
+
+		return nil
+	})
+
 	// Run the application
 	app.Run()
 }
