@@ -10,7 +10,7 @@ import (
     "time"
 )
 
-// ctxKey is the type used for the context value key to avoid collisions.
+// ctxKey is the type used for context keys to avoid collisions.
 type ctxKey int
 
 const (
@@ -18,17 +18,22 @@ const (
 )
 
 // OIDCUserInfoMiddleware returns a middleware that fetches user info from the OIDC userinfo endpoint.
-// It expects a valid Bearer token is present in the Authorization header (already validated by GoFr's OAuth middleware).
-// Put this middleware **after** GoFr's OAuth middleware.
+// Expects a valid Bearer token in the Authorization header (already validated by GoFr's OAuth middleware).
+// Register this middleware AFTER GoFr's OAuth middleware.
 func OIDCUserInfoMiddleware(userInfoEndpoint string) func(http.Handler) http.Handler {
     return func(next http.Handler) http.Handler {
         return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-            authHeader := r.Header.Get("Authorization")
-            if !strings.HasPrefix(authHeader, "Bearer ") {
+            // REVIEWER: Use strings.CutPrefix for Bearer extraction.
+            accessToken, ok := strings.CutPrefix(r.Header.Get("Authorization"), "Bearer ")
+            if !ok {
                 http.Error(w, "Unauthorized: missing bearer token", http.StatusUnauthorized)
                 return
             }
-            accessToken := strings.TrimPrefix(authHeader, "Bearer ")
+            accessToken = strings.TrimSpace(accessToken)
+            if accessToken == "" {
+                http.Error(w, "Unauthorized: empty bearer token", http.StatusUnauthorized)
+                return
+            }
 
             req, err := http.NewRequestWithContext(r.Context(), http.MethodGet, userInfoEndpoint, nil)
             if err != nil {

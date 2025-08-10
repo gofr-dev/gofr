@@ -3,6 +3,7 @@
 package middleware
 
 import (
+    "context"
     "encoding/json"
     "fmt"
     "net/http"
@@ -17,25 +18,40 @@ type OIDCMetadata struct {
     UserInfoEndpoint string `json:"userinfo_endpoint"`
 }
 
-var (
-    cachedMeta    *OIDCMetadata
-    cacheExpiry   time.Time
-    cacheDuration = 10 * time.Minute // Adjust cache TTL as needed
-    mu            sync.Mutex
-)
+// DiscoveryCache caches OIDC metadata per discovery URL.
+type DiscoveryCache struct {
+    url          string
+    cacheDuration time.Duration
+    mu           sync.Mutex
+    cachedMeta   *OIDCMetadata
+    cacheExpiry  time.Time
+}
 
-// FetchOIDCMetadata fetches and caches OIDC discovery metadata from the given URL.
-// It returns cached data if within cache duration.
-func FetchOIDCMetadata(discoveryURL string) (*OIDCMetadata, error) {
-    mu.Lock()
-    defer mu.Unlock()
+// NewDiscoveryCache creates a new per-URL OIDC discovery cache.
+func NewDiscoveryCache(url string, cacheDuration time.Duration) *DiscoveryCache {
+    return &DiscoveryCache{
+        url:          url,
+        cacheDuration: cacheDuration,
+    }
+}
+
+// GetMetadata fetches and caches OIDC discovery metadata from this cache's URL.
+// Uses context for HTTP request and returns cached data if valid.
+func (dc *DiscoveryCache) GetMetadata(ctx context.Context) (*OIDCMetadata, error) {
+    dc.mu.Lock()
+    defer dc.mu.Unlock()
 
     // Return cached metadata if still valid
-    if cachedMeta != nil && time.Now().Before(cacheExpiry) {
-        return cachedMeta, nil
+    if dc.cachedMeta != nil && time.Now().Before(dc.cacheExpiry) {
+        return dc.cachedMeta, nil
     }
 
-    resp, err := http.Get(discoveryURL)
+    req, err := http.NewRequestWithContext(ctx, http.MethodGet, dc.url, nil)
+    if err != nil {
+        return nil, fmt.Errorf("failed to create OIDC discovery request: %w", err)
+    }
+    client := &http.Client{Timeout: 10 * time.Second}
+    resp, err := client.Do(req)
     if err != nil {
         return nil, fmt.Errorf("failed to fetch OIDC discovery metadata: %w", err)
     }
@@ -51,9 +67,8 @@ func FetchOIDCMetadata(discoveryURL string) (*OIDCMetadata, error) {
     }
 
     // Cache the fetched metadata
-    cachedMeta = &meta
-    cacheExpiry = time.Now().Add(cacheDuration)
-
+    dc.cachedMeta = &meta
+    dc.cacheExpiry = time.Now().Add(dc.cacheDuration)
     return &meta, nil
 }
 

@@ -8,7 +8,7 @@ import (
     "testing"
 )
 
-// Helper to create a mock userinfo endpoint server
+// Helper to create a mock userinfo endpoint server.
 func newMockUserInfoServer(responseCode int, responseBody string) *httptest.Server {
     return httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
         auth := r.Header.Get("Authorization")
@@ -28,7 +28,6 @@ func TestOIDCUserInfoMiddleware_Success(t *testing.T) {
     defer ts.Close()
 
     mw := OIDCUserInfoMiddleware(ts.URL)
-
     handler := mw(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
         userInfo, ok := GetOIDCUserInfo(r.Context())
         if !ok {
@@ -66,8 +65,23 @@ func TestOIDCUserInfoMiddleware_MissingBearerToken(t *testing.T) {
     }
 }
 
+func TestOIDCUserInfoMiddleware_EmptyBearerToken(t *testing.T) {
+    mw := OIDCUserInfoMiddleware("https://dummy")
+    handler := mw(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+        t.Fatal("handler should not be called if token empty")
+    }))
+
+    req := httptest.NewRequest("GET", "/", nil)
+    req.Header.Set("Authorization", "Bearer    ") // whitespace-only token
+    rr := httptest.NewRecorder()
+    handler.ServeHTTP(rr, req)
+
+    if rr.Code != http.StatusUnauthorized {
+        t.Errorf("expected unauthorized for empty token, got %d", rr.Code)
+    }
+}
+
 func TestOIDCUserInfoMiddleware_BadUserInfoResponse(t *testing.T) {
-    // Server returns invalid JSON
     ts := newMockUserInfoServer(http.StatusOK, "{bad json")
     defer ts.Close()
 
@@ -87,7 +101,6 @@ func TestOIDCUserInfoMiddleware_BadUserInfoResponse(t *testing.T) {
 }
 
 func TestOIDCUserInfoMiddleware_UserInfoEndpointReturnsError(t *testing.T) {
-    // Server returns 401 unauthorized
     ts := newMockUserInfoServer(http.StatusUnauthorized, `{"error":"unauthorized"}`)
     defer ts.Close()
 

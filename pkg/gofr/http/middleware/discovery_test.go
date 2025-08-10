@@ -1,6 +1,7 @@
 package middleware
 
 import (
+    "context"
     "net/http"
     "net/http/httptest"
     "sync"
@@ -8,15 +9,8 @@ import (
     "time"
 )
 
-func resetCache() {
-    // Helper to reset package-level cache for isolated tests
-    mu.Lock()
-    defer mu.Unlock()
-    cachedMeta = nil
-    cacheExpiry = time.Time{}
-}
-
-func TestFetchOIDCMetadata_Success(t *testing.T) {
+// TestFetchOIDCMetadata_Success verifies fetching and parsing of metadata.
+func TestDiscoveryCache_GetMetadata_Success(t *testing.T) {
     sampleJSON := `{
         "issuer": "https://example.com",
         "jwks_uri": "https://example.com/jwks.json",
@@ -24,28 +18,31 @@ func TestFetchOIDCMetadata_Success(t *testing.T) {
     }`
 
     server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-        w.Write([]byte(sampleJSON))
+        w.WriteHeader(http.StatusOK)
+        _, _ = w.Write([]byte(sampleJSON))
     }))
     defer server.Close()
 
-    resetCache()
+    cache := NewDiscoveryCache(server.URL, 10*time.Minute)
 
-    meta, err := FetchOIDCMetadata(server.URL)
+    meta, err := cache.GetMetadata(context.Background())
     if err != nil {
         t.Fatalf("expected no error, got %v", err)
     }
+
     if meta.Issuer != "https://example.com" {
-        t.Errorf("expected issuer 'https://example.com', got %q", meta.Issuer)
+        t.Errorf("expected issuer https://example.com, got %q", meta.Issuer)
     }
     if meta.JWKSURI != "https://example.com/jwks.json" {
-        t.Errorf("expected jwks_uri 'https://example.com/jwks.json', got %q", meta.JWKSURI)
+        t.Errorf("expected jwks_uri https://example.com/jwks.json, got %q", meta.JWKSURI)
     }
     if meta.UserInfoEndpoint != "https://example.com/userinfo" {
-        t.Errorf("expected userinfo_endpoint 'https://example.com/userinfo', got %q", meta.UserInfoEndpoint)
+        t.Errorf("expected userinfo_endpoint https://example.com/userinfo, got %q", meta.UserInfoEndpoint)
     }
 }
 
-func TestFetchOIDCMetadata_Caching(t *testing.T) {
+// TestDiscoveryCache_Caching verifies subsequent calls within TTL do not re-fetch.
+func TestDiscoveryCache_Caching(t *testing.T) {
     sampleJSON := `{
         "issuer": "https://example.org",
         "jwks_uri": "https://example.org/jwks.json",
@@ -53,98 +50,91 @@ func TestFetchOIDCMetadata_Caching(t *testing.T) {
     }`
 
     var requestCount int
-    var muRequest sync.Mutex
+    var muReq sync.Mutex
 
     server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-        muRequest.Lock()
+        muReq.Lock()
         requestCount++
-        muRequest.Unlock()
-        w.Write([]byte(sampleJSON))
+        muReq.Unlock()
+        w.WriteHeader(http.StatusOK)
+        _, _ = w.Write([]byte(sampleJSON))
     }))
     defer server.Close()
 
-    resetCache()
+    cache := NewDiscoveryCache(server.URL, 10*time.Minute)
 
-    // First call: triggers HTTP request
-    meta1, err1 := FetchOIDCMetadata(server.URL)
-    if err1 != nil {
-        t.Fatalf("unexpected error on first fetch: %v", err1)
+    // First call — should trigger HTTP fetch
+    if _, err := cache.GetMetadata(context.Background()); err != nil {
+        t.Fatalf("unexpected error on first fetch: %v", err)
     }
 
-    // Second call immediately: should return cached metadata without HTTP request
-    meta2, err2 := FetchOIDCMetadata(server.URL)
-    if err2 != nil {
-        t.Fatalf("unexpected error on second fetch: %v", err2)
+    // Second call within TTL — should hit cache
+    if _, err := cache.GetMetadata(context.Background()); err != nil {
+        t.Fatalf("unexpected error on cached fetch: %v", err)
     }
 
-    muRequest.Lock()
-    count := requestCount
-    muRequest.Unlock()
+    muReq.Lock()
+    if requestCount != 1 {
+        t.Errorf("expected 1 HTTP request due to caching, got %d", requestCount)
+    }
+    muReq.Unlock()
 
-    if count != 1 {
-        t.Errorf("expected 1 HTTP request due to caching, got %d", count)
+    // Force expiry
+    cache.mu.Lock()
+    cache.cacheExpiry = time.Now().Add(-time.Minute)
+    cache.mu.Unlock()
+
+    // Third call — should trigger another HTTP fetch
+    if _, err := cache.GetMetadata(context.Background()); err != nil {
+        t.Fatalf("unexpected error on post-expiry fetch: %v", err)
     }
 
-    if meta1 != meta2 {
-        t.Error("expected cached metadata to be returned on second call")
+    muReq.Lock()
+    if requestCount != 2 {
+        t.Errorf("expected 2 HTTP requests after expiry, got %d", requestCount)
     }
-
-    // Simulate cache expiry by adjusting cacheExpiry directly
-    mu.Lock()
-    cacheExpiry = time.Now().Add(-time.Minute) // expired
-    mu.Unlock()
-
-    // Third call after expiry: triggers http request again
-    _, err3 := FetchOIDCMetadata(server.URL)
-    if err3 != nil {
-        t.Fatalf("unexpected error on third fetch after expiry: %v", err3)
-    }
-
-    muRequest.Lock()
-    updatedCount := requestCount
-    muRequest.Unlock()
-
-    if updatedCount != 2 {
-        t.Errorf("expected 2 HTTP requests after expiry, got %d", updatedCount)
-    }
+    muReq.Unlock()
 }
 
-func TestFetchOIDCMetadata_Non200Status(t *testing.T) {
+// TestDiscoveryCache_Non200Status ensures error for non-200 HTTP status.
+func TestDiscoveryCache_Non200Status(t *testing.T) {
     server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-        w.WriteHeader(http.StatusBadRequest)
-        w.Write([]byte(`Bad request`))
+        http.Error(w, "bad request", http.StatusBadRequest)
     }))
     defer server.Close()
 
-    resetCache()
+    cache := NewDiscoveryCache(server.URL, 10*time.Minute)
 
-    _, err := FetchOIDCMetadata(server.URL)
+    _, err := cache.GetMetadata(context.Background())
     if err == nil {
-        t.Fatal("expected error on non-200 HTTP status, got nil")
+        t.Fatal("expected error for non-200 status, got nil")
     }
 }
 
-func TestFetchOIDCMetadata_BadJSON(t *testing.T) {
+// TestDiscoveryCache_BadJSON ensures error if JSON is malformed.
+func TestDiscoveryCache_BadJSON(t *testing.T) {
     server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-        w.Write([]byte("{invalid json}"))
+        w.WriteHeader(http.StatusOK)
+        _, _ = w.Write([]byte("{bad json"))
     }))
     defer server.Close()
 
-    resetCache()
+    cache := NewDiscoveryCache(server.URL, 10*time.Minute)
 
-    _, err := FetchOIDCMetadata(server.URL)
+    _, err := cache.GetMetadata(context.Background())
     if err == nil {
-        t.Fatal("expected error due to bad JSON, got nil")
+        t.Fatal("expected error for bad JSON, got nil")
     }
 }
 
-func TestFetchOIDCMetadata_HTTPError(t *testing.T) {
-    resetCache()
+// TestDiscoveryCache_HTTPError ensures network errors are returned.
+func TestDiscoveryCache_HTTPError(t *testing.T) {
+    // Use an invalid port to cause a connection error
+    cache := NewDiscoveryCache("http://127.0.0.1:0", 10*time.Minute)
 
-    // Using an invalid URL to force HTTP client error
-    _, err := FetchOIDCMetadata("http://invalid.invalid")
+    _, err := cache.GetMetadata(context.Background())
     if err == nil {
-        t.Fatal("expected error due to HTTP GET failure, got nil")
+        t.Fatal("expected error due to HTTP failure, got nil")
     }
 }
 

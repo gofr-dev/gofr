@@ -1,66 +1,76 @@
 
 # OpenID Connect (OIDC) Middleware in GoFr
 
-This guide explains how to integrate OpenID Connect (OIDC) authentication support into your GoFr applications using the newly added OIDC middleware and dynamic OIDC discovery helper functions.
+This guide shows how to add OpenID Connect (OIDC) authentication to your GoFr applications using the new OIDC middleware and per-provider dynamic discovery with robust caching.
 
 ---
 
 ## Overview
 
-The OIDC middleware contribution provides:
+The OIDC middleware and helpers provide:
 
-- **Dynamic OIDC Discovery:** Automatically fetch and cache OIDC provider metadata, including JWKS endpoint, issuer, and userinfo endpoint.
-- **JWT Validation:** Leverages GoFr’s existing OAuth middleware (`EnableOAuth`) for Bearer token extraction, JWT parsing, signature verification, issuer/audience claim validation, and JWKS key rotation handling.
-- **Userinfo Fetch Middleware:** Custom middleware that uses the valid access token to fetch user profile information from the OIDC `userinfo` endpoint and attaches it to the request context.
-- **Context Helper:** Convenient function to access user info data in your route handlers.
+- **Dynamic OIDC Discovery:** Per-provider discovery of issuer, JWKS URI, and userinfo endpoint, with robust caching in a struct.
+- **JWT Validation:** Out-of-the-box via GoFr’s `EnableOAuth` middleware, including claim checks and JWKS key rotation.
+- **Userinfo Fetch Middleware:** Fetches user profile data from the OIDC `userinfo` endpoint, injecting it into the request context.
+- **Context Helper:** Retrieves user info easily in handlers.
 
 ---
 
-## 1. Fetch OIDC Discovery Metadata
+## 1. Set Up OIDC Discovery with Caching (Per-Provider)
 
-Before enabling OAuth middleware, fetch the provider’s metadata from the OIDC discovery URL (e.g., Google, Okta).
+Instead of using a single cached global function, create a **DiscoveryCache** for each OIDC provider. You must also use a `context.Context` for timeouts/cancellation.
 
 ```
 
-meta, err := middleware.FetchOIDCMetadata("https://accounts.google.com/.well-known/openid-configuration")
+import (
+"context"
+"time"
+"gofr.dev/pkg/gofr/http/middleware"
+)
+
+// Create a cache for Google's OIDC provider discovery
+cache := middleware.NewDiscoveryCache(
+"https://accounts.google.com/.well-known/openid-configuration",
+10 * time.Minute, // cache duration
+)
+
+// Fetch metadata with context
+meta, err := cache.GetMetadata(context.Background())
 if err != nil {
-// Handle error on startup
+// handle error on startup
 }
 
 ```
 
-This returns a cached struct with:
-- `meta.Issuer`  
-- `meta.JWKSURI`  
-- `meta.UserInfoEndpoint`  
+This returns per-URL/discovery cached metadata:
+- `meta.Issuer`
+- `meta.JWKSURI`
+- `meta.UserInfoEndpoint`
 
 ---
 
-## 2. Enable OAuth Middleware with Discovered Endpoints
+## 2. Enable OAuth Middleware with Discovered Metadata
 
-Configure GoFr’s built-in OAuth middleware by passing the discovered JWKS URI and issuer:
+Apply the discovered JWKS URI and issuer with GoFr's built-in OAuth middleware:
 
 ```
 
 app.EnableOAuth(
 meta.JWKSURI,
-300, // JWKS refresh interval in seconds (e.g. 5 minutes)
+300, // JWKS refresh interval in seconds
 jwt.WithIssuer(meta.Issuer),
-// jwt.WithAudience("your-audience") // Optional audience check
+// jwt.WithAudience("your-audience") // Optional
 )
 
 ```
 
-This middleware:
-- Extracts and validates Bearer tokens.
-- Verifies JWT signature using JWKS keys.
-- Caches JWKS and refreshes on rotation or expiry.
+- Handles Bearer token extraction, JWT validation, JWKS caching/key rotation.
 
 ---
 
-## 3. Register the OIDC Userinfo Middleware
+## 3. Register OIDC Userinfo Middleware
 
-Register the custom userinfo middleware **after** the OAuth middleware. It calls the OIDC userinfo endpoint with the verified token and attaches the response data to the request context.
+After the OAuth middleware, register the userinfo middleware to fetch profile info from the `userinfo` endpoint.
 
 ```
 
@@ -68,17 +78,19 @@ app.UseMiddleware(middleware.OIDCUserInfoMiddleware(meta.UserInfoEndpoint))
 
 ```
 
+- Userinfo middleware uses the verified Bearer token to call the endpoint and attaches the user info to the request context.
+
 ---
 
 ## 4. Access User Info in Handlers
 
-Within your route handlers, retrieve the fetched user information via the context helper:
+Inside your GoFr route handlers, retrieve user info using the helper:
 
 ```
 
 userInfo, ok := middleware.GetOIDCUserInfo(ctx.Request().Context())
 if !ok {
-// Handle missing user info (e.g., unauthorized)
+// Handle missing user info
 }
 // Use userInfo map for claims like "email", "name", "sub", etc.
 
@@ -102,30 +114,30 @@ return userInfo, nil
 
 ## 5. Notes & Best Practices
 
-- **Middleware Order:** Always enable OAuth middleware (`EnableOAuth`) **before** the userinfo middleware so tokens are validated first.
-- **Caching:** Discovery metadata and JWKS keys are cached and refreshed automatically to handle key rotation and endpoint changes.
-- **Customization:** Use `jwt.ParserOption` to enforce additional claim validation such as audience or custom checks.
-- **Error Handling:** Middleware will reject requests with invalid tokens or failed userinfo fetches.
-- **Extensibility:** You can extend userinfo middleware to map profile data into your app’s user management as needed.
+- **Discovery Cache is per-provider:** Instantiate `DiscoveryCache` for each provider if you work with more than one.
+- **Always pass a context:** `GetMetadata` must be called with a valid `context.Context` (e.g., `context.Background()` at startup, request context elsewhere).
+- **Middleware order:** Register OAuth middleware before the userinfo middleware.
+- **Bearer token extraction:** Follows Go best practices—uses `strings.CutPrefix` and validates non-empty tokens.
+- **Documentation and tests:** See codebase and test files (`oidc_test.go`, `discovery_test.go`) for example coverage.
 
 ---
 
-## 6. Summary
-
-| Step                        | Functionality                             |
-|-----------------------------|------------------------------------------|
-| Fetch discovery metadata    | `FetchOIDCMetadata`                       |
-| Enable OAuth validation     | `app.EnableOAuth`                         |
-| Fetch and inject user info  | `OIDCUserInfoMiddleware`                   |
-| Access user info in handlers| `GetOIDCUserInfo`                         |
-
----
-
-## 7. Example Integration Snippet
+## 6. Quick Integration Example
 
 ```
 
-meta, err := middleware.FetchOIDCMetadata("https://accounts.google.com/.well-known/openid-configuration")
+import (
+"context"
+"time"
+"gofr.dev/pkg/gofr/http/middleware"
+"github.com/golang-jwt/jwt/v5"
+)
+
+cache := middleware.NewDiscoveryCache(
+"https://accounts.google.com/.well-known/openid-configuration",
+10*time.Minute,
+)
+meta, err := cache.GetMetadata(context.Background())
 if err != nil {
 log.Fatalf("OIDC discovery failed: %v", err)
 }
@@ -150,8 +162,19 @@ return userInfo, nil
 
 ---
 
-This guide covers how to use your contributed OIDC middleware cleanly and idiomatically within GoFr. For more details, check the middleware source files and tests.
+## 7. Summary Table
+
+| Component                | Use                                                                              |
+|--------------------------|-----------------------------------------------------------------------------------|
+| DiscoveryCache           | Per-provider discovery and caching (thread-safe/isolated)                         |
+| GetMetadata (with ctx)   | Fetch/cached OIDC metadata                                                       |
+| EnableOAuth              | Configure JWT validation and key management                                      |
+| OIDCUserInfoMiddleware   | Fetch and inject user profile info                                               |
+| GetOIDCUserInfo          | Access user info in handlers                                                     |
 
 ---
 
+This guide covers how to use your contributed OIDC middleware cleanly and idiomatically within GoFr. For more details, check the middleware source files and tests.
+
+---
 
