@@ -120,7 +120,6 @@ type authInfo struct {
 // GetAuthInfo().GetClaims() : retrieves the jwt claims.
 // GetAuthInfo().GetUsername() : retrieves the username while basic authentication.
 // GetAuthInfo().GetAPIKey() : retrieves the APIKey being used for authentication.
-// GetAuthInfo().GetRole() : retrieves the role being used for authentication.
 func (c *Context) GetAuthInfo() AuthInfo {
 	claims, _ := c.Request.Context().Value(middleware.JWTClaim).(jwt.MapClaims)
 
@@ -128,13 +127,10 @@ func (c *Context) GetAuthInfo() AuthInfo {
 
 	username, _ := c.Request.Context().Value(middleware.Username).(string)
 
-	role, _ := c.Request.Context().Value(4).(string)
-
 	return &authInfo{
 		claims:   claims,
 		username: username,
 		apiKey:   APIKey,
-		role:     role,
 	}
 }
 

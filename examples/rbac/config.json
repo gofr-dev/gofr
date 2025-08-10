@@ -2,6 +2,6 @@
     "roles": {
       "admin": ["*"],
       "editor": ["/posts/*", "/dashboard"],
-      "user": ["/profile", "/home", "/sayhello*"]
+      "user": ["/profile", "/home", "/sayhello*","/greet"]
     }
   } 

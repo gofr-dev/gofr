@@ -16,20 +16,24 @@ func main() {
 		return
 	}
 
+	overrides := map[string]bool{"user1": true}
+
+	rbacConfigs.OverRides = overrides
+
 	rbacConfigs.RoleExtractorFunc = extractor
 
 	app.UseMiddleware(rbac.Middleware(rbacConfigs))
 
-	handler := func(ctx *gofr.Context) (any, error) {
-		return "Hello World!", nil
-	}
-
 	app.GET("/sayhello/123", handler)
-	app.GET("/greet", rbac.RequireRole("admin", handler))
+	app.GET("/greet", rbac.RequireRole("user1", handler))
 
 	app.Run() // listens and serves on localhost:8000
 }
 
 func extractor(req *http.Request, _ ...any) (string, error) {
 	return req.Header.Get("X-USER-ROLE"), nil
+}
+
+func handler(ctx *gofr.Context) (any, error) {
+	return "Hello World!", nil
 }

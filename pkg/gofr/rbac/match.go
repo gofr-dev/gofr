@@ -36,5 +36,10 @@ func isPathAllowed(role string, route string, config *Config) bool {
 		}
 	}
 
+	// override with role match
+	if config.OverRides[role] {
+		return true
+	}
+
 	return false
 }
