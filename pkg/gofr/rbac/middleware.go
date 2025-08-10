@@ -12,12 +12,6 @@ type authMethod int
 
 const userRole authMethod = 4
 
-/*
-roles with routes allowed- json file
-extract the file and store in rbac configs
-role given for the API- remove default case
-*/
-
 func Middleware(config *Config, args ...any) func(handler http.Handler) http.Handler {
 	return func(handler http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

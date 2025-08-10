@@ -41,7 +41,6 @@ type AuthInfo interface {
 	GetClaims() jwt.MapClaims
 	GetUsername() string
 	GetAPIKey() string
-	GetRole() string
 }
 
 /*
@@ -112,7 +111,6 @@ type authInfo struct {
 	claims   jwt.MapClaims
 	username string
 	apiKey   string
-	role     string
 }
 
 // GetAuthInfo is a method on context, to access different methods to retrieve authentication info.
@@ -150,12 +148,6 @@ func (a *authInfo) GetUsername() string {
 // It returns an empty string if called, when APIKey auth is not enabled.
 func (a *authInfo) GetAPIKey() string {
 	return a.apiKey
-}
-
-// GetRole returns the role when RBAC is enabled.
-// It returns an empty string if called, when RBAC is not enabled.
-func (a *authInfo) GetRole() string {
-	return a.role
 }
 
 // func (c *Context) reset(w Responder, r Request) {
