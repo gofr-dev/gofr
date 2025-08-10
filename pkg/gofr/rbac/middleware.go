@@ -8,15 +8,15 @@ import (
 	"gofr.dev/pkg/gofr"
 )
 
+type authMethod int
+
+const userRole authMethod = 4
+
 /*
 roles with routes allowed- json file
 extract the file and store in rbac configs
 role given for the API- remove default case
 */
-
-type authMethod int
-
-const userRole authMethod = 4
 
 func Middleware(config *Config, args ...any) func(handler http.Handler) http.Handler {
 	return func(handler http.Handler) http.Handler {
@@ -36,16 +36,16 @@ func Middleware(config *Config, args ...any) func(handler http.Handler) http.Han
 
 			ctx := context.WithValue(r.Context(), userRole, role)
 
-			handler.ServeHTTP(w, r.Clone(ctx))
+			handler.ServeHTTP(w, r.WithContext(ctx))
 		})
 	}
 }
 
 func RequireRole(allowedRole string, handlerFunc gofr.Handler) gofr.Handler {
 	return func(ctx *gofr.Context) (any, error) {
-		authinfo := ctx.GetAuthInfo()
+		role, _ := ctx.Context.Value(userRole).(string)
 
-		if authinfo.GetRole() == allowedRole {
+		if role == allowedRole {
 			return handlerFunc(ctx)
 		}
 
