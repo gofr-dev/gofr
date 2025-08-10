@@ -58,7 +58,7 @@ func main() {
 			default:
 				http.Error(w, err.Error(), http.StatusUnauthorized) // default to 401 for bad creds
 			}
-			
+
 			return
 		}
 
