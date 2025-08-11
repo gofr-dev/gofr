@@ -5,6 +5,7 @@ import (
 	"io"
 	"math"
 	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"sync"
@@ -50,6 +51,11 @@ func (cfg Config) buildWriter(paths []string) (io.Writer, error) {
 		case "stderr":
 			writers = append(writers, os.Stderr)
 		default:
+			// Ensure directory exists
+			if err := os.MkdirAll(filepath.Dir(path), 0755); err != nil {
+				return nil, fmt.Errorf("failed to create directory for %s: %w", path, err)
+			}
+
 			f, err := os.OpenFile(path, os.O_APPEND|os.O_CREATE|os.O_WRONLY, fileMode)
 			if err != nil {
 				return nil, fmt.Errorf("failed to open file %s: %w", path, err)

@@ -1,17 +1,16 @@
 package logging
 
 import (
+	"encoding/json"
 	"fmt"
 	"golang.org/x/term"
 	"io"
-	"math"
 	"os"
 	"runtime"
-	"strconv"
-	"strings"
 	"sync"
 	"time"
-	"unicode/utf8"
+
+	"gofr.dev/pkg/gofr/version"
 )
 
 // Performance constants
@@ -24,20 +23,22 @@ const (
 	fileMode          = 0644
 )
 
-// LogEntry simplified for line-based logging
+// LogEntry - Updated to match sync logger behavior
 type LogEntry struct {
-	Level   Level
-	Time    time.Time
-	Line    string
-	TraceID string
-	Fields  []Field
+	Level       Level       `json:"level"`
+	Time        time.Time   `json:"time"`
+	Message     interface{} `json:"message"` // ← Changed from 'Line string'
+	TraceID     string      `json:"trace_id,omitempty"`
+	GofrVersion string      `json:"gofrVersion"` // ← Added this field
+	Fields      []Field     // Keep for advanced structured logging
 }
 
 func (le *LogEntry) Reset() {
 	le.Level = INFO
 	le.Time = time.Time{}
-	le.Line = ""
+	le.Message = nil // ← Updated
 	le.TraceID = ""
+	le.GofrVersion = "" // ← Added this
 	le.Fields = nil
 }
 
@@ -95,10 +96,12 @@ func (jp *EnhancedJobPool) Put(job *LogJob) {
 
 // AsyncConfig configures the async logger
 type AsyncConfig struct {
-	Workers       int
-	BufferSize    int
-	BatchSize     int
-	FlushInterval time.Duration
+	Workers          int
+	BufferSize       int
+	BatchSize        int
+	OutputPaths      []string // e.g. []string{"stdout", "logs/app.log"}
+	ErrorOutputPaths []string // e.g. []string{"stderr", "logs/error.log"}
+	FlushInterval    time.Duration
 }
 
 func DefaultAsyncConfig() AsyncConfig {
@@ -110,7 +113,7 @@ func DefaultAsyncConfig() AsyncConfig {
 	}
 }
 
-// AsyncLogger - Line-based high-performance logger
+// AsyncLogger - High-performance async logger matching sync logger behavior
 type AsyncLogger struct {
 	level     Level
 	normalOut io.Writer
@@ -168,6 +171,32 @@ func NewAsyncLogger(level Level, normalOut, errorOut io.Writer, config AsyncConf
 	return l
 }
 
+func NewFileLogger(filePath string, level Level) Logger {
+	config := Config{
+		Level:            level,
+		Encoding:         "json",
+		OutputPaths:      []string{filePath},
+		ErrorOutputPaths: []string{filePath},
+		Async:            true,
+		AsyncConfig:      DefaultAsyncConfig(),
+	}
+
+	logger, err := config.Build()
+	if err != nil {
+		// Fallback to stdout/stderr if file fails
+		fallbackConfig := Config{
+			Level:            level,
+			OutputPaths:      []string{"stdout"},
+			ErrorOutputPaths: []string{"stderr"},
+			Async:            true,
+			AsyncConfig:      DefaultAsyncConfig(),
+		}
+		logger, _ = fallbackConfig.Build()
+	}
+
+	return logger
+}
+
 // isTerminal checks if the writer is a terminal
 func isTerminal(w io.Writer) bool {
 	switch v := w.(type) {
@@ -178,8 +207,26 @@ func isTerminal(w io.Writer) bool {
 	}
 }
 
-// Core logging method - accepts simple strings
-func (l *AsyncLogger) log(level Level, line string) {
+// extractTraceIDAndFilterArgs - exact copy from sync logger
+func (l *AsyncLogger) extractTraceIDAndFilterArgs(args []interface{}) (traceID string, filtered []interface{}) {
+	filtered = make([]interface{}, 0, len(args))
+
+	for _, arg := range args {
+		if m, ok := arg.(map[string]interface{}); ok {
+			if tid, exists := m["__trace_id__"].(string); exists && traceID == "" {
+				traceID = tid
+				continue
+			}
+		}
+
+		filtered = append(filtered, arg)
+	}
+
+	return traceID, filtered
+}
+
+// Updated core logging method - matches sync logger behavior
+func (l *AsyncLogger) logf(level Level, format string, args ...interface{}) {
 	if level < l.level {
 		return
 	}
@@ -188,17 +235,24 @@ func (l *AsyncLogger) log(level Level, line string) {
 	entry := l.entryPool.Get()
 	job := l.jobPool.Get()
 
-	// Extract trace ID if present in the line
-	traceID := l.extractTraceID(line)
-	if traceID != "" {
-		line = l.removeTraceID(line, traceID)
-	}
+	// Extract trace ID and filter args (like sync logger)
+	traceID, filteredArgs := l.extractTraceIDAndFilterArgs(args)
 
-	// Populate entry
+	// Populate entry (matching sync logger logic)
 	entry.Level = level
 	entry.Time = time.Now()
-	entry.Line = line
 	entry.TraceID = traceID
+	entry.GofrVersion = version.Framework
+
+	// Message handling logic (exactly like sync logger)
+	switch {
+	case len(filteredArgs) == 1 && format == "":
+		entry.Message = filteredArgs[0]
+	case len(filteredArgs) != 1 && format == "":
+		entry.Message = filteredArgs
+	case format != "":
+		entry.Message = fmt.Sprintf(format, filteredArgs...)
+	}
 
 	// Create job
 	job.Entry = entry
@@ -239,14 +293,8 @@ func (l *AsyncLogger) processJob(job *LogJob) {
 	if isTerminal {
 		l.prettyPrintToTerminal(job.Entry, out)
 	} else {
-		// Use fast JSON encoder
-		encoder := getEncoder()
-		defer putEncoder(encoder)
-
-		data, err := encoder.EncodeLogLine(job.Entry.Level, job.Entry.Time, job.Entry.Line, job.Entry.TraceID)
-		if err == nil {
-			out.Write(data)
-		}
+		// Use standard JSON encoder for non-terminal output
+		_ = json.NewEncoder(out).Encode(job.Entry)
 	}
 
 	// Update stats
@@ -255,105 +303,92 @@ func (l *AsyncLogger) processJob(job *LogJob) {
 	l.mu.Unlock()
 }
 
-// prettyPrintToTerminal handles terminal output with colors
+// prettyPrintToTerminal - matches sync logger behavior exactly
 func (l *AsyncLogger) prettyPrintToTerminal(entry *LogEntry, out io.Writer) {
 	l.writeMu.Lock()
 	defer l.writeMu.Unlock()
 
+	// Exact same format as sync logger
 	fmt.Fprintf(out, "\u001B[38;5;%dm%s\u001B[0m [%s]",
 		entry.Level.color(),
 		entry.Level.String()[0:4],
-		entry.Time.Format(time.TimeOnly),
-	)
+		entry.Time.Format(time.TimeOnly))
 
 	if entry.TraceID != "" {
 		fmt.Fprintf(out, " \u001B[38;5;8m%s\u001B[0m", entry.TraceID)
 	}
 
-	fmt.Fprintf(out, " %s\n", entry.Line)
+	fmt.Fprint(out, " ")
+
+	// Pretty printing logic - exactly like sync logger
+	if fn, ok := entry.Message.(PrettyPrint); ok {
+		fn.PrettyPrint(out)
+	} else {
+		fmt.Fprintf(out, "%v\n", entry.Message)
+	}
 }
 
-// Simple logging methods - just pass strings
+// Simple logging methods - updated to match sync logger
 func (l *AsyncLogger) Debug(args ...interface{}) {
-	if l.level <= DEBUG {
-		l.log(DEBUG, formatArgs(args))
-	}
+	l.logf(DEBUG, "", args...)
 }
 
 func (l *AsyncLogger) Info(args ...interface{}) {
-	if l.level <= INFO {
-		l.log(INFO, formatArgs(args))
-	}
+	l.logf(INFO, "", args...)
 }
 
 func (l *AsyncLogger) Warn(args ...interface{}) {
-	if l.level <= WARN {
-		l.log(WARN, formatArgs(args))
-	}
+	l.logf(WARN, "", args...)
 }
 
 func (l *AsyncLogger) Error(args ...interface{}) {
-	if l.level <= ERROR {
-		l.log(ERROR, formatArgs(args))
-	}
+	l.logf(ERROR, "", args...)
 }
 
 func (l *AsyncLogger) Fatal(args ...interface{}) {
-	l.log(FATAL, formatArgs(args))
+	l.logf(FATAL, "", args...)
 	l.Close()
 	os.Exit(1)
 }
 
 // Formatted logging methods
 func (l *AsyncLogger) Debugf(format string, args ...interface{}) {
-	if l.level <= DEBUG {
-		l.log(DEBUG, fmt.Sprintf(format, args...))
-	}
+	l.logf(DEBUG, format, args...)
 }
 
 func (l *AsyncLogger) Infof(format string, args ...interface{}) {
-	if l.level <= INFO {
-		l.log(INFO, fmt.Sprintf(format, args...))
-	}
+	l.logf(INFO, format, args...)
 }
 
 func (l *AsyncLogger) Warnf(format string, args ...interface{}) {
-	if l.level <= WARN {
-		l.log(WARN, fmt.Sprintf(format, args...))
-	}
+	l.logf(WARN, format, args...)
 }
 
 func (l *AsyncLogger) Errorf(format string, args ...interface{}) {
-	if l.level <= ERROR {
-		l.log(ERROR, fmt.Sprintf(format, args...))
-	}
+	l.logf(ERROR, format, args...)
 }
 
 func (l *AsyncLogger) Fatalf(format string, args ...interface{}) {
-	l.log(FATAL, fmt.Sprintf(format, args...))
+	l.logf(FATAL, format, args...)
 	l.Close()
 	os.Exit(1)
 }
 
-// Additional convenience methods
+// Additional methods to match interface
 func (l *AsyncLogger) Notice(args ...interface{}) {
-	if l.level <= NOTICE {
-		l.log(NOTICE, formatArgs(args))
-	}
+	l.logf(NOTICE, "", args...)
 }
 
 func (l *AsyncLogger) Noticef(format string, args ...interface{}) {
-	if l.level <= NOTICE {
-		l.log(NOTICE, fmt.Sprintf(format, args...))
-	}
+	l.logf(NOTICE, format, args...)
 }
 
 func (l *AsyncLogger) Log(args ...interface{}) {
-	l.Info(args...)
+	l.logf(INFO, "", args...)
 }
 
 func (l *AsyncLogger) Logf(format string, args ...interface{}) {
-	l.Infof(format, args...)
+	l.logf(INFO, format, args...)
 }
 
 // Worker methods

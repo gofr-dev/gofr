@@ -74,6 +74,11 @@ func (a *App) Shutdown(ctx context.Context) error {
 
 	a.container.Logger.Info("Application shutdown complete")
 
+	// Add logger shutdown BEFORE container close
+	if asyncLogger, ok := a.container.Logger.(*logging.AsyncLogger); ok {
+		err = errors.Join(err, asyncLogger.Close())
+	}
+
 	return err
 }
 
@@ -145,19 +150,26 @@ func (a *App) startSubscriptions(ctx context.Context) error {
 // readConfig reads the configuration from the default location.
 func (a *App) readConfig(isAppCMD bool) {
 	var location string
-
 	if _, err := os.Stat(configLocation); err == nil {
 		location = configLocation
 	}
 
 	if isAppCMD {
-		a.Config = config.NewEnvFile(location, logging.NewFileLogger(a.Config.Get("CMD_LOGS_FILE"), logging.GetLevelFromString(a.Config.GetOrDefault("LOG_LEVEL", "INFO"))))
+		// Create temporary config first to read values
+		tempConfig := config.NewEnvFile(location, nil)
 
+		// Now create proper logger with values from tempConfig
+		logger := logging.NewFileLogger(
+			tempConfig.Get("CMD_LOGS_FILE"),
+			logging.GetLevelFromString(tempConfig.GetOrDefault("LOG_LEVEL", "INFO")),
+		)
+
+		// Recreate config with proper logger
+		a.Config = config.NewEnvFile(location, logger)
 		return
 	}
 
 	logger, _ := logging.NewLogger(logging.INFO)
-
 	a.Config = config.NewEnvFile(location, logger)
 }
 

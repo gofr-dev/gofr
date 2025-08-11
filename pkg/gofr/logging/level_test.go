@@ -101,7 +101,7 @@ func TestGetLevelFromString(t *testing.T) {
 }
 
 func Test_changeLevel(t *testing.T) {
-	l := EnhancedAsyncLogger{
+	l := AsyncLogger{
 		level:     INFO,
 		normalOut: os.Stdout,
 		errorOut:  os.Stderr,

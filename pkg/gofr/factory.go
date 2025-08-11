@@ -1,6 +1,8 @@
 package gofr
 
 import (
+	"gofr.dev/pkg/gofr/logging"
+	"log"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -9,7 +11,6 @@ import (
 	"gofr.dev/pkg/gofr/cmd/terminal"
 	"gofr.dev/pkg/gofr/container"
 	"gofr.dev/pkg/gofr/http/middleware"
-	"gofr.dev/pkg/gofr/logging"
 	"gofr.dev/pkg/gofr/service"
 )
 
@@ -77,10 +78,28 @@ func NewCMD() *App {
 	app := &App{}
 	app.readConfig(true)
 	app.container = container.NewContainer(nil)
-	app.container.Logger = logging.NewFileLogger(app.Config.Get("CMD_LOGS_FILE"), logging.GetLevelFromString(app.Config.GetOrDefault("LOG_LEVEL", "INFO")))
+
+	// Build logger using Config struct approach
+	config := logging.Config{
+		Level:            logging.GetLevelFromString(app.Config.GetOrDefault("LOG_LEVEL", "INFO")),
+		Encoding:         "json",
+		OutputPaths:      []string{app.Config.GetOrDefault("CMD_LOGS_FILE", "stdout")},
+		ErrorOutputPaths: []string{app.Config.GetOrDefault("CMD_LOGS_FILE", "stderr")},
+		Async:            true,
+		AsyncConfig:      logging.DefaultAsyncConfig(),
+	}
+
+	logger, err := config.Build()
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	app.container.Logger = logger
+
 	app.cmd = &cmd{
 		out: terminal.New(),
 	}
+
 	app.container.Create(app.Config)
 	app.initTracer()
 
