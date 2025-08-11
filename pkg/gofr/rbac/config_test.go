@@ -18,9 +18,11 @@ func createTempJSONFile(t *testing.T, data any) string {
 	if err != nil {
 		t.Fatalf("error marshaling: %v", err)
 	}
-	if err := os.WriteFile(file, jsonBytes, 0644); err != nil {
+
+	if err := os.WriteFile(file, jsonBytes, 0600); err != nil {
 		t.Fatalf("error writing file: %v", err)
 	}
+
 	return file
 }
 
@@ -42,9 +44,11 @@ func TestLoadPermissions_Success(t *testing.T) {
 	if err != nil {
 		t.Fatalf("LoadPermissions returned error: %v", err)
 	}
+
 	if !reflect.DeepEqual(got.RoleWithPermissions, expected.RoleWithPermissions) {
 		t.Errorf("RoleWithPermissions mismatch: got %v, want %v", got.RoleWithPermissions, expected.RoleWithPermissions)
 	}
+
 	if !reflect.DeepEqual(got.OverRides, expected.OverRides) {
 		t.Errorf("OverRides mismatch: got %v, want %v", got.OverRides, expected.OverRides)
 	}
@@ -64,7 +68,7 @@ func TestLoadPermissions_InvalidJSON(t *testing.T) {
 	file := filepath.Join(dir, "bad.json")
 
 	// Write invalid JSON
-	if err := os.WriteFile(file, []byte("{invalid json"), 0644); err != nil {
+	if err := os.WriteFile(file, []byte("{invalid json"), 0600); err != nil {
 		t.Fatalf("could not write test file: %v", err)
 	}
 

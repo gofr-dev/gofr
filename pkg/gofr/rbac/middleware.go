@@ -12,6 +12,8 @@ type authMethod int
 
 const userRole authMethod = 4
 
+var ErrAccessDenied = errors.New("forbidden: access denied")
+
 func Middleware(config *Config, args ...any) func(handler http.Handler) http.Handler {
 	return func(handler http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -43,6 +45,6 @@ func RequireRole(allowedRole string, handlerFunc gofr.Handler) gofr.Handler {
 			return handlerFunc(ctx)
 		}
 
-		return nil, errors.New("forbidden: access denied")
+		return nil, ErrAccessDenied
 	}
 }

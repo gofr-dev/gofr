@@ -5,7 +5,7 @@ import (
 	"strings"
 )
 
-func isPathAllowed(role string, route string, config *Config) bool {
+func isPathAllowed(role, route string, config *Config) bool {
 	allowedPaths := config.RoleWithPermissions[role]
 
 	for _, pattern := range allowedPaths {
