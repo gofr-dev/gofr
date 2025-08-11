@@ -17,9 +17,12 @@ func LoadPermissions(path string) (*Config, error) {
 	if err != nil {
 		return nil, err
 	}
+
 	var config Config
+
 	if err := json.Unmarshal(data, &config); err != nil {
 		return nil, err
 	}
+
 	return &config, nil
 }

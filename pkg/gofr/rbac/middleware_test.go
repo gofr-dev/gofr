@@ -11,19 +11,21 @@ import (
 	"gofr.dev/pkg/gofr"
 )
 
-// mockHandler just writes "OK" to the ResponseWriter
-func mockHandler(w http.ResponseWriter, r *http.Request) {
-	io.WriteString(w, "OK")
+var errNoRole = errors.New("no role")
+
+// mockHandler just writes "OK" to the ResponseWriter.
+func mockHandler(w http.ResponseWriter, _ *http.Request) {
+	_, _ = io.WriteString(w, "OK")
 }
 
 func TestMiddleware_UnauthorizedRoleExtractor(t *testing.T) {
 	cfg := &Config{
-		RoleExtractorFunc: func(r *http.Request, args ...any) (string, error) {
-			return "", errors.New("no role")
+		RoleExtractorFunc: func(_ *http.Request, _ ...any) (string, error) {
+			return "", errNoRole
 		},
 	}
 
-	req := httptest.NewRequest("GET", "/some", nil)
+	req := httptest.NewRequest(http.MethodGet, "/some", http.NoBody)
 	rr := httptest.NewRecorder()
 
 	h := Middleware(cfg)(http.HandlerFunc(mockHandler))
@@ -32,6 +34,7 @@ func TestMiddleware_UnauthorizedRoleExtractor(t *testing.T) {
 	if rr.Code != http.StatusUnauthorized {
 		t.Errorf("got status %d, want %d", rr.Code, http.StatusUnauthorized)
 	}
+
 	if body := rr.Body.String(); body == "" {
 		t.Errorf("expected error message in body, got empty")
 	}
@@ -39,7 +42,7 @@ func TestMiddleware_UnauthorizedRoleExtractor(t *testing.T) {
 
 func TestMiddleware_ForbiddenPath(t *testing.T) {
 	cfg := &Config{
-		RoleExtractorFunc: func(r *http.Request, args ...any) (string, error) {
+		RoleExtractorFunc: func(_ *http.Request, _ ...any) (string, error) {
 			return "user", nil
 		},
 		RoleWithPermissions: map[string][]string{
@@ -48,7 +51,7 @@ func TestMiddleware_ForbiddenPath(t *testing.T) {
 		OverRides: map[string]bool{},
 	}
 
-	req := httptest.NewRequest("GET", "/forbidden", nil)
+	req := httptest.NewRequest(http.MethodGet, "/forbidden", http.NoBody)
 	rr := httptest.NewRecorder()
 
 	h := Middleware(cfg)(http.HandlerFunc(mockHandler))
@@ -61,7 +64,7 @@ func TestMiddleware_ForbiddenPath(t *testing.T) {
 
 func TestMiddleware_SuccessAddsRole(t *testing.T) {
 	cfg := &Config{
-		RoleExtractorFunc: func(r *http.Request, args ...any) (string, error) {
+		RoleExtractorFunc: func(_ *http.Request, _ ...any) (string, error) {
 			return "admin", nil
 		},
 		RoleWithPermissions: map[string][]string{
@@ -70,15 +73,17 @@ func TestMiddleware_SuccessAddsRole(t *testing.T) {
 	}
 
 	var ctxRole string
+
 	nextHandler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		// Extract role from context to verify it's stored
 		if val, ok := r.Context().Value(userRole).(string); ok {
 			ctxRole = val
 		}
+
 		w.WriteHeader(http.StatusOK)
 	})
 
-	req := httptest.NewRequest("GET", "/anything", nil)
+	req := httptest.NewRequest(http.MethodGet, "/anything", http.NoBody)
 	rr := httptest.NewRecorder()
 
 	h := Middleware(cfg)(nextHandler)
@@ -87,6 +92,7 @@ func TestMiddleware_SuccessAddsRole(t *testing.T) {
 	if rr.Code != http.StatusOK {
 		t.Errorf("got status %d, want %d", rr.Code, http.StatusOK)
 	}
+
 	if ctxRole != "admin" {
 		t.Errorf("expected role 'admin' in context, got '%s'", ctxRole)
 	}
@@ -95,36 +101,38 @@ func TestMiddleware_SuccessAddsRole(t *testing.T) {
 func TestRequireRole_Match(t *testing.T) {
 	expectedResult := "success"
 
-	handler := func(ctx *gofr.Context) (any, error) {
+	handler := func(_ *gofr.Context) (any, error) {
 		return expectedResult, nil
 	}
 
 	// Create a context with the expected role
-	baseCtx := context.WithValue(context.Background(), userRole, "admin")
+	baseCtx := context.WithValue(t.Context(), userRole, "admin")
 	gCtx := &gofr.Context{Context: baseCtx}
 
 	got, err := RequireRole("admin", handler)(gCtx)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
+
 	if got != expectedResult {
 		t.Errorf("got %v, want %v", got, expectedResult)
 	}
 }
 
 func TestRequireRole_NoMatch(t *testing.T) {
-	handler := func(ctx *gofr.Context) (any, error) {
+	handler := func(_ *gofr.Context) (any, error) {
 		return "should not run", nil
 	}
 
 	// context with wrong role
-	baseCtx := context.WithValue(context.Background(), userRole, "user")
+	baseCtx := context.WithValue(t.Context(), userRole, "user")
 	gCtx := &gofr.Context{Context: baseCtx}
 
 	_, err := RequireRole("admin", handler)(gCtx)
 	if err == nil {
 		t.Fatalf("expected error, got nil")
 	}
+
 	if err.Error() != "forbidden: access denied" {
 		t.Errorf("got error %q, want %q", err.Error(), "forbidden: access denied")
 	}

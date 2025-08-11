@@ -23,7 +23,7 @@ func TestHasRole(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			// Create base context with the userRole value
-			baseCtx := context.WithValue(context.Background(), userRole, tt.ctxRoleVal)
+			baseCtx := context.WithValue(t.Context(), userRole, tt.ctxRoleVal)
 
 			// Wrap baseCtx in gofr.Context
 			gofrCtx := &gofr.Context{Context: baseCtx}
@@ -37,14 +37,14 @@ func TestHasRole(t *testing.T) {
 }
 
 func TestIsAdmin(t *testing.T) {
-	baseCtx := context.WithValue(context.Background(), userRole, "admin")
+	baseCtx := context.WithValue(t.Context(), userRole, "admin")
 	gofrCtx := &gofr.Context{Context: baseCtx}
 
 	if !IsAdmin(gofrCtx) {
 		t.Errorf("IsAdmin() = false, want true")
 	}
 
-	nonAdminCtx := &gofr.Context{Context: context.WithValue(context.Background(), userRole, "viewer")}
+	nonAdminCtx := &gofr.Context{Context: context.WithValue(t.Context(), userRole, "viewer")}
 	if IsAdmin(nonAdminCtx) {
 		t.Errorf("IsAdmin() = true, want false")
 	}
@@ -52,7 +52,7 @@ func TestIsAdmin(t *testing.T) {
 
 func TestGetUserRole(t *testing.T) {
 	expectedRole := "editor"
-	baseCtx := context.WithValue(context.Background(), userRole, expectedRole)
+	baseCtx := context.WithValue(t.Context(), userRole, expectedRole)
 	gofrCtx := &gofr.Context{Context: baseCtx}
 
 	if role := GetUserRole(gofrCtx); role != expectedRole {
@@ -60,7 +60,7 @@ func TestGetUserRole(t *testing.T) {
 	}
 
 	// Test no role set should return ""
-	emptyCtx := &gofr.Context{Context: context.Background()}
+	emptyCtx := &gofr.Context{Context: t.Context()}
 	if role := GetUserRole(emptyCtx); role != "" {
 		t.Errorf("GetUserRole() with no role = %v, want empty string", role)
 	}
