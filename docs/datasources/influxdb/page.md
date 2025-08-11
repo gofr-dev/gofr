@@ -75,7 +75,7 @@ func main() {
 	// Ping InfluxDB
 	ok, err := client.Ping(context.Background())
 	if err != nil {
-		fmt.Println("Ping failed:", err)
+		app.Logger().Debug(err)
 		return
 	}
 	fmt.Println("InfluxDB connected:", ok)
@@ -83,7 +83,7 @@ func main() {
 	// Create organization
 	orgID, err := client.CreateOrganization(context.Background(), "demo-org")
 	if err != nil {
-		fmt.Println("CreateOrganization error:", err)
+		app.Logger().Debug(err)
 		return
 	}
 
@@ -91,7 +91,7 @@ func main() {
 	orgs, _ := client.ListOrganization(context.Background())
 	fmt.Println("Organizations:")
 	for id, name := range orgs {
-		fmt.Printf("- %s: %s\n", id, name)
+		app.Logger().Debug(id, name)
 	}
 
 	// Create bucket
@@ -104,21 +104,21 @@ func main() {
 	// List buckets for organization
 	buckets, err := client.ListBuckets(context.Background(), "demo-org")
 	if err != nil {
-		fmt.Println("ListBuckets error:", err)
+		app.Logger().Debug(err)
 		return
 	}
 	fmt.Println("Buckets:", buckets)
 
 	// Delete bucket
 	if err := client.DeleteBucket(context.Background(), orgID, bucketID); err != nil {
-		fmt.Println("DeleteBucket error:", err)
+		app.Logger().Debug(err)
 		return
 	}
 	fmt.Println("Bucket deleted successfully")
 
 	// Delete organization
 	if err := client.DeleteOrganization(context.Background(), orgID); err != nil {
-		fmt.Println("DeleteOrganization error:", err)
+		app.Logger().Debug(err)
 		return
 	}
 	fmt.Println("Organization deleted successfully")
