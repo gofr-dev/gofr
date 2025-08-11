@@ -37,7 +37,6 @@ func Run(migrationsMap map[int64]Migrate, c *container.Container) {
 
 	ds, mg, ok := getMigrator(c)
 	ds.Logger = c.Logger
-	ds.Services = c.Services
 	
 	// Returning with an error log as migration would eventually fail as No databases are initialized.
 	// Pub/Sub is considered as initialized if its configurations are given.
