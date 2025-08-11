@@ -89,7 +89,7 @@ func Insert(ctx *gofr.Context) (any, error) {
 func Get(ctx *gofr.Context) (any, error) {
 	var result Person
 
-	p := ctx.Param("name")
+	p := ctx.PathParam("name")
 
 	err := ctx.Mongo.FindOne(ctx, "collection", bson.D{{"name", p}} /* valid filter */, &result)
 	if err != nil {
