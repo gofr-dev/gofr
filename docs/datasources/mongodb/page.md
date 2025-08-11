@@ -66,7 +66,7 @@ func main() {
 	app.AddMongo(db)
 
 	app.POST("/mongo", Insert)
-	app.GET("/mongo/:name", Get)
+	app.GET("/mongo/{name}", Get)
 
 	app.Run()
 }
