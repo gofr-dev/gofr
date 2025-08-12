@@ -177,7 +177,7 @@ jobs:
 
       # Download coverage reports from previous jobs
       - name: Download Coverage Report
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v5
         with:
           path: artifacts
 
@@ -289,7 +289,7 @@ jobs:
 #
 #      # Download coverage artifacts
 #      - name: Download Coverage Report
-#        uses: actions/download-artifact@v4
+#        uses: actions/download-artifact@v5
 #        with:
 #          path: artifacts
 #
