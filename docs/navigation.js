@@ -183,6 +183,11 @@ export const navigation = [
                 desc: "Learn how to connect to and interact with CockroachDB in GoFr."
             },
             {
+                title: "Couchbase",
+                href: "/docs/datasources/couchbase",
+                desc: "Learn how to connect to and interact with couchbase database in GoFr."
+            },
+            {
                 title: "DGraph",
                 href: "/docs/datasources/dgraph",
                 desc: "Learn how to connect to and interact with dgraph database in GoFr."

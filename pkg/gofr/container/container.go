@@ -66,6 +66,7 @@ type Container struct {
 	ArangoDB      ArangoDB
 	Elasticsearch Elasticsearch
 	Oracle        OracleDB
+	Couchbase     Couchbase
 
 	KVStore KVStore
 
