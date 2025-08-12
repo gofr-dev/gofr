@@ -250,6 +250,7 @@ func TestPrettyPrint(t *testing.T) {
 		assert.Contains(t, outputLog, v)
 	}
 }
+
 func TestNewFileLogger_ValidPath(t *testing.T) {
 	tmpFile := filepath.Join(t.TempDir(), "test.log")
 

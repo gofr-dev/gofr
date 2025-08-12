@@ -144,6 +144,7 @@ func (m *mockReadCloser) Read(p []byte) (int, error) {
 func (*mockReadCloser) Close() error {
 	return nil
 }
+
 func TestCreateLocalCopies_WithDirectory(t *testing.T) {
 	mockZip := &Zip{
 		Files: map[string]file{
