@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/go-ldap/ldap/v3"
+
 	"gofr.dev/internal/auth/jwt"
 )
 
