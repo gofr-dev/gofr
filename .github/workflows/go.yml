@@ -101,7 +101,7 @@ jobs:
             export APP_ENV=test
             # Run tests for the examples directory with coverage
             go test gofr.dev/examples/... -v -short -coverprofile packageWithpbgo.cov -coverpkg=gofr.dev/examples/...
-             # Filter out auto-generated files by protobuf and gofr framework from coverage report
+            # Filter out auto-generated files by protobuf and gofr framework from coverage report
             grep -vE '(/client/|grpc-.+-client/main\.go|_client\.go|_gofr\.go|_grpc\.pb\.go|\.pb\.go|\.proto|health_.*\.go)' packageWithpbgo.cov > profile.cov
             # Display coverage statistics
             go tool cover -func profile.cov
@@ -150,7 +150,7 @@ jobs:
           command: |
             export APP_ENV=test
 
-          # Run tests for root gofr package
+            # Run tests for root gofr package
             go test -v -short -covermode=atomic \
               -coverpkg=./pkg/gofr -coverprofile=gofr_only.cov ./pkg/gofr
             exit_code=$?
@@ -162,7 +162,7 @@ jobs:
               exit $exit_code
             fi
 
-          # Run tests for sub-packages
+            # Run tests for sub-packages
             go test -v -covermode=atomic \
               -coverpkg=./pkg/gofr -coverprofile=submodules.cov ./pkg/gofr/...
             exit_code=$?
@@ -174,14 +174,12 @@ jobs:
               exit $exit_code
             fi
 
-          # Combine coverage profiles
+            # Combine coverage profiles
             echo "mode: atomic" > profile.cov
             grep -h -v "mode:" gofr_only.cov submodules.cov | grep -v '/mock_' >> profile.cov
 
-          # Show coverage summary
+            # Show coverage summary
             go tool cover -func profile.cov
-
-
 
       # Upload coverage report for the 1.24 Go version only
       - name: Upload Test Coverage
