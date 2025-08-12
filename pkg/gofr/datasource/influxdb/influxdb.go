@@ -20,7 +20,7 @@ type Config struct {
 // Client represents the InfluxDB client.
 type Client struct {
 	config  Config
-	client  influxdb2.Client
+	client  InfluxClient
 	logger  Logger
 	metrics Metrics
 	tracer  trace.Tracer
