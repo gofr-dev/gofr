@@ -35,34 +35,6 @@ type Mocks struct {
 	ScyllaDB      *MockScyllaDB
 }
 
-func newMocks(t *testing.T, ctrl *gomock.Controller) (*Mocks, *sqlMockDB) {
-	t.Helper()
-	mockDB, sqlMock, _ := sql.NewSQLMocks(t)
-	expectation := expectedQuery{}
-	sqlMockWrapper := &mockSQL{sqlMock, &expectation}
-	sqlDB := &sqlMockDB{mockDB, &expectation, logging.NewLogger(logging.DEBUG)}
-	sqlDB.finish(t)
-
-	return &Mocks{
-		Redis:         NewMockRedis(ctrl),
-		SQL:           sqlMockWrapper,
-		Clickhouse:    NewMockClickhouse(ctrl),
-		Cassandra:     NewMockCassandraWithContext(ctrl),
-		Mongo:         NewMockMongo(ctrl),
-		KVStore:       NewMockKVStore(ctrl),
-		DGraph:        NewMockDgraph(ctrl),
-		ArangoDB:      NewMockArangoDBProvider(ctrl),
-		OpenTSDB:      NewMockOpenTSDB(ctrl),
-		SurrealDB:     NewMockSurrealDB(ctrl),
-		Elasticsearch: NewMockElasticsearch(ctrl),
-		PubSub:        NewMockPubSubProvider(ctrl),
-		Couchbase:     NewMockCouchbase(ctrl),
-		File:          file.NewMockFileSystemProvider(ctrl),
-		Metrics:       NewMockMetrics(ctrl),
-		ScyllaDB:      NewMockScyllaDB(ctrl),
-	}, sqlDB
-}
-
 type options func(c *Container, ctrl *gomock.Controller) any
 
 func WithMockHTTPService(httpServiceNames ...string) options { //nolint:revive // WithMockHTTPService returns an
@@ -106,6 +78,8 @@ func setContainerMocks(c *Container, ctrl *gomock.Controller) {
 	c.ScyllaDB = NewMockScyllaDB(ctrl)
 
 	c.PubSub = NewMockPubSubProvider(ctrl)
+
+	c.Couchbase = NewMockCouchbase(ctrl)
 }
 
 func NewMockContainer(t *testing.T, options ...options) (*Container, *Mocks) {
@@ -130,23 +104,16 @@ func NewMockContainer(t *testing.T, options ...options) (*Container, *Mocks) {
 	// Initialize all other mocks via helpers.
 	setContainerMocks(container, ctrl)
 
-	container.PubSub = mocks.PubSub
-
-	container.Couchbase = mocks.Couchbase
+	var httpMock *service.MockHTTP
 
 	container.Services = make(map[string]service.HTTP)
-
-	container.metricsManager = mocks.Metrics
-	// TODO: Remove this expectation from mock container (previous generalization) to the actual tests where their expectations are being set.
-	mocks.Metrics.EXPECT().RecordHistogram(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(),
-		gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
 
 	for _, option := range options {
 		optionsAdded := option(container, ctrl)
 
 		val, ok := optionsAdded.(*service.MockHTTP)
 		if ok {
-			mocks.HTTPService = val
+			httpMock = val
 		}
 	}
 
@@ -176,7 +143,48 @@ func NewMockContainer(t *testing.T, options ...options) (*Container, *Mocks) {
 		ScyllaDB:      container.ScyllaDB.(*MockScyllaDB),
 	}
 
-	return container, mocks
+	container.metricsManager = mocks.Metrics
+	// TODO: Remove this expectation from mock container (previous generalization) to the actual tests where their expectations are being set.
+	mocks.Metrics.EXPECT().RecordHistogram(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(),
+		gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
+
+	for _, option := range options {
+		optionsAdded := option(container, ctrl)
+
+		val, ok := optionsAdded.(*service.MockHTTP)
+		if ok {
+			mocks.HTTPService = val
+		}
+	}
+
+	// Setup expectations/mockmetrics
+	container.Redis.(*MockRedis).EXPECT().Close().AnyTimes()
+
+	mockMetrics = NewMockMetrics(ctrl)
+	container.metricsManager = mockMetrics
+
+	mocks = Mocks{
+		Redis:         container.Redis.(*MockRedis),
+		SQL:           sqlMockWrapper,
+		Clickhouse:    container.Clickhouse.(*MockClickhouse),
+		Cassandra:     container.Cassandra.(*MockCassandraWithContext),
+		Mongo:         container.Mongo.(*MockMongo),
+		KVStore:       container.KVStore.(*MockKVStore),
+		File:          container.File.(*file.MockFileSystemProvider),
+		HTTPService:   httpMock,
+		DGraph:        container.DGraph.(*MockDgraph),
+		OpenTSDB:      container.OpenTSDB.(*MockOpenTSDB),
+		ArangoDB:      container.ArangoDB.(*MockArangoDBProvider),
+		SurrealDB:     container.SurrealDB.(*MockSurrealDB),
+		Elasticsearch: container.Elasticsearch.(*MockElasticsearch),
+		PubSub:        container.PubSub.(*MockPubSubProvider),
+		Metrics:       mockMetrics,
+		Oracle:        container.Oracle.(*MockOracleDB),
+		ScyllaDB:      container.ScyllaDB.(*MockScyllaDB),
+		Couchbase:     container.Couchbase.(*MockCouchbase),
+	}
+
+	return container, &mocks
 }
 
 type MockPubSub struct{}
