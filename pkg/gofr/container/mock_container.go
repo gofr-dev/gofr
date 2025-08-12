@@ -23,13 +23,14 @@ type Mocks struct {
 	KVStore       *MockKVStore
 	DGraph        *MockDgraph
 	ArangoDB      *MockArangoDBProvider
-	OpenTSDB      *MockOpenTSDBProvider
+	OpenTSDB      *MockOpenTSDB
 	SurrealDB     *MockSurrealDB
 	Elasticsearch *MockElasticsearch
 	PubSub        *MockPubSubProvider
 	File          *file.MockFileSystemProvider
 	HTTPService   *service.MockHTTP
 	Metrics       *MockMetrics
+	ScyllaDB      *MockScyllaDB
 }
 
 type options func(c *Container, ctrl *gomock.Controller) any
@@ -86,7 +87,7 @@ func NewMockContainer(t *testing.T, options ...options) (*Container, *Mocks) {
 	dgraphMock := NewMockDgraph(ctrl)
 	container.DGraph = dgraphMock
 
-	opentsdbMock := NewMockOpenTSDBProvider(ctrl)
+	opentsdbMock := NewMockOpenTSDB(ctrl)
 	container.OpenTSDB = opentsdbMock
 
 	arangoMock := NewMockArangoDBProvider(ctrl)
@@ -98,6 +99,8 @@ func NewMockContainer(t *testing.T, options ...options) (*Container, *Mocks) {
 	elasticsearchMock := NewMockElasticsearch(ctrl)
 	container.Elasticsearch = elasticsearchMock
 
+	scyllaMock := NewMockScyllaDB(ctrl)
+	container.ScyllaDB = scyllaMock
 	pubsubMock := NewMockPubSubProvider(ctrl)
 	container.PubSub = pubsubMock
 
@@ -135,6 +138,7 @@ func NewMockContainer(t *testing.T, options ...options) (*Container, *Mocks) {
 		Elasticsearch: elasticsearchMock,
 		PubSub:        pubsubMock,
 		Metrics:       mockMetrics,
+		ScyllaDB:      scyllaMock,
 	}
 
 	// TODO: Remove this expectation from mock container (previous generalization) to the actual tests where their expectations are being set.
