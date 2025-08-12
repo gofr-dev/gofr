@@ -96,6 +96,9 @@ docker run -d --name arangodb \
   -e ARANGO_ROOT_PASSWORD=rootpassword \
   --pull always \
   arangodb:latest
+docker login container-registry.oracle.com
+docker pull container-registry.oracle.com/database/free:latest
+docker run -d --name oracle-free -p 1521:1521 -e ORACLE_PWD=YourPasswordHere container-registry.oracle.com/database/free:latest
 ```
 
 > [!NOTE]
