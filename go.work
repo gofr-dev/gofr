@@ -17,6 +17,7 @@ use (
 	./pkg/gofr/datasource/kv-store/nats
 	./pkg/gofr/datasource/mongo
 	./pkg/gofr/datasource/opentsdb
+	./pkg/gofr/datasource/oracle
 	./pkg/gofr/datasource/pubsub/eventhub
 	./pkg/gofr/datasource/pubsub/nats
 	./pkg/gofr/datasource/scylladb
