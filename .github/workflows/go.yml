@@ -72,7 +72,7 @@ jobs:
     # Steps to execute for this job
     steps:
       - name: Checkout code into go module directory
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           fetch-depth: 0  # Full git history for accurate testing
 
@@ -125,7 +125,7 @@ jobs:
 
     steps:
       - name: Checkout code into go module directory
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           fetch-depth: 0
 
@@ -173,11 +173,11 @@ jobs:
     needs: [ Example-Unit-Testing,PKG-Unit-Testing ]
     steps:
       - name: Check out code into the Go module directory
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       # Download coverage reports from previous jobs
       - name: Download Coverage Report
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v5
         with:
           path: artifacts
 
@@ -213,7 +213,7 @@ jobs:
 
     steps:
       - name: Checkout code into go module directory
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           fetch-depth: 0
 
@@ -285,11 +285,11 @@ jobs:
 #    if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/development'}}
 #    steps:
 #      - name: Check out code into the Go module directory
-#        uses: actions/checkout@v4
+#        uses: actions/checkout@v5
 #
 #      # Download coverage artifacts
 #      - name: Download Coverage Report
-#        uses: actions/download-artifact@v4
+#        uses: actions/download-artifact@v5
 #        with:
 #          path: artifacts
 #
@@ -321,7 +321,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Check out code into the Go module directory
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Set up Go environment
         uses: actions/setup-go@v5
@@ -368,7 +368,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Check out code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Set up Go environment
         uses: actions/setup-go@v5
