@@ -13753,3 +13753,355 @@ func (mr *MockElasticsearchProviderMockRecorder) UseTracer(tracer any) *gomock.C
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UseTracer", reflect.TypeOf((*MockElasticsearchProvider)(nil).UseTracer), tracer)
 }
+
+// MockCouchbase is a mock of Couchbase interface.
+type MockCouchbase struct {
+	ctrl     *gomock.Controller
+	recorder *MockCouchbaseMockRecorder
+	isgomock struct{}
+}
+
+// MockCouchbaseMockRecorder is the mock recorder for MockCouchbase.
+type MockCouchbaseMockRecorder struct {
+	mock *MockCouchbase
+}
+
+// NewMockCouchbase creates a new mock instance.
+func NewMockCouchbase(ctrl *gomock.Controller) *MockCouchbase {
+	mock := &MockCouchbase{ctrl: ctrl}
+	mock.recorder = &MockCouchbaseMockRecorder{mock}
+	return mock
+}
+
+// EXPECT returns an object that allows the caller to indicate expected use.
+func (m *MockCouchbase) EXPECT() *MockCouchbaseMockRecorder {
+	return m.recorder
+}
+
+// AnalyticsQuery mocks base method.
+func (m *MockCouchbase) AnalyticsQuery(ctx context.Context, statement string, params map[string]any, result any) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "AnalyticsQuery", ctx, statement, params, result)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// AnalyticsQuery indicates an expected call of AnalyticsQuery.
+func (mr *MockCouchbaseMockRecorder) AnalyticsQuery(ctx, statement, params, result any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AnalyticsQuery", reflect.TypeOf((*MockCouchbase)(nil).AnalyticsQuery), ctx, statement, params, result)
+}
+
+// Close mocks base method.
+func (m *MockCouchbase) Close(opts any) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Close", opts)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// Close indicates an expected call of Close.
+func (mr *MockCouchbaseMockRecorder) Close(opts any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Close", reflect.TypeOf((*MockCouchbase)(nil).Close), opts)
+}
+
+// Get mocks base method.
+func (m *MockCouchbase) Get(ctx context.Context, key string, result any) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Get", ctx, key, result)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// Get indicates an expected call of Get.
+func (mr *MockCouchbaseMockRecorder) Get(ctx, key, result any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Get", reflect.TypeOf((*MockCouchbase)(nil).Get), ctx, key, result)
+}
+
+// HealthCheck mocks base method.
+func (m *MockCouchbase) HealthCheck(arg0 context.Context) (any, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "HealthCheck", arg0)
+	ret0, _ := ret[0].(any)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// HealthCheck indicates an expected call of HealthCheck.
+func (mr *MockCouchbaseMockRecorder) HealthCheck(arg0 any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "HealthCheck", reflect.TypeOf((*MockCouchbase)(nil).HealthCheck), arg0)
+}
+
+// Insert mocks base method.
+func (m *MockCouchbase) Insert(ctx context.Context, key string, document, result any) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Insert", ctx, key, document, result)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// Insert indicates an expected call of Insert.
+func (mr *MockCouchbaseMockRecorder) Insert(ctx, key, document, result any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Insert", reflect.TypeOf((*MockCouchbase)(nil).Insert), ctx, key, document, result)
+}
+
+// Query mocks base method.
+func (m *MockCouchbase) Query(ctx context.Context, statement string, params map[string]any, result any) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Query", ctx, statement, params, result)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// Query indicates an expected call of Query.
+func (mr *MockCouchbaseMockRecorder) Query(ctx, statement, params, result any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Query", reflect.TypeOf((*MockCouchbase)(nil).Query), ctx, statement, params, result)
+}
+
+// Remove mocks base method.
+func (m *MockCouchbase) Remove(ctx context.Context, key string) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Remove", ctx, key)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// Remove indicates an expected call of Remove.
+func (mr *MockCouchbaseMockRecorder) Remove(ctx, key any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Remove", reflect.TypeOf((*MockCouchbase)(nil).Remove), ctx, key)
+}
+
+// RunTransaction mocks base method.
+func (m *MockCouchbase) RunTransaction(ctx context.Context, logic func(any) error) (any, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "RunTransaction", ctx, logic)
+	ret0, _ := ret[0].(any)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// RunTransaction indicates an expected call of RunTransaction.
+func (mr *MockCouchbaseMockRecorder) RunTransaction(ctx, logic any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "RunTransaction", reflect.TypeOf((*MockCouchbase)(nil).RunTransaction), ctx, logic)
+}
+
+// Upsert mocks base method.
+func (m *MockCouchbase) Upsert(ctx context.Context, key string, document, result any) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Upsert", ctx, key, document, result)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// Upsert indicates an expected call of Upsert.
+func (mr *MockCouchbaseMockRecorder) Upsert(ctx, key, document, result any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Upsert", reflect.TypeOf((*MockCouchbase)(nil).Upsert), ctx, key, document, result)
+}
+
+// MockCouchbaseProvider is a mock of CouchbaseProvider interface.
+type MockCouchbaseProvider struct {
+	ctrl     *gomock.Controller
+	recorder *MockCouchbaseProviderMockRecorder
+	isgomock struct{}
+}
+
+// MockCouchbaseProviderMockRecorder is the mock recorder for MockCouchbaseProvider.
+type MockCouchbaseProviderMockRecorder struct {
+	mock *MockCouchbaseProvider
+}
+
+// NewMockCouchbaseProvider creates a new mock instance.
+func NewMockCouchbaseProvider(ctrl *gomock.Controller) *MockCouchbaseProvider {
+	mock := &MockCouchbaseProvider{ctrl: ctrl}
+	mock.recorder = &MockCouchbaseProviderMockRecorder{mock}
+	return mock
+}
+
+// EXPECT returns an object that allows the caller to indicate expected use.
+func (m *MockCouchbaseProvider) EXPECT() *MockCouchbaseProviderMockRecorder {
+	return m.recorder
+}
+
+// AnalyticsQuery mocks base method.
+func (m *MockCouchbaseProvider) AnalyticsQuery(ctx context.Context, statement string, params map[string]any, result any) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "AnalyticsQuery", ctx, statement, params, result)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// AnalyticsQuery indicates an expected call of AnalyticsQuery.
+func (mr *MockCouchbaseProviderMockRecorder) AnalyticsQuery(ctx, statement, params, result any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AnalyticsQuery", reflect.TypeOf((*MockCouchbaseProvider)(nil).AnalyticsQuery), ctx, statement, params, result)
+}
+
+// Close mocks base method.
+func (m *MockCouchbaseProvider) Close(opts any) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Close", opts)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// Close indicates an expected call of Close.
+func (mr *MockCouchbaseProviderMockRecorder) Close(opts any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Close", reflect.TypeOf((*MockCouchbaseProvider)(nil).Close), opts)
+}
+
+// Connect mocks base method.
+func (m *MockCouchbaseProvider) Connect() {
+	m.ctrl.T.Helper()
+	m.ctrl.Call(m, "Connect")
+}
+
+// Connect indicates an expected call of Connect.
+func (mr *MockCouchbaseProviderMockRecorder) Connect() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Connect", reflect.TypeOf((*MockCouchbaseProvider)(nil).Connect))
+}
+
+// Get mocks base method.
+func (m *MockCouchbaseProvider) Get(ctx context.Context, key string, result any) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Get", ctx, key, result)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// Get indicates an expected call of Get.
+func (mr *MockCouchbaseProviderMockRecorder) Get(ctx, key, result any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Get", reflect.TypeOf((*MockCouchbaseProvider)(nil).Get), ctx, key, result)
+}
+
+// HealthCheck mocks base method.
+func (m *MockCouchbaseProvider) HealthCheck(arg0 context.Context) (any, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "HealthCheck", arg0)
+	ret0, _ := ret[0].(any)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// HealthCheck indicates an expected call of HealthCheck.
+func (mr *MockCouchbaseProviderMockRecorder) HealthCheck(arg0 any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "HealthCheck", reflect.TypeOf((*MockCouchbaseProvider)(nil).HealthCheck), arg0)
+}
+
+// Insert mocks base method.
+func (m *MockCouchbaseProvider) Insert(ctx context.Context, key string, document, result any) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Insert", ctx, key, document, result)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// Insert indicates an expected call of Insert.
+func (mr *MockCouchbaseProviderMockRecorder) Insert(ctx, key, document, result any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Insert", reflect.TypeOf((*MockCouchbaseProvider)(nil).Insert), ctx, key, document, result)
+}
+
+// Query mocks base method.
+func (m *MockCouchbaseProvider) Query(ctx context.Context, statement string, params map[string]any, result any) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Query", ctx, statement, params, result)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// Query indicates an expected call of Query.
+func (mr *MockCouchbaseProviderMockRecorder) Query(ctx, statement, params, result any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Query", reflect.TypeOf((*MockCouchbaseProvider)(nil).Query), ctx, statement, params, result)
+}
+
+// Remove mocks base method.
+func (m *MockCouchbaseProvider) Remove(ctx context.Context, key string) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Remove", ctx, key)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// Remove indicates an expected call of Remove.
+func (mr *MockCouchbaseProviderMockRecorder) Remove(ctx, key any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Remove", reflect.TypeOf((*MockCouchbaseProvider)(nil).Remove), ctx, key)
+}
+
+// RunTransaction mocks base method.
+func (m *MockCouchbaseProvider) RunTransaction(ctx context.Context, logic func(any) error) (any, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "RunTransaction", ctx, logic)
+	ret0, _ := ret[0].(any)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// RunTransaction indicates an expected call of RunTransaction.
+func (mr *MockCouchbaseProviderMockRecorder) RunTransaction(ctx, logic any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "RunTransaction", reflect.TypeOf((*MockCouchbaseProvider)(nil).RunTransaction), ctx, logic)
+}
+
+// Upsert mocks base method.
+func (m *MockCouchbaseProvider) Upsert(ctx context.Context, key string, document, result any) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Upsert", ctx, key, document, result)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// Upsert indicates an expected call of Upsert.
+func (mr *MockCouchbaseProviderMockRecorder) Upsert(ctx, key, document, result any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Upsert", reflect.TypeOf((*MockCouchbaseProvider)(nil).Upsert), ctx, key, document, result)
+}
+
+// UseLogger mocks base method.
+func (m *MockCouchbaseProvider) UseLogger(logger any) {
+	m.ctrl.T.Helper()
+	m.ctrl.Call(m, "UseLogger", logger)
+}
+
+// UseLogger indicates an expected call of UseLogger.
+func (mr *MockCouchbaseProviderMockRecorder) UseLogger(logger any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UseLogger", reflect.TypeOf((*MockCouchbaseProvider)(nil).UseLogger), logger)
+}
+
+// UseMetrics mocks base method.
+func (m *MockCouchbaseProvider) UseMetrics(metrics any) {
+	m.ctrl.T.Helper()
+	m.ctrl.Call(m, "UseMetrics", metrics)
+}
+
+// UseMetrics indicates an expected call of UseMetrics.
+func (mr *MockCouchbaseProviderMockRecorder) UseMetrics(metrics any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UseMetrics", reflect.TypeOf((*MockCouchbaseProvider)(nil).UseMetrics), metrics)
+}
+
+// UseTracer mocks base method.
+func (m *MockCouchbaseProvider) UseTracer(tracer any) {
+	m.ctrl.T.Helper()
+	m.ctrl.Call(m, "UseTracer", tracer)
+}
+
+// UseTracer indicates an expected call of UseTracer.
+func (mr *MockCouchbaseProviderMockRecorder) UseTracer(tracer any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UseTracer", reflect.TypeOf((*MockCouchbaseProvider)(nil).UseTracer), tracer)
+}
