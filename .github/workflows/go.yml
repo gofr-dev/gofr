@@ -146,41 +146,44 @@ jobs:
         with:
           timeout_minutes: 5
           max_attempts: 2
-          retry_on: error  # Only retry on errors, not panics
+          retry_on: error
           command: |
+            export APP_ENV=test
+
           # Run tests for root gofr package
             go test -v -short -covermode=atomic \
-            -coverpkg=./pkg/gofr -coverprofile=gofr_only.cov ./pkg/gofr
+              -coverpkg=./pkg/gofr -coverprofile=gofr_only.cov ./pkg/gofr
             exit_code=$?
             if [ $exit_code -eq 2 ]; then
-            echo "::error::Panic detected in root gofr package tests"
-            exit 2
+              echo "::error::Panic detected in root gofr package tests"
+              exit 2
             elif [ $exit_code -ne 0 ]; then
-            echo "::error::Root gofr package tests failed"
-            exit $exit_code
+              echo "::error::Root gofr package tests failed"
+              exit $exit_code
             fi
-            
-            # Run tests for sub-packages
+
+          # Run tests for sub-packages
             go test -v -covermode=atomic \
-            -coverpkg=./pkg/gofr -coverprofile=submodules.cov ./pkg/gofr/...
+              -coverpkg=./pkg/gofr -coverprofile=submodules.cov ./pkg/gofr/...
             exit_code=$?
             if [ $exit_code -eq 2 ]; then
-            echo "::error::Panic detected in gofr sub-packages tests"
-            exit 2
+              echo "::error::Panic detected in gofr sub-packages tests"
+              exit 2
             elif [ $exit_code -ne 0 ]; then
-            echo "::error::Gofr sub-packages tests failed"
-            exit $exit_code
+              echo "::error::Gofr sub-packages tests failed"
+              exit $exit_code
             fi
 
           # Combine coverage profiles
-          echo "mode: atomic" > profile.cov
+            echo "mode: atomic" > profile.cov
             grep -h -v "mode:" gofr_only.cov submodules.cov | grep -v '/mock_' >> profile.cov
-            
-            # Show coverage summary
+
+          # Show coverage summary
             go tool cover -func profile.cov
 
 
-# Upload coverage report for the 1.24 Go version only
+
+      # Upload coverage report for the 1.24 Go version only
       - name: Upload Test Coverage
         if: ${{ matrix.go-version == '1.24'}}
         uses: actions/upload-artifact@v4
