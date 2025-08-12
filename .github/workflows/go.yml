@@ -148,25 +148,39 @@ jobs:
           max_attempts: 2
           retry_on: error  # Only retry on errors, not panics
           command: |
-            export APP_ENV=test
+          # Run tests for root gofr package
+            go test -v -short -covermode=atomic \
+            -coverpkg=./pkg/gofr -coverprofile=gofr_only.cov ./pkg/gofr
+            exit_code=$?
+            if [ $exit_code -eq 2 ]; then
+            echo "::error::Panic detected in root gofr package tests"
+            exit 2
+            elif [ $exit_code -ne 0 ]; then
+            echo "::error::Root gofr package tests failed"
+            exit $exit_code
+            fi
+            
+            # Run tests for sub-packages
+            go test -v -covermode=atomic \
+            -coverpkg=./pkg/gofr -coverprofile=submodules.cov ./pkg/gofr/...
+            exit_code=$?
+            if [ $exit_code -eq 2 ]; then
+            echo "::error::Panic detected in gofr sub-packages tests"
+            exit 2
+            elif [ $exit_code -ne 0 ]; then
+            echo "::error::Gofr sub-packages tests failed"
+            exit $exit_code
+            fi
 
-            # Custom test runner that distinguishes panics
-            run_test() {
-              go test -failfast -v -short -coverprofile packageWithpbgo.cov -coverpkg=gofr.dev/examples/...
-              local exit_code=$?
+          # Combine coverage profiles
+          echo "mode: atomic" > profile.cov
+            grep -h -v "mode:" gofr_only.cov submodules.cov | grep -v '/mock_' >> profile.cov
+            
+            # Show coverage summary
+            go tool cover -func profile.cov
 
-              if [ $exit_code -eq 2 ]; then
-                echo "PANIC detected - not retrying"
-                echo "::error::Test panic detected (exit code 2)"
-                return 2
-              fi
 
-              return $exit_code
-            }
-
-            run_test
-
-      # Upload coverage report for the 1.24 Go version only
+# Upload coverage report for the 1.24 Go version only
       - name: Upload Test Coverage
         if: ${{ matrix.go-version == '1.24'}}
         uses: actions/upload-artifact@v4
