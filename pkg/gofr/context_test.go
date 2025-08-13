@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"context"
 	"fmt"
-	"go.opentelemetry.io/otel/sdk/trace/tracetest"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -16,6 +15,7 @@ import (
 	"github.com/stretchr/testify/require"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/sdk/trace"
+	"go.opentelemetry.io/otel/sdk/trace/tracetest"
 
 	"gofr.dev/pkg/gofr/config"
 	"gofr.dev/pkg/gofr/container"
@@ -243,7 +243,8 @@ func TestContext_GetCorrelationID(t *testing.T) {
 	otel.SetTracerProvider(tp)
 
 	tracer := tp.Tracer("test")
-	ctx, span := tracer.Start(context.Background(), "test-span")
+	ctx, span := tracer.Start(t.Context(), "test-span")
+
 	defer span.End()
 
 	// Create Context instance
@@ -267,7 +268,7 @@ func TestContext_GetCorrelationID(t *testing.T) {
 func TestContext_GetCorrelationID_NoSpan(t *testing.T) {
 	// Test with no span in context
 	gofCtx := &Context{
-		Context: context.Background(),
+		Context: t.Context(),
 	}
 
 	correlationID := gofCtx.GetCorrelationID()
