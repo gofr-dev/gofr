@@ -138,9 +138,3 @@ wscat -c ws://localhost:8001/ws
 * Broadcast messages to multiple connected clients.
 * Add authentication for WebSocket connections.
 * Improve error handling and connection lifecycle management.
-
-✅ **Note**: This documentation follows GoFr’s contribution guidelines — proper heading structure, American English spelling, code blocks, and environment variable explanations.
-
----
-
-If you want, I can now do **the same format** for the `using-cron-jobs` example so both follow the same contribution/documentation standards. That way, the PR will be fully consistent.
