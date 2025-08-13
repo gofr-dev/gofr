@@ -21,7 +21,7 @@ This is useful for building **real-time applications** such as chat systems, das
 ## Prerequisites
 
 * **Go** 1.20 or later
-* **GoFr** framework ([Installation Guide](https://gofr.dev/docs/installation))
+* **GoFr** framework
 * Dependencies:
 
   ```bash
