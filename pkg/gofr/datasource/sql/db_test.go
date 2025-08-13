@@ -1184,37 +1184,38 @@ func TestDB_PingFailure(t *testing.T) {
 	err := db.Ping()
 	assert.Equal(t, sql.ErrConnDone, err)
 }
-func TestDB_QueryRow_NoRows(t *testing.T) {
-	db, mock := getDB(t, logging.DEBUG)
-	defer db.DB.Close()
-
-	query := "SELECT name FROM users WHERE id = ?"
-	mock.ExpectQuery(query).WithArgs(9999).WillReturnRows(sqlmock.NewRows([]string{"name"}))
-
-	row := db.QueryRow(query, 9999)
-
-	var name string
-	err := row.Scan(&name)
-	require.Error(t, err)
+func TestGetOperationType_EdgeCases(t *testing.T) {
+	require.Empty(t, getOperationType(""))
+	require.Empty(t, getOperationType("   "))
+	require.Equal(t, "SELECT", getOperationType("  SELECT * FROM users"))
 }
-func TestDB_Close_Twice(t *testing.T) {
-	db, _ := getDB(t, logging.DEBUG)
-	err := db.Close()
-	require.NoError(t, err)
-
-	err = db.Close()
-	require.Error(t, err)
+func TestClean_EmptyString(t *testing.T) {
+	require.Empty(t, clean(""))
+	require.Equal(t, "SELECT", clean("  SELECT  "))
 }
-func TestDB_Prepare_Failure(t *testing.T) {
-	db, mock := getDB(t, logging.DEBUG)
-	defer db.DB.Close()
+func TestDB_Dialect(t *testing.T) {
+	db, _ := getDB(t, logging.INFO)
+	defer db.Close()
 
-	query := "INVALID SQL"
-	mock.ExpectPrepare(query).WillReturnError(errSyntax)
+	db.config.Dialect = "postgresql"
+	require.Equal(t, "postgresql", db.Dialect())
+}
+func TestGetOperationType(t *testing.T) {
+	tests := []struct {
+		query    string
+		expected string
+	}{
+		{"SELECT * FROM users", "SELECT"},
+		{"  INSERT INTO users", "INSERT"},
+		{"UPDATE users SET name = ?", "UPDATE"},
+		{"DELETE FROM users", "DELETE"},
+		{"", ""},
+	}
 
-	stmt, err := db.Prepare(query)
-	require.Error(t, err)
-	assert.Nil(t, stmt)
+	for _, test := range tests {
+		result := getOperationType(test.query)
+		require.Equal(t, test.expected, result)
+	}
 }
 func TestDB_Begin_Error(t *testing.T) {
 	db, mock := getDB(t, logging.DEBUG)

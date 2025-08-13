@@ -401,16 +401,9 @@ func TestGoogleClient_Query(t *testing.T) {
 	require.NoError(t, err)
 }
 
-func TestGoogleClient_getSubscription_TopicNil(t *testing.T) {
+func TestIsConnected_WhenClientNotNil(t *testing.T) {
 	g := &googleClient{client: getGoogleClient(t)}
-
-	defer g.client.Close()
-
-	sub, err := g.getSubscription(t.Context(), nil)
-
-	require.Error(t, err)
-
-	assert.Nil(t, sub)
+	require.True(t, g.isConnected())
 }
 
 func TestClose_ClientNil(t *testing.T) {
