@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"gofr.dev/pkg/gofr"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -233,4 +234,44 @@ func TestGetAuthInfo_JWTClaims(t *testing.T) {
 	res := c.GetAuthInfo().GetClaims()
 
 	assert.Equal(t, claims, res)
+}
+
+func TestGetCorrelationID_WithSpan(t *testing.T) {
+	// Create a known TraceID for testing
+	traceID := trace.Trace{1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16}
+	spanID := trace.SpanID{1, 2, 3, 4, 5, 6, 7, 8}
+
+	spanCtx := trace.NewSpanContext(trace.SpanContextConfig{
+		TraceID:    traceID,
+		SpanID:     spanID,
+		TraceFlags: trace.FlagsSampled,
+		Remote:     false,
+	})
+
+	// Put the SpanContext in a context
+	ctx := trace.ContextWithSpanContext(context.Background(), spanCtx)
+
+	// Wrap in GoFr Context
+	gc := &gofr.Context{Context: ctx}
+
+	// Call method
+	got := gc.GetCorrelationID()
+
+	// Assert
+	want := traceID.String()
+	if got != want {
+		t.Errorf("GetCorrelationID() = %q, want %q", got, want)
+	}
+}
+
+func TestGetCorrelationID_NoSpan(t *testing.T) {
+	// No span in context
+	gc := &gofr.Context{Context: context.Background()}
+
+	got := gc.GetCorrelationID()
+	want := trace.TraceID().String() // zero TraceID string
+
+	if got != want {
+		t.Errorf("GetCorrelationID() without span = %q, want %q", got, want)
+	}
 }
