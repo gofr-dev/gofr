@@ -18,7 +18,7 @@ In this example, we:
 ## Prerequisites
 
 * **Go** 1.20 or later
-* **GoFr** framework ([Installation Guide](https://gofr.dev/docs/installation))
+* **GoFr** framework
 * [`stretchr/testify`](https://pkg.go.dev/github.com/stretchr/testify) for testing
 
 Install dependencies:
