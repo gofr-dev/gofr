@@ -83,6 +83,21 @@ func (a *App) AddClickhouse(db container.ClickhouseProvider) {
 	a.container.Clickhouse = db
 }
 
+// AddOracle initializes the OracleDB client.
+// Official implementation is available in the package: gofr.dev/pkg/gofr/datasource/oracle.
+func (a *App) AddOracle(db container.OracleProvider) {
+	db.UseLogger(a.Logger())
+	db.UseMetrics(a.Metrics())
+
+	tracer := otel.GetTracerProvider().Tracer("gofr-oracle")
+
+	db.UseTracer(tracer)
+
+	db.Connect()
+
+	a.container.Oracle = db
+}
+
 // UseMongo sets the Mongo datasource in the app's container.
 // Deprecated: Use the AddMongo method instead.
 func (a *App) UseMongo(db container.Mongo) {
@@ -209,6 +224,17 @@ func (a *App) AddElasticsearch(db container.ElasticsearchProvider) {
 	db.Connect()
 
 	a.container.Elasticsearch = db
+}
+
+func (a *App) AddCouchbase(db container.CouchbaseProvider) {
+	db.UseLogger(a.Logger())
+	db.UseMetrics(a.Metrics())
+
+	tracer := otel.GetTracerProvider().Tracer("gofr-couchbase")
+	db.UseTracer(tracer)
+	db.Connect()
+
+	a.container.Couchbase = db
 }
 
 // AddDBResolver sets up read/write splitting for SQL databases.
