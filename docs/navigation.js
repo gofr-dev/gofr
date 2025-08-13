@@ -123,6 +123,11 @@ export const navigation = [
                 desc: "Learn how to automatically render SwaggerUI documentation for your GoFr APIs, improving discoverability and usability."
             },
             {
+                title: 'Adding Synchronous Startup Hooks',
+                href: '/docs/advanced-guide/startup-hooks',
+                desc: "Learn how to seed a database, warm up a cache, or perform other critical setup procedures, synchronously before starting your application."
+            },
+            {
                 title: 'Error Handling',
                 href: '/docs/advanced-guide/gofr-errors',
                 desc: "Understand error handling mechanisms in GoFr to ensure robust applications and improved user experience."
@@ -178,6 +183,11 @@ export const navigation = [
                 desc: "Learn how to connect to and interact with CockroachDB in GoFr."
             },
             {
+                title: "Couchbase",
+                href: "/docs/datasources/couchbase",
+                desc: "Learn how to connect to and interact with couchbase database in GoFr."
+            },
+            {
                 title: "DGraph",
                 href: "/docs/datasources/dgraph",
                 desc: "Learn how to connect to and interact with dgraph database in GoFr."
@@ -191,6 +201,11 @@ export const navigation = [
                 title: "OpenTSDB",
                 href: "/docs/datasources/opentsdb",
                 desc: "Learn how to connect to and interact with opentsdb database in GoFr."
+            },
+            {
+                title: "OracleDB",
+                href: "/docs/datasources/oracle",
+                desc: "Learn how to connect to and interact with oracle database in GoFr."
             },
             {
                 title: "ScyllaDB",
@@ -208,14 +223,9 @@ export const navigation = [
                 desc: "Learn how to connect to and interact with surreal database in GoFr."
             },
             {
-                title: "Migrations",
-                href: "/docs/datasources/migrations",
-                desc: "Learn how to manage database schema changes and data migrations across different datasources in GoFr."
-            },
-            {
-                title: "Elasticsearch Migrations",
-                href: "/docs/datasources/migrations/elasticsearch",
-                desc: "Comprehensive guide to managing Elasticsearch indices, mappings, and data using GoFr's migration system."
+                title: "Elasticsearch",
+                href: "/docs/datasources/elasticsearch",
+                desc: "Learn how to connect to and interact with elasticsearch in GoFr."
             },
         ],
     },

@@ -128,6 +128,24 @@ type DGraph interface {
 	DropField(ctx context.Context, fieldName string) error
 }
 
+type ScyllaDB interface {
+	Query(dest any, stmt string, values ...any) error
+	QueryWithCtx(ctx context.Context, dest any, stmt string, values ...any) error
+
+	Exec(stmt string, values ...any) error
+	ExecWithCtx(ctx context.Context, stmt string, values ...any) error
+
+	ExecCAS(dest any, stmt string, values ...any) (bool, error)
+
+	NewBatch(name string, batchType int) error
+	NewBatchWithCtx(ctx context.Context, name string, batchType int) error
+
+	BatchQuery(name, stmt string, values ...any) error
+	BatchQueryWithCtx(ctx context.Context, name, stmt string, values ...any) error
+
+	ExecuteBatchWithCtx(ctx context.Context, name string) error
+}
+
 // Elasticsearch is an interface representing an Elasticsearch client for migration operations.
 // It includes only the essential methods needed for schema changes and migrations.
 type Elasticsearch interface {
@@ -162,4 +180,15 @@ type migrator interface {
 
 	commitMigration(c *container.Container, data transactionData) error
 	rollback(c *container.Container, data transactionData)
+}
+
+type OpenTSDB interface {
+	// PutDataPoints can be used for seeding initial metrics during migration
+	PutDataPoints(ctx context.Context, data any, queryParam string, res any) error
+	// PostAnnotation creates or updates an annotation in OpenTSDB using the 'POST /api/annotation' endpoint.
+	PostAnnotation(ctx context.Context, annotation any, res any) error
+	// PutAnnotation creates or replaces an annotation in OpenTSDB using the 'PUT /api/annotation' endpoint.
+	PutAnnotation(ctx context.Context, annotation any, res any) error
+	// DeleteAnnotation removes an annotation from OpenTSDB using the 'DELETE /api/annotation' endpoint.
+	DeleteAnnotation(ctx context.Context, annotation any, res any) error
 }
