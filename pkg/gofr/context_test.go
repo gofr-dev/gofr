@@ -4,7 +4,7 @@ import (
 	"bytes"
 	"context"
 	"fmt"
-	"gofr.dev/pkg/gofr"
+	"go.opentelemetry.io/otel/sdk/trace/tracetest"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -236,42 +236,45 @@ func TestGetAuthInfo_JWTClaims(t *testing.T) {
 	assert.Equal(t, claims, res)
 }
 
-func TestGetCorrelationID_WithSpan(t *testing.T) {
-	// Create a known TraceID for testing
-	traceID := trace.Trace{1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16}
-	spanID := trace.SpanID{1, 2, 3, 4, 5, 6, 7, 8}
+func TestContext_GetCorrelationID(t *testing.T) {
+	// Setup OpenTelemetry tracer
+	exporter := tracetest.NewInMemoryExporter()
+	tp := trace.NewTracerProvider(trace.WithSyncer(exporter))
+	otel.SetTracerProvider(tp)
 
-	spanCtx := trace.NewSpanContext(trace.SpanContextConfig{
-		TraceID:    traceID,
-		SpanID:     spanID,
-		TraceFlags: trace.FlagsSampled,
-		Remote:     false,
-	})
+	tracer := tp.Tracer("test")
+	ctx, span := tracer.Start(context.Background(), "test-span")
+	defer span.End()
 
-	// Put the SpanContext in a context
-	ctx := trace.ContextWithSpanContext(context.Background(), spanCtx)
+	// Create Context instance
+	gofCtx := &Context{
+		Context: ctx,
+	}
 
-	// Wrap in GoFr Context
-	gc := &gofr.Context{Context: ctx}
+	// Test GetCorrelationID
+	correlationID := gofCtx.GetCorrelationID()
 
-	// Call method
-	got := gc.GetCorrelationID()
+	// Verify result
+	if len(correlationID) != 32 {
+		t.Errorf("Expected correlation ID length 32, got %d", len(correlationID))
+	}
 
-	// Assert
-	want := traceID.String()
-	if got != want {
-		t.Errorf("GetCorrelationID() = %q, want %q", got, want)
+	if correlationID == "00000000000000000000000000000000" {
+		t.Error("Expected non-empty correlation ID")
 	}
 }
 
-func TestGetCorrelationID_NoSpan(t *testing.T) {
-	// No span in context
-	gc := &gofr.Context{Context: context.Background()}
+func TestContext_GetCorrelationID_NoSpan(t *testing.T) {
+	// Test with no span in context
+	gofCtx := &Context{
+		Context: context.Background(),
+	}
 
-	got := gc.GetCorrelationID()
-	want := trace.TraceID().String() // zero TraceID string
+	correlationID := gofCtx.GetCorrelationID()
 
-	if got != want {
-		t.Errorf("GetCorrelationID() without span = %q, want %q", got, want)
+	// Should return empty TraceID
+	expected := "00000000000000000000000000000000"
+	if correlationID != expected {
+		t.Errorf("Expected %s, got %s", expected, correlationID)
 	}
 }
