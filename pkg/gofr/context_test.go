@@ -15,6 +15,7 @@ import (
 	"github.com/stretchr/testify/require"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/sdk/trace"
+	"go.opentelemetry.io/otel/sdk/trace/tracetest"
 
 	"gofr.dev/pkg/gofr/config"
 	"gofr.dev/pkg/gofr/container"
@@ -233,4 +234,48 @@ func TestGetAuthInfo_JWTClaims(t *testing.T) {
 	res := c.GetAuthInfo().GetClaims()
 
 	assert.Equal(t, claims, res)
+}
+
+func TestContext_GetCorrelationID(t *testing.T) {
+	// Setup OpenTelemetry tracer
+	exporter := tracetest.NewInMemoryExporter()
+	tp := trace.NewTracerProvider(trace.WithSyncer(exporter))
+	otel.SetTracerProvider(tp)
+
+	tracer := tp.Tracer("test")
+	ctx, span := tracer.Start(t.Context(), "test-span")
+
+	defer span.End()
+
+	// Create Context instance
+	gofCtx := &Context{
+		Context: ctx,
+	}
+
+	// Test GetCorrelationID
+	correlationID := gofCtx.GetCorrelationID()
+
+	// Verify result
+	if len(correlationID) != 32 {
+		t.Errorf("Expected correlation ID length 32, got %d", len(correlationID))
+	}
+
+	if correlationID == "00000000000000000000000000000000" {
+		t.Error("Expected non-empty correlation ID")
+	}
+}
+
+func TestContext_GetCorrelationID_NoSpan(t *testing.T) {
+	// Test with no span in context
+	gofCtx := &Context{
+		Context: t.Context(),
+	}
+
+	correlationID := gofCtx.GetCorrelationID()
+
+	// Should return empty TraceID
+	expected := "00000000000000000000000000000000"
+	if correlationID != expected {
+		t.Errorf("Expected %s, got %s", expected, correlationID)
+	}
 }
