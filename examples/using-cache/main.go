@@ -13,15 +13,14 @@ package main
 import (
 	"context"
 	"fmt"
-	"net/http"
 	"os"
 	"os/signal"
 	"syscall"
 	"time"
 
-	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"gofr.dev/pkg/cache/factory"
 	"gofr.dev/pkg/cache/observability"
+	"gofr.dev/pkg/gofr"
 )
 
 func main() {
@@ -49,25 +48,29 @@ func main() {
 		panic(fmt.Sprintf("Failed to create cache: %v", err))
 	}
 
-	// Alternative: Redis cache (also updated to use functional options)
+	// Alternative: Redis cache
 	// c, err := factory.NewRedisCache(ctx, "default", 5*time.Minute,
 	// 	factory.WithObservabilityLogger(observability.NewStdLogger()),
 	// 	factory.WithMetrics(metrics),
 	//  factory.WithRedisAddr("localhost:6379"))
 
-	// Alternative: Dynamic cache type (also updated to use functional options)
+	// Alternative: Dynamic cache type
 	// cacheType := "inmemory" // or "redis"
 	// c, err := factory.NewCache(ctx, cacheType, "default", 5*time.Minute, 1000,
 	// 	factory.WithObservabilityLogger(observability.NewStdLogger()),
 	// 	factory.WithMetrics(metrics))
 
-	http.Handle("/metrics", promhttp.Handler())
+	// Start GoFr app to serve metrics via its built-in metrics server.
+	app := gofr.New()
+
 	go func() {
-		fmt.Println("Metrics available at http://localhost:8080/metrics")
-		if err := http.ListenAndServe(":8080", nil); err != http.ErrServerClosed {
-			fmt.Printf("Metrics server error: %v\n", err)
-			cancel()
+		port := app.Config.Get("METRICS_PORT")
+		if port == "" {
+			port = "2121"
 		}
+		fmt.Printf("Metrics available at http://localhost:%s/metrics\n", port)
+		app.Run()
+		cancel()
 	}()
 
 	go func() {
@@ -76,10 +79,10 @@ func main() {
 			case <-ctx.Done():
 				return
 			default:
-				c.Set(ctx, "alpha", 42)      // triggers sets_total
-				c.Get(ctx, "alpha")         // triggers hits_total
-				c.Get(ctx, "nonexistent")   // triggers misses_total
-				c.Delete(ctx, "alpha")      // triggers deletes_total
+				c.Set(ctx, "alpha", 42)   // triggers sets_total
+				c.Get(ctx, "alpha")       // triggers hits_total
+				c.Get(ctx, "nonexistent") // triggers misses_total
+				c.Delete(ctx, "alpha")    // triggers deletes_total
 				c.Set(ctx, "alpha", 100)
 				time.Sleep(2 * time.Second)
 			}
