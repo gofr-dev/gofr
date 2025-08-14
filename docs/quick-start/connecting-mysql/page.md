@@ -239,3 +239,42 @@ Now when we access {% new-tab-link title="http://localhost:9000/customer" href="
 ```
 
 **Note:** When using PostgreSQL or Supabase, you may need to use `$1` instead of `?` in SQL queries, depending on your driver configuration.
+
+### Enabling Read/Write Splitting in MySQL (DBResolver)
+GoFr provides built-in support for read/write splitting using its `DBRESOLVER` module for **MySQL**. 
+This feature allows applications to route write queries (e.g., `INSERT`, `UPDATE`) to the **primary database**, and 
+distribute read queries (`SELECT`) across **one or more replicas**, boosting performance, scalability, and reliability.
+
+Import the GoFr's dbresolver for MySQL:
+
+```shell
+go get gofr.dev/pkg/gofr/datasource/dbresolver@latest
+```
+
+After importing the package, you can configure the DBResolver in your GoFr application using the `AddDBResolver` method. 
+You can choose the load balancing strategy and enable fallback to primary:
+
+```go
+// Add DB resolver with round-robin strategy and fallback enabled
+resolver := dbresolver.NewProvider("round-robin", true)
+a.AddDBResolver(resolver)
+```
+
+- The first argument specifies the **load balancing strategy** for read queries. Supported values:
+   - `round-robin`: Distributes reads evenly across replicas.
+   - `random`: Selects a replica at random for each read.
+- The second argument enables **fallback** to the primary if all replicas are unavailable.
+
+###  Configuration
+Add replica hosts to your `.env` file using the `DB_REPLICA_HOSTS` variable:
+
+```env
+DB_REPLICA_HOSTS=localhost:3307,localhost:3308
+```
+
+These hosts will be treated as **read replicas**.
+
+**Benefits**
+- Performance: Offloads read traffic from the primary, reducing latency.
+- Scalability: Easily scale reads by adding more replicas.
+- Resilience: Ensures high availability through automatic fallback.
