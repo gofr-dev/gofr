@@ -479,8 +479,6 @@ func NewDefaultCache(ctx context.Context, name string) (cache.Cache, error) {
 		WithName(name),
 		WithTTL(DefaultTTL),
 		WithMaxItems(DefaultMaxItems),
-		WithLogger(observability.NewStdLogger()),
-		WithMetrics(observability.NewMetrics("gofr", "inmemory_cache")),
 	)
 }
 
@@ -492,8 +490,6 @@ func NewDebugCache(ctx context.Context, name string) (cache.Cache, error) {
 		WithName(name),
 		WithTTL(1*time.Minute),
 		WithMaxItems(DebugMaxItems),
-		WithLogger(observability.NewStdLogger()),
-		WithMetrics(observability.NewMetrics("gofr", "inmemory_cache")),
 	)
 }
 
@@ -505,7 +501,5 @@ func NewProductionCache(ctx context.Context, name string, ttl time.Duration, max
 		WithName(name),
 		WithTTL(ttl),
 		WithMaxItems(maxItems),
-		WithLogger(observability.NewStdLogger()),
-		WithMetrics(observability.NewMetrics("gofr", "inmemory_cache")),
 	)
 }

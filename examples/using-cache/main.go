@@ -19,7 +19,6 @@ import (
 	"time"
 
 	"gofr.dev/pkg/cache/factory"
-	"gofr.dev/pkg/cache/observability"
 	"gofr.dev/pkg/gofr"
 )
 
@@ -36,29 +35,23 @@ func main() {
 		cancel()
 	}()
 
-	metrics := observability.NewMetrics("gofr", "cache")
-
 	c, err := factory.NewInMemoryCache(ctx,
 		"default",
 		5*time.Minute,
 		1000,
-		factory.WithObservabilityLogger(observability.NewStdLogger()),
-		factory.WithMetrics(metrics))
+	)
 	if err != nil {
 		panic(fmt.Sprintf("Failed to create cache: %v", err))
 	}
 
 	// Alternative: Redis cache
 	// c, err := factory.NewRedisCache(ctx, "default", 5*time.Minute,
-	// 	factory.WithObservabilityLogger(observability.NewStdLogger()),
-	// 	factory.WithMetrics(metrics),
 	//  factory.WithRedisAddr("localhost:6379"))
 
 	// Alternative: Dynamic cache type
 	// cacheType := "inmemory" // or "redis"
 	// c, err := factory.NewCache(ctx, cacheType, "default", 5*time.Minute, 1000,
-	// 	factory.WithObservabilityLogger(observability.NewStdLogger()),
-	// 	factory.WithMetrics(metrics))
+	// )
 
 	// Start GoFr app to serve metrics via its built-in metrics server.
 	app := gofr.New()
