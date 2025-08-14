@@ -2,6 +2,7 @@ package middleware
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"net/http"
@@ -42,7 +43,7 @@ func AuthMiddleware(a AuthProvider) func(handler http.Handler) http.Handler {
 
 			authHeader, err := a.ExtractAuthHeader(r)
 			if err != nil {
-				http.Error(w, err.Error(), err.StatusCode())
+				writeJSONError(w, err.Error(), err.StatusCode())
 				return
 			}
 
@@ -72,4 +73,20 @@ func getAuthHeaderFromRequest(r *http.Request, key, prefix string) (string, Erro
 	}
 
 	return parts[1], nil
+}
+
+func writeJSONError(w http.ResponseWriter, message string, statusCode int) {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(statusCode)
+
+	response := map[string]interface{}{
+		"error": map[string]interface{}{
+			"message": message,
+		},
+	}
+
+	// If JSON encoding fails, fall back to plain text
+	if err := json.NewEncoder(w).Encode(response); err != nil {
+		http.Error(w, message, statusCode)
+	}
 }
