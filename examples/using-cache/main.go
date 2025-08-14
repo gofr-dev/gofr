@@ -18,7 +18,6 @@ import (
 	"syscall"
 	"time"
 
-	"gofr.dev/pkg/cache/factory"
 	"gofr.dev/pkg/gofr"
 )
 
@@ -35,27 +34,20 @@ func main() {
 		cancel()
 	}()
 
-	c, err := factory.NewInMemoryCache(ctx,
-		"default",
-		5*time.Minute,
-		1000,
-	)
-	if err != nil {
-		panic(fmt.Sprintf("Failed to create cache: %v", err))
-	}
-
-	// Alternative: Redis cache
-	// c, err := factory.NewRedisCache(ctx, "default", 5*time.Minute,
-	//  factory.WithRedisAddr("localhost:6379"))
-
-	// Alternative: Dynamic cache type
-	// cacheType := "inmemory" // or "redis"
-	// c, err := factory.NewCache(ctx, cacheType, "default", 5*time.Minute, 1000,
-	// )
-
-	// Start GoFr app to serve metrics via its built-in metrics server.
+	// Initialize the GoFr app.
 	app := gofr.New()
 
+	// Add the cache to the app's container.
+	app.AddInMemoryCache(ctx, "default", 5*time.Minute, 1000)
+	// app.AddRedisCache(ctx, "default", 5*time.Minute, "localhost:6379")
+
+	// Get the cache instance into a variable 'c' in the main scope.
+	c := app.GetCache("default")
+	if c == nil {
+		panic("failed to get cache from app container")
+	}
+
+	// Goroutine to run the app's metrics server.
 	go func() {
 		port := app.Config.Get("METRICS_PORT")
 		if port == "" {
@@ -66,6 +58,7 @@ func main() {
 		cancel()
 	}()
 
+	// Goroutine to simulate cache usage.
 	go func() {
 		for {
 			select {
