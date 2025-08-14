@@ -35,6 +35,7 @@ type bucket interface {
 	GetBuckets(ctx context.Context, pagingOptions ...api.PagingOption) (*[]domain.Bucket, error)
 	FindBucketByName(ctx context.Context, bucketName string) (*domain.Bucket, error)
 	FindBucketByID(ctx context.Context, bucketID string) (*domain.Bucket, error)
+	FindBucketsByOrgName(ctx context.Context, orgName string, pagingOptions ...api.PagingOption) (*[]domain.Bucket, error)
 	CreateBucket(ctx context.Context, bucket *domain.Bucket) (*domain.Bucket, error)
 	CreateBucketWithName(
 		ctx context.Context, org *domain.Organization, bucketName string, rules ...domain.RetentionRule) (*domain.Bucket, error)

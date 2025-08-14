@@ -389,6 +389,26 @@ func (mr *MockbucketMockRecorder) FindBucketByName(ctx, bucketName interface{}) 
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "FindBucketByName", reflect.TypeOf((*Mockbucket)(nil).FindBucketByName), ctx, bucketName)
 }
 
+// FindBucketsByOrgName mocks base method.
+func (m *Mockbucket) FindBucketsByOrgName(ctx context.Context, orgName string, pagingOptions ...api.PagingOption) (*[]domain.Bucket, error) {
+	m.ctrl.T.Helper()
+	varargs := []interface{}{ctx, orgName}
+	for _, a := range pagingOptions {
+		varargs = append(varargs, a)
+	}
+	ret := m.ctrl.Call(m, "FindBucketsByOrgName", varargs...)
+	ret0, _ := ret[0].(*[]domain.Bucket)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// FindBucketsByOrgName indicates an expected call of FindBucketsByOrgName.
+func (mr *MockbucketMockRecorder) FindBucketsByOrgName(ctx, orgName interface{}, pagingOptions ...interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	varargs := append([]interface{}{ctx, orgName}, pagingOptions...)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "FindBucketsByOrgName", reflect.TypeOf((*Mockbucket)(nil).FindBucketsByOrgName), varargs...)
+}
+
 // GetBuckets mocks base method.
 func (m *Mockbucket) GetBuckets(ctx context.Context, pagingOptions ...api.PagingOption) (*[]domain.Bucket, error) {
 	m.ctrl.T.Helper()
