@@ -4,31 +4,34 @@ import (
 	"context"
 	"time"
 
-	"go.opentelemetry.io/otel"
-
 	"gofr.dev/pkg/cache"
 	"gofr.dev/pkg/cache/factory"
-	"gofr.dev/pkg/cache/redis"
 )
 
+// AddInMemoryCache adds an in-memory cache to the app's container.
 func (a *App) AddInMemoryCache(ctx context.Context, name string, ttl time.Duration, maxItems int) {
 	c, err := factory.NewInMemoryCache(
-		ctx, name, ttl, maxItems,
+		ctx,
+		name,
+		factory.WithLogger(a.Logger()),
+		factory.WithTTL(ttl),
+		factory.WithMaxItems(maxItems),
 	)
 	if err != nil {
 		a.Logger().Errorf("inmemory cache init failed: %v", err)
 		return
 	}
 
-	tracer := otel.GetTracerProvider().Tracer("gofr-inmemory-cache")
-	c.UseTracer(tracer)
-
 	a.container.AddCache(name, c)
 }
 
+// AddRedisCache adds a Redis cache to the app's container.
 func (a *App) AddRedisCache(ctx context.Context, name string, ttl time.Duration, addr string) {
 	c, err := factory.NewRedisCache(
-		ctx, name, ttl,
+		ctx,
+		name,
+		factory.WithLogger(a.Logger()),
+		factory.WithTTL(ttl),
 		factory.WithRedisAddr(addr),
 	)
 	if err != nil {
@@ -36,32 +39,29 @@ func (a *App) AddRedisCache(ctx context.Context, name string, ttl time.Duration,
 		return
 	}
 
-	tracer := otel.GetTracerProvider().Tracer("gofr-redis-cache")
-	c.UseTracer(tracer)
-
 	a.container.AddCache(name, c)
 }
 
+// AddRedisCacheDirect adds a Redis cache with full configuration.
 func (a *App) AddRedisCacheDirect(ctx context.Context, name, addr, password string, db int, ttl time.Duration) {
-	c, err := redis.NewRedisCache(
+	c, err := factory.NewRedisCache(
 		ctx,
-		redis.WithName(name),
-		redis.WithAddr(addr),
-		redis.WithPassword(password),
-		redis.WithDB(db),
-		redis.WithTTL(ttl),
+		name,
+		factory.WithLogger(a.Logger()),
+		factory.WithTTL(ttl),
+		factory.WithRedisAddr(addr),
+		factory.WithRedisPassword(password),
+		factory.WithRedisDB(db),
 	)
 	if err != nil {
 		a.Logger().Errorf("redis cache init failed: %v", err)
 		return
 	}
 
-	tracer := otel.GetTracerProvider().Tracer("gofr-redis-cache")
-	c.UseTracer(tracer)
-
 	a.container.AddCache(name, c)
 }
 
+// GetCache retrieves a cache instance from the app's container by name.
 func (a *App) GetCache(name string) cache.Cache {
 	return a.container.GetCache(name)
 }
