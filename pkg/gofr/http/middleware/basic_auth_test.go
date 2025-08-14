@@ -61,14 +61,16 @@ func TestBasicAuthMiddleware_extractAuthHeader(t *testing.T) {
 
 	testCases := []struct {
 		header   string
-		response string
+		response any
 		err      error
 	}{
 		{
-			err: ErrorMissingAuthHeader{key: headerAuthorization},
+			response: nil,
+			err:      ErrorMissingAuthHeader{key: headerAuthorization},
 		},
 		{
-			header: "Basic wrong-header",
+			response: "",
+			header:   "Basic wrong-header",
 			err: ErrorInvalidAuthorizationHeaderFormat{
 				key:        headerAuthorization,
 				errMessage: "credentials should be in the format base64(username:password)",

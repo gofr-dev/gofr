@@ -1,6 +1,8 @@
 package middleware
 
 import (
+	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"strconv"
@@ -8,7 +10,10 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
+
+var errSimulatedWriteFailure = errors.New("simulated write failure")
 
 func TestAuthMiddleware(t *testing.T) {
 	testCases := []struct {
@@ -87,6 +92,97 @@ func Test_getAuthHeaderValue(t *testing.T) {
 			assert.Equal(t, tc.err, err)
 		})
 	}
+}
+
+func Test_writeJSONError(t *testing.T) {
+	testCases := []struct {
+		name       string
+		message    string
+		statusCode int
+	}{
+		{
+			name:       "Basic error response",
+			message:    "Unauthorized: Invalid username or password",
+			statusCode: http.StatusUnauthorized,
+		},
+		{
+			name:       "Not found error",
+			message:    "Resource not found",
+			statusCode: http.StatusNotFound,
+		},
+		{
+			name:       "Server error",
+			message:    "Internal server error",
+			statusCode: http.StatusInternalServerError,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			rr := httptest.NewRecorder()
+
+			writeJSONError(rr, tc.message, tc.statusCode)
+
+			assert.Equal(t, tc.statusCode, rr.Code)
+
+			assert.Equal(t, "application/json", rr.Header().Get("Content-Type"))
+
+			var response map[string]any
+			err := json.Unmarshal(rr.Body.Bytes(), &response)
+			require.NoError(t, err)
+
+			errorObj, ok := response["error"].(map[string]any)
+			assert.True(t, ok, "Response should have 'error' object")
+
+			message, ok := errorObj["message"].(string)
+			assert.True(t, ok, "Error object should have 'message' field")
+			assert.Equal(t, tc.message, message)
+		})
+	}
+}
+
+// Test for the error fallback when JSON encoding fails.
+func Test_writeJSONError_EncodingFailure(t *testing.T) {
+	// Create a simple mock writer that always fails on Write.
+	mockWriter := &mockFailingResponseWriter{
+		header: http.Header{},
+	}
+
+	message := "Test error message"
+	statusCode := http.StatusBadRequest
+
+	writeJSONError(mockWriter, message, statusCode)
+
+	assert.Equal(t, statusCode, mockWriter.statusCode)
+	assert.Equal(t, message+"\n", mockWriter.body)
+}
+
+// Simplified mock response writer.
+type mockFailingResponseWriter struct {
+	header     http.Header
+	body       string
+	statusCode int
+	jsonFailed bool // Track if JSON encoding has been attempted
+}
+
+func (m *mockFailingResponseWriter) Header() http.Header {
+	return m.header
+}
+
+func (m *mockFailingResponseWriter) Write(b []byte) (int, error) {
+	if !m.jsonFailed {
+		m.jsonFailed = true
+		return 0, errSimulatedWriteFailure
+	}
+
+	// Second write attempt (plain text fallback) will succeed
+	m.body = string(b)
+
+	return len(b), nil
+}
+
+func (m *mockFailingResponseWriter) WriteHeader(statusCode int) {
+	m.statusCode = statusCode
 }
 
 type MockAuthProvider struct {
