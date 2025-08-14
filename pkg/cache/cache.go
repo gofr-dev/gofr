@@ -1,6 +1,10 @@
 package cache
 
-import "context"
+import (
+	"context"
+
+	"go.opentelemetry.io/otel/trace"
+)
 
 type Cache interface {
 	// Get retrieves the value associated with the given key.
@@ -28,4 +32,6 @@ type Cache interface {
 	// Close releases any resources used by the cache, such as background goroutines or network connections.
 	// After Close is called, the cache may no longer be usable.
 	Close(ctx context.Context) error
+
+	UseTracer(tracer trace.Tracer)
 }

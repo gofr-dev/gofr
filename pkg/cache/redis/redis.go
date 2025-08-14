@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/redis/go-redis/v9"
+	"go.opentelemetry.io/otel/trace"
 
 	"gofr.dev/pkg/cache"
 	"gofr.dev/pkg/cache/observability"
@@ -35,6 +36,7 @@ type redisCache struct {
 	name    string
 	logger  observability.Logger
 	metrics *observability.Metrics
+	tracer  *trace.Tracer
 }
 
 type Option func(*redisCache) error
@@ -163,6 +165,10 @@ func NewRedisCache(ctx context.Context, opts ...Option) (cache.Cache, error) {
 		c.name, c.client.Options().Addr, c.client.Options().DB, c.ttl)
 
 	return c, nil
+}
+
+func (c *redisCache) UseTracer(tracer trace.Tracer) {
+	c.tracer = &tracer
 }
 
 // validateKey ensures key is non-empty.

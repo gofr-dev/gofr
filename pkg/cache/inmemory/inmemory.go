@@ -7,6 +7,8 @@ import (
 	"sync"
 	"time"
 
+	"go.opentelemetry.io/otel/trace"
+
 	"gofr.dev/pkg/cache"
 	"gofr.dev/pkg/cache/observability"
 )
@@ -50,6 +52,7 @@ type inMemoryCache struct {
 	name    string
 	logger  observability.Logger
 	metrics *observability.Metrics
+	tracer  *trace.Tracer
 }
 
 type Option func(*inMemoryCache) error
@@ -155,6 +158,10 @@ func NewInMemoryCache(ctx context.Context, opts ...Option) (cache.Cache, error) 
 	}
 
 	return c, nil
+}
+
+func (c *inMemoryCache) UseTracer(tracer trace.Tracer) {
+	c.tracer = &tracer
 }
 
 // Set adds or updates a key-value pair in the cache.
