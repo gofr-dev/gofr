@@ -37,9 +37,23 @@ func main() {
 	// Initialize the GoFr app.
 	app := gofr.New()
 
-	// Add the cache to the app's container.
+	// Method 1: Using the app's convenience methods (recommended for most cases)
+	// Tracing is automatically handled by the factory - no manual setup required!
 	app.AddInMemoryCache(ctx, "default", 5*time.Minute, 1000)
 	// app.AddRedisCache(ctx, "default", 5*time.Minute, "localhost:6379")
+
+	// Method 2: Using the factory directly (for more control)
+	// c, err := factory.NewInMemoryCache(
+	//     ctx,
+	//     "default",
+	//     factory.WithLogger(app.Logger()),
+	//     factory.WithTTL(5*time.Minute),
+	//     factory.WithMaxItems(1000),
+	// )
+	// if err != nil {
+	//     panic(fmt.Sprintf("failed to create cache: %v", err))
+	// }
+	// app.container.AddCache("default", c)
 
 	// Get the cache instance into a variable 'c' in the main scope.
 	c := app.GetCache("default")
