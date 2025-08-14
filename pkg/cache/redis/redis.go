@@ -161,7 +161,7 @@ func NewRedisCache(ctx context.Context, opts ...Option) (cache.Cache, error) {
 		return nil, fmt.Errorf("failed to connect to redis: %w", err)
 	}
 
-	c.logger.Infof("Redis cache '%s' initialized on %s, DB %d, TTL=%v",
+	c.logger.Infof(ctx, "Redis cache '%s' initialized on %s, DB %d, TTL=%v",
 		c.name, c.client.Options().Addr, c.client.Options().DB, c.ttl)
 
 	return c, nil
@@ -215,28 +215,28 @@ func (c *redisCache) Set(ctx context.Context, key string, value any) error {
 	start := time.Now()
 
 	if err := validateKey(key); err != nil {
-		c.logger.Errorf("Set failed: %v", err)
+		c.logger.Errorf(ctx, "Set failed: %v", err)
 		return err
 	}
 
 	if value == nil {
-		c.logger.Errorf("Set failed: %v", ErrNilValue)
+		c.logger.Errorf(ctx, "Set failed: %v", ErrNilValue)
 		return ErrNilValue
 	}
 
 	serializedValue, err := c.serializeValue(value)
 	if err != nil {
-		c.logger.Errorf("Set failed to serialize value for key '%s': %v", key, err)
+		c.logger.Errorf(ctx, "Set failed to serialize value for key '%s': %v", key, err)
 		return err
 	}
 
 	if err := c.client.Set(ctx, key, serializedValue, c.ttl).Err(); err != nil {
-		c.logger.Errorf("Redis Set failed for key '%s': %v", key, err)
+		c.logger.Errorf(ctx, "Redis Set failed for key '%s': %v", key, err)
 		return err
 	}
 
 	duration := time.Since(start)
-	c.logger.LogRequest("DEBUG", "Set new cache key", "SUCCESS", duration, key)
+	c.logger.LogRequest(ctx, "DEBUG", "Set new cache key", "SUCCESS", duration, key)
 
 	if c.metrics != nil {
 		c.metrics.Sets().WithLabelValues(c.name).Inc()
@@ -256,7 +256,7 @@ func (c *redisCache) Get(ctx context.Context, key string) (value any, found bool
 	start := time.Now()
 
 	if keyerr := validateKey(key); keyerr != nil {
-		c.logger.Errorf("Get failed: %v", keyerr)
+		c.logger.Errorf(ctx, "Get failed: %v", keyerr)
 		return nil, false, keyerr
 	}
 
@@ -264,7 +264,7 @@ func (c *redisCache) Get(ctx context.Context, key string) (value any, found bool
 	if err != nil {
 		if errors.Is(err, redis.Nil) {
 			duration := time.Since(start)
-			c.logger.Missf("GET", duration, key)
+			c.logger.Missf(ctx, "GET", duration, key)
 
 			if c.metrics != nil {
 				c.metrics.Misses().WithLabelValues(c.name).Inc()
@@ -274,13 +274,13 @@ func (c *redisCache) Get(ctx context.Context, key string) (value any, found bool
 			return nil, false, nil // Key does not exist
 		}
 
-		c.logger.Errorf("Redis Get failed for key '%s': %v", key, err)
+		c.logger.Errorf(ctx, "Redis Get failed for key '%s': %v", key, err)
 
 		return nil, false, err
 	}
 
 	duration := time.Since(start)
-	c.logger.Hitf("GET", duration, key)
+	c.logger.Hitf(ctx, "GET", duration, key)
 
 	if c.metrics != nil {
 		c.metrics.Hits().WithLabelValues(c.name).Inc()
@@ -297,18 +297,18 @@ func (c *redisCache) Delete(ctx context.Context, key string) error {
 	start := time.Now()
 
 	if err := validateKey(key); err != nil {
-		c.logger.Errorf("Delete failed: %v", err)
+		c.logger.Errorf(ctx, "Delete failed: %v", err)
 		return err
 	}
 
 	duration := time.Since(start)
 
 	if err := c.client.Del(ctx, key).Err(); err != nil {
-		c.logger.Errorf("Redis Del failed for key '%s': %v", key, err)
+		c.logger.Errorf(ctx, "Redis Del failed for key '%s': %v", key, err)
 		return err
 	}
 
-	c.logger.LogRequest("DEBUG", "Deleted cache key", "SUCCESS", duration, key)
+	c.logger.LogRequest(ctx, "DEBUG", "Deleted cache key", "SUCCESS", duration, key)
 
 	if c.metrics != nil {
 		c.metrics.Deletes().WithLabelValues(c.name).Inc()
@@ -326,13 +326,13 @@ func (c *redisCache) Exists(ctx context.Context, key string) (bool, error) {
 	start := time.Now()
 
 	if err := validateKey(key); err != nil {
-		c.logger.Errorf("Exists failed: %v", err)
+		c.logger.Errorf(ctx, "Exists failed: %v", err)
 		return false, err
 	}
 
 	res, err := c.client.Exists(ctx, key).Result()
 	if err != nil {
-		c.logger.Errorf("Redis Exists failed for key '%s': %v", key, err)
+		c.logger.Errorf(ctx, "Redis Exists failed for key '%s': %v", key, err)
 		return false, err
 	}
 
@@ -350,12 +350,12 @@ func (c *redisCache) Clear(ctx context.Context) error {
 	start := time.Now()
 
 	if err := c.client.FlushDB(ctx).Err(); err != nil {
-		c.logger.Errorf("Redis FlushDB failed: %v", err)
+		c.logger.Errorf(ctx, "Redis FlushDB failed: %v", err)
 		return err
 	}
 
 	duration := time.Since(start)
-	c.logger.LogRequest("WARN", "Cleared all keys", "SUCCESS", duration, c.name)
+	c.logger.LogRequest(ctx, "WARN", "Cleared all keys", "SUCCESS", duration, c.name)
 
 	if c.metrics != nil {
 		c.metrics.Items().WithLabelValues(c.name).Set(0)
@@ -367,17 +367,17 @@ func (c *redisCache) Clear(ctx context.Context) error {
 
 // Close closes the connection to the Redis server.
 // It's important to call Close to release network resources.
-func (c *redisCache) Close(_ context.Context) error {
+func (c *redisCache) Close(ctx context.Context) error {
 	if c.client == nil {
 		return ErrNilClient
 	}
 
 	if err := c.client.Close(); err != nil {
-		c.logger.Errorf("Failed to close redis client: %v", err)
+		c.logger.Errorf(ctx, "Failed to close redis client: %v", err)
 		return err
 	}
 
-	c.logger.Infof("Redis cache '%s' closed", c.name)
+	c.logger.Infof(ctx, "Redis cache '%s' closed", c.name)
 
 	return nil
 }
@@ -386,7 +386,7 @@ func (c *redisCache) Close(_ context.Context) error {
 func (c *redisCache) countKeys(ctx context.Context) int64 {
 	res, err := c.client.DBSize(ctx).Result()
 	if err != nil {
-		c.logger.Errorf("DBSize failed: %v", err)
+		c.logger.Errorf(ctx, "DBSize failed: %v", err)
 		return 0
 	}
 

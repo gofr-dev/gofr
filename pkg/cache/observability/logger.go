@@ -1,11 +1,14 @@
 package observability
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"regexp"
 	"strings"
 	"time"
+
+	"go.opentelemetry.io/otel/trace"
 )
 
 // ANSI Color Codes.
@@ -26,38 +29,35 @@ const (
 	DEBUG = "DEBUG"
 )
 
-const ansiRegex = "[\u001B\u009B][[\\]()#;?]*.{0,2}(?:(?:;\\d{1,3})*.[a-zA-Z\\d]|(?:\\d{1,4}/?)*[a-zA-Z])"
+const ansiRegex = "[\u001B\u009B][[]()#;?]*.{0,2}(?:(?:;\\d{1,3})*.[a-zA-Z\\d]|(?:\\d{1,4}/?)*[a-zA-Z])"
 
-// Logger defines a standard interface for logging.
+// Logger defines a standard interface for logging with built-in context awareness.
 type Logger interface {
-	Errorf(format string, args ...any)
-	Warnf(format string, args ...any)
-	Infof(format string, args ...any)
-	Debugf(format string, args ...any)
+	// Standard logging methods with context support
+	Errorf(ctx context.Context, format string, args ...any)
+	Warnf(ctx context.Context, format string, args ...any)
+	Infof(ctx context.Context, format string, args ...any)
+	Debugf(ctx context.Context, format string, args ...any)
 
-	Hitf(message string, duration time.Duration, operation string)
-	Missf(message string, duration time.Duration, operation string)
+	// Cache-specific logging methods
+	Hitf(ctx context.Context, message string, duration time.Duration, operation string)
+	Missf(ctx context.Context, message string, duration time.Duration, operation string)
 
-	// Generic method for creating structured logs like in the screenshot.
-	// level: "INFO", "DEBUG", etc.
-	// message: The initial message string (e.g., request ID, query context).
-	// tag: An int (like HTTP status 200) or string (like "SQL", "REDIS").
-	// duration: The operation's duration.
-	// operation: The final operation string (e.g., "GET /hello", "select 2+2").
-	LogRequest(level, message string, tag any, duration time.Duration, operation string)
+	// Generic structured logging method
+	LogRequest(ctx context.Context, level, message string, tag any, duration time.Duration, operation string)
 }
 
 type nopLogger struct{}
 
 func NewNopLogger() Logger { return &nopLogger{} }
 
-func (*nopLogger) Errorf(_ string, _ ...any)                                {}
-func (*nopLogger) Warnf(_ string, _ ...any)                                 {}
-func (*nopLogger) Infof(_ string, _ ...any)                                 {}
-func (*nopLogger) Debugf(_ string, _ ...any)                                {}
-func (*nopLogger) Hitf(_ string, _ time.Duration, _ string)                 {}
-func (*nopLogger) Missf(_ string, _ time.Duration, _ string)                {}
-func (*nopLogger) LogRequest(_, _ string, _ any, _ time.Duration, _ string) {}
+func (*nopLogger) Errorf(_ context.Context, _ string, _ ...any)                                {}
+func (*nopLogger) Warnf(_ context.Context, _ string, _ ...any)                                 {}
+func (*nopLogger) Infof(_ context.Context, _ string, _ ...any)                                 {}
+func (*nopLogger) Debugf(_ context.Context, _ string, _ ...any)                                {}
+func (*nopLogger) Hitf(_ context.Context, _ string, _ time.Duration, _ string)                 {}
+func (*nopLogger) Missf(_ context.Context, _ string, _ time.Duration, _ string)                {}
+func (*nopLogger) LogRequest(_ context.Context, _, _ string, _ any, _ time.Duration, _ string) {}
 
 type styledLogger struct {
 	useColors bool
@@ -69,42 +69,55 @@ func NewStdLogger() Logger {
 	}
 }
 
-func (l *styledLogger) Errorf(format string, args ...any) {
-	l.logSimple(ERROR, Red, format, args...)
+func (l *styledLogger) getTraceString(ctx context.Context) string {
+	if ctx == nil {
+		return ""
+	}
+
+	sc := trace.SpanFromContext(ctx).SpanContext()
+	if sc.IsValid() {
+		return " " + l.applyColor(Gray, sc.TraceID().String())
+	}
+
+	return ""
 }
 
-func (l *styledLogger) Warnf(format string, args ...any) {
-	l.logSimple(WARN, Yellow, format, args...)
+func (l *styledLogger) Errorf(ctx context.Context, format string, args ...any) {
+	l.logSimple(ctx, ERROR, Red, format, args...)
 }
 
-func (l *styledLogger) Infof(format string, args ...any) {
-	l.logSimple(INFO, Green, format, args...)
+func (l *styledLogger) Warnf(ctx context.Context, format string, args ...any) {
+	l.logSimple(ctx, WARN, Yellow, format, args...)
 }
 
-func (l *styledLogger) Debugf(format string, args ...any) {
-	l.logSimple(DEBUG, Gray, format, args...)
+func (l *styledLogger) Infof(ctx context.Context, format string, args ...any) {
+	l.logSimple(ctx, INFO, Green, format, args...)
 }
 
-func (l *styledLogger) Hitf(_ string, duration time.Duration, operation string) {
-	l.LogRequest(INFO, "Cache hit", "HIT", duration, operation)
+func (l *styledLogger) Debugf(ctx context.Context, format string, args ...any) {
+	l.logSimple(ctx, DEBUG, Gray, format, args...)
 }
 
-func (l *styledLogger) Missf(_ string, duration time.Duration, operation string) {
+func (l *styledLogger) Hitf(ctx context.Context, _ string, duration time.Duration, operation string) {
+	l.LogRequest(ctx, INFO, "Cache hit", "HIT", duration, operation)
+}
+
+func (l *styledLogger) Missf(ctx context.Context, _ string, duration time.Duration, operation string) {
 	// A miss isn't an error, but we'll color its tag yellow for attention.
-	l.LogRequest(INFO, "Cache miss", "MISS", duration, operation)
+	l.LogRequest(ctx, INFO, "Cache miss", "MISS", duration, operation)
 }
 
-func (l *styledLogger) LogRequest(level, message string, tag any, duration time.Duration, operation string) {
+func (l *styledLogger) LogRequest(ctx context.Context, level, message string, tag any, duration time.Duration, operation string) {
 	const tagColumnStart = 45
 
 	const durationColumnStart = 60
 
 	levelStr, levelColor := getLevelStyle(level)
 	ts := l.applyColor(Gray, "["+time.Now().Format(time.TimeOnly)+"]")
-	initialPart := fmt.Sprintf("%s %s %s", l.applyColor(levelColor, levelStr), ts, message)
+	traceStr := l.getTraceString(ctx)
+	initialPart := fmt.Sprintf("%s %s%s %s", l.applyColor(levelColor, levelStr), ts, traceStr, message)
 
 	tagStr := l.formatTag(tag)
-
 	durationStr := l.applyColor(Gray, fmt.Sprintf("%dµs", duration.Microseconds()))
 
 	padding1 := getPadding(tagColumnStart, len(stripAnsi(initialPart)))
@@ -120,11 +133,12 @@ func (l *styledLogger) LogRequest(level, message string, tag any, duration time.
 	)
 }
 
-func (l *styledLogger) logSimple(level, color, format string, args ...any) {
+func (l *styledLogger) logSimple(ctx context.Context, level, color, format string, args ...any) {
 	levelStr := l.applyColor(color, level)
 	ts := l.applyColor(Gray, "["+time.Now().Format(time.TimeOnly)+"]")
+	traceStr := l.getTraceString(ctx)
 	msg := fmt.Sprintf(format, args...)
-	fmt.Printf("%s %s %s\n", levelStr, ts, msg)
+	fmt.Printf("%s %s%s %s\n", levelStr, ts, traceStr, msg)
 }
 
 func getLevelStyle(level string) (levelStr, color string) {

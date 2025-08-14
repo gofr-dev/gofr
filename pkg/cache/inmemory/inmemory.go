@@ -7,6 +7,7 @@ import (
 	"sync"
 	"time"
 
+	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/trace"
 
 	"gofr.dev/pkg/cache"
@@ -127,6 +128,23 @@ func validateKey(key string) error {
 	return nil
 }
 
+// withSpan creates a span for cache operations and ensures proper context propagation.
+func (c *inMemoryCache) withSpan(ctx context.Context, operation, key string) (context.Context, trace.Span) {
+	if c.tracer == nil {
+		return ctx, trace.SpanFromContext(ctx)
+	}
+
+	tracer := *c.tracer
+	spanCtx, span := tracer.Start(ctx, fmt.Sprintf("cache.%s", operation),
+		trace.WithAttributes(
+			attribute.String("cache.name", c.name),
+			attribute.String("cache.key", key),
+			attribute.String("cache.operation", operation),
+		))
+
+	return spanCtx, span
+}
+
 // NewInMemoryCache creates and returns a new in-memory cache instance.
 // It takes zero or more Option functions to customize its configuration.
 // By default, it creates a cache with a 1-minute TTL and no item limit.
@@ -137,25 +155,20 @@ func NewInMemoryCache(ctx context.Context, opts ...Option) (cache.Cache, error) 
 		ttl:      time.Minute,
 		maxItems: 0,
 		quit:     make(chan struct{}),
-		name:     "default",
 		logger:   observability.NewStdLogger(),
 		metrics:  observability.NewMetrics("gofr", "inmemory_cache"),
 	}
 
 	for _, opt := range opts {
 		if err := opt(c); err != nil {
-			return nil, fmt.Errorf("failed to configure cache: %w", err)
+			return nil, err
 		}
 	}
 
-	c.logger.Infof("Cache '%s' initialized with TTL=%v, MaxItems=%d", c.name, c.ttl, c.maxItems)
+	c.logger.Infof(ctx, "Cache '%s' initialized with TTL=%s, MaxItems=%d", c.name, c.ttl, c.maxItems)
 
-	// Start periodic cleanup if TTL > 0
-	if c.ttl > 0 {
-		go c.startCleanup(ctx)
-	} else {
-		c.logger.Warnf("TTL disabled; items will not expire automatically")
-	}
+	// Start cleanup goroutine
+	go c.startCleanup(ctx)
 
 	return c, nil
 }
@@ -168,14 +181,17 @@ func (c *inMemoryCache) UseTracer(tracer trace.Tracer) {
 // If the key already exists, its value is updated, and it's marked as the most recently used item.
 // If the cache is at capacity, the least recently used item is evicted.
 // This operation is thread-safe.
-func (c *inMemoryCache) Set(_ context.Context, key string, value any) error {
+func (c *inMemoryCache) Set(ctx context.Context, key string, value any) error {
+	spanCtx, span := c.withSpan(ctx, "set", key)
+	defer span.End()
+
 	if err := validateKey(key); err != nil {
-		c.logger.Errorf("Set failed: %v", err)
+		c.logger.Errorf(spanCtx, "Set failed: %v", err)
 		return err
 	}
 
 	if value == nil {
-		c.logger.Errorf("Set failed: %v", ErrNilValue)
+		c.logger.Errorf(spanCtx, "Set failed: %v", ErrNilValue)
 		return ErrNilValue
 	}
 
@@ -187,7 +203,7 @@ func (c *inMemoryCache) Set(_ context.Context, key string, value any) error {
 	// Clean up expired entries (O(n) TTL scan)
 	removed := c.cleanupExpired(now)
 	if removed > 0 {
-		c.logger.Debugf("Cleaned %d expired items during Set", removed)
+		c.logger.Debugf(spanCtx, "Cleaned %d expired items during Set", removed)
 	}
 
 	// If present, update value and move node to front (most recently used)
@@ -199,7 +215,7 @@ func (c *inMemoryCache) Set(_ context.Context, key string, value any) error {
 		c.moveToFront(ent.node)
 
 		duration := time.Since(now)
-		c.logger.LogRequest("INFO", "SET", "UPDATE", duration, key)
+		c.logger.LogRequest(spanCtx, "INFO", "SET", "UPDATE", duration, key)
 		c.metrics.Sets().WithLabelValues(c.name).Inc()
 		c.metrics.Items().WithLabelValues(c.name).Set(float64(len(c.items)))
 		c.metrics.Latency().WithLabelValues(c.name, "set").Observe(duration.Seconds())
@@ -209,7 +225,7 @@ func (c *inMemoryCache) Set(_ context.Context, key string, value any) error {
 
 	// Evict if at capacity (O(1) eviction)
 	if c.maxItems > 0 && len(c.items) >= c.maxItems {
-		c.evictTail()
+		c.evictTail(spanCtx)
 	}
 
 	// Insert new node at head (most recently used)
@@ -219,7 +235,7 @@ func (c *inMemoryCache) Set(_ context.Context, key string, value any) error {
 	c.items[key] = entry{value: value, expiresAt: c.computeExpiry(now), node: node}
 
 	duration := time.Since(now)
-	c.logger.LogRequest("INFO", "SET", "CREATE", duration, key)
+	c.logger.LogRequest(spanCtx, "INFO", "SET", "CREATE", duration, key)
 	c.metrics.Sets().WithLabelValues(c.name).Inc()
 	c.metrics.Items().WithLabelValues(c.name).Set(float64(len(c.items)))
 	c.metrics.Latency().WithLabelValues(c.name, "set").Observe(duration.Seconds())
@@ -232,9 +248,12 @@ func (c *inMemoryCache) Set(_ context.Context, key string, value any) error {
 // It also marks the accessed item as the most recently used.
 // If the key is not found or has expired, it returns nil and false.
 // This operation is thread-safe.
-func (c *inMemoryCache) Get(_ context.Context, key string) (value any, found bool, err error) {
+func (c *inMemoryCache) Get(ctx context.Context, key string) (value any, found bool, err error) {
+	spanCtx, span := c.withSpan(ctx, "get", key)
+	defer span.End()
+
 	if err := validateKey(key); err != nil {
-		c.logger.Errorf("Get failed: %v", err)
+		c.logger.Errorf(spanCtx, "Get failed: %v", err)
 		return nil, false, err
 	}
 
@@ -250,7 +269,7 @@ func (c *inMemoryCache) Get(_ context.Context, key string) (value any, found boo
 		}
 
 		duration := time.Since(time.Now())
-		c.logger.Missf("GET", duration, key)
+		c.logger.Missf(spanCtx, "GET", duration, key)
 		c.metrics.Misses().WithLabelValues(c.name).Inc()
 		c.metrics.Latency().WithLabelValues(c.name, "get").Observe(duration.Seconds())
 
@@ -264,7 +283,7 @@ func (c *inMemoryCache) Get(_ context.Context, key string) (value any, found boo
 
 	duration := time.Since(start) // ✅ This now measures actual processing time
 
-	c.logger.Hitf("GET", duration, key)
+	c.logger.Hitf(spanCtx, "GET", duration, key)
 	c.metrics.Hits().WithLabelValues(c.name).Inc()
 	c.metrics.Latency().WithLabelValues(c.name, "get").Observe(duration.Seconds())
 
@@ -274,9 +293,12 @@ func (c *inMemoryCache) Get(_ context.Context, key string) (value any, found boo
 // Delete removes a key from the cache.
 // If the key does not exist, the operation is a no-op.
 // This operation is thread-safe.
-func (c *inMemoryCache) Delete(_ context.Context, key string) error {
+func (c *inMemoryCache) Delete(ctx context.Context, key string) error {
+	spanCtx, span := c.withSpan(ctx, "delete", key)
+	defer span.End()
+
 	if err := validateKey(key); err != nil {
-		c.logger.Errorf("Delete failed: %v", err)
+		c.logger.Errorf(spanCtx, "Delete failed: %v", err)
 		return err
 	}
 
@@ -287,7 +309,7 @@ func (c *inMemoryCache) Delete(_ context.Context, key string) error {
 		// O(1) removal from LRU list
 		c.removeNode(ent.node)
 		delete(c.items, key)
-		c.logger.Debugf("Deleted key '%s'", key)
+		c.logger.Debugf(spanCtx, "Deleted key '%s'", key)
 		c.metrics.Deletes().WithLabelValues(c.name).Inc()
 		c.metrics.Items().WithLabelValues(c.name).Set(float64(len(c.items)))
 	}
@@ -301,9 +323,12 @@ func (c *inMemoryCache) Delete(_ context.Context, key string) error {
 // It returns true if the key is present and valid, false otherwise.
 // This operation does not update the item's recency.
 // This operation is thread-safe.
-func (c *inMemoryCache) Exists(_ context.Context, key string) (bool, error) {
+func (c *inMemoryCache) Exists(ctx context.Context, key string) (bool, error) {
+	spanCtx, span := c.withSpan(ctx, "exists", key)
+	defer span.End()
+
 	if err := validateKey(key); err != nil {
-		c.logger.Errorf("Exists failed: %v", err)
+		c.logger.Errorf(spanCtx, "Exists failed: %v", err)
 		return false, err
 	}
 
@@ -319,16 +344,18 @@ func (c *inMemoryCache) Exists(_ context.Context, key string) (bool, error) {
 
 // Clear removes all items from the cache.
 // This operation is thread-safe.
-func (c *inMemoryCache) Clear(_ context.Context) error {
+func (c *inMemoryCache) Clear(ctx context.Context) error {
+	spanCtx, span := c.withSpan(ctx, "clear", "")
+	defer span.End()
+
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
 	count := len(c.items)
 	c.items = make(map[string]entry)
 	c.head, c.tail = nil, nil
-	c.logger.Infof("Cleared cache '%s', removed %d items", c.name, count)
+	c.logger.Infof(spanCtx, "Cleared cache '%s', removed %d items", c.name, count)
 	c.metrics.Items().WithLabelValues(c.name).Set(0)
-	c.metrics.Latency().WithLabelValues(c.name, "clear").Observe(0)
 
 	return nil
 }
@@ -337,18 +364,18 @@ func (c *inMemoryCache) Clear(_ context.Context) error {
 // Subsequent operations on the cache may fail. Calling Close on an already closed
 // cache returns ErrCacheClosed.
 // This operation is thread-safe.
-func (c *inMemoryCache) Close(_ context.Context) error {
+func (c *inMemoryCache) Close(ctx context.Context) error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
 	if c.closed {
-		c.logger.Warnf("Close called on already closed cache '%s'", c.name)
+		c.logger.Warnf(ctx, "Close called on already closed cache '%s'", c.name)
 		return ErrCacheClosed
 	}
 
 	close(c.quit)
 	c.closed = true
-	c.logger.Infof("Cache '%s' closed", c.name)
+	c.logger.Infof(ctx, "Cache '%s' closed", c.name)
 
 	return nil
 }
@@ -380,7 +407,7 @@ func (c *inMemoryCache) cleanupExpired(now time.Time) int {
 }
 
 // removes the least-recently used item.
-func (c *inMemoryCache) evictTail() {
+func (c *inMemoryCache) evictTail(ctx context.Context) {
 	if c.tail == nil {
 		return
 	}
@@ -388,7 +415,7 @@ func (c *inMemoryCache) evictTail() {
 	key := c.tail.key
 	c.removeNode(c.tail)
 	delete(c.items, key)
-	c.logger.Debugf("Evicted key '%s'", key)
+	c.logger.Debugf(ctx, "Evicted key '%s'", key)
 	c.metrics.Evicts().WithLabelValues(c.name).Inc()
 	c.metrics.Items().WithLabelValues(c.name).Set(float64(len(c.items)))
 }
@@ -447,7 +474,7 @@ func (c *inMemoryCache) startCleanup(ctx context.Context) {
 	ticker := time.NewTicker(interval)
 	defer ticker.Stop()
 
-	c.logger.Infof("Started cleanup every %v for cache '%s'", interval, c.name)
+	c.logger.Infof(ctx, "Started cleanup every %v for cache '%s'", interval, c.name)
 
 	for {
 		select {
@@ -456,17 +483,17 @@ func (c *inMemoryCache) startCleanup(ctx context.Context) {
 			if !c.closed {
 				removed := c.cleanupExpired(time.Now())
 				if removed > 0 {
-					c.logger.Debugf("Cleanup removed %d items, remaining %d", removed, len(c.items))
+					c.logger.Debugf(ctx, "Cleanup removed %d items, remaining %d", removed, len(c.items))
 				}
 			}
 			c.mu.Unlock()
 
 		case <-ctx.Done():
-			c.logger.Infof("Context canceled: stopping cleanup for cache '%s'", c.name)
+			c.logger.Infof(ctx, "Context canceled: stopping cleanup for cache '%s'", c.name)
 			return
 
 		case <-c.quit:
-			c.logger.Infof("Quit channel closed: stopping cleanup for cache '%s'", c.name)
+			c.logger.Infof(ctx, "Quit channel closed: stopping cleanup for cache '%s'", c.name)
 			return
 		}
 	}
