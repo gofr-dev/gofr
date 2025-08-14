@@ -170,12 +170,9 @@ func (c *Client) DeleteBucket(ctx context.Context, bucketID string) error {
 	if bucketID == "" {
 		return errEmptyBucketID
 	}
-
-	// bucketsAPI := c.client.BucketsAPI()
-	// if err := bucketsAPI.DeleteBucketWithID(ctx, bucketID); err != nil {
-	// 	return err
-	// }
-
+	if err := c.influx.bucket.DeleteBucketWithID(ctx, bucketID); err != nil {
+		return err
+	}
 	return nil
 }
 
@@ -235,20 +232,18 @@ func (c *Client) ListBuckets(ctx context.Context, org string) (buckets map[strin
 		return nil, errEmptyOrganizationName
 	}
 
-	// bucketsAPI := c.client.BucketsAPI()
+	bucketsDomain, err := c.influx.bucket.FindBucketsByOrgName(ctx, org)
+	if err != nil {
+		return nil, err
+	}
 
-	// bucketsDomain, err := bucketsAPI.FindBucketsByOrgName(ctx, org)
-	// if err != nil {
-	// 	return nil, err
-	// }
+	buckets = make(map[string]string) // Initialize the map
 
-	// buckets = make(map[string]string) // Initialize the map
-
-	// for _, bucket := range *bucketsDomain {
-	// 	if bucket.Name != "" {
-	// 		buckets[*bucket.Id] = bucket.Name
-	// 	}
-	// }
+	for _, bucket := range *bucketsDomain {
+		if bucket.Name != "" {
+			buckets[*bucket.Id] = bucket.Name
+		}
+	}
 
 	return buckets, nil
 }
