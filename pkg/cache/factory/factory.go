@@ -1,27 +1,36 @@
-// package factory provides factory functions for creating cache instances.
-// It simplifies the creation of different cache types (e.g., in-memory, Redis)
-// with a unified and configurable approach using the functional options pattern.
 package factory
 
 import (
 	"context"
 	"time"
 
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/trace"
+
 	"gofr.dev/pkg/cache"
 	"gofr.dev/pkg/cache/inmemory"
 	"gofr.dev/pkg/cache/observability"
 	"gofr.dev/pkg/cache/redis"
+	"gofr.dev/pkg/gofr/logging"
 )
 
-// config holds the configuration for creating cache instances.
 type config struct {
 	inMemoryOptions []inmemory.Option
 	redisOptions    []redis.Option
+	logger          logging.Logger
+	metrics         *observability.Metrics
 }
 
 type Option func(*config)
 
-// WithObservabilityLogger returns an Option that sets a custom logger for the cache.
+// WithLogger sets a custom logging.Logger for the cache.
+func WithLogger(logger logging.Logger) Option {
+	return func(c *config) {
+		c.logger = logger
+	}
+}
+
+// WithObservabilityLogger sets a custom observability.Logger for both in-memory and Redis caches.
 func WithObservabilityLogger(logger observability.Logger) Option {
 	return func(c *config) {
 		c.inMemoryOptions = append(c.inMemoryOptions, inmemory.WithLogger(logger))
@@ -29,94 +38,210 @@ func WithObservabilityLogger(logger observability.Logger) Option {
 	}
 }
 
-// WithObservabilityLoggerFunc returns an Option that sets a logger using a provider function.
-func WithObservabilityLoggerFunc(f func() observability.Logger) Option {
-	return func(c *config) {
-		logger := f()
-		c.inMemoryOptions = append(c.inMemoryOptions, inmemory.WithLogger(logger))
-		c.redisOptions = append(c.redisOptions, redis.WithLogger(logger))
-	}
-}
-
-// WithMetrics returns an Option that sets a metrics collector for the cache.
+// WithMetrics sets a metrics collector for both in-memory and Redis caches.
 func WithMetrics(metrics *observability.Metrics) Option {
 	return func(c *config) {
+		c.metrics = metrics
 		c.inMemoryOptions = append(c.inMemoryOptions, inmemory.WithMetrics(metrics))
 		c.redisOptions = append(c.redisOptions, redis.WithMetrics(metrics))
 	}
 }
 
-// WithRedisAddr returns an Option that sets the connection address for a Redis cache.
+// WithRedisAddr sets the Redis connection address.
 func WithRedisAddr(addr string) Option {
 	return func(c *config) {
 		c.redisOptions = append(c.redisOptions, redis.WithAddr(addr))
 	}
 }
 
-// NewInMemoryCache creates a new in-memory cache instance with the specified configuration.
-// Parameters:
-//   - ctx: The context for initialization.
-//   - name: A logical name for the cache, used in logging and metrics.
-//   - ttl: The default time-to-live for cache entries.
-//   - maxItems: The maximum number of items the cache can hold. LRU eviction is used if exceeded.
-//   - opts: Optional configurations, such as a custom logger or metrics collector.
-//
-// Returns a cache.Cache instance or an error if initialization fails.
-func NewInMemoryCache(ctx context.Context, name string, ttl time.Duration, maxItems int, opts ...Option) (cache.Cache, error) {
-	cfg := &config{
-		inMemoryOptions: []inmemory.Option{
-			inmemory.WithName(name),
-			inmemory.WithTTL(ttl),
-			inmemory.WithMaxItems(maxItems),
-		},
+// WithRedisPassword sets the password for Redis authentication.
+func WithRedisPassword(password string) Option {
+	return func(c *config) {
+		c.redisOptions = append(c.redisOptions, redis.WithPassword(password))
+	}
+}
+
+// WithRedisDB sets the Redis database number.
+func WithRedisDB(db int) Option {
+	return func(c *config) {
+		c.redisOptions = append(c.redisOptions, redis.WithDB(db))
+	}
+}
+
+// WithTTL sets the time-to-live for cache entries (applies to both in-memory and Redis caches).
+func WithTTL(ttl time.Duration) Option {
+	return func(c *config) {
+		c.inMemoryOptions = append(c.inMemoryOptions, inmemory.WithTTL(ttl))
+		c.redisOptions = append(c.redisOptions, redis.WithTTL(ttl))
+	}
+}
+
+// WithMaxItems sets the maximum number of items for in-memory cache.
+func WithMaxItems(maxItems int) Option {
+	return func(c *config) {
+		c.inMemoryOptions = append(c.inMemoryOptions, inmemory.WithMaxItems(maxItems))
+	}
+}
+
+type contextAwareLogger struct {
+	logging.Logger
+}
+
+func extractTraceID(ctx context.Context) map[string]any {
+	if ctx == nil {
+		return nil
 	}
 
+	sc := trace.SpanFromContext(ctx).SpanContext()
+	if sc.IsValid() {
+		return map[string]any{"__trace_id__": sc.TraceID().String()}
+	}
+
+	return nil
+}
+
+func (l *contextAwareLogger) Errorf(ctx context.Context, format string, args ...any) {
+	if traceMap := extractTraceID(ctx); traceMap != nil {
+		args = append(args, traceMap)
+	}
+
+	l.Logger.Errorf(format, args...)
+}
+
+func (l *contextAwareLogger) Warnf(ctx context.Context, format string, args ...any) {
+	if traceMap := extractTraceID(ctx); traceMap != nil {
+		args = append(args, traceMap)
+	}
+
+	l.Logger.Warnf(format, args...)
+}
+
+func (l *contextAwareLogger) Infof(ctx context.Context, format string, args ...any) {
+	if traceMap := extractTraceID(ctx); traceMap != nil {
+		args = append(args, traceMap)
+	}
+
+	l.Logger.Infof(format, args...)
+}
+
+func (l *contextAwareLogger) Debugf(ctx context.Context, format string, args ...any) {
+	if traceMap := extractTraceID(ctx); traceMap != nil {
+		args = append(args, traceMap)
+	}
+
+	l.Logger.Debugf(format, args...)
+}
+
+func (l *contextAwareLogger) Hitf(ctx context.Context, message string, duration time.Duration, operation string) {
+	args := []any{message, operation, duration}
+	if traceMap := extractTraceID(ctx); traceMap != nil {
+		args = append(args, traceMap)
+	}
+
+	l.Logger.Infof("%s: %s, duration: %s", args...)
+}
+
+func (l *contextAwareLogger) Missf(ctx context.Context, message string, duration time.Duration, operation string) {
+	args := []any{message, operation, duration}
+	if traceMap := extractTraceID(ctx); traceMap != nil {
+		args = append(args, traceMap)
+	}
+
+	l.Logger.Infof("%s: %s, duration: %s", args...)
+}
+
+func (l *contextAwareLogger) LogRequest(ctx context.Context, level, message string, tag any, duration time.Duration, operation string) {
+	logMessage := "message: %s, tag: %v, duration: %v, operation: %s"
+	args := []any{message, tag, duration, operation}
+
+	if traceMap := extractTraceID(ctx); traceMap != nil {
+		args = append(args, traceMap)
+	}
+
+	switch level {
+	case "INFO":
+		l.Logger.Infof(logMessage, args...)
+	case "DEBUG":
+		l.Logger.Debugf(logMessage, args...)
+	case "WARN":
+		l.Logger.Warnf(logMessage, args...)
+	case "ERROR":
+		l.Logger.Errorf(logMessage, args...)
+	default:
+		l.Logger.Logf(logMessage, args...)
+	}
+}
+
+func getTracer(name string) trace.Tracer {
+	return otel.GetTracerProvider().Tracer(name)
+}
+
+type cacheBuilder interface {
+	build(ctx context.Context, cfg *config) (cache.Cache, error)
+}
+
+type inMemoryBuilder struct {
+	name string
+}
+
+func (b *inMemoryBuilder) build(ctx context.Context, cfg *config) (cache.Cache, error) {
+	cfg.inMemoryOptions = append(cfg.inMemoryOptions, inmemory.WithName(b.name))
+
+	c, err := inmemory.NewInMemoryCache(ctx, cfg.inMemoryOptions...)
+	if err != nil {
+		return nil, err
+	}
+
+	c.UseTracer(getTracer("gofr-inmemory-cache"))
+
+	return c, nil
+}
+
+type redisBuilder struct {
+	name string
+}
+
+func (b *redisBuilder) build(ctx context.Context, cfg *config) (cache.Cache, error) {
+	cfg.redisOptions = append(cfg.redisOptions, redis.WithName(b.name))
+
+	c, err := redis.NewRedisCache(ctx, cfg.redisOptions...)
+	if err != nil {
+		return nil, err
+	}
+
+	c.UseTracer(getTracer("gofr-redis-cache"))
+
+	return c, nil
+}
+
+func newCacheWithBuilder(ctx context.Context, builder cacheBuilder, opts ...Option) (cache.Cache, error) {
+	cfg := &config{}
 	for _, opt := range opts {
 		opt(cfg)
 	}
 
-	return inmemory.NewInMemoryCache(ctx, cfg.inMemoryOptions...)
-}
-
-// NewRedisCache creates a new Redis-backed cache instance.
-// Parameters:
-//   - ctx: The context for initialization and connection verification.
-//   - name: A logical name for the cache, used in logging and metrics.
-//   - ttl: The default time-to-live for cache entries.
-//   - opts: Optional configurations, such as a custom logger, metrics collector, or Redis connection details.
-//
-// Returns a cache.Cache instance or an error if the connection to Redis fails.
-func NewRedisCache(ctx context.Context, name string, ttl time.Duration, opts ...Option) (cache.Cache, error) {
-	cfg := &config{
-		redisOptions: []redis.Option{
-			redis.WithName(name),
-			redis.WithTTL(ttl),
-		},
+	if cfg.logger != nil {
+		adaptedLogger := &contextAwareLogger{Logger: cfg.logger}
+		cfg.inMemoryOptions = append(cfg.inMemoryOptions, inmemory.WithLogger(adaptedLogger))
+		cfg.redisOptions = append(cfg.redisOptions, redis.WithLogger(adaptedLogger))
 	}
 
-	for _, opt := range opts {
-		opt(cfg)
-	}
-
-	return redis.NewRedisCache(ctx, cfg.redisOptions...)
+	return builder.build(ctx, cfg)
 }
 
-// NewCache is a generic factory that creates a cache instance based on the specified type.
-// It acts as a dispatcher to the more specific factory functions like NewInMemoryCache or NewRedisCache.
-// Parameters:
-//   - ctx: The context for initialization.
-//   - cacheType: The type of cache to create ("inmemory" or "redis"). Defaults to "inmemory".
-//   - name: A logical name for the cache.
-//   - ttl: The default time-to-live for entries.
-//   - maxItems: The maximum number of items (only applicable to in-memory cache).
-//   - opts: Optional configurations passed to the underlying cache constructor.
-//
-// Returns a cache.Cache instance or an error if initialization fails.
-func NewCache(ctx context.Context, cacheType, name string, ttl time.Duration, maxItems int, opts ...Option) (cache.Cache, error) {
+func NewInMemoryCache(ctx context.Context, name string, opts ...Option) (cache.Cache, error) {
+	return newCacheWithBuilder(ctx, &inMemoryBuilder{name: name}, opts...)
+}
+
+func NewRedisCache(ctx context.Context, name string, opts ...Option) (cache.Cache, error) {
+	return newCacheWithBuilder(ctx, &redisBuilder{name: name}, opts...)
+}
+
+func NewCache(ctx context.Context, cacheType, name string, opts ...Option) (cache.Cache, error) {
 	switch cacheType {
 	case "redis":
-		return NewRedisCache(ctx, name, ttl, opts...)
-	default: // "inmemory" is the default
-		return NewInMemoryCache(ctx, name, ttl, maxItems, opts...)
+		return NewRedisCache(ctx, name, opts...)
+	default:
+		return NewInMemoryCache(ctx, name, opts...)
 	}
 }
