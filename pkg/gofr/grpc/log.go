@@ -24,9 +24,9 @@ const (
 	nanosecondsPerMillisecond = 1e6
 	debugMethod               = "/grpc.health.v1.Health/SetServingStatus"
 	healthCheck               = "/grpc.health.v1.Health/Check"
-	clientStreamSuffix     = " [CLIENT-STREAM]"
-	serverStreamSuffix     = " [SERVER-STREAM]"
-	bidirectionalSuffix    = " [BI-DIRECTION_STREAM]"
+	clientStreamSuffix        = " [CLIENT-STREAM]"
+	serverStreamSuffix        = " [SERVER-STREAM]"
+	bidirectionalSuffix       = " [BI-DIRECTION_STREAM]"
 )
 
 type Logger interface {
@@ -54,12 +54,12 @@ func NewgRPCLogger() gRPCLog {
 	return gRPCLog{}
 }
 
-func (l gRPCLog) PrettyPrint(writer io.Writer) {
+func (l *gRPCLog) PrettyPrint(writer io.Writer) {
 	streamInfo := ""
 	if l.StreamType != "" {
 		streamInfo = fmt.Sprintf(" [%s]", l.StreamType)
 	}
-	
+
 	fmt.Fprintf(writer, "\u001B[38;5;8m%s \u001B[38;5;%dm%-*d"+
 		"\u001B[0m %*d\u001B[38;5;8mµs\u001B[0m %s%s %s\n",
 		l.ID, colorForGRPCCode(l.StatusCode),
@@ -110,7 +110,7 @@ func StreamObservabilityInterceptor(logger Logger, metrics Metrics) grpc.StreamS
 		err := handler(srv, wrappedStream)
 
 		streamType, grpcMethodName := getStreamTypeAndMethod(info)
-		
+
 		// Log and record metrics
 		logStreamRPC(ctx, logger, metrics, start, err, grpcMethodName, streamType, "app_gRPC-Stream_stats")
 
@@ -118,11 +118,10 @@ func StreamObservabilityInterceptor(logger Logger, metrics Metrics) grpc.StreamS
 	}
 }
 
-// getStreamTypeAndMethod determines the stream type and formats the method name
-func getStreamTypeAndMethod(info *grpc.StreamServerInfo) (string, string) {
-	var streamType string
-	methodName := info.FullMethod
-	
+// getStreamTypeAndMethod determines the stream type and formats the method name.
+func getStreamTypeAndMethod(info *grpc.StreamServerInfo) (streamType, methodName string) {
+	methodName = info.FullMethod
+
 	switch {
 	case info.IsClientStream && info.IsServerStream:
 		streamType = "BIDIRECTIONAL"
@@ -134,9 +133,10 @@ func getStreamTypeAndMethod(info *grpc.StreamServerInfo) (string, string) {
 		streamType = "SERVER_STREAM"
 		methodName += serverStreamSuffix
 	}
-	
+
 	return streamType, methodName
 }
+
 // wrappedServerStream propagates context with tracing for streaming RPCs.
 type wrappedServerStream struct {
 	grpc.ServerStream
@@ -218,12 +218,13 @@ func logStreamRPC(ctx context.Context, logger Logger, metrics Metrics, start tim
 
 	if err != nil {
 		statusErr, _ := status.FromError(err)
+		//nolint:gosec //errorcode is garenteed to be in safe range
 		logEntry.StatusCode = int32(statusErr.Code())
 	} else {
 		logEntry.StatusCode = int32(codes.OK)
 	}
 
-	logGRPCEntry(logger, logEntry, method)
+	logGRPCEntry(logger, &logEntry, method)
 	recordGRPCMetrics(ctx, metrics, metricName, duration, method, streamType)
 }
 
@@ -245,35 +246,35 @@ func logRPC(ctx context.Context, logger Logger, metrics Metrics, start time.Time
 		logEntry.StatusCode = int32(codes.OK)
 	}
 
-	logGRPCEntry(logger, logEntry, method)
+	logGRPCEntry(logger, &logEntry, method)
 	recordGRPCMetrics(ctx, metrics, name, duration, method, "")
 }
 
-// Helper function to extract trace ID from context
+// Helper function to extract trace ID from context.
 func getTraceID(ctx context.Context) string {
 	if ctx == nil {
 		return ""
 	}
-	
+
 	span := trace.SpanFromContext(ctx)
 	if span == nil {
 		return ""
 	}
-	
+
 	return span.SpanContext().TraceID().String()
 }
 
-// logGRPCEntry handles the actual logging with improved logic
-func logGRPCEntry(logger Logger, logEntry gRPCLog, method string) {
+// logGRPCEntry handles the actual logging with improved logic.
+func logGRPCEntry(logger Logger, logEntry *gRPCLog, method string) {
 	if logger == nil {
 		return
 	}
 
 	switch {
 	case method == debugMethod,
-		 strings.Contains(method, "/Send"),
-		 strings.Contains(method, "/Recv"),
-		 strings.Contains(method, "/SendAndClose"):
+		strings.Contains(method, "/Send"),
+		strings.Contains(method, "/Recv"),
+		strings.Contains(method, "/SendAndClose"):
 		logger.Debug(logEntry)
 	default:
 		logger.Info(logEntry)
@@ -286,12 +287,12 @@ func recordGRPCMetrics(ctx context.Context, metrics Metrics, name string, durati
 	}
 
 	durationMs := float64(duration.Milliseconds()) + float64(duration.Nanoseconds()%nanosecondsPerMillisecond)/nanosecondsPerMillisecond
-	
+
 	labels := []string{"method", method}
 	if streamType != "" {
 		labels = append(labels, "stream_type", streamType)
 	}
-	
+
 	metrics.RecordHistogram(ctx, name, durationMs, labels...)
 }
 
