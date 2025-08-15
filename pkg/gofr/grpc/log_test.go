@@ -47,7 +47,8 @@ func TestRPCLog_StringWithStreamType(t *testing.T) {
 		StreamType: "CLIENT_STREAM",
 	}
 
-	expLog := `{"id":"123","startTime":"2020-01-01T12:12:12","responseTime":0,"method":"/test.Service/Method","statusCode":0,"streamType":"CLIENT_STREAM"}`
+	expLog := `{"id":"123","startTime":"2020-01-01T12:12:12","responseTime":0,` +
+		`"method":"/test.Service/Method","statusCode":0,"streamType":"CLIENT_STREAM"}`
 
 	assert.Equal(t, expLog, l.String())
 }
@@ -97,7 +98,7 @@ func TestRPCLog_PrettyPrint(t *testing.T) {
 
 func TestRPCLog_PrettyPrintWithStreamType(t *testing.T) {
 	var buf bytes.Buffer
-	
+
 	l := gRPCLog{
 		ID:           "1",
 		StartTime:    "2023-01-01T12:00:00Z",
@@ -108,7 +109,7 @@ func TestRPCLog_PrettyPrintWithStreamType(t *testing.T) {
 	}
 
 	l.PrettyPrint(&buf)
-	
+
 	output := buf.String()
 	assert.Contains(t, output, "[SERVER_STREAM]")
 	assert.Contains(t, output, "/test.Service/Method")
@@ -116,10 +117,10 @@ func TestRPCLog_PrettyPrintWithStreamType(t *testing.T) {
 
 func TestGetStreamTypeAndMethod(t *testing.T) {
 	testCases := []struct {
-		desc             string
-		info             *grpc.StreamServerInfo
-		expectedType     string
-		expectedMethod   string
+		desc           string
+		info           *grpc.StreamServerInfo
+		expectedType   string
+		expectedMethod string
 	}{
 		{
 			desc: "bidirectional stream",
@@ -164,25 +165,25 @@ func TestGetStreamTypeAndMethod(t *testing.T) {
 
 func TestGetMetadataValue(t *testing.T) {
 	md := metadata.Pairs("key1", "value1", "key2", "value2")
-	
+
 	assert.Equal(t, "value1", getMetadataValue(md, "key1"))
 	assert.Equal(t, "value2", getMetadataValue(md, "key2"))
-	assert.Equal(t, "", getMetadataValue(md, "nonexistent"))
+	assert.Empty(t, getMetadataValue(md, "nonexistent"))
 }
 
 func TestGetTraceID(t *testing.T) {
-	assert.Equal(t, "", getTraceID(nil))
+	assert.Empty(t, getTraceID(context.TODO()))
 	assert.Equal(t, "00000000000000000000000000000000", getTraceID(context.Background()))
 }
 
 func TestWrappedServerStream_Context(t *testing.T) {
+	type contextKey string
+
 	originalCtx := context.Background()
-	newCtx := context.WithValue(originalCtx, "key", "value")
-	
+	newCtx := context.WithValue(originalCtx, contextKey("key"), "value")
 	wrapped := &wrappedServerStream{
 		ctx: newCtx,
 	}
-	
 	assert.Equal(t, newCtx, wrapped.Context())
-	assert.Equal(t, "value", wrapped.Context().Value("key"))
+	assert.Equal(t, "value", wrapped.Context().Value(contextKey("key")))
 }

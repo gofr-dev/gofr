@@ -57,7 +57,7 @@ func New() *App {
 		port = defaultGRPCPort
 	}
 
-	app.grpcServer, err = newGRPCServer(app.container, port, app.Config)
+	app.grpcServer, _ = newGRPCServer(app.container, port, app.Config)
 
 	app.subscriptionManager = newSubscriptionManager(app.container)
 
@@ -78,7 +78,7 @@ func NewCMD() *App {
 	app.readConfig(true)
 	app.container = container.NewContainer(nil)
 	app.container.Logger = logging.NewFileLogger(app.Config.Get("CMD_LOGS_FILE"))
-	
+
 	app.cmd = &cmd{
 		out: terminal.New(),
 	}

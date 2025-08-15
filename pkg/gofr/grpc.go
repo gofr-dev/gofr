@@ -28,6 +28,12 @@ type grpcServer struct {
 	config             config.Config
 }
 
+var (
+	ErrNonAddressable     = errors.New("cannot inject container as it is not addressable or is nil")
+	ErrInvalidPort        = errors.New("invalid port number")
+	ErrFailedCreateServer = errors.New("failed to create gRPC server")
+)
+
 // AddGRPCServerOptions allows users to add custom gRPC server options such as TLS configuration,
 // timeouts, interceptors, and other server-specific settings in a single call.
 //
@@ -44,14 +50,15 @@ type grpcServer struct {
 // to the server's configuration. It allows fine-tuning of the gRPC server's behavior during its initialization.
 func (a *App) AddGRPCServerOptions(grpcOpts ...grpc.ServerOption) {
 	if len(grpcOpts) == 0 {
-        a.container.Logger.Debug("no gRPC server options provided")
-        return
-    }
+		a.container.Logger.Debug("no gRPC server options provided")
+		return
+	}
+
 	a.container.Logger.Debugf("adding %d gRPC server options", len(grpcOpts))
 	a.grpcServer.options = append(a.grpcServer.options, grpcOpts...)
 }
 
-// AddGRPCUnaryInterceptors allows users to add custom gRPC interceptors. 
+// AddGRPCUnaryInterceptors allows users to add custom gRPC interceptors.
 // Example:
 //
 //	func loggingInterceptor(ctx context.Context, req interface{}, info *grpc.UnaryServerInfo,
@@ -62,12 +69,12 @@ func (a *App) AddGRPCServerOptions(grpcOpts ...grpc.ServerOption) {
 //	app.AddGRPCUnaryInterceptors(loggingInterceptor)
 func (a *App) AddGRPCUnaryInterceptors(interceptors ...grpc.UnaryServerInterceptor) {
 	if len(interceptors) == 0 {
-        a.container.Logger.Debug("no unary interceptors provided")
-        return
-    }
-	
+		a.container.Logger.Debug("no unary interceptors provided")
+		return
+	}
+
 	a.container.Logger.Debugf("adding %d valid unary interceptors", len(interceptors))
-    a.grpcServer.interceptors = append(a.grpcServer.interceptors, interceptors...)
+	a.grpcServer.interceptors = append(a.grpcServer.interceptors, interceptors...)
 }
 
 func (a *App) AddGRPCServerStreamInterceptors(interceptors ...grpc.StreamServerInterceptor) {
@@ -81,12 +88,12 @@ func (a *App) AddGRPCServerStreamInterceptors(interceptors ...grpc.StreamServerI
 }
 
 func newGRPCServer(c *container.Container, port int, cfg config.Config) (*grpcServer, error) {
-    if port <= 0 || port > 65535 {
-        return nil, fmt.Errorf("invalid port number: %d", port)
-    }
+	if port <= 0 || port > 65535 {
+		return nil, fmt.Errorf("%w: %d", ErrInvalidPort, port)
+	}
 
 	c.Logger.Infof("creating new gRPC server on port %d", port)
-	
+
 	registerGRPCMetrics(c)
 
 	middleware := make([]grpc.UnaryServerInterceptor, 0)
@@ -98,9 +105,9 @@ func newGRPCServer(c *container.Container, port int, cfg config.Config) (*grpcSe
 	streamMiddleware = append(streamMiddleware,
 		grpc_recovery.StreamServerInterceptor(),
 		gofr_grpc.StreamObservabilityInterceptor(c.Logger, c.Metrics()))
-	
+
 	c.Logger.Debugf("gRPC server created successfully on port %d", port)
-	
+
 	return &grpcServer{
 		port:               port,
 		interceptors:       middleware,
@@ -109,62 +116,64 @@ func newGRPCServer(c *container.Container, port int, cfg config.Config) (*grpcSe
 	}, nil
 }
 
-// registerGRPCMetrics registers essential gRPC metrics
+// registerGRPCMetrics registers essential gRPC metrics.
 func registerGRPCMetrics(c *container.Container) {
 	c.Metrics().NewGauge("grpc_server_status", "gRPC server status (1=running, 0=stopped)")
 	c.Metrics().NewCounter("grpc_server_errors_total", "Total gRPC server errors")
 	c.Metrics().NewCounter("grpc_services_registered_total", "Total gRPC services registered")
 }
 
-func (g *grpcServer) createServer() error{
+func (g *grpcServer) createServer() error {
 	interceptorOption := grpc.UnaryInterceptor(grpc_middleware.ChainUnaryServer(g.interceptors...))
 	streamOpt := grpc.StreamInterceptor(grpc_middleware.ChainStreamServer(g.streamInterceptors...))
 	g.options = append(g.options, interceptorOption, streamOpt)
 
 	g.server = grpc.NewServer(g.options...)
 	if g.server == nil {
-        return errors.New("failed to create gRPC server")
-    }
+		return ErrFailedCreateServer
+	}
 
 	enabled := strings.ToLower(g.config.GetOrDefault("GRPC_ENABLE_REFLECTION", "false"))
-	if enabled == "true" {
-        reflection.Register(g.server)
-    }
+	if enabled == defaultTelemetry {
+		reflection.Register(g.server)
+	}
 
 	return nil
 }
 
 func (g *grpcServer) Run(c *container.Container) {
-	
 	if g.server == nil {
-        if err := g.createServer(); err != nil {
-            c.Logger.Fatalf("failed to create gRPC server: %v", err)
+		if err := g.createServer(); err != nil {
+			c.Logger.Fatalf("failed to create gRPC server: %v", err)
 			c.Metrics().IncrementCounter(context.Background(), "grpc_server_errors_total")
-            return
-        }
-    }
+
+			return
+		}
+	}
 
 	addr := ":" + strconv.Itoa(g.port)
 
 	c.Logger.Infof("starting gRPC server at %s", addr)
 
-	listener, err := net.Listen("tcp", addr)
+	listener, err := (&net.ListenConfig{}).Listen(context.Background(), "tcp", addr)
 	if err != nil {
 		c.Logger.Errorf("error in starting gRPC server at %s: %s", addr, err)
 		c.Metrics().IncrementCounter(context.Background(), "grpc_server_errors_total")
 		c.Metrics().SetGauge("grpc_server_status", 0)
+
 		return
 	}
-	
+
 	c.Metrics().SetGauge("grpc_server_status", 1)
 
 	if err := g.server.Serve(listener); err != nil {
 		c.Logger.Errorf("error in starting gRPC server at %s: %s", addr, err)
 		c.Metrics().IncrementCounter(context.Background(), "grpc_server_errors_total")
 		c.Metrics().SetGauge("grpc_server_status", 0)
+
 		return
 	}
-	
+
 	c.Logger.Infof("gRPC server stopped on %s", addr)
 	c.Metrics().SetGauge("grpc_server_status", 0)
 }
@@ -183,27 +192,22 @@ func (g *grpcServer) Shutdown(ctx context.Context) error {
 	})
 }
 
-var (
-	errNonAddressable = errors.New("cannot inject container as it is not addressable or is nil")
-)
-
 // RegisterService adds a gRPC service to the GoFr application.
 func (a *App) RegisterService(desc *grpc.ServiceDesc, impl any) {
-	
 	if !a.grpcRegistered && !isPortAvailable(a.grpcServer.port) {
 		a.container.Logger.Fatalf("gRPC port %d is blocked or unreachable", a.grpcServer.port)
 	}
 
-    if !a.grpcRegistered {
-        if err := a.grpcServer.createServer(); err != nil {
-            a.container.Logger.Errorf("failed to create gRPC server for service %s: %v", desc.ServiceName, err)
-            return
-        }
-    }
+	if !a.grpcRegistered {
+		if err := a.grpcServer.createServer(); err != nil {
+			a.container.Logger.Errorf("failed to create gRPC server for service %s: %v", desc.ServiceName, err)
+			return
+		}
+	}
 
 	a.container.Logger.Infof("registering gRPC Server: %s", desc.ServiceName)
 	a.grpcServer.server.RegisterService(desc, impl)
-	
+
 	a.container.Metrics().IncrementCounter(context.Background(), "grpc_services_registered_total")
 
 	err := injectContainer(impl, a.container)
@@ -238,8 +242,8 @@ func injectContainer(impl any, c *container.Container) error {
 
 		if f.Type == reflect.TypeOf(c) {
 			if !v.CanSet() {
-				c.Logger.Error(errNonAddressable)
-				return errNonAddressable
+				c.Logger.Error(ErrNonAddressable)
+				return ErrNonAddressable
 			}
 
 			v.Set(reflect.ValueOf(c))
@@ -250,8 +254,8 @@ func injectContainer(impl any, c *container.Container) error {
 
 		if f.Type == reflect.TypeOf(*c) {
 			if !v.CanSet() {
-				c.Logger.Error(errNonAddressable)
-				return errNonAddressable
+				c.Logger.Error(ErrNonAddressable)
+				return ErrNonAddressable
 			}
 
 			v.Set(reflect.ValueOf(*c))

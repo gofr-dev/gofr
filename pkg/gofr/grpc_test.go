@@ -20,18 +20,23 @@ import (
 )
 
 func (g *grpcServer) addServerOptions(opts ...grpc.ServerOption) {
-    g.options = append(g.options, opts...)
+	g.options = append(g.options, opts...)
 }
 
 func (g *grpcServer) addUnaryInterceptors(interceptors ...grpc.UnaryServerInterceptor) {
-    g.interceptors = append(g.interceptors, interceptors...)
+	g.interceptors = append(g.interceptors, interceptors...)
 }
 
-func (g *grpcServer) registerService(desc *grpc.ServiceDesc, impl any) {
-    if g.server == nil {
-        g.createServer()
-    }
-    g.server.RegisterService(desc, impl)
+func (g *grpcServer) registerService(t *testing.T, desc *grpc.ServiceDesc, impl any) {
+	t.Helper()
+
+	if g.server == nil {
+		if err := g.createServer(); err != nil {
+			t.Fatalf("failed to create gRPC server: %v", err)
+		}
+	}
+
+	g.server.RegisterService(desc, impl)
 }
 
 func TestNewGRPCServer(t *testing.T) {
@@ -89,10 +94,8 @@ func TestGRPCServer_CreateServer(t *testing.T) {
 	g, err := newGRPCServer(&c, 9999, cfg)
 	require.NoError(t, err)
 
-	g.createServer()
 	err = g.createServer()
-    require.NoError(t, err) 
-
+	require.NoError(t, err)
 	assert.NotNil(t, g.server)
 }
 
@@ -103,12 +106,14 @@ func TestGRPCServer_RegisterService(t *testing.T) {
 	cfg := testutil.NewServerConfigs(t)
 	g, err := newGRPCServer(&c, 9999, cfg)
 	require.NoError(t, err)
-	g.createServer()
+
+	err = g.createServer()
+	require.NoError(t, err)
 
 	healthServer := health.NewServer()
 	desc := &grpc_health_v1.Health_ServiceDesc
-	
-	g.registerService(desc, healthServer)
+
+	g.registerService(t, desc, healthServer)
 
 	services := g.server.GetServiceInfo()
 	_, ok := services["grpc.health.v1.Health"]
@@ -133,7 +138,7 @@ func TestGRPC_ServerRun(t *testing.T) {
 
 			// If testing "server.Serve() error", occupy the port first
 			if tc.port == 10000 {
-				listener, err := net.Listen("tcp", fmt.Sprintf(":%d", tc.port))
+				listener, err := (&net.ListenConfig{}).Listen(context.Background(), "tcp", fmt.Sprintf(":%d", tc.port))
 				if err != nil {
 					t.Fatalf("Failed to occupy port %d: %v", tc.port, err)
 				}
@@ -177,7 +182,7 @@ func TestGRPC_ServerShutdown(t *testing.T) {
 	ctx, cancel := context.WithTimeout(t.Context(), 500*time.Millisecond)
 	defer cancel()
 
-	err := g.Shutdown(ctx)
+	err = g.Shutdown(ctx)
 	require.NoError(t, err, "TestGRPC_ServerShutdown Failed.\n")
 }
 
@@ -205,7 +210,7 @@ func TestGRPC_ServerShutdown_ContextCanceled(t *testing.T) {
 	// Cancel the context immediately
 	cancel()
 
-	err := <-errChan
+	err = <-errChan
 	require.ErrorContains(t, err, "context canceled", "Expected error due to context cancellation")
 }
 
@@ -219,7 +224,7 @@ func Test_injectContainer_Fails(t *testing.T) {
 	srv1 := &fail{}
 	err := injectContainer(srv1, c)
 
-	require.ErrorIs(t, err, errNonAddressable)
+	require.ErrorIs(t, err, ErrNonAddressable)
 	require.Nil(t, srv1.c1)
 
 	// Case: server is passed as unadressable(non-pointer)
@@ -282,7 +287,7 @@ func TestGRPC_Shutdown_BeforeStart(t *testing.T) {
 	ctx, cancel := context.WithTimeout(t.Context(), 500*time.Millisecond)
 	defer cancel()
 
-	err := g.Shutdown(ctx)
+	err = g.Shutdown(ctx)
 	assert.NoError(t, err, "Expected shutdown to succeed even if server was not started")
 }
 
@@ -317,7 +322,8 @@ func TestGRPC_ServerRun_WithInterceptorAndOptions(t *testing.T) {
 	// Register Health service
 	healthServer := health.NewServer()
 
-	app.grpcServer.createServer()
+	err := app.grpcServer.createServer()
+	require.NoError(t, err)
 
 	grpc_health_v1.RegisterHealthServer(app.grpcServer.server, healthServer)
 
@@ -352,12 +358,17 @@ func TestApp_WithReflection(t *testing.T) {
 	c := &container.Container{
 		Logger: logging.NewLogger(logging.DEBUG),
 	}
+
+	var err error
+
 	app := New()
 	app.container = c
 	cfg := testutil.NewServerConfigs(t)
 	app.grpcServer, err = newGRPCServer(c, 9999, cfg)
 	require.NoError(t, err)
-	app.grpcServer.createServer()
+
+	err = app.grpcServer.createServer()
+	require.NoError(t, err)
 
 	services := app.grpcServer.server.GetServiceInfo()
 	_, ok := services["grpc.reflection.v1alpha.ServerReflection"]
