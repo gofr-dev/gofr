@@ -73,8 +73,8 @@ func (f *FileSystem) Mkdir(name string, _ os.FileMode) error {
 	return err
 }
 
-func (f *FileSystem) MkdirAll(path string, perm os.FileMode) error {
-	cleaned := strings.Trim(path, "/")
+func (f *FileSystem) MkdirAll(dirPath string, perm os.FileMode) error {
+	cleaned := strings.Trim(dirPath, "/")
 	if cleaned == "" {
 		return nil
 	}
@@ -108,7 +108,7 @@ func isAlreadyExistsError(err error) bool {
 	return strings.Contains(err.Error(), "already exists")
 }
 
-func (f *FileSystem) RemoveAll(path string) error {
+func (f *FileSystem) RemoveAll(dirPath string) error {
 	var msg string
 
 	st := statusErr
@@ -121,7 +121,7 @@ func (f *FileSystem) RemoveAll(path string) error {
 	}, time.Now())
 
 	ctx := context.TODO()
-	objects, err := f.conn.ListObjects(ctx, path)
+	objects, err := f.conn.ListObjects(ctx, dirPath)
 
 	if err != nil {
 		msg = fmt.Sprintf("Error retrieving objects: %v", err)
@@ -137,9 +137,9 @@ func (f *FileSystem) RemoveAll(path string) error {
 
 	st = statusSuccess
 
-	msg = fmt.Sprintf("Directory with path %q, deleted successfully", path)
+	msg = fmt.Sprintf("Directory with path %q, deleted successfully", dirPath)
 
-	f.logger.Logf("Directory %s deleted.", path)
+	f.logger.Logf("Directory %s deleted.", dirPath)
 
 	return nil
 }

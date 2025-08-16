@@ -28,6 +28,7 @@ type FileSystem struct {
 
 // Config represents the gcs configuration.
 type Config struct {
+	EndPoint        string
 	BucketName      string
 	CredentialsJSON string
 	ProjectID       string
@@ -54,7 +55,30 @@ func (f *FileSystem) Connect() {
 
 	ctx := context.TODO()
 
-	client, err := storage.NewClient(ctx, option.WithCredentialsJSON([]byte(f.config.CredentialsJSON)))
+	var client *storage.Client
+
+	var err error
+
+	switch {
+	case f.config.EndPoint != "":
+		// Local emulator mode
+		client, err = storage.NewClient(
+			ctx,
+			option.WithEndpoint(f.config.EndPoint),
+			option.WithoutAuthentication(),
+		)
+
+	case f.config.CredentialsJSON != "":
+		// Direct JSON mode
+		client, err = storage.NewClient(
+			ctx,
+			option.WithCredentialsJSON([]byte(f.config.CredentialsJSON)),
+		)
+
+	default:
+		// Env var mode (GOOGLE_APPLICATION_CREDENTIALS)
+		client, err = storage.NewClient(ctx)
+	}
 
 	if err != nil {
 		f.logger.Errorf("Failed to connect to GCS: %v", err)
