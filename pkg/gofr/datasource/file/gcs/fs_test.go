@@ -1,6 +1,7 @@
 package gcs
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"io"
@@ -12,32 +13,38 @@ import (
 	"github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/require"
 	"gofr.dev/pkg/gofr/datasource/file"
+	"google.golang.org/api/option"
 	"gotest.tools/v3/assert"
 )
 
 var (
-	errObjectNotFound = errors.New("object not found")
-	errMock           = fmt.Errorf("errMock")
-	errorStat         = errors.New("stat error")
+	errObjectNotFound        = errors.New("object not found")
+	errMock                  = fmt.Errorf("errMock")
+	errorStat                = errors.New("stat error")
+	errSimulatedFirstFailure = errors.New("simulated first failure")
 )
+
+func TestNew_FileSystemProvider(t *testing.T) {
+	config := &Config{
+		BucketName:      "test-bucket",
+		EndPoint:        "http://localhost:4566",
+		CredentialsJSON: `{"type":"service_account"}`,
+		ProjectID:       "test-project",
+	}
+
+	provider := New(config)
+
+	fs, ok := provider.(*FileSystem)
+	require.True(t, ok, "New() should return *FileSystem")
+	require.NotNil(t, fs, "returned FileSystem should not be nil")
+
+	require.Equal(t, config, fs.config)
+	require.Nil(t, fs.conn)
+}
 
 func TestFileSystem_Connect(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
-
-	mockLogger := NewMockLogger(ctrl)
-	mockMetrics := NewMockMetrics(ctrl)
-
-	mockLogger.EXPECT().Debugf(gomock.Any(), gomock.Any()).AnyTimes()
-	mockLogger.EXPECT().Debug(gomock.Any()).AnyTimes()
-	mockLogger.EXPECT().Logf(gomock.Any(), gomock.Any()).AnyTimes()
-	mockLogger.EXPECT().Errorf(gomock.Any(), gomock.Any()).AnyTimes()
-
-	mockMetrics.EXPECT().RecordHistogram(
-		gomock.Any(), appFTPStats, gomock.Any(),
-		"type", gomock.Any(),
-		"status", gomock.Any(),
-	).AnyTimes()
 
 	tests := []struct {
 		name   string
@@ -70,14 +77,113 @@ func TestFileSystem_Connect(t *testing.T) {
 			subCtrl := gomock.NewController(t)
 			defer subCtrl.Finish()
 
+			mockLogger := NewMockLogger(ctrl)
+			mockMetrics := NewMockMetrics(ctrl)
+
+			mockMetrics.EXPECT().NewHistogram(
+				appFTPStats,
+				"App FTP Stats - duration of file operations",
+				defaultBuckets(),
+			).Times(1)
+
+			mockLogger.EXPECT().Debugf(gomock.Any(), gomock.Any()).AnyTimes()
+			mockLogger.EXPECT().Debug(gomock.Any()).AnyTimes()
+			mockLogger.EXPECT().Logf(gomock.Any(), gomock.Any()).AnyTimes()
+			mockLogger.EXPECT().Errorf(gomock.Any(), gomock.Any()).AnyTimes()
+
+			mockMetrics.EXPECT().RecordHistogram(
+				gomock.Any(), appFTPStats, gomock.Any(),
+				"type", gomock.Any(),
+				"status", gomock.Any(),
+			).AnyTimes()
+
 			fs := &FileSystem{
-				config:  tt.config,
-				logger:  mockLogger,
-				metrics: mockMetrics,
+				config:       tt.config,
+				logger:       mockLogger,
+				metrics:      mockMetrics,
+				disableRetry: true,
 			}
 
 			fs.Connect()
 		})
+	}
+}
+func TestFileSystem_startRetryConnect_Success(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	mockLogger := NewMockLogger(ctrl)
+	mockMetrics := NewMockMetrics(ctrl)
+
+	config := &Config{
+		BucketName: "retry-bucket",
+		CredentialsJSON: `{
+			"type": "service_account",
+			"client_email": "test@example.com",
+			"private_key": "-----BEGIN PRIVATE KEY-----\nMIIBOQIBAAJBAK...\n-----END PRIVATE KEY-----\n"
+		}`,
+	}
+
+	fs := &FileSystem{
+		config:  config,
+		logger:  mockLogger,
+		metrics: mockMetrics,
+	}
+
+	var callCount int
+
+	mockLogger.EXPECT().Errorf("Retry: failed to connect to GCS: %v", gomock.Any()).AnyTimes()
+	mockLogger.EXPECT().Logf("GCS connection restored to bucket %s", "retry-bucket").Times(1)
+
+	fs.conn = nil
+
+	done := make(chan bool, 1)
+
+	go func() {
+		ticker := time.NewTicker(10 * time.Millisecond)
+		defer ticker.Stop()
+
+		//nolint:staticcheck // for-select loop is required for periodic retry logic with ticker; range cannot be used here
+		for {
+			select {
+			case <-ticker.C:
+				ctx := context.TODO()
+
+				var (
+					client *storage.Client
+					err    error
+				)
+
+				callCount++
+				if callCount == 1 {
+					err = errSimulatedFirstFailure
+				} else {
+					client, err = storage.NewClient(ctx, option.WithCredentialsJSON([]byte(fs.config.CredentialsJSON)))
+					if err == nil {
+						fs.conn = &gcsClientImpl{
+							client: client,
+							bucket: client.Bucket(fs.config.BucketName),
+						}
+						fs.logger.Logf("GCS connection restored to bucket %s", fs.config.BucketName)
+
+						done <- true
+
+						return
+					}
+				}
+
+				if err != nil {
+					fs.logger.Errorf("Retry: failed to connect to GCS: %v", err)
+				}
+			}
+		}
+	}()
+
+	select {
+	case <-done:
+		require.NotNil(t, fs.conn, "connection should be restored")
+	case <-time.After(2 * time.Second):
+		t.Fatal("retry did not succeed within timeout")
 	}
 }
 
@@ -231,6 +337,28 @@ func Test_CreateFile(t *testing.T) {
 		})
 	}
 }
+
+func TestGenerateCopyName(t *testing.T) {
+	tests := []struct {
+		original string
+		count    int
+		expected string
+	}{
+		{"file.txt", 1, "file copy 1.txt"},
+		{"docs/report.pdf", 2, "docs/report copy 2.pdf"},
+		{"image.png", 3, "image copy 3.png"},
+		{"noext", 1, "noext copy 1"},
+		{"dir/file.txt", 1, "dir/file copy 1.txt"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.original, func(t *testing.T) {
+			result := generateCopyName(tt.original, tt.count)
+			require.Equal(t, tt.expected, result)
+		})
+	}
+}
+
 func Test_Remove_GCS(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()

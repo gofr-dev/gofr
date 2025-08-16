@@ -120,8 +120,8 @@ func (f *FileSystem) RemoveAll(dirPath string) error {
 	}, time.Now())
 
 	ctx := context.TODO()
-	objects, err := f.conn.ListObjects(ctx, dirPath)
 
+	objects, err := f.conn.ListObjects(ctx, dirPath)
 	if err != nil {
 		msg = fmt.Sprintf("Error retrieving objects: %v", err)
 		return err
@@ -272,7 +272,6 @@ func (f *FileSystem) Stat(name string) (file.FileInfo, error) {
 		}
 
 		objs, _, listErr := f.conn.ListDir(ctx, prefix)
-
 		if listErr != nil {
 			f.logger.Errorf("Error checking directory prefix: %v", listErr)
 			return nil, listErr

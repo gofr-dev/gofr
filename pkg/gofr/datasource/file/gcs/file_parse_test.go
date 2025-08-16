@@ -18,75 +18,89 @@ var (
 	errorRead = errors.New("read failed")
 )
 
-func TestFile_ReadAll(t *testing.T) {
+func TestFile_ReadAll_Success_JSON(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
-	tests := []struct {
-		name       string
-		fileName   string
-		body       io.ReadCloser
-		expectJSON bool
-		expectErr  bool
+	mockLogger := NewMockLogger(ctrl)
+	mockMetrics := NewMockMetrics(ctrl)
+
+	mockLogger.EXPECT().Debugf(gomock.Any(), gomock.Any()).AnyTimes()
+	mockLogger.EXPECT().Debug(gomock.Any()).AnyTimes()
+	mockLogger.EXPECT().Errorf(gomock.Any(), gomock.Any()).AnyTimes()
+
+	mockMetrics.EXPECT().RecordHistogram(
+		gomock.Any(), appFTPStats, gomock.Any(),
+		"type", gomock.Any(), "status", gomock.Any(),
+	).AnyTimes()
+
+	f := &File{
+		name:    "data.json",
+		body:    io.NopCloser(strings.NewReader(`[{"id":1}]`)),
+		logger:  mockLogger,
+		metrics: mockMetrics,
+	}
+
+	reader, err := f.ReadAll()
+
+	require.NoError(t, err)
+	require.NotNil(t, reader)
+	_, isJSON := reader.(*jsonReader)
+	require.True(t, isJSON, "Expected *jsonReader for .json file")
+}
+
+func TestFile_ReadAll_Success_NonJSON(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	mockLogger := NewMockLogger(ctrl)
+	mockMetrics := NewMockMetrics(ctrl)
+
+	mockLogger.EXPECT().Debugf(gomock.Any(), gomock.Any()).AnyTimes()
+	mockLogger.EXPECT().Debug(gomock.Any()).AnyTimes()
+	mockLogger.EXPECT().Errorf(gomock.Any(), gomock.Any()).AnyTimes()
+	mockMetrics.EXPECT().RecordHistogram(
+		gomock.Any(), appFTPStats, gomock.Any(),
+		"type", gomock.Any(), "status", gomock.Any(),
+	).AnyTimes()
+
+	testCases := []struct {
+		name string
+		file string
+		data string
 	}{
 		{
-			name:       "JSON file",
-			fileName:   "test.json",
-			body:       io.NopCloser(strings.NewReader(`[{"key":"value"}]`)),
-			expectJSON: true,
-			expectErr:  false,
+			name: "text file",
+			file: "log.txt",
+			data: "line1\nline2",
 		},
 		{
-			name:       "Text file",
-			fileName:   "test.txt",
-			body:       io.NopCloser(strings.NewReader("line1\nline2")),
-			expectJSON: false,
-			expectErr:  false,
+			name: "csv file",
+			file: "data.csv",
+			data: "name,age\nAlice,30",
 		},
 		{
-			name:       "CSV file",
-			fileName:   "test.csv",
-			body:       io.NopCloser(strings.NewReader("col1,col2\nval1,val2")),
-			expectJSON: false,
-			expectErr:  false,
+			name: "yaml file",
+			file: "config.yaml",
+			data: "key: value",
 		},
 	}
 
-	for _, tt := range tests {
+	for _, tt := range testCases {
 		t.Run(tt.name, func(t *testing.T) {
-			mockLogger := NewMockLogger(ctrl)
-			mockMetrics := NewMockMetrics(ctrl)
-
-			mockLogger.EXPECT().Debugf(gomock.Any()).AnyTimes()
-			mockLogger.EXPECT().Debug(gomock.Any()).AnyTimes()
-			mockLogger.EXPECT().Errorf(gomock.Any(), gomock.Any()).AnyTimes()
-			mockMetrics.EXPECT().RecordHistogram(gomock.Any(), appFTPStats, gomock.Any(),
-				"type", gomock.Any(), "status", gomock.Any()).AnyTimes()
-
 			f := &File{
-				name:    tt.fileName,
-				body:    tt.body,
+				name:    tt.file,
+				body:    io.NopCloser(strings.NewReader(tt.data)),
 				logger:  mockLogger,
 				metrics: mockMetrics,
 			}
 
 			reader, err := f.ReadAll()
 
-			if tt.expectErr {
-				require.Error(t, err)
-				return
-			}
-
 			require.NoError(t, err)
 			require.NotNil(t, reader)
-
-			if tt.expectJSON {
-				_, ok := reader.(*jsonReader)
-				require.True(t, ok, "Expected jsonReader")
-			} else {
-				_, ok := reader.(*textReader)
-				require.True(t, ok, "Expected textReader")
-			}
+			_, isText := reader.(*textReader)
+			require.True(t, isText, "Expected *textReader for non-JSON file")
 		})
 	}
 }
@@ -97,125 +111,192 @@ func (failingReader) Read(_ []byte) (int, error) {
 	return 0, errorRead
 }
 
-func TestFile_createJSONReader(t *testing.T) {
-	tests := []struct {
-		name      string
-		body      io.ReadCloser
-		expectErr bool
-	}{
-		{
-			name:      "valid JSON array",
-			body:      io.NopCloser(strings.NewReader(`[{"key":"value"}]`)),
-			expectErr: false,
-		},
-		{
-			name:      "valid JSON object",
-			body:      io.NopCloser(strings.NewReader(`{"key":"value"}`)),
-			expectErr: false,
-		},
-		{
-			name:      "read body failure",
-			body:      io.NopCloser(failingReader{}),
-			expectErr: true,
-		},
+func TestFile_createJSONReader_ValidJSON(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	mockLogger := NewMockLogger(ctrl)
+	mockMetrics := NewMockMetrics(ctrl)
+
+	// Expectations
+	mockLogger.EXPECT().Debug(gomock.Any()).AnyTimes()
+	mockLogger.EXPECT().Errorf(gomock.Any(), gomock.Any()).AnyTimes()
+	mockMetrics.EXPECT().RecordHistogram(
+		gomock.Any(), appFTPStats, gomock.Any(),
+		"type", gomock.Any(),
+		"status", gomock.Any(),
+	).AnyTimes()
+
+	f := &File{
+		name:    "data.json",
+		body:    io.NopCloser(strings.NewReader(`[{"id":1}]`)),
+		logger:  mockLogger,
+		metrics: mockMetrics,
 	}
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			ctrl := gomock.NewController(t)
-			defer ctrl.Finish()
+	reader, err := f.createJSONReader("test-location")
 
-			mockLogger := NewMockLogger(ctrl)
-			mockMetrics := NewMockMetrics(ctrl)
-
-			mockLogger.EXPECT().Errorf(gomock.Any(), gomock.Any()).AnyTimes()
-			mockLogger.EXPECT().Debug(gomock.Any()).AnyTimes()
-			mockLogger.EXPECT().Logf(gomock.Any(), gomock.Any()).AnyTimes()
-
-			mockMetrics.EXPECT().RecordHistogram(
-				gomock.Any(), appFTPStats, gomock.Any(),
-				"type", gomock.Any(),
-				"status", gomock.Any(),
-			).AnyTimes()
-
-			f := &File{
-				name:    "test.json",
-				body:    tt.body,
-				logger:  mockLogger,
-				metrics: mockMetrics,
-			}
-
-			reader, err := f.createJSONReader("test-location")
-
-			if tt.expectErr {
-				require.Error(t, err)
-				return
-			}
-
-			require.NoError(t, err)
-			require.NotNil(t, reader)
-			_, ok := reader.(*jsonReader)
-			require.True(t, ok)
-		})
-	}
+	require.NoError(t, err)
+	require.NotNil(t, reader)
+	_, ok := reader.(*jsonReader)
+	require.True(t, ok, "Expected *jsonReader for valid JSON")
 }
 
-func TestFile_createTextCSVReader(t *testing.T) {
-	tests := []struct {
-		name      string
-		body      io.ReadCloser
-		expectErr bool
-	}{
-		{
-			name:      "valid text",
-			body:      io.NopCloser(strings.NewReader("line1\nline2")),
-			expectErr: false,
-		},
-		{
-			name:      "empty text",
-			body:      io.NopCloser(strings.NewReader("")),
-			expectErr: false,
-		},
+func TestFile_createJSONReader_ValidJSONObject(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	mockLogger := NewMockLogger(ctrl)
+	mockMetrics := NewMockMetrics(ctrl)
+
+	mockLogger.EXPECT().Debug(gomock.Any()).AnyTimes()
+	mockLogger.EXPECT().Errorf(gomock.Any(), gomock.Any()).AnyTimes()
+	mockMetrics.EXPECT().RecordHistogram(
+		gomock.Any(), appFTPStats, gomock.Any(),
+		"type", gomock.Any(),
+		"status", gomock.Any(),
+	).AnyTimes()
+
+	f := &File{
+		name:    "config.json",
+		body:    io.NopCloser(strings.NewReader(`{"name":"test"}`)),
+		logger:  mockLogger,
+		metrics: mockMetrics,
 	}
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			ctrl := gomock.NewController(t)
-			defer ctrl.Finish()
+	reader, err := f.createJSONReader("test-location")
 
-			mockLogger := NewMockLogger(ctrl)
-			mockMetrics := NewMockMetrics(ctrl)
+	require.NoError(t, err)
+	require.NotNil(t, reader)
+	_, ok := reader.(*jsonReader)
+	require.True(t, ok, "Expected *jsonReader for JSON object")
+}
 
-			mockLogger.EXPECT().Errorf(gomock.Any(), gomock.Any()).AnyTimes()
-			mockLogger.EXPECT().Debug(gomock.Any()).AnyTimes()
-			mockLogger.EXPECT().Logf(gomock.Any(), gomock.Any()).AnyTimes()
+func TestFile_createJSONReader_ReadFailure(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
 
-			mockMetrics.EXPECT().RecordHistogram(
-				gomock.Any(), appFTPStats, gomock.Any(),
-				"type", gomock.Any(),
-				"status", gomock.Any(),
-			).AnyTimes()
+	mockLogger := NewMockLogger(ctrl)
+	mockMetrics := NewMockMetrics(ctrl)
 
-			f := &File{
-				name:    "test.txt",
-				body:    tt.body,
-				logger:  mockLogger,
-				metrics: mockMetrics,
-			}
+	mockLogger.EXPECT().Errorf(
+		"failed to read JSON body from location %s: %v",
+		"test-location",
+		errorRead,
+	).Times(1)
 
-			reader, err := f.createTextCSVReader("test-location")
+	mockLogger.EXPECT().Debug(gomock.Any()).AnyTimes()
+	mockMetrics.EXPECT().RecordHistogram(
+		gomock.Any(), appFTPStats, gomock.Any(),
+		"type", gomock.Any(),
+		"status", gomock.Any(),
+	).AnyTimes()
 
-			if tt.expectErr {
-				require.Error(t, err)
-				return
-			}
-
-			require.NoError(t, err)
-			require.NotNil(t, reader)
-			_, ok := reader.(*textReader)
-			require.True(t, ok)
-		})
+	f := &File{
+		name:    "broken.json",
+		body:    io.NopCloser(failingReader{}),
+		logger:  mockLogger,
+		metrics: mockMetrics,
 	}
+
+	reader, err := f.createJSONReader("test-location")
+
+	require.Error(t, err)
+	require.Nil(t, reader)
+}
+
+func TestFile_createTextCSVReader_ValidText(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	mockLogger := NewMockLogger(ctrl)
+	mockMetrics := NewMockMetrics(ctrl)
+
+	mockLogger.EXPECT().Debug(gomock.Any()).AnyTimes()
+	mockLogger.EXPECT().Errorf(gomock.Any(), gomock.Any()).AnyTimes()
+	mockMetrics.EXPECT().RecordHistogram(
+		gomock.Any(), appFTPStats, gomock.Any(),
+		"type", gomock.Any(),
+		"status", gomock.Any(),
+	).AnyTimes()
+
+	f := &File{
+		name:    "data.txt",
+		body:    io.NopCloser(strings.NewReader("line1\nline2")),
+		logger:  mockLogger,
+		metrics: mockMetrics,
+	}
+
+	reader, err := f.createTextCSVReader("test-location")
+
+	require.NoError(t, err)
+	require.NotNil(t, reader)
+	_, ok := reader.(*textReader)
+	require.True(t, ok, "Expected *textReader for valid text file")
+}
+
+func TestFile_createTextCSVReader_EmptyText(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	mockLogger := NewMockLogger(ctrl)
+	mockMetrics := NewMockMetrics(ctrl)
+
+	mockLogger.EXPECT().Debug(gomock.Any()).AnyTimes()
+	mockLogger.EXPECT().Errorf(gomock.Any(), gomock.Any()).AnyTimes()
+	mockMetrics.EXPECT().RecordHistogram(
+		gomock.Any(), appFTPStats, gomock.Any(),
+		"type", gomock.Any(),
+		"status", gomock.Any(),
+	).AnyTimes()
+
+	f := &File{
+		name:    "empty.txt",
+		body:    io.NopCloser(strings.NewReader("")),
+		logger:  mockLogger,
+		metrics: mockMetrics,
+	}
+
+	reader, err := f.createTextCSVReader("test-location")
+
+	require.NoError(t, err)
+	require.NotNil(t, reader)
+	_, ok := reader.(*textReader)
+
+	require.True(t, ok, "Expected *textReader even for empty content")
+}
+
+func TestFile_createTextCSVReader_ReadFailure(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	mockLogger := NewMockLogger(ctrl)
+	mockMetrics := NewMockMetrics(ctrl)
+
+	mockLogger.EXPECT().Errorf(
+		"failed to read text/csv body from location %s: %v",
+		"test-location",
+		errorRead,
+	).Times(1)
+
+	mockLogger.EXPECT().Debug(gomock.Any()).AnyTimes()
+	mockMetrics.EXPECT().RecordHistogram(
+		gomock.Any(), appFTPStats, gomock.Any(),
+		"type", gomock.Any(),
+		"status", gomock.Any(),
+	).AnyTimes()
+
+	f := &File{
+		name:    "broken.txt",
+		body:    io.NopCloser(failingReader{}),
+		logger:  mockLogger,
+		metrics: mockMetrics,
+	}
+
+	reader, err := f.createTextCSVReader("test-location")
+
+	require.Error(t, err)
+	require.Nil(t, reader)
 }
 
 func TestJSONReader_Next_Scan(t *testing.T) {
@@ -265,6 +346,7 @@ func TestTextReader_Next_Scan(t *testing.T) {
 
 	for reader.Next() {
 		var line string
+
 		err := reader.Scan(&line)
 		require.NoError(t, err)
 
@@ -288,6 +370,7 @@ func TestTextReader_Scan_NonPointer(t *testing.T) {
 	reader.Next()
 
 	var nonPointer string
+
 	err := reader.Scan(nonPointer)
 	require.Error(t, err)
 	require.Equal(t, errStringNotPointer, err)

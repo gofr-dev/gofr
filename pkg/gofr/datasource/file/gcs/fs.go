@@ -7,10 +7,11 @@ import (
 	"os"
 	"path"
 	"strings"
+	"sync"
 	"time"
 
 	"cloud.google.com/go/storage"
-	file "gofr.dev/pkg/gofr/datasource/file"
+	"gofr.dev/pkg/gofr/datasource/file"
 	"google.golang.org/api/option"
 )
 
@@ -25,6 +26,9 @@ type FileSystem struct {
 	config  *Config
 	logger  Logger
 	metrics Metrics
+
+	registerHistogram sync.Once
+	disableRetry      bool
 }
 
 // Config represents the gcs configuration.
@@ -35,7 +39,9 @@ type Config struct {
 	ProjectID       string
 }
 
-// New initializes a new instance of FTP fileSystem with provided configuration.
+func defaultBuckets() []float64 {
+	return []float64{0.1, 1, 10, 100, 1000}
+}
 func New(config *Config) file.FileSystemProvider {
 	return &FileSystem{config: config}
 }
@@ -51,6 +57,14 @@ func (f *FileSystem) Connect() {
 		Status:    &st,
 		Message:   &msg,
 	}, time.Now())
+
+	f.registerHistogram.Do(func() {
+		f.metrics.NewHistogram(
+			appFTPStats,
+			"App FTP Stats - duration of file operations",
+			defaultBuckets()...,
+		)
+	})
 
 	f.logger.Debugf("connecting to GCS bucket: %s", f.config.BucketName)
 
@@ -83,6 +97,11 @@ func (f *FileSystem) Connect() {
 
 	if err != nil {
 		f.logger.Errorf("Failed to connect to GCS: %v", err)
+
+		if !f.disableRetry {
+			go f.startRetryConnect()
+		}
+
 		return
 	}
 
@@ -95,6 +114,51 @@ func (f *FileSystem) Connect() {
 	msg = "GCS Client connected."
 
 	f.logger.Logf("connected to GCS bucket %s", f.config.BucketName)
+}
+
+func (f *FileSystem) startRetryConnect() {
+	ticker := time.NewTicker(time.Minute) // retry every 1 minute
+	defer ticker.Stop()
+
+	for {
+		<-ticker.C
+
+		ctx := context.TODO()
+
+		var (
+			client *storage.Client
+			err    error
+		)
+
+		switch {
+		case f.config.EndPoint != "":
+			client, err = storage.NewClient(
+				ctx,
+				option.WithEndpoint(f.config.EndPoint),
+				option.WithoutAuthentication(),
+			)
+		case f.config.CredentialsJSON != "":
+			client, err = storage.NewClient(
+				ctx,
+				option.WithCredentialsJSON([]byte(f.config.CredentialsJSON)),
+			)
+		default:
+			client, err = storage.NewClient(ctx)
+		}
+
+		if err != nil {
+			f.logger.Errorf("Retry: failed to connect to GCS: %v", err)
+			continue
+		}
+
+		f.conn = &gcsClientImpl{
+			client: client,
+			bucket: client.Bucket(f.config.BucketName),
+		}
+		f.logger.Logf("GCS connection restored to bucket %s", f.config.BucketName)
+
+		break
+	}
 }
 
 func (f *FileSystem) Create(name string) (file.File, error) {
@@ -129,12 +193,10 @@ func (f *FileSystem) Create(name string) (file.File, error) {
 		return nil, err
 	}
 
-	// 2. Resolve file name conflict
 	originalName := name
 
 	for index := 1; ; index++ {
 		objs, err := f.conn.ListObjects(ctx, name)
-
 		if err != nil {
 			msg = "Error checking existing objects"
 
@@ -192,8 +254,8 @@ func (f *FileSystem) Remove(name string) error {
 	}, time.Now())
 
 	ctx := context.TODO()
-	err := f.conn.DeleteObject(ctx, name)
 
+	err := f.conn.DeleteObject(ctx, name)
 	if err != nil {
 		f.logger.Errorf("Error while deleting file: %v", err)
 		return err
@@ -222,7 +284,6 @@ func (f *FileSystem) Open(name string) (file.File, error) {
 	ctx := context.TODO()
 
 	reader, err := f.conn.NewReader(ctx, name)
-
 	if err != nil {
 		if errors.Is(err, storage.ErrObjectNotExist) {
 			return nil, file.ErrFileNotFound

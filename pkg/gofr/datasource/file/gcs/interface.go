@@ -23,6 +23,9 @@ type gcsClientImpl struct {
 	bucket *storage.BucketHandle
 }
 
+// TODO: Future improvement - Refactor both S3 and GCS implementations to use a
+// common CloudStorageClient interface for better abstraction. This implementation
+// currently follows the same pattern as S3 to maintain consistency with existing code.
 type gcsClient interface {
 	NewWriter(ctx context.Context, name string) io.WriteCloser
 	NewReader(ctx context.Context, name string) (io.ReadCloser, error)

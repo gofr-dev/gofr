@@ -117,59 +117,60 @@ func (*fakeStorageWriter) Error() error {
 	return nil
 }
 
-func TestFile_Read(t *testing.T) {
+func TestFile_Read_Success(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
 	mockLogger := NewMockLogger(ctrl)
 	mockMetrics := NewMockMetrics(ctrl)
 
-	tests := []struct {
-		name        string
-		body        io.ReadCloser
-		readData    []byte
-		wantN       int
-		wantErr     bool
-		expectLog   bool
-		logContains string
-	}{
-		{
-			name:     "read from valid body",
-			body:     io.NopCloser(&mockReader{data: "hello"}),
-			readData: make([]byte, 5),
-			wantN:    5,
-			wantErr:  false,
-		},
-		{
-			name:     "read from nil body",
-			body:     nil,
-			readData: make([]byte, 5),
-			wantN:    0,
-			wantErr:  true,
-		},
+	mockLogger.EXPECT().Debug(gomock.Any()).AnyTimes()
+	mockMetrics.EXPECT().RecordHistogram(gomock.Any(), appFTPStats, gomock.Any(),
+		"type", gomock.Any(), "status", gomock.Any()).AnyTimes()
+
+	f := &File{
+		name:    "data.txt",
+		body:    io.NopCloser(&mockReader{data: "hello"}),
+		logger:  mockLogger,
+		metrics: mockMetrics,
 	}
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			f := &File{
-				body:    tt.body,
-				logger:  mockLogger,
-				metrics: mockMetrics,
-				name:    "test.txt",
-			}
+	buf := make([]byte, 5)
+	n, err := f.Read(buf)
 
-			n, err := f.Read(tt.readData)
+	require.NoError(t, err)
+	require.Equal(t, 5, n)
+	require.Equal(t, "hello", string(buf))
+}
 
-			if tt.wantErr {
-				require.Error(t, err)
-				require.Equal(t, 0, n)
-				require.ErrorIs(t, err, errNilGCSFileBody)
-			} else {
-				require.NoError(t, err)
-				require.Equal(t, tt.wantN, n)
-			}
-		})
+func TestFile_Read_Error_NilBody(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	mockLogger := NewMockLogger(ctrl)
+	mockMetrics := NewMockMetrics(ctrl)
+
+	mockLogger.EXPECT().Debug("GCS file body is nil")
+	mockLogger.EXPECT().Debug(gomock.Any()).AnyTimes()
+	mockMetrics.EXPECT().RecordHistogram(
+		gomock.Any(), appFTPStats, gomock.Any(),
+		"type", gomock.Any(),
+		"status", gomock.Any(),
+	).AnyTimes()
+
+	f := &File{
+		name:    "missing.txt",
+		body:    nil,
+		logger:  mockLogger,
+		metrics: mockMetrics,
 	}
+
+	buf := make([]byte, 5)
+	n, err := f.Read(buf)
+
+	require.Error(t, err)
+	require.Equal(t, 0, n)
+	require.ErrorIs(t, err, errNilGCSFileBody)
 }
 
 func TestFile_Seek_ReadAt_WriteAt(t *testing.T) {

@@ -25,7 +25,7 @@ type File struct {
 }
 
 var (
-	errNilGCSFileBody      = errors.New("GCS file body is nil")
+	errNilGCSFileBody      = errors.New("gcs file body is nil")
 	errSeekNotSupported    = errors.New("seek not supported on GCSFile")
 	errReadAtNotSupported  = errors.New("readAt not supported on GCSFile")
 	errWriteAtNotSupported = errors.New("writeAt not supported on GCSFile (read-only)")
@@ -40,6 +40,7 @@ const (
 
 func (f *File) Read(p []byte) (int, error) {
 	if f.body == nil {
+		f.logger.Debug("GCS file body is nil")
 		return 0, errNilGCSFileBody
 	}
 
@@ -60,7 +61,6 @@ func (f *File) Write(p []byte) (int, error) {
 	}, time.Now())
 
 	n, err := f.writer.Write(p)
-
 	if err != nil {
 		f.logger.Errorf("failed to write: %v", err)
 		msg = err.Error()
