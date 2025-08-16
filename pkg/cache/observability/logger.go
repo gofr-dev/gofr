@@ -13,20 +13,20 @@ import (
 
 // ANSI Color Codes.
 const (
-	Reset  = "\033[0m"
-	Red    = "\033[31m"
-	Green  = "\033[32m"
-	Yellow = "\033[33m"
-	Blue   = "\033[34m"
-	Cyan   = "\033[36m"
-	Gray   = "\033[90m"
+	reset  = "\033[0m"
+	red    = "\033[31m"
+	green  = "\033[32m"
+	yellow = "\033[33m"
+	blue   = "\033[34m"
+	cyan   = "\033[36m"
+	gray   = "\033[90m"
 )
 
 const (
-	INFO  = "INFO"
-	WARN  = "WARN"
-	ERROR = "ERROR"
-	DEBUG = "DEBUG"
+	info  = "INFO"
+	warn  = "WARN"
+	error = "ERROR"
+	debug = "DEBUG"
 )
 
 var ansiRegex = regexp.MustCompile("[\u001B\u009B][[]()#;?]*.{0,2}(?:(?:;\\d{1,3})*.[a-zA-Z\\d]|(?:\\d{1,4}/?)*[a-zA-Z])")
@@ -76,35 +76,35 @@ func (l *styledLogger) getTraceString(ctx context.Context) string {
 
 	sc := trace.SpanFromContext(ctx).SpanContext()
 	if sc.IsValid() {
-		return " " + l.applyColor(Gray, sc.TraceID().String())
+		return " " + l.applyColor(gray, sc.TraceID().String())
 	}
 
 	return ""
 }
 
 func (l *styledLogger) Errorf(ctx context.Context, format string, args ...any) {
-	l.logSimple(ctx, ERROR, Red, format, args...)
+	l.logSimple(ctx, error, red, format, args...)
 }
 
 func (l *styledLogger) Warnf(ctx context.Context, format string, args ...any) {
-	l.logSimple(ctx, WARN, Yellow, format, args...)
+	l.logSimple(ctx, warn, yellow, format, args...)
 }
 
 func (l *styledLogger) Infof(ctx context.Context, format string, args ...any) {
-	l.logSimple(ctx, INFO, Green, format, args...)
+	l.logSimple(ctx, info, green, format, args...)
 }
 
 func (l *styledLogger) Debugf(ctx context.Context, format string, args ...any) {
-	l.logSimple(ctx, DEBUG, Gray, format, args...)
+	l.logSimple(ctx, debug, gray, format, args...)
 }
 
 func (l *styledLogger) Hitf(ctx context.Context, _ string, duration time.Duration, operation string) {
-	l.LogRequest(ctx, INFO, "Cache hit", "HIT", duration, operation)
+	l.LogRequest(ctx, info, "Cache hit", "HIT", duration, operation)
 }
 
 func (l *styledLogger) Missf(ctx context.Context, _ string, duration time.Duration, operation string) {
 	// A miss isn't an error, but we'll color its tag yellow for attention.
-	l.LogRequest(ctx, INFO, "Cache miss", "MISS", duration, operation)
+	l.LogRequest(ctx, info, "Cache miss", "MISS", duration, operation)
 }
 
 func (l *styledLogger) LogRequest(ctx context.Context, level, message string, tag any, duration time.Duration, operation string) {
@@ -113,12 +113,12 @@ func (l *styledLogger) LogRequest(ctx context.Context, level, message string, ta
 	const durationColumnStart = 60
 
 	levelStr, levelColor := getLevelStyle(level)
-	ts := l.applyColor(Gray, "["+time.Now().Format(time.TimeOnly)+"]")
+	ts := l.applyColor(gray, "["+time.Now().Format(time.TimeOnly)+"]")
 	traceStr := l.getTraceString(ctx)
 	initialPart := fmt.Sprintf("%s %s%s %s", l.applyColor(levelColor, levelStr), ts, traceStr, message)
 
 	tagStr := l.formatTag(tag)
-	durationStr := l.applyColor(Gray, fmt.Sprintf("%dµs", duration.Microseconds()))
+	durationStr := l.applyColor(gray, fmt.Sprintf("%dµs", duration.Microseconds()))
 
 	padding1 := getPadding(tagColumnStart, len(stripAnsi(initialPart)))
 	padding2 := getPadding(durationColumnStart, tagColumnStart+len(stripAnsi(tagStr)))
@@ -135,7 +135,7 @@ func (l *styledLogger) LogRequest(ctx context.Context, level, message string, ta
 
 func (l *styledLogger) logSimple(ctx context.Context, level, color, format string, args ...any) {
 	levelStr := l.applyColor(color, level)
-	ts := l.applyColor(Gray, "["+time.Now().Format(time.TimeOnly)+"]")
+	ts := l.applyColor(gray, "["+time.Now().Format(time.TimeOnly)+"]")
 	traceStr := l.getTraceString(ctx)
 	msg := fmt.Sprintf(format, args...)
 	fmt.Printf("%s %s%s %s\n", levelStr, ts, traceStr, msg)
@@ -143,16 +143,16 @@ func (l *styledLogger) logSimple(ctx context.Context, level, color, format strin
 
 func getLevelStyle(level string) (levelStr, color string) {
 	switch level {
-	case ERROR:
-		return "ERROR", Red
-	case WARN:
-		return "WARN", Yellow
-	case INFO:
-		return "INFO", Green
-	case DEBUG:
-		return "DEBUG", Gray
+	case error:
+		return "ERROR", red
+	case warn:
+		return "WARN", yellow
+	case info:
+		return "INFO", green
+	case debug:
+		return "DEBUG", gray
 	default:
-		return level, Reset
+		return level, reset
 	}
 }
 
@@ -178,13 +178,13 @@ const (
 func (l *styledLogger) formatIntTag(t int) string {
 	var color string
 	if t >= StatusOKRangeStart && t < StatusOKRangeEnd {
-		color = Green
+		color = green
 	} else if t >= StatusClientErrorRangeStart && t < StatusClientErrorRangeEnd {
-		color = Yellow
+		color = yellow
 	} else if t >= StatusServerErrorRangeStart {
-		color = Red
+		color = red
 	} else {
-		color = Gray
+		color = gray
 	}
 
 	return l.applyColor(color, fmt.Sprintf("%d", t))
@@ -195,15 +195,15 @@ func (l *styledLogger) formatStringTag(t string) string {
 
 	switch t {
 	case "HIT":
-		color = Green
+		color = green
 	case "MISS":
-		color = Yellow
+		color = yellow
 	case "REDIS":
-		color = Blue
+		color = blue
 	case "SQL":
-		color = Cyan
+		color = cyan
 	default:
-		color = Gray
+		color = gray
 	}
 
 	return l.applyColor(color, t)
@@ -222,7 +222,7 @@ func (l *styledLogger) applyColor(color, text string) string {
 		return text
 	}
 
-	return color + text + Reset
+	return color + text + reset
 }
 
 func isTerminal() bool {
@@ -232,5 +232,5 @@ func isTerminal() bool {
 
 // stripAnsi removes ANSI escape codes from a string.
 func stripAnsi(str string) string {
-	return regexp.MustCompile(ansiRegex).ReplaceAllString(str, "")
+	return ansiRegex.ReplaceAllString(str, "")
 }
