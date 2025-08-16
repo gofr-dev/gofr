@@ -29,7 +29,7 @@ const (
 	DEBUG = "DEBUG"
 )
 
-const ansiRegex = "[\u001B\u009B][[]()#;?]*.{0,2}(?:(?:;\\d{1,3})*.[a-zA-Z\\d]|(?:\\d{1,4}/?)*[a-zA-Z])"
+var ansiRegex = regexp.MustCompile("[\u001B\u009B][[]()#;?]*.{0,2}(?:(?:;\\d{1,3})*.[a-zA-Z\\d]|(?:\\d{1,4}/?)*[a-zA-Z])")
 
 // Logger defines a standard interface for logging with built-in context awareness.
 type Logger interface {
