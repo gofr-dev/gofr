@@ -168,6 +168,7 @@ func (l *contextAwareLogger) LogRequest(ctx context.Context, level, message stri
 	case "ERROR":
 		l.Logger.Errorf(logMessage, args...)
 	default:
+		args = append(args, "unsupported log level", level)
 		l.Logger.Logf(logMessage, args...)
 	}
 }
