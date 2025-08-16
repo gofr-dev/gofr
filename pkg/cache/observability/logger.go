@@ -23,10 +23,10 @@ const (
 )
 
 const (
-	info  = "INFO"
-	warn  = "WARN"
-	error = "ERROR"
-	debug = "DEBUG"
+	infoLevel  = "INFO"
+	warnLevel  = "WARN"
+	errorLevel = "ERROR"
+	debugLevel = "DEBUG"
 )
 
 var ansiRegex = regexp.MustCompile("[\u001B\u009B][[]()#;?]*.{0,2}(?:(?:;\\d{1,3})*.[a-zA-Z\\d]|(?:\\d{1,4}/?)*[a-zA-Z])")
@@ -83,28 +83,28 @@ func (l *styledLogger) getTraceString(ctx context.Context) string {
 }
 
 func (l *styledLogger) Errorf(ctx context.Context, format string, args ...any) {
-	l.logSimple(ctx, error, red, format, args...)
+	l.logSimple(ctx, errorLevel, red, format, args...)
 }
 
 func (l *styledLogger) Warnf(ctx context.Context, format string, args ...any) {
-	l.logSimple(ctx, warn, yellow, format, args...)
+	l.logSimple(ctx, warnLevel, yellow, format, args...)
 }
 
 func (l *styledLogger) Infof(ctx context.Context, format string, args ...any) {
-	l.logSimple(ctx, info, green, format, args...)
+	l.logSimple(ctx, infoLevel, green, format, args...)
 }
 
 func (l *styledLogger) Debugf(ctx context.Context, format string, args ...any) {
-	l.logSimple(ctx, debug, gray, format, args...)
+	l.logSimple(ctx, debugLevel, gray, format, args...)
 }
 
 func (l *styledLogger) Hitf(ctx context.Context, _ string, duration time.Duration, operation string) {
-	l.LogRequest(ctx, info, "Cache hit", "HIT", duration, operation)
+	l.LogRequest(ctx, infoLevel, "Cache hit", "HIT", duration, operation)
 }
 
 func (l *styledLogger) Missf(ctx context.Context, _ string, duration time.Duration, operation string) {
 	// A miss isn't an error, but we'll color its tag yellow for attention.
-	l.LogRequest(ctx, info, "Cache miss", "MISS", duration, operation)
+	l.LogRequest(ctx, infoLevel, "Cache miss", "MISS", duration, operation)
 }
 
 func (l *styledLogger) LogRequest(ctx context.Context, level, message string, tag any, duration time.Duration, operation string) {
@@ -143,13 +143,13 @@ func (l *styledLogger) logSimple(ctx context.Context, level, color, format strin
 
 func getLevelStyle(level string) (levelStr, color string) {
 	switch level {
-	case error:
+	case errorLevel:
 		return "ERROR", red
-	case warn:
+	case warnLevel:
 		return "WARN", yellow
-	case info:
+	case infoLevel:
 		return "INFO", green
-	case debug:
+	case debugLevel:
 		return "DEBUG", gray
 	default:
 		return level, reset
@@ -168,20 +168,20 @@ func (l *styledLogger) formatTag(tag any) string {
 }
 
 const (
-	StatusOKRangeStart          = 200
-	StatusOKRangeEnd            = 300
-	StatusClientErrorRangeStart = 400
-	StatusClientErrorRangeEnd   = 500
-	StatusServerErrorRangeStart = 500
+	statusOKRangeStart          = 200
+	statusOKRangeEnd            = 300
+	statusClientErrorRangeStart = 400
+	statusClientErrorRangeEnd   = 500
+	statusServerErrorRangeStart = 500
 )
 
 func (l *styledLogger) formatIntTag(t int) string {
 	var color string
-	if t >= StatusOKRangeStart && t < StatusOKRangeEnd {
+	if t >= statusOKRangeStart && t < statusOKRangeEnd {
 		color = green
-	} else if t >= StatusClientErrorRangeStart && t < StatusClientErrorRangeEnd {
+	} else if t >= statusClientErrorRangeStart && t < statusClientErrorRangeEnd {
 		color = yellow
-	} else if t >= StatusServerErrorRangeStart {
+	} else if t >= statusServerErrorRangeStart {
 		color = red
 	} else {
 		color = gray
