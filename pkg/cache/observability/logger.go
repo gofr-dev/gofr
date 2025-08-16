@@ -163,7 +163,7 @@ func (l *styledLogger) formatTag(tag any) string {
 	case string:
 		return l.formatStringTag(t)
 	default:
-		return fmt.Sprintf("%v", tag)
+		return fmt.Sprint(tag)
 	}
 }
 
