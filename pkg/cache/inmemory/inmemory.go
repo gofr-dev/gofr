@@ -391,7 +391,7 @@ func (c *inMemoryCache) computeExpiry(now time.Time) time.Time {
 
 // unlinks expired entries.
 func (c *inMemoryCache) cleanupExpired(now time.Time) int {
-	removed := 0
+	var removed int
 
 	for k, ent := range c.items {
 		if now.After(ent.expiresAt) {
