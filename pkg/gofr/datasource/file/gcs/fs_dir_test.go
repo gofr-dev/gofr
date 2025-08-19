@@ -72,6 +72,8 @@ func Test_Mkdir_GCS(t *testing.T) {
 	mockLogger.EXPECT().Debugf(gomock.Any()).AnyTimes()
 	mockLogger.EXPECT().Debug(gomock.Any()).AnyTimes()
 	mockLogger.EXPECT().Errorf(gomock.Any(), gomock.Any()).AnyTimes()
+	mockMetrics.EXPECT().RecordHistogram(gomock.Any(), appFTPStats, gomock.Any(),
+		"type", gomock.Any(), "status", gomock.Any()).AnyTimes()
 
 	tests := []testCase{
 		{
@@ -136,6 +138,8 @@ func Test_ReadDir_GCS(t *testing.T) {
 	mockLogger.EXPECT().Logf(gomock.Any(), gomock.Any()).AnyTimes()
 	mockLogger.EXPECT().Debug(gomock.Any()).AnyTimes()
 	mockLogger.EXPECT().Errorf(gomock.Any(), gomock.Any()).AnyTimes()
+	mockMetrics.EXPECT().RecordHistogram(gomock.Any(), appFTPStats, gomock.Any(),
+		"type", gomock.Any(), "status", gomock.Any()).AnyTimes()
 
 	for _, tt := range getReadDirTestCases(mockGCS) {
 		t.Run(tt.name, func(t *testing.T) {

@@ -24,7 +24,6 @@ type gcsClientImpl struct {
 }
 
 type gcsClient interface {
-	// NewWriter(ctx context.Context, name string) *storage.Writer
 	NewWriter(ctx context.Context, name string) io.WriteCloser
 	NewReader(ctx context.Context, name string) (*storage.Reader, error)
 	DeleteObject(ctx context.Context, name string) error
@@ -32,7 +31,6 @@ type gcsClient interface {
 	ListObjects(ctx context.Context, prefix string) ([]string, error)
 	ListDir(ctx context.Context, prefix string) ([]*storage.ObjectAttrs, []string, error)
 	StatObject(ctx context.Context, name string) (*storage.ObjectAttrs, error)
-	// GetSignedURL(ctx context.Context, object string, expiry time.Duration) (string, error)
 }
 
 type Metrics interface {
