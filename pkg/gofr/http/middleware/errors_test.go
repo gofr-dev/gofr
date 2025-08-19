@@ -48,3 +48,10 @@ func TestHTTPError(t *testing.T) {
 		})
 	}
 }
+
+func TestNewMiddlewareErrorResponse(t *testing.T) {
+	message := "test error message"
+	resp := NewMiddlewareErrorResponse(message)
+
+	assert.Equal(t, message, resp.Error.Message)
+}

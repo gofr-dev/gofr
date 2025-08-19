@@ -94,56 +94,26 @@ func Test_getAuthHeaderValue(t *testing.T) {
 	}
 }
 
+// Test for writeJSONError function which should write a JSON error response
 func Test_writeJSONError(t *testing.T) {
-	testCases := []struct {
-		name       string
-		message    string
-		statusCode int
-	}{
-		{
-			name:       "Basic error response",
-			message:    "Unauthorized: Invalid username or password",
-			statusCode: http.StatusUnauthorized,
-		},
-		{
-			name:       "Not found error",
-			message:    "Resource not found",
-			statusCode: http.StatusNotFound,
-		},
-		{
-			name:       "Server error",
-			message:    "Internal server error",
-			statusCode: http.StatusInternalServerError,
-		},
-	}
+	rr := httptest.NewRecorder()
+	message := "Test error message"
+	statusCode := http.StatusBadRequest
 
-	for _, tc := range testCases {
-		t.Run(tc.name, func(t *testing.T) {
-			rr := httptest.NewRecorder()
+	writeJSONError(rr, message, statusCode)
 
-			writeJSONError(rr, tc.message, tc.statusCode)
+	assert.Equal(t, statusCode, rr.Code)
+	assert.Equal(t, "application/json", rr.Header().Get("Content-Type"))
 
-			assert.Equal(t, tc.statusCode, rr.Code)
-
-			assert.Equal(t, "application/json", rr.Header().Get("Content-Type"))
-
-			var response map[string]any
-			err := json.Unmarshal(rr.Body.Bytes(), &response)
-			require.NoError(t, err)
-
-			errorObj, ok := response["error"].(map[string]any)
-			assert.True(t, ok, "Response should have 'error' object")
-
-			message, ok := errorObj["message"].(string)
-			assert.True(t, ok, "Error object should have 'message' field")
-			assert.Equal(t, tc.message, message)
-		})
-	}
+	// Verify JSON structure matches our ErrorDetail/ErrMiddlewareResp structure
+	var response ErrMiddlewareResp
+	err := json.Unmarshal(rr.Body.Bytes(), &response)
+	require.NoError(t, err)
+	assert.Equal(t, message, response.Error.Message)
 }
 
-// Test for the error fallback when JSON encoding fails.
+// Test for the error fallback when JSON encoding fails
 func Test_writeJSONError_EncodingFailure(t *testing.T) {
-	// Create a simple mock writer that always fails on Write.
 	mockWriter := &mockFailingResponseWriter{
 		header: http.Header{},
 	}

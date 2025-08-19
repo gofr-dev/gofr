@@ -109,3 +109,20 @@ func (e ErrorInvalidConfiguration) Error() string {
 func (ErrorInvalidConfiguration) StatusCode() int {
 	return http.StatusInternalServerError
 }
+
+type ErrorDetail struct {
+	Message string `json:"message"`
+}
+
+type ErrMiddlewareResp struct {
+	Error ErrorDetail `json:"error"`
+}
+
+// NewMiddlewareErrorResponse creates a standard error response structure for middleware
+func NewMiddlewareErrorResponse(message string) ErrMiddlewareResp {
+	return ErrMiddlewareResp{
+		Error: ErrorDetail{
+			Message: message,
+		},
+	}
+}
