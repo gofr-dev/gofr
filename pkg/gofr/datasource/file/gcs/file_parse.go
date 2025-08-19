@@ -21,6 +21,7 @@ var (
 )
 
 const (
+	appFTPStats   = "app_ftp_stats"
 	statusErr     = "ERROR"
 	statusSuccess = "SUCCESS"
 )

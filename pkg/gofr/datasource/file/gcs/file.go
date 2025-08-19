@@ -1,6 +1,7 @@
 package gcs
 
 import (
+	"context"
 	"errors"
 	"io"
 	"time"
@@ -147,4 +148,6 @@ func (f *GCSFile) sendOperationStats(fl *FileLog, startTime time.Time) {
 	fl.Duration = duration
 
 	f.logger.Debug(fl)
+	f.metrics.RecordHistogram(context.Background(), appFTPStats, float64(duration),
+		"type", fl.Operation, "status", clean(fl.Status))
 }
