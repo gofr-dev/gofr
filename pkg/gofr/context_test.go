@@ -255,14 +255,9 @@ func TestContext_GetCorrelationID(t *testing.T) {
 	// Test GetCorrelationID
 	correlationID := gofCtx.GetCorrelationID()
 
-	// Verify result
-	if len(correlationID) != 32 {
-		t.Errorf("Expected correlation ID length 32, got %d", len(correlationID))
-	}
+	assert.Len(t, gofCtx.GetCorrelationID(), 32, "Expected correlation ID length 32, got %d", len(correlationID))
 
-	if correlationID == "00000000000000000000000000000000" {
-		t.Error("Expected non-empty correlation ID")
-	}
+	assert.NotEqual(t, "00000000000000000000000000000000", correlationID, "Expected non-empty correlation ID")
 }
 
 func TestContext_GetCorrelationID_NoSpan(t *testing.T) {
