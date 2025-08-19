@@ -118,7 +118,7 @@ type ErrMiddlewareResp struct {
 	Error ErrorDetail `json:"error"`
 }
 
-// NewMiddlewareErrorResponse creates a standard error response structure for middleware
+// NewMiddlewareErrorResponse creates a standard error response structure for middleware.
 func NewMiddlewareErrorResponse(message string) ErrMiddlewareResp {
 	return ErrMiddlewareResp{
 		Error: ErrorDetail{

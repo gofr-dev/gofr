@@ -94,7 +94,7 @@ func Test_getAuthHeaderValue(t *testing.T) {
 	}
 }
 
-// Test for writeJSONError function which should write a JSON error response
+// Test for writeJSONError function which should write a JSON error response.
 func Test_writeJSONError(t *testing.T) {
 	rr := httptest.NewRecorder()
 	message := "Test error message"
@@ -105,14 +105,14 @@ func Test_writeJSONError(t *testing.T) {
 	assert.Equal(t, statusCode, rr.Code)
 	assert.Equal(t, "application/json", rr.Header().Get("Content-Type"))
 
-	// Verify JSON structure matches our ErrorDetail/ErrMiddlewareResp structure
+	// Verify JSON structure matches our ErrorDetail/ErrMiddlewareResp structure.
 	var response ErrMiddlewareResp
 	err := json.Unmarshal(rr.Body.Bytes(), &response)
 	require.NoError(t, err)
 	assert.Equal(t, message, response.Error.Message)
 }
 
-// Test for the error fallback when JSON encoding fails
+// Test for the error fallback when JSON encoding fails.
 func Test_writeJSONError_EncodingFailure(t *testing.T) {
 	mockWriter := &mockFailingResponseWriter{
 		header: http.Header{},
@@ -132,7 +132,7 @@ type mockFailingResponseWriter struct {
 	header     http.Header
 	body       string
 	statusCode int
-	jsonFailed bool // Track if JSON encoding has been attempted
+	jsonFailed bool // Track if JSON encoding has been attempted.
 }
 
 func (m *mockFailingResponseWriter) Header() http.Header {
