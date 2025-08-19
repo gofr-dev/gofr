@@ -4,9 +4,10 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	gofrHttp "gofr.dev/pkg/gofr/http"
 	"net/http"
 	"strings"
+
+	gofrHttp "gofr.dev/pkg/gofr/http"
 )
 
 // AuthMethod represents a custom type to define the different authentication methods supported.
