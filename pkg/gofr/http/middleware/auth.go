@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	gofrHttp "gofr.dev/pkg/gofr/http"
 	"net/http"
 	"strings"
 )
@@ -42,7 +43,9 @@ func AuthMiddleware(a AuthProvider) func(handler http.Handler) http.Handler {
 
 			authHeader, err := a.ExtractAuthHeader(r)
 			if err != nil {
-				http.Error(w, err.Error(), err.StatusCode())
+				responder := gofrHttp.NewResponder(w, r.Method)
+				responder.Respond(nil, err)
+
 				return
 			}
 
