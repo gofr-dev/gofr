@@ -90,3 +90,4 @@ Therefore, GoFr utilizes a pluggable approach for new datasources by separating 
 | NATS-KV          |      ✅       |  ✅   |    ✅    |   ✅    |     ✅     |
 | ScyllaDB         |      ✅       |  ✅   |    ✅    |   ✅    |           |
 | Elasticsearch    |      ✅       |  ✅   |    ✅    |   ✅    |     ✅     |
+| Couchbase        |      ✅       |  ✅   |    ✅    |   ✅    |     ✅     |

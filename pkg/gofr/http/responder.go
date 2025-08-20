@@ -134,7 +134,7 @@ func getStatusCode(method string, data any, err error) (statusCode int, errResp 
 		return http.StatusPartialContent, createErrorResponse(err)
 	}
 
-	if e, ok := err.(statusCodeResponder); ok {
+	if e, ok := err.(StatusCodeResponder); ok {
 		return e.StatusCode(), createErrorResponse(err)
 	}
 
@@ -187,7 +187,7 @@ type response struct {
 	Data     any            `json:"data,omitempty"`
 }
 
-type statusCodeResponder interface {
+type StatusCodeResponder interface {
 	StatusCode() int
 }
 
