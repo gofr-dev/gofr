@@ -18,19 +18,6 @@ This is useful for building **real-time applications** such as chat systems, das
 
 ---
 
-## Prerequisites
-
-* **Go** 1.20 or later
-* **GoFr** framework
-* Dependencies:
-
-  ```bash
-  go get github.com/gorilla/websocket
-  go get github.com/stretchr/testify
-  ```
-
----
-
 ## Environment Variables
 
 Create a `.env` file in this directory with the following content:
@@ -130,11 +117,3 @@ wscat -c ws://localhost:8001/ws
 < Hello! GoFr
 ```
 
----
-
-## Possible Improvements
-
-* Support JSON message formats.
-* Broadcast messages to multiple connected clients.
-* Add authentication for WebSocket connections.
-* Improve error handling and connection lifecycle management.
