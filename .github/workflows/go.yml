@@ -288,7 +288,7 @@ jobs:
         uses: actions/checkout@v5
 
       - name: Install qlty CLI
-        run: curl -s https://qlty.sh/install | bash
+        run: curl https://qlty.sh | sh
 
       # Download coverage artifacts
       - name: Download Coverage Report
