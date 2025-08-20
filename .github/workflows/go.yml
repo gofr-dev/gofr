@@ -10,6 +10,7 @@ on:
     branches:
       - main
       - development
+      - fix/qlty_migration
     paths-ignore:
       - 'docs/**'  # Ignore changes to docs folder
   # Run on pull requests to main or development branches
@@ -282,13 +283,13 @@ jobs:
     # This job only needs example and pkg test results, not submodules
     needs: [Example-Unit-Testing, PKG-Unit-Testing]
     # Only run this job on pushes to the development branch
-    if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/development'}}
+    if: ${{ github.event_name == 'push' && (github.ref == 'refs/heads/development' || github.ref == 'refs/heads/fix/qlty_migration')}}
     steps:
       - name: Check out code into the Go module directory
         uses: actions/checkout@v5
 
       - name: Install qlty CLI
-        run: curl -s https://qlty.sh/install | bash
+        run: curl https://qlty.sh | sh
 
       # Download coverage artifacts
       - name: Download Coverage Report
