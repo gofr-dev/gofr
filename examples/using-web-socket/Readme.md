@@ -27,9 +27,7 @@ This is useful for building **real-time applications** such as chat systems, das
    cd gofr/examples/using-web-socket
    ```
 
-2. **Create the `.env` file** (as shown above).
-
-3. **Start the application**:
+2. **Start the application**:
 
    ```bash
    go run main.go
