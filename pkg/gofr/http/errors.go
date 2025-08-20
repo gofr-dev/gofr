@@ -147,14 +147,14 @@ func (ErrorPanicRecovery) LogLevel() logging.Level {
 
 // validate the errors satisfy the underlying interfaces they depend on.
 var (
-	_ statusCodeResponder = ErrorEntityNotFound{}
-	_ statusCodeResponder = ErrorEntityAlreadyExist{}
-	_ statusCodeResponder = ErrorInvalidParam{}
-	_ statusCodeResponder = ErrorMissingParam{}
-	_ statusCodeResponder = ErrorInvalidRoute{}
-	_ statusCodeResponder = ErrorRequestTimeout{}
-	_ statusCodeResponder = ErrorPanicRecovery{}
-	_ statusCodeResponder = ErrorServiceUnavailable{}
+	_ StatusCodeResponder = ErrorEntityNotFound{}
+	_ StatusCodeResponder = ErrorEntityAlreadyExist{}
+	_ StatusCodeResponder = ErrorInvalidParam{}
+	_ StatusCodeResponder = ErrorMissingParam{}
+	_ StatusCodeResponder = ErrorInvalidRoute{}
+	_ StatusCodeResponder = ErrorRequestTimeout{}
+	_ StatusCodeResponder = ErrorPanicRecovery{}
+	_ StatusCodeResponder = ErrorServiceUnavailable{}
 
 	_ logging.LogLevelResponder = ErrorEntityNotFound{}
 	_ logging.LogLevelResponder = ErrorEntityAlreadyExist{}
