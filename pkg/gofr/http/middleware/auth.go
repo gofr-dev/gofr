@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"net/http"
 	"strings"
+
+	gofrHttp "gofr.dev/pkg/gofr/http"
 )
 
 // AuthMethod represents a custom type to define the different authentication methods supported.
@@ -42,7 +44,9 @@ func AuthMiddleware(a AuthProvider) func(handler http.Handler) http.Handler {
 
 			authHeader, err := a.ExtractAuthHeader(r)
 			if err != nil {
-				http.Error(w, err.Error(), err.StatusCode())
+				responder := gofrHttp.NewResponder(w, r.Method)
+				responder.Respond(nil, err)
+
 				return
 			}
 
