@@ -15,20 +15,6 @@ In this example, we:
 
 ---
 
-## Prerequisites
-
-* **Go** 1.20 or later
-* **GoFr** framework
-* [`stretchr/testify`](https://pkg.go.dev/github.com/stretchr/testify) for testing
-
-Install dependencies:
-
-```bash
-go get github.com/stretchr/testify
-```
-
----
-
 ## Environment Variables
 
 Create a `.env` file with the following content:
@@ -128,11 +114,3 @@ INFO    Count: 2
 INFO    Count: 3
 ```
 
----
-
-## Possible Improvements
-
-* Run the cron job indefinitely by using `app.Run()` instead of stopping after a fixed duration.
-* Use environment variables for cron schedules instead of hardcoding.
-* Add more complex job logic (e.g., database cleanup, API polling).
-* Integrate metrics to track job execution counts and durations.
