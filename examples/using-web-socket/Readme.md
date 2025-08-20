@@ -18,20 +18,6 @@ This is useful for building **real-time applications** such as chat systems, das
 
 ---
 
-## Environment Variables
-
-Create a `.env` file in this directory with the following content:
-
-```env
-APP_NAME=using-web-socket
-HTTP_PORT=8001
-```
-
-* `APP_NAME`: Name of the application (used for logging and service identification).
-* `HTTP_PORT`: Port number for the HTTP and WebSocket server.
-
----
-
 ## How to Run
 
 1. **Clone the repository** and navigate to the example folder:
