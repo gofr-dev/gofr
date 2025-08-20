@@ -183,6 +183,11 @@ export const navigation = [
                 desc: "Learn how to connect to and interact with CockroachDB in GoFr."
             },
             {
+                title: "Couchbase",
+                href: "/docs/datasources/couchbase",
+                desc: "Learn how to connect to and interact with couchbase database in GoFr."
+            },
+            {
                 title: "DGraph",
                 href: "/docs/datasources/dgraph",
                 desc: "Learn how to connect to and interact with dgraph database in GoFr."
@@ -196,6 +201,11 @@ export const navigation = [
                 title: "OpenTSDB",
                 href: "/docs/datasources/opentsdb",
                 desc: "Learn how to connect to and interact with opentsdb database in GoFr."
+            },
+            {
+                title: "OracleDB",
+                href: "/docs/datasources/oracle",
+                desc: "Learn how to connect to and interact with oracle database in GoFr."
             },
             {
                 title: "ScyllaDB",
