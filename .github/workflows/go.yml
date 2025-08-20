@@ -279,10 +279,12 @@ jobs:
   upload_coverage:
     name: Upload Coverage📊
     runs-on: ubuntu-latest
+    env:
+      QLTY_TOKEN: ${{ secrets.QLTY_TOKEN }}
     # This job only needs example and pkg test results, not submodules
     needs: [Example-Unit-Testing, PKG-Unit-Testing]
     # Only run this job on pushes to the development branch
-    if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/development'}}
+    if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/qlty_updates'}}
     steps:
       - name: Check out code into the Go module directory
         uses: actions/checkout@v5
