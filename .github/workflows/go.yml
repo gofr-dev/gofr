@@ -318,6 +318,7 @@ jobs:
 
       # Upload merged coverage to CodeClimate for analysis
       - name: Upload
+        working-directory: artifacts
         run: qlty coverage publish merged_profile.cov --report-format=coverprofile
         env:
           QLTY_TOKEN: ${{ secrets.QLTY_TOKEN }}
