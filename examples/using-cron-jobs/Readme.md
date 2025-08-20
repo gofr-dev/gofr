@@ -15,22 +15,6 @@ In this example, we:
 
 ---
 
-## Environment Variables
-
-Create a `.env` file with the following content:
-
-```env
-APP_NAME=sample-cron
-TRACE_EXPORTER=zipkin
-TRACER_URL=http://localhost:2005/api/v2/spans
-```
-
-* `APP_NAME`: Application name for logging/monitoring.
-* `TRACE_EXPORTER`: Tracing backend (Zipkin in this example).
-* `TRACER_URL`: Zipkin endpoint for exporting trace data.
-
----
-
 ## How to Run
 
 1. **Clone the repository** and navigate to this example:
@@ -40,9 +24,7 @@ TRACER_URL=http://localhost:2005/api/v2/spans
    cd gofr/examples/using-cron-jobs
    ```
 
-2. **Create the `.env` file** as shown above.
-
-3. **Run the application**:
+2. **Run the application**:
 
    ```bash
    go run main.go
