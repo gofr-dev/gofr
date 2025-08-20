@@ -314,7 +314,7 @@ jobs:
 
       # Upload merged coverage to CodeClimate for analysis
       - name: Upload
-        run: qlty coverage publish --input merged_profile.cov
+        run: qlty coverage publish merged_profile.cov
         env:
           QLTY_TOKEN: ${{ secrets.QLTY_TOKEN }}
 
