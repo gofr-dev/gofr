@@ -10,6 +10,7 @@ on:
     branches:
       - main
       - development
+      - qlty_updates
     paths-ignore:
       - 'docs/**'  # Ignore changes to docs folder
   # Run on pull requests to main or development branches
