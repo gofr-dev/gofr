@@ -280,6 +280,10 @@ jobs:
   upload_coverage:
     name: Upload Coverage📊
     runs-on: ubuntu-latest
+    env:
+      QLTY_TOKEN: ${{ secrets.QLTY_TOKEN }}
+      QLTY_COVERAGE_TOKEN: ${{ secrets.QLTY_TOKEN }}
+
     # This job only needs example and pkg test results, not submodules
     needs: [Example-Unit-Testing, PKG-Unit-Testing]
     # Only run this job on pushes to the development branch
@@ -314,7 +318,7 @@ jobs:
 
       # Upload merged coverage to CodeClimate for analysis
       - name: Upload
-        run: qlty coverage publish --input merged_profile.cov
+        run: qlty coverage publish merged_profile.cov
         env:
           QLTY_TOKEN: ${{ secrets.QLTY_TOKEN }}
 
