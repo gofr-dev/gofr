@@ -1,23 +1,21 @@
 ## Contribution Guidelines
-
-- Minor changes can be done directly by editing code on GitHub. GitHub automatically creates a temporary branch and
+* Minor changes can be done directly by editing code on GitHub. GitHub automatically creates a temporary branch and
   files a PR. This is only suitable for really small changes like: spelling fixes, variable name changes or error string
   change etc. For larger commits, following steps are recommended.
 * (Optional) If you want to discuss your implementation with the users of GoFr, use the GitHub discussions of this repo.
 * Configure your editor to use goimports and golangci-lint on file changes. Any code which is not formatted using these
   tools, will fail on the pipeline.
-- Contributors should begin working on an issue only after it has been assigned to them. To get an issue assigned, please comment on the GitHub thread
+* Contributors should begin working on an issue only after it has been assigned to them. To get an issue assigned, please comment on the GitHub thread
   and request assignment from a maintainer. This helps avoid duplicate or conflicting pull requests from multiple contributors.
 * Issues labeled triage are not open for direct contributions. If you're interested in working on a triage issue, please reach out to the maintainers
   to discuss it before proceeding in the GitHub thread.
 <!-- spellchecker:off "favour" have to be ignored here -->
-- We follow **American English** conventions in this project (e.g., _"favor"_ instead of _"favour"_). Please keep this consistent across all code comments, documentation, etc.
+* We follow **American English** conventions in this project (e.g., *"favor"* instead of *"favour"*). Please keep this consistent across all code comments, documentation, etc.
 <!-- spellchecker:on -->
 * All code contributions should have associated tests and all new line additions should be covered in those test cases.
   No PR should ever decrease the overall code coverage.
 * Once your code changes are done along with the test cases, submit a PR to development branch. Please note that all PRs
   are merged from feature branches to development first.
-
 * PR should be raised only when development is complete and the code is ready for review. This approach helps reduce the number of open pull requests and facilitates a more efficient review process for the team.
 * All PRs need to be reviewed by at least 2 GoFr developers. They might reach out to you for any clarification.
 * Thank you for your contribution. :)
@@ -30,19 +28,21 @@ Testing is a crucial aspect of software development, and adherence to these guid
 
 1.  **Test Types:**
 
-    - Write unit tests for every new function or method.
-    - Include integration tests for any major feature added.
+    -   Write unit tests for every new function or method.
+    -   Include integration tests for any major feature added.
 
-2.  **Test Coverage:**
 
-- No new code should decrease the existing code coverage for the packages and files.
-  > The `code-climate` coverage check will not pass if there is any decrease in the test-coverage before and after any new PR is submitted.
+2. **Test Coverage:**
+
+-   No new code should decrease the existing code coverage for the packages and files.
+> The `code-climate` coverage check will not pass if there is any decrease in the test-coverage before and after any new PR is submitted.
+
+
 
 3. **Naming Conventions:**
 
-- Prefix unit test functions with `Test`.
-- Use clear and descriptive names.
-
+-   Prefix unit test functions with `Test`.
+-   Use clear and descriptive names.
 ```go
 func TestFunctionName(t *testing.T) {
 	// Test logic
@@ -52,7 +52,7 @@ func TestFunctionName(t *testing.T) {
 
 4. **Table-Driven Tests:**
 
-- Consider using table-driven tests for testing multiple scenarios.
+-   Consider using table-driven tests for testing multiple scenarios.
 
 > [!NOTE]
 > Some services will be required to pass the entire test suite. We recommend using docker for running those services.
@@ -108,31 +108,31 @@ docker run -it --rm -p 4443:4443 -e STORAGE_EMULATOR_HOST=0.0.0.0:4443 fsouza/fa
 > [!NOTE]
 > Please note that the recommended local port for the services are different from the actual ports. This is done to avoid conflict with the local installation on developer machines. This method also allows a developer to work on multiple projects which uses the same services but bound on different ports. One can choose to change the port for these services. Just remember to add the same in configs/.local.env, if you decide to do that.
 
-### Coding Guidelines
 
-- Use only what is given to you as part of function parameter or receiver. No globals. Inject all dependencies including
+### Coding Guidelines
+* Use only what is given to you as part of function parameter or receiver. No globals. Inject all dependencies including
   DB, Logger etc.
-- No magic. So, no init. In a large project, it becomes difficult to track which package is doing what at the
+* No magic. So, no init. In a large project, it becomes difficult to track which package is doing what at the
   initialization step.
-- Exported functions must have an associated godoc.
-- Sensitive data(username, password, keys) should not be pushed. Always use environment variables.
-- Take interfaces and return concrete types.
-  - Lean interfaces - take 'exactly' what you need, not more. Onus of interface definition is on the package who is
-    using it. so, it should be as lean as possible. This makes it easier to test.
-  - Be careful of type assertions in this context. If you take an interface and type assert to a type - then it's
-    similar to taking concrete type.
-- Uses of context:
-  - We should use context as a first parameter.
-  - Can not use string as a key for the context. Define your own type and provide context accessor method to avoid
-    conflict.
-- External Library uses:
-  - A little copying is better than a little dependency.
-  - All external dependencies should go through the same careful consideration, we would have done to our own written
-    code. We need to test the functionality we are going to use from an external library, as sometimes library
-    implementation may change.
-  - All dependencies must be abstracted as an interface. This will make it easier to switch libraries at later point
-    of time.
-- Version tagging as per Semantic versioning (https://semver.org/)
+* Exported functions must have an associated godoc.
+* Sensitive data(username, password, keys) should not be pushed. Always use environment variables.
+* Take interfaces and return concrete types.
+    - Lean interfaces - take 'exactly' what you need, not more. Onus of interface definition is on the package who is
+      using it. so, it should be as lean as possible. This makes it easier to test.
+    - Be careful of type assertions in this context. If you take an interface and type assert to a type - then it's
+      similar to taking concrete type.
+* Uses of context:
+    - We should use context as a first parameter.
+    - Can not use string as a key for the context. Define your own type and provide context accessor method to avoid
+      conflict.
+* External Library uses:
+    - A little copying is better than a little dependency.
+    - All external dependencies should go through the same careful consideration, we would have done to our own written
+      code. We need to test the functionality we are going to use from an external library, as sometimes library
+      implementation may change.
+    - All dependencies must be abstracted as an interface. This will make it easier to switch libraries at later point
+      of time.
+* Version tagging as per Semantic versioning (https://semver.org/)
 
 ### Documentation
 * After adding or modifying existing code, update the documentation too - [development/docs](https://github.com/gofr-dev/gofr/tree/development/docs).
