@@ -83,37 +83,68 @@ func TestContext_WriteMessageToSocket(t *testing.T) {
 	}
 
 	port := testutil.GetFreePort(t)
-	t.Setenv("HTTP_PORT", fmt.Sprint(port))
+	t.Setenv("HTTP_PORT", fmt.Sprintf("%d", port))
 
 	app := New()
 
+	messageChan := make(chan string, 1)
+
 	app.WebSocket("/ws", func(ctx *Context) (any, error) {
-		socketErr := ctx.WriteMessageToSocket("Hello! GoFr")
-		if socketErr != nil {
-			return nil, socketErr
+		err := ctx.WriteMessageToSocket("Hello! GoFr")
+		if err != nil {
+			t.Errorf("WriteMessageToSocket failed: %v", err)
+			return nil, err
 		}
 
-		conn := ctx.GetConnectionFromContext(ctx)
-		defer conn.Close()
+		// Signal that message was sent
+		select {
+		case messageChan <- "Hello! GoFr":
+		default:
+		}
 
-		return "", socketErr
+		return "Hello! GoFr", nil
 	})
 
 	go app.Run()
-	time.Sleep(100 * time.Millisecond) // Wait for the server to boot
+
+	// Give server time to start
+	time.Sleep(300 * time.Millisecond)
 
 	wsURL := fmt.Sprintf("ws://localhost:%d/ws", port)
 
-	ws, resp, err := websocket.DefaultDialer.Dial(wsURL, nil)
+	// Create WebSocket client with timeout
+	dialer := &websocket.Dialer{
+		HandshakeTimeout: 10 * time.Second,
+	}
+
+	ws, resp, err := dialer.Dial(wsURL, nil)
 	require.NoError(t, err, "WebSocket handshake failed")
 
-	defer resp.Body.Close()
-	defer ws.Close()
+	defer func() {
+		if resp != nil && resp.Body != nil {
+			resp.Body.Close()
+		}
+		if ws != nil {
+			ws.Close()
+		}
+	}()
 
+	// Set read deadline
+	ws.SetReadDeadline(time.Now().Add(10 * time.Second))
+
+	// Read the message
 	_, message, err := ws.ReadMessage()
 	require.NoError(t, err, "Failed to read WebSocket message")
 
 	assert.Equal(t, "Hello! GoFr", string(message))
+
+	// Wait for handler completion
+	select {
+	case msg := <-messageChan:
+		assert.Equal(t, "Hello! GoFr", msg)
+	case <-time.After(5 * time.Second):
+		t.Fatal("Test timed out waiting for handler completion")
+	}
 }
 
 func TestContext_WriteMessageToService(t *testing.T) {
