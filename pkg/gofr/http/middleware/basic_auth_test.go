@@ -60,48 +60,33 @@ func TestBasicAuthMiddleware_extractAuthHeader(t *testing.T) {
 	users := map[string]string{"storedUser": "storedPass", "user": "password", "newUser": ""}
 
 	testCases := []struct {
-		header    string
-		setHeader bool // New field to control whether to set header
-		response  string
-		err       error
+		header   string
+		response string
+		err      error
 	}{
 		{
-			setHeader: false, // Don't set the header at all
-			response:  "",    // Expect empty string, not nil
-			err:       ErrorMissingAuthHeader{key: headerAuthorization},
+			err: ErrorMissingAuthHeader{key: headerAuthorization},
 		},
 		{
-			header:    "Basic wrong-header",
-			setHeader: true,
-			response:  "",
+			header: "Basic wrong-header",
 			err: ErrorInvalidAuthorizationHeaderFormat{
 				key:        headerAuthorization,
 				errMessage: "credentials should be in the format base64(username:password)",
 			},
 		},
 		{
-			header:    "Basic " + base64.StdEncoding.EncodeToString([]byte("storedUser:storedPass")),
-			setHeader: true,
-			response:  "storedUser",
-			err:       nil,
+			header:   "Basic " + base64.StdEncoding.EncodeToString([]byte("storedUser:storedPass")),
+			response: "storedUser",
 		},
 	}
-
 	provider := &BasicAuthProvider{Users: users}
 
 	for i, tc := range testCases {
 		t.Run(strconv.Itoa(i), func(t *testing.T) {
 			req := httptest.NewRequest(http.MethodGet, "/", http.NoBody)
-
-			// Only set header if specified
-			if tc.setHeader {
-				req.Header.Set(headerAuthorization, tc.header)
-			}
-
+			req.Header.Set(headerAuthorization, tc.header)
 			response, err := provider.ExtractAuthHeader(req)
-			if tc.setHeader {
-				assert.Equal(t, tc.response, response)
-			}
+			assert.Equal(t, tc.response, response)
 			assert.Equal(t, tc.err, err)
 		})
 	}

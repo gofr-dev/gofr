@@ -11,16 +11,19 @@ import (
 )
 
 func TestAuthMiddleware(t *testing.T) {
+	errBody := `{"error":{"message":"invalid auth header in key 'Authorization'"}}`
+
 	testCases := []struct {
 		url            string
 		success        bool
 		statusCode     int
 		expectedHeader any
+		expectedBody   string
 	}{
-		{url: "/.well-known/health", success: true, statusCode: http.StatusOK},
-		{url: "/.well-known/health", statusCode: http.StatusOK},
-		{url: "/", success: true, statusCode: http.StatusOK, expectedHeader: "user-header-string"},
-		{url: "/", success: false, statusCode: http.StatusUnauthorized},
+		{url: "/.well-known/health", success: true, statusCode: http.StatusOK, expectedBody: `OK`},
+		{url: "/.well-known/health", statusCode: http.StatusOK, expectedBody: `OK`},
+		{url: "/", success: true, statusCode: http.StatusOK, expectedHeader: "user-header-string", expectedBody: `OK`},
+		{url: "/", success: false, statusCode: http.StatusUnauthorized, expectedBody: errBody},
 	}
 	for i, tc := range testCases {
 		t.Run(strconv.Itoa(i), func(t *testing.T) {
@@ -39,6 +42,7 @@ func TestAuthMiddleware(t *testing.T) {
 
 			assert.Equal(t, tc.statusCode, rr.Code)
 			assert.Equal(t, tc.statusCode == http.StatusOK, mockHandler.handlerCalled)
+			assert.Equal(t, tc.expectedBody, strings.TrimSuffix(rr.Body.String(), "\n"))
 
 			if strings.HasPrefix(tc.url, "/.well-known") {
 				return
@@ -107,7 +111,7 @@ func (p *MockAuthProvider) ExtractAuthHeader(_ *http.Request) (any, ErrorHTTP) {
 		return p.authHeader, nil
 	}
 
-	return nil, ErrorInvalidAuthorizationHeader{}
+	return nil, ErrorInvalidAuthorizationHeader{key: headerAuthorization}
 }
 
 type MockHandler struct {
