@@ -19,7 +19,7 @@ var (
 )
 
 type FileSystem struct {
-	GCSFile GCSFile
+	GCSFile File
 	conn    gcsClient
 	config  *Config
 	logger  Logger
@@ -166,7 +166,7 @@ func (f *FileSystem) Create(name string) (file.File, error) {
 
 	f.logger.Logf("Write stream successfully opened for file %q", name)
 
-	return &GCSFile{
+	return &File{
 		conn:         f.conn,
 		writer:       sw,
 		name:         name,
@@ -242,7 +242,7 @@ func (f *FileSystem) Open(name string) (file.File, error) {
 
 	msg = fmt.Sprintf("File with path %q retrieved successfully", name)
 
-	return &GCSFile{
+	return &File{
 		conn:         f.conn,
 		name:         name,
 		body:         reader,
