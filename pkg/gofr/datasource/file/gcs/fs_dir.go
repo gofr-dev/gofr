@@ -171,7 +171,7 @@ func (f *FileSystem) ReadDir(dir string) ([]file.FileInfo, error) {
 	for _, p := range prefixes {
 		trimmedName := strings.TrimSuffix(p, "/")
 		dirName := path.Base(trimmedName)
-		fileinfo = append(fileinfo, &GCSFile{
+		fileinfo = append(fileinfo, &File{
 			name:    dirName,
 			isDir:   true,
 			logger:  f.logger,
@@ -180,7 +180,7 @@ func (f *FileSystem) ReadDir(dir string) ([]file.FileInfo, error) {
 	}
 
 	for _, o := range objects {
-		fileinfo = append(fileinfo, &GCSFile{
+		fileinfo = append(fileinfo, &File{
 			name:         path.Base(o.Name),
 			size:         o.Size,
 			lastModified: o.Updated,
@@ -254,7 +254,7 @@ func (f *FileSystem) Stat(name string) (file.FileInfo, error) {
 		st = statusSuccess
 		msg = fmt.Sprintf("File with path %q info retrieved successfully", name)
 
-		return &GCSFile{
+		return &File{
 			name:         name,
 			logger:       f.logger,
 			metrics:      f.metrics,
@@ -283,7 +283,7 @@ func (f *FileSystem) Stat(name string) (file.FileInfo, error) {
 			st = statusSuccess
 			msg = fmt.Sprintf("Directory with path %q info retrieved successfully", name)
 
-			return &GCSFile{
+			return &File{
 				name:         name,
 				logger:       f.logger,
 				metrics:      f.metrics,

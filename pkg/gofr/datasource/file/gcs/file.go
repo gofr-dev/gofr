@@ -9,10 +9,7 @@ import (
 	"cloud.google.com/go/storage"
 )
 
-// GCSFile represents a file in an GCS bucket.
-//
-//nolint:revive // gcs.GCSFile is repetitive. A better name could have been chosen, but it's too late as it's already exported.
-type GCSFile struct {
+type File struct {
 	conn         gcsClient
 	writer       *storage.Writer
 	name         string
@@ -39,14 +36,14 @@ const (
 
 // ====== File interface methods ======
 
-func (f *GCSFile) Read(p []byte) (int, error) {
+func (f *File) Read(p []byte) (int, error) {
 	if f.body == nil {
 		return 0, ErrNilGCSFileBody
 	}
 
 	return f.body.Read(p)
 }
-func (f *GCSFile) Write(p []byte) (int, error) {
+func (f *File) Write(p []byte) (int, error) {
 	bucketName := getBucketName(f.name)
 
 	var msg string
@@ -69,14 +66,13 @@ func (f *GCSFile) Write(p []byte) (int, error) {
 		return n, err
 	}
 
-	st = statusSuccess
-	msg = "Write successful"
-	f.logger.Logf(msg)
+	st, msg = statusSuccess, "Write successful"
+	f.logger.Debug(msg)
 
 	return n, nil
 }
 
-func (f *GCSFile) Close() error {
+func (f *File) Close() error {
 	bucketName := getBucketName(f.name)
 
 	var msg string
@@ -101,7 +97,7 @@ func (f *GCSFile) Close() error {
 
 		msg = msgWriterClosed
 
-		f.logger.Logf(msg)
+		f.logger.Debug(msg)
 
 		return nil
 	}
@@ -117,7 +113,7 @@ func (f *GCSFile) Close() error {
 
 		msg = msgReaderClosed
 
-		f.logger.Logf(msgReaderClosed)
+		f.logger.Debug(msgReaderClosed)
 
 		return nil
 	}
@@ -129,20 +125,20 @@ func (f *GCSFile) Close() error {
 	return nil
 }
 
-func (*GCSFile) Seek(_ int64, _ int) (int64, error) {
+func (*File) Seek(_ int64, _ int) (int64, error) {
 	// Not supported: Seek requires reopening with range.
 	return 0, ErrSeekNotSupported
 }
 
-func (*GCSFile) ReadAt(_ []byte, _ int64) (int, error) {
+func (*File) ReadAt(_ []byte, _ int64) (int, error) {
 	return 0, ErrReadAtNotSupported
 }
 
-func (*GCSFile) WriteAt(_ []byte, _ int64) (int, error) {
+func (*File) WriteAt(_ []byte, _ int64) (int, error) {
 	return 0, ErrWriteAtNotSupported
 }
 
-func (f *GCSFile) sendOperationStats(fl *FileLog, startTime time.Time) {
+func (f *File) sendOperationStats(fl *FileLog, startTime time.Time) {
 	duration := time.Since(startTime).Microseconds()
 
 	fl.Duration = duration

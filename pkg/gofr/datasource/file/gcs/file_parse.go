@@ -38,7 +38,7 @@ type jsonReader struct {
 	token   json.Token
 }
 
-func (f *GCSFile) ReadAll() (file.RowReader, error) {
+func (f *File) ReadAll() (file.RowReader, error) {
 	bucketName := getBucketName(f.name)
 	location := path.Join(bucketName, f.name)
 
@@ -55,7 +55,7 @@ func (f *GCSFile) ReadAll() (file.RowReader, error) {
 }
 
 // createJSONReader creates a JSON reader for JSON files.
-func (f *GCSFile) createJSONReader(location string) (file.RowReader, error) {
+func (f *File) createJSONReader(location string) (file.RowReader, error) {
 	status := statusErr
 
 	defer f.sendOperationStats(&FileLog{Operation: "JSON READER", Location: location, Status: &status}, time.Now())
@@ -92,7 +92,7 @@ func (f *GCSFile) createJSONReader(location string) (file.RowReader, error) {
 }
 
 // createTextCSVReader creates a text reader for reading text files.
-func (f *GCSFile) createTextCSVReader(location string) (file.RowReader, error) {
+func (f *File) createTextCSVReader(location string) (file.RowReader, error) {
 	status := statusErr
 
 	defer f.sendOperationStats(&FileLog{Operation: "TEXT/CSV READER", Location: location, Status: &status}, time.Now())
@@ -136,7 +136,7 @@ func (f *textReader) Scan(i any) error {
 	return errStringNotPointer
 }
 
-func (f *GCSFile) Name() string {
+func (f *File) Name() string {
 	bucketName := getBucketName(f.name)
 
 	f.sendOperationStats(&FileLog{
@@ -147,7 +147,7 @@ func (f *GCSFile) Name() string {
 	return f.name
 }
 
-func (f *GCSFile) Size() int64 {
+func (f *File) Size() int64 {
 	bucketName := getBucketName(f.name)
 
 	f.sendOperationStats(&FileLog{
@@ -158,7 +158,7 @@ func (f *GCSFile) Size() int64 {
 	return f.size
 }
 
-func (f *GCSFile) ModTime() time.Time {
+func (f *File) ModTime() time.Time {
 	bucketName := getBucketName(f.name)
 
 	f.sendOperationStats(&FileLog{
@@ -169,7 +169,7 @@ func (f *GCSFile) ModTime() time.Time {
 	return f.lastModified
 }
 
-func (f *GCSFile) Mode() fs.FileMode {
+func (f *File) Mode() fs.FileMode {
 	bucketName := getBucketName(f.name)
 
 	f.sendOperationStats(&FileLog{
@@ -184,7 +184,7 @@ func (f *GCSFile) Mode() fs.FileMode {
 	return 0
 }
 
-func (f *GCSFile) IsDir() bool {
+func (f *File) IsDir() bool {
 	bucketName := getBucketName(f.name)
 
 	f.sendOperationStats(&FileLog{
@@ -195,7 +195,7 @@ func (f *GCSFile) IsDir() bool {
 	return f.isDir || f.contentType == "application/x-directory"
 }
 
-func (f *GCSFile) Sys() any {
+func (f *File) Sys() any {
 	bucketName := getBucketName(f.name)
 
 	f.sendOperationStats(&FileLog{

@@ -6,7 +6,12 @@ GoFr simplifies the complexity of working with different file stores by offering
 
 By default, local file-store is initialized and user can access it from the context.
 
-GoFr also supports FTP/SFTP file-store. Developers can also connect and use their AWS S3 bucket or Google Cloud Storage (GCS) bucket as a file-store. The file-store can be initialized as follows:
+GoFr also supports FTP/SFTP file-store. Developers can also connect and use their cloud storage bucket as a file-store. Following cloud storage options are currently supported:
+
+- **AWS S3**
+- **Google Cloud Storage (GCS)**
+
+The file-store can be initialized as follows:
 
 ### FTP file-store
 
@@ -307,7 +312,8 @@ err := ctx.File.Remove("my_dir")
 
 The `RemoveAll` command deletes all subdirectories as well. If you delete the current working directory, such as "../currentDir", the working directory will be reset to its parent directory.
 
-> Note: In S3 and GCS, RemoveAll only supports deleting directories and will return an error if a file path (as indicated by a file extension) is provided for S3. GCS handles both files and directories.
+> Note: In S3, RemoveAll only supports deleting directories and will return an error if a file path (as indicated by a file extension) is provided for S3.
+> GCS handles both files and directories.
 
 ```go
 err := ctx.File.RemoveAll("my_dir/my_text")
