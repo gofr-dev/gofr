@@ -19,14 +19,6 @@ import (
 	"gofr.dev/pkg/gofr/testutil"
 )
 
-func (g *grpcServer) addServerOptions(opts ...grpc.ServerOption) {
-	g.options = append(g.options, opts...)
-}
-
-func (g *grpcServer) addUnaryInterceptors(interceptors ...grpc.UnaryServerInterceptor) {
-	g.interceptors = append(g.interceptors, interceptors...)
-}
-
 func (g *grpcServer) registerService(t *testing.T, desc *grpc.ServiceDesc, impl any) {
 	t.Helper()
 

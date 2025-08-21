@@ -268,3 +268,11 @@ func injectContainer(impl any, c *container.Container) error {
 
 	return nil
 }
+
+func (g *grpcServer) addServerOptions(opts ...grpc.ServerOption) {
+	g.options = append(g.options, opts...)
+}
+
+func (g *grpcServer) addUnaryInterceptors(interceptors ...grpc.UnaryServerInterceptor) {
+	g.interceptors = append(g.interceptors, interceptors...)
+}
