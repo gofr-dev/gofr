@@ -241,36 +241,24 @@ func TestContext_GetCorrelationID(t *testing.T) {
 	exporter := tracetest.NewInMemoryExporter()
 	tp := trace.NewTracerProvider(trace.WithSyncer(exporter))
 	otel.SetTracerProvider(tp)
-
 	tracer := tp.Tracer("test")
-	ctx, span := tracer.Start(t.Context(), "test-span")
 
-	defer span.End()
+	t.Run("with span", func(t *testing.T) {
+		ctx, span := tracer.Start(t.Context(), "test-span")
+		defer span.End()
 
-	// Create Context instance
-	gofCtx := &Context{
-		Context: ctx,
-	}
+		gofCtx := &Context{Context: ctx}
+		correlationID := gofCtx.GetCorrelationID()
 
-	// Test GetCorrelationID
-	correlationID := gofCtx.GetCorrelationID()
+		assert.Len(t, correlationID, 32, "Expected correlation ID length 32, got %d", len(correlationID))
+		assert.NotEqual(t, "00000000000000000000000000000000", correlationID, "Expected non-empty correlation ID")
+	})
 
-	assert.Len(t, gofCtx.GetCorrelationID(), 32, "Expected correlation ID length 32, got %d", len(correlationID))
+	t.Run("without span", func(t *testing.T) {
+		gofCtx := &Context{Context: t.Context()}
+		correlationID := gofCtx.GetCorrelationID()
 
-	assert.NotEqual(t, "00000000000000000000000000000000", correlationID, "Expected non-empty correlation ID")
-}
-
-func TestContext_GetCorrelationID_NoSpan(t *testing.T) {
-	// Test with no span in context
-	gofCtx := &Context{
-		Context: t.Context(),
-	}
-
-	correlationID := gofCtx.GetCorrelationID()
-
-	// Should return empty TraceID
-	expected := "00000000000000000000000000000000"
-	if correlationID != expected {
-		t.Errorf("Expected %s, got %s", expected, correlationID)
-	}
+		expected := "00000000000000000000000000000000"
+		assert.Equal(t, expected, correlationID, "Expected empty TraceID when no span present")
+	})
 }
