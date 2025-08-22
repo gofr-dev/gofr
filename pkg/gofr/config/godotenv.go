@@ -3,11 +3,10 @@ package config
 import (
 	"errors"
 	"fmt"
+	"github.com/joho/godotenv"
 	"io/fs"
 	"os"
 	"strings"
-
-	"github.com/joho/godotenv"
 )
 
 const (
@@ -34,42 +33,55 @@ func NewEnvFile(configFolder string, logger logger) Config {
 }
 
 func (e *EnvLoader) read(folder string) {
+	// Capture initial system environment keys
+	initialEnv := make(map[string]bool)
+	for _, envVar := range os.Environ() {
+		key, _, _ := strings.Cut(envVar, "=")
+		initialEnv[key] = true
+	}
+
 	var (
-		defaultFile  = folder + defaultFileName
-		overrideFile = folder + defaultOverrideFileName
-		env          = e.Get("APP_ENV")
+		defaultFile = folder + defaultFileName
+		env         = os.Getenv("APP_ENV") // Get from initial system env
 	)
 
-	err := godotenv.Load(defaultFile)
-	if err != nil {
-		if !errors.Is(err, fs.ErrNotExist) {
-			e.logger.Fatalf("Failed to load config from file: %v, Err: %v", defaultFile, err)
-		}
+	// Read all files first and merge with correct precedence
+	envMap := make(map[string]string)
 
-		e.logger.Warnf("Failed to load config from file: %v, Err: %v", defaultFile, err)
-	} else {
+	// 1. Load base .env file (lowest precedence)
+	if content, err := godotenv.Read(defaultFile); err == nil {
+		for k, v := range content {
+			envMap[k] = v
+		}
 		e.logger.Infof("Loaded config from file: %v", defaultFile)
+	} else if !errors.Is(err, fs.ErrNotExist) {
+		e.logger.Fatalf("Failed to load config from file: %v, Err: %v", defaultFile, err)
 	}
 
-	if env != "" {
-		// If 'APP_ENV' is set to x, then GoFr will read '.env' from configs directory, and then it will be overwritten
-		// by configs present in file '.x.env'
-		overrideFile = fmt.Sprintf("%s/.%s.env", folder, env)
-	}
-
-	err = godotenv.Overload(overrideFile)
-	if err != nil {
-		if !errors.Is(err, fs.ErrNotExist) {
-			e.logger.Fatalf("Failed to load config from file: %v, Err: %v", overrideFile, err)
+	// 2. Load default override (.local.env) if exists (medium precedence)
+	localOverridePath := folder + defaultOverrideFileName
+	if content, err := godotenv.Read(localOverridePath); err == nil {
+		for k, v := range content {
+			envMap[k] = v
 		}
-	} else {
-		e.logger.Infof("Loaded config from file: %v", overrideFile)
+		e.logger.Infof("Applied override config: %v", localOverridePath)
 	}
 
-	// Reload system environment variables to ensure they override any previously loaded values
-	for _, envVar := range os.Environ() {
-		key, value, found := strings.Cut(envVar, "=")
-		if found {
+	// 3. Load app-env specific override (highest file precedence)
+	if env != "" {
+		envSpecificFile := fmt.Sprintf("%s/.%s.env", folder, env)
+		if content, err := godotenv.Read(envSpecificFile); err == nil {
+			for k, v := range content {
+				envMap[k] = v
+			}
+			e.logger.Infof("Applied app-env override config: %v", envSpecificFile)
+		}
+	}
+
+	// Apply to environment variables, respecting system env precedence
+	for key, value := range envMap {
+		// Only set if not in initial system environment
+		if !initialEnv[key] {
 			os.Setenv(key, value)
 		}
 	}
