@@ -396,6 +396,83 @@ func (mr *MockClickhouseMockRecorder) Select(ctx, dest, query any, args ...any) 
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Select", reflect.TypeOf((*MockClickhouse)(nil).Select), varargs...)
 }
 
+// MockOracle is a mock of Oracle interface.
+type MockOracle struct {
+	ctrl     *gomock.Controller
+	recorder *MockOracleMockRecorder
+	isgomock struct{}
+}
+
+// MockOracleMockRecorder is the mock recorder for MockOracle.
+type MockOracleMockRecorder struct {
+	mock *MockOracle
+}
+
+// NewMockOracle creates a new mock instance.
+func NewMockOracle(ctrl *gomock.Controller) *MockOracle {
+	mock := &MockOracle{ctrl: ctrl}
+	mock.recorder = &MockOracleMockRecorder{mock}
+	return mock
+}
+
+// EXPECT returns an object that allows the caller to indicate expected use.
+func (m *MockOracle) EXPECT() *MockOracleMockRecorder {
+	return m.recorder
+}
+
+// Exec mocks base method.
+func (m *MockOracle) Exec(ctx context.Context, query string, args ...any) error {
+	m.ctrl.T.Helper()
+	varargs := []any{ctx, query}
+	for _, a := range args {
+		varargs = append(varargs, a)
+	}
+	ret := m.ctrl.Call(m, "Exec", varargs...)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// Exec indicates an expected call of Exec.
+func (mr *MockOracleMockRecorder) Exec(ctx, query any, args ...any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	varargs := append([]any{ctx, query}, args...)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Exec", reflect.TypeOf((*MockOracle)(nil).Exec), varargs...)
+}
+
+// HealthCheck mocks base method.
+func (m *MockOracle) HealthCheck(ctx context.Context) (any, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "HealthCheck", ctx)
+	ret0, _ := ret[0].(any)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// HealthCheck indicates an expected call of HealthCheck.
+func (mr *MockOracleMockRecorder) HealthCheck(ctx any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "HealthCheck", reflect.TypeOf((*MockOracle)(nil).HealthCheck), ctx)
+}
+
+// Select mocks base method.
+func (m *MockOracle) Select(ctx context.Context, dest any, query string, args ...any) error {
+	m.ctrl.T.Helper()
+	varargs := []any{ctx, dest, query}
+	for _, a := range args {
+		varargs = append(varargs, a)
+	}
+	ret := m.ctrl.Call(m, "Select", varargs...)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// Select indicates an expected call of Select.
+func (mr *MockOracleMockRecorder) Select(ctx, dest, query any, args ...any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	varargs := append([]any{ctx, dest, query}, args...)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Select", reflect.TypeOf((*MockOracle)(nil).Select), varargs...)
+}
+
 // MockCassandra is a mock of Cassandra interface.
 type MockCassandra struct {
 	ctrl     *gomock.Controller
@@ -1540,6 +1617,7 @@ type DataPoint struct {
 	Timestamp int64             `json:"timestamp"`
 	Tags      map[string]string `json:"tags"`
 }
+
 // Mockmigrator is a mock of migrator interface.
 type Mockmigrator struct {
 	ctrl     *gomock.Controller
