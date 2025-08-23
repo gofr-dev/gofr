@@ -22,6 +22,7 @@ func oracleSetup(t *testing.T) (migrator, *MockOracle, *container.Container) {
 	od := oracleDS{Oracle: mockOracle}
 	mg := od.apply(&ds)
 	mockContainer.Oracle = mockOracle
+
 	return mg, mockOracle, mockContainer
 }
 
@@ -111,5 +112,6 @@ func captureStdout(f func()) string {
 	_ = w.Close()
 	os.Stdout = old
 	out := <-outC
+	
 	return out
 }
