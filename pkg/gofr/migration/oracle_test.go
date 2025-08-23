@@ -1,0 +1,109 @@
+package migration
+
+import (
+    "database/sql"
+    "testing"
+    "time"
+	"os"
+	"bytes"
+
+    "github.com/stretchr/testify/assert"
+    "go.uber.org/mock/gomock"
+    "gofr.dev/pkg/gofr/container"
+)
+
+func oracleSetup(t *testing.T) (migrator, *MockOracle, *container.Container) {
+    t.Helper()
+    ctrl := gomock.NewController(t)
+    mockContainer, _ := container.NewMockContainer(t)
+    mockOracle := NewMockOracle(ctrl)
+    ds := Datasource{Oracle: mockOracle}
+    od := oracleDS{Oracle: mockOracle}
+    mg := od.apply(&ds)
+    mockContainer.Oracle = mockOracle
+    return mg, mockOracle, mockContainer
+}
+
+func Test_OracleCheckAndCreateMigrationTable(t *testing.T) {
+    mg, mockOracle, mockContainer := oracleSetup(t)
+    testCases := []struct {
+        desc string
+        err  error
+    }{
+        {"no error", nil},
+        {"connection failed", sql.ErrConnDone},
+    }
+    for i, tc := range testCases {
+        mockOracle.EXPECT().Exec(gomock.Any(), CheckAndCreateOracleMigrationTable).Return(tc.err)
+        err := mg.checkAndCreateMigrationTable(mockContainer)
+        assert.Equal(t, tc.err, err, "TEST[%d]: %s failed", i, tc.desc)
+    }
+}
+
+func Test_OracleGetLastMigration(t *testing.T) {
+    mg, mockOracle, mockContainer := oracleSetup(t)
+    testCases := []struct {
+        desc string
+        err  error
+        resp int64
+    }{
+        {"no error", nil, 0},
+        {"connection failed", sql.ErrConnDone, 0},
+    }
+    for i, tc := range testCases {
+        mockOracle.EXPECT().Select(gomock.Any(), gomock.Any(), getLastOracleGoFrMigration).Return(tc.err)
+        resp := mg.getLastMigration(mockContainer)
+        assert.Equal(t, tc.resp, resp, "TEST[%d]: %s failed", i, tc.desc)
+    }
+}
+
+func Test_OracleCommitMigration(t *testing.T) {
+    mg, mockOracle, mockContainer := oracleSetup(t)
+    timeNow := time.Now()
+    td := transactionData{
+        StartTime:       timeNow,
+        MigrationNumber: 10,
+    }
+    testCases := []struct {
+        desc string
+        err  error
+    }{
+        {"no error", nil},
+        {"connection failed", sql.ErrConnDone},
+    }
+    for i, tc := range testCases {
+        mockOracle.EXPECT().Exec(gomock.Any(), insertOracleGoFrMigrationRow,
+            td.MigrationNumber, "UP", td.StartTime, gomock.Any()).Return(tc.err)
+        err := mg.commitMigration(mockContainer, td)
+        assert.Equal(t, tc.err, err, "TEST[%d]: %s failed", i, tc.desc)
+    }
+}
+
+func Test_OracleBeginTransaction(t *testing.T) {
+    logs := captureStdout(func() {
+        mg, _, mockContainer := oracleSetup(t)
+        mg.beginTransaction(mockContainer)
+    })
+    assert.Contains(t, logs, "OracleDB Migrator begin successfully")
+}
+
+// captureStdout helper to capture stdout during function execution
+func captureStdout(f func()) string {
+    old := os.Stdout
+    r, w, _ := os.Pipe()
+    os.Stdout = w
+
+    outC := make(chan string)
+    go func() {
+        var buf bytes.Buffer
+        _, _ = buf.ReadFrom(r)
+        outC <- buf.String()
+    }()
+
+    f()
+
+    _ = w.Close()
+    os.Stdout = old
+    out := <-outC
+    return out
+}

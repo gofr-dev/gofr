@@ -158,6 +158,13 @@ func initializeDatasources(c *container.Container, ds *Datasource, mg migrator) 
 			logIdentifier: "Clickhouse",
 		},
 		{
+			condition:     func() bool { return !isNil(c.Oracle) },
+			setDS:         func() { ds.Oracle = c.Oracle },
+			apply:         func(m migrator) migrator { return oracleDS{c.Oracle}.apply(m) },
+			logIdentifier: "Oracle",
+		},
+
+		{
 			condition:     func() bool { return c.PubSub != nil },
 			setDS:         func() { ds.PubSub = c.PubSub },
 			apply:         func(m migrator) migrator { return pubsubDS{c.PubSub}.apply(m) },
