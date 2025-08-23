@@ -1,7 +1,6 @@
 package migration
 
 import (
-	"context"
 	"database/sql"
 	"testing"
 	"time"
@@ -215,11 +214,11 @@ func TestOracleMigration_RunMigrationSuccess(t *testing.T) {
 
 	ds := Datasource{Oracle: mockOracle}
 	od := oracleDS{Oracle: mockOracle}
-	_ = od.apply(&ds) // apply migrator wrapper
+	_ = od.apply(&ds) // apply migrator wrapper.
 
 	migrationMap := map[int64]Migrate{
 		1: {UP: func(d Datasource) error {
-			return d.Oracle.Exec(context.Background(), "CREATE TABLE test (id INT)")
+			return d.Oracle.Exec(t.Context(), "CREATE TABLE test (id INT)")
 		}},
 	}
 
@@ -306,9 +305,9 @@ func TestOracleMigration_BeginTransaction_Logs(t *testing.T) {
 	od := oracleDS{Oracle: mockOracle}
 	mg := od.apply(&ds)
 
-	// Capture logs or just call method and rely on it not panicking
+	// Capture logs or just call method and rely on it not panicking.
 	mg.beginTransaction(mockContainer)
-	// Log output capture can be added if needed
+	// Log output capture can be added if needed.
 }
 
 func initializeOracleRunMocks(t *testing.T) (*MockOracle, *container.Container) {
@@ -317,7 +316,7 @@ func initializeOracleRunMocks(t *testing.T) (*MockOracle, *container.Container) 
 	mockOracle := NewMockOracle(gomock.NewController(t))
 	mockContainer, _ := container.NewMockContainer(t)
 
-	// Disable all other datasources by setting to nil
+	// Disable all other datasources by setting to nil.
 	mockContainer.SQL = nil
 	mockContainer.Redis = nil
 	mockContainer.Mongo = nil
@@ -331,7 +330,7 @@ func initializeOracleRunMocks(t *testing.T) (*MockOracle, *container.Container) 
 	mockContainer.ScyllaDB = nil
 	mockContainer.Clickhouse = nil
 
-	// Initialize Oracle mock and Logger
+	// Initialize Oracle mock and Logger.
 	mockContainer.Oracle = mockOracle
 	mockContainer.Logger = logging.NewMockLogger(logging.DEBUG)
 
