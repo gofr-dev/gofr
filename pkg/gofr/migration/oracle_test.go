@@ -112,6 +112,6 @@ func captureStdout(f func()) string {
 	_ = w.Close()
 	os.Stdout = old
 	out := <-outC
-	
+
 	return out
 }

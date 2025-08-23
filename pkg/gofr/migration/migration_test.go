@@ -307,7 +307,6 @@ func TestOracleMigration_BeginTransaction_Logs(t *testing.T) {
 
 	// Capture logs or just call method and rely on it not panicking.
 	mg.beginTransaction(mockContainer)
-	// Log output capture can be added if needed.
 }
 
 func initializeOracleRunMocks(t *testing.T) (*MockOracle, *container.Container) {
