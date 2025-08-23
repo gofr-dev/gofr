@@ -230,9 +230,9 @@ func initializeDatasources(c *container.Container, ds *Datasource, mg migrator) 
 }
 
 func isNil(i any) bool {
-	// Get the value of the interface
+	// Get the value of the interface.
 	val := reflect.ValueOf(i)
 
-	// If the interface is not assigned or is nil, return true
+	// If the interface is not assigned or is nil, return true.
 	return !val.IsValid() || val.IsNil()
 }
