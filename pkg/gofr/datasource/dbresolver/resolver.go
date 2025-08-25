@@ -286,9 +286,7 @@ func (r *Resolver) isReadQuery(query string) bool {
 	// Fast string comparison for common cases
 	firstSix := strings.ToUpper(trimmed[:6])
 	switch firstSix {
-	case "SELECT":
-		return true
-	case "SHOW  ", "DESCRI", "EXPLAI":
+	case "SELECT", "SHOW  ", "DESCRI", "EXPLAI":
 		return true
 	}
 
