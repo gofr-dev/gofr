@@ -26,6 +26,7 @@ type Mocks struct {
 	OpenTSDB      *MockOpenTSDB
 	SurrealDB     *MockSurrealDB
 	Elasticsearch *MockElasticsearch
+	InfluxDB      *MockInfluxDB
 	PubSub        *MockPubSubProvider
 	Couchbase     *MockCouchbase
 	File          *file.MockFileSystemProvider
@@ -132,12 +133,12 @@ func NewMockContainer(t *testing.T, options ...options) (*Container, *Mocks) {
 		KVStore:       container.KVStore.(*MockKVStore),
 		File:          container.File.(*file.MockFileSystemProvider),
 		HTTPService:   httpMock,
-		DGraph:        container.DGraph.(*MockDgraph),
-		OpenTSDB:      container.OpenTSDB.(*MockOpenTSDB),
-		ArangoDB:      container.ArangoDB.(*MockArangoDBProvider),
-		SurrealDB:     container.SurrealDB.(*MockSurrealDB),
-		Elasticsearch: container.Elasticsearch.(*MockElasticsearch),
-		PubSub:        container.PubSub.(*MockPubSubProvider),
+		DGraph:        dgraphMock,
+		OpenTSDB:      opentsdbMock,
+		ArangoDB:      arangoMock,
+		SurrealDB:     surrealMock,
+		Elasticsearch: elasticsearchMock,
+		PubSub:        pubsubMock,
 		Metrics:       mockMetrics,
 		Oracle:        container.Oracle.(*MockOracleDB),
 		ScyllaDB:      container.ScyllaDB.(*MockScyllaDB),
