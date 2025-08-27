@@ -6,7 +6,6 @@
 //	mockgen -source=datasources.go -destination=mock_datasources.go -package=container
 //
 
-// Package container is a generated GoMock package.
 package container
 
 import (
@@ -27,7 +26,6 @@ import (
 type MockDB struct {
 	ctrl     *gomock.Controller
 	recorder *MockDBMockRecorder
-	isgomock struct{}
 }
 
 // MockDBMockRecorder is the mock recorder for MockDB.
