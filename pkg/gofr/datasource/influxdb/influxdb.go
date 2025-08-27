@@ -321,12 +321,12 @@ func (c *Client) WritePoint(ctx context.Context,
 	org, bucket, measurement string,
 	tags map[string]string, fields map[string]any, timestamp time.Time,
 ) error {
-	// p := influxdb2.NewPoint(measurement, tags, fields, timestamp)
-	// writeAPI := c.client.WriteAPIBlocking(org, bucket)
-	// if err := writeAPI.WritePoint(ctx, p); err != nil {
-	// 	c.logger.Errorf("Failed to write point to influxdb: %v", err.Error())
-	// 	return err
-	// }
+	p := influxdb2.NewPoint(measurement, tags, fields, timestamp)
+	writeAPI := c.influx.client.WriteAPIBlocking(org, bucket)
+	if err := writeAPI.WritePoint(ctx, p); err != nil {
+		c.logger.Errorf("Failed to write point to influxdb: %v", err.Error())
+		return err
+	}
 	return nil
 }
 

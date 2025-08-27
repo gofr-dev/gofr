@@ -5,11 +5,10 @@ import (
 	"testing"
 
 	gomock "github.com/golang/mock/gomock"
+	"github.com/influxdata/influxdb-client-go/v2/api"
 	"github.com/influxdata/influxdb-client-go/v2/domain"
 	"github.com/stretchr/testify/require"
 	"go.opentelemetry.io/otel"
-
-	influxdb_mock "gofr.dev/pkg/gofr/datasource/influxdb/mocks"
 )
 
 var (
@@ -42,7 +41,7 @@ func setupDB(t *testing.T, ctrl *gomock.Controller) *Client {
 	mockLogger.EXPECT().Errorf(gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
 
 	// Replace the client with our mocked version
-	client.influx.client = influxdb_mock.NewMockclient(ctrl)
+	client.influx.client = NewMockclient(ctrl)
 
 	return client
 }
@@ -54,7 +53,7 @@ func Test_HealthCheckSuccess(t *testing.T) {
 	defer ctrl.Finish()
 
 	client := *setupDB(t, ctrl)
-	mockInflux := client.influx.client.(*influxdb_mock.Mockclient)
+	mockInflux := client.influx.client.(*Mockclient)
 
 	expectedHealth := &domain.HealthCheck{Status: "pass"}
 	mockInflux.EXPECT().
@@ -73,7 +72,7 @@ func Test_HealthCheckFail(t *testing.T) {
 	defer ctrl.Finish()
 
 	client := *setupDB(t, ctrl)
-	mockInflux := client.influx.client.(*influxdb_mock.Mockclient)
+	mockInflux := client.influx.client.(*Mockclient)
 
 	expectedHealth := &domain.HealthCheck{Status: "fail"}
 	mockInflux.EXPECT().
@@ -92,7 +91,7 @@ func Test_PingSuccess(t *testing.T) {
 	defer ctrl.Finish()
 
 	client := *setupDB(t, ctrl)
-	mockInflux := client.influx.client.(*influxdb_mock.Mockclient)
+	mockInflux := client.influx.client.(*Mockclient)
 
 	mockInflux.EXPECT().
 		Ping(gomock.Any()).
@@ -112,7 +111,7 @@ func Test_PingFailed(t *testing.T) {
 	defer ctrl.Finish()
 
 	client := *setupDB(t, ctrl)
-	mockInflux := client.influx.client.(*influxdb_mock.Mockclient)
+	mockInflux := client.influx.client.(*Mockclient)
 
 	mockInflux.EXPECT().
 		Ping(gomock.Any()).
@@ -168,7 +167,7 @@ func Test_CreateOrganization(t *testing.T) {
 	for _, tt := range testCases {
 		t.Run(tt.name, func(t *testing.T) {
 			client := *setupDB(t, ctrl)
-			mockOrganization := influxdb_mock.NewMockorganization(ctrl)
+			mockOrganization := NewMockorganization(ctrl)
 
 			client.influx.organization = mockOrganization
 			mockOrganization.EXPECT().
@@ -226,7 +225,7 @@ func Test_DeleteOrganization(t *testing.T) {
 	for _, tt := range testCases {
 		t.Run(tt.name, func(t *testing.T) {
 			client := *setupDB(t, ctrl)
-			mockOrganization := influxdb_mock.NewMockorganization(ctrl)
+			mockOrganization := NewMockorganization(ctrl)
 			client.influx.organization = mockOrganization
 
 			mockOrganization.EXPECT().
@@ -253,7 +252,7 @@ func Test_ListOrganization(t *testing.T) {
 	defer ctrl.Finish()
 
 	client := *setupDB(t, ctrl)
-	mockOrganization := influxdb_mock.NewMockorganization(ctrl)
+	mockOrganization := NewMockorganization(ctrl)
 	client.influx.organization = mockOrganization
 
 	t.Run("test zero organization", func(t *testing.T) {
@@ -367,7 +366,7 @@ func Test_CreateBucket(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			client := *setupDB(t, ctrl)
 
-			mockBucket := influxdb_mock.NewMockbucket(ctrl)
+			mockBucket := NewMockbucket(ctrl)
 
 			client.influx.bucket = mockBucket
 			mockBucket.EXPECT().
@@ -422,7 +421,7 @@ func Test_DeleteBucket(t *testing.T) {
 	for _, tt := range testCases {
 		t.Run(tt.name, func(t *testing.T) {
 			client := *setupDB(t, ctrl)
-			mockBucket := influxdb_mock.NewMockbucket(ctrl)
+			mockBucket := NewMockbucket(ctrl)
 
 			client.influx.bucket = mockBucket
 			mockBucket.EXPECT().
@@ -489,7 +488,7 @@ func Test_ListBucket(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			client := *setupDB(t, ctrl)
 
-			mockBucket := influxdb_mock.NewMockbucket(ctrl)
+			mockBucket := NewMockbucket(ctrl)
 
 			client.influx.bucket = mockBucket
 			mockBucket.EXPECT().
@@ -511,56 +510,52 @@ func Test_ListBucket(t *testing.T) {
 	}
 }
 
-// func Test_Query(t *testing.T) {
-// 	t.Helper()
+func Test_Query(t *testing.T) {
+	t.Helper()
 
-// 	ctrl := gomock.NewController(t)
-// 	defer ctrl.Finish()
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
 
-// 	testCases := []struct {
-// 		name        string
-// 		resp        *api.QueryTableResult
-// 		wantResults map[string]any
-// 		orgName     string
-// 		inputQuery  string
-// 		expectErr   bool
-// 		err         error
-// 	}{
-// 		{
-// 			name:        "failing error query",
-// 			orgName:     "org1",
-// 			inputQuery:  "dummyQuery1",
-// 			expectErr:   true,
-// 			wantResults: map[string]any{},
-// 			resp:        &api.QueryTableResult{},
-// 			err:         errors.New("Something"),
-// 		},
-// 	}
+	testCases := []struct {
+		name        string
+		resp        *api.QueryTableResult
+		wantResults map[string]any
+		orgName     string
+		inputQuery  string
+		expectErr   bool
+		err         error
+	}{
+		{
+			name:        "failing error query",
+			orgName:     "org1",
+			inputQuery:  "dummyQuery1",
+			expectErr:   true,
+			wantResults: map[string]any{},
+			resp:        &api.QueryTableResult{},
+			err:         errors.New("Something"),
+		},
+	}
+	for _, tt := range testCases {
+		t.Run(tt.name, func(t *testing.T) {
+			client := *setupDB(t, ctrl)
+			mockQuery := NewMockquery(ctrl)
 
-// 	for _, tt := range testCases {
-// 		t.Run(tt.name, func(t *testing.T) {
-// 			client := *setupDB(t, ctrl)
-// 			mockInflux := client.client.(*influxdb_mock.MockInfluxClient)
-// 			mockInfluxQueryAPI := influxdb_mock.NewMockInfluxQueryAPI(ctrl)
+			client.influx.query = mockQuery
 
-// 			mockInflux.EXPECT().QueryAPI(tt.orgName).
-// 				Return(mockInfluxQueryAPI).
-// 				AnyTimes()
+			mockQuery.EXPECT().
+				Query(gomock.Any(), tt.inputQuery).
+				Return(tt.resp, tt.err).
+				AnyTimes()
 
-// 			mockInfluxQueryAPI.EXPECT().
-// 				Query(gomock.Any(), tt.inputQuery).
-// 				Return(tt.resp, tt.err).
-// 				AnyTimes()
+			result, err := client.Query(t.Context(), tt.orgName, tt.inputQuery)
 
-// 			result, err := client.Query(t.Context(), tt.orgName, tt.inputQuery)
-
-// 			if tt.expectErr {
-// 				require.Error(t, err)
-// 				require.Equal(t, err, tt.err)
-// 				require.Empty(t, result)
-// 			} else {
-// 				require.NoError(t, err)
-// 			}
-// 		})
-// 	}
-// }
+			if tt.expectErr {
+				require.Error(t, err)
+				require.Equal(t, err, tt.err)
+				require.Empty(t, result)
+			} else {
+				require.NoError(t, err)
+			}
+		})
+	}
+}
