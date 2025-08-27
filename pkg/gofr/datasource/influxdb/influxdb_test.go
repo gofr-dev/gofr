@@ -15,6 +15,7 @@ var (
 	errInvalidOrgID      = errors.New("invalid organization id")
 	errFailedCreatingOrg = errors.New("failed to create new organization")
 	errPingFailed        = errors.New("failed to ping")
+	errFailedQuery       = errors.New("error failed query")
 )
 
 func setupDB(t *testing.T, ctrl *gomock.Controller) *Client {
@@ -258,7 +259,6 @@ func Test_ListOrganization(t *testing.T) {
 	t.Run("test zero organization", func(t *testing.T) {
 		allOrgs := []domain.Organization{}
 
-		// mockInflux.EXPECT().OrganizationsAPI().Return(mockOrganization).Times(1)
 		mockOrganization.EXPECT().
 			GetOrganizations(gomock.Any()).
 			Return(&allOrgs, nil).
@@ -532,7 +532,7 @@ func Test_Query(t *testing.T) {
 			expectErr:   true,
 			wantResults: map[string]any{},
 			resp:        &api.QueryTableResult{},
-			err:         errors.New("Something"),
+			err:         errFailedQuery,
 		},
 	}
 	for _, tt := range testCases {
@@ -547,7 +547,7 @@ func Test_Query(t *testing.T) {
 				Return(tt.resp, tt.err).
 				AnyTimes()
 
-			result, err := client.Query(t.Context(), tt.orgName, tt.inputQuery)
+			result, err := client.Query(t.Context(), tt.inputQuery)
 
 			if tt.expectErr {
 				require.Error(t, err)

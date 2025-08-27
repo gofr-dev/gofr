@@ -12,8 +12,8 @@ type influxdbOrganizationAPI struct {
 }
 
 // NewInfluxdbOrganizationAPI creates a new bucket API wrapper.
-func NewInfluxdbOrganizationAPI(api api.OrganizationsAPI) organization {
-	return influxdbOrganizationAPI{api: api}
+func NewInfluxdbOrganizationAPI(a api.OrganizationsAPI) organization {
+	return influxdbOrganizationAPI{api: a}
 }
 
 func (a influxdbOrganizationAPI) GetOrganizations(ctx context.Context, pagingOptions ...api.PagingOption) (*[]domain.Organization, error) {
@@ -46,7 +46,9 @@ func (b influxdbBucketAPI) GetBuckets(ctx context.Context, pagingOptions ...api.
 	return b.api.GetBuckets(ctx, pagingOptions...)
 }
 
-func (b influxdbBucketAPI) FindBucketsByOrgName(ctx context.Context, orgName string, pagingOptions ...api.PagingOption) (*[]domain.Bucket, error) {
+func (b influxdbBucketAPI) FindBucketsByOrgName(ctx context.Context, orgName string, pagingOptions ...api.PagingOption) (
+	*[]domain.Bucket, error,
+) {
 	return b.api.FindBucketsByOrgName(ctx, orgName, pagingOptions...)
 }
 

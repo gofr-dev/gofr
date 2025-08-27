@@ -170,9 +170,11 @@ func (c *Client) DeleteBucket(ctx context.Context, bucketID string) error {
 	if bucketID == "" {
 		return errEmptyBucketID
 	}
+
 	if err := c.influx.bucket.DeleteBucketWithID(ctx, bucketID); err != nil {
 		return err
 	}
+
 	return nil
 }
 
@@ -267,7 +269,7 @@ func (c *Client) Ping(ctx context.Context) (bool, error) {
 	return ping, nil
 }
 
-func (c *Client) Query(ctx context.Context, org, fluxQuery string) ([]map[string]any, error) {
+func (c *Client) Query(ctx context.Context, fluxQuery string) ([]map[string]any, error) {
 	result, err := c.influx.query.Query(ctx, fluxQuery)
 	if err != nil {
 		c.logger.Errorf("InfluxDB Flux Query '%v' failed: %v", fluxQuery, err.Error())
@@ -323,10 +325,12 @@ func (c *Client) WritePoint(ctx context.Context,
 ) error {
 	p := influxdb2.NewPoint(measurement, tags, fields, timestamp)
 	writeAPI := c.influx.client.WriteAPIBlocking(org, bucket)
+
 	if err := writeAPI.WritePoint(ctx, p); err != nil {
 		c.logger.Errorf("Failed to write point to influxdb: %v", err.Error())
 		return err
 	}
+
 	return nil
 }
 
