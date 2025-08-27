@@ -6,7 +6,6 @@
 //	mockgen -source=metrics.go -destination=mock_metrics.go -package=container
 //
 
-// Package container is a generated GoMock package.
 package container
 
 import (
@@ -20,7 +19,6 @@ import (
 type MockMetrics struct {
 	ctrl     *gomock.Controller
 	recorder *MockMetricsMockRecorder
-	isgomock struct{}
 }
 
 // MockMetricsMockRecorder is the mock recorder for MockMetrics.
