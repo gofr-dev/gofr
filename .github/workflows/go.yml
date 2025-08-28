@@ -10,6 +10,7 @@ on:
     branches:
       - main
       - development
+      - fix/qlty_toml
     paths-ignore:
       - 'docs/**'  # Ignore changes to docs folder
   # Run on pull requests to main or development branches
@@ -17,6 +18,7 @@ on:
     branches:
       - main
       - development
+      - fix/qlty_toml
     paths-ignore:
       - 'docs/**'  # Ignore changes to docs folder
 
@@ -286,7 +288,7 @@ jobs:
     # This job only needs example and pkg test results, not submodules
     needs: [Example-Unit-Testing, PKG-Unit-Testing]
     # Only run this job on pushes to the development branch
-    if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/development'}}
+    if: ${{ github.event_name == 'push' && (github.ref == 'refs/heads/development' || github.ref == 'refs/heads/fix/qlty_toml') }}
     steps:
       - name: Check out code into the Go module directory
         uses: actions/checkout@v5
