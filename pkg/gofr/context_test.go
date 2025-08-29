@@ -15,6 +15,7 @@ import (
 	"github.com/stretchr/testify/require"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/sdk/trace"
+	"go.opentelemetry.io/otel/sdk/trace/tracetest"
 
 	"gofr.dev/pkg/gofr/config"
 	"gofr.dev/pkg/gofr/container"
@@ -233,4 +234,31 @@ func TestGetAuthInfo_JWTClaims(t *testing.T) {
 	res := c.GetAuthInfo().GetClaims()
 
 	assert.Equal(t, claims, res)
+}
+
+func TestContext_GetCorrelationID(t *testing.T) {
+	// Setup OpenTelemetry tracer
+	exporter := tracetest.NewInMemoryExporter()
+	tp := trace.NewTracerProvider(trace.WithSyncer(exporter))
+	otel.SetTracerProvider(tp)
+	tracer := tp.Tracer("test")
+
+	t.Run("with span", func(t *testing.T) {
+		ctx, span := tracer.Start(t.Context(), "test-span")
+		defer span.End()
+
+		gofCtx := &Context{Context: ctx}
+		correlationID := gofCtx.GetCorrelationID()
+
+		assert.Len(t, correlationID, 32, "Expected correlation ID length 32, got %d", len(correlationID))
+		assert.NotEqual(t, "00000000000000000000000000000000", correlationID, "Expected non-empty correlation ID")
+	})
+
+	t.Run("without span", func(t *testing.T) {
+		gofCtx := &Context{Context: t.Context()}
+		correlationID := gofCtx.GetCorrelationID()
+
+		expected := "00000000000000000000000000000000"
+		assert.Equal(t, expected, correlationID, "Expected empty TraceID when no span present")
+	})
 }
