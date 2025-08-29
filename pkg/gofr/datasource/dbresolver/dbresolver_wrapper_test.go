@@ -75,7 +75,6 @@ func setupMocks(t *testing.T, createResolver bool) *Mocks {
 			replicaWrappers[i] = &replicaWrapper{
 				db:      r,
 				breaker: newCircuitBreaker(5, 30*time.Second),
-				index:   i,
 			}
 		}
 
@@ -102,7 +101,7 @@ func TestResolverWrapper_Build_Error(t *testing.T) {
 	defer mocks.Ctrl.Finish()
 
 	t.Run("Error_NilPrimary", func(t *testing.T) {
-		wrapper := NewProvider("round-robin", true)
+		wrapper := NewProvider(NewRoundRobinStrategy(2), true)
 		wrapper.UseLogger(mocks.Logger)
 		wrapper.UseMetrics(mocks.Metrics)
 		wrapper.UseTracer(otel.GetTracerProvider().Tracer("gofr-dbresolver"))
@@ -121,31 +120,25 @@ func TestResolverWrapper_Build_Success(t *testing.T) {
 
 	successTests := []struct {
 		name         string
-		strategy     string
+		strategy     Strategy
 		readFallback bool
 		replicas     []container.DB
 	}{
 		{
 			name:         "RoundRobinStrategy",
-			strategy:     "round-robin",
+			strategy:     NewRoundRobinStrategy(0),
 			readFallback: true,
 			replicas:     mocks.Replicas,
 		},
 		{
 			name:         "RandomStrategy",
-			strategy:     "random",
+			strategy:     NewRandomStrategy(),
 			readFallback: false,
 			replicas:     mocks.Replicas,
 		},
 		{
-			name:         "UnknownStrategyDefaultsToRoundRobin",
-			strategy:     "unknown",
-			readFallback: true,
-			replicas:     mocks.Replicas,
-		},
-		{
 			name:         "EmptyReplicas",
-			strategy:     "round-robin",
+			strategy:     NewRoundRobinStrategy(0),
 			readFallback: true,
 			replicas:     []container.DB{},
 		},

@@ -35,40 +35,6 @@ const (
 // Pre-compiled regex - compiled once at package init.
 var readQueryRegex = regexp.MustCompile(`(?i)^\s*(SELECT|SHOW|DESCRIBE|EXPLAIN)`)
 
-// queryCache implements a thread-safe, size-limited cache for query classification.
-type queryCache struct {
-	cache sync.Map
-	size  atomic.Int64
-	max   int64
-}
-
-func newQueryCache(maxSize int64) *queryCache {
-	return &queryCache{
-		max: maxSize,
-	}
-}
-
-func (c *queryCache) get(key string) (value, exists bool) {
-	val, found := c.cache.Load(key)
-	if !found {
-		return false, false
-	}
-
-	return val.(bool), true
-}
-
-func (c *queryCache) set(key string, value bool) {
-	// Simple bounded cache - reject if full
-	if c.size.Load() >= c.max {
-		return
-	}
-
-	// Only increment size if it's a new key.
-	if _, loaded := c.cache.LoadOrStore(key, value); !loaded {
-		c.size.Add(1)
-	}
-}
-
 // statistics holds atomic counters for various operations.
 type statistics struct {
 	primaryReads     atomic.Uint64
@@ -132,7 +98,6 @@ func (cb *circuitBreaker) recordFailure() {
 type replicaWrapper struct {
 	db      container.DB
 	breaker *circuitBreaker
-	index   int
 }
 
 // Resolver is the main struct that implements the container.DB interface.
@@ -180,7 +145,6 @@ func NewResolver(primary container.DB, replicas []container.DB, logger Logger, m
 		replicaWrappers[i] = &replicaWrapper{
 			db:      replica,
 			breaker: newCircuitBreaker(defaultMaxFailures, time.Duration(defaultTimeoutSec)*time.Second),
-			index:   i,
 		}
 	}
 
@@ -315,10 +279,10 @@ func (r *Resolver) selectHealthyReplica() (availableDB container.DB, availableIn
 		availableIndexes []int
 	)
 
-	for _, wrapper := range r.replicas {
+	for i, wrapper := range r.replicas {
 		if wrapper.breaker.allowRequest() {
 			availableDbs = append(availableDbs, wrapper.db)
-			availableIndexes = append(availableIndexes, wrapper.index)
+			availableIndexes = append(availableIndexes, i)
 		}
 	}
 

@@ -18,14 +18,14 @@ type ResolverWrapper struct {
 	logger       Logger
 	metrics      Metrics
 	tracer       trace.Tracer
-	strategyName string
+	strategy     Strategy
 	readFallback bool
 }
 
 // NewProvider creates a new ResolverWrapper with strategy and fallback config.
-func NewProvider(strategy string, readFallback bool) *ResolverWrapper {
+func NewProvider(strategy Strategy, readFallback bool) *ResolverWrapper {
 	return &ResolverWrapper{
-		strategyName: strategy,
+		strategy:     strategy,
 		readFallback: readFallback,
 	}
 }
@@ -62,18 +62,16 @@ func (r *ResolverWrapper) Build(primary container.DB, replicas []container.DB) (
 		return nil, errPrimaryNil
 	}
 
+	// Update RoundRobinStrategy count if needed
+	if rr, ok := r.strategy.(*RoundRobinStrategy); ok {
+		rr.count = len(replicas)
+	}
+
 	// Create options slice
 	var opts []Option
 
-	// Default to round-robin
-	strategy := NewRoundRobinStrategy(len(replicas))
-
-	if r.strategyName == "random" {
-		strategy = NewRandomStrategy()
-	}
-
 	// Add options.
-	opts = append(opts, WithStrategy(strategy), WithFallback(r.readFallback))
+	opts = append(opts, WithStrategy(r.strategy), WithFallback(r.readFallback))
 
 	// Create and return the resolver.
 	return NewResolver(primary, replicas, r.logger, r.metrics, opts...), nil
