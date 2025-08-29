@@ -266,13 +266,44 @@ a.AddDBResolver(resolver)
 - The second argument enables **fallback** to the primary if all replicas are unavailable.
 
 ###  Configuration
-Add replica hosts to your `.env` file using the `DB_REPLICA_HOSTS` variable:
+
+#### 1. Replica Hosts
+Add replica hosts, ports,users, passwords to your `.env` file using the following configs:
 
 ```env
-DB_REPLICA_HOSTS=localhost:3307,localhost:3308
+DB_REPLICA_HOSTS=localhost,replica1,replica2
+DB_REPLICA_PORTS=3307,3308,3309
+DB_REPLICA_USERS=readonly1,readonly2,readonly3
+DB_REPLICA_PASSWORDS=pass1,pass2,pass3
+
 ```
 
 These hosts will be treated as **read replicas**.
+
+#### 2. Replica Connection Pool Tuning
+By default, GoFr automatically scales connection pools for replicas based on your primary database settings:
+
+`DB_MAX_IDLE_CONNECTION` → multiplied by 4
+`DB_MAX_OPEN_CONNECTION` → multiplied by 2
+
+This ensures replicas can handle higher read concurrency without impacting the primary.
+GoFr also applies min/max caps to keep values safe. These can be customized:
+
+```go
+# Primary DB pool settings
+DB_MAX_IDLE_CONNECTION=2
+DB_MAX_OPEN_CONNECTION=20
+
+# Replica pool overrides (optional)
+DB_REPLICA_MAX_IDLE_CAP=100
+DB_REPLICA_MIN_IDLE=5
+DB_REPLICA_DEFAULT_IDLE=15
+
+DB_REPLICA_MAX_OPEN_CAP=500
+DB_REPLICA_MIN_OPEN=20
+DB_REPLICA_DEFAULT_OPEN=150
+
+```
 
 **Benefits**
 - Performance: Offloads read traffic from the primary, reducing latency.

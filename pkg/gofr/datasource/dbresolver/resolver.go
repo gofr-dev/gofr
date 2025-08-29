@@ -21,8 +21,6 @@ import (
 const (
 	healthStatusUP             = "UP"
 	healthStatusDOWN           = "DOWN"
-	roundRobinStrategy         = "round-robin"
-	randomStrategy             = "random"
 	circuitStateClosed   int32 = 0
 	circuitStateOpen     int32 = 1
 	circuitStateHalfOpen int32 = 2
@@ -43,55 +41,6 @@ type statistics struct {
 	primaryFallbacks atomic.Uint64
 	replicaFailures  atomic.Uint64
 	totalQueries     atomic.Uint64
-}
-
-// Circuit breaker for replica health with atomic operations.
-type circuitBreaker struct {
-	failures    atomic.Int32
-	lastFailure atomic.Int64
-	state       atomic.Int32 // 0=closed, 1=open, 2=half-open.
-	maxFailures int32
-	timeout     time.Duration
-}
-
-func newCircuitBreaker(maxFailures int32, timeout time.Duration) *circuitBreaker {
-	return &circuitBreaker{
-		maxFailures: maxFailures,
-		timeout:     timeout,
-	}
-}
-
-func (cb *circuitBreaker) allowRequest() bool {
-	state := cb.state.Load()
-
-	switch state {
-	case circuitStateClosed:
-		return true
-	case circuitStateOpen:
-		if time.Since(time.Unix(0, cb.lastFailure.Load())) > cb.timeout {
-			return cb.state.CompareAndSwap(circuitStateOpen, circuitStateHalfOpen)
-		}
-
-		return false
-	case circuitStateHalfOpen:
-		return true
-	default:
-		return true
-	}
-}
-
-func (cb *circuitBreaker) recordSuccess() {
-	cb.failures.Store(0)
-	cb.state.Store(0)
-}
-
-func (cb *circuitBreaker) recordFailure() {
-	failures := cb.failures.Add(1)
-	cb.lastFailure.Store(time.Now().UnixNano())
-
-	if failures >= cb.maxFailures {
-		cb.state.Store(1)
-	}
 }
 
 // Replica wrapper with circuit breaker.
@@ -118,23 +67,6 @@ type Resolver struct {
 	stopChan chan struct{}
 	wg       sync.WaitGroup
 	once     sync.Once
-}
-
-// Option is a function type for configuring the resolver.
-type Option func(*Resolver)
-
-// WithStrategy sets the strategy for the resolver.
-func WithStrategy(strategy Strategy) Option {
-	return func(r *Resolver) {
-		r.strategy = strategy
-	}
-}
-
-// WithFallback sets whether to fallback to primary on replica failure.
-func WithFallback(fallback bool) Option {
-	return func(r *Resolver) {
-		r.readFallback = fallback
-	}
 }
 
 // NewResolver creates a new Resolver instance with the provided primary and replicas.

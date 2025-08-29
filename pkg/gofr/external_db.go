@@ -15,12 +15,12 @@ import (
 )
 
 const (
-	maxIdleReplicaCap  = 50
-	minIdleReplica     = 10
-	maxOpenReplicaCap  = 200
-	minOpenReplica     = 50
-	defaultIdleReplica = 10
-	defaultOpenReplica = 100
+	maxIdleReplicaCapDefault  = 50
+	minIdleReplicaDefault     = 10
+	maxOpenReplicaCapDefault  = 200
+	minOpenReplicaDefault     = 50
+	defaultIdleReplicaDefault = 10
+	defaultOpenReplicaDefault = 100
 )
 
 // AddMongo sets the Mongo datasource in the app's container.
@@ -353,42 +353,60 @@ func (c *replicaConfigWrapper) Get(key string) string {
 	}
 }
 
-func optimizedIdleConnections(cfg config.Config) string {
-	val, err := strconv.Atoi(cfg.Get("DB_MAX_IDLE_CONNECTION"))
-
+func getReplicaConfigInt(cfg config.Config, key string, fallback int) int {
+	valStr := cfg.Get(key)
+	if valStr == "" {
+		return fallback
+	}
+	val, err := strconv.Atoi(valStr)
 	if err != nil || val <= 0 {
-		return strconv.Itoa(defaultIdleReplica)
+		return fallback
+	}
+	return val
+}
+
+func optimizedIdleConnections(cfg config.Config) string {
+	// Load caps from config or fallback to defaults
+	maxCap := getReplicaConfigInt(cfg, "DB_REPLICA_MAX_IDLE_CONNECTIONS", maxIdleReplicaCapDefault)
+	minVal := getReplicaConfigInt(cfg, "DB_REPLICA_MIN_IDLE_CONNECTIONS", minIdleReplicaDefault)
+	defaultVal := getReplicaConfigInt(cfg, "DB_REPLICA_DEFAULT_IDLE_CONNECTIONS", defaultIdleReplicaDefault)
+
+	val, err := strconv.Atoi(cfg.Get("DB_MAX_IDLE_CONNECTION"))
+	if err != nil || val <= 0 {
+		return strconv.Itoa(defaultVal)
 	}
 
 	optimized := val * 4
-
 	switch {
-	case optimized > maxIdleReplicaCap:
-		optimized = maxIdleReplicaCap
-	case optimized < minIdleReplica:
-		optimized = minIdleReplica
+	case optimized > maxCap:
+		optimized = maxCap
+	case optimized < minVal:
+		optimized = minVal
 	}
 
 	return strconv.Itoa(optimized)
 }
 
 func optimizedOpenConnections(cfg config.Config) string {
+	// Load caps from config or fallback to defaults
+	maxCap := getReplicaConfigInt(cfg, "DB_REPLICA_MAX_OPEN_CONNECTIONS", maxOpenReplicaCapDefault)
+	minVal := getReplicaConfigInt(cfg, "DB_REPLICA_MIN_OPEN_CONNECTIONS", minOpenReplicaDefault)
+	defaultVal := getReplicaConfigInt(cfg, "DB_REPLICA_DEFAULT_OPEN_CONNECTIONS", defaultOpenReplicaDefault)
+
 	val, err := strconv.Atoi(cfg.Get("DB_MAX_OPEN_CONNECTION"))
 	if err != nil {
-		return strconv.Itoa(defaultOpenReplica)
+		return strconv.Itoa(defaultVal)
 	}
-
 	if val == 0 {
-		return strconv.Itoa(defaultOpenReplica)
+		return strconv.Itoa(defaultVal)
 	}
 
 	optimized := val * 2
-
 	switch {
-	case optimized > maxOpenReplicaCap:
-		optimized = maxOpenReplicaCap
-	case optimized < minOpenReplica:
-		optimized = minOpenReplica
+	case optimized > maxCap:
+		optimized = maxCap
+	case optimized < minVal:
+		optimized = minVal
 	}
 
 	return strconv.Itoa(optimized)
