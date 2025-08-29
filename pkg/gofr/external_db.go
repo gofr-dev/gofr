@@ -275,55 +275,75 @@ func (a *App) AddDBResolver(resolver container.DBResolverProvider) {
 
 // createReplicaConnections creates optimized DB connections to replicas.
 func createReplicaConnections(cfg config.Config, logger logging.Logger, mtrcs metrics.Manager) []container.DB {
-	replicaHostsStr := cfg.Get("DB_REPLICA_HOSTS")
-	if replicaHostsStr == "" {
+	hosts := strings.Split(cfg.Get("DB_REPLICA_HOSTS"), ",")
+	ports := strings.Split(cfg.Get("DB_REPLICA_PORTS"), ",")
+	users := strings.Split(cfg.Get("DB_REPLICA_USERS"), ",")
+	passwords := strings.Split(cfg.Get("DB_REPLICA_PASSWORDS"), ",")
+
+	// Ensure minimum: at least hosts must be defined
+	if len(hosts) == 0 || (len(hosts) == 1 && hosts[0] == "") {
 		return nil
 	}
 
-	replicaHosts := strings.Split(replicaHostsStr, ",")
-
 	var replicas []container.DB
 
-	for _, host := range replicaHosts {
+	for i, host := range hosts {
 		host = strings.TrimSpace(host)
 		if host == "" {
 			continue
 		}
 
-		// Create optimized replica config.
+		port := safeGet(ports, i, cfg.Get("DB_PORT"))
+		user := safeGet(users, i, cfg.Get("DB_USER"))
+		pass := safeGet(passwords, i, cfg.Get("DB_PASSWORD"))
+
+		// Wrap replica config
 		replicaConfig := &replicaConfigWrapper{
-			Config:     cfg,
-			hostString: host,
+			Config:   cfg,
+			host:     host,
+			port:     port,
+			user:     user,
+			password: pass,
 		}
 
 		replica := sql.NewSQL(replicaConfig, logger, mtrcs)
 		if replica != nil {
 			replicas = append(replicas, replica)
-
-			logger.Logf("Created DB replica connection to %s", host)
+			logger.Logf("Created DB replica connection to %s:%s as user %s", host, port, user)
 		}
 	}
 
 	return replicas
 }
 
+// safeGet returns the element at index i if present, otherwise fallback.
+func safeGet(list []string, i int, fallback string) string {
+	if i < len(list) && strings.TrimSpace(list[i]) != "" {
+		return strings.TrimSpace(list[i])
+	}
+	return fallback
+}
+
 // replicaConfigWrapper wraps config and optimizes connection settings for replicas.
 type replicaConfigWrapper struct {
 	config.Config
-	hostString string
+	host     string
+	port     string
+	user     string
+	password string
 }
 
 // Get overrides config values for replica optimization.
 func (c *replicaConfigWrapper) Get(key string) string {
 	switch key {
 	case "DB_HOST":
-		return c.getHost()
+		return c.host
 	case "DB_PORT":
-		return c.getPort()
+		return c.port
 	case "DB_USER":
-		return c.getUser()
+		return c.user
 	case "DB_PASSWORD":
-		return c.getPassword()
+		return c.password
 	case "DB_MAX_IDLE_CONNECTION":
 		return optimizedIdleConnections(c.Config)
 	case "DB_MAX_OPEN_CONNECTION":
@@ -331,45 +351,6 @@ func (c *replicaConfigWrapper) Get(key string) string {
 	default:
 		return c.Config.Get(key)
 	}
-}
-
-func (c *replicaConfigWrapper) getHost() string {
-	if strings.Contains(c.hostString, ":") {
-		return strings.Split(c.hostString, ":")[0]
-	}
-
-	return c.hostString
-}
-
-func (c *replicaConfigWrapper) getPort() string {
-	if strings.Contains(c.hostString, ":") {
-		parts := strings.Split(c.hostString, ":")
-		if len(parts) > 1 {
-			return parts[1]
-		}
-	}
-
-	if replicaPort := c.Config.Get("DB_REPLICA_PORT"); replicaPort != "" {
-		return replicaPort
-	}
-
-	return c.Config.Get("DB_PORT")
-}
-
-func (c *replicaConfigWrapper) getUser() string {
-	if replicaUser := c.Config.Get("DB_REPLICA_USER"); replicaUser != "" {
-		return replicaUser
-	}
-
-	return c.Config.Get("DB_USER")
-}
-
-func (c *replicaConfigWrapper) getPassword() string {
-	if replicaPass := c.Config.Get("DB_REPLICA_PASSWORD"); replicaPass != "" {
-		return replicaPass
-	}
-
-	return c.Config.Get("DB_PASSWORD")
 }
 
 func optimizedIdleConnections(cfg config.Config) string {
