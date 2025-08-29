@@ -309,6 +309,7 @@ func createReplicaConnections(cfg config.Config, logger logging.Logger, mtrcs me
 		replica := sql.NewSQL(replicaConfig, logger, mtrcs)
 		if replica != nil {
 			replicas = append(replicas, replica)
+
 			logger.Logf("Created DB replica connection to %s:%s as user %s", host, port, user)
 		}
 	}
@@ -321,6 +322,7 @@ func safeGet(list []string, i int, fallback string) string {
 	if i < len(list) && strings.TrimSpace(list[i]) != "" {
 		return strings.TrimSpace(list[i])
 	}
+
 	return fallback
 }
 
@@ -355,13 +357,17 @@ func (c *replicaConfigWrapper) Get(key string) string {
 
 func getReplicaConfigInt(cfg config.Config, key string, fallback int) int {
 	valStr := cfg.Get(key)
+
 	if valStr == "" {
 		return fallback
 	}
+
 	val, err := strconv.Atoi(valStr)
+
 	if err != nil || val <= 0 {
 		return fallback
 	}
+
 	return val
 }
 
@@ -372,11 +378,13 @@ func optimizedIdleConnections(cfg config.Config) string {
 	defaultVal := getReplicaConfigInt(cfg, "DB_REPLICA_DEFAULT_IDLE_CONNECTIONS", defaultIdleReplicaDefault)
 
 	val, err := strconv.Atoi(cfg.Get("DB_MAX_IDLE_CONNECTION"))
+
 	if err != nil || val <= 0 {
 		return strconv.Itoa(defaultVal)
 	}
 
 	optimized := val * 4
+
 	switch {
 	case optimized > maxCap:
 		optimized = maxCap
@@ -394,14 +402,17 @@ func optimizedOpenConnections(cfg config.Config) string {
 	defaultVal := getReplicaConfigInt(cfg, "DB_REPLICA_DEFAULT_OPEN_CONNECTIONS", defaultOpenReplicaDefault)
 
 	val, err := strconv.Atoi(cfg.Get("DB_MAX_OPEN_CONNECTION"))
+
 	if err != nil {
 		return strconv.Itoa(defaultVal)
 	}
+
 	if val == 0 {
 		return strconv.Itoa(defaultVal)
 	}
 
 	optimized := val * 2
+
 	switch {
 	case optimized > maxCap:
 		optimized = maxCap
