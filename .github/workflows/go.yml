@@ -155,6 +155,7 @@ jobs:
             # Combine coverage profiles
             echo "mode: atomic" > profile.cov
             grep -h -v "mode:" gofr_only.cov submodules.cov | grep -v '/mock_' >> profile.cov
+            go tool cover -func profile.cov
 
       # Upload coverage report for the 1.24 Go version only
       - name: Upload Test Coverage
