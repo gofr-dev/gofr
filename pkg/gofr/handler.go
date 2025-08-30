@@ -87,8 +87,17 @@ func (h handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	select {
 	case <-c.Context.Done():
-		// If the context's deadline has been exceeded, return a timeout error response
-		if errors.Is(c.Err(), context.DeadlineExceeded) {
+		// Handle different context cancellation scenarios
+		ctxErr := c.Context.Err()
+		switch {
+		case errors.Is(ctxErr, context.Canceled):
+			// Client cancelled the request (e.g., closed browser tab)
+			err = gofrHTTP.ErrorClientClosedRequest{}
+		case errors.Is(ctxErr, context.DeadlineExceeded):
+			// Server-side timeout occurred
+			err = gofrHTTP.ErrorRequestTimeout{}
+		default:
+			// Fallback for other context errors
 			err = gofrHTTP.ErrorRequestTimeout{}
 		}
 	case <-done:

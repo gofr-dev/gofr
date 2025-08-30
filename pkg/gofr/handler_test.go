@@ -1,11 +1,16 @@
 package gofr
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"strconv"
+	"strings"
+	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -78,8 +83,7 @@ func TestHandler_ServeHTTP_Timeout(t *testing.T) {
 
 	h.ServeHTTP(w, r)
 
-	assert.Equal(t, http.StatusRequestTimeout, w.Code, "TestHandler_ServeHTTP_Timeout Failed")
-
+	assert.Equal(t, http.StatusGatewayTimeout, w.Code, "TestHandler_ServeHTTP_Timeout Failed")
 	assert.Contains(t, w.Body.String(), "request timed out", "TestHandler_ServeHTTP_Timeout Failed")
 }
 
@@ -257,4 +261,127 @@ func TestHandler_healthHandler(t *testing.T) {
 
 	require.NoError(t, err)
 	assert.NotNil(t, h)
+}
+
+func TestHandler_ServeHTTP_ContextCanceled(t *testing.T) {
+	w := httptest.NewRecorder()
+	r := httptest.NewRequest(http.MethodGet, "/", http.NoBody)
+
+	// Create a context that's already canceled
+	ctx, cancel := context.WithCancel(r.Context())
+	cancel() // Cancel immediately
+	r = r.WithContext(ctx)
+
+	h := handler{
+		container: &container.Container{Logger: logging.NewLogger(logging.FATAL)},
+	}
+
+	h.function = func(*Context) (any, error) {
+		time.Sleep(100 * time.Millisecond)
+		return "should not reach", nil
+	}
+
+	h.ServeHTTP(w, r)
+
+	assert.Equal(t, 499, w.Code, "Should return HTTP 499 for client closed request")
+	assert.Contains(t, w.Body.String(), "client closed request", "Should contain error message")
+}
+
+func TestHandler_ServeHTTP_ContextTimeout(t *testing.T) {
+	w := httptest.NewRecorder()
+	r := httptest.NewRequest(http.MethodGet, "/", http.NoBody)
+
+	// Create context with 50ms timeout
+	ctx, cancel := context.WithTimeout(r.Context(), 50*time.Millisecond)
+	defer cancel()
+	r = r.WithContext(ctx)
+
+	h := handler{
+		container: &container.Container{Logger: logging.NewLogger(logging.FATAL)},
+	}
+
+	h.function = func(*Context) (any, error) {
+		// Sleep longer than timeout to trigger deadline exceeded
+		time.Sleep(100 * time.Millisecond)
+		return "should timeout", nil
+	}
+
+	h.ServeHTTP(w, r)
+
+	assert.Equal(t, http.StatusGatewayTimeout, w.Code, "Should return HTTP 504 for context timeout")
+	assert.Contains(t, w.Body.String(), "request timed out")
+}
+
+func TestIntegration_ConcurrentClientCancellations(t *testing.T) {
+	ports := testutil.NewServerConfigs(t)
+	t.Setenv("METRICS_PORT", strconv.Itoa(ports.MetricsPort))
+
+	t.Setenv("HTTP_PORT", strconv.Itoa(ports.HTTPPort))
+
+	var requestCount atomic.Int64
+	var completedCount atomic.Int64
+
+	app := New()
+
+	app.GET("/concurrent", func(c *Context) (any, error) {
+		requestCount.Add(1)
+
+		// Simulate work
+		time.Sleep(150 * time.Millisecond)
+
+		completedCount.Add(1)
+		return map[string]string{"status": "completed"}, nil
+	})
+
+	go func() {
+		app.Run()
+	}()
+	time.Sleep(500 * time.Millisecond)
+
+	// Launch multiple concurrent requests with early cancellation
+	const numRequests = 10
+	var wg sync.WaitGroup
+	var canceledCount atomic.Int64
+
+	for i := 0; i < numRequests; i++ {
+		wg.Add(1)
+		go func(id int) {
+			defer wg.Done()
+
+			ctx, cancel := context.WithCancel(context.Background())
+
+			// Cancel after short delay
+			go func() {
+				time.Sleep(50 * time.Millisecond)
+				cancel()
+			}()
+
+			req, _ := http.NewRequestWithContext(ctx, "GET", fmt.Sprint("http://localhost:", ports.HTTPPort, "/concurrent"), nil)
+			client := &http.Client{}
+
+			resp, err := client.Do(req)
+			if err != nil {
+				if strings.Contains(err.Error(), "canceled") {
+					canceledCount.Add(1)
+				}
+				return
+			}
+
+			if resp != nil {
+				resp.Body.Close()
+			}
+		}(i)
+	}
+
+	wg.Wait()
+	time.Sleep(300 * time.Millisecond) // Let remaining requests complete
+
+	// Verify some requests were canceled
+	canceled := canceledCount.Load()
+	started := requestCount.Load()
+	completed := completedCount.Load()
+
+	t.Logf("Started: %d, Completed: %d, Canceled: %d", started, completed, canceled)
+	assert.Greater(t, canceled, int64(0), "Some requests should have been canceled")
+	assert.LessOrEqual(t, completed, started, "Completed should not exceed started")
 }
