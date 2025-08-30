@@ -6,7 +6,7 @@ toolchain go1.24.1
 
 require (
 	github.com/pkg/sftp v1.13.6
-	github.com/stretchr/testify v1.10.0
+	github.com/stretchr/testify v1.11.1
 	go.uber.org/mock v0.5.2
 	gofr.dev v1.43.0
 	golang.org/x/crypto v0.40.0
