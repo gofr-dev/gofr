@@ -94,11 +94,8 @@ func (h handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		case errors.Is(ctxErr, context.Canceled):
 			// Client canceled the request (e.g., closed browser tab)
 			err = gofrHTTP.ErrorClientClosedRequest{}
-		case errors.Is(ctxErr, context.DeadlineExceeded):
-			// Server-side timeout occurred
-			err = gofrHTTP.ErrorRequestTimeout{}
 		default:
-			// Fallback for other context errors
+			// Server-side timeout occurred && fallback for other context errors
 			err = gofrHTTP.ErrorRequestTimeout{}
 		}
 	case <-done:

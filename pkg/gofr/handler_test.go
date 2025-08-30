@@ -2,8 +2,10 @@ package gofr
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -392,4 +394,74 @@ func TestIntegration_ConcurrentClientCancellations(t *testing.T) {
 	t.Logf("Started: %d, Completed: %d, Canceled: %d", started, completed, canceled)
 	assert.Positive(t, canceled, "Some requests should have been canceled")
 	assert.LessOrEqual(t, completed, started, "Completed should not exceed started")
+}
+
+func TestIntegration_ServerTimeout(t *testing.T) {
+	ports := testutil.NewServerConfigs(t)
+
+	t.Setenv("METRICS_PORT", strconv.Itoa(ports.MetricsPort))
+	t.Setenv("HTTP_PORT", strconv.Itoa(ports.HTTPPort))
+
+	// Set GoFr's built-in request timeout to 1 second
+	t.Setenv("REQUEST_TIMEOUT", "1")
+
+	app := New()
+
+	// Handler that takes longer than server timeout
+	app.GET("/timeout-test", func(*Context) (any, error) {
+		// Sleep longer than REQUEST_TIMEOUT (1 second)
+		time.Sleep(2 * time.Second)
+		return map[string]string{"message": "should timeout"}, nil
+	})
+
+	go func() {
+		app.Run()
+	}()
+
+	// Wait for server to be ready
+	testURL := fmt.Sprintf("http://localhost:%d/timeout-test", ports.HTTPPort)
+	client := &http.Client{Timeout: 10 * time.Second} // Client timeout longer than server
+
+	ready := false
+
+	for i := 0; i < 50; i++ {
+		time.Sleep(100 * time.Millisecond)
+
+		req, err := http.NewRequestWithContext(t.Context(), http.MethodGet, testURL, http.NoBody)
+		require.NoError(t, err)
+
+		resp, err := client.Do(req)
+		if err == nil {
+			ready = true
+
+			resp.Body.Close()
+
+			break
+		}
+	}
+
+	require.True(t, ready, "Server should be ready")
+
+	req, err := http.NewRequestWithContext(t.Context(), http.MethodGet, testURL, http.NoBody)
+	require.NoError(t, err)
+
+	resp, err := client.Do(req)
+
+	require.NoError(t, err, "HTTP request should complete")
+
+	defer resp.Body.Close()
+
+	// GoFr should return 504 Gateway Timeout
+	assert.Equal(t, http.StatusGatewayTimeout, resp.StatusCode,
+		"Server should return 504 for request timeout")
+
+	body, err := io.ReadAll(resp.Body)
+	require.NoError(t, err)
+
+	var errorResponse map[string]any
+	err = json.Unmarshal(body, &errorResponse)
+	require.NoError(t, err)
+
+	errorObj := errorResponse["error"].(map[string]any)
+	assert.Equal(t, "request timed out", errorObj["message"])
 }
