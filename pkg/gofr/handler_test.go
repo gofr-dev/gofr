@@ -270,6 +270,7 @@ func TestHandler_ServeHTTP_ContextCanceled(t *testing.T) {
 	// Create a context that's already canceled
 	ctx, cancel := context.WithCancel(r.Context())
 	cancel() // Cancel immediately
+
 	r = r.WithContext(ctx)
 
 	h := handler{
@@ -294,6 +295,7 @@ func TestHandler_ServeHTTP_ContextTimeout(t *testing.T) {
 	// Create context with 50ms timeout
 	ctx, cancel := context.WithTimeout(r.Context(), 50*time.Millisecond)
 	defer cancel()
+
 	r = r.WithContext(ctx)
 
 	h := handler{
@@ -319,17 +321,19 @@ func TestIntegration_ConcurrentClientCancellations(t *testing.T) {
 	t.Setenv("HTTP_PORT", strconv.Itoa(ports.HTTPPort))
 
 	var requestCount atomic.Int64
+
 	var completedCount atomic.Int64
 
 	app := New()
 
-	app.GET("/concurrent", func(c *Context) (any, error) {
+	app.GET("/concurrent", func(_ *Context) (any, error) {
 		requestCount.Add(1)
 
 		// Simulate work
 		time.Sleep(150 * time.Millisecond)
 
 		completedCount.Add(1)
+
 		return map[string]string{"status": "completed"}, nil
 	})
 
@@ -340,15 +344,18 @@ func TestIntegration_ConcurrentClientCancellations(t *testing.T) {
 
 	// Launch multiple concurrent requests with early cancellation
 	const numRequests = 10
+
 	var wg sync.WaitGroup
+
 	var canceledCount atomic.Int64
 
 	for i := 0; i < numRequests; i++ {
 		wg.Add(1)
-		go func(id int) {
+
+		go func() {
 			defer wg.Done()
 
-			ctx, cancel := context.WithCancel(context.Background())
+			ctx, cancel := context.WithCancel(t.Context())
 
 			// Cancel after short delay
 			go func() {
@@ -356,7 +363,7 @@ func TestIntegration_ConcurrentClientCancellations(t *testing.T) {
 				cancel()
 			}()
 
-			req, _ := http.NewRequestWithContext(ctx, "GET", fmt.Sprint("http://localhost:", ports.HTTPPort, "/concurrent"), nil)
+			req, _ := http.NewRequestWithContext(ctx, http.MethodGet, fmt.Sprint("http://localhost:", ports.HTTPPort, "/concurrent"), http.NoBody)
 			client := &http.Client{}
 
 			resp, err := client.Do(req)
@@ -364,13 +371,14 @@ func TestIntegration_ConcurrentClientCancellations(t *testing.T) {
 				if strings.Contains(err.Error(), "canceled") {
 					canceledCount.Add(1)
 				}
+
 				return
 			}
 
 			if resp != nil {
 				resp.Body.Close()
 			}
-		}(i)
+		}()
 	}
 
 	wg.Wait()
@@ -382,6 +390,6 @@ func TestIntegration_ConcurrentClientCancellations(t *testing.T) {
 	completed := completedCount.Load()
 
 	t.Logf("Started: %d, Completed: %d, Canceled: %d", started, completed, canceled)
-	assert.Greater(t, canceled, int64(0), "Some requests should have been canceled")
+	assert.Positive(t, canceled, "Some requests should have been canceled")
 	assert.LessOrEqual(t, completed, started, "Completed should not exceed started")
 }

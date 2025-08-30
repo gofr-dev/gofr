@@ -112,7 +112,7 @@ func (ErrorRequestTimeout) LogLevel() logging.Level {
 	return logging.INFO // Server timeouts are informational
 }
 
-// ErrorClientClosedRequest represents when client cancels the request
+// ErrorClientClosedRequest represents when client cancels the request.
 type ErrorClientClosedRequest struct{}
 
 func (ErrorClientClosedRequest) Error() string {
