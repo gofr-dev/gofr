@@ -36,6 +36,7 @@ import (
 	"gofr.dev/pkg/gofr/service"
 	"gofr.dev/pkg/gofr/version"
 	"gofr.dev/pkg/gofr/websocket"
+	"gofr.dev/pkg/cache"
 )
 
 // Container is a collection of all common application level concerns. Things like Logger, Connection Pool for Redis
@@ -71,6 +72,8 @@ type Container struct {
 	KVStore KVStore
 
 	File file.FileSystem
+
+	Cache map[string]cache.Cache
 }
 
 func NewContainer(conf config.Config) *Container {
@@ -192,6 +195,13 @@ func (c *Container) Close() error {
 		c.WSManager.CloseConnection(conn)
 	}
 
+	// Close all cache
+	for _, cc := range c.Cache {
+		if cc != nil {
+			_ = cc.Close(context.Background())
+		}
+	}
+
 	return err
 }
 
@@ -287,6 +297,21 @@ func (c *Container) GetAppName() string {
 func (c *Container) GetAppVersion() string {
 	return c.appVersion
 }
+
+func (c *Container) AddCache(name string, v cache.Cache) {
+	if c.Cache == nil {
+		c.Cache = make(map[string]cache.Cache)
+	}
+	c.Cache[name] = v
+}
+
+func (c *Container) GetCache(name string) cache.Cache {
+	if c.Cache == nil {
+		return nil
+	}
+	return c.Cache[name]
+}
+
 
 func (c *Container) GetPublisher() pubsub.Publisher {
 	return c.PubSub
