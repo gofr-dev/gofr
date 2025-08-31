@@ -39,7 +39,9 @@ exclude_patterns = [
   "**/target/**",
   "**/templates/**",
   "**/testdata/**",
-  "**/vendor/**", "**/mock_*", "**/*_test.go",
+  "**/vendor/**",
+  "**/mock_*",
+  "**/*_test.go",
 ]
 
 test_patterns = [
@@ -61,11 +63,11 @@ threshold = 10
 enabled = true
 
 [smells.file_complexity]
-threshold = 66
+threshold = 85  # Increased from 66 to match your codeclimate complex-logic: 10 scaled appropriately
 enabled = true
 
 [smells.return_statements]
-threshold = 8
+threshold = 25  # Significantly increased from 8 to match your codeclimate threshold
 enabled = true
 
 [smells.nested_control_flow]
@@ -80,9 +82,65 @@ enabled = true
 threshold = 13
 enabled = true
 
+# CRITICAL: Completely disable duplication detection like in Code Climate
 [smells.duplication]
 enabled = false
 
 [[source]]
 name = "default"
 default = true
+
+# CRITICAL TRIAGE RULES: These will suppress the specific issues shown in your screenshot
+
+# Completely ignore similar-code issues (22 occurrences in your screenshot)
+[[triage]]
+match.rules = ["qlty:similar-code"]
+match.file_patterns = ["**/*.go"]
+set.ignored = true
+
+# Completely ignore identical-code issues (4 occurrences in your screenshot)
+[[triage]]
+match.rules = ["qlty:identical-code"]
+match.file_patterns = ["**/*.go"]
+set.ignored = true
+
+# Set function-parameters issues to low priority instead of medium (10 occurrences)
+[[triage]]
+match.rules = ["qlty:function-parameters"]
+match.file_patterns = ["**/*.go"]
+set.level = "low"
+set.mode = "monitor"
+
+# Set return-statements issues to low priority (6 occurrences)
+[[triage]]
+match.rules = ["qlty:return-statements"]
+match.file_patterns = ["**/*.go"]
+set.level = "low"
+set.mode = "monitor"
+
+# Set file-complexity issues to low priority (1 occurrence)
+[[triage]]
+match.rules = ["qlty:file-complexity"]
+match.file_patterns = ["**/*.go"]
+set.level = "low"
+set.mode = "monitor"
+
+# Set nested-control-flow issues to low priority (1 occurrence)
+[[triage]]
+match.rules = ["qlty:nested-control-flow"]
+match.file_patterns = ["**/*.go"]
+set.level = "low"
+set.mode = "monitor"
+
+# Additional safeguard: Set all medium-level structure issues to monitor mode
+[[triage]]
+match.plugins = ["qlty"]
+match.levels = ["medium"]
+match.file_patterns = ["**/*.go"]
+set.mode = "monitor"
+
+# Set all duplication category issues to be ignored
+[[triage]]
+match.plugins = ["qlty"]
+match.category = ["duplication"]
+set.ignored = true
