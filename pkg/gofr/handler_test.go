@@ -295,7 +295,7 @@ func TestHandler_ServeHTTP_ContextTimeout(t *testing.T) {
 	r := httptest.NewRequest(http.MethodGet, "/", http.NoBody)
 
 	// Create context with 50ms timeout
-	ctx, cancel := context.WithTimeout(r.Context(), 50*time.Millisecond)
+	ctx, cancel := context.WithTimeout(r.Context(), 1*time.Millisecond)
 	defer cancel()
 
 	r = r.WithContext(ctx)
@@ -306,7 +306,7 @@ func TestHandler_ServeHTTP_ContextTimeout(t *testing.T) {
 
 	h.function = func(*Context) (any, error) {
 		// Sleep longer than timeout to trigger deadline exceeded
-		time.Sleep(100 * time.Millisecond)
+		time.Sleep(10 * time.Millisecond)
 		return "should timeout", nil
 	}
 
@@ -332,7 +332,7 @@ func TestIntegration_ConcurrentClientCancellations(t *testing.T) {
 		requestCount.Add(1)
 
 		// Simulate work
-		time.Sleep(150 * time.Millisecond)
+		time.Sleep(10 * time.Millisecond)
 
 		completedCount.Add(1)
 
@@ -342,7 +342,7 @@ func TestIntegration_ConcurrentClientCancellations(t *testing.T) {
 	go func() {
 		app.Run()
 	}()
-	time.Sleep(500 * time.Millisecond)
+	time.Sleep(5 * time.Millisecond)
 
 	// Launch multiple concurrent requests with early cancellation
 	const numRequests = 10
@@ -361,7 +361,7 @@ func TestIntegration_ConcurrentClientCancellations(t *testing.T) {
 
 			// Cancel after short delay
 			go func() {
-				time.Sleep(50 * time.Millisecond)
+				time.Sleep(5 * time.Millisecond)
 				cancel()
 			}()
 
@@ -384,7 +384,7 @@ func TestIntegration_ConcurrentClientCancellations(t *testing.T) {
 	}
 
 	wg.Wait()
-	time.Sleep(300 * time.Millisecond) // Let remaining requests complete
+	time.Sleep(50 * time.Millisecond) // Let remaining requests complete
 
 	// Verify some requests were canceled
 	canceled := canceledCount.Load()
@@ -425,7 +425,7 @@ func TestIntegration_ServerTimeout(t *testing.T) {
 	ready := false
 
 	for i := 0; i < 50; i++ {
-		time.Sleep(100 * time.Millisecond)
+		time.Sleep(10 * time.Millisecond)
 
 		req, err := http.NewRequestWithContext(t.Context(), http.MethodGet, testURL, http.NoBody)
 		require.NoError(t, err)
