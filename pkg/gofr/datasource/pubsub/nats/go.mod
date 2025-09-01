@@ -7,7 +7,7 @@ toolchain go1.24.1
 require (
 	github.com/nats-io/nats-server/v2 v2.10.27
 	github.com/nats-io/nats.go v1.39.1
-	github.com/stretchr/testify v1.10.0
+	github.com/stretchr/testify v1.11.1
 	go.opentelemetry.io/otel/trace v1.37.0
 	go.uber.org/mock v0.6.0
 	gofr.dev v1.43.0
