@@ -146,3 +146,11 @@ func Test_ServiceUnavailable(t *testing.T) {
 		assert.Equal(t, tc.logLevel, err.LogLevel())
 	}
 }
+
+func TestErrorClientClosedRequest(t *testing.T) {
+	err := ErrorClientClosedRequest{}
+
+	assert.Equal(t, "client closed request", err.Error())
+	assert.Equal(t, StatusClientClosedRequest, err.StatusCode())
+	assert.Equal(t, logging.DEBUG, err.LogLevel())
+}
