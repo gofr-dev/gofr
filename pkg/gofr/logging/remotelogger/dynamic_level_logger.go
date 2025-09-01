@@ -3,6 +3,7 @@ package remotelogger
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"io"
 	"slices"
 	"time"
@@ -14,6 +15,72 @@ import (
 const (
 	requestTimeout = 5 * time.Second
 )
+
+// filteringLogger filters HTTP logs from remote logger to reduce noise
+type filteringLogger struct {
+	logging.Logger
+	firstSuccessfulHit bool
+	initLogged         bool
+}
+
+// Log implements a simplified filtering strategy with consistent formatting
+func (f *filteringLogger) Log(args ...any) {
+	if len(args) == 0 || args[0] == nil {
+		f.Logger.Log(args...)
+		return
+	}
+
+	// Handle HTTP logs
+	httpLog, ok := args[0].(*service.Log)
+	if !ok {
+		f.Logger.Log(args...)
+		return
+	}
+
+	// Log initialization message if not already logged
+	if !f.initLogged {
+		f.initLogged = true
+		f.Logger.Infof("Initializing remote logger connection to %s", httpLog.URI)
+	}
+
+	isSuccessful := httpLog.ResponseCode >= 200 && httpLog.ResponseCode < 300
+
+	switch {
+	// First successful hit - log at INFO level
+	case isSuccessful && !f.firstSuccessfulHit:
+		f.firstSuccessfulHit = true
+		f.Logger.Log(args...)
+
+	// Subsequent successful hits - log at DEBUG level with consistent format
+	case isSuccessful:
+		if debugLogger, ok := f.Logger.(interface{ Debugf(string, ...any) }); ok {
+			colorCode := colorForResponseCode(httpLog.ResponseCode)
+			debugLogger.Debugf("\u001B[38;5;8m%s \u001B[38;5;%dm%-6d\u001B[0m %8d\u001B[38;5;8mµs\u001B[0m %s %s",
+				httpLog.CorrelationID,
+				colorCode,
+				httpLog.ResponseCode,
+				httpLog.ResponseTime,
+				httpLog.HTTPMethod,
+				httpLog.URI)
+		}
+
+	// Error responses - pass through to original logger
+	default:
+		f.Logger.Log(args...)
+	}
+}
+
+func colorForResponseCode(status int) int {
+	switch {
+	case status >= 200 && status < 300:
+		return 34 // blue
+	case status >= 400 && status < 500:
+		return 220 // yellow
+	case status >= 500 && status < 600:
+		return 202 // red
+	}
+	return 0
+}
 
 /*
 New creates a new RemoteLogger instance with the provided level, remote configuration URL, and level fetch interval.
@@ -50,18 +117,61 @@ func (r *remoteLogger) UpdateLogLevel() {
 
 	defer ticker.Stop()
 
-	remoteService := service.NewHTTPService(r.remoteURL, r.Logger, nil)
+	// Create filtered logger with proper initialization
+	filteredLogger := &filteringLogger{
+		Logger:             r.Logger,
+		firstSuccessfulHit: false,
+		initLogged:         false,
+	}
+
+	remoteService := service.NewHTTPService(r.remoteURL, filteredLogger, nil)
+
+	r.Infof("Remote logger monitoring initialized with URL: %s, interval: %s",
+		r.remoteURL, r.levelFetchInterval)
+
+	checkAndUpdateLevel := func() {
+		newLevel, err := fetchAndUpdateLogLevel(remoteService, r.currentLevel)
+		if err != nil {
+			r.Warnf("Failed to fetch log level: %v", err)
+			return
+		}
+
+		if r.currentLevel != newLevel {
+			logLevelChange(r, r.currentLevel, newLevel)
+			r.ChangeLevel(newLevel)
+			r.currentLevel = newLevel
+		}
+	}
+
+	// Perform initial check immediately
+	checkAndUpdateLevel()
+
+	// Setup ticker for periodic checks
+	ticker = time.NewTicker(r.levelFetchInterval)
+	defer ticker.Stop()
 
 	for range ticker.C {
-		newLevel, err := fetchAndUpdateLogLevel(remoteService, r.currentLevel)
-		if err == nil {
-			r.ChangeLevel(newLevel)
+		checkAndUpdateLevel()
+	}
+}
 
-			if r.currentLevel != newLevel {
-				r.Infof("LOG_LEVEL updated from %v to %v", r.currentLevel, newLevel)
-				r.currentLevel = newLevel
-			}
-		}
+// Helper function to log level changes at appropriate level
+func logLevelChange(r *remoteLogger, oldLevel, newLevel logging.Level) {
+	// Use the higher level to ensure visibility
+	logLevel := oldLevel
+	if newLevel > oldLevel {
+		logLevel = newLevel
+	}
+
+	message := fmt.Sprintf("LOG_LEVEL updated from %v to %v", oldLevel, newLevel)
+
+	switch logLevel {
+	case logging.FATAL:
+		r.Fatalf(message)
+	case logging.ERROR:
+		r.Errorf(message)
+	default:
+		r.Infof(message)
 	}
 }
 
