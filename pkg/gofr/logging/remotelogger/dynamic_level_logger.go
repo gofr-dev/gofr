@@ -14,23 +14,27 @@ import (
 
 const (
 	requestTimeout = 5 * time.Second
+	// ANSI color codes for terminal output.
+	colorBlue   = 34  // For successful responses (2xx)
+	colorYellow = 220 // For client errors (4xx)
+	colorRed    = 202 // For server errors (5xx)
 )
 
-// filteringLogger filters HTTP logs from remote logger to reduce noise
-type filteringLogger struct {
+// httpLogFilter filters HTTP logs from remote logger to reduce noise.
+type httpLogFilter struct {
 	logging.Logger
 	firstSuccessfulHit bool
 	initLogged         bool
 }
 
-// Log implements a simplified filtering strategy with consistent formatting
-func (f *filteringLogger) Log(args ...any) {
+// Log implements a simplified filtering strategy with consistent formatting.
+func (f *httpLogFilter) Log(args ...any) {
 	if len(args) == 0 || args[0] == nil {
 		f.Logger.Log(args...)
 		return
 	}
 
-	// Handle HTTP logs
+	// Handle HTTP logs.
 	httpLog, ok := args[0].(*service.Log)
 	if !ok {
 		f.Logger.Log(args...)
@@ -73,12 +77,13 @@ func (f *filteringLogger) Log(args ...any) {
 func colorForResponseCode(status int) int {
 	switch {
 	case status >= 200 && status < 300:
-		return 34 // blue
+		return colorBlue
 	case status >= 400 && status < 500:
-		return 220 // yellow
+		return colorYellow
 	case status >= 500 && status < 600:
-		return 202 // red
+		return colorRed
 	}
+
 	return 0
 }
 
@@ -118,7 +123,7 @@ func (r *remoteLogger) UpdateLogLevel() {
 	defer ticker.Stop()
 
 	// Create filtered logger with proper initialization
-	filteredLogger := &filteringLogger{
+	filteredLogger := &httpLogFilter{
 		Logger:             r.Logger,
 		firstSuccessfulHit: false,
 		initLogged:         false,
@@ -155,7 +160,7 @@ func (r *remoteLogger) UpdateLogLevel() {
 	}
 }
 
-// Helper function to log level changes at appropriate level
+// Helper function to log level changes at appropriate level.
 func logLevelChange(r *remoteLogger, oldLevel, newLevel logging.Level) {
 	// Use the higher level to ensure visibility
 	logLevel := oldLevel
@@ -170,8 +175,14 @@ func logLevelChange(r *remoteLogger, oldLevel, newLevel logging.Level) {
 		r.Fatalf(message)
 	case logging.ERROR:
 		r.Errorf(message)
-	default:
+	case logging.WARN:
+		r.Warnf(message)
+	case logging.NOTICE:
+		r.Noticef(message)
+	case logging.INFO:
 		r.Infof(message)
+	case logging.DEBUG:
+		r.Infof(message) // Using Info for DEBUG to ensure visibility
 	}
 }
 
