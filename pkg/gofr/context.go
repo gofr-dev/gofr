@@ -177,3 +177,7 @@ func newCMDContext(w Responder, r Request, c *container.Container, out terminal.
 		ContextLogger: *logging.NewContextLogger(r.Context(), c.Logger),
 	}
 }
+
+func (c *Context) GetCorrelationID() string {
+	return trace.SpanFromContext(c).SpanContext().TraceID().String()
+}
