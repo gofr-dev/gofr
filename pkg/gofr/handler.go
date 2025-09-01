@@ -90,13 +90,12 @@ func (h handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		// Handle different context cancellation scenarios
 		ctxErr := c.Context.Err()
 
-		switch {
-		case errors.Is(ctxErr, context.Canceled):
+		// Server-side timeout occurred && fallback for other context errors
+		err = gofrHTTP.ErrorRequestTimeout{}
+
+		if errors.Is(ctxErr, context.Canceled) {
 			// Client canceled the request (e.g., closed browser tab)
 			err = gofrHTTP.ErrorClientClosedRequest{}
-		default:
-			// Server-side timeout occurred && fallback for other context errors
-			err = gofrHTTP.ErrorRequestTimeout{}
 		}
 	case <-done:
 		handleWebSocketUpgrade(r)
