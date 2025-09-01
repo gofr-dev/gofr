@@ -9,6 +9,7 @@ use (
 	./pkg/gofr/datasource/couchbase
 	./pkg/gofr/datasource/dgraph
 	./pkg/gofr/datasource/elasticsearch
+	./pkg/gofr/datasource/file/azure
 	./pkg/gofr/datasource/file/ftp
 	./pkg/gofr/datasource/file/s3
 	./pkg/gofr/datasource/file/sftp
