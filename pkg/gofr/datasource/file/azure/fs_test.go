@@ -1057,3 +1057,18 @@ func TestStringOperations(t *testing.T) {
 	require.Equal(t, "file.txt", getFilePath("/file.txt"))
 	require.Equal(t, "dir/file.txt", getFilePath("/dir/file.txt"))
 }
+
+// Test enhanced client methods
+func TestClientDownloadFile(t *testing.T) {
+	// Test with nil share client
+	c := &client{}
+
+	_, err := c.DownloadFile(context.Background(), map[string]any{"path": "test.txt"})
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "share client not initialized")
+
+	// Test with missing path - this will also fail due to nil shareClient
+	_, err = c.DownloadFile(context.Background(), map[string]any{})
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "share client not initialized")
+}

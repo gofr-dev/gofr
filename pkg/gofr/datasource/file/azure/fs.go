@@ -423,13 +423,63 @@ func (f *FileSystem) Stat(name string) (fileSystem.FileInfo, error) {
 		Message:   nil,
 	}, time.Now())
 
-	// TODO: Implement proper file properties
+	if f.conn == nil {
+		return nil, ErrShareClientNotInitialized
+	}
+
+	// Try to get file properties first
+	props, err := f.conn.GetProperties(context.Background(), map[string]any{
+		"path": name,
+	})
+	if err != nil {
+		// If file doesn't exist, try to check if it's a directory
+		// For now, we'll assume it's a file and return the error
+		return nil, fmt.Errorf("failed to get file properties for %s: %w", name, err)
+	}
+
+	// Extract properties
+	fileProps, ok := props.(map[string]any)
+	if !ok {
+		return nil, fmt.Errorf("invalid properties response format")
+	}
+
+	size, _ := fileProps["size"].(int64)
+	lastModified, _ := fileProps["lastModified"].(time.Time)
+	contentType, _ := fileProps["contentType"].(string)
+
+	// Determine if it's a directory based on content type and size
+	// Azure File Storage directories typically have no content type and 0 size
+	// Files have content type and actual size
+	isDir := contentType == "" && size == 0 && strings.HasSuffix(name, "/")
+
 	return &azureFileInfo{
 		name:    name,
-		size:    0,
-		isDir:   false,
-		modTime: time.Now(),
+		size:    size,
+		isDir:   isDir,
+		modTime: lastModified,
 	}, nil
+}
+
+// Exists checks if a file or directory exists in the Azure File Storage.
+func (f *FileSystem) Exists(name string) bool {
+	defer f.sendOperationStats(&FileLog{
+		Operation: "EXISTS",
+		Location:  getLocation(f.config.ShareName),
+		Status:    nil,
+		Message:   nil,
+	}, time.Now())
+
+	if f.conn == nil {
+		return false
+	}
+
+	// Try to get file properties to check if it exists
+	_, err := f.conn.GetProperties(context.Background(), map[string]any{
+		"path": name,
+	})
+
+	// If there's no error, the file exists
+	return err == nil
 }
 
 // ChDir changes the current directory.
