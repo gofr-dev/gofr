@@ -22,9 +22,9 @@ func (f *File) sendOperationStats(log *FileLog, startTime time.Time) {
 }
 
 // sendOperationStats sends operation statistics to metrics if available.
-func (fs *FileSystem) sendOperationStats(log *FileLog, startTime time.Time) {
-	if fs.metrics != nil {
+func (f *FileSystem) sendOperationStats(log *FileLog, startTime time.Time) {
+	if f.metrics != nil {
 		duration := time.Since(startTime).Seconds()
-		fs.metrics.RecordHistogram(context.Background(), "azure_filesystem_operation_duration", duration, log.Operation, log.Location)
+		f.metrics.RecordHistogram(context.Background(), "azure_filesystem_operation_duration", duration, log.Operation, log.Location)
 	}
 }

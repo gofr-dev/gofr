@@ -55,7 +55,9 @@ func (f *File) Read(_ []byte) (n int, err error) {
 		Message:   nil,
 	}, time.Now())
 
-	// TODO: Implement proper file reading
+	// TODO: Implement proper file reading using Azure SDK
+	// This would require a file client and proper offset handling
+	// For now, return not implemented as we need more context
 	return 0, ErrReadNotImplemented
 }
 
@@ -92,7 +94,9 @@ func (f *File) Write(_ []byte) (n int, err error) {
 		Message:   nil,
 	}, time.Now())
 
-	// TODO: Implement proper file write
+	// TODO: Implement proper file writing using Azure SDK
+	// This would require a file client and proper offset handling
+	// For now, return not implemented as we need more context
 	return 0, ErrWriteNotImplemented
 }
 

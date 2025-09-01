@@ -20,4 +20,8 @@ var (
 	ErrReadNotImplemented                           = errors.New("Read not implemented")
 	ErrWriteNotImplemented                          = errors.New("Write not implemented")
 	ErrInvalidWhence                                = errors.New("invalid whence")
+	ErrShareClientNotInitialized                    = errors.New("share client not initialized")
+	ErrDownloadFileRequiresPath                     = errors.New("download file requires file path context")
+	ErrUploadRangeRequiresPath                      = errors.New("upload range requires file path context")
+	ErrGetPropertiesRequiresPath                    = errors.New("get properties requires file path context")
 )
