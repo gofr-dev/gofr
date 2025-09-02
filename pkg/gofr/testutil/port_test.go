@@ -16,7 +16,8 @@ func TestGetFreePort(t *testing.T) {
 	assert.Positive(t, port, "Expected port to be greater than 0")
 
 	// Test that the port is actually free by trying to listen on it
-	listener, err := net.Listen("tcp", fmt.Sprintf("localhost:%d", port))
+	lc := net.ListenConfig{}
+	listener, err := lc.Listen(t.Context(), "tcp", fmt.Sprintf("localhost:%d", port))
 	require.NoError(t, err, "Expected to be able to listen on the free port")
 
 	_ = listener.Close()
