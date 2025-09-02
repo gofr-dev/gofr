@@ -1,0 +1,60 @@
+{
+    "dashboard": {
+      "id": null,
+      "title": "Gofr InMemory Cache Metrics",
+      "panels": [
+        {
+          "type": "timeseries",
+          "title": "Cache Hits",
+          "targets": [
+            {"expr": "gofr_inmemory_cache_hits_total", "legendFormat": "{{cache_name}}"}
+          ],
+          "gridPos": {"h": 8, "w": 12, "x": 0, "y": 0}
+        },
+        {
+          "type": "timeseries",
+          "title": "Cache Misses",
+          "targets": [
+            {"expr": "gofr_inmemory_cache_misses_total", "legendFormat": "{{cache_name}}"}
+          ],
+          "gridPos": {"h": 8, "w": 12, "x": 12, "y": 0}
+        },
+        {
+          "type": "timeseries",
+          "title": "Cache Sets",
+          "targets": [
+            {"expr": "gofr_inmemory_cache_sets_total", "legendFormat": "{{cache_name}}"}
+          ],
+          "gridPos": {"h": 8, "w": 12, "x": 0, "y": 8}
+        },
+        {
+          "type": "timeseries",
+          "title": "Cache Deletes",
+          "targets": [
+            {"expr": "gofr_inmemory_cache_deletes_total", "legendFormat": "{{cache_name}}"}
+          ],
+          "gridPos": {"h": 8, "w": 12, "x": 12, "y": 8}
+        },
+        {
+          "type": "timeseries",
+          "title": "Cache Evictions",
+          "targets": [
+            {"expr": "gofr_inmemory_cache_evictions_total", "legendFormat": "{{cache_name}}"}
+          ],
+          "gridPos": {"h": 8, "w": 12, "x": 0, "y": 16}
+        },
+        {
+          "type": "timeseries",
+          "title": "Current Item Count",
+          "targets": [
+            {"expr": "gofr_inmemory_cache_items_current", "legendFormat": "{{cache_name}}"}
+          ],
+          "gridPos": {"h": 8, "w": 12, "x": 12, "y": 16}
+        }
+      ],
+      "schemaVersion": 36,
+      "version": 1,
+      "refresh": "5s"
+    },
+    "overwrite": true
+  }
