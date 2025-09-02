@@ -10,6 +10,7 @@ on:
     branches:
       - main
       - development
+      - update/go@v1.25
     paths-ignore:
       - 'docs/**'  # Ignore changes to docs folder
   # Run on pull requests to main or development branches
@@ -29,7 +30,7 @@ jobs:
     # Define a matrix strategy to test against multiple Go versions
     strategy:
       matrix:
-        go-version: ['1.24','1.23', '1.22']
+        go-version: ['1.25','1.24', '1.23']
       # Continue with other jobs if one version fails
       fail-fast: false
 
@@ -120,7 +121,7 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        go-version: ['1.24','1.23', '1.22']
+        go-version: ['1.25','1.24', '1.23']
       fail-fast: false
 
     steps:
@@ -208,7 +209,7 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        go-version:  ['1.24','1.23', '1.22']
+        go-version:  ['1.25','1.24', '1.23']
       fail-fast: false
 
     steps:
@@ -333,7 +334,7 @@ jobs:
       - name: Set up Go environment
         uses: actions/setup-go@v5
         with:
-          go-version: '1.24'
+          go-version: '1.25'
           cache: false
 
       # Install the linting tool
@@ -380,7 +381,7 @@ jobs:
       - name: Set up Go environment
         uses: actions/setup-go@v5
         with:
-          go-version: 1.24
+          go-version: 1.25
 
       # Check file naming conventions using ls-lint
       - name: Check for file names errors
