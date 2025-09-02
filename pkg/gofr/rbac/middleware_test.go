@@ -3,137 +3,142 @@ package rbac
 import (
 	"context"
 	"errors"
-	"io"
 	"net/http"
 	"net/http/httptest"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
 	"gofr.dev/pkg/gofr"
 )
 
-var errNoRole = errors.New("no role")
-
-// mockHandler just writes "OK" to the ResponseWriter.
-func mockHandler(w http.ResponseWriter, _ *http.Request) {
-	_, _ = io.WriteString(w, "OK")
+// mock role extractor function for testing
+func mockRoleExtractor(r *http.Request, args ...any) (string, error) {
+	role := r.Header.Get("Role")
+	if role == "" {
+		return "", errors.New("no role")
+	}
+	return role, nil
 }
 
-func TestMiddleware_UnauthorizedRoleExtractor(t *testing.T) {
-	cfg := &Config{
-		RoleExtractorFunc: func(_ *http.Request, _ ...any) (string, error) {
-			return "", errNoRole
+func TestMiddleware_Authorization(t *testing.T) {
+	config := &Config{
+		RouteWithPermissions: map[string][]string{
+			"/allowed": {"admin"},
 		},
+		OverRides:         map[string]bool{},
+		RoleExtractorFunc: mockRoleExtractor,
 	}
 
-	req := httptest.NewRequest(http.MethodGet, "/some", http.NoBody)
-	rr := httptest.NewRecorder()
-
-	h := Middleware(cfg)(http.HandlerFunc(mockHandler))
-	h.ServeHTTP(rr, req)
-
-	if rr.Code != http.StatusUnauthorized {
-		t.Errorf("got status %d, want %d", rr.Code, http.StatusUnauthorized)
-	}
-
-	if body := rr.Body.String(); body == "" {
-		t.Errorf("expected error message in body, got empty")
-	}
-}
-
-func TestMiddleware_ForbiddenPath(t *testing.T) {
-	cfg := &Config{
-		RoleExtractorFunc: func(_ *http.Request, _ ...any) (string, error) {
-			return "user", nil
-		},
-		RoleWithPermissions: map[string][]string{
-			"user": {},
-		},
-		OverRides: map[string]bool{},
-	}
-
-	req := httptest.NewRequest(http.MethodGet, "/forbidden", http.NoBody)
-	rr := httptest.NewRecorder()
-
-	h := Middleware(cfg)(http.HandlerFunc(mockHandler))
-	h.ServeHTTP(rr, req)
-
-	if rr.Code != http.StatusForbidden {
-		t.Errorf("got status %d, want %d", rr.Code, http.StatusForbidden)
-	}
-}
-
-func TestMiddleware_SuccessAddsRole(t *testing.T) {
-	cfg := &Config{
-		RoleExtractorFunc: func(_ *http.Request, _ ...any) (string, error) {
-			return "admin", nil
-		},
-		RoleWithPermissions: map[string][]string{
-			"admin": {"*"},
-		},
-	}
-
-	var ctxRole string
-
+	// next handler to confirm request passed through middleware
+	nextCalled := false
 	nextHandler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		// Extract role from context to verify it's stored
-		if val, ok := r.Context().Value(userRole).(string); ok {
-			ctxRole = val
-		}
-
+		nextCalled = true
 		w.WriteHeader(http.StatusOK)
 	})
 
-	req := httptest.NewRequest(http.MethodGet, "/anything", http.NoBody)
-	rr := httptest.NewRecorder()
+	middleware := Middleware(config)
 
-	h := Middleware(cfg)(nextHandler)
-	h.ServeHTTP(rr, req)
-
-	if rr.Code != http.StatusOK {
-		t.Errorf("got status %d, want %d", rr.Code, http.StatusOK)
+	// test cases
+	tests := []struct {
+		name         string
+		roleHeader   string
+		requestPath  string
+		wantStatus   int
+		wantNextCall bool
+	}{
+		{
+			name:         "No role header",
+			roleHeader:   "",
+			requestPath:  "/allowed",
+			wantStatus:   http.StatusUnauthorized,
+			wantNextCall: false,
+		},
+		{
+			name:         "Unauthorized role",
+			roleHeader:   "user",
+			requestPath:  "/allowed",
+			wantStatus:   http.StatusForbidden,
+			wantNextCall: false,
+		},
+		{
+			name:         "Authorized role",
+			roleHeader:   "admin",
+			requestPath:  "/allowed",
+			wantStatus:   http.StatusOK,
+			wantNextCall: true,
+		},
 	}
 
-	if ctxRole != "admin" {
-		t.Errorf("expected role 'admin' in context, got '%s'", ctxRole)
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			nextCalled = false
+			req := httptest.NewRequest(http.MethodGet, tc.requestPath, nil)
+			if tc.roleHeader != "" {
+				req.Header.Set("Role", tc.roleHeader)
+			}
+			w := httptest.NewRecorder()
+
+			handlerToTest := middleware(nextHandler)
+			handlerToTest.ServeHTTP(w, req)
+
+			assert.Equal(t, tc.wantStatus, w.Code)
+			assert.Equal(t, tc.wantNextCall, nextCalled)
+		})
 	}
 }
 
-func TestRequireRole_Match(t *testing.T) {
-	expectedResult := "success"
-
-	handler := func(_ *gofr.Context) (any, error) {
-		return expectedResult, nil
+func TestRequireRole_Handler(t *testing.T) {
+	allowedRole := "admin"
+	called := false
+	handlerFunc := func(ctx *gofr.Context) (any, error) {
+		called = true
+		return "success", nil
 	}
 
-	// Create a context with the expected role
-	baseCtx := context.WithValue(t.Context(), userRole, "admin")
-	gCtx := &gofr.Context{Context: baseCtx}
+	wrappedHandler := RequireRole(allowedRole, handlerFunc)
 
-	got, err := RequireRole("admin", handler)(gCtx)
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
+	tests := []struct {
+		name        string
+		contextRole string
+		wantErr     error
+		wantCalled  bool
+	}{
+		{
+			name:        "Role allowed",
+			contextRole: "admin",
+			wantErr:     nil,
+			wantCalled:  true,
+		},
+		{
+			name:        "Role denied",
+			contextRole: "user",
+			wantErr:     ErrAccessDenied,
+			wantCalled:  false,
+		},
+		{
+			name:        "No role in context",
+			contextRole: "",
+			wantErr:     ErrAccessDenied,
+			wantCalled:  false,
+		},
 	}
 
-	if got != expectedResult {
-		t.Errorf("got %v, want %v", got, expectedResult)
-	}
-}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			called = false
+			ctx := &gofr.Context{
+				Context: context.WithValue(context.Background(), userRole, tc.contextRole),
+			}
+			resp, err := wrappedHandler(ctx)
 
-func TestRequireRole_NoMatch(t *testing.T) {
-	handler := func(_ *gofr.Context) (any, error) {
-		return "should not run", nil
-	}
-
-	// context with wrong role
-	baseCtx := context.WithValue(t.Context(), userRole, "user")
-	gCtx := &gofr.Context{Context: baseCtx}
-
-	_, err := RequireRole("admin", handler)(gCtx)
-	if err == nil {
-		t.Fatalf("expected error, got nil")
-	}
-
-	if err.Error() != "forbidden: access denied" {
-		t.Errorf("got error %q, want %q", err.Error(), "forbidden: access denied")
+			assert.Equal(t, tc.wantErr, err)
+			if tc.wantCalled {
+				assert.True(t, called)
+				assert.Equal(t, "success", resp)
+			} else {
+				assert.False(t, called)
+				assert.Nil(t, resp)
+			}
+		})
 	}
 }

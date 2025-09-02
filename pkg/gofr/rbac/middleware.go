@@ -24,7 +24,7 @@ func Middleware(config *Config, args ...any) func(handler http.Handler) http.Han
 				return
 			}
 
-			if !isPathAllowed(role, r.URL.Path, config) {
+			if !isRoleAllowed(role, r.URL.Path, config) {
 				http.Error(w, "Forbidden: Access denied", http.StatusForbidden)
 
 				return

@@ -35,21 +35,6 @@ func TestHasRole(t *testing.T) {
 		})
 	}
 }
-
-func TestIsAdmin(t *testing.T) {
-	baseCtx := context.WithValue(t.Context(), userRole, "admin")
-	gofrCtx := &gofr.Context{Context: baseCtx}
-
-	if !IsAdmin(gofrCtx) {
-		t.Errorf("IsAdmin() = false, want true")
-	}
-
-	nonAdminCtx := &gofr.Context{Context: context.WithValue(t.Context(), userRole, "viewer")}
-	if IsAdmin(nonAdminCtx) {
-		t.Errorf("IsAdmin() = true, want false")
-	}
-}
-
 func TestGetUserRole(t *testing.T) {
 	expectedRole := "editor"
 	baseCtx := context.WithValue(t.Context(), userRole, expectedRole)

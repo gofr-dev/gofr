@@ -10,21 +10,24 @@ import (
 func main() {
 	app := gofr.New()
 
-	// json config path file is required
+	// loading the rbac config file which is required
 	rbacConfigs, err := rbac.LoadPermissions("config.json")
 	if err != nil {
 		return
 	}
 
-	overrides := map[string]bool{"user1": true}
-
+	// example of setting override for a specific role
+	overrides := map[string]bool{"/greet": true}
 	rbacConfigs.OverRides = overrides
 
+	// setting the role extractor function
 	rbacConfigs.RoleExtractorFunc = extractor
 
+	// applying the middleware
 	app.UseMiddleware(rbac.Middleware(rbacConfigs))
 
-	app.GET("/sayhello/123", handler)
+	// sample routes
+	app.GET("/sayhello/321", handler)
 	app.GET("/greet", rbac.RequireRole("user1", handler))
 
 	app.Run() // listens and serves on localhost:8000
