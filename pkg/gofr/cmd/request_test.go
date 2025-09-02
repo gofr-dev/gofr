@@ -44,7 +44,6 @@ func TestRequest_Bind(t *testing.T) {
 
 	osHostName, _ := os.Hostname()
 
-	//nolint:usetesting // Comparing context.Background() directly is intentional and safe in this case.
 	assert.Equal(t, context.Background(), ctx, "TEST Failed.\n context is not context.Background.")
 
 	assert.Equal(t, osHostName, hostName, "TEST Failed.\n Hostname did not match.")

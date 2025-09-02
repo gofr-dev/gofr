@@ -69,6 +69,7 @@ func checkExternalDBHealth(ctx context.Context, c *Container, healthMap map[stri
 		"elasticsearch": c.Elasticsearch,
 		"oracle":        c.Oracle,
 		"couchbase":     c.Couchbase,
+		"influx":        c.InfluxDB,
 	}
 
 	for name, service := range services {
