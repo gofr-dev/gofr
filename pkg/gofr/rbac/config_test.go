@@ -1,79 +1,47 @@
 package rbac
 
 import (
-	"encoding/json"
 	"os"
-	"path/filepath"
-	"reflect"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
 )
 
-// Helper function to create a temporary JSON file for testing.
-func createTempJSONFile(t *testing.T, data any) string {
-	t.Helper()
-	dir := t.TempDir()
-	file := filepath.Join(dir, "test.json")
-
-	jsonBytes, err := json.Marshal(data)
-	if err != nil {
-		t.Fatalf("error marshaling: %v", err)
-	}
-
-	if err := os.WriteFile(file, jsonBytes, 0600); err != nil {
-		t.Fatalf("error writing file: %v", err)
-	}
-
-	return file
-}
-
 func TestLoadPermissions_Success(t *testing.T) {
-	expected := Config{
-		RoleWithPermissions: map[string][]string{
-			"admin":  {"/admin", "/dashboard"},
-			"viewer": {"/dashboard"},
-		},
-	}
-	file := createTempJSONFile(t, struct {
-		RoleWithPermissions map[string][]string `json:"roles"`
-	}{
-		RoleWithPermissions: expected.RoleWithPermissions,
-	})
+	jsonContent := `{
+        "route": {"admin":["read", "write"], "user":["read"]},
+        "OverRides": {"admin":true, "user":false}
+    }`
+	tempFile, err := os.CreateTemp("", "test_permissions_*.json")
+	assert.NoError(t, err)
+	defer os.Remove(tempFile.Name())
 
-	got, err := LoadPermissions(file)
+	_, err = tempFile.Write([]byte(jsonContent))
+	assert.NoError(t, err)
+	tempFile.Close()
 
-	if err != nil {
-		t.Fatalf("LoadPermissions returned error: %v", err)
-	}
-
-	if !reflect.DeepEqual(got.RoleWithPermissions, expected.RoleWithPermissions) {
-		t.Errorf("RoleWithPermissions mismatch: got %v, want %v", got.RoleWithPermissions, expected.RoleWithPermissions)
-	}
-
-	if !reflect.DeepEqual(got.OverRides, expected.OverRides) {
-		t.Errorf("OverRides mismatch: got %v, want %v", got.OverRides, expected.OverRides)
-	}
+	cfg, err := LoadPermissions(tempFile.Name())
+	assert.NoError(t, err)
+	assert.Equal(t, map[string][]string{"admin": {"read", "write"}, "user": {"read"}}, cfg.RouteWithPermissions)
+	assert.Equal(t, map[string]bool{"admin": true, "user": false}, cfg.OverRides)
 }
 
 func TestLoadPermissions_FileNotFound(t *testing.T) {
-	// Act
-	_, err := LoadPermissions("nonexistentpath.json")
-	// Assert
-	if err == nil {
-		t.Fatalf("expected error for missing file, got nil")
-	}
+	cfg, err := LoadPermissions("non_existent_file.json")
+	assert.Nil(t, cfg)
+	assert.Error(t, err)
 }
 
 func TestLoadPermissions_InvalidJSON(t *testing.T) {
-	dir := t.TempDir()
-	file := filepath.Join(dir, "bad.json")
+	tempFile, err := os.CreateTemp("", "badjson_*.json")
+	assert.NoError(t, err)
+	defer os.Remove(tempFile.Name())
 
-	// Write invalid JSON
-	if err := os.WriteFile(file, []byte("{invalid json"), 0600); err != nil {
-		t.Fatalf("could not write test file: %v", err)
-	}
+	_, err = tempFile.Write([]byte(`{"route": [INVALID JSON}`))
+	assert.NoError(t, err)
+	tempFile.Close()
 
-	_, err := LoadPermissions(file)
-	if err == nil {
-		t.Fatalf("expected JSON unmarshal error, got nil")
-	}
+	cfg, err := LoadPermissions(tempFile.Name())
+	assert.Nil(t, cfg)
+	assert.Error(t, err)
 }

@@ -2,43 +2,31 @@ package rbac
 
 import (
 	"path"
-	"strings"
 )
 
-func isPathAllowed(role, route string, config *Config) bool {
-	allowedPaths := config.RoleWithPermissions[role]
+func isRoleAllowed(role, apiroute string, config *Config) bool {
+	var routePermissions []string
 
-	for _, pattern := range allowedPaths {
-		// Allow simple wildcard "*"
-		if pattern == "*" {
-			return true
-		}
-
-		// Ensure pattern ends with * if it's a prefix match
-		if pattern == route {
-			return true
-		}
-		// Normalize pattern and path to avoid trailing slash issues
-		normalizedPattern := strings.TrimSuffix(pattern, "/")
-		normalizedPath := strings.TrimSuffix(route, "/")
-
-		// Allow matching wildcard like /admin/* or /users/*
-		if ok, _ := path.Match(normalizedPattern, normalizedPath); ok {
-			return true
-		}
-
-		// Support prefix match with * (e.g. /users/* should match /users/123)
-		if strings.HasSuffix(pattern, "*") {
-			prefix := strings.TrimSuffix(pattern, "*")
-			if strings.HasPrefix(route, prefix) {
+	// find the matched route from config
+	for route, allowedRoles := range config.RouteWithPermissions {
+		if isMatched, _ := path.Match(route, apiroute); isMatched && route != "" {
+			// check if override is set for the matched route
+			if config.OverRides[apiroute] {
 				return true
 			}
+			routePermissions = allowedRoles
+			break
 		}
 	}
 
-	// override with role match
-	if config.OverRides[role] {
-		return true
+	// append global permissions if any
+	routePermissions = append(routePermissions, config.RouteWithPermissions["*"]...)
+
+	// check if role is in allowed roles for the matched route
+	for _, allowedRole := range routePermissions {
+		if allowedRole == role || allowedRole == "*" {
+			return true
+		}
 	}
 
 	return false

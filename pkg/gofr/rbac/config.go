@@ -7,9 +7,9 @@ import (
 )
 
 type Config struct {
-	RoleWithPermissions map[string][]string `json:"roles"` // Role: [Allowed routes]
-	RoleExtractorFunc   func(req *http.Request, args ...any) (string, error)
-	OverRides           map[string]bool // role: [override bool]
+	RouteWithPermissions map[string][]string `json:"route"` // route: [Allowed roles]
+	RoleExtractorFunc    func(req *http.Request, args ...any) (string, error)
+	OverRides            map[string]bool // route: [override bool]
 }
 
 func LoadPermissions(path string) (*Config, error) {
