@@ -1,6 +1,6 @@
 module gofr.dev/pkg/gofr/datasource/kv-store/nats
 
-go 1.23.4
+go 1.25
 
 require (
 	github.com/nats-io/nats.go v1.38.0
