@@ -39,6 +39,11 @@ type Clickhouse interface {
 	HealthCheck(ctx context.Context) (any, error)
 }
 
+type Oracle interface {
+	Select(ctx context.Context, dest any, query string, args ...any) error
+	Exec(ctx context.Context, query string, args ...any) error
+}
+
 type Cassandra interface {
 	Exec(query string, args ...any) error
 	NewBatch(name string, batchType int) error
