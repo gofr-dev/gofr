@@ -132,7 +132,7 @@ func TestLogger_LevelFatal(t *testing.T) {
 	}
 
 	//nolint:gosec // starting the actual test in a different subprocess
-	cmd := exec.Command(os.Args[0], "-test.run=TestLogger_LevelFatal")
+	cmd := exec.CommandContext(t.Context(), os.Args[0], "-test.run=TestLogger_LevelFatal")
 	cmd.Env = append(os.Environ(), "GOFR_EXITER=1")
 
 	stdout, err := cmd.StderrPipe()

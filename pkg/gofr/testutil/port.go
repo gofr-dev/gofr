@@ -13,7 +13,8 @@ import (
 func GetFreePort(t *testing.T) int {
 	t.Helper()
 
-	listener, err := net.Listen("tcp", "localhost:0")
+	lc := net.ListenConfig{}
+	listener, err := lc.Listen(t.Context(), "tcp", "localhost:0")
 	require.NoError(t, err, "Failed to get a free port.")
 
 	port := listener.Addr().(*net.TCPAddr).Port
