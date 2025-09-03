@@ -143,7 +143,8 @@ func TestCron_parseSchedule_Error(t *testing.T) {
 				"* * ab/2 * *",
 				"* 1,2/10 * * *",
 				"* * 1,2,3,1-15/10 * *",
-				"a b c d e"},
+				"a b c d e",
+			},
 			expErrString: "unable to parse",
 		},
 	}
@@ -328,6 +329,7 @@ func TestJob_tick(t *testing.T) {
 func Test_noopRequest(t *testing.T) {
 	noop := noopRequest{}
 
+	//nolint:usetesting // Using context.Background() intentionally instead of t.Context()
 	assert.Equal(t, context.Background(), noop.Context())
 	assert.Empty(t, noop.Param(""))
 	assert.Empty(t, noop.PathParam(""))
