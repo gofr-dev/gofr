@@ -9,7 +9,7 @@ import (
 	reflect "reflect"
 
 	gomock "github.com/golang/mock/gomock"
-	influxdb2 "github.com/influxdata/influxdb-client-go/v2"
+	influxdb "github.com/influxdata/influxdb-client-go/v2"
 	api "github.com/influxdata/influxdb-client-go/v2/api"
 	domain "github.com/influxdata/influxdb-client-go/v2/domain"
 )
@@ -95,10 +95,10 @@ func (mr *MockclientMockRecorder) Health(ctx interface{}) *gomock.Call {
 }
 
 // Options mocks base method.
-func (m *Mockclient) Options() *influxdb2.Options {
+func (m *Mockclient) Options() *influxdb.Options {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "Options")
-	ret0, _ := ret[0].(*influxdb2.Options)
+	ret0, _ := ret[0].(*influxdb.Options)
 	return ret0
 }
 
