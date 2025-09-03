@@ -101,6 +101,7 @@ docker run -d --name db -p 8091-8096:8091-8096 -p 11210-11211:11210-11211 couchb
 docker login container-registry.oracle.com
 docker pull container-registry.oracle.com/database/free:latest
 docker run -d --name oracle-free -p 1521:1521 -e ORACLE_PWD=YourPasswordHere container-registry.oracle.com/database/free:latest
+docker run -it --rm -p 4443:4443 -e STORAGE_EMULATOR_HOST=0.0.0.0:4443 fsouza/fake-gcs-server:latest
 ```
 
 > [!NOTE]
