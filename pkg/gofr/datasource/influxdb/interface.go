@@ -3,7 +3,7 @@ package influxdb
 import (
 	"context"
 
-	influxdb2 "github.com/influxdata/influxdb-client-go/v2"
+	influxdb "github.com/influxdata/influxdb-client-go/v2"
 	"github.com/influxdata/influxdb-client-go/v2/api"
 	"github.com/influxdata/influxdb-client-go/v2/domain"
 )
@@ -13,7 +13,7 @@ type client interface {
 	Setup(ctx context.Context, username, password, org, bucket string, retentionPeriodHours int) (*domain.OnboardingResponse, error)
 	Health(ctx context.Context) (*domain.HealthCheck, error)
 	Ping(ctx context.Context) (bool, error)
-	Options() *influxdb2.Options
+	Options() *influxdb.Options
 	WriteAPIBlocking(org, bucket string) api.WriteAPIBlocking
 	QueryAPI(org string) api.QueryAPI
 	AuthorizationsAPI() api.AuthorizationsAPI

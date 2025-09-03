@@ -5,7 +5,7 @@ import (
 	"errors"
 	"time"
 
-	influxdb2 "github.com/influxdata/influxdb-client-go/v2"
+	influxdb "github.com/influxdata/influxdb-client-go/v2"
 	"go.opencensus.io/trace"
 )
 
@@ -323,7 +323,7 @@ func (c *Client) WritePoint(ctx context.Context,
 	org, bucket, measurement string,
 	tags map[string]string, fields map[string]any, timestamp time.Time,
 ) error {
-	p := influxdb2.NewPoint(measurement, tags, fields, timestamp)
+	p := influxdb.NewPoint(measurement, tags, fields, timestamp)
 	writeAPI := c.influx.client.WriteAPIBlocking(org, bucket)
 
 	if err := writeAPI.WritePoint(ctx, p); err != nil {
@@ -350,7 +350,7 @@ func (c *Client) Connect() {
 	c.logger.Logf("connecting to influxdb at %v", c.config.URL)
 
 	// Create a new client using an InfluxDB server base URL and an authentication token
-	c.influx.client = influxdb2.NewClient(
+	c.influx.client = influxdb.NewClient(
 		c.config.URL,
 		c.config.Token,
 	)
