@@ -439,21 +439,6 @@ func (mr *MockOracleMockRecorder) Exec(ctx, query any, args ...any) *gomock.Call
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Exec", reflect.TypeOf((*MockOracle)(nil).Exec), varargs...)
 }
 
-// HealthCheck mocks base method.
-func (m *MockOracle) HealthCheck(ctx context.Context) (any, error) {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "HealthCheck", ctx)
-	ret0, _ := ret[0].(any)
-	ret1, _ := ret[1].(error)
-	return ret0, ret1
-}
-
-// HealthCheck indicates an expected call of HealthCheck.
-func (mr *MockOracleMockRecorder) HealthCheck(ctx any) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "HealthCheck", reflect.TypeOf((*MockOracle)(nil).HealthCheck), ctx)
-}
-
 // Select mocks base method.
 func (m *MockOracle) Select(ctx context.Context, dest any, query string, args ...any) error {
 	m.ctrl.T.Helper()
