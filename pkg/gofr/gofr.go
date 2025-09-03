@@ -101,7 +101,9 @@ func (a *App) Shutdown(ctx context.Context) error {
 }
 
 func isPortAvailable(port int) bool {
-	conn, err := net.DialTimeout("tcp", fmt.Sprintf(":%d", port), checkPortTimeout)
+	dialer := net.Dialer{Timeout: checkPortTimeout}
+
+	conn, err := dialer.DialContext(context.Background(), "tcp", fmt.Sprintf(":%d", port))
 	if err != nil {
 		return true
 	}
