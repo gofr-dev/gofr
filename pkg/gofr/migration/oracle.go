@@ -25,7 +25,7 @@ func (od oracleDS) apply(m migrator) migrator {
 }
 
 const (
-	CheckAndCreateOracleMigrationTable = `
+	checkAndCreateOracleMigrationTable = `
 BEGIN
     EXECUTE IMMEDIATE 'CREATE TABLE gofr_migrations (
         version NUMBER NOT NULL,
@@ -51,7 +51,7 @@ VALUES (:1, :2, :3, :4)
 
 // Create migration table if it doesn't exist.
 func (om oracleMigrator) checkAndCreateMigrationTable(_ *container.Container) error {
-	return om.Oracle.Exec(context.Background(), CheckAndCreateOracleMigrationTable)
+	return om.Oracle.Exec(context.Background(), checkAndCreateOracleMigrationTable)
 }
 
 // Get the last applied migration version.
