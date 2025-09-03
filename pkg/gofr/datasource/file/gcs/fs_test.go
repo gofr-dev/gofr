@@ -13,8 +13,8 @@ import (
 )
 
 var (
-	ErrObjectNotFound = errors.New("object not found")
-	ErrMock           = fmt.Errorf("errMock")
+	errObjectNotFound = errors.New("object not found")
+	errMock           = fmt.Errorf("errMock")
 )
 
 func Test_CreateFile(t *testing.T) {
@@ -69,7 +69,7 @@ func Test_CreateFile(t *testing.T) {
 			name:       "fail when parent directory does not exist",
 			createPath: "abc/abc.txt",
 			setupMocks: func(m *MockgcsClient) {
-				m.EXPECT().ListObjects(gomock.Any(), "abc/").Return(nil, ErrMock)
+				m.EXPECT().ListObjects(gomock.Any(), "abc/").Return(nil, errMock)
 			},
 			expectError: true,
 			isRoot:      false,
@@ -268,7 +268,7 @@ func Test_StatFile_GCS(t *testing.T) {
 			name:        "File not found",
 			filePath:    "notfound.txt",
 			mockAttr:    nil,
-			mockError:   ErrObjectNotFound,
+			mockError:   errObjectNotFound,
 			expectError: true,
 		},
 	}

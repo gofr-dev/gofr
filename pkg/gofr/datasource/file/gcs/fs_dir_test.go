@@ -21,17 +21,17 @@ func (*fakeWriteCloser) Close() error {
 type errorWriterCloser struct{}
 
 var (
-	ErrWrite       = errors.New("write error")
-	ErrClose       = errors.New("close error")
-	ErrDirNotFound = errors.New("directory not found")
+	errWrite       = errors.New("write error")
+	errClose       = errors.New("close error")
+	errDirNotFound = errors.New("directory not found")
 )
 
 func (*errorWriterCloser) Write(_ []byte) (int, error) {
-	return 0, ErrWrite
+	return 0, errWrite
 }
 
 func (*errorWriterCloser) Close() error {
-	return ErrClose
+	return errClose
 }
 
 type result struct {
@@ -206,7 +206,7 @@ func getReadDirTestCases(mockGCS *MockgcsClient) []readDirTestCase {
 			dirPath:         "does-not-exist",
 			expectedResults: nil,
 			setupMock: func() {
-				mockGCS.EXPECT().ListDir(gomock.Any(), "does-not-exist").Return(nil, nil, ErrDirNotFound)
+				mockGCS.EXPECT().ListDir(gomock.Any(), "does-not-exist").Return(nil, nil, errDirNotFound)
 			},
 			expectError: true,
 		},
