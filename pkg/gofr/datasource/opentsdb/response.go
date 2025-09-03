@@ -210,7 +210,7 @@ type genericResponse interface {
 // method, URL, and body content. It returns the parsed response or an error, if any.
 func (c *Client) sendRequest(ctx context.Context, method, url, reqBodyCnt string, parsedResp response) error {
 	// Create the HTTP request, attaching the context if available.
-	req, err := http.NewRequest(method, url, strings.NewReader(reqBodyCnt))
+	req, err := http.NewRequestWithContext(ctx, method, url, strings.NewReader(reqBodyCnt))
 	if ctx != nil {
 		req = req.WithContext(ctx)
 	}

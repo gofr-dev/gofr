@@ -1,8 +1,6 @@
 module gofr.dev/pkg/gofr/datasource/clickhouse
 
-go 1.23.0
-
-toolchain go1.24.0
+go 1.25
 
 require (
 	github.com/ClickHouse/clickhouse-go/v2 v2.40.1

@@ -1171,7 +1171,7 @@ func TestDB_PingSuccess(t *testing.T) {
 	mock.ExpectPing()
 	mock.ExpectPing().WillReturnError(nil)
 
-	err := db.Ping()
+	err := db.PingContext(t.Context())
 	assert.NoError(t, err)
 }
 
@@ -1181,7 +1181,7 @@ func TestDB_PingFailure(t *testing.T) {
 
 	mock.ExpectPing().WillReturnError(sql.ErrConnDone)
 
-	err := db.Ping()
+	err := db.PingContext(t.Context())
 	assert.Equal(t, sql.ErrConnDone, err)
 }
 func TestGetOperationType_EdgeCases(t *testing.T) {
