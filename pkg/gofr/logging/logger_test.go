@@ -135,15 +135,28 @@ func TestLogger_LevelFatal(t *testing.T) {
 	cmd := exec.CommandContext(t.Context(), os.Args[0], "-test.run=TestLogger_LevelFatal")
 	cmd.Env = append(os.Environ(), "GOFR_EXITER=1")
 
-	stdout, err := cmd.StderrPipe()
+	stderr, err := cmd.StderrPipe()
 	require.NoError(t, err)
 
 	require.NoError(t, cmd.Start())
 
-	logBytes, err := io.ReadAll(stdout)
+	stderrBytes, err := io.ReadAll(stderr)
 	require.NoError(t, err)
 
-	log := string(logBytes)
+	// Use stderr as the log output (the JSON log is written to stderr)
+	// Extract only the JSON log line from stderr
+	stderrOutput := string(stderrBytes)
+
+	lines := strings.Split(stderrOutput, "\n")
+
+	var log string
+
+	for _, line := range lines {
+		if strings.HasPrefix(line, "{") && strings.Contains(line, "level") {
+			log = line
+			break
+		}
+	}
 
 	levels := []Level{DEBUG, INFO, NOTICE, WARN, ERROR} // levels which should not be present in case of FATAL log_level
 

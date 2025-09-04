@@ -112,10 +112,9 @@ func TestContext_WriteMessageToSocket(t *testing.T) {
 	wsURL := fmt.Sprintf("ws://localhost:%d/ws", configs.HTTPPort)
 
 	// Test the WebSocket connection
+	// Note: We don't wait for server to stop as it's designed to run until signal.
+	// The test completes after testing the WebSocket functionality.
 	testWebSocketConnection(t, wsURL, messageChan, handlerDone)
-
-	// Note: We don't wait for server to stop as it's designed to run until signal
-	// The test completes after testing the WebSocket functionality
 }
 
 // handleWebSocketMessage handles the WebSocket message sending logic.
@@ -149,6 +148,7 @@ func testWebSocketConnection(t *testing.T, wsURL string, messageChan chan string
 	}
 
 	ws, resp, err := dialer.Dial(wsURL, nil)
+
 	require.NoError(t, err, "WebSocket handshake failed")
 
 	defer func() {
