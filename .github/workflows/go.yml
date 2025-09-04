@@ -118,10 +118,9 @@ jobs:
   PKG-Unit-Testing:
     name: PKG Unit Testing (v${{ matrix.go-version }})🛠
     runs-on: ubuntu-latest
-    timeout-minutes: 15  # Prevent infinite hangs
     strategy:
       matrix:
-        go-version: [ '1.24','1.23', '1.22' ]
+        go-version: ['1.24','1.23', '1.22']
       fail-fast: false
 
     steps:
@@ -134,53 +133,61 @@ jobs:
         uses: actions/setup-go@v5
         with:
           go-version: ${{ matrix.go-version }}
+        id: Go
 
       - name: Get dependencies
-        run: go mod download
+        run: |
+          go mod download
 
-      - name: Install go-acc
-        run: go install github.com/ory/go-acc@latest
-
-      - name: Test with Smart Retry Logic
+      # Run pkg tests with automatic retry logic
+      - name: Test with Retry Logic
+        id: test
         uses: nick-fields/retry@v3
         with:
-          timeout_minutes: 10
+          timeout_minutes: 5
           max_attempts: 2
           retry_on: error
           command: |
             export APP_ENV=test
 
-            # Use go-acc for unified coverage collection
-            go-acc -o profile.cov -v ./pkg/gofr/...
-
+            # Run tests for root gofr package
+            go test -v -short -covermode=atomic \
+              -coverpkg=./pkg/gofr -coverprofile=gofr_only.cov ./pkg/gofr
             exit_code=$?
-
-            # Smart retry: don't retry test logic failures
-            if [ $exit_code -eq 1 ]; then
-              echo "::error::Test logic failure - not retrying"
-              exit 1
-            fi
-
             if [ $exit_code -eq 2 ]; then
-              echo "::error::Test panic - not retrying"  
+              echo "::error::Panic detected in root gofr package tests"
               exit 2
-            fi
-
-            if [ $exit_code -ne 0 ]; then
-              echo "::warning::Infrastructure issue (exit $exit_code) - will retry"
+            elif [ $exit_code -ne 0 ]; then
+              echo "::error::Root gofr package tests failed"
               exit $exit_code
             fi
+
+            # Run tests for sub-packages
+            go test -v -covermode=atomic \
+              -coverpkg=./pkg/gofr -coverprofile=submodules.cov ./pkg/gofr/...
+            exit_code=$?
+            if [ $exit_code -eq 2 ]; then
+              echo "::error::Panic detected in gofr sub-packages tests"
+              exit 2
+            elif [ $exit_code -ne 0 ]; then
+              echo "::error::Gofr sub-packages tests failed"
+              exit $exit_code
+            fi
+
+            # Combine coverage profiles
+            echo "mode: atomic" > profile.cov
+            grep -h -v "mode:" gofr_only.cov submodules.cov | grep -v '/mock_' >> profile.cov
 
             # Show coverage summary
             go tool cover -func profile.cov
 
+      # Upload coverage report for the 1.24 Go version only
       - name: Upload Test Coverage
-        if: always() && matrix.go-version == '1.24'
+        if: ${{ matrix.go-version == '1.24'}}
         uses: actions/upload-artifact@v4
         with:
           name: PKG-Coverage-Report
           path: profile.cov
-
 
   # Job for analyzing and reporting code coverage
   parse_coverage:
