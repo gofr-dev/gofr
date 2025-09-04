@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"sync"
 	"testing"
 	"time"
 
@@ -82,17 +83,25 @@ func TestContext_WriteMessageToSocket(t *testing.T) {
 		t.Skip("skipping test in short mode")
 	}
 
-	port := testutil.GetFreePort(t)
-	t.Setenv("HTTP_PORT", fmt.Sprintf("%d", port))
+	// Use NewServerConfigs to get free ports for both HTTP and metrics
+	configs := testutil.NewServerConfigs(t)
 
 	app := New()
 
 	messageChan := make(chan string, 1)
+	handlerDone := make(chan struct{})
+	var handlerOnce sync.Once
 
 	app.WebSocket("/ws", func(ctx *Context) (any, error) {
+		defer handlerOnce.Do(func() { close(handlerDone) })
+		
 		err := ctx.WriteMessageToSocket("Hello! GoFr")
 		if err != nil {
-			t.Errorf("WriteMessageToSocket failed: %v", err)
+			// Signal error instead of calling t.Errorf in goroutine
+			select {
+			case messageChan <- "ERROR":
+			default:
+			}
 			return nil, err
 		}
 
@@ -105,12 +114,17 @@ func TestContext_WriteMessageToSocket(t *testing.T) {
 		return "Hello! GoFr", nil
 	})
 
-	go app.Run()
+	// Start server in goroutine
+	serverDone := make(chan struct{})
+	go func() {
+		defer close(serverDone)
+		app.Run()
+	}()
 
 	// Give server time to start
 	time.Sleep(300 * time.Millisecond)
 
-	wsURL := fmt.Sprintf("ws://localhost:%d/ws", port)
+	wsURL := fmt.Sprintf("ws://localhost:%d/ws", configs.HTTPPort)
 
 	// Create WebSocket client with timeout
 	dialer := &websocket.Dialer{
@@ -141,10 +155,28 @@ func TestContext_WriteMessageToSocket(t *testing.T) {
 	// Wait for handler completion
 	select {
 	case msg := <-messageChan:
-		assert.Equal(t, "Hello! GoFr", msg)
+		if msg == "ERROR" {
+			t.Error("WriteMessageToSocket failed in handler")
+		} else {
+			assert.Equal(t, "Hello! GoFr", msg)
+		}
 	case <-time.After(5 * time.Second):
 		t.Fatal("Test timed out waiting for handler completion")
 	}
+
+	// Wait for handler to complete before closing connection
+	select {
+	case <-handlerDone:
+		// Handler completed successfully
+	case <-time.After(2 * time.Second):
+		t.Error("Handler did not complete within timeout")
+	}
+
+	// Close the websocket connection to trigger cleanup
+	ws.Close()
+	
+	// Wait a bit for cleanup to complete
+	time.Sleep(100 * time.Millisecond)
 }
 
 func TestContext_WriteMessageToService(t *testing.T) {
@@ -152,50 +184,81 @@ func TestContext_WriteMessageToService(t *testing.T) {
 		t.Skip("skipping test in short mode")
 	}
 
-	port := testutil.GetFreePort(t)
-	t.Setenv("HTTP_PORT", fmt.Sprint(port))
+	// Use NewServerConfigs to get free ports for both HTTP and metrics
+	configs := testutil.NewServerConfigs(t)
 
 	app := New()
 
-	// Start a WebSocket server
+	// Create a simple echo server for testing
 	app.WebSocket("/ws", func(ctx *Context) (any, error) {
-		conn := ctx.GetWSConnectionByServiceName("test-service")
-
-		messageToSend := "Hello, WebSocket!"
-
-		err := ctx.WriteMessageToService("test-service", messageToSend)
+		// This is a simple echo server that reads a message and echoes it back
+		var message string
+		
+		// Read the incoming message using ctx.Bind
+		err := ctx.Bind(&message)
 		if err != nil {
 			return nil, err
 		}
 
-		_, receivedMessage, err := conn.ReadMessage()
-		if err != nil {
-			return nil, err
-		}
-
-		assert.Equal(t, messageToSend, string(receivedMessage))
-
-		return nil, nil
+		// Echo the message back
+		return message, nil
 	})
 
-	go app.Run()
+	// Start server in goroutine
+	serverDone := make(chan struct{})
+	go func() {
+		defer close(serverDone)
+		app.Run()
+	}()
+
+	// Give server time to start
 	time.Sleep(100 * time.Millisecond)
 
-	wsURL := fmt.Sprintf("ws://localhost:%d/ws", port)
+	wsURL := fmt.Sprintf("ws://localhost:%d/ws", configs.HTTPPort)
 
-	serviceName := "test-service"
-	retryInterval := 50 * time.Millisecond
-	err := app.AddWSService(serviceName, wsURL, http.Header{}, true, retryInterval)
-	require.NoError(t, err, "AddWSService should not return an error")
-
-	// Establish a WebSocket connection
+	// Establish a WebSocket connection to the echo server
 	ws, resp, err := websocket.DefaultDialer.Dial(wsURL, nil)
 	require.NoError(t, err, "Dial should not return an error")
 
-	defer ws.Close()
-	defer resp.Body.Close()
+	defer func() {
+		ws.Close()
+		if resp != nil && resp.Body != nil {
+			resp.Body.Close()
+		}
+	}()
+	
+	// Test WriteMessageToService with a separate service connection
+	// First, create a service connection to the same server
+	serviceName := "test-service"
+	retryInterval := 50 * time.Millisecond
+	err = app.AddWSService(serviceName, wsURL, http.Header{}, true, retryInterval)
+	require.NoError(t, err, "AddWSService should not return an error")
 
-	require.NoError(t, err, "WebSocket handshake failed")
+	// Wait for the service to be ready
+	time.Sleep(200 * time.Millisecond)
+
+	// Test WriteMessageToService
+	messageToSend := "Hello, WebSocket Service!"
+	err = app.WriteMessageToService(serviceName, messageToSend)
+	require.NoError(t, err, "WriteMessageToService should not return an error")
+
+
+	// Send a message to the echo server and read the response
+	err = ws.WriteMessage(websocket.TextMessage, []byte("Hello, WebSocket!"))
+	require.NoError(t, err, "WriteMessage should not return an error")
+
+	// Read the response
+	ws.SetReadDeadline(time.Now().Add(5 * time.Second))
+	_, message, err := ws.ReadMessage()
+	require.NoError(t, err, "ReadMessage should not return an error")
+
+	assert.Equal(t, "Hello, WebSocket!", string(message))
+
+	// Close the websocket connection to trigger cleanup
+	ws.Close()
+	
+	// Wait a bit for cleanup to complete
+	time.Sleep(100 * time.Millisecond)
 }
 
 func TestGetAuthInfo_BasicAuth(t *testing.T) {

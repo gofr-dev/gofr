@@ -35,19 +35,30 @@ func (a *App) WebSocket(route string, handler Handler) {
 			return nil, websocket.ErrorConnection
 		}
 
-		ctx.Request = conn
-
-		ctx.Context = context.WithValue(ctx, websocket.WSConnectionKey, conn)
+		// Create a new context with the websocket connection instead of modifying the existing one
+		// This prevents race conditions when multiple goroutines access the context
+		wsCtx := context.WithValue(ctx.Context, websocket.WSConnectionKey, conn)
+		
+		// Create a new context with the websocket connection as the request
+		wsContext := &Context{
+			Context:       wsCtx,
+			Request:       conn,
+			responder:     ctx.responder,
+			Container:     ctx.Container,
+			Out:           ctx.Out,
+			ContextLogger: ctx.ContextLogger,
+		}
 
 		defer a.httpServer.ws.CloseConnection(connID)
 
-		handleWebSocketConnection(ctx, conn, handler)
+		handleWebSocketConnection(wsContext, conn, handler)
 
 		return nil, nil
 	})
 }
 
 // AddWSService registers a WebSocket service, establishes a persistent connection, and optionally handles reconnection.
+// This is used for inter-service WebSocket communication.
 func (a *App) AddWSService(serviceName, url string, headers http.Header, enableReconnection bool, retryInterval time.Duration) error {
 	conn, resp, err := gWebsocket.DefaultDialer.Dial(url, headers)
 	if resp != nil {
@@ -71,6 +82,22 @@ func (a *App) AddWSService(serviceName, url string, headers http.Header, enableR
 	a.Logger().Infof("Successfully connected to WebSocket service: %s", serviceName)
 
 	return nil
+}
+
+// WriteMessageToService writes a message to a WebSocket service connection.
+// This is used for inter-service WebSocket communication.
+func (a *App) WriteMessageToService(serviceName string, data any) error {
+	conn := a.container.GetWSConnectionByServiceName(serviceName)
+	if conn == nil {
+		return fmt.Errorf("%w: %s", ErrConnectionNotFound, serviceName)
+	}
+
+	message, err := serializeMessage(data)
+	if err != nil {
+		return err
+	}
+
+	return conn.WriteMessage(websocket.TextMessage, message)
 }
 
 func (a *App) handleReconnection(serviceName, url string, headers http.Header, retryInterval time.Duration) {
@@ -97,20 +124,26 @@ func (a *App) handleReconnection(serviceName, url string, headers http.Header, r
 }
 
 func handleWebSocketConnection(ctx *Context, conn *websocket.Connection, handler Handler) {
-	for {
-		response, err := handler(ctx)
-		if handleWebSocketError(ctx, "error handling message", err) {
-			break
-		}
+	// Set read deadline to prevent hanging connections
+	conn.SetReadDeadline(time.Now().Add(60 * time.Second))
+	
+	// Call the handler once per connection
+	// The handler is responsible for reading messages and sending responses
+	response, err := handler(ctx)
+	if handleWebSocketError(ctx, "error handling websocket connection", err) {
+		return
+	}
 
+	// Only send response if it's not nil
+	if response != nil {
 		message, err := serializeMessage(response)
 		if handleWebSocketError(ctx, "failed to serialize message", err) {
-			continue
+			return
 		}
 
 		err = conn.WriteMessage(websocket.TextMessage, message)
 		if handleWebSocketError(ctx, "failed to write response to websocket", err) {
-			break
+			return
 		}
 	}
 }

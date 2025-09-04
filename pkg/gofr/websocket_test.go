@@ -76,8 +76,11 @@ func Test_AddWSService(t *testing.T) {
 	app := New()
 
 	app.WebSocket("/ws", func(ctx *Context) (any, error) {
-		conn := ctx.GetConnectionFromContext(ctx)
-		defer conn.Close()
+		var message string
+		err := ctx.Bind(&message)
+		if err != nil {
+			return nil, err
+		}
 
 		return "Service Response", nil
 	})
@@ -97,6 +100,11 @@ func Test_AddWSService(t *testing.T) {
 	// Verify the connection is registered
 	conn := app.container.WSManager.GetConnectionByServiceName(serviceName)
 	require.NotNil(t, conn, "Connection should be registered")
+
+	// Test WriteMessageToService
+	messageToSend := "Hello, WebSocket Service!"
+	err = app.WriteMessageToService(serviceName, messageToSend)
+	require.NoError(t, err, "WriteMessageToService should not return an error")
 }
 
 func waitForWebSocketReady(wsURL string, timeout time.Duration) error {
