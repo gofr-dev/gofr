@@ -88,31 +88,15 @@ func TestContext_WriteMessageToSocket(t *testing.T) {
 	configs := testutil.NewServerConfigs(t)
 
 	app := New()
-
 	messageChan := make(chan string, 1)
 	handlerDone := make(chan struct{})
+
 	var handlerOnce sync.Once
 
 	app.WebSocket("/ws", func(ctx *Context) (any, error) {
 		defer handlerOnce.Do(func() { close(handlerDone) })
-		
-		err := ctx.WriteMessageToSocket("Hello! GoFr")
-		if err != nil {
-			// Signal error instead of calling t.Errorf in goroutine
-			select {
-			case messageChan <- "ERROR":
-			default:
-			}
-			return nil, err
-		}
 
-		// Signal that message was sent
-		select {
-		case messageChan <- "Hello! GoFr":
-		default:
-		}
-
-		return "Hello! GoFr", nil
+		return handleWebSocketMessage(ctx, messageChan)
 	})
 
 	// Start server in goroutine
@@ -127,6 +111,42 @@ func TestContext_WriteMessageToSocket(t *testing.T) {
 
 	wsURL := fmt.Sprintf("ws://localhost:%d/ws", configs.HTTPPort)
 
+	// Test the WebSocket connection
+	testWebSocketConnection(t, wsURL, messageChan, handlerDone)
+
+	// Wait for server to stop
+	select {
+	case <-serverDone:
+	case <-time.After(5 * time.Second):
+		t.Error("Server did not stop within timeout")
+	}
+}
+
+// handleWebSocketMessage handles the WebSocket message sending logic.
+func handleWebSocketMessage(ctx *Context, messageChan chan string) (any, error) {
+	err := ctx.WriteMessageToSocket("Hello! GoFr")
+	if err != nil {
+		// Signal error instead of calling t.Errorf in goroutine
+		select {
+		case messageChan <- "ERROR":
+		default:
+		}
+
+		return nil, err
+	}
+
+	// Signal that message was sent
+	select {
+	case messageChan <- "Hello! GoFr":
+	default:
+	}
+
+	return "Hello! GoFr", nil
+}
+
+// testWebSocketConnection tests the WebSocket connection and message reading.
+func testWebSocketConnection(t *testing.T, wsURL string, messageChan chan string, handlerDone chan struct{}) {
+	t.Helper()
 	// Create WebSocket client with timeout
 	dialer := &websocket.Dialer{
 		HandshakeTimeout: 10 * time.Second,
@@ -139,15 +159,14 @@ func TestContext_WriteMessageToSocket(t *testing.T) {
 		if resp != nil && resp.Body != nil {
 			resp.Body.Close()
 		}
+
 		if ws != nil {
 			ws.Close()
 		}
 	}()
 
-	// Set read deadline
-	ws.SetReadDeadline(time.Now().Add(10 * time.Second))
-
-	// Read the message
+	// Set read deadline and read message
+	_ = ws.SetReadDeadline(time.Now().Add(10 * time.Second))
 	_, message, err := ws.ReadMessage()
 	require.NoError(t, err, "Failed to read WebSocket message")
 
@@ -175,7 +194,7 @@ func TestContext_WriteMessageToSocket(t *testing.T) {
 
 	// Close the websocket connection to trigger cleanup
 	ws.Close()
-	
+
 	// Wait a bit for cleanup to complete
 	time.Sleep(100 * time.Millisecond)
 }
@@ -194,7 +213,7 @@ func TestContext_WriteMessageToService(t *testing.T) {
 	app.WebSocket("/ws", func(ctx *Context) (any, error) {
 		// This is a simple echo server that reads a message and echoes it back
 		var message string
-		
+
 		// Read the incoming message using ctx.Bind
 		err := ctx.Bind(&message)
 		if err != nil {
@@ -223,11 +242,12 @@ func TestContext_WriteMessageToService(t *testing.T) {
 
 	defer func() {
 		ws.Close()
+
 		if resp != nil && resp.Body != nil {
 			resp.Body.Close()
 		}
 	}()
-	
+
 	// Test WriteMessageToService with a separate service connection
 	// First, create a service connection to the same server
 	serviceName := "test-service"
@@ -243,13 +263,12 @@ func TestContext_WriteMessageToService(t *testing.T) {
 	err = app.WriteMessageToService(serviceName, messageToSend)
 	require.NoError(t, err, "WriteMessageToService should not return an error")
 
-
 	// Send a message to the echo server and read the response
 	err = ws.WriteMessage(websocket.TextMessage, []byte("Hello, WebSocket!"))
 	require.NoError(t, err, "WriteMessage should not return an error")
 
 	// Read the response
-	ws.SetReadDeadline(time.Now().Add(5 * time.Second))
+	_ = ws.SetReadDeadline(time.Now().Add(5 * time.Second))
 	_, message, err := ws.ReadMessage()
 	require.NoError(t, err, "ReadMessage should not return an error")
 
@@ -257,7 +276,7 @@ func TestContext_WriteMessageToService(t *testing.T) {
 
 	// Close the websocket connection to trigger cleanup
 	ws.Close()
-	
+
 	// Wait a bit for cleanup to complete
 	time.Sleep(100 * time.Millisecond)
 }

@@ -113,7 +113,7 @@ func Test_NewOAuthProvider(t *testing.T) {
 				RefreshInterval: testCase.interval,
 				Path:            "/.well-known/jwks.json", // Set a default path
 			}
-			
+
 			// Set up mock expectations for successful cases
 			if testCase.err == nil && testCase.jwks != nil {
 				mockHTTP := testCase.jwks.(*service.MockHTTP)
@@ -123,7 +123,7 @@ func Test_NewOAuthProvider(t *testing.T) {
 						Body:       http.NoBody,
 					}, nil).AnyTimes()
 			}
-			
+
 			response, err := NewOAuthProvider(config, testCase.options...)
 			assert.Equal(t, testCase.err, err)
 
@@ -304,6 +304,7 @@ func Test_getPublicKeyFunc(t *testing.T) {
 
 			response, err := function(token)
 			assert.Equal(t, tc.response, response)
+
 			if tc.funcErr != nil {
 				assert.Equal(t, tc.funcErr, err)
 			} else {

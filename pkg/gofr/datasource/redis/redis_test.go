@@ -52,7 +52,8 @@ func TestRedis_QueryLogging(t *testing.T) {
 	defer s.Close()
 
 	mockMetric := NewMockMetrics(ctrl)
-	mockMetric.EXPECT().RecordHistogram(gomock.Any(), "app_redis_stats", gomock.Any(), "hostname", gomock.Any(), "type", gomock.Any()).AnyTimes()
+	mockMetric.EXPECT().RecordHistogram(gomock.Any(), "app_redis_stats", gomock.Any(),
+		"hostname", gomock.Any(), "type", gomock.Any()).AnyTimes()
 
 	result := testutil.StdoutOutputForFunc(func() {
 		mockLogger := logging.NewMockLogger(logging.DEBUG)
@@ -86,7 +87,8 @@ func TestRedis_PipelineQueryLogging(t *testing.T) {
 	defer s.Close()
 
 	mockMetric := NewMockMetrics(ctrl)
-	mockMetric.EXPECT().RecordHistogram(gomock.Any(), "app_redis_stats", gomock.Any(), "hostname", gomock.Any(), "type", gomock.Any()).AnyTimes()
+	mockMetric.EXPECT().RecordHistogram(gomock.Any(), "app_redis_stats", gomock.Any(),
+		"hostname", gomock.Any(), "type", gomock.Any()).AnyTimes()
 
 	// Execute Redis pipeline
 	result := testutil.StdoutOutputForFunc(func() {

@@ -32,6 +32,7 @@ func Test_NewMetricsManagerSuccess(t *testing.T) {
 	req, _ := http.NewRequestWithContext(t.Context(), http.MethodGet, server.URL+"/metrics", http.NoBody)
 	resp, _ := server.Client().Do(req)
 	body, _ := io.ReadAll(resp.Body)
+
 	defer resp.Body.Close()
 
 	stringBody := string(body)
@@ -65,7 +66,8 @@ func Test_NewMetricsManagerSuccess(t *testing.T) {
 		"TEST Failed. histogram metrics registration failed")
 
 	// ✅ Fixed: Added otel_scope_schema_url=""
-	assert.Contains(t, stringBody, `histogram_test_bucket{otel_scope_name="testing-app",otel_scope_schema_url="",otel_scope_version="v1.0.0",le="0"} 0`,
+	assert.Contains(t, stringBody,
+		`histogram_test_bucket{otel_scope_name="testing-app",otel_scope_schema_url="",otel_scope_version="v1.0.0",le="0"} 0`,
 		"TEST Failed. histogram metrics value did not reflect")
 }
 

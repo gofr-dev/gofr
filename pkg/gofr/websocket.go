@@ -38,7 +38,7 @@ func (a *App) WebSocket(route string, handler Handler) {
 		// Create a new context with the websocket connection instead of modifying the existing one
 		// This prevents race conditions when multiple goroutines access the context
 		wsCtx := context.WithValue(ctx.Context, websocket.WSConnectionKey, conn)
-		
+
 		// Create a new context with the websocket connection as the request
 		wsContext := &Context{
 			Context:       wsCtx,
@@ -125,8 +125,9 @@ func (a *App) handleReconnection(serviceName, url string, headers http.Header, r
 
 func handleWebSocketConnection(ctx *Context, conn *websocket.Connection, handler Handler) {
 	// Set read deadline to prevent hanging connections
-	conn.SetReadDeadline(time.Now().Add(60 * time.Second))
-	
+	const websocketTimeout = 60 * time.Second
+	_ = conn.SetReadDeadline(time.Now().Add(websocketTimeout))
+
 	// Call the handler once per connection
 	// The handler is responsible for reading messages and sending responses
 	response, err := handler(ctx)

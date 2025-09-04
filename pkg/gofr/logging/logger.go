@@ -145,7 +145,7 @@ func (l *logger) Fatal(args ...any) {
 
 	// Flush output before exiting
 	if f, ok := l.errorOut.(*os.File); ok {
-		f.Sync()
+		_ = f.Sync() // Ignore sync error as we're about to exit
 	}
 
 	//nolint:revive // exit status is 1 as it denotes failure as signified by Fatal log
@@ -157,7 +157,7 @@ func (l *logger) Fatalf(format string, args ...any) {
 
 	// Flush output before exiting
 	if f, ok := l.errorOut.(*os.File); ok {
-		f.Sync()
+		_ = f.Sync() // Ignore sync error as we're about to exit
 	}
 
 	//nolint:revive // exit status is 1 as it denotes failure as signified by Fatal log

@@ -95,7 +95,7 @@ func Test_EnvSuccess_Local_Override(t *testing.T) {
 
 func Test_EnvSuccess_SystemEnv_Override(t *testing.T) {
 	clearAllEnv()
-	
+
 	// Set initial environment variables
 	envData := map[string]string{
 		"TEST_ENV": "env",

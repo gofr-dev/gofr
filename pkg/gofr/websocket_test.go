@@ -78,6 +78,7 @@ func Test_AddWSService(t *testing.T) {
 	app.WebSocket("/ws", func(ctx *Context) (any, error) {
 		var message string
 		err := ctx.Bind(&message)
+
 		if err != nil {
 			return nil, err
 		}
