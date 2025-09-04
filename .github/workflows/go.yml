@@ -10,6 +10,7 @@ on:
     branches:
       - main
       - development
+      - update/go@v1.25
     paths-ignore:
       - 'docs/**'  # Ignore changes to docs folder
   # Run on pull requests to main or development branches
@@ -29,7 +30,7 @@ jobs:
     # Define a matrix strategy to test against multiple Go versions
     strategy:
       matrix:
-        go-version: ['1.24','1.23', '1.22']
+        go-version: ['1.25','1.24', '1.23']
       # Continue with other jobs if one version fails
       fail-fast: false
 
@@ -37,7 +38,7 @@ jobs:
     services:
       # Kafka service
       kafka:
-        image: bitnami/kafka:3.4
+        image: bitnami/kafka:3.4.1
         ports:
           - "9092:9092"
         env:
@@ -120,7 +121,7 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        go-version: ['1.24','1.23', '1.22']
+        go-version: ['1.25','1.24', '1.23']
       fail-fast: false
 
     steps:
@@ -232,7 +233,7 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        go-version:  ['1.24','1.23', '1.22']
+        go-version:  ['1.25','1.24', '1.23']
       fail-fast: false
 
     steps:
@@ -303,6 +304,10 @@ jobs:
   upload_coverage:
     name: Upload Coverage📊
     runs-on: ubuntu-latest
+    env:
+      QLTY_TOKEN: ${{ secrets.QLTY_TOKEN }}
+      QLTY_COVERAGE_TOKEN: ${{ secrets.QLTY_TOKEN }}
+
     # This job only needs example and pkg test results, not submodules
     needs: [Example-Unit-Testing, PKG-Unit-Testing]
     # Only run this job on pushes to the development branch
@@ -312,7 +317,9 @@ jobs:
         uses: actions/checkout@v5
 
       - name: Install qlty CLI
-        run: curl -s https://qlty.sh/install | bash
+        run: |
+          curl https://qlty.sh | sh
+          echo "$HOME/.qlty/bin" >> $GITHUB_PATH
 
       # Download coverage artifacts
       - name: Download Coverage Report
@@ -335,7 +342,8 @@ jobs:
 
       # Upload merged coverage to CodeClimate for analysis
       - name: Upload
-        run: qlty coverage publish --input merged_profile.cov
+        working-directory: artifacts
+        run: qlty coverage publish merged_profile.cov --format=coverprofile --strip-prefix="gofr.dev/" --add-prefix="${GITHUB_WORKSPACE}/"
         env:
           QLTY_TOKEN: ${{ secrets.QLTY_TOKEN }}
 
@@ -350,13 +358,13 @@ jobs:
       - name: Set up Go environment
         uses: actions/setup-go@v5
         with:
-          go-version: '1.24'
+          go-version: '1.25'
           cache: false
 
       # Install the linting tool
       - name: Install golangci-lint
         run: |
-          go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.1
+          go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.4.0
 
       - name: Get dependencies
         run: |
@@ -397,7 +405,7 @@ jobs:
       - name: Set up Go environment
         uses: actions/setup-go@v5
         with:
-          go-version: 1.24
+          go-version: 1.25
 
       # Check file naming conventions using ls-lint
       - name: Check for file names errors

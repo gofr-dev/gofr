@@ -1171,7 +1171,7 @@ func TestDB_PingSuccess(t *testing.T) {
 	mock.ExpectPing()
 	mock.ExpectPing().WillReturnError(nil)
 
-	err := db.Ping()
+	err := db.PingContext(t.Context())
 	assert.NoError(t, err)
 }
 
@@ -1181,7 +1181,7 @@ func TestDB_PingFailure(t *testing.T) {
 
 	mock.ExpectPing().WillReturnError(sql.ErrConnDone)
 
-	err := db.Ping()
+	err := db.PingContext(t.Context())
 	assert.Equal(t, sql.ErrConnDone, err)
 }
 func TestGetOperationType_EdgeCases(t *testing.T) {
@@ -1226,4 +1226,28 @@ func TestDB_Begin_Error(t *testing.T) {
 	tx, err := db.Begin()
 	require.Error(t, err)
 	assert.Nil(t, tx)
+}
+
+func TestDB_sendOperationStats_RecordsMilliseconds(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	mockMetrics := NewMockMetrics(ctrl)
+
+	db := &DB{
+		logger:  logging.NewMockLogger(logging.DEBUG),
+		config:  &DBConfig{HostName: "host", Database: "db"},
+		metrics: mockMetrics,
+	}
+
+	start := time.Now().Add(-1500 * time.Millisecond) // 1.5 seconds ago
+
+	// Expect RecordHistogram to be called with duration 1500 (milliseconds)
+	mockMetrics.EXPECT().RecordHistogram(
+		gomock.Any(), "app_sql_stats", float64(1500),
+		"hostname", "host", "database", "db", "type", "SELECT",
+	)
+
+	db.sendOperationStats(start, "SELECT", "SELECT * FROM users")
+
+	duration := time.Since(start).Milliseconds()
+	assert.Equal(t, int64(1500), duration)
 }
