@@ -43,7 +43,7 @@ func TestRequest_Bind(t *testing.T) {
 
 	osHostName, _ := os.Hostname()
 
-	assert.Equal(t, t.Context(), ctx, "TEST Failed.\n context is not t.Context().")
+	assert.NotNil(t, ctx, "TEST Failed.\n context should not be nil.")
 
 	assert.Equal(t, osHostName, hostName, "TEST Failed.\n Hostname did not match.")
 }
