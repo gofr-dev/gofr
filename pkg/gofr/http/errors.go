@@ -105,7 +105,7 @@ func (ErrorRequestTimeout) Error() string {
 }
 
 func (ErrorRequestTimeout) StatusCode() int {
-	return http.StatusGatewayTimeout // 504 is more appropriate for gateway timeouts
+	return http.StatusRequestTimeout // 408 is correct for request timeouts
 }
 
 func (ErrorRequestTimeout) LogLevel() logging.Level {
