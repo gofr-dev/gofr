@@ -153,7 +153,6 @@ func TestLogger_LevelFatal(t *testing.T) {
 
 	assertMessageInJSONLog(t, log, "Test Fatal Log")
 
-	// Check that the program exited
 	err = cmd.Wait()
 
 	var e *exec.ExitError
@@ -165,6 +164,7 @@ func TestLogger_LevelFatal(t *testing.T) {
 func assertMessageInJSONLog(t *testing.T, logLine, expectation string) {
 	t.Helper()
 
+	// Try to unmarshal the entire log line as JSON first
 	var l logEntry
 	_ = json.Unmarshal([]byte(logLine), &l)
 
