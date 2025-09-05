@@ -76,12 +76,8 @@ func Test_AddWSService(t *testing.T) {
 	app := New()
 
 	app.WebSocket("/ws", func(ctx *Context) (any, error) {
-		var message string
-		err := ctx.Bind(&message)
-
-		if err != nil {
-			return nil, err
-		}
+		conn := ctx.GetConnectionFromContext(ctx)
+		defer conn.Close()
 
 		return "Service Response", nil
 	})

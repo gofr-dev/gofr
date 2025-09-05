@@ -6,7 +6,6 @@ import (
 	"errors"
 	"net/http"
 	"sync"
-	"time"
 
 	"github.com/gorilla/websocket"
 )
@@ -88,23 +87,6 @@ func (w *Connection) WriteMessage(messageType int, data []byte) error {
 	defer w.writeMutex.Unlock()
 
 	return w.Conn.WriteMessage(messageType, data)
-}
-
-// ReadMessage reads the next message from the websocket connection.
-//
-// This method is thread-safe and can be called concurrently with WriteMessage.
-func (w *Connection) ReadMessage() (messageType int, p []byte, err error) {
-	return w.Conn.ReadMessage()
-}
-
-// SetReadDeadline sets the read deadline for the websocket connection.
-func (w *Connection) SetReadDeadline(t time.Time) error {
-	return w.Conn.SetReadDeadline(t)
-}
-
-// SetWriteDeadline sets the write deadline for the websocket connection.
-func (w *Connection) SetWriteDeadline(t time.Time) error {
-	return w.Conn.SetWriteDeadline(t)
 }
 
 func (*Connection) HostName() string {

@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"net"
 	"net/http"
-	"strings"
 	"time"
 
 	gWebsocket "github.com/gorilla/websocket"
@@ -126,9 +125,7 @@ func handleWebSocketError(ctx *Context, msg string, err error) bool {
 	// Check if the error is a WebSocket close error or if the underlying TCP connection is closed.
 	// This prevents unnecessary retries and avoids an infinite loop of read/write operations on the WebSocket.
 	return gWebsocket.IsCloseError(err, gWebsocket.CloseNormalClosure, gWebsocket.CloseGoingAway,
-		gWebsocket.CloseAbnormalClosure) || errors.Is(err, net.ErrClosed) ||
-		strings.Contains(err.Error(), "broken pipe") ||
-		strings.Contains(err.Error(), "connection reset by peer")
+		gWebsocket.CloseAbnormalClosure) || errors.Is(err, net.ErrClosed)
 }
 
 func serializeMessage(response any) ([]byte, error) {

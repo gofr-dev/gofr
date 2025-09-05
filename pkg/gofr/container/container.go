@@ -298,21 +298,12 @@ func (c *Container) GetSubscriber() pubsub.Subscriber {
 
 // GetConnectionFromContext retrieves a WebSocket connection from the context using the Manager.
 func (c *Container) GetConnectionFromContext(ctx context.Context) *websocket.Connection {
-	if c.WSManager == nil {
+	connID, ok := ctx.Value(websocket.WSConnectionKey).(string)
+	if !ok {
 		return nil
 	}
 
-	// First check if connection is directly stored in context
-	if conn, ok := ctx.Value(websocket.WSConnectionKey).(*websocket.Connection); ok {
-		return conn
-	}
-
-	// Fallback to connection ID lookup
-	if connID, ok := ctx.Value(websocket.WSConnectionKey).(string); ok {
-		return c.WSManager.GetWebsocketConnection(connID)
-	}
-
-	return nil
+	return c.WSManager.GetWebsocketConnection(connID)
 }
 
 // GetWSConnectionByServiceName retrieves a WebSocket connection by its service name.
