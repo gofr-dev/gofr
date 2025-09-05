@@ -37,25 +37,21 @@ func Test_NewMetricsManagerSuccess(t *testing.T) {
 
 	stringBody := string(body)
 
-	// ✅ Fixed: Added otel_scope_schema_url=""
 	assert.Contains(t, stringBody, `otel_scope_name="testing-app",otel_scope_schema_url="",otel_scope_version="v1.0.0"`,
 		"TEST Failed. service name and version not coming in metrics")
 
 	assert.Contains(t, stringBody, `counter_test_total this is metric to test counter`,
 		"TEST Failed. counter-test metrics registration failed")
 
-	// ✅ Fixed: Added otel_scope_schema_url=""
 	assert.Contains(t, stringBody, `counter_test_total{otel_scope_name="testing-app",otel_scope_schema_url="",otel_scope_version="v1.0.0"} 1`,
 		"TEST Failed. counter-test metrics registration failed")
 
 	assert.Contains(t, stringBody, `gauge_test this is metric to test gauge`,
 		"TEST Failed. gauge-test metrics registration failed")
 
-	// ✅ Fixed: Added otel_scope_schema_url=""
 	assert.Contains(t, stringBody, `gauge_test{otel_scope_name="testing-app",otel_scope_schema_url="",otel_scope_version="v1.0.0"} 50`,
 		"TEST Failed. gauge_test metrics value not set")
 
-	// ✅ Fixed: Changed 'p_down_counter' to 'up_down_counter' AND added otel_scope_schema_url=""
 	assert.Contains(t, stringBody, `up_down_counter{otel_scope_name="testing-app",otel_scope_schema_url="",otel_scope_version="v1.0.0"} 10`,
 		"TEST Failed. up-down-counter metrics value did not reflect")
 
@@ -65,7 +61,6 @@ func Test_NewMetricsManagerSuccess(t *testing.T) {
 	assert.Contains(t, stringBody, `histogram_test this is metric to test histogram`,
 		"TEST Failed. histogram metrics registration failed")
 
-	// ✅ Fixed: Added otel_scope_schema_url=""
 	assert.Contains(t, stringBody,
 		`histogram_test_bucket{otel_scope_name="testing-app",otel_scope_schema_url="",otel_scope_version="v1.0.0",le="0"} 0`,
 		"TEST Failed. histogram metrics value did not reflect")

@@ -96,7 +96,7 @@ func (e *EnvLoader) loadLocalOverrideFile(folder string, envMap map[string]strin
 			envMap[k] = v
 		}
 
-		e.logger.Infof("Applied override config: %v", localOverridePath)
+		e.logger.Debugf("Applied override config: %v", localOverridePath)
 	}
 }
 
@@ -115,7 +115,7 @@ func (e *EnvLoader) loadEnvSpecificFile(folder string, envMap map[string]string)
 			envMap[k] = v
 		}
 
-		e.logger.Infof("Applied app-env override config: %v", envSpecificFile)
+		e.logger.Debugf("Applied app-env override config: %v", envSpecificFile)
 	}
 }
 

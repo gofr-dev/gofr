@@ -107,7 +107,7 @@ func TestContext_WriteMessageToSocket(t *testing.T) {
 	}()
 
 	// Give server time to start
-	time.Sleep(300 * time.Millisecond)
+	time.Sleep(30 * time.Millisecond)
 
 	wsURL := fmt.Sprintf("ws://localhost:%d/ws", configs.HTTPPort)
 
@@ -228,7 +228,7 @@ func TestContext_WriteMessageToService(t *testing.T) {
 	}()
 
 	// Give server time to start
-	time.Sleep(100 * time.Millisecond)
+	time.Sleep(10 * time.Millisecond)
 
 	wsURL := fmt.Sprintf("ws://localhost:%d/ws", configs.HTTPPort)
 
@@ -252,7 +252,7 @@ func TestContext_WriteMessageToService(t *testing.T) {
 	require.NoError(t, err, "AddWSService should not return an error")
 
 	// Wait for the service to be ready
-	time.Sleep(200 * time.Millisecond)
+	time.Sleep(20 * time.Millisecond)
 
 	// Test WriteMessageToService
 	messageToSend := "Hello, WebSocket Service!"

@@ -1,4 +1,0 @@
-=== RUN   TestLogger_LevelFatal
-{"level":"FATAL","time":"2025-09-04T16:15:53.341565+05:30","message":"Test Fatal Log","gofrVersion":"dev"}
-exit status 1
-FAIL	gofr.dev/pkg/gofr/logging	0.270s
