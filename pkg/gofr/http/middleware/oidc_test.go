@@ -54,9 +54,9 @@ func TestOIDCAuthProvider_ExtractAuthHeader_MissingToken(t *testing.T) {
 	req := httptest.NewRequest(http.MethodGet, "http://example.com", http.NoBody) // No Authorization header
 
 	_, err := provider.ExtractAuthHeader(req)
-	if !errors.Is(err, ErrMissingToken) {
-		t.Errorf("expected ErrMissingToken, got %v", err)
-	}
+	if errMissing, ok := err.(interface{ StatusCode() int }); !ok || errMissing.StatusCode() != http.StatusUnauthorized {
+        t.Errorf("expected unauthorized error for missing token, got %v", err)
+    }
 }
 
 func TestOIDCAuthProvider_ExtractAuthHeader_EmptyToken(t *testing.T) {
@@ -65,9 +65,9 @@ func TestOIDCAuthProvider_ExtractAuthHeader_EmptyToken(t *testing.T) {
 	req.Header.Set("Authorization", "Bearer ")
 
 	_, err := provider.ExtractAuthHeader(req)
-	if !errors.Is(err, ErrEmptyToken) {
-		t.Errorf("expected ErrEmptyToken, got %v", err)
-	}
+	if errEmpty, ok := err.(interface{ StatusCode() int }); !ok || errEmpty.StatusCode() != http.StatusUnauthorized {
+        t.Errorf("expected unauthorized error for empty token, got %v", err)
+    }
 }
 
 func TestOIDCAuthProvider_ExtractAuthHeader_UserInfoEndpointError(t *testing.T) {

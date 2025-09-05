@@ -96,6 +96,11 @@ docker run -d --name arangodb \
   -e ARANGO_ROOT_PASSWORD=rootpassword \
   --pull always \
   arangodb:latest
+docker run --name dynamodb-local -d -p 8000:8000 amazon/dynamodb-local
+docker run -d --name db -p 8091-8096:8091-8096 -p 11210-11211:11210-11211 couchbase
+docker login container-registry.oracle.com
+docker pull container-registry.oracle.com/database/free:latest
+docker run -d --name oracle-free -p 1521:1521 -e ORACLE_PWD=YourPasswordHere container-registry.oracle.com/database/free:latest
 ```
 
 > [!NOTE]

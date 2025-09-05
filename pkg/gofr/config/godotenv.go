@@ -40,6 +40,9 @@ func (e *EnvLoader) read(folder string) {
 		env          = e.Get("APP_ENV")
 	)
 
+	// Only Capture initial system environment before any file loading
+	initialEnv := e.captureInitialEnv()
+
 	err := godotenv.Load(defaultFile)
 	if err != nil {
 		if !errors.Is(err, fs.ErrNotExist) {
@@ -66,13 +69,25 @@ func (e *EnvLoader) read(folder string) {
 		e.logger.Infof("Loaded config from file: %v", overrideFile)
 	}
 
-	// Reload system environment variables to ensure they override any previously loaded values
+	// Reload system environment variables to ensure they take precedence over values loaded from files.
+	// This is required because Overload replaces the original system variables, which we need to restore.
+	for key, envVar := range initialEnv {
+		os.Setenv(key, envVar)
+	}
+}
+
+// captureInitialEnv captures the initial system environment keys.
+func (*EnvLoader) captureInitialEnv() map[string]string {
+	initialEnv := make(map[string]string)
+
 	for _, envVar := range os.Environ() {
 		key, value, found := strings.Cut(envVar, "=")
 		if found {
-			os.Setenv(key, value)
+			initialEnv[key] = value
 		}
 	}
+
+	return initialEnv
 }
 
 func (*EnvLoader) Get(key string) string {

@@ -3,15 +3,13 @@ package middleware
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
 	"strings"
-	"time"
 )
 
 // Predefined errors for consistent error handling.
 var (
-	ErrMissingToken      = errors.New("missing bearer token")
-	ErrEmptyToken        = errors.New("empty bearer token")
 	ErrCreateRequest     = errors.New("failed to create userinfo request")
 	ErrUserInfoFetch     = errors.New("failed to fetch userinfo")
 	ErrUserInfoBadStatus = errors.New("userinfo endpoint returned error status")
@@ -25,49 +23,48 @@ type OIDCAuthProvider struct {
 }
 
 // GetAuthMethod returns the authentication method for OIDCAuthProvider.
-func (p *OIDCAuthProvider) GetAuthMethod() authMethod {
+func (p *OIDCAuthProvider) GetAuthMethod() AuthMethod {
 	return JWTClaim
 }
 
 // ExtractAuthHeader extracts and validates the Bearer token, returns userinfo.
 func (p *OIDCAuthProvider) ExtractAuthHeader(r *http.Request) (any, error) {
-	authHeader := r.Header.Get("Authorization")
+	authHeader := r.Header.Get(http.CanonicalHeaderKey("Authorization"))
 
 	token, ok := strings.CutPrefix(authHeader, "Bearer ")
 	if !ok {
-		return nil, ErrMissingToken
+		return nil, NewMissingAuthHeaderError(http.CanonicalHeaderKey("Authorization"))
 	}
 
 	token = strings.TrimSpace(token)
 	if token == "" {
-		return nil, ErrEmptyToken
+		return nil, NewMissingAuthHeaderError(http.CanonicalHeaderKey("Authorization"))
 	}
 
 	req, err := http.NewRequestWithContext(r.Context(), http.MethodGet, p.UserInfoEndpoint, http.NoBody)
 	if err != nil {
-		return nil, ErrCreateRequest
+		return nil, fmt.Errorf("%w: %v", ErrCreateRequest, err)
 	}
 
-	req.Header.Set("Authorization", "Bearer "+token)
+	req.Header.Set(http.CanonicalHeaderKey("Authorization"), "Bearer "+token)
 
-	client := p.Client
-	if client == nil {
-		client = &http.Client{Timeout: 5 * time.Second}
+	if p.Client == nil {
+		return nil, errors.New("http client not initialized in OIDCAuthProvider")
 	}
 
-	resp, err := client.Do(req)
+	resp, err := p.Client.Do(req)
 	if err != nil {
-		return nil, ErrUserInfoFetch
+		return nil, fmt.Errorf("%w: %v", ErrUserInfoFetch, err)
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		return nil, ErrUserInfoBadStatus
+		return nil, fmt.Errorf("%w: received status %d", ErrUserInfoBadStatus, resp.StatusCode)
 	}
 
 	var userInfo map[string]any
 	if err := json.NewDecoder(resp.Body).Decode(&userInfo); err != nil {
-		return nil, ErrUserInfoJSON
+		return nil, fmt.Errorf("%w: %v", ErrUserInfoJSON, err)
 	}
 
 	return userInfo, nil

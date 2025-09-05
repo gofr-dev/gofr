@@ -9,8 +9,8 @@
 </p>
 <a href="https://pkg.go.dev/gofr.dev"><img src="https://img.shields.io/badge/GoDoc-Read%20Documentation-blue?style=for-the-badge" alt="godoc"></a>
 <a href="https://gofr.dev/docs"><img src="https://img.shields.io/badge/GoFr-Docs-orange?style=for-the-badge" alt="gofr-docs"></a>
-<a href="https://codeclimate.com/github/gofr-dev/gofr/maintainability"><img src="https://img.shields.io/codeclimate/maintainability/gofr-dev/gofr?style=for-the-badge" alt="maintainability"></a>
-<a href="https://codeclimate.com/github/gofr-dev/gofr/test_coverage"><img src="https://img.shields.io/codeclimate/coverage/gofr-dev/gofr?style=for-the-badge" alt="test-coverage"></a>
+<a href="https://qlty.sh/gh/gofr-dev/projects/gofr"><img src="https://qlty.sh/gh/gofr-dev/projects/gofr/maintainability.svg" alt="Maintainability" height="27.99" /></a>
+<a href="https://qlty.sh/gh/gofr-dev/projects/gofr"><img src="https://qlty.sh/gh/gofr-dev/projects/gofr/coverage.svg" alt="Code Coverage" height="27.99" /></a>
 <a href="https://goreportcard.com/report/gofr.dev"><img src="https://goreportcard.com/badge/gofr.dev?style=for-the-badge" alt="Go Report Card"></a>
 <a href="https://opensource.org/licenses/Apache-2.0"><img src="https://img.shields.io/badge/License-Apache_2.0-blue?style=for-the-badge" alt="Apache 2.0 License"></a>
 <a href="https://discord.gg/wsaSkQTdgq"><img src="https://img.shields.io/badge/discord-join-us?style=for-the-badge&logo=discord&color=7289DA" alt="discord" /></a>
@@ -109,11 +109,13 @@ Explore a variety of ready-to-run examples in the [GoFr examples directory](http
 
 ## 👍 **Contribute**
 
-Help us make GoFr even better:
+Join Us in Making GoFr Better
 
-1. **Star** this repo on GitHub! 🌟
-2. Write a review or tutorial on **[Medium](https://medium.com/)**, **[Dev.to](https://dev.to/)**, or your blog.
-3. Review the **[CONTRIBUTING.md](CONTRIBUTING.md)** guide to learn how to contribute to the project.
+**Share your experience**: If you’ve found GoFr helpful, consider writing a review or tutorial on platforms like **[Medium](https://medium.com/)**, **[Dev.to](https://dev.to/)**, or your personal blog. 
+Your insights could help others get started faster!
+
+**Contribute to the project**: Want to get involved? Check out our **[CONTRIBUTING.md](CONTRIBUTING.md)**
+guide to learn how you can contribute code, suggest improvements, or report issues.
 
 ---
 

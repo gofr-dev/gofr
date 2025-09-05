@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"sync"
 	"time"
+	"fmt"
 )
 
 // Predefined errors for discovery metadata fetching.
@@ -26,7 +27,7 @@ type OIDCMetadata struct {
 
 // DiscoveryCache caches OIDC metadata per discovery URL.
 type DiscoveryCache struct {
-	url           string
+	discoveryUrl           string
 	cacheDuration time.Duration
 	mu            sync.Mutex
 	cachedMeta    *OIDCMetadata
@@ -34,9 +35,9 @@ type DiscoveryCache struct {
 }
 
 // NewDiscoveryCache creates a new per-URL OIDC discovery cache.
-func NewDiscoveryCache(url string, cacheDuration time.Duration) *DiscoveryCache {
+func NewDiscoveryCache(discoveryUrl string, cacheDuration time.Duration) *DiscoveryCache {
 	return &DiscoveryCache{
-		url:           url,
+		discoveryUrl:           discoveryUrl,
 		cacheDuration: cacheDuration,
 	}
 }
@@ -51,27 +52,27 @@ func (dc *DiscoveryCache) GetMetadata(ctx context.Context) (*OIDCMetadata, error
 		return dc.cachedMeta, nil
 	}
 
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, dc.url, http.NoBody)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, dc.discoveryUrl, http.NoBody)
 	if err != nil {
-		return nil, ErrFailedCreateDiscoveryRequest
+		return nil, fmt.Errorf("%w: %w", ErrFailedCreateDiscoveryRequest, err)
 	}
 
 	client := &http.Client{Timeout: 10 * time.Second}
 
 	resp, err := client.Do(req)
 	if err != nil {
-		return nil, ErrFailedFetchDiscoveryMetadata
+		return nil, fmt.Errorf("%w: %w", ErrFailedFetchDiscoveryMetadata, err)
 	}
 
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		return nil, ErrBadDiscoveryStatus
+		return nil, fmt.Errorf("%w: unexpected status code: %d", ErrBadDiscoveryStatus, resp.StatusCode)
 	}
 
 	var meta OIDCMetadata
 	if err := json.NewDecoder(resp.Body).Decode(&meta); err != nil {
-		return nil, ErrFailedDecodeDiscoveryJSON
+		return nil, fmt.Errorf("%w: unexpected status code: %d", ErrFailedDecodeDiscoveryJSON, resp.StatusCode)
 	}
 
 	dc.cachedMeta = &meta
