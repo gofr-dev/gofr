@@ -151,6 +151,11 @@ export const navigation = [
                 title: 'Profiling in GoFr Applications',
                 href: '/docs/advanced-guide/debugging',
                 desc: "Discover GoFr auto-enables pprof profiling by leveraging its built-in configurations."
+            },
+            {
+                title: 'OIDC Authentication',
+                href: '/docs/advanced-guide/oidc-authentication',
+                desc: 'Learn how to integrate OpenID Connect (OIDC) authentication using GoFR. Covers setup, configuration, and usage for secure authentication flows.'
             }
         ],
     },

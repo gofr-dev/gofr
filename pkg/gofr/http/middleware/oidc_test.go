@@ -1,140 +1,99 @@
 package middleware
 
 import (
-    "context"
-    "net/http"
-    "net/http/httptest"
-    "strings"
-    "testing"
+	"errors"
+	"net/http"
+	"net/http/httptest"
+	"strings"
+	"testing"
 )
 
-// Helper to create a mock userinfo endpoint server.
+// newMockUserInfoServer creates a test server with custom response.
 func newMockUserInfoServer(responseCode int, responseBody string) *httptest.Server {
-    return httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-        auth := r.Header.Get("Authorization")
-        if !strings.HasPrefix(auth, "Bearer ") {
-            w.WriteHeader(http.StatusUnauthorized)
-            w.Write([]byte(`{"error":"missing token"}`))
-            return
-        }
-        w.WriteHeader(responseCode)
-        w.Write([]byte(responseBody))
-    }))
+	return httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		auth := r.Header.Get("Authorization")
+		if !strings.HasPrefix(auth, "Bearer ") {
+			w.WriteHeader(http.StatusUnauthorized)
+			_, _ = w.Write([]byte(`{"error":"missing token"}`))
+
+			return
+		}
+
+		w.WriteHeader(responseCode)
+		_, _ = w.Write([]byte(responseBody))
+	}))
 }
 
-func TestOIDCUserInfoMiddleware_Success(t *testing.T) {
-    userInfoJSON := `{"email":"foo@example.com","sub":"abc123"}`
-    ts := newMockUserInfoServer(http.StatusOK, userInfoJSON)
-    defer ts.Close()
+func TestOIDCAuthProvider_ExtractAuthHeader_Success(t *testing.T) {
+	userInfoJSON := `{"email":"foo@example.com","sub":"abc123"}`
 
-    mw := OIDCUserInfoMiddleware(ts.URL)
-    handler := mw(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-        userInfo, ok := GetOIDCUserInfo(r.Context())
-        if !ok {
-            t.Fatal("userInfo not found in context")
-        }
-        if email, exists := userInfo["email"]; !exists || email != "foo@example.com" {
-            t.Errorf("expected email foo@example.com, got %v", email)
-        }
-        w.WriteHeader(http.StatusOK)
-    }))
+	ts := newMockUserInfoServer(http.StatusOK, userInfoJSON)
+	defer ts.Close()
+	provider := &OIDCAuthProvider{UserInfoEndpoint: ts.URL}
 
-    req := httptest.NewRequest("GET", "/", nil)
-    req.Header.Set("Authorization", "Bearer validtoken")
-    rr := httptest.NewRecorder()
-    handler.ServeHTTP(rr, req)
+	req := httptest.NewRequest(http.MethodGet, "http://example.com", http.NoBody)
+	req.Header.Set("Authorization", "Bearer validtoken")
 
-    if rr.Code != http.StatusOK {
-        t.Fatalf("expected status OK, got %v", rr.Code)
-    }
+	claims, err := provider.ExtractAuthHeader(req)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	userInfo, ok := claims.(map[string]any)
+	if !ok {
+		t.Fatal("expected userInfo to be a map[string]interface{}")
+	}
+
+	if email, exists := userInfo["email"]; !exists || email != "foo@example.com" {
+		t.Errorf("expected email foo@example.com, got %v", email)
+	}
 }
 
-func TestOIDCUserInfoMiddleware_MissingBearerToken(t *testing.T) {
-    mw := OIDCUserInfoMiddleware("https://dummy")
+func TestOIDCAuthProvider_ExtractAuthHeader_MissingToken(t *testing.T) {
+	provider := &OIDCAuthProvider{UserInfoEndpoint: "https://dummy"}
+	req := httptest.NewRequest(http.MethodGet, "http://example.com", http.NoBody) // No Authorization header
 
-    handler := mw(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-        t.Fatal("handler should not be called if token missing")
-    }))
-
-    req := httptest.NewRequest("GET", "/", nil)
-    rr := httptest.NewRecorder()
-    handler.ServeHTTP(rr, req)
-
-    if rr.Code != http.StatusUnauthorized {
-        t.Errorf("expected unauthorized status code, got %d", rr.Code)
-    }
+	_, err := provider.ExtractAuthHeader(req)
+	if !errors.Is(err, ErrMissingToken) {
+		t.Errorf("expected ErrMissingToken, got %v", err)
+	}
 }
 
-func TestOIDCUserInfoMiddleware_EmptyBearerToken(t *testing.T) {
-    mw := OIDCUserInfoMiddleware("https://dummy")
-    handler := mw(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-        t.Fatal("handler should not be called if token empty")
-    }))
+func TestOIDCAuthProvider_ExtractAuthHeader_EmptyToken(t *testing.T) {
+	provider := &OIDCAuthProvider{UserInfoEndpoint: "https://dummy"}
+	req := httptest.NewRequest(http.MethodGet, "http://example.com", http.NoBody)
+	req.Header.Set("Authorization", "Bearer ")
 
-    req := httptest.NewRequest("GET", "/", nil)
-    req.Header.Set("Authorization", "Bearer    ") // whitespace-only token
-    rr := httptest.NewRecorder()
-    handler.ServeHTTP(rr, req)
-
-    if rr.Code != http.StatusUnauthorized {
-        t.Errorf("expected unauthorized for empty token, got %d", rr.Code)
-    }
+	_, err := provider.ExtractAuthHeader(req)
+	if !errors.Is(err, ErrEmptyToken) {
+		t.Errorf("expected ErrEmptyToken, got %v", err)
+	}
 }
 
-func TestOIDCUserInfoMiddleware_BadUserInfoResponse(t *testing.T) {
-    ts := newMockUserInfoServer(http.StatusOK, "{bad json")
-    defer ts.Close()
+func TestOIDCAuthProvider_ExtractAuthHeader_UserInfoEndpointError(t *testing.T) {
+	ts := newMockUserInfoServer(http.StatusUnauthorized, `{"error":"unauthorized"}`)
+	defer ts.Close()
+	provider := &OIDCAuthProvider{UserInfoEndpoint: ts.URL}
 
-    mw := OIDCUserInfoMiddleware(ts.URL)
-    handler := mw(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-        t.Fatal("handler should not be called if userinfo JSON invalid")
-    }))
+	req := httptest.NewRequest(http.MethodGet, "http://example.com", http.NoBody)
+	req.Header.Set("Authorization", "Bearer validtoken")
 
-    req := httptest.NewRequest("GET", "/", nil)
-    req.Header.Set("Authorization", "Bearer validtoken")
-    rr := httptest.NewRecorder()
-    handler.ServeHTTP(rr, req)
-
-    if rr.Code != http.StatusInternalServerError {
-        t.Errorf("expected internal server error status code for bad JSON, got %d", rr.Code)
-    }
+	_, err := provider.ExtractAuthHeader(req)
+	if !errors.Is(err, ErrUserInfoBadStatus) {
+		t.Errorf("expected ErrUserInfoBadStatus, got %v", err)
+	}
 }
 
-func TestOIDCUserInfoMiddleware_UserInfoEndpointReturnsError(t *testing.T) {
-    ts := newMockUserInfoServer(http.StatusUnauthorized, `{"error":"unauthorized"}`)
-    defer ts.Close()
+func TestOIDCAuthProvider_ExtractAuthHeader_BadUserInfoJSON(t *testing.T) {
+	ts := newMockUserInfoServer(http.StatusOK, "{bad json")
+	defer ts.Close()
+	provider := &OIDCAuthProvider{UserInfoEndpoint: ts.URL}
 
-    mw := OIDCUserInfoMiddleware(ts.URL)
-    handler := mw(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-        t.Fatal("handler should not be called if userinfo endpoint errors")
-    }))
+	req := httptest.NewRequest(http.MethodGet, "http://example.com", http.NoBody)
+	req.Header.Set("Authorization", "Bearer validtoken")
 
-    req := httptest.NewRequest("GET", "/", nil)
-    req.Header.Set("Authorization", "Bearer validtoken")
-    rr := httptest.NewRecorder()
-    handler.ServeHTTP(rr, req)
-
-    if rr.Code != http.StatusUnauthorized {
-        t.Errorf("expected unauthorized status code for userinfo error, got %d", rr.Code)
-    }
+	_, err := provider.ExtractAuthHeader(req)
+	if !errors.Is(err, ErrUserInfoJSON) {
+		t.Errorf("expected ErrUserInfoJSON, got %v", err)
+	}
 }
-
-func TestGetOIDCUserInfo_Helper(t *testing.T) {
-    ctx := context.WithValue(context.Background(), userInfoKey, map[string]interface{}{"foo": "bar"})
-
-    userInfo, ok := GetOIDCUserInfo(ctx)
-    if !ok {
-        t.Error("expected true, got false")
-    }
-    if val, exists := userInfo["foo"]; !exists || val != "bar" {
-        t.Errorf("got %v, want bar", val)
-    }
-
-    // Test with missing key
-    emptyCtx := context.Background()
-    _, ok = GetOIDCUserInfo(emptyCtx)
-    if ok {
-        t.Error("expected false, got true")
-    }
-}
-

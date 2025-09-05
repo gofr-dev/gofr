@@ -5,6 +5,7 @@ go 1.24
 require (
 	cloud.google.com/go/pubsub v1.49.0
 	github.com/DATA-DOG/go-sqlmock v1.5.2
+	github.com/MicahParks/keyfunc v1.9.0
 	github.com/XSAM/otelsql v0.39.0
 	github.com/alicebob/miniredis/v2 v2.35.0
 	github.com/dgraph-io/dgo/v210 v210.0.0-20230328113526-b66f8ae53a2d
@@ -12,6 +13,7 @@ require (
 	github.com/go-redis/redismock/v9 v9.2.0
 	github.com/go-sql-driver/mysql v1.9.3
 	github.com/gogo/protobuf v1.3.2
+	github.com/golang-jwt/jwt/v4 v4.5.2
 	github.com/golang-jwt/jwt/v5 v5.3.0
 	github.com/google/uuid v1.6.0
 	github.com/gorilla/mux v1.8.1
