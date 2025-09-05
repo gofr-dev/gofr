@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"net"
 	"net/http"
+	"strings"
 	"time"
 
 	gWebsocket "github.com/gorilla/websocket"
@@ -35,30 +36,19 @@ func (a *App) WebSocket(route string, handler Handler) {
 			return nil, websocket.ErrorConnection
 		}
 
-		// Create a new context with the websocket connection instead of modifying the existing one
-		// This prevents race conditions when multiple goroutines access the context
-		wsCtx := context.WithValue(ctx.Context, websocket.WSConnectionKey, conn)
+		ctx.Request = conn
 
-		// Create a new context with the websocket connection as the request
-		wsContext := &Context{
-			Context:       wsCtx,
-			Request:       conn,
-			responder:     ctx.responder,
-			Container:     ctx.Container,
-			Out:           ctx.Out,
-			ContextLogger: ctx.ContextLogger,
-		}
+		ctx.Context = context.WithValue(ctx, websocket.WSConnectionKey, conn)
 
 		defer a.httpServer.ws.CloseConnection(connID)
 
-		handleWebSocketConnection(wsContext, conn, handler)
+		handleWebSocketConnection(ctx, conn, handler)
 
 		return nil, nil
 	})
 }
 
 // AddWSService registers a WebSocket service, establishes a persistent connection, and optionally handles reconnection.
-// This is used for inter-service WebSocket communication.
 func (a *App) AddWSService(serviceName, url string, headers http.Header, enableReconnection bool, retryInterval time.Duration) error {
 	conn, resp, err := gWebsocket.DefaultDialer.Dial(url, headers)
 	if resp != nil {
@@ -124,27 +114,20 @@ func (a *App) handleReconnection(serviceName, url string, headers http.Header, r
 }
 
 func handleWebSocketConnection(ctx *Context, conn *websocket.Connection, handler Handler) {
-	// Set read deadline to prevent hanging connections
-	const websocketTimeout = 60 * time.Second
-	_ = conn.SetReadDeadline(time.Now().Add(websocketTimeout))
+	for {
+		response, err := handler(ctx)
+		if handleWebSocketError(ctx, "error handling message", err) {
+			break
+		}
 
-	// Call the handler once per connection
-	// The handler is responsible for reading messages and sending responses
-	response, err := handler(ctx)
-	if handleWebSocketError(ctx, "error handling websocket connection", err) {
-		return
-	}
-
-	// Only send response if it's not nil
-	if response != nil {
 		message, err := serializeMessage(response)
 		if handleWebSocketError(ctx, "failed to serialize message", err) {
-			return
+			continue
 		}
 
 		err = conn.WriteMessage(websocket.TextMessage, message)
 		if handleWebSocketError(ctx, "failed to write response to websocket", err) {
-			return
+			break
 		}
 	}
 }
@@ -159,7 +142,9 @@ func handleWebSocketError(ctx *Context, msg string, err error) bool {
 	// Check if the error is a WebSocket close error or if the underlying TCP connection is closed.
 	// This prevents unnecessary retries and avoids an infinite loop of read/write operations on the WebSocket.
 	return gWebsocket.IsCloseError(err, gWebsocket.CloseNormalClosure, gWebsocket.CloseGoingAway,
-		gWebsocket.CloseAbnormalClosure) || errors.Is(err, net.ErrClosed)
+		gWebsocket.CloseAbnormalClosure) || errors.Is(err, net.ErrClosed) ||
+		strings.Contains(err.Error(), "broken pipe") ||
+		strings.Contains(err.Error(), "connection reset by peer")
 }
 
 func serializeMessage(response any) ([]byte, error) {
