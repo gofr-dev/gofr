@@ -37,8 +37,11 @@ func (e *EnvLoader) read(folder string) {
 	// Capture initial system environment keys
 	initialEnv := e.captureInitialEnv()
 
+	// Capture APP_ENV before loading files to ensure proper environment-specific file loading
+	appEnv := os.Getenv("APP_ENV")
+
 	// Load environment files with proper precedence
-	envMap := e.loadEnvironmentFiles(folder)
+	envMap := e.loadEnvironmentFiles(folder, appEnv)
 
 	// Apply to environment variables, respecting system env precedence
 	e.applyEnvironmentVariables(envMap, initialEnv)
@@ -57,7 +60,7 @@ func (*EnvLoader) captureInitialEnv() map[string]bool {
 }
 
 // loadEnvironmentFiles loads all environment files with proper precedence.
-func (e *EnvLoader) loadEnvironmentFiles(folder string) map[string]string {
+func (e *EnvLoader) loadEnvironmentFiles(folder string, appEnv string) map[string]string {
 	envMap := make(map[string]string)
 
 	// Load base .env file (lowest precedence)
@@ -67,7 +70,7 @@ func (e *EnvLoader) loadEnvironmentFiles(folder string) map[string]string {
 	e.loadLocalOverrideFile(folder, envMap)
 
 	// Load app-env specific override (highest file precedence)
-	e.loadEnvSpecificFile(folder, envMap)
+	e.loadEnvSpecificFile(folder, envMap, appEnv)
 
 	return envMap
 }
@@ -83,7 +86,8 @@ func (e *EnvLoader) loadBaseEnvFile(folder string, envMap map[string]string) {
 
 		e.logger.Infof("Loaded config from file: %v", defaultFile)
 	} else if !errors.Is(err, fs.ErrNotExist) {
-		e.logger.Warnf("Failed to load config from file: %v, Err: %v", defaultFile, err)
+		// CRITICAL: Fatal error for non-file-not-found errors (permissions, corruption, etc.)
+		e.logger.Fatalf("Failed to load config from file: %v, Err: %v", defaultFile, err)
 	}
 }
 
@@ -101,14 +105,12 @@ func (e *EnvLoader) loadLocalOverrideFile(folder string, envMap map[string]strin
 }
 
 // loadEnvSpecificFile loads the app-env specific override file.
-func (e *EnvLoader) loadEnvSpecificFile(folder string, envMap map[string]string) {
-	env := os.Getenv("APP_ENV")
-
-	if env == "" {
+func (e *EnvLoader) loadEnvSpecificFile(folder string, envMap map[string]string, appEnv string) {
+	if appEnv == "" {
 		return
 	}
 
-	envSpecificFile := fmt.Sprintf("%s/.%s.env", folder, env)
+	envSpecificFile := fmt.Sprintf("%s/.%s.env", folder, appEnv)
 
 	if content, err := godotenv.Read(envSpecificFile); err == nil {
 		for k, v := range content {
@@ -116,6 +118,9 @@ func (e *EnvLoader) loadEnvSpecificFile(folder string, envMap map[string]string)
 		}
 
 		e.logger.Debugf("Applied app-env override config: %v", envSpecificFile)
+	} else if !errors.Is(err, fs.ErrNotExist) {
+		// CRITICAL: Fatal error for non-file-not-found errors (permissions, corruption, etc.)
+		e.logger.Fatalf("Failed to load config from file: %v, Err: %v", envSpecificFile, err)
 	}
 }
 

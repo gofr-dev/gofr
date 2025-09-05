@@ -48,6 +48,7 @@ func Test_EnvSuccess(t *testing.T) {
 }
 
 func Test_EnvSuccess_AppEnv_Override(t *testing.T) {
+	clearAllEnv()
 	t.Setenv("APP_ENV", "prod")
 
 	envData := map[string]string{
