@@ -83,7 +83,7 @@ func (e *EnvLoader) loadBaseEnvFile(folder string, envMap map[string]string) {
 
 		e.logger.Infof("Loaded config from file: %v", defaultFile)
 	} else if !errors.Is(err, fs.ErrNotExist) {
-		e.logger.Fatalf("Failed to load config from file: %v, Err: %v", defaultFile, err)
+		e.logger.Warnf("Failed to load config from file: %v, Err: %v", defaultFile, err)
 	}
 }
 
