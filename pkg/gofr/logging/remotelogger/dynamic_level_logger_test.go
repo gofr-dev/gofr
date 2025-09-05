@@ -1,10 +1,13 @@
 package remotelogger
 
 import (
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"os"
 	"strings"
+	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -242,4 +245,78 @@ func TestHTTPLogFilter_ErrorLogs(t *testing.T) {
 	output := buf.String()
 	assert.Contains(t, output, "http://example.com/error")
 	assert.Contains(t, output, "500")
+}
+
+func TestHTTPLogFilter_ConcurrentAccess(t *testing.T) {
+	const (
+		goroutines       = 50
+		logsPerGoroutine = 20
+	)
+
+	var buf strings.Builder
+
+	testLogger := &testBufferLogger{buf: &buf}
+	filter := &httpLogFilter{Logger: testLogger}
+
+	var wg sync.WaitGroup
+
+	wg.Add(goroutines)
+
+	for i := 0; i < goroutines; i++ {
+		go func(id int) {
+			defer wg.Done()
+
+			for j := 0; j < logsPerGoroutine; j++ {
+				filter.Log(&service.Log{
+					CorrelationID: fmt.Sprintf("req-%d-%d", id, j),
+					URI:           "/test",
+					HTTPMethod:    "GET",
+					ResponseCode:  200,
+					ResponseTime:  int64(j),
+				})
+			}
+		}(i)
+	}
+
+	wg.Wait()
+
+	filter.mu.Lock()
+	assert.True(t, filter.initLogged, "expected initLogged to be true")
+	filter.mu.Unlock()
+
+	assert.NotEmpty(t, buf.String(), "expected logs to be written")
+}
+
+func TestRemoteLogger_ConcurrentLevelAccess(t *testing.T) {
+	var count int32
+
+	mockServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		lvl := "DEBUG"
+
+		if atomic.AddInt32(&count, 1)%2 == 0 {
+			lvl = "ERROR"
+		}
+
+		fmt.Fprintf(w, `{"data":{"serviceName":"test-service","logLevel":"%s"}}`, lvl)
+	}))
+
+	defer mockServer.Close()
+
+	rl := &remoteLogger{
+		remoteURL:          mockServer.URL,
+		levelFetchInterval: 5 * time.Millisecond,
+		currentLevel:       logging.INFO,
+		Logger:             logging.NewMockLogger(logging.INFO),
+	}
+
+	// Run UpdateLogLevel in multiple goroutines
+	for i := 0; i < 5; i++ {
+		go rl.UpdateLogLevel()
+	}
+
+	time.Sleep(10 * time.Millisecond)
+
+	rl.mu.RLock()
+	defer rl.mu.RUnlock()
+	assert.NotEqual(t, logging.INFO, rl.currentLevel, "expected level to change")
 }

@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"slices"
+	"sync"
 	"time"
 
 	"gofr.dev/pkg/gofr/logging"
@@ -23,6 +24,7 @@ const (
 // httpLogFilter filters HTTP logs from remote logger to reduce noise.
 type httpLogFilter struct {
 	logging.Logger
+	mu                 sync.Mutex
 	firstSuccessfulHit bool
 	initLogged         bool
 }
@@ -41,18 +43,36 @@ func (f *httpLogFilter) Log(args ...any) {
 		return
 	}
 
+	f.handleHTTPLog(httpLog, args)
+}
+
+func (f *httpLogFilter) handleHTTPLog(httpLog *service.Log, args []any) {
 	// Log initialization message if not already logged
-	if !f.initLogged {
+	f.mu.Lock()
+	notLoggedYet := !f.initLogged
+
+	if notLoggedYet {
 		f.initLogged = true
+	}
+
+	f.mu.Unlock()
+
+	if notLoggedYet {
 		f.Logger.Infof("Initializing remote logger connection to %s", httpLog.URI)
 	}
 
 	isSuccessful := httpLog.ResponseCode >= 200 && httpLog.ResponseCode < 300
 
+	f.mu.Lock()
+	isFirstHit := !f.firstSuccessfulHit
+	f.mu.Unlock()
+
 	switch {
 	// First successful hit - log at INFO level
-	case isSuccessful && !f.firstSuccessfulHit:
+	case isSuccessful && isFirstHit:
+		f.mu.Lock()
 		f.firstSuccessfulHit = true
+		f.mu.Unlock()
 		f.Logger.Log(args...)
 
 	// Subsequent successful hits - log at DEBUG level with consistent format
@@ -93,7 +113,7 @@ The remote configuration URL is expected to be a JSON endpoint that returns the 
 The level fetch interval determines how often the logger checks for updates to the remote configuration.
 */
 func New(level logging.Level, remoteConfigURL string, loggerFetchInterval time.Duration) logging.Logger {
-	l := remoteLogger{
+	l := &remoteLogger{
 		remoteURL:          remoteConfigURL,
 		Logger:             logging.NewLogger(level),
 		levelFetchInterval: loggerFetchInterval,
@@ -110,6 +130,7 @@ func New(level logging.Level, remoteConfigURL string, loggerFetchInterval time.D
 type remoteLogger struct {
 	remoteURL          string
 	levelFetchInterval time.Duration
+	mu                 sync.RWMutex
 	currentLevel       logging.Level
 	logging.Logger
 }
@@ -117,11 +138,6 @@ type remoteLogger struct {
 // UpdateLogLevel continuously fetches the log level from the remote configuration URL at the specified interval
 // and updates the underlying log level if it has changed.
 func (r *remoteLogger) UpdateLogLevel() {
-	interval := r.levelFetchInterval
-	ticker := time.NewTicker(interval)
-
-	defer ticker.Stop()
-
 	// Create filtered logger with proper initialization
 	filteredLogger := &httpLogFilter{
 		Logger:             r.Logger,
@@ -135,16 +151,26 @@ func (r *remoteLogger) UpdateLogLevel() {
 		r.remoteURL, r.levelFetchInterval)
 
 	checkAndUpdateLevel := func() {
-		newLevel, err := fetchAndUpdateLogLevel(remoteService, r.currentLevel)
+		r.mu.RLock()
+		currentLevel := r.currentLevel
+		r.mu.RUnlock()
+
+		newLevel, err := fetchAndUpdateLogLevel(remoteService, currentLevel)
 		if err != nil {
 			r.Warnf("Failed to fetch log level: %v", err)
 			return
 		}
 
+		r.mu.Lock()
 		if r.currentLevel != newLevel {
-			logLevelChange(r, r.currentLevel, newLevel)
-			r.ChangeLevel(newLevel)
+			oldLevel := r.currentLevel
 			r.currentLevel = newLevel
+			r.mu.Unlock()
+
+			logLevelChange(r, oldLevel, newLevel)
+			r.ChangeLevel(newLevel)
+		} else {
+			r.mu.Unlock()
 		}
 	}
 
@@ -152,7 +178,7 @@ func (r *remoteLogger) UpdateLogLevel() {
 	checkAndUpdateLevel()
 
 	// Setup ticker for periodic checks
-	ticker = time.NewTicker(r.levelFetchInterval)
+	ticker := time.NewTicker(r.levelFetchInterval)
 	defer ticker.Stop()
 
 	for range ticker.C {
