@@ -46,10 +46,13 @@ func TestGRPC_ServerRun(t *testing.T) {
 
 			// If testing "server.Serve() error", occupy the port first
 			if tc.port == 10000 {
-				listener, err := net.Listen("tcp", fmt.Sprintf(":%d", tc.port))
+				lc := net.ListenConfig{}
+
+				listener, err := lc.Listen(t.Context(), "tcp", fmt.Sprintf(":%d", tc.port))
 				if err != nil {
 					t.Fatalf("Failed to occupy port %d: %v", tc.port, err)
 				}
+
 				defer listener.Close() // Ensure cleanup
 			}
 
