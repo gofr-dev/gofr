@@ -2,6 +2,7 @@ package dynamodb
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"strings"
@@ -113,7 +114,7 @@ func (c *Client) Connect() error {
 	return nil
 }
 
-func (c *Client) Get(ctx context.Context, key string) (map[string]any, error) {
+func (c *Client) Get(ctx context.Context, key string) (string, error) {
 	span := c.addTrace(ctx, "get", key)
 	defer c.sendOperationsStats(time.Now(), "GET", span, key)
 
@@ -127,43 +128,56 @@ func (c *Client) Get(ctx context.Context, key string) (map[string]any, error) {
 	out, err := c.db.GetItem(ctx, input)
 	if err != nil {
 		c.logger.Errorf("error while fetching data for key: %v, error: %v", key, err)
-		return nil, err
+		return "", err
 	}
 
 	if out.Item == nil {
-		return nil, errKeyNotFound
+		return "", errKeyNotFound
 	}
 
+	// Look for a "value" field that contains the JSON string
+	if valueField, exists := out.Item["value"]; exists {
+		if stringValue, ok := valueField.(*types.AttributeValueMemberS); ok {
+			return stringValue.Value, nil
+		}
+	}
+
+	// Fallback: marshal the entire item as JSON (excluding partition key)
 	var result map[string]any
 	err = attributevalue.UnmarshalMap(out.Item, &result)
-
 	if err != nil {
 		c.logger.Errorf("error unmarshalling item for key: %v, error: %v", key, err)
-		return nil, err
+		return "", err
 	}
 
 	delete(result, c.configs.PartitionKeyName)
 
-	return result, nil
+	// Convert to JSON string
+	jsonData, err := json.Marshal(result)
+	if err != nil {
+		c.logger.Errorf("error marshaling result to JSON for key: %v, error: %v", key, err)
+		return "", err
+	}
+
+	return string(jsonData), nil
 }
 
-func (c *Client) Set(ctx context.Context, key string, attributes map[string]any) error {
+func (c *Client) Set(ctx context.Context, key, value string) error {
 	span := c.addTrace(ctx, "set", key)
 	defer c.sendOperationsStats(time.Now(), "SET", span, key)
 
-	itemAV, err := attributevalue.MarshalMap(attributes)
-	if err != nil {
-		c.logger.Errorf("error marshaling attributes for key: %v, error: %v", key, err)
-		return err
+	// Store the value as a simple string in the "value" field
+	item := map[string]types.AttributeValue{
+		c.configs.PartitionKeyName: &types.AttributeValueMemberS{Value: key},
+		"value":                    &types.AttributeValueMemberS{Value: value},
 	}
 
-	itemAV[c.configs.PartitionKeyName] = &types.AttributeValueMemberS{Value: key}
 	input := &dynamodb.PutItemInput{
 		TableName: aws.String(c.configs.Table),
-		Item:      itemAV,
+		Item:      item,
 	}
 
-	_, err = c.db.PutItem(ctx, input)
+	_, err := c.db.PutItem(ctx, input)
 	if err != nil {
 		c.logger.Errorf("error while setting data for key: %v, error: %v", key, err)
 		return err

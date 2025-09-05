@@ -721,3 +721,4 @@ type ElasticsearchProvider interface {
 
 	provider
 }
+
