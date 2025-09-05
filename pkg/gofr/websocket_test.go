@@ -99,11 +99,11 @@ func Test_AddWSService(t *testing.T) {
 	require.NoError(t, err, "Failed to add WebSocket service")
 
 	// Verify the connection is registered
-	conn := app.container.WSManager.GetConnectionByServiceName(serviceName)
-	require.NotNil(t, conn, "Connection should be registered")
 
 	// Note: WriteMessageToService method has been removed from App
 	// WebSocket service communication should be handled through the Context
+	conn := app.container.WSManager.GetConnectionByServiceName(serviceName)
+	require.NotNil(t, conn, "Connection should be registered")
 }
 
 func waitForWebSocketReady(wsURL string, timeout time.Duration) error {

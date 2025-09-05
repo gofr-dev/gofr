@@ -74,7 +74,6 @@ func (a *App) AddWSService(serviceName, url string, headers http.Header, enableR
 	return nil
 }
 
-
 func (a *App) handleReconnection(serviceName, url string, headers http.Header, retryInterval time.Duration) {
 	go func() {
 		for {
