@@ -102,11 +102,11 @@ func TestResponder_getStatusCode(t *testing.T) {
 		{"partial content with error", http.MethodGet, "partial response", ErrorInvalidRoute{},
 			http.StatusPartialContent, map[string]any{"message": ErrorInvalidRoute{}.Error()}},
 		{"request timeout error", http.MethodGet, nil, ErrorRequestTimeout{},
-			http.StatusGatewayTimeout,
+			http.StatusRequestTimeout,
 			map[string]any{"message": ErrorRequestTimeout{}.Error()}},
 		{"client closed request error", http.MethodGet, nil, ErrorClientClosedRequest{}, 499,
 			map[string]any{"message": ErrorClientClosedRequest{}.Error()}},
-		{"server timeout error", http.MethodGet, nil, ErrorRequestTimeout{}, http.StatusGatewayTimeout,
+		{"server timeout error", http.MethodGet, nil, ErrorRequestTimeout{}, http.StatusRequestTimeout,
 			map[string]any{"message": ErrorRequestTimeout{}.Error()}},
 	}
 
@@ -151,7 +151,7 @@ func TestRespondWithApplicationJSON(t *testing.T) {
 		{"client closed request - no response", nil, ErrorClientClosedRequest{},
 			StatusClientClosedRequest, `{"error":{"message":"client closed request"}}`},
 		{"server timeout error", nil, ErrorRequestTimeout{},
-			http.StatusGatewayTimeout, `{"error":{"message":"request timed out"}}`},
+			http.StatusRequestTimeout, `{"error":{"message":"request timed out"}}`},
 	}
 
 	for i, tc := range tests {

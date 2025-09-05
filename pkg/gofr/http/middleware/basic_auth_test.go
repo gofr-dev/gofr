@@ -61,7 +61,7 @@ func TestBasicAuthMiddleware_extractAuthHeader(t *testing.T) {
 
 	testCases := []struct {
 		header   string
-		response string
+		response any
 		err      error
 	}{
 		{
@@ -73,6 +73,7 @@ func TestBasicAuthMiddleware_extractAuthHeader(t *testing.T) {
 				key:        headerAuthorization,
 				errMessage: "credentials should be in the format base64(username:password)",
 			},
+			response: "",
 		},
 		{
 			header:   "Basic " + base64.StdEncoding.EncodeToString([]byte("storedUser:storedPass")),

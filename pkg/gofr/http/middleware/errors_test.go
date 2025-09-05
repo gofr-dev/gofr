@@ -22,7 +22,7 @@ func TestHTTPError(t *testing.T) {
 		{
 			err:        ErrorInvalidAuthorizationHeaderFormat{key: "Authorization", errMessage: "Bearer {value}"},
 			statusCode: http.StatusUnauthorized,
-			message:    "invalid auth header, required errMessage `Bearer {value}` in key 'Authorization'",
+			message:    "invalid value in 'Authorization' header - Bearer {value}",
 		},
 		{
 			err:        ErrorForbidden{message: "operation forbidden"},

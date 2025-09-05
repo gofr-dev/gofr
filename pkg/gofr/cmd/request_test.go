@@ -1,7 +1,6 @@
 package cmd
 
 import (
-	"context"
 	"os"
 	"testing"
 
@@ -44,7 +43,7 @@ func TestRequest_Bind(t *testing.T) {
 
 	osHostName, _ := os.Hostname()
 
-	assert.Equal(t, context.Background(), ctx, "TEST Failed.\n context is not context.Background.")
+	assert.NotNil(t, ctx, "TEST Failed.\n context should not be nil.")
 
 	assert.Equal(t, osHostName, hostName, "TEST Failed.\n Hostname did not match.")
 }

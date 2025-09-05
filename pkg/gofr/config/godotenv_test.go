@@ -3,6 +3,7 @@ package config
 import (
 	"fmt"
 	"os"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -10,12 +11,21 @@ import (
 	"gofr.dev/pkg/gofr/logging"
 )
 
+func clearAllEnv() {
+	for _, envVar := range os.Environ() {
+		key, _, _ := strings.Cut(envVar, "=")
+		_ = os.Unsetenv(key)
+	}
+}
+
 func TestMain(m *testing.M) {
 	os.Setenv("GOFR_TELEMETRY", "false")
-	m.Run()
+	os.Exit(m.Run())
 }
 
 func Test_EnvSuccess(t *testing.T) {
+	clearAllEnv()
+
 	envData := map[string]string{
 		"DB_URL":     "localhost:5432",
 		"API_KEY":    "your_api_key_here",
@@ -31,13 +41,15 @@ func Test_EnvSuccess(t *testing.T) {
 
 	env := NewEnvFile(dir, logger)
 
-	assert.Equal(t, "localhost:5432", env.Get("DB_URL"), "TEST Failed.\n godotenv success")
-	assert.Equal(t, "your_api_key_here", env.GetOrDefault("API_KEY", "xyz"), "TEST Failed.\n godotenv success")
-	assert.Equal(t, "test", env.GetOrDefault("DATABASE", "test"), "TEST Failed.\n godotenv success")
-	assert.Equal(t, "small_case_value", env.Get("small_case"), "TEST Failed.\n godotenv success")
+	assert.Equal(t, "localhost:5432", env.Get("DB_URL"))
+	assert.Equal(t, "your_api_key_here", env.GetOrDefault("API_KEY", "xyz"))
+	assert.Equal(t, "test", env.GetOrDefault("DATABASE", "test"))
+	assert.Equal(t, "small_case_value", env.Get("small_case"))
 }
 
 func Test_EnvSuccess_AppEnv_Override(t *testing.T) {
+	clearAllEnv()
+
 	t.Setenv("APP_ENV", "prod")
 
 	envData := map[string]string{
@@ -60,7 +72,7 @@ func Test_EnvSuccess_AppEnv_Override(t *testing.T) {
 }
 
 func Test_EnvSuccess_Local_Override(t *testing.T) {
-	t.Setenv("APP_ENV", "")
+	clearAllEnv()
 
 	envData := map[string]string{
 		"API_KEY": "your_api_key_here",
@@ -82,6 +94,8 @@ func Test_EnvSuccess_Local_Override(t *testing.T) {
 }
 
 func Test_EnvSuccess_SystemEnv_Override(t *testing.T) {
+	clearAllEnv()
+
 	// Set initial environment variables
 	envData := map[string]string{
 		"TEST_ENV": "env",
@@ -105,6 +119,8 @@ func Test_EnvSuccess_SystemEnv_Override(t *testing.T) {
 }
 
 func Test_EnvFailureWithHyphen(t *testing.T) {
+	clearAllEnv()
+
 	envData := map[string]string{
 		"KEY-WITH-HYPHEN": "DASH-VALUE",
 		"UNABLE_TO_LOAD":  "VALUE",
