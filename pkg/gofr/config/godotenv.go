@@ -60,7 +60,7 @@ func (*EnvLoader) captureInitialEnv() map[string]bool {
 }
 
 // loadEnvironmentFiles loads all environment files with proper precedence.
-func (e *EnvLoader) loadEnvironmentFiles(folder string, appEnv string) map[string]string {
+func (e *EnvLoader) loadEnvironmentFiles(folder, appEnv string) map[string]string {
 	envMap := make(map[string]string)
 
 	// Load base .env file (lowest precedence)
