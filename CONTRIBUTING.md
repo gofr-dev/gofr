@@ -96,6 +96,7 @@ docker run -d --name arangodb \
   -e ARANGO_ROOT_PASSWORD=rootpassword \
   --pull always \
   arangodb:latest
+docker run --name dynamodb-local -d -p 8000:8000 amazon/dynamodb-local
 ```
 
 > [!NOTE]

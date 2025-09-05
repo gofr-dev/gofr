@@ -1,0 +1,4 @@
+=== RUN   TestDebugFatal
+{"level":"FATAL","time":"2025-09-04T16:05:25.083456+05:30","message":"Test Fatal Log","gofrVersion":"dev"}
+FAIL	gofr.dev/pkg/gofr/logging	0.151s
+FAIL
