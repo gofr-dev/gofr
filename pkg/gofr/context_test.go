@@ -192,7 +192,7 @@ func testWebSocketConnection(t *testing.T, wsURL string, messageChan chan string
 	ws.Close()
 
 	// Wait a bit for cleanup to complete
-	time.Sleep(100 * time.Millisecond)
+	time.Sleep(10 * time.Millisecond)
 }
 
 func TestContext_WriteMessageToService(t *testing.T) {
@@ -244,7 +244,6 @@ func TestContext_WriteMessageToService(t *testing.T) {
 		}
 	}()
 
-	// Note: WriteMessageToService method has been removed from App
 	// WebSocket service communication should be handled through the Context
 
 	// Send a message to the echo server and read the response
@@ -262,7 +261,7 @@ func TestContext_WriteMessageToService(t *testing.T) {
 	ws.Close()
 
 	// Wait a bit for cleanup to complete
-	time.Sleep(100 * time.Millisecond)
+	time.Sleep(10 * time.Millisecond)
 }
 
 func TestGetAuthInfo_BasicAuth(t *testing.T) {
