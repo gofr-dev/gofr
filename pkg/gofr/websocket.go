@@ -74,21 +74,6 @@ func (a *App) AddWSService(serviceName, url string, headers http.Header, enableR
 	return nil
 }
 
-// WriteMessageToService writes a message to a WebSocket service connection.
-// This is used for inter-service WebSocket communication.
-func (a *App) WriteMessageToService(serviceName string, data any) error {
-	conn := a.container.GetWSConnectionByServiceName(serviceName)
-	if conn == nil {
-		return fmt.Errorf("%w: %s", ErrConnectionNotFound, serviceName)
-	}
-
-	message, err := serializeMessage(data)
-	if err != nil {
-		return err
-	}
-
-	return conn.WriteMessage(websocket.TextMessage, message)
-}
 
 func (a *App) handleReconnection(serviceName, url string, headers http.Header, retryInterval time.Duration) {
 	go func() {

@@ -244,20 +244,8 @@ func TestContext_WriteMessageToService(t *testing.T) {
 		}
 	}()
 
-	// Test WriteMessageToService with a separate service connection
-	// First, create a service connection to the same server
-	serviceName := "test-service"
-	retryInterval := 50 * time.Millisecond
-	err = app.AddWSService(serviceName, wsURL, http.Header{}, true, retryInterval)
-	require.NoError(t, err, "AddWSService should not return an error")
-
-	// Wait for the service to be ready
-	time.Sleep(20 * time.Millisecond)
-
-	// Test WriteMessageToService
-	messageToSend := "Hello, WebSocket Service!"
-	err = app.WriteMessageToService(serviceName, messageToSend)
-	require.NoError(t, err, "WriteMessageToService should not return an error")
+	// Note: WriteMessageToService method has been removed from App
+	// WebSocket service communication should be handled through the Context
 
 	// Send a message to the echo server and read the response
 	err = ws.WriteMessage(websocket.TextMessage, []byte("Hello, WebSocket!"))
