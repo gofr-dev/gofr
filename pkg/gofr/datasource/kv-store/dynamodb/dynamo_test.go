@@ -10,7 +10,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb/types"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"go.opentelemetry.io/otel/trace"
+	"go.opentelemetry.io/otel/trace/noop"
 	"go.uber.org/mock/gomock"
 )
 
@@ -355,17 +355,19 @@ func Test_ToJSONError(t *testing.T) {
 
 func Test_FromJSON(t *testing.T) {
 	jsonStr := `{"name":"John Doe","age":30,"email":"john@example.com"}`
+
 	var result map[string]any
 
 	err := FromJSON(jsonStr, &result)
 	require.NoError(t, err)
 	assert.Equal(t, "John Doe", result["name"])
-	assert.Equal(t, float64(30), result["age"])
+	assert.InEpsilon(t, float64(30), result["age"], 0.01)
 	assert.Equal(t, "john@example.com", result["email"])
 }
 
 func Test_FromJSONError(t *testing.T) {
 	invalidJSON := `{"name":"John Doe","age":30,"email":}`
+
 	var result map[string]any
 
 	err := FromJSON(invalidJSON, &result)
@@ -403,7 +405,7 @@ func Test_ClientNotConnected(t *testing.T) {
 	health, err := client.HealthCheck(ctx)
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "status down")
-	
+
 	h, ok := health.(*Health)
 	require.True(t, ok)
 	assert.Equal(t, "DOWN", h.Status)
@@ -506,7 +508,7 @@ func Test_ClientUseTracer(t *testing.T) {
 
 	defer finish()
 
-	mockTracer := trace.NewNoopTracerProvider().Tracer("test")
+	mockTracer := noop.NewTracerProvider().Tracer("test")
 	client.UseTracer(mockTracer)
 
 	assert.Equal(t, mockTracer, client.tracer)
@@ -552,7 +554,7 @@ func Test_ClientSetWithTracer(t *testing.T) {
 	defer finish()
 
 	// Add tracer
-	mockTracer := trace.NewNoopTracerProvider().Tracer("test")
+	mockTracer := noop.NewTracerProvider().Tracer("test")
 	client.UseTracer(mockTracer)
 
 	key := "test-key"
@@ -591,7 +593,7 @@ func Test_ClientGetWithTracer(t *testing.T) {
 	defer finish()
 
 	// Add tracer
-	mockTracer := trace.NewNoopTracerProvider().Tracer("test")
+	mockTracer := noop.NewTracerProvider().Tracer("test")
 	client.UseTracer(mockTracer)
 
 	key := "test-key"
