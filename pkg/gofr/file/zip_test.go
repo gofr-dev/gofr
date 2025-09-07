@@ -144,3 +144,33 @@ func (m *mockReadCloser) Read(p []byte) (int, error) {
 func (*mockReadCloser) Close() error {
 	return nil
 }
+
+func TestCreateLocalCopies_WithDirectory(t *testing.T) {
+	mockZip := &Zip{
+		Files: map[string]file{
+			"dir1/": {name: "dir1/", isDir: true},
+		},
+	}
+
+	destDir := "test-dir"
+	defer os.RemoveAll(destDir)
+
+	err := mockZip.CreateLocalCopies(destDir)
+	require.NoError(t, err)
+
+	// Check if the directory exists
+	expectedDir := filepath.Join(destDir, "dir1")
+	info, err := os.Stat(expectedDir)
+	require.NoError(t, err)
+	assert.True(t, info.IsDir(), "Expected dir1 to be a directory")
+}
+func TestCreateLocalCopies_Failure(t *testing.T) {
+	mockZip := &Zip{
+		Files: map[string]file{
+			string([]byte{0x00}): {name: string([]byte{0x00}), content: []byte("invalid"), isDir: false, size: 7}, // Invalid path
+		},
+	}
+
+	err := mockZip.CreateLocalCopies("test-bad")
+	require.Error(t, err, "Expected error when creating file with invalid name")
+}

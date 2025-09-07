@@ -132,7 +132,7 @@ func TestLogger_LevelFatal(t *testing.T) {
 	}
 
 	//nolint:gosec // starting the actual test in a different subprocess
-	cmd := exec.Command(os.Args[0], "-test.run=TestLogger_LevelFatal")
+	cmd := exec.CommandContext(t.Context(), os.Args[0], "-test.run=TestLogger_LevelFatal")
 	cmd.Env = append(os.Environ(), "GOFR_EXITER=1")
 
 	stdout, err := cmd.StderrPipe()
@@ -248,4 +248,22 @@ func TestPrettyPrint(t *testing.T) {
 	for _, v := range expOut {
 		assert.Contains(t, outputLog, v)
 	}
+}
+
+func TestNewFileLogger_UnwritablePath(t *testing.T) {
+	l := NewFileLogger("/root/invalid.log")
+	logger, ok := l.(*logger)
+	require.True(t, ok)
+
+	assert.Equal(t, io.Discard, logger.normalOut)
+	assert.Equal(t, io.Discard, logger.errorOut)
+}
+
+func TestNewFileLogger_NilPath(t *testing.T) {
+	l := NewFileLogger("")
+	logger, ok := l.(*logger)
+	require.True(t, ok)
+
+	assert.Equal(t, io.Discard, logger.normalOut)
+	assert.Equal(t, io.Discard, logger.errorOut)
 }

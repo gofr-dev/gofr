@@ -206,6 +206,19 @@ type ClickhouseProvider interface {
 	provider
 }
 
+type OracleDB interface {
+	Exec(ctx context.Context, query string, args ...any) error
+	Select(ctx context.Context, dest any, query string, args ...any) error
+
+	HealthChecker
+}
+
+type OracleProvider interface {
+	OracleDB
+
+	provider
+}
+
 // Mongo is an interface representing a MongoDB database client with common CRUD operations.
 type Mongo interface {
 	// Find executes a query to find documents in a collection based on a filter and stores the results
@@ -722,3 +735,44 @@ type ElasticsearchProvider interface {
 	provider
 }
 
+// Couchbase defines the methods for interacting with a Couchbase database.
+type Couchbase interface {
+	// Get retrieves a document by its key from the specified bucket.
+	// The result parameter should be a pointer to the struct where the document will be unmarshaled.
+	Get(ctx context.Context, key string, result any) error
+
+	// InsertOne inserts a new document in the collection.
+	Insert(ctx context.Context, key string, document, result any) error
+
+	// Upsert inserts a new document or replaces an existing one in the specified bucket.
+	// The document parameter can be any Go type that can be marshaled into JSON.
+	Upsert(ctx context.Context, key string, document any, result any) error
+
+	// Remove deletes a document by its key from the specified bucket.
+	Remove(ctx context.Context, key string) error
+
+	// Query executes a N1QL query against the Couchbase cluster.
+	// The statement is the N1QL query string, and params are any query parameters.
+	// The result parameter should be a pointer to a slice of structs or maps where the query results will be unmarshaled.
+	Query(ctx context.Context, statement string, params map[string]any, result any) error
+
+	// AnalyticsQuery executes an Analytics query against the Couchbase Analytics service.
+	// The statement is the Analytics query string, and params are any query parameters.
+	// The result parameter should be a pointer to a slice of structs or maps where the query results will be unmarshaled.
+	AnalyticsQuery(ctx context.Context, statement string, params map[string]any, result any) error
+
+	RunTransaction(ctx context.Context, logic func(attempt any) error) (any, error)
+
+	Close(opts any) error
+
+	HealthChecker
+}
+
+// CouchbaseProvider is an interface that extends Couchbase with additional methods
+// for logging, metrics, tracing, and connection management, aligning with other
+// data source providers in your package.
+type CouchbaseProvider interface {
+	Couchbase
+
+	provider
+}

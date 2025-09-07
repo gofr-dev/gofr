@@ -10,6 +10,7 @@ on:
     branches:
       - main
       - development
+      - update/go@v1.25
     paths-ignore:
       - 'docs/**'  # Ignore changes to docs folder
   # Run on pull requests to main or development branches
@@ -29,7 +30,7 @@ jobs:
     # Define a matrix strategy to test against multiple Go versions
     strategy:
       matrix:
-        go-version: ['1.24','1.23', '1.22']
+        go-version: ['1.25','1.24', '1.23']
       # Continue with other jobs if one version fails
       fail-fast: false
 
@@ -37,7 +38,7 @@ jobs:
     services:
       # Kafka service
       kafka:
-        image: bitnami/kafka:3.4
+        image: bitnami/kafka:3.4.1
         ports:
           - "9092:9092"
         env:
@@ -72,7 +73,7 @@ jobs:
     # Steps to execute for this job
     steps:
       - name: Checkout code into go module directory
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           fetch-depth: 0  # Full git history for accurate testing
 
@@ -120,12 +121,12 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        go-version: ['1.24','1.23', '1.22']
+        go-version: ['1.25','1.24', '1.23']
       fail-fast: false
 
     steps:
       - name: Checkout code into go module directory
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           fetch-depth: 0
 
@@ -173,11 +174,11 @@ jobs:
     needs: [ Example-Unit-Testing,PKG-Unit-Testing ]
     steps:
       - name: Check out code into the Go module directory
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       # Download coverage reports from previous jobs
       - name: Download Coverage Report
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v5
         with:
           path: artifacts
 
@@ -208,12 +209,12 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        go-version:  ['1.24','1.23', '1.22']
+        go-version:  ['1.25','1.24', '1.23']
       fail-fast: false
 
     steps:
       - name: Checkout code into go module directory
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           fetch-depth: 0
 
@@ -275,45 +276,52 @@ jobs:
           name: submodule-coverage-reports
           path: coverage_reports/*.cov
 
-  # Job for uploading coverage to external services (CodeClimate)
-#  upload_coverage:
-#    name: Upload Coverage📊
-#    runs-on: ubuntu-latest
-#    # This job only needs example and pkg test results, not submodules
-#    needs: [Example-Unit-Testing, PKG-Unit-Testing]
-#    # Only run this job on pushes to the development branch
-#    if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/development'}}
-#    steps:
-#      - name: Check out code into the Go module directory
-#        uses: actions/checkout@v4
-#
-#      # Download coverage artifacts
-#      - name: Download Coverage Report
-#        uses: actions/download-artifact@v4
-#        with:
-#          path: artifacts
-#
-#      # Merge coverage from example and pkg tests only
-#      - name: Merge Coverage Files
-#        working-directory: artifacts
-#        run: |
-#          echo "mode: set" > merged_profile.cov
-#          tail -n +2 ./Example-Test-Report/profile.cov >> merged_profile.cov
-#          tail -n +2 ./PKG-Coverage-Report/profile.cov >> merged_profile.cov
-#
-#          # Generate and print total coverage percentage
-#          echo "Total Coverage:"
-#          go tool cover -func=merged_profile.cov | tail -n 1
-#        shell: bash
-#
-#      # Upload merged coverage to CodeClimate for analysis
-#      - name: Upload
-#        uses: paambaati/codeclimate-action@v9.0.0
-#        env:
-#          CC_TEST_REPORTER_ID: ${{ secrets.CC_TEST_REPORTER_ID }}
-#        with:
-#          coverageLocations: artifacts/merged_profile.cov:gocov
-#          prefix: gofr.dev
+  # Job for uploading coverage to external services (qlty.sh)
+  upload_coverage:
+    name: Upload Coverage📊
+    runs-on: ubuntu-latest
+    env:
+      QLTY_TOKEN: ${{ secrets.QLTY_TOKEN }}
+      QLTY_COVERAGE_TOKEN: ${{ secrets.QLTY_TOKEN }}
+
+    # This job only needs example and pkg test results, not submodules
+    needs: [Example-Unit-Testing, PKG-Unit-Testing]
+    # Only run this job on pushes to the development branch
+    if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/development'}}
+    steps:
+      - name: Check out code into the Go module directory
+        uses: actions/checkout@v5
+
+      - name: Install qlty CLI
+        run: |
+          curl https://qlty.sh | sh
+          echo "$HOME/.qlty/bin" >> $GITHUB_PATH
+
+      # Download coverage artifacts
+      - name: Download Coverage Report
+        uses: actions/download-artifact@v5
+        with:
+          path: artifacts
+
+      # Merge coverage from example and pkg tests only
+      - name: Merge Coverage Files
+        working-directory: artifacts
+        run: |
+          echo "mode: set" > merged_profile.cov
+          tail -n +2 ./Example-Test-Report/profile.cov >> merged_profile.cov
+          tail -n +2 ./PKG-Coverage-Report/profile.cov >> merged_profile.cov
+
+          # Generate and print total coverage percentage
+          echo "Total Coverage:"
+          go tool cover -func=merged_profile.cov | tail -n 1
+        shell: bash
+
+      # Upload merged coverage to CodeClimate for analysis
+      - name: Upload
+        working-directory: artifacts
+        run: qlty coverage publish merged_profile.cov --format=coverprofile --strip-prefix="gofr.dev/" --add-prefix="${GITHUB_WORKSPACE}/"
+        env:
+          QLTY_TOKEN: ${{ secrets.QLTY_TOKEN }}
 
   # Job for code quality checks
   code_quality:
@@ -321,18 +329,18 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Check out code into the Go module directory
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Set up Go environment
         uses: actions/setup-go@v5
         with:
-          go-version: '1.24'
+          go-version: '1.25'
           cache: false
 
       # Install the linting tool
       - name: Install golangci-lint
         run: |
-          go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.1
+          go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.4.0
 
       - name: Get dependencies
         run: |
@@ -368,12 +376,12 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Check out code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Set up Go environment
         uses: actions/setup-go@v5
         with:
-          go-version: 1.24
+          go-version: 1.25
 
       # Check file naming conventions using ls-lint
       - name: Check for file names errors
