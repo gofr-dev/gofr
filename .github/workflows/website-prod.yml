@@ -6,9 +6,7 @@ on:
   push:
     tags:
       - "v*.*.*"
-    branches:
-      - main
-      - development
+
 env:
   APP_NAME: gofr-website
   WEBSITE_REGISTRY: ghcr.io
@@ -29,7 +27,7 @@ jobs:
     name: 🐳 Dockerize
     steps:
       - name: Checkout Code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
@@ -39,7 +37,7 @@ jobs:
         with:
           registry: us-central1-docker.pkg.dev
           username: _json_key
-          password: ${{ secrets.deploy_key }}
+          password: ${{ secrets.GOFR_WEBSITE_GOFR_DEV_DEPLOYMENT_KEY }}
 
       - name: Log in to the GitHub Container registry
         uses: docker/login-action@v3
@@ -74,35 +72,7 @@ jobs:
       - id: output-image
         run: echo "image=`echo us-central1-docker.pkg.dev/${{ env.GAR_PROJECT }}/${{ env.GAR_REGISTRY }}/${{ env.APP_NAME }}:${{ env.TAG }}`" >> "$GITHUB_OUTPUT"
 
-  deployment_stage:
-    runs-on: ubuntu-latest
-    if: ${{ github.ref == 'refs/heads/development' }}
-    name: 🚀 Deploy-Stage
-    needs: dockerize
-    container:
-      image: ghcr.io/zopsmart/gha-images:deployments-0.1.3
-      options: --rm
-    env:
-      image: ${{needs.dockerize.outputs.image}}
-
-    steps:
-      - name: Checkout Code
-        uses: actions/checkout@v4
-
-      - name: Authorize to GCP service account
-        uses: google-github-actions/auth@v2
-        with:
-          credentials_json: ${{ secrets.deploy_key }}
-
-      - name: Set GCloud Project and Fetch Cluster Credentials
-        run: gcloud container clusters get-credentials ${{ env.CLUSTER_NAME }} --region=us-central1 --project=${{ env.CLUSTER_PROJECT }}
-
-      - name: Update Deployment Image
-        run: kubectl set image deployment/${{ env.APP_NAME }} ${{ env.APP_NAME }}=${{ env.image }} --namespace ${{ env.NAMESPACE_STAGE }}
-
-
   deployment:
-    if: ${{ startsWith(github.ref, 'refs/tags/v')}}
     runs-on: ubuntu-latest
     name: 🚀 Deploy-Prod
     needs: dockerize
@@ -114,12 +84,12 @@ jobs:
 
     steps:
       - name: Checkout Code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Authorize to GCP service account
         uses: google-github-actions/auth@v2
         with:
-          credentials_json: ${{ secrets.deploy_key }}
+          credentials_json: ${{ secrets.GOFR_WEBSITE_GOFR_DEV_DEPLOYMENT_KEY }}
 
       - name: Set GCloud Project and Fetch Cluster Credentials
         run: gcloud container clusters get-credentials ${{ env.CLUSTER_NAME }} --region=us-central1 --project=${{ env.CLUSTER_PROJECT }}
