@@ -13,4 +13,6 @@ type Log struct {
 	Type     string `json:"type"`
 	Duration int64  `json:"duration"`
 	Key      string `json:"key"`
+	Value    string `json:"value,omitempty"`
 }
+

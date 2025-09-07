@@ -6,11 +6,11 @@ import (
 	"testing"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
-	"github.com/aws/aws-sdk-go-v2/feature/dynamodb/attributevalue"
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb"
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb/types"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"go.opentelemetry.io/otel/trace"
 	"go.uber.org/mock/gomock"
 )
 
@@ -34,10 +34,11 @@ func setupTest(t *testing.T) testDeps {
 	mockMetrics := NewMockMetrics(ctrl)
 
 	client := &Client{
-		db:      mockDB,
-		configs: &Configs{Table: "test-table", Region: "us-east-1", PartitionKeyName: "pk"},
-		logger:  mockLogger,
-		metrics: mockMetrics,
+		db:        mockDB,
+		configs:   &Configs{Table: "test-table", Region: "us-east-1", PartitionKeyName: "pk"},
+		logger:    mockLogger,
+		metrics:   mockMetrics,
+		connected: true, // Set as connected for tests
 	}
 
 	return testDeps{
@@ -62,17 +63,14 @@ func Test_ClientSet(t *testing.T) {
 	defer finish()
 
 	key := "test-key"
-	attributes := map[string]any{"field1": "value1", "field2": "value2"}
-
-	itemAV, err := attributevalue.MarshalMap(attributes)
-
-	require.NoError(t, err)
-
-	itemAV["pk"] = &types.AttributeValueMemberS{Value: key}
+	value := "test-value"
 
 	expectedInput := &dynamodb.PutItemInput{
 		TableName: aws.String("test-table"),
-		Item:      itemAV,
+		Item: map[string]types.AttributeValue{
+			"pk":    &types.AttributeValueMemberS{Value: key},
+			"value": &types.AttributeValueMemberS{Value: value},
+		},
 	}
 
 	mockDB.EXPECT().PutItem(ctx, expectedInput, gomock.Any()).Return(&dynamodb.PutItemOutput{}, nil)
@@ -82,10 +80,10 @@ func Test_ClientSet(t *testing.T) {
 		"app_dynamodb_duration_ms",
 		gomock.Any(),
 		"table", client.configs.Table,
-		"type", "SET",
+		"operation", "SET",
 	)
 
-	require.NoError(t, client.Set(ctx, key, attributes))
+	require.NoError(t, client.Set(ctx, key, value))
 }
 
 func Test_ClientSetError(t *testing.T) {
@@ -100,7 +98,7 @@ func Test_ClientSetError(t *testing.T) {
 	defer finish()
 
 	key := "test-key"
-	attributes := map[string]any{"field1": "value1", "field2": "value2"}
+	value := "test-value"
 	expectedErr := errDynamoFailure
 
 	mockDB.EXPECT().PutItem(ctx, gomock.Any(), gomock.Any()).Return(nil, expectedErr)
@@ -111,10 +109,10 @@ func Test_ClientSetError(t *testing.T) {
 		"app_dynamodb_duration_ms",
 		gomock.Any(),
 		"table", "test-table",
-		"type", "SET",
+		"operation", "SET",
 	)
 
-	err := client.Set(ctx, key, attributes)
+	err := client.Set(ctx, key, value)
 	require.Error(t, err)
 	assert.Equal(t, expectedErr, err)
 }
@@ -131,12 +129,7 @@ func Test_ClientGet(t *testing.T) {
 	defer finish()
 
 	key := "test-key"
-	expectedAttributes := map[string]any{"field1": "value1", "field2": "value2"}
-
-	itemAV, err := attributevalue.MarshalMap(expectedAttributes)
-	require.NoError(t, err)
-
-	itemAV["pk"] = &types.AttributeValueMemberS{Value: key}
+	expectedValue := "test-value"
 
 	expectedInput := &dynamodb.GetItemInput{
 		TableName: aws.String("test-table"),
@@ -146,7 +139,10 @@ func Test_ClientGet(t *testing.T) {
 	}
 
 	expectedOutput := &dynamodb.GetItemOutput{
-		Item: itemAV,
+		Item: map[string]types.AttributeValue{
+			"pk":    &types.AttributeValueMemberS{Value: key},
+			"value": &types.AttributeValueMemberS{Value: expectedValue},
+		},
 	}
 
 	mockDB.EXPECT().GetItem(ctx, expectedInput, gomock.Any()).Return(expectedOutput, nil)
@@ -156,13 +152,13 @@ func Test_ClientGet(t *testing.T) {
 		"app_dynamodb_duration_ms",
 		gomock.Any(),
 		"table", "test-table",
-		"type", "GET",
+		"operation", "GET",
 	)
 
 	result, err := client.Get(ctx, key)
 
 	require.NoError(t, err)
-	assert.Equal(t, expectedAttributes, result)
+	assert.Equal(t, expectedValue, result)
 }
 
 func Test_ClientGetError(t *testing.T) {
@@ -194,14 +190,14 @@ func Test_ClientGetError(t *testing.T) {
 		"app_dynamodb_duration_ms",
 		gomock.Any(),
 		"table", "test-table",
-		"type", "GET",
+		"operation", "GET",
 	)
 
 	value, err := client.Get(ctx, key)
 
 	require.Error(t, err)
 	assert.Equal(t, expectedErr, err)
-	assert.Nil(t, value)
+	assert.Empty(t, value)
 }
 
 func Test_ClientDelete(t *testing.T) {
@@ -230,7 +226,7 @@ func Test_ClientDelete(t *testing.T) {
 		"app_dynamodb_duration_ms",
 		gomock.Any(),
 		"table", client.configs.Table,
-		"type", "DELETE",
+		"operation", "DELETE",
 	)
 
 	require.NoError(t, client.Delete(ctx, key))
@@ -265,7 +261,7 @@ func Test_ClientDeleteError(t *testing.T) {
 		"app_dynamodb_duration_ms",
 		gomock.Any(),
 		"table", "test-table",
-		"type", "DELETE",
+		"operation", "DELETE",
 	)
 
 	err := client.Delete(ctx, key)
@@ -331,4 +327,302 @@ func Test_ClientHealthCheckFailure(t *testing.T) {
 		"table":  "test-table",
 		"region": "us-east-1",
 	}, h.Details)
+}
+
+func Test_ToJSON(t *testing.T) {
+	testData := map[string]any{
+		"name":  "John Doe",
+		"age":   30,
+		"email": "john@example.com",
+	}
+
+	jsonStr, err := ToJSON(testData)
+	require.NoError(t, err)
+	assert.NotEmpty(t, jsonStr)
+	assert.Contains(t, jsonStr, "John Doe")
+	assert.Contains(t, jsonStr, "john@example.com")
+}
+
+func Test_ToJSONError(t *testing.T) {
+	// Create a value that cannot be marshaled to JSON
+	invalidData := make(chan int)
+
+	jsonStr, err := ToJSON(invalidData)
+	require.Error(t, err)
+	assert.Empty(t, jsonStr)
+	assert.Contains(t, err.Error(), "failed to marshal value to JSON")
+}
+
+func Test_FromJSON(t *testing.T) {
+	jsonStr := `{"name":"John Doe","age":30,"email":"john@example.com"}`
+	var result map[string]any
+
+	err := FromJSON(jsonStr, &result)
+	require.NoError(t, err)
+	assert.Equal(t, "John Doe", result["name"])
+	assert.Equal(t, float64(30), result["age"])
+	assert.Equal(t, "john@example.com", result["email"])
+}
+
+func Test_FromJSONError(t *testing.T) {
+	invalidJSON := `{"name":"John Doe","age":30,"email":}`
+	var result map[string]any
+
+	err := FromJSON(invalidJSON, &result)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "failed to unmarshal JSON")
+}
+
+func Test_ClientNotConnected(t *testing.T) {
+	deps := setupTest(t)
+	ctx := deps.ctx
+	client := deps.client
+	finish := deps.finish
+
+	defer finish()
+
+	// Set connected to false
+	client.connected = false
+
+	// Test Set when not connected
+	err := client.Set(ctx, "key", "value")
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "client not connected")
+
+	// Test Get when not connected
+	_, err = client.Get(ctx, "key")
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "client not connected")
+
+	// Test Delete when not connected
+	err = client.Delete(ctx, "key")
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "client not connected")
+
+	// Test HealthCheck when not connected
+	health, err := client.HealthCheck(ctx)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "status down")
+	
+	h, ok := health.(*Health)
+	require.True(t, ok)
+	assert.Equal(t, "DOWN", h.Status)
+	assert.Contains(t, h.Details["error"], "client not connected")
+}
+
+func Test_ClientGetItemNotFound(t *testing.T) {
+	deps := setupTest(t)
+	ctx := deps.ctx
+	client := deps.client
+	mockDB := deps.mockDB
+	mockLogger := deps.mockLogger
+	mockMetrics := deps.mockMetrics
+	finish := deps.finish
+
+	defer finish()
+
+	key := "non-existent-key"
+
+	expectedInput := &dynamodb.GetItemInput{
+		TableName: aws.String("test-table"),
+		Key: map[string]types.AttributeValue{
+			"pk": &types.AttributeValueMemberS{Value: key},
+		},
+	}
+
+	// Return empty item (key not found)
+	expectedOutput := &dynamodb.GetItemOutput{
+		Item: map[string]types.AttributeValue{},
+	}
+
+	mockDB.EXPECT().GetItem(ctx, expectedInput, gomock.Any()).Return(expectedOutput, nil)
+	mockLogger.EXPECT().Debug(gomock.Any())
+	mockMetrics.EXPECT().RecordHistogram(
+		gomock.Any(),
+		"app_dynamodb_duration_ms",
+		gomock.Any(),
+		"table", "test-table",
+		"operation", "GET",
+	)
+
+	result, err := client.Get(ctx, key)
+
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "key not found")
+	assert.Empty(t, result)
+}
+
+func Test_ClientConnect(t *testing.T) {
+	deps := setupTest(t)
+	client := deps.client
+	mockLogger := deps.mockLogger
+	mockMetrics := deps.mockMetrics
+	finish := deps.finish
+
+	defer finish()
+
+	// Set up expectations for Connect
+	mockLogger.EXPECT().Debugf("connecting to DynamoDB table %v in region %v", "test-table", "us-east-1")
+	mockMetrics.EXPECT().NewHistogram("app_dynamodb_duration_ms", "Response time of DynamoDB queries in milliseconds.", gomock.Any())
+	mockLogger.EXPECT().Infof("connected to DynamoDB table %v in region %v", "test-table", "us-east-1")
+
+	// Call Connect
+	client.Connect()
+
+	// Verify client is connected
+	assert.True(t, client.connected)
+}
+
+func Test_ClientUseLogger(t *testing.T) {
+	deps := setupTest(t)
+	client := deps.client
+	finish := deps.finish
+
+	defer finish()
+
+	mockLogger := NewMockLogger(gomock.NewController(t))
+	client.UseLogger(mockLogger)
+
+	assert.Equal(t, mockLogger, client.logger)
+}
+
+func Test_ClientUseMetrics(t *testing.T) {
+	deps := setupTest(t)
+	client := deps.client
+	finish := deps.finish
+
+	defer finish()
+
+	mockMetrics := NewMockMetrics(gomock.NewController(t))
+	client.UseMetrics(mockMetrics)
+
+	assert.Equal(t, mockMetrics, client.metrics)
+}
+
+func Test_ClientUseTracer(t *testing.T) {
+	deps := setupTest(t)
+	client := deps.client
+	finish := deps.finish
+
+	defer finish()
+
+	mockTracer := trace.NewNoopTracerProvider().Tracer("test")
+	client.UseTracer(mockTracer)
+
+	assert.Equal(t, mockTracer, client.tracer)
+}
+
+func Test_New(t *testing.T) {
+	configs := Configs{
+		Table:            "test-table",
+		Region:           "us-east-1",
+		Endpoint:         "http://localhost:8000",
+		PartitionKeyName: "custom-pk",
+	}
+
+	client := New(configs)
+
+	assert.Equal(t, "test-table", client.configs.Table)
+	assert.Equal(t, "us-east-1", client.configs.Region)
+	assert.Equal(t, "http://localhost:8000", client.configs.Endpoint)
+	assert.Equal(t, "custom-pk", client.configs.PartitionKeyName)
+	assert.False(t, client.connected)
+}
+
+func Test_NewWithDefaultPartitionKey(t *testing.T) {
+	configs := Configs{
+		Table:  "test-table",
+		Region: "us-east-1",
+	}
+
+	client := New(configs)
+
+	assert.Equal(t, "pk", client.configs.PartitionKeyName) // Should default to "pk"
+}
+
+func Test_ClientSetWithTracer(t *testing.T) {
+	deps := setupTest(t)
+	ctx := deps.ctx
+	client := deps.client
+	mockDB := deps.mockDB
+	mockLogger := deps.mockLogger
+	mockMetrics := deps.mockMetrics
+	finish := deps.finish
+
+	defer finish()
+
+	// Add tracer
+	mockTracer := trace.NewNoopTracerProvider().Tracer("test")
+	client.UseTracer(mockTracer)
+
+	key := "test-key"
+	value := "test-value"
+
+	expectedInput := &dynamodb.PutItemInput{
+		TableName: aws.String("test-table"),
+		Item: map[string]types.AttributeValue{
+			"pk":    &types.AttributeValueMemberS{Value: key},
+			"value": &types.AttributeValueMemberS{Value: value},
+		},
+	}
+
+	mockDB.EXPECT().PutItem(ctx, expectedInput, gomock.Any()).Return(&dynamodb.PutItemOutput{}, nil)
+	mockLogger.EXPECT().Debug(gomock.Any())
+	mockMetrics.EXPECT().RecordHistogram(
+		gomock.Any(),
+		"app_dynamodb_duration_ms",
+		gomock.Any(),
+		"table", client.configs.Table,
+		"operation", "SET",
+	)
+
+	require.NoError(t, client.Set(ctx, key, value))
+}
+
+func Test_ClientGetWithTracer(t *testing.T) {
+	deps := setupTest(t)
+	ctx := deps.ctx
+	client := deps.client
+	mockDB := deps.mockDB
+	mockLogger := deps.mockLogger
+	mockMetrics := deps.mockMetrics
+	finish := deps.finish
+
+	defer finish()
+
+	// Add tracer
+	mockTracer := trace.NewNoopTracerProvider().Tracer("test")
+	client.UseTracer(mockTracer)
+
+	key := "test-key"
+	expectedValue := "test-value"
+
+	expectedInput := &dynamodb.GetItemInput{
+		TableName: aws.String("test-table"),
+		Key: map[string]types.AttributeValue{
+			"pk": &types.AttributeValueMemberS{Value: key},
+		},
+	}
+
+	expectedOutput := &dynamodb.GetItemOutput{
+		Item: map[string]types.AttributeValue{
+			"pk":    &types.AttributeValueMemberS{Value: key},
+			"value": &types.AttributeValueMemberS{Value: expectedValue},
+		},
+	}
+
+	mockDB.EXPECT().GetItem(ctx, expectedInput, gomock.Any()).Return(expectedOutput, nil)
+	mockLogger.EXPECT().Debug(gomock.Any())
+	mockMetrics.EXPECT().RecordHistogram(
+		gomock.Any(),
+		"app_dynamodb_duration_ms",
+		gomock.Any(),
+		"table", "test-table",
+		"operation", "GET",
+	)
+
+	result, err := client.Get(ctx, key)
+
+	require.NoError(t, err)
+	assert.Equal(t, expectedValue, result)
 }
