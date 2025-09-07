@@ -1,4 +1,4 @@
-module gofr.dev/pkg/gofr/datasource/kv-store/dynamo
+module gofr.dev/pkg/gofr/datasource/kv-store/dynamodb
 
 go 1.24.4
 

@@ -5,12 +5,10 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"strings"
 	"time"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/config"
-	"github.com/aws/aws-sdk-go-v2/feature/dynamodb/attributevalue"
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb"
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb/types"
 	"go.opentelemetry.io/otel/attribute"
@@ -55,6 +53,7 @@ type Client struct {
 	logger  Logger
 	metrics Metrics
 	tracer  trace.Tracer
+	connected bool
 }
 
 func New(configs Configs) *Client {
@@ -62,7 +61,35 @@ func New(configs Configs) *Client {
 		configs.PartitionKeyName = "pk"
 	}
 
-	return &Client{configs: &configs}
+	return &Client{configs: &configs, connected: false}
+}
+
+// Connect establishes a connection to DynamoDB and registers metrics using the provided configuration.
+func (c *Client) Connect() {
+	c.logger.Debugf("connecting to DynamoDB table %v in region %v", c.configs.Table, c.configs.Region)
+
+	dynamoBuckets := []float64{1, 2, 5, 10, 20, 50, 100, 200, 500, 1000, 2000, 5000}
+	c.metrics.NewHistogram("app_dynamodb_duration_ms", "Response time of DynamoDB queries in milliseconds.", dynamoBuckets...)
+
+	awsCfg, err := config.LoadDefaultConfig(context.Background(), config.WithRegion(c.configs.Region))
+	if err != nil {
+		c.logger.Errorf("error loading AWS config: %v", err)
+		return
+	}
+
+	var opts []func(*dynamodb.Options)
+
+	if c.configs.Endpoint != "" {
+		opts = append(opts, func(o *dynamodb.Options) {
+			o.BaseEndpoint = aws.String(c.configs.Endpoint)
+		})
+	}
+
+	db := dynamodb.NewFromConfig(awsCfg, opts...)
+	c.db = db
+	c.connected = true
+
+	c.logger.Infof("connected to DynamoDB table %v in region %v", c.configs.Table, c.configs.Region)
 }
 
 // UseLogger sets the logger for the Dynamo client which asserts the Logger interface.
@@ -86,37 +113,30 @@ func (c *Client) UseTracer(tracer any) {
 	}
 }
 
-func (c *Client) Connect() error {
-	c.logger.Debugf("connecting to DynamoDB table %v in region %v", c.configs.Table, c.configs.Region)
-
-	dynamoBuckets := []float64{1, 2, 5, 10, 20, 50, 100, 200, 500, 1000, 2000, 5000}
-	c.metrics.NewHistogram("app_dynamodb_duration_ms", "Response time of DynamoDB queries in milliseconds.", dynamoBuckets...)
-
-	awsCfg, err := config.LoadDefaultConfig(context.Background(), config.WithRegion(c.configs.Region))
+// ToJSON converts a Go struct to JSON string for use with KVStore.Set
+func ToJSON(value any) (string, error) {
+	jsonData, err := json.Marshal(value)
 	if err != nil {
-		c.logger.Errorf("error loading AWS config: %v", err)
-		return fmt.Errorf("failed to load AWS config: %w", err)
+		return "", fmt.Errorf("failed to marshal value to JSON: %w", err)
 	}
+	return string(jsonData), nil
+}
 
-	var opts []func(*dynamodb.Options)
-
-	if c.configs.Endpoint != "" {
-		opts = append(opts, func(o *dynamodb.Options) {
-			o.BaseEndpoint = aws.String(c.configs.Endpoint)
-		})
+// FromJSON converts a JSON string to a Go struct for use with KVStore.Get
+func FromJSON(jsonData string, dest any) error {
+	if err := json.Unmarshal([]byte(jsonData), dest); err != nil {
+		return fmt.Errorf("failed to unmarshal JSON: %w", err)
 	}
-
-	db := dynamodb.NewFromConfig(awsCfg, opts...)
-	c.db = db
-
-	c.logger.Infof("connected to DynamoDB table %v in region %v", c.configs.Table, c.configs.Region)
-
 	return nil
 }
 
 func (c *Client) Get(ctx context.Context, key string) (string, error) {
+	if !c.connected {
+		return "", fmt.Errorf("client not connected, call Connect() first")
+	}
+
 	span := c.addTrace(ctx, "get", key)
-	defer c.sendOperationsStats(time.Now(), "GET", span, key)
+	defer c.sendOperationsStats(time.Now(), "GET", "get", span, key)
 
 	input := &dynamodb.GetItemInput{
 		TableName: aws.String(c.configs.Table),
@@ -142,31 +162,19 @@ func (c *Client) Get(ctx context.Context, key string) (string, error) {
 		}
 	}
 
-	// Fallback: marshal the entire item as JSON (excluding partition key)
-	var result map[string]any
-	err = attributevalue.UnmarshalMap(out.Item, &result)
-	if err != nil {
-		c.logger.Errorf("error unmarshalling item for key: %v, error: %v", key, err)
-		return "", err
-	}
-
-	delete(result, c.configs.PartitionKeyName)
-
-	// Convert to JSON string
-	jsonData, err := json.Marshal(result)
-	if err != nil {
-		c.logger.Errorf("error marshaling result to JSON for key: %v, error: %v", key, err)
-		return "", err
-	}
-
-	return string(jsonData), nil
+	// If no "value" field exists, return key not found error
+	return "", fmt.Errorf("key not found: %s", key)
 }
 
 func (c *Client) Set(ctx context.Context, key, value string) error {
-	span := c.addTrace(ctx, "set", key)
-	defer c.sendOperationsStats(time.Now(), "SET", span, key)
+	if !c.connected {
+		return fmt.Errorf("client not connected, call Connect() first")
+	}
 
-	// Store the value as a simple string in the "value" field
+	span := c.addTrace(ctx, "set", key)
+	defer c.sendOperationsStats(time.Now(), "SET", "set", span, key)
+
+	// Store the value as a string in the "value" field
 	item := map[string]types.AttributeValue{
 		c.configs.PartitionKeyName: &types.AttributeValueMemberS{Value: key},
 		"value":                    &types.AttributeValueMemberS{Value: value},
@@ -187,8 +195,12 @@ func (c *Client) Set(ctx context.Context, key, value string) error {
 }
 
 func (c *Client) Delete(ctx context.Context, key string) error {
+	if !c.connected {
+		return fmt.Errorf("client not connected, call Connect() first")
+	}
+
 	span := c.addTrace(ctx, "delete", key)
-	defer c.sendOperationsStats(time.Now(), "DELETE", span, key)
+	defer c.sendOperationsStats(time.Now(), "DELETE", "delete", span, key)
 
 	input := &dynamodb.DeleteItemInput{
 		TableName: aws.String(c.configs.Table),
@@ -214,6 +226,10 @@ type Health struct {
 }
 
 func (c *Client) HealthCheck(ctx context.Context) (any, error) {
+	if !c.connected {
+		return &Health{Status: "DOWN", Details: map[string]any{"error": "client not connected"}}, errStatusDown
+	}
+
 	h := Health{
 		Details: make(map[string]any),
 	}
@@ -235,23 +251,29 @@ func (c *Client) HealthCheck(ctx context.Context) (any, error) {
 	return &h, nil
 }
 
-func (c *Client) sendOperationsStats(start time.Time, methodType string,
-	span trace.Span, kv ...string) {
-	duration := time.Since(start).Microseconds()
+func (c *Client) sendOperationsStats(start time.Time, methodType, method string, span trace.Span, kv ...string) {
+	duration := time.Since(start)
+
+	var key string
+	if len(kv) > 0 {
+		key = kv[0]
+	}
 
 	c.logger.Debug(&Log{
 		Type:     methodType,
-		Duration: duration,
-		Key:      strings.Join(kv, " "),
+		Duration: duration.Microseconds(),
+		Key:      key,
+		Value:    c.configs.Table,
 	})
 
 	if span != nil {
 		defer span.End()
-		span.SetAttributes(attribute.Int64("dynamodb.duration_us", duration))
+		span.SetAttributes(attribute.Int64(fmt.Sprintf("dynamodb.%v.duration(μs)", method), duration.Microseconds()))
 	}
 
-	c.metrics.RecordHistogram(context.Background(), "app_dynamodb_duration_ms", float64(duration), "table", c.configs.Table,
-		"type", methodType)
+	c.metrics.RecordHistogram(context.Background(), "app_dynamodb_duration_ms", float64(duration.Milliseconds()),
+		"table", c.configs.Table,
+		"operation", methodType)
 }
 
 func (c *Client) addTrace(ctx context.Context, method, key string) trace.Span {
