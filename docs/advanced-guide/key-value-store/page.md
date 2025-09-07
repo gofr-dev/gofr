@@ -242,13 +242,26 @@ For local development, you can use DynamoDB Local with Docker:
 # Start DynamoDB Local
 docker run --name dynamodb-local -d -p 8000:8000 amazon/dynamodb-local
 
-# Create a table (optional - can be done programmatically)
+# Create a table
 aws dynamodb create-table \
     --table-name gofr-kv-store \
     --attribute-definitions AttributeName=pk,AttributeType=S \
     --key-schema AttributeName=pk,KeyType=HASH \
     --billing-mode PAY_PER_REQUEST \
-    --endpoint-url http://localhost:8000
+    --endpoint-url http://localhost:8000 \
+    --region us-east-1
+```
+
+### JSON Helper Functions
+
+The DynamoDB package provides helper functions for JSON serialization/deserialization that work with the standard KVStore interface:
+
+```go
+// ToJSON converts any struct to JSON string
+func ToJSON(value any) (string, error)
+
+// FromJSON converts JSON string to struct
+func FromJSON(jsonData string, dest any) error
 ```
 
 ### Example
@@ -257,7 +270,6 @@ aws dynamodb create-table \
 package main
 
 import (
-	"encoding/json"
 	"fmt"
 	"time"
 
@@ -280,21 +292,19 @@ func main() {
 		Table:            "gofr-kv-store",
 		Region:           "us-east-1",
 		Endpoint:         "http://localhost:8000", // For local DynamoDB
-		PartitionKeyName: "pk", // Default is "pk" if not specified
+		PartitionKeyName: "pk",
 	})
 
 	// Connect to DynamoDB
 	db.Connect()
 
-	// Inject the DynamoDB into gofr to use DynamoDB across the application
-	// using gofr context
+	// Inject the DynamoDB into gofr
 	app.AddKVStore(db)
 
 	app.POST("/user", CreateUser)
 	app.GET("/user/{id}", GetUser)
 	app.PUT("/user/{id}", UpdateUser)
 	app.DELETE("/user/{id}", DeleteUser)
-	app.GET("/health", HealthCheck)
 
 	app.Run()
 }
@@ -308,14 +318,14 @@ func CreateUser(ctx *gofr.Context) (any, error) {
 	user.ID = fmt.Sprintf("user_%d", time.Now().UnixNano())
 	user.CreatedAt = time.Now()
 
-	// Serialize user to JSON string
-	userData, err := json.Marshal(user)
+	// Convert struct to JSON string using helper function
+	userData, err := dynamodb.ToJSON(user)
 	if err != nil {
 		return nil, fmt.Errorf("failed to serialize user: %w", err)
 	}
 
-	// Store in DynamoDB
-	if err := ctx.KVStore.Set(ctx, user.ID, string(userData)); err != nil {
+	// Store using standard KVStore interface
+	if err := ctx.KVStore.Set(ctx, user.ID, userData); err != nil {
 		return nil, fmt.Errorf("failed to create user: %w", err)
 	}
 
@@ -328,15 +338,15 @@ func GetUser(ctx *gofr.Context) (any, error) {
 		return nil, fmt.Errorf("user ID is required")
 	}
 
-	// Get user from DynamoDB
+	// Get JSON string from KVStore
 	userData, err := ctx.KVStore.Get(ctx, id)
 	if err != nil {
 		return nil, fmt.Errorf("user not found: %w", err)
 	}
 
-	// Deserialize user from JSON string
+	// Convert JSON string to struct using helper function
 	var user User
-	if err := json.Unmarshal([]byte(userData), &user); err != nil {
+	if err := dynamodb.FromJSON(userData, &user); err != nil {
 		return nil, fmt.Errorf("failed to parse user data: %w", err)
 	}
 
@@ -356,14 +366,14 @@ func UpdateUser(ctx *gofr.Context) (any, error) {
 
 	user.ID = id
 
-	// Serialize user to JSON string
-	userData, err := json.Marshal(user)
+	// Convert struct to JSON string using helper function
+	userData, err := dynamodb.ToJSON(user)
 	if err != nil {
 		return nil, fmt.Errorf("failed to serialize user: %w", err)
 	}
 
-	// Update in DynamoDB
-	if err := ctx.KVStore.Set(ctx, id, string(userData)); err != nil {
+	// Update in DynamoDB using standard KVStore interface
+	if err := ctx.KVStore.Set(ctx, id, userData); err != nil {
 		return nil, fmt.Errorf("failed to update user: %w", err)
 	}
 
@@ -376,62 +386,14 @@ func DeleteUser(ctx *gofr.Context) (any, error) {
 		return nil, fmt.Errorf("user ID is required")
 	}
 
-	// Delete from DynamoDB
+	// Delete from DynamoDB using standard KVStore interface
 	if err := ctx.KVStore.Delete(ctx, id); err != nil {
 		return nil, fmt.Errorf("failed to delete user: %w", err)
 	}
 
 	return map[string]string{"message": "User deleted successfully"}, nil
 }
-
-func HealthCheck(ctx *gofr.Context) (any, error) {
-	// DynamoDB health check is automatically handled by GoFr
-	return map[string]string{"status": "healthy"}, nil
-}
 ```
-
-### JSON Helper Functions
-
-The DynamoDB package provides helper functions for JSON serialization/deserialization that work with the standard KVStore interface:
-
-```go
-// Using helper functions with the standard KVStore interface
-func CreateUser(ctx *gofr.Context) (any, error) {
-    var user User
-    ctx.Bind(&user)
-    
-    // Convert struct to JSON string
-    userData, err := dynamodb.ToJSON(user)
-    if err != nil {
-        return nil, err
-    }
-    
-    // Store using standard KVStore interface
-    ctx.KVStore.Set(ctx, user.ID, userData)
-    
-    return user, nil
-}
-
-func GetUser(ctx *gofr.Context) (any, error) {
-    id := ctx.PathParam("id")
-    
-    // Get JSON string from KVStore
-    userData, err := ctx.KVStore.Get(ctx, id)
-    if err != nil {
-        return nil, err
-    }
-    
-    // Convert JSON string to struct
-    var user User
-    err = dynamodb.FromJSON(userData, &user)
-    if err != nil {
-        return nil, err
-    }
-    
-    return user, nil
-}
-```
-
 
 ### Production Configuration
 
