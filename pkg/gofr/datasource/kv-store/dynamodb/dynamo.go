@@ -15,8 +15,11 @@ import (
 	"go.opentelemetry.io/otel/trace"
 )
 
-var errStatusDown = errors.New("status down")
-var errKeyNotFound = errors.New("key not found")
+var (
+	errClientNotConnected = errors.New("client not connected, call Connect() first")
+	errKeyNotFound        = errors.New("key not found")
+	errStatusDown         = errors.New("status down")
+)
 
 type Configs struct {
 	Table            string
@@ -48,11 +51,11 @@ type dynamoDBInterface interface {
 }
 
 type Client struct {
-	db      dynamoDBInterface
-	configs *Configs
-	logger  Logger
-	metrics Metrics
-	tracer  trace.Tracer
+	db        dynamoDBInterface
+	configs   *Configs
+	logger    Logger
+	metrics   Metrics
+	tracer    trace.Tracer
 	connected bool
 }
 
@@ -113,26 +116,28 @@ func (c *Client) UseTracer(tracer any) {
 	}
 }
 
-// ToJSON converts a Go struct to JSON string for use with KVStore.Set
+// ToJSON converts a Go struct to JSON string for use with KVStore.Set.
 func ToJSON(value any) (string, error) {
 	jsonData, err := json.Marshal(value)
 	if err != nil {
 		return "", fmt.Errorf("failed to marshal value to JSON: %w", err)
 	}
+
 	return string(jsonData), nil
 }
 
-// FromJSON converts a JSON string to a Go struct for use with KVStore.Get
+// FromJSON converts a JSON string to a Go struct for use with KVStore.Get.
 func FromJSON(jsonData string, dest any) error {
 	if err := json.Unmarshal([]byte(jsonData), dest); err != nil {
 		return fmt.Errorf("failed to unmarshal JSON: %w", err)
 	}
+
 	return nil
 }
 
 func (c *Client) Get(ctx context.Context, key string) (string, error) {
 	if !c.connected {
-		return "", fmt.Errorf("client not connected, call Connect() first")
+		return "", errClientNotConnected
 	}
 
 	span := c.addTrace(ctx, "get", key)
@@ -163,12 +168,12 @@ func (c *Client) Get(ctx context.Context, key string) (string, error) {
 	}
 
 	// If no "value" field exists, return key not found error
-	return "", fmt.Errorf("key not found: %s", key)
+	return "", fmt.Errorf("%w: %s", errKeyNotFound, key)
 }
 
 func (c *Client) Set(ctx context.Context, key, value string) error {
 	if !c.connected {
-		return fmt.Errorf("client not connected, call Connect() first")
+		return errClientNotConnected
 	}
 
 	span := c.addTrace(ctx, "set", key)
@@ -196,7 +201,7 @@ func (c *Client) Set(ctx context.Context, key, value string) error {
 
 func (c *Client) Delete(ctx context.Context, key string) error {
 	if !c.connected {
-		return fmt.Errorf("client not connected, call Connect() first")
+		return errClientNotConnected
 	}
 
 	span := c.addTrace(ctx, "delete", key)

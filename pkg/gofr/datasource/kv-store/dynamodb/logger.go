@@ -25,4 +25,3 @@ func (l *Log) PrettyPrint(writer io.Writer) {
 	fmt.Fprintf(writer, "\u001B[38;5;8m%-32s \u001B[38;5;162m%-6s\u001B[0m %8d\u001B[38;5;8mµs\u001B[0m %s \n",
 		l.Type, "DYNMO", l.Duration, l.Key+" "+l.Value)
 }
-
