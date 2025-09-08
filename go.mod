@@ -36,6 +36,7 @@ require (
 	go.opentelemetry.io/otel/sdk/metric v1.37.0
 	go.opentelemetry.io/otel/trace v1.37.0
 	go.uber.org/mock v0.6.0
+	gofr.dev/pkg/cache v0.0.0-00010101000000-000000000000
 	golang.org/x/oauth2 v0.30.0
 	golang.org/x/sync v0.16.0
 	golang.org/x/term v0.34.0
@@ -45,6 +46,8 @@ require (
 	google.golang.org/protobuf v1.36.7
 	modernc.org/sqlite v1.38.2
 )
+
+replace gofr.dev/pkg/cache => ./pkg/cache
 
 require (
 	cloud.google.com/go v0.120.0 // indirect
