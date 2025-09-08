@@ -69,7 +69,8 @@ func (e *EnvLoader) read(folder string) {
 		e.logger.Infof("Loaded config from file: %v", overrideFile)
 	}
 
-	// Reload system environment variables to ensure they override any previously loaded values
+	// Reload system environment variables to ensure they take precedence over values loaded from files.
+	// This is required because Overload replaces the original system variables, which we need to restore.
 	for key, envVar := range initialEnv {
 		os.Setenv(key, envVar)
 	}
