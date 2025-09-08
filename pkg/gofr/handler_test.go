@@ -85,7 +85,7 @@ func TestHandler_ServeHTTP_Timeout(t *testing.T) {
 
 	h.ServeHTTP(w, r)
 
-	assert.Equal(t, http.StatusRequestTimeout, w.Code, "TestHandler_ServeHTTP_Timeout Failed")
+	assert.Equal(t, http.StatusGatewayTimeout, w.Code, "TestHandler_ServeHTTP_Timeout Failed")
 	assert.Contains(t, w.Body.String(), "request timed out", "TestHandler_ServeHTTP_Timeout Failed")
 }
 
