@@ -93,8 +93,8 @@ func (*EnvLoader) captureInitialEnv() map[string]bool {
 }
 
 // overloadEnvFile loads and applies environment variables from a file, similar to godotenv.Overload
-// but with better control over the application process and respect for system environment precedence
-func (e *EnvLoader) overloadEnvFile(filePath string, initialEnv map[string]bool) error {
+// but with better control over the application process and respect for system environment precedence.
+func (*EnvLoader) overloadEnvFile(filePath string, initialEnv map[string]bool) error {
 	content, err := godotenv.Read(filePath)
 	if err != nil {
 		return err
