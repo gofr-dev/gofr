@@ -40,7 +40,7 @@ func (e *EnvLoader) read(folder string) {
 		env          = e.Get("APP_ENV")
 	)
 
-	// Capture initial system environment before any file loading
+	// Only Capture initial system environment before any file loading
 	initialEnv := e.captureInitialEnv()
 
 	err := godotenv.Load(defaultFile)
@@ -72,21 +72,20 @@ func (e *EnvLoader) read(folder string) {
 	}
 
 	// Reload system environment variables to ensure they override any previously loaded values
-	for _, envVar := range os.Environ() {
-		key, value, found := strings.Cut(envVar, "=")
-		if found {
-			os.Setenv(key, value)
-		}
+	for key, envVar := range initialEnv {
+		os.Setenv(key, envVar)
 	}
 }
 
 // captureInitialEnv captures the initial system environment keys.
-func (*EnvLoader) captureInitialEnv() map[string]bool {
-	initialEnv := make(map[string]bool)
+func (*EnvLoader) captureInitialEnv() map[string]string {
+	initialEnv := make(map[string]string)
 
 	for _, envVar := range os.Environ() {
-		key, _, _ := strings.Cut(envVar, "=")
-		initialEnv[key] = true
+		key, value, found := strings.Cut(envVar, "=")
+		if found {
+			initialEnv[key] = value
+		}
 	}
 
 	return initialEnv
@@ -94,7 +93,7 @@ func (*EnvLoader) captureInitialEnv() map[string]bool {
 
 // overloadEnvFile loads and applies environment variables from a file, similar to godotenv.Overload
 // but with better control over the application process and respect for system environment precedence.
-func (*EnvLoader) overloadEnvFile(filePath string, initialEnv map[string]bool) error {
+func (*EnvLoader) overloadEnvFile(filePath string, initialEnv map[string]string) error {
 	content, err := godotenv.Read(filePath)
 	if err != nil {
 		return err
@@ -102,7 +101,8 @@ func (*EnvLoader) overloadEnvFile(filePath string, initialEnv map[string]bool) e
 
 	// Apply the environment variables from the file only if they're not already set in system environment
 	for key, value := range content {
-		if !initialEnv[key] {
+		_, found := initialEnv[key]
+		if !found {
 			os.Setenv(key, value)
 		}
 	}
