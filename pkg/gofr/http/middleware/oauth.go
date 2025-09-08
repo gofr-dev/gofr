@@ -218,13 +218,18 @@ type OAuthProvider struct {
 
 // NewOAuthProvider generates a OAuthProvider for the given OauthConfigs and jwt.ParserOption.
 func NewOAuthProvider(config OauthConfigs, options ...jwt.ParserOption) (AuthProvider, error) {
-	function, err := getPublicKeyFunc(NewOAuth(config))
-	if err != nil {
-		return nil, err
+	// Validate configuration before proceeding
+	if config.Provider == nil {
+		return nil, errEmptyProvider
 	}
 
 	if config.RefreshInterval <= time.Second {
 		return nil, errInvalidInterval
+	}
+
+	function, err := getPublicKeyFunc(NewOAuth(config))
+	if err != nil {
+		return nil, err
 	}
 
 	return &OAuthProvider{
