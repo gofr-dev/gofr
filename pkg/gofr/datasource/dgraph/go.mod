@@ -1,8 +1,6 @@
 module gofr.dev/pkg/gofr/datasource/dgraph
 
-go 1.23.0
-
-toolchain go1.24.1
+go 1.25
 
 require (
 	github.com/dgraph-io/dgo/v210 v210.0.0-20230328113526-b66f8ae53a2d
