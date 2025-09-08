@@ -10,16 +10,17 @@ on:
     branches:
       - main
       - development
-      - update/go@v1.25
     paths-ignore:
       - 'docs/**'  # Ignore changes to docs folder
+      - '**/*.md'
   # Run on pull requests to main or development branches
   pull_request:
     branches:
       - main
       - development
     paths-ignore:
-      - 'docs/**'  # Ignore changes to docs folder
+      - 'docs/**'# Ignore changes to docs folder
+      - '**/*.md'
 
 # Define the jobs that this workflow will run
 jobs:
