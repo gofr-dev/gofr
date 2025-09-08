@@ -19,6 +19,7 @@ import (
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"go.uber.org/mock/gomock"
 
 	"gofr.dev/pkg/gofr/service"
 )
@@ -87,6 +88,9 @@ func TestOAuthProvider_extractAuthHeader(t *testing.T) {
 }
 
 func Test_NewOAuthProvider(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
 	testCases := []struct {
 		jwks            JWKSProvider
 		interval        time.Duration
@@ -96,10 +100,10 @@ func Test_NewOAuthProvider(t *testing.T) {
 	}{
 		{err: errEmptyProvider},
 		{interval: 10 * time.Second, err: errEmptyProvider},
-		{jwks: &service.MockHTTP{}, interval: 0 * time.Second, err: errInvalidInterval},
-		{jwks: &service.MockHTTP{}, interval: -2 * time.Second, err: errInvalidInterval},
-		{jwks: &service.MockHTTP{}, interval: 10, err: errInvalidInterval},
-		{jwks: &service.MockHTTP{}, interval: 10 * time.Second, expectedOptions: 1},
+		{jwks: service.NewMockHTTP(ctrl), interval: 0 * time.Second, err: errInvalidInterval},
+		{jwks: service.NewMockHTTP(ctrl), interval: -2 * time.Second, err: errInvalidInterval},
+		{jwks: service.NewMockHTTP(ctrl), interval: 10, err: errInvalidInterval},
+		{jwks: service.NewMockHTTP(ctrl), interval: 10 * time.Second, expectedOptions: 1},
 	}
 
 	for i, testCase := range testCases {
@@ -107,7 +111,19 @@ func Test_NewOAuthProvider(t *testing.T) {
 			config := OauthConfigs{
 				Provider:        testCase.jwks,
 				RefreshInterval: testCase.interval,
+				Path:            "/.well-known/jwks.json", // Set a default path
 			}
+
+			// Set up mock expectations for successful cases
+			if testCase.err == nil && testCase.jwks != nil {
+				mockHTTP := testCase.jwks.(*service.MockHTTP)
+				mockHTTP.EXPECT().GetWithHeaders(gomock.Any(), "/.well-known/jwks.json", nil, nil).
+					Return(&http.Response{
+						StatusCode: http.StatusOK,
+						Body:       http.NoBody,
+					}, nil).AnyTimes()
+			}
+
 			response, err := NewOAuthProvider(config, testCase.options...)
 			assert.Equal(t, testCase.err, err)
 
@@ -265,10 +281,11 @@ func Test_getPublicKeyFunc(t *testing.T) {
 		provider PublicKeyProvider
 		response any
 		err      error
+		funcErr  error
 	}{
 		{err: errEmptyProvider},
 		{provider: validPublicKeyProvider{}, response: &rsa.PublicKey{N: big.NewInt(65537), E: 65537}},
-		{provider: emptyPublicKeyProvider{}, err: JWKNotFound{}},
+		{provider: emptyPublicKeyProvider{}, response: nil, funcErr: JWKNotFound{}},
 	}
 	for i, tc := range testCases {
 		t.Run(strconv.Itoa(i), func(t *testing.T) {
@@ -279,9 +296,20 @@ func Test_getPublicKeyFunc(t *testing.T) {
 				return
 			}
 
-			response, err := function(&jwt.Token{})
+			// Create a token with a kid header for the emptyPublicKeyProvider test
+			token := &jwt.Token{}
+			if i == 2 { // Test case 2 is emptyPublicKeyProvider
+				token.Header = map[string]any{"kid": "test-key-id"}
+			}
+
+			response, err := function(token)
 			assert.Equal(t, tc.response, response)
-			assert.Equal(t, tc.err, err)
+
+			if tc.funcErr != nil {
+				assert.Equal(t, tc.funcErr, err)
+			} else {
+				assert.Equal(t, tc.err, err)
+			}
 		})
 	}
 }
