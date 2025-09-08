@@ -60,9 +60,7 @@ func (e *EnvLoader) read(folder string) {
 		overrideFile = fmt.Sprintf("%s/.%s.env", folder, env)
 	}
 
-	// Use Read + manual application instead of Overload
-	// but only apply if the variable is not already set in system environment
-	err = e.overloadEnvFile(overrideFile, initialEnv)
+	err = godotenv.Overload(overrideFile)
 	if err != nil {
 		if !errors.Is(err, fs.ErrNotExist) {
 			e.logger.Fatalf("Failed to load config from file: %v, Err: %v", overrideFile, err)
@@ -89,25 +87,6 @@ func (*EnvLoader) captureInitialEnv() map[string]string {
 	}
 
 	return initialEnv
-}
-
-// overloadEnvFile loads and applies environment variables from a file, similar to godotenv.Overload
-// but with better control over the application process and respect for system environment precedence.
-func (*EnvLoader) overloadEnvFile(filePath string, initialEnv map[string]string) error {
-	content, err := godotenv.Read(filePath)
-	if err != nil {
-		return err
-	}
-
-	// Apply the environment variables from the file only if they're not already set in system environment
-	for key, value := range content {
-		_, found := initialEnv[key]
-		if !found {
-			os.Setenv(key, value)
-		}
-	}
-
-	return nil
 }
 
 func (*EnvLoader) Get(key string) string {
