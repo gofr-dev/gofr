@@ -41,14 +41,15 @@ func Test_EnvSuccess(t *testing.T) {
 
 	env := NewEnvFile(dir, logger)
 
-	assert.Equal(t, "localhost:5432", env.Get("DB_URL"), "TEST Failed.\n godotenv success")
-	assert.Equal(t, "your_api_key_here", env.GetOrDefault("API_KEY", "xyz"), "TEST Failed.\n godotenv success")
-	assert.Equal(t, "test", env.GetOrDefault("DATABASE", "test"), "TEST Failed.\n godotenv success")
-	assert.Equal(t, "small_case_value", env.Get("small_case"), "TEST Failed.\n godotenv success")
+	assert.Equal(t, "localhost:5432", env.Get("DB_URL"))
+	assert.Equal(t, "your_api_key_here", env.GetOrDefault("API_KEY", "xyz"))
+	assert.Equal(t, "test", env.GetOrDefault("DATABASE", "test"))
+	assert.Equal(t, "small_case_value", env.Get("small_case"))
 }
 
 func Test_EnvSuccess_AppEnv_Override(t *testing.T) {
 	clearAllEnv()
+
 	t.Setenv("APP_ENV", "prod")
 
 	envData := map[string]string{
@@ -118,6 +119,8 @@ func Test_EnvSuccess_SystemEnv_Override(t *testing.T) {
 }
 
 func Test_EnvFailureWithHyphen(t *testing.T) {
+	clearAllEnv()
+
 	envData := map[string]string{
 		"KEY-WITH-HYPHEN": "DASH-VALUE",
 		"UNABLE_TO_LOAD":  "VALUE",
