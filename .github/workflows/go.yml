@@ -10,16 +10,17 @@ on:
     branches:
       - main
       - development
-      - update/go@v1.25
     paths-ignore:
       - 'docs/**'  # Ignore changes to docs folder
+      - '**/*.md'
   # Run on pull requests to main or development branches
   pull_request:
     branches:
       - main
       - development
     paths-ignore:
-      - 'docs/**'  # Ignore changes to docs folder
+      - 'docs/**'# Ignore changes to docs folder
+      - '**/*.md'
 
 # Define the jobs that this workflow will run
 jobs:
@@ -147,15 +148,39 @@ jobs:
         with:
           timeout_minutes: 5
           max_attempts: 2
+          retry_on: error
           command: |
             export APP_ENV=test
-            # Run tests with coverage for root gofr package only
-            go test -v -short -covermode=atomic -coverpkg=./pkg/gofr -coverprofile=gofr_only.cov ./pkg/gofr
-            # Run tests for all sub-packages under gofr
-            go test -v -covermode=atomic -coverpkg=./pkg/gofr -coverprofile=submodules.cov ./pkg/gofr/...
+
+            # Run tests for root gofr package
+            go test -v -short -covermode=atomic \
+              -coverpkg=./pkg/gofr -coverprofile=gofr_only.cov ./pkg/gofr
+            exit_code=$?
+            if [ $exit_code -eq 2 ]; then
+              echo "::error::Panic detected in root gofr package tests"
+              exit 2
+            elif [ $exit_code -ne 0 ]; then
+              echo "::error::Root gofr package tests failed"
+              exit $exit_code
+            fi
+
+            # Run tests for sub-packages
+            go test -v -covermode=atomic \
+              -coverpkg=./pkg/gofr -coverprofile=submodules.cov ./pkg/gofr/...
+            exit_code=$?
+            if [ $exit_code -eq 2 ]; then
+              echo "::error::Panic detected in gofr sub-packages tests"
+              exit 2
+            elif [ $exit_code -ne 0 ]; then
+              echo "::error::Gofr sub-packages tests failed"
+              exit $exit_code
+            fi
+
             # Combine coverage profiles
             echo "mode: atomic" > profile.cov
             grep -h -v "mode:" gofr_only.cov submodules.cov | grep -v '/mock_' >> profile.cov
+
+            # Show coverage summary
             go tool cover -func profile.cov
 
       # Upload coverage report for the 1.24 Go version only
@@ -265,7 +290,7 @@ jobs:
             
               # Copy coverage file to the coverage_reports directory
               cp ${module_name}.cov ../../../coverage_reports/
-              
+            
               cd -
             '
 
