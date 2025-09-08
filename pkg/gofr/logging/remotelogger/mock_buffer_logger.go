@@ -8,6 +8,9 @@ import (
 )
 
 // testBufferLogger is a simple logger that writes to a buffer.
+// It's primarily used in dynamic_level_logger_test.go for testing HTTPLogFilter and other log-related functionality,
+// where direct capture of stdout would be insufficient.
+// Unlike testutil.StdoutOutputForFunc, this logger provides isolation for component-specific testing and respects the logging levels.
 type testBufferLogger struct {
 	buf   *strings.Builder
 	level logging.Level
