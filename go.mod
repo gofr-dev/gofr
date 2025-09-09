@@ -37,9 +37,9 @@ require (
 	go.opentelemetry.io/otel/trace v1.38.0
 	go.uber.org/mock v0.6.0
 	golang.org/x/oauth2 v0.30.0
-	golang.org/x/sync v0.16.0
+	golang.org/x/sync v0.17.0
 	golang.org/x/term v0.34.0
-	golang.org/x/text v0.28.0
+	golang.org/x/text v0.29.0
 	google.golang.org/api v0.249.0
 	google.golang.org/grpc v1.75.0
 	google.golang.org/protobuf v1.36.8
