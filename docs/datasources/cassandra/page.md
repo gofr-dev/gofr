@@ -1,4 +1,5 @@
 # Cassandra
+GoFr supports pluggable Cassandra drivers. 
 
 ## Configuration
 
@@ -11,7 +12,7 @@
 
 ## Setup
 
-GoFr supports pluggable Cassandra drivers. It defines an interface that specifies the required methods for interacting
+GoFr defines an interface that specifies the required methods for interacting
 with Cassandra. Any driver implementation that adheres to this interface can be integrated into GoFr using the
 `app.AddCassandra()` method. This approach promotes flexibility and allows you to choose the Cassandra driver that best
 suits your project's needs.
