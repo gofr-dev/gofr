@@ -218,7 +218,7 @@ func logStreamRPC(ctx context.Context, logger Logger, metrics Metrics, start tim
 
 	if err != nil {
 		statusErr, _ := status.FromError(err)
-		//nolint:gosec //errorcode is garenteed to be in safe range
+		//nolint:gosec //errorcode is guaranteed to be in safe range
 		logEntry.StatusCode = int32(statusErr.Code())
 	} else {
 		logEntry.StatusCode = int32(codes.OK)
