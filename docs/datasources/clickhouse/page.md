@@ -1,7 +1,7 @@
 # ClickHouse
 
 ## Configuration
-To connect to `ClickHouse`, you need to provide the following environment variables:
+To connect to `ClickHouse`, you need to provide the following environment variables and use it:
 - `HOSTS`: The hostname or IP address of your `ClickHouse` server.
 - `USERNAME`: The username for connecting to the database.
 - `PASSWORD`: The password for the specified user.
