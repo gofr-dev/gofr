@@ -172,14 +172,14 @@ func TestGetMetadataValue(t *testing.T) {
 }
 
 func TestGetTraceID(t *testing.T) {
-	assert.Empty(t, getTraceID(context.TODO()))
-	assert.Equal(t, "00000000000000000000000000000000", getTraceID(context.Background()))
+	assert.Equal(t, "00000000000000000000000000000000", getTraceID(t.Context()))
+	assert.Equal(t, "00000000000000000000000000000000", getTraceID(context.TODO()))
 }
 
 func TestWrappedServerStream_Context(t *testing.T) {
 	type contextKey string
 
-	originalCtx := context.Background()
+	originalCtx := t.Context()
 	newCtx := context.WithValue(originalCtx, contextKey("key"), "value")
 	wrapped := &wrappedServerStream{
 		ctx: newCtx,
