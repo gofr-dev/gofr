@@ -2,7 +2,7 @@
 
 
 
-## Configuration
+### Configuration
 
 To connect to ArangoDB, you need to provide the following environment variables:
 - **HOST**: The hostname or IP address of your ArangoDB server.
@@ -10,7 +10,7 @@ To connect to ArangoDB, you need to provide the following environment variables:
 - **PASSWORD**: The password for the specified user.
 - **PORT**: The port number
 
-## Setup
+### Setup
 
 GoFr supports injecting `ArangoDB` that implements the following interface. Any driver that implements the interface can be
 added using the `app.AddArangoDB()` method, and users can use ArangoDB across the application with `gofr.Context`.
