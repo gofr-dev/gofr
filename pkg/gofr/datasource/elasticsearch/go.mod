@@ -1,13 +1,13 @@
 module gofr.dev/pkg/gofr/datasource/elasticsearch
 
-go 1.24.0
+go 1.25
 
 require (
 	github.com/elastic/go-elasticsearch/v8 v8.18.1
-	github.com/stretchr/testify v1.10.0
+	github.com/stretchr/testify v1.11.0
 	go.opentelemetry.io/otel v1.37.0
 	go.opentelemetry.io/otel/trace v1.37.0
-	go.uber.org/mock v0.5.2
+	go.uber.org/mock v0.6.0
 )
 
 require (
