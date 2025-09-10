@@ -6,9 +6,9 @@
 
 To connect to ArangoDB, you need to provide the following environment variables:
 - `HOST`: The hostname or IP address of your ArangoDB server.
-- `**USER**`: The username for connecting to the database.
-- `**PASSWORD**`: The password for the specified user.
-- `**PORT**`: The port number
+- `USER`: The username for connecting to the database.
+- `PASSWORD`: The password for the specified user.
+- `PORT`: The port number
 
 ## Setup
 
