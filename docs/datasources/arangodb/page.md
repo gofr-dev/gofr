@@ -5,7 +5,7 @@ added using the `app.AddArangoDB()` method, and users can use ArangoDB across th
 
 ## Configuration
 
-To connect to CockroachDB, you need to provide the following environment variables:
+To connect to ArangoDB, you need to provide the following environment variables:
 - **HOST**: The hostname or IP address of your ArangoDB server.
 - **USER**: The username for connecting to the database.
 - **PASSWORD**: The password for the specified user.
