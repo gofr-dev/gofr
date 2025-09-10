@@ -1,7 +1,6 @@
 # ArangoDB
 
-GoFr supports injecting `ArangoDB` that implements the following interface. Any driver that implements the interface can be
-added using the `app.AddArangoDB()` method, and users can use ArangoDB across the application with `gofr.Context`.
+
 
 ## Configuration
 
@@ -11,8 +10,10 @@ To connect to ArangoDB, you need to provide the following environment variables:
 - **PASSWORD**: The password for the specified user.
 - **PORT**: The port number
 
+## Setup
 
-
+GoFr supports injecting `ArangoDB` that implements the following interface. Any driver that implements the interface can be
+added using the `app.AddArangoDB()` method, and users can use ArangoDB across the application with `gofr.Context`.
 
 ```go
 type ArangoDB interface {
