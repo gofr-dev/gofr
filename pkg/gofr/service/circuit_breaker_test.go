@@ -592,6 +592,14 @@ func (m *mockMetrics) RecordHistogram(ctx context.Context, name string, value fl
 	m.Called(ctx, name, value, labels)
 }
 
+func (m *mockMetrics) IncrementCounter(ctx context.Context, name string, labels ...string) {
+	m.Called(ctx, name, labels)
+}
+
+func (m *mockMetrics) SetGauge(name string, value float64, labels ...string) {
+	m.Called(name, value, labels)
+}
+
 type customTransport struct {
 }
 

@@ -8,6 +8,7 @@ import (
 
 type Logger interface {
 	Log(args ...any)
+	Debug(args ...any)
 }
 
 type Log struct {

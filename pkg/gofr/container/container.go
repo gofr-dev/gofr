@@ -259,6 +259,9 @@ func (c *Container) registerFrameworkMetrics() {
 		httpBuckets := []float64{.001, .003, .005, .01, .02, .03, .05, .1, .2, .3, .5, .75, 1, 2, 3, 5, 10, 30}
 		c.Metrics().NewHistogram("app_http_response", "Response time of HTTP requests in seconds.", httpBuckets...)
 		c.Metrics().NewHistogram("app_http_service_response", "Response time of HTTP service requests in seconds.", httpBuckets...)
+		c.Metrics().NewCounter("app_rate_limiter_requests_total", "Total rate limiter requests")
+		c.Metrics().NewCounter("app_rate_limiter_denied_total", "Total denied requests")
+		c.Metrics().NewGauge("app_rate_limiter_tokens_available", "Current tokens available")
 	}
 
 	{ // Redis metrics
