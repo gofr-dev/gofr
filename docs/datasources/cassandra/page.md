@@ -1,9 +1,21 @@
-## Cassandra
+# Cassandra
+
+## Configuration
+
+- `HOSTS`: The hostname or IP address of your `Cassandra` server.
+- `KEYSPACE`: The name of the keyspace (like a database) that holds your tables and defines replication and durability settings.
+- `PORT`: The port number
+- `USERNAME`: The username for connecting to the database.
+- `PASSWORD`: The password for the specified user.
+
+
+## Setup
 
 GoFr supports pluggable Cassandra drivers. It defines an interface that specifies the required methods for interacting
 with Cassandra. Any driver implementation that adheres to this interface can be integrated into GoFr using the
 `app.AddCassandra()` method. This approach promotes flexibility and allows you to choose the Cassandra driver that best
 suits your project's needs.
+
 
 ```go
 type CassandraWithContext interface {
