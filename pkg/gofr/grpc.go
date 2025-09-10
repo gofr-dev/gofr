@@ -130,7 +130,7 @@ func (g *grpcServer) createServer() error {
 	}
 
 	enabled := strings.ToLower(g.config.GetOrDefault("GRPC_ENABLE_REFLECTION", "false"))
-	if enabled == defaultTelemetry {
+	if enabled == "true" {
 		reflection.Register(g.server)
 	}
 
