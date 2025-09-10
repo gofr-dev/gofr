@@ -110,7 +110,6 @@ func (rl *distributedRateLimiter) checkRateLimit(req *http.Request) error {
 		return nil // Fail open
 	}
 
-	// ✅ FIX: Safe result parsing
 	resultArray, ok := result.([]any)
 	if !ok || len(resultArray) != 2 {
 		rl.logger.Log("Invalid Redis response format, allowing request")
@@ -129,7 +128,6 @@ func (rl *distributedRateLimiter) checkRateLimit(req *http.Request) error {
 		return nil
 	}
 
-	// ✅ FIX: Record metrics for distributed limiter
 	if rl.metrics != nil {
 		rl.metrics.IncrementCounter(context.Background(), "app_rate_limiter_requests_total", "service", serviceKey)
 

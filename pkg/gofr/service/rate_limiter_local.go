@@ -64,12 +64,11 @@ func NewLocalRateLimiter(config RateLimiterConfig, h HTTP) HTTP {
 func newTokenBucket(maxTokens int, refillRate float64) *tokenBucket {
 	maxScaled := int64(maxTokens) * scale
 
-	// ✅ FIX: Calculate tokens per nanosecond with float64 precision
 	refillPerNanoFloat := refillRate * float64(scale) / float64(time.Second)
 
 	return &tokenBucket{
 		tokens:           maxScaled,
-		fractionalTokens: 0.0, // ✅ FIX: Initialize fractional accumulator
+		fractionalTokens: 0.0,
 		lastRefillTime:   time.Now().UnixNano(),
 		maxTokens:        maxScaled,
 		refillPerNano:    refillPerNanoFloat,
@@ -77,7 +76,7 @@ func newTokenBucket(maxTokens int, refillRate float64) *tokenBucket {
 }
 
 // allow with enhanced precision and metrics.
-func (tb *tokenBucket) allow(ctx context.Context, metrics Metrics, serviceKey string) (bool, time.Duration) {
+func (tb *tokenBucket) allow() (allowed bool, waitTime time.Duration, tokensRemaining int64) {
 	start := time.Now()
 
 	for attempt := 0; attempt < maxCASAttempts && time.Since(start) < maxCASTime; attempt++ {
@@ -87,20 +86,18 @@ func (tb *tokenBucket) allow(ctx context.Context, metrics Metrics, serviceKey st
 		if newTokens < scale {
 			retry := tb.calculateRetry(newTokens)
 			tb.advanceTime(now)
-			tb.recordDenied(ctx, metrics, serviceKey)
 
-			return false, retry
+			return false, retry, newTokens
 		}
 
 		if tb.consumeToken(newTokens, now) {
-			tb.recordSuccess(ctx, metrics, serviceKey, newTokens-scale)
-			return true, 0
+			return true, 0, newTokens - scale
 		}
 
 		tb.backoff(attempt)
 	}
 
-	return false, time.Second
+	return false, time.Second, 0
 }
 
 func (tb *tokenBucket) refillTokens(now int64) int64 {
@@ -159,22 +156,6 @@ func (tb *tokenBucket) consumeToken(tokens, now int64) bool {
 	return false
 }
 
-func (*tokenBucket) recordDenied(ctx context.Context, metrics Metrics, serviceKey string) {
-	if metrics != nil {
-		metrics.IncrementCounter(ctx, "app_rate_limiter_denied_total", "service", serviceKey)
-	}
-}
-
-func (*tokenBucket) recordSuccess(ctx context.Context, metrics Metrics, serviceKey string, remaining int64) {
-	if metrics != nil {
-		metrics.IncrementCounter(ctx, "app_rate_limiter_requests_total", "service", serviceKey)
-
-		availableTokens := float64(remaining) / float64(scale)
-
-		metrics.SetGauge("app_rate_limiter_tokens_available", availableTokens, "service", serviceKey)
-	}
-}
-
 func (*tokenBucket) backoff(attempt int) {
 	if attempt < backoffAttemptThreshold {
 		runtime.Gosched()
@@ -185,7 +166,6 @@ func (*tokenBucket) backoff(attempt int) {
 
 // checkRateLimit with custom keying support.
 func (rl *localRateLimiter) checkRateLimit(req *http.Request) error {
-	// ✅ FIX: Use configurable KeyFunc for custom keying
 	serviceKey := rl.config.KeyFunc(req)
 	now := time.Now().Unix()
 
@@ -197,9 +177,12 @@ func (rl *localRateLimiter) checkRateLimit(req *http.Request) error {
 	bucketEntry := entry.(*bucketEntry)
 	atomic.StoreInt64(&bucketEntry.lastAccess, now)
 
-	allowed, retryAfter := bucketEntry.bucket.allow(context.Background(), rl.metrics, serviceKey)
+	allowed, retryAfter, tokensRemaining := bucketEntry.bucket.allow()
+
+	tokensAvailable := float64(tokensRemaining) / float64(scale)
+	rl.updateRateLimiterMetrics(context.Background(), serviceKey, allowed, tokensAvailable)
+
 	if !allowed {
-		// ✅ FIX: Debug level to prevent log spam
 		rl.logger.Debug("Rate limit exceeded",
 			"service", serviceKey,
 			"rate", rl.config.RequestsPerSecond,
