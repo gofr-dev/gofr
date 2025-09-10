@@ -1,5 +1,14 @@
-## ClickHouse
+# ClickHouse
 
+## Configuration
+To connect to `ClickHouse`, you need to provide the following environment variables:
+- `HOSTS`: The hostname or IP address of your `ClickHouse` server.
+- `USERNAME`: The username for connecting to the database.
+- `PASSWORD`: The password for the specified user.
+- `DATABASE`: The name of the database to connect to.
+
+
+## Setup
 GoFr supports injecting ClickHouse that supports the following interface. Any driver that implements the interface can be added
 using `app.AddClickhouse()` method, and user's can use ClickHouse across application with `gofr.Context`.
 ```go
