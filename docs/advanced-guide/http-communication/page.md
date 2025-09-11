@@ -95,10 +95,13 @@ GoFr provides its user with additional configurational options while registering
 - **DefaultHeaders** - This option allows user to set some default headers that will be propagated to the downstream HTTP Service every time it is being called.
 - **HealthConfig** - This option allows user to add the `HealthEndpoint` along with `Timeout` to enable and perform the timely health checks for downstream HTTP Service.
 - **RetryConfig** - This option allows user to add the maximum number of retry count if before returning error if any downstream HTTP Service fails.
+- **RateLimiterConfig** -  This option allows user to configure rate limiting for downstream service calls using token bucket algorithm. It controls the request rate to prevent overwhelming dependent services and supports both in-memory and Redis-based implementations.
 
 #### Usage:
 
 ```go
+rc := redis.NewClient(cfg, a.Logger(), a.Metrics())
+
 a.AddHTTPService("cat-facts", "https://catfact.ninja",
 	service.NewAPIKeyConfig("some-random-key"),
 	service.NewBasicAuthConfig("username", "password"),
@@ -119,5 +122,11 @@ a.AddHTTPService("cat-facts", "https://catfact.ninja",
   &service.RetryConfig{
       MaxRetries: 5
   },
+  
+  &service.RateLimiterConfig{
+      Rate:      5,
+      Burst:     10,
+      RedisClient: rc, // if RedisClient is nil, in-memory rate limiter will be used
+    },
 )
 ```
