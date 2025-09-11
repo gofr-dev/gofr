@@ -30,21 +30,30 @@ if tokens == nil then
 end
 
 -- Refill tokens
-local delta = math.max(0, now - last_refill)
+local delta = math.max(0, (now - last_refill)/1e9)
 local new_tokens = math.min(burst, tokens + delta * refill_rate)
 
--- Try to consume one token
-if new_tokens < 1 then
-  -- not enough tokens
-  redis.call("HMSET", key, "tokens", new_tokens, "last_refill", now)
-  redis.call("EXPIRE", key, 600)
-  return 0
+local allowed = 0
+local retryAfter = 0
+
+if new_tokens >= 1 then
+  allowed = 1
+  new_tokens = new_tokens - 1
 else
-  redis.call("HMSET", key, "tokens", new_tokens - 1, "last_refill", now)
-  redis.call("EXPIRE", key, 600)
-  return 1
+  retryAfter = math.ceil((1 - new_tokens) / refill_rate * 1000) -- ms
 end
+
+redis.call("HSET", key, "tokens", new_tokens, "last_refill", now)
+redis.call("EXPIRE", key, 600)
+
+return {allowed, retryAfter}
 `
+
+// DistributedRateLimiter implements Redis-based distributed rate limiting using Token Bucket algorithm.
+// Strategy: Token Bucket with Redis Lua scripts for atomic operations
+// - Suitable for: Multi-instance production deployments
+// - Benefits: True distributed limiting across all service instances
+// - Performance: Single Redis call per rate limit check with atomic Lua execution
 
 // distributedRateLimiter with metrics support.
 type distributedRateLimiter struct {
@@ -116,17 +125,8 @@ func (rl *distributedRateLimiter) checkRateLimit(req *http.Request) error {
 		return nil // Fail open
 	}
 
-	allowed, err := toInt64(resultArray[0])
-	if err != nil {
-		rl.logger.Log("Invalid Redis allowed value, allowing request", "error", err)
-		return nil
-	}
-
-	retryAfterMs, err := toInt64(resultArray[1])
-	if err != nil {
-		rl.logger.Log("Invalid Redis retry-after value, allowing request", "error", err)
-		return nil
-	}
+	allowed, _ := toInt64(resultArray[0])
+	retryAfterMs, _ := toInt64(resultArray[1])
 
 	if rl.metrics != nil {
 		rl.metrics.IncrementCounter(context.Background(), "app_rate_limiter_requests_total", "service", serviceKey)
@@ -154,7 +154,8 @@ func (rl *distributedRateLimiter) checkRateLimit(req *http.Request) error {
 // GetWithHeaders performs rate-limited HTTP GET request with custom headers.
 func (rl *distributedRateLimiter) GetWithHeaders(ctx context.Context, path string, queryParams map[string]any,
 	headers map[string]string) (*http.Response, error) {
-	req, _ := http.NewRequestWithContext(ctx, http.MethodGet, path, http.NoBody)
+	fullURL := buildFullURL(path, rl.HTTP)
+	req, _ := http.NewRequestWithContext(ctx, http.MethodGet, fullURL, http.NoBody)
 
 	if err := rl.checkRateLimit(req); err != nil {
 		return nil, err
@@ -166,7 +167,8 @@ func (rl *distributedRateLimiter) GetWithHeaders(ctx context.Context, path strin
 // PostWithHeaders performs rate-limited HTTP POST request with custom headers.
 func (rl *distributedRateLimiter) PostWithHeaders(ctx context.Context, path string, queryParams map[string]any,
 	body []byte, headers map[string]string) (*http.Response, error) {
-	req, _ := http.NewRequestWithContext(ctx, http.MethodPost, path, http.NoBody)
+	fullURL := buildFullURL(path, rl.HTTP)
+	req, _ := http.NewRequestWithContext(ctx, http.MethodPost, fullURL, http.NoBody)
 
 	if err := rl.checkRateLimit(req); err != nil {
 		return nil, err
@@ -178,7 +180,8 @@ func (rl *distributedRateLimiter) PostWithHeaders(ctx context.Context, path stri
 // PatchWithHeaders performs rate-limited HTTP PATCH request with custom headers.
 func (rl *distributedRateLimiter) PatchWithHeaders(ctx context.Context, path string, queryParams map[string]any,
 	body []byte, headers map[string]string) (*http.Response, error) {
-	req, _ := http.NewRequestWithContext(ctx, http.MethodPatch, path, http.NoBody)
+	fullURL := buildFullURL(path, rl.HTTP)
+	req, _ := http.NewRequestWithContext(ctx, http.MethodPatch, fullURL, http.NoBody)
 
 	if err := rl.checkRateLimit(req); err != nil {
 		return nil, err
@@ -190,7 +193,8 @@ func (rl *distributedRateLimiter) PatchWithHeaders(ctx context.Context, path str
 // PutWithHeaders performs rate-limited HTTP PUT request with custom headers.
 func (rl *distributedRateLimiter) PutWithHeaders(ctx context.Context, path string, queryParams map[string]any,
 	body []byte, headers map[string]string) (*http.Response, error) {
-	req, _ := http.NewRequestWithContext(ctx, http.MethodPut, path, http.NoBody)
+	fullURL := buildFullURL(path, rl.HTTP)
+	req, _ := http.NewRequestWithContext(ctx, http.MethodPut, fullURL, http.NoBody)
 
 	if err := rl.checkRateLimit(req); err != nil {
 		return nil, err
@@ -202,7 +206,8 @@ func (rl *distributedRateLimiter) PutWithHeaders(ctx context.Context, path strin
 // DeleteWithHeaders performs rate-limited HTTP DELETE request with custom headers.
 func (rl *distributedRateLimiter) DeleteWithHeaders(ctx context.Context, path string, body []byte,
 	headers map[string]string) (*http.Response, error) {
-	req, _ := http.NewRequestWithContext(ctx, http.MethodDelete, path, http.NoBody)
+	fullURL := buildFullURL(path, rl.HTTP)
+	req, _ := http.NewRequestWithContext(ctx, http.MethodDelete, fullURL, http.NoBody)
 
 	if err := rl.checkRateLimit(req); err != nil {
 		return nil, err
@@ -213,7 +218,8 @@ func (rl *distributedRateLimiter) DeleteWithHeaders(ctx context.Context, path st
 
 // Get performs rate-limited HTTP GET request.
 func (rl *distributedRateLimiter) Get(ctx context.Context, path string, queryParams map[string]any) (*http.Response, error) {
-	req, _ := http.NewRequestWithContext(ctx, http.MethodGet, path, http.NoBody)
+	fullURL := buildFullURL(path, rl.HTTP)
+	req, _ := http.NewRequestWithContext(ctx, http.MethodGet, fullURL, http.NoBody)
 
 	if err := rl.checkRateLimit(req); err != nil {
 		return nil, err
@@ -225,7 +231,8 @@ func (rl *distributedRateLimiter) Get(ctx context.Context, path string, queryPar
 // Post performs rate-limited HTTP POST request.
 func (rl *distributedRateLimiter) Post(ctx context.Context, path string, queryParams map[string]any,
 	body []byte) (*http.Response, error) {
-	req, _ := http.NewRequestWithContext(ctx, http.MethodPost, path, http.NoBody)
+	fullURL := buildFullURL(path, rl.HTTP)
+	req, _ := http.NewRequestWithContext(ctx, http.MethodPost, fullURL, http.NoBody)
 
 	if err := rl.checkRateLimit(req); err != nil {
 		return nil, err
@@ -237,7 +244,8 @@ func (rl *distributedRateLimiter) Post(ctx context.Context, path string, queryPa
 // Patch performs rate-limited HTTP PATCH request.
 func (rl *distributedRateLimiter) Patch(ctx context.Context, path string, queryParams map[string]any,
 	body []byte) (*http.Response, error) {
-	req, _ := http.NewRequestWithContext(ctx, http.MethodPatch, path, http.NoBody)
+	fullURL := buildFullURL(path, rl.HTTP)
+	req, _ := http.NewRequestWithContext(ctx, http.MethodPatch, fullURL, http.NoBody)
 
 	if err := rl.checkRateLimit(req); err != nil {
 		return nil, err
@@ -249,7 +257,8 @@ func (rl *distributedRateLimiter) Patch(ctx context.Context, path string, queryP
 // Put performs rate-limited HTTP PUT request.
 func (rl *distributedRateLimiter) Put(ctx context.Context, path string, queryParams map[string]any,
 	body []byte) (*http.Response, error) {
-	req, _ := http.NewRequestWithContext(ctx, http.MethodPut, path, http.NoBody)
+	fullURL := buildFullURL(path, rl.HTTP)
+	req, _ := http.NewRequestWithContext(ctx, http.MethodPut, fullURL, http.NoBody)
 
 	if err := rl.checkRateLimit(req); err != nil {
 		return nil, err
@@ -260,7 +269,8 @@ func (rl *distributedRateLimiter) Put(ctx context.Context, path string, queryPar
 
 // Delete performs rate-limited HTTP DELETE request.
 func (rl *distributedRateLimiter) Delete(ctx context.Context, path string, body []byte) (*http.Response, error) {
-	req, _ := http.NewRequestWithContext(ctx, http.MethodDelete, path, http.NoBody)
+	fullURL := buildFullURL(path, rl.HTTP)
+	req, _ := http.NewRequestWithContext(ctx, http.MethodDelete, fullURL, http.NoBody)
 
 	if err := rl.checkRateLimit(req); err != nil {
 		return nil, err

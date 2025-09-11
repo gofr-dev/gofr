@@ -23,13 +23,32 @@ type RateLimiterConfig struct {
 	RedisClient       *gofrRedis.Redis           `json:"-"` // Optional Redis for distributed limiting
 }
 
-// Default key function extracts scheme://host
+// defaultKeyFunc extracts a normalized service key from an HTTP request.
 func defaultKeyFunc(req *http.Request) string {
 	if req == nil || req.URL == nil {
 		return "unknown"
 	}
 
-	return req.URL.Scheme + "://" + req.URL.Host
+	scheme := req.URL.Scheme
+	host := req.URL.Host
+
+	if scheme == "" {
+		if req.TLS != nil {
+			scheme = methodHTTPS
+		} else {
+			scheme = methodHTTP
+		}
+	}
+
+	if host == "" {
+		host = req.Host
+	}
+
+	if host == "" {
+		host = unknownServiceKey
+	}
+
+	return scheme + "://" + host
 }
 
 // Validate checks if the configuration is valid.
@@ -81,4 +100,9 @@ type RateLimitError struct {
 
 func (e *RateLimitError) Error() string {
 	return fmt.Sprintf("rate limit exceeded for service: %s, retry after: %v", e.ServiceKey, e.RetryAfter)
+}
+
+// StatusCode Implement StatusCodeResponder so Responder picks correct HTTP code.
+func (*RateLimitError) StatusCode() int {
+	return http.StatusTooManyRequests // 429
 }
