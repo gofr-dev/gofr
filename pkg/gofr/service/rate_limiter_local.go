@@ -4,12 +4,18 @@ import (
 	"context"
 	"net/http"
 	"runtime"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
 )
 
-const backoffAttemptThreshold = 3
+const (
+	backoffAttemptThreshold = 3
+	unknownServiceKey       = "unknown"
+	methodHTTP              = "http"
+	methodHTTPS             = "https"
+)
 
 // tokenBucket with fractional accumulator for better precision.
 type tokenBucket struct {
@@ -20,6 +26,12 @@ type tokenBucket struct {
 	refillPerNano    float64    // Tokens per nanosecond (float64 for precision)
 	fracMutex        sync.Mutex // Protects fractionalTokens
 }
+
+// LocalRateLimiter implements in-memory rate limiting using the Token Bucket algorithm.
+// Strategy: Token Bucket with fractional precision for sub-1 RPS support
+// - Suitable for: Single-instance deployments, development, testing
+// - Limitations: Per-instance limiting only, not suitable for multi-instance production
+// - Performance: Lock-free atomic operations with CAS loops
 
 // localRateLimiter with metrics support.
 type localRateLimiter struct {
@@ -100,6 +112,7 @@ func (tb *tokenBucket) allow() (allowed bool, waitTime time.Duration, tokensRema
 	return false, time.Second, 0
 }
 
+// refillTokens calculates and returns new token count after refilling based on elapsed time.
 func (tb *tokenBucket) refillTokens(now int64) int64 {
 	oldTime := atomic.LoadInt64(&tb.lastRefillTime)
 	oldTokens := atomic.LoadInt64(&tb.tokens)
@@ -123,6 +136,7 @@ func (tb *tokenBucket) refillTokens(now int64) int64 {
 	return newTokens
 }
 
+// calculateRetry computes the precise time duration until the next token becomes available.
 func (tb *tokenBucket) calculateRetry(tokens int64) time.Duration {
 	if tb.refillPerNano == 0 {
 		return time.Second
@@ -164,6 +178,31 @@ func (*tokenBucket) backoff(attempt int) {
 	}
 }
 
+// buildFullURL constructs an absolute URL by combining the base service URL with the given path.
+func buildFullURL(path string, httpSvc HTTP) string {
+	if strings.HasPrefix(path, "http://") || strings.HasPrefix(path, "https://") {
+		return path
+	}
+
+	// Get base URL from embedded HTTP service
+	httpSvcImpl, ok := httpSvc.(*httpService)
+	if !ok {
+		return path
+	}
+
+	base := strings.TrimRight(httpSvcImpl.url, "/")
+	if base == "" {
+		return path
+	}
+
+	// Ensure path starts with /
+	if !strings.HasPrefix(path, "/") {
+		path = "/" + path
+	}
+
+	return base + path
+}
+
 // checkRateLimit with custom keying support.
 func (rl *localRateLimiter) checkRateLimit(req *http.Request) error {
 	serviceKey := rl.config.KeyFunc(req)
@@ -180,7 +219,7 @@ func (rl *localRateLimiter) checkRateLimit(req *http.Request) error {
 	allowed, retryAfter, tokensRemaining := bucketEntry.bucket.allow()
 
 	tokensAvailable := float64(tokensRemaining) / float64(scale)
-	rl.updateRateLimiterMetrics(context.Background(), serviceKey, allowed, tokensAvailable)
+	rl.updateRateLimiterMetrics(req.Context(), serviceKey, allowed, tokensAvailable)
 
 	if !allowed {
 		rl.logger.Debug("Rate limit exceeded",
@@ -241,7 +280,8 @@ func (rl *localRateLimiter) cleanupRoutine() {
 // GetWithHeaders performs rate-limited HTTP GET request with custom headers.
 func (rl *localRateLimiter) GetWithHeaders(ctx context.Context, path string, queryParams map[string]any,
 	headers map[string]string) (*http.Response, error) {
-	req, _ := http.NewRequestWithContext(ctx, http.MethodGet, path, http.NoBody)
+	fullURL := buildFullURL(path, rl.HTTP)
+	req, _ := http.NewRequestWithContext(ctx, http.MethodGet, fullURL, http.NoBody)
 
 	if err := rl.checkRateLimit(req); err != nil {
 		return nil, err
@@ -253,7 +293,8 @@ func (rl *localRateLimiter) GetWithHeaders(ctx context.Context, path string, que
 // PostWithHeaders performs rate-limited HTTP POST request with custom headers.
 func (rl *localRateLimiter) PostWithHeaders(ctx context.Context, path string, queryParams map[string]any,
 	body []byte, headers map[string]string) (*http.Response, error) {
-	req, _ := http.NewRequestWithContext(ctx, http.MethodPost, path, http.NoBody)
+	fullURL := buildFullURL(path, rl.HTTP)
+	req, _ := http.NewRequestWithContext(ctx, http.MethodPost, fullURL, http.NoBody)
 
 	if err := rl.checkRateLimit(req); err != nil {
 		return nil, err
@@ -265,7 +306,9 @@ func (rl *localRateLimiter) PostWithHeaders(ctx context.Context, path string, qu
 // PatchWithHeaders performs rate-limited HTTP PATCH request with custom headers.
 func (rl *localRateLimiter) PatchWithHeaders(ctx context.Context, path string, queryParams map[string]any,
 	body []byte, headers map[string]string) (*http.Response, error) {
-	req, _ := http.NewRequestWithContext(ctx, http.MethodPatch, path, http.NoBody)
+	fullURL := buildFullURL(path, rl.HTTP)
+
+	req, _ := http.NewRequestWithContext(ctx, http.MethodPatch, fullURL, http.NoBody)
 
 	if err := rl.checkRateLimit(req); err != nil {
 		return nil, err
@@ -277,7 +320,8 @@ func (rl *localRateLimiter) PatchWithHeaders(ctx context.Context, path string, q
 // PutWithHeaders performs rate-limited HTTP PUT request with custom headers.
 func (rl *localRateLimiter) PutWithHeaders(ctx context.Context, path string, queryParams map[string]any, body []byte,
 	headers map[string]string) (*http.Response, error) {
-	req, _ := http.NewRequestWithContext(ctx, http.MethodPut, path, http.NoBody)
+	fullURL := buildFullURL(path, rl.HTTP)
+	req, _ := http.NewRequestWithContext(ctx, http.MethodPut, fullURL, http.NoBody)
 
 	if err := rl.checkRateLimit(req); err != nil {
 		return nil, err
@@ -289,7 +333,8 @@ func (rl *localRateLimiter) PutWithHeaders(ctx context.Context, path string, que
 // DeleteWithHeaders performs rate-limited HTTP DELETE request with custom headers.
 func (rl *localRateLimiter) DeleteWithHeaders(ctx context.Context, path string, body []byte,
 	headers map[string]string) (*http.Response, error) {
-	req, _ := http.NewRequestWithContext(ctx, http.MethodDelete, path, http.NoBody)
+	fullURL := buildFullURL(path, rl.HTTP)
+	req, _ := http.NewRequestWithContext(ctx, http.MethodDelete, fullURL, http.NoBody)
 
 	if err := rl.checkRateLimit(req); err != nil {
 		return nil, err
@@ -300,7 +345,8 @@ func (rl *localRateLimiter) DeleteWithHeaders(ctx context.Context, path string, 
 
 // Get performs rate-limited HTTP GET request.
 func (rl *localRateLimiter) Get(ctx context.Context, path string, queryParams map[string]any) (*http.Response, error) {
-	req, _ := http.NewRequestWithContext(ctx, http.MethodGet, path, http.NoBody)
+	fullURL := buildFullURL(path, rl.HTTP)
+	req, _ := http.NewRequestWithContext(ctx, http.MethodGet, fullURL, http.NoBody)
 
 	if err := rl.checkRateLimit(req); err != nil {
 		return nil, err
@@ -312,7 +358,8 @@ func (rl *localRateLimiter) Get(ctx context.Context, path string, queryParams ma
 // Post performs rate-limited HTTP POST request.
 func (rl *localRateLimiter) Post(ctx context.Context, path string, queryParams map[string]any,
 	body []byte) (*http.Response, error) {
-	req, _ := http.NewRequestWithContext(ctx, http.MethodPost, path, http.NoBody)
+	fullURL := buildFullURL(path, rl.HTTP)
+	req, _ := http.NewRequestWithContext(ctx, http.MethodPost, fullURL, http.NoBody)
 
 	if err := rl.checkRateLimit(req); err != nil {
 		return nil, err
@@ -324,7 +371,8 @@ func (rl *localRateLimiter) Post(ctx context.Context, path string, queryParams m
 // Patch performs rate-limited HTTP PATCH request.
 func (rl *localRateLimiter) Patch(ctx context.Context, path string, queryParams map[string]any,
 	body []byte) (*http.Response, error) {
-	req, _ := http.NewRequestWithContext(ctx, http.MethodPatch, path, http.NoBody)
+	fullURL := buildFullURL(path, rl.HTTP)
+	req, _ := http.NewRequestWithContext(ctx, http.MethodPatch, fullURL, http.NoBody)
 
 	if err := rl.checkRateLimit(req); err != nil {
 		return nil, err
@@ -336,7 +384,8 @@ func (rl *localRateLimiter) Patch(ctx context.Context, path string, queryParams 
 // Put performs rate-limited HTTP PUT request.
 func (rl *localRateLimiter) Put(ctx context.Context, path string, queryParams map[string]any,
 	body []byte) (*http.Response, error) {
-	req, _ := http.NewRequestWithContext(ctx, http.MethodPut, path, http.NoBody)
+	fullURL := buildFullURL(path, rl.HTTP)
+	req, _ := http.NewRequestWithContext(ctx, http.MethodPut, fullURL, http.NoBody)
 
 	if err := rl.checkRateLimit(req); err != nil {
 		return nil, err
@@ -347,7 +396,8 @@ func (rl *localRateLimiter) Put(ctx context.Context, path string, queryParams ma
 
 // Delete performs rate-limited HTTP DELETE request.
 func (rl *localRateLimiter) Delete(ctx context.Context, path string, body []byte) (*http.Response, error) {
-	req, _ := http.NewRequestWithContext(ctx, http.MethodDelete, path, http.NoBody)
+	fullURL := buildFullURL(path, rl.HTTP)
+	req, _ := http.NewRequestWithContext(ctx, http.MethodDelete, fullURL, http.NoBody)
 
 	if err := rl.checkRateLimit(req); err != nil {
 		return nil, err
