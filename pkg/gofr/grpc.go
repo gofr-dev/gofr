@@ -29,9 +29,9 @@ type grpcServer struct {
 }
 
 var (
-	ErrNonAddressable     = errors.New("cannot inject container as it is not addressable or is nil")
-	ErrInvalidPort        = errors.New("invalid port number")
-	ErrFailedCreateServer = errors.New("failed to create gRPC server")
+	errNonAddressable     = errors.New("cannot inject container as it is not addressable or is nil")
+	errInvalidPort        = errors.New("invalid port number")
+	errFailedCreateServer = errors.New("failed to create gRPC server")
 )
 
 // AddGRPCServerOptions allows users to add custom gRPC server options such as TLS configuration,
@@ -89,7 +89,7 @@ func (a *App) AddGRPCServerStreamInterceptors(interceptors ...grpc.StreamServerI
 
 func newGRPCServer(c *container.Container, port int, cfg config.Config) (*grpcServer, error) {
 	if port <= 0 || port > 65535 {
-		return nil, fmt.Errorf("%w: %d", ErrInvalidPort, port)
+		return nil, fmt.Errorf("%w: %d", errInvalidPort, port)
 	}
 
 	registerGRPCMetrics(c)
@@ -126,7 +126,7 @@ func (g *grpcServer) createServer() error {
 
 	g.server = grpc.NewServer(g.options...)
 	if g.server == nil {
-		return ErrFailedCreateServer
+		return errFailedCreateServer
 	}
 
 	enabled := strings.ToLower(g.config.GetOrDefault("GRPC_ENABLE_REFLECTION", "false"))
@@ -244,8 +244,8 @@ func injectContainer(impl any, c *container.Container) error {
 
 		if f.Type == reflect.TypeOf(c) {
 			if !v.CanSet() {
-				c.Logger.Error(ErrNonAddressable)
-				return ErrNonAddressable
+				c.Logger.Error(errNonAddressable)
+				return errNonAddressable
 			}
 
 			v.Set(reflect.ValueOf(c))
@@ -256,8 +256,8 @@ func injectContainer(impl any, c *container.Container) error {
 
 		if f.Type == reflect.TypeOf(*c) {
 			if !v.CanSet() {
-				c.Logger.Error(ErrNonAddressable)
-				return ErrNonAddressable
+				c.Logger.Error(errNonAddressable)
+				return errNonAddressable
 			}
 
 			v.Set(reflect.ValueOf(*c))

@@ -288,7 +288,7 @@ func Test_injectContainer_Fails(t *testing.T) {
 	srv1 := &fail{}
 	err := injectContainer(srv1, c)
 
-	require.ErrorIs(t, err, ErrNonAddressable)
+	require.ErrorIs(t, err, errNonAddressable)
 	require.Nil(t, srv1.c1)
 
 	// Case: server is passed as unadressable(non-pointer)
