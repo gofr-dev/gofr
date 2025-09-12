@@ -1,4 +1,12 @@
-## Couchbase
+# Couchbase
+
+## Configuration
+- `HOST`: The hostname or IP address of your Couchbase server.
+- `USER`: The username for connecting to the database.
+- `PASSWORD`: The password for the specified user.
+- `BUCKET`: Top level container
+
+## Setup
 
 GoFr supports injecting `Couchbase` that implements the following interface. Any driver that implements the interface can be
 added using the `app.AddCouchbase()` method, and users can use Couchbase across the application with `gofr.Context`.
@@ -38,7 +46,7 @@ import (
     "context"
     "fmt"
     "log"
-
+	"os"
     "gofr.dev/pkg/gofr"
     "gofr.dev/pkg/gofr/datasource/couchbase"
 )
@@ -55,10 +63,10 @@ func main() {
 
     // Add the Couchbase datasource to the application
     a.AddCouchbase(couchbase.New(&couchbase.Config{
-        Host:     "localhost",
-        User:     "Administrator",
-        Password: "password",
-        Bucket:   "test-bucket",
+        Host:     os.Getenv("HOST"),
+        User:     os.Getenv("USER"),
+        Password: os.Getenv("PASSWORD"),
+        Bucket:   os.Getenv("BUCKET"),
     }))
 
     // Add the routes
