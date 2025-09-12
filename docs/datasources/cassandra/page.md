@@ -56,6 +56,7 @@ go get gofr.dev/pkg/gofr/datasource/cassandra@latest
 package main
 
 import (
+	"os"
 	"gofr.dev/pkg/gofr"
 	cassandraPkg "gofr.dev/pkg/gofr/datasource/cassandra"
 )
@@ -72,11 +73,11 @@ func main() {
 	app := gofr.New()
 
 	config := cassandraPkg.Config{
-		Hosts:    "localhost",
-		Keyspace: "test",
-		Port:     2003,
-		Username: "cassandra",
-		Password: "cassandra",
+		Hosts:    os.Getenv("HOSTS"),
+		Keyspace: os.Getenv("KEYSPACE"),
+		Port:     os.Getenv("PORT"),
+		Username: os.Getenv("USERNAME"),
+		Password: os.Getenv("PASSWORD"),
 	}
 
 	cassandra := cassandraPkg.New(config)
