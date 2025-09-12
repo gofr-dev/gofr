@@ -1,5 +1,11 @@
-## Dgraph
+# Dgraph
 
+## Configuration
+To connect to `Dgraph`, you need to provide the following environment variables and use it:
+- `HOST`: The hostname or IP address of your Dgraph server.
+- `PORT`: The port number.
+
+## Setup
 GoFr supports injecting Dgraph with an interface that defines the necessary methods for interacting with the Dgraph
 database. Any driver that implements the following interface can be added using the app.AddDgraph() method.
 
@@ -55,7 +61,7 @@ package main
 import (
 	"encoding/json"
 	"fmt"
-
+	"os"
 	"github.com/dgraph-io/dgo/v210/protos/api"
 
 	"gofr.dev/pkg/gofr"
@@ -67,8 +73,8 @@ func main() {
 	app := gofr.New()
 
 	db := dgraph.New(dgraph.Config{
-		Host: "localhost",
-		Port: "9080",
+		Host: os.Getenv("HOST"),
+		Port: os.Getenv("PORT"),
 	})
 
 	// Connect to Dgraph running on localhost:9080
