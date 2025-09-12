@@ -66,7 +66,7 @@ package main
 
 import (
 	"fmt"
-
+	"os"
 	"gofr.dev/pkg/gofr"
 	"gofr.dev/pkg/gofr/datasource/arangodb"
 )
@@ -81,10 +81,10 @@ func main() {
 
 	// Configure the ArangoDB client
 	arangoClient := arangodb.New(arangodb.Config{
-		Host:     "localhost",
-		User:     "root",
-		Password: "root",
-		Port:     8529,
+		Host:     os.Getenv("HOST"),
+		User:     os.Getenv("USER"),
+		Password: os.Getenv("PASSWORD"),
+		Port:     os.Getenv("PORT"),
 	})
 	app.AddArangoDB(arangoClient)
 
