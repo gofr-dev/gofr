@@ -33,6 +33,7 @@ go get gofr.dev/pkg/gofr/datasource/clickhouse@latest
 package main
 
 import (
+	"os"
 	"gofr.dev/pkg/gofr"
 	"gofr.dev/pkg/gofr/datasource/clickhouse"
 )
@@ -47,10 +48,10 @@ func main() {
 	app := gofr.New()
 
 	app.AddClickhouse(clickhouse.New(clickhouse.Config{
-		Hosts:    "localhost:9001",
-		Username: "root",
-		Password: "password",
-		Database: "users",
+		Hosts:    os.Getenv("HOSTS"),
+		Username: os.Getenv("USERNAME"),
+		Password: os.Getenv("PASSWORD"),
+		Database: os.Getenv("DATABASE"),
 	}))
 
 	app.POST("/user", Post)
