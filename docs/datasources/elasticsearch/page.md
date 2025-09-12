@@ -1,4 +1,12 @@
-## Elasticsearch
+# Elasticsearch
+
+## Configuration
+To connect to `Elasticsearch`, you need to provide the following environment variables:
+- `ADDRESSES`: Set of elasticsearch node URLs that the client will connect to.
+- `USERNAME`: The username for connecting to the database.
+- `PASSWORD`: The password for the specified user.
+
+## Setup
 
 GoFr supports injecting Elasticsearch with an interface that defines the 
 necessary methods for interacting with Elasticsearch. 
