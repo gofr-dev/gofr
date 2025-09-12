@@ -72,7 +72,7 @@ func createTestInterceptors() []grpc.UnaryServerInterceptor {
 	}
 }
 
-//nolint:thelper // createMockGRPCConfig creates a mock config with gRPC-specific settings.
+//nolint:thelper // linter is suppressed to avoid SA5011 (possible nil pointer derefernce) warnings from staticcheck
 func createMockGRPCConfig(t *testing.T, port int, enableReflection bool) config.Config {
 	// Use a default metrics port if t is nil (for cases where we don't need a real free port)
 	metricsPort := 8080
