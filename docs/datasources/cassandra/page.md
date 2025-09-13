@@ -2,8 +2,9 @@
 GoFr supports pluggable Cassandra drivers. 
 
 ## Configuration
+To connect to `Cassandra`, you need to provide the following environment variables:
 
-- `HOSTS`: The hostname or IP address of your `Cassandra` server.
+- `HOSTS`: The hostname or IP address of your Cassandra server.
 - `KEYSPACE`: The name of the keyspace (like a database) that holds your tables and defines replication and durability settings.
 - `PORT`: The port number
 - `USERNAME`: The username for connecting to the database.
