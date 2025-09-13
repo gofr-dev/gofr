@@ -1,7 +1,7 @@
 # SurrealDB
 
 ## Configuration
-To connect to SurrealDB, you need to provide the following environment variables:
+To connect to `SurrealDB`, you need to provide the following environment variables:
 - `HOST`: The hostname or IP address of your SurrealDB server.
 - `PORT`: The port number.
 - `USERNAME`: The username for connecting to the database.
