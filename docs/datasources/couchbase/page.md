@@ -2,7 +2,7 @@
 
 ## Configuration
 
-To connect to `ClickHouse`, you need to provide the following environment variables and use it:
+To connect to `Couchbase`, you need to provide the following environment variables and use it:
 - `HOST`: The hostname or IP address of your Couchbase server.
 - `USER`: The username for connecting to the database.
 - `PASSWORD`: The password for the specified user.
