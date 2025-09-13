@@ -67,7 +67,7 @@ import (
 	"context"
 	"encoding/json"
 	"net/http"
-
+	"os"
 	"gofr.dev/pkg/gofr"
 	"gofr.dev/pkg/gofr/datasource/elasticsearch"
 )
@@ -78,9 +78,9 @@ func main() {
 
 	// Create Elasticsearch client with configuration
 	es := elasticsearch.New(elasticsearch.Config{
-		Addresses: []string{"http://localhost:9200"},
-		Username:  "elastic",
-		Password:  "changeme",
+		Addresses: os.Getenv("ADDRESSES"),
+			Username:  os.Getenv("USERNAME"),
+		Password:  os.Getenv("PASSWORD"),
 	})
 
 	// Add Elasticsearch to the application
