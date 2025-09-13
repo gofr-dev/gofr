@@ -8,6 +8,7 @@ To connect to `ScyllaDB`, you need to provide the following environment variable
 - `USERNAME`: The username for connecting to the database.
 - `PASSWORD`: The password for the specified user.
 
+## Setup
 GoFr supports pluggable ScyllaDB drivers. It defines an interface that specifies the required methods for interacting
 with ScyllaDB. Any driver implementation that adheres to this interface can be integrated into GoFr using the
 `app.AddScyllaDB()` method.
