@@ -1,5 +1,16 @@
-## SurrealDB
+# SurrealDB
 
+## Configuration
+To connect to SurrealDB, you need to provide the following environment variables:
+- `HOST`: The hostname or IP address of your SurrealDB server.
+- `PORT`: The port number.
+- `USERNAME`: The username for connecting to the database.
+- `PASSWORD`: The password for the specified user.
+- `NAMESPACE`: Top level container in SurrealDB that groups databases.
+- `DATABASE`: The name of the database to connect to.
+- `TLSENABLED`: TLS mode (e.g., disable, require)
+
+## Setup 
 GoFr supports injecting SurrealDB database that supports the following interface. Any driver that implements the interface can be added
 using `app.AddSurrealDB()` method, and users can use Surreal DB across application through the `gofr.Context`.
 
@@ -49,6 +60,7 @@ package main
 import (
 	"gofr.dev/pkg/gofr"
 	"gofr.dev/pkg/gofr/datasource/surrealdb"
+	"os"
 )
 
 type Person struct {
@@ -66,13 +78,13 @@ func main() {
 	app := gofr.New()
 
 	client := surrealdb.New(&surrealdb.Config{
-		Host:       "localhost",
-		Port:       8000,
-		Username:   "root",
-		Password:   "root",
-		Namespace:  "test_namespace",
-		Database:   "test_database",
-		TLSEnabled: false,
+		Host:       os.Getenv("HOST"),
+		Port:       os.Getenv("PORT"),
+		Username:   os.Getenv("USERNAME"),
+		Password:   os.Getenv("PASSWORD"),
+		Namespace:  os.Getenv("NAMESPACE"),
+		Database:   os.Getenv("DATABASE"),
+		TLSEnabled: os.Getenv("TLSENABLED"),
 	})
 
 	app.AddSurrealDB(client)
