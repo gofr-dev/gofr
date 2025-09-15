@@ -5,7 +5,6 @@ import (
 	"testing"
 
 	gomock "github.com/golang/mock/gomock"
-	"github.com/influxdata/influxdb-client-go/v2/api"
 	"github.com/influxdata/influxdb-client-go/v2/domain"
 	"github.com/stretchr/testify/require"
 	"go.opentelemetry.io/otel"
@@ -516,46 +515,25 @@ func Test_Query(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
-	testCases := []struct {
-		name        string
-		resp        *api.QueryTableResult
-		wantResults map[string]any
-		orgName     string
-		inputQuery  string
-		expectErr   bool
-		err         error
-	}{
-		{
-			name:        "failing error query",
-			orgName:     "org1",
-			inputQuery:  "dummyQuery1",
-			expectErr:   true,
-			wantResults: map[string]any{},
-			resp:        &api.QueryTableResult{},
-			err:         errFailedQuery,
-		},
-	}
-	for _, tt := range testCases {
-		t.Run(tt.name, func(t *testing.T) {
-			client := *setupDB(t, ctrl)
-			mockQuery := NewMockquery(ctrl)
+	client := *setupDB(t, ctrl)
+	mockClient := client.influx.client.(*Mockclient)
+	mockQueryAPI := NewMockquery(ctrl)
 
-			client.influx.query = mockQuery
+	// Mock QueryAPI call
+	mockClient.EXPECT().
+		QueryAPI("org1").
+		Return(mockQueryAPI).
+		Times(1)
 
-			mockQuery.EXPECT().
-				Query(gomock.Any(), tt.inputQuery).
-				Return(tt.resp, tt.err).
-				AnyTimes()
+	// Mock Query call
+	mockQueryAPI.EXPECT().
+		Query(gomock.Any(), "dummyQuery1").
+		Return(nil, errFailedQuery).
+		Times(1)
 
-			result, err := client.Query(t.Context(), tt.inputQuery)
+	result, err := client.Query(t.Context(), "org1", "dummyQuery1")
 
-			if tt.expectErr {
-				require.Error(t, err)
-				require.Equal(t, err, tt.err)
-				require.Empty(t, result)
-			} else {
-				require.NoError(t, err)
-			}
-		})
-	}
+	require.Error(t, err)
+	require.Equal(t, errFailedQuery, err)
+	require.Empty(t, result)
 }

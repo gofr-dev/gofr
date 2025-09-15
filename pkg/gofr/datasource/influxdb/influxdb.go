@@ -269,10 +269,13 @@ func (c *Client) Ping(ctx context.Context) (bool, error) {
 	return ping, nil
 }
 
-func (c *Client) Query(ctx context.Context, fluxQuery string) ([]map[string]any, error) {
-	result, err := c.influx.query.Query(ctx, fluxQuery)
+func (c *Client) Query(ctx context.Context, org, fluxQuery string) ([]map[string]any, error) {
+	queryAPI := c.influx.client.QueryAPI(org)
+
+	result, err := queryAPI.Query(ctx, fluxQuery)
 	if err != nil {
 		c.logger.Errorf("InfluxDB Flux Query '%v' failed: %v", fluxQuery, err.Error())
+
 		return nil, err
 	}
 
@@ -281,19 +284,22 @@ func (c *Client) Query(ctx context.Context, fluxQuery string) ([]map[string]any,
 	for result.Next() {
 		if result.Err() != nil {
 			c.logger.Errorf("Error processing InfluxDB Flux Query result: %v", result.Err().Error())
+
 			return nil, result.Err()
 		}
 
 		record := make(map[string]any)
+
 		for k, v := range result.Record().Values() {
 			record[k] = v
 		}
 
 		records = append(records, record)
 	}
-	// Check for any final errors after iteration.
+
 	if result.Err() != nil {
 		c.logger.Errorf("Final error in InfluxDB Flux Query result: %v", result.Err().Error())
+
 		return nil, result.Err()
 	}
 
@@ -357,6 +363,7 @@ func (c *Client) Connect() {
 
 	c.influx.organization = NewInfluxdbOrganizationAPI(c.influx.client.OrganizationsAPI())
 	c.influx.bucket = NewInfluxdbBucketAPI(c.influx.client.BucketsAPI())
+	c.influx.query = c.influx.client.QueryAPI("")
 
 	if _, err := c.HealthCheck(context.Background()); err != nil {
 		c.logger.Errorf("InfluxDB health check failed: %v", err.Error())
