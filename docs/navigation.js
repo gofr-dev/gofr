@@ -151,6 +151,11 @@ export const navigation = [
                 title: 'Profiling in GoFr Applications',
                 href: '/docs/advanced-guide/debugging',
                 desc: "Discover GoFr auto-enables pprof profiling by leveraging its built-in configurations."
+            },
+            {
+                title: 'Adding Synchronous Startup Hooks',
+                href: '/docs/advanced-guide/startup-hooks',
+                desc: "Learn how to seed a database, warm up a cache, or perform other critical setup procedures, synchronously before starting your application."
             }
         ],
     },
