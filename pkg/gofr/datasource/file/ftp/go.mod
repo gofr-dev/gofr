@@ -1,6 +1,6 @@
 module gofr.dev/pkg/gofr/datasource/file/ftp
 
-go 1.24
+go 1.25
 
 require (
 	github.com/jlaffaye/ftp v0.2.0
