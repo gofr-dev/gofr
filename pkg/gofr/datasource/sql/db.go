@@ -67,7 +67,7 @@ func getOperationType(query string) string {
 
 func (d *DB) Query(query string, args ...any) (*sql.Rows, error) {
 	defer d.sendOperationStats(time.Now(), "Query", query, args...)
-	return d.DB.Query(query, args...)
+	return d.DB.QueryContext(context.Background(), query, args...)
 }
 
 func (d *DB) QueryContext(ctx context.Context, query string, args ...any) (*sql.Rows, error) {
@@ -81,7 +81,7 @@ func (d *DB) Dialect() string {
 
 func (d *DB) QueryRow(query string, args ...any) *sql.Row {
 	defer d.sendOperationStats(time.Now(), "QueryRow", query, args...)
-	return d.DB.QueryRow(query, args...)
+	return d.DB.QueryRowContext(context.Background(), query, args...)
 }
 
 func (d *DB) QueryRowContext(ctx context.Context, query string, args ...any) *sql.Row {
@@ -91,7 +91,7 @@ func (d *DB) QueryRowContext(ctx context.Context, query string, args ...any) *sq
 
 func (d *DB) Exec(query string, args ...any) (sql.Result, error) {
 	defer d.sendOperationStats(time.Now(), "Exec", query, args...)
-	return d.DB.Exec(query, args...)
+	return d.DB.ExecContext(context.Background(), query, args...)
 }
 
 func (d *DB) ExecContext(ctx context.Context, query string, args ...any) (sql.Result, error) {
@@ -101,11 +101,11 @@ func (d *DB) ExecContext(ctx context.Context, query string, args ...any) (sql.Re
 
 func (d *DB) Prepare(query string) (*sql.Stmt, error) {
 	defer d.sendOperationStats(time.Now(), "Prepare", query)
-	return d.DB.Prepare(query)
+	return d.DB.PrepareContext(context.Background(), query)
 }
 
 func (d *DB) Begin() (*Tx, error) {
-	tx, err := d.DB.Begin()
+	tx, err := d.DB.BeginTx(context.Background(), nil)
 	if err != nil {
 		return nil, err
 	}
@@ -144,12 +144,12 @@ func (t *Tx) sendOperationStats(start time.Time, queryType, query string, args .
 
 func (t *Tx) Query(query string, args ...any) (*sql.Rows, error) {
 	defer t.sendOperationStats(time.Now(), "TxQuery", query, args...)
-	return t.Tx.Query(query, args...)
+	return t.Tx.QueryContext(context.Background(), query, args...)
 }
 
 func (t *Tx) QueryRow(query string, args ...any) *sql.Row {
 	defer t.sendOperationStats(time.Now(), "TxQueryRow", query, args...)
-	return t.Tx.QueryRow(query, args...)
+	return t.Tx.QueryRowContext(context.Background(), query, args...)
 }
 
 func (t *Tx) QueryRowContext(ctx context.Context, query string, args ...any) *sql.Row {
@@ -159,7 +159,7 @@ func (t *Tx) QueryRowContext(ctx context.Context, query string, args ...any) *sq
 
 func (t *Tx) Exec(query string, args ...any) (sql.Result, error) {
 	defer t.sendOperationStats(time.Now(), "TxExec", query, args...)
-	return t.Tx.Exec(query, args...)
+	return t.Tx.ExecContext(context.Background(), query, args...)
 }
 
 func (t *Tx) ExecContext(ctx context.Context, query string, args ...any) (sql.Result, error) {
@@ -169,7 +169,7 @@ func (t *Tx) ExecContext(ctx context.Context, query string, args ...any) (sql.Re
 
 func (t *Tx) Prepare(query string) (*sql.Stmt, error) {
 	defer t.sendOperationStats(time.Now(), "TxPrepare", query)
-	return t.Tx.Prepare(query)
+	return t.Tx.PrepareContext(context.Background(), query)
 }
 
 func (t *Tx) Commit() error {

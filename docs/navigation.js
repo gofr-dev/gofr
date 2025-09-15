@@ -110,7 +110,7 @@ export const navigation = [
             {
                 title: 'Key Value Store',
                 href: '/docs/advanced-guide/key-value-store',
-                desc: "Explore how to implement and manage a key-value store in your GoFr application for fast and efficient data retrieval."
+                desc: "Explore how to implement and manage a key-value store in your GoFr application for fast and efficient data retrieval. Supports BadgerDB, NATS-KV, and DynamoDB."
             },
             {
                 title: 'Dealing with SQL',

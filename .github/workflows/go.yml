@@ -12,13 +12,15 @@ on:
       - development
     paths-ignore:
       - 'docs/**'  # Ignore changes to docs folder
+      - '**/*.md'
   # Run on pull requests to main or development branches
   pull_request:
     branches:
       - main
       - development
     paths-ignore:
-      - 'docs/**'  # Ignore changes to docs folder
+      - 'docs/**'# Ignore changes to docs folder
+      - '**/*.md'
 
 # Define the jobs that this workflow will run
 jobs:
@@ -29,7 +31,7 @@ jobs:
     # Define a matrix strategy to test against multiple Go versions
     strategy:
       matrix:
-        go-version: ['1.24','1.23', '1.22']
+        go-version: ['1.25','1.24', '1.23']
       # Continue with other jobs if one version fails
       fail-fast: false
 
@@ -120,7 +122,7 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        go-version: ['1.24','1.23', '1.22']
+        go-version: ['1.25','1.24', '1.23']
       fail-fast: false
 
     steps:
@@ -146,15 +148,39 @@ jobs:
         with:
           timeout_minutes: 5
           max_attempts: 2
+          retry_on: error
           command: |
             export APP_ENV=test
-            # Run tests with coverage for root gofr package only
-            go test -v -short -covermode=atomic -coverpkg=./pkg/gofr -coverprofile=gofr_only.cov ./pkg/gofr
-            # Run tests for all sub-packages under gofr
-            go test -v -covermode=atomic -coverpkg=./pkg/gofr -coverprofile=submodules.cov ./pkg/gofr/...
+
+            # Run tests for root gofr package
+            go test -v -short -covermode=atomic \
+              -coverpkg=./pkg/gofr -coverprofile=gofr_only.cov ./pkg/gofr
+            exit_code=$?
+            if [ $exit_code -eq 2 ]; then
+              echo "::error::Panic detected in root gofr package tests"
+              exit 2
+            elif [ $exit_code -ne 0 ]; then
+              echo "::error::Root gofr package tests failed"
+              exit $exit_code
+            fi
+
+            # Run tests for sub-packages
+            go test -v -covermode=atomic \
+              -coverpkg=./pkg/gofr -coverprofile=submodules.cov ./pkg/gofr/...
+            exit_code=$?
+            if [ $exit_code -eq 2 ]; then
+              echo "::error::Panic detected in gofr sub-packages tests"
+              exit 2
+            elif [ $exit_code -ne 0 ]; then
+              echo "::error::Gofr sub-packages tests failed"
+              exit $exit_code
+            fi
+
             # Combine coverage profiles
             echo "mode: atomic" > profile.cov
             grep -h -v "mode:" gofr_only.cov submodules.cov | grep -v '/mock_' >> profile.cov
+
+            # Show coverage summary
             go tool cover -func profile.cov
 
       # Upload coverage report for the 1.24 Go version only
@@ -208,7 +234,7 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        go-version:  ['1.24','1.23', '1.22']
+        go-version:  ['1.25','1.24', '1.23']
       fail-fast: false
 
     steps:
@@ -264,7 +290,7 @@ jobs:
             
               # Copy coverage file to the coverage_reports directory
               cp ${module_name}.cov ../../../coverage_reports/
-              
+            
               cd -
             '
 
@@ -333,13 +359,13 @@ jobs:
       - name: Set up Go environment
         uses: actions/setup-go@v5
         with:
-          go-version: '1.24'
+          go-version: '1.25'
           cache: false
 
       # Install the linting tool
       - name: Install golangci-lint
         run: |
-          go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.1
+          go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.4.0
 
       - name: Get dependencies
         run: |
@@ -380,7 +406,7 @@ jobs:
       - name: Set up Go environment
         uses: actions/setup-go@v5
         with:
-          go-version: 1.24
+          go-version: 1.25
 
       # Check file naming conventions using ls-lint
       - name: Check for file names errors
