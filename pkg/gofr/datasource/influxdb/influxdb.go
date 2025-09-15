@@ -3,6 +3,7 @@ package influxdb
 import (
 	"context"
 	"errors"
+	"strings"
 	"time"
 
 	influxdb "github.com/influxdata/influxdb-client-go/v2"
@@ -69,7 +70,11 @@ func (c *Client) CreateOrganization(ctx context.Context, orgName string) (string
 		return "", errEmptyOrganizationName
 	}
 
-	newOrg, err := c.influx.organization.CreateOrganizationWithName(ctx, orgName)
+	tracedCtx, span := c.addTrace(ctx, "create-organization", "")
+	start := time.Now()
+	defer c.sendOperationStats(start, "CreateOrganization", "", "create-organization", span, orgName)
+
+	newOrg, err := c.influx.organization.CreateOrganizationWithName(tracedCtx, orgName)
 	if err != nil {
 		c.logger.Errorf("failed to create new organization with name '%v' %v", orgName, err)
 		return "", err
@@ -94,7 +99,11 @@ func (c *Client) DeleteOrganization(ctx context.Context, orgID string) error {
 		return errEmptyOrganizationID
 	}
 
-	err := c.influx.organization.DeleteOrganizationWithID(ctx, orgID)
+	tracedCtx, span := c.addTrace(ctx, "delete-organization", "")
+	start := time.Now()
+	defer c.sendOperationStats(start, "DeleteOrganization", "", "delete-organization", span, orgID)
+
+	err := c.influx.organization.DeleteOrganizationWithID(tracedCtx, orgID)
 	if err != nil {
 		return err
 	}
@@ -112,7 +121,11 @@ func (c *Client) DeleteOrganization(ctx context.Context, orgID string) error {
 // - orgs: A map of organization IDs to their corresponding names.
 // - err: Error if the API call fails or the organizations cannot be retrieved.
 func (c *Client) ListOrganization(ctx context.Context) (map[string]string, error) {
-	allOrg, err := c.influx.organization.GetOrganizations(ctx)
+	start := time.Now()
+	tracedCtx, span := c.addTrace(ctx, "list-organizations", "")
+	defer c.sendOperationStats(start, "ListOrganization", "", "list-organizations", span)
+
+	allOrg, err := c.influx.organization.GetOrganizations(tracedCtx)
 	if err != nil {
 		return nil, errFetchOrganization
 	}
@@ -150,7 +163,11 @@ func (c *Client) CreateBucket(ctx context.Context, orgID, bucketName string) (bu
 		return "", errEmptyBucketName
 	}
 
-	newBucket, err := c.influx.bucket.CreateBucketWithNameWithID(ctx, orgID, bucketName)
+	tracedCtx, span := c.addTrace(ctx, "create-bucket", "")
+	start := time.Now()
+	defer c.sendOperationStats(start, "CreateBucket", "", "create-bucket", span, orgID, bucketName)
+
+	newBucket, err := c.influx.bucket.CreateBucketWithNameWithID(tracedCtx, orgID, bucketName)
 	if err != nil {
 		return "", err
 	}
@@ -171,7 +188,11 @@ func (c *Client) DeleteBucket(ctx context.Context, bucketID string) error {
 		return errEmptyBucketID
 	}
 
-	if err := c.influx.bucket.DeleteBucketWithID(ctx, bucketID); err != nil {
+	tracedCtx, span := c.addTrace(ctx, "delete-bucket", "")
+	start := time.Now()
+	defer c.sendOperationStats(start, "DeleteBucket", "", "delete-bucket", span, bucketID)
+
+	if err := c.influx.bucket.DeleteBucketWithID(tracedCtx, bucketID); err != nil {
 		return err
 	}
 
@@ -193,11 +214,15 @@ type Health struct {
 // - any: A datasource.Health object containing the status and details of the InfluxDB service.
 // - err: Error if the health check request fails or the InfluxDB client returns an error.
 func (c *Client) HealthCheck(ctx context.Context) (any, error) {
+	start := time.Now()
+	tracedCtx, span := c.addTrace(ctx, "health-check", "")
+	defer c.sendOperationStats(start, "HealthCheck", "", "health-check", span)
+
 	h := Health{Details: make(map[string]any)}
 	h.Details["Username"] = c.config.Username
 	h.Details["Url"] = c.config.URL
 
-	health, err := c.influx.client.Health(ctx)
+	health, err := c.influx.client.Health(tracedCtx)
 	if err != nil {
 		h.Status = statusDown
 		h.Details["error"] = err.Error()
@@ -234,7 +259,11 @@ func (c *Client) ListBuckets(ctx context.Context, org string) (buckets map[strin
 		return nil, errEmptyOrganizationName
 	}
 
-	bucketsDomain, err := c.influx.bucket.FindBucketsByOrgName(ctx, org)
+	start := time.Now()
+	tracedCtx, span := c.addTrace(ctx, "list-buckets", "")
+	defer c.sendOperationStats(start, "ListBuckets", "", "list-buckets", span, org)
+
+	bucketsDomain, err := c.influx.bucket.FindBucketsByOrgName(tracedCtx, org)
 	if err != nil {
 		return nil, err
 	}
@@ -260,7 +289,11 @@ func (c *Client) ListBuckets(ctx context.Context, org string) (buckets map[strin
 // - bool: True if the InfluxDB server is reachable; false otherwise.
 // - err: Error if the ping request fails.
 func (c *Client) Ping(ctx context.Context) (bool, error) {
-	ping, err := c.influx.client.Ping(ctx)
+	start := time.Now()
+	tracedCtx, span := c.addTrace(ctx, "ping", "")
+	defer c.sendOperationStats(start, "Ping", "", "ping", span)
+
+	ping, err := c.influx.client.Ping(tracedCtx)
 	if err != nil {
 		c.logger.Errorf("%v", err)
 		return false, err
@@ -270,9 +303,13 @@ func (c *Client) Ping(ctx context.Context) (bool, error) {
 }
 
 func (c *Client) Query(ctx context.Context, org, fluxQuery string) ([]map[string]any, error) {
+	tracedCtx, span := c.addTrace(ctx, "query", fluxQuery)
+	start := time.Now()
+	defer c.sendOperationStats(start, "Query", fluxQuery, "query", span, org)
+
 	queryAPI := c.influx.client.QueryAPI(org)
 
-	result, err := queryAPI.Query(ctx, fluxQuery)
+	result, err := queryAPI.Query(tracedCtx, fluxQuery)
 	if err != nil {
 		c.logger.Errorf("InfluxDB Flux Query '%v' failed: %v", fluxQuery, err.Error())
 
@@ -329,10 +366,14 @@ func (c *Client) WritePoint(ctx context.Context,
 	org, bucket, measurement string,
 	tags map[string]string, fields map[string]any, timestamp time.Time,
 ) error {
+	start := time.Now()
+	tracedCtx, span := c.addTrace(ctx, "write-point", "")
+	defer c.sendOperationStats(start, "WritePoint", "", "write-point", span, org, bucket, measurement)
+
 	p := influxdb.NewPoint(measurement, tags, fields, timestamp)
 	writeAPI := c.influx.client.WriteAPIBlocking(org, bucket)
 
-	if err := writeAPI.WritePoint(ctx, p); err != nil {
+	if err := writeAPI.WritePoint(tracedCtx, p); err != nil {
 		c.logger.Errorf("Failed to write point to influxdb: %v", err.Error())
 		return err
 	}
@@ -365,10 +406,75 @@ func (c *Client) Connect() {
 	c.influx.bucket = NewInfluxdbBucketAPI(c.influx.client.BucketsAPI())
 	c.influx.query = c.influx.client.QueryAPI("")
 
+	if c.metrics != nil {
+		influxBuckets := []float64{.05, .075, .1, .125, .15, .2, .3, .5, .75, 1, 2, 3, 4, 5, 7.5, 10}
+		c.metrics.NewHistogram(
+			"app_influxdb_stats",
+			"Response time of InfluxDB operations in milliseconds.",
+			influxBuckets...,
+		)
+	}
+
 	if _, err := c.HealthCheck(context.Background()); err != nil {
 		c.logger.Errorf("InfluxDB health check failed: %v", err.Error())
 		return
 	}
 
 	c.logger.Logf("connected to influxdb at : %v", c.config.URL)
+}
+
+func (c *Client) addTrace(ctx context.Context, method, query string) (context.Context, *trace.Span) {
+	if c.tracer != nil {
+		ctxWithSpan, span := trace.StartSpan(ctx, "influxdb-"+method)
+
+		if query != "" {
+			span.AddAttributes(trace.StringAttribute("influxdb.query", query))
+		}
+
+		return ctxWithSpan, span
+	}
+
+	return ctx, nil
+}
+
+// sendOperationStats logs duration, ends span, records histogram.
+func (c *Client) sendOperationStats(start time.Time, methodType, query, method string, span *trace.Span, args ...any) {
+	duration := time.Since(start).Microseconds()
+	durationMS := time.Since(start).Milliseconds()
+
+	c.logger.Debug(&QueryLog{
+		Operation: methodType,
+		Query:     query,
+		Duration:  duration,
+		Args:      args,
+	})
+
+	if span != nil {
+		span.End()
+	}
+
+	if c.metrics != nil {
+		opType := getOperationType(query)
+		if opType == "" {
+			opType = methodType // fallback for non-query operations
+		}
+
+		c.metrics.RecordHistogram(
+			context.Background(),
+			"app_influxdb_stats",
+			float64(durationMS),
+			"url", c.config.URL,
+			"type", getOperationType(query),
+		)
+	}
+}
+
+// getOperationType extracts the first token (SELECT-like for Flux or blank).
+func getOperationType(q string) string {
+	q = strings.TrimSpace(q)
+	if q == "" {
+		return ""
+	}
+	parts := strings.Fields(q)
+	return strings.ToUpper(parts[0])
 }

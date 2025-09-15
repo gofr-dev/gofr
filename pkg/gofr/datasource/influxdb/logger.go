@@ -21,11 +21,32 @@ type QueryLog struct {
 	Query     string `json:"query"`
 	Duration  int64  `json:"duration"`
 	Keyspace  string `json:"keyspace,omitempty"`
+	Args      []any  `json:"args,omitempty"`
 }
 
 func (ql *QueryLog) PrettyPrint(writer io.Writer) {
-	fmt.Fprintf(writer, "\u001B[38;5;8m%-32s \u001B[38;5;206m%-6s\u001B[0m %8d\u001B[38;5;8mµs\u001B[0m %s \u001B[38;5;8m%-32s\u001B[0m\n",
-		clean(ql.Operation), "INFL", ql.Duration, clean(ql.Keyspace), clean(ql.Query))
+	var argsStr string
+
+	if len(ql.Args) > 0 {
+		var parts []string
+
+		for _, a := range ql.Args {
+			parts = append(parts, clean(fmt.Sprintf("%v", a)))
+		}
+
+		argsStr = " [" + strings.Join(parts, ", ") + "]"
+	}
+
+	fmt.Fprintf(
+		writer,
+		"\u001B[38;5;8m%-32s \u001B[38;5;206m%-6s\u001B[0m %8d\u001B[38;5;8mms\u001B[0m %s \u001B[38;5;8m%-32s\u001B[0m%s\n",
+		clean(ql.Operation),
+		"INFL",
+		ql.Duration,
+		clean(ql.Keyspace),
+		clean(ql.Query),
+		argsStr,
+	)
 }
 
 // clean takes a string query as input and performs two operations to clean it up:
