@@ -72,7 +72,7 @@ func (c *Client) CreateOrganization(ctx context.Context, orgName string) (string
 
 	tracedCtx, span := c.addTrace(ctx, "create-organization", "")
 	start := time.Now()
-	defer c.sendOperationStats(start, "CreateOrganization", "", "create-organization", span, orgName)
+	defer c.sendOperationStats(start, "CreateOrganization", "create-organization", span, orgName)
 
 	newOrg, err := c.influx.organization.CreateOrganizationWithName(tracedCtx, orgName)
 	if err != nil {
@@ -101,7 +101,7 @@ func (c *Client) DeleteOrganization(ctx context.Context, orgID string) error {
 
 	tracedCtx, span := c.addTrace(ctx, "delete-organization", "")
 	start := time.Now()
-	defer c.sendOperationStats(start, "DeleteOrganization", "", "delete-organization", span, orgID)
+	defer c.sendOperationStats(start, "DeleteOrganization", "delete-organization", span, orgID)
 
 	err := c.influx.organization.DeleteOrganizationWithID(tracedCtx, orgID)
 	if err != nil {
@@ -123,7 +123,7 @@ func (c *Client) DeleteOrganization(ctx context.Context, orgID string) error {
 func (c *Client) ListOrganization(ctx context.Context) (map[string]string, error) {
 	start := time.Now()
 	tracedCtx, span := c.addTrace(ctx, "list-organizations", "")
-	defer c.sendOperationStats(start, "ListOrganization", "", "list-organizations", span)
+	defer c.sendOperationStats(start, "ListOrganization", "list-organizations", span)
 
 	allOrg, err := c.influx.organization.GetOrganizations(tracedCtx)
 	if err != nil {
@@ -165,7 +165,7 @@ func (c *Client) CreateBucket(ctx context.Context, orgID, bucketName string) (bu
 
 	tracedCtx, span := c.addTrace(ctx, "create-bucket", "")
 	start := time.Now()
-	defer c.sendOperationStats(start, "CreateBucket", "", "create-bucket", span, orgID, bucketName)
+	defer c.sendOperationStats(start, "CreateBucket", "create-bucket", span, orgID, bucketName)
 
 	newBucket, err := c.influx.bucket.CreateBucketWithNameWithID(tracedCtx, orgID, bucketName)
 	if err != nil {
@@ -190,7 +190,7 @@ func (c *Client) DeleteBucket(ctx context.Context, bucketID string) error {
 
 	tracedCtx, span := c.addTrace(ctx, "delete-bucket", "")
 	start := time.Now()
-	defer c.sendOperationStats(start, "DeleteBucket", "", "delete-bucket", span, bucketID)
+	defer c.sendOperationStats(start, "DeleteBucket", "delete-bucket", span, bucketID)
 
 	if err := c.influx.bucket.DeleteBucketWithID(tracedCtx, bucketID); err != nil {
 		return err
@@ -216,7 +216,7 @@ type Health struct {
 func (c *Client) HealthCheck(ctx context.Context) (any, error) {
 	start := time.Now()
 	tracedCtx, span := c.addTrace(ctx, "health-check", "")
-	defer c.sendOperationStats(start, "HealthCheck", "", "health-check", span)
+	defer c.sendOperationStats(start, "HealthCheck", "health-check", span)
 
 	h := Health{Details: make(map[string]any)}
 	h.Details["Username"] = c.config.Username
@@ -261,7 +261,7 @@ func (c *Client) ListBuckets(ctx context.Context, org string) (buckets map[strin
 
 	start := time.Now()
 	tracedCtx, span := c.addTrace(ctx, "list-buckets", "")
-	defer c.sendOperationStats(start, "ListBuckets", "", "list-buckets", span, org)
+	defer c.sendOperationStats(start, "ListBuckets", "list-buckets", span, org)
 
 	bucketsDomain, err := c.influx.bucket.FindBucketsByOrgName(tracedCtx, org)
 	if err != nil {
@@ -291,7 +291,7 @@ func (c *Client) ListBuckets(ctx context.Context, org string) (buckets map[strin
 func (c *Client) Ping(ctx context.Context) (bool, error) {
 	start := time.Now()
 	tracedCtx, span := c.addTrace(ctx, "ping", "")
-	defer c.sendOperationStats(start, "Ping", "", "ping", span)
+	defer c.sendOperationStats(start, "Ping", "ping", span)
 
 	ping, err := c.influx.client.Ping(tracedCtx)
 	if err != nil {
@@ -305,7 +305,7 @@ func (c *Client) Ping(ctx context.Context) (bool, error) {
 func (c *Client) Query(ctx context.Context, org, fluxQuery string) ([]map[string]any, error) {
 	tracedCtx, span := c.addTrace(ctx, "query", fluxQuery)
 	start := time.Now()
-	defer c.sendOperationStats(start, "Query", fluxQuery, "query", span, org)
+	defer c.sendOperationStats(start, "Query", fluxQuery, span, org)
 
 	queryAPI := c.influx.client.QueryAPI(org)
 
@@ -368,7 +368,7 @@ func (c *Client) WritePoint(ctx context.Context,
 ) error {
 	start := time.Now()
 	tracedCtx, span := c.addTrace(ctx, "write-point", "")
-	defer c.sendOperationStats(start, "WritePoint", "", "write-point", span, org, bucket, measurement)
+	defer c.sendOperationStats(start, "WritePoint", "write-point", span, org, bucket, measurement)
 
 	p := influxdb.NewPoint(measurement, tags, fields, timestamp)
 	writeAPI := c.influx.client.WriteAPIBlocking(org, bucket)
@@ -438,14 +438,13 @@ func (c *Client) addTrace(ctx context.Context, method, query string) (context.Co
 }
 
 // sendOperationStats logs duration, ends span, records histogram.
-func (c *Client) sendOperationStats(start time.Time, methodType, query, method string, span *trace.Span, args ...any) {
-	duration := time.Since(start).Microseconds()
+func (c *Client) sendOperationStats(start time.Time, methodType, query string, span *trace.Span, args ...any) {
 	durationMS := time.Since(start).Milliseconds()
 
 	c.logger.Debug(&QueryLog{
 		Operation: methodType,
 		Query:     query,
-		Duration:  duration,
+		Duration:  durationMS,
 		Args:      args,
 	})
 
@@ -464,7 +463,7 @@ func (c *Client) sendOperationStats(start time.Time, methodType, query, method s
 			"app_influxdb_stats",
 			float64(durationMS),
 			"url", c.config.URL,
-			"type", getOperationType(query),
+			"type", opType,
 		)
 	}
 }
@@ -472,9 +471,12 @@ func (c *Client) sendOperationStats(start time.Time, methodType, query, method s
 // getOperationType extracts the first token (SELECT-like for Flux or blank).
 func getOperationType(q string) string {
 	q = strings.TrimSpace(q)
+
 	if q == "" {
 		return ""
 	}
+
 	parts := strings.Fields(q)
+
 	return strings.ToUpper(parts[0])
 }
