@@ -80,8 +80,6 @@ func (c *Client) CreateOrganization(ctx context.Context, orgName string) (string
 		return "", err
 	}
 
-	c.logger.Debugf("organization created with name '%v'", orgName)
-
 	return *newOrg.Id, nil
 }
 

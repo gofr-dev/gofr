@@ -36,9 +36,12 @@ func setupDB(t *testing.T, ctrl *gomock.Controller) *Client {
 	client.UseMetrics(mockMetrics)
 	client.UseTracer(otel.GetTracerProvider().Tracer("gofr-influxdb"))
 
-	mockLogger.EXPECT().Debugf(gomock.Any(), gomock.Any()).AnyTimes()
+	mockLogger.EXPECT().Debug(gomock.Any()).AnyTimes()
 	mockLogger.EXPECT().Errorf(gomock.Any(), gomock.Any()).AnyTimes()
 	mockLogger.EXPECT().Errorf(gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
+
+	mockMetrics.EXPECT().RecordHistogram(gomock.Any(), gomock.Any(), gomock.Any(),
+		gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
 
 	// Replace the client with our mocked version
 	client.influx.client = NewMockclient(ctrl)
