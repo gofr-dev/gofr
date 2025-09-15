@@ -799,7 +799,7 @@ type InfluxDB interface {
 
 	// Query runs a Flux query and returns the result as a slice of maps,
 	// where each map is a row with column name-value pairs.
-	Query(ctx context.Context, fluxQuery string) ([]map[string]any, error)
+	Query(ctx context.Context, org, fluxQuery string) ([]map[string]any, error)
 
 	// CreateBucket creates a new bucket under the specified organization.
 	CreateBucket(ctx context.Context, org, bucket string) (string, error)
