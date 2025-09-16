@@ -5,7 +5,7 @@ go 1.25
 require (
 	cloud.google.com/go/pubsub v1.49.0
 	github.com/DATA-DOG/go-sqlmock v1.5.2
-	github.com/XSAM/otelsql v0.39.0
+	github.com/XSAM/otelsql v0.40.0
 	github.com/alicebob/miniredis/v2 v2.35.0
 	github.com/dgraph-io/dgo/v210 v210.0.0-20230328113526-b66f8ae53a2d
 	github.com/eclipse/paho.mqtt.golang v1.5.0
