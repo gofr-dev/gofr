@@ -58,7 +58,7 @@ return {allowed, retryAfter}
 // distributedRateLimiter with metrics support.
 type distributedRateLimiter struct {
 	config      RateLimiterConfig
-	redisClient gofrRedis.Redis
+	redisClient *gofrRedis.Redis
 	logger      Logger
 	metrics     Metrics
 	HTTP
@@ -69,10 +69,14 @@ func NewDistributedRateLimiter(config RateLimiterConfig, h HTTP) HTTP {
 
 	rl := &distributedRateLimiter{
 		config:      config,
-		redisClient: *config.RedisClient,
+		redisClient: config.RedisClient,
 		logger:      httpSvc.Logger,
 		metrics:     httpSvc.Metrics,
 		HTTP:        h,
+	}
+
+	if rl.redisClient == nil {
+		rl.logger.Log("Distributed rate limiter initialized without Redis client; operating pass-through")
 	}
 
 	return rl
