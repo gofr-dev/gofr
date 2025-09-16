@@ -118,7 +118,9 @@ func TestLocalRateLimiter_EnforceLimit(t *testing.T) {
 	require.Nil(t, resp)
 	assertRateLimited(t, err)
 
-	resp.Body.Close()
+	if resp != nil {
+		_ = resp.Body.Close()
+	}
 
 	wait(1100 * time.Millisecond)
 
