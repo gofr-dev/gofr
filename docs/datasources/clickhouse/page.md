@@ -33,7 +33,6 @@ go get gofr.dev/pkg/gofr/datasource/clickhouse@latest
 package main
 
 import (
-	"os"
 	"gofr.dev/pkg/gofr"
 	"gofr.dev/pkg/gofr/datasource/clickhouse"
 )
