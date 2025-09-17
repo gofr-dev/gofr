@@ -57,7 +57,6 @@ go get gofr.dev/pkg/gofr/datasource/cassandra@latest
 package main
 
 import (
-	"os"
 	"gofr.dev/pkg/gofr"
 	cassandraPkg "gofr.dev/pkg/gofr/datasource/cassandra"
 )
