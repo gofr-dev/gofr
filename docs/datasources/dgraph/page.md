@@ -61,7 +61,6 @@ package main
 import (
 	"encoding/json"
 	"fmt"
-	"os"
 	"github.com/dgraph-io/dgo/v210/protos/api"
 
 	"gofr.dev/pkg/gofr"
@@ -73,8 +72,8 @@ func main() {
 	app := gofr.New()
 
 	db := dgraph.New(dgraph.Config{
-		Host: os.Getenv("HOST"),
-		Port: os.Getenv("PORT"),
+		Host: app.Config.Get("HOST"),
+		Port: app.Config.Get("PORT"),
 	})
 
 	// Connect to Dgraph running on localhost:9080
