@@ -103,7 +103,7 @@ func (om oracleMigrator) beginTransaction(c *container.Container) transactionDat
 // Commit the migration.
 func (om oracleMigrator) commitMigration(c *container.Container, data transactionData) error {
 	// Get the Oracle transaction from transactionData
-	tx, ok := data.OracleTx.(OracleTx)
+	tx, ok := data.OracleTx.(container.OracleTx)
 	if !ok {
 		c.Error("invalid Oracle transaction")
 		return errors.New("invalid Oracle transaction")
@@ -132,7 +132,7 @@ func (om oracleMigrator) commitMigration(c *container.Container, data transactio
 
 // Rollback the migration.
 func (om oracleMigrator) rollback(c *container.Container, data transactionData) {
-	if tx, ok := data.OracleTx.(OracleTx); ok {
+	if tx, ok := data.OracleTx.(container.OracleTx); ok {
 		if err := tx.Rollback(); err != nil {
 			c.Errorf("unable to rollback Oracle transaction: %v", err)
 		} else {

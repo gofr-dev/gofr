@@ -21,8 +21,9 @@ type transactionData struct {
 	StartTime       time.Time
 	MigrationNumber int64
 
-	SQLTx   *gofrSql.Tx
-	RedisTx goRedis.Pipeliner
+	SQLTx    *gofrSql.Tx
+	RedisTx  goRedis.Pipeliner
+	OracleTx container.OracleTx
 }
 
 func Run(migrationsMap map[int64]Migrate, c *container.Container) {
