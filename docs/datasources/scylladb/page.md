@@ -59,7 +59,6 @@ package main
 
 import (
 	"github.com/gocql/gocql"
-	"os"
 	"gofr.dev/pkg/gofr"
 	"gofr.dev/pkg/gofr/datasource/scylladb"
 	"gofr.dev/pkg/gofr/http"
@@ -75,11 +74,11 @@ func main() {
 	app := gofr.New()
 
 	client := scylladb.New(scylladb.Config{
-		Host:     os.Getenv("HOST"),
-		Keyspace: os.Getenv("KEYSPACE"),
-		Port:     os.Getenv("PORT"),
-		Username: os.Getenv("USERNAME"),
-		Password: os.Getenv("PASSWORD"),
+		Host:     app.Config.Get("HOST"),
+		Keyspace: app.Config.Get("KEYSPACE"),
+		Port:     app.Config.Get("PORT"),
+		Username: app.Config.Get("USERNAME"),
+		Password: app.Config.Get("PASSWORD"),
 	})
 
 	app.AddScyllaDB(client)
