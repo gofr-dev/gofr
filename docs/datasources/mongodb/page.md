@@ -51,7 +51,6 @@ package main
 
 import (
 	"time"
-	"os"
 	"go.mongodb.org/mongo-driver/bson"
 	"gofr.dev/pkg/gofr/datasource/mongo"
 
@@ -67,7 +66,7 @@ type Person struct {
 func main() {
 	app := gofr.New()
 
-	db := mongo.New(mongo.Config{URI: os.Getenv("URI"), Database: os.Getenv("DATABASE"), ConnectionTimeout: os.Getenv("CONNECTIONTIMEOUT")})
+	db := mongo.New(mongo.Config{URI: app.Config.Get("URI"), Database: app.Config.Get("DATABASE"), ConnectionTimeout: app.Config.Get("CONNECTIONTIMEOUT")})
 
 	// inject the mongo into gofr to use mongoDB across the application
 	// using gofr context
