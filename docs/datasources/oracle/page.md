@@ -142,7 +142,6 @@ package main
 import (
  "gofr.dev/pkg/gofr"
  "gofr.dev/pkg/gofr/datasource/oracle"
- "os"
 )
 
 type User struct {
@@ -155,11 +154,11 @@ func main() {
  app := gofr.New()
 
  app.AddOracle(oracle.New(oracle.Config{
-  Host:     os.Getenv("HOST"),
-  Port:     os.Getenv("PORT"),
-  Username: os.Getenv("USERNAME"),
-  Password: os.Getenv("PASSWORD")
-  Service:  os.Getenv("SERVICE"),
+  Host:     app.Config.Get("HOST"),
+  Port:     app.Config.Get("PORT"),
+  Username: app.Config.Get("USERNAME"),
+  Password: app.Config.Get("PASSWORD")
+  Service:  app.Config.Get("SERVICE"),
  }))
 
  app.POST("/user", Post)
