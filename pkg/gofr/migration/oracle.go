@@ -8,6 +8,8 @@ import (
 	"gofr.dev/pkg/gofr/container"
 )
 
+var errInvalidOracleTransaction = errors.New("invalid Oracle transaction")
+
 type oracleDS struct {
 	Oracle
 }
@@ -61,8 +63,10 @@ func (om oracleMigrator) getLastMigration(c *container.Container) int64 {
 		LastMigration int64 `db:"last_migration"`
 	}
 
-	var lastMigrations []LastMigration
-	var lastMigration int64
+	var (
+		lastMigrations []LastMigration
+		lastMigration  int64
+	)
 
 	err := om.Oracle.Select(context.Background(), &lastMigrations, getLastOracleGoFrMigration)
 	if err != nil {
@@ -90,11 +94,13 @@ func (om oracleMigrator) beginTransaction(c *container.Container) transactionDat
 	tx, err := om.Oracle.Begin()
 	if err != nil {
 		c.Errorf("unable to begin Oracle transaction: %v", err)
+
 		return transactionData{}
 	}
 
 	td := om.migrator.beginTransaction(c)
 	td.OracleTx = tx // Store the transaction in transactionData
+
 	c.Debug("Oracle Transaction begin successful")
 
 	return td
@@ -102,28 +108,34 @@ func (om oracleMigrator) beginTransaction(c *container.Container) transactionDat
 
 // Commit the migration.
 func (om oracleMigrator) commitMigration(c *container.Container, data transactionData) error {
-	// Get the Oracle transaction from transactionData
-	tx, ok := data.OracleTx.(container.OracleTx)
-	if !ok {
+	if data.OracleTx == nil {
 		c.Error("invalid Oracle transaction")
-		return errors.New("invalid Oracle transaction")
+
+		return errInvalidOracleTransaction
 	}
 
 	// Insert migration record using the transaction
-	err := tx.ExecContext(context.Background(), insertOracleGoFrMigrationRow,
+	err := data.OracleTx.ExecContext(context.Background(), insertOracleGoFrMigrationRow,
 		data.MigrationNumber, "UP", data.StartTime, time.Since(data.StartTime).Milliseconds())
 
 	if err != nil {
 		c.Errorf("failed to insert migration record: %v", err)
-		tx.Rollback()
+
+		err := data.OracleTx.Rollback()
+
+		if rollbackErr := data.OracleTx.Rollback(); rollbackErr != nil {
+			c.Errorf("also failed to rollback: %v", rollbackErr)
+		}
+
 		return err
 	}
 
 	c.Debugf("inserted record for migration %v in Oracle gofr_migrations table", data.MigrationNumber)
 
 	// Commit the transaction
-	if err := tx.Commit(); err != nil {
+	if err := data.OracleTx.Commit(); err != nil {
 		c.Errorf("failed to commit Oracle transaction: %v", err)
+
 		return err
 	}
 
@@ -132,8 +144,8 @@ func (om oracleMigrator) commitMigration(c *container.Container, data transactio
 
 // Rollback the migration.
 func (om oracleMigrator) rollback(c *container.Container, data transactionData) {
-	if tx, ok := data.OracleTx.(container.OracleTx); ok {
-		if err := tx.Rollback(); err != nil {
+	if data.OracleTx != nil {
+		if err := data.OracleTx.Rollback(); err != nil {
 			c.Errorf("unable to rollback Oracle transaction: %v", err)
 		} else {
 			c.Debug("Oracle transaction successfully rolled back")
@@ -141,5 +153,6 @@ func (om oracleMigrator) rollback(c *container.Container, data transactionData) 
 	}
 
 	om.migrator.rollback(c, data)
+
 	c.Fatalf("migration %v failed and rolled back", data.MigrationNumber)
 }
