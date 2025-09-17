@@ -43,7 +43,6 @@ import (
 	"bytes"
 	"encoding/json"
 	"errors"
-	"os"
 	"gofr.dev/pkg/gofr"
 	"gofr.dev/pkg/gofr/datasource/solr"
 )
@@ -52,8 +51,8 @@ func main() {
 	app := gofr.New()
 
 	app.AddSolr(solr.New(solr.Config{
-		Host: os.Getenv("HOST"),
-		Port: os.Getenv("PORT"),
+		Host: app.Config.Get("HOST"),
+		Port: app.Config.Get("PORT"),
 	}))
 
 	app.POST("/solr", post)
