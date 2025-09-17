@@ -11,6 +11,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.opentelemetry.io/otel"
+
 	gofrRedis "gofr.dev/pkg/gofr/datasource/redis"
 	"gofr.dev/pkg/gofr/logging"
 )
