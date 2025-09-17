@@ -1,4 +1,4 @@
-<img width="1183" height="1280" alt="image" src="https://github.com/user-attachments/assets/660ba60d-9a01-446a-8d6a-b15d2de05317" /><img width="1183" height="1280" alt="image" src="https://github.com/user-attachments/assets/22c3306e-9f6a-4fc1-837d-c89e76883e11" /># Couchbase
+# Couchbase
 
 ## Configuration
 
