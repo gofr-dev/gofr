@@ -74,11 +74,11 @@ func main() {
 	app := gofr.New()
 
 	config := cassandraPkg.Config{
-		Hosts:    os.Getenv("HOSTS"),
-		Keyspace: os.Getenv("KEYSPACE"),
-		Port:     os.Getenv("PORT"),
-		Username: os.Getenv("USERNAME"),
-		Password: os.Getenv("PASSWORD"),
+		Hosts:    app.Config.Get("HOSTS"),
+		Keyspace: app.Config.Get("KEYSPACE"),
+		Port:     app.Config.Get("PORT"),
+		Username: app.Config.Get("USERNAME"),
+		Password: app.Config.Get("PASSWORD"),
 	}
 
 	cassandra := cassandraPkg.New(config)
