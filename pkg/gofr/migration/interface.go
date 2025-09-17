@@ -42,6 +42,7 @@ type Clickhouse interface {
 type Oracle interface {
 	Select(ctx context.Context, dest any, query string, args ...any) error
 	Exec(ctx context.Context, query string, args ...any) error
+	Begin() (container.OracleTx, error)
 }
 
 type Cassandra interface {
