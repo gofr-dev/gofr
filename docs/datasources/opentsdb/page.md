@@ -111,7 +111,6 @@ import (
 	"fmt"
 	"math/rand/v2"
 	"time"
-	"os"
 	"gofr.dev/pkg/gofr"
 	"gofr.dev/pkg/gofr/datasource/opentsdb"
 )
@@ -121,10 +120,10 @@ func main() {
 
 	// Initialize OpenTSDB connection
 	app.AddOpenTSDB(opentsdb.New(opentsdb.Config{
-		Host:             os.Getenv("HOST"),
-		MaxContentLength: os.Getenv("MAXCONTENTLENGTH"),
-		MaxPutPointsNum:  os.Getenv("MAXPUTPOINTSNUM"),
-		DetectDeltaNum:   os.Getenv("DETECTDELTANUM"),
+		Host:             app.Config.Get("HOST"),
+		MaxContentLength: app.Config.Get("MAXCONTENTLENGTH"),
+		MaxPutPointsNum:  app.Config.Get("MAXPUTPOINTSNUM"),
+		DetectDeltaNum:   app.Config.Get("DETECTDELTANUM"),
 	}))
 
 	// Register routes
