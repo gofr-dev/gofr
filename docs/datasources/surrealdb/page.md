@@ -60,7 +60,6 @@ package main
 import (
 	"gofr.dev/pkg/gofr"
 	"gofr.dev/pkg/gofr/datasource/surrealdb"
-	"os"
 )
 
 type Person struct {
@@ -78,13 +77,13 @@ func main() {
 	app := gofr.New()
 
 	client := surrealdb.New(&surrealdb.Config{
-		Host:       os.Getenv("HOST"),
-		Port:       os.Getenv("PORT"),
-		Username:   os.Getenv("USERNAME"),
-		Password:   os.Getenv("PASSWORD"),
-		Namespace:  os.Getenv("NAMESPACE"),
-		Database:   os.Getenv("DATABASE"),
-		TLSEnabled: os.Getenv("TLSENABLED"),
+		Host:       app.Config.Get("HOST"),
+		Port:       app.Config.Get("PORT"),
+		Username:   app.Config.Get("USERNAME"),
+		Password:   app.Config.Get("PASSWORD"),
+		Namespace:  app.Config.Get("NAMESPACE"),
+		Database:   app.Config.Get("DATABASE"),
+		TLSEnabled: app.Config.Get("TLSENABLED"),
 	})
 
 	app.AddSurrealDB(client)
