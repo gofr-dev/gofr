@@ -1,4 +1,4 @@
-# Couchbase
+<img width="1183" height="1280" alt="image" src="https://github.com/user-attachments/assets/660ba60d-9a01-446a-8d6a-b15d2de05317" /><img width="1183" height="1280" alt="image" src="https://github.com/user-attachments/assets/22c3306e-9f6a-4fc1-837d-c89e76883e11" /># Couchbase
 
 ## Configuration
 
@@ -48,7 +48,6 @@ import (
     "context"
     "fmt"
     "log"
-	"os"
     "gofr.dev/pkg/gofr"
     "gofr.dev/pkg/gofr/datasource/couchbase"
 )
@@ -65,10 +64,10 @@ func main() {
 
     // Add the Couchbase datasource to the application
     a.AddCouchbase(couchbase.New(&couchbase.Config{
-        Host:     os.Getenv("HOST"),
-        User:     os.Getenv("USER"),
-        Password: os.Getenv("PASSWORD"),
-        Bucket:   os.Getenv("BUCKET"),
+        Host:     app.Config.Get("HOST"),
+        User:     app.Config.Get("USER"),
+        Password: app.Config.Get("PASSWORD"),
+        Bucket:   app.Config.Get("BUCKET"),
     }))
 
     // Add the routes
