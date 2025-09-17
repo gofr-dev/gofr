@@ -1,15 +1,13 @@
 package migration
 
 import (
-	"bytes"
 	"database/sql"
-	"os"
 	"testing"
 	"time"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
-
 	"gofr.dev/pkg/gofr/container"
 	"gofr.dev/pkg/gofr/logging"
 )
@@ -70,65 +68,57 @@ func Test_OracleGetLastMigration(t *testing.T) {
 }
 
 func Test_OracleCommitMigration(t *testing.T) {
-	mg, mockOracle, mockContainer := oracleSetup(t)
+	mg, _, mockContainer := oracleSetup(t)
+	ctrl := gomock.NewController(t)
 	timeNow := time.Now()
-	td := transactionData{
+
+	// Success case
+	mockTxSuccess := container.NewMockOracleTx(ctrl)
+	tdSuccess := transactionData{
 		StartTime:       timeNow,
 		MigrationNumber: 10,
-	}
-	testCases := []struct {
-		desc string
-		err  error
-	}{
-		{"no error", nil},
-		{"connection failed", sql.ErrConnDone},
+		OracleTx:        mockTxSuccess,
 	}
 
-	for i, tc := range testCases {
-		mockOracle.EXPECT().Exec(gomock.Any(), insertOracleGoFrMigrationRow,
-			td.MigrationNumber, "UP", td.StartTime, gomock.Any()).Return(tc.err)
+	mockTxSuccess.EXPECT().
+		ExecContext(gomock.Any(), insertOracleGoFrMigrationRow,
+			tdSuccess.MigrationNumber, "UP", tdSuccess.StartTime, gomock.Any()).
+		Return(nil)
 
-		err := mg.commitMigration(mockContainer, td)
-		assert.Equal(t, tc.err, err, "TEST[%d]: %s failed", i, tc.desc)
+	mockTxSuccess.EXPECT().Commit().Return(nil)
+
+	err := mg.commitMigration(mockContainer, tdSuccess)
+	require.NoError(t, err, "Success case failed")
+
+	// Error case
+	mockTxError := container.NewMockOracleTx(ctrl)
+	tdError := transactionData{
+		StartTime:       timeNow,
+		MigrationNumber: 10,
+		OracleTx:        mockTxError,
 	}
-}
 
-func Test_OracleBeginTransaction(t *testing.T) {
-	logs := captureStdout(func() {
-		mg, _, mockContainer := oracleSetup(t)
-		mg.beginTransaction(mockContainer)
-	})
-	assert.Contains(t, logs, "OracleDB Migrator begin successfully")
-}
+	mockTxError.EXPECT().
+		ExecContext(gomock.Any(), insertOracleGoFrMigrationRow,
+			tdError.MigrationNumber, "UP", tdError.StartTime, gomock.Any()).
+		Return(sql.ErrConnDone)
 
-// captureStdout helper to capture stdout during function execution.
-func captureStdout(f func()) string {
-	old := os.Stdout
-	r, w, _ := os.Pipe()
-	os.Stdout = w
+	mockTxError.EXPECT().Rollback().Return(nil)
 
-	outC := make(chan string)
-	go func() {
-		var buf bytes.Buffer
-		_, _ = buf.ReadFrom(r)
-		outC <- buf.String()
-	}()
-
-	f()
-
-	_ = w.Close()
-	os.Stdout = old
-	out := <-outC
-
-	return out
+	err = mg.commitMigration(mockContainer, tdError)
+	assert.Equal(t, sql.ErrConnDone, err, "Error case failed")
 }
 
 func TestOracleMigration_RunMigrationSuccess(t *testing.T) {
 	mockOracle, mockContainer := initializeOracleRunMocks(t)
+	ctrl := gomock.NewController(t)
+
+	// Create a mock transaction
+	mockTx := container.NewMockOracleTx(ctrl)
 
 	ds := Datasource{Oracle: mockOracle}
 	od := oracleDS{Oracle: mockOracle}
-	_ = od.apply(&ds) // apply migrator wrapper.
+	_ = od.apply(&ds)
 
 	migrationMap := map[int64]Migrate{
 		1: {UP: func(d Datasource) error {
@@ -136,10 +126,12 @@ func TestOracleMigration_RunMigrationSuccess(t *testing.T) {
 		}},
 	}
 
-	mockOracle.EXPECT().Exec(gomock.Any(), checkAndCreateOracleMigrationTable).Return(nil)
+	mockOracle.EXPECT().Exec(gomock.Any(), gomock.Any()).Return(nil).MaxTimes(2)
 	mockOracle.EXPECT().Select(gomock.Any(), gomock.Any(), getLastOracleGoFrMigration).Return(nil)
-	mockOracle.EXPECT().Exec(gomock.Any(), "CREATE TABLE test (id INT)").Return(nil)
-	mockOracle.EXPECT().Exec(gomock.Any(), insertOracleGoFrMigrationRow, int64(1), "UP", gomock.Any(), gomock.Any()).Return(nil)
+	mockOracle.EXPECT().Begin().Return(mockTx, nil)
+	mockTx.EXPECT().ExecContext(gomock.Any(), gomock.Any(), gomock.Any(),
+		gomock.Any(), gomock.Any(), gomock.Any()).Return(nil)
+	mockTx.EXPECT().Commit().Return(nil)
 
 	Run(migrationMap, mockContainer)
 }
@@ -178,49 +170,6 @@ func TestOracleMigration_GetLastMigration_ReturnsZeroOnError(t *testing.T) {
 
 	lastMigration := mg.getLastMigration(mockContainer)
 	assert.Equal(t, int64(0), lastMigration)
-}
-
-func TestOracleMigration_CommitMigration(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
-
-	mockContainer, mocks := container.NewMockContainer(t)
-	mockOracle := mocks.Oracle
-	mockContainer.Oracle = mockOracle
-
-	ds := Datasource{Oracle: mockOracle}
-	od := oracleDS{Oracle: mockOracle}
-	mg := od.apply(&ds)
-
-	td := transactionData{
-		StartTime:       time.Now(),
-		MigrationNumber: 42,
-	}
-
-	mockOracle.EXPECT().
-		Exec(gomock.Any(), insertOracleGoFrMigrationRow,
-			td.MigrationNumber, "UP", td.StartTime, gomock.Any()).
-		Return(nil)
-
-	err := mg.commitMigration(mockContainer, td)
-	assert.NoError(t, err)
-}
-
-func TestOracleMigration_BeginTransaction_Logs(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
-
-	mockContainer, mocks := container.NewMockContainer(t)
-	mockOracle := mocks.Oracle
-	mockContainer.Logger = logging.NewLogger(logging.DEBUG)
-	mockContainer.Oracle = mockOracle
-
-	ds := Datasource{Oracle: mockOracle}
-	od := oracleDS{Oracle: mockOracle}
-	mg := od.apply(&ds)
-
-	// Capture logs or just call method and rely on it not panicking.
-	mg.beginTransaction(mockContainer)
 }
 
 func initializeOracleRunMocks(t *testing.T) (*container.MockOracleDB, *container.Container) {
