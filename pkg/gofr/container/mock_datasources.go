@@ -936,6 +936,63 @@ func (mr *MockRedisMockRecorder) BitOpAnd(ctx, destKey any, keys ...any) *gomock
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "BitOpAnd", reflect.TypeOf((*MockRedis)(nil).BitOpAnd), varargs...)
 }
 
+// BitOpAndOr mocks base method.
+func (m *MockRedis) BitOpAndOr(ctx context.Context, destKey string, keys ...string) *redis.IntCmd {
+	m.ctrl.T.Helper()
+	varargs := []any{ctx, destKey}
+	for _, a := range keys {
+		varargs = append(varargs, a)
+	}
+	ret := m.ctrl.Call(m, "BitOpAndOr", varargs...)
+	ret0, _ := ret[0].(*redis.IntCmd)
+	return ret0
+}
+
+// BitOpAndOr indicates an expected call of BitOpAndOr.
+func (mr *MockRedisMockRecorder) BitOpAndOr(ctx, destKey any, keys ...any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	varargs := append([]any{ctx, destKey}, keys...)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "BitOpAndOr", reflect.TypeOf((*MockRedis)(nil).BitOpAndOr), varargs...)
+}
+
+// BitOpDiff mocks base method.
+func (m *MockRedis) BitOpDiff(ctx context.Context, destKey string, keys ...string) *redis.IntCmd {
+	m.ctrl.T.Helper()
+	varargs := []any{ctx, destKey}
+	for _, a := range keys {
+		varargs = append(varargs, a)
+	}
+	ret := m.ctrl.Call(m, "BitOpDiff", varargs...)
+	ret0, _ := ret[0].(*redis.IntCmd)
+	return ret0
+}
+
+// BitOpDiff indicates an expected call of BitOpDiff.
+func (mr *MockRedisMockRecorder) BitOpDiff(ctx, destKey any, keys ...any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	varargs := append([]any{ctx, destKey}, keys...)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "BitOpDiff", reflect.TypeOf((*MockRedis)(nil).BitOpDiff), varargs...)
+}
+
+// BitOpDiff1 mocks base method.
+func (m *MockRedis) BitOpDiff1(ctx context.Context, destKey string, keys ...string) *redis.IntCmd {
+	m.ctrl.T.Helper()
+	varargs := []any{ctx, destKey}
+	for _, a := range keys {
+		varargs = append(varargs, a)
+	}
+	ret := m.ctrl.Call(m, "BitOpDiff1", varargs...)
+	ret0, _ := ret[0].(*redis.IntCmd)
+	return ret0
+}
+
+// BitOpDiff1 indicates an expected call of BitOpDiff1.
+func (mr *MockRedisMockRecorder) BitOpDiff1(ctx, destKey any, keys ...any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	varargs := append([]any{ctx, destKey}, keys...)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "BitOpDiff1", reflect.TypeOf((*MockRedis)(nil).BitOpDiff1), varargs...)
+}
+
 // BitOpNot mocks base method.
 func (m *MockRedis) BitOpNot(ctx context.Context, destKey, key string) *redis.IntCmd {
 	m.ctrl.T.Helper()
@@ -948,6 +1005,25 @@ func (m *MockRedis) BitOpNot(ctx context.Context, destKey, key string) *redis.In
 func (mr *MockRedisMockRecorder) BitOpNot(ctx, destKey, key any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "BitOpNot", reflect.TypeOf((*MockRedis)(nil).BitOpNot), ctx, destKey, key)
+}
+
+// BitOpOne mocks base method.
+func (m *MockRedis) BitOpOne(ctx context.Context, destKey string, keys ...string) *redis.IntCmd {
+	m.ctrl.T.Helper()
+	varargs := []any{ctx, destKey}
+	for _, a := range keys {
+		varargs = append(varargs, a)
+	}
+	ret := m.ctrl.Call(m, "BitOpOne", varargs...)
+	ret0, _ := ret[0].(*redis.IntCmd)
+	return ret0
+}
+
+// BitOpOne indicates an expected call of BitOpOne.
+func (mr *MockRedisMockRecorder) BitOpOne(ctx, destKey any, keys ...any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	varargs := append([]any{ctx, destKey}, keys...)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "BitOpOne", reflect.TypeOf((*MockRedis)(nil).BitOpOne), varargs...)
 }
 
 // BitOpOr mocks base method.
@@ -7108,6 +7184,25 @@ func (mr *MockRedisMockRecorder) XAck(ctx, stream, group any, ids ...any) *gomoc
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "XAck", reflect.TypeOf((*MockRedis)(nil).XAck), varargs...)
 }
 
+// XAckDel mocks base method.
+func (m *MockRedis) XAckDel(ctx context.Context, stream, group, mode string, ids ...string) *redis.SliceCmd {
+	m.ctrl.T.Helper()
+	varargs := []any{ctx, stream, group, mode}
+	for _, a := range ids {
+		varargs = append(varargs, a)
+	}
+	ret := m.ctrl.Call(m, "XAckDel", varargs...)
+	ret0, _ := ret[0].(*redis.SliceCmd)
+	return ret0
+}
+
+// XAckDel indicates an expected call of XAckDel.
+func (mr *MockRedisMockRecorder) XAckDel(ctx, stream, group, mode any, ids ...any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	varargs := append([]any{ctx, stream, group, mode}, ids...)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "XAckDel", reflect.TypeOf((*MockRedis)(nil).XAckDel), varargs...)
+}
+
 // XAdd mocks base method.
 func (m *MockRedis) XAdd(ctx context.Context, a *redis.XAddArgs) *redis.StringCmd {
 	m.ctrl.T.Helper()
@@ -7195,6 +7290,25 @@ func (mr *MockRedisMockRecorder) XDel(ctx, stream any, ids ...any) *gomock.Call 
 	mr.mock.ctrl.T.Helper()
 	varargs := append([]any{ctx, stream}, ids...)
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "XDel", reflect.TypeOf((*MockRedis)(nil).XDel), varargs...)
+}
+
+// XDelEx mocks base method.
+func (m *MockRedis) XDelEx(ctx context.Context, stream, mode string, ids ...string) *redis.SliceCmd {
+	m.ctrl.T.Helper()
+	varargs := []any{ctx, stream, mode}
+	for _, a := range ids {
+		varargs = append(varargs, a)
+	}
+	ret := m.ctrl.Call(m, "XDelEx", varargs...)
+	ret0, _ := ret[0].(*redis.SliceCmd)
+	return ret0
+}
+
+// XDelEx indicates an expected call of XDelEx.
+func (mr *MockRedisMockRecorder) XDelEx(ctx, stream, mode any, ids ...any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	varargs := append([]any{ctx, stream, mode}, ids...)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "XDelEx", reflect.TypeOf((*MockRedis)(nil).XDelEx), varargs...)
 }
 
 // XGroupCreate mocks base method.
@@ -7510,6 +7624,34 @@ func (mr *MockRedisMockRecorder) XTrimMaxLenApprox(ctx, key, maxLen, limit any) 
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "XTrimMaxLenApprox", reflect.TypeOf((*MockRedis)(nil).XTrimMaxLenApprox), ctx, key, maxLen, limit)
 }
 
+// XTrimMaxLenApproxMode mocks base method.
+func (m *MockRedis) XTrimMaxLenApproxMode(ctx context.Context, key string, maxLen, limit int64, mode string) *redis.IntCmd {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "XTrimMaxLenApproxMode", ctx, key, maxLen, limit, mode)
+	ret0, _ := ret[0].(*redis.IntCmd)
+	return ret0
+}
+
+// XTrimMaxLenApproxMode indicates an expected call of XTrimMaxLenApproxMode.
+func (mr *MockRedisMockRecorder) XTrimMaxLenApproxMode(ctx, key, maxLen, limit, mode any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "XTrimMaxLenApproxMode", reflect.TypeOf((*MockRedis)(nil).XTrimMaxLenApproxMode), ctx, key, maxLen, limit, mode)
+}
+
+// XTrimMaxLenMode mocks base method.
+func (m *MockRedis) XTrimMaxLenMode(ctx context.Context, key string, maxLen int64, mode string) *redis.IntCmd {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "XTrimMaxLenMode", ctx, key, maxLen, mode)
+	ret0, _ := ret[0].(*redis.IntCmd)
+	return ret0
+}
+
+// XTrimMaxLenMode indicates an expected call of XTrimMaxLenMode.
+func (mr *MockRedisMockRecorder) XTrimMaxLenMode(ctx, key, maxLen, mode any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "XTrimMaxLenMode", reflect.TypeOf((*MockRedis)(nil).XTrimMaxLenMode), ctx, key, maxLen, mode)
+}
+
 // XTrimMinID mocks base method.
 func (m *MockRedis) XTrimMinID(ctx context.Context, key, minID string) *redis.IntCmd {
 	m.ctrl.T.Helper()
@@ -7536,6 +7678,34 @@ func (m *MockRedis) XTrimMinIDApprox(ctx context.Context, key, minID string, lim
 func (mr *MockRedisMockRecorder) XTrimMinIDApprox(ctx, key, minID, limit any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "XTrimMinIDApprox", reflect.TypeOf((*MockRedis)(nil).XTrimMinIDApprox), ctx, key, minID, limit)
+}
+
+// XTrimMinIDApproxMode mocks base method.
+func (m *MockRedis) XTrimMinIDApproxMode(ctx context.Context, key, minID string, limit int64, mode string) *redis.IntCmd {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "XTrimMinIDApproxMode", ctx, key, minID, limit, mode)
+	ret0, _ := ret[0].(*redis.IntCmd)
+	return ret0
+}
+
+// XTrimMinIDApproxMode indicates an expected call of XTrimMinIDApproxMode.
+func (mr *MockRedisMockRecorder) XTrimMinIDApproxMode(ctx, key, minID, limit, mode any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "XTrimMinIDApproxMode", reflect.TypeOf((*MockRedis)(nil).XTrimMinIDApproxMode), ctx, key, minID, limit, mode)
+}
+
+// XTrimMinIDMode mocks base method.
+func (m *MockRedis) XTrimMinIDMode(ctx context.Context, key, minID, mode string) *redis.IntCmd {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "XTrimMinIDMode", ctx, key, minID, mode)
+	ret0, _ := ret[0].(*redis.IntCmd)
+	return ret0
+}
+
+// XTrimMinIDMode indicates an expected call of XTrimMinIDMode.
+func (mr *MockRedisMockRecorder) XTrimMinIDMode(ctx, key, minID, mode any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "XTrimMinIDMode", reflect.TypeOf((*MockRedis)(nil).XTrimMinIDMode), ctx, key, minID, mode)
 }
 
 // ZAdd mocks base method.
@@ -8306,156 +8476,6 @@ func (m *MockRedis) ZUnionWithScores(ctx context.Context, store redis.ZStore) *r
 func (mr *MockRedisMockRecorder) ZUnionWithScores(ctx, store any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ZUnionWithScores", reflect.TypeOf((*MockRedis)(nil).ZUnionWithScores), ctx, store)
-}
-
-func (m *MockRedis) BitOpDiff(ctx context.Context, destKey string, keys ...string) *redis.IntCmd {
-	m.ctrl.T.Helper()
-	varargs := []any{ctx, destKey}
-	for _, a := range keys {
-		varargs = append(varargs, a)
-	}
-	ret := m.ctrl.Call(m, "BitOpDiff", varargs...)
-	ret0, _ := ret[0].(*redis.IntCmd)
-	return ret0
-}
-
-func (m *MockRedis) BitOpDiff1(ctx context.Context, destKey string, keys ...string) *redis.IntCmd {
-	m.ctrl.T.Helper()
-	varargs := []any{ctx, destKey}
-	for _, a := range keys {
-		varargs = append(varargs, a)
-	}
-	ret := m.ctrl.Call(m, "BitOpDiff1", varargs...)
-	ret0, _ := ret[0].(*redis.IntCmd)
-	return ret0
-}
-
-func (m *MockRedis) BitOpAndOr(ctx context.Context, destKey string, keys ...string) *redis.IntCmd {
-	m.ctrl.T.Helper()
-	varargs := []any{ctx, destKey}
-	for _, a := range keys {
-		varargs = append(varargs, a)
-	}
-	ret := m.ctrl.Call(m, "BitOpAndOr", varargs...)
-	ret0, _ := ret[0].(*redis.IntCmd)
-	return ret0
-}
-
-func (m *MockRedis) BitOpOne(ctx context.Context, destKey string, keys ...string) *redis.IntCmd {
-	m.ctrl.T.Helper()
-	varargs := []any{ctx, destKey}
-	for _, a := range keys {
-		varargs = append(varargs, a)
-	}
-	ret := m.ctrl.Call(m, "BitOpOne", varargs...)
-	ret0, _ := ret[0].(*redis.IntCmd)
-	return ret0
-}
-
-func (m *MockRedis) XAckDel(ctx context.Context, stream string, group string, mode string, ids ...string) *redis.SliceCmd {
-	m.ctrl.T.Helper()
-	varargs := []any{ctx, stream, group, mode}
-	for _, a := range ids {
-		varargs = append(varargs, a)
-	}
-	ret := m.ctrl.Call(m, "XAckDel", varargs...)
-	ret0, _ := ret[0].(*redis.SliceCmd)
-	return ret0
-}
-
-func (m *MockRedis) XDelEx(ctx context.Context, stream string, mode string, ids ...string) *redis.SliceCmd {
-	m.ctrl.T.Helper()
-	varargs := []any{ctx, stream, mode}
-	for _, a := range ids {
-		varargs = append(varargs, a)
-	}
-	ret := m.ctrl.Call(m, "XDelEx", varargs...)
-	ret0, _ := ret[0].(*redis.SliceCmd)
-	return ret0
-}
-
-func (m *MockRedis) XTrimMaxLenMode(ctx context.Context, key string, maxLen int64, mode string) *redis.IntCmd {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "XTrimMaxLenMode", ctx, key, maxLen, mode)
-	ret0, _ := ret[0].(*redis.IntCmd)
-	return ret0
-}
-
-func (m *MockRedis) XTrimMaxLenApproxMode(ctx context.Context, key string, maxLen, limit int64, mode string) *redis.IntCmd {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "XTrimMaxLenApproxMode", ctx, key, maxLen, limit, mode)
-	ret0, _ := ret[0].(*redis.IntCmd)
-	return ret0
-}
-
-func (m *MockRedis) XTrimMinIDMode(ctx context.Context, key string, minID string, mode string) *redis.IntCmd {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "XTrimMinIDMode", ctx, key, minID, mode)
-	ret0, _ := ret[0].(*redis.IntCmd)
-	return ret0
-}
-
-func (m *MockRedis) XTrimMinIDApproxMode(ctx context.Context, key string, minID string, limit int64, mode string) *redis.IntCmd {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "XTrimMinIDApproxMode", ctx, key, minID, limit, mode)
-	ret0, _ := ret[0].(*redis.IntCmd)
-	return ret0
-}
-
-func (mr *MockRedisMockRecorder) BitOpDiff(ctx, destKey any, keys ...any) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	varargs := append([]any{ctx, destKey}, keys...)
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "BitOpDiff", reflect.TypeOf((*MockRedis)(nil).BitOpDiff), varargs...)
-}
-
-func (mr *MockRedisMockRecorder) BitOpDiff1(ctx, destKey any, keys ...any) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	varargs := append([]any{ctx, destKey}, keys...)
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "BitOpDiff1", reflect.TypeOf((*MockRedis)(nil).BitOpDiff1), varargs...)
-}
-
-func (mr *MockRedisMockRecorder) BitOpAndOr(ctx, destKey any, keys ...any) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	varargs := append([]any{ctx, destKey}, keys...)
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "BitOpAndOr", reflect.TypeOf((*MockRedis)(nil).BitOpAndOr), varargs...)
-}
-
-func (mr *MockRedisMockRecorder) BitOpOne(ctx, destKey any, keys ...any) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	varargs := append([]any{ctx, destKey}, keys...)
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "BitOpOne", reflect.TypeOf((*MockRedis)(nil).BitOpOne), varargs...)
-}
-
-func (mr *MockRedisMockRecorder) XAckDel(ctx, stream, group, mode any, ids ...any) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	varargs := append([]any{ctx, stream, group, mode}, ids...)
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "XAckDel", reflect.TypeOf((*MockRedis)(nil).XAckDel), varargs...)
-}
-
-func (mr *MockRedisMockRecorder) XDelEx(ctx, stream, mode any, ids ...any) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	varargs := append([]any{ctx, stream, mode}, ids...)
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "XDelEx", reflect.TypeOf((*MockRedis)(nil).XDelEx), varargs...)
-}
-
-func (mr *MockRedisMockRecorder) XTrimMaxLenMode(ctx, key, maxLen, mode any) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "XTrimMaxLenMode", reflect.TypeOf((*MockRedis)(nil).XTrimMaxLenMode), ctx, key, maxLen, mode)
-}
-
-func (mr *MockRedisMockRecorder) XTrimMaxLenApproxMode(ctx, key, maxLen, limit, mode any) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "XTrimMaxLenApproxMode", reflect.TypeOf((*MockRedis)(nil).XTrimMaxLenApproxMode), ctx, key, maxLen, limit, mode)
-}
-
-func (mr *MockRedisMockRecorder) XTrimMinIDMode(ctx, key, minID, mode any) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "XTrimMinIDMode", reflect.TypeOf((*MockRedis)(nil).XTrimMinIDMode), ctx, key, minID, mode)
-}
-
-func (mr *MockRedisMockRecorder) XTrimMinIDApproxMode(ctx, key, minID, limit, mode any) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "XTrimMinIDApproxMode", reflect.TypeOf((*MockRedis)(nil).XTrimMinIDApproxMode), ctx, key, minID, limit, mode)
 }
 
 // MockCassandra is a mock of Cassandra interface.
@@ -9666,6 +9686,21 @@ func (m *MockOracleDB) EXPECT() *MockOracleDBMockRecorder {
 	return m.recorder
 }
 
+// Begin mocks base method.
+func (m *MockOracleDB) Begin() (OracleTx, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Begin")
+	ret0, _ := ret[0].(OracleTx)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// Begin indicates an expected call of Begin.
+func (mr *MockOracleDBMockRecorder) Begin() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Begin", reflect.TypeOf((*MockOracleDB)(nil).Begin))
+}
+
 // Exec mocks base method.
 func (m *MockOracleDB) Exec(ctx context.Context, query string, args ...any) error {
 	m.ctrl.T.Helper()
@@ -9719,6 +9754,96 @@ func (mr *MockOracleDBMockRecorder) Select(ctx, dest, query any, args ...any) *g
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Select", reflect.TypeOf((*MockOracleDB)(nil).Select), varargs...)
 }
 
+// MockOracleTx is a mock of OracleTx interface.
+type MockOracleTx struct {
+	ctrl     *gomock.Controller
+	recorder *MockOracleTxMockRecorder
+	isgomock struct{}
+}
+
+// MockOracleTxMockRecorder is the mock recorder for MockOracleTx.
+type MockOracleTxMockRecorder struct {
+	mock *MockOracleTx
+}
+
+// NewMockOracleTx creates a new mock instance.
+func NewMockOracleTx(ctrl *gomock.Controller) *MockOracleTx {
+	mock := &MockOracleTx{ctrl: ctrl}
+	mock.recorder = &MockOracleTxMockRecorder{mock}
+	return mock
+}
+
+// EXPECT returns an object that allows the caller to indicate expected use.
+func (m *MockOracleTx) EXPECT() *MockOracleTxMockRecorder {
+	return m.recorder
+}
+
+// Commit mocks base method.
+func (m *MockOracleTx) Commit() error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Commit")
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// Commit indicates an expected call of Commit.
+func (mr *MockOracleTxMockRecorder) Commit() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Commit", reflect.TypeOf((*MockOracleTx)(nil).Commit))
+}
+
+// ExecContext mocks base method.
+func (m *MockOracleTx) ExecContext(ctx context.Context, query string, args ...any) error {
+	m.ctrl.T.Helper()
+	varargs := []any{ctx, query}
+	for _, a := range args {
+		varargs = append(varargs, a)
+	}
+	ret := m.ctrl.Call(m, "ExecContext", varargs...)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// ExecContext indicates an expected call of ExecContext.
+func (mr *MockOracleTxMockRecorder) ExecContext(ctx, query any, args ...any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	varargs := append([]any{ctx, query}, args...)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ExecContext", reflect.TypeOf((*MockOracleTx)(nil).ExecContext), varargs...)
+}
+
+// Rollback mocks base method.
+func (m *MockOracleTx) Rollback() error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Rollback")
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// Rollback indicates an expected call of Rollback.
+func (mr *MockOracleTxMockRecorder) Rollback() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Rollback", reflect.TypeOf((*MockOracleTx)(nil).Rollback))
+}
+
+// SelectContext mocks base method.
+func (m *MockOracleTx) SelectContext(ctx context.Context, dest any, query string, args ...any) error {
+	m.ctrl.T.Helper()
+	varargs := []any{ctx, dest, query}
+	for _, a := range args {
+		varargs = append(varargs, a)
+	}
+	ret := m.ctrl.Call(m, "SelectContext", varargs...)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// SelectContext indicates an expected call of SelectContext.
+func (mr *MockOracleTxMockRecorder) SelectContext(ctx, dest, query any, args ...any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	varargs := append([]any{ctx, dest, query}, args...)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SelectContext", reflect.TypeOf((*MockOracleTx)(nil).SelectContext), varargs...)
+}
+
 // MockOracleProvider is a mock of OracleProvider interface.
 type MockOracleProvider struct {
 	ctrl     *gomock.Controller
@@ -9741,6 +9866,21 @@ func NewMockOracleProvider(ctrl *gomock.Controller) *MockOracleProvider {
 // EXPECT returns an object that allows the caller to indicate expected use.
 func (m *MockOracleProvider) EXPECT() *MockOracleProviderMockRecorder {
 	return m.recorder
+}
+
+// Begin mocks base method.
+func (m *MockOracleProvider) Begin() (OracleTx, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Begin")
+	ret0, _ := ret[0].(OracleTx)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// Begin indicates an expected call of Begin.
+func (mr *MockOracleProviderMockRecorder) Begin() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Begin", reflect.TypeOf((*MockOracleProvider)(nil).Begin))
 }
 
 // Connect mocks base method.
