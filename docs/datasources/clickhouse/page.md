@@ -48,10 +48,10 @@ func main() {
 	app := gofr.New()
 
 	app.AddClickhouse(clickhouse.New(clickhouse.Config{
-		Hosts:    os.Getenv("HOSTS"),
-		Username: os.Getenv("USERNAME"),
-		Password: os.Getenv("PASSWORD"),
-		Database: os.Getenv("DATABASE"),
+		Hosts:    app.Config.Get("HOSTS"),
+		Username: app.Config.Get("USERNAME"),
+		Password: app.Config.Get("PASSWORD"),
+		Database: app.Config.Get("DATABASE"),
 	}))
 
 	app.POST("/user", Post)
