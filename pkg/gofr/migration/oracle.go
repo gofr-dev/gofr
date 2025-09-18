@@ -121,8 +121,6 @@ func (om oracleMigrator) commitMigration(c *container.Container, data transactio
 	if err != nil {
 		c.Errorf("failed to insert migration record: %v", err)
 
-		err := data.OracleTx.Rollback()
-
 		if rollbackErr := data.OracleTx.Rollback(); rollbackErr != nil {
 			c.Errorf("also failed to rollback: %v", rollbackErr)
 		}
