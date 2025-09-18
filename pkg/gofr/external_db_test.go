@@ -205,6 +205,7 @@ func TestApp_AddOpenTSDB(t *testing.T) {
 		assert.Equal(t, mock, app.container.OpenTSDB)
 	})
 }
+
 func TestApp_AddScyllaDB(t *testing.T) {
 	t.Run("Adding ScyllaDB", func(t *testing.T) {
 		testutil.NewServerConfigs(t)
