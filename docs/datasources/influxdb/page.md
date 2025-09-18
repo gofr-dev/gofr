@@ -9,7 +9,6 @@ Any driver that implements this interface can be injected via the `app.AddInflux
 ```go
 // InfluxDB defines the methods for interacting with an InfluxDB database.
 type InfluxDB interface {
-    Connect()
     CreateOrganization(ctx context.Context, orgName string) (string, error)
     DeleteOrganization(ctx context.Context, orgID string) error
     ListOrganization(ctx context.Context) (map[string]string, error)
@@ -23,10 +22,6 @@ type InfluxDB interface {
 
     Query(ctx context.Context, org string, fluxQuery string) ([]map[string]any, error)
     WritePoints(ctx context.Context, bucket string, org string, points []container.InfluxPoint) error)
-
-    UseLogger(logger any)
-    UseMetrics(metrics any)
-    UseTracer(tracer any)
 }
 ```
 
