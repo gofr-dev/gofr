@@ -103,7 +103,7 @@ func Test_OracleCommitMigration(t *testing.T) {
 			tdError.MigrationNumber, "UP", tdError.StartTime, gomock.Any()).
 		Return(sql.ErrConnDone)
 
-	mockTxError.EXPECT().Rollback().Return(nil)
+	mockTxError.EXPECT().Rollback().Return(nil).AnyTimes()
 
 	err = mg.commitMigration(mockContainer, tdError)
 	assert.Equal(t, sql.ErrConnDone, err, "Error case failed")
