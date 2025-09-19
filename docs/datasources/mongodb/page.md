@@ -1,7 +1,7 @@
 ## MongoDB
 
 GoFr supports injecting MongoDB that supports the following interface. Any driver that implements the interface can be added
-using `app.AddMongo()` method, and user's can use MongoDB across application with `gofr.Context`.
+using `app.AddMongo()` method, and users can use MongoDB across application with `gofr.Context`.
 ```go
 type Mongo interface {
 	Find(ctx context.Context, collection string, filter any, results any) error
@@ -28,8 +28,7 @@ type Mongo interface {
 }
 ```
 
-User's can easily inject a driver that supports this interface, this provides usability without
-compromising the extensibility to use multiple databases.
+Users can easily inject a driver that supports this interface; this provides usability without compromising the extensibility to use multiple databases.
 
 Import the gofr's external driver for MongoDB:
 
