@@ -1,5 +1,11 @@
-## Solr
+# Solr
 
+## Configuration
+To connect to `Solr` DB, you need to provide the following environment variables:
+- `HOST`: The hostname or IP address of your Solr DB server.
+- `PORT`: The port number.
+
+## Setup
 GoFr supports injecting Solr database that supports the following interface. Any driver that implements the interface can be added
 using `app.AddSolr()` method, and user's can use Solr DB across application with `gofr.Context`.
 
@@ -37,7 +43,6 @@ import (
 	"bytes"
 	"encoding/json"
 	"errors"
-
 	"gofr.dev/pkg/gofr"
 	"gofr.dev/pkg/gofr/datasource/solr"
 )
@@ -46,8 +51,8 @@ func main() {
 	app := gofr.New()
 
 	app.AddSolr(solr.New(solr.Config{
-		Host: "localhost",
-		Port: "2020",
+		Host: app.Config.Get("HOST"),
+		Port: app.Config.Get("PORT"),
 	}))
 
 	app.POST("/solr", post)
