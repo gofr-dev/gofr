@@ -234,6 +234,11 @@ export const navigation = [
                 href: "/docs/datasources/elasticsearch",
                 desc: "Learn how to connect to and interact with elasticsearch in GoFr."
             },
+            {
+                title: "InfluxDB",
+                href: "/docs/datasources/influxdb",
+                desc: "Learn how to connect to and interact with influxdb in GoFr."
+            },
         ],
     },
     {
