@@ -194,6 +194,31 @@ func authInterceptor(ctx context.Context, req any, info *grpc.UnaryServerInfo, h
 }
 ```
 
+## Adding Custom Stream interceptors
+
+For streaming RPCs (client-stream, server-stream, or bidirectional), GoFr allows you to add stream interceptors using AddGRPCServerStreamInterceptors. These are useful for handling logic that needs to span the entire lifetime of a stream.
+```go
+func main() {
+    app := gofr.New()
+
+    app.AddGRPCServerStreamInterceptors(streamAuthInterceptor)
+
+    // ... register your service
+    app.Run()
+}
+
+func streamAuthInterceptor(srv any, ss grpc.ServerStream, info *grpc.StreamServerInfo, handler grpc.StreamHandler) error {
+	// Example: Validate metadata for the entire stream
+	md, ok := metadata.FromIncomingContext(ss.Context())
+	if !ok || !isValidToken(md["auth-token"]) {
+		return status.Errorf(codes.Unauthenticated, "invalid stream token")
+	}
+
+	// If valid, continue processing the stream
+	return handler(srv, ss)
+}
+```
+
 For more details on adding additional interceptors and server options, refer to the [official gRPC Go package](https://pkg.go.dev/google.golang.org/grpc#ServerOption).
 
 ## Generating gRPC Client using `gofr wrap grpc client`
@@ -229,7 +254,48 @@ func {serviceMethod}(ctx *gofr.Context) (*{serviceResponse}, error) {
     return res, nil
 }
 ```
+## Error Handling and Validation
+GoFr's gRPC implementation includes built-in error handling and validation:
 
+**Port Validation**: Automatically validates that gRPC ports are within valid range (1-65535)
+**Port Availability**: Checks if the specified port is available before starting the server
+**Server Creation**: Validates server creation and provides detailed error messages
+**Container Injection**: Validates container injection into gRPC services with detailed logging
+
+Port Configuration
+```bash
+// Set custom gRPC port in .env file
+GRPC_PORT=9001
+
+// Or use default port 9000 if not specified
+```
+## gRPC Reflection
+GoFr supports gRPC reflection for easier debugging and testing. Enable it using the configuration:
+```bash
+# In your .env file
+GRPC_ENABLE_REFLECTION=true
+```
+When enabled, you can use tools like grpcurl to inspect and test your gRPC services:
+
+```bash
+# List available services
+grpcurl -plaintext localhost:9000 list
+
+# Describe a service
+grpcurl -plaintext localhost:9000 describe YourService
+
+# Make a test call
+grpcurl -plaintext -d '{"name": "test"}' localhost:9000 YourService/YourMethod
+```
+
+## Built-in Metrics
+GoFr automatically registers the following gRPC metrics:
+
++ **grpc_server_status**: Gauge indicating server status (1=running, 0=stopped)
++ **grpc_server_errors_total**: Counter for total gRPC server errors
++ **grpc_services_registered_total**: Counter for total registered gRPC services
+
+These metrics are automatically available in your metrics endpoint and can be used for monitoring and alerting.
 
 ## Customizing gRPC Client with DialOptions
 
