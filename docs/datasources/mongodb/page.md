@@ -1,5 +1,13 @@
-## MongoDB
+# MongoDB
 
+## Configuration
+To connect to `MongoDB`, you need to provide the following environment variables:
+- `URI`: Mongodb server URL that the client connects to.
+- `DATABASE`: The name of the database to connect to.
+- `CONNECTIONTIMEOUT`: The maximum time the client will wait while trying to establish a connection.
+  
+
+## Setup
 GoFr supports injecting MongoDB that supports the following interface. Any driver that implements the interface can be added
 using `app.AddMongo()` method, and users can use MongoDB across application with `gofr.Context`.
 ```go
@@ -42,7 +50,6 @@ package main
 
 import (
 	"time"
-
 	"go.mongodb.org/mongo-driver/bson"
 	"gofr.dev/pkg/gofr/datasource/mongo"
 
@@ -58,7 +65,7 @@ type Person struct {
 func main() {
 	app := gofr.New()
 
-	db := mongo.New(mongo.Config{URI: "mongodb://localhost:27017", Database: "test", ConnectionTimeout: 4 * time.Second})
+	db := mongo.New(mongo.Config{URI: app.Config.Get("URI"), Database: app.Config.Get("DATABASE"), ConnectionTimeout: app.Config.Get("CONNECTIONTIMEOUT")})
 
 	// inject the mongo into gofr to use mongoDB across the application
 	// using gofr context
