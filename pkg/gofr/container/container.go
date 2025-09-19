@@ -67,6 +67,7 @@ type Container struct {
 	Elasticsearch Elasticsearch
 	Oracle        OracleDB
 	Couchbase     Couchbase
+	InfluxDB      InfluxDB
 
 	KVStore KVStore
 
