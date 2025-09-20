@@ -1,6 +1,4 @@
-go 1.24.0
-
-toolchain go1.24.0
+go 1.25.0
 
 use (
 	.
@@ -8,15 +6,19 @@ use (
 	./pkg/gofr/datasource/arangodb
 	./pkg/gofr/datasource/cassandra
 	./pkg/gofr/datasource/clickhouse
+	./pkg/gofr/datasource/couchbase
 	./pkg/gofr/datasource/dgraph
 	./pkg/gofr/datasource/elasticsearch
 	./pkg/gofr/datasource/file/ftp
 	./pkg/gofr/datasource/file/s3
 	./pkg/gofr/datasource/file/sftp
+	./pkg/gofr/datasource/influxdb
 	./pkg/gofr/datasource/kv-store/badger
+	./pkg/gofr/datasource/kv-store/dynamodb
 	./pkg/gofr/datasource/kv-store/nats
 	./pkg/gofr/datasource/mongo
 	./pkg/gofr/datasource/opentsdb
+	./pkg/gofr/datasource/oracle
 	./pkg/gofr/datasource/pubsub/eventhub
 	./pkg/gofr/datasource/pubsub/nats
 	./pkg/gofr/datasource/scylladb

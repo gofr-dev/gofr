@@ -70,11 +70,10 @@ func Test_MetricsGetHandler_SystemMetricsRegistered(t *testing.T) {
 
 	bodyString := string(body)
 
-	assert.Contains(t, bodyString, `app_go_sys{otel_scope_name="test-app",otel_scope_version="v1.0.0"}`)
-	assert.Contains(t, bodyString, `app_sys_memory_alloc{otel_scope_name="test-app",otel_scope_version="v1.0.0"}`)
-	assert.Contains(t, bodyString, `app_sys_total_alloc{otel_scope_name="test-app",otel_scope_version="v1.0.0"}`)
-	assert.Contains(t, bodyString, `app_sys_total_alloc{otel_scope_name="test-app",otel_scope_version="v1.0.0"}`)
-	assert.Contains(t, bodyString, `app_go_numGC{otel_scope_name="test-app",otel_scope_version="v1.0.0"}`)
+	assert.Contains(t, bodyString, `app_go_sys{otel_scope_name="test-app",otel_scope_schema_url="",otel_scope_version="v1.0.0"}`)
+	assert.Contains(t, bodyString, `app_sys_memory_alloc{otel_scope_name="test-app",otel_scope_schema_url="",otel_scope_version="v1.0.0"}`)
+	assert.Contains(t, bodyString, `app_sys_total_alloc{otel_scope_name="test-app",otel_scope_schema_url="",otel_scope_version="v1.0.0"}`)
+	assert.Contains(t, bodyString, `app_go_numGC{otel_scope_name="test-app",otel_scope_schema_url="",otel_scope_version="v1.0.0"}`)
 }
 
 func Test_MetricsGetHandler_RegisteredProfilingRoutes(t *testing.T) {

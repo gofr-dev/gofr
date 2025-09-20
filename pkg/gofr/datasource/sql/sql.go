@@ -1,6 +1,7 @@
 package sql
 
 import (
+	"context"
 	"database/sql"
 	"fmt"
 	"strconv"
@@ -69,13 +70,13 @@ func NewSQL(configs config.Config, logger datasource.Logger, metrics Metrics) *D
 		setupSupabaseDefaults(dbConfig, configs, logger)
 	}
 
+	if dbConfig.Dialect == "" {
+		return nil
+	}
+
 	// if Hostname is not provided, we won't try to connect to DB
 	if dbConfig.Dialect != sqlite && dbConfig.HostName == "" {
 		logger.Errorf("connection to %s failed: host name is empty.", dbConfig.Dialect)
-	}
-
-	if dbConfig.Dialect == "" {
-		return nil
 	}
 
 	logger.Debugf("generating database connection string for '%s'", dbConfig.Dialect)
@@ -137,7 +138,7 @@ func registerOtel(dialect string, logger datasource.Logger) (string, error) {
 }
 
 func pingToTestConnection(database *DB) *DB {
-	if err := database.DB.Ping(); err != nil {
+	if err := database.DB.PingContext(context.Background()); err != nil {
 		printConnectionFailureLog("connect", database.config, database.logger, err)
 
 		return database
@@ -152,11 +153,11 @@ func retryConnection(database *DB) {
 	const connRetryFrequencyInSeconds = 10
 
 	for {
-		if database.DB.Ping() != nil {
+		if database.DB.PingContext(context.Background()) != nil {
 			database.logger.Info("retrying SQL database connection")
 
 			for {
-				err := database.DB.Ping()
+				err := database.DB.PingContext(context.Background())
 				if err == nil {
 					printConnectionSuccessLog("connected", database.config, database.logger)
 

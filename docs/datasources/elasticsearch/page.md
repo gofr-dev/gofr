@@ -1,4 +1,12 @@
-## Elasticsearch
+# Elasticsearch
+
+## Configuration
+To connect to `Elasticsearch`, you need to provide the following environment variables:
+- `ADDRESSES`: Set of elasticsearch node URLs that the client will connect to.
+- `USERNAME`: The username for connecting to the database.
+- `PASSWORD`: The password for the specified user.
+
+## Setup
 
 GoFr supports injecting Elasticsearch with an interface that defines the 
 necessary methods for interacting with Elasticsearch. 
@@ -59,7 +67,6 @@ import (
 	"context"
 	"encoding/json"
 	"net/http"
-
 	"gofr.dev/pkg/gofr"
 	"gofr.dev/pkg/gofr/datasource/elasticsearch"
 )
@@ -70,9 +77,9 @@ func main() {
 
 	// Create Elasticsearch client with configuration
 	es := elasticsearch.New(elasticsearch.Config{
-		Addresses: []string{"http://localhost:9200"},
-		Username:  "elastic",
-		Password:  "changeme",
+		Addresses: app.Config.Get("ADDRESSES"),
+			Username:  app.Config.Get("USERNAME"),
+		Password:  app.Config.Get("PASSWORD"),
 	})
 
 	// Add Elasticsearch to the application

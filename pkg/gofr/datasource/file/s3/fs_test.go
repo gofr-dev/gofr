@@ -631,7 +631,6 @@ func Test_StatDirectory(t *testing.T) {
 		config:  &cfg,
 	}
 
-	//nolint:usetesting // Can't use t.Context() as inside Stat method we are using context.TODO()
 	mockConn.EXPECT().ListObjectsV2(context.TODO(), &s3.ListObjectsV2Input{
 		Bucket: aws.String("gofr-bucket-2"),
 		Prefix: aws.String("dir1/dir2"),
