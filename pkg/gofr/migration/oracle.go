@@ -53,8 +53,16 @@ VALUES (:1, :2, :3, :4)
 )
 
 // Create migration table if it doesn't exist.
-func (om oracleMigrator) checkAndCreateMigrationTable(_ *container.Container) error {
-	return om.Oracle.Exec(context.Background(), checkAndCreateOracleMigrationTable)
+func (om oracleMigrator) checkAndCreateMigrationTable(c *container.Container) error {
+	err := om.Oracle.Exec(context.Background(), checkAndCreateOracleMigrationTable)
+
+	if err != nil {
+		c.Errorf("Failed to create Oracle migration table: %v", err)
+	} else {
+		c.Infof("Oracle migration table checked/created successfully")
+	}
+
+	return err
 }
 
 // Get the last applied migration version.
@@ -70,6 +78,8 @@ func (om oracleMigrator) getLastMigration(c *container.Container) int64 {
 
 	err := om.Oracle.Select(context.Background(), &lastMigrations, getLastOracleGoFrMigration)
 	if err != nil {
+		c.Errorf("Failed to fetch last migration: %v", err)
+
 		return 0
 	}
 
