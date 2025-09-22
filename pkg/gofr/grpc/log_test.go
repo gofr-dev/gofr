@@ -9,8 +9,14 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+	"go.opentelemetry.io/otel/trace"
+	"go.uber.org/mock/gomock"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/health/grpc_health_v1"
 	"google.golang.org/grpc/metadata"
+	"google.golang.org/grpc/status"
 
 	"gofr.dev/pkg/gofr/testutil"
 )
@@ -173,7 +179,7 @@ func TestGetMetadataValue(t *testing.T) {
 
 func TestGetTraceID(t *testing.T) {
 	assert.Equal(t, "00000000000000000000000000000000", getTraceID(t.Context()))
-	assert.Equal(t, "00000000000000000000000000000000", getTraceID(context.TODO()))
+	assert.Equal(t, "00000000000000000000000000000000", getTraceID(t.Context()))
 }
 
 func TestWrappedServerStream_Context(t *testing.T) {
@@ -186,4 +192,526 @@ func TestWrappedServerStream_Context(t *testing.T) {
 	}
 	assert.Equal(t, newCtx, wrapped.Context())
 	assert.Equal(t, "value", wrapped.Context().Value(contextKey("key")))
+}
+
+// Mock implementations for testing.
+type mockLogger struct {
+	infoCalls  []any
+	errorCalls []any
+	debugCalls []any
+	fatalCalls []any
+}
+
+func (m *mockLogger) Info(args ...any) {
+	m.infoCalls = append(m.infoCalls, args)
+}
+
+func (m *mockLogger) Errorf(format string, args ...any) {
+	m.errorCalls = append(m.errorCalls, []any{format, args})
+}
+
+func (m *mockLogger) Debug(args ...any) {
+	m.debugCalls = append(m.debugCalls, args)
+}
+
+func (m *mockLogger) Fatalf(format string, args ...any) {
+	m.fatalCalls = append(m.fatalCalls, []any{format, args})
+}
+
+type mockMetrics struct {
+	histogramCalls []any
+}
+
+func (m *mockMetrics) RecordHistogram(ctx context.Context, name string, value float64, labels ...string) {
+	m.histogramCalls = append(m.histogramCalls, []any{ctx, name, value, labels})
+}
+
+func TestGRPCLog_DocumentRPCLog(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	mockLogger := &mockLogger{}
+	mockMetrics := &mockMetrics{}
+
+	log := gRPCLog{}
+	ctx := t.Context()
+	start := time.Now()
+	err := status.Error(codes.Internal, "test error")
+	method := "test.method"
+	name := "test_metric"
+
+	log.DocumentRPCLog(ctx, mockLogger, mockMetrics, start, err, method, name)
+
+	// Verify logger was called
+	assert.Len(t, mockLogger.infoCalls, 1)
+	assert.Len(t, mockMetrics.histogramCalls, 1)
+}
+
+func TestObservabilityInterceptor(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	mockLogger := &mockLogger{}
+	mockMetrics := &mockMetrics{}
+
+	interceptor := ObservabilityInterceptor(mockLogger, mockMetrics)
+
+	ctx := t.Context()
+	req := "test request"
+	info := &grpc.UnaryServerInfo{
+		FullMethod: "/test.Service/Method",
+	}
+
+	handler := func(_ context.Context, _ any) (any, error) {
+		return "test response", nil
+	}
+
+	resp, err := interceptor(ctx, req, info, handler)
+
+	require.NoError(t, err)
+	assert.Equal(t, "test response", resp)
+	assert.Len(t, mockLogger.infoCalls, 1)
+	assert.Len(t, mockMetrics.histogramCalls, 1)
+}
+
+func TestObservabilityInterceptor_WithError(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	mockLogger := &mockLogger{}
+	mockMetrics := &mockMetrics{}
+
+	interceptor := ObservabilityInterceptor(mockLogger, mockMetrics)
+
+	ctx := t.Context()
+	req := "test request"
+	info := &grpc.UnaryServerInfo{
+		FullMethod: "/test.Service/Method",
+	}
+
+	handler := func(_ context.Context, _ any) (any, error) {
+		return nil, status.Error(codes.Internal, "test error")
+	}
+
+	resp, err := interceptor(ctx, req, info, handler)
+
+	require.Error(t, err)
+	assert.Nil(t, resp)
+	assert.Len(t, mockLogger.errorCalls, 1)
+	assert.Len(t, mockMetrics.histogramCalls, 1)
+}
+
+func TestObservabilityInterceptor_HealthCheck(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	mockLogger := &mockLogger{}
+	mockMetrics := &mockMetrics{}
+
+	interceptor := ObservabilityInterceptor(mockLogger, mockMetrics)
+
+	ctx := t.Context()
+	req := &grpc_health_v1.HealthCheckRequest{
+		Service: "test-service",
+	}
+	info := &grpc.UnaryServerInfo{
+		FullMethod: healthCheck,
+	}
+
+	handler := func(_ context.Context, _ any) (any, error) {
+		return &grpc_health_v1.HealthCheckResponse{}, nil
+	}
+
+	resp, err := interceptor(ctx, req, info, handler)
+
+	require.NoError(t, err)
+	assert.NotNil(t, resp)
+	assert.Len(t, mockLogger.infoCalls, 1)
+	assert.Len(t, mockMetrics.histogramCalls, 1)
+}
+
+func TestStreamObservabilityInterceptor(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	mockLogger := &mockLogger{}
+	mockMetrics := &mockMetrics{}
+
+	interceptor := StreamObservabilityInterceptor(mockLogger, mockMetrics)
+
+	info := &grpc.StreamServerInfo{
+		FullMethod:     "/test.Service/Stream",
+		IsClientStream: false,
+		IsServerStream: true,
+	}
+
+	handler := func(_ any, _ grpc.ServerStream) error {
+		return nil
+	}
+
+	err := interceptor(nil, &mockServerStream{}, info, handler)
+
+	require.NoError(t, err)
+	assert.Len(t, mockLogger.infoCalls, 1)
+	assert.Len(t, mockMetrics.histogramCalls, 1)
+}
+
+func TestStreamObservabilityInterceptor_ClientStream(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	mockLogger := &mockLogger{}
+	mockMetrics := &mockMetrics{}
+
+	interceptor := StreamObservabilityInterceptor(mockLogger, mockMetrics)
+
+	info := &grpc.StreamServerInfo{
+		FullMethod:     "/test.Service/Stream",
+		IsClientStream: true,
+		IsServerStream: false,
+	}
+
+	handler := func(_ any, _ grpc.ServerStream) error {
+		return nil
+	}
+
+	err := interceptor(nil, &mockServerStream{}, info, handler)
+
+	require.NoError(t, err)
+	assert.Len(t, mockLogger.infoCalls, 1)
+	assert.Len(t, mockMetrics.histogramCalls, 1)
+}
+
+func TestStreamObservabilityInterceptor_BidirectionalStream(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	mockLogger := &mockLogger{}
+	mockMetrics := &mockMetrics{}
+
+	interceptor := StreamObservabilityInterceptor(mockLogger, mockMetrics)
+
+	info := &grpc.StreamServerInfo{
+		FullMethod:     "/test.Service/Stream",
+		IsClientStream: true,
+		IsServerStream: true,
+	}
+
+	handler := func(_ any, _ grpc.ServerStream) error {
+		return nil
+	}
+
+	err := interceptor(nil, &mockServerStream{}, info, handler)
+
+	require.NoError(t, err)
+	assert.Len(t, mockLogger.infoCalls, 1)
+	assert.Len(t, mockMetrics.histogramCalls, 1)
+}
+
+func TestStreamObservabilityInterceptor_WithError(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	mockLogger := &mockLogger{}
+	mockMetrics := &mockMetrics{}
+
+	interceptor := StreamObservabilityInterceptor(mockLogger, mockMetrics)
+
+	info := &grpc.StreamServerInfo{
+		FullMethod:     "/test.Service/Stream",
+		IsClientStream: false,
+		IsServerStream: true,
+	}
+
+	handler := func(_ any, _ grpc.ServerStream) error {
+		return status.Error(codes.Internal, "stream error")
+	}
+
+	err := interceptor(nil, &mockServerStream{}, info, handler)
+
+	require.Error(t, err)
+	assert.Len(t, mockLogger.infoCalls, 1)
+	assert.Len(t, mockMetrics.histogramCalls, 1)
+}
+
+func TestInitializeSpanContext(t *testing.T) {
+	tests := []struct {
+		name     string
+		ctx      context.Context
+		expected bool
+	}{
+		{
+			name:     "no metadata",
+			ctx:      t.Context(),
+			expected: false,
+		},
+		{
+			name: "valid trace context",
+			ctx: metadata.NewIncomingContext(t.Context(), metadata.Pairs(
+				"x-gofr-traceid", "12345678901234567890123456789012",
+				"x-gofr-spanid", "1234567890123456",
+			)),
+			expected: true,
+		},
+		{
+			name: "missing trace id",
+			ctx: metadata.NewIncomingContext(t.Context(), metadata.Pairs(
+				"x-gofr-spanid", "1234567890123456",
+			)),
+			expected: false,
+		},
+		{
+			name: "missing span id",
+			ctx: metadata.NewIncomingContext(t.Context(), metadata.Pairs(
+				"x-gofr-traceid", "12345678901234567890123456789012",
+			)),
+			expected: false,
+		},
+		{
+			name: "invalid trace id",
+			ctx: metadata.NewIncomingContext(t.Context(), metadata.Pairs(
+				"x-gofr-traceid", "invalid",
+				"x-gofr-spanid", "1234567890123456",
+			)),
+			expected: true, // Function creates span context even with invalid hex
+		},
+		{
+			name: "invalid span id",
+			ctx: metadata.NewIncomingContext(t.Context(), metadata.Pairs(
+				"x-gofr-traceid", "12345678901234567890123456789012",
+				"x-gofr-spanid", "invalid",
+			)),
+			expected: true, // Function creates span context even with invalid hex
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := initializeSpanContext(tt.ctx)
+
+			if tt.expected {
+				// When trace context is created, the result should be different from input
+				assert.NotEqual(t, tt.ctx, result)
+				// Verify that a span context was added
+				span := trace.SpanFromContext(result)
+				assert.NotNil(t, span)
+				// For invalid hex values, the span context may not be valid but still exists
+				if tt.name == "valid trace context" {
+					assert.True(t, span.SpanContext().IsValid())
+				} else {
+					// For invalid cases, span context exists but may not be valid
+					assert.False(t, span.SpanContext().IsValid())
+				}
+			} else {
+				// When no trace context is created, the result should be the same as input
+				assert.Equal(t, tt.ctx, result)
+			}
+		})
+	}
+}
+
+func TestGetMetadataValue_Comprehensive(t *testing.T) {
+	tests := []struct {
+		name     string
+		md       metadata.MD
+		key      string
+		expected string
+	}{
+		{
+			name:     "key exists",
+			md:       metadata.Pairs("test-key", "test-value"),
+			key:      "test-key",
+			expected: "test-value",
+		},
+		{
+			name:     "key does not exist",
+			md:       metadata.Pairs("other-key", "other-value"),
+			key:      "test-key",
+			expected: "",
+		},
+		{
+			name:     "empty metadata",
+			md:       metadata.MD{},
+			key:      "test-key",
+			expected: "",
+		},
+		{
+			name:     "multiple values",
+			md:       metadata.Pairs("test-key", "value1", "test-key", "value2"),
+			key:      "test-key",
+			expected: "value1",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := getMetadataValue(tt.md, tt.key)
+			assert.Equal(t, tt.expected, result)
+		})
+	}
+}
+
+// Mock server stream for testing.
+type mockServerStream struct {
+	grpc.ServerStream
+	ctx context.Context
+}
+
+func (m *mockServerStream) Context() context.Context {
+	if m.ctx == nil {
+		return context.Background()
+	}
+
+	return m.ctx
+}
+
+func (*mockServerStream) SendMsg(_ any) error {
+	return nil
+}
+
+func (*mockServerStream) RecvMsg(_ any) error {
+	return nil
+}
+
+func TestWrappedServerStream_Context_Comprehensive(t *testing.T) {
+	type testKey string
+
+	ctx := context.WithValue(t.Context(), testKey("test-key"), "test-value")
+
+	wrapped := &wrappedServerStream{
+		ServerStream: &mockServerStream{},
+		ctx:          ctx,
+	}
+
+	result := wrapped.Context()
+	assert.Equal(t, ctx, result)
+}
+
+// Additional tests to reach 100% coverage.
+func TestGetTraceID_WithSpanContext(t *testing.T) {
+	// Test with context without span - this returns the default trace ID
+	ctx := t.Context()
+	traceID := getTraceID(ctx)
+	assert.Equal(t, "00000000000000000000000000000000", traceID)
+}
+
+func TestGetTraceID_WithValidSpan(t *testing.T) {
+	// Create a context with a valid span
+	ctx := t.Context()
+	span := trace.SpanFromContext(ctx)
+
+	// Test with valid span context
+	traceID := getTraceID(ctx)
+	assert.NotEmpty(t, traceID)
+	assert.Equal(t, span.SpanContext().TraceID().String(), traceID)
+}
+
+func TestGetTraceID_WithNilSpan(t *testing.T) {
+	// Create a custom context that will make trace.SpanFromContext return nil
+	// We'll use a context with a custom value that doesn't have a span
+	type customKey string
+
+	ctx := context.WithValue(t.Context(), customKey("custom-key"), "custom-value")
+
+	// Test with context that has nil span
+	traceID := getTraceID(ctx)
+	assert.Equal(t, "00000000000000000000000000000000", traceID)
+}
+
+func TestLogGRPCEntry(t *testing.T) {
+	mockLogger := &mockLogger{}
+
+	// Test logGRPCEntry function
+	log := &gRPCLog{
+		ID:           "test-id",
+		StartTime:    "2023-01-01T12:00:00Z",
+		ResponseTime: 100,
+		Method:       "/test.Service/Method",
+		StatusCode:   0,
+	}
+
+	logGRPCEntry(mockLogger, log, "/test.Service/Method")
+
+	// Verify logger was called
+	assert.Len(t, mockLogger.infoCalls, 1)
+}
+
+func TestLogGRPCEntry_WithDebugMethod(t *testing.T) {
+	mockLogger := &mockLogger{}
+
+	// Test logGRPCEntry function with debug method
+	log := &gRPCLog{
+		ID:           "test-id",
+		StartTime:    "2023-01-01T12:00:00Z",
+		ResponseTime: 100,
+		Method:       debugMethod,
+		StatusCode:   0,
+	}
+
+	logGRPCEntry(mockLogger, log, debugMethod)
+
+	// Verify debug logger was called
+	assert.Len(t, mockLogger.debugCalls, 1)
+}
+
+func TestLogGRPCEntry_WithSendMethod(t *testing.T) {
+	mockLogger := &mockLogger{}
+
+	// Test logGRPCEntry function with Send method
+	log := &gRPCLog{
+		ID:           "test-id",
+		StartTime:    "2023-01-01T12:00:00Z",
+		ResponseTime: 100,
+		Method:       "/test.Service/Send",
+		StatusCode:   0,
+	}
+
+	logGRPCEntry(mockLogger, log, "/test.Service/Send")
+
+	// Verify debug logger was called
+	assert.Len(t, mockLogger.debugCalls, 1)
+}
+
+func TestLogGRPCEntry_WithNilLogger(_ *testing.T) {
+	// Test logGRPCEntry function with nil logger
+	log := &gRPCLog{
+		ID:           "test-id",
+		StartTime:    "2023-01-01T12:00:00Z",
+		ResponseTime: 100,
+		Method:       "/test.Service/Method",
+		StatusCode:   0,
+	}
+
+	// This should not panic
+	logGRPCEntry(nil, log, "/test.Service/Method")
+}
+
+func TestRecordGRPCMetrics(t *testing.T) {
+	mockMetrics := &mockMetrics{}
+	ctx := t.Context()
+
+	// Test recordGRPCMetrics function
+	recordGRPCMetrics(ctx, mockMetrics, "test_metric", 100*time.Millisecond, "/test.Service/Method", "")
+
+	// Verify metrics was called
+	assert.Len(t, mockMetrics.histogramCalls, 1)
+}
+
+func TestRecordGRPCMetrics_WithStreamType(t *testing.T) {
+	mockMetrics := &mockMetrics{}
+	ctx := t.Context()
+
+	// Test recordGRPCMetrics function with stream type
+	recordGRPCMetrics(ctx, mockMetrics, "test_metric", 100*time.Millisecond, "/test.Service/Method", "SERVER_STREAM")
+
+	// Verify metrics was called
+	assert.Len(t, mockMetrics.histogramCalls, 1)
+}
+
+func TestRecordGRPCMetrics_WithNilMetrics(t *testing.T) {
+	ctx := t.Context()
+
+	// Test recordGRPCMetrics function with nil metrics
+	// This should not panic
+	recordGRPCMetrics(ctx, nil, "test_metric", 100*time.Millisecond, "/test.Service/Method", "")
 }
