@@ -71,6 +71,10 @@ func Run(migrationsMap map[int64]Migrate, c *container.Container) {
 		ds.SQL = migrationInfo.SQLTx
 		ds.Redis = migrationInfo.RedisTx
 
+		if migrationInfo.OracleTx != nil {
+			ds.Oracle = &oracleTransactionWrapper{tx: migrationInfo.OracleTx}
+		}
+
 		migrationInfo.StartTime = time.Now()
 		migrationInfo.MigrationNumber = currentMigration
 
