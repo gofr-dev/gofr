@@ -19,15 +19,12 @@ import (
 
 // Constants for strategies and intervals.
 const (
-	healthStatusUP             = "UP"
-	healthStatusDOWN           = "DOWN"
-	circuitStateClosed   int32 = 0
-	circuitStateOpen     int32 = 1
-	circuitStateHalfOpen int32 = 2
-	defaultMaxFailures   int32 = 5
-	defaultTimeoutSec    int   = 30
-	defaultCacheSize     int64 = 1000
-	minQueryLength       int   = 6
+	healthStatusUP           = "UP"
+	healthStatusDOWN         = "DOWN"
+	defaultMaxFailures int32 = 5
+	defaultTimeoutSec  int   = 30
+	defaultCacheSize   int64 = 1000
+	minQueryLength     int   = 4
 )
 
 // Pre-compiled regex - compiled once at package init.
@@ -93,7 +90,7 @@ func NewResolver(primary container.DB, replicas []container.DB, logger Logger, m
 
 	// Default strategy
 	if len(replicas) > 0 {
-		r.strategy = NewRoundRobinStrategy(len(replicas))
+		r.strategy = NewRoundRobinStrategy()
 	}
 
 	// Apply options
@@ -180,9 +177,9 @@ func (r *Resolver) isReadQuery(query string) bool {
 	}
 
 	// Fast string comparison for common cases
-	firstSix := strings.ToUpper(trimmed[:6])
-	switch firstSix {
-	case "SELECT", "SHOW  ", "DESCRI", "EXPLAI":
+	firstFour := strings.ToUpper(trimmed[:minQueryLength])
+	switch firstFour {
+	case "SELE", "SHOW", "DESC", "EXPL":
 		return true
 	}
 
@@ -456,7 +453,7 @@ func (r *Resolver) HealthCheck() *datasource.Health {
 
 		var stateStr string
 
-		switch state {
+		switch *state {
 		case circuitStateClosed:
 			stateStr = "CLOSED"
 		case circuitStateOpen:

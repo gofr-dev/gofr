@@ -62,11 +62,6 @@ func (r *ResolverWrapper) Build(primary container.DB, replicas []container.DB) (
 		return nil, errPrimaryNil
 	}
 
-	// Update RoundRobinStrategy count if needed
-	if rr, ok := r.strategy.(*RoundRobinStrategy); ok {
-		rr.count = len(replicas)
-	}
-
 	// Create options slice
 	var opts []Option
 

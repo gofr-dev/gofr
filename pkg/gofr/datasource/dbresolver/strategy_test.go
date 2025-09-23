@@ -21,7 +21,7 @@ func TestRoundRobinStrategy_Choose(t *testing.T) {
 	replicas := []container.DB{mockReplica1, mockReplica2, mockReplica3}
 
 	// Create strategy
-	strategy := NewRoundRobinStrategy(len(replicas))
+	strategy := NewRoundRobinStrategy()
 
 	// First call should return first replica
 	db, err := strategy.Choose(replicas)
@@ -53,7 +53,7 @@ func TestRoundRobinStrategy_Choose_SingleReplica(t *testing.T) {
 	replicas := []container.DB{mockReplica}
 
 	// Create strategy
-	strategy := NewRoundRobinStrategy(len(replicas))
+	strategy := NewRoundRobinStrategy()
 
 	// All calls should return the same replica
 	for i := 0; i < 5; i++ {
@@ -64,7 +64,7 @@ func TestRoundRobinStrategy_Choose_SingleReplica(t *testing.T) {
 }
 
 func TestRoundRobinStrategy_Choose_NoReplicas(t *testing.T) {
-	strategy := NewRoundRobinStrategy(0)
+	strategy := NewRoundRobinStrategy()
 
 	db, err := strategy.Choose([]container.DB{})
 	assert.Nil(t, db)
@@ -121,7 +121,7 @@ func TestRandomStrategy_Choose_NoReplicas(t *testing.T) {
 }
 
 func TestStrategy_Name(t *testing.T) {
-	roundRobin := NewRoundRobinStrategy(3)
+	roundRobin := NewRoundRobinStrategy()
 	assert.Equal(t, string(StrategyRoundRobin), roundRobin.Name())
 
 	random := NewRandomStrategy()

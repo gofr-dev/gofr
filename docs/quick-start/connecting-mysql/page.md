@@ -256,7 +256,7 @@ You can choose the load balancing strategy and enable fallback to primary:
 
 ```go
 // Add DB resolver with round-robin strategy and fallback enabled
-resolver := dbresolver.NewProvider("round-robin", true)
+resolver := dbresolver.NewProvider(dbresolver.NewRoundRobinStrategy(), true)
 a.AddDBResolver(resolver)
 ```
 

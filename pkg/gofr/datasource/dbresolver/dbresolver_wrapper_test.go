@@ -101,7 +101,7 @@ func TestResolverWrapper_Build_Error(t *testing.T) {
 	defer mocks.Ctrl.Finish()
 
 	t.Run("Error_NilPrimary", func(t *testing.T) {
-		wrapper := NewProvider(NewRoundRobinStrategy(2), true)
+		wrapper := NewProvider(NewRoundRobinStrategy(), true)
 		wrapper.UseLogger(mocks.Logger)
 		wrapper.UseMetrics(mocks.Metrics)
 		wrapper.UseTracer(otel.GetTracerProvider().Tracer("gofr-dbresolver"))
@@ -126,7 +126,7 @@ func TestResolverWrapper_Build_Success(t *testing.T) {
 	}{
 		{
 			name:         "RoundRobinStrategy",
-			strategy:     NewRoundRobinStrategy(0),
+			strategy:     NewRoundRobinStrategy(),
 			readFallback: true,
 			replicas:     mocks.Replicas,
 		},
@@ -138,7 +138,7 @@ func TestResolverWrapper_Build_Success(t *testing.T) {
 		},
 		{
 			name:         "EmptyReplicas",
-			strategy:     NewRoundRobinStrategy(0),
+			strategy:     NewRoundRobinStrategy(),
 			readFallback: true,
 			replicas:     []container.DB{},
 		},

@@ -29,14 +29,11 @@ type Strategy interface {
 // RoundRobinStrategy selects replicas in round-robin order.
 type RoundRobinStrategy struct {
 	current atomic.Int64
-	count   int
 }
 
 // NewRoundRobinStrategy creates a new round-robin strategy instance.
-func NewRoundRobinStrategy(count int) Strategy {
-	return &RoundRobinStrategy{
-		count: count,
-	}
+func NewRoundRobinStrategy() Strategy {
+	return &RoundRobinStrategy{}
 }
 
 // Choose selects the next replica in round-robin fashion.
