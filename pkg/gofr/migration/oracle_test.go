@@ -1,6 +1,7 @@
 package migration
 
 import (
+	"context"
 	"database/sql"
 	"testing"
 	"time"
@@ -114,7 +115,6 @@ func TestOracleMigration_RunMigrationSuccess(t *testing.T) {
 	mockOracle, mockContainer := initializeOracleRunMocks(t)
 	ctrl := gomock.NewController(t)
 
-	// Create a mock transaction
 	mockTx := container.NewMockOracleTx(ctrl)
 
 	ds := Datasource{Oracle: mockOracle}
@@ -123,15 +123,21 @@ func TestOracleMigration_RunMigrationSuccess(t *testing.T) {
 
 	migrationMap := map[int64]Migrate{
 		1: {UP: func(d Datasource) error {
-			return d.Oracle.Exec(t.Context(), "CREATE TABLE test (id INT)")
+			return d.Oracle.Exec(context.Background(), "CREATE TABLE test (id INT)")
 		}},
 	}
 
-	mockOracle.EXPECT().Exec(gomock.Any(), gomock.Any()).Return(nil).MaxTimes(2)
+	// Set up mock expectations in the correct order
+	mockOracle.EXPECT().Exec(gomock.Any(), checkAndCreateOracleMigrationTable).Return(nil)
 	mockOracle.EXPECT().Select(gomock.Any(), gomock.Any(), getLastOracleGoFrMigration).Return(nil)
 	mockOracle.EXPECT().Begin().Return(mockTx, nil)
-	mockTx.EXPECT().ExecContext(gomock.Any(), gomock.Any(), gomock.Any(),
-		gomock.Any(), gomock.Any(), gomock.Any()).Return(nil)
+
+	// Migration execution through transaction wrapper
+	mockTx.EXPECT().ExecContext(gomock.Any(), "CREATE TABLE test (id INT)").Return(nil)
+
+	// Migration record insertion and commit
+	mockTx.EXPECT().ExecContext(gomock.Any(), insertOracleGoFrMigrationRow,
+		int64(1), "UP", gomock.Any(), gomock.Any()).Return(nil)
 	mockTx.EXPECT().Commit().Return(nil)
 
 	Run(migrationMap, mockContainer)
