@@ -3,7 +3,7 @@ module gofr.dev/examples/using-add-filestore
 go 1.25
 
 require (
-	github.com/stretchr/testify v1.11.0
+	github.com/stretchr/testify v1.11.1
 	go.uber.org/mock v0.6.0
 	gofr.dev v1.43.0
 	gofr.dev/pkg/gofr/datasource/file/ftp v0.2.1
