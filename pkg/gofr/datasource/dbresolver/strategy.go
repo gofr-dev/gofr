@@ -12,10 +12,10 @@ import (
 type StrategyType string
 
 const (
-	// StrategyRoundRobin distributes load sequentially across replicas.
-	StrategyRoundRobin StrategyType = "round-robin"
-	// StrategyRandom randomly selects a replica for each request.
-	StrategyRandom StrategyType = "random"
+	// strategyRoundRobin distributes load sequentially across replicas.
+	strategyRoundRobin StrategyType = "round-robin"
+	// strategyRandom randomly selects a replica for each request.
+	strategyRandom StrategyType = "random"
 )
 
 var errNoReplicasAvailable = errors.New("no replicas available")
@@ -55,7 +55,7 @@ func (s *RoundRobinStrategy) Choose(replicas []container.DB) (container.DB, erro
 
 // Name returns the name of strategy.
 func (*RoundRobinStrategy) Name() string {
-	return string(StrategyRoundRobin)
+	return string(strategyRoundRobin)
 }
 
 // RandomStrategy selects a replica randomly.
@@ -77,5 +77,5 @@ func (*RandomStrategy) Choose(replicas []container.DB) (container.DB, error) {
 
 // Name returns the name of the strategy.
 func (*RandomStrategy) Name() string {
-	return string(StrategyRandom)
+	return string(strategyRandom)
 }

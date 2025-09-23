@@ -19,8 +19,6 @@ import (
 
 // Constants for strategies and intervals.
 const (
-	healthStatusUP           = "UP"
-	healthStatusDOWN         = "DOWN"
 	defaultMaxFailures int32 = 5
 	defaultTimeoutSec  int   = 30
 	defaultCacheSize   int64 = 1000

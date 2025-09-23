@@ -15,6 +15,11 @@ import (
 
 var errTestReplicaFailed = errors.New("replica connection failed")
 
+const (
+	healthStatusUP   = "UP"
+	healthStatusDOWN = "DOWN"
+)
+
 // MockResult is a mock of sql.Result interface.
 type MockResult struct {
 	ctrl     *gomock.Controller
