@@ -1,6 +1,6 @@
 module gofr.dev/pkg/gofr/datasource/file/s3
 
-go 1.24
+go 1.25
 
 require (
 	github.com/aws/aws-sdk-go-v2 v1.36.5
@@ -9,7 +9,7 @@ require (
 	github.com/aws/aws-sdk-go-v2/service/s3 v1.81.0
 	github.com/stretchr/testify v1.11.1
 	go.uber.org/mock v0.6.0
-	gofr.dev v1.43.0
+	gofr.dev v1.45.0
 )
 
 require (

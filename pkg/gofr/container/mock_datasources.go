@@ -14192,3 +14192,393 @@ func (mr *MockDBResolverProviderMockRecorder) UseTracer(tracer any) *gomock.Call
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UseTracer", reflect.TypeOf((*MockDBResolverProvider)(nil).UseTracer), tracer)
 }
+
+// MockInfluxDB is a mock of InfluxDB interface.
+type MockInfluxDB struct {
+	ctrl     *gomock.Controller
+	recorder *MockInfluxDBMockRecorder
+	isgomock struct{}
+}
+
+// MockInfluxDBMockRecorder is the mock recorder for MockInfluxDB.
+type MockInfluxDBMockRecorder struct {
+	mock *MockInfluxDB
+}
+
+// NewMockInfluxDB creates a new mock instance.
+func NewMockInfluxDB(ctrl *gomock.Controller) *MockInfluxDB {
+	mock := &MockInfluxDB{ctrl: ctrl}
+	mock.recorder = &MockInfluxDBMockRecorder{mock}
+	return mock
+}
+
+// EXPECT returns an object that allows the caller to indicate expected use.
+func (m *MockInfluxDB) EXPECT() *MockInfluxDBMockRecorder {
+	return m.recorder
+}
+
+// CreateBucket mocks base method.
+func (m *MockInfluxDB) CreateBucket(ctx context.Context, org, bucket string) (string, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "CreateBucket", ctx, org, bucket)
+	ret0, _ := ret[0].(string)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// CreateBucket indicates an expected call of CreateBucket.
+func (mr *MockInfluxDBMockRecorder) CreateBucket(ctx, org, bucket any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CreateBucket", reflect.TypeOf((*MockInfluxDB)(nil).CreateBucket), ctx, org, bucket)
+}
+
+// CreateOrganization mocks base method.
+func (m *MockInfluxDB) CreateOrganization(ctx context.Context, org string) (string, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "CreateOrganization", ctx, org)
+	ret0, _ := ret[0].(string)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// CreateOrganization indicates an expected call of CreateOrganization.
+func (mr *MockInfluxDBMockRecorder) CreateOrganization(ctx, org any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CreateOrganization", reflect.TypeOf((*MockInfluxDB)(nil).CreateOrganization), ctx, org)
+}
+
+// DeleteBucket mocks base method.
+func (m *MockInfluxDB) DeleteBucket(ctx context.Context, bucketID string) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "DeleteBucket", ctx, bucketID)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// DeleteBucket indicates an expected call of DeleteBucket.
+func (mr *MockInfluxDBMockRecorder) DeleteBucket(ctx, bucketID any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeleteBucket", reflect.TypeOf((*MockInfluxDB)(nil).DeleteBucket), ctx, bucketID)
+}
+
+// DeleteOrganization mocks base method.
+func (m *MockInfluxDB) DeleteOrganization(ctx context.Context, orgID string) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "DeleteOrganization", ctx, orgID)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// DeleteOrganization indicates an expected call of DeleteOrganization.
+func (mr *MockInfluxDBMockRecorder) DeleteOrganization(ctx, orgID any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeleteOrganization", reflect.TypeOf((*MockInfluxDB)(nil).DeleteOrganization), ctx, orgID)
+}
+
+// HealthCheck mocks base method.
+func (m *MockInfluxDB) HealthCheck(arg0 context.Context) (any, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "HealthCheck", arg0)
+	ret0, _ := ret[0].(any)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// HealthCheck indicates an expected call of HealthCheck.
+func (mr *MockInfluxDBMockRecorder) HealthCheck(arg0 any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "HealthCheck", reflect.TypeOf((*MockInfluxDB)(nil).HealthCheck), arg0)
+}
+
+// ListBuckets mocks base method.
+func (m *MockInfluxDB) ListBuckets(ctx context.Context, org string) (map[string]string, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "ListBuckets", ctx, org)
+	ret0, _ := ret[0].(map[string]string)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// ListBuckets indicates an expected call of ListBuckets.
+func (mr *MockInfluxDBMockRecorder) ListBuckets(ctx, org any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListBuckets", reflect.TypeOf((*MockInfluxDB)(nil).ListBuckets), ctx, org)
+}
+
+// ListOrganization mocks base method.
+func (m *MockInfluxDB) ListOrganization(ctx context.Context) (map[string]string, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "ListOrganization", ctx)
+	ret0, _ := ret[0].(map[string]string)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// ListOrganization indicates an expected call of ListOrganization.
+func (mr *MockInfluxDBMockRecorder) ListOrganization(ctx any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListOrganization", reflect.TypeOf((*MockInfluxDB)(nil).ListOrganization), ctx)
+}
+
+// Ping mocks base method.
+func (m *MockInfluxDB) Ping(ctx context.Context) (bool, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Ping", ctx)
+	ret0, _ := ret[0].(bool)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// Ping indicates an expected call of Ping.
+func (mr *MockInfluxDBMockRecorder) Ping(ctx any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Ping", reflect.TypeOf((*MockInfluxDB)(nil).Ping), ctx)
+}
+
+// Query mocks base method.
+func (m *MockInfluxDB) Query(ctx context.Context, org, fluxQuery string) ([]map[string]any, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Query", ctx, org, fluxQuery)
+	ret0, _ := ret[0].([]map[string]any)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// Query indicates an expected call of Query.
+func (mr *MockInfluxDBMockRecorder) Query(ctx, org, fluxQuery any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Query", reflect.TypeOf((*MockInfluxDB)(nil).Query), ctx, org, fluxQuery)
+}
+
+// WritePoint mocks base method.
+func (m *MockInfluxDB) WritePoint(ctx context.Context, org, bucket, measurement string, tags map[string]string, fields map[string]any, timestamp time.Time) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "WritePoint", ctx, org, bucket, measurement, tags, fields, timestamp)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// WritePoint indicates an expected call of WritePoint.
+func (mr *MockInfluxDBMockRecorder) WritePoint(ctx, org, bucket, measurement, tags, fields, timestamp any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "WritePoint", reflect.TypeOf((*MockInfluxDB)(nil).WritePoint), ctx, org, bucket, measurement, tags, fields, timestamp)
+}
+
+// MockInfluxDBProvider is a mock of InfluxDBProvider interface.
+type MockInfluxDBProvider struct {
+	ctrl     *gomock.Controller
+	recorder *MockInfluxDBProviderMockRecorder
+	isgomock struct{}
+}
+
+// MockInfluxDBProviderMockRecorder is the mock recorder for MockInfluxDBProvider.
+type MockInfluxDBProviderMockRecorder struct {
+	mock *MockInfluxDBProvider
+}
+
+// NewMockInfluxDBProvider creates a new mock instance.
+func NewMockInfluxDBProvider(ctrl *gomock.Controller) *MockInfluxDBProvider {
+	mock := &MockInfluxDBProvider{ctrl: ctrl}
+	mock.recorder = &MockInfluxDBProviderMockRecorder{mock}
+	return mock
+}
+
+// EXPECT returns an object that allows the caller to indicate expected use.
+func (m *MockInfluxDBProvider) EXPECT() *MockInfluxDBProviderMockRecorder {
+	return m.recorder
+}
+
+// Connect mocks base method.
+func (m *MockInfluxDBProvider) Connect() {
+	m.ctrl.T.Helper()
+	m.ctrl.Call(m, "Connect")
+}
+
+// Connect indicates an expected call of Connect.
+func (mr *MockInfluxDBProviderMockRecorder) Connect() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Connect", reflect.TypeOf((*MockInfluxDBProvider)(nil).Connect))
+}
+
+// CreateBucket mocks base method.
+func (m *MockInfluxDBProvider) CreateBucket(ctx context.Context, org, bucket string) (string, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "CreateBucket", ctx, org, bucket)
+	ret0, _ := ret[0].(string)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// CreateBucket indicates an expected call of CreateBucket.
+func (mr *MockInfluxDBProviderMockRecorder) CreateBucket(ctx, org, bucket any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CreateBucket", reflect.TypeOf((*MockInfluxDBProvider)(nil).CreateBucket), ctx, org, bucket)
+}
+
+// CreateOrganization mocks base method.
+func (m *MockInfluxDBProvider) CreateOrganization(ctx context.Context, org string) (string, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "CreateOrganization", ctx, org)
+	ret0, _ := ret[0].(string)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// CreateOrganization indicates an expected call of CreateOrganization.
+func (mr *MockInfluxDBProviderMockRecorder) CreateOrganization(ctx, org any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CreateOrganization", reflect.TypeOf((*MockInfluxDBProvider)(nil).CreateOrganization), ctx, org)
+}
+
+// DeleteBucket mocks base method.
+func (m *MockInfluxDBProvider) DeleteBucket(ctx context.Context, bucketID string) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "DeleteBucket", ctx, bucketID)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// DeleteBucket indicates an expected call of DeleteBucket.
+func (mr *MockInfluxDBProviderMockRecorder) DeleteBucket(ctx, bucketID any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeleteBucket", reflect.TypeOf((*MockInfluxDBProvider)(nil).DeleteBucket), ctx, bucketID)
+}
+
+// DeleteOrganization mocks base method.
+func (m *MockInfluxDBProvider) DeleteOrganization(ctx context.Context, orgID string) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "DeleteOrganization", ctx, orgID)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// DeleteOrganization indicates an expected call of DeleteOrganization.
+func (mr *MockInfluxDBProviderMockRecorder) DeleteOrganization(ctx, orgID any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeleteOrganization", reflect.TypeOf((*MockInfluxDBProvider)(nil).DeleteOrganization), ctx, orgID)
+}
+
+// HealthCheck mocks base method.
+func (m *MockInfluxDBProvider) HealthCheck(arg0 context.Context) (any, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "HealthCheck", arg0)
+	ret0, _ := ret[0].(any)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// HealthCheck indicates an expected call of HealthCheck.
+func (mr *MockInfluxDBProviderMockRecorder) HealthCheck(arg0 any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "HealthCheck", reflect.TypeOf((*MockInfluxDBProvider)(nil).HealthCheck), arg0)
+}
+
+// ListBuckets mocks base method.
+func (m *MockInfluxDBProvider) ListBuckets(ctx context.Context, org string) (map[string]string, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "ListBuckets", ctx, org)
+	ret0, _ := ret[0].(map[string]string)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// ListBuckets indicates an expected call of ListBuckets.
+func (mr *MockInfluxDBProviderMockRecorder) ListBuckets(ctx, org any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListBuckets", reflect.TypeOf((*MockInfluxDBProvider)(nil).ListBuckets), ctx, org)
+}
+
+// ListOrganization mocks base method.
+func (m *MockInfluxDBProvider) ListOrganization(ctx context.Context) (map[string]string, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "ListOrganization", ctx)
+	ret0, _ := ret[0].(map[string]string)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// ListOrganization indicates an expected call of ListOrganization.
+func (mr *MockInfluxDBProviderMockRecorder) ListOrganization(ctx any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListOrganization", reflect.TypeOf((*MockInfluxDBProvider)(nil).ListOrganization), ctx)
+}
+
+// Ping mocks base method.
+func (m *MockInfluxDBProvider) Ping(ctx context.Context) (bool, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Ping", ctx)
+	ret0, _ := ret[0].(bool)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// Ping indicates an expected call of Ping.
+func (mr *MockInfluxDBProviderMockRecorder) Ping(ctx any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Ping", reflect.TypeOf((*MockInfluxDBProvider)(nil).Ping), ctx)
+}
+
+// Query mocks base method.
+func (m *MockInfluxDBProvider) Query(ctx context.Context, org, fluxQuery string) ([]map[string]any, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Query", ctx, org, fluxQuery)
+	ret0, _ := ret[0].([]map[string]any)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// Query indicates an expected call of Query.
+func (mr *MockInfluxDBProviderMockRecorder) Query(ctx, org, fluxQuery any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Query", reflect.TypeOf((*MockInfluxDBProvider)(nil).Query), ctx, org, fluxQuery)
+}
+
+// UseLogger mocks base method.
+func (m *MockInfluxDBProvider) UseLogger(logger any) {
+	m.ctrl.T.Helper()
+	m.ctrl.Call(m, "UseLogger", logger)
+}
+
+// UseLogger indicates an expected call of UseLogger.
+func (mr *MockInfluxDBProviderMockRecorder) UseLogger(logger any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UseLogger", reflect.TypeOf((*MockInfluxDBProvider)(nil).UseLogger), logger)
+}
+
+// UseMetrics mocks base method.
+func (m *MockInfluxDBProvider) UseMetrics(metrics any) {
+	m.ctrl.T.Helper()
+	m.ctrl.Call(m, "UseMetrics", metrics)
+}
+
+// UseMetrics indicates an expected call of UseMetrics.
+func (mr *MockInfluxDBProviderMockRecorder) UseMetrics(metrics any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UseMetrics", reflect.TypeOf((*MockInfluxDBProvider)(nil).UseMetrics), metrics)
+}
+
+// UseTracer mocks base method.
+func (m *MockInfluxDBProvider) UseTracer(tracer any) {
+	m.ctrl.T.Helper()
+	m.ctrl.Call(m, "UseTracer", tracer)
+}
+
+// UseTracer indicates an expected call of UseTracer.
+func (mr *MockInfluxDBProviderMockRecorder) UseTracer(tracer any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UseTracer", reflect.TypeOf((*MockInfluxDBProvider)(nil).UseTracer), tracer)
+}
+
+// WritePoint mocks base method.
+func (m *MockInfluxDBProvider) WritePoint(ctx context.Context, org, bucket, measurement string, tags map[string]string, fields map[string]any, timestamp time.Time) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "WritePoint", ctx, org, bucket, measurement, tags, fields, timestamp)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// WritePoint indicates an expected call of WritePoint.
+func (mr *MockInfluxDBProviderMockRecorder) WritePoint(ctx, org, bucket, measurement, tags, fields, timestamp any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "WritePoint", reflect.TypeOf((*MockInfluxDBProvider)(nil).WritePoint), ctx, org, bucket, measurement, tags, fields, timestamp)
+}

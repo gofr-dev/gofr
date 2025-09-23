@@ -422,3 +422,14 @@ func optimizedOpenConnections(cfg config.Config) string {
 
 	return strconv.Itoa(optimized)
 }
+
+func (a *App) AddInfluxDB(db container.InfluxDBProvider) {
+	db.UseLogger(a.Logger())
+	db.UseMetrics(a.Metrics())
+
+	tracer := otel.GetTracerProvider().Tracer("gofr-influxdb")
+	db.UseTracer(tracer)
+	db.Connect()
+
+	a.container.InfluxDB = db
+}
