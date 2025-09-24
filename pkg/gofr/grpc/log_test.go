@@ -18,6 +18,7 @@ import (
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
 
+	"gofr.dev/pkg/gofr/container"
 	"gofr.dev/pkg/gofr/testutil"
 )
 
@@ -194,44 +195,19 @@ func TestWrappedServerStream_Context(t *testing.T) {
 	assert.Equal(t, "value", wrapped.Context().Value(contextKey("key")))
 }
 
-// Mock implementations for testing.
-type mockLogger struct {
-	infoCalls  []any
-	errorCalls []any
-	debugCalls []any
-	fatalCalls []any
-}
+// Helper function to create mock logger and metrics for testing.
+func createMocks(t *testing.T) (*container.MockLogger, *container.MockMetrics, *gomock.Controller) {
+	t.Helper()
+	ctrl := gomock.NewController(t)
+	mockLogger := container.NewMockLogger(ctrl)
+	mockMetrics := container.NewMockMetrics(ctrl)
 
-func (m *mockLogger) Info(args ...any) {
-	m.infoCalls = append(m.infoCalls, args)
-}
-
-func (m *mockLogger) Errorf(format string, args ...any) {
-	m.errorCalls = append(m.errorCalls, []any{format, args})
-}
-
-func (m *mockLogger) Debug(args ...any) {
-	m.debugCalls = append(m.debugCalls, args)
-}
-
-func (m *mockLogger) Fatalf(format string, args ...any) {
-	m.fatalCalls = append(m.fatalCalls, []any{format, args})
-}
-
-type mockMetrics struct {
-	histogramCalls []any
-}
-
-func (m *mockMetrics) RecordHistogram(ctx context.Context, name string, value float64, labels ...string) {
-	m.histogramCalls = append(m.histogramCalls, []any{ctx, name, value, labels})
+	return mockLogger, mockMetrics, ctrl
 }
 
 func TestGRPCLog_DocumentRPCLog(t *testing.T) {
-	ctrl := gomock.NewController(t)
+	mockLogger, mockMetrics, ctrl := createMocks(t)
 	defer ctrl.Finish()
-
-	mockLogger := &mockLogger{}
-	mockMetrics := &mockMetrics{}
 
 	log := gRPCLog{}
 	ctx := t.Context()
@@ -240,19 +216,16 @@ func TestGRPCLog_DocumentRPCLog(t *testing.T) {
 	method := "test.method"
 	name := "test_metric"
 
-	log.DocumentRPCLog(ctx, mockLogger, mockMetrics, start, err, method, name)
+	// Set up expectations
+	mockLogger.EXPECT().Info(gomock.Any()).Times(1)
+	mockMetrics.EXPECT().RecordHistogram(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Times(1)
 
-	// Verify logger was called
-	assert.Len(t, mockLogger.infoCalls, 1)
-	assert.Len(t, mockMetrics.histogramCalls, 1)
+	log.DocumentRPCLog(ctx, mockLogger, mockMetrics, start, err, method, name)
 }
 
 func TestObservabilityInterceptor(t *testing.T) {
-	ctrl := gomock.NewController(t)
+	mockLogger, mockMetrics, ctrl := createMocks(t)
 	defer ctrl.Finish()
-
-	mockLogger := &mockLogger{}
-	mockMetrics := &mockMetrics{}
 
 	interceptor := ObservabilityInterceptor(mockLogger, mockMetrics)
 
@@ -266,20 +239,19 @@ func TestObservabilityInterceptor(t *testing.T) {
 		return "test response", nil
 	}
 
+	// Set up expectations
+	mockLogger.EXPECT().Info(gomock.Any()).Times(1)
+	mockMetrics.EXPECT().RecordHistogram(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Times(1)
+
 	resp, err := interceptor(ctx, req, info, handler)
 
 	require.NoError(t, err)
 	assert.Equal(t, "test response", resp)
-	assert.Len(t, mockLogger.infoCalls, 1)
-	assert.Len(t, mockMetrics.histogramCalls, 1)
 }
 
 func TestObservabilityInterceptor_WithError(t *testing.T) {
-	ctrl := gomock.NewController(t)
+	mockLogger, mockMetrics, ctrl := createMocks(t)
 	defer ctrl.Finish()
-
-	mockLogger := &mockLogger{}
-	mockMetrics := &mockMetrics{}
 
 	interceptor := ObservabilityInterceptor(mockLogger, mockMetrics)
 
@@ -293,20 +265,20 @@ func TestObservabilityInterceptor_WithError(t *testing.T) {
 		return nil, status.Error(codes.Internal, "test error")
 	}
 
+	// Set up expectations - the function logs errors with Errorf and then with Info
+	mockLogger.EXPECT().Errorf(gomock.Any(), gomock.Any(), gomock.Any()).Times(1)
+	mockLogger.EXPECT().Info(gomock.Any()).Times(1)
+	mockMetrics.EXPECT().RecordHistogram(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Times(1)
+
 	resp, err := interceptor(ctx, req, info, handler)
 
 	require.Error(t, err)
 	assert.Nil(t, resp)
-	assert.Len(t, mockLogger.errorCalls, 1)
-	assert.Len(t, mockMetrics.histogramCalls, 1)
 }
 
 func TestObservabilityInterceptor_HealthCheck(t *testing.T) {
-	ctrl := gomock.NewController(t)
+	mockLogger, mockMetrics, ctrl := createMocks(t)
 	defer ctrl.Finish()
-
-	mockLogger := &mockLogger{}
-	mockMetrics := &mockMetrics{}
 
 	interceptor := ObservabilityInterceptor(mockLogger, mockMetrics)
 
@@ -322,20 +294,19 @@ func TestObservabilityInterceptor_HealthCheck(t *testing.T) {
 		return &grpc_health_v1.HealthCheckResponse{}, nil
 	}
 
+	// Set up expectations
+	mockLogger.EXPECT().Info(gomock.Any()).Times(1)
+	mockMetrics.EXPECT().RecordHistogram(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Times(1)
+
 	resp, err := interceptor(ctx, req, info, handler)
 
 	require.NoError(t, err)
 	assert.NotNil(t, resp)
-	assert.Len(t, mockLogger.infoCalls, 1)
-	assert.Len(t, mockMetrics.histogramCalls, 1)
 }
 
 func TestStreamObservabilityInterceptor(t *testing.T) {
-	ctrl := gomock.NewController(t)
+	mockLogger, mockMetrics, ctrl := createMocks(t)
 	defer ctrl.Finish()
-
-	mockLogger := &mockLogger{}
-	mockMetrics := &mockMetrics{}
 
 	interceptor := StreamObservabilityInterceptor(mockLogger, mockMetrics)
 
@@ -349,19 +320,18 @@ func TestStreamObservabilityInterceptor(t *testing.T) {
 		return nil
 	}
 
+	// Set up expectations
+	mockLogger.EXPECT().Info(gomock.Any()).Times(1)
+	mockMetrics.EXPECT().RecordHistogram(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Times(1)
+
 	err := interceptor(nil, &mockServerStream{}, info, handler)
 
 	require.NoError(t, err)
-	assert.Len(t, mockLogger.infoCalls, 1)
-	assert.Len(t, mockMetrics.histogramCalls, 1)
 }
 
 func TestStreamObservabilityInterceptor_ClientStream(t *testing.T) {
-	ctrl := gomock.NewController(t)
+	mockLogger, mockMetrics, ctrl := createMocks(t)
 	defer ctrl.Finish()
-
-	mockLogger := &mockLogger{}
-	mockMetrics := &mockMetrics{}
 
 	interceptor := StreamObservabilityInterceptor(mockLogger, mockMetrics)
 
@@ -375,19 +345,18 @@ func TestStreamObservabilityInterceptor_ClientStream(t *testing.T) {
 		return nil
 	}
 
+	// Set up expectations
+	mockLogger.EXPECT().Info(gomock.Any()).Times(1)
+	mockMetrics.EXPECT().RecordHistogram(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Times(1)
+
 	err := interceptor(nil, &mockServerStream{}, info, handler)
 
 	require.NoError(t, err)
-	assert.Len(t, mockLogger.infoCalls, 1)
-	assert.Len(t, mockMetrics.histogramCalls, 1)
 }
 
 func TestStreamObservabilityInterceptor_BidirectionalStream(t *testing.T) {
-	ctrl := gomock.NewController(t)
+	mockLogger, mockMetrics, ctrl := createMocks(t)
 	defer ctrl.Finish()
-
-	mockLogger := &mockLogger{}
-	mockMetrics := &mockMetrics{}
 
 	interceptor := StreamObservabilityInterceptor(mockLogger, mockMetrics)
 
@@ -401,19 +370,18 @@ func TestStreamObservabilityInterceptor_BidirectionalStream(t *testing.T) {
 		return nil
 	}
 
+	// Set up expectations
+	mockLogger.EXPECT().Info(gomock.Any()).Times(1)
+	mockMetrics.EXPECT().RecordHistogram(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Times(1)
+
 	err := interceptor(nil, &mockServerStream{}, info, handler)
 
 	require.NoError(t, err)
-	assert.Len(t, mockLogger.infoCalls, 1)
-	assert.Len(t, mockMetrics.histogramCalls, 1)
 }
 
 func TestStreamObservabilityInterceptor_WithError(t *testing.T) {
-	ctrl := gomock.NewController(t)
+	mockLogger, mockMetrics, ctrl := createMocks(t)
 	defer ctrl.Finish()
-
-	mockLogger := &mockLogger{}
-	mockMetrics := &mockMetrics{}
 
 	interceptor := StreamObservabilityInterceptor(mockLogger, mockMetrics)
 
@@ -427,11 +395,13 @@ func TestStreamObservabilityInterceptor_WithError(t *testing.T) {
 		return status.Error(codes.Internal, "stream error")
 	}
 
+	// Set up expectations
+	mockLogger.EXPECT().Info(gomock.Any()).Times(1)
+	mockMetrics.EXPECT().RecordHistogram(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Times(1)
+
 	err := interceptor(nil, &mockServerStream{}, info, handler)
 
 	require.Error(t, err)
-	assert.Len(t, mockLogger.infoCalls, 1)
-	assert.Len(t, mockMetrics.histogramCalls, 1)
 }
 
 func TestInitializeSpanContext(t *testing.T) {
@@ -619,7 +589,8 @@ func TestGetTraceID_WithNilSpan(t *testing.T) {
 }
 
 func TestLogGRPCEntry(t *testing.T) {
-	mockLogger := &mockLogger{}
+	mockLogger, _, ctrl := createMocks(t)
+	defer ctrl.Finish()
 
 	// Test logGRPCEntry function
 	log := &gRPCLog{
@@ -630,14 +601,15 @@ func TestLogGRPCEntry(t *testing.T) {
 		StatusCode:   0,
 	}
 
-	logGRPCEntry(mockLogger, log, "/test.Service/Method")
+	// Set up expectations
+	mockLogger.EXPECT().Info(gomock.Any()).Times(1)
 
-	// Verify logger was called
-	assert.Len(t, mockLogger.infoCalls, 1)
+	logGRPCEntry(mockLogger, log, "/test.Service/Method")
 }
 
 func TestLogGRPCEntry_WithDebugMethod(t *testing.T) {
-	mockLogger := &mockLogger{}
+	mockLogger, _, ctrl := createMocks(t)
+	defer ctrl.Finish()
 
 	// Test logGRPCEntry function with debug method
 	log := &gRPCLog{
@@ -648,14 +620,15 @@ func TestLogGRPCEntry_WithDebugMethod(t *testing.T) {
 		StatusCode:   0,
 	}
 
-	logGRPCEntry(mockLogger, log, debugMethod)
+	// Set up expectations
+	mockLogger.EXPECT().Debug(gomock.Any()).Times(1)
 
-	// Verify debug logger was called
-	assert.Len(t, mockLogger.debugCalls, 1)
+	logGRPCEntry(mockLogger, log, debugMethod)
 }
 
 func TestLogGRPCEntry_WithSendMethod(t *testing.T) {
-	mockLogger := &mockLogger{}
+	mockLogger, _, ctrl := createMocks(t)
+	defer ctrl.Finish()
 
 	// Test logGRPCEntry function with Send method
 	log := &gRPCLog{
@@ -666,10 +639,10 @@ func TestLogGRPCEntry_WithSendMethod(t *testing.T) {
 		StatusCode:   0,
 	}
 
-	logGRPCEntry(mockLogger, log, "/test.Service/Send")
+	// Set up expectations
+	mockLogger.EXPECT().Debug(gomock.Any()).Times(1)
 
-	// Verify debug logger was called
-	assert.Len(t, mockLogger.debugCalls, 1)
+	logGRPCEntry(mockLogger, log, "/test.Service/Send")
 }
 
 func TestLogGRPCEntry_WithNilLogger(_ *testing.T) {
@@ -687,25 +660,29 @@ func TestLogGRPCEntry_WithNilLogger(_ *testing.T) {
 }
 
 func TestRecordGRPCMetrics(t *testing.T) {
-	mockMetrics := &mockMetrics{}
+	_, mockMetrics, ctrl := createMocks(t)
+	defer ctrl.Finish()
+
 	ctx := t.Context()
+
+	// Set up expectations
+	mockMetrics.EXPECT().RecordHistogram(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Times(1)
 
 	// Test recordGRPCMetrics function
 	recordGRPCMetrics(ctx, mockMetrics, "test_metric", 100*time.Millisecond, "/test.Service/Method", "")
-
-	// Verify metrics was called
-	assert.Len(t, mockMetrics.histogramCalls, 1)
 }
 
 func TestRecordGRPCMetrics_WithStreamType(t *testing.T) {
-	mockMetrics := &mockMetrics{}
+	_, mockMetrics, ctrl := createMocks(t)
+	defer ctrl.Finish()
+
 	ctx := t.Context()
+
+	// Set up expectations
+	mockMetrics.EXPECT().RecordHistogram(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Times(1)
 
 	// Test recordGRPCMetrics function with stream type
 	recordGRPCMetrics(ctx, mockMetrics, "test_metric", 100*time.Millisecond, "/test.Service/Method", "SERVER_STREAM")
-
-	// Verify metrics was called
-	assert.Len(t, mockMetrics.histogramCalls, 1)
 }
 
 func TestRecordGRPCMetrics_WithNilMetrics(t *testing.T) {
