@@ -36,5 +36,6 @@ To test the example, follow these steps:
 
 1. Open your browser and navigate to `http://localhost:9000/hello`.
 2. To view the GoFr trace, open `https://tracer.gofr.dev` and paste the traceid.
-3. To view the Grafana Dashboard open `http://localhost:3000`
-
+3. To access the Grafana Dashboard, open `http://localhost:3000`. The dashboard UI will be displayed. Use the default admin credentials to log in:
+    - Username: `admin`
+    - Password: `password`
