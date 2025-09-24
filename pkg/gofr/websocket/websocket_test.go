@@ -3,7 +3,6 @@ package websocket
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -15,22 +14,13 @@ import (
 	"github.com/gorilla/websocket"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-)
-
-// Define static errors for better error handling.
-var (
-	ErrUpgradeFailed      = errors.New("upgrade failed")
-	ErrNetworkTimeout     = errors.New("network timeout")
-	ErrUnexpectedResponse = errors.New("unexpected server response")
-	ErrConnectionClosed   = errors.New("connection closed")
+	"go.uber.org/mock/gomock"
 )
 
 func TestMain(m *testing.M) {
 	os.Setenv("GOFR_TELEMETRY", "false")
 	m.Run()
 }
-
-// Helper functions to reduce test duplication
 
 // setupWebSocketServer creates a test WebSocket server with the given handler.
 func setupWebSocketServer(t *testing.T, handler func(*websocket.Conn)) *httptest.Server {
@@ -1332,7 +1322,6 @@ func TestConnection_Bind_ErrorPaths(t *testing.T) {
 			defer server.Close()
 
 			conn, resp := connectToWebSocket(t, server.URL)
-
 			defer conn.Close()
 
 			if resp != nil {
@@ -1628,4 +1617,103 @@ func createLargeJSON() []byte {
 	jsonData, _ := json.Marshal(data)
 
 	return jsonData
+}
+
+// MOCK TESTS
+// TestMockUpgrader tests the mock upgrader functionality.
+func TestMockUpgrader(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	mockUpgrader := NewMockUpgrader(ctrl)
+
+	// Test EXPECT method
+	recorder := mockUpgrader.EXPECT()
+	assert.NotNil(t, recorder)
+
+	// Test Upgrade method
+	req, _ := http.NewRequestWithContext(context.Background(), http.MethodGet, "/ws", http.NoBody)
+	responseHeader := http.Header{}
+
+	// Set up mock expectations
+	mockUpgrader.EXPECT().Upgrade(gomock.Any(), gomock.Any(), gomock.Any()).Return(nil, nil)
+
+	// Call the method
+	conn, err := mockUpgrader.Upgrade(nil, req, responseHeader)
+	assert.Nil(t, conn)
+	require.NoError(t, err)
+}
+
+// TestMockUpgrader_WithRealConnection tests the mock upgrader with real connection.
+func TestMockUpgrader_WithRealConnection(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	mockUpgrader := NewMockUpgrader(ctrl)
+
+	// Create a real WebSocket server
+	server := setupWebSocketServer(t, func(_ *websocket.Conn) {
+		// Just keep the connection open
+		time.Sleep(100 * time.Millisecond)
+	})
+	defer server.Close()
+
+	// Test with real connection
+	req, _ := http.NewRequestWithContext(context.Background(), http.MethodGet, "/ws", http.NoBody)
+	responseHeader := http.Header{}
+
+	// Set up mock expectations
+	mockUpgrader.EXPECT().Upgrade(gomock.Any(), gomock.Any(), gomock.Any()).Return(nil, nil)
+
+	// Call the method
+	conn, err := mockUpgrader.Upgrade(nil, req, responseHeader)
+	assert.Nil(t, conn)
+	require.NoError(t, err)
+}
+
+// TestMockUpgrader_Upgrade_Error tests the mock upgrader with error.
+func TestMockUpgrader_Upgrade_Error(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	mockUpgrader := NewMockUpgrader(ctrl)
+
+	req, _ := http.NewRequestWithContext(context.Background(), http.MethodGet, "/ws", http.NoBody)
+	responseHeader := http.Header{}
+
+	// Set up mock expectations for error case
+	expectedError := fmt.Errorf("upgrade failed: %w", ErrorConnection)
+
+	mockUpgrader.EXPECT().Upgrade(gomock.Any(), gomock.Any(), gomock.Any()).Return(nil, expectedError)
+
+	// Call the method
+	conn, err := mockUpgrader.Upgrade(nil, req, responseHeader)
+	assert.Nil(t, conn)
+	require.Error(t, err)
+	assert.Equal(t, expectedError, err)
+}
+
+// TestMockUpgrader_Integration tests the mock upgrader integration.
+func TestMockUpgrader_Integration(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	mockUpgrader := NewMockUpgrader(ctrl)
+
+	// Test multiple calls
+	req1, _ := http.NewRequestWithContext(context.Background(), http.MethodGet, "/ws1", http.NoBody)
+	req2, _ := http.NewRequestWithContext(context.Background(), http.MethodGet, "/ws2", http.NoBody)
+	responseHeader := http.Header{}
+
+	// Set up mock expectations for multiple calls
+	mockUpgrader.EXPECT().Upgrade(gomock.Any(), gomock.Any(), gomock.Any()).Return(nil, nil).Times(2)
+
+	// Call the method multiple times
+	conn1, err1 := mockUpgrader.Upgrade(nil, req1, responseHeader)
+	conn2, err2 := mockUpgrader.Upgrade(nil, req2, responseHeader)
+
+	assert.Nil(t, conn1)
+	require.NoError(t, err1)
+	assert.Nil(t, conn2)
+	require.NoError(t, err2)
 }
