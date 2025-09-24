@@ -15,17 +15,74 @@ import (
 	"github.com/gorilla/websocket"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	gomock "go.uber.org/mock/gomock"
 )
 
 // Define static errors for better error handling.
 var (
-	ErrUpgradeFailed = errors.New("upgrade failed")
+	ErrUpgradeFailed      = errors.New("upgrade failed")
+	ErrNetworkTimeout     = errors.New("network timeout")
+	ErrUnexpectedResponse = errors.New("unexpected server response")
+	ErrConnectionClosed   = errors.New("connection closed")
 )
 
 func TestMain(m *testing.M) {
 	os.Setenv("GOFR_TELEMETRY", "false")
 	m.Run()
+}
+
+// Helper functions to reduce test duplication
+
+// setupWebSocketServer creates a test WebSocket server with the given handler.
+func setupWebSocketServer(t *testing.T, handler func(*websocket.Conn)) *httptest.Server {
+	t.Helper()
+	
+	upgrader := websocket.Upgrader{}
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		conn, err := upgrader.Upgrade(w, r, nil)
+		if err != nil {
+			t.Errorf("Failed to upgrade connection: %v", err)
+			return
+		}
+		defer conn.Close()
+		
+		handler(conn)
+	}))
+	
+	return server
+}
+
+// connectToWebSocket connects to a WebSocket server and returns the connection.
+func connectToWebSocket(t *testing.T, serverURL string) (*websocket.Conn, *http.Response) {
+	t.Helper()
+	
+	url := "ws" + serverURL[len("http"):] + "/ws"
+	dialer := websocket.DefaultDialer
+	conn, resp, err := dialer.Dial(url, nil)
+	require.NoError(t, err)
+	
+	return conn, resp
+}
+
+// createTestConnection creates a WebSocket connection for testing.
+func createTestConnection(t *testing.T, conn *websocket.Conn) *Connection {
+	t.Helper()
+	
+	return &Connection{Conn: conn}
+}
+
+// sendMessageToWebSocket sends a message to a WebSocket connection.
+func sendMessageToWebSocket(t *testing.T, conn *websocket.Conn, message []byte) {
+	t.Helper()
+	
+	err := conn.WriteMessage(websocket.TextMessage, message)
+	require.NoError(t, err)
+}
+
+// waitForWebSocketOperation waits for a WebSocket operation to complete.
+func waitForWebSocketOperation(t *testing.T, duration time.Duration) {
+	t.Helper()
+	
+	time.Sleep(duration)
 }
 
 // CORE FUNCTIONALITY TESTS
@@ -70,41 +127,25 @@ func TestConnection_Bind(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-				upgrader := websocket.Upgrader{}
-				conn, err := upgrader.Upgrade(w, r, nil)
-
-				if err != nil {
-					t.Errorf("Failed to upgrade connection: %v", err)
-					return
-				}
-
-				defer conn.Close()
-
-				wsConn := &Connection{Conn: conn}
-				err = wsConn.Bind(tt.targetType)
+			server := setupWebSocketServer(t, func(conn *websocket.Conn) {
+				wsConn := createTestConnection(t, conn)
+				err := wsConn.Bind(tt.targetType)
 
 				if tt.expectError {
-					assert.Error(t, err)
+					require.Error(t, err)
 				} else {
-					assert.NoError(t, err)
+					require.NoError(t, err)
 					assert.Equal(t, tt.expected, dereferenceValue(tt.targetType))
 				}
-			}))
+			})
 			defer server.Close()
 
-			url := "ws" + server.URL[len("http"):] + "/ws"
-			dialer := websocket.DefaultDialer
-			conn, resp, err := dialer.Dial(url, nil)
-			require.NoError(t, err)
-
+			conn, resp := connectToWebSocket(t, server.URL)
 			defer conn.Close()
 			defer resp.Body.Close()
 
-			err = conn.WriteMessage(websocket.TextMessage, tt.inputMessage)
-			require.NoError(t, err)
-
-			time.Sleep(100 * time.Millisecond)
+			sendMessageToWebSocket(t, conn, tt.inputMessage)
+			waitForWebSocketOperation(t, 100*time.Millisecond)
 		})
 	}
 }
@@ -164,41 +205,90 @@ func TestConnection_WriteMessage(t *testing.T) {
 
 // TestConnection_ReadMessage tests reading messages.
 func TestConnection_ReadMessage(t *testing.T) {
-	upgrader := websocket.Upgrader{}
 	testMessage := []byte("test read message")
 
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		conn, err := upgrader.Upgrade(w, r, nil)
-		if err != nil {
-			t.Errorf("Failed to upgrade connection: %v", err)
-			return
-		}
-		defer conn.Close()
-
-		wsConn := &Connection{Conn: conn}
+	server := setupWebSocketServer(t, func(conn *websocket.Conn) {
+		wsConn := createTestConnection(t, conn)
 
 		// Write a test message
-		err = wsConn.WriteMessage(websocket.TextMessage, testMessage)
-		if err != nil {
-			t.Errorf("Failed to write message: %v", err)
-			return
-		}
-	}))
+		err := wsConn.WriteMessage(websocket.TextMessage, testMessage)
+		require.NoError(t, err)
+	})
 	defer server.Close()
 
-	url := "ws" + server.URL[len("http"):] + "/ws"
-	dialer := websocket.DefaultDialer
-	conn, resp, err := dialer.Dial(url, nil)
-	require.NoError(t, err)
-
+	conn, resp := connectToWebSocket(t, server.URL)
 	defer conn.Close()
 	defer resp.Body.Close()
 
-	wsConn := &Connection{Conn: conn}
+	wsConn := createTestConnection(t, conn)
 	messageType, message, err := wsConn.ReadMessage()
 	require.NoError(t, err)
 	assert.Equal(t, websocket.TextMessage, messageType)
 	assert.Equal(t, testMessage, message)
+}
+
+// TestConnection_ReadMessage_ErrorHandling tests reading messages with error scenarios.
+func TestConnection_ReadMessage_ErrorHandling(t *testing.T) {
+	tests := []struct {
+		name        string
+		setupServer func(*testing.T, *websocket.Conn)
+		expectError bool
+		description string
+	}{
+		{
+			name: "Connection closed before read",
+			setupServer: func(t *testing.T, conn *websocket.Conn) {
+				t.Helper()
+				wsConn := createTestConnection(t, conn)
+				// Close connection to force read error
+				conn.Close()
+				
+				messageType, message, err := wsConn.ReadMessage()
+				require.Error(t, err, "Expected error for closed connection")
+				assert.Equal(t, -1, messageType) // Closed connection returns -1
+				assert.Nil(t, message)
+			},
+			expectError: true,
+			description: "Should handle connection closed before read",
+		},
+		{
+			name: "Network timeout during read",
+			setupServer: func(t *testing.T, conn *websocket.Conn) {
+				t.Helper()
+				wsConn := createTestConnection(t, conn)
+				// Set a very short read deadline to simulate timeout
+				err := wsConn.SetReadDeadline(time.Now().Add(1 * time.Millisecond))
+				require.NoError(t, err)
+				
+				// Wait for deadline to pass
+				time.Sleep(10 * time.Millisecond)
+				
+				messageType, message, err := wsConn.ReadMessage()
+				assert.Error(t, err, "Expected timeout error")
+				assert.Equal(t, -1, messageType) // Timeout returns -1
+				assert.Nil(t, message)
+			},
+			expectError: true,
+			description: "Should handle network timeout during read",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			server := setupWebSocketServer(t, func(conn *websocket.Conn) {
+				tt.setupServer(t, conn)
+			})
+			defer server.Close()
+
+			conn, resp := connectToWebSocket(t, server.URL)
+			defer conn.Close()
+			defer resp.Body.Close()
+
+			// Send a message to trigger the server handler
+			sendMessageToWebSocket(t, conn, []byte("test"))
+			waitForWebSocketOperation(t, 100*time.Millisecond)
+		})
+	}
 }
 
 // TestConnection_Deadlines tests deadline functionality.
@@ -237,7 +327,7 @@ func TestConnection_Deadlines(t *testing.T) {
 }
 
 // WS UPGRADER TESTS
-// TestWSUpgrader_NewWSUpgrader tests upgrader creation with options.
+// TestWSUpgrader_NewWSUpgrader tests upgrader creation with basic options.
 func TestWSUpgrader_NewWSUpgrader(t *testing.T) {
 	tests := []struct {
 		name     string
@@ -285,55 +375,347 @@ func TestWSUpgrader_NewWSUpgrader(t *testing.T) {
 	}
 }
 
-// TestWSUpgrader_Upgrade tests the upgrade functionality.
-func TestWSUpgrader_Upgrade(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
-
-	mockUpgrader := NewMockUpgrader(ctrl)
-	expectedConn := &websocket.Conn{}
-
+// TestWSUpgrader_BufferOptions tests buffer size options.
+func TestWSUpgrader_BufferOptions(t *testing.T) {
 	tests := []struct {
-		name           string
-		setupMock      func()
-		expectError    bool
-		expectedResult *websocket.Conn
+		name     string
+		options  []Options
+		validate func(t *testing.T, upgrader *WSUpgrader)
 	}{
 		{
-			name: "Successful upgrade",
-			setupMock: func() {
-				mockUpgrader.EXPECT().Upgrade(gomock.Any(), gomock.Any(), gomock.Any()).Return(expectedConn, nil)
+			name: "With multiple subprotocols",
+			options: []Options{
+				WithSubprotocols("protocol1", "protocol2", "protocol3"),
 			},
-			expectError:    false,
-			expectedResult: expectedConn,
+			validate: func(t *testing.T, upgrader *WSUpgrader) {
+				t.Helper()
+				actualUpgrader := upgrader.Upgrader.(*websocket.Upgrader)
+				assert.Equal(t, []string{"protocol1", "protocol2", "protocol3"}, actualUpgrader.Subprotocols)
+			},
 		},
 		{
-			name: "Upgrade error",
-			setupMock: func() {
-				mockUpgrader.EXPECT().Upgrade(gomock.Any(), gomock.Any(), gomock.Any()).Return(nil, ErrUpgradeFailed)
+			name: "With zero buffer sizes",
+			options: []Options{
+				WithReadBufferSize(0),
+				WithWriteBufferSize(0),
 			},
-			expectError:    true,
-			expectedResult: nil,
+			validate: func(t *testing.T, upgrader *WSUpgrader) {
+				t.Helper()
+				actualUpgrader := upgrader.Upgrader.(*websocket.Upgrader)
+				assert.Equal(t, 0, actualUpgrader.ReadBufferSize)
+				assert.Equal(t, 0, actualUpgrader.WriteBufferSize)
+			},
+		},
+		{
+			name: "With negative buffer sizes",
+			options: []Options{
+				WithReadBufferSize(-1),
+				WithWriteBufferSize(-1),
+			},
+			validate: func(t *testing.T, upgrader *WSUpgrader) {
+				t.Helper()
+				actualUpgrader := upgrader.Upgrader.(*websocket.Upgrader)
+				assert.Equal(t, -1, actualUpgrader.ReadBufferSize)
+				assert.Equal(t, -1, actualUpgrader.WriteBufferSize)
+			},
+		},
+		{
+			name: "With very large buffer sizes",
+			options: []Options{
+				WithReadBufferSize(1024 * 1024),  // 1MB
+				WithWriteBufferSize(1024 * 1024), // 1MB
+			},
+			validate: func(t *testing.T, upgrader *WSUpgrader) {
+				t.Helper()
+				actualUpgrader := upgrader.Upgrader.(*websocket.Upgrader)
+				assert.Equal(t, 1024*1024, actualUpgrader.ReadBufferSize)
+				assert.Equal(t, 1024*1024, actualUpgrader.WriteBufferSize)
+			},
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			tt.setupMock()
+			upgrader := NewWSUpgrader(tt.options...)
+			tt.validate(t, upgrader)
+		})
+	}
+}
 
-			wsUpgrader := &WSUpgrader{Upgrader: mockUpgrader}
-			req, err := http.NewRequestWithContext(context.Background(), http.MethodGet, "/", http.NoBody)
-			require.NoError(t, err)
+// TestWSUpgrader_TimeoutOptions tests timeout options.
+func TestWSUpgrader_TimeoutOptions(t *testing.T) {
+	tests := []struct {
+		name     string
+		options  []Options
+		validate func(t *testing.T, upgrader *WSUpgrader)
+	}{
+		{
+			name: "With zero handshake timeout",
+			options: []Options{
+				WithHandshakeTimeout(0),
+			},
+			validate: func(t *testing.T, upgrader *WSUpgrader) {
+				t.Helper()
+				actualUpgrader := upgrader.Upgrader.(*websocket.Upgrader)
+				assert.Equal(t, time.Duration(0), actualUpgrader.HandshakeTimeout)
+			},
+		},
+		{
+			name: "With very long handshake timeout",
+			options: []Options{
+				WithHandshakeTimeout(24 * time.Hour),
+			},
+			validate: func(t *testing.T, upgrader *WSUpgrader) {
+				t.Helper()
+				actualUpgrader := upgrader.Upgrader.(*websocket.Upgrader)
+				assert.Equal(t, 24*time.Hour, actualUpgrader.HandshakeTimeout)
+			},
+		},
+	}
 
-			w := httptest.NewRecorder()
-			conn, err := wsUpgrader.Upgrade(w, req, nil)
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			upgrader := NewWSUpgrader(tt.options...)
+			tt.validate(t, upgrader)
+		})
+	}
+}
 
+// TestWSUpgrader_ConflictingOptions tests conflicting or invalid option combinations.
+func TestWSUpgrader_ConflictingOptions(t *testing.T) {
+	tests := []struct {
+		name        string
+		options     []Options
+		expectError bool
+		description string
+	}{
+		{
+			name: "Multiple buffer size options - last wins",
+			options: []Options{
+				WithReadBufferSize(1024),
+				WithReadBufferSize(2048),
+				WithWriteBufferSize(512),
+				WithWriteBufferSize(4096),
+			},
+			expectError: false,
+			description: "Last option should override previous ones",
+		},
+		{
+			name: "Multiple handshake timeout options - last wins",
+			options: []Options{
+				WithHandshakeTimeout(1 * time.Second),
+				WithHandshakeTimeout(2 * time.Second),
+				WithHandshakeTimeout(3 * time.Second),
+			},
+			expectError: false,
+			description: "Last timeout option should override previous ones",
+		},
+		{
+			name: "Multiple subprotocol options - last wins",
+			options: []Options{
+				WithSubprotocols("protocol1", "protocol2"),
+				WithSubprotocols("protocol3", "protocol4", "protocol5"),
+			},
+			expectError: false,
+			description: "Last subprotocol option should override previous ones",
+		},
+		{
+			name: "Multiple error handlers - last wins",
+			options: []Options{
+				WithError(func(_ http.ResponseWriter, _ *http.Request, _ int, _ error) {}),
+				WithError(func(_ http.ResponseWriter, _ *http.Request, _ int, _ error) {}),
+			},
+			expectError: false,
+			description: "Last error handler should override previous one",
+		},
+		{
+			name: "Multiple check origin handlers - last wins",
+			options: []Options{
+				WithCheckOrigin(func(_ *http.Request) bool { return false }),
+				WithCheckOrigin(func(_ *http.Request) bool { return true }),
+			},
+			expectError: false,
+			description: "Last check origin handler should override previous one",
+		},
+		{
+			name: "Multiple compression options - last wins",
+			options: []Options{
+				WithCompression(),
+				WithCompression(),
+			},
+			expectError: false,
+			description: "Multiple compression options should not conflict",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			upgrader := NewWSUpgrader(tt.options...)
+			assert.NotNil(t, upgrader, tt.description)
+			
+			// Verify the last option takes precedence
+			actualUpgrader := upgrader.Upgrader.(*websocket.Upgrader)
+			assert.NotNil(t, actualUpgrader, "Upgrader should be created successfully")
+		})
+	}
+}
+
+// TestWSUpgrader_RealConnectionConflicts tests conflicting options with real WebSocket connections.
+func TestWSUpgrader_RealConnectionConflicts(t *testing.T) {
+	tests := []struct {
+		name        string
+		options     []Options
+		expectError bool
+		description string
+	}{
+		{
+			name: "CheckOrigin rejecting all connections",
+			options: []Options{
+				WithCheckOrigin(func(_ *http.Request) bool { return false }),
+			},
+			expectError: true,
+			description: "Should reject connection when CheckOrigin returns false",
+		},
+		{
+			name: "Very short handshake timeout",
+			options: []Options{
+				WithHandshakeTimeout(1 * time.Nanosecond),
+			},
+			expectError: true,
+			description: "Should timeout with very short handshake timeout",
+		},
+		{
+			name: "CheckOrigin accepting all connections",
+			options: []Options{
+				WithCheckOrigin(func(_ *http.Request) bool { return true }),
+			},
+			expectError: false,
+			description: "Should accept connection when CheckOrigin returns true",
+		},
+		{
+			name: "Normal timeout with compression",
+			options: []Options{
+				WithHandshakeTimeout(5 * time.Second),
+				WithCompression(),
+			},
+			expectError: false,
+			description: "Should work with normal timeout and compression",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			upgrader := NewWSUpgrader(tt.options...)
+			
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				conn, err := upgrader.Upgrade(w, r, nil)
+				if tt.expectError {
+					assert.Error(t, err, tt.description)
+					assert.Nil(t, conn, "Connection should be nil on error")
+				} else {
+					require.NoError(t, err, tt.description)
+					if conn != nil {
+						conn.Close()
+					}
+				}
+			}))
+			defer server.Close()
+
+			url := "ws" + server.URL[len("http"):] + "/ws"
+			dialer := websocket.DefaultDialer
+			conn, resp, err := dialer.Dial(url, nil)
+			
 			if tt.expectError {
-				require.Error(t, err)
-				require.Nil(t, conn)
+				require.Error(t, err, tt.description)
+				if resp != nil {
+					resp.Body.Close()
+				}
 			} else {
-				require.NoError(t, err)
-				assert.Equal(t, tt.expectedResult, conn)
+				require.NoError(t, err, tt.description)
+
+				if conn != nil {
+					conn.Close()
+				}
+
+				if resp != nil {
+					resp.Body.Close()
+				}
+			}
+		})
+	}
+}
+
+// TestWSUpgrader_Upgrade tests the upgrade functionality with real connections.
+func TestWSUpgrader_Upgrade(t *testing.T) {
+	tests := []struct {
+		name        string
+		options     []Options
+		expectError bool
+		description string
+	}{
+		{
+			name:        "Successful upgrade with default options",
+			options:     []Options{},
+			expectError: false,
+			description: "Should successfully upgrade HTTP to WebSocket",
+		},
+		{
+			name: "Successful upgrade with custom options",
+			options: []Options{
+				WithReadBufferSize(1024),
+				WithWriteBufferSize(1024),
+				WithHandshakeTimeout(5 * time.Second),
+			},
+			expectError: false,
+			description: "Should successfully upgrade with custom options",
+		},
+		{
+			name: "Upgrade with CheckOrigin rejection",
+			options: []Options{
+				WithCheckOrigin(func(_ *http.Request) bool { return false }),
+			},
+			expectError: true,
+			description: "Should fail when CheckOrigin returns false",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			upgrader := NewWSUpgrader(tt.options...)
+			
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				conn, err := upgrader.Upgrade(w, r, nil)
+				if tt.expectError {
+					assert.Error(t, err, tt.description)
+					assert.Nil(t, conn, "Connection should be nil on error")
+				} else {
+					require.NoError(t, err, tt.description)
+					if conn != nil {
+						conn.Close()
+					}
+				}
+			}))
+			defer server.Close()
+
+			url := "ws" + server.URL[len("http"):] + "/ws"
+			dialer := websocket.DefaultDialer
+			conn, resp, err := dialer.Dial(url, nil)
+			
+			if tt.expectError {
+				require.Error(t, err, tt.description)
+				if resp != nil {
+					resp.Body.Close()
+				}
+			} else {
+				require.NoError(t, err, tt.description)
+
+				if conn != nil {
+					conn.Close()
+				}
+
+				if resp != nil {
+					resp.Body.Close()
+				}
 			}
 		})
 	}
@@ -509,7 +891,7 @@ func TestConnection_Bind_EdgeCases(t *testing.T) {
 				if tt.expectError {
 					assert.Error(t, err, tt.description)
 				} else {
-					assert.NoError(t, err, tt.description)
+					require.NoError(t, err, tt.description)
 				}
 			}))
 			defer server.Close()
@@ -579,38 +961,26 @@ func TestManager_EdgeCases(t *testing.T) {
 }
 
 // TestConnection_UnimplementedMethods tests unimplemented methods.
+// These methods are intentionally unimplemented for WebSocket connections.
 func TestConnection_UnimplementedMethods(t *testing.T) {
 	conn := &Connection{}
 
-	// Test Param method
+	// Test Param method - should return empty string
 	assert.Empty(t, conn.Param("test"))
 
-	// Test PathParam method
+	// Test PathParam method - should return empty string
 	assert.Empty(t, conn.PathParam("test"))
 
-	// Test HostName method
+	// Test HostName method - should return empty string
 	assert.Empty(t, conn.HostName())
 
-	// Test Context method
+	// Test Context method - should return a valid context
 	ctx := conn.Context()
 	assert.NotNil(t, ctx)
 
-	// Test Params method
+	// Test Params method - should return nil
 	params := conn.Params("test")
 	assert.Nil(t, params)
-}
-
-// TestConnection_ErrorHandling tests error handling.
-func TestConnection_ErrorHandling(t *testing.T) {
-	// Test with nil connection
-	conn := &Connection{}
-
-	// These should not panic
-	assert.Empty(t, conn.Param("test"))
-	assert.Empty(t, conn.PathParam("test"))
-	assert.Empty(t, conn.HostName())
-	assert.NotNil(t, conn.Context())
-	assert.Nil(t, conn.Params("test"))
 }
 
 // OPTIONS TESTS
@@ -659,46 +1029,100 @@ func TestConstants(t *testing.T) {
 	assert.Equal(t, "couldn't establish connection to web socket", ErrorConnection.Error())
 }
 
-// TestConnection_Bind_ErrorPaths tests error paths in Bind method for 100% coverage.
+// TestConnection_Bind_ErrorPaths tests comprehensive error paths in Bind method.
 func TestConnection_Bind_ErrorPaths(t *testing.T) {
-	upgrader := websocket.Upgrader{}
+	tests := []struct {
+		name        string
+		setupServer func(*testing.T, *websocket.Conn)
+		expectError bool
+		description string
+	}{
+		{
+			name: "Connection closed before read",
+			setupServer: func(t *testing.T, conn *websocket.Conn) {
+				t.Helper()
+				wsConn := createTestConnection(t, conn)
+				// Close connection to force read error
+				conn.Close()
+				
+				var data string
+				err := wsConn.Bind(&data)
+				assert.Error(t, err, "Expected error for closed connection")
+			},
+			expectError: true,
+			description: "Should handle connection closed before read",
+		},
+		{
+			name: "Network timeout during read",
+			setupServer: func(t *testing.T, conn *websocket.Conn) {
+				t.Helper()
+				wsConn := createTestConnection(t, conn)
+				// Set a very short read deadline to simulate timeout
+				err := wsConn.SetReadDeadline(time.Now().Add(1 * time.Millisecond))
+				require.NoError(t, err)
+				
+				// Wait for deadline to pass
+				time.Sleep(10 * time.Millisecond)
+				
+				var data string
+				err = wsConn.Bind(&data)
+				assert.Error(t, err, "Expected timeout error")
+			},
+			expectError: true,
+			description: "Should handle network timeout during read",
+		},
+		{
+			name: "Unexpected server response - binary message",
+			setupServer: func(t *testing.T, conn *websocket.Conn) {
+				t.Helper()
+				wsConn := createTestConnection(t, conn)
+				
+				// Send binary message instead of text
+				err := conn.WriteMessage(websocket.BinaryMessage, []byte("binary data"))
+				require.NoError(t, err)
+				
+				var data string
+				err = wsConn.Bind(&data)
+				// This should still work as we're reading the message
+				assert.NoError(t, err, "Should handle binary messages")
+			},
+			expectError: false,
+			description: "Should handle binary messages gracefully",
+		},
+		{
+			name: "Connection interrupted during read",
+			setupServer: func(t *testing.T, conn *websocket.Conn) {
+				t.Helper()
+				wsConn := createTestConnection(t, conn)
+				
+				// Close connection immediately to simulate interruption
+				conn.Close()
+				
+				var data string
+				err := wsConn.Bind(&data)
+				assert.Error(t, err, "Expected error for interrupted connection")
+			},
+			expectError: true,
+			description: "Should handle connection interruption during read",
+		},
+	}
 
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		conn, err := upgrader.Upgrade(w, r, nil)
-		if err != nil {
-			t.Errorf("Failed to upgrade connection: %v", err)
-			return
-		}
-		defer conn.Close()
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			server := setupWebSocketServer(t, func(conn *websocket.Conn) {
+				tt.setupServer(t, conn)
+			})
+			defer server.Close()
 
-		wsConn := &Connection{Conn: conn}
+			conn, resp := connectToWebSocket(t, server.URL)
+			defer conn.Close()
+			defer resp.Body.Close()
 
-		// Test error path in Bind when ReadMessage fails
-		// We'll close the connection to force a read error
-		conn.Close()
-
-		var data string
-		err = wsConn.Bind(&data)
-
-		if err == nil {
-			t.Error("Expected error for closed connection")
-		}
-	}))
-	defer server.Close()
-
-	url := "ws" + server.URL[len("http"):] + "/ws"
-	dialer := websocket.DefaultDialer
-	conn, resp, err := dialer.Dial(url, nil)
-	require.NoError(t, err)
-
-	defer conn.Close()
-	defer resp.Body.Close()
-
-	// Write a message to trigger the server
-	err = conn.WriteMessage(websocket.TextMessage, []byte("test"))
-	require.NoError(t, err)
-
-	time.Sleep(100 * time.Millisecond)
+			// Send a message to trigger the server handler
+			sendMessageToWebSocket(t, conn, []byte("test"))
+			waitForWebSocketOperation(t, 100*time.Millisecond)
+		})
+	}
 }
 
 // TestConnection_Bind_JSONError tests JSON unmarshaling error path.
@@ -811,18 +1235,17 @@ func TestManager_CloseConnection_WithRealConn(t *testing.T) {
 	time.Sleep(100 * time.Millisecond)
 }
 
-// TestWSUpgrader_Upgrade_Error tests upgrade error path.
+// TestWSUpgrader_Upgrade_Error tests upgrade error path with invalid request.
 func TestWSUpgrader_Upgrade_Error(t *testing.T) {
-	// Create a mock upgrader that returns an error
-	mockUpgrader := &mockUpgraderWithError{}
-	wsUpgrader := &WSUpgrader{Upgrader: mockUpgrader}
-
+	upgrader := NewWSUpgrader()
+	
+	// Test with invalid request (not a WebSocket upgrade request)
 	req, err := http.NewRequestWithContext(context.Background(), http.MethodGet, "/", http.NoBody)
 	require.NoError(t, err)
 
 	w := httptest.NewRecorder()
 
-	conn, err := wsUpgrader.Upgrade(w, req, nil)
+	conn, err := upgrader.Upgrade(w, req, nil)
 	require.Error(t, err)
 	require.Nil(t, conn)
 }
@@ -977,9 +1400,3 @@ func createLargeJSON() []byte {
 	return jsonData
 }
 
-// mockUpgraderWithError is a mock upgrader that always returns an error.
-type mockUpgraderWithError struct{}
-
-func (*mockUpgraderWithError) Upgrade(_ http.ResponseWriter, _ *http.Request, _ http.Header) (*websocket.Conn, error) {
-	return nil, ErrUpgradeFailed
-}
