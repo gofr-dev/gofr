@@ -110,6 +110,14 @@ func (*Message) HostName() string {
 	return ""
 }
 
+func (*Message) Headers() map[string][]string {
+	return make(map[string][]string)
+}
+
+func (m *Message) Header(key string) string {
+	return ""
+}
+
 func (*Message) Params(string) []string {
 	return nil
 }

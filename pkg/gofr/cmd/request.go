@@ -86,6 +86,14 @@ func (*Request) HostName() (hostname string) {
 	return hostname
 }
 
+func (r *Request) Headers() map[string][]string {
+	return make(map[string][]string) // Not applicable for CMD, can be implemented if needed
+}
+
+func (r *Request) Header(key string) string {
+	return "" // Not applicable for CMD, can be implemented if needed
+}
+
 // Params retrieves all values for a given query parameter key, including comma-separated values.
 func (r *Request) Params(key string) []string {
 	value, exists := r.params[key]

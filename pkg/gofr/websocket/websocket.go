@@ -60,6 +60,14 @@ func (*Connection) Param(_ string) string {
 	return "" // Not applicable for WebSocket, can be implemented if needed
 }
 
+func (c *Connection) Headers() map[string][]string {
+	return make(map[string][]string) // Not applicable for WebSocket, can be implemented if needed
+}
+
+func (w *Connection) Header(key string) string {
+	return "" // Not applicable for WebSocket, can be implemented if needed
+}
+
 func (*Connection) PathParam(_ string) string {
 	return "" // Not applicable for WebSocket, can be implemented if needed
 }
