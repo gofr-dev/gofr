@@ -316,3 +316,33 @@ func TestBind_BinaryOctetStream_NotPointerToByteSlice(t *testing.T) {
 		t.Errorf("Expected error to contain: input is not a pointer to a byte slice: invalid input, got: %v", err)
 	}
 }
+
+func TestHeaders(t *testing.T) {
+	req := httptest.NewRequest(http.MethodGet, "/abc", http.NoBody)
+	req.Header.Add("X-Custom-Header", "value1")
+	req.Header.Add("X-Custom-Header", "value2")
+	req.Header.Add("Content-Type", "application/json")	
+
+	r := NewRequest(req)
+	headers := r.Headers()
+
+	if len(headers) != 2 {
+		t.Errorf("Expected 2 headers, got %d", len(headers))
+	}
+
+	if headers["X-Custom-Header"][0] != "value1" || headers["X-Custom-Header"][1] != "value2" {
+		t.Errorf("X-Custom-Header values do not match expected values")
+	}
+}
+
+func TestHeaders_Header(t *testing.T) {
+	req := httptest.NewRequest(http.MethodGet, "/abc", http.NoBody)
+	req.Header.Add("X-Custom-Header", "value1")
+	req.Header.Add("Content-Type", "application/json")
+
+	r := NewRequest(req)
+	header := r.Header("X-Custom-Header")
+	if header != "value1" {
+		t.Errorf("Expected X-Custom-Header to be 'value1', got '%s'", header)
+	}
+}
