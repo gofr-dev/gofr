@@ -34,21 +34,21 @@ func newHTTPService(t *testing.T) *httpService {
 
 func TestRateLimiterConfig_Validate(t *testing.T) {
 	t.Run("invalid RPS", func(t *testing.T) {
-		cfg := RateLimiterConfig{RequestsPerSecond: 0, Burst: 1}
+		cfg := RateLimiterConfig{Requests: 0, Burst: 1}
 		err := cfg.Validate()
 		require.Error(t, err)
 		assert.ErrorIs(t, err, errInvalidRequestRate)
 	})
 
 	t.Run("invalid Burst", func(t *testing.T) {
-		cfg := RateLimiterConfig{RequestsPerSecond: 1, Burst: 0}
+		cfg := RateLimiterConfig{Requests: 1, Burst: 0}
 		err := cfg.Validate()
 		require.Error(t, err)
 		assert.ErrorIs(t, err, errInvalidBurstSize)
 	})
 
 	t.Run("sets default KeyFunc when nil", func(t *testing.T) {
-		cfg := RateLimiterConfig{RequestsPerSecond: 1.5, Burst: 2}
+		cfg := RateLimiterConfig{Requests: 1.5, Burst: 2}
 		require.Nil(t, cfg.KeyFunc)
 		require.NoError(t, cfg.Validate())
 		require.NotNil(t, cfg.KeyFunc)
@@ -98,14 +98,14 @@ func TestDefaultKeyFunc(t *testing.T) {
 
 func TestAddOption_InvalidConfigReturnsOriginal(t *testing.T) {
 	h := newHTTPService(t)
-	cfg := RateLimiterConfig{RequestsPerSecond: 0, Burst: 1} // invalid
+	cfg := RateLimiterConfig{Requests: 0, Burst: 1} // invalid
 	out := cfg.AddOption(h)
 	assert.Same(t, h, out)
 }
 
 func TestAddOption_LocalLimiter(t *testing.T) {
 	h := newHTTPService(t)
-	cfg := RateLimiterConfig{RequestsPerSecond: 2, Burst: 3}
+	cfg := RateLimiterConfig{Requests: 2, Burst: 3}
 	out := cfg.AddOption(h)
 
 	_, isLocal := out.(*localRateLimiter)
@@ -117,9 +117,9 @@ func TestAddOption_LocalLimiter(t *testing.T) {
 func TestAddOption_DistributedLimiter(t *testing.T) {
 	h := newHTTPService(t)
 	cfg := RateLimiterConfig{
-		RequestsPerSecond: 5,
-		Burst:             5,
-		RedisClient:       new(gofrRedis.Redis),
+		Requests:    5,
+		Burst:       5,
+		RedisClient: new(gofrRedis.Redis),
 	}
 
 	out := cfg.AddOption(h)

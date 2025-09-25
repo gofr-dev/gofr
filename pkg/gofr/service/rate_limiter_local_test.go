@@ -64,9 +64,10 @@ func TestNewLocalRateLimiter_Basic(t *testing.T) {
 	base := newBaseHTTPService(t, &hits)
 
 	rl := NewLocalRateLimiter(RateLimiterConfig{
-		RequestsPerSecond: 5,
-		Burst:             5,
-		KeyFunc:           func(*http.Request) string { return "svc-basic" },
+		Requests: 5,
+		Window:   time.Second,
+		Burst:    5,
+		KeyFunc:  func(*http.Request) string { return "svc-basic" },
 	}, base)
 
 	resp, err := rl.Get(t.Context(), "/ok", nil)
@@ -86,9 +87,10 @@ func TestLocalRateLimiter_EnforceLimit(t *testing.T) {
 	base := newBaseHTTPService(t, &hits)
 
 	rl := NewLocalRateLimiter(RateLimiterConfig{
-		RequestsPerSecond: 1,
-		Burst:             1,
-		KeyFunc:           func(*http.Request) string { return "svc-limit" },
+		Requests: 1,
+		Window:   time.Second,
+		Burst:    1,
+		KeyFunc:  func(*http.Request) string { return "svc-limit" },
 	}, base)
 
 	resp, err := rl.Get(t.Context(), "/r1", nil)
@@ -125,9 +127,10 @@ func TestLocalRateLimiter_FractionalRPS(t *testing.T) {
 	base := newBaseHTTPService(t, &hits)
 
 	rl := NewLocalRateLimiter(RateLimiterConfig{
-		RequestsPerSecond: 0.5,
-		Burst:             1,
-		KeyFunc:           func(*http.Request) string { return "svc-frac" },
+		Requests: 0.5,
+		Window:   time.Second,
+		Burst:    1,
+		KeyFunc:  func(*http.Request) string { return "svc-frac" },
 	}, base)
 
 	resp, err := rl.Get(t.Context(), "/a", nil)
@@ -164,9 +167,10 @@ func TestLocalRateLimiter_CustomKey_SharedBucket(t *testing.T) {
 	base := newBaseHTTPService(t, &hits)
 
 	rl := NewLocalRateLimiter(RateLimiterConfig{
-		RequestsPerSecond: 1,
-		Burst:             1,
-		KeyFunc:           func(*http.Request) string { return "shared-key" },
+		Requests: 1,
+		Window:   time.Second,
+		Burst:    1,
+		KeyFunc:  func(*http.Request) string { return "shared-key" },
 	}, base)
 
 	resp, err := rl.Get(t.Context(), "/p1", nil)
@@ -206,9 +210,10 @@ func TestLocalRateLimiter_Concurrency(t *testing.T) {
 	base := newBaseHTTPService(t, &hits)
 
 	rl := NewLocalRateLimiter(RateLimiterConfig{
-		RequestsPerSecond: 1,
-		Burst:             1,
-		KeyFunc:           func(*http.Request) string { return "svc-conc" },
+		Requests: 1,
+		Window:   time.Second,
+		Burst:    1,
+		KeyFunc:  func(*http.Request) string { return "svc-conc" },
 	}, base)
 
 	const workers = 12
@@ -275,9 +280,10 @@ func TestLocalRateLimiter_NoMetrics(t *testing.T) {
 	base := newBaseHTTPService(t, &hits)
 
 	rl := NewLocalRateLimiter(RateLimiterConfig{
-		RequestsPerSecond: 2,
-		Burst:             2,
-		KeyFunc:           func(*http.Request) string { return "svc-nometrics" },
+		Requests: 2,
+		Window:   time.Second,
+		Burst:    2,
+		KeyFunc:  func(*http.Request) string { return "svc-nometrics" },
 	}, base)
 
 	resp, err := rl.Get(t.Context(), "/m", nil)
@@ -295,9 +301,10 @@ func TestLocalRateLimiter_RateLimitErrorFields(t *testing.T) {
 	base := newBaseHTTPService(t, &hits)
 
 	rl := NewLocalRateLimiter(RateLimiterConfig{
-		RequestsPerSecond: 0, // Always zero refill
-		Burst:             1,
-		KeyFunc:           func(*http.Request) string { return "svc-zero" },
+		Requests: 0, // Always zero refill
+		Window:   time.Second,
+		Burst:    1,
+		KeyFunc:  func(*http.Request) string { return "svc-zero" },
 	}, base)
 
 	resp, err := rl.Get(t.Context(), "/z1", nil)
@@ -330,16 +337,17 @@ func TestLocalRateLimiter_WrapperMethods_SuccessAndLimited(t *testing.T) {
 
 	// Success limiter: plenty of capacity
 	successRL := NewLocalRateLimiter(RateLimiterConfig{
-		RequestsPerSecond: 100,
-		Burst:             100,
-		KeyFunc:           func(*http.Request) string { return "wrapper-allow" },
+		Requests: 100,
+		Window:   time.Second,
+		Burst:    100,
+		KeyFunc:  func(*http.Request) string { return "wrapper-allow" },
 	}, base)
 
 	// Deny limiter: zero capacity (covers error branch)
 	denyRL := NewLocalRateLimiter(RateLimiterConfig{
-		RequestsPerSecond: 0,
-		Burst:             0,
-		KeyFunc:           func(*http.Request) string { return "wrapper-deny" },
+		Requests: 0,
+		Burst:    0,
+		KeyFunc:  func(*http.Request) string { return "wrapper-deny" },
 	}, base)
 
 	tests := []struct {

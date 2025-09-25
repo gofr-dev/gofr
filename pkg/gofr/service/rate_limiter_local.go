@@ -73,10 +73,11 @@ func NewLocalRateLimiter(config RateLimiterConfig, h HTTP) HTTP {
 }
 
 // newTokenBucket creates a new atomic token bucket with proper float64 scaling.
-func newTokenBucket(maxTokens int, refillRate float64) *tokenBucket {
-	maxScaled := int64(maxTokens) * scale
+func newTokenBucket(config *RateLimiterConfig) *tokenBucket {
+	maxScaled := int64(config.Burst) * scale
 
-	refillPerNanoFloat := refillRate * float64(scale) / float64(time.Second)
+	requestsPerSecond := config.RequestsPerSecond()
+	refillPerNanoFloat := requestsPerSecond * float64(scale) / float64(time.Second)
 
 	return &tokenBucket{
 		tokens:           maxScaled,
@@ -209,7 +210,7 @@ func (rl *localRateLimiter) checkRateLimit(req *http.Request) error {
 	now := time.Now().Unix()
 
 	entry, _ := rl.buckets.LoadOrStore(serviceKey, &bucketEntry{
-		bucket:     newTokenBucket(rl.config.Burst, rl.config.RequestsPerSecond),
+		bucket:     newTokenBucket(&rl.config),
 		lastAccess: now,
 	})
 

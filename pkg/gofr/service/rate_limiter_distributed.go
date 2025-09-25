@@ -16,8 +16,12 @@ import (
 const tokenBucketScript = `
 local key = KEYS[1]
 local burst = tonumber(ARGV[1])
-local refill_rate = tonumber(ARGV[2])
-local now = tonumber(ARGV[3])
+local requests = tonumber(ARGV[2])
+local window_seconds = tonumber(ARGV[3])
+local now = tonumber(ARGV[4])
+
+-- Calculate refill rate as requests per second
+local refill_rate = requests / window_seconds
 
 -- Fetch bucket
 local bucket = redis.call("HMGET", key, "tokens", "last_refill")
@@ -25,8 +29,8 @@ local tokens = tonumber(bucket[1])
 local last_refill = tonumber(bucket[2])
 
 if tokens == nil then
-  tokens = burst
-  last_refill = now
+tokens = burst
+last_refill = now
 end
 
 -- Refill tokens
@@ -37,10 +41,10 @@ local allowed = 0
 local retryAfter = 0
 
 if new_tokens >= 1 then
-  allowed = 1
-  new_tokens = new_tokens - 1
+allowed = 1
+new_tokens = new_tokens - 1
 else
-  retryAfter = math.ceil((1 - new_tokens) / refill_rate * 1000) -- ms
+retryAfter = math.ceil((1 - new_tokens) / refill_rate * 1000) -- ms
 end
 
 redis.call("HSET", key, "tokens", new_tokens, "last_refill", now)
@@ -108,7 +112,7 @@ func (rl *distributedRateLimiter) checkRateLimit(req *http.Request) error {
 		tokenBucketScript,
 		[]string{"gofr:ratelimit:" + serviceKey},
 		rl.config.Burst,
-		rl.config.RequestsPerSecond,
+		int64(rl.config.Window.Seconds()),
 		now,
 	)
 
