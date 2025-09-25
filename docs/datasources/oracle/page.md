@@ -1,5 +1,14 @@
 # OracleDB
 
+## Configuration
+To connect to `OracleDB`, you need to provide the following environment variables:
+- `HOST`: The hostname or IP address of your OracleDB server.
+- `PORT`: The port number.
+- `USERNAME`: The username for connecting to the database.
+- `PASSWORD`: The password for the specified user.
+- `SERVICE`: The specific Oracle database instance or service on the server that the client should connect to.
+
+## Setup
 GoFr supports injecting OracleDB as a relational datasource through a clean, extensible interface. Any driver that implements the following interface can be added using the `app.AddOracle()` method, and users can access OracleDB throughout their application via `gofr.Context`.
 
 ```go
@@ -145,11 +154,11 @@ func main() {
  app := gofr.New()
 
  app.AddOracle(oracle.New(oracle.Config{
-  Host:     "localhost",
-  Port:     1521,
-  Username: "system",
-  Password: "YourPasswordHere", // Replace with actual password
-  Service:  "FREEPDB1",
+  Host:     app.Config.Get("HOST"),
+  Port:     app.Config.Get("PORT"),
+  Username: app.Config.Get("USERNAME"),
+  Password: app.Config.Get("PASSWORD")
+  Service:  app.Config.Get("SERVICE"),
  }))
 
  app.POST("/user", Post)
