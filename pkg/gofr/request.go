@@ -13,5 +13,7 @@ type Request interface {
 	PathParam(string) string
 	Bind(any) error
 	HostName() string
+	Headers() map[string][]string
+	Header(string) string
 	Params(string) []string
 }
