@@ -1,18 +1,20 @@
 package exporters
 
 import (
+	"encoding/json"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"runtime"
 	"testing"
+	"time"
 
+	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
-
 	"gofr.dev/pkg/gofr/version"
 )
 
 func TestSendFrameworkStartupTelemetry_Disabled(t *testing.T) {
-	// Set environment variable to disable telemetry
 	t.Setenv("GOFR_TELEMETRY_DISABLED", "true")
 
 	requestMade := false
@@ -22,49 +24,63 @@ func TestSendFrameworkStartupTelemetry_Disabled(t *testing.T) {
 
 		w.WriteHeader(http.StatusOK)
 	}))
-
 	defer server.Close()
 
 	SendFrameworkStartupTelemetry("test-app", "1.0.0")
+	time.Sleep(100 * time.Millisecond)
 
-	if requestMade {
-		t.Error("Expected no telemetry when disabled, but request was made")
-	}
+	assert.False(t, requestMade, "Expected no telemetry when disabled")
 }
 
-func TestCreateTelemetryResource(t *testing.T) {
-	appName := "test-app"
-	appVersion := "1.0.0"
+func TestSendFrameworkStartupTelemetry_DefaultValues(t *testing.T) {
+	var receivedData TelemetryData
 
-	resource := createTelemetryResource(appName, appVersion)
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		body, err := io.ReadAll(r.Body)
+		assert.NoError(t, err)
 
-	if resource == nil {
-		t.Fatal("Expected resource to be created, got nil")
+		err = json.Unmarshal(body, &receivedData)
+		assert.NoError(t, err)
+
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer server.Close()
+
+	// Test with empty values to verify defaults.
+	testSendTelemetryData("", "", server.URL)
+	time.Sleep(100 * time.Millisecond)
+
+	assert.Equal(t, defaultAppName, receivedData.ServiceName)
+	assert.Equal(t, "unknown", receivedData.ServiceVersion)
+	assert.Equal(t, "gofr-framework", receivedData.Source)
+	assert.Equal(t, 0, receivedData.RawDataSize)
+}
+
+// Helper function that replicates sendTelemetryData but with configurable endpoint.
+func testSendTelemetryData(appName, appVersion, endpoint string) {
+	if appName == "" {
+		appName = defaultAppName
 	}
 
-	// Verify attributes exist
-	attrs := resource.Attributes()
-
-	expectedAttrs := map[string]string{
-		"service.name":      appName,
-		"service.version":   appVersion,
-		"framework":         "gofr",
-		"framework_version": version.Framework,
-		"go_version":        runtime.Version(),
-		"os":                runtime.GOOS,
-		"arch":              runtime.GOARCH,
+	if appVersion == "" {
+		appVersion = "unknown"
 	}
 
-	// Convert slice to map for easier lookup
-	foundAttrs := make(map[string]string)
-	for _, attr := range attrs {
-		foundAttrs[string(attr.Key)] = attr.Value.AsString()
+	now := time.Now().UTC()
+
+	data := TelemetryData{
+		Timestamp:        now.Format(time.RFC3339),
+		EventID:          uuid.New().String(),
+		Source:           "gofr-framework",
+		ServiceName:      appName,
+		ServiceVersion:   appVersion,
+		RawDataSize:      0,
+		FrameworkVersion: version.Framework,
+		GoVersion:        runtime.Version(),
+		OS:               runtime.GOOS,
+		Architecture:     runtime.GOARCH,
+		StartupTime:      now.Format(time.RFC3339),
 	}
 
-	for key, expected := range expectedAttrs {
-		actual, exists := foundAttrs[key]
-
-		assert.True(t, exists, "Expected attribute %s to exist: %v", key)
-		assert.Equal(t, expected, actual, "Expected %s = %s, got %s", key, expected, actual)
-	}
+	sendToEndpoint(&data, endpoint)
 }

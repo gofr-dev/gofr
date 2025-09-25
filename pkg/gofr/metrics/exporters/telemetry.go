@@ -1,124 +1,98 @@
 package exporters
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
+	"net/http"
 	"os"
 	"runtime"
 	"time"
 
-	"go.opentelemetry.io/otel/attribute"
-	"go.opentelemetry.io/otel/exporters/otlp/otlpmetric/otlpmetrichttp"
-	"go.opentelemetry.io/otel/metric"
-	metricSdk "go.opentelemetry.io/otel/sdk/metric"
-	"go.opentelemetry.io/otel/sdk/metric/metricdata"
-	"go.opentelemetry.io/otel/sdk/resource"
-	semconv "go.opentelemetry.io/otel/semconv/v1.17.0"
-
+	"github.com/google/uuid"
 	"gofr.dev/pkg/gofr/version"
 )
 
 const (
-	telemetryEndpoint = "localhost:8080"
-	defaultAppName    = "gofr-app"
+	defaultTelemetryEndpoint = "http://localhost:8080/v1/metrics"
+	defaultAppName           = "gofr-app"
+	requestTimeout           = 10 * time.Second
 )
 
-// SendFrameworkStartupTelemetry sends proper OTLP telemetry ONCE on startup.
+// TelemetryData represents the JSON telemetry payload.
+type TelemetryData struct {
+	Timestamp        string `json:"timestamp"`
+	EventID          string `json:"event_id"`
+	Source           string `json:"source"`
+	ServiceName      string `json:"service_name,omitempty"`
+	ServiceVersion   string `json:"service_version,omitempty"`
+	RawDataSize      int    `json:"raw_data_size"`
+	FrameworkVersion string `json:"framework_version,omitempty"`
+	GoVersion        string `json:"go_version,omitempty"`
+	OS               string `json:"os,omitempty"`
+	Architecture     string `json:"architecture,omitempty"`
+	StartupTime      string `json:"startup_time,omitempty"`
+}
+
+// SendFrameworkStartupTelemetry sends telemetry data.
 func SendFrameworkStartupTelemetry(appName, appVersion string) {
 	if os.Getenv("GOFR_TELEMETRY_DISABLED") == "true" {
 		return
 	}
 
-	// Send in background to avoid blocking startup
-	go func() {
-		// Create OTLP HTTP exporter
-		exporter, err := otlpmetrichttp.New(
-			context.Background(),
-			otlpmetrichttp.WithEndpoint(telemetryEndpoint),
-			otlpmetrichttp.WithInsecure(),
-			otlpmetrichttp.WithHeaders(map[string]string{
-				"Content-Type": "application/x-protobuf", // Proper OTLP content type
-			}),
-		)
-		if err != nil {
-			return // Fail silently
-		}
-
-		// Create manual reader for one-time export
-		reader := metricSdk.NewManualReader()
-
-		// Create meter provider
-		provider := metricSdk.NewMeterProvider(
-			metricSdk.WithReader(reader),
-			metricSdk.WithResource(createTelemetryResource(appName, appVersion)),
-		)
-
-		defer func() {
-			if err = provider.Shutdown(context.Background()); err != nil {
-				return
-			}
-		}()
-
-		defer func() {
-			if err = exporter.Shutdown(context.Background()); err != nil {
-				return
-			}
-		}()
-
-		// Get meter
-		meter := provider.Meter("gofr-telemetry", metric.WithInstrumentationVersion(appVersion))
-
-		// Create startup counter
-		startupCounter, err := meter.Int64Counter(
-			"gofr_framework_starts_total",
-			metric.WithDescription("Total number of GoFr framework startups"),
-		)
-		if err != nil {
-			return
-		}
-
-		if appName == "" {
-			appName = defaultAppName
-		}
-
-		if appVersion == "" {
-			appVersion = "unknown"
-		}
-
-		// Record startup event
-		ctx := context.Background()
-		startupCounter.Add(ctx, 1,
-			metric.WithAttributes(
-				attribute.String("app_name", appName),
-				attribute.String("app_version", appVersion),
-				attribute.String("startup_time", time.Now().UTC().Format(time.RFC3339)),
-			),
-		)
-
-		var resourceMetrics metricdata.ResourceMetrics
-
-		// Manually collect and export the metrics ONCE
-		err = reader.Collect(ctx, &resourceMetrics)
-		if err != nil {
-			return
-		}
-
-		// Export the metrics
-		if err := exporter.Export(ctx, &resourceMetrics); err != nil {
-			return
-		}
-	}()
+	go sendTelemetryData(appName, appVersion)
 }
 
-// createTelemetryResource creates resource with framework-specific attributes.
-func createTelemetryResource(appName, appVersion string) *resource.Resource {
-	return resource.NewWithAttributes(
-		semconv.SchemaURL,
-		semconv.ServiceNameKey.String(appName),
-		semconv.ServiceVersionKey.String(appVersion),
-		attribute.String("framework", "gofr"),
-		attribute.String("framework_version", version.Framework),
-		attribute.String("go_version", runtime.Version()),
-		attribute.String("os", runtime.GOOS),
-		attribute.String("arch", runtime.GOARCH),
-	)
+func sendTelemetryData(appName, appVersion string) {
+	if appName == "" {
+		appName = defaultAppName
+	}
+
+	if appVersion == "" {
+		appVersion = "unknown"
+	}
+
+	now := time.Now().UTC()
+
+	data := TelemetryData{
+		Timestamp:        now.Format(time.RFC3339),
+		EventID:          uuid.New().String(),
+		Source:           "gofr-framework",
+		ServiceName:      appName,
+		ServiceVersion:   appVersion,
+		RawDataSize:      0,
+		FrameworkVersion: version.Framework,
+		GoVersion:        runtime.Version(),
+		OS:               runtime.GOOS,
+		Architecture:     runtime.GOARCH,
+		StartupTime:      now.Format(time.RFC3339),
+	}
+
+	sendToEndpoint(&data, defaultTelemetryEndpoint)
+}
+
+func sendToEndpoint(data *TelemetryData, endpoint string) {
+	jsonData, err := json.Marshal(data)
+	if err != nil {
+		return
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), requestTimeout)
+	defer cancel()
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, endpoint, bytes.NewBuffer(jsonData))
+	if err != nil {
+		return
+	}
+
+	req.Header.Set("Content-Type", "application/json")
+
+	client := &http.Client{Timeout: 10 * time.Second}
+
+	resp, err := client.Do(req)
+	if err != nil {
+		return
+	}
+
+	resp.Body.Close()
 }
