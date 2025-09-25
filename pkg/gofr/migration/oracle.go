@@ -160,8 +160,6 @@ func (om oracleMigrator) commitMigration(c *container.Container, data transactio
 		return err
 	}
 
-	c.Infof("Migration %v ran successfully", data.MigrationNumber)
-
 	return om.migrator.commitMigration(c, data)
 }
 
@@ -169,9 +167,9 @@ func (om oracleMigrator) commitMigration(c *container.Container, data transactio
 func (om oracleMigrator) rollback(c *container.Container, data transactionData) {
 	if data.OracleTx != nil {
 		if err := data.OracleTx.Rollback(); err != nil {
-			c.Errorf("unable to rollback Oracle transaction: %v", err)
+			c.Fatalf("unable to rollback Oracle transaction: %v", err)
 		} else {
-			c.Debug("Oracle transaction successfully rolled back")
+			c.Fatalf("Oracle migration failed, transaction rolled back - exiting application")
 		}
 	}
 
