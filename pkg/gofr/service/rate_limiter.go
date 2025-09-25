@@ -17,10 +17,11 @@ var (
 
 // RateLimiterConfig with custom keying support.
 type RateLimiterConfig struct {
-	RequestsPerSecond float64                    // Token refill rate (must be > 0)
-	Burst             int                        // Maximum burst capacity (must be > 0)
-	KeyFunc           func(*http.Request) string // Optional custom key extraction
-	RedisClient       *gofrRedis.Redis           `json:"-"` // Optional Redis for distributed limiting
+	Requests    float64                    // Number of requests allowed
+	Window      time.Duration              // Time window (e.g., time.Minute, time.Hour)
+	Burst       int                        // Maximum burst capacity (must be > 0)
+	KeyFunc     func(*http.Request) string // Optional custom key extraction
+	RedisClient *gofrRedis.Redis           `json:"-"` // Optional Redis for distributed limiting
 }
 
 // defaultKeyFunc extracts a normalized service key from an HTTP request.
@@ -53,8 +54,12 @@ func defaultKeyFunc(req *http.Request) string {
 
 // Validate checks if the configuration is valid.
 func (config *RateLimiterConfig) Validate() error {
-	if config.RequestsPerSecond <= 0 {
-		return fmt.Errorf("%w: %f", errInvalidRequestRate, config.RequestsPerSecond)
+	if config.Requests <= 0 {
+		return fmt.Errorf("%w: %f", errInvalidRequestRate, config.Requests)
+	}
+
+	if config.Window <= 0 {
+		config.Window = time.Minute // Default: per-minute rate limiting
 	}
 
 	if config.Burst <= 0 {
@@ -90,6 +95,12 @@ func (config *RateLimiterConfig) AddOption(h HTTP) HTTP {
 	}
 
 	return NewLocalRateLimiter(*config, h)
+}
+
+// RequestsPerSecond converts the configured rate to requests per second.
+func (config *RateLimiterConfig) RequestsPerSecond() float64 {
+	// Convert any time window to "requests per second" for internal math
+	return float64(config.Requests) / config.Window.Seconds()
 }
 
 // RateLimitError represents a rate limiting error.
