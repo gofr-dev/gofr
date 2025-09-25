@@ -182,6 +182,15 @@ func (noopRequest) Bind(any) error {
 	return nil
 }
 
+func (noopRequest) Headers() map[string][]string {
+	return nil
+}
+
+func (noopRequest) Header(string) string {
+	return ""
+}
+
 func (noopRequest) Params(string) []string {
 	return nil
 }
+
