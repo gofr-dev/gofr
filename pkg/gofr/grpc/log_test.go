@@ -404,38 +404,51 @@ func TestStreamObservabilityInterceptor_WithError(t *testing.T) {
 	require.Error(t, err)
 }
 
-func TestInitializeSpanContext(t *testing.T) {
+func TestInitializeSpanContext_NoSpanCreated(t *testing.T) {
 	tests := []struct {
-		name     string
-		ctx      context.Context
-		expected bool
+		name string
+		ctx  context.Context
 	}{
 		{
-			name:     "no metadata",
-			ctx:      t.Context(),
-			expected: false,
-		},
-		{
-			name: "valid trace context",
-			ctx: metadata.NewIncomingContext(t.Context(), metadata.Pairs(
-				"x-gofr-traceid", "12345678901234567890123456789012",
-				"x-gofr-spanid", "1234567890123456",
-			)),
-			expected: true,
+			name: "no metadata",
+			ctx:  t.Context(),
 		},
 		{
 			name: "missing trace id",
 			ctx: metadata.NewIncomingContext(t.Context(), metadata.Pairs(
 				"x-gofr-spanid", "1234567890123456",
 			)),
-			expected: false,
 		},
 		{
 			name: "missing span id",
 			ctx: metadata.NewIncomingContext(t.Context(), metadata.Pairs(
 				"x-gofr-traceid", "12345678901234567890123456789012",
 			)),
-			expected: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := initializeSpanContext(tt.ctx)
+			// When no trace context is created, the result should be the same as input
+			assert.Equal(t, tt.ctx, result)
+		})
+	}
+}
+
+func TestInitializeSpanContext_SpanCreated(t *testing.T) {
+	tests := []struct {
+		name        string
+		ctx         context.Context
+		expectValid bool
+	}{
+		{
+			name: "valid trace context",
+			ctx: metadata.NewIncomingContext(t.Context(), metadata.Pairs(
+				"x-gofr-traceid", "12345678901234567890123456789012",
+				"x-gofr-spanid", "1234567890123456",
+			)),
+			expectValid: true,
 		},
 		{
 			name: "invalid trace id",
@@ -443,7 +456,7 @@ func TestInitializeSpanContext(t *testing.T) {
 				"x-gofr-traceid", "invalid",
 				"x-gofr-spanid", "1234567890123456",
 			)),
-			expected: true, // Function creates span context even with invalid hex
+			expectValid: false, // Function creates span context even with invalid hex
 		},
 		{
 			name: "invalid span id",
@@ -451,31 +464,20 @@ func TestInitializeSpanContext(t *testing.T) {
 				"x-gofr-traceid", "12345678901234567890123456789012",
 				"x-gofr-spanid", "invalid",
 			)),
-			expected: true, // Function creates span context even with invalid hex
+			expectValid: false, // Function creates span context even with invalid hex
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			result := initializeSpanContext(tt.ctx)
-
-			if tt.expected {
-				// When trace context is created, the result should be different from input
-				assert.NotEqual(t, tt.ctx, result)
-				// Verify that a span context was added
-				span := trace.SpanFromContext(result)
-				assert.NotNil(t, span)
-				// For invalid hex values, the span context may not be valid but still exists
-				if tt.name == "valid trace context" {
-					assert.True(t, span.SpanContext().IsValid())
-				} else {
-					// For invalid cases, span context exists but may not be valid
-					assert.False(t, span.SpanContext().IsValid())
-				}
-			} else {
-				// When no trace context is created, the result should be the same as input
-				assert.Equal(t, tt.ctx, result)
-			}
+			// When trace context is created, the result should be different from input
+			assert.NotEqual(t, tt.ctx, result)
+			// Verify that a span context was added
+			span := trace.SpanFromContext(result)
+			assert.NotNil(t, span)
+			// Check if span context is valid based on test expectation
+			assert.Equal(t, tt.expectValid, span.SpanContext().IsValid())
 		})
 	}
 }
