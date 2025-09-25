@@ -124,7 +124,8 @@ a.AddHTTPService("cat-facts", "https://catfact.ninja",
   },
   
   &service.RateLimiterConfig{
-      Rate:      5,
+	  Requests: 5,
+	  Window:   time.Minute,
       Burst:     10,
       RedisClient: rc, // if RedisClient is nil, in-memory rate limiter will be used
     },
