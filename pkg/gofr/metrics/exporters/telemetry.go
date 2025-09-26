@@ -15,7 +15,7 @@ import (
 )
 
 const (
-	defaultTelemetryEndpoint = "http://localhost:8080/v1/metrics"
+	defaultTelemetryEndpoint = "https://gofr.dev/telemetry/v1/metrics"
 	defaultAppName           = "gofr-app"
 	requestTimeout           = 10 * time.Second
 )
