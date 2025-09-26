@@ -1,6 +1,7 @@
 package exporters
 
 import (
+	"github.com/prometheus/otlptranslator"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/exporters/prometheus"
 	"go.opentelemetry.io/otel/metric"
@@ -12,7 +13,9 @@ import (
 )
 
 func Prometheus(appName, appVersion string) metric.Meter {
-	exporter, err := prometheus.New(prometheus.WithoutTargetInfo())
+	exporter, err := prometheus.New(
+		prometheus.WithoutTargetInfo(),
+		prometheus.WithTranslationStrategy(otlptranslator.NoTranslation))
 	if err != nil {
 		return nil
 	}
