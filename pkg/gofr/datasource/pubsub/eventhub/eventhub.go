@@ -297,7 +297,7 @@ func (c *Client) processEventsFromPartitionClient(ctx context.Context, topic str
 		processor: partitionClient,
 		logger:    c.logger,
 	}
-	msg.Topic = partitionClient.PartitionID()
+	msg.Topic = topic
 	msg.MetaData = events[0].EventData
 
 	end := time.Since(start)
@@ -383,7 +383,7 @@ func (c *Client) tryReadFromPartition(ctx context.Context, partitionID, topic st
 		processor: nil, // Not using processor for direct reads
 		logger:    c.logger,
 	}
-	msg.Topic = partitionID
+	msg.Topic = topic
 	msg.MetaData = events[0].EventData
 
 	end := time.Since(start)
