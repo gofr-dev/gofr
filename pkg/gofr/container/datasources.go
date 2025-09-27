@@ -210,8 +210,16 @@ type ClickhouseProvider interface {
 type OracleDB interface {
 	Exec(ctx context.Context, query string, args ...any) error
 	Select(ctx context.Context, dest any, query string, args ...any) error
+	Begin() (OracleTx, error)
 
 	HealthChecker
+}
+
+type OracleTx interface {
+	ExecContext(ctx context.Context, query string, args ...any) error
+	SelectContext(ctx context.Context, dest any, query string, args ...any) error
+	Commit() error
+	Rollback() error
 }
 
 type OracleProvider interface {

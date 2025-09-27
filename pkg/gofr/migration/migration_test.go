@@ -202,6 +202,7 @@ func initializeClickHouseRunMocks(t *testing.T) (*MockClickhouse, *container.Con
 	mockContainer.Elasticsearch = nil
 	mockContainer.OpenTSDB = nil
 	mockContainer.ScyllaDB = nil
+	mockContainer.Oracle = nil
 	mockContainer.Logger = logging.NewMockLogger(logging.DEBUG)
 	mockContainer.Clickhouse = mockClickHouse
 
