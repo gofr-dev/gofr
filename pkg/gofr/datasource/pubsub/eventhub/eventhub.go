@@ -3,9 +3,12 @@ package eventhub
 import (
 	"context"
 	"errors"
+	"fmt"
+	"os"
 	"strings"
 	"time"
 
+	"github.com/Azure/azure-sdk-for-go/sdk/azcore/to"
 	"github.com/Azure/azure-sdk-for-go/sdk/messaging/azeventhubs"
 	"github.com/Azure/azure-sdk-for-go/sdk/messaging/azeventhubs/checkpoints"
 	"github.com/Azure/azure-sdk-for-go/sdk/storage/azblob/container"
@@ -25,7 +28,12 @@ var (
 	errEmptyTopic         = errors.New("topic name cannot be empty")
 )
 
-const defaultQueryTimeout = 30 * time.Second
+const (
+	defaultQueryTimeout     = 30 * time.Second
+	eventHubPropsTimeout    = 2 * time.Second
+	basicTierMaxPartitions  = 2
+	basicTierReceiveTimeout = 3 * time.Second
+)
 
 type Config struct {
 	ConnectionString          string
@@ -128,10 +136,17 @@ func (c *Client) UseTracer(tracer any) {
 	}
 }
 
-// Connect establishes a connection to Cassandra and registers metrics using the provided configuration when the client was Created.
+// Connect establishes a connection to Event Hub and registers metrics using the provided configuration when the client was Created.
 func (c *Client) Connect() {
 	if !c.validConfigs(c.cfg) {
 		return
+	}
+
+	if c.cfg.ConsumerGroup == "" {
+		c.cfg.ConsumerGroup = c.generateUniqueConsumerGroup()
+		c.logger.Debugf("Auto-generated consumer group: %s", c.cfg.ConsumerGroup)
+	} else {
+		c.logger.Debugf("Using provided consumer group: %s", c.cfg.ConsumerGroup)
 	}
 
 	c.logger.Debug("Event Hub connection started using connection string")
@@ -205,6 +220,28 @@ func (c *Client) Connect() {
 	c.producer = producerClient
 	c.consumer = consumerClient
 	c.checkPoint = checkpointStore
+
+	c.logger.Debug("Event Hub client initialization complete")
+}
+
+// generateUniqueConsumerGroup creates a unique consumer group for this instance.
+func (*Client) generateUniqueConsumerGroup() string {
+	// Try environment variables first (Kubernetes/Docker)
+	if podName := os.Getenv("POD_NAME"); podName != "" {
+		return fmt.Sprintf("gofr-%s", podName)
+	}
+
+	if hostname := os.Getenv("HOSTNAME"); hostname != "" {
+		return fmt.Sprintf("gofr-%s", hostname)
+	}
+
+	// Fallback to system hostname + process ID.
+	if hostname, err := os.Hostname(); err == nil {
+		return fmt.Sprintf("gofr-%s-%d", hostname, os.Getpid())
+	}
+
+	// Final fallback.
+	return fmt.Sprintf("gofr-instance-%d", time.Now().UnixNano())
 }
 
 // Subscribe checks all partitions for the first available event and returns it.
@@ -213,48 +250,89 @@ func (c *Client) Subscribe(ctx context.Context, topic string) (*pubsub.Message, 
 		return nil, errClientNotConnected
 	}
 
-	var (
-		msg *pubsub.Message
-		err error
-	)
+	// Try processor approach first
+	partitionClient := c.processor.NextPartitionClient(ctx)
+	if partitionClient != nil {
+		return c.processEventsFromPartitionClient(ctx, topic, partitionClient)
+	}
 
-	//  for each partition in the event hub, create a partition client with processEvents as the function to process events
-	for {
-		partitionClient := c.processor.NextPartitionClient(ctx)
+	// Fallback to direct consumer approach if processor doesn't have partition clients ready
+	return c.subscribeDirectFromConsumer(ctx, topic)
+}
 
-		if partitionClient == nil {
-			break
+// processEventsFromPartitionClient processes events using the processor partition client.
+func (c *Client) processEventsFromPartitionClient(ctx context.Context, topic string,
+	partitionClient *azeventhubs.ProcessorPartitionClient) (*pubsub.Message, error) {
+	defer closePartitionResources(ctx, partitionClient)
+
+	timeout := c.getReceiveTimeout()
+
+	receiveCtx, cancel := context.WithTimeout(ctx, timeout)
+	defer cancel()
+
+	c.metrics.IncrementCounter(ctx, "app_pubsub_subscribe_total_count", "topic", topic, "subscription_name", partitionClient.PartitionID())
+
+	start := time.Now()
+
+	// ReceiveEvents signature: ReceiveEvents(ctx context.Context, count int, options *ReceiveEventsOptions) ([]*ReceivedEventData, error)
+	// Note: ReceiveEventsOptions is nil for default behavior.
+	events, err := partitionClient.ReceiveEvents(receiveCtx, 1, nil)
+	if err != nil {
+		if !errors.Is(err, context.DeadlineExceeded) {
+			c.logger.Debugf("Error receiving events from partition %s: %v", partitionClient.PartitionID(), err)
 		}
 
-		c.metrics.IncrementCounter(ctx, "app_pubsub_subscribe_total_count", "topic", topic, "subscription_name", partitionClient.PartitionID())
+		return nil, nil
+	}
 
-		start := time.Now()
+	if len(events) == 0 {
+		return nil, nil
+	}
 
-		select {
-		case <-ctx.Done():
-			return nil, nil
-		default:
-			msg, err = c.processEvents(ctx, partitionClient)
-			if errors.Is(err, ErrNoMsgReceived) {
-				// If no message is received, we don't achieve anything by returning error rather check in a different partition.
-				// This logic may change if we remove the timeout while receiving a message. However, waiting on just one partition
-				// might lead to missing data, so spawning one go-routine or having a worker pool can be an option to do this operation faster.
-				continue
-			}
+	// Create message from the first event
+	msg := pubsub.NewMessage(ctx)
+	msg.Value = events[0].Body
+	msg.Committer = &Message{
+		event:     events[0],
+		processor: partitionClient,
+		logger:    c.logger,
+	}
+	msg.Topic = topic
+	msg.MetaData = events[0].EventData
 
-			end := time.Since(start)
+	end := time.Since(start)
+	c.logger.Debug(&Log{
+		Mode:          "SUB",
+		MessageValue:  strings.Join(strings.Fields(string(msg.Value)), " "),
+		Topic:         topic,
+		Host:          c.cfg.EventhubName + ":" + c.cfg.ConsumerGroup + ":" + partitionClient.PartitionID(),
+		PubSubBackend: "EVHUB",
+		Time:          end.Microseconds(),
+	})
 
-			c.logger.Debug(&Log{
-				Mode:          "SUB",
-				MessageValue:  strings.Join(strings.Fields(string(msg.Value)), " "),
-				Topic:         topic,
-				Host:          c.cfg.EventhubName + ":" + c.cfg.ConsumerGroup + ":" + partitionClient.PartitionID(),
-				PubSubBackend: "EVHUB",
-				Time:          end.Microseconds(),
-			})
+	c.metrics.IncrementCounter(ctx, "app_pubsub_subscribe_success_count", "topic", topic, "subscription_name", partitionClient.PartitionID())
 
-			c.metrics.IncrementCounter(ctx, "app_pubsub_subscribe_success_count", "topic", topic, "subscription_name", partitionClient.PartitionID())
+	return msg, nil
+}
 
+// subscribeDirectFromConsumer uses consumer client directly as fallback.
+func (c *Client) subscribeDirectFromConsumer(ctx context.Context, topic string) (*pubsub.Message, error) {
+	// Get partition information
+	props, err := c.consumer.GetEventHubProperties(ctx, nil)
+	if err != nil {
+		c.logger.Errorf("Failed to get Event Hub properties: %v", err)
+		return nil, err
+	}
+
+	// Try each partition for available messages - use LATEST to avoid old messages
+	for _, partitionID := range props.PartitionIDs {
+		msg, err := c.tryReadFromPartition(ctx, partitionID, topic)
+		if err != nil {
+			c.logger.Debugf("Error reading from partition %s: %v", partitionID, err)
+			continue
+		}
+
+		if msg != nil {
 			return msg, nil
 		}
 	}
@@ -262,34 +340,93 @@ func (c *Client) Subscribe(ctx context.Context, topic string) (*pubsub.Message, 
 	return nil, nil
 }
 
-func (*Client) processEvents(ctx context.Context, partitionClient *azeventhubs.ProcessorPartitionClient) (*pubsub.Message, error) {
-	defer closePartitionResources(ctx, partitionClient)
+// tryReadFromPartition attempts to read a single message from specified partition.
+func (c *Client) tryReadFromPartition(ctx context.Context, partitionID, topic string) (*pubsub.Message, error) {
+	// Create partition client for direct read with LATEST position to avoid old messages.
+	partitionClient, err := c.consumer.NewPartitionClient(partitionID, &azeventhubs.PartitionClientOptions{
+		StartPosition: azeventhubs.StartPosition{
+			Latest: to.Ptr(true), // Use Latest to only get new messages
+		},
+	})
 
-	receiveCtx, receiveCtxCancel := context.WithTimeout(ctx, time.Second)
+	if err != nil {
+		return nil, err
+	}
+
+	defer partitionClient.Close(ctx)
+
+	timeout := c.getReceiveTimeout()
+
+	receiveCtx, cancel := context.WithTimeout(ctx, timeout)
+	defer cancel()
+
+	c.metrics.IncrementCounter(ctx, "app_pubsub_subscribe_total_count", "topic", topic, "subscription_name", partitionID)
+
+	start := time.Now()
+
 	events, err := partitionClient.ReceiveEvents(receiveCtx, 1, nil)
-
-	receiveCtxCancel()
 
 	if err != nil && !errors.Is(err, context.DeadlineExceeded) {
 		return nil, err
 	}
 
 	if len(events) == 0 {
-		return nil, ErrNoMsgReceived
+		return nil, nil // No message available in this partition
 	}
 
+	// Create message from event
 	msg := pubsub.NewMessage(ctx)
 
 	msg.Value = events[0].Body
 	msg.Committer = &Message{
 		event:     events[0],
-		processor: partitionClient,
+		processor: nil, // Not using processor for direct reads
+		logger:    c.logger,
 	}
-
-	msg.Topic = partitionClient.PartitionID()
+	msg.Topic = topic
 	msg.MetaData = events[0].EventData
 
+	end := time.Since(start)
+	c.logger.Debug(&Log{
+		Mode:          "SUB",
+		MessageValue:  strings.Join(strings.Fields(string(msg.Value)), " "),
+		Topic:         topic,
+		Host:          c.cfg.EventhubName + ":" + c.cfg.ConsumerGroup + ":" + partitionID,
+		PubSubBackend: "EVHUB",
+		Time:          end.Microseconds(),
+	})
+
+	c.metrics.IncrementCounter(ctx, "app_pubsub_subscribe_success_count", "topic", topic, "subscription_name", partitionID)
+
 	return msg, nil
+}
+
+// getReceiveTimeout returns appropriate timeout based on Event Hub characteristics.
+func (c *Client) getReceiveTimeout() time.Duration {
+	// Check if this might be basic tier by examining partition count
+	if c.isLikelyBasicTier() {
+		return basicTierReceiveTimeout
+	}
+
+	return time.Second
+}
+
+// isLikelyBasicTier detects basic tier characteristics.
+func (c *Client) isLikelyBasicTier() bool {
+	if c.consumer == nil {
+		return false
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), eventHubPropsTimeout)
+	defer cancel()
+
+	props, err := c.consumer.GetEventHubProperties(ctx, nil)
+	if err != nil {
+		return false // Default to standard behavior on error
+	}
+
+	// Basic tier typically has fewer partitions
+	return len(props.PartitionIDs) <= basicTierMaxPartitions
 }
 
 func closePartitionResources(ctx context.Context, partitionClient *azeventhubs.ProcessorPartitionClient) {
@@ -401,18 +538,31 @@ func (c *Client) GetEventHubName() string {
 	return c.cfg.EventhubName
 }
 
+// Close safely closes all Event Hub clients and resources.
 func (c *Client) Close() error {
-	err := c.producer.Close(context.Background())
-	if err != nil {
-		c.logger.Errorf("failed to close Event Hub producer %v", err)
+	var lastErr error
+
+	// Close producer if it exists
+	if c.producer != nil {
+		if err := c.producer.Close(context.Background()); err != nil {
+			c.logger.Errorf("failed to close Event Hub producer: %v", err)
+			lastErr = err
+		}
 	}
 
-	err = c.consumer.Close(context.Background())
-	if err != nil {
-		c.logger.Errorf("failed to close Event Hub consumer %v", err)
+	// Close consumer if it exists
+	if c.consumer != nil {
+		if err := c.consumer.Close(context.Background()); err != nil {
+			c.logger.Errorf("failed to close Event Hub consumer: %v", err)
+			lastErr = err
+		}
 	}
 
-	c.processorCtx()
+	// Cancel processor context if it exists
+	if c.processorCtx != nil {
+		c.processorCtx()
+		c.logger.Debug("Event Hub processor context canceled")
+	}
 
-	return err
+	return lastErr
 }
