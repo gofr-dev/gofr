@@ -4,23 +4,57 @@ GoFr provides a structured error handling approach to simplify error management 
 The errors package in GoFr provides functionality for handling errors in GoFr applications. It includes predefined HTTP 
 and database errors, as well as the ability to create custom errors with additional context.
 
+## Import Requirements
+
+To use GoFr's predefined HTTP errors, users need to import the appropriate packages:
+
+```go
+import (
+    "gofr.dev/pkg/gofr/http"
+    "gofr.dev/pkg/gofr/datasource"
+)
+```
+
 ## Pre-defined HTTP Errors
 
 GoFr’s `http` package offers several predefined error types to represent common HTTP error scenarios. These errors 
 automatically handle HTTP status code selection. These include:
 
-- `ErrorInvalidParam`: Represents an error due to an invalid parameter.
-- `ErrorMissingParam`: Represents an error due to a missing parameter.
-- `ErrorEntityNotFound`: Represents an error due to a not found entity.
-- `ErrorEntityAlreadyExist`: Represents an error due to creation of duplicate entity.
-- `ErrorInvalidRoute`: Represents an error for invalid route.
-- `ErrorRequestTimeout`: Represents an error for request which timed out.
-- `ErrorPanicRecovery`: Represents an error for request which panicked.
+| Error Type | Description | HTTP Status Code |
+|------------|-------------|------------------|
+| `ErrorInvalidParam` | Represents an error due to an invalid parameter. | **400 Bad Request** |
+| `ErrorMissingParam` | Represents an error due to a missing parameter. | **400 Bad Request** |
+| `ErrorEntityNotFound` | Represents an error due to a not found entity. | **404 Not Found** |
+| `ErrorEntityAlreadyExist` | Represents an error due to creation of duplicate entity. | **409 Conflict** |
+| `ErrorInvalidRoute` | Represents an error for invalid route. | **404 Not Found** |
+| `ErrorRequestTimeout` | Represents an error for request which timed out. | **408 Request Timeout** |
+| `ErrorPanicRecovery` | Represents an error for request which panicked. | **500 Internal Server Error** |
 
 #### Usage:
+
 To use the predefined HTTP errors, users can simply call them using GoFr's http package:
+
 ```go
-err := http.ErrorMissingParam{Param: []string{"id"}}
+// Invalid parameter error - returns 400 Bad Request
+err := http.ErrorInvalidParam{Params: []string{"age"}}
+
+// Missing parameter error - returns 400 Bad Request  
+err := http.ErrorMissingParam{Params: []string{"id"}}
+
+// Entity not found error - returns 404 Not Found
+err := http.ErrorEntityNotFound{Name: "user", Value: "123"}
+
+// Entity already exists error - returns 409 Conflict
+err := http.ErrorEntityAlreadyExist{}
+
+// Invalid route error - returns 404 Not Found
+err := http.ErrorInvalidRoute{}
+
+// Request timeout error - returns 408 Request Timeout
+err := http.ErrorRequestTimeout{}
+
+// Panic recovery error - returns 500 Internal Server Error
+err := http.ErrorPanicRecovery{}
 ```
 
 ## Database Errors
@@ -29,6 +63,7 @@ as database connection, query failure, availability etc. The `ErrorDB` struct ca
 any custom message to it.
 
 #### Usage:
+
 ```go
 // Creating a custom error wrapped in  underlying error for database operations
 dbErr := datasource.ErrorDB{Err: err, Message: "error from sql db"}
