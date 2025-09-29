@@ -116,9 +116,9 @@ func TestAddOption_LocalLimiter(t *testing.T) {
 func TestAddOption_DistributedLimiter(t *testing.T) {
 	h := newHTTPService(t)
 	cfg := RateLimiterConfig{
-		Requests:    5,
-		Burst:       5,
-		RedisClient: new(gofrRedis.Redis),
+		Requests: 5,
+		Burst:    5,
+		Store:    NewRedisRateLimiterStore(new(gofrRedis.Redis)),
 	}
 
 	out := cfg.AddOption(h)

@@ -57,11 +57,12 @@ const (
 )
 
 // NewLocalRateLimiter creates a new local rate limiter with metrics.
-func NewLocalRateLimiter(config RateLimiterConfig, h HTTP) HTTP {
+func NewLocalRateLimiter(config RateLimiterConfig, h HTTP, store RateLimiterStore) HTTP {
 	httpSvc := h.(*httpService)
 
 	rl := &localRateLimiter{
 		config:  config,
+		store:   store,
 		logger:  httpSvc.Logger,
 		metrics: httpSvc.Metrics,
 		HTTP:    h,
