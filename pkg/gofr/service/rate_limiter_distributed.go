@@ -65,12 +65,12 @@ type distributedRateLimiter struct {
 	HTTP
 }
 
-func NewDistributedRateLimiter(config RateLimiterConfig, h HTTP) HTTP {
+func NewDistributedRateLimiter(config RateLimiterConfig, h HTTP, store RateLimiterStore) HTTP {
 	httpSvc := h.(*httpService)
 
 	rl := &distributedRateLimiter{
 		config:  config,
-		store:   NewRedisRateLimiterStore(config.RedisClient),
+		store:   store,
 		logger:  httpSvc.Logger,
 		metrics: httpSvc.Metrics,
 		HTTP:    h,

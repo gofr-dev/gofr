@@ -29,9 +29,10 @@ func (r *RedisRateLimiterStore) Allow(ctx context.Context, key string, config Ra
 		ctx,
 		tokenBucketScript,
 		[]string{"gofr:ratelimit:" + key},
-		config.Burst,
-		int64(config.Window.Seconds()),
-		now,
+		config.Burst,                   // ARGV[1]: burst
+		config.Requests,                // ARGV[2]: requests
+		int64(config.Window.Seconds()), // ARGV[3]: window_seconds
+		now,                            // ARGV[4]: now (nanoseconds)
 	)
 
 	result, err := cmd.Result()

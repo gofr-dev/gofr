@@ -5,8 +5,6 @@ import (
 	"fmt"
 	"net/http"
 	"time"
-
-	gofrRedis "gofr.dev/pkg/gofr/datasource/redis"
 )
 
 var (
@@ -17,11 +15,11 @@ var (
 
 // RateLimiterConfig with custom keying support.
 type RateLimiterConfig struct {
-	Requests    float64                    // Number of requests allowed
-	Window      time.Duration              // Time window (e.g., time.Minute, time.Hour)
-	Burst       int                        // Maximum burst capacity (must be > 0)
-	KeyFunc     func(*http.Request) string // Optional custom key extraction
-	RedisClient *gofrRedis.Redis           `json:"-"` // Optional Redis for distributed limiting
+	Requests float64                    // Number of requests allowed
+	Window   time.Duration              // Time window (e.g., time.Minute, time.Hour)
+	Burst    int                        // Maximum burst capacity (must be > 0)
+	KeyFunc  func(*http.Request) string // Optional custom key extraction
+	Store    RateLimiterStore
 }
 
 // defaultKeyFunc extracts a normalized service key from an HTTP request.
@@ -88,9 +86,13 @@ func (config *RateLimiterConfig) AddOption(h HTTP) HTTP {
 		return h
 	}
 
-	// Choose implementation based on Redis client availability.
-	if config.RedisClient != nil {
-		return NewDistributedRateLimiter(*config, h)
+	// Choose implementation based on Redis client availability. Default to local store if not set
+	if config.Store != nil {
+		if _, ok := config.Store.(*RedisRateLimiterStore); ok {
+			return NewDistributedRateLimiter(*config, h, config.Store)
+		}
+
+		return NewLocalRateLimiter(*config, h, config.Store)
 	}
 
 	// Log warning for local rate limiting.
@@ -98,7 +100,7 @@ func (config *RateLimiterConfig) AddOption(h HTTP) HTTP {
 		httpSvc.Logger.Log("Using local rate limiting - not suitable for multi-instance deployments")
 	}
 
-	return NewLocalRateLimiter(*config, h)
+	return NewLocalRateLimiter(*config, h, NewLocalRateLimiterStore())
 }
 
 // RequestsPerSecond converts the configured rate to requests per second.

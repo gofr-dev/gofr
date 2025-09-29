@@ -64,11 +64,12 @@ func TestNewLocalRateLimiter_Basic(t *testing.T) {
 	base := newBaseHTTPService(t, &hits)
 
 	rl := NewLocalRateLimiter(RateLimiterConfig{
+
 		Requests: 5,
 		Window:   time.Second,
 		Burst:    5,
 		KeyFunc:  func(*http.Request) string { return "svc-basic" },
-	}, base)
+	}, base, NewLocalRateLimiterStore())
 
 	resp, err := rl.Get(t.Context(), "/ok", nil)
 	assertAllowed(t, resp, err)
@@ -91,7 +92,7 @@ func TestLocalRateLimiter_EnforceLimit(t *testing.T) {
 		Window:   time.Second,
 		Burst:    1,
 		KeyFunc:  func(*http.Request) string { return "svc-limit" },
-	}, base)
+	}, base, NewLocalRateLimiterStore())
 
 	resp, err := rl.Get(t.Context(), "/r1", nil)
 	assertAllowed(t, resp, err)
@@ -131,7 +132,7 @@ func TestLocalRateLimiter_FractionalRPS(t *testing.T) {
 		Window:   time.Second,
 		Burst:    1,
 		KeyFunc:  func(*http.Request) string { return "svc-frac" },
-	}, base)
+	}, base, NewLocalRateLimiterStore())
 
 	resp, err := rl.Get(t.Context(), "/a", nil)
 	assertAllowed(t, resp, err)
@@ -171,7 +172,7 @@ func TestLocalRateLimiter_CustomKey_SharedBucket(t *testing.T) {
 		Window:   time.Second,
 		Burst:    1,
 		KeyFunc:  func(*http.Request) string { return "shared-key" },
-	}, base)
+	}, base, NewLocalRateLimiterStore())
 
 	resp, err := rl.Get(t.Context(), "/p1", nil)
 	assertAllowed(t, resp, err)
@@ -214,7 +215,7 @@ func TestLocalRateLimiter_Concurrency(t *testing.T) {
 		Window:   time.Second,
 		Burst:    1,
 		KeyFunc:  func(*http.Request) string { return "svc-conc" },
-	}, base)
+	}, base, NewLocalRateLimiterStore())
 
 	const workers = 12
 	results := make([]error, workers)
@@ -284,7 +285,7 @@ func TestLocalRateLimiter_NoMetrics(t *testing.T) {
 		Window:   time.Second,
 		Burst:    2,
 		KeyFunc:  func(*http.Request) string { return "svc-nometrics" },
-	}, base)
+	}, base, NewLocalRateLimiterStore())
 
 	resp, err := rl.Get(t.Context(), "/m", nil)
 	assertAllowed(t, resp, err)
@@ -305,7 +306,7 @@ func TestLocalRateLimiter_RateLimitErrorFields(t *testing.T) {
 		Window:   time.Second,
 		Burst:    1,
 		KeyFunc:  func(*http.Request) string { return "svc-zero" },
-	}, base)
+	}, base, NewLocalRateLimiterStore())
 
 	resp, err := rl.Get(t.Context(), "/z1", nil)
 
@@ -341,14 +342,14 @@ func TestLocalRateLimiter_WrapperMethods_SuccessAndLimited(t *testing.T) {
 		Window:   time.Second,
 		Burst:    100,
 		KeyFunc:  func(*http.Request) string { return "wrapper-allow" },
-	}, base)
+	}, base, NewLocalRateLimiterStore())
 
 	// Deny limiter: zero capacity (covers error branch)
 	denyRL := NewLocalRateLimiter(RateLimiterConfig{
 		Requests: 0,
 		Burst:    0,
 		KeyFunc:  func(*http.Request) string { return "wrapper-deny" },
-	}, base)
+	}, base, NewLocalRateLimiterStore())
 
 	tests := []struct {
 		name string

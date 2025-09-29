@@ -97,6 +97,15 @@ GoFr provides its user with additional configurational options while registering
 - **RetryConfig** - This option allows user to add the maximum number of retry count if before returning error if any downstream HTTP Service fails.
 - **RateLimiterConfig** -  This option allows user to configure rate limiting for downstream service calls using token bucket algorithm. It controls the request rate to prevent overwhelming dependent services and supports both in-memory and Redis-based implementations.
 
+**Rate Limiter Store: Customization**
+GoFr allows you to use a custom rate limiter store by implementing the RateLimiterStore interface.This enables integration with any backend (e.g., Redis, database, or custom logic)
+Interface:
+```go
+type RateLimiterStore interface {
+    Allow(ctx context.Context, key string, config RateLimiterConfig) (allowed bool, retryAfter int64, err error)
+}
+```
+
 #### Usage:
 
 ```go
@@ -127,7 +136,7 @@ a.AddHTTPService("cat-facts", "https://catfact.ninja",
 	  Requests: 5,
 	  Window:   time.Minute,
       Burst:     10,
-      RedisClient: rc, // if RedisClient is nil, in-memory rate limiter will be used
+	  Store:    service.NewRedisRateLimiterStore(rc)}, // Skip this field to use in-memory store
     },
 )
 ```
