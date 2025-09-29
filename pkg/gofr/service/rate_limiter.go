@@ -10,8 +10,8 @@ import (
 )
 
 var (
-	errInvalidRequestRate     = errors.New("requestsPerSecond must be greater than 0")
-	errInvalidBurstSize       = errors.New("burst must be greater than 0")
+	errInvalidRequestRate     = errors.New("requests must be greater than 0 per configured time window")
+	errBurstLessThanRequests  = errors.New("burst must be greater than requests per window")
 	errInvalidRedisResultType = errors.New("unexpected Redis result type")
 )
 
@@ -63,7 +63,11 @@ func (config *RateLimiterConfig) Validate() error {
 	}
 
 	if config.Burst <= 0 {
-		return fmt.Errorf("%w: %d", errInvalidBurstSize, config.Burst)
+		config.Burst = int(config.Requests)
+	}
+
+	if float64(config.Burst) < config.Requests {
+		return fmt.Errorf("%w: burst=%d, requests=%f", errBurstLessThanRequests, config.Burst, config.Requests)
 	}
 
 	// Set default key function if not provided.

@@ -36,7 +36,7 @@ type tokenBucket struct {
 // localRateLimiter with metrics support.
 type localRateLimiter struct {
 	config  RateLimiterConfig
-	buckets sync.Map
+	store   RateLimiterStore
 	logger  Logger
 	metrics Metrics
 	HTTP
@@ -207,32 +207,16 @@ func buildFullURL(path string, httpSvc HTTP) string {
 // checkRateLimit with custom keying support.
 func (rl *localRateLimiter) checkRateLimit(req *http.Request) error {
 	serviceKey := rl.config.KeyFunc(req)
-	now := time.Now().Unix()
 
-	entry, _ := rl.buckets.LoadOrStore(serviceKey, &bucketEntry{
-		bucket:     newTokenBucket(&rl.config),
-		lastAccess: now,
-	})
+	allowed, retryAfter, _ := rl.store.Allow(req.Context(), serviceKey, rl.config)
 
-	bucketEntry := entry.(*bucketEntry)
-	atomic.StoreInt64(&bucketEntry.lastAccess, now)
-
-	allowed, retryAfter, tokensRemaining := bucketEntry.bucket.allow()
-
-	tokensAvailable := float64(tokensRemaining) / float64(scale)
-	rl.updateRateLimiterMetrics(req.Context(), serviceKey, allowed, tokensAvailable)
+	rl.updateRateLimiterMetrics(req.Context(), serviceKey, allowed, 0)
 
 	if !allowed {
-		rl.logger.Debug("Rate limit exceeded",
-			"service", serviceKey,
-			"rate", rl.config.RequestsPerSecond,
-			"burst", rl.config.Burst,
-			"retry_after", retryAfter)
+		rl.logger.Debug("Rate limit exceeded", "service", serviceKey, "rate", rl.config.RequestsPerSecond, ""+
+			"burst", rl.config.Burst, "retry_after", retryAfter)
 
-		return &RateLimitError{
-			ServiceKey: serviceKey,
-			RetryAfter: retryAfter,
-		}
+		return &RateLimitError{ServiceKey: serviceKey, RetryAfter: retryAfter}
 	}
 
 	return nil
@@ -260,11 +244,16 @@ func (rl *localRateLimiter) cleanupRoutine() {
 		cutoff := time.Now().Unix() - int64(bucketTTL.Seconds())
 		cleaned := 0
 
-		rl.buckets.Range(func(key, value any) bool {
+		localStore, ok := rl.store.(*LocalRateLimiterStore)
+		if !ok {
+			continue // Not a local store, skip cleanup
+		}
+
+		localStore.buckets.Range(func(key, value any) bool {
 			entry := value.(*bucketEntry)
 
 			if atomic.LoadInt64(&entry.lastAccess) < cutoff {
-				rl.buckets.Delete(key)
+				localStore.buckets.Delete(key)
 
 				cleaned++
 			}

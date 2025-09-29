@@ -5,9 +5,6 @@ import (
 	"fmt"
 	"net/http"
 	"strconv"
-	"time"
-
-	gofrRedis "gofr.dev/pkg/gofr/datasource/redis"
 )
 
 // tokenBucketScript is a Lua script for atomic token bucket rate limiting in Redis.
@@ -61,10 +58,10 @@ return {allowed, retryAfter}
 
 // distributedRateLimiter with metrics support.
 type distributedRateLimiter struct {
-	config      RateLimiterConfig
-	redisClient *gofrRedis.Redis
-	logger      Logger
-	metrics     Metrics
+	config  RateLimiterConfig
+	store   RateLimiterStore
+	logger  Logger
+	metrics Metrics
 	HTTP
 }
 
@@ -72,15 +69,11 @@ func NewDistributedRateLimiter(config RateLimiterConfig, h HTTP) HTTP {
 	httpSvc := h.(*httpService)
 
 	rl := &distributedRateLimiter{
-		config:      config,
-		redisClient: config.RedisClient,
-		logger:      httpSvc.Logger,
-		metrics:     httpSvc.Metrics,
-		HTTP:        h,
-	}
-
-	if rl.redisClient == nil {
-		rl.logger.Log("Distributed rate limiter initialized without Redis client; operating pass-through")
+		config:  config,
+		store:   NewRedisRateLimiterStore(config.RedisClient),
+		logger:  httpSvc.Logger,
+		metrics: httpSvc.Metrics,
+		HTTP:    h,
 	}
 
 	return rl
@@ -105,55 +98,24 @@ func toInt64(i any) (int64, error) {
 // checkRateLimit for distributed version with metrics.
 func (rl *distributedRateLimiter) checkRateLimit(req *http.Request) error {
 	serviceKey := rl.config.KeyFunc(req)
-	now := time.Now().UnixNano()
 
-	cmd := rl.redisClient.Eval(
-		context.Background(),
-		tokenBucketScript,
-		[]string{"gofr:ratelimit:" + serviceKey},
-		rl.config.Burst,
-		int64(rl.config.Window.Seconds()),
-		now,
-	)
-
-	result, err := cmd.Result()
+	allowed, retryAfter, err := rl.store.Allow(context.Background(), serviceKey, rl.config)
 	if err != nil {
-		rl.logger.Log("Redis rate limiter error, allowing request", "error", err)
-		// Record error metric
-		if rl.metrics != nil {
-			rl.metrics.IncrementCounter(context.Background(), "app_rate_limiter_errors_total", "service", serviceKey, "type", "redis_error")
-		}
+		rl.logger.Log("Rate limiter store error, allowing request", "error", err)
 
-		return nil // Fail open
+		rl.metrics.IncrementCounter(context.Background(), "app_rate_limiter_errors_total", "service", serviceKey, "type", "store_error")
+
+		return nil
 	}
 
-	resultArray, ok := result.([]any)
-	if !ok || len(resultArray) != 2 {
-		rl.logger.Log("Invalid Redis response format, allowing request")
-		return nil // Fail open
-	}
+	rl.metrics.IncrementCounter(context.Background(), "app_rate_limiter_requests_total", "service", serviceKey)
 
-	allowed, _ := toInt64(resultArray[0])
-	retryAfterMs, _ := toInt64(resultArray[1])
+	if !allowed {
+		rl.metrics.IncrementCounter(context.Background(), "app_rate_limiter_denied_total", "service", serviceKey)
 
-	if rl.metrics != nil {
-		rl.metrics.IncrementCounter(context.Background(), "app_rate_limiter_requests_total", "service", serviceKey)
+		rl.logger.Debug("Distributed rate limit exceeded", "service", serviceKey, "retry_after", retryAfter)
 
-		if allowed != 1 {
-			rl.metrics.IncrementCounter(context.Background(), "app_rate_limiter_denied_total", "service", serviceKey)
-		}
-	}
-
-	if allowed != 1 {
-		retryAfter := time.Duration(retryAfterMs) * time.Millisecond
-		rl.logger.Debug("Distributed rate limit exceeded",
-			"service", serviceKey,
-			"retry_after", retryAfter)
-
-		return &RateLimitError{
-			ServiceKey: serviceKey,
-			RetryAfter: retryAfter,
-		}
+		return &RateLimitError{ServiceKey: serviceKey, RetryAfter: retryAfter}
 	}
 
 	return nil
