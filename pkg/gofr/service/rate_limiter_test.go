@@ -6,7 +6,6 @@ import (
 	"net/http/httptest"
 	"net/url"
 	"testing"
-	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -40,11 +39,11 @@ func TestRateLimiterConfig_Validate(t *testing.T) {
 		assert.ErrorIs(t, err, errInvalidRequestRate)
 	})
 
-	t.Run("invalid Burst", func(t *testing.T) {
-		cfg := RateLimiterConfig{Requests: 1, Burst: 0}
+	t.Run("burst less than requests", func(t *testing.T) {
+		cfg := RateLimiterConfig{Requests: 5, Burst: 3}
 		err := cfg.Validate()
 		require.Error(t, err)
-		assert.ErrorIs(t, err, errInvalidBurstSize)
+		assert.ErrorIs(t, err, errBurstLessThanRequests)
 	})
 
 	t.Run("sets default KeyFunc when nil", func(t *testing.T) {
@@ -126,14 +125,4 @@ func TestAddOption_DistributedLimiter(t *testing.T) {
 	_, isDist := out.(*distributedRateLimiter)
 
 	assert.True(t, isDist, "expected *distributedRateLimiter")
-}
-
-func TestRateLimitError(t *testing.T) {
-	err := &RateLimitError{ServiceKey: "svc-x", RetryAfter: 1500 * time.Millisecond}
-
-	assert.Contains(t, err.Error(), "svc-x")
-	assert.Contains(t, err.Error(), "retry after")
-	assert.Equal(t, http.StatusTooManyRequests, err.StatusCode())
-
-	assert.NotErrorIs(t, err, errInvalidBurstSize, "unexpected error match")
 }
