@@ -131,7 +131,6 @@ func TestRedis_Close(t *testing.T) {
 	// Mock Redis server setup
 	s, err := miniredis.Run()
 	require.NoError(t, err)
-
 	defer s.Close()
 
 	// Mock metrics setup

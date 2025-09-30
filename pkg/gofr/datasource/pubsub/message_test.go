@@ -115,7 +115,6 @@ func TestBindString(t *testing.T) {
 	m := &Message{Value: []byte("test")}
 
 	var s string
-
 	err := m.bindString(&s)
 	require.NoError(t, err)
 	assert.Equal(t, "test", s)
@@ -125,7 +124,6 @@ func TestBindFloat64(t *testing.T) {
 	m := &Message{Value: []byte("1.23")}
 
 	var f float64
-
 	err := m.bindFloat64(&f)
 	require.NoError(t, err)
 	assert.InEpsilon(t, 1.23, f, 0.01)
@@ -133,7 +131,6 @@ func TestBindFloat64(t *testing.T) {
 	m = &Message{Value: []byte("not a float")}
 
 	var f2 float64
-
 	err = m.bindFloat64(&f2)
 	require.Error(t, err)
 }
@@ -142,7 +139,6 @@ func TestBindInt(t *testing.T) {
 	m := &Message{Value: []byte("123")}
 
 	var i int
-
 	err := m.bindInt(&i)
 	require.NoError(t, err)
 	assert.Equal(t, 123, i)
@@ -150,7 +146,6 @@ func TestBindInt(t *testing.T) {
 	m = &Message{Value: []byte("not an int")}
 
 	var i2 int
-
 	err = m.bindInt(&i2)
 	require.Error(t, err)
 }
@@ -159,7 +154,6 @@ func TestBindBool(t *testing.T) {
 	m := &Message{Value: []byte("true")}
 
 	var b bool
-
 	err := m.bindBool(&b)
 	require.NoError(t, err)
 	assert.True(t, b)
@@ -167,7 +161,6 @@ func TestBindBool(t *testing.T) {
 	m = &Message{Value: []byte("not a bool")}
 
 	var b2 bool
-
 	err = m.bindBool(&b2)
 	require.Error(t, err)
 }
@@ -176,7 +169,6 @@ func TestBindStruct(t *testing.T) {
 	m := &Message{Value: []byte(`{"key":"value"}`)}
 
 	var i map[string]any
-
 	err := m.bindStruct(&i)
 	require.NoError(t, err)
 	assert.Equal(t, map[string]any{"key": "value"}, i)
@@ -184,7 +176,6 @@ func TestBindStruct(t *testing.T) {
 	m = &Message{Value: []byte(`{"key":}`)}
 
 	var i2 map[string]any
-
 	err = m.bindStruct(&i2)
 	require.Error(t, err)
 }

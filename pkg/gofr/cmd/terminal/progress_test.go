@@ -13,7 +13,6 @@ func TestProgressBar_SuccessCases(t *testing.T) {
 	total := int64(100)
 
 	var out bytes.Buffer
-
 	stream := &Out{terminal{isTerminal: true, fd: 1}, &out}
 	bar := ProgressBar{
 		stream:  stream,
@@ -43,7 +42,6 @@ func TestProgressBar_SuccessCases(t *testing.T) {
 
 func TestProgressBar_Fail(t *testing.T) {
 	var out bytes.Buffer
-
 	stream := &Out{terminal{isTerminal: true, fd: 1}, &out}
 	bar, err := NewProgressBar(stream, int64(-1))
 
@@ -54,7 +52,6 @@ func TestProgressBar_Fail(t *testing.T) {
 
 func TestProgressBar_Incr(t *testing.T) {
 	var out bytes.Buffer
-
 	stream := &Out{terminal{isTerminal: true, fd: 1}, &out}
 	bar := ProgressBar{stream: stream, current: 0, total: 100, mu: sync.Mutex{}}
 	// doing this as while calculating terminal size, the code will not

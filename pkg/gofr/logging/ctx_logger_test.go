@@ -189,7 +189,6 @@ func TestContextLogger_Integration(t *testing.T) {
 	ctxLogger.Info("test message")
 
 	var logData map[string]any
-
 	err := json.NewDecoder(bytes.NewReader(buf.Bytes())).Decode(&logData)
 	require.NoError(t, err)
 

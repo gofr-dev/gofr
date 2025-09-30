@@ -748,7 +748,6 @@ func Test_OpenTSDBCommitMigration_ConcurrentAccess(t *testing.T) {
 				StartTime:       time.Now().Add(-time.Duration(migrationNum) * time.Millisecond),
 				MigrationNumber: int64(migrationNum),
 			}
-
 			err := migratorWithOpenTSDB.commitMigration(mockContainer, txData)
 			errCh <- err
 		}(i)
@@ -809,7 +808,6 @@ func Test_OpenTSDBCommitMigration_ConcurrentDuplicates(t *testing.T) {
 				StartTime:       time.Now(),
 				MigrationNumber: migrationNumber,
 			}
-
 			err := migratorWithOpenTSDB.commitMigration(mockContainer, txData)
 			errCh <- err
 		}()
@@ -869,7 +867,6 @@ func Test_OpenTSDBCommitMigration_JSONFormatValidation(t *testing.T) {
 
 	// Should be properly indented JSON
 	var rawData []tsdbMigrationRecord
-
 	err = json.Unmarshal(content, &rawData)
 	require.NoError(t, err)
 

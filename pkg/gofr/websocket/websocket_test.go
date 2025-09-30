@@ -44,13 +44,11 @@ func TestConnection_Bind_Success(t *testing.T) {
 			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 				conn, err := upgrader.Upgrade(w, r, nil)
 				assert.NoError(t, err)
-
 				defer conn.Close()
 
 				wsConn := &Connection{Conn: conn}
 
 				var data any
-
 				switch tt.expectedData.(type) {
 				case string:
 					data = new(string)
@@ -164,7 +162,6 @@ func TestConcurrentWriteMessageCalls(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		conn, err := upgrader.Upgrade(w, r, nil)
 		assert.NoError(t, err)
-
 		defer conn.Close()
 
 		wc := &Connection{Conn: conn}

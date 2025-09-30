@@ -86,6 +86,7 @@ func New(conf *Config, logger pubsub.Logger, metrics Metrics) *kafkaClient { //n
 	ctx := context.Background()
 
 	err = client.initialize(ctx)
+
 	if err != nil {
 		logger.Errorf("failed to connect to kafka at %v, error: %v", conf.Brokers, err)
 
@@ -204,8 +205,8 @@ func (k *kafkaClient) Subscribe(ctx context.Context, topic string) (*pubsub.Mess
 
 	// Read a single message from the topic
 	reader = k.reader[topic]
-
 	msg, err := reader.FetchMessage(ctx)
+
 	if err != nil {
 		k.logger.Errorf("failed to read message from kafka topic %s: %v", topic, err)
 

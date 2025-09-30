@@ -59,6 +59,7 @@ func setupOAuthHTTPServer(t *testing.T, config *OAuthConfig) *httptest.Server {
 		}
 
 		accessToken, err := server.generateToken(getClaims(r))
+
 		if err != nil {
 			http.Error(w, "Unable to generate token", http.StatusInternalServerError)
 			return

@@ -46,6 +46,7 @@ func (a *App) initTracer() {
 	}
 
 	exporter, err := a.getExporter(traceExporter, tracerHost, tracerPort, tracerURL)
+
 	if err != nil {
 		a.container.Error(err)
 	}

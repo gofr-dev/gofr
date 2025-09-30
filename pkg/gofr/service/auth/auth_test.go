@@ -66,7 +66,6 @@ func TestAuthProvider(t *testing.T) {
 	for i, tc := range testCases {
 		t.Run(fmt.Sprintf("Test Case #%d", i), func(t *testing.T) {
 			var server *httptest.Server
-
 			switch tc.authOption.(type) {
 			case *OAuthConfig:
 				server = oAuthServer
@@ -116,12 +115,12 @@ func validateOAuthError(t *testing.T, err, expectedError error, statusCode int) 
 	}
 }
 
-func callHTTPService(ctx context.Context, s service.HTTP, method string,
+func callHTTPService(ctx context.Context, service service.HTTP, method string,
 	headers map[string]string) (resp *http.Response, err error) {
 	if headers != nil {
-		resp, err = callHTTPServiceWithHeaders(ctx, s, method, headers)
+		resp, err = callHTTPServiceWithHeaders(ctx, service, method, headers)
 	} else {
-		resp, err = callHTTPServiceWithoutHeaders(ctx, s, method)
+		resp, err = callHTTPServiceWithoutHeaders(ctx, service, method)
 	}
 
 	return resp, err

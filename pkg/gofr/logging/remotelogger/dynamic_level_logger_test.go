@@ -144,7 +144,6 @@ func TestDynamicLoggerSuccess(t *testing.T) {
 // TestHTTPLogFilter_NonHTTPLogs tests regular non-HTTP logs are passed through.
 func TestHTTPLogFilter_NonHTTPLogs(t *testing.T) {
 	var buf strings.Builder
-
 	testLogger := &testBufferLogger{buf: &buf}
 
 	filter := &httpLogFilter{
@@ -159,7 +158,6 @@ func TestHTTPLogFilter_NonHTTPLogs(t *testing.T) {
 // TestHTTPLogFilter_EmptyArgs tests handling of empty arguments.
 func TestHTTPLogFilter_EmptyArgs(t *testing.T) {
 	var buf strings.Builder
-
 	testLogger := &testBufferLogger{buf: &buf}
 
 	filter := &httpLogFilter{
@@ -175,7 +173,6 @@ func TestHTTPLogFilter_EmptyArgs(t *testing.T) {
 // TestHTTPLogFilter_InitAndFirstSuccess tests initialization and first successful hit.
 func TestHTTPLogFilter_InitAndFirstSuccess(t *testing.T) {
 	var buf strings.Builder
-
 	testLogger := &testBufferLogger{buf: &buf}
 
 	filter := &httpLogFilter{
@@ -200,7 +197,6 @@ func TestHTTPLogFilter_InitAndFirstSuccess(t *testing.T) {
 // TestHTTPLogFilter_SubsequentSuccess tests subsequent successful HTTP hits.
 func TestHTTPLogFilter_SubsequentSuccess(t *testing.T) {
 	var buf strings.Builder
-
 	testLogger := &testBufferLogger{buf: &buf}
 
 	filter := &httpLogFilter{
@@ -228,7 +224,6 @@ func TestHTTPLogFilter_SubsequentSuccess(t *testing.T) {
 // TestHTTPLogFilter_ErrorLogs tests handling of error HTTP logs.
 func TestHTTPLogFilter_ErrorLogs(t *testing.T) {
 	var buf strings.Builder
-
 	testLogger := &testBufferLogger{buf: &buf}
 
 	filter := &httpLogFilter{
@@ -323,6 +318,5 @@ func TestRemoteLogger_ConcurrentLevelAccess(t *testing.T) {
 
 	rl.mu.RLock()
 	defer rl.mu.RUnlock()
-
 	assert.NotEqual(t, logging.INFO, rl.currentLevel, "expected level to change")
 }

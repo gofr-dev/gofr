@@ -162,7 +162,6 @@ func (r *remoteLogger) UpdateLogLevel() {
 		}
 
 		r.mu.Lock()
-
 		if r.currentLevel != newLevel {
 			oldLevel := r.currentLevel
 			r.currentLevel = newLevel

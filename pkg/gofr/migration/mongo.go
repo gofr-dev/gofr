@@ -77,8 +77,8 @@ func (mg mongoMigrator) commitMigration(c *container.Container, data transaction
 		"start_time": data.StartTime,
 		"duration":   time.Since(data.StartTime).Milliseconds(),
 	}
-
 	_, err := mg.Mongo.InsertOne(context.Background(), mongoMigrationCollection, migrationDoc)
+
 	if err != nil {
 		return err
 	}

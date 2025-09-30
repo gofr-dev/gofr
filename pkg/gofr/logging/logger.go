@@ -169,7 +169,6 @@ func (l *logger) prettyPrint(e *logEntry, out io.Writer) {
 	// the logs when printed in go routines were getting misaligned since we are achieving
 	// a single line of log, in 2 separate statements which caused the misalignment.
 	l.lock <- struct{}{} // Acquire the channel's lock
-
 	defer func() {
 		<-l.lock // Release the channel's token
 	}()

@@ -45,6 +45,7 @@ func (s *SubscriptionManager) startSubscriber(ctx context.Context, topic string,
 
 func (s *SubscriptionManager) handleSubscription(ctx context.Context, topic string, handler SubscribeFunc) error {
 	msg, err := s.container.GetSubscriber().Subscribe(ctx, topic)
+
 	if err != nil {
 		s.container.Logger.Errorf("error while reading from topic %v, err: %v", topic, err.Error())
 
@@ -57,7 +58,6 @@ func (s *SubscriptionManager) handleSubscription(ctx context.Context, topic stri
 
 	// newContext creates a new context from the msg.Context()
 	msgCtx := newContext(nil, msg, s.container)
-
 	err = func(ctx *Context) error {
 		// TODO : Move panic recovery at central location which will manage for all the different cases.
 		defer func() {
@@ -66,6 +66,7 @@ func (s *SubscriptionManager) handleSubscription(ctx context.Context, topic stri
 
 		return handler(ctx)
 	}(msgCtx)
+
 	if err != nil {
 		s.container.Logger.Errorf("error in handler for topic %s: %v", topic, err)
 

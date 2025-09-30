@@ -318,7 +318,6 @@ func (*DB) rowsToStruct(rows *sql.Rows, vo reflect.Value) {
 			fields = append(fields, v.Field(i).Addr().Interface())
 		} else {
 			var i any
-
 			fields = append(fields, &i)
 		}
 	}

@@ -91,6 +91,7 @@ func (s scyllaMigrator) commitMigration(c *container.Container, data transaction
 		data.StartTime,
 		time.Since(data.StartTime).Milliseconds(),
 	)
+
 	if err != nil {
 		c.Errorf("Failed to insert migration record: %v", err)
 		return err

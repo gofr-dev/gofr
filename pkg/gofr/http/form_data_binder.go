@@ -163,7 +163,6 @@ func (c *customUnmarshaller) UnmarshalJSON(data []byte) error {
 
 func parseStringToMap(data string) (map[string]any, error) {
 	var c customUnmarshaller
-
 	err := json.Unmarshal([]byte(data), &c)
 
 	return c.dataMap, err

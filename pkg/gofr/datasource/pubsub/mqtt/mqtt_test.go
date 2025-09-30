@@ -716,7 +716,6 @@ func TestMQTT_subscribeToTopicForQuery_ContextError(t *testing.T) {
 
 		deadlineCtx, cancel := context.WithTimeout(t.Context(), 1*time.Nanosecond) // Ensure deadline exceeded
 		defer cancel()
-
 		time.Sleep(5 * time.Millisecond) // Give time for deadline to pass
 
 		mockClient.EXPECT().Subscribe(topicName, mockConfigs.QoS, gomock.Any()).Return(mockToken)

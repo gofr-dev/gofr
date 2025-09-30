@@ -102,7 +102,6 @@ func (j *job) run(cntnr *container.Container) {
 	c.Infof("Starting cron job: %s", j.name)
 
 	start := time.Now()
-
 	defer func() {
 		if r := recover(); r != nil {
 			c.Errorf("Panic in cron job %s: %v", j.name, r)

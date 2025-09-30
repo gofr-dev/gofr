@@ -101,10 +101,8 @@ func TestContext_WriteMessageToSocket(t *testing.T) {
 
 	// Start server in goroutine
 	serverDone := make(chan struct{})
-
 	go func() {
 		defer close(serverDone)
-
 		app.Run()
 	}()
 
@@ -224,10 +222,8 @@ func TestContext_WriteMessageToService(t *testing.T) {
 
 	// Start server in goroutine
 	serverDone := make(chan struct{})
-
 	go func() {
 		defer close(serverDone)
-
 		app.Run()
 	}()
 

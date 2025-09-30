@@ -121,7 +121,6 @@ func (m *MQTT) Subscribe(ctx context.Context, topic string) (*pubsub.Message, er
 
 		m.subscriptions[topic] = subs
 	}
-
 	m.mu.Unlock()
 
 	select {

@@ -109,7 +109,6 @@ func Logging(probes LogProbes, logger logger) func(inner http.Handler) http.Hand
 			}
 
 			defer handleRequestLog(srw, r, start, traceID, spanID, logger)
-
 			inner.ServeHTTP(srw, r)
 		})
 	}

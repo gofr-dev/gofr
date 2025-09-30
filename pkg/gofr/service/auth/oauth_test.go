@@ -9,9 +9,8 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
-	"golang.org/x/oauth2"
-
 	"gofr.dev/pkg/gofr/service"
+	"golang.org/x/oauth2"
 )
 
 const invalidURL = "abc://invalid-url"
@@ -40,11 +39,11 @@ func TestNewOAuthConfig(t *testing.T) {
 		authStyle    oauth2.AuthStyle
 		err          error
 	}{
-		{err: service.AuthErr{Err: nil, Message: "client id is mandatory"}},
-		{clientID: clientID, err: service.AuthErr{Err: nil, Message: "client secret is mandatory"}},
-		{clientID: clientID, tokenURL: tokenURL, err: service.AuthErr{Err: nil, Message: "client secret is mandatory"}},
-		{clientID: clientID, clientSecret: clientSecret, err: service.AuthErr{Err: nil, Message: "token url is mandatory"}},
-		{clientID: clientID, clientSecret: clientSecret, tokenURL: "invalid_url_format", err: service.AuthErr{Err: nil, Message: "empty host"}},
+		{err: service.AuthErr{nil, "client id is mandatory"}},
+		{clientID: clientID, err: service.AuthErr{nil, "client secret is mandatory"}},
+		{clientID: clientID, tokenURL: tokenURL, err: service.AuthErr{nil, "client secret is mandatory"}},
+		{clientID: clientID, clientSecret: clientSecret, err: service.AuthErr{nil, "token url is mandatory"}},
+		{clientID: clientID, clientSecret: clientSecret, tokenURL: "invalid_url_format", err: service.AuthErr{nil, "empty host"}},
 		{clientID: clientID, clientSecret: clientSecret, tokenURL: tokenURL},
 		{clientID: clientID, clientSecret: "some_random_client_secret", tokenURL: tokenURL},
 		{clientID: "some_random_client_id", clientSecret: clientSecret, tokenURL: tokenURL},
