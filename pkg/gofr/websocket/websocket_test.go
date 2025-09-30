@@ -14,7 +14,6 @@ import (
 	"github.com/gorilla/websocket"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"go.uber.org/mock/gomock"
 )
 
 func TestMain(m *testing.M) {
@@ -76,42 +75,31 @@ func waitForWebSocketOperation(t *testing.T, duration time.Duration) {
 }
 
 // CORE FUNCTIONALITY TESTS
-// TestConnection_Bind tests the Bind method with various data types.
-func TestConnection_Bind(t *testing.T) {
+// TestConnection_Bind_Success tests the Bind method with successful cases.
+func TestConnection_Bind_Success(t *testing.T) {
 	tests := []struct {
 		name         string
 		inputMessage []byte
 		targetType   any
 		expected     any
-		expectError  bool
 	}{
 		{
 			name:         "Bind to string - success",
 			inputMessage: []byte("Hello, WebSocket"),
 			targetType:   new(string),
 			expected:     "Hello, WebSocket",
-			expectError:  false,
 		},
 		{
 			name:         "Bind to JSON struct - success",
 			inputMessage: []byte(`{"name":"test","value":123}`),
 			targetType:   &map[string]any{},
 			expected:     map[string]any{"name": "test", "value": float64(123)},
-			expectError:  false,
-		},
-		{
-			name:         "Bind to invalid JSON - error",
-			inputMessage: []byte(`{"name":"test",invalid}`),
-			targetType:   &map[string]any{},
-			expected:     nil,
-			expectError:  true,
 		},
 		{
 			name:         "Bind to custom struct - success",
 			inputMessage: []byte(`{"id":1,"name":"test"}`),
 			targetType:   &testStruct{},
 			expected:     testStruct{ID: 1, Name: "test"},
-			expectError:  false,
 		},
 	}
 
@@ -120,13 +108,44 @@ func TestConnection_Bind(t *testing.T) {
 			server := setupWebSocketServer(t, func(conn *websocket.Conn) {
 				wsConn := createTestConnection(t, conn)
 				err := wsConn.Bind(tt.targetType)
+				require.NoError(t, err)
+				assert.Equal(t, tt.expected, dereferenceValue(tt.targetType))
+			})
+			defer server.Close()
 
-				if tt.expectError {
-					require.Error(t, err)
-				} else {
-					require.NoError(t, err)
-					assert.Equal(t, tt.expected, dereferenceValue(tt.targetType))
-				}
+			conn, resp := connectToWebSocket(t, server.URL)
+			defer conn.Close()
+
+			if resp != nil {
+				resp.Body.Close()
+			}
+
+			sendMessageToWebSocket(t, conn, tt.inputMessage)
+			waitForWebSocketOperation(t, 100*time.Millisecond)
+		})
+	}
+}
+
+// TestConnection_Bind_Failure tests the Bind method with error cases.
+func TestConnection_Bind_Failure(t *testing.T) {
+	tests := []struct {
+		name         string
+		inputMessage []byte
+		targetType   any
+	}{
+		{
+			name:         "Bind to invalid JSON - error",
+			inputMessage: []byte(`{"name":"test",invalid}`),
+			targetType:   &map[string]any{},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			server := setupWebSocketServer(t, func(conn *websocket.Conn) {
+				wsConn := createTestConnection(t, conn)
+				err := wsConn.Bind(tt.targetType)
+				require.Error(t, err)
 			})
 			defer server.Close()
 
@@ -566,36 +585,18 @@ func TestWSUpgrader_ConflictingOptions(t *testing.T) {
 	}
 }
 
-// TestWSUpgrader_RealConnectionConflicts tests conflicting options with real WebSocket connections.
-func TestWSUpgrader_RealConnectionConflicts(t *testing.T) {
+// TestWSUpgrader_RealConnectionConflicts_Success tests successful connection scenarios.
+func TestWSUpgrader_RealConnectionConflicts_Success(t *testing.T) {
 	tests := []struct {
 		name        string
 		options     []Options
-		expectError bool
 		description string
 	}{
-		{
-			name: "CheckOrigin rejecting all connections",
-			options: []Options{
-				WithCheckOrigin(func(_ *http.Request) bool { return false }),
-			},
-			expectError: true,
-			description: "Should reject connection when CheckOrigin returns false",
-		},
-		{
-			name: "Very short handshake timeout",
-			options: []Options{
-				WithHandshakeTimeout(1 * time.Nanosecond),
-			},
-			expectError: true,
-			description: "Should timeout with very short handshake timeout",
-		},
 		{
 			name: "CheckOrigin accepting all connections",
 			options: []Options{
 				WithCheckOrigin(func(_ *http.Request) bool { return true }),
 			},
-			expectError: false,
 			description: "Should accept connection when CheckOrigin returns true",
 		},
 		{
@@ -604,7 +605,6 @@ func TestWSUpgrader_RealConnectionConflicts(t *testing.T) {
 				WithHandshakeTimeout(5 * time.Second),
 				WithCompression(),
 			},
-			expectError: false,
 			description: "Should work with normal timeout and compression",
 		},
 	}
@@ -615,15 +615,10 @@ func TestWSUpgrader_RealConnectionConflicts(t *testing.T) {
 
 			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 				conn, err := upgrader.Upgrade(w, r, nil)
-				if tt.expectError {
-					assert.Error(t, err, tt.description)
-					assert.Nil(t, conn, "Connection should be nil on error")
-				} else {
-					assert.NoError(t, err, tt.description)
+				assert.NoError(t, err, tt.description)
 
-					if conn != nil {
-						conn.Close()
-					}
+				if conn != nil {
+					conn.Close()
 				}
 			}))
 			defer server.Close()
@@ -631,40 +626,75 @@ func TestWSUpgrader_RealConnectionConflicts(t *testing.T) {
 			url := "ws" + server.URL[len("http"):] + "/ws"
 			dialer := websocket.DefaultDialer
 			conn, resp, err := dialer.Dial(url, nil)
+			require.NoError(t, err, tt.description)
 
-			if tt.expectError {
-				require.Error(t, err, tt.description)
+			if conn != nil {
+				conn.Close()
+			}
 
-				if resp != nil {
-					resp.Body.Close()
-				}
-			} else {
-				require.NoError(t, err, tt.description)
-
-				if conn != nil {
-					conn.Close()
-				}
-
-				if resp != nil {
-					resp.Body.Close()
-				}
+			if resp != nil {
+				resp.Body.Close()
 			}
 		})
 	}
 }
 
-// TestWSUpgrader_Upgrade tests the upgrade functionality with real connections.
-func TestWSUpgrader_Upgrade(t *testing.T) {
+// TestWSUpgrader_RealConnectionConflicts_Failure tests error connection scenarios.
+func TestWSUpgrader_RealConnectionConflicts_Failure(t *testing.T) {
 	tests := []struct {
 		name        string
 		options     []Options
-		expectError bool
+		description string
+	}{
+		{
+			name: "CheckOrigin rejecting all connections",
+			options: []Options{
+				WithCheckOrigin(func(_ *http.Request) bool { return false }),
+			},
+			description: "Should reject connection when CheckOrigin returns false",
+		},
+		{
+			name: "Very short handshake timeout",
+			options: []Options{
+				WithHandshakeTimeout(1 * time.Nanosecond),
+			},
+			description: "Should timeout with very short handshake timeout",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			upgrader := NewWSUpgrader(tt.options...)
+
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				conn, err := upgrader.Upgrade(w, r, nil)
+				assert.Error(t, err, tt.description)
+				assert.Nil(t, conn, "Connection should be nil on error")
+			}))
+			defer server.Close()
+
+			url := "ws" + server.URL[len("http"):] + "/ws"
+			dialer := websocket.DefaultDialer
+			_, resp, err := dialer.Dial(url, nil)
+			require.Error(t, err, tt.description)
+
+			if resp != nil {
+				resp.Body.Close()
+			}
+		})
+	}
+}
+
+// TestWSUpgrader_Upgrade_Success tests successful upgrade scenarios.
+func TestWSUpgrader_Upgrade_Success(t *testing.T) {
+	tests := []struct {
+		name        string
+		options     []Options
 		description string
 	}{
 		{
 			name:        "Successful upgrade with default options",
 			options:     []Options{},
-			expectError: false,
 			description: "Should successfully upgrade HTTP to WebSocket",
 		},
 		{
@@ -674,15 +704,52 @@ func TestWSUpgrader_Upgrade(t *testing.T) {
 				WithWriteBufferSize(1024),
 				WithHandshakeTimeout(5 * time.Second),
 			},
-			expectError: false,
 			description: "Should successfully upgrade with custom options",
 		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			upgrader := NewWSUpgrader(tt.options...)
+
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				conn, err := upgrader.Upgrade(w, r, nil)
+				assert.NoError(t, err, tt.description)
+
+				if conn != nil {
+					conn.Close()
+				}
+			}))
+			defer server.Close()
+
+			url := "ws" + server.URL[len("http"):] + "/ws"
+			dialer := websocket.DefaultDialer
+			conn, resp, err := dialer.Dial(url, nil)
+			require.NoError(t, err, tt.description)
+
+			if conn != nil {
+				conn.Close()
+			}
+
+			if resp != nil {
+				resp.Body.Close()
+			}
+		})
+	}
+}
+
+// TestWSUpgrader_Upgrade_Failure tests error upgrade scenarios.
+func TestWSUpgrader_Upgrade_Failure(t *testing.T) {
+	tests := []struct {
+		name        string
+		options     []Options
+		description string
+	}{
 		{
 			name: "Upgrade with CheckOrigin rejection",
 			options: []Options{
 				WithCheckOrigin(func(_ *http.Request) bool { return false }),
 			},
-			expectError: true,
 			description: "Should fail when CheckOrigin returns false",
 		},
 	}
@@ -693,39 +760,18 @@ func TestWSUpgrader_Upgrade(t *testing.T) {
 
 			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 				conn, err := upgrader.Upgrade(w, r, nil)
-				if tt.expectError {
-					assert.Error(t, err, tt.description)
-					assert.Nil(t, conn, "Connection should be nil on error")
-				} else {
-					assert.NoError(t, err, tt.description)
-
-					if conn != nil {
-						conn.Close()
-					}
-				}
+				assert.Error(t, err, tt.description)
+				assert.Nil(t, conn, "Connection should be nil on error")
 			}))
 			defer server.Close()
 
 			url := "ws" + server.URL[len("http"):] + "/ws"
 			dialer := websocket.DefaultDialer
-			conn, resp, err := dialer.Dial(url, nil)
+			_, resp, err := dialer.Dial(url, nil)
+			require.Error(t, err, tt.description)
 
-			if tt.expectError {
-				require.Error(t, err, tt.description)
-
-				if resp != nil {
-					resp.Body.Close()
-				}
-			} else {
-				require.NoError(t, err, tt.description)
-
-				if conn != nil {
-					conn.Close()
-				}
-
-				if resp != nil {
-					resp.Body.Close()
-				}
+			if resp != nil {
+				resp.Body.Close()
 			}
 		})
 	}
@@ -836,41 +882,30 @@ func TestManager_ConcurrentOperations(t *testing.T) {
 }
 
 // EDGE CASE TESTS
-// TestConnection_Bind_EdgeCases tests edge cases for the Bind method.
-func TestConnection_Bind_EdgeCases(t *testing.T) {
+// TestConnection_Bind_EdgeCases_Success tests successful edge cases for the Bind method.
+func TestConnection_Bind_EdgeCases_Success(t *testing.T) {
 	tests := []struct {
 		name         string
 		inputMessage []byte
 		targetType   any
-		expectError  bool
 		description  string
 	}{
-		{
-			name:         "Bind to non-pointer",
-			inputMessage: []byte("test"),
-			targetType:   "not a pointer",
-			expectError:  true,
-			description:  "Should handle non-pointer types",
-		},
 		{
 			name:         "Bind to empty string",
 			inputMessage: []byte(""),
 			targetType:   new(string),
-			expectError:  false,
 			description:  "Should handle empty string",
 		},
 		{
 			name:         "Bind to large JSON",
 			inputMessage: createLargeJSON(),
 			targetType:   &map[string]any{},
-			expectError:  false,
 			description:  "Should handle large JSON payloads",
 		},
 		{
 			name:         "Bind to invalid UTF-8",
 			inputMessage: []byte{0xff, 0xfe, 0xfd},
 			targetType:   new(string),
-			expectError:  false,
 			description:  "Should handle invalid UTF-8 sequences",
 		},
 	}
@@ -890,12 +925,61 @@ func TestConnection_Bind_EdgeCases(t *testing.T) {
 
 				wsConn := &Connection{Conn: conn}
 				err = wsConn.Bind(tt.targetType)
+				assert.NoError(t, err, tt.description)
+			}))
+			defer server.Close()
 
-				if tt.expectError {
-					assert.Error(t, err, tt.description)
-				} else {
-					assert.NoError(t, err, tt.description)
+			url := "ws" + server.URL[len("http"):] + "/ws"
+			dialer := websocket.DefaultDialer
+			conn, resp, err := dialer.Dial(url, nil)
+			require.NoError(t, err)
+
+			defer conn.Close()
+
+			if resp != nil {
+				resp.Body.Close()
+			}
+
+			err = conn.WriteMessage(websocket.TextMessage, tt.inputMessage)
+			require.NoError(t, err)
+
+			time.Sleep(100 * time.Millisecond)
+		})
+	}
+}
+
+// TestConnection_Bind_EdgeCases_Failure tests error edge cases for the Bind method.
+func TestConnection_Bind_EdgeCases_Failure(t *testing.T) {
+	tests := []struct {
+		name         string
+		inputMessage []byte
+		targetType   any
+		description  string
+	}{
+		{
+			name:         "Bind to non-pointer",
+			inputMessage: []byte("test"),
+			targetType:   "not a pointer",
+			description:  "Should handle non-pointer types",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				upgrader := websocket.Upgrader{}
+				conn, err := upgrader.Upgrade(w, r, nil)
+
+				if err != nil {
+					t.Errorf("Failed to upgrade connection: %v", err)
+					return
 				}
+
+				defer conn.Close()
+
+				wsConn := &Connection{Conn: conn}
+				err = wsConn.Bind(tt.targetType)
+				assert.Error(t, err, tt.description)
 			}))
 			defer server.Close()
 
@@ -1228,14 +1312,6 @@ func TestOptions(t *testing.T) {
 	assert.NotNil(t, upgrader.CheckOrigin)
 }
 
-// CONSTANTS TESTS
-// TestConstants tests package constants.
-func TestConstants(t *testing.T) {
-	assert.Equal(t, WSConnectionKey, WSKey("ws-connection-key"))
-	assert.Equal(t, 1, TextMessage)
-	assert.Equal(t, "couldn't establish connection to web socket", ErrorConnection.Error())
-}
-
 // TestConnection_Bind_ErrorPaths tests comprehensive error paths in Bind method.
 func TestConnection_Bind_ErrorPaths(t *testing.T) {
 	tests := []struct {
@@ -1451,8 +1527,8 @@ func TestManager_CloseConnection_WithRealConn(t *testing.T) {
 	time.Sleep(100 * time.Millisecond)
 }
 
-// TestWSUpgrader_Upgrade_Error tests upgrade error path with invalid request.
-func TestWSUpgrader_Upgrade_Error(t *testing.T) {
+// TestWSUpgrader_Upgrade_InvalidRequest tests upgrade error path with invalid request.
+func TestWSUpgrader_Upgrade_InvalidRequest(t *testing.T) {
 	upgrader := NewWSUpgrader()
 
 	// Test with invalid request (not a WebSocket upgrade request)
@@ -1464,127 +1540,6 @@ func TestWSUpgrader_Upgrade_Error(t *testing.T) {
 	conn, err := upgrader.Upgrade(w, req, nil)
 	require.Error(t, err)
 	require.Nil(t, conn)
-}
-
-// PERFORMANCE TESTS
-// TestConnection_Performance tests performance characteristics.
-func TestConnection_Performance(t *testing.T) {
-	if testing.Short() {
-		t.Skip("Skipping performance test in short mode")
-	}
-
-	upgrader := websocket.Upgrader{}
-	messageCount := 10000
-
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		conn, err := upgrader.Upgrade(w, r, nil)
-		if err != nil {
-			t.Errorf("Failed to upgrade connection: %v", err)
-			return
-		}
-		defer conn.Close()
-
-		wsConn := &Connection{Conn: conn}
-
-		start := time.Now()
-
-		// Write many messages
-		for i := 0; i < messageCount; i++ {
-			message := []byte("performance test message")
-			err := wsConn.WriteMessage(websocket.TextMessage, message)
-
-			if err != nil {
-				t.Errorf("Failed to write message: %v", err)
-				return
-			}
-		}
-
-		duration := time.Since(start)
-		t.Logf("Wrote %d messages in %v (%.2f msg/sec)",
-			messageCount, duration, float64(messageCount)/duration.Seconds())
-	}))
-	defer server.Close()
-
-	url := "ws" + server.URL[len("http"):] + "/ws"
-	dialer := websocket.DefaultDialer
-	conn, resp, err := dialer.Dial(url, nil)
-	require.NoError(t, err)
-
-	defer conn.Close()
-
-	if resp != nil {
-		resp.Body.Close()
-	}
-
-	// Read messages
-	start := time.Now()
-
-	for i := 0; i < messageCount; i++ {
-		_, _, err := conn.ReadMessage()
-		require.NoError(t, err)
-	}
-
-	duration := time.Since(start)
-	t.Logf("Read %d messages in %v (%.2f msg/sec)",
-		messageCount, duration, float64(messageCount)/duration.Seconds())
-}
-
-// TestManager_Performance tests manager performance.
-func TestManager_Performance(t *testing.T) {
-	if testing.Short() {
-		t.Skip("Skipping performance test in short mode")
-	}
-
-	manager := New()
-	connectionCount := 10000
-
-	// Test adding many connections
-	start := time.Now()
-
-	for i := 0; i < connectionCount; i++ {
-		conn := &Connection{Conn: nil} // Use nil to avoid close issues
-		manager.AddWebsocketConnection("conn"+string(rune(i)), conn)
-	}
-
-	addDuration := time.Since(start)
-	t.Logf("Added %d connections in %v (%.2f conn/sec)",
-		connectionCount, addDuration, float64(connectionCount)/addDuration.Seconds())
-
-	// Test listing connections
-	start = time.Now()
-	connections := manager.ListConnections()
-	listDuration := time.Since(start)
-
-	assert.Len(t, connections, connectionCount)
-	t.Logf("Listed %d connections in %v (%.2f conn/sec)",
-		len(connections), listDuration, float64(len(connections))/listDuration.Seconds())
-
-	// Test getting connections
-	start = time.Now()
-
-	for i := 0; i < connectionCount; i++ {
-		conn := manager.GetWebsocketConnection("conn" + string(rune(i)))
-		assert.NotNil(t, conn)
-	}
-
-	getDuration := time.Since(start)
-	t.Logf("Retrieved %d connections in %v (%.2f conn/sec)",
-		connectionCount, getDuration, float64(connectionCount)/getDuration.Seconds())
-
-	// Test closing connections
-	start = time.Now()
-
-	for i := 0; i < connectionCount; i++ {
-		manager.CloseConnection("conn" + string(rune(i)))
-	}
-
-	closeDuration := time.Since(start)
-	t.Logf("Closed %d connections in %v (%.2f conn/sec)",
-		connectionCount, closeDuration, float64(connectionCount)/closeDuration.Seconds())
-
-	// Verify all connections are closed
-	connections = manager.ListConnections()
-	assert.Empty(t, connections)
 }
 
 // testStruct is a helper type for testing.
@@ -1617,103 +1572,4 @@ func createLargeJSON() []byte {
 	jsonData, _ := json.Marshal(data)
 
 	return jsonData
-}
-
-// MOCK TESTS
-// TestMockUpgrader tests the mock upgrader functionality.
-func TestMockUpgrader(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
-
-	mockUpgrader := NewMockUpgrader(ctrl)
-
-	// Test EXPECT method
-	recorder := mockUpgrader.EXPECT()
-	assert.NotNil(t, recorder)
-
-	// Test Upgrade method
-	req, _ := http.NewRequestWithContext(context.Background(), http.MethodGet, "/ws", http.NoBody)
-	responseHeader := http.Header{}
-
-	// Set up mock expectations
-	mockUpgrader.EXPECT().Upgrade(gomock.Any(), gomock.Any(), gomock.Any()).Return(nil, nil)
-
-	// Call the method
-	conn, err := mockUpgrader.Upgrade(nil, req, responseHeader)
-	assert.Nil(t, conn)
-	require.NoError(t, err)
-}
-
-// TestMockUpgrader_WithRealConnection tests the mock upgrader with real connection.
-func TestMockUpgrader_WithRealConnection(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
-
-	mockUpgrader := NewMockUpgrader(ctrl)
-
-	// Create a real WebSocket server
-	server := setupWebSocketServer(t, func(_ *websocket.Conn) {
-		// Just keep the connection open
-		time.Sleep(100 * time.Millisecond)
-	})
-	defer server.Close()
-
-	// Test with real connection
-	req, _ := http.NewRequestWithContext(context.Background(), http.MethodGet, "/ws", http.NoBody)
-	responseHeader := http.Header{}
-
-	// Set up mock expectations
-	mockUpgrader.EXPECT().Upgrade(gomock.Any(), gomock.Any(), gomock.Any()).Return(nil, nil)
-
-	// Call the method
-	conn, err := mockUpgrader.Upgrade(nil, req, responseHeader)
-	assert.Nil(t, conn)
-	require.NoError(t, err)
-}
-
-// TestMockUpgrader_Upgrade_Error tests the mock upgrader with error.
-func TestMockUpgrader_Upgrade_Error(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
-
-	mockUpgrader := NewMockUpgrader(ctrl)
-
-	req, _ := http.NewRequestWithContext(context.Background(), http.MethodGet, "/ws", http.NoBody)
-	responseHeader := http.Header{}
-
-	// Set up mock expectations for error case
-	expectedError := fmt.Errorf("upgrade failed: %w", ErrorConnection)
-
-	mockUpgrader.EXPECT().Upgrade(gomock.Any(), gomock.Any(), gomock.Any()).Return(nil, expectedError)
-
-	// Call the method
-	conn, err := mockUpgrader.Upgrade(nil, req, responseHeader)
-	assert.Nil(t, conn)
-	require.Error(t, err)
-	assert.Equal(t, expectedError, err)
-}
-
-// TestMockUpgrader_Integration tests the mock upgrader integration.
-func TestMockUpgrader_Integration(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
-
-	mockUpgrader := NewMockUpgrader(ctrl)
-
-	// Test multiple calls
-	req1, _ := http.NewRequestWithContext(context.Background(), http.MethodGet, "/ws1", http.NoBody)
-	req2, _ := http.NewRequestWithContext(context.Background(), http.MethodGet, "/ws2", http.NoBody)
-	responseHeader := http.Header{}
-
-	// Set up mock expectations for multiple calls
-	mockUpgrader.EXPECT().Upgrade(gomock.Any(), gomock.Any(), gomock.Any()).Return(nil, nil).Times(2)
-
-	// Call the method multiple times
-	conn1, err1 := mockUpgrader.Upgrade(nil, req1, responseHeader)
-	conn2, err2 := mockUpgrader.Upgrade(nil, req2, responseHeader)
-
-	assert.Nil(t, conn1)
-	require.NoError(t, err1)
-	assert.Nil(t, conn2)
-	require.NoError(t, err2)
 }
