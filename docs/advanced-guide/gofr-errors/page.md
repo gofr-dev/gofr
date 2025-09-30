@@ -9,15 +9,55 @@ and database errors, as well as the ability to create custom errors with additio
 GoFr's `http` package offers several predefined error types to represent common HTTP error scenarios. These errors 
 automatically handle HTTP status code selection. These include:
 
-| Error Type | Description | Status Code |
-|------------|-------------|-------------|
-| `ErrorInvalidParam` | Represents an error due to an invalid parameter | 400 (Bad Request) |
-| `ErrorMissingParam` | Represents an error due to a missing parameter | 400 (Bad Request) |
-| `ErrorEntityNotFound` | Represents an error due to a not found entity | 404 (Not Found) |
-| `ErrorEntityAlreadyExist` | Represents an error due to creation of duplicate entity | 409 (Conflict) |
-| `ErrorInvalidRoute` | Represents an error for invalid route | 404 (Not Found) |
-| `ErrorRequestTimeout` | Represents an error for request which timed out | 408 (Request Timeout) |
-| `ErrorPanicRecovery` | Represents an error for request which panicked | 500 (Internal Server Error) |
+{% table %}
+
+- Error Type
+- Description
+- Status Code
+
+---
+
+- `ErrorInvalidParam`
+- Represents an error due to an invalid parameter
+- 400 (Bad Request)
+
+---
+
+- `ErrorMissingParam`
+- Represents an error due to a missing parameter
+- 400 (Bad Request)
+
+---
+
+- `ErrorEntityNotFound`
+- Represents an error due to a not found entity
+- 404 (Not Found)
+
+---
+
+- `ErrorEntityAlreadyExist`
+- Represents an error due to creation of duplicate entity
+- 409 (Conflict)
+
+---
+
+- `ErrorInvalidRoute`
+- Represents an error for invalid route
+- 404 (Not Found)
+
+---
+
+- `ErrorRequestTimeout`
+- Represents an error for request which timed out
+- 408 (Request Timeout)
+
+---
+
+- `ErrorPanicRecovery`
+- Represents an error for request which panicked
+- 500 (Internal Server Error)
+
+{% /table %}
 
 #### Usage:
 To use the predefined HTTP errors, users need to import the GoFr http package and can simply call them:
