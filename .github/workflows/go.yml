@@ -39,7 +39,7 @@ jobs:
     services:
       # Kafka service
       kafka:
-        image: bitnami/kafka:3.4.1
+        image: bitnamilegacy/kafka:3.4.1
         ports:
           - "9092:9092"
         env:
