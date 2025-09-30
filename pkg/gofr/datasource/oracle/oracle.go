@@ -12,6 +12,7 @@ import (
 	_ "github.com/godror/godror"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/trace"
+
 	"gofr.dev/pkg/gofr/container"
 )
 
@@ -89,7 +90,6 @@ func (c *Client) Connect() {
 		c.config.Username, c.config.Password, c.config.ConnectionString)
 
 	db, err := sql.Open("godror", dsn)
-
 	if err != nil {
 		c.logger.Errorf("error while connecting to OracleDB: %v", err)
 
@@ -315,6 +315,7 @@ func (c *Client) sendOperationStats(start time.Time, methodType, query, method s
 
 	if span != nil {
 		defer span.End()
+
 		span.SetAttributes(attribute.Int64(fmt.Sprintf("oracle.%v.duration", method), duration))
 	}
 }
