@@ -1,11 +1,13 @@
 package service
 
 import (
+	"context"
 	"crypto/tls"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -125,4 +127,40 @@ func TestAddOption_DistributedLimiter(t *testing.T) {
 	_, isDist := out.(*distributedRateLimiter)
 
 	assert.True(t, isDist, "expected *distributedRateLimiter")
+}
+
+type dummyStore struct{}
+
+func (dummyStore) Allow(_ context.Context, _ string, _ RateLimiterConfig) (allowed bool,
+	retryAfter time.Duration, err error) {
+	return true, 0, nil
+}
+
+func TestNewDistributedRateLimiter_WithHTTPService_Success(t *testing.T) {
+	config := RateLimiterConfig{
+		Requests: 10,
+		Window:   time.Minute,
+		Burst:    10,
+	}
+	h := newHTTPService(t)
+	store := &dummyStore{}
+
+	result := NewDistributedRateLimiter(config, h, store)
+
+	_, ok := result.(*distributedRateLimiter)
+	assert.True(t, ok, "should return distributedRateLimiter")
+}
+
+func TestNewDistributedRateLimiter_WithHTTPService_Error(t *testing.T) {
+	config := RateLimiterConfig{
+		Requests: 0, // Invalid
+		Window:   time.Minute,
+		Burst:    10,
+	}
+	h := newHTTPService(t)
+	store := &dummyStore{}
+
+	result := NewDistributedRateLimiter(config, h, store)
+
+	assert.Same(t, h, result, "should return original HTTP on invalid config")
 }

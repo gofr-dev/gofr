@@ -58,6 +58,14 @@ const (
 
 // NewLocalRateLimiter creates a new local rate limiter with metrics.
 func NewLocalRateLimiter(config RateLimiterConfig, h HTTP, store RateLimiterStore) HTTP {
+	if err := config.Validate(); err != nil {
+		if httpSvc, ok := h.(*httpService); ok {
+			httpSvc.Logger.Log("Invalid rate limiter config, disabling local rate limiting", "error", err)
+		}
+
+		return h
+	}
+
 	httpSvc := h.(*httpService)
 
 	rl := &localRateLimiter{
