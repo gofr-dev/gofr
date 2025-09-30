@@ -9,6 +9,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
+
 	"gofr.dev/pkg/gofr/datasource/pubsub"
 	"gofr.dev/pkg/gofr/logging"
 )
@@ -178,6 +179,7 @@ func createMockMessageBatch(ctrl *gomock.Controller) jetstream.MessageBatch {
 
 	msgChan := make(chan jetstream.Msg, 1)
 	msgChan <- mockMsg
+
 	close(msgChan)
 
 	mockBatch.EXPECT().Messages().Return(msgChan).AnyTimes()
