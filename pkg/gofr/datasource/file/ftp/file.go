@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/jlaffaye/ftp"
+
 	file_interface "gofr.dev/pkg/gofr/datasource/file"
 )
 
@@ -237,7 +238,6 @@ func (f *File) Read(p []byte) (n int, err error) {
 
 	//nolint:gosec // We ensure the offset is never negative in the application logic.
 	r, err := f.conn.RetrFrom(f.path, uint64(f.offset))
-
 	if err != nil {
 		f.logger.Errorf("Read failed: Failed to open file with path %q : %v", f.path, err)
 		return 0, err

@@ -14,6 +14,7 @@ import (
 	awsConfig "github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/credentials"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
+
 	file "gofr.dev/pkg/gofr/datasource/file"
 )
 
@@ -95,7 +96,6 @@ func (f *FileSystem) Connect() {
 				f.config.SecretAccessKey,
 				"")), // "" is the session token. Currently, we do not handle connections through session token.
 	)
-
 	if err != nil {
 		f.logger.Errorf("failed to load configuration: %v", err)
 		return
@@ -141,7 +141,6 @@ func (f *FileSystem) Create(name string) (file.File, error) {
 			Bucket: aws.String(f.config.BucketName),
 			Prefix: aws.String(parentPath + "/"),
 		})
-
 		if err != nil {
 			return nil, err
 		}
@@ -160,7 +159,6 @@ func (f *FileSystem) Create(name string) (file.File, error) {
 		// this specifies the file must be downloaded before being opened
 		ContentDisposition: aws.String("attachment"),
 	})
-
 	if err != nil {
 		f.logger.Errorf("Failed to create the file: %v", err)
 		return nil, err
@@ -170,7 +168,6 @@ func (f *FileSystem) Create(name string) (file.File, error) {
 		Bucket: aws.String(f.config.BucketName),
 		Key:    aws.String(name),
 	})
-
 	if err != nil {
 		f.logger.Errorf("Failed to retrieve %q: %v", name, err)
 		return nil, err
@@ -213,7 +210,6 @@ func (f *FileSystem) Remove(name string) error {
 		Bucket: aws.String(f.config.BucketName),
 		Key:    aws.String(name),
 	})
-
 	if err != nil {
 		f.logger.Errorf("Error while deleting file: %v", err)
 		return err
@@ -247,7 +243,6 @@ func (f *FileSystem) Open(name string) (file.File, error) {
 		Bucket: aws.String(f.config.BucketName),
 		Key:    aws.String(name),
 	})
-
 	if err != nil {
 		f.logger.Errorf("failed to retrieve %q: %v", name, err)
 		return nil, err
@@ -328,7 +323,6 @@ func (f *FileSystem) Rename(oldname, newname string) error {
 		ContentType:        aws.String(mime.TypeByExtension(path.Ext(newname))),
 		ContentDisposition: aws.String("attachment"),
 	})
-
 	if err != nil {
 		msg = fmt.Sprintf("Error while copying file: %v", err)
 		return err
