@@ -90,7 +90,6 @@ func NewSQL(configs config.Config, logger datasource.Logger, metrics Metrics) *D
 	logger.Debugf("registering sql dialect '%s' for traces", dbConfig.Dialect)
 
 	otelRegisteredDialect, err := registerOtel(dbConfig.Dialect, logger)
-
 	if err != nil {
 		logger.Errorf("could not register sql dialect '%s' for traces, error: %s", dbConfig.Dialect, err)
 		return nil

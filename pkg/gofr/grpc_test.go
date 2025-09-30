@@ -176,8 +176,10 @@ func TestGRPC_ServerRun(t *testing.T) {
 					if r := recover(); r != nil {
 						t.Logf("Server panicked: %v", r)
 					}
+
 					done <- true
 				}()
+
 				g.Run(c)
 			}
 
@@ -267,6 +269,7 @@ func TestGRPC_ServerShutdown_ContextCanceled(t *testing.T) {
 	ctx, cancel := context.WithCancel(t.Context())
 
 	errChan := make(chan error, 1)
+
 	go func() {
 		errChan <- g.Shutdown(ctx)
 	}()

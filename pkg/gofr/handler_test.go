@@ -342,6 +342,7 @@ func TestIntegration_ConcurrentClientCancellations(t *testing.T) {
 	go func() {
 		app.Run()
 	}()
+
 	time.Sleep(5 * time.Millisecond)
 
 	// Launch multiple concurrent requests with early cancellation
@@ -459,6 +460,7 @@ func TestIntegration_ServerTimeout(t *testing.T) {
 	require.NoError(t, err)
 
 	var errorResponse map[string]any
+
 	err = json.Unmarshal(body, &errorResponse)
 	require.NoError(t, err)
 
