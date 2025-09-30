@@ -66,6 +66,14 @@ type distributedRateLimiter struct {
 }
 
 func NewDistributedRateLimiter(config RateLimiterConfig, h HTTP, store RateLimiterStore) HTTP {
+	if err := config.Validate(); err != nil {
+		if httpSvc, ok := h.(*httpService); ok {
+			httpSvc.Logger.Log("Invalid rate limiter config, disabling distributed rate limiting", "error", err)
+		}
+
+		return h
+	}
+
 	httpSvc := h.(*httpService)
 
 	rl := &distributedRateLimiter{

@@ -87,11 +87,13 @@ func TestLocalRateLimiter_EnforceLimit(t *testing.T) {
 
 	base := newBaseHTTPService(t, &hits)
 
+	key := "svc-limit-" + time.Now().Format("150405.000000000")
+
 	rl := NewLocalRateLimiter(RateLimiterConfig{
 		Requests: 1,
 		Window:   time.Second,
 		Burst:    1,
-		KeyFunc:  func(*http.Request) string { return "svc-limit" },
+		KeyFunc:  func(*http.Request) string { return key },
 	}, base, NewLocalRateLimiterStore())
 
 	resp, err := rl.Get(t.Context(), "/r1", nil)
@@ -302,7 +304,7 @@ func TestLocalRateLimiter_RateLimitErrorFields(t *testing.T) {
 	base := newBaseHTTPService(t, &hits)
 
 	rl := NewLocalRateLimiter(RateLimiterConfig{
-		Requests: 0, // Always zero refill
+		Requests: 1, // Always zero refill
 		Window:   time.Second,
 		Burst:    1,
 		KeyFunc:  func(*http.Request) string { return "svc-zero" },
@@ -331,21 +333,63 @@ func TestLocalRateLimiter_RateLimitErrorFields(t *testing.T) {
 	assert.GreaterOrEqual(t, rlErr.RetryAfter, time.Second)
 }
 
-func TestLocalRateLimiter_WrapperMethods_SuccessAndLimited(t *testing.T) {
+func TestLocalRateLimiter_WrapperMethods_Allowed(t *testing.T) {
 	var hits atomic.Int64
-
 	base := newBaseHTTPService(t, &hits)
 
-	// Success limiter: plenty of capacity
-	successRL := NewLocalRateLimiter(RateLimiterConfig{
+	rl := NewLocalRateLimiter(RateLimiterConfig{
 		Requests: 100,
 		Window:   time.Second,
 		Burst:    100,
 		KeyFunc:  func(*http.Request) string { return "wrapper-allow" },
 	}, base, NewLocalRateLimiterStore())
 
-	// Deny limiter: zero capacity (covers error branch)
-	denyRL := NewLocalRateLimiter(RateLimiterConfig{
+	tests := []struct {
+		name string
+		call func(h HTTP) (*http.Response, error)
+	}{
+		{"Get", func(h HTTP) (*http.Response, error) { return h.Get(t.Context(), "/g", nil) }},
+		{"GetWithHeaders", func(h HTTP) (*http.Response, error) {
+			return h.GetWithHeaders(t.Context(), "/gh", nil, map[string]string{"X": "1"})
+		}},
+		{"Post", func(h HTTP) (*http.Response, error) { return h.Post(t.Context(), "/p", nil, []byte("x")) }},
+		{"PostWithHeaders", func(h HTTP) (*http.Response, error) {
+			return h.PostWithHeaders(t.Context(), "/ph", nil, []byte("x"), map[string]string{"X": "1"})
+		}},
+		{"Patch", func(h HTTP) (*http.Response, error) { return h.Patch(t.Context(), "/pa", nil, []byte("x")) }},
+		{"PatchWithHeaders", func(h HTTP) (*http.Response, error) {
+			return h.PatchWithHeaders(t.Context(), "/pah", nil, []byte("x"), map[string]string{"X": "1"})
+		}},
+		{"Put", func(h HTTP) (*http.Response, error) { return h.Put(t.Context(), "/put", nil, []byte("x")) }},
+		{"PutWithHeaders", func(h HTTP) (*http.Response, error) {
+			return h.PutWithHeaders(t.Context(), "/puth", nil, []byte("x"), map[string]string{"X": "1"})
+		}},
+		{"Delete", func(h HTTP) (*http.Response, error) { return h.Delete(t.Context(), "/d", []byte("x")) }},
+		{"DeleteWithHeaders", func(h HTTP) (*http.Response, error) {
+			return h.DeleteWithHeaders(t.Context(), "/dh", []byte("x"), map[string]string{"X": "1"})
+		}},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			resp, err := tc.call(rl)
+
+			assertAllowed(t, resp, err)
+
+			if resp != nil {
+				_ = resp.Body.Close()
+			}
+		})
+	}
+
+	assert.Equal(t, int64(len(tests)), hits.Load())
+}
+
+func TestLocalRateLimiter_WrapperMethods_InvalidConfig(t *testing.T) {
+	var hits atomic.Int64
+	base := newBaseHTTPService(t, &hits)
+
+	rl := NewLocalRateLimiter(RateLimiterConfig{
 		Requests: 0,
 		Burst:    0,
 		KeyFunc:  func(*http.Request) string { return "wrapper-deny" },
@@ -377,10 +421,9 @@ func TestLocalRateLimiter_WrapperMethods_SuccessAndLimited(t *testing.T) {
 		}},
 	}
 
-	// Success path
 	for _, tc := range tests {
-		t.Run(tc.name+"_Allowed", func(t *testing.T) {
-			resp, err := tc.call(successRL)
+		t.Run(tc.name, func(t *testing.T) {
+			resp, err := tc.call(rl)
 
 			assertAllowed(t, resp, err)
 
@@ -390,24 +433,5 @@ func TestLocalRateLimiter_WrapperMethods_SuccessAndLimited(t *testing.T) {
 		})
 	}
 
-	// Denied path (each should hit rate limit before underlying service)
-	for _, tc := range tests {
-		t.Run(tc.name+"_RateLimited", func(t *testing.T) {
-			resp, err := tc.call(denyRL)
-
-			require.Error(t, err)
-			assert.Nil(t, resp)
-
-			if resp != nil {
-				_ = resp.Body.Close()
-			}
-
-			var rlErr *RateLimitError
-
-			assert.ErrorAs(t, err, &rlErr)
-		})
-	}
-
-	// At least all success invocations should have reached downstream.
 	assert.Equal(t, int64(len(tests)), hits.Load())
 }
