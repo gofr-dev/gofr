@@ -115,12 +115,12 @@ func validateOAuthError(t *testing.T, err, expectedError error, statusCode int) 
 	}
 }
 
-func callHTTPService(ctx context.Context, service service.HTTP, method string,
+func callHTTPService(ctx context.Context, s service.HTTP, method string,
 	headers map[string]string) (resp *http.Response, err error) {
 	if headers != nil {
-		resp, err = callHTTPServiceWithHeaders(ctx, service, method, headers)
+		resp, err = callHTTPServiceWithHeaders(ctx, s, method, headers)
 	} else {
-		resp, err = callHTTPServiceWithoutHeaders(ctx, service, method)
+		resp, err = callHTTPServiceWithoutHeaders(ctx, s, method)
 	}
 
 	return resp, err

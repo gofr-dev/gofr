@@ -3,10 +3,11 @@ package auth
 import (
 	"context"
 	"fmt"
-	"golang.org/x/oauth2"
-	"golang.org/x/oauth2/clientcredentials"
 	"net/url"
 	"strings"
+
+	"golang.org/x/oauth2"
+	"golang.org/x/oauth2/clientcredentials"
 
 	"gofr.dev/pkg/gofr/service"
 )
@@ -42,11 +43,11 @@ func (c *OAuthConfig) AddOption(svc service.HTTP) service.HTTP {
 func NewOAuthConfig(clientID, secret, tokenURL string, scopes []string, params url.Values,
 	authStyle oauth2.AuthStyle) (service.Options, error) {
 	if clientID == "" {
-		return nil, service.AuthErr{nil, "client id is mandatory"}
+		return nil, service.AuthErr{Err: nil, Message: "client id is mandatory"}
 	}
 
 	if secret == "" {
-		return nil, service.AuthErr{nil, "client secret is mandatory"}
+		return nil, service.AuthErr{Err: nil, Message: "client secret is mandatory"}
 	}
 
 	if err := validateTokenURL(tokenURL); err != nil {
@@ -67,22 +68,22 @@ func NewOAuthConfig(clientID, secret, tokenURL string, scopes []string, params u
 
 func validateTokenURL(tokenURL string) error {
 	if tokenURL == "" {
-		return service.AuthErr{nil, "token url is mandatory"}
+		return service.AuthErr{Err: nil, Message: "token url is mandatory"}
 	}
 
 	u, err := url.Parse(tokenURL)
 
 	switch {
 	case err != nil:
-		return service.AuthErr{err, "error in token URL"}
+		return service.AuthErr{Err: err, Message: "error in token URL"}
 	case u.Host == "" || u.Scheme == "":
-		return service.AuthErr{err, "empty host"}
+		return service.AuthErr{Err: err, Message: "empty host"}
 	case strings.Contains(u.Host, ".."):
-		return service.AuthErr{nil, "invalid host pattern, contains `..`"}
+		return service.AuthErr{Err: nil, Message: "invalid host pattern, contains `..`"}
 	case strings.HasSuffix(u.Host, "."):
-		return service.AuthErr{nil, "invalid host pattern, ends with `.`"}
+		return service.AuthErr{Err: nil, Message: "invalid host pattern, ends with `.`"}
 	case u.Scheme != "http" && u.Scheme != "https":
-		return service.AuthErr{nil, "invalid scheme, allowed http and https only"}
+		return service.AuthErr{Err: nil, Message: "invalid scheme, allowed http and https only"}
 	default:
 		return nil
 	}
