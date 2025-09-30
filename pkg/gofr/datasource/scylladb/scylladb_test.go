@@ -30,6 +30,7 @@ func initTest(t *testing.T) (*Client, *mockDependencies) {
 	ctrl := gomock.NewController(t)
 
 	defer ctrl.Finish()
+
 	mockLogger := NewMockLogger(ctrl)
 	mockMetrics := NewMockMetrics(ctrl)
 	mockSession := NewMocksession(ctrl)
@@ -314,6 +315,7 @@ func Test_BatchQuery(t *testing.T) {
 		}, nil},
 		{"batch is not initialized", func() {
 			mockDeps.mockLogger.EXPECT().Debug(gomock.AssignableToTypeOf(&QueryLog{}))
+
 			client.scylla.batches = nil
 		}, errBatchNotInitialized},
 	}
@@ -354,6 +356,7 @@ func Test_ExecuteBatchCAS(t *testing.T) {
 		}, &mockStructSlice, assert.AnError},
 		{"failure case: batch not initialized", &mockStructSlice, func() {
 			mockDeps.mockLogger.EXPECT().Debug(gomock.AssignableToTypeOf(&QueryLog{}))
+
 			client.scylla.batches = nil
 		}, &mockStructSlice, errBatchNotInitialized},
 	}
@@ -512,6 +515,7 @@ func Test_ExecuteBatch(t *testing.T) {
 		}, errMock},
 		{"batch not initialized", func() {
 			mockDeps.mockLogger.EXPECT().Debug(gomock.AssignableToTypeOf(&QueryLog{}))
+
 			client.scylla.batches = nil
 		}, errBatchNotInitialized},
 	}
