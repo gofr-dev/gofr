@@ -49,14 +49,14 @@ func TestRemoteLogger_UpdateLevel(t *testing.T) {
 func TestRemoteLogger_UpdateLevelError(t *testing.T) {
 	rl := remoteLogger{
 		remoteURL:          "invalid url",
-		levelFetchInterval: 1,
+		levelFetchInterval: 1 * time.Second,
 		currentLevel:       2,
 		Logger:             logging.NewMockLogger(logging.INFO),
 	}
 
 	go rl.UpdateLogLevel()
 
-	time.Sleep(100 * time.Millisecond)
+	time.Sleep(2 * time.Second)
 
 	assert.Equal(t, logging.INFO, rl.currentLevel)
 }
