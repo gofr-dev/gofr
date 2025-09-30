@@ -13,6 +13,7 @@ import (
 	"github.com/Azure/azure-sdk-for-go/sdk/messaging/azeventhubs/checkpoints"
 	"github.com/Azure/azure-sdk-for-go/sdk/storage/azblob/container"
 	"go.opentelemetry.io/otel/trace"
+
 	"gofr.dev/pkg/gofr/datasource"
 	"gofr.dev/pkg/gofr/datasource/pubsub"
 )
@@ -348,7 +349,6 @@ func (c *Client) tryReadFromPartition(ctx context.Context, partitionID, topic st
 			Latest: to.Ptr(true), // Use Latest to only get new messages
 		},
 	})
-
 	if err != nil {
 		return nil, err
 	}
@@ -527,6 +527,7 @@ func (c *Client) Query(ctx context.Context, query string, args ...any) ([]byte, 
 
 	if _, hasDeadline := ctx.Deadline(); !hasDeadline {
 		var cancel context.CancelFunc
+
 		readCtx, cancel = context.WithTimeout(ctx, defaultQueryTimeout)
 		defer cancel()
 	}

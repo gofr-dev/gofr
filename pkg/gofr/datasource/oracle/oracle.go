@@ -12,7 +12,6 @@ import (
 	_ "github.com/godror/godror"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/trace"
-
 	"gofr.dev/pkg/gofr/container"
 )
 

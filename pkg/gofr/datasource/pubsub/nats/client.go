@@ -10,7 +10,6 @@ import (
 
 	"github.com/nats-io/nats.go/jetstream"
 	"go.opentelemetry.io/otel/trace"
-
 	"gofr.dev/pkg/gofr/datasource/pubsub"
 )
 

@@ -2,7 +2,6 @@ package nats
 
 import (
 	"github.com/nats-io/nats.go/jetstream"
-
 	"gofr.dev/pkg/gofr/datasource/pubsub"
 )
 

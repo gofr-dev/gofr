@@ -10,9 +10,10 @@ import (
 	"github.com/stretchr/testify/require"
 	"go.opentelemetry.io/otel"
 	"go.uber.org/mock/gomock"
+	"nhooyr.io/websocket"
+
 	"gofr.dev/pkg/gofr/datasource"
 	"gofr.dev/pkg/gofr/testutil"
-	"nhooyr.io/websocket"
 )
 
 func TestConnect(t *testing.T) {
@@ -262,8 +263,8 @@ func getTestConfigs() Config {
 		opts := &websocket.DialOptions{
 			Subprotocols: []string{"amqp"},
 		}
-		wssConn, _, err := websocket.Dial(ctx, args.Host, opts)
 
+		wssConn, _, err := websocket.Dial(ctx, args.Host, opts)
 		if err != nil {
 			return nil, err
 		}
