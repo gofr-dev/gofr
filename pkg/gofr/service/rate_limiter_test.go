@@ -2,165 +2,207 @@ package service
 
 import (
 	"context"
-	"crypto/tls"
+	"errors"
+
 	"net/http"
-	"net/http/httptest"
-	"net/url"
 	"testing"
 	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"go.opentelemetry.io/otel"
-
-	gofrRedis "gofr.dev/pkg/gofr/datasource/redis"
-	"gofr.dev/pkg/gofr/logging"
+	"go.uber.org/mock/gomock"
 )
 
-func newHTTPService(t *testing.T) *httpService {
-	t.Helper()
-
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		w.WriteHeader(http.StatusOK)
-	}))
-	t.Cleanup(srv.Close)
-
-	return &httpService{
-		Client: http.DefaultClient,
-		url:    srv.URL,
-		Logger: logging.NewMockLogger(logging.INFO),
-		Tracer: otel.Tracer("gofr-http-client"),
-	}
+// --- Simple logger mock ---
+type mockLogger struct {
+	logs []string
 }
 
-func TestRateLimiterConfig_Validate(t *testing.T) {
-	t.Run("invalid RPS", func(t *testing.T) {
-		cfg := RateLimiterConfig{Requests: 0, Burst: 1}
-		err := cfg.Validate()
-		require.Error(t, err)
-		assert.ErrorIs(t, err, errInvalidRequestRate)
-	})
+func (l *mockLogger) Log(_ ...any)   { l.logs = append(l.logs, "Log") }
+func (l *mockLogger) Debug(_ ...any) { l.logs = append(l.logs, "Debug") }
 
-	t.Run("burst less than requests", func(t *testing.T) {
-		cfg := RateLimiterConfig{Requests: 5, Burst: 3}
-		err := cfg.Validate()
-		require.Error(t, err)
-		assert.ErrorIs(t, err, errBurstLessThanRequests)
-	})
-
-	t.Run("sets default KeyFunc when nil", func(t *testing.T) {
-		cfg := RateLimiterConfig{Requests: 1.5, Burst: 2}
-		require.Nil(t, cfg.KeyFunc)
-		require.NoError(t, cfg.Validate())
-		require.NotNil(t, cfg.KeyFunc)
-	})
+type mockStore struct {
+	allowed    bool
+	retryAfter time.Duration
+	err        error
 }
 
-func TestDefaultKeyFunc(t *testing.T) {
-	t.Run("nil request", func(t *testing.T) {
-		assert.Equal(t, "unknown", defaultKeyFunc(nil))
-	})
+func (m *mockStore) Allow(_ context.Context, _ string, _ RateLimiterConfig) (bool, time.Duration, error) {
+	return m.allowed, m.retryAfter, m.err
+}
+func (*mockStore) StartCleanup(_ context.Context, _ Logger) {}
 
-	t.Run("nil URL", func(t *testing.T) {
-		req := &http.Request{}
-		assert.Equal(t, "unknown", defaultKeyFunc(req))
-	})
+func (*mockStore) StopCleanup() {}
 
-	t.Run("http derived scheme", func(t *testing.T) {
-		req := &http.Request{
-			URL: &url.URL{Host: "example.com"},
-		}
-		assert.Equal(t, "http://example.com", defaultKeyFunc(req))
-	})
+func TestRateLimiter_buildFullURL(t *testing.T) {
+	httpSvc := &httpService{url: "http://base.com/api"}
+	rl := &rateLimiter{HTTP: httpSvc}
 
-	t.Run("https derived scheme", func(t *testing.T) {
-		req := &http.Request{
-			URL: &url.URL{Host: "secure.com"},
-			TLS: &tls.ConnectionState{},
-		}
-		assert.Equal(t, "https://secure.com", defaultKeyFunc(req))
-	})
+	assert.Equal(t, "http://foo.com/bar", rl.buildFullURL("http://foo.com/bar"))
+	assert.Equal(t, "https://foo.com/bar", rl.buildFullURL("https://foo.com/bar"))
+	assert.Equal(t, "http://base.com/api/foo", rl.buildFullURL("foo"))
+	assert.Equal(t, "http://base.com/api/foo", rl.buildFullURL("/foo"))
 
-	t.Run("host from req.Host fallback", func(t *testing.T) {
-		req := &http.Request{
-			URL:  &url.URL{},
-			Host: "fallback:9090",
-		}
-		assert.Equal(t, "http://fallback:9090", defaultKeyFunc(req))
-	})
+	httpSvc.url = ""
 
-	t.Run("unknown service key when no host present", func(t *testing.T) {
-		req := &http.Request{
-			URL: &url.URL{},
-		}
-		assert.Equal(t, "http://unknown", defaultKeyFunc(req))
-	})
+	assert.Equal(t, "bar", rl.buildFullURL("bar"))
+
+	rl.HTTP = &mockHTTP{}
+
+	assert.Equal(t, "baz", rl.buildFullURL("baz"))
 }
 
-func TestAddOption_InvalidConfigReturnsOriginal(t *testing.T) {
-	h := newHTTPService(t)
-	cfg := RateLimiterConfig{Requests: 0, Burst: 1} // invalid
-	out := cfg.AddOption(h)
-	assert.Same(t, h, out)
-}
+func TestRateLimiter_checkRateLimit_Error(t *testing.T) {
+	store := &mockStore{allowed: true, err: errors.New("fail")}
+	logger := &mockLogger{}
 
-func TestAddOption_LocalLimiter(t *testing.T) {
-	h := newHTTPService(t)
-	cfg := RateLimiterConfig{Requests: 2, Burst: 3}
-	out := cfg.AddOption(h)
+	ctrl := gomock.NewController(t)
+	metrics := NewMockMetrics(ctrl)
 
-	_, isLocal := out.(*localRateLimiter)
-	assert.True(t, isLocal, "expected *localRateLimiter")
+	metrics.EXPECT().IncrementCounter(gomock.Any(), "app_rate_limiter_requests_total", "service", "svc")
+	metrics.EXPECT().IncrementCounter(gomock.Any(), "app_rate_limiter_errors_total", "service", "svc", "type", "store_error")
 
-	assert.NotNil(t, cfg.KeyFunc)
-}
-
-func TestAddOption_DistributedLimiter(t *testing.T) {
-	h := newHTTPService(t)
-	cfg := RateLimiterConfig{
-		Requests: 5,
-		Burst:    5,
-		Store:    NewRedisRateLimiterStore(new(gofrRedis.Redis)),
+	rl := &rateLimiter{
+		config: RateLimiterConfig{
+			KeyFunc: func(*http.Request) string { return "svc" },
+			Store:   store,
+		},
+		store:   store,
+		logger:  logger,
+		metrics: metrics,
 	}
 
-	out := cfg.AddOption(h)
-	_, isDist := out.(*distributedRateLimiter)
+	req, _ := http.NewRequest("GET", "/", nil)
 
-	assert.True(t, isDist, "expected *distributedRateLimiter")
+	err := rl.checkRateLimit(req)
+
+	assert.NoError(t, err)
+	assert.Contains(t, logger.logs, "Log")
 }
 
-type dummyStore struct{}
+func TestRateLimiter_checkRateLimit_Denied(t *testing.T) {
+	store := &mockStore{allowed: false}
+	logger := &mockLogger{}
 
-func (dummyStore) Allow(_ context.Context, _ string, _ RateLimiterConfig) (allowed bool,
-	retryAfter time.Duration, err error) {
-	return true, 0, nil
-}
+	ctrl := gomock.NewController(t)
+	metrics := NewMockMetrics(ctrl)
 
-func TestNewDistributedRateLimiter_WithHTTPService_Success(t *testing.T) {
-	config := RateLimiterConfig{
-		Requests: 10,
-		Window:   time.Minute,
-		Burst:    10,
+	metrics.EXPECT().IncrementCounter(gomock.Any(), "app_rate_limiter_requests_total", "service", "svc")
+	metrics.EXPECT().IncrementCounter(gomock.Any(), "app_rate_limiter_denied_total", "service", "svc")
+
+	rl := &rateLimiter{
+		config: RateLimiterConfig{
+			KeyFunc: func(*http.Request) string { return "svc" },
+			Store:   store,
+		},
+		store:   store,
+		logger:  logger,
+		metrics: metrics,
 	}
-	h := newHTTPService(t)
-	store := &dummyStore{}
 
-	result := NewDistributedRateLimiter(config, h, store)
+	req, _ := http.NewRequest("GET", "/", nil)
+	err := rl.checkRateLimit(req)
 
-	_, ok := result.(*distributedRateLimiter)
-	assert.True(t, ok, "should return distributedRateLimiter")
+	assert.IsType(t, &RateLimitError{}, err)
+	assert.Contains(t, logger.logs, "Debug")
 }
 
-func TestNewDistributedRateLimiter_WithHTTPService_Error(t *testing.T) {
-	config := RateLimiterConfig{
-		Requests: 0, // Invalid
-		Window:   time.Minute,
-		Burst:    10,
+func TestRateLimiter_checkRateLimit_Allowed(t *testing.T) {
+	store := &mockStore{allowed: true}
+
+	logger := &mockLogger{}
+
+	ctrl := gomock.NewController(t)
+	metrics := NewMockMetrics(ctrl)
+
+	metrics.EXPECT().IncrementCounter(gomock.Any(), "app_rate_limiter_requests_total", "service", "svc")
+
+	rl := &rateLimiter{
+		config: RateLimiterConfig{
+			KeyFunc: func(*http.Request) string { return "svc" },
+			Store:   store,
+		},
+		store:   store,
+		logger:  logger,
+		metrics: metrics,
 	}
-	h := newHTTPService(t)
-	store := &dummyStore{}
 
-	result := NewDistributedRateLimiter(config, h, store)
+	req, _ := http.NewRequest("GET", "/", nil)
 
-	assert.Same(t, h, result, "should return original HTTP on invalid config")
+	err := rl.checkRateLimit(req)
+	assert.NoError(t, err)
+}
+
+func TestRateLimiter_HTTPMethods(t *testing.T) {
+	mock := &mockHTTP{}
+
+	store := &mockStore{allowed: true}
+	logger := &mockLogger{}
+
+	ctrl := gomock.NewController(t)
+	metrics := NewMockMetrics(ctrl)
+
+	metrics.EXPECT().IncrementCounter(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
+
+	rl := &rateLimiter{
+		config: RateLimiterConfig{
+			KeyFunc: func(*http.Request) string { return "svc" },
+			Store:   store,
+		},
+		store:   store,
+		logger:  logger,
+		metrics: metrics,
+		HTTP:    mock,
+	}
+
+	ctx := context.Background()
+	resp, err := rl.Get(ctx, "foo", nil)
+
+	require.NoError(t, err)
+	assert.Equal(t, http.StatusOK, resp.StatusCode)
+
+	resp, err = rl.GetWithHeaders(ctx, "foo", nil, nil)
+
+	assert.NoError(t, err)
+	assert.Equal(t, http.StatusOK, resp.StatusCode)
+
+	resp, err = rl.Post(ctx, "foo", nil, nil)
+
+	require.NoError(t, err)
+	assert.Equal(t, http.StatusCreated, resp.StatusCode)
+
+	resp, err = rl.PostWithHeaders(ctx, "foo", nil, nil, nil)
+
+	assert.NoError(t, err)
+	assert.Equal(t, http.StatusCreated, resp.StatusCode)
+
+	resp, err = rl.Put(ctx, "foo", nil, nil)
+
+	assert.NoError(t, err)
+	assert.Equal(t, http.StatusOK, resp.StatusCode)
+
+	resp, err = rl.PutWithHeaders(ctx, "foo", nil, nil, nil)
+
+	assert.NoError(t, err)
+	assert.Equal(t, http.StatusOK, resp.StatusCode)
+
+	resp, err = rl.Patch(ctx, "foo", nil, nil)
+
+	assert.NoError(t, err)
+	assert.Equal(t, http.StatusOK, resp.StatusCode)
+
+	resp, err = rl.PatchWithHeaders(ctx, "foo", nil, nil, nil)
+
+	assert.NoError(t, err)
+	assert.Equal(t, http.StatusOK, resp.StatusCode)
+
+	resp, err = rl.Delete(ctx, "foo", nil)
+
+	assert.NoError(t, err)
+	assert.Equal(t, http.StatusNoContent, resp.StatusCode)
+
+	resp, err = rl.DeleteWithHeaders(ctx, "foo", nil, nil)
+
+	assert.NoError(t, err)
+	assert.Equal(t, http.StatusNoContent, resp.StatusCode)
 }

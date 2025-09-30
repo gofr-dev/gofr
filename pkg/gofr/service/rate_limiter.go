@@ -1,125 +1,231 @@
 package service
 
 import (
-	"errors"
-	"fmt"
+	"context"
 	"net/http"
-	"time"
+	"strings"
 )
 
-var (
-	errInvalidRequestRate     = errors.New("requests must be greater than 0 per configured time window")
-	errBurstLessThanRequests  = errors.New("burst must be greater than requests per window")
-	errInvalidRedisResultType = errors.New("unexpected Redis result type")
-)
-
-// RateLimiterConfig with custom keying support.
-type RateLimiterConfig struct {
-	Requests float64                    // Number of requests allowed
-	Window   time.Duration              // Time window (e.g., time.Minute, time.Hour)
-	Burst    int                        // Maximum burst capacity (must be > 0)
-	KeyFunc  func(*http.Request) string // Optional custom key extraction
-	Store    RateLimiterStore
+// rateLimiter provides unified rate limiting for HTTP clients.
+type rateLimiter struct {
+	config  RateLimiterConfig
+	store   RateLimiterStore
+	logger  Logger
+	metrics Metrics
+	HTTP    // Embedded HTTP service
 }
 
-// defaultKeyFunc extracts a normalized service key from an HTTP request.
-func defaultKeyFunc(req *http.Request) string {
-	if req == nil || req.URL == nil {
-		return "unknown"
+// NewRateLimiter creates a new unified rate limiter.
+func NewRateLimiter(config RateLimiterConfig, h HTTP) HTTP {
+	httpSvc := h.(*httpService)
+
+	rl := &rateLimiter{
+		config:  config,
+		store:   config.Store,
+		logger:  httpSvc.Logger,
+		metrics: httpSvc.Metrics,
+		HTTP:    h,
 	}
 
-	scheme := req.URL.Scheme
-	host := req.URL.Host
+	// Start cleanup routine
+	ctx := context.Background()
+	rl.store.StartCleanup(ctx, rl.logger)
 
-	if scheme == "" {
-		if req.TLS != nil {
-			scheme = methodHTTPS
-		} else {
-			scheme = methodHTTP
-		}
-	}
-
-	if host == "" {
-		host = req.Host
-	}
-
-	if host == "" {
-		host = unknownServiceKey
-	}
-
-	return scheme + "://" + host
+	return rl
 }
 
-// Validate checks if the configuration is valid.
-func (config *RateLimiterConfig) Validate() error {
-	if config.Requests <= 0 {
-		return fmt.Errorf("%w: %f", errInvalidRequestRate, config.Requests)
+// buildFullURL constructs an absolute URL by combining the base service URL with the given path.
+func (rl *rateLimiter) buildFullURL(path string) string {
+	if strings.HasPrefix(path, "http://") || strings.HasPrefix(path, "https://") {
+		return path
 	}
 
-	if config.Window <= 0 {
-		config.Window = time.Minute // Default: per-minute rate limiting
+	// Get base URL from embedded HTTP service
+	httpSvcImpl, ok := rl.HTTP.(*httpService)
+	if !ok {
+		return path
 	}
 
-	if config.Burst <= 0 {
-		config.Burst = int(config.Requests)
+	base := strings.TrimRight(httpSvcImpl.url, "/")
+	if base == "" {
+		return path
 	}
 
-	if float64(config.Burst) < config.Requests {
-		return fmt.Errorf("%w: burst=%d, requests=%f", errBurstLessThanRequests, config.Burst, config.Requests)
+	// Ensure path starts with /
+	if !strings.HasPrefix(path, "/") {
+		path = "/" + path
 	}
 
-	// Set default key function if not provided.
-	if config.KeyFunc == nil {
-		config.KeyFunc = defaultKeyFunc
+	return base + path
+}
+
+// checkRateLimit performs rate limit check using the configured store.
+func (rl *rateLimiter) checkRateLimit(req *http.Request) error {
+	serviceKey := rl.config.KeyFunc(req)
+	allowed, retryAfter, err := rl.store.Allow(req.Context(), serviceKey, rl.config)
+
+	// Update metrics
+	rl.updateRateLimiterMetrics(req.Context(), serviceKey, allowed, err)
+
+	if err != nil {
+		rl.logger.Log("Rate limiter store error, allowing request", "error", err)
+
+		return nil // Fail open
+	}
+
+	if !allowed {
+		rl.logger.Debug("Rate limit exceeded", "service", serviceKey, "rate", rl.config.RequestsPerSecond(),
+			"burst", rl.config.Burst, "retry_after", retryAfter)
+
+		return &RateLimitError{ServiceKey: serviceKey, RetryAfter: retryAfter}
 	}
 
 	return nil
 }
 
-// AddOption implements the Options interface.
-func (config *RateLimiterConfig) AddOption(h HTTP) HTTP {
-	if err := config.Validate(); err != nil {
-		if httpSvc, ok := h.(*httpService); ok {
-			httpSvc.Logger.Log("Invalid rate limiter config, disabling rate limiting", "error", err)
-		}
-
-		return h
+// updateRateLimiterMetrics updates metrics for rate limiting operations.
+func (rl *rateLimiter) updateRateLimiterMetrics(ctx context.Context, serviceKey string, allowed bool, err error) {
+	if rl.metrics == nil {
+		return
 	}
 
-	// Choose implementation based on Redis client availability. Default to local store if not set
-	if config.Store != nil {
-		if _, ok := config.Store.(*RedisRateLimiterStore); ok {
-			return NewDistributedRateLimiter(*config, h, config.Store)
-		}
+	rl.metrics.IncrementCounter(ctx, "app_rate_limiter_requests_total", "service", serviceKey)
 
-		return NewLocalRateLimiter(*config, h, config.Store)
+	if err != nil {
+		rl.metrics.IncrementCounter(ctx, "app_rate_limiter_errors_total", "service", serviceKey, "type", "store_error")
 	}
 
-	// Log warning for local rate limiting.
-	if httpSvc, ok := h.(*httpService); ok {
-		httpSvc.Logger.Log("Using local rate limiting - not suitable for multi-instance deployments")
+	if !allowed {
+		rl.metrics.IncrementCounter(ctx, "app_rate_limiter_denied_total", "service", serviceKey)
+	}
+}
+
+// HTTP Method Implementations - All methods follow the same pattern.
+
+// Get performs rate-limited HTTP GET request.
+func (rl *rateLimiter) Get(ctx context.Context, path string, queryParams map[string]any) (*http.Response, error) {
+	fullURL := rl.buildFullURL(path)
+	req, _ := http.NewRequestWithContext(ctx, http.MethodGet, fullURL, http.NoBody)
+
+	if err := rl.checkRateLimit(req); err != nil {
+		return nil, err
 	}
 
-	return NewLocalRateLimiter(*config, h, NewLocalRateLimiterStore())
+	return rl.HTTP.Get(ctx, path, queryParams)
 }
 
-// RequestsPerSecond converts the configured rate to requests per second.
-func (config *RateLimiterConfig) RequestsPerSecond() float64 {
-	// Convert any time window to "requests per second" for internal math
-	return float64(config.Requests) / config.Window.Seconds()
+// GetWithHeaders performs rate-limited HTTP GET request with custom headers.
+func (rl *rateLimiter) GetWithHeaders(ctx context.Context, path string, queryParams map[string]any,
+	headers map[string]string) (*http.Response, error) {
+	fullURL := rl.buildFullURL(path)
+	req, _ := http.NewRequestWithContext(ctx, http.MethodGet, fullURL, http.NoBody)
+
+	if err := rl.checkRateLimit(req); err != nil {
+		return nil, err
+	}
+
+	return rl.HTTP.GetWithHeaders(ctx, path, queryParams, headers)
 }
 
-// RateLimitError represents a rate limiting error.
-type RateLimitError struct {
-	ServiceKey string
-	RetryAfter time.Duration
+// Post performs rate-limited HTTP POST request.
+func (rl *rateLimiter) Post(ctx context.Context, path string, queryParams map[string]any,
+	body []byte) (*http.Response, error) {
+	fullURL := rl.buildFullURL(path)
+	req, _ := http.NewRequestWithContext(ctx, http.MethodPost, fullURL, http.NoBody)
+
+	if err := rl.checkRateLimit(req); err != nil {
+		return nil, err
+	}
+
+	return rl.HTTP.Post(ctx, path, queryParams, body)
 }
 
-func (e *RateLimitError) Error() string {
-	return fmt.Sprintf("rate limit exceeded for service: %s, retry after: %v", e.ServiceKey, e.RetryAfter)
+// PostWithHeaders performs rate-limited HTTP POST request with custom headers.
+func (rl *rateLimiter) PostWithHeaders(ctx context.Context, path string, queryParams map[string]any,
+	body []byte, headers map[string]string) (*http.Response, error) {
+	fullURL := rl.buildFullURL(path)
+	req, _ := http.NewRequestWithContext(ctx, http.MethodPost, fullURL, http.NoBody)
+
+	if err := rl.checkRateLimit(req); err != nil {
+		return nil, err
+	}
+
+	return rl.HTTP.PostWithHeaders(ctx, path, queryParams, body, headers)
 }
 
-// StatusCode Implement StatusCodeResponder so Responder picks correct HTTP code.
-func (*RateLimitError) StatusCode() int {
-	return http.StatusTooManyRequests // 429
+// Put performs rate-limited HTTP PUT request.
+func (rl *rateLimiter) Put(ctx context.Context, path string, queryParams map[string]any,
+	body []byte) (*http.Response, error) {
+	fullURL := rl.buildFullURL(path)
+	req, _ := http.NewRequestWithContext(ctx, http.MethodPut, fullURL, http.NoBody)
+
+	if err := rl.checkRateLimit(req); err != nil {
+		return nil, err
+	}
+
+	return rl.HTTP.Put(ctx, path, queryParams, body)
+}
+
+// PutWithHeaders performs rate-limited HTTP PUT request with custom headers.
+func (rl *rateLimiter) PutWithHeaders(ctx context.Context, path string, queryParams map[string]any, body []byte,
+	headers map[string]string) (*http.Response, error) {
+	fullURL := rl.buildFullURL(path)
+	req, _ := http.NewRequestWithContext(ctx, http.MethodPut, fullURL, http.NoBody)
+
+	if err := rl.checkRateLimit(req); err != nil {
+		return nil, err
+	}
+
+	return rl.HTTP.PutWithHeaders(ctx, path, queryParams, body, headers)
+}
+
+// Patch performs rate-limited HTTP PATCH request.
+func (rl *rateLimiter) Patch(ctx context.Context, path string, queryParams map[string]any,
+	body []byte) (*http.Response, error) {
+	fullURL := rl.buildFullURL(path)
+	req, _ := http.NewRequestWithContext(ctx, http.MethodPatch, fullURL, http.NoBody)
+
+	if err := rl.checkRateLimit(req); err != nil {
+		return nil, err
+	}
+
+	return rl.HTTP.Patch(ctx, path, queryParams, body)
+}
+
+// PatchWithHeaders performs rate-limited HTTP PATCH request with custom headers.
+func (rl *rateLimiter) PatchWithHeaders(ctx context.Context, path string, queryParams map[string]any,
+	body []byte, headers map[string]string) (*http.Response, error) {
+	fullURL := rl.buildFullURL(path)
+	req, _ := http.NewRequestWithContext(ctx, http.MethodPatch, fullURL, http.NoBody)
+
+	if err := rl.checkRateLimit(req); err != nil {
+		return nil, err
+	}
+
+	return rl.HTTP.PatchWithHeaders(ctx, path, queryParams, body, headers)
+}
+
+// Delete performs rate-limited HTTP DELETE request.
+func (rl *rateLimiter) Delete(ctx context.Context, path string, body []byte) (*http.Response, error) {
+	fullURL := rl.buildFullURL(path)
+	req, _ := http.NewRequestWithContext(ctx, http.MethodDelete, fullURL, http.NoBody)
+
+	if err := rl.checkRateLimit(req); err != nil {
+		return nil, err
+	}
+
+	return rl.HTTP.Delete(ctx, path, body)
+}
+
+// DeleteWithHeaders performs rate-limited HTTP DELETE request with custom headers.
+func (rl *rateLimiter) DeleteWithHeaders(ctx context.Context, path string, body []byte,
+	headers map[string]string) (*http.Response, error) {
+	fullURL := rl.buildFullURL(path)
+	req, _ := http.NewRequestWithContext(ctx, http.MethodDelete, fullURL, http.NoBody)
+
+	if err := rl.checkRateLimit(req); err != nil {
+		return nil, err
+	}
+
+	return rl.HTTP.DeleteWithHeaders(ctx, path, body, headers)
 }
