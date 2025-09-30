@@ -13,7 +13,6 @@ import (
 	"time"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
-
 	file "gofr.dev/pkg/gofr/datasource/file"
 )
 
