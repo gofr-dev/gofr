@@ -10,6 +10,7 @@ import (
 
 	"github.com/nats-io/nats.go/jetstream"
 	"go.opentelemetry.io/otel/trace"
+
 	"gofr.dev/pkg/gofr/datasource/pubsub"
 )
 
@@ -141,6 +142,7 @@ func (c *Client) SubscribeWithHandler(ctx context.Context, subject string, handl
 
 	go func() {
 		defer cancel() // Ensure the cancellation is handled properly
+
 		c.processMessages(subCtx, cons, subject, handler)
 	}()
 
