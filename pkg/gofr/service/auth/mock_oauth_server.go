@@ -1,4 +1,4 @@
-package service
+package auth
 
 import (
 	"crypto/rand"

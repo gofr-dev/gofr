@@ -2,8 +2,11 @@ package service
 
 import (
 	"context"
+	"encoding/base64"
+	"gofr.dev/pkg/gofr/service/auth"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -222,4 +225,21 @@ func TestRetryProvider_DeleteWithHeaders(t *testing.T) {
 	defer resp.Body.Close()
 
 	assert.Equal(t, http.StatusNoContent, resp.StatusCode)
+}
+
+func checkAuthHeaders(t *testing.T, r *http.Request) {
+	t.Helper()
+
+	authHeader := r.Header.Get(auth.AuthHeader)
+
+	if authHeader == "" {
+		return
+	}
+
+	authParts := strings.Split(authHeader, " ")
+	payload, _ := base64.StdEncoding.DecodeString(authParts[1])
+	credentials := strings.Split(string(payload), ":")
+
+	assert.Equal(t, "user", credentials[0])
+	assert.Equal(t, "password", credentials[1])
 }

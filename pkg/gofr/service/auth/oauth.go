@@ -1,13 +1,14 @@
-package service
+package auth
 
 import (
 	"context"
 	"fmt"
+	"golang.org/x/oauth2"
+	"golang.org/x/oauth2/clientcredentials"
 	"net/url"
 	"strings"
 
-	"golang.org/x/oauth2"
-	"golang.org/x/oauth2/clientcredentials"
+	"gofr.dev/pkg/gofr/service"
 )
 
 // OAuthConfig describes a 2-legged OAuth2 flow, with both the
@@ -34,17 +35,18 @@ type OAuthConfig struct {
 	AuthStyle oauth2.AuthStyle
 }
 
-func (c *OAuthConfig) AddOption(svc HTTP) HTTP {
+func (c *OAuthConfig) AddOption(svc service.HTTP) service.HTTP {
 	return &authProvider{auth: c.addAuthorizationHeader, HTTP: svc}
 }
 
-func NewOAuthConfig(clientID, secret, tokenURL string, scopes []string, params url.Values, authStyle oauth2.AuthStyle) (Options, error) {
+func NewOAuthConfig(clientID, secret, tokenURL string, scopes []string, params url.Values,
+	authStyle oauth2.AuthStyle) (service.Options, error) {
 	if clientID == "" {
-		return nil, AuthErr{nil, "client id is mandatory"}
+		return nil, service.AuthErr{nil, "client id is mandatory"}
 	}
 
 	if secret == "" {
-		return nil, AuthErr{nil, "client secret is mandatory"}
+		return nil, service.AuthErr{nil, "client secret is mandatory"}
 	}
 
 	if err := validateTokenURL(tokenURL); err != nil {
@@ -65,22 +67,22 @@ func NewOAuthConfig(clientID, secret, tokenURL string, scopes []string, params u
 
 func validateTokenURL(tokenURL string) error {
 	if tokenURL == "" {
-		return AuthErr{nil, "token url is mandatory"}
+		return service.AuthErr{nil, "token url is mandatory"}
 	}
 
 	u, err := url.Parse(tokenURL)
 
 	switch {
 	case err != nil:
-		return AuthErr{err, "error in token URL"}
+		return service.AuthErr{err, "error in token URL"}
 	case u.Host == "" || u.Scheme == "":
-		return AuthErr{err, "empty host"}
+		return service.AuthErr{err, "empty host"}
 	case strings.Contains(u.Host, ".."):
-		return AuthErr{nil, "invalid host pattern, contains `..`"}
+		return service.AuthErr{nil, "invalid host pattern, contains `..`"}
 	case strings.HasSuffix(u.Host, "."):
-		return AuthErr{nil, "invalid host pattern, ends with `.`"}
+		return service.AuthErr{nil, "invalid host pattern, ends with `.`"}
 	case u.Scheme != "http" && u.Scheme != "https":
-		return AuthErr{nil, "invalid scheme, allowed http and https only"}
+		return service.AuthErr{nil, "invalid scheme, allowed http and https only"}
 	default:
 		return nil
 	}
@@ -94,7 +96,7 @@ func (c *OAuthConfig) addAuthorizationHeader(ctx context.Context, headers map[st
 	}
 
 	if authHeader, ok := headers[AuthHeader]; ok && authHeader != "" {
-		return nil, AuthErr{Message: fmt.Sprintf("value %v already exists for header %v", authHeader, AuthHeader)}
+		return nil, service.AuthErr{Message: fmt.Sprintf("value %v already exists for header %v", authHeader, AuthHeader)}
 	}
 
 	clientCredentials := clientcredentials.Config{

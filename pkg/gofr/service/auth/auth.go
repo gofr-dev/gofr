@@ -1,15 +1,17 @@
-package service
+package auth
 
 import (
 	"context"
 	"net/http"
+
+	"gofr.dev/pkg/gofr/service"
 )
 
 const AuthHeader = "Authorization"
 
 type authProvider struct {
 	auth func(context.Context, map[string]string) (map[string]string, error)
-	HTTP
+	service.HTTP
 }
 
 func (a *authProvider) Get(ctx context.Context, path string, queryParams map[string]any) (*http.Response, error) {

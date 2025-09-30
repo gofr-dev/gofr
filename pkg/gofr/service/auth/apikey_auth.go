@@ -1,11 +1,13 @@
 // Package service provides an HTTP client with features for logging, metrics, and resilience.It supports various
 // functionalities like health checks, circuit-breaker and various authentication.
-package service
+package auth
 
 import (
 	"context"
 	"fmt"
 	"strings"
+
+	"gofr.dev/pkg/gofr/service"
 )
 
 // #nosec G101
@@ -15,14 +17,14 @@ type APIKeyConfig struct {
 	APIKey string
 }
 
-func (a *APIKeyConfig) AddOption(h HTTP) HTTP {
+func (a *APIKeyConfig) AddOption(h service.HTTP) service.HTTP {
 	return &authProvider{auth: a.addAuthorizationHeader, HTTP: h}
 }
 
-func NewAPIKeyConfig(apiKey string) (Options, error) {
+func NewAPIKeyConfig(apiKey string) (service.Options, error) {
 	apiKey = strings.TrimSpace(apiKey)
 	if apiKey == "" {
-		return nil, AuthErr{Message: "non empty api key is required"}
+		return nil, service.AuthErr{Message: "non empty api key is required"}
 	}
 
 	return &APIKeyConfig{APIKey: apiKey}, nil
@@ -34,7 +36,7 @@ func (a *APIKeyConfig) addAuthorizationHeader(_ context.Context, headers map[str
 	}
 
 	if value, exists := headers[xAPIKeyHeader]; exists {
-		return headers, AuthErr{Message: fmt.Sprintf("value %v already exists for header %v", value, xAPIKeyHeader)}
+		return headers, service.AuthErr{Message: fmt.Sprintf("value %v already exists for header %v", value, xAPIKeyHeader)}
 	}
 
 	headers[xAPIKeyHeader] = a.APIKey

@@ -1,4 +1,4 @@
-package service
+package auth
 
 import (
 	"net/http"
@@ -7,6 +7,8 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+
+	"gofr.dev/pkg/gofr/service"
 )
 
 func TestMain(m *testing.M) {
@@ -17,13 +19,13 @@ func TestMain(m *testing.M) {
 func TestNewAPIKeyConfig(t *testing.T) {
 	testCases := []struct {
 		apiKey       string
-		apiKeyOption Options
+		apiKeyOption service.Options
 		err          error
 	}{
 		{apiKey: "valid", apiKeyOption: &APIKeyConfig{APIKey: "valid"}},
 		{apiKey: "  valid  ", apiKeyOption: &APIKeyConfig{APIKey: "valid"}},
-		{apiKey: "", err: AuthErr{Message: "non empty api key is required"}},
-		{apiKey: "  ", err: AuthErr{Message: "non empty api key is required"}},
+		{apiKey: "", err: service.AuthErr{Message: "non empty api key is required"}},
+		{apiKey: "  ", err: service.AuthErr{Message: "non empty api key is required"}},
 	}
 
 	for i, tc := range testCases {
@@ -48,7 +50,7 @@ func TestAddAuthorizationHeader_APIKey(t *testing.T) {
 			apiKey:   "valid",
 			headers:  map[string]string{xAPIKeyHeader: "existing-value"},
 			response: map[string]string{xAPIKeyHeader: "existing-value"},
-			err:      AuthErr{Message: `value existing-value already exists for header X-Api-Key`},
+			err:      service.AuthErr{Message: `value existing-value already exists for header X-Api-Key`},
 		},
 		{
 			apiKey:   "valid",

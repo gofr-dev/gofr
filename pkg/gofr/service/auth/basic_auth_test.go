@@ -1,26 +1,27 @@
-package service
+package auth
 
 import (
 	"encoding/base64"
 	"net/http"
 	"net/http/httptest"
-	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+
+	"gofr.dev/pkg/gofr/service"
 )
 
 func TestNewBasicAuthConfig(t *testing.T) {
-	badPasswordErr := AuthErr{Err: base64.CorruptInputError(12), Message: "password should be base64 encoded"}
+	badPasswordErr := service.AuthErr{Err: base64.CorruptInputError(12), Message: "password should be base64 encoded"}
 	testCases := []struct {
 		username string
 		password string
-		option   Options
+		option   service.Options
 		err      error
 	}{
-		{username: "value", password: "", option: nil, err: AuthErr{Message: "password is required"}},
-		{username: "", password: "", option: nil, err: AuthErr{Message: "username is required"}},
-		{username: "  ", password: "", option: nil, err: AuthErr{Message: "username is required"}},
+		{username: "value", password: "", option: nil, err: service.AuthErr{Message: "password is required"}},
+		{username: "", password: "", option: nil, err: service.AuthErr{Message: "username is required"}},
+		{username: "  ", password: "", option: nil, err: service.AuthErr{Message: "username is required"}},
 		{username: "value", password: "cGFzc3dvcmQ===", option: nil, err: badPasswordErr},
 		{username: "value", password: "cGFzc3dvcmQ=", option: &BasicAuthConfig{"value", "password"}, err: nil},
 		{username: "  value ", password: "cGFzc3dvcmQ=", option: &BasicAuthConfig{"value", "password"}, err: nil},
@@ -53,7 +54,7 @@ func TestAddAuthorizationHeader_BasicAuth(t *testing.T) {
 			password: "cGFzc3dvcmQ=",
 			headers:  map[string]string{AuthHeader: "existing value"},
 			response: map[string]string{AuthHeader: "existing value"},
-			err:      AuthErr{Message: "value existing value already exists for header Authorization"},
+			err:      service.AuthErr{Message: "value existing value already exists for header Authorization"},
 		},
 		{
 			username: "username",
@@ -98,21 +99,4 @@ func setupBasicAuthHTTPServer(t *testing.T, config *BasicAuthConfig) *httptest.S
 	})
 
 	return server
-}
-
-func checkAuthHeaders(t *testing.T, r *http.Request) {
-	t.Helper()
-
-	authHeader := r.Header.Get(AuthHeader)
-
-	if authHeader == "" {
-		return
-	}
-
-	authParts := strings.Split(authHeader, " ")
-	payload, _ := base64.StdEncoding.DecodeString(authParts[1])
-	credentials := strings.Split(string(payload), ":")
-
-	assert.Equal(t, "user", credentials[0])
-	assert.Equal(t, "password", credentials[1])
 }

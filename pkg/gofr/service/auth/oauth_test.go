@@ -1,4 +1,4 @@
-package service
+package auth
 
 import (
 	"errors"
@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"gofr.dev/pkg/gofr/service"
 	"golang.org/x/oauth2"
 )
 
@@ -38,11 +39,11 @@ func TestNewOAuthConfig(t *testing.T) {
 		authStyle    oauth2.AuthStyle
 		err          error
 	}{
-		{err: AuthErr{nil, "client id is mandatory"}},
-		{clientID: clientID, err: AuthErr{nil, "client secret is mandatory"}},
-		{clientID: clientID, tokenURL: tokenURL, err: AuthErr{nil, "client secret is mandatory"}},
-		{clientID: clientID, clientSecret: clientSecret, err: AuthErr{nil, "token url is mandatory"}},
-		{clientID: clientID, clientSecret: clientSecret, tokenURL: "invalid_url_format", err: AuthErr{nil, "empty host"}},
+		{err: service.AuthErr{nil, "client id is mandatory"}},
+		{clientID: clientID, err: service.AuthErr{nil, "client secret is mandatory"}},
+		{clientID: clientID, tokenURL: tokenURL, err: service.AuthErr{nil, "client secret is mandatory"}},
+		{clientID: clientID, clientSecret: clientSecret, err: service.AuthErr{nil, "token url is mandatory"}},
+		{clientID: clientID, clientSecret: clientSecret, tokenURL: "invalid_url_format", err: service.AuthErr{nil, "empty host"}},
 		{clientID: clientID, clientSecret: clientSecret, tokenURL: tokenURL},
 		{clientID: clientID, clientSecret: "some_random_client_secret", tokenURL: tokenURL},
 		{clientID: "some_random_client_id", clientSecret: clientSecret, tokenURL: tokenURL},
@@ -118,7 +119,7 @@ func TestAddAuthorizationHeader_OAuth(t *testing.T) {
 	headerWithEmptyAuth := map[string]string{AuthHeader: ""}
 	headerWithoutAuth := map[string]string{"Content Type": "Value"}
 	headerWithEmptyAuthAndOtherValues := map[string]string{"Content Type": "Value", AuthHeader: ""}
-	authHeaderExistsError := AuthErr{Message: "value Value already exists for header Authorization"}
+	authHeaderExistsError := service.AuthErr{Message: "value Value already exists for header Authorization"}
 
 	testCases := []struct {
 		tokenURL string

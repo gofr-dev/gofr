@@ -1,4 +1,4 @@
-package service
+package auth
 
 import (
 	"context"
@@ -14,6 +14,7 @@ import (
 	"golang.org/x/oauth2"
 
 	"gofr.dev/pkg/gofr/logging"
+	"gofr.dev/pkg/gofr/service"
 )
 
 func TestAuthProvider(t *testing.T) {
@@ -36,11 +37,11 @@ func TestAuthProvider(t *testing.T) {
 	apiKeyAuthServer := setupAPIKeyAuthHTTPServer(t, validAPIKeyConfig)
 	invalidAPIKeyConfig := &APIKeyConfig{"invalid-value"}
 
-	authHeaderExistsErr := AuthErr{Message: "value auth-string already exists for header " + AuthHeader}
-	apiHeaderExistsErr := AuthErr{Message: "value auth-string already exists for header " + xAPIKeyHeader}
+	authHeaderExistsErr := service.AuthErr{Message: "value auth-string already exists for header " + AuthHeader}
+	apiHeaderExistsErr := service.AuthErr{Message: "value auth-string already exists for header " + xAPIKeyHeader}
 
 	testCases := []struct {
-		authOption Options
+		authOption service.Options
 		headers    map[string]string
 		statusCode int
 		err        error
@@ -74,7 +75,7 @@ func TestAuthProvider(t *testing.T) {
 				server = apiKeyAuthServer
 			}
 
-			httpService := NewHTTPService(server.URL, logging.NewMockLogger(logging.INFO), nil, tc.authOption)
+			httpService := service.NewHTTPService(server.URL, logging.NewMockLogger(logging.INFO), nil, tc.authOption)
 
 			for _, method := range httpMethods {
 				resp, err := callHTTPService(t.Context(), httpService, method, tc.headers)
@@ -101,7 +102,7 @@ func validateOAuthError(t *testing.T, err, expectedError error, statusCode int) 
 
 	retrieveError := &oauth2.RetrieveError{}
 	URLError := &url.Error{}
-	authErr := AuthErr{}
+	authErr := service.AuthErr{}
 
 	if errors.As(err, &retrieveError) {
 		assert.Equal(t, statusCode, retrieveError.Response.StatusCode)
@@ -114,7 +115,7 @@ func validateOAuthError(t *testing.T, err, expectedError error, statusCode int) 
 	}
 }
 
-func callHTTPService(ctx context.Context, service HTTP, method string,
+func callHTTPService(ctx context.Context, service service.HTTP, method string,
 	headers map[string]string) (resp *http.Response, err error) {
 	if headers != nil {
 		resp, err = callHTTPServiceWithHeaders(ctx, service, method, headers)
@@ -125,7 +126,7 @@ func callHTTPService(ctx context.Context, service HTTP, method string,
 	return resp, err
 }
 
-func callHTTPServiceWithHeaders(ctx context.Context, service HTTP, method string,
+func callHTTPServiceWithHeaders(ctx context.Context, s service.HTTP, method string,
 	headers map[string]string) (resp *http.Response, err error) {
 	path := "test"
 	queryParams := map[string]any{"key": "value"}
@@ -133,37 +134,37 @@ func callHTTPServiceWithHeaders(ctx context.Context, service HTTP, method string
 
 	switch method {
 	case http.MethodGet:
-		return service.GetWithHeaders(ctx, path, queryParams, headers)
+		return s.GetWithHeaders(ctx, path, queryParams, headers)
 	case http.MethodPost:
-		return service.PostWithHeaders(ctx, path, queryParams, body, headers)
+		return s.PostWithHeaders(ctx, path, queryParams, body, headers)
 	case http.MethodPut:
-		return service.PutWithHeaders(ctx, path, queryParams, body, headers)
+		return s.PutWithHeaders(ctx, path, queryParams, body, headers)
 	case http.MethodPatch:
-		return service.PatchWithHeaders(ctx, path, queryParams, body, headers)
+		return s.PatchWithHeaders(ctx, path, queryParams, body, headers)
 	case http.MethodDelete:
-		return service.DeleteWithHeaders(ctx, path, body, headers)
+		return s.DeleteWithHeaders(ctx, path, body, headers)
 	default:
-		return nil, AuthErr{Message: "unknown method"}
+		return nil, service.AuthErr{Message: "unknown method"}
 	}
 }
 
-func callHTTPServiceWithoutHeaders(ctx context.Context, service HTTP, method string) (resp *http.Response, err error) {
+func callHTTPServiceWithoutHeaders(ctx context.Context, s service.HTTP, method string) (resp *http.Response, err error) {
 	path := "test"
 	queryParams := map[string]any{"key": "value"}
 	body := []byte("body")
 
 	switch method {
 	case http.MethodGet:
-		return service.Get(ctx, path, queryParams)
+		return s.Get(ctx, path, queryParams)
 	case http.MethodPost:
-		return service.Post(ctx, path, queryParams, body)
+		return s.Post(ctx, path, queryParams, body)
 	case http.MethodPut:
-		return service.Put(ctx, path, queryParams, body)
+		return s.Put(ctx, path, queryParams, body)
 	case http.MethodPatch:
-		return service.Patch(ctx, path, queryParams, body)
+		return s.Patch(ctx, path, queryParams, body)
 	case http.MethodDelete:
-		return service.Delete(ctx, path, body)
+		return s.Delete(ctx, path, body)
 	default:
-		return nil, AuthErr{Message: "unknown method"}
+		return nil, service.AuthErr{Message: "unknown method"}
 	}
 }

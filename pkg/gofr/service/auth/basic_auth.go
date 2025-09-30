@@ -1,10 +1,12 @@
-package service
+package auth
 
 import (
 	"context"
 	"encoding/base64"
 	"fmt"
 	"strings"
+
+	"gofr.dev/pkg/gofr/service"
 )
 
 type BasicAuthConfig struct {
@@ -12,25 +14,25 @@ type BasicAuthConfig struct {
 	Password string
 }
 
-func (c *BasicAuthConfig) AddOption(h HTTP) HTTP {
+func (c *BasicAuthConfig) AddOption(h service.HTTP) service.HTTP {
 	return &authProvider{auth: c.addAuthorizationHeader, HTTP: h}
 }
 
-func NewBasicAuthConfig(username, password string) (Options, error) {
+func NewBasicAuthConfig(username, password string) (service.Options, error) {
 	username = strings.TrimSpace(username)
 	password = strings.TrimSpace(password)
 
 	if username == "" {
-		return nil, AuthErr{Message: "username is required"}
+		return nil, service.AuthErr{Message: "username is required"}
 	}
 
 	if password == "" {
-		return nil, AuthErr{Message: "password is required"}
+		return nil, service.AuthErr{Message: "password is required"}
 	}
 
 	decodedPassword, err := base64.StdEncoding.DecodeString(password)
 	if err != nil || string(decodedPassword) == password {
-		return nil, AuthErr{Err: err, Message: "password should be base64 encoded"}
+		return nil, service.AuthErr{Err: err, Message: "password should be base64 encoded"}
 	}
 
 	return &BasicAuthConfig{username, string(decodedPassword)}, nil
@@ -42,7 +44,7 @@ func (c *BasicAuthConfig) addAuthorizationHeader(_ context.Context, headers map[
 	}
 
 	if value, exists := headers[AuthHeader]; exists {
-		return headers, AuthErr{Message: fmt.Sprintf("value %v already exists for header %v", value, AuthHeader)}
+		return headers, service.AuthErr{Message: fmt.Sprintf("value %v already exists for header %v", value, AuthHeader)}
 	}
 
 	encodedAuth := base64.StdEncoding.EncodeToString([]byte(c.UserName + ":" + c.Password))
