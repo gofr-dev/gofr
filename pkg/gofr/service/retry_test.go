@@ -3,7 +3,6 @@ package service
 import (
 	"context"
 	"encoding/base64"
-	"gofr.dev/pkg/gofr/service/auth"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -230,7 +229,7 @@ func TestRetryProvider_DeleteWithHeaders(t *testing.T) {
 func checkAuthHeaders(t *testing.T, r *http.Request) {
 	t.Helper()
 
-	authHeader := r.Header.Get(auth.AuthHeader)
+	authHeader := r.Header.Get("Authorization")
 
 	if authHeader == "" {
 		return
