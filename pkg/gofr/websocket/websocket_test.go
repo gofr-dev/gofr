@@ -68,10 +68,10 @@ func sendMessageToWebSocket(t *testing.T, conn *websocket.Conn, message []byte) 
 }
 
 // waitForWebSocketOperation waits for a WebSocket operation to complete.
-func waitForWebSocketOperation(t *testing.T, duration time.Duration) {
+func waitForWebSocketOperation(t *testing.T) {
 	t.Helper()
 
-	time.Sleep(duration)
+	time.Sleep(100 * time.Millisecond)
 }
 
 // CORE FUNCTIONALITY TESTS
@@ -121,7 +121,7 @@ func TestConnection_Bind_Success(t *testing.T) {
 			}
 
 			sendMessageToWebSocket(t, conn, tt.inputMessage)
-			waitForWebSocketOperation(t, 100*time.Millisecond)
+			waitForWebSocketOperation(t)
 		})
 	}
 }
@@ -157,7 +157,7 @@ func TestConnection_Bind_Failure(t *testing.T) {
 			}
 
 			sendMessageToWebSocket(t, conn, tt.inputMessage)
-			waitForWebSocketOperation(t, 100*time.Millisecond)
+			waitForWebSocketOperation(t)
 		})
 	}
 }
@@ -308,7 +308,7 @@ func TestConnection_ReadMessage_ErrorHandling(t *testing.T) {
 
 			// Send a message to trigger the server handler
 			sendMessageToWebSocket(t, conn, []byte("test"))
-			waitForWebSocketOperation(t, 100*time.Millisecond)
+			waitForWebSocketOperation(t)
 		})
 	}
 }
@@ -1406,7 +1406,7 @@ func TestConnection_Bind_ErrorPaths(t *testing.T) {
 
 			// Send a message to trigger the server handler
 			sendMessageToWebSocket(t, conn, []byte("test"))
-			waitForWebSocketOperation(t, 100*time.Millisecond)
+			waitForWebSocketOperation(t)
 		})
 	}
 }
