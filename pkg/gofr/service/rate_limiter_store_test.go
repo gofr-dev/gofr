@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"gofr.dev/pkg/gofr/logging"
 	"gofr.dev/pkg/gofr/testutil"
@@ -38,7 +39,7 @@ func TestLocalRateLimiterStore_Allow(t *testing.T) {
 	allowed, retry, err := store.Allow(context.Background(), key, cfg)
 	assert.True(t, allowed)
 	assert.Zero(t, retry)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	allowed, retry, err = store.Allow(context.Background(), key, cfg)
 	assert.False(t, allowed)
@@ -51,7 +52,8 @@ func TestLocalRateLimiterStore_CleanupExpiredBuckets(t *testing.T) {
 	cfg := RateLimiterConfig{Requests: 1, Burst: 1, Window: time.Second}
 	key := "cleanup-key"
 
-	_, _, _ = store.Allow(context.Background(), key, cfg)
+	_, _, err := store.Allow(context.Background(), key, cfg)
+	require.NoError(t, err)
 
 	// Simulate old lastAccess
 	entry, _ := store.buckets.Load(key)
@@ -94,7 +96,7 @@ func TestRedisRateLimiterStore_toInt64_ValidCases(t *testing.T) {
 	for _, tc := range tests {
 		val, err := toInt64(tc.input)
 
-		assert.NoError(t, err)
+		require.NoError(t, err)
 		assert.Equal(t, tc.expected, val)
 	}
 }

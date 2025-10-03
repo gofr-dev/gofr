@@ -2,8 +2,6 @@ package service
 
 import (
 	"context"
-	"errors"
-
 	"net/http"
 	"testing"
 	"time"
@@ -13,7 +11,6 @@ import (
 	"go.uber.org/mock/gomock"
 )
 
-// --- Simple logger mock ---
 type mockLogger struct {
 	logs []string
 }
@@ -53,7 +50,7 @@ func TestRateLimiter_buildFullURL(t *testing.T) {
 }
 
 func TestRateLimiter_checkRateLimit_Error(t *testing.T) {
-	store := &mockStore{allowed: true, err: errors.New("fail")}
+	store := &mockStore{allowed: true, err: errTest}
 	logger := &mockLogger{}
 
 	ctrl := gomock.NewController(t)
@@ -72,11 +69,11 @@ func TestRateLimiter_checkRateLimit_Error(t *testing.T) {
 		metrics: metrics,
 	}
 
-	req, _ := http.NewRequest("GET", "/", nil)
+	req, _ := http.NewRequestWithContext(t.Context(), http.MethodGet, "/", http.NoBody)
 
 	err := rl.checkRateLimit(req)
 
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.Contains(t, logger.logs, "Log")
 }
 
@@ -100,7 +97,7 @@ func TestRateLimiter_checkRateLimit_Denied(t *testing.T) {
 		metrics: metrics,
 	}
 
-	req, _ := http.NewRequest("GET", "/", nil)
+	req, _ := http.NewRequestWithContext(t.Context(), http.MethodGet, "/", http.NoBody)
 	err := rl.checkRateLimit(req)
 
 	assert.IsType(t, &RateLimitError{}, err)
@@ -127,7 +124,7 @@ func TestRateLimiter_checkRateLimit_Allowed(t *testing.T) {
 		metrics: metrics,
 	}
 
-	req, _ := http.NewRequest("GET", "/", nil)
+	req, _ := http.NewRequestWithContext(t.Context(), http.MethodGet, "/", http.NoBody)
 
 	err := rl.checkRateLimit(req)
 	assert.NoError(t, err)
@@ -161,48 +158,68 @@ func TestRateLimiter_HTTPMethods(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, http.StatusOK, resp.StatusCode)
 
+	defer resp.Body.Close()
+
 	resp, err = rl.GetWithHeaders(ctx, "foo", nil, nil)
 
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.Equal(t, http.StatusOK, resp.StatusCode)
+
+	defer resp.Body.Close()
 
 	resp, err = rl.Post(ctx, "foo", nil, nil)
 
 	require.NoError(t, err)
 	assert.Equal(t, http.StatusCreated, resp.StatusCode)
 
+	defer resp.Body.Close()
+
 	resp, err = rl.PostWithHeaders(ctx, "foo", nil, nil, nil)
 
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.Equal(t, http.StatusCreated, resp.StatusCode)
+
+	defer resp.Body.Close()
 
 	resp, err = rl.Put(ctx, "foo", nil, nil)
 
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.Equal(t, http.StatusOK, resp.StatusCode)
+
+	defer resp.Body.Close()
 
 	resp, err = rl.PutWithHeaders(ctx, "foo", nil, nil, nil)
 
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.Equal(t, http.StatusOK, resp.StatusCode)
+
+	defer resp.Body.Close()
 
 	resp, err = rl.Patch(ctx, "foo", nil, nil)
 
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.Equal(t, http.StatusOK, resp.StatusCode)
+
+	defer resp.Body.Close()
 
 	resp, err = rl.PatchWithHeaders(ctx, "foo", nil, nil, nil)
 
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.Equal(t, http.StatusOK, resp.StatusCode)
+
+	defer resp.Body.Close()
 
 	resp, err = rl.Delete(ctx, "foo", nil)
 
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.Equal(t, http.StatusNoContent, resp.StatusCode)
+
+	defer resp.Body.Close()
 
 	resp, err = rl.DeleteWithHeaders(ctx, "foo", nil, nil)
 
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.Equal(t, http.StatusNoContent, resp.StatusCode)
+
+	_ = resp.Body.Close()
 }
