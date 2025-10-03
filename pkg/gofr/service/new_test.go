@@ -93,7 +93,6 @@ func TestHTTPService_createAndSendRequest(t *testing.T) {
 
 		resp, err := service.createAndSendRequest(ctx,
 			http.MethodPost, "test-path", tc.queryParams, tc.body, tc.headers)
-
 		if err != nil {
 			if resp != nil {
 				resp.Body.Close()

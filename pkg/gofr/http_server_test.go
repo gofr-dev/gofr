@@ -113,8 +113,10 @@ func TestShutdown_ServerStopsListening(t *testing.T) {
 	defer cancel()
 
 	errChan := make(chan error, 1)
+
 	go func() {
 		time.Sleep(100 * time.Millisecond)
+
 		errChan <- server.Shutdown(ctx)
 	}()
 
@@ -150,8 +152,10 @@ func TestShutdown_ServerContextDeadline(t *testing.T) {
 
 	// Simulate a delay in the shutdown process to trigger context timeout
 	shutdownCh := make(chan error, 1)
+
 	go func() {
 		time.Sleep(100 * time.Millisecond) // Delay longer than the context timeout
+
 		shutdownCh <- server.Shutdown(ctx)
 	}()
 

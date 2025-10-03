@@ -215,7 +215,6 @@ func (c *Client) Delete(ctx context.Context, key string) error {
 	}
 
 	_, err := c.db.DeleteItem(ctx, input)
-
 	if err != nil {
 		c.logger.Errorf("error while deleting data for key: %v, error: %v", key, err)
 
@@ -273,6 +272,7 @@ func (c *Client) sendOperationsStats(start time.Time, methodType, method string,
 
 	if span != nil {
 		defer span.End()
+
 		span.SetAttributes(attribute.Int64(fmt.Sprintf("dynamodb.%v.duration(μs)", method), duration.Microseconds()))
 	}
 
