@@ -478,6 +478,7 @@ func TestGoogleClient_collectMessages_LimitReached(t *testing.T) {
 	msgChan := make(chan []byte, 3)
 
 	msgChan <- []byte("message1")
+
 	msgChan <- []byte("message2")
 
 	close(msgChan)

@@ -160,7 +160,6 @@ func (g *grpcServer) Run(c *container.Container) {
 	c.Logger.Infof("starting gRPC server at %s", addr)
 
 	listener, err := (&net.ListenConfig{}).Listen(context.Background(), "tcp", addr)
-
 	if err != nil {
 		c.Logger.Errorf("error in starting gRPC server at %s: %s", addr, err)
 		c.Metrics().IncrementCounter(context.Background(), "grpc_server_errors_total")

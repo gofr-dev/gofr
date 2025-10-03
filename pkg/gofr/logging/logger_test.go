@@ -179,6 +179,7 @@ func assertMessageInJSONLog(t *testing.T, logLine, expectation string) {
 
 	// Try to unmarshal the entire log line as JSON first
 	var l logEntry
+
 	_ = json.Unmarshal([]byte(logLine), &l)
 
 	if l.Message != expectation {

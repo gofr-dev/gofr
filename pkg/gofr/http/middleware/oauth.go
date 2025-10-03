@@ -47,6 +47,7 @@ func (JWKNotFound) Error() string {
 func (p *PublicKeys) Get(kid string) *rsa.PublicKey {
 	p.mu.RLock()
 	defer p.mu.RUnlock()
+
 	key := p.keys[strings.TrimSpace(kid)]
 
 	return key
@@ -250,7 +251,6 @@ func (p *OAuthProvider) ExtractAuthHeader(r *http.Request) (any, ErrorHTTP) {
 	}
 
 	token, parseErr := jwt.Parse(header, p.publicKeyFunc, p.options...)
-
 	if parseErr != nil {
 		if strings.Contains(parseErr.Error(), "token is malformed") {
 			return nil, NewInvalidAuthorizationHeaderFormatError(headerAuthorization, "token is malformed")

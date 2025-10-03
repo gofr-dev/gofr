@@ -121,7 +121,6 @@ func (s surrealMigrator) commitMigration(c *container.Container, data transactio
 		"start_time": data.StartTime,
 		"duration":   time.Since(data.StartTime).Milliseconds(),
 	})
-
 	if err != nil {
 		return err
 	}

@@ -157,6 +157,7 @@ func (c *Client) sendOperationStats(start time.Time, methodType string, method s
 
 	if span != nil {
 		defer span.End()
+
 		span.SetAttributes(attribute.Int64(fmt.Sprintf("badger.%v.duration(μs)", method), time.Since(start).Microseconds()))
 	}
 
