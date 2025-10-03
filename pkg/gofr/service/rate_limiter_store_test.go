@@ -7,9 +7,6 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-
-	"gofr.dev/pkg/gofr/logging"
-	"gofr.dev/pkg/gofr/testutil"
 )
 
 func TestTokenBucket_Allow(t *testing.T) {
@@ -60,13 +57,10 @@ func TestLocalRateLimiterStore_CleanupExpiredBuckets(t *testing.T) {
 	bucketEntry := entry.(*bucketEntry)
 	bucketEntry.lastAccess = time.Now().Unix() - int64(bucketTTL.Seconds()) - 1
 
-	log := testutil.StdoutOutputForFunc(func() {
-		store.cleanupExpiredBuckets(logging.NewMockLogger(logging.DEBUG))
-	})
+	store.cleanupExpiredBuckets()
 
 	_, exists := store.buckets.Load(key)
 	assert.False(t, exists)
-	assert.Contains(t, log, "Cleaned up rate limiter buckets")
 }
 
 func TestLocalRateLimiterStore_StartAndStopCleanup(t *testing.T) {
@@ -75,7 +69,7 @@ func TestLocalRateLimiterStore_StartAndStopCleanup(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	store.StartCleanup(ctx, logging.NewMockLogger(logging.INFO))
+	store.StartCleanup(ctx)
 	assert.NotNil(t, store.stopCh)
 
 	store.StopCleanup()
