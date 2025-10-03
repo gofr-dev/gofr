@@ -8,28 +8,22 @@ import (
 
 // rateLimiter provides unified rate limiting for HTTP clients.
 type rateLimiter struct {
-	config  RateLimiterConfig
-	store   RateLimiterStore
-	logger  Logger
-	metrics Metrics
-	HTTP    // Embedded HTTP service
+	config RateLimiterConfig
+	store  RateLimiterStore
+	HTTP   // Embedded HTTP service
 }
 
 // NewRateLimiter creates a new unified rate limiter.
 func NewRateLimiter(config RateLimiterConfig, h HTTP) HTTP {
-	httpSvc := h.(*httpService)
-
 	rl := &rateLimiter{
-		config:  config,
-		store:   config.Store,
-		logger:  httpSvc.Logger,
-		metrics: httpSvc.Metrics,
-		HTTP:    h,
+		config: config,
+		store:  config.Store,
+		HTTP:   h,
 	}
 
 	// Start cleanup routine
 	ctx := context.Background()
-	rl.store.StartCleanup(ctx, rl.logger)
+	rl.store.StartCleanup(ctx)
 
 	return rl
 }
@@ -62,45 +56,18 @@ func (rl *rateLimiter) buildFullURL(path string) string {
 // checkRateLimit performs rate limit check using the configured store.
 func (rl *rateLimiter) checkRateLimit(req *http.Request) error {
 	serviceKey := rl.config.KeyFunc(req)
+
 	allowed, retryAfter, err := rl.store.Allow(req.Context(), serviceKey, rl.config)
-
-	// Update metrics
-	rl.updateRateLimiterMetrics(req.Context(), serviceKey, allowed, err)
-
 	if err != nil {
-		rl.logger.Log("Rate limiter store error, allowing request", "error", err)
-
 		return nil // Fail open
 	}
 
 	if !allowed {
-		rl.logger.Debug("Rate limit exceeded", "service", serviceKey, "rate", rl.config.RequestsPerSecond(),
-			"burst", rl.config.Burst, "retry_after", retryAfter)
-
 		return &RateLimitError{ServiceKey: serviceKey, RetryAfter: retryAfter}
 	}
 
 	return nil
 }
-
-// updateRateLimiterMetrics updates metrics for rate limiting operations.
-func (rl *rateLimiter) updateRateLimiterMetrics(ctx context.Context, serviceKey string, allowed bool, err error) {
-	if rl.metrics == nil {
-		return
-	}
-
-	rl.metrics.IncrementCounter(ctx, "app_rate_limiter_requests_total", "service", serviceKey)
-
-	if err != nil {
-		rl.metrics.IncrementCounter(ctx, "app_rate_limiter_errors_total", "service", serviceKey, "type", "store_error")
-	}
-
-	if !allowed {
-		rl.metrics.IncrementCounter(ctx, "app_rate_limiter_denied_total", "service", serviceKey)
-	}
-}
-
-// HTTP Method Implementations - All methods follow the same pattern.
 
 // Get performs rate-limited HTTP GET request.
 func (rl *rateLimiter) Get(ctx context.Context, path string, queryParams map[string]any) (*http.Response, error) {

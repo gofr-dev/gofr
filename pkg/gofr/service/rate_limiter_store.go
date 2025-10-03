@@ -19,7 +19,7 @@ const (
 // RateLimiterStore abstracts the storage and cleanup for rate limiter buckets.
 type RateLimiterStore interface {
 	Allow(ctx context.Context, key string, config RateLimiterConfig) (allowed bool, retryAfter time.Duration, err error)
-	StartCleanup(ctx context.Context, logger Logger)
+	StartCleanup(ctx context.Context)
 	StopCleanup()
 }
 
@@ -114,7 +114,7 @@ func (l *LocalRateLimiterStore) Allow(_ context.Context, key string, config Rate
 	return allowed, retryAfter, nil
 }
 
-func (l *LocalRateLimiterStore) StartCleanup(ctx context.Context, logger Logger) {
+func (l *LocalRateLimiterStore) StartCleanup(ctx context.Context) {
 	l.stopCh = make(chan struct{})
 
 	go func() {
@@ -124,7 +124,7 @@ func (l *LocalRateLimiterStore) StartCleanup(ctx context.Context, logger Logger)
 		for {
 			select {
 			case <-ticker.C:
-				l.cleanupExpiredBuckets(logger)
+				l.cleanupExpiredBuckets()
 			case <-l.stopCh:
 				return
 			case <-ctx.Done():
@@ -140,7 +140,7 @@ func (l *LocalRateLimiterStore) StopCleanup() {
 	}
 }
 
-func (l *LocalRateLimiterStore) cleanupExpiredBuckets(logger Logger) {
+func (l *LocalRateLimiterStore) cleanupExpiredBuckets() {
 	cutoff := time.Now().Unix() - int64(bucketTTL.Seconds())
 	cleaned := 0
 
@@ -154,10 +154,6 @@ func (l *LocalRateLimiterStore) cleanupExpiredBuckets(logger Logger) {
 
 		return true
 	})
-
-	if cleaned > 0 && logger != nil {
-		logger.Debug("Cleaned up rate limiter buckets", "count", cleaned)
-	}
 }
 
 // tokenBucketScript is a Lua script for atomic token bucket rate limiting in Redis.

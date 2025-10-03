@@ -8,15 +8,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"go.uber.org/mock/gomock"
 )
-
-type mockLogger struct {
-	logs []string
-}
-
-func (l *mockLogger) Log(_ ...any)   { l.logs = append(l.logs, "Log") }
-func (l *mockLogger) Debug(_ ...any) { l.logs = append(l.logs, "Debug") }
 
 type mockStore struct {
 	allowed    bool
@@ -27,7 +19,7 @@ type mockStore struct {
 func (m *mockStore) Allow(_ context.Context, _ string, _ RateLimiterConfig) (bool, time.Duration, error) {
 	return m.allowed, m.retryAfter, m.err
 }
-func (*mockStore) StartCleanup(_ context.Context, _ Logger) {}
+func (*mockStore) StartCleanup(_ context.Context) {}
 
 func (*mockStore) StopCleanup() {}
 
@@ -51,22 +43,13 @@ func TestRateLimiter_buildFullURL(t *testing.T) {
 
 func TestRateLimiter_checkRateLimit_Error(t *testing.T) {
 	store := &mockStore{allowed: true, err: errTest}
-	logger := &mockLogger{}
-
-	ctrl := gomock.NewController(t)
-	metrics := NewMockMetrics(ctrl)
-
-	metrics.EXPECT().IncrementCounter(gomock.Any(), "app_rate_limiter_requests_total", "service", "svc")
-	metrics.EXPECT().IncrementCounter(gomock.Any(), "app_rate_limiter_errors_total", "service", "svc", "type", "store_error")
 
 	rl := &rateLimiter{
 		config: RateLimiterConfig{
 			KeyFunc: func(*http.Request) string { return "svc" },
 			Store:   store,
 		},
-		store:   store,
-		logger:  logger,
-		metrics: metrics,
+		store: store,
 	}
 
 	req, _ := http.NewRequestWithContext(t.Context(), http.MethodGet, "/", http.NoBody)
@@ -74,54 +57,34 @@ func TestRateLimiter_checkRateLimit_Error(t *testing.T) {
 	err := rl.checkRateLimit(req)
 
 	require.NoError(t, err)
-	assert.Contains(t, logger.logs, "Log")
 }
 
 func TestRateLimiter_checkRateLimit_Denied(t *testing.T) {
 	store := &mockStore{allowed: false}
-	logger := &mockLogger{}
-
-	ctrl := gomock.NewController(t)
-	metrics := NewMockMetrics(ctrl)
-
-	metrics.EXPECT().IncrementCounter(gomock.Any(), "app_rate_limiter_requests_total", "service", "svc")
-	metrics.EXPECT().IncrementCounter(gomock.Any(), "app_rate_limiter_denied_total", "service", "svc")
 
 	rl := &rateLimiter{
 		config: RateLimiterConfig{
 			KeyFunc: func(*http.Request) string { return "svc" },
 			Store:   store,
 		},
-		store:   store,
-		logger:  logger,
-		metrics: metrics,
+		store: store,
 	}
 
 	req, _ := http.NewRequestWithContext(t.Context(), http.MethodGet, "/", http.NoBody)
 	err := rl.checkRateLimit(req)
 
 	assert.IsType(t, &RateLimitError{}, err)
-	assert.Contains(t, logger.logs, "Debug")
 }
 
 func TestRateLimiter_checkRateLimit_Allowed(t *testing.T) {
 	store := &mockStore{allowed: true}
-
-	logger := &mockLogger{}
-
-	ctrl := gomock.NewController(t)
-	metrics := NewMockMetrics(ctrl)
-
-	metrics.EXPECT().IncrementCounter(gomock.Any(), "app_rate_limiter_requests_total", "service", "svc")
 
 	rl := &rateLimiter{
 		config: RateLimiterConfig{
 			KeyFunc: func(*http.Request) string { return "svc" },
 			Store:   store,
 		},
-		store:   store,
-		logger:  logger,
-		metrics: metrics,
+		store: store,
 	}
 
 	req, _ := http.NewRequestWithContext(t.Context(), http.MethodGet, "/", http.NoBody)
@@ -134,22 +97,14 @@ func TestRateLimiter_HTTPMethods(t *testing.T) {
 	mock := &mockHTTP{}
 
 	store := &mockStore{allowed: true}
-	logger := &mockLogger{}
-
-	ctrl := gomock.NewController(t)
-	metrics := NewMockMetrics(ctrl)
-
-	metrics.EXPECT().IncrementCounter(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
 
 	rl := &rateLimiter{
 		config: RateLimiterConfig{
 			KeyFunc: func(*http.Request) string { return "svc" },
 			Store:   store,
 		},
-		store:   store,
-		logger:  logger,
-		metrics: metrics,
-		HTTP:    mock,
+		store: store,
+		HTTP:  mock,
 	}
 
 	ctx := context.Background()
