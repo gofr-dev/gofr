@@ -28,6 +28,16 @@ func NewRateLimiter(config RateLimiterConfig, h HTTP) HTTP {
 	return rl
 }
 
+// AddOption allows RateLimiterConfig to be used as a service.Options.
+func (cfg *RateLimiterConfig) AddOption(h HTTP) HTTP {
+	// Assume cfg is already validated via constructor
+	if cfg.Store == nil {
+		cfg.Store = NewLocalRateLimiterStore()
+	}
+
+	return NewRateLimiter(*cfg, h)
+}
+
 // buildFullURL constructs an absolute URL by combining the base service URL with the given path.
 func (rl *rateLimiter) buildFullURL(path string) string {
 	if strings.HasPrefix(path, "http://") || strings.HasPrefix(path, "https://") {

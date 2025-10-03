@@ -28,6 +28,22 @@ type RateLimiterConfig struct {
 	Store    RateLimiterStore
 }
 
+func NewRateLimiterConfig(requests float64, window time.Duration, burst int, store RateLimiterStore, keyFunc func(*http.Request) string) (*RateLimiterConfig, error) {
+	cfg := &RateLimiterConfig{
+		Requests: requests,
+		Window:   window,
+		Burst:    burst,
+		Store:    store,
+		KeyFunc:  keyFunc,
+	}
+
+	if err := cfg.Validate(); err != nil {
+		return nil, err
+	}
+
+	return cfg, nil
+}
+
 // defaultKeyFunc extracts a normalized service key from an HTTP request.
 func defaultKeyFunc(req *http.Request) string {
 	if req == nil || req.URL == nil {
@@ -80,29 +96,6 @@ func (config *RateLimiterConfig) Validate() error {
 	}
 
 	return nil
-}
-
-// AddOption implements the Options interface.
-func (config *RateLimiterConfig) AddOption(h HTTP) HTTP {
-	if err := config.Validate(); err != nil {
-		if httpSvc, ok := h.(*httpService); ok {
-			httpSvc.Logger.Log("Invalid rate limiter config, disabling rate limiting", "error", err)
-		}
-
-		return h
-	}
-
-	// Default to local store if not set
-	if config.Store == nil {
-		config.Store = NewLocalRateLimiterStore()
-
-		// Log warning for local rate limiting.
-		if httpSvc, ok := h.(*httpService); ok {
-			httpSvc.Logger.Log("Using local rate limiting - not suitable for multi-instance deployments")
-		}
-	}
-
-	return NewRateLimiter(*config, h)
 }
 
 // RequestsPerSecond converts the configured rate to requests per second.
