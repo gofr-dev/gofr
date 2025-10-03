@@ -214,6 +214,7 @@ func (c *Client) sendOperationStats(start time.Time, methodType, method string, 
 
 	if span != nil {
 		defer span.End()
+
 		span.SetAttributes(attribute.Int64(fmt.Sprintf("natskv.%v.duration(μs)", method), duration.Microseconds()))
 	}
 

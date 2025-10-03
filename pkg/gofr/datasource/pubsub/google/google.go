@@ -62,6 +62,7 @@ func New(conf Config, logger pubsub.Logger, metrics Metrics) *googleClient {
 	logger.Debugf("connecting to google pubsub client with projectID '%s' and subscriptionName '%s", conf.ProjectID, conf.SubscriptionName)
 
 	var client googleClient
+
 	client.Config = conf
 	client.logger = logger
 	client.metrics = metrics
@@ -328,7 +329,6 @@ func (g *googleClient) getSubscription(ctx context.Context, topic *gcPubSub.Topi
 		subscription, err = g.client.CreateSubscription(ctx, g.SubscriptionName+"-"+topic.ID(), gcPubSub.SubscriptionConfig{
 			Topic: topic,
 		})
-
 		if err != nil {
 			return nil, err
 		}
