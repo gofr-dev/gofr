@@ -2,7 +2,6 @@ package main
 
 import (
 	"github.com/stretchr/testify/assert"
-	"gofr.dev/pkg/gofr"
 	"gofr.dev/pkg/gofr/testutil"
 	"net/http"
 	"testing"
@@ -12,72 +11,56 @@ import (
 func Test_setupAPIKeyAuthFailed(t *testing.T) {
 	serverConfigs := testutil.NewServerConfigs(t)
 
-	app := gofr.New()
+	// Run main() in a goroutine to avoid blocking
+	go main()
 
-	setupAPIKeyAuth(app)
+	// Allow time for server to start
+	time.Sleep(100 * time.Millisecond)
 
-	app.GET("/api-key-failure", func(_ *gofr.Context) (any, error) {
-		return "success", nil
+	client := &http.Client{Timeout: 200 * time.Millisecond}
+
+	// Test invalid API key
+	t.Run("Invalid API Key", func(t *testing.T) {
+		req, _ := http.NewRequestWithContext(t.Context(), http.MethodGet,
+			serverConfigs.HTTPHost+"/test-auth", http.NoBody)
+		req.Header.Set("X-Api-Key", "test-key")
+
+		resp, err := client.Do(req)
+		if err != nil {
+			t.Fatalf("Error making request: %v", err)
+		}
+		defer resp.Body.Close()
+
+		assert.Equal(t, http.StatusUnauthorized, resp.StatusCode)
 	})
-
-	go app.Run()
-
-	time.Sleep(10 * time.Millisecond)
-
-	var netClient = &http.Client{
-		Timeout: 20 * time.Millisecond,
-	}
-
-	req, _ := http.NewRequestWithContext(t.Context(), http.MethodGet,
-		serverConfigs.HTTPHost+"/api-key-failure", http.NoBody)
-
-	req.Header.Set("X-Api-Key", "test-key")
-
-	// Send the request and check for successful response
-	resp, err := netClient.Do(req)
-	if err != nil {
-		t.Errorf("error while making HTTP request in Test_APIKeyAuthMiddleware. err: %v", err)
-		return
-	}
-
-	defer resp.Body.Close()
-
-	assert.Equal(t, http.StatusUnauthorized, resp.StatusCode, "Test_setupAPIKeyAuthFailed")
 }
 
 func Test_setupAPIKeyAuthSuccess(t *testing.T) {
 	serverConfigs := testutil.NewServerConfigs(t)
 
-	app := gofr.New()
+	// Run main() in a goroutine to avoid blocking
+	go main()
 
-	setupAPIKeyAuth(app)
+	// Allow time for server to start
+	time.Sleep(100 * time.Millisecond)
 
-	app.GET("/api-key-success", func(_ *gofr.Context) (any, error) {
-		return "success", nil
+	client := &http.Client{Timeout: 200 * time.Millisecond}
+
+	// Test valid API key
+	t.Run("Valid API Key", func(t *testing.T) {
+		req, _ := http.NewRequestWithContext(t.Context(), http.MethodGet,
+			serverConfigs.HTTPHost+"/test-auth", http.NoBody)
+		req.Header.Set("X-Api-Key", "valid-api-key")
+
+		resp, err := client.Do(req)
+		if err != nil {
+			t.Fatalf("Error making request: %v", err)
+		}
+		defer resp.Body.Close()
+
+		assert.Equal(t, http.StatusOK, resp.StatusCode)
 	})
 
-	go app.Run()
-
-	time.Sleep(10 * time.Millisecond)
-
-	var netClient = &http.Client{
-		Timeout: 20 * time.Millisecond,
-	}
-
-	req, _ := http.NewRequestWithContext(t.Context(), http.MethodGet,
-		serverConfigs.HTTPHost+"/api-key-success", http.NoBody)
-	req.Header.Set("X-Api-Key", "valid-api-key")
-
-	// Send the request and check for successful response
-	resp, err := netClient.Do(req)
-	if err != nil {
-		t.Errorf("error while making HTTP request in Test_APIKeyAuthMiddleware. err: %v", err)
-		return
-	}
-
-	defer resp.Body.Close()
-
-	assert.Equal(t, http.StatusOK, resp.StatusCode, "Test_setupAPIKeyAuthSuccess")
 }
 
 //func encodeBasicAuthorization(t *testing.T, arg string) string {
