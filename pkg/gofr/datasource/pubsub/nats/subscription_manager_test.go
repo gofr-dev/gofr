@@ -178,6 +178,7 @@ func createMockMessageBatch(ctrl *gomock.Controller) jetstream.MessageBatch {
 
 	msgChan := make(chan jetstream.Msg, 1)
 	msgChan <- mockMsg
+
 	close(msgChan)
 
 	mockBatch.EXPECT().Messages().Return(msgChan).AnyTimes()

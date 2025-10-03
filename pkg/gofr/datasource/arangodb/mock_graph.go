@@ -63,6 +63,7 @@ func (m *MockDatabaseGraph) CreateGraph(ctx context.Context, name string, graph 
 // CreateGraph indicates an expected call of CreateGraph.
 func (mr *MockDatabaseGraphMockRecorder) CreateGraph(ctx, name, graph, options any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
+
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CreateGraph",
 		reflect.TypeOf((*MockDatabaseGraph)(nil).CreateGraph), ctx, name, graph, options)
 }
@@ -81,6 +82,7 @@ func (m *MockDatabaseGraph) GetEdges(ctx context.Context, name, vertex string,
 // GetEdges indicates an expected call of GetEdges.
 func (mr *MockDatabaseGraphMockRecorder) GetEdges(ctx, name, vertex, options any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
+
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetEdges",
 		reflect.TypeOf((*MockDatabaseGraph)(nil).GetEdges), ctx, name, vertex, options)
 }
@@ -99,6 +101,7 @@ func (m *MockDatabaseGraph) Graph(ctx context.Context, name string,
 // Graph indicates an expected call of Graph.
 func (mr *MockDatabaseGraphMockRecorder) Graph(ctx, name, options any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
+
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Graph",
 		reflect.TypeOf((*MockDatabaseGraph)(nil).Graph), ctx, name, options)
 }
@@ -116,6 +119,7 @@ func (m *MockDatabaseGraph) GraphExists(ctx context.Context, name string) (bool,
 // GraphExists indicates an expected call of GraphExists.
 func (mr *MockDatabaseGraphMockRecorder) GraphExists(ctx, name any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
+
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GraphExists",
 		reflect.TypeOf((*MockDatabaseGraph)(nil).GraphExists), ctx, name)
 }
@@ -133,6 +137,7 @@ func (m *MockDatabaseGraph) Graphs(ctx context.Context) (GraphsResponseReader, e
 // Graphs indicates an expected call of Graphs.
 func (mr *MockDatabaseGraphMockRecorder) Graphs(ctx any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
+
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Graphs",
 		reflect.TypeOf((*MockDatabaseGraph)(nil).Graphs), ctx)
 }
@@ -174,6 +179,7 @@ func (m *MockGraphsResponseReader) Read() (arangodb.Graph, error) {
 // Read indicates an expected call of Read.
 func (mr *MockGraphsResponseReaderMockRecorder) Read() *gomock.Call {
 	mr.mock.ctrl.T.Helper()
+
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Read",
 		reflect.TypeOf((*MockGraphsResponseReader)(nil).Read))
 }
@@ -216,6 +222,7 @@ func (m *MockGraph) CreateEdgeDefinition(ctx context.Context, collection string,
 // CreateEdgeDefinition indicates an expected call of CreateEdgeDefinition.
 func (mr *MockGraphMockRecorder) CreateEdgeDefinition(ctx, collection, from, to, opts any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
+
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CreateEdgeDefinition",
 		reflect.TypeOf((*MockGraph)(nil).CreateEdgeDefinition), ctx, collection, from, to, opts)
 }
@@ -234,6 +241,7 @@ func (m *MockGraph) CreateVertexCollection(ctx context.Context, name string,
 // CreateVertexCollection indicates an expected call of CreateVertexCollection.
 func (mr *MockGraphMockRecorder) CreateVertexCollection(ctx, name, opts any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
+
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CreateVertexCollection",
 		reflect.TypeOf((*MockGraph)(nil).CreateVertexCollection), ctx, name, opts)
 }
@@ -252,6 +260,7 @@ func (m *MockGraph) DeleteEdgeDefinition(ctx context.Context, collection string,
 // DeleteEdgeDefinition indicates an expected call of DeleteEdgeDefinition.
 func (mr *MockGraphMockRecorder) DeleteEdgeDefinition(ctx, collection, opts any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
+
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeleteEdgeDefinition",
 		reflect.TypeOf((*MockGraph)(nil).DeleteEdgeDefinition), ctx, collection, opts)
 }
@@ -270,6 +279,7 @@ func (m *MockGraph) DeleteVertexCollection(ctx context.Context, name string,
 // DeleteVertexCollection indicates an expected call of DeleteVertexCollection.
 func (mr *MockGraphMockRecorder) DeleteVertexCollection(ctx, name, opts any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
+
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeleteVertexCollection",
 		reflect.TypeOf((*MockGraph)(nil).DeleteVertexCollection), ctx, name, opts)
 }
@@ -287,6 +297,7 @@ func (m *MockGraph) EdgeDefinition(ctx context.Context, collection string) (aran
 // EdgeDefinition indicates an expected call of EdgeDefinition.
 func (mr *MockGraphMockRecorder) EdgeDefinition(ctx, collection any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
+
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "EdgeDefinition",
 		reflect.TypeOf((*MockGraph)(nil).EdgeDefinition), ctx, collection)
 }
@@ -304,6 +315,7 @@ func (m *MockGraph) EdgeDefinitionExists(ctx context.Context, collection string)
 // EdgeDefinitionExists indicates an expected call of EdgeDefinitionExists.
 func (mr *MockGraphMockRecorder) EdgeDefinitionExists(ctx, collection any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
+
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "EdgeDefinitionExists",
 		reflect.TypeOf((*MockGraph)(nil).EdgeDefinitionExists), ctx, collection)
 }
@@ -411,6 +423,7 @@ func (m *MockGraph) NumberOfShards() *int {
 // NumberOfShards indicates an expected call of NumberOfShards.
 func (mr *MockGraphMockRecorder) NumberOfShards() *gomock.Call {
 	mr.mock.ctrl.T.Helper()
+
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "NumberOfShards",
 		reflect.TypeOf((*MockGraph)(nil).NumberOfShards))
 }
@@ -427,6 +440,7 @@ func (m *MockGraph) OrphanCollections() []string {
 // OrphanCollections indicates an expected call of OrphanCollections.
 func (mr *MockGraphMockRecorder) OrphanCollections() *gomock.Call {
 	mr.mock.ctrl.T.Helper()
+
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "OrphanCollections",
 		reflect.TypeOf((*MockGraph)(nil).OrphanCollections))
 }
@@ -460,6 +474,7 @@ func (m *MockGraph) ReplaceEdgeDefinition(ctx context.Context, collection string
 // ReplaceEdgeDefinition indicates an expected call of ReplaceEdgeDefinition.
 func (mr *MockGraphMockRecorder) ReplaceEdgeDefinition(ctx, collection, from, to, opts any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
+
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ReplaceEdgeDefinition",
 		reflect.TypeOf((*MockGraph)(nil).ReplaceEdgeDefinition), ctx, collection, from, to, opts)
 }
@@ -476,6 +491,7 @@ func (m *MockGraph) ReplicationFactor() int {
 // ReplicationFactor indicates an expected call of ReplicationFactor.
 func (mr *MockGraphMockRecorder) ReplicationFactor() *gomock.Call {
 	mr.mock.ctrl.T.Helper()
+
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ReplicationFactor",
 		reflect.TypeOf((*MockGraph)(nil).ReplicationFactor))
 }
@@ -492,6 +508,7 @@ func (m *MockGraph) SmartGraphAttribute() string {
 // SmartGraphAttribute indicates an expected call of SmartGraphAttribute.
 func (mr *MockGraphMockRecorder) SmartGraphAttribute() *gomock.Call {
 	mr.mock.ctrl.T.Helper()
+
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SmartGraphAttribute",
 		reflect.TypeOf((*MockGraph)(nil).SmartGraphAttribute))
 }
@@ -509,6 +526,7 @@ func (m *MockGraph) VertexCollection(ctx context.Context, name string) (arangodb
 // VertexCollection indicates an expected call of VertexCollection.
 func (mr *MockGraphMockRecorder) VertexCollection(ctx, name any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
+
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "VertexCollection",
 		reflect.TypeOf((*MockGraph)(nil).VertexCollection), ctx, name)
 }
@@ -526,6 +544,7 @@ func (m *MockGraph) VertexCollectionExists(ctx context.Context, name string) (bo
 // VertexCollectionExists indicates an expected call of VertexCollectionExists.
 func (mr *MockGraphMockRecorder) VertexCollectionExists(ctx, name any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
+
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "VertexCollectionExists",
 		reflect.TypeOf((*MockGraph)(nil).VertexCollectionExists), ctx, name)
 }
@@ -543,6 +562,7 @@ func (m *MockGraph) VertexCollections(ctx context.Context) ([]arangodb.VertexCol
 // VertexCollections indicates an expected call of VertexCollections.
 func (mr *MockGraphMockRecorder) VertexCollections(ctx any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
+
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "VertexCollections",
 		reflect.TypeOf((*MockGraph)(nil).VertexCollections), ctx)
 }
@@ -600,6 +620,7 @@ func (m *MockGraphVertexCollections) CreateVertexCollection(ctx context.Context,
 // CreateVertexCollection indicates an expected call of CreateVertexCollection.
 func (mr *MockGraphVertexCollectionsMockRecorder) CreateVertexCollection(ctx, name, opts any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
+
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CreateVertexCollection",
 		reflect.TypeOf((*MockGraphVertexCollections)(nil).CreateVertexCollection), ctx, name, opts)
 }
@@ -618,6 +639,7 @@ func (m *MockGraphVertexCollections) DeleteVertexCollection(ctx context.Context,
 // DeleteVertexCollection indicates an expected call of DeleteVertexCollection.
 func (mr *MockGraphVertexCollectionsMockRecorder) DeleteVertexCollection(ctx, name, opts any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
+
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock,
 		"DeleteVertexCollection", reflect.TypeOf((*MockGraphVertexCollections)(nil).DeleteVertexCollection), ctx, name, opts)
 }
@@ -635,6 +657,7 @@ func (m *MockGraphVertexCollections) VertexCollection(ctx context.Context, name 
 // VertexCollection indicates an expected call of VertexCollection.
 func (mr *MockGraphVertexCollectionsMockRecorder) VertexCollection(ctx, name any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
+
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock,
 		"VertexCollection", reflect.TypeOf((*MockGraphVertexCollections)(nil).VertexCollection), ctx, name)
 }
@@ -652,6 +675,7 @@ func (m *MockGraphVertexCollections) VertexCollectionExists(ctx context.Context,
 // VertexCollectionExists indicates an expected call of VertexCollectionExists.
 func (mr *MockGraphVertexCollectionsMockRecorder) VertexCollectionExists(ctx, name any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
+
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock,
 		"VertexCollectionExists", reflect.TypeOf((*MockGraphVertexCollections)(nil).VertexCollectionExists), ctx, name)
 }
@@ -669,6 +693,7 @@ func (m *MockGraphVertexCollections) VertexCollections(ctx context.Context) ([]a
 // VertexCollections indicates an expected call of VertexCollections.
 func (mr *MockGraphVertexCollectionsMockRecorder) VertexCollections(ctx any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
+
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "VertexCollections",
 		reflect.TypeOf((*MockGraphVertexCollections)(nil).VertexCollections), ctx)
 }
@@ -711,6 +736,7 @@ func (m *MockGraphEdgesDefinition) CreateEdgeDefinition(ctx context.Context, col
 // CreateEdgeDefinition indicates an expected call of CreateEdgeDefinition.
 func (mr *MockGraphEdgesDefinitionMockRecorder) CreateEdgeDefinition(ctx, collection, from, to, opts any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
+
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CreateEdgeDefinition",
 		reflect.TypeOf((*MockGraphEdgesDefinition)(nil).CreateEdgeDefinition), ctx, collection, from, to, opts)
 }
@@ -729,6 +755,7 @@ func (m *MockGraphEdgesDefinition) DeleteEdgeDefinition(ctx context.Context, col
 // DeleteEdgeDefinition indicates an expected call of DeleteEdgeDefinition.
 func (mr *MockGraphEdgesDefinitionMockRecorder) DeleteEdgeDefinition(ctx, collection, opts any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
+
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeleteEdgeDefinition",
 		reflect.TypeOf((*MockGraphEdgesDefinition)(nil).DeleteEdgeDefinition), ctx, collection, opts)
 }
@@ -746,6 +773,7 @@ func (m *MockGraphEdgesDefinition) EdgeDefinition(ctx context.Context, collectio
 // EdgeDefinition indicates an expected call of EdgeDefinition.
 func (mr *MockGraphEdgesDefinitionMockRecorder) EdgeDefinition(ctx, collection any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
+
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "EdgeDefinition",
 		reflect.TypeOf((*MockGraphEdgesDefinition)(nil).EdgeDefinition), ctx, collection)
 }
@@ -763,6 +791,7 @@ func (m *MockGraphEdgesDefinition) EdgeDefinitionExists(ctx context.Context, col
 // EdgeDefinitionExists indicates an expected call of EdgeDefinitionExists.
 func (mr *MockGraphEdgesDefinitionMockRecorder) EdgeDefinitionExists(ctx, collection any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
+
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "EdgeDefinitionExists",
 		reflect.TypeOf((*MockGraphEdgesDefinition)(nil).EdgeDefinitionExists), ctx, collection)
 }
@@ -780,6 +809,7 @@ func (m *MockGraphEdgesDefinition) GetEdgeDefinitions(ctx context.Context) ([]ar
 // GetEdgeDefinitions indicates an expected call of GetEdgeDefinitions.
 func (mr *MockGraphEdgesDefinitionMockRecorder) GetEdgeDefinitions(ctx any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
+
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetEdgeDefinitions",
 		reflect.TypeOf((*MockGraphEdgesDefinition)(nil).GetEdgeDefinitions), ctx)
 }

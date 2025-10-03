@@ -41,6 +41,7 @@ func Test_WebSocket_Success(t *testing.T) {
 	})
 
 	go app.Run()
+
 	time.Sleep(100 * time.Millisecond)
 
 	// Create a WebSocket client
@@ -77,8 +78,8 @@ func Test_AddWSService(t *testing.T) {
 
 	app.WebSocket("/ws", func(ctx *Context) (any, error) {
 		var message string
-		err := ctx.Bind(&message)
 
+		err := ctx.Bind(&message)
 		if err != nil {
 			return nil, err
 		}
