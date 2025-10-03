@@ -265,6 +265,7 @@ func TestTextReader_Next_Scan(t *testing.T) {
 
 	for reader.Next() {
 		var line string
+
 		err := reader.Scan(&line)
 		require.NoError(t, err)
 
@@ -288,6 +289,7 @@ func TestTextReader_Scan_NonPointer(t *testing.T) {
 	reader.Next()
 
 	var nonPointer string
+
 	err := reader.Scan(nonPointer)
 	require.Error(t, err)
 	require.Equal(t, errStringNotPointer, err)

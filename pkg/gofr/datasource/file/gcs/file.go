@@ -60,7 +60,6 @@ func (f *File) Write(p []byte) (int, error) {
 	}, time.Now())
 
 	n, err := f.writer.Write(p)
-
 	if err != nil {
 		f.logger.Errorf("failed to write: %v", err)
 		msg = err.Error()

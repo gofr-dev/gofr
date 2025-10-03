@@ -134,7 +134,6 @@ func (f *FileSystem) Create(name string) (file.File, error) {
 
 	for index := 1; ; index++ {
 		objs, err := f.conn.ListObjects(ctx, name)
-
 		if err != nil {
 			msg = "Error checking existing objects"
 
@@ -192,8 +191,8 @@ func (f *FileSystem) Remove(name string) error {
 	}, time.Now())
 
 	ctx := context.TODO()
-	err := f.conn.DeleteObject(ctx, name)
 
+	err := f.conn.DeleteObject(ctx, name)
 	if err != nil {
 		f.logger.Errorf("Error while deleting file: %v", err)
 		return err
@@ -222,7 +221,6 @@ func (f *FileSystem) Open(name string) (file.File, error) {
 	ctx := context.TODO()
 
 	reader, err := f.conn.NewReader(ctx, name)
-
 	if err != nil {
 		if errors.Is(err, storage.ErrObjectNotExist) {
 			return nil, file.ErrFileNotFound
