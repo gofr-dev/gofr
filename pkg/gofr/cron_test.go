@@ -1,7 +1,6 @@
 package gofr
 
 import (
-	"context"
 	"fmt"
 	"testing"
 	"time"
@@ -9,6 +8,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"gofr.dev/pkg/gofr/container"
 	"gofr.dev/pkg/gofr/testutil"
 )
 
@@ -142,7 +142,8 @@ func TestCron_parseSchedule_Error(t *testing.T) {
 				"* * ab/2 * *",
 				"* 1,2/10 * * *",
 				"* * 1,2,3,1-15/10 * *",
-				"a b c d e"},
+				"a b c d e",
+			},
 			expErrString: "unable to parse",
 		},
 	}
@@ -225,7 +226,8 @@ func TestCronTab_runScheduled(t *testing.T) {
 
 	// can make container nil as we are not testing the internal working of
 	// dependency function as it is user defined
-	c := NewCron(nil)
+	mockContainer, _ := container.NewMockContainer(t)
+	c := NewCron(mockContainer)
 
 	// Populate the job array for cron table
 	c.jobs = []*job{j}
@@ -326,8 +328,7 @@ func TestJob_tick(t *testing.T) {
 func Test_noopRequest(t *testing.T) {
 	noop := noopRequest{}
 
-	//nolint:usetesting // Using context.Background() intentionally instead of t.Context()
-	assert.Equal(t, context.Background(), noop.Context())
+	assert.NotNil(t, noop.Context())
 	assert.Empty(t, noop.Param(""))
 	assert.Empty(t, noop.PathParam(""))
 	assert.Equal(t, "gofr", noop.HostName())

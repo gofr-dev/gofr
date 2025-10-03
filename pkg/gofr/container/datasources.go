@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"database/sql"
+	"time"
 
 	"github.com/redis/go-redis/v9"
 
@@ -202,6 +203,27 @@ type Clickhouse interface {
 
 type ClickhouseProvider interface {
 	Clickhouse
+
+	provider
+}
+
+type OracleDB interface {
+	Exec(ctx context.Context, query string, args ...any) error
+	Select(ctx context.Context, dest any, query string, args ...any) error
+	Begin() (OracleTx, error)
+
+	HealthChecker
+}
+
+type OracleTx interface {
+	ExecContext(ctx context.Context, query string, args ...any) error
+	SelectContext(ctx context.Context, dest any, query string, args ...any) error
+	Commit() error
+	Rollback() error
+}
+
+type OracleProvider interface {
+	OracleDB
 
 	provider
 }
@@ -703,14 +725,14 @@ type Elasticsearch interface {
 	// DeleteDocument removes a document by ID.
 	DeleteDocument(ctx context.Context, index, id string) error
 
-	// Search executes a query against one or more indices.
-	// Returns the entire response JSON as a map.
-	Search(ctx context.Context, indices []string, query map[string]any) (map[string]any, error)
-
 	// Bulk executes multiple indexing/updating/deleting operations in one request.
 	// Each entry in `operations` should be a JSON‑serializable object
 	// following the Elasticsearch bulk API format.
 	Bulk(ctx context.Context, operations []map[string]any) (map[string]any, error)
+
+	// Search executes a query against one or more indices.
+	// Returns the entire response JSON as a map.
+	Search(ctx context.Context, indices []string, query map[string]any) (map[string]any, error)
 
 	HealthChecker
 }
@@ -718,6 +740,93 @@ type Elasticsearch interface {
 // ElasticsearchProvider an interface that extends Elasticsearch with additional methods for logging, metrics, and connection management.
 type ElasticsearchProvider interface {
 	Elasticsearch
+
+	provider
+}
+
+// Couchbase defines the methods for interacting with a Couchbase database.
+type Couchbase interface {
+	// Get retrieves a document by its key from the specified bucket.
+	// The result parameter should be a pointer to the struct where the document will be unmarshaled.
+	Get(ctx context.Context, key string, result any) error
+
+	// InsertOne inserts a new document in the collection.
+	Insert(ctx context.Context, key string, document, result any) error
+
+	// Upsert inserts a new document or replaces an existing one in the specified bucket.
+	// The document parameter can be any Go type that can be marshaled into JSON.
+	Upsert(ctx context.Context, key string, document any, result any) error
+
+	// Remove deletes a document by its key from the specified bucket.
+	Remove(ctx context.Context, key string) error
+
+	// Query executes a N1QL query against the Couchbase cluster.
+	// The statement is the N1QL query string, and params are any query parameters.
+	// The result parameter should be a pointer to a slice of structs or maps where the query results will be unmarshaled.
+	Query(ctx context.Context, statement string, params map[string]any, result any) error
+
+	// AnalyticsQuery executes an Analytics query against the Couchbase Analytics service.
+	// The statement is the Analytics query string, and params are any query parameters.
+	// The result parameter should be a pointer to a slice of structs or maps where the query results will be unmarshaled.
+	AnalyticsQuery(ctx context.Context, statement string, params map[string]any, result any) error
+
+	RunTransaction(ctx context.Context, logic func(attempt any) error) (any, error)
+
+	Close(opts any) error
+
+	HealthChecker
+}
+
+// CouchbaseProvider is an interface that extends Couchbase with additional methods
+// for logging, metrics, tracing, and connection management, aligning with other
+// data source providers in your package.
+type CouchbaseProvider interface {
+	Couchbase
+
+	provider
+}
+
+// InfluxDB defines the operations required to interact with an InfluxDB instance.
+type InfluxDB interface {
+	// CreateOrganization create new bucket in the influxdb
+	CreateOrganization(ctx context.Context, org string) (string, error)
+
+	// DeleteOrganization deletes a organization under the specified organization.
+	DeleteOrganization(ctx context.Context, orgID string) error
+
+	// ListOrganization list all the available organization
+	ListOrganization(ctx context.Context) (orgs map[string]string, err error)
+
+	// WritePoint writes one time-series points to a bucket.
+	// 'points' should follow the line protocol format or structured map format.
+	WritePoint(ctx context.Context, org, bucket string,
+		measurement string,
+		tags map[string]string,
+		fields map[string]any,
+		timestamp time.Time) error
+
+	// Query runs a Flux query and returns the result as a slice of maps,
+	// where each map is a row with column name-value pairs.
+	Query(ctx context.Context, org, fluxQuery string) ([]map[string]any, error)
+
+	// CreateBucket creates a new bucket under the specified organization.
+	CreateBucket(ctx context.Context, org, bucket string) (string, error)
+
+	// DeleteBucket deletes a bucketId with bucketID
+	DeleteBucket(ctx context.Context, bucketID string) error
+
+	// ListBuckets lists all buckets under the specified organization.
+	ListBuckets(ctx context.Context, org string) (map[string]string, error)
+
+	// Ping checks if the InfluxDB instance is reachable and healthy.
+	Ping(ctx context.Context) (bool, error)
+
+	HealthChecker
+}
+
+// InfluxDBProvider an interface that extends InfluxDB with additional methods for logging, metrics, and connection management.
+type InfluxDBProvider interface {
+	InfluxDB
 
 	provider
 }

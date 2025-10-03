@@ -67,9 +67,6 @@ func (h handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		c.Context = ctx
 	}
 
-	reqLogger := logging.NewContextLogger(c, h.container.Logger)
-	c.ContextLogger = *reqLogger
-
 	done := make(chan struct{})
 	panicked := make(chan struct{})
 
@@ -90,9 +87,15 @@ func (h handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	select {
 	case <-c.Context.Done():
-		// If the context's deadline has been exceeded, return a timeout error response
-		if errors.Is(c.Err(), context.DeadlineExceeded) {
-			err = gofrHTTP.ErrorRequestTimeout{}
+		// Handle different context cancellation scenarios
+		ctxErr := c.Context.Err()
+
+		// Server-side timeout occurred && fallback for other context errors
+		err = gofrHTTP.ErrorRequestTimeout{}
+
+		if errors.Is(ctxErr, context.Canceled) {
+			// Client canceled the request (e.g., closed browser tab)
+			err = gofrHTTP.ErrorClientClosedRequest{}
 		}
 	case <-done:
 		handleWebSocketUpgrade(r)

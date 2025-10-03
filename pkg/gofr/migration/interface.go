@@ -26,6 +26,7 @@ type SQL interface {
 }
 
 type PubSub interface {
+	Query(ctx context.Context, query string, args ...any) ([]byte, error)
 	CreateTopic(context context.Context, name string) error
 	DeleteTopic(context context.Context, name string) error
 }
@@ -36,6 +37,12 @@ type Clickhouse interface {
 	AsyncInsert(ctx context.Context, query string, wait bool, args ...any) error
 
 	HealthCheck(ctx context.Context) (any, error)
+}
+
+type Oracle interface {
+	Select(ctx context.Context, dest any, query string, args ...any) error
+	Exec(ctx context.Context, query string, args ...any) error
+	Begin() (container.OracleTx, error)
 }
 
 type Cassandra interface {
@@ -127,6 +134,48 @@ type DGraph interface {
 	DropField(ctx context.Context, fieldName string) error
 }
 
+type ScyllaDB interface {
+	Query(dest any, stmt string, values ...any) error
+	QueryWithCtx(ctx context.Context, dest any, stmt string, values ...any) error
+
+	Exec(stmt string, values ...any) error
+	ExecWithCtx(ctx context.Context, stmt string, values ...any) error
+
+	ExecCAS(dest any, stmt string, values ...any) (bool, error)
+
+	NewBatch(name string, batchType int) error
+	NewBatchWithCtx(ctx context.Context, name string, batchType int) error
+
+	BatchQuery(name, stmt string, values ...any) error
+	BatchQueryWithCtx(ctx context.Context, name, stmt string, values ...any) error
+
+	ExecuteBatchWithCtx(ctx context.Context, name string) error
+}
+
+// Elasticsearch is an interface representing an Elasticsearch client for migration operations.
+// It includes only the essential methods needed for schema changes and migrations.
+type Elasticsearch interface {
+	// CreateIndex creates a new index with optional mapping/settings.
+	CreateIndex(ctx context.Context, index string, settings map[string]any) error
+
+	// DeleteIndex deletes an existing index.
+	DeleteIndex(ctx context.Context, index string) error
+
+	// IndexDocument indexes (creates or replaces) a single document.
+	// Useful for seeding data or adding configuration documents during migrations.
+	IndexDocument(ctx context.Context, index, id string, document any) error
+
+	// DeleteDocument removes a document by ID.
+	// Useful for removing specific documents during migrations.
+	DeleteDocument(ctx context.Context, index, id string) error
+
+	// Bulk executes multiple indexing/updating/deleting operations in one request.
+	// Each entry in `operations` should be a JSON‑serializable object
+	// following the Elasticsearch bulk API format.
+	// Useful for bulk operations during migrations.
+	Bulk(ctx context.Context, operations []map[string]any) (map[string]any, error)
+}
+
 // keeping the migrator interface unexported as, right now it is not being implemented directly, by the externalDB drivers.
 // keeping the implementations for externalDB at one place such that if any change in migration logic, we would change directly here.
 type migrator interface {
@@ -137,4 +186,15 @@ type migrator interface {
 
 	commitMigration(c *container.Container, data transactionData) error
 	rollback(c *container.Container, data transactionData)
+}
+
+type OpenTSDB interface {
+	// PutDataPoints can be used for seeding initial metrics during migration
+	PutDataPoints(ctx context.Context, data any, queryParam string, res any) error
+	// PostAnnotation creates or updates an annotation in OpenTSDB using the 'POST /api/annotation' endpoint.
+	PostAnnotation(ctx context.Context, annotation any, res any) error
+	// PutAnnotation creates or replaces an annotation in OpenTSDB using the 'PUT /api/annotation' endpoint.
+	PutAnnotation(ctx context.Context, annotation any, res any) error
+	// DeleteAnnotation removes an annotation from OpenTSDB using the 'DELETE /api/annotation' endpoint.
+	DeleteAnnotation(ctx context.Context, annotation any, res any) error
 }

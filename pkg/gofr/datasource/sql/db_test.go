@@ -20,6 +20,7 @@ var (
 	errDB     = testutil.CustomError{ErrorMessage: "DB error"}
 	errSyntax = testutil.CustomError{ErrorMessage: "syntax error"}
 	errTx     = testutil.CustomError{ErrorMessage: "error starting transaction"}
+	errbegin  = testutil.CustomError{ErrorMessage: "begin failed"}
 )
 
 func getDB(t *testing.T, logLevel logging.Level) (*DB, sqlmock.Sqlmock) {
@@ -1141,4 +1142,112 @@ func TestClean(t *testing.T) {
 	out := clean(query)
 
 	assert.Empty(t, out)
+}
+func TestDB_CloseWhenNil(t *testing.T) {
+	db := &DB{}
+	err := db.Close()
+	assert.NoError(t, err)
+}
+func TestDB_BeginTx(t *testing.T) {
+	db, mock := getDB(t, logging.DEBUG)
+	defer db.DB.Close()
+
+	ctrl := gomock.NewController(t)
+	db.metrics = NewMockMetrics(ctrl)
+
+	mock.ExpectBegin()
+
+	tx, err := db.BeginTx(t.Context(), &sql.TxOptions{Isolation: sql.LevelReadCommitted})
+	require.NoError(t, err)
+	assert.NotNil(t, tx)
+}
+func TestDB_PingSuccess(t *testing.T) {
+	db, mock := getDB(t, logging.DEBUG)
+	defer db.DB.Close()
+
+	ctrl := gomock.NewController(t)
+	db.metrics = NewMockMetrics(ctrl)
+
+	mock.ExpectPing()
+	mock.ExpectPing().WillReturnError(nil)
+
+	err := db.PingContext(t.Context())
+	assert.NoError(t, err)
+}
+
+func TestDB_PingFailure(t *testing.T) {
+	db, mock := getDB(t, logging.DEBUG)
+	defer db.DB.Close()
+
+	mock.ExpectPing().WillReturnError(sql.ErrConnDone)
+
+	err := db.PingContext(t.Context())
+	assert.Equal(t, sql.ErrConnDone, err)
+}
+func TestGetOperationType_EdgeCases(t *testing.T) {
+	require.Empty(t, getOperationType(""))
+	require.Empty(t, getOperationType("   "))
+	require.Equal(t, "SELECT", getOperationType("  SELECT * FROM users"))
+}
+func TestClean_EmptyString(t *testing.T) {
+	require.Empty(t, clean(""))
+	require.Equal(t, "SELECT", clean("  SELECT  "))
+}
+func TestDB_Dialect(t *testing.T) {
+	db, _ := getDB(t, logging.INFO)
+	defer db.Close()
+
+	db.config.Dialect = "postgresql"
+	require.Equal(t, "postgresql", db.Dialect())
+}
+func TestGetOperationType(t *testing.T) {
+	tests := []struct {
+		query    string
+		expected string
+	}{
+		{"SELECT * FROM users", "SELECT"},
+		{"  INSERT INTO users", "INSERT"},
+		{"UPDATE users SET name = ?", "UPDATE"},
+		{"DELETE FROM users", "DELETE"},
+		{"", ""},
+	}
+
+	for _, test := range tests {
+		result := getOperationType(test.query)
+		require.Equal(t, test.expected, result)
+	}
+}
+func TestDB_Begin_Error(t *testing.T) {
+	db, mock := getDB(t, logging.DEBUG)
+	defer db.DB.Close()
+
+	mock.ExpectBegin().WillReturnError(errbegin)
+
+	tx, err := db.Begin()
+	require.Error(t, err)
+	assert.Nil(t, tx)
+}
+
+func TestDB_sendOperationStats_RecordsMilliseconds(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	mockMetrics := NewMockMetrics(ctrl)
+
+	db := &DB{
+		logger:  logging.NewMockLogger(logging.DEBUG),
+		config:  &DBConfig{HostName: "host", Database: "db"},
+		metrics: mockMetrics,
+	}
+
+	start := time.Now().Add(-1500 * time.Millisecond) // 1.5 seconds ago
+
+	// Expect RecordHistogram to be called with duration 1500 (milliseconds)
+	mockMetrics.EXPECT().RecordHistogram(
+		gomock.Any(), "app_sql_stats", float64(1500),
+		"hostname", "host", "database", "db", "type", "SELECT",
+	)
+
+	db.sendOperationStats(start, "SELECT", "SELECT * FROM users")
+
+	duration := time.Since(start).Milliseconds()
+	assert.Equal(t, int64(1500), duration)
 }

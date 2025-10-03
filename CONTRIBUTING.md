@@ -5,6 +5,10 @@
 * (Optional) If you want to discuss your implementation with the users of GoFr, use the GitHub discussions of this repo.
 * Configure your editor to use goimport and golangci-lint on file changes. Any code which is not formatted using these
   tools, will fail on the pipeline.
+* Contributors should begin working on an issue only after it has been assigned to them. To get an issue assigned, please comment on the GitHub thread
+  and request assignment from a maintainer. This helps avoid duplicate or conflicting pull requests from multiple contributors.
+* Issues labeled triage are not open for direct contributions. If you're interested in working on a triage issue, please reach out to the maintainers
+  to discuss it before proceeding in the Github thread.
 <!-- spellchecker:off "favour" have to be ignored here -->
 * We follow **American English** conventions in this project (e.g., *"favor"* instead of *"favour"*). Please keep this consistent across all code comments, documentation, etc.
 <!-- spellchecker:on -->
@@ -92,6 +96,11 @@ docker run -d --name arangodb \
   -e ARANGO_ROOT_PASSWORD=rootpassword \
   --pull always \
   arangodb:latest
+docker run --name dynamodb-local -d -p 8000:8000 amazon/dynamodb-local
+docker run -d --name db -p 8091-8096:8091-8096 -p 11210-11211:11210-11211 couchbase
+docker login container-registry.oracle.com
+docker pull container-registry.oracle.com/database/free:latest
+docker run -d --name oracle-free -p 1521:1521 -e ORACLE_PWD=YourPasswordHere container-registry.oracle.com/database/free:latest
 ```
 
 > [!NOTE]
@@ -124,7 +133,7 @@ docker run -d --name arangodb \
 * Version tagging as per Semantic versioning (https://semver.org/)
 
 ### Documentation
-* After adding or modifying code existing code, update the documentation too - [development/docs](https://github.com/gofr-dev/gofr/tree/development/docs).
+* After adding or modifying existing code, update the documentation too - [development/docs](https://github.com/gofr-dev/gofr/tree/development/docs).
 * When you consider a new documentation page is needed, start by adding a new file and writing your new documentation. Then - add a reference to it in [navigation.js](https://gofr.dev/docs/navigation.js).
 * If needed, update or add proper code examples for your changes.
 * In case images are needed, add it to [docs/public](./docs/public) folder.

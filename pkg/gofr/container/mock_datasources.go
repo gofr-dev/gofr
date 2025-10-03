@@ -936,6 +936,63 @@ func (mr *MockRedisMockRecorder) BitOpAnd(ctx, destKey any, keys ...any) *gomock
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "BitOpAnd", reflect.TypeOf((*MockRedis)(nil).BitOpAnd), varargs...)
 }
 
+// BitOpAndOr mocks base method.
+func (m *MockRedis) BitOpAndOr(ctx context.Context, destKey string, keys ...string) *redis.IntCmd {
+	m.ctrl.T.Helper()
+	varargs := []any{ctx, destKey}
+	for _, a := range keys {
+		varargs = append(varargs, a)
+	}
+	ret := m.ctrl.Call(m, "BitOpAndOr", varargs...)
+	ret0, _ := ret[0].(*redis.IntCmd)
+	return ret0
+}
+
+// BitOpAndOr indicates an expected call of BitOpAndOr.
+func (mr *MockRedisMockRecorder) BitOpAndOr(ctx, destKey any, keys ...any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	varargs := append([]any{ctx, destKey}, keys...)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "BitOpAndOr", reflect.TypeOf((*MockRedis)(nil).BitOpAndOr), varargs...)
+}
+
+// BitOpDiff mocks base method.
+func (m *MockRedis) BitOpDiff(ctx context.Context, destKey string, keys ...string) *redis.IntCmd {
+	m.ctrl.T.Helper()
+	varargs := []any{ctx, destKey}
+	for _, a := range keys {
+		varargs = append(varargs, a)
+	}
+	ret := m.ctrl.Call(m, "BitOpDiff", varargs...)
+	ret0, _ := ret[0].(*redis.IntCmd)
+	return ret0
+}
+
+// BitOpDiff indicates an expected call of BitOpDiff.
+func (mr *MockRedisMockRecorder) BitOpDiff(ctx, destKey any, keys ...any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	varargs := append([]any{ctx, destKey}, keys...)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "BitOpDiff", reflect.TypeOf((*MockRedis)(nil).BitOpDiff), varargs...)
+}
+
+// BitOpDiff1 mocks base method.
+func (m *MockRedis) BitOpDiff1(ctx context.Context, destKey string, keys ...string) *redis.IntCmd {
+	m.ctrl.T.Helper()
+	varargs := []any{ctx, destKey}
+	for _, a := range keys {
+		varargs = append(varargs, a)
+	}
+	ret := m.ctrl.Call(m, "BitOpDiff1", varargs...)
+	ret0, _ := ret[0].(*redis.IntCmd)
+	return ret0
+}
+
+// BitOpDiff1 indicates an expected call of BitOpDiff1.
+func (mr *MockRedisMockRecorder) BitOpDiff1(ctx, destKey any, keys ...any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	varargs := append([]any{ctx, destKey}, keys...)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "BitOpDiff1", reflect.TypeOf((*MockRedis)(nil).BitOpDiff1), varargs...)
+}
+
 // BitOpNot mocks base method.
 func (m *MockRedis) BitOpNot(ctx context.Context, destKey, key string) *redis.IntCmd {
 	m.ctrl.T.Helper()
@@ -948,6 +1005,25 @@ func (m *MockRedis) BitOpNot(ctx context.Context, destKey, key string) *redis.In
 func (mr *MockRedisMockRecorder) BitOpNot(ctx, destKey, key any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "BitOpNot", reflect.TypeOf((*MockRedis)(nil).BitOpNot), ctx, destKey, key)
+}
+
+// BitOpOne mocks base method.
+func (m *MockRedis) BitOpOne(ctx context.Context, destKey string, keys ...string) *redis.IntCmd {
+	m.ctrl.T.Helper()
+	varargs := []any{ctx, destKey}
+	for _, a := range keys {
+		varargs = append(varargs, a)
+	}
+	ret := m.ctrl.Call(m, "BitOpOne", varargs...)
+	ret0, _ := ret[0].(*redis.IntCmd)
+	return ret0
+}
+
+// BitOpOne indicates an expected call of BitOpOne.
+func (mr *MockRedisMockRecorder) BitOpOne(ctx, destKey any, keys ...any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	varargs := append([]any{ctx, destKey}, keys...)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "BitOpOne", reflect.TypeOf((*MockRedis)(nil).BitOpOne), varargs...)
 }
 
 // BitOpOr mocks base method.
@@ -6837,6 +6913,258 @@ func (mr *MockRedisMockRecorder) Unlink(ctx any, keys ...any) *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Unlink", reflect.TypeOf((*MockRedis)(nil).Unlink), varargs...)
 }
 
+// VAdd mocks base method.
+func (m *MockRedis) VAdd(ctx context.Context, key, element string, val redis.Vector) *redis.BoolCmd {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "VAdd", ctx, key, element, val)
+	ret0, _ := ret[0].(*redis.BoolCmd)
+	return ret0
+}
+
+// VAdd indicates an expected call of VAdd.
+func (mr *MockRedisMockRecorder) VAdd(ctx, key, element, val any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "VAdd", reflect.TypeOf((*MockRedis)(nil).VAdd), ctx, key, element, val)
+}
+
+// VAddWithArgs mocks base method.
+func (m *MockRedis) VAddWithArgs(ctx context.Context, key, element string, val redis.Vector, addArgs *redis.VAddArgs) *redis.BoolCmd {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "VAddWithArgs", ctx, key, element, val, addArgs)
+	ret0, _ := ret[0].(*redis.BoolCmd)
+	return ret0
+}
+
+// VAddWithArgs indicates an expected call of VAddWithArgs.
+func (mr *MockRedisMockRecorder) VAddWithArgs(ctx, key, element, val, addArgs any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "VAddWithArgs", reflect.TypeOf((*MockRedis)(nil).VAddWithArgs), ctx, key, element, val, addArgs)
+}
+
+// VCard mocks base method.
+func (m *MockRedis) VCard(ctx context.Context, key string) *redis.IntCmd {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "VCard", ctx, key)
+	ret0, _ := ret[0].(*redis.IntCmd)
+	return ret0
+}
+
+// VCard indicates an expected call of VCard.
+func (mr *MockRedisMockRecorder) VCard(ctx, key any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "VCard", reflect.TypeOf((*MockRedis)(nil).VCard), ctx, key)
+}
+
+// VClearAttributes mocks base method.
+func (m *MockRedis) VClearAttributes(ctx context.Context, key, element string) *redis.BoolCmd {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "VClearAttributes", ctx, key, element)
+	ret0, _ := ret[0].(*redis.BoolCmd)
+	return ret0
+}
+
+// VClearAttributes indicates an expected call of VClearAttributes.
+func (mr *MockRedisMockRecorder) VClearAttributes(ctx, key, element any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "VClearAttributes", reflect.TypeOf((*MockRedis)(nil).VClearAttributes), ctx, key, element)
+}
+
+// VDim mocks base method.
+func (m *MockRedis) VDim(ctx context.Context, key string) *redis.IntCmd {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "VDim", ctx, key)
+	ret0, _ := ret[0].(*redis.IntCmd)
+	return ret0
+}
+
+// VDim indicates an expected call of VDim.
+func (mr *MockRedisMockRecorder) VDim(ctx, key any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "VDim", reflect.TypeOf((*MockRedis)(nil).VDim), ctx, key)
+}
+
+// VEmb mocks base method.
+func (m *MockRedis) VEmb(ctx context.Context, key, element string, raw bool) *redis.SliceCmd {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "VEmb", ctx, key, element, raw)
+	ret0, _ := ret[0].(*redis.SliceCmd)
+	return ret0
+}
+
+// VEmb indicates an expected call of VEmb.
+func (mr *MockRedisMockRecorder) VEmb(ctx, key, element, raw any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "VEmb", reflect.TypeOf((*MockRedis)(nil).VEmb), ctx, key, element, raw)
+}
+
+// VGetAttr mocks base method.
+func (m *MockRedis) VGetAttr(ctx context.Context, key, element string) *redis.StringCmd {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "VGetAttr", ctx, key, element)
+	ret0, _ := ret[0].(*redis.StringCmd)
+	return ret0
+}
+
+// VGetAttr indicates an expected call of VGetAttr.
+func (mr *MockRedisMockRecorder) VGetAttr(ctx, key, element any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "VGetAttr", reflect.TypeOf((*MockRedis)(nil).VGetAttr), ctx, key, element)
+}
+
+// VInfo mocks base method.
+func (m *MockRedis) VInfo(ctx context.Context, key string) *redis.MapStringInterfaceCmd {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "VInfo", ctx, key)
+	ret0, _ := ret[0].(*redis.MapStringInterfaceCmd)
+	return ret0
+}
+
+// VInfo indicates an expected call of VInfo.
+func (mr *MockRedisMockRecorder) VInfo(ctx, key any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "VInfo", reflect.TypeOf((*MockRedis)(nil).VInfo), ctx, key)
+}
+
+// VLinks mocks base method.
+func (m *MockRedis) VLinks(ctx context.Context, key, element string) *redis.StringSliceCmd {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "VLinks", ctx, key, element)
+	ret0, _ := ret[0].(*redis.StringSliceCmd)
+	return ret0
+}
+
+// VLinks indicates an expected call of VLinks.
+func (mr *MockRedisMockRecorder) VLinks(ctx, key, element any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "VLinks", reflect.TypeOf((*MockRedis)(nil).VLinks), ctx, key, element)
+}
+
+// VLinksWithScores mocks base method.
+func (m *MockRedis) VLinksWithScores(ctx context.Context, key, element string) *redis.VectorScoreSliceCmd {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "VLinksWithScores", ctx, key, element)
+	ret0, _ := ret[0].(*redis.VectorScoreSliceCmd)
+	return ret0
+}
+
+// VLinksWithScores indicates an expected call of VLinksWithScores.
+func (mr *MockRedisMockRecorder) VLinksWithScores(ctx, key, element any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "VLinksWithScores", reflect.TypeOf((*MockRedis)(nil).VLinksWithScores), ctx, key, element)
+}
+
+// VRandMember mocks base method.
+func (m *MockRedis) VRandMember(ctx context.Context, key string) *redis.StringCmd {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "VRandMember", ctx, key)
+	ret0, _ := ret[0].(*redis.StringCmd)
+	return ret0
+}
+
+// VRandMember indicates an expected call of VRandMember.
+func (mr *MockRedisMockRecorder) VRandMember(ctx, key any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "VRandMember", reflect.TypeOf((*MockRedis)(nil).VRandMember), ctx, key)
+}
+
+// VRandMemberCount mocks base method.
+func (m *MockRedis) VRandMemberCount(ctx context.Context, key string, count int) *redis.StringSliceCmd {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "VRandMemberCount", ctx, key, count)
+	ret0, _ := ret[0].(*redis.StringSliceCmd)
+	return ret0
+}
+
+// VRandMemberCount indicates an expected call of VRandMemberCount.
+func (mr *MockRedisMockRecorder) VRandMemberCount(ctx, key, count any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "VRandMemberCount", reflect.TypeOf((*MockRedis)(nil).VRandMemberCount), ctx, key, count)
+}
+
+// VRem mocks base method.
+func (m *MockRedis) VRem(ctx context.Context, key, element string) *redis.BoolCmd {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "VRem", ctx, key, element)
+	ret0, _ := ret[0].(*redis.BoolCmd)
+	return ret0
+}
+
+// VRem indicates an expected call of VRem.
+func (mr *MockRedisMockRecorder) VRem(ctx, key, element any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "VRem", reflect.TypeOf((*MockRedis)(nil).VRem), ctx, key, element)
+}
+
+// VSetAttr mocks base method.
+func (m *MockRedis) VSetAttr(ctx context.Context, key, element string, attr any) *redis.BoolCmd {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "VSetAttr", ctx, key, element, attr)
+	ret0, _ := ret[0].(*redis.BoolCmd)
+	return ret0
+}
+
+// VSetAttr indicates an expected call of VSetAttr.
+func (mr *MockRedisMockRecorder) VSetAttr(ctx, key, element, attr any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "VSetAttr", reflect.TypeOf((*MockRedis)(nil).VSetAttr), ctx, key, element, attr)
+}
+
+// VSim mocks base method.
+func (m *MockRedis) VSim(ctx context.Context, key string, val redis.Vector) *redis.StringSliceCmd {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "VSim", ctx, key, val)
+	ret0, _ := ret[0].(*redis.StringSliceCmd)
+	return ret0
+}
+
+// VSim indicates an expected call of VSim.
+func (mr *MockRedisMockRecorder) VSim(ctx, key, val any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "VSim", reflect.TypeOf((*MockRedis)(nil).VSim), ctx, key, val)
+}
+
+// VSimWithArgs mocks base method.
+func (m *MockRedis) VSimWithArgs(ctx context.Context, key string, val redis.Vector, args *redis.VSimArgs) *redis.StringSliceCmd {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "VSimWithArgs", ctx, key, val, args)
+	ret0, _ := ret[0].(*redis.StringSliceCmd)
+	return ret0
+}
+
+// VSimWithArgs indicates an expected call of VSimWithArgs.
+func (mr *MockRedisMockRecorder) VSimWithArgs(ctx, key, val, args any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "VSimWithArgs", reflect.TypeOf((*MockRedis)(nil).VSimWithArgs), ctx, key, val, args)
+}
+
+// VSimWithArgsWithScores mocks base method.
+func (m *MockRedis) VSimWithArgsWithScores(ctx context.Context, key string, val redis.Vector, args *redis.VSimArgs) *redis.VectorScoreSliceCmd {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "VSimWithArgsWithScores", ctx, key, val, args)
+	ret0, _ := ret[0].(*redis.VectorScoreSliceCmd)
+	return ret0
+}
+
+// VSimWithArgsWithScores indicates an expected call of VSimWithArgsWithScores.
+func (mr *MockRedisMockRecorder) VSimWithArgsWithScores(ctx, key, val, args any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "VSimWithArgsWithScores", reflect.TypeOf((*MockRedis)(nil).VSimWithArgsWithScores), ctx, key, val, args)
+}
+
+// VSimWithScores mocks base method.
+func (m *MockRedis) VSimWithScores(ctx context.Context, key string, val redis.Vector) *redis.VectorScoreSliceCmd {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "VSimWithScores", ctx, key, val)
+	ret0, _ := ret[0].(*redis.VectorScoreSliceCmd)
+	return ret0
+}
+
+// VSimWithScores indicates an expected call of VSimWithScores.
+func (mr *MockRedisMockRecorder) VSimWithScores(ctx, key, val any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "VSimWithScores", reflect.TypeOf((*MockRedis)(nil).VSimWithScores), ctx, key, val)
+}
+
 // XAck mocks base method.
 func (m *MockRedis) XAck(ctx context.Context, stream, group string, ids ...string) *redis.IntCmd {
 	m.ctrl.T.Helper()
@@ -6854,6 +7182,25 @@ func (mr *MockRedisMockRecorder) XAck(ctx, stream, group any, ids ...any) *gomoc
 	mr.mock.ctrl.T.Helper()
 	varargs := append([]any{ctx, stream, group}, ids...)
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "XAck", reflect.TypeOf((*MockRedis)(nil).XAck), varargs...)
+}
+
+// XAckDel mocks base method.
+func (m *MockRedis) XAckDel(ctx context.Context, stream, group, mode string, ids ...string) *redis.SliceCmd {
+	m.ctrl.T.Helper()
+	varargs := []any{ctx, stream, group, mode}
+	for _, a := range ids {
+		varargs = append(varargs, a)
+	}
+	ret := m.ctrl.Call(m, "XAckDel", varargs...)
+	ret0, _ := ret[0].(*redis.SliceCmd)
+	return ret0
+}
+
+// XAckDel indicates an expected call of XAckDel.
+func (mr *MockRedisMockRecorder) XAckDel(ctx, stream, group, mode any, ids ...any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	varargs := append([]any{ctx, stream, group, mode}, ids...)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "XAckDel", reflect.TypeOf((*MockRedis)(nil).XAckDel), varargs...)
 }
 
 // XAdd mocks base method.
@@ -6943,6 +7290,25 @@ func (mr *MockRedisMockRecorder) XDel(ctx, stream any, ids ...any) *gomock.Call 
 	mr.mock.ctrl.T.Helper()
 	varargs := append([]any{ctx, stream}, ids...)
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "XDel", reflect.TypeOf((*MockRedis)(nil).XDel), varargs...)
+}
+
+// XDelEx mocks base method.
+func (m *MockRedis) XDelEx(ctx context.Context, stream, mode string, ids ...string) *redis.SliceCmd {
+	m.ctrl.T.Helper()
+	varargs := []any{ctx, stream, mode}
+	for _, a := range ids {
+		varargs = append(varargs, a)
+	}
+	ret := m.ctrl.Call(m, "XDelEx", varargs...)
+	ret0, _ := ret[0].(*redis.SliceCmd)
+	return ret0
+}
+
+// XDelEx indicates an expected call of XDelEx.
+func (mr *MockRedisMockRecorder) XDelEx(ctx, stream, mode any, ids ...any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	varargs := append([]any{ctx, stream, mode}, ids...)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "XDelEx", reflect.TypeOf((*MockRedis)(nil).XDelEx), varargs...)
 }
 
 // XGroupCreate mocks base method.
@@ -7258,6 +7624,34 @@ func (mr *MockRedisMockRecorder) XTrimMaxLenApprox(ctx, key, maxLen, limit any) 
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "XTrimMaxLenApprox", reflect.TypeOf((*MockRedis)(nil).XTrimMaxLenApprox), ctx, key, maxLen, limit)
 }
 
+// XTrimMaxLenApproxMode mocks base method.
+func (m *MockRedis) XTrimMaxLenApproxMode(ctx context.Context, key string, maxLen, limit int64, mode string) *redis.IntCmd {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "XTrimMaxLenApproxMode", ctx, key, maxLen, limit, mode)
+	ret0, _ := ret[0].(*redis.IntCmd)
+	return ret0
+}
+
+// XTrimMaxLenApproxMode indicates an expected call of XTrimMaxLenApproxMode.
+func (mr *MockRedisMockRecorder) XTrimMaxLenApproxMode(ctx, key, maxLen, limit, mode any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "XTrimMaxLenApproxMode", reflect.TypeOf((*MockRedis)(nil).XTrimMaxLenApproxMode), ctx, key, maxLen, limit, mode)
+}
+
+// XTrimMaxLenMode mocks base method.
+func (m *MockRedis) XTrimMaxLenMode(ctx context.Context, key string, maxLen int64, mode string) *redis.IntCmd {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "XTrimMaxLenMode", ctx, key, maxLen, mode)
+	ret0, _ := ret[0].(*redis.IntCmd)
+	return ret0
+}
+
+// XTrimMaxLenMode indicates an expected call of XTrimMaxLenMode.
+func (mr *MockRedisMockRecorder) XTrimMaxLenMode(ctx, key, maxLen, mode any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "XTrimMaxLenMode", reflect.TypeOf((*MockRedis)(nil).XTrimMaxLenMode), ctx, key, maxLen, mode)
+}
+
 // XTrimMinID mocks base method.
 func (m *MockRedis) XTrimMinID(ctx context.Context, key, minID string) *redis.IntCmd {
 	m.ctrl.T.Helper()
@@ -7284,6 +7678,34 @@ func (m *MockRedis) XTrimMinIDApprox(ctx context.Context, key, minID string, lim
 func (mr *MockRedisMockRecorder) XTrimMinIDApprox(ctx, key, minID, limit any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "XTrimMinIDApprox", reflect.TypeOf((*MockRedis)(nil).XTrimMinIDApprox), ctx, key, minID, limit)
+}
+
+// XTrimMinIDApproxMode mocks base method.
+func (m *MockRedis) XTrimMinIDApproxMode(ctx context.Context, key, minID string, limit int64, mode string) *redis.IntCmd {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "XTrimMinIDApproxMode", ctx, key, minID, limit, mode)
+	ret0, _ := ret[0].(*redis.IntCmd)
+	return ret0
+}
+
+// XTrimMinIDApproxMode indicates an expected call of XTrimMinIDApproxMode.
+func (mr *MockRedisMockRecorder) XTrimMinIDApproxMode(ctx, key, minID, limit, mode any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "XTrimMinIDApproxMode", reflect.TypeOf((*MockRedis)(nil).XTrimMinIDApproxMode), ctx, key, minID, limit, mode)
+}
+
+// XTrimMinIDMode mocks base method.
+func (m *MockRedis) XTrimMinIDMode(ctx context.Context, key, minID, mode string) *redis.IntCmd {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "XTrimMinIDMode", ctx, key, minID, mode)
+	ret0, _ := ret[0].(*redis.IntCmd)
+	return ret0
+}
+
+// XTrimMinIDMode indicates an expected call of XTrimMinIDMode.
+func (mr *MockRedisMockRecorder) XTrimMinIDMode(ctx, key, minID, mode any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "XTrimMinIDMode", reflect.TypeOf((*MockRedis)(nil).XTrimMinIDMode), ctx, key, minID, mode)
 }
 
 // ZAdd mocks base method.
@@ -9240,6 +9662,367 @@ func (mr *MockClickhouseProviderMockRecorder) UseTracer(tracer any) *gomock.Call
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UseTracer", reflect.TypeOf((*MockClickhouseProvider)(nil).UseTracer), tracer)
 }
 
+// MockOracleDB is a mock of OracleDB interface.
+type MockOracleDB struct {
+	ctrl     *gomock.Controller
+	recorder *MockOracleDBMockRecorder
+	isgomock struct{}
+}
+
+// MockOracleDBMockRecorder is the mock recorder for MockOracleDB.
+type MockOracleDBMockRecorder struct {
+	mock *MockOracleDB
+}
+
+// NewMockOracleDB creates a new mock instance.
+func NewMockOracleDB(ctrl *gomock.Controller) *MockOracleDB {
+	mock := &MockOracleDB{ctrl: ctrl}
+	mock.recorder = &MockOracleDBMockRecorder{mock}
+	return mock
+}
+
+// EXPECT returns an object that allows the caller to indicate expected use.
+func (m *MockOracleDB) EXPECT() *MockOracleDBMockRecorder {
+	return m.recorder
+}
+
+// Begin mocks base method.
+func (m *MockOracleDB) Begin() (OracleTx, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Begin")
+	ret0, _ := ret[0].(OracleTx)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// Begin indicates an expected call of Begin.
+func (mr *MockOracleDBMockRecorder) Begin() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Begin", reflect.TypeOf((*MockOracleDB)(nil).Begin))
+}
+
+// Exec mocks base method.
+func (m *MockOracleDB) Exec(ctx context.Context, query string, args ...any) error {
+	m.ctrl.T.Helper()
+	varargs := []any{ctx, query}
+	for _, a := range args {
+		varargs = append(varargs, a)
+	}
+	ret := m.ctrl.Call(m, "Exec", varargs...)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// Exec indicates an expected call of Exec.
+func (mr *MockOracleDBMockRecorder) Exec(ctx, query any, args ...any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	varargs := append([]any{ctx, query}, args...)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Exec", reflect.TypeOf((*MockOracleDB)(nil).Exec), varargs...)
+}
+
+// ExecContext mocks base method.
+func (m *MockOracleDB) ExecContext(ctx context.Context, query string, args ...any) error {
+	m.ctrl.T.Helper()
+	varargs := []any{ctx, query}
+	for _, a := range args {
+		varargs = append(varargs, a)
+	}
+	ret := m.ctrl.Call(m, "ExecContext", varargs...)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// ExecContext indicates an expected call of ExecContext.
+func (mr *MockOracleDBMockRecorder) ExecContext(ctx, query any, args ...any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	varargs := append([]any{ctx, query}, args...)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ExecContext", reflect.TypeOf((*MockOracleTx)(nil).ExecContext), varargs...)
+}
+
+
+// HealthCheck mocks base method.
+func (m *MockOracleDB) HealthCheck(arg0 context.Context) (any, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "HealthCheck", arg0)
+	ret0, _ := ret[0].(any)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// HealthCheck indicates an expected call of HealthCheck.
+func (mr *MockOracleDBMockRecorder) HealthCheck(arg0 any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "HealthCheck", reflect.TypeOf((*MockOracleDB)(nil).HealthCheck), arg0)
+}
+
+// Select mocks base method.
+func (m *MockOracleDB) Select(ctx context.Context, dest any, query string, args ...any) error {
+	m.ctrl.T.Helper()
+	varargs := []any{ctx, dest, query}
+	for _, a := range args {
+		varargs = append(varargs, a)
+	}
+	ret := m.ctrl.Call(m, "Select", varargs...)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// Select indicates an expected call of Select.
+func (mr *MockOracleDBMockRecorder) Select(ctx, dest, query any, args ...any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	varargs := append([]any{ctx, dest, query}, args...)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Select", reflect.TypeOf((*MockOracleDB)(nil).Select), varargs...)
+}
+
+// MockOracleTx is a mock of OracleTx interface.
+type MockOracleTx struct {
+	ctrl     *gomock.Controller
+	recorder *MockOracleTxMockRecorder
+	isgomock struct{}
+}
+
+// MockOracleTxMockRecorder is the mock recorder for MockOracleTx.
+type MockOracleTxMockRecorder struct {
+	mock *MockOracleTx
+}
+
+// NewMockOracleTx creates a new mock instance.
+func NewMockOracleTx(ctrl *gomock.Controller) *MockOracleTx {
+	mock := &MockOracleTx{ctrl: ctrl}
+	mock.recorder = &MockOracleTxMockRecorder{mock}
+	return mock
+}
+
+// EXPECT returns an object that allows the caller to indicate expected use.
+func (m *MockOracleTx) EXPECT() *MockOracleTxMockRecorder {
+	return m.recorder
+}
+
+// Commit mocks base method.
+func (m *MockOracleTx) Commit() error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Commit")
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// Commit indicates an expected call of Commit.
+func (mr *MockOracleTxMockRecorder) Commit() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Commit", reflect.TypeOf((*MockOracleTx)(nil).Commit))
+}
+
+// ExecContext mocks base method.
+func (m *MockOracleTx) ExecContext(ctx context.Context, query string, args ...any) error {
+	m.ctrl.T.Helper()
+	varargs := []any{ctx, query}
+	for _, a := range args {
+		varargs = append(varargs, a)
+	}
+	ret := m.ctrl.Call(m, "ExecContext", varargs...)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// ExecContext indicates an expected call of ExecContext.
+func (mr *MockOracleTxMockRecorder) ExecContext(ctx, query any, args ...any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	varargs := append([]any{ctx, query}, args...)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ExecContext", reflect.TypeOf((*MockOracleTx)(nil).ExecContext), varargs...)
+}
+
+// Exec mocks base method.
+func (m *MockOracleTx) Exec(ctx context.Context, query string, args ...any) error {
+	m.ctrl.T.Helper()
+	varargs := []any{ctx, query}
+	for _, a := range args {
+		varargs = append(varargs, a)
+	}
+	ret := m.ctrl.Call(m, "Exec", varargs...)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// Exec indicates an expected call of ExecContext.
+func (mr *MockOracleTxMockRecorder) Exec(ctx, query any, args ...any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	varargs := append([]any{ctx, query}, args...)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Exec", reflect.TypeOf((*MockOracleTx)(nil).Exec), varargs...)
+}
+
+// Rollback mocks base method.
+func (m *MockOracleTx) Rollback() error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Rollback")
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// Rollback indicates an expected call of Rollback.
+func (mr *MockOracleTxMockRecorder) Rollback() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Rollback", reflect.TypeOf((*MockOracleTx)(nil).Rollback))
+}
+
+// SelectContext mocks base method.
+func (m *MockOracleTx) SelectContext(ctx context.Context, dest any, query string, args ...any) error {
+	m.ctrl.T.Helper()
+	varargs := []any{ctx, dest, query}
+	for _, a := range args {
+		varargs = append(varargs, a)
+	}
+	ret := m.ctrl.Call(m, "SelectContext", varargs...)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// SelectContext indicates an expected call of SelectContext.
+func (mr *MockOracleTxMockRecorder) SelectContext(ctx, dest, query any, args ...any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	varargs := append([]any{ctx, dest, query}, args...)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SelectContext", reflect.TypeOf((*MockOracleTx)(nil).SelectContext), varargs...)
+}
+
+// MockOracleProvider is a mock of OracleProvider interface.
+type MockOracleProvider struct {
+	ctrl     *gomock.Controller
+	recorder *MockOracleProviderMockRecorder
+	isgomock struct{}
+}
+
+// MockOracleProviderMockRecorder is the mock recorder for MockOracleProvider.
+type MockOracleProviderMockRecorder struct {
+	mock *MockOracleProvider
+}
+
+// NewMockOracleProvider creates a new mock instance.
+func NewMockOracleProvider(ctrl *gomock.Controller) *MockOracleProvider {
+	mock := &MockOracleProvider{ctrl: ctrl}
+	mock.recorder = &MockOracleProviderMockRecorder{mock}
+	return mock
+}
+
+// EXPECT returns an object that allows the caller to indicate expected use.
+func (m *MockOracleProvider) EXPECT() *MockOracleProviderMockRecorder {
+	return m.recorder
+}
+
+// Begin mocks base method.
+func (m *MockOracleProvider) Begin() (OracleTx, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Begin")
+	ret0, _ := ret[0].(OracleTx)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// Begin indicates an expected call of Begin.
+func (mr *MockOracleProviderMockRecorder) Begin() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Begin", reflect.TypeOf((*MockOracleProvider)(nil).Begin))
+}
+
+// Connect mocks base method.
+func (m *MockOracleProvider) Connect() {
+	m.ctrl.T.Helper()
+	m.ctrl.Call(m, "Connect")
+}
+
+// Connect indicates an expected call of Connect.
+func (mr *MockOracleProviderMockRecorder) Connect() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Connect", reflect.TypeOf((*MockOracleProvider)(nil).Connect))
+}
+
+// Exec mocks base method.
+func (m *MockOracleProvider) Exec(ctx context.Context, query string, args ...any) error {
+	m.ctrl.T.Helper()
+	varargs := []any{ctx, query}
+	for _, a := range args {
+		varargs = append(varargs, a)
+	}
+	ret := m.ctrl.Call(m, "Exec", varargs...)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// Exec indicates an expected call of Exec.
+func (mr *MockOracleProviderMockRecorder) Exec(ctx, query any, args ...any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	varargs := append([]any{ctx, query}, args...)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Exec", reflect.TypeOf((*MockOracleProvider)(nil).Exec), varargs...)
+}
+
+// HealthCheck mocks base method.
+func (m *MockOracleProvider) HealthCheck(arg0 context.Context) (any, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "HealthCheck", arg0)
+	ret0, _ := ret[0].(any)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// HealthCheck indicates an expected call of HealthCheck.
+func (mr *MockOracleProviderMockRecorder) HealthCheck(arg0 any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "HealthCheck", reflect.TypeOf((*MockOracleProvider)(nil).HealthCheck), arg0)
+}
+
+// Select mocks base method.
+func (m *MockOracleProvider) Select(ctx context.Context, dest any, query string, args ...any) error {
+	m.ctrl.T.Helper()
+	varargs := []any{ctx, dest, query}
+	for _, a := range args {
+		varargs = append(varargs, a)
+	}
+	ret := m.ctrl.Call(m, "Select", varargs...)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// Select indicates an expected call of Select.
+func (mr *MockOracleProviderMockRecorder) Select(ctx, dest, query any, args ...any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	varargs := append([]any{ctx, dest, query}, args...)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Select", reflect.TypeOf((*MockOracleProvider)(nil).Select), varargs...)
+}
+
+// UseLogger mocks base method.
+func (m *MockOracleProvider) UseLogger(logger any) {
+	m.ctrl.T.Helper()
+	m.ctrl.Call(m, "UseLogger", logger)
+}
+
+// UseLogger indicates an expected call of UseLogger.
+func (mr *MockOracleProviderMockRecorder) UseLogger(logger any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UseLogger", reflect.TypeOf((*MockOracleProvider)(nil).UseLogger), logger)
+}
+
+// UseMetrics mocks base method.
+func (m *MockOracleProvider) UseMetrics(metrics any) {
+	m.ctrl.T.Helper()
+	m.ctrl.Call(m, "UseMetrics", metrics)
+}
+
+// UseMetrics indicates an expected call of UseMetrics.
+func (mr *MockOracleProviderMockRecorder) UseMetrics(metrics any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UseMetrics", reflect.TypeOf((*MockOracleProvider)(nil).UseMetrics), metrics)
+}
+
+// UseTracer mocks base method.
+func (m *MockOracleProvider) UseTracer(tracer any) {
+	m.ctrl.T.Helper()
+	m.ctrl.Call(m, "UseTracer", tracer)
+}
+
+// UseTracer indicates an expected call of UseTracer.
+func (mr *MockOracleProviderMockRecorder) UseTracer(tracer any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UseTracer", reflect.TypeOf((*MockOracleProvider)(nil).UseTracer), tracer)
+}
+
 // MockMongo is a mock of Mongo interface.
 type MockMongo struct {
 	ctrl     *gomock.Controller
@@ -10586,31 +11369,31 @@ func (mr *MockPubSubProviderMockRecorder) Connect() *gomock.Call {
 }
 
 // CreateTopic mocks base method.
-func (m *MockPubSubProvider) CreateTopic(context context.Context, name string) error {
+func (m *MockPubSubProvider) CreateTopic(arg0 context.Context, name string) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "CreateTopic", context, name)
+	ret := m.ctrl.Call(m, "CreateTopic", arg0, name)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // CreateTopic indicates an expected call of CreateTopic.
-func (mr *MockPubSubProviderMockRecorder) CreateTopic(context, name any) *gomock.Call {
+func (mr *MockPubSubProviderMockRecorder) CreateTopic(arg0, name any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CreateTopic", reflect.TypeOf((*MockPubSubProvider)(nil).CreateTopic), context, name)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CreateTopic", reflect.TypeOf((*MockPubSubProvider)(nil).CreateTopic), arg0, name)
 }
 
 // DeleteTopic mocks base method.
-func (m *MockPubSubProvider) DeleteTopic(context context.Context, name string) error {
+func (m *MockPubSubProvider) DeleteTopic(arg0 context.Context, name string) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "DeleteTopic", context, name)
+	ret := m.ctrl.Call(m, "DeleteTopic", arg0, name)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // DeleteTopic indicates an expected call of DeleteTopic.
-func (mr *MockPubSubProviderMockRecorder) DeleteTopic(context, name any) *gomock.Call {
+func (mr *MockPubSubProviderMockRecorder) DeleteTopic(arg0, name any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeleteTopic", reflect.TypeOf((*MockPubSubProvider)(nil).DeleteTopic), context, name)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeleteTopic", reflect.TypeOf((*MockPubSubProvider)(nil).DeleteTopic), arg0, name)
 }
 
 // Health mocks base method.
@@ -10639,6 +11422,26 @@ func (m *MockPubSubProvider) Publish(ctx context.Context, topic string, message 
 func (mr *MockPubSubProviderMockRecorder) Publish(ctx, topic, message any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Publish", reflect.TypeOf((*MockPubSubProvider)(nil).Publish), ctx, topic, message)
+}
+
+// Query mocks base method.
+func (m *MockPubSubProvider) Query(ctx context.Context, query string, args ...any) ([]byte, error) {
+	m.ctrl.T.Helper()
+	varargs := []any{ctx, query}
+	for _, a := range args {
+		varargs = append(varargs, a)
+	}
+	ret := m.ctrl.Call(m, "Query", varargs...)
+	ret0, _ := ret[0].([]byte)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// Query indicates an expected call of Query.
+func (mr *MockPubSubProviderMockRecorder) Query(ctx, query any, args ...any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	varargs := append([]any{ctx, query}, args...)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Query", reflect.TypeOf((*MockPubSubProvider)(nil).Query), varargs...)
 }
 
 // Subscribe mocks base method.
@@ -13128,4 +13931,746 @@ func (m *MockElasticsearchProvider) UseTracer(tracer any) {
 func (mr *MockElasticsearchProviderMockRecorder) UseTracer(tracer any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UseTracer", reflect.TypeOf((*MockElasticsearchProvider)(nil).UseTracer), tracer)
+}
+
+// MockCouchbase is a mock of Couchbase interface.
+type MockCouchbase struct {
+	ctrl     *gomock.Controller
+	recorder *MockCouchbaseMockRecorder
+	isgomock struct{}
+}
+
+// MockCouchbaseMockRecorder is the mock recorder for MockCouchbase.
+type MockCouchbaseMockRecorder struct {
+	mock *MockCouchbase
+}
+
+// NewMockCouchbase creates a new mock instance.
+func NewMockCouchbase(ctrl *gomock.Controller) *MockCouchbase {
+	mock := &MockCouchbase{ctrl: ctrl}
+	mock.recorder = &MockCouchbaseMockRecorder{mock}
+	return mock
+}
+
+// EXPECT returns an object that allows the caller to indicate expected use.
+func (m *MockCouchbase) EXPECT() *MockCouchbaseMockRecorder {
+	return m.recorder
+}
+
+// AnalyticsQuery mocks base method.
+func (m *MockCouchbase) AnalyticsQuery(ctx context.Context, statement string, params map[string]any, result any) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "AnalyticsQuery", ctx, statement, params, result)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// AnalyticsQuery indicates an expected call of AnalyticsQuery.
+func (mr *MockCouchbaseMockRecorder) AnalyticsQuery(ctx, statement, params, result any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AnalyticsQuery", reflect.TypeOf((*MockCouchbase)(nil).AnalyticsQuery), ctx, statement, params, result)
+}
+
+// Close mocks base method.
+func (m *MockCouchbase) Close(opts any) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Close", opts)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// Close indicates an expected call of Close.
+func (mr *MockCouchbaseMockRecorder) Close(opts any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Close", reflect.TypeOf((*MockCouchbase)(nil).Close), opts)
+}
+
+// Get mocks base method.
+func (m *MockCouchbase) Get(ctx context.Context, key string, result any) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Get", ctx, key, result)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// Get indicates an expected call of Get.
+func (mr *MockCouchbaseMockRecorder) Get(ctx, key, result any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Get", reflect.TypeOf((*MockCouchbase)(nil).Get), ctx, key, result)
+}
+
+// HealthCheck mocks base method.
+func (m *MockCouchbase) HealthCheck(arg0 context.Context) (any, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "HealthCheck", arg0)
+	ret0, _ := ret[0].(any)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// HealthCheck indicates an expected call of HealthCheck.
+func (mr *MockCouchbaseMockRecorder) HealthCheck(arg0 any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "HealthCheck", reflect.TypeOf((*MockCouchbase)(nil).HealthCheck), arg0)
+}
+
+// Insert mocks base method.
+func (m *MockCouchbase) Insert(ctx context.Context, key string, document, result any) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Insert", ctx, key, document, result)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// Insert indicates an expected call of Insert.
+func (mr *MockCouchbaseMockRecorder) Insert(ctx, key, document, result any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Insert", reflect.TypeOf((*MockCouchbase)(nil).Insert), ctx, key, document, result)
+}
+
+// Query mocks base method.
+func (m *MockCouchbase) Query(ctx context.Context, statement string, params map[string]any, result any) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Query", ctx, statement, params, result)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// Query indicates an expected call of Query.
+func (mr *MockCouchbaseMockRecorder) Query(ctx, statement, params, result any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Query", reflect.TypeOf((*MockCouchbase)(nil).Query), ctx, statement, params, result)
+}
+
+// Remove mocks base method.
+func (m *MockCouchbase) Remove(ctx context.Context, key string) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Remove", ctx, key)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// Remove indicates an expected call of Remove.
+func (mr *MockCouchbaseMockRecorder) Remove(ctx, key any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Remove", reflect.TypeOf((*MockCouchbase)(nil).Remove), ctx, key)
+}
+
+// RunTransaction mocks base method.
+func (m *MockCouchbase) RunTransaction(ctx context.Context, logic func(any) error) (any, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "RunTransaction", ctx, logic)
+	ret0, _ := ret[0].(any)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// RunTransaction indicates an expected call of RunTransaction.
+func (mr *MockCouchbaseMockRecorder) RunTransaction(ctx, logic any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "RunTransaction", reflect.TypeOf((*MockCouchbase)(nil).RunTransaction), ctx, logic)
+}
+
+// Upsert mocks base method.
+func (m *MockCouchbase) Upsert(ctx context.Context, key string, document, result any) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Upsert", ctx, key, document, result)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// Upsert indicates an expected call of Upsert.
+func (mr *MockCouchbaseMockRecorder) Upsert(ctx, key, document, result any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Upsert", reflect.TypeOf((*MockCouchbase)(nil).Upsert), ctx, key, document, result)
+}
+
+// MockCouchbaseProvider is a mock of CouchbaseProvider interface.
+type MockCouchbaseProvider struct {
+	ctrl     *gomock.Controller
+	recorder *MockCouchbaseProviderMockRecorder
+	isgomock struct{}
+}
+
+// MockCouchbaseProviderMockRecorder is the mock recorder for MockCouchbaseProvider.
+type MockCouchbaseProviderMockRecorder struct {
+	mock *MockCouchbaseProvider
+}
+
+// NewMockCouchbaseProvider creates a new mock instance.
+func NewMockCouchbaseProvider(ctrl *gomock.Controller) *MockCouchbaseProvider {
+	mock := &MockCouchbaseProvider{ctrl: ctrl}
+	mock.recorder = &MockCouchbaseProviderMockRecorder{mock}
+	return mock
+}
+
+// EXPECT returns an object that allows the caller to indicate expected use.
+func (m *MockCouchbaseProvider) EXPECT() *MockCouchbaseProviderMockRecorder {
+	return m.recorder
+}
+
+// AnalyticsQuery mocks base method.
+func (m *MockCouchbaseProvider) AnalyticsQuery(ctx context.Context, statement string, params map[string]any, result any) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "AnalyticsQuery", ctx, statement, params, result)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// AnalyticsQuery indicates an expected call of AnalyticsQuery.
+func (mr *MockCouchbaseProviderMockRecorder) AnalyticsQuery(ctx, statement, params, result any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AnalyticsQuery", reflect.TypeOf((*MockCouchbaseProvider)(nil).AnalyticsQuery), ctx, statement, params, result)
+}
+
+// Close mocks base method.
+func (m *MockCouchbaseProvider) Close(opts any) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Close", opts)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// Close indicates an expected call of Close.
+func (mr *MockCouchbaseProviderMockRecorder) Close(opts any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Close", reflect.TypeOf((*MockCouchbaseProvider)(nil).Close), opts)
+}
+
+// Connect mocks base method.
+func (m *MockCouchbaseProvider) Connect() {
+	m.ctrl.T.Helper()
+	m.ctrl.Call(m, "Connect")
+}
+
+// Connect indicates an expected call of Connect.
+func (mr *MockCouchbaseProviderMockRecorder) Connect() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Connect", reflect.TypeOf((*MockCouchbaseProvider)(nil).Connect))
+}
+
+// Get mocks base method.
+func (m *MockCouchbaseProvider) Get(ctx context.Context, key string, result any) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Get", ctx, key, result)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// Get indicates an expected call of Get.
+func (mr *MockCouchbaseProviderMockRecorder) Get(ctx, key, result any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Get", reflect.TypeOf((*MockCouchbaseProvider)(nil).Get), ctx, key, result)
+}
+
+// HealthCheck mocks base method.
+func (m *MockCouchbaseProvider) HealthCheck(arg0 context.Context) (any, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "HealthCheck", arg0)
+	ret0, _ := ret[0].(any)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// HealthCheck indicates an expected call of HealthCheck.
+func (mr *MockCouchbaseProviderMockRecorder) HealthCheck(arg0 any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "HealthCheck", reflect.TypeOf((*MockCouchbaseProvider)(nil).HealthCheck), arg0)
+}
+
+// Insert mocks base method.
+func (m *MockCouchbaseProvider) Insert(ctx context.Context, key string, document, result any) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Insert", ctx, key, document, result)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// Insert indicates an expected call of Insert.
+func (mr *MockCouchbaseProviderMockRecorder) Insert(ctx, key, document, result any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Insert", reflect.TypeOf((*MockCouchbaseProvider)(nil).Insert), ctx, key, document, result)
+}
+
+// Query mocks base method.
+func (m *MockCouchbaseProvider) Query(ctx context.Context, statement string, params map[string]any, result any) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Query", ctx, statement, params, result)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// Query indicates an expected call of Query.
+func (mr *MockCouchbaseProviderMockRecorder) Query(ctx, statement, params, result any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Query", reflect.TypeOf((*MockCouchbaseProvider)(nil).Query), ctx, statement, params, result)
+}
+
+// Remove mocks base method.
+func (m *MockCouchbaseProvider) Remove(ctx context.Context, key string) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Remove", ctx, key)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// Remove indicates an expected call of Remove.
+func (mr *MockCouchbaseProviderMockRecorder) Remove(ctx, key any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Remove", reflect.TypeOf((*MockCouchbaseProvider)(nil).Remove), ctx, key)
+}
+
+// RunTransaction mocks base method.
+func (m *MockCouchbaseProvider) RunTransaction(ctx context.Context, logic func(any) error) (any, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "RunTransaction", ctx, logic)
+	ret0, _ := ret[0].(any)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// RunTransaction indicates an expected call of RunTransaction.
+func (mr *MockCouchbaseProviderMockRecorder) RunTransaction(ctx, logic any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "RunTransaction", reflect.TypeOf((*MockCouchbaseProvider)(nil).RunTransaction), ctx, logic)
+}
+
+// Upsert mocks base method.
+func (m *MockCouchbaseProvider) Upsert(ctx context.Context, key string, document, result any) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Upsert", ctx, key, document, result)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// Upsert indicates an expected call of Upsert.
+func (mr *MockCouchbaseProviderMockRecorder) Upsert(ctx, key, document, result any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Upsert", reflect.TypeOf((*MockCouchbaseProvider)(nil).Upsert), ctx, key, document, result)
+}
+
+// UseLogger mocks base method.
+func (m *MockCouchbaseProvider) UseLogger(logger any) {
+	m.ctrl.T.Helper()
+	m.ctrl.Call(m, "UseLogger", logger)
+}
+
+// UseLogger indicates an expected call of UseLogger.
+func (mr *MockCouchbaseProviderMockRecorder) UseLogger(logger any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UseLogger", reflect.TypeOf((*MockCouchbaseProvider)(nil).UseLogger), logger)
+}
+
+// UseMetrics mocks base method.
+func (m *MockCouchbaseProvider) UseMetrics(metrics any) {
+	m.ctrl.T.Helper()
+	m.ctrl.Call(m, "UseMetrics", metrics)
+}
+
+// UseMetrics indicates an expected call of UseMetrics.
+func (mr *MockCouchbaseProviderMockRecorder) UseMetrics(metrics any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UseMetrics", reflect.TypeOf((*MockCouchbaseProvider)(nil).UseMetrics), metrics)
+}
+
+// UseTracer mocks base method.
+func (m *MockCouchbaseProvider) UseTracer(tracer any) {
+	m.ctrl.T.Helper()
+	m.ctrl.Call(m, "UseTracer", tracer)
+}
+
+// UseTracer indicates an expected call of UseTracer.
+func (mr *MockCouchbaseProviderMockRecorder) UseTracer(tracer any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UseTracer", reflect.TypeOf((*MockCouchbaseProvider)(nil).UseTracer), tracer)
+}
+
+// MockInfluxDB is a mock of InfluxDB interface.
+type MockInfluxDB struct {
+	ctrl     *gomock.Controller
+	recorder *MockInfluxDBMockRecorder
+	isgomock struct{}
+}
+
+// MockInfluxDBMockRecorder is the mock recorder for MockInfluxDB.
+type MockInfluxDBMockRecorder struct {
+	mock *MockInfluxDB
+}
+
+// NewMockInfluxDB creates a new mock instance.
+func NewMockInfluxDB(ctrl *gomock.Controller) *MockInfluxDB {
+	mock := &MockInfluxDB{ctrl: ctrl}
+	mock.recorder = &MockInfluxDBMockRecorder{mock}
+	return mock
+}
+
+// EXPECT returns an object that allows the caller to indicate expected use.
+func (m *MockInfluxDB) EXPECT() *MockInfluxDBMockRecorder {
+	return m.recorder
+}
+
+// CreateBucket mocks base method.
+func (m *MockInfluxDB) CreateBucket(ctx context.Context, org, bucket string) (string, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "CreateBucket", ctx, org, bucket)
+	ret0, _ := ret[0].(string)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// CreateBucket indicates an expected call of CreateBucket.
+func (mr *MockInfluxDBMockRecorder) CreateBucket(ctx, org, bucket any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CreateBucket", reflect.TypeOf((*MockInfluxDB)(nil).CreateBucket), ctx, org, bucket)
+}
+
+// CreateOrganization mocks base method.
+func (m *MockInfluxDB) CreateOrganization(ctx context.Context, org string) (string, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "CreateOrganization", ctx, org)
+	ret0, _ := ret[0].(string)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// CreateOrganization indicates an expected call of CreateOrganization.
+func (mr *MockInfluxDBMockRecorder) CreateOrganization(ctx, org any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CreateOrganization", reflect.TypeOf((*MockInfluxDB)(nil).CreateOrganization), ctx, org)
+}
+
+// DeleteBucket mocks base method.
+func (m *MockInfluxDB) DeleteBucket(ctx context.Context, bucketID string) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "DeleteBucket", ctx, bucketID)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// DeleteBucket indicates an expected call of DeleteBucket.
+func (mr *MockInfluxDBMockRecorder) DeleteBucket(ctx, bucketID any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeleteBucket", reflect.TypeOf((*MockInfluxDB)(nil).DeleteBucket), ctx, bucketID)
+}
+
+// DeleteOrganization mocks base method.
+func (m *MockInfluxDB) DeleteOrganization(ctx context.Context, orgID string) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "DeleteOrganization", ctx, orgID)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// DeleteOrganization indicates an expected call of DeleteOrganization.
+func (mr *MockInfluxDBMockRecorder) DeleteOrganization(ctx, orgID any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeleteOrganization", reflect.TypeOf((*MockInfluxDB)(nil).DeleteOrganization), ctx, orgID)
+}
+
+// HealthCheck mocks base method.
+func (m *MockInfluxDB) HealthCheck(arg0 context.Context) (any, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "HealthCheck", arg0)
+	ret0, _ := ret[0].(any)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// HealthCheck indicates an expected call of HealthCheck.
+func (mr *MockInfluxDBMockRecorder) HealthCheck(arg0 any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "HealthCheck", reflect.TypeOf((*MockInfluxDB)(nil).HealthCheck), arg0)
+}
+
+// ListBuckets mocks base method.
+func (m *MockInfluxDB) ListBuckets(ctx context.Context, org string) (map[string]string, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "ListBuckets", ctx, org)
+	ret0, _ := ret[0].(map[string]string)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// ListBuckets indicates an expected call of ListBuckets.
+func (mr *MockInfluxDBMockRecorder) ListBuckets(ctx, org any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListBuckets", reflect.TypeOf((*MockInfluxDB)(nil).ListBuckets), ctx, org)
+}
+
+// ListOrganization mocks base method.
+func (m *MockInfluxDB) ListOrganization(ctx context.Context) (map[string]string, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "ListOrganization", ctx)
+	ret0, _ := ret[0].(map[string]string)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// ListOrganization indicates an expected call of ListOrganization.
+func (mr *MockInfluxDBMockRecorder) ListOrganization(ctx any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListOrganization", reflect.TypeOf((*MockInfluxDB)(nil).ListOrganization), ctx)
+}
+
+// Ping mocks base method.
+func (m *MockInfluxDB) Ping(ctx context.Context) (bool, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Ping", ctx)
+	ret0, _ := ret[0].(bool)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// Ping indicates an expected call of Ping.
+func (mr *MockInfluxDBMockRecorder) Ping(ctx any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Ping", reflect.TypeOf((*MockInfluxDB)(nil).Ping), ctx)
+}
+
+// Query mocks base method.
+func (m *MockInfluxDB) Query(ctx context.Context, org, fluxQuery string) ([]map[string]any, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Query", ctx, org, fluxQuery)
+	ret0, _ := ret[0].([]map[string]any)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// Query indicates an expected call of Query.
+func (mr *MockInfluxDBMockRecorder) Query(ctx, org, fluxQuery any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Query", reflect.TypeOf((*MockInfluxDB)(nil).Query), ctx, org, fluxQuery)
+}
+
+// WritePoint mocks base method.
+func (m *MockInfluxDB) WritePoint(ctx context.Context, org, bucket, measurement string, tags map[string]string, fields map[string]any, timestamp time.Time) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "WritePoint", ctx, org, bucket, measurement, tags, fields, timestamp)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// WritePoint indicates an expected call of WritePoint.
+func (mr *MockInfluxDBMockRecorder) WritePoint(ctx, org, bucket, measurement, tags, fields, timestamp any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "WritePoint", reflect.TypeOf((*MockInfluxDB)(nil).WritePoint), ctx, org, bucket, measurement, tags, fields, timestamp)
+}
+
+// MockInfluxDBProvider is a mock of InfluxDBProvider interface.
+type MockInfluxDBProvider struct {
+	ctrl     *gomock.Controller
+	recorder *MockInfluxDBProviderMockRecorder
+	isgomock struct{}
+}
+
+// MockInfluxDBProviderMockRecorder is the mock recorder for MockInfluxDBProvider.
+type MockInfluxDBProviderMockRecorder struct {
+	mock *MockInfluxDBProvider
+}
+
+// NewMockInfluxDBProvider creates a new mock instance.
+func NewMockInfluxDBProvider(ctrl *gomock.Controller) *MockInfluxDBProvider {
+	mock := &MockInfluxDBProvider{ctrl: ctrl}
+	mock.recorder = &MockInfluxDBProviderMockRecorder{mock}
+	return mock
+}
+
+// EXPECT returns an object that allows the caller to indicate expected use.
+func (m *MockInfluxDBProvider) EXPECT() *MockInfluxDBProviderMockRecorder {
+	return m.recorder
+}
+
+// Connect mocks base method.
+func (m *MockInfluxDBProvider) Connect() {
+	m.ctrl.T.Helper()
+	m.ctrl.Call(m, "Connect")
+}
+
+// Connect indicates an expected call of Connect.
+func (mr *MockInfluxDBProviderMockRecorder) Connect() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Connect", reflect.TypeOf((*MockInfluxDBProvider)(nil).Connect))
+}
+
+// CreateBucket mocks base method.
+func (m *MockInfluxDBProvider) CreateBucket(ctx context.Context, org, bucket string) (string, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "CreateBucket", ctx, org, bucket)
+	ret0, _ := ret[0].(string)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// CreateBucket indicates an expected call of CreateBucket.
+func (mr *MockInfluxDBProviderMockRecorder) CreateBucket(ctx, org, bucket any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CreateBucket", reflect.TypeOf((*MockInfluxDBProvider)(nil).CreateBucket), ctx, org, bucket)
+}
+
+// CreateOrganization mocks base method.
+func (m *MockInfluxDBProvider) CreateOrganization(ctx context.Context, org string) (string, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "CreateOrganization", ctx, org)
+	ret0, _ := ret[0].(string)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// CreateOrganization indicates an expected call of CreateOrganization.
+func (mr *MockInfluxDBProviderMockRecorder) CreateOrganization(ctx, org any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CreateOrganization", reflect.TypeOf((*MockInfluxDBProvider)(nil).CreateOrganization), ctx, org)
+}
+
+// DeleteBucket mocks base method.
+func (m *MockInfluxDBProvider) DeleteBucket(ctx context.Context, bucketID string) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "DeleteBucket", ctx, bucketID)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// DeleteBucket indicates an expected call of DeleteBucket.
+func (mr *MockInfluxDBProviderMockRecorder) DeleteBucket(ctx, bucketID any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeleteBucket", reflect.TypeOf((*MockInfluxDBProvider)(nil).DeleteBucket), ctx, bucketID)
+}
+
+// DeleteOrganization mocks base method.
+func (m *MockInfluxDBProvider) DeleteOrganization(ctx context.Context, orgID string) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "DeleteOrganization", ctx, orgID)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// DeleteOrganization indicates an expected call of DeleteOrganization.
+func (mr *MockInfluxDBProviderMockRecorder) DeleteOrganization(ctx, orgID any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeleteOrganization", reflect.TypeOf((*MockInfluxDBProvider)(nil).DeleteOrganization), ctx, orgID)
+}
+
+// HealthCheck mocks base method.
+func (m *MockInfluxDBProvider) HealthCheck(arg0 context.Context) (any, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "HealthCheck", arg0)
+	ret0, _ := ret[0].(any)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// HealthCheck indicates an expected call of HealthCheck.
+func (mr *MockInfluxDBProviderMockRecorder) HealthCheck(arg0 any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "HealthCheck", reflect.TypeOf((*MockInfluxDBProvider)(nil).HealthCheck), arg0)
+}
+
+// ListBuckets mocks base method.
+func (m *MockInfluxDBProvider) ListBuckets(ctx context.Context, org string) (map[string]string, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "ListBuckets", ctx, org)
+	ret0, _ := ret[0].(map[string]string)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// ListBuckets indicates an expected call of ListBuckets.
+func (mr *MockInfluxDBProviderMockRecorder) ListBuckets(ctx, org any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListBuckets", reflect.TypeOf((*MockInfluxDBProvider)(nil).ListBuckets), ctx, org)
+}
+
+// ListOrganization mocks base method.
+func (m *MockInfluxDBProvider) ListOrganization(ctx context.Context) (map[string]string, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "ListOrganization", ctx)
+	ret0, _ := ret[0].(map[string]string)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// ListOrganization indicates an expected call of ListOrganization.
+func (mr *MockInfluxDBProviderMockRecorder) ListOrganization(ctx any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListOrganization", reflect.TypeOf((*MockInfluxDBProvider)(nil).ListOrganization), ctx)
+}
+
+// Ping mocks base method.
+func (m *MockInfluxDBProvider) Ping(ctx context.Context) (bool, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Ping", ctx)
+	ret0, _ := ret[0].(bool)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// Ping indicates an expected call of Ping.
+func (mr *MockInfluxDBProviderMockRecorder) Ping(ctx any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Ping", reflect.TypeOf((*MockInfluxDBProvider)(nil).Ping), ctx)
+}
+
+// Query mocks base method.
+func (m *MockInfluxDBProvider) Query(ctx context.Context, org, fluxQuery string) ([]map[string]any, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Query", ctx, org, fluxQuery)
+	ret0, _ := ret[0].([]map[string]any)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// Query indicates an expected call of Query.
+func (mr *MockInfluxDBProviderMockRecorder) Query(ctx, org, fluxQuery any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Query", reflect.TypeOf((*MockInfluxDBProvider)(nil).Query), ctx, org, fluxQuery)
+}
+
+// UseLogger mocks base method.
+func (m *MockInfluxDBProvider) UseLogger(logger any) {
+	m.ctrl.T.Helper()
+	m.ctrl.Call(m, "UseLogger", logger)
+}
+
+// UseLogger indicates an expected call of UseLogger.
+func (mr *MockInfluxDBProviderMockRecorder) UseLogger(logger any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UseLogger", reflect.TypeOf((*MockInfluxDBProvider)(nil).UseLogger), logger)
+}
+
+// UseMetrics mocks base method.
+func (m *MockInfluxDBProvider) UseMetrics(metrics any) {
+	m.ctrl.T.Helper()
+	m.ctrl.Call(m, "UseMetrics", metrics)
+}
+
+// UseMetrics indicates an expected call of UseMetrics.
+func (mr *MockInfluxDBProviderMockRecorder) UseMetrics(metrics any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UseMetrics", reflect.TypeOf((*MockInfluxDBProvider)(nil).UseMetrics), metrics)
+}
+
+// UseTracer mocks base method.
+func (m *MockInfluxDBProvider) UseTracer(tracer any) {
+	m.ctrl.T.Helper()
+	m.ctrl.Call(m, "UseTracer", tracer)
+}
+
+// UseTracer indicates an expected call of UseTracer.
+func (mr *MockInfluxDBProviderMockRecorder) UseTracer(tracer any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UseTracer", reflect.TypeOf((*MockInfluxDBProvider)(nil).UseTracer), tracer)
+}
+
+// WritePoint mocks base method.
+func (m *MockInfluxDBProvider) WritePoint(ctx context.Context, org, bucket, measurement string, tags map[string]string, fields map[string]any, timestamp time.Time) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "WritePoint", ctx, org, bucket, measurement, tags, fields, timestamp)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// WritePoint indicates an expected call of WritePoint.
+func (mr *MockInfluxDBProviderMockRecorder) WritePoint(ctx, org, bucket, measurement, tags, fields, timestamp any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "WritePoint", reflect.TypeOf((*MockInfluxDBProvider)(nil).WritePoint), ctx, org, bucket, measurement, tags, fields, timestamp)
 }

@@ -63,7 +63,7 @@ svc := ctx.GetHTTPService(<service_name>)
 ```
 
 ```go  
-func Customer(ctx *gofr.Context) (interface{}, error) {
+func Customer(ctx *gofr.Context) (any, error) {
 	// Get the payment service client
 	paymentSvc := ctx.GetHTTPService("payment")
 
@@ -100,13 +100,9 @@ GoFr provides its user with additional configurational options while registering
 
 ```go
 a.AddHTTPService("cat-facts", "https://catfact.ninja",
-    &service.APIKeyConfig{APIKey: "some-random-key"},
-
-    &service.BasicAuthConfig{
-       UserName: "gofr",
-       Password: "gofr",
-  },
-
+	service.NewAPIKeyConfig("some-random-key"),
+	service.NewBasicAuthConfig("username", "password"),
+	
     &service.CircuitBreakerConfig{
        Threshold: 4,
        Interval:  1 * time.Second,
@@ -117,14 +113,8 @@ a.AddHTTPService("cat-facts", "https://catfact.ninja",
    &service.HealthConfig{
        HealthEndpoint: "breeds",
   },
-
-   &service.OAuthConfig{
-       ClientID:       "abc",
-       ClientSecret:   "abc",
-       TokenURL:       "http://test.com",
-       Scopes:         nil,
-       EndpointParams: nil,
-  },
+   service.NewOAuthConfig("clientID", "clientSecret",
+	   "https://tokenurl.com", nil, nil, 0),
 
   &service.RetryConfig{
       MaxRetries: 5

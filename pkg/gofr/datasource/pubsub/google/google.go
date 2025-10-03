@@ -5,6 +5,7 @@ package google
 import (
 	"context"
 	"errors"
+	"fmt"
 	"strings"
 	"sync"
 	"time"
@@ -20,9 +21,13 @@ var (
 	errProjectIDNotProvided    = errors.New("google project id not provided")
 	errSubscriptionNotProvided = errors.New("subscription name not provided")
 	errClientNotConnected      = errors.New("google pubsub client is not connected")
+	errTopicName               = errors.New("empty topic name")
 )
 
-const defaultRetryInterval = 10 * time.Second
+const (
+	defaultRetryInterval = 10 * time.Second
+	messageBufferSize    = 100
+)
 
 type Config struct {
 	ProjectID        string
@@ -40,6 +45,11 @@ type googleClient struct {
 	mu          sync.RWMutex
 }
 
+const (
+	defaultQueryTimeout = 30 * time.Second
+	defaultMessageLimit = 10
+)
+
 //nolint:revive // We do not want anyone using the client without initialization steps.
 func New(conf Config, logger pubsub.Logger, metrics Metrics) *googleClient {
 	err := validateConfigs(&conf)
@@ -52,6 +62,7 @@ func New(conf Config, logger pubsub.Logger, metrics Metrics) *googleClient {
 	logger.Debugf("connecting to google pubsub client with projectID '%s' and subscriptionName '%s", conf.ProjectID, conf.SubscriptionName)
 
 	var client googleClient
+
 	client.Config = conf
 	client.logger = logger
 	client.metrics = metrics
@@ -98,18 +109,6 @@ func connect(conf Config, logger pubsub.Logger) (*gcPubSub.Client, error) {
 	logger.Logf("connected to google pubsub client, projectID: %s", client.Project())
 
 	return client, nil
-}
-
-func validateConfigs(conf *Config) error {
-	if conf.ProjectID == "" {
-		return errProjectIDNotProvided
-	}
-
-	if conf.SubscriptionName == "" {
-		return errSubscriptionNotProvided
-	}
-
-	return nil
 }
 
 func (g *googleClient) Publish(ctx context.Context, topic string, message []byte) error {
@@ -236,6 +235,62 @@ func (g *googleClient) Subscribe(ctx context.Context, topic string) (*pubsub.Mes
 	}
 }
 
+func (g *googleClient) Query(ctx context.Context, query string, args ...any) ([]byte, error) {
+	if !g.isConnected() {
+		return nil, errClientNotConnected
+	}
+
+	if query == "" {
+		return nil, errTopicName
+	}
+
+	timeout, limit := parseQueryArgs(args...)
+
+	// Get topic and subscription
+	topic, err := g.getTopic(ctx, query)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get topic: %w", err)
+	}
+
+	subscription, err := g.getQuerySubscription(ctx, topic)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get subscription: %w", err)
+	}
+
+	msgChan := make(chan []byte, messageBufferSize)
+	queryCtx, cancel := context.WithTimeout(ctx, timeout)
+
+	defer cancel()
+
+	// Start receiving messages
+	go func() {
+		defer close(msgChan)
+
+		receiveCtx, receiveCancel := context.WithTimeout(queryCtx, timeout)
+		defer receiveCancel()
+
+		err := subscription.Receive(receiveCtx, func(_ context.Context, msg *gcPubSub.Message) {
+			defer msg.Ack()
+
+			select {
+			case msgChan <- msg.Data:
+			case <-receiveCtx.Done():
+				return
+			default:
+				// Channel might be full, try non-blocking send
+				g.logger.Debugf("Query: message channel full for topic %s", query)
+			}
+		})
+
+		if err != nil && !errors.Is(err, context.Canceled) && !errors.Is(err, context.DeadlineExceeded) {
+			g.logger.Debugf("Query: receive ended for topic %s: %v", query, err)
+		}
+	}()
+
+	// Collect messages
+	return g.collectMessages(queryCtx, msgChan, limit), nil
+}
+
 func (g *googleClient) getTopic(ctx context.Context, topic string) (*gcPubSub.Topic, error) {
 	if g.client == nil {
 		return nil, errClientNotConnected
@@ -274,7 +329,6 @@ func (g *googleClient) getSubscription(ctx context.Context, topic *gcPubSub.Topi
 		subscription, err = g.client.CreateSubscription(ctx, g.SubscriptionName+"-"+topic.ID(), gcPubSub.SubscriptionConfig{
 			Topic: topic,
 		})
-
 		if err != nil {
 			return nil, err
 		}
@@ -338,18 +392,4 @@ func retryConnect(conf Config, logger pubsub.Logger, g *googleClient) {
 
 		time.Sleep(defaultRetryInterval)
 	}
-}
-
-func (g *googleClient) isConnected() bool {
-	if g.client == nil {
-		return false
-	}
-
-	ctx, cancel := context.WithTimeout(context.Background(), defaultRetryInterval)
-	defer cancel()
-
-	it := g.client.Topics(ctx)
-	_, err := it.Next()
-
-	return err == nil || errors.Is(err, iterator.Done)
 }

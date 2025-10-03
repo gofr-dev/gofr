@@ -1,0 +1,99 @@
+name: Build and Deploy Website To Stage
+permissions:
+  contents: read
+
+on:
+  push:
+    branches:
+      - development
+
+env:
+  APP_NAME: gofr-website
+  WEBSITE_REGISTRY: ghcr.io
+  GAR_PROJECT: raramuri-tech
+  GAR_REGISTRY: kops-dev
+  CLUSTER_NAME: raramuri-tech
+  CLUSTER_PROJECT: raramuri-tech
+  NAMESPACE: gofr-dev
+  NAMESPACE_STAGE: gofr-dev-stg
+
+jobs:
+  dockerize:
+    permissions:
+      contents: read
+      packages: write
+    runs-on: ubuntu-latest
+    outputs:
+      image: ${{ steps.output-image.outputs.image }}
+    name: 🐳 Dockerize
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v5
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Login to GAR
+        uses: docker/login-action@v3
+        with:
+          registry: us-central1-docker.pkg.dev
+          username: _json_key
+          password: ${{ secrets.GOFR_WEBSITE_GOFR_DEV_STG_DEPLOYMENT_KEY }}
+
+      - name: Log in to the GitHub Container registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.WEBSITE_REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Download UI Image
+        run: |
+          docker pull ${{ env.WEBSITE_REGISTRY }}/gofr-dev/website:latest
+
+      - name: Determine Image Tag
+        id: determine-tag
+        run: |
+          if [[ "${{ github.ref }}" == refs/tags/* ]]; then
+            TAG=${GITHUB_REF#refs/tags/}
+          else
+            TAG=${{ github.sha }}
+          fi
+          echo "TAG=$TAG" >> $GITHUB_ENV
+
+
+      - name: Build and Push Image
+        uses: docker/build-push-action@v6
+        with:
+          push: true
+          context: ./
+          file: ./docs/Dockerfile
+          tags: us-central1-docker.pkg.dev/${{ env.GAR_PROJECT }}/${{ env.GAR_REGISTRY }}/${{ env.APP_NAME }}:${{ env.TAG }}
+
+      - id: output-image
+        run: echo "image=`echo us-central1-docker.pkg.dev/${{ env.GAR_PROJECT }}/${{ env.GAR_REGISTRY }}/${{ env.APP_NAME }}:${{ env.TAG }}`" >> "$GITHUB_OUTPUT"
+
+  deployment_stage:
+    runs-on: ubuntu-latest
+    name: 🚀 Deploy-Stage
+    needs: dockerize
+    container:
+      image: ghcr.io/zopsmart/gha-images:deployments-0.1.3
+      options: --rm
+    env:
+      image: ${{needs.dockerize.outputs.image}}
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v5
+
+      - name: Authorize to GCP service account
+        uses: google-github-actions/auth@v3
+        with:
+          credentials_json: ${{ secrets.GOFR_WEBSITE_GOFR_DEV_STG_DEPLOYMENT_KEY }}
+
+      - name: Set GCloud Project and Fetch Cluster Credentials
+        run: gcloud container clusters get-credentials ${{ env.CLUSTER_NAME }} --region=us-central1 --project=${{ env.CLUSTER_PROJECT }}
+
+      - name: Update Deployment Image
+        run: kubectl set image deployment/${{ env.APP_NAME }} ${{ env.APP_NAME }}=${{ env.image }} --namespace ${{ env.NAMESPACE_STAGE }}

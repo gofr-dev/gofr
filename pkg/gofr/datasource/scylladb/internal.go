@@ -228,6 +228,7 @@ func (c *Client) sendOperationStats(ql *QueryLog, startTime time.Time, method st
 
 	if span != nil {
 		defer span.End()
+
 		span.SetAttributes(attribute.Int64(fmt.Sprintf("scylla.%v.duration", method), duration))
 	}
 

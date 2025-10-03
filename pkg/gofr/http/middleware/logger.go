@@ -21,7 +21,7 @@ var errHijackNotSupported = errors.New("response writer does not support hijacki
 type StatusResponseWriter struct {
 	http.ResponseWriter
 	status int
-	// wroteHeader keeps a flag to keep a check that the framework do not attemot to write the header again. This was previously causing
+	// wroteHeader keeps a flag to keep a check that the framework do not attempt to write the header again. This was previously causing
 	// `superfluous response.WriteHeader call`. This is particularly helpful in scenarios where the developer has already written header
 	// in any custom middlewares.
 	wroteHeader bool
@@ -109,6 +109,7 @@ func Logging(probes LogProbes, logger logger) func(inner http.Handler) http.Hand
 			}
 
 			defer handleRequestLog(srw, r, start, traceID, spanID, logger)
+
 			inner.ServeHTTP(srw, r)
 		})
 	}

@@ -76,6 +76,7 @@ func NewHTTPService(serviceAddress string, logger Logger, metrics Metrics, optio
 	}
 
 	var svc HTTP
+
 	svc = h
 
 	// if options are given, then add them to the httpService struct

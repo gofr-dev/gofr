@@ -1,13 +1,13 @@
 module gofr.dev/pkg/gofr/datasource/kv-store/nats
 
-go 1.23.4
+go 1.25
 
 require (
 	github.com/nats-io/nats.go v1.38.0
-	github.com/stretchr/testify v1.10.0
-	go.opentelemetry.io/otel v1.36.0
-	go.opentelemetry.io/otel/trace v1.36.0
-	go.uber.org/mock v0.5.2
+	github.com/stretchr/testify v1.11.1
+	go.opentelemetry.io/otel v1.38.0
+	go.opentelemetry.io/otel/trace v1.38.0
+	go.uber.org/mock v0.6.0
 )
 
 require (

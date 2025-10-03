@@ -3,433 +3,393 @@ package middleware
 import (
 	"bytes"
 	"context"
+	"crypto/rsa"
+	"encoding/base64"
 	"encoding/json"
 	"io"
+	"math/big"
+	"net"
 	"net/http"
 	"net/http/httptest"
-	"strings"
+	"regexp"
+	"strconv"
 	"testing"
 	"time"
 
 	"github.com/golang-jwt/jwt/v5"
-	"github.com/gorilla/mux"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"go.uber.org/mock/gomock"
+
+	"gofr.dev/pkg/gofr/service"
 )
 
-func TestOAuthSuccess(t *testing.T) {
-	router := mux.NewRouter()
-	router.HandleFunc("/test", func(w http.ResponseWriter, _ *http.Request) {
-		w.WriteHeader(http.StatusOK)
-	}).Methods(http.MethodGet).Name("/test")
-	router.Use(OAuth(NewOAuth(OauthConfigs{Provider: &MockProvider{}, RefreshInterval: 10})))
-
-	server := httptest.NewServer(router)
-
-	client := http.Client{}
-
-	resp, err := client.Do(getRequest(t, server.URL))
-
-	require.NoError(t, err)
-	assert.Equal(t, http.StatusOK, resp.StatusCode)
-
-	resp.Body.Close()
-}
-
-func TestGetJwtClaims(t *testing.T) {
-	claims := []byte(`{"aud":"stage.kops.dev","iat":1257894000,"orig":"GOOGLE",` +
-		`"picture":"https://lh3.googleusercontent.com/a/ACg8ocKJ5DDA4zruzFlsQ9KvL` +
-		`jHDtbOT_hpVz0hEO8jSl2m7Myk=s96-c","sub":"rakshit.singh@zopsmart.com","sub-id"` +
-		`:"a6573e1d-abea-4863-acdb-6cf3626a4414","type":"refresh_token"}`)
-
-	router := mux.NewRouter()
-	router.HandleFunc("/test", func(w http.ResponseWriter, r *http.Request) {
-		result, err := json.Marshal(r.Context().Value(JWTClaim))
-		if err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
-			return
-		}
-
-		_, err = w.Write(result)
-		if err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
-			return
-		}
-
-		w.WriteHeader(http.StatusOK)
-	}).Methods(http.MethodGet).Name("/test")
-	router.Use(OAuth(NewOAuth(OauthConfigs{Provider: &MockProvider{}, RefreshInterval: 10})))
-
-	server := httptest.NewServer(router)
-
-	client := http.Client{}
-
-	resp, err := client.Do(getRequest(t, server.URL))
-	result := make([]byte, len(claims))
-	_, _ = resp.Body.Read(result)
-
-	require.NoError(t, err)
-	assert.Equal(t, http.StatusOK, resp.StatusCode)
-	assert.Equal(t, claims, result)
-
-	resp.Body.Close()
-}
-
-func TestOAuthInvalidTokenFormat(t *testing.T) {
-	router := mux.NewRouter()
-	router.HandleFunc("/test", func(w http.ResponseWriter, _ *http.Request) {
-		w.WriteHeader(http.StatusOK)
-	}).Methods(http.MethodGet).Name("/test")
-	router.Use(OAuth(NewOAuth(OauthConfigs{Provider: &MockProvider{}, RefreshInterval: 10})))
-
-	server := httptest.NewServer(router)
-
-	req, _ := http.NewRequestWithContext(t.Context(), http.MethodGet, server.URL+"/test", http.NoBody)
-	req.Header.Set("Authorization", "eyJhb")
-
-	client := http.Client{}
-
-	resp, err := client.Do(req)
-
-	respBody, _ := io.ReadAll(resp.Body)
-
-	require.NoError(t, err)
-	assert.Equal(t, http.StatusUnauthorized, resp.StatusCode)
-	assert.Contains(t, string(respBody), `authorization header format must be Bearer {token}`)
-
-	resp.Body.Close()
-}
-
-func TestOAuthEmptyAuthHeader(t *testing.T) {
-	router := mux.NewRouter()
-	router.HandleFunc("/test", func(w http.ResponseWriter, _ *http.Request) {
-		w.WriteHeader(http.StatusOK)
-	}).Methods(http.MethodGet).Name("/test")
-	router.Use(OAuth(NewOAuth(OauthConfigs{Provider: &MockProvider{}, RefreshInterval: 10})))
-
-	server := httptest.NewServer(router)
-
-	req, _ := http.NewRequestWithContext(t.Context(), http.MethodGet, server.URL+"/test", http.NoBody)
-
-	client := http.Client{}
-
-	resp, err := client.Do(req)
-
-	respBody, _ := io.ReadAll(resp.Body)
-
-	require.NoError(t, err)
-	assert.Equal(t, http.StatusUnauthorized, resp.StatusCode)
-	assert.Contains(t, string(respBody), `authorization header is required`)
-
-	resp.Body.Close()
-}
-
-func TestOAuthMalformedToken(t *testing.T) {
-	router := mux.NewRouter()
-	router.HandleFunc("/test", func(w http.ResponseWriter, _ *http.Request) {
-		w.WriteHeader(http.StatusOK)
-	}).Methods(http.MethodGet).Name("/test")
-	router.Use(OAuth(NewOAuth(OauthConfigs{Provider: &MockProvider{}, RefreshInterval: 1 * time.Millisecond})))
-
-	server := httptest.NewServer(router)
-
-	req, _ := http.NewRequestWithContext(t.Context(), http.MethodGet, server.URL+"/test", http.NoBody)
-	req.Header.Set("Authorization", "Bearer eyJh")
-
-	client := http.Client{}
-
-	resp, err := client.Do(req)
-
-	respBody, _ := io.ReadAll(resp.Body)
-
-	require.NoError(t, err)
-	assert.Equal(t, http.StatusUnauthorized, resp.StatusCode)
-	assert.Contains(t, string(respBody), `token is malformed: token contains an invalid number of segments`)
-
-	resp.Body.Close()
-}
-
-func TestOAuthJWKSKeyNotFound(t *testing.T) {
-	router := mux.NewRouter()
-	router.HandleFunc("/test", func(w http.ResponseWriter, _ *http.Request) {
-		w.WriteHeader(http.StatusOK)
-	}).Methods(http.MethodGet).Name("/test")
-	router.Use(OAuth(NewOAuth(OauthConfigs{Provider: &MockProvider{}, RefreshInterval: 10})))
-
-	server := httptest.NewServer(router)
-
-	req, _ := http.NewRequestWithContext(t.Context(), http.MethodGet, server.URL+"/test", http.NoBody)
-	req.Header.Set("Authorization", "Bearer eyJhbGciOiJSUzI1NiIsImtpZCI6IjhaOV9RQTBSa0Y3RHM3TUFNaDFxLTl6dVJZ"+
-		"TklSTThHV3BZdXdyb0ZkTjg9IiwidHlwIjoiSldUIn0.eyJhdWQiOiJzdGFnZS5hdXRoLnpvcHNtYXJ0LmNvbSIsImV4cCI6MTcxODc5MDQ2My"+
-		"wiaWF0IjoxNzEwMTUwNDYzLCJpc3MiOiJzdGFnZS5hdXRoLnpvcHNtYXJ0LmNvbSIsIm5hbWUiOiJSYWtzaGl0IFNpbmdoIiwib3JpZyI6IkdP"+
-		"T0dMRSIsInBpY3R1cmUiOiJodHRwczovL2xoMy5nb29nbGV1c2VyY29udGVudC5jb20vYS9BQ2c4b2NLSjVEREE0enJ1ekZsc1E5S3ZMakhEdG"+
-		"JPVF9ocFZ6MGhFTzhqU2wybTdNeWs9czk2LWMiLCJzdWIiOiJyYWtzaGl0LnNpbmdoQHpvcHNtYXJ0LmNvbSIsInN1Yi1pZCI6ImE2NTczZTFk"+
-		"LWFiZWEtNDg2My1hY2RiLTZjZjM2MjZhNDQxNCIsInR5cCI6InJlZnJlc2hfdG9rZW4ifQ.SYs0UY1uCYly1mAHmr5KLUgdze8dXX5Ee4dueL"+
-		"br4wo4sjucmG1uyprheGhLbc5frwIMxHjliIToHgTzyOYeyJNnBbyihnoNjHEFgEU-Sy_-mPXLP6cUkEJKf4SzDroGDNLoYqJb_wZglqrTxFt81"+
-		"bO3itEsp3puK-u_Y0VL9Mu2kKZJDY9sRAxI39inKIu-S1A14nHaXuGox9FHAfRv6Vs7Pk2RloNa3C6NB8mCNeg40sP1G-hgUlJMmYG0q6DJL9N"+
-		"xOvpVZk_Trs01pfkXqpyoI4Q2GzuvjlByidxX-XeWLjd8YfuPA5IDyYiKPf8pqvqa47I1yXky0o_eXmnvDw")
-
-	client := http.Client{}
-
-	resp, err := client.Do(req)
-
-	respBody, _ := io.ReadAll(resp.Body)
-
-	require.NoError(t, err)
-	assert.Equal(t, http.StatusUnauthorized, resp.StatusCode)
-	assert.Contains(t, string(respBody), `token is unverifiable: error while executing keyfunc`)
-
-	resp.Body.Close()
-}
-
-func TestPublicKeyFromJWKS_EmptyJWKS_ReturnsNil(t *testing.T) {
-	jwks := JWKS{}
-
-	result := publicKeyFromJWKS(jwks)
-
-	assert.Nil(t, result)
-}
-
-func Test_OAuth_well_known(t *testing.T) {
-	testHandler := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		_, _ = w.Write([]byte("Success"))
-	})
-
-	req := httptest.NewRequest(http.MethodGet, "/.well-known/health-check", http.NoBody)
-	rr := httptest.NewRecorder()
-
-	authMiddleware := OAuth(nil)(testHandler)
-	authMiddleware.ServeHTTP(rr, req)
-
-	assert.Equal(t, 200, rr.Code, "TEST Failed.\n")
-
-	assert.Equal(t, "Success", rr.Body.String(), "TEST Failed.\n")
-}
-
-func TestOAuthHTTPCallFailed(t *testing.T) {
-	router := mux.NewRouter()
-	router.HandleFunc("/test", func(w http.ResponseWriter, _ *http.Request) {
-		w.WriteHeader(http.StatusOK)
-	}).Methods(http.MethodGet).Name("/test")
-	router.Use(OAuth(NewOAuth(OauthConfigs{Provider: &MockErrorProvider{}, RefreshInterval: 10})))
-
-	server := httptest.NewServer(router)
-
-	client := http.Client{}
-
-	resp, err := client.Do(getRequest(t, server.URL))
-
-	require.NoError(t, err)
-	assert.Equal(t, http.StatusUnauthorized, resp.StatusCode)
-
-	resp.Body.Close()
-}
-
-func TestOAuthReadError(t *testing.T) {
-	router := mux.NewRouter()
-	router.HandleFunc("/test", func(w http.ResponseWriter, _ *http.Request) {
-		w.WriteHeader(http.StatusOK)
-	}).Methods(http.MethodGet).Name("/test")
-	router.Use(OAuth(NewOAuth(OauthConfigs{Provider: &MockReaderErrorProvider{}, RefreshInterval: 10})))
-
-	server := httptest.NewServer(router)
-
-	client := http.Client{}
-
-	resp, err := client.Do(getRequest(t, server.URL))
-
-	require.NoError(t, err)
-	assert.Equal(t, http.StatusUnauthorized, resp.StatusCode)
-
-	resp.Body.Close()
-}
-
-func TestOAuthJSONUnmarshalError(t *testing.T) {
-	router := mux.NewRouter()
-	router.HandleFunc("/test", func(w http.ResponseWriter, _ *http.Request) {
-		w.WriteHeader(http.StatusOK)
-	}).Methods(http.MethodGet).Name("/test")
-	router.Use(OAuth(NewOAuth(OauthConfigs{Provider: &MockJSONResponseErrorProvider{}, RefreshInterval: 10})))
-
-	server := httptest.NewServer(router)
-
-	client := http.Client{}
-
-	resp, err := client.Do(getRequest(t, server.URL))
-
-	require.NoError(t, err)
-	assert.Equal(t, http.StatusUnauthorized, resp.StatusCode)
-
-	resp.Body.Close()
-}
-
-type MockProvider struct {
-}
-
-func (*MockProvider) GetWithHeaders(context.Context, string, map[string]any,
-	map[string]string) (*http.Response, error) {
-	// Marshal the JSON body
-	responseBody := map[string]any{
-		"keys": []map[string]string{
-			{
-				"kty": "RSA",
-				"use": "sig",
-				"kid": "00TQ0vTi5PuRvlqFFcwByG4Z0LtdDqKI_BVPTkvzexE",
-				"n": "0nb5fKw3xb4_NMkEh80jG0_HuKByBnTIRqPTX-xbtSEDTsev1O4oyl3az0UdebyimwqHSLPVFIitHnfhHsto0IycnL9omEm" +
-					"40YWEUxOqs5HJaFhZsKHZmxCUkYsb-nHhYm67sYiPkcBQrisWFJi4r48EyLv050D85MkhPiD3Iy0Q5m29U-Hf9CIfxy1MS8akJ" +
-					"uTnk8Ir4ajHN7ze33IOAjE1UPX1viZ6QSwbFPo0YrGf6vZq21cbhS6UD1JC-A_iFVdSGKzBAfFspQaAllifmaym6XK-q4mKqTW" +
-					"430zKlGCnQd3ddg3zmCe7KqpJ6aDVUQ0FS_K8GnOoWeScWEj0qw",
-				"e": "AQAB",
-			},
+func TestOAuthProvider_extractAuthHeader(t *testing.T) {
+	regex := regexp.MustCompile(jwtRegexPattern)
+
+	validHeader := `Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.` +
+		`eyJzdWIiOiIxMjM0NTY3ODkwIiwibmFtZSI6IkpvaG4gRG9lIiwiYWRtaW4iOnRydWUsImlhdCI6MTUxNjIzOTAyMn0.` +
+		`KMUFsIDTnFmyG3nMiGM6H9FNFUROf3wh7SmqJp-QV30`
+
+	testCases := []struct {
+		publicKeyFunc func(token *jwt.Token) (any, error) // public key matching, not matching
+		options       []jwt.ParserOption
+		header        string // missing, malformed, valid
+		response      any
+		err           ErrorHTTP
+	}{
+		{
+			err: ErrorMissingAuthHeader{key: headerAuthorization},
+		},
+		{
+			header: "Bearer some-value",
+			err:    ErrorInvalidAuthorizationHeaderFormat{key: headerAuthorization, errMessage: "jwt expected"},
+		},
+		{
+			header: "Bearer a.b.c",
+			err:    ErrorInvalidAuthorizationHeaderFormat{key: headerAuthorization, errMessage: "token is malformed"},
+		},
+		{
+			publicKeyFunc: notFoundPublicKeyFunc(),
+			header:        validHeader,
+			err:           ErrorInvalidAuthorizationHeader{key: headerAuthorization},
+		},
+		{
+			publicKeyFunc: emptyProviderPublicKeyFunc(),
+			header:        validHeader,
+			err:           ErrorInvalidConfiguration{message: "jwks configuration issue"},
+		},
+		{
+			publicKeyFunc: validPublicKeyFunc(),
+			header:        validHeader,
+			response:      jwt.MapClaims{"admin": true, "iat": 1.516239022e+09, "name": "John Doe", "sub": "1234567890"},
+		},
+		{
+			publicKeyFunc: validPublicKeyFunc(),
+			header:        validHeader,
+			options:       []jwt.ParserOption{jwt.WithExpirationRequired()},
+			err:           ErrorInvalidAuthorizationHeader{key: headerAuthorization},
 		},
 	}
+	for i, tc := range testCases {
+		t.Run(strconv.Itoa(i), func(t *testing.T) {
+			req := httptest.NewRequest(http.MethodGet, "/", http.NoBody)
+			req.Header.Set(headerAuthorization, tc.header)
+			provider := &OAuthProvider{
+				publicKeyFunc: tc.publicKeyFunc,
+				options:       tc.options,
+				regex:         regex,
+			}
+			response, err := provider.ExtractAuthHeader(req)
+			assert.Equal(t, tc.response, response)
+			assert.Equal(t, tc.err, err)
+		})
+	}
+}
 
-	jsonResponse, err := json.Marshal(responseBody)
-	if err != nil {
-		return nil, err
+func Test_NewOAuthProvider(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	testCases := []struct {
+		jwks            JWKSProvider
+		interval        time.Duration
+		options         []jwt.ParserOption
+		expectedOptions int
+		err             error
+	}{
+		{err: errEmptyProvider},
+		{interval: 10 * time.Second, err: errEmptyProvider},
+		{jwks: service.NewMockHTTP(ctrl), interval: 0 * time.Second, err: errInvalidInterval},
+		{jwks: service.NewMockHTTP(ctrl), interval: -2 * time.Second, err: errInvalidInterval},
+		{jwks: service.NewMockHTTP(ctrl), interval: 10, err: errInvalidInterval},
+		{jwks: service.NewMockHTTP(ctrl), interval: 10 * time.Second, expectedOptions: 1},
 	}
 
-	// Construct an HTTP response with the JSON body
-	response := &http.Response{
-		StatusCode: http.StatusOK,
-		Body:       http.NoBody,
+	for i, testCase := range testCases {
+		t.Run(strconv.Itoa(i), func(t *testing.T) {
+			config := OauthConfigs{
+				Provider:        testCase.jwks,
+				RefreshInterval: testCase.interval,
+				Path:            "/.well-known/jwks.json", // Set a default path
+			}
+
+			// Set up mock expectations for successful cases
+			if testCase.err == nil && testCase.jwks != nil {
+				mockHTTP := testCase.jwks.(*service.MockHTTP)
+				mockHTTP.EXPECT().GetWithHeaders(gomock.Any(), "/.well-known/jwks.json", nil, nil).
+					Return(&http.Response{
+						StatusCode: http.StatusOK,
+						Body:       http.NoBody,
+					}, nil).AnyTimes()
+			}
+
+			response, err := NewOAuthProvider(config, testCase.options...)
+			assert.Equal(t, testCase.err, err)
+
+			if testCase.err != nil {
+				return
+			}
+
+			oAuthProvider, ok := response.(*OAuthProvider)
+
+			require.True(t, ok)
+			assert.NotNil(t, oAuthProvider.publicKeyFunc)
+			assert.Len(t, oAuthProvider.options, testCase.expectedOptions)
+		})
+	}
+}
+
+func TestOAuthProvider_getAuthMethod(t *testing.T) {
+	assert.Equal(t, JWTClaim, (&OAuthProvider{}).GetAuthMethod())
+}
+
+func TestJSONWebKey_rsaPublicKey(t *testing.T) {
+	testCases := []struct {
+		modulus        string
+		publicExponent string
+		response       *rsa.PublicKey
+		err            error
+	}{
+		{err: errEmptyModulus},
+		{modulus: `AQAB`, err: errEmptyPublicExponent},
+		{modulus: `jw=`, publicExponent: `lorem-ipsum`, err: base64.CorruptInputError(2)},
+		{modulus: `AQAB`, publicExponent: `jw====`, err: base64.CorruptInputError(2)},
+		{modulus: `AQAB`, publicExponent: `AQAB`, response: &rsa.PublicKey{N: big.NewInt(65537), E: 65537}},
 	}
 
-	response.Body = http.NoBody // Reset the response body
-	response.Body = io.NopCloser(bytes.NewReader(jsonResponse))
-
-	return response, nil
+	for i, tc := range testCases {
+		t.Run(strconv.Itoa(i), func(t *testing.T) {
+			key := &JSONWebKey{Modulus: tc.modulus, PublicExponent: tc.publicExponent}
+			response, err := key.rsaPublicKey()
+			assert.Equal(t, tc.response, response)
+			assert.Equal(t, tc.err, err)
+		})
+	}
 }
 
-type MockErrorProvider struct {
-}
-
-func (*MockErrorProvider) GetWithHeaders(context.Context, string, map[string]any,
-	map[string]string) (*http.Response, error) {
-	// Marshal the JSON body
-	return nil, oauthError{msg: "response error"}
-}
-
-type oauthError struct {
-	msg string
-}
-
-func (o oauthError) Error() string {
-	return o.msg
-}
-
-// CustomReader simulates an error during the Read operation.
-type CustomReader struct{}
-
-func (*CustomReader) Read([]byte) (int, error) {
-	return 0, oauthError{msg: "read error"}
-}
-
-type MockReaderErrorProvider struct{}
-
-func (*MockReaderErrorProvider) GetWithHeaders(context.Context, string, map[string]any,
-	map[string]string) (*http.Response, error) {
-	// Create a custom reader that returns an error
-	body := &CustomReader{}
-
-	// Create an http.Response with the custom reader as the body
-	response := &http.Response{
-		StatusCode: http.StatusOK,
-		Body:       io.NopCloser(body),
+func Test_publicKeyFromJWKS(t *testing.T) {
+	validJWKS := JWKS{Keys: []JSONWebKey{
+		{ID: "id-1", Modulus: `AQAB`, PublicExponent: `AQAB`},
+		{ID: "id-2", Modulus: `AQAB`, PublicExponent: `AQAB`},
+	}}
+	emptyJWKS := JWKS{}
+	partialValidJWKS := JWKS{Keys: []JSONWebKey{
+		{ID: "id-1", Modulus: `AQAB`, PublicExponent: `AQAB`},
+		{ID: "id-2", Modulus: `AQAB`, PublicExponent: `AQAB`},
+		{ID: "id-2", Modulus: ``, PublicExponent: `AQAB`},
+	}}
+	response := map[string]*rsa.PublicKey{
+		"id-1": {N: big.NewInt(65537), E: 65537},
+		"id-2": {N: big.NewInt(65537), E: 65537},
 	}
 
-	return response, nil
+	testCases := []struct {
+		jwks     JWKS
+		response map[string]*rsa.PublicKey
+	}{
+		{jwks: emptyJWKS},
+		{jwks: validJWKS, response: response},
+		{jwks: partialValidJWKS, response: response},
+	}
+	for i, tc := range testCases {
+		t.Run(strconv.Itoa(i), func(t *testing.T) {
+			result := publicKeyFromJWKS(tc.jwks)
+			assert.Equal(t, tc.response, result)
+		})
+	}
 }
 
-type MockJSONResponseErrorProvider struct{}
+func TestJWKNotFound_Error(t *testing.T) {
+	assert.Equal(t, "JWKS Not Found", JWKNotFound{}.Error())
+}
 
-func (*MockJSONResponseErrorProvider) GetWithHeaders(context.Context, string, map[string]any,
-	map[string]string) (*http.Response, error) {
-	// Create a body with invalid JSON
-	body := strings.NewReader("invalid JSON")
-
-	// Create an http.Response with the invalid JSON body
-	response := &http.Response{
-		StatusCode: http.StatusOK,
-		Body:       io.NopCloser(body),
+func TestPublicKeys_Get(t *testing.T) {
+	keySet := map[string]*rsa.PublicKey{
+		"id-1": {N: nil, E: 0},
+		"id-2": {N: nil, E: 1},
+		"id-3": {N: nil, E: 2},
 	}
 
-	return response, nil
-}
-
-func Test_OAuthFailureInvalidAudience(t *testing.T) {
-	router := mux.NewRouter()
-
-	router.HandleFunc("/test", func(w http.ResponseWriter, _ *http.Request) {
-		w.WriteHeader(http.StatusOK)
-	}).Methods(http.MethodGet)
-
-	mockProvider := &MockProvider{}
-	parserOpts := []jwt.ParserOption{
-		jwt.WithIssuer("GOOGLE"),
-		jwt.WithAudience("stagekopsdev"),
-		jwt.WithValidMethods([]string{"RS256"}),
-		jwt.WithExpirationRequired(),
-		jwt.WithIssuedAt(),
+	testCases := []struct {
+		keys     map[string]*rsa.PublicKey
+		keyID    string
+		response *rsa.PublicKey
+	}{
+		{keys: keySet, keyID: "id-1", response: &rsa.PublicKey{E: 0}},
+		{keys: keySet, keyID: "id-2", response: &rsa.PublicKey{E: 1}},
+		{keyID: "id-1"},
+		{keys: keySet, keyID: "id-0"},
 	}
-
-	router.Use(OAuth(NewOAuth(OauthConfigs{
-		Provider:        mockProvider,
-		RefreshInterval: 10,
-	}), parserOpts...))
-
-	server := httptest.NewServer(router)
-	defer server.Close()
-
-	client := http.Client{}
-
-	resp, err := client.Do(getRequest(t, server.URL))
-
-	require.NoError(t, err)
-
-	defer resp.Body.Close()
-
-	assert.Equal(t, http.StatusUnauthorized, resp.StatusCode)
-}
-
-func Test_OAuthSuccessWithValidation(t *testing.T) {
-	router := mux.NewRouter()
-	router.HandleFunc("/test", func(w http.ResponseWriter, _ *http.Request) {
-		w.WriteHeader(http.StatusOK)
-	}).Methods(http.MethodGet).Name("/test")
-
-	parserOpts := []jwt.ParserOption{
-		jwt.WithAudience("stage.kops.dev"),
-		jwt.WithValidMethods([]string{"RS256"}),
-		jwt.WithIssuedAt(),
+	for i, tc := range testCases {
+		t.Run(strconv.Itoa(i), func(t *testing.T) {
+			publicKeys := PublicKeys{keys: tc.keys}
+			response := publicKeys.Get(tc.keyID)
+			assert.Equal(t, tc.response, response)
+		})
 	}
-
-	router.Use(OAuth(NewOAuth(OauthConfigs{Provider: &MockProvider{}, RefreshInterval: 10}), parserOpts...))
-
-	server := httptest.NewServer(router)
-
-	client := http.Client{}
-
-	resp, err := client.Do(getRequest(t, server.URL))
-
-	require.NoError(t, err)
-	assert.Equal(t, http.StatusOK, resp.StatusCode)
-
-	resp.Body.Close()
 }
 
-func getRequest(t *testing.T, url string) *http.Request {
-	t.Helper()
+func Test_getPublicKeys(t *testing.T) {
+	testCases := []struct {
+		path           string
+		responseLength int
+		err            error
+	}{
+		{path: "/empty-body", err: errEmptyResponseBody},
+		{path: "/dns-error", err: &net.DNSError{}},
+		{path: "/wrong-path", err: errInvalidURL},
+		{path: "/.well-known/unparseable-json", err: &json.SyntaxError{}},
+		{path: "/.well-known/format-error", err: &json.UnmarshalTypeError{}},
+		{path: "/empty-list"},
+		{path: "", responseLength: 2},
+	}
+	for i, tc := range testCases {
+		t.Run(strconv.Itoa(i), func(t *testing.T) {
+			response, err := getPublicKeys(t.Context(), MockJWKSProvider{}, tc.path)
+			assert.Len(t, response.Keys, tc.responseLength)
+			assert.IsType(t, tc.err, err)
+		})
+	}
+}
 
-	req, _ := http.NewRequestWithContext(t.Context(), http.MethodGet, url+"/test", http.NoBody)
-	req.Header.Set("Authorization", "Bearer eyJhbGciOiJSUzI1NiIsImtpZCI6IjAwVFEwdlRpNVB1UnZscUZGY3dCeUc0WjBM"+
-		"dGREcUtJX0JWUFRrdnpleEUiLCJ0eXAiOiJKV1QifQ.eyJhdWQiOiJzdGFnZS5rb3BzLmRldiIsImlhdCI6MTI1Nzg5NDAwMCwib3JpZyI6IkdP"+
-		"T0dMRSIsInBpY3R1cmUiOiJodHRwczovL2xoMy5nb29nbGV1c2VyY29udGVudC5jb20vYS9BQ2c4b2NLSjVEREE0enJ1ekZsc1E5S3ZMakhEdG"+
-		"JPVF9ocFZ6MGhFTzhqU2wybTdNeWs9czk2LWMiLCJzdWIiOiJyYWtzaGl0LnNpbmdoQHpvcHNtYXJ0LmNvbSIsInN1Yi1pZCI6ImE2NTczZTFkL"+
-		"WFiZWEtNDg2My1hY2RiLTZjZjM2MjZhNDQxNCIsInR5cCI6InJlZnJlc2hfdG9rZW4ifQ.NkYSi6KJtGA3js9dcN3UqJWfeJdB88p7cxclrc6"+
-		"fxJODlCalsbbwIr3QL4AR9i0ucJjmoTIipCwpdM1IYDjCd-ilf2mTp11Wba31XoH--8YLI9Ju0wbpYhtF3wa00NF1Ijt48ze09IJ6QtE-etm"+
-		"AN8T7izsXbPeSrFiN3NVQU87eGxc3bEQhEsV5u3E6j8EdVDv8xbwisETY-N0mDftZp0w8UCkQ7MarOrA5IaXs2MHyCETy5y9QFd4djppH9oFo"+
-		"y5-AtEZqzyHKfGMlerjtJp8uOgFso9FycGuO0TFhR4AaZGVZxB072Hu-71tbx7atXp3zmDdkK_jkg5aVepoU_Q")
+func TestPublicKeys_updateKeys(t *testing.T) {
+	testCases := []struct {
+		keys          map[string]*rsa.PublicKey
+		path          string
+		updatedLength int
+	}{
+		{keys: nil, path: "/empty-response"},
+		{keys: nil, path: "/empty-list", updatedLength: 0},
+		{keys: nil, path: "", updatedLength: 2},
+		{keys: map[string]*rsa.PublicKey{"11": {}}, path: "/empty-response", updatedLength: 1},
+		{keys: map[string]*rsa.PublicKey{"11": {}}, path: "/empty-list", updatedLength: 1},
+		{keys: map[string]*rsa.PublicKey{"11": {}}, path: "", updatedLength: 2},
+	}
+	for i, tc := range testCases {
+		t.Run(strconv.Itoa(i), func(t *testing.T) {
+			config := OauthConfigs{Provider: MockJWKSProvider{}, Path: tc.path}
+			publicKeys := PublicKeys{keys: tc.keys}
+			publicKeys.updateKeys(config)
+			assert.Len(t, publicKeys.keys, tc.updatedLength)
+		})
+	}
+}
 
-	return req
+func Test_getPublicKeyFunc(t *testing.T) {
+	testCases := []struct {
+		provider PublicKeyProvider
+		response any
+		err      error
+		funcErr  error
+	}{
+		{err: errEmptyProvider},
+		{provider: validPublicKeyProvider{}, response: &rsa.PublicKey{N: big.NewInt(65537), E: 65537}},
+		{provider: emptyPublicKeyProvider{}, response: nil, funcErr: JWKNotFound{}},
+	}
+	for i, tc := range testCases {
+		t.Run(strconv.Itoa(i), func(t *testing.T) {
+			function, err := getPublicKeyFunc(tc.provider)
+			assert.Equal(t, tc.err, err)
+
+			if function == nil {
+				return
+			}
+
+			// Create a token with a kid header for the emptyPublicKeyProvider test
+			token := &jwt.Token{}
+			if i == 2 { // Test case 2 is emptyPublicKeyProvider
+				token.Header = map[string]any{"kid": "test-key-id"}
+			}
+
+			response, err := function(token)
+			assert.Equal(t, tc.response, response)
+
+			if tc.funcErr != nil {
+				assert.Equal(t, tc.funcErr, err)
+			} else {
+				assert.Equal(t, tc.err, err)
+			}
+		})
+	}
+}
+
+func notFoundPublicKeyFunc() func(token *jwt.Token) (any, error) {
+	return func(_ *jwt.Token) (any, error) {
+		return nil, JWKNotFound{}
+	}
+}
+
+func validPublicKeyFunc() func(token *jwt.Token) (any, error) {
+	return func(_ *jwt.Token) (any, error) {
+		return []byte("a-string-secret-at-least-256-bits-long"), nil
+	}
+}
+
+func emptyProviderPublicKeyFunc() func(token *jwt.Token) (any, error) {
+	return func(_ *jwt.Token) (any, error) {
+		return nil, errEmptyProvider
+	}
+}
+
+type validPublicKeyProvider struct {
+}
+
+func (validPublicKeyProvider) Get(_ string) *rsa.PublicKey {
+	return &rsa.PublicKey{N: big.NewInt(65537), E: 65537}
+}
+
+type emptyPublicKeyProvider struct{}
+
+func (emptyPublicKeyProvider) Get(_ string) *rsa.PublicKey {
+	return nil
+}
+
+type MockJWKSProvider struct {
+}
+
+func (MockJWKSProvider) GetWithHeaders(_ context.Context, path string, _ map[string]any,
+	_ map[string]string) (*http.Response, error) {
+	keys := []JSONWebKey{{ID: "111", Type: "RSA", Modulus: "someBase64UrlEncodedModulus", PublicExponent: "AQAB"},
+		{ID: "212", Type: "RSA", Modulus: "AnotherModulus", PublicExponent: "AQAB"}}
+
+	switch path {
+	case "":
+		jwks := JWKS{
+			Keys: keys,
+		}
+		jwksJSON, _ := json.Marshal(jwks)
+
+		return &http.Response{
+			Body:       io.NopCloser(bytes.NewBuffer(jwksJSON)),
+			StatusCode: http.StatusOK,
+		}, nil
+	case "/empty-list":
+		jwks := JWKS{}
+		jwksJSON, _ := json.Marshal(jwks)
+
+		return &http.Response{
+			Body:       io.NopCloser(bytes.NewBuffer(jwksJSON)),
+			StatusCode: http.StatusOK,
+		}, nil
+
+	case "/.well-known/format-error":
+		jwksJSON, _ := json.Marshal(keys)
+
+		return &http.Response{
+			Body:       io.NopCloser(bytes.NewBuffer(jwksJSON)),
+			StatusCode: http.StatusOK,
+		}, nil
+	case "/.well-known/unparseable-json":
+		return &http.Response{
+			Body:       io.NopCloser(bytes.NewBufferString(`{ "key": "value", invalid }`)),
+			StatusCode: http.StatusOK,
+		}, nil
+	case "/wrong-path":
+		return &http.Response{StatusCode: http.StatusNotFound}, nil
+	case "/dns-error":
+		return nil, &net.DNSError{}
+	default:
+		return &http.Response{StatusCode: http.StatusOK}, nil
+	}
 }

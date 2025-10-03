@@ -1,5 +1,14 @@
-## OpenTSDB
+# OpenTSDB
 
+
+## Configuration
+To connect to `OpenTSDB`, you need to provide the following environment variables:
+- `HOSTS`: The hostname or IP address of your OpenTSDB server.
+- `MAXCONTENTLENGTH`: Max length of the request body in bytes.
+- `MAXPUTPOINTSNUM`: Max number of data points that can be sent in a single `PUT` request.
+- `DETECTDELTANUM`: The number of data points that OpenTSDB looks at to spot unusual time gaps.
+
+## Setup
 GoFr supports injecting OpenTSDB to facilitate interaction with OpenTSDB's REST APIs.
 Implementations adhering to the `OpenTSDB` interface can be registered with `app.AddOpenTSDB()`,
 enabling applications to leverage OpenTSDB for time-series data management through `gofr.Context`.
@@ -102,7 +111,6 @@ import (
 	"fmt"
 	"math/rand/v2"
 	"time"
-
 	"gofr.dev/pkg/gofr"
 	"gofr.dev/pkg/gofr/datasource/opentsdb"
 )
@@ -112,10 +120,10 @@ func main() {
 
 	// Initialize OpenTSDB connection
 	app.AddOpenTSDB(opentsdb.New(opentsdb.Config{
-		Host:             "localhost:4242",
-		MaxContentLength: 4096,
-		MaxPutPointsNum:  1000,
-		DetectDeltaNum:   10,
+		Host:             app.Config.Get("HOST"),
+		MaxContentLength: app.Config.Get("MAXCONTENTLENGTH"),
+		MaxPutPointsNum:  app.Config.Get("MAXPUTPOINTSNUM"),
+		DetectDeltaNum:   app.Config.Get("DETECTDELTANUM"),
 	}))
 
 	// Register routes

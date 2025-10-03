@@ -16,7 +16,8 @@ func TestGetFreePort(t *testing.T) {
 	assert.Positive(t, port, "Expected port to be greater than 0")
 
 	// Test that the port is actually free by trying to listen on it
-	listener, err := net.Listen("tcp", fmt.Sprintf("localhost:%d", port))
+	lc := net.ListenConfig{}
+	listener, err := lc.Listen(t.Context(), "tcp", fmt.Sprintf("localhost:%d", port))
 	require.NoError(t, err, "Expected to be able to listen on the free port")
 
 	_ = listener.Close()
@@ -45,4 +46,84 @@ func TestNewServerConfigs(t *testing.T) {
 	assert.Equal(t, strconv.Itoa(env.GRPCPort), grpcPortEnv, "GRPC_PORT should match the configured GRPCPort")
 	assert.NotZero(t, env.GRPCPort, "GRPCPort should not be zero")
 	assert.Equal(t, env.GRPCHost, "localhost:"+grpcPortEnv, "GRPCHost should match environment variable")
+}
+
+// ...existing code...
+
+func TestServiceConfigs_Get(t *testing.T) {
+	cfg := &ServiceConfigs{
+		HTTPPort:    8080,
+		HTTPHost:    "http://localhost:8080",
+		MetricsPort: 9090,
+		MetricsHost: "http://localhost:9090",
+		GRPCPort:    50051,
+		GRPCHost:    "localhost:50051",
+	}
+
+	// Test Get method - it should always return empty string as per current implementation
+	testCases := []struct {
+		desc string
+		key  string
+	}{
+		{
+			desc: "empty key",
+			key:  "",
+		},
+		{
+			desc: "non-empty key",
+			key:  "HTTP_PORT",
+		},
+		{
+			desc: "random key",
+			key:  "RANDOM_KEY",
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.desc, func(t *testing.T) {
+			result := cfg.Get(tc.key)
+			assert.Empty(t, result, "Get should return empty string for all keys")
+		})
+	}
+}
+
+func TestServiceConfigs_GetOrDefault(t *testing.T) {
+	cfg := &ServiceConfigs{
+		HTTPPort:    8080,
+		HTTPHost:    "http://localhost:8080",
+		MetricsPort: 9090,
+		MetricsHost: "http://localhost:9090",
+		GRPCPort:    50051,
+		GRPCHost:    "localhost:50051",
+	}
+
+	// Test GetOrDefault method - it should always return empty string as per current implementation
+	testCases := []struct {
+		desc         string
+		key          string
+		defaultValue string
+	}{
+		{
+			desc:         "empty key and default",
+			key:          "",
+			defaultValue: "",
+		},
+		{
+			desc:         "non-empty key with default",
+			key:          "HTTP_PORT",
+			defaultValue: "8080",
+		},
+		{
+			desc:         "random key with default",
+			key:          "RANDOM_KEY",
+			defaultValue: "some-default",
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.desc, func(t *testing.T) {
+			result := cfg.GetOrDefault(tc.key, tc.defaultValue)
+			assert.Empty(t, result, "GetOrDefault should return empty string for all keys and defaults")
+		})
+	}
 }

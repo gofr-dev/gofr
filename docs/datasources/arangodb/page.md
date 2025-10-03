@@ -1,4 +1,16 @@
-## ArangoDB
+# ArangoDB
+
+
+
+## Configuration
+
+To connect to `ArangoDB`, you need to provide the following environment variables:
+- `HOST`: The hostname or IP address of your `ArangoDB` server.
+- `USER`: The username for connecting to the database.
+- `PASSWORD`: The password for the specified user.
+- `PORT`: The port number
+
+## Setup
 
 GoFr supports injecting `ArangoDB` that implements the following interface. Any driver that implements the interface can be
 added using the `app.AddArangoDB()` method, and users can use ArangoDB across the application with `gofr.Context`.
@@ -47,14 +59,13 @@ Import the GoFr's external driver for ArangoDB:
 go get gofr.dev/pkg/gofr/datasource/arangodb@latest
 ```
 
-### Example
+## Example
 
 ```go
 package main
 
 import (
 	"fmt"
-
 	"gofr.dev/pkg/gofr"
 	"gofr.dev/pkg/gofr/datasource/arangodb"
 )
@@ -69,10 +80,10 @@ func main() {
 
 	// Configure the ArangoDB client
 	arangoClient := arangodb.New(arangodb.Config{
-		Host:     "localhost",
-		User:     "root",
-		Password: "root",
-		Port:     8529,
+		Host:     app.Config.Get("HOST"),
+		User:     app.Config.Get("USER"),
+		Password: app.Config.Get("PASSWORD"),
+		Port:     app.Config.Get("PORT"),
 	})
 	app.AddArangoDB(arangoClient)
 
@@ -86,7 +97,7 @@ func main() {
 }
 
 // Setup demonstrates database and collection creation
-func Setup(ctx *gofr.Context) (interface{}, error) {
+func Setup(ctx *gofr.Context) (any, error) {
 	_, err := ctx.ArangoDB.CreateDocument(ctx, "social_network", "", nil)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create database: %w", err)
@@ -122,7 +133,7 @@ func createCollection(ctx *gofr.Context, dbName, collectionName string) error {
 }
 
 // CreateUserHandler demonstrates user management and document creation
-func CreateUserHandler(ctx *gofr.Context) (interface{}, error) {
+func CreateUserHandler(ctx *gofr.Context) (any, error) {
 	name := ctx.PathParam("name")
 
 	// Create a person document
@@ -142,7 +153,7 @@ func CreateUserHandler(ctx *gofr.Context) (interface{}, error) {
 }
 
 // CreateFriendship demonstrates edge document creation
-func CreateFriendship(ctx *gofr.Context) (interface{}, error) {
+func CreateFriendship(ctx *gofr.Context) (any, error) {
 	var req struct {
 		From      string `json:"from"`
 		To        string `json:"to"`
@@ -172,7 +183,7 @@ func CreateFriendship(ctx *gofr.Context) (interface{}, error) {
 }
 
 // GetEdgesHandler demonstrates fetching edges connected to a vertex
-func GetEdgesHandler(ctx *gofr.Context) (interface{}, error) {
+func GetEdgesHandler(ctx *gofr.Context) (any, error) {
 	collection := ctx.PathParam("collection")
 	vertexID := ctx.PathParam("vertexID")
 
@@ -188,7 +199,7 @@ func GetEdgesHandler(ctx *gofr.Context) (interface{}, error) {
 		return nil, fmt.Errorf("failed to get edges: %w", err)
 	}
 
-	return map[string]interface{}{
+	return map[string]any{
 		"vertexID": vertexID,
 		"edges":    edges,
 	}, nil

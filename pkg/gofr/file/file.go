@@ -1,3 +1,10 @@
+/*
+Package file provides unified access to various file operations, such as creating, reading, writing files across :
+- S3
+- FTP
+- SFTP
+- Local FileSystem
+*/
 package file
 
 type file struct {

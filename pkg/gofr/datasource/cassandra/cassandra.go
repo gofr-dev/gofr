@@ -292,6 +292,7 @@ func (*Client) getFields(columns []string, fieldNameIndex map[string]int, v refl
 			fields = append(fields, v.Field(i).Addr().Interface())
 		} else {
 			var i any
+
 			fields = append(fields, &i)
 		}
 	}
@@ -339,6 +340,7 @@ func (c *Client) sendOperationStats(ql *QueryLog, startTime time.Time, method st
 
 	if span != nil {
 		defer span.End()
+
 		span.SetAttributes(attribute.Int64(fmt.Sprintf("cassandra.%v.duration", method), duration))
 	}
 

@@ -16,10 +16,6 @@ import (
 	"gofr.dev/pkg/gofr/testutil"
 )
 
-func TestValidateConfigs(*testing.T) {
-	// This test remains unchanged
-}
-
 func TestNATSClient_Publish(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
@@ -336,7 +332,7 @@ func TestNATSClient_CreateTopic(t *testing.T) {
 
 	mockConnManager.EXPECT().IsConnected().Return(true)
 	mockStreamManager.EXPECT().
-		CreateStream(ctx, StreamConfig{
+		CreateStream(ctx, &StreamConfig{
 			Stream:   "test-topic",
 			Subjects: []string{"test-topic"},
 		}).Return(nil)
@@ -403,7 +399,7 @@ func TestClient_ValidateAndPrepare(t *testing.T) {
 		logger: logging.NewMockLogger(logging.DEBUG),
 	}
 
-	err := client.validateAndPrepare()
+	err := validateAndPrepare(client.Config, client.logger)
 	require.Error(t, err)
 
 	client.Config = &Config{
@@ -415,7 +411,7 @@ func TestClient_ValidateAndPrepare(t *testing.T) {
 		Consumer: "test-consumer",
 	}
 
-	err = client.validateAndPrepare()
+	err = validateAndPrepare(client.Config, client.logger)
 	assert.NoError(t, err)
 }
 
@@ -425,7 +421,7 @@ func TestClient_ValidateAndPrepareError(t *testing.T) {
 		logger: logging.NewMockLogger(logging.DEBUG),
 	}
 
-	err := client.validateAndPrepare()
+	err := validateAndPrepare(client.Config, client.logger)
 	require.Error(t, err)
 
 	client.Config = &Config{
@@ -437,23 +433,8 @@ func TestClient_ValidateAndPrepareError(t *testing.T) {
 		Consumer: "test-consumer",
 	}
 
-	err = client.validateAndPrepare()
+	err = validateAndPrepare(client.Config, client.logger)
 	assert.Error(t, err)
-}
-
-func TestClient_LogSuccessfulConnection(t *testing.T) {
-	mockLogger := logging.NewMockLogger(logging.DEBUG)
-	client := &Client{
-		Config: &Config{Server: "nats://localhost:4222"},
-		logger: mockLogger,
-	}
-
-	logs := testutil.StdoutOutputForFunc(func() {
-		client.logger = logging.NewMockLogger(logging.DEBUG)
-		client.logSuccessfulConnection()
-	})
-
-	assert.Contains(t, logs, "connected to NATS server 'nats://localhost:4222'")
 }
 
 func TestClient_UseLogger(t *testing.T) {
@@ -572,6 +553,7 @@ func testFirstSubscription(t *testing.T, client *Client, mocks *testMocks, wg *s
 	require.NoError(t, err)
 
 	mocks.messageChan1 <- mocks.msg1
+
 	close(mocks.messageChan1)
 
 	assertHandlerCalled(t, firstHandlerCalled, "First handler")
@@ -589,6 +571,7 @@ func testSecondSubscription(t *testing.T, client *Client, mocks *testMocks, wg *
 	require.NoError(t, err)
 
 	mocks.messageChan2 <- mocks.msg2
+
 	close(mocks.messageChan2)
 
 	assertHandlerCalled(t, errorHandlerCalled, "Error handler")
@@ -667,6 +650,7 @@ func createFirstHandler(t *testing.T, handlerCalled chan<- bool, wg *sync.WaitGr
 
 	return func(context.Context, jetstream.Msg) error {
 		t.Log("First handler called")
+
 		handlerCalled <- true
 
 		wg.Done()
@@ -680,6 +664,7 @@ func createErrorHandler(t *testing.T, handlerCalled chan<- bool, wg *sync.WaitGr
 
 	return func(context.Context, jetstream.Msg) error {
 		t.Log("Error handler called")
+
 		handlerCalled <- true
 
 		t.Logf("Error handling message: %v", errHandlerError)
@@ -706,6 +691,7 @@ func waitForHandlersToComplete(t *testing.T, wg *sync.WaitGroup) {
 	t.Helper()
 
 	done := make(chan struct{})
+
 	go func() {
 		wg.Wait()
 		close(done)
@@ -750,9 +736,9 @@ func TestClient_CreateStream(t *testing.T) {
 	}
 
 	mockConnManager.EXPECT().IsConnected().Return(true)
-	mockStreamManager.EXPECT().CreateStream(gomock.Any(), cfg).Return(nil)
+	mockStreamManager.EXPECT().CreateStream(gomock.Any(), &cfg).Return(nil)
 
-	err := client.CreateStream(t.Context(), cfg)
+	err := client.CreateStream(t.Context(), &cfg)
 	require.NoError(t, err)
 }
 
@@ -1007,4 +993,199 @@ func TestClient_establishConnection(t *testing.T) {
 			assert.Equalf(t, tt.wantErr, err, "Test[%d] failed - %s", i, tt.name)
 		})
 	}
+}
+
+func TestClient_Query_Success(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	mockConnManager := NewMockConnectionManagerInterface(ctrl)
+	mockJetStream := NewMockJetStream(ctrl)
+	mockConsumer := NewMockConsumer(ctrl)
+	mockMessageBatch := NewMockMessageBatch(ctrl)
+	mockLogger := logging.NewMockLogger(logging.DEBUG)
+
+	client := &Client{
+		connManager: mockConnManager,
+		logger:      mockLogger,
+		Config: &Config{
+			Stream: StreamConfig{
+				Stream: "test-stream",
+			},
+			MaxWait: 5 * time.Second,
+		},
+	}
+
+	query := "test-subject"
+	expectedMessages := []byte("message1\nmessage2")
+
+	// Mock expectations
+	mockConnManager.EXPECT().IsConnected().Return(true)
+	mockConnManager.EXPECT().JetStream().Return(mockJetStream, nil)
+	mockJetStream.EXPECT().CreateOrUpdateConsumer(gomock.Any(),
+		"test-stream", gomock.Any()).Return(mockConsumer, nil)
+	mockConsumer.EXPECT().CachedInfo().AnyTimes().Return(&jetstream.ConsumerInfo{
+		Config: jetstream.ConsumerConfig{FilterSubject: "test-subject"}})
+	mockConsumer.EXPECT().Info(gomock.Any()).Return(&jetstream.ConsumerInfo{Name: "test-stream"}, nil)
+	mockJetStream.EXPECT().DeleteConsumer(gomock.Any(), "test-stream", gomock.Any()).Return(nil)
+	mockConsumer.EXPECT().Fetch(2, gomock.Any()).Return(mockMessageBatch, nil).Times(1)
+
+	// Mock message channel
+	messageChannel := make(chan jetstream.Msg, 2)
+	messageChannel <- newMockMessage("message1")
+
+	messageChannel <- newMockMessage("message2")
+
+	close(messageChannel)
+
+	mockMessageBatch.EXPECT().Messages().Return(messageChannel)
+
+	// Call the Query method
+	result, err := client.Query(t.Context(), query, 2*time.Second, 2)
+
+	// Assertions
+	require.NoError(t, err)
+	require.Equal(t, expectedMessages, result)
+}
+
+// Helper function to create a mock message.
+func newMockMessage(data string) jetstream.Msg {
+	ctrl := gomock.NewController(nil)
+	mockMsg := NewMockMsg(ctrl)
+	mockMsg.EXPECT().Data().Return([]byte(data)).AnyTimes()
+	mockMsg.EXPECT().Ack().Return(nil).AnyTimes()
+
+	return mockMsg
+}
+
+func TestClient_Query_EmptyQuery(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	mockConnManager := NewMockConnectionManagerInterface(ctrl)
+	mockConnManager.EXPECT().IsConnected().Return(true).AnyTimes()
+
+	client := &Client{
+		connManager: mockConnManager,
+		logger:      logging.NewMockLogger(logging.DEBUG),
+	}
+
+	query := ""
+
+	result, err := client.Query(t.Context(), query)
+
+	require.Error(t, err)
+	require.Nil(t, result)
+	require.Equal(t, errEmptySubject, err)
+}
+
+func TestClient_Query_ClientNotConnected(t *testing.T) {
+	client := &Client{
+		logger: logging.NewMockLogger(logging.DEBUG),
+	}
+
+	query := "test-subject"
+
+	result, err := client.Query(t.Context(), query)
+
+	require.Error(t, err)
+	require.Nil(t, result)
+	require.Equal(t, errClientNotConnected, err)
+}
+
+func TestClient_Query_JetStreamError(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	mockConnManager := NewMockConnectionManagerInterface(ctrl)
+	mockLogger := logging.NewMockLogger(logging.DEBUG)
+
+	client := &Client{
+		connManager: mockConnManager,
+		logger:      mockLogger,
+	}
+
+	query := "test-subject"
+
+	mockConnManager.EXPECT().IsConnected().Return(true)
+	mockConnManager.EXPECT().JetStream().Return(nil, errJetStream)
+
+	result, err := client.Query(t.Context(), query)
+
+	require.Error(t, err)
+	require.Nil(t, result)
+	require.Contains(t, err.Error(), errJetStream.Error())
+}
+
+func TestClient_Query_ConsumerCreationError(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	mockConnManager := NewMockConnectionManagerInterface(ctrl)
+	mockJetStream := NewMockJetStream(ctrl)
+	mockLogger := logging.NewMockLogger(logging.DEBUG)
+
+	client := &Client{
+		connManager: mockConnManager,
+		logger:      mockLogger,
+		Config: &Config{
+			Stream: StreamConfig{
+				Stream: "test-stream",
+			},
+		},
+	}
+
+	query := "test-subject"
+
+	mockConnManager.EXPECT().IsConnected().Return(true)
+	mockConnManager.EXPECT().JetStream().Return(mockJetStream, nil)
+	mockJetStream.EXPECT().CreateOrUpdateConsumer(gomock.Any(), "test-stream", gomock.Any()).
+		Return(nil, errConsumerCreationError)
+
+	result, err := client.Query(t.Context(), query)
+
+	require.Error(t, err)
+	require.Nil(t, result)
+	require.Contains(t, err.Error(), errConsumerCreationError.Error())
+}
+
+func TestClient_Query_MessageFetchError(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	mockConnManager := NewMockConnectionManagerInterface(ctrl)
+	mockJetStream := NewMockJetStream(ctrl)
+	mockConsumer := NewMockConsumer(ctrl)
+	mockMessageBatch := NewMockMessageBatch(ctrl)
+	mockLogger := logging.NewMockLogger(logging.DEBUG)
+
+	client := &Client{
+		connManager: mockConnManager,
+		logger:      mockLogger,
+		Config: &Config{
+			Stream: StreamConfig{
+				Stream: "test-stream",
+			},
+			MaxWait: 5 * time.Second,
+		},
+	}
+
+	query := "test-subject"
+
+	// Mock expectations
+	mockConnManager.EXPECT().IsConnected().Return(true)
+	mockConnManager.EXPECT().JetStream().Return(mockJetStream, nil)
+	mockJetStream.EXPECT().CreateOrUpdateConsumer(gomock.Any(),
+		"test-stream", gomock.Any()).Return(mockConsumer, nil)
+	mockConsumer.EXPECT().Fetch(gomock.Any(), gomock.Any()).Return(mockMessageBatch, errHandlerError)
+	mockJetStream.EXPECT().DeleteConsumer(gomock.Any(), "test-stream", gomock.Any()).Return(nil)
+	mockConsumer.EXPECT().Info(gomock.Any()).Return(&jetstream.ConsumerInfo{Name: "test-stream"}, nil)
+
+	// Call the Query method
+	result, err := client.Query(t.Context(), query)
+
+	// Assertions
+	require.Error(t, err)
+	require.Nil(t, result)
+	require.Contains(t, err.Error(), errHandlerError.Error())
 }

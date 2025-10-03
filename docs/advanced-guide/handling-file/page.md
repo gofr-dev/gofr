@@ -145,7 +145,7 @@ for _, entry := range entries {
         entryType = "Dir"
     } 
 
-    fmt.Printf("%v: %v Size: %v Last Modified Time : %v\n" entryType, entry.Name(), entry.Size(), entry.ModTime())
+    fmt.Printf("%v: %v Size: %v Last Modified Time : %v\n", entryType, entry.Name(), entry.Size(), entry.ModTime())
 }
 ```
 > Note: In S3, directories are represented as prefixes of file keys. This method retrieves file
@@ -213,7 +213,7 @@ if entry.IsDir() {
      entryType = "Dir"
 }
 
-fmt.Printf("%v: %v Size: %v Last Modified Time : %v\n" entryType, entry.Name(), entry.Size(), entry.ModTime())
+fmt.Printf("%v: %v Size: %v Last Modified Time : %v\n", entryType, entry.Name(), entry.Size(), entry.ModTime())
 ```
 >Note: In S3:
 > - Names without a file extension are treated as directories by default.

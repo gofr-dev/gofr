@@ -1,9 +1,23 @@
-## Cassandra
+# Cassandra
+GoFr supports pluggable Cassandra drivers. 
 
-GoFr supports pluggable Cassandra drivers. It defines an interface that specifies the required methods for interacting
+## Configuration
+To connect to `Cassandra`, you need to provide the following environment variables:
+
+- `HOSTS`: The hostname or IP address of your Cassandra server.
+- `KEYSPACE`: The name of the keyspace (like a database) that holds your tables and defines replication and durability settings.
+- `PORT`: The port number
+- `USERNAME`: The username for connecting to the database.
+- `PASSWORD`: The password for the specified user.
+
+
+## Setup
+
+GoFr defines an interface that specifies the required methods for interacting
 with Cassandra. Any driver implementation that adheres to this interface can be integrated into GoFr using the
 `app.AddCassandra()` method. This approach promotes flexibility and allows you to choose the Cassandra driver that best
 suits your project's needs.
+
 
 ```go
 type CassandraWithContext interface {
@@ -59,11 +73,11 @@ func main() {
 	app := gofr.New()
 
 	config := cassandraPkg.Config{
-		Hosts:    "localhost",
-		Keyspace: "test",
-		Port:     2003,
-		Username: "cassandra",
-		Password: "cassandra",
+		Hosts:    app.Config.Get("HOSTS"),
+		Keyspace: app.Config.Get("KEYSPACE"),
+		Port:     app.Config.Get("PORT"),
+		Username: app.Config.Get("USERNAME"),
+		Password: app.Config.Get("PASSWORD"),
 	}
 
 	cassandra := cassandraPkg.New(config)

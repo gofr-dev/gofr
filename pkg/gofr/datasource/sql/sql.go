@@ -1,6 +1,7 @@
 package sql
 
 import (
+	"context"
 	"database/sql"
 	"fmt"
 	"strconv"
@@ -17,11 +18,13 @@ import (
 
 const (
 	sqlite         = "sqlite"
+	cockroachDB    = "cockroachdb"
 	defaultDBPort  = 3306
 	requireSSLMode = "require"
 )
 
-var errUnsupportedDialect = fmt.Errorf("unsupported db dialect; supported dialects are - mysql, postgres, supabase, sqlite")
+var errUnsupportedDialect = fmt.Errorf(
+	"unsupported db dialect; supported dialects are - mysql, postgres, supabase, sqlite, %s", cockroachDB)
 
 // DBConfig has those members which are necessary variables while connecting to database.
 type DBConfig struct {
@@ -37,8 +40,35 @@ type DBConfig struct {
 	Charset     string
 }
 
+func setupSupabaseDefaults(dbConfig *DBConfig, configs config.Config, logger datasource.Logger) {
+	if dbConfig.HostName == "" {
+		projectRef := configs.Get("SUPABASE_PROJECT_REF")
+		if projectRef != "" {
+			dbConfig.HostName = fmt.Sprintf("db.%s.supabase.co", projectRef)
+		}
+	}
+
+	if dbConfig.Database == "" {
+		dbConfig.Database = dialectPostgres
+	}
+
+	if dbConfig.SSLMode != requireSSLMode {
+		logger.Warnf("Supabase connections require SSL. Setting DB_SSL_MODE to 'require'")
+
+		dbConfig.SSLMode = requireSSLMode // Enforce SSL mode for Supabase
+	}
+
+	if dbConfig.Port == strconv.Itoa(defaultDBPort) {
+		dbConfig.Port = "5432"
+	}
+}
+
 func NewSQL(configs config.Config, logger datasource.Logger, metrics Metrics) *DB {
 	dbConfig := getDBConfig(configs)
+
+	if dbConfig.Dialect == supabaseDialect {
+		setupSupabaseDefaults(dbConfig, configs, logger)
+	}
 
 	if dbConfig.Dialect == "" {
 		return nil
@@ -47,18 +77,6 @@ func NewSQL(configs config.Config, logger datasource.Logger, metrics Metrics) *D
 	// if Hostname is not provided, we won't try to connect to DB
 	if dbConfig.Dialect != sqlite && dbConfig.HostName == "" {
 		logger.Errorf("connection to %s failed: host name is empty.", dbConfig.Dialect)
-		return nil
-	}
-
-	// For Supabase, enforce SSL mode as "require"
-	if dbConfig.Dialect == supabaseDialect && dbConfig.SSLMode != requireSSLMode {
-		logger.Warnf("Supabase connections require SSL. Setting DB_SSL_MODE to 'require'")
-
-		dbConfig.SSLMode = requireSSLMode
-
-		if dbConfig.Port == strconv.Itoa(defaultDBPort) {
-			dbConfig.Port = "5432"
-		}
 	}
 
 	logger.Debugf("generating database connection string for '%s'", dbConfig.Dialect)
@@ -71,7 +89,7 @@ func NewSQL(configs config.Config, logger datasource.Logger, metrics Metrics) *D
 
 	logger.Debugf("registering sql dialect '%s' for traces", dbConfig.Dialect)
 
-	otelRegisteredDialect, err := otelsql.Register(dbConfig.Dialect)
+	otelRegisteredDialect, err := registerOtel(dbConfig.Dialect, logger)
 	if err != nil {
 		logger.Errorf("could not register sql dialect '%s' for traces, error: %s", dbConfig.Dialect, err)
 		return nil
@@ -105,8 +123,21 @@ func NewSQL(configs config.Config, logger datasource.Logger, metrics Metrics) *D
 	return database
 }
 
+func registerOtel(dialect string, logger datasource.Logger) (string, error) {
+	// Supabase and CockroachDB use the PostgreSQL driver, so we register them as the "postgres" dialect
+	// to ensure compatibility with OpenTelemetry instrumentation.
+	otelSupportedDialect := dialect
+
+	if dialect == supabaseDialect || dialect == cockroachDB {
+		logger.Debugf("using '%s' as an alias for '%s' for otel-sql registration", dialectPostgres, dialect)
+		otelSupportedDialect = dialectPostgres
+	}
+
+	return otelsql.Register(otelSupportedDialect)
+}
+
 func pingToTestConnection(database *DB) *DB {
-	if err := database.DB.Ping(); err != nil {
+	if err := database.DB.PingContext(context.Background()); err != nil {
 		printConnectionFailureLog("connect", database.config, database.logger, err)
 
 		return database
@@ -121,11 +152,11 @@ func retryConnection(database *DB) {
 	const connRetryFrequencyInSeconds = 10
 
 	for {
-		if database.DB.Ping() != nil {
+		if database.DB.PingContext(context.Background()) != nil {
 			database.logger.Info("retrying SQL database connection")
 
 			for {
-				err := database.DB.Ping()
+				err := database.DB.PingContext(context.Background())
 				if err == nil {
 					printConnectionSuccessLog("connected", database.config, database.logger)
 
@@ -193,7 +224,7 @@ func getDBConnectionString(dbConfig *DBConfig) (string, error) {
 			dbConfig.Database,
 			dbConfig.Charset,
 		), nil
-	case dialectPostgres, supabaseDialect:
+	case dialectPostgres, supabaseDialect, cockroachDB:
 		return fmt.Sprintf("host=%s port=%s user=%s password=%s dbname=%s sslmode=%s",
 			dbConfig.HostName, dbConfig.Port, dbConfig.User, dbConfig.Password, dbConfig.Database, dbConfig.SSLMode), nil
 	case sqlite:

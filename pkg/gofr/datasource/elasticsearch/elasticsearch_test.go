@@ -702,7 +702,12 @@ func TestClient_Bulk_Errors(t *testing.T) {
 }
 
 func TestClient_Connect_Success(t *testing.T) {
+	ctrl := gomock.NewController(t)
+
 	client, _ := setupTest(t)
+	mockLogger := NewMockLogger(ctrl)
+
+	client.UseLogger(mockLogger)
 
 	mux := http.NewServeMux()
 
@@ -729,11 +734,13 @@ func TestClient_Connect_Success(t *testing.T) {
     "number": "8.0.0"
    }
   }`))
-
 		if err != nil {
 			t.Error("failed to write response: ", err)
 		}
 	})
+
+	mockLogger.EXPECT().Debugf(gomock.Any(), gomock.Any()).AnyTimes()
+	mockLogger.EXPECT().Errorf("Elasticsearch health check failed: %v", gomock.Any())
 
 	server := httptest.NewServer(mux)
 	defer server.Close()
