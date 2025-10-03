@@ -23,7 +23,7 @@ type RateLimiterStore interface {
 	StopCleanup()
 }
 
-// tokenBucket with simplified integer-only token handling
+// tokenBucket with simplified integer-only token handling.
 type tokenBucket struct {
 	tokens         int64 // Current tokens
 	lastRefillTime int64 // Unix nano timestamp
@@ -37,7 +37,7 @@ type bucketEntry struct {
 	lastAccess int64 // Unix timestamp
 }
 
-// newTokenBucket creates a new token bucket with integer-only math
+// newTokenBucket creates a new token bucket with integer-only math.
 func newTokenBucket(config *RateLimiterConfig) *tokenBucket {
 	maxTokens := int64(config.Burst)
 	refillRate := int64(config.RequestsPerSecond())
@@ -50,7 +50,7 @@ func newTokenBucket(config *RateLimiterConfig) *tokenBucket {
 	}
 }
 
-// allow checks if a token can be consumed
+// allow checks if a token can be consumed.
 func (tb *tokenBucket) allow() (allowed bool, waitTime time.Duration) {
 	now := time.Now().UnixNano()
 
@@ -67,21 +67,21 @@ func (tb *tokenBucket) allow() (allowed bool, waitTime time.Duration) {
 			newTokens = tb.maxTokens
 		}
 
-		// Try to consume a token
-		if newTokens >= 1 {
-			if atomic.CompareAndSwapInt64(&tb.tokens, oldTokens, newTokens-1) {
-				atomic.StoreInt64(&tb.lastRefillTime, now)
-				return true, 0
-			}
-		} else {
-			// Calculate wait time
+		// Early return if not enough tokens
+		if newTokens < 1 {
 			waitTime := time.Duration((1-newTokens)*int64(time.Second)/tb.refillRate) * time.Nanosecond
-
 			if waitTime < time.Millisecond {
 				waitTime = time.Millisecond
 			}
 
 			return false, waitTime
+		}
+
+		// Try to consume a token
+		if atomic.CompareAndSwapInt64(&tb.tokens, oldTokens, newTokens-1) {
+			atomic.StoreInt64(&tb.lastRefillTime, now)
+
+			return true, 0
 		}
 	}
 }
@@ -148,6 +148,7 @@ func (l *LocalRateLimiterStore) cleanupExpiredBuckets(logger Logger) {
 		entry := value.(*bucketEntry)
 		if atomic.LoadInt64(&entry.lastAccess) < cutoff {
 			l.buckets.Delete(key)
+
 			cleaned++
 		}
 
@@ -241,15 +242,15 @@ func (r *RedisRateLimiterStore) Allow(ctx context.Context, key string, config Ra
 	return allowed == 1, time.Duration(retryAfterMs) * time.Millisecond, nil
 }
 
-func (r *RedisRateLimiterStore) StartCleanup(_ context.Context, _ Logger) {
-	// No-op: Redis handles cleanup automatically via EXPIRE commands in Lua script
+func (*RedisRateLimiterStore) StartCleanup(_ context.Context, _ Logger) {
+	// No-op: Redis handles cleanup automatically via EXPIRE commands in Lua script.
 }
 
-func (r *RedisRateLimiterStore) StopCleanup() {
-	// No-op: Redis handles cleanup automatically
+func (*RedisRateLimiterStore) StopCleanup() {
+	// No-op: Redis handles cleanup automatically.
 }
 
-// toInt64 safely converts Redis result to int64
+// toInt64 safely converts Redis result to int64.
 func toInt64(i any) (int64, error) {
 	switch v := i.(type) {
 	case int64:
