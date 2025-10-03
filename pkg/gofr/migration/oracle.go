@@ -60,7 +60,6 @@ VALUES (:1, :2, :3, :4)
 // Create migration table if it doesn't exist.
 func (om oracleMigrator) checkAndCreateMigrationTable(c *container.Container) error {
 	err := om.Oracle.Exec(context.Background(), checkAndCreateOracleMigrationTable)
-
 	if err != nil {
 		c.Errorf("Failed to create Oracle migration table: %v", err)
 	} else {
@@ -145,7 +144,6 @@ func (om oracleMigrator) commitMigration(c *container.Container, data transactio
 	// Insert migration record using the transaction.
 	err := data.OracleTx.ExecContext(context.Background(), insertOracleGoFrMigrationRow,
 		data.MigrationNumber, "UP", data.StartTime, time.Since(data.StartTime).Milliseconds())
-
 	if err != nil {
 		c.Errorf("failed to insert migration record: %v", err)
 
