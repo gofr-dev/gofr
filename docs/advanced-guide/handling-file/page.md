@@ -117,19 +117,27 @@ import (
 func main() {
 	app := gofr.New()
 
-	// Option 1: Using JSON credentials string
-	app.AddFileStore(gcs.New(&gcs.Config{
-		BucketName:      "my-bucket",
-		CredentialsJSON: readFile("gcs-credentials.json"),
-		ProjectID:       "my-project-id",
-	}))
+	// Option 1: Using JSON credentials with local emulator
+    app.AddFileStore(gcs.New(&gcs.Config{
+        EndPoint:        "http://localhost:4566", // for LocalStack S3-compatible endpoint
+        BucketName:      "my-bucket",
+        CredentialsJSON: readFile("gcs-credentials.json"),
+        ProjectID:       "my-project-id",
+    }))
 
-	// Option 2: Using default credentials from env
-	// app.AddFileStore(gcs.New(&gcs.Config{
-	//     BucketName: "my-bucket",
-	//     ProjectID:  "my-project-id",
-	// }))
+    // Option 2: Using default credentials (GOOGLE_APPLICATION_CREDENTIALS)
+    // app.AddFileStore(gcs.New(&gcs.Config{
+    //     BucketName: "my-bucket",
+    //     ProjectID:  "my-project-id",
+    // }))
 
+    // Option 3: Direct connection to real GCS (no EndPoint)
+    // app.AddFileStore(gcs.New(&gcs.Config{
+    //     BucketName:      "my-bucket",
+    //     CredentialsJSON: readFile("prod-creds.json"),
+    //     ProjectID:       "my-project-id",
+    // }))
+	
 	app.Run()
 }
 
