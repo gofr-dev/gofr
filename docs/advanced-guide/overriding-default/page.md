@@ -143,9 +143,18 @@ func main() {
 }
 ```
 
+In GoFr, the following HTTP methods can be redirected, along with their corresponding status codes:
+
+- **GET (302 Found)**: It is safe to redirect because the request remains a GET after the redirect.
+- **POST (303 See Other)**: The browser converts the POST request to a GET on redirect.
+- **PUT (303 See Other)**: The browser converts the PUT request to a GET on redirect.
+- **PATCH (303 See Other)**: The browser converts the PATCH request to a GET on redirect.
+- **DELETE (302 Found)**: This is a temporary redirect, but method handling is ambiguous, as most browsers historically convert the DELETE request into a GET.
+
+
 ## Favicon.ico
 
-By default, GoFr load its own `favicon.ico` present in root directory for an application. To override `favicon.ico` user
+By default, GoFr loads its own `favicon.ico` present in root directory for an application. To override `favicon.ico` user
 can place its custom icon in the **static** directory of its application.
 
 > [!NOTE]

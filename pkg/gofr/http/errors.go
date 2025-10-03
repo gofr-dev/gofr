@@ -9,7 +9,10 @@ import (
 	"gofr.dev/pkg/gofr/logging"
 )
 
-const alreadyExistsMessage = "entity already exists"
+const (
+	alreadyExistsMessage      = "entity already exists"
+	StatusClientClosedRequest = 499
+)
 
 // ErrorEntityNotFound represents an error for when an entity is not found in the system.
 type ErrorEntityNotFound struct {
@@ -102,11 +105,26 @@ func (ErrorRequestTimeout) Error() string {
 }
 
 func (ErrorRequestTimeout) StatusCode() int {
-	return http.StatusRequestTimeout
+	return http.StatusRequestTimeout // 408 is correct for request timeouts
 }
 
 func (ErrorRequestTimeout) LogLevel() logging.Level {
-	return logging.INFO
+	return logging.INFO // Server timeouts are informational
+}
+
+// ErrorClientClosedRequest represents when client cancels the request.
+type ErrorClientClosedRequest struct{}
+
+func (ErrorClientClosedRequest) Error() string {
+	return "client closed request"
+}
+
+func (ErrorClientClosedRequest) StatusCode() int {
+	return StatusClientClosedRequest // Non-standard but widely used by Nginx
+}
+
+func (ErrorClientClosedRequest) LogLevel() logging.Level {
+	return logging.DEBUG // Client cancellations aren't server errors
 }
 
 type ErrorServiceUnavailable struct {
@@ -147,15 +165,17 @@ func (ErrorPanicRecovery) LogLevel() logging.Level {
 
 // validate the errors satisfy the underlying interfaces they depend on.
 var (
-	_ statusCodeResponder = ErrorEntityNotFound{}
-	_ statusCodeResponder = ErrorEntityAlreadyExist{}
-	_ statusCodeResponder = ErrorInvalidParam{}
-	_ statusCodeResponder = ErrorMissingParam{}
-	_ statusCodeResponder = ErrorInvalidRoute{}
-	_ statusCodeResponder = ErrorRequestTimeout{}
-	_ statusCodeResponder = ErrorPanicRecovery{}
-	_ statusCodeResponder = ErrorServiceUnavailable{}
+	_ StatusCodeResponder = ErrorEntityNotFound{}
+	_ StatusCodeResponder = ErrorEntityAlreadyExist{}
+	_ StatusCodeResponder = ErrorInvalidParam{}
+	_ StatusCodeResponder = ErrorMissingParam{}
+	_ StatusCodeResponder = ErrorInvalidRoute{}
+	_ StatusCodeResponder = ErrorRequestTimeout{}
+	_ StatusCodeResponder = ErrorPanicRecovery{}
+	_ StatusCodeResponder = ErrorServiceUnavailable{}
+	_ StatusCodeResponder = ErrorClientClosedRequest{}
 
+	_ logging.LogLevelResponder = ErrorClientClosedRequest{}
 	_ logging.LogLevelResponder = ErrorEntityNotFound{}
 	_ logging.LogLevelResponder = ErrorEntityAlreadyExist{}
 	_ logging.LogLevelResponder = ErrorInvalidParam{}

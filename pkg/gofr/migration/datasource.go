@@ -7,15 +7,19 @@ type Datasource struct {
 	// Need to think it through as it will bring breaking changes.
 	Logger
 
-	SQL        SQL
-	Redis      Redis
-	PubSub     PubSub
-	Clickhouse Clickhouse
-	Cassandra  Cassandra
-	Mongo      Mongo
-	ArangoDB   ArangoDB
-	SurrealDB  SurrealDB
-	DGraph     DGraph
+	SQL           SQL
+	Redis         Redis
+	PubSub        PubSub
+	Clickhouse    Clickhouse
+	Oracle        Oracle
+	Cassandra     Cassandra
+	Mongo         Mongo
+	ArangoDB      ArangoDB
+	SurrealDB     SurrealDB
+	DGraph        DGraph
+	ScyllaDB      ScyllaDB
+	Elasticsearch Elasticsearch
+	OpenTSDB      OpenTSDB
 }
 
 // It is a base implementation for migration manager, on this other database drivers have been wrapped.

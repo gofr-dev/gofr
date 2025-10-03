@@ -3,6 +3,7 @@ package nats
 import (
 	"context"
 	"errors"
+	"strings"
 
 	"github.com/nats-io/nats.go/jetstream"
 	"gofr.dev/pkg/gofr/datasource/pubsub"
@@ -23,17 +24,41 @@ func newStreamManager(js jetstream.JetStream, logger pubsub.Logger) *StreamManag
 }
 
 // CreateStream creates a new jStream stream.
-func (sm *StreamManager) CreateStream(ctx context.Context, cfg StreamConfig) error {
-	sm.logger.Debugf("creating stream %s", cfg.Stream)
+func (sm *StreamManager) CreateStream(ctx context.Context, cfg *StreamConfig) error {
 	jsCfg := jetstream.StreamConfig{
 		Name:     cfg.Stream,
 		Subjects: cfg.Subjects,
 		MaxBytes: cfg.MaxBytes,
+		MaxAge:   cfg.MaxAge,
+	}
+
+	if cfg.Storage != "" {
+		if cfg.Storage == "file" {
+			jsCfg.Storage = jetstream.FileStorage
+		} else if cfg.Storage == "memory" {
+			jsCfg.Storage = jetstream.MemoryStorage
+		}
+	}
+
+	if cfg.Retention != "" {
+		switch cfg.Retention {
+		case "limits":
+			jsCfg.Retention = jetstream.LimitsPolicy
+		case "interest":
+			jsCfg.Retention = jetstream.InterestPolicy
+		case "workqueue":
+			jsCfg.Retention = jetstream.WorkQueuePolicy
+		}
 	}
 
 	_, err := sm.js.CreateStream(ctx, jsCfg)
 	if err != nil {
+		if strings.Contains(err.Error(), "stream name already in use") {
+			return nil
+		}
+
 		sm.logger.Errorf("failed to create stream: %v", err)
+
 		return err
 	}
 

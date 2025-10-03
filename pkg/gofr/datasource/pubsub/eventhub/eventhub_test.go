@@ -4,10 +4,13 @@ import (
 	"context"
 	"net"
 	"testing"
+	"time"
 
 	"github.com/Azure/azure-sdk-for-go/sdk/messaging/azeventhubs"
 	"github.com/stretchr/testify/require"
+	"go.opentelemetry.io/otel"
 	"go.uber.org/mock/gomock"
+	"gofr.dev/pkg/gofr/datasource"
 	"gofr.dev/pkg/gofr/testutil"
 	"nhooyr.io/websocket"
 )
@@ -29,6 +32,7 @@ func TestConnect(t *testing.T) {
 
 	client.UseLogger(mockLogger)
 	client.UseMetrics(NewMockMetrics(ctrl))
+	client.UseTracer(otel.GetTracerProvider().Tracer("gofr-eventhub"))
 
 	client.Connect()
 
@@ -183,14 +187,14 @@ func Test_CreateTopic(t *testing.T) {
 	mockLogger.EXPECT().Debug("Event Hub consumer client setup success")
 	mockLogger.EXPECT().Debug("Event Hub processor setup success")
 	mockLogger.EXPECT().Debug("Event Hub processor running successfully").AnyTimes()
-	mockLogger.EXPECT().Error("topic deletion is not supported in Event Hub")
+	mockLogger.EXPECT().Error("topic creation is not supported in Event Hub")
 
 	client.UseLogger(mockLogger)
 	client.UseMetrics(mockMetrics)
 
 	client.Connect()
 
-	err := client.DeleteTopic(t.Context(), "random-topic")
+	err := client.CreateTopic(t.Context(), "random-topic")
 
 	require.NoError(t, err, "Event Hub Topic Creation not allowed failed")
 
@@ -212,14 +216,14 @@ func Test_DeleteTopic(t *testing.T) {
 	mockLogger.EXPECT().Debug("Event Hub consumer client setup success")
 	mockLogger.EXPECT().Debug("Event Hub processor setup success")
 	mockLogger.EXPECT().Debug("Event Hub processor running successfully").AnyTimes()
-	mockLogger.EXPECT().Error("topic creation is not supported in Event Hub")
+	mockLogger.EXPECT().Error("topic deletion is not supported in Event Hub")
 
 	client.UseLogger(mockLogger)
 	client.UseMetrics(mockMetrics)
 
 	client.Connect()
 
-	err := client.CreateTopic(t.Context(), "random-topic")
+	err := client.DeleteTopic(t.Context(), "random-topic")
 
 	require.NoError(t, err, "Event Hub Topic Deletion not allowed failed")
 
@@ -258,8 +262,8 @@ func getTestConfigs() Config {
 		opts := &websocket.DialOptions{
 			Subprotocols: []string{"amqp"},
 		}
-		wssConn, _, err := websocket.Dial(ctx, args.Host, opts)
 
+		wssConn, _, err := websocket.Dial(ctx, args.Host, opts)
 		if err != nil {
 			return nil, err
 		}
@@ -284,4 +288,155 @@ func getTestConfigs() Config {
 			NewWebSocketConn: newWebSocketConnFn,
 		},
 	}
+}
+
+func TestGetEventHubName(t *testing.T) {
+	expectedName := "test-event-hub"
+	client := New(Config{
+		EventhubName: expectedName,
+	})
+
+	require.Equal(t, expectedName, client.GetEventHubName(),
+		"GetEventHubName should return the configured EventhubName")
+}
+
+func TestQuery_Failures(t *testing.T) {
+	testCases := []struct {
+		name          string
+		setupClient   func() *Client
+		query         string
+		expectedError error
+	}{
+		{
+			name: "consumer_not_connected",
+			setupClient: func() *Client {
+				return New(Config{
+					EventhubName: "test-hub",
+				})
+			},
+			query:         "test-hub",
+			expectedError: errClientNotConnected,
+		},
+		{
+			name: "empty_topic",
+			setupClient: func() *Client {
+				client := New(Config{
+					EventhubName: "test-hub",
+				})
+				client.consumer = &azeventhubs.ConsumerClient{}
+				return client
+			},
+			query:         "",
+			expectedError: errEmptyTopic,
+		},
+		{
+			name: "topic_mismatch",
+			setupClient: func() *Client {
+				client := New(Config{
+					EventhubName: "test-hub",
+				})
+				client.consumer = &azeventhubs.ConsumerClient{} // Just needs to be non-nil
+				return client
+			},
+			query:         "different-hub",
+			expectedError: ErrTopicMismatch,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+
+			client := tc.setupClient()
+			mockLogger := NewMockLogger(ctrl)
+
+			client.UseLogger(mockLogger)
+
+			result, err := client.Query(t.Context(), tc.query)
+
+			require.Nil(t, result, "Result should be nil for failure case: %s", tc.name)
+			require.Equal(t, tc.expectedError, err, "Error should match expected for case: %s", tc.name)
+		})
+	}
+}
+
+func TestQuery_ContextWithDeadline(t *testing.T) {
+	// Test that when context has deadline, we respect it
+	ctrl := gomock.NewController(t)
+
+	client := New(Config{
+		EventhubName: "test-hub",
+	})
+	client.consumer = &azeventhubs.ConsumerClient{} // Just needs to be non-nil
+
+	mockLogger := NewMockLogger(ctrl)
+	client.UseLogger(mockLogger)
+
+	ctx, cancel := context.WithTimeout(t.Context(), 100*time.Millisecond)
+	defer cancel()
+
+	// Execute Query (will fail with ErrTopicMismatch before it gets to the deadline handling)
+	_, err := client.Query(ctx, "different-hub")
+
+	// Verify it failed for the right reason
+	require.Equal(t, ErrTopicMismatch, err)
+	require.True(t, mockLogger.ctrl.Satisfied())
+}
+
+func Test_ValidConfigs(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	mockLogger := NewMockLogger(ctrl)
+	client := New(Config{})
+	client.UseLogger(mockLogger)
+
+	mockLogger.EXPECT().Error("eventhubName cannot be an empty")
+	mockLogger.EXPECT().Error("connectionString cannot be an empty")
+	mockLogger.EXPECT().Error("storageServiceURL cannot be an empty")
+	mockLogger.EXPECT().Error("storageContainerName cannot be an empty")
+	mockLogger.EXPECT().Error("containerConnectionString cannot be an empty")
+
+	valid := client.validConfigs(Config{})
+
+	require.False(t, valid, "validConfigs should return false for invalid configuration")
+}
+
+func Test_Health(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	mockLogger := NewMockLogger(ctrl)
+	client := New(getTestConfigs())
+	client.UseLogger(mockLogger)
+
+	mockLogger.EXPECT().Error("health-check not implemented for Event Hub")
+
+	health := client.Health()
+
+	require.Equal(t, datasource.Health{}, health, "Health should return an empty datasource.Health struct")
+}
+
+func TestCreateTopic_ForMigrations(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	mockLogger := NewMockLogger(ctrl)
+	client := New(getTestConfigs())
+	client.UseLogger(mockLogger)
+
+	err := client.CreateTopic(t.Context(), "gofr_migrations")
+
+	require.NoError(t, err, "CreateTopic should not return an error for 'gofr_migrations'")
+}
+
+func Test_GetEventHubName(t *testing.T) {
+	expectedName := "test-event-hub"
+	client := New(Config{
+		EventhubName: expectedName,
+	})
+
+	actualName := client.GetEventHubName()
+
+	require.Equal(t, expectedName, actualName, "GetEventHubName should return the configured EventhubName")
 }

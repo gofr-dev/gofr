@@ -1,8 +1,10 @@
 package mqtt
 
 import (
+	"context"
 	"errors"
 	"net/url"
+	"strconv"
 	"sync"
 	"testing"
 	"time"
@@ -587,4 +589,197 @@ func TestMQTT_Close(t *testing.T) {
 	err := client.Close()
 
 	require.NoError(t, err)
+}
+
+func Test_parseQueryArgs(t *testing.T) {
+	tests := []struct {
+		name            string
+		args            []any
+		expectedTimeout time.Duration
+		expectedLimit   int
+	}{
+		{"no args", []any{}, defaultQueryCollectTimeout, defaultQueryMessageLimit},
+		{"only timeout arg", []any{10 * time.Second}, 10 * time.Second, defaultQueryMessageLimit},
+		{"timeout and limit args", []any{15 * time.Second, 5}, 15 * time.Second, 5},
+		{"invalid timeout type, valid limit", []any{"not a duration", 5}, defaultQueryCollectTimeout, 5},
+		{"valid timeout, invalid limit type", []any{10 * time.Second, "not an int"}, 10 * time.Second, defaultQueryMessageLimit},
+		{"only limit arg (nil for timeout)", []any{nil, 7}, defaultQueryCollectTimeout, 7},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			timeout, limit := parseQueryArgs(tt.args...)
+			assert.Equal(t, tt.expectedTimeout, timeout, "Timeout mismatch")
+			assert.Equal(t, tt.expectedLimit, limit, "Limit mismatch")
+		})
+	}
+}
+
+func TestMQTT_createQueryMessageHandler(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	mockLogger := NewMockLogger(ctrl)
+	mq := &MQTT{logger: mockLogger}
+
+	msgChan := make(chan *pubsub.Message, 1) // Buffer size of 1
+	topic := "test/handler/topic"
+
+	handler := mq.createQueryMessageHandler(t.Context(), msgChan, topic)
+
+	mockMsg1 := &mockMessage{topic: topic, pyload: "message 1", messageID: 123, qos: 1, retained: false}
+	mockMsg2 := &mockMessage{topic: topic, pyload: "message 2 (dropped)", messageID: 124, qos: 1, retained: false}
+
+	// Send first message
+	handler(nil, mockMsg1)
+
+	// Expect a log when the second message is dropped due to buffer overflow
+	mockLogger.EXPECT().Debugf("Query: msgChan full for topic %s, message dropped during collection", topic).Times(1)
+
+	// Send second message, which should be dropped
+	handler(nil, mockMsg2)
+
+	// Assert the received message (single assertion block)
+	receivedMsg := <-msgChan
+	assert.Equal(t, mockMsg1.Topic(), receivedMsg.Topic)
+	assert.Equal(t, mockMsg1.Payload(), receivedMsg.Value)
+
+	meta := receivedMsg.MetaData.(map[string]string)
+	assert.Equal(t, map[string]string{
+		"messageID": strconv.Itoa(int(mockMsg1.MessageID())),
+		"qos":       string(mockMsg1.Qos()),
+		"retained":  strconv.FormatBool(mockMsg1.Retained()),
+	}, meta, "Metadata mismatch")
+
+	// Ensure the channel is empty
+	assert.Empty(t, msgChan, "Channel should be empty after reading the first message")
+}
+
+func TestMQTT_subscribeToTopicForQuery_SuccessAndErrors(t *testing.T) {
+	topic := "test/subquery"
+	timeout := 50 * time.Millisecond
+	dummyHandler := func(_ mqtt.Client, _ mqtt.Message) {}
+
+	testCases := []struct {
+		name        string
+		waitSuccess bool
+		tokenErr    error
+		expectedErr error
+	}{
+		{"success", true, nil, nil},
+		{"timeout without token error", false, nil, errSubscriptionTimeout},
+		{"timeout with token error", false, errToken, errSubscriptionFailed},
+		{"completed but token error", true, errToken, errSubscriptionFailed},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			ctrl, mq, mockClient, _, mockToken := getMockMQTT(t, mockConfigs)
+			defer ctrl.Finish()
+
+			mockClient.EXPECT().Subscribe(topic, mockConfigs.QoS, gomock.Any()).Return(mockToken)
+			mockToken.EXPECT().WaitTimeout(timeout).Return(tc.waitSuccess)
+			mockToken.EXPECT().Error().Return(tc.tokenErr)
+
+			err := mq.subscribeToTopicForQuery(t.Context(), topic, timeout, dummyHandler)
+			assert.ErrorIs(t, err, tc.expectedErr)
+		})
+	}
+}
+
+func TestMQTT_subscribeToTopicForQuery_ContextError(t *testing.T) {
+	topicName := "test/subquery"
+	subscribeTimeout := 50 * time.Millisecond // Short timeout for tests
+
+	var dummyHandler mqtt.MessageHandler = func(_ mqtt.Client, _ mqtt.Message) {}
+
+	t.Run("error_context_canceled_during_wait", func(t *testing.T) {
+		ctrl, mq, mockClient, _, mockToken := getMockMQTT(t, mockConfigs)
+		defer ctrl.Finish()
+
+		cancelledCtx, cancel := context.WithCancel(t.Context())
+		cancel() // Cancel context immediately
+
+		mockClient.EXPECT().Subscribe(topicName, mockConfigs.QoS, gomock.Any()).Return(mockToken)
+		mockToken.EXPECT().WaitTimeout(subscribeTimeout).Return(false) // Assume WaitTimeout returns false due to context
+
+		err := mq.subscribeToTopicForQuery(cancelledCtx, topicName, subscribeTimeout, dummyHandler)
+
+		require.Error(t, err)
+		require.ErrorIs(t, err, context.Canceled) // Check that the specific context error is wrapped
+		assert.Contains(t, err.Error(), "context error during MQTT subscription to '"+topicName+"': context canceled")
+	})
+
+	t.Run("error_context_deadline_exceeded_during_wait", func(t *testing.T) {
+		ctrl, mq, mockClient, _, mockToken := getMockMQTT(t, mockConfigs)
+		defer ctrl.Finish()
+
+		deadlineCtx, cancel := context.WithTimeout(t.Context(), 1*time.Nanosecond) // Ensure deadline exceeded
+		defer cancel()
+
+		time.Sleep(5 * time.Millisecond) // Give time for deadline to pass
+
+		mockClient.EXPECT().Subscribe(topicName, mockConfigs.QoS, gomock.Any()).Return(mockToken)
+		mockToken.EXPECT().WaitTimeout(subscribeTimeout).Return(false)
+
+		err := mq.subscribeToTopicForQuery(deadlineCtx, topicName, subscribeTimeout, dummyHandler)
+
+		require.Error(t, err)
+		require.ErrorIs(t, err, context.DeadlineExceeded)
+		assert.Contains(t, err.Error(), "context error during MQTT subscription to '"+topicName+"': context deadline exceeded")
+	})
+}
+
+func TestMQTT_Query_SuccessCases(t *testing.T) {
+	topic := "test/query/success"
+
+	testCases := []struct {
+		name         string
+		messageLimit int
+		timeout      time.Duration
+		messages     []string
+		expectedData string
+	}{
+		{"one_message_default_args", 1, 150 * time.Millisecond, []string{"hello query one"}, "hello query one"},
+		{"multiple_messages_limit_reached", 2, 150 * time.Millisecond, []string{"msgA", "msgB", "msgC"}, "msgA\nmsgB"},
+		{"timeout_reached_before_limit", 5, 30 * time.Millisecond, []string{"only"}, "only"},
+		{"no_messages_collected", 1, 30 * time.Millisecond, []string{}, ""},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			ctrl, mq, mockClient, _, mockSubToken := getMockMQTT(t, mockConfigs)
+			defer ctrl.Finish()
+
+			mockClient.EXPECT().IsConnected().Return(true)
+
+			var capturedHandler mqtt.MessageHandler
+
+			mockClient.EXPECT().Subscribe(topic, mockConfigs.QoS, gomock.Any()).
+				DoAndReturn(func(_ string, _ byte, h mqtt.MessageHandler) mqtt.Token {
+					capturedHandler = h
+					return mockSubToken
+				})
+
+			mockSubToken.EXPECT().WaitTimeout(tc.timeout).Return(true)
+			mockSubToken.EXPECT().Error().Return(nil)
+
+			mockUnsubToken := NewMockToken(ctrl)
+			mockClient.EXPECT().Unsubscribe(topic).Return(mockUnsubToken)
+			mockUnsubToken.EXPECT().WaitTimeout(unsubscribeOpTimeout).Return(true)
+
+			// Simulate message publishing
+			go func() {
+				time.Sleep(10 * time.Millisecond)
+
+				for _, msg := range tc.messages {
+					capturedHandler(nil, &mockMessage{topic: topic, pyload: msg, qos: int(mockConfigs.QoS)})
+				}
+			}()
+
+			result, err := mq.Query(t.Context(), topic, tc.timeout, tc.messageLimit)
+			require.NoError(t, err)
+			assert.Equal(t, tc.expectedData, string(result))
+		})
+	}
 }

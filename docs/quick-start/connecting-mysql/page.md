@@ -9,16 +9,16 @@ Just like Redis, GoFr supports connection to various SQL-compatible databases (M
 Users can run MySQL/MariaDB and create a database locally using the following Docker command:
 
 ```bash
-docker run --name gofr-db -e MYSQL_ROOT_PASSWORD=root123 -e MYSQL_DATABASE=test_db -p 3306:3306 -d mysql:8.0.30
+docker run --name gofr-mysql -e MYSQL_ROOT_PASSWORD=root123 -e MYSQL_DATABASE=test_db -p 3306:3306 -d mysql:8.0.30
 ```
 
-Access `test_db` database and create table customer with columns `id` and `name`. Change mysql to mariadb as needed: 
+Access the `test_db` database and create a table customer with columns `id` and `name`. Change MySQL to MariaDB as needed: 
 
 ```bash
 docker exec -it gofr-mysql mysql -uroot -proot123 test_db -e "CREATE TABLE customers (id INT AUTO_INCREMENT PRIMARY KEY, name VARCHAR(255) NOT NULL);"
 ```
 
-Now the database with table is ready, we can connect our GoFr server to MySQL/MariaDB. 
+Now that the database with the table is ready, we can connect our GoFr server to MySQL/MariaDB. 
 
 ### Configuration & Usage
 
@@ -51,7 +51,7 @@ Users can run PostgreSQL and create a database locally using the following Docke
 docker run --name gofr-postgres -e POSTGRES_PASSWORD=postgres -e POSTGRES_DB=test_db -p 5432:5432 -d postgres:14
 ```
 
-Access `test_db` database and create table customer with columns `id` and `name`:
+Access `test_db` database and create a table customer with columns `id` and `name`:
 
 ```bash
 docker exec -it gofr-postgres psql -U postgres test_db -c "CREATE TABLE customers (id SERIAL PRIMARY KEY, name VARCHAR(255) NOT NULL);"
@@ -59,7 +59,7 @@ docker exec -it gofr-postgres psql -U postgres test_db -c "CREATE TABLE customer
 
 ### Configuration & Usage
 
-After adding PostgreSQL configs `.env` will be updated to the following:
+After adding PostgreSQL configs, `.env` will be updated to the following:
 
 ```dotenv
 # configs/.env
@@ -141,7 +141,7 @@ DB_URL=postgresql://postgres:your_password@db.your_project_ref.supabase.co:5432/
 
 For all supported SQL databases, GoFr provides a consistent API to interact with your data.
 
-Now in the following example, we'll store customer data using **POST** `/customer` and then use **GET** `/customer` to retrieve the same.
+Now, in the following example, we'll store customer data using **POST** `/customer` and then use **GET** `/customer` to retrieve the same.
 We will be storing the customer data with `id` and `name`.
 
 After adding code to add and retrieve data from the SQL datastore, `main.go` will be updated to the following.
@@ -212,7 +212,7 @@ func main() {
 }
 ```
 
-To update the database with the customer data access use through this curl command through terminal
+To update the database with the customer data access, use this curl command through the terminal
 
 ```bash
 # here abc and xyz after /customer are the path parameters

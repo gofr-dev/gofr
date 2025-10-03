@@ -237,6 +237,19 @@ func TestSQL_getDBConnectionString(t *testing.T) {
 			expOut: "file:test.db",
 		},
 		{
+			desc: "cockroachdb dialect",
+			configs: &DBConfig{
+				Dialect:  "cockroachdb",
+				HostName: "host",
+				User:     "user",
+				Password: "password",
+				Port:     "26257",
+				Database: "test",
+				SSLMode:  "require",
+			},
+			expOut: "host=host port=26257 user=user password=password dbname=test sslmode=require",
+		},
+		{
 			desc:    "unsupported dialect",
 			configs: &DBConfig{Dialect: "mssql"},
 			expOut:  "",
@@ -351,4 +364,34 @@ func Test_SQLRetryConnectionInfoLog(t *testing.T) {
 	})
 
 	assert.Contains(t, logs, "retrying SQL database connection")
+}
+
+func TestNewSQL_CockroachDB(t *testing.T) {
+	ctrl := gomock.NewController(t)
+
+	mockConfig := config.NewMockConfig(map[string]string{
+		"DB_DIALECT":  "cockroachdb",
+		"DB_HOST":     "localhost",
+		"DB_USER":     "testuser",
+		"DB_PASSWORD": "testpassword",
+		"DB_PORT":     "26257",
+		"DB_NAME":     "testdb",
+		"DB_SSL_MODE": "disable",
+	})
+
+	mockLogger := logging.NewMockLogger(logging.DEBUG)
+	mockMetrics := NewMockMetrics(ctrl)
+
+	mockMetrics.EXPECT().SetGauge(gomock.Any(), gomock.Any()).AnyTimes()
+
+	testLogs := testutil.StderrOutputForFunc(func() {
+		db := NewSQL(mockConfig, mockLogger, mockMetrics)
+		assert.NotNil(t, db, "Expected a non-nil DB object for cockroachdb")
+
+		if db != nil {
+			assert.Equal(t, "cockroachdb", db.Dialect(), "Expected dialect to be cockroachdb")
+		}
+	})
+
+	fmt.Println("Test Logs for CockroachDB:", testLogs)
 }

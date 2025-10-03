@@ -21,8 +21,9 @@ type transactionData struct {
 	StartTime       time.Time
 	MigrationNumber int64
 
-	SQLTx   *gofrSql.Tx
-	RedisTx goRedis.Pipeliner
+	SQLTx    *gofrSql.Tx
+	RedisTx  goRedis.Pipeliner
+	OracleTx container.OracleTx
 }
 
 func Run(migrationsMap map[int64]Migrate, c *container.Container) {
@@ -57,18 +58,22 @@ func Run(migrationsMap map[int64]Migrate, c *container.Container) {
 
 	for _, currentMigration := range keys {
 		if currentMigration <= lastMigration {
-			c.Debugf("skipping migration %v", currentMigration)
+			c.Infof("skipping migration %v", currentMigration)
 
 			continue
 		}
 
-		c.Logger.Debugf("running migration %v", currentMigration)
+		c.Logger.Infof("running migration %v", currentMigration)
 
 		migrationInfo := mg.beginTransaction(c)
 
 		// Replacing the objects in datasource object only for those Datasources which support transactions.
 		ds.SQL = migrationInfo.SQLTx
 		ds.Redis = migrationInfo.RedisTx
+
+		if migrationInfo.OracleTx != nil {
+			ds.Oracle = &oracleTransactionWrapper{tx: migrationInfo.OracleTx}
+		}
 
 		migrationInfo.StartTime = time.Now()
 		migrationInfo.MigrationNumber = currentMigration
@@ -112,105 +117,127 @@ func getKeys(migrationsMap map[int64]Migrate) (invalidKey, keys []int64) {
 
 func getMigrator(c *container.Container) (Datasource, migrator, bool) {
 	var (
-		ok bool
 		ds Datasource
 		mg migrator = &ds
+		ok bool
 	)
 
-	if !isNil(c.SQL) {
-		ok = true
-
-		ds.SQL = c.SQL
-
-		s := sqlDS{ds.SQL}
-		mg = s.apply(mg)
-
-		c.Debug("initialized data source for SQL")
-	}
-
-	if !isNil(c.Redis) {
-		ok = true
-
-		ds.Redis = c.Redis
-
-		mg = redisDS{ds.Redis}.apply(mg)
-
-		c.Debug("initialized data source for redis")
-	}
-
-	if !isNil(c.Clickhouse) {
-		ok = true
-
-		ds.Clickhouse = c.Clickhouse
-
-		mg = clickHouseDS{ds.Clickhouse}.apply(mg)
-
-		c.Debug("initialized data source for Clickhouse")
-	}
-
-	if c.PubSub != nil {
-		ok = true
-
-		ds.PubSub = c.PubSub
-	}
-
-	if !isNil(c.Cassandra) {
-		ok = true
-
-		ds.Cassandra = cassandraDS{c.Cassandra}
-
-		mg = cassandraDS{c.Cassandra}.apply(mg)
-
-		c.Debug("initialized data source for Cassandra")
-	}
-
-	if !isNil(c.Mongo) {
-		ok = true
-
-		ds.Mongo = mongoDS{c.Mongo}
-
-		mg = mongoDS{c.Mongo}.apply(mg)
-
-		c.Debug("initialized data source for Mongo")
-	}
-
-	if !isNil(c.ArangoDB) {
-		ok = true
-
-		ds.ArangoDB = arangoDS{c.ArangoDB}
-
-		mg = arangoDS{c.ArangoDB}.apply(mg)
-
-		c.Debug("initialized data source for ArangoDB")
-	}
-
-	if !isNil(c.SurrealDB) {
-		ok = true
-
-		ds.SurrealDB = surrealDS{c.SurrealDB}
-
-		mg = surrealDS{c.SurrealDB}.apply(mg)
-
-		c.Debug("initialized data source for surrealDB")
-	}
-
-	if !isNil(c.DGraph) {
-		ok = true
-
-		ds.DGraph = dgraphDS{c.DGraph}
-
-		mg = dgraphDS{c.DGraph}.apply(mg)
-
-		c.Debug("initialized data source for dgraph")
-	}
+	mg, ok = initializeDatasources(c, &ds, mg)
 
 	return ds, mg, ok
 }
 
+type datasourceInitializer struct {
+	condition     func() bool
+	setDS         func()
+	apply         func(m migrator) migrator
+	logIdentifier string
+}
+
+func initializeDatasources(c *container.Container, ds *Datasource, mg migrator) (migrator, bool) {
+	var initialized bool
+
+	initializers := []datasourceInitializer{
+		{
+			condition:     func() bool { return !isNil(c.SQL) },
+			setDS:         func() { ds.SQL = c.SQL },
+			apply:         func(m migrator) migrator { return (&sqlDS{ds.SQL}).apply(m) },
+			logIdentifier: "SQL",
+		},
+		{
+			condition:     func() bool { return !isNil(c.Redis) },
+			setDS:         func() { ds.Redis = c.Redis },
+			apply:         func(m migrator) migrator { return redisDS{ds.Redis}.apply(m) },
+			logIdentifier: "Redis",
+		},
+		{
+			condition:     func() bool { return !isNil(c.DGraph) },
+			setDS:         func() { ds.DGraph = dgraphDS{c.DGraph} },
+			apply:         func(m migrator) migrator { return dgraphDS{c.DGraph}.apply(m) },
+			logIdentifier: "DGraph",
+		},
+		{
+			condition:     func() bool { return !isNil(c.Clickhouse) },
+			setDS:         func() { ds.Clickhouse = c.Clickhouse },
+			apply:         func(m migrator) migrator { return clickHouseDS{ds.Clickhouse}.apply(m) },
+			logIdentifier: "Clickhouse",
+		},
+		{
+			condition:     func() bool { return !isNil(c.Oracle) },
+			setDS:         func() { ds.Oracle = c.Oracle },
+			apply:         func(m migrator) migrator { return oracleDS{c.Oracle}.apply(m) },
+			logIdentifier: "Oracle",
+		},
+
+		{
+			condition:     func() bool { return c.PubSub != nil },
+			setDS:         func() { ds.PubSub = c.PubSub },
+			apply:         func(m migrator) migrator { return pubsubDS{c.PubSub}.apply(m) },
+			logIdentifier: "PubSub",
+		},
+		{
+			condition:     func() bool { return !isNil(c.Cassandra) },
+			setDS:         func() { ds.Cassandra = cassandraDS{c.Cassandra} },
+			apply:         func(m migrator) migrator { return cassandraDS{c.Cassandra}.apply(m) },
+			logIdentifier: "Cassandra",
+		},
+		{
+			condition:     func() bool { return !isNil(c.Mongo) },
+			setDS:         func() { ds.Mongo = mongoDS{c.Mongo} },
+			apply:         func(m migrator) migrator { return mongoDS{c.Mongo}.apply(m) },
+			logIdentifier: "Mongo",
+		},
+		{
+			condition:     func() bool { return !isNil(c.ArangoDB) },
+			setDS:         func() { ds.ArangoDB = arangoDS{c.ArangoDB} },
+			apply:         func(m migrator) migrator { return arangoDS{c.ArangoDB}.apply(m) },
+			logIdentifier: "ArangoDB",
+		},
+		{
+			condition:     func() bool { return !isNil(c.SurrealDB) },
+			setDS:         func() { ds.SurrealDB = surrealDS{c.SurrealDB} },
+			apply:         func(m migrator) migrator { return surrealDS{c.SurrealDB}.apply(m) },
+			logIdentifier: "SurrealDB",
+		},
+		{
+			condition:     func() bool { return !isNil(c.Elasticsearch) },
+			setDS:         func() { ds.Elasticsearch = c.Elasticsearch },
+			apply:         func(m migrator) migrator { return elasticsearchDS{c.Elasticsearch}.apply(m) },
+			logIdentifier: "Elasticsearch",
+		},
+		{
+			condition:     func() bool { return !isNil(c.OpenTSDB) },
+			setDS:         func() { ds.OpenTSDB = c.OpenTSDB },
+			apply:         func(m migrator) migrator { return openTSDBDS{c.OpenTSDB, "gofr_migrations.json"}.apply(m) },
+			logIdentifier: "OpenTSDB",
+		},
+		{
+			condition:     func() bool { return !isNil(c.ScyllaDB) },
+			setDS:         func() { ds.ScyllaDB = c.ScyllaDB },
+			apply:         func(m migrator) migrator { return scyllaDS{c.ScyllaDB}.apply(m) },
+			logIdentifier: "ScyllaDB",
+		},
+	}
+
+	for _, init := range initializers {
+		if !init.condition() {
+			continue
+		}
+
+		init.setDS()
+		mg = init.apply(mg)
+		initialized = true
+
+		c.Debugf("initialized data source for %s", init.logIdentifier)
+	}
+
+	return mg, initialized
+}
+
 func isNil(i any) bool {
-	// Get the value of the interface
+	// Get the value of the interface.
 	val := reflect.ValueOf(i)
 
-	// If the interface is not assigned or is nil, return true
+	// If the interface is not assigned or is nil, return true.
 	return !val.IsValid() || val.IsNil()
 }

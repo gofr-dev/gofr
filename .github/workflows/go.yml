@@ -10,16 +10,17 @@ on:
     branches:
       - main
       - development
-      - fix/test_coverage
     paths-ignore:
       - 'docs/**'  # Ignore changes to docs folder
+      - '**/*.md'
   # Run on pull requests to main or development branches
   pull_request:
     branches:
       - main
       - development
     paths-ignore:
-      - 'docs/**'  # Ignore changes to docs folder
+      - 'docs/**'# Ignore changes to docs folder
+      - '**/*.md'
 
 # Define the jobs that this workflow will run
 jobs:
@@ -30,7 +31,7 @@ jobs:
     # Define a matrix strategy to test against multiple Go versions
     strategy:
       matrix:
-        go-version: ['1.24','1.23', '1.22']
+        go-version: ['1.25','1.24', '1.23']
       # Continue with other jobs if one version fails
       fail-fast: false
 
@@ -38,7 +39,7 @@ jobs:
     services:
       # Kafka service
       kafka:
-        image: bitnami/kafka:3.4
+        image: bitnamilegacy/kafka:3.4.1
         ports:
           - "9092:9092"
         env:
@@ -73,7 +74,7 @@ jobs:
     # Steps to execute for this job
     steps:
       - name: Checkout code into go module directory
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           fetch-depth: 0  # Full git history for accurate testing
 
@@ -121,12 +122,12 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        go-version: ['1.24','1.23', '1.22']
+        go-version: ['1.25','1.24', '1.23']
       fail-fast: false
 
     steps:
       - name: Checkout code into go module directory
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           fetch-depth: 0
 
@@ -147,15 +148,39 @@ jobs:
         with:
           timeout_minutes: 5
           max_attempts: 2
+          retry_on: error
           command: |
             export APP_ENV=test
-            # Run tests with coverage for root gofr package only
-            go test -v -short -covermode=atomic -coverpkg=./pkg/gofr -coverprofile=gofr_only.cov ./pkg/gofr
-            # Run tests for all sub-packages under gofr
-            go test -v -covermode=atomic -coverpkg=./pkg/gofr -coverprofile=submodules.cov ./pkg/gofr/...
+
+            # Run tests for root gofr package
+            go test -v -short -covermode=atomic \
+              -coverpkg=./pkg/gofr -coverprofile=gofr_only.cov ./pkg/gofr
+            exit_code=$?
+            if [ $exit_code -eq 2 ]; then
+              echo "::error::Panic detected in root gofr package tests"
+              exit 2
+            elif [ $exit_code -ne 0 ]; then
+              echo "::error::Root gofr package tests failed"
+              exit $exit_code
+            fi
+
+            # Run tests for sub-packages
+            go test -v -covermode=atomic \
+              -coverpkg=./pkg/gofr -coverprofile=submodules.cov ./pkg/gofr/...
+            exit_code=$?
+            if [ $exit_code -eq 2 ]; then
+              echo "::error::Panic detected in gofr sub-packages tests"
+              exit 2
+            elif [ $exit_code -ne 0 ]; then
+              echo "::error::Gofr sub-packages tests failed"
+              exit $exit_code
+            fi
+
             # Combine coverage profiles
             echo "mode: atomic" > profile.cov
             grep -h -v "mode:" gofr_only.cov submodules.cov | grep -v '/mock_' >> profile.cov
+
+            # Show coverage summary
             go tool cover -func profile.cov
 
       # Upload coverage report for the 1.24 Go version only
@@ -174,11 +199,11 @@ jobs:
     needs: [ Example-Unit-Testing,PKG-Unit-Testing ]
     steps:
       - name: Check out code into the Go module directory
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       # Download coverage reports from previous jobs
       - name: Download Coverage Report
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v5
         with:
           path: artifacts
 
@@ -209,12 +234,12 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        go-version:  ['1.24','1.23', '1.22']
+        go-version:  ['1.25','1.24', '1.23']
       fail-fast: false
 
     steps:
       - name: Checkout code into go module directory
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           fetch-depth: 0
 
@@ -265,7 +290,7 @@ jobs:
             
               # Copy coverage file to the coverage_reports directory
               cp ${module_name}.cov ../../../coverage_reports/
-              
+            
               cd -
             '
 
@@ -276,21 +301,30 @@ jobs:
           name: submodule-coverage-reports
           path: coverage_reports/*.cov
 
-  # Job for uploading coverage to external services (CodeClimate)
+  # Job for uploading coverage to external services (qlty.sh)
   upload_coverage:
     name: Upload Coverage📊
     runs-on: ubuntu-latest
+    env:
+      QLTY_TOKEN: ${{ secrets.QLTY_TOKEN }}
+      QLTY_COVERAGE_TOKEN: ${{ secrets.QLTY_TOKEN }}
+
     # This job only needs example and pkg test results, not submodules
     needs: [Example-Unit-Testing, PKG-Unit-Testing]
     # Only run this job on pushes to the development branch
     if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/development'}}
     steps:
       - name: Check out code into the Go module directory
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
+
+      - name: Install qlty CLI
+        run: |
+          curl https://qlty.sh | sh
+          echo "$HOME/.qlty/bin" >> $GITHUB_PATH
 
       # Download coverage artifacts
       - name: Download Coverage Report
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v5
         with:
           path: artifacts
 
@@ -309,12 +343,10 @@ jobs:
 
       # Upload merged coverage to CodeClimate for analysis
       - name: Upload
-        uses: paambaati/codeclimate-action@v9.0.0
+        working-directory: artifacts
+        run: qlty coverage publish merged_profile.cov --format=coverprofile --strip-prefix="gofr.dev/" --add-prefix="${GITHUB_WORKSPACE}/"
         env:
-          CC_TEST_REPORTER_ID: ${{ secrets.CC_TEST_REPORTER_ID }}
-        with:
-          coverageLocations: artifacts/merged_profile.cov:gocov
-          prefix: gofr.dev
+          QLTY_TOKEN: ${{ secrets.QLTY_TOKEN }}
 
   # Job for code quality checks
   code_quality:
@@ -322,18 +354,18 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Check out code into the Go module directory
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Set up Go environment
         uses: actions/setup-go@v5
         with:
-          go-version: '1.24'
+          go-version: '1.25'
           cache: false
 
       # Install the linting tool
       - name: Install golangci-lint
         run: |
-          go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.1
+          go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.4.0
 
       - name: Get dependencies
         run: |
@@ -369,12 +401,12 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Check out code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Set up Go environment
         uses: actions/setup-go@v5
         with:
-          go-version: 1.24
+          go-version: 1.25
 
       # Check file naming conventions using ls-lint
       - name: Check for file names errors

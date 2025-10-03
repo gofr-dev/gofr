@@ -43,7 +43,7 @@ func (d *DB) DropDB(ctx context.Context, database string) error {
 
 	defer d.client.sendOperationStats(&QueryLog{Operation: "dropDB", Database: database}, startTime, "dropDB", span)
 
-	db, err := d.client.client.GetDatabase(tracerCtx, database, nil)
+	db, err := d.client.client.GetDatabase(tracerCtx, database, &arangodb.GetDatabaseOptions{})
 	if err != nil {
 		return err
 	}

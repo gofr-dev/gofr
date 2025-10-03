@@ -3,6 +3,7 @@ package gofr
 import (
 	"encoding/base64"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -66,6 +67,7 @@ func TestGoFr_isPortAvailable(t *testing.T) {
 				g := New()
 
 				go g.Run()
+
 				time.Sleep(100 * time.Millisecond)
 			}
 
@@ -209,6 +211,7 @@ func TestGofr_ServerRun(t *testing.T) {
 	})
 
 	go g.Run()
+
 	time.Sleep(100 * time.Millisecond)
 
 	var netClient = &http.Client{
@@ -707,6 +710,7 @@ func Test_UseMiddleware(t *testing.T) {
 	})
 
 	go app.Run()
+
 	time.Sleep(100 * time.Millisecond)
 
 	var netClient = &http.Client{
@@ -812,6 +816,7 @@ func Test_APIKeyAuthMiddleware(t *testing.T) {
 	})
 
 	go app.Run()
+
 	time.Sleep(100 * time.Millisecond)
 
 	var netClient = &http.Client{
@@ -858,6 +863,7 @@ func Test_SwaggerEndpoints(t *testing.T) {
 	app.httpServer.port = configs.HTTPPort
 
 	go app.Run()
+
 	time.Sleep(100 * time.Millisecond)
 
 	var netClient = &http.Client{
@@ -935,6 +941,7 @@ func setupTestEnvironment(t *testing.T) (host string, htmlContent []byte) {
 	app.httpServer.port = configs.HTTPPort
 
 	go app.Run()
+
 	time.Sleep(100 * time.Millisecond)
 
 	host = configs.HTTPHost
@@ -1051,7 +1058,6 @@ func createPublicDirectory(t *testing.T, defaultPublicStaticDir string, htmlCont
 	}
 
 	file, err := os.Create(filepath.Join(directory, indexHTML))
-
 	if err != nil {
 		t.Fatalf("Couldn't create %s file", indexHTML)
 	}
@@ -1075,6 +1081,7 @@ func Test_Shutdown(t *testing.T) {
 		})
 
 		go g.Run()
+
 		time.Sleep(10 * time.Millisecond)
 
 		err := g.Shutdown(t.Context())
@@ -1160,5 +1167,40 @@ func TestApp_Subscribe(t *testing.T) {
 		_, ok := app.subscriptionManager.subscriptions["Hello"]
 
 		assert.False(t, ok)
+	})
+}
+
+// Define static error for testing.
+var errHookFailed = errors.New("hook failed")
+
+func TestApp_OnStart(t *testing.T) {
+	// Test case 1: Hook executes successfully
+	t.Run("success", func(t *testing.T) {
+		var hookCalled bool
+
+		app := New()
+
+		app.OnStart(func(_ *Context) error {
+			hookCalled = true
+			return nil
+		})
+
+		err := app.runOnStartHooks(t.Context())
+
+		require.NoError(t, err, "Expected no error from runOnStartHooks")
+		assert.True(t, hookCalled, "Expected the OnStart hook to be called")
+	})
+
+	// Test case 2: Hook returns an error
+	t.Run("error", func(t *testing.T) {
+		app := New()
+
+		app.OnStart(func(_ *Context) error {
+			return errHookFailed
+		})
+
+		err := app.runOnStartHooks(t.Context())
+
+		require.ErrorIs(t, err, errHookFailed, "Expected an error from runOnStartHooks")
 	})
 }

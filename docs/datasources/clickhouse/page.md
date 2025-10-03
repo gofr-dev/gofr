@@ -1,5 +1,14 @@
-## ClickHouse
+# ClickHouse
 
+## Configuration
+To connect to `ClickHouse`, you need to provide the following environment variables and use it:
+- `HOSTS`: The hostname or IP address of your `ClickHouse` server.
+- `USERNAME`: The username for connecting to the database.
+- `PASSWORD`: The password for the specified user.
+- `DATABASE`: The name of the database to connect to.
+
+
+## Setup
 GoFr supports injecting ClickHouse that supports the following interface. Any driver that implements the interface can be added
 using `app.AddClickhouse()` method, and user's can use ClickHouse across application with `gofr.Context`.
 ```go
@@ -25,24 +34,23 @@ package main
 
 import (
 	"gofr.dev/pkg/gofr"
-
 	"gofr.dev/pkg/gofr/datasource/clickhouse"
 )
 
 type User struct {
 	Id   string `ch:"id"`
 	Name string `ch:"name"`
-	Age  string `ch:"age"`
+	Age  int    `ch:"age"`
 }
 
 func main() {
 	app := gofr.New()
 
 	app.AddClickhouse(clickhouse.New(clickhouse.Config{
-		Hosts:    "localhost:9001",
-		Username: "root",
-		Password: "password",
-		Database: "users",
+		Hosts:    app.Config.Get("HOSTS"),
+		Username: app.Config.Get("USERNAME"),
+		Password: app.Config.Get("PASSWORD"),
+		Database: app.Config.Get("DATABASE"),
 	}))
 
 	app.POST("/user", Post)
@@ -52,12 +60,12 @@ func main() {
 }
 
 func Post(ctx *gofr.Context) (any, error) {
-	err := ctx.Clickhouse.Exec(ctx, "INSERT INTO users (id, name, age) VALUES (?, ?, ?)", "8f165e2d-feef-416c-95f6-913ce3172e15", "aryan", "10")
+	err := ctx.Clickhouse.Exec(ctx, "INSERT INTO users (id, name, age) VALUES (?, ?, ?)", "8f165e2d-feef-416c-95f6-913ce3172e15", "aryan", 10)
 	if err != nil {
 		return nil, err
 	}
 
-	return "successful inserted", nil
+	return "successfully inserted", nil
 }
 
 func Get(ctx *gofr.Context) (any, error) {

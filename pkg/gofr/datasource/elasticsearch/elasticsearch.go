@@ -139,7 +139,7 @@ func (c *Client) CreateIndex(ctx context.Context, index string, settings map[str
 	}
 
 	c.sendOperationStats(start, fmt.Sprintf("CREATE INDEX %s", index),
-		[]string{index}, "", body, span)
+		[]string{index}, "", settings, span)
 
 	return nil
 }

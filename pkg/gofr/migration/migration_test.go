@@ -54,26 +54,6 @@ func Test_getMigratorDBInitialisation(t *testing.T) {
 	assert.True(t, isInitialized, "TEST Failed \nNo datastores are Initialized")
 }
 
-func initializeClickHouseRunMocks(t *testing.T) (*MockClickhouse, *container.Container) {
-	t.Helper()
-
-	mockClickHouse := NewMockClickhouse(gomock.NewController(t))
-
-	mockContainer, _ := container.NewMockContainer(t)
-	mockContainer.SQL = nil
-	mockContainer.Redis = nil
-	mockContainer.Mongo = nil
-	mockContainer.Cassandra = nil
-	mockContainer.PubSub = nil
-	mockContainer.ArangoDB = nil
-	mockContainer.SurrealDB = nil
-	mockContainer.DGraph = nil
-	mockContainer.Logger = logging.NewMockLogger(logging.DEBUG)
-	mockContainer.Clickhouse = mockClickHouse
-
-	return mockClickHouse, mockContainer
-}
-
 func TestMigrationRunClickhouseSuccess(t *testing.T) {
 	logs := testutil.StdoutOutputForFunc(func() {
 		migrationMap := map[int64]Migrate{
@@ -203,4 +183,28 @@ func TestMigrationRunClickhouseCommitError(t *testing.T) {
 	})
 
 	assert.Contains(t, logs, "failed to commit migration, err: sql: connection is already closed")
+}
+
+func initializeClickHouseRunMocks(t *testing.T) (*MockClickhouse, *container.Container) {
+	t.Helper()
+
+	mockClickHouse := NewMockClickhouse(gomock.NewController(t))
+
+	mockContainer, _ := container.NewMockContainer(t)
+	mockContainer.SQL = nil
+	mockContainer.Redis = nil
+	mockContainer.Mongo = nil
+	mockContainer.Cassandra = nil
+	mockContainer.PubSub = nil
+	mockContainer.ArangoDB = nil
+	mockContainer.SurrealDB = nil
+	mockContainer.DGraph = nil
+	mockContainer.Elasticsearch = nil
+	mockContainer.OpenTSDB = nil
+	mockContainer.ScyllaDB = nil
+	mockContainer.Oracle = nil
+	mockContainer.Logger = logging.NewMockLogger(logging.DEBUG)
+	mockContainer.Clickhouse = mockClickHouse
+
+	return mockClickHouse, mockContainer
 }

@@ -1,6 +1,7 @@
 package s3
 
 import (
+	"context"
 	"errors"
 	"io"
 	"os"
@@ -630,7 +631,7 @@ func Test_StatDirectory(t *testing.T) {
 		config:  &cfg,
 	}
 
-	mockConn.EXPECT().ListObjectsV2(t.Context(), &s3.ListObjectsV2Input{
+	mockConn.EXPECT().ListObjectsV2(context.TODO(), &s3.ListObjectsV2Input{
 		Bucket: aws.String("gofr-bucket-2"),
 		Prefix: aws.String("dir1/dir2"),
 	}).Return(&s3.ListObjectsV2Output{

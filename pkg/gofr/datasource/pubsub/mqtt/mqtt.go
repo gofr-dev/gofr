@@ -3,8 +3,6 @@ package mqtt
 import (
 	"context"
 	"errors"
-	"math"
-	"strconv"
 	"sync"
 	"time"
 
@@ -16,13 +14,22 @@ import (
 )
 
 const (
-	publicBroker        = "broker.emqx.io"
-	messageBuffer       = 10
-	defaultRetryTimeout = 10 * time.Second
-	maxRetryTimeout     = 1 * time.Minute
+	publicBroker               = "broker.emqx.io"
+	messageBuffer              = 10
+	defaultRetryTimeout        = 10 * time.Second
+	maxRetryTimeout            = 1 * time.Minute
+	defaultQueryMessageLimit   = 10
+	defaultQueryCollectTimeout = 5 * time.Second
+	unsubscribeOpTimeout       = 2 * time.Second
 )
 
-var errClientNotConnected = errors.New("mqtt client not connected")
+var (
+	errClientNotConnected  = errors.New("mqtt client not connected")
+	errEmptyTopicName      = errors.New("empty topic name")
+	errSubscriptionTimeout = errors.New("timed out waiting for MQTT subscription")
+	errSubscriptionFailed  = errors.New("failed to subscribe to MQTT topic")
+	errQueryCancelled      = errors.New("query canceled")
+)
 
 type SubscribeFunc func(*pubsub.Message) error
 
@@ -114,6 +121,7 @@ func (m *MQTT) Subscribe(ctx context.Context, topic string) (*pubsub.Message, er
 
 		m.subscriptions[topic] = subs
 	}
+
 	m.mu.Unlock()
 
 	select {
@@ -127,39 +135,47 @@ func (m *MQTT) Subscribe(ctx context.Context, topic string) (*pubsub.Message, er
 	}
 }
 
-func (m *MQTT) createMqttHandler(_ context.Context, topic string, msgs chan *pubsub.Message) mqtt.MessageHandler {
-	return func(_ mqtt.Client, msg mqtt.Message) {
-		ctx := context.Background()
-		ctx, span := otel.GetTracerProvider().Tracer("gofr").Start(ctx, "mqtt-subscribe")
-
-		defer span.End()
-
-		m.metrics.IncrementCounter(ctx, "app_pubsub_subscribe_total_count", "topic", topic)
-
-		var messg = pubsub.NewMessage(context.WithoutCancel(ctx))
-		messg.Topic = msg.Topic()
-		messg.Value = msg.Payload()
-		messg.MetaData = map[string]string{
-			"qos":       string(msg.Qos()),
-			"retained":  strconv.FormatBool(msg.Retained()),
-			"messageID": strconv.Itoa(int(msg.MessageID())),
-		}
-
-		messg.Committer = &message{msg: msg}
-
-		// store the message in the channel
-		msgs <- messg
-
-		m.logger.Debug(&pubsub.Log{
-			Mode:          "SUB",
-			CorrelationID: span.SpanContext().TraceID().String(),
-			MessageValue:  string(msg.Payload()),
-			Topic:         msg.Topic(),
-			Host:          m.config.Hostname,
-			PubSubBackend: "MQTT",
-		})
+// Query retrieves messages from a topic, waiting up to a specified duration and message limit.
+func (m *MQTT) Query(ctx context.Context, query string, args ...any) ([]byte, error) {
+	if !m.Client.IsConnected() {
+		return nil, errClientNotConnected
 	}
+
+	if query == "" {
+		return nil, errEmptyTopicName
+	}
+
+	collectTimeout, messageLimit := parseQueryArgs(args...)
+
+	msgChan := make(chan *pubsub.Message, messageBuffer)
+	handler := m.createQueryMessageHandler(ctx, msgChan, query)
+
+	if err := m.subscribeToTopicForQuery(ctx, query, collectTimeout, handler); err != nil {
+		return nil, err
+	}
+
+	defer func() {
+		unsubToken := m.Client.Unsubscribe(query)
+		if !unsubToken.WaitTimeout(unsubscribeOpTimeout) {
+			m.logger.Warnf("Query: timed out unsubscribing from topic %s", query)
+		}
+	}()
+
+	queryCtx, cancel := context.WithTimeout(ctx, collectTimeout)
+	defer cancel()
+
+	resultBuffer, messagesCollected, collectionErr := m.collectMessages(queryCtx, msgChan, messageLimit, query)
+	if collectionErr != nil {
+		return nil, collectionErr
+	}
+
+	if resultBuffer.Len() == 0 && messagesCollected == 0 {
+		m.logger.Debugf("Query: no messages collected for topic %s within timeout/limit", query)
+	}
+
+	return resultBuffer.Bytes(), nil
 }
+
 func (m *MQTT) Publish(ctx context.Context, topic string, message []byte) error {
 	_, span := otel.GetTracerProvider().Tracer("gofr").Start(ctx, "mqtt-publish")
 	defer span.End()
@@ -223,7 +239,7 @@ func (m *MQTT) Health() datasource.Health {
 }
 
 func (m *MQTT) CreateTopic(_ context.Context, topic string) error {
-	token := m.Client.Publish(topic, m.config.QoS, m.config.RetrieveRetained, []byte("topic creation"))
+	token := m.Client.Publish(topic, m.config.QoS, false, []byte("topic creation"))
 	token.Wait()
 
 	if token.Error() != nil {
@@ -252,123 +268,4 @@ func (m *MQTT) SubscribeWithFunction(topic string, subscribeFunc SubscribeFunc) 
 	}
 
 	return nil
-}
-
-func getHandler(subscribeFunc SubscribeFunc) func(client mqtt.Client, msg mqtt.Message) {
-	return func(_ mqtt.Client, msg mqtt.Message) {
-		pubsubMsg := &pubsub.Message{
-			Topic: msg.Topic(),
-			Value: msg.Payload(),
-			MetaData: map[string]string{
-				"qos":       string(msg.Qos()),
-				"retained":  strconv.FormatBool(msg.Retained()),
-				"messageID": strconv.Itoa(int(msg.MessageID())),
-			},
-		}
-
-		// call the user defined function
-		_ = subscribeFunc(pubsubMsg)
-	}
-}
-
-func (m *MQTT) Unsubscribe(topic string) error {
-	m.mu.RLock()
-	defer m.mu.RUnlock()
-
-	token := m.Client.Unsubscribe(topic)
-	token.Wait()
-
-	if token.Error() != nil {
-		m.logger.Errorf("error while unsubscribing from topic '%s', error: %v", topic, token.Error())
-
-		return token.Error()
-	}
-
-	sub, ok := m.subscriptions[topic]
-	if ok {
-		close(sub.msgs)
-		delete(m.subscriptions, topic)
-	}
-
-	return nil
-}
-
-func (m *MQTT) Close() error {
-	timeout := m.config.CloseTimeout
-
-	return m.Disconnect(uint(math.Min(float64(timeout.Milliseconds()), float64(math.MaxUint32))))
-}
-
-func (m *MQTT) Disconnect(waitTime uint) error {
-	m.mu.RLock()
-	defer m.mu.RUnlock()
-
-	var err error
-
-	for topic := range m.subscriptions {
-		unsubscribeErr := m.Unsubscribe(topic)
-		if err != nil {
-			err = errors.Join(err, unsubscribeErr)
-
-			m.logger.Errorf("Error closing Subscription: %v", err)
-		}
-	}
-
-	m.Client.Disconnect(waitTime)
-
-	return err
-}
-
-func (m *MQTT) Ping() error {
-	connected := m.Client.IsConnected()
-
-	if !connected {
-		return errClientNotConnected
-	}
-
-	return nil
-}
-
-func retryConnect(client mqtt.Client, config *Config, logger Logger, options *mqtt.ClientOptions) {
-	for {
-		token := client.Connect()
-		if token.Wait() && token.Error() == nil {
-			logger.Infof("connected to MQTT at '%v:%v' with clientID '%v'", config.Hostname, config.Port, options.ClientID)
-
-			return
-		}
-
-		logger.Errorf("could not connect to MQTT at '%v:%v', error: %v", config.Hostname, config.Port, token.Error())
-		time.Sleep(defaultRetryTimeout)
-	}
-}
-
-func createReconnectHandler(mu *sync.RWMutex, config *Config, subs map[string]subscription,
-	logger Logger) mqtt.OnConnectHandler {
-	return func(client mqtt.Client) {
-		// Re-subscribe to all topics after reconnecting
-		mu.RLock()
-		defer mu.RUnlock()
-
-		for topic, sub := range subs {
-			token := client.Subscribe(topic, config.QoS, sub.handler)
-			if token.Wait() && token.Error() != nil {
-				logger.Debugf("failed to resubscribe to topic %s: %v", topic, token.Error())
-			} else {
-				logger.Debugf("resubscribed to topic %s successfully", topic)
-			}
-		}
-	}
-}
-
-func createConnectionLostHandler(logger Logger) func(_ mqtt.Client, err error) {
-	return func(_ mqtt.Client, err error) {
-		logger.Errorf("mqtt connection lost, error: %v", err.Error())
-	}
-}
-
-func createReconnectingHandler(logger Logger, config *Config) func(mqtt.Client, *mqtt.ClientOptions) {
-	return func(_ mqtt.Client, _ *mqtt.ClientOptions) {
-		logger.Infof("reconnecting to MQTT at '%v:%v' with clientID '%v'", config.Hostname, config.Port, config.ClientID)
-	}
 }

@@ -145,7 +145,7 @@ func (a *authInfo) GetUsername() string {
 }
 
 // GetAPIKey returns the APIKey when APIKey auth is enabled.
-// It returns an empty strung if called, when APIKey auth is not enabled.
+// It returns an empty string if called, when APIKey auth is not enabled.
 func (a *authInfo) GetAPIKey() string {
 	return a.apiKey
 }
@@ -159,19 +159,25 @@ func (a *authInfo) GetAPIKey() string {
 
 func newContext(w Responder, r Request, c *container.Container) *Context {
 	return &Context{
-		Context:   r.Context(),
-		Request:   r,
-		responder: w,
-		Container: c,
+		Context:       r.Context(),
+		Request:       r,
+		responder:     w,
+		Container:     c,
+		ContextLogger: *logging.NewContextLogger(r.Context(), c.Logger),
 	}
 }
 
 func newCMDContext(w Responder, r Request, c *container.Container, out terminal.Output) *Context {
 	return &Context{
-		Context:   r.Context(),
-		responder: w,
-		Request:   r,
-		Container: c,
-		Out:       out,
+		Context:       r.Context(),
+		responder:     w,
+		Request:       r,
+		Container:     c,
+		Out:           out,
+		ContextLogger: *logging.NewContextLogger(r.Context(), c.Logger),
 	}
+}
+
+func (c *Context) GetCorrelationID() string {
+	return trace.SpanFromContext(c).SpanContext().TraceID().String()
 }

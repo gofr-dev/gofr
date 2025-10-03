@@ -1,10 +1,13 @@
 package remotelogger
 
 import (
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"os"
 	"strings"
+	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -136,4 +139,190 @@ func TestDynamicLoggerSuccess(t *testing.T) {
 	if !strings.Contains(log, "Debug log after log level change") {
 		t.Errorf("TestDynamicLoggerSuccess failed! missing debug log")
 	}
+}
+
+// TestHTTPLogFilter_NonHTTPLogs tests regular non-HTTP logs are passed through.
+func TestHTTPLogFilter_NonHTTPLogs(t *testing.T) {
+	var buf strings.Builder
+
+	testLogger := &testBufferLogger{buf: &buf}
+
+	filter := &httpLogFilter{
+		Logger: testLogger,
+	}
+
+	filter.Log("This is a regular message")
+
+	assert.Contains(t, buf.String(), "This is a regular message")
+}
+
+// TestHTTPLogFilter_EmptyArgs tests handling of empty arguments.
+func TestHTTPLogFilter_EmptyArgs(t *testing.T) {
+	var buf strings.Builder
+
+	testLogger := &testBufferLogger{buf: &buf}
+
+	filter := &httpLogFilter{
+		Logger: testLogger,
+	}
+
+	filter.Log()
+
+	// Should not write anything meaningful
+	assert.Equal(t, "\n", buf.String())
+}
+
+// TestHTTPLogFilter_InitAndFirstSuccess tests initialization and first successful hit.
+func TestHTTPLogFilter_InitAndFirstSuccess(t *testing.T) {
+	var buf strings.Builder
+
+	testLogger := &testBufferLogger{buf: &buf}
+
+	filter := &httpLogFilter{
+		Logger: testLogger,
+	}
+
+	successLog := &service.Log{
+		URI:           "http://example.com/test",
+		ResponseCode:  200,
+		ResponseTime:  150,
+		HTTPMethod:    "GET",
+		CorrelationID: "test-id-1",
+	}
+
+	filter.Log(successLog)
+
+	output := buf.String()
+	assert.Contains(t, output, "Initializing remote logger connection to http://example.com/test")
+	assert.Contains(t, output, "test-id-1")
+}
+
+// TestHTTPLogFilter_SubsequentSuccess tests subsequent successful HTTP hits.
+func TestHTTPLogFilter_SubsequentSuccess(t *testing.T) {
+	var buf strings.Builder
+
+	testLogger := &testBufferLogger{buf: &buf}
+
+	filter := &httpLogFilter{
+		Logger:             testLogger,
+		firstSuccessfulHit: true,
+		initLogged:         true,
+	}
+
+	successLog := &service.Log{
+		URI:           "http://example.com/test2",
+		ResponseCode:  200,
+		ResponseTime:  200,
+		HTTPMethod:    "POST",
+		CorrelationID: "test-id-2",
+	}
+
+	filter.Log(successLog)
+
+	output := buf.String()
+	assert.Contains(t, output, "test-id-2")
+	assert.Contains(t, output, "POST")
+	assert.Contains(t, output, "http://example.com/test2")
+}
+
+// TestHTTPLogFilter_ErrorLogs tests handling of error HTTP logs.
+func TestHTTPLogFilter_ErrorLogs(t *testing.T) {
+	var buf strings.Builder
+
+	testLogger := &testBufferLogger{buf: &buf}
+
+	filter := &httpLogFilter{
+		Logger:             testLogger,
+		firstSuccessfulHit: true,
+		initLogged:         true,
+	}
+
+	errorLog := &service.Log{
+		URI:           "http://example.com/error",
+		ResponseCode:  500,
+		ResponseTime:  300,
+		HTTPMethod:    "GET",
+		CorrelationID: "test-id-3",
+	}
+
+	filter.Log(errorLog)
+
+	output := buf.String()
+	assert.Contains(t, output, "http://example.com/error")
+	assert.Contains(t, output, "500")
+}
+
+func TestHTTPLogFilter_ConcurrentAccess(t *testing.T) {
+	const (
+		goroutines       = 50
+		logsPerGoroutine = 20
+	)
+
+	var buf strings.Builder
+
+	testLogger := &testBufferLogger{buf: &buf}
+	filter := &httpLogFilter{Logger: testLogger}
+
+	var wg sync.WaitGroup
+
+	wg.Add(goroutines)
+
+	for i := 0; i < goroutines; i++ {
+		go func(id int) {
+			defer wg.Done()
+
+			for j := 0; j < logsPerGoroutine; j++ {
+				filter.Log(&service.Log{
+					CorrelationID: fmt.Sprintf("req-%d-%d", id, j),
+					URI:           "/test",
+					HTTPMethod:    "GET",
+					ResponseCode:  200,
+					ResponseTime:  int64(j),
+				})
+			}
+		}(i)
+	}
+
+	wg.Wait()
+
+	filter.mu.Lock()
+	assert.True(t, filter.initLogged, "expected initLogged to be true")
+	filter.mu.Unlock()
+
+	assert.NotEmpty(t, buf.String(), "expected logs to be written")
+}
+
+func TestRemoteLogger_ConcurrentLevelAccess(t *testing.T) {
+	var count int32
+
+	mockServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		lvl := "DEBUG"
+
+		if atomic.AddInt32(&count, 1)%2 == 0 {
+			lvl = "ERROR"
+		}
+
+		fmt.Fprintf(w, `{"data":{"serviceName":"test-service","logLevel":"%s"}}`, lvl)
+	}))
+
+	defer mockServer.Close()
+
+	rl := &remoteLogger{
+		remoteURL:          mockServer.URL,
+		levelFetchInterval: 5 * time.Millisecond,
+		currentLevel:       logging.INFO,
+		Logger:             logging.NewMockLogger(logging.INFO),
+	}
+
+	// Run UpdateLogLevel in multiple goroutines
+	for i := 0; i < 5; i++ {
+		go rl.UpdateLogLevel()
+	}
+
+	time.Sleep(10 * time.Millisecond)
+
+	rl.mu.RLock()
+	defer rl.mu.RUnlock()
+
+	assert.NotEqual(t, logging.INFO, rl.currentLevel, "expected level to change")
 }

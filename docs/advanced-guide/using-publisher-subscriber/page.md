@@ -344,7 +344,7 @@ Azure Event Hubs is supported as an external PubSub provider such that if you ar
 Import the external driver for `eventhub` using the following command.
 
 ```bash
-go get gofr.dev/pkg/gofr/datasources/pubsub/eventhub
+go get gofr.dev/pkg/gofr/datasource/pubsub/eventhub
 ```
 
 Use the `AddPubSub` method of GoFr's app to connect
@@ -359,6 +359,7 @@ app := gofr.New()
        StorageServiceURL:         "https://gofrdev.windows.net/",
        StorageContainerName:      "test",
        EventhubName:              "test1",
+       ConsumerGroup:             "$Default",
     }))
 ```
 

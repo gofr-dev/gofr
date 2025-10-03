@@ -1,209 +1,185 @@
 package service
 
 import (
+	"errors"
+	"fmt"
 	"net/http"
-	"net/http/httptest"
+	"net/url"
 	"strings"
 	"testing"
 
-	"github.com/golang-jwt/jwt/v5"
 	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
-	"go.opentelemetry.io/otel"
-
-	"gofr.dev/pkg/gofr/logging"
+	"golang.org/x/oauth2"
 )
 
-func oAuthHTTPServer(t *testing.T) *httptest.Server {
+const invalidURL = "abc://invalid-url"
+
+var (
+	errMissingTokenURL    = errors.New(`unsupported protocol scheme ""`)
+	errIncorrectProtocol  = errors.New(`unsupported protocol scheme "abc"`)
+	errInvalidCredentials = &oauth2.RetrieveError{Response: &http.Response{StatusCode: http.StatusUnauthorized}}
+)
+
+func TestNewOAuthConfig(t *testing.T) {
+	config := oAuthConfigForTests(t, "/token")
+
+	server := setupOAuthHTTPServer(t, config)
+
+	tokenURL := server.URL + config.TokenURL
+	clientID := config.ClientID
+	clientSecret := config.ClientSecret
+
+	testCases := []struct {
+		clientID     string
+		clientSecret string
+		tokenURL     string
+		scopes       []string
+		params       url.Values
+		authStyle    oauth2.AuthStyle
+		err          error
+	}{
+		{err: AuthErr{nil, "client id is mandatory"}},
+		{clientID: clientID, err: AuthErr{nil, "client secret is mandatory"}},
+		{clientID: clientID, tokenURL: tokenURL, err: AuthErr{nil, "client secret is mandatory"}},
+		{clientID: clientID, clientSecret: clientSecret, err: AuthErr{nil, "token url is mandatory"}},
+		{clientID: clientID, clientSecret: clientSecret, tokenURL: "invalid_url_format", err: AuthErr{nil, "empty host"}},
+		{clientID: clientID, clientSecret: clientSecret, tokenURL: tokenURL},
+		{clientID: clientID, clientSecret: "some_random_client_secret", tokenURL: tokenURL},
+		{clientID: "some_random_client_id", clientSecret: clientSecret, tokenURL: tokenURL},
+		{clientID: clientID, clientSecret: clientSecret, tokenURL: tokenURL, authStyle: 1},
+		{clientID: clientID, clientSecret: "some_random_client_secret", tokenURL: tokenURL, authStyle: 1},
+		{clientID: "some_random_client_id", clientSecret: clientSecret, tokenURL: tokenURL, authStyle: 2},
+	}
+
+	for i, tc := range testCases {
+		t.Run(fmt.Sprintf("Test case #%d", i), func(t *testing.T) {
+			config, err := NewOAuthConfig(tc.clientID, tc.clientSecret, tc.tokenURL, tc.scopes, tc.params, tc.authStyle)
+			assert.Equal(t, tc.err, err)
+
+			if tc.err != nil {
+				assert.Empty(t, config)
+				return
+			}
+
+			oAuthConfig, ok := config.(*OAuthConfig)
+			assert.True(t, ok, "failed to get OAuthConfig")
+
+			if oAuthConfig == nil {
+				t.Errorf("failed to get OAuthConfig")
+				return
+			}
+
+			assert.Equal(t, tc.clientID, oAuthConfig.ClientID)
+			assert.Equal(t, tc.clientSecret, oAuthConfig.ClientSecret)
+			assert.Equal(t, tc.tokenURL, oAuthConfig.TokenURL)
+			assert.Equal(t, tc.params, oAuthConfig.EndpointParams)
+			assert.Equal(t, tc.scopes, oAuthConfig.Scopes)
+			assert.Equal(t, tc.authStyle, oAuthConfig.AuthStyle)
+		})
+	}
+}
+
+func TestHttpService_validateTokenURL(t *testing.T) {
+	testCases := []struct {
+		tokenURL string
+		errMsg   string
+	}{
+		{tokenURL: "https://www.example.com"},
+		{tokenURL: "https://www.example.com.", errMsg: "invalid host pattern, ends with `.`"},
+		{tokenURL: "https://www.192.168.1.1.com"},
+		{tokenURL: "https://www.192.168.1.1..com", errMsg: "invalid host pattern, contains `..`"},
+		{tokenURL: "ftp://www.192.168.1.1..com", errMsg: "invalid host pattern, contains `..`"},
+		{tokenURL: "ftp://www.192.168.1.1.com", errMsg: "invalid scheme, allowed http and https only"},
+		{tokenURL: "www.192.168.1.1.com", errMsg: "empty host"},
+		{tokenURL: "https://www.example.", errMsg: "invalid host pattern, ends with `.`"},
+		{errMsg: "token url is mandatory"},
+		{tokenURL: "invalid_url_format", errMsg: "empty host"},
+	}
+
+	for i, tc := range testCases {
+		t.Run(fmt.Sprintf("Test Case #%d", i), func(t *testing.T) {
+			err := validateTokenURL(tc.tokenURL)
+			if tc.errMsg != "" {
+				assert.ErrorContains(t, err, tc.errMsg)
+			}
+		})
+	}
+}
+
+func TestAddAuthorizationHeader_OAuth(t *testing.T) {
+	config := oAuthConfigForTests(t, "/token")
+
+	server := setupOAuthHTTPServer(t, config)
+
+	tokenURL := server.URL + config.TokenURL
+
+	emptyHeaders := map[string]string{}
+	headerWithAuth := map[string]string{AuthHeader: "Value"}
+	headerWithEmptyAuth := map[string]string{AuthHeader: ""}
+	headerWithoutAuth := map[string]string{"Content Type": "Value"}
+	headerWithEmptyAuthAndOtherValues := map[string]string{"Content Type": "Value", AuthHeader: ""}
+	authHeaderExistsError := AuthErr{Message: "value Value already exists for header Authorization"}
+
+	testCases := []struct {
+		tokenURL string
+		headers  map[string]string
+		response map[string]string
+		err      error
+	}{
+		{headers: headerWithAuth, err: authHeaderExistsError},
+		{err: &url.Error{Op: "Post", URL: "", Err: errMissingTokenURL}},
+		{tokenURL: tokenURL, headers: headerWithAuth, err: authHeaderExistsError},
+		{tokenURL: tokenURL, headers: headerWithEmptyAuth, response: emptyHeaders},
+		{tokenURL: tokenURL, headers: headerWithoutAuth, response: headerWithoutAuth},
+		{tokenURL: tokenURL, headers: headerWithEmptyAuthAndOtherValues, response: headerWithoutAuth},
+	}
+
+	for i, tc := range testCases {
+		t.Run(fmt.Sprintf("Test Case #%d", i), func(t *testing.T) {
+			config.TokenURL = tc.tokenURL
+
+			headers, err := config.addAuthorizationHeader(t.Context(), tc.headers)
+			assert.Equal(t, tc.err, err)
+
+			if err != nil {
+				return
+			}
+
+			authHeader, ok := headers[AuthHeader]
+			assert.True(t, ok)
+			assert.NotEmpty(t, authHeader)
+			assert.True(t, strings.HasPrefix(authHeader, "Bearer"))
+			delete(headers, AuthHeader)
+			assert.Equal(t, tc.response, headers)
+		})
+	}
+}
+
+// Helper method for getting OAuthConfig.
+func oAuthConfigForTests(t *testing.T, tokenURL string) *OAuthConfig {
 	t.Helper()
 
-	// Start a test HTTP server
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		header := r.Header.Get("Authorization")
-		token := strings.Split(header, " ")
-
-		parsedToken, _ := jwt.Parse(token[1], func(*jwt.Token) (any, error) {
-			return []byte("my-secret-key"), nil
-		})
-
-		claims, _ := parsedToken.Claims.GetAudience()
-
-		assert.Equal(t, "https://dev-zq6tvaxf3v7p0g7j.us.auth0.com/api/v2/", claims[0])
-
-		w.WriteHeader(http.StatusOK)
-	}))
-
-	return server
-}
-
-func setupHTTPServiceTestServerForOAuth(server *httptest.Server) HTTP {
-	// Initialize HTTP service with custom transport, URL, tracer, logger, and metrics
-	service := httpService{
-		Client: &http.Client{},
-		url:    server.URL,
-		Tracer: otel.Tracer("gofr-http-client"),
-		Logger: logging.NewMockLogger(logging.DEBUG),
-	}
-
-	// Circuit breaker configuration
-	oauthConfig := OAuthConfig{
-		ClientID:     "0iyeGcLYWudLGqZfD6HvOdZHZ5TlciAJ",
-		ClientSecret: "GQXTY2f9186nUS3C9WWi7eJz8-iVEsxq7lKxdjfhOJbsEPPtEszL3AxFn8k_NAER",
-		TokenURL:     "https://dev-zq6tvaxf3v7p0g7j.us.auth0.com/oauth/token",
+	config := &OAuthConfig{
+		TokenURL: tokenURL,
 		EndpointParams: map[string][]string{
-			"audience": {"https://dev-zq6tvaxf3v7p0g7j.us.auth0.com/api/v2/"},
+			"aud": {"some-random-value"},
 		},
+		AuthStyle: oauth2.AuthStyleInParams,
 	}
 
-	// Apply circuit breaker option to the HTTP service
-	httpSvc := oauthConfig.AddOption(&service)
-
-	return httpSvc
-}
-
-func setupHTTPServiceTestServerForOAuthWithUnSupportedMethod() HTTP {
-	// Initialize HTTP service with custom transport, URL, tracer, logger, and metrics
-	service := httpService{
-		Client: &http.Client{},
-		Tracer: otel.Tracer("gofr-http-client"),
-		Logger: logging.NewMockLogger(logging.DEBUG),
+	clientID, err := generateRandomString(clientIDLength)
+	if err != nil {
+		t.Fatalf("unable to generate random string for oAuthConfig")
 	}
 
-	// Circuit breaker configuration
-	oauthConfig := OAuthConfig{}
+	config.ClientID = clientID
 
-	// Apply circuit breaker option to the HTTP service
-	httpSvc := oauthConfig.AddOption(&service)
-
-	return httpSvc
-}
-
-func TestHttpService_GetSuccessRequestsOAuth(t *testing.T) {
-	server := oAuthHTTPServer(t)
-
-	service := setupHTTPServiceTestServerForOAuth(server)
-
-	resp, err := service.Get(t.Context(), "test", nil)
-
-	assert.Equal(t, http.StatusOK, resp.StatusCode)
-	require.NoError(t, err)
-
-	_ = resp.Body.Close()
-}
-
-func TestHttpService_PostSuccessRequestsOAuth(t *testing.T) {
-	server := oAuthHTTPServer(t)
-
-	service := setupHTTPServiceTestServerForOAuth(server)
-
-	resp, err := service.Post(t.Context(), "test", nil, nil)
-
-	assert.Equal(t, http.StatusOK, resp.StatusCode)
-	require.NoError(t, err)
-
-	_ = resp.Body.Close()
-}
-
-func TestHttpService_PatchSuccessRequestsOAuth(t *testing.T) {
-	server := oAuthHTTPServer(t)
-
-	service := setupHTTPServiceTestServerForOAuth(server)
-
-	resp, err := service.Patch(t.Context(), "test", nil, nil)
-
-	assert.Equal(t, http.StatusOK, resp.StatusCode)
-	require.NoError(t, err)
-
-	_ = resp.Body.Close()
-}
-
-func TestHttpService_PutSuccessRequestsOAuth(t *testing.T) {
-	server := oAuthHTTPServer(t)
-
-	service := setupHTTPServiceTestServerForOAuth(server)
-
-	resp, err := service.Put(t.Context(), "test", nil, nil)
-
-	assert.Equal(t, http.StatusOK, resp.StatusCode)
-	require.NoError(t, err)
-
-	_ = resp.Body.Close()
-}
-
-func TestHttpService_DeleteSuccessRequestsOAuth(t *testing.T) {
-	server := oAuthHTTPServer(t)
-
-	service := setupHTTPServiceTestServerForOAuth(server)
-
-	resp, err := service.Delete(t.Context(), "test", nil)
-
-	assert.Equal(t, http.StatusOK, resp.StatusCode)
-	require.NoError(t, err)
-
-	_ = resp.Body.Close()
-}
-
-func TestHttpService_DeleteRequestsOAuthError(t *testing.T) {
-	service := setupHTTPServiceTestServerForOAuthWithUnSupportedMethod()
-
-	resp, err := service.Delete(t.Context(), "test", nil)
-
-	assert.Nil(t, resp)
-	require.ErrorContains(t, err, `unsupported protocol scheme`)
-
-	if resp != nil {
-		resp.Body.Close()
+	clientSecret, err := generateRandomString(clientSecretLength)
+	if err != nil {
+		t.Fatalf("unable to generate random string for oAuthConfig")
 	}
-}
 
-func TestHttpService_PutRequestsOAuthError(t *testing.T) {
-	service := setupHTTPServiceTestServerForOAuthWithUnSupportedMethod()
+	config.ClientSecret = clientSecret
 
-	resp, err := service.Put(t.Context(), "test", nil, nil)
-
-	assert.Nil(t, resp)
-	require.ErrorContains(t, err, `unsupported protocol scheme`)
-
-	if resp != nil {
-		resp.Body.Close()
-	}
-}
-
-func TestHttpService_PatchRequestsOAuthError(t *testing.T) {
-	service := setupHTTPServiceTestServerForOAuthWithUnSupportedMethod()
-
-	resp, err := service.Patch(t.Context(), "test", nil, nil)
-
-	assert.Nil(t, resp)
-	require.ErrorContains(t, err, `unsupported protocol scheme`)
-
-	if resp != nil {
-		resp.Body.Close()
-	}
-}
-
-func TestHttpService_PostRequestsOAuthError(t *testing.T) {
-	service := setupHTTPServiceTestServerForOAuthWithUnSupportedMethod()
-
-	resp, err := service.Post(t.Context(), "test", nil, nil)
-
-	assert.Nil(t, resp)
-	require.ErrorContains(t, err, `unsupported protocol scheme`)
-
-	if resp != nil {
-		resp.Body.Close()
-	}
-}
-
-func TestHttpService_GetRequestsOAuthError(t *testing.T) {
-	service := setupHTTPServiceTestServerForOAuthWithUnSupportedMethod()
-
-	resp, err := service.Get(t.Context(), "test", nil)
-
-	assert.Nil(t, resp)
-	require.ErrorContains(t, err, `unsupported protocol scheme`)
-
-	if resp != nil {
-		resp.Body.Close()
-	}
+	return config
 }

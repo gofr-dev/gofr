@@ -2,7 +2,9 @@ package kafka
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"io"
 	"time"
 
 	"github.com/segmentio/kafka-go"
@@ -88,7 +90,7 @@ func (k *kafkaClient) isConnected() bool {
 
 func setupDialer(conf *Config) (*kafka.Dialer, error) {
 	dialer := &kafka.Dialer{
-		Timeout:   10 * time.Second,
+		Timeout:   defaultRetryTimeout,
 		DualStack: true,
 	}
 
@@ -147,4 +149,80 @@ func createKafkaWriter(conf *Config, dialer *kafka.Dialer, logger pubsub.Logger)
 		BatchTimeout: time.Duration(conf.BatchTimeout),
 		Logger:       kafka.LoggerFunc(logger.Debugf),
 	})
+}
+
+func (*kafkaClient) parseQueryArgs(args ...any) (offSet int64, limit int) {
+	var offset int64
+
+	limit = 10
+
+	if len(args) > 0 {
+		if val, ok := args[0].(int64); ok {
+			offset = val
+		}
+	}
+
+	if len(args) > 1 {
+		if val, ok := args[1].(int); ok {
+			limit = val
+		}
+	}
+
+	return offset, limit
+}
+
+func (k *kafkaClient) createReader(topic string, offset int64) (*kafka.Reader, error) {
+	reader := kafka.NewReader(kafka.ReaderConfig{
+		Brokers:     k.config.Brokers,
+		Topic:       topic,
+		Partition:   k.config.Partition,
+		MinBytes:    1,
+		MaxBytes:    defaultMaxBytes,
+		StartOffset: kafka.FirstOffset,
+	})
+
+	if err := reader.SetOffset(offset); err != nil {
+		reader.Close()
+		return nil, fmt.Errorf("failed to set offset: %w", err)
+	}
+
+	return reader, nil
+}
+
+func (*kafkaClient) getReadContext(ctx context.Context) context.Context {
+	if _, hasDeadline := ctx.Deadline(); !hasDeadline {
+		readCtx, cancel := context.WithTimeout(ctx, defaultReadTimeout)
+		_ = cancel // We can't defer here, but timeout will handle cleanup
+
+		return readCtx
+	}
+
+	return ctx
+}
+
+func (k *kafkaClient) readMessages(ctx context.Context, reader *kafka.Reader, limit int) ([]byte, error) {
+	var result []byte
+
+	for i := 0; i < limit; i++ {
+		msg, err := reader.ReadMessage(ctx)
+		if err != nil {
+			if k.isExpectedError(err) {
+				break
+			}
+
+			return nil, fmt.Errorf("failed to read message: %w", err)
+		}
+
+		if len(result) > 0 {
+			result = append(result, '\n')
+		}
+
+		result = append(result, msg.Value...)
+	}
+
+	return result, nil
+}
+
+func (*kafkaClient) isExpectedError(err error) bool {
+	return errors.Is(err, context.DeadlineExceeded) || errors.Is(err, io.EOF)
 }

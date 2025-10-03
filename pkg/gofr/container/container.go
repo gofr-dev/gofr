@@ -65,6 +65,9 @@ type Container struct {
 	SurrealDB     SurrealDB
 	ArangoDB      ArangoDB
 	Elasticsearch Elasticsearch
+	Oracle        OracleDB
+	Couchbase     Couchbase
+	InfluxDB      InfluxDB
 
 	KVStore KVStore
 
@@ -87,11 +90,11 @@ func NewContainer(conf config.Config) *Container {
 }
 
 func (c *Container) Create(conf config.Config) {
-	if c.appName != "" {
+	if c.appName == "" {
 		c.appName = conf.GetOrDefault("APP_NAME", "gofr-app")
 	}
 
-	if c.appVersion != "" {
+	if c.appVersion == "" {
 		c.appVersion = conf.GetOrDefault("APP_VERSION", "dev")
 	}
 
@@ -199,6 +202,8 @@ func (c *Container) createMqttPubSub(conf config.Config) pubsub.Client {
 	port, _ := strconv.Atoi(conf.Get("MQTT_PORT"))
 	order, _ := strconv.ParseBool(conf.GetOrDefault("MQTT_MESSAGE_ORDER", "false"))
 
+	retrieveRetained, _ := strconv.ParseBool(conf.GetOrDefault("MQTT_RETRIEVE_RETAINED", "false"))
+
 	keepAlive, err := time.ParseDuration(conf.Get("MQTT_KEEP_ALIVE"))
 	if err != nil {
 		keepAlive = 30 * time.Second
@@ -216,16 +221,17 @@ func (c *Container) createMqttPubSub(conf config.Config) pubsub.Client {
 	}
 
 	configs := &mqtt.Config{
-		Protocol:     conf.GetOrDefault("MQTT_PROTOCOL", "tcp"), // using tcp as default method to connect to broker
-		Hostname:     conf.Get("MQTT_HOST"),
-		Port:         port,
-		Username:     conf.Get("MQTT_USER"),
-		Password:     conf.Get("MQTT_PASSWORD"),
-		ClientID:     conf.Get("MQTT_CLIENT_ID_SUFFIX"),
-		QoS:          qos,
-		Order:        order,
-		KeepAlive:    keepAlive,
-		CloseTimeout: 0 * time.Millisecond,
+		Protocol:         conf.GetOrDefault("MQTT_PROTOCOL", "tcp"), // using tcp as default method to connect to broker
+		Hostname:         conf.Get("MQTT_HOST"),
+		Port:             port,
+		Username:         conf.Get("MQTT_USER"),
+		Password:         conf.Get("MQTT_PASSWORD"),
+		ClientID:         conf.Get("MQTT_CLIENT_ID_SUFFIX"),
+		QoS:              qos,
+		Order:            order,
+		RetrieveRetained: retrieveRetained,
+		KeepAlive:        keepAlive,
+		CloseTimeout:     0 * time.Millisecond,
 	}
 
 	return mqtt.New(configs, c.Logger, c.metricsManager)
@@ -293,12 +299,21 @@ func (c *Container) GetSubscriber() pubsub.Subscriber {
 
 // GetConnectionFromContext retrieves a WebSocket connection from the context using the Manager.
 func (c *Container) GetConnectionFromContext(ctx context.Context) *websocket.Connection {
-	connID, ok := ctx.Value(websocket.WSConnectionKey).(string)
-	if !ok {
+	if c.WSManager == nil {
 		return nil
 	}
 
-	return c.WSManager.GetWebsocketConnection(connID)
+	// First check if connection is directly stored in context
+	if conn, ok := ctx.Value(websocket.WSConnectionKey).(*websocket.Connection); ok {
+		return conn
+	}
+
+	// Fallback to connection ID lookup
+	if connID, ok := ctx.Value(websocket.WSConnectionKey).(string); ok {
+		return c.WSManager.GetWebsocketConnection(connID)
+	}
+
+	return nil
 }
 
 // GetWSConnectionByServiceName retrieves a WebSocket connection by its service name.

@@ -152,6 +152,7 @@ func Test_Query(t *testing.T) {
 		}
 
 		var resp QueryResponse
+
 		resp.Result = &queryResult
 
 		mockConn.EXPECT().

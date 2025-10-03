@@ -114,7 +114,7 @@ func (*SubscriptionManager) createOrUpdateConsumer(
 		FilterSubject: topic,
 		MaxDeliver:    cfg.Stream.MaxDeliver,
 		DeliverPolicy: jetstream.DeliverNewPolicy,
-		AckWait:       30 * time.Second,
+		AckWait:       defaultAckWait,
 	})
 
 	return cons, err
@@ -212,6 +212,7 @@ func (*SubscriptionManager) checkBatchError(msgs jetstream.MessageBatch, topic s
 
 func (sm *SubscriptionManager) Close() {
 	sm.subMutex.Lock()
+
 	for _, sub := range sm.subscriptions {
 		sub.cancel()
 	}
@@ -220,6 +221,7 @@ func (sm *SubscriptionManager) Close() {
 	sm.subMutex.Unlock()
 
 	sm.bufferMutex.Lock()
+
 	for _, buffer := range sm.topicBuffers {
 		close(buffer)
 	}
