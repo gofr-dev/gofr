@@ -155,6 +155,7 @@ func generateMultipartRequestZip(t *testing.T) *http.Request {
 	t.Helper()
 
 	var buf bytes.Buffer
+
 	writer := multipart.NewWriter(&buf)
 
 	f, err := os.Open("../testutil/test.zip")
