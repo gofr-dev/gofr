@@ -395,6 +395,7 @@ func TestGetAggregatorsSuccess(t *testing.T) {
 	require.NotNil(t, aggreResp)
 
 	var aggregators []string
+
 	err = json.Unmarshal([]byte(expectedResponse), &aggregators)
 	require.NoError(t, err)
 	require.ElementsMatch(t, aggregators, aggreResp.Aggregators) // Assuming your response has an Aggregators field
