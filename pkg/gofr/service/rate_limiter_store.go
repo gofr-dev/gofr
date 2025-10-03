@@ -242,7 +242,7 @@ func (r *RedisRateLimiterStore) Allow(ctx context.Context, key string, config Ra
 	return allowed == 1, time.Duration(retryAfterMs) * time.Millisecond, nil
 }
 
-func (*RedisRateLimiterStore) StartCleanup(_ context.Context, _ Logger) {
+func (*RedisRateLimiterStore) StartCleanup(_ context.Context) {
 	// No-op: Redis handles cleanup automatically via EXPIRE commands in Lua script.
 }
 

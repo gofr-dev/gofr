@@ -102,14 +102,16 @@ GoFr allows you to use a custom rate limiter store by implementing the RateLimit
 Interface:
 ```go
 type RateLimiterStore interface {
-    Allow(ctx context.Context, key string, config RateLimiterConfig) (allowed bool, retryAfter int64, err error)
+Allow(ctx context.Context, key string, config RateLimiterConfig) (allowed bool, retryAfter time.Duration, err error)
+StartCleanup(ctx context.Context)
+StopCleanup()
 }
 ```
 
 #### Usage:
 
 ```go
-rc := redis.NewClient(cfg, a.Logger(), a.Metrics())
+rc := redis.NewClient(a.Config, a.Logger(), a.Metrics())
 
 a.AddHTTPService("cat-facts", "https://catfact.ninja",
 	service.NewAPIKeyConfig("some-random-key"),
