@@ -56,23 +56,27 @@ func NewCircuitBreaker(config CircuitBreakerConfig, h HTTP) *circuitBreaker {
 }
 
 // executeWithCircuitBreaker executes the given function with circuit breaker protection.
-func (cb *circuitBreaker) executeWithCircuitBreaker(ctx context.Context, f func(ctx context.Context) (*http.Response,
-	error)) (*http.Response, error) {
+func (cb *circuitBreaker) executeWithCircuitBreaker(
+	ctx context.Context,
+	f func(ctx context.Context) (*http.Response, error),
+) (*http.Response, error) {
+	// Fast path: handle OPEN state / potential recovery without holding the lock during the remote call.
 	cb.mu.Lock()
-	defer cb.mu.Unlock()
-
 	if cb.state == OpenState {
-		if time.Since(cb.lastChecked) > cb.interval {
-			// Check health before potentially closing the circuit
-			if cb.healthCheck(ctx) {
-				cb.resetCircuit()
-				return nil, nil
-			}
+		if time.Since(cb.lastChecked) > cb.interval && cb.healthCheck(ctx) {
+			// Health succeeded; reset and (for backward compatibility) return nil, nil like original implementation.
+			cb.state = ClosedState
+			cb.failureCount = 0
+			cb.mu.Unlock()
+			return nil, nil
 		}
-
+		// Still open and not recoverable.
+		cb.mu.Unlock()
 		return nil, ErrCircuitOpen
 	}
+	cb.mu.Unlock()
 
+	// Execute the request outside the lock.
 	result, err := f(ctx)
 	if err != nil {
 		cb.handleFailure()
@@ -80,19 +84,22 @@ func (cb *circuitBreaker) executeWithCircuitBreaker(ctx context.Context, f func(
 		cb.resetFailureCount()
 	}
 
-	if cb.failureCount > cb.threshold {
+	// Check if we crossed threshold after updating failure count.
+	cb.mu.RLock()
+	overThreshold := cb.failureCount > cb.threshold
+	cb.mu.RUnlock()
+
+	if overThreshold {
 		cb.openCircuit()
 		return nil, ErrCircuitOpen
 	}
 
 	return result, err
 }
-
 // isOpen returns true if the circuit breaker is in the open state.
 func (cb *circuitBreaker) isOpen() bool {
-	cb.mu.Lock()
-	defer cb.mu.Unlock()
-
+	cb.mu.RLock()
+	defer cb.mu.RUnlock()
 	return cb.state == OpenState
 }
 
@@ -106,6 +113,7 @@ func (cb *circuitBreaker) healthCheck(ctx context.Context) bool {
 // startHealthChecks initiates periodic health checks.
 func (cb *circuitBreaker) startHealthChecks() {
 	ticker := time.NewTicker(cb.interval)
+	defer ticker.Stop()
 
 	for range ticker.C {
 		if cb.isOpen() {
@@ -120,27 +128,36 @@ func (cb *circuitBreaker) startHealthChecks() {
 
 // openCircuit transitions the circuit breaker to the open state.
 func (cb *circuitBreaker) openCircuit() {
+	cb.mu.Lock()
 	cb.state = OpenState
 	cb.lastChecked = time.Now()
+	cb.mu.Unlock()
 }
 
 // resetCircuit transitions the circuit breaker to the closed state.
 func (cb *circuitBreaker) resetCircuit() {
+	cb.mu.Lock()
 	cb.state = ClosedState
 	cb.failureCount = 0
+	cb.mu.Unlock()
 }
 
 // handleFailure increments the failure count and opens the circuit if the threshold is reached.
 func (cb *circuitBreaker) handleFailure() {
+	cb.mu.Lock()
 	cb.failureCount++
 	if cb.failureCount > cb.threshold {
-		cb.openCircuit()
+		cb.state = OpenState
+		cb.lastChecked = time.Now()
 	}
+	cb.mu.Unlock()
 }
 
 // resetFailureCount resets the failure count to zero.
 func (cb *circuitBreaker) resetFailureCount() {
+	cb.mu.Lock()
 	cb.failureCount = 0
+	cb.mu.Unlock()
 }
 
 func (cb *CircuitBreakerConfig) AddOption(h HTTP) HTTP {
@@ -148,7 +165,12 @@ func (cb *CircuitBreakerConfig) AddOption(h HTTP) HTTP {
 }
 
 func (cb *circuitBreaker) tryCircuitRecovery() bool {
-	if time.Since(cb.lastChecked) > cb.interval && cb.healthCheck(context.TODO()) {
+	cb.mu.RLock()
+	since := time.Since(cb.lastChecked)
+	interval := cb.interval
+	cb.mu.RUnlock()
+
+	if since > interval && cb.healthCheck(context.TODO()) {
 		cb.resetCircuit()
 		return true
 	}
