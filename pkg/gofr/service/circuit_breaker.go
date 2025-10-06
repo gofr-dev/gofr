@@ -74,7 +74,6 @@ func (cb *circuitBreaker) executeWithCircuitBreaker(ctx context.Context, f func(
 	}
 
 	result, err := f(ctx)
-
 	if err != nil {
 		cb.handleFailure()
 	} else {
