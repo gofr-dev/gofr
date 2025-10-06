@@ -67,6 +67,7 @@ func TestGoFr_isPortAvailable(t *testing.T) {
 				g := New()
 
 				go g.Run()
+
 				time.Sleep(100 * time.Millisecond)
 			}
 
@@ -210,6 +211,7 @@ func TestGofr_ServerRun(t *testing.T) {
 	})
 
 	go g.Run()
+
 	time.Sleep(100 * time.Millisecond)
 
 	var netClient = &http.Client{
@@ -708,6 +710,7 @@ func Test_UseMiddleware(t *testing.T) {
 	})
 
 	go app.Run()
+
 	time.Sleep(100 * time.Millisecond)
 
 	var netClient = &http.Client{
@@ -813,6 +816,7 @@ func Test_APIKeyAuthMiddleware(t *testing.T) {
 	})
 
 	go app.Run()
+
 	time.Sleep(100 * time.Millisecond)
 
 	var netClient = &http.Client{
@@ -859,6 +863,7 @@ func Test_SwaggerEndpoints(t *testing.T) {
 	app.httpServer.port = configs.HTTPPort
 
 	go app.Run()
+
 	time.Sleep(100 * time.Millisecond)
 
 	var netClient = &http.Client{
@@ -936,6 +941,7 @@ func setupTestEnvironment(t *testing.T) (host string, htmlContent []byte) {
 	app.httpServer.port = configs.HTTPPort
 
 	go app.Run()
+
 	time.Sleep(100 * time.Millisecond)
 
 	host = configs.HTTPHost
@@ -1052,7 +1058,6 @@ func createPublicDirectory(t *testing.T, defaultPublicStaticDir string, htmlCont
 	}
 
 	file, err := os.Create(filepath.Join(directory, indexHTML))
-
 	if err != nil {
 		t.Fatalf("Couldn't create %s file", indexHTML)
 	}
@@ -1076,6 +1081,7 @@ func Test_Shutdown(t *testing.T) {
 		})
 
 		go g.Run()
+
 		time.Sleep(10 * time.Millisecond)
 
 		err := g.Shutdown(t.Context())
