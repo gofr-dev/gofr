@@ -16,7 +16,7 @@ import (
 )
 
 func TestSendFrameworkStartupTelemetry_Disabled(t *testing.T) {
-	t.Setenv("GOFR_TELEMETRY_DISABLED", "true")
+	t.Setenv("GOFR_TELEMETRY", "true")
 
 	requestMade := false
 

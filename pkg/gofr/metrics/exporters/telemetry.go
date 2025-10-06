@@ -37,7 +37,7 @@ type TelemetryData struct {
 
 // SendFrameworkStartupTelemetry sends telemetry data.
 func SendFrameworkStartupTelemetry(appName, appVersion string) {
-	if os.Getenv("GOFR_TELEMETRY_DISABLED") == "true" {
+	if os.Getenv("GOFR_TELEMETRY") == "false" {
 		return
 	}
 
