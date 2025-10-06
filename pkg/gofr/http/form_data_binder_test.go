@@ -11,6 +11,7 @@ import (
 func Test_setFieldValueFromData(t *testing.T) {
 	t.Run("String Field", func(t *testing.T) {
 		var str string
+
 		field := reflect.ValueOf(&str).Elem()
 
 		err := setFieldValueFromData(field, "hello")
@@ -20,6 +21,7 @@ func Test_setFieldValueFromData(t *testing.T) {
 
 	t.Run("Int Field", func(t *testing.T) {
 		var num int
+
 		field := reflect.ValueOf(&num).Elem()
 
 		err := setFieldValueFromData(field, 42)
@@ -29,6 +31,7 @@ func Test_setFieldValueFromData(t *testing.T) {
 
 	t.Run("Float Field", func(t *testing.T) {
 		var f float64
+
 		field := reflect.ValueOf(&f).Elem()
 
 		err := setFieldValueFromData(field, 3.14)
@@ -38,6 +41,7 @@ func Test_setFieldValueFromData(t *testing.T) {
 
 	t.Run("Bool Field", func(t *testing.T) {
 		var b bool
+
 		field := reflect.ValueOf(&b).Elem()
 
 		err := setFieldValueFromData(field, true)
@@ -47,6 +51,7 @@ func Test_setFieldValueFromData(t *testing.T) {
 
 	t.Run("Unsupported Kind", func(t *testing.T) {
 		var m map[string]string
+
 		field := reflect.ValueOf(&m).Elem()
 		err := setFieldValueFromData(field, map[string]string{"a": "b"})
 		require.Error(t, err)

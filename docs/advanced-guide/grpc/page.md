@@ -55,8 +55,8 @@ syntax = "proto3";
 // Indicates the go package where the generated file will be produced
 option go_package = "path/to/your/proto/file";
 
-service {serviceName}Service {
-  rpc {serviceMethod} ({serviceRequest}) returns ({serviceResponse}) {}
+service <SERVICE_NAME>Service {
+  rpc <SERVICE_METHOD> (<SERVICE_REQUEST>) returns (<SERVICE_RESPONSE>) {}
         }
 ```
 
@@ -66,13 +66,13 @@ Users must define the type of message being exchanged between server and client,
 procedure call. Below is a generic representation for services' gRPC messages type.
 
 ```protobuf
-message {serviceRequest} {
+message <SERVICE_REQUEST> {
     int64 id = 1;
     string name = 2;
     // other fields that can be passed
         }
 
-message {serviceResponse} {
+message <SERVICE_RESPONSE> {
     int64 id = 1;
     string name = 2;
     string address = 3;
@@ -90,10 +90,10 @@ protoc \
 	--go_opt=paths=source_relative \
 	--go-grpc_out=. \
 	--go-grpc_opt=paths=source_relative \
-	{serviceName}.proto
+	<SERVICE_NAME>.proto
 ```
 
-This command generates two files, `{serviceName}.pb.go` and `{serviceName}_grpc.pb.go`, containing the necessary code for performing RPC calls.
+This command generates two files, `<SERVICE_NAME>.pb.go` and `<SERVICE_NAME>_grpc.pb.go`, containing the necessary code for performing RPC calls.
 
 ## Prerequisite: gofr-cli must be installed
 To install the CLI -
@@ -109,15 +109,15 @@ go install gofr.dev/cli/gofr@latest
 gofr wrap grpc server -proto=./path/your/proto/file
    ```
 
-This command leverages the `gofr-cli` to generate a `{serviceName}_server.go` file (e.g., `customer_server.go`)
+This command leverages the `gofr-cli` to generate a `<SERVICE_NAME>_server.go` file (e.g., `customer_server.go`)
 containing a template for your gRPC server implementation, including context support, in the same directory as
 that of the specified proto file.
 
 **2. Modify the Generated Code:**
 
-- Customize the `{serviceName}GoFrServer` struct with required dependencies and fields.
-- Implement the `{serviceMethod}` method to handle incoming requests, as required in this usecase:
-  - Bind the request payload using `ctx.Bind(&{serviceRequest})`.
+- Customize the `<SERVICE_NAME>GoFrServer` struct with required dependencies and fields.
+- Implement the `<SERVICE_METHOD>` method to handle incoming requests, as required in this usecase:
+  - Bind the request payload using `ctx.Bind(&<SERVICE_REQUEST>)`.
   - Process the request and generate a response.
 
 ## Registering the gRPC Service with Gofr
@@ -138,7 +138,7 @@ import (
 func main() {
     app := gofr.New()
 
-    packageName.Register{serviceName}ServerWithGofr(app, &{packageName}.New{serviceName}GoFrServer())
+    packageName.Register<SERVICE_NAME>ServerWithGofr(app, &<PACKAGE_NAME>.New<SERVICE_NAME>GoFrServer())
 
     app.Run()
 }
@@ -163,7 +163,7 @@ func main() {
     	grpc.ConnectionTimeout(10 * time.Second),
     )
 
-    packageName.Register{serviceName}ServerWithGofr(app, &{packageName}.New{serviceName}GoFrServer())
+    packageName.Register<SERVICE_NAME>ServerWithGofr(app, &<PACKAGE_NAME>.New<SERVICE_NAME>GoFrServer())
 
     app.Run()
 }
@@ -180,7 +180,7 @@ func main() {
 
     app.AddGRPCUnaryInterceptors(authInterceptor)
 
-    packageName.Register{serviceName}ServerWithGofr(app, &{packageName}.New{serviceName}GoFrServer())
+    packageName.Register<SERVICE_NAME>ServerWithGofr(app, &<PACKAGE_NAME>.New<SERVICE_NAME>GoFrServer())
 
     app.Run()
 }
@@ -194,6 +194,31 @@ func authInterceptor(ctx context.Context, req any, info *grpc.UnaryServerInfo, h
 }
 ```
 
+## Adding Custom Stream interceptors
+
+For streaming RPCs (client-stream, server-stream, or bidirectional), GoFr allows you to add stream interceptors using AddGRPCServerStreamInterceptors. These are useful for handling logic that needs to span the entire lifetime of a stream.
+```go
+func main() {
+    app := gofr.New()
+
+    app.AddGRPCServerStreamInterceptors(streamAuthInterceptor)
+
+    // ... register your service
+    app.Run()
+}
+
+func streamAuthInterceptor(srv any, ss grpc.ServerStream, info *grpc.StreamServerInfo, handler grpc.StreamHandler) error {
+	// Example: Validate metadata for the entire stream
+	md, ok := metadata.FromIncomingContext(ss.Context())
+	if !ok || !isValidToken(md["auth-token"]) {
+		return status.Errorf(codes.Unauthenticated, "invalid stream token")
+	}
+
+	// If valid, continue processing the stream
+	return handler(srv, ss)
+}
+```
+
 For more details on adding additional interceptors and server options, refer to the [official gRPC Go package](https://pkg.go.dev/google.golang.org/grpc#ServerOption).
 
 ## Generating gRPC Client using `gofr wrap grpc client`
@@ -202,26 +227,26 @@ For more details on adding additional interceptors and server options, refer to 
    ```bash
 gofr wrap grpc client -proto=./path/your/proto/file
    ```
-This command leverages the `gofr-cli` to generate a `{serviceName}_client.go` file (e.g., `customer_client.go`). This file must not be modified.
+This command leverages the `gofr-cli` to generate a `<SERVICE_NAME>_client.go` file (e.g., `customer_client.go`). This file must not be modified.
 
-**2. Register the connection to your gRPC service inside your {serviceMethod} and make inter-service calls as follows :**
+**2. Register the connection to your gRPC service inside your <SERVICE_METHOD> and make inter-service calls as follows :**
 
    ```go
 // gRPC Handler with context support
-func {serviceMethod}(ctx *gofr.Context) (*{serviceResponse}, error) {
+func <SERVICE_METHOD>(ctx *gofr.Context) (*<SERVICE_RESPONSE>, error) {
 	// Create the gRPC client
-    srv, err := New{serviceName}GoFrClient("your-grpc-server-host", ctx.Metrics())
+    srv, err := New<SERVICE_NAME>GoFrClient("your-grpc-server-host", ctx.Metrics())
     if err != nil {
         return nil, err
     }
 
     // Prepare the request
-    req := &{serviceRequest}{
+    req := &<SERVICE_REQUEST>{
     // populate fields as necessary
     }
 
 	// Call the gRPC method with tracing/metrics enabled
-    res, err := srv.{serviceMethod}(ctx, req)
+    res, err := srv.<SERVICE_METHOD>(ctx, req)
     if err != nil {
         return nil, err
     }
@@ -229,7 +254,48 @@ func {serviceMethod}(ctx *gofr.Context) (*{serviceResponse}, error) {
     return res, nil
 }
 ```
+## Error Handling and Validation
+GoFr's gRPC implementation includes built-in error handling and validation:
 
+**Port Validation**: Automatically validates that gRPC ports are within valid range (1-65535)
+**Port Availability**: Checks if the specified port is available before starting the server
+**Server Creation**: Validates server creation and provides detailed error messages
+**Container Injection**: Validates container injection into gRPC services with detailed logging
+
+Port Configuration
+```bash
+// Set custom gRPC port in .env file
+GRPC_PORT=9001
+
+// Or use default port 9000 if not specified
+```
+## gRPC Reflection
+GoFr supports gRPC reflection for easier debugging and testing. Enable it using the configuration:
+```bash
+# In your .env file
+GRPC_ENABLE_REFLECTION=true
+```
+When enabled, you can use tools like grpcurl to inspect and test your gRPC services:
+
+```bash
+# List available services
+grpcurl -plaintext localhost:9000 list
+
+# Describe a service
+grpcurl -plaintext localhost:9000 describe YourService
+
+# Make a test call
+grpcurl -plaintext -d '{"name": "test"}' localhost:9000 YourService/YourMethod
+```
+
+## Built-in Metrics
+GoFr automatically registers the following gRPC metrics:
+
++ **grpc_server_status**: Gauge indicating server status (1=running, 0=stopped)
++ **grpc_server_errors_total**: Counter for total gRPC server errors
++ **grpc_services_registered_total**: Counter for total registered gRPC services
+
+These metrics are automatically available in your metrics endpoint and can be used for monitoring and alerting.
 
 ## Customizing gRPC Client with DialOptions
 
@@ -241,7 +307,7 @@ func main() {
     app := gofr.New()
 
     // Create a gRPC client for the service
-    gRPCClient, err := client.New{serviceName}GoFrClient(
+    gRPCClient, err := client.New<SERVICE_NAME>GoFrClient(
         app.Config.Get("GRPC_SERVER_HOST"),
         app.Metrics(),
         grpc.WithChainUnaryInterceptor(MetadataUnaryInterceptor),
@@ -308,7 +374,7 @@ func main() {
         return
     }
 
-    gRPCClient, err := client.New{serviceName}GoFrClient(
+    gRPCClient, err := client.New<SERVICE_NAME>GoFrClient(
         app.Config.Get("GRPC_SERVER_HOST"),
         app.Metrics(),
         grpc.WithTransportCredentials(creds),
@@ -343,7 +409,7 @@ GoFr provides built-in health checks for gRPC services, enabling observability, 
 ### Client Interface
 
 ```go
-type {serviceName}GoFrClient interface {
+type <SERVICE_NAME>GoFrClient interface {
     SayHello(*gofr.Context, *HelloRequest, ...grpc.CallOption) (*HelloResponse, error)
     health
 }
@@ -356,7 +422,7 @@ type health interface {
 
 ### Server Integration
 ```go
-type {serviceName}GoFrServer struct {
+type <SERVICE_NAME>GoFrServer struct {
     health *healthServer
 }
 ```

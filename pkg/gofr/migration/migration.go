@@ -21,8 +21,9 @@ type transactionData struct {
 	StartTime       time.Time
 	MigrationNumber int64
 
-	SQLTx   *gofrSql.Tx
-	RedisTx goRedis.Pipeliner
+	SQLTx    *gofrSql.Tx
+	RedisTx  goRedis.Pipeliner
+	OracleTx container.OracleTx
 }
 
 func Run(migrationsMap map[int64]Migrate, c *container.Container) {
@@ -69,6 +70,10 @@ func Run(migrationsMap map[int64]Migrate, c *container.Container) {
 		// Replacing the objects in datasource object only for those Datasources which support transactions.
 		ds.SQL = migrationInfo.SQLTx
 		ds.Redis = migrationInfo.RedisTx
+
+		if migrationInfo.OracleTx != nil {
+			ds.Oracle = &oracleTransactionWrapper{tx: migrationInfo.OracleTx}
+		}
 
 		migrationInfo.StartTime = time.Now()
 		migrationInfo.MigrationNumber = currentMigration
@@ -158,6 +163,13 @@ func initializeDatasources(c *container.Container, ds *Datasource, mg migrator) 
 			logIdentifier: "Clickhouse",
 		},
 		{
+			condition:     func() bool { return !isNil(c.Oracle) },
+			setDS:         func() { ds.Oracle = c.Oracle },
+			apply:         func(m migrator) migrator { return oracleDS{c.Oracle}.apply(m) },
+			logIdentifier: "Oracle",
+		},
+
+		{
 			condition:     func() bool { return c.PubSub != nil },
 			setDS:         func() { ds.PubSub = c.PubSub },
 			apply:         func(m migrator) migrator { return pubsubDS{c.PubSub}.apply(m) },
@@ -223,9 +235,9 @@ func initializeDatasources(c *container.Container, ds *Datasource, mg migrator) 
 }
 
 func isNil(i any) bool {
-	// Get the value of the interface
+	// Get the value of the interface.
 	val := reflect.ValueOf(i)
 
-	// If the interface is not assigned or is nil, return true
+	// If the interface is not assigned or is nil, return true.
 	return !val.IsValid() || val.IsNil()
 }

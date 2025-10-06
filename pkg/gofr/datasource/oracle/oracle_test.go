@@ -1,6 +1,7 @@
 package oracle
 
 import (
+	"context"
 	"database/sql"
 	"errors"
 	"testing"
@@ -110,7 +111,7 @@ func Test_Oracle_Select(t *testing.T) {
 func Test_New_ReturnsClient(t *testing.T) {
 	cfg := Config{Host: "h", Port: 1, Username: "u", Password: "p", Service: "s"}
 
-	c := New(cfg)
+	c := New(&cfg)
 
 	require.NotNil(t, c)
 
@@ -118,7 +119,7 @@ func Test_New_ReturnsClient(t *testing.T) {
 }
 
 func Test_UseLogger_SetsLoggerWhenCorrectType(t *testing.T) {
-	c := New(Config{})
+	c := New(&Config{})
 
 	ctrl := gomock.NewController(t)
 
@@ -136,7 +137,7 @@ func Test_UseLogger_SetsLoggerWhenCorrectType(t *testing.T) {
 }
 
 func Test_UseMetrics_SetsMetricsWhenCorrectType(t *testing.T) {
-	c := New(Config{})
+	c := New(&Config{})
 
 	ctrl := gomock.NewController(t)
 
@@ -154,7 +155,7 @@ func Test_UseMetrics_SetsMetricsWhenCorrectType(t *testing.T) {
 }
 
 func Test_UseTracer_SetsTracerWhenCorrectType(t *testing.T) {
-	c := New(Config{})
+	c := New(&Config{})
 
 	tracerMock := noop.NewTracerProvider().Tracer("test") // or custom mock.
 
@@ -172,7 +173,7 @@ func Test_Connect_SuccessAndFailure(t *testing.T) {
 
 	defer ctrl.Finish()
 
-	c := New(Config{Host: "h", Port: 1, Username: "u", Password: "p", Service: "s"})
+	c := New(&Config{Host: "h", Port: 1, Username: "u", Password: "p", Service: "s"})
 
 	mockLogger := NewMockLogger(ctrl)
 
@@ -181,7 +182,7 @@ func Test_Connect_SuccessAndFailure(t *testing.T) {
 	// --- Fail sql.Open ---
 	c.config.Username = "baduser"
 
-	mockLogger.EXPECT().Debugf(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
+	mockLogger.EXPECT().Debugf(gomock.Any())
 
 	mockLogger.EXPECT().Errorf(gomock.Any(), gomock.Any()).AnyTimes()
 
@@ -244,7 +245,7 @@ func Test_Select_ErrorPropagation(t *testing.T) {
 }
 
 func Test_addTrace_WithAndWithoutTracer(t *testing.T) {
-	c := New(Config{})
+	c := New(&Config{})
 
 	ctx := t.Context()
 
@@ -276,7 +277,7 @@ func Test_sendOperationStats_WithAndWithoutSpan(t *testing.T) {
 
 	mockMetrics := NewMockMetrics(ctrl)
 
-	c := New(Config{})
+	c := New(&Config{})
 
 	c.UseLogger(mockLogger)
 
@@ -407,7 +408,7 @@ func Test_Oracle_InvalidHostName(t *testing.T) {
 
 	defer ctrl.Finish()
 
-	c := New(Config{
+	c := New(&Config{
 		Host:     "invalid.hostname",
 		Port:     1521,
 		Username: "system",
@@ -419,7 +420,7 @@ func Test_Oracle_InvalidHostName(t *testing.T) {
 
 	c.UseLogger(mockLogger)
 
-	mockLogger.EXPECT().Debugf(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any())
+	mockLogger.EXPECT().Debugf(gomock.Any())
 	mockLogger.EXPECT().Errorf(gomock.Any(), gomock.Any()).AnyTimes()
 
 	c.Connect()
@@ -450,8 +451,8 @@ func Test_Oracle_ConnectionTimeout(t *testing.T) {
 
 	defer ctrl.Finish()
 
-	c := New(Config{
-		Host:     "10.255.255.1", // unreachable IP
+	c := New(&Config{
+		Host:     "10.255.255.1",
 		Port:     1521,
 		Username: "system",
 		Password: "password",
@@ -462,7 +463,7 @@ func Test_Oracle_ConnectionTimeout(t *testing.T) {
 
 	c.UseLogger(mockLogger)
 
-	mockLogger.EXPECT().Debugf(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any())
+	mockLogger.EXPECT().Debugf(gomock.Any())
 	mockLogger.EXPECT().Errorf(gomock.Any(), gomock.Any()).AnyTimes()
 
 	c.Connect()
@@ -473,7 +474,7 @@ func Test_Oracle_ConnectionError(t *testing.T) {
 
 	defer ctrl.Finish()
 
-	c := New(Config{
+	c := New(&Config{
 		Host:     "localhost",
 		Port:     1521,
 		Username: "wrong_user",
@@ -485,7 +486,7 @@ func Test_Oracle_ConnectionError(t *testing.T) {
 
 	c.UseLogger(mockLogger)
 
-	mockLogger.EXPECT().Debugf(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any())
+	mockLogger.EXPECT().Debugf(gomock.Any())
 	mockLogger.EXPECT().Errorf(gomock.Any(), gomock.Any()).AnyTimes()
 
 	c.Connect()
@@ -496,7 +497,7 @@ func Test_Connect_InvalidHost(t *testing.T) {
 
 	defer ctrl.Finish()
 
-	c := New(Config{Host: "", Port: 1521, Username: "u", Password: "p", Service: "s"})
+	c := New(&Config{Host: "", Port: 1521, Username: "u", Password: "p", Service: "s"})
 
 	mockLogger := NewMockLogger(ctrl)
 
@@ -512,7 +513,7 @@ func Test_Connect_InvalidPort(t *testing.T) {
 
 	defer ctrl.Finish()
 
-	c := New(Config{Host: "h", Port: 0, Username: "u", Password: "p", Service: "s"})
+	c := New(&Config{Host: "h", Port: 0, Username: "u", Password: "p", Service: "s"})
 
 	mockLogger := NewMockLogger(ctrl)
 
@@ -563,4 +564,178 @@ func Test_sqlConn_Ping(t *testing.T) {
 	err := s.Ping(t.Context())
 
 	require.NoError(t, err)
+}
+
+func Test_Oracle_Begin_Success(t *testing.T) {
+	// Create a mock DB with sqlmock
+	db, mock, err := sqlmock.New()
+	require.NoError(t, err)
+
+	defer db.Close()
+
+	// Create client with mocked connection
+	ctrl := gomock.NewController(t)
+	mockLogger := NewMockLogger(ctrl)
+
+	c := Client{
+		conn:   &sqlConn{db: db},
+		logger: mockLogger,
+	}
+
+	// Expect Begin to be called and debug log to be recorded
+	mock.ExpectBegin()
+	mockLogger.EXPECT().Debug(gomock.Any())
+
+	// Call Begin
+	tx, err := c.Begin()
+	require.NoError(t, err)
+	require.NotNil(t, tx)
+
+	// Verify expectations
+	assert.NoError(t, mock.ExpectationsWereMet())
+}
+
+func Test_Oracle_Begin_NoConnection(t *testing.T) {
+	c := Client{conn: nil}
+
+	tx, err := c.Begin()
+	require.Error(t, err)
+	require.Nil(t, tx)
+	assert.ErrorIs(t, err, errNoConnection)
+}
+
+// func Test_Oracle_Begin_InvalidConnType(t *testing.T) {
+// 	c := Client{
+// 		conn: &struct{}{}, // Not a sqlConn
+// 	}
+//
+// 	tx, err := c.Begin()
+// 	require.Error(t, err)
+// 	require.Nil(t, tx)
+// 	assert.ErrorIs(t, err, errInvalidConnType)
+// }
+
+func Test_OracleTx_ExecContext(t *testing.T) {
+	db, mock, err := sqlmock.New()
+	require.NoError(t, err)
+
+	defer db.Close()
+
+	// Begin a transaction
+	mock.ExpectBegin()
+
+	sqlTx, err := db.BeginTx(context.Background(), nil)
+	require.NoError(t, err)
+
+	// Create mock logger
+	ctrl := gomock.NewController(t)
+	mockLogger := NewMockLogger(ctrl)
+	mockLogger.EXPECT().Debug(gomock.Any())
+
+	// Create oracle transaction
+	tx := &oracleTx{tx: sqlTx, logger: mockLogger}
+
+	// Set up expectations for the exec
+	mock.ExpectExec("INSERT INTO users").WithArgs(1, "test").
+		WillReturnResult(sqlmock.NewResult(1, 1))
+
+	// Execute the query
+	err = tx.ExecContext(context.Background(), "INSERT INTO users (id, name) VALUES (?, ?)", 1, "test")
+	require.NoError(t, err)
+
+	// Verify expectations
+	assert.NoError(t, mock.ExpectationsWereMet())
+}
+
+func Test_OracleTx_SelectContext(t *testing.T) {
+	db, mock, err := sqlmock.New()
+	require.NoError(t, err)
+
+	defer db.Close()
+
+	// Begin a transaction
+	mock.ExpectBegin()
+
+	sqlTx, err := db.BeginTx(context.Background(), nil)
+	require.NoError(t, err)
+
+	// Create mock logger
+	ctrl := gomock.NewController(t)
+	mockLogger := NewMockLogger(ctrl)
+	mockLogger.EXPECT().Debug(gomock.Any())
+
+	// Create oracle transaction
+	tx := &oracleTx{tx: sqlTx, logger: mockLogger}
+
+	// Set up expectations for the query
+	columns := []string{"id", "name"}
+	rows := sqlmock.NewRows(columns).
+		AddRow(1, "gofr").
+		AddRow(2, "dev")
+
+	mock.ExpectQuery("SELECT id, name FROM users").WillReturnRows(rows)
+
+	// Execute the query
+	var result []map[string]any
+
+	err = tx.SelectContext(context.Background(), &result, "SELECT id, name FROM users")
+	require.NoError(t, err)
+
+	// Verify results
+	require.Len(t, result, 2)
+	assert.Equal(t, "gofr", result[0]["name"])
+	assert.Equal(t, int64(1), result[0]["id"])
+
+	// Verify expectations
+	assert.NoError(t, mock.ExpectationsWereMet())
+}
+
+func Test_OracleTx_Commit(t *testing.T) {
+	db, mock, err := sqlmock.New()
+	require.NoError(t, err)
+
+	defer db.Close()
+
+	mock.ExpectBegin()
+
+	sqlTx, err := db.BeginTx(context.Background(), nil)
+	require.NoError(t, err)
+
+	ctrl := gomock.NewController(t)
+	mockLogger := NewMockLogger(ctrl)
+	mockLogger.EXPECT().Debug(gomock.Any())
+
+	tx := &oracleTx{tx: sqlTx, logger: mockLogger}
+
+	mock.ExpectCommit()
+
+	err = tx.Commit()
+	require.NoError(t, err)
+
+	assert.NoError(t, mock.ExpectationsWereMet())
+}
+
+func Test_OracleTx_Rollback(t *testing.T) {
+	db, mock, err := sqlmock.New()
+	require.NoError(t, err)
+
+	defer db.Close()
+
+	mock.ExpectBegin()
+
+	sqlTx, err := db.BeginTx(context.Background(), nil)
+	require.NoError(t, err)
+
+	ctrl := gomock.NewController(t)
+	mockLogger := NewMockLogger(ctrl)
+	mockLogger.EXPECT().Debug(gomock.Any())
+
+	tx := &oracleTx{tx: sqlTx, logger: mockLogger}
+
+	mock.ExpectRollback()
+
+	err = tx.Rollback()
+	require.NoError(t, err)
+
+	assert.NoError(t, mock.ExpectationsWereMet())
 }

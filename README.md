@@ -109,11 +109,13 @@ Explore a variety of ready-to-run examples in the [GoFr examples directory](http
 
 ## 👍 **Contribute**
 
-Help us make GoFr even better:
+Join Us in Making GoFr Better
 
-1. **Star** this repo on GitHub! 🌟
-2. Write a review or tutorial on **[Medium](https://medium.com/)**, **[Dev.to](https://dev.to/)**, or your blog.
-3. Review the **[CONTRIBUTING.md](CONTRIBUTING.md)** guide to learn how to contribute to the project.
+**Share your experience**: If you’ve found GoFr helpful, consider writing a review or tutorial on platforms like **[Medium](https://medium.com/)**, **[Dev.to](https://dev.to/)**, or your personal blog. 
+Your insights could help others get started faster!
+
+**Contribute to the project**: Want to get involved? Check out our **[CONTRIBUTING.md](CONTRIBUTING.md)**
+guide to learn how you can contribute code, suggest improvements, or report issues.
 
 ---
 

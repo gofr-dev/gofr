@@ -143,12 +143,22 @@ func (l *logger) Errorf(format string, args ...any) {
 func (l *logger) Fatal(args ...any) {
 	l.logf(FATAL, "", args...)
 
+	// Flush output before exiting
+	if f, ok := l.errorOut.(*os.File); ok {
+		_ = f.Sync() // Ignore sync error as we're about to exit
+	}
+
 	//nolint:revive // exit status is 1 as it denotes failure as signified by Fatal log
 	os.Exit(1)
 }
 
 func (l *logger) Fatalf(format string, args ...any) {
 	l.logf(FATAL, format, args...)
+
+	// Flush output before exiting
+	if f, ok := l.errorOut.(*os.File); ok {
+		_ = f.Sync() // Ignore sync error as we're about to exit
+	}
 
 	//nolint:revive // exit status is 1 as it denotes failure as signified by Fatal log
 	os.Exit(1)
@@ -159,6 +169,7 @@ func (l *logger) prettyPrint(e *logEntry, out io.Writer) {
 	// the logs when printed in go routines were getting misaligned since we are achieving
 	// a single line of log, in 2 separate statements which caused the misalignment.
 	l.lock <- struct{}{} // Acquire the channel's lock
+
 	defer func() {
 		<-l.lock // Release the channel's token
 	}()
@@ -221,6 +232,11 @@ func NewFileLogger(path string) Logger {
 }
 
 func checkIfTerminal(w io.Writer) bool {
+	// Force JSON output in test environments
+	if os.Getenv("GOFR_EXITER") == "1" {
+		return false
+	}
+
 	switch v := w.(type) {
 	case *os.File:
 		return term.IsTerminal(int(v.Fd()))

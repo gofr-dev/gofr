@@ -85,7 +85,7 @@ func TestHandler_ServeHTTP_Timeout(t *testing.T) {
 
 	h.ServeHTTP(w, r)
 
-	assert.Equal(t, http.StatusGatewayTimeout, w.Code, "TestHandler_ServeHTTP_Timeout Failed")
+	assert.Equal(t, http.StatusRequestTimeout, w.Code, "TestHandler_ServeHTTP_Timeout Failed")
 	assert.Contains(t, w.Body.String(), "request timed out", "TestHandler_ServeHTTP_Timeout Failed")
 }
 
@@ -312,7 +312,7 @@ func TestHandler_ServeHTTP_ContextTimeout(t *testing.T) {
 
 	h.ServeHTTP(w, r)
 
-	assert.Equal(t, http.StatusGatewayTimeout, w.Code, "Should return HTTP 504 for context timeout")
+	assert.Equal(t, http.StatusRequestTimeout, w.Code, "Should return HTTP 408 for context timeout")
 	assert.Contains(t, w.Body.String(), "request timed out")
 }
 
@@ -342,6 +342,7 @@ func TestIntegration_ConcurrentClientCancellations(t *testing.T) {
 	go func() {
 		app.Run()
 	}()
+
 	time.Sleep(5 * time.Millisecond)
 
 	// Launch multiple concurrent requests with early cancellation
@@ -451,14 +452,15 @@ func TestIntegration_ServerTimeout(t *testing.T) {
 
 	defer resp.Body.Close()
 
-	// GoFr should return 504 Gateway Timeout
-	assert.Equal(t, http.StatusGatewayTimeout, resp.StatusCode,
-		"Server should return 504 for request timeout")
+	// GoFr should return 408 Request Timeout
+	assert.Equal(t, http.StatusRequestTimeout, resp.StatusCode,
+		"Server should return 408 for request timeout")
 
 	body, err := io.ReadAll(resp.Body)
 	require.NoError(t, err)
 
 	var errorResponse map[string]any
+
 	err = json.Unmarshal(body, &errorResponse)
 	require.NoError(t, err)
 
