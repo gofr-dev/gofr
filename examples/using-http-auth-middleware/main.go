@@ -8,11 +8,11 @@ import (
 func main() {
 	a := gofr.New()
 
-	// For Basic Auth
+	//For Basic Auth
 	//setupBasicAuth(a)
 
 	// For APIKey Auth
-	//setupAPIKeyAuth(a)
+	setupAPIKeyAuth(a)
 
 	//For OAuth
 	//a.EnableOAuth("<JWKS-Endpoint>", 10)
