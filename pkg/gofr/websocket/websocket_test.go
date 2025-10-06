@@ -870,6 +870,7 @@ func TestManager_ConcurrentOperations(t *testing.T) {
 
 		go func(i int) {
 			defer wg.Done()
+
 			manager.CloseConnection("conn" + string(rune(i)))
 		}(i)
 	}
@@ -968,8 +969,8 @@ func TestConnection_Bind_EdgeCases_Failure(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 				upgrader := websocket.Upgrader{}
-				conn, err := upgrader.Upgrade(w, r, nil)
 
+				conn, err := upgrader.Upgrade(w, r, nil)
 				if err != nil {
 					t.Errorf("Failed to upgrade connection: %v", err)
 					return
@@ -1188,8 +1189,8 @@ func TestConnection_Bind_JSONCase(t *testing.T) {
 
 		// Send JSON message
 		jsonData := `{"name": "test", "value": 123}`
-		err := conn.WriteMessage(websocket.TextMessage, []byte(jsonData))
 
+		err := conn.WriteMessage(websocket.TextMessage, []byte(jsonData))
 		if err != nil {
 			return // Ignore errors in server handler
 		}
@@ -1201,7 +1202,6 @@ func TestConnection_Bind_JSONCase(t *testing.T) {
 		}
 
 		err = wsConn.Bind(&data)
-
 		if err != nil {
 			return // Ignore errors in server handler
 		}
@@ -1428,6 +1428,7 @@ func TestConnection_Bind_JSONError(t *testing.T) {
 
 		// Test with invalid JSON that will cause unmarshaling error
 		var data map[string]any
+
 		err = wsConn.Bind(&data)
 		// This should fail with invalid JSON
 		if err == nil {
