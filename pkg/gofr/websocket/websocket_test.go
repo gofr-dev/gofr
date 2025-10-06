@@ -914,8 +914,8 @@ func TestConnection_Bind_EdgeCases_Success(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 				upgrader := websocket.Upgrader{}
-				conn, err := upgrader.Upgrade(w, r, nil)
 
+				conn, err := upgrader.Upgrade(w, r, nil)
 				if err != nil {
 					t.Errorf("Failed to upgrade connection: %v", err)
 					return
@@ -1255,6 +1255,7 @@ func TestWSUpgrader_Upgrade_WithResponseHeader(t *testing.T) {
 			t.Errorf("Failed to upgrade connection: %v", err)
 			return
 		}
+
 		defer conn.Close()
 	}))
 	defer server.Close()
