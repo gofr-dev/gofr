@@ -9,8 +9,7 @@ import (
 	"strconv"
 	"strings"
 
-	grpc_middleware "github.com/grpc-ecosystem/go-grpc-middleware"
-	grpc_recovery "github.com/grpc-ecosystem/go-grpc-middleware/recovery"
+	grpc_recovery "github.com/grpc-ecosystem/go-grpc-middleware/v2/interceptors/recovery"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/reflection"
 
@@ -120,8 +119,8 @@ func registerGRPCMetrics(c *container.Container) {
 }
 
 func (g *grpcServer) createServer() error {
-	interceptorOption := grpc.UnaryInterceptor(grpc_middleware.ChainUnaryServer(g.interceptors...))
-	streamOpt := grpc.StreamInterceptor(grpc_middleware.ChainStreamServer(g.streamInterceptors...))
+	interceptorOption := grpc.ChainUnaryInterceptor(g.interceptors...)
+	streamOpt := grpc.ChainStreamInterceptor(g.streamInterceptors...)
 	g.options = append(g.options, interceptorOption, streamOpt)
 
 	g.server = grpc.NewServer(g.options...)
