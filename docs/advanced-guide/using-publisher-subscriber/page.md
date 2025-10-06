@@ -332,14 +332,14 @@ docker run -d \
 When subscribing or publishing using NATS JetStream, make sure to use the appropriate subject name that matches your stream configuration.
 For more information on setting up and using NATS JetStream, refer to the official NATS documentation.
 
-### Azure Event Hub
-GoFr supports Event Hub starting gofr version v1.22.0.
+### Azure Event Hubs
+GoFr supports Event Hubs starting gofr version v1.22.0.
 
 While subscribing gofr reads from all the partitions of the consumer group provided in the configuration reducing hassle to manage them.
 
 #### Configs
 
-Azure Event Hub is supported as an external PubSub provider such that if you are not using it, it doesn't get added in your binary.
+Azure Event Hubs is supported as an external PubSub provider such that if you are not using it, it doesn't get added in your binary.
 
 Import the external driver for `eventhub` using the following command.
 
@@ -363,11 +363,11 @@ app := gofr.New()
     }))
 ```
 
-While subscribing/publishing from Event Hub make sure to keep the topic-name same as event-hub name.
+While subscribing/publishing from Event Hubs make sure to keep the topic-name same as event-hub name.
 
 #### Setup
 
-1. To set up Azure Event Hub refer the following [documentation](https://learn.microsoft.com/en-us/azure/event-hubs/event-hubs-create).
+1. To set up Azure Event Hubs refer the following [documentation](https://learn.microsoft.com/en-us/azure/event-hubs/event-hubs-create).
 
 2. As GoFr manages reading from all the partitions it needs to store the information about what has been read and what is left for that GoFr uses Azure Container which can be setup from the following [documentation](https://learn.microsoft.com/en-us/azure/storage/blobs/blob-containers-portal).
 
