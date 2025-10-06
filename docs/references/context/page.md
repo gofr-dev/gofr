@@ -90,6 +90,40 @@ values := ctx.Request.Params("category")
 // values = []string{"books", "electronics", "tech"}
 ```
 
+
+## Accessing Authentication Information
+
+GoFr provides a helper method to access authentication details from the context.
+These values are populated when the respective authentication middleware is enabled (see [HTTP Auth Middleware](https://github.com/gofr-dev/gofr/blob/0845d19181d2cc55e12c557fc9ad51adb4ab44fd/examples/using-http-auth-middleware/ReadMe.md) section).
+
+```go
+info := ctx.GetAuthInfo()
+```
+
+### Methods
+
+* **`GetClaims()`** – Returns the JWT claims containing standard fields such as:
+
+  * `Issuer` – identifies who issued the token.
+  * `Subject` – identifies the principal that is the subject of the token.
+  * `Audience` – identifies the intended recipients of the token.
+  * `NotBefore` – time before which the token is not valid.
+  * `IssuedAt` – time at which the token was issued.
+  * `ExpirationTime` – time after which the token expires.
+
+  **Requires:** OAuth middleware (`EnableOAuth`)
+
+* **`GetUsername()`** – Returns the authenticated username when using Basic Authentication.
+
+  **Requires:** Basic Auth middleware (`EnableBasicAuthWithValidator`)
+
+* **`GetAPIKey()`** – Returns the API key used for authentication.
+
+  **Requires:** API Key middleware (`EnableAPIKeyAuthWithValidator`)
+
+> Note: These values will be available only if the respective authentication middleware is enabled in the application.
+
+
 ## Accessing dependencies
 
 GoFr context embeds the container object which provides access to
