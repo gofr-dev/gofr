@@ -1091,8 +1091,8 @@ func TestConnection_ConcurrentWriteMessage(t *testing.T) {
 				defer wg.Done()
 
 				message := fmt.Sprintf("message %d", i)
-				err := wsConn.WriteMessage(websocket.TextMessage, []byte(message))
 
+				err := wsConn.WriteMessage(websocket.TextMessage, []byte(message))
 				if err != nil {
 					t.Errorf("WriteMessage failed: %v", err)
 				}
@@ -1158,7 +1158,6 @@ func TestConnection_Bind_StringCase(t *testing.T) {
 
 		// Send text message
 		err := conn.WriteMessage(websocket.TextMessage, []byte("test message"))
-
 		if err != nil {
 			return // Ignore errors in server handler
 		}
@@ -1167,7 +1166,6 @@ func TestConnection_Bind_StringCase(t *testing.T) {
 		var data string
 
 		err = wsConn.Bind(&data)
-
 		if err != nil {
 			return // Ignore errors in server handler
 		}
