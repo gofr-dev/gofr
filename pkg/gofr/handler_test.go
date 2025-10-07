@@ -367,7 +367,7 @@ func TestIntegration_ConcurrentClientCancellations(t *testing.T) {
 			}()
 
 			req, _ := http.NewRequestWithContext(ctx, http.MethodGet, fmt.Sprint("http://localhost:", ports.HTTPPort, "/concurrent"), http.NoBody)
-			client := &http.Client{}
+			client := GetHTTPClient()
 
 			resp, err := client.Do(req)
 			if err != nil {
@@ -421,7 +421,7 @@ func TestIntegration_ServerTimeout(t *testing.T) {
 
 	// Wait for server to be ready
 	testURL := fmt.Sprintf("http://localhost:%d/timeout-test", ports.HTTPPort)
-	client := &http.Client{Timeout: 10 * time.Second} // Client timeout longer than server
+	client := GetHTTPClient(HTTPClientOptions{Timeout: 10 * time.Second}) // Client timeout longer than server
 
 	ready := false
 

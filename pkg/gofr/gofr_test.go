@@ -214,9 +214,9 @@ func TestGofr_ServerRun(t *testing.T) {
 
 	time.Sleep(100 * time.Millisecond)
 
-	var netClient = &http.Client{
+	var netClient = GetHTTPClient(HTTPClientOptions{
 		Timeout: 200 * time.Millisecond,
-	}
+	})
 
 	re, _ := http.NewRequestWithContext(t.Context(), http.MethodGet,
 		"http://localhost:"+fmt.Sprint(configs.HTTPPort)+"/hello", http.NoBody)
@@ -713,9 +713,9 @@ func Test_UseMiddleware(t *testing.T) {
 
 	time.Sleep(100 * time.Millisecond)
 
-	var netClient = &http.Client{
+	var netClient = GetHTTPClient(HTTPClientOptions{
 		Timeout: 200 * time.Millisecond,
-	}
+	})
 
 	req, _ := http.NewRequestWithContext(t.Context(), http.MethodGet,
 		fmt.Sprintf("http://localhost:%d", port)+"/test", http.NoBody)
@@ -819,9 +819,9 @@ func Test_APIKeyAuthMiddleware(t *testing.T) {
 
 	time.Sleep(100 * time.Millisecond)
 
-	var netClient = &http.Client{
+	var netClient = GetHTTPClient(HTTPClientOptions{
 		Timeout: 200 * time.Millisecond,
-	}
+	})
 
 	req, _ := http.NewRequestWithContext(t.Context(), http.MethodGet,
 		fmt.Sprintf("http://localhost:%d", port)+"/test", http.NoBody)
@@ -866,9 +866,9 @@ func Test_SwaggerEndpoints(t *testing.T) {
 
 	time.Sleep(100 * time.Millisecond)
 
-	var netClient = &http.Client{
+	var netClient = GetHTTPClient(HTTPClientOptions{
 		Timeout: 200 * time.Millisecond,
-	}
+	})
 
 	re, _ := http.NewRequestWithContext(t.Context(), http.MethodGet,
 		configs.HTTPHost+"/.well-known/swagger", http.NoBody)

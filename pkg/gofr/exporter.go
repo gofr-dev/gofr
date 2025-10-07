@@ -75,9 +75,7 @@ func (e *Exporter) processSpans(ctx context.Context, logger logging.Logger, span
 
 	req.Header.Set("Content-Type", "application/json")
 
-	client := &http.Client{}
-
-	resp, err := client.Do(req)
+	resp, err := GetHTTPClient().Do(req)
 	if err != nil {
 		logger.Errorf("failed to create spans, error: %v", err)
 		return err
