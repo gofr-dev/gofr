@@ -254,7 +254,6 @@ func (c *Client) Query(ctx context.Context, dbName, query string, bindVars map[s
 	queryOptions.BindVars = bindVars
 
 	cursor, err := db.Query(tracerCtx, query, &queryOptions)
-
 	if err != nil {
 		return err
 	}
@@ -340,6 +339,7 @@ func (c *Client) sendOperationStats(ql *QueryLog, startTime time.Time, method st
 
 	if span != nil {
 		defer span.End()
+
 		span.SetAttributes(attribute.Int64(fmt.Sprintf("arangodb.%v.duration", method), duration))
 	}
 }

@@ -108,6 +108,7 @@ func TestStore_ConcurrentGaugeSetGet(t *testing.T) {
 
 		go func(val float64) {
 			defer wg.Done()
+
 			g.mu.Lock()
 			g.observations[attribute.NewSet()] = val
 			g.mu.Unlock()

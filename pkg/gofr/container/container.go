@@ -116,6 +116,8 @@ func (c *Container) Create(conf config.Config) {
 
 	c.metricsManager = metrics.NewMetricsManager(exporters.Prometheus(c.GetAppName(), c.GetAppVersion()), c.Logger)
 
+	exporters.SendFrameworkStartupTelemetry(c.GetAppName(), c.GetAppVersion())
+
 	// Register framework metrics
 	c.registerFrameworkMetrics()
 
