@@ -79,7 +79,7 @@ func validateTokenURL(tokenURL string) error {
 		return AuthErr{nil, "invalid host pattern, contains `..`"}
 	case strings.HasSuffix(u.Host, "."):
 		return AuthErr{nil, "invalid host pattern, ends with `.`"}
-	case u.Scheme != "http" && u.Scheme != "https":
+	case u.Scheme != methodHTTP && u.Scheme != methodHTTPS:
 		return AuthErr{nil, "invalid scheme, allowed http and https only"}
 	default:
 		return nil
