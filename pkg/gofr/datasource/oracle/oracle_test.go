@@ -570,6 +570,7 @@ func Test_Oracle_Begin_Success(t *testing.T) {
 	// Create a mock DB with sqlmock
 	db, mock, err := sqlmock.New()
 	require.NoError(t, err)
+
 	defer db.Close()
 
 	// Create client with mocked connection
@@ -617,6 +618,7 @@ func Test_Oracle_Begin_NoConnection(t *testing.T) {
 func Test_OracleTx_ExecContext(t *testing.T) {
 	db, mock, err := sqlmock.New()
 	require.NoError(t, err)
+
 	defer db.Close()
 
 	// Begin a transaction
@@ -648,6 +650,7 @@ func Test_OracleTx_ExecContext(t *testing.T) {
 func Test_OracleTx_SelectContext(t *testing.T) {
 	db, mock, err := sqlmock.New()
 	require.NoError(t, err)
+
 	defer db.Close()
 
 	// Begin a transaction
@@ -674,6 +677,7 @@ func Test_OracleTx_SelectContext(t *testing.T) {
 
 	// Execute the query
 	var result []map[string]any
+
 	err = tx.SelectContext(context.Background(), &result, "SELECT id, name FROM users")
 	require.NoError(t, err)
 
@@ -689,6 +693,7 @@ func Test_OracleTx_SelectContext(t *testing.T) {
 func Test_OracleTx_Commit(t *testing.T) {
 	db, mock, err := sqlmock.New()
 	require.NoError(t, err)
+
 	defer db.Close()
 
 	mock.ExpectBegin()
@@ -713,6 +718,7 @@ func Test_OracleTx_Commit(t *testing.T) {
 func Test_OracleTx_Rollback(t *testing.T) {
 	db, mock, err := sqlmock.New()
 	require.NoError(t, err)
+
 	defer db.Close()
 
 	mock.ExpectBegin()
