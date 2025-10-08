@@ -197,6 +197,26 @@ func (a *App) AddHTTPService(serviceName, serviceAddress string, options ...serv
 	a.container.Services[serviceName] = service.NewHTTPService(serviceAddress, a.container.Logger, a.container.Metrics(), options...)
 }
 
+// AddHTTPServiceWithValidation adds an HTTP service with validation
+func (a *App) AddHTTPServiceWithValidation(serviceName, address string, options ...interface{}) error {
+	if a.container.Services == nil {
+		a.container.Services = make(map[string]service.HTTP)
+	}
+
+	if _, ok := a.container.Services[serviceName]; ok {
+		a.container.Debugf("Service already registered Name: %v", serviceName)
+	}
+
+	svc, err := service.NewHTTPServiceWithValidation(address, a.container.Logger, a.container.Metrics(), options...)
+	if err != nil {
+		return err
+	}
+
+	a.container.Services[serviceName] = svc
+
+	return nil
+}
+
 // Metrics returns the metrics manager associated with the App.
 func (a *App) Metrics() metrics.Manager {
 	return a.container.Metrics()

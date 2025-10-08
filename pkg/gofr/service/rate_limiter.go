@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"net/http"
+	"reflect"
 	"strings"
 )
 
@@ -15,13 +16,28 @@ type rateLimiter struct {
 
 // NewRateLimiter creates a new unified rate limiter.
 func NewRateLimiter(config RateLimiterConfig, h HTTP) HTTP {
+	_ = config.Validate() // Apply defaults even if validation fails
+
+	return createRateLimiter(config, h)
+}
+
+// NewRateLimiterWithValidation creates a rate limiter with validation
+func NewRateLimiterWithValidation(config RateLimiterConfig, h HTTP) (HTTP, error) {
+	if err := config.Validate(); err != nil {
+		return nil, err
+	}
+
+	// Create with validated config
+	return createRateLimiter(config, h), nil
+}
+
+func createRateLimiter(config RateLimiterConfig, h HTTP) HTTP {
 	rl := &rateLimiter{
 		config: config,
 		store:  config.Store,
 		HTTP:   h,
 	}
 
-	// Start cleanup routine
 	ctx := context.Background()
 	rl.store.StartCleanup(ctx)
 
@@ -37,6 +53,17 @@ func (cfg *RateLimiterConfig) AddOption(h HTTP) HTTP {
 
 	return NewRateLimiter(*cfg, h)
 }
+
+// AddOptionWithValidation implements the AddOptionWithValidation interface
+func (r *RateLimiterConfig) AddOptionWithValidation(h HTTP) (HTTP, error) {
+	if r == nil {
+		return h, nil
+	}
+
+	return NewRateLimiterWithValidation(*r, h)
+}
+
+// Keep the existing AddOption method for backward compatibility
 
 // buildFullURL constructs an absolute URL by combining the base service URL with the given path.
 func (rl *rateLimiter) buildFullURL(path string) string {
@@ -65,6 +92,11 @@ func (rl *rateLimiter) buildFullURL(path string) string {
 
 // checkRateLimit performs rate limit check using the configured store.
 func (rl *rateLimiter) checkRateLimit(req *http.Request) error {
+	if isCircuitOpen(rl.HTTP) {
+		// Skip rate limiting if circuit is open
+		return nil
+	}
+
 	serviceKey := rl.config.KeyFunc(req)
 
 	allowed, retryAfter, err := rl.store.Allow(req.Context(), serviceKey, rl.config)
@@ -77,6 +109,34 @@ func (rl *rateLimiter) checkRateLimit(req *http.Request) error {
 	}
 
 	return nil
+}
+
+// isCircuitOpen checks if there's a circuit breaker in the chain and if it's open
+func isCircuitOpen(h HTTP) bool {
+	// Direct check
+	if cb, ok := h.(*circuitBreaker); ok {
+		return cb.isOpen()
+	}
+
+	// Use reflection to check for embedded HTTP field
+	v := reflect.ValueOf(h)
+	if v.Kind() == reflect.Ptr && !v.IsNil() {
+		v = v.Elem()
+		if v.Kind() == reflect.Struct {
+			// Look for HTTP field that might contain a circuit breaker
+			for i := 0; i < v.NumField(); i++ {
+				field := v.Field(i)
+				if field.Type().String() == "service.HTTP" && !field.IsNil() {
+					// Recursively check if the HTTP field has a circuit breaker
+					if httpField, ok := field.Interface().(HTTP); ok {
+						return isCircuitOpen(httpField)
+					}
+				}
+			}
+		}
+	}
+
+	return false
 }
 
 // Get performs rate-limited HTTP GET request.
