@@ -70,7 +70,7 @@ func (cb *circuitBreaker) executeWithCircuitBreaker(
 			cb.mu.Unlock()
 			return nil, nil
 		}
-		// Still open and not recoverable.
+		
 		cb.mu.Unlock()
 		return nil, ErrCircuitOpen
 	}
