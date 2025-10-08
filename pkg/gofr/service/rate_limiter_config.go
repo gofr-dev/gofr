@@ -95,6 +95,10 @@ func (config *RateLimiterConfig) Validate() error {
 		config.KeyFunc = defaultKeyFunc
 	}
 
+	if config.Store == nil {
+		config.Store = NewLocalRateLimiterStore()
+	}
+
 	return nil
 }
 

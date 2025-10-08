@@ -40,7 +40,12 @@ type bucketEntry struct {
 // newTokenBucket creates a new token bucket with integer-only math.
 func newTokenBucket(config *RateLimiterConfig) *tokenBucket {
 	maxTokens := int64(config.Burst)
-	refillRate := int64(config.RequestsPerSecond())
+	rps := config.RequestsPerSecond()
+
+	refillRate := int64(rps)
+	if refillRate <= 0 {
+		refillRate = 1
+	}
 
 	return &tokenBucket{
 		tokens:         maxTokens,
@@ -53,6 +58,10 @@ func newTokenBucket(config *RateLimiterConfig) *tokenBucket {
 // allow checks if a token can be consumed.
 func (tb *tokenBucket) allow() (allowed bool, waitTime time.Duration) {
 	now := time.Now().UnixNano()
+
+	if tb.refillRate <= 0 {
+		tb.refillRate = 1
+	}
 
 	// Calculate tokens to add based on elapsed time
 	elapsed := now - atomic.LoadInt64(&tb.lastRefillTime)

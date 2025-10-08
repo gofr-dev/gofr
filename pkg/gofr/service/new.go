@@ -87,6 +87,38 @@ func NewHTTPService(serviceAddress string, logger Logger, metrics Metrics, optio
 	return svc
 }
 
+// NewHTTPServiceWithValidation provides error handling for options
+func NewHTTPServiceWithValidation(serviceAddress string, logger Logger, metrics Metrics, options ...interface{}) (HTTP, error) {
+	h := &httpService{
+		Client:  &http.Client{},
+		url:     serviceAddress,
+		Tracer:  otel.Tracer("gofr-http-client"),
+		Logger:  logger,
+		Metrics: metrics,
+	}
+
+	var svc HTTP = h
+
+	// Process options with validation support
+	for _, o := range options {
+		// Try validation interface first
+		if validator, ok := o.(AddOptionWithValidation); ok {
+			var err error
+			svc, err = validator.AddOptionWithValidation(svc)
+			if err != nil {
+				return nil, err
+			}
+		} else if option, ok := o.(Options); ok {
+			// Fall back to standard interface
+			svc = option.AddOption(svc)
+		} else {
+			return nil, fmt.Errorf("option %T doesn't implement either Options or AddOptionWithValidation", o)
+		}
+	}
+
+	return svc, nil
+}
+
 func (h *httpService) Get(ctx context.Context, path string, queryParams map[string]any) (*http.Response, error) {
 	return h.GetWithHeaders(ctx, path, queryParams, nil)
 }
