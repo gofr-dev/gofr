@@ -10,6 +10,7 @@ on:
     branches:
       - main
       - development
+      - fix/http_example_test
     paths-ignore:
       - 'docs/**'  # Ignore changes to docs folder
       - '**/*.md'
