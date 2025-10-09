@@ -120,7 +120,6 @@ func (g *googleClient) Publish(ctx context.Context, topic string, message []byte
 	t, err := g.getTopic(ctx, topic)
 	if err != nil {
 		g.logger.Errorf("could not create topic '%s', error: %v", topic, err)
-		g.metrics.IncrementCounter(ctx, "app_pubsub_publish_failure_count", "topic", topic)
 
 		return err
 	}
@@ -135,7 +134,6 @@ func (g *googleClient) Publish(ctx context.Context, topic string, message []byte
 	_, err = result.Get(ctx)
 	if err != nil {
 		g.logger.Errorf("error publishing to google topic '%s', error: %v", topic, err)
-		g.metrics.IncrementCounter(ctx, "app_pubsub_publish_failure_count", "topic", topic)
 
 		return err
 	}
@@ -162,30 +160,25 @@ func (g *googleClient) Subscribe(ctx context.Context, topic string) (*pubsub.Mes
 		return nil, nil
 	}
 
+	if !g.isConnected() {
+		time.Sleep(defaultRetryInterval)
+
+		return nil, errClientNotConnected
+	}
+
 	spanCtx, span := otel.GetTracerProvider().Tracer("gofr").Start(ctx, "gcp-subscribe")
 	defer span.End()
 
 	g.metrics.IncrementCounter(spanCtx, "app_pubsub_subscribe_total_count", "topic", topic, "subscription_name", g.Config.SubscriptionName)
 
-	if !g.isConnected() {
-		time.Sleep(defaultRetryInterval)
-		g.metrics.IncrementCounter(spanCtx, "app_pubsub_subscribe_failure_count", "topic", topic, "subscription_name", g.Config.SubscriptionName)
-
-		return nil, errClientNotConnected
-	}
-
 	if _, ok := g.subStarted[topic]; !ok {
 		t, err := g.getTopic(spanCtx, topic)
 		if err != nil {
-			g.metrics.IncrementCounter(spanCtx, "app_pubsub_subscribe_failure_count", "topic", topic, "subscription_name", g.Config.SubscriptionName)
-
 			return nil, err
 		}
 
 		subscription, err := g.getSubscription(spanCtx, t)
 		if err != nil {
-			g.metrics.IncrementCounter(spanCtx, "app_pubsub_subscribe_failure_count", "topic", topic, "subscription_name", g.Config.SubscriptionName)
-
 			return nil, err
 		}
 
@@ -243,16 +236,11 @@ func (g *googleClient) Subscribe(ctx context.Context, topic string) (*pubsub.Mes
 }
 
 func (g *googleClient) Query(ctx context.Context, query string, args ...any) ([]byte, error) {
-	// Add total counter for Query operations
-	g.metrics.IncrementCounter(ctx, "app_pubsub_query_total_count", "topic", query)
-
 	if !g.isConnected() {
-		g.metrics.IncrementCounter(ctx, "app_pubsub_query_failure_count", "topic", query)
 		return nil, errClientNotConnected
 	}
 
 	if query == "" {
-		g.metrics.IncrementCounter(ctx, "app_pubsub_query_failure_count", "topic", query)
 		return nil, errTopicName
 	}
 
@@ -261,13 +249,11 @@ func (g *googleClient) Query(ctx context.Context, query string, args ...any) ([]
 	// Get topic and subscription
 	topic, err := g.getTopic(ctx, query)
 	if err != nil {
-		g.metrics.IncrementCounter(ctx, "app_pubsub_query_failure_count", "topic", query)
 		return nil, fmt.Errorf("failed to get topic: %w", err)
 	}
 
 	subscription, err := g.getQuerySubscription(ctx, topic)
 	if err != nil {
-		g.metrics.IncrementCounter(ctx, "app_pubsub_query_failure_count", "topic", query)
 		return nil, fmt.Errorf("failed to get subscription: %w", err)
 	}
 
@@ -302,12 +288,7 @@ func (g *googleClient) Query(ctx context.Context, query string, args ...any) ([]
 	}()
 
 	// Collect messages
-	result := g.collectMessages(queryCtx, msgChan, limit)
-
-	// Add success counter for Query operations
-	g.metrics.IncrementCounter(ctx, "app_pubsub_query_success_count", "topic", query)
-
-	return result, nil
+	return g.collectMessages(queryCtx, msgChan, limit), nil
 }
 
 func (g *googleClient) getTopic(ctx context.Context, topic string) (*gcPubSub.Topic, error) {
