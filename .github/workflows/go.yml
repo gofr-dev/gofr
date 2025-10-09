@@ -341,12 +341,12 @@ jobs:
           go tool cover -func=merged_profile.cov | tail -n 1
         shell: bash
 
-#      # Upload merged coverage to CodeClimate for analysis
-#      - name: Upload
-#        working-directory: artifacts
-#        run: qlty coverage publish merged_profile.cov --format=coverprofile --strip-prefix="gofr.dev/" --add-prefix="${GITHUB_WORKSPACE}/"
-#        env:
-#          QLTY_TOKEN: ${{ secrets.QLTY_TOKEN }}
+      # Upload merged coverage to CodeClimate for analysis
+      - name: Upload
+        working-directory: artifacts
+        run: qlty coverage publish merged_profile.cov --format=coverprofile --strip-prefix="gofr.dev/" --add-prefix="${GITHUB_WORKSPACE}/"
+        env:
+          QLTY_TOKEN: ${{ secrets.QLTY_TOKEN }}
 
   # Job for code quality checks
   code_quality:
