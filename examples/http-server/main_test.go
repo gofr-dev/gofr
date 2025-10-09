@@ -5,20 +5,24 @@ import (
 	"encoding/json"
 	"io"
 	"net/http"
+	"net/http/httptest"
 	"os"
 	"strconv"
+	"strings"
 	"testing"
 	"time"
 
 	"github.com/go-redis/redismock/v9"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"go.uber.org/mock/gomock"
 
 	"gofr.dev/pkg/gofr"
 	"gofr.dev/pkg/gofr/config"
 	"gofr.dev/pkg/gofr/container"
 	"gofr.dev/pkg/gofr/datasource/redis"
 	"gofr.dev/pkg/gofr/logging"
+	"gofr.dev/pkg/gofr/service"
 	"gofr.dev/pkg/gofr/testutil"
 )
 
@@ -140,7 +144,7 @@ func TestIntegration_SimpleAPIServer_Health(t *testing.T) {
 		statusCode int
 	}{
 		{"health handler", "/.well-known/health", http.StatusOK}, // Health check should be added by the framework.
-		{"favicon handler", "/favicon.ico", http.StatusOK},       //Favicon should be added by the framework.
+		{"favicon handler", "/favicon.ico", http.StatusOK},       // Favicon should be added by the framework.
 	}
 
 	for i, tc := range tests {
@@ -179,4 +183,135 @@ func TestRedisHandler(t *testing.T) {
 
 	assert.Nil(t, resp)
 	require.Error(t, err)
+}
+
+// MockRequest implements the Request interface for testing
+type MockRequest struct {
+	*http.Request
+	params map[string]string
+}
+
+func (m *MockRequest) HostName() string {
+	// TODO implement me
+	panic("implement me")
+}
+
+func (m *MockRequest) Params(s string) []string {
+	// TODO implement me
+	panic("implement me")
+}
+
+func NewMockRequest(req *http.Request) *MockRequest {
+	// Parse query parameters
+	queryParams := make(map[string]string)
+	for k, v := range req.URL.Query() {
+		if len(v) > 0 {
+			queryParams[k] = v[0]
+		}
+	}
+
+	return &MockRequest{
+		Request: req,
+		params:  queryParams,
+	}
+}
+
+// Param returns URL query parameters
+func (m *MockRequest) Param(key string) string {
+	return m.params[key]
+}
+
+// PathParam returns URL path parameters
+func (m *MockRequest) PathParam(key string) string {
+	return ""
+}
+
+// Bind implements the Bind method required by the Request interface
+func (m *MockRequest) Bind(i any) error {
+	return nil
+}
+
+// createTestContext sets up a GoFr context for unit tests with a given URL and optional mock container.
+func createTestContext(method, url string, mockContainer *container.Container) *gofr.Context {
+	req := httptest.NewRequest(method, url, nil)
+	mockReq := NewMockRequest(req)
+
+	var c *container.Container
+	if mockContainer != nil {
+		c = mockContainer
+	} else {
+		c = &container.Container{Logger: logging.NewLogger(logging.DEBUG)}
+	}
+
+	logger := c.Logger
+
+	return &gofr.Context{
+		Context:       req.Context(),
+		Request:       mockReq,
+		Container:     c,
+		ContextLogger: *logging.NewContextLogger(req.Context(), logger),
+	}
+}
+
+func TestHelloHandler(t *testing.T) {
+	// With name parameter
+	ctx := createTestContext(http.MethodGet, "/hello?name=test", nil)
+	resp, err := HelloHandler(ctx)
+	assert.NoError(t, err)
+	assert.Equal(t, "Hello test!", resp)
+
+	// Without name parameter
+	ctx = createTestContext(http.MethodGet, "/hello", nil)
+	resp, err = HelloHandler(ctx)
+	assert.NoError(t, err)
+	assert.Equal(t, "Hello World!", resp)
+}
+
+func TestErrorHandler(t *testing.T) {
+	ctx := createTestContext(http.MethodGet, "/error", nil)
+
+	resp, err := ErrorHandler(ctx)
+	assert.Nil(t, resp)
+	assert.Error(t, err)
+	assert.Equal(t, "some error occurred", err.Error())
+}
+
+func TestMysqlHandler(t *testing.T) {
+	mockContainer, mocks := container.NewMockContainer(t)
+
+	// Setup SQL mock to return 4
+	mocks.SQL.ExpectQuery("select 2+2").
+		WillReturnRows(mocks.SQL.NewRows([]string{"value"}).AddRow(4))
+
+	ctx := createTestContext(http.MethodGet, "/mysql", mockContainer)
+
+	resp, err := MysqlHandler(ctx)
+	assert.NoError(t, err)
+	assert.Equal(t, 4, resp)
+}
+
+func TestTraceHandler(t *testing.T) {
+	mockContainer, mocks := container.NewMockContainer(t, container.WithMockHTTPService())
+
+	// Redis expectations
+	mocks.Redis.EXPECT().Ping(gomock.Any()).Return(nil).Times(5)
+
+	// HTTP service mock
+	httpService := mocks.HTTPService
+	mockResp := &http.Response{
+		StatusCode: http.StatusOK,
+		Body:       io.NopCloser(strings.NewReader(`{"data":"mock data"}`)),
+	}
+	httpService.EXPECT().Get(gomock.Any(), "redis", gomock.Any()).Return(mockResp, nil)
+
+	// Attach service to container
+	mockContainer.Services = map[string]service.HTTP{
+		"anotherService": httpService,
+	}
+
+	ctx := createTestContext(http.MethodGet, "/trace", mockContainer)
+
+	resp, err := TraceHandler(ctx)
+	assert.NoError(t, err)
+	assert.Equal(t, "mock data", resp)
 }
