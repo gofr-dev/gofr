@@ -786,6 +786,14 @@ type CouchbaseProvider interface {
 	provider
 }
 
+// DBResolverProvider defines an interface for SQL read/write splitting providers.
+type DBResolverProvider interface {
+	// Build creates a resolver with the given primary and replicas.
+	Build(primary DB, replicas []DB) (DB, error)
+
+	provider
+}
+
 // InfluxDB defines the operations required to interact with an InfluxDB instance.
 type InfluxDB interface {
 	// CreateOrganization create new bucket in the influxdb
