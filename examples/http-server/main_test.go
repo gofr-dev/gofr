@@ -192,13 +192,19 @@ type MockRequest struct {
 }
 
 func (m *MockRequest) HostName() string {
-	// TODO implement me
-	panic("implement me")
+	if m.Request != nil {
+		return m.Request.Host
+	}
+
+	return ""
 }
 
 func (m *MockRequest) Params(s string) []string {
-	// TODO implement me
-	panic("implement me")
+	if m.Request != nil {
+		return m.Request.URL.Query()[s]
+	}
+
+	return nil
 }
 
 func NewMockRequest(req *http.Request) *MockRequest {
