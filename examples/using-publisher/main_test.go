@@ -27,6 +27,8 @@ func TestMain(m *testing.M) {
 }
 
 func TestExamplePublisherError(t *testing.T) {
+	t.Setenv("PUBSUB_BROKER", "localhost:1092")
+
 	configs := testutil.NewServerConfigs(t)
 	host := fmt.Sprint("http://localhost:", configs.HTTPPort)
 
