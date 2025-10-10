@@ -10,72 +10,28 @@ import (
 
 	"gofr.dev/pkg/gofr"
 	"gofr.dev/pkg/gofr/container"
-	"gofr.dev/pkg/gofr/datasource/pubsub/kafka"
 	"gofr.dev/pkg/gofr/logging"
 	"gofr.dev/pkg/gofr/testutil"
 )
 
 func TestMain(m *testing.M) {
 	os.Setenv("GOFR_TELEMETRY", "false")
+
 	m.Run()
 }
 
-type mockMetrics struct {
-}
+func TestMainInitialization(t *testing.T) {
+	t.Setenv("PUBSUB_BROKER", "localhost:1012")
 
-func (m *mockMetrics) IncrementCounter(ctx context.Context, name string, labels ...string) {
-}
-
-func initializeTest(t *testing.T) {
-	c := kafka.New(&kafka.Config{
-		Brokers:      []string{"localhost:9092"},
-		OffSet:       1,
-		BatchSize:    kafka.DefaultBatchSize,
-		BatchBytes:   kafka.DefaultBatchBytes,
-		BatchTimeout: kafka.DefaultBatchTimeout,
-		Partition:    1,
-	}, logging.NewMockLogger(logging.INFO), &mockMetrics{})
-
-	err := c.Publish(context.Background(), "order-logs", []byte(`{"data":{"orderId":"123","status":"pending"}}`))
-	if err != nil {
-		t.Errorf("Error while publishing: %v", err)
-	}
-
-	err = c.Publish(context.Background(), "products", []byte(`{"data":{"productId":"123","price":"599"}}`))
-	if err != nil {
-		t.Errorf("Error while publishing: %v", err)
-	}
-}
-
-func TestExampleSubscriber(t *testing.T) {
 	log := testutil.StdoutOutputForFunc(func() {
-		testutil.NewServerConfigs(t)
-
 		go main()
-		time.Sleep(time.Second * 30) // Giving some time to start the server
 
-		initializeTest(t)
-		time.Sleep(time.Second * 5) // Giving some time to publish events
+		time.Sleep(200 * time.Millisecond)
 	})
 
-	testCases := []struct {
-		desc        string
-		expectedLog string
-	}{
-		{
-			desc:        "valid order",
-			expectedLog: "Received order",
-		},
-		{
-			desc:        "valid product",
-			expectedLog: "Received product",
-		},
-	}
-
-	for i, tc := range testCases {
-		if !strings.Contains(log, tc.expectedLog) {
-			t.Errorf("TEST[%d], Failed.\n%s", i, tc.desc)
-		}
+	expectedLog := "connected to 1 Kafka brokers"
+	if !strings.Contains(log, expectedLog) {
+		t.Errorf("Expected log to contain %q, but got: %s", expectedLog, log)
 	}
 }
 

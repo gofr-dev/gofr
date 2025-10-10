@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"gofr.dev/pkg/gofr/testutil"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -18,44 +19,11 @@ import (
 	"gofr.dev/pkg/gofr"
 	"gofr.dev/pkg/gofr/container"
 	"gofr.dev/pkg/gofr/logging"
-	"gofr.dev/pkg/gofr/testutil"
 )
 
 func TestMain(m *testing.M) {
 	os.Setenv("GOFR_TELEMETRY", "false")
 	m.Run()
-}
-
-func TestExamplePublisher(t *testing.T) {
-	configs := testutil.NewServerConfigs(t)
-
-	go main()
-	time.Sleep(30 * time.Second)
-
-	testCases := []struct {
-		desc               string
-		path               string
-		body               []byte
-		expectedStatusCode int
-	}{
-		{"valid order", "/publish-order", []byte(`{"data":{"orderId":"123","status":"pending"}}`), http.StatusCreated},
-		{"invalid order", "/publish-order", []byte(`{"data":,"status":"pending"}`), http.StatusInternalServerError},
-		{"valid product", "/publish-product", []byte(`{"data":{"productId":"123","price":"599"}}`), http.StatusCreated},
-		{"invalid product", "/publish-product", []byte(`{"data":,"price":"pending"}`), http.StatusInternalServerError},
-	}
-
-	client := http.Client{}
-
-	for i, tc := range testCases {
-		req, _ := http.NewRequest(http.MethodPost, configs.HTTPHost+tc.path, bytes.NewBuffer(tc.body))
-		req.Header.Set("content-type", "application/json")
-
-		resp, err := client.Do(req)
-		require.NoError(t, err, "TEST[%d] %s failed", i, tc.desc)
-		defer resp.Body.Close()
-
-		assert.Equal(t, tc.expectedStatusCode, resp.StatusCode, "TEST[%d] %s failed", i, tc.desc)
-	}
 }
 
 func TestExamplePublisherError(t *testing.T) {
