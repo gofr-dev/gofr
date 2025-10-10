@@ -21,8 +21,6 @@ func TestMain(m *testing.M) {
 }
 
 func TestMainInitialization(t *testing.T) {
-	t.Setenv("PUBSUB_BROKER", "localhost:1012")
-
 	log := testutil.StdoutOutputForFunc(func() {
 		go main()
 
