@@ -35,9 +35,21 @@ type Config struct {
 	ProjectID       string
 }
 
-// New initializes a new instance of FTP fileSystem with provided configuration.
+func defaultBuckets() []float64 {
+	return []float64{0.1, 1, 10, 100, 1000}
+}
 func New(config *Config) file.FileSystemProvider {
-	return &FileSystem{config: config}
+	fs := &FileSystem{
+		config: config,
+	}
+
+	fs.metrics.NewHistogram(
+		appFTPStats,
+		"App FTP Stats - duration of file operations",
+		defaultBuckets()...,
+	)
+
+	return fs
 }
 
 func (f *FileSystem) Connect() {

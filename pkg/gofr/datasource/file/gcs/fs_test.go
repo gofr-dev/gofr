@@ -32,6 +32,11 @@ func TestFileSystem_Connect(t *testing.T) {
 	mockLogger.EXPECT().Debug(gomock.Any()).AnyTimes()
 	mockLogger.EXPECT().Logf(gomock.Any(), gomock.Any()).AnyTimes()
 	mockLogger.EXPECT().Errorf(gomock.Any(), gomock.Any()).AnyTimes()
+	mockMetrics.EXPECT().NewHistogram(
+		appFTPStats,
+		gomock.Any(),
+		gomock.Any(),
+	).AnyTimes()
 
 	mockMetrics.EXPECT().RecordHistogram(
 		gomock.Any(), appFTPStats, gomock.Any(),

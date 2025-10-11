@@ -60,7 +60,11 @@ func (f *File) createJSONReader(location string) (file.RowReader, error) {
 
 	buffer, err := io.ReadAll(f.body)
 	if err != nil {
-		f.logger.Errorf("ReadAll Failed: Unable to read json file: %v", err)
+		if err != nil {
+			f.logger.Errorf("failed to read JSON body from location %s: %v", location, err)
+			return nil, err
+		}
+
 		return nil, err
 	}
 
@@ -94,7 +98,7 @@ func (f *File) createTextCSVReader(location string) (file.RowReader, error) {
 
 	buffer, err := io.ReadAll(f.body)
 	if err != nil {
-		f.logger.Errorf("ReadAll failed: Unable to read text file: %v", err)
+		f.logger.Errorf("failed to read text/csv body from location %s: %v", location, err)
 		return nil, err
 	}
 

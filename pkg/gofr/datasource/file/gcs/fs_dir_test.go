@@ -44,20 +44,27 @@ type result struct {
 	IsDir bool
 }
 
-func Test_Mkdir_GCS(t *testing.T) {
-	type testCase struct {
-		name        string
-		dirName     string
-		setupMocks  func(mockGCS *MockgcsClient)
-		expectError bool
-	}
-
+func TestFileSystem_Mkdir_GCS_Success(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
 	mockGCS := NewMockgcsClient(ctrl)
 	mockLogger := NewMockLogger(ctrl)
 	mockMetrics := NewMockMetrics(ctrl)
+
+	mockLogger.EXPECT().Debugf(gomock.Any(), gomock.Any()).AnyTimes()
+	mockLogger.EXPECT().Debug(gomock.Any()).AnyTimes()
+	mockLogger.EXPECT().Logf(gomock.Any(), gomock.Any()).AnyTimes()
+	mockLogger.EXPECT().Errorf(gomock.Any(), gomock.Any()).AnyTimes()
+	mockMetrics.EXPECT().RecordHistogram(
+		gomock.Any(), appFTPStats, gomock.Any(),
+		"type", gomock.Any(),
+		"status", gomock.Any(),
+	).AnyTimes()
+
+	buf := &bytes.Buffer{}
+	fakeWriter := &fakeWriteCloser{Buffer: buf}
+	mockGCS.EXPECT().NewWriter(gomock.Any(), "testDir/").Return(fakeWriter)
 
 	config := &Config{
 		BucketName:      "test-bucket",
@@ -72,56 +79,83 @@ func Test_Mkdir_GCS(t *testing.T) {
 		metrics: mockMetrics,
 	}
 
-	mockLogger.EXPECT().Logf(gomock.Any(), gomock.Any()).AnyTimes()
-	mockLogger.EXPECT().Debugf(gomock.Any()).AnyTimes()
-	mockLogger.EXPECT().Debug(gomock.Any()).AnyTimes()
+	err := fs.Mkdir("testDir", 0777)
+
+	require.NoError(t, err)
+}
+
+func TestFileSystem_Mkdir_GCS_Error_EmptyName(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	mockLogger := NewMockLogger(ctrl)
+	mockMetrics := NewMockMetrics(ctrl)
+
+	mockLogger.EXPECT().Debugf(gomock.Any(), gomock.Any()).AnyTimes()
 	mockLogger.EXPECT().Errorf(gomock.Any(), gomock.Any()).AnyTimes()
-	mockMetrics.EXPECT().RecordHistogram(gomock.Any(), appFTPStats, gomock.Any(),
-		"type", gomock.Any(), "status", gomock.Any()).AnyTimes()
+	mockLogger.EXPECT().Debug(gomock.Any()).AnyTimes()
+	mockMetrics.EXPECT().RecordHistogram(
+		gomock.Any(), appFTPStats, gomock.Any(),
+		"type", gomock.Any(),
+		"status", gomock.Any(),
+	).AnyTimes()
 
-	tests := []testCase{
-		{
-			name:    "successfully create directory",
-			dirName: "testDir",
-			setupMocks: func(m *MockgcsClient) {
-				buf := &bytes.Buffer{}
-				fakeWriter := &fakeWriteCloser{Buffer: buf}
-				m.EXPECT().NewWriter(gomock.Any(), "testDir/").Return(fakeWriter)
-			},
-			expectError: false,
-		},
-		{
-			name:    "fail when directory name is empty",
-			dirName: "",
-			setupMocks: func(_ *MockgcsClient) {
-				// No mock needed for empty dir
-			},
-			expectError: true,
-		},
-		{
-			name:    "fail when GCS write fails",
-			dirName: "brokenDir",
-			setupMocks: func(m *MockgcsClient) {
-				errorWriter := &errorWriterCloser{}
-				m.EXPECT().NewWriter(gomock.Any(), "brokenDir/").Return(errorWriter)
-			},
-			expectError: true,
-		},
+	config := &Config{
+		BucketName:      "test-bucket",
+		CredentialsJSON: "fake-creds",
+		ProjectID:       "test-project",
 	}
 
-	for i, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			tt.setupMocks(mockGCS)
-
-			err := fs.Mkdir(tt.dirName, 0777)
-
-			if tt.expectError {
-				require.Error(t, err, "Test %d (%s): expected an error", i, tt.name)
-			} else {
-				require.NoError(t, err, "Test %d (%s): expected no error", i, tt.name)
-			}
-		})
+	fs := &FileSystem{
+		conn:    nil,
+		config:  config,
+		logger:  mockLogger,
+		metrics: mockMetrics,
 	}
+
+	err := fs.Mkdir("", 0777)
+
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "directory name cannot be empty")
+}
+
+func TestFileSystem_Mkdir_GCS_Error_WriteFailure(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	mockGCS := NewMockgcsClient(ctrl)
+	mockLogger := NewMockLogger(ctrl)
+	mockMetrics := NewMockMetrics(ctrl)
+
+	mockLogger.EXPECT().Debugf(gomock.Any(), gomock.Any()).AnyTimes()
+	mockLogger.EXPECT().Errorf(gomock.Any(), gomock.Any()).AnyTimes()
+	mockLogger.EXPECT().Debug(gomock.Any()).AnyTimes()
+	mockMetrics.EXPECT().RecordHistogram(
+		gomock.Any(), appFTPStats, gomock.Any(),
+		"type", gomock.Any(),
+		"status", gomock.Any(),
+	).AnyTimes()
+
+	errorWriter := &errorWriterCloser{}
+	mockGCS.EXPECT().NewWriter(gomock.Any(), "brokenDir/").Return(errorWriter)
+
+	config := &Config{
+		BucketName:      "test-bucket",
+		CredentialsJSON: "fake-creds",
+		ProjectID:       "test-project",
+	}
+
+	fs := &FileSystem{
+		conn:    mockGCS,
+		config:  config,
+		logger:  mockLogger,
+		metrics: mockMetrics,
+	}
+
+	err := fs.Mkdir("brokenDir", 0777)
+
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "write error")
 }
 func TestFileSystem_MkdirAll(t *testing.T) {
 	ctrl := gomock.NewController(t)

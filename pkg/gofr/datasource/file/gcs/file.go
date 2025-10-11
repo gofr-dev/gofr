@@ -40,6 +40,7 @@ const (
 
 func (f *File) Read(p []byte) (int, error) {
 	if f.body == nil {
+		f.logger.Debug("GCS file body is nil")
 		return 0, errNilGCSFileBody
 	}
 
