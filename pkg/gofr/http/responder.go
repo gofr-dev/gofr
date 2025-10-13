@@ -74,7 +74,9 @@ func (r Responder) Respond(data any, err error) {
 		resp = response{Data: data, Error: errorObj}
 	}
 
-	r.w.Header().Set("Content-Type", "application/json")
+	if r.w.Header().Get("Content-Type") == "" {
+		r.w.Header().Set("Content-Type", "application/json")
+	}
 
 	r.w.WriteHeader(statusCode)
 
