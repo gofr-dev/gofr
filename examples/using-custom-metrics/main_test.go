@@ -54,9 +54,9 @@ func TestIntegration(t *testing.T) {
 
 	assert.Equal(t, http.StatusOK, resp.StatusCode, "TEST[%d], Failed.\n%s")
 
-	assert.Contains(t, strBody, `product_stock{otel_scope_name="using-metrics",otel_scope_version="v0.1.0"} 50`)
-	assert.Contains(t, strBody, `total_credit_day_sale{otel_scope_name="using-metrics",otel_scope_version="v0.1.0",sale_type="credit"} 1000`)
-	assert.Contains(t, strBody, `total_credit_day_sale{otel_scope_name="using-metrics",otel_scope_version="v0.1.0",sale_type="credit_return"} -1000`)
-	assert.Contains(t, strBody, `transaction_success_total{otel_scope_name="using-metrics",otel_scope_version="v0.1.0"} 1`)
+	assert.Contains(t, strBody, `product_stock{otel_scope_name="using-metrics",otel_scope_schema_url="",otel_scope_version="v0.1.0"} 50`)
+	assert.Contains(t, strBody, `total_credit_day_sale{otel_scope_name="using-metrics",otel_scope_schema_url="",otel_scope_version="v0.1.0",sale_type="credit"} 1000`)
+	assert.Contains(t, strBody, `total_credit_day_sale{otel_scope_name="using-metrics",otel_scope_schema_url="",otel_scope_version="v0.1.0",sale_type="credit_return"} -1000`)
+	assert.Contains(t, strBody, `transaction_success{otel_scope_name="using-metrics",otel_scope_schema_url="",otel_scope_version="v0.1.0"} 1`)
 	assert.Contains(t, strBody, "transaction_time")
 }
