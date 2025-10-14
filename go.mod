@@ -40,7 +40,7 @@ require (
 	golang.org/x/oauth2 v0.32.0
 	golang.org/x/sync v0.17.0
 	golang.org/x/term v0.36.0
-	golang.org/x/text v0.29.0
+	golang.org/x/text v0.30.0
 	google.golang.org/api v0.251.0
 	google.golang.org/grpc v1.76.0
 	google.golang.org/protobuf v1.36.10
