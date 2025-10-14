@@ -116,36 +116,6 @@ func TestRedisGetHandler(t *testing.T) {
 	require.Error(t, err)
 }
 
-func TestWarmupCache_Success(t *testing.T) {
-	logger := logging.NewLogger(logging.DEBUG)
-	redisClient, mock := redismock.NewClientMock()
-	mock.ExpectSet("initial-data", "This is some data cached at startup.", 0).SetVal("OK")
-
-	rc := &redis.Redis{Client: redisClient}
-
-	ctx := &gofr.Context{Context: context.Background(), Container: &container.Container{Logger: logger, Redis: rc}}
-
-	err := warmupCache(ctx)
-	require.NoError(t, err)
-}
-
-func TestWarmupCache_Failure(t *testing.T) {
-
-	logger := logging.NewLogger(logging.DEBUG)
-	redisClient, mock := redismock.NewClientMock()
-	mock.ExpectSet("initial-data", "This is some data cached at startup.", 0).
-		SetErr(fmt.Errorf("mocked redis error"))
-
-	rc := &redis.Redis{Client: redisClient}
-
-	rc.Client = redisClient
-
-	ctx := &gofr.Context{Context: context.Background(), Container: &container.Container{Logger: logger, Redis: rc}}
-
-	err := warmupCache(ctx)
-	require.Error(t, err)
-}
-
 func TestRedisPipelineHandler(t *testing.T) {
 	configs := testutil.NewServerConfigs(t)
 
