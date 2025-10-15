@@ -33,8 +33,8 @@ go.opentelemetry.io/otel/trace v1.38.0 h1:Fxk5bKrDZJUH+AMyyIXGcFAPah0oRcT+LuNtJr
 go.opentelemetry.io/otel/trace v1.38.0/go.mod h1:j1P9ivuFsTceSWe1oY+EeW3sc+Pp42sO++GHkg4wwhs=
 go.uber.org/mock v0.6.0 h1:hyF9dfmbgIX5EfOdasqLsWD6xqpNZlXblLB/Dbnwv3Y=
 go.uber.org/mock v0.6.0/go.mod h1:KiVJ4BqZJaMj4svdfmHM0AUx4NJYO8ZNpPnZn1Z+BBU=
-gofr.dev v1.46.0 h1:sZkMehH4EZQnudwybtEsBuZwhlFXSTcAFbgjcAuvoR8=
-gofr.dev v1.46.0/go.mod h1:eMQQF/1u4cNDhDVMYhtWDSHOrN6MsRdw1zE9L/+Fk5U=
+gofr.dev v1.46.2 h1:imk40wcsEsungCw5yLFcX2S0i+3/frA7gWftvr4oMp8=
+gofr.dev v1.46.2/go.mod h1:f6rKM969/RRFsVf3aqNwwU1WXhGX9w/UXwvOhiosQ3c=
 golang.org/x/sys v0.36.0 h1:KVRy2GtZBrk1cBYA7MKu5bEZFxQk4NIDV6RLVcC8o0k=
 golang.org/x/sys v0.36.0/go.mod h1:OgkHotnGiDImocRcuBABYBEXf8A9a87e/uXjp9XT3ks=
 golang.org/x/term v0.35.0 h1:bZBVKBudEyhRcajGcNc3jIfWPqV4y/Kt2XcoigOWtDQ=
