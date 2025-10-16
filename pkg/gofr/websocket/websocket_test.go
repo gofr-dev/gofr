@@ -22,7 +22,7 @@ func TestMain(m *testing.M) {
 }
 
 // setupWebSocketServer creates a test WebSocket server with the given handler.
-func setupWebSocketServer(t *testing.T, handler func(*websocket.Conn)) *httptest.Server {
+func setupWebSocketServer(t *testing.T, handler func(*Connection)) *httptest.Server {
 	t.Helper()
 
 	upgrader := websocket.Upgrader{}
@@ -34,14 +34,15 @@ func setupWebSocketServer(t *testing.T, handler func(*websocket.Conn)) *httptest
 		}
 		defer conn.Close()
 
-		handler(conn)
+		wsConn := &Connection{Conn: conn}
+		handler(wsConn)
 	}))
 
 	return server
 }
 
 // connectToWebSocket connects to a WebSocket server and returns the connection.
-func connectToWebSocket(t *testing.T, serverURL string) (*websocket.Conn, *http.Response) {
+func connectToWebSocket(t *testing.T, serverURL string) (*Connection, *http.Response) {
 	t.Helper()
 
 	url := "ws" + serverURL[len("http"):] + "/ws"
@@ -49,18 +50,11 @@ func connectToWebSocket(t *testing.T, serverURL string) (*websocket.Conn, *http.
 	conn, resp, err := dialer.Dial(url, nil)
 	require.NoError(t, err)
 
-	return conn, resp
-}
-
-// createTestConnection creates a WebSocket connection for testing.
-func createTestConnection(t *testing.T, conn *websocket.Conn) *Connection {
-	t.Helper()
-
-	return &Connection{Conn: conn}
+	return &Connection{Conn: conn}, resp
 }
 
 // sendMessageToWebSocket sends a message to a WebSocket connection.
-func sendMessageToWebSocket(t *testing.T, conn *websocket.Conn, message []byte) {
+func sendMessageToWebSocket(t *testing.T, conn *Connection, message []byte) {
 	t.Helper()
 
 	err := conn.WriteMessage(websocket.TextMessage, message)
@@ -105,8 +99,7 @@ func TestConnection_Bind_Success(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			server := setupWebSocketServer(t, func(conn *websocket.Conn) {
-				wsConn := createTestConnection(t, conn)
+			server := setupWebSocketServer(t, func(wsConn *Connection) {
 				err := wsConn.Bind(tt.targetType)
 				require.NoError(t, err)
 				assert.Equal(t, tt.expected, dereferenceValue(tt.targetType))
@@ -142,8 +135,7 @@ func TestConnection_Bind_Failure(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			server := setupWebSocketServer(t, func(conn *websocket.Conn) {
-				wsConn := createTestConnection(t, conn)
+			server := setupWebSocketServer(t, func(wsConn *Connection) {
 				err := wsConn.Bind(tt.targetType)
 				require.Error(t, err)
 			})
@@ -164,19 +156,9 @@ func TestConnection_Bind_Failure(t *testing.T) {
 
 // TestConnection_WriteMessage tests thread-safe writing.
 func TestConnection_WriteMessage(t *testing.T) {
-	upgrader := websocket.Upgrader{}
 	message := "test message"
 
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		conn, err := upgrader.Upgrade(w, r, nil)
-		if err != nil {
-			t.Errorf("Failed to upgrade connection: %v", err)
-			return
-		}
-		defer conn.Close()
-
-		wsConn := &Connection{Conn: conn}
-
+	server := setupWebSocketServer(t, func(wsConn *Connection) {
 		// Test concurrent writes
 		var wg sync.WaitGroup
 		for i := 0; i < 10; i++ {
@@ -191,14 +173,10 @@ func TestConnection_WriteMessage(t *testing.T) {
 		}
 
 		wg.Wait()
-	}))
+	})
 	defer server.Close()
 
-	url := "ws" + server.URL[len("http"):] + "/ws"
-	dialer := websocket.DefaultDialer
-	conn, resp, err := dialer.Dial(url, nil)
-	require.NoError(t, err)
-
+	conn, resp := connectToWebSocket(t, server.URL)
 	defer conn.Close()
 
 	if resp != nil {
@@ -222,9 +200,7 @@ func TestConnection_WriteMessage(t *testing.T) {
 func TestConnection_ReadMessage(t *testing.T) {
 	testMessage := []byte("test read message")
 
-	server := setupWebSocketServer(t, func(conn *websocket.Conn) {
-		wsConn := createTestConnection(t, conn)
-
+	server := setupWebSocketServer(t, func(wsConn *Connection) {
 		// Write a test message
 		err := wsConn.WriteMessage(websocket.TextMessage, testMessage)
 		require.NoError(t, err)
@@ -239,8 +215,7 @@ func TestConnection_ReadMessage(t *testing.T) {
 		resp.Body.Close()
 	}
 
-	wsConn := createTestConnection(t, conn)
-	messageType, message, err := wsConn.ReadMessage()
+	messageType, message, err := conn.ReadMessage()
 	require.NoError(t, err)
 	assert.Equal(t, websocket.TextMessage, messageType)
 	assert.Equal(t, testMessage, message)
@@ -250,17 +225,16 @@ func TestConnection_ReadMessage(t *testing.T) {
 func TestConnection_ReadMessage_ErrorHandling(t *testing.T) {
 	tests := []struct {
 		name        string
-		setupServer func(*testing.T, *websocket.Conn)
+		setupServer func(*testing.T, *Connection)
 		expectError bool
 		description string
 	}{
 		{
 			name: "Connection closed before read",
-			setupServer: func(t *testing.T, conn *websocket.Conn) {
+			setupServer: func(t *testing.T, wsConn *Connection) {
 				t.Helper()
-				wsConn := createTestConnection(t, conn)
 				// Close connection to force read error
-				conn.Close()
+				wsConn.Close()
 
 				messageType, message, err := wsConn.ReadMessage()
 				require.Error(t, err, "Expected error for closed connection")
@@ -272,9 +246,8 @@ func TestConnection_ReadMessage_ErrorHandling(t *testing.T) {
 		},
 		{
 			name: "Network timeout during read",
-			setupServer: func(t *testing.T, conn *websocket.Conn) {
+			setupServer: func(t *testing.T, wsConn *Connection) {
 				t.Helper()
-				wsConn := createTestConnection(t, conn)
 				// Set a very short read deadline to simulate timeout
 				err := wsConn.SetReadDeadline(time.Now().Add(1 * time.Millisecond))
 				require.NoError(t, err)
@@ -294,8 +267,8 @@ func TestConnection_ReadMessage_ErrorHandling(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			server := setupWebSocketServer(t, func(conn *websocket.Conn) {
-				tt.setupServer(t, conn)
+			server := setupWebSocketServer(t, func(wsConn *Connection) {
+				tt.setupServer(t, wsConn)
 			})
 			defer server.Close()
 
@@ -315,33 +288,18 @@ func TestConnection_ReadMessage_ErrorHandling(t *testing.T) {
 
 // TestConnection_Deadlines tests deadline functionality.
 func TestConnection_Deadlines(t *testing.T) {
-	upgrader := websocket.Upgrader{}
-
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		conn, err := upgrader.Upgrade(w, r, nil)
-		if err != nil {
-			t.Errorf("Failed to upgrade connection: %v", err)
-			return
-		}
-		defer conn.Close()
-
-		wsConn := &Connection{Conn: conn}
-
+	server := setupWebSocketServer(t, func(wsConn *Connection) {
 		// Test read deadline
-		err = wsConn.SetReadDeadline(time.Now().Add(100 * time.Millisecond))
-		assert.NoError(t, err)
+		err := wsConn.SetReadDeadline(time.Now().Add(100 * time.Millisecond))
+		require.NoError(t, err)
 
 		// Test write deadline
 		err = wsConn.SetWriteDeadline(time.Now().Add(100 * time.Millisecond))
-		assert.NoError(t, err)
-	}))
+		require.NoError(t, err)
+	})
 	defer server.Close()
 
-	url := "ws" + server.URL[len("http"):] + "/ws"
-	dialer := websocket.DefaultDialer
-	conn, resp, err := dialer.Dial(url, nil)
-	require.NoError(t, err)
-
+	conn, resp := connectToWebSocket(t, server.URL)
 	defer conn.Close()
 
 	if resp != nil {
@@ -913,35 +871,20 @@ func TestConnection_Bind_EdgeCases_Success(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-				upgrader := websocket.Upgrader{}
-
-				conn, err := upgrader.Upgrade(w, r, nil)
-				if err != nil {
-					t.Errorf("Failed to upgrade connection: %v", err)
-					return
-				}
-
-				defer conn.Close()
-
-				wsConn := &Connection{Conn: conn}
-				err = wsConn.Bind(tt.targetType)
+			server := setupWebSocketServer(t, func(wsConn *Connection) {
+				err := wsConn.Bind(tt.targetType)
 				assert.NoError(t, err, tt.description)
-			}))
+			})
 			defer server.Close()
 
-			url := "ws" + server.URL[len("http"):] + "/ws"
-			dialer := websocket.DefaultDialer
-			conn, resp, err := dialer.Dial(url, nil)
-			require.NoError(t, err)
-
+			conn, resp := connectToWebSocket(t, server.URL)
 			defer conn.Close()
 
 			if resp != nil {
 				resp.Body.Close()
 			}
 
-			err = conn.WriteMessage(websocket.TextMessage, tt.inputMessage)
+			err := conn.WriteMessage(websocket.TextMessage, tt.inputMessage)
 			require.NoError(t, err)
 
 			time.Sleep(100 * time.Millisecond)
@@ -967,35 +910,20 @@ func TestConnection_Bind_EdgeCases_Failure(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-				upgrader := websocket.Upgrader{}
-
-				conn, err := upgrader.Upgrade(w, r, nil)
-				if err != nil {
-					t.Errorf("Failed to upgrade connection: %v", err)
-					return
-				}
-
-				defer conn.Close()
-
-				wsConn := &Connection{Conn: conn}
-				err = wsConn.Bind(tt.targetType)
+			server := setupWebSocketServer(t, func(wsConn *Connection) {
+				err := wsConn.Bind(tt.targetType)
 				assert.Error(t, err, tt.description)
-			}))
+			})
 			defer server.Close()
 
-			url := "ws" + server.URL[len("http"):] + "/ws"
-			dialer := websocket.DefaultDialer
-			conn, resp, err := dialer.Dial(url, nil)
-			require.NoError(t, err)
-
+			conn, resp := connectToWebSocket(t, server.URL)
 			defer conn.Close()
 
 			if resp != nil {
 				resp.Body.Close()
 			}
 
-			err = conn.WriteMessage(websocket.TextMessage, tt.inputMessage)
+			err := conn.WriteMessage(websocket.TextMessage, tt.inputMessage)
 			require.NoError(t, err)
 
 			time.Sleep(100 * time.Millisecond)
@@ -1076,9 +1004,7 @@ func TestConnection_UnimplementedMethods(t *testing.T) {
 
 // TestConnection_ConcurrentWriteMessage tests concurrent WriteMessage calls.
 func TestConnection_ConcurrentWriteMessage(t *testing.T) {
-	server := setupWebSocketServer(t, func(conn *websocket.Conn) {
-		wsConn := createTestConnection(t, conn)
-
+	server := setupWebSocketServer(t, func(wsConn *Connection) {
 		var wg sync.WaitGroup
 
 		numGoroutines := 10
@@ -1104,7 +1030,6 @@ func TestConnection_ConcurrentWriteMessage(t *testing.T) {
 	defer server.Close()
 
 	conn, resp := connectToWebSocket(t, server.URL)
-
 	defer conn.Close()
 
 	if resp != nil {
@@ -1122,11 +1047,9 @@ func TestConnection_ConcurrentWriteMessage(t *testing.T) {
 
 // TestConnection_Bind_JSONUnmarshalError tests Bind method with JSON unmarshaling error.
 func TestConnection_Bind_JSONUnmarshalError(t *testing.T) {
-	server := setupWebSocketServer(t, func(conn *websocket.Conn) {
-		wsConn := createTestConnection(t, conn)
-
+	server := setupWebSocketServer(t, func(wsConn *Connection) {
 		// Send invalid JSON
-		err := conn.WriteMessage(websocket.TextMessage, []byte("invalid json"))
+		err := wsConn.WriteMessage(websocket.TextMessage, []byte("invalid json"))
 		if err != nil {
 			return // Ignore errors in server handler
 		}
@@ -1153,11 +1076,9 @@ func TestConnection_Bind_JSONUnmarshalError(t *testing.T) {
 
 // TestConnection_Bind_StringCase tests Bind method with string case.
 func TestConnection_Bind_StringCase(t *testing.T) {
-	server := setupWebSocketServer(t, func(conn *websocket.Conn) {
-		wsConn := createTestConnection(t, conn)
-
+	server := setupWebSocketServer(t, func(wsConn *Connection) {
 		// Send text message
-		err := conn.WriteMessage(websocket.TextMessage, []byte("test message"))
+		err := wsConn.WriteMessage(websocket.TextMessage, []byte("test message"))
 		if err != nil {
 			return // Ignore errors in server handler
 		}
@@ -1182,13 +1103,11 @@ func TestConnection_Bind_StringCase(t *testing.T) {
 
 // TestConnection_Bind_JSONCase tests Bind method with JSON case.
 func TestConnection_Bind_JSONCase(t *testing.T) {
-	server := setupWebSocketServer(t, func(conn *websocket.Conn) {
-		wsConn := createTestConnection(t, conn)
-
+	server := setupWebSocketServer(t, func(wsConn *Connection) {
 		// Send JSON message
 		jsonData := `{"name": "test", "value": 123}`
 
-		err := conn.WriteMessage(websocket.TextMessage, []byte(jsonData))
+		err := wsConn.WriteMessage(websocket.TextMessage, []byte(jsonData))
 		if err != nil {
 			return // Ignore errors in server handler
 		}
@@ -1219,7 +1138,7 @@ func TestManager_CloseConnection_WithValidConn(t *testing.T) {
 	manager := New()
 
 	// Create a real connection
-	server := setupWebSocketServer(t, func(_ *websocket.Conn) {
+	server := setupWebSocketServer(t, func(_ *Connection) {
 		// Just keep the connection open
 		time.Sleep(100 * time.Millisecond)
 	})
@@ -1230,8 +1149,7 @@ func TestManager_CloseConnection_WithValidConn(t *testing.T) {
 		resp.Body.Close()
 	}
 
-	wsConn := &Connection{Conn: conn}
-	manager.AddWebsocketConnection("test", wsConn)
+	manager.AddWebsocketConnection("test", conn)
 
 	// Close connection - should not panic
 	manager.CloseConnection("test")
@@ -1315,17 +1233,16 @@ func TestOptions(t *testing.T) {
 func TestConnection_Bind_ErrorPaths(t *testing.T) {
 	tests := []struct {
 		name        string
-		setupServer func(*testing.T, *websocket.Conn)
+		setupServer func(*testing.T, *Connection)
 		expectError bool
 		description string
 	}{
 		{
 			name: "Connection closed before read",
-			setupServer: func(t *testing.T, conn *websocket.Conn) {
+			setupServer: func(t *testing.T, wsConn *Connection) {
 				t.Helper()
-				wsConn := createTestConnection(t, conn)
 				// Close connection to force read error
-				conn.Close()
+				wsConn.Close()
 
 				var data string
 				err := wsConn.Bind(&data)
@@ -1336,9 +1253,8 @@ func TestConnection_Bind_ErrorPaths(t *testing.T) {
 		},
 		{
 			name: "Network timeout during read",
-			setupServer: func(t *testing.T, conn *websocket.Conn) {
+			setupServer: func(t *testing.T, wsConn *Connection) {
 				t.Helper()
-				wsConn := createTestConnection(t, conn)
 				// Set a very short read deadline to simulate timeout
 				err := wsConn.SetReadDeadline(time.Now().Add(1 * time.Millisecond))
 				require.NoError(t, err)
@@ -1355,12 +1271,11 @@ func TestConnection_Bind_ErrorPaths(t *testing.T) {
 		},
 		{
 			name: "Unexpected server response - binary message",
-			setupServer: func(t *testing.T, conn *websocket.Conn) {
+			setupServer: func(t *testing.T, wsConn *Connection) {
 				t.Helper()
-				wsConn := createTestConnection(t, conn)
 
 				// Send binary message instead of text
-				err := conn.WriteMessage(websocket.BinaryMessage, []byte("binary data"))
+				err := wsConn.WriteMessage(websocket.BinaryMessage, []byte("binary data"))
 				require.NoError(t, err)
 
 				var data string
@@ -1373,12 +1288,11 @@ func TestConnection_Bind_ErrorPaths(t *testing.T) {
 		},
 		{
 			name: "Connection interrupted during read",
-			setupServer: func(t *testing.T, conn *websocket.Conn) {
+			setupServer: func(t *testing.T, wsConn *Connection) {
 				t.Helper()
-				wsConn := createTestConnection(t, conn)
 
 				// Close connection immediately to simulate interruption
-				conn.Close()
+				wsConn.Close()
 
 				var data string
 				err := wsConn.Bind(&data)
@@ -1391,8 +1305,8 @@ func TestConnection_Bind_ErrorPaths(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			server := setupWebSocketServer(t, func(conn *websocket.Conn) {
-				tt.setupServer(t, conn)
+			server := setupWebSocketServer(t, func(wsConn *Connection) {
+				tt.setupServer(t, wsConn)
 			})
 			defer server.Close()
 
@@ -1412,34 +1326,19 @@ func TestConnection_Bind_ErrorPaths(t *testing.T) {
 
 // TestConnection_Bind_JSONError tests JSON unmarshaling error path.
 func TestConnection_Bind_JSONError(t *testing.T) {
-	upgrader := websocket.Upgrader{}
-
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		conn, err := upgrader.Upgrade(w, r, nil)
-		if err != nil {
-			t.Errorf("Failed to upgrade connection: %v", err)
-			return
-		}
-		defer conn.Close()
-
-		wsConn := &Connection{Conn: conn}
-
+	server := setupWebSocketServer(t, func(wsConn *Connection) {
 		// Test with invalid JSON that will cause unmarshaling error
 		var data map[string]any
 
-		err = wsConn.Bind(&data)
+		err := wsConn.Bind(&data)
 		// This should fail with invalid JSON
 		if err == nil {
 			t.Error("Expected error for invalid JSON")
 		}
-	}))
+	})
 	defer server.Close()
 
-	url := "ws" + server.URL[len("http"):] + "/ws"
-	dialer := websocket.DefaultDialer
-	conn, resp, err := dialer.Dial(url, nil)
-	require.NoError(t, err)
-
+	conn, resp := connectToWebSocket(t, server.URL)
 	defer conn.Close()
 
 	if resp != nil {
@@ -1447,7 +1346,7 @@ func TestConnection_Bind_JSONError(t *testing.T) {
 	}
 
 	// Send invalid JSON to trigger error path
-	err = conn.WriteMessage(websocket.TextMessage, []byte(`{"invalid": json}`))
+	err := conn.WriteMessage(websocket.TextMessage, []byte(`{"invalid": json}`))
 	require.NoError(t, err)
 
 	time.Sleep(100 * time.Millisecond)
@@ -1485,17 +1384,8 @@ func TestManager_CloseConnection_NonExistent(t *testing.T) {
 func TestManager_CloseConnection_WithRealConn(t *testing.T) {
 	manager := New()
 
-	// Create a real websocket connection using httptest
-	upgrader := websocket.Upgrader{}
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		conn, err := upgrader.Upgrade(w, r, nil)
-		if err != nil {
-			t.Errorf("Failed to upgrade connection: %v", err)
-			return
-		}
-		defer conn.Close()
-
-		wsConn := &Connection{Conn: conn}
+	// Create a real websocket connection
+	server := setupWebSocketServer(t, func(wsConn *Connection) {
 		manager.AddWebsocketConnection("test-conn", wsConn)
 
 		// Close connection - should call Close() on the websocket
@@ -1504,16 +1394,11 @@ func TestManager_CloseConnection_WithRealConn(t *testing.T) {
 		// Verify connection is removed
 		retrieved := manager.GetWebsocketConnection("test-conn")
 		assert.Nil(t, retrieved)
-	}))
-
+	})
 	defer server.Close()
 
 	// Connect to the server to trigger the handler
-	url := "ws" + server.URL[len("http"):] + "/ws"
-	dialer := websocket.DefaultDialer
-	conn, resp, err := dialer.Dial(url, nil)
-	require.NoError(t, err)
-
+	conn, resp := connectToWebSocket(t, server.URL)
 	defer conn.Close()
 
 	if resp != nil {
@@ -1521,7 +1406,7 @@ func TestManager_CloseConnection_WithRealConn(t *testing.T) {
 	}
 
 	// Send a message to trigger the server handler
-	err = conn.WriteMessage(websocket.TextMessage, []byte("test"))
+	err := conn.WriteMessage(websocket.TextMessage, []byte("test"))
 	require.NoError(t, err)
 
 	time.Sleep(100 * time.Millisecond)
