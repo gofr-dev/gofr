@@ -8,55 +8,58 @@ import (
 )
 
 const (
-	// AppFileStats is the single metric name for all file operations across providers
+	// AppFileStats is the single metric name for all file operations across providers.
 	AppFileStats = "app_file_stats"
 )
 
-// StorageMetrics interface that all storage providers should use
+// StorageMetrics interface that all storage providers should use.
 type StorageMetrics interface {
-	// NewHistogram creates a new histogram with the given name, description, and buckets
+	// NewHistogram creates a new histogram with the given name, description, and buckets.
 	NewHistogram(name, desc string, buckets ...float64)
 
-	// RecordHistogram records a value in the histogram with the given name and labels
+	// RecordHistogram records a value in the histogram with the given name and labels.
 	RecordHistogram(ctx context.Context, name string, value float64, labels ...string)
 }
 
-// DefaultHistogramBuckets returns the standard bucket sizes for file operations
+// DefaultHistogramBuckets returns the standard bucket sizes for file operations.
 func DefaultHistogramBuckets() []float64 {
 	return []float64{0.1, 1, 10, 100, 1000}
 }
 
-// LogFileOperation is a helper function that handles both logging and metrics recording
-func LogFileOperation(
-	ctx context.Context,
-	logger datasource.Logger,
-	metrics StorageMetrics,
-	operation string,
-	location string,
-	provider string,
-	startTime time.Time,
-	status *string,
-	message *string,
-) {
-	duration := time.Since(startTime).Microseconds()
+// OperationObservability contains all parameters needed for logging and metrics collection.
+type OperationObservability struct {
+	Context   context.Context
+	Logger    datasource.Logger
+	Metrics   StorageMetrics
+	Operation string
+	Location  string
+	Provider  string
+	StartTime time.Time
+	Status    *string
+	Message   *string
+}
 
-	log := &FileOperationLog{
-		Operation: operation,
+// ObserveFileOperation is a helper function that handles both logging and metrics recording.
+func ObserveFileOperation(params *OperationObservability) {
+	duration := time.Since(params.StartTime).Microseconds()
+
+	log := &OperationLog{
+		Operation: params.Operation,
 		Duration:  duration,
-		Status:    status,
-		Location:  location,
-		Message:   message,
-		Provider:  provider,
+		Status:    params.Status,
+		Location:  params.Location,
+		Message:   params.Message,
+		Provider:  params.Provider,
 	}
 
-	logger.Debug(log)
+	params.Logger.Debug(log)
 
-	metrics.RecordHistogram(
-		ctx,
+	params.Metrics.RecordHistogram(
+		params.Context,
 		AppFileStats,
 		float64(duration),
-		"type", operation,
-		"status", CleanString(status),
-		"provider", provider,
+		"type", params.Operation,
+		"status", cleanString(params.Status),
+		"provider", params.Provider,
 	)
 }

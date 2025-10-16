@@ -40,8 +40,9 @@ func (f *File) ReadAll() (file.RowReader, error) {
 	st := file.StatusError
 	startTime := time.Now()
 
-	defer file.LogFileOperation(context.Background(), f.logger, f.metrics, "READALL",
-		location, "GCS", startTime, &st, &msg)
+	defer file.ObserveFileOperation(&file.OperationObservability{Context: context.Background(), Logger: f.logger,
+		Metrics:   f.metrics,
+		Operation: "READALL", Location: location, Provider: "GCS", StartTime: startTime, Status: &st, Message: &msg})
 
 	if strings.HasSuffix(f.Name(), ".json") {
 		reader, err := f.createJSONReader(location)
@@ -73,9 +74,9 @@ func (f *File) createJSONReader(location string) (file.RowReader, error) {
 	st := file.StatusError
 	startTime := time.Now()
 
-	defer file.LogFileOperation(
-		context.Background(), f.logger, f.metrics, "JSON READER",
-		location, "GCS", startTime, &st, &msg)
+	defer file.ObserveFileOperation(&file.OperationObservability{
+		Context: context.Background(), Logger: f.logger, Metrics: f.metrics, Operation: "JSON READER",
+		Location: location, Provider: "GCS", StartTime: startTime, Status: &st, Message: &msg})
 
 	buffer, err := io.ReadAll(f.body)
 	if err != nil {
@@ -120,9 +121,9 @@ func (f *File) createTextCSVReader(location string) (file.RowReader, error) {
 	st := file.StatusError
 	startTime := time.Now()
 
-	defer file.LogFileOperation(
-		context.Background(), f.logger, f.metrics, "TEXT/CSV READER",
-		location, "GCS", startTime, &st, &msg,
+	defer file.ObserveFileOperation(&file.OperationObservability{
+		Context: context.Background(), Logger: f.logger, Metrics: f.metrics, Operation: "TEXT/CSV READER",
+		Location: location, Provider: "GCS", StartTime: startTime, Status: &st, Message: &msg},
 	)
 
 	buffer, err := io.ReadAll(f.body)
@@ -175,9 +176,9 @@ func (f *File) Name() string {
 	msg := "Name retrieved"
 	startTime := time.Now()
 
-	defer file.LogFileOperation(
-		context.Background(), f.logger, f.metrics, "GET NAME",
-		location, "GCS", startTime, &st, &msg,
+	defer file.ObserveFileOperation(&file.OperationObservability{
+		Context: context.Background(), Logger: f.logger, Metrics: f.metrics, Operation: "GET NAME",
+		Location: location, Provider: "GCS", StartTime: startTime, Status: &st, Message: &msg},
 	)
 
 	return f.name
@@ -191,9 +192,9 @@ func (f *File) Size() int64 {
 	msg := "Size retrieved"
 	startTime := time.Now()
 
-	defer file.LogFileOperation(
-		context.Background(), f.logger, f.metrics, "FILE/DIR SIZE",
-		location, "GCS", startTime, &st, &msg,
+	defer file.ObserveFileOperation(&file.OperationObservability{
+		Context: context.Background(), Logger: f.logger, Metrics: f.metrics, Operation: "FILE/DIR SIZE",
+		Location: location, Provider: "GCS", StartTime: startTime, Status: &st, Message: &msg},
 	)
 
 	return f.size
@@ -207,9 +208,9 @@ func (f *File) ModTime() time.Time {
 	msg := "ModTime retrieved"
 	startTime := time.Now()
 
-	defer file.LogFileOperation(
-		context.Background(), f.logger, f.metrics, "LAST MODIFIED",
-		location, "GCS", startTime, &st, &msg,
+	defer file.ObserveFileOperation(&file.OperationObservability{
+		Context: context.Background(), Logger: f.logger, Metrics: f.metrics, Operation: "LAST MODIFIED",
+		Location: location, Provider: "GCS", StartTime: startTime, Status: &st, Message: &msg},
 	)
 
 	return f.lastModified
@@ -223,9 +224,9 @@ func (f *File) Mode() fs.FileMode {
 	msg := "Mode retrieved"
 	startTime := time.Now()
 
-	defer file.LogFileOperation(
-		context.Background(), f.logger, f.metrics, "MODE",
-		location, "GCS", startTime, &st, &msg,
+	defer file.ObserveFileOperation(&file.OperationObservability{
+		Context: context.Background(), Logger: f.logger, Metrics: f.metrics, Operation: "MODE",
+		Location: location, Provider: "GCS", StartTime: startTime, Status: &st, Message: &msg},
 	)
 
 	if f.isDir {
@@ -243,9 +244,9 @@ func (f *File) IsDir() bool {
 	msg := "IsDir checked"
 	startTime := time.Now()
 
-	defer file.LogFileOperation(
-		context.Background(), f.logger, f.metrics, "IS DIR",
-		location, "GCS", startTime, &st, &msg,
+	defer file.ObserveFileOperation(&file.OperationObservability{
+		Context: context.Background(), Logger: f.logger, Metrics: f.metrics, Operation: "IS DIR",
+		Location: location, Provider: "GCS", StartTime: startTime, Status: &st, Message: &msg},
 	)
 
 	return f.isDir || f.contentType == "application/x-directory"
@@ -259,9 +260,9 @@ func (f *File) Sys() any {
 	msg := "Sys info retrieved"
 	startTime := time.Now()
 
-	defer file.LogFileOperation(
-		context.Background(), f.logger, f.metrics, "SYS",
-		location, "GCS", startTime, &st, &msg,
+	defer file.ObserveFileOperation(&file.OperationObservability{
+		Context: context.Background(), Logger: f.logger, Metrics: f.metrics, Operation: "SYS",
+		Location: location, Provider: "GCS", StartTime: startTime, Status: &st, Message: &msg},
 	)
 
 	return nil

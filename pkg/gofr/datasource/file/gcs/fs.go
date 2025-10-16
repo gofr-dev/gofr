@@ -50,16 +50,16 @@ func (f *FileSystem) Connect() {
 
 	startTime := time.Now()
 
-	defer file.LogFileOperation(
-		context.Background(),
-		f.logger,
-		f.metrics,
-		"CONNECT",
-		getLocation(f.config.BucketName),
-		"GCS",
-		startTime,
-		&st,
-		&msg,
+	defer file.ObserveFileOperation(&file.OperationObservability{
+		Context:   context.Background(),
+		Logger:    f.logger,
+		Metrics:   f.metrics,
+		Operation: "CONNECT",
+		Location:  getLocation(f.config.BucketName),
+		Provider:  "GCS",
+		StartTime: startTime,
+		Status:    &st,
+		Message:   &msg},
 	)
 
 	f.registerHistogram.Do(func() {
@@ -173,9 +173,9 @@ func (f *FileSystem) Create(name string) (file.File, error) {
 	)
 
 	startTime := time.Now()
-	defer file.LogFileOperation(
-		context.Background(), f.logger, f.metrics, "CREATE FILE",
-		getLocation(f.config.BucketName), "GCS", startTime, &st, &msg,
+	defer file.ObserveFileOperation(&file.OperationObservability{
+		Context: context.Background(), Logger: f.logger, Metrics: f.metrics, Operation: "CREATE FILE",
+		Location: getLocation(f.config.BucketName), Provider: "GCS", StartTime: startTime, Status: &st, Message: &msg},
 	)
 
 	ctx := context.Background()
@@ -251,10 +251,10 @@ func (f *FileSystem) Remove(name string) error {
 
 	startTime := time.Now()
 
-	defer file.LogFileOperation(
-		context.Background(), f.logger, f.metrics,
-		"REMOVE FILE", getLocation(f.config.BucketName),
-		"GCS", startTime, &st, &msg,
+	defer file.ObserveFileOperation(&file.OperationObservability{
+		Context: context.Background(), Logger: f.logger, Metrics: f.metrics,
+		Operation: "REMOVE FILE", Location: getLocation(f.config.BucketName),
+		Provider: "GCS", StartTime: startTime, Status: &st, Message: &msg},
 	)
 
 	ctx := context.TODO()
@@ -282,9 +282,10 @@ func (f *FileSystem) Open(name string) (file.File, error) {
 
 	startTime := time.Now()
 
-	defer file.LogFileOperation(
-		context.Background(), f.logger, f.metrics, "OPEN FILE", getLocation(f.config.BucketName),
-		"GCS", startTime, &st, &msg)
+	defer file.ObserveFileOperation(&file.OperationObservability{
+		Context: context.Background(), Logger: f.logger, Metrics: f.metrics, Operation: "OPEN FILE",
+		Location: getLocation(f.config.BucketName),
+		Provider: "GCS", StartTime: startTime, Status: &st, Message: &msg})
 
 	ctx := context.TODO()
 
@@ -334,10 +335,10 @@ func (f *FileSystem) Rename(oldname, newname string) error {
 
 	startTime := time.Now()
 
-	defer file.LogFileOperation(
-		context.Background(), f.logger, f.metrics,
-		"RENAME", getLocation(f.config.BucketName), "GCS",
-		startTime, &st, &msg,
+	defer file.ObserveFileOperation(&file.OperationObservability{
+		Context: context.Background(), Logger: f.logger, Metrics: f.metrics,
+		Operation: "RENAME", Location: getLocation(f.config.BucketName), Provider: "GCS",
+		StartTime: startTime, Status: &st, Message: &msg},
 	)
 
 	ctx := context.TODO()

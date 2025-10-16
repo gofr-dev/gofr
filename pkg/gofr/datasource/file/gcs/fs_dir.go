@@ -35,9 +35,9 @@ func (f *FileSystem) Mkdir(name string, _ os.FileMode) error {
 
 	startTime := time.Now()
 
-	defer file.LogFileOperation(
-		context.Background(), f.logger, f.metrics, "MKDIR", getLocation(f.config.BucketName), "GCS",
-		startTime, &st, &msg)
+	defer file.ObserveFileOperation(&file.OperationObservability{
+		Context: context.Background(), Logger: f.logger, Metrics: f.metrics, Operation: "MKDIR",
+		Location: getLocation(f.config.BucketName), Provider: "GCS", StartTime: startTime, Status: &st, Message: &msg})
 
 	if name == "" {
 		msg = "directory name cannot be empty"
@@ -111,9 +111,10 @@ func (f *FileSystem) RemoveAll(dirPath string) error {
 
 	startTime := time.Now()
 
-	defer file.LogFileOperation(
-		context.Background(), f.logger, f.metrics, "REMOVEALL", getLocation(f.config.BucketName),
-		"GCS", startTime, &st, &msg)
+	defer file.ObserveFileOperation(&file.OperationObservability{
+		Context: context.Background(), Logger: f.logger, Metrics: f.metrics, Operation: "REMOVEALL",
+		Location: getLocation(f.config.BucketName),
+		Provider: "GCS", StartTime: startTime, Status: &st, Message: &msg})
 
 	ctx := context.TODO()
 
@@ -149,9 +150,10 @@ func (f *FileSystem) ReadDir(dir string) ([]file.FileInfo, error) {
 
 	startTime := time.Now()
 
-	defer file.LogFileOperation(
-		context.Background(), f.logger, f.metrics,
-		"READDIR", getLocation(f.config.BucketName), "GCS", startTime, &st, &msg)
+	defer file.ObserveFileOperation(&file.OperationObservability{
+		Context: context.Background(), Logger: f.logger, Metrics: f.metrics,
+		Operation: "READDIR", Location: getLocation(f.config.BucketName),
+		Provider: "GCS", StartTime: startTime, Status: &st, Message: &msg})
 
 	ctx := context.TODO()
 
@@ -204,9 +206,10 @@ func (f *FileSystem) ChDir(_ string) error {
 
 	startTime := time.Now()
 
-	defer file.LogFileOperation(
-		context.Background(), f.logger, f.metrics, op, getLocation(f.config.BucketName), "GCS",
-		startTime, &st, &msg)
+	defer file.ObserveFileOperation(&file.OperationObservability{
+		Context: context.Background(), Logger: f.logger, Metrics: f.metrics, Operation: op,
+		Location: getLocation(f.config.BucketName), Provider: "GCS",
+		StartTime: startTime, Status: &st, Message: &msg})
 
 	f.logger.Errorf("%s: not supported in GCS", op)
 
@@ -221,9 +224,9 @@ func (f *FileSystem) Getwd() (string, error) {
 
 	var msg = "Returning simulated root directory"
 
-	defer file.LogFileOperation(
-		context.Background(), f.logger, f.metrics, op, getLocation(f.config.BucketName),
-		"GCS", start, &st, &msg)
+	defer file.ObserveFileOperation(&file.OperationObservability{
+		Context: context.Background(), Logger: f.logger, Metrics: f.metrics, Operation: op, Location: getLocation(f.config.BucketName),
+		Provider: "GCS", StartTime: start, Status: &st, Message: &msg})
 
 	return getLocation(f.config.BucketName), nil
 }
@@ -234,9 +237,10 @@ func (f *FileSystem) Stat(name string) (file.FileInfo, error) {
 
 	startTime := time.Now()
 
-	defer file.LogFileOperation(
-		context.Background(), f.logger, f.metrics, "STAT", getLocation(f.config.BucketName),
-		"GCS", startTime, &st, &msg)
+	defer file.ObserveFileOperation(&file.OperationObservability{
+		Context: context.Background(), Logger: f.logger, Metrics: f.metrics, Operation: "STAT",
+		Location: getLocation(f.config.BucketName),
+		Provider: "GCS", StartTime: startTime, Status: &st, Message: &msg})
 
 	ctx := context.TODO()
 

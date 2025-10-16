@@ -57,9 +57,9 @@ func (f *File) Write(p []byte) (int, error) {
 
 	startTime := time.Now()
 
-	defer file.LogFileOperation(
-		context.Background(), f.logger, f.metrics, "WRITE",
-		getLocation(bucketName), "GCS", startTime, &st, &msg)
+	defer file.ObserveFileOperation(&file.OperationObservability{
+		Context: context.Background(), Logger: f.logger, Metrics: f.metrics, Operation: "WRITE",
+		Location: getLocation(bucketName), Provider: "GCS", StartTime: startTime, Status: &st, Message: &msg})
 
 	n, err := f.writer.Write(p)
 	if err != nil {
@@ -84,9 +84,9 @@ func (f *File) Close() error {
 
 	startTime := time.Now()
 
-	defer file.LogFileOperation(
-		context.Background(), f.logger, f.metrics, "CLOSE",
-		getLocation(bucketName), "GCS", startTime, &st, &msg)
+	defer file.ObserveFileOperation(&file.OperationObservability{
+		Context: context.Background(), Logger: f.logger, Metrics: f.metrics, Operation: "CLOSE",
+		Location: getLocation(bucketName), Provider: "GCS", StartTime: startTime, Status: &st, Message: &msg})
 
 	if f.writer != nil {
 		err := f.writer.Close()
