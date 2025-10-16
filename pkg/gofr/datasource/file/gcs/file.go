@@ -5,6 +5,8 @@ import (
 	"errors"
 	"io"
 	"time"
+
+	"gofr.dev/pkg/gofr/datasource/file"
 )
 
 type gcsWriter interface {
@@ -51,7 +53,7 @@ func (f *File) Write(p []byte) (int, error) {
 
 	var msg string
 
-	st := statusErr
+	st := file.StatusError
 
 	defer f.sendOperationStats(&FileLog{
 		Operation: "WRITE",
@@ -68,7 +70,7 @@ func (f *File) Write(p []byte) (int, error) {
 		return n, err
 	}
 
-	st, msg = statusSuccess, "Write successful"
+	st, msg = file.StatusSuccess, "Write successful"
 	f.logger.Debug(msg)
 
 	return n, nil
@@ -79,7 +81,7 @@ func (f *File) Close() error {
 
 	var msg string
 
-	st := statusErr
+	st := file.StatusError
 
 	defer f.sendOperationStats(&FileLog{
 		Operation: "CLOSE",
@@ -95,7 +97,7 @@ func (f *File) Close() error {
 			return err
 		}
 
-		st = statusSuccess
+		st = file.StatusSuccess
 
 		msg = msgWriterClosed
 
@@ -111,7 +113,7 @@ func (f *File) Close() error {
 			return err
 		}
 
-		st = statusSuccess
+		st = file.StatusSuccess
 
 		msg = msgReaderClosed
 
@@ -120,7 +122,7 @@ func (f *File) Close() error {
 		return nil
 	}
 
-	st = statusSuccess
+	st = file.StatusSuccess
 
 	msg = msgWriterClosed
 
@@ -141,11 +143,18 @@ func (*File) WriteAt(_ []byte, _ int64) (int, error) {
 }
 
 func (f *File) sendOperationStats(fl *FileLog, startTime time.Time) {
-	duration := time.Since(startTime).Microseconds()
+	status := fl.Status
+	message := fl.Message
 
-	fl.Duration = duration
-
-	f.logger.Debug(fl)
-	f.metrics.RecordHistogram(context.Background(), appFTPStats, float64(duration),
-		"type", fl.Operation, "status", clean(fl.Status))
+	file.LogFileOperation(
+		context.Background(),
+		f.logger,
+		f.metrics,
+		fl.Operation,
+		fl.Location,
+		"GCS",
+		startTime,
+		status,
+		message,
+	)
 }

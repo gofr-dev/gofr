@@ -31,7 +31,7 @@ func getLocation(bucket string) string {
 func (f *FileSystem) Mkdir(name string, _ os.FileMode) error {
 	var msg string
 
-	st := statusErr
+	st := file.StatusError
 
 	defer f.sendOperationStats(&FileLog{
 		Operation: "MKDIR",
@@ -63,11 +63,11 @@ func (f *FileSystem) Mkdir(name string, _ os.FileMode) error {
 		}
 	}
 
-	st = statusSuccess
+	st = file.StatusSuccess
 
 	msg = fmt.Sprintf("Directories on path %q created successfully", name)
 
-	f.logger.Logf("Created directories on path %q", name)
+	f.logger.Infof("Created directories on path %q", name)
 
 	return err
 }
@@ -110,7 +110,7 @@ func isAlreadyExistsError(err error) bool {
 func (f *FileSystem) RemoveAll(dirPath string) error {
 	var msg string
 
-	st := statusErr
+	st := file.StatusError
 
 	defer f.sendOperationStats(&FileLog{
 		Operation: "REMOVEALL",
@@ -134,11 +134,11 @@ func (f *FileSystem) RemoveAll(dirPath string) error {
 		}
 	}
 
-	st = statusSuccess
+	st = file.StatusSuccess
 
 	msg = fmt.Sprintf("Directory with path %q, deleted successfully", dirPath)
 
-	f.logger.Logf("Directory %s deleted.", dirPath)
+	f.logger.Infof("Directory %s deleted.", dirPath)
 
 	return nil
 }
@@ -146,7 +146,7 @@ func (f *FileSystem) RemoveAll(dirPath string) error {
 func (f *FileSystem) ReadDir(dir string) ([]file.FileInfo, error) {
 	var msg string
 
-	st := statusErr
+	st := file.StatusError
 
 	defer f.sendOperationStats(&FileLog{
 		Operation: "READDIR",
@@ -160,7 +160,7 @@ func (f *FileSystem) ReadDir(dir string) ([]file.FileInfo, error) {
 	objects, prefixes, err := f.conn.ListDir(ctx, dir)
 	if err != nil {
 		msg = fmt.Sprintf("Error retrieving objects: %v", err)
-		f.logger.Logf(msg)
+		f.logger.Infof(msg)
 
 		return nil, err
 	}
@@ -189,10 +189,10 @@ func (f *FileSystem) ReadDir(dir string) ([]file.FileInfo, error) {
 		})
 	}
 
-	st = statusSuccess
+	st = file.StatusSuccess
 	msg = fmt.Sprintf("Directory/Files in directory with path %q retrieved successfully", dir)
 
-	f.logger.Logf("Reading directory/files from GCS at path %q successful.", dir)
+	f.logger.Infof("Reading directory/files from GCS at path %q successful.", dir)
 
 	return fileinfo, nil
 }
@@ -200,7 +200,7 @@ func (f *FileSystem) ReadDir(dir string) ([]file.FileInfo, error) {
 func (f *FileSystem) ChDir(_ string) error {
 	const op = "CHDIR"
 
-	st := statusErr
+	st := file.StatusError
 
 	var msg = "Changing directory not supported"
 
@@ -218,7 +218,7 @@ func (f *FileSystem) ChDir(_ string) error {
 func (f *FileSystem) Getwd() (string, error) {
 	const op = "GETWD"
 
-	st := statusSuccess
+	st := file.StatusSuccess
 
 	start := time.Now()
 
@@ -236,7 +236,7 @@ func (f *FileSystem) Getwd() (string, error) {
 func (f *FileSystem) Stat(name string) (file.FileInfo, error) {
 	var msg string
 
-	st := statusErr
+	st := file.StatusError
 
 	defer f.sendOperationStats(&FileLog{
 		Operation: "STAT",
@@ -250,7 +250,7 @@ func (f *FileSystem) Stat(name string) (file.FileInfo, error) {
 	// Try to stat the object (file)
 	attr, err := f.conn.StatObject(ctx, name)
 	if err == nil {
-		st = statusSuccess
+		st = file.StatusSuccess
 		msg = fmt.Sprintf("File with path %q info retrieved successfully", name)
 
 		return &File{
@@ -278,7 +278,7 @@ func (f *FileSystem) Stat(name string) (file.FileInfo, error) {
 		}
 
 		if len(objs) > 0 {
-			st = statusSuccess
+			st = file.StatusSuccess
 			msg = fmt.Sprintf("Directory with path %q info retrieved successfully", name)
 
 			return &File{

@@ -10,8 +10,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/require"
+	"go.uber.org/mock/gomock"
+	"gofr.dev/pkg/gofr/datasource/file"
 )
 
 var (
@@ -30,9 +31,8 @@ func TestFile_ReadAll_Success_JSON(t *testing.T) {
 	mockLogger.EXPECT().Errorf(gomock.Any(), gomock.Any()).AnyTimes()
 
 	mockMetrics.EXPECT().RecordHistogram(
-		gomock.Any(), appFTPStats, gomock.Any(),
-		"type", gomock.Any(), "status", gomock.Any(),
-	).AnyTimes()
+		gomock.Any(), file.AppFileStats, gomock.Any(),
+		"type", gomock.Any(), "status", gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
 
 	f := &File{
 		name:    "data.json",
@@ -60,8 +60,8 @@ func TestFile_ReadAll_Success_NonJSON(t *testing.T) {
 	mockLogger.EXPECT().Debug(gomock.Any()).AnyTimes()
 	mockLogger.EXPECT().Errorf(gomock.Any(), gomock.Any()).AnyTimes()
 	mockMetrics.EXPECT().RecordHistogram(
-		gomock.Any(), appFTPStats, gomock.Any(),
-		"type", gomock.Any(), "status", gomock.Any(),
+		gomock.Any(), file.AppFileStats, gomock.Any(),
+		"type", gomock.Any(), "status", gomock.Any(), "provider", gomock.Any(),
 	).AnyTimes()
 
 	testCases := []struct {
@@ -122,9 +122,9 @@ func TestFile_createJSONReader_ValidJSON(t *testing.T) {
 	mockLogger.EXPECT().Debug(gomock.Any()).AnyTimes()
 	mockLogger.EXPECT().Errorf(gomock.Any(), gomock.Any()).AnyTimes()
 	mockMetrics.EXPECT().RecordHistogram(
-		gomock.Any(), appFTPStats, gomock.Any(),
+		gomock.Any(), file.AppFileStats, gomock.Any(),
 		"type", gomock.Any(),
-		"status", gomock.Any(),
+		"status", gomock.Any(), "provider", gomock.Any(),
 	).AnyTimes()
 
 	f := &File{
@@ -152,9 +152,9 @@ func TestFile_createJSONReader_ValidJSONObject(t *testing.T) {
 	mockLogger.EXPECT().Debug(gomock.Any()).AnyTimes()
 	mockLogger.EXPECT().Errorf(gomock.Any(), gomock.Any()).AnyTimes()
 	mockMetrics.EXPECT().RecordHistogram(
-		gomock.Any(), appFTPStats, gomock.Any(),
+		gomock.Any(), file.AppFileStats, gomock.Any(),
 		"type", gomock.Any(),
-		"status", gomock.Any(),
+		"status", gomock.Any(), "provider", gomock.Any(),
 	).AnyTimes()
 
 	f := &File{
@@ -187,9 +187,9 @@ func TestFile_createJSONReader_ReadFailure(t *testing.T) {
 
 	mockLogger.EXPECT().Debug(gomock.Any()).AnyTimes()
 	mockMetrics.EXPECT().RecordHistogram(
-		gomock.Any(), appFTPStats, gomock.Any(),
+		gomock.Any(), file.AppFileStats, gomock.Any(),
 		"type", gomock.Any(),
-		"status", gomock.Any(),
+		"status", gomock.Any(), "provider", gomock.Any(),
 	).AnyTimes()
 
 	f := &File{
@@ -215,9 +215,9 @@ func TestFile_createTextCSVReader_ValidText(t *testing.T) {
 	mockLogger.EXPECT().Debug(gomock.Any()).AnyTimes()
 	mockLogger.EXPECT().Errorf(gomock.Any(), gomock.Any()).AnyTimes()
 	mockMetrics.EXPECT().RecordHistogram(
-		gomock.Any(), appFTPStats, gomock.Any(),
+		gomock.Any(), file.AppFileStats, gomock.Any(),
 		"type", gomock.Any(),
-		"status", gomock.Any(),
+		"status", gomock.Any(), "provider", gomock.Any(),
 	).AnyTimes()
 
 	f := &File{
@@ -245,9 +245,9 @@ func TestFile_createTextCSVReader_EmptyText(t *testing.T) {
 	mockLogger.EXPECT().Debug(gomock.Any()).AnyTimes()
 	mockLogger.EXPECT().Errorf(gomock.Any(), gomock.Any()).AnyTimes()
 	mockMetrics.EXPECT().RecordHistogram(
-		gomock.Any(), appFTPStats, gomock.Any(),
+		gomock.Any(), file.AppFileStats, gomock.Any(),
 		"type", gomock.Any(),
-		"status", gomock.Any(),
+		"status", gomock.Any(), "provider", gomock.Any(),
 	).AnyTimes()
 
 	f := &File{
@@ -281,9 +281,9 @@ func TestFile_createTextCSVReader_ReadFailure(t *testing.T) {
 
 	mockLogger.EXPECT().Debug(gomock.Any()).AnyTimes()
 	mockMetrics.EXPECT().RecordHistogram(
-		gomock.Any(), appFTPStats, gomock.Any(),
+		gomock.Any(), file.AppFileStats, gomock.Any(),
 		"type", gomock.Any(),
-		"status", gomock.Any(),
+		"status", gomock.Any(), "provider", gomock.Any(),
 	).AnyTimes()
 
 	f := &File{
@@ -385,12 +385,12 @@ func TestFile_ModTime(t *testing.T) {
 
 	mockLogger.EXPECT().Errorf(gomock.Any(), gomock.Any()).AnyTimes()
 	mockLogger.EXPECT().Debug(gomock.Any()).AnyTimes()
-	mockLogger.EXPECT().Logf(gomock.Any(), gomock.Any()).AnyTimes()
+	mockLogger.EXPECT().Infof(gomock.Any(), gomock.Any()).AnyTimes()
 
 	mockMetrics.EXPECT().RecordHistogram(
-		gomock.Any(), appFTPStats, gomock.Any(),
+		gomock.Any(), file.AppFileStats, gomock.Any(),
 		"type", gomock.Any(),
-		"status", gomock.Any(),
+		"status", gomock.Any(), "provider", gomock.Any(),
 	).AnyTimes()
 
 	expectedTime := time.Now()
@@ -414,12 +414,12 @@ func TestFile_Mode(t *testing.T) {
 
 	mockLogger.EXPECT().Errorf(gomock.Any(), gomock.Any()).AnyTimes()
 	mockLogger.EXPECT().Debug(gomock.Any()).AnyTimes()
-	mockLogger.EXPECT().Logf(gomock.Any(), gomock.Any()).AnyTimes()
+	mockLogger.EXPECT().Infof(gomock.Any(), gomock.Any()).AnyTimes()
 
 	mockMetrics.EXPECT().RecordHistogram(
-		gomock.Any(), appFTPStats, gomock.Any(),
+		gomock.Any(), file.AppFileStats, gomock.Any(),
 		"type", gomock.Any(),
-		"status", gomock.Any(),
+		"status", gomock.Any(), "provider", gomock.Any(),
 	).AnyTimes()
 
 	tests := []struct {
@@ -455,12 +455,12 @@ func TestFile_Sys(t *testing.T) {
 
 	mockLogger.EXPECT().Errorf(gomock.Any(), gomock.Any()).AnyTimes()
 	mockLogger.EXPECT().Debug(gomock.Any()).AnyTimes()
-	mockLogger.EXPECT().Logf(gomock.Any(), gomock.Any()).AnyTimes()
+	mockLogger.EXPECT().Infof(gomock.Any(), gomock.Any()).AnyTimes()
 
 	mockMetrics.EXPECT().RecordHistogram(
-		gomock.Any(), appFTPStats, gomock.Any(),
+		gomock.Any(), file.AppFileStats, gomock.Any(),
 		"type", gomock.Any(),
-		"status", gomock.Any(),
+		"status", gomock.Any(), "provider", gomock.Any(),
 	).AnyTimes()
 
 	f := &File{

@@ -39,9 +39,6 @@ type Config struct {
 	ProjectID       string
 }
 
-func defaultBuckets() []float64 {
-	return []float64{0.1, 1, 10, 100, 1000}
-}
 func New(config *Config) file.FileSystemProvider {
 	return &FileSystem{config: config}
 }
@@ -49,7 +46,7 @@ func New(config *Config) file.FileSystemProvider {
 func (f *FileSystem) Connect() {
 	var msg string
 
-	st := statusErr
+	st := file.StatusError
 
 	defer f.sendOperationStats(&FileLog{
 		Operation: "CONNECT",
@@ -60,9 +57,9 @@ func (f *FileSystem) Connect() {
 
 	f.registerHistogram.Do(func() {
 		f.metrics.NewHistogram(
-			appFTPStats,
+			file.AppFileStats,
 			"App FTP Stats - duration of file operations",
-			defaultBuckets()...,
+			file.DefaultHistogramBuckets()...,
 		)
 	})
 
@@ -110,10 +107,10 @@ func (f *FileSystem) Connect() {
 		bucket: client.Bucket(f.config.BucketName),
 	}
 
-	st = statusSuccess
+	st = file.StatusSuccess
 	msg = "GCS Client connected."
 
-	f.logger.Logf("connected to GCS bucket %s", f.config.BucketName)
+	f.logger.Infof("connected to GCS bucket %s", f.config.BucketName)
 }
 
 func (f *FileSystem) startRetryConnect() {
@@ -155,7 +152,7 @@ func (f *FileSystem) startRetryConnect() {
 			client: client,
 			bucket: client.Bucket(f.config.BucketName),
 		}
-		f.logger.Logf("GCS connection restored to bucket %s", f.config.BucketName)
+		f.logger.Infof("GCS connection restored to bucket %s", f.config.BucketName)
 
 		break
 	}
@@ -164,7 +161,7 @@ func (f *FileSystem) startRetryConnect() {
 func (f *FileSystem) Create(name string) (file.File, error) {
 	var (
 		msg string
-		st  = statusErr
+		st  = file.StatusError
 	)
 
 	startTime := time.Now()
@@ -224,10 +221,10 @@ func (f *FileSystem) Create(name string) (file.File, error) {
 		return nil, fmt.Errorf("type assertion failed: %w", errWriterTypeAssertion)
 	}
 
-	st = statusSuccess
+	st = file.StatusSuccess
 	msg = "Write stream opened successfully"
 
-	f.logger.Logf("Write stream successfully opened for file %q", name)
+	f.logger.Infof("Write stream successfully opened for file %q", name)
 
 	return &File{
 		conn:         f.conn,
@@ -244,7 +241,7 @@ func (f *FileSystem) Create(name string) (file.File, error) {
 func (f *FileSystem) Remove(name string) error {
 	var msg string
 
-	st := statusErr
+	st := file.StatusError
 
 	defer f.sendOperationStats(&FileLog{
 		Operation: "REMOVE FILE",
@@ -261,10 +258,10 @@ func (f *FileSystem) Remove(name string) error {
 		return err
 	}
 
-	st = statusSuccess
+	st = file.StatusSuccess
 	msg = "File deletion on GCS successful"
 
-	f.logger.Logf("File with path %q deleted", name)
+	f.logger.Infof("File with path %q deleted", name)
 
 	return nil
 }
@@ -272,7 +269,7 @@ func (f *FileSystem) Remove(name string) error {
 func (f *FileSystem) Open(name string) (file.File, error) {
 	var msg string
 
-	st := statusErr
+	st := file.StatusError
 
 	defer f.sendOperationStats(&FileLog{
 		Operation: "OPEN FILE",
@@ -300,7 +297,7 @@ func (f *FileSystem) Open(name string) (file.File, error) {
 		return nil, err
 	}
 
-	st = statusSuccess
+	st = file.StatusSuccess
 
 	msg = fmt.Sprintf("File with path %q retrieved successfully", name)
 
@@ -319,7 +316,7 @@ func (f *FileSystem) Open(name string) (file.File, error) {
 func (f *FileSystem) Rename(oldname, newname string) error {
 	var msg string
 
-	st := statusErr
+	st := file.StatusError
 
 	defer f.sendOperationStats(&FileLog{
 		Operation: "RENAME",
@@ -331,7 +328,7 @@ func (f *FileSystem) Rename(oldname, newname string) error {
 	ctx := context.TODO()
 
 	if oldname == newname {
-		f.logger.Logf("%q & %q are same", oldname, newname)
+		f.logger.Infof("%q & %q are same", oldname, newname)
 		return nil
 	}
 
@@ -352,10 +349,10 @@ func (f *FileSystem) Rename(oldname, newname string) error {
 		return err
 	}
 
-	st = statusSuccess
+	st = file.StatusSuccess
 	msg = "File renamed successfully"
 
-	f.logger.Logf("File with path %q renamed to %q", oldname, newname)
+	f.logger.Infof("File with path %q renamed to %q", oldname, newname)
 
 	return nil
 }

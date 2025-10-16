@@ -5,8 +5,9 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/require"
+	"go.uber.org/mock/gomock"
+	"gofr.dev/pkg/gofr/datasource/file"
 )
 
 func TestFile_Write(t *testing.T) {
@@ -19,10 +20,9 @@ func TestFile_Write(t *testing.T) {
 	mockLogger.EXPECT().Debug(gomock.Any()).AnyTimes()
 	mockLogger.EXPECT().Errorf(gomock.Any(), gomock.Any()).AnyTimes()
 	mockMetrics.EXPECT().RecordHistogram(
-		gomock.Any(), appFTPStats, gomock.Any(),
+		gomock.Any(), file.AppFileStats, gomock.Any(),
 		"type", gomock.Any(),
-		"status", gomock.Any(),
-	).AnyTimes()
+		"status", gomock.Any(), "provider", gomock.Any()).AnyTimes()
 
 	fakeWriter := &fakeStorageWriter{written: 0}
 
@@ -51,9 +51,9 @@ func TestFile_Close(t *testing.T) {
 	mockLogger.EXPECT().Debug(gomock.Any()).AnyTimes()
 	mockLogger.EXPECT().Errorf(gomock.Any(), gomock.Any()).AnyTimes()
 	mockMetrics.EXPECT().RecordHistogram(
-		gomock.Any(), appFTPStats, gomock.Any(),
+		gomock.Any(), file.AppFileStats, gomock.Any(),
 		"type", gomock.Any(),
-		"status", gomock.Any(),
+		"status", gomock.Any(), "provider", gomock.Any(),
 	).AnyTimes()
 
 	t.Run("close writer", func(t *testing.T) {
@@ -125,7 +125,7 @@ func TestFile_Read_Success(t *testing.T) {
 	mockMetrics := NewMockMetrics(ctrl)
 
 	mockLogger.EXPECT().Debug(gomock.Any()).AnyTimes()
-	mockMetrics.EXPECT().RecordHistogram(gomock.Any(), appFTPStats, gomock.Any(),
+	mockMetrics.EXPECT().RecordHistogram(gomock.Any(), file.AppFileStats, gomock.Any(),
 		"type", gomock.Any(), "status", gomock.Any()).AnyTimes()
 
 	f := &File{
@@ -153,7 +153,7 @@ func TestFile_Read_Error_NilBody(t *testing.T) {
 	mockLogger.EXPECT().Debug("GCS file body is nil")
 	mockLogger.EXPECT().Debug(gomock.Any()).AnyTimes()
 	mockMetrics.EXPECT().RecordHistogram(
-		gomock.Any(), appFTPStats, gomock.Any(),
+		gomock.Any(), file.AppFileStats, gomock.Any(),
 		"type", gomock.Any(),
 		"status", gomock.Any(),
 	).AnyTimes()

@@ -7,8 +7,9 @@ import (
 	"time"
 
 	"cloud.google.com/go/storage"
-	"github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/require"
+	"go.uber.org/mock/gomock"
+	"gofr.dev/pkg/gofr/datasource/file"
 )
 
 type fakeWriteCloser struct {
@@ -54,10 +55,10 @@ func TestFileSystem_Mkdir_GCS_Success(t *testing.T) {
 
 	mockLogger.EXPECT().Debugf(gomock.Any(), gomock.Any()).AnyTimes()
 	mockLogger.EXPECT().Debug(gomock.Any()).AnyTimes()
-	mockLogger.EXPECT().Logf(gomock.Any(), gomock.Any()).AnyTimes()
+	mockLogger.EXPECT().Infof(gomock.Any(), gomock.Any()).AnyTimes()
 	mockLogger.EXPECT().Errorf(gomock.Any(), gomock.Any()).AnyTimes()
 	mockMetrics.EXPECT().RecordHistogram(
-		gomock.Any(), appFTPStats, gomock.Any(),
+		gomock.Any(), file.AppFileStats, gomock.Any(),
 		"type", gomock.Any(),
 		"status", gomock.Any(),
 	).AnyTimes()
@@ -95,7 +96,7 @@ func TestFileSystem_Mkdir_GCS_Error_EmptyName(t *testing.T) {
 	mockLogger.EXPECT().Errorf(gomock.Any(), gomock.Any()).AnyTimes()
 	mockLogger.EXPECT().Debug(gomock.Any()).AnyTimes()
 	mockMetrics.EXPECT().RecordHistogram(
-		gomock.Any(), appFTPStats, gomock.Any(),
+		gomock.Any(), file.AppFileStats, gomock.Any(),
 		"type", gomock.Any(),
 		"status", gomock.Any(),
 	).AnyTimes()
@@ -131,7 +132,7 @@ func TestFileSystem_Mkdir_GCS_Error_WriteFailure(t *testing.T) {
 	mockLogger.EXPECT().Errorf(gomock.Any(), gomock.Any()).AnyTimes()
 	mockLogger.EXPECT().Debug(gomock.Any()).AnyTimes()
 	mockMetrics.EXPECT().RecordHistogram(
-		gomock.Any(), appFTPStats, gomock.Any(),
+		gomock.Any(), file.AppFileStats, gomock.Any(),
 		"type", gomock.Any(),
 		"status", gomock.Any(),
 	).AnyTimes()
@@ -173,11 +174,12 @@ func TestFileSystem_MkdirAll(t *testing.T) {
 		metrics: mockMetrics,
 	}
 
-	mockLogger.EXPECT().Logf(gomock.Any(), gomock.Any()).AnyTimes()
+	mockLogger.EXPECT().Infof(gomock.Any(), gomock.Any()).AnyTimes()
 	mockLogger.EXPECT().Debugf(gomock.Any()).AnyTimes()
 	mockLogger.EXPECT().Debug(gomock.Any()).AnyTimes()
 	mockLogger.EXPECT().Errorf(gomock.Any(), gomock.Any()).AnyTimes()
-	mockMetrics.EXPECT().RecordHistogram(gomock.Any(), appFTPStats, gomock.Any(), "type", gomock.Any(), "status", gomock.Any()).AnyTimes()
+	mockMetrics.EXPECT().RecordHistogram(gomock.Any(), file.AppFileStats, gomock.Any(), "type",
+		gomock.Any(), "status", gomock.Any()).AnyTimes()
 
 	mockGCS.EXPECT().NewWriter(gomock.Any(), "foo/").Return(&fakeWriteCloser{Buffer: &bytes.Buffer{}}).AnyTimes()
 	mockGCS.EXPECT().NewWriter(gomock.Any(), "foo/bar/").Return(&fakeWriteCloser{Buffer: &bytes.Buffer{}}).AnyTimes()
@@ -209,11 +211,12 @@ func TestFileSystem_RemoveAll(t *testing.T) {
 		metrics: mockMetrics,
 	}
 
-	mockLogger.EXPECT().Logf(gomock.Any(), gomock.Any()).AnyTimes()
+	mockLogger.EXPECT().Infof(gomock.Any(), gomock.Any()).AnyTimes()
 	mockLogger.EXPECT().Debugf(gomock.Any()).AnyTimes()
 	mockLogger.EXPECT().Debug(gomock.Any()).AnyTimes()
 	mockLogger.EXPECT().Errorf(gomock.Any(), gomock.Any()).AnyTimes()
-	mockMetrics.EXPECT().RecordHistogram(gomock.Any(), appFTPStats, gomock.Any(), "type", gomock.Any(), "status", gomock.Any()).AnyTimes()
+	mockMetrics.EXPECT().RecordHistogram(gomock.Any(), file.AppFileStats, gomock.Any(),
+		"type", gomock.Any(), "status", gomock.Any()).AnyTimes()
 
 	mockGCS.EXPECT().ListObjects(gomock.Any(), "fail-list").Return(nil, errorList)
 
@@ -250,8 +253,9 @@ func TestFileSystem_ChDir_Getwd(t *testing.T) {
 	mockLogger.EXPECT().Errorf(gomock.Any(), gomock.Any()).AnyTimes()
 	mockLogger.EXPECT().Debugf(gomock.Any()).AnyTimes()
 	mockLogger.EXPECT().Debug(gomock.Any()).AnyTimes()
-	mockLogger.EXPECT().Logf(gomock.Any(), gomock.Any()).AnyTimes()
-	mockMetrics.EXPECT().RecordHistogram(gomock.Any(), appFTPStats, gomock.Any(), "type", gomock.Any(), "status", gomock.Any()).AnyTimes()
+	mockLogger.EXPECT().Infof(gomock.Any(), gomock.Any()).AnyTimes()
+	mockMetrics.EXPECT().RecordHistogram(gomock.Any(), file.AppFileStats, gomock.Any(),
+		"type", gomock.Any(), "status", gomock.Any()).AnyTimes()
 
 	err := fs.ChDir("any")
 	require.Error(t, err)
@@ -280,8 +284,9 @@ func TestFileSystem_Stat(t *testing.T) {
 	mockLogger.EXPECT().Errorf(gomock.Any(), gomock.Any()).AnyTimes()
 	mockLogger.EXPECT().Debugf(gomock.Any()).AnyTimes()
 	mockLogger.EXPECT().Debug(gomock.Any()).AnyTimes()
-	mockLogger.EXPECT().Logf(gomock.Any(), gomock.Any()).AnyTimes()
-	mockMetrics.EXPECT().RecordHistogram(gomock.Any(), appFTPStats, gomock.Any(), "type", gomock.Any(), "status", gomock.Any()).AnyTimes()
+	mockLogger.EXPECT().Infof(gomock.Any(), gomock.Any()).AnyTimes()
+	mockMetrics.EXPECT().RecordHistogram(gomock.Any(), file.AppFileStats, gomock.Any(), "type", gomock.Any(),
+		"status", gomock.Any(), "provider", gomock.Any()).AnyTimes()
 
 	// File exists
 	attrs := &storage.ObjectAttrs{Size: 42, ContentType: "application/pdf", Updated: time.Now()}
@@ -328,11 +333,11 @@ func Test_ReadDir_GCS(t *testing.T) {
 		metrics: mockMetrics,
 	}
 
-	mockLogger.EXPECT().Logf(gomock.Any(), gomock.Any()).AnyTimes()
+	mockLogger.EXPECT().Infof(gomock.Any(), gomock.Any()).AnyTimes()
 	mockLogger.EXPECT().Debug(gomock.Any()).AnyTimes()
 	mockLogger.EXPECT().Errorf(gomock.Any(), gomock.Any()).AnyTimes()
-	mockMetrics.EXPECT().RecordHistogram(gomock.Any(), appFTPStats, gomock.Any(),
-		"type", gomock.Any(), "status", gomock.Any()).AnyTimes()
+	mockMetrics.EXPECT().RecordHistogram(gomock.Any(), file.AppFileStats, gomock.Any(),
+		"type", gomock.Any(), "status", gomock.Any(), "provider", gomock.Any()).AnyTimes()
 
 	for _, tt := range getReadDirTestCases(mockGCS) {
 		t.Run(tt.name, func(t *testing.T) {

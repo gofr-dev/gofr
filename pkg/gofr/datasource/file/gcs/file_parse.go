@@ -18,12 +18,6 @@ var (
 	errStringNotPointer = errors.New("input should be a pointer to a string")
 )
 
-const (
-	appFTPStats   = "app_ftp_stats"
-	statusErr     = "ERROR"
-	statusSuccess = "SUCCESS"
-)
-
 // textReader implements RowReader for reading text files.
 type textReader struct {
 	scanner *bufio.Scanner
@@ -54,7 +48,7 @@ func (f *File) ReadAll() (file.RowReader, error) {
 
 // createJSONReader creates a JSON reader for JSON files.
 func (f *File) createJSONReader(location string) (file.RowReader, error) {
-	status := statusErr
+	status := file.StatusError
 
 	defer f.sendOperationStats(&FileLog{Operation: "JSON READER", Location: location, Status: &status}, time.Now())
 
@@ -79,20 +73,20 @@ func (f *File) createJSONReader(location string) (file.RowReader, error) {
 	}
 
 	if d, ok := token.(json.Delim); ok && d == '[' {
-		status = statusSuccess
+		status = file.StatusSuccess
 		return &jsonReader{decoder: decoder, token: token}, err
 	}
 
 	// Reading JSON object
 	decoder = json.NewDecoder(reader)
-	status = statusSuccess
+	status = file.StatusSuccess
 
 	return &jsonReader{decoder: decoder}, nil
 }
 
 // createTextCSVReader creates a text reader for reading text files.
 func (f *File) createTextCSVReader(location string) (file.RowReader, error) {
-	status := statusErr
+	status := file.StatusError
 
 	defer f.sendOperationStats(&FileLog{Operation: "TEXT/CSV READER", Location: location, Status: &status}, time.Now())
 
@@ -103,7 +97,7 @@ func (f *File) createTextCSVReader(location string) (file.RowReader, error) {
 	}
 
 	reader := bytes.NewReader(buffer)
-	status = statusSuccess
+	status = file.StatusSuccess
 
 	return &textReader{
 		scanner: bufio.NewScanner(reader),

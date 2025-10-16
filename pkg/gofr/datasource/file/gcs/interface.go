@@ -9,14 +9,14 @@ import (
 	"io"
 
 	"cloud.google.com/go/storage"
+	"gofr.dev/pkg/gofr/datasource"
+	"gofr.dev/pkg/gofr/datasource/file"
 	"google.golang.org/api/iterator"
 )
 
+// Logger interface redefines the logger interface for the package.
 type Logger interface {
-	Debug(args ...any)
-	Debugf(pattern string, args ...any)
-	Logf(pattern string, args ...any)
-	Errorf(pattern string, args ...any)
+	datasource.Logger
 }
 type gcsClientImpl struct {
 	client *storage.Client
@@ -37,8 +37,7 @@ type gcsClient interface {
 }
 
 type Metrics interface {
-	NewHistogram(name, desc string, buckets ...float64)
-	RecordHistogram(ctx context.Context, name string, value float64, labels ...string)
+	file.StorageMetrics
 }
 
 func (g *gcsClientImpl) NewWriter(ctx context.Context, name string) io.WriteCloser {
