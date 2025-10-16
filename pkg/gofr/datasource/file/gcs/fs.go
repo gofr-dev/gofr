@@ -48,12 +48,19 @@ func (f *FileSystem) Connect() {
 
 	st := file.StatusError
 
-	defer f.sendOperationStats(&FileLog{
-		Operation: "CONNECT",
-		Location:  getLocation(f.config.BucketName),
-		Status:    &st,
-		Message:   &msg,
-	}, time.Now())
+	startTime := time.Now()
+
+	defer file.LogFileOperation(
+		context.Background(),
+		f.logger,
+		f.metrics,
+		"CONNECT",
+		getLocation(f.config.BucketName),
+		"GCS",
+		startTime,
+		&st,
+		&msg,
+	)
 
 	f.registerHistogram.Do(func() {
 		f.metrics.NewHistogram(
@@ -94,6 +101,7 @@ func (f *FileSystem) Connect() {
 
 	if err != nil {
 		f.logger.Errorf("Failed to connect to GCS: %v", err)
+		msg = err.Error()
 
 		if !f.disableRetry {
 			go f.startRetryConnect()
@@ -165,12 +173,10 @@ func (f *FileSystem) Create(name string) (file.File, error) {
 	)
 
 	startTime := time.Now()
-	defer f.sendOperationStats(&FileLog{
-		Operation: "CREATE FILE",
-		Location:  getLocation(f.config.BucketName),
-		Status:    &st,
-		Message:   &msg,
-	}, startTime)
+	defer file.LogFileOperation(
+		context.Background(), f.logger, f.metrics, "CREATE FILE",
+		getLocation(f.config.BucketName), "GCS", startTime, &st, &msg,
+	)
 
 	ctx := context.Background()
 
@@ -243,18 +249,21 @@ func (f *FileSystem) Remove(name string) error {
 
 	st := file.StatusError
 
-	defer f.sendOperationStats(&FileLog{
-		Operation: "REMOVE FILE",
-		Location:  getLocation(f.config.BucketName),
-		Status:    &st,
-		Message:   &msg,
-	}, time.Now())
+	startTime := time.Now()
+
+	defer file.LogFileOperation(
+		context.Background(), f.logger, f.metrics,
+		"REMOVE FILE", getLocation(f.config.BucketName),
+		"GCS", startTime, &st, &msg,
+	)
 
 	ctx := context.TODO()
 
 	err := f.conn.DeleteObject(ctx, name)
 	if err != nil {
 		f.logger.Errorf("Error while deleting file: %v", err)
+		msg = err.Error()
+
 		return err
 	}
 
@@ -271,22 +280,24 @@ func (f *FileSystem) Open(name string) (file.File, error) {
 
 	st := file.StatusError
 
-	defer f.sendOperationStats(&FileLog{
-		Operation: "OPEN FILE",
-		Location:  getLocation(f.config.BucketName),
-		Status:    &st,
-		Message:   &msg,
-	}, time.Now())
+	startTime := time.Now()
+
+	defer file.LogFileOperation(
+		context.Background(), f.logger, f.metrics, "OPEN FILE", getLocation(f.config.BucketName),
+		"GCS", startTime, &st, &msg)
 
 	ctx := context.TODO()
 
 	reader, err := f.conn.NewReader(ctx, name)
 	if err != nil {
 		if errors.Is(err, storage.ErrObjectNotExist) {
+			msg = "File not found"
+
 			return nil, file.ErrFileNotFound
 		}
 
 		f.logger.Errorf("failed to retrieve %q: %v", name, err)
+		msg = err.Error()
 
 		return nil, err
 	}
@@ -294,6 +305,9 @@ func (f *FileSystem) Open(name string) (file.File, error) {
 	attr, err := f.conn.StatObject(ctx, name)
 	if err != nil {
 		reader.Close()
+
+		msg = err.Error()
+
 		return nil, err
 	}
 
@@ -318,22 +332,30 @@ func (f *FileSystem) Rename(oldname, newname string) error {
 
 	st := file.StatusError
 
-	defer f.sendOperationStats(&FileLog{
-		Operation: "RENAME",
-		Location:  getLocation(f.config.BucketName),
-		Status:    &st,
-		Message:   &msg,
-	}, time.Now())
+	startTime := time.Now()
+
+	defer file.LogFileOperation(
+		context.Background(), f.logger, f.metrics,
+		"RENAME", getLocation(f.config.BucketName), "GCS",
+		startTime, &st, &msg,
+	)
 
 	ctx := context.TODO()
 
 	if oldname == newname {
+		st = file.StatusSuccess
+		msg = "Source and destination names are the same"
+
 		f.logger.Infof("%q & %q are same", oldname, newname)
+
 		return nil
 	}
 
 	if path.Dir(oldname) != path.Dir(newname) {
+		msg = "Renaming to different location not permitted"
+
 		f.logger.Errorf("%q & %q are not in same location", oldname, newname)
+
 		return fmt.Errorf("%w: renaming as well as moving file to different location is not allowed", errOperationNotPermitted)
 	}
 	// Copy old object to new

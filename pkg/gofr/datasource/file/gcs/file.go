@@ -55,12 +55,11 @@ func (f *File) Write(p []byte) (int, error) {
 
 	st := file.StatusError
 
-	defer f.sendOperationStats(&FileLog{
-		Operation: "WRITE",
-		Location:  getLocation(bucketName),
-		Status:    &st,
-		Message:   &msg,
-	}, time.Now())
+	startTime := time.Now()
+
+	defer file.LogFileOperation(
+		context.Background(), f.logger, f.metrics, "WRITE",
+		getLocation(bucketName), "GCS", startTime, &st, &msg)
 
 	n, err := f.writer.Write(p)
 	if err != nil {
@@ -83,12 +82,11 @@ func (f *File) Close() error {
 
 	st := file.StatusError
 
-	defer f.sendOperationStats(&FileLog{
-		Operation: "CLOSE",
-		Location:  getLocation(bucketName),
-		Status:    &st,
-		Message:   &msg,
-	}, time.Now())
+	startTime := time.Now()
+
+	defer file.LogFileOperation(
+		context.Background(), f.logger, f.metrics, "CLOSE",
+		getLocation(bucketName), "GCS", startTime, &st, &msg)
 
 	if f.writer != nil {
 		err := f.writer.Close()
@@ -140,21 +138,4 @@ func (*File) ReadAt(_ []byte, _ int64) (int, error) {
 
 func (*File) WriteAt(_ []byte, _ int64) (int, error) {
 	return 0, errWriteAtNotSupported
-}
-
-func (f *File) sendOperationStats(fl *FileLog, startTime time.Time) {
-	status := fl.Status
-	message := fl.Message
-
-	file.LogFileOperation(
-		context.Background(),
-		f.logger,
-		f.metrics,
-		fl.Operation,
-		fl.Location,
-		"GCS",
-		startTime,
-		status,
-		message,
-	)
 }

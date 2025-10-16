@@ -94,8 +94,7 @@ func TestFileSystem_Connect(t *testing.T) {
 			mockMetrics.EXPECT().RecordHistogram(
 				gomock.Any(), file.AppFileStats, gomock.Any(),
 				"type", gomock.Any(),
-				"status", gomock.Any(),
-			).AnyTimes()
+				"status", gomock.Any(), "provider", gomock.Any()).AnyTimes()
 
 			fs := &FileSystem{
 				config:       tt.config,
@@ -206,7 +205,7 @@ func TestFileSystem_Open(t *testing.T) {
 	mockLogger.EXPECT().Debug(gomock.Any()).AnyTimes()
 	mockLogger.EXPECT().Errorf(gomock.Any(), gomock.Any()).AnyTimes()
 	mockMetrics.EXPECT().RecordHistogram(gomock.Any(), file.AppFileStats, gomock.Any(),
-		"type", gomock.Any(), "status", gomock.Any()).AnyTimes()
+		"type", gomock.Any(), "status", gomock.Any(), "provider", gomock.Any()).AnyTimes()
 
 	t.Run("file found", func(t *testing.T) {
 		attr := &storage.ObjectAttrs{
@@ -282,7 +281,7 @@ func Test_CreateFile(t *testing.T) {
 	mockLogger.EXPECT().Errorf(gomock.Any(), gomock.Any()).AnyTimes()
 	mockLogger.EXPECT().Debug(gomock.Any()).AnyTimes()
 	mockMetrics.EXPECT().RecordHistogram(gomock.Any(), file.AppFileStats, gomock.Any(),
-		"type", gomock.Any(), "status", gomock.Any()).AnyTimes()
+		"type", gomock.Any(), "status", gomock.Any(), "provider", gomock.Any()).AnyTimes()
 
 	tests := []testCase{
 		{
@@ -379,7 +378,7 @@ func Test_Remove_GCS(t *testing.T) {
 	mockLogger.EXPECT().Errorf(gomock.Any(), gomock.Any()).AnyTimes()
 	mockLogger.EXPECT().Debug(gomock.Any()).AnyTimes()
 	mockMetrics.EXPECT().RecordHistogram(gomock.Any(), file.AppFileStats, gomock.Any(),
-		"type", gomock.Any(), "status", gomock.Any()).AnyTimes()
+		"type", gomock.Any(), "status", gomock.Any(), "provider", gomock.Any()).AnyTimes()
 
 	mockGCS.EXPECT().
 		DeleteObject(gomock.Any(), "abc/a1.txt").
@@ -470,7 +469,7 @@ func TestRenameFile(t *testing.T) {
 	mockLogger.EXPECT().Errorf(gomock.Any(), gomock.Any()).AnyTimes()
 	mockLogger.EXPECT().Debug(gomock.Any(), gomock.Any()).AnyTimes()
 	mockMetrics.EXPECT().RecordHistogram(gomock.Any(), file.AppFileStats, gomock.Any(),
-		"type", gomock.Any(), "status", gomock.Any()).AnyTimes()
+		"type", gomock.Any(), "status", gomock.Any(), "provider", gomock.Any()).AnyTimes()
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

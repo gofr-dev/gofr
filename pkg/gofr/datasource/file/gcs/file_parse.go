@@ -3,6 +3,7 @@ package gcs
 import (
 	"bufio"
 	"bytes"
+	"context"
 	"encoding/json"
 	"errors"
 	"io"
@@ -34,30 +35,53 @@ func (f *File) ReadAll() (file.RowReader, error) {
 	bucketName := getBucketName(f.name)
 	location := path.Join(bucketName, f.name)
 
-	defer f.sendOperationStats(&FileLog{
-		Operation: "READALL",
-		Location:  location,
-	}, time.Now())
+	var msg string
+
+	st := file.StatusError
+	startTime := time.Now()
+
+	defer file.LogFileOperation(context.Background(), f.logger, f.metrics, "READALL",
+		location, "GCS", startTime, &st, &msg)
 
 	if strings.HasSuffix(f.Name(), ".json") {
-		return f.createJSONReader(location)
+		reader, err := f.createJSONReader(location)
+		if err == nil {
+			st = file.StatusSuccess
+			msg = "JSON reader created successfully"
+		} else {
+			msg = err.Error()
+		}
+
+		return reader, err
 	}
 
-	return f.createTextCSVReader(location)
+	reader, err := f.createTextCSVReader(location)
+	if err == nil {
+		st = file.StatusSuccess
+		msg = "Text reader created successfully"
+	} else {
+		msg = err.Error()
+	}
+
+	return reader, err
 }
 
 // createJSONReader creates a JSON reader for JSON files.
 func (f *File) createJSONReader(location string) (file.RowReader, error) {
-	status := file.StatusError
+	var msg string
 
-	defer f.sendOperationStats(&FileLog{Operation: "JSON READER", Location: location, Status: &status}, time.Now())
+	st := file.StatusError
+	startTime := time.Now()
+
+	defer file.LogFileOperation(
+		context.Background(), f.logger, f.metrics, "JSON READER",
+		location, "GCS", startTime, &st, &msg)
 
 	buffer, err := io.ReadAll(f.body)
 	if err != nil {
-		if err != nil {
-			f.logger.Errorf("failed to read JSON body from location %s: %v", location, err)
-			return nil, err
-		}
+		f.logger.Errorf("failed to read JSON body from location %s: %v", location, err)
+
+		msg = err.Error()
 
 		return nil, err
 	}
@@ -69,35 +93,49 @@ func (f *File) createJSONReader(location string) (file.RowReader, error) {
 	token, err := decoder.Token()
 	if err != nil {
 		f.logger.Errorf("Error decoding token: %v", err)
+		msg = err.Error()
+
 		return nil, err
 	}
 
 	if d, ok := token.(json.Delim); ok && d == '[' {
-		status = file.StatusSuccess
+		st = file.StatusSuccess
+		msg = "JSON array reader created successfully"
+
 		return &jsonReader{decoder: decoder, token: token}, err
 	}
 
 	// Reading JSON object
 	decoder = json.NewDecoder(reader)
-	status = file.StatusSuccess
+	st = file.StatusSuccess
+	msg = "JSON object reader created successfully"
 
 	return &jsonReader{decoder: decoder}, nil
 }
 
 // createTextCSVReader creates a text reader for reading text files.
 func (f *File) createTextCSVReader(location string) (file.RowReader, error) {
-	status := file.StatusError
+	var msg string
 
-	defer f.sendOperationStats(&FileLog{Operation: "TEXT/CSV READER", Location: location, Status: &status}, time.Now())
+	st := file.StatusError
+	startTime := time.Now()
+
+	defer file.LogFileOperation(
+		context.Background(), f.logger, f.metrics, "TEXT/CSV READER",
+		location, "GCS", startTime, &st, &msg,
+	)
 
 	buffer, err := io.ReadAll(f.body)
 	if err != nil {
 		f.logger.Errorf("failed to read text/csv body from location %s: %v", location, err)
+		msg = err.Error()
+
 		return nil, err
 	}
 
 	reader := bytes.NewReader(buffer)
-	status = file.StatusSuccess
+	st = file.StatusSuccess
+	msg = "Text/CSV reader created successfully"
 
 	return &textReader{
 		scanner: bufio.NewScanner(reader),
@@ -131,44 +169,64 @@ func (f *textReader) Scan(i any) error {
 
 func (f *File) Name() string {
 	bucketName := getBucketName(f.name)
+	location := getLocation(bucketName)
 
-	f.sendOperationStats(&FileLog{
-		Operation: "GET NAME",
-		Location:  getLocation(bucketName),
-	}, time.Now())
+	st := file.StatusSuccess
+	msg := "Name retrieved"
+	startTime := time.Now()
+
+	defer file.LogFileOperation(
+		context.Background(), f.logger, f.metrics, "GET NAME",
+		location, "GCS", startTime, &st, &msg,
+	)
 
 	return f.name
 }
 
 func (f *File) Size() int64 {
 	bucketName := getBucketName(f.name)
+	location := getLocation(bucketName)
 
-	f.sendOperationStats(&FileLog{
-		Operation: "FILE/DIR SIZE",
-		Location:  getLocation(bucketName),
-	}, time.Now())
+	st := file.StatusSuccess
+	msg := "Size retrieved"
+	startTime := time.Now()
+
+	defer file.LogFileOperation(
+		context.Background(), f.logger, f.metrics, "FILE/DIR SIZE",
+		location, "GCS", startTime, &st, &msg,
+	)
 
 	return f.size
 }
 
 func (f *File) ModTime() time.Time {
 	bucketName := getBucketName(f.name)
+	location := getLocation(bucketName)
 
-	f.sendOperationStats(&FileLog{
-		Operation: "LAST MODIFIED",
-		Location:  getLocation(bucketName),
-	}, time.Now())
+	st := file.StatusSuccess
+	msg := "ModTime retrieved"
+	startTime := time.Now()
+
+	defer file.LogFileOperation(
+		context.Background(), f.logger, f.metrics, "LAST MODIFIED",
+		location, "GCS", startTime, &st, &msg,
+	)
 
 	return f.lastModified
 }
 
 func (f *File) Mode() fs.FileMode {
 	bucketName := getBucketName(f.name)
+	location := getLocation(bucketName)
 
-	f.sendOperationStats(&FileLog{
-		Operation: "MODE",
-		Location:  getLocation(bucketName),
-	}, time.Now())
+	st := file.StatusSuccess
+	msg := "Mode retrieved"
+	startTime := time.Now()
+
+	defer file.LogFileOperation(
+		context.Background(), f.logger, f.metrics, "MODE",
+		location, "GCS", startTime, &st, &msg,
+	)
 
 	if f.isDir {
 		return fs.ModeDir
@@ -179,22 +237,32 @@ func (f *File) Mode() fs.FileMode {
 
 func (f *File) IsDir() bool {
 	bucketName := getBucketName(f.name)
+	location := getLocation(bucketName)
 
-	f.sendOperationStats(&FileLog{
-		Operation: "IS DIR",
-		Location:  getLocation(bucketName),
-	}, time.Now())
+	st := file.StatusSuccess
+	msg := "IsDir checked"
+	startTime := time.Now()
+
+	defer file.LogFileOperation(
+		context.Background(), f.logger, f.metrics, "IS DIR",
+		location, "GCS", startTime, &st, &msg,
+	)
 
 	return f.isDir || f.contentType == "application/x-directory"
 }
 
 func (f *File) Sys() any {
 	bucketName := getBucketName(f.name)
+	location := getLocation(bucketName)
 
-	f.sendOperationStats(&FileLog{
-		Operation: "SYS",
-		Location:  getLocation(bucketName),
-	}, time.Now())
+	st := file.StatusSuccess
+	msg := "Sys info retrieved"
+	startTime := time.Now()
+
+	defer file.LogFileOperation(
+		context.Background(), f.logger, f.metrics, "SYS",
+		location, "GCS", startTime, &st, &msg,
+	)
 
 	return nil
 }

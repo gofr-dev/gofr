@@ -33,12 +33,11 @@ func (f *FileSystem) Mkdir(name string, _ os.FileMode) error {
 
 	st := file.StatusError
 
-	defer f.sendOperationStats(&FileLog{
-		Operation: "MKDIR",
-		Location:  getLocation(f.config.BucketName),
-		Status:    &st,
-		Message:   &msg,
-	}, time.Now())
+	startTime := time.Now()
+
+	defer file.LogFileOperation(
+		context.Background(), f.logger, f.metrics, "MKDIR", getLocation(f.config.BucketName), "GCS",
+		startTime, &st, &msg)
 
 	if name == "" {
 		msg = "directory name cannot be empty"
@@ -55,12 +54,10 @@ func (f *FileSystem) Mkdir(name string, _ os.FileMode) error {
 
 	_, err := writer.Write([]byte("dir"))
 	if err != nil {
-		if err != nil {
-			msg = fmt.Sprintf("failed to create directory %q on GCS: %v", objName, err)
-			f.logger.Errorf(msg)
+		msg = fmt.Sprintf("failed to create directory %q on GCS: %v", objName, err)
+		f.logger.Errorf(msg)
 
-			return err
-		}
+		return err
 	}
 
 	st = file.StatusSuccess
@@ -112,12 +109,11 @@ func (f *FileSystem) RemoveAll(dirPath string) error {
 
 	st := file.StatusError
 
-	defer f.sendOperationStats(&FileLog{
-		Operation: "REMOVEALL",
-		Location:  getLocation(f.config.BucketName),
-		Status:    &st,
-		Message:   &msg,
-	}, time.Now())
+	startTime := time.Now()
+
+	defer file.LogFileOperation(
+		context.Background(), f.logger, f.metrics, "REMOVEALL", getLocation(f.config.BucketName),
+		"GCS", startTime, &st, &msg)
 
 	ctx := context.TODO()
 
@@ -130,6 +126,9 @@ func (f *FileSystem) RemoveAll(dirPath string) error {
 	for _, obj := range objects {
 		if err := f.conn.DeleteObject(ctx, obj); err != nil {
 			f.logger.Errorf("Error while deleting directory: %v", err)
+
+			msg = err.Error()
+
 			return err
 		}
 	}
@@ -148,12 +147,11 @@ func (f *FileSystem) ReadDir(dir string) ([]file.FileInfo, error) {
 
 	st := file.StatusError
 
-	defer f.sendOperationStats(&FileLog{
-		Operation: "READDIR",
-		Location:  getLocation(f.config.BucketName),
-		Status:    &st,
-		Message:   &msg,
-	}, time.Now())
+	startTime := time.Now()
+
+	defer file.LogFileOperation(
+		context.Background(), f.logger, f.metrics,
+		"READDIR", getLocation(f.config.BucketName), "GCS", startTime, &st, &msg)
 
 	ctx := context.TODO()
 
@@ -204,12 +202,11 @@ func (f *FileSystem) ChDir(_ string) error {
 
 	var msg = "Changing directory not supported"
 
-	defer f.sendOperationStats(&FileLog{
-		Operation: op,
-		Location:  getLocation(f.config.BucketName),
-		Status:    &st,
-		Message:   &msg,
-	}, time.Now())
+	startTime := time.Now()
+
+	defer file.LogFileOperation(
+		context.Background(), f.logger, f.metrics, op, getLocation(f.config.BucketName), "GCS",
+		startTime, &st, &msg)
 
 	f.logger.Errorf("%s: not supported in GCS", op)
 
@@ -224,12 +221,9 @@ func (f *FileSystem) Getwd() (string, error) {
 
 	var msg = "Returning simulated root directory"
 
-	defer f.sendOperationStats(&FileLog{
-		Operation: op,
-		Location:  getLocation(f.config.BucketName),
-		Status:    &st,
-		Message:   &msg,
-	}, start)
+	defer file.LogFileOperation(
+		context.Background(), f.logger, f.metrics, op, getLocation(f.config.BucketName),
+		"GCS", start, &st, &msg)
 
 	return getLocation(f.config.BucketName), nil
 }
@@ -238,12 +232,11 @@ func (f *FileSystem) Stat(name string) (file.FileInfo, error) {
 
 	st := file.StatusError
 
-	defer f.sendOperationStats(&FileLog{
-		Operation: "STAT",
-		Location:  getLocation(f.config.BucketName),
-		Status:    &st,
-		Message:   &msg,
-	}, time.Now())
+	startTime := time.Now()
+
+	defer file.LogFileOperation(
+		context.Background(), f.logger, f.metrics, "STAT", getLocation(f.config.BucketName),
+		"GCS", startTime, &st, &msg)
 
 	ctx := context.TODO()
 
@@ -274,6 +267,8 @@ func (f *FileSystem) Stat(name string) (file.FileInfo, error) {
 		objs, _, listErr := f.conn.ListDir(ctx, prefix)
 		if listErr != nil {
 			f.logger.Errorf("Error checking directory prefix: %v", listErr)
+			msg = listErr.Error()
+
 			return nil, listErr
 		}
 
@@ -293,14 +288,7 @@ func (f *FileSystem) Stat(name string) (file.FileInfo, error) {
 	}
 
 	f.logger.Errorf("Error returning file or directory info: %v", err)
+	msg = err.Error()
 
 	return nil, err
-}
-
-func (f *FileSystem) sendOperationStats(fl *FileLog, startTime time.Time) {
-	duration := time.Since(startTime).Microseconds()
-
-	fl.Duration = duration
-
-	f.logger.Debug(fl)
 }
