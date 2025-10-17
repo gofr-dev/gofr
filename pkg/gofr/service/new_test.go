@@ -303,7 +303,7 @@ func TestHTTPService_PatchWithHeaders(t *testing.T) {
 			t.Fatal("Unable to read request body")
 		}
 
-		assert.Equal(t, http.MethodPut, r.Method)
+		assert.Equal(t, http.MethodPatch, r.Method)
 		assert.Equal(t, "/test-path", r.URL.Path)
 		assert.Equal(t, "key=value&name=gofr&name=test", r.URL.RawQuery)
 		assert.Contains(t, "value1", r.Header.Get("Header1"))
