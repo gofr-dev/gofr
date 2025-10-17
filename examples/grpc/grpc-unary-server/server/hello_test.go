@@ -21,9 +21,6 @@ func TestGoFrHelloServer_Creation(t *testing.T) {
 	configs := testutil.NewServerConfigs(t)
 
 	t.Run("HelloGoFrServerCreation", func(t *testing.T) {
-		// Set HTTP port to avoid port conflicts
-		os.Setenv("HTTP_PORT", fmt.Sprintf("%d", configs.HTTPPort))
-
 		// Test GoFr's HelloGoFrServer creation
 		app := gofr.New()
 		helloServer := &HelloGoFrServer{}
@@ -36,9 +33,6 @@ func TestGoFrHelloServer_Creation(t *testing.T) {
 	})
 
 	t.Run("HelloServerWrapperCreation", func(t *testing.T) {
-		// Set HTTP port to avoid port conflicts
-		os.Setenv("HTTP_PORT", fmt.Sprintf("%d", configs.HTTPPort))
-
 		// Test GoFr's HelloServerWrapper creation
 		app := gofr.New()
 		helloServer := &HelloGoFrServer{}
@@ -138,13 +132,10 @@ func TestGoFrHelloServer_ContextIntegration(t *testing.T) {
 }
 
 func TestGoFrHelloServer_Registration(t *testing.T) {
-	configs := testutil.NewServerConfigs(t)
+	_ = testutil.NewServerConfigs(t)
 
 	// Test GoFr's server registration functionality
 	t.Run("RegisterHelloServerWithGofr", func(t *testing.T) {
-		// Set HTTP port to avoid port conflicts
-		os.Setenv("HTTP_PORT", fmt.Sprintf("%d", configs.HTTPPort))
-
 		// Test GoFr's RegisterHelloServerWithGofr function
 		app := gofr.New()
 		helloServer := &HelloGoFrServer{}
@@ -186,10 +177,7 @@ func TestGoFrHelloServer_HealthIntegration(t *testing.T) {
 }
 
 func TestGoFrHelloServer_MultipleInstances(t *testing.T) {
-	configs := testutil.NewServerConfigs(t)
-
-	// Set HTTP port to avoid port conflicts
-	os.Setenv("HTTP_PORT", fmt.Sprintf("%d", configs.HTTPPort))
+	_ = testutil.NewServerConfigs(t)
 
 	// Test GoFr's multiple server instances
 	t.Run("MultipleHelloServers", func(t *testing.T) {
@@ -211,10 +199,7 @@ func TestGoFrHelloServer_MultipleInstances(t *testing.T) {
 }
 
 func TestNewHelloGoFrServer(t *testing.T) {
-	configs := testutil.NewServerConfigs(t)
-
-	// Set HTTP port to avoid port conflicts
-	os.Setenv("HTTP_PORT", fmt.Sprintf("%d", configs.HTTPPort))
+	_ = testutil.NewServerConfigs(t)
 
 	t.Run("NewHelloGoFrServerCreation", func(t *testing.T) {
 		// Test GoFr's NewHelloGoFrServer function
@@ -229,10 +214,7 @@ func TestNewHelloGoFrServer(t *testing.T) {
 }
 
 func TestHelloServerWrapper_SayHello(t *testing.T) {
-	configs := testutil.NewServerConfigs(t)
-
-	// Set HTTP port to avoid port conflicts
-	os.Setenv("HTTP_PORT", fmt.Sprintf("%d", configs.HTTPPort))
+	_ = testutil.NewServerConfigs(t)
 
 	t.Run("SayHelloWrapper", func(t *testing.T) {
 		// Create a mock server implementation
