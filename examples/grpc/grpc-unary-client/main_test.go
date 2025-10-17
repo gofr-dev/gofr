@@ -60,7 +60,7 @@ func TestIntegration_UnaryClient(t *testing.T) {
 	time.Sleep(100 * time.Millisecond)
 
 	// Set the gRPC server host for the client
-	os.Setenv("GRPC_SERVER_HOST", configs.GRPCHost)
+	t.Setenv("GRPC_SERVER_HOST", configs.GRPCHost)
 
 	// Start the HTTP server (unary client example)
 	go main()
@@ -119,7 +119,7 @@ func TestIntegration_UnaryClient_Concurrent(t *testing.T) {
 	time.Sleep(100 * time.Millisecond)
 
 	// Set the gRPC server host for the client
-	os.Setenv("GRPC_SERVER_HOST", configs.GRPCHost)
+	t.Setenv("GRPC_SERVER_HOST", configs.GRPCHost)
 
 	// Start the HTTP server (unary client example)
 	go main()
