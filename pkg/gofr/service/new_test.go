@@ -322,7 +322,7 @@ func TestHTTPService_PatchWithHeaders(t *testing.T) {
 
 	// TODO : Nil Correlation ID is coming in logs, it has to be fixed
 
-	resp, err := service.PutWithHeaders(t.Context(), "test-path",
+	resp, err := service.PatchWithHeaders(t.Context(), "test-path",
 		map[string]any{"key": "value", "name": []string{"gofr", "test"}}, []byte("{Test Body}"),
 		map[string]string{"header1": "value1"})
 
