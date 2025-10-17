@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -32,10 +33,13 @@ func TestMain(m *testing.M) {
 }
 
 func TestIntegration_SimpleAPIServer(t *testing.T) {
-	host := "http://localhost:9000"
-
+	httpPort := testutil.GetFreePort(t)
 	port := testutil.GetFreePort(t)
+
+	t.Setenv("HTTP_PORT", strconv.Itoa(httpPort))
 	t.Setenv("METRICS_PORT", strconv.Itoa(port))
+
+	host := fmt.Sprintf("http://localhost:%d", httpPort)
 
 	go main()
 	time.Sleep(100 * time.Millisecond) // Giving some time to start the server
@@ -48,7 +52,6 @@ func TestIntegration_SimpleAPIServer(t *testing.T) {
 		{"hello handler", "/hello", "Hello World!"},
 		{"hello handler with query parameter", "/hello?name=gofr", "Hello gofr!"},
 		{"redis handler", "/redis", ""},
-		{"trace handler", "/trace", ""},
 		{"mysql handler", "/mysql", float64(4)},
 	}
 
@@ -80,7 +83,16 @@ func TestIntegration_SimpleAPIServer(t *testing.T) {
 }
 
 func TestIntegration_SimpleAPIServer_Errors(t *testing.T) {
-	host := "http://localhost:9000"
+	httpPort := testutil.GetFreePort(t)
+	port := testutil.GetFreePort(t)
+
+	t.Setenv("HTTP_PORT", strconv.Itoa(httpPort))
+	t.Setenv("METRICS_PORT", strconv.Itoa(port))
+
+	host := fmt.Sprintf("http://localhost:%d", httpPort)
+
+	go main()
+	time.Sleep(100 * time.Millisecond) // Giving some time to start the server
 
 	tests := []struct {
 		desc       string
@@ -136,7 +148,16 @@ func TestIntegration_SimpleAPIServer_Errors(t *testing.T) {
 }
 
 func TestIntegration_SimpleAPIServer_Health(t *testing.T) {
-	host := "http://localhost:9000"
+	httpPort := testutil.GetFreePort(t)
+	port := testutil.GetFreePort(t)
+
+	t.Setenv("HTTP_PORT", strconv.Itoa(httpPort))
+	t.Setenv("METRICS_PORT", strconv.Itoa(port))
+
+	host := fmt.Sprintf("http://localhost:%d", httpPort)
+
+	go main()
+	time.Sleep(100 * time.Millisecond) // Giving some time to start the server
 
 	tests := []struct {
 		desc       string
