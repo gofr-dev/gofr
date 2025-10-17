@@ -87,6 +87,35 @@ func TestRedisSetHandler(t *testing.T) {
 	require.Error(t, err)
 }
 
+func TestRedisGetHandler(t *testing.T) {
+	configs := testutil.NewServerConfigs(t)
+
+	a := gofr.New()
+	logger := logging.NewLogger(logging.DEBUG)
+	redisClient, mock := redismock.NewClientMock()
+
+	rc := redis.NewClient(config.NewMockConfig(map[string]string{"REDIS_HOST": "localhost", "REDIS_PORT": "2001"}), logger, a.Metrics())
+	rc.Client = redisClient
+
+	mock.ExpectSet("testKey1", "testValue1", time.Minute*5).SetErr(testutil.CustomError{ErrorMessage: "redis get error"})
+	mock.ClearExpect()
+
+	mock.ExpectGet("testKey1").SetErr(testutil.CustomError{ErrorMessage: "redis get error"})
+	mock.ClearExpect()
+
+	req, _ := http.NewRequestWithContext(context.Background(), http.MethodGet, fmt.Sprintf("http://localhost:%d/handle", configs.HTTPPort), bytes.NewBuffer([]byte(`{"key":"value"}`)))
+	req.Header.Set("content-type", "application/json")
+	gofrReq := gofrHTTP.NewRequest(req)
+
+	ctx := &gofr.Context{Context: context.Background(),
+		Request: gofrReq, Container: &container.Container{Logger: logger, Redis: rc}}
+
+	resp, err := RedisGetHandler(ctx)
+
+	assert.Nil(t, resp)
+	require.Error(t, err)
+}
+
 func TestRedisPipelineHandler(t *testing.T) {
 	configs := testutil.NewServerConfigs(t)
 
