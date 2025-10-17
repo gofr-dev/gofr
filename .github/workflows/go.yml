@@ -97,17 +97,16 @@ jobs:
         id: test
         uses: nick-fields/retry@v3
         with:
-          timeout_minutes: 5  # Maximum time for the tests to run
-          max_attempts: 2      # Retry up to 2 times if tests fail
+          timeout_minutes: 5
+          max_attempts: 2
+          retry_on: error 
+          shell: bash
           command: |
+            set -e  
             export APP_ENV=test
-            # Run tests for the examples directory with coverage
             go test ./examples/... -v -short -covermode=atomic -coverprofile packageWithpbgo.cov -coverpkg=./examples/...
-             # Filter out auto-generated files by protobuf and gofr framework from coverage report
             grep -vE '(/client/|grpc-.+-client/main\.go|_client\.go|_gofr\.go|_grpc\.pb\.go|\.pb\.go|\.proto|health_.*\.go)' packageWithpbgo.cov > profile.cov
-            # Display coverage statistics
             go tool cover -func profile.cov
-
       # Upload coverage report for the 1.24 Go version only
       - name: Upload Test Coverage
         if: ${{ matrix.go-version == '1.24'}}
