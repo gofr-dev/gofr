@@ -2,8 +2,6 @@ package client
 
 import (
 	"context"
-	"fmt"
-	"os"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -148,13 +146,10 @@ func TestGoFrHelloClientWrapper_MultipleInstances(t *testing.T) {
 }
 
 func TestGoFrHelloClientWrapper_ErrorHandling(t *testing.T) {
-	configs := testutil.NewServerConfigs(t)
+	_ = testutil.NewServerConfigs(t)
 
 	// Test GoFr's error handling patterns
 	t.Run("InvalidAddressHandling", func(t *testing.T) {
-		// Set HTTP port to avoid port conflicts
-		os.Setenv("HTTP_PORT", fmt.Sprintf("%d", configs.HTTPPort))
-
 		// Test GoFr's handling of invalid addresses
 		app := gofr.New()
 		helloClient, err := NewHelloGoFrClient("invalid:address", app.Metrics())
