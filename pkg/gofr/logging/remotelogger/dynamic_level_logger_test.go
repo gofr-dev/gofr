@@ -326,3 +326,34 @@ func TestRemoteLogger_ConcurrentLevelAccess(t *testing.T) {
 
 	assert.NotEqual(t, logging.INFO, rl.currentLevel, "expected level to change")
 }
+
+func TestLogLevelChangeToFatal_NoExit(t *testing.T) {
+	mockServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+
+		body := `{ "data": { "serviceName": "test-service", "logLevel": "FATAL" } }`
+
+		_, _ = w.Write([]byte(body))
+	}))
+	defer mockServer.Close()
+
+	// This test succeeds if it completes without the process exiting
+	log := testutil.StdoutOutputForFunc(func() {
+		rl := New(logging.INFO, mockServer.URL, 10*time.Millisecond)
+
+		time.Sleep(20 * time.Millisecond)
+
+		// If we reach this point, the application didn't exit
+		// Now check that the logger did change to FATAL level
+		if remoteLogger, ok := rl.(*remoteLogger); ok {
+			remoteLogger.mu.RLock()
+
+			assert.Equal(t, logging.FATAL, remoteLogger.currentLevel, "Log level should be updated to FATAL")
+
+			remoteLogger.mu.RUnlock()
+		}
+	})
+
+	// Verify the log contains a warning about the level change
+	assert.Contains(t, log, "LOG_LEVEL updated from INFO to FATAL")
+}
