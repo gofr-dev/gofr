@@ -118,6 +118,103 @@ func Test_CreateFile(t *testing.T) {
 	}
 }
 
+func Test_CreateFile_ErrorCases(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	// Create a mock S3 client
+	mockS3 := NewMocks3Client(ctrl)
+	mockLogger := NewMockLogger(ctrl)
+	mockMetrics := NewMockMetrics(ctrl)
+
+	// Define the configuration for the S3 package
+	config := &Config{
+		EndPoint:        "https://example.com",
+		BucketName:      "test-bucket",
+		Region:          "us-east-1",
+		AccessKeyID:     "dummy-access-key",
+		SecretAccessKey: "dummy-secret-key",
+	}
+
+	f := S3File{
+		logger:  mockLogger,
+		metrics: mockMetrics,
+		conn:    mockS3,
+	}
+
+	fs := &FileSystem{
+		s3File:  f,
+		conn:    mockS3,
+		logger:  mockLogger,
+		config:  config,
+		metrics: mockMetrics,
+	}
+
+	tests := []struct {
+		name        string
+		createPath  string
+		setupMocks  func()
+		expectError bool
+	}{
+		{
+			name:       "PutObject_Fails",
+			createPath: "folder/test.txt",
+			setupMocks: func() {
+				// Mock ListObjectsV2 to succeed (for parent path check)
+				mockS3.EXPECT().ListObjectsV2(gomock.Any(), gomock.Any()).Return(&s3.ListObjectsV2Output{
+					Contents: []types.Object{
+						{
+							Key:  aws.String("folder/"),
+							Size: aws.Int64(0),
+						},
+					},
+				}, nil)
+				// Mock PutObject to fail
+				mockS3.EXPECT().PutObject(gomock.Any(), gomock.Any()).Return(nil, errMock)
+			},
+			expectError: true,
+		},
+		{
+			name:       "GetObject_Fails_After_PutObject_Success",
+			createPath: "folder/test.txt",
+			setupMocks: func() {
+				// Mock ListObjectsV2 to succeed (for parent path check)
+				mockS3.EXPECT().ListObjectsV2(gomock.Any(), gomock.Any()).Return(&s3.ListObjectsV2Output{
+					Contents: []types.Object{
+						{
+							Key:  aws.String("folder/"),
+							Size: aws.Int64(0),
+						},
+					},
+				}, nil)
+				// Mock PutObject to succeed
+				mockS3.EXPECT().PutObject(gomock.Any(), gomock.Any()).Return(&s3.PutObjectOutput{}, nil)
+				// Mock GetObject to fail
+				mockS3.EXPECT().GetObject(gomock.Any(), gomock.Any()).Return(nil, errMock)
+			},
+			expectError: true,
+		},
+	}
+
+	// Don't mock logger expectations - let the actual logger calls happen
+	mockLogger.EXPECT().Debug(gomock.Any()).AnyTimes()
+	mockLogger.EXPECT().Errorf(gomock.Any(), gomock.Any()).AnyTimes()
+	mockLogger.EXPECT().Logf(gomock.Any(), gomock.Any()).AnyTimes()
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			tt.setupMocks()
+			_, err := fs.Create(tt.createPath)
+
+			if tt.expectError {
+				require.Error(t, err, "Expected error for case: %s", tt.name)
+			} else {
+				require.NoError(t, err, "Unexpected error for case: %s", tt.name)
+			}
+		})
+	}
+}
+
 func Test_OpenFile(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
@@ -150,20 +247,170 @@ func Test_OpenFile(t *testing.T) {
 		metrics: mockMetrics,
 	}
 
-	mockLogger.EXPECT().Logf(gomock.Any(), gomock.Any()).AnyTimes()
-	mockLogger.EXPECT().Debug(gomock.Any()).AnyTimes()
-	mockLogger.EXPECT().Errorf(gomock.Any(), gomock.Any()).AnyTimes()
-	mockLogger.EXPECT().Debug(gomock.Any(), gomock.Any()).AnyTimes()
+	tests := []struct {
+		name          string
+		fileName      string
+		setupMocks    func()
+		expectError   bool
+		expectedError string
+	}{
+		{
+			name:     "Success_OpenFile",
+			fileName: "abc.json",
+			setupMocks: func() {
+				mockLogger.EXPECT().Debug(gomock.Any()).Times(1) // For the deferred stat log
+				mockS3.EXPECT().GetObject(gomock.Any(), gomock.Any()).Return(&s3.GetObjectOutput{
+					Body:          io.NopCloser(strings.NewReader("mock file content")), // Mock file content
+					ContentType:   aws.String("text/plain"),                             // Mock content type
+					LastModified:  aws.Time(time.Now()),                                 // Mock last modified time
+					ContentLength: aws.Int64(123),                                       // Mock file size in bytes
+				}, nil).Times(1)
+			},
+			expectError: false,
+		},
+		{
+			name:     "Error_GetObjectFails",
+			fileName: "nonexistent.json",
+			setupMocks: func() {
+				mockLogger.EXPECT().Errorf("failed to retrieve %q: %v", "nonexistent.json", errMock).Times(1)
+				mockLogger.EXPECT().Debug(gomock.Any()).Times(1) // For the deferred stat log
+				mockS3.EXPECT().GetObject(gomock.Any(), gomock.Any()).Return(nil, errMock).Times(1)
+			},
+			expectError:   true,
+			expectedError: "mocked error",
+		},
+	}
 
-	mockS3.EXPECT().GetObject(gomock.Any(), gomock.Any()).Return(&s3.GetObjectOutput{
-		Body:          io.NopCloser(strings.NewReader("mock file content")), // Mock file content
-		ContentType:   aws.String("text/plain"),                             // Mock content type
-		LastModified:  aws.Time(time.Now()),                                 // Mock last modified time
-		ContentLength: aws.Int64(123),                                       // Mock file size in bytes
-	}, nil).AnyTimes()
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Reset mock expectations for each test
+			ctrl.Finish()
+			ctrl = gomock.NewController(t)
+			mockS3 = NewMocks3Client(ctrl)
+			mockLogger = NewMockLogger(ctrl)
+			mockMetrics = NewMockMetrics(ctrl)
 
-	_, err := fs.OpenFile("abc.json", 0, os.ModePerm)
-	require.NoError(t, err, "TEST[%d] Failed. Desc: %v", 0, "Failed to open file")
+			// Update the FileSystem with new mocks
+			fs.conn = mockS3
+			fs.logger = mockLogger
+			fs.metrics = mockMetrics
+
+			// Setup mocks for this test case
+			tt.setupMocks()
+
+			// Execute the test
+			_, err := fs.OpenFile(tt.fileName, 0, os.ModePerm)
+
+			if tt.expectError {
+				require.Error(t, err, "Expected error but got none for case: %s", tt.name)
+
+				if tt.expectedError != "" {
+					require.Contains(t, err.Error(), tt.expectedError, "Expected error to contain %q, got %q", tt.expectedError, err.Error())
+				}
+			} else {
+				require.NoError(t, err, "Unexpected error for case: %s", tt.name)
+			}
+		})
+	}
+}
+
+func Test_Open(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	// Create a mock S3 client
+	mockS3 := NewMocks3Client(ctrl)
+	mockLogger := NewMockLogger(ctrl)
+	mockMetrics := NewMockMetrics(ctrl)
+
+	// Define the configuration for the S3 package
+	config := &Config{
+		EndPoint:        "https://example.com",
+		BucketName:      "test-bucket",
+		Region:          "us-east-1",
+		AccessKeyID:     "dummy-access-key",
+		SecretAccessKey: "dummy-secret-key",
+	}
+
+	f := S3File{
+		logger:  mockLogger,
+		metrics: mockMetrics,
+		conn:    mockS3,
+	}
+
+	fs := &FileSystem{
+		s3File:  f,
+		conn:    mockS3,
+		logger:  mockLogger,
+		config:  config,
+		metrics: mockMetrics,
+	}
+
+	tests := []struct {
+		name          string
+		fileName      string
+		setupMocks    func()
+		expectError   bool
+		expectedError string
+	}{
+		{
+			name:     "Success_OpenFile",
+			fileName: "test.json",
+			setupMocks: func() {
+				mockLogger.EXPECT().Debug(gomock.Any()).Times(1) // For the deferred stat log
+				mockS3.EXPECT().GetObject(gomock.Any(), gomock.Any()).Return(&s3.GetObjectOutput{
+					Body:          io.NopCloser(strings.NewReader("test content")),
+					ContentType:   aws.String("application/json"),
+					LastModified:  aws.Time(time.Now()),
+					ContentLength: aws.Int64(12),
+				}, nil).Times(1)
+			},
+			expectError: false,
+		},
+		{
+			name:     "Error_GetObjectFails",
+			fileName: "missing.json",
+			setupMocks: func() {
+				mockLogger.EXPECT().Errorf("failed to retrieve %q: %v", "missing.json", errMock).Times(1)
+				mockLogger.EXPECT().Debug(gomock.Any()).Times(1) // For the deferred stat log
+				mockS3.EXPECT().GetObject(gomock.Any(), gomock.Any()).Return(nil, errMock).Times(1)
+			},
+			expectError:   true,
+			expectedError: "mocked error",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Reset mock expectations for each test
+			ctrl.Finish()
+			ctrl = gomock.NewController(t)
+			mockS3 = NewMocks3Client(ctrl)
+			mockLogger = NewMockLogger(ctrl)
+			mockMetrics = NewMockMetrics(ctrl)
+
+			// Update the FileSystem with new mocks
+			fs.conn = mockS3
+			fs.logger = mockLogger
+			fs.metrics = mockMetrics
+
+			// Setup mocks for this test case
+			tt.setupMocks()
+
+			// Execute the test
+			_, err := fs.Open(tt.fileName)
+
+			if tt.expectError {
+				require.Error(t, err, "Expected error but got none for case: %s", tt.name)
+
+				if tt.expectedError != "" {
+					require.Contains(t, err.Error(), tt.expectedError, "Expected error to contain %q, got %q", tt.expectedError, err.Error())
+				}
+			} else {
+				require.NoError(t, err, "Unexpected error for case: %s", tt.name)
+			}
+		})
+	}
 }
 
 func Test_MakingDirectories(t *testing.T) {
@@ -288,6 +535,53 @@ func Test_RenameDirectory(t *testing.T) {
 
 	err := fs.Rename("old-dir", "new-dir")
 	require.NoError(t, err, "TEST[%d] Failed. Desc: %v", 0, "Failed to rename directory")
+}
+
+func Test_renameDirectory_ErrorCase(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	// Create a mock S3 client
+	mockS3 := NewMocks3Client(ctrl)
+	mockLogger := NewMockLogger(ctrl)
+	mockMetrics := NewMockMetrics(ctrl)
+
+	// Define the configuration for the S3 package
+	config := &Config{
+		EndPoint:        "https://example.com",
+		BucketName:      "test-bucket",
+		Region:          "us-east-1",
+		AccessKeyID:     "dummy-access-key",
+		SecretAccessKey: "dummy-secret-key",
+	}
+
+	f := S3File{
+		logger:  mockLogger,
+		metrics: mockMetrics,
+		conn:    mockS3,
+	}
+
+	fs := &FileSystem{
+		s3File:  f,
+		conn:    mockS3,
+		logger:  mockLogger,
+		config:  config,
+		metrics: mockMetrics,
+	}
+
+	// Mock ListObjectsV2 to fail
+	mockS3.EXPECT().ListObjectsV2(gomock.Any(), gomock.Any()).Return(nil, errMock)
+
+	// Don't mock logger expectations - let the actual logger calls happen
+	mockLogger.EXPECT().Debug(gomock.Any()).AnyTimes()
+	mockLogger.EXPECT().Errorf(gomock.Any(), gomock.Any()).AnyTimes()
+
+	// Execute the test by calling Rename with directory paths (no extension)
+	err := fs.Rename("old-dir", "new-dir")
+
+	// Verify error is returned
+	require.Error(t, err, "Expected error when ListObjectsV2 fails in renameDirectory")
+	require.Contains(t, err.Error(), "mocked error", "Expected error to contain the mocked error")
 }
 
 type result struct {
@@ -655,4 +949,51 @@ func Test_StatDirectory(t *testing.T) {
 
 	require.NoError(t, err, "TEST[%d] Failed. Desc: %v", 0, "Error getting directory stats")
 	assert.Equal(t, expectedResponse, response, "Mismatch in results for path: %v", expectedResponse.name)
+}
+
+func Test_Stat_ErrorCase(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	// Create a mock S3 client
+	mockS3 := NewMocks3Client(ctrl)
+	mockLogger := NewMockLogger(ctrl)
+	mockMetrics := NewMockMetrics(ctrl)
+
+	// Define the configuration for the S3 package
+	config := &Config{
+		EndPoint:        "https://example.com",
+		BucketName:      "test-bucket",
+		Region:          "us-east-1",
+		AccessKeyID:     "dummy-access-key",
+		SecretAccessKey: "dummy-secret-key",
+	}
+
+	f := S3File{
+		logger:  mockLogger,
+		metrics: mockMetrics,
+		conn:    mockS3,
+	}
+
+	fs := &FileSystem{
+		s3File:  f,
+		conn:    mockS3,
+		logger:  mockLogger,
+		config:  config,
+		metrics: mockMetrics,
+	}
+
+	// Mock ListObjectsV2 to fail
+	mockS3.EXPECT().ListObjectsV2(gomock.Any(), gomock.Any()).Return(nil, errMock)
+
+	// Don't mock logger expectations - let the actual logger calls happen
+	mockLogger.EXPECT().Debug(gomock.Any()).AnyTimes()
+	mockLogger.EXPECT().Errorf(gomock.Any(), gomock.Any()).AnyTimes()
+
+	// Execute the test
+	_, err := fs.Stat("test-file.txt")
+
+	// Verify error is returned
+	require.Error(t, err, "Expected error when ListObjectsV2 fails")
+	require.Contains(t, err.Error(), "mocked error", "Expected error to contain the mocked error")
 }
