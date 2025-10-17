@@ -2,6 +2,11 @@
 
 GoFr provides a simple way to build command-line applications using `app.NewCMD()`. This creates standalone CLI tools without starting an HTTP server.
 
+## Configuration
+To configure logging for CLI applications, set the following environment variable:
+- `CMD_LOGS_FILE`: The file path where CLI logs will be written. If not set, logs are printed to stdout by default.
+
+
 ## Getting Started
 
 Create a basic CLI application with subcommands:
@@ -71,4 +76,4 @@ go build -o mycli
 ./mycli --help
 ```
 
-For more details, see the [sample-cmd example](../../examples/sample-cmd).
+For more details, see the [sample-cmd example](../../../examples/sample-cmd).
