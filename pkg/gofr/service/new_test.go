@@ -15,6 +15,20 @@ import (
 	"gofr.dev/pkg/gofr/logging"
 )
 
+func validateResponse(t *testing.T, resp *http.Response, err error, testNum int, desc string, hasError bool) {
+
+	if resp != nil {
+		defer resp.Body.Close()
+	}
+	if hasError {
+		require.Error(t, err)
+		assert.Nil(t, resp, "TEST[%d], Failed.\n%s")
+		return
+	}
+	require.NoError(t, err)
+	assert.NotNil(t, resp, "TEST[%d], Failed.\n%s", testNum, desc)
+}
+
 func TestNewHTTPService(t *testing.T) {
 	tests := []struct {
 		desc           string
@@ -79,7 +93,7 @@ func TestHTTPService_createAndSendRequest(t *testing.T) {
 
 			w.WriteHeader(http.StatusOK)
 		}))
-
+		defer server.Close()
 		service := &httpService{
 			Client:  http.DefaultClient,
 			url:     server.URL,
@@ -93,16 +107,7 @@ func TestHTTPService_createAndSendRequest(t *testing.T) {
 
 		resp, err := service.createAndSendRequest(ctx,
 			http.MethodPost, "test-path", tc.queryParams, tc.body, tc.headers)
-		if err != nil {
-			if resp != nil {
-				resp.Body.Close()
-			}
-		}
-
-		require.NoError(t, err)
-		assert.NotNil(t, resp, "TEST[%d], Failed.\n%s", i, tc.desc)
-
-		server.Close()
+		validateResponse(t, resp, err, i, tc.desc, false)
 	}
 }
 
@@ -129,12 +134,7 @@ func TestHTTPService_Get(t *testing.T) {
 	resp, err := service.Get(t.Context(), "test-path",
 		map[string]any{"key": "value", "name": []string{"gofr", "test"}})
 
-	if resp != nil {
-		defer resp.Body.Close()
-	}
-
-	require.NoError(t, err)
-	assert.NotNil(t, resp, "TEST, Failed.")
+	validateResponse(t, resp, err, 0, "", false)
 }
 
 func TestHTTPService_GetWithHeaders(t *testing.T) {
@@ -162,12 +162,8 @@ func TestHTTPService_GetWithHeaders(t *testing.T) {
 		map[string]any{"key": "value", "name": []string{"gofr", "test"}},
 		map[string]string{"header1": "value1"})
 
-	if resp != nil {
-		defer resp.Body.Close()
-	}
+	validateResponse(t, resp, err, 0, "", false)
 
-	require.NoError(t, err)
-	assert.NotNil(t, resp, "TEST, Failed.")
 }
 
 func TestHTTPService_Put(t *testing.T) {
@@ -202,12 +198,8 @@ func TestHTTPService_Put(t *testing.T) {
 	resp, err := service.Put(t.Context(), "test-path",
 		map[string]any{"key": "value", "name": []string{"gofr", "test"}}, []byte("{Test Body}"))
 
-	if resp != nil {
-		defer resp.Body.Close()
-	}
+	validateResponse(t, resp, err, 0, "", false)
 
-	require.NoError(t, err)
-	assert.NotNil(t, resp, "TEST, Failed.")
 }
 
 func TestHTTPService_PutWithHeaders(t *testing.T) {
@@ -244,12 +236,8 @@ func TestHTTPService_PutWithHeaders(t *testing.T) {
 		map[string]any{"key": "value", "name": []string{"gofr", "test"}}, []byte("{Test Body}"),
 		map[string]string{"header1": "value1"})
 
-	if resp != nil {
-		defer resp.Body.Close()
-	}
+	validateResponse(t, resp, err, 0, "", false)
 
-	require.NoError(t, err)
-	assert.NotNil(t, resp, "TEST, Failed.")
 }
 
 func TestHTTPService_Patch(t *testing.T) {
@@ -284,12 +272,8 @@ func TestHTTPService_Patch(t *testing.T) {
 	resp, err := service.Patch(t.Context(), "test-path",
 		map[string]any{"key": "value", "name": []string{"gofr", "test"}}, []byte("{Test Body}"))
 
-	if resp != nil {
-		defer resp.Body.Close()
-	}
+	validateResponse(t, resp, err, 0, "", false)
 
-	require.NoError(t, err)
-	assert.NotNil(t, resp, "TEST, Failed.")
 }
 
 func TestHTTPService_PatchWithHeaders(t *testing.T) {
@@ -326,12 +310,8 @@ func TestHTTPService_PatchWithHeaders(t *testing.T) {
 		map[string]any{"key": "value", "name": []string{"gofr", "test"}}, []byte("{Test Body}"),
 		map[string]string{"header1": "value1"})
 
-	if resp != nil {
-		defer resp.Body.Close()
-	}
+	validateResponse(t, resp, err, 0, "", false)
 
-	require.NoError(t, err)
-	assert.NotNil(t, resp, "TEST, Failed.")
 }
 
 func TestHTTPService_Post(t *testing.T) {
@@ -366,12 +346,8 @@ func TestHTTPService_Post(t *testing.T) {
 	resp, err := service.Post(t.Context(), "test-path",
 		map[string]any{"key": "value", "name": []string{"gofr", "test"}}, []byte("{Test Body}"))
 
-	if resp != nil {
-		defer resp.Body.Close()
-	}
+	validateResponse(t, resp, err, 0, "", false)
 
-	require.NoError(t, err)
-	assert.NotNil(t, resp, "TEST, Failed.")
 }
 
 func TestHTTPService_PostWithHeaders(t *testing.T) {
@@ -408,12 +384,8 @@ func TestHTTPService_PostWithHeaders(t *testing.T) {
 		map[string]any{"key": "value", "name": []string{"gofr", "test"}}, []byte("{Test Body}"),
 		map[string]string{"header1": "value1"})
 
-	if resp != nil {
-		defer resp.Body.Close()
-	}
+	validateResponse(t, resp, err, 0, "", false)
 
-	require.NoError(t, err)
-	assert.NotNil(t, resp, "TEST, Failed.")
 }
 
 func TestHTTPService_Delete(t *testing.T) {
@@ -446,12 +418,8 @@ func TestHTTPService_Delete(t *testing.T) {
 
 	resp, err := service.Delete(t.Context(), "test-path", []byte("{Test Body}"))
 
-	if resp != nil {
-		defer resp.Body.Close()
-	}
+	validateResponse(t, resp, err, 0, "", false)
 
-	require.NoError(t, err)
-	assert.NotNil(t, resp, "TEST, Failed.")
 }
 
 func TestHTTPService_DeleteWithHeaders(t *testing.T) {
@@ -486,12 +454,8 @@ func TestHTTPService_DeleteWithHeaders(t *testing.T) {
 	resp, err := service.DeleteWithHeaders(t.Context(), "test-path", []byte("{Test Body}"),
 		map[string]string{"header1": "value1"})
 
-	if resp != nil {
-		defer resp.Body.Close()
-	}
+	validateResponse(t, resp, err, 0, "", false)
 
-	require.NoError(t, err)
-	assert.NotNil(t, resp, "TEST, Failed.")
 }
 
 func TestHTTPService_createAndSendRequestCreateRequestFailure(t *testing.T) {
@@ -507,12 +471,8 @@ func TestHTTPService_createAndSendRequestCreateRequestFailure(t *testing.T) {
 		"!@#$", "test-path", map[string]any{"key": "value", "name": []string{"gofr", "test"}},
 		[]byte("{Test Body}"), map[string]string{"header1": "value1"})
 
-	if resp != nil {
-		defer resp.Body.Close()
-	}
+	validateResponse(t, resp, err, 0, "", true)
 
-	require.Error(t, err)
-	assert.Nil(t, resp, "TEST[%d], Failed.\n%s")
 }
 
 func TestHTTPService_createAndSendRequestServerError(t *testing.T) {
@@ -536,10 +496,6 @@ func TestHTTPService_createAndSendRequestServerError(t *testing.T) {
 		http.MethodPost, "test-path", map[string]any{"key": "value", "name": []string{"gofr", "test"}},
 		[]byte("{Test Body}"), map[string]string{"header1": "value1"})
 
-	if resp != nil {
-		defer resp.Body.Close()
-	}
+	validateResponse(t, resp, err, 0, "", true)
 
-	require.Error(t, err)
-	assert.Nil(t, resp, "TEST[%d], Failed.\n%s")
 }
