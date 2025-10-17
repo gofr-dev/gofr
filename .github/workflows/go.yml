@@ -222,6 +222,15 @@ jobs:
           codeCoverage=${codeCoverage%?}
           echo "CODE_COVERAGE=$codeCoverage" >> $GITHUB_ENV
           echo "✅ Total Code Coverage: $codeCoverage%"
+          
+
+      # Add this step after "Parse code-coverage value"
+      - name: Show Examples Coverage
+        working-directory: artifacts
+        run: |
+          echo "=== EXAMPLES COVERAGE BREAKDOWN ==="
+          go tool cover -func=merged_profile.cov | grep "examples/"
+
   #      - name: Check if code-coverage is greater than threshold
   #        run: |
   #          codeCoverage=${{ env.CODE_COVERAGE }}
