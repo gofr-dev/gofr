@@ -1,7 +1,6 @@
 package client
 
 import (
-	"os"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -15,7 +14,8 @@ import (
 )
 
 func TestGoFrHealthClientWrapper_Creation(t *testing.T) {
-	os.Setenv("GOFR_TELEMETRY", "false")
+	t.Setenv("GOFR_TELEMETRY", "false")
+
 	configs := testutil.NewServerConfigs(t)
 
 	t.Run("NewHealthClient", func(t *testing.T) {
@@ -50,7 +50,8 @@ func TestGoFrHealthClientWrapper_Creation(t *testing.T) {
 }
 
 func TestGoFrHealthClientWrapper_Methods(t *testing.T) {
-	os.Setenv("GOFR_TELEMETRY", "false")
+	t.Setenv("GOFR_TELEMETRY", "false")
+
 	configs := testutil.NewServerConfigs(t)
 
 	// Test GoFr's wrapper methods without actual gRPC calls
@@ -85,7 +86,8 @@ func TestGoFrHealthClientWrapper_Methods(t *testing.T) {
 }
 
 func TestGoFrHealthClientWrapper_ContextIntegration(t *testing.T) {
-	os.Setenv("GOFR_TELEMETRY", "false")
+	t.Setenv("GOFR_TELEMETRY", "false")
+
 	configs := testutil.NewServerConfigs(t)
 
 	// Test GoFr's context integration
@@ -128,7 +130,7 @@ func TestGoFrHealthClientWrapper_ContextIntegration(t *testing.T) {
 }
 
 func TestGoFrHealthClientWrapper_ErrorHandling(t *testing.T) {
-	os.Setenv("GOFR_TELEMETRY", "false")
+	t.Setenv("GOFR_TELEMETRY", "false")
 
 	// Test GoFr's error handling patterns
 	t.Run("InvalidConnectionHandling", func(t *testing.T) {

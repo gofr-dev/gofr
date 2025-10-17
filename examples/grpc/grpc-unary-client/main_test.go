@@ -64,7 +64,7 @@ func TestIntegration_UnaryClient(t *testing.T) {
 
 	// Start the HTTP server (unary client example)
 	go main()
-	time.Sleep(200 * time.Millisecond) // Give HTTP server time to start
+	time.Sleep(100 * time.Millisecond) // Give HTTP server time to start
 
 	// Test HTTP endpoints that use GoFr gRPC client internally
 	tests := []struct {
@@ -83,7 +83,7 @@ func TestIntegration_UnaryClient(t *testing.T) {
 		baseURL := fmt.Sprintf("http://localhost:%d%s", configs.HTTPPort, tc.path)
 		parsedURL, err := url.Parse(baseURL)
 		require.NoError(t, err, "TEST[%d], Failed to parse URL.\n%s", i, tc.desc)
-		
+
 		resp, err := http.Get(parsedURL.String())
 		require.NoError(t, err, "TEST[%d], Failed.\n%s", i, tc.desc)
 		defer resp.Body.Close()
@@ -123,7 +123,7 @@ func TestIntegration_UnaryClient_Concurrent(t *testing.T) {
 
 	// Start the HTTP server (unary client example)
 	go main()
-	time.Sleep(200 * time.Millisecond) // Give HTTP server time to start
+	time.Sleep(100 * time.Millisecond) // Give HTTP server time to start
 
 	numClients := 5
 	done := make(chan bool, numClients)
@@ -152,8 +152,8 @@ func TestIntegration_UnaryClient_Concurrent(t *testing.T) {
 func TestIntegration_UnaryClient_ErrorHandling(t *testing.T) {
 	t.Run("InvalidGRPCServerHost", func(t *testing.T) {
 		// Test with invalid gRPC server host
-		os.Setenv("GRPC_SERVER_HOST", "invalid:address")
-		
+		t.Setenv("GRPC_SERVER_HOST", "invalid:address")
+
 		// Create a new app to test with invalid host
 		app := gofr.New()
 		_, err := client.NewHelloGoFrClient(app.Config.Get("GRPC_SERVER_HOST"), app.Metrics())
@@ -166,8 +166,8 @@ func TestIntegration_UnaryClient_ErrorHandling(t *testing.T) {
 
 	t.Run("EmptyGRPCServerHost", func(t *testing.T) {
 		// Test with empty gRPC server host
-		os.Setenv("GRPC_SERVER_HOST", "")
-		
+		t.Setenv("GRPC_SERVER_HOST", "")
+
 		// Create a new app to test with empty host
 		app := gofr.New()
 		_, err := client.NewHelloGoFrClient(app.Config.Get("GRPC_SERVER_HOST"), app.Metrics())
