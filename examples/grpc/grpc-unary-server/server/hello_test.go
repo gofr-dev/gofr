@@ -17,7 +17,7 @@ import (
 )
 
 func TestGoFrHelloServer_Creation(t *testing.T) {
-	configs := testutil.NewServerConfigs(t)
+	_ = testutil.NewServerConfigs(t)
 
 	t.Run("HelloGoFrServerCreation", func(t *testing.T) {
 		// Test GoFr's HelloGoFrServer creation
