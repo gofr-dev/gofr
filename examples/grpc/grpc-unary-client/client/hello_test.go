@@ -27,11 +27,8 @@ func createTestContext() *gofr.Context {
 
 func TestGoFrHelloClientWrapper_Creation(t *testing.T) {
 	configs := testutil.NewServerConfigs(t)
-	
+
 	t.Run("NewHelloGoFrClient", func(t *testing.T) {
-		// Set HTTP port to avoid port conflicts
-		os.Setenv("HTTP_PORT", fmt.Sprintf("%d", configs.HTTPPort))
-		
 		// Test GoFr's NewHelloGoFrClient function
 		conn, err := grpc.Dial(configs.GRPCHost, grpc.WithTransportCredentials(insecure.NewCredentials()))
 		require.NoError(t, err, "Connection creation should not fail immediately")
@@ -41,15 +38,12 @@ func TestGoFrHelloClientWrapper_Creation(t *testing.T) {
 		helloClient, err := NewHelloGoFrClient(configs.GRPCHost, app.Metrics())
 		require.NoError(t, err, "GoFr hello client creation should not fail")
 		assert.NotNil(t, helloClient, "GoFr hello client should not be nil")
-		
+
 		// Test that it implements the GoFr interface
 		var _ HelloGoFrClient = helloClient
 	})
 
 	t.Run("HelloClientWrapperInterface", func(t *testing.T) {
-		// Set HTTP port to avoid port conflicts
-		os.Setenv("HTTP_PORT", fmt.Sprintf("%d", configs.HTTPPort))
-		
 		// Test GoFr's interface compliance
 		conn, err := grpc.Dial(configs.GRPCHost, grpc.WithTransportCredentials(insecure.NewCredentials()))
 		require.NoError(t, err, "Connection creation should not fail immediately")
@@ -58,10 +52,10 @@ func TestGoFrHelloClientWrapper_Creation(t *testing.T) {
 		app := gofr.New()
 		helloClient, err := NewHelloGoFrClient(configs.GRPCHost, app.Metrics())
 		require.NoError(t, err, "GoFr hello client creation should not fail")
-		
+
 		// Test HelloGoFrClient interface compliance
 		var _ HelloGoFrClient = helloClient
-		
+
 		// Test that wrapper has the correct GoFr type
 		wrapper, ok := helloClient.(*HelloClientWrapper)
 		assert.True(t, ok, "Should be able to cast to GoFr HelloClientWrapper")
@@ -71,10 +65,7 @@ func TestGoFrHelloClientWrapper_Creation(t *testing.T) {
 
 func TestGoFrHelloClientWrapper_Methods(t *testing.T) {
 	configs := testutil.NewServerConfigs(t)
-	
-	// Set HTTP port to avoid port conflicts
-	os.Setenv("HTTP_PORT", fmt.Sprintf("%d", configs.HTTPPort))
-	
+
 	// Test GoFr's wrapper methods without actual gRPC calls
 	app := gofr.New()
 	helloClient, err := NewHelloGoFrClient(configs.GRPCHost, app.Metrics())
@@ -86,7 +77,7 @@ func TestGoFrHelloClientWrapper_Methods(t *testing.T) {
 		req := &HelloRequest{
 			Name: "test-name",
 		}
-		
+
 		// This will fail due to connection, but we're testing GoFr's method signature
 		_, err := helloClient.SayHello(ctx, req)
 		assert.Error(t, err, "Should fail with invalid connection, but method should exist")
@@ -101,10 +92,7 @@ func TestGoFrHelloClientWrapper_Methods(t *testing.T) {
 
 func TestGoFrHelloClientWrapper_ContextIntegration(t *testing.T) {
 	configs := testutil.NewServerConfigs(t)
-	
-	// Set HTTP port to avoid port conflicts
-	os.Setenv("HTTP_PORT", fmt.Sprintf("%d", configs.HTTPPort))
-	
+
 	// Test GoFr's context integration
 	app := gofr.New()
 	helloClient, err := NewHelloGoFrClient(configs.GRPCHost, app.Metrics())
@@ -116,11 +104,11 @@ func TestGoFrHelloClientWrapper_ContextIntegration(t *testing.T) {
 		req := &HelloRequest{
 			Name: "test-name",
 		}
-		
+
 		// Test that the method signature is correct for GoFr context
 		_, err := helloClient.SayHello(ctx, req)
 		assert.Error(t, err, "Should fail with invalid connection")
-		
+
 		// Test that context is properly passed (even though call fails)
 		assert.NotNil(t, ctx, "GoFr context should not be nil")
 	})
@@ -131,10 +119,10 @@ func TestGoFrHelloClientWrapper_ContextIntegration(t *testing.T) {
 		req := &HelloRequest{
 			Name: "test-name",
 		}
-		
+
 		// Verify the method signature expects *gofr.Context
 		var _ func(*gofr.Context, *HelloRequest, ...grpc.CallOption) (*HelloResponse, error) = helloClient.SayHello
-		
+
 		// Ensure the call compiles (even if it fails at runtime)
 		_, _ = helloClient.SayHello(ctx, req)
 	})
@@ -142,17 +130,14 @@ func TestGoFrHelloClientWrapper_ContextIntegration(t *testing.T) {
 
 func TestGoFrHelloClientWrapper_MultipleInstances(t *testing.T) {
 	configs := testutil.NewServerConfigs(t)
-	
-	// Set HTTP port to avoid port conflicts
-	os.Setenv("HTTP_PORT", fmt.Sprintf("%d", configs.HTTPPort))
-	
+
 	// Test GoFr's client creation with multiple instances
 	t.Run("MultipleHelloClients", func(t *testing.T) {
 		app := gofr.New()
-		
+
 		client1, err := NewHelloGoFrClient(configs.GRPCHost, app.Metrics())
 		require.NoError(t, err, "First GoFr hello client creation should not fail")
-		
+
 		client2, err := NewHelloGoFrClient(configs.GRPCHost, app.Metrics())
 		require.NoError(t, err, "Second GoFr hello client creation should not fail")
 
@@ -164,17 +149,17 @@ func TestGoFrHelloClientWrapper_MultipleInstances(t *testing.T) {
 
 func TestGoFrHelloClientWrapper_ErrorHandling(t *testing.T) {
 	configs := testutil.NewServerConfigs(t)
-	
+
 	// Test GoFr's error handling patterns
 	t.Run("InvalidAddressHandling", func(t *testing.T) {
 		// Set HTTP port to avoid port conflicts
 		os.Setenv("HTTP_PORT", fmt.Sprintf("%d", configs.HTTPPort))
-		
+
 		// Test GoFr's handling of invalid addresses
 		app := gofr.New()
 		helloClient, err := NewHelloGoFrClient("invalid:address", app.Metrics())
 		require.NoError(t, err, "Client creation should not fail immediately")
-		
+
 		ctx := createTestContext()
 		req := &HelloRequest{
 			Name: "test-name",
@@ -186,14 +171,11 @@ func TestGoFrHelloClientWrapper_ErrorHandling(t *testing.T) {
 	})
 
 	t.Run("EmptyAddressHandling", func(t *testing.T) {
-		// Set HTTP port to avoid port conflicts
-		os.Setenv("HTTP_PORT", fmt.Sprintf("%d", configs.HTTPPort))
-		
 		// Test GoFr's handling of empty addresses
 		app := gofr.New()
 		helloClient, err := NewHelloGoFrClient("", app.Metrics())
 		require.NoError(t, err, "Client creation should not fail immediately")
-		
+
 		ctx := createTestContext()
 		req := &HelloRequest{
 			Name: "test-name",
@@ -207,10 +189,7 @@ func TestGoFrHelloClientWrapper_ErrorHandling(t *testing.T) {
 
 func TestGoFrHelloClientWrapper_ConcurrentAccess(t *testing.T) {
 	configs := testutil.NewServerConfigs(t)
-	
-	// Set HTTP port to avoid port conflicts
-	os.Setenv("HTTP_PORT", fmt.Sprintf("%d", configs.HTTPPort))
-	
+
 	// Test GoFr's concurrent access patterns
 	t.Run("ConcurrentSayHelloCalls", func(t *testing.T) {
 		app := gofr.New()
@@ -226,7 +205,7 @@ func TestGoFrHelloClientWrapper_ConcurrentAccess(t *testing.T) {
 				req := &HelloRequest{
 					Name: "concurrent-test",
 				}
-				
+
 				// This will fail due to connection, but we're testing GoFr's concurrency
 				_, err := helloClient.SayHello(ctx, req)
 				assert.Error(t, err, "Should fail with invalid connection")
