@@ -2,8 +2,6 @@ package server
 
 import (
 	"context"
-	"fmt"
-	"os"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -13,10 +11,7 @@ import (
 )
 
 func TestHelloRequestWrapper_Context(t *testing.T) {
-	configs := testutil.NewServerConfigs(t)
-
-	// Set HTTP port to avoid port conflicts
-	os.Setenv("HTTP_PORT", fmt.Sprintf("%d", configs.HTTPPort))
+	_ = testutil.NewServerConfigs(t)
 
 	t.Run("Context", func(t *testing.T) {
 		// Create request wrapper
@@ -33,10 +28,7 @@ func TestHelloRequestWrapper_Context(t *testing.T) {
 }
 
 func TestHelloRequestWrapper_Param(t *testing.T) {
-	configs := testutil.NewServerConfigs(t)
-
-	// Set HTTP port to avoid port conflicts
-	os.Setenv("HTTP_PORT", fmt.Sprintf("%d", configs.HTTPPort))
+	_ = testutil.NewServerConfigs(t)
 
 	t.Run("Param", func(t *testing.T) {
 		// Create request wrapper
@@ -51,10 +43,7 @@ func TestHelloRequestWrapper_Param(t *testing.T) {
 }
 
 func TestHelloRequestWrapper_PathParam(t *testing.T) {
-	configs := testutil.NewServerConfigs(t)
-
-	// Set HTTP port to avoid port conflicts
-	os.Setenv("HTTP_PORT", fmt.Sprintf("%d", configs.HTTPPort))
+	_ = testutil.NewServerConfigs(t)
 
 	t.Run("PathParam", func(t *testing.T) {
 		// Create request wrapper
@@ -69,10 +58,7 @@ func TestHelloRequestWrapper_PathParam(t *testing.T) {
 }
 
 func TestHelloRequestWrapper_HostName(t *testing.T) {
-	configs := testutil.NewServerConfigs(t)
-
-	// Set HTTP port to avoid port conflicts
-	os.Setenv("HTTP_PORT", fmt.Sprintf("%d", configs.HTTPPort))
+	_ = testutil.NewServerConfigs(t)
 
 	t.Run("HostName", func(t *testing.T) {
 		// Create request wrapper
@@ -87,10 +73,7 @@ func TestHelloRequestWrapper_HostName(t *testing.T) {
 }
 
 func TestHelloRequestWrapper_Params(t *testing.T) {
-	configs := testutil.NewServerConfigs(t)
-
-	// Set HTTP port to avoid port conflicts
-	os.Setenv("HTTP_PORT", fmt.Sprintf("%d", configs.HTTPPort))
+	_ = testutil.NewServerConfigs(t)
 
 	t.Run("Params", func(t *testing.T) {
 		// Create request wrapper
@@ -105,10 +88,7 @@ func TestHelloRequestWrapper_Params(t *testing.T) {
 }
 
 func TestHelloRequestWrapper_Bind(t *testing.T) {
-	configs := testutil.NewServerConfigs(t)
-
-	// Set HTTP port to avoid port conflicts
-	os.Setenv("HTTP_PORT", fmt.Sprintf("%d", configs.HTTPPort))
+	_ = testutil.NewServerConfigs(t)
 
 	t.Run("BindSuccess", func(t *testing.T) {
 		// Create request wrapper
