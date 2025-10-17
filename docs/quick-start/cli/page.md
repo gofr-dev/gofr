@@ -4,7 +4,7 @@ GoFr provides a simple way to build command-line applications using `app.NewCMD(
 
 ## Configuration
 To configure logging for CLI applications, set the following environment variable:
-- `CMD_LOGS_FILE`: The file path where CLI logs will be written. If not set, logs are printed to stdout by default.
+- `CMD_LOGS_FILE`: The file path where CLI logs will be written. If not set, logs are discarded.
 
 
 ## Getting Started
