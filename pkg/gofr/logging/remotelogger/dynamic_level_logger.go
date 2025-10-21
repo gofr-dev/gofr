@@ -78,10 +78,8 @@ func (f *httpLogFilter) handleHTTPLog(httpLog *service.Log, args []any) {
 	// Subsequent successful hits - log at DEBUG level with consistent format
 	case isSuccessful:
 		if debugLogger, ok := f.Logger.(interface{ Debugf(string, ...any) }); ok {
-			colorCode := colorForResponseCode(httpLog.ResponseCode)
-			debugLogger.Debugf("\u001B[38;5;8m%s \u001B[38;5;%dm%-6d\u001B[0m %8d\u001B[38;5;8mµs\u001B[0m %s %s",
+			debugLogger.Debugf("%s %d %dus %s %s",
 				httpLog.CorrelationID,
-				colorCode,
 				httpLog.ResponseCode,
 				httpLog.ResponseTime,
 				httpLog.HTTPMethod,
@@ -92,19 +90,6 @@ func (f *httpLogFilter) handleHTTPLog(httpLog *service.Log, args []any) {
 	default:
 		f.Logger.Log(args...)
 	}
-}
-
-func colorForResponseCode(status int) int {
-	switch {
-	case status >= 200 && status < 300:
-		return colorBlue
-	case status >= 400 && status < 500:
-		return colorYellow
-	case status >= 500 && status < 600:
-		return colorRed
-	}
-
-	return 0
 }
 
 /*
