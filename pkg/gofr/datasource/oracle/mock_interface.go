@@ -91,3 +91,93 @@ func (mr *MockConnectionMockRecorder) Select(ctx, dest, query any, args ...any) 
 	varargs := append([]any{ctx, dest, query}, args...)
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Select", reflect.TypeOf((*MockConnection)(nil).Select), varargs...)
 }
+
+// MockTxn is a mock of Txn interface.
+type MockTxn struct {
+	ctrl     *gomock.Controller
+	recorder *MockTxnMockRecorder
+	isgomock struct{}
+}
+
+// MockTxnMockRecorder is the mock recorder for MockTxn.
+type MockTxnMockRecorder struct {
+	mock *MockTxn
+}
+
+// NewMockTxn creates a new mock instance.
+func NewMockTxn(ctrl *gomock.Controller) *MockTxn {
+	mock := &MockTxn{ctrl: ctrl}
+	mock.recorder = &MockTxnMockRecorder{mock}
+	return mock
+}
+
+// EXPECT returns an object that allows the caller to indicate expected use.
+func (m *MockTxn) EXPECT() *MockTxnMockRecorder {
+	return m.recorder
+}
+
+// Commit mocks base method.
+func (m *MockTxn) Commit() error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Commit")
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// Commit indicates an expected call of Commit.
+func (mr *MockTxnMockRecorder) Commit() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Commit", reflect.TypeOf((*MockTxn)(nil).Commit))
+}
+
+// ExecContext mocks base method.
+func (m *MockTxn) ExecContext(ctx context.Context, query string, args ...any) error {
+	m.ctrl.T.Helper()
+	varargs := []any{ctx, query}
+	for _, a := range args {
+		varargs = append(varargs, a)
+	}
+	ret := m.ctrl.Call(m, "ExecContext", varargs...)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// ExecContext indicates an expected call of ExecContext.
+func (mr *MockTxnMockRecorder) ExecContext(ctx, query any, args ...any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	varargs := append([]any{ctx, query}, args...)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ExecContext", reflect.TypeOf((*MockTxn)(nil).ExecContext), varargs...)
+}
+
+// Rollback mocks base method.
+func (m *MockTxn) Rollback() error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Rollback")
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// Rollback indicates an expected call of Rollback.
+func (mr *MockTxnMockRecorder) Rollback() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Rollback", reflect.TypeOf((*MockTxn)(nil).Rollback))
+}
+
+// SelectContext mocks base method.
+func (m *MockTxn) SelectContext(ctx context.Context, dest any, query string, args ...any) error {
+	m.ctrl.T.Helper()
+	varargs := []any{ctx, dest, query}
+	for _, a := range args {
+		varargs = append(varargs, a)
+	}
+	ret := m.ctrl.Call(m, "SelectContext", varargs...)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// SelectContext indicates an expected call of SelectContext.
+func (mr *MockTxnMockRecorder) SelectContext(ctx, dest, query any, args ...any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	varargs := append([]any{ctx, dest, query}, args...)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SelectContext", reflect.TypeOf((*MockTxn)(nil).SelectContext), varargs...)
+}

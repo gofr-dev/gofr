@@ -553,6 +553,7 @@ func testFirstSubscription(t *testing.T, client *Client, mocks *testMocks, wg *s
 	require.NoError(t, err)
 
 	mocks.messageChan1 <- mocks.msg1
+
 	close(mocks.messageChan1)
 
 	assertHandlerCalled(t, firstHandlerCalled, "First handler")
@@ -570,6 +571,7 @@ func testSecondSubscription(t *testing.T, client *Client, mocks *testMocks, wg *
 	require.NoError(t, err)
 
 	mocks.messageChan2 <- mocks.msg2
+
 	close(mocks.messageChan2)
 
 	assertHandlerCalled(t, errorHandlerCalled, "Error handler")
@@ -648,6 +650,7 @@ func createFirstHandler(t *testing.T, handlerCalled chan<- bool, wg *sync.WaitGr
 
 	return func(context.Context, jetstream.Msg) error {
 		t.Log("First handler called")
+
 		handlerCalled <- true
 
 		wg.Done()
@@ -661,6 +664,7 @@ func createErrorHandler(t *testing.T, handlerCalled chan<- bool, wg *sync.WaitGr
 
 	return func(context.Context, jetstream.Msg) error {
 		t.Log("Error handler called")
+
 		handlerCalled <- true
 
 		t.Logf("Error handling message: %v", errHandlerError)
@@ -687,6 +691,7 @@ func waitForHandlersToComplete(t *testing.T, wg *sync.WaitGroup) {
 	t.Helper()
 
 	done := make(chan struct{})
+
 	go func() {
 		wg.Wait()
 		close(done)
@@ -1028,7 +1033,9 @@ func TestClient_Query_Success(t *testing.T) {
 	// Mock message channel
 	messageChannel := make(chan jetstream.Msg, 2)
 	messageChannel <- newMockMessage("message1")
+
 	messageChannel <- newMockMessage("message2")
+
 	close(messageChannel)
 
 	mockMessageBatch.EXPECT().Messages().Return(messageChannel)

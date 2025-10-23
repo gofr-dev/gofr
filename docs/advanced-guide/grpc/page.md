@@ -55,8 +55,8 @@ syntax = "proto3";
 // Indicates the go package where the generated file will be produced
 option go_package = "path/to/your/proto/file";
 
-service {serviceName}Service {
-  rpc {serviceMethod} ({serviceRequest}) returns ({serviceResponse}) {}
+service <SERVICE_NAME>Service {
+  rpc <SERVICE_METHOD> (<SERVICE_REQUEST>) returns (<SERVICE_RESPONSE>) {}
         }
 ```
 
@@ -66,13 +66,13 @@ Users must define the type of message being exchanged between server and client,
 procedure call. Below is a generic representation for services' gRPC messages type.
 
 ```protobuf
-message {serviceRequest} {
+message <SERVICE_REQUEST> {
     int64 id = 1;
     string name = 2;
     // other fields that can be passed
         }
 
-message {serviceResponse} {
+message <SERVICE_RESPONSE> {
     int64 id = 1;
     string name = 2;
     string address = 3;
@@ -90,10 +90,10 @@ protoc \
 	--go_opt=paths=source_relative \
 	--go-grpc_out=. \
 	--go-grpc_opt=paths=source_relative \
-	{serviceName}.proto
+	<SERVICE_NAME>.proto
 ```
 
-This command generates two files, `{serviceName}.pb.go` and `{serviceName}_grpc.pb.go`, containing the necessary code for performing RPC calls.
+This command generates two files, `<SERVICE_NAME>.pb.go` and `<SERVICE_NAME>_grpc.pb.go`, containing the necessary code for performing RPC calls.
 
 ## Prerequisite: gofr-cli must be installed
 To install the CLI -
@@ -109,15 +109,15 @@ go install gofr.dev/cli/gofr@latest
 gofr wrap grpc server -proto=./path/your/proto/file
    ```
 
-This command leverages the `gofr-cli` to generate a `{serviceName}_server.go` file (e.g., `customer_server.go`)
+This command leverages the `gofr-cli` to generate a `<SERVICE_NAME>_server.go` file (e.g., `customer_server.go`)
 containing a template for your gRPC server implementation, including context support, in the same directory as
 that of the specified proto file.
 
 **2. Modify the Generated Code:**
 
-- Customize the `{serviceName}GoFrServer` struct with required dependencies and fields.
-- Implement the `{serviceMethod}` method to handle incoming requests, as required in this usecase:
-  - Bind the request payload using `ctx.Bind(&{serviceRequest})`.
+- Customize the `<SERVICE_NAME>GoFrServer` struct with required dependencies and fields.
+- Implement the `<SERVICE_METHOD>` method to handle incoming requests, as required in this usecase:
+  - Bind the request payload using `ctx.Bind(&<SERVICE_REQUEST>)`.
   - Process the request and generate a response.
 
 ## Registering the gRPC Service with Gofr
@@ -138,7 +138,7 @@ import (
 func main() {
     app := gofr.New()
 
-    packageName.Register{serviceName}ServerWithGofr(app, &{packageName}.New{serviceName}GoFrServer())
+    packageName.Register<SERVICE_NAME>ServerWithGofr(app, &<PACKAGE_NAME>.New<SERVICE_NAME>GoFrServer())
 
     app.Run()
 }
@@ -163,7 +163,7 @@ func main() {
     	grpc.ConnectionTimeout(10 * time.Second),
     )
 
-    packageName.Register{serviceName}ServerWithGofr(app, &{packageName}.New{serviceName}GoFrServer())
+    packageName.Register<SERVICE_NAME>ServerWithGofr(app, &<PACKAGE_NAME>.New<SERVICE_NAME>GoFrServer())
 
     app.Run()
 }
@@ -180,7 +180,7 @@ func main() {
 
     app.AddGRPCUnaryInterceptors(authInterceptor)
 
-    packageName.Register{serviceName}ServerWithGofr(app, &{packageName}.New{serviceName}GoFrServer())
+    packageName.Register<SERVICE_NAME>ServerWithGofr(app, &<PACKAGE_NAME>.New<SERVICE_NAME>GoFrServer())
 
     app.Run()
 }
@@ -227,26 +227,26 @@ For more details on adding additional interceptors and server options, refer to 
    ```bash
 gofr wrap grpc client -proto=./path/your/proto/file
    ```
-This command leverages the `gofr-cli` to generate a `{serviceName}_client.go` file (e.g., `customer_client.go`). This file must not be modified.
+This command leverages the `gofr-cli` to generate a `<SERVICE_NAME>_client.go` file (e.g., `customer_client.go`). This file must not be modified.
 
-**2. Register the connection to your gRPC service inside your {serviceMethod} and make inter-service calls as follows :**
+**2. Register the connection to your gRPC service inside your <SERVICE_METHOD> and make inter-service calls as follows :**
 
    ```go
 // gRPC Handler with context support
-func {serviceMethod}(ctx *gofr.Context) (*{serviceResponse}, error) {
+func <SERVICE_METHOD>(ctx *gofr.Context) (*<SERVICE_RESPONSE>, error) {
 	// Create the gRPC client
-    srv, err := New{serviceName}GoFrClient("your-grpc-server-host", ctx.Metrics())
+    srv, err := New<SERVICE_NAME>GoFrClient("your-grpc-server-host", ctx.Metrics())
     if err != nil {
         return nil, err
     }
 
     // Prepare the request
-    req := &{serviceRequest}{
+    req := &<SERVICE_REQUEST>{
     // populate fields as necessary
     }
 
 	// Call the gRPC method with tracing/metrics enabled
-    res, err := srv.{serviceMethod}(ctx, req)
+    res, err := srv.<SERVICE_METHOD>(ctx, req)
     if err != nil {
         return nil, err
     }
@@ -307,7 +307,7 @@ func main() {
     app := gofr.New()
 
     // Create a gRPC client for the service
-    gRPCClient, err := client.New{serviceName}GoFrClient(
+    gRPCClient, err := client.New<SERVICE_NAME>GoFrClient(
         app.Config.Get("GRPC_SERVER_HOST"),
         app.Metrics(),
         grpc.WithChainUnaryInterceptor(MetadataUnaryInterceptor),
@@ -374,7 +374,7 @@ func main() {
         return
     }
 
-    gRPCClient, err := client.New{serviceName}GoFrClient(
+    gRPCClient, err := client.New<SERVICE_NAME>GoFrClient(
         app.Config.Get("GRPC_SERVER_HOST"),
         app.Metrics(),
         grpc.WithTransportCredentials(creds),
@@ -409,7 +409,7 @@ GoFr provides built-in health checks for gRPC services, enabling observability, 
 ### Client Interface
 
 ```go
-type {serviceName}GoFrClient interface {
+type <SERVICE_NAME>GoFrClient interface {
     SayHello(*gofr.Context, *HelloRequest, ...grpc.CallOption) (*HelloResponse, error)
     health
 }
@@ -422,7 +422,7 @@ type health interface {
 
 ### Server Integration
 ```go
-type {serviceName}GoFrServer struct {
+type <SERVICE_NAME>GoFrServer struct {
     health *healthServer
 }
 ```
