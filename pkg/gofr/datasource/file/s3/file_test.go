@@ -112,14 +112,12 @@ func TestS3File_Close(t *testing.T) {
 
 			err := f.Close()
 
-			if !errors.Is(err, tc.expected) {
-				if tc.expected == nil && err != nil {
-					t.Errorf("Expected nil error, got %v", err)
-				} else if tc.expected != nil && err == nil {
-					t.Errorf("Expected error %v, got nil", tc.expected)
-				} else if tc.expected != nil && !strings.Contains(err.Error(), tc.expected.Error()) {
-					t.Errorf("Expected error containing %q, got %q", tc.expected.Error(), err.Error())
-				}
+			if tc.expected == nil {
+				assert.NoError(t, err, "Expected no error")
+			} else {
+				assert.Error(t, err, "Expected an error")
+				assert.True(t, errors.Is(err, tc.expected) || strings.Contains(err.Error(), tc.expected.Error()),
+					"Expected error to be %v or contain %q, got %v", tc.expected, tc.expected.Error(), err)
 			}
 		})
 	}
@@ -208,19 +206,12 @@ func TestS3File_Read_Success(t *testing.T) {
 			n, err := f.Read(p)
 
 			// Check if the expected error is the one returned (or wrapped)
-			if !errors.Is(err, tc.expectedErr) {
-				t.Errorf("Expected error %v, got %v", tc.expectedErr, err)
-			}
+			assert.True(t, errors.Is(err, tc.expectedErr), "Expected error %v, got %v", tc.expectedErr, err)
 
 			if tc.expectedErr == nil {
-				if n != tc.expectedN {
-					t.Errorf("Expected bytes read %d, got %d", tc.expectedN, n)
-				}
-
+				assert.Equal(t, tc.expectedN, n, "Expected bytes read %d, got %d", tc.expectedN, n)
 				// We only check up to n bytes of the expected and actual content
-				if string(p[:n]) != tc.expectedP[:n] {
-					t.Errorf("Expected content %q, got %q", tc.expectedP[:n], string(p[:n]))
-				}
+				assert.Equal(t, tc.expectedP[:n], string(p[:n]), "Expected content %q, got %q", tc.expectedP[:n], string(p[:n]))
 			}
 		})
 	}
@@ -290,19 +281,12 @@ func TestS3File_Read_Failure(t *testing.T) {
 			n, err := f.Read(p)
 
 			// Check if the expected error is the one returned (or wrapped)
-			if !errors.Is(err, tc.expectedErr) {
-				t.Errorf("Expected error %v, got %v", tc.expectedErr, err)
-			}
+			assert.True(t, errors.Is(err, tc.expectedErr), "Expected error %v, got %v", tc.expectedErr, err)
 
 			if tc.expectedErr == nil {
-				if n != tc.expectedN {
-					t.Errorf("Expected bytes read %d, got %d", tc.expectedN, n)
-				}
-
+				assert.Equal(t, tc.expectedN, n, "Expected bytes read %d, got %d", tc.expectedN, n)
 				// We only check up to n bytes of the expected and actual content
-				if string(p[:n]) != tc.expectedP[:n] {
-					t.Errorf("Expected content %q, got %q", tc.expectedP[:n], string(p[:n]))
-				}
+				assert.Equal(t, tc.expectedP[:n], string(p[:n]), "Expected content %q, got %q", tc.expectedP[:n], string(p[:n]))
 			}
 		})
 	}
@@ -391,22 +375,12 @@ func TestS3File_ReadAt(t *testing.T) {
 			p := make([]byte, tc.bufferLen)
 			n, err := f.ReadAt(p, tc.readAtOffset)
 
-			if !errors.Is(err, tc.expectedErr) {
-				t.Errorf("Expected error %v, got %v", tc.expectedErr, err)
-			}
+			assert.True(t, errors.Is(err, tc.expectedErr), "Expected error %v, got %v", tc.expectedErr, err)
 
 			if tc.expectedErr == nil {
-				if n != tc.expectedN {
-					t.Errorf("Expected bytes read %d, got %d", tc.expectedN, n)
-				}
-
-				if string(p[:n]) != tc.expectedP[:n] {
-					t.Errorf("Expected content %q, got %q", tc.expectedP[:n], string(p[:n]))
-				}
-
-				if f.offset != 10 {
-					t.Errorf("ReadAt modified offset. Expected 10, got %d", f.offset)
-				}
+				assert.Equal(t, tc.expectedN, n, "Expected bytes read %d, got %d", tc.expectedN, n)
+				assert.Equal(t, tc.expectedP[:n], string(p[:n]), "Expected content %q, got %q", tc.expectedP[:n], string(p[:n]))
+				assert.Equal(t, int64(10), f.offset, "ReadAt modified offset. Expected 10, got %d", f.offset)
 			}
 		})
 	}
@@ -489,22 +463,12 @@ func TestS3File_Write_Success(t *testing.T) {
 
 			n, err := f.Write(tc.dataToWrite)
 
-			if !errors.Is(err, tc.expectedErr) {
-				t.Errorf("Expected error %v, got %v", tc.expectedErr, err)
-			}
+			assert.True(t, errors.Is(err, tc.expectedErr), "Expected error %v, got %v", tc.expectedErr, err)
 
 			if tc.expectedErr == nil {
-				if n != tc.expectedN {
-					t.Errorf("Expected bytes written %d, got %d", tc.expectedN, n)
-				}
-
-				if f.offset != tc.expectedOffset {
-					t.Errorf("Expected offset %d, got %d", tc.expectedOffset, f.offset)
-				}
-
-				if f.size != tc.expectedSize {
-					t.Errorf("Expected size %d, got %d", tc.expectedSize, f.size)
-				}
+				assert.Equal(t, tc.expectedN, n, "Expected bytes written %d, got %d", tc.expectedN, n)
+				assert.Equal(t, tc.expectedOffset, f.offset, "Expected offset %d, got %d", tc.expectedOffset, f.offset)
+				assert.Equal(t, tc.expectedSize, f.size, "Expected size %d, got %d", tc.expectedSize, f.size)
 			}
 		})
 	}
@@ -573,22 +537,12 @@ func TestS3File_Write_Failure(t *testing.T) {
 
 			n, err := f.Write(tc.dataToWrite)
 
-			if !errors.Is(err, tc.expectedErr) {
-				t.Errorf("Expected error %v, got %v", tc.expectedErr, err)
-			}
+			assert.True(t, errors.Is(err, tc.expectedErr), "Expected error %v, got %v", tc.expectedErr, err)
 
 			if tc.expectedErr == nil {
-				if n != tc.expectedN {
-					t.Errorf("Expected bytes written %d, got %d", tc.expectedN, n)
-				}
-
-				if f.offset != tc.expectedOffset {
-					t.Errorf("Expected offset %d, got %d", tc.expectedOffset, f.offset)
-				}
-
-				if f.size != tc.expectedSize {
-					t.Errorf("Expected size %d, got %d", tc.expectedSize, f.size)
-				}
+				assert.Equal(t, tc.expectedN, n, "Expected bytes written %d, got %d", tc.expectedN, n)
+				assert.Equal(t, tc.expectedOffset, f.offset, "Expected offset %d, got %d", tc.expectedOffset, f.offset)
+				assert.Equal(t, tc.expectedSize, f.size, "Expected size %d, got %d", tc.expectedSize, f.size)
 			}
 		})
 	}
@@ -667,22 +621,12 @@ func TestS3File_WriteAt(t *testing.T) {
 
 			n, err := f.WriteAt(tc.dataToWrite, tc.writeAtOffset)
 
-			if !errors.Is(err, tc.expectedErr) {
-				t.Errorf("Expected error %v, got %v", tc.expectedErr, err)
-			}
+			assert.True(t, errors.Is(err, tc.expectedErr), "Expected error %v, got %v", tc.expectedErr, err)
 
 			if tc.expectedErr == nil {
-				if n != tc.expectedN {
-					t.Errorf("Expected bytes written %d, got %d", tc.expectedN, n)
-				}
-
-				if f.offset != tc.expectedOffset {
-					t.Errorf("WriteAt modified offset. Expected %d, got %d", tc.expectedOffset, f.offset)
-				}
-
-				if f.size != tc.expectedSize {
-					t.Errorf("Expected size %d, got %d", tc.expectedSize, f.size)
-				}
+				assert.Equal(t, tc.expectedN, n, "Expected bytes written %d, got %d", tc.expectedN, n)
+				assert.Equal(t, tc.expectedOffset, f.offset, "WriteAt modified offset. Expected %d, got %d", tc.expectedOffset, f.offset)
+				assert.Equal(t, tc.expectedSize, f.size, "Expected size %d, got %d", tc.expectedSize, f.size)
 			}
 		})
 	}
@@ -764,18 +708,11 @@ func TestS3File_Seek_Basic(t *testing.T) {
 
 			newOffset, err := f.Seek(tc.offset, tc.whence)
 
-			if !errors.Is(err, tc.expectedErr) {
-				t.Errorf("Expected error %v, got %v", tc.expectedErr, err)
-			}
+			assert.True(t, errors.Is(err, tc.expectedErr), "Expected error %v, got %v", tc.expectedErr, err)
 
 			if tc.expectedErr == nil {
-				if newOffset != tc.expectedNewOffset {
-					t.Errorf("Expected new offset %d, got %d", tc.expectedNewOffset, newOffset)
-				}
-
-				if f.offset != tc.expectedNewOffset {
-					t.Errorf("File struct offset was not updated. Expected %d, got %d", tc.expectedNewOffset, f.offset)
-				}
+				assert.Equal(t, tc.expectedNewOffset, newOffset, "Expected new offset %d, got %d", tc.expectedNewOffset, newOffset)
+				assert.Equal(t, tc.expectedNewOffset, f.offset, "File struct offset was not updated. Expected %d, got %d", tc.expectedNewOffset, f.offset)
 			}
 		})
 	}
@@ -839,18 +776,11 @@ func TestS3File_Seek_Advanced(t *testing.T) {
 
 			newOffset, err := f.Seek(tc.offset, tc.whence)
 
-			if !errors.Is(err, tc.expectedErr) {
-				t.Errorf("Expected error %v, got %v", tc.expectedErr, err)
-			}
+			assert.True(t, errors.Is(err, tc.expectedErr), "Expected error %v, got %v", tc.expectedErr, err)
 
 			if tc.expectedErr == nil {
-				if newOffset != tc.expectedNewOffset {
-					t.Errorf("Expected new offset %d, got %d", tc.expectedNewOffset, newOffset)
-				}
-
-				if f.offset != tc.expectedNewOffset {
-					t.Errorf("File struct offset was not updated. Expected %d, got %d", tc.expectedNewOffset, f.offset)
-				}
+				assert.Equal(t, tc.expectedNewOffset, newOffset, "Expected new offset %d, got %d", tc.expectedNewOffset, newOffset)
+				assert.Equal(t, tc.expectedNewOffset, f.offset, "File struct offset was not updated. Expected %d, got %d", tc.expectedNewOffset, f.offset)
 			}
 		})
 	}
@@ -1068,12 +998,12 @@ func TestS3File_ReadAll(t *testing.T) {
 
 			reader, err := f.ReadAll()
 
-			if tt.expectedType == "error" || tt.expectedType == "json-error" {
+			switch tt.expectedType {
+			case "error", "json-error":
 				assertErrorCase(t, err, reader, tt.expectedType)
-				return
+			default:
+				assertSuccessCase(t, err, reader, tt.expectedType)
 			}
-
-			assertSuccessCase(t, err, reader, tt.expectedType)
 		})
 	}
 }
@@ -1097,7 +1027,6 @@ func (m *MockReadCloser) Close() error {
 	if m.CloseFunc != nil {
 		return m.CloseFunc()
 	}
-
 	return nil
 }
 
