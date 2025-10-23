@@ -29,6 +29,8 @@ type httpLogFilter struct {
 	initLogged         bool
 }
 
+// isTerminalLogger checks if the underlying logger supports terminal output (TTY).
+// Returns true if colors and pretty-printing can be applied safely.
 func (f *httpLogFilter) isTerminalLogger() bool {
 	type terminalChecker interface {
 		IsTerminal() bool
