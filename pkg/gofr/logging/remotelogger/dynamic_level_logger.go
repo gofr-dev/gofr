@@ -15,10 +15,6 @@ import (
 
 const (
 	requestTimeout = 5 * time.Second
-	// ANSI color codes for terminal output.
-	colorBlue   = 34  // For successful responses (2xx)
-	colorYellow = 220 // For client errors (4xx)
-	colorRed    = 202 // For server errors (5xx)
 )
 
 // httpLogFilter filters HTTP logs from remote logger to reduce noise.
