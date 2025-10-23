@@ -245,6 +245,8 @@ func checkIfTerminal(w io.Writer) bool {
 	}
 }
 
+// IsTerminal returns true if the logger's output is a terminal (TTY).
+// This helps decide whether to include ANSI color codes for pretty printing.
 func (l *logger) IsTerminal() bool {
 	return l.isTerminal
 }
