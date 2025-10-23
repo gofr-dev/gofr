@@ -245,6 +245,10 @@ func checkIfTerminal(w io.Writer) bool {
 	}
 }
 
+func (l *logger) IsTerminal() bool {
+	return l.isTerminal
+}
+
 // ChangeLevel changes the log level of the logger.
 // This allows dynamic adjustment of the logging verbosity.
 func (l *logger) ChangeLevel(level Level) {

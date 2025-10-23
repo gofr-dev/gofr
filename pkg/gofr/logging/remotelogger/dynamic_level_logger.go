@@ -29,6 +29,18 @@ type httpLogFilter struct {
 	initLogged         bool
 }
 
+func (f *httpLogFilter) isTerminalLogger() bool {
+	type terminalChecker interface {
+		IsTerminal() bool
+	}
+
+	if l, ok := f.Logger.(terminalChecker); ok {
+		return l.IsTerminal()
+	}
+
+	return false
+}
+
 // Log implements a simplified filtering strategy with consistent formatting.
 func (f *httpLogFilter) Log(args ...any) {
 	if len(args) == 0 || args[0] == nil {
@@ -78,14 +90,23 @@ func (f *httpLogFilter) handleHTTPLog(httpLog *service.Log, args []any) {
 	// Subsequent successful hits - log at DEBUG level with consistent format
 	case isSuccessful:
 		if debugLogger, ok := f.Logger.(interface{ Debugf(string, ...any) }); ok {
-			colorCode := colorForResponseCode(httpLog.ResponseCode)
-			debugLogger.Debugf("\u001B[38;5;8m%s \u001B[38;5;%dm%-6d\u001B[0m %8d\u001B[38;5;8mµs\u001B[0m %s %s",
-				httpLog.CorrelationID,
-				colorCode,
-				httpLog.ResponseCode,
-				httpLog.ResponseTime,
-				httpLog.HTTPMethod,
-				httpLog.URI)
+			if f.isTerminalLogger() {
+				colorCode := colorForResponseCode(httpLog.ResponseCode)
+				debugLogger.Debugf("\u001B[38;5;8m%s \u001B[38;5;%dm%-6d\u001B[0m %8dμs\u001B[0m %s %s",
+					httpLog.CorrelationID,
+					colorCode,
+					httpLog.ResponseCode,
+					httpLog.ResponseTime,
+					httpLog.HTTPMethod,
+					httpLog.URI)
+			} else {
+				debugLogger.Debugf("%s %d %dμs %s %s",
+					httpLog.CorrelationID,
+					httpLog.ResponseCode,
+					httpLog.ResponseTime,
+					httpLog.HTTPMethod,
+					httpLog.URI)
+			}
 		}
 
 	// Error responses - pass through to original logger
