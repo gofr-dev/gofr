@@ -33,6 +33,17 @@ func validateResponse(t *testing.T, resp *http.Response, err error, hasError boo
 	assert.NotNil(t, resp, "TEST[%d], Failed.\n%s")
 }
 
+func newService(t *testing.T, server *httptest.Server) *httpService {
+	t.Helper()
+
+	return &httpService{
+		Client: http.DefaultClient,
+		url:    server.URL,
+		Tracer: otel.Tracer("gofr-http-client"),
+		Logger: logging.NewMockLogger(logging.INFO),
+	}
+}
+
 func TestNewHTTPService(t *testing.T) {
 	tests := []struct {
 		desc           string
@@ -135,12 +146,7 @@ func TestHTTPService_Get(t *testing.T) {
 	}))
 	defer server.Close()
 
-	service := &httpService{
-		Client: http.DefaultClient,
-		url:    server.URL,
-		Tracer: otel.Tracer("gofr-http-client"),
-		Logger: logging.NewMockLogger(logging.INFO),
-	}
+	service := newService(t, server)
 
 	// TODO : Nil Correlation ID is coming in logs, it has to be fixed
 
@@ -162,12 +168,7 @@ func TestHTTPService_GetWithHeaders(t *testing.T) {
 	}))
 	defer server.Close()
 
-	service := &httpService{
-		Client: http.DefaultClient,
-		url:    server.URL,
-		Tracer: otel.Tracer("gofr-http-client"),
-		Logger: logging.NewMockLogger(logging.INFO),
-	}
+	service := newService(t, server)
 
 	// TODO : Nil Correlation ID is coming in logs, it has to be fixed
 
@@ -198,12 +199,7 @@ func TestHTTPService_Put(t *testing.T) {
 	}))
 	defer server.Close()
 
-	service := &httpService{
-		Client: http.DefaultClient,
-		url:    server.URL,
-		Tracer: otel.Tracer("gofr-http-client"),
-		Logger: logging.NewMockLogger(logging.INFO),
-	}
+	service := newService(t, server)
 
 	// TODO : Nil Correlation ID is coming in logs, it has to be fixed
 
@@ -234,12 +230,7 @@ func TestHTTPService_PutWithHeaders(t *testing.T) {
 	}))
 	defer server.Close()
 
-	service := &httpService{
-		Client: http.DefaultClient,
-		url:    server.URL,
-		Tracer: otel.Tracer("gofr-http-client"),
-		Logger: logging.NewMockLogger(logging.INFO),
-	}
+	service := newService(t, server)
 
 	// TODO : Nil Correlation ID is coming in logs, it has to be fixed
 
@@ -270,12 +261,7 @@ func TestHTTPService_Patch(t *testing.T) {
 	}))
 	defer server.Close()
 
-	service := &httpService{
-		Client: http.DefaultClient,
-		url:    server.URL,
-		Tracer: otel.Tracer("gofr-http-client"),
-		Logger: logging.NewMockLogger(logging.INFO),
-	}
+	service := newService(t, server)
 
 	// TODO : Nil Correlation ID is coming in logs, it has to be fixed
 
@@ -306,12 +292,7 @@ func TestHTTPService_PatchWithHeaders(t *testing.T) {
 	}))
 	defer server.Close()
 
-	service := &httpService{
-		Client: http.DefaultClient,
-		url:    server.URL,
-		Tracer: otel.Tracer("gofr-http-client"),
-		Logger: logging.NewMockLogger(logging.INFO),
-	}
+	service := newService(t, server)
 
 	// TODO : Nil Correlation ID is coming in logs, it has to be fixed
 
@@ -342,12 +323,7 @@ func TestHTTPService_Post(t *testing.T) {
 	}))
 	defer server.Close()
 
-	service := &httpService{
-		Client: http.DefaultClient,
-		url:    server.URL,
-		Tracer: otel.Tracer("gofr-http-client"),
-		Logger: logging.NewMockLogger(logging.INFO),
-	}
+	service := newService(t, server)
 
 	// TODO : Nil Correlation ID is coming in logs, it has to be fixed
 
@@ -378,12 +354,7 @@ func TestHTTPService_PostWithHeaders(t *testing.T) {
 	}))
 	defer server.Close()
 
-	service := &httpService{
-		Client: http.DefaultClient,
-		url:    server.URL,
-		Tracer: otel.Tracer("gofr-http-client"),
-		Logger: logging.NewMockLogger(logging.INFO),
-	}
+	service := newService(t, server)
 
 	// TODO : Nil Correlation ID is coming in logs, it has to be fixed
 
@@ -413,12 +384,7 @@ func TestHTTPService_Delete(t *testing.T) {
 	}))
 	defer server.Close()
 
-	service := &httpService{
-		Client: http.DefaultClient,
-		url:    server.URL,
-		Tracer: otel.Tracer("gofr-http-client"),
-		Logger: logging.NewMockLogger(logging.INFO),
-	}
+	service := newService(t, server)
 
 	// TODO : Nil Correlation ID is coming in logs, it has to be fixed
 
@@ -447,12 +413,7 @@ func TestHTTPService_DeleteWithHeaders(t *testing.T) {
 	}))
 	defer server.Close()
 
-	service := &httpService{
-		Client: http.DefaultClient,
-		url:    server.URL,
-		Tracer: otel.Tracer("gofr-http-client"),
-		Logger: logging.NewMockLogger(logging.INFO),
-	}
+	service := newService(t, server)
 
 	// TODO : Nil Correlation ID is coming in logs, it has to be fixed
 
