@@ -7,6 +7,13 @@ export const navigation = [
                 title: 'Hello Server',
                 href: '/docs/quick-start/introduction' ,
                 desc: "Getting started with how to write a server using GoFR with basic examples and explanations. Boost your productivity with efficient coding practices and learn to build scalable applications quickly."},
+
+            {
+                title: 'CLI Applications',
+                href: '/docs/quick-start/cli',
+                desc: "Learn to build powerful command-line interface (CLI) applications using GoFr's app.NewCMD(), offering a robust framework for command-line tools."
+            },
+               
             {
                 title: 'Configuration',
                 href: '/docs/quick-start/configuration',
