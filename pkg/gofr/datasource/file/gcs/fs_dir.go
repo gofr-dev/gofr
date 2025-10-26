@@ -20,12 +20,26 @@ var (
 	errCHNDIRNotSupported = errors.New("changing directory is not supported in GCS")
 )
 
-func getBucketName(filePath string) string {
-	return strings.Split(filePath, string(filepath.Separator))[0]
-}
+const maxSplitParts = 2
 
+func getBucketName(filePath string) string {
+	parts := strings.SplitN(filePath, "/", maxSplitParts)
+	if len(parts) > 0 {
+		return parts[0]
+	}
+
+	return ""
+}
+func getObjectName(filePath string) string {
+	parts := strings.SplitN(filePath, "/", maxSplitParts)
+	if len(parts) == maxSplitParts {
+		return parts[1]
+	}
+
+	return ""
+}
 func getLocation(bucket string) string {
-	return path.Join(string(filepath.Separator), bucket)
+	return filepath.Join(string(filepath.Separator), bucket)
 }
 
 func (f *FileSystem) Mkdir(name string, _ os.FileMode) error {

@@ -3,6 +3,7 @@ package gcs
 import (
 	"bytes"
 	"errors"
+	"path/filepath"
 	"testing"
 	"time"
 
@@ -29,6 +30,58 @@ var (
 	errorDelete    = errors.New("delete error")
 	errorDirList   = errors.New("dirlist error")
 )
+
+func TestGetBucketName(t *testing.T) {
+	tc := []struct {
+		input, want string
+	}{
+		{"mybucket/file.txt", "mybucket"},
+		{"bucket1/data/abc.csv", "bucket1"},
+		{"bucketonly", "bucketonly"},
+		{"/bucket/file", ""},
+		{"", ""},
+	}
+	for _, c := range tc {
+		got := getBucketName(c.input)
+		if got != c.want {
+			t.Errorf("getBucketName(%q) = %q, want %q", c.input, got, c.want)
+		}
+	}
+}
+
+func TestGetObjectName(t *testing.T) {
+	tc := []struct {
+		input, want string
+	}{
+		{"mybucket/file.txt", "file.txt"},
+		{"bucket1/data/abc.csv", "data/abc.csv"},
+		{"bucketonly", ""},
+		{"/bucket/file", "bucket/file"},
+		{"", ""},
+	}
+	for _, c := range tc {
+		got := getObjectName(c.input)
+		if got != c.want {
+			t.Errorf("getObjectName(%q) = %q, want %q", c.input, got, c.want)
+		}
+	}
+}
+
+func TestGetLocation(t *testing.T) {
+	tc := []struct {
+		input, want string
+	}{
+		{"mybucket", string(filepath.Separator) + "mybucket"},
+		{"bucket1", string(filepath.Separator) + "bucket1"},
+		{"", string(filepath.Separator)},
+	}
+	for _, c := range tc {
+		got := getLocation(c.input)
+		if got != c.want {
+			t.Errorf("getLocation(%q) = %q, want %q", c.input, got, c.want)
+		}
+	}
+}
 
 func (*errorWriterCloser) Write(_ []byte) (int, error) {
 	return 0, errWrite

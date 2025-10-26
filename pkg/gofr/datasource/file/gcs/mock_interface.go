@@ -185,6 +185,21 @@ func (mr *MockgcsClientMockRecorder) ListObjects(ctx, prefix interface{}) *gomoc
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListObjects", reflect.TypeOf((*MockgcsClient)(nil).ListObjects), ctx, prefix)
 }
 
+// NewRangeReader mocks base method.
+func (m *MockgcsClient) NewRangeReader(ctx context.Context, name string, offset, length int64) (io.ReadCloser, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "NewRangeReader", ctx, name, offset, length)
+	ret0, _ := ret[0].(io.ReadCloser)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// NewRangeReader indicates an expected call of NewRangeReader.
+func (mr *MockgcsClientMockRecorder) NewRangeReader(ctx, name, offset, length interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "NewRangeReader", reflect.TypeOf((*MockgcsClient)(nil).NewRangeReader), ctx, name, offset, length)
+}
+
 // NewReader mocks base method.
 func (m *MockgcsClient) NewReader(ctx context.Context, name string) (io.ReadCloser, error) {
 	m.ctrl.T.Helper()

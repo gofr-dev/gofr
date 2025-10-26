@@ -3,6 +3,7 @@ package gcs
 import (
 	"context"
 	"errors"
+	"fmt"
 	"io"
 	"time"
 )
@@ -25,10 +26,8 @@ type File struct {
 }
 
 var (
-	errNilGCSFileBody      = errors.New("gcs file body is nil")
-	errSeekNotSupported    = errors.New("seek not supported on GCSFile")
-	errReadAtNotSupported  = errors.New("readAt not supported on GCSFile")
-	errWriteAtNotSupported = errors.New("writeAt not supported on GCSFile (read-only)")
+	errNilGCSFileBody    = errors.New("gcs file body is nil")
+	errOffesetOutOfRange = errors.New("offset out of range")
 )
 
 const (
@@ -127,17 +126,177 @@ func (f *File) Close() error {
 	return nil
 }
 
-func (*File) Seek(_ int64, _ int) (int64, error) {
-	// Not supported: Seek requires reopening with range.
-	return 0, errSeekNotSupported
+func (f *File) check(whence int, offset, length int64, msg *string) (int64, error) {
+	switch whence {
+	case io.SeekStart:
+	case io.SeekEnd:
+		offset += length
+	case io.SeekCurrent:
+		offset += f.size
+	default:
+		return 0, errOffesetOutOfRange
+	}
+
+	if offset < 0 || offset > length {
+		*msg = fmt.Sprintf("Offset %v out of bounds %v", offset, length)
+		return 0, errOffesetOutOfRange
+	}
+
+	f.size = offset
+
+	return f.size, nil
 }
 
-func (*File) ReadAt(_ []byte, _ int64) (int, error) {
-	return 0, errReadAtNotSupported
+func (f *File) Seek(offset int64, whence int) (int64, error) {
+	bucketName := getBucketName(f.name)
+
+	var msg string
+
+	status := statusErr
+
+	defer f.sendOperationStats(&FileLog{
+		Operation: "SEEK",
+		Location:  getLocation(bucketName),
+		Status:    &status,
+		Message:   &msg,
+	}, time.Now())
+
+	ctx := context.Background()
+
+	attrs, err := f.conn.StatObject(ctx, f.name)
+	if err != nil {
+		msg = fmt.Sprintf("could not get object attrs: %v", err)
+		f.logger.Errorf(msg)
+
+		return 0, err
+	}
+
+	newPos, err := f.check(whence, offset, attrs.Size, &msg)
+	if err != nil {
+		f.logger.Errorf("Seek failed. Error: %v", err)
+		return 0, err
+	}
+
+	if f.body != nil {
+		_ = f.body.Close()
+	}
+
+	reader, err := f.conn.NewRangeReader(ctx, getObjectName(f.name), newPos, -1)
+	if err != nil {
+		f.logger.Errorf("failed to set new range reader: %v", err)
+
+		return 0, err
+	}
+
+	f.body = reader
+	f.size = newPos
+
+	status = statusSuccess
+
+	f.logger.Logf("Seek repositioned reader to offset %v for %q", newPos, f.name)
+
+	return newPos, nil
 }
 
-func (*File) WriteAt(_ []byte, _ int64) (int, error) {
-	return 0, errWriteAtNotSupported
+func (f *File) ReadAt(p []byte, off int64) (int, error) {
+	bucketName := getBucketName(f.name)
+
+	var msg string
+
+	status := statusErr
+
+	defer f.sendOperationStats(&FileLog{
+		Operation: "READ_AT",
+		Location:  getLocation(bucketName),
+		Status:    &status,
+		Message:   &msg,
+	}, time.Now())
+
+	ctx := context.Background()
+
+	rdr, err := f.conn.NewRangeReader(ctx, getObjectName(f.name), off, int64(len(p)))
+	if err != nil {
+		f.logger.Errorf("failed to create range reader: %v", err)
+
+		return 0, err
+	}
+	defer rdr.Close()
+
+	n, err := io.ReadFull(rdr, p)
+	if err != nil && !errors.Is(err, io.EOF) && !errors.Is(err, io.ErrUnexpectedEOF) {
+		msg = fmt.Sprintf("read failed: %v", err)
+		f.logger.Errorf(msg)
+
+		return n, err
+	}
+
+	status = statusSuccess
+
+	f.logger.Debugf("ReadAt read %d bytes from offset %d for file %q", n, off, f.name)
+
+	return n, nil
+}
+
+func (f *File) WriteAt(p []byte, off int64) (int, error) {
+	bucketName := getBucketName(f.name)
+
+	var msg string
+
+	status := statusErr
+
+	defer f.sendOperationStats(&FileLog{
+		Operation: "WRITE_AT",
+		Location:  getLocation(bucketName),
+		Status:    &status,
+		Message:   &msg,
+	}, time.Now())
+
+	objectName := getObjectName(f.name)
+	ctx := context.Background()
+	rdr, err := f.conn.NewReader(ctx, objectName)
+
+	var oldData []byte
+	if err == nil {
+		oldData, _ = io.ReadAll(rdr)
+		_ = rdr.Close()
+	}
+
+	if int64(len(oldData)) < off {
+		pad := make([]byte, off-int64(len(oldData)))
+		oldData = append(oldData, pad...)
+	}
+
+	end := off + int64(len(p))
+	if end > int64(len(oldData)) {
+		newData := make([]byte, end)
+		copy(newData, oldData)
+		copy(newData[off:], p)
+		oldData = newData
+	} else {
+		copy(oldData[off:end], p)
+	}
+
+	w := f.conn.NewWriter(ctx, objectName)
+	if _, err := w.Write(oldData); err != nil {
+		_ = w.Close()
+		msg = fmt.Sprintf("failed to write updated data: %v", err)
+		f.logger.Errorf(msg)
+
+		return 0, err
+	}
+
+	if err := w.Close(); err != nil {
+		msg = fmt.Sprintf("failed to close writer: %v", err)
+		f.logger.Errorf(msg)
+
+		return 0, err
+	}
+
+	status = statusSuccess
+
+	f.logger.Debugf("WriteAt wrote %d bytes at offset %d in %q", len(p), off, f.name)
+
+	return len(p), nil
 }
 
 func (f *File) sendOperationStats(fl *FileLog, startTime time.Time) {

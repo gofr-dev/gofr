@@ -29,6 +29,7 @@ type gcsClientImpl struct {
 type gcsClient interface {
 	NewWriter(ctx context.Context, name string) io.WriteCloser
 	NewReader(ctx context.Context, name string) (io.ReadCloser, error)
+	NewRangeReader(ctx context.Context, name string, offset, length int64) (io.ReadCloser, error)
 	DeleteObject(ctx context.Context, name string) error
 	CopyObject(ctx context.Context, src, dst string) error
 	ListObjects(ctx context.Context, prefix string) ([]string, error)
@@ -47,6 +48,9 @@ func (g *gcsClientImpl) NewWriter(ctx context.Context, name string) io.WriteClos
 
 func (g *gcsClientImpl) NewReader(ctx context.Context, name string) (io.ReadCloser, error) {
 	return g.bucket.Object(name).NewReader(ctx)
+}
+func (g *gcsClientImpl) NewRangeReader(ctx context.Context, name string, offset, length int64) (io.ReadCloser, error) {
+	return g.bucket.Object(name).NewRangeReader(ctx, offset, length)
 }
 
 func (g *gcsClientImpl) DeleteObject(ctx context.Context, name string) error {
