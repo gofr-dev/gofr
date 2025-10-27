@@ -93,17 +93,45 @@ jobs:
         run: docker run -d -p 2005:9411 openzipkin/zipkin:latest
 
       # Wait for service ports to be ready before running tests (prevents race conditions)
+      
       - name: Wait for services to be ready
         run: |
-          echo "Waiting for MySQL..."
-          until mysqladmin ping -h mysql -ppassword --silent 2>/dev/null; do sleep 2; done
+          set +e  # Don't exit on individual command failures
+          
+          echo "Waiting for MySQL on 127.0.0.1:2002..."
+          for i in {1..60}; do
+            if timeout 2 bash -c 'echo > /dev/tcp/127.0.0.1/2002' 2>/dev/null; then
+              echo "✓ MySQL port is open"
+              sleep 2  # Give MySQL time to fully initialize
+              break
+            fi
+            echo "  Attempt $i/60..."
+            sleep 1
+          done
 
-          echo "Waiting for Redis..."
-          until redis-cli -h redis ping &>/dev/null; do sleep 2; done
+          echo "Waiting for Redis on 127.0.0.1:2001..."
+          for i in {1..60}; do
+            if timeout 2 bash -c 'echo > /dev/tcp/127.0.0.1/2001' 2>/dev/null; then
+              echo "✓ Redis port is open"
+              break
+            fi
+            echo "  Attempt $i/60..."
+            sleep 1
+          done
 
-          echo "Waiting for Kafka..."
-          until nc -z kafka 9092; do sleep 2; done
+          echo "Waiting for Kafka on 127.0.0.1:1092..."
+          for i in {1..60}; do
+            if timeout 2 bash -c 'echo > /dev/tcp/127.0.0.1/1092' 2>/dev/null; then
+              echo "✓ Kafka port is open"
+              break
+            fi
+            echo "  Attempt $i/60..."
+            sleep 1
+          done
 
+          echo "All services should be ready!"
+          sleep 3  # Final buffer
+        shell: bash
 
 
       # Run tests with automatic retry on failures
