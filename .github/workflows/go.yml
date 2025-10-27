@@ -96,13 +96,14 @@ jobs:
       - name: Wait for services to be ready
         run: |
           echo "Waiting for MySQL..."
-          until mysqladmin ping -h mysql -ppassword --silent; do sleep 2; done
+          until mysqladmin ping -h mysql -ppassword --silent 2>/dev/null; do sleep 2; done
 
           echo "Waiting for Redis..."
-          until redis-cli -h redis ping; do sleep 2; done
+          until redis-cli -h redis ping &>/dev/null; do sleep 2; done
 
           echo "Waiting for Kafka..."
           until nc -z kafka 9092; do sleep 2; done
+
 
 
       # Run tests with automatic retry on failures
