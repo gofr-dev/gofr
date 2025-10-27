@@ -93,23 +93,6 @@ jobs:
         run: docker run -d -p 2005:9411 openzipkin/zipkin:latest
 
       # Run tests with automatic retry on failures
-      
-      - name: Wait for services to be ready
-        run: |
-          set -e
-          echo "Waiting for Redis (localhost:2001), Kafka (localhost:1092) and MySQL (localhost:2002)..."
-          attempts=0
-          max=60
-          while : ; do
-            nc -z 127.0.0.1 2001 >/dev/null 2>&1 && nc -z 127.0.0.1 1092 >/dev/null 2>&1 && nc -z 127.0.0.1 2002 >/dev/null 2>&1 && break
-            attempts=$((attempts+1))
-            if [ $attempts -ge $max ]; then
-              echo "Timeout waiting for services"
-              exit 1
-            fi
-            sleep 1
-          done
-          echo "Services ready."
       - name: Test with Retry Logic
         id: test
         uses: nick-fields/retry@v3
