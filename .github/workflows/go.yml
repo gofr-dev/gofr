@@ -152,7 +152,7 @@ jobs:
       # Upload coverage report for the 1.24 Go version only
       - name: Upload Test Coverage
         if: ${{ matrix.go-version == '1.24'}}
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: Example-Test-Report
           path: profile.cov
@@ -221,7 +221,7 @@ jobs:
       # Upload coverage report for the 1.24 Go version only
       - name: Upload Test Coverage
         if: ${{ matrix.go-version == '1.24'}}
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: PKG-Coverage-Report
           path: profile.cov
@@ -238,7 +238,7 @@ jobs:
 
       # Download coverage reports from previous jobs
       - name: Download Coverage Report
-        uses: actions/download-artifact@v5
+        uses: actions/download-artifact@v6
         with:
           path: artifacts
 
@@ -328,7 +328,7 @@ jobs:
             '
       # Upload submodule coverage reports as an artifact
       - name: Upload Coverage Reports
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: submodule-coverage-reports
           path: coverage_reports/*.cov
@@ -355,7 +355,7 @@ jobs:
           echo "$HOME/.qlty/bin" >> $GITHUB_PATH
       # Download coverage artifacts
       - name: Download Coverage Report
-        uses: actions/download-artifact@v5
+        uses: actions/download-artifact@v6
         with:
           path: artifacts
 
