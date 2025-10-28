@@ -102,7 +102,7 @@ jobs:
           command: |
             export APP_ENV=test
             # Run tests for the examples directory with coverage
-            go test gofr.dev/examples/... -v -short -coverprofile packageWithpbgo.cov -coverpkg=gofr.dev/examples/...
+            go test ./examples/... -v -short -covermode=atomic -coverprofile packageWithpbgo.cov -coverpkg=./examples/...
              # Filter out auto-generated files by protobuf and gofr framework from coverage report
             grep -vE '(/client/|grpc-.+-client/main\.go|_client\.go|_gofr\.go|_grpc\.pb\.go|\.pb\.go|\.proto|health_.*\.go)' packageWithpbgo.cov > profile.cov
             # Display coverage statistics
@@ -111,7 +111,7 @@ jobs:
       # Upload coverage report for the 1.24 Go version only
       - name: Upload Test Coverage
         if: ${{ matrix.go-version == '1.24'}}
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: Example-Test-Report
           path: profile.cov
@@ -186,7 +186,7 @@ jobs:
       # Upload coverage report for the 1.24 Go version only
       - name: Upload Test Coverage
         if: ${{ matrix.go-version == '1.24'}}
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: PKG-Coverage-Report
           path: profile.cov
@@ -203,7 +203,7 @@ jobs:
 
       # Download coverage reports from previous jobs
       - name: Download Coverage Report
-        uses: actions/download-artifact@v5
+        uses: actions/download-artifact@v6
         with:
           path: artifacts
 
@@ -211,8 +211,8 @@ jobs:
       - name: Merge Coverage Files
         working-directory: artifacts
         run: |
-          awk '!/^mode: / && FNR==1{print "mode: set"} {print}' ./Example-Test-Report/profile.cov > merged_profile.cov
-          tail -n +2 ./PKG-Coverage-Report/profile.cov >> merged_profile.cov
+          echo "mode: atomic" > merged_profile.cov
+          grep -h -v "mode:" ./Example-Test-Report/profile.cov ./PKG-Coverage-Report/profile.cov >> merged_profile.cov
 
       # Calculate and output the total code coverage percentage
       - name: Parse code-coverage value
@@ -222,6 +222,7 @@ jobs:
           codeCoverage=${codeCoverage%?}
           echo "CODE_COVERAGE=$codeCoverage" >> $GITHUB_ENV
           echo "✅ Total Code Coverage: $codeCoverage%"
+
   #      - name: Check if code-coverage is greater than threshold
   #        run: |
   #          codeCoverage=${{ env.CODE_COVERAGE }}
@@ -296,7 +297,7 @@ jobs:
 
       # Upload submodule coverage reports as an artifact
       - name: Upload Coverage Reports
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: submodule-coverage-reports
           path: coverage_reports/*.cov
@@ -324,7 +325,7 @@ jobs:
 
       # Download coverage artifacts
       - name: Download Coverage Report
-        uses: actions/download-artifact@v5
+        uses: actions/download-artifact@v6
         with:
           path: artifacts
 
@@ -332,9 +333,8 @@ jobs:
       - name: Merge Coverage Files
         working-directory: artifacts
         run: |
-          echo "mode: set" > merged_profile.cov
-          tail -n +2 ./Example-Test-Report/profile.cov >> merged_profile.cov
-          tail -n +2 ./PKG-Coverage-Report/profile.cov >> merged_profile.cov
+          echo "mode: atomic" > merged_profile.cov
+          grep -h -v "mode:" ./Example-Test-Report/profile.cov ./PKG-Coverage-Report/profile.cov >> merged_profile.cov
 
           # Generate and print total coverage percentage
           echo "Total Coverage:"
