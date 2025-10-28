@@ -267,6 +267,21 @@ func (mr *MockgcsClientMockRecorder) NewReader(ctx, name any) *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "NewReader", reflect.TypeOf((*MockgcsClient)(nil).NewReader), ctx, name)
 }
 
+// NewRangeReader mocks base method.
+func (m *MockgcsClient) NewRangeReader(ctx context.Context, name string, offset, length int64) (io.ReadCloser, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "NewRangeReader", ctx, name, offset, length)
+	ret0, _ := ret[0].(io.ReadCloser)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// NewRangeReader indicates an expected call of NewRangeReader.
+func (mr *MockgcsClientMockRecorder) NewRangeReader(ctx, name, offset, length interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "NewRangeReader", reflect.TypeOf((*MockgcsClient)(nil).NewRangeReader), ctx, name, offset, length)
+}
+
 // NewWriter mocks base method.
 func (m *MockgcsClient) NewWriter(ctx context.Context, name string) io.WriteCloser {
 	m.ctrl.T.Helper()

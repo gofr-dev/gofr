@@ -1,13 +1,19 @@
 package gcs
 
 import (
+	"fmt"
 	"io"
 	"strings"
 	"testing"
 
+	"cloud.google.com/go/storage"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
 	"gofr.dev/pkg/gofr/datasource/file"
+)
+
+var (
+	errStat = fmt.Errorf("stat error")
 )
 
 func TestFile_Write(t *testing.T) {
@@ -173,22 +179,6 @@ func TestFile_Read_Error_NilBody(t *testing.T) {
 	require.ErrorIs(t, err, errNilGCSFileBody)
 }
 
-func TestFile_Seek_ReadAt_WriteAt(t *testing.T) {
-	f := &File{}
-
-	_, err := f.Seek(0, 0)
-	require.Error(t, err)
-	require.ErrorIs(t, err, errSeekNotSupported)
-
-	_, err = f.ReadAt([]byte{}, 0)
-	require.Error(t, err)
-	require.ErrorIs(t, err, errReadAtNotSupported)
-
-	_, err = f.WriteAt([]byte{}, 0)
-	require.Error(t, err)
-	require.ErrorIs(t, err, errWriteAtNotSupported)
-}
-
 type mockReader struct {
 	data string
 }
@@ -206,4 +196,263 @@ func (m *mockReader) Read(p []byte) (int, error) {
 
 func (*mockReader) Close() error {
 	return nil
+}
+
+type fakeStorageReader struct {
+	io.Reader
+}
+
+func (*fakeStorageReader) Close() error { return nil }
+
+func TestFile_Seek(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	mockClient := NewMockgcsClient(ctrl)
+	mockLogger := NewMockLogger(ctrl)
+	mockMetrics := NewMockMetrics(ctrl)
+
+	filePath := "bucket/file.txt"
+	objectName := getObjectName(filePath)
+	attrs := &storage.ObjectAttrs{Size: 20}
+
+	mockClient.EXPECT().
+		StatObject(gomock.Any(), filePath).
+		Return(attrs, nil)
+
+	mockClient.EXPECT().
+		NewRangeReader(gomock.Any(), objectName, int64(5), int64(-1)).
+		Return(&fakeStorageReader{Reader: strings.NewReader("data starting from offset 5")}, nil)
+
+	mockLogger.EXPECT().Infof(gomock.Any(), gomock.Any()).AnyTimes()
+	mockLogger.EXPECT().Errorf(gomock.Any()).AnyTimes()
+	mockLogger.EXPECT().Debug(gomock.Any()).AnyTimes()
+	mockLogger.EXPECT().Debugf(gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
+
+	mockMetrics.EXPECT().RecordHistogram(
+		gomock.Any(), file.AppFileStats, gomock.Any(),
+		"type", gomock.Any(),
+		"status", gomock.Any(), "provider", gomock.Any()).AnyTimes()
+
+	f := &File{
+		conn:    mockClient,
+		name:    "bucket/file.txt",
+		logger:  mockLogger,
+		metrics: mockMetrics,
+	}
+
+	pos, err := f.Seek(5, io.SeekStart)
+	require.NoError(t, err)
+	require.Equal(t, int64(5), pos)
+	require.NotNil(t, f.body)
+}
+
+func TestFile_Seek_StatObjectError(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	mockClient := NewMockgcsClient(ctrl)
+	mockLogger := NewMockLogger(ctrl)
+	mockMetrics := NewMockMetrics(ctrl)
+
+	filePath := "bucket/file.txt"
+	expectedErr := errStat
+
+	mockClient.EXPECT().
+		StatObject(gomock.Any(), filePath).
+		Return(nil, expectedErr)
+
+	mockLogger.EXPECT().Infof(gomock.Any(), gomock.Any()).AnyTimes()
+	mockLogger.EXPECT().Debug(gomock.Any()).AnyTimes()
+	mockLogger.EXPECT().Debugf(gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
+	mockMetrics.EXPECT().RecordHistogram(
+		gomock.Any(), file.AppFileStats, gomock.Any(),
+		"type", gomock.Any(),
+		"status", gomock.Any(), "provider", gomock.Any()).AnyTimes()
+	mockLogger.EXPECT().Errorf(gomock.Any()).Times(1)
+
+	f := &File{
+		conn:    mockClient,
+		name:    filePath,
+		logger:  mockLogger,
+		metrics: mockMetrics,
+	}
+
+	_, err := f.Seek(0, io.SeekStart)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "stat error")
+}
+
+func TestFile_Seek_CheckError(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	mockClient := NewMockgcsClient(ctrl)
+	mockLogger := NewMockLogger(ctrl)
+	mockMetrics := NewMockMetrics(ctrl)
+
+	filePath := "bucket/file.txt"
+	attrs := &storage.ObjectAttrs{Size: 10}
+
+	mockClient.EXPECT().
+		StatObject(gomock.Any(), filePath).
+		Return(attrs, nil)
+
+	mockLogger.EXPECT().Errorf(gomock.Any(), gomock.Any()).Times(1)
+
+	mockLogger.EXPECT().Infof(gomock.Any(), gomock.Any()).AnyTimes()
+	mockLogger.EXPECT().Debug(gomock.Any()).AnyTimes()
+	mockLogger.EXPECT().Debugf(gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
+	mockMetrics.EXPECT().RecordHistogram(
+		gomock.Any(), file.AppFileStats, gomock.Any(),
+		"type", gomock.Any(),
+		"status", gomock.Any(), "provider", gomock.Any()).AnyTimes()
+
+	f := &File{
+		conn:    mockClient,
+		name:    filePath,
+		logger:  mockLogger,
+		metrics: mockMetrics,
+	}
+
+	_, err := f.Seek(0, 999)
+	require.Error(t, err)
+	require.ErrorIs(t, err, errOffsetOutOfRange)
+}
+
+func TestFile_Seek_NewRangeReaderError(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	mockClient := NewMockgcsClient(ctrl)
+	mockLogger := NewMockLogger(ctrl)
+	mockMetrics := NewMockMetrics(ctrl)
+
+	filePath := "bucket/file.txt"
+	objectName := getObjectName(filePath)
+	attrs := &storage.ObjectAttrs{Size: 10}
+
+	mockClient.EXPECT().
+		StatObject(gomock.Any(), filePath).
+		Return(attrs, nil)
+
+	mockClient.EXPECT().
+		NewRangeReader(gomock.Any(), objectName, int64(0), int64(-1)).
+		Return(nil, errStat)
+
+	mockLogger.EXPECT().Errorf(gomock.Any(), gomock.Any()).Times(1)
+
+	mockLogger.EXPECT().Infof(gomock.Any(), gomock.Any()).AnyTimes()
+	mockLogger.EXPECT().Debug(gomock.Any()).AnyTimes()
+	mockLogger.EXPECT().Debugf(gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
+	mockMetrics.EXPECT().RecordHistogram(
+		gomock.Any(), file.AppFileStats, gomock.Any(),
+		"type", gomock.Any(),
+		"status", gomock.Any(), "provider", gomock.Any()).AnyTimes()
+
+	f := &File{
+		conn:    mockClient,
+		name:    filePath,
+		logger:  mockLogger,
+		metrics: mockMetrics,
+	}
+
+	_, err := f.Seek(0, io.SeekStart)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), errStat.Error())
+}
+
+func TestFile_ReadAt(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	mockClient := NewMockgcsClient(ctrl)
+	mockLogger := NewMockLogger(ctrl)
+	mockMetrics := NewMockMetrics(ctrl)
+
+	filePath := "bucket/file.txt"
+	objectName := getObjectName(filePath)
+	expected := "abcd"
+	buf := make([]byte, len(expected))
+	mockClient.EXPECT().
+		NewRangeReader(gomock.Any(), objectName, int64(1), int64(len(buf))).
+		Return(&fakeStorageReader{Reader: strings.NewReader(expected)}, nil)
+
+	mockLogger.EXPECT().Debug(gomock.Any()).AnyTimes()
+	mockLogger.EXPECT().Debugf(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
+	mockLogger.EXPECT().Errorf(gomock.Any()).AnyTimes()
+	mockMetrics.EXPECT().RecordHistogram(
+		gomock.Any(), file.AppFileStats, gomock.Any(),
+		"type", gomock.Any(),
+		"status", gomock.Any(), "provider", gomock.Any()).AnyTimes()
+
+	f := &File{
+		conn:    mockClient,
+		name:    "bucket/file.txt",
+		logger:  mockLogger,
+		metrics: mockMetrics,
+	}
+	n, err := f.ReadAt(buf, 1)
+	require.NoError(t, err)
+	require.Equal(t, len(expected), n)
+	require.Equal(t, []byte(expected), buf)
+}
+
+type mockWriteCloser struct {
+	buf  []byte
+	save func([]byte)
+}
+
+func (w *mockWriteCloser) Write(p []byte) (int, error) {
+	w.buf = append(w.buf, p...)
+	return len(p), nil
+}
+
+func (w *mockWriteCloser) Close() error {
+	if w.save != nil {
+		w.save(w.buf)
+	}
+
+	return nil
+}
+func TestFile_WriteAt(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	mockClient := NewMockgcsClient(ctrl)
+	mockLogger := NewMockLogger(ctrl)
+	mockMetrics := NewMockMetrics(ctrl)
+
+	filePath := "bucket/file.txt"
+	objectName := getObjectName(filePath)
+	initialContent := "abcdef"
+	mockClient.EXPECT().
+		NewReader(gomock.Any(), objectName).
+		Return(&fakeStorageReader{Reader: strings.NewReader(initialContent)}, nil)
+
+	var written []byte
+	mockClient.EXPECT().
+		NewWriter(gomock.Any(), objectName).
+		Return(&mockWriteCloser{save: func(p []byte) { written = append(written, p...) }})
+
+	mockLogger.EXPECT().Debug(gomock.Any()).AnyTimes()
+	mockLogger.EXPECT().Debugf(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
+	mockLogger.EXPECT().Errorf(gomock.Any()).AnyTimes()
+	mockMetrics.EXPECT().RecordHistogram(
+		gomock.Any(), file.AppFileStats, gomock.Any(),
+		"type", gomock.Any(),
+		"status", gomock.Any(), "provider", gomock.Any()).AnyTimes()
+
+	f := &File{
+		conn:    mockClient,
+		name:    "bucket/file.txt",
+		logger:  mockLogger,
+		metrics: mockMetrics,
+	}
+
+	overwrite := []byte("ZZ")
+	n, err := f.WriteAt(overwrite, 2)
+	require.NoError(t, err)
+	require.Equal(t, len(overwrite), n)
+	require.Equal(t, "abZZef", string(written))
 }
