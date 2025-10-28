@@ -10,7 +10,7 @@ export const navigation = [
 
             {
                 title: 'CLI Applications',
-                href: '/docs/cli/cli', 
+                href: '/docs/quick-start/cli',
                 desc: "Learn to build powerful command-line interface (CLI) applications using GoFr's app.NewCMD(), offering a robust framework for command-line tools."
             },
                
