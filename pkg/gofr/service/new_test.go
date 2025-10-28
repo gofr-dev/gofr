@@ -15,35 +15,6 @@ import (
 	"gofr.dev/pkg/gofr/logging"
 )
 
-func validateResponse(t *testing.T, resp *http.Response, err error, hasError bool) {
-	t.Helper()
-
-	if resp != nil {
-		defer resp.Body.Close()
-	}
-
-	if hasError {
-		require.Error(t, err)
-		assert.Nil(t, resp, "TEST[%d], Failed.\n%s")
-
-		return
-	}
-
-	require.NoError(t, err)
-	assert.NotNil(t, resp, "TEST[%d], Failed.\n%s")
-}
-
-func newService(t *testing.T, server *httptest.Server) *httpService {
-	t.Helper()
-
-	return &httpService{
-		Client: http.DefaultClient,
-		url:    server.URL,
-		Tracer: otel.Tracer("gofr-http-client"),
-		Logger: logging.NewMockLogger(logging.INFO),
-	}
-}
-
 func TestNewHTTPService(t *testing.T) {
 	tests := []struct {
 		desc           string
@@ -461,4 +432,33 @@ func TestHTTPService_createAndSendRequestServerError(t *testing.T) {
 		[]byte("{Test Body}"), map[string]string{"header1": "value1"})
 
 	validateResponse(t, resp, err, true)
+}
+
+func validateResponse(t *testing.T, resp *http.Response, err error, hasError bool) {
+	t.Helper()
+
+	if resp != nil {
+		defer resp.Body.Close()
+	}
+
+	if hasError {
+		require.Error(t, err)
+		assert.Nil(t, resp, "TEST[%d], Failed.\n%s")
+
+		return
+	}
+
+	require.NoError(t, err)
+	assert.NotNil(t, resp, "TEST[%d], Failed.\n%s")
+}
+
+func newService(t *testing.T, server *httptest.Server) *httpService {
+	t.Helper()
+
+	return &httpService{
+		Client: http.DefaultClient,
+		url:    server.URL,
+		Tracer: otel.Tracer("gofr-http-client"),
+		Logger: logging.NewMockLogger(logging.INFO),
+	}
 }
