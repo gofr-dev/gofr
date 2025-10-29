@@ -69,7 +69,7 @@ jobs:
           - "2001:6379"
         options: >-
           --entrypoint redis-server
-          --health-cmd='redis-cli ping'
+          --health-cmd="redis-cli ping"
           --health-interval=5s
           --health-timeout=5s
           --health-retries=5
@@ -84,7 +84,7 @@ jobs:
           MYSQL_ROOT_PASSWORD: "password"
           MYSQL_DATABASE: "test"
         options: >-
-          --health-cmd='mysqladmin ping -h localhost -ppassword --silent'
+          --health-cmd="mysqladmin ping -h localhost -ppassword --silent"
           --health-interval=5s
           --health-timeout=5s
           --health-retries=10
