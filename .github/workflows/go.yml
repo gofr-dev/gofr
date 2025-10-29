@@ -55,13 +55,24 @@ jobs:
           KAFKA_CFG_CONTROLLER_QUORUM_VOTERS: 1@127.0.0.1:9093
           ALLOW_PLAINTEXT_LISTENER: yes
           KAFKA_CFG_NODE_ID: 1
-
+        options: >-
+          --health-cmd='kafka-broker-api-versions.sh --bootstrap-server 127.0.0.1:9092'
+          --health-interval=5s
+          --health-timeout=10s
+          --health-retries=5
+          --health-start-period=10s
       # Redis service — tests expect Redis at localhost:2001, so expose 2001
       redis:
         image: redis:7.0.5
         ports:
           - "2001:6379"
-        options: "--entrypoint redis-server"
+        options: >-
+          --entrypoint redis-server
+          --health-cmd='redis-cli ping'
+          --health-interval=5s
+          --health-timeout=5s
+          --health-retries=5
+          --health-start-period=5s
 
       # MySQL service — move MySQL to a different host port to avoid conflict with Redis
       mysql:
@@ -71,6 +82,12 @@ jobs:
         env:
           MYSQL_ROOT_PASSWORD: "password"
           MYSQL_DATABASE: "test"
+        options: >-
+          --health-cmd='mysqladmin ping -h localhost -ppassword --silent'
+          --health-interval=5s
+          --health-timeout=5s
+          --health-retries=10
+          --health-start-period=5s
 
     # Steps to execute for this job
     steps:
@@ -91,47 +108,6 @@ jobs:
           go mod download
       - name: Start Zipkin
         run: docker run -d -p 2005:9411 openzipkin/zipkin:latest
-
-      # Wait for service ports to be ready before running tests (prevents race conditions)
-      
-      - name: Wait for services to be ready
-        run: |
-          set +e  # Don't exit on individual command failures
-          
-          echo "Waiting for MySQL on 127.0.0.1:2002..."
-          for i in {1..60}; do
-            if timeout 2 bash -c 'echo > /dev/tcp/127.0.0.1/2002' 2>/dev/null; then
-              echo "✓ MySQL port is open"
-              sleep 2  # Give MySQL time to fully initialize
-              break
-            fi
-            echo "  Attempt $i/60..."
-            sleep 1
-          done
-
-          echo "Waiting for Redis on 127.0.0.1:2001..."
-          for i in {1..60}; do
-            if timeout 2 bash -c 'echo > /dev/tcp/127.0.0.1/2001' 2>/dev/null; then
-              echo "✓ Redis port is open"
-              break
-            fi
-            echo "  Attempt $i/60..."
-            sleep 1
-          done
-
-          echo "Waiting for Kafka on 127.0.0.1:1092..."
-          for i in {1..60}; do
-            if timeout 2 bash -c 'echo > /dev/tcp/127.0.0.1/1092' 2>/dev/null; then
-              echo "✓ Kafka port is open"
-              break
-            fi
-            echo "  Attempt $i/60..."
-            sleep 1
-          done
-
-          echo "All services should be ready!"
-          sleep 3  # Final buffer
-        shell: bash
 
       # Run tests with automatic retry on failures
       - name: Test with Retry Logic
@@ -192,6 +168,7 @@ jobs:
           retry_on: error
           command: |
             export APP_ENV=test
+            
             # Run tests for root gofr package
             go test -v -short -covermode=atomic \
               -coverpkg=./pkg/gofr -coverprofile=gofr_only.cov ./pkg/gofr
@@ -203,6 +180,7 @@ jobs:
               echo "::error::Root gofr package tests failed"
               exit $exit_code
             fi
+
             # Run tests for sub-packages
             go test -v -covermode=atomic \
               -coverpkg=./pkg/gofr -coverprofile=submodules.cov ./pkg/gofr/...
@@ -214,11 +192,14 @@ jobs:
               echo "::error::Gofr sub-packages tests failed"
               exit $exit_code
             fi
+
             # Combine coverage profiles
             echo "mode: atomic" > profile.cov
             grep -h -v "mode:" gofr_only.cov submodules.cov | grep -v '/mock_' >> profile.cov
+            
             # Show coverage summary
             go tool cover -func profile.cov
+      
       # Upload coverage report for the 1.24 Go version only
       - name: Upload Test Coverage
         if: ${{ matrix.go-version == '1.24'}}
@@ -249,6 +230,7 @@ jobs:
         run: |
           echo "mode: atomic" > merged_profile.cov
           grep -h -v "mode:" ./Example-Test-Report/profile.cov ./PKG-Coverage-Report/profile.cov >> merged_profile.cov
+      
       # Calculate and output the total code coverage percentage
       - name: Parse code-coverage value
         working-directory: artifacts
@@ -291,6 +273,7 @@ jobs:
           # Find all directories containing a go.mod file within 'pkg'
           SUBMODULES=$(find pkg -name "go.mod" -exec dirname {} \; | jq -R -s -c 'split("\n") | map(select(length > 0))')
           echo "submodules=$SUBMODULES" >> $GITHUB_OUTPUT
+      
       # Test all submodules in parallel with retry logic
       - name: Test Submodules with Retry and Parallelism
         id: test_submodules
@@ -354,6 +337,7 @@ jobs:
         run: |
           curl https://qlty.sh | sh
           echo "$HOME/.qlty/bin" >> $GITHUB_PATH
+      
       # Download coverage artifacts
       - name: Download Coverage Report
         uses: actions/download-artifact@v6
@@ -396,13 +380,16 @@ jobs:
       - name: Install golangci-lint
         run: |
           go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.4.0
+      
       - name: Get dependencies
         run: |
           go mod tidy
+      
       # Run linter on the root module
       - name: Lint Root Module
         run: |
           golangci-lint run --output.text.print-issued-lines --output.text.colors=true --show-stats=false --timeout=5m
+      
       # Run linter on each submodule
       - name: Lint Submodules
         run: |
@@ -421,6 +408,7 @@ jobs:
             echo "Linting failed for $total_errors submodule(s)."
             exit 1  # Fail the job if there are linting errors in submodules
           fi
+  
   # Job for checking filename conventions
   linting_party:
     name: Linting Party🥳
