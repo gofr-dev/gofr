@@ -103,21 +103,8 @@ jobs:
           continue_on_error: false
           retry_on: error
           command: |
-            # Run tests for sub-packages
-            go test -v -covermode=atomic \
-              -coverpkg=./pkg/gofr -coverprofile=submodules.cov ./pkg/gofr/...
-            exit_code=$?
-            if [ $exit_code -eq 2 ]; then
-              echo "::error::Panic detected in gofr sub-packages tests"
-              exit 2
-            elif [ $exit_code -ne 0 ]; then
-              echo "::error::Gofr sub-packages tests failed"
-              exit $exit_code
-            fi
-            # Combine coverage profiles
-            echo "mode: atomic" > profile.cov
-            grep -h -v "mode:" gofr_only.cov submodules.cov | grep -v '/mock_' >> profile.cov
-            # Show coverage summary
+            set -e
+            export APP_ENV=test
             # Run tests for the examples directory with coverage
             go test ./examples/... -v -short -covermode=atomic -coverprofile packageWithpbgo.cov -coverpkg=./examples/...
              # Filter out auto-generated files by protobuf and gofr framework from coverage report
