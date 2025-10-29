@@ -16,14 +16,13 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
-	"gofr.dev/pkg/gofr/datasource/file"
 )
 
 var (
-	ErrGetObject     = errors.New("failed to get object from S3")
-	ErrPutObject     = errors.New("failed to put object to S3")
-	ErrCloseFailed   = errors.New("close failed")
-	ErrReadAllFailed = errors.New("simulated io.ReadAll error")
+	errGetObject     = errors.New("failed to get object from S3")
+	errPutObject     = errors.New("failed to put object to S3")
+	errCloseFailed   = errors.New("close failed")
+	errReadAllFailed = errors.New("simulated io.ReadAll error")
 )
 
 // Helper function to create a new S3File instance for testing.
@@ -39,7 +38,6 @@ func newTestS3FileWithTime(_ *testing.T, ctrl *gomock.Controller, name string, s
 	mockMetrics := NewMockMetrics(ctrl)
 	mockLogger := NewMockLogger(ctrl)
 
-	// Set up default logger expectations for common operations
 	mockLogger.EXPECT().Logf(gomock.Any(), gomock.Any()).AnyTimes()
 	mockLogger.EXPECT().Debug(gomock.Any()).AnyTimes()
 	mockLogger.EXPECT().Errorf(gomock.Any(), gomock.Any()).AnyTimes()
@@ -78,27 +76,19 @@ func (m *mockReadCloser) Close() error {
 	return m.closeErr
 }
 
-// TestClose tests the Close method of S3File.
-func TestS3File_Close(t *testing.T) {
+// TestS3File_Close_Success tests the successful Close operations of S3File.
+func TestS3File_Close_Success(t *testing.T) {
 	testCases := []struct {
-		name     string
-		body     io.ReadCloser
-		expected error
+		name string
+		body io.ReadCloser
 	}{
 		{
-			name:     "Success_BodyNil",
-			body:     nil,
-			expected: nil,
+			name: "Success_BodyNil",
+			body: nil,
 		},
 		{
-			name:     "Success_BodyNotNil",
-			body:     &mockReadCloser{Reader: bytes.NewReader([]byte("test")), closeErr: nil},
-			expected: nil,
-		},
-		{
-			name:     "Failure_CloseError",
-			body:     &mockReadCloser{Reader: bytes.NewReader([]byte("test")), closeErr: ErrCloseFailed},
-			expected: ErrCloseFailed,
+			name: "Success_BodyNotNil",
+			body: &mockReadCloser{Reader: bytes.NewReader([]byte("test")), closeErr: nil},
 		},
 	}
 
@@ -112,15 +102,24 @@ func TestS3File_Close(t *testing.T) {
 
 			err := f.Close()
 
-			if tc.expected == nil {
-				assert.NoError(t, err, "Expected no error")
-			} else {
-				require.Error(t, err, "Expected an error")
-				assert.True(t, errors.Is(err, tc.expected) || strings.Contains(err.Error(), tc.expected.Error()),
-					"Expected error to be %v or contain %q, got %v", tc.expected, tc.expected.Error(), err)
-			}
+			assert.NoError(t, err, "Expected no error")
 		})
 	}
+}
+
+// TestS3File_Close_Failure tests the failure cases of S3File Close operations.
+func TestS3File_Close_Failure(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	f := newTestS3File(t, ctrl, "test-bucket/test-file.txt", 10, 0)
+	f.body = &mockReadCloser{Reader: bytes.NewReader([]byte("test")), closeErr: errCloseFailed}
+
+	err := f.Close()
+
+	require.Error(t, err, "Expected an error")
+	assert.True(t, errors.Is(err, errCloseFailed) || strings.Contains(err.Error(), errCloseFailed.Error()),
+		"Expected error to be %v or contain %q, got %v", errCloseFailed, errCloseFailed.Error(), err)
 }
 
 var errS3Test = errors.New("s3 error")
@@ -191,28 +190,19 @@ func TestS3File_Read_Success(t *testing.T) {
 
 			m := f.conn.(*Mocks3Client)
 
-			if tc.mockGetObject != nil {
-				tc.mockGetObject(m.EXPECT())
-			}
+			tc.mockGetObject(m.EXPECT())
 
-			// Use the buffer length defined in the test case
 			p := make([]byte, tc.bufferLen)
 
-			// Reset buffer for clean comparison
 			for i := range p {
 				p[i] = 0
 			}
 
 			n, err := f.Read(p)
 
-			// Check if the expected error is the one returned (or wrapped)
-			require.ErrorIs(t, err, tc.expectedErr, "Expected error %v, got %v", tc.expectedErr, err)
-
-			if tc.expectedErr == nil {
-				assert.Equal(t, tc.expectedN, n, "Expected bytes read %d, got %d", tc.expectedN, n)
-				// We only check up to n bytes of the expected and actual content
-				assert.Equal(t, tc.expectedP[:n], string(p[:n]), "Expected content %q, got %q", tc.expectedP[:n], string(p[:n]))
-			}
+			require.NoError(t, err, "Expected no error")
+			assert.Equal(t, tc.expectedN, n, "Expected bytes read %d, got %d", tc.expectedN, n)
+			assert.Equal(t, tc.expectedP[:n], string(p[:n]), "Expected content %q, got %q", tc.expectedP[:n], string(p[:n]))
 		})
 	}
 }
@@ -266,34 +256,50 @@ func TestS3File_Read_Failure(t *testing.T) {
 
 			m := f.conn.(*Mocks3Client)
 
-			if tc.mockGetObject != nil {
-				tc.mockGetObject(m.EXPECT())
-			}
+			tc.mockGetObject(m.EXPECT())
 
-			// Use the buffer length defined in the test case
 			p := make([]byte, tc.bufferLen)
 
-			// Reset buffer for clean comparison
 			for i := range p {
 				p[i] = 0
 			}
 
 			n, err := f.Read(p)
 
-			// Check if the expected error is the one returned (or wrapped)
+			require.Error(t, err, "Expected an error")
 			require.ErrorIs(t, err, tc.expectedErr, "Expected error %v, got %v", tc.expectedErr, err)
-
-			if tc.expectedErr == nil {
-				assert.Equal(t, tc.expectedN, n, "Expected bytes read %d, got %d", tc.expectedN, n)
-				// We only check up to n bytes of the expected and actual content
-				assert.Equal(t, tc.expectedP[:n], string(p[:n]), "Expected content %q, got %q", tc.expectedP[:n], string(p[:n]))
-			}
+			assert.Equal(t, tc.expectedN, n, "Expected bytes read %d, got %d", tc.expectedN, n)
 		})
 	}
 }
 
-// TestReadAt tests the ReadAt method of S3File.
-func TestS3File_ReadAt(t *testing.T) {
+// TestS3File_ReadAt_Success tests the successful ReadAt operations of S3File.
+func TestS3File_ReadAt_Success(t *testing.T) {
+	bucketName := "test-bucket"
+	fileName := "test-file.txt"
+	fullPath := bucketName + "/" + fileName
+	content := "This is a test file content."
+	fileSize := int64(len(content))
+
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	f := newTestS3File(t, ctrl, fullPath, fileSize, 10)
+	m := f.conn.(*Mocks3Client)
+
+	m.EXPECT().GetObject(gomock.Any(), gomock.Any()).Return(getObjectOutput(content), nil)
+
+	p := make([]byte, 4)
+	n, err := f.ReadAt(p, 5)
+
+	require.NoError(t, err, "Expected no error")
+	assert.Equal(t, 4, n, "Expected bytes read 4, got %d", n)
+	assert.Equal(t, "is a", string(p[:n]), "Expected content %q, got %q", "is a", string(p[:n]))
+	assert.Equal(t, int64(10), f.offset, "ReadAt modified offset. Expected 10, got %d", f.offset)
+}
+
+// TestS3File_ReadAt_Failure tests the failure cases of S3File ReadAt operations.
+func TestS3File_ReadAt_Failure(t *testing.T) {
 	bucketName := "test-bucket"
 	fileName := "test-file.txt"
 	fullPath := bucketName + "/" + fileName
@@ -302,60 +308,40 @@ func TestS3File_ReadAt(t *testing.T) {
 
 	testCases := []struct {
 		name          string
-		size          int64
 		readAtOffset  int64
 		bufferLen     int
 		mockGetObject func(m *Mocks3ClientMockRecorder)
 		expectedN     int
-		expectedP     string
 		expectedErr   error
 	}{
 		{
-			name:         "Success_ReadFromMiddle",
-			size:         fileSize,
-			readAtOffset: 5,
-			bufferLen:    4,
-			mockGetObject: func(m *Mocks3ClientMockRecorder) {
-				m.GetObject(gomock.Any(), gomock.Any()).Return(getObjectOutput(content), nil)
-			},
-			expectedN:   4,
-			expectedP:   "is a",
-			expectedErr: nil,
-		},
-		{
 			name:         "Failure_GetObjectError",
-			size:         fileSize,
 			readAtOffset: 0,
 			bufferLen:    10,
 			mockGetObject: func(m *Mocks3ClientMockRecorder) {
 				m.GetObject(gomock.Any(), gomock.Any()).Return(nil, errS3Test)
 			},
 			expectedN:   0,
-			expectedP:   "",
 			expectedErr: errS3Test,
 		},
 		{
 			name:         "Failure_NilBody",
-			size:         fileSize,
 			readAtOffset: 0,
 			bufferLen:    10,
 			mockGetObject: func(m *Mocks3ClientMockRecorder) {
 				m.GetObject(gomock.Any(), gomock.Any()).Return(&s3.GetObjectOutput{Body: nil}, nil)
 			},
 			expectedN:   0,
-			expectedP:   "",
 			expectedErr: io.EOF,
 		},
 		{
 			name:         "Failure_OutOfRange",
-			size:         fileSize,
 			readAtOffset: 25,
 			bufferLen:    4,
 			mockGetObject: func(m *Mocks3ClientMockRecorder) {
 				m.GetObject(gomock.Any(), gomock.Any()).Return(getObjectOutput(content), nil)
 			},
 			expectedN:   0,
-			expectedP:   "",
 			expectedErr: ErrOutOfRange,
 		},
 	}
@@ -365,23 +351,17 @@ func TestS3File_ReadAt(t *testing.T) {
 			ctrl := gomock.NewController(t)
 			defer ctrl.Finish()
 
-			f := newTestS3File(t, ctrl, fullPath, tc.size, 10)
+			f := newTestS3File(t, ctrl, fullPath, fileSize, 10)
 			m := f.conn.(*Mocks3Client)
 
-			if tc.mockGetObject != nil {
-				tc.mockGetObject(m.EXPECT())
-			}
+			tc.mockGetObject(m.EXPECT())
 
 			p := make([]byte, tc.bufferLen)
 			n, err := f.ReadAt(p, tc.readAtOffset)
 
+			require.Error(t, err, "Expected an error")
 			require.ErrorIs(t, err, tc.expectedErr, "Expected error %v, got %v", tc.expectedErr, err)
-
-			if tc.expectedErr == nil {
-				assert.Equal(t, tc.expectedN, n, "Expected bytes read %d, got %d", tc.expectedN, n)
-				assert.Equal(t, tc.expectedP[:n], string(p[:n]), "Expected content %q, got %q", tc.expectedP[:n], string(p[:n]))
-				assert.Equal(t, int64(10), f.offset, "ReadAt modified offset. Expected 10, got %d", f.offset)
-			}
+			assert.Equal(t, tc.expectedN, n, "Expected bytes read %d, got %d", tc.expectedN, n)
 		})
 	}
 }
@@ -457,19 +437,14 @@ func TestS3File_Write_Success(t *testing.T) {
 
 			m := f.conn.(*Mocks3Client)
 
-			if tc.mockExpectations != nil {
-				tc.mockExpectations(m.EXPECT())
-			}
+			tc.mockExpectations(m.EXPECT())
 
 			n, err := f.Write(tc.dataToWrite)
 
-			require.ErrorIs(t, err, tc.expectedErr, "Expected error %v, got %v", tc.expectedErr, err)
-
-			if tc.expectedErr == nil {
-				assert.Equal(t, tc.expectedN, n, "Expected bytes written %d, got %d", tc.expectedN, n)
-				assert.Equal(t, tc.expectedOffset, f.offset, "Expected offset %d, got %d", tc.expectedOffset, f.offset)
-				assert.Equal(t, tc.expectedSize, f.size, "Expected size %d, got %d", tc.expectedSize, f.size)
-			}
+			require.NoError(t, err, "Expected no error")
+			assert.Equal(t, tc.expectedN, n, "Expected bytes written %d, got %d", tc.expectedN, n)
+			assert.Equal(t, tc.expectedOffset, f.offset, "Expected offset %d, got %d", tc.expectedOffset, f.offset)
+			assert.Equal(t, tc.expectedSize, f.size, "Expected size %d, got %d", tc.expectedSize, f.size)
 		})
 	}
 }
@@ -531,79 +506,91 @@ func TestS3File_Write_Failure(t *testing.T) {
 
 			m := f.conn.(*Mocks3Client)
 
-			if tc.mockExpectations != nil {
-				tc.mockExpectations(m.EXPECT())
-			}
+			tc.mockExpectations(m.EXPECT())
 
 			n, err := f.Write(tc.dataToWrite)
 
+			require.Error(t, err, "Expected an error")
 			require.ErrorIs(t, err, tc.expectedErr, "Expected error %v, got %v", tc.expectedErr, err)
-
-			if tc.expectedErr == nil {
-				assert.Equal(t, tc.expectedN, n, "Expected bytes written %d, got %d", tc.expectedN, n)
-				assert.Equal(t, tc.expectedOffset, f.offset, "Expected offset %d, got %d", tc.expectedOffset, f.offset)
-				assert.Equal(t, tc.expectedSize, f.size, "Expected size %d, got %d", tc.expectedSize, f.size)
-			}
+			assert.Equal(t, tc.expectedN, n, "Expected bytes written %d, got %d", tc.expectedN, n)
+			assert.Equal(t, tc.expectedOffset, f.offset, "Expected offset %d, got %d", tc.expectedOffset, f.offset)
+			assert.Equal(t, tc.expectedSize, f.size, "Expected size %d, got %d", tc.expectedSize, f.size)
 		})
 	}
 }
 
-// TestWriteAt tests the WriteAt method of S3File.
-func TestS3File_WriteAt(t *testing.T) {
+// TestS3File_WriteAt_Success tests the successful WriteAt operations of S3File.
+func TestS3File_WriteAt_Success(t *testing.T) {
+	bucketName, fileName := "test-bucket", "test-file.txt"
+	fullPath := bucketName + "/" + fileName
+	initialContent := "Hello, World!"
+	initialSize, dataToWrite := int64(len(initialContent)), []byte("GoFr")
+
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	f := newTestS3File(t, ctrl, fullPath, initialSize, 10)
+	m := f.conn.(*Mocks3Client)
+
+	m.EXPECT().GetObject(gomock.Any(), gomock.Any()).Return(getObjectOutput(initialContent), nil)
+
+	expectedPutBody := []byte("Hello, GoFrd!")
+
+	m.EXPECT().PutObject(gomock.Any(), gomock.Any()).Do(func(_ context.Context, params *s3.PutObjectInput, _ ...func(*s3.Options)) {
+		actualPutBody := getBodyContent(t, params.Body)
+		require.True(t, bytes.Equal(expectedPutBody, actualPutBody),
+			"PutObject Body mismatch. Expected: %q, Got: %q", string(expectedPutBody), string(actualPutBody))
+	}).Return(putObjectOutput(), nil)
+
+	n, err := f.WriteAt(dataToWrite, 7)
+
+	require.NoError(t, err, "Expected no error")
+	assert.Equal(t, len(dataToWrite), n, "Expected bytes written %d, got %d", len(dataToWrite), n)
+	assert.Equal(t, int64(10), f.offset, "WriteAt modified offset. Expected 10, got %d", f.offset)
+	assert.Equal(t, initialSize, f.size, "Expected size %d, got %d", initialSize, f.size)
+}
+
+// TestS3File_WriteAt_Failure tests the failure cases of S3File WriteAt operations.
+func TestS3File_WriteAt_Failure(t *testing.T) {
 	bucketName, fileName := "test-bucket", "test-file.txt"
 	fullPath := bucketName + "/" + fileName
 	initialContent := "Hello, World!"
 	initialSize, dataToWrite := int64(len(initialContent)), []byte("GoFr")
 
 	testCases := []struct {
-		name                         string
-		writeAtOffset, initialOffset int64
-		dataToWrite                  []byte
-		mockExpectations             func(m *Mocks3ClientMockRecorder)
-		expectedN                    int
-		expectedOffset, expectedSize int64
-		expectedErr                  error
+		name             string
+		writeAtOffset    int64
+		initialOffset    int64
+		mockExpectations func(m *Mocks3ClientMockRecorder)
+		expectedN        int
+		expectedOffset   int64
+		expectedSize     int64
+		expectedErr      error
 	}{
 		{
-			name:          "Success_WriteAtMiddle",
-			initialOffset: 10, writeAtOffset: 7,
-			dataToWrite: dataToWrite,
-			mockExpectations: func(m *Mocks3ClientMockRecorder) {
-				m.GetObject(gomock.Any(), gomock.Any()).Return(getObjectOutput(initialContent), nil)
-
-				expectedPutBody := []byte("Hello, GoFrd!")
-
-				m.PutObject(gomock.Any(), gomock.Any()).Do(func(_ context.Context, params *s3.PutObjectInput, _ ...func(*s3.Options)) {
-					actualPutBody := getBodyContent(t, params.Body)
-					if !bytes.Equal(expectedPutBody, actualPutBody) {
-						t.Errorf("PutObject Body mismatch. Expected: %q, Got: %q", string(expectedPutBody), string(actualPutBody))
-						t.FailNow()
-					}
-				}).Return(putObjectOutput(), nil)
-			},
-			expectedN: len(dataToWrite), expectedOffset: 10, expectedSize: initialSize,
-			expectedErr: nil,
-		},
-		{
 			name:          "Failure_GetObjectError",
-			initialOffset: 10, writeAtOffset: 5,
-			dataToWrite: dataToWrite,
+			initialOffset: 10,
+			writeAtOffset: 5,
 			mockExpectations: func(m *Mocks3ClientMockRecorder) {
-				m.GetObject(gomock.Any(), gomock.Any()).Return(nil, ErrGetObject)
+				m.GetObject(gomock.Any(), gomock.Any()).Return(nil, errGetObject)
 			},
-			expectedN: 0, expectedOffset: 10, expectedSize: initialSize,
-			expectedErr: ErrGetObject,
+			expectedN:      0,
+			expectedOffset: 10,
+			expectedSize:   initialSize,
+			expectedErr:    errGetObject,
 		},
 		{
 			name:          "Failure_PutObjectError",
-			initialOffset: 10, writeAtOffset: 0,
-			dataToWrite: dataToWrite,
+			initialOffset: 10,
+			writeAtOffset: 0,
 			mockExpectations: func(m *Mocks3ClientMockRecorder) {
 				m.GetObject(gomock.Any(), gomock.Any()).Return(getObjectOutput(initialContent), nil)
-				m.PutObject(gomock.Any(), gomock.Any()).Return(nil, ErrPutObject)
+				m.PutObject(gomock.Any(), gomock.Any()).Return(nil, errPutObject)
 			},
-			expectedN: 0, expectedOffset: 10, expectedSize: initialSize,
-			expectedErr: ErrPutObject,
+			expectedN:      0,
+			expectedOffset: 10,
+			expectedSize:   initialSize,
+			expectedErr:    errPutObject,
 		},
 	}
 
@@ -615,19 +602,15 @@ func TestS3File_WriteAt(t *testing.T) {
 			f := newTestS3File(t, ctrl, fullPath, initialSize, tc.initialOffset)
 
 			m := f.conn.(*Mocks3Client)
-			if tc.mockExpectations != nil {
-				tc.mockExpectations(m.EXPECT())
-			}
+			tc.mockExpectations(m.EXPECT())
 
-			n, err := f.WriteAt(tc.dataToWrite, tc.writeAtOffset)
+			n, err := f.WriteAt(dataToWrite, tc.writeAtOffset)
 
+			require.Error(t, err, "Expected an error")
 			require.ErrorIs(t, err, tc.expectedErr, "Expected error %v, got %v", tc.expectedErr, err)
-
-			if tc.expectedErr == nil {
-				assert.Equal(t, tc.expectedN, n, "Expected bytes written %d, got %d", tc.expectedN, n)
-				assert.Equal(t, tc.expectedOffset, f.offset, "WriteAt modified offset. Expected %d, got %d", tc.expectedOffset, f.offset)
-				assert.Equal(t, tc.expectedSize, f.size, "Expected size %d, got %d", tc.expectedSize, f.size)
-			}
+			assert.Equal(t, tc.expectedN, n, "Expected bytes written %d, got %d", tc.expectedN, n)
+			assert.Equal(t, tc.expectedOffset, f.offset, "WriteAt modified offset. Expected %d, got %d", tc.expectedOffset, f.offset)
+			assert.Equal(t, tc.expectedSize, f.size, "Expected size %d, got %d", tc.expectedSize, f.size)
 		})
 	}
 }
@@ -642,12 +625,12 @@ func getBodyContent(t *testing.T, body io.Reader) []byte {
 	return b
 }
 
-// TestS3File_Seek_Basic tests the basic Seek operations (SeekStart and SeekCurrent) of S3File.
-func TestS3File_Seek_Basic(t *testing.T) {
+// TestS3File_Seek_Success tests the successful Seek operations of S3File.
+func TestS3File_Seek_Success(t *testing.T) {
 	bucketName := "test-bucket"
 	fileName := "test-file.txt"
 	fullPath := bucketName + "/" + fileName
-	fileSize := int64(20) // Mock file size
+	fileSize := int64(20)
 
 	testCases := []struct {
 		name              string
@@ -655,7 +638,6 @@ func TestS3File_Seek_Basic(t *testing.T) {
 		offset            int64
 		whence            int
 		expectedNewOffset int64
-		expectedErr       error
 	}{
 		{
 			name:              "SeekStart_Success",
@@ -663,23 +645,6 @@ func TestS3File_Seek_Basic(t *testing.T) {
 			offset:            10,
 			whence:            io.SeekStart,
 			expectedNewOffset: 10,
-			expectedErr:       nil,
-		},
-		{
-			name:              "SeekStart_Failure_Negative",
-			initialOffset:     5,
-			offset:            -1,
-			whence:            io.SeekStart,
-			expectedNewOffset: 0,
-			expectedErr:       ErrOutOfRange,
-		},
-		{
-			name:              "SeekStart_Failure_TooLarge",
-			initialOffset:     5,
-			offset:            21,
-			whence:            io.SeekStart,
-			expectedNewOffset: 0,
-			expectedErr:       ErrOutOfRange,
 		},
 		{
 			name:              "SeekCurrent_Success",
@@ -687,68 +652,13 @@ func TestS3File_Seek_Basic(t *testing.T) {
 			offset:            10,
 			whence:            io.SeekCurrent,
 			expectedNewOffset: 15,
-			expectedErr:       nil,
 		},
-		{
-			name:              "SeekCurrent_Failure_NegativeResult",
-			initialOffset:     5,
-			offset:            -6,
-			whence:            io.SeekCurrent,
-			expectedNewOffset: 0,
-			expectedErr:       ErrOutOfRange,
-		},
-	}
-
-	for _, tc := range testCases {
-		t.Run(tc.name, func(t *testing.T) {
-			ctrl := gomock.NewController(t)
-			defer ctrl.Finish()
-
-			f := newTestS3File(t, ctrl, fullPath, fileSize, tc.initialOffset)
-
-			newOffset, err := f.Seek(tc.offset, tc.whence)
-
-			require.ErrorIs(t, err, tc.expectedErr, "Expected error %v, got %v", tc.expectedErr, err)
-
-			if tc.expectedErr == nil {
-				assert.Equal(t, tc.expectedNewOffset, newOffset, "Expected new offset %d, got %d", tc.expectedNewOffset, newOffset)
-				assert.Equal(t, tc.expectedNewOffset, f.offset,
-					"File struct offset was not updated. Expected %d, got %d", tc.expectedNewOffset, f.offset)
-			}
-		})
-	}
-}
-
-// TestS3File_Seek_Advanced tests the advanced Seek operations (SeekEnd and InvalidWhence) of S3File.
-func TestS3File_Seek_Advanced(t *testing.T) {
-	bucketName := "test-bucket"
-	fileName := "test-file.txt"
-	fullPath := bucketName + "/" + fileName
-	fileSize := int64(20) // Mock file size
-
-	testCases := []struct {
-		name              string
-		initialOffset     int64
-		offset            int64
-		whence            int
-		expectedNewOffset int64
-		expectedErr       error
-	}{
 		{
 			name:              "SeekEnd_Success",
 			initialOffset:     5,
 			offset:            -5,
 			whence:            io.SeekEnd,
 			expectedNewOffset: 15,
-			expectedErr:       nil,
-		},
-		{
-			name:              "SeekEnd_Failure_TooLarge",
-			initialOffset:     5,
-			offset:            1,
-			whence:            io.SeekEnd,
-			expectedNewOffset: 0,
-			expectedErr:       ErrOutOfRange,
 		},
 		{
 			name:              "SeekEnd_Success_ToStart",
@@ -756,15 +666,6 @@ func TestS3File_Seek_Advanced(t *testing.T) {
 			offset:            -20,
 			whence:            io.SeekEnd,
 			expectedNewOffset: 0,
-			expectedErr:       nil,
-		},
-		{
-			name:              "Seek_InvalidWhence",
-			initialOffset:     5,
-			offset:            0,
-			whence:            3, // Invalid whence
-			expectedNewOffset: 0,
-			expectedErr:       os.ErrInvalid,
 		},
 	}
 
@@ -777,13 +678,76 @@ func TestS3File_Seek_Advanced(t *testing.T) {
 
 			newOffset, err := f.Seek(tc.offset, tc.whence)
 
-			require.ErrorIs(t, err, tc.expectedErr, "Expected error %v, got %v", tc.expectedErr, err)
+			require.NoError(t, err, "Expected no error")
+			assert.Equal(t, tc.expectedNewOffset, newOffset, "Expected new offset %d, got %d", tc.expectedNewOffset, newOffset)
+			assert.Equal(t, tc.expectedNewOffset, f.offset, "File struct offset was not updated. "+
+				"Expected %d, got %d", tc.expectedNewOffset, f.offset)
+		})
+	}
+}
 
-			if tc.expectedErr == nil {
-				assert.Equal(t, tc.expectedNewOffset, newOffset, "Expected new offset %d, got %d", tc.expectedNewOffset, newOffset)
-				assert.Equal(t, tc.expectedNewOffset, f.offset,
-					"File struct offset was not updated. Expected %d, got %d", tc.expectedNewOffset, f.offset)
-			}
+// TestS3File_Seek_Failure tests the failure cases of S3File Seek operations.
+func TestS3File_Seek_Failure(t *testing.T) {
+	bucketName := "test-bucket"
+	fileName := "test-file.txt"
+	fullPath := bucketName + "/" + fileName
+	fileSize := int64(20)
+
+	testCases := []struct {
+		name          string
+		initialOffset int64
+		offset        int64
+		whence        int
+		expectedErr   error
+	}{
+		{
+			name:          "SeekStart_Failure_Negative",
+			initialOffset: 5,
+			offset:        -1,
+			whence:        io.SeekStart,
+			expectedErr:   ErrOutOfRange,
+		},
+		{
+			name:          "SeekStart_Failure_TooLarge",
+			initialOffset: 5,
+			offset:        21,
+			whence:        io.SeekStart,
+			expectedErr:   ErrOutOfRange,
+		},
+		{
+			name:          "SeekCurrent_Failure_NegativeResult",
+			initialOffset: 5,
+			offset:        -6,
+			whence:        io.SeekCurrent,
+			expectedErr:   ErrOutOfRange,
+		},
+		{
+			name:          "SeekEnd_Failure_TooLarge",
+			initialOffset: 5,
+			offset:        1,
+			whence:        io.SeekEnd,
+			expectedErr:   ErrOutOfRange,
+		},
+		{
+			name:          "Seek_InvalidWhence",
+			initialOffset: 5,
+			offset:        0,
+			whence:        3, // Invalid whence
+			expectedErr:   os.ErrInvalid,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+			defer ctrl.Finish()
+
+			f := newTestS3File(t, ctrl, fullPath, fileSize, tc.initialOffset)
+
+			_, err := f.Seek(tc.offset, tc.whence)
+
+			require.Error(t, err, "Expected an error")
+			require.ErrorIs(t, err, tc.expectedErr, "Expected error %v, got %v", tc.expectedErr, err)
 		})
 	}
 }
@@ -796,12 +760,10 @@ func TestJsonReader_ValidObjects(t *testing.T) {
 	]`
 	reader := bytes.NewReader([]byte(jsonContent))
 	decoder := json.NewDecoder(reader)
-	// Must consume the '[' token
 	_, _ = decoder.Token()
 
 	jReader := jsonReader{decoder: decoder}
 
-	// Test first object
 	require.True(t, jReader.Next(), "Expected Next to be true for the first object")
 
 	var data1 struct {
@@ -812,7 +774,6 @@ func TestJsonReader_ValidObjects(t *testing.T) {
 	assert.Equal(t, "Alice", data1.Name)
 	assert.Equal(t, 30, data1.Age)
 
-	// Test second object
 	require.True(t, jReader.Next(), "Expected Next to be true for the second object")
 
 	var data2 struct {
@@ -832,27 +793,22 @@ func TestJsonReader_NullAndEnd(t *testing.T) {
 	]`
 	reader := bytes.NewReader([]byte(jsonContent))
 	decoder := json.NewDecoder(reader)
-	// Must consume the '[' token
 	_, _ = decoder.Token()
 
 	jReader := jsonReader{decoder: decoder}
 
-	// Skip first object
 	jReader.Next()
 	err := jReader.Scan(&struct{}{})
 	require.NoError(t, err, "Scan failed for null object")
 
-	// Test null object
 	require.True(t, jReader.Next(), "Expected Next to be true for the null object")
 
 	var data3 any
 	require.NoError(t, jReader.Scan(&data3), "Scan failed for null object")
 	assert.Nil(t, data3)
 
-	// Test end of array
 	assert.False(t, jReader.Next(), "Expected Next to be false at the end of the array")
 
-	// Test Scan error after array end
 	var invalidScanTarget struct{}
 	require.Error(t, jReader.Scan(&invalidScanTarget), "Expected Scan to fail after array end")
 }
@@ -870,144 +826,135 @@ func TestS3File_Metadata_Methods(t *testing.T) {
 
 	f := newTestS3FileWithTime(t, ctrl, fullPath, testSize, 0, testTime)
 
-	// Test Name
 	expectedName := "my-file.txt"
 	assert.Equal(t, expectedName, f.Name())
 
-	// Test Size
 	assert.Equal(t, testSize, f.Size())
 
-	// Test ModTime
 	assert.Equal(t, testTime, f.ModTime())
 
-	// Test IsDir
 	assert.False(t, f.IsDir())
 
-	// Test IsDir for a directory-like name
 	f.name = bucketName + "/path/to/my-dir/"
 	assert.True(t, f.IsDir())
 
-	// Test Mode (placeholder)
 	assert.Equal(t, os.FileMode(0), f.Mode())
 }
 
-// createMockBody creates a MockReadCloser for testing based on the test case parameters.
-func createMockBody(fileBody []byte, bodyReadError error) *MockReadCloser {
-	if bodyReadError != nil {
-		return &MockReadCloser{
-			Reader: io.NopCloser(errorReader{err: bodyReadError}),
-			CloseFunc: func() error {
-				return nil
-			},
-		}
+// createMockBodyWithError creates a MockReadCloser that returns an error when reading.
+func createMockBodyWithError(bodyReadError error) *MockReadCloser {
+	return &MockReadCloser{
+		Reader: io.NopCloser(errorReader{err: bodyReadError}),
+		CloseFunc: func() error {
+			return nil
+		},
 	}
-
-	return &MockReadCloser{Reader: bytes.NewReader(fileBody)}
 }
 
-// assertErrorCase validates that ReadAll returns an error as expected.
-func assertErrorCase(t *testing.T, err error, reader file.RowReader, _ string) {
+// createMockBodyWithContent creates a MockReadCloser with the provided content.
+func createMockBodyWithContent(fileBody []byte) *MockReadCloser {
+	return &MockReadCloser{
+		Reader: bytes.NewReader(fileBody),
+		CloseFunc: func() error {
+			return nil
+		},
+	}
+}
+
+// Helper function for creating a new S3File instance for a test.
+func newS3FileForReadAll(t *testing.T, ctrl *gomock.Controller, name string, body io.ReadCloser) *S3File {
 	t.Helper()
+	f := newTestS3File(t, ctrl, name, 0, 0)
+	f.body = body
+
+	return f
+}
+
+// TestS3File_ReadAll_JSONArray_Success tests reading JSON array from S3File.
+func TestS3File_ReadAll_JSONArray_Success(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	mockBody := createMockBodyWithContent([]byte(`[{"id": 1}, {"id": 2}]`))
+	f := newS3FileForReadAll(t, ctrl, "my-bucket/path/to/data.json", mockBody)
+
+	reader, err := f.ReadAll()
+
+	require.NoError(t, err, "ReadAll() unexpected error")
+	require.NotNil(t, reader, "ReadAll() returned nil reader on success")
+	assert.IsType(t, &jsonReader{}, reader, "ReadAll() for JSON array expected *jsonReader")
+}
+
+// TestS3File_ReadAll_JSONObject_Success tests reading JSON object from S3File.
+func TestS3File_ReadAll_JSONObject_Success(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	mockBody := createMockBodyWithContent([]byte(`{"key": "value"}`))
+	f := newS3FileForReadAll(t, ctrl, "my-bucket/path/to/config.json", mockBody)
+
+	reader, err := f.ReadAll()
+
+	require.NoError(t, err, "ReadAll() unexpected error")
+	require.NotNil(t, reader, "ReadAll() returned nil reader on success")
+	assert.IsType(t, &jsonReader{}, reader, "ReadAll() for JSON object expected *jsonReader")
+}
+
+// TestS3File_ReadAll_Text_Success tests reading text/CSV from S3File.
+func TestS3File_ReadAll_Text_Success(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	mockBody := createMockBodyWithContent([]byte("col1,col2\n1,2"))
+	f := newS3FileForReadAll(t, ctrl, "my-bucket/path/to/data.csv", mockBody)
+
+	reader, err := f.ReadAll()
+
+	require.NoError(t, err, "ReadAll() unexpected error")
+	require.NotNil(t, reader, "ReadAll() returned nil reader on success")
+	assert.IsType(t, &textReader{}, reader, "ReadAll() for text file expected *textReader")
+}
+
+// TestS3File_ReadAll_JSON_Error tests ReadAll error for JSON file.
+func TestS3File_ReadAll_JSON_Error(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	mockBody := createMockBodyWithError(errReadAllFailed)
+	f := newS3FileForReadAll(t, ctrl, "my-bucket/fail.json", mockBody)
+
+	reader, err := f.ReadAll()
+
 	require.Error(t, err, "ReadAll() expected an error, but got nil")
 	assert.Nil(t, reader, "ReadAll() expected nil reader on error")
 }
 
-// assertSuccessCase validates that ReadAll succeeds and returns the correct reader type.
-func assertSuccessCase(t *testing.T, err error, reader file.RowReader, expectedType string) {
-	t.Helper()
-	require.NoError(t, err, "ReadAll() unexpected error")
-	require.NotNil(t, reader, "ReadAll() returned nil reader on success")
-
-	switch expectedType {
-	case "json-array", "json-object":
-		assert.IsType(t, &jsonReader{}, reader, "ReadAll() for JSON file expected *jsonReader")
-	case "text":
-		assert.IsType(t, &textReader{}, reader, "ReadAll() for text file expected *textReader")
-	}
-}
-
-func TestS3File_ReadAll(t *testing.T) {
+// TestS3File_ReadAll_Text_Error tests ReadAll error for text/CSV file.
+func TestS3File_ReadAll_Text_Error(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
-	// A sample error for simulating I/O failures.
-	readError := ErrReadAllFailed
+	mockBody := createMockBodyWithError(errReadAllFailed)
+	f := newS3FileForReadAll(t, ctrl, "my-bucket/fail.txt", mockBody)
 
-	// Helper function for creating a new S3File instance for a test
-	newS3File := func(name string, body io.ReadCloser) *S3File {
-		f := newTestS3File(t, ctrl, name, 0, 0)
-		f.body = body
+	reader, err := f.ReadAll()
 
-		return f
-	}
+	require.Error(t, err, "ReadAll() expected an error, but got nil")
+	assert.Nil(t, reader, "ReadAll() expected nil reader on error")
+}
 
-	// --- Test Cases ---
-	tests := []struct {
-		name          string
-		fileName      string
-		fileBody      []byte
-		bodyReadError error
-		expectedType  string
-	}{
-		{
-			name:          "JSON Array Success",
-			fileName:      "my-bucket/path/to/data.json",
-			fileBody:      []byte(`[{"id": 1}, {"id": 2}]`),
-			bodyReadError: nil,
-			expectedType:  "json-array",
-		},
-		{
-			name:          "JSON Object Success",
-			fileName:      "my-bucket/path/to/config.json",
-			fileBody:      []byte(`{"key": "value"}`),
-			bodyReadError: nil,
-			expectedType:  "json-object",
-		},
-		{
-			name:          "Text/CSV Success",
-			fileName:      "my-bucket/path/to/data.csv",
-			fileBody:      []byte("col1,col2\n1,2"),
-			bodyReadError: nil,
-			expectedType:  "text",
-		},
-		{
-			name:          "JSON ReadAll Error",
-			fileName:      "my-bucket/fail.json",
-			fileBody:      nil,
-			bodyReadError: readError,
-			expectedType:  "error",
-		},
-		{
-			name:          "Text/CSV ReadAll Error",
-			fileName:      "my-bucket/fail.txt",
-			fileBody:      nil,
-			bodyReadError: readError,
-			expectedType:  "error",
-		},
-		{
-			name:          "JSON Invalid Token Error",
-			fileName:      "my-bucket/invalid.json",
-			fileBody:      []byte(`not a json`),
-			bodyReadError: nil,
-			expectedType:  "json-error",
-		},
-	}
+// TestS3File_ReadAll_JSONInvalidToken_Error tests ReadAll error for invalid JSON.
+func TestS3File_ReadAll_JSONInvalidToken_Error(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			mockBody := createMockBody(tt.fileBody, tt.bodyReadError)
-			f := newS3File(tt.fileName, mockBody)
+	mockBody := createMockBodyWithContent([]byte(`not a json`))
+	f := newS3FileForReadAll(t, ctrl, "my-bucket/invalid.json", mockBody)
 
-			reader, err := f.ReadAll()
+	reader, err := f.ReadAll()
 
-			switch tt.expectedType {
-			case "error", "json-error":
-				assertErrorCase(t, err, reader, tt.expectedType)
-			default:
-				assertSuccessCase(t, err, reader, tt.expectedType)
-			}
-		})
-	}
+	require.Error(t, err, "ReadAll() expected an error, but got nil")
+	assert.Nil(t, reader, "ReadAll() expected nil reader on error")
 }
 
 // errorReader is a helper to simulate an io.ReadAll failure for testing.
@@ -1026,11 +973,7 @@ type MockReadCloser struct {
 }
 
 func (m *MockReadCloser) Close() error {
-	if m.CloseFunc != nil {
-		return m.CloseFunc()
-	}
-
-	return nil
+	return m.CloseFunc()
 }
 
 func TestFileSystem_Connect(t *testing.T) {
@@ -1045,7 +988,6 @@ func TestFileSystem_Connect(t *testing.T) {
 		EndPoint:        "http://localhost:9000",
 	}
 
-	// --- Test Case: Successful Connection ---
 	t.Run("SuccessCase", func(t *testing.T) {
 		mockLogger := NewMockLogger(ctrl)
 		mockLogger.EXPECT().Debug(gomock.Any()).AnyTimes()
@@ -1057,7 +999,6 @@ func TestFileSystem_Connect(t *testing.T) {
 			logger: mockLogger,
 		}
 
-		// Execute the function under test
 		fs.Connect()
 
 		assert.NotNil(t, fs.conn, "Connect() failed to initialize S3 client")
