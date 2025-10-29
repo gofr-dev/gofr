@@ -56,7 +56,7 @@ jobs:
           ALLOW_PLAINTEXT_LISTENER: yes
           KAFKA_CFG_NODE_ID: 1
         options: >-
-          --health-cmd='kafka-broker-api-versions.sh --bootstrap-server 127.0.0.1:9092'
+          --health-cmd='kafka-broker-api-versions.sh --broker-list 127.0.0.1:9092'
           --health-interval=5s
           --health-timeout=10s
           --health-retries=5
