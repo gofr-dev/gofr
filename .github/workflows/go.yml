@@ -41,15 +41,14 @@ jobs:
       kafka:
         image: bitnamilegacy/kafka:3.4.1
         ports:
-          - "1092:9092"
+          - "9092:9092"
         env:
           KAFKA_ENABLE_KRAFT: yes
           KAFKA_CFG_PROCESS_ROLES: broker,controller
           KAFKA_CFG_CONTROLLER_LISTENER_NAMES: CONTROLLER
           KAFKA_CFG_LISTENERS: PLAINTEXT://:9092,CONTROLLER://:9093
           KAFKA_CFG_LISTENER_SECURITY_PROTOCOL_MAP: CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT
-          # advertise the host port that tests use
-          KAFKA_CFG_ADVERTISED_LISTENERS: PLAINTEXT://127.0.0.1:1092
+          KAFKA_CFG_ADVERTISED_LISTENERS: PLAINTEXT://127.0.0.1:9092
           KAFKA_CFG_AUTO_CREATE_TOPICS_ENABLE: true
           KAFKA_BROKER_ID: 1
           KAFKA_CFG_CONTROLLER_QUORUM_VOTERS: 1@127.0.0.1:9093
@@ -60,20 +59,14 @@ jobs:
       redis:
         image: redis:7.0.5
         ports:
-          - "2001:6379"
-        options: >-
-          --entrypoint redis-server
-          --health-cmd="redis-cli ping"
-          --health-interval=5s
-          --health-timeout=5s
-          --health-retries=5
-          --health-start-period=5s
+          - "2002:6379"
+        options: "--entrypoint redis-server"
 
       # MySQL service — move MySQL to a different host port to avoid conflict with Redis
       mysql:
         image: mysql:8.2.0
         ports:
-          - "2002:3306"
+          - "2001:3306"
         env:
           MYSQL_ROOT_PASSWORD: "password"
           MYSQL_DATABASE: "test"
