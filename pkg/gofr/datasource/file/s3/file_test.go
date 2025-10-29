@@ -23,6 +23,7 @@ var (
 	errPutObject     = errors.New("failed to put object to S3")
 	errCloseFailed   = errors.New("close failed")
 	errReadAllFailed = errors.New("simulated io.ReadAll error")
+	errS3Test        = errors.New("s3 error")
 )
 
 // Helper function to create a new S3File instance for testing.
@@ -121,8 +122,6 @@ func TestS3File_Close_Failure(t *testing.T) {
 	assert.True(t, errors.Is(err, errCloseFailed) || strings.Contains(err.Error(), errCloseFailed.Error()),
 		"Expected error to be %v or contain %q, got %v", errCloseFailed, errCloseFailed.Error(), err)
 }
-
-var errS3Test = errors.New("s3 error")
 
 // TestS3File_Read_Success tests the successful Read operations of S3File.
 func TestS3File_Read_Success(t *testing.T) {
