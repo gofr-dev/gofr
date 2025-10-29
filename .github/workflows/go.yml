@@ -113,6 +113,7 @@ jobs:
         with:
           timeout_minutes: 5  # Maximum time for the tests to run
           max_attempts: 2      # Retry up to 2 times if tests fail
+          continue_on_error: false
           command: |
             set -e
             export APP_ENV=test
