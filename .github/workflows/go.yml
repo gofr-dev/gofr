@@ -158,7 +158,7 @@ jobs:
       - name: Get dependencies
         run: |
           go mod download
-          
+
       # Run pkg tests with automatic retry logic
       - name: Test with Retry Logic
         id: test
@@ -169,7 +169,7 @@ jobs:
           retry_on: error
           command: |
             export APP_ENV=test
-  
+
             # Run tests for root gofr package
             go test -v -short -covermode=atomic \
               -coverpkg=./pkg/gofr -coverprofile=gofr_only.cov ./pkg/gofr
@@ -275,7 +275,7 @@ jobs:
           # Find all directories containing a go.mod file within 'pkg'
           SUBMODULES=$(find pkg -name "go.mod" -exec dirname {} \; | jq -R -s -c 'split("\n") | map(select(length > 0))')
           echo "submodules=$SUBMODULES" >> $GITHUB_OUTPUT
-      
+  
       # Test all submodules in parallel with retry logic
       - name: Test Submodules with Retry and Parallelism
         id: test_submodules
