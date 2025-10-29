@@ -106,6 +106,7 @@ jobs:
       - name: Get dependencies
         run: |
           go mod download
+
       - name: Start Zipkin
         run: docker run -d -p 2005:9411 openzipkin/zipkin:latest
 
@@ -124,7 +125,7 @@ jobs:
             grep -vE '(/client/|grpc-.+-client/main\.go|_client\.go|_gofr\.go|_grpc\.pb\.go|\.pb\.go|\.proto|health_.*\.go)' packageWithpbgo.cov > profile.cov
             # Display coverage statistics
             go tool cover -func profile.cov
-            
+
       # Upload coverage report for the 1.24 Go version only
       - name: Upload Test Coverage
         if: ${{ matrix.go-version == '1.24'}}
@@ -168,7 +169,7 @@ jobs:
           retry_on: error
           command: |
             export APP_ENV=test
-            
+  
             # Run tests for root gofr package
             go test -v -short -covermode=atomic \
               -coverpkg=./pkg/gofr -coverprofile=gofr_only.cov ./pkg/gofr
@@ -196,10 +197,10 @@ jobs:
             # Combine coverage profiles
             echo "mode: atomic" > profile.cov
             grep -h -v "mode:" gofr_only.cov submodules.cov | grep -v '/mock_' >> profile.cov
-            
+
             # Show coverage summary
             go tool cover -func profile.cov
-      
+
       # Upload coverage report for the 1.24 Go version only
       - name: Upload Test Coverage
         if: ${{ matrix.go-version == '1.24'}}
@@ -230,7 +231,7 @@ jobs:
         run: |
           echo "mode: atomic" > merged_profile.cov
           grep -h -v "mode:" ./Example-Test-Report/profile.cov ./PKG-Coverage-Report/profile.cov >> merged_profile.cov
-      
+
       # Calculate and output the total code coverage percentage
       - name: Parse code-coverage value
         working-directory: artifacts
@@ -239,6 +240,7 @@ jobs:
           codeCoverage=${codeCoverage%?}
           echo "CODE_COVERAGE=$codeCoverage" >> $GITHUB_ENV
           echo "✅ Total Code Coverage: $codeCoverage%"
+
   #      - name: Check if code-coverage is greater than threshold
   #        run: |
   #          codeCoverage=${{ env.CODE_COVERAGE }}
@@ -310,6 +312,7 @@ jobs:
             
               cd -
             '
+
       # Upload submodule coverage reports as an artifact
       - name: Upload Coverage Reports
         uses: actions/upload-artifact@v5
@@ -337,7 +340,7 @@ jobs:
         run: |
           curl https://qlty.sh | sh
           echo "$HOME/.qlty/bin" >> $GITHUB_PATH
-      
+
       # Download coverage artifacts
       - name: Download Coverage Report
         uses: actions/download-artifact@v6
@@ -350,6 +353,7 @@ jobs:
         run: |
           echo "mode: atomic" > merged_profile.cov
           grep -h -v "mode:" ./Example-Test-Report/profile.cov ./PKG-Coverage-Report/profile.cov >> merged_profile.cov
+
           # Generate and print total coverage percentage
           echo "Total Coverage:"
           go tool cover -func=merged_profile.cov | tail -n 1
@@ -380,16 +384,16 @@ jobs:
       - name: Install golangci-lint
         run: |
           go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.4.0
-      
+
       - name: Get dependencies
         run: |
           go mod tidy
-      
+
       # Run linter on the root module
       - name: Lint Root Module
         run: |
           golangci-lint run --output.text.print-issued-lines --output.text.colors=true --show-stats=false --timeout=5m
-      
+
       # Run linter on each submodule
       - name: Lint Submodules
         run: |
@@ -408,7 +412,7 @@ jobs:
             echo "Linting failed for $total_errors submodule(s)."
             exit 1  # Fail the job if there are linting errors in submodules
           fi
-  
+
   # Job for checking filename conventions
   linting_party:
     name: Linting Party🥳
