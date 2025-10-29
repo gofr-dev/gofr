@@ -109,17 +109,17 @@ jobs:
       - name: Test with Retry Logic
         id: test
         uses: nick-fields/retry@v3
+        continue-on-error: false
         with:
           timeout_minutes: 5  # Maximum time for the tests to run
           max_attempts: 2      # Retry up to 2 times if tests fail
-          continue-on-error: false
           command: |
             set -e
             export APP_ENV=test
             # Run tests for the examples directory with coverage
             go test ./examples/... -v -short -covermode=atomic -coverprofile packageWithpbgo.cov -coverpkg=./examples/...
              # Filter out auto-generated files by protobuf and gofr framework from coverage report
-            grep -vE '(/client/|grpc-.+-client/main\.go|_client\.go|_gofr\.go|_grpc\.pb\.go|\.pb\.go|\.proto|health_.*\.go)' packageWithpbgo.cov > profile.cov
+            grep -vE '(/client/|grpc-.+-client/main\.go|_client\.go|_gofr\.go|_grpc\.pb\.go|\.pb\.go|\.proto|health_.*\.go)' packageWithpbgo.cov > profile.cov  || true
             # Display coverage statistics
             go tool cover -func profile.cov
 
