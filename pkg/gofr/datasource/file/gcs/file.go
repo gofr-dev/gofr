@@ -28,39 +28,27 @@ type File struct {
 }
 
 var (
-	errNilGCSFileBody   = errors.New("gcs file body is nil")
-	errOffsetOutOfRange = errors.New("offset out of range")
-)
-
-const (
-	msgWriterClosed = "Writer closed successfully"
-	msgReaderClosed = "Reader closed successfully"
-	statusErr       = "ERROR"
-	statusSuccess   = "SUCCESS"
+	errNilGCSFileBody = errors.New("gcs file body is nil")
 )
 
 // ====== File interface methods ======
 
 func (f *File) Read(p []byte) (int, error) {
 	if f.body == nil {
-		f.logger.Debug("GCS file body is nil")
+		f.logger.Error("GCS file body is nil")
 		return 0, errNilGCSFileBody
 	}
 
 	return f.body.Read(p)
 }
 func (f *File) Write(p []byte) (int, error) {
-	bucketName := getBucketName(f.name)
-
 	var msg string
 
 	st := file.StatusError
 
 	startTime := time.Now()
 
-	defer file.ObserveFileOperation(&file.OperationObservability{
-		Context: context.Background(), Logger: f.logger, Metrics: f.metrics, Operation: "WRITE",
-		Location: getLocation(bucketName), Provider: "GCS", StartTime: startTime, Status: &st, Message: &msg})
+	defer f.observe(file.OpWrite, startTime, &st, &msg)
 
 	n, err := f.writer.Write(p)
 	if err != nil {
@@ -77,17 +65,13 @@ func (f *File) Write(p []byte) (int, error) {
 }
 
 func (f *File) Close() error {
-	bucketName := getBucketName(f.name)
-
 	var msg string
 
 	st := file.StatusError
 
 	startTime := time.Now()
 
-	defer file.ObserveFileOperation(&file.OperationObservability{
-		Context: context.Background(), Logger: f.logger, Metrics: f.metrics, Operation: "CLOSE",
-		Location: getLocation(bucketName), Provider: "GCS", StartTime: startTime, Status: &st, Message: &msg})
+	defer f.observe(file.OpClose, startTime, &st, &msg)
 
 	if f.writer != nil {
 		err := f.writer.Close()
@@ -98,9 +82,7 @@ func (f *File) Close() error {
 
 		st = file.StatusSuccess
 
-		msg = msgWriterClosed
-
-		f.logger.Debug(msg)
+		msg = file.MsgWriterClosed
 
 		return nil
 	}
@@ -114,51 +96,26 @@ func (f *File) Close() error {
 
 		st = file.StatusSuccess
 
-		msg = msgReaderClosed
+		msg = file.MsgReaderClosed
 
-		f.logger.Debug(msgReaderClosed)
+		f.logger.Debug(file.MsgReaderClosed)
 
 		return nil
 	}
 
 	st = file.StatusSuccess
 
-	msg = msgWriterClosed
+	msg = file.MsgWriterClosed
 
 	return nil
 }
 
-func (f *File) check(whence int, offset, length int64, msg *string) (int64, error) {
-	switch whence {
-	case io.SeekStart:
-	case io.SeekEnd:
-		offset += length
-	case io.SeekCurrent:
-		offset += f.size
-	default:
-		return 0, errOffsetOutOfRange
-	}
-
-	if offset < 0 || offset > length {
-		*msg = fmt.Sprintf("Offset %v out of bounds %v", offset, length)
-		return 0, errOffsetOutOfRange
-	}
-
-	f.size = offset
-
-	return f.size, nil
-}
-
 func (f *File) Seek(offset int64, whence int) (int64, error) {
-	bucketName := getBucketName(f.name)
-
 	var msg string
 
-	status := statusErr
+	status := file.StatusError
 
-	defer file.ObserveFileOperation(&file.OperationObservability{
-		Context: context.Background(), Logger: f.logger, Metrics: f.metrics, Operation: "SEEK",
-		Location: getLocation(bucketName), Provider: "GCS", StartTime: time.Now(), Status: &status, Message: &msg})
+	defer f.observe(file.OpSeek, time.Now(), &status, &msg)
 
 	ctx := context.Background()
 
@@ -170,7 +127,7 @@ func (f *File) Seek(offset int64, whence int) (int64, error) {
 		return 0, err
 	}
 
-	newPos, err := f.check(whence, offset, attrs.Size, &msg)
+	newPos, err := file.ValidateSeekOffset(whence, offset, f.size, attrs.Size)
 	if err != nil {
 		f.logger.Errorf("Seek failed. Error: %v", err)
 		return 0, err
@@ -180,7 +137,7 @@ func (f *File) Seek(offset int64, whence int) (int64, error) {
 		_ = f.body.Close()
 	}
 
-	reader, err := f.conn.NewRangeReader(ctx, getObjectName(f.name), newPos, -1)
+	reader, err := f.conn.NewRangeReader(ctx, file.GetObjectName(f.name), newPos, -1)
 	if err != nil {
 		f.logger.Errorf("failed to set new range reader: %v", err)
 
@@ -190,7 +147,7 @@ func (f *File) Seek(offset int64, whence int) (int64, error) {
 	f.body = reader
 	f.size = newPos
 
-	status = statusSuccess
+	status = file.StatusSuccess
 
 	f.logger.Infof("Seek repositioned reader to offset %v for %q", newPos, f.name)
 
@@ -198,19 +155,15 @@ func (f *File) Seek(offset int64, whence int) (int64, error) {
 }
 
 func (f *File) ReadAt(p []byte, off int64) (int, error) {
-	bucketName := getBucketName(f.name)
-
 	var msg string
 
-	status := statusErr
+	status := file.StatusError
 
-	defer file.ObserveFileOperation(&file.OperationObservability{
-		Context: context.Background(), Logger: f.logger, Metrics: f.metrics, Operation: "READ_AT",
-		Location: getLocation(bucketName), Provider: "GCS", StartTime: time.Now(), Status: &status, Message: &msg})
+	defer f.observe(file.OpReadAt, time.Now(), &status, &msg)
 
 	ctx := context.Background()
 
-	rdr, err := f.conn.NewRangeReader(ctx, getObjectName(f.name), off, int64(len(p)))
+	rdr, err := f.conn.NewRangeReader(ctx, file.GetObjectName(f.name), off, int64(len(p)))
 	if err != nil {
 		f.logger.Errorf("failed to create range reader: %v", err)
 
@@ -226,7 +179,7 @@ func (f *File) ReadAt(p []byte, off int64) (int, error) {
 		return n, err
 	}
 
-	status = statusSuccess
+	status = file.StatusSuccess
 
 	f.logger.Debugf("ReadAt read %d bytes from offset %d for file %q", n, off, f.name)
 
@@ -234,17 +187,13 @@ func (f *File) ReadAt(p []byte, off int64) (int, error) {
 }
 
 func (f *File) WriteAt(p []byte, off int64) (int, error) {
-	bucketName := getBucketName(f.name)
-
 	var msg string
 
-	status := statusErr
+	status := file.StatusError
 
-	defer file.ObserveFileOperation(&file.OperationObservability{
-		Context: context.Background(), Logger: f.logger, Metrics: f.metrics, Operation: "WRITE_AT",
-		Location: getLocation(bucketName), Provider: "GCS", StartTime: time.Now(), Status: &status, Message: &msg})
+	defer f.observe(file.OpWriteAt, time.Now(), &status, &msg)
 
-	objectName := getObjectName(f.name)
+	objectName := file.GetObjectName(f.name)
 	ctx := context.Background()
 	rdr, err := f.conn.NewReader(ctx, objectName)
 
@@ -285,9 +234,26 @@ func (f *File) WriteAt(p []byte, off int64) (int, error) {
 		return 0, err
 	}
 
-	status = statusSuccess
+	status = file.StatusSuccess
 
 	f.logger.Debugf("WriteAt wrote %d bytes at offset %d in %q", len(p), off, f.name)
 
 	return len(p), nil
+}
+
+// observe is a helper method to reduce boilerplate for file operation observability.
+func (f *File) observe(operation string, startTime time.Time, status, message *string) {
+	bucketName := file.GetBucketName(f.name)
+
+	file.ObserveOperation(&file.OperationObservability{
+		Context:   context.Background(),
+		Logger:    f.logger,
+		Metrics:   f.metrics,
+		Operation: operation,
+		Location:  getLocation(bucketName),
+		Provider:  "GCS",
+		StartTime: startTime,
+		Status:    status,
+		Message:   message,
+	})
 }

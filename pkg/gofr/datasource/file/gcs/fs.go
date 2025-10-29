@@ -50,17 +50,7 @@ func (f *FileSystem) Connect() {
 
 	startTime := time.Now()
 
-	defer file.ObserveFileOperation(&file.OperationObservability{
-		Context:   context.Background(),
-		Logger:    f.logger,
-		Metrics:   f.metrics,
-		Operation: "CONNECT",
-		Location:  getLocation(f.config.BucketName),
-		Provider:  "GCS",
-		StartTime: startTime,
-		Status:    &st,
-		Message:   &msg},
-	)
+	defer f.observe(file.OpConnect, startTime, &st, &msg)
 
 	f.registerHistogram.Do(func() {
 		f.metrics.NewHistogram(
@@ -173,10 +163,8 @@ func (f *FileSystem) Create(name string) (file.File, error) {
 	)
 
 	startTime := time.Now()
-	defer file.ObserveFileOperation(&file.OperationObservability{
-		Context: context.Background(), Logger: f.logger, Metrics: f.metrics, Operation: "CREATE FILE",
-		Location: getLocation(f.config.BucketName), Provider: "GCS", StartTime: startTime, Status: &st, Message: &msg},
-	)
+
+	defer f.observe(file.OpCreate, startTime, &st, &msg)
 
 	ctx := context.Background()
 
@@ -251,11 +239,7 @@ func (f *FileSystem) Remove(name string) error {
 
 	startTime := time.Now()
 
-	defer file.ObserveFileOperation(&file.OperationObservability{
-		Context: context.Background(), Logger: f.logger, Metrics: f.metrics,
-		Operation: "REMOVE FILE", Location: getLocation(f.config.BucketName),
-		Provider: "GCS", StartTime: startTime, Status: &st, Message: &msg},
-	)
+	defer f.observe(file.OpRemove, startTime, &st, &msg)
 
 	ctx := context.TODO()
 
@@ -282,10 +266,7 @@ func (f *FileSystem) Open(name string) (file.File, error) {
 
 	startTime := time.Now()
 
-	defer file.ObserveFileOperation(&file.OperationObservability{
-		Context: context.Background(), Logger: f.logger, Metrics: f.metrics, Operation: "OPEN FILE",
-		Location: getLocation(f.config.BucketName),
-		Provider: "GCS", StartTime: startTime, Status: &st, Message: &msg})
+	defer f.observe(file.OpOpen, startTime, &st, &msg)
 
 	ctx := context.TODO()
 
@@ -335,11 +316,7 @@ func (f *FileSystem) Rename(oldname, newname string) error {
 
 	startTime := time.Now()
 
-	defer file.ObserveFileOperation(&file.OperationObservability{
-		Context: context.Background(), Logger: f.logger, Metrics: f.metrics,
-		Operation: "RENAME", Location: getLocation(f.config.BucketName), Provider: "GCS",
-		StartTime: startTime, Status: &st, Message: &msg},
-	)
+	defer f.observe(file.OpRename, startTime, &st, &msg)
 
 	ctx := context.TODO()
 
@@ -401,4 +378,19 @@ func generateCopyName(original string, count int) string {
 	base := strings.TrimSuffix(original, ext)
 
 	return fmt.Sprintf("%s copy %d%s", base, count, ext)
+}
+
+// observe is a helper method for FileSystem-level operations.
+func (f *FileSystem) observe(operation string, startTime time.Time, status, message *string) {
+	file.ObserveOperation(&file.OperationObservability{
+		Context:   context.Background(),
+		Logger:    f.logger,
+		Metrics:   f.metrics,
+		Operation: operation,
+		Location:  getLocation(f.config.BucketName),
+		Provider:  "GCS",
+		StartTime: startTime,
+		Status:    status,
+		Message:   message,
+	})
 }

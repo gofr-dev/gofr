@@ -156,7 +156,7 @@ func TestFile_Read_Error_NilBody(t *testing.T) {
 	mockLogger := NewMockLogger(ctrl)
 	mockMetrics := NewMockMetrics(ctrl)
 
-	mockLogger.EXPECT().Debug("GCS file body is nil")
+	mockLogger.EXPECT().Error("GCS file body is nil")
 	mockLogger.EXPECT().Debug(gomock.Any()).AnyTimes()
 	mockMetrics.EXPECT().RecordHistogram(
 		gomock.Any(), file.AppFileStats, gomock.Any(),
@@ -213,7 +213,7 @@ func TestFile_Seek(t *testing.T) {
 	mockMetrics := NewMockMetrics(ctrl)
 
 	filePath := "bucket/file.txt"
-	objectName := getObjectName(filePath)
+	objectName := file.GetObjectName(filePath)
 	attrs := &storage.ObjectAttrs{Size: 20}
 
 	mockClient.EXPECT().
@@ -317,7 +317,7 @@ func TestFile_Seek_CheckError(t *testing.T) {
 
 	_, err := f.Seek(0, 999)
 	require.Error(t, err)
-	require.ErrorIs(t, err, errOffsetOutOfRange)
+	require.ErrorIs(t, err, file.ErrOutOfRange)
 }
 
 func TestFile_Seek_NewRangeReaderError(t *testing.T) {
@@ -329,7 +329,7 @@ func TestFile_Seek_NewRangeReaderError(t *testing.T) {
 	mockMetrics := NewMockMetrics(ctrl)
 
 	filePath := "bucket/file.txt"
-	objectName := getObjectName(filePath)
+	objectName := file.GetObjectName(filePath)
 	attrs := &storage.ObjectAttrs{Size: 10}
 
 	mockClient.EXPECT().
@@ -371,7 +371,7 @@ func TestFile_ReadAt(t *testing.T) {
 	mockMetrics := NewMockMetrics(ctrl)
 
 	filePath := "bucket/file.txt"
-	objectName := getObjectName(filePath)
+	objectName := file.GetObjectName(filePath)
 	expected := "abcd"
 	buf := make([]byte, len(expected))
 	mockClient.EXPECT().
@@ -424,7 +424,7 @@ func TestFile_WriteAt(t *testing.T) {
 	mockMetrics := NewMockMetrics(ctrl)
 
 	filePath := "bucket/file.txt"
-	objectName := getObjectName(filePath)
+	objectName := file.GetObjectName(filePath)
 	initialContent := "abcdef"
 	mockClient.EXPECT().
 		NewReader(gomock.Any(), objectName).

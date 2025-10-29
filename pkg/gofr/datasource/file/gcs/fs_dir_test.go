@@ -43,7 +43,7 @@ func TestGetBucketName(t *testing.T) {
 		{"", ""},
 	}
 	for _, c := range tc {
-		got := getBucketName(c.input)
+		got := file.GetBucketName(c.input)
 		if got != c.want {
 			t.Errorf("getBucketName(%q) = %q, want %q", c.input, got, c.want)
 		}
@@ -61,7 +61,7 @@ func TestGetObjectName(t *testing.T) {
 		{"", ""},
 	}
 	for _, c := range tc {
-		got := getObjectName(c.input)
+		got := file.GetObjectName(c.input)
 		if got != c.want {
 			t.Errorf("getObjectName(%q) = %q, want %q", c.input, got, c.want)
 		}

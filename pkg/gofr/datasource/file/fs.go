@@ -3,9 +3,12 @@ package file
 import (
 	"os"
 	"path"
+	"strings"
 
 	"gofr.dev/pkg/gofr/datasource"
 )
+
+const maxPathParts = 2
 
 type fileSystem struct {
 	logger datasource.Logger
@@ -114,4 +117,24 @@ func (fileSystem) ReadDir(dir string) ([]FileInfo, error) {
 	}
 
 	return fileInfo, err
+}
+
+// GetBucketName extracts the bucket name from a path like "bucket/path/to/file".
+func GetBucketName(filePath string) string {
+	parts := strings.SplitN(filePath, "/", maxPathParts)
+	if len(parts) > 0 {
+		return parts[0]
+	}
+
+	return ""
+}
+
+// GetObjectName extracts the object name from a path like "bucket/path/to/file".
+func GetObjectName(filePath string) string {
+	parts := strings.SplitN(filePath, "/", maxPathParts)
+	if len(parts) == maxPathParts {
+		return parts[1]
+	}
+
+	return ""
 }

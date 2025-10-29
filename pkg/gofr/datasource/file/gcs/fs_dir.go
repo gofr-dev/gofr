@@ -20,26 +20,6 @@ var (
 	errCHNDIRNotSupported = errors.New("changing directory is not supported in GCS")
 )
 
-const maxSplitParts = 2
-
-func getBucketName(filePath string) string {
-	parts := strings.SplitN(filePath, "/", maxSplitParts)
-	if len(parts) > 0 {
-		return parts[0]
-	}
-
-	return ""
-}
-
-func getObjectName(filePath string) string {
-	parts := strings.SplitN(filePath, "/", maxSplitParts)
-	if len(parts) == maxSplitParts {
-		return parts[1]
-	}
-
-	return ""
-}
-
 func getLocation(bucket string) string {
 	return filepath.Join(string(filepath.Separator), bucket)
 }
@@ -51,9 +31,7 @@ func (f *FileSystem) Mkdir(name string, _ os.FileMode) error {
 
 	startTime := time.Now()
 
-	defer file.ObserveFileOperation(&file.OperationObservability{
-		Context: context.Background(), Logger: f.logger, Metrics: f.metrics, Operation: "MKDIR",
-		Location: getLocation(f.config.BucketName), Provider: "GCS", StartTime: startTime, Status: &st, Message: &msg})
+	defer f.observe(file.OpMkdir, startTime, &st, &msg)
 
 	if name == "" {
 		msg = "directory name cannot be empty"
@@ -79,8 +57,6 @@ func (f *FileSystem) Mkdir(name string, _ os.FileMode) error {
 	st = file.StatusSuccess
 
 	msg = fmt.Sprintf("Directories on path %q created successfully", name)
-
-	f.logger.Infof("Created directories on path %q", name)
 
 	return err
 }
@@ -127,10 +103,7 @@ func (f *FileSystem) RemoveAll(dirPath string) error {
 
 	startTime := time.Now()
 
-	defer file.ObserveFileOperation(&file.OperationObservability{
-		Context: context.Background(), Logger: f.logger, Metrics: f.metrics, Operation: "REMOVEALL",
-		Location: getLocation(f.config.BucketName),
-		Provider: "GCS", StartTime: startTime, Status: &st, Message: &msg})
+	defer f.observe(file.OpRemoveAll, startTime, &st, &msg)
 
 	ctx := context.TODO()
 
@@ -166,10 +139,7 @@ func (f *FileSystem) ReadDir(dir string) ([]file.FileInfo, error) {
 
 	startTime := time.Now()
 
-	defer file.ObserveFileOperation(&file.OperationObservability{
-		Context: context.Background(), Logger: f.logger, Metrics: f.metrics,
-		Operation: "READDIR", Location: getLocation(f.config.BucketName),
-		Provider: "GCS", StartTime: startTime, Status: &st, Message: &msg})
+	defer f.observe(file.OpReadDir, startTime, &st, &msg)
 
 	ctx := context.TODO()
 
@@ -214,35 +184,26 @@ func (f *FileSystem) ReadDir(dir string) ([]file.FileInfo, error) {
 }
 
 func (f *FileSystem) ChDir(_ string) error {
-	const op = "CHDIR"
-
 	st := file.StatusError
 
 	var msg = "Changing directory not supported"
 
 	startTime := time.Now()
 
-	defer file.ObserveFileOperation(&file.OperationObservability{
-		Context: context.Background(), Logger: f.logger, Metrics: f.metrics, Operation: op,
-		Location: getLocation(f.config.BucketName), Provider: "GCS",
-		StartTime: startTime, Status: &st, Message: &msg})
+	defer f.observe(file.OpChDir, startTime, &st, &msg)
 
-	f.logger.Errorf("%s: not supported in GCS", op)
+	f.logger.Errorf("%s: not supported in GCS", file.OpChDir)
 
 	return errCHNDIRNotSupported
 }
 func (f *FileSystem) Getwd() (string, error) {
-	const op = "GETWD"
-
 	st := file.StatusSuccess
 
 	start := time.Now()
 
 	var msg = "Returning simulated root directory"
 
-	defer file.ObserveFileOperation(&file.OperationObservability{
-		Context: context.Background(), Logger: f.logger, Metrics: f.metrics, Operation: op, Location: getLocation(f.config.BucketName),
-		Provider: "GCS", StartTime: start, Status: &st, Message: &msg})
+	defer f.observe(file.OpGetwd, start, &st, &msg)
 
 	return getLocation(f.config.BucketName), nil
 }
@@ -253,10 +214,7 @@ func (f *FileSystem) Stat(name string) (file.FileInfo, error) {
 
 	startTime := time.Now()
 
-	defer file.ObserveFileOperation(&file.OperationObservability{
-		Context: context.Background(), Logger: f.logger, Metrics: f.metrics, Operation: "STAT",
-		Location: getLocation(f.config.BucketName),
-		Provider: "GCS", StartTime: startTime, Status: &st, Message: &msg})
+	defer f.observe(file.OpStat, startTime, &st, &msg)
 
 	ctx := context.TODO()
 

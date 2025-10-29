@@ -91,6 +91,13 @@ var (
 	ErrDestinationExists = os.ErrExist
 )
 
+const (
+	StatusSuccess   = "SUCCESS"
+	StatusError     = "ERROR"
+	MsgWriterClosed = "Writer closed successfully"
+	MsgReaderClosed = "Reader closed successfully"
+)
+
 // FileSystemProvider : Any simulated or real filesystem provider should implement this interface.
 //
 //nolint:revive // let's consider file.FileSystemProvider doesn't sound repetitive

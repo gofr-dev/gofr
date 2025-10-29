@@ -3,7 +3,6 @@ package gcs
 import (
 	"bufio"
 	"bytes"
-	"context"
 	"encoding/json"
 	"errors"
 	"io"
@@ -32,7 +31,7 @@ type jsonReader struct {
 }
 
 func (f *File) ReadAll() (file.RowReader, error) {
-	bucketName := getBucketName(f.name)
+	bucketName := file.GetBucketName(f.name)
 	location := path.Join(bucketName, f.name)
 
 	var msg string
@@ -40,9 +39,7 @@ func (f *File) ReadAll() (file.RowReader, error) {
 	st := file.StatusError
 	startTime := time.Now()
 
-	defer file.ObserveFileOperation(&file.OperationObservability{Context: context.Background(), Logger: f.logger,
-		Metrics:   f.metrics,
-		Operation: "READALL", Location: location, Provider: "GCS", StartTime: startTime, Status: &st, Message: &msg})
+	defer f.observe(file.OpReadAll, startTime, &st, &msg)
 
 	if strings.HasSuffix(f.Name(), ".json") {
 		reader, err := f.createJSONReader(location)
@@ -74,9 +71,7 @@ func (f *File) createJSONReader(location string) (file.RowReader, error) {
 	st := file.StatusError
 	startTime := time.Now()
 
-	defer file.ObserveFileOperation(&file.OperationObservability{
-		Context: context.Background(), Logger: f.logger, Metrics: f.metrics, Operation: "JSON READER",
-		Location: location, Provider: "GCS", StartTime: startTime, Status: &st, Message: &msg})
+	defer f.observe(file.OpJSONReader, startTime, &st, &msg)
 
 	buffer, err := io.ReadAll(f.body)
 	if err != nil {
@@ -121,10 +116,7 @@ func (f *File) createTextCSVReader(location string) (file.RowReader, error) {
 	st := file.StatusError
 	startTime := time.Now()
 
-	defer file.ObserveFileOperation(&file.OperationObservability{
-		Context: context.Background(), Logger: f.logger, Metrics: f.metrics, Operation: "TEXT/CSV READER",
-		Location: location, Provider: "GCS", StartTime: startTime, Status: &st, Message: &msg},
-	)
+	defer f.observe(file.OpTextCSVReader, startTime, &st, &msg)
 
 	buffer, err := io.ReadAll(f.body)
 	if err != nil {
@@ -169,65 +161,41 @@ func (f *textReader) Scan(i any) error {
 }
 
 func (f *File) Name() string {
-	bucketName := getBucketName(f.name)
-	location := getLocation(bucketName)
-
 	st := file.StatusSuccess
 	msg := "Name retrieved"
 	startTime := time.Now()
 
-	defer file.ObserveFileOperation(&file.OperationObservability{
-		Context: context.Background(), Logger: f.logger, Metrics: f.metrics, Operation: "GET NAME",
-		Location: location, Provider: "GCS", StartTime: startTime, Status: &st, Message: &msg},
-	)
+	defer f.observe(file.OpGetName, startTime, &st, &msg)
 
 	return f.name
 }
 
 func (f *File) Size() int64 {
-	bucketName := getBucketName(f.name)
-	location := getLocation(bucketName)
-
 	st := file.StatusSuccess
 	msg := "Size retrieved"
 	startTime := time.Now()
 
-	defer file.ObserveFileOperation(&file.OperationObservability{
-		Context: context.Background(), Logger: f.logger, Metrics: f.metrics, Operation: "FILE/DIR SIZE",
-		Location: location, Provider: "GCS", StartTime: startTime, Status: &st, Message: &msg},
-	)
+	defer f.observe(file.OpFileSize, startTime, &st, &msg)
 
 	return f.size
 }
 
 func (f *File) ModTime() time.Time {
-	bucketName := getBucketName(f.name)
-	location := getLocation(bucketName)
-
 	st := file.StatusSuccess
 	msg := "ModTime retrieved"
 	startTime := time.Now()
 
-	defer file.ObserveFileOperation(&file.OperationObservability{
-		Context: context.Background(), Logger: f.logger, Metrics: f.metrics, Operation: "LAST MODIFIED",
-		Location: location, Provider: "GCS", StartTime: startTime, Status: &st, Message: &msg},
-	)
+	defer f.observe(file.OpLastMod, startTime, &st, &msg)
 
 	return f.lastModified
 }
 
 func (f *File) Mode() fs.FileMode {
-	bucketName := getBucketName(f.name)
-	location := getLocation(bucketName)
-
 	st := file.StatusSuccess
 	msg := "Mode retrieved"
 	startTime := time.Now()
 
-	defer file.ObserveFileOperation(&file.OperationObservability{
-		Context: context.Background(), Logger: f.logger, Metrics: f.metrics, Operation: "MODE",
-		Location: location, Provider: "GCS", StartTime: startTime, Status: &st, Message: &msg},
-	)
+	defer f.observe(file.OpMode, startTime, &st, &msg)
 
 	if f.isDir {
 		return fs.ModeDir
@@ -237,33 +205,21 @@ func (f *File) Mode() fs.FileMode {
 }
 
 func (f *File) IsDir() bool {
-	bucketName := getBucketName(f.name)
-	location := getLocation(bucketName)
-
 	st := file.StatusSuccess
 	msg := "IsDir checked"
 	startTime := time.Now()
 
-	defer file.ObserveFileOperation(&file.OperationObservability{
-		Context: context.Background(), Logger: f.logger, Metrics: f.metrics, Operation: "IS DIR",
-		Location: location, Provider: "GCS", StartTime: startTime, Status: &st, Message: &msg},
-	)
+	defer f.observe(file.OpIsDir, startTime, &st, &msg)
 
 	return f.isDir || f.contentType == "application/x-directory"
 }
 
 func (f *File) Sys() any {
-	bucketName := getBucketName(f.name)
-	location := getLocation(bucketName)
-
 	st := file.StatusSuccess
 	msg := "Sys info retrieved"
 	startTime := time.Now()
 
-	defer file.ObserveFileOperation(&file.OperationObservability{
-		Context: context.Background(), Logger: f.logger, Metrics: f.metrics, Operation: "SYS",
-		Location: location, Provider: "GCS", StartTime: startTime, Status: &st, Message: &msg},
-	)
+	defer f.observe(file.OpSys, startTime, &st, &msg)
 
 	return nil
 }

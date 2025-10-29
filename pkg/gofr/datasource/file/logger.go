@@ -7,12 +7,6 @@ import (
 	"strings"
 )
 
-// Common status constants.
-const (
-	StatusSuccess = "SUCCESS"
-	StatusError   = "ERROR"
-)
-
 // OperationLog represents a standardized log entry for file operations.
 type OperationLog struct {
 	Operation string  `json:"operation"`

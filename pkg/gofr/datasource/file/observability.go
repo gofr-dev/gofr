@@ -12,6 +12,39 @@ const (
 	AppFileStats = "app_file_stats"
 )
 
+// Operation constants for standardization across all file providers.
+const (
+	OpConnect       = "CONNECT"
+	OpCreate        = "CREATE FILE"
+	OpOpen          = "OPEN FILE"
+	OpRead          = "READ"
+	OpWrite         = "WRITE"
+	OpClose         = "CLOSE"
+	OpSeek          = "SEEK"
+	OpReadAt        = "READ_AT"
+	OpWriteAt       = "WRITE_AT"
+	OpRemove        = "REMOVE FILE"
+	OpRename        = "RENAME"
+	OpMkdir         = "MKDIR"
+	OpMkdirAll      = "MKDIRALL"
+	OpRemoveAll     = "REMOVEALL"
+	OpReadDir       = "READDIR"
+	OpStat          = "STAT"
+	OpChDir         = "CHDIR"
+	OpGetwd         = "GETWD"
+	OpReadAll       = "READALL"
+	OpJSONReader    = "JSON READER"
+	OpTextCSVReader = "TEXT/CSV READER"
+
+	// FileInfo operations.
+	OpGetName  = "GET NAME"
+	OpFileSize = "FILE/DIR SIZE"
+	OpLastMod  = "LAST MODIFIED"
+	OpMode     = "MODE"
+	OpIsDir    = "IS DIR"
+	OpSys      = "SYS"
+)
+
 // StorageMetrics interface that all storage providers should use.
 type StorageMetrics interface {
 	// NewHistogram creates a new histogram with the given name, description, and buckets.
@@ -39,8 +72,8 @@ type OperationObservability struct {
 	Message   *string
 }
 
-// ObserveFileOperation is a helper function that handles both logging and metrics recording.
-func ObserveFileOperation(params *OperationObservability) {
+// ObserveOperation is a helper function that handles both logging and metrics recording.
+func ObserveOperation(params *OperationObservability) {
 	duration := time.Since(params.StartTime).Microseconds()
 
 	log := &OperationLog{
