@@ -56,11 +56,12 @@ jobs:
           ALLOW_PLAINTEXT_LISTENER: yes
           KAFKA_CFG_NODE_ID: 1
         options: >-
-          --health-cmd='bash -c "echo > /dev/tcp/127.0.0.1/9092"'
-          --health-interval=5s
+          --health-cmd="kafka-topics.sh --list --bootstrap-server localhost:9092 || exit 1"
+          --health-interval=10s
           --health-timeout=5s
           --health-retries=10
-          --health-start-period=15s
+          --health-start-period=25s
+
       # Redis service — tests expect Redis at localhost:2001, so expose 2001
       redis:
         image: redis:7.0.5
