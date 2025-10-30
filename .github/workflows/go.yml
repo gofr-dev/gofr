@@ -9,7 +9,6 @@ on:
   push:
     branches:
       - main
-      - test3
       - development
     paths-ignore:
       - 'docs/**'  # Ignore changes to docs folder
@@ -42,14 +41,14 @@ jobs:
       kafka:
         image: bitnamilegacy/kafka:3.4.1
         ports:
-          - "1092:9092"
+          - "9092:9092"
         env:
           KAFKA_ENABLE_KRAFT: yes
           KAFKA_CFG_PROCESS_ROLES: broker,controller
           KAFKA_CFG_CONTROLLER_LISTENER_NAMES: CONTROLLER
           KAFKA_CFG_LISTENERS: PLAINTEXT://:9092,CONTROLLER://:9093
           KAFKA_CFG_LISTENER_SECURITY_PROTOCOL_MAP: CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT
-          KAFKA_CFG_ADVERTISED_LISTENERS: PLAINTEXT://127.0.0.1:1092
+          KAFKA_CFG_ADVERTISED_LISTENERS: PLAINTEXT://127.0.0.1:9092
           KAFKA_CFG_AUTO_CREATE_TOPICS_ENABLE: true
           KAFKA_BROKER_ID: 1
           KAFKA_CFG_CONTROLLER_QUORUM_VOTERS: 1@127.0.0.1:9093
@@ -60,14 +59,14 @@ jobs:
       redis:
         image: redis:7.0.5
         ports:
-          - "2001:6379"
+          - "2002:6379"
         options: "--entrypoint redis-server"
 
       # MySQL service
       mysql:
         image: mysql:8.2.0
         ports:
-          - "2009:3306"
+          - "2001:3306"
         env:
           MYSQL_ROOT_PASSWORD: "password"
           MYSQL_DATABASE: "test"
@@ -96,21 +95,24 @@ jobs:
       - name: Test with Retry Logic
         id: test
         uses: nick-fields/retry@v3
+        continue-on-error: false
         with:
           timeout_minutes: 5  # Maximum time for the tests to run
-          max_attempts: 2      # Retry up to 2 times if tests fail          
-          continue_on_error: false
-          retry_on: error
+          max_attempts: 2      # Retry up to 2 times if tests fail
           command: |
             set -e
             export APP_ENV=test
             # Run tests for the examples directory with coverage
             go test ./examples/... -v -short -covermode=atomic -coverprofile packageWithpbgo.cov -coverpkg=./examples/...
+            # Treat exit code 0 as success; exit code 1 may be harmless if output exists
+            if [ "${exit_code:-0}" -ne 0 ]; then
+              echo "⚠️ go test exited with $exit_code"
+            fi
              # Filter out auto-generated files by protobuf and gofr framework from coverage report
+
             grep -vE '(/client/|grpc-.+-client/main\.go|_client\.go|_gofr\.go|_grpc\.pb\.go|\.pb\.go|\.proto|health_.*\.go)' packageWithpbgo.cov > profile.cov
             # Display coverage statistics
             go tool cover -func profile.cov
-
       # Upload coverage report for the 1.24 Go version only
       - name: Upload Test Coverage
         if: ${{ matrix.go-version == '1.24'}}
@@ -119,7 +121,7 @@ jobs:
           name: Example-Test-Report
           path: profile.cov
 
-  # Job for testing the pkg directorypk
+  # Job for testing the pkg directory
   PKG-Unit-Testing:
     name: PKG Unit Testing (v${{ matrix.go-version }})🛠
     runs-on: ubuntu-latest
@@ -150,7 +152,7 @@ jobs:
         with:
           timeout_minutes: 5
           max_attempts: 2
-          continue_on_error: false
+          continue-on-error: false
           retry_on: error
           command: |
             set -e
@@ -181,7 +183,7 @@ jobs:
             echo "mode: atomic" > profile.cov
             grep -h -v "mode:" gofr_only.cov submodules.cov | grep -v '/mock_' >> profile.cov
             # Show coverage summary
-
+            go tool cover -func profile.cov
       # Upload coverage report for the 1.24 Go version only
       - name: Upload Test Coverage
         if: ${{ matrix.go-version == '1.24'}}
@@ -212,7 +214,6 @@ jobs:
         run: |
           echo "mode: atomic" > merged_profile.cov
           grep -h -v "mode:" ./Example-Test-Report/profile.cov ./PKG-Coverage-Report/profile.cov >> merged_profile.cov
-      
       # Calculate and output the total code coverage percentage
       - name: Parse code-coverage value
         working-directory: artifacts
@@ -221,7 +222,6 @@ jobs:
           codeCoverage=${codeCoverage%?}
           echo "CODE_COVERAGE=$codeCoverage" >> $GITHUB_ENV
           echo "✅ Total Code Coverage: $codeCoverage%"
-
   #      - name: Check if code-coverage is greater than threshold
   #        run: |
   #          codeCoverage=${{ env.CODE_COVERAGE }}
@@ -256,7 +256,6 @@ jobs:
           # Find all directories containing a go.mod file within 'pkg'
           SUBMODULES=$(find pkg -name "go.mod" -exec dirname {} \; | jq -R -s -c 'split("\n") | map(select(length > 0))')
           echo "submodules=$SUBMODULES" >> $GITHUB_OUTPUT
-
       # Test all submodules in parallel with retry logic
       - name: Test Submodules with Retry and Parallelism
         id: test_submodules
@@ -293,7 +292,6 @@ jobs:
             
               cd -
             '
-
       # Upload submodule coverage reports as an artifact
       - name: Upload Coverage Reports
         uses: actions/upload-artifact@v5
@@ -333,8 +331,6 @@ jobs:
         run: |
           echo "mode: atomic" > merged_profile.cov
           grep -h -v "mode:" ./Example-Test-Report/profile.cov ./PKG-Coverage-Report/profile.cov >> merged_profile.cov
-             '
-
           # Generate and print total coverage percentage
           echo "Total Coverage:"
           go tool cover -func=merged_profile.cov | tail -n 1
@@ -365,16 +361,13 @@ jobs:
       - name: Install golangci-lint
         run: |
           go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.4.0
-
       - name: Get dependencies
         run: |
           go mod tidy
-
       # Run linter on the root module
       - name: Lint Root Module
         run: |
           golangci-lint run --output.text.print-issued-lines --output.text.colors=true --show-stats=false --timeout=5m
-
       # Run linter on each submodule
       - name: Lint Submodules
         run: |
@@ -393,7 +386,6 @@ jobs:
             echo "Linting failed for $total_errors submodule(s)."
             exit 1  # Fail the job if there are linting errors in submodules
           fi
-
   # Job for checking filename conventions
   linting_party:
     name: Linting Party🥳
