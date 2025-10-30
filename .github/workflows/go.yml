@@ -88,6 +88,7 @@ jobs:
       - name: Get dependencies
         run: |
           go mod download
+      
       - name: Start Zipkin
         run: docker run -d -p 2005:9411 openzipkin/zipkin:latest
 
@@ -113,6 +114,7 @@ jobs:
             grep -vE '(/client/|grpc-.+-client/main\.go|_client\.go|_gofr\.go|_grpc\.pb\.go|\.pb\.go|\.proto|health_.*\.go)' packageWithpbgo.cov > profile.cov
             # Display coverage statistics
             go tool cover -func profile.cov
+      
       # Upload coverage report for the 1.24 Go version only
       - name: Upload Test Coverage
         if: ${{ matrix.go-version == '1.24'}}
@@ -145,6 +147,7 @@ jobs:
       - name: Get dependencies
         run: |
           go mod download
+      
       # Run pkg tests with automatic retry logic
       - name: Test with Retry Logic
         id: test
@@ -184,6 +187,7 @@ jobs:
             grep -h -v "mode:" gofr_only.cov submodules.cov | grep -v '/mock_' >> profile.cov
             # Show coverage summary
             go tool cover -func profile.cov
+      
       # Upload coverage report for the 1.24 Go version only
       - name: Upload Test Coverage
         if: ${{ matrix.go-version == '1.24'}}
