@@ -71,10 +71,15 @@ func (*mockHTTP) DeleteWithHeaders(_ context.Context, _ string, _ []byte, _ map[
 	return &http.Response{StatusCode: http.StatusNoContent, Body: http.NoBody}, nil
 }
 
-func TestRetryProvider_Get(t *testing.T) {
+// helper to create a retry HTTP instance
+func newRetryHTTP() HTTP {
 	mockHTTP := &mockHTTP{}
 	retryConfig := &RetryConfig{MaxRetries: 3}
-	retryHTTP := retryConfig.AddOption(mockHTTP)
+	return retryConfig.AddOption(mockHTTP)
+}
+
+func TestRetryProvider_Get(t *testing.T) {
+	retryHTTP := newRetryHTTP()
 
 	// Make the GET request
 	resp, err := retryHTTP.Get(t.Context(), "/test", nil)
@@ -85,10 +90,10 @@ func TestRetryProvider_Get(t *testing.T) {
 	assert.Equal(t, http.StatusOK, resp.StatusCode)
 }
 
+
 func TestRetryProvider_GetWithHeaders(t *testing.T) {
-	mockHTTP := &mockHTTP{}
-	retryConfig := &RetryConfig{MaxRetries: 3}
-	retryHTTP := retryConfig.AddOption(mockHTTP)
+	retryHTTP := newRetryHTTP()
+
 
 	// Make the GET request with headers
 	resp, err := retryHTTP.GetWithHeaders(t.Context(), "/test", nil,
@@ -101,9 +106,8 @@ func TestRetryProvider_GetWithHeaders(t *testing.T) {
 }
 
 func TestRetryProvider_Post(t *testing.T) {
-	mockHTTP := &mockHTTP{}
-	retryConfig := &RetryConfig{MaxRetries: 3}
-	retryHTTP := retryConfig.AddOption(mockHTTP)
+	retryHTTP := newRetryHTTP()
+
 
 	// Make the POST request
 	resp, err := retryHTTP.Post(t.Context(), "/test", nil, []byte("body"))
@@ -115,9 +119,8 @@ func TestRetryProvider_Post(t *testing.T) {
 }
 
 func TestRetryProvider_PostWithHeaders(t *testing.T) {
-	mockHTTP := &mockHTTP{}
-	retryConfig := &RetryConfig{MaxRetries: 3}
-	retryHTTP := retryConfig.AddOption(mockHTTP)
+	retryHTTP := newRetryHTTP()
+
 
 	// Make the POST request with headers
 	resp, err := retryHTTP.PostWithHeaders(t.Context(), "/test", nil, []byte("body"),
@@ -130,9 +133,8 @@ func TestRetryProvider_PostWithHeaders(t *testing.T) {
 }
 
 func TestRetryProvider_Put(t *testing.T) {
-	mockHTTP := &mockHTTP{}
-	retryConfig := &RetryConfig{MaxRetries: 3}
-	retryHTTP := retryConfig.AddOption(mockHTTP)
+	retryHTTP := newRetryHTTP()
+
 
 	// Make the PUT request
 	resp, err := retryHTTP.Put(t.Context(), "/test", nil, []byte("body"))
@@ -144,9 +146,8 @@ func TestRetryProvider_Put(t *testing.T) {
 }
 
 func TestRetryProvider_PutWithHeaders(t *testing.T) {
-	mockHTTP := &mockHTTP{}
-	retryConfig := &RetryConfig{MaxRetries: 3}
-	retryHTTP := retryConfig.AddOption(mockHTTP)
+	retryHTTP := newRetryHTTP()
+
 
 	// Make the PUT request with headers
 	resp, err := retryHTTP.PutWithHeaders(t.Context(), "/test", nil, []byte("body"),
@@ -182,9 +183,8 @@ func TestRetryProvider_Patch_WithError(t *testing.T) {
 }
 
 func TestRetryProvider_PatchWithHeaders(t *testing.T) {
-	mockHTTP := &mockHTTP{}
-	retryConfig := &RetryConfig{MaxRetries: 3}
-	retryHTTP := retryConfig.AddOption(mockHTTP)
+	retryHTTP := newRetryHTTP()
+
 
 	// Make the PATCH request with headers
 	resp, err := retryHTTP.PatchWithHeaders(t.Context(), "/test", nil, []byte("body"),
@@ -197,9 +197,8 @@ func TestRetryProvider_PatchWithHeaders(t *testing.T) {
 }
 
 func TestRetryProvider_Delete(t *testing.T) {
-	mockHTTP := &mockHTTP{}
-	retryConfig := &RetryConfig{MaxRetries: 3}
-	retryHTTP := retryConfig.AddOption(mockHTTP)
+	retryHTTP := newRetryHTTP()
+
 
 	// Make the DELETE request
 	resp, err := retryHTTP.Delete(t.Context(), "/test", nil)
@@ -210,9 +209,8 @@ func TestRetryProvider_Delete(t *testing.T) {
 	assert.Equal(t, http.StatusNoContent, resp.StatusCode)
 }
 func TestRetryProvider_DeleteWithHeaders(t *testing.T) {
-	mockHTTP := &mockHTTP{}
-	retryConfig := &RetryConfig{MaxRetries: 3}
-	retryHTTP := retryConfig.AddOption(mockHTTP)
+	retryHTTP := newRetryHTTP()
+
 
 	// Make the DELETE request with headers
 	resp, err := retryHTTP.DeleteWithHeaders(t.Context(), "/test", []byte("body"),
