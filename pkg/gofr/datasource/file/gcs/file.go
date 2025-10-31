@@ -5,6 +5,9 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"os"
+	"path/filepath"
+	"strings"
 	"time"
 
 	"gofr.dev/pkg/gofr/datasource/file"
@@ -15,7 +18,7 @@ type gcsWriter interface {
 	Close() error
 }
 type File struct {
-	conn         gcsClient
+	conn         file.StorageProvider
 	writer       gcsWriter
 	name         string
 	logger       Logger
@@ -34,13 +37,37 @@ var (
 // ====== File interface methods ======
 
 func (f *File) Read(p []byte) (int, error) {
+	var msg string
+
+	st := file.StatusError
+	startTime := time.Now()
+
+	defer f.observe(file.OpRead, startTime, &st, &msg)
+
 	if f.body == nil {
-		f.logger.Error("GCS file body is nil")
+		msg = "GCS file body is nil"
+
+		f.logger.Error(msg)
+
 		return 0, errNilGCSFileBody
 	}
 
-	return f.body.Read(p)
+	n, err := f.body.Read(p)
+
+	if err != nil && !errors.Is(err, io.EOF) {
+		msg = fmt.Sprintf("Read failed: %v", err)
+
+		f.logger.Errorf(msg)
+
+		return n, err
+	}
+
+	st = file.StatusSuccess
+	msg = fmt.Sprintf("Read %d bytes", n)
+
+	return n, err
 }
+
 func (f *File) Write(p []byte) (int, error) {
 	var msg string
 
@@ -239,6 +266,78 @@ func (f *File) WriteAt(p []byte, off int64) (int, error) {
 	f.logger.Debugf("WriteAt wrote %d bytes at offset %d in %q", len(p), off, f.name)
 
 	return len(p), nil
+}
+
+func (f *File) ReadAll() (file.RowReader, error) {
+	var msg string
+
+	st := file.StatusError
+	startTime := time.Now()
+
+	defer f.observe(file.OpReadAll, startTime, &st, &msg)
+
+	if f.body == nil {
+		msg = "file body is nil"
+
+		f.logger.Error(msg)
+
+		return nil, errNilGCSFileBody
+	}
+
+	if strings.HasSuffix(f.name, ".json") {
+		reader, err := file.NewJSONReader(f.body)
+		if err != nil {
+			msg = fmt.Sprintf("failed to create JSON reader: %v", err)
+			f.logger.Errorf(msg)
+
+			return nil, err
+		}
+
+		st = file.StatusSuccess
+		msg = "JSON reader created successfully"
+
+		return reader, nil
+	}
+
+	// Default to text/CSV reader
+	reader := file.NewTextReader(f.body)
+	st = file.StatusSuccess
+	msg = "Text reader created successfully"
+
+	return reader, nil
+}
+
+func getLocation(bucket string) string {
+	return filepath.Join(string(filepath.Separator), bucket)
+}
+
+func (f *File) Name() string {
+	return filepath.Base(f.name)
+}
+
+func (f *File) Size() int64 {
+	return f.size
+}
+
+func (f *File) ModTime() time.Time {
+	return f.lastModified
+}
+
+func (f *File) IsDir() bool {
+	return f.isDir || f.contentType == "application/x-directory"
+}
+
+func (f *File) Mode() os.FileMode {
+	if f.IsDir() {
+		return dirPermissions | os.ModeDir
+	}
+
+	return filePermissions
+}
+
+// Sys returns nil (no underlying system-specific data).
+func (*File) Sys() any {
+	return nil
 }
 
 // observe is a helper method to reduce boilerplate for file operation observability.

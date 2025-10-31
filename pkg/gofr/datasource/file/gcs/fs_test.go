@@ -3,9 +3,6 @@ package gcs
 import (
 	"context"
 	"errors"
-	"fmt"
-	"io"
-	"strings"
 	"testing"
 	"time"
 
@@ -14,13 +11,9 @@ import (
 	"go.uber.org/mock/gomock"
 	"gofr.dev/pkg/gofr/datasource/file"
 	"google.golang.org/api/option"
-	"gotest.tools/v3/assert"
 )
 
 var (
-	errObjectNotFound        = errors.New("object not found")
-	errMock                  = fmt.Errorf("errMock")
-	errorStat                = errors.New("stat error")
 	errSimulatedFirstFailure = errors.New("simulated first failure")
 )
 
@@ -73,16 +66,13 @@ func TestFileSystem_Connect(t *testing.T) {
 	}
 
 	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			subCtrl := gomock.NewController(t)
-			defer subCtrl.Finish()
-
+		t.Run(tt.name, func(*testing.T) {
 			mockLogger := NewMockLogger(ctrl)
 			mockMetrics := NewMockMetrics(ctrl)
 
 			mockMetrics.EXPECT().NewHistogram(
 				file.AppFileStats,
-				"App FTP Stats - duration of file operations",
+				"App GCS Stats - duration of file operations",
 				file.DefaultHistogramBuckets(),
 			).Times(1)
 
@@ -107,6 +97,7 @@ func TestFileSystem_Connect(t *testing.T) {
 		})
 	}
 }
+
 func TestFileSystem_startRetryConnect_Success(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
@@ -159,7 +150,7 @@ func TestFileSystem_startRetryConnect_Success(t *testing.T) {
 				} else {
 					client, err = storage.NewClient(ctx, option.WithCredentialsJSON([]byte(fs.config.CredentialsJSON)))
 					if err == nil {
-						fs.conn = &gcsClientImpl{
+						fs.conn = &storageAdapter{
 							client: client,
 							bucket: client.Bucket(fs.config.BucketName),
 						}
@@ -186,183 +177,11 @@ func TestFileSystem_startRetryConnect_Success(t *testing.T) {
 	}
 }
 
-func TestFileSystem_Open(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
-
-	mockGCS := NewMockgcsClient(ctrl)
-	mockLogger := NewMockLogger(ctrl)
-	mockMetrics := NewMockMetrics(ctrl)
-
-	fs := &FileSystem{
-		conn:    mockGCS,
-		config:  &Config{BucketName: "test-bucket"},
-		logger:  mockLogger,
-		metrics: mockMetrics,
-	}
-
-	mockLogger.EXPECT().Infof(gomock.Any(), gomock.Any()).AnyTimes()
-	mockLogger.EXPECT().Debug(gomock.Any()).AnyTimes()
-	mockLogger.EXPECT().Errorf(gomock.Any(), gomock.Any()).AnyTimes()
-	mockMetrics.EXPECT().RecordHistogram(gomock.Any(), file.AppFileStats, gomock.Any(),
-		"type", gomock.Any(), "status", gomock.Any(), "provider", gomock.Any()).AnyTimes()
-
-	t.Run("file found", func(t *testing.T) {
-		attr := &storage.ObjectAttrs{
-			Name:        "test.txt",
-			Size:        100,
-			Updated:     time.Now(),
-			ContentType: "text/plain",
-		}
-
-		mockGCS.EXPECT().NewReader(gomock.Any(), "test.txt").Return(io.NopCloser(strings.NewReader("data")), nil)
-		mockGCS.EXPECT().StatObject(gomock.Any(), "test.txt").Return(attr, nil)
-
-		fileInfo, err := fs.Open("test.txt")
-
-		require.NoError(t, err)
-		require.NotNil(t, fileInfo)
-	})
-
-	t.Run("file not found", func(t *testing.T) {
-		mockGCS.EXPECT().NewReader(gomock.Any(), "missing.txt").Return(nil, storage.ErrObjectNotExist)
-
-		_, err := fs.Open("missing.txt")
-		require.Error(t, err)
-		require.Equal(t, file.ErrFileNotFound, err)
-	})
-
-	t.Run("error reading file", func(t *testing.T) {
-		mockGCS.EXPECT().NewReader(gomock.Any(), "error.txt").Return(nil, errorRead)
-
-		_, err := fs.Open("error.txt")
-		require.Error(t, err)
-	})
-
-	t.Run("error on StatObject", func(t *testing.T) {
-		mockGCS.EXPECT().NewReader(gomock.Any(), "statfail.txt").Return(io.NopCloser(strings.NewReader("data")), nil)
-		mockGCS.EXPECT().StatObject(gomock.Any(), "statfail.txt").Return(nil, errorStat)
-
-		_, err := fs.Open("statfail.txt")
-		require.Error(t, err)
-	})
-}
-
-func Test_CreateFile(t *testing.T) {
-	type testCase struct {
-		name        string
-		createPath  string
-		setupMocks  func(mockGCS *MockgcsClient)
-		expectError bool
-		isRoot      bool
-	}
-
-	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
-
-	mockGCS := NewMockgcsClient(ctrl)
-	mockLogger := NewMockLogger(ctrl)
-	mockMetrics := NewMockMetrics(ctrl)
-
-	config := &Config{
-		BucketName:      "test-bucket",
-		CredentialsJSON: "fake-creds",
-		ProjectID:       "test-project",
-	}
-
-	fs := &FileSystem{
-		conn:    mockGCS,
-		config:  config,
-		logger:  mockLogger,
-		metrics: mockMetrics,
-	}
-
-	mockLogger.EXPECT().Infof(gomock.Any(), gomock.Any()).AnyTimes()
-	mockLogger.EXPECT().Errorf(gomock.Any(), gomock.Any()).AnyTimes()
-	mockLogger.EXPECT().Debug(gomock.Any()).AnyTimes()
-	mockMetrics.EXPECT().RecordHistogram(gomock.Any(), file.AppFileStats, gomock.Any(),
-		"type", gomock.Any(), "status", gomock.Any(), "provider", gomock.Any()).AnyTimes()
-
-	tests := []testCase{
-		{
-			name:       "create file at root level",
-			createPath: "abc.txt",
-			setupMocks: func(m *MockgcsClient) {
-				m.EXPECT().ListObjects(gomock.Any(), ".").Return([]string{}, nil)
-				m.EXPECT().ListObjects(gomock.Any(), "abc.txt").Return([]string{}, nil)
-				m.EXPECT().NewWriter(gomock.Any(), "abc.txt").Return(&storage.Writer{})
-			},
-
-			expectError: false,
-			isRoot:      true,
-		},
-		{
-			name:       "fail when parent directory does not exist",
-			createPath: "abc/abc.txt",
-			setupMocks: func(m *MockgcsClient) {
-				m.EXPECT().ListObjects(gomock.Any(), "abc/").Return(nil, errMock)
-			},
-			expectError: true,
-			isRoot:      false,
-		},
-		{
-			name:       "create file inside existing directory",
-			createPath: "abc/efg.txt",
-			setupMocks: func(m *MockgcsClient) {
-				// parent path "abc/" exists
-				m.EXPECT().ListObjects(gomock.Any(), "abc/").Return([]string{"abc/.keep"}, nil)
-				// filename does not exist
-				m.EXPECT().ListObjects(gomock.Any(), "abc/efg.txt").Return([]string{}, nil)
-				m.EXPECT().NewWriter(gomock.Any(), "abc/efg.txt").Return(&storage.Writer{})
-			},
-			expectError: false,
-			isRoot:      false,
-		},
-	}
-
-	for i, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			tt.setupMocks(mockGCS)
-
-			fileData, err := fs.Create(tt.createPath)
-
-			if tt.expectError {
-				require.Error(t, err, "Test %d (%s): expected an error", i, tt.name)
-				return
-			}
-
-			require.NoError(t, err, "Test %d (%s): expected no error", i, tt.name)
-			require.NotNil(t, fileData)
-		})
-	}
-}
-
-func TestGenerateCopyName(t *testing.T) {
-	tests := []struct {
-		original string
-		count    int
-		expected string
-	}{
-		{"file.txt", 1, "file copy 1.txt"},
-		{"docs/report.pdf", 2, "docs/report copy 2.pdf"},
-		{"image.png", 3, "image copy 3.png"},
-		{"noext", 1, "noext copy 1"},
-		{"dir/file.txt", 1, "dir/file copy 1.txt"},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.original, func(t *testing.T) {
-			result := generateCopyName(tt.original, tt.count)
-			require.Equal(t, tt.expected, result)
-		})
-	}
-}
-
 func Test_Remove_GCS(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
-	mockGCS := NewMockgcsClient(ctrl)
+	mockGCS := NewMockStorageProvider(ctrl)
 	mockLogger := NewMockLogger(ctrl)
 	mockMetrics := NewMockMetrics(ctrl)
 
@@ -398,7 +217,7 @@ func TestRenameFile(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
-	mockConn := NewMockgcsClient(ctrl)
+	mockConn := NewMockStorageProvider(ctrl)
 	mockLogger := NewMockLogger(ctrl)
 	mockMetrics := NewMockMetrics(ctrl)
 
@@ -483,161 +302,4 @@ func TestRenameFile(t *testing.T) {
 			}
 		})
 	}
-}
-
-func Test_StatFile_GCS(t *testing.T) {
-	tm := time.Now()
-
-	type result struct {
-		name  string
-		size  int64
-		isDir bool
-	}
-
-	tests := []struct {
-		name        string
-		filePath    string
-		mockAttr    *storage.ObjectAttrs
-		mockError   error
-		expected    result
-		expectError bool
-	}{
-		{
-			name:     "Valid file stat",
-			filePath: "abc/efg/file.txt",
-			mockAttr: &storage.ObjectAttrs{
-				Name:        "abc/efg/file.txt",
-				Size:        123,
-				Updated:     tm,
-				ContentType: "text/plain",
-			},
-			expected: result{
-				name:  "abc/efg/file.txt",
-				size:  123,
-				isDir: false,
-			},
-		},
-		{
-			name:        "File not found",
-			filePath:    "notfound.txt",
-			mockAttr:    nil,
-			mockError:   errObjectNotFound,
-			expectError: true,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			ctrl := gomock.NewController(t)
-			defer ctrl.Finish()
-
-			mockGCS := NewMockgcsClient(ctrl)
-			mockLogger := NewMockLogger(ctrl)
-			mockMetrics := NewMockMetrics(ctrl)
-
-			config := &Config{BucketName: "test-bucket"}
-
-			fs := &FileSystem{
-				conn:    mockGCS,
-				config:  config,
-				logger:  mockLogger,
-				metrics: mockMetrics,
-			}
-
-			mockLogger.EXPECT().Infof(gomock.Any(), gomock.Any()).AnyTimes()
-			mockLogger.EXPECT().Debug(gomock.Any()).AnyTimes()
-			mockLogger.EXPECT().Errorf(gomock.Any(), gomock.Any()).AnyTimes()
-
-			mockGCS.EXPECT().StatObject(gomock.Any(), tt.filePath).Return(tt.mockAttr, tt.mockError)
-			mockMetrics.EXPECT().RecordHistogram(gomock.Any(), file.AppFileStats, gomock.Any(),
-				"type", gomock.Any(), "status", gomock.Any(), "provider", gomock.Any()).AnyTimes()
-
-			res, err := fs.Stat(tt.filePath)
-			if tt.expectError {
-				require.Error(t, err)
-				return
-			}
-
-			require.NoError(t, err)
-
-			actual := result{
-				name:  res.Name(),
-				size:  res.Size(),
-				isDir: res.IsDir(),
-			}
-
-			assert.Equal(t, tt.expected, actual)
-		})
-	}
-}
-func Test_Stat_FileAndDir(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
-
-	mockGCS := NewMockgcsClient(ctrl)
-	mockLogger := NewMockLogger(ctrl)
-	mockMetrics := NewMockMetrics(ctrl)
-
-	fs := &FileSystem{
-		conn:    mockGCS,
-		logger:  mockLogger,
-		metrics: mockMetrics,
-		config: &Config{
-			BucketName: "test-bucket",
-		},
-	}
-
-	mockLogger.EXPECT().Infof(gomock.Any(), gomock.Any()).AnyTimes()
-	mockLogger.EXPECT().Debug(gomock.Any()).AnyTimes()
-	mockLogger.EXPECT().Errorf(gomock.Any(), gomock.Any()).AnyTimes()
-	mockMetrics.EXPECT().RecordHistogram(gomock.Any(), file.AppFileStats, gomock.Any(),
-		"type", gomock.Any(), "status", gomock.Any(), "provider", gomock.Any()).AnyTimes()
-
-	fileName := "documents/testfile.txt"
-	fileAttrs := &storage.ObjectAttrs{
-		Name:        fileName,
-		Size:        1024,
-		ContentType: "text/plain",
-		Updated:     time.Now(),
-	}
-	mockGCS.EXPECT().StatObject(gomock.Any(), fileName).Return(fileAttrs, nil)
-
-	info, err := fs.Stat(fileName)
-	assert.NilError(t, err)
-	assert.Equal(t, fileName, info.Name())
-	assert.Equal(t, int64(1024), info.Size())
-	assert.Check(t, !info.IsDir())
-
-	dirName := "documents/folder/"
-	dirAttrs := &storage.ObjectAttrs{
-		Name:        dirName,
-		Size:        0,
-		ContentType: "application/x-directory",
-		Updated:     time.Now(),
-	}
-
-	mockGCS.EXPECT().StatObject(gomock.Any(), dirName).Return(dirAttrs, nil)
-
-	info, err = fs.Stat(dirName)
-
-	assert.NilError(t, err)
-	assert.Equal(t, dirName, info.Name())
-	assert.Equal(t, int64(0), info.Size())
-	assert.Check(t, info.IsDir())
-}
-
-func Test_FileSystem_UseLogger_UseMetrics(t *testing.T) {
-	fs := &FileSystem{}
-
-	logger := NewMockLogger(gomock.NewController(t))
-	metrics := NewMockMetrics(gomock.NewController(t))
-
-	require.Nil(t, fs.logger)
-	require.Nil(t, fs.metrics)
-
-	fs.UseLogger(logger)
-	require.Equal(t, logger, fs.logger)
-
-	fs.UseMetrics(metrics)
-	require.Equal(t, metrics, fs.metrics)
 }

@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"os"
 	"path"
-	"strings"
 	"sync"
 	"time"
 
@@ -21,8 +20,9 @@ var (
 )
 
 type FileSystem struct {
-	GCSFile File
-	conn    gcsClient
+	file.CommonFileSystem
+
+	conn    file.StorageProvider
 	config  *Config
 	logger  Logger
 	metrics Metrics
@@ -55,14 +55,14 @@ func (f *FileSystem) Connect() {
 	f.registerHistogram.Do(func() {
 		f.metrics.NewHistogram(
 			file.AppFileStats,
-			"App FTP Stats - duration of file operations",
+			"App GCS Stats - duration of file operations",
 			file.DefaultHistogramBuckets()...,
 		)
 	})
 
 	f.logger.Debugf("connecting to GCS bucket: %s", f.config.BucketName)
 
-	ctx := context.TODO()
+	ctx := context.Background()
 
 	var client *storage.Client
 
@@ -100,9 +100,16 @@ func (f *FileSystem) Connect() {
 		return
 	}
 
-	f.conn = &gcsClientImpl{
+	f.conn = &storageAdapter{
 		client: client,
 		bucket: client.Bucket(f.config.BucketName),
+	}
+
+	f.CommonFileSystem = file.CommonFileSystem{
+		Provider: f.conn,
+		Location: f.config.BucketName,
+		Logger:   f.logger,
+		Metrics:  f.metrics,
 	}
 
 	st = file.StatusSuccess
@@ -118,7 +125,7 @@ func (f *FileSystem) startRetryConnect() {
 	for {
 		<-ticker.C
 
-		ctx := context.TODO()
+		ctx := context.Background()
 
 		var (
 			client *storage.Client
@@ -146,10 +153,18 @@ func (f *FileSystem) startRetryConnect() {
 			continue
 		}
 
-		f.conn = &gcsClientImpl{
+		f.conn = &storageAdapter{
 			client: client,
 			bucket: client.Bucket(f.config.BucketName),
 		}
+
+		f.CommonFileSystem = file.CommonFileSystem{
+			Provider: f.conn,
+			Location: f.config.BucketName,
+			Logger:   f.logger,
+			Metrics:  f.metrics,
+		}
+
 		f.logger.Infof("GCS connection restored to bucket %s", f.config.BucketName)
 
 		break
@@ -200,11 +215,18 @@ func (f *FileSystem) Create(name string) (file.File, error) {
 			break // Safe to use
 		}
 
-		name = generateCopyName(originalName, index)
+		name = file.GenerateCopyName(originalName, index)
 	}
 
-	// 3. Open writer to create file
+	// 3. Open writer
 	writer := f.conn.NewWriter(ctx, name)
+
+	if fw, ok := writer.(*failWriter); ok {
+		msg = "Invalid writer"
+		_ = fw.Close()
+
+		return nil, fmt.Errorf("failed to create writer: %w", fw.err)
+	}
 
 	sw, ok := writer.(*storage.Writer)
 	if !ok {
@@ -226,7 +248,7 @@ func (f *FileSystem) Create(name string) (file.File, error) {
 		name:         name,
 		contentType:  sw.ContentType,
 		size:         sw.Size,
-		lastModified: sw.Updated,
+		lastModified: time.Now(),
 		logger:       f.logger,
 		metrics:      f.metrics,
 	}, nil
@@ -241,7 +263,7 @@ func (f *FileSystem) Remove(name string) error {
 
 	defer f.observe(file.OpRemove, startTime, &st, &msg)
 
-	ctx := context.TODO()
+	ctx := context.Background()
 
 	err := f.conn.DeleteObject(ctx, name)
 	if err != nil {
@@ -268,7 +290,7 @@ func (f *FileSystem) Open(name string) (file.File, error) {
 
 	defer f.observe(file.OpOpen, startTime, &st, &msg)
 
-	ctx := context.TODO()
+	ctx := context.Background()
 
 	reader, err := f.conn.NewReader(ctx, name)
 	if err != nil {
@@ -284,7 +306,7 @@ func (f *FileSystem) Open(name string) (file.File, error) {
 		return nil, err
 	}
 
-	attr, err := f.conn.StatObject(ctx, name)
+	objInfo, err := f.conn.StatObject(ctx, name)
 	if err != nil {
 		reader.Close()
 
@@ -303,9 +325,9 @@ func (f *FileSystem) Open(name string) (file.File, error) {
 		body:         reader,
 		logger:       f.logger,
 		metrics:      f.metrics,
-		size:         attr.Size,
-		contentType:  attr.ContentType,
-		lastModified: attr.Updated,
+		size:         objInfo.Size,
+		contentType:  objInfo.ContentType,
+		lastModified: objInfo.LastModified,
 	}, nil
 }
 
@@ -318,7 +340,7 @@ func (f *FileSystem) Rename(oldname, newname string) error {
 
 	defer f.observe(file.OpRename, startTime, &st, &msg)
 
-	ctx := context.TODO()
+	ctx := context.Background()
 
 	if oldname == newname {
 		st = file.StatusSuccess
@@ -372,12 +394,6 @@ func (f *FileSystem) UseMetrics(metrics any) {
 	if m, ok := metrics.(Metrics); ok {
 		f.metrics = m
 	}
-}
-func generateCopyName(original string, count int) string {
-	ext := path.Ext(original)
-	base := strings.TrimSuffix(original, ext)
-
-	return fmt.Sprintf("%s copy %d%s", base, count, ext)
 }
 
 // observe is a helper method for FileSystem-level operations.

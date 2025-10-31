@@ -5,8 +5,8 @@ import (
 	"io"
 	"strings"
 	"testing"
+	"time"
 
-	"cloud.google.com/go/storage"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
 	"gofr.dev/pkg/gofr/datasource/file"
@@ -131,8 +131,12 @@ func TestFile_Read_Success(t *testing.T) {
 	mockMetrics := NewMockMetrics(ctrl)
 
 	mockLogger.EXPECT().Debug(gomock.Any()).AnyTimes()
-	mockMetrics.EXPECT().RecordHistogram(gomock.Any(), file.AppFileStats, gomock.Any(),
-		"type", gomock.Any(), "status", gomock.Any()).AnyTimes()
+	mockMetrics.EXPECT().RecordHistogram(
+		gomock.Any(), file.AppFileStats, gomock.Any(),
+		"type", gomock.Any(),
+		"status", gomock.Any(),
+		"provider", gomock.Any(),
+	).AnyTimes()
 
 	f := &File{
 		name:    "data.txt",
@@ -162,6 +166,7 @@ func TestFile_Read_Error_NilBody(t *testing.T) {
 		gomock.Any(), file.AppFileStats, gomock.Any(),
 		"type", gomock.Any(),
 		"status", gomock.Any(),
+		"provider", gomock.Any(),
 	).AnyTimes()
 
 	f := &File{
@@ -208,13 +213,19 @@ func TestFile_Seek(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
-	mockClient := NewMockgcsClient(ctrl)
+	mockClient := NewMockStorageProvider(ctrl)
 	mockLogger := NewMockLogger(ctrl)
 	mockMetrics := NewMockMetrics(ctrl)
 
 	filePath := "bucket/file.txt"
 	objectName := file.GetObjectName(filePath)
-	attrs := &storage.ObjectAttrs{Size: 20}
+
+	attrs := &file.ObjectInfo{
+		Name:         filePath,
+		Size:         20,
+		ContentType:  "text/plain",
+		LastModified: time.Now(),
+	}
 
 	mockClient.EXPECT().
 		StatObject(gomock.Any(), filePath).
@@ -251,7 +262,7 @@ func TestFile_Seek_StatObjectError(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
-	mockClient := NewMockgcsClient(ctrl)
+	mockClient := NewMockStorageProvider(ctrl)
 	mockLogger := NewMockLogger(ctrl)
 	mockMetrics := NewMockMetrics(ctrl)
 
@@ -287,12 +298,15 @@ func TestFile_Seek_CheckError(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
-	mockClient := NewMockgcsClient(ctrl)
+	mockClient := NewMockStorageProvider(ctrl)
 	mockLogger := NewMockLogger(ctrl)
 	mockMetrics := NewMockMetrics(ctrl)
 
 	filePath := "bucket/file.txt"
-	attrs := &storage.ObjectAttrs{Size: 10}
+	attrs := &file.ObjectInfo{
+		Name: filePath,
+		Size: 10,
+	}
 
 	mockClient.EXPECT().
 		StatObject(gomock.Any(), filePath).
@@ -324,13 +338,16 @@ func TestFile_Seek_NewRangeReaderError(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
-	mockClient := NewMockgcsClient(ctrl)
+	mockClient := NewMockStorageProvider(ctrl)
 	mockLogger := NewMockLogger(ctrl)
 	mockMetrics := NewMockMetrics(ctrl)
 
 	filePath := "bucket/file.txt"
 	objectName := file.GetObjectName(filePath)
-	attrs := &storage.ObjectAttrs{Size: 10}
+	attrs := &file.ObjectInfo{
+		Name: filePath,
+		Size: 10,
+	}
 
 	mockClient.EXPECT().
 		StatObject(gomock.Any(), filePath).
@@ -366,7 +383,7 @@ func TestFile_ReadAt(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
-	mockClient := NewMockgcsClient(ctrl)
+	mockClient := NewMockStorageProvider(ctrl)
 	mockLogger := NewMockLogger(ctrl)
 	mockMetrics := NewMockMetrics(ctrl)
 
@@ -419,7 +436,7 @@ func TestFile_WriteAt(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
-	mockClient := NewMockgcsClient(ctrl)
+	mockClient := NewMockStorageProvider(ctrl)
 	mockLogger := NewMockLogger(ctrl)
 	mockMetrics := NewMockMetrics(ctrl)
 
