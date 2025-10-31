@@ -158,8 +158,10 @@ func (a *authInfo) GetAPIKey() string {
 // }
 
 func newContext(w Responder, r Request, c *container.Container) *Context {
+	baseCtx := context.WithValue(r.Context(), "request", r)
+
 	return &Context{
-		Context:       r.Context(),
+		Context:       baseCtx,
 		Request:       r,
 		responder:     w,
 		Container:     c,

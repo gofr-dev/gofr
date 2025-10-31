@@ -4,8 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
-	"regexp"
-	"strings"
+	"net/http"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -19,14 +18,12 @@ import (
 
 // Constants for strategies and intervals.
 const (
-	defaultMaxFailures int32 = 5
-	defaultTimeoutSec  int   = 30
-	defaultCacheSize   int64 = 1000
-	minQueryLength     int   = 4
+	contextKeyHTTPMethod contextKey = "dbresolver.http_method"
+	defaultMaxFailures   int32      = 5
+	defaultTimeoutSec    int        = 30
 )
 
-// Pre-compiled regex - compiled once at package init.
-var readQueryRegex = regexp.MustCompile(`(?i)^\s*(SELECT|SHOW|DESCRIBE|EXPLAIN)`)
+type contextKey string
 
 // statistics holds atomic counters for various operations.
 type statistics struct {
@@ -55,8 +52,9 @@ type Resolver struct {
 	metrics Metrics
 	tracer  trace.Tracer
 
-	queryCache *queryCache
-	stats      *statistics
+	primaryRoutes map[string]bool
+
+	stats *statistics
 
 	// Background task management.
 	stopChan chan struct{}
@@ -76,14 +74,14 @@ func NewResolver(primary container.DB, replicas []container.DB, logger Logger, m
 	}
 
 	r := &Resolver{
-		primary:      primary,
-		replicas:     replicaWrappers,
-		readFallback: true, // Default to true
-		logger:       logger,
-		metrics:      metrics,
-		queryCache:   newQueryCache(defaultCacheSize), // Bounded sync.Map cache.
-		stats:        &statistics{},
-		stopChan:     make(chan struct{}),
+		primary:       primary,
+		replicas:      replicaWrappers,
+		readFallback:  true, // Default to true
+		logger:        logger,
+		metrics:       metrics,
+		stats:         &statistics{},
+		primaryRoutes: make(map[string]bool),
+		stopChan:      make(chan struct{}),
 	}
 
 	// Default strategy
@@ -161,37 +159,47 @@ func (r *Resolver) updateMetrics() {
 	r.metrics.SetGauge("dbresolver_failures", float64(r.stats.replicaFailures.Load()))
 }
 
-// Fast query classification with optimized string operations.
-func (r *Resolver) isReadQuery(query string) bool {
-	// Fast path: check first few characters for common patterns
-	if len(query) < minQueryLength {
+// shouldUseReplica determines if the query should use replica based on HTTP method
+// It uses type assertion to check if the request has an HTTP method without requiring interface changes
+func (r *Resolver) shouldUseReplica(ctx context.Context) bool {
+	if len(r.replicas) == 0 {
 		return false
 	}
 
-	// Trim whitespace and get first word
-	trimmed := strings.TrimLeft(query, " \t\n\r")
-	if len(trimmed) < minQueryLength {
+	// Try to get the request from context
+	reqValue := ctx.Value("request")
+	if reqValue == nil {
+		// No request in context - default to primary for safety
 		return false
 	}
 
-	// Fast string comparison for common cases
-	firstFour := strings.ToUpper(trimmed[:minQueryLength])
-	switch firstFour {
-	case "SELE", "SHOW", "DESC", "EXPL":
-		return true
+	// Try to type assert to an HTTP request that has a Method field
+	// This works because Go's http.Request has a public Method field
+	type httpMethodGetter interface {
+		Method() string
 	}
 
-	// Check cache for edge cases
-	if cached, exists := r.queryCache.get(query); exists {
-		return cached
+	// Try interface with Method() first (in case it's wrapped)
+	if methodGetter, ok := reqValue.(httpMethodGetter); ok {
+		method := methodGetter.Method()
+		return method == "GET" || method == "HEAD" || method == "OPTIONS"
 	}
 
-	// Fallback to regex for complex queries
-	isRead := readQueryRegex.MatchString(query)
+	// Try to access the underlying *http.Request directly
+	// This works because many GoFr request implementations expose the raw http.Request
+	type rawHTTPRequestHolder interface {
+		HTTPRequest() *http.Request
+	}
 
-	r.queryCache.set(query, isRead)
+	if holder, ok := reqValue.(rawHTTPRequestHolder); ok {
+		httpReq := holder.HTTPRequest()
+		if httpReq != nil {
+			return httpReq.Method == "GET" || httpReq.Method == "HEAD" || httpReq.Method == "OPTIONS"
+		}
+	}
 
-	return isRead
+	// If we can't determine the method, default to primary for safety
+	return false
 }
 
 // selectHealthyReplica chooses an available replica using circuit breaker.
@@ -279,12 +287,13 @@ func (r *Resolver) Query(query string, args ...any) (*sql.Rows, error) {
 // QueryContext routes queries with optimized path.
 func (r *Resolver) QueryContext(ctx context.Context, query string, args ...any) (*sql.Rows, error) {
 	start := time.Now()
-	isRead := r.isReadQuery(query)
 	r.stats.totalQueries.Add(1)
 
 	tracedCtx, span := r.addTrace(ctx, "query", query)
 
-	if isRead && len(r.replicas) > 0 {
+	useReplica := r.shouldUseReplica(ctx)
+
+	if useReplica && len(r.replicas) > 0 {
 		// Try replica first
 		replica, replicaIdx := r.selectHealthyReplica()
 		if replica != nil {
@@ -317,7 +326,7 @@ func (r *Resolver) QueryContext(ctx context.Context, query string, args ...any) 
 		return nil, errReplicaFailedNoFallback
 	}
 
-	// Write query - always use primary
+	// Non-GET requests - always use primary
 	r.stats.primaryWrites.Add(1)
 	rows, err := r.primary.QueryContext(tracedCtx, query, args...)
 	r.recordStats(start, "query", "primary", span, false)
@@ -333,13 +342,14 @@ func (r *Resolver) QueryRow(query string, args ...any) *sql.Row {
 // QueryRowContext routes queries with circuit breaker.
 func (r *Resolver) QueryRowContext(ctx context.Context, query string, args ...any) *sql.Row {
 	start := time.Now()
-	isRead := r.isReadQuery(query)
 	r.stats.totalQueries.Add(1)
 
-	tracedCtx, span := r.addTrace(ctx, "query-row", query)
-	defer r.recordStats(start, "query-row", "primary", span, isRead)
+	useReplica := r.shouldUseReplica(ctx)
 
-	if isRead && len(r.replicas) > 0 {
+	tracedCtx, span := r.addTrace(ctx, "query-row", query)
+	defer r.recordStats(start, "query-row", "primary", span, useReplica)
+
+	if useReplica && len(r.replicas) > 0 {
 		replica, replicaIdx := r.selectHealthyReplica()
 		if replica != nil {
 			r.stats.replicaReads.Add(1)
@@ -377,12 +387,13 @@ func (r *Resolver) ExecContext(ctx context.Context, query string, args ...any) (
 // Select routes to replica for reads, primary for writes.
 func (r *Resolver) Select(ctx context.Context, data any, query string, args ...any) {
 	start := time.Now()
-	isRead := r.isReadQuery(query)
 	r.stats.totalQueries.Add(1)
 
 	tracedCtx, span := r.addTrace(ctx, "select", query)
 
-	if isRead && len(r.replicas) > 0 {
+	useReplica := r.shouldUseReplica(ctx)
+
+	if useReplica && len(r.replicas) > 0 {
 		replica, replicaIdx := r.selectHealthyReplica()
 
 		if replica != nil {
@@ -401,7 +412,7 @@ func (r *Resolver) Select(ctx context.Context, data any, query string, args ...a
 
 	r.primary.Select(tracedCtx, data, query, args...)
 
-	r.recordStats(start, "select", "primary", span, isRead)
+	r.recordStats(start, "select", "primary", span, false)
 }
 
 // Prepare always routes to primary (consistency).
@@ -496,4 +507,9 @@ func (r *Resolver) Close() error {
 	}
 
 	return err
+}
+
+// WithHTTPMethod adds HTTP method to context for routing decisions
+func WithHTTPMethod(ctx context.Context, method string) context.Context {
+	return context.WithValue(ctx, contextKeyHTTPMethod, method)
 }

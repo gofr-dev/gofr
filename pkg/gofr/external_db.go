@@ -270,6 +270,9 @@ func (a *App) AddDBResolver(resolver container.DBResolverProvider) {
 	}
 
 	a.container.SQL = resolverDB
+
+	a.UseMiddleware()
+
 	a.Logger().Logf("DB read/write splitting enabled with %d replicas", len(replicas))
 }
 
