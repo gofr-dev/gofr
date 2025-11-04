@@ -109,7 +109,7 @@ func TestSQL_GetDBConfig(t *testing.T) {
 		"DB_CHARSET":             "utf8mb4",
 	})
 
-	expectedComfigs := &DBConfig{
+	expectedConfigs := &DBConfig{
 		Dialect:     "mysql",
 		HostName:    "host",
 		User:        "user",
@@ -124,7 +124,7 @@ func TestSQL_GetDBConfig(t *testing.T) {
 
 	configs := getDBConfig(mockConfig)
 
-	assert.Equal(t, expectedComfigs, configs)
+	assert.Equal(t, expectedConfigs, configs)
 }
 
 func TestSQL_ConfigCases(t *testing.T) {

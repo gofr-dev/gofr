@@ -139,8 +139,8 @@ func (c *Client) Connect() {
 	c.metrics.NewGauge("app_surrealdb_open_connections", "Number of open SurrealDB connections.")
 
 	endpoint := c.buildEndpoint()
-	err := c.connectToDatabase(endpoint)
 
+	err := c.connectToDatabase(endpoint)
 	if err != nil {
 		return
 	}
@@ -173,8 +173,8 @@ func (c *Client) connectToDatabase(endpoint string) error {
 	c.logger.Debugf("connecting to SurrealDB at %s", endpoint)
 
 	var err error
-	c.db, err = newDB(endpoint)
 
+	c.db, err = newDB(endpoint)
 	if err != nil {
 		c.logError("failed to connect to SurrealDB", err)
 		return err
@@ -528,6 +528,7 @@ func (c *Client) Update(ctx context.Context, table, id string, data any) (any, e
 	span := c.addTrace(ctx, "Update", fmt.Sprintf("%s:%s", table, id))
 
 	logMessage := fmt.Sprintf("Updating record with ID %q in table %q", id, table)
+
 	startTime := time.Now()
 	defer c.sendOperationStats(&QueryLog{
 		Query:         logMessage,

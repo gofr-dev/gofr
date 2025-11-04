@@ -144,6 +144,7 @@ func TestDynamicLoggerSuccess(t *testing.T) {
 // TestHTTPLogFilter_NonHTTPLogs tests regular non-HTTP logs are passed through.
 func TestHTTPLogFilter_NonHTTPLogs(t *testing.T) {
 	var buf strings.Builder
+
 	testLogger := &testBufferLogger{buf: &buf}
 
 	filter := &httpLogFilter{
@@ -158,6 +159,7 @@ func TestHTTPLogFilter_NonHTTPLogs(t *testing.T) {
 // TestHTTPLogFilter_EmptyArgs tests handling of empty arguments.
 func TestHTTPLogFilter_EmptyArgs(t *testing.T) {
 	var buf strings.Builder
+
 	testLogger := &testBufferLogger{buf: &buf}
 
 	filter := &httpLogFilter{
@@ -173,6 +175,7 @@ func TestHTTPLogFilter_EmptyArgs(t *testing.T) {
 // TestHTTPLogFilter_InitAndFirstSuccess tests initialization and first successful hit.
 func TestHTTPLogFilter_InitAndFirstSuccess(t *testing.T) {
 	var buf strings.Builder
+
 	testLogger := &testBufferLogger{buf: &buf}
 
 	filter := &httpLogFilter{
@@ -197,6 +200,7 @@ func TestHTTPLogFilter_InitAndFirstSuccess(t *testing.T) {
 // TestHTTPLogFilter_SubsequentSuccess tests subsequent successful HTTP hits.
 func TestHTTPLogFilter_SubsequentSuccess(t *testing.T) {
 	var buf strings.Builder
+
 	testLogger := &testBufferLogger{buf: &buf}
 
 	filter := &httpLogFilter{
@@ -224,6 +228,7 @@ func TestHTTPLogFilter_SubsequentSuccess(t *testing.T) {
 // TestHTTPLogFilter_ErrorLogs tests handling of error HTTP logs.
 func TestHTTPLogFilter_ErrorLogs(t *testing.T) {
 	var buf strings.Builder
+
 	testLogger := &testBufferLogger{buf: &buf}
 
 	filter := &httpLogFilter{
@@ -318,5 +323,37 @@ func TestRemoteLogger_ConcurrentLevelAccess(t *testing.T) {
 
 	rl.mu.RLock()
 	defer rl.mu.RUnlock()
+
 	assert.NotEqual(t, logging.INFO, rl.currentLevel, "expected level to change")
+}
+
+func TestLogLevelChangeToFatal_NoExit(t *testing.T) {
+	mockServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+
+		body := `{ "data": { "serviceName": "test-service", "logLevel": "FATAL" } }`
+
+		_, _ = w.Write([]byte(body))
+	}))
+	defer mockServer.Close()
+
+	// This test succeeds if it completes without the process exiting
+	log := testutil.StdoutOutputForFunc(func() {
+		rl := New(logging.INFO, mockServer.URL, 10*time.Millisecond)
+
+		time.Sleep(20 * time.Millisecond)
+
+		// If we reach this point, the application didn't exit
+		// Now check that the logger did change to FATAL level
+		if remoteLogger, ok := rl.(*remoteLogger); ok {
+			remoteLogger.mu.RLock()
+
+			assert.Equal(t, logging.FATAL, remoteLogger.currentLevel, "Log level should be updated to FATAL")
+
+			remoteLogger.mu.RUnlock()
+		}
+	})
+
+	// Verify the log contains a warning about the level change
+	assert.Contains(t, log, "LOG_LEVEL updated from INFO to FATAL")
 }

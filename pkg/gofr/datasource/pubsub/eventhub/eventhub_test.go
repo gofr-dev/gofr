@@ -262,8 +262,8 @@ func getTestConfigs() Config {
 		opts := &websocket.DialOptions{
 			Subprotocols: []string{"amqp"},
 		}
-		wssConn, _, err := websocket.Dial(ctx, args.Host, opts)
 
+		wssConn, _, err := websocket.Dial(ctx, args.Host, opts)
 		if err != nil {
 			return nil, err
 		}
