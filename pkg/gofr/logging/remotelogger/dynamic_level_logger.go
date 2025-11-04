@@ -9,6 +9,7 @@ import (
 	"sync"
 	"time"
 
+	"gofr.dev/pkg/gofr/config"
 	"gofr.dev/pkg/gofr/logging"
 	"gofr.dev/pkg/gofr/service"
 )
@@ -147,7 +148,9 @@ func New(level logging.Level, remoteConfigURL string, loggerFetchInterval time.D
 	}
 
 	if remoteConfigURL != "" {
-		go l.UpdateLogLevel()
+		config := NewHTTPRemoteConfig(remoteConfigURL, loggerFetchInterval, l.Logger)
+		config.Register(l)
+		go config.Start()
 	}
 
 	return l
@@ -159,6 +162,25 @@ type remoteLogger struct {
 	mu                 sync.RWMutex
 	currentLevel       logging.Level
 	logging.Logger
+}
+
+// RemoteConfigurable implementation
+func (r *remoteLogger) UpdateConfig(config map[string]any) {
+	if levelStr, ok := config["logLevel"].(string); ok {
+		newLevel := logging.GetLevelFromString(levelStr)
+
+		r.mu.Lock()
+		if r.currentLevel != newLevel {
+			oldLevel := r.currentLevel
+			r.currentLevel = newLevel
+			r.mu.Unlock()
+
+			logLevelChange(r, oldLevel, newLevel)
+			r.ChangeLevel(newLevel)
+		} else {
+			r.mu.Unlock()
+		}
+	}
 }
 
 // UpdateLogLevel continuously fetches the log level from the remote configuration URL at the specified interval
@@ -240,12 +262,21 @@ func logLevelChange(r *remoteLogger, oldLevel, newLevel logging.Level) {
 }
 
 func fetchAndUpdateLogLevel(remoteService service.HTTP, currentLevel logging.Level) (logging.Level, error) {
+	if newLogLevelStr, err := fetchLogLevelStr(remoteService); err != nil {
+		return currentLevel, err
+	} else if newLogLevelStr != "" {
+		return logging.GetLevelFromString(newLogLevelStr), nil
+	}
+	return currentLevel, nil
+}
+
+func fetchLogLevelStr(remoteService service.HTTP) (string, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), requestTimeout) // Set timeout for 5 seconds
 	defer cancel()
 
 	resp, err := remoteService.Get(ctx, "", nil)
 	if err != nil {
-		return currentLevel, err
+		return "", err
 	}
 	defer resp.Body.Close()
 
@@ -258,20 +289,82 @@ func fetchAndUpdateLogLevel(remoteService service.HTTP, currentLevel logging.Lev
 
 	responseBody, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return currentLevel, err
+		return "", err
 	}
 
 	err = json.Unmarshal(responseBody, &response)
 	if err != nil {
-		return currentLevel, err
+		return "", err
 	}
 
 	logLevels := []string{"DEBUG", "INFO", "NOTICE", "WARN", "ERROR", "FATAL"}
 
 	if slices.Contains(logLevels, response.Data.Level) && response.Data.ServiceName != "" {
-		newLevel := logging.GetLevelFromString(response.Data.Level)
-		return newLevel, nil
+		return response.Data.Level, nil
 	}
 
-	return currentLevel, nil
+	return "", nil
+}
+
+// httpRemoteConfig fetches runtime config via HTTP and pushes it to registered clients.
+type httpRemoteConfig struct {
+	url      string
+	interval time.Duration
+	logger   logging.Logger
+	clients  []config.RemoteConfigurable
+}
+
+func NewHTTPRemoteConfig(url string, interval time.Duration, logger logging.Logger) config.RemoteConfiguration {
+	return &httpRemoteConfig{
+		url:      url,
+		interval: interval,
+		logger:   logger,
+	}
+}
+
+func (h *httpRemoteConfig) Register(c config.RemoteConfigurable) {
+	h.clients = append(h.clients, c)
+}
+
+func (h *httpRemoteConfig) Start() {
+	filteredLogger := &httpLogFilter{Logger: h.logger}
+	remoteService := service.NewHTTPService(h.url, filteredLogger, nil)
+
+	h.logger.Infof("Remote configuration monitoring initialized with URL: %s, interval: %s",
+		h.url, h.interval)
+
+	checkAndUpdate := func() {
+		config, err := fetchRemoteConfig(remoteService)
+		if err != nil {
+			h.logger.Warnf("Failed to fetch remote config: %v", err)
+			return
+		}
+
+		for _, client := range h.clients {
+			client.UpdateConfig(config)
+		}
+	}
+
+	// run once immediately
+	checkAndUpdate()
+
+	// then periodically
+	ticker := time.NewTicker(h.interval)
+	go func() {
+		defer ticker.Stop()
+		for range ticker.C {
+			checkAndUpdate()
+		}
+	}()
+}
+
+func fetchRemoteConfig(remoteService service.HTTP) (map[string]any, error) {
+	if newLogLevelStr, err := fetchLogLevelStr(remoteService); err != nil {
+		return map[string]any{}, nil
+	} else if newLogLevelStr != "" {
+		return map[string]any{
+			"logLevel": newLogLevelStr,
+		}, nil
+	}
+	return map[string]any{}, nil
 }
