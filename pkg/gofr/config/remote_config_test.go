@@ -6,7 +6,7 @@ import (
 	"time"
 )
 
-// mockRemoteConfigurable is a mock that records updates for verification
+// mockRemoteConfigurable is a mock that records updates for verification.
 type mockRemoteConfigurable struct {
 	mu           sync.Mutex
 	updatedCount int
@@ -16,11 +16,12 @@ type mockRemoteConfigurable struct {
 func (m *mockRemoteConfigurable) UpdateConfig(cfg map[string]any) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
+
 	m.updatedCount++
 	m.lastConfig = cfg
 }
 
-// mockRemoteConfiguration simulates a runtime configuration manager
+// mockRemoteConfiguration simulates a runtime configuration manager.
 type mockRemoteConfiguration struct {
 	mu           sync.Mutex
 	registered   []RemoteConfigurable
@@ -37,6 +38,7 @@ func newMockRemoteConfiguration() *mockRemoteConfiguration {
 func (m *mockRemoteConfiguration) Register(c RemoteConfigurable) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
+
 	m.registered = append(m.registered, c)
 }
 
@@ -48,9 +50,11 @@ func (m *mockRemoteConfiguration) Start() {
 	go func() {
 		for cfg := range m.startTrigger {
 			m.mu.Lock()
+
 			for _, r := range m.registered {
 				r.UpdateConfig(cfg)
 			}
+
 			m.mu.Unlock()
 		}
 	}()
@@ -90,14 +94,14 @@ func TestRemoteConfiguration_RegisterAndStart(t *testing.T) {
 	}
 }
 
-func TestRemoteConfiguration_NoRegisteredComponents(t *testing.T) {
+func TestRemoteConfiguration_NoRegisteredComponents(_ *testing.T) {
 	rc := newMockRemoteConfiguration()
 	rc.Start()
 
 	cfg := map[string]any{"feature": "enabled"}
 	rc.pushConfig(cfg)
 
-	// Should not panic even if no components are registered
+	// Should not panic even if no components are registered.
 	time.Sleep(20 * time.Millisecond)
 }
 
