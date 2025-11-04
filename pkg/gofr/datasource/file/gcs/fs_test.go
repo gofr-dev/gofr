@@ -3,6 +3,7 @@ package gcs
 import (
 	"context"
 	"errors"
+	"strings"
 	"testing"
 	"time"
 
@@ -302,4 +303,414 @@ func TestRenameFile(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestFileSystem_Create_ParentDirectoryNotExist(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	mockConn := NewMockStorageProvider(ctrl)
+	mockLogger := NewMockLogger(ctrl)
+	mockMetrics := NewMockMetrics(ctrl)
+
+	config := &Config{BucketName: "test-bucket"}
+
+	fs := &FileSystem{
+		conn:    mockConn,
+		config:  config,
+		logger:  mockLogger,
+		metrics: mockMetrics,
+	}
+
+	expectedErr := errObjectNotFound
+
+	mockConn.EXPECT().
+		ListObjects(gomock.Any(), "parent/").
+		Return(nil, expectedErr)
+
+	mockLogger.EXPECT().Errorf("Failed to list parent directory %q: %v", "parent/", expectedErr)
+	mockLogger.EXPECT().Debug(gomock.Any()).AnyTimes()
+	mockMetrics.EXPECT().RecordHistogram(
+		gomock.Any(), file.AppFileStats, gomock.Any(),
+		"type", gomock.Any(),
+		"status", gomock.Any(),
+		"provider", gomock.Any(),
+	).AnyTimes()
+
+	_, err := fs.Create("parent/file.txt")
+
+	require.Error(t, err)
+	require.Equal(t, expectedErr, err)
+}
+
+func TestFileSystem_Create_ListObjectsError(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	mockConn := NewMockStorageProvider(ctrl)
+	mockLogger := NewMockLogger(ctrl)
+	mockMetrics := NewMockMetrics(ctrl)
+
+	config := &Config{BucketName: "test-bucket"}
+
+	fs := &FileSystem{
+		conn:    mockConn,
+		config:  config,
+		logger:  mockLogger,
+		metrics: mockMetrics,
+	}
+
+	expectedErr := errRead
+
+	// Parent directory check succeeds
+	mockConn.EXPECT().
+		ListObjects(gomock.Any(), ".").
+		Return([]string{}, nil)
+
+	// But checking for existing file fails
+	mockConn.EXPECT().
+		ListObjects(gomock.Any(), "file.txt").
+		Return(nil, expectedErr)
+
+	mockLogger.EXPECT().Errorf("Failed to list objects for name %q: %v", "file.txt", expectedErr)
+	mockLogger.EXPECT().Debug(gomock.Any()).AnyTimes()
+	mockMetrics.EXPECT().RecordHistogram(
+		gomock.Any(), file.AppFileStats, gomock.Any(),
+		"type", gomock.Any(),
+		"status", gomock.Any(),
+		"provider", gomock.Any(),
+	).AnyTimes()
+
+	_, err := fs.Create("file.txt")
+
+	require.Error(t, err)
+	require.Equal(t, expectedErr, err)
+}
+
+func TestFileSystem_Create_FileAlreadyExists(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	mockConn := NewMockStorageProvider(ctrl)
+	mockLogger := NewMockLogger(ctrl)
+	mockMetrics := NewMockMetrics(ctrl)
+
+	config := &Config{BucketName: "test-bucket"}
+
+	fs := &FileSystem{
+		conn:    mockConn,
+		config:  config,
+		logger:  mockLogger,
+		metrics: mockMetrics,
+	}
+
+	mockConn.EXPECT().
+		ListObjects(gomock.Any(), ".").
+		Return([]string{}, nil)
+
+	// Original name exists
+	mockConn.EXPECT().
+		ListObjects(gomock.Any(), "file.txt").
+		Return([]string{"file.txt"}, nil)
+
+	expectedCopyName := "file copy 1.txt"
+	mockConn.EXPECT().
+		ListObjects(gomock.Any(), expectedCopyName).
+		Return([]string{}, nil)
+
+	mockWriter := &storage.Writer{}
+	mockConn.EXPECT().
+		NewWriter(gomock.Any(), expectedCopyName).
+		Return(mockWriter)
+
+	mockLogger.EXPECT().Infof("Write stream successfully opened for file %q", expectedCopyName)
+	mockLogger.EXPECT().Debug(gomock.Any()).AnyTimes()
+	mockMetrics.EXPECT().RecordHistogram(
+		gomock.Any(), file.AppFileStats, gomock.Any(),
+		"type", gomock.Any(),
+		"status", gomock.Any(),
+		"provider", gomock.Any(),
+	).AnyTimes()
+
+	f, err := fs.Create("file.txt")
+
+	require.NoError(t, err)
+	require.NotNil(t, f)
+	require.Equal(t, expectedCopyName, f.(*File).name)
+}
+
+func TestFileSystem_Create_WriterTypeAssertionFailed(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	mockConn := NewMockStorageProvider(ctrl)
+	mockLogger := NewMockLogger(ctrl)
+	mockMetrics := NewMockMetrics(ctrl)
+
+	config := &Config{BucketName: "test-bucket"}
+
+	fs := &FileSystem{
+		conn:    mockConn,
+		config:  config,
+		logger:  mockLogger,
+		metrics: mockMetrics,
+	}
+
+	mockConn.EXPECT().
+		ListObjects(gomock.Any(), ".").
+		Return([]string{}, nil)
+
+	mockConn.EXPECT().
+		ListObjects(gomock.Any(), "file.txt").
+		Return([]string{}, nil)
+
+	// Return a writer that's not *storage.Writer
+	mockConn.EXPECT().
+		NewWriter(gomock.Any(), "file.txt").
+		Return(&mockWriteCloser{})
+
+	mockLogger.EXPECT().Errorf("Type assertion failed for writer to *storage.Writer")
+	mockLogger.EXPECT().Debug(gomock.Any()).AnyTimes()
+	mockMetrics.EXPECT().RecordHistogram(
+		gomock.Any(), file.AppFileStats, gomock.Any(),
+		"type", gomock.Any(),
+		"status", gomock.Any(),
+		"provider", gomock.Any(),
+	).AnyTimes()
+
+	_, err := fs.Create("file.txt")
+
+	require.Error(t, err)
+	require.ErrorIs(t, err, errWriterTypeAssertion)
+}
+
+func TestFileSystem_Open_FileNotFound(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	mockConn := NewMockStorageProvider(ctrl)
+	mockLogger := NewMockLogger(ctrl)
+	mockMetrics := NewMockMetrics(ctrl)
+
+	config := &Config{BucketName: "test-bucket"}
+
+	fs := &FileSystem{
+		conn:    mockConn,
+		config:  config,
+		logger:  mockLogger,
+		metrics: mockMetrics,
+	}
+
+	mockConn.EXPECT().
+		NewReader(gomock.Any(), "notfound.txt").
+		Return(nil, storage.ErrObjectNotExist)
+
+	mockLogger.EXPECT().Debug(gomock.Any()).AnyTimes()
+	mockMetrics.EXPECT().RecordHistogram(
+		gomock.Any(), file.AppFileStats, gomock.Any(),
+		"type", gomock.Any(),
+		"status", gomock.Any(),
+		"provider", gomock.Any(),
+	).AnyTimes()
+
+	_, err := fs.Open("notfound.txt")
+
+	require.Error(t, err)
+	require.ErrorIs(t, err, file.ErrFileNotFound)
+}
+
+func TestFileSystem_Open_ReaderError(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	mockConn := NewMockStorageProvider(ctrl)
+	mockLogger := NewMockLogger(ctrl)
+	mockMetrics := NewMockMetrics(ctrl)
+
+	config := &Config{BucketName: "test-bucket"}
+
+	fs := &FileSystem{
+		conn:    mockConn,
+		config:  config,
+		logger:  mockLogger,
+		metrics: mockMetrics,
+	}
+
+	expectedErr := errRead
+
+	mockConn.EXPECT().
+		NewReader(gomock.Any(), "file.txt").
+		Return(nil, expectedErr)
+
+	mockLogger.EXPECT().Errorf("failed to retrieve %q: %v", "file.txt", expectedErr)
+	mockLogger.EXPECT().Debug(gomock.Any()).AnyTimes()
+	mockMetrics.EXPECT().RecordHistogram(
+		gomock.Any(), file.AppFileStats, gomock.Any(),
+		"type", gomock.Any(),
+		"status", gomock.Any(),
+		"provider", gomock.Any(),
+	).AnyTimes()
+
+	_, err := fs.Open("file.txt")
+
+	require.Error(t, err)
+	require.Equal(t, expectedErr, err)
+}
+
+func TestFileSystem_Open_StatObjectError(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	mockConn := NewMockStorageProvider(ctrl)
+	mockLogger := NewMockLogger(ctrl)
+	mockMetrics := NewMockMetrics(ctrl)
+
+	config := &Config{BucketName: "test-bucket"}
+
+	fs := &FileSystem{
+		conn:    mockConn,
+		config:  config,
+		logger:  mockLogger,
+		metrics: mockMetrics,
+	}
+
+	expectedErr := errStat
+	mockReader := &fakeStorageReader{Reader: strings.NewReader("test")}
+
+	mockConn.EXPECT().
+		NewReader(gomock.Any(), "file.txt").
+		Return(mockReader, nil)
+
+	mockConn.EXPECT().
+		StatObject(gomock.Any(), "file.txt").
+		Return(nil, expectedErr)
+
+	mockLogger.EXPECT().Debug(gomock.Any()).AnyTimes()
+	mockMetrics.EXPECT().RecordHistogram(
+		gomock.Any(), file.AppFileStats, gomock.Any(),
+		"type", gomock.Any(),
+		"status", gomock.Any(),
+		"provider", gomock.Any(),
+	).AnyTimes()
+
+	_, err := fs.Open("file.txt")
+
+	require.Error(t, err)
+	require.Equal(t, expectedErr, err)
+	require.True(t, mockReader.closed, "Reader should be closed on error")
+}
+func TestFileSystem_OpenFile(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	mockConn := NewMockStorageProvider(ctrl)
+	mockLogger := NewMockLogger(ctrl)
+	mockMetrics := NewMockMetrics(ctrl)
+
+	config := &Config{BucketName: "test-bucket"}
+
+	fs := &FileSystem{
+		conn:    mockConn,
+		config:  config,
+		logger:  mockLogger,
+		metrics: mockMetrics,
+	}
+
+	mockReader := &fakeStorageReader{Reader: strings.NewReader("test")}
+	mockConn.EXPECT().
+		NewReader(gomock.Any(), "file.txt").
+		Return(mockReader, nil)
+
+	mockConn.EXPECT().
+		StatObject(gomock.Any(), "file.txt").
+		Return(&file.ObjectInfo{
+			Size:         4,
+			ContentType:  "text/plain",
+			LastModified: time.Now(),
+		}, nil)
+
+	mockLogger.EXPECT().Debug(gomock.Any()).AnyTimes()
+	mockMetrics.EXPECT().RecordHistogram(
+		gomock.Any(), file.AppFileStats, gomock.Any(),
+		"type", gomock.Any(),
+		"status", gomock.Any(),
+		"provider", gomock.Any(),
+	).AnyTimes()
+
+	f, err := fs.OpenFile("file.txt", 0, 0644)
+
+	require.NoError(t, err)
+	require.NotNil(t, f)
+}
+
+func TestFileSystem_UseLogger_Success(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	mockLogger := NewMockLogger(ctrl)
+
+	fs := &FileSystem{}
+
+	fs.UseLogger(mockLogger)
+
+	require.Equal(t, mockLogger, fs.logger)
+}
+
+func TestFileSystem_UseLogger_InvalidType(t *testing.T) {
+	fs := &FileSystem{}
+
+	// Pass a non-Logger type
+	fs.UseLogger("not a logger")
+
+	require.Nil(t, fs.logger)
+}
+
+func TestFileSystem_UseMetrics_Success(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	mockMetrics := NewMockMetrics(ctrl)
+
+	fs := &FileSystem{}
+
+	fs.UseMetrics(mockMetrics)
+
+	require.Equal(t, mockMetrics, fs.metrics)
+}
+
+func TestFileSystem_UseMetrics_InvalidType(t *testing.T) {
+	fs := &FileSystem{}
+
+	// Pass a non-Metrics type
+	fs.UseMetrics("not metrics")
+
+	require.Nil(t, fs.metrics)
+}
+
+// Helper types
+
+type mockWriteCloser struct {
+	save func([]byte)
+}
+
+func (m *mockWriteCloser) Write(p []byte) (int, error) {
+	if m.save != nil {
+		m.save(p)
+	}
+
+	return len(p), nil
+}
+
+func (*mockWriteCloser) Close() error {
+	return nil
+}
+
+type fakeStorageReader struct {
+	*strings.Reader
+	closed bool
+}
+
+func (f *fakeStorageReader) Close() error {
+	f.closed = true
+	return nil
 }
