@@ -2,7 +2,6 @@ package gcs
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"strings"
 	"testing"
@@ -185,7 +184,7 @@ func TestStorageAdapter_CopyObject_SameSourceAndDest(t *testing.T) {
 }
 
 func TestFailWriter_Write(t *testing.T) {
-	expectedErr := errors.New("test error")
+	expectedErr := errRead
 	fw := &failWriter{err: expectedErr}
 
 	n, err := fw.Write([]byte("test data"))
@@ -196,7 +195,7 @@ func TestFailWriter_Write(t *testing.T) {
 }
 
 func TestFailWriter_Close(t *testing.T) {
-	expectedErr := errors.New("test error")
+	expectedErr := errRead
 	fw := &failWriter{err: expectedErr}
 
 	err := fw.Close()
@@ -527,7 +526,7 @@ func TestMockStorageProvider_ListDir_Error(t *testing.T) {
 	defer ctrl.Finish()
 
 	mockProvider := NewMockStorageProvider(ctrl)
-	expectedErr := errors.New("failed to list directory")
+	expectedErr := errObjectNotFound
 
 	mockProvider.EXPECT().
 		ListDir(gomock.Any(), "invalid/").
