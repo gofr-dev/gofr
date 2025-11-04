@@ -21,7 +21,7 @@ import (
 
 func TestMain(m *testing.M) {
 	os.Setenv("GOFR_TELEMETRY", "false")
-	m.Run()
+	os.Exit(m.Run())
 }
 
 func TestRemoteLogger_UpdateLevel(t *testing.T) {
