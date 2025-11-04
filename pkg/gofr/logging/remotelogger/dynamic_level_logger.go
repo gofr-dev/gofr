@@ -148,9 +148,10 @@ func New(level logging.Level, remoteConfigURL string, loggerFetchInterval time.D
 	}
 
 	if remoteConfigURL != "" {
-		config := NewHTTPRemoteConfig(remoteConfigURL, loggerFetchInterval, l.Logger)
-		config.Register(l)
-		go config.Start()
+		cfg := NewHTTPRemoteConfig(remoteConfigURL, loggerFetchInterval, l.Logger)
+		cfg.Register(l)
+
+		go cfg.Start()
 	}
 
 	return l
@@ -164,12 +165,13 @@ type remoteLogger struct {
 	logging.Logger
 }
 
-// RemoteConfigurable implementation
-func (r *remoteLogger) UpdateConfig(config map[string]any) {
-	if levelStr, ok := config["logLevel"].(string); ok {
+// UpdateConfig implements the config.RemoteConfigurable interface and updates the log level based on the provided configuration.
+func (r *remoteLogger) UpdateConfig(cfg map[string]any) {
+	if levelStr, ok := cfg["logLevel"].(string); ok {
 		newLevel := logging.GetLevelFromString(levelStr)
 
 		r.mu.Lock()
+
 		if r.currentLevel != newLevel {
 			oldLevel := r.currentLevel
 			r.currentLevel = newLevel
@@ -267,6 +269,7 @@ func fetchAndUpdateLogLevel(remoteService service.HTTP, currentLevel logging.Lev
 	} else if newLogLevelStr != "" {
 		return logging.GetLevelFromString(newLogLevelStr), nil
 	}
+
 	return currentLevel, nil
 }
 
@@ -350,8 +353,10 @@ func (h *httpRemoteConfig) Start() {
 
 	// then periodically
 	ticker := time.NewTicker(h.interval)
+
 	go func() {
 		defer ticker.Stop()
+
 		for range ticker.C {
 			checkAndUpdate()
 		}
@@ -360,11 +365,12 @@ func (h *httpRemoteConfig) Start() {
 
 func fetchRemoteConfig(remoteService service.HTTP) (map[string]any, error) {
 	if newLogLevelStr, err := fetchLogLevelStr(remoteService); err != nil {
-		return map[string]any{}, nil
+		return map[string]any{}, err
 	} else if newLogLevelStr != "" {
 		return map[string]any{
 			"logLevel": newLogLevelStr,
 		}, nil
 	}
+
 	return map[string]any{}, nil
 }

@@ -2,8 +2,10 @@ package remotelogger
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -12,7 +14,7 @@ import (
 	"gofr.dev/pkg/gofr/logging"
 )
 
-// Mock Logger (implements logging.Logger)
+// Mock Logger (implements logging.Logger).
 type mockLogger struct {
 	mu        sync.Mutex
 	messages  []string
@@ -20,35 +22,50 @@ type mockLogger struct {
 	changeCnt int32
 }
 
-func (m *mockLogger) record(prefix string, _ ...any) {
+func (m *mockLogger) record(prefix string, parts ...any) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	m.messages = append(m.messages, prefix)
+
+	msg := fmt.Sprint(append([]any{prefix, ":"}, parts...)...)
+	m.messages = append(m.messages, msg)
 }
 
-func (m *mockLogger) Debug(args ...any)                  { m.record("Debug", args...) }
-func (m *mockLogger) Debugf(format string, args ...any)  { m.record("Debugf", args...) }
-func (m *mockLogger) Log(args ...any)                    { m.record("Log", args...) }
-func (m *mockLogger) Logf(format string, args ...any)    { m.record("Logf", args...) }
-func (m *mockLogger) Info(args ...any)                   { m.record("Info", args...) }
-func (m *mockLogger) Infof(format string, args ...any)   { m.record("Infof", args...) }
-func (m *mockLogger) Notice(args ...any)                 { m.record("Notice", args...) }
-func (m *mockLogger) Noticef(format string, args ...any) { m.record("Noticef", args...) }
-func (m *mockLogger) Warn(args ...any)                   { m.record("Warn", args...) }
-func (m *mockLogger) Warnf(format string, args ...any)   { m.record("Warnf", args...) }
-func (m *mockLogger) Error(args ...any)                  { m.record("Error", args...) }
-func (m *mockLogger) Errorf(format string, args ...any)  { m.record("Errorf", args...) }
-func (m *mockLogger) Fatal(args ...any)                  { m.record("Fatal", args...) }
-func (m *mockLogger) Fatalf(format string, args ...any)  { m.record("Fatalf", args...) }
+func (m *mockLogger) Debug(args ...any) { m.record("Debug", args...) }
+func (m *mockLogger) Debugf(format string, args ...any) {
+	m.record("Debugf", fmt.Sprintf(format, args...))
+}
+func (m *mockLogger) Log(args ...any)                 { m.record("Log", args...) }
+func (m *mockLogger) Logf(format string, args ...any) { m.record("Logf", fmt.Sprintf(format, args...)) }
+func (m *mockLogger) Info(args ...any)                { m.record("Info", args...) }
+func (m *mockLogger) Infof(format string, args ...any) {
+	m.record("Infof", fmt.Sprintf(format, args...))
+}
+func (m *mockLogger) Notice(args ...any) { m.record("Notice", args...) }
+func (m *mockLogger) Noticef(format string, args ...any) {
+	m.record("Noticef", fmt.Sprintf(format, args...))
+}
+func (m *mockLogger) Warn(args ...any) { m.record("Warn", args...) }
+func (m *mockLogger) Warnf(format string, args ...any) {
+	m.record("Warnf", fmt.Sprintf(format, args...))
+}
+func (m *mockLogger) Error(args ...any) { m.record("Error", args...) }
+func (m *mockLogger) Errorf(format string, args ...any) {
+	m.record("Errorf", fmt.Sprintf(format, args...))
+}
+func (m *mockLogger) Fatal(args ...any) { m.record("Fatal", args...) }
+func (m *mockLogger) Fatalf(format string, args ...any) {
+	m.record("Fatalf", fmt.Sprintf(format, args...))
+}
 
 func (m *mockLogger) ChangeLevel(level logging.Level) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
+
 	m.level = level
 	atomic.AddInt32(&m.changeCnt, 1)
 }
 
-// Mock RemoteConfigurable Client
+// Mock RemoteConfigurable Client.
 type mockClient struct {
 	updateCalled int32
 	lastConfig   map[string]any
@@ -59,10 +76,10 @@ func (m *mockClient) UpdateConfig(cfg map[string]any) {
 	m.lastConfig = cfg
 }
 
-// Tests for httpRemoteConfig
+// Tests for httpRemoteConfig.
 func TestHttpRemoteConfig_RegisterAndStart(t *testing.T) {
 	// mock HTTP server returning valid JSON
-	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	handler := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		resp := map[string]any{
 			"data": map[string]string{
 				"serviceName": "test-service",
@@ -71,6 +88,7 @@ func TestHttpRemoteConfig_RegisterAndStart(t *testing.T) {
 		}
 		_ = json.NewEncoder(w).Encode(resp)
 	})
+
 	server := httptest.NewServer(handler)
 	defer server.Close()
 
@@ -94,27 +112,51 @@ func TestHttpRemoteConfig_RegisterAndStart(t *testing.T) {
 }
 
 func TestHttpRemoteConfig_InvalidJSON(t *testing.T) {
+	t.Parallel()
+
 	// mock server returning invalid JSON
-	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Write([]byte(`invalid-json`))
+	handler := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = w.Write([]byte(`invalid-json`))
 	})
+
 	server := httptest.NewServer(handler)
 	defer server.Close()
 
 	logger := &mockLogger{}
 	cfg := NewHTTPRemoteConfig(server.URL, 50*time.Millisecond, logger).(*httpRemoteConfig)
 	client := &mockClient{}
+
 	cfg.Register(client)
-
 	cfg.Start()
-	time.Sleep(120 * time.Millisecond)
 
-	if atomic.LoadInt32(&client.updateCalled) == 0 {
-		t.Errorf("expected UpdateConfig to be called at least once even if response invalid")
+	// Wait for a couple of polling intervals
+	time.Sleep(200 * time.Millisecond)
+
+	updateCount := atomic.LoadInt32(&client.updateCalled)
+
+	if updateCount != 0 {
+		t.Errorf("expected UpdateConfig not to be called on invalid JSON, but got %d calls", updateCount)
+	}
+
+	// Check that an error log was recorded for invalid JSON
+	logger.mu.Lock()
+	defer logger.mu.Unlock()
+
+	foundErrorLog := false
+
+	for _, msg := range logger.messages {
+		if strings.Contains(msg, "invalid") || strings.Contains(strings.ToLower(msg), "error") {
+			foundErrorLog = true
+			break
+		}
+	}
+
+	if !foundErrorLog {
+		t.Errorf("expected error log message for invalid JSON response, got logs: %v", logger.messages)
 	}
 }
 
-// Tests for remoteLogger (RemoteConfigurable)
+// Tests for remoteLogger (RemoteConfigurable).
 func TestRemoteLogger_UpdateConfig_ChangesLevel(t *testing.T) {
 	logger := &mockLogger{}
 	r := &remoteLogger{
