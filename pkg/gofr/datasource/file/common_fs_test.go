@@ -125,6 +125,7 @@ func TestCommonFileSystem_Mkdir(t *testing.T) {
 
 			if tt.expectError {
 				require.Error(t, err)
+
 				if tt.expectedErr != nil {
 					assert.Equal(t, tt.expectedErr, err)
 				}
@@ -604,50 +605,4 @@ func TestGenerateCopyName(t *testing.T) {
 			assert.Equal(t, tt.expected, result)
 		})
 	}
-}
-
-// setupMkdirMocks configures mock expectations for Mkdir operation.
-func setupMkdirMocks(ctrl *gomock.Controller, mockProvider *MockStorageProvider,
-	dirName string, writeErr, closeErr error) {
-	if dirName == "" {
-		return
-	}
-
-	mockWriter := NewMockWriteCloser(ctrl)
-
-	expectedName := dirName
-	if !strings.HasSuffix(expectedName, "/") {
-		expectedName += "/"
-	}
-
-	mockProvider.EXPECT().
-		NewWriter(gomock.Any(), expectedName).
-		Return(mockWriter)
-
-	mockWriter.EXPECT().
-		Write([]byte("")).
-		Return(0, writeErr)
-
-	configureMockClose(mockWriter, closeErr)
-}
-
-// assertTestResult validates test outcomes without branching logic.
-func assertTestResult(t *testing.T, err error, expectError bool, expectedErr error) {
-	t.Helper()
-
-	assert.Equal(t, expectError, err != nil, "Error expectation mismatch")
-
-	if expectedErr != nil {
-		assert.Equal(t, expectedErr, err)
-	}
-}
-
-// configureMockClose sets up Close() expectations based on error conditions.
-func configureMockClose(mockWriter *MockWriteCloser, closeErr error) {
-	if closeErr != nil {
-		mockWriter.EXPECT().Close().Return(closeErr).AnyTimes()
-		return
-	}
-
-	mockWriter.EXPECT().Close().Return(nil).AnyTimes()
 }
