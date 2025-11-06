@@ -20,23 +20,57 @@ type sftpFile struct {
 }
 
 func (f sftpFile) Size() int64 {
-	return 0
+	stat, err := f.File.Stat()
+	if err != nil {
+		f.logger.Errorf("failed to get file size: %v", err)
+
+		return 0
+	}
+
+	return stat.Size()
 }
 
 func (f sftpFile) ModTime() time.Time {
-	return time.Unix(0, 0)
+	stat, err := f.File.Stat()
+	if err != nil {
+		f.logger.Errorf("failed to get file modification time: %v", err)
+
+		return time.Unix(0, 0)
+	}
+
+	return stat.ModTime()
 }
 
 func (f sftpFile) IsDir() bool {
-	return false
+	stat, err := f.File.Stat()
+	if err != nil {
+		f.logger.Errorf("failed to check if file is directory: %v", err)
+
+		return false
+	}
+
+	return stat.IsDir()
 }
 
 func (f sftpFile) Mode() os.FileMode {
-	return f.Mode()
+	stat, err := f.File.Stat()
+	if err != nil {
+		f.logger.Errorf("failed to get file mode: %v", err)
+		return 0
+	}
+
+	return stat.Mode()
 }
 
 func (f sftpFile) Sys() any {
-	return nil
+	stat, err := f.File.Stat()
+	if err != nil {
+		f.logger.Errorf("failed to get file system info: %v", err)
+
+		return nil
+	}
+
+	return stat.Sys()
 }
 
 type textReader struct {
