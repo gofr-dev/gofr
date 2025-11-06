@@ -32,7 +32,7 @@ type S3File struct {
 	lastModified time.Time
 }
 
-func (f *S3File) Sys() any {
+func (*S3File) Sys() any {
 	return nil
 }
 
