@@ -14,12 +14,12 @@ import (
 
 var (
 	// ErrEmptyDirectoryName is returned when attempting to create a directory with an empty name.
-	ErrEmptyDirectoryName = errors.New("directory name cannot be empty")
+	errEmptyDirectoryName = errors.New("directory name cannot be empty")
 
 	// ErrChDirNotSupported is returned when changing directory is attempted on cloud storage.
-	ErrChDirNotSupported = errors.New("changing directory is not supported in cloud storage")
+	errChDirNotSupported = errors.New("changing directory is not supported in cloud storage")
 
-	ErrProviderNotSet = errors.New("file provider not set")
+	errUnsupportedFlags = errors.New("unsupported flag combination for OpenFile")
 )
 
 // CommonFileSystem provides shared implementations of FileSystem operations.
@@ -73,12 +73,12 @@ func (c *CommonFileSystem) Mkdir(name string, _ os.FileMode) error {
 	st := StatusError
 	startTime := time.Now()
 
-	defer c.observe(OpMkdir, startTime, &st, &msg)
+	defer c.Observe(OpMkdir, startTime, &st, &msg)
 
 	if name == "" {
 		msg = "directory name cannot be empty"
 
-		return ErrEmptyDirectoryName
+		return errEmptyDirectoryName
 	}
 
 	ctx := context.Background()
@@ -99,9 +99,7 @@ func (c *CommonFileSystem) Mkdir(name string, _ os.FileMode) error {
 	// Create empty object to represent directory
 	writer := c.Provider.NewWriter(ctx, objName)
 	if writer == nil {
-		msg = "failed to create writer"
-
-		return fmt.Errorf("NewWriter returned nil")
+		return errWriterNil
 	}
 	defer writer.Close()
 
@@ -116,6 +114,7 @@ func (c *CommonFileSystem) Mkdir(name string, _ os.FileMode) error {
 		}
 
 		msg = fmt.Sprintf("failed to write directory marker: %v", err)
+
 		return err
 	}
 
@@ -132,48 +131,31 @@ func (c *CommonFileSystem) Mkdir(name string, _ os.FileMode) error {
 
 // MkdirAll creates nested directories by recursively calling Mkdir for each path component.
 // Example: "a/b/c" creates "a/", "a/b/", and "a/b/c/".
+// MkdirAll creates nested directories by recursively calling Mkdir for each path component.
 func (c *CommonFileSystem) MkdirAll(dirPath string, perm os.FileMode) error {
-	msg := ""
+	var msg string
+
 	st := StatusError
 	startTime := time.Now()
 
-	defer c.observe(OpMkdirAll, startTime, &st, &msg)
+	defer c.Observe(OpMkdirAll, startTime, &st, &msg)
 
-	// Clean and validate path
-	cleaned := strings.Trim(dirPath, "/")
-	if cleaned == "" || cleaned == "." {
-		st = StatusSuccess
-		msg = "Skipped root/current directory"
+	if dirPath == "" {
+		msg = "directory path cannot be empty"
 
-		return nil
+		return errEmptyDirectoryName
 	}
 
-	// Check if already exists (using StatObject for cloud storage)
-	ctx := context.Background()
-	if _, err := c.Provider.StatObject(ctx, cleaned+"/"); err == nil {
-		st = StatusSuccess
-		msg = fmt.Sprintf("Directory %q already exists", dirPath)
+	// Split and filter path components
+	components := c.getPathComponents(dirPath)
 
-		return nil
-	}
+	// Create each directory in the path
+	currentPath := ""
+	for _, component := range components {
+		currentPath = path.Join(currentPath, component)
 
-	// Split path into components and filter out "." and ".."
-	dirs := strings.Split(cleaned, "/")
-	var validDirs []string
-	for _, dir := range dirs {
-		if dir != "" && dir != "." && dir != ".." {
-			validDirs = append(validDirs, dir)
-		}
-	}
-
-	// Create each directory component
-	var currentPath string
-	for _, dir := range validDirs {
-		currentPath = path.Join(currentPath, dir)
-		err := c.Mkdir(currentPath, perm)
-
-		if err != nil && !IsAlreadyExistsError(err) {
-			msg = err.Error()
+		if err := c.Mkdir(currentPath, perm); err != nil && !os.IsExist(err) {
+			msg = fmt.Sprintf("failed to create %q: %v", currentPath, err)
 
 			return err
 		}
@@ -181,7 +163,22 @@ func (c *CommonFileSystem) MkdirAll(dirPath string, perm os.FileMode) error {
 
 	st = StatusSuccess
 	msg = fmt.Sprintf("Created directory %q successfully", dirPath)
+
 	return nil
+}
+
+// getPathComponents splits a path and filters out empty, ".", and ".." components.
+func (*CommonFileSystem) getPathComponents(dirPath string) []string {
+	parts := strings.Split(strings.Trim(dirPath, "/"), "/")
+	components := make([]string, 0, len(parts))
+
+	for _, part := range parts {
+		if part != "" && part != "." && part != ".." {
+			components = append(components, part)
+		}
+	}
+
+	return components
 }
 
 // RemoveAll deletes a directory and all its contents by listing all objects with the prefix
@@ -192,7 +189,7 @@ func (c *CommonFileSystem) RemoveAll(dirPath string) error {
 	st := StatusError
 	startTime := time.Now()
 
-	defer c.observe(OpRemoveAll, startTime, &st, &msg)
+	defer c.Observe(OpRemoveAll, startTime, &st, &msg)
 
 	ctx := context.Background()
 
@@ -225,7 +222,7 @@ func (c *CommonFileSystem) ReadDir(dir string) ([]FileInfo, error) {
 
 	startTime := time.Now()
 
-	defer c.observe(OpReadDir, startTime, &st, &msg)
+	defer c.Observe(OpReadDir, startTime, &st, &msg)
 
 	ctx := context.Background()
 
@@ -278,7 +275,7 @@ func (c *CommonFileSystem) Stat(name string) (FileInfo, error) {
 	st := StatusError
 	startTime := time.Now()
 
-	defer c.observe(OpStat, startTime, &st, &msg)
+	defer c.Observe(OpStat, startTime, &st, &msg)
 
 	ctx := context.Background()
 
@@ -334,9 +331,9 @@ func (c *CommonFileSystem) ChDir(_ string) error {
 	msg := "ChDir not supported in cloud storage"
 	startTime := time.Now()
 
-	defer c.observe(OpChDir, startTime, &st, &msg)
+	defer c.Observe(OpChDir, startTime, &st, &msg)
 
-	return ErrChDirNotSupported
+	return errChDirNotSupported
 }
 
 // Getwd returns the configured location (bucket name or connection identifier).
@@ -345,7 +342,7 @@ func (c *CommonFileSystem) Getwd() (string, error) {
 	msg := "Returning location"
 	startTime := time.Now()
 
-	defer c.observe(OpGetwd, startTime, &st, &msg)
+	defer c.Observe(OpGetwd, startTime, &st, &msg)
 
 	return c.Location, nil
 }
@@ -355,10 +352,11 @@ func (c *CommonFileSystem) Getwd() (string, error) {
 // Create creates a new file for writing.
 func (c *CommonFileSystem) Create(name string) (File, error) {
 	var msg string
+
 	st := StatusError
 	startTime := time.Now()
 
-	defer c.observe(OpCreate, startTime, &st, &msg)
+	defer c.Observe(OpCreate, startTime, &st, &msg)
 
 	ctx := context.Background()
 
@@ -381,10 +379,11 @@ func (c *CommonFileSystem) Create(name string) (File, error) {
 // Open opens a file for reading.
 func (c *CommonFileSystem) Open(name string) (File, error) {
 	var msg string
+
 	st := StatusError
 	startTime := time.Now()
 
-	defer c.observe(OpOpen, startTime, &st, &msg)
+	defer c.Observe(OpOpen, startTime, &st, &msg)
 
 	ctx := context.Background()
 
@@ -418,112 +417,105 @@ func (c *CommonFileSystem) Open(name string) (File, error) {
 
 // OpenFile opens a file with the specified flags and permissions.
 func (c *CommonFileSystem) OpenFile(name string, flag int, perm os.FileMode) (File, error) {
-	msg := ""
+	var msg string
+
 	st := StatusError
 	startTime := time.Now()
 
-	defer c.observe(OpOpenFile, startTime, &st, &msg)
+	defer c.Observe(OpOpenFile, startTime, &st, &msg)
 
-	if c.Provider == nil {
-		return nil, ErrProviderNotSet
+	// Try different strategies based on flags
+	file, err := c.tryOpenStrategies(name, flag, perm)
+	if err != nil {
+		msg = fmt.Sprintf("failed to open %q: %v", name, err)
+		return nil, err
 	}
 
-	ctx := context.Background()
+	st = StatusSuccess
+	msg = fmt.Sprintf("Opened %q with flags %d", name, flag)
 
-	// Handle different flag combinations
-	switch {
-	case flag&os.O_RDWR != 0:
-		info, err := c.Provider.StatObject(ctx, name)
-		if err != nil && flag&os.O_CREATE == 0 {
-			msg = fmt.Sprintf("file %q not found: %v", name, err)
-			return nil, ErrFileNotFound
+	return file, nil
+}
+
+// tryOpenStrategies attempts different strategies to open a file based on flags.
+func (c *CommonFileSystem) tryOpenStrategies(name string, flag int, perm os.FileMode) (File, error) {
+	// Strategy 1: Try local filesystem for O_RDWR
+	if flag&os.O_RDWR != 0 {
+		if localFile, err := c.tryLocalFileOpen(name, flag, perm); err == nil {
+			return localFile, nil
 		}
+	}
 
-		osFile, err := os.OpenFile(name, flag, perm)
-		if err != nil {
-			msg = fmt.Sprintf("unsupported flags for cloud storage: %d", flag)
-			return nil, fmt.Errorf("%s", msg)
-		}
+	// Strategy 2: Handle read-only flags
+	if flag&(os.O_WRONLY|os.O_RDWR) == 0 {
+		return c.Open(name)
+	}
 
-		size := int64(0)
-		if info != nil {
-			size = info.Size
-		}
+	// Strategy 3: Handle write flags
+	return c.handleWriteFlags(name, flag)
+}
 
-		st = StatusSuccess
-		msg = fmt.Sprintf("Opened %q with flags %d", name, flag)
+// tryLocalFileOpen attempts to open a file using os.OpenFile (for local filesystem).
+func (c *CommonFileSystem) tryLocalFileOpen(name string, flag int, perm os.FileMode) (File, error) {
+	osFile, err := os.OpenFile(name, flag, perm)
+	if err != nil {
+		return nil, err
+	}
 
-		return &CommonFile{
-			name:     name,
-			body:     osFile,
-			writer:   osFile,
-			size:     size,
-			logger:   c.Logger,
-			metrics:  c.Metrics,
-			location: c.Location,
-		}, nil
+	info, err := osFile.Stat()
+	if err != nil {
+		osFile.Close()
 
-	case flag&os.O_WRONLY != 0 || flag&os.O_CREATE != 0:
-		// Write or create mode
+		return nil, err
+	}
+
+	return &CommonFile{
+		name:     name,
+		body:     osFile,
+		writer:   osFile,
+		size:     info.Size(),
+		logger:   c.Logger,
+		metrics:  c.Metrics,
+		location: c.Location,
+	}, nil
+}
+
+// handleWriteFlags handles O_WRONLY, O_APPEND, O_CREATE, O_TRUNC flags.
+func (c *CommonFileSystem) handleWriteFlags(name string, flag int) (File, error) {
+	// O_CREATE or O_TRUNC: create new file
+	if flag&(os.O_CREATE|os.O_TRUNC) != 0 {
+		return c.Create(name)
+	}
+
+	// O_APPEND: open existing for append
+	if flag&os.O_APPEND != 0 {
+		ctx := context.Background()
+
 		writer := c.Provider.NewWriter(ctx, name)
-
-		info, _ := c.Provider.StatObject(ctx, name)
-		size := int64(0)
-		if info != nil {
-			size = info.Size
+		if writer == nil {
+			return nil, errWriterNil
 		}
-
-		st = StatusSuccess
-		msg = fmt.Sprintf("Opened %q for writing", name)
 
 		return &CommonFile{
 			name:     name,
 			writer:   writer,
-			size:     size,
 			logger:   c.Logger,
 			metrics:  c.Metrics,
 			location: c.Location,
 		}, nil
-
-	default:
-		// Read-only mode (default)
-		reader, err := c.Provider.NewReader(ctx, name)
-		if err != nil {
-			msg = err.Error()
-			return nil, err
-		}
-
-		info, err := c.Provider.StatObject(ctx, name)
-		if err != nil {
-			_ = reader.Close()
-			msg = err.Error()
-			return nil, err
-		}
-
-		st = StatusSuccess
-		msg = fmt.Sprintf("Opened %q for reading", name)
-
-		return &CommonFile{
-			name:         name,
-			body:         reader,
-			size:         info.Size,
-			contentType:  info.ContentType,
-			lastModified: info.LastModified,
-			isDir:        info.IsDir,
-			logger:       c.Logger,
-			metrics:      c.Metrics,
-			location:     c.Location,
-		}, nil
 	}
+
+	return nil, errUnsupportedFlags
 }
 
 // Remove deletes a file.
 func (c *CommonFileSystem) Remove(name string) error {
 	var msg string
+
 	st := StatusError
 	startTime := time.Now()
 
-	defer c.observe(OpRemove, startTime, &st, &msg)
+	defer c.Observe(OpRemove, startTime, &st, &msg)
 
 	ctx := context.Background()
 
@@ -541,22 +533,25 @@ func (c *CommonFileSystem) Remove(name string) error {
 // Rename renames a file (copy + delete).
 func (c *CommonFileSystem) Rename(oldname, newname string) error {
 	var msg string
+
 	st := StatusError
 	startTime := time.Now()
 
-	defer c.observe(OpRename, startTime, &st, &msg)
+	defer c.Observe(OpRename, startTime, &st, &msg)
 
 	ctx := context.Background()
 
 	// Copy to new location
 	if err := c.Provider.CopyObject(ctx, oldname, newname); err != nil {
 		msg = fmt.Sprintf("failed to copy %q to %q: %v", oldname, newname, err)
+
 		return err
 	}
 
 	// Delete old
 	if err := c.Provider.DeleteObject(ctx, oldname); err != nil {
 		msg = fmt.Sprintf("failed to delete old file %q: %v", oldname, err)
+
 		return err
 	}
 
@@ -566,15 +561,15 @@ func (c *CommonFileSystem) Rename(oldname, newname string) error {
 	return nil
 }
 
-// observe is a helper method to centralize observability for all operations.
-func (c *CommonFileSystem) observe(operation string, startTime time.Time, status, message *string) {
+// Observe is a helper method to centralize observability for all operations.
+func (c *CommonFileSystem) Observe(operation string, startTime time.Time, status, message *string) {
 	ObserveOperation(&OperationObservability{
 		Context:   context.Background(),
 		Logger:    c.Logger,
 		Metrics:   c.Metrics,
 		Operation: operation,
 		Location:  c.Location,
-		Provider:  "Common", // Providers can override this in their own observe methods
+		Provider:  "Common", // Providers can override this in their own Observe methods
 		StartTime: startTime,
 		Status:    status,
 		Message:   message,

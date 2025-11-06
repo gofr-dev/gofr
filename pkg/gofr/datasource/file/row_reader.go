@@ -5,8 +5,6 @@ import (
 	"encoding/json"
 	"errors"
 	"io"
-	"os"
-	"strings"
 
 	"gofr.dev/pkg/gofr/datasource"
 )
@@ -59,6 +57,7 @@ func (t *textReader) Scan(i any) error {
 	}
 
 	*target = t.scanner.Text()
+
 	return nil
 }
 
@@ -72,6 +71,7 @@ func NewJSONReader(r io.Reader, logger datasource.Logger) (RowReader, error) {
 		if logger != nil {
 			logger.Errorf("failed to read JSON structure: %v", err)
 		}
+
 		return nil, err
 	}
 
@@ -111,20 +111,10 @@ func (j *jsonReader) Scan(i any) error {
 		if j.consumed {
 			return io.EOF
 		}
+
 		j.consumed = true
 	}
 
 	// Decode the next object
 	return j.decoder.Decode(&i)
-}
-
-// createRowReader determines the appropriate reader based on file extension.
-// This is used by local filesystem's ReadAll() implementation.
-func createRowReader(f *os.File, logger datasource.Logger) (RowReader, error) {
-	if strings.HasSuffix(f.Name(), ".json") {
-		return NewJSONReader(f, logger)
-	}
-
-	// Default to text/CSV reader
-	return NewTextReader(f, logger), nil
 }

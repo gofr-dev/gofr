@@ -12,6 +12,30 @@ import (
 	"gofr.dev/pkg/gofr/datasource"
 )
 
+// Error variables for common file operations.
+var (
+	// errFileNotOpenForReading is returned when attempting to read from a file that wasn't opened for reading.
+	errFileNotOpenForReading = errors.New("file not open for reading")
+
+	// errFileNotOpenForWriting is returned when attempting to write to a file that wasn't opened for writing.
+	errFileNotOpenForWriting = errors.New("file not open for writing")
+
+	// errWriteAtNotSupported is returned when WriteAt is called on cloud storage.
+	errWriteAtNotSupported = errors.New("WriteAt not supported for cloud storage")
+
+	// errWriterNil is returned when NewWriter returns nil.
+	errWriterNil = errors.New("NewWriter returned nil")
+)
+
+// File permission constants.
+const (
+	// DefaultFileMode is the standard file permission (0644 = rw-r--r--).
+	DefaultFileMode os.FileMode = 0644
+
+	// DefaultDirMode is the standard directory permission (0755 = rwxr-xr-x).
+	DefaultDirMode os.FileMode = 0755
+)
+
 // CommonFile implements FileInfo for all providers, eliminating redundant metadata getters.
 // Providers instantiate this struct when returning file metadata.
 type CommonFile struct {
@@ -79,14 +103,14 @@ func NewCommonFileWriter(
 // Read implements io.Reader.
 func (f *CommonFile) Read(p []byte) (int, error) {
 	var msg string
+
 	st := StatusError
 	startTime := time.Now()
 
 	defer f.observe(OpRead, startTime, &st, &msg)
 
 	if f.body == nil {
-		msg = "file not open for reading"
-		return 0, errors.New(msg)
+		return 0, errFileNotOpenForReading
 	}
 
 	n, err := f.body.Read(p)
@@ -106,6 +130,7 @@ func (f *CommonFile) Read(p []byte) (int, error) {
 // ReadAt implements io.ReaderAt.
 func (f *CommonFile) ReadAt(p []byte, off int64) (int, error) {
 	var msg string
+
 	st := StatusError
 	startTime := time.Now()
 
@@ -127,7 +152,7 @@ func (f *CommonFile) ReadAt(p []byte, off int64) (int, error) {
 	defer reader.Close()
 
 	n, err := io.ReadFull(reader, p)
-	if err != nil && err != io.EOF && err != io.ErrUnexpectedEOF {
+	if err != nil && errors.Is(err, io.EOF) && !errors.Is(err, io.ErrUnexpectedEOF) {
 		msg = fmt.Sprintf("ReadAt failed: %v", err)
 		return n, err
 	}
@@ -141,20 +166,20 @@ func (f *CommonFile) ReadAt(p []byte, off int64) (int, error) {
 // Write implements io.Writer.
 func (f *CommonFile) Write(p []byte) (int, error) {
 	var msg string
+
 	st := StatusError
 	startTime := time.Now()
 
 	defer f.observe(OpWrite, startTime, &st, &msg)
 
 	if f.writer == nil {
-		msg = "file not open for writing"
-
-		return 0, fmt.Errorf("%s", msg)
+		return 0, errFileNotOpenForWriting
 	}
 
 	n, err := f.writer.Write(p)
 	if err != nil {
 		msg = fmt.Sprintf("write failed: %v", err)
+
 		return n, err
 	}
 
@@ -167,14 +192,14 @@ func (f *CommonFile) Write(p []byte) (int, error) {
 // WriteAt writes len(p) bytes from p to the file at offset off (supports local filesystem only).
 func (f *CommonFile) WriteAt(p []byte, off int64) (int, error) {
 	var msg string
+
 	st := StatusError
 	startTime := time.Now()
 
 	defer f.observe(OpWriteAt, startTime, &st, &msg)
 
 	if f.writer == nil {
-		msg = "file not opened for writing"
-		return 0, fmt.Errorf("%s", msg)
+		return 0, errFileNotOpenForWriting
 	}
 
 	// Check if writer is an *os.File (local filesystem)
@@ -193,13 +218,13 @@ func (f *CommonFile) WriteAt(p []byte, off int64) (int, error) {
 	}
 
 	// Cloud storage doesn't support WriteAt
-	msg = "WriteAt not supported for cloud storage"
-	return 0, fmt.Errorf("%s", msg)
+	return 0, errWriteAtNotSupported
 }
 
 // Seek implements io.Seeker.
 func (f *CommonFile) Seek(offset int64, whence int) (int64, error) {
 	var msg string
+
 	st := StatusError
 	startTime := time.Now()
 
@@ -240,6 +265,7 @@ func (f *CommonFile) Seek(offset int64, whence int) (int64, error) {
 // Close implements io.Closer.
 func (f *CommonFile) Close() error {
 	var msg string
+
 	st := StatusError
 	startTime := time.Now()
 
@@ -252,6 +278,7 @@ func (f *CommonFile) Close() error {
 		if err := f.body.Close(); err != nil {
 			errs = append(errs, fmt.Errorf("failed to close reader: %w", err))
 		}
+
 		f.body = nil
 	}
 
@@ -260,11 +287,13 @@ func (f *CommonFile) Close() error {
 		if err := f.writer.Close(); err != nil {
 			errs = append(errs, fmt.Errorf("failed to close writer: %w", err))
 		}
+
 		f.writer = nil
 	}
 
 	if len(errs) > 0 {
 		msg = fmt.Sprintf("close failed: %v", errs)
+
 		return errors.Join(errs...)
 	}
 
@@ -297,16 +326,17 @@ func (f *CommonFile) IsDir() bool {
 
 // Mode returns the file mode bits.
 func (f *CommonFile) Mode() os.FileMode {
-	if f.IsDir() {
-		return os.ModeDir
+	if f.isDir {
+		return DefaultDirMode
 	}
-	return 0644 // Standard file permissions
+
+	return DefaultFileMode
 }
 
 // ReadAll returns a reader for JSON/CSV files.
 func (f *CommonFile) ReadAll() (RowReader, error) {
 	if f.body == nil {
-		return nil, errors.New("file not open for reading")
+		return nil, errFileNotOpenForReading
 	}
 
 	if strings.HasSuffix(f.name, ".json") {

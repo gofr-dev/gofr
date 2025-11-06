@@ -75,7 +75,9 @@ func ObserveOperation(params *OperationObservability) {
 		Provider:  params.Provider,
 	}
 
-	params.Logger.Debug(log)
+	if params.Logger != nil {
+		params.Logger.Debug(log)
+	}
 
 	if params.Metrics != nil {
 		params.Metrics.RecordHistogram(

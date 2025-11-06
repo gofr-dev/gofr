@@ -9,6 +9,8 @@ import (
 	"gofr.dev/pkg/gofr/datasource"
 )
 
+const dirPerm = 0755
+
 // localProvider implements StorageProvider for local filesystem.
 type localProvider struct{}
 
@@ -62,7 +64,7 @@ func (*localProvider) NewRangeReader(_ context.Context, name string, offset, len
 
 func (*localProvider) NewWriter(_ context.Context, name string) io.WriteCloser {
 	// Create parent directories if needed
-	if err := os.MkdirAll(filepath.Dir(name), 0755); err != nil {
+	if err := os.MkdirAll(filepath.Dir(name), dirPerm); err != nil {
 		return &failWriter{err: err}
 	}
 
@@ -98,10 +100,11 @@ func (*localProvider) CopyObject(_ context.Context, src, dst string) error {
 	if err != nil {
 		return err
 	}
+
 	defer srcFile.Close()
 
-	if err := os.MkdirAll(filepath.Dir(dst), 0755); err != nil {
-		return err
+	if mkdirErr := os.MkdirAll(filepath.Dir(dst), DefaultDirMode); mkdirErr != nil {
+		return mkdirErr
 	}
 
 	dstFile, err := os.Create(dst)
@@ -111,6 +114,7 @@ func (*localProvider) CopyObject(_ context.Context, src, dst string) error {
 	defer dstFile.Close()
 
 	_, err = io.Copy(dstFile, srcFile)
+
 	return err
 }
 
@@ -121,6 +125,7 @@ func (*localProvider) ListObjects(_ context.Context, prefix string) ([]string, e
 	}
 
 	var objects []string
+
 	for _, entry := range entries {
 		if !entry.IsDir() {
 			objects = append(objects, entry.Name())
@@ -136,8 +141,10 @@ func (*localProvider) ListDir(_ context.Context, prefix string) ([]ObjectInfo, [
 		return nil, nil, err
 	}
 
-	var objects []ObjectInfo
-	var dirs []string
+	var (
+		objects []ObjectInfo
+		dirs    []string
+	)
 
 	for _, entry := range entries {
 		info, err := entry.Info()
@@ -192,7 +199,7 @@ type failWriter struct {
 	err error
 }
 
-func (f *failWriter) Write(p []byte) (int, error) {
+func (f *failWriter) Write([]byte) (int, error) {
 	return 0, f.err
 }
 

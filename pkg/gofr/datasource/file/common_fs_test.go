@@ -377,7 +377,7 @@ func TestCommonFileSystem_ChDir(t *testing.T) {
 	err := fs.ChDir("some/dir")
 
 	require.Error(t, err)
-	assert.Equal(t, ErrChDirNotSupported, err)
+	assert.Equal(t, errChDirNotSupported, err)
 }
 
 func TestCommonFileSystem_Getwd(t *testing.T) {
@@ -614,7 +614,7 @@ func TestCommonFileSystem_Mkdir(t *testing.T) {
 			name:        "empty directory name",
 			dirName:     "",
 			expectError: true,
-			expectedErr: ErrEmptyDirectoryName,
+			expectedErr: errEmptyDirectoryName,
 		},
 		{
 			name:        "write error",
