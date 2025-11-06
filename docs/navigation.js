@@ -111,7 +111,7 @@ export const navigation = [
             {
                 title: 'Key Value Store',
                 href: '/docs/advanced-guide/key-value-store',
-                desc: "Explore how to implement and manage a key-value store in your GoFr application for fast and efficient data retrieval. Supports BadgerDB, NATS-KV, and DynamoDB."
+                desc: "Explore how to implement and manage a key-value store in your GoFr application for fast and efficient data retrieval."
             },
             {
                 title: 'Dealing with SQL',
@@ -194,11 +194,6 @@ export const navigation = [
                 desc: "Learn how to connect to and interact with CockroachDB in GoFr."
             },
             {
-                title: "Couchbase",
-                href: "/docs/datasources/couchbase",
-                desc: "Learn how to connect to and interact with couchbase database in GoFr."
-            },
-            {
                 title: "DGraph",
                 href: "/docs/datasources/dgraph",
                 desc: "Learn how to connect to and interact with dgraph database in GoFr."
@@ -212,11 +207,6 @@ export const navigation = [
                 title: "OpenTSDB",
                 href: "/docs/datasources/opentsdb",
                 desc: "Learn how to connect to and interact with opentsdb database in GoFr."
-            },
-            {
-                title: "OracleDB",
-                href: "/docs/datasources/oracle",
-                desc: "Learn how to connect to and interact with oracle database in GoFr."
             },
             {
                 title: "ScyllaDB",
@@ -237,11 +227,6 @@ export const navigation = [
                 title: "Elasticsearch",
                 href: "/docs/datasources/elasticsearch",
                 desc: "Learn how to connect to and interact with elasticsearch in GoFr."
-            },
-            {
-                title: "InfluxDB",
-                href: "/docs/datasources/influxdb",
-                desc: "Learn how to connect to and interact with influxdb in GoFr."
             },
         ],
     },
