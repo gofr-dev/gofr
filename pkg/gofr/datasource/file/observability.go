@@ -14,35 +14,25 @@ const (
 
 // Operation constants for standardization across all file providers.
 const (
-	OpConnect       = "CONNECT"
-	OpCreate        = "CREATE FILE"
-	OpOpen          = "OPEN FILE"
-	OpRead          = "READ"
-	OpWrite         = "WRITE"
-	OpClose         = "CLOSE"
-	OpSeek          = "SEEK"
-	OpReadAt        = "READ_AT"
-	OpWriteAt       = "WRITE_AT"
-	OpRemove        = "REMOVE FILE"
-	OpRename        = "RENAME"
-	OpMkdir         = "MKDIR"
-	OpMkdirAll      = "MKDIRALL"
-	OpRemoveAll     = "REMOVEALL"
-	OpReadDir       = "READDIR"
-	OpStat          = "STAT"
-	OpChDir         = "CHDIR"
-	OpGetwd         = "GETWD"
-	OpReadAll       = "READALL"
-	OpJSONReader    = "JSON READER"
-	OpTextCSVReader = "TEXT/CSV READER"
-
-	// FileInfo operations.
-	OpGetName  = "GET NAME"
-	OpFileSize = "FILE/DIR SIZE"
-	OpLastMod  = "LAST MODIFIED"
-	OpMode     = "MODE"
-	OpIsDir    = "IS DIR"
-	OpSys      = "SYS"
+	OpConnect   = "CONNECT"
+	OpCreate    = "CREATE"
+	OpOpen      = "OPEN"
+	OpOpenFile  = "OPEN_FILE"
+	OpRemove    = "REMOVE"
+	OpRename    = "RENAME"
+	OpMkdir     = "MKDIR"
+	OpMkdirAll  = "MKDIR_ALL"
+	OpRemoveAll = "REMOVE_ALL"
+	OpReadDir   = "READ_DIR"
+	OpStat      = "STAT"
+	OpChDir     = "CHDIR"
+	OpGetwd     = "GETWD"
+	OpRead      = "READ"
+	OpReadAt    = "READ_AT"
+	OpWrite     = "WRITE"
+	OpWriteAt   = "WRITE_AT"
+	OpSeek      = "SEEK"
+	OpClose     = "CLOSE"
 )
 
 // StorageMetrics interface that all storage providers should use.
@@ -87,12 +77,14 @@ func ObserveOperation(params *OperationObservability) {
 
 	params.Logger.Debug(log)
 
-	params.Metrics.RecordHistogram(
-		params.Context,
-		AppFileStats,
-		float64(duration),
-		"type", params.Operation,
-		"status", cleanString(params.Status),
-		"provider", params.Provider,
-	)
+	if params.Metrics != nil {
+		params.Metrics.RecordHistogram(
+			params.Context,
+			AppFileStats,
+			float64(duration),
+			"type", params.Operation,
+			"status", cleanString(params.Status),
+			"provider", params.Provider,
+		)
+	}
 }

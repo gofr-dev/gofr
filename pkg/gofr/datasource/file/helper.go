@@ -3,11 +3,34 @@ package file
 import (
 	"errors"
 	"fmt"
+	"io"
 	"path"
 	"strings"
 
 	"google.golang.org/api/googleapi"
 )
+
+// ValidateSeekOffset validates and calculates the new offset for Seek operations.
+func ValidateSeekOffset(whence int, offset, currentPos, length int64) (int64, error) {
+	var newOffset int64
+
+	switch whence {
+	case io.SeekStart:
+		newOffset = offset
+	case io.SeekEnd:
+		newOffset = length + offset
+	case io.SeekCurrent:
+		newOffset = currentPos + offset
+	default:
+		return 0, ErrOutOfRange
+	}
+
+	if newOffset < 0 || newOffset > length {
+		return 0, fmt.Errorf("%w: offset %d out of bounds [0, %d]", ErrOutOfRange, newOffset, length)
+	}
+
+	return newOffset, nil
+}
 
 // IsAlreadyExistsError checks if an error indicates an object already exists.
 // Handles provider-specific error codes (e.g., GCS 409/412, S3 ResourceExists).

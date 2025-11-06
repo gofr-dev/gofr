@@ -1,6 +1,7 @@
 package file
 
 import (
+	"context"
 	"errors"
 	"io"
 	"os"
@@ -17,6 +18,13 @@ type File interface {
 	io.WriterAt
 
 	ReadAll() (RowReader, error)
+
+	Name() string
+	Size() int64
+	ModTime() time.Time
+	IsDir() bool
+	Mode() os.FileMode
+	Sys() any
 }
 
 // FileInfo : Any simulated or real file should implement this interface.
@@ -33,6 +41,33 @@ type FileInfo interface {
 type RowReader interface {
 	Next() bool
 	Scan(any) error
+}
+
+// StorageProvider abstracts low-level storage operations (stateless).
+// This is the interface that each provider (GCS, S3, FTP, SFTP) must implement.
+type StorageProvider interface {
+	// Reader/Writer operations
+	NewReader(ctx context.Context, name string) (io.ReadCloser, error)
+	NewRangeReader(ctx context.Context, name string, offset, length int64) (io.ReadCloser, error)
+	NewWriter(ctx context.Context, name string) io.WriteCloser
+
+	// Object operations
+	DeleteObject(ctx context.Context, name string) error
+	CopyObject(ctx context.Context, src, dst string) error
+	StatObject(ctx context.Context, name string) (*ObjectInfo, error)
+
+	// Listing operations
+	ListObjects(ctx context.Context, prefix string) ([]string, error)
+	ListDir(ctx context.Context, prefix string) (objects []ObjectInfo, prefixes []string, err error)
+}
+
+// ObjectInfo represents cloud storage object metadata.
+type ObjectInfo struct {
+	Name         string
+	Size         int64
+	ContentType  string
+	LastModified time.Time
+	IsDir        bool
 }
 
 // FileSystem : Any simulated or real filesystem should implement this interface.
@@ -82,22 +117,6 @@ type FileSystem interface {
 	Getwd() (string, error)
 }
 
-var (
-	ErrFileClosed        = errors.New("File is closed")
-	ErrOutOfRange        = errors.New("out of range")
-	ErrTooLarge          = errors.New("too large")
-	ErrFileNotFound      = os.ErrNotExist
-	ErrFileExists        = os.ErrExist
-	ErrDestinationExists = os.ErrExist
-)
-
-const (
-	StatusSuccess   = "SUCCESS"
-	StatusError     = "ERROR"
-	MsgWriterClosed = "Writer closed successfully"
-	MsgReaderClosed = "Reader closed successfully"
-)
-
 // FileSystemProvider : Any simulated or real filesystem provider should implement this interface.
 //
 //nolint:revive // let's consider file.FileSystemProvider doesn't sound repetitive
@@ -113,3 +132,15 @@ type FileSystemProvider interface {
 	// Connect establishes a connection to FileSystem and registers metrics using the provided configuration when the client was Created.
 	Connect()
 }
+
+var (
+	ErrOutOfRange   = errors.New("out of range")
+	ErrFileNotFound = os.ErrNotExist
+)
+
+const (
+	StatusSuccess   = "SUCCESS"
+	StatusError     = "ERROR"
+	MsgWriterClosed = "Writer closed successfully"
+	MsgReaderClosed = "Reader closed successfully"
+)
