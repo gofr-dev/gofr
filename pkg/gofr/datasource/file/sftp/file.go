@@ -6,6 +6,7 @@ import (
 	"errors"
 	"os"
 	"strings"
+	"time"
 
 	"github.com/pkg/sftp"
 	"gofr.dev/pkg/gofr/datasource/file"
@@ -16,6 +17,26 @@ var errNotStringPointer = errors.New("input should be a pointer to a string")
 type sftpFile struct {
 	*sftp.File
 	logger Logger
+}
+
+func (f sftpFile) Size() int64 {
+	return 0
+}
+
+func (f sftpFile) ModTime() time.Time {
+	return time.Unix(0, 0)
+}
+
+func (f sftpFile) IsDir() bool {
+	return false
+}
+
+func (f sftpFile) Mode() os.FileMode {
+	return f.Mode()
+}
+
+func (f sftpFile) Sys() any {
+	return nil
 }
 
 type textReader struct {

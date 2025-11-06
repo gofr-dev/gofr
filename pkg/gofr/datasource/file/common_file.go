@@ -257,7 +257,7 @@ func (f *CommonFile) Seek(offset int64, whence int) (int64, error) {
 	f.currentPos = newPos
 
 	st = StatusSuccess
-	msg = fmt.Sprintf("Seeked to position %d in %q", newPos, f.name)
+	msg = fmt.Sprintf("Sought to position %d in %q", newPos, f.name)
 
 	return newPos, nil
 }

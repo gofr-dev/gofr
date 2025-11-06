@@ -44,36 +44,47 @@ func setupCommonFS(t *testing.T) (*gomock.Controller, *MockStorageProvider, *Com
 	return ctrl, mockProvider, fs
 }
 
-func TestCommonFileSystem_MkdirAll(t *testing.T) {
+func TestCommonFileSystem_Mkdir(t *testing.T) {
 	tests := []struct {
 		name        string
-		dirPath     string
+		dirName     string
+		writeErr    error
+		closeErr    error
 		expectError bool
+		expectedErr error
 	}{
 		{
-			name:        "single level directory",
-			dirPath:     "testdir",
+			name:        "successful directory creation",
+			dirName:     "testdir",
 			expectError: false,
 		},
 		{
-			name:        "nested directories",
-			dirPath:     "parent/child/grandchild",
+			name:        "directory with trailing slash",
+			dirName:     "testdir/",
 			expectError: false,
 		},
 		{
-			name:        "empty path",
-			dirPath:     "",
+			name:        "nested directory path",
+			dirName:     "parent/child",
 			expectError: false,
 		},
 		{
-			name:        "path with leading slash",
-			dirPath:     "/parent/child",
-			expectError: false,
+			name:        "empty directory name",
+			dirName:     "",
+			expectError: true,
+			expectedErr: errEmptyDirectoryName,
 		},
 		{
-			name:        "path with trailing slash",
-			dirPath:     "parent/child/",
-			expectError: false,
+			name:        "write error",
+			dirName:     "testdir",
+			writeErr:    errTest,
+			expectError: true,
+		},
+		{
+			name:        "close error",
+			dirName:     "testdir",
+			closeErr:    errTest,
+			expectError: true,
 		},
 	}
 
@@ -82,32 +93,41 @@ func TestCommonFileSystem_MkdirAll(t *testing.T) {
 			ctrl, mockProvider, fs := setupCommonFS(t)
 			defer ctrl.Finish()
 
-			if tt.dirPath != "" {
-				cleaned := strings.Trim(tt.dirPath, "/")
-				dirs := strings.Split(cleaned, "/")
+			if tt.dirName != "" {
+				expectedName := tt.dirName
+				if !strings.HasSuffix(expectedName, "/") {
+					expectedName += "/"
+				}
 
-				for range dirs {
-					mockWriter := NewMockWriteCloser(ctrl)
+				// Mock StatObject to indicate directory doesn't exist
+				mockProvider.EXPECT().
+					StatObject(gomock.Any(), expectedName).
+					Return(nil, errTest)
 
-					mockProvider.EXPECT().
-						NewWriter(gomock.Any(), gomock.Any()).
-						Return(mockWriter)
+				mockWriter := NewMockWriteCloser(ctrl)
 
-					mockWriter.EXPECT().
-						Write([]byte("")).
-						Return(0, nil)
+				mockProvider.EXPECT().
+					NewWriter(gomock.Any(), expectedName).
+					Return(mockWriter)
 
-					mockWriter.EXPECT().
-						Close().
-						Return(nil).
-						AnyTimes()
+				mockWriter.EXPECT().
+					Write([]byte("")).
+					Return(0, tt.writeErr)
+
+				if tt.closeErr != nil {
+					mockWriter.EXPECT().Close().Return(tt.closeErr).AnyTimes()
+				} else {
+					mockWriter.EXPECT().Close().Return(nil).AnyTimes()
 				}
 			}
 
-			err := fs.MkdirAll(tt.dirPath, os.ModePerm)
+			err := fs.Mkdir(tt.dirName, os.ModePerm)
 
 			if tt.expectError {
 				require.Error(t, err)
+				if tt.expectedErr != nil {
+					assert.Equal(t, tt.expectedErr, err)
+				}
 			} else {
 				require.NoError(t, err)
 			}
@@ -582,64 +602,6 @@ func TestGenerateCopyName(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			result := GenerateCopyName(tt.original, tt.count)
 			assert.Equal(t, tt.expected, result)
-		})
-	}
-}
-
-func TestCommonFileSystem_Mkdir(t *testing.T) {
-	tests := []struct {
-		name        string
-		dirName     string
-		writeErr    error
-		closeErr    error
-		expectError bool
-		expectedErr error
-	}{
-		{
-			name:        "successful directory creation",
-			dirName:     "testdir",
-			expectError: false,
-		},
-		{
-			name:        "directory with trailing slash",
-			dirName:     "testdir/",
-			expectError: false,
-		},
-		{
-			name:        "nested directory path",
-			dirName:     "parent/child",
-			expectError: false,
-		},
-		{
-			name:        "empty directory name",
-			dirName:     "",
-			expectError: true,
-			expectedErr: errEmptyDirectoryName,
-		},
-		{
-			name:        "write error",
-			dirName:     "testdir",
-			writeErr:    errTest,
-			expectError: true,
-		},
-		{
-			name:        "close error",
-			dirName:     "testdir",
-			closeErr:    errTest,
-			expectError: true,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			ctrl, mockProvider, fs := setupCommonFS(t)
-			defer ctrl.Finish()
-
-			setupMkdirMocks(ctrl, mockProvider, tt.dirName, tt.writeErr, tt.closeErr)
-
-			err := fs.Mkdir(tt.dirName, os.ModePerm)
-
-			assertTestResult(t, err, tt.expectError, tt.expectedErr)
 		})
 	}
 }

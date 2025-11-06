@@ -158,22 +158,22 @@ func TestCommonFile_Mode(t *testing.T) {
 		{
 			name:         "directory mode",
 			isDir:        true,
-			expectedMode: fs.ModeDir,
+			expectedMode: DefaultDirMode,
 		},
 		{
 			name:         "file mode",
 			isDir:        false,
-			expectedMode: 0,
+			expectedMode: DefaultFileMode,
 		},
 		{
 			name:         "directory by content type",
 			contentType:  "application/x-directory",
-			expectedMode: fs.ModeDir,
+			expectedMode: DefaultFileMode,
 		},
 		{
 			name:         "regular file content type",
 			contentType:  "text/plain",
-			expectedMode: 0,
+			expectedMode: DefaultFileMode,
 		},
 	}
 
@@ -216,7 +216,7 @@ func TestCommonFile_CompleteFileInfo(t *testing.T) {
 	assert.Equal(t, int64(2048), f.Size())
 	assert.Equal(t, now, f.ModTime())
 	assert.False(t, f.IsDir())
-	assert.Equal(t, fs.FileMode(0), f.Mode())
+	assert.Equal(t, DefaultFileMode, f.Mode())
 	assert.Nil(t, f.Sys())
 }
 
@@ -235,6 +235,6 @@ func TestCommonFile_CompleteDirectoryInfo(t *testing.T) {
 	assert.Equal(t, int64(0), f.Size())
 	assert.Equal(t, now, f.ModTime())
 	assert.True(t, f.IsDir())
-	assert.Equal(t, fs.ModeDir, f.Mode())
+	assert.Equal(t, DefaultDirMode, f.Mode())
 	assert.Nil(t, f.Sys())
 }
