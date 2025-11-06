@@ -7,12 +7,6 @@ export const navigation = [
                 title: 'Hello Server',
                 href: '/docs/quick-start/introduction' ,
                 desc: "Getting started with how to write a server using GoFR with basic examples and explanations. Boost your productivity with efficient coding practices and learn to build scalable applications quickly."},
-
-            {
-                title: 'CLI Applications',
-                href: '/docs/quick-start/cli',
-                desc: "Learn to build powerful command-line interface (CLI) applications using GoFr's app.NewCMD(), offering a robust framework for command-line tools."
-            },
                
             {
                 title: 'Configuration',
@@ -160,10 +154,15 @@ export const navigation = [
                 desc: "Discover GoFr auto-enables pprof profiling by leveraging its built-in configurations."
             },
             {
-                title: 'OIDC Authentication',
-                href: '/docs/advanced-guide/oidc-authentication',
-                desc: 'Learn how to integrate OpenID Connect (OIDC) authentication using GoFR. Covers setup, configuration, and usage for secure authentication flows.'
-            }
+                title: 'Adding Synchronous Startup Hooks',
+                href: '/docs/advanced-guide/startup-hooks',
+                desc: "Learn how to seed a database, warm up a cache, or perform other critical setup procedures, synchronously before starting your application."
+            },
+            {
+                title: 'Building CLI Applications',
+                href: '/docs/advanced-guide/building-cli-applications',
+                desc: "Learn to build powerful command-line interface (CLI) applications using GoFr's app.NewCMD(), offering a robust framework for command-line tools."
+            },
         ],
     },
     {
