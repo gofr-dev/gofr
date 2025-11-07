@@ -183,7 +183,7 @@ type fileSystem struct {
 	*localFileSystem
 }
 
-// New initializes local filesystem with logger (backward compatible wrapper)
+// New initializes local filesystem with logger (backward compatible wrapper).
 func New(logger datasource.Logger) FileSystem {
 	provider := &localProvider{}
 
