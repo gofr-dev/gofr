@@ -2,6 +2,7 @@ package file
 
 import (
 	"bufio"
+	"bytes"
 	"encoding/json"
 	"errors"
 	"io"
@@ -9,7 +10,10 @@ import (
 	"gofr.dev/pkg/gofr/datasource"
 )
 
-var errNotPointer = errors.New("input should be a pointer to a string")
+var (
+	errNotPointer  = errors.New("input should be a pointer to a string")
+	errInvalidJSON = errors.New("invalid JSON")
+)
 
 // textReader reads text/CSV files line by line.
 type textReader struct {
@@ -19,10 +23,9 @@ type textReader struct {
 
 // jsonReader reads JSON files (array or single object).
 type jsonReader struct {
-	decoder    *json.Decoder
-	firstToken json.Token
-	isArray    bool
-	consumed   bool
+	decoder  *json.Decoder
+	isArray  bool
+	consumed bool
 }
 
 // NewTextReader creates a RowReader for text/CSV files.
@@ -63,29 +66,49 @@ func (t *textReader) Scan(i any) error {
 
 // NewJSONReader creates a RowReader for JSON files (auto-detects array vs object).
 func NewJSONReader(r io.Reader, logger datasource.Logger) (RowReader, error) {
-	decoder := json.NewDecoder(r)
-
-	// Read first token to determine structure
-	token, err := decoder.Token()
+	// Read entire payload so we can validate and then create a fresh decoder.
+	b, err := io.ReadAll(r)
 	if err != nil {
 		if logger != nil {
-			logger.Errorf("failed to read JSON structure: %v", err)
+			logger.Errorf("failed to read JSON input: %v", err)
 		}
 
 		return nil, err
 	}
 
-	// Check if it's a JSON array
-	isArray := false
-	if d, ok := token.(json.Delim); ok && d == '[' {
-		isArray = true
+	trimmed := bytes.TrimLeft(b, " \t\r\n")
+	if len(trimmed) == 0 {
+		return nil, io.EOF
+	}
+
+	// Validate JSON to detect invalid input early.
+	if !json.Valid(trimmed) {
+		if logger != nil {
+			logger.Errorf("invalid JSON input")
+		}
+
+		return nil, errInvalidJSON
+	}
+
+	isArray := trimmed[0] == '['
+	decoder := json.NewDecoder(bytes.NewReader(trimmed))
+
+	// If array, consume the opening '[' so decoder.More() works properly.
+	if isArray {
+		_, err := decoder.Token()
+		if err != nil {
+			if logger != nil {
+				logger.Errorf("failed to read JSON array token: %v", err)
+			}
+
+			return nil, err
+		}
 	}
 
 	return &jsonReader{
-		decoder:    decoder,
-		firstToken: token,
-		isArray:    isArray,
-		consumed:   false,
+		decoder:  decoder,
+		isArray:  isArray,
+		consumed: false,
 	}, nil
 }
 

@@ -30,8 +30,6 @@ var (
 
 const (
 	contentTypeDirectory = "application/x-directory"
-	dirPermissions       = 0755
-	filePermissions      = 0644
 )
 
 // storageAdapter adapts GCS client to implement file.StorageProvider.
