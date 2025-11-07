@@ -89,61 +89,6 @@ func isAdministrativeOperation(query string) bool {
 		strings.Contains(query, "DATABASE")
 }
 
-// processResults processes and extracts meaningful data from query results.
-func (c *Client) processResults(query string, results *[]QueryResult) ([]any, error) {
-	var resp []any
-
-	if len(*results) > 0 {
-		resp = make([]any, 0, len(*results))
-	}
-
-	for _, r := range *results {
-		if err := c.processResult(query, r, &resp); err != nil {
-			return nil, err
-		}
-	}
-
-	return resp, nil
-}
-
-// processResult handles individual query result.
-func (c *Client) processResult(query string, r QueryResult, resp *[]any) error {
-	if r.Status != statusOK {
-		return c.handleNonOKStatus(query, r, resp)
-	}
-
-	return c.handleOKStatus(r, resp)
-}
-
-// handleNonOKStatus handles non-OK status results.
-func (c *Client) handleNonOKStatus(query string, r QueryResult, resp *[]any) error {
-	if !isAdministrativeOperation(query) {
-		c.logger.Errorf("query result error: %v", r.Result)
-		return nil
-	}
-
-	handled, err := c.handleAdminError(r.Result, resp)
-	if err != nil {
-		return err
-	}
-
-	if handled {
-		return nil
-	}
-
-	return c.processResultRecords(r.Result, resp)
-}
-
-// handleOKStatus handles OK status results.
-func (c *Client) handleOKStatus(r QueryResult, resp *[]any) error {
-	if isCustomNil(r.Result) {
-		*resp = append(*resp, true)
-		return nil
-	}
-
-	return c.processResultRecords(r.Result, resp)
-}
-
 // handleAdminError handles administrative operation errors.
 func (*Client) handleAdminError(result any, resp *[]any) (bool, error) {
 	if strErr, ok := result.(string); ok {

@@ -4,17 +4,11 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"log/slog"
 	"math"
-	"net/url"
-	"os"
 	"strings"
 	"time"
 
 	"github.com/surrealdb/surrealdb.go"
-	"github.com/surrealdb/surrealdb.go/pkg/connection"
-	"github.com/surrealdb/surrealdb.go/pkg/constants"
-	"github.com/surrealdb/surrealdb.go/pkg/logger"
 	"github.com/surrealdb/surrealdb.go/pkg/models"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/trace"
@@ -60,7 +54,7 @@ type Config struct {
 // Client represents a client to interact with SurrealDB.
 type Client struct {
 	config  *Config
-	db      Connection
+	db      *surrealdb.DB
 	logger  Logger
 	metrics Metrics
 	tracer  trace.Tracer
@@ -94,39 +88,15 @@ func (c *Client) UseTracer(tracer any) {
 	}
 }
 
-// newDB creates a new SurrealDB client.
-func newDB(connectionURL string) (con connection.Connection, err error) {
-	u, err := url.ParseRequestURI(connectionURL)
+// newDB creates a new SurrealDB client using v1.0.0 API.
+func newDB(ctx context.Context, connectionURL string) (*surrealdb.DB, error) {
+	// Use the new FromEndpointURLString which handles both HTTP and WebSocket connections
+	db, err := surrealdb.FromEndpointURLString(ctx, connectionURL)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to create SurrealDB client: %w", err)
 	}
 
-	scheme := u.Scheme
-
-	newParams := connection.NewConnectionParams{
-		Marshaler:   models.CborMarshaler{},
-		Unmarshaler: models.CborUnmarshaler{},
-		BaseURL:     fmt.Sprintf("%s://%s", u.Scheme, u.Host),
-		Logger:      logger.New(slog.NewTextHandler(os.Stdout, nil)),
-	}
-
-	switch scheme {
-	case schemeHTTP, schemeHTTPS:
-		con = connection.NewHTTPConnection(newParams)
-	case schemeWS, schemeWSS:
-		con = connection.NewWebSocketConnection(newParams)
-	case schemeMemory, schemeMem, schemeSurrealkv:
-		return nil, fmt.Errorf("%w", errEmbeddedDBNotEnabled)
-	default:
-		return nil, fmt.Errorf("%w", errInvalidConnectionURL)
-	}
-
-	err = con.Connect()
-	if err != nil {
-		return nil, err
-	}
-
-	return con, nil
+	return db, nil
 }
 
 // Connect establishes a connection to the SurrealDB database.
@@ -140,17 +110,21 @@ func (c *Client) Connect() {
 
 	endpoint := c.buildEndpoint()
 
-	err := c.connectToDatabase(endpoint)
+	// Create context with timeout for connection
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	err := c.connectToDatabase(ctx, endpoint)
 	if err != nil {
 		return
 	}
 
-	err = c.setupNamespaceAndDatabase()
+	err = c.setupNamespaceAndDatabase(ctx)
 	if err != nil {
 		return
 	}
 
-	err = c.authenticateCredentials()
+	err = c.authenticateCredentials(ctx)
 	if err != nil {
 		return
 	}
@@ -169,12 +143,12 @@ func (c *Client) buildEndpoint() string {
 }
 
 // connectToDatabase handles the connection to SurrealDB and returns an error if failed.
-func (c *Client) connectToDatabase(endpoint string) error {
+func (c *Client) connectToDatabase(ctx context.Context, endpoint string) error {
 	c.logger.Debugf("connecting to SurrealDB at %s", endpoint)
 
 	var err error
 
-	c.db, err = newDB(endpoint)
+	c.db, err = newDB(ctx, endpoint)
 	if err != nil {
 		c.logError("failed to connect to SurrealDB", err)
 		return err
@@ -189,8 +163,8 @@ func (c *Client) connectToDatabase(endpoint string) error {
 }
 
 // setupNamespaceAndDatabase sets the namespace and database for SurrealDB.
-func (c *Client) setupNamespaceAndDatabase() error {
-	err := c.db.Use(c.config.Namespace, c.config.Database)
+func (c *Client) setupNamespaceAndDatabase(ctx context.Context) error {
+	err := c.db.Use(ctx, c.config.Namespace, c.config.Database)
 	if err != nil {
 		c.logError("unable to set the namespace and database for SurrealDB", err)
 		return err
@@ -199,22 +173,18 @@ func (c *Client) setupNamespaceAndDatabase() error {
 	return nil
 }
 
-// SignIn is a helper method for signing in a user.
-func (c *Client) signIn(authData *surrealdb.Auth) (string, error) {
-	var token connection.RPCResponse[string]
-	if err := c.db.Send(&token, "signin", authData); err != nil {
+// signIn is a helper method for signing in a user using v1.0.0 API.
+func (c *Client) signIn(ctx context.Context, authData *surrealdb.Auth) (string, error) {
+	token, err := c.db.SignIn(ctx, authData)
+	if err != nil {
 		return "", err
 	}
 
-	if err := c.db.Let(constants.AuthTokenKey, token.Result); err != nil {
-		return "", err
-	}
-
-	return *token.Result, nil
+	return token, nil
 }
 
-// authenticate handles the authentication process if credentials are provided.
-func (c *Client) authenticateCredentials() error {
+// authenticateCredentials handles the authentication process if credentials are provided.
+func (c *Client) authenticateCredentials(ctx context.Context) error {
 	if c.config.Username == "" && c.config.Password == "" {
 		return nil
 	}
@@ -223,7 +193,7 @@ func (c *Client) authenticateCredentials() error {
 		return errInvalidCredentialsConfig
 	}
 
-	_, err := c.signIn(&surrealdb.Auth{
+	_, err := c.signIn(ctx, &surrealdb.Auth{
 		Username: c.config.Username,
 		Password: c.config.Password,
 	})
@@ -250,41 +220,21 @@ func (c *Client) logError(message string, err error) {
 }
 
 // useNamespace switches the active namespace for the database connection.
-func (c *Client) useNamespace(ns string) error {
+func (c *Client) useNamespace(ctx context.Context, ns string) error {
 	if c.db == nil {
 		return errNotConnected
 	}
 
-	return c.db.Use(ns, "")
+	return c.db.Use(ctx, ns, "")
 }
 
 // useDatabase switches the active database for the connection.
-func (c *Client) useDatabase(db string) error {
+func (c *Client) useDatabase(ctx context.Context, db string) error {
 	if c.db == nil {
 		return errNotConnected
 	}
 
-	return c.db.Use("", db)
-}
-
-type DBResponse struct {
-	ID     any                  `json:"id" msgpack:"id"`
-	Error  *connection.RPCError `json:"error,omitempty" msgpack:"error,omitempty"`
-	Result any
-}
-
-// QueryResponse defines the structure of the query response.
-type QueryResponse struct {
-	ID     any                  `json:"id" msgpack:"id"`
-	Error  *connection.RPCError `json:"error,omitempty" msgpack:"error,omitempty"`
-	Result *[]QueryResult       `json:"result,omitempty" msgpack:"result,omitempty"`
-}
-
-// QueryResult represents each query result from SurrealDB.
-type QueryResult struct {
-	Status string `json:"status"`
-	Time   string `json:"time"`
-	Result any    `json:"result"`
+	return c.db.Use(ctx, "", db)
 }
 
 // Query executes a query on the SurrealDB instance.
@@ -325,16 +275,51 @@ func (c *Client) Query(ctx context.Context, query string, vars map[string]any) (
 		Span:          span,
 	}, startTime)
 
-	var res QueryResponse
-	if err := c.db.Send(&res, "query", query, vars); err != nil {
+	// Use the new v1.0.0 Query function
+	results, err := surrealdb.Query[any](ctx, c.db, query, vars)
+	if err != nil {
+		return nil, fmt.Errorf("query failed: %w", err)
+	}
+
+	if results == nil || len(*results) == 0 {
 		return nil, errNoResult
 	}
 
-	if res.Result == nil {
-		return nil, errNoResult
+	return c.processQueryResults(query, *results)
+}
+
+// processQueryResults processes query results from v1.0.0 API format.
+func (c *Client) processQueryResults(query string, results []surrealdb.QueryResult[any]) ([]any, error) {
+	var resp []any
+
+	for _, result := range results {
+		if result.Error != nil {
+			c.logger.Errorf("query error: %v", result.Error.Message)
+			if !isAdministrativeOperation(query) {
+				return nil, fmt.Errorf("query error: %s", result.Error.Message)
+			}
+			continue
+		}
+
+		if result.Result != nil {
+			if isCustomNil(result.Result) {
+				resp = append(resp, true)
+			} else if resultList, ok := result.Result.([]any); ok {
+				for _, record := range resultList {
+					extracted, err := c.extractRecord(record)
+					if err != nil {
+						c.logger.Errorf("failed to extract record: %v", err)
+						continue
+					}
+					resp = append(resp, extracted)
+				}
+			} else {
+				resp = append(resp, result.Result)
+			}
+		}
 	}
 
-	return c.processResults(query, res.Result)
+	return resp, nil
 }
 
 // extractRecord extracts and processes a single record into a map[string]any}.
@@ -458,33 +443,17 @@ func (c *Client) Select(ctx context.Context, table string) ([]map[string]any, er
 		Span:          span,
 	}, startTime)
 
-	var res DBResponse
-	if err := c.db.Send(&res, "select", table); err != nil {
+	// Use the new v1.0.0 Select function
+	results, err := surrealdb.Select[[]map[string]any](ctx, c.db, models.Table(table))
+	if err != nil {
 		return nil, fmt.Errorf("select operation failed: %w", err)
 	}
 
-	return c.processSelectResults(res.Result)
-}
-
-// processSelectResults handles the conversion of raw database results into a structured format.
-func (c *Client) processSelectResults(result any) ([]map[string]any, error) {
-	records, ok := result.([]any)
-	if !ok {
-		return nil, errUnexpectedResult
+	if results == nil {
+		return []map[string]any{}, nil
 	}
 
-	processed := make([]map[string]any, 0, len(records))
-
-	for _, record := range records {
-		extracted, err := c.extractRecord(record)
-		if err != nil {
-			return nil, fmt.Errorf("failed to process record: %w", err)
-		}
-
-		processed = append(processed, extracted)
-	}
-
-	return processed, nil
+	return *results, nil
 }
 
 // Create creates a new record into the specified table in the database.
@@ -509,22 +478,30 @@ func (c *Client) Create(ctx context.Context, table string, data any) (map[string
 		Span:          span,
 	}, startTime)
 
-	var res DBResponse
-	if err := c.db.Send(&res, "create", table, data); err != nil {
+	// Use the new v1.0.0 Create function
+	result, err := surrealdb.Create[map[string]any](ctx, c.db, models.Table(table), data)
+	if err != nil {
 		return nil, fmt.Errorf("create operation failed: %w", err)
 	}
 
-	return c.extractRecord(res.Result)
+	if result == nil {
+		return nil, errNoRecord
+	}
+
+	return *result, nil
 }
 
 // Update modifies an existing record in the specified table using a generic MERGE update.
-// It constructs an update query with a RETURN * clause so that the updated record is returned.
 func (c *Client) Update(ctx context.Context, table, id string, data any) (any, error) {
 	if c.db == nil {
 		return nil, errNotConnected
 	}
 
-	updateQuery := fmt.Sprintf("UPDATE %s:%s MERGE $data RETURN *", table, id)
+	recordID := models.RecordID{
+		Table: table,
+		ID:    id,
+	}
+
 	span := c.addTrace(ctx, "Update", fmt.Sprintf("%s:%s", table, id))
 
 	logMessage := fmt.Sprintf("Updating record with ID %q in table %q", id, table)
@@ -540,97 +517,17 @@ func (c *Client) Update(ctx context.Context, table, id string, data any) (any, e
 		Span:          span,
 	}, startTime)
 
-	var updateResult DBResponse
-	if err := c.db.Send(&updateResult, "query", updateQuery, map[string]any{"data": data}); err != nil {
+	// Use the new v1.0.0 Update function
+	result, err := surrealdb.Update[map[string]any](ctx, c.db, recordID, data)
+	if err != nil {
 		return nil, fmt.Errorf("update operation failed: %w", err)
 	}
 
-	if updateResult.Error != nil {
-		return nil, fmt.Errorf("%w: %s", errSurrealDBUpdate, updateResult.Error.Message)
-	}
-
-	// Handle the nested response structure
-	return c.processUpdateResult(updateResult.Result)
-}
-
-// processUpdateResult handles the processing of update operation results.
-func (c *Client) processUpdateResult(result any) (any, error) {
-	resultSlice, err := validateResultSlice(result)
-	if err != nil {
-		return nil, err
-	}
-
-	responseItem, err := validateResponseItem(resultSlice[0])
-	if err != nil {
-		return nil, err
-	}
-
-	resultData, err := validateAndExtractResult(responseItem)
-	if err != nil {
-		return nil, err
-	}
-
-	return c.processResultData(resultData)
-}
-
-// validateResultSlice validates the initial result slice.
-func validateResultSlice(result any) ([]any, error) {
-	resultSlice, ok := result.([]any)
-	if !ok {
-		return nil, fmt.Errorf("%w: expected []any, got %T", errUnexpectedResult, result)
-	}
-
-	if len(resultSlice) == 0 {
+	if result == nil {
 		return nil, errNoRecord
 	}
 
-	return resultSlice, nil
-}
-
-// validateResponseItem validates the response item and converts it to a string map.
-func validateResponseItem(item any) (map[string]any, error) {
-	responseItem, ok := item.(map[any]any)
-	if !ok {
-		return nil, fmt.Errorf("%w: expected map[any]any in response", errUnexpectedResult)
-	}
-
-	response := make(map[string]any)
-
-	for k, v := range responseItem {
-		if keyStr, ok := k.(string); ok {
-			response[keyStr] = v
-		}
-	}
-
-	if status, ok := response["status"].(string); !ok || status != statusOK {
-		return nil, fmt.Errorf("%w: %v", errQueryFailed, response["status"])
-	}
-
-	return response, nil
-}
-
-// validateAndExtractResult validates and extracts the result data.
-func validateAndExtractResult(response map[string]any) (any, error) {
-	resultData, exists := response["result"]
-	if !exists {
-		return nil, errNoRecord
-	}
-
-	return resultData, nil
-}
-
-// processResultData handles both single record and array responses.
-func (c *Client) processResultData(resultData any) (any, error) {
-	switch data := resultData.(type) {
-	case []any:
-		if len(data) == 0 {
-			return nil, errNoRecord
-		}
-
-		return c.extractRecord(data[0])
-	default:
-		return c.extractRecord(data)
-	}
+	return *result, nil
 }
 
 // Insert inserts a new record into the specified table in SurrealDB.
@@ -655,22 +552,17 @@ func (c *Client) Insert(ctx context.Context, table string, data any) ([]map[stri
 		Span:          span,
 	}, startTime)
 
-	var res DBResponse
-	if err := c.db.Send(&res, "insert", table, data); err != nil {
-		return nil, err
+	// Use the new v1.0.0 Insert function
+	results, err := surrealdb.Insert[map[string]any](ctx, c.db, models.Table(table), data)
+	if err != nil {
+		return nil, fmt.Errorf("insert operation failed: %w", err)
 	}
 
-	result, ok := res.Result.([]any)
-	if !ok {
-		return nil, fmt.Errorf("%w: %T", errUnexpectedResultType, res.Result)
+	if results == nil {
+		return []map[string]any{}, nil
 	}
 
-	resSlice := make([]map[string]any, 0)
-	for _, record := range result {
-		resSlice = append(resSlice, record.(map[string]any))
-	}
-
-	return resSlice, nil
+	return *results, nil
 }
 
 // Delete removes a record from the specified table in SurrealDB.
@@ -695,17 +587,22 @@ func (c *Client) Delete(ctx context.Context, table, id string) (any, error) {
 		Span:          span,
 	}, startTime)
 
-	var res DBResponse
-	if err := c.db.Send(&res, "query", query, nil); err != nil {
+	// Use the new v1.0.0 Delete function
+	recordID := models.RecordID{
+		Table: table,
+		ID:    id,
+	}
+
+	result, err := surrealdb.Delete[map[string]any](ctx, c.db, recordID)
+	if err != nil {
 		return nil, fmt.Errorf("delete operation failed: %w", err)
 	}
 
-	results, ok := res.Result.([]any)
-	if !ok || len(results) == 0 {
+	if result == nil {
 		return nil, nil
 	}
 
-	return c.extractRecord(results[0])
+	return *result, nil
 }
 
 // addTrace starts a new trace span for the specified method and query.
@@ -798,8 +695,8 @@ func (c *Client) HealthCheck(ctx context.Context) (any, error) {
 		return &h, errNotConnected
 	}
 
-	var res DBResponse
-	if err := c.db.Send(&res, "info"); err != nil {
+	// Use the new v1.0.0 Info method
+	if _, err := c.db.Info(ctx); err != nil {
 		h.Status = statusDown
 		h.Details["error"] = fmt.Sprintf("Connection test failed: %v", err)
 		h.Details["connection_state"] = "failed"
@@ -807,7 +704,7 @@ func (c *Client) HealthCheck(ctx context.Context) (any, error) {
 		return &h, err
 	}
 
-	if err := c.db.Use(c.config.Namespace, c.config.Database); err != nil {
+	if err := c.db.Use(ctx, c.config.Namespace, c.config.Database); err != nil {
 		h.Status = statusDown
 		h.Details["error"] = fmt.Sprintf("Database access verification failed: %v", err)
 		h.Details["connection_state"] = "connected_but_access_failed"

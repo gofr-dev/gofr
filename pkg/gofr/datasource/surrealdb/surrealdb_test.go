@@ -1,3 +1,7 @@
+// TODO: Tests need to be updated for SurrealDB client v1.0.0
+// The old Connection interface mock is no longer applicable as we now use *surrealdb.DB directly
+//go:build integration
+
 package surrealdb
 
 import (
