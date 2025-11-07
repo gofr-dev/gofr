@@ -327,6 +327,10 @@ func (f *FileSystem) Rename(oldname, newname string) error {
 	return nil
 }
 
+func (*File) Sys() any {
+	return nil
+}
+
 func (f *FileSystem) sendOperationStats(fl *FileLog, startTime time.Time) {
 	duration := time.Since(startTime).Microseconds()
 
