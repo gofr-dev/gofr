@@ -11,6 +11,7 @@ use (
 	./pkg/gofr/datasource/elasticsearch
 	./pkg/gofr/datasource/file/ftp
 	./pkg/gofr/datasource/file/s3
+	./pkg/gofr/datasource/file/gcs
 	./pkg/gofr/datasource/file/sftp
 	./pkg/gofr/datasource/influxdb
 	./pkg/gofr/datasource/kv-store/badger
