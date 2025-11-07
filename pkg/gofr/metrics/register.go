@@ -108,12 +108,35 @@ func (m *metricsManager) NewUpDownCounter(name, desc string) {
 //	[10, 100), [100, 1000), [1000, +Inf), where each range represents response times
 //	within a certain range, and the last bucket includes all values above 1000ms (represented by +Inf,
 //	which stands for positive infinity).
+
+//-->
+// NewHistogram registers a new histogram metric with specified bucket boundaries.
+// If no buckets are provided, a default set is used.
 func (m *metricsManager) NewHistogram(name, desc string, buckets ...float64) {
-	histogram, err := m.meter.Float64Histogram(name, metric.WithDescription(desc),
-		metric.WithExplicitBucketBoundaries(buckets...))
+	if len(buckets) > 1 {
+		for i := 1; i < len(buckets); i++ {
+			if buckets[i] <= buckets[i-1] {
+				m.logger.Error("invalid bucket boundaries")
+				return
+			}
+		}
+	}
+	if len(buckets) == 0 {
+    buckets = []float64{
+        0.001, 0.005, 0.01, 0.025, 0.05,
+        0.1, 0.25, 0.5, 1, 2.5,
+        5, 10, 20, 30, 60,
+    }
+}
+
+
+	histogram, err := m.meter.Float64Histogram(
+		name,
+		metric.WithDescription(desc),
+		metric.WithExplicitBucketBoundaries(buckets...),
+	)
 	if err != nil {
 		m.logger.Error(err)
-
 		return
 	}
 
@@ -122,6 +145,7 @@ func (m *metricsManager) NewHistogram(name, desc string, buckets ...float64) {
 		m.logger.Error(err)
 	}
 }
+
 
 // NewGauge registers a new gauge metrics. This metric can set
 // the value of metric to a particular value, but it doesn't store the last recorded value for the metrics.
