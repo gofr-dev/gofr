@@ -179,6 +179,26 @@ func (*localProvider) ListDir(_ context.Context, prefix string) ([]ObjectInfo, [
 	return objects, dirs, nil
 }
 
+type fileSystem struct {
+	*localFileSystem
+}
+
+// New initializes local filesystem with logger (backward compatible wrapper)
+func New(logger datasource.Logger) FileSystem {
+	provider := &localProvider{}
+
+	cfs := &CommonFileSystem{
+		Provider: provider,
+		Location: "local",
+		Logger:   logger,
+		Metrics:  nil,
+	}
+
+	lfs := &localFileSystem{CommonFileSystem: cfs}
+
+	return &fileSystem{localFileSystem: lfs}
+}
+
 // ============= Helper Types =============
 
 // limitedReadCloser wraps a ReadCloser with a byte limit.
