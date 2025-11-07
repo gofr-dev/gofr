@@ -119,7 +119,7 @@ func main() {
 
 	// Option 1: Using JSON credentials with local emulator
 	fs, err := gcs.New(&gcs.Config{
-		EndPoint:        "http://localhost:4566", // for LocalStack S3-compatible endpoint
+		EndPoint:        "http://localhost:4566",
 		BucketName:      "my-bucket",
 		CredentialsJSON: readFile("gcs-credentials.json"),
 		ProjectID:       "my-project-id",
