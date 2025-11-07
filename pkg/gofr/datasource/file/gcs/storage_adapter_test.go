@@ -23,11 +23,13 @@ import (
 var errTest = errors.New("test error")
 
 func TestStorageAdapter_Connect(t *testing.T) {
+	// Test 1: Nil config should return error
 	adapter := &storageAdapter{}
 
 	err := adapter.Connect(context.Background())
 
-	assert.NoError(t, err)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "GCS config is nil")
 }
 
 func TestStorageAdapter_Health_NilClient(t *testing.T) {

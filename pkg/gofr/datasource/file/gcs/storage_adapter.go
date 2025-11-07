@@ -9,10 +9,12 @@ import (
 	"cloud.google.com/go/storage"
 	"gofr.dev/pkg/gofr/datasource/file"
 	"google.golang.org/api/iterator"
+	"google.golang.org/api/option"
 )
 
 var (
 	// Storage adapter errors.
+	errGCSConfigNil              = errors.New("GCS config is nil")
 	errGCSClientNotInitialized   = errors.New("GCS client or bucket is not initialized")
 	errEmptyObjectName           = errors.New("object name is empty")
 	errInvalidOffset             = errors.New("invalid offset: must be >= 0")
@@ -34,12 +36,49 @@ const (
 
 // storageAdapter adapts GCS client to implement file.StorageProvider.
 type storageAdapter struct {
+	cfg    *Config
 	client *storage.Client
 	bucket *storage.BucketHandle
 }
 
-// Connect is a no-op for GCS (connection is managed by FileSystem.Connect).
-func (*storageAdapter) Connect(context.Context) error {
+// Connect initializes the GCS client and validates bucket access.
+func (s *storageAdapter) Connect(ctx context.Context) error {
+	// fast-path
+	if s.client != nil && s.bucket != nil {
+		return nil
+	}
+
+	if s.cfg == nil {
+		return errGCSConfigNil
+	}
+
+	var (
+		client *storage.Client
+		err    error
+	)
+
+	switch {
+	case s.cfg.EndPoint != "":
+		client, err = storage.NewClient(ctx, option.WithEndpoint(s.cfg.EndPoint), option.WithoutAuthentication())
+	case s.cfg.CredentialsJSON != "":
+		client, err = storage.NewClient(ctx, option.WithCredentialsJSON([]byte(s.cfg.CredentialsJSON)))
+	default:
+		client, err = storage.NewClient(ctx)
+	}
+
+	if err != nil {
+		return fmt.Errorf("failed to create storage client: %w", err)
+	}
+
+	bucket := client.Bucket(s.cfg.BucketName)
+	if _, err := bucket.Attrs(ctx); err != nil {
+		_ = client.Close()
+		return fmt.Errorf("bucket validation failed: %w", err)
+	}
+
+	s.client = client
+	s.bucket = bucket
+
 	return nil
 }
 

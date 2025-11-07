@@ -7,6 +7,7 @@ import (
 	"os"
 	"path"
 	"strings"
+	"sync"
 	"time"
 
 	"gofr.dev/pkg/gofr/datasource"
@@ -20,6 +21,8 @@ var (
 	errChDirNotSupported = errors.New("changing directory is not supported in cloud storage")
 
 	errUnsupportedFlags = errors.New("unsupported flag combination for OpenFile")
+
+	errProviderNil = errors.New("storage provider is not configured")
 )
 
 // CommonFileSystem provides shared implementations of FileSystem operations.
@@ -39,6 +42,54 @@ type CommonFileSystem struct {
 	Location string            // Bucket name or connection identifier (e.g., "my-bucket", "ftp://host")
 	Logger   datasource.Logger // Logger for operation tracking
 	Metrics  StorageMetrics    // Metrics for observability
+
+	registerHistogram sync.Once
+	connected         bool
+	disableRetry      bool
+}
+
+// Connect calls the provider's Connect and performs common bookkeeping (metrics / logs / observe).
+func (c *CommonFileSystem) Connect(ctx context.Context) error {
+	start := time.Now()
+	st := StatusError
+	msg := ""
+
+	defer c.Observe(OpConnect, start, &st, &msg)
+
+	c.registerHistogram.Do(func() {
+		if c.Metrics != nil {
+			c.Metrics.NewHistogram(AppFileStats, "App File Stats - duration of file operations",
+				DefaultHistogramBuckets()...)
+		}
+	})
+
+	if c.Provider == nil {
+		return errProviderNil
+	}
+
+	// already connected fast-path
+	if c.connected {
+		st = StatusSuccess
+		msg = "already connected"
+
+		return nil
+	}
+
+	// delegate provider-specific connect
+	if err := c.Provider.Connect(ctx); err != nil {
+		return err
+	}
+
+	// success bookkeeping
+	c.connected = true
+	st = StatusSuccess
+	msg = "connected"
+
+	if c.Logger != nil {
+		c.Logger.Infof("connected to %s", c.Location)
+	}
+
+	return nil
 }
 
 // UseLogger sets the logger for the CommonFileSystem.
@@ -52,16 +103,6 @@ func (c *CommonFileSystem) UseLogger(logger any) {
 func (c *CommonFileSystem) UseMetrics(metrics any) {
 	if m, ok := metrics.(StorageMetrics); ok {
 		c.Metrics = m
-	}
-}
-
-// Connect is a no-op for CommonFileSystem since StorageProvider is stateless.
-// The actual connection logic is handled by the provider wrapper (e.g., gcs.FileSystem).
-func (c *CommonFileSystem) Connect() {
-	// No-op: StorageProvider doesn't have a Connect method
-	// Connection is handled by the wrapper (gcs.FileSystem, s3.FileSystem, etc.)
-	if c.Logger != nil {
-		c.Logger.Debugf("CommonFileSystem initialized for location: %s", c.Location)
 	}
 }
 
@@ -574,4 +615,23 @@ func (c *CommonFileSystem) Observe(operation string, startTime time.Time, status
 		Status:    status,
 		Message:   message,
 	})
+}
+
+func (c *CommonFileSystem) IsConnected() bool {
+	return c.connected
+}
+
+// SetDisableRetry enables or disables background retry behavior.
+func (c *CommonFileSystem) SetDisableRetry(disable bool) {
+	c.disableRetry = disable
+}
+
+// IsRetryDisabled returns true if background retry is disabled.
+func (c *CommonFileSystem) IsRetryDisabled() bool {
+	return c.disableRetry
+}
+
+// SetConnected manually sets the connected state (for testing).
+func (c *CommonFileSystem) SetConnected(connected bool) {
+	c.connected = connected
 }

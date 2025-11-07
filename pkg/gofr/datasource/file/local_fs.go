@@ -14,22 +14,34 @@ const dirPerm = 0755
 // localProvider implements StorageProvider for local filesystem.
 type localProvider struct{}
 
+// localFileSystem is a small adapter that exposes the no-arg Connect()
+// required by FileSystemProvider and delegates to CommonFileSystem.
+type localFileSystem struct {
+	*CommonFileSystem
+}
+
 // NewLocalFileSystem creates a FileSystemProvider for local filesystem operations.
 func NewLocalFileSystem(logger datasource.Logger) FileSystemProvider {
 	provider := &localProvider{}
 
-	return &CommonFileSystem{
+	cfs := &CommonFileSystem{
 		Provider: provider,
 		Location: "local",
 		Logger:   logger,
 		Metrics:  nil,
 	}
+
+	return &localFileSystem{CommonFileSystem: cfs}
+}
+
+func (*localProvider) Connect(context.Context) error {
+	return nil
 }
 
 // ============= StorageProvider Implementation =============
 
-func (*localProvider) Connect(context.Context) error {
-	return nil // Local FS is always "connected"
+func (l *localFileSystem) Connect() {
+	_ = l.CommonFileSystem.Connect(context.Background())
 }
 
 func (*localProvider) Health(context.Context) error {

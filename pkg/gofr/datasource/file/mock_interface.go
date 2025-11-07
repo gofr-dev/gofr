@@ -401,6 +401,22 @@ func (m *MockStorageProvider) EXPECT() *MockStorageProviderMockRecorder {
 	return m.recorder
 }
 
+
+// Connect mocks base method.
+func (m *MockStorageProvider) Connect(ctx context.Context) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Connect", ctx)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// Connect indicates an expected call of Connect.
+func (mr *MockStorageProviderMockRecorder) Connect(ctx any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Connect", reflect.TypeOf((*MockStorageProvider)(nil).Connect), ctx)
+}
+
+
 // CopyObject mocks base method.
 func (m *MockStorageProvider) CopyObject(ctx context.Context, src, dst string) error {
 	m.ctrl.T.Helper()

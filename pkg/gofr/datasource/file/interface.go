@@ -46,17 +46,16 @@ type RowReader interface {
 // StorageProvider abstracts low-level storage operations (stateless).
 // This is the interface that each provider (GCS, S3, FTP, SFTP) must implement.
 type StorageProvider interface {
-	// Reader/Writer operations
+	Connect(ctx context.Context) error
+
 	NewReader(ctx context.Context, name string) (io.ReadCloser, error)
 	NewRangeReader(ctx context.Context, name string, offset, length int64) (io.ReadCloser, error)
 	NewWriter(ctx context.Context, name string) io.WriteCloser
 
-	// Object operations
 	DeleteObject(ctx context.Context, name string) error
 	CopyObject(ctx context.Context, src, dst string) error
 	StatObject(ctx context.Context, name string) (*ObjectInfo, error)
 
-	// Listing operations
 	ListObjects(ctx context.Context, prefix string) ([]string, error)
 	ListDir(ctx context.Context, prefix string) (objects []ObjectInfo, prefixes []string, err error)
 }

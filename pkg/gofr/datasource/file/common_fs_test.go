@@ -923,7 +923,7 @@ func TestCommonFileSystem_Connect_UsesLoggerWhenPresent(t *testing.T) {
 
 	mockLogger := NewMockLogger(ctrl)
 	// Expect Debugf to be called once. Use gomock.Any() for the format and args.
-	mockLogger.EXPECT().Debugf(gomock.Any(), gomock.Any()).Times(1)
+	mockLogger.EXPECT().Debug(gomock.Any()).Times(1)
 
 	fs := &CommonFileSystem{
 		Logger:   mockLogger,
@@ -931,17 +931,19 @@ func TestCommonFileSystem_Connect_UsesLoggerWhenPresent(t *testing.T) {
 	}
 
 	// Should call Debugf on provided logger
-	fs.Connect()
+	err := fs.Connect(t.Context())
+	assert.Equal(t, err, errProviderNil)
 }
 
-func TestCommonFileSystem_Connect_NoLogger_NoPanic(*testing.T) {
+func TestCommonFileSystem_Connect_NoLogger_NoPanic(t *testing.T) {
 	// No logger configured: Connect should be a no-op and not panic
 	fs := &CommonFileSystem{
 		Logger:   nil,
 		Location: "no-logger",
 	}
 
-	fs.Connect()
+	err := fs.Connect(t.Context())
+	assert.Equal(t, err, errProviderNil)
 }
 
 // Test for PrettyPrint on OperationLog: verify output contains key fields.

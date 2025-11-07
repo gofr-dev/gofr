@@ -3,34 +3,20 @@ package gcs
 import (
 	"context"
 	"errors"
-	"sync"
 	"time"
 
-	"cloud.google.com/go/storage"
 	"gofr.dev/pkg/gofr/datasource"
 	"gofr.dev/pkg/gofr/datasource/file"
-	"google.golang.org/api/option"
 )
 
 var (
-	errInvalidConfig    = errors.New("invalid GCS configuration: bucket name is required")
-	errConnectionFailed = errors.New("failed to connect to GCS")
+	errInvalidConfig = errors.New("invalid GCS configuration: bucket name is required")
 )
 
-const gcsClientConnected = "GCS Client connected."
+const defaultTimeout = 10 * time.Second
 
 type fileSystem struct {
 	*file.CommonFileSystem
-
-	client  *storage.Client
-	bucket  *storage.BucketHandle
-	config  *Config
-	logger  datasource.Logger
-	metrics file.StorageMetrics
-
-	registerHistogram sync.Once
-	connected         bool
-	disableRetry      bool
 }
 
 // Config represents the gcs configuration.
@@ -43,214 +29,81 @@ type Config struct {
 
 // New creates and validates a new GCS file system.
 // Returns error if connection fails.
-func New(config *Config) (file.FileSystemProvider, error) {
+func New(config *Config, logger datasource.Logger, metrics file.StorageMetrics) (file.FileSystemProvider, error) {
 	if config == nil || config.BucketName == "" {
 		return nil, errInvalidConfig
 	}
 
+	adapter := &storageAdapter{cfg: config}
+
 	fs := &fileSystem{
-		config: config,
+		CommonFileSystem: &file.CommonFileSystem{
+			Provider: adapter,
+			Location: config.BucketName,
+			Logger:   logger,
+			Metrics:  metrics,
+		},
 	}
 
-	// Try initial connection to validate credentials
-	if err := fs.tryConnect(context.Background()); err != nil {
-		return nil, errors.Join(errConnectionFailed, err)
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTimeout)
+	defer cancel()
+
+	// use CommonFileSystem.Connect for bookkeeping (fast-path since adapter is connected)
+	if err := fs.CommonFileSystem.Connect(ctx); err != nil {
+		if logger != nil {
+			logger.Warnf("GCS bucket %s not available, starting background retry: %v", config.BucketName, err)
+		}
+
+		go fs.startRetryConnect()
+
+		return fs, nil
 	}
 
+	// Connected successfully
 	return fs, nil
 }
 
-// tryConnect attempts to establish a connection and validate credentials.
-func (f *fileSystem) tryConnect(ctx context.Context) error {
-	var (
-		client *storage.Client
-		err    error
-	)
-
-	if f.logger != nil {
-		f.logger.Debugf("connecting to GCS bucket: %s", f.config.BucketName)
-	}
-
-	switch {
-	case f.config.EndPoint != "":
-		// Local emulator mode
-		client, err = storage.NewClient(
-			ctx,
-			option.WithEndpoint(f.config.EndPoint),
-			option.WithoutAuthentication(),
-		)
-
-	case f.config.CredentialsJSON != "":
-		// Direct JSON mode
-		client, err = storage.NewClient(
-			ctx,
-			option.WithCredentialsJSON([]byte(f.config.CredentialsJSON)),
-		)
-
-	default:
-		// Env var mode (GOOGLE_APPLICATION_CREDENTIALS)
-		client, err = storage.NewClient(ctx)
-	}
-
-	if err != nil {
-		return err
-	}
-
-	// Validate connection by checking bucket access
-	bucket := client.Bucket(f.config.BucketName)
-	if _, err := bucket.Attrs(ctx); err != nil {
-		client.Close()
-
-		return err
-	}
-
-	f.client = client
-	f.bucket = bucket
-
-	return nil
-}
-
+// Connect tries a single immediate connect via provider; on failure it starts a background retry.
 func (f *fileSystem) Connect() {
-	var msg string
-
-	st := file.StatusError
-
-	startTime := time.Now()
-
-	defer f.observe(file.OpConnect, startTime, &st, &msg)
-
-	f.registerHistogram.Do(func() {
-		f.metrics.NewHistogram(
-			file.AppFileStats,
-			"App GCS Stats - duration of file operations",
-			file.DefaultHistogramBuckets()...,
-		)
-	})
-
-	if f.client != nil && f.bucket != nil {
-		provider := &storageAdapter{
-			client: f.client,
-			bucket: f.bucket,
-		}
-
-		f.CommonFileSystem = &file.CommonFileSystem{
-			Provider: provider,
-			Location: f.config.BucketName,
-			Logger:   f.logger,
-			Metrics:  f.metrics,
-		}
-
-		f.connected = true
-
-		st = file.StatusSuccess
-		msg = gcsClientConnected
-
-		f.logger.Infof("connected to GCS bucket %s", f.config.BucketName)
-
+	if f.CommonFileSystem.IsConnected() {
 		return
 	}
 
-	// Fallback: try to reconnect if somehow client is nil
-	f.logger.Debugf("attempting to reconnect to GCS bucket: %s", f.config.BucketName)
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTimeout)
+	defer cancel()
 
-	ctx := context.Background()
-	if err := f.tryConnect(ctx); err != nil {
-		if f.logger != nil {
-			f.logger.Errorf("Failed to connect to GCS: %v", err)
-		}
-
-		msg = err.Error()
-
-		// Start retry goroutine
-		go f.startRetryConnect()
-
-		return
-	}
-
-	provider := &storageAdapter{
-		client: f.client,
-		bucket: f.bucket,
-	}
-
-	f.CommonFileSystem = &file.CommonFileSystem{
-		Provider: provider,
-		Location: f.config.BucketName,
-		Logger:   f.logger,
-		Metrics:  f.metrics,
-	}
-
-	f.connected = true
-
-	st = file.StatusSuccess
-	msg = gcsClientConnected
-
-	f.logger.Infof("connected to GCS bucket %s", f.config.BucketName)
+	_ = f.CommonFileSystem.Connect(ctx)
 }
 
+// startRetryConnect repeatedly calls provider.Connect until success, then delegates to CommonFileSystem.Connect.
+// startRetryConnect retries connection every 30 seconds until success.
 func (f *fileSystem) startRetryConnect() {
-	ticker := time.NewTicker(time.Minute) // retry every 1 minute
+	ticker := time.NewTicker(time.Minute)
 	defer ticker.Stop()
 
-	for {
-		<-ticker.C
-
-		if f.connected || f.disableRetry {
-			return // Already connected
+	for range ticker.C {
+		if f.CommonFileSystem.IsConnected() || f.CommonFileSystem.IsRetryDisabled() {
+			return
 		}
 
-		ctx := context.Background()
+		ctx, cancel := context.WithTimeout(context.Background(), defaultTimeout)
 
-		if err := f.tryConnect(ctx); err != nil {
-			f.logger.Errorf("Retry: failed to connect to GCS: %v", err)
+		err := f.CommonFileSystem.Connect(ctx)
 
-			continue
+		cancel()
+
+		if err == nil {
+			// Success - exit retry loop
+			if f.CommonFileSystem.Logger != nil {
+				f.CommonFileSystem.Logger.Infof("GCS connection restored to bucket %s", f.CommonFileSystem.Location)
+			}
+
+			return
 		}
 
-		provider := &storageAdapter{
-			client: f.client,
-			bucket: f.bucket,
+		// Still failing - log and continue retrying
+		if f.CommonFileSystem.Logger != nil {
+			f.CommonFileSystem.Logger.Debugf("GCS retry failed, will try again: %v", err)
 		}
-
-		f.CommonFileSystem = &file.CommonFileSystem{
-			Provider: provider,
-			Location: f.config.BucketName,
-			Logger:   f.logger,
-			Metrics:  f.metrics,
-		}
-
-		f.connected = true
-
-		f.logger.Infof("GCS connection restored to bucket %s", f.config.BucketName)
-
-		break
 	}
-}
-
-// UseLogger sets the Logger interface for the FTP file system.
-func (f *fileSystem) UseLogger(logger any) {
-	if l, ok := logger.(datasource.Logger); ok {
-		f.logger = l
-	}
-}
-
-// UseMetrics sets the Metrics interface.
-func (f *fileSystem) UseMetrics(metrics any) {
-	if m, ok := metrics.(file.StorageMetrics); ok {
-		f.metrics = m
-	}
-}
-
-// observe is a helper method for FileSystem-level operations.
-func (f *fileSystem) observe(operation string, startTime time.Time, status, message *string) {
-	file.ObserveOperation(&file.OperationObservability{
-		Context:   context.Background(),
-		Logger:    f.logger,
-		Metrics:   f.metrics,
-		Operation: operation,
-		Location:  f.config.BucketName,
-		Provider:  "GCS",
-		StartTime: startTime,
-		Status:    status,
-		Message:   message,
-	})
 }
