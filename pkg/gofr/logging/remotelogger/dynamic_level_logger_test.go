@@ -1,6 +1,7 @@
 package remotelogger
 
 import (
+	"bytes"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -356,4 +357,68 @@ func TestLogLevelChangeToFatal_NoExit(t *testing.T) {
 
 	// Verify the log contains a warning about the level change
 	assert.Contains(t, log, "LOG_LEVEL updated from INFO to FATAL")
+}
+
+func TestHTTPDebugMsg_PrettyPrint(t *testing.T) {
+	cases := []struct {
+		name         string
+		msg          httpDebugMsg
+		wantColorSeq string
+	}{
+		{
+			name: "2xx uses blue",
+			msg: httpDebugMsg{
+				CorrelationID: "corr-200",
+				ResponseCode:  200,
+				ResponseTime:  123,
+				HTTPMethod:    "GET",
+				URI:           "/ok",
+			},
+			wantColorSeq: fmt.Sprintf("\u001B[38;5;%dm", colorBlue),
+		},
+		{
+			name: "4xx uses yellow",
+			msg: httpDebugMsg{
+				CorrelationID: "corr-404",
+				ResponseCode:  404,
+				ResponseTime:  456,
+				HTTPMethod:    "POST",
+				URI:           "/not-found",
+			},
+			wantColorSeq: fmt.Sprintf("\u001B[38;5;%dm", colorYellow),
+		},
+		{
+			name: "5xx uses red",
+			msg: httpDebugMsg{
+				CorrelationID: "corr-500",
+				ResponseCode:  500,
+				ResponseTime:  789,
+				HTTPMethod:    "PUT",
+				URI:           "/err",
+			},
+			wantColorSeq: fmt.Sprintf("\u001B[38;5;%dm", colorRed),
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			var buf bytes.Buffer
+			tc.msg.PrettyPrint(&buf)
+			out := buf.String()
+
+			// basic content checks
+			assert.Contains(t, out, tc.msg.CorrelationID)
+			assert.Contains(t, out, tc.msg.HTTPMethod)
+			assert.Contains(t, out, tc.msg.URI)
+			assert.Contains(t, out, fmt.Sprintf("%d", tc.msg.ResponseCode))
+			// response time should include the microsecond suffix
+			assert.Contains(t, out, fmt.Sprintf("%dμs", tc.msg.ResponseTime))
+
+			// color sequence must be present
+			assert.Contains(t, out, tc.wantColorSeq, "expected color sequence %q in output: %q", tc.wantColorSeq, out)
+
+			// ensure reset code present
+			assert.Contains(t, out, "\u001B[0m")
+		})
+	}
 }
