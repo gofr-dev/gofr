@@ -171,7 +171,7 @@ func (c *Container) Create(conf config.Config) {
 		c.PubSub = c.createMqttPubSub(conf)
 	}
 
-	c.File = file.New(c.Logger)
+	c.File = file.NewLocalFileSystem(c.Logger)
 
 	c.WSManager = websocket.New()
 }
