@@ -12,8 +12,7 @@ import (
 func main() {
 	a := gofr.New()
 
-	// HTTP service with Circuit Breaker config given, uses custom health check
-	// either of circuit breaker or health can be used as well, as both implement service.Options interface.
+	// HTTP service with Circuit Breaker, Health Check, and Connection Pool configuration
 	// Note: /breeds is not an actual health check endpoint for "https://catfact.ninja"
 	a.AddHTTPService("cat-facts", "https://catfact.ninja",
 		&service.CircuitBreakerConfig{
@@ -23,12 +22,22 @@ func main() {
 		&service.HealthConfig{
 			HealthEndpoint: "breeds",
 		},
+		&service.ConnectionPoolConfig{
+			MaxIdleConns:        100,
+			MaxIdleConnsPerHost: 10,
+			IdleConnTimeout:     30 * time.Second,
+		},
 	)
 
-	// service with improper health-check to test health check
+	// service with connection pool configuration for high-frequency requests
 	a.AddHTTPService("fact-checker", "https://catfact.ninja",
 		&service.HealthConfig{
 			HealthEndpoint: "breed",
+		},
+		&service.ConnectionPoolConfig{
+			MaxIdleConns:        50,
+			MaxIdleConnsPerHost: 5,
+			IdleConnTimeout:     15 * time.Second,
 		},
 	)
 
