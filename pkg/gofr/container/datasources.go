@@ -788,8 +788,7 @@ type CouchbaseProvider interface {
 
 // DBResolverProvider defines an interface for SQL read/write splitting providers.
 type DBResolverProvider interface {
-	// Build creates a resolver with the given primary and replicas.
-	Build(primary DB, replicas []DB) (DB, error)
+	GetResolver() DB
 
 	provider
 }

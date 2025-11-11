@@ -1,17 +1,10 @@
 package gofr
 
 import (
-	"strconv"
-	"strings"
-
 	"go.opentelemetry.io/otel"
 
-	"gofr.dev/pkg/gofr/config"
 	"gofr.dev/pkg/gofr/container"
 	"gofr.dev/pkg/gofr/datasource/file"
-	"gofr.dev/pkg/gofr/datasource/sql"
-	"gofr.dev/pkg/gofr/logging"
-	"gofr.dev/pkg/gofr/metrics"
 )
 
 const (
@@ -237,193 +230,26 @@ func (a *App) AddCouchbase(db container.CouchbaseProvider) {
 	a.container.Couchbase = db
 }
 
-// AddDBResolver sets up read/write splitting for SQL databases.
+// AddDBResolver sets up database resolver with read/write splitting
 func (a *App) AddDBResolver(resolver container.DBResolverProvider) {
-	// Exit if SQL is not configured.
+	// Validate primary SQL exists
 	if a.container.SQL == nil {
-		a.Logger().Errorf("Cannot set up DB resolver: SQL is not configured")
+		a.Logger().Fatal("Primary SQL connection must be configured before adding DBResolver")
 		return
 	}
 
-	// Set up logger, metrics, tracer.
 	resolver.UseLogger(a.Logger())
 	resolver.UseMetrics(a.Metrics())
 
-	tracer := otel.GetTracerProvider().Tracer("gofr.dbresolver")
+	tracer := otel.GetTracerProvider().Tracer("gofr-dbresolver")
 	resolver.UseTracer(tracer)
 
-	// Connect (no-op for resolver)
 	resolver.Connect()
 
-	// Create replica connections.
-	replicas := createReplicaConnections(a.Config, a.Logger(), a.Metrics())
-	if len(replicas) == 0 {
-		a.Logger().Debugf("No replicas configured, skipping DB resolver setup")
-		return
-	}
+	// Replace the SQL connection with the resolver
+	a.container.SQL = resolver.GetResolver()
 
-	// Build resolver with primary and replicas.
-	resolverDB, err := resolver.Build(a.container.SQL, replicas)
-	if err != nil {
-		a.Logger().Errorf("Failed to build DB resolver: %v", err)
-		return
-	}
-
-	a.container.SQL = resolverDB
-
-	a.UseMiddleware()
-
-	a.Logger().Logf("DB read/write splitting enabled with %d replicas", len(replicas))
-}
-
-// createReplicaConnections creates optimized DB connections to replicas.
-func createReplicaConnections(cfg config.Config, logger logging.Logger, mtrcs metrics.Manager) []container.DB {
-	hosts := strings.Split(cfg.Get("DB_REPLICA_HOSTS"), ",")
-	ports := strings.Split(cfg.Get("DB_REPLICA_PORTS"), ",")
-	users := strings.Split(cfg.Get("DB_REPLICA_USERS"), ",")
-	passwords := strings.Split(cfg.Get("DB_REPLICA_PASSWORDS"), ",")
-
-	// Ensure minimum: at least hosts must be defined
-	if len(hosts) == 0 || (len(hosts) == 1 && hosts[0] == "") {
-		return nil
-	}
-
-	var replicas []container.DB
-
-	for i, host := range hosts {
-		host = strings.TrimSpace(host)
-		if host == "" {
-			continue
-		}
-
-		port := safeGet(ports, i, cfg.Get("DB_PORT"))
-		user := safeGet(users, i, cfg.Get("DB_USER"))
-		pass := safeGet(passwords, i, cfg.Get("DB_PASSWORD"))
-
-		// Wrap replica config
-		replicaConfig := &replicaConfigWrapper{
-			Config:   cfg,
-			host:     host,
-			port:     port,
-			user:     user,
-			password: pass,
-		}
-
-		replica := sql.NewSQL(replicaConfig, logger, mtrcs)
-		if replica != nil {
-			replicas = append(replicas, replica)
-
-			logger.Logf("Created DB replica connection to %s:%s as user %s", host, port, user)
-		}
-	}
-
-	return replicas
-}
-
-// safeGet returns the element at index i if present, otherwise fallback.
-func safeGet(list []string, i int, fallback string) string {
-	if i < len(list) && strings.TrimSpace(list[i]) != "" {
-		return strings.TrimSpace(list[i])
-	}
-
-	return fallback
-}
-
-// replicaConfigWrapper wraps config and optimizes connection settings for replicas.
-type replicaConfigWrapper struct {
-	config.Config
-	host     string
-	port     string
-	user     string
-	password string
-}
-
-// Get overrides config values for replica optimization.
-func (c *replicaConfigWrapper) Get(key string) string {
-	switch key {
-	case "DB_HOST":
-		return c.host
-	case "DB_PORT":
-		return c.port
-	case "DB_USER":
-		return c.user
-	case "DB_PASSWORD":
-		return c.password
-	case "DB_MAX_IDLE_CONNECTION":
-		return optimizedIdleConnections(c.Config)
-	case "DB_MAX_OPEN_CONNECTION":
-		return optimizedOpenConnections(c.Config)
-	default:
-		return c.Config.Get(key)
-	}
-}
-
-func getReplicaConfigInt(cfg config.Config, key string, fallback int) int {
-	valStr := cfg.Get(key)
-
-	if valStr == "" {
-		return fallback
-	}
-
-	val, err := strconv.Atoi(valStr)
-
-	if err != nil || val <= 0 {
-		return fallback
-	}
-
-	return val
-}
-
-func optimizedIdleConnections(cfg config.Config) string {
-	// Load caps from config or fallback to defaults
-	maxCap := getReplicaConfigInt(cfg, "DB_REPLICA_MAX_IDLE_CONNECTIONS", maxIdleReplicaCapDefault)
-	minVal := getReplicaConfigInt(cfg, "DB_REPLICA_MIN_IDLE_CONNECTIONS", minIdleReplicaDefault)
-	defaultVal := getReplicaConfigInt(cfg, "DB_REPLICA_DEFAULT_IDLE_CONNECTIONS", defaultIdleReplicaDefault)
-
-	val, err := strconv.Atoi(cfg.Get("DB_MAX_IDLE_CONNECTION"))
-
-	if err != nil || val <= 0 {
-		return strconv.Itoa(defaultVal)
-	}
-
-	optimized := val * 4
-
-	switch {
-	case optimized > maxCap:
-		optimized = maxCap
-	case optimized < minVal:
-		optimized = minVal
-	}
-
-	return strconv.Itoa(optimized)
-}
-
-func optimizedOpenConnections(cfg config.Config) string {
-	// Load caps from config or fallback to defaults
-	maxCap := getReplicaConfigInt(cfg, "DB_REPLICA_MAX_OPEN_CONNECTIONS", maxOpenReplicaCapDefault)
-	minVal := getReplicaConfigInt(cfg, "DB_REPLICA_MIN_OPEN_CONNECTIONS", minOpenReplicaDefault)
-	defaultVal := getReplicaConfigInt(cfg, "DB_REPLICA_DEFAULT_OPEN_CONNECTIONS", defaultOpenReplicaDefault)
-
-	val, err := strconv.Atoi(cfg.Get("DB_MAX_OPEN_CONNECTION"))
-
-	if err != nil {
-		return strconv.Itoa(defaultVal)
-	}
-
-	if val == 0 {
-		return strconv.Itoa(defaultVal)
-	}
-
-	optimized := val * 2
-
-	switch {
-	case optimized > maxCap:
-		optimized = maxCap
-	case optimized < minVal:
-		optimized = minVal
-	}
-
-	return strconv.Itoa(optimized)
+	a.Logger().Logf("DB Resolver initialized successfully")
 }
 
 func (a *App) AddInfluxDB(db container.InfluxDBProvider) {
@@ -435,4 +261,8 @@ func (a *App) AddInfluxDB(db container.InfluxDBProvider) {
 	db.Connect()
 
 	a.container.InfluxDB = db
+}
+
+func (a *App) GetSQL() container.DB {
+	return a.container.SQL
 }

@@ -15,6 +15,10 @@ type Logger interface {
 	Logf(pattern string, args ...any)
 	Errorf(pattern string, args ...any)
 	Warnf(pattern string, args ...any)
+	Info(args ...any)
+	Infof(format string, args ...any)
+	Error(args ...any)
+	Warn(args ...any)
 }
 
 // QueryLog contains information about a SQL query.

@@ -3,8 +3,9 @@ package dbresolver
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
-	"net/http"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -18,10 +19,14 @@ import (
 
 // Constants for strategies and intervals.
 const (
-	contextKeyHTTPMethod contextKey = "dbresolver.http_method"
-	defaultMaxFailures   int32      = 5
-	defaultTimeoutSec    int        = 30
+	contextKeyHTTPMethod  contextKey = "dbresolver.http_method"
+	contextKeyRequestPath contextKey = "dbresolver.request_path"
+
+	defaultMaxFailures = 5
+	defaultTimeoutSec  = 30
 )
+
+var errReplicaFailedNoFallback = errors.New("replica query failed and fallback disabled")
 
 type contextKey string
 
@@ -39,6 +44,7 @@ type statistics struct {
 type replicaWrapper struct {
 	db      container.DB
 	breaker *circuitBreaker
+	index   int
 }
 
 // Resolver is the main struct that implements the container.DB interface.
@@ -52,7 +58,8 @@ type Resolver struct {
 	metrics Metrics
 	tracer  trace.Tracer
 
-	primaryRoutes map[string]bool
+	primaryRoutes   map[string]bool
+	primaryPrefixes []string
 
 	stats *statistics
 
@@ -70,6 +77,7 @@ func NewResolver(primary container.DB, replicas []container.DB, logger Logger, m
 		replicaWrappers[i] = &replicaWrapper{
 			db:      replica,
 			breaker: newCircuitBreaker(defaultMaxFailures, time.Duration(defaultTimeoutSec)*time.Second),
+			index:   i,
 		}
 	}
 
@@ -92,6 +100,12 @@ func NewResolver(primary container.DB, replicas []container.DB, logger Logger, m
 	// Apply options
 	for _, opt := range opts {
 		opt(r)
+	}
+
+	for route := range r.primaryRoutes {
+		if strings.HasSuffix(route, "*") {
+			r.primaryPrefixes = append(r.primaryPrefixes, strings.TrimSuffix(route, "*"))
+		}
 	}
 
 	// Initialize metrics and start background tasks.
@@ -159,86 +173,83 @@ func (r *Resolver) updateMetrics() {
 	r.metrics.SetGauge("dbresolver_failures", float64(r.stats.replicaFailures.Load()))
 }
 
-// shouldUseReplica determines if the query should use replica based on HTTP method
-// It uses type assertion to check if the request has an HTTP method without requiring interface changes
+// shouldUseReplica determines routing based on HTTP method and path
 func (r *Resolver) shouldUseReplica(ctx context.Context) bool {
 	if len(r.replicas) == 0 {
 		return false
 	}
 
-	// Try to get the request from context
-	reqValue := ctx.Value("request")
-	if reqValue == nil {
-		// No request in context - default to primary for safety
-		return false
-	}
-
-	// Try to type assert to an HTTP request that has a Method field
-	// This works because Go's http.Request has a public Method field
-	type httpMethodGetter interface {
-		Method() string
-	}
-
-	// Try interface with Method() first (in case it's wrapped)
-	if methodGetter, ok := reqValue.(httpMethodGetter); ok {
-		method := methodGetter.Method()
-		return method == "GET" || method == "HEAD" || method == "OPTIONS"
-	}
-
-	// Try to access the underlying *http.Request directly
-	// This works because many GoFr request implementations expose the raw http.Request
-	type rawHTTPRequestHolder interface {
-		HTTPRequest() *http.Request
-	}
-
-	if holder, ok := reqValue.(rawHTTPRequestHolder); ok {
-		httpReq := holder.HTTPRequest()
-		if httpReq != nil {
-			return httpReq.Method == "GET" || httpReq.Method == "HEAD" || httpReq.Method == "OPTIONS"
+	// Check if path requires primary
+	if path, ok := ctx.Value(contextKeyRequestPath).(string); ok {
+		if r.isPrimaryRoute(path) {
+			return false
 		}
 	}
 
-	// If we can't determine the method, default to primary for safety
+	// Check HTTP method
+	method, ok := ctx.Value(contextKeyHTTPMethod).(string)
+	if !ok {
+		return false // Default to primary for safety
+	}
+
+	return method == "GET" || method == "HEAD" || method == "OPTIONS"
+}
+
+// isPrimaryRoute checks if path matches primary route patterns
+func (r *Resolver) isPrimaryRoute(path string) bool {
+	if r.primaryRoutes[path] {
+		return true
+	}
+
+	// Prefix match (precompiled patterns)
+	for _, prefix := range r.primaryPrefixes {
+		if strings.HasPrefix(path, prefix) {
+			return true
+		}
+	}
+
 	return false
 }
 
 // selectHealthyReplica chooses an available replica using circuit breaker.
-func (r *Resolver) selectHealthyReplica() (availableDB container.DB, availableIndex int) {
+func (r *Resolver) selectHealthyReplica() *replicaWrapper {
 	if len(r.replicas) == 0 {
-		return nil, -1
+		return nil
 	}
 
 	// Get all available DBs for strategy
 	var (
-		availableDbs     []container.DB
-		availableIndexes []int
+		availableDbs      []container.DB
+		availableWrappers []*replicaWrapper
 	)
 
-	for i, wrapper := range r.replicas {
+	for _, wrapper := range r.replicas {
 		if wrapper.breaker.allowRequest() {
 			availableDbs = append(availableDbs, wrapper.db)
-			availableIndexes = append(availableIndexes, i)
+			availableWrappers = append(availableWrappers, wrapper)
 		}
 	}
 
 	if len(availableDbs) == 0 {
-		return nil, -1
+		if r.logger != nil {
+			r.logger.Warn("All replicas are unavailable (circuit breakers open), falling back to primary")
+		}
+
+		return nil
 	}
 
 	// Use strategy to choose from available replicas
 	chosenDB, err := r.strategy.Choose(availableDbs)
 	if err != nil {
-		return nil, -1
+		return nil
 	}
 
-	// Find the index of chosen replica
-	for i, db := range availableDbs {
-		if db == chosenDB {
-			return chosenDB, availableIndexes[i]
+	for _, wrapper := range availableWrappers {
+		if wrapper.db == chosenDB {
+			return wrapper
 		}
 	}
-
-	return chosenDB, availableIndexes[0]
+	return availableWrappers[0]
 }
 
 // addTrace adds tracing information to the context and returns a span.
@@ -295,26 +306,35 @@ func (r *Resolver) QueryContext(ctx context.Context, query string, args ...any) 
 
 	if useReplica && len(r.replicas) > 0 {
 		// Try replica first
-		replica, replicaIdx := r.selectHealthyReplica()
-		if replica != nil {
-			rows, err := replica.QueryContext(tracedCtx, query, args...)
+		wrapper := r.selectHealthyReplica()
+		if wrapper != nil {
+			rows, err := wrapper.db.QueryContext(tracedCtx, query, args...)
 			if err == nil {
 				r.stats.replicaReads.Add(1)
-				r.replicas[replicaIdx].breaker.recordSuccess()
+				wrapper.breaker.recordSuccess()
 				r.recordStats(start, "query", "replica", span, true)
 
 				return rows, nil
 			}
 
 			// Record failure
-			r.replicas[replicaIdx].breaker.recordFailure()
+			wrapper.breaker.recordFailure()
 			r.stats.replicaFailures.Add(1)
+
+			if r.logger != nil {
+				r.logger.Errorf("Replica #%d failed, circuit breaker triggered: %v", wrapper.index+1, err)
+			}
 		}
 
 		// Fallback to primary if enabled
 		if r.readFallback {
 			r.stats.primaryFallbacks.Add(1)
 			r.stats.primaryReads.Add(1)
+
+			if r.logger != nil {
+				r.logger.Warn("Falling back to primary for read operation")
+			}
+
 			rows, err := r.primary.QueryContext(tracedCtx, query, args...)
 			r.recordStats(start, "query", "primary-fallback", span, true)
 
@@ -350,12 +370,12 @@ func (r *Resolver) QueryRowContext(ctx context.Context, query string, args ...an
 	defer r.recordStats(start, "query-row", "primary", span, useReplica)
 
 	if useReplica && len(r.replicas) > 0 {
-		replica, replicaIdx := r.selectHealthyReplica()
-		if replica != nil {
+		wrapper := r.selectHealthyReplica()
+		if wrapper != nil {
 			r.stats.replicaReads.Add(1)
-			r.replicas[replicaIdx].breaker.recordSuccess()
+			wrapper.breaker.recordSuccess()
 
-			return replica.QueryRowContext(tracedCtx, query, args...)
+			return wrapper.db.QueryRowContext(tracedCtx, query, args...)
 		}
 
 		r.stats.replicaFailures.Add(1)
@@ -394,12 +414,13 @@ func (r *Resolver) Select(ctx context.Context, data any, query string, args ...a
 	useReplica := r.shouldUseReplica(ctx)
 
 	if useReplica && len(r.replicas) > 0 {
-		replica, replicaIdx := r.selectHealthyReplica()
+		wrapper := r.selectHealthyReplica()
 
-		if replica != nil {
+		if wrapper != nil {
 			r.stats.replicaReads.Add(1)
-			r.replicas[replicaIdx].breaker.recordSuccess()
-			replica.Select(tracedCtx, data, query, args...)
+			wrapper.breaker.recordSuccess()
+			wrapper.db.Select(tracedCtx, data, query, args...)
+
 			r.recordStats(start, "select", "replica", span, true)
 
 			return
@@ -512,4 +533,9 @@ func (r *Resolver) Close() error {
 // WithHTTPMethod adds HTTP method to context for routing decisions
 func WithHTTPMethod(ctx context.Context, method string) context.Context {
 	return context.WithValue(ctx, contextKeyHTTPMethod, method)
+}
+
+// WithRequestPath adds request path to context
+func WithRequestPath(ctx context.Context, path string) context.Context {
+	return context.WithValue(ctx, contextKeyRequestPath, path)
 }
