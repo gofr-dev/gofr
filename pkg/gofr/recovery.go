@@ -1,11 +1,15 @@
 package gofr
 
 import (
+	"errors"
 	"fmt"
 	"runtime/debug"
 
 	"gofr.dev/pkg/gofr/logging"
 )
+
+// ErrPanic is the base error for panic recovery.
+var ErrPanic = errors.New("panic in component")
 
 // RecoveryLog represents the structure of a panic recovery log entry.
 type RecoveryLog struct {
@@ -37,7 +41,7 @@ func NewRecoveryHandler(logger logging.Logger, component string) *RecoveryHandle
 //	defer NewRecoveryHandler(logger, "cron-job").Recover()
 func (r *RecoveryHandler) Recover() {
 	if rec := recover(); rec != nil {
-		r.handlePanic(rec)
+		_ = r.handlePanic(rec)
 	}
 }
 
@@ -70,7 +74,7 @@ func (r *RecoveryHandler) RecoverWithCallback(callback func(error)) {
 //	}()
 func (r *RecoveryHandler) RecoverWithChannel(panicChan chan<- struct{}) {
 	if rec := recover(); rec != nil {
-		r.handlePanic(rec)
+		_ = r.handlePanic(rec)
 		if panicChan != nil {
 			close(panicChan)
 		}
@@ -90,7 +94,7 @@ func (r *RecoveryHandler) handlePanic(rec any) error {
 		errMsg = fmt.Sprintf("%v", rec)
 	}
 
-	err := fmt.Errorf("panic in %s: %s", r.component, errMsg)
+	err := fmt.Errorf("%w: %s - %s", ErrPanic, r.component, errMsg)
 
 	r.logger.Error(RecoveryLog{
 		Component:  r.component,

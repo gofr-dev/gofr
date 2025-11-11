@@ -85,8 +85,8 @@ func TestRecoveryHandler_RecoverWithCallback(t *testing.T) {
 	})
 
 	assert.True(t, callbackCalled, "callback should be called")
-	assert.NotNil(t, callbackErr, "callback error should not be nil")
-	assert.Contains(t, callbackErr.Error(), "panic in callback-test")
+	assert.Error(t, callbackErr, "callback error should not be nil")
+	assert.Contains(t, callbackErr.Error(), "callback-test")
 	assert.Contains(t, logs, "callback-test")
 }
 
@@ -188,8 +188,8 @@ func TestSafeGoWithCallback(t *testing.T) {
 		panic("test panic in SafeGoWithCallback")
 	}, func(err error) {
 		callbackCalled = true
-		assert.NotNil(t, err)
-		assert.Contains(t, err.Error(), "panic in safe-go-callback-test")
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "safe-go-callback-test")
 		close(done)
 	})
 
