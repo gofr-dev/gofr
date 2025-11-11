@@ -104,10 +104,7 @@ func (j *job) run(cntnr *container.Container) {
 	start := time.Now()
 
 	defer func() {
-		if r := recover(); r != nil {
-			c.Errorf("Panic in cron job %s: %v", j.name, r)
-		}
-
+		NewRecoveryHandler(c.Logger, "cron-job:"+j.name).Recover()
 		c.Infof("Finished cron job: %s in %s", j.name, time.Since(start))
 	}()
 

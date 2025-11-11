@@ -2,11 +2,9 @@ package gofr
 
 import (
 	"context"
-	"runtime/debug"
 	"time"
 
 	"gofr.dev/pkg/gofr/container"
-	"gofr.dev/pkg/gofr/logging"
 )
 
 type SubscribeFunc func(c *Context) error
@@ -59,10 +57,7 @@ func (s *SubscriptionManager) handleSubscription(ctx context.Context, topic stri
 	msgCtx := newContext(nil, msg, s.container)
 
 	err = func(ctx *Context) error {
-		// TODO : Move panic recovery at central location which will manage for all the different cases.
-		defer func() {
-			panicRecovery(recover(), ctx.Logger)
-		}()
+		defer NewRecoveryHandler(ctx.Logger, "subscriber:"+topic).Recover()
 
 		return handler(ctx)
 	}(msgCtx)
@@ -73,35 +68,8 @@ func (s *SubscriptionManager) handleSubscription(ctx context.Context, topic stri
 	}
 
 	if msg.Committer != nil {
-		// commit the message if the subscription function does not return error
 		msg.Commit()
 	}
 
 	return nil
-}
-
-type panicLog struct {
-	Error      string `json:"error,omitempty"`
-	StackTrace string `json:"stack_trace,omitempty"`
-}
-
-func panicRecovery(re any, log logging.Logger) {
-	if re == nil {
-		return
-	}
-
-	var e string
-	switch t := re.(type) {
-	case string:
-		e = t
-	case error:
-		e = t.Error()
-	default:
-		e = "Unknown panic type"
-	}
-
-	log.Error(panicLog{
-		Error:      e,
-		StackTrace: string(debug.Stack()),
-	})
 }

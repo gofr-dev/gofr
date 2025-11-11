@@ -71,7 +71,11 @@ func (cmd *cmd) Run(c *container.Container) {
 		return
 	}
 
-	ctx.responder.Respond(r.handler(ctx))
+	// Execute command with panic recovery
+	func() {
+		defer NewRecoveryHandler(c.Logger, "cmd:"+r.pattern).Recover()
+		ctx.responder.Respond(r.handler(ctx))
+	}()
 }
 
 // noCommandResponse responds with error when no route with the given subcommand is not found or handler is nil.

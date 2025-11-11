@@ -218,10 +218,7 @@ func (a *App) SubCommand(pattern string, handler Handler, options ...Options) {
 // The migrationsMap argument is a map where the key is the version number of the migration
 // and the value is a migration.Migrate instance that implements the migration logic.
 func (a *App) Migrate(migrationsMap map[int64]migration.Migrate) {
-	// TODO : Move panic recovery at central location which will manage for all the different cases.
-	defer func() {
-		panicRecovery(recover(), a.container.Logger)
-	}()
+	defer NewRecoveryHandler(a.container.Logger, "migration").Recover()
 
 	migration.Run(migrationsMap, a.container)
 }

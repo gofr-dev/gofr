@@ -55,7 +55,7 @@ func (a *App) handleStartupHooks(ctx context.Context) bool {
 // startShutdownHandler starts a goroutine to handle graceful shutdown.
 func (a *App) startShutdownHandler(ctx context.Context, timeout time.Duration) {
 	// Goroutine to handle shutdown when context is canceled
-	go func() {
+	SafeGo(a.Logger(), "shutdown-handler", func() {
 		<-ctx.Done()
 
 		// Create a shutdown context with a timeout
@@ -72,13 +72,15 @@ func (a *App) startShutdownHandler(ctx context.Context, timeout time.Duration) {
 		if shutdownErr != nil {
 			a.Logger().Debugf("Server shutdown failed: %v", shutdownErr)
 		}
-	}()
+	})
 }
 
 // startTelemetryIfEnabled starts telemetry if it's enabled.
 func (a *App) startTelemetryIfEnabled() {
 	if a.hasTelemetry() {
-		go a.sendTelemetry(http.DefaultClient, true)
+		SafeGo(a.Logger(), "telemetry", func() {
+			a.sendTelemetry(http.DefaultClient, true)
+		})
 	}
 }
 
@@ -102,6 +104,7 @@ func (a *App) startMetricsServer(wg *sync.WaitGroup) {
 		wg.Add(1)
 
 		go func(m *metricServer) {
+			defer NewRecoveryHandler(a.Logger(), "metrics-server").Recover()
 			defer wg.Done()
 
 			m.Run(a.container)
@@ -116,6 +119,7 @@ func (a *App) startHTTPServer(wg *sync.WaitGroup) {
 		a.httpServerSetup()
 
 		go func(s *httpServer) {
+			defer NewRecoveryHandler(a.Logger(), "http-server").Recover()
 			defer wg.Done()
 
 			s.run(a.container)
@@ -129,6 +133,7 @@ func (a *App) startGRPCServer(wg *sync.WaitGroup) {
 		wg.Add(1)
 
 		go func(s *grpcServer) {
+			defer NewRecoveryHandler(a.Logger(), "grpc-server").Recover()
 			defer wg.Done()
 
 			s.Run(a.container)
@@ -141,6 +146,7 @@ func (a *App) startSubscriptionManager(ctx context.Context, wg *sync.WaitGroup) 
 	wg.Add(1)
 
 	go func() {
+		defer NewRecoveryHandler(a.Logger(), "subscription-manager").Recover()
 		defer wg.Done()
 
 		err := a.startSubscriptions(ctx)
