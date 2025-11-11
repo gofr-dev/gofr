@@ -242,8 +242,10 @@ Now when we access {% new-tab-link title="http://localhost:9000/customer" href="
 
 ### Enabling Read/Write Splitting in MySQL (DBResolver)
 GoFr provides built-in support for read/write splitting using its `DBRESOLVER` module for **MySQL**. 
-This feature allows applications to route write queries (e.g., `INSERT`, `UPDATE`) to the **primary database**, and 
+This feature allows applications to route write queries (e.g., `INSERT`, `UPDATE`, `DELETE`) to the **primary database**, and 
 distribute read queries (`SELECT`) across **one or more replicas**, boosting performance, scalability, and reliability.
+
+#### Installation
 
 Import the GoFr's dbresolver for MySQL:
 
@@ -251,50 +253,107 @@ Import the GoFr's dbresolver for MySQL:
 go get gofr.dev/pkg/gofr/datasource/dbresolver@latest
 ```
 
-After importing the package, you can configure the DBResolver in your GoFr application using the `AddDBResolver` method. 
-You can choose the load balancing strategy and enable fallback to primary:
+#### Configuration
 
-```go
-// Add DB resolver with round-robin strategy and fallback enabled
-resolver := dbresolver.NewProvider(dbresolver.NewRoundRobinStrategy(), true)
-a.AddDBResolver(resolver)
-```
+**1. Environment Variables**
 
-- The first argument specifies the **load balancing strategy** for read queries. Supported values:
-   - `round-robin`: Distributes reads evenly across replicas.
-   - `random`: Selects a replica at random for each read.
-- The second argument enables **fallback** to the primary if all replicas are unavailable.
+Add replica connection details to your .env file:
 
-###  Configuration
+```editorconfig
+# Primary database
+DB_HOST=localhost
+DB_PORT=3306
+DB_USER=root
+DB_PASSWORD=root123
+DB_NAME=test_db
+DB_DIALECT=mysql
 
-#### 1. Replica Hosts
-Add replica hosts, ports,users, passwords to your `.env` file using the following configs:
-
-```env
+# Replica configuration
 DB_REPLICA_HOSTS=localhost,replica1,replica2
 DB_REPLICA_PORTS=3307,3308,3309
 DB_REPLICA_USERS=readonly1,readonly2,readonly3
 DB_REPLICA_PASSWORDS=pass1,pass2,pass3
-
 ```
 
-These hosts will be treated as **read replicas**.
+**2. Initialize DBResolver**
 
-#### 2. Replica Connection Pool Tuning
-By default, GoFr automatically scales connection pools for replicas based on your primary database settings:
-
-`DB_MAX_IDLE_CONNECTION` → multiplied by 4
-`DB_MAX_OPEN_CONNECTION` → multiplied by 2
-
-This ensures replicas can handle higher read concurrency without impacting the primary.
-GoFr also applies min/max caps to keep values safe. These can be customized:
+After importing the package, you can configure the DBResolver in your GoFr application using the `AddDBResolver` method. 
+You can choose the load balancing strategy and enable fallback to primary:
 
 ```go
-# Primary DB pool settings
-DB_MAX_IDLE_CONNECTION=2
-DB_MAX_OPEN_CONNECTION=20
+package main
 
-# Replica pool overrides (optional)
+import (
+	"gofr.dev/pkg/gofr"
+	"gofr.dev/pkg/gofr/datasource/dbresolver"
+)
+
+type Customer struct {
+	ID   int    `db:"id"`
+	Name string `db:"name"`
+}
+
+func main() {
+	a := gofr.New()
+
+	// Initialize DB resolver with default settings
+	err := dbresolver.InitDBResolver(a, dbresolver.Config{
+		Strategy:      dbresolver.StrategyRoundRobin, // use round-robin strategy or random strategy
+		ReadFallback:  true, // allow reads on primary if all replicas are down
+		MaxFailures:   3, 			  // number of allowed failures before marking a replica as down
+		TimeoutSec:    30, // timeout for marking a replica as down
+		PrimaryRoutes: []string{"/admin", "/api/payments/*"}, // routes that should go to primary
+	})
+	if err != nil {
+		a.Logger().Errorf("failed to initialize db resolver: %v", err)
+	}
+
+	// Read endpoint - goes to replica
+	a.GET("/customers", func(c *gofr.Context) (interface{}, error) {
+		var customers []Customer
+
+		c.SQL.Select(c, &customers, "SELECT id, name FROM customers")
+
+		return customers, err
+	})
+
+	// Write endpoint - goes to primary
+	a.POST("/customers", func(c *gofr.Context) (interface{}, error) {
+		var customer Customer
+
+		c.Bind(&customer)
+
+		_, err := c.SQL.Exec("INSERT INTO customers (name) VALUES (?)", customer.Name)
+
+		return customer, err
+	})
+
+	// Admin endpoint - forced to primary
+	a.GET("/admin/customers", func(c *gofr.Context) (interface{}, error) {
+		var customers []Customer
+
+		c.SQL.Select(c, &customers, "SELECT id, name FROM customers")
+
+		return customers, err
+	})
+
+	a.Run()
+}
+```
+
+**3. Connection Pool Tuning (Optional)**
+
+By default, replica pools are auto-scaled based on primary settings:
+
+```
+# Defaults (automatically calculated)
+DB_MAX_IDLE_CONNECTION=2    → Replicas: 8 (2 × 4)
+DB_MAX_OPEN_CONNECTION=20   → Replicas: 40 (20 × 2)
+```
+
+Override with:
+
+```
 DB_REPLICA_MAX_IDLE_CAP=100
 DB_REPLICA_MIN_IDLE=5
 DB_REPLICA_DEFAULT_IDLE=15

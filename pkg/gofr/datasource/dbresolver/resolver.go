@@ -140,6 +140,7 @@ func (r *Resolver) initializeMetrics() {
 // startBackgroundTasks starts minimal background processing.
 func (r *Resolver) startBackgroundTasks() {
 	r.wg.Add(1)
+
 	go r.backgroundProcessor()
 }
 
@@ -173,29 +174,29 @@ func (r *Resolver) updateMetrics() {
 	r.metrics.SetGauge("dbresolver_failures", float64(r.stats.replicaFailures.Load()))
 }
 
-// shouldUseReplica determines routing based on HTTP method and path
+// shouldUseReplica determines routing based on HTTP method and path.
 func (r *Resolver) shouldUseReplica(ctx context.Context) bool {
 	if len(r.replicas) == 0 {
 		return false
 	}
 
-	// Check if path requires primary
+	// Check if path requires primary.
 	if path, ok := ctx.Value(contextKeyRequestPath).(string); ok {
 		if r.isPrimaryRoute(path) {
 			return false
 		}
 	}
 
-	// Check HTTP method
+	// Check HTTP method.
 	method, ok := ctx.Value(contextKeyHTTPMethod).(string)
 	if !ok {
-		return false // Default to primary for safety
+		return false // Default to primary for safety.
 	}
 
 	return method == "GET" || method == "HEAD" || method == "OPTIONS"
 }
 
-// isPrimaryRoute checks if path matches primary route patterns
+// isPrimaryRoute checks if path matches primary route patterns.
 func (r *Resolver) isPrimaryRoute(path string) bool {
 	if r.primaryRoutes[path] {
 		return true
@@ -217,7 +218,7 @@ func (r *Resolver) selectHealthyReplica() *replicaWrapper {
 		return nil
 	}
 
-	// Get all available DBs for strategy
+	// Get all available DBs for strategy.
 	var (
 		availableDbs      []container.DB
 		availableWrappers []*replicaWrapper
@@ -238,7 +239,7 @@ func (r *Resolver) selectHealthyReplica() *replicaWrapper {
 		return nil
 	}
 
-	// Use strategy to choose from available replicas
+	// Use strategy to choose from available replicas.
 	chosenDB, err := r.strategy.Choose(availableDbs)
 	if err != nil {
 		return nil
@@ -249,6 +250,7 @@ func (r *Resolver) selectHealthyReplica() *replicaWrapper {
 			return wrapper
 		}
 	}
+
 	return availableWrappers[0]
 }
 
@@ -276,6 +278,7 @@ func (r *Resolver) recordStats(start time.Time, method, target string, span trac
 	// Update trace if available.
 	if span != nil {
 		defer span.End()
+
 		span.SetAttributes(
 			attribute.String("dbresolver.target", target),
 			attribute.Int64("dbresolver.duration", duration),
@@ -298,58 +301,73 @@ func (r *Resolver) Query(query string, args ...any) (*sql.Rows, error) {
 // QueryContext routes queries with optimized path.
 func (r *Resolver) QueryContext(ctx context.Context, query string, args ...any) (*sql.Rows, error) {
 	start := time.Now()
+
 	r.stats.totalQueries.Add(1)
 
 	tracedCtx, span := r.addTrace(ctx, "query", query)
-
 	useReplica := r.shouldUseReplica(ctx)
 
 	if useReplica && len(r.replicas) > 0 {
-		// Try replica first
-		wrapper := r.selectHealthyReplica()
-		if wrapper != nil {
-			rows, err := wrapper.db.QueryContext(tracedCtx, query, args...)
-			if err == nil {
-				r.stats.replicaReads.Add(1)
-				wrapper.breaker.recordSuccess()
-				r.recordStats(start, "query", "replica", span, true)
+		return r.executeReplicaQuery(tracedCtx, span, start, query, args...)
+	}
 
-				return rows, nil
-			}
+	// Non-GET requests or no replicas - use primary.
+	r.stats.primaryWrites.Add(1)
+	rows, err := r.primary.QueryContext(tracedCtx, query, args...)
 
-			// Record failure
-			wrapper.breaker.recordFailure()
-			r.stats.replicaFailures.Add(1)
+	r.recordStats(start, "query", "primary", span, false)
 
-			if r.logger != nil {
-				r.logger.Errorf("Replica #%d failed, circuit breaker triggered: %v", wrapper.index+1, err)
-			}
-		}
+	return rows, err
+}
 
-		// Fallback to primary if enabled
-		if r.readFallback {
-			r.stats.primaryFallbacks.Add(1)
-			r.stats.primaryReads.Add(1)
+// executeReplicaQuery attempts to execute query on replica with fallback handling.
+func (r *Resolver) executeReplicaQuery(ctx context.Context, span trace.Span, start time.Time,
+	query string, args ...any) (*sql.Rows, error) {
+	wrapper := r.selectHealthyReplica()
 
-			if r.logger != nil {
-				r.logger.Warn("Falling back to primary for read operation")
-			}
+	if wrapper == nil {
+		return r.fallbackToPrimary(ctx, span, start, query, "No healthy replica available, falling back to primary", args...)
+	}
 
-			rows, err := r.primary.QueryContext(tracedCtx, query, args...)
-			r.recordStats(start, "query", "primary-fallback", span, true)
+	rows, err := wrapper.db.QueryContext(ctx, query, args...)
+	if err == nil {
+		r.stats.replicaReads.Add(1)
+		wrapper.breaker.recordSuccess()
 
-			return rows, err
-		}
+		r.recordStats(start, "query", "replica", span, true)
 
+		return rows, nil
+	}
+
+	// Record failure.
+	wrapper.breaker.recordFailure()
+	r.stats.replicaFailures.Add(1)
+
+	if r.logger != nil {
+		r.logger.Errorf("Replica #%d failed, circuit breaker triggered: %v", wrapper.index+1, err)
+	}
+
+	return r.fallbackToPrimary(ctx, span, start, query, "Falling back to primary for read operation", args...)
+}
+
+// fallbackToPrimary handles primary fallback logic with custom warning message.
+func (r *Resolver) fallbackToPrimary(ctx context.Context, span trace.Span, start time.Time,
+	query, warningMsg string, args ...any) (*sql.Rows, error) {
+	if !r.readFallback {
 		r.recordStats(start, "query", "replica-failed", span, true)
 
 		return nil, errReplicaFailedNoFallback
 	}
 
-	// Non-GET requests - always use primary
-	r.stats.primaryWrites.Add(1)
-	rows, err := r.primary.QueryContext(tracedCtx, query, args...)
-	r.recordStats(start, "query", "primary", span, false)
+	r.stats.primaryFallbacks.Add(1)
+	r.stats.primaryReads.Add(1)
+
+	if r.logger != nil && warningMsg != "" {
+		r.logger.Warn(warningMsg)
+	}
+
+	rows, err := r.primary.QueryContext(ctx, query, args...)
+	r.recordStats(start, "query", "primary-fallback", span, true)
 
 	return rows, err
 }
@@ -362,6 +380,7 @@ func (r *Resolver) QueryRow(query string, args ...any) *sql.Row {
 // QueryRowContext routes queries with circuit breaker.
 func (r *Resolver) QueryRowContext(ctx context.Context, query string, args ...any) *sql.Row {
 	start := time.Now()
+
 	r.stats.totalQueries.Add(1)
 
 	useReplica := r.shouldUseReplica(ctx)
@@ -407,6 +426,7 @@ func (r *Resolver) ExecContext(ctx context.Context, query string, args ...any) (
 // Select routes to replica for reads, primary for writes.
 func (r *Resolver) Select(ctx context.Context, data any, query string, args ...any) {
 	start := time.Now()
+
 	r.stats.totalQueries.Add(1)
 
 	tracedCtx, span := r.addTrace(ctx, "select", query)
@@ -530,12 +550,12 @@ func (r *Resolver) Close() error {
 	return err
 }
 
-// WithHTTPMethod adds HTTP method to context for routing decisions
+// WithHTTPMethod adds HTTP method to context for routing decisions.
 func WithHTTPMethod(ctx context.Context, method string) context.Context {
 	return context.WithValue(ctx, contextKeyHTTPMethod, method)
 }
 
-// WithRequestPath adds request path to context
+// WithRequestPath adds request path to context.
 func WithRequestPath(ctx context.Context, path string) context.Context {
 	return context.WithValue(ctx, contextKeyRequestPath, path)
 }

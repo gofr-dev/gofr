@@ -122,8 +122,8 @@ func TestRandomStrategy_Choose_NoReplicas(t *testing.T) {
 
 func TestStrategy_Name(t *testing.T) {
 	roundRobin := NewRoundRobinStrategy()
-	assert.Equal(t, string(strategyRoundRobin), roundRobin.Name())
+	assert.Equal(t, string(StrategyRoundRobin), roundRobin.Name())
 
 	random := NewRandomStrategy()
-	assert.Equal(t, string(strategyRandom), random.Name())
+	assert.Equal(t, string(StrategyRandom), random.Name())
 }

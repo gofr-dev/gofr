@@ -20,11 +20,16 @@ const (
 	maxIdleReplicaCapDefault = 10
 	minOpenReplicaDefault    = 5
 	maxOpenReplicaCapDefault = 20
+	expectedHostPortParts
 )
 
-var errPrimaryNil = errors.New("primary SQL connection is nil")
+var (
+	errPrimaryNil               = errors.New("primary SQL connection is nil")
+	errInvalidReplicaHostFormat = errors.New("invalid replica host format (expected host:port)")
+	errDBNameRequired           = errors.New("DB_NAME is required")
+)
 
-// Config holds resolver configuration
+// Config holds resolver configuration.
 type Config struct {
 	Strategy      StrategyType
 	ReadFallback  bool
@@ -33,8 +38,8 @@ type Config struct {
 	PrimaryRoutes []string
 }
 
-// DBResolverProvider implements container.DBResolverProvider interface
-type DBResolverProvider struct {
+// ResolverProvider implements container.DBResolverProvider interface.
+type ResolverProvider struct {
 	resolver container.DB
 	logger   any
 	metrics  any
@@ -43,43 +48,44 @@ type DBResolverProvider struct {
 	app      *gofr.App
 }
 
-// NewDBResolverProvider creates a new DBResolverProvider
-func NewDBResolverProvider(app *gofr.App, cfg Config) *DBResolverProvider {
-	return &DBResolverProvider{
+// NewDBResolverProvider creates a new ResolverProvider.
+func NewDBResolverProvider(app *gofr.App, cfg Config) *ResolverProvider {
+	return &ResolverProvider{
 		app: app,
 		cfg: cfg,
 	}
 }
 
-// UseLogger sets the logger - ✅ Implements provider.UseLogger()
-func (p *DBResolverProvider) UseLogger(logger any) {
+// UseLogger sets the logger.
+func (p *ResolverProvider) UseLogger(logger any) {
 	p.logger = logger
 }
 
-// UseMetrics sets the metrics - ✅ Implements provider.UseMetrics()
-func (p *DBResolverProvider) UseMetrics(metrics any) {
+// UseMetrics sets the metrics.
+func (p *ResolverProvider) UseMetrics(metrics any) {
 	p.metrics = metrics
 }
 
-// UseTracer sets the tracer - ✅ Implements provider.UseTracer()
-func (p *DBResolverProvider) UseTracer(tracer any) {
+// UseTracer sets the tracer.
+func (p *ResolverProvider) UseTracer(tracer any) {
 	if t, ok := tracer.(trace.Tracer); ok {
 		p.tracer = t
 	}
 }
 
-// Connect initializes the resolver - ✅ SINGLE SOURCE OF TRUTH
-func (p *DBResolverProvider) Connect() {
-	// Get primary from app
+// Connect initializes the resolver.
+func (p *ResolverProvider) Connect() {
+	// Get primary from app.
 	primary := p.app.GetSQL()
 	if primary == nil {
 		if logger, ok := p.logger.(Logger); ok {
-			logger.Errorf("Primary SQL connection is nil")
+			logger.Error(errPrimaryNil)
 		}
+
 		return
 	}
 
-	// Convert logger and metrics to proper types
+	// Convert logger and metrics to proper types.
 	logger, loggerOk := p.logger.(Logger)
 	metrics, metricsOk := p.metrics.(Metrics)
 
@@ -87,40 +93,25 @@ func (p *DBResolverProvider) Connect() {
 		if loggerOk {
 			logger.Errorf("Invalid logger or metrics type")
 		}
+
 		return
 	}
 
-	// Create replicas from config
-	replicas, err := createReplicas(p.app.Config, logger, metrics)
-	if err != nil {
-		logger.Errorf("Failed to create replicas: %v", err)
+	replicas := p.createAndValidateReplicas(logger, metrics)
+	if replicas == nil {
 		return
 	}
 
-	if len(replicas) == 0 {
-		logger.Warn("No replicas configured - all operations will use primary")
-		p.resolver = primary
-		return
-	}
-
-	// Build primary routes map
+	// Build primary routes map.
 	primaryRoutesMap := make(map[string]bool)
+
 	for _, route := range p.cfg.PrimaryRoutes {
 		primaryRoutesMap[route] = true
 	}
 
-	// Create strategy
-	var strategy Strategy
-	switch p.cfg.Strategy {
-	case strategyRandom:
-		strategy = NewRandomStrategy()
-	case strategyRoundRobin:
-		strategy = NewRoundRobinStrategy()
-	default:
-		strategy = NewRoundRobinStrategy()
-	}
+	strategy := createStrategy(p.cfg.Strategy)
 
-	// ✅ Create resolver - single place!
+	// Create resolver - single place!
 	p.resolver = NewResolver(
 		primary,
 		replicas,
@@ -134,25 +125,58 @@ func (p *DBResolverProvider) Connect() {
 	logger.Logf("DB Resolver initialized with %d replicas", len(replicas))
 }
 
-// GetResolver returns the underlying resolver - ✅ Implements DBResolverProvider.GetResolver()
-func (p *DBResolverProvider) GetResolver() container.DB {
+// createAndValidateReplicas creates replicas and validates count.
+func (p *ResolverProvider) createAndValidateReplicas(logger Logger, metrics Metrics) []container.DB {
+	// Create replicas from config.
+	replicas, err := createReplicas(p.app.Config, logger, metrics)
+	if err != nil {
+		logger.Errorf("Failed to create replicas: %v", err)
+
+		return nil
+	}
+
+	if len(replicas) == 0 {
+		logger.Warn("No replicas configured - all operations will use primary")
+
+		p.resolver = p.app.GetSQL()
+
+		return nil
+	}
+
+	return replicas
+}
+
+// createStrategy returns the configured strategy.
+func createStrategy(strategyType StrategyType) Strategy {
+	switch strategyType {
+	case StrategyRandom:
+		return NewRandomStrategy()
+	case StrategyRoundRobin:
+		return NewRoundRobinStrategy()
+	default:
+		return NewRoundRobinStrategy()
+	}
+}
+
+// GetResolver returns the underlying resolver.
+func (p *ResolverProvider) GetResolver() container.DB {
 	return p.resolver
 }
 
-// InitDBResolver - Complete initialization with middleware
+// InitDBResolver - Complete initialization with middleware.
 func InitDBResolver(app *gofr.App, cfg Config) error {
 	provider := NewDBResolverProvider(app, cfg)
 
-	// ✅ Add middleware to inject HTTP context
+	//  Add middleware to inject HTTP context.
 	app.UseMiddleware(createHTTPMiddleware())
 
-	// ✅ Add resolver (calls Connect() internally)
+	//  Add resolver (calls Connect() internally).
 	app.AddDBResolver(provider)
 
 	return nil
 }
 
-// createHTTPMiddleware injects HTTP method/path into context
+// createHTTPMiddleware injects HTTP method/path into context.
 func createHTTPMiddleware() gofrHTTP.Middleware {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -166,7 +190,7 @@ func createHTTPMiddleware() gofrHTTP.Middleware {
 	}
 }
 
-// createReplicas creates replica connections from configuration
+// createReplicas creates replica connections from configuration.
 func createReplicas(cfg config.Config, logger Logger, metrics Metrics) ([]container.DB, error) {
 	replicasStr := cfg.Get("DB_REPLICA_HOSTS")
 	if replicasStr == "" {
@@ -186,8 +210,8 @@ func createReplicas(cfg config.Config, logger Logger, metrics Metrics) ([]contai
 		}
 
 		parts := strings.Split(hostPort, ":")
-		if len(parts) != 2 {
-			return nil, fmt.Errorf("invalid replica host format at index %d: %s (expected host:port)", i, hostPort)
+		if len(parts) != expectedHostPortParts {
+			return nil, fmt.Errorf("%w at index %d: %s", errInvalidReplicaHostFormat, i, hostPort)
 		}
 
 		host, port := parts[0], parts[1]
@@ -198,17 +222,19 @@ func createReplicas(cfg config.Config, logger Logger, metrics Metrics) ([]contai
 		}
 
 		replicas = append(replicas, replica)
+
 		logger.Logf("Created DB replica connection to %s:%s", host, port)
 	}
 
 	return replicas, nil
 }
 
-// createReplicaConnection creates a single replica database connection
+// createReplicaConnection creates a single replica database connection.
 func createReplicaConnection(cfg config.Config, host, port, user, password string, logger Logger, metrics Metrics) (container.DB, error) {
 	dbName := cfg.Get("DB_NAME")
+
 	if dbName == "" {
-		return nil, errors.New("DB_NAME is required")
+		return nil, errDBNameRequired
 	}
 
 	replicaCfg := &replicaConfig{
@@ -220,10 +246,11 @@ func createReplicaConnection(cfg config.Config, host, port, user, password strin
 	}
 
 	db := gofrSQL.NewSQL(replicaCfg, logger, metrics)
+
 	return db, nil
 }
 
-// replicaConfig wraps the main config and overrides specific values
+// replicaConfig wraps the main config and overrides specific values.
 type replicaConfig struct {
 	base     config.Config
 	host     string
@@ -256,47 +283,63 @@ func (r *replicaConfig) GetOrDefault(key, defaultValue string) string {
 	if val == "" {
 		return defaultValue
 	}
+
 	return val
 }
 
-func optimizedIdleConnections(cfg config.Config) string {
-	maxIdleStr := cfg.Get("DB_REPLICA_MAX_IDLE_CONNECTIONS")
-	if maxIdleStr == "" {
-		return strconv.Itoa(minIdleReplicaDefault)
+func getReplicaConfigInt(cfg config.Config, key string, fallback int) int {
+	valStr := cfg.Get(key)
+	if valStr == "" {
+		return fallback
 	}
 
-	maxIdle, err := strconv.Atoi(maxIdleStr)
+	val, err := strconv.Atoi(valStr)
 	if err != nil {
-		return strconv.Itoa(minIdleReplicaDefault)
+		return fallback
 	}
 
-	if maxIdle < minIdleReplicaDefault {
-		maxIdle = minIdleReplicaDefault
-	}
-	if maxIdle > maxIdleReplicaCapDefault {
-		maxIdle = maxIdleReplicaCapDefault
+	return val
+}
+
+func optimizedConnections(cfg config.Config, key string, minDefault, maxDefault, defaultVal, multiplier int) string {
+	val := getReplicaConfigInt(cfg, key, defaultVal)
+	if val <= 0 {
+		return strconv.Itoa(defaultVal)
 	}
 
-	return strconv.Itoa(maxIdle)
+	optimized := val * multiplier
+
+	if optimized < minDefault {
+		optimized = minDefault
+	}
+
+	if optimized > maxDefault {
+		optimized = maxDefault
+	}
+
+	return strconv.Itoa(optimized)
+}
+
+func optimizedIdleConnections(cfg config.Config) string {
+	// preserves previous behavior: read replica idle config, clamp to min/max
+	return optimizedConnections(
+		cfg,
+		"DB_REPLICA_MAX_IDLE_CONNECTIONS",
+		minIdleReplicaDefault,
+		maxIdleReplicaCapDefault,
+		minIdleReplicaDefault,
+		1,
+	)
 }
 
 func optimizedOpenConnections(cfg config.Config) string {
-	maxOpenStr := cfg.Get("DB_REPLICA_MAX_OPEN_CONNECTIONS")
-	if maxOpenStr == "" {
-		return strconv.Itoa(minOpenReplicaDefault)
-	}
-
-	maxOpen, err := strconv.Atoi(maxOpenStr)
-	if err != nil {
-		return strconv.Itoa(minOpenReplicaDefault)
-	}
-
-	if maxOpen < minOpenReplicaDefault {
-		maxOpen = minOpenReplicaDefault
-	}
-	if maxOpen > maxOpenReplicaCapDefault {
-		maxOpen = maxOpenReplicaCapDefault
-	}
-
-	return strconv.Itoa(maxOpen)
+	// preserves previous behavior: read replica open config, clamp to min/max
+	return optimizedConnections(
+		cfg,
+		"DB_REPLICA_MAX_OPEN_CONNECTIONS",
+		minOpenReplicaDefault,
+		maxOpenReplicaCapDefault,
+		minOpenReplicaDefault,
+		1,
+	)
 }
