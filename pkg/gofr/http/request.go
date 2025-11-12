@@ -161,12 +161,6 @@ func (r *Request) bindForm(ptr any, isMultipart bool) error {
 	return nil
 }
 
-// HTTPRequest returns the underlying *http.Request
-// This allows external packages to access HTTP-specific fields when needed
-func (r *Request) HTTPRequest() *http.Request {
-	return r.req // r.req is your internal *http.Request field
-}
-
 // bindBinary handles binding for binary/octet-stream content type.
 func (r *Request) bindBinary(raw any) error {
 	// Ensure raw is a pointer to a byte slice

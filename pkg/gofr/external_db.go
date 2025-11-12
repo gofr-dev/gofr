@@ -7,15 +7,6 @@ import (
 	"gofr.dev/pkg/gofr/datasource/file"
 )
 
-const (
-	maxIdleReplicaCapDefault  = 50
-	minIdleReplicaDefault     = 10
-	maxOpenReplicaCapDefault  = 200
-	minOpenReplicaDefault     = 50
-	defaultIdleReplicaDefault = 10
-	defaultOpenReplicaDefault = 100
-)
-
 // AddMongo sets the Mongo datasource in the app's container.
 func (a *App) AddMongo(db container.MongoProvider) {
 	db.UseLogger(a.Logger())
@@ -230,7 +221,7 @@ func (a *App) AddCouchbase(db container.CouchbaseProvider) {
 	a.container.Couchbase = db
 }
 
-// AddDBResolver sets up database resolver with read/write splitting
+// AddDBResolver sets up database resolver with read/write splitting.
 func (a *App) AddDBResolver(resolver container.DBResolverProvider) {
 	// Validate primary SQL exists
 	if a.container.SQL == nil {
