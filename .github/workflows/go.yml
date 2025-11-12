@@ -96,18 +96,25 @@ jobs:
       - name: Test with Retry Logic
         id: test
         uses: nick-fields/retry@v3
+        continue-on-error: false
         with:
           timeout_minutes: 5  # Maximum time for the tests to run
           max_attempts: 2      # Retry up to 2 times if tests fail
           command: |
+            set -e
             export APP_ENV=test
             # Run tests for the examples directory with coverage
             go test ./examples/... -v -short -covermode=atomic -coverprofile packageWithpbgo.cov -coverpkg=./examples/...
+            # Treat exit code 0 as success; exit code 1 may be harmless if output exists
+            if [ "${exit_code:-0}" -ne 0 ]; then
+              echo "⚠️ go test exited with $exit_code"
+            fi
              # Filter out auto-generated files by protobuf and gofr framework from coverage report
+
             grep -vE '(/client/|grpc-.+-client/main\.go|_client\.go|_gofr\.go|_grpc\.pb\.go|\.pb\.go|\.proto|health_.*\.go)' packageWithpbgo.cov > profile.cov
             # Display coverage statistics
             go tool cover -func profile.cov
-
+      
       # Upload coverage report for the 1.24 Go version only
       - name: Upload Test Coverage
         if: ${{ matrix.go-version == '1.24'}}
@@ -148,10 +155,12 @@ jobs:
         with:
           timeout_minutes: 5
           max_attempts: 2
+          continue-on-error: false
           retry_on: error
           command: |
+            set -e
             export APP_ENV=test
-
+            
             # Run tests for root gofr package
             go test -v -short -covermode=atomic \
               -coverpkg=./pkg/gofr -coverprofile=gofr_only.cov ./pkg/gofr
@@ -175,11 +184,9 @@ jobs:
               echo "::error::Gofr sub-packages tests failed"
               exit $exit_code
             fi
-
             # Combine coverage profiles
             echo "mode: atomic" > profile.cov
             grep -h -v "mode:" gofr_only.cov submodules.cov | grep -v '/mock_' >> profile.cov
-
             # Show coverage summary
             go tool cover -func profile.cov
 
@@ -213,7 +220,6 @@ jobs:
         run: |
           echo "mode: atomic" > merged_profile.cov
           grep -h -v "mode:" ./Example-Test-Report/profile.cov ./PKG-Coverage-Report/profile.cov >> merged_profile.cov
-
       # Calculate and output the total code coverage percentage
       - name: Parse code-coverage value
         working-directory: artifacts
@@ -288,13 +294,12 @@ jobs:
             
               # Run tests with a focus on failed tests first
               go test ./... -v -short -coverprofile=${module_name}.cov -coverpkg=./...
-            
+
               # Copy coverage file to the coverage_reports directory
               cp ${module_name}.cov ../../../coverage_reports/
             
               cd -
             '
-
       # Upload submodule coverage reports as an artifact
       - name: Upload Coverage Reports
         uses: actions/upload-artifact@v5
@@ -322,7 +327,6 @@ jobs:
         run: |
           curl https://qlty.sh | sh
           echo "$HOME/.qlty/bin" >> $GITHUB_PATH
-
       # Download coverage artifacts
       - name: Download Coverage Report
         uses: actions/download-artifact@v6
@@ -335,7 +339,6 @@ jobs:
         run: |
           echo "mode: atomic" > merged_profile.cov
           grep -h -v "mode:" ./Example-Test-Report/profile.cov ./PKG-Coverage-Report/profile.cov >> merged_profile.cov
-
           # Generate and print total coverage percentage
           echo "Total Coverage:"
           go tool cover -func=merged_profile.cov | tail -n 1
@@ -366,7 +369,6 @@ jobs:
       - name: Install golangci-lint
         run: |
           go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.4.0
-
       - name: Get dependencies
         run: |
           go mod tidy
@@ -375,7 +377,6 @@ jobs:
       - name: Lint Root Module
         run: |
           golangci-lint run --output.text.print-issued-lines --output.text.colors=true --show-stats=false --timeout=5m
-
       # Run linter on each submodule
       - name: Lint Submodules
         run: |
