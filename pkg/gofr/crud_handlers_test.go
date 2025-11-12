@@ -273,7 +273,11 @@ func Test_CreateHandler(t *testing.T) {
 
 			assert.Equal(t, tc.expectedResp, resp, "TEST[%d], Failed.\n%s", i, tc.desc)
 
-			assert.IsType(t, tc.expectedErr, err, "TEST[%d], Failed.\n%s", i, tc.desc)
+			if tc.expectedErr != nil {
+				assert.ErrorIs(t, err, tc.expectedErr, "TEST[%d], Failed.\n%s", i, tc.desc)
+			} else {
+				assert.NoError(t, err, "TEST[%d], Failed.\n%s", i, tc.desc)
+			}
 		})
 	}
 }
@@ -526,7 +530,11 @@ func Test_UpdateHandler(t *testing.T) {
 
 				assert.Equal(t, tc.expectedResp, resp, "TEST[%d], Failed.\n%s", i, tc.desc)
 
-				assert.IsType(t, tc.expectedErr, err, "TEST[%d], Failed.\n%s", i, tc.desc)
+				if tc.expectedErr != nil {
+					assert.ErrorIs(t, err, tc.expectedErr, "TEST[%d], Failed.\n%s", i, tc.desc)
+				} else {
+					assert.NoError(t, err, "TEST[%d], Failed.\n%s", i, tc.desc)
+				}
 			})
 		}
 

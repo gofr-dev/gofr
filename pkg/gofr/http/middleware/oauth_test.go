@@ -248,7 +248,12 @@ func Test_getPublicKeys(t *testing.T) {
 		t.Run(strconv.Itoa(i), func(t *testing.T) {
 			response, err := getPublicKeys(t.Context(), MockJWKSProvider{}, tc.path)
 			assert.Len(t, response.Keys, tc.responseLength)
-			assert.IsType(t, tc.err, err)
+
+			if tc.err != nil {
+				assert.ErrorIs(t, err, tc.err)
+			} else {
+				assert.NoError(t, err)
+			}
 		})
 	}
 }

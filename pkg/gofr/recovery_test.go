@@ -6,9 +6,15 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"gofr.dev/pkg/gofr/logging"
 	"gofr.dev/pkg/gofr/testutil"
+)
+
+var (
+	errTestError  = errors.New("test error")
+	errPanicError = errors.New("panic error")
 )
 
 func TestRecoveryHandler_Recover(t *testing.T) {
@@ -24,7 +30,7 @@ func TestRecoveryHandler_Recover(t *testing.T) {
 		},
 		{
 			name:      "error panic",
-			panicVal:  errors.New("test error"),
+			panicVal:  errTestError,
 			component: "error-component",
 		},
 		{
@@ -42,6 +48,7 @@ func TestRecoveryHandler_Recover(t *testing.T) {
 
 				func() {
 					defer handler.Recover()
+
 					panic(tt.panicVal)
 				}()
 			})
@@ -59,6 +66,7 @@ func TestRecoveryHandler_Recover_NoPanic(t *testing.T) {
 
 		func() {
 			defer handler.Recover()
+
 			// No panic
 		}()
 	})
@@ -69,6 +77,7 @@ func TestRecoveryHandler_Recover_NoPanic(t *testing.T) {
 
 func TestRecoveryHandler_RecoverWithCallback(t *testing.T) {
 	callbackCalled := false
+
 	var callbackErr error
 
 	logs := testutil.StderrOutputForFunc(func() {
@@ -80,12 +89,13 @@ func TestRecoveryHandler_RecoverWithCallback(t *testing.T) {
 				callbackCalled = true
 				callbackErr = err
 			})
+
 			panic("test panic with callback")
 		}()
 	})
 
 	assert.True(t, callbackCalled, "callback should be called")
-	assert.Error(t, callbackErr, "callback error should not be nil")
+	require.Error(t, callbackErr, "callback error should not be nil")
 	assert.Contains(t, callbackErr.Error(), "callback-test")
 	assert.Contains(t, logs, "callback-test")
 }
@@ -98,6 +108,7 @@ func TestRecoveryHandler_RecoverWithCallback_NoCallback(t *testing.T) {
 		// Should not panic even if callback is nil
 		func() {
 			defer handler.RecoverWithCallback(nil)
+
 			panic("test panic without callback")
 		}()
 	})
@@ -113,6 +124,7 @@ func TestRecoveryHandler_RecoverWithChannel(t *testing.T) {
 		handler := NewRecoveryHandler(mockLogger, "channel-test")
 
 		defer handler.RecoverWithChannel(panicChan)
+
 		panic("test panic with channel")
 	}()
 
@@ -132,7 +144,9 @@ func TestRecoveryHandler_RecoverWithChannel_NoChannel(t *testing.T) {
 		handler := NewRecoveryHandler(mockLogger, "no-channel-test")
 
 		defer handler.RecoverWithChannel(nil)
+
 		defer close(done)
+
 		panic("test panic without channel")
 	}()
 
@@ -150,6 +164,7 @@ func TestSafeGo(t *testing.T) {
 
 	SafeGo(mockLogger, "safe-go-test", func() {
 		defer close(done)
+
 		panic("test panic in SafeGo")
 	})
 
@@ -168,6 +183,7 @@ func TestSafeGo_NoPanic(t *testing.T) {
 
 	SafeGo(mockLogger, "safe-go-no-panic", func() {
 		result = 42
+
 		close(done)
 	})
 
@@ -188,8 +204,10 @@ func TestSafeGoWithCallback(t *testing.T) {
 		panic("test panic in SafeGoWithCallback")
 	}, func(err error) {
 		callbackCalled = true
-		assert.Error(t, err)
+
+		require.Error(t, err)
 		assert.Contains(t, err.Error(), "safe-go-callback-test")
+
 		close(done)
 	})
 
@@ -208,6 +226,7 @@ func TestRecoveryLog_Structure(t *testing.T) {
 
 		func() {
 			defer handler.Recover()
+
 			panic("test panic for log structure")
 		}()
 	})
@@ -223,7 +242,7 @@ func TestRecoveryHandler_DifferentPanicTypes(t *testing.T) {
 		panicVal any
 	}{
 		{"string", "panic string"},
-		{"error", errors.New("panic error")},
+		{"error", errPanicError},
 		{"int", 123},
 		{"float", 45.67},
 		{"bool", true},
@@ -239,6 +258,7 @@ func TestRecoveryHandler_DifferentPanicTypes(t *testing.T) {
 
 				func() {
 					defer handler.Recover()
+
 					panic(tc.panicVal)
 				}()
 			})
@@ -265,12 +285,15 @@ func TestRecoveryHandler_ConcurrentPanics(t *testing.T) {
 	done := make(chan struct{}, count)
 
 	for i := 0; i < count; i++ {
-		go func(id int) {
+		go func(_ int) {
 			handler := NewRecoveryHandler(mockLogger, "concurrent-test")
+
 			func() {
 				defer handler.Recover()
+
 				panic("concurrent panic")
 			}()
+
 			done <- struct{}{}
 		}(i)
 	}

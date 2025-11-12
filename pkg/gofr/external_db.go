@@ -22,6 +22,7 @@ func (a *App) AddMongo(db container.MongoProvider) {
 }
 
 // AddFTP sets the FTP datasource in the app's container.
+//
 // Deprecated: Use the AddFile method instead.
 func (a *App) AddFTP(fs file.FileSystemProvider) {
 	fs.UseLogger(a.Logger())
@@ -83,6 +84,7 @@ func (a *App) AddOracle(db container.OracleProvider) {
 }
 
 // UseMongo sets the Mongo datasource in the app's container.
+//
 // Deprecated: Use the AddMongo method instead.
 func (a *App) UseMongo(db container.Mongo) {
 	a.container.Mongo = db

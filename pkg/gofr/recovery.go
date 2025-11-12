@@ -40,7 +40,7 @@ func NewRecoveryHandler(logger logging.Logger, component string) *RecoveryHandle
 //
 //	defer NewRecoveryHandler(logger, "cron-job").Recover()
 func (r *RecoveryHandler) Recover() {
-	if rec := recover(); rec != nil {
+	if rec := recover(); rec != nil { //nolint:revive // This method is designed to be called with defer
 		_ = r.handlePanic(rec)
 	}
 }
@@ -54,8 +54,9 @@ func (r *RecoveryHandler) Recover() {
 //	    // Additional cleanup or notification
 //	})
 func (r *RecoveryHandler) RecoverWithCallback(callback func(error)) {
-	if rec := recover(); rec != nil {
+	if rec := recover(); rec != nil { //nolint:revive // This method is designed to be called with defer
 		err := r.handlePanic(rec)
+
 		if callback != nil {
 			callback(err)
 		}
@@ -73,8 +74,9 @@ func (r *RecoveryHandler) RecoverWithCallback(callback func(error)) {
 //	    // ... work ...
 //	}()
 func (r *RecoveryHandler) RecoverWithChannel(panicChan chan<- struct{}) {
-	if rec := recover(); rec != nil {
+	if rec := recover(); rec != nil { //nolint:revive // This method is designed to be called with defer
 		_ = r.handlePanic(rec)
+
 		if panicChan != nil {
 			close(panicChan)
 		}
@@ -116,6 +118,7 @@ func (r *RecoveryHandler) handlePanic(rec any) error {
 func SafeGo(logger logging.Logger, component string, fn func()) {
 	go func() {
 		defer NewRecoveryHandler(logger, component).Recover()
+
 		fn()
 	}()
 }
@@ -133,6 +136,7 @@ func SafeGo(logger logging.Logger, component string, fn func()) {
 func SafeGoWithCallback(logger logging.Logger, component string, fn func(), callback func(error)) {
 	go func() {
 		defer NewRecoveryHandler(logger, component).RecoverWithCallback(callback)
+
 		fn()
 	}()
 }

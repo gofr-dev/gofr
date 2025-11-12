@@ -74,6 +74,7 @@ func (cmd *cmd) Run(c *container.Container) {
 	// Execute command with panic recovery
 	func() {
 		defer NewRecoveryHandler(c.Logger, "cmd:"+r.pattern).Recover()
+
 		ctx.responder.Respond(r.handler(ctx))
 	}()
 }

@@ -155,6 +155,7 @@ func TestDB_SelectSingleColumnFromStringToCustomInt(t *testing.T) {
 
 func TestDB_SelectContextError(t *testing.T) {
 	ctx, cancel := context.WithDeadline(t.Context(), time.Now().Add(time.Microsecond))
+
 	time.Sleep(1 * time.Millisecond)
 
 	defer cancel()

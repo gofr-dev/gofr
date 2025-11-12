@@ -879,6 +879,7 @@ func TestKafkaClient_Query_ContextHandling(t *testing.T) {
 				t.Helper()
 				ctx, cancel := context.WithCancel(t.Context())
 				cancel()
+
 				return ctx, func() {}
 			},
 			description: "Should handle canceled context",

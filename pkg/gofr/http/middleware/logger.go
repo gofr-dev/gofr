@@ -180,6 +180,7 @@ func panicRecovery(re any, w http.ResponseWriter, logger logger) {
 	}
 
 	var e string
+
 	switch t := re.(type) {
 	case string:
 		e = t
