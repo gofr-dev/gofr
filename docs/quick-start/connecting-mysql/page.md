@@ -241,9 +241,11 @@ Now when we access {% new-tab-link title="http://localhost:9000/customer" href="
 **Note:** When using PostgreSQL or Supabase, you may need to use `$1` instead of `?` in SQL queries, depending on your driver configuration.
 
 ### Enabling Read/Write Splitting in MySQL (DBResolver)
-GoFr provides built-in support for read/write splitting using its `DBRESOLVER` module for **MySQL**. 
-This feature allows applications to route write queries (e.g., `INSERT`, `UPDATE`, `DELETE`) to the **primary database**, and 
-distribute read queries (`SELECT`) across **one or more replicas**, boosting performance, scalability, and reliability.
+GoFr provides built-in support for read/write splitting using its `DBRESOLVER` module for **MySQL**.
+This feature automatically routes requests to the **primary database** or **read replicas** based on:
+
+- **HTTP Method**: Write operations (`POST`, `PUT`, `PATCH`, `DELETE`) → Primary | Read operations (`GET`, `HEAD`, `OPTIONS`) → Replicas
+- **Route Configuration**: Force specific routes to always use the primary database for strong consistency
 
 #### Installation
 

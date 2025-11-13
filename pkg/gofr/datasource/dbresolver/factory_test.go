@@ -43,21 +43,21 @@ func TestResolverProvider_GetResolver(t *testing.T) {
 }
 
 func TestCreateStrategy_RoundRobin(t *testing.T) {
-	strategy := createStrategy(StrategyRoundRobin)
+	strategy := getStrategy(StrategyRoundRobin)
 
 	assert.NotNil(t, strategy)
 	assert.IsType(t, &RoundRobinStrategy{}, strategy)
 }
 
 func TestCreateStrategy_Random(t *testing.T) {
-	strategy := createStrategy(StrategyRandom)
+	strategy := getStrategy(StrategyRandom)
 
 	assert.NotNil(t, strategy)
 	assert.IsType(t, &RandomStrategy{}, strategy)
 }
 
 func TestCreateStrategy_Default(t *testing.T) {
-	strategy := createStrategy(StrategyType("unknown"))
+	strategy := getStrategy(StrategyType("unknown"))
 
 	assert.NotNil(t, strategy)
 	assert.IsType(t, &RoundRobinStrategy{}, strategy)
@@ -219,7 +219,7 @@ func TestCreateReplicas_EmptyConfig(t *testing.T) {
 	mockLogger := NewMockLogger(ctrl)
 	mockMetrics := NewMockMetrics(ctrl)
 
-	replicas, err := createReplicas(mockConfig, mockLogger, mockMetrics)
+	replicas, err := connectReplicas(mockConfig, mockLogger, mockMetrics)
 
 	require.NoError(t, err)
 	assert.Nil(t, replicas)
@@ -237,7 +237,7 @@ func TestCreateReplicas_InvalidHostFormat(t *testing.T) {
 	mockLogger := NewMockLogger(ctrl)
 	mockMetrics := NewMockMetrics(ctrl)
 
-	replicas, err := createReplicas(mockConfig, mockLogger, mockMetrics)
+	replicas, err := connectReplicas(mockConfig, mockLogger, mockMetrics)
 
 	require.Error(t, err)
 	assert.Nil(t, replicas)
@@ -355,7 +355,7 @@ func TestCreateReplicas_NoReplicaHosts(t *testing.T) {
 	mockMetrics := NewMockMetrics(ctrl)
 	mockConfig := config.NewMockConfig(map[string]string{})
 
-	replicas, err := createReplicas(mockConfig, mockLogger, mockMetrics)
+	replicas, err := connectReplicas(mockConfig, mockLogger, mockMetrics)
 
 	require.NoError(t, err)
 	assert.Nil(t, replicas)
@@ -372,7 +372,7 @@ func TestCreateReplicas_EmptyHostAfterTrim(t *testing.T) {
 		"DB_NAME":          "testdb",
 	})
 
-	replicas, err := createReplicas(mockConfig, mockLogger, mockMetrics)
+	replicas, err := connectReplicas(mockConfig, mockLogger, mockMetrics)
 
 	require.Error(t, err)
 	assert.Nil(t, replicas)

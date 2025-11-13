@@ -109,7 +109,7 @@ func (p *ResolverProvider) Connect() {
 		primaryRoutesMap[route] = true
 	}
 
-	strategy := createStrategy(p.cfg.Strategy)
+	strategy := getStrategy(p.cfg.Strategy)
 
 	// Create resolver - single place!
 	p.resolver = NewResolver(
@@ -128,7 +128,7 @@ func (p *ResolverProvider) Connect() {
 // createAndValidateReplicas creates replicas and validates count.
 func (p *ResolverProvider) createAndValidateReplicas(logger Logger, metrics Metrics) []container.DB {
 	// Create replicas from config.
-	replicas, err := createReplicas(p.app.Config, logger, metrics)
+	replicas, err := connectReplicas(p.app.Config, logger, metrics)
 	if err != nil {
 		logger.Errorf("Failed to create replicas: %v", err)
 
@@ -146,8 +146,8 @@ func (p *ResolverProvider) createAndValidateReplicas(logger Logger, metrics Metr
 	return replicas
 }
 
-// createStrategy returns the configured strategy.
-func createStrategy(strategyType StrategyType) Strategy {
+// getStrategy returns the configured strategy.
+func getStrategy(strategyType StrategyType) Strategy {
 	switch strategyType {
 	case StrategyRandom:
 		return NewRandomStrategy()
@@ -190,8 +190,8 @@ func createHTTPMiddleware() gofrHTTP.Middleware {
 	}
 }
 
-// createReplicas creates replica connections from configuration.
-func createReplicas(cfg config.Config, logger Logger, metrics Metrics) ([]container.DB, error) {
+// connectReplicas creates replica connections from configuration.
+func connectReplicas(cfg config.Config, logger Logger, metrics Metrics) ([]container.DB, error) {
 	replicasStr := cfg.Get("DB_REPLICA_HOSTS")
 	if replicasStr == "" {
 		return nil, nil
@@ -200,8 +200,8 @@ func createReplicas(cfg config.Config, logger Logger, metrics Metrics) ([]contai
 	replicaHosts := strings.Split(replicasStr, ",")
 	replicas := make([]container.DB, 0, len(replicaHosts))
 
-	user := cfg.GetOrDefault("DB_REPLICA_USER", cfg.Get("DB_USER"))
-	password := cfg.GetOrDefault("DB_REPLICA_PASSWORD", cfg.Get("DB_PASSWORD"))
+	user := cfg.Get("DB_REPLICA_USER")
+	password := cfg.Get("DB_REPLICA_PASSWORD")
 
 	for i, hostPort := range replicaHosts {
 		hostPort = strings.TrimSpace(hostPort)

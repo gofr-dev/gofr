@@ -13,7 +13,6 @@ import (
 	reflect "reflect"
 
 	gomock "go.uber.org/mock/gomock"
-	container "gofr.dev/pkg/gofr/container"
 )
 
 // MockStrategy is a mock of Strategy interface.
@@ -40,19 +39,18 @@ func (m *MockStrategy) EXPECT() *MockStrategyMockRecorder {
 	return m.recorder
 }
 
-// Choose mocks base method.
-func (m *MockStrategy) Choose(replicas []container.DB) (container.DB, error) {
+// Next mocks base method.
+func (m *MockStrategy) Next(count int) int {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "Choose", replicas)
-	ret0, _ := ret[0].(container.DB)
-	ret1, _ := ret[1].(error)
-	return ret0, ret1
+	ret := m.ctrl.Call(m, "Next", count)
+	ret0, _ := ret[0].(int)
+	return ret0
 }
 
-// Choose indicates an expected call of Choose.
-func (mr *MockStrategyMockRecorder) Choose(replicas any) *gomock.Call {
+// Next indicates an expected call of Next.
+func (mr *MockStrategyMockRecorder) Next(count any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Choose", reflect.TypeOf((*MockStrategy)(nil).Choose), replicas)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Next", reflect.TypeOf((*MockStrategy)(nil).Next), count)
 }
 
 // Name mocks base method.

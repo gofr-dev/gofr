@@ -1,11 +1,8 @@
 package dbresolver
 
 import (
-	"errors"
 	"math/rand"
 	"sync/atomic"
-
-	"gofr.dev/pkg/gofr/container"
 )
 
 // StrategyType defines the load balancing strategy type.
@@ -18,17 +15,15 @@ const (
 	StrategyRandom StrategyType = "random"
 )
 
-var errNoReplicasAvailable = errors.New("no replicas available")
-
 // Strategy interface defines replica selection logic.
 type Strategy interface {
-	Choose(replicas []container.DB) (container.DB, error)
 	Name() string
+	Next(count int) int
 }
 
 // RoundRobinStrategy selects replicas in round-robin order.
 type RoundRobinStrategy struct {
-	current atomic.Int64
+	current atomic.Uint64
 }
 
 // NewRoundRobinStrategy creates a new round-robin strategy instance.
@@ -36,21 +31,15 @@ func NewRoundRobinStrategy() Strategy {
 	return &RoundRobinStrategy{}
 }
 
-// Choose selects the next replica in round-robin fashion.
-// Choose selects the next replica in round-robin fashion.
-func (s *RoundRobinStrategy) Choose(replicas []container.DB) (container.DB, error) {
-	replicaCount := int64(len(replicas))
-	if replicaCount == 0 {
-		return nil, errNoReplicasAvailable
+// Next selects the next replica index in round-robin fashion.
+func (s *RoundRobinStrategy) Next(count int) int {
+	if count <= 0 {
+		return -1
 	}
 
-	count := s.current.Add(1)
+	next := s.current.Add(1)
 
-	idx64 := count % replicaCount
-
-	idx := int(idx64)
-
-	return replicas[idx], nil
+	return int((next - 1) % uint64(count)) //nolint:gosec // count is validated to be positive
 }
 
 // Name returns the name of strategy.
@@ -66,13 +55,13 @@ func NewRandomStrategy() Strategy {
 	return &RandomStrategy{}
 }
 
-// Choose selects a random replica.
-func (*RandomStrategy) Choose(replicas []container.DB) (container.DB, error) {
-	if len(replicas) == 0 {
-		return nil, errNoReplicasAvailable
+// Next selects a random replica index.
+func (*RandomStrategy) Next(count int) int {
+	if count == 0 {
+		return -1
 	}
 
-	return replicas[rand.Intn(len(replicas))], nil //nolint:gosec // acceptable randomness for load balance
+	return rand.Intn(count) //nolint:gosec // acceptable randomness for load balance
 }
 
 // Name returns the name of the strategy.

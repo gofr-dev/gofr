@@ -4,126 +4,100 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
-	"go.uber.org/mock/gomock"
-	"gofr.dev/pkg/gofr/container"
 )
 
-func TestRoundRobinStrategy_Choose(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
-
-	// Create mock replicas
-	mockReplica1 := NewMockDB(ctrl)
-	mockReplica2 := NewMockDB(ctrl)
-	mockReplica3 := NewMockDB(ctrl)
-
-	replicas := []container.DB{mockReplica1, mockReplica2, mockReplica3}
-
-	// Create strategy
+func TestRoundRobinStrategy_Next(t *testing.T) {
 	strategy := NewRoundRobinStrategy()
 
-	// First call should return first replica
-	db, err := strategy.Choose(replicas)
-	require.NoError(t, err)
-	assert.Equal(t, mockReplica1, db)
+	// Test with 3 replicas
+	count := 3
 
-	// Second call should return second replica
-	db, err = strategy.Choose(replicas)
-	require.NoError(t, err)
-	assert.Equal(t, mockReplica2, db)
+	// First call should return index 0
+	idx := strategy.Next(count)
 
-	// Third call should return third replica
-	db, err = strategy.Choose(replicas)
-	require.NoError(t, err)
-	assert.Equal(t, mockReplica3, db)
+	assert.Equal(t, 0, idx)
 
-	// Fourth call should wrap around to first replica
-	db, err = strategy.Choose(replicas)
-	require.NoError(t, err)
-	assert.Equal(t, mockReplica1, db)
+	// Second call should return index 1
+	idx = strategy.Next(count)
+
+	assert.Equal(t, 1, idx)
+
+	// Third call should return index 2
+	idx = strategy.Next(count)
+
+	assert.Equal(t, 2, idx)
+
+	// Fourth call should wrap around to index 0
+	idx = strategy.Next(count)
+
+	assert.Equal(t, 0, idx)
 }
 
-func TestRoundRobinStrategy_Choose_SingleReplica(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
-
-	// Create mock replica
-	mockReplica := NewMockDB(ctrl)
-	replicas := []container.DB{mockReplica}
-
-	// Create strategy
+func TestRoundRobinStrategy_Next_SingleReplica(t *testing.T) {
 	strategy := NewRoundRobinStrategy()
 
-	// All calls should return the same replica
+	// All calls should return index 0
 	for i := 0; i < 5; i++ {
-		db, err := strategy.Choose(replicas)
-		require.NoError(t, err)
-		assert.Equal(t, mockReplica, db)
+		idx := strategy.Next(1)
+
+		assert.Equal(t, 0, idx)
 	}
 }
 
-func TestRoundRobinStrategy_Choose_NoReplicas(t *testing.T) {
+func TestRoundRobinStrategy_Next_NoReplicas(t *testing.T) {
 	strategy := NewRoundRobinStrategy()
 
-	db, err := strategy.Choose([]container.DB{})
-	assert.Nil(t, db)
-	assert.ErrorIs(t, err, errNoReplicasAvailable)
+	idx := strategy.Next(0)
+
+	assert.Equal(t, -1, idx)
 }
 
-func TestRandomStrategy_Choose(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
-
-	// Create mock replicas
-	mockReplica1 := NewMockDB(ctrl)
-	mockReplica2 := NewMockDB(ctrl)
-	mockReplica3 := NewMockDB(ctrl)
-
-	replicas := []container.DB{mockReplica1, mockReplica2, mockReplica3}
-
-	// Create strategy
+func TestRandomStrategy_Next(t *testing.T) {
 	strategy := NewRandomStrategy()
 
-	// Verify that multiple calls return one of the replicas
-	for i := 0; i < 10; i++ {
-		result, err := strategy.Choose(replicas)
-		require.NoError(t, err)
-		assert.Contains(t, replicas, result)
+	count := 3
+
+	// Verify that multiple calls return valid indices
+	seen := make(map[int]bool)
+
+	for i := 0; i < 100; i++ {
+		idx := strategy.Next(count)
+
+		assert.GreaterOrEqual(t, idx, 0)
+		assert.Less(t, idx, count)
+
+		seen[idx] = true
 	}
+
+	// With 100 iterations, we should see all 3 indices
+	assert.Len(t, seen, count)
 }
 
-func TestRandomStrategy_Choose_SingleReplica(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
-
-	// Create mock replica
-	mockReplica := NewMockDB(ctrl)
-	replicas := []container.DB{mockReplica}
-
-	// Create strategy
+func TestRandomStrategy_Next_SingleReplica(t *testing.T) {
 	strategy := NewRandomStrategy()
 
-	// All calls should return the same replica
+	// All calls should return index 0
 	for i := 0; i < 5; i++ {
-		db, err := strategy.Choose(replicas)
-		require.NoError(t, err)
-		assert.Equal(t, mockReplica, db)
+		idx := strategy.Next(1)
+
+		assert.Equal(t, 0, idx)
 	}
 }
 
-func TestRandomStrategy_Choose_NoReplicas(t *testing.T) {
+func TestRandomStrategy_Next_NoReplicas(t *testing.T) {
 	strategy := NewRandomStrategy()
 
-	db, err := strategy.Choose([]container.DB{})
-	assert.Nil(t, db)
-	assert.ErrorIs(t, err, errNoReplicasAvailable)
+	idx := strategy.Next(0)
+
+	assert.Equal(t, -1, idx)
 }
 
 func TestStrategy_Name(t *testing.T) {
 	roundRobin := NewRoundRobinStrategy()
+
 	assert.Equal(t, string(StrategyRoundRobin), roundRobin.Name())
 
 	random := NewRandomStrategy()
+
 	assert.Equal(t, string(StrategyRandom), random.Name())
 }

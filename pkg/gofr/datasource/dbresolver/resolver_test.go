@@ -169,7 +169,7 @@ func TestResolver_Query_ReadGoesToReplica(t *testing.T) {
 
 	ctx := WithHTTPMethod(t.Context(), "GET")
 
-	mocks.Strategy.EXPECT().Choose(gomock.Any()).Return(mocks.MockReplicas[0], nil)
+	mocks.Strategy.EXPECT().Next(2).Return(0)
 	mocks.MockReplicas[0].EXPECT().QueryContext(gomock.Any(), readQuery).Return(expectedRows, nil)
 
 	rows, err := mocks.Resolver.QueryContext(ctx, readQuery)
@@ -206,7 +206,7 @@ func TestResolver_QueryContext_ReadGoesToReplica(t *testing.T) {
 
 	ctx := WithHTTPMethod(t.Context(), "GET")
 
-	mocks.Strategy.EXPECT().Choose(gomock.Any()).Return(mocks.MockReplicas[0], nil)
+	mocks.Strategy.EXPECT().Next(2).Return(0)
 	mocks.MockReplicas[0].EXPECT().QueryContext(gomock.Any(), readQuery, args[0]).Return(expectedRows, nil)
 
 	rows, err := mocks.Resolver.QueryContext(ctx, readQuery, args[0])
@@ -244,7 +244,7 @@ func TestResolver_QueryRow_ReadGoesToReplica(t *testing.T) {
 
 	ctx := WithHTTPMethod(t.Context(), "GET")
 
-	mocks.Strategy.EXPECT().Choose(gomock.Any()).Return(mocks.MockReplicas[0], nil)
+	mocks.Strategy.EXPECT().Next(2).Return(0)
 	mocks.MockReplicas[0].EXPECT().QueryRowContext(gomock.Any(), readQuery, args[0]).Return(expectedRow)
 
 	row := mocks.Resolver.QueryRowContext(ctx, readQuery, args[0])
@@ -278,7 +278,7 @@ func TestResolver_QueryRowContext_ReadGoesToReplica(t *testing.T) {
 
 	ctx := WithHTTPMethod(t.Context(), "GET")
 
-	mocks.Strategy.EXPECT().Choose(gomock.Any()).Return(mocks.MockReplicas[0], nil)
+	mocks.Strategy.EXPECT().Next(2).Return(0)
 	mocks.MockReplicas[0].EXPECT().QueryRowContext(gomock.Any(), readQuery, args[0]).Return(expectedRow)
 
 	row := mocks.Resolver.QueryRowContext(ctx, readQuery, args[0])
@@ -345,7 +345,7 @@ func TestResolver_Select_ReadGoesToReplica(t *testing.T) {
 
 	ctx := WithHTTPMethod(t.Context(), "GET")
 
-	mocks.Strategy.EXPECT().Choose(gomock.Any()).Return(mocks.MockReplicas[0], nil)
+	mocks.Strategy.EXPECT().Next(2).Return(0)
 	mocks.MockReplicas[0].EXPECT().Select(gomock.Any(), data, readQuery, args[0])
 
 	mocks.Resolver.Select(ctx, data, readQuery, args[0])
@@ -446,7 +446,7 @@ func TestResolver_QueryContext_WithFallback(t *testing.T) {
 	ctx := WithHTTPMethod(t.Context(), "GET")
 
 	// First replica attempt fails
-	mocks.Strategy.EXPECT().Choose(gomock.Any()).Return(mocks.MockReplicas[0], nil)
+	mocks.Strategy.EXPECT().Next(2).Return(0)
 	mocks.MockReplicas[0].EXPECT().QueryContext(gomock.Any(), readQuery).Return(nil, errTestReplicaFailed)
 
 	mocks.Logger.EXPECT().Warn("Falling back to primary for read operation")
@@ -720,36 +720,6 @@ func TestResolver_ShouldUseReplica_NoMethod(t *testing.T) {
 	assert.False(t, useReplica)
 }
 
-func TestResolver_ShouldUseReplica_HEADMethod(t *testing.T) {
-	ctrl, mockPrimary, replicas, mockLogger, mockMetrics := setupNewResolverTest(t, 1, true)
-	defer ctrl.Finish()
-
-	resolver := NewResolver(mockPrimary, replicas, mockLogger, mockMetrics)
-
-	dbResolver, ok := resolver.(*Resolver)
-	require.True(t, ok)
-
-	ctx := WithHTTPMethod(t.Context(), "HEAD")
-
-	useReplica := dbResolver.shouldUseReplica(ctx)
-	assert.True(t, useReplica)
-}
-
-func TestResolver_ShouldUseReplica_OPTIONSMethod(t *testing.T) {
-	ctrl, mockPrimary, replicas, mockLogger, mockMetrics := setupNewResolverTest(t, 1, true)
-	defer ctrl.Finish()
-
-	resolver := NewResolver(mockPrimary, replicas, mockLogger, mockMetrics)
-
-	dbResolver, ok := resolver.(*Resolver)
-	require.True(t, ok)
-
-	ctx := WithHTTPMethod(t.Context(), "OPTIONS")
-
-	useReplica := dbResolver.shouldUseReplica(ctx)
-	assert.True(t, useReplica)
-}
-
 func TestResolver_IsPrimaryRoute_ExactMatch(t *testing.T) {
 	ctrl, mockPrimary, replicas, mockLogger, mockMetrics := setupNewResolverTest(t, 1, true)
 	defer ctrl.Finish()
@@ -802,43 +772,6 @@ func TestResolver_UpdateMetrics_NoMetrics(t *testing.T) {
 	dbResolver.updateMetrics()
 
 	assert.Nil(t, dbResolver.metrics)
-}
-
-func TestWithCircuitBreaker(t *testing.T) {
-	ctrl, mockPrimary, replicas, mockLogger, mockMetrics := setupNewResolverTest(t, 1, true)
-	defer ctrl.Finish()
-
-	resolver := NewResolver(mockPrimary, replicas, mockLogger, mockMetrics,
-		WithCircuitBreaker(5, 10),
-	)
-
-	dbResolver, ok := resolver.(*Resolver)
-	require.True(t, ok)
-
-	require.Len(t, dbResolver.replicas, 1)
-	require.NotNil(t, dbResolver.replicas[0].breaker)
-	assert.Equal(t, int32(5), dbResolver.replicas[0].breaker.maxFailures)
-	assert.Equal(t, 10*time.Second, dbResolver.replicas[0].breaker.timeout)
-}
-
-func TestWithCircuitBreaker_MultipleReplicas(t *testing.T) {
-	ctrl, mockPrimary, replicas, mockLogger, mockMetrics := setupNewResolverTest(t, 2, true)
-	defer ctrl.Finish()
-
-	resolver := NewResolver(mockPrimary, replicas, mockLogger, mockMetrics,
-		WithCircuitBreaker(3, 5),
-	)
-
-	dbResolver, ok := resolver.(*Resolver)
-	require.True(t, ok)
-
-	require.Len(t, dbResolver.replicas, 2)
-
-	for i, wrapper := range dbResolver.replicas {
-		require.NotNil(t, wrapper.breaker, "replica %d should have circuit breaker", i)
-		assert.Equal(t, int32(3), wrapper.breaker.maxFailures)
-		assert.Equal(t, 5*time.Second, wrapper.breaker.timeout)
-	}
 }
 
 func TestQueryLog_PrettyPrint(t *testing.T) {

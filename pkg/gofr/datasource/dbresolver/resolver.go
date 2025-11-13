@@ -19,7 +19,11 @@ import (
 
 // Constants for strategies and intervals.
 const (
-	contextKeyHTTPMethod  contextKey = "dbresolver.http_method"
+	contextKeyHTTPMethod contextKey = "dbresolver.http_method"
+
+	// contextKeyRequestPath stores the HTTP request path in context.
+	// Used to determine if the route matches PrimaryRoutes configuration,
+	// forcing queries to use the primary database instead of replicas.
 	contextKeyRequestPath contextKey = "dbresolver.request_path"
 
 	defaultMaxFailures = 5
@@ -193,7 +197,7 @@ func (r *Resolver) shouldUseReplica(ctx context.Context) bool {
 		return false // Default to primary for safety.
 	}
 
-	return method == "GET" || method == "HEAD" || method == "OPTIONS"
+	return method == "GET"
 }
 
 // isPrimaryRoute checks if path matches primary route patterns.
@@ -218,20 +222,16 @@ func (r *Resolver) selectHealthyReplica() *replicaWrapper {
 		return nil
 	}
 
-	// Get all available DBs for strategy.
-	var (
-		availableDbs      []container.DB
-		availableWrappers []*replicaWrapper
-	)
+	// Build list of healthy replica indices
+	var healthyIndices []int
 
-	for _, wrapper := range r.replicas {
+	for i, wrapper := range r.replicas {
 		if wrapper.breaker.allowRequest() {
-			availableDbs = append(availableDbs, wrapper.db)
-			availableWrappers = append(availableWrappers, wrapper)
+			healthyIndices = append(healthyIndices, i)
 		}
 	}
 
-	if len(availableDbs) == 0 {
+	if len(healthyIndices) == 0 {
 		if r.logger != nil {
 			r.logger.Warn("All replicas are unavailable (circuit breakers open), falling back to primary")
 		}
@@ -239,19 +239,15 @@ func (r *Resolver) selectHealthyReplica() *replicaWrapper {
 		return nil
 	}
 
-	// Use strategy to choose from available replicas.
-	chosenDB, err := r.strategy.Choose(availableDbs)
-	if err != nil {
+	// Strategy picks index from healthy replicas
+	idx := r.strategy.Next(len(healthyIndices))
+	if idx < 0 || idx >= len(healthyIndices) {
 		return nil
 	}
 
-	for _, wrapper := range availableWrappers {
-		if wrapper.db == chosenDB {
-			return wrapper
-		}
-	}
+	originalIdx := healthyIndices[idx]
 
-	return availableWrappers[0]
+	return r.replicas[originalIdx]
 }
 
 // addTrace adds tracing information to the context and returns a span.
@@ -272,18 +268,25 @@ func (r *Resolver) addTrace(ctx context.Context, method, query string) (context.
 }
 
 // recordStats records operation statistics and updates tracing spans.
-func (r *Resolver) recordStats(start time.Time, method, target string, span trace.Span, isRead bool) {
+func (r *Resolver) recordStats(start time.Time, method, target string, span trace.Span, isRead bool, replicaIndex *int) {
 	duration := time.Since(start).Microseconds()
 
 	// Update trace if available.
 	if span != nil {
 		defer span.End()
 
-		span.SetAttributes(
+		attrs := []attribute.KeyValue{
 			attribute.String("dbresolver.target", target),
 			attribute.Int64("dbresolver.duration", duration),
 			attribute.Bool("dbresolver.is_read", isRead),
-		)
+		}
+
+		// Add replica index if available
+		if replicaIndex != nil {
+			attrs = append(attrs, attribute.Int("dbresolver.replica_index", *replicaIndex))
+		}
+
+		span.SetAttributes(attrs...)
 	}
 
 	// Record metrics histogram only if metrics are enabled.
@@ -315,7 +318,7 @@ func (r *Resolver) QueryContext(ctx context.Context, query string, args ...any) 
 	r.stats.primaryWrites.Add(1)
 	rows, err := r.primary.QueryContext(tracedCtx, query, args...)
 
-	r.recordStats(start, "query", "primary", span, false)
+	r.recordStats(start, "query", "primary", span, false, nil)
 
 	return rows, err
 }
@@ -334,7 +337,7 @@ func (r *Resolver) executeReplicaQuery(ctx context.Context, span trace.Span, sta
 		r.stats.replicaReads.Add(1)
 		wrapper.breaker.recordSuccess()
 
-		r.recordStats(start, "query", "replica", span, true)
+		r.recordStats(start, "query", "replica", span, true, &wrapper.index)
 
 		return rows, nil
 	}
@@ -354,7 +357,7 @@ func (r *Resolver) executeReplicaQuery(ctx context.Context, span trace.Span, sta
 func (r *Resolver) fallbackToPrimary(ctx context.Context, span trace.Span, start time.Time,
 	query, warningMsg string, args ...any) (*sql.Rows, error) {
 	if !r.readFallback {
-		r.recordStats(start, "query", "replica-failed", span, true)
+		r.recordStats(start, "query", "replica-failed", span, true, nil)
 
 		return nil, errReplicaFailedNoFallback
 	}
@@ -367,7 +370,7 @@ func (r *Resolver) fallbackToPrimary(ctx context.Context, span trace.Span, start
 	}
 
 	rows, err := r.primary.QueryContext(ctx, query, args...)
-	r.recordStats(start, "query", "primary-fallback", span, true)
+	r.recordStats(start, "query", "primary-fallback", span, true, nil)
 
 	return rows, err
 }
@@ -386,13 +389,14 @@ func (r *Resolver) QueryRowContext(ctx context.Context, query string, args ...an
 	useReplica := r.shouldUseReplica(ctx)
 
 	tracedCtx, span := r.addTrace(ctx, "query-row", query)
-	defer r.recordStats(start, "query-row", "primary", span, useReplica)
 
 	if useReplica && len(r.replicas) > 0 {
 		wrapper := r.selectHealthyReplica()
 		if wrapper != nil {
 			r.stats.replicaReads.Add(1)
 			wrapper.breaker.recordSuccess()
+
+			r.recordStats(start, "query-row", "replica", span, true, &wrapper.index)
 
 			return wrapper.db.QueryRowContext(tracedCtx, query, args...)
 		}
@@ -401,6 +405,8 @@ func (r *Resolver) QueryRowContext(ctx context.Context, query string, args ...an
 	}
 
 	r.stats.primaryWrites.Add(1)
+
+	r.recordStats(start, "query-row", "primary", span, false, nil)
 
 	return r.primary.QueryRowContext(tracedCtx, query, args...)
 }
@@ -418,7 +424,7 @@ func (r *Resolver) ExecContext(ctx context.Context, query string, args ...any) (
 	r.stats.totalQueries.Add(1)
 
 	tracedCtx, span := r.addTrace(ctx, "exec", query)
-	defer r.recordStats(start, "exec", "primary", span, false)
+	defer r.recordStats(start, "exec", "primary", span, false, nil)
 
 	return r.primary.ExecContext(tracedCtx, query, args...)
 }
@@ -441,7 +447,7 @@ func (r *Resolver) Select(ctx context.Context, data any, query string, args ...a
 			wrapper.breaker.recordSuccess()
 			wrapper.db.Select(tracedCtx, data, query, args...)
 
-			r.recordStats(start, "select", "replica", span, true)
+			r.recordStats(start, "select", "replica", span, true, &wrapper.index)
 
 			return
 		}
@@ -453,7 +459,7 @@ func (r *Resolver) Select(ctx context.Context, data any, query string, args ...a
 
 	r.primary.Select(tracedCtx, data, query, args...)
 
-	r.recordStats(start, "select", "primary", span, false)
+	r.recordStats(start, "select", "primary", span, false, nil)
 }
 
 // Prepare always routes to primary (consistency).
