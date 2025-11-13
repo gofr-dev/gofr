@@ -18,15 +18,10 @@ var (
 	errNotConnected             = errors.New("not connected to database")
 	errNoDatabaseInstance       = errors.New("failed to connect to SurrealDB: no valid database instance")
 	errInvalidCredentialsConfig = errors.New("both username and password must be provided")
-	errEmbeddedDBNotEnabled     = errors.New("embedded database not enabled")
-	errInvalidConnectionURL     = errors.New("invalid connection URL")
 	errNoRecord                 = errors.New("no record found")
-	errUnexpectedResultType     = errors.New("unexpected result type")
 	errNoResult                 = errors.New("no result found in query response")
-	errInvalidResult            = errors.New("unexpected result format: expected []any")
 	errUnexpectedResult         = errors.New("unexpected result type: expected []any")
-	errSurrealDBUpdate          = errors.New("surrealdb update operation failed")
-	errQueryFailed              = errors.New("query failed with unexpected status")
+	errQueryError               = errors.New("query error")
 )
 
 const (
@@ -38,6 +33,8 @@ const (
 	schemeMem       = "mem"
 	schemeSurrealkv = "surrealkv"
 	statusOK        = "OK"
+
+	defaultTimeout = 30 * time.Second
 )
 
 // Config represents the configuration required to connect to SurrealDB.
@@ -111,7 +108,7 @@ func (c *Client) Connect() {
 	endpoint := c.buildEndpoint()
 
 	// Create context with timeout for connection
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTimeout)
 	defer cancel()
 
 	err := c.connectToDatabase(ctx, endpoint)
@@ -219,24 +216,6 @@ func (c *Client) logError(message string, err error) {
 	c.logger.Errorf("%s", message)
 }
 
-// useNamespace switches the active namespace for the database connection.
-func (c *Client) useNamespace(ctx context.Context, ns string) error {
-	if c.db == nil {
-		return errNotConnected
-	}
-
-	return c.db.Use(ctx, ns, "")
-}
-
-// useDatabase switches the active database for the connection.
-func (c *Client) useDatabase(ctx context.Context, db string) error {
-	if c.db == nil {
-		return errNotConnected
-	}
-
-	return c.db.Use(ctx, "", db)
-}
-
 // Query executes a query on the SurrealDB instance.
 func (c *Client) Query(ctx context.Context, query string, vars map[string]any) ([]any, error) {
 	const unknown = "unknown"
@@ -295,27 +274,35 @@ func (c *Client) processQueryResults(query string, results []surrealdb.QueryResu
 	for _, result := range results {
 		if result.Error != nil {
 			c.logger.Errorf("query error: %v", result.Error.Message)
+
 			if !isAdministrativeOperation(query) {
-				return nil, fmt.Errorf("query error: %s", result.Error.Message)
+				return nil, fmt.Errorf("%w: %s", errQueryError, result.Error.Message)
 			}
+
 			continue
 		}
 
-		if result.Result != nil {
-			if isCustomNil(result.Result) {
-				resp = append(resp, true)
-			} else if resultList, ok := result.Result.([]any); ok {
-				for _, record := range resultList {
-					extracted, err := c.extractRecord(record)
-					if err != nil {
-						c.logger.Errorf("failed to extract record: %v", err)
-						continue
-					}
-					resp = append(resp, extracted)
+		if result.Result == nil {
+			continue
+		}
+
+		if isCustomNil(result.Result) {
+			resp = append(resp, true)
+			continue
+		}
+
+		if resultList, ok := result.Result.([]any); ok {
+			for _, record := range resultList {
+				extracted, err := c.extractRecord(record)
+				if err != nil {
+					c.logger.Errorf("failed to extract record: %v", err)
+					continue
 				}
-			} else {
-				resp = append(resp, result.Result)
+
+				resp = append(resp, extracted)
 			}
+		} else {
+			resp = append(resp, result.Result)
 		}
 	}
 
