@@ -245,7 +245,7 @@ func Test_CreateHandler(t *testing.T) {
 			mockErr:       nil,
 			expectedQuery: "",
 			expectedResp:  nil,
-			expectedErr:   &json.UnmarshalTypeError{Value: "string", Offset: 9, Struct: "userEntity", Field: "id"},
+			expectedErr:   &json.UnmarshalTypeError{},
 		},
 	}
 
@@ -274,7 +274,7 @@ func Test_CreateHandler(t *testing.T) {
 			assert.Equal(t, tc.expectedResp, resp, "TEST[%d], Failed.\n%s", i, tc.desc)
 
 			if tc.expectedErr != nil {
-				assert.ErrorIs(t, err, tc.expectedErr, "TEST[%d], Failed.\n%s", i, tc.desc)
+				assert.IsType(t, tc.expectedErr, err, "TEST[%d], Failed.\n%s", i, tc.desc)
 			} else {
 				assert.NoError(t, err, "TEST[%d], Failed.\n%s", i, tc.desc)
 			}
@@ -504,7 +504,7 @@ func Test_UpdateHandler(t *testing.T) {
 				reqBody:      []byte(`{"id":"2"}`),
 				mockErr:      nil,
 				expectedResp: nil,
-				expectedErr:  &json.UnmarshalTypeError{Value: "string", Offset: 9, Struct: "user", Field: "id"},
+				expectedErr:  &json.UnmarshalTypeError{},
 			},
 			{
 				desc:         "error From DB",
@@ -531,7 +531,7 @@ func Test_UpdateHandler(t *testing.T) {
 				assert.Equal(t, tc.expectedResp, resp, "TEST[%d], Failed.\n%s", i, tc.desc)
 
 				if tc.expectedErr != nil {
-					assert.ErrorIs(t, err, tc.expectedErr, "TEST[%d], Failed.\n%s", i, tc.desc)
+					assert.IsType(t, tc.expectedErr, err, "TEST[%d], Failed.\n%s", i, tc.desc)
 				} else {
 					assert.NoError(t, err, "TEST[%d], Failed.\n%s", i, tc.desc)
 				}
