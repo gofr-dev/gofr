@@ -18,7 +18,8 @@ func Test_Client_CreateDB(t *testing.T) {
 	ctx := context.Background()
 	database := "testDB"
 
-	mockArango.EXPECT().CreateDatabase(gomock.Any(), database, nil).Return(nil)
+	mockArango.EXPECT().DatabaseExists(gomock.Any(), gomock.Any()).Return(false, nil)
+	mockArango.EXPECT().CreateDatabase(gomock.Any(), database, nil).Return(nil, nil)
 	mockLogger.EXPECT().Debug(gomock.Any()).AnyTimes()
 	mockMetrics.EXPECT().RecordHistogram(gomock.Any(), "app_arango_stats", gomock.Any(),
 		gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
@@ -33,7 +34,8 @@ func Test_Client_CreateDB_Error(t *testing.T) {
 	ctx := context.Background()
 	database := "errorDB"
 
-	mockArango.EXPECT().CreateDatabase(gomock.Any(), database, nil).Return(errDBNotFound)
+	mockArango.EXPECT().DatabaseExists(gomock.Any(), gomock.Any()).Return(false, errDBNotFound)
+	mockArango.EXPECT().CreateDatabase(gomock.Any(), database, nil).Return(nil, errDBNotFound)
 	mockLogger.EXPECT().Debug(gomock.Any()).AnyTimes()
 	mockMetrics.EXPECT().RecordHistogram(gomock.Any(), "app_arango_stats", gomock.Any(),
 		gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
@@ -44,11 +46,12 @@ func Test_Client_CreateDB_Error(t *testing.T) {
 }
 
 func Test_Client_CreateDB_AlreadyExists(t *testing.T) {
-	client, _, _, mockLogger, mockMetrics := setupDB(t)
+	client, mockArango, _, mockLogger, mockMetrics := setupDB(t)
 
 	ctx := context.Background()
 	database := "dbExists"
 
+	mockArango.EXPECT().DatabaseExists(gomock.Any(), gomock.Any()).Return(true, nil)
 	mockLogger.EXPECT().Debugf("database %s already exists", database)
 	mockLogger.EXPECT().Debug(gomock.Any()).AnyTimes()
 	mockMetrics.EXPECT().RecordHistogram(gomock.Any(), "app_arango_stats", gomock.Any(),
@@ -63,11 +66,12 @@ func Test_Client_DropDB(t *testing.T) {
 
 	ctx := context.Background()
 	database := "testDB"
-	mockDB := NewMockDatabase(gomock.NewController(t))
+	ctrl := gomock.NewController(t)
+	mockDB := NewMockDatabase(ctrl)
 
 	// Mock the database method to return a mock database instance
 	mockArango.EXPECT().GetDatabase(gomock.Any(), database, &arangodb.GetDatabaseOptions{}).
-		Return(mockDB, nil).Times(1)
+		Return(arangodb.Database(mockDB), nil).Times(1)
 	mockDB.EXPECT().Remove(gomock.Any()).Return(nil).Times(1)
 	mockLogger.EXPECT().Debug(gomock.Any()).AnyTimes()
 	mockMetrics.EXPECT().RecordHistogram(gomock.Any(), "app_arango_stats", gomock.Any(),
@@ -114,10 +118,10 @@ func Test_Client_CreateCollection(t *testing.T) {
 	client, mockArango, _, mockLogger, mockMetrics := setupDB(t)
 	mockDB := NewMockDatabase(gomock.NewController(t))
 
-	mockArango.EXPECT().GetDatabase(gomock.Any(), "testDB", &arangodb.GetDatabaseOptions{}).
+	mockArango.EXPECT().GetDatabase(gomock.Any(), "testDB", nil).
 		Return(mockDB, nil)
 	mockDB.EXPECT().CollectionExists(gomock.Any(), "testCollection").Return(false, nil)
-	mockDB.EXPECT().CreateCollection(gomock.Any(), "testCollection", gomock.Any()).Return(nil, nil)
+	mockDB.EXPECT().CreateCollectionV2(gomock.Any(), "testCollection", gomock.Any()).Return(nil, nil)
 	mockLogger.EXPECT().Debug(gomock.Any()).AnyTimes()
 	mockMetrics.EXPECT().RecordHistogram(gomock.Any(), "app_arango_stats", gomock.Any(),
 		gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
@@ -130,10 +134,10 @@ func Test_Client_CreateCollection_Error(t *testing.T) {
 	client, mockArango, _, mockLogger, mockMetrics := setupDB(t)
 	mockDB := NewMockDatabase(gomock.NewController(t))
 
-	mockArango.EXPECT().GetDatabase(gomock.Any(), "testDB", &arangodb.GetDatabaseOptions{}).
+	mockArango.EXPECT().GetDatabase(gomock.Any(), "testDB", nil).
 		Return(mockDB, nil)
 	mockDB.EXPECT().CollectionExists(gomock.Any(), "testCollection").Return(false, nil)
-	mockDB.EXPECT().CreateCollection(gomock.Any(), "testCollection", gomock.Any()).Return(nil, errCollectionNotFound)
+	mockDB.EXPECT().CreateCollectionV2(gomock.Any(), "testCollection", gomock.Any()).Return(nil, errCollectionNotFound)
 	mockLogger.EXPECT().Debug(gomock.Any()).AnyTimes()
 	mockMetrics.EXPECT().RecordHistogram(gomock.Any(), "app_arango_stats", gomock.Any(),
 		gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
@@ -147,7 +151,7 @@ func Test_Client_CreateCollection_AlreadyExists(t *testing.T) {
 	client, mockArango, _, mockLogger, mockMetrics := setupDB(t)
 	mockDB := NewMockDatabase(gomock.NewController(t))
 
-	mockArango.EXPECT().GetDatabase(gomock.Any(), "dbExists", &arangodb.GetDatabaseOptions{}).
+	mockArango.EXPECT().GetDatabase(gomock.Any(), "dbExists", nil).
 		Return(mockDB, nil)
 	mockDB.EXPECT().CollectionExists(gomock.Any(), "testCollection").Return(true, nil)
 	mockLogger.EXPECT().Debug(gomock.Any()).AnyTimes()
@@ -162,12 +166,14 @@ func Test_Client_CreateCollection_AlreadyExists(t *testing.T) {
 
 func Test_Client_DropCollection(t *testing.T) {
 	client, mockArango, _, mockLogger, mockMetrics := setupDB(t)
-	mockDB := NewMockDatabase(gomock.NewController(t))
-	mockCollection := NewMockCollection(gomock.NewController(t))
+	ctrl := gomock.NewController(t)
+	mockDB := NewMockDatabase(ctrl)
+	mockCollection := NewMockCollection(ctrl)
 
-	mockArango.EXPECT().GetDatabase(gomock.Any(), "testDB", &arangodb.GetDatabaseOptions{}).
+	mockArango.EXPECT().GetDatabase(gomock.Any(), "testDB", nil).
 		Return(mockDB, nil)
-	mockDB.EXPECT().GetCollection(gomock.Any(), "testCollection", nil).Return(mockCollection, nil)
+	mockDB.EXPECT().GetCollection(gomock.Any(), "testCollection", nil).
+		Return(mockCollection, nil)
 	mockCollection.EXPECT().Remove(gomock.Any()).Return(nil)
 	mockLogger.EXPECT().Debug(gomock.Any()).AnyTimes()
 	mockMetrics.EXPECT().RecordHistogram(gomock.Any(), "app_arango_stats",
@@ -182,7 +188,7 @@ func Test_Client_DropCollection_Error(t *testing.T) {
 	client, mockArango, _, mockLogger, mockMetrics := setupDB(t)
 	mockDB := NewMockDatabase(gomock.NewController(t))
 
-	mockArango.EXPECT().GetDatabase(gomock.Any(), "testDB", &arangodb.GetDatabaseOptions{}).
+	mockArango.EXPECT().GetDatabase(gomock.Any(), "testDB", nil).
 		Return(mockDB, nil)
 	mockDB.EXPECT().GetCollection(gomock.Any(), "testCollection", nil).
 		Return(nil, errCollectionNotFound)
