@@ -13,6 +13,7 @@ import (
 	"gofr.dev/pkg/gofr/container"
 	"gofr.dev/pkg/gofr/http/middleware"
 	"gofr.dev/pkg/gofr/logging"
+	gofrRecovery "gofr.dev/pkg/gofr/recovery"
 )
 
 type Context struct {
@@ -73,6 +74,13 @@ func (c *Context) Trace(name string) trace.Span {
 
 func (c *Context) Bind(i any) error {
 	return c.Request.Bind(i)
+}
+
+// GoSafe launches a goroutine with panic recovery.
+// It ensures that panics in the goroutine are logged and don't crash the application.
+func (c *Context) GoSafe(fn func()) {
+	recoveryHandler := gofrRecovery.New(c.Container.Logger, c.Metrics())
+	recoveryHandler.GoSafe(c.Context, fn)
 }
 
 // WriteMessageToSocket writes a message to the WebSocket connection associated with the context.
