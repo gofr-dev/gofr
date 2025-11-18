@@ -19,6 +19,7 @@ const (
 type Health struct {
 	Status  string         `json:"status"`
 	Details map[string]any `json:"details"`
+	Reason  string         `json:"reason,omitempty"` // Reason provides additional context for the health status
 }
 
 func (h *httpService) HealthCheck(ctx context.Context) *Health {

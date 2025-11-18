@@ -16,6 +16,29 @@ func (c *BasicAuthConfig) AddOption(h HTTP) HTTP {
 	return &authProvider{auth: c.addAuthorizationHeader, HTTP: h}
 }
 
+// Validate implements the Validator interface for BasicAuthConfig.
+// Returns an error if username or password is empty.
+// Note: The password in BasicAuthConfig is already decoded (from base64).
+func (c *BasicAuthConfig) Validate() error {
+	username := strings.TrimSpace(c.UserName)
+	password := strings.TrimSpace(c.Password)
+
+	if username == "" {
+		return AuthErr{Message: "username is required"}
+	}
+
+	if password == "" {
+		return AuthErr{Message: "password is required"}
+	}
+
+	return nil
+}
+
+// FeatureName implements the Validator interface.
+func (*BasicAuthConfig) FeatureName() string {
+	return "Basic Authentication"
+}
+
 func NewBasicAuthConfig(username, password string) (Options, error) {
 	username = strings.TrimSpace(username)
 	password = strings.TrimSpace(password)
@@ -33,7 +56,14 @@ func NewBasicAuthConfig(username, password string) (Options, error) {
 		return nil, AuthErr{Err: err, Message: "password should be base64 encoded"}
 	}
 
-	return &BasicAuthConfig{username, string(decodedPassword)}, nil
+	config := &BasicAuthConfig{username, string(decodedPassword)}
+
+	// Validate during creation as well for immediate feedback
+	if err := config.Validate(); err != nil {
+		return nil, err
+	}
+
+	return config, nil
 }
 
 func (c *BasicAuthConfig) addAuthorizationHeader(_ context.Context, headers map[string]string) (map[string]string, error) {

@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"fmt"
 	"net/http"
 )
 
@@ -14,6 +15,25 @@ func (a *DefaultHeaders) AddOption(h HTTP) HTTP {
 		Headers: a.Headers,
 		HTTP:    h,
 	}
+}
+
+// Validate implements the Validator interface for DefaultHeaders.
+// Returns an error if headers map is nil or empty.
+func (a *DefaultHeaders) Validate() error {
+	if a.Headers == nil {
+		return fmt.Errorf("headers map cannot be nil")
+	}
+
+	if len(a.Headers) == 0 {
+		return fmt.Errorf("headers map cannot be empty")
+	}
+
+	return nil
+}
+
+// FeatureName implements the Validator interface.
+func (*DefaultHeaders) FeatureName() string {
+	return "Custom Headers"
 }
 
 type customHeader struct {

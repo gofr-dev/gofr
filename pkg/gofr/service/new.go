@@ -65,7 +65,57 @@ type httpClient interface {
 
 // NewHTTPService function creates a new instance of the httpService struct, which implements the HTTP interface.
 // It initializes the http.Client, url, Tracer, and Logger fields of the httpService struct with the provided values.
+// Options are validated in soft mode (default) - warnings are logged but service creation continues.
+// Use NewHTTPServiceWithValidation for strict validation mode.
 func NewHTTPService(serviceAddress string, logger Logger, metrics Metrics, options ...Options) HTTP {
+	return NewHTTPServiceWithValidation(serviceAddress, logger, metrics, ValidationConfig{
+		Mode:   ValidationModeSoft,
+		Logger: logger,
+	}, options...)
+}
+
+// NewHTTPServiceWithValidation creates a new instance of the httpService with explicit validation configuration.
+// This allows developers to choose between strict and soft validation modes.
+//
+//   - ValidationModeSoft (default): Logs warnings but allows service creation to continue with potentially invalid config
+//   - ValidationModeStrict: Returns a service that fails on first request if any option validation fails
+//
+// Example:
+//
+//	// Strict validation - service fails if any option is invalid
+//	svc := service.NewHTTPServiceWithValidation(
+//		"http://example.com",
+//		logger,
+//		metrics,
+//		service.ValidationConfig{Mode: service.ValidationModeStrict, Logger: logger},
+//		apiKeyConfig,
+//	)
+//
+//	// Soft validation - logs warnings but continues (default behavior)
+//	svc := service.NewHTTPServiceWithValidation(
+//		"http://example.com",
+//		logger,
+//		metrics,
+//		service.ValidationConfig{Mode: service.ValidationModeSoft, Logger: logger},
+//		apiKeyConfig,
+//	)
+func NewHTTPServiceWithValidation(serviceAddress string, logger Logger, metrics Metrics, config ValidationConfig, options ...Options) HTTP {
+	// Validate options based on validation mode
+	if err := validateOptions(config, options); err != nil {
+		// In strict mode, validation failures return a service that fails on first request
+		if config.Mode == ValidationModeStrict {
+			// If logger is available, log the validation error before returning
+			if config.Logger != nil {
+				config.Logger.Log(fmt.Sprintf("Service creation failed due to validation errors: %v", err))
+			}
+			// Return a service wrapper that will fail on first request
+			return &validationFailedService{
+				err: fmt.Errorf("service creation failed: %w", err),
+			}
+		}
+		// In soft mode, errors are already logged, continue with service creation
+	}
+
 	h := &httpService{
 		// using default HTTP client to do HTTP communication
 		Client:  &http.Client{},
@@ -85,6 +135,59 @@ func NewHTTPService(serviceAddress string, logger Logger, metrics Metrics, optio
 	}
 
 	return svc
+}
+
+// validationFailedService is a service wrapper that fails on any request when validation failed in strict mode.
+type validationFailedService struct {
+	err error
+}
+
+func (v *validationFailedService) Get(_ context.Context, _ string, _ map[string]any) (*http.Response, error) {
+	return nil, v.err
+}
+
+func (v *validationFailedService) GetWithHeaders(_ context.Context, _ string, _ map[string]any, _ map[string]string) (*http.Response, error) {
+	return nil, v.err
+}
+
+func (v *validationFailedService) Post(_ context.Context, _ string, _ map[string]any, _ []byte) (*http.Response, error) {
+	return nil, v.err
+}
+
+func (v *validationFailedService) PostWithHeaders(_ context.Context, _ string, _ map[string]any, _ []byte, _ map[string]string) (*http.Response, error) {
+	return nil, v.err
+}
+
+func (v *validationFailedService) Put(_ context.Context, _ string, _ map[string]any, _ []byte) (*http.Response, error) {
+	return nil, v.err
+}
+
+func (v *validationFailedService) PutWithHeaders(_ context.Context, _ string, _ map[string]any, _ []byte, _ map[string]string) (*http.Response, error) {
+	return nil, v.err
+}
+
+func (v *validationFailedService) Patch(_ context.Context, _ string, _ map[string]any, _ []byte) (*http.Response, error) {
+	return nil, v.err
+}
+
+func (v *validationFailedService) PatchWithHeaders(_ context.Context, _ string, _ map[string]any, _ []byte, _ map[string]string) (*http.Response, error) {
+	return nil, v.err
+}
+
+func (v *validationFailedService) Delete(_ context.Context, _ string, _ []byte) (*http.Response, error) {
+	return nil, v.err
+}
+
+func (v *validationFailedService) DeleteWithHeaders(_ context.Context, _ string, _ []byte, _ map[string]string) (*http.Response, error) {
+	return nil, v.err
+}
+
+func (v *validationFailedService) HealthCheck(_ context.Context) *Health {
+	return &Health{Status: "DOWN", Reason: v.err.Error()}
+}
+
+func (v *validationFailedService) getHealthResponseForEndpoint(_ context.Context, _ string, _ int) *Health {
+	return &Health{Status: "DOWN", Reason: v.err.Error()}
 }
 
 func (h *httpService) Get(ctx context.Context, path string, queryParams map[string]any) (*http.Response, error) {

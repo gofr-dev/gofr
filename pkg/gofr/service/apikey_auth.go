@@ -19,13 +19,36 @@ func (a *APIKeyConfig) AddOption(h HTTP) HTTP {
 	return &authProvider{auth: a.addAuthorizationHeader, HTTP: h}
 }
 
+// Validate implements the Validator interface for APIKeyConfig.
+// Returns an error if the API key is empty.
+func (a *APIKeyConfig) Validate() error {
+	apiKey := strings.TrimSpace(a.APIKey)
+	if apiKey == "" {
+		return AuthErr{Message: "non empty api key is required"}
+	}
+
+	return nil
+}
+
+// FeatureName implements the Validator interface.
+func (*APIKeyConfig) FeatureName() string {
+	return "APIKey Authentication"
+}
+
 func NewAPIKeyConfig(apiKey string) (Options, error) {
 	apiKey = strings.TrimSpace(apiKey)
 	if apiKey == "" {
 		return nil, AuthErr{Message: "non empty api key is required"}
 	}
 
-	return &APIKeyConfig{APIKey: apiKey}, nil
+	config := &APIKeyConfig{APIKey: apiKey}
+
+	// Validate during creation as well for immediate feedback
+	if err := config.Validate(); err != nil {
+		return nil, err
+	}
+
+	return config, nil
 }
 
 func (a *APIKeyConfig) addAuthorizationHeader(_ context.Context, headers map[string]string) (map[string]string, error) {

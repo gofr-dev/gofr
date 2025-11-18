@@ -38,6 +38,29 @@ func (c *OAuthConfig) AddOption(svc HTTP) HTTP {
 	return &authProvider{auth: c.addAuthorizationHeader, HTTP: svc}
 }
 
+// Validate implements the Validator interface for OAuthConfig.
+// Returns an error if clientID, secret, or tokenURL is invalid.
+func (c *OAuthConfig) Validate() error {
+	if c.ClientID == "" {
+		return AuthErr{nil, "client id is mandatory"}
+	}
+
+	if c.ClientSecret == "" {
+		return AuthErr{nil, "client secret is mandatory"}
+	}
+
+	if err := validateTokenURL(c.TokenURL); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+// FeatureName implements the Validator interface.
+func (*OAuthConfig) FeatureName() string {
+	return "OAuth2 Authentication"
+}
+
 func NewOAuthConfig(clientID, secret, tokenURL string, scopes []string, params url.Values, authStyle oauth2.AuthStyle) (Options, error) {
 	if clientID == "" {
 		return nil, AuthErr{nil, "client id is mandatory"}
@@ -51,7 +74,7 @@ func NewOAuthConfig(clientID, secret, tokenURL string, scopes []string, params u
 		return nil, err
 	}
 
-	config := OAuthConfig{
+	config := &OAuthConfig{
 		ClientID:       clientID,
 		ClientSecret:   secret,
 		TokenURL:       tokenURL,
@@ -60,7 +83,12 @@ func NewOAuthConfig(clientID, secret, tokenURL string, scopes []string, params u
 		AuthStyle:      authStyle,
 	}
 
-	return &config, nil
+	// Validate during creation as well for immediate feedback
+	if err := config.Validate(); err != nil {
+		return nil, err
+	}
+
+	return config, nil
 }
 
 func validateTokenURL(tokenURL string) error {

@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"errors"
+	"fmt"
 	"net/http"
 	"sync"
 	"time"
@@ -24,6 +25,25 @@ var (
 type CircuitBreakerConfig struct {
 	Threshold int           // Threshold represents the max no of retry before switching the circuit breaker state.
 	Interval  time.Duration // Interval represents the time interval duration between hitting the HealthURL
+}
+
+// Validate implements the Validator interface for CircuitBreakerConfig.
+// Returns an error if threshold is <= 0 or interval is <= 0.
+func (c *CircuitBreakerConfig) Validate() error {
+	if c.Threshold <= 0 {
+		return fmt.Errorf("threshold must be greater than 0, got %d", c.Threshold)
+	}
+
+	if c.Interval <= 0 {
+		return fmt.Errorf("interval must be greater than 0, got %v", c.Interval)
+	}
+
+	return nil
+}
+
+// FeatureName implements the Validator interface.
+func (*CircuitBreakerConfig) FeatureName() string {
+	return "Circuit Breaker"
 }
 
 // circuitBreaker represents a circuit breaker implementation.
