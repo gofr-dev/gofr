@@ -1,7 +1,7 @@
 # Handling Data Migrations
 
-Suppose you manually make changes to your database, and now it's your responsibility to inform other developers to execute them. Additionally, you need to keep track of which changes should be applied to production machines in the next deployment.
-GoFr supports data migrations for MySQL, Postgres, Redis, ClickHouse & Cassandra which allows altering the state of a database, be it adding a new column to existing table or modifying the data type of existing column or adding constraints to an existing table, setting and removing keys etc.
+If you make manual changes to your database, you must inform other developers so they can apply the same changes. Additionally, you need to keep track of which changes should be applied to production machines in the next deployment.
+GoFr supports data migrations for MySQL, Postgres, Redis, ClickHouse & Cassandra which allows you to modify database state — such as adding columns, changing data types, adding constraints, or managing keys.
 
 ## Usage
 
@@ -12,7 +12,7 @@ It is recommended to maintain a `migrations` directory in your project root to e
 **Migration file names**
 
 It is recommended that each migration file should be numbered in the format of _YYYYMMDDHHMMSS_ when the migration was created.
-This helps prevent numbering conflicts and allows for maintaining the correct sort order by name in different filesystem views.
+This prevents numbering conflicts and ensures migrations sort correctly across different filesystems.
 
 Run the following commands to create a migration file
 
@@ -55,10 +55,10 @@ func createTableEmployee() migration.Migrate {
 }
 ```
 
-`migration.Datasource` have the datasources whose migrations are supported i.e., Redis and SQL (MySQL and PostgreSQL).
-All migrations always run in a transaction.
+`migration.Datasource` contains the supported datasources, i.e., Redis and SQL (MySQL and PostgreSQL).
+All migrations run within a transaction.
 
-For MySQL, it is highly recommended to use `IF EXISTS` and `IF NOT EXIST` in DDL commands as MySQL implicitly commits these commands.
+For MySQL, use `IF EXISTS` and `IF NOT EXISTS` in DDL commands because MySQL implicitly commits these statements.
 
 **Create a function which returns all the migrations in a map**
 
@@ -112,7 +112,7 @@ GoFr maintains the records in the database itself which helps in tracking which 
 
 **SQL**
 
-Migration records are stored and maintained in **gofr_migrations** table which has the following schema:
+Migration records are stored in **gofr_migrations** table which has the following schema:
 
 {% table %}
 
@@ -149,31 +149,30 @@ Migration records are stored and maintained in a Redis Hash named **gofr_migrati
 
 Example :
 
-Key : 20240226153000
+Key: 20240226153000
 
-Value : {"method":"UP","startTime":"2024-02-26T15:03:46.844558+05:30","duration":0}
+Value: {"method":"UP","startTime":"2024-02-26T15:03:46.844558+05:30","duration":0}
 
-Where,
+Explanation:
 
-**Version** : Migration version is the number provided in the map, i.e., sequence number.
+**Version** : The migration version is the numeric key defined in the map.
 
-**Start Time** : Time when Migration Started in UTC.
+**Start Time** : Time when the migration started in UTC.
 
 **Duration** : Time taken by Migration since it started in milliseconds.
 
-**Method** : It contains the method(UP/DOWN) in which migration ran.
+**Method** : It indicates whether the migration ran in UP or DOWN mode.
 (For now only method UP is supported)
 
 ### Migrations in Cassandra
 
-`GoFr` provides support for migrations in Cassandra but does not guarantee atomicity for individual Data Manipulation Language (DML) commands. To achieve atomicity during migrations, users can leverage batch operations using the `NewBatch`, `BatchQuery`, and `ExecuteBatch` methods. These methods allow multiple queries to be executed as a single atomic operation.
+`GoFr` provides support for migrations in Cassandra but does not guarantee atomicity for individual DML commands. To achieve atomicity during migrations, users can leverage batch operations using the `NewBatch`, `BatchQuery`, and `ExecuteBatch` methods. These methods allow multiple queries to be executed as a single atomic operation.
 
 Alternatively, users can construct their batch queries using the `BEGIN BATCH` and `APPLY BATCH` statements to ensure that all the commands within the batch are executed successfully or not at all. This is particularly useful for complex migrations involving multiple inserts, updates, or schema changes in a single transaction-like operation.
 
-When using batch operations, consider using a `LoggedBatch` for atomicity or an `UnloggedBatch` for improved performance where atomicity isn't required. This approach provides a way to maintain data consistency during complex migrations.
+When using batch operations, consider using a `LoggedBatch` for atomicity or an `UnloggedBatch` for improved performance where atomicity isn't required. This approach helps maintain data consistency in complex migrations.
 
-> Note: The following example assumes that user has already created the `KEYSPACE` in cassandra. A `KEYSPACE` in Cassandra is a container for tables that defines data replication settings across the cluster.
-
+> Note: The following example assumes that users have already created the `KEYSPACE` in Cassandra. A `KEYSPACE` in Cassandra is a container for tables that defines data replication settings across the cluster.
 
 ```go
 package migrations
@@ -238,41 +237,49 @@ func createTableEmployeeCassandra() migration.Migrate {
 }
 ```
 
-## Migrations in ElasticSearch
+## Migrations in Elasticsearch
 
-GoFr allows Elasticsearch document migrations, focusing on **single document** and **bulk operations**.
+GoFr supports Elasticsearch document migrations, including **single-document** and **bulk operations**.
 
 ### Single Document Migration
 
-```go  
-func addSingleProduct() migration.Migrate {  
- return migration.Migrate{ 
-	 UP: func(d migration.Datasource) error { 
-			 product := map[string]any{ 
-			 "title": "Laptop", 
-			 "price": 999.99, 
-			 "category": "electronics", 
-			 } 
-			 
-		return d.Elasticsearch.IndexDocument( context.Background(), "products", "1", product, ) }, }
-		}  
-```  
+```go
+func addSingleProduct() migration.Migrate {
+	return migration.Migrate{
+		UP: func(d migration.Datasource) error {
+			product := map[string]any{
+				"title": "Laptop",
+				"price": 999.99,
+				"category": "electronics",
+		 	}
+
+		 	return d.Elasticsearch.IndexDocument(
+				context.Background(),
+			 	"products",
+			 	"1",
+			 	product,
+		 	)
+	 	},
+	}
+}
+```
 
 ### Bulk Operation Migration
 
-```go  
-func bulkProducts() migration.Migrate {  
- return migration.Migrate{ 
- UP: func(d migration.Datasource) error { 
-		operations := []map[string]any{ 
-			{"index": map[string]any{"_index": "products", "_id": "1"}}, 
-			{"title": "Phone", "price": 699.99, "category": "electronics"}, 
-			{"index": map[string]any{"_index": "products", "_id": "2"}}, 
-			{"title": "Mug", "price": 12.99, "category": "kitchen"}, 
+```go
+func bulkProducts() migration.Migrate {
+ return migration.Migrate{
+ UP: func(d migration.Datasource) error {
+		operations := []map[string]any{
+			{"index": map[string]any{"_index": "products", "_id": "1"}},
+			{"title": "Phone", "price": 699.99, "category": "electronics"},
+			{"index": map[string]any{"_index": "products", "_id": "2"}},
+			{"title": "Mug", "price": 12.99, "category": "kitchen"},
 			 }
-		
-		_, err := d.Elasticsearch.Bulk(context.Background(), operations) return err },}
-	}  
-``` 
+
+		_, err := d.Elasticsearch.Bulk(context.Background(), operations)
+		return err },}
+	}
+```
 
 > ##### Check out the example to add and run migrations in GoFr: [Visit GitHub](https://github.com/gofr-dev/gofr/blob/main/examples/using-migrations/main.go)
