@@ -301,6 +301,22 @@ func (c *Client) processQueryResults(query string, results []surrealdb.QueryResu
 
 				resp = append(resp, extracted)
 			}
+		} else if resultMap, ok := result.Result.(map[string]any); ok {
+			// Handle single record returned as map directly (e.g., from type::thing() queries)
+			extracted, err := c.extractRecord(resultMap)
+			if err != nil {
+				c.logger.Errorf("failed to extract record: %v", err)
+			} else {
+				resp = append(resp, extracted)
+			}
+		} else if resultMap, ok := result.Result.(map[any]any); ok {
+			// Handle single record as map[any]any for compatibility
+			extracted, err := c.extractRecord(resultMap)
+			if err != nil {
+				c.logger.Errorf("failed to extract record: %v", err)
+			} else {
+				resp = append(resp, extracted)
+			}
 		} else {
 			resp = append(resp, result.Result)
 		}
@@ -311,26 +327,37 @@ func (c *Client) processQueryResults(query string, results []surrealdb.QueryResu
 
 // extractRecord extracts and processes a single record into a map[string]any}.
 func (c *Client) extractRecord(record any) (map[string]any, error) {
-	recordMap, ok := record.(map[any]any)
-	if !ok {
-		return nil, errUnexpectedResult
-	}
+	// Handle map[string]any first (SurrealDB v1.0.0 format)
+	if recordMap, ok := record.(map[string]any); ok {
+		extracted := make(map[string]any, len(recordMap))
 
-	extracted := make(map[string]any, len(recordMap))
-
-	for k, v := range recordMap {
-		keyStr, ok := k.(string)
-		if !ok {
-			c.logger.Errorf("non-string key encountered: %v", k)
-			continue
+		for k, v := range recordMap {
+			val := c.convertValue(v)
+			extracted[k] = val
 		}
 
-		val := c.convertValue(v)
-
-		extracted[keyStr] = val
+		return extracted, nil
 	}
 
-	return extracted, nil
+	// Fall back to map[any]any for compatibility
+	if recordMap, ok := record.(map[any]any); ok {
+		extracted := make(map[string]any, len(recordMap))
+
+		for k, v := range recordMap {
+			keyStr, ok := k.(string)
+			if !ok {
+				c.logger.Errorf("non-string key encountered: %v", k)
+				continue
+			}
+
+			val := c.convertValue(v)
+			extracted[keyStr] = val
+		}
+
+		return extracted, nil
+	}
+
+	return nil, errUnexpectedResult
 }
 
 // convertValue handles the conversion of different numeric types and strings to appropriate Go types.
