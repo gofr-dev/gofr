@@ -11,6 +11,7 @@ import (
 	"gofr.dev/pkg/gofr/container"
 	gofrHTTP "gofr.dev/pkg/gofr/http"
 	"gofr.dev/pkg/gofr/http/middleware"
+	"gofr.dev/pkg/gofr/recovery"
 	"gofr.dev/pkg/gofr/websocket"
 )
 
@@ -33,7 +34,11 @@ func newHTTPServer(c *container.Container, port int, middlewareConfigs middlewar
 	r := gofrHTTP.NewRouter()
 	wsManager := websocket.New()
 
+	// Create recovery handler for panic recovery middleware
+	recoveryHandler := recovery.New(c.Logger, c.Metrics())
+
 	r.Use(
+		recoveryHandler.HTTPRecoverMiddleware,
 		middleware.Tracer,
 		middleware.Logging(middlewareConfigs.LogProbes, c.Logger),
 		middleware.CORS(middlewareConfigs.CorsHeaders, r.RegisteredRoutes),
