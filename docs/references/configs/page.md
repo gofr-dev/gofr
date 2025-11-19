@@ -254,6 +254,429 @@ This document lists all the configuration options supported by the GoFr framewor
 - REDIS_DB
 - Database number to use for the Redis server.
 
+---
+
+- REDIS_TLS_ENABLED
+- Whether to enable TLS for Redis connections.
+- false
+
+{% /table %}
+
+### ArangoDB
+
+{% table %}
+
+- Name
+- Description
+
+---
+
+- ARANGODB_HOST
+- Hostname of the ArangoDB server.
+
+---
+
+- ARANGODB_USER
+- Username for ArangoDB authentication.
+
+---
+
+- ARANGODB_PASSWORD
+- Password for ArangoDB authentication.
+
+---
+
+- ARANGODB_PORT
+- Port of the ArangoDB server.
+
+{% /table %}
+
+### Cassandra
+
+{% table %}
+
+- Name
+- Description
+
+---
+
+- CASSANDRA_HOSTS
+- Comma-separated list of Cassandra hosts.
+
+---
+
+- CASSANDRA_KEYSPACE
+- Keyspace for Cassandra.
+
+---
+
+- CASSANDRA_PORT
+- Port of the Cassandra server.
+
+---
+
+- CASSANDRA_USERNAME
+- Username for Cassandra authentication.
+
+---
+
+- CASSANDRA_PASSWORD
+- Password for Cassandra authentication.
+
+{% /table %}
+
+### ClickHouse
+
+{% table %}
+
+- Name
+- Description
+
+---
+
+- CLICKHOUSE_HOSTS
+- Comma-separated list of ClickHouse hosts.
+
+---
+
+- CLICKHOUSE_USERNAME
+- Username for ClickHouse authentication.
+
+---
+
+- CLICKHOUSE_PASSWORD
+- Password for ClickHouse authentication.
+
+---
+
+- CLICKHOUSE_DATABASE
+- Database name for ClickHouse.
+
+{% /table %}
+
+### Couchbase
+
+{% table %}
+
+- Name
+- Description
+
+---
+
+- COUCHBASE_HOST
+- Hostname of the Couchbase server.
+
+---
+
+- COUCHBASE_USER
+- Username for Couchbase authentication.
+
+---
+
+- COUCHBASE_PASSWORD
+- Password for Couchbase authentication.
+
+---
+
+- COUCHBASE_BUCKET
+- Bucket name for Couchbase.
+
+---
+
+- COUCHBASE_URI
+- URI for Couchbase connection.
+
+---
+
+- COUCHBASE_CONNECTION_TIMEOUT
+- Connection timeout for Couchbase in seconds.
+
+{% /table %}
+
+### DGraph
+
+{% table %}
+
+- Name
+- Description
+
+---
+
+- DGRAPH_HOST
+- Hostname of the DGraph server.
+
+---
+
+- DGRAPH_PORT
+- Port of the DGraph server.
+
+{% /table %}
+
+### Elasticsearch
+
+{% table %}
+
+- Name
+- Description
+
+---
+
+- ELASTICSEARCH_ADDRESSES
+- Comma-separated list of Elasticsearch addresses.
+
+---
+
+- ELASTICSEARCH_USERNAME
+- Username for Elasticsearch authentication.
+
+---
+
+- ELASTICSEARCH_PASSWORD
+- Password for Elasticsearch authentication.
+
+{% /table %}
+
+### InfluxDB
+
+{% table %}
+
+- Name
+- Description
+
+---
+
+- INFLUXDB_URL
+- URL of the InfluxDB server.
+
+---
+
+- INFLUXDB_TOKEN
+- Token for InfluxDB authentication.
+
+---
+
+- INFLUXDB_USERNAME
+- Username for InfluxDB authentication.
+
+---
+
+- INFLUXDB_PASSWORD
+- Password for InfluxDB authentication.
+
+{% /table %}
+
+### MongoDB
+
+{% table %}
+
+- Name
+- Description
+
+---
+
+- MONGODB_HOST
+- Hostname of the MongoDB server.
+
+---
+
+- MONGODB_USER
+- Username for MongoDB authentication.
+
+---
+
+- MONGODB_PASSWORD
+- Password for MongoDB authentication.
+
+---
+
+- MONGODB_PORT
+- Port of the MongoDB server.
+
+---
+
+- MONGODB_DATABASE
+- Database name for MongoDB.
+
+---
+
+- MONGODB_URI
+- URI for MongoDB connection.
+
+---
+
+- MONGODB_CONNECTION_TIMEOUT
+- Connection timeout for MongoDB in seconds.
+
+{% /table %}
+
+### OpenTSDB
+
+{% table %}
+
+- Name
+- Description
+
+---
+
+- OPENTSDB_HOST
+- Hostname of the OpenTSDB server.
+
+---
+
+- OPENTSDB_TRANSPORT
+- Transport for OpenTSDB (e.g., http).
+
+---
+
+- OPENTSDB_MAX_PUT_POINTS_NUM
+- Maximum number of put points.
+
+---
+
+- OPENTSDB_DETECT_DELTA_NUM
+- Detect delta number.
+
+---
+
+- OPENTSDB_MAX_CONTENT_LENGTH
+- Maximum content length.
+
+{% /table %}
+
+### Oracle
+
+{% table %}
+
+- Name
+- Description
+
+---
+
+- ORACLE_HOST
+- Hostname of the Oracle server.
+
+---
+
+- ORACLE_PORT
+- Port of the Oracle server.
+
+---
+
+- ORACLE_USERNAME
+- Username for Oracle authentication.
+
+---
+
+- ORACLE_PASSWORD
+- Password for Oracle authentication.
+
+---
+
+- ORACLE_SERVICE
+- Service name for Oracle.
+
+---
+
+- ORACLE_CONNECTION_STRING
+- Connection string for Oracle.
+
+{% /table %}
+
+### ScyllaDB
+
+{% table %}
+
+- Name
+- Description
+
+---
+
+- SCYLLADB_HOST
+- Hostname of the ScyllaDB server.
+
+---
+
+- SCYLLADB_KEYSPACE
+- Keyspace for ScyllaDB.
+
+---
+
+- SCYLLADB_PORT
+- Port of the ScyllaDB server.
+
+---
+
+- SCYLLADB_USERNAME
+- Username for ScyllaDB authentication.
+
+---
+
+- SCYLLADB_PASSWORD
+- Password for ScyllaDB authentication.
+
+{% /table %}
+
+### Solr
+
+{% table %}
+
+- Name
+- Description
+
+---
+
+- SOLR_HOST
+- Hostname of the Solr server.
+
+---
+
+- SOLR_PORT
+- Port of the Solr server.
+
+{% /table %}
+
+### SurrealDB
+
+{% table %}
+
+- Name
+- Description
+
+---
+
+- SURREALDB_HOST
+- Hostname of the SurrealDB server.
+
+---
+
+- SURREALDB_PORT
+- Port of the SurrealDB server.
+
+---
+
+- SURREALDB_USERNAME
+- Username for SurrealDB authentication.
+
+---
+
+- SURREALDB_PASSWORD
+- Password for SurrealDB authentication.
+
+---
+
+- SURREALDB_NAMESPACE
+- Namespace for SurrealDB.
+
+---
+
+- SURREALDB_DATABASE
+- Database name for SurrealDB.
+
+---
+
+- SURREALDB_TLS_ENABLED
+- Whether to enable TLS for SurrealDB connections.
+
 {% /table %}
 
 ### Pub/Sub
@@ -459,25 +882,5 @@ This document lists all the configuration options supported by the GoFr framewor
 - Retrieve retained messages on subscription
 
 {% /table %}
-
-**NATS JetStream**
-
-{% table %}
-
-- Name
-- Description
-- Default Value
-
----
-
--  NATS_SERVER
--  URL of the NATS server
--  nats://localhost:4222
-
----
-
--  NATS_CREDS_FILE
--  File containing the NATS credentials
-- creds.json
 
 {% /table %}
