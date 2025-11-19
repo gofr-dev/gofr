@@ -173,8 +173,6 @@ func addMonitoringFeature() migration.Migrate {
 - **Easier rollback:** Reverting a feature means reverting one migration, not tracking multiple related migrations
 - **Better organization:** Related changes stay together, making the codebase easier to understand
 
-**Remember:** If you have to do 4 things while implementing a feature, write 1 migration that does all 4 things together.
-
 ## Migration Records
 
 **SQL**
