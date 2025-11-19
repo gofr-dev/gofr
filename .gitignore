@@ -22,3 +22,12 @@ vendor/
 # IDE Cache
 .vscode
 .DS_Store
+
+*.cov
+go.work.sum
+PANIC_RECOVERY.patch
+recovery/
+PANIC_RECOVERY.patch
+*.cov
+go.work.sum
+recovery/
