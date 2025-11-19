@@ -28,22 +28,6 @@ type RateLimiterConfig struct {
 	Store    RateLimiterStore
 }
 
-func NewRateLimiterConfig(requests float64, window time.Duration, burst int, store RateLimiterStore, keyFunc func(*http.Request) string) (*RateLimiterConfig, error) {
-	cfg := &RateLimiterConfig{
-		Requests: requests,
-		Window:   window,
-		Burst:    burst,
-		Store:    store,
-		KeyFunc:  keyFunc,
-	}
-
-	if err := cfg.Validate(); err != nil {
-		return nil, err
-	}
-
-	return cfg, nil
-}
-
 // defaultKeyFunc extracts a normalized service key from an HTTP request.
 func defaultKeyFunc(req *http.Request) string {
 	if req == nil || req.URL == nil {
@@ -73,29 +57,36 @@ func defaultKeyFunc(req *http.Request) string {
 }
 
 // Validate checks if the configuration is valid.
+// Validate checks if the configuration is valid and sets defaults.
 func (config *RateLimiterConfig) Validate() error {
+	var validationError error
+
 	if config.Requests <= 0 {
-		return fmt.Errorf("%w: %f", errInvalidRequestRate, config.Requests)
+		validationError = fmt.Errorf("%w: %f", errInvalidRequestRate, config.Requests)
+
+		config.Requests = 60 // Default: 60 requests per minute
 	}
 
 	if config.Window <= 0 {
-		config.Window = time.Minute // Default: per-minute rate limiting
+		config.Window = defaultWindow
 	}
 
 	if config.Burst <= 0 {
-		config.Burst = int(config.Requests)
+		config.Burst = defaultBurstCapacity // Default: allow burst of 10 requests
 	}
 
 	if float64(config.Burst) < config.Requests {
-		return fmt.Errorf("%w: burst=%d, requests=%f", errBurstLessThanRequests, config.Burst, config.Requests)
+		validationError = fmt.Errorf("%w: burst=%d, requests=%f", errBurstLessThanRequests, config.Burst, config.Requests)
+
+		config.Burst = int(config.Requests)
 	}
 
-	// Set default key function if not provided.
+	// Set default key function if not provided
 	if config.KeyFunc == nil {
 		config.KeyFunc = defaultKeyFunc
 	}
 
-	return nil
+	return validationError
 }
 
 // RequestsPerSecond converts the configured rate to requests per second.

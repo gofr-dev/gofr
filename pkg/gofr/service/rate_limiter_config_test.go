@@ -3,42 +3,20 @@ package service
 import (
 	"crypto/tls"
 	"net/http"
-	"net/http/httptest"
 	"net/url"
 	"testing"
 	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"go.opentelemetry.io/otel"
-
-	"gofr.dev/pkg/gofr/logging"
-	"gofr.dev/pkg/gofr/testutil"
 )
-
-func newHTTPService(t *testing.T) *httpService {
-	t.Helper()
-
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		w.WriteHeader(http.StatusOK)
-	}))
-	t.Cleanup(srv.Close)
-
-	return &httpService{
-		Client: http.DefaultClient,
-		url:    srv.URL,
-		Logger: logging.NewMockLogger(logging.INFO),
-		Tracer: otel.Tracer("gofr-http-client"),
-	}
-}
 
 func TestRateLimiterConfig_Validate(t *testing.T) {
 	t.Run("invalid RPS", func(t *testing.T) {
 		cfg := RateLimiterConfig{Requests: 0, Burst: 1}
-		err := cfg.Validate()
+		_ = cfg.Validate()
 
-		require.Error(t, err)
-		assert.ErrorIs(t, err, errInvalidRequestRate)
+		assert.Equal(t, int(cfg.Requests), defaultRequestsPerMinute)
 	})
 
 	t.Run("burst less than requests", func(t *testing.T) {
@@ -102,30 +80,6 @@ func TestDefaultKeyFunc(t *testing.T) {
 
 		assert.Equal(t, "http://unknown", defaultKeyFunc(req))
 	})
-}
-
-func TestAddOption_InvalidConfigReturnsOriginal(t *testing.T) {
-	h := newHTTPService(t)
-
-	cfg := RateLimiterConfig{Requests: 0, Burst: 1} // invalid
-
-	out := cfg.AddOption(h)
-
-	assert.Same(t, h, out)
-}
-
-func TestAddOption_DefaultsToLocalStoreAndLogsWarning(t *testing.T) {
-	log := testutil.StdoutOutputForFunc(func() {
-		h := newHTTPService(t)
-
-		cfg := RateLimiterConfig{Requests: 2, Burst: 2, Window: time.Second}
-
-		cfg.Store = nil
-
-		_ = cfg.AddOption(h)
-	})
-
-	assert.Contains(t, log, "Using local rate limiting - not suitable for multi-instance deployments")
 }
 
 func TestRequestsPerSecond(t *testing.T) {

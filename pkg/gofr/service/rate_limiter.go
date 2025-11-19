@@ -4,6 +4,13 @@ import (
 	"context"
 	"net/http"
 	"strings"
+	"time"
+)
+
+const (
+	defaultRequestsPerMinute = 60
+	defaultBurstCapacity     = 10
+	defaultWindow            = time.Minute
 )
 
 // rateLimiter provides unified rate limiting for HTTP clients.
@@ -29,13 +36,16 @@ func NewRateLimiter(config RateLimiterConfig, h HTTP) HTTP {
 }
 
 // AddOption allows RateLimiterConfig to be used as a service.Options.
-func (cfg *RateLimiterConfig) AddOption(h HTTP) HTTP {
+func (config *RateLimiterConfig) AddOption(h HTTP) HTTP {
+	// Validate always succeeds  - it auto-corrects invalid values
+	_ = config.Validate()
+
 	// Assume cfg is already validated via constructor
-	if cfg.Store == nil {
-		cfg.Store = NewLocalRateLimiterStore()
+	if config.Store == nil {
+		config.Store = NewLocalRateLimiterStore()
 	}
 
-	return NewRateLimiter(*cfg, h)
+	return NewRateLimiter(*config, h)
 }
 
 // buildFullURL constructs an absolute URL by combining the base service URL with the given path.
