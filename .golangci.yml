@@ -1,4 +1,10 @@
 version: "2"
+
+issues:
+  exclude-dirs:
+    - "^examples/"
+    - "^examples$"
+
 linters:
   default: none
   enable:
@@ -42,124 +48,132 @@ linters:
     - unparam
     - unused
     - usestdlibvars
-    - usetesting
     - whitespace
-    - wsl_v5
+    - wsl
 
-    # don't enable:
-    # - godox  # Disabling because we need TODO lines at this stage of project.
-    # - testpackage # We also need to do unit test for unexported functions. And adding _internal in all files is cumbersome.
+linters-settings:
+  dupl:
+    threshold: 100
 
-  settings:
-    dupl:
-      threshold: 100
-    exhaustive:
-      default-signifies-exhaustive: false
-    funlen:
-      lines: 100
-      statements: 50
-    goconst:
-      min-len: 2
-      min-occurrences: 2
-    gocritic:
-      disabled-checks:
-        - dupImport # https://github.com/go-critic/go-critic/issues/845
-        - ifElseChain
-        - octalLiteral
-        - whyNoLint
-        - wrapperFunc
-      enabled-tags:
-        - diagnostic
-        - experimental
-        - opinionated
-        - performance
-        - style
-    gocyclo:
-      min-complexity: 10
-    govet:
-      enable:
-        - shadow
-      settings:
-        printf:
-          funcs:
-            - (gofr.dev/pkg/gofr/Logger).Logf
-            - (gofr.dev/pkg/gofr/Logger).Errorf
-    lll:
-      line-length: 140
-    misspell:
-      locale: US
-    mnd:
-      checks:
-        - argument
-        - case
-        - condition
-        - return
-    nolintlint:
-      require-explanation: true # require an explanation for nolint directives
-      require-specific: true # require nolint directives to be specific about which linter is being skipped
-      allow-unused: false # report any unused nolint directives
-    revive:
-      rules:
-        - name: blank-imports
-        - name: context-as-argument
-        - name: context-keys-type
-        - name: dot-imports
-        - name: empty-block
-        - name: error-naming
-        - name: error-return
-        - name: error-strings
-        - name: errorf
-        - name: exported
-          arguments:
-             # enables checking public methods of private types
-            - checkPrivateReceivers
-            # make error messages clearer
-            - sayRepetitiveInsteadOfStutters
-        - name: increment-decrement
-        - name: indent-error-flow
-        - name: range
-        - name: receiver-naming
-        - name: redefines-builtin-id
-        - name: superfluous-else
-        - name: time-naming
-        - name: unexported-return
-        - name: unreachable-code
-        - name: unused-parameter
-        - name: var-declaration
-        - name: var-naming
-        - name: bare-return
-        - name: bool-literal-in-expr
-        - name: comment-spacings
-        - name: early-return
-        - name: defer
-        - name: deep-exit
-        - name: unused-receiver
-        - name: use-any
-    staticcheck:
-      checks:
-        - all
-        - -QF1001 # TODO remove this line and fix reported errors
-        - -QF1003 # TODO remove this line and fix reported errors
-        - -QF1008 # TODO remove this line and fix reported errors
-        - -ST1000 # TODO remove this line and fix reported errors
-    usestdlibvars:
-      time-layout: true
-  exclusions:
-    presets:
-      - common-false-positives # TODO fix errors reported by this and remove this line
-      - legacy                 # TODO fix errors reported by this and remove this line
-      - std-error-handling     # TODO remove this line, configure errcheck, and fix reported errors
+  exhaustive:
+    default-signifies-exhaustive: false
+
+  funlen:
+    lines: 100
+    statements: 50
+
+  goconst:
+    min-len: 2
+    min-occurrences: 2
+
+  gocritic:
+    disabled-checks:
+      - dupImport
+      - ifElseChain
+      - octalLiteral
+      - whyNoLint
+      - wrapperFunc
+    enabled-tags:
+      - diagnostic
+      - experimental
+      - opinionated
+      - performance
+      - style
+
+  gocyclo:
+    min-complexity: 10
+
+  govet:
+    enable:
+      - shadow
+    settings:
+      printf:
+        funcs:
+          - (gofr.dev/pkg/gofr/Logger).Logf
+          - (gofr.dev/pkg/gofr/Logger).Errorf
+
+  lll:
+    line-length: 140
+
+  misspell:
+    locale: US
+
+  mnd:
+    checks:
+      - argument
+      - case
+      - condition
+      - return
+
+  nolintlint:
+    require-explanation: true
+    require-specific: true
+    allow-unused: false
+
+  revive:
     rules:
-      - linters:
-          - dupl
-          - goconst
-          - mnd
-        path: _test\.go
-      - linters:
-          - revive
-        text: "exported (.+) should have comment" # TODO fix errors reported by this and remove this line
-    paths:
-      - examples  # TODO remove this line and fix reported errors
+      - name: blank-imports
+      - name: context-as-argument
+      - name: context-keys-type
+      - name: dot-imports
+      - name: empty-block
+      - name: error-naming
+      - name: error-return
+      - name: error-strings
+      - name: errorf
+      - name: exported
+        arguments:
+          - checkPrivateReceivers
+          - sayRepetitiveInsteadOfStutters
+      - name: increment-decrement
+      - name: indent-error-flow
+      - name: range
+      - name: receiver-naming
+      - name: redefines-builtin-id
+      - name: superfluous-else
+      - name: time-naming
+      - name: unexported-return
+      - name: unreachable-code
+      - name: unused-parameter
+      - name: var-declaration
+      - name: var-naming
+      - name: bare-return
+      - name: bool-literal-in-expr
+      - name: comment-spacings
+      - name: early-return
+      - name: defer
+      - name: deep-exit
+      - name: unused-receiver
+      - name: use-any
+
+  staticcheck:
+    checks:
+      - all
+      - -QF1001
+      - -QF1003
+      - -QF1008
+      - -ST1000
+
+  usestdlibvars:
+    time-layout: true
+
+exclusions:
+  presets:
+    - common-false-positives
+    - legacy
+    - std-error-handling
+
+  rules:
+    - linters:
+        - dupl
+        - goconst
+        - mnd
+      path: _test\.go
+
+    - linters:
+        - revive
+      text: "exported (.+) should have comment"
+
 formatters:
   enable:
     - gci

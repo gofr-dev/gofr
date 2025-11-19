@@ -19,7 +19,7 @@ on:
       - main
       - development
     paths-ignore:
-      - 'docs/**'# Ignore changes to docs folder
+      - 'docs/**'  # Ignore changes to docs folder
       - '**/*.md'
 
 # Define the jobs that this workflow will run

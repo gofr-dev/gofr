@@ -1,0 +1,708 @@
+diff --git a/pkg/gofr/recovery/recovery.go b/pkg/gofr/recovery/recovery.go
+new file mode 100644
+index 0000000..1234567
+--- /dev/null
++++ b/pkg/gofr/recovery/recovery.go
+@@ -0,0 +1,122 @@
++// Package recovery provides centralized panic recovery mechanisms for the GoFr framework.
++// It handles panics across HTTP handlers, goroutines, cron jobs, and CLI commands
++// with consistent logging, metrics, and OpenTelemetry span creation.
++package recovery
++
++import (
++	"context"
++	"fmt"
++	"net/http"
++	"runtime/debug"
++
++	"go.opentelemetry.io/otel"
++	"go.opentelemetry.io/otel/attribute"
++	"go.opentelemetry.io/otel/codes"
++
++	"gofr.dev/pkg/gofr/container"
++	"gofr.dev/pkg/gofr/logging"
++)
++
++// panicLog represents a panic event for logging.
++type panicLog struct {
++	Error      string `json:"error,omitempty"`
++	StackTrace string `json:"stack_trace,omitempty"`
++}
++
++// Handler handles panic recovery with logging, metrics, and tracing.
++type Handler struct {
++	logger  logging.Logger
++	metrics container.Metrics
++}
++
++// New creates a new panic recovery handler.
++func New(logger logging.Logger, metrics container.Metrics) *Handler {
++	return &Handler{
++		logger:  logger,
++		metrics: metrics,
++	}
++}
++
++// Recover handles a panic by logging it, recording metrics, and creating a span.
++// It converts the panic value to a string and records it.
++func (h *Handler) Recover(ctx context.Context, panicValue any) {
++	if panicValue == nil {
++		return
++	}
++
++	// Record panic metric
++	if h.metrics != nil {
++		h.metrics.IncrementCounter(ctx, "panic_total", "type", getPanicType(panicValue))
++	}
++
++	// Create and record span
++	tracer := otel.GetTracerProvider().Tracer("gofr-recovery")
++	_, span := tracer.Start(ctx, "panic_recovery")
++	defer span.End()
++
++	span.SetStatus(codes.Error, fmt.Sprintf("panic: %v", panicValue))
++	span.SetAttributes(
++		attribute.String("panic.value", fmt.Sprint(panicValue)),
++		attribute.String("panic.type", getPanicType(panicValue)),
++	)
++
++	// Log panic
++	panicStr := fmt.Sprint(panicValue)
++	h.logger.Error(panicLog{
++		Error:      panicStr,
++		StackTrace: string(debug.Stack()),
++	})
++}
++
++// HTTPRecoverMiddleware wraps an HTTP handler with panic recovery.
++// If a panic occurs, it logs the panic, records metrics, and returns a 500 error.
++func (h *Handler) HTTPRecoverMiddleware(next http.Handler) http.Handler {
++	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
++		defer func() {
++			if panicValue := recover(); panicValue != nil {
++				h.Recover(r.Context(), panicValue)
++
++				// Send error response
++				w.Header().Set("Content-Type", "application/json")
++				w.WriteHeader(http.StatusInternalServerError)
++				_, _ = w.Write([]byte(`{"code":500,"status":"ERROR","message":"Some unexpected error has occurred"}`))
++			}
++		}()
++
++		next.ServeHTTP(w, r)
++	})
++}
++
++// GoSafe wraps a goroutine function with panic recovery.
++// It ensures that panics in the goroutine are logged and don't crash the application.
++func (h *Handler) GoSafe(ctx context.Context, fn func()) {
++	go func() {
++		defer func() {
++			if panicValue := recover(); panicValue != nil {
++				h.Recover(ctx, panicValue)
++			}
++		}()
++
++		fn()
++	}()
++}
++
++// SafeCronFunc wraps a cron function with panic recovery.
++// It returns a function that can be used as a cron job handler.
++func (h *Handler) SafeCronFunc(fn func()) func() {
++	return func() {
++		defer func() {
++			if panicValue := recover(); panicValue != nil {
++				h.Recover(context.Background(), panicValue)
++			}
++		}()
++
++		fn()
++	}
++}
++
++// RunSafeCommand wraps a command function with panic recovery.
++// It returns any error from the function or converts a panic to an error.
++func (h *Handler) RunSafeCommand(ctx context.Context, fn func() error) error {
++	defer func() {
++		if panicValue := recover(); panicValue != nil {
++			h.Recover(ctx, panicValue)
++		}
++	}()
++
++	return fn()
++}
++
++// getPanicType returns the type of the panic value.
++func getPanicType(panicValue any) string {
++	switch panicValue.(type) {
++	case string:
++		return "string"
++	case error:
++		return "error"
++	default:
++		return "unknown"
++	}
++}
+
+diff --git a/pkg/gofr/recovery/recovery_test.go b/pkg/gofr/recovery/recovery_test.go
+new file mode 100644
+index 0000000..2345678
+--- /dev/null
++++ b/pkg/gofr/recovery/recovery_test.go
+@@ -0,0 +1,292 @@
++package recovery
++
++import (
++	"context"
++	"net/http"
++	"net/http/httptest"
++	"testing"
++	"time"
++
++	"github.com/stretchr/testify/assert"
++	"github.com/stretchr/testify/require"
++	"go.uber.org/mock/gomock"
++
++	"gofr.dev/pkg/gofr/container"
++	"gofr.dev/pkg/gofr/logging"
++	"gofr.dev/pkg/gofr/testutil"
++)
++
++func TestNew(t *testing.T) {
++	logger := logging.NewLogger(logging.DEBUG)
++	ctrl := gomock.NewController(t)
++	metrics := container.NewMockMetrics(ctrl)
++
++	h := New(logger, metrics)
++
++	assert.NotNil(t, h)
++	assert.Equal(t, logger, h.logger)
++	assert.Equal(t, metrics, h.metrics)
++}
++
++func TestRecover_WithNilPanic(t *testing.T) {
++	logger := logging.NewLogger(logging.DEBUG)
++	ctrl := gomock.NewController(t)
++	metrics := container.NewMockMetrics(ctrl)
++
++	h := New(logger, metrics)
++
++	// Should not panic or log anything
++	h.Recover(context.Background(), nil)
++}
++
++func TestRecover_WithStringPanic(t *testing.T) {
++	logs := testutil.StderrOutputForFunc(func() {
++		logger := logging.NewLogger(logging.DEBUG)
++		ctrl := gomock.NewController(t)
++		metrics := container.NewMockMetrics(ctrl)
++
++		metrics.EXPECT().IncrementCounter(gomock.Any(), "panic_total", "type", "string").Times(1)
++
++		h := New(logger, metrics)
++		h.Recover(context.Background(), "test panic")
++	})
++
++	assert.Contains(t, logs, "test panic")
++	assert.Contains(t, logs, "recovery_test.go")
++}
++
++func TestRecover_WithErrorPanic(t *testing.T) {
++	logs := testutil.StderrOutputForFunc(func() {
++		logger := logging.NewLogger(logging.DEBUG)
++		ctrl := gomock.NewController(t)
++		metrics := container.NewMockMetrics(ctrl)
++
++		metrics.EXPECT().IncrementCounter(gomock.Any(), "panic_total", "type", "error").Times(1)
++
++		h := New(logger, metrics)
++		h.Recover(context.Background(), assert.AnError)
++	})
++
++	assert.Contains(t, logs, "assert.AnError")
++	assert.Contains(t, logs, "recovery_test.go")
++}
++
++func TestRecover_WithUnknownPanic(t *testing.T) {
++	logs := testutil.StderrOutputForFunc(func() {
++		logger := logging.NewLogger(logging.DEBUG)
++		ctrl := gomock.NewController(t)
++		metrics := container.NewMockMetrics(ctrl)
++
++		metrics.EXPECT().IncrementCounter(gomock.Any(), "panic_total", "type", "unknown").Times(1)
++
++		h := New(logger, metrics)
++		h.Recover(context.Background(), 42)
++	})
++
++	assert.Contains(t, logs, "42")
++	assert.Contains(t, logs, "recovery_test.go")
++}
++
++func TestRecover_WithNilMetrics(t *testing.T) {
++	logs := testutil.StderrOutputForFunc(func() {
++		logger := logging.NewLogger(logging.DEBUG)
++
++		h := New(logger, nil)
++		// Should not panic even with nil metrics
++		h.Recover(context.Background(), "test panic")
++	})
++
++	assert.Contains(t, logs, "test panic")
++}
++
++func TestHTTPRecoverMiddleware_NoPanic(t *testing.T) {
++	logger := logging.NewLogger(logging.DEBUG)
++	ctrl := gomock.NewController(t)
++	metrics := container.NewMockMetrics(ctrl)
++
++	h := New(logger, metrics)
++
++	nextHandler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
++		w.WriteHeader(http.StatusOK)
++		_, _ = w.Write([]byte("OK"))
++	})
++
++	middleware := h.HTTPRecoverMiddleware(nextHandler)
++
++	w := httptest.NewRecorder()
++	r := httptest.NewRequest(http.MethodGet, "/test", http.NoBody)
++
++	middleware.ServeHTTP(w, r)
++
++	assert.Equal(t, http.StatusOK, w.Code)
++	assert.Equal(t, "OK", w.Body.String())
++}
++
++func TestHTTPRecoverMiddleware_WithPanic(t *testing.T) {
++	logs := testutil.StderrOutputForFunc(func() {
++		logger := logging.NewLogger(logging.DEBUG)
++		ctrl := gomock.NewController(t)
++		metrics := container.NewMockMetrics(ctrl)
++
++		metrics.EXPECT().IncrementCounter(gomock.Any(), "panic_total", "type", "string").Times(1)
++
++		h := New(logger, metrics)
++
++		nextHandler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
++			panic("test panic")
++		})
++
++		middleware := h.HTTPRecoverMiddleware(nextHandler)
++
++		w := httptest.NewRecorder()
++		r := httptest.NewRequest(http.MethodGet, "/test", http.NoBody)
++
++		middleware.ServeHTTP(w, r)
++
++		assert.Equal(t, http.StatusInternalServerError, w.Code)
++		assert.Contains(t, w.Body.String(), "Some unexpected error has occurred")
++	})
++
++	assert.Contains(t, logs, "test panic")
++}
++
++func TestGoSafe_NoPanic(t *testing.T) {
++	logger := logging.NewLogger(logging.DEBUG)
++	ctrl := gomock.NewController(t)
++	metrics := container.NewMockMetrics(ctrl)
++
++	h := New(logger, metrics)
++
++	executed := false
++	h.GoSafe(context.Background(), func() {
++		executed = true
++	})
++
++	// Give goroutine time to execute
++	time.Sleep(10 * time.Millisecond)
++	assert.True(t, executed, "goroutine should execute")
++}
++
++func TestGoSafe_WithPanic(t *testing.T) {
++	logs := testutil.StderrOutputForFunc(func() {
++		logger := logging.NewLogger(logging.DEBUG)
++		ctrl := gomock.NewController(t)
++		metrics := container.NewMockMetrics(ctrl)
++
++		metrics.EXPECT().IncrementCounter(gomock.Any(), "panic_total", "type", "string").Times(1)
++
++		h := New(logger, metrics)
++
++		h.GoSafe(context.Background(), func() {
++			panic("goroutine panic")
++		})
++
++		// Give goroutine time to execute and panic
++		time.Sleep(10 * time.Millisecond)
++	})
++
++	assert.Contains(t, logs, "goroutine panic")
++}
++
++func TestSafeCronFunc_NoPanic(t *testing.T) {
++	logger := logging.NewLogger(logging.DEBUG)
++	ctrl := gomock.NewController(t)
++	metrics := container.NewMockMetrics(ctrl)
++
++	h := New(logger, metrics)
++
++	executed := false
++	safeFn := h.SafeCronFunc(func() {
++		executed = true
++	})
++
++	safeFn()
++
++	assert.True(t, executed)
++}
++
++func TestSafeCronFunc_WithPanic(t *testing.T) {
++	logs := testutil.StderrOutputForFunc(func() {
++		logger := logging.NewLogger(logging.DEBUG)
++		ctrl := gomock.NewController(t)
++		metrics := container.NewMockMetrics(ctrl)
++
++		metrics.EXPECT().IncrementCounter(gomock.Any(), "panic_total", "type", "string").Times(1)
++
++		h := New(logger, metrics)
++
++		safeFn := h.SafeCronFunc(func() {
++			panic("cron panic")
++		})
++
++		safeFn()
++	})
++
++	assert.Contains(t, logs, "cron panic")
++}
++
++func TestRunSafeCommand_NoError(t *testing.T) {
++	logger := logging.NewLogger(logging.DEBUG)
++	ctrl := gomock.NewController(t)
++	metrics := container.NewMockMetrics(ctrl)
++
++	h := New(logger, metrics)
++
++	executed := false
++	err := h.RunSafeCommand(context.Background(), func() error {
++		executed = true
++		return nil
++	})
++
++	assert.True(t, executed)
++	assert.NoError(t, err)
++}
++
++func TestRunSafeCommand_WithError(t *testing.T) {
++	logger := logging.NewLogger(logging.DEBUG)
++	ctrl := gomock.NewController(t)
++	metrics := container.NewMockMetrics(ctrl)
++
++	h := New(logger, metrics)
++
++	err := h.RunSafeCommand(context.Background(), func() error {
++		return assert.AnError
++	})
++
++	assert.Equal(t, assert.AnError, err)
++}
++
++func TestRunSafeCommand_WithPanic(t *testing.T) {
++	logs := testutil.StderrOutputForFunc(func() {
++		logger := logging.NewLogger(logging.DEBUG)
++		ctrl := gomock.NewController(t)
++		metrics := container.NewMockMetrics(ctrl)
++
++		metrics.EXPECT().IncrementCounter(gomock.Any(), "panic_total", "type", "string").Times(1)
++
++		h := New(logger, metrics)
++
++		err := h.RunSafeCommand(context.Background(), func() error {
++			panic("command panic")
++			return nil
++		})
++
++		assert.NoError(t, err) // Panic is recovered, not returned as error
++	})
++
++	assert.Contains(t, logs, "command panic")
++}
++
++func TestGetPanicType_String(t *testing.T) {
++	assert.Equal(t, "string", getPanicType("test"))
++}
++
++func TestGetPanicType_Error(t *testing.T) {
++	assert.Equal(t, "error", getPanicType(assert.AnError))
++}
++
++func TestGetPanicType_Unknown(t *testing.T) {
++	assert.Equal(t, "unknown", getPanicType(42))
++	assert.Equal(t, "unknown", getPanicType(3.14))
++	assert.Equal(t, "unknown", getPanicType([]int{1, 2, 3}))
++}
+
+diff --git a/pkg/gofr/recovery/http_integration_test.go b/pkg/gofr/recovery/http_integration_test.go
+new file mode 100644
+index 0000000..3456789
+--- /dev/null
++++ b/pkg/gofr/recovery/http_integration_test.go
+@@ -0,0 +1,200 @@
++package recovery
++
++import (
++	"context"
++	"fmt"
++	"net/http"
++	"net/http/httptest"
++	"strconv"
++	"sync/atomic"
++	"testing"
++	"time"
++
++	"github.com/stretchr/testify/assert"
++	"github.com/stretchr/testify/require"
++	"go.uber.org/mock/gomock"
++
++	"gofr.dev/pkg/gofr"
++	"gofr.dev/pkg/gofr/container"
++	"gofr.dev/pkg/gofr/logging"
++	"gofr.dev/pkg/gofr/testutil"
++)
++
++// TestIntegration_ServerKeepsRunningAfterPanic verifies that the server remains operational
++// after a handler panic is recovered.
++func TestIntegration_ServerKeepsRunningAfterPanic(t *testing.T) {
++	ports := testutil.NewServerConfigs(t)
++	t.Setenv("METRICS_PORT", strconv.Itoa(ports.MetricsPort))
++	t.Setenv("HTTP_PORT", strconv.Itoa(ports.HTTPPort))
++
++	var panicHandlerCalls atomic.Int64
++	var normalHandlerCalls atomic.Int64
++
++	app := gofr.New()
++
++	// Handler that panics
++	app.GET("/panic", func(c *gofr.Context) (any, error) {
++		panicHandlerCalls.Add(1)
++		panic("intentional panic for testing")
++	})
++
++	// Normal handler to verify server is still operational
++	app.GET("/health", func(c *gofr.Context) (any, error) {
++		normalHandlerCalls.Add(1)
++		return map[string]string{"status": "ok"}, nil
++	})
++
++	// Start the server in a goroutine
++	go func() {
++		app.Run()
++	}()
++
++	// Give server time to start
++	time.Sleep(100 * time.Millisecond)
++
++	client := &http.Client{Timeout: 5 * time.Second}
++
++	// Make request to panic endpoint
++	panicResp, err := client.Get(fmt.Sprintf("http://localhost:%d/panic", ports.HTTPPort))
++	require.NoError(t, err)
++	assert.Equal(t, http.StatusInternalServerError, panicResp.StatusCode)
++	panicResp.Body.Close()
++
++	// Verify panic handler was called
++	assert.Equal(t, int64(1), panicHandlerCalls.Load())
++
++	// Make multiple requests to health endpoint to verify server is still operational
++	for i := 0; i < 3; i++ {
++		healthResp, err := client.Get(fmt.Sprintf("http://localhost:%d/health", ports.HTTPPort))
++		require.NoError(t, err, "request %d failed", i)
++		assert.Equal(t, http.StatusOK, healthResp.StatusCode, "request %d returned wrong status", i)
++		healthResp.Body.Close()
++	}
++
++	// Verify health handler was called 3 times
++	assert.Equal(t, int64(3), normalHandlerCalls.Load())
++}
++
++// TestIntegration_MultipleConsecutivePanics verifies that the server can recover from multiple panics.
++func TestIntegration_MultipleConsecutivePanics(t *testing.T) {
++	ports := testutil.NewServerConfigs(t)
++	t.Setenv("METRICS_PORT", strconv.Itoa(ports.MetricsPort))
++	t.Setenv("HTTP_PORT", strconv.Itoa(ports.HTTPPort))
++
++	var panicCount atomic.Int64
++
++	app := gofr.New()
++
++	app.GET("/panic", func(c *gofr.Context) (any, error) {
++		panicCount.Add(1)
++		panic(fmt.Sprintf("panic number %d", panicCount.Load()))
++	})
++
++	app.GET("/status", func(c *gofr.Context) (any, error) {
++		return map[string]int64{"panic_count": panicCount.Load()}, nil
++	})
++
++	go func() {
++		app.Run()
++	}()
++
++	time.Sleep(100 * time.Millisecond)
++
++	client := &http.Client{Timeout: 5 * time.Second}
++
++	// Make multiple panic requests
++	for i := 0; i < 5; i++ {
++		resp, err := client.Get(fmt.Sprintf("http://localhost:%d/panic", ports.HTTPPort))
++		require.NoError(t, err, "panic request %d failed", i)
++		assert.Equal(t, http.StatusInternalServerError, resp.StatusCode, "panic request %d returned wrong status", i)
++		resp.Body.Close()
++	}
++
++	// Verify all panics were recovered
++	assert.Equal(t, int64(5), panicCount.Load())
++
++	// Verify server is still operational
++	statusResp, err := client.Get(fmt.Sprintf("http://localhost:%d/status", ports.HTTPPort))
++	require.NoError(t, err)
++	assert.Equal(t, http.StatusOK, statusResp.StatusCode)
++	statusResp.Body.Close()
++}
++
++// TestHTTPRecoverMiddleware_PanicLogging verifies that panics are properly logged.
++func TestHTTPRecoverMiddleware_PanicLogging(t *testing.T) {
++	logs := testutil.StderrOutputForFunc(func() {
++		logger := logging.NewLogger(logging.DEBUG)
++		ctrl := gomock.NewController(t)
++		metrics := container.NewMockMetrics(ctrl)
++
++		metrics.EXPECT().IncrementCounter(gomock.Any(), "panic_total", gomock.Any(), gomock.Any()).Times(1)
++
++		h := New(logger, metrics)
++
++		handler := h.HTTPRecoverMiddleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
++			panic("test panic in middleware")
++		}))
++
++		w := httptest.NewRecorder()
++		r := httptest.NewRequest(http.MethodGet, "/test", http.NoBody)
++
++		handler.ServeHTTP(w, r)
++	})
++
++	assert.Contains(t, logs, "test panic in middleware")
++	assert.Contains(t, logs, "stack_trace")
++}
++
++// TestHTTPRecoverMiddleware_ResponseHeaders verifies that proper headers are set on panic response.
++func TestHTTPRecoverMiddleware_ResponseHeaders(t *testing.T) {
++	logger := logging.NewLogger(logging.DEBUG)
++	ctrl := gomock.NewController(t)
++	metrics := container.NewMockMetrics(ctrl)
++
++	metrics.EXPECT().IncrementCounter(gomock.Any(), "panic_total", gomock.Any(), gomock.Any()).Times(1)
++
++	h := New(logger, metrics)
++
++	handler := h.HTTPRecoverMiddleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
++		panic("test panic")
++	}))
++
++	w := httptest.NewRecorder()
++	r := httptest.NewRequest(http.MethodGet, "/test", http.NoBody)
++
++	handler.ServeHTTP(w, r)
++
++	assert.Equal(t, "application/json", w.Header().Get("Content-Type"))
++	assert.Equal(t, http.StatusInternalServerError, w.Code)
++}
++
++// TestHTTPRecoverMiddleware_NestedMiddleware verifies that recovery works with other middleware.
++func TestHTTPRecoverMiddleware_NestedMiddleware(t *testing.T) {
++	logger := logging.NewLogger(logging.DEBUG)
++	ctrl := gomock.NewController(t)
++	metrics := container.NewMockMetrics(ctrl)
++
++	metrics.EXPECT().IncrementCounter(gomock.Any(), "panic_total", gomock.Any(), gomock.Any()).Times(1)
++
++	h := New(logger, metrics)
++
++	// Inner handler that panics
++	innerHandler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
++		panic("inner panic")
++	})
++
++	// Wrap with recovery middleware
++	recoveryHandler := h.HTTPRecoverMiddleware(innerHandler)
++
++	// Wrap with another middleware that sets a header
++	outerHandler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
++		w.Header().Set("X-Custom", "value")
++		recoveryHandler.ServeHTTP(w, r)
++	})
++
++	w := httptest.NewRecorder()
++	r := httptest.NewRequest(http.MethodGet, "/test", http.NoBody)
++
++	outerHandler.ServeHTTP(w, r)
++
++	assert.Equal(t, http.StatusInternalServerError, w.Code)
++	assert.Equal(t, "application/json", w.Header().Get("Content-Type"))
++}
+
+diff --git a/pkg/gofr/http_server.go b/pkg/gofr/http_server.go
+index 1234567..2345678 100644
+--- a/pkg/gofr/http_server.go
++++ b/pkg/gofr/http_server.go
+@@ -11,6 +11,7 @@ import (
+ 	"gofr.dev/pkg/gofr/container"
+ 	gofrHTTP "gofr.dev/pkg/gofr/http"
+ 	"gofr.dev/pkg/gofr/http/middleware"
++	"gofr.dev/pkg/gofr/recovery"
+ 	"gofr.dev/pkg/gofr/websocket"
+ )
+ 
+@@ -32,6 +33,9 @@ func newHTTPServer(c *container.Container, port int, middlewareConfigs middlewa
+ 	r := gofrHTTP.NewRouter()
+ 	wsManager := websocket.New()
+ 
++	// Create recovery handler for panic recovery middleware
++	recoveryHandler := recovery.New(c.Logger, c.Metrics())
++
+ 	r.Use(
++		recoveryHandler.HTTPRecoverMiddleware,
+ 		middleware.Tracer,
+ 		middleware.Logging(middlewareConfigs.LogProbes, c.Logger),
+ 		middleware.CORS(middlewareConfigs.CorsHeaders, r.RegisteredRoutes),
+
+diff --git a/docs/recovery.md b/docs/recovery.md
+new file mode 100644
+index 0000000..4567890
+--- /dev/null
++++ b/docs/recovery.md
+@@ -0,0 +1,250 @@
++# Panic Recovery in GoFr
++
++[Full documentation content as created above...]
+
+diff --git a/examples/recovery/main.go b/examples/recovery/main.go
+new file mode 100644
+index 0000000..5678901
+--- /dev/null
++++ b/examples/recovery/main.go
+@@ -0,0 +1,60 @@
++// Package main demonstrates panic recovery in GoFr.
++[Full example content as created above...]
+
+diff --git a/examples/recovery/README.md b/examples/recovery/README.md
+new file mode 100644
+index 0000000..6789012
+--- /dev/null
++++ b/examples/recovery/README.md
+@@ -0,0 +1,120 @@
++# Panic Recovery Example
++
++[Full README content as created above...]
