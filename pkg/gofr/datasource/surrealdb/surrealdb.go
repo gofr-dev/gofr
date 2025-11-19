@@ -291,38 +291,43 @@ func (c *Client) processQueryResults(query string, results []surrealdb.QueryResu
 			continue
 		}
 
-		if resultList, ok := result.Result.([]any); ok {
-			for _, record := range resultList {
-				extracted, err := c.extractRecord(record)
-				if err != nil {
-					c.logger.Errorf("failed to extract record: %v", err)
-					continue
-				}
-
-				resp = append(resp, extracted)
-			}
-		} else if resultMap, ok := result.Result.(map[string]any); ok {
-			// Handle single record returned as map directly (e.g., from type::thing() queries)
-			extracted, err := c.extractRecord(resultMap)
-			if err != nil {
-				c.logger.Errorf("failed to extract record: %v", err)
-			} else {
-				resp = append(resp, extracted)
-			}
-		} else if resultMap, ok := result.Result.(map[any]any); ok {
-			// Handle single record as map[any]any for compatibility
-			extracted, err := c.extractRecord(resultMap)
-			if err != nil {
-				c.logger.Errorf("failed to extract record: %v", err)
-			} else {
-				resp = append(resp, extracted)
-			}
-		} else {
-			resp = append(resp, result.Result)
-		}
+		c.handleResultRecord(result.Result, &resp)
 	}
 
 	return resp, nil
+}
+
+// handleResultRecord processes a single result record and appends to response.
+func (c *Client) handleResultRecord(result any, resp *[]any) {
+	switch res := result.(type) {
+	case []any:
+		for _, record := range res {
+			extracted, err := c.extractRecord(record)
+			if err != nil {
+				c.logger.Errorf("failed to extract record: %v", err)
+				continue
+			}
+			*resp = append(*resp, extracted)
+		}
+	case map[string]any:
+		// Handle single record returned as map directly (e.g., from type::thing() queries)
+		extracted, err := c.extractRecord(res)
+		if err != nil {
+			c.logger.Errorf("failed to extract record: %v", err)
+		} else {
+			*resp = append(*resp, extracted)
+		}
+	case map[any]any:
+		// Handle single record as map[any]any for compatibility
+		extracted, err := c.extractRecord(res)
+		if err != nil {
+			c.logger.Errorf("failed to extract record: %v", err)
+		} else {
+			*resp = append(*resp, extracted)
+		}
+	default:
+		*resp = append(*resp, result)
+	}
 }
 
 // extractRecord extracts and processes a single record into a map[string]any}.
