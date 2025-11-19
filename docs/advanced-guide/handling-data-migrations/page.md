@@ -78,6 +78,8 @@ func All() map[int64]migration.Migrate {
 
 Migrations run in ascending order of keys in this map.
 
+> **Best Practice:** Before creating multiple migrations, learn about [organizing migrations by feature](#organizing-migrations-by-feature) to avoid creating one migration per table or operation.
+
 ### Initialization from main.go
 
 ```go
@@ -107,6 +109,71 @@ INFO [16:55:46] Migration 20240226153000 ran successfully
 ```
 
 GoFr maintains the records in the database itself which helps in tracking which migrations have already been executed and ensures that only migrations that have never been run are executed.
+
+## Organizing Migrations by Feature
+
+**Important:** Migrations should be organized by **feature**, not by individual database operations. The migration history should tell the story of feature evolution, not database operation granularity.
+
+### Bad Practice: One Migration Per Operation
+
+A common mistake is to create one migration for each table or operation, even when they're part of the same feature:
+
+```go
+func All() map[int64]migration.Migrate {
+    return map[int64]migration.Migrate{
+        20251114000001: createTableUsers(),
+        20251114000002: createTableMonitors(),
+        20251114000003: createTableCheckResults(),
+        20251114000004: createTableIncidents(),
+    }
+}
+```
+
+**Why this is problematic:**
+- When reverting a feature, you want to revert all related changes together
+- When deploying, you want to deploy the entire feature atomically
+- Having multiple migrations for a single feature creates unnecessary complexity and potential inconsistencies
+
+### Good Practice: One Migration Per Feature
+
+Instead, group all database operations related to a single feature into one migration:
+
+```go
+func All() map[int64]migration.Migrate {
+    return map[int64]migration.Migrate{
+        20251114000001: addMonitoringFeature(), // Creates all 4 tables together
+    }
+}
+
+func addMonitoringFeature() migration.Migrate {
+    return migration.Migrate{
+        UP: func(d migration.Datasource) error {
+            // Create all tables for the monitoring feature
+            if _, err := d.SQL.Exec(createTableUsers); err != nil {
+                return err
+            }
+            if _, err := d.SQL.Exec(createTableMonitors); err != nil {
+                return err
+            }
+            if _, err := d.SQL.Exec(createTableCheckResults); err != nil {
+                return err
+            }
+            if _, err := d.SQL.Exec(createTableIncidents); err != nil {
+                return err
+            }
+            return nil
+        },
+    }
+}
+```
+
+**Benefits of this approach:**
+- **Atomic deployment:** The entire feature is deployed or reverted together
+- **Clear history:** Migration history reflects feature evolution, not granular operations
+- **Easier rollback:** Reverting a feature means reverting one migration, not tracking multiple related migrations
+- **Better organization:** Related changes stay together, making the codebase easier to understand
+
+**Remember:** If you have to do 4 things while implementing a feature, write 1 migration that does all 4 things together.
 
 ## Migration Records
 
