@@ -19,6 +19,7 @@ env:
 
 jobs:
   dockerize:
+    if: ${{ github.repository == 'gofr-dev/gofr' }}
     permissions:
       contents: read
       packages: write
