@@ -16,7 +16,7 @@ func TestRateLimiterConfig_Validate(t *testing.T) {
 		cfg := RateLimiterConfig{Requests: 0, Burst: 1}
 		_ = cfg.Validate()
 
-		assert.Equal(t, int(cfg.Requests), defaultRequestsPerMinute)
+		assert.Equal(t, defaultRequestsPerMinute, int(cfg.Requests))
 	})
 
 	t.Run("burst less than requests", func(t *testing.T) {
