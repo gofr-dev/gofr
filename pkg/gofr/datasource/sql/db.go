@@ -62,7 +62,7 @@ func getOperationType(query string) string {
 	query = strings.TrimSpace(query)
 	words := strings.Split(query, " ")
 
-	return words[0]
+	return strings.ToUpper(words[0])
 }
 
 func (d *DB) Query(query string, args ...any) (*sql.Rows, error) {
