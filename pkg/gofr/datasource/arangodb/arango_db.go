@@ -82,12 +82,14 @@ func (d *DB) CreateCollection(ctx context.Context, database, collection string, 
 		return ErrCollectionExists
 	}
 
-	options := arangodb.CreateCollectionProperties{Type: arangodb.CollectionTypeDocument}
+	collectionType := arangodb.CollectionTypeDocument
 	if isEdge {
-		options.Type = arangodb.CollectionTypeEdge
+		collectionType = arangodb.CollectionTypeEdge
 	}
 
-	_, err = db.CreateCollection(tracerCtx, collection, &options)
+	options := arangodb.CreateCollectionPropertiesV2{Type: &collectionType}
+
+	_, err = db.CreateCollectionV2(tracerCtx, collection, &options)
 
 	return err
 }

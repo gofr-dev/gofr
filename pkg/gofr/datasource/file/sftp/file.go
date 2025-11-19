@@ -6,6 +6,7 @@ import (
 	"errors"
 	"os"
 	"strings"
+	"time"
 
 	"github.com/pkg/sftp"
 	"gofr.dev/pkg/gofr/datasource/file"
@@ -16,6 +17,60 @@ var errNotStringPointer = errors.New("input should be a pointer to a string")
 type sftpFile struct {
 	*sftp.File
 	logger Logger
+}
+
+func (f sftpFile) Size() int64 {
+	stat, err := f.File.Stat()
+	if err != nil {
+		f.logger.Errorf("failed to get file size: %v", err)
+
+		return 0
+	}
+
+	return stat.Size()
+}
+
+func (f sftpFile) ModTime() time.Time {
+	stat, err := f.File.Stat()
+	if err != nil {
+		f.logger.Errorf("failed to get file modification time: %v", err)
+
+		return time.Unix(0, 0)
+	}
+
+	return stat.ModTime()
+}
+
+func (f sftpFile) IsDir() bool {
+	stat, err := f.File.Stat()
+	if err != nil {
+		f.logger.Errorf("failed to check if file is directory: %v", err)
+
+		return false
+	}
+
+	return stat.IsDir()
+}
+
+func (f sftpFile) Mode() os.FileMode {
+	stat, err := f.File.Stat()
+	if err != nil {
+		f.logger.Errorf("failed to get file mode: %v", err)
+		return 0
+	}
+
+	return stat.Mode()
+}
+
+func (f sftpFile) Sys() any {
+	stat, err := f.File.Stat()
+	if err != nil {
+		f.logger.Errorf("failed to get file system info: %v", err)
+
+		return nil
+	}
+
+	return stat.Sys()
 }
 
 type textReader struct {
