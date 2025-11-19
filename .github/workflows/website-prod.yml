@@ -18,6 +18,7 @@ env:
   NAMESPACE_STAGE: gofr-dev-stg
 jobs:
   dockerize:
+    if: ${{ github.repository == 'gofr-dev/gofr' }}
     permissions:
       contents: read
       packages: write

@@ -313,7 +313,7 @@ jobs:
     # This job only needs example and pkg test results, not submodules
     needs: [Example-Unit-Testing, PKG-Unit-Testing]
     # Only run this job on pushes to the development branch
-    if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/development'}}
+    if: ${{ github.repository == 'gofr-dev/gofr' && github.event_name == 'push' && github.ref == 'refs/heads/development'}}
     steps:
       - name: Check out code into the Go module directory
         uses: actions/checkout@v5
