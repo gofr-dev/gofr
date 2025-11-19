@@ -42,6 +42,20 @@ func (r Responder) Respond(data any, err error) {
 		v.Render(r.w)
 
 		return
+	case resTypes.XML:
+		contentType := v.ContentType
+		if contentType == "" {
+			contentType = "application/xml"
+		}
+
+		r.w.Header().Set("Content-Type", contentType)
+		r.w.WriteHeader(http.StatusOK)
+
+		if len(v.Content) > 0 {
+			_, _ = r.w.Write(v.Content)
+		}
+
+		return
 	case resTypes.Redirect:
 		// HTTP 302 by default
 		statusCode := http.StatusFound

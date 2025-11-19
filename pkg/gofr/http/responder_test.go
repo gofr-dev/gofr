@@ -22,6 +22,23 @@ func TestResponder(t *testing.T) {
 		expectedBody []byte
 	}{
 		{
+			desc: "xml response type default content type",
+			data: resTypes.XML{
+				Content: []byte(`<Response status="ok"><Message>Hello</Message></Response>`),
+			},
+			contentType:  "application/xml",
+			expectedBody: []byte(`<Response status="ok"><Message>Hello</Message></Response>`),
+		},
+		{
+			desc: "xml response type custom content type",
+			data: resTypes.XML{
+				Content:     []byte(`<soapenv:Envelope></soapenv:Envelope>`),
+				ContentType: "application/soap+xml",
+			},
+			contentType:  "application/soap+xml",
+			expectedBody: []byte(`<soapenv:Envelope></soapenv:Envelope>`),
+		},
+		{
 			desc:         "raw response type",
 			data:         resTypes.Raw{Data: []byte("raw data")},
 			contentType:  "application/json",
