@@ -1,0 +1,10 @@
+{
+  "route": {
+    "/api/users": ["admin", "editor", "viewer"],
+    "/api/admin/*": ["admin"]
+  },
+  "overrides": {
+    "/health": true
+  }
+}
+
