@@ -5,44 +5,217 @@ import (
 	"errors"
 	"net/http"
 
-	"gofr.dev/pkg/gofr"
+	"gofr.dev/pkg/gofr/logging"
 )
 
 type authMethod int
 
 const userRole authMethod = 4
 
-var ErrAccessDenied = errors.New("forbidden: access denied")
+var (
+	// ErrAccessDenied is returned when a user doesn't have required role/permission
+	ErrAccessDenied = errors.New("forbidden: access denied")
 
+	// ErrRoleNotFound is returned when role cannot be extracted from request
+	ErrRoleNotFound = errors.New("unauthorized: role not found")
+)
+
+// AuditLogger is an interface for logging authorization decisions.
+type AuditLogger interface {
+	LogAccess(logger logging.Logger, req *http.Request, role, route string, allowed bool, reason string)
+}
+
+// DefaultAuditLogger is a basic implementation of AuditLogger that uses GoFr's logger.
+type DefaultAuditLogger struct{}
+
+// LogAccess logs an authorization decision using GoFr's logger.
+func (l *DefaultAuditLogger) LogAccess(logger logging.Logger, req *http.Request, role, route string, allowed bool, reason string) {
+	if logger == nil {
+		return // Skip logging if no logger provided
+	}
+
+	status := "denied"
+	if allowed {
+		status = "allowed"
+	}
+
+	logger.Infof("[RBAC Audit] %s %s - Role: %s - Route: %s - %s - Reason: %s",
+		req.Method, req.URL.Path, role, route, status, reason)
+}
+
+// Middleware creates an HTTP middleware function that enforces RBAC authorization.
+// It extracts the user's role and checks if the role is allowed for the requested route.
 func Middleware(config *Config, args ...any) func(handler http.Handler) http.Handler {
 	return func(handler http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			role, err := config.RoleExtractorFunc(r, args)
-			if err != nil {
-				http.Error(w, "Unauthorized: Missing or invalid role", http.StatusUnauthorized)
+			route := r.URL.Path
 
+			// Check if route is overridden (public access)
+			if config.OverRides != nil && config.OverRides[route] {
+				handler.ServeHTTP(w, r)
 				return
 			}
 
-			if !isRoleAllowed(role, r.URL.Path, config) {
-				http.Error(w, "Forbidden: Access denied", http.StatusForbidden)
+			// Extract role
+			var role string
+			var err error
 
+			if config.RoleExtractorFunc != nil {
+				role, err = config.RoleExtractorFunc(r, args...)
+				if err != nil {
+					// Use default role if configured
+					if config.DefaultRole != "" {
+						role = config.DefaultRole
+					} else {
+						handleAuthError(w, r, config, "", route, ErrRoleNotFound)
+						return
+					}
+				}
+			} else if config.DefaultRole != "" {
+				role = config.DefaultRole
+			} else {
+				handleAuthError(w, r, config, "", route, ErrRoleNotFound)
 				return
 			}
 
+			// Check authorization
+			authorized := false
+			authReason := ""
+
+			// Check permission-based access if enabled
+			if config.EnablePermissions && config.PermissionConfig != nil {
+				// Store role in request context first for permission check
+				reqCtx := context.WithValue(r.Context(), userRole, role)
+				reqWithRole := r.WithContext(reqCtx)
+				if err := CheckPermission(reqWithRole, config.PermissionConfig); err == nil {
+					authorized = true
+					authReason = "permission-based"
+				}
+			}
+
+			// Check role-based access (if not already authorized by permissions)
+			if !authorized {
+				// Use hierarchy if configured
+				if len(config.RoleHierarchy) > 0 {
+					hierarchy := NewRoleHierarchy(config.RoleHierarchy)
+					if IsRoleAllowedWithHierarchy(role, route, config, hierarchy) {
+						authorized = true
+						authReason = "role-based (with hierarchy)"
+					}
+				} else {
+					if isRoleAllowed(role, route, config) {
+						authorized = true
+						authReason = "role-based"
+					}
+				}
+			}
+
+			if !authorized {
+				handleAuthError(w, r, config, role, route, ErrAccessDenied)
+				return
+			}
+
+			// Log audit event (always enabled when Logger is available)
+			if config.Logger != nil {
+				if config.AuditLogger != nil {
+					config.AuditLogger.LogAccess(config.Logger, r, role, route, true, authReason)
+				} else {
+					logAuditEvent(config.Logger, r, role, route, true, authReason)
+				}
+			}
+
+			// Store role in context and continue
 			ctx := context.WithValue(r.Context(), userRole, role)
-
 			handler.ServeHTTP(w, r.WithContext(ctx))
 		})
 	}
 }
 
-func RequireRole(allowedRole string, handlerFunc gofr.Handler) gofr.Handler {
-	return func(ctx *gofr.Context) (any, error) {
-		role, _ := ctx.Context.Value(userRole).(string)
+// handleAuthError handles authorization errors with custom error handler or default response.
+func handleAuthError(w http.ResponseWriter, r *http.Request, config *Config, role, route string, err error) {
+	// Log audit event (always enabled when Logger is available)
+	if config.Logger != nil {
+		reason := "access denied"
+		if errors.Is(err, ErrRoleNotFound) {
+			reason = "role not found"
+		}
+		if config.AuditLogger != nil {
+			config.AuditLogger.LogAccess(config.Logger, r, role, route, false, reason)
+		} else {
+			logAuditEvent(config.Logger, r, role, route, false, reason)
+		}
+	}
+
+	// Use custom error handler if provided
+	if config.ErrorHandler != nil {
+		config.ErrorHandler(w, r, role, route, err)
+		return
+	}
+
+	// Default error handling
+	if errors.Is(err, ErrRoleNotFound) {
+		http.Error(w, "Unauthorized: Missing or invalid role", http.StatusUnauthorized)
+		return
+	}
+
+	http.Error(w, "Forbidden: Access denied", http.StatusForbidden)
+}
+
+// logAuditEvent logs authorization decisions for audit purposes.
+func logAuditEvent(logger logging.Logger, r *http.Request, role, route string, allowed bool, reason string) {
+	auditLogger := &DefaultAuditLogger{}
+	auditLogger.LogAccess(logger, r, role, route, allowed, reason)
+}
+
+// HandlerFunc is a function type that matches GoFr's handler signature.
+// This avoids import cycle with gofr package.
+// Users should use gofr.RequireRole() instead for type safety.
+type HandlerFunc func(ctx interface{}) (any, error)
+
+// RequireRole wraps a handler to require a specific role.
+// Returns ErrAccessDenied if the user's role doesn't match.
+// Note: For GoFr applications, use gofr.RequireRole() instead for better type safety.
+func RequireRole(allowedRole string, handlerFunc HandlerFunc) HandlerFunc {
+	return func(ctx interface{}) (any, error) {
+		// Type assert to get context value access
+		type contextValueGetter interface {
+			Value(key interface{}) interface{}
+		}
+
+		var role string
+		if ctxWithValue, ok := ctx.(contextValueGetter); ok {
+			if roleVal := ctxWithValue.Value(userRole); roleVal != nil {
+				role, _ = roleVal.(string)
+			}
+		}
 
 		if role == allowedRole {
 			return handlerFunc(ctx)
+		}
+
+		return nil, ErrAccessDenied
+	}
+}
+
+// RequireAnyRole wraps a handler to require any of the specified roles.
+// Note: For GoFr applications, use gofr.RequireAnyRole() instead for better type safety.
+func RequireAnyRole(allowedRoles []string, handlerFunc HandlerFunc) HandlerFunc {
+	return func(ctx interface{}) (any, error) {
+		type contextValueGetter interface {
+			Value(key interface{}) interface{}
+		}
+
+		var role string
+		if ctxWithValue, ok := ctx.(contextValueGetter); ok {
+			if roleVal := ctxWithValue.Value(userRole); roleVal != nil {
+				role, _ = roleVal.(string)
+			}
+		}
+
+		for _, allowedRole := range allowedRoles {
+			if role == allowedRole {
+				return handlerFunc(ctx)
+			}
 		}
 
 		return nil, ErrAccessDenied
