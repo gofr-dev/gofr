@@ -157,7 +157,6 @@ logger.Fatal("CRITICAL: DATABASE_PASSWORD environment variable is not set. Exiti
 ```Console
 FATA [14:05:06] CRITICAL: DATABASE_PASSWORD environment variable is not set. Exiting.
 ```
-
 ---
 
 {% figure src="/quick-start-logs.png" alt="Pretty Printed Logs" /%}
