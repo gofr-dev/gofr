@@ -1,0 +1,15 @@
+{
+  "route": {
+    "/api/users": ["admin", "editor", "viewer"],
+    "/api/admin/*": ["admin"]
+  },
+  "overrides": {
+    "/health": true
+  },
+  "defaultRole": "viewer",
+  "roleHierarchy": {
+    "admin": ["editor", "author", "viewer"],
+    "editor": ["author", "viewer"]
+  }
+}
+
