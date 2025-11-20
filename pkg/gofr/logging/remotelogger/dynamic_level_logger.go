@@ -21,6 +21,34 @@ const (
 	colorRed    = 202 // For server errors (5xx)
 )
 
+// httpDebugMsg represents a structured HTTP debug log entry.
+// It implements PrettyPrint for colored output and json.Marshaler for JSON logs.
+type httpDebugMsg struct {
+	CorrelationID string `json:"correlation_id"`
+	ResponseCode  int    `json:"response_code"`
+	ResponseTime  int64  `json:"response_time_us"`
+	HTTPMethod    string `json:"http_method"`
+	URI           string `json:"uri"`
+}
+
+func (m httpDebugMsg) PrettyPrint(w io.Writer) {
+	colorCode := colorForResponseCode(m.ResponseCode)
+	fmt.Fprintf(w,
+		"\u001B[38;5;8m%s \u001B[38;5;%dm%-6d\u001B[0m %8dμs\u001B[0m %s %s\n",
+		m.CorrelationID,
+		colorCode,
+		m.ResponseCode,
+		m.ResponseTime,
+		m.HTTPMethod,
+		m.URI,
+	)
+}
+
+func (m httpDebugMsg) MarshalJSON() ([]byte, error) {
+	type alias httpDebugMsg
+	return json.Marshal(alias(m))
+}
+
 // httpLogFilter filters HTTP logs from remote logger to reduce noise.
 type httpLogFilter struct {
 	logging.Logger
@@ -77,16 +105,14 @@ func (f *httpLogFilter) handleHTTPLog(httpLog *service.Log, args []any) {
 
 	// Subsequent successful hits - log at DEBUG level with consistent format
 	case isSuccessful:
-		if debugLogger, ok := f.Logger.(interface{ Debugf(string, ...any) }); ok {
-			colorCode := colorForResponseCode(httpLog.ResponseCode)
-			debugLogger.Debugf("\u001B[38;5;8m%s \u001B[38;5;%dm%-6d\u001B[0m %8d\u001B[38;5;8mµs\u001B[0m %s %s",
-				httpLog.CorrelationID,
-				colorCode,
-				httpLog.ResponseCode,
-				httpLog.ResponseTime,
-				httpLog.HTTPMethod,
-				httpLog.URI)
+		msg := httpDebugMsg{
+			CorrelationID: httpLog.CorrelationID,
+			ResponseCode:  httpLog.ResponseCode,
+			ResponseTime:  httpLog.ResponseTime,
+			HTTPMethod:    httpLog.HTTPMethod,
+			URI:           httpLog.URI,
 		}
+		f.Logger.Debug(msg)
 
 	// Error responses - pass through to original logger
 	default:
@@ -199,7 +225,7 @@ func logLevelChange(r *remoteLogger, oldLevel, newLevel logging.Level) {
 
 	switch logLevel {
 	case logging.FATAL:
-		r.Fatalf(message)
+		r.Warnf(message)
 	case logging.ERROR:
 		r.Errorf(message)
 	case logging.WARN:

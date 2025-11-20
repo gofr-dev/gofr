@@ -10,7 +10,7 @@ import (
 	"gofr.dev/pkg/gofr/testutil"
 )
 
-func Test_getMigratorDatastoreNotInitialised(t *testing.T) {
+func Test_getMigratorDatastoreNotInitialized(t *testing.T) {
 	logs := testutil.StdoutOutputForFunc(func() {
 		mockContainer, _ := container.NewMockContainer(t)
 		mockContainer.SQL = nil

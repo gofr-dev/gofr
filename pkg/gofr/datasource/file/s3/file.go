@@ -32,6 +32,10 @@ type S3File struct {
 	lastModified time.Time
 }
 
+func (*S3File) Sys() any {
+	return nil
+}
+
 var (
 	ErrNilResponse = errors.New("response retrieved is nil ")
 )

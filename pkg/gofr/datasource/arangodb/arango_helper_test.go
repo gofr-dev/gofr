@@ -13,8 +13,8 @@ import (
 func Test_Client_CreateUser(t *testing.T) {
 	client, mockArango, _, mockLogger, mockMetrics := setupDB(t)
 
-	mockArango.EXPECT().AddUser(gomock.Any(), "test", &arangodb.UserOptions{Password: "user123"}).
-		Return(nil, nil)
+	mockArango.EXPECT().CreateUser(gomock.Any(), gomock.Any(), gomock.Any()).Return(nil, nil)
+
 	mockLogger.EXPECT().Debug(gomock.Any())
 	mockMetrics.EXPECT().RecordHistogram(context.Background(), "app_arango_stats",
 		gomock.Any(), "endpoint", gomock.Any(), gomock.Any(), gomock.Any())
@@ -29,8 +29,7 @@ func Test_Client_CreateUser(t *testing.T) {
 func Test_Client_DropUser(t *testing.T) {
 	client, mockArango, _, mockLogger, mockMetrics := setupDB(t)
 
-	// Ensure the mock returns nil as an error type
-	mockArango.EXPECT().DropUser(gomock.Any(), "test").Return(nil)
+	mockArango.EXPECT().RemoveUser(gomock.Any(), gomock.Any()).Return(nil)
 	mockLogger.EXPECT().Debug(gomock.Any())
 	mockMetrics.EXPECT().RecordHistogram(context.Background(), "app_arango_stats", gomock.Any(),
 		gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any())
@@ -113,7 +112,7 @@ func TestUser(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
-	mockArango := NewMockArango(ctrl)
+	mockArango := NewMockClient(ctrl)
 	mockUser := NewMockUser(ctrl)
 	client := &Client{client: mockArango}
 
@@ -147,7 +146,7 @@ func TestClient_Database(t *testing.T) {
 
 	mockLogger := NewMockLogger(ctrl)
 	mockMetrics := NewMockMetrics(ctrl)
-	mockArango := NewMockArango(ctrl)
+	mockArango := NewMockClient(ctrl)
 
 	config := Config{Host: "localhost", Port: 8527, User: "root", Password: "root"}
 	client := New(config)
@@ -164,7 +163,7 @@ func TestClient_Database(t *testing.T) {
 
 	t.Run("Get database Success", func(t *testing.T) {
 		mockArango.EXPECT().
-			GetDatabase(ctx, dbName, &arangodb.GetDatabaseOptions{}).
+			GetDatabase(ctx, dbName, nil).
 			Return(mockDatabase, nil)
 		mockDatabase.EXPECT().Name().Return(dbName)
 
@@ -176,7 +175,7 @@ func TestClient_Database(t *testing.T) {
 
 	t.Run("Get database Error", func(t *testing.T) {
 		mockArango.EXPECT().
-			GetDatabase(ctx, dbName, &arangodb.GetDatabaseOptions{}).
+			GetDatabase(ctx, dbName, nil).
 			Return(nil, errDBNotFound)
 
 		db, err := client.database(ctx, dbName)
@@ -187,7 +186,7 @@ func TestClient_Database(t *testing.T) {
 	// Test database operations
 	t.Run("database Operations", func(t *testing.T) {
 		mockArango.EXPECT().
-			GetDatabase(ctx, dbName, &arangodb.GetDatabaseOptions{}).
+			GetDatabase(ctx, dbName, nil).
 			Return(mockDatabase, nil)
 		mockDatabase.EXPECT().Name().Return(dbName)
 		mockDatabase.EXPECT().Remove(ctx).Return(nil)

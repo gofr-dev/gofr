@@ -13,6 +13,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"go.uber.org/mock/gomock"
 
 	"gofr.dev/pkg/gofr"
 	"gofr.dev/pkg/gofr/container"
@@ -82,11 +83,14 @@ func TestHTTPHandlerURLError(t *testing.T) {
 		fmt.Sprint("http://localhost:", port, "/handle"), bytes.NewBuffer([]byte(`{"key":"value"}`)))
 	gofrReq := gofrHTTP.NewRequest(req)
 
-	mockContainer, _ := container.NewMockContainer(t)
+	mockContainer, mocks := container.NewMockContainer(t)
 
 	ctx := &gofr.Context{Context: context.Background(), Request: gofrReq, Container: mockContainer}
 
 	ctx.Container.Services = map[string]service.HTTP{"cat-facts": service.NewHTTPService("http://invalid", ctx.Logger, mockContainer.Metrics())}
+
+	mocks.Metrics.EXPECT().RecordHistogram(gomock.Any(), "app_http_service_response", gomock.Any(), gomock.Any(),
+		"http://invalid", "method", "GET", "status", gomock.Any())
 
 	resp, err := Handler(ctx)
 

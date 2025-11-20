@@ -18,7 +18,7 @@ var (
 	errDocumentNotFound = errors.New("document not found")
 )
 
-func setupDB(t *testing.T) (*Client, *MockArango, *MockUser, *MockLogger, *MockMetrics) {
+func setupDB(t *testing.T) (*Client, *MockClient, *MockUser, *MockLogger, *MockMetrics) {
 	t.Helper()
 
 	ctrl := gomock.NewController(t)
@@ -27,8 +27,10 @@ func setupDB(t *testing.T) (*Client, *MockArango, *MockUser, *MockLogger, *MockM
 	// Setup
 	mockLogger := NewMockLogger(ctrl)
 	mockMetrics := NewMockMetrics(ctrl)
-	mockArango := NewMockArango(ctrl)
+	mockArango := NewMockClient(ctrl)
 	mockUser := NewMockUser(ctrl)
+
+	mockLogger.EXPECT().Debugf(gomock.Any(), gomock.Any()).AnyTimes()
 
 	config := Config{Host: "localhost", Port: 8527, User: "root", Password: "root"}
 	client := New(config)
@@ -75,7 +77,7 @@ func TestClient_Query_Success(t *testing.T) {
 		{"_key": "doc2", "value": "test2"},
 	}
 
-	test.MockArango.EXPECT().GetDatabase(test.Ctx, dbName, &arangodb.GetDatabaseOptions{}).
+	test.MockArango.EXPECT().GetDatabase(test.Ctx, dbName, nil).
 		Return(test.MockDB, nil)
 	test.MockDB.EXPECT().Query(test.Ctx, query, &arangodb.QueryOptions{BindVars: bindVars}).
 		Return(NewMockQueryCursor(test.Ctrl, expectedResult), nil)
@@ -281,7 +283,7 @@ func TestClient_Query_WithBatchSizeAndFullCount(t *testing.T) {
 		},
 	}
 
-	test.MockArango.EXPECT().GetDatabase(test.Ctx, dbName, &arangodb.GetDatabaseOptions{}).
+	test.MockArango.EXPECT().GetDatabase(test.Ctx, dbName, nil).
 		Return(test.MockDB, nil)
 
 	test.MockDB.EXPECT().
@@ -321,7 +323,7 @@ func TestClient_Query_WithMaxPlans(t *testing.T) {
 		},
 	}
 
-	test.MockArango.EXPECT().GetDatabase(test.Ctx, dbName, &arangodb.GetDatabaseOptions{}).
+	test.MockArango.EXPECT().GetDatabase(test.Ctx, dbName, nil).
 		Return(test.MockDB, nil)
 
 	test.MockDB.EXPECT().
@@ -348,7 +350,7 @@ func TestClient_Query_InvalidResultType(t *testing.T) {
 
 	var result int // Incorrect type
 
-	test.MockArango.EXPECT().GetDatabase(test.Ctx, dbName, &arangodb.GetDatabaseOptions{}).
+	test.MockArango.EXPECT().GetDatabase(test.Ctx, dbName, nil).
 		Return(test.MockDB, nil)
 	test.MockDB.EXPECT().Query(test.Ctx, query, gomock.Any()).Return(NewMockQueryCursor(test.Ctrl, nil), nil)
 

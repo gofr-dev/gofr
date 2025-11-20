@@ -406,3 +406,38 @@ func TestResponder_ClientClosedRequestHandling(t *testing.T) {
 	assert.Equal(t, 499, recorder.Code)
 	assert.JSONEq(t, `{"error":{"message":"client closed request"}}`, recorder.Body.String())
 }
+
+func TestResponder_ContentTypePreservation(t *testing.T) {
+	tests := []struct {
+		desc              string
+		presetContentType string
+		expectedType      string
+	}{
+		{
+			desc:              "preset content type should be preserved",
+			presetContentType: "text/event-stream",
+			expectedType:      "text/event-stream",
+		},
+		{
+			desc:              "no preset content type - defaults to application/json",
+			presetContentType: "",
+			expectedType:      "application/json",
+		},
+	}
+
+	for i, tc := range tests {
+		recorder := httptest.NewRecorder()
+
+		// Simulate SetCustomHeaders by manually setting Content-Type header before calling Respond
+		if tc.presetContentType != "" {
+			recorder.Header().Set("Content-Type", tc.presetContentType)
+		}
+
+		responder := NewResponder(recorder, http.MethodGet)
+		responder.Respond("Test data", nil)
+
+		contentType := recorder.Header().Get("Content-Type")
+
+		assert.Equal(t, tc.expectedType, contentType, "TEST[%d] Failed: %s", i, tc.desc)
+	}
+}
