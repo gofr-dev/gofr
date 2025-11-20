@@ -1,6 +1,7 @@
 package remotelogger
 
 import (
+	// Standard library.
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -11,6 +12,10 @@ import (
 	"testing"
 	"time"
 
+	// Third-party.
+	"github.com/stretchr/testify/assert"
+
+	// Local module.
 	"gofr.dev/pkg/gofr/logging"
 )
 
@@ -78,7 +83,7 @@ func (m *mockClient) UpdateConfig(cfg map[string]any) {
 
 // Tests for httpRemoteConfig.
 func TestHttpRemoteConfig_RegisterAndStart(t *testing.T) {
-	// mock HTTP server returning valid JSON
+	// mock HTTP server returning valid JSON.
 	handler := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		resp := map[string]any{
 			"data": map[string]string{
@@ -100,18 +105,20 @@ func TestHttpRemoteConfig_RegisterAndStart(t *testing.T) {
 
 	cfg.Start()
 
-	time.Sleep(120 * time.Millisecond) // wait for one tick
+	// wait for at least one polling tick.
+	time.Sleep(120 * time.Millisecond)
 
-	if atomic.LoadInt32(&client.updateCalled) == 0 {
-		t.Fatalf("expected UpdateConfig to be called at least once")
+	updateCount := atomic.LoadInt32(&client.updateCalled)
+	assert.Positive(t, updateCount, "UpdateConfig called")
+
+	if client.lastConfig == nil {
+		t.Fatalf("expected lastConfig not nil")
 	}
 
-	if client.lastConfig["logLevel"] != "DEBUG" {
-		t.Errorf("expected logLevel=DEBUG, got %v", client.lastConfig["logLevel"])
-	}
+	assert.Equal(t, "DEBUG", client.lastConfig["logLevel"], "logLevel value")
 }
 
-func TestHttpRemoteConfig_InvalidJSON(t *testing.T) {
+func TestHttpRemoteConfig_InvalidJSON_LogsErrorAndDoesNotUpdateClients(t *testing.T) {
 	t.Parallel()
 
 	// mock server returning invalid JSON
@@ -132,76 +139,83 @@ func TestHttpRemoteConfig_InvalidJSON(t *testing.T) {
 	// Wait for a couple of polling intervals
 	time.Sleep(200 * time.Millisecond)
 
+	// Client must not be updated on invalid JSON.
 	updateCount := atomic.LoadInt32(&client.updateCalled)
+	assert.Equal(t, int32(0), updateCount, "client update count on invalid JSON")
 
-	if updateCount != 0 {
-		t.Errorf("expected UpdateConfig not to be called on invalid JSON, but got %d calls", updateCount)
-	}
-
-	// Check that an error log was recorded for invalid JSON
+	// Logger must have recorded an error message (case-insensitive/substring match).
 	logger.mu.Lock()
-	defer logger.mu.Unlock()
+	messagesCopy := append([]string(nil), logger.messages...)
+	logger.mu.Unlock()
 
-	foundErrorLog := false
+	// Look for "invalid" or "error" substring in logs.
+	found := false
 
-	for _, msg := range logger.messages {
-		if strings.Contains(msg, "invalid") || strings.Contains(strings.ToLower(msg), "error") {
-			foundErrorLog = true
+	for _, msg := range messagesCopy {
+		lmsg := strings.ToLower(msg)
+		if strings.Contains(lmsg, "invalid") || strings.Contains(lmsg, "error") {
+			found = true
 			break
 		}
 	}
 
-	if !foundErrorLog {
-		t.Errorf("expected error log message for invalid JSON response, got logs: %v", logger.messages)
-	}
+	assert.True(t, found,
+		"expected error log message for invalid JSON response, got logs: %v",
+		messagesCopy,
+	)
 }
 
-// Tests for remoteLogger (RemoteConfigurable).
-func TestRemoteLogger_UpdateConfig_ChangesLevel(t *testing.T) {
-	logger := &mockLogger{}
-	r := &remoteLogger{
-		Logger:       logger,
-		currentLevel: logging.INFO,
+func TestRemoteLogger_UpdateConfig_Behaviors(t *testing.T) {
+	cases := []struct {
+		name          string
+		startLevel    logging.Level
+		cfg           map[string]any
+		wantLevel     logging.Level
+		wantChangeCnt func(t *testing.T, cnt int32)
+	}{
+		{
+			name:       "change-to-debug",
+			startLevel: logging.INFO,
+			cfg:        map[string]any{"logLevel": "DEBUG"},
+			wantLevel:  logging.DEBUG,
+			wantChangeCnt: func(t *testing.T, _ int32) {
+				t.Helper() // REQUIRED by thelper
+			},
+		},
+		{
+			name:       "no-change-same-level",
+			startLevel: logging.INFO,
+			cfg:        map[string]any{"logLevel": "INFO"},
+			wantLevel:  logging.INFO,
+			wantChangeCnt: func(t *testing.T, cnt int32) {
+				t.Helper() // REQUIRED by thelper
+				assert.Equal(t, int32(0), cnt, "expected no change")
+			},
+		},
+		{
+			name:       "invalid-key",
+			startLevel: logging.INFO,
+			cfg:        map[string]any{"invalidKey": "DEBUG"},
+			wantLevel:  logging.INFO,
+			wantChangeCnt: func(t *testing.T, cnt int32) {
+				t.Helper() // REQUIRED by thelper
+				assert.Equal(t, int32(0), cnt, "expected no change for invalid key")
+			},
+		},
 	}
 
-	cfg := map[string]any{"logLevel": "DEBUG"}
-	r.UpdateConfig(cfg)
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			logger := &mockLogger{}
+			r := &remoteLogger{
+				Logger:       logger,
+				currentLevel: tc.startLevel,
+			}
 
-	if r.currentLevel != logging.DEBUG {
-		t.Errorf("expected log level to change to DEBUG, got %v", r.currentLevel)
-	}
+			r.UpdateConfig(tc.cfg)
 
-	if atomic.LoadInt32(&logger.changeCnt) == 0 {
-		t.Errorf("expected ChangeLevel to be called")
-	}
-}
-
-func TestRemoteLogger_UpdateConfig_NoChange(t *testing.T) {
-	logger := &mockLogger{}
-	r := &remoteLogger{
-		Logger:       logger,
-		currentLevel: logging.INFO,
-	}
-
-	cfg := map[string]any{"logLevel": "INFO"}
-	r.UpdateConfig(cfg)
-
-	if atomic.LoadInt32(&logger.changeCnt) != 0 {
-		t.Errorf("expected ChangeLevel not to be called when same level")
-	}
-}
-
-func TestRemoteLogger_UpdateConfig_InvalidKey(t *testing.T) {
-	logger := &mockLogger{}
-	r := &remoteLogger{
-		Logger:       logger,
-		currentLevel: logging.INFO,
-	}
-
-	cfg := map[string]any{"invalidKey": "DEBUG"}
-	r.UpdateConfig(cfg)
-
-	if atomic.LoadInt32(&logger.changeCnt) != 0 {
-		t.Errorf("expected no ChangeLevel when invalid key present")
+			assert.Equal(t, tc.wantLevel, r.currentLevel, "current level mismatch")
+			tc.wantChangeCnt(t, atomic.LoadInt32(&logger.changeCnt))
+		})
 	}
 }

@@ -76,7 +76,7 @@ func (f *httpLogFilter) Log(args ...any) {
 }
 
 func (f *httpLogFilter) handleHTTPLog(httpLog *service.Log, args []any) {
-	// Log initialization message if not already logged
+	// Log initialization message if not already logged.
 	f.mu.Lock()
 	notLoggedYet := !f.initLogged
 
@@ -104,7 +104,7 @@ func (f *httpLogFilter) handleHTTPLog(httpLog *service.Log, args []any) {
 		f.mu.Unlock()
 		f.Logger.Log(args...)
 
-	// Subsequent successful hits - log at DEBUG level with consistent format
+	// Subsequent successful hits - log at DEBUG level with consistent format.
 	case isSuccessful:
 		msg := httpDebugMsg{
 			CorrelationID: httpLog.CorrelationID,
@@ -115,7 +115,7 @@ func (f *httpLogFilter) handleHTTPLog(httpLog *service.Log, args []any) {
 		}
 		f.Logger.Debug(msg)
 
-	// Error responses - pass through to original logger
+	// Error responses - pass through to original logger.
 	default:
 		f.Logger.Log(args...)
 	}
@@ -314,10 +314,10 @@ type httpRemoteConfig struct {
 	url      string
 	interval time.Duration
 	logger   logging.Logger
-	clients  []config.RemoteConfigurable
+	clients  []config.Subscriber
 }
 
-func NewHTTPRemoteConfig(url string, interval time.Duration, logger logging.Logger) config.RemoteConfiguration {
+func NewHTTPRemoteConfig(url string, interval time.Duration, logger logging.Logger) config.Provider {
 	return &httpRemoteConfig{
 		url:      url,
 		interval: interval,
@@ -325,7 +325,7 @@ func NewHTTPRemoteConfig(url string, interval time.Duration, logger logging.Logg
 	}
 }
 
-func (h *httpRemoteConfig) Register(c config.RemoteConfigurable) {
+func (h *httpRemoteConfig) Register(c config.Subscriber) {
 	h.clients = append(h.clients, c)
 }
 
@@ -365,12 +365,12 @@ func (h *httpRemoteConfig) Start() {
 
 func fetchRemoteConfig(remoteService service.HTTP) (map[string]any, error) {
 	if newLogLevelStr, err := fetchLogLevelStr(remoteService); err != nil {
-		return map[string]any{}, err
+		return nil, err
 	} else if newLogLevelStr != "" {
 		return map[string]any{
 			"logLevel": newLogLevelStr,
 		}, nil
 	}
 
-	return map[string]any{}, nil
+	return nil, nil
 }

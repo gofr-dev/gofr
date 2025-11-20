@@ -4,16 +4,17 @@ import (
 	"sync"
 	"testing"
 	"time"
+
+	"github.com/stretchr/testify/assert"
 )
 
-// mockRemoteConfigurable is a mock that records updates for verification.
-type mockRemoteConfigurable struct {
+type mockConfigSubscriber struct {
 	mu           sync.Mutex
 	updatedCount int
 	lastConfig   map[string]any
 }
 
-func (m *mockRemoteConfigurable) UpdateConfig(cfg map[string]any) {
+func (m *mockConfigSubscriber) UpdateConfig(cfg map[string]any) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
@@ -21,28 +22,27 @@ func (m *mockRemoteConfigurable) UpdateConfig(cfg map[string]any) {
 	m.lastConfig = cfg
 }
 
-// mockRemoteConfiguration simulates a runtime configuration manager.
-type mockRemoteConfiguration struct {
+type mockConfigProvider struct {
 	mu           sync.Mutex
-	registered   []RemoteConfigurable
+	registered   []Subscriber
 	started      bool
 	startTrigger chan map[string]any
 }
 
-func newMockRemoteConfiguration() *mockRemoteConfiguration {
-	return &mockRemoteConfiguration{
+func newMockConfigProvider() *mockConfigProvider {
+	return &mockConfigProvider{
 		startTrigger: make(chan map[string]any, 1),
 	}
 }
 
-func (m *mockRemoteConfiguration) Register(c RemoteConfigurable) {
+func (m *mockConfigProvider) Register(c Subscriber) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
 	m.registered = append(m.registered, c)
 }
 
-func (m *mockRemoteConfiguration) Start() {
+func (m *mockConfigProvider) Start() {
 	m.mu.Lock()
 	m.started = true
 	m.mu.Unlock()
@@ -60,68 +60,56 @@ func (m *mockRemoteConfiguration) Start() {
 	}()
 }
 
-func (m *mockRemoteConfiguration) pushConfig(cfg map[string]any) {
+func (m *mockConfigProvider) pushConfig(cfg map[string]any) {
 	m.startTrigger <- cfg
 }
 
-func TestRemoteConfiguration_RegisterAndStart(t *testing.T) {
-	rc := newMockRemoteConfiguration()
-	c1 := &mockRemoteConfigurable{}
-	c2 := &mockRemoteConfigurable{}
+func TestConfigProvider_RegisterAndStart(t *testing.T) {
+	rc := newMockConfigProvider()
+	c1 := &mockConfigSubscriber{}
+	c2 := &mockConfigSubscriber{}
 
 	rc.Register(c1)
 	rc.Register(c2)
 
 	rc.Start()
 
-	// Simulate runtime config update
-	cfg := map[string]any{"log_level": "DEBUG"}
-	rc.pushConfig(cfg)
-
-	// Wait briefly for goroutine to deliver update
+	rc.pushConfig(map[string]any{"log_level": "DEBUG"})
 	time.Sleep(50 * time.Millisecond)
 
-	if c1.updatedCount != 1 || c2.updatedCount != 1 {
-		t.Fatalf("expected both configurables to be updated once, got c1=%d, c2=%d", c1.updatedCount, c2.updatedCount)
-	}
-
-	if c1.lastConfig["log_level"] != "DEBUG" {
-		t.Errorf("expected c1 to receive correct config value, got %+v", c1.lastConfig)
-	}
-
-	if !rc.started {
-		t.Errorf("expected configuration Start() to set started=true")
-	}
+	assert.Equal(t, 1, c1.updatedCount, "c1 update count")
+	assert.Equal(t, 1, c2.updatedCount, "c2 update count")
+	assert.Equal(t, "DEBUG", c1.lastConfig["log_level"], "c1 config value")
+	assert.True(t, rc.started, "provider started")
 }
 
-func TestRemoteConfiguration_NoRegisteredComponents(_ *testing.T) {
-	rc := newMockRemoteConfiguration()
+func TestConfigProvider_NoRegisteredComponents(_ *testing.T) {
+	rc := newMockConfigProvider()
 	rc.Start()
 
-	cfg := map[string]any{"feature": "enabled"}
-	rc.pushConfig(cfg)
-
-	// Should not panic even if no components are registered.
+	rc.pushConfig(map[string]any{"feature": "enabled"})
 	time.Sleep(20 * time.Millisecond)
 }
 
-func TestRemoteConfigurable_UpdateConfigCalledMultipleTimes(t *testing.T) {
-	rc := newMockRemoteConfiguration()
-	c := &mockRemoteConfigurable{}
+func TestConfigSubscriber_UpdateConfigMultipleTimes(t *testing.T) {
+	rc := newMockConfigProvider()
+	c := &mockConfigSubscriber{}
+
 	rc.Register(c)
 	rc.Start()
 
-	for i := 0; i < 3; i++ {
+	expectedLast := 0
+
+	for i := range 3 {
 		rc.pushConfig(map[string]any{"version": i})
+		expectedLast = i
 	}
 
 	time.Sleep(100 * time.Millisecond)
 
-	if c.updatedCount != 3 {
-		t.Fatalf("expected 3 updates, got %d", c.updatedCount)
-	}
+	assert.Equal(t, 3, c.updatedCount, "update count")
 
-	if c.lastConfig["version"] != 2 {
-		t.Errorf("expected last config version 2, got %v", c.lastConfig["version"])
-	}
+	version, ok := c.lastConfig["version"].(int)
+	assert.True(t, ok)
+	assert.Equal(t, expectedLast, version, "last version")
 }
