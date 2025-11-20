@@ -1,0 +1,7 @@
+{
+  "route": {
+    "/api/*": ["admin", "editor"]
+  },
+  "enablePermissions": true
+}
+
