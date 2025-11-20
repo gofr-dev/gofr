@@ -6,6 +6,14 @@ users can perform actions or access data within an application.
 
 GoFr offers various approaches to implement authorization.
 
+## Exempted Paths
+
+By default, the authentication middleware exempts the following paths from authentication:
+
+- i `/.well-known/alive`: Used for liveness probes, should be publicly accessible for health checks.
+
+The health check endpoint `/.well-known/health` is not exempted and requires authentication, as it may contain sensitive information about the service and its dependencies.
+
 ## 1. HTTP Basic Auth
 *Basic Authentication* is a simple HTTP authentication scheme where the user's credentials (username and password) are 
 transmitted in the request header in a Base64-encoded format.
