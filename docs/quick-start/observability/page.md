@@ -15,6 +15,151 @@ Log Level can be changed by setting the environment variable `LOG_LEVEL` value t
 When the GoFr server runs, it prints a log for reading configs, database connection, requests, database queries, missing configs, etc.
 They contain information such as request's correlation ID, status codes, request time, etc.
 
+The following table outlines the specific significance of each log level and provides guidelines on when to use them effectively:
+
+{% table %}
+
+- Levels
+- Color
+- Description
+- When to use
+
+---
+
+- DEBUG 
+- `Grey`
+- extremely detailed or low-priority details for development.
+- Variable values, loop steps, raw payloads, etc.
+
+---
+
+- INFO
+- `Cyan`
+- Standard operational events indicating system health.
+- Server startup confirmation, successful requests, and routine health checks, etc.
+
+---
+
+- NOTICE
+- `Yellow`
+- Normal but distinct conditions requiring attention.
+- Configuration updates, significant state changes, or system initialization events, etc.
+
+
+---
+
+- WARN 
+- `Yellow`
+- Potential issues handled gracefully without system failure.
+- Deprecated API calls, connection retries, or approaching resource limits, etc.
+
+---
+
+- ERROR 
+- `Red`
+- Failure of specific requests or operations.
+- Database connection failures, 4xx/5xx responses, or internal logic errors, etc.
+
+---
+
+- FATAL 
+- `Red`
+- Critical system failures forcing immediate shutdown.
+- Missing required configuration or port binding failures preventing startup, etc.
+
+{% /table %}
+
+---
+
+### DEBUG
+This is the lowest priority level (Integer value: 1). It represents the most detailed information.
+
+**Example Snippet-**
+```Go
+// Example: Checking a variable inside a loop
+// Assuming i = 5 and item.Value = 42
+logger.Debug("Processing item index:", i, "Value:", item.Value)
+```
+**Output-**
+```Console
+DEBU [14:05:01] [Processing item index: 5 Value: 42]
+```
+---
+### INFO
+Represents standard operational events (Integer value: 2). It is the default fallback level if an unknown level string is provided.
+
+**Example Snippet-**
+```Go
+// Example: Server startup confirmation
+logger.Info("Server started successfully on port 8000")
+```
+**Output-**
+```Console
+INFO [14:05:02] Server started successfully on port 8000
+```
+
+---
+
+### NOTICE
+A level higher than INFO but lower than WARN (Integer value: 3). It shares the same visual prominence as a Warning but implies a "normal" condition rather than a problem.
+
+**Example Snippet-**
+```Go
+// Example: Configuration update
+logger.Notice("Configuration hot-reload triggered by system admin")
+```
+**Output-**
+```Console
+NOTI [14:05:03] Configuration hot-reload triggered by system admin
+```
+
+---
+
+### WARN
+Indicates a potential issue that does not stop the application (Integer value: 4).
+
+**Example Snippet-**
+```Go
+// Example: Retrying a connection
+logger.Warn("Database connection timeout. Retrying in 2 seconds... (Attempt 1/3)")
+```
+**Output-**
+```Console
+WARN [14:05:04] Database connection timeout. Retrying in 2 seconds... (Attempt 1/3)
+```
+
+---
+
+### ERROR
+Indicates a failure event (Integer value: 5). Crucially, this level changes the output destination to the error stream.
+
+**Example Snippet-**
+```Go
+// Example: Database query failure
+logger.Error("Failed to fetch user profile: database connection refused")
+```
+**Output-**
+```Console
+ERRO [14:05:05] Failed to fetch user profile: database connection refused
+```
+
+---
+
+### FATAL
+The highest priority level (Integer value: 6). It represents a critical system failure.
+
+**Example Snippet-**
+```Go
+// Example: Missing critical config
+logger.Fatal("CRITICAL: DATABASE_PASSWORD environment variable is not set. Exiting.")
+```
+**Output-**
+```Console
+FATA [14:05:06] CRITICAL: DATABASE_PASSWORD environment variable is not set. Exiting.
+```
+
+---
+
 {% figure src="/quick-start-logs.png" alt="Pretty Printed Logs" /%}
 
 Logs are well-structured, they are of type JSON when exported to a file, such that they can be pushed to logging systems such as {% new-tab-link title="Loki" href="https://grafana.com/oss/loki/" /%}, Elasticsearch, etc.
