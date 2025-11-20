@@ -1,12 +1,12 @@
 package config
 
-// RemoteConfigurable represents any component that can be updated at runtime.
-type RemoteConfigurable interface {
+// Subscriber represents any component that can be updated at runtime.
+type Subscriber interface {
 	UpdateConfig(config map[string]any)
 }
 
-// RemoteConfiguration represents a runtime config provider.
-type RemoteConfiguration interface {
-	Register(c RemoteConfigurable)
+// Provider represents a runtime config provider.
+type Provider interface {
+	Register(c Subscriber)
 	Start()
 }
