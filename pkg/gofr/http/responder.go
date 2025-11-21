@@ -27,53 +27,13 @@ type Responder struct {
 // Respond sends a response with the given data and handles potential errors, setting appropriate
 // status codes and formatting responses as JSON or raw data as needed.
 func (r Responder) Respond(data any, err error) {
-	var resp any
-
-	switch v := data.(type) {
-	case resTypes.File:
-		r.w.Header().Set("Content-Type", v.ContentType)
-		r.w.WriteHeader(http.StatusOK)
-
-		_, _ = r.w.Write(v.Content)
-
-		return
-	case resTypes.Template:
-		r.w.Header().Set("Content-Type", "text/html")
-		v.Render(r.w)
-
-		return
-	case resTypes.XML:
-		contentType := v.ContentType
-		if contentType == "" {
-			contentType = "application/xml"
-		}
-
-		r.w.Header().Set("Content-Type", contentType)
-		r.w.WriteHeader(http.StatusOK)
-
-		if len(v.Content) > 0 {
-			_, _ = r.w.Write(v.Content)
-		}
-
-		return
-	case resTypes.Redirect:
-		// HTTP 302 by default
-		statusCode := http.StatusFound
-
-		switch r.method {
-		case http.MethodPost, http.MethodPut, http.MethodPatch:
-			// HTTP 303
-			statusCode = http.StatusSeeOther
-		}
-
-		r.w.Header().Set("Location", v.URL)
-		r.w.WriteHeader(statusCode)
-
+	if r.handleSpecialResponseTypes(data) {
 		return
 	}
 
 	statusCode, errorObj := r.determineResponse(data, err)
 
+	var resp any
 	switch v := data.(type) {
 	case resTypes.Raw:
 		resp = v.Data
@@ -95,6 +55,43 @@ func (r Responder) Respond(data any, err error) {
 	r.w.WriteHeader(statusCode)
 
 	_ = json.NewEncoder(r.w).Encode(resp)
+}
+
+// handleSpecialResponseTypes handles special response types that bypass JSON encoding.
+// Returns true if the response was handled, false otherwise.
+func (r Responder) handleSpecialResponseTypes(data any) bool {
+	switch v := data.(type) {
+	case resTypes.File:
+		r.w.Header().Set("Content-Type", v.ContentType)
+		r.w.WriteHeader(http.StatusOK)
+		_, _ = r.w.Write(v.Content)
+		return true
+	case resTypes.Template:
+		r.w.Header().Set("Content-Type", "text/html")
+		v.Render(r.w)
+		return true
+	case resTypes.XML:
+		contentType := v.ContentType
+		if contentType == "" {
+			contentType = "application/xml"
+		}
+		r.w.Header().Set("Content-Type", contentType)
+		r.w.WriteHeader(http.StatusOK)
+		if len(v.Content) > 0 {
+			_, _ = r.w.Write(v.Content)
+		}
+		return true
+	case resTypes.Redirect:
+		statusCode := http.StatusFound
+		if r.method == http.MethodPost || r.method == http.MethodPut || r.method == http.MethodPatch {
+			statusCode = http.StatusSeeOther
+		}
+		r.w.Header().Set("Location", v.URL)
+		r.w.WriteHeader(statusCode)
+		return true
+	}
+
+	return false
 }
 
 func (r Responder) determineResponse(data any, err error) (statusCode int, errObj any) {
