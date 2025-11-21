@@ -1,12 +1,12 @@
 # Advanced RBAC Example
 
-This example demonstrates advanced RBAC features including hot-reload, custom error handling, audit logging, and caching.
+This example demonstrates advanced RBAC features including hot-reload, custom error handling, automatic audit logging, and caching.
 
 ## Features Demonstrated
 
 - Hot-reload configuration
 - Custom error handlers
-- Custom audit logging
+- Automatic audit logging (uses GoFr's logger)
 - Role caching
 - YAML configuration
 - Role hierarchy
@@ -44,8 +44,18 @@ Configuration automatically reloads when the file changes (every 30 seconds).
 ### Custom Error Handler
 Returns JSON error responses instead of plain text.
 
-### Custom Audit Logger
-Logs all authorization decisions to GoFr logger.
+### Audit Logging
+
+Audit logging is **automatically enabled** when using RBAC. GoFr's logger is used automatically to log all authorization decisions.
+
+**What gets logged:**
+- HTTP method and path
+- User role
+- Route being accessed
+- Authorization decision (allowed/denied)
+- Reason for the decision
+
+**No configuration needed** - audit logging works automatically when you enable RBAC.
 
 ### Caching
 Role lookups are cached for 5 minutes to improve performance.

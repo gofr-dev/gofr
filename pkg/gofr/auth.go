@@ -124,20 +124,23 @@ func (a *App) EnableRBAC(permissionsFile string, roleExtractor rbac.RoleExtracto
 	config.RoleExtractorFunc = roleExtractor
 	config.Logger = a.container.Logger // Set GoFr logger for audit logging (always enabled)
 
-	a.httpServer.router.Use(rbac.Middleware(config))
+	// Pass container to middleware (optional - only needed for database-based role extraction)
+	// Container is automatically available to RoleExtractorFunc when needed
+	a.httpServer.router.Use(rbac.Middleware(config, a.container))
 }
 
 // EnableRBACWithConfig enables RBAC with full configuration options.
 //
 // This method provides maximum flexibility for RBAC configuration.
-// Use this when you need custom error handling, audit logging, or other advanced features.
+// Use this when you need custom error handling or other advanced features.
+// Audit logging is automatically enabled when config.Logger is set.
 func (a *App) EnableRBACWithConfig(config *rbac.Config) {
 	if config == nil {
 		a.container.Error("RBAC config is nil. Proceeding without RBAC")
 		return
 	}
 
-	// Set logger if not already set (audit logging is always enabled when logger is available)
+	// Set logger if not already set (audit logging is automatically enabled when Logger is set)
 	if config.Logger == nil {
 		config.Logger = a.container.Logger
 	}
@@ -151,7 +154,15 @@ func (a *App) EnableRBACWithConfig(config *rbac.Config) {
 		config.OverRides = make(map[string]bool)
 	}
 
-	a.httpServer.router.Use(rbac.Middleware(config))
+	// Determine if container is needed based on RequiresContainer flag
+	// Default to false if not set (container not needed for most use cases)
+	// Only pass container if explicitly required (database-based extraction)
+	if config.RequiresContainer {
+		a.httpServer.router.Use(rbac.Middleware(config, a.container))
+	} else {
+		// Don't pass container for header/JWT-based RBAC (security: restrict container access)
+		a.httpServer.router.Use(rbac.Middleware(config))
+	}
 }
 
 // EnableRBACWithHotReload enables RBAC with hot-reload capability.
@@ -173,8 +184,10 @@ func (a *App) EnableRBACWithHotReload(permissionsFile string, roleExtractor rbac
 
 	config := loader.GetConfig()
 	config.RoleExtractorFunc = roleExtractor
-	config.Logger = a.container.Logger // Set GoFr logger for audit logging (always enabled)
+	config.Logger = a.container.Logger // Audit logging is automatically enabled when Logger is set
+	config.RequiresContainer = false // Header-based extraction doesn't need container
 
+	// Don't pass container for header-based RBAC (container not needed)
 	a.httpServer.router.Use(rbac.Middleware(config))
 }
 
@@ -252,7 +265,7 @@ func (a *App) EnableRBACWithPermissions(config *rbac.Config, roleExtractor rbac.
 	config.RoleExtractorFunc = roleExtractor
 	config.EnablePermissions = true
 	if config.Logger == nil {
-		config.Logger = a.container.Logger // Set GoFr logger for audit logging (always enabled)
+		config.Logger = a.container.Logger // Audit logging is automatically enabled when Logger is set
 	}
 
 	// Initialize empty maps if not present
@@ -264,7 +277,15 @@ func (a *App) EnableRBACWithPermissions(config *rbac.Config, roleExtractor rbac.
 		config.OverRides = make(map[string]bool)
 	}
 
-	a.httpServer.router.Use(rbac.Middleware(config))
+	// Determine if container is needed based on RequiresContainer flag
+	// Default to false if not set (container not needed for most use cases)
+	// Only pass container if explicitly required (database-based extraction)
+	if config.RequiresContainer {
+		a.httpServer.router.Use(rbac.Middleware(config, a.container))
+	} else {
+		// Don't pass container for header/JWT-based RBAC (security: restrict container access)
+		a.httpServer.router.Use(rbac.Middleware(config))
+	}
 }
 
 // EnableRBACWithJWT enables RBAC with JWT-based role extraction.
@@ -291,7 +312,9 @@ func (a *App) EnableRBACWithJWT(permissionsFile string, roleClaim string) {
 	// Create JWT role extractor
 	jwtExtractor := rbac.NewJWTRoleExtractor(roleClaim)
 	config.RoleExtractorFunc = jwtExtractor.ExtractRole
-	config.Logger = a.container.Logger // Set GoFr logger for audit logging (always enabled)
+	config.Logger = a.container.Logger // Audit logging is automatically enabled when Logger is set
+	config.RequiresContainer = false // JWT-based extraction doesn't need container
 
+	// Don't pass container for JWT-based RBAC (container not needed)
 	a.httpServer.router.Use(rbac.Middleware(config))
 }
