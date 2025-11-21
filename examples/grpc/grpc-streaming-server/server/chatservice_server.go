@@ -32,10 +32,17 @@ func (s *ChatServiceGoFrServer) ServerStream(ctx *gofr.Context, stream ChatServi
 	req := Request{}
 	err := ctx.Bind(&req)
 	if err != nil {
-		return err
+		return status.Errorf(codes.InvalidArgument, "invalid request: %v", err)
 	}
 
 	for i := 0; i < 5; i++ {
+		// Check if context is canceled
+		select {
+		case <-stream.Context().Done():
+			return status.Error(codes.Canceled, "client disconnected")
+		default:
+		}
+
 		resp := &Response{Message: fmt.Sprintf("Server stream %d: %s", i, req.Message)}
 		if err := stream.Send(resp); err != nil {
 			return status.Errorf(codes.Internal, "error sending stream: %v", err)
@@ -50,14 +57,22 @@ func (s *ChatServiceGoFrServer) ClientStream(ctx *gofr.Context, stream ChatServi
 	var finalMessage strings.Builder
 
 	for {
+		// Check if context is canceled before receiving
+		select {
+		case <-stream.Context().Done():
+			return status.Error(codes.Canceled, "client disconnected")
+		default:
+		}
+
 		req, err := stream.Recv()
 		if err == io.EOF {
+			// Client has finished sending, send final response
 			return stream.SendAndClose(&Response{
 				Message: fmt.Sprintf("Received %d messages. Final: %s", messageCount, finalMessage.String()),
 			})
 		}
 		if err != nil {
-			return err
+			return status.Errorf(codes.Internal, "error receiving stream: %v", err)
 		}
 
 		messageCount++
@@ -71,19 +86,27 @@ func (s *ChatServiceGoFrServer) BiDiStream(ctx *gofr.Context, stream ChatService
 
 	go func() {
 		for {
+			// Check if context is canceled
+			select {
+			case <-stream.Context().Done():
+				errChan <- status.Error(codes.Canceled, "client disconnected")
+				return
+			default:
+			}
+
 			req, err := stream.Recv()
 			if err == io.EOF {
 				break
 			}
 			if err != nil {
-				errChan <- err
+				errChan <- status.Errorf(codes.Internal, "error receiving stream: %v", err)
 				return
 			}
 
 			// Process request and send response
 			resp := &Response{Message: "Echo: " + req.Message}
 			if err := stream.Send(resp); err != nil {
-				errChan <- err
+				errChan <- status.Errorf(codes.Internal, "error sending stream: %v", err)
 				return
 			}
 		}
