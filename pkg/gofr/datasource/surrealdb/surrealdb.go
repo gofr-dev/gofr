@@ -307,6 +307,7 @@ func (c *Client) handleResultRecord(result any, resp *[]any) {
 				c.logger.Errorf("failed to extract record: %v", err)
 				continue
 			}
+
 			*resp = append(*resp, extracted)
 		}
 	case map[string]any:
