@@ -16,22 +16,6 @@ type Logger interface {
 	Errorf(pattern string, args ...any)
 }
 
-// Connection defines methods for interacting with a database connection.
-type Connection interface {
-	// Connect establishes a connection to the database.
-	Connect() error
-	// Close terminates the database connection.
-	Close() error
-	// Send executes a database operation with the given method and parameters.
-	Send(res any, method string, params ...any) error
-	// Use sets the active namespace and database for the connection.
-	Use(namespace string, database string) error
-	// Let sets a session variable in the connection.
-	Let(key string, value any) error
-	// Unset removes a session variable from the connection.
-	Unset(key string) error
-}
-
 // Metrics provides methods to record and manage application metrics.
 type Metrics interface {
 	// NewCounter creates a new counter metric.
