@@ -7,6 +7,7 @@ import (
 	"strings"
 	"testing"
 
+	"gofr.dev/pkg/gofr/service"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -20,8 +21,9 @@ func TestAuthMiddleware(t *testing.T) {
 		expectedHeader any
 		expectedBody   string
 	}{
-		{url: "/.well-known/health", success: true, statusCode: http.StatusOK, expectedBody: `OK`},
-		{url: "/.well-known/health", statusCode: http.StatusOK, expectedBody: `OK`},
+		{url: service.AlivePath, statusCode: http.StatusOK, expectedBody: `OK`},
+		{url: service.HealthPath, success: true, statusCode: http.StatusOK, expectedHeader: "user-header-string", expectedBody: `OK`},
+		{url: service.HealthPath, success: false, statusCode: http.StatusUnauthorized, expectedBody: errBody},
 		{url: "/", success: true, statusCode: http.StatusOK, expectedHeader: "user-header-string", expectedBody: `OK`},
 		{url: "/", success: false, statusCode: http.StatusUnauthorized, expectedBody: errBody},
 	}
@@ -44,12 +46,13 @@ func TestAuthMiddleware(t *testing.T) {
 			assert.Equal(t, tc.statusCode == http.StatusOK, mockHandler.handlerCalled)
 			assert.Equal(t, tc.expectedBody, strings.TrimSuffix(rr.Body.String(), "\n"))
 
-			if strings.HasPrefix(tc.url, "/.well-known") {
+			if tc.url == service.AlivePath {
+				assert.False(t, authProvider.extractAuthHeaderCalled)
+				assert.False(t, authProvider.getAuthMethodCalled)
 				return
 			}
 
 			assert.True(t, authProvider.extractAuthHeaderCalled)
-
 			assert.Equal(t, tc.statusCode == http.StatusOK, authProvider.getAuthMethodCalled)
 		})
 	}

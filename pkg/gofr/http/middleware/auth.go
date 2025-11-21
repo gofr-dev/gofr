@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	gofrHttp "gofr.dev/pkg/gofr/http"
+	"gofr.dev/pkg/gofr/service"
 )
 
 // AuthMethod represents a custom type to define the different authentication methods supported.
@@ -37,7 +38,7 @@ type AuthProvider interface {
 func AuthMiddleware(a AuthProvider) func(handler http.Handler) http.Handler {
 	return func(handler http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			if isWellKnown(r.URL.Path) {
+			if r.URL.Path == service.AlivePath {
 				handler.ServeHTTP(w, r)
 				return
 			}
