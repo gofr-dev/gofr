@@ -99,7 +99,9 @@ GoFr provides its user with additional configurational options while registering
 
 **Rate Limiter Store: Customization**
 GoFr allows you to use a custom rate limiter store by implementing the RateLimiterStore interface.This enables integration with any backend (e.g., Redis, database, or custom logic)
-Interface:
+
+**Interface:**
+
 ```go
 type RateLimiterStore interface {
 Allow(ctx context.Context, key string, config RateLimiterConfig) (allowed bool, retryAfter time.Duration, err error)
@@ -142,3 +144,8 @@ a.AddHTTPService("cat-facts", "https://catfact.ninja",
     },
 )
 ```
+
+**Best Practices:**
+- For distributed systems: It is strongly recommended to use Redis-based store (`NewRedisRateLimiterStore`) to ensure consistent rate limiting across multiple instances of your application.
+- For single-instance applications: The default in-memory store (`NewLocalRateLimiterStore`) is sufficient and provides better performance.
+- Rate configuration: Set Burst higher than Requests to allow short traffic bursts while maintaining average rate limits.
