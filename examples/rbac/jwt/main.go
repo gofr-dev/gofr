@@ -12,8 +12,16 @@ func main() {
 	app.EnableOAuth("https://auth.example.com/.well-known/jwks.json", 10)
 
 	// Enable RBAC with JWT role extraction
-	// The "role" parameter specifies the JWT claim path
-	// Supports: "role", "roles[0]", "permissions.role", etc.
+	// The "role" parameter (roleClaim) specifies the JWT claim path
+	// 
+	// Supported formats:
+	//   - "role" - Simple claim: {"role": "admin"}
+	//   - "roles[0]" - Array notation: {"roles": ["admin", "user"]} - extracts first element
+	//   - "roles[1]" - Array notation: {"roles": ["admin", "user"]} - extracts second element
+	//   - "permissions.role" - Dot notation: {"permissions": {"role": "admin"}}
+	//   - "user.permissions.role" - Deeply nested: {"user": {"permissions": {"role": "admin"}}}
+	//
+	// If roleClaim is empty (""), it defaults to "role"
 	app.EnableRBACWithJWT("configs/rbac.json", "role")
 
 	// Example routes

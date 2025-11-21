@@ -5,7 +5,6 @@ import (
 	"time"
 
 	"gofr.dev/pkg/gofr"
-	"gofr.dev/pkg/gofr/logging"
 	"gofr.dev/pkg/gofr/rbac"
 )
 
@@ -25,9 +24,6 @@ func main() {
 		w.WriteHeader(http.StatusForbidden)
 		w.Write([]byte(`{"error": "Access denied", "role": "` + role + `", "route": "` + route + `"}`))
 	}
-
-	// Example 3: Custom audit logger (audit logging is always enabled when Logger is set)
-	config.AuditLogger = &CustomAuditLogger{app: app}
 
 	// Example 4: Enable caching
 	config.EnableCache = true
@@ -49,22 +45,3 @@ func getAllUsers(ctx *gofr.Context) (interface{}, error) {
 func adminHandler(ctx *gofr.Context) (interface{}, error) {
 	return map[string]string{"message": "Admin panel"}, nil
 }
-
-// CustomAuditLogger implements rbac.AuditLogger interface
-type CustomAuditLogger struct {
-	app *gofr.App
-}
-
-func (l *CustomAuditLogger) LogAccess(logger logging.Logger, req *http.Request, role, route string, allowed bool, reason string) {
-	status := "denied"
-	if allowed {
-		status = "allowed"
-	}
-
-	// Use the provided logger (GoFr's logger) for audit logging
-	if logger != nil {
-		logger.Infof("[RBAC Audit] Method: %s, Path: %s, Role: %s, Route: %s, Status: %s, Reason: %s",
-			req.Method, req.URL.Path, role, route, status, reason)
-	}
-}
-

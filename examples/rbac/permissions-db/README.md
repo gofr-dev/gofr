@@ -74,6 +74,10 @@ config.PermissionConfig = &rbac.PermissionConfig{
         "DELETE /api/users": "users:delete",
     },
 }
+
+// CRITICAL: Set RequiresContainer = true for database-based role extraction
+// This enables container access in RoleExtractorFunc
+config.RequiresContainer = true
 ```
 
 ## Setup Instructions
@@ -211,14 +215,25 @@ userID := session.UserID
 config.EnableCache = true
 config.CacheTTL = 5 * time.Minute
 
+// CRITICAL: Set RequiresContainer = true for database-based role extraction
+config.RequiresContainer = true
+
 // Role extraction with caching
+// Container is passed as args[0] when RequiresContainer = true
 config.RoleExtractorFunc = func(req *http.Request, args ...any) (string, error) {
     userID := req.Header.Get("X-User-ID")
-    // Cache lookup happens automatically in middleware
-    // Database query only if cache miss
-    var role string
-    err := app.DB().QueryRowContext(req.Context(), "SELECT role FROM users WHERE id = ?", userID).Scan(&role)
-    return role, err
+    
+    // Get container from args (only available when RequiresContainer = true)
+    if len(args) > 0 {
+        if cntr, ok := args[0].(*container.Container); ok && cntr != nil && cntr.SQL != nil {
+            // Cache lookup happens automatically in middleware
+            // Database query only if cache miss
+            var role string
+            err := cntr.SQL.QueryRowContext(req.Context(), "SELECT role FROM users WHERE id = ?", userID).Scan(&role)
+            return role, err
+        }
+    }
+    return "", fmt.Errorf("database not available")
 }
 ```
 

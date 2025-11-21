@@ -22,6 +22,26 @@ type Config struct {
 
 	// RoleExtractorFunc extracts the user's role from the HTTP request
 	// This function is called for each request to determine the user's role
+	// The container (if available) is passed as the first argument in args
+	// Container is only provided when using database-based role extraction
+	// For header-based or JWT-based RBAC, args will be empty
+	// Users can access container.SQL, container.Redis, etc. to use datasources
+	// Example (header-based - no container needed):
+	//   RoleExtractorFunc: func(req *http.Request, args ...any) (string, error) {
+	//       return req.Header.Get("X-User-Role"), nil
+	//   }
+	// Example (database-based - container provided):
+	//   RoleExtractorFunc: func(req *http.Request, args ...any) (string, error) {
+	//       if len(args) > 0 {
+	//           if cntr, ok := args[0].(*container.Container); ok && cntr != nil {
+	//               // Use container.SQL.QueryRowContext(...) to query database
+	//               var role string
+	//               err := cntr.SQL.QueryRowContext(req.Context(), "SELECT role FROM users WHERE id = ?", userID).Scan(&role)
+	//               return role, err
+	//           }
+	//       }
+	//       return "", fmt.Errorf("database not available")
+	//   }
 	RoleExtractorFunc func(req *http.Request, args ...any) (string, error)
 
 	// OverRides allows bypassing authorization for specific routes
@@ -54,13 +74,16 @@ type Config struct {
 	// CacheTTL is the cache time-to-live for roles
 	CacheTTL time.Duration `json:"cacheTTL,omitempty" yaml:"cacheTTL,omitempty"`
 
-	// AuditLogger is used for logging authorization decisions
-	// If nil, default logger is used
-	AuditLogger AuditLogger `json:"-" yaml:"-"`
-
 	// Logger is the GoFr logger instance for audit logging and config reload errors
-	// If nil, audit logging will be skipped when using DefaultAuditLogger
+	// If nil, audit logging will be skipped
+	// Audit logging is automatically performed using GoFr's logger when Logger is set
 	Logger logging.Logger `json:"-" yaml:"-"`
+
+	// RequiresContainer indicates if the RoleExtractorFunc needs access to the container
+	// This flag determines whether the container is passed to RoleExtractorFunc
+	// Set to true for database-based role extraction, false for header/JWT-based extraction
+	// When false, the container is not passed to middleware, improving security and clarity
+	RequiresContainer bool `json:"-" yaml:"-"`
 }
 
 // LoadPermissions loads RBAC configuration from a JSON or YAML file.

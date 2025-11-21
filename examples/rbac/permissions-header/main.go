@@ -36,6 +36,7 @@ func main() {
 	}
 
 	// Enable RBAC with permissions and header-based role extraction
+	// Note: args will be empty for header-based RBAC (container not needed)
 	app.EnableRBACWithPermissions(config, func(req *http.Request, args ...any) (string, error) {
 		return req.Header.Get("X-User-Role"), nil
 	})

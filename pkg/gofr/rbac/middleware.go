@@ -5,6 +5,7 @@ import (
 	"errors"
 	"net/http"
 
+	"gofr.dev/pkg/gofr/container"
 	"gofr.dev/pkg/gofr/logging"
 )
 
@@ -20,16 +21,12 @@ var (
 	ErrRoleNotFound = errors.New("unauthorized: role not found")
 )
 
-// AuditLogger is an interface for logging authorization decisions.
-type AuditLogger interface {
-	LogAccess(logger logging.Logger, req *http.Request, role, route string, allowed bool, reason string)
-}
+// auditLogger is an internal logger for authorization decisions.
+// Audit logging is automatically performed using GoFr's logger - users don't need to configure this.
+type auditLogger struct{}
 
-// DefaultAuditLogger is a basic implementation of AuditLogger that uses GoFr's logger.
-type DefaultAuditLogger struct{}
-
-// LogAccess logs an authorization decision using GoFr's logger.
-func (l *DefaultAuditLogger) LogAccess(logger logging.Logger, req *http.Request, role, route string, allowed bool, reason string) {
+// logAccess logs an authorization decision using GoFr's logger.
+func (l *auditLogger) logAccess(logger logging.Logger, req *http.Request, role, route string, allowed bool, reason string) {
 	if logger == nil {
 		return // Skip logging if no logger provided
 	}
@@ -45,9 +42,25 @@ func (l *DefaultAuditLogger) LogAccess(logger logging.Logger, req *http.Request,
 
 // Middleware creates an HTTP middleware function that enforces RBAC authorization.
 // It extracts the user's role and checks if the role is allowed for the requested route.
+//
+// The container is only passed to RoleExtractorFunc when config.RequiresContainer is true.
+// This flag is automatically set by app.EnableRBAC*() methods:
+//   - Header-based RBAC: RequiresContainer = false (container not passed)
+//   - JWT-based RBAC: RequiresContainer = false (container not passed)
+//   - Database-based RBAC: RequiresContainer = true (container passed)
+//
+// This ensures container access is restricted and only available when needed for security.
+// Users should use app.EnableRBAC(), app.EnableRBACWithJWT(), app.EnableRBACWithPermissions(), etc.
+// instead of calling this function directly.
 func Middleware(config *Config, args ...any) func(handler http.Handler) http.Handler {
 	return func(handler http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			// If config is nil, allow all requests (fail open)
+			if config == nil {
+				handler.ServeHTTP(w, r)
+				return
+			}
+
 			route := r.URL.Path
 
 			// Check if route is overridden (public access)
@@ -61,7 +74,38 @@ func Middleware(config *Config, args ...any) func(handler http.Handler) http.Han
 			var err error
 
 			if config.RoleExtractorFunc != nil {
-				role, err = config.RoleExtractorFunc(r, args...)
+				// Pass container only if explicitly required (database-based role extraction)
+				// For header/JWT-based extraction, container is not needed and not passed
+				extractorArgs := []any{}
+				
+				// Only pass container if RequiresContainer is true (database-based extraction)
+				if config.RequiresContainer {
+					if len(args) > 0 {
+						if cntr, ok := args[0].(*container.Container); ok && cntr != nil {
+							extractorArgs = append(extractorArgs, cntr)
+						}
+						// Append any additional args that were passed
+						if len(args) > 1 {
+							extractorArgs = append(extractorArgs, args[1:]...)
+						}
+					}
+				} else {
+					// For header/JWT-based extraction, only pass additional args (not container)
+					if len(args) > 0 {
+						// Skip first arg (container) if it's a container, otherwise include all args
+						startIdx := 0
+						if len(args) > 0 {
+							if _, ok := args[0].(*container.Container); ok {
+								startIdx = 1 // Skip container
+							}
+						}
+						if startIdx < len(args) {
+							extractorArgs = append(extractorArgs, args[startIdx:]...)
+						}
+					}
+				}
+
+				role, err = config.RoleExtractorFunc(r, extractorArgs...)
 				if err != nil {
 					// Use default role if configured
 					if config.DefaultRole != "" {
@@ -116,12 +160,9 @@ func Middleware(config *Config, args ...any) func(handler http.Handler) http.Han
 			}
 
 			// Log audit event (always enabled when Logger is available)
+			// Audit logging is automatically performed using GoFr's logger
 			if config.Logger != nil {
-				if config.AuditLogger != nil {
-					config.AuditLogger.LogAccess(config.Logger, r, role, route, true, authReason)
-				} else {
-					logAuditEvent(config.Logger, r, role, route, true, authReason)
-				}
+				logAuditEvent(config.Logger, r, role, route, true, authReason)
 			}
 
 			// Store role in context and continue
@@ -134,16 +175,13 @@ func Middleware(config *Config, args ...any) func(handler http.Handler) http.Han
 // handleAuthError handles authorization errors with custom error handler or default response.
 func handleAuthError(w http.ResponseWriter, r *http.Request, config *Config, role, route string, err error) {
 	// Log audit event (always enabled when Logger is available)
+	// Audit logging is automatically performed using GoFr's logger
 	if config.Logger != nil {
 		reason := "access denied"
 		if errors.Is(err, ErrRoleNotFound) {
 			reason = "role not found"
 		}
-		if config.AuditLogger != nil {
-			config.AuditLogger.LogAccess(config.Logger, r, role, route, false, reason)
-		} else {
-			logAuditEvent(config.Logger, r, role, route, false, reason)
-		}
+		logAuditEvent(config.Logger, r, role, route, false, reason)
 	}
 
 	// Use custom error handler if provided
@@ -162,9 +200,11 @@ func handleAuthError(w http.ResponseWriter, r *http.Request, config *Config, rol
 }
 
 // logAuditEvent logs authorization decisions for audit purposes.
+// This is called automatically by the middleware when Logger is set.
+// Users don't need to configure this - it uses GoFr's logger automatically.
 func logAuditEvent(logger logging.Logger, r *http.Request, role, route string, allowed bool, reason string) {
-	auditLogger := &DefaultAuditLogger{}
-	auditLogger.LogAccess(logger, r, role, route, allowed, reason)
+	auditLogger := &auditLogger{}
+	auditLogger.logAccess(logger, r, role, route, allowed, reason)
 }
 
 // HandlerFunc is a function type that matches GoFr's handler signature.

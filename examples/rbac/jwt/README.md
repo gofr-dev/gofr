@@ -54,10 +54,23 @@ The JWT token should contain a role claim. Example:
 }
 ```
 
-**Supported Claim Paths:**
-- `"role"` - Simple claim: `{"role": "admin"}`
-- `"roles[0]"` - Array notation: `{"roles": ["admin", "user"]}`
-- `"permissions.role"` - Nested claim: `{"permissions": {"role": "admin"}}`
+**JWT Role Claim Parameter (`roleClaim`):**
+
+The `roleClaim` parameter in `app.EnableRBACWithJWT()` or `rbac.NewJWTRoleExtractor()` specifies the path to the role in JWT claims. It supports multiple formats:
+
+| Format | Example | JWT Claim Structure |
+|--------|---------|---------------------|
+| **Simple Key** | `"role"` | `{"role": "admin"}` |
+| **Array Notation** | `"roles[0]"` | `{"roles": ["admin", "user"]}` - extracts first element |
+| **Array Notation** | `"roles[1]"` | `{"roles": ["admin", "user"]}` - extracts second element |
+| **Dot Notation** | `"permissions.role"` | `{"permissions": {"role": "admin"}}` |
+| **Deeply Nested** | `"user.permissions.role"` | `{"user": {"permissions": {"role": "admin"}}}` |
+
+**Notes:**
+- If `roleClaim` is empty (`""`), it defaults to `"role"`
+- The extracted value is converted to string automatically
+- Array indices must be valid integers (e.g., `[0]`, `[1]`, not `[invalid]`)
+- Array indices must be within bounds (e.g., `roles[5]` fails if array has only 2 elements)
 
 ## Setup Instructions
 
@@ -114,15 +127,27 @@ app.EnableOAuth(mockJWKS.JWKSEndpoint(), 10)
 
 ### Simple Claim
 ```json
-{"role": "admin"}
+{"role": "admin", "sub": "user123"}
 ```
-Use: `app.EnableRBACWithJWT("configs/rbac.json", "role")`
+```go
+app.EnableRBACWithJWT("configs/rbac.json", "role")
+```
 
-### Array Claim
+### Array Claim (First Element)
 ```json
-{"roles": ["admin", "user"]}
+{"roles": ["admin", "user"], "sub": "user123"}
 ```
-Use: `app.EnableRBACWithJWT("configs/rbac.json", "roles[0]")`
+```go
+app.EnableRBACWithJWT("configs/rbac.json", "roles[0]")  // Extracts "admin"
+```
+
+### Array Claim (Second Element)
+```json
+{"roles": ["admin", "user"], "sub": "user123"}
+```
+```go
+app.EnableRBACWithJWT("configs/rbac.json", "roles[1]")  // Extracts "user"
+```
 
 ### Nested Claim
 ```json
@@ -130,10 +155,28 @@ Use: `app.EnableRBACWithJWT("configs/rbac.json", "roles[0]")`
   "permissions": {
     "role": "admin",
     "scope": "read:write"
-  }
+  },
+  "sub": "user123"
 }
 ```
-Use: `app.EnableRBACWithJWT("configs/rbac.json", "permissions.role")`
+```go
+app.EnableRBACWithJWT("configs/rbac.json", "permissions.role")
+```
+
+### Deeply Nested Claim
+```json
+{
+  "user": {
+    "permissions": {
+      "role": "admin"
+    }
+  },
+  "sub": "user123"
+}
+```
+```go
+app.EnableRBACWithJWT("configs/rbac.json", "user.permissions.role")
+```
 
 ## Security Considerations
 
