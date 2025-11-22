@@ -104,6 +104,11 @@ export const navigation = [
                 desc: "Step-by-step guide on writing a gRPC server in GoFr to facilitate efficient communication between services."
             },
             {
+                title: 'gRPC Streaming',
+                href: '/docs/advanced-guide/grpc-streaming',
+                desc: "Learn how to implement server-side, client-side, and bidirectional streaming in GoFr with built-in observability and error handling."
+            },
+            {
                 title: 'Using Pub/Sub',
                 href: '/docs/advanced-guide/using-publisher-subscriber',
                 desc: "Discover how to GoFr seamlessly allows to integrate different Pub/Sub systems in your application for effective messaging and event-driven architectures."
