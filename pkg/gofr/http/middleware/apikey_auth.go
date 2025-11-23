@@ -69,11 +69,15 @@ func (a *APIKeyAuthProvider) validateAPIKey(apiKey string) bool {
 		return a.ValidateFunc(apiKey)
 	default:
 		for _, key := range a.APIKeys {
-			if apiKey == key {
+			// Use constant time compare to mitigate timing attacks
+			if subtle.ConstantTimeCompare([]byte(apiKey), []byte(key)) == 1 {
 				return true
 			}
 		}
 
+		// constant time compare with dummy key for timing attack mitigation
+		dummy := "dummy"
+		subtle.ConstantTimeCompare([]byte(apiKey), []byte(dummy))
 		return false
 	}
 }
