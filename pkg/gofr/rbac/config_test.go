@@ -214,12 +214,20 @@ func TestNewConfigLoader_WithHotReload(t *testing.T) {
 	err = os.WriteFile(tempFile.Name(), []byte(newContent), 0o600)
 	require.NoError(t, err)
 
-	// Wait for reload
-	time.Sleep(200 * time.Millisecond)
+	// Wait for reload with retries (CI environments may be slower)
+	var reloadedConfig *Config
+
+	for i := 0; i < 10; i++ {
+		time.Sleep(100 * time.Millisecond)
+
+		reloadedConfig = loader.GetConfig()
+		if len(reloadedConfig.RouteWithPermissions["admin"]) == 2 {
+			break
+		}
+	}
 
 	// Check if config was reloaded
-	reloadedConfig := loader.GetConfig()
-	assert.Equal(t, []string{"read", "write"}, reloadedConfig.RouteWithPermissions["admin"])
+	require.Equal(t, []string{"read", "write"}, reloadedConfig.RouteWithPermissions["admin"])
 
 	loader.Stop()
 }
