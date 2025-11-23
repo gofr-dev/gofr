@@ -16,4 +16,3 @@ func NewJWTRoleExtractor(roleClaim string) JWTRoleExtractorProvider {
 type JWTRoleExtractorProvider interface {
 	ExtractRole(req *http.Request, args ...any) (string, error)
 }
-

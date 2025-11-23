@@ -237,6 +237,7 @@ func TestIntegration_PermissionsDB_WithDatabase(t *testing.T) {
 		method         string
 		path           string
 		userID         string
+		body           []byte
 		expectedStatus int
 		expectedBody   map[string]string
 		checkBody      bool

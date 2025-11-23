@@ -7,42 +7,56 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+
 	gofrConfig "gofr.dev/pkg/gofr/config"
 	"gofr.dev/pkg/gofr/container"
 	"gofr.dev/pkg/gofr/logging"
 )
 
-// mock role extractor function for testing
-func mockRoleExtractor(r *http.Request, args ...any) (string, error) {
+var (
+	errNoRole                = errors.New("no role")
+	errUserIDNotFound        = errors.New("user ID not found")
+	errContainerNotAvailable = errors.New("container not available")
+)
+
+// mock role extractor function for testing.
+func mockRoleExtractor(r *http.Request, _ ...any) (string, error) {
 	role := r.Header.Get("Role")
 	if role == "" {
-		return "", errors.New("no role")
+		return "", errNoRole
 	}
+
 	return role, nil
 }
 
-// mock role extractor that uses container (for database-based testing)
+// mock role extractor that uses container (for database-based testing).
 func mockDBRoleExtractor(r *http.Request, args ...any) (string, error) {
-	// Check if container is provided
-	if len(args) > 0 {
-		if cntr, ok := args[0].(*container.Container); ok && cntr != nil {
-			// Simulate database query
-			userID := r.Header.Get("X-User-ID")
-			if userID == "" {
-				return "", errors.New("user ID not found")
-			}
-			// In real scenario, would query database: cntr.SQL.QueryRowContext(...)
-			// For testing, return based on userID
-			if userID == "1" {
-				return "admin", nil
-			}
-			if userID == "2" {
-				return "editor", nil
-			}
-			return "viewer", nil
-		}
+	if len(args) == 0 {
+		return "", errContainerNotAvailable
 	}
-	return "", errors.New("container not available")
+
+	cntr, ok := args[0].(*container.Container)
+	if !ok || cntr == nil {
+		return "", errContainerNotAvailable
+	}
+
+	// Simulate database query
+	userID := r.Header.Get("X-User-Id")
+	if userID == "" {
+		return "", errUserIDNotFound
+	}
+
+	// In real scenario, would query database: cntr.SQL.QueryRowContext(...)
+	// For testing, return based on userID
+	switch userID {
+	case "1":
+		return "admin", nil
+	case "2":
+		return "editor", nil
+	default:
+		return "viewer", nil
+	}
 }
 
 func TestMiddleware_Authorization(t *testing.T) {
@@ -56,8 +70,9 @@ func TestMiddleware_Authorization(t *testing.T) {
 
 	// next handler to confirm request passed through middleware
 	nextCalled := false
-	nextHandler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	nextHandler := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		nextCalled = true
+
 		w.WriteHeader(http.StatusOK)
 	})
 
@@ -98,10 +113,13 @@ func TestMiddleware_Authorization(t *testing.T) {
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			nextCalled = false
-			req := httptest.NewRequest(http.MethodGet, tc.requestPath, nil)
+
+			req := httptest.NewRequest(http.MethodGet, tc.requestPath, http.NoBody)
+
 			if tc.roleHeader != "" {
 				req.Header.Set("Role", tc.roleHeader)
 			}
+
 			w := httptest.NewRecorder()
 
 			handlerToTest := middleware(nextHandler)
@@ -124,8 +142,9 @@ func TestMiddleware_WithContainer(t *testing.T) {
 	}
 
 	nextCalled := false
-	nextHandler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	nextHandler := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		nextCalled = true
+
 		w.WriteHeader(http.StatusOK)
 	})
 
@@ -166,10 +185,12 @@ func TestMiddleware_WithContainer(t *testing.T) {
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			nextCalled = false
-			req := httptest.NewRequest(http.MethodGet, tc.requestPath, nil)
+
+			req := httptest.NewRequest(http.MethodGet, tc.requestPath, http.NoBody)
 			if tc.userID != "" {
-				req.Header.Set("X-User-ID", tc.userID)
+				req.Header.Set("X-User-Id", tc.userID)
 			}
+
 			w := httptest.NewRecorder()
 
 			handlerToTest := middleware(nextHandler)
@@ -193,14 +214,15 @@ func TestMiddleware_WithOverride(t *testing.T) {
 	}
 
 	nextCalled := false
-	nextHandler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	nextHandler := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		nextCalled = true
+
 		w.WriteHeader(http.StatusOK)
 	})
 
 	// Test without container
 	middleware := Middleware(config)
-	req := httptest.NewRequest(http.MethodGet, "/public", nil)
+	req := httptest.NewRequest(http.MethodGet, "/public", http.NoBody)
 	// No role header - should still pass due to override
 	w := httptest.NewRecorder()
 
@@ -216,21 +238,22 @@ func TestMiddleware_WithDefaultRole(t *testing.T) {
 		RouteWithPermissions: map[string][]string{
 			"/allowed": {"viewer"},
 		},
-		DefaultRole:       "viewer",
-		RoleExtractorFunc: func(r *http.Request, args ...any) (string, error) {
-			return "", errors.New("no role")
+		DefaultRole: "viewer",
+		RoleExtractorFunc: func(_ *http.Request, _ ...any) (string, error) {
+			return "", errNoRole
 		},
 	}
 
 	nextCalled := false
-	nextHandler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	nextHandler := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		nextCalled = true
+
 		w.WriteHeader(http.StatusOK)
 	})
 
 	// Test without container
 	middleware := Middleware(config)
-	req := httptest.NewRequest(http.MethodGet, "/allowed", nil)
+	req := httptest.NewRequest(http.MethodGet, "/allowed", http.NoBody)
 	w := httptest.NewRecorder()
 
 	handlerToTest := middleware(nextHandler)
@@ -258,8 +281,9 @@ func TestMiddleware_WithPermissionCheck(t *testing.T) {
 	}
 
 	nextCalled := false
-	nextHandler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	nextHandler := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		nextCalled = true
+
 		w.WriteHeader(http.StatusOK)
 	})
 
@@ -289,8 +313,10 @@ func TestMiddleware_WithPermissionCheck(t *testing.T) {
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			nextCalled = false
-			req := httptest.NewRequest(http.MethodGet, "/api/users", nil)
+			req := httptest.NewRequest(http.MethodGet, "/api/users", http.NoBody)
+
 			req.Header.Set("Role", tc.role)
+
 			w := httptest.NewRecorder()
 
 			handlerToTest := middleware(nextHandler)
@@ -314,15 +340,17 @@ func TestMiddleware_WithHierarchy(t *testing.T) {
 	}
 
 	nextCalled := false
-	nextHandler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	nextHandler := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		nextCalled = true
+
 		w.WriteHeader(http.StatusOK)
 	})
 
 	// Test without container
 	middleware := Middleware(config)
-	req := httptest.NewRequest(http.MethodGet, "/api/users", nil)
+	req := httptest.NewRequest(http.MethodGet, "/api/users", http.NoBody)
 	req.Header.Set("Role", "admin") // Admin should have editor permissions
+
 	w := httptest.NewRecorder()
 
 	handlerToTest := middleware(nextHandler)
@@ -339,21 +367,22 @@ func TestMiddleware_WithCustomErrorHandler(t *testing.T) {
 			"/allowed": {"admin"},
 		},
 		RoleExtractorFunc: mockRoleExtractor,
-		ErrorHandler: func(w http.ResponseWriter, r *http.Request, role, route string, err error) {
+		ErrorHandler: func(w http.ResponseWriter, _ *http.Request, _, _ string, _ error) {
 			errorHandlerCalled = true
 			w.WriteHeader(http.StatusForbidden)
-			w.Write([]byte("Custom error"))
+			_, _ = w.Write([]byte("Custom error"))
 		},
 	}
 
-	nextHandler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	nextHandler := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusOK)
 	})
 
 	// Test without container
 	middleware := Middleware(config)
-	req := httptest.NewRequest(http.MethodGet, "/allowed", nil)
+	req := httptest.NewRequest(http.MethodGet, "/allowed", http.NoBody)
 	req.Header.Set("Role", "user") // Unauthorized
+
 	w := httptest.NewRecorder()
 
 	handlerToTest := middleware(nextHandler)
@@ -373,15 +402,17 @@ func TestMiddleware_WithAuditLogging(t *testing.T) {
 		Logger:            logging.NewMockLogger(logging.INFO),
 	}
 
-	nextHandler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	nextHandler := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusOK)
 	})
 
 	// Test without container
 	// Audit logging is automatically performed when Logger is set
 	middleware := Middleware(config)
-	req := httptest.NewRequest(http.MethodGet, "/allowed", nil)
+	req := httptest.NewRequest(http.MethodGet, "/allowed", http.NoBody)
+
 	req.Header.Set("Role", "admin")
+
 	w := httptest.NewRecorder()
 
 	handlerToTest := middleware(nextHandler)
@@ -395,7 +426,7 @@ func TestMiddleware_WithAuditLogging(t *testing.T) {
 func TestRequireRole_Handler(t *testing.T) {
 	allowedRole := "admin"
 	called := false
-	handlerFunc := func(ctx interface{}) (any, error) {
+	handlerFunc := func(_ any) (any, error) {
 		called = true
 		return "success", nil
 	}
@@ -432,7 +463,7 @@ func TestRequireRole_Handler(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			called = false
 			ctx := &mockContextValueGetter{
-				value: func(key interface{}) interface{} {
+				value: func(key any) any {
 					if key == userRole {
 						return tc.contextRole
 					}
@@ -442,11 +473,12 @@ func TestRequireRole_Handler(t *testing.T) {
 			resp, err := wrappedHandler(ctx)
 
 			if tc.wantErr != nil {
-				assert.Error(t, err)
-				assert.ErrorIs(t, err, tc.wantErr)
+				require.Error(t, err)
+				require.ErrorIs(t, err, tc.wantErr)
 			} else {
-				assert.NoError(t, err)
+				require.NoError(t, err)
 			}
+
 			if tc.wantCalled {
 				assert.True(t, called)
 				assert.Equal(t, "success", resp)
@@ -461,7 +493,7 @@ func TestRequireRole_Handler(t *testing.T) {
 func TestRequireAnyRole(t *testing.T) {
 	allowedRoles := []string{"admin", "editor"}
 	called := false
-	handlerFunc := func(ctx interface{}) (any, error) {
+	handlerFunc := func(_ any) (any, error) {
 		called = true
 		return "success", nil
 	}
@@ -498,7 +530,7 @@ func TestRequireAnyRole(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			called = false
 			ctx := &mockContextValueGetter{
-				value: func(key interface{}) interface{} {
+				value: func(key any) any {
 					if key == userRole {
 						return tc.contextRole
 					}
@@ -508,11 +540,12 @@ func TestRequireAnyRole(t *testing.T) {
 			resp, err := wrappedHandler(ctx)
 
 			if tc.wantErr != nil {
-				assert.Error(t, err)
-				assert.ErrorIs(t, err, tc.wantErr)
+				require.Error(t, err)
+				require.ErrorIs(t, err, tc.wantErr)
 			} else {
-				assert.NoError(t, err)
+				require.NoError(t, err)
 			}
+
 			if tc.wantCalled {
 				assert.True(t, called)
 				assert.Equal(t, "success", resp)
@@ -523,4 +556,3 @@ func TestRequireAnyRole(t *testing.T) {
 		})
 	}
 }
-

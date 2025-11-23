@@ -87,7 +87,7 @@ func TestRoleHierarchy_GetEffectiveRoles(t *testing.T) {
 func TestRoleHierarchy_GetEffectiveRoles_Circular(t *testing.T) {
 	// Test that circular references don't cause infinite loops
 	hierarchy := map[string][]string{
-		"admin": {"editor"},
+		"admin":  {"editor"},
 		"editor": {"admin"}, // Circular reference
 	}
 
@@ -101,6 +101,7 @@ func TestRoleHierarchy_GetEffectiveRoles_Circular(t *testing.T) {
 	for _, role := range effectiveRoles {
 		roleCount[role]++
 	}
+
 	for _, count := range roleCount {
 		assert.Equal(t, 1, count, "No role should appear more than once")
 	}
@@ -231,11 +232,11 @@ func TestIsRoleAllowedWithHierarchy(t *testing.T) {
 	rh := NewRoleHierarchy(hierarchy)
 
 	tests := []struct {
-		name     string
-		role     string
-		route    string
-		want     bool
-		useHier  bool
+		name    string
+		role    string
+		route   string
+		want    bool
+		useHier bool
 	}{
 		{
 			name:    "With hierarchy - admin can access editor route",
@@ -275,6 +276,7 @@ func TestIsRoleAllowedWithHierarchy(t *testing.T) {
 			} else {
 				got = IsRoleAllowedWithHierarchy(tt.role, tt.route, config, nil)
 			}
+
 			assert.Equal(t, tt.want, got)
 		})
 	}
@@ -304,10 +306,13 @@ func TestRoleHierarchy_ThreadSafety(t *testing.T) {
 
 	// Concurrent reads
 	done := make(chan bool, 10)
+
 	for i := 0; i < 10; i++ {
 		go func() {
 			roles := rh.GetEffectiveRoles("admin")
+
 			assert.NotEmpty(t, roles)
+
 			done <- true
 		}()
 	}
@@ -355,4 +360,3 @@ func TestRoleHierarchy_EmptyHierarchy(t *testing.T) {
 	assert.True(t, rh.HasRole(ctx, "admin"))
 	assert.False(t, rh.HasRole(ctx, "editor"))
 }
-

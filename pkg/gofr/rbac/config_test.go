@@ -14,16 +14,15 @@ func TestLoadPermissions_Success(t *testing.T) {
         "route": {"admin":["read", "write"], "user":["read"]},
         "overrides": {"admin":true, "user":false}
     }`
-	tempFile, err := os.CreateTemp("", "test_permissions_*.json")
-	assert.NoError(t, err)
-	defer os.Remove(tempFile.Name())
+	tempFile, err := os.CreateTemp(t.TempDir(), "test_permissions_*.json")
+	require.NoError(t, err)
 
-	_, err = tempFile.Write([]byte(jsonContent))
-	assert.NoError(t, err)
+	_, err = tempFile.WriteString(jsonContent)
+	require.NoError(t, err)
 	tempFile.Close()
 
 	cfg, err := LoadPermissions(tempFile.Name())
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.Equal(t, map[string][]string{"admin": {"read", "write"}, "user": {"read"}}, cfg.RouteWithPermissions)
 	assert.Equal(t, map[string]bool{"admin": true, "user": false}, cfg.OverRides)
 }
@@ -35,12 +34,13 @@ func TestLoadPermissions_FileNotFound(t *testing.T) {
 }
 
 func TestLoadPermissions_InvalidJSON(t *testing.T) {
-	tempFile, err := os.CreateTemp("", "badjson_*.json")
-	assert.NoError(t, err)
+	tempFile, err := os.CreateTemp(t.TempDir(), "badjson_*.json")
+	require.NoError(t, err)
+
 	defer os.Remove(tempFile.Name())
 
-	_, err = tempFile.Write([]byte(`{"route": [INVALID JSON}`))
-	assert.NoError(t, err)
+	_, err = tempFile.WriteString(`{"route": [INVALID JSON}`)
+	require.NoError(t, err)
 	tempFile.Close()
 
 	cfg, err := LoadPermissions(tempFile.Name())
@@ -60,11 +60,10 @@ overrides:
   /health: true
 defaultRole: viewer
 `
-	tempFile, err := os.CreateTemp("", "test_permissions_*.yaml")
+	tempFile, err := os.CreateTemp(t.TempDir(), "test_permissions_*.yaml")
 	require.NoError(t, err)
-	defer os.Remove(tempFile.Name())
 
-	_, err = tempFile.Write([]byte(yamlContent))
+	_, err = tempFile.WriteString(yamlContent)
 	require.NoError(t, err)
 	tempFile.Close()
 
@@ -81,11 +80,10 @@ func TestLoadPermissions_YML(t *testing.T) {
   /api/users:
     - admin
 `
-	tempFile, err := os.CreateTemp("", "test_permissions_*.yml")
+	tempFile, err := os.CreateTemp(t.TempDir(), "test_permissions_*.yml")
 	require.NoError(t, err)
-	defer os.Remove(tempFile.Name())
 
-	_, err = tempFile.Write([]byte(yamlContent))
+	_, err = tempFile.WriteString(yamlContent)
 	require.NoError(t, err)
 	tempFile.Close()
 
@@ -95,26 +93,24 @@ func TestLoadPermissions_YML(t *testing.T) {
 }
 
 func TestLoadPermissions_UnsupportedFormat(t *testing.T) {
-	tempFile, err := os.CreateTemp("", "test_permissions_*.xml")
+	tempFile, err := os.CreateTemp(t.TempDir(), "test_permissions_*.xml")
 	require.NoError(t, err)
-	defer os.Remove(tempFile.Name())
 
-	_, err = tempFile.Write([]byte(`<config></config>`))
+	_, err = tempFile.WriteString(`<config></config>`)
 	require.NoError(t, err)
 	tempFile.Close()
 
 	cfg, err := LoadPermissions(tempFile.Name())
 	assert.Nil(t, cfg)
-	assert.Error(t, err)
+	require.Error(t, err)
 	assert.Contains(t, err.Error(), "unsupported config file format")
 }
 
 func TestLoadPermissions_InvalidYAML(t *testing.T) {
-	tempFile, err := os.CreateTemp("", "badyaml_*.yaml")
+	tempFile, err := os.CreateTemp(t.TempDir(), "badyaml_*.yaml")
 	require.NoError(t, err)
-	defer os.Remove(tempFile.Name())
 
-	_, err = tempFile.Write([]byte(`route: [invalid: yaml`))
+	_, err = tempFile.WriteString(`route: [invalid: yaml`)
 	require.NoError(t, err)
 	tempFile.Close()
 
@@ -125,9 +121,10 @@ func TestLoadPermissions_InvalidYAML(t *testing.T) {
 
 func TestLoadPermissions_EnvOverrides(t *testing.T) {
 	// Set environment variables
-	os.Setenv("RBAC_DEFAULT_ROLE", "test-role")
-	os.Setenv("RBAC_ROUTE_/api/test", "admin,editor")
-	os.Setenv("RBAC_OVERRIDE_/public", "true")
+	t.Setenv("RBAC_DEFAULT_ROLE", "test-role")
+	t.Setenv("RBAC_ROUTE_/api/test", "admin,editor")
+	t.Setenv("RBAC_OVERRIDE_/public", "true")
+
 	defer func() {
 		os.Unsetenv("RBAC_DEFAULT_ROLE")
 		os.Unsetenv("RBAC_ROUTE_/api/test")
@@ -138,11 +135,10 @@ func TestLoadPermissions_EnvOverrides(t *testing.T) {
         "route": {"admin":["read"]},
         "overrides": {}
     }`
-	tempFile, err := os.CreateTemp("", "test_permissions_*.json")
+	tempFile, err := os.CreateTemp(t.TempDir(), "test_permissions_*.json")
 	require.NoError(t, err)
-	defer os.Remove(tempFile.Name())
 
-	_, err = tempFile.Write([]byte(jsonContent))
+	_, err = tempFile.WriteString(jsonContent)
 	require.NoError(t, err)
 	tempFile.Close()
 
@@ -157,11 +153,10 @@ func TestLoadPermissions_EnvOverrides(t *testing.T) {
 
 func TestLoadPermissions_InitializesEmptyMaps(t *testing.T) {
 	jsonContent := `{}`
-	tempFile, err := os.CreateTemp("", "test_permissions_*.json")
+	tempFile, err := os.CreateTemp(t.TempDir(), "test_permissions_*.json")
 	require.NoError(t, err)
-	defer os.Remove(tempFile.Name())
 
-	_, err = tempFile.Write([]byte(jsonContent))
+	_, err = tempFile.WriteString(jsonContent)
 	require.NoError(t, err)
 	tempFile.Close()
 
@@ -175,11 +170,10 @@ func TestNewConfigLoader(t *testing.T) {
 	jsonContent := `{
         "route": {"admin":["read"]}
     }`
-	tempFile, err := os.CreateTemp("", "test_permissions_*.json")
+	tempFile, err := os.CreateTemp(t.TempDir(), "test_permissions_*.json")
 	require.NoError(t, err)
-	defer os.Remove(tempFile.Name())
 
-	_, err = tempFile.Write([]byte(jsonContent))
+	_, err = tempFile.WriteString(jsonContent)
 	require.NoError(t, err)
 	tempFile.Close()
 
@@ -199,11 +193,10 @@ func TestNewConfigLoader_WithHotReload(t *testing.T) {
 	jsonContent := `{
         "route": {"admin":["read"]}
     }`
-	tempFile, err := os.CreateTemp("", "test_permissions_*.json")
+	tempFile, err := os.CreateTemp(t.TempDir(), "test_permissions_*.json")
 	require.NoError(t, err)
-	defer os.Remove(tempFile.Name())
 
-	_, err = tempFile.Write([]byte(jsonContent))
+	_, err = tempFile.WriteString(jsonContent)
 	require.NoError(t, err)
 	tempFile.Close()
 
@@ -218,7 +211,7 @@ func TestNewConfigLoader_WithHotReload(t *testing.T) {
 	newContent := `{
         "route": {"admin":["read", "write"]}
     }`
-	err = os.WriteFile(tempFile.Name(), []byte(newContent), 0644)
+	err = os.WriteFile(tempFile.Name(), []byte(newContent), 0o600)
 	require.NoError(t, err)
 
 	// Wait for reload
@@ -235,11 +228,10 @@ func TestConfigLoader_Reload(t *testing.T) {
 	jsonContent := `{
         "route": {"admin":["read"]}
     }`
-	tempFile, err := os.CreateTemp("", "test_permissions_*.json")
+	tempFile, err := os.CreateTemp(t.TempDir(), "test_permissions_*.json")
 	require.NoError(t, err)
-	defer os.Remove(tempFile.Name())
 
-	_, err = tempFile.Write([]byte(jsonContent))
+	_, err = tempFile.WriteString(jsonContent)
 	require.NoError(t, err)
 	tempFile.Close()
 
@@ -250,7 +242,7 @@ func TestConfigLoader_Reload(t *testing.T) {
 	newContent := `{
         "route": {"admin":["read", "write"]}
     }`
-	err = os.WriteFile(tempFile.Name(), []byte(newContent), 0644)
+	err = os.WriteFile(tempFile.Name(), []byte(newContent), 0o600)
 	require.NoError(t, err)
 
 	// Manually reload
@@ -267,11 +259,10 @@ func TestConfigLoader_GetConfig_ThreadSafe(t *testing.T) {
 	jsonContent := `{
         "route": {"admin":["read"]}
     }`
-	tempFile, err := os.CreateTemp("", "test_permissions_*.json")
+	tempFile, err := os.CreateTemp(t.TempDir(), "test_permissions_*.json")
 	require.NoError(t, err)
-	defer os.Remove(tempFile.Name())
 
-	_, err = tempFile.Write([]byte(jsonContent))
+	_, err = tempFile.WriteString(jsonContent)
 	require.NoError(t, err)
 	tempFile.Close()
 
@@ -280,10 +271,12 @@ func TestConfigLoader_GetConfig_ThreadSafe(t *testing.T) {
 
 	// Concurrent reads
 	done := make(chan bool, 10)
+
 	for i := 0; i < 10; i++ {
 		go func() {
 			config := loader.GetConfig()
 			assert.NotNil(t, config)
+
 			done <- true
 		}()
 	}
@@ -311,11 +304,10 @@ func TestLoadPermissions_WithPermissionConfig(t *testing.T) {
         },
         "enablePermissions": true
     }`
-	tempFile, err := os.CreateTemp("", "test_permissions_*.json")
+	tempFile, err := os.CreateTemp(t.TempDir(), "test_permissions_*.json")
 	require.NoError(t, err)
-	defer os.Remove(tempFile.Name())
 
-	_, err = tempFile.Write([]byte(jsonContent))
+	_, err = tempFile.WriteString(jsonContent)
 	require.NoError(t, err)
 	tempFile.Close()
 
@@ -335,11 +327,10 @@ func TestLoadPermissions_WithRoleHierarchy(t *testing.T) {
             "editor": ["author", "viewer"]
         }
     }`
-	tempFile, err := os.CreateTemp("", "test_permissions_*.json")
+	tempFile, err := os.CreateTemp(t.TempDir(), "test_permissions_*.json")
 	require.NoError(t, err)
-	defer os.Remove(tempFile.Name())
 
-	_, err = tempFile.Write([]byte(jsonContent))
+	_, err = tempFile.WriteString(jsonContent)
 	require.NoError(t, err)
 	tempFile.Close()
 
@@ -387,6 +378,7 @@ func TestLoadPermissions_FileExtensionDetection(t *testing.T) {
 			content: `<config></config>`,
 			wantErr: true,
 			checkErr: func(t *testing.T, err error) {
+				t.Helper()
 				assert.Contains(t, err.Error(), "unsupported config file format")
 			},
 		},
@@ -394,22 +386,24 @@ func TestLoadPermissions_FileExtensionDetection(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			tempFile, err := os.CreateTemp("", "test_permissions_*"+tt.ext)
+			tempFile, err := os.CreateTemp(t.TempDir(), "test_permissions_*"+tt.ext)
 			require.NoError(t, err)
+
 			defer os.Remove(tempFile.Name())
 
-			_, err = tempFile.Write([]byte(tt.content))
+			_, err = tempFile.WriteString(tt.content)
 			require.NoError(t, err)
 			tempFile.Close()
 
 			cfg, err := LoadPermissions(tempFile.Name())
 			if tt.wantErr {
-				assert.Error(t, err)
+				require.Error(t, err)
+
 				if tt.checkErr != nil {
 					tt.checkErr(t, err)
 				}
 			} else {
-				assert.NoError(t, err)
+				require.NoError(t, err)
 				assert.NotNil(t, cfg)
 			}
 		})
@@ -418,10 +412,10 @@ func TestLoadPermissions_FileExtensionDetection(t *testing.T) {
 
 func TestLoadPermissions_ErrorMessages(t *testing.T) {
 	tests := []struct {
-		name        string
-		setup       func() string
-		wantErrMsg  string
-		cleanup     func(string)
+		name       string
+		setup      func() string
+		wantErrMsg string
+		cleanup    func(string)
 	}{
 		{
 			name: "File not found",
@@ -434,8 +428,8 @@ func TestLoadPermissions_ErrorMessages(t *testing.T) {
 		{
 			name: "Invalid JSON",
 			setup: func() string {
-				tempFile, _ := os.CreateTemp("", "bad_*.json")
-				tempFile.WriteString(`{invalid json}`)
+				tempFile, _ := os.CreateTemp(t.TempDir(), "bad_*.json")
+				_, _ = tempFile.WriteString(`{invalid json}`)
 				tempFile.Close()
 				return tempFile.Name()
 			},
@@ -447,8 +441,8 @@ func TestLoadPermissions_ErrorMessages(t *testing.T) {
 		{
 			name: "Invalid YAML",
 			setup: func() string {
-				tempFile, _ := os.CreateTemp("", "bad_*.yaml")
-				tempFile.WriteString(`invalid: yaml: [`)
+				tempFile, _ := os.CreateTemp(t.TempDir(), "bad_*.yaml")
+				_, _ = tempFile.WriteString(`invalid: yaml: [`)
 				tempFile.Close()
 				return tempFile.Name()
 			},
@@ -466,7 +460,7 @@ func TestLoadPermissions_ErrorMessages(t *testing.T) {
 
 			cfg, err := LoadPermissions(path)
 			assert.Nil(t, cfg)
-			assert.Error(t, err)
+			require.Error(t, err)
 			assert.Contains(t, err.Error(), tt.wantErrMsg)
 		})
 	}

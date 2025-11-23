@@ -12,7 +12,8 @@ import (
 func TestNewRoleCache(t *testing.T) {
 	cache := NewRoleCache(5 * time.Minute)
 	assert.NotNil(t, cache)
-	defer cache.Stop()
+
+	cache.Stop()
 }
 
 func TestRoleCache_GetSet(t *testing.T) {
@@ -91,22 +92,27 @@ func TestRoleCache_Clear(t *testing.T) {
 	// Verify all are gone
 	_, found = cache.Get("user:123")
 	assert.False(t, found)
+
 	_, found = cache.Get("user:456")
 	assert.False(t, found)
+
 	_, found = cache.Get("user:789")
 	assert.False(t, found)
 }
 
-func TestRoleCache_ThreadSafety(t *testing.T) {
+func TestRoleCache_ThreadSafety(_ *testing.T) {
 	cache := NewRoleCache(5 * time.Minute)
 	defer cache.Stop()
 
 	// Concurrent writes and reads
 	done := make(chan bool, 20)
+
 	for i := 0; i < 10; i++ {
 		go func(id int) {
 			key := "user:" + string(rune(id))
+
 			cache.Set(key, "admin")
+
 			done <- true
 		}(i)
 	}
@@ -114,7 +120,9 @@ func TestRoleCache_ThreadSafety(t *testing.T) {
 	for i := 0; i < 10; i++ {
 		go func(id int) {
 			key := "user:" + string(rune(id))
+
 			_, _ = cache.Get(key)
+
 			done <- true
 		}(i)
 	}
@@ -139,6 +147,7 @@ func TestRoleCache_Cleanup(t *testing.T) {
 	// Values should be cleaned up
 	_, found := cache.Get("user:1")
 	assert.False(t, found)
+
 	_, found = cache.Get("user:2")
 	assert.False(t, found)
 }
@@ -152,8 +161,9 @@ func TestDefaultCacheKeyGenerator(t *testing.T) {
 		{
 			name: "User ID header",
 			req: func() *http.Request {
-				req := httptest.NewRequest("GET", "/", nil)
-				req.Header.Set("X-User-ID", "123")
+				req := httptest.NewRequest(http.MethodGet, "/", http.NoBody)
+				req.Header.Set("X-User-Id", "123")
+
 				return req
 			}(),
 			wantPref: "rbac:user:",
@@ -161,8 +171,9 @@ func TestDefaultCacheKeyGenerator(t *testing.T) {
 		{
 			name: "API Key header",
 			req: func() *http.Request {
-				req := httptest.NewRequest("GET", "/", nil)
+				req := httptest.NewRequest(http.MethodGet, "/", http.NoBody)
 				req.Header.Set("X-Api-Key", "key123")
+
 				return req
 			}(),
 			wantPref: "rbac:apikey:",
@@ -170,8 +181,9 @@ func TestDefaultCacheKeyGenerator(t *testing.T) {
 		{
 			name: "Fallback to IP",
 			req: func() *http.Request {
-				req := httptest.NewRequest("GET", "/", nil)
+				req := httptest.NewRequest(http.MethodGet, "/", http.NoBody)
 				req.RemoteAddr = "192.168.1.1:8080"
+
 				return req
 			}(),
 			wantPref: "rbac:ip:",
@@ -257,6 +269,7 @@ func TestRoleCache_ZeroTTL(t *testing.T) {
 
 	// Should not be found immediately (or very quickly expires)
 	time.Sleep(10 * time.Millisecond)
+
 	// With zero TTL, behavior may vary, but should not crash
 	assert.NotPanics(t, func() {
 		cache.Get("user:123")
@@ -269,9 +282,11 @@ func TestRoleCache_ConcurrentSetGet(t *testing.T) {
 
 	// Concurrent sets and gets on same key
 	done := make(chan bool, 20)
+
 	for i := 0; i < 10; i++ {
 		go func() {
 			cache.Set("user:123", "admin")
+
 			done <- true
 		}()
 	}
@@ -279,6 +294,7 @@ func TestRoleCache_ConcurrentSetGet(t *testing.T) {
 	for i := 0; i < 10; i++ {
 		go func() {
 			_, _ = cache.Get("user:123")
+
 			done <- true
 		}()
 	}
@@ -293,4 +309,3 @@ func TestRoleCache_ConcurrentSetGet(t *testing.T) {
 	assert.True(t, found)
 	assert.Equal(t, "admin", role)
 }
-

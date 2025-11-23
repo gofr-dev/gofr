@@ -2,6 +2,7 @@ package rbac
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"os"
@@ -10,8 +11,14 @@ import (
 	"sync"
 	"time"
 
-	"gofr.dev/pkg/gofr/logging"
 	"gopkg.in/yaml.v3"
+
+	"gofr.dev/pkg/gofr/logging"
+)
+
+var (
+	// errUnsupportedFormat is returned when the config file format is not supported.
+	errUnsupportedFormat = errors.New("unsupported config file format")
 )
 
 // Config represents the RBAC configuration structure.
@@ -88,7 +95,7 @@ type Config struct {
 
 // LoadPermissions loads RBAC configuration from a JSON or YAML file.
 // The file format is automatically detected based on the file extension.
-// Supported formats: .json, .yaml, .yml
+// Supported formats: .json, .yaml, .yml.
 func LoadPermissions(path string) (*Config, error) {
 	data, err := os.ReadFile(path)
 	if err != nil {
@@ -109,7 +116,7 @@ func LoadPermissions(path string) (*Config, error) {
 			return nil, fmt.Errorf("failed to parse JSON config file %s: %w", path, err)
 		}
 	default:
-		return nil, fmt.Errorf("unsupported config file format: %s (supported: .json, .yaml, .yml)", ext)
+		return nil, fmt.Errorf("unsupported config file format: %s (supported: .json, .yaml, .yml): %w", ext, errUnsupportedFormat)
 	}
 
 	// Apply environment variable overrides
@@ -145,31 +152,44 @@ func applyEnvOverrides(config *Config) {
 		}
 
 		if strings.HasPrefix(key, "RBAC_ROUTE_") {
-			route := strings.TrimPrefix(key, "RBAC_ROUTE_")
-			// Replace underscores with slashes for route paths
-			route = strings.ReplaceAll(route, "_", "/")
-			roles := strings.Split(value, ",")
-			// Trim whitespace from roles
-			for i, role := range roles {
-				roles[i] = strings.TrimSpace(role)
-			}
-			if config.RouteWithPermissions == nil {
-				config.RouteWithPermissions = make(map[string][]string)
-			}
-			config.RouteWithPermissions[route] = roles
+			applyRouteOverride(config, key, value)
 		}
 
-		// Override specific routes (override flag)
 		if strings.HasPrefix(key, "RBAC_OVERRIDE_") {
-			route := strings.TrimPrefix(key, "RBAC_OVERRIDE_")
-			route = strings.ReplaceAll(route, "_", "/")
-			if strings.ToLower(value) == "true" || value == "1" {
-				if config.OverRides == nil {
-					config.OverRides = make(map[string]bool)
-				}
-				config.OverRides[route] = true
-			}
+			applyOverrideFlag(config, key, value)
 		}
+	}
+}
+
+// applyRouteOverride applies a route override from environment variable.
+func applyRouteOverride(config *Config, key, value string) {
+	route := strings.TrimPrefix(key, "RBAC_ROUTE_")
+	route = strings.ReplaceAll(route, "_", "/")
+	roles := strings.Split(value, ",")
+
+	// Trim whitespace from roles
+	for i, role := range roles {
+		roles[i] = strings.TrimSpace(role)
+	}
+
+	if config.RouteWithPermissions == nil {
+		config.RouteWithPermissions = make(map[string][]string)
+	}
+
+	config.RouteWithPermissions[route] = roles
+}
+
+// applyOverrideFlag applies an override flag from environment variable.
+func applyOverrideFlag(config *Config, key, value string) {
+	route := strings.TrimPrefix(key, "RBAC_OVERRIDE_")
+	route = strings.ReplaceAll(route, "_", "/")
+
+	if strings.EqualFold(value, "true") || value == "1" {
+		if config.OverRides == nil {
+			config.OverRides = make(map[string]bool)
+		}
+
+		config.OverRides[route] = true
 	}
 }
 
@@ -223,6 +243,7 @@ func NewConfigLoaderWithLogger(path string, reloadInterval time.Duration, logger
 func (l *ConfigLoader) GetConfig() *Config {
 	l.mu.RLock()
 	defer l.mu.RUnlock()
+
 	return l.config
 }
 
