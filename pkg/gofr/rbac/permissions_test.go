@@ -2,6 +2,7 @@ package rbac
 
 import (
 	"context"
+	"net/http"
 	"net/http/httptest"
 	"testing"
 
@@ -14,7 +15,7 @@ func TestHasPermission(t *testing.T) {
 		Permissions: map[string][]string{
 			"users:read":  {"admin", "editor", "viewer"},
 			"users:write": {"admin", "editor"},
-			"posts:read":   {"admin", "author", "viewer"},
+			"posts:read":  {"admin", "author", "viewer"},
 		},
 	}
 
@@ -73,48 +74,48 @@ func TestHasPermission(t *testing.T) {
 func TestGetRequiredPermission(t *testing.T) {
 	config := &PermissionConfig{
 		RoutePermissionMap: map[string]string{
-			"GET /api/users":    "users:read",
-			"POST /api/users":   "users:write",
-			"GET /api/posts/*":  "posts:read",
-			"* /api/public/*":   "public:read",
+			"GET /api/users":   "users:read",
+			"POST /api/users":  "users:write",
+			"GET /api/posts/*": "posts:read",
+			"* /api/public/*":  "public:read",
 		},
 		DefaultPermission: "default:read",
 	}
 
 	tests := []struct {
-		name       string
-		method     string
-		route      string
-		want       string
-		wantErr    bool
-		checkErr   func(*testing.T, error)
+		name     string
+		method   string
+		route    string
+		want     string
+		wantErr  bool
+		checkErr func(*testing.T, error)
 	}{
 		{
-			name:   "Exact match",
-			method: "GET",
-			route:  "/api/users",
-			want:   "users:read",
+			name:    "Exact match",
+			method:  "GET",
+			route:   "/api/users",
+			want:    "users:read",
 			wantErr: false,
 		},
 		{
-			name:   "Pattern match with wildcard",
-			method: "GET",
-			route:  "/api/posts/123",
-			want:   "posts:read",
+			name:    "Pattern match with wildcard",
+			method:  "GET",
+			route:   "/api/posts/123",
+			want:    "posts:read",
 			wantErr: false,
 		},
 		{
-			name:   "Method wildcard",
-			method: "PUT",
-			route:  "/api/public/test",
-			want:   "public:read",
+			name:    "Method wildcard",
+			method:  "PUT",
+			route:   "/api/public/test",
+			want:    "public:read",
 			wantErr: false,
 		},
 		{
-			name:   "Default permission",
-			method: "GET",
-			route:  "/api/unknown",
-			want:   "default:read",
+			name:    "Default permission",
+			method:  "GET",
+			route:   "/api/unknown",
+			want:    "default:read",
 			wantErr: false,
 		},
 		{
@@ -124,6 +125,7 @@ func TestGetRequiredPermission(t *testing.T) {
 			want:    "",
 			wantErr: true,
 			checkErr: func(t *testing.T, err error) {
+				t.Helper()
 				assert.Contains(t, err.Error(), "no permission mapping found")
 			},
 		},
@@ -142,12 +144,13 @@ func TestGetRequiredPermission(t *testing.T) {
 
 			got, err := GetRequiredPermission(tt.method, tt.route, testConfig)
 			if tt.wantErr {
-				assert.Error(t, err)
+				require.Error(t, err)
+
 				if tt.checkErr != nil {
 					tt.checkErr(t, err)
 				}
 			} else {
-				assert.NoError(t, err)
+				require.NoError(t, err)
 				assert.Equal(t, tt.want, got)
 			}
 		})
@@ -216,27 +219,28 @@ func TestCheckPermission(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			req := httptest.NewRequest(tt.method, tt.route, nil)
+			req := httptest.NewRequest(tt.method, tt.route, http.NoBody)
 			ctx := context.WithValue(req.Context(), userRole, tt.role)
 			req = req.WithContext(ctx)
 
 			err := CheckPermission(req, config)
 			if tt.wantErr {
-				assert.Error(t, err)
+				require.Error(t, err)
+
 				if tt.wantErrIs != nil {
-					assert.ErrorIs(t, err, tt.wantErrIs)
+					require.ErrorIs(t, err, tt.wantErrIs)
 				}
 			} else {
-				assert.NoError(t, err)
+				require.NoError(t, err)
 			}
 		})
 	}
 }
 
 func TestCheckPermission_NilConfig(t *testing.T) {
-	req := httptest.NewRequest("GET", "/api/users", nil)
+	req := httptest.NewRequest(http.MethodGet, "/api/users", http.NoBody)
 	err := CheckPermission(req, nil)
-	assert.Error(t, err)
+	require.Error(t, err)
 	assert.ErrorIs(t, err, ErrPermissionDenied)
 }
 
@@ -308,31 +312,31 @@ func TestRequirePermission(t *testing.T) {
 	}
 
 	tests := []struct {
-		name           string
-		permission     string
-		ctxRole        string
-		wantErr        bool
+		name            string
+		permission      string
+		ctxRole         string
+		wantErr         bool
 		wantHandlerCall bool
 	}{
 		{
-			name:           "Has permission",
-			permission:     "users:read",
-			ctxRole:        "admin",
-			wantErr:        false,
+			name:            "Has permission",
+			permission:      "users:read",
+			ctxRole:         "admin",
+			wantErr:         false,
 			wantHandlerCall: true,
 		},
 		{
-			name:           "No permission",
-			permission:     "users:read",
-			ctxRole:        "viewer",
-			wantErr:        true,
+			name:            "No permission",
+			permission:      "users:read",
+			ctxRole:         "viewer",
+			wantErr:         true,
 			wantHandlerCall: false,
 		},
 		{
-			name:           "No role",
-			permission:     "users:read",
-			ctxRole:        "",
-			wantErr:        true,
+			name:            "No role",
+			permission:      "users:read",
+			ctxRole:         "",
+			wantErr:         true,
 			wantHandlerCall: false,
 		},
 	}
@@ -340,7 +344,7 @@ func TestRequirePermission(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			handlerCalled := false
-			handlerFunc := func(ctx interface{}) (any, error) {
+			handlerFunc := func(_ any) (any, error) {
 				handlerCalled = true
 				return "success", nil
 			}
@@ -349,7 +353,7 @@ func TestRequirePermission(t *testing.T) {
 
 			// Create mock context that implements ContextValueGetter
 			ctx := &mockContextValueGetter{
-				value: func(key interface{}) interface{} {
+				value: func(key any) any {
 					if key == userRole {
 						return tt.ctxRole
 					}
@@ -359,11 +363,11 @@ func TestRequirePermission(t *testing.T) {
 
 			result, err := wrapped(ctx)
 			if tt.wantErr {
-				assert.Error(t, err)
-				assert.ErrorIs(t, err, ErrPermissionDenied)
+				require.Error(t, err)
+				require.ErrorIs(t, err, ErrPermissionDenied)
 				assert.False(t, handlerCalled)
 			} else {
-				assert.NoError(t, err)
+				require.NoError(t, err)
 				assert.True(t, handlerCalled)
 				assert.Equal(t, "success", result)
 			}
@@ -372,14 +376,14 @@ func TestRequirePermission(t *testing.T) {
 }
 
 func TestRequirePermission_NilConfig(t *testing.T) {
-	handlerFunc := func(ctx interface{}) (any, error) {
+	handlerFunc := func(_ any) (any, error) {
 		return "success", nil
 	}
 
 	wrapped := RequirePermission("users:read", nil, handlerFunc)
 
 	ctx := &mockContextValueGetter{
-		value: func(key interface{}) interface{} {
+		value: func(key any) any {
 			if key == userRole {
 				return "admin"
 			}
@@ -388,8 +392,8 @@ func TestRequirePermission_NilConfig(t *testing.T) {
 	}
 
 	result, err := wrapped(ctx)
-	assert.Error(t, err)
-	assert.ErrorIs(t, err, ErrPermissionDenied)
+	require.Error(t, err)
+	require.ErrorIs(t, err, ErrPermissionDenied)
 	assert.Nil(t, result)
 }
 
@@ -414,4 +418,3 @@ func TestPermissionConfig_WithDefaultPermission(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, "specific:read", permission)
 }
-

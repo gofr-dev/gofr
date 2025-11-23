@@ -2,12 +2,14 @@ package providers
 
 import (
 	"context"
+	"net/http"
 	"net/http/httptest"
 	"testing"
 
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
 	"gofr.dev/pkg/gofr/http/middleware"
 )
 
@@ -30,7 +32,7 @@ func TestJWTRoleExtractor_ExtractRole_SimpleClaim(t *testing.T) {
 		"sub":  "user123",
 	}
 
-	req := httptest.NewRequest("GET", "/", nil)
+	req := httptest.NewRequest(http.MethodGet, "/", http.NoBody)
 	req = req.WithContext(context.WithValue(req.Context(), middleware.JWTClaim, claims))
 
 	role, err := extractor.ExtractRole(req)
@@ -42,11 +44,11 @@ func TestJWTRoleExtractor_ExtractRole_ArrayNotation(t *testing.T) {
 	extractor := NewJWTRoleExtractor("roles[0]")
 
 	claims := jwt.MapClaims{
-		"roles": []interface{}{"admin", "editor"},
+		"roles": []any{"admin", "editor"},
 		"sub":   "user123",
 	}
 
-	req := httptest.NewRequest("GET", "/", nil)
+	req := httptest.NewRequest(http.MethodGet, "/", http.NoBody)
 	req = req.WithContext(context.WithValue(req.Context(), middleware.JWTClaim, claims))
 
 	role, err := extractor.ExtractRole(req)
@@ -58,13 +60,13 @@ func TestJWTRoleExtractor_ExtractRole_NestedClaim(t *testing.T) {
 	extractor := NewJWTRoleExtractor("permissions.role")
 
 	claims := jwt.MapClaims{
-		"permissions": map[string]interface{}{
+		"permissions": map[string]any{
 			"role": "admin",
 		},
 		"sub": "user123",
 	}
 
-	req := httptest.NewRequest("GET", "/", nil)
+	req := httptest.NewRequest(http.MethodGet, "/", http.NoBody)
 	req = req.WithContext(context.WithValue(req.Context(), middleware.JWTClaim, claims))
 
 	role, err := extractor.ExtractRole(req)
@@ -75,12 +77,12 @@ func TestJWTRoleExtractor_ExtractRole_NestedClaim(t *testing.T) {
 func TestJWTRoleExtractor_ExtractRole_NoJWT(t *testing.T) {
 	extractor := NewJWTRoleExtractor("role")
 
-	req := httptest.NewRequest("GET", "/", nil)
+	req := httptest.NewRequest(http.MethodGet, "/", http.NoBody)
 	// No JWT claims in context
 
 	role, err := extractor.ExtractRole(req)
-	assert.Error(t, err)
-	assert.ErrorIs(t, err, ErrJWTNotEnabled)
+	require.Error(t, err)
+	require.ErrorIs(t, err, ErrJWTNotEnabled)
 	assert.Empty(t, role)
 }
 
@@ -91,12 +93,12 @@ func TestJWTRoleExtractor_ExtractRole_ClaimNotFound(t *testing.T) {
 		"role": "admin",
 	}
 
-	req := httptest.NewRequest("GET", "/", nil)
+	req := httptest.NewRequest(http.MethodGet, "/", http.NoBody)
 	req = req.WithContext(context.WithValue(req.Context(), middleware.JWTClaim, claims))
 
 	role, err := extractor.ExtractRole(req)
-	assert.Error(t, err)
-	assert.ErrorIs(t, err, ErrRoleClaimNotFound)
+	require.Error(t, err)
+	require.ErrorIs(t, err, ErrRoleClaimNotFound)
 	assert.Empty(t, role)
 }
 
@@ -107,7 +109,7 @@ func TestJWTRoleExtractor_ExtractRole_NonStringValue(t *testing.T) {
 		"role": 123, // Non-string value
 	}
 
-	req := httptest.NewRequest("GET", "/", nil)
+	req := httptest.NewRequest(http.MethodGet, "/", http.NoBody)
 	req = req.WithContext(context.WithValue(req.Context(), middleware.JWTClaim, claims))
 
 	role, err := extractor.ExtractRole(req)
@@ -119,14 +121,14 @@ func TestJWTRoleExtractor_ExtractRole_ArrayIndexOutOfBounds(t *testing.T) {
 	extractor := NewJWTRoleExtractor("roles[5]")
 
 	claims := jwt.MapClaims{
-		"roles": []interface{}{"admin", "editor"},
+		"roles": []any{"admin", "editor"},
 	}
 
-	req := httptest.NewRequest("GET", "/", nil)
+	req := httptest.NewRequest(http.MethodGet, "/", http.NoBody)
 	req = req.WithContext(context.WithValue(req.Context(), middleware.JWTClaim, claims))
 
 	role, err := extractor.ExtractRole(req)
-	assert.Error(t, err)
+	require.Error(t, err)
 	assert.Empty(t, role)
 }
 
@@ -134,14 +136,14 @@ func TestJWTRoleExtractor_ExtractRole_InvalidArrayIndex(t *testing.T) {
 	extractor := NewJWTRoleExtractor("roles[invalid]")
 
 	claims := jwt.MapClaims{
-		"roles": []interface{}{"admin", "editor"},
+		"roles": []any{"admin", "editor"},
 	}
 
-	req := httptest.NewRequest("GET", "/", nil)
+	req := httptest.NewRequest(http.MethodGet, "/", http.NoBody)
 	req = req.WithContext(context.WithValue(req.Context(), middleware.JWTClaim, claims))
 
 	role, err := extractor.ExtractRole(req)
-	assert.Error(t, err)
+	require.Error(t, err)
 	assert.Empty(t, role)
 }
 
@@ -149,14 +151,14 @@ func TestJWTRoleExtractor_ExtractRole_DeeplyNested(t *testing.T) {
 	extractor := NewJWTRoleExtractor("user.permissions.role")
 
 	claims := jwt.MapClaims{
-		"user": map[string]interface{}{
-			"permissions": map[string]interface{}{
+		"user": map[string]any{
+			"permissions": map[string]any{
 				"role": "admin",
 			},
 		},
 	}
 
-	req := httptest.NewRequest("GET", "/", nil)
+	req := httptest.NewRequest(http.MethodGet, "/", http.NoBody)
 	req = req.WithContext(context.WithValue(req.Context(), middleware.JWTClaim, claims))
 
 	role, err := extractor.ExtractRole(req)
@@ -176,7 +178,7 @@ func TestExtractClaimValue_SimpleKey(t *testing.T) {
 
 func TestExtractClaimValue_ArrayNotation(t *testing.T) {
 	claims := jwt.MapClaims{
-		"roles": []interface{}{"admin", "editor", "viewer"},
+		"roles": []any{"admin", "editor", "viewer"},
 	}
 
 	value, err := extractClaimValue(claims, "roles[1]")
@@ -186,7 +188,7 @@ func TestExtractClaimValue_ArrayNotation(t *testing.T) {
 
 func TestExtractClaimValue_DotNotation(t *testing.T) {
 	claims := jwt.MapClaims{
-		"user": map[string]interface{}{
+		"user": map[string]any{
 			"role": "admin",
 		},
 	}
@@ -202,7 +204,7 @@ func TestExtractClaimValue_NotFound(t *testing.T) {
 	}
 
 	value, err := extractClaimValue(claims, "nonexistent")
-	assert.Error(t, err)
+	require.Error(t, err)
 	assert.Nil(t, value)
 }
 
@@ -212,7 +214,6 @@ func TestExtractClaimValue_EmptyPath(t *testing.T) {
 	}
 
 	value, err := extractClaimValue(claims, "")
-	assert.Error(t, err)
+	require.Error(t, err)
 	assert.Nil(t, value)
 }
-

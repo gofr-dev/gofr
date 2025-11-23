@@ -7,15 +7,25 @@ import (
 	"strings"
 
 	"github.com/golang-jwt/jwt/v5"
+
 	"gofr.dev/pkg/gofr/http/middleware"
 )
 
 var (
-	// ErrJWTNotEnabled is returned when JWT role extraction is attempted but OAuth is not enabled
+	// ErrJWTNotEnabled is returned when JWT role extraction is attempted but OAuth is not enabled.
 	ErrJWTNotEnabled = errors.New("JWT/OAuth middleware not enabled")
 
-	// ErrRoleClaimNotFound is returned when the specified role claim is not found in JWT
+	// ErrRoleClaimNotFound is returned when the specified role claim is not found in JWT.
 	ErrRoleClaimNotFound = errors.New("role claim not found in JWT")
+
+	ErrEmptyClaimPath        = errors.New("empty claim path")
+	ErrInvalidArrayNotation  = errors.New("invalid array notation")
+	ErrInvalidArrayIndex     = errors.New("invalid array index")
+	ErrClaimKeyNotFound      = errors.New("claim key not found")
+	ErrClaimNotArray         = errors.New("claim value is not an array")
+	ErrArrayIndexOutOfBounds = errors.New("array index out of bounds")
+	ErrClaimPathNotFound     = errors.New("claim path not found")
+	ErrInvalidClaimStructure = errors.New("invalid claim structure")
 )
 
 // JWTRoleExtractor extracts role from JWT claims stored in request context.
@@ -52,7 +62,7 @@ func (e *JWTRoleExtractor) ExtractRole(req *http.Request, _ ...any) (string, err
 	// Extract role using the configured claim path
 	role, err := extractClaimValue(claims, e.RoleClaim)
 	if err != nil {
-		return "", fmt.Errorf("%w: %v", ErrRoleClaimNotFound, err)
+		return "", fmt.Errorf("%w: %w", ErrRoleClaimNotFound, err)
 	}
 
 	// Convert to string
@@ -68,91 +78,117 @@ func (e *JWTRoleExtractor) ExtractRole(req *http.Request, _ ...any) (string, err
 // extractClaimValue extracts a value from JWT claims using a dot-notation or array notation path.
 // Examples:
 //   - "role" -> claims["role"]
-//   - "roles[0]" -> claims["roles"].([]interface{})[0]
-//   - "permissions.role" -> claims["permissions"].(map[string]interface{})["role"]
-func extractClaimValue(claims jwt.MapClaims, path string) (interface{}, error) {
+//   - "roles[0]" -> claims["roles"].([]any)[0]
+//   - "permissions.role" -> claims["permissions"].(map[string]any)["role"]
+func extractClaimValue(claims jwt.MapClaims, path string) (any, error) {
 	if path == "" {
-		return nil, errors.New("empty claim path")
+		return nil, ErrEmptyClaimPath
 	}
 
 	// Handle array notation: "roles[0]"
 	if idx := strings.Index(path, "["); idx != -1 {
-		key := path[:idx]
-		arrayPath := path[idx:]
-
-		// Extract array index
-		if !strings.HasPrefix(arrayPath, "[") || !strings.HasSuffix(arrayPath, "]") {
-			return nil, fmt.Errorf("invalid array notation: %s", path)
-		}
-
-		indexStr := strings.Trim(arrayPath, "[]")
-		var index int
-		if _, err := fmt.Sscanf(indexStr, "%d", &index); err != nil {
-			return nil, fmt.Errorf("invalid array index: %s", indexStr)
-		}
-
-		value, ok := claims[key]
-		if !ok {
-			return nil, fmt.Errorf("claim key not found: %s", key)
-		}
-
-		arr, ok := value.([]interface{})
-		if !ok {
-			return nil, fmt.Errorf("claim value is not an array: %s", key)
-		}
-
-		if index < 0 || index >= len(arr) {
-			return nil, fmt.Errorf("array index out of bounds: %d (length: %d)", index, len(arr))
-		}
-
-		return arr[index], nil
+		return extractArrayClaim(claims, path, idx)
 	}
 
 	// Handle dot notation: "permissions.role"
 	if strings.Contains(path, ".") {
-		parts := strings.Split(path, ".")
-		var current interface{} = claims
-
-		for i, part := range parts {
-			if i == len(parts)-1 {
-				// Last part - return the value
-				if m, ok := current.(map[string]interface{}); ok {
-					value, exists := m[part]
-					if !exists {
-						return nil, fmt.Errorf("claim path not found: %s", path)
-					}
-					return value, nil
-				}
-
-				// jwt.MapClaims is a type alias for map[string]interface{}
-				if m, ok := current.(jwt.MapClaims); ok {
-					value, exists := m[part]
-					if !exists {
-						return nil, fmt.Errorf("claim path not found: %s", path)
-					}
-					return value, nil
-				}
-
-				return nil, fmt.Errorf("invalid claim structure at: %s", strings.Join(parts[:i+1], "."))
-			}
-
-			// Navigate through nested structure
-			if m, ok := current.(map[string]interface{}); ok {
-				current = m[part]
-			} else if m, ok := current.(jwt.MapClaims); ok {
-				current = m[part]
-			} else {
-				return nil, fmt.Errorf("invalid claim structure at: %s", strings.Join(parts[:i+1], "."))
-			}
-		}
+		return extractNestedClaim(claims, path)
 	}
 
 	// Simple key lookup
 	value, ok := claims[path]
 	if !ok {
-		return nil, fmt.Errorf("claim key not found: %s", path)
+		return nil, fmt.Errorf("%w: %s", ErrClaimKeyNotFound, path)
 	}
 
 	return value, nil
 }
 
+func extractArrayClaim(claims jwt.MapClaims, path string, idx int) (any, error) {
+	key := path[:idx]
+	arrayPath := path[idx:]
+
+	// Extract array index
+	if !strings.HasPrefix(arrayPath, "[") || !strings.HasSuffix(arrayPath, "]") {
+		return nil, fmt.Errorf("%w: %s", ErrInvalidArrayNotation, path)
+	}
+
+	indexStr := strings.Trim(arrayPath, "[]")
+
+	var index int
+	if _, err := fmt.Sscanf(indexStr, "%d", &index); err != nil {
+		return nil, fmt.Errorf("%w: %s", ErrInvalidArrayIndex, indexStr)
+	}
+
+	value, ok := claims[key]
+	if !ok {
+		return nil, fmt.Errorf("%w: %s", ErrClaimKeyNotFound, key)
+	}
+
+	arr, ok := value.([]any)
+	if !ok {
+		return nil, fmt.Errorf("%w: %s", ErrClaimNotArray, key)
+	}
+
+	if index < 0 || index >= len(arr) {
+		return nil, fmt.Errorf("%w: %d (length: %d)", ErrArrayIndexOutOfBounds, index, len(arr))
+	}
+
+	return arr[index], nil
+}
+
+func extractNestedClaim(claims jwt.MapClaims, path string) (any, error) {
+	parts := strings.Split(path, ".")
+
+	var current any = claims
+
+	for i, part := range parts {
+		if i == len(parts)-1 {
+			return extractFinalPart(current, part, path, parts, i)
+		}
+
+		// Navigate through nested structure
+		current = navigateNestedStructure(current, part, path, parts, i)
+		if current == nil {
+			return nil, fmt.Errorf("%w: %s", ErrInvalidClaimStructure, strings.Join(parts[:i+1], "."))
+		}
+	}
+
+	return nil, fmt.Errorf("%w: %s", ErrClaimPathNotFound, path)
+}
+
+func extractFinalPart(current any, part, path string, parts []string, index int) (any, error) {
+	// Last part - return the value
+	if m, ok := current.(map[string]any); ok {
+		value, exists := m[part]
+		if !exists {
+			return nil, fmt.Errorf("%w: %s", ErrClaimPathNotFound, path)
+		}
+
+		return value, nil
+	}
+
+	// jwt.MapClaims is a type alias for map[string]any
+	if m, ok := current.(jwt.MapClaims); ok {
+		value, exists := m[part]
+		if !exists {
+			return nil, fmt.Errorf("%w: %s", ErrClaimPathNotFound, path)
+		}
+
+		return value, nil
+	}
+
+	return nil, fmt.Errorf("%w: %s", ErrInvalidClaimStructure, strings.Join(parts[:index+1], "."))
+}
+
+func navigateNestedStructure(current any, part, _ string, _ []string, _ int) any {
+	if m, ok := current.(map[string]any); ok {
+		return m[part]
+	}
+
+	if m, ok := current.(jwt.MapClaims); ok {
+		return m[part]
+	}
+
+	return nil
+}

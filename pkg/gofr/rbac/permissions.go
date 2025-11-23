@@ -10,8 +10,11 @@ import (
 )
 
 var (
-	// ErrPermissionDenied is returned when a user doesn't have required permission
+	// ErrPermissionDenied is returned when a user doesn't have required permission.
 	ErrPermissionDenied = errors.New("forbidden: permission denied")
+
+	// errNoPermissionMapping is returned when no permission mapping is found for a route.
+	errNoPermissionMapping = errors.New("no permission mapping found")
 )
 
 // PermissionConfig holds permission-based access control configuration.
@@ -63,7 +66,8 @@ func GetRequiredPermission(method, route string, config *PermissionConfig) (stri
 		if config != nil && config.DefaultPermission != "" {
 			return config.DefaultPermission, nil
 		}
-		return "", fmt.Errorf("no permission mapping found for %s %s", method, route)
+
+		return "", fmt.Errorf("no permission mapping found for %s %s: %w", method, route, errNoPermissionMapping)
 	}
 
 	// Try exact match: "GET /api/users"
@@ -84,15 +88,18 @@ func GetRequiredPermission(method, route string, config *PermissionConfig) (stri
 		return config.DefaultPermission, nil
 	}
 
-	return "", fmt.Errorf("no permission mapping found for %s %s", method, route)
+	return "", fmt.Errorf("no permission mapping found for %s %s: %w", method, route, errNoPermissionMapping)
 }
 
 // matchesRoutePattern checks if a route pattern matches the given method and route.
-// Supports wildcards: "GET /api/*" matches "GET /api/users"
+// Supports wildcards: "GET /api/*" matches "GET /api/users".
 func matchesRoutePattern(pattern, method, route string) bool {
 	// Split pattern into method and path
-	parts := strings.SplitN(pattern, " ", 2)
-	if len(parts) != 2 {
+	const expectedParts = 2
+
+	parts := strings.SplitN(pattern, " ", expectedParts)
+
+	if len(parts) != expectedParts {
 		return false
 	}
 
@@ -106,6 +113,7 @@ func matchesRoutePattern(pattern, method, route string) bool {
 
 	// Use path/filepath.Match for path pattern matching
 	matched, _ := path.Match(patternPath, route)
+
 	return matched
 }
 
@@ -133,28 +141,8 @@ func CheckPermission(req *http.Request, config *PermissionConfig) error {
 // RequirePermission wraps a handler to require a specific permission.
 // Note: For GoFr applications, use gofr.RequirePermission() instead for better type safety.
 func RequirePermission(requiredPermission string, config *PermissionConfig, handlerFunc HandlerFunc) HandlerFunc {
-	return func(ctx interface{}) (any, error) {
-		type contextValueGetter interface {
-			Value(key interface{}) interface{}
-		}
-
-		var reqCtx context.Context
-		if ctxWithValue, ok := ctx.(contextValueGetter); ok {
-			// Try to extract context.Context from GoFr context
-			if gofrCtx, ok := ctx.(interface{ Context() context.Context }); ok {
-				reqCtx = gofrCtx.Context()
-			} else {
-				// Fallback: create a context with role value
-				roleVal := ctxWithValue.Value(userRole)
-				if roleVal != nil {
-					reqCtx = context.WithValue(context.Background(), userRole, roleVal)
-				} else {
-					reqCtx = context.Background()
-				}
-			}
-		} else {
-			reqCtx = context.Background()
-		}
+	return func(ctx any) (any, error) {
+		reqCtx := extractContextFromCtx(ctx)
 
 		if !HasPermission(reqCtx, requiredPermission, config) {
 			return nil, ErrPermissionDenied
@@ -164,3 +152,27 @@ func RequirePermission(requiredPermission string, config *PermissionConfig, hand
 	}
 }
 
+// extractContextFromCtx extracts context.Context from the given context value.
+func extractContextFromCtx(ctx any) context.Context {
+	type contextValueGetter interface {
+		Value(key any) any
+	}
+
+	ctxWithValue, ok := ctx.(contextValueGetter)
+	if !ok {
+		return context.Background()
+	}
+
+	// Try to extract context.Context from GoFr context
+	if gofrCtx, ok := ctx.(interface{ Context() context.Context }); ok {
+		return gofrCtx.Context()
+	}
+
+	// Fallback: create a context with role value
+	roleVal := ctxWithValue.Value(userRole)
+	if roleVal != nil {
+		return context.WithValue(context.Background(), userRole, roleVal)
+	}
+
+	return context.Background()
+}

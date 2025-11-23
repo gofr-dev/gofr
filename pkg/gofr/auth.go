@@ -185,7 +185,7 @@ func (a *App) EnableRBACWithHotReload(permissionsFile string, roleExtractor rbac
 	config := loader.GetConfig()
 	config.RoleExtractorFunc = roleExtractor
 	config.Logger = a.container.Logger // Audit logging is automatically enabled when Logger is set
-	config.RequiresContainer = false // Header-based extraction doesn't need container
+	config.RequiresContainer = false   // Header-based extraction doesn't need container
 
 	// Don't pass container for header-based RBAC (container not needed)
 	a.httpServer.router.Use(rbac.Middleware(config))
@@ -194,10 +194,11 @@ func (a *App) EnableRBACWithHotReload(permissionsFile string, roleExtractor rbac
 // RequireRole wraps a handler to require a specific role.
 // This is a convenience wrapper that works with GoFr's Handler type.
 func RequireRole(allowedRole string, handlerFunc Handler) Handler {
-	rbacHandler := rbac.RequireRole(allowedRole, func(ctx interface{}) (any, error) {
+	rbacHandler := rbac.RequireRole(allowedRole, func(ctx any) (any, error) {
 		if gofrCtx, ok := ctx.(*Context); ok {
 			return handlerFunc(gofrCtx)
 		}
+
 		return nil, rbac.ErrAccessDenied
 	})
 
@@ -209,10 +210,11 @@ func RequireRole(allowedRole string, handlerFunc Handler) Handler {
 // RequireAnyRole wraps a handler to require any of the specified roles.
 // This is a convenience wrapper that works with GoFr's Handler type.
 func RequireAnyRole(allowedRoles []string, handlerFunc Handler) Handler {
-	rbacHandler := rbac.RequireAnyRole(allowedRoles, func(ctx interface{}) (any, error) {
+	rbacHandler := rbac.RequireAnyRole(allowedRoles, func(ctx any) (any, error) {
 		if gofrCtx, ok := ctx.(*Context); ok {
 			return handlerFunc(gofrCtx)
 		}
+
 		return nil, rbac.ErrAccessDenied
 	})
 
@@ -225,10 +227,11 @@ func RequireAnyRole(allowedRoles []string, handlerFunc Handler) Handler {
 // This works with permission-based access control.
 // The permissionConfig must be set in the RBAC config.
 func RequirePermission(requiredPermission string, permissionConfig *rbac.PermissionConfig, handlerFunc Handler) Handler {
-	rbacHandler := rbac.RequirePermission(requiredPermission, permissionConfig, func(ctx interface{}) (any, error) {
+	rbacHandler := rbac.RequirePermission(requiredPermission, permissionConfig, func(ctx any) (any, error) {
 		if gofrCtx, ok := ctx.(*Context); ok {
 			return handlerFunc(gofrCtx)
 		}
+
 		return nil, rbac.ErrPermissionDenied
 	})
 
@@ -264,6 +267,7 @@ func (a *App) EnableRBACWithPermissions(config *rbac.Config, roleExtractor rbac.
 
 	config.RoleExtractorFunc = roleExtractor
 	config.EnablePermissions = true
+
 	if config.Logger == nil {
 		config.Logger = a.container.Logger // Audit logging is automatically enabled when Logger is set
 	}
@@ -302,7 +306,7 @@ func (a *App) EnableRBACWithPermissions(config *rbac.Config, roleExtractor rbac.
 //
 //	app.EnableOAuth("https://auth.example.com/.well-known/jwks.json", 10)
 //	app.EnableRBACWithJWT("configs/rbac.json", "role")
-func (a *App) EnableRBACWithJWT(permissionsFile string, roleClaim string) {
+func (a *App) EnableRBACWithJWT(permissionsFile, roleClaim string) {
 	config, err := rbac.LoadPermissions(permissionsFile)
 	if err != nil {
 		a.container.Errorf("Failed to load RBAC permissions: %v. Proceeding without RBAC", err)
@@ -313,7 +317,7 @@ func (a *App) EnableRBACWithJWT(permissionsFile string, roleClaim string) {
 	jwtExtractor := rbac.NewJWTRoleExtractor(roleClaim)
 	config.RoleExtractorFunc = jwtExtractor.ExtractRole
 	config.Logger = a.container.Logger // Audit logging is automatically enabled when Logger is set
-	config.RequiresContainer = false // JWT-based extraction doesn't need container
+	config.RequiresContainer = false   // JWT-based extraction doesn't need container
 
 	// Don't pass container for JWT-based RBAC (container not needed)
 	a.httpServer.router.Use(rbac.Middleware(config))

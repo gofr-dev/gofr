@@ -6,13 +6,19 @@ import (
 	"time"
 )
 
+const (
+	// cleanupIntervalDivisor determines how often cleanup runs relative to TTL.
+	// Cleanup runs at TTL / cleanupIntervalDivisor.
+	cleanupIntervalDivisor = 2
+)
+
 // RoleCache caches role lookups to improve performance.
 type RoleCache struct {
-	cache      map[string]cachedRole
-	mu         sync.RWMutex
-	ttl        time.Duration
-	cleanupCh  chan struct{}
-	cleanupWg  sync.WaitGroup
+	cache     map[string]cachedRole
+	mu        sync.RWMutex
+	ttl       time.Duration
+	cleanupCh chan struct{}
+	cleanupWg sync.WaitGroup
 }
 
 type cachedRole struct {
@@ -31,6 +37,7 @@ func NewRoleCache(ttl time.Duration) *RoleCache {
 	// Start cleanup goroutine only if TTL > 0
 	if ttl > 0 {
 		cache.cleanupWg.Add(1)
+
 		go cache.cleanup()
 	}
 
@@ -87,19 +94,22 @@ func (c *RoleCache) Clear() {
 func (c *RoleCache) cleanup() {
 	defer c.cleanupWg.Done()
 
-	ticker := time.NewTicker(c.ttl / 2) // Cleanup twice as often as TTL
+	ticker := time.NewTicker(c.ttl / cleanupIntervalDivisor)
 	defer ticker.Stop()
 
 	for {
 		select {
 		case <-ticker.C:
 			c.mu.Lock()
+
 			now := time.Now()
+
 			for key, cached := range c.cache {
 				if now.After(cached.expiresAt) {
 					delete(c.cache, key)
 				}
 			}
+
 			c.mu.Unlock()
 
 		case <-c.cleanupCh:
@@ -116,6 +126,7 @@ func (c *RoleCache) Stop() {
 	default:
 		close(c.cleanupCh)
 	}
+
 	c.cleanupWg.Wait()
 }
 
@@ -125,7 +136,7 @@ type CacheKeyGenerator func(req *http.Request) string
 // DefaultCacheKeyGenerator generates cache keys from user ID or API key.
 func DefaultCacheKeyGenerator(req *http.Request) string {
 	// Try to get user ID from various sources
-	if userID := req.Header.Get("X-User-ID"); userID != "" {
+	if userID := req.Header.Get("X-User-Id"); userID != "" {
 		return "rbac:user:" + userID
 	}
 
@@ -136,4 +147,3 @@ func DefaultCacheKeyGenerator(req *http.Request) string {
 	// Fallback to remote address (less ideal)
 	return "rbac:ip:" + req.RemoteAddr
 }
-

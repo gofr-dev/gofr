@@ -7,15 +7,16 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-// mockContextValueGetter implements ContextValueGetter interface for testing
+// mockContextValueGetter implements ContextValueGetter interface for testing.
 type mockContextValueGetter struct {
-	value func(key interface{}) interface{}
+	value func(key any) any
 }
 
-func (m *mockContextValueGetter) Value(key interface{}) interface{} {
+func (m *mockContextValueGetter) Value(key any) any {
 	if m.value != nil {
 		return m.value(key)
 	}
+
 	return nil
 }
 
@@ -35,7 +36,7 @@ func TestHasRole(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			ctx := &mockContextValueGetter{
-				value: func(key interface{}) interface{} {
+				value: func(key any) any {
 					if key == userRole {
 						return tt.ctxRoleVal
 					}
@@ -52,7 +53,7 @@ func TestHasRole(t *testing.T) {
 func TestGetUserRole(t *testing.T) {
 	expectedRole := "editor"
 	ctx := &mockContextValueGetter{
-		value: func(key interface{}) interface{} {
+		value: func(key any) any {
 			if key == userRole {
 				return expectedRole
 			}
@@ -65,7 +66,7 @@ func TestGetUserRole(t *testing.T) {
 
 	// Test no role set should return ""
 	emptyCtx := &mockContextValueGetter{
-		value: func(key interface{}) interface{} {
+		value: func(_ any) any {
 			return nil
 		},
 	}

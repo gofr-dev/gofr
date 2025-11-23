@@ -6,7 +6,7 @@ import (
 )
 
 // RoleHierarchy manages role inheritance relationships.
-// Example: admin > editor > author > viewer
+// Example: admin > editor > author > viewer.
 type RoleHierarchy struct {
 	// hierarchy maps roles to their inherited roles
 	// Example: "admin": ["editor", "author", "viewer"]
@@ -132,4 +132,3 @@ func IsRoleAllowedWithHierarchy(role, route string, config *Config, hierarchy *R
 
 	return false
 }
-
