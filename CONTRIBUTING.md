@@ -61,7 +61,6 @@ func TestFunctionName(t *testing.T) {
 docker run --name mongodb -d -p 27017:27017 -e MONGO_INITDB_ROOT_USERNAME=user -e MONGO_INITDB_ROOT_PASSWORD=password mongodb/mongodb-community-server:latest
 docker run -d -p 21:21 -p 21000-21010:21000-21010 -e USERS='user|password' delfer/alpine-ftp-server
 
-
 # the docker image is relatively unstable. Alternatively, refer to official guide of OpenTSDB to locally setup OpenTSDB env.
 # http://opentsdb.net/docs/build/html/installation.html#id1
 docker run -d --name gofr-opentsdb -p 4242:4242 petergrace/opentsdb-docker:latest
