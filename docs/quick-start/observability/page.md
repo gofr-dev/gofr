@@ -15,80 +15,99 @@ Log Level can be changed by setting the environment variable `LOG_LEVEL` value t
 When the GoFr server runs, it prints a log for reading configs, database connection, requests, database queries, missing configs, etc.
 They contain information such as request's correlation ID, status codes, request time, etc.
 
-The following table outlines the specific significance of each log level and provides guidelines on when to use them effectively:
-
-{% table %}
-
-- Levels
-- Color
-- Description
-- When to use
-
----
-
-- DEBUG 
-- `Grey`
-- extremely detailed or low-priority details for development.
-- Variable values, loop steps, raw payloads, etc.
-
----
-
-- INFO
-- `Cyan`
-- Standard operational events indicating system health.
-- Server startup confirmation, successful requests, and routine health checks, etc.
-
----
-
-- NOTICE
-- `Yellow`
-- Normal but distinct conditions requiring attention.
-- Configuration updates, significant state changes, or system initialization events, etc.
-
-
----
-
-- WARN 
-- `Yellow`
-- Potential issues handled gracefully without system failure.
-- Deprecated API calls, connection retries, or approaching resource limits, etc.
-
----
-
-- ERROR 
-- `Red`
-- Failure of specific requests or operations.
-- Database connection failures, 4xx/5xx responses, or internal logic errors, etc.
-
----
-
-- FATAL 
-- `Red`
-- Critical system failures forcing immediate shutdown.
-- Missing required configuration or port binding failures preventing startup, etc.
-
-{% /table %}
-
----
-
 ### DEBUG
-This is the lowest priority level (Integer value: 1). It represents the most detailed information.
+This is the lowest priority level (Integer value: 1). It represents the most detailed/granual information.
 
-**Example Snippet-**
+**Color -** Grey
+
+
+#### **Usage Examples:**
+
+***1. Variable States and Intermediate Values -***
+It allows developers to verify that calculations, data transformations, and state changes are occurring exactly as intended before the final result is produced.
+
+**Code Example**
+	
 ```Go
-// Example: Checking a variable inside a loop
-// Assuming i = 5 and item.Value = 42
-logger.Debug("Processing item index:", i, "Value:", item.Value)
+// Context: Calculating a discount inside a shopping cart function
+originalPrice := 150.00
+discountRate := 0.20 // 20%
+tax := 1.05          // 5% tax
+
+logger.Debug("Calc trace - Price:", originalPrice, "Discount:", discountRate, "Tax Multiplier:", tax)
+
 ```
-**Output-**
+
+**Output**
 ```Console
-DEBU [14:05:01] [Processing item index: 5 Value: 42]
+
+DEBU [10:15:01] Calc trace - Price: 150 Discount: 0.2 Tax Multiplier: 1.05
 ```
+
+***2. Control Flow and Loop Iterations -***
+ Conditional logic (if/else statements), and the step-by-step progress of iterative loops.
+
+**Code Example**
+
+```Go
+// Context: Processing a batch of user IDs
+userIds := []int{101, 102, 103}
+
+logger.Debug("Starting batch processing for", len(userIds), "users")
+
+for i, id := range userIds {
+	logger.Debug("Loop step", i, "- Processing User ID:", id)
+}
+```
+**Output**
+```Console
+DEBU [10:15:02] Starting batch processing for 3 users
+DEBU [10:15:02] Loop step 0 - Processing User ID: 101
+DEBU [10:15:02] Loop step 1 - Processing User ID: 102
+DEBU [10:15:02] Loop step 2 - Processing User ID: 103
+```
+
+***3. Raw Data Payloads,Initialization and Database Internals -*** Used to debug API integrations, Initialization, Processing.
+
+**Code Example**
+```Go
+// 1. Resource Initialization (Startup)
+logger.Debug("[Init] Loading config from ./config.yaml")
+
+// 2. Raw Data Payload (Input)
+data := `{"id": 42, "role": "admin"}`
+logger.Debug("[Payload] Received raw body:", data)
+
+// 3. Database Internals (Processing)
+query := fmt.Sprintf("SELECT * FROM users WHERE id=%d", 42)
+logger.Debug("[SQL] Generated Query:", query)
+```
+**Output**
+```Console
+DEBU [10:15:05] [Init] Loading config from ./config.yaml
+DEBU [10:15:05] [Payload] Received raw body: {"id": 42, "role": "admin"}
+DEBU [10:15:05] [SQL] Generated Query: SELECT * FROM users WHERE id=42
+```
+
+#### **Examples of when Not to Use:**
+
+
+***1. Avoid Logging Critical Business Data:*** Do not utilize `DEBUG` for audit trails or essential transaction records. In production environments, this level is typically suppressed to optimize performance, resulting in the loss of critical business insights.
+
+***2. Prohibit PII Logging:*** Strictly avoid logging Personally Identifiable Information (PII) or credentials (e.g., passwords, tokens)As `DEBUG` is frequently used for raw variable dumps, there is a high risk of exposing sensitive data in plain text
+
 ---
 ### INFO
 Represents standard operational events (Integer value: 2). It is the default fallback level if an unknown level string is provided.
 
-**Example Snippet-**
+**Color -** Cyan
+
+#### **Usage Examples:**
+
+***1. Server Starting -*** Initiating the application boot sequence and binding to the configured network ports.
+
+
+**Code Example**
 ```Go
 // Example: Server startup confirmation
 logger.Info("Server started successfully on port 8000")
@@ -97,13 +116,57 @@ logger.Info("Server started successfully on port 8000")
 ```Console
 INFO [14:05:02] Server started successfully on port 8000
 ```
+***2. Job Completed -*** The scheduled background task has successfully finished execution and released all locked resources.
 
+
+**Code Example**
+```Go
+// Context: A background data export job has finished successfully
+jobID := "EXP-2024-88"
+recordsProcessed := 5000
+duration := "1.2s"
+
+logger.Info("Data export job completed successfully",
+	"JobID", jobID, 
+    "Records", recordsProcessed, 
+    "Duration", duration)
+```
+**Output**
+```Console
+INFO [14:20:05] Data export job completed successfully JobID: EXP-2024-88 Records: 5000 Duration: 1.2s
+```
+
+***3. Health Check Passed -*** Routine diagnostic monitoring confirms that all system services are active and responding within normal parameters.
+
+
+**Code Example**
+```Go
+// Log an INFO level message with a key-value pair
+logger.Info("Health Check Passed")
+```
+**Output**
+```Console
+INFO [14:05:02] Health Check Passed
+```
+
+#### **Examples of when not to use**
+
+***1. Do Not Use for Exceptions:*** Refrain from using this level for error conditions.`INFO` logs are routed to standard output (`stdout`), causing them to be potentially overlooked by monitoring tools specifically configured to capture standard error (`stderr`) streams.
+
+***2. Avoid High-Frequency Saturation:*** 
+Do not emit `INFO` logs within tight loops or data-intensive processing blocks. Excessive logging at this level can rapidly saturate storage and obscure significant operational events with noise.
 ---
 
 ### NOTICE
-A level higher than INFO but lower than WARN (Integer value: 3). It shares the same visual prominence as a Warning but implies a "normal" condition rather than a problem.
+A level higher than `INFO` but lower than `WARN` (Integer value: 3). It shares the same visual prominence as a Warning but implies a "normal" condition rather than a problem. in simple words its used for events that are normal but rare and significant.
 
-**Example Snippet-**
+**Color -** Yellow
+
+#### **Usage Examples:**
+
+***1. Configuration Reloaded -*** System settings have been hot-swapped dynamically without requiring a full application restart.
+
+**Code Example**
 ```Go
 // Example: Configuration update
 logger.Notice("Configuration hot-reload triggered by system admin")
@@ -112,51 +175,229 @@ logger.Notice("Configuration hot-reload triggered by system admin")
 ```Console
 NOTI [14:05:03] Configuration hot-reload triggered by system admin
 ```
+***2. Switching to Secondary Database -*** Primary node connectivity was lost, so traffic is being automatically rerouted to the replica instance to maintain uptime.
+
+
+**Code Example**
+```Go
+// Using the classic logger to manually tag the level
+logger.Notice("Switching to Secondary Database")
+```
+**Output**
+```Console
+NOTI [14:52:00] Switching to Secondary Database
+```
+
+***3. Cache Cleared -*** The in-memory data store has been purged to ensure subsequent requests fetch fresh data directly from the source.
+
+
+**Code Example**
+```Go
+logger.Notice("Cache Cleared")
+```
+**Output**
+```Console
+NOTI [14:52:00] Cache Cleared
+```
+
+#### **Examples of when not to use**
+
+***1. Misclassification of Failures:*** Do not utilize this level for error scenarios. `NOTICE` semantically implies a healthy system state; using it for failures creates ambiguity regarding system health.
+
+***2. Avoid Routine Operations:*** 
+Do not apply this level to standard, high-volume request logs. `NOTICE `should be reserved for distinct, infrequent state changes rather than repetitive per-request activities.
 
 ---
 
 ### WARN
-Indicates a potential issue that does not stop the application (Integer value: 4).
+it's Used when an anomaly had occurred, but the application recovered or continued execution.
 
-**Example Snippet-**
+**Color -** Yellow
+
+#### **Usage Examples:**
+
+***1. Retrying database connection -*** Temporary connectivity loss detected. initiating an exponential backoff strategy to re-establish the link.
+
+**Code Example**
 ```Go
 // Example: Retrying a connection
 logger.Warn("Database connection timeout. Retrying in 2 seconds... (Attempt 1/3)")
 ```
-**Output-**
+**Output**
 ```Console
 WARN [14:05:04] Database connection timeout. Retrying in 2 seconds... (Attempt 1/3)
 ```
+***2. Using fallback values -*** The external configuration service is unreachable, so the system is defaulting to hardcoded safe parameters to continue operation.
+
+
+**Code Example**
+```Go
+logger.Warn("Timeout config not found. Using fallback: 30s")
+```
+**Output**
+```Console
+WARN [14:55:00] Timeout config not found. Using fallback: 30s
+```
+
+***3. Deprecated API usage -*** The application is calling an obsolete function or endpoint that will be removed in future versions; code migration is required.
+
+
+**Code Example**
+```Go
+logger.Warn("Deprecated API usage detected: /v1/login")
+```
+**Output**
+```Console
+WARN [14:56:00] Deprecated API usage detected: /v1/login
+```
+
+#### **Examples of when not to use**
+
+***1. Do Not Use for Definitive Failures:*** If a specific request or operation fails completely, do not categorize it as a `WARN`. This level implies the system "survived" or handled the issue gracefully; unrecoverable failures should be logged as `ERROR`.
+
+***2. Avoid Precautionary Logging:*** 
+Do not log warnings for standard behaviors or expected redundancies (false positives). Overuse desensitizes operators to genuine alerts.
+
 
 ---
 
 ### ERROR
-Indicates a failure event (Integer value: 5). Crucially, this level changes the output destination to the error stream.
+Indicates a failure event (Integer value: 5).This level routes logs to `stderr` (Standard Error), ensuring visibility to error tracking tools.
 
-**Example Snippet-**
+**Color -** Red
+
+#### **Usage Examples:**
+
+***1. database timeouts -*** The database query exceeded the maximum execution time limit and was forcibly cancelled to prevent resource exhaustion.
+
+**Code Example**
 ```Go
-// Example: Database query failure
-logger.Error("Failed to fetch user profile: database connection refused")
+// Context: A complex query exceeds the defined execution time limit
+// Simulating a context deadline exceeded error
+err := context.DeadlineExceeded
+
+if err != nil {
+    logger.Error("DB Query Timeout: Analytics fetch took > 3000ms. Canceling operation.")
+}
 ```
-**Output-**
+**Output**
 ```Console
-ERRO [14:05:05] Failed to fetch user profile: database connection refused
+ERRO [10:20:01] DB Query Timeout: Analytics fetch took > 3000ms. Canceling operation.
 ```
+***2. 500 Internal Server Errors -*** An unexpected condition was encountered on the server side that prevented it from fulfilling the incoming request.
+
+
+**Code Example**
+```Go
+// Context: An API endpoint fails to process a request due to a downstream failure
+err := processPayment() // returns error: "gateway unreachable"
+
+if err != nil {
+    // We send a generic 500 to the user, but log the specific error internally
+    logger.Error("HTTP 500 Response: Payment gateway unreachable. Request ID: req_99")
+}
+```
+**Output**
+```Console
+ERRO [10:20:02] HTTP 500 Response: Payment gateway unreachable. Request ID: req_99
+```
+
+***3. null pointer exceptions -*** The code attempted to dereference a memory address that does not point to a valid object, causing a runtime panic.
+
+
+**Code Example**
+```Go
+// Context: Preventing a panic by checking if a struct is nil before accessing it
+var userProfile *User // This is currently nil
+
+if userProfile == nil {
+    logger.Error("Runtime Safety: Attempted to access methods on a nil 'User' object. Skipping.")
+}
+```
+**Output**
+```Console
+ERRO [10:20:03] Runtime Safety: Attempted to access methods on a nil 'User' object. Skipping.
+```
+
+#### **Examples of when not to use**
+
+***1. Inappropriate for System-Wide Crashes:*** Do not use `ERROR` for unrecoverable startup failures that render the application non-functional (e.g., missing critical configuration). Such dependencies must be handled via `FATAL` to ensure immediate process termination
+
+***2. Avoid Logging Client-Side Validation as System Errors*** 
+Exercise caution when logging user input errors (e.g., `400 Bad Request`). Classifying routine client-side validation failures as system ERRORs creates noise in alerting systems; `INFO` or `WARN` is often more
 
 ---
 
 ### FATAL
-The highest priority level (Integer value: 6). It represents a critical system failure.
+The highest priority level (Integer value: 6). It represents a critical system failures where the application cannot function.
 
-**Example Snippet-**
+**Color -** Red
+
+#### **Usage Examples:**
+
+***1. Port already in use -*** The application failed to bind to the network socket because another process is currently listening on the specified port.
+
+**Code Example**
 ```Go
-// Example: Missing critical config
-logger.Fatal("CRITICAL: DATABASE_PASSWORD environment variable is not set. Exiting.")
+// Context: The web server attempts to start, but the port is occupied
+port := ":8080"
+err := http.ListenAndServe(port, nil)
+
+if err != nil {
+    // The application cannot run without a network listener, so we crash
+    logger.Fatal("Network Bind Failure: Port 8080 is already in use by another process.")
+}
 ```
-**Output-**
+**Output**
 ```Console
-FATA [14:05:06] CRITICAL: DATABASE_PASSWORD environment variable is not set. Exiting.
+FATA [10:30:01] Network Bind Failure: Port 8080 is already in use by another process.
 ```
+***2. Missing encryption keys -*** Essential security credentials required for signing tokens or encrypting data are absent from the environment variables.
+
+
+**Code Example**
+```Go
+// Context: Checking environment variables for security keys before starting
+jwtKey := os.Getenv("JWT_PRIVATE_KEY")
+
+if jwtKey == "" {
+    // We cannot start the app insecurely, so we force a shutdown
+    logger.Fatal("SECURITY CRITICAL: Missing encryption keys. JWT_PRIVATE_KEY is empty.")
+}
+```
+**Output**
+```Console
+FATA [10:30:02] SECURITY CRITICAL: Missing encryption keys. JWT_PRIVATE_KEY is empty.
+```
+
+***3. Cannot connect to primary database on startup -*** The application is aborting the boot sequence because it cannot establish an initial connection to the required data store.
+
+
+**Code Example**
+```Go
+// Context: Initial "Ping" to the database during the boot sequence
+err := db.Ping()
+
+if err != nil {
+    // Unlike a runtime error, if the DB is gone at startup, the app is useless
+    logger.Fatal("Boot Failure: Cannot connect to primary database. Connection refused.")
+}
+```
+**Output**
+```Console
+FATA [10:30:03] Boot Failure: Cannot connect to primary database. Connection refused.
+```
+
+#### **Examples when not to use**
+
+***1. Strictly Prohibited During Request Handling:*** Never invoke `FATAL` during runtime request processing. This method executes `os.Exit(1)`, causing the entire server instance to terminate immediately. Using this for a runtime error (like a failed SQL query) causes a complete service outage rather than a single request failure.
+
+
+---
+> **Note:** Performance & Log Volume.
+>1. Early Exit Optimization: The logger implements an "Early Exit" strategy. If the incoming log level is lower than the configured `LOG_LEVEL`, the function returns immediately before performing any formatting or allocation.
+>2. Locking Overhead: The terminal output utilizes a mutex lock to ensure thread safety.
+
 ---
 
 {% figure src="/quick-start-logs.png" alt="Pretty Printed Logs" /%}
