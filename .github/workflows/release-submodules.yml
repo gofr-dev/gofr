@@ -1,0 +1,80 @@
+name: Release submodules after GoFr release
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: write
+
+jobs:
+  detect-and-dispatch:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout GoFr repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Identify current & previous tags
+        run: |
+          CUR_TAG="${{ github.event.release.tag_name }}"
+          PREV_TAG=$(git tag --sort=-creatordate | sed -n '2p' || echo "")
+          echo "CUR_TAG=$CUR_TAG" >> $GITHUB_ENV
+          echo "PREV_TAG=$PREV_TAG" >> $GITHUB_ENV
+
+      - name: Detect changed files since previous tag
+        id: changes
+        run: |
+          if [ -z "$PREV_TAG" ]; then
+            git ls-tree -r --name-only HEAD > changed.txt
+          else
+            git diff --name-only "$PREV_TAG" "$CUR_TAG" > changed.txt
+          fi
+          cat changed.txt
+
+      - name: Determine changed submodules
+        id: submodules
+        run: |
+          cat > submodule_map.txt << 'EOF'
+pkg/datasources   gofr-dev/datasources
+pkg/logging       gofr-dev/logging
+EOF
+
+          touched_dirs=$(awk -F/ '{print $1"/"$2}' changed.txt | sort -u)
+
+          repos=""
+          new_modules=""
+
+          while read -r dir; do
+            repo=$(awk -v d="$dir" '$1==d {print $2}' submodule_map.txt)
+            if [ -n "$repo" ]; then
+              repos="$repos $repo"
+            else
+              new_modules="$new_modules $dir"
+            fi
+          done <<< "$touched_dirs"
+
+          echo "repos_to_dispatch=$repos" >> $GITHUB_OUTPUT
+          echo "new_modules=$new_modules" >> $GITHUB_OUTPUT
+
+      - name: Trigger dispatch to changed submodule repos
+        if: steps.submodules.outputs.repos_to_dispatch != ''
+        run: |
+          for repo in ${{ steps.submodules.outputs.repos_to_dispatch }}; do
+            curl -X POST \
+              -H "Accept: application/vnd.github+json" \
+              -H "Authorization: Bearer ${{ secrets.DISPATCH_TOKEN }}" \
+              https://api.github.com/repos/${repo}/dispatches \
+              -d '{"event_type": "gofr-parent-release", "client_payload": {"tag": "'"${{ env.CUR_TAG }}"'"}}'
+          done
+
+      - name: Trigger website workflow for NEW modules
+        if: steps.submodules.outputs.new_modules != ''
+        run: |
+          curl -X POST \
+            -H "Accept: application/vnd.github+json" \
+            -H "Authorization: Bearer ${{ secrets.DISPATCH_TOKEN }}" \
+            https://api.github.com/repos/gofr-dev/website/dispatches \
+            -d '{"event_type": "new-submodule-added", "client_payload": {"tag": "'"${{ env.CUR_TAG }}"'"}}'
