@@ -214,19 +214,30 @@ func TestNewConfigLoader_WithHotReload(t *testing.T) {
 	err = os.WriteFile(tempFile.Name(), []byte(newContent), 0o600)
 	require.NoError(t, err)
 
+	// Sync to ensure file system updates modification time
+	file, err := os.OpenFile(tempFile.Name(), os.O_WRONLY, 0o600)
+	if err == nil {
+		_ = file.Sync()
+		file.Close()
+	}
+
+	// Small delay to ensure file system has updated modification time
+	time.Sleep(50 * time.Millisecond)
+
 	// Wait for reload with retries (CI environments may be slower)
 	var reloadedConfig *Config
 
-	for i := 0; i < 10; i++ {
+	for i := 0; i < 20; i++ {
 		time.Sleep(100 * time.Millisecond)
 
 		reloadedConfig = loader.GetConfig()
-		if len(reloadedConfig.RouteWithPermissions["admin"]) == 2 {
+		if reloadedConfig != nil && len(reloadedConfig.RouteWithPermissions["admin"]) == 2 {
 			break
 		}
 	}
 
 	// Check if config was reloaded
+	require.NotNil(t, reloadedConfig, "Config should not be nil")
 	require.Equal(t, []string{"read", "write"}, reloadedConfig.RouteWithPermissions["admin"])
 
 	loader.Stop()

@@ -1,6 +1,8 @@
 package rbac
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -199,6 +201,7 @@ type ConfigLoader struct {
 	config   *Config
 	mu       sync.RWMutex
 	lastMod  time.Time
+	lastHash string
 	interval time.Duration
 	stopCh   chan struct{}
 	logger   logging.Logger
@@ -222,10 +225,18 @@ func NewConfigLoaderWithLogger(path string, reloadInterval time.Duration, logger
 		return nil, err
 	}
 
+	// Calculate initial file hash
+	fileHash, err := calculateFileHash(path)
+	if err != nil {
+		// If hash calculation fails, fall back to modification time
+		fileHash = ""
+	}
+
 	loader := &ConfigLoader{
 		path:     path,
 		config:   config,
 		lastMod:  info.ModTime(),
+		lastHash: fileHash,
 		interval: reloadInterval,
 		stopCh:   make(chan struct{}),
 		logger:   logger,
@@ -259,15 +270,25 @@ func (l *ConfigLoader) Reload() error {
 		return err
 	}
 
+	// Calculate file hash
+	fileHash, err := calculateFileHash(l.path)
+	if err != nil {
+		// If hash calculation fails, use empty string (will still work with mod time)
+		fileHash = ""
+	}
+
 	l.mu.Lock()
 	l.config = config
 	l.lastMod = info.ModTime()
+	l.lastHash = fileHash
 	l.mu.Unlock()
 
 	return nil
 }
 
 // reloadLoop periodically checks for file changes and reloads if needed.
+//
+//nolint:gocognit,gocyclo // complexity is acceptable for this function
 func (l *ConfigLoader) reloadLoop() {
 	ticker := time.NewTicker(l.interval)
 	defer ticker.Stop()
@@ -280,7 +301,31 @@ func (l *ConfigLoader) reloadLoop() {
 				continue
 			}
 
-			if info.ModTime().After(l.lastMod) {
+			// Read lastMod and lastHash with lock for thread safety
+			l.mu.RLock()
+			lastMod := l.lastMod
+			lastHash := l.lastHash
+			l.mu.RUnlock()
+
+			// Check if file was modified using both modification time and content hash.
+			// This is more reliable than just using modification time.
+			fileHash, err := calculateFileHash(l.path)
+			//nolint:nestif // nested if is acceptable here for clarity
+			if err != nil {
+				// If hash calculation fails, fall back to modification time
+				if info.ModTime().After(lastMod) {
+					if err := l.Reload(); err != nil {
+						if l.logger != nil {
+							l.logger.Errorf("[RBAC] Failed to reload config: %v", err)
+						}
+					}
+				}
+
+				continue
+			}
+
+			// Reload if hash changed (most reliable) or modification time changed (fallback)
+			if fileHash != lastHash || info.ModTime().After(lastMod) {
 				if err := l.Reload(); err != nil {
 					// Log error but continue
 					if l.logger != nil {
@@ -292,6 +337,18 @@ func (l *ConfigLoader) reloadLoop() {
 			return
 		}
 	}
+}
+
+// calculateFileHash calculates SHA256 hash of file content.
+func calculateFileHash(path string) (string, error) {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return "", err
+	}
+
+	hash := sha256.Sum256(data)
+
+	return hex.EncodeToString(hash[:]), nil
 }
 
 // Stop stops the hot-reload loop.
