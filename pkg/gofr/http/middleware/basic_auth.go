@@ -1,6 +1,7 @@
 package middleware
 
 import (
+	"crypto/subtle"
 	"encoding/base64"
 	"errors"
 	"net/http"
