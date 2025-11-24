@@ -34,7 +34,7 @@ originalPrice := 150.00
 discountRate := 0.20 // 20%
 tax := 1.05          // 5% tax
 
-logger.Debug("Calc trace - Price:", originalPrice, "Discount:", discountRate, "Tax Multiplier:", tax)
+ctx.Debug("Calc trace - Price:", originalPrice, "Discount:", discountRate, "Tax Multiplier:", tax)
 
 ```
 
@@ -53,10 +53,10 @@ DEBU [10:15:01] Calc trace - Price: 150 Discount: 0.2 Tax Multiplier: 1.05
 // Context: Processing a batch of user IDs
 userIds := []int{101, 102, 103}
 
-logger.Debug("Starting batch processing for", len(userIds), "users")
+ctx.Debug("Starting batch processing for", len(userIds), "users")
 
 for i, id := range userIds {
-	logger.Debug("Loop step", i, "- Processing User ID:", id)
+	ctx.Debug("Loop step", i, "- Processing User ID:", id)
 }
 ```
 **Output**
@@ -72,15 +72,15 @@ DEBU [10:15:02] Loop step 2 - Processing User ID: 103
 **Code Example**
 ```Go
 // 1. Resource Initialization (Startup)
-logger.Debug("[Init] Loading config from ./config.yaml")
+ctx.Debug("[Init] Loading config from ./config.yaml")
 
 // 2. Raw Data Payload (Input)
 data := `{"id": 42, "role": "admin"}`
-logger.Debug("[Payload] Received raw body:", data)
+ctx.Debug("[Payload] Received raw body:", data)
 
 // 3. Database Internals (Processing)
 query := fmt.Sprintf("SELECT * FROM users WHERE id=%d", 42)
-logger.Debug("[SQL] Generated Query:", query)
+ctx.Debug("[SQL] Generated Query:", query)
 ```
 **Output**
 ```Console
@@ -110,7 +110,7 @@ Represents standard operational events (Integer value: 2). It is the default fal
 **Code Example**
 ```Go
 // Example: Server startup confirmation
-logger.Info("Server started successfully on port 8000")
+app.Logger().Info("Server started successfully on port 8000")
 ```
 **Output-**
 ```Console
@@ -126,7 +126,7 @@ jobID := "EXP-2024-88"
 recordsProcessed := 5000
 duration := "1.2s"
 
-logger.Info("Data export job completed successfully",
+ctx.Info("Data export job completed successfully",
 	"JobID", jobID, 
     "Records", recordsProcessed, 
     "Duration", duration)
@@ -142,7 +142,7 @@ INFO [14:20:05] Data export job completed successfully JobID: EXP-2024-88 Record
 **Code Example**
 ```Go
 // Log an INFO level message with a key-value pair
-logger.Info("Health Check Passed")
+ctx.Info("Health Check Passed")
 ```
 **Output**
 ```Console
@@ -169,7 +169,7 @@ A level higher than `INFO` but lower than `WARN` (Integer value: 3). It shares t
 **Code Example**
 ```Go
 // Example: Configuration update
-logger.Notice("Configuration hot-reload triggered by system admin")
+ctx.Notice("Configuration hot-reload triggered by system admin")
 ```
 **Output-**
 ```Console
@@ -181,7 +181,7 @@ NOTI [14:05:03] Configuration hot-reload triggered by system admin
 **Code Example**
 ```Go
 // Using the classic logger to manually tag the level
-logger.Notice("Switching to Secondary Database")
+ctx.Notice("Switching to Secondary Database")
 ```
 **Output**
 ```Console
@@ -193,7 +193,7 @@ NOTI [14:52:00] Switching to Secondary Database
 
 **Code Example**
 ```Go
-logger.Notice("Cache Cleared")
+ctx.Notice("Cache Cleared")
 ```
 **Output**
 ```Console
@@ -221,7 +221,7 @@ it's Used when an anomaly had occurred, but the application recovered or continu
 **Code Example**
 ```Go
 // Example: Retrying a connection
-logger.Warn("Database connection timeout. Retrying in 2 seconds... (Attempt 1/3)")
+ctx.Warn("Database connection timeout. Retrying in 2 seconds... (Attempt 1/3)")
 ```
 **Output**
 ```Console
@@ -232,7 +232,7 @@ WARN [14:05:04] Database connection timeout. Retrying in 2 seconds... (Attempt 1
 
 **Code Example**
 ```Go
-logger.Warn("Timeout config not found. Using fallback: 30s")
+ctx.Warn("Timeout config not found. Using fallback: 30s")
 ```
 **Output**
 ```Console
@@ -244,7 +244,7 @@ WARN [14:55:00] Timeout config not found. Using fallback: 30s
 
 **Code Example**
 ```Go
-logger.Warn("Deprecated API usage detected: /v1/login")
+ctx.Warn("Deprecated API usage detected: /v1/login")
 ```
 **Output**
 ```Console
@@ -277,7 +277,7 @@ Indicates a failure event (Integer value: 5).This level routes logs to `stderr` 
 err := context.DeadlineExceeded
 
 if err != nil {
-    logger.Error("DB Query Timeout: Analytics fetch took > 3000ms. Canceling operation.")
+    ctx.Error("DB Query Timeout: Analytics fetch took > 3000ms. Canceling operation.")
 }
 ```
 **Output**
@@ -294,7 +294,7 @@ err := processPayment() // returns error: "gateway unreachable"
 
 if err != nil {
     // We send a generic 500 to the user, but log the specific error internally
-    logger.Error("HTTP 500 Response: Payment gateway unreachable. Request ID: req_99")
+    ctx.Error("HTTP 500 Response: Payment gateway unreachable. Request ID: req_99")
 }
 ```
 **Output**
@@ -311,7 +311,7 @@ ERRO [10:20:02] HTTP 500 Response: Payment gateway unreachable. Request ID: req_
 var userProfile *User // This is currently nil
 
 if userProfile == nil {
-    logger.Error("Runtime Safety: Attempted to access methods on a nil 'User' object. Skipping.")
+    ctx.Error("Runtime Safety: Attempted to access methods on a nil 'User' object. Skipping.")
 }
 ```
 **Output**
@@ -345,7 +345,7 @@ err := http.ListenAndServe(port, nil)
 
 if err != nil {
     // The application cannot run without a network listener, so we crash
-    logger.Fatal("Network Bind Failure: Port 8080 is already in use by another process.")
+    app.Logger().Fatal("Network Bind Failure: Port 8080 is already in use by another process.")
 }
 ```
 **Output**
@@ -362,7 +362,7 @@ jwtKey := os.Getenv("JWT_PRIVATE_KEY")
 
 if jwtKey == "" {
     // We cannot start the app insecurely, so we force a shutdown
-    logger.Fatal("SECURITY CRITICAL: Missing encryption keys. JWT_PRIVATE_KEY is empty.")
+    app.Logger().Fatal("SECURITY CRITICAL: Missing encryption keys. JWT_PRIVATE_KEY is empty.")
 }
 ```
 **Output**
@@ -380,7 +380,7 @@ err := db.Ping()
 
 if err != nil {
     // Unlike a runtime error, if the DB is gone at startup, the app is useless
-    logger.Fatal("Boot Failure: Cannot connect to primary database. Connection refused.")
+    app.Logger().Fatal("Boot Failure: Cannot connect to primary database. Connection refused.")
 }
 ```
 **Output**
@@ -399,6 +399,7 @@ FATA [10:30:03] Boot Failure: Cannot connect to primary database. Connection ref
 >2. Locking Overhead: The terminal output utilizes a mutex lock to ensure thread safety.
 
 ---
+
 
 {% figure src="/quick-start-logs.png" alt="Pretty Printed Logs" /%}
 
