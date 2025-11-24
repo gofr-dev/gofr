@@ -146,3 +146,19 @@ rateLimiterConfig := middleware.RateLimiterConfig{
 - Stale per-IP limiters are cleaned up automatically every 5 minutes
 - IP extraction order: `X-Forwarded-For` → `X-Real-IP` → `RemoteAddr`
 - Works seamlessly with other middleware (auth, logging, metrics)
+
+### Single-Pod vs Multi-Pod Deployments
+
+**Important**: The current implementation uses in-memory storage and is designed for **single-pod deployments**. 
+
+In **multi-pod/distributed systems**:
+- Each pod enforces rate limits independently
+- A client can send up to `RequestsPerSecond × NumberOfPods` requests
+- Example: With 3 pods and 10 req/sec limit, a client could make 30 req/sec total
+
+**For distributed rate limiting**, consider:
+1. **Redis-backed limiter** (planned for future release)
+2. **API Gateway** (Kong, Envoy, NGINX) rate limiting at the ingress layer
+3. **Sticky sessions** (less reliable, but keeps clients on same pod)
+
+For distributed rate limiting support, see the related issue that will be created after this PR is merged.

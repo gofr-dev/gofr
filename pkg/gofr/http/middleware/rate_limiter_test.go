@@ -26,12 +26,14 @@ func newRateLimiterMockMetrics() *rateLimiterMockMetrics {
 func (m *rateLimiterMockMetrics) IncrementCounter(_ context.Context, name string, _ ...string) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
+
 	m.counters[name]++
 }
 
-func (m *rateLimiterMockMetrics) getCount(name string) int {
+func (m *rateLimiterMockMetrics) GetCounter(name string) int {
 	m.mu.Lock()
 	defer m.mu.Unlock()
+
 	return m.counters[name]
 }
 
@@ -43,7 +45,7 @@ func TestRateLimiter_GlobalLimit(t *testing.T) {
 		PerIP:             false,
 	}
 
-	handler := RateLimiter(config, metrics)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	handler := RateLimiter(config, metrics)(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusOK)
 		_, _ = w.Write([]byte("OK"))
 	}))
@@ -63,7 +65,7 @@ func TestRateLimiter_GlobalLimit(t *testing.T) {
 	assert.Equal(t, http.StatusTooManyRequests, rr.Code, "Request should be rate limited")
 
 	// Verify metric was incremented
-	assert.Equal(t, 1, metrics.getCount("app_http_rate_limit_exceeded_total"))
+	assert.Equal(t, 1, metrics.GetCounter("app_http_rate_limit_exceeded_total"))
 }
 
 func TestRateLimiter_PerIPLimit(t *testing.T) {
@@ -74,7 +76,7 @@ func TestRateLimiter_PerIPLimit(t *testing.T) {
 		PerIP:             true,
 	}
 
-	handler := RateLimiter(config, metrics)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	handler := RateLimiter(config, metrics)(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusOK)
 	}))
 
@@ -110,7 +112,7 @@ func TestRateLimiter_SkipHealthEndpoints(t *testing.T) {
 		PerIP:             false,
 	}
 
-	handler := RateLimiter(config, metrics)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	handler := RateLimiter(config, metrics)(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusOK)
 	}))
 
@@ -135,31 +137,37 @@ func TestRateLimiter_ConcurrentRequests(t *testing.T) {
 		PerIP:             true,
 	}
 
-	handler := RateLimiter(config, metrics)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	handler := RateLimiter(config, metrics)(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusOK)
 	}))
 
 	var wg sync.WaitGroup
+
 	successCount := 0
 	rateLimitedCount := 0
+
 	var mu sync.Mutex
 
 	// Send 20 concurrent requests from same IP
 	for i := 0; i < 20; i++ {
 		wg.Add(1)
-		go func(index int) {
+
+		go func(_ int) {
 			defer wg.Done()
+
 			req := httptest.NewRequest(http.MethodGet, "/test", http.NoBody)
 			req.RemoteAddr = "192.168.1.1:12345"
 			rr := httptest.NewRecorder()
 			handler.ServeHTTP(rr, req)
 
 			mu.Lock()
+
 			if rr.Code == http.StatusOK {
 				successCount++
 			} else if rr.Code == http.StatusTooManyRequests {
 				rateLimitedCount++
 			}
+
 			mu.Unlock()
 		}(i)
 	}
@@ -170,7 +178,7 @@ func TestRateLimiter_ConcurrentRequests(t *testing.T) {
 	// The important thing is that rate limiting occurred
 	assert.GreaterOrEqual(t, successCount, 9, "Should allow approximately burst size requests")
 	assert.LessOrEqual(t, successCount, 11, "Should not allow significantly more than burst size")
-	assert.Greater(t, rateLimitedCount, 0, "Should have some rate limited requests")
+	assert.Positive(t, rateLimitedCount, "Should have some rate limited requests")
 	assert.Equal(t, 20, successCount+rateLimitedCount, "Total requests should be 20")
 }
 
@@ -181,12 +189,12 @@ func TestRateLimiter_TokenRefill(t *testing.T) {
 
 	metrics := newRateLimiterMockMetrics()
 	config := RateLimiterConfig{
-		RequestsPerSecond: 5,  // 5 requests per second
+		RequestsPerSecond: 5, // 5 requests per second
 		Burst:             2,
 		PerIP:             false,
 	}
 
-	handler := RateLimiter(config, metrics)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	handler := RateLimiter(config, metrics)(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusOK)
 	}))
 
