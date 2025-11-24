@@ -20,13 +20,16 @@ const (
 	maxIdleReplicaCapDefault = 10
 	minOpenReplicaDefault    = 5
 	maxOpenReplicaCapDefault = 20
-	expectedHostPortParts
+	expectedHostPortParts    = 2
 )
 
 var (
 	errPrimaryNil               = errors.New("primary SQL connection is nil")
 	errInvalidReplicaHostFormat = errors.New("invalid replica host format (expected host:port)")
 	errDBNameRequired           = errors.New("DB_NAME is required")
+	errEmptyCredentials         = errors.New("replica has empty credentials")
+	errInvalidPort              = errors.New("invalid port for replica")
+	errAllReplicasFailed        = errors.New("all replicas failed to connect")
 )
 
 // Config holds resolver configuration.
@@ -36,6 +39,14 @@ type Config struct {
 	MaxFailures   uint32
 	TimeoutSec    uint32
 	PrimaryRoutes []string
+	Replicas      []ReplicaCredential
+}
+
+// ReplicaCredential stores credentials for a single replica.
+type ReplicaCredential struct {
+	Host     string `json:"host"` // Format: "hostname:port".
+	User     string `json:"user"`
+	Password string `json:"password"` // Supports commas and special chars.
 }
 
 // ResolverProvider implements container.DBResolverProvider interface.
@@ -49,10 +60,10 @@ type ResolverProvider struct {
 }
 
 // NewDBResolverProvider creates a new ResolverProvider.
-func NewDBResolverProvider(app *gofr.App, cfg Config) *ResolverProvider {
+func NewDBResolverProvider(app *gofr.App, cfg *Config) *ResolverProvider {
 	return &ResolverProvider{
 		app: app,
-		cfg: cfg,
+		cfg: *cfg,
 	}
 }
 
@@ -124,11 +135,9 @@ func (p *ResolverProvider) Connect() {
 
 	logger.Logf("DB Resolver initialized with %d replicas", len(replicas))
 }
-
-// createAndValidateReplicas creates replicas and validates count.
 func (p *ResolverProvider) createAndValidateReplicas(logger Logger, metrics Metrics) []container.DB {
-	// Create replicas from config.
-	replicas, err := connectReplicas(p.app.Config, logger, metrics)
+	// Pass Config to connectReplicas
+	replicas, err := connectReplicas(&p.cfg, p.app.Config, logger, metrics)
 	if err != nil {
 		logger.Errorf("Failed to create replicas: %v", err)
 
@@ -164,7 +173,7 @@ func (p *ResolverProvider) GetResolver() container.DB {
 }
 
 // InitDBResolver - Complete initialization with middleware.
-func InitDBResolver(app *gofr.App, cfg Config) error {
+func InitDBResolver(app *gofr.App, cfg *Config) error {
 	provider := NewDBResolverProvider(app, cfg)
 
 	//  Add middleware to inject HTTP context.
@@ -190,43 +199,76 @@ func createHTTPMiddleware() gofrHTTP.Middleware {
 	}
 }
 
-// connectReplicas creates replica connections from configuration.
-func connectReplicas(cfg config.Config, logger Logger, metrics Metrics) ([]container.DB, error) {
-	replicasStr := cfg.Get("DB_REPLICA_HOSTS")
-	if replicasStr == "" {
+// connectReplicas creates replica connections from Config.Replicas.
+func connectReplicas(cfg *Config, appCfg config.Config, logger Logger, metrics Metrics) ([]container.DB, error) {
+	if len(cfg.Replicas) == 0 {
 		return nil, nil
 	}
 
-	replicaHosts := strings.Split(replicasStr, ",")
-	replicas := make([]container.DB, 0, len(replicaHosts))
+	replicas := make([]container.DB, 0, len(cfg.Replicas))
 
-	user := cfg.Get("DB_REPLICA_USER")
-	password := cfg.Get("DB_REPLICA_PASSWORD")
+	var failedReplicas []string
 
-	for i, hostPort := range replicaHosts {
-		hostPort = strings.TrimSpace(hostPort)
-		if hostPort == "" {
-			continue
+	for i, cred := range cfg.Replicas {
+		if err := validateReplicaCredentials(cred, i); err != nil {
+			return nil, err
 		}
 
-		parts := strings.Split(hostPort, ":")
-		if len(parts) != expectedHostPortParts {
-			return nil, fmt.Errorf("%w at index %d: %s", errInvalidReplicaHostFormat, i, hostPort)
-		}
-
-		host, port := parts[0], parts[1]
-
-		replica, err := createReplicaConnection(cfg, host, port, user, password, logger, metrics)
+		host, port, err := parseReplicaHost(cred.Host, i)
 		if err != nil {
-			return nil, fmt.Errorf("failed to create replica #%d (%s:%s): %w", i+1, host, port, err)
+			return nil, err
+		}
+
+		replica, err := createReplicaConnection(appCfg, host, port, cred.User, cred.Password, logger, metrics)
+		if err != nil {
+			logger.Warnf("Failed to connect to replica #%d (%s): %v", i+1, cred.Host, err)
+
+			failedReplicas = append(failedReplicas, cred.Host)
+
+			continue // Skip failed replica instead of failing completely
 		}
 
 		replicas = append(replicas, replica)
 
-		logger.Logf("Created DB replica connection to %s:%s", host, port)
+		logger.Logf("Created DB replica connection to %s", cred.Host)
+	}
+
+	if len(replicas) == 0 {
+		return nil, fmt.Errorf("%w (%d total)", errAllReplicasFailed, len(cfg.Replicas))
+	}
+
+	if len(failedReplicas) > 0 {
+		logger.Warnf("%d/%d replicas failed: %v", len(failedReplicas), len(cfg.Replicas), failedReplicas)
 	}
 
 	return replicas, nil
+}
+
+// validateReplicaCredentials checks if all required fields are present.
+func validateReplicaCredentials(cred ReplicaCredential, index int) error {
+	if cred.Host == "" || cred.User == "" || cred.Password == "" {
+		return fmt.Errorf("%w at index %d", errEmptyCredentials, index)
+	}
+
+	return nil
+}
+
+// parseReplicaHost splits host:port and validates the format.
+func parseReplicaHost(host string, index int) (validatedHost, validatedPort string, err error) {
+	parts := strings.Split(host, ":")
+	if len(parts) != expectedHostPortParts {
+		return "", "", fmt.Errorf("%w at index %d: %s", errInvalidReplicaHostFormat, index, host)
+	}
+
+	hostname := strings.TrimSpace(parts[0])
+	port := strings.TrimSpace(parts[1])
+
+	// Validate port is numeric
+	if _, err := strconv.Atoi(port); err != nil {
+		return "", "", fmt.Errorf("%w at index %d: %s", errInvalidPort, index, port)
+	}
+
+	return hostname, port, nil
 }
 
 // createReplicaConnection creates a single replica database connection.

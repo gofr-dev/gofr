@@ -21,7 +21,7 @@ func TestNewDBResolverProvider(t *testing.T) {
 		ReadFallback: true,
 	}
 
-	provider := NewDBResolverProvider(app, cfg)
+	provider := NewDBResolverProvider(app, &cfg)
 
 	require.NotNil(t, provider)
 	assert.Equal(t, app, provider.app)
@@ -211,39 +211,6 @@ func TestOptimizedOpenConnections_AboveMax(t *testing.T) {
 	assert.Equal(t, "20", result)
 }
 
-func TestCreateReplicas_EmptyConfig(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
-
-	mockConfig := config.NewMockConfig(map[string]string{})
-	mockLogger := NewMockLogger(ctrl)
-	mockMetrics := NewMockMetrics(ctrl)
-
-	replicas, err := connectReplicas(mockConfig, mockLogger, mockMetrics)
-
-	require.NoError(t, err)
-	assert.Nil(t, replicas)
-}
-
-func TestCreateReplicas_InvalidHostFormat(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
-
-	mockConfig := config.NewMockConfig(map[string]string{
-		"DB_REPLICA_HOSTS": "invalid-host",
-		"DB_USER":          "user",
-		"DB_PASSWORD":      "pass",
-	})
-	mockLogger := NewMockLogger(ctrl)
-	mockMetrics := NewMockMetrics(ctrl)
-
-	replicas, err := connectReplicas(mockConfig, mockLogger, mockMetrics)
-
-	require.Error(t, err)
-	assert.Nil(t, replicas)
-	assert.ErrorIs(t, err, errInvalidReplicaHostFormat)
-}
-
 func TestCreateReplicaConnection_NoDBName(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
@@ -346,38 +313,6 @@ func TestResolverProvider_GetResolver_Nil(t *testing.T) {
 
 	assert.Nil(t, resolver)
 }
-
-func TestCreateReplicas_NoReplicaHosts(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
-
-	mockLogger := NewMockLogger(ctrl)
-	mockMetrics := NewMockMetrics(ctrl)
-	mockConfig := config.NewMockConfig(map[string]string{})
-
-	replicas, err := connectReplicas(mockConfig, mockLogger, mockMetrics)
-
-	require.NoError(t, err)
-	assert.Nil(t, replicas)
-}
-
-func TestCreateReplicas_EmptyHostAfterTrim(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
-
-	mockLogger := NewMockLogger(ctrl)
-	mockMetrics := NewMockMetrics(ctrl)
-	mockConfig := config.NewMockConfig(map[string]string{
-		"DB_REPLICA_HOSTS": "  ,  , localhost:3307",
-		"DB_NAME":          "testdb",
-	})
-
-	replicas, err := connectReplicas(mockConfig, mockLogger, mockMetrics)
-
-	require.Error(t, err)
-	assert.Nil(t, replicas)
-}
-
 func TestCreateHTTPMiddleware(t *testing.T) {
 	middleware := createHTTPMiddleware()
 
@@ -614,4 +549,292 @@ func TestCircuitBreaker_ConcurrentFailures(t *testing.T) {
 	failures := cb.failures.Load()
 	assert.Equal(t, int32(5), failures)
 	assert.Equal(t, circuitStateClosed, *cb.state.Load())
+}
+
+func TestConnectReplicas_EmptyConfig(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	mockConfig := config.NewMockConfig(map[string]string{
+		"DB_NAME": "testdb",
+	})
+	mockLogger := NewMockLogger(ctrl)
+	mockMetrics := NewMockMetrics(ctrl)
+
+	cfg := Config{
+		Replicas: []ReplicaCredential{}, // Empty replicas
+	}
+
+	replicas, err := connectReplicas(&cfg, mockConfig, mockLogger, mockMetrics)
+
+	require.NoError(t, err)
+	assert.Nil(t, replicas)
+}
+
+func TestConnectReplicas_ValidSingleReplica(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	mockConfig := config.NewMockConfig(map[string]string{
+		"DB_NAME": "testdb",
+	})
+	mockLogger := NewMockLogger(ctrl)
+	mockMetrics := NewMockMetrics(ctrl)
+
+	mockLogger.EXPECT().Logf("Created DB replica connection to %s", "localhost:3307").Times(1)
+
+	cfg := Config{
+		Replicas: []ReplicaCredential{
+			{
+				Host:     "localhost:3307",
+				User:     "replica_user",
+				Password: "replica_pass",
+			},
+		},
+	}
+
+	replicas, err := connectReplicas(&cfg, mockConfig, mockLogger, mockMetrics)
+
+	require.NoError(t, err)
+	require.NotNil(t, replicas)
+	assert.Len(t, replicas, 1)
+}
+
+func TestConnectReplicas_MultipleReplicas(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	mockConfig := config.NewMockConfig(map[string]string{
+		"DB_NAME": "testdb",
+	})
+	mockLogger := NewMockLogger(ctrl)
+	mockMetrics := NewMockMetrics(ctrl)
+
+	mockLogger.EXPECT().Logf(gomock.Any(), gomock.Any()).Times(3)
+
+	cfg := Config{
+		Replicas: []ReplicaCredential{
+			{Host: "replica1:3307", User: "user1", Password: "pass1"},
+			{Host: "replica2:3308", User: "user2", Password: "pass2"},
+			{Host: "replica3:3309", User: "user3", Password: "pass3"},
+		},
+	}
+
+	replicas, err := connectReplicas(&cfg, mockConfig, mockLogger, mockMetrics)
+
+	require.NoError(t, err)
+	require.NotNil(t, replicas)
+	assert.Len(t, replicas, 3)
+}
+
+func TestConnectReplicas_InvalidHostFormat(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	mockConfig := config.NewMockConfig(map[string]string{
+		"DB_NAME": "testdb",
+	})
+	mockLogger := NewMockLogger(ctrl)
+	mockMetrics := NewMockMetrics(ctrl)
+
+	cfg := Config{
+		Replicas: []ReplicaCredential{
+			{Host: "invalid-host-without-port", User: "user", Password: "pass"},
+		},
+	}
+
+	replicas, err := connectReplicas(&cfg, mockConfig, mockLogger, mockMetrics)
+
+	require.Error(t, err)
+	assert.Nil(t, replicas)
+	assert.ErrorIs(t, err, errInvalidReplicaHostFormat)
+}
+
+func TestConnectReplicas_EmptyCredentials(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	mockConfig := config.NewMockConfig(map[string]string{
+		"DB_NAME": "testdb",
+	})
+	mockLogger := NewMockLogger(ctrl)
+	mockMetrics := NewMockMetrics(ctrl)
+
+	tests := []struct {
+		name    string
+		replica ReplicaCredential
+	}{
+		{
+			name:    "empty host",
+			replica: ReplicaCredential{Host: "", User: "user", Password: "pass"},
+		},
+		{
+			name:    "empty user",
+			replica: ReplicaCredential{Host: "localhost:3307", User: "", Password: "pass"},
+		},
+		{
+			name:    "empty password",
+			replica: ReplicaCredential{Host: "localhost:3307", User: "user", Password: ""},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cfg := Config{
+				Replicas: []ReplicaCredential{tt.replica},
+			}
+
+			replicas, err := connectReplicas(&cfg, mockConfig, mockLogger, mockMetrics)
+
+			require.Error(t, err)
+			assert.Nil(t, replicas)
+			assert.Contains(t, err.Error(), "empty credentials")
+		})
+	}
+}
+
+func TestConnectReplicas_InvalidPort(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	mockConfig := config.NewMockConfig(map[string]string{
+		"DB_NAME": "testdb",
+	})
+	mockLogger := NewMockLogger(ctrl)
+	mockMetrics := NewMockMetrics(ctrl)
+
+	cfg := Config{
+		Replicas: []ReplicaCredential{
+			{Host: "localhost:abc", User: "user", Password: "pass"},
+		},
+	}
+
+	replicas, err := connectReplicas(&cfg, mockConfig, mockLogger, mockMetrics)
+
+	require.Error(t, err)
+	assert.Nil(t, replicas)
+	assert.Contains(t, err.Error(), "invalid port")
+}
+
+func TestConnectReplicas_PasswordWithCommas(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	mockConfig := config.NewMockConfig(map[string]string{
+		"DB_NAME": "testdb",
+	})
+	mockLogger := NewMockLogger(ctrl)
+	mockMetrics := NewMockMetrics(ctrl)
+
+	mockLogger.EXPECT().Logf(gomock.Any(), gomock.Any()).Times(1)
+
+	cfg := Config{
+		Replicas: []ReplicaCredential{
+			{
+				Host:     "localhost:3307",
+				User:     "user",
+				Password: "pass,with,commas,and,special!@#$%",
+			},
+		},
+	}
+
+	replicas, err := connectReplicas(&cfg, mockConfig, mockLogger, mockMetrics)
+
+	require.NoError(t, err)
+	require.NotNil(t, replicas)
+	assert.Len(t, replicas, 1)
+}
+
+func TestConnectReplicas_PartialFailures(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	mockConfig := config.NewMockConfig(map[string]string{
+		"DB_NAME": "testdb",
+	})
+	mockLogger := NewMockLogger(ctrl)
+	mockMetrics := NewMockMetrics(ctrl)
+
+	// Both replicas will succeed in creation (gofrSQL.NewSQL doesn't validate connectivity)
+	mockLogger.EXPECT().Logf(gomock.Any(), gomock.Any()).Times(2)
+
+	cfg := Config{
+		Replicas: []ReplicaCredential{
+			{Host: "localhost:9999", User: "user", Password: "pass"},
+			{Host: "localhost:3307", User: "valid_user", Password: "pass"},
+		},
+	}
+
+	replicas, err := connectReplicas(&cfg, mockConfig, mockLogger, mockMetrics)
+
+	require.NoError(t, err)
+	require.NotNil(t, replicas)
+	assert.Len(t, replicas, 2) // Both replicas created successfully
+}
+
+func TestConnectReplicas_AllReplicasFail(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	mockConfig := config.NewMockConfig(map[string]string{
+		"DB_NAME": "testdb",
+	})
+	mockLogger := NewMockLogger(ctrl)
+	mockMetrics := NewMockMetrics(ctrl)
+
+	// Both replicas will succeed in creation
+	mockLogger.EXPECT().Logf(gomock.Any(), gomock.Any()).Times(2)
+
+	cfg := Config{
+		Replicas: []ReplicaCredential{
+			{Host: "localhost:9999", User: "user", Password: "pass"},
+			{Host: "localhost:9998", User: "user", Password: "pass"},
+		},
+	}
+
+	replicas, err := connectReplicas(&cfg, mockConfig, mockLogger, mockMetrics)
+
+	require.NoError(t, err) // No error during creation
+	require.NotNil(t, replicas)
+	assert.Len(t, replicas, 2) // Both replicas created
+}
+
+func TestConnectReplicas_HostWithWhitespace(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	mockConfig := config.NewMockConfig(map[string]string{
+		"DB_NAME": "testdb",
+	})
+	mockLogger := NewMockLogger(ctrl)
+	mockMetrics := NewMockMetrics(ctrl)
+
+	mockLogger.EXPECT().Logf(gomock.Any(), gomock.Any()).Times(1)
+
+	cfg := Config{
+		Replicas: []ReplicaCredential{
+			{Host: "  localhost : 3307  ", User: "user", Password: "pass"},
+		},
+	}
+
+	replicas, err := connectReplicas(&cfg, mockConfig, mockLogger, mockMetrics)
+
+	require.NoError(t, err)
+	require.NotNil(t, replicas)
+	assert.Len(t, replicas, 1)
+}
+
+func TestCreateReplicaConnection_MissingDBName(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	mockConfig := config.NewMockConfig(map[string]string{})
+	mockLogger := NewMockLogger(ctrl)
+	mockMetrics := NewMockMetrics(ctrl)
+
+	replica, err := createReplicaConnection(mockConfig, "localhost", "3307", "user", "pass", mockLogger, mockMetrics)
+
+	require.Error(t, err)
+	assert.Nil(t, replica)
+	assert.ErrorIs(t, err, errDBNameRequired)
 }
