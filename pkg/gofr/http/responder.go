@@ -61,6 +61,7 @@ func (r Responder) Respond(data any, err error) {
 // handleSpecialResponseTypes handles special response types that bypass JSON encoding.
 // Returns true if the response was handled, false otherwise.
 func (r Responder) handleSpecialResponseTypes(data any) bool {
+
 	switch v := data.(type) {
 	case resTypes.File:
 		r.w.Header().Set("Content-Type", v.ContentType)
@@ -75,6 +76,7 @@ func (r Responder) handleSpecialResponseTypes(data any) bool {
 		return true
 	case resTypes.XML:
 		contentType := v.ContentType
+
 		if contentType == "" {
 			contentType = "application/xml"
 		}
@@ -89,6 +91,7 @@ func (r Responder) handleSpecialResponseTypes(data any) bool {
 		return true
 	case resTypes.Redirect:
 		statusCode := http.StatusFound
+
 		if r.method == http.MethodPost || r.method == http.MethodPut || r.method == http.MethodPatch {
 			statusCode = http.StatusSeeOther
 		}
