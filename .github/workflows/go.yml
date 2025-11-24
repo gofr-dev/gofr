@@ -355,6 +355,8 @@ jobs:
     steps:
       - name: Check out code into the Go module directory
         uses: actions/checkout@v5
+        with:
+          fetch-depth: 0  # Fetch full history for --new-from-rev
 
       - name: Set up Go environment
         uses: actions/setup-go@v5
@@ -374,7 +376,11 @@ jobs:
       # Run linter on the root module
       - name: Lint Root Module
         run: |
-          golangci-lint run --output.text.print-issued-lines --output.text.colors=true --show-stats=false --timeout=5m
+          if [ "${{ github.event_name }}" == "pull_request" ]; then
+            golangci-lint run --new-from-rev=origin/${{ github.base_ref }} --output.text.print-issued-lines --output.text.colors=true --show-stats=false --timeout=5m
+          else
+            golangci-lint run --new-from-rev=${{ github.event.before }} --output.text.print-issued-lines --output.text.colors=true --show-stats=false --timeout=5m
+          fi
 
       # Run linter on each submodule
       - name: Lint Submodules
@@ -386,7 +392,11 @@ jobs:
             # Change directory to the submodule and run golangci-lint
             cd $module
             go mod tidy
-            golangci-lint run --output.text.print-issued-lines --output.text.colors=true --show-stats=false --timeout 9m0s || total_errors=$((total_errors + 1))
+            if [ "${{ github.event_name }}" == "pull_request" ]; then
+              golangci-lint run --new-from-rev=origin/${{ github.base_ref }} --output.text.print-issued-lines --output.text.colors=true --show-stats=false --timeout 9m0s || total_errors=$((total_errors + 1))
+            else
+              golangci-lint run --new-from-rev=${{ github.event.before }} --output.text.print-issued-lines --output.text.colors=true --show-stats=false --timeout 9m0s || total_errors=$((total_errors + 1))
+            fi
             cd -  # Return to the root directory
           done
           echo "Total submodule lint errors: $total_errors"
