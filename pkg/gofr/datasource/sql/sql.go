@@ -1,6 +1,7 @@
 package sql
 
 import (
+	"context"
 	"database/sql"
 	"fmt"
 	"strconv"
@@ -89,7 +90,6 @@ func NewSQL(configs config.Config, logger datasource.Logger, metrics Metrics) *D
 	logger.Debugf("registering sql dialect '%s' for traces", dbConfig.Dialect)
 
 	otelRegisteredDialect, err := registerOtel(dbConfig.Dialect, logger)
-
 	if err != nil {
 		logger.Errorf("could not register sql dialect '%s' for traces, error: %s", dbConfig.Dialect, err)
 		return nil
@@ -137,7 +137,7 @@ func registerOtel(dialect string, logger datasource.Logger) (string, error) {
 }
 
 func pingToTestConnection(database *DB) *DB {
-	if err := database.DB.Ping(); err != nil {
+	if err := database.DB.PingContext(context.Background()); err != nil {
 		printConnectionFailureLog("connect", database.config, database.logger, err)
 
 		return database
@@ -152,11 +152,11 @@ func retryConnection(database *DB) {
 	const connRetryFrequencyInSeconds = 10
 
 	for {
-		if database.DB.Ping() != nil {
+		if database.DB.PingContext(context.Background()) != nil {
 			database.logger.Info("retrying SQL database connection")
 
 			for {
-				err := database.DB.Ping()
+				err := database.DB.PingContext(context.Background())
 				if err == nil {
 					printConnectionSuccessLog("connected", database.config, database.logger)
 

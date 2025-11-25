@@ -93,7 +93,6 @@ func TestHTTPService_createAndSendRequest(t *testing.T) {
 
 		resp, err := service.createAndSendRequest(ctx,
 			http.MethodPost, "test-path", tc.queryParams, tc.body, tc.headers)
-
 		if err != nil {
 			if resp != nil {
 				resp.Body.Close()
@@ -118,24 +117,14 @@ func TestHTTPService_Get(t *testing.T) {
 	}))
 	defer server.Close()
 
-	service := &httpService{
-		Client: http.DefaultClient,
-		url:    server.URL,
-		Tracer: otel.Tracer("gofr-http-client"),
-		Logger: logging.NewMockLogger(logging.INFO),
-	}
+	service := newService(t, server)
 
 	// TODO : Nil Correlation ID is coming in logs, it has to be fixed
 
 	resp, err := service.Get(t.Context(), "test-path",
 		map[string]any{"key": "value", "name": []string{"gofr", "test"}})
 
-	if resp != nil {
-		defer resp.Body.Close()
-	}
-
-	require.NoError(t, err)
-	assert.NotNil(t, resp, "TEST, Failed.")
+	validateResponse(t, resp, err, false)
 }
 
 func TestHTTPService_GetWithHeaders(t *testing.T) {
@@ -150,12 +139,7 @@ func TestHTTPService_GetWithHeaders(t *testing.T) {
 	}))
 	defer server.Close()
 
-	service := &httpService{
-		Client: http.DefaultClient,
-		url:    server.URL,
-		Tracer: otel.Tracer("gofr-http-client"),
-		Logger: logging.NewMockLogger(logging.INFO),
-	}
+	service := newService(t, server)
 
 	// TODO : Nil Correlation ID is coming in logs, it has to be fixed
 
@@ -163,12 +147,7 @@ func TestHTTPService_GetWithHeaders(t *testing.T) {
 		map[string]any{"key": "value", "name": []string{"gofr", "test"}},
 		map[string]string{"header1": "value1"})
 
-	if resp != nil {
-		defer resp.Body.Close()
-	}
-
-	require.NoError(t, err)
-	assert.NotNil(t, resp, "TEST, Failed.")
+	validateResponse(t, resp, err, false)
 }
 
 func TestHTTPService_Put(t *testing.T) {
@@ -191,24 +170,14 @@ func TestHTTPService_Put(t *testing.T) {
 	}))
 	defer server.Close()
 
-	service := &httpService{
-		Client: http.DefaultClient,
-		url:    server.URL,
-		Tracer: otel.Tracer("gofr-http-client"),
-		Logger: logging.NewMockLogger(logging.INFO),
-	}
+	service := newService(t, server)
 
 	// TODO : Nil Correlation ID is coming in logs, it has to be fixed
 
 	resp, err := service.Put(t.Context(), "test-path",
 		map[string]any{"key": "value", "name": []string{"gofr", "test"}}, []byte("{Test Body}"))
 
-	if resp != nil {
-		defer resp.Body.Close()
-	}
-
-	require.NoError(t, err)
-	assert.NotNil(t, resp, "TEST, Failed.")
+	validateResponse(t, resp, err, false)
 }
 
 func TestHTTPService_PutWithHeaders(t *testing.T) {
@@ -232,12 +201,7 @@ func TestHTTPService_PutWithHeaders(t *testing.T) {
 	}))
 	defer server.Close()
 
-	service := &httpService{
-		Client: http.DefaultClient,
-		url:    server.URL,
-		Tracer: otel.Tracer("gofr-http-client"),
-		Logger: logging.NewMockLogger(logging.INFO),
-	}
+	service := newService(t, server)
 
 	// TODO : Nil Correlation ID is coming in logs, it has to be fixed
 
@@ -245,12 +209,7 @@ func TestHTTPService_PutWithHeaders(t *testing.T) {
 		map[string]any{"key": "value", "name": []string{"gofr", "test"}}, []byte("{Test Body}"),
 		map[string]string{"header1": "value1"})
 
-	if resp != nil {
-		defer resp.Body.Close()
-	}
-
-	require.NoError(t, err)
-	assert.NotNil(t, resp, "TEST, Failed.")
+	validateResponse(t, resp, err, false)
 }
 
 func TestHTTPService_Patch(t *testing.T) {
@@ -273,24 +232,14 @@ func TestHTTPService_Patch(t *testing.T) {
 	}))
 	defer server.Close()
 
-	service := &httpService{
-		Client: http.DefaultClient,
-		url:    server.URL,
-		Tracer: otel.Tracer("gofr-http-client"),
-		Logger: logging.NewMockLogger(logging.INFO),
-	}
+	service := newService(t, server)
 
 	// TODO : Nil Correlation ID is coming in logs, it has to be fixed
 
 	resp, err := service.Patch(t.Context(), "test-path",
 		map[string]any{"key": "value", "name": []string{"gofr", "test"}}, []byte("{Test Body}"))
 
-	if resp != nil {
-		defer resp.Body.Close()
-	}
-
-	require.NoError(t, err)
-	assert.NotNil(t, resp, "TEST, Failed.")
+	validateResponse(t, resp, err, false)
 }
 
 func TestHTTPService_PatchWithHeaders(t *testing.T) {
@@ -304,7 +253,7 @@ func TestHTTPService_PatchWithHeaders(t *testing.T) {
 			t.Fatal("Unable to read request body")
 		}
 
-		assert.Equal(t, http.MethodPut, r.Method)
+		assert.Equal(t, http.MethodPatch, r.Method)
 		assert.Equal(t, "/test-path", r.URL.Path)
 		assert.Equal(t, "key=value&name=gofr&name=test", r.URL.RawQuery)
 		assert.Contains(t, "value1", r.Header.Get("Header1"))
@@ -314,25 +263,15 @@ func TestHTTPService_PatchWithHeaders(t *testing.T) {
 	}))
 	defer server.Close()
 
-	service := &httpService{
-		Client: http.DefaultClient,
-		url:    server.URL,
-		Tracer: otel.Tracer("gofr-http-client"),
-		Logger: logging.NewMockLogger(logging.INFO),
-	}
+	service := newService(t, server)
 
 	// TODO : Nil Correlation ID is coming in logs, it has to be fixed
 
-	resp, err := service.PutWithHeaders(t.Context(), "test-path",
+	resp, err := service.PatchWithHeaders(t.Context(), "test-path",
 		map[string]any{"key": "value", "name": []string{"gofr", "test"}}, []byte("{Test Body}"),
 		map[string]string{"header1": "value1"})
 
-	if resp != nil {
-		defer resp.Body.Close()
-	}
-
-	require.NoError(t, err)
-	assert.NotNil(t, resp, "TEST, Failed.")
+	validateResponse(t, resp, err, false)
 }
 
 func TestHTTPService_Post(t *testing.T) {
@@ -355,24 +294,14 @@ func TestHTTPService_Post(t *testing.T) {
 	}))
 	defer server.Close()
 
-	service := &httpService{
-		Client: http.DefaultClient,
-		url:    server.URL,
-		Tracer: otel.Tracer("gofr-http-client"),
-		Logger: logging.NewMockLogger(logging.INFO),
-	}
+	service := newService(t, server)
 
 	// TODO : Nil Correlation ID is coming in logs, it has to be fixed
 
 	resp, err := service.Post(t.Context(), "test-path",
 		map[string]any{"key": "value", "name": []string{"gofr", "test"}}, []byte("{Test Body}"))
 
-	if resp != nil {
-		defer resp.Body.Close()
-	}
-
-	require.NoError(t, err)
-	assert.NotNil(t, resp, "TEST, Failed.")
+	validateResponse(t, resp, err, false)
 }
 
 func TestHTTPService_PostWithHeaders(t *testing.T) {
@@ -396,12 +325,7 @@ func TestHTTPService_PostWithHeaders(t *testing.T) {
 	}))
 	defer server.Close()
 
-	service := &httpService{
-		Client: http.DefaultClient,
-		url:    server.URL,
-		Tracer: otel.Tracer("gofr-http-client"),
-		Logger: logging.NewMockLogger(logging.INFO),
-	}
+	service := newService(t, server)
 
 	// TODO : Nil Correlation ID is coming in logs, it has to be fixed
 
@@ -409,12 +333,7 @@ func TestHTTPService_PostWithHeaders(t *testing.T) {
 		map[string]any{"key": "value", "name": []string{"gofr", "test"}}, []byte("{Test Body}"),
 		map[string]string{"header1": "value1"})
 
-	if resp != nil {
-		defer resp.Body.Close()
-	}
-
-	require.NoError(t, err)
-	assert.NotNil(t, resp, "TEST, Failed.")
+	validateResponse(t, resp, err, false)
 }
 
 func TestHTTPService_Delete(t *testing.T) {
@@ -436,23 +355,13 @@ func TestHTTPService_Delete(t *testing.T) {
 	}))
 	defer server.Close()
 
-	service := &httpService{
-		Client: http.DefaultClient,
-		url:    server.URL,
-		Tracer: otel.Tracer("gofr-http-client"),
-		Logger: logging.NewMockLogger(logging.INFO),
-	}
+	service := newService(t, server)
 
 	// TODO : Nil Correlation ID is coming in logs, it has to be fixed
 
 	resp, err := service.Delete(t.Context(), "test-path", []byte("{Test Body}"))
 
-	if resp != nil {
-		defer resp.Body.Close()
-	}
-
-	require.NoError(t, err)
-	assert.NotNil(t, resp, "TEST, Failed.")
+	validateResponse(t, resp, err, false)
 }
 
 func TestHTTPService_DeleteWithHeaders(t *testing.T) {
@@ -475,24 +384,14 @@ func TestHTTPService_DeleteWithHeaders(t *testing.T) {
 	}))
 	defer server.Close()
 
-	service := &httpService{
-		Client: http.DefaultClient,
-		url:    server.URL,
-		Tracer: otel.Tracer("gofr-http-client"),
-		Logger: logging.NewMockLogger(logging.INFO),
-	}
+	service := newService(t, server)
 
 	// TODO : Nil Correlation ID is coming in logs, it has to be fixed
 
 	resp, err := service.DeleteWithHeaders(t.Context(), "test-path", []byte("{Test Body}"),
 		map[string]string{"header1": "value1"})
 
-	if resp != nil {
-		defer resp.Body.Close()
-	}
-
-	require.NoError(t, err)
-	assert.NotNil(t, resp, "TEST, Failed.")
+	validateResponse(t, resp, err, false)
 }
 
 func TestHTTPService_createAndSendRequestCreateRequestFailure(t *testing.T) {
@@ -508,12 +407,7 @@ func TestHTTPService_createAndSendRequestCreateRequestFailure(t *testing.T) {
 		"!@#$", "test-path", map[string]any{"key": "value", "name": []string{"gofr", "test"}},
 		[]byte("{Test Body}"), map[string]string{"header1": "value1"})
 
-	if resp != nil {
-		defer resp.Body.Close()
-	}
-
-	require.Error(t, err)
-	assert.Nil(t, resp, "TEST[%d], Failed.\n%s")
+	validateResponse(t, resp, err, true)
 }
 
 func TestHTTPService_createAndSendRequestServerError(t *testing.T) {
@@ -537,10 +431,34 @@ func TestHTTPService_createAndSendRequestServerError(t *testing.T) {
 		http.MethodPost, "test-path", map[string]any{"key": "value", "name": []string{"gofr", "test"}},
 		[]byte("{Test Body}"), map[string]string{"header1": "value1"})
 
+	validateResponse(t, resp, err, true)
+}
+
+func validateResponse(t *testing.T, resp *http.Response, err error, hasError bool) {
+	t.Helper()
+
 	if resp != nil {
 		defer resp.Body.Close()
 	}
 
-	require.Error(t, err)
-	assert.Nil(t, resp, "TEST[%d], Failed.\n%s")
+	if hasError {
+		require.Error(t, err)
+		assert.Nil(t, resp, "TEST[%d], Failed.\n%s")
+
+		return
+	}
+
+	require.NoError(t, err)
+	assert.NotNil(t, resp, "TEST[%d], Failed.\n%s")
+}
+
+func newService(t *testing.T, server *httptest.Server) *httpService {
+	t.Helper()
+
+	return &httpService{
+		Client: http.DefaultClient,
+		url:    server.URL,
+		Tracer: otel.Tracer("gofr-http-client"),
+		Logger: logging.NewMockLogger(logging.INFO),
+	}
 }

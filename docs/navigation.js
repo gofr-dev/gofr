@@ -7,6 +7,7 @@ export const navigation = [
                 title: 'Hello Server',
                 href: '/docs/quick-start/introduction' ,
                 desc: "Getting started with how to write a server using GoFR with basic examples and explanations. Boost your productivity with efficient coding practices and learn to build scalable applications quickly."},
+               
             {
                 title: 'Configuration',
                 href: '/docs/quick-start/configuration',
@@ -103,6 +104,11 @@ export const navigation = [
                 desc: "Step-by-step guide on writing a gRPC server in GoFr to facilitate efficient communication between services."
             },
             {
+                title: 'gRPC Streaming',
+                href: '/docs/advanced-guide/grpc-streaming',
+                desc: "Learn how to implement server-side, client-side, and bidirectional streaming in GoFr with built-in observability and error handling."
+            },
+            {
                 title: 'Using Pub/Sub',
                 href: '/docs/advanced-guide/using-publisher-subscriber',
                 desc: "Discover how to GoFr seamlessly allows to integrate different Pub/Sub systems in your application for effective messaging and event-driven architectures."
@@ -110,7 +116,7 @@ export const navigation = [
             {
                 title: 'Key Value Store',
                 href: '/docs/advanced-guide/key-value-store',
-                desc: "Explore how to implement and manage a key-value store in your GoFr application for fast and efficient data retrieval."
+                desc: "Explore how to implement and manage a key-value store in your GoFr application for fast and efficient data retrieval. Supports BadgerDB, NATS-KV, and DynamoDB."
             },
             {
                 title: 'Dealing with SQL',
@@ -151,7 +157,17 @@ export const navigation = [
                 title: 'Profiling in GoFr Applications',
                 href: '/docs/advanced-guide/debugging',
                 desc: "Discover GoFr auto-enables pprof profiling by leveraging its built-in configurations."
-            }
+            },
+            {
+                title: 'Adding Synchronous Startup Hooks',
+                href: '/docs/advanced-guide/startup-hooks',
+                desc: "Learn how to seed a database, warm up a cache, or perform other critical setup procedures, synchronously before starting your application."
+            },
+            {
+                title: 'Building CLI Applications',
+                href: '/docs/advanced-guide/building-cli-applications',
+                desc: "Learn to build powerful command-line interface (CLI) applications using GoFr's app.NewCMD(), offering a robust framework for command-line tools."
+            },
         ],
     },
     {
@@ -226,6 +242,11 @@ export const navigation = [
                 title: "Elasticsearch",
                 href: "/docs/datasources/elasticsearch",
                 desc: "Learn how to connect to and interact with elasticsearch in GoFr."
+            },
+            {
+                title: "InfluxDB",
+                href: "/docs/datasources/influxdb",
+                desc: "Learn how to connect to and interact with influxdb in GoFr."
             },
         ],
     },

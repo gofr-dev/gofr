@@ -12,7 +12,7 @@ COPY  docs/navigation.js /app/src/lib
 COPY  docs/events.json /app/src/app/events
 COPY  docs/testimonials.json /app/utils
 
-ENV NODE_ENV production
+ENV NODE_ENV=production
 
 RUN npm install
 RUN npm run build

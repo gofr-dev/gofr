@@ -3,18 +3,18 @@
   files a PR. This is only suitable for really small changes like: spelling fixes, variable name changes or error string
   change etc. For larger commits, following steps are recommended.
 * (Optional) If you want to discuss your implementation with the users of GoFr, use the GitHub discussions of this repo.
-* Configure your editor to use goimport and golangci-lint on file changes. Any code which is not formatted using these
+* Configure your editor to use goimports and golangci-lint on file changes. Any code which is not formatted using these
   tools, will fail on the pipeline.
 * Contributors should begin working on an issue only after it has been assigned to them. To get an issue assigned, please comment on the GitHub thread
   and request assignment from a maintainer. This helps avoid duplicate or conflicting pull requests from multiple contributors.
 * Issues labeled triage are not open for direct contributions. If you're interested in working on a triage issue, please reach out to the maintainers
-  to discuss it before proceeding in the Github thread.
+  to discuss it before proceeding in the GitHub thread.
 <!-- spellchecker:off "favour" have to be ignored here -->
 * We follow **American English** conventions in this project (e.g., *"favor"* instead of *"favour"*). Please keep this consistent across all code comments, documentation, etc.
 <!-- spellchecker:on -->
-* All code contributions should have associated tests and all new line additions should be covered in those testcases.
+* All code contributions should have associated tests and all new line additions should be covered in those test cases.
   No PR should ever decrease the overall code coverage.
-* Once your code changes are done along with the testcases, submit a PR to development branch. Please note that all PRs
+* Once your code changes are done along with the test cases, submit a PR to development branch. Please note that all PRs
   are merged from feature branches to development first.
 * PR should be raised only when development is complete and the code is ready for review. This approach helps reduce the number of open pull requests and facilitates a more efficient review process for the team.
 * All PRs need to be reviewed by at least 2 GoFr developers. They might reach out to you for any clarification.
@@ -50,7 +50,6 @@ func TestFunctionName(t *testing.T) {
 ```
 
 
-
 4. **Table-Driven Tests:**
 
 -   Consider using table-driven tests for testing multiple scenarios.
@@ -61,6 +60,7 @@ func TestFunctionName(t *testing.T) {
 ```console
 docker run --name mongodb -d -p 27017:27017 -e MONGO_INITDB_ROOT_USERNAME=user -e MONGO_INITDB_ROOT_PASSWORD=password mongodb/mongodb-community-server:latest
 docker run -d -p 21:21 -p 21000-21010:21000-21010 -e USERS='user|password' delfer/alpine-ftp-server
+
 # the docker image is relatively unstable. Alternatively, refer to official guide of OpenTSDB to locally setup OpenTSDB env.
 # http://opentsdb.net/docs/build/html/installation.html#id1
 docker run -d --name gofr-opentsdb -p 4242:4242 petergrace/opentsdb-docker:latest
@@ -96,13 +96,12 @@ docker run -d --name arangodb \
   -e ARANGO_ROOT_PASSWORD=rootpassword \
   --pull always \
   arangodb:latest
-<<<<<<< HEAD
+docker run --name dynamodb-local -d -p 8000:8000 amazon/dynamodb-local
 docker run -d --name db -p 8091-8096:8091-8096 -p 11210-11211:11210-11211 couchbase
-=======
 docker login container-registry.oracle.com
 docker pull container-registry.oracle.com/database/free:latest
 docker run -d --name oracle-free -p 1521:1521 -e ORACLE_PWD=YourPasswordHere container-registry.oracle.com/database/free:latest
->>>>>>> origin
+docker run -it --rm -p 4443:4443 -e STORAGE_EMULATOR_HOST=0.0.0.0:4443 fsouza/fake-gcs-server:latest
 ```
 
 > [!NOTE]

@@ -32,6 +32,10 @@ type S3File struct {
 	lastModified time.Time
 }
 
+func (*S3File) Sys() any {
+	return nil
+}
+
 var (
 	ErrNilResponse = errors.New("response retrieved is nil ")
 )
@@ -81,7 +85,6 @@ func (f *S3File) Read(p []byte) (n int, err error) {
 		Bucket: aws.String(bucketName),
 		Key:    aws.String(fileName),
 	})
-
 	if err != nil {
 		msg = fmt.Sprintf("Failed to retrieve %q: %v", fileName, err)
 		return 0, err
@@ -144,7 +147,6 @@ func (f *S3File) ReadAt(p []byte, offset int64) (n int, err error) {
 		Bucket: aws.String(bucketName),
 		Key:    aws.String(fileName),
 	})
-
 	if err != nil {
 		msg = fmt.Sprintf("Failed to retrieve file %q: %v", fileName, err)
 		return 0, err
@@ -213,7 +215,6 @@ func (f *S3File) Write(p []byte) (n int, err error) {
 			Bucket: aws.String(bucketName),
 			Key:    aws.String(fileName),
 		})
-
 		if err != nil {
 			msg = fmt.Sprintf("Failed to retrieve file %q: %v", fileName, err)
 			return 0, err
@@ -248,7 +249,6 @@ func (f *S3File) Write(p []byte) (n int, err error) {
 		// this specifies the file must be downloaded before being opened
 		ContentDisposition: aws.String("attachment"),
 	})
-
 	if err != nil {
 		msg = fmt.Sprintf("Failed to put file %q: %v", fileName, err)
 		return 0, err
@@ -288,7 +288,6 @@ func (f *S3File) WriteAt(p []byte, offset int64) (n int, err error) {
 		Bucket: aws.String(bucketName),
 		Key:    aws.String(fileName),
 	})
-
 	if err != nil {
 		msg = fmt.Sprintf("Failed to retrieve file %q: %v", fileName, err)
 		return 0, err
@@ -318,7 +317,6 @@ func (f *S3File) WriteAt(p []byte, offset int64) (n int, err error) {
 		// this specifies the file must be downloaded before being opened
 		ContentDisposition: aws.String("attachment"),
 	})
-
 	if err != nil {
 		msg = fmt.Sprintf("Failed to put file %q: %v", fileName, err)
 		return 0, err

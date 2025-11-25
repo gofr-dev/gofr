@@ -1,4 +1,16 @@
-## ArangoDB
+# ArangoDB
+
+
+
+## Configuration
+
+To connect to `ArangoDB`, you need to provide the following environment variables:
+- `HOST`: The hostname or IP address of your `ArangoDB` server.
+- `USER`: The username for connecting to the database.
+- `PASSWORD`: The password for the specified user.
+- `PORT`: The port number
+
+## Setup
 
 GoFr supports injecting `ArangoDB` that implements the following interface. Any driver that implements the interface can be
 added using the `app.AddArangoDB()` method, and users can use ArangoDB across the application with `gofr.Context`.
@@ -47,14 +59,13 @@ Import the GoFr's external driver for ArangoDB:
 go get gofr.dev/pkg/gofr/datasource/arangodb@latest
 ```
 
-### Example
+## Example
 
 ```go
 package main
 
 import (
 	"fmt"
-
 	"gofr.dev/pkg/gofr"
 	"gofr.dev/pkg/gofr/datasource/arangodb"
 )
@@ -69,10 +80,10 @@ func main() {
 
 	// Configure the ArangoDB client
 	arangoClient := arangodb.New(arangodb.Config{
-		Host:     "localhost",
-		User:     "root",
-		Password: "root",
-		Port:     8529,
+		Host:     app.Config.Get("HOST"),
+		User:     app.Config.Get("USER"),
+		Password: app.Config.Get("PASSWORD"),
+		Port:     app.Config.Get("PORT"),
 	})
 	app.AddArangoDB(arangoClient)
 

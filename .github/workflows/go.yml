@@ -12,13 +12,15 @@ on:
       - development
     paths-ignore:
       - 'docs/**'  # Ignore changes to docs folder
+      - '**/*.md'
   # Run on pull requests to main or development branches
   pull_request:
     branches:
       - main
       - development
     paths-ignore:
-      - 'docs/**'  # Ignore changes to docs folder
+      - 'docs/**'# Ignore changes to docs folder
+      - '**/*.md'
 
 # Define the jobs that this workflow will run
 jobs:
@@ -29,7 +31,7 @@ jobs:
     # Define a matrix strategy to test against multiple Go versions
     strategy:
       matrix:
-        go-version: ['1.24','1.23', '1.22']
+        go-version: ['1.25','1.24', '1.23']
       # Continue with other jobs if one version fails
       fail-fast: false
 
@@ -37,7 +39,7 @@ jobs:
     services:
       # Kafka service
       kafka:
-        image: bitnami/kafka:3.4.1
+        image: bitnamilegacy/kafka:3.4.1
         ports:
           - "9092:9092"
         env:
@@ -100,7 +102,7 @@ jobs:
           command: |
             export APP_ENV=test
             # Run tests for the examples directory with coverage
-            go test gofr.dev/examples/... -v -short -coverprofile packageWithpbgo.cov -coverpkg=gofr.dev/examples/...
+            go test ./examples/... -v -short -covermode=atomic -coverprofile packageWithpbgo.cov -coverpkg=./examples/...
              # Filter out auto-generated files by protobuf and gofr framework from coverage report
             grep -vE '(/client/|grpc-.+-client/main\.go|_client\.go|_gofr\.go|_grpc\.pb\.go|\.pb\.go|\.proto|health_.*\.go)' packageWithpbgo.cov > profile.cov
             # Display coverage statistics
@@ -109,7 +111,7 @@ jobs:
       # Upload coverage report for the 1.24 Go version only
       - name: Upload Test Coverage
         if: ${{ matrix.go-version == '1.24'}}
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: Example-Test-Report
           path: profile.cov
@@ -120,7 +122,7 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        go-version: ['1.24','1.23', '1.22']
+        go-version: ['1.25','1.24', '1.23']
       fail-fast: false
 
     steps:
@@ -146,21 +148,45 @@ jobs:
         with:
           timeout_minutes: 5
           max_attempts: 2
+          retry_on: error
           command: |
             export APP_ENV=test
-            # Run tests with coverage for root gofr package only
-            go test -v -short -covermode=atomic -coverpkg=./pkg/gofr -coverprofile=gofr_only.cov ./pkg/gofr
-            # Run tests for all sub-packages under gofr
-            go test -v -covermode=atomic -coverpkg=./pkg/gofr -coverprofile=submodules.cov ./pkg/gofr/...
+
+            # Run tests for root gofr package
+            go test -v -short -covermode=atomic \
+              -coverpkg=./pkg/gofr -coverprofile=gofr_only.cov ./pkg/gofr
+            exit_code=$?
+            if [ $exit_code -eq 2 ]; then
+              echo "::error::Panic detected in root gofr package tests"
+              exit 2
+            elif [ $exit_code -ne 0 ]; then
+              echo "::error::Root gofr package tests failed"
+              exit $exit_code
+            fi
+
+            # Run tests for sub-packages
+            go test -v -covermode=atomic \
+              -coverpkg=./pkg/gofr -coverprofile=submodules.cov ./pkg/gofr/...
+            exit_code=$?
+            if [ $exit_code -eq 2 ]; then
+              echo "::error::Panic detected in gofr sub-packages tests"
+              exit 2
+            elif [ $exit_code -ne 0 ]; then
+              echo "::error::Gofr sub-packages tests failed"
+              exit $exit_code
+            fi
+
             # Combine coverage profiles
             echo "mode: atomic" > profile.cov
             grep -h -v "mode:" gofr_only.cov submodules.cov | grep -v '/mock_' >> profile.cov
+
+            # Show coverage summary
             go tool cover -func profile.cov
 
       # Upload coverage report for the 1.24 Go version only
       - name: Upload Test Coverage
         if: ${{ matrix.go-version == '1.24'}}
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: PKG-Coverage-Report
           path: profile.cov
@@ -177,7 +203,7 @@ jobs:
 
       # Download coverage reports from previous jobs
       - name: Download Coverage Report
-        uses: actions/download-artifact@v5
+        uses: actions/download-artifact@v6
         with:
           path: artifacts
 
@@ -185,8 +211,8 @@ jobs:
       - name: Merge Coverage Files
         working-directory: artifacts
         run: |
-          awk '!/^mode: / && FNR==1{print "mode: set"} {print}' ./Example-Test-Report/profile.cov > merged_profile.cov
-          tail -n +2 ./PKG-Coverage-Report/profile.cov >> merged_profile.cov
+          echo "mode: atomic" > merged_profile.cov
+          grep -h -v "mode:" ./Example-Test-Report/profile.cov ./PKG-Coverage-Report/profile.cov >> merged_profile.cov
 
       # Calculate and output the total code coverage percentage
       - name: Parse code-coverage value
@@ -196,6 +222,7 @@ jobs:
           codeCoverage=${codeCoverage%?}
           echo "CODE_COVERAGE=$codeCoverage" >> $GITHUB_ENV
           echo "✅ Total Code Coverage: $codeCoverage%"
+
   #      - name: Check if code-coverage is greater than threshold
   #        run: |
   #          codeCoverage=${{ env.CODE_COVERAGE }}
@@ -208,7 +235,7 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        go-version:  ['1.24','1.23', '1.22']
+        go-version:  ['1.25','1.24', '1.23']
       fail-fast: false
 
     steps:
@@ -264,13 +291,13 @@ jobs:
             
               # Copy coverage file to the coverage_reports directory
               cp ${module_name}.cov ../../../coverage_reports/
-              
+            
               cd -
             '
 
       # Upload submodule coverage reports as an artifact
       - name: Upload Coverage Reports
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: submodule-coverage-reports
           path: coverage_reports/*.cov
@@ -286,7 +313,7 @@ jobs:
     # This job only needs example and pkg test results, not submodules
     needs: [Example-Unit-Testing, PKG-Unit-Testing]
     # Only run this job on pushes to the development branch
-    if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/development'}}
+    if: ${{ github.repository == 'gofr-dev/gofr' && github.event_name == 'push' && github.ref == 'refs/heads/development'}}
     steps:
       - name: Check out code into the Go module directory
         uses: actions/checkout@v5
@@ -298,7 +325,7 @@ jobs:
 
       # Download coverage artifacts
       - name: Download Coverage Report
-        uses: actions/download-artifact@v5
+        uses: actions/download-artifact@v6
         with:
           path: artifacts
 
@@ -306,9 +333,8 @@ jobs:
       - name: Merge Coverage Files
         working-directory: artifacts
         run: |
-          echo "mode: set" > merged_profile.cov
-          tail -n +2 ./Example-Test-Report/profile.cov >> merged_profile.cov
-          tail -n +2 ./PKG-Coverage-Report/profile.cov >> merged_profile.cov
+          echo "mode: atomic" > merged_profile.cov
+          grep -h -v "mode:" ./Example-Test-Report/profile.cov ./PKG-Coverage-Report/profile.cov >> merged_profile.cov
 
           # Generate and print total coverage percentage
           echo "Total Coverage:"
@@ -333,13 +359,13 @@ jobs:
       - name: Set up Go environment
         uses: actions/setup-go@v5
         with:
-          go-version: '1.24'
+          go-version: '1.25'
           cache: false
 
       # Install the linting tool
       - name: Install golangci-lint
         run: |
-          go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.1
+          go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.4.0
 
       - name: Get dependencies
         run: |
@@ -380,7 +406,7 @@ jobs:
       - name: Set up Go environment
         uses: actions/setup-go@v5
         with:
-          go-version: 1.24
+          go-version: 1.25
 
       # Check file naming conventions using ls-lint
       - name: Check for file names errors

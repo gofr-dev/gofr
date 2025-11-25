@@ -98,16 +98,76 @@ func TestCMDRun_ProgressContextCancelled(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
 
-	// add an already canceled context
+	// Create a proper context with logger to avoid nil pointer dereference
+	container := &container.Container{
+		Logger: logging.NewMockLogger(logging.ERROR),
+	}
+	
 	res, err := progress(&gofr.Context{
-		Context: ctx,
-		Request: cmd.NewRequest([]string{"command", "spinner"}),
-		Container: &container.Container{
-			Logger: logging.NewMockLogger(logging.ERROR),
-		},
-		Out: terminal.New(),
+		Context:       ctx,
+		Request:       cmd.NewRequest([]string{"command", "progress"}),
+		Container:     container,
+		Out:           terminal.New(),
+		ContextLogger: *logging.NewContextLogger(ctx, container.Logger),
 	})
 
 	assert.Empty(t, res)
 	assert.ErrorIs(t, err, context.Canceled)
+}
+
+// TestCMDRunWithInvalidCommand tests that invalid commands return appropriate error
+func TestCMDRunWithInvalidCommand(t *testing.T) {
+	expErr := "No Command Found!\n"
+	os.Args = []string{"command", "invalid"}
+	output := testutil.StderrOutputForFunc(main)
+
+	assert.Equal(t, expErr, output, "TEST Failed.\n")
+}
+
+// TestCMDRunWithEmptyParams tests the params command with empty name parameter
+func TestCMDRunWithEmptyParams(t *testing.T) {
+	expResp := "Hello !\n"
+	os.Args = []string{"command", "params", "-name="}
+	output := testutil.StdoutOutputForFunc(main)
+
+	assert.Contains(t, output, expResp, "TEST Failed.\n")
+}
+
+// TestCMDRunHelpCommand tests the help functionality
+func TestCMDRunHelpCommand(t *testing.T) {
+	testCases := []struct {
+		args     []string
+		expected []string
+	}{
+		{[]string{"command", "help"}, []string{"Available commands:", "hello", "params", "spinner", "progress"}},
+		{[]string{"command", "-h"}, []string{"Available commands:", "hello", "params", "spinner", "progress"}},
+		{[]string{"command", "--help"}, []string{"Available commands:", "hello", "params", "spinner", "progress"}},
+	}
+
+	for i, tc := range testCases {
+		os.Args = tc.args
+		output := testutil.StdoutOutputForFunc(main)
+
+		for _, expected := range tc.expected {
+			assert.Contains(t, output, expected, "TEST[%d] Failed. Expected to contain: %s\n", i, expected)
+		}
+	}
+}
+
+// TestCMDRunHelpForSpecificCommand tests help for specific commands
+func TestCMDRunHelpForSpecificCommand(t *testing.T) {
+	testCases := []struct {
+		args     []string
+		expected string
+	}{
+		{[]string{"command", "hello", "-h"}, "hello world option"},
+		{[]string{"command", "hello", "--help"}, "hello world option"},
+	}
+
+	for i, tc := range testCases {
+		os.Args = tc.args
+		output := testutil.StdoutOutputForFunc(main)
+
+		assert.Contains(t, output, tc.expected, "TEST[%d] Failed.\n", i)
+	}
 }
