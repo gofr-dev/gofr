@@ -8478,6 +8478,325 @@ func (mr *MockRedisMockRecorder) ZUnionWithScores(ctx, store any) *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ZUnionWithScores", reflect.TypeOf((*MockRedis)(nil).ZUnionWithScores), ctx, store)
 }
 
+// ClientMaintNotifications mocks base method.
+func (m *MockRedis) ClientMaintNotifications(ctx context.Context, enabled bool, endpointType string) *redis.StatusCmd {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "ClientMaintNotifications", ctx, enabled, endpointType)
+	ret0, _ := ret[0].(*redis.StatusCmd)
+	return ret0
+}
+
+// ClientMaintNotifications indicates an expected call of ClientMaintNotifications.
+func (mr *MockRedisMockRecorder) ClientMaintNotifications(ctx, enabled, endpointType any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ClientMaintNotifications", reflect.TypeOf((*MockRedis)(nil).ClientMaintNotifications), ctx, enabled, endpointType)
+}
+
+// SlowLogLen mocks base method.
+func (m *MockRedis) SlowLogLen(ctx context.Context) *redis.IntCmd {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "SlowLogLen", ctx)
+	ret0, _ := ret[0].(*redis.IntCmd)
+	return ret0
+}
+
+// SlowLogLen indicates an expected call of SlowLogLen.
+func (mr *MockRedisMockRecorder) SlowLogLen(ctx any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SlowLogLen", reflect.TypeOf((*MockRedis)(nil).SlowLogLen), ctx)
+}
+
+// SlowLogReset mocks base method.
+func (m *MockRedis) SlowLogReset(ctx context.Context) *redis.StatusCmd {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "SlowLogReset", ctx)
+	ret0, _ := ret[0].(*redis.StatusCmd)
+	return ret0
+}
+
+// SlowLogReset indicates an expected call of SlowLogReset.
+func (mr *MockRedisMockRecorder) SlowLogReset(ctx any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SlowLogReset", reflect.TypeOf((*MockRedis)(nil).SlowLogReset), ctx)
+}
+
+// Latency mocks base method.
+func (m *MockRedis) Latency(ctx context.Context) *redis.LatencyCmd {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Latency", ctx)
+	ret0, _ := ret[0].(*redis.LatencyCmd)
+	return ret0
+}
+
+// Latency indicates an expected call of Latency.
+func (mr *MockRedisMockRecorder) Latency(ctx any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Latency", reflect.TypeOf((*MockRedis)(nil).Latency), ctx)
+}
+
+// LatencyReset mocks base method.
+func (m *MockRedis) LatencyReset(ctx context.Context, events ...interface{}) *redis.StatusCmd {
+	m.ctrl.T.Helper()
+	varargs := []any{ctx}
+	for _, a := range events {
+		varargs = append(varargs, a)
+	}
+	ret := m.ctrl.Call(m, "LatencyReset", varargs...)
+	ret0, _ := ret[0].(*redis.StatusCmd)
+	return ret0
+}
+
+// LatencyReset indicates an expected call of LatencyReset.
+func (mr *MockRedisMockRecorder) LatencyReset(ctx any, events ...any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	varargs := append([]any{ctx}, events...)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "LatencyReset", reflect.TypeOf((*MockRedis)(nil).LatencyReset), varargs...)
+}
+
+// ACLGenPass mocks base method.
+func (m *MockRedis) ACLGenPass(ctx context.Context, bit int) *redis.StringCmd {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "ACLGenPass", ctx, bit)
+	ret0, _ := ret[0].(*redis.StringCmd)
+	return ret0
+}
+
+// ACLGenPass indicates an expected call of ACLGenPass.
+func (mr *MockRedisMockRecorder) ACLGenPass(ctx, bit any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ACLGenPass", reflect.TypeOf((*MockRedis)(nil).ACLGenPass), ctx, bit)
+}
+
+// ACLUsers mocks base method.
+func (m *MockRedis) ACLUsers(ctx context.Context) *redis.StringSliceCmd {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "ACLUsers", ctx)
+	ret0, _ := ret[0].(*redis.StringSliceCmd)
+	return ret0
+}
+
+// ACLUsers indicates an expected call of ACLUsers.
+func (mr *MockRedisMockRecorder) ACLUsers(ctx any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ACLUsers", reflect.TypeOf((*MockRedis)(nil).ACLUsers), ctx)
+}
+
+// ACLWhoAmI mocks base method.
+func (m *MockRedis) ACLWhoAmI(ctx context.Context) *redis.StringCmd {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "ACLWhoAmI", ctx)
+	ret0, _ := ret[0].(*redis.StringCmd)
+	return ret0
+}
+
+// ACLWhoAmI indicates an expected call of ACLWhoAmI.
+func (mr *MockRedisMockRecorder) ACLWhoAmI(ctx any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ACLWhoAmI", reflect.TypeOf((*MockRedis)(nil).ACLWhoAmI), ctx)
+}
+
+// FTHybrid mocks base method.
+func (m *MockRedis) FTHybrid(ctx context.Context, index string, searchExpr string, vectorField string, vectorData redis.Vector) *redis.FTHybridCmd {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "FTHybrid", ctx, index, searchExpr, vectorField, vectorData)
+	ret0, _ := ret[0].(*redis.FTHybridCmd)
+	return ret0
+}
+
+// FTHybrid indicates an expected call of FTHybrid.
+func (mr *MockRedisMockRecorder) FTHybrid(ctx, index, searchExpr, vectorField, vectorData any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "FTHybrid", reflect.TypeOf((*MockRedis)(nil).FTHybrid), ctx, index, searchExpr, vectorField, vectorData)
+}
+
+// FTHybridWithArgs mocks base method.
+func (m *MockRedis) FTHybridWithArgs(ctx context.Context, index string, options *redis.FTHybridOptions) *redis.FTHybridCmd {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "FTHybridWithArgs", ctx, index, options)
+	ret0, _ := ret[0].(*redis.FTHybridCmd)
+	return ret0
+}
+
+// FTHybridWithArgs indicates an expected call of FTHybridWithArgs.
+func (mr *MockRedisMockRecorder) FTHybridWithArgs(ctx, index, options any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "FTHybridWithArgs", reflect.TypeOf((*MockRedis)(nil).FTHybridWithArgs), ctx, index, options)
+}
+
+// DelExArgs mocks base method.
+func (m *MockRedis) DelExArgs(ctx context.Context, key string, a redis.DelExArgs) *redis.IntCmd {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "DelExArgs", ctx, key, a)
+	ret0, _ := ret[0].(*redis.IntCmd)
+	return ret0
+}
+
+// DelExArgs indicates an expected call of DelExArgs.
+func (mr *MockRedisMockRecorder) DelExArgs(ctx, key, a any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DelExArgs", reflect.TypeOf((*MockRedis)(nil).DelExArgs), ctx, key, a)
+}
+
+// Digest mocks base method.
+func (m *MockRedis) Digest(ctx context.Context, key string) *redis.DigestCmd {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Digest", ctx, key)
+	ret0, _ := ret[0].(*redis.DigestCmd)
+	return ret0
+}
+
+// Digest indicates an expected call of Digest.
+func (mr *MockRedisMockRecorder) Digest(ctx, key any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Digest", reflect.TypeOf((*MockRedis)(nil).Digest), ctx, key)
+}
+
+// MSetEX mocks base method.
+func (m *MockRedis) MSetEX(ctx context.Context, args redis.MSetEXArgs, values ...interface{}) *redis.IntCmd {
+	m.ctrl.T.Helper()
+	varargs := []any{ctx, args}
+	for _, a := range values {
+		varargs = append(varargs, a)
+	}
+	ret := m.ctrl.Call(m, "MSetEX", varargs...)
+	ret0, _ := ret[0].(*redis.IntCmd)
+	return ret0
+}
+
+// MSetEX indicates an expected call of MSetEX.
+func (mr *MockRedisMockRecorder) MSetEX(ctx, args any, values ...any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	varargs := append([]any{ctx, args}, values...)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "MSetEX", reflect.TypeOf((*MockRedis)(nil).MSetEX), varargs...)
+}
+
+// SetIFEQ mocks base method.
+func (m *MockRedis) SetIFEQ(ctx context.Context, key string, value interface{}, matchValue interface{}, expiration time.Duration) *redis.StatusCmd {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "SetIFEQ", ctx, key, value, matchValue, expiration)
+	ret0, _ := ret[0].(*redis.StatusCmd)
+	return ret0
+}
+
+// SetIFEQ indicates an expected call of SetIFEQ.
+func (mr *MockRedisMockRecorder) SetIFEQ(ctx, key, value, matchValue, expiration any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetIFEQ", reflect.TypeOf((*MockRedis)(nil).SetIFEQ), ctx, key, value, matchValue, expiration)
+}
+
+// SetIFEQGet mocks base method.
+func (m *MockRedis) SetIFEQGet(ctx context.Context, key string, value interface{}, matchValue interface{}, expiration time.Duration) *redis.StringCmd {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "SetIFEQGet", ctx, key, value, matchValue, expiration)
+	ret0, _ := ret[0].(*redis.StringCmd)
+	return ret0
+}
+
+// SetIFEQGet indicates an expected call of SetIFEQGet.
+func (mr *MockRedisMockRecorder) SetIFEQGet(ctx, key, value, matchValue, expiration any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetIFEQGet", reflect.TypeOf((*MockRedis)(nil).SetIFEQGet), ctx, key, value, matchValue, expiration)
+}
+
+// SetIFNE mocks base method.
+func (m *MockRedis) SetIFNE(ctx context.Context, key string, value interface{}, matchValue interface{}, expiration time.Duration) *redis.StatusCmd {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "SetIFNE", ctx, key, value, matchValue, expiration)
+	ret0, _ := ret[0].(*redis.StatusCmd)
+	return ret0
+}
+
+// SetIFNE indicates an expected call of SetIFNE.
+func (mr *MockRedisMockRecorder) SetIFNE(ctx, key, value, matchValue, expiration any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetIFNE", reflect.TypeOf((*MockRedis)(nil).SetIFNE), ctx, key, value, matchValue, expiration)
+}
+
+// SetIFNEGet mocks base method.
+func (m *MockRedis) SetIFNEGet(ctx context.Context, key string, value interface{}, matchValue interface{}, expiration time.Duration) *redis.StringCmd {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "SetIFNEGet", ctx, key, value, matchValue, expiration)
+	ret0, _ := ret[0].(*redis.StringCmd)
+	return ret0
+}
+
+// SetIFNEGet indicates an expected call of SetIFNEGet.
+func (mr *MockRedisMockRecorder) SetIFNEGet(ctx, key, value, matchValue, expiration any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetIFNEGet", reflect.TypeOf((*MockRedis)(nil).SetIFNEGet), ctx, key, value, matchValue, expiration)
+}
+
+// SetIFDEQ mocks base method.
+func (m *MockRedis) SetIFDEQ(ctx context.Context, key string, value interface{}, matchDigest uint64, expiration time.Duration) *redis.StatusCmd {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "SetIFDEQ", ctx, key, value, matchDigest, expiration)
+	ret0, _ := ret[0].(*redis.StatusCmd)
+	return ret0
+}
+
+// SetIFDEQ indicates an expected call of SetIFDEQ.
+func (mr *MockRedisMockRecorder) SetIFDEQ(ctx, key, value, matchDigest, expiration any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetIFDEQ", reflect.TypeOf((*MockRedis)(nil).SetIFDEQ), ctx, key, value, matchDigest, expiration)
+}
+
+// SetIFDEQGet mocks base method.
+func (m *MockRedis) SetIFDEQGet(ctx context.Context, key string, value interface{}, matchDigest uint64, expiration time.Duration) *redis.StringCmd {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "SetIFDEQGet", ctx, key, value, matchDigest, expiration)
+	ret0, _ := ret[0].(*redis.StringCmd)
+	return ret0
+}
+
+// SetIFDEQGet indicates an expected call of SetIFDEQGet.
+func (mr *MockRedisMockRecorder) SetIFDEQGet(ctx, key, value, matchDigest, expiration any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetIFDEQGet", reflect.TypeOf((*MockRedis)(nil).SetIFDEQGet), ctx, key, value, matchDigest, expiration)
+}
+
+// SetIFDNE mocks base method.
+func (m *MockRedis) SetIFDNE(ctx context.Context, key string, value interface{}, matchDigest uint64, expiration time.Duration) *redis.StatusCmd {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "SetIFDNE", ctx, key, value, matchDigest, expiration)
+	ret0, _ := ret[0].(*redis.StatusCmd)
+	return ret0
+}
+
+// SetIFDNE indicates an expected call of SetIFDNE.
+func (mr *MockRedisMockRecorder) SetIFDNE(ctx, key, value, matchDigest, expiration any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetIFDNE", reflect.TypeOf((*MockRedis)(nil).SetIFDNE), ctx, key, value, matchDigest, expiration)
+}
+
+// SetIFDNEGet mocks base method.
+func (m *MockRedis) SetIFDNEGet(ctx context.Context, key string, value interface{}, matchDigest uint64, expiration time.Duration) *redis.StringCmd {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "SetIFDNEGet", ctx, key, value, matchDigest, expiration)
+	ret0, _ := ret[0].(*redis.StringCmd)
+	return ret0
+}
+
+// SetIFDNEGet indicates an expected call of SetIFDNEGet.
+func (mr *MockRedisMockRecorder) SetIFDNEGet(ctx, key, value, matchDigest, expiration any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetIFDNEGet", reflect.TypeOf((*MockRedis)(nil).SetIFDNEGet), ctx, key, value, matchDigest, expiration)
+}
+
+// VRange mocks base method.
+func (m *MockRedis) VRange(ctx context.Context, key, start, end string, count int64) *redis.StringSliceCmd {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "VRange", ctx, key, start, end, count)
+	ret0, _ := ret[0].(*redis.StringSliceCmd)
+	return ret0
+}
+
+// VRange indicates an expected call of VRange.
+func (mr *MockRedisMockRecorder) VRange(ctx, key, start, end, count any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "VRange", reflect.TypeOf((*MockRedis)(nil).VRange), ctx, key, start, end, count)
+}
+
+
 // MockCassandra is a mock of Cassandra interface.
 type MockCassandra struct {
 	ctrl     *gomock.Controller
