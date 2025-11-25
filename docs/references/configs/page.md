@@ -107,6 +107,24 @@ This document lists all the configuration options supported by the GoFr framewor
 -  Timeout duration for server shutdown process
 -  30s
 
+---
+
+-  GOFR_TELEMETRY
+-  Enable telemetry for GoFr framework usage
+-  true
+
+---
+
+-  LOG_DISABLE_PROBES
+-  Disable log probes for health checks
+-  false
+
+---
+
+-  GRPC_ENABLE_REFLECTION
+-  Enable gRPC server reflection
+-  false
+
 
 {% /table %}
 
@@ -314,6 +332,27 @@ This document lists all the configuration options supported by the GoFr framewor
 
 - REDIS_DB
 - Database number to use for the Redis server.
+
+---
+
+- REDIS_TLS_ENABLED
+- Enable TLS for Redis connections
+- false
+
+---
+
+- REDIS_TLS_CA_CERT
+- Path to the TLS CA certificate file for Redis
+
+---
+
+- REDIS_TLS_CERT
+- Path to the TLS certificate file for Redis
+
+---
+
+- REDIS_TLS_KEY
+- Path to the TLS key file for Redis
 
 {% /table %}
 
@@ -542,3 +581,4 @@ This document lists all the configuration options supported by the GoFr framewor
 - creds.json
 
 {% /table %}
+
