@@ -118,7 +118,6 @@ func Logging(probes LogProbes, logger logger) func(inner http.Handler) http.Hand
 
 func handleRequestLog(srw *StatusResponseWriter, r *http.Request, start time.Time, traceID, spanID string, logger logger) {
     duration := time.Since(start)
-
 	l := &RequestLog{
 		TraceID:      traceID,
 		SpanID:       spanID,
