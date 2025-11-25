@@ -10,6 +10,8 @@ import (
 	"gofr.dev/pkg/gofr/container"
 )
 
+const dummyValue = "dummy" // FIX: make "dummy" string a constant
+
 // BasicAuthProvider represents a basic authentication provider.
 type BasicAuthProvider struct {
 	Users                       map[string]string
@@ -100,9 +102,10 @@ func (a *BasicAuthProvider) validateCredentials(username, password string) bool 
 		storedPass, ok := a.Users[username]
 
 		if !ok {
-			dummy := "dummy"
-			// constant time compare with dummy password to mitigate timing attacks
-			subtle.ConstantTimeCompare([]byte(password), []byte(dummy))
+			// FIX: Use dummyValue constant
+			subtle.ConstantTimeCompare([]byte(password), []byte(dummyValue))
+
+			// FIX: Add exactly one blank line before return
 			return false
 		}
 
