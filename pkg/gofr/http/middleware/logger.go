@@ -53,6 +53,7 @@ type RequestLog struct {
 	SpanID       string `json:"span_id,omitempty"`
 	StartTime    string `json:"start_time,omitempty"`
 	ResponseTime int64  `json:"response_time,omitempty"`
+	ResponseTimeHuman string `json:"response_time_human,omitempty"`
 	Method       string `json:"method,omitempty"`
 	UserAgent    string `json:"user_agent,omitempty"`
 	IP           string `json:"ip,omitempty"`
@@ -116,25 +117,28 @@ func Logging(probes LogProbes, logger logger) func(inner http.Handler) http.Hand
 }
 
 func handleRequestLog(srw *StatusResponseWriter, r *http.Request, start time.Time, traceID, spanID string, logger logger) {
-	l := &RequestLog{
-		TraceID:      traceID,
-		SpanID:       spanID,
-		StartTime:    start.Format("2006-01-02T15:04:05.999999999-07:00"),
-		ResponseTime: time.Since(start).Nanoseconds() / 1000,
-		Method:       r.Method,
-		UserAgent:    r.UserAgent(),
-		IP:           getIPAddress(r),
-		URI:          r.RequestURI,
-		Response:     srw.status,
-	}
+    duration := time.Since(start)
 
-	if logger != nil {
-		if srw.status >= http.StatusInternalServerError {
-			logger.Error(l)
-		} else {
-			logger.Log(l)
-		}
-	}
+    l := &RequestLog{
+        TraceID:           traceID,
+        SpanID:            spanID,
+        StartTime:         start.Format("2006-01-02T15:04:05.999999999-07:00"),
+        ResponseTime:      duration.Nanoseconds() / 1000,
+        ResponseTimeHuman: duration.String(),
+        Method:            r.Method,
+        UserAgent:         r.UserAgent(),
+        IP:                getIPAddress(r),
+        URI:               r.RequestURI,
+        Response:          srw.status,
+    }
+
+    if logger != nil {
+        if srw.status >= http.StatusInternalServerError {
+            logger.Error(l)
+        } else {
+            logger.Log(l)
+        }
+    }
 }
 
 // isLogProbeDisabled checks if probes are disabled to skip logging for default probe paths
