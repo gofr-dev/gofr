@@ -28,12 +28,7 @@ type Connection struct {
 // ErrorConnection is the connection error that occurs when websocket connection cannot be established.
 var ErrorConnection = errors.New("couldn't establish connection to web socket")
 
-// The message types are defined in RFC 6455, section 11.8.
-const (
-	// TextMessage denotes a text data message. The text message payload is
-	// interpreted as UTF-8 encoded text data.
-	TextMessage = 1
-)
+
 
 type WSUpgrader struct {
 	Upgrader Upgrader
