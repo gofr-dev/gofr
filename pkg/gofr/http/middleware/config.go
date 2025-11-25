@@ -14,6 +14,7 @@ import (
 type Config struct {
 	CorsHeaders map[string]string
 	LogProbes   LogProbes
+	MaxBodySize int64
 }
 
 type LogProbes struct {
@@ -48,6 +49,15 @@ func GetConfigs(c config.Config) Config {
 	value, err := strconv.ParseBool(logDisableProbes)
 	if err == nil {
 		middlewareConfigs.LogProbes.Disabled = value
+	}
+
+	// Config value for Max Body Size
+	maxBodySizeStr := c.GetOrDefault("HTTP_MAX_BODY_SIZE", "")
+	if maxBodySizeStr != "" {
+		maxBodySize, err := strconv.ParseInt(maxBodySizeStr, 10, 64)
+		if err == nil && maxBodySize > 0 {
+			middlewareConfigs.MaxBodySize = maxBodySize
+		}
 	}
 
 	return middlewareConfigs

@@ -33,7 +33,14 @@ func newHTTPServer(c *container.Container, port int, middlewareConfigs middlewar
 	r := gofrHTTP.NewRouter()
 	wsManager := websocket.New()
 
+	// Body size limit middleware should be early in the chain to prevent reading large bodies
+	maxBodySize := middlewareConfigs.MaxBodySize
+	if maxBodySize == 0 {
+		maxBodySize = middleware.DefaultMaxBodySize
+	}
+
 	r.Use(
+		middleware.BodySizeLimit(maxBodySize),
 		middleware.Tracer,
 		middleware.Logging(middlewareConfigs.LogProbes, c.Logger),
 		middleware.CORS(middlewareConfigs.CorsHeaders, r.RegisteredRoutes),

@@ -37,3 +37,55 @@ func TestLogDisableProbesConfig(t *testing.T) {
 
 	assert.True(t, middlewareConfigs.LogProbes.Disabled, "TestLogDisableProbesConfig Failed!")
 }
+
+func TestMaxBodySizeConfig(t *testing.T) {
+	tests := []struct {
+		name           string
+		configValue    string
+		expectedSize   int64
+		description    string
+	}{
+		{
+			name:         "Valid body size config",
+			configValue:  "10485760", // 10 MB in bytes
+			expectedSize: 10485760,
+			description:  "Should parse valid body size from config",
+		},
+		{
+			name:         "Empty body size config",
+			configValue:  "",
+			expectedSize: 0,
+			description:  "Should default to 0 when config is empty",
+		},
+		{
+			name:         "Invalid body size config",
+			configValue:  "invalid",
+			expectedSize: 0,
+			description:  "Should default to 0 when config is invalid",
+		},
+		{
+			name:         "Zero body size config",
+			configValue:  "0",
+			expectedSize: 0,
+			description:  "Should be 0 when config is zero",
+		},
+		{
+			name:         "Negative body size config",
+			configValue:  "-100",
+			expectedSize: 0,
+			description:  "Should default to 0 when config is negative",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			mockConfig := config.NewMockConfig(map[string]string{
+				"HTTP_MAX_BODY_SIZE": tt.configValue,
+			})
+
+			middlewareConfigs := GetConfigs(mockConfig)
+
+			assert.Equal(t, tt.expectedSize, middlewareConfigs.MaxBodySize, tt.description)
+		})
+	}
+}
