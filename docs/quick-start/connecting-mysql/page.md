@@ -259,7 +259,7 @@ go get gofr.dev/pkg/gofr/datasource/dbresolver@latest
 
 **1. Environment Variables**
 
-Add replica connection details to your .env file:
+Configure the primary database in your .env file:
 
 ```editorconfig
 # Primary database
@@ -269,12 +269,6 @@ DB_USER=root
 DB_PASSWORD=root123
 DB_NAME=test_db
 DB_DIALECT=mysql
-
-# Replica configuration
-DB_REPLICA_HOSTS=localhost,replica1,replica2
-DB_REPLICA_PORTS=3307,3308,3309
-DB_REPLICA_USERS=readonly1,readonly2,readonly3
-DB_REPLICA_PASSWORDS=pass1,pass2,pass3
 ```
 
 **2. Initialize DBResolver**
@@ -299,12 +293,30 @@ func main() {
 	a := gofr.New()
 
 	// Initialize DB resolver with default settings
-	err := dbresolver.InitDBResolver(a, dbresolver.Config{
+	err := dbresolver.InitDBResolver(a, &dbresolver.Config{
 		Strategy:      dbresolver.StrategyRoundRobin, // use round-robin strategy or random strategy
 		ReadFallback:  true, // allow reads on primary if all replicas are down
 		MaxFailures:   3, 			  // number of allowed failures before marking a replica as down
 		TimeoutSec:    30, // timeout for marking a replica as down
-		PrimaryRoutes: []string{"/admin", "/api/payments/*"}, // routes that should go to primary
+		PrimaryRoutes: []string{"/admin", "/api/payments/*"},
+
+		Replicas: []dbresolver.ReplicaCredential{
+			{
+				Host:     "localhost:3307",
+				User:     "replica_user1",
+				Password: "pass1",
+			},
+			{
+				Host:     "replica2.example.com:3308",
+				User:     "replica_user2",
+				Password: "pass2",
+			},
+			{
+				Host:     "replica3.example.com:3309",
+				User:     "replica_user3",
+				Password: "pass3",
+			},
+		},// routes that should go to primary
 	})
 	if err != nil {
 		a.Logger().Errorf("failed to initialize db resolver: %v", err)

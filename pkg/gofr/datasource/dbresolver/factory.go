@@ -44,9 +44,9 @@ type Config struct {
 
 // ReplicaCredential stores credentials for a single replica.
 type ReplicaCredential struct {
-	Host     string `json:"host"` // Format: "hostname:port".
-	User     string `json:"user"`
-	Password string `json:"password"` // Supports commas and special chars.
+	Host     string `json:"host"`     // Format: "hostname:port" (e.g., "localhost:3307").
+	User     string `json:"user"`     // Database username.
+	Password string `json:"password"` // Database password (supports special characters).
 }
 
 // ResolverProvider implements container.DBResolverProvider interface.
