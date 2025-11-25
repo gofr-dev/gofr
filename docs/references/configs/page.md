@@ -308,7 +308,7 @@ This document lists all the configuration options supported by the GoFr framewor
 
 -  PUBSUB_BACKEND
 -  Pub/Sub message broker backend
--  kafka, google, mqtt, nats
+-  kafka, google, mqtt, nats, redis
 
 {% /table %}
 
@@ -433,6 +433,112 @@ This document lists all the configuration options supported by the GoFr framewor
 
 -  GOOGLE_SUBSCRIPTION_NAME
 -  Name of the Google Pub/Sub subscription. Required for Google Pub/Sub.
+
+{% /table %}
+
+**Redis**
+
+{% table %}
+
+- Name
+- Description
+- Default Value
+
+---
+
+-  REDIS_ADDR
+-  Redis server address (host:port)
+-  localhost:6379
+
+---
+
+-  REDIS_PASSWORD
+-  Password for Redis authentication
+-  None
+
+---
+
+-  REDIS_DB
+-  Database number to use (0-15)
+-  0
+
+---
+
+-  REDIS_MAX_RETRIES
+-  Maximum number of retries for failed commands
+-  3
+
+---
+
+-  REDIS_DIAL_TIMEOUT
+-  Timeout for establishing connections
+-  5s
+
+---
+
+-  REDIS_READ_TIMEOUT
+-  Timeout for socket reads
+-  3s
+
+---
+
+-  REDIS_WRITE_TIMEOUT
+-  Timeout for socket writes
+-  3s
+
+---
+
+-  REDIS_POOL_SIZE
+-  Maximum number of socket connections in the pool
+-  10
+
+---
+
+-  REDIS_MIN_IDLE_CONNS
+-  Minimum number of idle connections
+-  5
+
+---
+
+-  REDIS_MAX_IDLE_CONNS
+-  Maximum number of idle connections
+-  10
+
+---
+
+-  REDIS_CONN_MAX_IDLE_TIME
+-  Maximum amount of time a connection may be idle
+-  5m
+
+---
+
+-  REDIS_CONN_MAX_LIFETIME
+-  Maximum amount of time a connection may be reused
+-  30m
+
+---
+
+-  REDIS_TLS_CERT_FILE
+-  Path to the TLS certificate file
+-  None
+
+---
+
+-  REDIS_TLS_KEY_FILE
+-  Path to the TLS key file
+-  None
+
+---
+
+-  REDIS_TLS_CA_CERT_FILE
+-  Path to the TLS CA certificate file
+-  None
+
+---
+
+-  REDIS_TLS_INSECURE_SKIP_VERIFY
+-  Skip TLS certificate verification
+-  false
 
 {% /table %}
 

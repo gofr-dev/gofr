@@ -10,7 +10,7 @@ scaled and maintained according to its own requirement.
 ## Design choice
 
 In GoFr application if a user wants to use the Publisher-Subscriber design, it supports several message brokers, 
-including Apache Kafka, Google PubSub, MQTT, and NATS JetStream.
+including Apache Kafka, Google PubSub, MQTT, NATS JetStream, and Redis Pub/Sub.
 The initialization of the PubSub is done in an IoC container which handles the PubSub client dependency.
 With this, the control lies with the framework and thus promotes modularity, testability, and re-usability.
 Users can do publish and subscribe to multiple topics in a single application, by providing the topic name.
@@ -332,6 +332,235 @@ docker run -d \
 When subscribing or publishing using NATS JetStream, make sure to use the appropriate subject name that matches your stream configuration.
 For more information on setting up and using NATS JetStream, refer to the official NATS documentation.
 
+### Redis Pub/Sub
+
+Redis Pub/Sub is a lightweight messaging system that allows applications to publish and subscribe to channels. 
+GoFr supports Redis Pub/Sub as a message broker, providing a simple and efficient way to implement pub/sub patterns.
+
+#### Configs
+
+{% table %}
+- Name
+- Description
+- Required
+- Default
+- Example
+- Valid format
+
+---
+
+- `PUBSUB_BACKEND`
+- Using Redis Pub/Sub as message broker.
+- `+`
+-
+- `REDIS`
+- Not empty string
+
+---
+
+- `REDIS_ADDR`
+- Address to connect to Redis server (host:port).
+- `-`
+- `localhost:6379`
+- `localhost:6379` or `redis.example.com:6380`
+- host:port format
+
+---
+
+- `REDIS_PASSWORD`
+- Password for Redis authentication (if required).
+- `-`
+- `""`
+- `mypassword`
+- String
+
+---
+
+- `REDIS_DB`
+- Database number to use (0-15).
+- `-`
+- `0`
+- `1`
+- Integer (0-15)
+
+---
+
+- `REDIS_MAX_RETRIES`
+- Maximum number of retries for failed commands.
+- `-`
+- `3`
+- `5`
+- Positive integer
+
+---
+
+- `REDIS_DIAL_TIMEOUT`
+- Timeout for establishing connections.
+- `-`
+- `5s`
+- `10s`
+- Duration (e.g., 5s, 10s)
+
+---
+
+- `REDIS_READ_TIMEOUT`
+- Timeout for socket reads.
+- `-`
+- `3s`
+- `5s`
+- Duration
+
+---
+
+- `REDIS_WRITE_TIMEOUT`
+- Timeout for socket writes.
+- `-`
+- `3s`
+- `5s`
+- Duration
+
+---
+
+- `REDIS_POOL_SIZE`
+- Maximum number of socket connections in the pool.
+- `-`
+- `10`
+- `20`
+- Positive integer
+
+---
+
+- `REDIS_MIN_IDLE_CONNS`
+- Minimum number of idle connections.
+- `-`
+- `5`
+- `10`
+- Positive integer
+
+---
+
+- `REDIS_MAX_IDLE_CONNS`
+- Maximum number of idle connections.
+- `-`
+- `10`
+- `20`
+- Positive integer
+
+---
+
+- `REDIS_CONN_MAX_IDLE_TIME`
+- Maximum amount of time a connection may be idle.
+- `-`
+- `5m`
+- `10m`
+- Duration
+
+---
+
+- `REDIS_CONN_MAX_LIFETIME`
+- Maximum amount of time a connection may be reused.
+- `-`
+- `30m`
+- `1h`
+- Duration
+
+---
+
+- `REDIS_TLS_CERT_FILE`
+- Path to the TLS certificate file.
+- `-`
+- `""`
+- `/path/to/cert.pem`
+- Path
+
+---
+
+- `REDIS_TLS_KEY_FILE`
+- Path to the TLS key file.
+- `-`
+- `""`
+- `/path/to/key.pem`
+- Path
+
+---
+
+- `REDIS_TLS_CA_CERT_FILE`
+- Path to the TLS CA certificate file.
+- `-`
+- `""`
+- `/path/to/ca.pem`
+- Path
+
+---
+
+- `REDIS_TLS_INSECURE_SKIP_VERIFY`
+- Skip TLS certificate verification.
+- `-`
+- `false`
+- `true`
+- Boolean
+
+{% /table %}
+
+```dotenv
+PUBSUB_BACKEND=REDIS
+REDIS_ADDR=localhost:6379
+REDIS_PASSWORD=mypassword
+REDIS_DB=0
+REDIS_MAX_RETRIES=3
+REDIS_DIAL_TIMEOUT=5s
+REDIS_READ_TIMEOUT=3s
+REDIS_WRITE_TIMEOUT=3s
+REDIS_POOL_SIZE=10
+REDIS_MIN_IDLE_CONNS=5
+REDIS_MAX_IDLE_CONNS=10
+REDIS_CONN_MAX_IDLE_TIME=5m
+REDIS_CONN_MAX_LIFETIME=30m
+REDIS_TLS_CERT_FILE=/path/to/cert.pem
+REDIS_TLS_KEY_FILE=/path/to/key.pem
+REDIS_TLS_CA_CERT_FILE=/path/to/ca.pem
+REDIS_TLS_INSECURE_SKIP_VERIFY=false
+```
+
+#### Docker setup
+
+```shell
+docker run -d \
+	--name redis \
+	-p 6379:6379 \
+	redis:7-alpine
+```
+
+For Redis with password authentication:
+
+```shell
+docker run -d \
+	--name redis \
+	-p 6379:6379 \
+	redis:7-alpine redis-server --requirepass mypassword
+```
+
+For Redis with TLS:
+
+```shell
+docker run -d \
+	--name redis \
+	-p 6379:6379 \
+	-v /path/to/certs:/tls \
+	redis:7-alpine redis-server \
+	--tls-port 6380 \
+	--port 0 \
+	--tls-cert-file /tls/redis.crt \
+	--tls-key-file /tls/redis.key \
+	--tls-ca-cert-file /tls/ca.crt
+```
+
+> **Note**: Redis Pub/Sub uses channels (topics) that are created automatically on first publish/subscribe. 
+> Channels cannot be explicitly created or deleted - they exist as long as there are active subscriptions.
+
+> **Note**: Redis Pub/Sub provides at-most-once delivery semantics. Messages are not persisted, 
+> so if a subscriber is not connected when a message is published, it will not receive that message.
+
 ### Azure Event Hubs
 GoFr supports Event Hubs starting gofr version v1.22.0.
 
@@ -416,7 +645,7 @@ func (ctx *gofr.Context) error
 ```
 
 `Subscribe` method of GoFr App will continuously read a message from the configured `PUBSUB_BACKEND` which
-can be either `KAFKA` or `GOOGLE` as of now. These can be configured in the configs folder under `.env`
+can be `KAFKA`, `GOOGLE`, `MQTT`, `NATS`, `REDIS`, or `AZURE_EVENTHUB`. These can be configured in the configs folder under `.env`
 
 > The returned error determines which messages are to be committed and which ones are to be consumed again.
 
