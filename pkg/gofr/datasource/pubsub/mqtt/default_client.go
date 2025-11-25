@@ -20,7 +20,7 @@ func getDefaultClient(config *Config, logger Logger, metrics Metrics) *MQTT {
 	)
 
 	if config.Username == "gofr-mqtt-test" {
-		host = "test.mosquitto.org"
+		host = "broker.hivemq.com"
 	}
 
 	opts := mqtt.NewClientOptions()
