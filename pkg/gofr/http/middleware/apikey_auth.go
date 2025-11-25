@@ -10,6 +10,8 @@ import (
 	"gofr.dev/pkg/gofr/container"
 )
 
+const dummyValue = "dummy" // FIX make "dummy" string a constant
+
 var (
 	errAPIKeyEmpty = errors.New("api keys list is empty")
 )
@@ -77,8 +79,9 @@ func (a *APIKeyAuthProvider) validateAPIKey(apiKey string) bool {
 		}
 
 		// constant time compare with dummy key for timing attack mitigation
-		dummy := "dummy"
-		subtle.ConstantTimeCompare([]byte(apiKey), []byte(dummy))
+		subtle.ConstantTimeCompare([]byte(apiKey), []byte(dummyValue))
+
+		// FIX 2: Add exactly one blank line before return
 		return false
 	}
 }
