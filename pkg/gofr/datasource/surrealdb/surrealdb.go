@@ -51,7 +51,7 @@ type Config struct {
 // Client represents a client to interact with SurrealDB.
 type Client struct {
 	config  *Config
-	db      *surrealdb.DB
+	db      DB
 	logger  Logger
 	metrics Metrics
 	tracer  trace.Tracer
@@ -86,14 +86,14 @@ func (c *Client) UseTracer(tracer any) {
 }
 
 // newDB creates a new SurrealDB client using v1.0.0 API.
-func newDB(ctx context.Context, connectionURL string) (*surrealdb.DB, error) {
+func newDB(ctx context.Context, connectionURL string) (DB, error) {
 	// Use the new FromEndpointURLString which handles both HTTP and WebSocket connections
 	db, err := surrealdb.FromEndpointURLString(ctx, connectionURL)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create SurrealDB client: %w", err)
 	}
 
-	return db, nil
+	return NewDBWrapper(db), nil
 }
 
 // Connect establishes a connection to the SurrealDB database.
@@ -254,8 +254,9 @@ func (c *Client) Query(ctx context.Context, query string, vars map[string]any) (
 		Span:          span,
 	}, startTime)
 
-	// Use the new v1.0.0 Query function
-	results, err := surrealdb.Query[any](ctx, c.db, query, vars)
+	// Use the new v1.0.0 Query function with the wrapped DB
+	dbWrapper := c.db.(*DBWrapper)
+	results, err := surrealdb.Query[any](ctx, dbWrapper.GetDB(), query, vars)
 	if err != nil {
 		return nil, fmt.Errorf("query failed: %w", err)
 	}
@@ -463,8 +464,9 @@ func (c *Client) Select(ctx context.Context, table string) ([]map[string]any, er
 		Span:          span,
 	}, startTime)
 
-	// Use the new v1.0.0 Select function
-	results, err := surrealdb.Select[[]map[string]any](ctx, c.db, models.Table(table))
+	// Use the new v1.0.0 Select function with the wrapped DB
+	dbWrapper := c.db.(*DBWrapper)
+	results, err := surrealdb.Select[[]map[string]any](ctx, dbWrapper.GetDB(), models.Table(table))
 	if err != nil {
 		return nil, fmt.Errorf("select operation failed: %w", err)
 	}
@@ -498,8 +500,9 @@ func (c *Client) Create(ctx context.Context, table string, data any) (map[string
 		Span:          span,
 	}, startTime)
 
-	// Use the new v1.0.0 Create function
-	result, err := surrealdb.Create[map[string]any](ctx, c.db, models.Table(table), data)
+	// Use the new v1.0.0 Create function with the wrapped DB
+	dbWrapper := c.db.(*DBWrapper)
+	result, err := surrealdb.Create[map[string]any](ctx, dbWrapper.GetDB(), models.Table(table), data)
 	if err != nil {
 		return nil, fmt.Errorf("create operation failed: %w", err)
 	}
@@ -537,8 +540,9 @@ func (c *Client) Update(ctx context.Context, table, id string, data any) (any, e
 		Span:          span,
 	}, startTime)
 
-	// Use the new v1.0.0 Update function
-	result, err := surrealdb.Update[map[string]any](ctx, c.db, recordID, data)
+	// Use the new v1.0.0 Update function with the wrapped DB
+	dbWrapper := c.db.(*DBWrapper)
+	result, err := surrealdb.Update[map[string]any](ctx, dbWrapper.GetDB(), recordID, data)
 	if err != nil {
 		return nil, fmt.Errorf("update operation failed: %w", err)
 	}
@@ -572,8 +576,9 @@ func (c *Client) Insert(ctx context.Context, table string, data any) ([]map[stri
 		Span:          span,
 	}, startTime)
 
-	// Use the new v1.0.0 Insert function
-	results, err := surrealdb.Insert[map[string]any](ctx, c.db, models.Table(table), data)
+	// Use the new v1.0.0 Insert function with the wrapped DB
+	dbWrapper := c.db.(*DBWrapper)
+	results, err := surrealdb.Insert[map[string]any](ctx, dbWrapper.GetDB(), models.Table(table), data)
 	if err != nil {
 		return nil, fmt.Errorf("insert operation failed: %w", err)
 	}
@@ -613,7 +618,9 @@ func (c *Client) Delete(ctx context.Context, table, id string) (any, error) {
 		ID:    id,
 	}
 
-	result, err := surrealdb.Delete[map[string]any](ctx, c.db, recordID)
+	// Use the new v1.0.0 Delete function with the wrapped DB
+	dbWrapper := c.db.(*DBWrapper)
+	result, err := surrealdb.Delete[map[string]any](ctx, dbWrapper.GetDB(), recordID)
 	if err != nil {
 		return nil, fmt.Errorf("delete operation failed: %w", err)
 	}

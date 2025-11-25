@@ -13,8 +13,77 @@ import (
 	context "context"
 	reflect "reflect"
 
+	surrealdb "github.com/surrealdb/surrealdb.go"
 	gomock "go.uber.org/mock/gomock"
 )
+
+// MockDB is a mock of DB interface.
+type MockDB struct {
+	ctrl     *gomock.Controller
+	recorder *MockDBMockRecorder
+	isgomock struct{}
+}
+
+// MockDBMockRecorder is the mock recorder for MockDB.
+type MockDBMockRecorder struct {
+	mock *MockDB
+}
+
+// NewMockDB creates a new mock instance.
+func NewMockDB(ctrl *gomock.Controller) *MockDB {
+	mock := &MockDB{ctrl: ctrl}
+	mock.recorder = &MockDBMockRecorder{mock}
+	return mock
+}
+
+// EXPECT returns an object that allows the caller to indicate expected use.
+func (m *MockDB) EXPECT() *MockDBMockRecorder {
+	return m.recorder
+}
+
+// Info mocks base method.
+func (m *MockDB) Info(ctx context.Context) (any, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Info", ctx)
+	ret0, _ := ret[0].(any)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// Info indicates an expected call of Info.
+func (mr *MockDBMockRecorder) Info(ctx any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Info", reflect.TypeOf((*MockDB)(nil).Info), ctx)
+}
+
+// SignIn mocks base method.
+func (m *MockDB) SignIn(ctx context.Context, auth *surrealdb.Auth) (string, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "SignIn", ctx, auth)
+	ret0, _ := ret[0].(string)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// SignIn indicates an expected call of SignIn.
+func (mr *MockDBMockRecorder) SignIn(ctx, auth any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SignIn", reflect.TypeOf((*MockDB)(nil).SignIn), ctx, auth)
+}
+
+// Use mocks base method.
+func (m *MockDB) Use(ctx context.Context, namespace, database string) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Use", ctx, namespace, database)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// Use indicates an expected call of Use.
+func (mr *MockDBMockRecorder) Use(ctx, namespace, database any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Use", reflect.TypeOf((*MockDB)(nil).Use), ctx, namespace, database)
+}
 
 // MockLogger is a mock of Logger interface.
 type MockLogger struct {
