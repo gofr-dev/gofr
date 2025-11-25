@@ -42,7 +42,7 @@ func (a *App) AddPubSub(pubsub container.PubSubProvider) {
 	a.container.PubSub = pubsub
 }
 
-// AddFileStore sets the FTP,SFTP,S3 datasource in the app's container.
+// AddFileStore sets the FTP, SFTP, S3, GCS, or Azure File Storage datasource in the app's container.
 func (a *App) AddFileStore(fs file.FileSystemProvider) {
 	fs.UseLogger(a.Logger())
 	fs.UseMetrics(a.Metrics())
