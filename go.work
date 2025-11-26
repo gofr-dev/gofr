@@ -7,6 +7,7 @@ use (
 	./pkg/gofr/datasource/cassandra
 	./pkg/gofr/datasource/clickhouse
 	./pkg/gofr/datasource/couchbase
+	./pkg/gofr/datasource/dbresolver
 	./pkg/gofr/datasource/dgraph
 	./pkg/gofr/datasource/elasticsearch
 	./pkg/gofr/datasource/file/ftp
