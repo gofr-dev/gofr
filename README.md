@@ -8,6 +8,7 @@
 <h2 style="font-size: 28px;"><b>GoFr: An Opinionated Microservice Development Framework</b></h2>
 </p>
 <a href="https://pkg.go.dev/gofr.dev"><img src="https://img.shields.io/badge/GoDoc-Read%20Documentation-blue?style=for-the-badge" alt="godoc"></a>
+<a href="https://www.bestpractices.dev/projects/8099"><img src="https://www.bestpractices.dev/projects/8099/badge"></a>
 <a href="https://gofr.dev/docs"><img src="https://img.shields.io/badge/GoFr-Docs-orange?style=for-the-badge" alt="gofr-docs"></a>
 <a href="https://qlty.sh/gh/gofr-dev/projects/gofr"><img src="https://qlty.sh/gh/gofr-dev/projects/gofr/maintainability.svg" alt="Maintainability" height="27.99" /></a>
 <a href="https://qlty.sh/gh/gofr-dev/projects/gofr"><img src="https://qlty.sh/gh/gofr-dev/projects/gofr/coverage.svg" alt="Code Coverage" height="27.99" /></a>
