@@ -213,6 +213,67 @@ This document lists all the configuration options supported by the GoFr framewor
 
 ---
 
+- DB_REPLICA_HOSTS
+- Comma-separated list of replica database hosts. Used for read replicas.
+- None
+
+---
+
+- DB_REPLICA_PORTS
+- Comma-separated list of replica database ports. Used for read replicas.
+- None
+
+---
+
+- DB_REPLICA_USERS
+- Comma-separated list of replica database users. Used for read replicas.
+- None
+
+---
+
+- DB_REPLICA_PASSWORDS_
+- Comma-separated list of replica database passwords. Used for read replicas.
+- None
+
+---
+
+- DB_REPLICA_MAX_IDLE_CONNECTIONS
+- Maximum idle connections allowed for a replica
+- 50
+
+---
+
+- DB_REPLICA_MIN_IDLE_CONNECTIONS
+- Minimum idle connections for a replica
+- 10
+
+---
+
+- DB_REPLICA_DEFAULT_IDLE_CONNECTIONS
+- Idle connections used if no primary setting is provided
+- 10
+
+---
+
+- DB_REPLICA_MAX_OPEN_CONNECTIONS
+- Maximum open connections allowed for a replica
+- 200
+
+---
+
+- DB_REPLICA_MIN_OPEN_CONNECTIONS
+- Minimum open connections for a replica
+- 50
+
+---
+
+- DB_REPLICA_DEFAULT_OPEN_CONNECTIONS
+- Open connections used if no primary setting is provided
+- 100
+
+---
+
+
 - DB_CHARSET
 - The character set for database connection
 - utf8
