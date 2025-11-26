@@ -16,7 +16,7 @@ When the GoFr server runs, it prints a log for reading configs, database connect
 They contain information such as request's correlation ID, status codes, request time, etc.
 
 ### DEBUG
-This is the lowest priority level (Integer value: 1). It represents the most detailed/granual information.
+This is the lowest priority level. It represents the most detailed/granual information.
 
 **Color -** Grey
 
@@ -29,13 +29,16 @@ It allows developers to verify that calculations, data transformations, and stat
 **Code Example**
 	
 ```Go
-// Context: Calculating a discount inside a shopping cart function
-originalPrice := 150.00
-discountRate := 0.20 // 20%
-tax := 1.05          // 5% tax
+// CalculateDiscount is a handler that calculates the final price
+func CalculateDiscount(ctx *gofr.Context) (interface{}, error) {
+    originalPrice := 150.00
+    discountRate := 0.20 // 20%
+    tax := 1.05          // 5% tax
 
-ctx.Debug("Calc trace - Price:", originalPrice, "Discount:", discountRate, "Tax Multiplier:", tax)
-
+    ctx.Debug("Calc trace - Price:", originalPrice, "Discount:", discountRate, "Tax Multiplier:", tax)
+    
+    return nil, nil
+}
 ```
 
 **Output**
@@ -50,13 +53,16 @@ DEBU [10:15:01] Calc trace - Price: 150 Discount: 0.2 Tax Multiplier: 1.05
 **Code Example**
 
 ```Go
-// Context: Processing a batch of user IDs
-userIds := []int{101, 102, 103}
+// ProcessBatch simulates processing a list of users
+func ProcessBatch(ctx *gofr.Context) (interface{}, error) {
+    userIds := []int{101, 102, 103}
 
-ctx.Debug("Starting batch processing for", len(userIds), "users")
+    ctx.Debug("Starting batch processing for", len(userIds), "users")
 
-for i, id := range userIds {
-	ctx.Debug("Loop step", i, "- Processing User ID:", id)
+    for i, id := range userIds {
+        ctx.Debug("Loop step", i, "- Processing User ID:", id)
+    }
+    return nil, nil
 }
 ```
 **Output**
@@ -71,20 +77,21 @@ DEBU [10:15:02] Loop step 2 - Processing User ID: 103
 
 **Code Example**
 ```Go
-// 1. Resource Initialization (Startup)
-ctx.Debug("[Init] Loading config from ./config.yaml")
+// InspectPayload simulates debugging an incoming request payload
+func InspectPayload(ctx *gofr.Context) (interface{}, error) {
+    // 1. Raw Data Payload (Input)
+    data := `{"id": 42, "role": "admin"}`
+    ctx.Debug("[Payload] Received raw body:", data)
 
-// 2. Raw Data Payload (Input)
-data := `{"id": 42, "role": "admin"}`
-ctx.Debug("[Payload] Received raw body:", data)
-
-// 3. Database Internals (Processing)
-query := fmt.Sprintf("SELECT * FROM users WHERE id=%d", 42)
-ctx.Debug("[SQL] Generated Query:", query)
+    // 2. Database Internals (Processing)
+    query := fmt.Sprintf("SELECT * FROM users WHERE id=%d", 42)
+    ctx.Debug("[SQL] Generated Query:", query)
+    
+    return nil, nil
+}
 ```
 **Output**
 ```Console
-DEBU [10:15:05] [Init] Loading config from ./config.yaml
 DEBU [10:15:05] [Payload] Received raw body: {"id": 42, "role": "admin"}
 DEBU [10:15:05] [SQL] Generated Query: SELECT * FROM users WHERE id=42
 ```
@@ -98,7 +105,7 @@ DEBU [10:15:05] [SQL] Generated Query: SELECT * FROM users WHERE id=42
 
 ---
 ### INFO
-Represents standard operational events (Integer value: 2). It is the default fallback level if an unknown level string is provided.
+Represents standard operational events. It is the default fallback level if an unknown level string is provided.
 
 **Color -** Cyan
 
@@ -121,15 +128,15 @@ INFO [14:05:02] Server started successfully on port 8000
 
 **Code Example**
 ```Go
-// Context: A background data export job has finished successfully
-jobID := "EXP-2024-88"
-recordsProcessed := 5000
-duration := "1.2s"
+// RunExportJob simulates a background data export task
+func RunExportJob(ctx *gofr.Context) (interface{}, error) {
+    jobID := "EXP-2024-88"
+    records := 5000
+    duration := "1.2s"
 
-ctx.Info("Data export job completed successfully",
-	"JobID", jobID, 
-    "Records", recordsProcessed, 
-    "Duration", duration)
+    ctx.Info("Data export job completed successfully", "JobID", jobID, "Records", records, "Duration", duration)
+    return nil, nil
+}
 ```
 **Output**
 ```Console
@@ -141,8 +148,11 @@ INFO [14:20:05] Data export job completed successfully JobID: EXP-2024-88 Record
 
 **Code Example**
 ```Go
-// Log an INFO level message with a key-value pair
-ctx.Info("Health Check Passed")
+// HealthHandler performs a routine system check
+func HealthHandler(ctx *gofr.Context) (interface{}, error) {
+    ctx.Info("Health Check Passed")
+    return "OK", nil
+}
 ```
 **Output**
 ```Console
@@ -158,7 +168,7 @@ Do not emit `INFO` logs within tight loops or data-intensive processing blocks. 
 ---
 
 ### NOTICE
-A level higher than `INFO` but lower than `WARN` (Integer value: 3). It shares the same visual prominence as a Warning but implies a "normal" condition rather than a problem. in simple words its used for events that are normal but rare and significant.
+A level higher than `INFO` but lower than `WARN`. It shares the same visual prominence as a Warning but implies a "normal" condition rather than a problem. in simple words its used for events that are normal but rare and significant.
 
 **Color -** Yellow
 
@@ -168,8 +178,11 @@ A level higher than `INFO` but lower than `WARN` (Integer value: 3). It shares t
 
 **Code Example**
 ```Go
-// Example: Configuration update
-ctx.Notice("Configuration hot-reload triggered by system admin")
+// TriggerReload is an admin handler to refresh configs
+func TriggerReload(ctx *gofr.Context) (interface{}, error) {
+    ctx.Notice("Configuration hot-reload triggered by system admin")
+    return "Config Reloaded", nil
+}
 ```
 **Output-**
 ```Console
@@ -180,8 +193,12 @@ NOTI [14:05:03] Configuration hot-reload triggered by system admin
 
 **Code Example**
 ```Go
-// Using the classic logger to manually tag the level
-ctx.Notice("Switching to Secondary Database")
+// CheckDBConnection monitors database status
+func CheckDBConnection(ctx *gofr.Context) (interface{}, error) {
+    // Logic to detect primary DB failure...
+    ctx.Notice("Switching to Secondary Database")
+    return nil, nil
+}
 ```
 **Output**
 ```Console
@@ -193,7 +210,11 @@ NOTI [14:52:00] Switching to Secondary Database
 
 **Code Example**
 ```Go
-ctx.Notice("Cache Cleared")
+// InvalidateCache clears the application cache
+func InvalidateCache(ctx *gofr.Context) (interface{}, error) {
+    ctx.Notice("Cache Cleared")
+    return nil, nil
+}
 ```
 **Output**
 ```Console
@@ -220,8 +241,12 @@ it's Used when an anomaly had occurred, but the application recovered or continu
 
 **Code Example**
 ```Go
-// Example: Retrying a connection
-ctx.Warn("Database connection timeout. Retrying in 2 seconds... (Attempt 1/3)")
+// ConnectWithRetry simulates a resilient database connection
+func ConnectWithRetry(ctx *gofr.Context) (interface{}, error) {
+    // Simulating a failed attempt
+    ctx.Warn("Database connection timeout. Retrying in 2 seconds... (Attempt 1/3)")
+    return nil, nil
+}
 ```
 **Output**
 ```Console
@@ -232,7 +257,11 @@ WARN [14:05:04] Database connection timeout. Retrying in 2 seconds... (Attempt 1
 
 **Code Example**
 ```Go
-ctx.Warn("Timeout config not found. Using fallback: 30s")
+// GetTimeoutConfig retrieves config with a safe fallback
+func GetTimeoutConfig(ctx *gofr.Context) (interface{}, error) {
+    ctx.Warn("Timeout config not found. Using fallback: 30s")
+    return 30, nil
+}
 ```
 **Output**
 ```Console
@@ -244,7 +273,11 @@ WARN [14:55:00] Timeout config not found. Using fallback: 30s
 
 **Code Example**
 ```Go
-ctx.Warn("Deprecated API usage detected: /v1/login")
+// LoginV1 is an old endpoint scheduled for removal
+func LoginV1(ctx *gofr.Context) (interface{}, error) {
+    ctx.Warn("Deprecated API usage detected: /v1/login")
+    return nil, nil
+}
 ```
 **Output**
 ```Console
@@ -262,7 +295,7 @@ Do not log warnings for standard behaviors or expected redundancies (false posit
 ---
 
 ### ERROR
-Indicates a failure event (Integer value: 5).This level routes logs to `stderr` (Standard Error), ensuring visibility to error tracking tools.
+Indicates a failure event. This level routes logs to `stderr` (Standard Error), ensuring visibility to error tracking tools.
 
 **Color -** Red
 
@@ -272,12 +305,13 @@ Indicates a failure event (Integer value: 5).This level routes logs to `stderr` 
 
 **Code Example**
 ```Go
-// Context: A complex query exceeds the defined execution time limit
-// Simulating a context deadline exceeded error
-err := context.DeadlineExceeded
-
-if err != nil {
-    ctx.Error("DB Query Timeout: Analytics fetch took > 3000ms. Canceling operation.")
+// FetchAnalytics simulates a long-running query that times out
+func FetchAnalytics(ctx *gofr.Context) (interface{}, error) {
+    err := context.DeadlineExceeded
+    if err != nil {
+        ctx.Error("DB Query Timeout: Analytics fetch took > 3000ms. Canceling operation.")
+    }
+    return nil, err
 }
 ```
 **Output**
@@ -289,12 +323,11 @@ ERRO [10:20:01] DB Query Timeout: Analytics fetch took > 3000ms. Canceling opera
 
 **Code Example**
 ```Go
-// Context: An API endpoint fails to process a request due to a downstream failure
-err := processPayment() // returns error: "gateway unreachable"
-
-if err != nil {
-    // We send a generic 500 to the user, but log the specific error internally
+// ProcessPayment handles payment processing logic
+func ProcessPayment(ctx *gofr.Context) (interface{}, error) {
+    // Simulating a gateway failure
     ctx.Error("HTTP 500 Response: Payment gateway unreachable. Request ID: req_99")
+    return nil, fmt.Errorf("gateway unreachable")
 }
 ```
 **Output**
@@ -307,11 +340,15 @@ ERRO [10:20:02] HTTP 500 Response: Payment gateway unreachable. Request ID: req_
 
 **Code Example**
 ```Go
-// Context: Preventing a panic by checking if a struct is nil before accessing it
-var userProfile *User // This is currently nil
-
-if userProfile == nil {
-    ctx.Error("Runtime Safety: Attempted to access methods on a nil 'User' object. Skipping.")
+// GetUserProfile retrieves user data safely
+func GetUserProfile(ctx *gofr.Context) (interface{}, error) {
+    var userProfile *User // Currently nil
+    
+    if userProfile == nil {
+        ctx.Error("Runtime Safety: Attempted to access methods on a nil 'User' object. Skipping.")
+        return nil, fmt.Errorf("user not found")
+    }
+    return userProfile, nil
 }
 ```
 **Output**
@@ -329,7 +366,7 @@ Exercise caution when logging user input errors (e.g., `400 Bad Request`). Class
 ---
 
 ### FATAL
-The highest priority level (Integer value: 6). It represents a critical system failures where the application cannot function.
+The highest priority level. It represents a critical system failures where the application cannot function.
 
 **Color -** Red
 
@@ -399,7 +436,6 @@ FATA [10:30:03] Boot Failure: Cannot connect to primary database. Connection ref
 >2. Locking Overhead: The terminal output utilizes a mutex lock to ensure thread safety.
 
 ---
-
 
 {% figure src="/quick-start-logs.png" alt="Pretty Printed Logs" /%}
 
