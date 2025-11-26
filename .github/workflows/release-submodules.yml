@@ -1,9 +1,9 @@
 name: Release submodules after GoFr release
 
-# TEMPORARY: manual trigger for testing  
-# Change to `release.published` once confirmed
+# Automatically triggers when a new GoFr tag is published
 on:
-  workflow_dispatch:
+  release:
+    types: [published]   # major / minor release
 
 permissions:
   contents: read
@@ -14,11 +14,13 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
+      # Step 1 — Checkout repository
       - name: Checkout GoFr repository
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
+      # Step 2 — Detect current & previous tags
       - name: Identify current & previous tags
         run: |
           CUR_TAG="${{ github.event.release.tag_name }}"
@@ -28,6 +30,7 @@ jobs:
           echo "Current tag: $CUR_TAG"
           echo "Previous tag: $PREV_TAG"
 
+      # Step 3 — Detect changed files after the previous tag
       - name: Detect changed files since previous tag
         id: changes
         run: |
@@ -37,24 +40,21 @@ jobs:
           else
             git diff --name-only "$PREV_TAG" "$CUR_TAG" > changed.txt
           fi
-
           echo "Changed files:"
           cat changed.txt
 
+      # Step 4 — Map changed directories to submodule repos
       - name: Determine changed submodules
         id: submodules
         run: |
-          # Create mapping of submodule directories → repo names
+          # Mapping of submodule directories → repository names
           cat > submodule_map.txt << 'EOF'
-          pkg/datasources   gofr-dev/datasources
-          pkg/logging       gofr-dev/logging
-          EOF
+            pkg/datasources   gofr-dev/datasources
+            pkg/logging       gofr-dev/logging
+            EOF
 
           echo "Detecting touched directories..."
           touched_dirs=$(awk -F/ '{print $1"/"$2}' changed.txt | sort -u)
-
-          echo "Touched directories:"
-          echo "$touched_dirs"
 
           repos=""
           new_modules=""
@@ -70,32 +70,19 @@ jobs:
 
           echo "repos_to_dispatch=$repos" >> $GITHUB_OUTPUT
           echo "new_modules=$new_modules" >> $GITHUB_OUTPUT
-          echo "Submodule repos to dispatch: $repos"
-          echo "New modules detected: $new_modules"
 
+      # Step 5 — DRY RUN: Simulate dispatch for existing modules  
       - name: Trigger dispatch to changed submodules (dry-run)
         if: steps.submodules.outputs.repos_to_dispatch != ''
         run: |
           echo "=== DRY RUN MODE ==="
           for repo in ${{ steps.submodules.outputs.repos_to_dispatch }}; do
-            echo "Would trigger dispatch to: $repo"
-            echo "Tag: $CUR_TAG"
-            # curl command commented out for safe review
-            # curl -X POST \
-            #   -H "Accept: application/vnd.github+json" \
-            #   -H "Authorization: Bearer ${{ secrets.DISPATCH_TOKEN }}" \
-            #   https://api.github.com/repos/${repo}/dispatches \
-            #   -d '{"event_type": "gofr-parent-release", "client_payload": {"tag": "'"${{ env.CUR_TAG }}"'"}}'
+            echo "Would trigger dispatch to: $repo (tag: ${{ env.CUR_TAG }})"
           done
 
+      # Step 6 — DRY RUN: Trigger website only for NEW modules
       - name: Trigger website workflow for NEW modules (dry-run)
         if: steps.submodules.outputs.new_modules != ''
         run: |
           echo "=== DRY RUN MODE ==="
           echo "Would trigger website workflow for modules: ${{ steps.submodules.outputs.new_modules }}"
-          # curl command commented out for safe review
-          # curl -X POST \
-          #   -H "Accept: application/vnd.github+json" \
-          #   -H "Authorization: Bearer ${{ secrets.DISPATCH_TOKEN }}" \
-          #   https://api.github.com/repos/gofr-dev/website/dispatches \
-          #   -d '{"event_type": "new-submodule-added", "client_payload": {"tag": "'"${{ env.CUR_TAG }}"'"}}'
