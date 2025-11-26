@@ -10039,26 +10039,6 @@ func (mr *MockOracleDBMockRecorder) Exec(ctx, query any, args ...any) *gomock.Ca
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Exec", reflect.TypeOf((*MockOracleDB)(nil).Exec), varargs...)
 }
 
-// ExecContext mocks base method.
-func (m *MockOracleDB) ExecContext(ctx context.Context, query string, args ...any) error {
-	m.ctrl.T.Helper()
-	varargs := []any{ctx, query}
-	for _, a := range args {
-		varargs = append(varargs, a)
-	}
-	ret := m.ctrl.Call(m, "ExecContext", varargs...)
-	ret0, _ := ret[0].(error)
-	return ret0
-}
-
-// ExecContext indicates an expected call of ExecContext.
-func (mr *MockOracleDBMockRecorder) ExecContext(ctx, query any, args ...any) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	varargs := append([]any{ctx, query}, args...)
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ExecContext", reflect.TypeOf((*MockOracleTx)(nil).ExecContext), varargs...)
-}
-
-
 // HealthCheck mocks base method.
 func (m *MockOracleDB) HealthCheck(arg0 context.Context) (any, error) {
 	m.ctrl.T.Helper()
@@ -10148,25 +10128,6 @@ func (mr *MockOracleTxMockRecorder) ExecContext(ctx, query any, args ...any) *go
 	mr.mock.ctrl.T.Helper()
 	varargs := append([]any{ctx, query}, args...)
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ExecContext", reflect.TypeOf((*MockOracleTx)(nil).ExecContext), varargs...)
-}
-
-// Exec mocks base method.
-func (m *MockOracleTx) Exec(ctx context.Context, query string, args ...any) error {
-	m.ctrl.T.Helper()
-	varargs := []any{ctx, query}
-	for _, a := range args {
-		varargs = append(varargs, a)
-	}
-	ret := m.ctrl.Call(m, "Exec", varargs...)
-	ret0, _ := ret[0].(error)
-	return ret0
-}
-
-// Exec indicates an expected call of ExecContext.
-func (mr *MockOracleTxMockRecorder) Exec(ctx, query any, args ...any) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	varargs := append([]any{ctx, query}, args...)
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Exec", reflect.TypeOf((*MockOracleTx)(nil).Exec), varargs...)
 }
 
 // Rollback mocks base method.
@@ -14602,6 +14563,92 @@ func (m *MockCouchbaseProvider) UseTracer(tracer any) {
 func (mr *MockCouchbaseProviderMockRecorder) UseTracer(tracer any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UseTracer", reflect.TypeOf((*MockCouchbaseProvider)(nil).UseTracer), tracer)
+}
+
+// MockDBResolverProvider is a mock of DBResolverProvider interface.
+type MockDBResolverProvider struct {
+	ctrl     *gomock.Controller
+	recorder *MockDBResolverProviderMockRecorder
+	isgomock struct{}
+}
+
+// MockDBResolverProviderMockRecorder is the mock recorder for MockDBResolverProvider.
+type MockDBResolverProviderMockRecorder struct {
+	mock *MockDBResolverProvider
+}
+
+// NewMockDBResolverProvider creates a new mock instance.
+func NewMockDBResolverProvider(ctrl *gomock.Controller) *MockDBResolverProvider {
+	mock := &MockDBResolverProvider{ctrl: ctrl}
+	mock.recorder = &MockDBResolverProviderMockRecorder{mock}
+	return mock
+}
+
+// EXPECT returns an object that allows the caller to indicate expected use.
+func (m *MockDBResolverProvider) EXPECT() *MockDBResolverProviderMockRecorder {
+	return m.recorder
+}
+
+// Connect mocks base method.
+func (m *MockDBResolverProvider) Connect() {
+	m.ctrl.T.Helper()
+	m.ctrl.Call(m, "Connect")
+}
+
+// Connect indicates an expected call of Connect.
+func (mr *MockDBResolverProviderMockRecorder) Connect() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Connect", reflect.TypeOf((*MockDBResolverProvider)(nil).Connect))
+}
+
+// GetResolver mocks base method.
+func (m *MockDBResolverProvider) GetResolver() DB {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetResolver")
+	ret0, _ := ret[0].(DB)
+	return ret0
+}
+
+// GetResolver indicates an expected call of GetResolver.
+func (mr *MockDBResolverProviderMockRecorder) GetResolver() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetResolver", reflect.TypeOf((*MockDBResolverProvider)(nil).GetResolver))
+}
+
+// UseLogger mocks base method.
+func (m *MockDBResolverProvider) UseLogger(logger any) {
+	m.ctrl.T.Helper()
+	m.ctrl.Call(m, "UseLogger", logger)
+}
+
+// UseLogger indicates an expected call of UseLogger.
+func (mr *MockDBResolverProviderMockRecorder) UseLogger(logger any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UseLogger", reflect.TypeOf((*MockDBResolverProvider)(nil).UseLogger), logger)
+}
+
+// UseMetrics mocks base method.
+func (m *MockDBResolverProvider) UseMetrics(metrics any) {
+	m.ctrl.T.Helper()
+	m.ctrl.Call(m, "UseMetrics", metrics)
+}
+
+// UseMetrics indicates an expected call of UseMetrics.
+func (mr *MockDBResolverProviderMockRecorder) UseMetrics(metrics any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UseMetrics", reflect.TypeOf((*MockDBResolverProvider)(nil).UseMetrics), metrics)
+}
+
+// UseTracer mocks base method.
+func (m *MockDBResolverProvider) UseTracer(tracer any) {
+	m.ctrl.T.Helper()
+	m.ctrl.Call(m, "UseTracer", tracer)
+}
+
+// UseTracer indicates an expected call of UseTracer.
+func (mr *MockDBResolverProviderMockRecorder) UseTracer(tracer any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UseTracer", reflect.TypeOf((*MockDBResolverProvider)(nil).UseTracer), tracer)
 }
 
 // MockInfluxDB is a mock of InfluxDB interface.
