@@ -10,7 +10,7 @@ import (
 	"gofr.dev/pkg/gofr/container"
 )
 
-const dummyValue = "dummy" // FIX make "dummy" string a constant
+
 
 var (
 	errAPIKeyEmpty = errors.New("api keys list is empty")

@@ -10,7 +10,7 @@ import (
 	"gofr.dev/pkg/gofr/container"
 )
 
-const dummyValue = "dummy" // FIX: make "dummy" string a constant
+
 
 // BasicAuthProvider represents a basic authentication provider.
 type BasicAuthProvider struct {
