@@ -11,7 +11,6 @@ import (
 )
 
 
-
 var (
 	errAPIKeyEmpty = errors.New("api keys list is empty")
 )

@@ -11,7 +11,6 @@ import (
 )
 
 
-
 // BasicAuthProvider represents a basic authentication provider.
 type BasicAuthProvider struct {
 	Users                       map[string]string
