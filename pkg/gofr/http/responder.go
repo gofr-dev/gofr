@@ -34,6 +34,7 @@ func (r Responder) Respond(data any, err error) {
 	statusCode, errorObj := r.determineResponse(data, err)
 
 	var resp any
+
 	switch v := data.(type) {
 	case resTypes.Raw:
 		resp = v.Data
@@ -65,29 +66,36 @@ func (r Responder) handleSpecialResponseTypes(data any) bool {
 		r.w.Header().Set("Content-Type", v.ContentType)
 		r.w.WriteHeader(http.StatusOK)
 		_, _ = r.w.Write(v.Content)
+
 		return true
 	case resTypes.Template:
 		r.w.Header().Set("Content-Type", "text/html")
 		v.Render(r.w)
+
 		return true
 	case resTypes.XML:
 		contentType := v.ContentType
 		if contentType == "" {
 			contentType = "application/xml"
 		}
+
 		r.w.Header().Set("Content-Type", contentType)
 		r.w.WriteHeader(http.StatusOK)
+
 		if len(v.Content) > 0 {
 			_, _ = r.w.Write(v.Content)
 		}
+
 		return true
 	case resTypes.Redirect:
 		statusCode := http.StatusFound
 		if r.method == http.MethodPost || r.method == http.MethodPut || r.method == http.MethodPatch {
 			statusCode = http.StatusSeeOther
 		}
+
 		r.w.Header().Set("Location", v.URL)
 		r.w.WriteHeader(statusCode)
+
 		return true
 	}
 
