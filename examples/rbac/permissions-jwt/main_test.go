@@ -173,12 +173,12 @@ func createTestApp(jwksEndpoint string) *gofr.App {
 		},
 	}
 
-	// Create JWT role extractor
-	jwtExtractor := rbac.NewJWTRoleExtractor("role")
-	config.RoleExtractorFunc = jwtExtractor.ExtractRole
-
-	// Enable RBAC with permissions
-	app.EnableRBACWithPermissions(config, jwtExtractor.ExtractRole)
+	// Enable RBAC with permissions and JWT role extraction
+	app.EnableRBAC(
+		gofr.WithConfig(config),
+		gofr.WithJWT("role"),
+		gofr.WithPermissions(config.PermissionConfig),
+	)
 
 	// Example routes
 	app.GET("/api/users", getAllUsers)

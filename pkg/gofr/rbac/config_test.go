@@ -3,7 +3,6 @@ package rbac
 import (
 	"os"
 	"testing"
-	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -177,101 +176,14 @@ func TestNewConfigLoader(t *testing.T) {
 	require.NoError(t, err)
 	tempFile.Close()
 
-	// Test without hot-reload
+	// Test config loader
 	loader, err := NewConfigLoader(tempFile.Name(), 0)
 	require.NoError(t, err)
 	assert.NotNil(t, loader)
 
 	config := loader.GetConfig()
 	assert.NotNil(t, config)
-	assert.Equal(t, []string{"read"}, config.RouteWithPermissions["admin"])
-
-	loader.Stop()
-}
-
-func TestNewConfigLoader_WithHotReload(t *testing.T) {
-	jsonContent := `{
-        "route": {"admin":["read"]}
-    }`
-	tempFile, err := os.CreateTemp(t.TempDir(), "test_permissions_*.json")
-	require.NoError(t, err)
-
-	_, err = tempFile.WriteString(jsonContent)
-	require.NoError(t, err)
-	tempFile.Close()
-
-	loader, err := NewConfigLoader(tempFile.Name(), 100*time.Millisecond)
-	require.NoError(t, err)
-	assert.NotNil(t, loader)
-
-	config := loader.GetConfig()
-	assert.NotNil(t, config)
-
-	// Update file
-	newContent := `{
-        "route": {"admin":["read", "write"]}
-    }`
-	err = os.WriteFile(tempFile.Name(), []byte(newContent), 0o600)
-	require.NoError(t, err)
-
-	// Sync to ensure file system updates modification time
-	file, err := os.OpenFile(tempFile.Name(), os.O_WRONLY, 0o600)
-	if err == nil {
-		_ = file.Sync()
-		file.Close()
-	}
-
-	// Small delay to ensure file system has updated modification time
-	time.Sleep(50 * time.Millisecond)
-
-	// Wait for reload with retries (CI environments may be slower)
-	var reloadedConfig *Config
-
-	for i := 0; i < 20; i++ {
-		time.Sleep(100 * time.Millisecond)
-
-		reloadedConfig = loader.GetConfig()
-		if reloadedConfig != nil && len(reloadedConfig.RouteWithPermissions["admin"]) == 2 {
-			break
-		}
-	}
-
-	// Check if config was reloaded
-	require.NotNil(t, reloadedConfig, "Config should not be nil")
-	require.Equal(t, []string{"read", "write"}, reloadedConfig.RouteWithPermissions["admin"])
-
-	loader.Stop()
-}
-
-func TestConfigLoader_Reload(t *testing.T) {
-	jsonContent := `{
-        "route": {"admin":["read"]}
-    }`
-	tempFile, err := os.CreateTemp(t.TempDir(), "test_permissions_*.json")
-	require.NoError(t, err)
-
-	_, err = tempFile.WriteString(jsonContent)
-	require.NoError(t, err)
-	tempFile.Close()
-
-	loader, err := NewConfigLoader(tempFile.Name(), 0)
-	require.NoError(t, err)
-
-	// Update file
-	newContent := `{
-        "route": {"admin":["read", "write"]}
-    }`
-	err = os.WriteFile(tempFile.Name(), []byte(newContent), 0o600)
-	require.NoError(t, err)
-
-	// Manually reload
-	err = loader.Reload()
-	require.NoError(t, err)
-
-	config := loader.GetConfig()
-	assert.Equal(t, []string{"read", "write"}, config.RouteWithPermissions["admin"])
-
-	loader.Stop()
+	assert.Equal(t, []string{"read"}, config.GetRouteWithPermissions()["admin"])
 }
 
 func TestConfigLoader_GetConfig_ThreadSafe(t *testing.T) {
@@ -304,8 +216,6 @@ func TestConfigLoader_GetConfig_ThreadSafe(t *testing.T) {
 	for i := 0; i < 10; i++ {
 		<-done
 	}
-
-	loader.Stop()
 }
 
 func TestLoadPermissions_WithPermissionConfig(t *testing.T) {

@@ -36,21 +36,18 @@ func main() {
 		},
 	}
 
-	// Create JWT role extractor
+	// Enable RBAC with permissions and JWT role extraction
 	// The roleClaim parameter supports multiple formats:
 	//   - "role" - Simple claim: {"role": "admin"}
 	//   - "roles[0]" - Array notation: {"roles": ["admin", "user"]}
 	//   - "permissions.role" - Dot notation: {"permissions": {"role": "admin"}}
 	//   - "user.permissions.role" - Deeply nested: {"user": {"permissions": {"role": "admin"}}}
 	// If empty (""), defaults to "role"
-	jwtExtractor := rbac.NewJWTRoleExtractor("role")
-	config.RoleExtractorFunc = jwtExtractor.ExtractRole
-	
-	// RequiresContainer = false (default) - JWT-based extraction doesn't need container
-	// Container is not passed to RoleExtractorFunc for JWT-based RBAC
-
-	// Enable RBAC with permissions
-	app.EnableRBACWithPermissions(config, jwtExtractor.ExtractRole)
+	app.EnableRBAC(
+		gofr.WithConfig(config),
+		gofr.WithJWT("role"),
+		gofr.WithPermissions(config.PermissionConfig),
+	)
 
 	// Example routes
 	app.GET("/api/users", getAllUsers)

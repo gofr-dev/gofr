@@ -1,8 +1,6 @@
 package rbac
 
 import (
-	"crypto/sha256"
-	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -13,9 +11,9 @@ import (
 	"sync"
 	"time"
 
-	"gopkg.in/yaml.v3"
-
+	"gofr.dev/pkg/gofr"
 	"gofr.dev/pkg/gofr/logging"
+	"gopkg.in/yaml.v3"
 )
 
 var (
@@ -77,13 +75,7 @@ type Config struct {
 	// Example: "admin": ["editor", "author", "viewer"]
 	RoleHierarchy map[string][]string `json:"roleHierarchy,omitempty" yaml:"roleHierarchy,omitempty"`
 
-	// EnableCache enables role caching for performance
-	EnableCache bool `json:"enableCache,omitempty" yaml:"enableCache,omitempty"`
-
-	// CacheTTL is the cache time-to-live for roles
-	CacheTTL time.Duration `json:"cacheTTL,omitempty" yaml:"cacheTTL,omitempty"`
-
-	// Logger is the GoFr logger instance for audit logging and config reload errors
+	// Logger is the GoFr logger instance for audit logging
 	// If nil, audit logging will be skipped
 	// Audit logging is automatically performed using GoFr's logger when Logger is set
 	Logger logging.Logger `json:"-" yaml:"-"`
@@ -195,193 +187,109 @@ func applyOverrideFlag(config *Config, key, value string) {
 	}
 }
 
-// ConfigLoader manages loading and reloading of RBAC configuration.
+// ConfigLoader manages loading of RBAC configuration.
 type ConfigLoader struct {
-	path     string
-	config   *Config
-	mu       sync.RWMutex
-	lastMod  time.Time
-	lastHash string
-	interval time.Duration
-	stopCh   chan struct{}
-	logger   logging.Logger
+	config *Config
+	mu     sync.RWMutex
 }
 
-// NewConfigLoader creates a new config loader with hot-reload capability.
-// If reloadInterval is 0, hot-reload is disabled.
-func NewConfigLoader(path string, reloadInterval time.Duration) (*ConfigLoader, error) {
-	return NewConfigLoaderWithLogger(path, reloadInterval, nil)
+// NewConfigLoader creates a new config loader.
+func NewConfigLoader(path string, _ time.Duration) (*ConfigLoader, error) {
+	return NewConfigLoaderWithLogger(path, nil)
 }
 
 // NewConfigLoaderWithLogger creates a new ConfigLoader with a logger for error reporting.
-func NewConfigLoaderWithLogger(path string, reloadInterval time.Duration, logger logging.Logger) (*ConfigLoader, error) {
+func NewConfigLoaderWithLogger(path string, logger logging.Logger) (*ConfigLoader, error) {
 	config, err := LoadPermissions(path)
 	if err != nil {
 		return nil, err
 	}
 
-	info, err := os.Stat(path)
-	if err != nil {
-		return nil, err
-	}
-
-	// Calculate initial file hash
-	fileHash, err := calculateFileHash(path)
-	if err != nil {
-		// If hash calculation fails, fall back to modification time
-		fileHash = ""
+	if logger != nil {
+		config.Logger = logger
 	}
 
 	loader := &ConfigLoader{
-		path:     path,
-		config:   config,
-		lastMod:  info.ModTime(),
-		lastHash: fileHash,
-		interval: reloadInterval,
-		stopCh:   make(chan struct{}),
-		logger:   logger,
-	}
-
-	// Start hot-reload if interval is set
-	if reloadInterval > 0 {
-		go loader.reloadLoop()
+		config: config,
 	}
 
 	return loader, nil
 }
 
 // GetConfig returns the current configuration (thread-safe).
-func (l *ConfigLoader) GetConfig() *Config {
+func (l *ConfigLoader) GetConfig() gofr.RBACConfig {
 	l.mu.RLock()
 	defer l.mu.RUnlock()
 
 	return l.config
 }
 
-// Reload manually reloads the configuration from file.
-func (l *ConfigLoader) Reload() error {
-	config, err := LoadPermissions(l.path)
-	if err != nil {
-		return err
-	}
+// Implement RBACConfig interface methods
 
-	info, err := os.Stat(l.path)
-	if err != nil {
-		return err
-	}
-
-	// Calculate file hash
-	fileHash, err := calculateFileHash(l.path)
-	if err != nil {
-		// If hash calculation fails, use empty string (will still work with mod time)
-		fileHash = ""
-	}
-
-	l.mu.Lock()
-	l.config = config
-	l.lastMod = info.ModTime()
-	l.lastHash = fileHash
-	l.mu.Unlock()
-
-	return nil
+// GetRouteWithPermissions returns the route-to-roles mapping.
+func (c *Config) GetRouteWithPermissions() map[string][]string {
+	return c.RouteWithPermissions
 }
 
-// reloadLoop periodically checks for file changes and reloads if needed.
-//
-//nolint:gocognit,gocyclo // complexity is acceptable for this function
-func (l *ConfigLoader) reloadLoop() {
-	ticker := time.NewTicker(l.interval)
-	defer ticker.Stop()
+// GetRoleExtractorFunc returns the role extractor function.
+func (c *Config) GetRoleExtractorFunc() gofr.RoleExtractor {
+	return c.RoleExtractorFunc
+}
 
-	for {
-		select {
-		case <-ticker.C:
-			info, err := os.Stat(l.path)
-			if err != nil {
-				continue
-			}
+// GetPermissionConfig returns permission configuration if enabled.
+func (c *Config) GetPermissionConfig() any {
+	// Return as any to match interface, will be type-asserted by callers
+	return c.PermissionConfig
+}
 
-			// Read lastMod and lastHash with lock for thread safety
-			l.mu.RLock()
-			lastMod := l.lastMod
-			lastHash := l.lastHash
-			l.mu.RUnlock()
+// GetOverRides returns route overrides.
+func (c *Config) GetOverRides() map[string]bool {
+	return c.OverRides
+}
 
-			// Check if file was modified using both modification time and content hash.
-			// This is more reliable than just using modification time.
-			fileHash, err := calculateFileHash(l.path)
-			//nolint:nestif // nested if is acceptable here for clarity
-			if err != nil {
-				// If hash calculation fails, fall back to modification time
-				if info.ModTime().After(lastMod) {
-					if err := l.Reload(); err != nil {
-						if l.logger != nil {
-							l.logger.Errorf("[RBAC] Failed to reload config: %v", err)
-						}
-					}
-				}
+// GetLogger returns the logger instance.
+func (c *Config) GetLogger() any {
+	return c.Logger
+}
 
-				continue
-			}
+// GetRequiresContainer returns whether container access is needed.
+func (c *Config) GetRequiresContainer() bool {
+	return c.RequiresContainer
+}
 
-			// Reload if hash changed (most reliable) or modification time changed (fallback)
-			if fileHash != lastHash || info.ModTime().After(lastMod) {
-				if err := l.Reload(); err != nil {
-					// Log error but continue
-					if l.logger != nil {
-						l.logger.Errorf("[RBAC] Failed to reload config: %v", err)
-					}
-				}
-			}
-		case <-l.stopCh:
-			return
-		}
+// SetRoleExtractorFunc sets the role extractor function.
+func (c *Config) SetRoleExtractorFunc(extractor gofr.RoleExtractor) {
+	c.RoleExtractorFunc = extractor
+}
+
+// SetLogger sets the logger instance.
+func (c *Config) SetLogger(logger any) {
+	if l, ok := logger.(logging.Logger); ok {
+		c.Logger = l
 	}
 }
 
-// calculateFileHash calculates SHA256 hash of file content.
-func calculateFileHash(path string) (string, error) {
-	data, err := os.ReadFile(path)
-	if err != nil {
-		return "", err
+// SetRequiresContainer sets whether container access is needed.
+func (c *Config) SetRequiresContainer(required bool) {
+	c.RequiresContainer = required
+}
+
+// SetEnablePermissions enables permission-based access control.
+func (c *Config) SetEnablePermissions(enabled bool) {
+	c.EnablePermissions = enabled
+}
+
+// InitializeMaps initializes empty maps if not present.
+func (c *Config) InitializeMaps() {
+	if c.RouteWithPermissions == nil {
+		c.RouteWithPermissions = make(map[string][]string)
 	}
 
-	hash := sha256.Sum256(data)
+	if c.OverRides == nil {
+		c.OverRides = make(map[string]bool)
+	}
 
-	return hex.EncodeToString(hash[:]), nil
-}
-
-// Stop stops the hot-reload loop.
-func (l *ConfigLoader) Stop() {
-	close(l.stopCh)
-}
-
-// RoleExtractor is a type alias for role extraction functions.
-type RoleExtractor func(req *http.Request, args ...any) (string, error)
-
-// JWTConfig holds configuration for JWT-based role extraction.
-type JWTConfig struct {
-	// RoleClaim is the path to the role claim in JWT
-	// Examples: "role", "roles[0]", "permissions.role"
-	RoleClaim string
-
-	// JWKSEndpoint is the endpoint to fetch JWKS (if needed)
-	JWKSEndpoint string
-
-	// RefreshInterval is how often to refresh JWKS
-	RefreshInterval time.Duration
-}
-
-// DBConfig holds configuration for database-based role extraction.
-type DBConfig struct {
-	// UserIDExtractor extracts user ID from request
-	UserIDExtractor func(req *http.Request) string
-
-	// RoleQuery is the SQL query to fetch role
-	// Should return a single string value (the role)
-	// Example: "SELECT role FROM users WHERE id = ?"
-	RoleQuery string
-
-	// CacheTTL is the cache time-to-live for roles
-	CacheTTL time.Duration
+	if c.RoleHierarchy == nil {
+		c.RoleHierarchy = make(map[string][]string)
+	}
 }

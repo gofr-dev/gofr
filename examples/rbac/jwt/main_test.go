@@ -15,6 +15,7 @@ import (
 
 	"gofr.dev/pkg/gofr"
 	"gofr.dev/pkg/gofr/testutil"
+	_ "gofr.dev/pkg/gofr/rbac" // Import RBAC module for automatic registration
 )
 
 func TestMain(m *testing.M) {
@@ -180,7 +181,10 @@ func createTestApp(jwksEndpoint string) *gofr.App {
 	app.EnableOAuth(jwksEndpoint, 10)
 
 	// Enable RBAC with JWT role extraction
-	app.EnableRBACWithJWT("configs/rbac.json", "role")
+	app.EnableRBAC(
+		gofr.WithPermissionsFile("configs/rbac.json"),
+		gofr.WithJWT("role"),
+	)
 
 	// Example routes
 	app.GET("/api/users", getAllUsers)

@@ -208,7 +208,12 @@ func TestIntegration_PermissionsDB_WithDatabase(t *testing.T) {
 		return "", fmt.Errorf("database not available")
 	}
 
-	app.EnableRBACWithPermissions(rbacConfig, rbacConfig.RoleExtractorFunc)
+	app.EnableRBAC(
+		gofr.WithConfig(rbacConfig),
+		gofr.WithRoleExtractor(rbacConfig.RoleExtractorFunc),
+		gofr.WithPermissions(rbacConfig.PermissionConfig),
+		gofr.WithRequiresContainer(true),
+	)
 	app.GET("/api/users", func(ctx *gofr.Context) (interface{}, error) {
 		return map[string]string{"message": "Users list"}, nil
 	})

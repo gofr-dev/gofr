@@ -56,7 +56,7 @@ func (*auditLogger) logAccess(logger logging.Logger, req *http.Request, role, ro
 //   - Database-based RBAC: RequiresContainer = true (container passed)
 //
 // This ensures container access is restricted and only available when needed for security.
-// Users should use app.EnableRBAC(), app.EnableRBACWithJWT(), app.EnableRBACWithPermissions(), etc.
+// Users should use app.EnableRBAC() with options (WithJWT, WithPermissions, etc.)
 // instead of calling this function directly.
 func Middleware(config *Config, args ...any) func(handler http.Handler) http.Handler {
 	return func(handler http.Handler) http.Handler {

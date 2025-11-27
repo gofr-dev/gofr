@@ -2,6 +2,7 @@ package main
 
 import (
 	"gofr.dev/pkg/gofr"
+	_ "gofr.dev/pkg/gofr/rbac" // Import RBAC module for automatic registration
 )
 
 func main() {
@@ -22,7 +23,10 @@ func main() {
 	//   - "user.permissions.role" - Deeply nested: {"user": {"permissions": {"role": "admin"}}}
 	//
 	// If roleClaim is empty (""), it defaults to "role"
-	app.EnableRBACWithJWT("configs/rbac.json", "role")
+	app.EnableRBAC(
+		gofr.WithPermissionsFile("configs/rbac.json"),
+		gofr.WithJWT("role"),
+	)
 
 	// Example routes
 	app.GET("/api/users", getAllUsers)
