@@ -21,6 +21,8 @@ const (
 	// #nosec G101
 	headerXAPIKey       = "X-Api-Key"
 	headerAuthorization = "Authorization"
+
+	dummyValue = "dummy"
 )
 
 var (
