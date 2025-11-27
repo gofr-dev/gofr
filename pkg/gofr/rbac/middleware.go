@@ -4,9 +4,6 @@ import (
 	"context"
 	"errors"
 	"net/http"
-
-	"gofr.dev/pkg/gofr/container"
-	"gofr.dev/pkg/gofr/logging"
 )
 
 type authMethod int
@@ -31,8 +28,8 @@ var (
 // Audit logging is automatically performed using GoFr's logger - users don't need to configure this.
 type auditLogger struct{}
 
-// logAccess logs an authorization decision using GoFr's logger.
-func (*auditLogger) logAccess(logger logging.Logger, req *http.Request, role, route string, allowed bool, reason string) {
+// logAccess logs an authorization decision using the logger.
+func (*auditLogger) logAccess(logger Logger, req *http.Request, role, route string, allowed bool, reason string) {
 	if logger == nil {
 		return // Skip logging if no logger provided
 	}
@@ -152,6 +149,16 @@ func extractRole(r *http.Request, config *Config, args []any) (string, error) {
 		return "", ErrRoleNotFound
 	}
 
+	// If role is empty, use default role if available
+	if role == "" && config.DefaultRole != "" {
+		return config.DefaultRole, nil
+	}
+
+	// If role is still empty and no default role, return error
+	if role == "" {
+		return "", ErrRoleNotFound
+	}
+
 	return role, nil
 }
 
@@ -172,14 +179,14 @@ func buildContainerArgs(args []any) []any {
 		return extractorArgs
 	}
 
-	cntr, ok := args[0].(*container.Container)
-	if ok && cntr != nil {
-		extractorArgs = append(extractorArgs, cntr)
-	}
+	// Container is passed as any - we just forward it to the extractor
+	if len(args) > 0 && args[0] != nil {
+		extractorArgs = append(extractorArgs, args[0])
 
-	// Append any additional args
-	if len(args) > 1 {
-		extractorArgs = append(extractorArgs, args[1:]...)
+		// Append any additional args
+		if len(args) > 1 {
+			extractorArgs = append(extractorArgs, args[1:]...)
+		}
 	}
 
 	return extractorArgs
@@ -192,8 +199,10 @@ func buildNonContainerArgs(args []any) []any {
 	}
 
 	startIdx := 0
-	if _, ok := args[0].(*container.Container); ok {
-		startIdx = 1 // Skip container
+	// Skip first arg if it's a container (when RequiresContainer is false)
+	// We assume the first arg is ALWAYS the container (or nil placeholder)
+	if len(args) > 0 {
+		startIdx = 1
 	}
 
 	if startIdx >= len(args) {
@@ -233,8 +242,8 @@ func checkAuthorization(r *http.Request, role, route string, config *Config) (au
 
 // logAuditEvent logs authorization decisions for audit purposes.
 // This is called automatically by the middleware when Logger is set.
-// Users don't need to configure this - it uses GoFr's logger automatically.
-func logAuditEvent(logger logging.Logger, r *http.Request, role, route string, allowed bool, reason string) {
+// Users don't need to configure this - it uses the provided logger automatically.
+func logAuditEvent(logger Logger, r *http.Request, role, route string, allowed bool, reason string) {
 	auditLogger := &auditLogger{}
 	auditLogger.logAccess(logger, r, role, route, allowed, reason)
 }

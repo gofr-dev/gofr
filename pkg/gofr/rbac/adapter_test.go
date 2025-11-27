@@ -7,7 +7,6 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"gofr.dev/pkg/gofr/logging"
 )
 
 func TestRegisterRBAC(t *testing.T) {
@@ -23,10 +22,15 @@ func TestRBACLoader_LoadPermissions(t *testing.T) {
 
 	t.Run("Success", func(t *testing.T) {
 		jsonContent := `{"route": {"admin":["read"]}}`
-		tempFile := createTempFile(t, "test_*.json", jsonContent)
-		defer removeFile(t, tempFile)
 
-		config, err := loader.LoadPermissions(tempFile)
+		tempFile, err := os.CreateTemp(t.TempDir(), "test_*.json")
+		require.NoError(t, err)
+
+		_, err = tempFile.WriteString(jsonContent)
+		require.NoError(t, err)
+		require.NoError(t, tempFile.Close())
+
+		config, err := loader.LoadPermissions(tempFile.Name())
 		require.NoError(t, err)
 		assert.NotNil(t, config)
 	})
@@ -43,11 +47,16 @@ func TestRBACLoader_NewConfigLoaderWithLogger(t *testing.T) {
 
 	t.Run("WithLogger", func(t *testing.T) {
 		jsonContent := `{"route": {"admin":["read"]}}`
-		tempFile := createTempFile(t, "test_*.json", jsonContent)
-		defer removeFile(t, tempFile)
 
-		mockLogger := logging.NewMockLogger(logging.INFO)
-		configLoader, err := loader.NewConfigLoaderWithLogger(tempFile, mockLogger)
+		tempFile, err := os.CreateTemp(t.TempDir(), "test_*.json")
+		require.NoError(t, err)
+
+		_, err = tempFile.WriteString(jsonContent)
+		require.NoError(t, err)
+		require.NoError(t, tempFile.Close())
+
+		mockLogger := &mockLogger{}
+		configLoader, err := loader.NewConfigLoaderWithLogger(tempFile.Name(), mockLogger)
 		require.NoError(t, err)
 		assert.NotNil(t, configLoader)
 
@@ -57,27 +66,37 @@ func TestRBACLoader_NewConfigLoaderWithLogger(t *testing.T) {
 
 	t.Run("WithNilLogger", func(t *testing.T) {
 		jsonContent := `{"route": {"admin":["read"]}}`
-		tempFile := createTempFile(t, "test_*.json", jsonContent)
-		defer removeFile(t, tempFile)
 
-		configLoader, err := loader.NewConfigLoaderWithLogger(tempFile, nil)
+		tempFile, err := os.CreateTemp(t.TempDir(), "test_*.json")
+		require.NoError(t, err)
+
+		_, err = tempFile.WriteString(jsonContent)
+		require.NoError(t, err)
+		require.NoError(t, tempFile.Close())
+
+		configLoader, err := loader.NewConfigLoaderWithLogger(tempFile.Name(), nil)
 		require.NoError(t, err)
 		assert.NotNil(t, configLoader)
 	})
 
 	t.Run("WithInvalidLoggerType", func(t *testing.T) {
 		jsonContent := `{"route": {"admin":["read"]}}`
-		tempFile := createTempFile(t, "test_*.json", jsonContent)
-		defer removeFile(t, tempFile)
+
+		tempFile, err := os.CreateTemp(t.TempDir(), "test_*.json")
+		require.NoError(t, err)
+
+		_, err = tempFile.WriteString(jsonContent)
+		require.NoError(t, err)
+		require.NoError(t, tempFile.Close())
 
 		// Pass a non-logger type
-		configLoader, err := loader.NewConfigLoaderWithLogger(tempFile, "not-a-logger")
+		configLoader, err := loader.NewConfigLoaderWithLogger(tempFile.Name(), "not-a-logger")
 		require.NoError(t, err)
 		assert.NotNil(t, configLoader)
 	})
 
 	t.Run("FileNotFound", func(t *testing.T) {
-		mockLogger := logging.NewMockLogger(logging.INFO)
+		mockLogger := &mockLogger{}
 		configLoader, err := loader.NewConfigLoaderWithLogger("nonexistent.json", mockLogger)
 		require.Error(t, err)
 		assert.Nil(t, configLoader)
@@ -112,7 +131,7 @@ func TestRBACMiddleware_Middleware(t *testing.T) {
 		assert.NotNil(t, mwFunc)
 
 		// Verify it returns a middleware function
-		handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		handler := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 			w.WriteHeader(http.StatusOK)
 		})
 
@@ -125,7 +144,7 @@ func TestRBACMiddleware_Middleware(t *testing.T) {
 		mwFunc := middleware.Middleware(nil)
 		assert.NotNil(t, mwFunc)
 
-		handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		handler := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 			w.WriteHeader(http.StatusOK)
 		})
 
@@ -137,7 +156,7 @@ func TestRBACMiddleware_Middleware(t *testing.T) {
 		mwFunc := middleware.Middleware(nil)
 		assert.NotNil(t, mwFunc)
 
-		handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		handler := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 			w.WriteHeader(http.StatusOK)
 		})
 
@@ -148,7 +167,7 @@ func TestRBACMiddleware_Middleware(t *testing.T) {
 
 func TestRequireRoleAdapter(t *testing.T) {
 	t.Run("Success", func(t *testing.T) {
-		handlerFunc := func(ctx any) (any, error) {
+		handlerFunc := func(_ any) (any, error) {
 			return "success", nil
 		}
 
@@ -158,7 +177,7 @@ func TestRequireRoleAdapter(t *testing.T) {
 
 	t.Run("WithContextValueGetter", func(t *testing.T) {
 		handlerCalled := false
-		handlerFunc := func(ctx any) (any, error) {
+		handlerFunc := func(_ any) (any, error) {
 			handlerCalled = true
 			return "success", nil
 		}
@@ -182,7 +201,7 @@ func TestRequireRoleAdapter(t *testing.T) {
 
 	t.Run("WithWrongRole", func(t *testing.T) {
 		handlerCalled := false
-		handlerFunc := func(ctx any) (any, error) {
+		handlerFunc := func(_ any) (any, error) {
 			handlerCalled = true
 			return "success", nil
 		}
@@ -200,7 +219,7 @@ func TestRequireRoleAdapter(t *testing.T) {
 
 		result, err := adapter(ctx)
 		require.Error(t, err)
-		assert.ErrorIs(t, err, ErrAccessDenied)
+		require.ErrorIs(t, err, ErrAccessDenied)
 		assert.False(t, handlerCalled)
 		assert.Nil(t, result)
 	})
@@ -208,7 +227,7 @@ func TestRequireRoleAdapter(t *testing.T) {
 
 func TestRequireAnyRoleAdapter(t *testing.T) {
 	t.Run("Success", func(t *testing.T) {
-		handlerFunc := func(ctx any) (any, error) {
+		handlerFunc := func(_ any) (any, error) {
 			return "success", nil
 		}
 
@@ -218,7 +237,7 @@ func TestRequireAnyRoleAdapter(t *testing.T) {
 
 	t.Run("WithMatchingRole", func(t *testing.T) {
 		handlerCalled := false
-		handlerFunc := func(ctx any) (any, error) {
+		handlerFunc := func(_ any) (any, error) {
 			handlerCalled = true
 			return "success", nil
 		}
@@ -242,7 +261,7 @@ func TestRequireAnyRoleAdapter(t *testing.T) {
 
 	t.Run("WithNonMatchingRole", func(t *testing.T) {
 		handlerCalled := false
-		handlerFunc := func(ctx any) (any, error) {
+		handlerFunc := func(_ any) (any, error) {
 			handlerCalled = true
 			return "success", nil
 		}
@@ -260,7 +279,7 @@ func TestRequireAnyRoleAdapter(t *testing.T) {
 
 		result, err := adapter(ctx)
 		require.Error(t, err)
-		assert.ErrorIs(t, err, ErrAccessDenied)
+		require.ErrorIs(t, err, ErrAccessDenied)
 		assert.False(t, handlerCalled)
 		assert.Nil(t, result)
 	})
@@ -274,7 +293,7 @@ func TestRequirePermissionAdapter(t *testing.T) {
 			},
 		}
 
-		handlerFunc := func(ctx any) (any, error) {
+		handlerFunc := func(_ any) (any, error) {
 			return "success", nil
 		}
 
@@ -284,7 +303,7 @@ func TestRequirePermissionAdapter(t *testing.T) {
 
 	t.Run("WithInvalidPermissionConfigType", func(t *testing.T) {
 		// Pass a config that doesn't implement *PermissionConfig
-		handlerFunc := func(ctx any) (any, error) {
+		handlerFunc := func(_ any) (any, error) {
 			return "success", nil
 		}
 
@@ -292,14 +311,14 @@ func TestRequirePermissionAdapter(t *testing.T) {
 		assert.NotNil(t, adapter)
 
 		ctx := &mockContextValueGetter{
-			value: func(key any) any {
+			value: func(_ any) any {
 				return nil
 			},
 		}
 
 		result, err := adapter(ctx)
 		require.Error(t, err)
-		assert.ErrorIs(t, err, ErrPermissionDenied)
+		require.ErrorIs(t, err, ErrPermissionDenied)
 		assert.Nil(t, result)
 	})
 
@@ -311,7 +330,7 @@ func TestRequirePermissionAdapter(t *testing.T) {
 		}
 
 		handlerCalled := false
-		handlerFunc := func(ctx any) (any, error) {
+		handlerFunc := func(_ any) (any, error) {
 			handlerCalled = true
 			return "success", nil
 		}
@@ -341,7 +360,7 @@ func TestRequirePermissionAdapter(t *testing.T) {
 		}
 
 		handlerCalled := false
-		handlerFunc := func(ctx any) (any, error) {
+		handlerFunc := func(_ any) (any, error) {
 			handlerCalled = true
 			return "success", nil
 		}
@@ -359,41 +378,112 @@ func TestRequirePermissionAdapter(t *testing.T) {
 
 		result, err := adapter(ctx)
 		require.Error(t, err)
-		assert.ErrorIs(t, err, ErrPermissionDenied)
+		require.ErrorIs(t, err, ErrPermissionDenied)
 		assert.False(t, handlerCalled)
 		assert.Nil(t, result)
 	})
 }
 
-// Helper functions for tests
-func createTempFile(t *testing.T, pattern, content string) string {
-	t.Helper()
-	tempFile, err := createTempFileWithContent(pattern, content)
-	require.NoError(t, err)
-	return tempFile
+func TestRequirePermissionAdapter_EdgeCases(t *testing.T) {
+	t.Run("WithNoRoleInContext", func(t *testing.T) {
+		permissionConfig := &PermissionConfig{
+			Permissions: map[string][]string{
+				"users:read": {"admin"},
+			},
+		}
+
+		handlerCalled := false
+		handlerFunc := func(_ any) (any, error) {
+			handlerCalled = true
+			return "success", nil
+		}
+
+		adapter := requirePermissionAdapter("users:read", permissionConfig, handlerFunc)
+
+		ctx := &mockContextValueGetter{
+			value: func(_ any) any {
+				return nil // No role in context
+			},
+		}
+
+		result, err := adapter(ctx)
+		require.Error(t, err)
+		require.ErrorIs(t, err, ErrPermissionDenied)
+		assert.False(t, handlerCalled)
+		assert.Nil(t, result)
+	})
 }
 
-func createTempFileWithContent(pattern, content string) (string, error) {
-	tempFile, err := os.CreateTemp("", pattern)
-	if err != nil {
-		return "", err
-	}
+func TestRequireAnyRoleAdapter_EdgeCases(t *testing.T) {
+	t.Run("WithNoRoleInContext", func(t *testing.T) {
+		handlerCalled := false
+		handlerFunc := func(_ any) (any, error) {
+			handlerCalled = true
+			return "success", nil
+		}
 
-	_, err = tempFile.WriteString(content)
-	if err != nil {
-		tempFile.Close()
-		os.Remove(tempFile.Name())
-		return "", err
-	}
+		adapter := requireAnyRoleAdapter([]string{"admin", "editor"}, handlerFunc)
 
-	tempFile.Close()
-	return tempFile.Name(), nil
+		ctx := &mockContextValueGetter{
+			value: func(_ any) any {
+				return nil // No role in context
+			},
+		}
+
+		result, err := adapter(ctx)
+		require.Error(t, err)
+		require.ErrorIs(t, err, ErrAccessDenied)
+		assert.False(t, handlerCalled)
+		assert.Nil(t, result)
+	})
+
+	t.Run("WithEmptyRolesList", func(t *testing.T) {
+		handlerCalled := false
+		handlerFunc := func(_ any) (any, error) {
+			handlerCalled = true
+			return "success", nil
+		}
+
+		adapter := requireAnyRoleAdapter([]string{}, handlerFunc)
+
+		ctx := &mockContextValueGetter{
+			value: func(key any) any {
+				if key == userRole {
+					return "admin"
+				}
+				return nil
+			},
+		}
+
+		result, err := adapter(ctx)
+		require.Error(t, err)
+		require.ErrorIs(t, err, ErrAccessDenied)
+		assert.False(t, handlerCalled)
+		assert.Nil(t, result)
+	})
+
+	t.Run("WithNonStringRole", func(t *testing.T) {
+		handlerCalled := false
+		handlerFunc := func(_ any) (any, error) {
+			handlerCalled = true
+			return "success", nil
+		}
+
+		adapter := requireAnyRoleAdapter([]string{"admin", "editor"}, handlerFunc)
+
+		ctx := &mockContextValueGetter{
+			value: func(key any) any {
+				if key == userRole {
+					return 123 // Non-string role
+				}
+				return nil
+			},
+		}
+
+		result, err := adapter(ctx)
+		require.Error(t, err)
+		require.ErrorIs(t, err, ErrAccessDenied)
+		assert.False(t, handlerCalled)
+		assert.Nil(t, result)
+	})
 }
-
-func removeFile(t *testing.T, path string) {
-	t.Helper()
-	if path != "" {
-		os.Remove(path)
-	}
-}
-

@@ -114,4 +114,3 @@ func TestJWTRoleExtractorProvider_ExtractRole(t *testing.T) {
 		assert.Equal(t, "admin", role)
 	})
 }
-

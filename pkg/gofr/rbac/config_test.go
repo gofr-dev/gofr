@@ -1,6 +1,7 @@
 package rbac
 
 import (
+	"net/http"
 	"os"
 	"testing"
 
@@ -330,6 +331,62 @@ func TestLoadPermissions_FileExtensionDetection(t *testing.T) {
 	}
 }
 
+func TestLoadPermissions_NoExtensionFile(t *testing.T) {
+	jsonContent := `{"route": {"admin":["read"]}}`
+	tempFile, err := os.CreateTemp(t.TempDir(), "test_permissions")
+	require.NoError(t, err)
+
+	_, err = tempFile.WriteString(jsonContent)
+	require.NoError(t, err)
+	tempFile.Close()
+
+	cfg, err := LoadPermissions(tempFile.Name())
+	require.NoError(t, err)
+	assert.Equal(t, []string{"read"}, cfg.RouteWithPermissions["admin"])
+}
+
+func TestConfigLoader_GetConfig_ConcurrentAccess(t *testing.T) {
+	jsonContent := `{
+        "route": {"admin":["read"]}
+    }`
+	tempFile, err := os.CreateTemp(t.TempDir(), "test_permissions_*.json")
+	require.NoError(t, err)
+
+	_, err = tempFile.WriteString(jsonContent)
+	require.NoError(t, err)
+	tempFile.Close()
+
+	loader, err := NewConfigLoader(tempFile.Name(), 0)
+	require.NoError(t, err)
+
+	// Concurrent reads and writes
+	done := make(chan bool, 20)
+
+	for i := 0; i < 10; i++ {
+		go func() {
+			config := loader.GetConfig()
+			assert.NotNil(t, config)
+
+			done <- true
+		}()
+	}
+
+	// Wait for all goroutines
+	for i := 0; i < 10; i++ {
+		<-done
+	}
+}
+
+func TestConfig_GetPermissionConfig_Nil(t *testing.T) {
+	config := &Config{}
+	assert.Nil(t, config.GetPermissionConfig())
+}
+
+func TestConfig_GetLogger_Nil(t *testing.T) {
+	config := &Config{}
+	assert.Nil(t, config.GetLogger())
+}
+
 func TestLoadPermissions_ErrorMessages(t *testing.T) {
 	tests := []struct {
 		name       string
@@ -389,13 +446,299 @@ func TestLoadPermissions_ErrorMessages(t *testing.T) {
 // assertLoadPermissionsResult asserts LoadPermissions results without nested if-else.
 func assertLoadPermissionsResult(t *testing.T, cfg *Config, err error, wantErr bool, checkErr func(*testing.T, error)) {
 	t.Helper()
+
 	if wantErr {
 		require.Error(t, err)
+
 		if checkErr != nil {
 			checkErr(t, err)
 		}
+
 		return
 	}
+
 	require.NoError(t, err)
 	assert.NotNil(t, cfg)
+}
+
+func TestConfig_GetterMethods(t *testing.T) {
+	extractor := func(_ *http.Request, _ ...any) (string, error) {
+		return "admin", nil
+	}
+	permissionConfig := &PermissionConfig{
+		Permissions: map[string][]string{
+			"users:read": {"admin"},
+		},
+	}
+	mockLogger := &mockLogger{}
+
+	config := &Config{
+		RouteWithPermissions: map[string][]string{
+			"/api/users": {"admin"},
+		},
+		RoleExtractorFunc: extractor,
+		PermissionConfig:  permissionConfig,
+		OverRides:         map[string]bool{"/health": true},
+		Logger:            mockLogger,
+		RequiresContainer: true,
+		EnablePermissions: true,
+	}
+
+	assert.Equal(t, map[string][]string{"/api/users": {"admin"}}, config.GetRouteWithPermissions())
+	assert.NotNil(t, config.GetRoleExtractorFunc())
+	assert.Equal(t, permissionConfig, config.GetPermissionConfig())
+	assert.Equal(t, map[string]bool{"/health": true}, config.GetOverRides())
+	assert.Equal(t, mockLogger, config.GetLogger())
+	assert.True(t, config.GetRequiresContainer())
+}
+
+func TestConfig_SetterMethods(t *testing.T) {
+	config := &Config{}
+	extractor := func(_ *http.Request, _ ...any) (string, error) {
+		return "admin", nil
+	}
+	mockLogger := &mockLogger{}
+
+	config.SetRoleExtractorFunc(extractor)
+	assert.NotNil(t, config.RoleExtractorFunc)
+
+	config.SetLogger(mockLogger)
+	assert.Equal(t, mockLogger, config.Logger)
+
+	config.SetLogger("not-a-logger")
+	assert.Equal(t, mockLogger, config.Logger) // Should remain unchanged
+
+	config.SetRequiresContainer(true)
+	assert.True(t, config.RequiresContainer)
+
+	config.SetRequiresContainer(false)
+	assert.False(t, config.RequiresContainer)
+
+	config.SetEnablePermissions(true)
+	assert.True(t, config.EnablePermissions)
+
+	config.SetEnablePermissions(false)
+	assert.False(t, config.EnablePermissions)
+}
+
+func TestConfig_InitializeMaps(t *testing.T) {
+	t.Run("AllMapsNil", func(t *testing.T) {
+		config := &Config{}
+		config.InitializeMaps()
+
+		assert.NotNil(t, config.RouteWithPermissions)
+		assert.NotNil(t, config.OverRides)
+		assert.NotNil(t, config.RoleHierarchy)
+	})
+
+	t.Run("SomeMapsNil", func(t *testing.T) {
+		config := &Config{
+			RouteWithPermissions: map[string][]string{"/test": {"admin"}},
+		}
+		config.InitializeMaps()
+
+		assert.NotNil(t, config.RouteWithPermissions)
+		assert.Equal(t, []string{"admin"}, config.RouteWithPermissions["/test"])
+		assert.NotNil(t, config.OverRides)
+		assert.NotNil(t, config.RoleHierarchy)
+	})
+
+	t.Run("AllMapsInitialized", func(t *testing.T) {
+		config := &Config{
+			RouteWithPermissions: map[string][]string{"/test": {"admin"}},
+			OverRides:            map[string]bool{"/health": true},
+			RoleHierarchy:        map[string][]string{"admin": {"editor"}},
+		}
+		config.InitializeMaps()
+
+		assert.Equal(t, []string{"admin"}, config.RouteWithPermissions["/test"])
+		assert.True(t, config.OverRides["/health"])
+		assert.Equal(t, []string{"editor"}, config.RoleHierarchy["admin"])
+	})
+}
+
+func TestNewConfigLoaderWithLogger(t *testing.T) {
+	jsonContent := `{
+        "route": {"admin":["read"]}
+    }`
+	tempFile, err := os.CreateTemp(t.TempDir(), "test_permissions_*.json")
+	require.NoError(t, err)
+
+	_, err = tempFile.WriteString(jsonContent)
+	require.NoError(t, err)
+	tempFile.Close()
+
+	mockLogger := &mockLogger{}
+
+	loader, err := NewConfigLoaderWithLogger(tempFile.Name(), mockLogger)
+	require.NoError(t, err)
+	assert.NotNil(t, loader)
+
+	config := loader.GetConfig()
+	assert.NotNil(t, config)
+	assert.Equal(t, mockLogger, config.GetLogger())
+}
+
+func TestApplyEnvOverrides_EdgeCases(t *testing.T) {
+	t.Run("RouteOverrideWithUnderscores", func(t *testing.T) {
+		t.Setenv("RBAC_ROUTE_/api_test_users", "admin,editor")
+
+		defer os.Unsetenv("RBAC_ROUTE_/api_test_users")
+
+		config := &Config{}
+		applyEnvOverrides(config)
+
+		assert.Equal(t, []string{"admin", "editor"}, config.RouteWithPermissions["/api/test/users"])
+	})
+
+	t.Run("RouteOverrideWithSpaces", func(t *testing.T) {
+		t.Setenv("RBAC_ROUTE_/api/users", "admin, editor, viewer")
+
+		defer os.Unsetenv("RBAC_ROUTE_/api/users")
+
+		config := &Config{}
+		applyEnvOverrides(config)
+
+		assert.Equal(t, []string{"admin", "editor", "viewer"}, config.RouteWithPermissions["/api/users"])
+	})
+
+	t.Run("OverrideFlagFalse", func(t *testing.T) {
+		t.Setenv("RBAC_OVERRIDE_/public", "false")
+
+		defer os.Unsetenv("RBAC_OVERRIDE_/public")
+
+		config := &Config{}
+		applyEnvOverrides(config)
+
+		assert.Nil(t, config.OverRides)
+	})
+
+	t.Run("OverrideFlagZero", func(t *testing.T) {
+		t.Setenv("RBAC_OVERRIDE_/public", "0")
+
+		defer os.Unsetenv("RBAC_OVERRIDE_/public")
+
+		config := &Config{}
+		applyEnvOverrides(config)
+
+		assert.Nil(t, config.OverRides)
+	})
+
+	t.Run("OverrideFlagOne", func(t *testing.T) {
+		t.Setenv("RBAC_OVERRIDE_/public", "1")
+
+		defer os.Unsetenv("RBAC_OVERRIDE_/public")
+
+		config := &Config{}
+		applyEnvOverrides(config)
+
+		assert.True(t, config.OverRides["/public"])
+	})
+
+	t.Run("OverrideFlagCaseInsensitive", func(t *testing.T) {
+		t.Setenv("RBAC_OVERRIDE_/public", "TRUE")
+
+		defer os.Unsetenv("RBAC_OVERRIDE_/public")
+
+		config := &Config{}
+		applyEnvOverrides(config)
+
+		assert.True(t, config.OverRides["/public"])
+	})
+
+	t.Run("RouteOverrideSingleRole", func(t *testing.T) {
+		t.Setenv("RBAC_ROUTE_/api/test", "admin")
+
+		defer os.Unsetenv("RBAC_ROUTE_/api/test")
+
+		config := &Config{}
+		applyEnvOverrides(config)
+
+		assert.Equal(t, []string{"admin"}, config.RouteWithPermissions["/api/test"])
+	})
+
+	t.Run("RouteOverrideEmptyValue", func(t *testing.T) {
+		t.Setenv("RBAC_ROUTE_/api/test", "")
+
+		defer os.Unsetenv("RBAC_ROUTE_/api/test")
+
+		config := &Config{}
+		applyEnvOverrides(config)
+
+		assert.Equal(t, []string{""}, config.RouteWithPermissions["/api/test"])
+	})
+}
+
+func TestApplyRouteOverride(t *testing.T) {
+	t.Run("WithNilRouteWithPermissions", func(t *testing.T) {
+		config := &Config{}
+		applyRouteOverride(config, "RBAC_ROUTE_/api/test", "admin,editor")
+
+		assert.NotNil(t, config.RouteWithPermissions)
+		assert.Equal(t, []string{"admin", "editor"}, config.RouteWithPermissions["/api/test"])
+	})
+
+	t.Run("WithExistingRouteWithPermissions", func(t *testing.T) {
+		config := &Config{
+			RouteWithPermissions: map[string][]string{
+				"/other": {"viewer"},
+			},
+		}
+		applyRouteOverride(config, "RBAC_ROUTE_/api/test", "admin,editor")
+
+		assert.Equal(t, []string{"admin", "editor"}, config.RouteWithPermissions["/api/test"])
+		assert.Equal(t, []string{"viewer"}, config.RouteWithPermissions["/other"])
+	})
+
+	t.Run("WithMultipleUnderscores", func(t *testing.T) {
+		config := &Config{}
+		applyRouteOverride(config, "RBAC_ROUTE_/api_test_users", "admin")
+
+		assert.Equal(t, []string{"admin"}, config.RouteWithPermissions["/api/test/users"])
+	})
+}
+
+func TestApplyOverrideFlag(t *testing.T) {
+	t.Run("WithTrueValue", func(t *testing.T) {
+		config := &Config{}
+		applyOverrideFlag(config, "RBAC_OVERRIDE_/public", "true")
+
+		assert.NotNil(t, config.OverRides)
+		assert.True(t, config.OverRides["/public"])
+	})
+
+	t.Run("WithOneValue", func(t *testing.T) {
+		config := &Config{}
+		applyOverrideFlag(config, "RBAC_OVERRIDE_/public", "1")
+
+		assert.NotNil(t, config.OverRides)
+		assert.True(t, config.OverRides["/public"])
+	})
+
+	t.Run("WithFalseValue", func(t *testing.T) {
+		config := &Config{}
+		applyOverrideFlag(config, "RBAC_OVERRIDE_/public", "false")
+
+		assert.Nil(t, config.OverRides)
+	})
+
+	t.Run("WithNilOverRides", func(t *testing.T) {
+		config := &Config{}
+		applyOverrideFlag(config, "RBAC_OVERRIDE_/public", "true")
+
+		assert.NotNil(t, config.OverRides)
+		assert.True(t, config.OverRides["/public"])
+	})
+
+	t.Run("WithExistingOverRides", func(t *testing.T) {
+		config := &Config{
+			OverRides: map[string]bool{
+				"/other": true,
+			},
+		}
+		applyOverrideFlag(config, "RBAC_OVERRIDE_/public", "true")
+
+		assert.True(t, config.OverRides["/public"])
+		assert.True(t, config.OverRides["/other"])
+	})
 }

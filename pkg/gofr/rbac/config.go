@@ -12,7 +12,6 @@ import (
 	"time"
 
 	"gofr.dev/pkg/gofr"
-	"gofr.dev/pkg/gofr/logging"
 	"gopkg.in/yaml.v3"
 )
 
@@ -40,12 +39,11 @@ type Config struct {
 	// Example (database-based - container provided):
 	//   RoleExtractorFunc: func(req *http.Request, args ...any) (string, error) {
 	//       if len(args) > 0 {
-	//           if cntr, ok := args[0].(*container.Container); ok && cntr != nil {
-	//               // Use container.SQL.QueryRowContext(...) to query database
-	//               var role string
-	//               err := cntr.SQL.QueryRowContext(req.Context(), "SELECT role FROM users WHERE id = ?", userID).Scan(&role)
-	//               return role, err
-	//           }
+	//           // Container is passed as first argument when RequiresContainer is true
+	//           // Type assert to your container type to access datasources
+	//           // var role string
+	//           // err := container.SQL.QueryRowContext(req.Context(), "SELECT role FROM users WHERE id = ?", userID).Scan(&role)
+	//           // return role, err
 	//       }
 	//       return "", fmt.Errorf("database not available")
 	//   }
@@ -75,10 +73,10 @@ type Config struct {
 	// Example: "admin": ["editor", "author", "viewer"]
 	RoleHierarchy map[string][]string `json:"roleHierarchy,omitempty" yaml:"roleHierarchy,omitempty"`
 
-	// Logger is the GoFr logger instance for audit logging
+	// Logger is the logger instance for audit logging
 	// If nil, audit logging will be skipped
-	// Audit logging is automatically performed using GoFr's logger when Logger is set
-	Logger logging.Logger `json:"-" yaml:"-"`
+	// Audit logging is automatically performed when Logger is set
+	Logger Logger `json:"-" yaml:"-"`
 
 	// RequiresContainer indicates if the RoleExtractorFunc needs access to the container
 	// This flag determines whether the container is passed to RoleExtractorFunc
@@ -199,7 +197,7 @@ func NewConfigLoader(path string, _ time.Duration) (*ConfigLoader, error) {
 }
 
 // NewConfigLoaderWithLogger creates a new ConfigLoader with a logger for error reporting.
-func NewConfigLoaderWithLogger(path string, logger logging.Logger) (*ConfigLoader, error) {
+func NewConfigLoaderWithLogger(path string, logger Logger) (*ConfigLoader, error) {
 	config, err := LoadPermissions(path)
 	if err != nil {
 		return nil, err
@@ -264,7 +262,7 @@ func (c *Config) SetRoleExtractorFunc(extractor gofr.RoleExtractor) {
 
 // SetLogger sets the logger instance.
 func (c *Config) SetLogger(logger any) {
-	if l, ok := logger.(logging.Logger); ok {
+	if l, ok := logger.(Logger); ok {
 		c.Logger = l
 	}
 }

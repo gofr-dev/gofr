@@ -117,3 +117,15 @@ func TestGetUserRole_NilContext(t *testing.T) {
 	role := GetUserRole(nil)
 	assert.Empty(t, role)
 }
+
+// mockLogger is a simple mock implementation of the Logger interface for testing.
+type mockLogger struct{}
+
+func (*mockLogger) Debug(_ ...any)            {}
+func (*mockLogger) Debugf(_ string, _ ...any) {}
+func (*mockLogger) Info(_ ...any)             {}
+func (*mockLogger) Infof(_ string, _ ...any)  {}
+func (*mockLogger) Error(_ ...any)            {}
+func (*mockLogger) Errorf(_ string, _ ...any) {}
+func (*mockLogger) Warn(_ ...any)             {}
+func (*mockLogger) Warnf(_ string, _ ...any)  {}

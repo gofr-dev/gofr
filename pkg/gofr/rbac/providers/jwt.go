@@ -19,7 +19,7 @@ var (
 	// This error is exported for users who want to handle missing role claims in their error handling logic.
 	ErrRoleClaimNotFound = errors.New("role claim not found in JWT")
 
-	// Internal errors - not exported as they are implementation details
+	// Internal errors - not exported as they are implementation details.
 	errEmptyClaimPath        = errors.New("empty claim path")
 	errInvalidArrayNotation  = errors.New("invalid array notation")
 	errInvalidArrayIndex     = errors.New("invalid array index")
@@ -56,6 +56,7 @@ func NewJWTRoleExtractor(roleClaim string) *JWTRoleExtractor {
 // It expects the OAuth middleware to have already validated the JWT and stored claims.
 func (e *JWTRoleExtractor) ExtractRole(req *http.Request, _ ...any) (string, error) {
 	// Get JWT claims from context (set by OAuth middleware)
+	// We use the same context key that GoFr's OAuth middleware uses
 	claims, ok := req.Context().Value(middleware.JWTClaim).(jwt.MapClaims)
 	if !ok || claims == nil {
 		return "", ErrJWTNotEnabled
@@ -100,7 +101,7 @@ func extractClaimValue(claims jwt.MapClaims, path string) (any, error) {
 	// Simple key lookup
 	value, ok := claims[path]
 	if !ok {
-		return nil, fmt.Errorf("%w: %s", ErrClaimKeyNotFound, path)
+		return nil, fmt.Errorf("%w: %s", errClaimPathNotFound, path)
 	}
 
 	return value, nil
@@ -156,7 +157,7 @@ func extractNestedClaim(claims jwt.MapClaims, path string) (any, error) {
 		}
 	}
 
-		return nil, fmt.Errorf("%w: %s", errClaimPathNotFound, path)
+	return nil, fmt.Errorf("%w: %s", errClaimPathNotFound, path)
 }
 
 func extractFinalPart(current any, part, path string, parts []string, index int) (any, error) {
@@ -180,7 +181,7 @@ func extractFinalPart(current any, part, path string, parts []string, index int)
 		return value, nil
 	}
 
-		return nil, fmt.Errorf("%w: %s", errInvalidClaimStructure, strings.Join(parts[:index+1], "."))
+	return nil, fmt.Errorf("%w: %s", errInvalidClaimStructure, strings.Join(parts[:index+1], "."))
 }
 
 func navigateNestedStructure(current any, part, _ string, _ []string, _ int) any {

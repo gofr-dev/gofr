@@ -4,7 +4,8 @@ import (
 	"net/http"
 
 	"gofr.dev/pkg/gofr"
-	"gofr.dev/pkg/gofr/logging"
+
+	"gofr.dev/pkg/gofr/rbac/providers"
 )
 
 // registerRBAC registers RBAC implementations with core GoFr.
@@ -35,8 +36,8 @@ func (*rbacLoader) LoadPermissions(file string) (gofr.RBACConfig, error) {
 }
 
 func (*rbacLoader) NewConfigLoaderWithLogger(file string, logger any) (gofr.ConfigLoader, error) {
-	var log logging.Logger
-	if loggerVal, ok := logger.(logging.Logger); ok {
+	var log Logger
+	if loggerVal, ok := logger.(Logger); ok {
 		log = loggerVal
 	}
 
@@ -49,8 +50,8 @@ func (*rbacLoader) NewConfigLoaderWithLogger(file string, logger any) (gofr.Conf
 }
 
 func (*rbacLoader) NewJWTRoleExtractor(claim string) gofr.JWTRoleExtractor {
-	// NewJWTRoleExtractor returns JWTRoleExtractorProvider which implements gofr.JWTRoleExtractor
-	return NewJWTRoleExtractor(claim)
+	// NewJWTRoleExtractor returns *providers.JWTRoleExtractor which implements gofr.JWTRoleExtractor
+	return providers.NewJWTRoleExtractor(claim)
 }
 
 // rbacMiddleware implements RBACMiddleware interface.
