@@ -55,13 +55,17 @@ func main() {
 	}
 
 	// Enable RBAC with permissions
-	app.EnableRBACWithPermissions(config, func(req *http.Request, args ...any) (string, error) {
-		role := req.Header.Get("X-User-Role")
-		if role == "" {
-			return "", fmt.Errorf("role header not found")
-		}
-		return role, nil
-	})
+	app.EnableRBAC(
+		gofr.WithConfig(config),
+		gofr.WithRoleExtractor(func(req *http.Request, args ...any) (string, error) {
+			role := req.Header.Get("X-User-Role")
+			if role == "" {
+				return "", fmt.Errorf("role header not found")
+			}
+			return role, nil
+		}),
+		gofr.WithPermissions(config.PermissionConfig),
+	)
 
 	// Example routes
 	app.GET("/api/users", getAllUsers)
@@ -334,15 +338,12 @@ The config file contains important settings beyond permissions:
   "roleHierarchy": {        // Role inheritance
     "admin": ["editor", "viewer"]
   },
-  "enablePermissions": true,  // Enable permission checks
-  "enableCache": true,        // Enable caching
-  "cacheTTL": "5m"            // Cache TTL
+  "enablePermissions": true  // Enable permission checks
 }
 ```
 
 #### 3. **Configuration Management Benefits**
 
-- **Hot-Reload**: Configuration can be reloaded without code changes
 - **Environment Overrides**: Supports `RBAC_ROUTE_*` environment variables
 - **Separation of Concerns**: Route-level config in file, fine-grained permissions in code
 - **Version Control**: Config changes tracked separately from code
@@ -373,13 +374,14 @@ config := &rbac.Config{
     },
 }
 
-app.EnableRBACWithConfig(config)
+app.EnableRBAC(
+	gofr.WithConfig(config),
+)
 ```
 
 ### When to Use Each Approach
 
 #### Use File-Based Config When:
-- ✅ You want hot-reload capability
 - ✅ Configuration changes frequently
 - ✅ Non-developers need to modify permissions
 - ✅ You want environment variable overrides
@@ -388,7 +390,6 @@ app.EnableRBACWithConfig(config)
 #### Use Pure Code-Based Config When:
 - ✅ Permissions are static and rarely change
 - ✅ All configuration is managed in code
-- ✅ You don't need hot-reload
 - ✅ You want everything in one place
 
 ### Recommended Pattern
@@ -425,7 +426,6 @@ For permission-based RBAC, the recommended pattern is:
 This gives you:
 - **Flexibility**: Fine-grained permissions in code (easy to maintain)
 - **Safety**: Route-level fallback from config file
-- **Hot-Reload**: Can reload route-level config without code changes
 - **Best of Both**: Code for complex logic, file for simple route rules
 
 ## Implementation Patterns
@@ -437,13 +437,17 @@ This gives you:
 **Example**: [Permission-Based RBAC (Header) Example](https://github.com/gofr-dev/gofr/tree/main/examples/rbac/permissions-header)
 
 ```go
-app.EnableRBACWithPermissions(config, func(req *http.Request, args ...any) (string, error) {
-    role := req.Header.Get("X-User-Role")
-    if role == "" {
-        return "", fmt.Errorf("role header not found")
-    }
-    return role, nil
-})
+app.EnableRBAC(
+	gofr.WithConfig(config),
+	gofr.WithRoleExtractor(func(req *http.Request, args ...any) (string, error) {
+		role := req.Header.Get("X-User-Role")
+		if role == "" {
+			return "", fmt.Errorf("role header not found")
+		}
+		return role, nil
+	}),
+	gofr.WithPermissions(config.PermissionConfig),
+)
 ```
 
 ### 2. Permission-Based RBAC (JWT)
@@ -455,10 +459,11 @@ app.EnableRBACWithPermissions(config, func(req *http.Request, args ...any) (stri
 ```go
 app.EnableOAuth("https://auth.example.com/.well-known/jwks.json", 10)
 
-jwtExtractor := rbac.NewJWTRoleExtractor("role")
-config.RoleExtractorFunc = jwtExtractor.ExtractRole
-
-app.EnableRBACWithPermissions(config, jwtExtractor.ExtractRole)
+app.EnableRBAC(
+	gofr.WithConfig(config),
+	gofr.WithJWT("role"),
+	gofr.WithPermissions(config.PermissionConfig),
+)
 ```
 
 ### 3. Permission-Based RBAC (Database)
@@ -489,7 +494,12 @@ config.RoleExtractorFunc = func(req *http.Request, args ...any) (string, error) 
     return "", fmt.Errorf("database not available")
 }
 
-app.EnableRBACWithPermissions(config, config.RoleExtractorFunc)
+app.EnableRBAC(
+	gofr.WithConfig(config),
+	gofr.WithRoleExtractor(config.RoleExtractorFunc),
+	gofr.WithPermissions(config.PermissionConfig),
+	gofr.WithRequiresContainer(true),
+)
 ```
 
 > **Note**: The container is automatically passed to `RoleExtractorFunc` when using database-based role extraction. For header-based or JWT-based RBAC, the container is not needed and `args` will be empty.
