@@ -256,6 +256,7 @@ func (c *Client) Query(ctx context.Context, query string, vars map[string]any) (
 
 	// Use the new v1.0.0 Query function with the wrapped DB
 	dbWrapper := c.db.(*DBWrapper)
+
 	results, err := surrealdb.Query[any](ctx, dbWrapper.GetDB(), query, vars)
 	if err != nil {
 		return nil, fmt.Errorf("query failed: %w", err)
@@ -466,6 +467,7 @@ func (c *Client) Select(ctx context.Context, table string) ([]map[string]any, er
 
 	// Use the new v1.0.0 Select function with the wrapped DB
 	dbWrapper := c.db.(*DBWrapper)
+
 	results, err := surrealdb.Select[[]map[string]any](ctx, dbWrapper.GetDB(), models.Table(table))
 	if err != nil {
 		return nil, fmt.Errorf("select operation failed: %w", err)
@@ -502,6 +504,7 @@ func (c *Client) Create(ctx context.Context, table string, data any) (map[string
 
 	// Use the new v1.0.0 Create function with the wrapped DB
 	dbWrapper := c.db.(*DBWrapper)
+
 	result, err := surrealdb.Create[map[string]any](ctx, dbWrapper.GetDB(), models.Table(table), data)
 	if err != nil {
 		return nil, fmt.Errorf("create operation failed: %w", err)
@@ -542,6 +545,7 @@ func (c *Client) Update(ctx context.Context, table, id string, data any) (any, e
 
 	// Use the new v1.0.0 Update function with the wrapped DB
 	dbWrapper := c.db.(*DBWrapper)
+
 	result, err := surrealdb.Update[map[string]any](ctx, dbWrapper.GetDB(), recordID, data)
 	if err != nil {
 		return nil, fmt.Errorf("update operation failed: %w", err)
@@ -578,6 +582,7 @@ func (c *Client) Insert(ctx context.Context, table string, data any) ([]map[stri
 
 	// Use the new v1.0.0 Insert function with the wrapped DB
 	dbWrapper := c.db.(*DBWrapper)
+
 	results, err := surrealdb.Insert[map[string]any](ctx, dbWrapper.GetDB(), models.Table(table), data)
 	if err != nil {
 		return nil, fmt.Errorf("insert operation failed: %w", err)
@@ -620,6 +625,7 @@ func (c *Client) Delete(ctx context.Context, table, id string) (any, error) {
 
 	// Use the new v1.0.0 Delete function with the wrapped DB
 	dbWrapper := c.db.(*DBWrapper)
+
 	result, err := surrealdb.Delete[map[string]any](ctx, dbWrapper.GetDB(), recordID)
 	if err != nil {
 		return nil, fmt.Errorf("delete operation failed: %w", err)

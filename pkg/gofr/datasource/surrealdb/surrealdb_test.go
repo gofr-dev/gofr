@@ -294,42 +294,48 @@ func Test_NotConnectedError(t *testing.T) {
 	t.Run("query without connection", func(t *testing.T) {
 		ctx := context.Background()
 		result, err := client.Query(ctx, "SELECT * FROM users", nil)
-		assert.ErrorIs(t, err, errNotConnected)
+
+		require.ErrorIs(t, err, errNotConnected)
 		assert.Nil(t, result)
 	})
 
 	t.Run("select without connection", func(t *testing.T) {
 		ctx := context.Background()
 		result, err := client.Select(ctx, "users")
-		assert.ErrorIs(t, err, errNotConnected)
+
+		require.ErrorIs(t, err, errNotConnected)
 		assert.Nil(t, result)
 	})
 
 	t.Run("create without connection", func(t *testing.T) {
 		ctx := context.Background()
 		result, err := client.Create(ctx, "users", map[string]any{"name": "test"})
-		assert.ErrorIs(t, err, errNotConnected)
+
+		require.ErrorIs(t, err, errNotConnected)
 		assert.Nil(t, result)
 	})
 
 	t.Run("update without connection", func(t *testing.T) {
 		ctx := context.Background()
 		result, err := client.Update(ctx, "users", "1", map[string]any{"name": "updated"})
-		assert.ErrorIs(t, err, errNotConnected)
+
+		require.ErrorIs(t, err, errNotConnected)
 		assert.Nil(t, result)
 	})
 
 	t.Run("insert without connection", func(t *testing.T) {
 		ctx := context.Background()
 		result, err := client.Insert(ctx, "users", []map[string]any{{"name": "test"}})
-		assert.ErrorIs(t, err, errNotConnected)
+
+		require.ErrorIs(t, err, errNotConnected)
 		assert.Nil(t, result)
 	})
 
 	t.Run("delete without connection", func(t *testing.T) {
 		ctx := context.Background()
 		result, err := client.Delete(ctx, "users", "1")
-		assert.ErrorIs(t, err, errNotConnected)
+
+		require.ErrorIs(t, err, errNotConnected)
 		assert.Nil(t, result)
 	})
 }
