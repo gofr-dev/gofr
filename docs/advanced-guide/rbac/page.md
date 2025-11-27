@@ -9,10 +9,15 @@ GoFr's RBAC middleware provides:
 - ✅ **Multiple Authentication Methods** - Header-based, JWT-based, and Database-based role extraction
 - ✅ **Permission-Based Access Control** - Fine-grained permissions beyond simple roles
 - ✅ **Role Hierarchy** - Inherited roles (admin > editor > author > viewer)
-- ✅ **Hot-Reload** - Automatic configuration reloading without restart
-- ✅ **Caching** - Performance optimization for role lookups
 - ✅ **Audit Logging** - Comprehensive authorization logging using GoFr's logger
 - ✅ **Framework Integration** - Simple API consistent with other GoFr features
+- ✅ **Modular Design** - RBAC is an external module, keeping the core framework lightweight
+
+> **Important**: To use RBAC features, you must import the RBAC module:
+> ```go
+> import _ "gofr.dev/pkg/gofr/rbac" // Import RBAC module for automatic registration
+> ```
+> The RBAC module uses automatic registration via package-level variable initialization. When imported, RBAC implementations are automatically registered with core GoFr, allowing you to use `app.EnableRBAC()` and related functions.
 
 > **Note**: Container access is restricted for security. The container is only passed to `RoleExtractorFunc` when `config.RequiresContainer = true` (database-based role extraction). For header-based or JWT-based RBAC, `RequiresContainer = false` (default) and `args` will be empty.
 
@@ -28,6 +33,7 @@ package main
 import (
 	"net/http"
 	"gofr.dev/pkg/gofr"
+	_ "gofr.dev/pkg/gofr/rbac" // Import RBAC module for automatic registration
 )
 
 func main() {
@@ -35,18 +41,23 @@ func main() {
 
 	// Enable RBAC with header-based role extraction
 	// Note: args will be empty for header-based RBAC (container not needed)
-	app.EnableRBAC("configs/rbac.json", func(req *http.Request, args ...any) (string, error) {
-		role := req.Header.Get("X-User-Role")
-		if role == "" {
-			return "", fmt.Errorf("role header not found")
-		}
-		return role, nil
-	})
+	app.EnableRBAC(
+		gofr.WithPermissionsFile("configs/rbac.json"),
+		gofr.WithRoleExtractor(func(req *http.Request, args ...any) (string, error) {
+			role := req.Header.Get("X-User-Role")
+			if role == "" {
+				return "", fmt.Errorf("role header not found")
+			}
+			return role, nil
+		}),
+	)
 
 	app.GET("/api/users", handler)
 	app.Run()
 }
 ```
+
+> **Note**: The RBAC module uses automatic registration via package-level variable initialization (not `init()`). When you import `gofr.dev/pkg/gofr/rbac`, the RBAC implementations are automatically registered with core GoFr. This allows the framework to remain lightweight - RBAC is only included when explicitly imported.
 
 > **⚠️ Security Note**: Header-based RBAC is **not secure** for public APIs. Use JWT-based RBAC for production applications.
 
@@ -61,9 +72,18 @@ GoFr supports five main RBAC patterns, each suited for different use cases:
 **Example**: [Simple RBAC Example](https://github.com/gofr-dev/gofr/tree/main/examples/rbac/simple)
 
 ```go
-app.EnableRBAC("configs/rbac.json", func(req *http.Request, args ...any) (string, error) {
-	return req.Header.Get("X-User-Role"), nil
-})
+import (
+	"net/http"
+	"gofr.dev/pkg/gofr"
+	_ "gofr.dev/pkg/gofr/rbac" // Import RBAC module for automatic registration
+)
+
+app.EnableRBAC(
+	gofr.WithPermissionsFile("configs/rbac.json"),
+	gofr.WithRoleExtractor(func(req *http.Request, args ...any) (string, error) {
+		return req.Header.Get("X-User-Role"), nil
+	}),
+)
 ```
 
 **Configuration** (`configs/rbac.json`):
@@ -91,18 +111,26 @@ app.EnableRBAC("configs/rbac.json", func(req *http.Request, args ...any) (string
 **Example**: [JWT RBAC Example](https://github.com/gofr-dev/gofr/tree/main/examples/rbac/jwt)
 
 ```go
+import (
+	"gofr.dev/pkg/gofr"
+	_ "gofr.dev/pkg/gofr/rbac" // Import RBAC module for automatic registration
+)
+
 app := gofr.New()
 
 // Enable OAuth middleware first (required for JWT validation)
 app.EnableOAuth("https://auth.example.com/.well-known/jwks.json", 10)
 
 // Enable RBAC with JWT role extraction
-app.EnableRBACWithJWT("configs/rbac.json", "role")
+app.EnableRBAC(
+	gofr.WithPermissionsFile("configs/rbac.json"),
+	gofr.WithJWT("role"),
+)
 ```
 
 **JWT Role Claim Parameter (`roleClaim`)**:
 
-The `roleClaim` parameter in `app.EnableRBACWithJWT()` or `rbac.NewJWTRoleExtractor()` specifies the path to the role in JWT claims. It supports multiple formats:
+The `roleClaim` parameter in `WithJWT()` or `rbac.NewJWTRoleExtractor()` specifies the path to the role in JWT claims. It supports multiple formats:
 
 | Format | Example | JWT Claim Structure |
 |--------|---------|---------------------|
@@ -116,19 +144,31 @@ The `roleClaim` parameter in `app.EnableRBACWithJWT()` or `rbac.NewJWTRoleExtrac
 
 ```go
 // Simple claim
-app.EnableRBACWithJWT("configs/rbac.json", "role")
+app.EnableRBAC(
+	gofr.WithPermissionsFile("configs/rbac.json"),
+	gofr.WithJWT("role"),
+)
 // JWT: {"role": "admin", "sub": "user123"}
 
 // Array notation - extract first role
-app.EnableRBACWithJWT("configs/rbac.json", "roles[0]")
+app.EnableRBAC(
+	gofr.WithPermissionsFile("configs/rbac.json"),
+	gofr.WithJWT("roles[0]"),
+)
 // JWT: {"roles": ["admin", "editor"], "sub": "user123"}
 
 // Nested claim
-app.EnableRBACWithJWT("configs/rbac.json", "permissions.role")
+app.EnableRBAC(
+	gofr.WithPermissionsFile("configs/rbac.json"),
+	gofr.WithJWT("permissions.role"),
+)
 // JWT: {"permissions": {"role": "admin"}, "sub": "user123"}
 
 // Deeply nested
-app.EnableRBACWithJWT("configs/rbac.json", "user.permissions.role")
+app.EnableRBAC(
+	gofr.WithPermissionsFile("configs/rbac.json"),
+	gofr.WithJWT("user.permissions.role"),
+)
 // JWT: {"user": {"permissions": {"role": "admin"}}, "sub": "user123"}
 ```
 
@@ -176,13 +216,17 @@ func main() {
 		},
 	}
 
-	app.EnableRBACWithPermissions(config, func(req *http.Request, args ...any) (string, error) {
-		role := req.Header.Get("X-User-Role")
-		if role == "" {
-			return "", fmt.Errorf("role header not found")
-		}
-		return role, nil
-	})
+	app.EnableRBAC(
+		gofr.WithConfig(config),
+		gofr.WithRoleExtractor(func(req *http.Request, args ...any) (string, error) {
+			role := req.Header.Get("X-User-Role")
+			if role == "" {
+				return "", fmt.Errorf("role header not found")
+			}
+			return role, nil
+		}),
+		gofr.WithPermissions(config.PermissionConfig),
+	)
 
 	app.Run()
 }
@@ -216,11 +260,11 @@ config.PermissionConfig = &rbac.PermissionConfig{
 	},
 }
 
-// Create JWT role extractor
-jwtExtractor := rbac.NewJWTRoleExtractor("role")
-config.RoleExtractorFunc = jwtExtractor.ExtractRole
-
-app.EnableRBACWithPermissions(config, jwtExtractor.ExtractRole)
+	app.EnableRBAC(
+		gofr.WithConfig(config),
+		gofr.WithJWT("role"),
+		gofr.WithPermissions(config.PermissionConfig),
+	)
 ```
 
 **Example**: [Permission-Based RBAC (JWT) Example](https://github.com/gofr-dev/gofr/tree/main/examples/rbac/permissions-jwt)
@@ -300,7 +344,12 @@ config.RoleExtractorFunc = func(req *http.Request, args ...any) (string, error) 
 }
 
 // Enable RBAC with permissions
-app.EnableRBACWithPermissions(config, config.RoleExtractorFunc)
+	app.EnableRBAC(
+		gofr.WithConfig(config),
+		gofr.WithRoleExtractor(config.RoleExtractorFunc),
+		gofr.WithPermissions(config.PermissionConfig),
+		gofr.WithRequiresContainer(true),
+	)
 ```
 
 **Container Access Control**:
@@ -366,9 +415,7 @@ app.EnableRBACWithPermissions(config, config.RoleExtractorFunc)
       "DELETE /api/users": "users:delete"
     }
   },
-  "enablePermissions": true,
-  "enableCache": true,
-  "cacheTTL": "5m"
+  "enablePermissions": true
 }
 ```
 
@@ -414,8 +461,6 @@ permissions:
     "POST /api/users": users:write
 
 enablePermissions: true
-enableCache: true
-cacheTTL: 5m
 ```
 
 ## Configuration Fields
@@ -428,8 +473,6 @@ cacheTTL: 5m
 | `roleHierarchy` | `map[string][]string` | Defines role inheritance relationships |
 | `permissions` | `object` | Permission-based access control configuration |
 | `enablePermissions` | `boolean` | Enable permission-based checks |
-| `enableCache` | `boolean` | Enable role caching for performance |
-| `cacheTTL` | `string` | Cache time-to-live (e.g., "5m", "1h") |
 
 ## Route Patterns
 
@@ -488,15 +531,6 @@ func handler(ctx *gofr.Context) (interface{}, error) {
 
 ## Advanced Features
 
-### Hot-Reload Configuration
-
-Automatically reload RBAC configuration when the file changes:
-
-```go
-// Reload configuration every 30 seconds
-app.EnableRBACWithHotReload("configs/rbac.yaml", roleExtractor, 30*time.Second)
-```
-
 ### Custom Error Handler
 
 Customize error responses for authorization failures:
@@ -507,16 +541,9 @@ config.ErrorHandler = func(w http.ResponseWriter, r *http.Request, role, route s
 	w.Write([]byte(fmt.Sprintf("Access denied for role %s on %s", role, route)))
 }
 
-app.EnableRBACWithConfig(config)
-```
-
-### Role Caching
-
-Enable caching to improve performance, especially for database-based role extraction:
-
-```go
-config.EnableCache = true
-config.CacheTTL = 5 * time.Minute
+app.EnableRBAC(
+	gofr.WithConfig(config),
+)
 ```
 
 ### Audit Logging
@@ -564,7 +591,7 @@ RBAC_OVERRIDE_/health=true
 | **Production Ready** | ❌ No | ✅ Yes | ❌ No | ✅ Yes | ✅ Yes |
 | **Setup Complexity** | ✅ Simple | ⚠️ Medium | ⚠️ Medium | ⚠️ Medium | ⚠️ High |
 
-*Can be optimized with caching
+*Consider implementing application-level caching (e.g., Redis) for database-based role extraction
 
 ## Migration Path
 
@@ -594,7 +621,7 @@ Each example includes:
 
 1. **Never use header-based RBAC for public APIs** - Use JWT-based RBAC instead
 2. **Always validate JWT tokens** - Use proper JWKS endpoints with HTTPS
-3. **Enable caching for DB-based roles** - Reduce database load and improve performance
+3. **Consider caching for DB-based roles** - Implement application-level caching (e.g., Redis) to reduce database load
 4. **Use HTTPS in production** - Protect tokens and headers from interception
 5. **Implement rate limiting** - Prevent abuse and brute force attacks
 6. **Monitor audit logs** - Track authorization decisions for security analysis
@@ -608,7 +635,7 @@ Each example includes:
 The config file serves multiple purposes:
 1. **Fallback Authorization** - `RouteWithPermissions` acts as fallback when permission mappings are missing
 2. **Configuration Settings** - Provides overrides, defaultRole, roleHierarchy, and other settings
-3. **Management Benefits** - Enables hot-reload, environment variable overrides, and version control
+3. **Management Benefits** - Enables environment variable overrides and version control
 
 See [Permission-Based Access Control](https://gofr.dev/docs/advanced-guide/rbac-permissions) for comprehensive documentation on permissions, including detailed explanations, examples, and best practices.
 
@@ -624,26 +651,44 @@ See [Permission-Based Access Control](https://gofr.dev/docs/advanced-guide/rbac-
 
 ### Framework Methods
 
-- `app.EnableRBAC(permissionsFile, roleExtractor)` - Basic RBAC (header-based)
-  - Sets `RequiresContainer = false` automatically
-  - Container not passed to `RoleExtractorFunc`
+- `app.EnableRBAC(options ...RBACOption)` - Unified RBAC configuration with options pattern
   
-- `app.EnableRBACWithJWT(permissionsFile, roleClaim)` - JWT-based RBAC
-  - Sets `RequiresContainer = false` automatically
-  - Container not passed to `RoleExtractorFunc`
-  - `roleClaim` supports: `"role"`, `"roles[0]"`, `"permissions.role"`, `"user.permissions.role"`, etc.
+  **Available Options:**
+  - `WithPermissionsFile(file string)` - Load RBAC config from a file
+  - `WithRoleExtractor(extractor RoleExtractor)` - Set custom role extraction function
+  - `WithConfig(config RBACConfig)` - Use a pre-loaded RBAC configuration
+  - `WithJWT(roleClaim string)` - Enable JWT-based role extraction
+  - `WithPermissions(permissionConfig PermissionConfig)` - Enable permission-based access control
+  - `WithRequiresContainer(required bool)` - Indicate if container access is needed
   
-- `app.EnableRBACWithPermissions(config, roleExtractor)` - Permission-based RBAC
-  - Container passed only if `config.RequiresContainer = true`
-  - Set `RequiresContainer = true` for database-based extraction
+  **Examples:**
+  ```go
+  // Basic RBAC (header-based)
+  app.EnableRBAC(
+      gofr.WithPermissionsFile("configs/rbac.json"),
+      gofr.WithRoleExtractor(roleExtractor),
+  )
   
-- `app.EnableRBACWithConfig(config)` - Full configuration with all options
-  - Container passed only if `config.RequiresContainer = true`
-  - Set `RequiresContainer = true` for database-based extraction
+  // JWT-based RBAC
+  app.EnableRBAC(
+      gofr.WithPermissionsFile("configs/rbac.json"),
+      gofr.WithJWT("role"),
+  )
   
-- `app.EnableRBACWithHotReload(permissionsFile, roleExtractor, interval)` - Hot-reload enabled RBAC
-  - Sets `RequiresContainer = false` automatically
-  - Container not passed to `RoleExtractorFunc`
+  // Permission-based RBAC
+  app.EnableRBAC(
+      gofr.WithConfig(config),
+      gofr.WithRoleExtractor(roleExtractor),
+      gofr.WithPermissions(permissionConfig),
+  )
+  
+  // Database-based (requires container)
+  app.EnableRBAC(
+      gofr.WithConfig(config),
+      gofr.WithRoleExtractor(roleExtractor),
+      gofr.WithRequiresContainer(true),
+  )
+  ```
 
 ### Handler Helpers
 
@@ -673,7 +718,7 @@ Access role and permission information in your handlers:
 - **Solution**: Ensure OAuth middleware is enabled before RBAC, and JWT claim path is correct
 
 **Issue**: Database-based roles slow
-- **Solution**: Enable caching with `enableCache: true` and set appropriate `cacheTTL`
+- **Solution**: Consider implementing application-level caching (e.g., Redis) for role lookups
 
 ## Need Help?
 
