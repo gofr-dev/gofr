@@ -3,6 +3,11 @@ go 1.25.0
 use (
 	.
 	./examples/using-add-filestore
+	./examples/rbac/simple
+    ./examples/rbac/jwt
+    ./examples/rbac/permissions-header
+    ./examples/rbac/permissions-jwt
+    ./examples/rbac/permissions-db
 	./pkg/gofr/datasource/arangodb
 	./pkg/gofr/datasource/cassandra
 	./pkg/gofr/datasource/clickhouse
@@ -27,9 +32,4 @@ use (
 	./pkg/gofr/datasource/solr
 	./pkg/gofr/datasource/surrealdb
 	./pkg/gofr/rbac
-	./examples/rbac/simple
-	./examples/rbac/jwt
-	./examples/rbac/permissions-header
-	./examples/rbac/permissions-jwt
-	./examples/rbac/permissions-db
 )
