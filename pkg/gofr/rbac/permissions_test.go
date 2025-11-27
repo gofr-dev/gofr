@@ -388,8 +388,56 @@ func TestPermissionConfig_WithDefaultPermission(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, "default:read", permission)
 
-	// Test specific permission takes precedence
 	permission, err = GetRequiredPermission("GET", "/api/specific", config)
 	require.NoError(t, err)
 	assert.Equal(t, "specific:read", permission)
+}
+
+func assertGetRequiredPermissionResult(t *testing.T, got string, err error, want string, wantErr bool, checkErr func(*testing.T, error)) {
+	t.Helper()
+
+	if wantErr {
+		require.Error(t, err)
+
+		if checkErr != nil {
+			checkErr(t, err)
+		}
+
+		return
+	}
+
+	require.NoError(t, err)
+	assert.Equal(t, want, got)
+}
+
+func assertCheckPermissionResult(t *testing.T, err error, wantErr bool, wantErrIs error) {
+	t.Helper()
+
+	if wantErr {
+		require.Error(t, err)
+
+		if wantErrIs != nil {
+			require.ErrorIs(t, err, wantErrIs)
+		}
+
+		return
+	}
+
+	require.NoError(t, err)
+}
+
+func assertRequirePermissionResult(t *testing.T, err error, handlerCalled bool, result any, wantErr bool) {
+	t.Helper()
+
+	if wantErr {
+		require.Error(t, err)
+		assert.False(t, handlerCalled)
+		assert.Nil(t, result)
+
+		return
+	}
+
+	require.NoError(t, err)
+	assert.True(t, handlerCalled)
+	assert.Equal(t, "success", result)
 }

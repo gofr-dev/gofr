@@ -299,4 +299,3 @@ func RequirePermission(requiredPermission string, permissionConfig PermissionCon
 		return rbacHandler(ctx)
 	}
 }
-

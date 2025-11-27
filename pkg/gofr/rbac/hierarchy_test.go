@@ -354,3 +354,11 @@ func TestRoleHierarchy_EmptyHierarchy(t *testing.T) {
 	assert.True(t, rh.HasRole(ctx, "admin"))
 	assert.False(t, rh.HasRole(ctx, "editor"))
 }
+
+func getIsRoleAllowedWithHierarchy(role, route string, config *Config, hierarchy *RoleHierarchy, useHier bool) bool {
+	if !useHier {
+		return IsRoleAllowedWithHierarchy(role, route, config, nil)
+	}
+
+	return IsRoleAllowedWithHierarchy(role, route, config, hierarchy)
+}

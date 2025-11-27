@@ -2,6 +2,8 @@ module gofr.dev/pkg/gofr/rbac
 
 go 1.25
 
+replace gofr.dev => ../../..
+
 require (
 	github.com/golang-jwt/jwt/v5 v5.3.0
 	github.com/stretchr/testify v1.11.1
@@ -100,7 +102,3 @@ require (
 	modernc.org/memory v1.11.0 // indirect
 	modernc.org/sqlite v1.40.1 // indirect
 )
-
-// replace directive for local development
-// This allows the RBAC module to use the local gofr.dev module during development
-replace gofr.dev => ../../..
