@@ -32,6 +32,18 @@ type PermissionConfig struct {
 	DefaultPermission string `json:"defaultPermission,omitempty" yaml:"defaultPermission,omitempty"`
 }
 
+// Implement PermissionConfig interface methods
+
+// GetPermissions returns the permissions map.
+func (p *PermissionConfig) GetPermissions() map[string][]string {
+	return p.Permissions
+}
+
+// GetRoutePermissionMap returns the route-to-permission mapping.
+func (p *PermissionConfig) GetRoutePermissionMap() map[string]string {
+	return p.RoutePermissionMap
+}
+
 // HasPermission checks if the user's role has the specified permission.
 func HasPermission(ctx context.Context, permission string, config *PermissionConfig) bool {
 	if config == nil || config.Permissions == nil {

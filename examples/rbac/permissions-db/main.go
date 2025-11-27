@@ -82,8 +82,13 @@ func main() {
 		return role, nil
 	}
 
-	// Enable RBAC with permissions
-	app.EnableRBACWithPermissions(config, config.RoleExtractorFunc)
+	// Enable RBAC with permissions and database-based role extraction
+	app.EnableRBAC(
+		gofr.WithConfig(config),
+		gofr.WithRoleExtractor(config.RoleExtractorFunc),
+		gofr.WithPermissions(config.PermissionConfig),
+		gofr.WithRequiresContainer(true),
+	)
 
 	// Example routes
 	app.GET("/api/users", getAllUsers)

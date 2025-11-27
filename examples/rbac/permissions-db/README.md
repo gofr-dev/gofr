@@ -171,21 +171,16 @@ userID := session.UserID
 
 **Optimization strategies:**
 
-1. **Enable Caching:**
-   ```go
-   config.EnableCache = true
-   config.CacheTTL = 5 * time.Minute
-   ```
+1. **Implement Application-Level Caching:**
+   - Use Redis/Memcached for role caching
+   - Implement TTL-based cache invalidation
+   - Cache roles with appropriate expiration times
 
 2. **Use Connection Pooling:**
    - GoFr automatically manages database connection pools
    - Configure pool size in database config
 
-3. **Cache at Application Level:**
-   - Use Redis/Memcached for role caching
-   - Implement TTL-based cache invalidation
-
-4. **Batch Queries:**
+3. **Batch Queries:**
    - If extracting multiple user roles, batch the queries
 
 ## Advantages
@@ -203,34 +198,51 @@ userID := session.UserID
 
 ## Best Practices
 
-1. **Always use caching** for production applications
+1. **Implement application-level caching** (e.g., Redis) for production applications to reduce database load
 2. **Use connection pooling** to manage database connections
 3. **Handle database errors gracefully** (fallback to default role or deny access)
 4. **Monitor query performance** and optimize slow queries
 5. **Consider read replicas** for role lookups to reduce load on primary DB
 
-## Example: With Caching
+## Example: With Application-Level Caching
+
+For production applications, implement caching at the application level using Redis or similar:
 
 ```go
-config.EnableCache = true
-config.CacheTTL = 5 * time.Minute
-
 // CRITICAL: Set RequiresContainer = true for database-based role extraction
 config.RequiresContainer = true
 
-// Role extraction with caching
+// Role extraction with application-level caching
 // Container is passed as args[0] when RequiresContainer = true
 config.RoleExtractorFunc = func(req *http.Request, args ...any) (string, error) {
     userID := req.Header.Get("X-User-ID")
     
     // Get container from args (only available when RequiresContainer = true)
     if len(args) > 0 {
-        if cntr, ok := args[0].(*container.Container); ok && cntr != nil && cntr.SQL != nil {
-            // Cache lookup happens automatically in middleware
-            // Database query only if cache miss
-            var role string
-            err := cntr.SQL.QueryRowContext(req.Context(), "SELECT role FROM users WHERE id = ?", userID).Scan(&role)
-            return role, err
+        if cntr, ok := args[0].(*container.Container); ok && cntr != nil {
+            // Check Redis cache first
+            if cntr.Redis != nil {
+                cachedRole, err := cntr.Redis.Get(req.Context(), "rbac:role:"+userID).Result()
+                if err == nil {
+                    return cachedRole, nil
+                }
+            }
+            
+            // Cache miss - query database
+            if cntr.SQL != nil {
+                var role string
+                err := cntr.SQL.QueryRowContext(req.Context(), "SELECT role FROM users WHERE id = ?", userID).Scan(&role)
+                if err != nil {
+                    return "", err
+                }
+                
+                // Cache the role for future requests (5 minute TTL)
+                if cntr.Redis != nil {
+                    _ = cntr.Redis.Set(req.Context(), "rbac:role:"+userID, role, 5*time.Minute)
+                }
+                
+                return role, nil
+            }
         }
     }
     return "", fmt.Errorf("database not available")

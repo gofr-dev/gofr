@@ -13,6 +13,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"gofr.dev/pkg/gofr/testutil"
+	_ "gofr.dev/pkg/gofr/rbac" // Import RBAC module for automatic registration
 )
 
 func TestMain(m *testing.M) {

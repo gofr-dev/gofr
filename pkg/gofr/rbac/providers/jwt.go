@@ -7,7 +7,6 @@ import (
 	"strings"
 
 	"github.com/golang-jwt/jwt/v5"
-
 	"gofr.dev/pkg/gofr/http/middleware"
 )
 

@@ -56,7 +56,7 @@ The JWT token should contain a role claim. Example:
 
 **JWT Role Claim Parameter (`roleClaim`):**
 
-The `roleClaim` parameter in `app.EnableRBACWithJWT()` or `rbac.NewJWTRoleExtractor()` specifies the path to the role in JWT claims. It supports multiple formats:
+The `roleClaim` parameter in `WithJWT()` or `rbac.NewJWTRoleExtractor()` specifies the path to the role in JWT claims. It supports multiple formats:
 
 | Format | Example | JWT Claim Structure |
 |--------|---------|---------------------|
@@ -130,7 +130,10 @@ app.EnableOAuth(mockJWKS.JWKSEndpoint(), 10)
 {"role": "admin", "sub": "user123"}
 ```
 ```go
-app.EnableRBACWithJWT("configs/rbac.json", "role")
+app.EnableRBAC(
+	gofr.WithPermissionsFile("configs/rbac.json"),
+	gofr.WithJWT("role"),
+)
 ```
 
 ### Array Claim (First Element)
@@ -138,7 +141,10 @@ app.EnableRBACWithJWT("configs/rbac.json", "role")
 {"roles": ["admin", "user"], "sub": "user123"}
 ```
 ```go
-app.EnableRBACWithJWT("configs/rbac.json", "roles[0]")  // Extracts "admin"
+app.EnableRBAC(
+	gofr.WithPermissionsFile("configs/rbac.json"),
+	gofr.WithJWT("roles[0]"),  // Extracts "admin"
+)
 ```
 
 ### Array Claim (Second Element)
@@ -146,7 +152,10 @@ app.EnableRBACWithJWT("configs/rbac.json", "roles[0]")  // Extracts "admin"
 {"roles": ["admin", "user"], "sub": "user123"}
 ```
 ```go
-app.EnableRBACWithJWT("configs/rbac.json", "roles[1]")  // Extracts "user"
+app.EnableRBAC(
+	gofr.WithPermissionsFile("configs/rbac.json"),
+	gofr.WithJWT("roles[1]"),  // Extracts "user"
+)
 ```
 
 ### Nested Claim
@@ -160,7 +169,10 @@ app.EnableRBACWithJWT("configs/rbac.json", "roles[1]")  // Extracts "user"
 }
 ```
 ```go
-app.EnableRBACWithJWT("configs/rbac.json", "permissions.role")
+app.EnableRBAC(
+	gofr.WithPermissionsFile("configs/rbac.json"),
+	gofr.WithJWT("permissions.role"),
+)
 ```
 
 ### Deeply Nested Claim
@@ -175,7 +187,10 @@ app.EnableRBACWithJWT("configs/rbac.json", "permissions.role")
 }
 ```
 ```go
-app.EnableRBACWithJWT("configs/rbac.json", "user.permissions.role")
+app.EnableRBAC(
+	gofr.WithPermissionsFile("configs/rbac.json"),
+	gofr.WithJWT("user.permissions.role"),
+)
 ```
 
 ## Security Considerations
