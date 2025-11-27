@@ -458,7 +458,7 @@ func TestRequireRole_Handler(t *testing.T) {
 		},
 	}
 
-	for _, tc := range tests {
+		for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			called = false
 			ctx := &mockContextValueGetter{
@@ -471,20 +471,8 @@ func TestRequireRole_Handler(t *testing.T) {
 			}
 			resp, err := wrappedHandler(ctx)
 
-			if tc.wantErr != nil {
-				require.Error(t, err)
-				require.ErrorIs(t, err, tc.wantErr)
-			} else {
-				require.NoError(t, err)
-			}
-
-			if tc.wantCalled {
-				assert.True(t, called)
-				assert.Equal(t, "success", resp)
-			} else {
-				assert.False(t, called)
-				assert.Nil(t, resp)
-			}
+			assertErrorExpectation(t, err, tc.wantErr)
+			assertHandlerCallExpectation(t, called, tc.wantCalled, resp)
 		})
 	}
 }
@@ -525,7 +513,7 @@ func TestRequireAnyRole(t *testing.T) {
 		},
 	}
 
-	for _, tc := range tests {
+		for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			called = false
 			ctx := &mockContextValueGetter{
@@ -538,20 +526,31 @@ func TestRequireAnyRole(t *testing.T) {
 			}
 			resp, err := wrappedHandler(ctx)
 
-			if tc.wantErr != nil {
-				require.Error(t, err)
-				require.ErrorIs(t, err, tc.wantErr)
-			} else {
-				require.NoError(t, err)
-			}
-
-			if tc.wantCalled {
-				assert.True(t, called)
-				assert.Equal(t, "success", resp)
-			} else {
-				assert.False(t, called)
-				assert.Nil(t, resp)
-			}
+			assertErrorExpectation(t, err, tc.wantErr)
+			assertHandlerCallExpectation(t, called, tc.wantCalled, resp)
 		})
 	}
+}
+
+// assertErrorExpectation asserts error expectations without nested if-else.
+func assertErrorExpectation(t *testing.T, err error, wantErr error) {
+	t.Helper()
+	if wantErr != nil {
+		require.Error(t, err)
+		require.ErrorIs(t, err, wantErr)
+		return
+	}
+	require.NoError(t, err)
+}
+
+// assertHandlerCallExpectation asserts handler call expectations without nested if-else.
+func assertHandlerCallExpectation(t *testing.T, called bool, wantCalled bool, resp any) {
+	t.Helper()
+	if wantCalled {
+		assert.True(t, called)
+		assert.Equal(t, "success", resp)
+		return
+	}
+	assert.False(t, called)
+	assert.Nil(t, resp)
 }

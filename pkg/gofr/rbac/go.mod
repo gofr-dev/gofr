@@ -101,4 +101,6 @@ require (
 	modernc.org/sqlite v1.40.1 // indirect
 )
 
+// replace directive for local development
+// This allows the RBAC module to use the local gofr.dev module during development
 replace gofr.dev => ../../..
