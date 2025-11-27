@@ -355,22 +355,12 @@ func Test_SQLRetryConnectionInfoLog(t *testing.T) {
 
 		mockLogger := logging.NewMockLogger(logging.DEBUG)
 
-		// The pushDBMetrics goroutine runs immediately and calls SetGauge with actual stats
-		// We need to allow any number of calls with any values since the stats depend on
-		// the internal state of the sql.DB object, which may not be 0 even for failed connections
-		mockMetrics.EXPECT().SetGauge(gomock.Any(), gomock.Any()).AnyTimes()
+		mockMetrics.EXPECT().SetGauge("app_sql_open_connections", float64(0))
+		mockMetrics.EXPECT().SetGauge("app_sql_inUse_connections", float64(0))
 
-		db := NewSQL(mockConfig, mockLogger, mockMetrics)
+		_ = NewSQL(mockConfig, mockLogger, mockMetrics)
 
-		// Give the retry goroutine time to start and log
-		// The retry connection goroutine checks if ping fails, and if it does,
-		// it logs "retrying SQL database connection" immediately
-		time.Sleep(200 * time.Millisecond)
-
-		// Close the database to stop goroutines and prevent further metric calls
-		if db != nil {
-			_ = db.Close()
-		}
+		time.Sleep(100 * time.Millisecond)
 	})
 
 	assert.Contains(t, logs, "retrying SQL database connection")
