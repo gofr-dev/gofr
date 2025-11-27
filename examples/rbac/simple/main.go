@@ -28,15 +28,15 @@ func main() {
 	app.Run()
 }
 
-func getAllUsers(ctx *gofr.Context) (interface{}, error) {
+func getAllUsers(_ *gofr.Context) (interface{}, error) {
 	return map[string]string{"message": "Users list"}, nil
 }
 
-func adminHandler(ctx *gofr.Context) (interface{}, error) {
+func adminHandler(_ *gofr.Context) (interface{}, error) {
 	return map[string]string{"message": "Admin panel"}, nil
 }
 
-func dashboardHandler(ctx *gofr.Context) (interface{}, error) {
+func dashboardHandler(_ *gofr.Context) (interface{}, error) {
 	return map[string]string{"message": "Dashboard"}, nil
 }
 

@@ -143,16 +143,7 @@ func TestGetRequiredPermission(t *testing.T) {
 			}
 
 			got, err := GetRequiredPermission(tt.method, tt.route, testConfig)
-			if tt.wantErr {
-				require.Error(t, err)
-
-				if tt.checkErr != nil {
-					tt.checkErr(t, err)
-				}
-			} else {
-				require.NoError(t, err)
-				assert.Equal(t, tt.want, got)
-			}
+			assertGetRequiredPermissionResult(t, got, err, tt.want, tt.wantErr, tt.checkErr)
 		})
 	}
 }
@@ -224,15 +215,7 @@ func TestCheckPermission(t *testing.T) {
 			req = req.WithContext(ctx)
 
 			err := CheckPermission(req, config)
-			if tt.wantErr {
-				require.Error(t, err)
-
-				if tt.wantErrIs != nil {
-					require.ErrorIs(t, err, tt.wantErrIs)
-				}
-			} else {
-				require.NoError(t, err)
-			}
+			assertCheckPermissionResult(t, err, tt.wantErr, tt.wantErrIs)
 		})
 	}
 }
@@ -362,15 +345,7 @@ func TestRequirePermission(t *testing.T) {
 			}
 
 			result, err := wrapped(ctx)
-			if tt.wantErr {
-				require.Error(t, err)
-				require.ErrorIs(t, err, ErrPermissionDenied)
-				assert.False(t, handlerCalled)
-			} else {
-				require.NoError(t, err)
-				assert.True(t, handlerCalled)
-				assert.Equal(t, "success", result)
-			}
+			assertRequirePermissionResult(t, err, handlerCalled, result, tt.wantErr)
 		})
 	}
 }

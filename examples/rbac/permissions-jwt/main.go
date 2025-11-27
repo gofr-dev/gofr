@@ -59,23 +59,23 @@ func main() {
 	app.Run()
 }
 
-func getAllUsers(ctx *gofr.Context) (interface{}, error) {
+func getAllUsers(_ *gofr.Context) (interface{}, error) {
 	return map[string]string{"message": "Users list"}, nil
 }
 
-func createUser(ctx *gofr.Context) (interface{}, error) {
+func createUser(_ *gofr.Context) (interface{}, error) {
 	return map[string]string{"message": "User created"}, nil
 }
 
-func deleteUser(ctx *gofr.Context) (interface{}, error) {
+func deleteUser(_ *gofr.Context) (interface{}, error) {
 	return map[string]string{"message": "User deleted"}, nil
 }
 
-func getAllPosts(ctx *gofr.Context) (interface{}, error) {
+func getAllPosts(_ *gofr.Context) (interface{}, error) {
 	return map[string]string{"message": "Posts list"}, nil
 }
 
-func createPost(ctx *gofr.Context) (interface{}, error) {
+func createPost(_ *gofr.Context) (interface{}, error) {
 	return map[string]string{"message": "Post created"}, nil
 }
 

@@ -325,16 +325,7 @@ func TestLoadPermissions_FileExtensionDetection(t *testing.T) {
 			tempFile.Close()
 
 			cfg, err := LoadPermissions(tempFile.Name())
-			if tt.wantErr {
-				require.Error(t, err)
-
-				if tt.checkErr != nil {
-					tt.checkErr(t, err)
-				}
-			} else {
-				require.NoError(t, err)
-				assert.NotNil(t, cfg)
-			}
+			assertLoadPermissionsResult(t, cfg, err, tt.wantErr, tt.checkErr)
 		})
 	}
 }
@@ -393,4 +384,18 @@ func TestLoadPermissions_ErrorMessages(t *testing.T) {
 			assert.Contains(t, err.Error(), tt.wantErrMsg)
 		})
 	}
+}
+
+// assertLoadPermissionsResult asserts LoadPermissions results without nested if-else.
+func assertLoadPermissionsResult(t *testing.T, cfg *Config, err error, wantErr bool, checkErr func(*testing.T, error)) {
+	t.Helper()
+	if wantErr {
+		require.Error(t, err)
+		if checkErr != nil {
+			checkErr(t, err)
+		}
+		return
+	}
+	require.NoError(t, err)
+	assert.NotNil(t, cfg)
 }
