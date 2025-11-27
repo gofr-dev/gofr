@@ -26,4 +26,10 @@ use (
 	./pkg/gofr/datasource/scylladb
 	./pkg/gofr/datasource/solr
 	./pkg/gofr/datasource/surrealdb
+	./pkg/gofr/rbac
+	./examples/rbac/simple
+	./examples/rbac/jwt
+	./examples/rbac/permissions-header
+	./examples/rbac/permissions-jwt
+	./examples/rbac/permissions-db
 )
