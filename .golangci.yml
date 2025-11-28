@@ -172,4 +172,4 @@ formatters:
         - localmodule
     goimports:
       local-prefixes:
-        - github.com/golangci/golangci-lint
+        - gofr.dev
