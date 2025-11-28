@@ -107,6 +107,24 @@ This document lists all the configuration options supported by the GoFr framewor
 -  Timeout duration for server shutdown process
 -  30s
 
+---
+
+-  GOFR_TELEMETRY
+-  Enable telemetry for GoFr framework usage
+-  true
+
+---
+
+-  LOG_DISABLE_PROBES
+-  Disable log probes for health checks
+-  false
+
+---
+
+-  GRPC_ENABLE_REFLECTION
+-  Enable gRPC server reflection
+-  false
+
 
 {% /table %}
 
@@ -195,6 +213,67 @@ This document lists all the configuration options supported by the GoFr framewor
 
 ---
 
+- DB_REPLICA_HOSTS
+- Comma-separated list of replica database hosts. Used for read replicas.
+- None
+
+---
+
+- DB_REPLICA_PORTS
+- Comma-separated list of replica database ports. Used for read replicas.
+- None
+
+---
+
+- DB_REPLICA_USERS
+- Comma-separated list of replica database users. Used for read replicas.
+- None
+
+---
+
+- DB_REPLICA_PASSWORDS_
+- Comma-separated list of replica database passwords. Used for read replicas.
+- None
+
+---
+
+- DB_REPLICA_MAX_IDLE_CONNECTIONS
+- Maximum idle connections allowed for a replica
+- 50
+
+---
+
+- DB_REPLICA_MIN_IDLE_CONNECTIONS
+- Minimum idle connections for a replica
+- 10
+
+---
+
+- DB_REPLICA_DEFAULT_IDLE_CONNECTIONS
+- Idle connections used if no primary setting is provided
+- 10
+
+---
+
+- DB_REPLICA_MAX_OPEN_CONNECTIONS
+- Maximum open connections allowed for a replica
+- 200
+
+---
+
+- DB_REPLICA_MIN_OPEN_CONNECTIONS
+- Minimum open connections for a replica
+- 50
+
+---
+
+- DB_REPLICA_DEFAULT_OPEN_CONNECTIONS
+- Open connections used if no primary setting is provided
+- 100
+
+---
+
+
 - DB_CHARSET
 - The character set for database connection
 - utf8
@@ -253,6 +332,27 @@ This document lists all the configuration options supported by the GoFr framewor
 
 - REDIS_DB
 - Database number to use for the Redis server.
+
+---
+
+- REDIS_TLS_ENABLED
+- Enable TLS for Redis connections
+- false
+
+---
+
+- REDIS_TLS_CA_CERT
+- Path to the TLS CA certificate file for Redis
+
+---
+
+- REDIS_TLS_CERT
+- Path to the TLS certificate file for Redis
+
+---
+
+- REDIS_TLS_KEY
+- Path to the TLS key file for Redis
 
 {% /table %}
 
@@ -481,3 +581,4 @@ This document lists all the configuration options supported by the GoFr framewor
 - creds.json
 
 {% /table %}
+

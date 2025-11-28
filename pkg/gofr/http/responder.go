@@ -27,38 +27,13 @@ type Responder struct {
 // Respond sends a response with the given data and handles potential errors, setting appropriate
 // status codes and formatting responses as JSON or raw data as needed.
 func (r Responder) Respond(data any, err error) {
-	var resp any
-
-	switch v := data.(type) {
-	case resTypes.File:
-		r.w.Header().Set("Content-Type", v.ContentType)
-		r.w.WriteHeader(http.StatusOK)
-
-		_, _ = r.w.Write(v.Content)
-
-		return
-	case resTypes.Template:
-		r.w.Header().Set("Content-Type", "text/html")
-		v.Render(r.w)
-
-		return
-	case resTypes.Redirect:
-		// HTTP 302 by default
-		statusCode := http.StatusFound
-
-		switch r.method {
-		case http.MethodPost, http.MethodPut, http.MethodPatch:
-			// HTTP 303
-			statusCode = http.StatusSeeOther
-		}
-
-		r.w.Header().Set("Location", v.URL)
-		r.w.WriteHeader(statusCode)
-
+	if r.handleSpecialResponseTypes(data, err) {
 		return
 	}
 
 	statusCode, errorObj := r.determineResponse(data, err)
+
+	var resp any
 
 	switch v := data.(type) {
 	case resTypes.Raw:
@@ -81,6 +56,93 @@ func (r Responder) Respond(data any, err error) {
 	r.w.WriteHeader(statusCode)
 
 	_ = json.NewEncoder(r.w).Encode(resp)
+}
+
+// handleSpecialResponseTypes handles special response types that bypass JSON encoding.
+// Returns true if the response was handled, false otherwise.
+func (r Responder) handleSpecialResponseTypes(data any, err error) bool {
+	// For special response types (XML/File/Template), use error status code directly
+	// instead of partial content (206) when errors occur
+	statusCode := r.getStatusCodeForSpecialResponse(data, err)
+
+	switch v := data.(type) {
+	case resTypes.File:
+		r.w.Header().Set("Content-Type", v.ContentType)
+		r.w.WriteHeader(statusCode)
+		_, _ = r.w.Write(v.Content)
+
+		return true
+
+	case resTypes.Template:
+		r.w.Header().Set("Content-Type", "text/html")
+		r.w.WriteHeader(statusCode)
+		v.Render(r.w)
+
+		return true
+
+	case resTypes.XML:
+		contentType := v.ContentType
+
+		if contentType == "" {
+			contentType = "application/xml"
+		}
+
+		r.w.Header().Set("Content-Type", contentType)
+		r.w.WriteHeader(statusCode)
+
+		if len(v.Content) > 0 {
+			_, _ = r.w.Write(v.Content)
+		}
+
+		return true
+
+	case resTypes.Redirect:
+		// Redirect status codes are determined by HTTP method, not error state
+		redirectStatusCode := http.StatusFound
+
+		if r.method == http.MethodPost || r.method == http.MethodPut || r.method == http.MethodPatch {
+			redirectStatusCode = http.StatusSeeOther
+		}
+
+		r.w.Header().Set("Location", v.URL)
+		r.w.WriteHeader(redirectStatusCode)
+
+		return true
+	}
+
+	return false
+}
+
+// getStatusCodeForSpecialResponse returns the appropriate status code for special response types.
+// Unlike regular responses, special types (XML/File/Template) should use error status codes
+// directly instead of returning 206 (Partial Content) when both data and error are present.
+func (r Responder) getStatusCodeForSpecialResponse(data any, err error) int {
+	if err == nil {
+		return handleSuccessStatusCode(r.method, data)
+	}
+
+	// For special response types, prioritize error status code over partial content
+	if e, ok := err.(StatusCodeResponder); ok {
+		return e.StatusCode()
+	}
+
+	return http.StatusInternalServerError
+}
+
+// handleSuccessStatusCode returns the status code for successful responses based on HTTP method.
+func handleSuccessStatusCode(method string, data any) int {
+	switch method {
+	case http.MethodPost:
+		if data != nil {
+			return http.StatusCreated
+		}
+
+		return http.StatusAccepted
+	case http.MethodDelete:
+		return http.StatusNoContent
+	default:
+		return http.StatusOK
+	}
 }
 
 func (r Responder) determineResponse(data any, err error) (statusCode int, errObj any) {
