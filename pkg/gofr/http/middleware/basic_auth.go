@@ -1,6 +1,7 @@
 package middleware
 
 import (
+	"crypto/subtle"
 	"encoding/base64"
 	"errors"
 	"net/http"
@@ -98,7 +99,16 @@ func (a *BasicAuthProvider) validateCredentials(username, password string) bool 
 	default:
 		storedPass, ok := a.Users[username]
 
-		return ok && storedPass == password
+		if !ok {
+			// FIX: Use dummyValue constant
+			subtle.ConstantTimeCompare([]byte(password), []byte(dummyValue))
+
+			// FIX: Add exactly one blank line before return
+			return false
+		}
+
+		// constant time compare for password comparison
+		return subtle.ConstantTimeCompare([]byte(password), []byte(storedPass)) == 1
 	}
 }
 
