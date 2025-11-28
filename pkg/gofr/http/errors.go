@@ -163,6 +163,21 @@ func (ErrorPanicRecovery) LogLevel() logging.Level {
 	return logging.ERROR
 }
 
+// ErrorTooManyRequests represents an error when rate limit is exceeded.
+type ErrorTooManyRequests struct{}
+
+func (ErrorTooManyRequests) Error() string {
+	return "rate limit exceeded"
+}
+
+func (ErrorTooManyRequests) StatusCode() int {
+	return http.StatusTooManyRequests
+}
+
+func (ErrorTooManyRequests) LogLevel() logging.Level {
+	return logging.WARN
+}
+
 // validate the errors satisfy the underlying interfaces they depend on.
 var (
 	_ StatusCodeResponder = ErrorEntityNotFound{}
@@ -174,6 +189,7 @@ var (
 	_ StatusCodeResponder = ErrorPanicRecovery{}
 	_ StatusCodeResponder = ErrorServiceUnavailable{}
 	_ StatusCodeResponder = ErrorClientClosedRequest{}
+	_ StatusCodeResponder = ErrorTooManyRequests{}
 
 	_ logging.LogLevelResponder = ErrorClientClosedRequest{}
 	_ logging.LogLevelResponder = ErrorEntityNotFound{}
@@ -184,4 +200,5 @@ var (
 	_ logging.LogLevelResponder = ErrorRequestTimeout{}
 	_ logging.LogLevelResponder = ErrorPanicRecovery{}
 	_ logging.LogLevelResponder = ErrorServiceUnavailable{}
+	_ logging.LogLevelResponder = ErrorTooManyRequests{}
 )
