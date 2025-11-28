@@ -15,6 +15,8 @@ import (
 	resTypes "gofr.dev/pkg/gofr/http/response"
 )
 
+var errTest = fmt.Errorf("internal server error")
+
 func TestResponder(t *testing.T) {
 	tests := []struct {
 		desc         string
@@ -482,7 +484,7 @@ func TestResponder_XMLFileTemplate_ErrorStatusCodes(t *testing.T) {
 			data: resTypes.XML{
 				Content: []byte(`<Response><Error>Internal Error</Error></Response>`),
 			},
-			err:          fmt.Errorf("internal server error"),
+			err:          errTest,
 			expectedCode: http.StatusInternalServerError,
 		},
 		{
@@ -500,7 +502,7 @@ func TestResponder_XMLFileTemplate_ErrorStatusCodes(t *testing.T) {
 				ContentType: "application/pdf",
 				Content:     []byte("fake pdf data"),
 			},
-			err:          fmt.Errorf("file read error"),
+			err:          errTest,
 			expectedCode: http.StatusInternalServerError,
 		},
 		{
