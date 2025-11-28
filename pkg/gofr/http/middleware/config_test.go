@@ -40,10 +40,10 @@ func TestLogDisableProbesConfig(t *testing.T) {
 
 func TestMaxBodySizeConfig(t *testing.T) {
 	tests := []struct {
-		name           string
-		configValue    string
-		expectedSize   int64
-		description    string
+		name         string
+		configValue  string
+		expectedSize int64
+		description  string
 	}{
 		{
 			name:         "Valid body size config",

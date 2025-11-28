@@ -13,7 +13,7 @@ import (
 )
 
 func TestBodySizeLimit_WithinLimit(t *testing.T) {
-	maxSize := int64(1024) // 1 KB
+	maxSize := int64(1024)                     // 1 KB
 	body := bytes.NewReader(make([]byte, 512)) // 512 bytes
 
 	req := httptest.NewRequest(http.MethodPost, "/test", body)
@@ -32,7 +32,7 @@ func TestBodySizeLimit_WithinLimit(t *testing.T) {
 }
 
 func TestBodySizeLimit_ExceedsLimit_ContentLength(t *testing.T) {
-	maxSize := int64(1024) // 1 KB
+	maxSize := int64(1024)                      // 1 KB
 	body := bytes.NewReader(make([]byte, 2048)) // 2 KB
 
 	req := httptest.NewRequest(http.MethodPost, "/test", body)
@@ -52,7 +52,7 @@ func TestBodySizeLimit_ExceedsLimit_ContentLength(t *testing.T) {
 }
 
 func TestBodySizeLimit_ExceedsLimit_ReadingBody(t *testing.T) {
-	maxSize := int64(1024) // 1 KB
+	maxSize := int64(1024)                      // 1 KB
 	body := bytes.NewReader(make([]byte, 2048)) // 2 KB
 
 	req := httptest.NewRequest(http.MethodPost, "/test", body)
@@ -108,45 +108,55 @@ func TestBodySizeLimit_NegativeMaxSize_UsesDefault(t *testing.T) {
 	assert.Equal(t, http.StatusOK, rr.Code)
 }
 
-func TestBodySizeLimit_GET_NoCheck(t *testing.T) {
-	req := httptest.NewRequest(http.MethodGet, "/test", nil)
+func TestBodySizeLimit_GET_ExceedsLimit(t *testing.T) {
+	maxSize := int64(10)
+	body := bytes.NewReader(make([]byte, 20))
+
+	req := httptest.NewRequest(http.MethodGet, "/test", body)
+	req.ContentLength = 20
 	rr := httptest.NewRecorder()
 
-	handler := BodySizeLimit(1)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	handler := BodySizeLimit(maxSize)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
-		_, _ = w.Write([]byte("success"))
 	}))
 
 	handler.ServeHTTP(rr, req)
 
-	assert.Equal(t, http.StatusOK, rr.Code)
+	assert.Equal(t, http.StatusRequestEntityTooLarge, rr.Code)
 }
 
-func TestBodySizeLimit_HEAD_NoCheck(t *testing.T) {
-	req := httptest.NewRequest(http.MethodHead, "/test", nil)
+func TestBodySizeLimit_HEAD_ExceedsLimit(t *testing.T) {
+	maxSize := int64(10)
+	body := bytes.NewReader(make([]byte, 20))
+
+	req := httptest.NewRequest(http.MethodHead, "/test", body)
+	req.ContentLength = 20
 	rr := httptest.NewRecorder()
 
-	handler := BodySizeLimit(1)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	handler := BodySizeLimit(maxSize)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 	}))
 
 	handler.ServeHTTP(rr, req)
 
-	assert.Equal(t, http.StatusOK, rr.Code)
+	assert.Equal(t, http.StatusRequestEntityTooLarge, rr.Code)
 }
 
-func TestBodySizeLimit_DELETE_NoCheck(t *testing.T) {
-	req := httptest.NewRequest(http.MethodDelete, "/test", nil)
+func TestBodySizeLimit_DELETE_ExceedsLimit(t *testing.T) {
+	maxSize := int64(10)
+	body := bytes.NewReader(make([]byte, 20))
+
+	req := httptest.NewRequest(http.MethodDelete, "/test", body)
+	req.ContentLength = 20
 	rr := httptest.NewRecorder()
 
-	handler := BodySizeLimit(1)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	handler := BodySizeLimit(maxSize)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
-		_, _ = w.Write([]byte("success"))
 	}))
 
 	handler.ServeHTTP(rr, req)
 
-	assert.Equal(t, http.StatusOK, rr.Code)
+	assert.Equal(t, http.StatusRequestEntityTooLarge, rr.Code)
 }
 
 func TestErrorRequestBodyTooLarge(t *testing.T) {
@@ -157,7 +167,7 @@ func TestErrorRequestBodyTooLarge(t *testing.T) {
 }
 
 func TestBodySizeLimit_ExactLimit(t *testing.T) {
-	maxSize := int64(1024) // 1 KB
+	maxSize := int64(1024)                      // 1 KB
 	body := bytes.NewReader(make([]byte, 1024)) // Exactly 1 KB
 
 	req := httptest.NewRequest(http.MethodPost, "/test", body)
@@ -258,4 +268,3 @@ func TestBodySizeLimit_UnknownContentLength(t *testing.T) {
 
 	assert.Equal(t, http.StatusOK, rr.Code)
 }
-

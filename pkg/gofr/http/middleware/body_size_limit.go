@@ -19,11 +19,6 @@ func BodySizeLimit(maxSize int64) func(http.Handler) http.Handler {
 
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			// Skip body size check for methods that typically don't have bodies
-			if r.Method == http.MethodGet || r.Method == http.MethodHead || r.Method == http.MethodDelete {
-				next.ServeHTTP(w, r)
-				return
-			}
 
 			// Check Content-Length header if present
 			if contentLength := r.ContentLength; contentLength > 0 {
@@ -56,4 +51,3 @@ func respondWithError(w http.ResponseWriter, err ErrorHTTP) {
 
 	_ = json.NewEncoder(w).Encode(response)
 }
-
