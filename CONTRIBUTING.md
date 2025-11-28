@@ -60,7 +60,6 @@ func TestFunctionName(t *testing.T) {
 ```console
 docker run --name mongodb -d -p 27017:27017 -e MONGO_INITDB_ROOT_USERNAME=user -e MONGO_INITDB_ROOT_PASSWORD=password mongodb/mongodb-community-server:latest
 docker run -d -p 21:21 -p 21000-21010:21000-21010 -e USERS='user|password' delfer/alpine-ftp-server
-```
 
 # the docker image is relatively unstable. Alternatively, refer to official guide of OpenTSDB to locally setup OpenTSDB env.
 # http://opentsdb.net/docs/build/html/installation.html#id1
@@ -102,6 +101,7 @@ docker run -d --name db -p 8091-8096:8091-8096 -p 11210-11211:11210-11211 couchb
 docker login container-registry.oracle.com
 docker pull container-registry.oracle.com/database/free:latest
 docker run -d --name oracle-free -p 1521:1521 -e ORACLE_PWD=YourPasswordHere container-registry.oracle.com/database/free:latest
+docker run -it --rm -p 4443:4443 -e STORAGE_EMULATOR_HOST=0.0.0.0:4443 fsouza/fake-gcs-server:latest
 ```
 
 > [!NOTE]
