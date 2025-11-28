@@ -8,7 +8,7 @@ Supported data sources:
   - Key-value storages (Redis, BadgerDB)
   - Pub/Sub systems (Azure Event Hub, Google as backend, Kafka, MQTT)
   - Search engines (Solr)
-  - File systems (FTP, SFTP, S3)
+  - File systems (FTP, SFTP, S3, GCS, Azure File Storage)
 */
 package container
 
