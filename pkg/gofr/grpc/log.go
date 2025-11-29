@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/propagation"
 	"go.opentelemetry.io/otel/trace"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
@@ -179,6 +180,12 @@ func ObservabilityInterceptor(logger Logger, metrics Metrics) grpc.UnaryServerIn
 func initializeSpanContext(ctx context.Context) context.Context {
 	md, _ := metadata.FromIncomingContext(ctx)
 
+	ctx = otel.GetTextMapPropagator().Extract(ctx, metadataCarrier(md))
+
+	if trace.SpanContextFromContext(ctx).IsValid() {
+		return ctx
+	}
+
 	traceIDHex := getMetadataValue(md, "x-gofr-traceid")
 	spanIDHex := getMetadataValue(md, "x-gofr-spanid")
 
@@ -303,4 +310,26 @@ func getMetadataValue(md metadata.MD, key string) string {
 	}
 
 	return ""
+}
+
+type metadataCarrier metadata.MD
+
+func (m metadataCarrier) Get(key string) string {
+	values := metadata.MD(m).Get(key)
+	if len(values) > 0 {
+		return values[0]
+	}
+	return ""
+}
+
+func (m metadataCarrier) Set(key string, value string) {
+	metadata.MD(m).Set(key, value)
+}
+
+func (m metadataCarrier) Keys() []string {
+	keys := make([]string, 0, len(m))
+	for k := range m {
+		keys = append(keys, k)
+	}
+	return keys
 }
