@@ -109,3 +109,21 @@ func (e ErrorInvalidConfiguration) Error() string {
 func (ErrorInvalidConfiguration) StatusCode() int {
 	return http.StatusInternalServerError
 }
+
+// ErrorRequestBodyTooLarge represents the scenario where the request body exceeds the maximum allowed size.
+type ErrorRequestBodyTooLarge struct {
+	maxSize int64
+	actual  int64
+}
+
+func NewRequestBodyTooLargeError(maxSize, actual int64) ErrorRequestBodyTooLarge {
+	return ErrorRequestBodyTooLarge{maxSize: maxSize, actual: actual}
+}
+
+func (e ErrorRequestBodyTooLarge) Error() string {
+	return fmt.Sprintf("request body too large: %d bytes exceeds maximum allowed size of %d bytes", e.actual, e.maxSize)
+}
+
+func (ErrorRequestBodyTooLarge) StatusCode() int {
+	return http.StatusRequestEntityTooLarge
+}

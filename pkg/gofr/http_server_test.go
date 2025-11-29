@@ -1,7 +1,9 @@
 package gofr
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
 	"fmt"
 	"net/http"
 	"os"
@@ -233,4 +235,89 @@ func createTempCertFile(t *testing.T) string {
 	defer f.Close()
 
 	return f.Name()
+}
+
+func TestBodySizeLimitMiddleware_Integration(t *testing.T) {
+	port := testutil.GetFreePort(t)
+
+	tests := []struct {
+		name           string
+		bodySize       int
+		maxBodySize    string
+		expectedStatus int
+		description    string
+	}{
+		{
+			name:           "Request within limit",
+			bodySize:       1024, // 1 KB
+			maxBodySize:    "2048", // 2 KB
+			expectedStatus: http.StatusOK,
+			description:    "Should allow requests within the body size limit",
+		},
+		{
+			name:           "Request exceeds limit",
+			bodySize:       2048, // 2 KB
+			maxBodySize:    "1024", // 1 KB
+			expectedStatus: http.StatusRequestEntityTooLarge,
+			description:    "Should reject requests exceeding the body size limit",
+		},
+		{
+			name:           "Request at exact limit",
+			bodySize:       1024, // 1 KB
+			maxBodySize:    "1024", // 1 KB
+			expectedStatus: http.StatusOK,
+			description:    "Should allow requests at the exact body size limit",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cfg := map[string]string{
+				"HTTP_PORT":         fmt.Sprint(port),
+				"LOG_LEVEL":         "INFO",
+				"HTTP_MAX_BODY_SIZE": tt.maxBodySize,
+			}
+
+			c := container.NewContainer(config.NewMockConfig(cfg))
+			app := New()
+			app.container = c
+			app.Config = config.NewMockConfig(cfg)
+
+			app.POST("/test", func(ctx *Context) (any, error) {
+				var body map[string]any
+				if err := ctx.Bind(&body); err != nil {
+					return nil, err
+				}
+				return "success", nil
+			})
+
+			go app.Run()
+			time.Sleep(100 * time.Millisecond)
+
+			body := make([]byte, tt.bodySize)
+			for i := range body {
+				body[i] = 'a'
+			}
+
+			req, err := http.NewRequestWithContext(t.Context(), http.MethodPost,
+				fmt.Sprintf("http://localhost:%d/test", port), bytes.NewReader(body))
+			require.NoError(t, err, "Failed to create request")
+			req.Header.Set("Content-Type", "application/json")
+
+			client := &http.Client{Timeout: 2 * time.Second}
+			resp, err := client.Do(req)
+			require.NoError(t, err, "Failed to make request")
+			defer resp.Body.Close()
+
+			assert.Equal(t, tt.expectedStatus, resp.StatusCode, tt.description)
+
+			if tt.expectedStatus == http.StatusRequestEntityTooLarge {
+				var errorResponse map[string]any
+				err := json.NewDecoder(resp.Body).Decode(&errorResponse)
+				require.NoError(t, err)
+				assert.Equal(t, "ERROR", errorResponse["status"])
+				assert.Contains(t, errorResponse["message"], "request body too large")
+			}
+		})
+	}
 }
