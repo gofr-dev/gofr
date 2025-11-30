@@ -84,6 +84,16 @@ export const navigation = [
                 desc: "Implement various HTTP authentication methods to secure your GoFR application and protect sensitive endpoints."
             },
             {
+                title: 'Role-Based Access Control (RBAC)',
+                href: '/docs/advanced-guide/rbac',
+                desc: "Implement comprehensive Role-Based Access Control with support for roles, permissions, hierarchy, JWT integration, and database-based role extraction."
+            },
+            {
+                title: 'Permission-Based Access Control',
+                href: '/docs/advanced-guide/rbac-permissions',
+                desc: "Learn how to implement fine-grained permission-based access control with route-to-permission mapping, role-to-permission assignment, and handler-level permission checks."
+            },
+            {
                 title: 'Circuit Breaker Support',
                 href: '/docs/advanced-guide/circuit-breaker',
                 desc: "Understand how to implement circuit breaker patterns to enhance the resilience of your services against failures."
