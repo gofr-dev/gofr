@@ -6,22 +6,19 @@ Role-Based Access Control (RBAC) is a security mechanism that restricts access t
 
 GoFr's RBAC middleware provides:
 
-- ✅ **Multiple Authentication Methods** - Header-based, JWT-based, and Database-based role extraction
+- ✅ **Multiple Authentication Methods** - Header-based and JWT-based role extraction
 - ✅ **Permission-Based Access Control** - Fine-grained permissions beyond simple roles
 - ✅ **Role Hierarchy** - Inherited roles (admin > editor > author > viewer)
 - ✅ **Audit Logging** - Comprehensive authorization logging using GoFr's logger
 - ✅ **Framework Integration** - Simple API consistent with other GoFr features
 - ✅ **Modular Design** - RBAC is an external module, keeping the core framework lightweight
+- ✅ **Role-Centric Permissions** - Intuitive permission model where roles define what they can do
 
-> **Important**: To use RBAC features, you must import the RBAC module:
-> ```go
-> import _ "gofr.dev/pkg/gofr/rbac" // Import RBAC module for automatic registration
-> ```
-> The RBAC module uses automatic registration via package-level variable initialization. When imported, RBAC implementations are automatically registered with core GoFr, allowing you to use `app.EnableRBAC()` and related functions.
-
-> **Note**: Container access is restricted for security. The container is only passed to `RoleExtractorFunc` when `config.RequiresContainer = true` (database-based role extraction). For header-based or JWT-based RBAC, `RequiresContainer = false` (default) and `args` will be empty.
+> **Important**: `app.EnableRBAC()` follows the same factory function pattern used throughout GoFr for datasources (e.g., `app.AddMongo()`, `app.AddPostgres()`). It automatically registers RBAC implementations when called. Simply call `app.EnableRBAC()` to enable RBAC features. When using RBAC options (e.g., `&rbac.JWTExtractor{}`), you must import the rbac package: `import "gofr.dev/pkg/gofr/rbac"`.
 
 ## Quick Start
+
+GoFr's RBAC follows the same factory function pattern as datasource registration. Just like you use `app.AddMongo(db)` to register MongoDB, you use `app.EnableRBAC()` to register and configure RBAC.
 
 ### Basic RBAC with Header-Based Roles
 
@@ -31,39 +28,50 @@ The simplest way to implement RBAC is using header-based role extraction:
 package main
 
 import (
-	"net/http"
 	"gofr.dev/pkg/gofr"
-	_ "gofr.dev/pkg/gofr/rbac" // Import RBAC module for automatic registration
 )
 
 func main() {
 	app := gofr.New()
 
-	// Enable RBAC with header-based role extraction
-	// Note: args will be empty for header-based RBAC (container not needed)
-	app.EnableRBAC(
-		gofr.WithPermissionsFile("configs/rbac.json"),
-		gofr.WithRoleExtractor(func(req *http.Request, args ...any) (string, error) {
-			role := req.Header.Get("X-User-Role")
-			if role == "" {
-				return "", fmt.Errorf("role header not found")
-			}
-			return role, nil
-		}),
-	)
+	// Enable RBAC - uses default config path (configs/rbac.json)
+	// Config file defines roleHeader: "X-User-Role" for automatic header extraction
+	// EnableRBAC is a factory function that registers RBAC automatically
+	app.EnableRBAC()
 
 	app.GET("/api/users", handler)
 	app.Run()
 }
 ```
 
-> **Note**: The RBAC module uses automatic registration via package-level variable initialization (not `init()`). When you import `gofr.dev/pkg/gofr/rbac`, the RBAC implementations are automatically registered with core GoFr. This allows the framework to remain lightweight - RBAC is only included when explicitly imported.
+**Configuration** (`configs/rbac.json`):
+
+```json
+{
+  "roleHeader": "X-User-Role",
+  "route": {
+    "/api/users": ["admin", "editor", "viewer"],
+    "/api/admin/*": ["admin"],
+    "*": ["viewer"]
+  },
+  "overrides": {
+    "/health": true,
+    "/metrics": true
+  },
+  "defaultRole": "viewer",
+  "roleHierarchy": {
+    "admin": ["editor", "author", "viewer"],
+    "editor": ["author", "viewer"],
+    "author": ["viewer"]
+  }
+}
+```
 
 > **⚠️ Security Note**: Header-based RBAC is **not secure** for public APIs. Use JWT-based RBAC for production applications.
 
 ## RBAC Implementation Patterns
 
-GoFr supports five main RBAC patterns, each suited for different use cases:
+GoFr supports four main RBAC patterns, each suited for different use cases:
 
 ### 1. Simple RBAC (Header-Based)
 
@@ -73,23 +81,22 @@ GoFr supports five main RBAC patterns, each suited for different use cases:
 
 ```go
 import (
-	"net/http"
 	"gofr.dev/pkg/gofr"
-	_ "gofr.dev/pkg/gofr/rbac" // Import RBAC module for automatic registration
 )
 
-app.EnableRBAC(
-	gofr.WithPermissionsFile("configs/rbac.json"),
-	gofr.WithRoleExtractor(func(req *http.Request, args ...any) (string, error) {
-		return req.Header.Get("X-User-Role"), nil
-	}),
-)
+app := gofr.New()
+
+// Enable RBAC with default config path
+// Config file defines roleHeader for automatic header extraction
+// EnableRBAC is a factory function that registers RBAC automatically
+app.EnableRBAC() // Uses configs/rbac.json by default
 ```
 
 **Configuration** (`configs/rbac.json`):
 
 ```json
 {
+  "roleHeader": "X-User-Role",
   "route": {
     "/api/users": ["admin", "editor", "viewer"],
     "/api/admin/*": ["admin"],
@@ -113,7 +120,7 @@ app.EnableRBAC(
 ```go
 import (
 	"gofr.dev/pkg/gofr"
-	_ "gofr.dev/pkg/gofr/rbac" // Import RBAC module for automatic registration
+	"gofr.dev/pkg/gofr/rbac" // Import for JWTExtractor type
 )
 
 app := gofr.New()
@@ -122,15 +129,13 @@ app := gofr.New()
 app.EnableOAuth("https://auth.example.com/.well-known/jwks.json", 10)
 
 // Enable RBAC with JWT role extraction
-app.EnableRBAC(
-	gofr.WithPermissionsFile("configs/rbac.json"),
-	gofr.WithJWT("role"),
-)
+// EnableRBAC is a factory function that registers RBAC automatically
+app.EnableRBAC("configs/rbac.json", &rbac.JWTExtractor{Claim: "role"})
 ```
 
 **JWT Role Claim Parameter (`roleClaim`)**:
 
-The `roleClaim` parameter in `WithJWT()` or `rbac.NewJWTRoleExtractor()` specifies the path to the role in JWT claims. It supports multiple formats:
+The `roleClaim` parameter in `JWTExtractor` specifies the path to the role in JWT claims. It supports multiple formats:
 
 | Format | Example | JWT Claim Structure |
 |--------|---------|---------------------|
@@ -144,32 +149,16 @@ The `roleClaim` parameter in `WithJWT()` or `rbac.NewJWTRoleExtractor()` specifi
 
 ```go
 // Simple claim
-app.EnableRBAC(
-	gofr.WithPermissionsFile("configs/rbac.json"),
-	gofr.WithJWT("role"),
-)
+app.EnableRBAC("configs/rbac.json", &rbac.JWTExtractor{Claim: "role"})
 // JWT: {"role": "admin", "sub": "user123"}
 
 // Array notation - extract first role
-app.EnableRBAC(
-	gofr.WithPermissionsFile("configs/rbac.json"),
-	gofr.WithJWT("roles[0]"),
-)
+app.EnableRBAC("configs/rbac.json", &rbac.JWTExtractor{Claim: "roles[0]"})
 // JWT: {"roles": ["admin", "editor"], "sub": "user123"}
 
 // Nested claim
-app.EnableRBAC(
-	gofr.WithPermissionsFile("configs/rbac.json"),
-	gofr.WithJWT("permissions.role"),
-)
+app.EnableRBAC("configs/rbac.json", &rbac.JWTExtractor{Claim: "permissions.role"})
 // JWT: {"permissions": {"role": "admin"}, "sub": "user123"}
-
-// Deeply nested
-app.EnableRBAC(
-	gofr.WithPermissionsFile("configs/rbac.json"),
-	gofr.WithJWT("user.permissions.role"),
-)
-// JWT: {"user": {"permissions": {"role": "admin"}}, "sub": "user123"}
 ```
 
 **Note**: 
@@ -190,49 +179,51 @@ app.EnableRBAC(
 
 ```go
 import (
-	"fmt"
-	"net/http"
 	"gofr.dev/pkg/gofr"
-	"gofr.dev/pkg/gofr/rbac"
 )
 
-func main() {
-	app := gofr.New()
+app := gofr.New()
 
-	// Load base configuration (provides fallback role-based auth and other settings)
-	config, _ := rbac.LoadPermissions("configs/rbac.json")
-	
-	// Configure fine-grained permission-based access control
-	config.PermissionConfig = &rbac.PermissionConfig{
-		Permissions: map[string][]string{
-			"users:read":   {"admin", "editor", "viewer"},
-			"users:write":  {"admin", "editor"},
-			"users:delete": {"admin"},
-		},
-		RoutePermissionMap: map[string]string{
-			"GET /api/users":    "users:read",
-			"POST /api/users":   "users:write",
-			"DELETE /api/users": "users:delete",
-		},
-	}
-
-	app.EnableRBAC(
-		gofr.WithConfig(config),
-		gofr.WithRoleExtractor(func(req *http.Request, args ...any) (string, error) {
-			role := req.Header.Get("X-User-Role")
-			if role == "" {
-				return "", fmt.Errorf("role header not found")
-			}
-			return role, nil
-		}),
-		gofr.WithPermissions(config.PermissionConfig),
-	)
-
-	app.Run()
-}
+// Enable RBAC with permissions
+// Config file defines roleHeader and all permissions
+// EnableRBAC is a factory function that registers RBAC automatically
+app.EnableRBAC() // Uses configs/rbac.json by default
 ```
 
-> **Note**: The config file provides fallback role-based authorization and other settings (overrides, defaultRole, etc.). Fine-grained permissions are defined in code. See [Permission-Based Access Control](https://gofr.dev/docs/advanced-guide/rbac-permissions) for comprehensive documentation.
+**Configuration** (`configs/rbac.json`):
+
+```json
+{
+  "roleHeader": "X-User-Role",
+  "route": {
+    "/api/*": ["admin", "editor"]
+  },
+  "permissions": {
+    "rolePermissions": {
+      "admin": ["users:read", "users:write", "users:delete", "posts:read", "posts:write"],
+      "editor": ["users:read", "users:write", "posts:read"],
+      "viewer": ["users:read", "posts:read"]
+    },
+    "routePermissionRules": [
+      {
+        "methods": ["GET"],
+        "regex": "^/api/users(/.*)?$",
+        "permission": "users:read"
+      },
+      {
+        "methods": ["POST", "PUT"],
+        "regex": "^/api/users(/.*)?$",
+        "permission": "users:write"
+      },
+      {
+        "methods": ["DELETE"],
+        "regex": "^/api/users/\\d+$",
+        "permission": "users:delete"
+      }
+    ]
+  }
+}
+```
 
 **Example**: [Permission-Based RBAC (Header) Example](https://github.com/gofr-dev/gofr/tree/main/examples/rbac/permissions-header)
 
@@ -248,145 +239,132 @@ app := gofr.New()
 // Enable OAuth middleware
 app.EnableOAuth("https://auth.example.com/.well-known/jwks.json", 10)
 
-config, _ := rbac.LoadPermissions("configs/rbac.json")
-config.PermissionConfig = &rbac.PermissionConfig{
-	Permissions: map[string][]string{
-		"users:read": {"admin", "editor", "viewer"},
-		"users:write": {"admin", "editor"},
-	},
-	RoutePermissionMap: map[string]string{
-		"GET /api/users": "users:read",
-		"POST /api/users": "users:write",
-	},
-}
-
-	app.EnableRBAC(
-		gofr.WithConfig(config),
-		gofr.WithJWT("role"),
-		gofr.WithPermissions(config.PermissionConfig),
-	)
+// Enable RBAC with JWT and permissions
+app.EnableRBAC("", &rbac.JWTExtractor{Claim: "role"})
+// Uses default config path: configs/rbac.json
 ```
 
 **Example**: [Permission-Based RBAC (JWT) Example](https://github.com/gofr-dev/gofr/tree/main/examples/rbac/permissions-jwt)
 
 **Related**: [HTTP Authentication - OAuth 2.0](https://gofr.dev/docs/advanced-guide/http-authentication#3-oauth-20)
 
-### 5. Permission-Based RBAC (Database)
+## Factory Function Pattern
 
-**Best for**: Dynamic roles, multi-tenant applications, admin-managed roles
+GoFr's RBAC follows the same factory function pattern used throughout the framework for datasource registration. This provides a consistent API and user experience.
 
-**Example**: [Permission-Based RBAC (Database) Example](https://github.com/gofr-dev/gofr/tree/main/examples/rbac/permissions-db)
+### Options Pattern (Same as HTTP Service)
 
-**Important**: Database-based RBAC requires explicit container access. You must set `config.RequiresContainer = true` to enable container access.
+RBAC options follow the exact same pattern as HTTP service options (`service.Options`):
+
+| Aspect | HTTP Service | RBAC |
+|--------|--------------|------|
+| **Interface** | `service.Options` | `rbac.Options` (internal) / `gofr.RBACOption` (public) |
+| **Method** | `AddOption(h HTTP) HTTP` | `AddOption(config RBACConfig) RBACConfig` |
+| **Usage** | `app.AddHTTPService(name, addr, options...)` | `app.EnableRBAC(configFile, options...)` |
+| **Composable** | ✅ Yes - options can be chained | ✅ Yes - options can be chained |
+
+**Example Comparison**:
 
 ```go
-import (
-	"database/sql"
-	"fmt"
-	"net/http"
-	"gofr.dev/pkg/gofr/container"
-	"gofr.dev/pkg/gofr/rbac"
+// HTTP Service Options
+app.AddHTTPService("payment", "http://localhost:9000",
+    &service.RateLimiterConfig{...},
+    &service.CircuitBreakerConfig{...},
 )
 
-// Load base configuration
-config, err := rbac.LoadPermissions("configs/rbac.json")
-if err != nil {
-	app.Logger().Error("Failed to load RBAC config: ", err)
-	return
-}
-
-// Configure permission-based access control
-config.PermissionConfig = &rbac.PermissionConfig{
-	Permissions: map[string][]string{
-		"users:read":   {"admin", "editor", "viewer"},
-		"users:write":  {"admin", "editor"},
-		"users:delete": {"admin"},
-	},
-	RoutePermissionMap: map[string]string{
-		"GET /api/users":    "users:read",
-		"POST /api/users":   "users:write",
-		"DELETE /api/users": "users:delete",
-	},
-}
-
-// CRITICAL: Set RequiresContainer = true for database-based role extraction
-// This enables container access in RoleExtractorFunc
-config.RequiresContainer = true
-
-// Database-based role extraction
-// Extract user ID from header/token, then query database for role
-config.RoleExtractorFunc = func(req *http.Request, args ...any) (string, error) {
-	// Extract user ID from header (could be from JWT, session, etc.)
-	userID := req.Header.Get("X-User-ID")
-	if userID == "" {
-		return "", fmt.Errorf("user ID not found in request")
-	}
-
-	// Get container from args (only available when RequiresContainer = true)
-	// Container is automatically passed as args[0] when RequiresContainer = true
-	if len(args) > 0 {
-		if cntr, ok := args[0].(*container.Container); ok && cntr != nil && cntr.SQL != nil {
-			// Use container.SQL.QueryRowContext() to query database
-			var role string
-			err := cntr.SQL.QueryRowContext(req.Context(), "SELECT role FROM users WHERE id = ?", userID).Scan(&role)
-			if err != nil {
-				if err == sql.ErrNoRows {
-					return "", fmt.Errorf("user not found")
-				}
-				return "", err
-			}
-			return role, nil
-		}
-	}
-	
-	// Fallback if container is not available
-	return "", fmt.Errorf("database not available")
-}
-
-// Enable RBAC with permissions
-	app.EnableRBAC(
-		gofr.WithConfig(config),
-		gofr.WithRoleExtractor(config.RoleExtractorFunc),
-		gofr.WithPermissions(config.PermissionConfig),
-		gofr.WithRequiresContainer(true),
-	)
+// RBAC Options (same pattern)
+app.EnableRBAC("configs/rbac.json",
+    &rbac.JWTExtractor{Claim: "role"},
+    &rbac.HeaderRoleExtractor{HeaderKey: "X-User-Role"},
+)
 ```
 
-**Container Access Control**:
+Both patterns use the same interface design where each option implements `AddOption` method, making them composable and order-agnostic.
 
-- **`RequiresContainer = false`** (default): Container is **NOT** passed to `RoleExtractorFunc`
-  - Used for: Header-based RBAC, JWT-based RBAC
-  - `args` will be empty in `RoleExtractorFunc`
-  - Container access is restricted for security
+### Comparison with Datasource Registration
 
-- **`RequiresContainer = true`**: Container **IS** passed to `RoleExtractorFunc`
-  - Used for: Database-based RBAC
-  - `args[0]` will be `*container.Container` in `RoleExtractorFunc`
-  - Allows access to `container.SQL`, `container.Redis`, etc.
+Just like datasources, RBAC uses a factory function pattern:
 
-**Differentiating Between Extraction Types**:
+| Feature | Datasources | RBAC |
+|---------|-------------|------|
+| **Factory Function** | `app.AddMongo(db)` | `app.EnableRBAC(configFile, options...)` |
+| **Pattern** | Single entry point | Single entry point |
+| **Setup** | Logger, Metrics, Tracer | Logger, Config, Middleware |
+| **User Import** | Import datasource package | Import rbac package (when using options) |
+| **Registration** | Direct assignment | Interface-based registration |
 
-| Extraction Type | RequiresContainer | Container Passed | args in RoleExtractorFunc |
-|----------------|-------------------|------------------|---------------------------|
-| Header-based | `false` | ❌ No | Empty |
-| JWT-based | `false` | ❌ No | Empty |
-| Database-based | `true` (must set) | ✅ Yes | `args[0] = *container.Container` |
+### Example Comparison
 
-**Security Note**: 
-- Container access is restricted by default for security
-- Only set `RequiresContainer = true` when you actually need database access
-- Header/JWT-based extractors cannot access the container even if it's available
+**Datasource Registration:**
+```go
+import (
+    "gofr.dev/pkg/gofr"
+    "gofr.dev/pkg/gofr/datasource/mongo"
+)
 
-**Example**: [Permission-Based RBAC (Database) Example](https://github.com/gofr-dev/gofr/tree/main/examples/rbac/permissions-db)
+app := gofr.New()
+mongoDB := mongo.New(...)
+app.AddMongo(mongoDB)  // Factory function - sets up logger, metrics, tracer, connects
+```
 
-**Related**: [Connecting MySQL](https://gofr.dev/docs/quick-start/connecting-mysql)
+**RBAC Registration:**
+```go
+import (
+    "gofr.dev/pkg/gofr"
+    "gofr.dev/pkg/gofr/rbac"  // Import when using options
+)
+
+app := gofr.New()
+app.EnableRBAC("configs/rbac.json", &rbac.JWTExtractor{Claim: "role"})  // Factory function - registers, loads config, sets up middleware
+```
+
+Both follow the same pattern:
+1. **Import the package** when using specific features/options
+2. **Call the factory function** to register and configure
+3. **Framework handles setup** automatically (logger, metrics, connection/setup)
 
 ## Configuration
+
+### EnableRBAC API
+
+The `EnableRBAC` function accepts an optional config file path and variadic options:
+
+```go
+func (a *App) EnableRBAC(configFile string, options ...RBACOption)
+```
+
+**Parameters**:
+- `configFile` (string): Path to RBAC config file (JSON or YAML). If empty, tries default paths:
+  - `configs/rbac.json`
+  - `configs/rbac.yaml`
+  - `configs/rbac.yml`
+- `options` (...RBACOption): Optional interface-based options (follows same pattern as `service.Options`):
+  - `&rbac.HeaderRoleExtractor{HeaderKey: "X-User-Role"}` - Header-based extraction
+  - `&rbac.JWTExtractor{Claim: "role"}` - JWT-based extraction
+
+**Options Pattern**: RBAC options follow the same pattern as HTTP service options (`service.Options`). Each option implements the `AddOption(config RBACConfig) RBACConfig` method, allowing for composable configuration similar to how HTTP services use `AddOption(h HTTP) HTTP`.
+
+**Examples**:
+
+```go
+// Use default config path
+app.EnableRBAC()
+
+// Use custom config path
+app.EnableRBAC("configs/custom-rbac.json")
+
+// Use default path with JWT option
+app.EnableRBAC("", &rbac.JWTExtractor{Claim: "role"})
+
+// Use custom path with header extractor
+app.EnableRBAC("configs/rbac.json", &rbac.HeaderRoleExtractor{HeaderKey: "X-User-Role"})
+```
 
 ### JSON Configuration
 
 ```json
 {
+  "roleHeader": "X-User-Role",
   "route": {
     "/api/users": ["admin", "editor", "viewer"],
     "/api/posts": ["admin", "editor", "author"],
@@ -404,24 +382,32 @@ config.RoleExtractorFunc = func(req *http.Request, args ...any) (string, error) 
     "author": ["viewer"]
   },
   "permissions": {
-    "permissions": {
-      "users:read": ["admin", "editor", "viewer"],
-      "users:write": ["admin", "editor"],
-      "users:delete": ["admin"]
+    "rolePermissions": {
+      "admin": ["users:read", "users:write", "users:delete"],
+      "editor": ["users:read", "users:write"],
+      "viewer": ["users:read"]
     },
-    "routePermissions": {
-      "GET /api/users": "users:read",
-      "POST /api/users": "users:write",
-      "DELETE /api/users": "users:delete"
-    }
-  },
-  "enablePermissions": true
+    "routePermissionRules": [
+      {
+        "methods": ["GET"],
+        "regex": "^/api/users(/.*)?$",
+        "permission": "users:read"
+      },
+      {
+        "methods": ["POST", "PUT"],
+        "regex": "^/api/users(/.*)?$",
+        "permission": "users:write"
+      }
+    ]
+  }
 }
 ```
 
 ### YAML Configuration
 
 ```yaml
+roleHeader: X-User-Role
+
 route:
   /api/users:
     - admin
@@ -448,31 +434,37 @@ roleHierarchy:
     - viewer
 
 permissions:
-  permissions:
-    users:read:
-      - admin
-      - editor
-      - viewer
-    users:write:
-      - admin
-      - editor
-  routePermissions:
-    "GET /api/users": users:read
-    "POST /api/users": users:write
-
-enablePermissions: true
+  rolePermissions:
+    admin:
+      - users:read
+      - users:write
+      - users:delete
+    editor:
+      - users:read
+      - users:write
+    viewer:
+      - users:read
+  routePermissionRules:
+    - methods: [GET]
+      regex: "^/api/users(/.*)?$"
+      permission: users:read
+    - methods: [POST, PUT]
+      regex: "^/api/users(/.*)?$"
+      permission: users:write
 ```
 
 ## Configuration Fields
 
 | Field | Type | Description |
 |-------|------|-------------|
+| `roleHeader` | `string` | HTTP header key for role extraction (e.g., "X-User-Role"). Auto-configures header extractor |
 | `route` | `map[string][]string` | Maps route patterns to allowed roles. Supports wildcards (`*`, `/api/*`) |
 | `overrides` | `map[string]bool` | Routes that bypass RBAC (public access) |
-| `defaultRole` | `string` | Role used when no role can be extracted |
+| `defaultRole` | `string` | ⚠️ Role used when no role can be extracted. **Security Warning**: Can be a security flaw if not carefully considered |
 | `roleHierarchy` | `map[string][]string` | Defines role inheritance relationships |
 | `permissions` | `object` | Permission-based access control configuration |
-| `enablePermissions` | `boolean` | Enable permission-based checks |
+| `permissions.rolePermissions` | `map[string][]string` | **Role-centric**: Maps roles to their permissions (e.g., `"admin": ["users:read", "users:write"]`) |
+| `permissions.routePermissionRules` | `array` | Structured route-to-permission mapping with regex support |
 
 ## Route Patterns
 
@@ -481,6 +473,38 @@ GoFr supports flexible route pattern matching:
 - **Exact Match**: `"/api/users"` matches exactly `/api/users`
 - **Wildcard**: `"/api/*"` matches `/api/users`, `/api/posts`, etc.
 - **Global Fallback**: `"*"` matches all routes not explicitly defined
+
+## Route Permission Rules
+
+The new `routePermissionRules` format provides structured, flexible route-to-permission mapping:
+
+```json
+{
+  "routePermissionRules": [
+    {
+      "methods": ["GET"],
+      "regex": "^/api/users(/.*)?$",
+      "permission": "users:read"
+    },
+    {
+      "methods": ["POST", "PUT"],
+      "path": "/api/users",
+      "permission": "users:write"
+    },
+    {
+      "methods": ["DELETE"],
+      "regex": "^/api/users/\\d+$",
+      "permission": "users:delete"
+    }
+  ]
+}
+```
+
+**Fields**:
+- `methods` (array): HTTP methods (GET, POST, PUT, DELETE, PATCH, etc.). Empty or `["*"]` matches all methods
+- `path` (string): Path pattern (supports wildcards). Used when `regex` is not provided
+- `regex` (string): Regular expression pattern. Takes precedence over `path` if both are provided
+- `permission` (string): Required permission for matching routes
 
 ## Handler-Level Authorization
 
@@ -501,8 +525,11 @@ app.GET("/dashboard", gofr.RequireAnyRole([]string{"admin", "editor"}, dashboard
 ### Require Permission
 
 ```go
-app.DELETE("/api/users", gofr.RequirePermission("users:delete", config.PermissionConfig, deleteUser))
+// Note: Middleware automatically checks permissions, but you can use this for programmatic checks
+app.DELETE("/api/users/:id", gofr.RequirePermission("users:delete", config.PermissionConfig, deleteUser))
 ```
+
+> **Note**: With the new API, middleware automatically checks permissions based on `routePermissionRules`. You typically don't need `RequirePermission()` at the route level unless you need programmatic checks within handlers.
 
 ## Context Helpers
 
@@ -540,15 +567,11 @@ config.ErrorHandler = func(w http.ResponseWriter, r *http.Request, role, route s
 	w.WriteHeader(http.StatusForbidden)
 	w.Write([]byte(fmt.Sprintf("Access denied for role %s on %s", role, route)))
 }
-
-app.EnableRBAC(
-	gofr.WithConfig(config),
-)
 ```
 
 ### Audit Logging
 
-RBAC automatically logs all authorization decisions using GoFr's logger when `config.Logger` is set (which is done automatically by `app.EnableRBAC*()` methods).
+RBAC automatically logs all authorization decisions using GoFr's logger when `config.Logger` is set (which is done automatically by `app.EnableRBAC()`).
 
 **Audit logs include:**
 - Request method and path
@@ -559,7 +582,7 @@ RBAC automatically logs all authorization decisions using GoFr's logger when `co
 
 **Example log output:**
 ```
-[RBAC Audit] GET /api/users - Role: admin - Route: /api/users - allowed - Reason: role-based
+[RBAC Audit] GET /api/users - Role: admin - Route: /api/users - allowed - Reason: permission-based
 [RBAC Audit] GET /api/admin - Role: viewer - Route: /api/admin - denied - Reason: access denied
 ```
 
@@ -582,16 +605,13 @@ RBAC_OVERRIDE_/health=true
 
 ## Comparison Matrix
 
-| Feature | Simple | JWT | Permissions-Header | Permissions-JWT | Permissions-DB |
-|---------|--------|-----|-------------------|----------------|----------------|
-| **Security** | ⚠️ Low | ✅ High | ⚠️ Low | ✅ High | ✅ High |
-| **Flexibility** | ⚠️ Low | ⚠️ Low | ✅ High | ✅ High | ✅✅ Very High |
-| **Performance** | ✅ Fast | ✅ Fast | ✅ Fast | ✅ Fast | ⚠️ Slower* |
-| **Dynamic Roles** | ❌ No | ❌ No | ❌ No | ❌ No | ✅ Yes |
-| **Production Ready** | ❌ No | ✅ Yes | ❌ No | ✅ Yes | ✅ Yes |
-| **Setup Complexity** | ✅ Simple | ⚠️ Medium | ⚠️ Medium | ⚠️ Medium | ⚠️ High |
-
-*Consider implementing application-level caching (e.g., Redis) for database-based role extraction
+| Feature | Simple | JWT | Permissions-Header | Permissions-JWT |
+|---------|--------|-----|-------------------|----------------|
+| **Security** | ⚠️ Low | ✅ High | ⚠️ Low | ✅ High |
+| **Flexibility** | ⚠️ Low | ⚠️ Low | ✅ High | ✅ High |
+| **Performance** | ✅ Fast | ✅ Fast | ✅ Fast | ✅ Fast |
+| **Production Ready** | ❌ No | ✅ Yes | ❌ No | ✅ Yes |
+| **Setup Complexity** | ✅ Simple | ⚠️ Medium | ⚠️ Medium | ⚠️ Medium |
 
 ## Migration Path
 
@@ -599,7 +619,6 @@ RBAC_OVERRIDE_/health=true
 1. Start with **Simple RBAC** for development
 2. Move to **JWT RBAC** for production
 3. Add **Permissions** when you need fine-grained control
-4. Use **Database-based** when roles need to be dynamic
 
 ## Complete Examples
 
@@ -609,7 +628,6 @@ All examples are available in the GoFr repository:
 - [JWT RBAC Example](https://github.com/gofr-dev/gofr/tree/main/examples/rbac/jwt) - JWT-based role extraction
 - [Permission-Based RBAC (Header)](https://github.com/gofr-dev/gofr/tree/main/examples/rbac/permissions-header) - Permissions with header roles
 - [Permission-Based RBAC (JWT)](https://github.com/gofr-dev/gofr/tree/main/examples/rbac/permissions-jwt) - Permissions with JWT roles
-- [Permission-Based RBAC (Database)](https://github.com/gofr-dev/gofr/tree/main/examples/rbac/permissions-db) - Permissions with database roles
 
 Each example includes:
 - Complete working code
@@ -617,84 +635,118 @@ Each example includes:
 - Integration tests
 - Setup instructions in code comments
 
-## Security Best Practices
+## Best Practices
+
+### 1. Security
 
 1. **Never use header-based RBAC for public APIs** - Use JWT-based RBAC instead
 2. **Always validate JWT tokens** - Use proper JWKS endpoints with HTTPS
-3. **Consider caching for DB-based roles** - Implement application-level caching (e.g., Redis) to reduce database load
-4. **Use HTTPS in production** - Protect tokens and headers from interception
-5. **Implement rate limiting** - Prevent abuse and brute force attacks
-6. **Monitor audit logs** - Track authorization decisions for security analysis
-7. **Use role hierarchy wisely** - Don't create overly complex hierarchies
-8. **Regular security audits** - Review RBAC configurations periodically
+3. **Use HTTPS in production** - Protect tokens and headers from interception
+4. **Implement rate limiting** - Prevent abuse and brute force attacks
+5. **Monitor audit logs** - Track authorization decisions for security analysis
+6. **Avoid defaultRole in production** - Can be a security flaw if not carefully considered
 
-## Understanding Permission Configuration
+### 2. Configuration
 
-**Why load from file when defining permissions in code?**
+1. **Use role-centric permissions** - More intuitive than permission-centric model
+   ```json
+   {
+     "rolePermissions": {
+       "admin": ["users:read", "users:write", "users:delete"],
+       "editor": ["users:read", "users:write"]
+     }
+   }
+   ```
+2. **Use structured route rules** - More flexible than string-based mapping
+   ```json
+   {
+     "routePermissionRules": [
+       {
+         "methods": ["GET"],
+         "regex": "^/api/users(/.*)?$",
+         "permission": "users:read"
+       }
+     ]
+   }
+   ```
+3. **Set roleHeader in config** - Auto-configures header extraction
+4. **Use default config paths** - Simplifies configuration management
 
-The config file serves multiple purposes:
-1. **Fallback Authorization** - `RouteWithPermissions` acts as fallback when permission mappings are missing
-2. **Configuration Settings** - Provides overrides, defaultRole, roleHierarchy, and other settings
-3. **Management Benefits** - Enables environment variable overrides and version control
+### 3. Permission Design
 
-See [Permission-Based Access Control](https://gofr.dev/docs/advanced-guide/rbac-permissions) for comprehensive documentation on permissions, including detailed explanations, examples, and best practices.
+1. **Use consistent naming** - Follow `resource:action` format (e.g., `users:read`, `posts:write`)
+2. **Group related permissions** - Organize by resource type
+3. **Document permission requirements** - Comment which permissions are needed for each endpoint
+4. **Test permission checks** - Write integration tests to verify authorization
+
+### 4. Code Organization
+
+1. **Let middleware handle checks** - Don't add `RequirePermission()` at route level unless needed for programmatic checks
+2. **Use context helpers** - Access role/permission info in handlers when needed
+3. **Keep configs in files** - Use JSON/YAML files for route-level config, code for fine-grained permissions
+4. **Version control configs** - Track RBAC configuration changes separately from code
+
+### 5. Performance
+
+1. **Cache role lookups** - For high-traffic applications, consider caching roles
+2. **Optimize route rules** - Use specific patterns before generic ones
+3. **Monitor performance** - Track authorization decision times
+
+### 6. Maintenance
+
+1. **Regular security audits** - Review RBAC configurations periodically
+2. **Use role hierarchy wisely** - Don't create overly complex hierarchies
+3. **Document role meanings** - Clearly define what each role can do
+4. **Keep examples updated** - Maintain working examples for reference
 
 ## Related Documentation
 
+- [Permission-Based Access Control](./rbac-permissions/page.md) - Detailed permission documentation
 - [HTTP Authentication](https://gofr.dev/docs/advanced-guide/http-authentication) - Basic Auth, API Keys, OAuth 2.0
 - [HTTP Communication](https://gofr.dev/docs/advanced-guide/http-communication) - Inter-service HTTP calls
 - [Middlewares](https://gofr.dev/docs/advanced-guide/middlewares) - Custom middleware implementation
-- [Connecting MySQL](https://gofr.dev/docs/quick-start/connecting-mysql) - Database setup for DB-based RBAC
 - [Configuration](https://gofr.dev/docs/quick-start/configuration) - Environment variables and configuration management
 
 ## API Reference
 
 ### Framework Methods
 
-- `app.EnableRBAC(options ...RBACOption)` - Unified RBAC configuration with options pattern
+- `app.EnableRBAC(configFile string, options ...RBACOption)` - Factory function that enables RBAC with config file and options (follows same pattern as `app.AddHTTPService()`)
   
-  **Available Options:**
-  - `WithPermissionsFile(file string)` - Load RBAC config from a file
-  - `WithRoleExtractor(extractor RoleExtractor)` - Set custom role extraction function
-  - `WithConfig(config RBACConfig)` - Use a pre-loaded RBAC configuration
-  - `WithJWT(roleClaim string)` - Enable JWT-based role extraction
-  - `WithPermissions(permissionConfig PermissionConfig)` - Enable permission-based access control
-  - `WithRequiresContainer(required bool)` - Indicate if container access is needed
+  **Factory Function Behavior:**
+  - Automatically registers RBAC implementations on first call
+  - No need to import the RBAC module separately
+  - Handles registration internally
+  
+  **Parameters:**
+  - `configFile` (string): Optional path to RBAC config file. If empty, tries default paths:
+    - `configs/rbac.json`
+    - `configs/rbac.yaml`
+    - `configs/rbac.yml`
+  - `options` (...RBACOption): Optional interface-based options (follows same pattern as `service.Options`):
+    - `&rbac.HeaderRoleExtractor{HeaderKey: "X-User-Role"}` - Header-based role extraction
+    - `&rbac.JWTExtractor{Claim: "role"}` - JWT-based role extraction
   
   **Examples:**
   ```go
-  // Basic RBAC (header-based)
-  app.EnableRBAC(
-      gofr.WithPermissionsFile("configs/rbac.json"),
-      gofr.WithRoleExtractor(roleExtractor),
-  )
+  // Use default config path
+  app.EnableRBAC()
   
-  // JWT-based RBAC
-  app.EnableRBAC(
-      gofr.WithPermissionsFile("configs/rbac.json"),
-      gofr.WithJWT("role"),
-  )
+  // Use custom config path
+  app.EnableRBAC("configs/custom-rbac.json")
   
-  // Permission-based RBAC
-  app.EnableRBAC(
-      gofr.WithConfig(config),
-      gofr.WithRoleExtractor(roleExtractor),
-      gofr.WithPermissions(permissionConfig),
-  )
+  // Use default path with JWT option
+  app.EnableRBAC("", &rbac.JWTExtractor{Claim: "role"})
   
-  // Database-based (requires container)
-  app.EnableRBAC(
-      gofr.WithConfig(config),
-      gofr.WithRoleExtractor(roleExtractor),
-      gofr.WithRequiresContainer(true),
-  )
+  // Use custom path with header extractor
+  app.EnableRBAC("configs/rbac.json", &rbac.HeaderRoleExtractor{HeaderKey: "X-User-Role"})
   ```
 
 ### Handler Helpers
 
 - `gofr.RequireRole(role, handler)` - Require specific role
 - `gofr.RequireAnyRole(roles, handler)` - Require any of multiple roles
-- `gofr.RequirePermission(permission, config, handler)` - Require permission
+- `gofr.RequirePermission(permission, config, handler)` - Require permission (for programmatic checks)
 
 ### Context Helpers
 
@@ -709,20 +761,23 @@ Access role and permission information in your handlers:
 ### Common Issues
 
 **Issue**: Role not being extracted
-- **Solution**: Ensure role extractor returns an error when role is missing, or set `defaultRole` in config
+- **Solution**: Ensure `roleHeader` is set in config or use `HeaderRoleExtractor` option. Check that the header is present in requests.
 
 **Issue**: Permission checks failing
-- **Solution**: Verify `enablePermissions` is set to `true` and `PermissionConfig` is properly configured
+- **Solution**: Verify `rolePermissions` is properly configured and `routePermissionRules` match your routes correctly.
 
 **Issue**: JWT role extraction failing
-- **Solution**: Ensure OAuth middleware is enabled before RBAC, and JWT claim path is correct
+- **Solution**: Ensure OAuth middleware is enabled before RBAC, and JWT claim path is correct.
 
-**Issue**: Database-based roles slow
-- **Solution**: Consider implementing application-level caching (e.g., Redis) for role lookups
+**Issue**: Config file not found
+- **Solution**: Ensure config file exists at the specified path, or use default paths (`configs/rbac.json`, `configs/rbac.yaml`, `configs/rbac.yml`).
+
+**Issue**: RBAC not working / "RBAC module not imported" error
+- **Solution**: This should not happen with the factory function pattern. If it does, ensure you're calling `app.EnableRBAC()` and that the rbac package is available in your dependencies. The factory function handles registration automatically.
 
 ## Need Help?
 
 - Check [RBAC Examples](https://github.com/gofr-dev/gofr/tree/main/examples/rbac) for complete working code
 - See [GoFr Documentation](https://gofr.dev/docs) for general framework documentation
 - Review [Permission-Based Access Control](./rbac-permissions/page.md) for detailed permission documentation
-
+- See [RBAC Architecture](./rbac/ARCHITECTURE.md) for code execution flow

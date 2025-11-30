@@ -12,10 +12,8 @@ import (
 )
 
 var (
-	errNoRole                = errors.New("no role")
-	errUserIDNotFound        = errors.New("user ID not found")
-	errContainerNotAvailable = errors.New("container not available")
-	errExtractionFailed      = errors.New("extraction failed")
+	errNoRole           = errors.New("no role")
+	errExtractionFailed = errors.New("extraction failed")
 )
 
 // mock role extractor function for testing.
@@ -26,36 +24,6 @@ func mockRoleExtractor(r *http.Request, _ ...any) (string, error) {
 	}
 
 	return role, nil
-}
-
-// mock role extractor that uses container (for database-based testing).
-func mockDBRoleExtractor(r *http.Request, args ...any) (string, error) {
-	if len(args) == 0 {
-		return "", errContainerNotAvailable
-	}
-
-	// Container is passed as any - we just check if it exists
-	// In real usage, users would type assert to their container type
-	if args[0] == nil {
-		return "", errContainerNotAvailable
-	}
-
-	// Simulate database query
-	userID := r.Header.Get("X-User-Id")
-	if userID == "" {
-		return "", errUserIDNotFound
-	}
-
-	// In real scenario, would query database: cntr.SQL.QueryRowContext(...)
-	// For testing, return based on userID
-	switch userID {
-	case "1":
-		return "admin", nil
-	case "2":
-		return "editor", nil
-	default:
-		return "viewer", nil
-	}
 }
 
 func TestMiddleware_Authorization(t *testing.T) {
@@ -117,78 +85,6 @@ func TestMiddleware_Authorization(t *testing.T) {
 
 			if tc.roleHeader != "" {
 				req.Header.Set("Role", tc.roleHeader)
-			}
-
-			w := httptest.NewRecorder()
-
-			handlerToTest := middleware(nextHandler)
-			handlerToTest.ServeHTTP(w, req)
-
-			assert.Equal(t, tc.wantStatus, w.Code)
-			assert.Equal(t, tc.wantNextCall, nextCalled)
-		})
-	}
-}
-
-func TestMiddleware_WithContainer(t *testing.T) {
-	config := &Config{
-		RouteWithPermissions: map[string][]string{
-			"/allowed": {"admin"},
-		},
-		OverRides:         map[string]bool{},
-		RoleExtractorFunc: mockDBRoleExtractor,
-		RequiresContainer: true, // Enable container access for database-based extraction
-	}
-
-	nextCalled := false
-	nextHandler := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		nextCalled = true
-
-		w.WriteHeader(http.StatusOK)
-	})
-
-	// Test with container (database-based RBAC needs container)
-	// In real usage, this would be a real container, but for testing we use a mock
-	mockContainer := struct{}{} // Mock container - in real usage this would be *container.Container
-	middleware := Middleware(config, mockContainer)
-
-	tests := []struct {
-		name         string
-		userID       string
-		requestPath  string
-		wantStatus   int
-		wantNextCall bool
-	}{
-		{
-			name:         "Admin user (userID=1)",
-			userID:       "1",
-			requestPath:  "/allowed",
-			wantStatus:   http.StatusOK,
-			wantNextCall: true,
-		},
-		{
-			name:         "Editor user (userID=2)",
-			userID:       "2",
-			requestPath:  "/allowed",
-			wantStatus:   http.StatusForbidden,
-			wantNextCall: false,
-		},
-		{
-			name:         "No user ID",
-			userID:       "",
-			requestPath:  "/allowed",
-			wantStatus:   http.StatusUnauthorized,
-			wantNextCall: false,
-		},
-	}
-
-	for _, tc := range tests {
-		t.Run(tc.name, func(t *testing.T) {
-			nextCalled = false
-
-			req := httptest.NewRequest(http.MethodGet, tc.requestPath, http.NoBody)
-			if tc.userID != "" {
-				req.Header.Set("X-User-Id", tc.userID)
 			}
 
 			w := httptest.NewRecorder()
@@ -569,7 +465,7 @@ func TestExtractRole_EdgeCases(t *testing.T) {
 		}
 
 		req := httptest.NewRequest(http.MethodGet, "/test", http.NoBody)
-		role, err := extractRole(req, config, nil)
+		role, err := extractRole(req, config)
 		require.NoError(t, err)
 		assert.Equal(t, "guest", role)
 	})
@@ -583,7 +479,7 @@ func TestExtractRole_EdgeCases(t *testing.T) {
 		}
 
 		req := httptest.NewRequest(http.MethodGet, "/test", http.NoBody)
-		role, err := extractRole(req, config, nil)
+		role, err := extractRole(req, config)
 		require.NoError(t, err)
 		assert.Equal(t, "guest", role)
 	})
@@ -596,7 +492,7 @@ func TestExtractRole_EdgeCases(t *testing.T) {
 		}
 
 		req := httptest.NewRequest(http.MethodGet, "/test", http.NoBody)
-		role, err := extractRole(req, config, nil)
+		role, err := extractRole(req, config)
 		require.Error(t, err)
 		require.ErrorIs(t, err, ErrRoleNotFound)
 		assert.Empty(t, role)
@@ -611,7 +507,7 @@ func TestExtractRole_EdgeCases(t *testing.T) {
 		}
 
 		req := httptest.NewRequest(http.MethodGet, "/test", http.NoBody)
-		role, err := extractRole(req, config, nil)
+		role, err := extractRole(req, config)
 		require.NoError(t, err)
 		assert.Equal(t, "guest", role)
 	})
@@ -624,96 +520,13 @@ func TestExtractRole_EdgeCases(t *testing.T) {
 		}
 
 		req := httptest.NewRequest(http.MethodGet, "/test", http.NoBody)
-		role, err := extractRole(req, config, nil)
+		role, err := extractRole(req, config)
 		require.Error(t, err)
 		require.ErrorIs(t, err, ErrRoleNotFound)
 		assert.Empty(t, role)
 	})
 }
 
-func TestBuildExtractorArgs(t *testing.T) {
-	t.Run("RequiresContainerWithArgs", func(t *testing.T) {
-		config := &Config{
-			RequiresContainer: true,
-		}
-
-		args := []any{"container", "extra"}
-		result := buildExtractorArgs(config, args)
-		assert.Equal(t, args, result)
-	})
-
-	t.Run("RequiresContainerNoArgs", func(t *testing.T) {
-		config := &Config{
-			RequiresContainer: true,
-		}
-
-		result := buildExtractorArgs(config, nil)
-		assert.Empty(t, result)
-	})
-
-	t.Run("NoContainerWithArgs", func(t *testing.T) {
-		config := &Config{
-			RequiresContainer: false,
-		}
-
-		args := []any{"container", "extra"}
-		result := buildExtractorArgs(config, args)
-		assert.Equal(t, []any{"extra"}, result) // First arg skipped
-	})
-
-	t.Run("NoContainerNoArgs", func(t *testing.T) {
-		config := &Config{
-			RequiresContainer: false,
-		}
-
-		result := buildExtractorArgs(config, nil)
-		assert.Empty(t, result)
-	})
-}
-
-func TestBuildContainerArgs(t *testing.T) {
-	t.Run("WithContainerAndExtraArgs", func(t *testing.T) {
-		args := []any{"container", "arg1", "arg2"}
-		result := buildContainerArgs(args)
-		assert.Equal(t, args, result)
-	})
-
-	t.Run("WithNilContainer", func(t *testing.T) {
-		args := []any{nil, "arg1"}
-		result := buildContainerArgs(args)
-		assert.Equal(t, []any{}, result) // Nil container not appended
-	})
-
-	t.Run("EmptyArgs", func(t *testing.T) {
-		result := buildContainerArgs([]any{})
-		assert.Empty(t, result)
-	})
-}
-
-func TestBuildNonContainerArgs(t *testing.T) {
-	t.Run("SkipFirstArg", func(t *testing.T) {
-		args := []any{"container", "arg1", "arg2"}
-		result := buildNonContainerArgs(args)
-		assert.Equal(t, []any{"arg1", "arg2"}, result)
-	})
-
-	t.Run("WithNilFirstArg", func(t *testing.T) {
-		args := []any{nil, "arg1"}
-		result := buildNonContainerArgs(args)
-		assert.Equal(t, []any{"arg1"}, result)
-	})
-
-	t.Run("EmptyArgs", func(t *testing.T) {
-		result := buildNonContainerArgs([]any{})
-		assert.Empty(t, result)
-	})
-
-	t.Run("OnlyContainerArg", func(t *testing.T) {
-		args := []any{"container"}
-		result := buildNonContainerArgs(args)
-		assert.Empty(t, result) // Only container, nothing left
-	})
-}
 
 func TestCheckAuthorization_EdgeCases(t *testing.T) {
 	t.Run("PermissionBasedAccess", func(t *testing.T) {
