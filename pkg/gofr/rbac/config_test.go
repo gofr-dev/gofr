@@ -166,7 +166,7 @@ func TestLoadPermissions_InitializesEmptyMaps(t *testing.T) {
 	assert.NotNil(t, cfg.OverRides)
 }
 
-func TestNewConfigLoader(t *testing.T) {
+func TestNewConfigLoaderWithLogger_NilLogger(t *testing.T) {
 	jsonContent := `{
         "route": {"admin":["read"]}
     }`
@@ -178,7 +178,7 @@ func TestNewConfigLoader(t *testing.T) {
 	tempFile.Close()
 
 	// Test config loader
-	loader, err := NewConfigLoader(tempFile.Name(), 0)
+		loader, err := NewConfigLoaderWithLogger(tempFile.Name(), nil)
 	require.NoError(t, err)
 	assert.NotNil(t, loader)
 
@@ -198,7 +198,7 @@ func TestConfigLoader_GetConfig_ThreadSafe(t *testing.T) {
 	require.NoError(t, err)
 	tempFile.Close()
 
-	loader, err := NewConfigLoader(tempFile.Name(), 0)
+		loader, err := NewConfigLoaderWithLogger(tempFile.Name(), nil)
 	require.NoError(t, err)
 
 	// Concurrent reads
@@ -356,7 +356,7 @@ func TestConfigLoader_GetConfig_ConcurrentAccess(t *testing.T) {
 	require.NoError(t, err)
 	tempFile.Close()
 
-	loader, err := NewConfigLoader(tempFile.Name(), 0)
+	loader, err := NewConfigLoaderWithLogger(tempFile.Name(), nil)
 	require.NoError(t, err)
 
 	// Concurrent reads and writes
@@ -480,7 +480,6 @@ func TestConfig_GetterMethods(t *testing.T) {
 		PermissionConfig:  permissionConfig,
 		OverRides:         map[string]bool{"/health": true},
 		Logger:            mockLogger,
-		RequiresContainer: true,
 		EnablePermissions: true,
 	}
 
@@ -489,7 +488,6 @@ func TestConfig_GetterMethods(t *testing.T) {
 	assert.Equal(t, permissionConfig, config.GetPermissionConfig())
 	assert.Equal(t, map[string]bool{"/health": true}, config.GetOverRides())
 	assert.Equal(t, mockLogger, config.GetLogger())
-	assert.True(t, config.GetRequiresContainer())
 }
 
 func TestConfig_SetterMethods(t *testing.T) {
@@ -507,12 +505,6 @@ func TestConfig_SetterMethods(t *testing.T) {
 
 	config.SetLogger("not-a-logger")
 	assert.Equal(t, mockLogger, config.Logger) // Should remain unchanged
-
-	config.SetRequiresContainer(true)
-	assert.True(t, config.RequiresContainer)
-
-	config.SetRequiresContainer(false)
-	assert.False(t, config.RequiresContainer)
 
 	config.SetEnablePermissions(true)
 	assert.True(t, config.EnablePermissions)

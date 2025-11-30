@@ -46,16 +46,8 @@ func (*auditLogger) logAccess(logger Logger, req *http.Request, role, route stri
 // Middleware creates an HTTP middleware function that enforces RBAC authorization.
 // It extracts the user's role and checks if the role is allowed for the requested route.
 //
-// The container is only passed to RoleExtractorFunc when config.RequiresContainer is true.
-// This flag is automatically set by app.EnableRBAC*() methods:
-//   - Header-based RBAC: RequiresContainer = false (container not passed)
-//   - JWT-based RBAC: RequiresContainer = false (container not passed)
-//   - Database-based RBAC: RequiresContainer = true (container passed)
-//
-// This ensures container access is restricted and only available when needed for security.
-// Users should use app.EnableRBAC() with options (WithJWT, WithPermissions, etc.)
-// instead of calling this function directly.
-func Middleware(config *Config, args ...any) func(handler http.Handler) http.Handler {
+// Users should use app.EnableRBAC() with options instead of calling this function directly.
+func Middleware(config *Config) func(handler http.Handler) http.Handler {
 	return func(handler http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			// If config is nil, allow all requests (fail open)
@@ -73,7 +65,7 @@ func Middleware(config *Config, args ...any) func(handler http.Handler) http.Han
 			}
 
 			// Extract role
-			role, err := extractRole(r, config, args)
+			role, err := extractRole(r, config)
 			if err != nil {
 				handleAuthError(w, r, config, "", route, err)
 				return
@@ -129,7 +121,7 @@ func handleAuthError(w http.ResponseWriter, r *http.Request, config *Config, rol
 }
 
 // extractRole extracts the user's role from the request using the configured extractor.
-func extractRole(r *http.Request, config *Config, args []any) (string, error) {
+func extractRole(r *http.Request, config *Config) (string, error) {
 	if config.RoleExtractorFunc == nil {
 		if config.DefaultRole != "" {
 			return config.DefaultRole, nil
@@ -138,9 +130,8 @@ func extractRole(r *http.Request, config *Config, args []any) (string, error) {
 		return "", ErrRoleNotFound
 	}
 
-	extractorArgs := buildExtractorArgs(config, args)
-
-	role, err := config.RoleExtractorFunc(r, extractorArgs...)
+	// Role extractor is called without any args (no container access)
+	role, err := config.RoleExtractorFunc(r)
 	if err != nil {
 		if config.DefaultRole != "" {
 			return config.DefaultRole, nil
@@ -160,56 +151,6 @@ func extractRole(r *http.Request, config *Config, args []any) (string, error) {
 	}
 
 	return role, nil
-}
-
-// buildExtractorArgs builds the arguments to pass to the role extractor function.
-func buildExtractorArgs(config *Config, args []any) []any {
-	if config.RequiresContainer {
-		return buildContainerArgs(args)
-	}
-
-	return buildNonContainerArgs(args)
-}
-
-// buildContainerArgs builds args for database-based extraction (includes container).
-func buildContainerArgs(args []any) []any {
-	extractorArgs := []any{}
-
-	if len(args) == 0 {
-		return extractorArgs
-	}
-
-	// Container is passed as any - we just forward it to the extractor
-	if len(args) > 0 && args[0] != nil {
-		extractorArgs = append(extractorArgs, args[0])
-
-		// Append any additional args
-		if len(args) > 1 {
-			extractorArgs = append(extractorArgs, args[1:]...)
-		}
-	}
-
-	return extractorArgs
-}
-
-// buildNonContainerArgs builds args for header/JWT-based extraction (skips container).
-func buildNonContainerArgs(args []any) []any {
-	if len(args) == 0 {
-		return []any{}
-	}
-
-	startIdx := 0
-	// Skip first arg if it's a container (when RequiresContainer is false)
-	// We assume the first arg is ALWAYS the container (or nil placeholder)
-	if len(args) > 0 {
-		startIdx = 1
-	}
-
-	if startIdx >= len(args) {
-		return []any{}
-	}
-
-	return args[startIdx:]
 }
 
 // checkAuthorization checks if the user is authorized to access the route.

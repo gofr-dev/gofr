@@ -1,12 +1,9 @@
-package gofr
+package rbac
 
-import (
-	"net/http"
-)
+import "net/http"
 
 // RBACConfig is the minimal interface for RBAC configuration.
-// This interface matches rbac.RBACConfig to allow rbac.Config to implement it.
-// The actual interface is defined in rbac package to avoid cyclic imports.
+// This interface is defined in the rbac package to avoid cyclic imports.
 type RBACConfig interface {
 	// GetRouteWithPermissions returns the route-to-roles mapping
 	GetRouteWithPermissions() map[string][]string
@@ -44,28 +41,9 @@ type RBACConfig interface {
 // RoleExtractor extracts the user's role from the HTTP request.
 type RoleExtractor func(req *http.Request, args ...any) (string, error)
 
-// PermissionConfig is the interface for permission-based access control.
-type PermissionConfig interface {
-	GetPermissions() map[string][]string
-	GetRoutePermissionMap() map[string]string
-	GetRolePermissions() map[string][]string
-	GetRoutePermissionRules() []RoutePermissionRule
-}
-
-// RoutePermissionRule defines a rule for mapping routes to permissions.
-type RoutePermissionRule struct {
-	Methods    []string `json:"methods" yaml:"methods"`
-	Path       string   `json:"path,omitempty" yaml:"path,omitempty"`
-	Regex      string   `json:"regex,omitempty" yaml:"regex,omitempty"`
-	Permission string   `json:"permission" yaml:"permission"`
-}
-
-// RBACOption is an interface for RBAC configuration options.
+// Options is an interface for RBAC configuration options.
 // This follows the same pattern as service.Options for consistency.
-// The method name is AddOption to match service.Options pattern.
-type RBACOption interface {
+type Options interface {
 	AddOption(config RBACConfig) RBACConfig
 }
 
-// RBACHandlerFunc is a function type for RBAC handler wrappers.
-type RBACHandlerFunc func(ctx any) (any, error)

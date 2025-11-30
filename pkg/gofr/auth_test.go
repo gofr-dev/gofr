@@ -12,7 +12,7 @@ import (
 	gofrHTTP "gofr.dev/pkg/gofr/http"
 )
 
-func TestEnableRBAC_WithoutModule(_ *testing.T) {
+func TestEnableRBAC_WithoutProvider(t *testing.T) {
 	app := &App{
 		container: container.NewContainer(config.NewMockConfig(nil)),
 		httpServer: &httpServer{
@@ -20,12 +20,9 @@ func TestEnableRBAC_WithoutModule(_ *testing.T) {
 		},
 	}
 
-	app.EnableRBAC(
-		WithPermissionsFile("test.json"),
-		WithRoleExtractor(func(_ *http.Request, _ ...any) (string, error) {
-			return "admin", nil
-		}),
-	)
+	// Test new API - EnableRBAC requires provider
+	app.EnableRBAC(nil, "test.json")
+	// Should log error about nil provider
 }
 
 func TestEnableRBAC_NoConfigProvided(_ *testing.T) {
@@ -36,70 +33,46 @@ func TestEnableRBAC_NoConfigProvided(_ *testing.T) {
 		},
 	}
 
-	app.EnableRBAC()
+	// Create a mock provider
+	mockProvider := &mockRBACProvider{}
+	app.EnableRBAC(mockProvider, "") // Empty string uses default paths
 }
 
-func TestRBACOptions_WithPermissionsFile(t *testing.T) {
-	opts := &RBACOptions{}
-	WithPermissionsFile("test.json")(opts)
-	assert.Equal(t, "test.json", opts.PermissionsFile)
+// mockRBACProvider is a minimal mock for testing
+type mockRBACProvider struct{}
+
+func (m *mockRBACProvider) LoadPermissions(file string) (any, error) {
+	return nil, nil
 }
 
-func TestRBACOptions_WithRoleExtractor(t *testing.T) {
-	opts := &RBACOptions{}
-	extractor := func(_ *http.Request, _ ...any) (string, error) {
-		return "admin", nil
+func (m *mockRBACProvider) GetMiddleware(config any) func(http.Handler) http.Handler {
+	return func(handler http.Handler) http.Handler {
+		return handler
 	}
-	WithRoleExtractor(extractor)(opts)
-	assert.NotNil(t, opts.RoleExtractor)
 }
 
-func TestRBACOptions_WithConfig(t *testing.T) {
-	opts := &RBACOptions{}
-	// Note: We can't create a real RBACConfig without importing the RBAC module
-	// This test just verifies the option function works
-	WithConfig(nil)(opts)
-	assert.Nil(t, opts.Config)
+func (m *mockRBACProvider) RequireRole(allowedRole string, handlerFunc func(any) (any, error)) func(any) (any, error) {
+	return handlerFunc
 }
 
-func TestRBACOptions_WithJWT(t *testing.T) {
-	opts := &RBACOptions{}
-	WithJWT("role")(opts)
-	assert.Equal(t, "role", opts.JWTRoleClaim)
+func (m *mockRBACProvider) RequireAnyRole(allowedRoles []string, handlerFunc func(any) (any, error)) func(any) (any, error) {
+	return handlerFunc
 }
 
-func TestRBACOptions_WithPermissions(t *testing.T) {
-	opts := &RBACOptions{}
-	// Note: We can't create a real PermissionConfig without importing the RBAC module
-	// This test just verifies the option function works
-	WithPermissions(nil)(opts)
-	assert.Nil(t, opts.PermissionConfig)
-	assert.False(t, opts.RequiresContainer)
+func (m *mockRBACProvider) RequirePermission(requiredPermission string, permissionConfig any, handlerFunc func(any) (any, error)) func(any) (any, error) {
+	return handlerFunc
 }
 
-func TestRBACOptions_WithRequiresContainer(t *testing.T) {
-	opts := &RBACOptions{}
-	WithRequiresContainer(true)(opts)
-	assert.True(t, opts.RequiresContainer)
-
-	WithRequiresContainer(false)(opts)
-	assert.False(t, opts.RequiresContainer)
+func (m *mockRBACProvider) ErrAccessDenied() error {
+	return nil
 }
 
-func TestRBACOptions_MultipleOptions(t *testing.T) {
-	opts := &RBACOptions{}
-	extractor := func(_ *http.Request, _ ...any) (string, error) {
-		return "admin", nil
-	}
-
-	WithPermissionsFile("test.json")(opts)
-	WithRoleExtractor(extractor)(opts)
-	WithRequiresContainer(true)(opts)
-
-	assert.Equal(t, "test.json", opts.PermissionsFile)
-	assert.NotNil(t, opts.RoleExtractor)
-	assert.True(t, opts.RequiresContainer)
+func (m *mockRBACProvider) ErrPermissionDenied() error {
+	return nil
 }
+
+// Old functional options tests removed - new API uses interface-based options
+// See examples/rbac for usage of new API with HeaderRoleExtractor, JWTExtractor, etc.
 
 func TestRequireRole_WithoutModule(t *testing.T) {
 	handler := func(_ *Context) (any, error) {
@@ -109,7 +82,9 @@ func TestRequireRole_WithoutModule(t *testing.T) {
 	wrapped := RequireRole("admin", handler)
 	require.NotNil(t, wrapped)
 
-	ctx := &Context{}
+	ctx := &Context{
+		Container: container.NewContainer(config.NewMockConfig(nil)),
+	}
 	result, err := wrapped(ctx)
 	assert.Nil(t, result)
 	require.Error(t, err)
@@ -124,7 +99,9 @@ func TestRequireAnyRole_WithoutModule(t *testing.T) {
 	wrapped := RequireAnyRole([]string{"admin", "editor"}, handler)
 	require.NotNil(t, wrapped)
 
-	ctx := &Context{}
+	ctx := &Context{
+		Container: container.NewContainer(config.NewMockConfig(nil)),
+	}
 	result, err := wrapped(ctx)
 	assert.Nil(t, result)
 	require.Error(t, err)
@@ -139,7 +116,9 @@ func TestRequirePermission_WithoutModule(t *testing.T) {
 	wrapped := RequirePermission("users:read", nil, handler)
 	require.NotNil(t, wrapped)
 
-	ctx := &Context{}
+	ctx := &Context{
+		Container: container.NewContainer(config.NewMockConfig(nil)),
+	}
 	result, err := wrapped(ctx)
 	assert.Nil(t, result)
 	require.Error(t, err)

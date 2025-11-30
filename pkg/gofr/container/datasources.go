@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"database/sql"
+	"net/http"
 	"time"
 
 	"github.com/redis/go-redis/v9"
@@ -836,4 +837,32 @@ type InfluxDBProvider interface {
 	InfluxDB
 
 	provider
+}
+
+// RBACProvider is the interface for RBAC implementations.
+// External RBAC modules (like gofr.dev/pkg/gofr/rbac) implement this interface.
+// This follows the same pattern as datasource providers (e.g., MongoProvider, PostgresProvider).
+// Note: This interface uses `any` for types to avoid cyclic imports with gofr package.
+type RBACProvider interface {
+	// LoadPermissions loads RBAC configuration from a file
+	LoadPermissions(file string) (any, error)
+
+	// GetMiddleware returns the middleware function for the given config
+	// The returned function should be compatible with http.Handler middleware pattern
+	GetMiddleware(config any) func(http.Handler) http.Handler
+
+	// RequireRole wraps a handler to require a specific role
+	RequireRole(allowedRole string, handlerFunc func(any) (any, error)) func(any) (any, error)
+
+	// RequireAnyRole wraps a handler to require any of the specified roles
+	RequireAnyRole(allowedRoles []string, handlerFunc func(any) (any, error)) func(any) (any, error)
+
+	// RequirePermission wraps a handler to require a specific permission
+	RequirePermission(requiredPermission string, permissionConfig any, handlerFunc func(any) (any, error)) func(any) (any, error)
+
+	// ErrAccessDenied returns the error used when access is denied
+	ErrAccessDenied() error
+
+	// ErrPermissionDenied returns the error used when permission is denied
+	ErrPermissionDenied() error
 }

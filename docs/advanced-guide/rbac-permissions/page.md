@@ -6,11 +6,14 @@ Permission-Based Access Control (PBAC) extends Role-Based Access Control (RBAC) 
 
 GoFr's permission-based RBAC provides:
 
+- ✅ **Factory Function Pattern** - `app.EnableRBAC()` follows the same pattern as `app.AddMongo()`, `app.AddPostgres()` - automatically registers RBAC when called
 - ✅ **Fine-Grained Control** - Define permissions like `users:read`, `users:write`, `users:delete`
-- ✅ **Route-to-Permission Mapping** - Map HTTP methods and routes to specific permissions
-- ✅ **Role-to-Permission Mapping** - Assign permissions to roles
+- ✅ **Structured Route Rules** - Map HTTP methods and routes to specific permissions using flexible regex patterns
+- ✅ **Role-Centric Permissions** - Intuitive model where roles define what they can do
+- ✅ **Automatic Route Protection** - Middleware automatically checks permissions - no route-level wrappers needed
 - ✅ **Fallback to Role-Based** - Automatically falls back to role-based checks when permission mapping is missing
-- ✅ **Handler-Level Checks** - Use `gofr.RequirePermission()` for explicit permission checks in handlers
+
+> **Note**: `app.EnableRBAC()` follows the same factory function pattern used throughout GoFr for datasource registration. Just like you use `app.AddMongo(db)` to register MongoDB, you use `app.EnableRBAC()` to register and configure RBAC. When using RBAC options (e.g., `&rbac.JWTExtractor{}`), you must import the rbac package: `import "gofr.dev/pkg/gofr/rbac"`.
 
 ## Quick Start
 
@@ -20,81 +23,58 @@ GoFr's permission-based RBAC provides:
 package main
 
 import (
-	"fmt"
-	"net/http"
 	"gofr.dev/pkg/gofr"
-	"gofr.dev/pkg/gofr/rbac"
 )
 
 func main() {
 	app := gofr.New()
 
-	// Load base RBAC configuration
-	config, err := rbac.LoadPermissions("configs/rbac.json")
-	if err != nil {
-		app.Logger().Error("Failed to load RBAC config: ", err)
-		return
-	}
-
-	// Configure permission-based access control
-	config.PermissionConfig = &rbac.PermissionConfig{
-		Permissions: map[string][]string{
-			"users:read":   {"admin", "editor", "viewer"},
-			"users:write":  {"admin", "editor"},
-			"users:delete": {"admin"},
-			"posts:read":   {"admin", "author", "viewer"},
-			"posts:write":  {"admin", "author"},
-		},
-		RoutePermissionMap: map[string]string{
-			"GET /api/users":    "users:read",
-			"POST /api/users":   "users:write",
-			"DELETE /api/users": "users:delete",
-			"GET /api/posts":    "posts:read",
-			"POST /api/posts":   "posts:write",
-		},
-	}
-
 	// Enable RBAC with permissions
-	app.EnableRBAC(
-		gofr.WithConfig(config),
-		gofr.WithRoleExtractor(func(req *http.Request, args ...any) (string, error) {
-			role := req.Header.Get("X-User-Role")
-			if role == "" {
-				return "", fmt.Errorf("role header not found")
-			}
-			return role, nil
-		}),
-		gofr.WithPermissions(config.PermissionConfig),
-	)
+	// Config file defines all permissions and route mappings
+	// EnableRBAC is a factory function that registers RBAC automatically
+	app.EnableRBAC() // Uses configs/rbac.json by default
 
-	// Example routes
-	app.GET("/api/users", getAllUsers)
-	app.POST("/api/users", createUser)
-	app.DELETE("/api/users", gofr.RequirePermission("users:delete", config.PermissionConfig, deleteUser))
-	app.GET("/api/posts", getAllPosts)
-	app.POST("/api/posts", createPost)
+	// Example routes - permissions checked automatically by middleware
+	app.GET("/api/users", getAllUsers)        // Auto-checked: users:read
+	app.POST("/api/users", createUser)       // Auto-checked: users:write
+	app.DELETE("/api/users/:id", deleteUser) // Auto-checked: users:delete
 
 	app.Run()
 }
+```
 
-func getAllUsers(ctx *gofr.Context) (interface{}, error) {
-	return map[string]string{"message": "Users list"}, nil
-}
+**Configuration** (`configs/rbac.json`):
 
-func createUser(ctx *gofr.Context) (interface{}, error) {
-	return map[string]string{"message": "User created"}, nil
-}
-
-func deleteUser(ctx *gofr.Context) (interface{}, error) {
-	return map[string]string{"message": "User deleted"}, nil
-}
-
-func getAllPosts(ctx *gofr.Context) (interface{}, error) {
-	return map[string]string{"message": "Posts list"}, nil
-}
-
-func createPost(ctx *gofr.Context) (interface{}, error) {
-	return map[string]string{"message": "Post created"}, nil
+```json
+{
+  "roleHeader": "X-User-Role",
+  "route": {
+    "/api/*": ["admin", "editor"]
+  },
+  "permissions": {
+    "rolePermissions": {
+      "admin": ["users:read", "users:write", "users:delete"],
+      "editor": ["users:read", "users:write"],
+      "viewer": ["users:read"]
+    },
+    "routePermissionRules": [
+      {
+        "methods": ["GET"],
+        "regex": "^/api/users(/.*)?$",
+        "permission": "users:read"
+      },
+      {
+        "methods": ["POST", "PUT"],
+        "regex": "^/api/users(/.*)?$",
+        "permission": "users:write"
+      },
+      {
+        "methods": ["DELETE"],
+        "regex": "^/api/users/\\d+$",
+        "permission": "users:delete"
+      }
+    ]
+  }
 }
 ```
 
@@ -125,74 +105,94 @@ if !authorized {
 }
 ```
 
+**Benefits of Fallback**:
+- Provides safety net when permission mappings are missing
+- Allows gradual migration from role-based to permission-based
+- Ensures routes are always protected even if permission config is incomplete
+
 ### Permission Flow
 
 1. **Request arrives** → Middleware extracts user role
-2. **Permission check** → Checks if route has a permission mapping
+2. **Permission check** → Checks if route matches a permission rule
 3. **Role validation** → Verifies if user's role has the required permission
 4. **Fallback** → If no permission mapping exists, falls back to role-based check
 5. **Authorization decision** → Allow or deny based on the checks
 
 ## Configuration
 
-### Permission Structure
+### Role-Centric Permission Model
 
-```go
-type PermissionConfig struct {
-    // Permissions maps permission names to roles that have them
-    Permissions map[string][]string
-    
-    // RoutePermissionMap maps "METHOD /path" to permission names
-    RoutePermissionMap map[string]string
-}
-```
-
-### Example Configuration
-
-```go
-config.PermissionConfig = &rbac.PermissionConfig{
-    Permissions: map[string][]string{
-        // Permission: [roles that have this permission]
-        "users:read":   {"admin", "editor", "viewer"},
-        "users:write":  {"admin", "editor"},
-        "users:delete": {"admin"},
-        "posts:read":   {"admin", "author", "viewer"},
-        "posts:write":  {"admin", "author"},
-        "posts:delete": {"admin"},
-    },
-    RoutePermissionMap: map[string]string{
-        // "METHOD /path": "permission"
-        "GET /api/users":    "users:read",
-        "POST /api/users":   "users:write",
-        "DELETE /api/users": "users:delete",
-        "GET /api/posts":    "posts:read",
-        "POST /api/posts":   "posts:write",
-        "DELETE /api/posts": "posts:delete",
-    },
-}
-```
-
-### JSON Configuration (Alternative)
-
-You can also define permissions in the JSON config file:
+GoFr uses a **role-centric** permission model, which is more intuitive than the traditional permission-centric model:
 
 ```json
 {
-  "permissions": {
-    "permissions": {
-      "users:read": ["admin", "editor", "viewer"],
-      "users:write": ["admin", "editor"],
-      "users:delete": ["admin"]
-    },
-    "routePermissions": {
-      "GET /api/users": "users:read",
-      "POST /api/users": "users:write",
-      "DELETE /api/users": "users:delete"
-    }
-  },
-  "enablePermissions": true
+  "rolePermissions": {
+    "admin": ["users:read", "users:write", "users:delete"],
+    "editor": ["users:read", "users:write"],
+    "viewer": ["users:read"]
+  }
 }
 ```
+
+**Why Role-Centric?**
+- ✅ Easy to see what a role can do (all permissions in one place)
+- ✅ Better for understanding role capabilities
+- ✅ More maintainable as roles change
+- ✅ Aligns with how developers think about access control
+
+### Structured Route Permission Rules
+
+The new `routePermissionRules` format provides flexible, structured route-to-permission mapping:
+
+```json
+{
+  "routePermissionRules": [
+    {
+      "methods": ["GET"],
+      "regex": "^/api/users(/.*)?$",
+      "permission": "users:read"
+    },
+    {
+      "methods": ["POST", "PUT"],
+      "path": "/api/users",
+      "permission": "users:write"
+    },
+    {
+      "methods": ["DELETE"],
+      "regex": "^/api/users/\\d+$",
+      "permission": "users:delete"
+    }
+  ]
+}
+```
+
+**Fields**:
+- `methods` (array): HTTP methods (GET, POST, PUT, DELETE, PATCH, etc.). Empty or `["*"]` matches all methods
+- `path` (string): Path pattern (supports wildcards). Used when `regex` is not provided
+- `regex` (string): Regular expression pattern. Takes precedence over `path` if both are provided
+- `permission` (string): Required permission for matching routes
+
+**Benefits**:
+- ✅ Supports multiple HTTP methods per rule
+- ✅ Flexible regex patterns for complex route matching
+- ✅ More readable than string-based `"METHOD /path"` format
+- ✅ Easier to maintain and extend
+
+### Legacy Format Support
+
+For backward compatibility, the legacy `routePermissions` format is still supported:
+
+```json
+{
+  "routePermissions": {
+    "GET /api/users": "users:read",
+    "POST /api/users": "users:write",
+    "DELETE /api/users": "users:delete"
+  }
+}
+```
+
+> **Note**: `routePermissionRules` takes precedence over `routePermissions` if both are provided.
 
 ## Permission Naming Conventions
 
@@ -215,218 +215,24 @@ Use the format: `resource:action`
 "reports:export"  // Export reports
 ```
 
-### Alternative Formats
+## Automatic Route Protection
 
-You can use any format that works for your application:
-
-```go
-"read_users"      // Alternative format
-"write_users"
-"delete_users"
-"user.read"       // Dot notation
-"user.write"
-"user.delete"
-```
-
-## Route-to-Permission Mapping
-
-### Format
-
-The route permission map uses the format: `"METHOD /path"`
+With the new API, middleware automatically checks permissions based on `routePermissionRules`. You **don't need** to add `RequirePermission()` at the route level:
 
 ```go
-RoutePermissionMap: map[string]string{
-    "GET /api/users":      "users:read",
-    "POST /api/users":     "users:write",
-    "PUT /api/users/:id":  "users:write",
-    "DELETE /api/users/:id": "users:delete",
-}
+// ✅ Good: Middleware automatically checks permissions
+app.GET("/api/users", getAllUsers)
+app.POST("/api/users", createUser)
+app.DELETE("/api/users/:id", deleteUser)
+
+// ❌ Not needed: Middleware already checks permissions
+// app.DELETE("/api/users/:id", gofr.RequirePermission("users:delete", config, deleteUser))
 ```
 
-### Wildcard Support
-
-Route patterns support wildcards:
-
-```go
-RoutePermissionMap: map[string]string{
-    "GET /api/users/*":    "users:read",   // All GET requests under /api/users/
-    "POST /api/*":         "admin:write",  // All POST requests under /api/
-    "* /api/admin/*":      "admin:all",    // All methods under /api/admin/
-}
-```
-
-### Method Matching
-
-- `GET` - Matches GET requests
-- `POST` - Matches POST requests
-- `PUT` - Matches PUT requests
-- `DELETE` - Matches DELETE requests
-- `PATCH` - Matches PATCH requests
-- `*` - Matches any HTTP method
-
-## Handler-Level Permission Checks
-
-### Using `gofr.RequirePermission()`
-
-For explicit permission checks in handlers:
-
-```go
-app.DELETE("/api/users/:id", gofr.RequirePermission("users:delete", config.PermissionConfig, deleteUser))
-```
-
-### Example
-
-```go
-func deleteUser(ctx *gofr.Context) (interface{}, error) {
-    // This handler will only be called if the user has "users:delete" permission
-    userID := ctx.PathParam("id")
-    
-    // Delete user logic here
-    return map[string]string{"message": "User deleted"}, nil
-}
-```
-
-### Multiple Permission Checks
-
-You can chain permission checks:
-
-```go
-app.PUT("/api/users/:id", 
-    gofr.RequirePermission("users:write", config.PermissionConfig,
-        gofr.RequirePermission("users:update", config.PermissionConfig, updateUser)))
-```
-
-## Why Load from File When Defining Permissions in Code?
-
-This is a common question when working with permission-based RBAC in GoFr. Let's understand the design rationale.
-
-### The Config File Serves Multiple Purposes
-
-#### 1. **Fallback Authorization**
-
-The `RouteWithPermissions` in the config file acts as a **fallback** when:
-- Permission mapping is not found for a route
-- You want to use both permission-based AND role-based checks together
-- Routes don't have explicit permission mappings
-
-**Example**:
-```json
-{
-  "route": {
-    "/api/*": ["admin", "editor"]  // Fallback: any route under /api/* requires admin or editor
-  },
-  "enablePermissions": true
-}
-```
-
-Even if a route like `/api/unknown` doesn't have a permission mapping, it will still be checked against the role-based fallback (`/api/*` requires admin/editor).
-
-#### 2. **Other Configuration Settings**
-
-The config file contains important settings beyond permissions:
-
-```json
-{
-  "route": {
-    "/api/*": ["admin", "editor"]
-  },
-  "overrides": {
-    "/health": true,        // Public routes
-    "/metrics": true
-  },
-  "defaultRole": "viewer",  // Default when role extraction fails
-  "roleHierarchy": {        // Role inheritance
-    "admin": ["editor", "viewer"]
-  },
-  "enablePermissions": true  // Enable permission checks
-}
-```
-
-#### 3. **Configuration Management Benefits**
-
-- **Environment Overrides**: Supports `RBAC_ROUTE_*` environment variables
-- **Separation of Concerns**: Route-level config in file, fine-grained permissions in code
-- **Version Control**: Config changes tracked separately from code
-
-### Alternative: Pure Code-Based Configuration
-
-You can also create the config entirely in code without loading from a file:
-
-```go
-config := &rbac.Config{
-    RouteWithPermissions: map[string][]string{
-        "/api/*": {"admin", "editor"},
-    },
-    OverRides: map[string]bool{
-        "/health": true,
-    },
-    DefaultRole: "viewer",
-    EnablePermissions: true,
-    PermissionConfig: &rbac.PermissionConfig{
-        Permissions: map[string][]string{
-            "users:read": {"admin", "editor", "viewer"},
-            "users:write": {"admin", "editor"},
-        },
-        RoutePermissionMap: map[string]string{
-            "GET /api/users": "users:read",
-            "POST /api/users": "users:write",
-        },
-    },
-}
-
-app.EnableRBAC(
-	gofr.WithConfig(config),
-)
-```
-
-### When to Use Each Approach
-
-#### Use File-Based Config When:
-- ✅ Configuration changes frequently
-- ✅ Non-developers need to modify permissions
-- ✅ You want environment variable overrides
-- ✅ You need fallback role-based authorization
-
-#### Use Pure Code-Based Config When:
-- ✅ Permissions are static and rarely change
-- ✅ All configuration is managed in code
-- ✅ You want everything in one place
-
-### Recommended Pattern
-
-For permission-based RBAC, the recommended pattern is:
-
-1. **Minimal config file** with route-level fallbacks and settings:
-   ```json
-   {
-     "route": {
-       "/api/*": ["admin", "editor"]
-     },
-     "enablePermissions": true,
-     "overrides": {
-       "/health": true
-     }
-   }
-   ```
-
-2. **Fine-grained permissions in code**:
-   ```go
-   config.PermissionConfig = &rbac.PermissionConfig{
-       Permissions: map[string][]string{
-           "users:read": {"admin", "editor", "viewer"},
-           "users:write": {"admin", "editor"},
-       },
-       RoutePermissionMap: map[string]string{
-           "GET /api/users": "users:read",
-           "POST /api/users": "users:write",
-       },
-   }
-   ```
-
-This gives you:
-- **Flexibility**: Fine-grained permissions in code (easy to maintain)
-- **Safety**: Route-level fallback from config file
-- **Best of Both**: Code for complex logic, file for simple route rules
+**When to use `RequirePermission()`**:
+- For programmatic checks within handlers
+- For dynamic, conditional permissions
+- For fine-grained checks that can't be expressed in route rules
 
 ## Implementation Patterns
 
@@ -437,17 +243,10 @@ This gives you:
 **Example**: [Permission-Based RBAC (Header) Example](https://github.com/gofr-dev/gofr/tree/main/examples/rbac/permissions-header)
 
 ```go
-app.EnableRBAC(
-	gofr.WithConfig(config),
-	gofr.WithRoleExtractor(func(req *http.Request, args ...any) (string, error) {
-		role := req.Header.Get("X-User-Role")
-		if role == "" {
-			return "", fmt.Errorf("role header not found")
-		}
-		return role, nil
-	}),
-	gofr.WithPermissions(config.PermissionConfig),
-)
+app := gofr.New()
+
+// Enable RBAC - config file defines roleHeader and permissions
+app.EnableRBAC() // Uses configs/rbac.json by default
 ```
 
 ### 2. Permission-Based RBAC (JWT)
@@ -457,56 +256,114 @@ app.EnableRBAC(
 **Example**: [Permission-Based RBAC (JWT) Example](https://github.com/gofr-dev/gofr/tree/main/examples/rbac/permissions-jwt)
 
 ```go
+app := gofr.New()
+
+// Enable OAuth middleware
 app.EnableOAuth("https://auth.example.com/.well-known/jwks.json", 10)
 
-app.EnableRBAC(
-	gofr.WithConfig(config),
-	gofr.WithJWT("role"),
-	gofr.WithPermissions(config.PermissionConfig),
-)
+// Enable RBAC with JWT and permissions
+app.EnableRBAC("", &rbac.JWTExtractor{Claim: "role"})
 ```
 
-### 3. Permission-Based RBAC (Database)
+## Common Patterns
 
-**Best for**: Dynamic roles, multi-tenant applications, admin-managed roles
+### Pattern 1: CRUD Permissions
 
-**Example**: [Permission-Based RBAC (Database) Example](https://github.com/gofr-dev/gofr/tree/main/examples/rbac/permissions-db)
-
-```go
-config.RoleExtractorFunc = func(req *http.Request, args ...any) (string, error) {
-    userID := req.Header.Get("X-User-ID")
-    if userID == "" {
-        return "", fmt.Errorf("user ID not found")
+```json
+{
+  "rolePermissions": {
+    "admin": ["users:create", "users:read", "users:update", "users:delete"],
+    "editor": ["users:create", "users:read", "users:update"],
+    "viewer": ["users:read"]
+  },
+  "routePermissionRules": [
+    {
+      "methods": ["POST"],
+      "regex": "^/api/users$",
+      "permission": "users:create"
+    },
+    {
+      "methods": ["GET"],
+      "regex": "^/api/users(/.*)?$",
+      "permission": "users:read"
+    },
+    {
+      "methods": ["PUT", "PATCH"],
+      "regex": "^/api/users/\\d+$",
+      "permission": "users:update"
+    },
+    {
+      "methods": ["DELETE"],
+      "regex": "^/api/users/\\d+$",
+      "permission": "users:delete"
     }
-
-    // Get container from args (automatically injected for database-based extraction)
-    if len(args) > 0 {
-        if cntr, ok := args[0].(*container.Container); ok && cntr != nil && cntr.SQL != nil {
-            var role string
-            err := cntr.SQL.QueryRowContext(req.Context(), "SELECT role FROM users WHERE id = ?", userID).Scan(&role)
-            if err != nil {
-                return "", err
-            }
-            return role, nil
-        }
-    }
-    
-    return "", fmt.Errorf("database not available")
+  ]
 }
-
-app.EnableRBAC(
-	gofr.WithConfig(config),
-	gofr.WithRoleExtractor(config.RoleExtractorFunc),
-	gofr.WithPermissions(config.PermissionConfig),
-	gofr.WithRequiresContainer(true),
-)
 ```
 
-> **Note**: The container is automatically passed to `RoleExtractorFunc` when using database-based role extraction. For header-based or JWT-based RBAC, the container is not needed and `args` will be empty.
+### Pattern 2: Resource-Specific Permissions
+
+```json
+{
+  "rolePermissions": {
+    "admin": ["own:posts:read", "own:posts:write", "all:posts:read", "all:posts:write"],
+    "author": ["own:posts:read", "own:posts:write"],
+    "viewer": ["own:posts:read", "all:posts:read"]
+  },
+  "routePermissionRules": [
+    {
+      "methods": ["GET"],
+      "regex": "^/api/posts/my-posts$",
+      "permission": "own:posts:read"
+    },
+    {
+      "methods": ["GET"],
+      "regex": "^/api/posts(/.*)?$",
+      "permission": "all:posts:read"
+    }
+  ]
+}
+```
 
 ## Best Practices
 
-### 1. Use Consistent Permission Naming
+### 1. Use Role-Centric Permissions
+
+```json
+{
+  "rolePermissions": {
+    "admin": ["users:read", "users:write", "users:delete"],
+    "editor": ["users:read", "users:write"],
+    "viewer": ["users:read"]
+  }
+}
+```
+
+**Benefits**:
+- Easy to see what each role can do
+- Better for understanding role capabilities
+- More maintainable
+
+### 2. Use Structured Route Rules
+
+```json
+{
+  "routePermissionRules": [
+    {
+      "methods": ["GET"],
+      "regex": "^/api/users(/.*)?$",
+      "permission": "users:read"
+    }
+  ]
+}
+```
+
+**Benefits**:
+- Supports multiple HTTP methods
+- Flexible regex patterns
+- More readable and maintainable
+
+### 3. Use Consistent Permission Naming
 
 ```go
 // Good: Consistent format
@@ -522,28 +379,21 @@ app.EnableRBAC(
 "DELETE_POSTS"
 ```
 
-### 2. Group Related Permissions
+### 4. Group Related Permissions
 
-```go
-Permissions: map[string][]string{
-    // User management
-    "users:read":   {"admin", "editor", "viewer"},
-    "users:write":  {"admin", "editor"},
-    "users:delete": {"admin"},
-    
-    // Post management
-    "posts:read":   {"admin", "author", "viewer"},
-    "posts:write":  {"admin", "author"},
-    "posts:delete": {"admin"},
-    
-    // Order management
-    "orders:read":    {"admin", "manager", "viewer"},
-    "orders:approve": {"admin", "manager"},
-    "orders:cancel":  {"admin"},
+```json
+{
+  "rolePermissions": {
+    "admin": [
+      "users:read", "users:write", "users:delete",
+      "posts:read", "posts:write", "posts:delete",
+      "orders:read", "orders:approve", "orders:cancel"
+    ]
+  }
 }
 ```
 
-### 3. Use Fallback Routes
+### 5. Use Fallback Routes
 
 Always define fallback routes in your config file:
 
@@ -558,7 +408,7 @@ Always define fallback routes in your config file:
 
 This ensures routes without explicit permission mappings are still protected.
 
-### 4. Document Permission Requirements
+### 6. Document Permission Requirements
 
 Document which permissions are required for each endpoint:
 
@@ -568,7 +418,7 @@ Document which permissions are required for each endpoint:
 // DELETE /api/users/:id - Requires: users:delete
 ```
 
-### 5. Test Permission Checks
+### 7. Test Permission Checks
 
 Write integration tests to verify permission checks:
 
@@ -580,84 +430,55 @@ func TestPermissionChecks(t *testing.T) {
 }
 ```
 
-## Common Patterns
+### 8. Let Middleware Handle Checks
 
-### Pattern 1: CRUD Permissions
-
-```go
-Permissions: map[string][]string{
-    "users:create": {"admin", "editor"},
-    "users:read":   {"admin", "editor", "viewer"},
-    "users:update": {"admin", "editor"},
-    "users:delete": {"admin"},
-},
-RoutePermissionMap: map[string]string{
-    "POST /api/users":     "users:create",
-    "GET /api/users":      "users:read",
-    "PUT /api/users/:id":  "users:update",
-    "DELETE /api/users/:id": "users:delete",
-},
-```
-
-### Pattern 2: Hierarchical Permissions
+Don't add `RequirePermission()` at route level unless needed for programmatic checks:
 
 ```go
-Permissions: map[string][]string{
-    "users:read":   {"admin", "editor", "viewer"},
-    "users:write":  {"admin", "editor"},      // Includes read implicitly
-    "users:delete": {"admin"},                // Includes read and write implicitly
-},
-```
+// ✅ Good: Middleware automatically checks
+app.DELETE("/api/users/:id", deleteUser)
 
-### Pattern 3: Resource-Specific Permissions
-
-```go
-Permissions: map[string][]string{
-    "own:posts:read":   {"admin", "author", "viewer"},
-    "own:posts:write":  {"admin", "author"},
-    "all:posts:read":  {"admin", "editor"},
-    "all:posts:write":  {"admin", "editor"},
-},
+// ❌ Not needed: Middleware already checks
+// app.DELETE("/api/users/:id", gofr.RequirePermission("users:delete", config, deleteUser))
 ```
 
 ## Troubleshooting
 
 ### Permission Check Not Working
 
-1. **Verify `enablePermissions` is true** in config
-2. **Check route format** - Must be `"METHOD /path"` (e.g., `"GET /api/users"`)
+1. **Verify `rolePermissions` is configured** - Check that roles have permissions assigned
+2. **Check route rule format** - Ensure `routePermissionRules` match your routes correctly
 3. **Verify role extraction** - Ensure role is being extracted correctly
-4. **Check permission mapping** - Ensure route has a permission mapping
+4. **Check permission mapping** - Ensure route matches a permission rule
 5. **Review fallback** - Check if role-based fallback is allowing access
 
 ### Permission Always Denied
 
 1. **Check role assignment** - Verify user's role has the required permission
-2. **Review permission config** - Ensure `PermissionConfig` is properly set
-3. **Check route matching** - Verify route pattern matches exactly
+2. **Review permission config** - Ensure `rolePermissions` is properly set
+3. **Check route matching** - Verify route pattern/regex matches exactly
 4. **Enable debug logging** - Check audit logs for authorization decisions
 
 ### Permission Always Allowed
 
 1. **Check fallback routes** - Fallback might be too permissive
-2. **Verify permission check** - Ensure `EnablePermissions` is true
-3. **Review route mapping** - Ensure route has a permission mapping
+2. **Verify permission check** - Ensure `PermissionConfig` is set
+3. **Review route mapping** - Ensure route matches a permission rule
 
 ## Related Documentation
 
-- [Role-Based Access Control (RBAC)](https://gofr.dev/docs/advanced-guide/rbac) - Complete RBAC guide
+- [Role-Based Access Control (RBAC)](./rbac/page.md) - Complete RBAC guide
 - [HTTP Authentication](https://gofr.dev/docs/advanced-guide/http-authentication) - Authentication methods
 - [Permission-Based RBAC Examples](https://github.com/gofr-dev/gofr/tree/main/examples/rbac) - Working examples
+- [RBAC Architecture](./rbac/ARCHITECTURE.md) - Code execution flow
 
 ## Examples
 
 - [Permission-Based RBAC (Header)](https://github.com/gofr-dev/gofr/tree/main/examples/rbac/permissions-header) - Header-based role extraction with permissions
 - [Permission-Based RBAC (JWT)](https://github.com/gofr-dev/gofr/tree/main/examples/rbac/permissions-jwt) - JWT-based role extraction with permissions
-- [Permission-Based RBAC (Database)](https://github.com/gofr-dev/gofr/tree/main/examples/rbac/permissions-db) - Database-based role extraction with permissions
 
 Each example includes:
 - Complete working code
 - Configuration files
 - Integration tests
 - Detailed README with setup instructions
-

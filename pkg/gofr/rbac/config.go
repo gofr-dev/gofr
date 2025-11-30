@@ -9,9 +9,7 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
-	"time"
 
-	"gofr.dev/pkg/gofr"
 	"gopkg.in/yaml.v3"
 )
 
@@ -26,27 +24,14 @@ type Config struct {
 	// Example: "/api/users": ["admin", "editor"]
 	RouteWithPermissions map[string][]string `json:"route" yaml:"route"`
 
+	// RoleHeader specifies the HTTP header key for role extraction
+	// Example: "X-User-Role"
+	// If set, automatically creates a header-based role extractor
+	RoleHeader string `json:"roleHeader,omitempty" yaml:"roleHeader,omitempty"`
+
 	// RoleExtractorFunc extracts the user's role from the HTTP request
 	// This function is called for each request to determine the user's role
-	// The container (if available) is passed as the first argument in args
-	// Container is only provided when using database-based role extraction
-	// For header-based or JWT-based RBAC, args will be empty
-	// Users can access container.SQL, container.Redis, etc. to use datasources
-	// Example (header-based - no container needed):
-	//   RoleExtractorFunc: func(req *http.Request, args ...any) (string, error) {
-	//       return req.Header.Get("X-User-Role"), nil
-	//   }
-	// Example (database-based - container provided):
-	//   RoleExtractorFunc: func(req *http.Request, args ...any) (string, error) {
-	//       if len(args) > 0 {
-	//           // Container is passed as first argument when RequiresContainer is true
-	//           // Type assert to your container type to access datasources
-	//           // var role string
-	//           // err := container.SQL.QueryRowContext(req.Context(), "SELECT role FROM users WHERE id = ?", userID).Scan(&role)
-	//           // return role, err
-	//       }
-	//       return "", fmt.Errorf("database not available")
-	//   }
+	// Args will be empty for header/JWT-based extraction
 	RoleExtractorFunc func(req *http.Request, args ...any) (string, error)
 
 	// OverRides allows bypassing authorization for specific routes
@@ -55,6 +40,8 @@ type Config struct {
 
 	// DefaultRole is used when no role can be extracted
 	// If empty, missing role results in unauthorized error
+	// ⚠️ Security Warning: Using defaultRole can be a security flaw if not carefully considered.
+	// Only use for internal services in trusted networks or development/testing environments.
 	DefaultRole string `json:"defaultRole,omitempty" yaml:"defaultRole,omitempty"`
 
 	// ErrorHandler is called when authorization fails
@@ -66,8 +53,8 @@ type Config struct {
 	PermissionConfig *PermissionConfig `json:"permissions,omitempty" yaml:"permissions,omitempty"`
 
 	// EnablePermissions enables permission-based checks
-	// If true, permission checks are performed in addition to role checks
-	EnablePermissions bool `json:"enablePermissions,omitempty" yaml:"enablePermissions,omitempty"`
+	// Auto-detected from PermissionConfig presence, but can be set explicitly
+	EnablePermissions bool `json:"-" yaml:"-"`
 
 	// RoleHierarchy defines role inheritance relationships
 	// Example: "admin": ["editor", "author", "viewer"]
@@ -77,12 +64,6 @@ type Config struct {
 	// If nil, audit logging will be skipped
 	// Audit logging is automatically performed when Logger is set
 	Logger Logger `json:"-" yaml:"-"`
-
-	// RequiresContainer indicates if the RoleExtractorFunc needs access to the container
-	// This flag determines whether the container is passed to RoleExtractorFunc
-	// Set to true for database-based role extraction, false for header/JWT-based extraction
-	// When false, the container is not passed to middleware, improving security and clarity
-	RequiresContainer bool `json:"-" yaml:"-"`
 }
 
 // LoadPermissions loads RBAC configuration from a JSON or YAML file.
@@ -121,6 +102,15 @@ func LoadPermissions(path string) (*Config, error) {
 
 	if config.OverRides == nil {
 		config.OverRides = make(map[string]bool)
+	}
+
+	// Auto-detect permissions if PermissionConfig is set
+	if config.PermissionConfig != nil {
+		config.EnablePermissions = true
+		// Compile regex patterns in route rules
+		if err := config.PermissionConfig.CompileRoutePermissionRules(); err != nil {
+			return nil, fmt.Errorf("failed to compile route permission rules: %w", err)
+		}
 	}
 
 	return &config, nil
@@ -191,11 +181,6 @@ type ConfigLoader struct {
 	mu     sync.RWMutex
 }
 
-// NewConfigLoader creates a new config loader.
-func NewConfigLoader(path string, _ time.Duration) (*ConfigLoader, error) {
-	return NewConfigLoaderWithLogger(path, nil)
-}
-
 // NewConfigLoaderWithLogger creates a new ConfigLoader with a logger for error reporting.
 func NewConfigLoaderWithLogger(path string, logger Logger) (*ConfigLoader, error) {
 	config, err := LoadPermissions(path)
@@ -215,7 +200,7 @@ func NewConfigLoaderWithLogger(path string, logger Logger) (*ConfigLoader, error
 }
 
 // GetConfig returns the current configuration (thread-safe).
-func (l *ConfigLoader) GetConfig() gofr.RBACConfig {
+func (l *ConfigLoader) GetConfig() RBACConfig {
 	l.mu.RLock()
 	defer l.mu.RUnlock()
 
@@ -230,7 +215,7 @@ func (c *Config) GetRouteWithPermissions() map[string][]string {
 }
 
 // GetRoleExtractorFunc returns the role extractor function.
-func (c *Config) GetRoleExtractorFunc() gofr.RoleExtractor {
+func (c *Config) GetRoleExtractorFunc() RoleExtractor {
 	return c.RoleExtractorFunc
 }
 
@@ -250,13 +235,14 @@ func (c *Config) GetLogger() any {
 	return c.Logger
 }
 
-// GetRequiresContainer returns whether container access is needed.
-func (c *Config) GetRequiresContainer() bool {
-	return c.RequiresContainer
+
+// GetRoleHeader returns the role header key if configured.
+func (c *Config) GetRoleHeader() string {
+	return c.RoleHeader
 }
 
 // SetRoleExtractorFunc sets the role extractor function.
-func (c *Config) SetRoleExtractorFunc(extractor gofr.RoleExtractor) {
+func (c *Config) SetRoleExtractorFunc(extractor RoleExtractor) {
 	c.RoleExtractorFunc = extractor
 }
 
@@ -267,10 +253,6 @@ func (c *Config) SetLogger(logger any) {
 	}
 }
 
-// SetRequiresContainer sets whether container access is needed.
-func (c *Config) SetRequiresContainer(required bool) {
-	c.RequiresContainer = required
-}
 
 // SetEnablePermissions enables permission-based access control.
 func (c *Config) SetEnablePermissions(enabled bool) {
