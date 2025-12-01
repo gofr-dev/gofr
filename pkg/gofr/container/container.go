@@ -27,6 +27,7 @@ import (
 	"gofr.dev/pkg/gofr/datasource/pubsub/google"
 	"gofr.dev/pkg/gofr/datasource/pubsub/kafka"
 	"gofr.dev/pkg/gofr/datasource/pubsub/mqtt"
+	redisPubSub "gofr.dev/pkg/gofr/datasource/pubsub/redis"
 	"gofr.dev/pkg/gofr/datasource/redis"
 	"gofr.dev/pkg/gofr/datasource/sql"
 	"gofr.dev/pkg/gofr/logging"
@@ -169,6 +170,11 @@ func (c *Container) Create(conf config.Config) {
 		}, c.Logger, c.metricsManager)
 	case "MQTT":
 		c.PubSub = c.createMqttPubSub(conf)
+	case "REDIS":
+		// Auto-initialize Redis PubSub from config (similar to Redis DB)
+		if pubsubClient := redisPubSub.NewClient(conf, c.Logger, c.metricsManager); pubsubClient != nil {
+			c.PubSub = pubsubClient
+		}
 	}
 
 	c.File = file.NewLocalFileSystem(c.Logger)

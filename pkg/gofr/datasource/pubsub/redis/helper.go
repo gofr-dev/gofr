@@ -6,9 +6,11 @@ import (
 	"crypto/x509"
 	"fmt"
 	"os"
+	"strconv"
 	"time"
 
 	"github.com/redis/go-redis/v9"
+	"gofr.dev/pkg/gofr/config"
 )
 
 const (
@@ -152,4 +154,116 @@ func parseQueryArgs(args ...any) (timeout time.Duration, limit int) {
 	}
 
 	return timeout, limit
+}
+
+// getRedisPubSubConfig builds Config from config.Config (reads env vars).
+// Similar to getRedisConfig() in datasource/redis/redis.go.
+// It supports the following environment variables:
+//
+//	REDIS_PUBSUB_ADDR: Redis address (e.g., "localhost:6379") - primary config
+//	REDIS_HOST: Redis host (fallback if REDIS_PUBSUB_ADDR not set)
+//	REDIS_PORT: Redis port (fallback, default: 6379)
+//	REDIS_PUBSUB_DB: Redis database number for PubSub (fallback to REDIS_DB)
+//	REDIS_DB: Redis database (fallback, default: 0)
+//	REDIS_PASSWORD: Redis password
+//	REDIS_PUBSUB_DIAL_TIMEOUT: Connection timeout (default: 5s)
+//	REDIS_PUBSUB_READ_TIMEOUT: Read timeout (default: 3s)
+//	REDIS_PUBSUB_WRITE_TIMEOUT: Write timeout (default: 3s)
+//	REDIS_TLS_ENABLED: Enable TLS (set to "true")
+//	REDIS_TLS_CA_CERT: CA certificate file path
+//	REDIS_TLS_CERT: Client certificate file path
+//	REDIS_TLS_KEY: Client key file path
+//	REDIS_TLS_INSECURE_SKIP_VERIFY: Skip TLS verification (set to "true")
+func getRedisPubSubConfig(c config.Config) *Config {
+	cfg := DefaultConfig()
+
+	// Read address - prefer REDIS_PUBSUB_ADDR, fallback to REDIS_HOST:REDIS_PORT
+	if addr := c.Get("REDIS_PUBSUB_ADDR"); addr != "" {
+		cfg.Addr = addr
+	} else if host := c.Get("REDIS_HOST"); host != "" {
+		port := c.GetOrDefault("REDIS_PORT", "6379")
+		cfg.Addr = fmt.Sprintf("%s:%s", host, port)
+	}
+
+	// Read password
+	cfg.Password = c.Get("REDIS_PASSWORD")
+
+	// Read database - prefer REDIS_PUBSUB_DB, fallback to REDIS_DB
+	if dbStr := c.Get("REDIS_PUBSUB_DB"); dbStr != "" {
+		if db, err := strconv.Atoi(dbStr); err == nil && db >= 0 {
+			cfg.DB = db
+		}
+	} else if dbStr := c.Get("REDIS_DB"); dbStr != "" {
+		if db, err := strconv.Atoi(dbStr); err == nil && db >= 0 {
+			cfg.DB = db
+		}
+	}
+
+	// Parse timeouts
+	if timeout := c.Get("REDIS_PUBSUB_DIAL_TIMEOUT"); timeout != "" {
+		if d, err := time.ParseDuration(timeout); err == nil && d > 0 {
+			cfg.DialTimeout = d
+		}
+	}
+
+	if timeout := c.Get("REDIS_PUBSUB_READ_TIMEOUT"); timeout != "" {
+		if d, err := time.ParseDuration(timeout); err == nil && d > 0 {
+			cfg.ReadTimeout = d
+		}
+	}
+
+	if timeout := c.Get("REDIS_PUBSUB_WRITE_TIMEOUT"); timeout != "" {
+		if d, err := time.ParseDuration(timeout); err == nil && d > 0 {
+			cfg.WriteTimeout = d
+		}
+	}
+
+	// Parse connection pool settings
+	if poolSize := c.Get("REDIS_PUBSUB_POOL_SIZE"); poolSize != "" {
+		if size, err := strconv.Atoi(poolSize); err == nil && size > 0 {
+			cfg.PoolSize = size
+		}
+	}
+
+	if minIdle := c.Get("REDIS_PUBSUB_MIN_IDLE_CONNS"); minIdle != "" {
+		if n, err := strconv.Atoi(minIdle); err == nil && n >= 0 {
+			cfg.MinIdleConns = n
+		}
+	}
+
+	if maxIdle := c.Get("REDIS_PUBSUB_MAX_IDLE_CONNS"); maxIdle != "" {
+		if n, err := strconv.Atoi(maxIdle); err == nil && n >= 0 {
+			cfg.MaxIdleConns = n
+		}
+	}
+
+	// Parse max retries
+	if retries := c.Get("REDIS_PUBSUB_MAX_RETRIES"); retries != "" {
+		if n, err := strconv.Atoi(retries); err == nil && n >= 0 {
+			cfg.MaxRetries = n
+		}
+	}
+
+	// Setup TLS if enabled
+	if c.Get("REDIS_TLS_ENABLED") == "true" {
+		tlsConfig := &TLSConfig{
+			InsecureSkipVerify: c.Get("REDIS_TLS_INSECURE_SKIP_VERIFY") == "true",
+		}
+
+		if caCert := c.Get("REDIS_TLS_CA_CERT"); caCert != "" {
+			tlsConfig.CACertFile = caCert
+		}
+
+		if cert := c.Get("REDIS_TLS_CERT"); cert != "" {
+			tlsConfig.CertFile = cert
+		}
+
+		if key := c.Get("REDIS_TLS_KEY"); key != "" {
+			tlsConfig.KeyFile = key
+		}
+
+		cfg.TLS = tlsConfig
+	}
+
+	return cfg
 }

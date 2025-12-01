@@ -13,6 +13,7 @@ import (
 	"github.com/redis/go-redis/v9"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/trace"
+	"gofr.dev/pkg/gofr/config"
 	"gofr.dev/pkg/gofr/datasource"
 	"gofr.dev/pkg/gofr/datasource/pubsub"
 )
@@ -57,6 +58,26 @@ func New(cfg *Config) *Client {
 		subWg:       make(map[string]*sync.WaitGroup),
 		chanClosed:  make(map[string]bool),
 	}
+}
+
+// NewClient creates a Redis PubSub client from config.Config (similar to Redis DB).
+// This function reads configuration from environment variables and auto-connects.
+// It's used for automatic initialization in container.Create().
+// If no Redis address is configured, it returns nil (same behavior as Redis DB).
+func NewClient(c config.Config, logger pubsub.Logger, metrics Metrics) *Client {
+	cfg := getRedisPubSubConfig(c)
+
+	// If no Redis address configured, return nil (same as Redis DB behavior)
+	if cfg.Addr == "" {
+		return nil
+	}
+
+	client := New(cfg)
+	client.UseLogger(logger)
+	client.UseMetrics(metrics)
+	client.Connect() // Auto-connect
+
+	return client
 }
 
 // UseLogger sets the logger for the Redis client.
