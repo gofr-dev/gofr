@@ -1335,7 +1335,7 @@ func TestStorageAdapter_NewRangeReader_Success(t *testing.T) {
 				w.Header().Set("Content-Range", "bytes 5-9/11")
 				w.Header().Set("Content-Length", "5")
 				w.WriteHeader(http.StatusPartialContent)
-				_, _ = w.Write([]byte(" worl"))
+				_, _ = w.Write([]byte(" world"))
 
 				return
 			}
