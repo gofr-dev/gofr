@@ -150,12 +150,16 @@ func (cmd *cmd) addRoute(pattern string, handler Handler, options ...Options) {
 func (cmd *cmd) printHelp() {
 	fmt.Println("Available commands:")
 
-	for _, r := range cmd.routes {
-		fmt.Printf("\n  %s\n", r.pattern)
+	var maxLen int
 
-		if r.description != "" {
-			fmt.Printf("    Description: %s\n", r.description)
+	for _, r := range cmd.routes {
+		if len(r.pattern) > maxLen {
+			maxLen = len(r.pattern)
 		}
+	}
+
+	for _, r := range cmd.routes {
+		fmt.Printf("  %-*s  %s\n", maxLen, r.pattern, r.description)
 
 		if r.help != "" {
 			fmt.Printf("    Help: %s\n", r.help)
