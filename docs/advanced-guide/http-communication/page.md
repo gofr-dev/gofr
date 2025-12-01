@@ -90,6 +90,17 @@ GoFr provides its user with additional configurational options while registering
 
 - **APIKeyConfig** - This option allows the user to set the `API-Key` Based authentication as the default auth for downstream HTTP Service.
 - **BasicAuthConfig** - This option allows the user to set basic auth (username and password) as the default auth for downstream HTTP Service.
+
+**Important:** The password must be base64 encoded in your configuration/environment variables. GoFr will decode it internally before creating the Authorization header.
+
+
+**Example:**
+```bash
+# Generate base64 encoded password
+echo -n "your-password" | base64
+# Output: eW91ci1wYXNzd29yZA==
+```
+
 - **OAuthConfig** - This option allows user to add `OAuth` as default auth for downstream HTTP Service.
 - **CircuitBreakerConfig** - This option allows the user to configure the GoFr Circuit Breaker's `threshold` and `interval` for the failing downstream HTTP Service calls. If the failing calls exceeds the threshold the circuit breaker will automatically be enabled.
 - **DefaultHeaders** - This option allows user to set some default headers that will be propagated to the downstream HTTP Service every time it is being called.
