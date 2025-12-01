@@ -240,14 +240,16 @@ Now when we access {% new-tab-link title="http://localhost:9000/customer" href="
 
 **Note:** When using PostgreSQL or Supabase, you may need to use `$1` instead of `?` in SQL queries, depending on your driver configuration.
 
-### Enabling Read/Write Splitting in MySQL (DBResolver)
+## Enabling Read/Write Splitting in MySQL (DBResolver)
 GoFr provides built-in support for read/write splitting using its `DBRESOLVER` module for **MySQL**.
 This feature automatically routes requests to the **primary database** or **read replicas** based on:
 
-- **HTTP Method**: Write operations (`POST`, `PUT`, `PATCH`, `DELETE`) → Primary | Read operations (`GET`, `HEAD`, `OPTIONS`) → Replicas
+- **HTTP Method**:
+    -   Write operations (`POST`, `PUT`, `PATCH`, `DELETE`) → Primary
+    -   Read operations (`GET`, `HEAD`, `OPTIONS`) → Replicas
 - **Route Configuration**: Force specific routes to always use the primary database for strong consistency
 
-#### Installation
+### Installation
 
 Import the GoFr's dbresolver for MySQL:
 
@@ -255,7 +257,7 @@ Import the GoFr's dbresolver for MySQL:
 go get gofr.dev/pkg/gofr/datasource/dbresolver@latest
 ```
 
-#### Configuration
+### Configuration
 
 **1. Environment Variables**
 
@@ -273,7 +275,7 @@ DB_DIALECT=mysql
 
 **2. Initialize DBResolver**
 
-After importing the package, you can configure the DBResolver in your GoFr application using the `AddDBResolver` method. 
+After importing the package, you can configure the DBResolver in your GoFr application using the `AddDBResolver` method.
 You can choose the load balancing strategy and enable fallback to primary:
 
 ```go
@@ -359,7 +361,7 @@ func main() {
 
 By default, replica pools are auto-scaled based on primary settings:
 
-```
+```editorconfig
 # Defaults (automatically calculated)
 DB_MAX_IDLE_CONNECTION=2    → Replicas: 8 (2 × 4)
 DB_MAX_OPEN_CONNECTION=20   → Replicas: 40 (20 × 2)
@@ -367,7 +369,7 @@ DB_MAX_OPEN_CONNECTION=20   → Replicas: 40 (20 × 2)
 
 Override with:
 
-```
+```editorconfig
 DB_REPLICA_MAX_IDLE_CAP=100
 DB_REPLICA_MIN_IDLE=5
 DB_REPLICA_DEFAULT_IDLE=15
@@ -375,7 +377,6 @@ DB_REPLICA_DEFAULT_IDLE=15
 DB_REPLICA_MAX_OPEN_CAP=500
 DB_REPLICA_MIN_OPEN=20
 DB_REPLICA_DEFAULT_OPEN=150
-
 ```
 
 **Benefits**
