@@ -43,6 +43,34 @@ type Client struct {
 	tracer  trace.Tracer
 }
 
+// sanitizeRedisAddr removes credentials from a Redis address for safe logging.
+// It handles Redis URI format (redis://user:password@host:port) and plain host:port format.
+func sanitizeRedisAddr(addr string) string {
+	// Handle Redis URI format: redis://user:password@host:port/db
+	if strings.Contains(addr, "@") {
+		// Find the last @ symbol to handle edge cases with multiple @ symbols
+		lastAt := strings.LastIndex(addr, "@")
+		if lastAt >= 0 && lastAt < len(addr)-1 {
+			// Extract the host:port part (after last @)
+			hostPart := addr[lastAt+1:]
+			
+			// Check if there's a scheme (redis:// or rediss://)
+			if strings.HasPrefix(addr, "redis://") {
+				return "redis://" + hostPart
+			}
+			if strings.HasPrefix(addr, "rediss://") {
+				return "rediss://" + hostPart
+			}
+			
+			// No scheme, just return host:port
+			return hostPart
+		}
+	}
+	
+	// No credentials found, return as-is (safe for host:port format)
+	return addr
+}
+
 // New creates a new Redis PubSub client.
 func New(cfg *Config) *Client {
 	if cfg == nil {
@@ -119,7 +147,7 @@ func (r *Client) Connect() {
 	}
 
 	if r.logger != nil {
-		r.logger.Debugf("connecting to Redis at '%s'", r.cfg.Addr)
+		r.logger.Debugf("connecting to Redis at '%s'", sanitizeRedisAddr(r.cfg.Addr))
 	}
 
 	options, err := createRedisOptions(r.cfg)
@@ -144,7 +172,7 @@ func (r *Client) Connect() {
 
 	if err := r.testConnections(); err != nil {
 		if r.logger != nil {
-			r.logger.Errorf("failed to connect to Redis at '%s', error: %v", r.cfg.Addr, err)
+			r.logger.Errorf("failed to connect to Redis at '%s', error: %v", sanitizeRedisAddr(r.cfg.Addr), err)
 		}
 
 		go r.retryConnect()
@@ -158,12 +186,12 @@ func (r *Client) Connect() {
 
 	if err := r.queryConn.Ping(ctx).Err(); err != nil {
 		if r.logger != nil {
-			r.logger.Errorf("failed to connect query connection to Redis at '%s', error: %v", r.cfg.Addr, err)
+			r.logger.Errorf("failed to connect query connection to Redis at '%s', error: %v", sanitizeRedisAddr(r.cfg.Addr), err)
 		}
 	}
 
 	if r.logger != nil {
-		r.logger.Logf("connected to Redis at '%s'", r.cfg.Addr)
+		r.logger.Logf("connected to Redis at '%s'", sanitizeRedisAddr(r.cfg.Addr))
 	}
 }
 
@@ -234,14 +262,14 @@ func (r *Client) retryConnect() {
 		if pubErr != nil || subErr != nil || queryErr != nil {
 			if r.logger != nil {
 				r.logger.Errorf("could not connect to Redis at '%s', pub error: %v, sub error: %v, query error: %v",
-					r.cfg.Addr, pubErr, subErr, queryErr)
+					sanitizeRedisAddr(r.cfg.Addr), pubErr, subErr, queryErr)
 			}
 
 			continue
 		}
 
 		if r.logger != nil {
-			r.logger.Logf("reconnected to Redis at '%s'", r.cfg.Addr)
+			r.logger.Logf("reconnected to Redis at '%s'", sanitizeRedisAddr(r.cfg.Addr))
 		}
 
 		// Restart subscriptions if they were active
@@ -343,7 +371,7 @@ func (r *Client) Publish(ctx context.Context, topic string, message []byte) erro
 			CorrelationID: span.SpanContext().TraceID().String(),
 			MessageValue:  strings.Join(strings.Fields(string(message)), " "),
 			Topic:         topic,
-			Host:          r.cfg.Addr,
+			Host:          sanitizeRedisAddr(r.cfg.Addr),
 			PubSubBackend: "REDIS",
 			Time:          end.Microseconds(),
 		})
@@ -444,7 +472,7 @@ func (r *Client) waitForMessage(ctx context.Context, spanCtx context.Context, sp
 				CorrelationID: span.SpanContext().TraceID().String(),
 				MessageValue:  strings.Join(strings.Fields(string(msg.Value)), " "),
 				Topic:         topic,
-				Host:          r.cfg.Addr,
+				Host:          sanitizeRedisAddr(r.cfg.Addr),
 				PubSubBackend: "REDIS",
 				Time:          0, // Redis doesn't provide timing info
 			})
@@ -552,7 +580,7 @@ func (r *Client) Health() datasource.Health {
 		Status: "DOWN",
 		Details: map[string]any{
 			"backend": "REDIS",
-			"addr":    r.cfg.Addr,
+			"addr":    sanitizeRedisAddr(r.cfg.Addr),
 		},
 	}
 
@@ -815,20 +843,21 @@ func (r *Client) Close() error {
 	r.mu.Unlock()
 
 	// Close connections
+	// Ignore "client is closed" errors as connections may already be closed
 	if r.pubConn != nil {
-		if err := r.pubConn.Close(); err != nil {
+		if err := r.pubConn.Close(); err != nil && !strings.Contains(err.Error(), "client is closed") {
 			errs = append(errs, err)
 		}
 	}
 
 	if r.subConn != nil {
-		if err := r.subConn.Close(); err != nil {
+		if err := r.subConn.Close(); err != nil && !strings.Contains(err.Error(), "client is closed") {
 			errs = append(errs, err)
 		}
 	}
 
 	if r.queryConn != nil {
-		if err := r.queryConn.Close(); err != nil {
+		if err := r.queryConn.Close(); err != nil && !strings.Contains(err.Error(), "client is closed") {
 			errs = append(errs, err)
 		}
 	}
