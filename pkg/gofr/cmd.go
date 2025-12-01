@@ -26,10 +26,12 @@ type route struct {
 type Options func(c *route)
 
 // ErrCommandNotFound is an empty struct used to represent a specific error when a command is not found.
-type ErrCommandNotFound struct{}
+type ErrCommandNotFound struct {
+	Command string
+}
 
-func (ErrCommandNotFound) Error() string {
-	return "No Command Found!"
+func (e ErrCommandNotFound) Error() string {
+	return fmt.Sprintf("'%s' is not a valid command.", e.Command)
 }
 
 func (cmd *cmd) Run(c *container.Container) {
@@ -60,6 +62,7 @@ func (cmd *cmd) Run(c *container.Container) {
 
 	r := cmd.handler(subCommand)
 	ctx := newCMDContext(&cmd2.Responder{}, cmd2.NewRequest(args), c, cmd.out)
+	ctx.Request.SetParam("subCommand", subCommand)
 
 	// handling if route is not found or the handler is nil
 	if cmd.noCommandResponse(r, ctx) {
@@ -77,14 +80,14 @@ func (cmd *cmd) Run(c *container.Container) {
 // noCommandResponse responds with error when no route with the given subcommand is not found or handler is nil.
 func (cmd *cmd) noCommandResponse(r *route, ctx *Context) bool {
 	if r == nil {
-		ctx.responder.Respond(nil, ErrCommandNotFound{})
+		ctx.responder.Respond(nil, ErrCommandNotFound{Command: ctx.Request.Param("subCommand")})
 		cmd.printHelp()
 
 		return true
 	}
 
 	if r.handler == nil {
-		ctx.responder.Respond(nil, ErrCommandNotFound{})
+		ctx.responder.Respond(nil, ErrCommandNotFound{Command: ctx.Request.Param("subCommand")})
 
 		return true
 	}
