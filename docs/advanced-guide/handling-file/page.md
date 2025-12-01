@@ -204,6 +204,8 @@ func main() {
 > - The `Endpoint` field is optional and defaults to `https://{AccountName}.file.core.windows.net`
 > - Currently supports one file share per file-store instance
 > - The implementation automatically retries connection if the initial connection fails
+> - **Automatic parent directory creation**: When creating files in nested paths (e.g., `dir1/subdir/file.txt`), parent directories are automatically created, matching local filesystem behavior
+> - **Content type detection**: Content types are automatically detected based on file extensions (e.g., `.json` → `application/json`, `.txt` → `text/plain`)
 
 ### Creating Directory
 
@@ -281,8 +283,13 @@ file, _ := ctx.File.Create("my_file.text")
 _, _ = file.Write([]byte("Hello World!"))
 
 // Closes and saves the file.
-	file.Close()
+file.Close()
 ```
+
+> **Note for Azure File Storage:**
+> - Files can be created in nested directories (e.g., `dir1/subdir/file.txt`). Parent directories are automatically created if they don't exist
+> - Content types are automatically detected based on file extensions (e.g., `.json`, `.txt`, `.csv`, `.xml`, `.html`, `.pdf`)
+> - This behavior matches local filesystem operations for consistency
 
 ### Reading file as CSV/JSON/TEXT
 
