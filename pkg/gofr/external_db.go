@@ -221,6 +221,28 @@ func (a *App) AddCouchbase(db container.CouchbaseProvider) {
 	a.container.Couchbase = db
 }
 
+// AddDBResolver sets up database resolver with read/write splitting.
+func (a *App) AddDBResolver(resolver container.DBResolverProvider) {
+	// Validate primary SQL exists
+	if a.container.SQL == nil {
+		a.Logger().Fatal("Primary SQL connection must be configured before adding DBResolver")
+		return
+	}
+
+	resolver.UseLogger(a.Logger())
+	resolver.UseMetrics(a.Metrics())
+
+	tracer := otel.GetTracerProvider().Tracer("gofr-dbresolver")
+	resolver.UseTracer(tracer)
+
+	resolver.Connect()
+
+	// Replace the SQL connection with the resolver
+	a.container.SQL = resolver.GetResolver()
+
+	a.Logger().Logf("DB Resolver initialized successfully")
+}
+
 func (a *App) AddInfluxDB(db container.InfluxDBProvider) {
 	db.UseLogger(a.Logger())
 	db.UseMetrics(a.Metrics())
@@ -230,4 +252,8 @@ func (a *App) AddInfluxDB(db container.InfluxDBProvider) {
 	db.Connect()
 
 	a.container.InfluxDB = db
+}
+
+func (a *App) GetSQL() container.DB {
+	return a.container.SQL
 }
