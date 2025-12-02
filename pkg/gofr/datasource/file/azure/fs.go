@@ -10,7 +10,9 @@ import (
 )
 
 var (
-	errInvalidConfig = errors.New("invalid Azure configuration: share name is required")
+	errInvalidConfig       = errors.New("invalid Azure configuration: share name is required")
+	errAccountNameRequired = errors.New("invalid Azure configuration: account name is required")
+	errAccountKeyRequired  = errors.New("invalid Azure configuration: account key is required")
 )
 
 const defaultTimeout = 10 * time.Second
@@ -30,8 +32,20 @@ type Config struct {
 // New creates and validates a new Azure File Storage file system.
 // Returns error if connection fails.
 func New(config *Config, logger datasource.Logger, metrics file.StorageMetrics) (file.FileSystemProvider, error) {
-	if config == nil || config.ShareName == "" {
+	if config == nil {
 		return nil, errInvalidConfig
+	}
+
+	if config.ShareName == "" {
+		return nil, errInvalidConfig
+	}
+
+	if config.AccountName == "" {
+		return nil, errAccountNameRequired
+	}
+
+	if config.AccountKey == "" {
+		return nil, errAccountKeyRequired
 	}
 
 	adapter := &storageAdapter{cfg: config}

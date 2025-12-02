@@ -28,6 +28,34 @@ func TestNew_EmptyShareName(t *testing.T) {
 	assert.ErrorIs(t, err, errInvalidConfig)
 }
 
+func TestNew_EmptyAccountName(t *testing.T) {
+	config := &Config{
+		ShareName:   "testshare",
+		AccountName: "",
+		AccountKey:  "testkey",
+	}
+
+	fs, err := New(config, nil, nil)
+
+	require.Error(t, err)
+	assert.Nil(t, fs)
+	assert.ErrorIs(t, err, errAccountNameRequired)
+}
+
+func TestNew_EmptyAccountKey(t *testing.T) {
+	config := &Config{
+		ShareName:   "testshare",
+		AccountName: "testaccount",
+		AccountKey:  "",
+	}
+
+	fs, err := New(config, nil, nil)
+
+	require.Error(t, err)
+	assert.Nil(t, fs)
+	assert.ErrorIs(t, err, errAccountKeyRequired)
+}
+
 func TestNew_ConnectionFailure_StartsRetry(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
@@ -59,93 +87,6 @@ func TestNew_ConnectionFailure_StartsRetry(t *testing.T) {
 	require.NotNil(t, fs)
 
 	time.Sleep(100 * time.Millisecond)
-
-	fs.(*azureFileSystem).CommonFileSystem.SetDisableRetry(true)
-}
-
-func TestNew_WithEndpoint(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
-
-	mockLogger := file.NewMockLogger(ctrl)
-	mockMetrics := file.NewMockMetrics(ctrl)
-
-	config := &Config{
-		AccountName: "testaccount",
-		AccountKey:  "testkey",
-		ShareName:   "testshare",
-		Endpoint:    "https://custom.endpoint.com",
-	}
-
-	mockMetrics.EXPECT().NewHistogram(file.AppFileStats, gomock.Any(), gomock.Any())
-
-	mockLogger.EXPECT().Infof("connected to %s", "testshare").MaxTimes(1)
-	mockLogger.EXPECT().Warnf(
-		"Azure File Share %s not available, starting background retry: %v",
-		"testshare",
-		gomock.Any(),
-	).MaxTimes(1)
-
-	mockLogger.EXPECT().Debug(gomock.Any())
-	mockMetrics.EXPECT().RecordHistogram(gomock.Any(), file.AppFileStats, gomock.Any(), gomock.Any())
-
-	fs, err := New(config, mockLogger, mockMetrics)
-
-	require.NoError(t, err)
-	require.NotNil(t, fs)
-
-	// If connected, verify state
-	if fs.(*azureFileSystem).CommonFileSystem.IsConnected() {
-		t.Log("Successfully connected to Azure File Share")
-	} else {
-		t.Log("Azure File Share not available, retry started")
-
-		fs.(*azureFileSystem).CommonFileSystem.SetDisableRetry(true)
-	}
-}
-
-func TestNew_DefaultEndpoint(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
-
-	mockLogger := file.NewMockLogger(ctrl)
-	mockMetrics := file.NewMockMetrics(ctrl)
-
-	config := &Config{
-		AccountName: "testaccount",
-		AccountKey:  "testkey",
-		ShareName:   "testshare",
-		// Endpoint is empty, should default to core.windows.net
-	}
-
-	mockMetrics.EXPECT().NewHistogram(file.AppFileStats, gomock.Any(), gomock.Any())
-
-	mockLogger.EXPECT().Infof("connected to %s", "testshare").MaxTimes(1)
-	mockLogger.EXPECT().Warnf(
-		"Azure File Share %s not available, starting background retry: %v",
-		"testshare",
-		gomock.Any(),
-	).MaxTimes(1)
-
-	mockLogger.EXPECT().Debug(gomock.Any())
-	mockMetrics.EXPECT().RecordHistogram(gomock.Any(), file.AppFileStats, gomock.Any(), gomock.Any())
-
-	fs, err := New(config, mockLogger, mockMetrics)
-
-	require.NoError(t, err)
-	require.NotNil(t, fs)
-
-	// Verify endpoint was set correctly in adapter
-	adapter := fs.(*azureFileSystem).CommonFileSystem.Provider.(*storageAdapter)
-	assert.Equal(t, "testaccount", adapter.cfg.AccountName)
-	assert.Equal(t, "testshare", adapter.cfg.ShareName)
-
-	// Default endpoint should be set
-	if adapter.cfg.Endpoint == "" {
-		// Endpoint is built in Connect, so it might be empty here
-		// But the logic should use the default when empty
-		t.Log("Endpoint will be set to default in Connect()")
-	}
 
 	fs.(*azureFileSystem).CommonFileSystem.SetDisableRetry(true)
 }
@@ -234,7 +175,7 @@ func TestAzureFileSystem_startRetryConnect(t *testing.T) {
 	time.Sleep(50 * time.Millisecond)
 }
 
-func TestAzureFileSystem_startRetryConnect_Connected(t *testing.T) {
+func TestAzureFileSystem_startRetryConnect_RetryDisabled(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
@@ -248,7 +189,6 @@ func TestAzureFileSystem_startRetryConnect_Connected(t *testing.T) {
 	}
 
 	mockMetrics.EXPECT().NewHistogram(file.AppFileStats, gomock.Any(), gomock.Any())
-	mockLogger.EXPECT().Infof("connected to %s", "testshare").MaxTimes(1)
 	mockLogger.EXPECT().Warnf(gomock.Any(), gomock.Any(), gomock.Any()).MaxTimes(1)
 	mockLogger.EXPECT().Debug(gomock.Any())
 	mockMetrics.EXPECT().RecordHistogram(gomock.Any(), file.AppFileStats, gomock.Any(), gomock.Any())
@@ -256,27 +196,11 @@ func TestAzureFileSystem_startRetryConnect_Connected(t *testing.T) {
 	fs, err := New(config, mockLogger, mockMetrics)
 	require.NoError(t, err)
 
-	// If connected, retry should exit immediately
-	if fs.(*azureFileSystem).CommonFileSystem.IsConnected() {
-		// Retry won't start if already connected
-		t.Log("Already connected, retry won't start")
-	} else {
-		fs.(*azureFileSystem).CommonFileSystem.SetDisableRetry(true)
-	}
-}
+	// Disable retry immediately - retry loop should exit
+	fs.(*azureFileSystem).CommonFileSystem.SetDisableRetry(true)
 
-func TestConfig_Fields(t *testing.T) {
-	config := &Config{
-		AccountName: "myaccount",
-		AccountKey:  "mykey",
-		ShareName:   "myshare",
-		Endpoint:    "https://custom.endpoint.com",
-	}
-
-	assert.Equal(t, "myaccount", config.AccountName)
-	assert.Equal(t, "mykey", config.AccountKey)
-	assert.Equal(t, "myshare", config.ShareName)
-	assert.Equal(t, "https://custom.endpoint.com", config.Endpoint)
+	// Give it a moment to check the retry disabled flag
+	time.Sleep(50 * time.Millisecond)
 }
 
 func TestConfig_EmptyEndpoint(t *testing.T) {

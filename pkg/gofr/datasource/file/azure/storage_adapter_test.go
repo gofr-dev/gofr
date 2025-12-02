@@ -39,15 +39,6 @@ func TestStorageAdapter_Connect(t *testing.T) {
 			description:   "Should return error when config is nil",
 		},
 		{
-			name: "already_connected",
-			adapter: &storageAdapter{
-				cfg:         &Config{ShareName: "test"},
-				shareClient: &share.Client{},
-			},
-			expectedError: nil,
-			description:   "Should return nil when already connected",
-		},
-		{
 			name: "empty_share_name",
 			adapter: &storageAdapter{
 				cfg: &Config{
@@ -56,7 +47,7 @@ func TestStorageAdapter_Connect(t *testing.T) {
 					ShareName:   "",
 				},
 			},
-			expectedError: nil,
+			expectedError: errShareNameEmpty,
 			expectedMsg:   "share name cannot be empty",
 			description:   "Should return error when share name is empty",
 		},
@@ -66,17 +57,26 @@ func TestStorageAdapter_Connect(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			err := tt.adapter.Connect(context.Background())
 
-			if tt.expectedError != nil {
-				require.Error(t, err)
-				require.ErrorIs(t, err, tt.expectedError)
-			}
+			require.Error(t, err)
+			require.ErrorIs(t, err, tt.expectedError)
 
 			if tt.expectedMsg != "" {
-				require.Error(t, err)
 				assert.Contains(t, err.Error(), tt.expectedMsg)
 			}
 		})
 	}
+}
+
+// TestStorageAdapter_Connect_AlreadyConnected tests the Connect method when already connected.
+func TestStorageAdapter_Connect_AlreadyConnected(t *testing.T) {
+	adapter := &storageAdapter{
+		cfg:         &Config{ShareName: "test"},
+		shareClient: &share.Client{},
+	}
+
+	err := adapter.Connect(context.Background())
+
+	require.NoError(t, err)
 }
 
 // TestStorageAdapter_Health tests the Health method with table-driven tests.
@@ -110,13 +110,11 @@ func TestStorageAdapter_Close(t *testing.T) {
 	tests := []struct {
 		name        string
 		adapter     *storageAdapter
-		expectError bool
 		description string
 	}{
 		{
 			name:        "nil_client",
 			adapter:     &storageAdapter{},
-			expectError: false,
 			description: "Should return nil when client is nil",
 		},
 	}
@@ -125,11 +123,7 @@ func TestStorageAdapter_Close(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			err := tt.adapter.Close()
 
-			if tt.expectError {
-				require.Error(t, err)
-			} else {
-				assert.NoError(t, err)
-			}
+			require.NoError(t, err)
 		})
 	}
 }
@@ -167,14 +161,8 @@ func TestStorageAdapter_NewReader(t *testing.T) {
 			reader, err := tt.adapter.NewReader(context.Background(), tt.objectName)
 
 			require.Error(t, err)
-
-			if tt.expectedError != nil {
-				require.ErrorIs(t, err, tt.expectedError)
-			}
-
-			if tt.expectedNil {
-				assert.Nil(t, reader)
-			}
+			require.ErrorIs(t, err, tt.expectedError)
+			assert.Nil(t, reader)
 		})
 	}
 }
@@ -228,14 +216,8 @@ func TestStorageAdapter_NewRangeReader(t *testing.T) {
 			reader, err := tt.adapter.NewRangeReader(context.Background(), tt.objectName, tt.offset, tt.length)
 
 			require.Error(t, err)
-
-			if tt.expectedError != nil {
-				require.ErrorIs(t, err, tt.expectedError)
-			}
-
-			if tt.expectedNil {
-				assert.Nil(t, reader)
-			}
+			require.ErrorIs(t, err, tt.expectedError)
+			assert.Nil(t, reader)
 		})
 	}
 }
@@ -273,101 +255,61 @@ func TestStorageAdapter_NewWriter(t *testing.T) {
 			if tt.expectedError != nil {
 				n, err := writer.Write([]byte("test"))
 				assert.Equal(t, 0, n)
-				assert.ErrorIs(t, err, tt.expectedError)
-			}
-		})
-	}
-}
-
-// TestAzureWriter_Write tests the azureWriter Write method with table-driven tests.
-func TestAzureWriter_Write(t *testing.T) {
-	tests := []struct {
-		name          string
-		writer        *azureWriter
-		data          []byte
-		expectedN     int
-		expectedError error
-		description   string
-	}{
-		{
-			name: "write_success",
-			writer: &azureWriter{
-				buffer: make([]byte, 0),
-				closed: false,
-			},
-			data:          []byte("test data"),
-			expectedN:     9,
-			expectedError: nil,
-			description:   "Should append data to buffer successfully",
-		},
-		{
-			name: "write_when_closed",
-			writer: &azureWriter{
-				buffer: make([]byte, 0),
-				closed: true,
-			},
-			data:          []byte("test"),
-			expectedN:     0,
-			expectedError: errWriterAlreadyClosed,
-			description:   "Should return error when writer is closed",
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			n, err := tt.writer.Write(tt.data)
-
-			assert.Equal(t, tt.expectedN, n)
-
-			if tt.expectedError != nil {
 				require.Error(t, err)
 				require.ErrorIs(t, err, tt.expectedError)
-			} else {
-				assert.NoError(t, err)
 			}
 		})
 	}
 }
 
-// TestAzureWriter_Close tests the azureWriter Close method with table-driven tests.
-func TestAzureWriter_Close(t *testing.T) {
-	tests := []struct {
-		name          string
-		writer        *azureWriter
-		expectedError error
-		description   string
-	}{
-		{
-			name: "already_closed",
-			writer: &azureWriter{
-				closed: true,
-			},
-			expectedError: nil,
-			description:   "Should return nil when already closed",
-		},
-		{
-			name: "empty_buffer",
-			writer: &azureWriter{
-				closed: false,
-				buffer: []byte{},
-			},
-			expectedError: nil,
-			description:   "Should return nil when buffer is empty",
-		},
+// TestAzureWriter_Write_Success tests successful write operation.
+func TestAzureWriter_Write_Success(t *testing.T) {
+	writer := &azureWriter{
+		buffer: make([]byte, 0),
+		closed: false,
 	}
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			err := tt.writer.Close()
+	n, err := writer.Write([]byte("test data"))
 
-			if tt.expectedError != nil {
-				require.Error(t, err)
-				assert.ErrorIs(t, err, tt.expectedError)
-			} else {
-				assert.NoError(t, err)
-			}
-		})
+	assert.Equal(t, 9, n)
+	require.NoError(t, err)
+}
+
+// TestAzureWriter_Write_WhenClosed tests write operation when writer is closed.
+func TestAzureWriter_Write_WhenClosed(t *testing.T) {
+	writer := &azureWriter{
+		buffer: make([]byte, 0),
+		closed: true,
 	}
+
+	n, err := writer.Write([]byte("test"))
+
+	assert.Equal(t, 0, n)
+	require.Error(t, err)
+	require.ErrorIs(t, err, errWriterAlreadyClosed)
+}
+
+// TestAzureWriter_Close_AlreadyClosed tests Close when writer is already closed.
+func TestAzureWriter_Close_AlreadyClosed(t *testing.T) {
+	writer := &azureWriter{
+		closed: true,
+	}
+
+	err := writer.Close()
+
+	require.NoError(t, err)
+}
+
+// TestAzureWriter_Close_EmptyBuffer tests Close when buffer is empty.
+func TestAzureWriter_Close_EmptyBuffer(t *testing.T) {
+	writer := &azureWriter{
+		closed: false,
+		buffer: []byte{},
+	}
+
+	err := writer.Close()
+
+	require.NoError(t, err)
 }
 
 // TestStorageAdapter_StatObject tests the StatObject method with table-driven tests.
@@ -403,14 +345,8 @@ func TestStorageAdapter_StatObject(t *testing.T) {
 			info, err := tt.adapter.StatObject(context.Background(), tt.objectName)
 
 			require.Error(t, err)
-
-			if tt.expectedError != nil {
-				require.ErrorIs(t, err, tt.expectedError)
-			}
-
-			if tt.expectedNil {
-				assert.Nil(t, info)
-			}
+			require.ErrorIs(t, err, tt.expectedError)
+			assert.Nil(t, info)
 		})
 	}
 }
@@ -445,10 +381,7 @@ func TestStorageAdapter_DeleteObject(t *testing.T) {
 			err := tt.adapter.DeleteObject(context.Background(), tt.objectName)
 
 			require.Error(t, err)
-
-			if tt.expectedError != nil {
-				require.ErrorIs(t, err, tt.expectedError)
-			}
+			require.ErrorIs(t, err, tt.expectedError)
 		})
 	}
 }
@@ -556,14 +489,8 @@ func TestStorageAdapter_ListObjects(t *testing.T) {
 			objects, err := tt.adapter.ListObjects(context.Background(), tt.prefix)
 
 			require.Error(t, err)
-
-			if tt.expectedError != nil {
-				require.ErrorIs(t, err, tt.expectedError)
-			}
-
-			if tt.expectedNil {
-				assert.Nil(t, objects)
-			}
+			require.ErrorIs(t, err, tt.expectedError)
+			assert.Nil(t, objects)
 		})
 	}
 }
@@ -593,15 +520,9 @@ func TestStorageAdapter_ListDir(t *testing.T) {
 			objects, prefixes, err := tt.adapter.ListDir(context.Background(), tt.prefix)
 
 			require.Error(t, err)
-
-			if tt.expectedError != nil {
-				require.ErrorIs(t, err, tt.expectedError)
-			}
-
-			if tt.expectedNil {
-				assert.Nil(t, objects)
-				assert.Nil(t, prefixes)
-			}
+			require.ErrorIs(t, err, tt.expectedError)
+			assert.Nil(t, objects)
+			assert.Nil(t, prefixes)
 		})
 	}
 }
@@ -1127,12 +1048,8 @@ func TestEnsureParentDirectories(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			err := tt.adapter.ensureParentDirectories(context.Background(), tt.filePath)
 
-			if tt.expectedError != nil {
-				require.Error(t, err)
-				assert.ErrorIs(t, err, tt.expectedError)
-			} else {
-				assert.NoError(t, err)
-			}
+			require.Error(t, err)
+			require.ErrorIs(t, err, tt.expectedError)
 		})
 	}
 }
@@ -2522,14 +2439,11 @@ func TestStorageAdapter_EnsureParentDirectories_Success(t *testing.T) {
 	}
 
 	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
+		t.Run(tt.name, func(_ *testing.T) {
 			err := adapter.ensureParentDirectories(context.Background(), tt.filePath)
-			if tt.expectError {
-				require.Error(t, err)
-			} else {
-				// May fail due to handler limitations, but tests the code path
-				_ = err
-			}
+
+			// May fail due to handler limitations, but tests the code path
+			_ = err
 		})
 	}
 }
