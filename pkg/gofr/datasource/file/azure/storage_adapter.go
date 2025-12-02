@@ -91,6 +91,11 @@ func (s *storageAdapter) Connect(ctx context.Context) error {
 	// Validate share access by getting properties
 	_, err = shareClient.GetProperties(ctx, nil)
 	if err != nil {
+		// Check if error is due to context deadline exceeded (timeout)
+		if errors.Is(ctx.Err(), context.DeadlineExceeded) {
+			return fmt.Errorf("share validation failed: connection timeout (10s): %w", err)
+		}
+
 		return fmt.Errorf("share validation failed: %w", err)
 	}
 
