@@ -105,29 +105,11 @@ docker run -it --rm -p 4443:4443 -e STORAGE_EMULATOR_HOST=0.0.0.0:4443 fsouza/fa
 # Azurite - Azure Storage Emulator (supports Blob, Queue, and Table Storage)
 # Note: Azurite does NOT support Azure File Storage. 
 # For Azure File Storage testing options, see below:
-# 
-# Option 1: Use actual Azure Storage Account (recommended for integration tests)
+# Use actual Azure Storage Account (recommended for integration tests)
 #   - Create a free Azure Storage Account: https://azure.microsoft.com/free/
 #   - Create a File Share in the storage account
 #   - Use the storage account name, key, and share name in your configs/.env
 #   - Free tier includes 5GB storage and 20,000 transactions per month
-#
-# Option 2: Use mocks for unit testing (already implemented in the codebase)
-#   - Unit tests use mocks and don't require Azure credentials
-#   - See: pkg/gofr/datasource/file/azure/*_test.go
-#
-# Option 3: Use local filesystem for development (limited - doesn't test Azure-specific features)
-#   - Use file.NewLocalFileSystem() for basic file operations during development
-#   - Note: This won't test Azure File Storage specific features like share management
-# Basic setup for Blob Storage only:
-docker run -p 10000:10000 mcr.microsoft.com/azure-storage/azurite azurite-blob --blobHost 0.0.0.0
-# Full setup with all services (Blob, Queue, and Table):
-docker run -p 10000:10000 -p 10001:10001 -p 10002:10002 mcr.microsoft.com/azure-storage/azurite
-# With persistent data storage:
-docker run -p 10000:10000 -p 10001:10001 -p 10002:10002 -v c:/azurite:/data mcr.microsoft.com/azure-storage/azurite
-# Default account credentials for Azurite:
-# Account Name: devstoreaccount1
-# Account Key: Eby8vdM02xNOcqFlqUwJQlL1xkc/VBrVxQkrmCL7R1j=
 ```
 
 > [!NOTE]
