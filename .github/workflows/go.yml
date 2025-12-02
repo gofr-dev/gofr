@@ -373,7 +373,7 @@ jobs:
       # Use the official golangci-lint action for the root module
       # This action automatically detects changed files and only reports new issues
       - name: Lint Root Module
-        uses: golangci/golangci-lint-action@v7
+        uses: golangci/golangci-lint-action@v9
         with:
           version: v2.4.0
           only-new-issues: true
@@ -469,7 +469,7 @@ jobs:
 
       # Use the official golangci-lint action for this submodule
       - name: Lint ${{ matrix.module }}
-        uses: golangci/golangci-lint-action@v7
+        uses: golangci/golangci-lint-action@v9
         with:
           version: v2.4.0
           working-directory: ${{ matrix.module }}
