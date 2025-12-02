@@ -30,8 +30,8 @@ go.opentelemetry.io/otel/trace v1.38.0 h1:Fxk5bKrDZJUH+AMyyIXGcFAPah0oRcT+LuNtJr
 go.opentelemetry.io/otel/trace v1.38.0/go.mod h1:j1P9ivuFsTceSWe1oY+EeW3sc+Pp42sO++GHkg4wwhs=
 go.uber.org/mock v0.6.0 h1:hyF9dfmbgIX5EfOdasqLsWD6xqpNZlXblLB/Dbnwv3Y=
 go.uber.org/mock v0.6.0/go.mod h1:KiVJ4BqZJaMj4svdfmHM0AUx4NJYO8ZNpPnZn1Z+BBU=
-gofr.dev v1.48.0 h1:pm8S3zemYlVCOuxc+eDXskjZmh9wLNdLD+5ZN/Q2Erg=
-gofr.dev v1.48.0/go.mod h1:vZBvtpICtT5b+YWdpolPPR+x2H9Ft1NIAi1FjOXrwKk=
+gofr.dev v1.49.0 h1:fmFDTI8ApbjD2H3guGgoH+77vXZmvNUpKmgnSyndv00=
+gofr.dev v1.49.0/go.mod h1:Ylcywf9+cS7ab0IMHomyoGfxP52xfaQ/eNZQlKWuTKQ=
 golang.org/x/crypto v0.45.0 h1:jMBrvKuj23MTlT0bQEOBcAE0mjg8mK9RXFhRH6nyF3Q=
 golang.org/x/crypto v0.45.0/go.mod h1:XTGrrkGJve7CYK7J8PEww4aY7gM3qMCElcJQ8n8JdX4=
 golang.org/x/sys v0.38.0 h1:3yZWxaJjBmCWXqhN1qh02AkOnCQ1poK6oF+a7xWL6Gc=
