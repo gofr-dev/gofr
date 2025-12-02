@@ -357,7 +357,7 @@ jobs:
       has_modules: ${{ steps.changed-submodules.outputs.has_modules }}
     steps:
       - name: Check out code into the Go module directory
-        uses: actions/checkout@v5
+        uses: actions/checkout@v6
         with:
           fetch-depth: 0  # Full history needed for proper diff analysis
 
@@ -373,7 +373,7 @@ jobs:
       # Use the official golangci-lint action for the root module
       # This action automatically detects changed files and only reports new issues
       - name: Lint Root Module
-        uses: golangci/golangci-lint-action@v7
+        uses: golangci/golangci-lint-action@v9
         with:
           version: v2.4.0
           only-new-issues: true
@@ -383,7 +383,7 @@ jobs:
       # This implements a changed-files based approach as suggested by the maintainer
       - name: Get Changed Files
         id: changed-files
-        uses: tj-actions/changed-files@v45
+        uses: tj-actions/changed-files@v47
         with:
           files: |
             pkg/**/*.go
@@ -453,7 +453,7 @@ jobs:
       fail-fast: false
     steps:
       - name: Check out code
-        uses: actions/checkout@v5
+        uses: actions/checkout@v6
         with:
           fetch-depth: 0
 
@@ -469,7 +469,7 @@ jobs:
 
       # Use the official golangci-lint action for this submodule
       - name: Lint ${{ matrix.module }}
-        uses: golangci/golangci-lint-action@v7
+        uses: golangci/golangci-lint-action@v9
         with:
           version: v2.4.0
           working-directory: ${{ matrix.module }}
