@@ -148,5 +148,11 @@ type otelErrorHandler struct {
 }
 
 func (o *otelErrorHandler) Handle(e error) {
+	// 201 is a success status code, but the zipkin exporter treats it as an error.
+	// We should ignore this error.
+	if strings.Contains(e.Error(), "status 201") {
+		return
+	}
+
 	o.logger.Error(e.Error())
 }
