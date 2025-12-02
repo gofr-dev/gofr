@@ -383,7 +383,7 @@ jobs:
       # This implements a changed-files based approach as suggested by the maintainer
       - name: Get Changed Files
         id: changed-files
-        uses: tj-actions/changed-files@v45
+        uses: tj-actions/changed-files@v47
         with:
           files: |
             pkg/**/*.go
