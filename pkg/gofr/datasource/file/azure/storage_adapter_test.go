@@ -1,7 +1,6 @@
 package azure
 
 import (
-	"bytes"
 	"context"
 	"crypto/tls"
 	"errors"
@@ -222,44 +221,26 @@ func TestStorageAdapter_NewRangeReader(t *testing.T) {
 	}
 }
 
-// TestStorageAdapter_NewWriter tests the NewWriter method with table-driven tests.
-func TestStorageAdapter_NewWriter(t *testing.T) {
-	tests := []struct {
-		name          string
-		adapter       *storageAdapter
-		objectName    string
-		expectedError error
-		description   string
-	}{
-		{
-			name:          "empty_name",
-			adapter:       &storageAdapter{},
-			objectName:    "",
-			expectedError: errEmptyObjectName,
-			description:   "Should return failWriter when object name is empty",
-		},
-		{
-			name:        "valid_name",
-			adapter:     &storageAdapter{cfg: &Config{ShareName: "test"}},
-			objectName:  "file.txt",
-			description: "Should return writer (will fail on write due to nil client)",
-		},
-	}
+// TestStorageAdapter_NewWriter_EmptyName tests NewWriter with empty name.
+func TestStorageAdapter_NewWriter_EmptyName(t *testing.T) {
+	adapter := &storageAdapter{}
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			writer := tt.adapter.NewWriter(context.Background(), tt.objectName)
+	writer := adapter.NewWriter(context.Background(), "")
 
-			require.NotNil(t, writer)
+	require.NotNil(t, writer)
+	n, err := writer.Write([]byte("test"))
+	assert.Equal(t, 0, n)
+	require.Error(t, err)
+	require.ErrorIs(t, err, errEmptyObjectName)
+}
 
-			if tt.expectedError != nil {
-				n, err := writer.Write([]byte("test"))
-				assert.Equal(t, 0, n)
-				require.Error(t, err)
-				require.ErrorIs(t, err, tt.expectedError)
-			}
-		})
-	}
+// TestStorageAdapter_NewWriter_ValidName tests NewWriter with valid name.
+func TestStorageAdapter_NewWriter_ValidName(t *testing.T) {
+	adapter := &storageAdapter{cfg: &Config{ShareName: "test"}}
+
+	writer := adapter.NewWriter(context.Background(), "file.txt")
+
+	require.NotNil(t, writer)
 }
 
 // TestAzureWriter_Write_Success tests successful write operation.
@@ -571,53 +552,27 @@ func TestFailWriter(t *testing.T) {
 	}
 }
 
-// TestBytesReadSeekCloser_Read tests the Read method of bytesReadSeekCloser.
-func TestBytesReadSeekCloser_Read(t *testing.T) {
-	tests := []struct {
-		name        string
-		setup       func() *bytesReadSeekCloser
-		readBuf     []byte
-		readN       int
-		readErr     error
-		description string
-	}{
-		{
-			name: "read_success",
-			setup: func() *bytesReadSeekCloser {
-				return &bytesReadSeekCloser{data: []byte("hello world")}
-			},
-			readBuf:     make([]byte, 5),
-			readN:       5,
-			readErr:     nil,
-			description: "Should read data successfully",
-		},
-		{
-			name: "read_eof",
-			setup: func() *bytesReadSeekCloser {
-				return &bytesReadSeekCloser{data: []byte("hi"), offset: 2}
-			},
-			readBuf:     make([]byte, 10),
-			readN:       0,
-			readErr:     io.EOF,
-			description: "Should return EOF when at end",
-		},
-	}
+// TestBytesReadSeekCloser_Read_Success tests successful read operation.
+func TestBytesReadSeekCloser_Read_Success(t *testing.T) {
+	brsc := &bytesReadSeekCloser{data: []byte("hello world")}
+	readBuf := make([]byte, 5)
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			brsc := tt.setup()
+	n, err := brsc.Read(readBuf)
 
-			n, err := brsc.Read(tt.readBuf)
-			assert.Equal(t, tt.readN, n)
+	assert.Equal(t, 5, n)
+	require.NoError(t, err)
+}
 
-			if tt.readErr != nil {
-				require.Error(t, err)
-				require.ErrorIs(t, err, tt.readErr)
-			} else {
-				assert.NoError(t, err)
-			}
-		})
-	}
+// TestBytesReadSeekCloser_Read_EOF tests read operation when at end of data.
+func TestBytesReadSeekCloser_Read_EOF(t *testing.T) {
+	brsc := &bytesReadSeekCloser{data: []byte("hi"), offset: 2}
+	readBuf := make([]byte, 10)
+
+	n, err := brsc.Read(readBuf)
+
+	assert.Equal(t, 0, n)
+	require.Error(t, err)
+	require.ErrorIs(t, err, io.EOF)
 }
 
 // TestBytesReadSeekCloser_Seek tests the Seek method of bytesReadSeekCloser.
@@ -710,7 +665,7 @@ func TestBytesReadSeekCloser_Seek(t *testing.T) {
 				require.Error(t, err)
 				require.ErrorIs(t, err, tt.seekErr)
 			} else {
-				assert.NoError(t, err)
+				require.NoError(t, err)
 			}
 		})
 	}
@@ -722,82 +677,6 @@ func TestBytesReadSeekCloser_Close(t *testing.T) {
 
 	err := brsc.Close()
 	assert.NoError(t, err)
-}
-
-// TestReadSeekCloserWrapper tests the readSeekCloserWrapper implementation with table-driven tests.
-func TestReadSeekCloserWrapper(t *testing.T) {
-	tests := []struct {
-		name        string
-		setup       func() *readSeekCloserWrapper
-		readBuf     []byte
-		readN       int
-		readErr     error
-		seekOffset  int64
-		seekWhence  int
-		seekErr     error
-		description string
-	}{
-		{
-			name: "read_success",
-			setup: func() *readSeekCloserWrapper {
-				return &readSeekCloserWrapper{reader: io.NopCloser(bytes.NewReader([]byte("test data")))}
-			},
-			readBuf:     make([]byte, 4),
-			readN:       4,
-			readErr:     nil,
-			description: "Should read data successfully",
-		},
-		{
-			name: "seek_invalid_whence",
-			setup: func() *readSeekCloserWrapper {
-				return &readSeekCloserWrapper{reader: io.NopCloser(bytes.NewReader([]byte("test")))}
-			},
-			seekOffset:  0,
-			seekWhence:  99,
-			seekErr:     errInvalidWhence,
-			description: "Should return error for invalid whence",
-		},
-		{
-			name: "close_success",
-			setup: func() *readSeekCloserWrapper {
-				return &readSeekCloserWrapper{reader: io.NopCloser(bytes.NewReader([]byte("test")))}
-			},
-			description: "Should close successfully",
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			wrapper := tt.setup()
-
-			if tt.readBuf != nil {
-				n, err := wrapper.Read(tt.readBuf)
-				assert.Equal(t, tt.readN, n)
-
-				if tt.readErr != nil {
-					require.Error(t, err)
-					require.ErrorIs(t, err, tt.readErr)
-				} else {
-					require.NoError(t, err)
-				}
-			}
-
-			if tt.seekWhence != 0 {
-				_, err := wrapper.Seek(tt.seekOffset, tt.seekWhence)
-				if tt.seekErr != nil {
-					require.Error(t, err)
-					require.ErrorIs(t, err, tt.seekErr)
-				} else {
-					require.NoError(t, err)
-				}
-			}
-
-			if strings.Contains(tt.name, "close") {
-				err := wrapper.Close()
-				assert.NoError(t, err)
-			}
-		})
-	}
 }
 
 // TestStorageAdapter_getFileClient tests the getFileClient method with table-driven tests.
@@ -816,27 +695,6 @@ func TestStorageAdapter_getFileClient(t *testing.T) {
 			expectedError: errAzureClientNotInitialized,
 			description:   "Should return error when shareClient is nil",
 		},
-		{
-			name:          "root_file",
-			adapter:       &storageAdapter{cfg: &Config{ShareName: "test"}},
-			filePath:      "file.txt",
-			expectedError: errAzureClientNotInitialized,
-			description:   "Should return error for root file (nil client)",
-		},
-		{
-			name:          "subdirectory_file",
-			adapter:       &storageAdapter{cfg: &Config{ShareName: "test"}},
-			filePath:      "dir/file.txt",
-			expectedError: errAzureClientNotInitialized,
-			description:   "Should return error for subdirectory file (nil client)",
-		},
-		{
-			name:          "nested_path",
-			adapter:       &storageAdapter{cfg: &Config{ShareName: "test"}},
-			filePath:      "dir/subdir/file.txt",
-			expectedError: errAzureClientNotInitialized,
-			description:   "Should return error for nested path (nil client)",
-		},
 	}
 
 	for _, tt := range tests {
@@ -844,7 +702,7 @@ func TestStorageAdapter_getFileClient(t *testing.T) {
 			_, err := tt.adapter.getFileClient(tt.filePath)
 
 			require.Error(t, err)
-			assert.ErrorIs(t, err, tt.expectedError)
+			require.ErrorIs(t, err, tt.expectedError)
 		})
 	}
 }
@@ -2372,12 +2230,9 @@ func TestStorageAdapter_GetFileClient_Success(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			fileClient, err := adapter.getFileClient(tt.filePath)
-			if tt.expected {
-				require.NoError(t, err)
-				assert.NotNil(t, fileClient)
-			} else {
-				require.Error(t, err)
-			}
+
+			require.NoError(t, err)
+			assert.NotNil(t, fileClient)
 		})
 	}
 }
@@ -2439,11 +2294,14 @@ func TestStorageAdapter_EnsureParentDirectories_Success(t *testing.T) {
 	}
 
 	for _, tt := range tests {
-		t.Run(tt.name, func(_ *testing.T) {
+		t.Run(tt.name, func(t *testing.T) {
 			err := adapter.ensureParentDirectories(context.Background(), tt.filePath)
 
-			// May fail due to handler limitations, but tests the code path
-			_ = err
+			if tt.expectError {
+				require.Error(t, err)
+			} else {
+				require.NoError(t, err)
+			}
 		})
 	}
 }

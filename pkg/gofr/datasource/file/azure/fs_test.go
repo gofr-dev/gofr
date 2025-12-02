@@ -202,15 +202,3 @@ func TestAzureFileSystem_startRetryConnect_RetryDisabled(t *testing.T) {
 	// Give it a moment to check the retry disabled flag
 	time.Sleep(50 * time.Millisecond)
 }
-
-func TestConfig_EmptyEndpoint(t *testing.T) {
-	config := &Config{
-		AccountName: "myaccount",
-		AccountKey:  "mykey",
-		ShareName:   "myshare",
-		// Endpoint is empty
-	}
-
-	assert.Empty(t, config.Endpoint)
-	// Endpoint will be built in Connect() as: "https://" + AccountName + ".file.core.windows.net"
-}
