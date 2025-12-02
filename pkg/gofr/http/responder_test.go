@@ -2,6 +2,7 @@ package http
 
 import (
 	"bytes"
+	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -14,6 +15,8 @@ import (
 	resTypes "gofr.dev/pkg/gofr/http/response"
 )
 
+var errTest = fmt.Errorf("internal server error")
+
 func TestResponder(t *testing.T) {
 	tests := []struct {
 		desc         string
@@ -21,6 +24,23 @@ func TestResponder(t *testing.T) {
 		contentType  string
 		expectedBody []byte
 	}{
+		{
+			desc: "xml response type default content type",
+			data: resTypes.XML{
+				Content: []byte(`<Response status="ok"><Message>Hello</Message></Response>`),
+			},
+			contentType:  "application/xml",
+			expectedBody: []byte(`<Response status="ok"><Message>Hello</Message></Response>`),
+		},
+		{
+			desc: "xml response type custom content type",
+			data: resTypes.XML{
+				Content:     []byte(`<soapenv:Envelope></soapenv:Envelope>`),
+				ContentType: "application/soap+xml",
+			},
+			contentType:  "application/soap+xml",
+			expectedBody: []byte(`<soapenv:Envelope></soapenv:Envelope>`),
+		},
 		{
 			desc:         "raw response type",
 			data:         resTypes.Raw{Data: []byte("raw data")},
@@ -439,5 +459,77 @@ func TestResponder_ContentTypePreservation(t *testing.T) {
 		contentType := recorder.Header().Get("Content-Type")
 
 		assert.Equal(t, tc.expectedType, contentType, "TEST[%d] Failed: %s", i, tc.desc)
+	}
+}
+
+// TestResponder_XMLFileTemplate_ErrorStatusCodes verifies that XML, File, and Template responses
+// return appropriate error status codes when errors occur, not always 200 OK.
+func TestResponder_XMLFileTemplate_ErrorStatusCodes(t *testing.T) {
+	tests := []struct {
+		desc         string
+		data         any
+		err          error
+		expectedCode int
+	}{
+		{
+			desc: "XML response with 404 error should return 404",
+			data: resTypes.XML{
+				Content: []byte(`<Response><Error>Not Found</Error></Response>`),
+			},
+			err:          ErrorEntityNotFound{Name: "id", Value: "123"},
+			expectedCode: http.StatusNotFound,
+		},
+		{
+			desc: "XML response with 500 error should return 500",
+			data: resTypes.XML{
+				Content: []byte(`<Response><Error>Internal Error</Error></Response>`),
+			},
+			err:          errTest,
+			expectedCode: http.StatusInternalServerError,
+		},
+		{
+			desc: "File response with 404 error should return 404",
+			data: resTypes.File{
+				ContentType: "image/png",
+				Content:     []byte("fake image data"),
+			},
+			err:          ErrorEntityNotFound{Name: "file", Value: "test.png"},
+			expectedCode: http.StatusNotFound,
+		},
+		{
+			desc: "File response with 500 error should return 500",
+			data: resTypes.File{
+				ContentType: "application/pdf",
+				Content:     []byte("fake pdf data"),
+			},
+			err:          errTest,
+			expectedCode: http.StatusInternalServerError,
+		},
+		{
+			desc: "XML response with no error should return 200",
+			data: resTypes.XML{
+				Content: []byte(`<Response><Status>OK</Status></Response>`),
+			},
+			err:          nil,
+			expectedCode: http.StatusOK,
+		},
+		{
+			desc: "File response with no error should return 200",
+			data: resTypes.File{
+				ContentType: "text/plain",
+				Content:     []byte("file content"),
+			},
+			err:          nil,
+			expectedCode: http.StatusOK,
+		},
+	}
+
+	for i, tc := range tests {
+		recorder := httptest.NewRecorder()
+		r := NewResponder(recorder, http.MethodGet)
+
+		r.Respond(tc.data, tc.err)
+
+		assert.Equal(t, tc.expectedCode, recorder.Code, "TEST[%d] Failed: %s", i, tc.desc)
 	}
 }
