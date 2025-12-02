@@ -357,7 +357,7 @@ jobs:
       has_modules: ${{ steps.changed-submodules.outputs.has_modules }}
     steps:
       - name: Check out code into the Go module directory
-        uses: actions/checkout@v5
+        uses: actions/checkout@v6
         with:
           fetch-depth: 0  # Full history needed for proper diff analysis
 
@@ -453,7 +453,7 @@ jobs:
       fail-fast: false
     steps:
       - name: Check out code
-        uses: actions/checkout@v5
+        uses: actions/checkout@v6
         with:
           fetch-depth: 0
 
