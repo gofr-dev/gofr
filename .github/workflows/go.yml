@@ -332,39 +332,64 @@ jobs:
             # Get the list of submodules
             SUBMODULES='${{ steps.detect_submodules.outputs.submodules }}'
             
+            # Check if we have any submodules to test
+            if [ "$SUBMODULES" = "[]" ] || [ -z "$SUBMODULES" ]; then
+              echo "ℹ️ No submodules to test"
+              exit 0
+            fi
+            
             # Process each submodule in parallel with a maximum of 4 parallel jobs
-            echo $SUBMODULES | jq -c '.[]' | xargs -I{} -P 4 bash -c '
-              set -e
+            # Use a temporary file to track failures (accessible from subshells)
+            FAILED_MODULES_FILE=$(mktemp)
+            echo $SUBMODULES | jq -c '.[]' | xargs -I{} -P 4 bash -c "
               module={}
-              echo "Testing module: $module"
+              echo \"Testing module: \$module\"
               
-              if [ ! -d "$module" ]; then
-                echo "⚠️ Warning: Module directory $module does not exist, skipping"
+              if [ ! -d \"\$module\" ]; then
+                echo \"⚠️ Warning: Module directory \$module does not exist, skipping\"
                 exit 0
               fi
               
-              cd "$module" || { echo "⚠️ Error: Failed to cd to $module"; exit 1; }
+              if ! cd \"\$module\" 2>/dev/null; then
+                echo \"⚠️ Error: Failed to cd to \$module\"
+                echo \"\$module\" >> \"$FAILED_MODULES_FILE\"
+                exit 0
+              fi
             
               # Extract module name (replace / with _)
-              module_name=$(echo "$module" | tr "/" "_")
+              module_name=\$(echo \"\$module\" | tr \"/\" \"_\")
             
-              # Download dependencies for the submodule
-              go mod download || { echo "⚠️ Warning: Failed to download dependencies for $module"; }
-              go mod tidy || { echo "⚠️ Warning: Failed to tidy dependencies for $module"; }
+              # Download dependencies for the submodule (non-fatal)
+              go mod download || echo \"⚠️ Warning: Failed to download dependencies for \$module\"
+              go mod tidy || echo \"⚠️ Warning: Failed to tidy dependencies for \$module\"
             
-              # Run tests with a focus on failed tests first
-              if go test ./... -v -short -coverprofile=${module_name}.cov -coverpkg=./...; then
+              # Run tests - capture exit code (don't use set -e)
+              if go test ./... -v -short -coverprofile=\${module_name}.cov -coverpkg=./...; then
                 # Copy coverage file to the coverage_reports directory if it exists
-                if [ -f "${module_name}.cov" ]; then
-                  cp "${module_name}.cov" ../../../coverage_reports/ || echo "⚠️ Warning: Failed to copy coverage file for $module"
+                if [ -f \"\${module_name}.cov\" ]; then
+                  cp \"\${module_name}.cov\" ../../../coverage_reports/ || echo \"⚠️ Warning: Failed to copy coverage file for \$module\"
                 fi
+                echo \"✅ Tests passed for module \$module\"
               else
-                echo "⚠️ Warning: Tests failed for module $module"
-                exit 1
+                echo \"❌ Tests failed for module \$module\"
+                echo \"\$module\" >> \"$FAILED_MODULES_FILE\"
               fi
             
               cd - || true
-            ' || echo "⚠️ Warning: Some submodule tests failed"
+            " || true
+            
+            # Check if any modules failed
+            if [ -s "$FAILED_MODULES_FILE" ]; then
+              echo "::error::The following submodules had test failures:"
+              while IFS= read -r module; do
+                echo "::error::  - $module"
+              done < "$FAILED_MODULES_FILE"
+              rm -f "$FAILED_MODULES_FILE"
+              exit 1
+            else
+              echo "✅ All submodule tests passed"
+              rm -f "$FAILED_MODULES_FILE"
+            fi
 
       # Upload submodule coverage reports as an artifact
       - name: Upload Coverage Reports

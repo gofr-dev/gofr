@@ -21,6 +21,9 @@ func TestMain(m *testing.M) {
 }
 
 func TestMainInitialization(t *testing.T) {
+	// Use NewServerConfigs to get a free metrics port and avoid port conflicts
+	_ = testutil.NewServerConfigs(t)
+	
 	log := testutil.StdoutOutputForFunc(func() {
 		go main()
 
