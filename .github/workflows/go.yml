@@ -105,15 +105,30 @@ jobs:
             export APP_ENV=test
             # Run tests for the examples directory with coverage
             go test ./examples/... -v -short -covermode=atomic -coverprofile packageWithpbgo.cov -coverpkg=./examples/...
-            # Treat exit code 0 as success; exit code 1 may be harmless if output exists
-            if [ "${exit_code:-0}" -ne 0 ]; then
-              echo "⚠️ go test exited with $exit_code"
+            exit_code=$?
+            if [ $exit_code -eq 2 ]; then
+              echo "::error::Panic detected in examples tests"
+              exit 2
+            elif [ $exit_code -ne 0 ]; then
+              echo "::error::Examples tests failed with exit code $exit_code"
+              exit $exit_code
             fi
-             # Filter out auto-generated files by protobuf and gofr framework from coverage report
-
-            grep -vE '(/client/|grpc-.+-client/main\.go|_client\.go|_gofr\.go|_grpc\.pb\.go|\.pb\.go|\.proto|health_.*\.go)' packageWithpbgo.cov > profile.cov
-            # Display coverage statistics
-            go tool cover -func profile.cov
+            
+            # Filter out auto-generated files by protobuf and gofr framework from coverage report
+            # Use || true to prevent grep from failing if no matches found
+            if [ -f packageWithpbgo.cov ]; then
+              grep -vE '(/client/|grpc-.+-client/main\.go|_client\.go|_gofr\.go|_grpc\.pb\.go|\.pb\.go|\.proto|health_.*\.go)' packageWithpbgo.cov > profile.cov || true
+            else
+              echo "⚠️ Warning: packageWithpbgo.cov not found, creating empty profile"
+              echo "mode: atomic" > profile.cov
+            fi
+            
+            # Display coverage statistics (only if profile has content)
+            if [ -s profile.cov ]; then
+              go tool cover -func profile.cov
+            else
+              echo "⚠️ Warning: No coverage data found in profile.cov"
+            fi
 
       # Upload coverage report for the 1.24 Go version only
       - name: Upload Test Coverage
