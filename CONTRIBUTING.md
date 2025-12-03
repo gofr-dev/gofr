@@ -102,14 +102,6 @@ docker login container-registry.oracle.com
 docker pull container-registry.oracle.com/database/free:latest
 docker run -d --name oracle-free -p 1521:1521 -e ORACLE_PWD=YourPasswordHere container-registry.oracle.com/database/free:latest
 docker run -it --rm -p 4443:4443 -e STORAGE_EMULATOR_HOST=0.0.0.0:4443 fsouza/fake-gcs-server:latest
-# Azurite - Azure Storage Emulator (supports Blob, Queue, and Table Storage)
-# Note: Azurite does NOT support Azure File Storage. 
-# For Azure File Storage testing options, see below:
-# Use actual Azure Storage Account (recommended for integration tests)
-#   - Create a free Azure Storage Account: https://azure.microsoft.com/free/
-#   - Create a File Share in the storage account
-#   - Use the storage account name, key, and share name in your configs/.env
-#   - Free tier includes 5GB storage and 20,000 transactions per month
 ```
 
 > [!NOTE]
