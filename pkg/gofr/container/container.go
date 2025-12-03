@@ -72,8 +72,6 @@ type Container struct {
 	KVStore KVStore
 
 	File file.FileSystem
-
-	RBAC RBACProvider
 }
 
 func NewContainer(conf config.Config) *Container {
