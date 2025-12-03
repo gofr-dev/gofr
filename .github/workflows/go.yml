@@ -19,7 +19,7 @@ on:
       - main
       - development
     paths-ignore:
-      - 'docs/**'# Ignore changes to docs folder
+      - 'docs/**'  # Ignore changes to docs folder
       - '**/*.md'
 
 # Define the jobs that this workflow will run
@@ -114,7 +114,7 @@ jobs:
             grep -vE '(/client/|grpc-.+-client/main\.go|_client\.go|_gofr\.go|_grpc\.pb\.go|\.pb\.go|\.proto|health_.*\.go)' packageWithpbgo.cov > profile.cov
             # Display coverage statistics
             go tool cover -func profile.cov
-      
+
       # Upload coverage report for the 1.24 Go version only
       - name: Upload Test Coverage
         if: ${{ matrix.go-version == '1.24'}}
@@ -160,7 +160,7 @@ jobs:
           command: |
             set -e
             export APP_ENV=test
-            
+
             # Run tests for root gofr package
             go test -v -short -covermode=atomic \
               -coverpkg=./pkg/gofr -coverprofile=gofr_only.cov ./pkg/gofr
@@ -184,9 +184,11 @@ jobs:
               echo "::error::Gofr sub-packages tests failed"
               exit $exit_code
             fi
+
             # Combine coverage profiles
             echo "mode: atomic" > profile.cov
             grep -h -v "mode:" gofr_only.cov submodules.cov | grep -v '/mock_' >> profile.cov
+
             # Show coverage summary
             go tool cover -func profile.cov
 
@@ -220,6 +222,7 @@ jobs:
         run: |
           echo "mode: atomic" > merged_profile.cov
           grep -h -v "mode:" ./Example-Test-Report/profile.cov ./PKG-Coverage-Report/profile.cov >> merged_profile.cov
+
       # Calculate and output the total code coverage percentage
       - name: Parse code-coverage value
         working-directory: artifacts
@@ -294,12 +297,13 @@ jobs:
             
               # Run tests with a focus on failed tests first
               go test ./... -v -short -coverprofile=${module_name}.cov -coverpkg=./...
-
+            
               # Copy coverage file to the coverage_reports directory
               cp ${module_name}.cov ../../../coverage_reports/
             
               cd -
             '
+
       # Upload submodule coverage reports as an artifact
       - name: Upload Coverage Reports
         uses: actions/upload-artifact@v5
@@ -327,6 +331,7 @@ jobs:
         run: |
           curl https://qlty.sh | sh
           echo "$HOME/.qlty/bin" >> $GITHUB_PATH
+
       # Download coverage artifacts
       - name: Download Coverage Report
         uses: actions/download-artifact@v6
@@ -339,6 +344,7 @@ jobs:
         run: |
           echo "mode: atomic" > merged_profile.cov
           grep -h -v "mode:" ./Example-Test-Report/profile.cov ./PKG-Coverage-Report/profile.cov >> merged_profile.cov
+
           # Generate and print total coverage percentage
           echo "Total Coverage:"
           go tool cover -func=merged_profile.cov | tail -n 1
@@ -355,9 +361,14 @@ jobs:
   code_quality:
     name: Code Quality🎖️
     runs-on: ubuntu-latest
+    outputs:
+      modules: ${{ steps.changed-submodules.outputs.modules }}
+      has_modules: ${{ steps.changed-submodules.outputs.has_modules }}
     steps:
       - name: Check out code into the Go module directory
         uses: actions/checkout@v6
+        with:
+          fetch-depth: 0  # Full history needed for proper diff analysis
 
       - name: Set up Go environment
         uses: actions/setup-go@v5
@@ -365,36 +376,114 @@ jobs:
           go-version: '1.25'
           cache: false
 
-      # Install the linting tool
-      - name: Install golangci-lint
-        run: |
-          go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.4.0
       - name: Get dependencies
-        run: |
-          go mod tidy
+        run: go mod download
 
-      # Run linter on the root module
+      # Use the official golangci-lint action for the root module
+      # This action automatically detects changed files and only reports new issues
       - name: Lint Root Module
+        uses: golangci/golangci-lint-action@v9
+        with:
+          version: v2.4.0
+          only-new-issues: true
+          args: --timeout=5m
+
+      # Detect changed files to determine which submodules need linting
+      # This implements a changed-files based approach as suggested by the maintainer
+      - name: Get Changed Files
+        id: changed-files
+        uses: tj-actions/changed-files@v47
+        with:
+          files: |
+            pkg/**/*.go
+            pkg/**/go.mod
+            pkg/**/go.sum
+
+      # Find all submodules that have changes
+      - name: Find Changed Submodules
+        id: changed-submodules
         run: |
-          golangci-lint run --output.text.print-issued-lines --output.text.colors=true --show-stats=false --timeout=5m
-      # Run linter on each submodule
-      - name: Lint Submodules
-        run: |
-          echo "Searching for submodules..."
-          total_errors=0  # Initialize error counter
-          for module in $(find pkg -name "go.mod" -exec dirname {} \;); do
-            echo "Linting submodule: $module"
-            # Change directory to the submodule and run golangci-lint
-            cd $module
-            go mod tidy
-            golangci-lint run --output.text.print-issued-lines --output.text.colors=true --show-stats=false --timeout 9m0s || total_errors=$((total_errors + 1))
-            cd -  # Return to the root directory
-          done
-          echo "Total submodule lint errors: $total_errors"
-          if [ $total_errors -gt 0 ]; then
-            echo "Linting failed for $total_errors submodule(s)."
-            exit 1  # Fail the job if there are linting errors in submodules
+          # Check if any files changed
+          if [ "${{ steps.changed-files.outputs.any_changed }}" != "true" ]; then
+            echo "✅ No changes in pkg/ directory"
+            echo "modules=[]" >> $GITHUB_OUTPUT
+            echo "has_modules=false" >> $GITHUB_OUTPUT
+            exit 0
           fi
+          
+          changed_files="${{ steps.changed-files.outputs.all_changed_files }}"
+          changed_modules=""
+          
+          echo "📝 Changed files detected:"
+          echo "$changed_files" | tr ' ' '\n'
+          echo ""
+          
+          # Extract unique submodule directories from changed files
+          for file in $changed_files; do
+            # Find the nearest parent directory containing go.mod
+            dir=$(dirname "$file")
+            while [ "$dir" != "." ] && [ "$dir" != "/" ]; do
+              if [ -f "$dir/go.mod" ] && [[ "$dir" == pkg/* ]]; then
+                # Check if this module is not already in the list
+                if [[ ! "$changed_modules" =~ (^|[[:space:]])"$dir"($|[[:space:]]) ]]; then
+                  changed_modules="$changed_modules$dir "
+                fi
+                break
+              fi
+              dir=$(dirname "$dir")
+            done
+          done
+          
+          changed_modules=$(echo "$changed_modules" | xargs -n1 | sort -u)
+          
+          if [ -n "$changed_modules" ]; then
+            echo "📦 Submodules with changes:"
+            echo "$changed_modules"
+            # Convert to JSON array for matrix usage
+            modules_json=$(echo "$changed_modules" | jq -R -s -c 'split("\n") | map(select(length > 0))')
+            echo "modules=$modules_json" >> $GITHUB_OUTPUT
+            echo "has_modules=true" >> $GITHUB_OUTPUT
+          else
+            echo "✅ No submodule changes detected"
+            echo "modules=[]" >> $GITHUB_OUTPUT
+            echo "has_modules=false" >> $GITHUB_OUTPUT
+          fi
+
+  # Separate job to lint changed submodules using matrix strategy
+  # This allows us to use the official golangci-lint action for each submodule
+  lint_changed_submodules:
+    name: Lint Submodules🔍
+    runs-on: ubuntu-latest
+    needs: code_quality
+    if: needs.code_quality.outputs.has_modules == 'true'
+    strategy:
+      matrix:
+        module: ${{ fromJson(needs.code_quality.outputs.modules) }}
+      fail-fast: false
+    steps:
+      - name: Check out code
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Set up Go environment
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.25'
+          cache: false
+
+      - name: Download dependencies for ${{ matrix.module }}
+        working-directory: ${{ matrix.module }}
+        run: go mod download
+
+      # Use the official golangci-lint action for this submodule
+      - name: Lint ${{ matrix.module }}
+        uses: golangci/golangci-lint-action@v9
+        with:
+          version: v2.4.0
+          working-directory: ${{ matrix.module }}
+          only-new-issues: true
+          args: --timeout=9m
 
   # Job for checking filename conventions
   linting_party:
