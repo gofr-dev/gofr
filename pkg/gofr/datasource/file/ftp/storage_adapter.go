@@ -463,32 +463,28 @@ func getContentType(entry *ftp.Entry) string {
 		return "application/x-directory"
 	}
 
-	name := strings.ToLower(entry.Name)
+	ext := strings.ToLower(path.Ext(entry.Name))
 
-	switch {
-	case strings.HasSuffix(name, ".json"):
-		return "application/json"
-	case strings.HasSuffix(name, ".xml"):
-		return "application/xml"
-	case strings.HasSuffix(name, ".txt"):
-		return "text/plain; charset=utf-8"
-	case strings.HasSuffix(name, ".csv"):
-		return "text/csv"
-	case strings.HasSuffix(name, ".html"), strings.HasSuffix(name, ".htm"):
-		return "text/html"
-	case strings.HasSuffix(name, ".pdf"):
-		return "application/pdf"
-	case strings.HasSuffix(name, ".zip"):
-		return "application/zip"
-	case strings.HasSuffix(name, ".jpg"), strings.HasSuffix(name, ".jpeg"):
-		return "image/jpeg"
-	case strings.HasSuffix(name, ".png"):
-		return "image/png"
-	case strings.HasSuffix(name, ".gif"):
-		return "image/gif"
-	default:
-		return "application/octet-stream"
+	contentTypes := map[string]string{
+		".json": "application/json",
+		".xml":  "application/xml",
+		".txt":  "text/plain; charset=utf-8",
+		".csv":  "text/csv",
+		".html": "text/html",
+		".htm":  "text/html",
+		".pdf":  "application/pdf",
+		".zip":  "application/zip",
+		".jpg":  "image/jpeg",
+		".jpeg": "image/jpeg",
+		".png":  "image/png",
+		".gif":  "image/gif",
 	}
+
+	if contentType, ok := contentTypes[ext]; ok {
+		return contentType
+	}
+
+	return "application/octet-stream"
 }
 
 func safeUint64ToInt64(u uint64) int64 {
