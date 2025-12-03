@@ -187,10 +187,22 @@ jobs:
 
             # Combine coverage profiles
             echo "mode: atomic" > profile.cov
-            grep -h -v "mode:" gofr_only.cov submodules.cov | grep -v '/mock_' >> profile.cov
+            # Use || true to prevent grep from failing if no matches found
+            # Check if files exist before grepping
+            if [ -f gofr_only.cov ] && [ -f submodules.cov ]; then
+              grep -h -v "mode:" gofr_only.cov submodules.cov 2>/dev/null | grep -v '/mock_' >> profile.cov || true
+            elif [ -f gofr_only.cov ]; then
+              grep -v "mode:" gofr_only.cov 2>/dev/null | grep -v '/mock_' >> profile.cov || true
+            elif [ -f submodules.cov ]; then
+              grep -v "mode:" submodules.cov 2>/dev/null | grep -v '/mock_' >> profile.cov || true
+            fi
 
-            # Show coverage summary
-            go tool cover -func profile.cov
+            # Show coverage summary (only if profile has content)
+            if [ -s profile.cov ]; then
+              go tool cover -func profile.cov
+            else
+              echo "⚠️ Warning: No coverage data found"
+            fi
 
       # Upload coverage report for the 1.24 Go version only
       - name: Upload Test Coverage
@@ -445,6 +457,10 @@ jobs:
             echo "has_modules=true" >> $GITHUB_OUTPUT
           else
             echo "✅ No submodule changes detected"
+            echo "ℹ️ This means either:"
+            echo "  1. No files changed in pkg/ submodules"
+            echo "  2. Changed files are in root pkg/gofr (not submodules)"
+            echo "  3. Changed files don't have go.mod in their directory"
             echo "modules=[]" >> $GITHUB_OUTPUT
             echo "has_modules=false" >> $GITHUB_OUTPUT
           fi
