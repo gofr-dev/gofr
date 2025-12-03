@@ -1,32 +1,54 @@
 package rbac
 
 import (
+	"fmt"
 	"net/http"
 
-	"gofr.dev/pkg/gofr/container"
+	"gofr.dev/pkg/gofr"
 )
 
-// Provider implements container.RBACProvider interface.
-// This follows the same pattern as datasource providers (e.g., mongo.Client).
-type Provider struct{}
+// Provider is the RBAC provider implementation.
+// Provider implements gofr.RBACProvider interface.
+type Provider struct {
+	config *Config // Store the loaded config
+	logger any      // Store the logger (set via UseLogger)
+}
 
 // NewProvider creates a new RBAC provider.
-// This follows the same pattern as datasource providers (e.g., mongo.New()).
 //
 // Example:
 //
 //	provider := rbac.NewProvider()
 //	app.EnableRBAC(provider, "configs/rbac.json")
-func NewProvider() container.RBACProvider {
+func NewProvider() *Provider {
 	return &Provider{}
 }
 
-// LoadPermissions loads RBAC configuration from a file.
+// UseLogger sets the logger for the provider.
+// This is called automatically by EnableRBAC - users don't need to configure this.
+func (p *Provider) UseLogger(logger any) {
+	p.logger = logger
+}
+
+// LoadPermissions loads RBAC configuration from a file and stores it in the provider.
 func (p *Provider) LoadPermissions(file string) (any, error) {
-	return LoadPermissions(file)
+	config, err := LoadPermissions(file)
+	if err != nil {
+		return nil, err
+	}
+
+	p.config = config
+
+	// Set logger on config if available (automatic audit logging)
+	if p.logger != nil {
+		config.SetLogger(p.logger)
+	}
+
+	return config, nil
 }
 
 // GetMiddleware returns the middleware function for the given config.
+// All authorization is handled via unified config (Roles and Endpoints).
 func (p *Provider) GetMiddleware(config any) func(http.Handler) http.Handler {
 	rbacConfig, ok := config.(*Config)
 	if !ok {
@@ -39,85 +61,21 @@ func (p *Provider) GetMiddleware(config any) func(http.Handler) http.Handler {
 	return Middleware(rbacConfig)
 }
 
-// RequireRole wraps a handler to require a specific role.
-func (p *Provider) RequireRole(allowedRole string, handlerFunc func(any) (any, error)) func(any) (any, error) {
-	hf := HandlerFunc(handlerFunc)
-	wrapped := RequireRole(allowedRole, hf)
-
-	return func(ctx any) (any, error) {
-		return wrapped(ctx)
-	}
-}
-
-// RequireAnyRole wraps a handler to require any of the specified roles.
-func (p *Provider) RequireAnyRole(allowedRoles []string, handlerFunc func(any) (any, error)) func(any) (any, error) {
-	hf := HandlerFunc(handlerFunc)
-	wrapped := RequireAnyRole(allowedRoles, hf)
-
-	return func(ctx any) (any, error) {
-		return wrapped(ctx)
-	}
-}
-
-// RequirePermission wraps a handler to require a specific permission.
-func (p *Provider) RequirePermission(requiredPermission string, permissionConfig any, handlerFunc func(any) (any, error)) func(any) (any, error) {
-	var rbacPermConfig *PermissionConfig
-
-	// Convert permissionConfig to *PermissionConfig
-	if permissionConfig == nil {
-		rbacPermConfig = &PermissionConfig{}
-	} else {
-		// Try to convert from gofr.PermissionConfig interface
-		if pc, ok := permissionConfig.(interface {
-			GetRolePermissions() map[string][]string
-			GetRoutePermissionMap() map[string]string
-			GetPermissions() map[string][]string
-			GetRoutePermissionRules() []RoutePermissionRule
-		}); ok {
-			rules := pc.GetRoutePermissionRules()
-			if len(rules) > 0 {
-				rbacRules := make([]RoutePermissionRule, len(rules))
-				for i, rule := range rules {
-					rbacRules[i] = RoutePermissionRule{
-						Methods:    rule.Methods,
-						Path:       rule.Path,
-						Regex:      rule.Regex,
-						Permission: rule.Permission,
-					}
-				}
-				rbacPermConfig = &PermissionConfig{
-					RoutePermissionRules: rbacRules,
-					RolePermissions:      pc.GetRolePermissions(),
-				}
-			} else {
-				rbacPermConfig = &PermissionConfig{
-					RolePermissions:    pc.GetRolePermissions(),
-					RoutePermissionMap: pc.GetRoutePermissionMap(),
-					Permissions:        pc.GetPermissions(),
-				}
-			}
-		} else if pc, ok := permissionConfig.(*PermissionConfig); ok {
-			rbacPermConfig = pc
-		} else {
-			rbacPermConfig = &PermissionConfig{}
-		}
+// EnableHotReload enables hot reloading with the given source.
+// This should be called in app.OnStart after Redis/HTTP services are available.
+// The config file must have hotReload.enabled: true for this to work.
+func (p *Provider) EnableHotReload(source gofr.HotReloadSource) error {
+	if p.config == nil {
+		return fmt.Errorf("config not loaded - call EnableRBAC first")
 	}
 
-	hf := HandlerFunc(handlerFunc)
-	wrapped := RequirePermission(requiredPermission, rbacPermConfig, hf)
-
-	return func(ctx any) (any, error) {
-		return wrapped(ctx)
+	if p.config.HotReloadConfig == nil || !p.config.HotReloadConfig.Enabled {
+		return nil // Hot reload not enabled in config, silently return
 	}
-}
 
-// ErrAccessDenied returns the error used when access is denied.
-func (p *Provider) ErrAccessDenied() error {
-	return ErrAccessDenied
-}
+	// Set the source and start hot reload internally
+	p.config.HotReloadConfig.Source = source
+	p.config.StartHotReload() // Internal method on Config
 
-// ErrPermissionDenied returns the error used when permission is denied.
-func (p *Provider) ErrPermissionDenied() error {
-	return ErrPermissionDenied
+	return nil
 }
-

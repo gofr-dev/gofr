@@ -1,19 +1,20 @@
 # Permission-Based Access Control in GoFr
 
-Permission-Based Access Control (PBAC) extends Role-Based Access Control (RBAC) by providing fine-grained authorization at the permission level. Instead of just checking if a user has a specific role, you can check if they have a specific permission to perform an action.
+Permission-Based Access Control (PBAC) extends Role-Based Access Control (RBAC) by providing fine-grained authorization at the permission level. GoFr's RBAC is **purely permission-based** - all authorization is done through permissions, not direct role-to-route mapping.
 
 ## Overview
 
 GoFr's permission-based RBAC provides:
 
-- ✅ **Factory Function Pattern** - `app.EnableRBAC()` follows the same pattern as `app.AddMongo()`, `app.AddPostgres()` - automatically registers RBAC when called
+- ✅ **Pure Config-Based** - All authorization rules defined in JSON/YAML files
+- ✅ **Two-Level Mapping** - Role→Permission and Route&Method→Permission mapping only
 - ✅ **Fine-Grained Control** - Define permissions like `users:read`, `users:write`, `users:delete`
-- ✅ **Structured Route Rules** - Map HTTP methods and routes to specific permissions using flexible regex patterns
-- ✅ **Role-Centric Permissions** - Intuitive model where roles define what they can do
+- ✅ **Flexible Route Patterns** - Support for path patterns, wildcards, and regex
+- ✅ **Role Inheritance** - Roles can inherit permissions from other roles
 - ✅ **Automatic Route Protection** - Middleware automatically checks permissions - no route-level wrappers needed
-- ✅ **Fallback to Role-Based** - Automatically falls back to role-based checks when permission mapping is missing
+- ✅ **Hot Reloading** - Update permissions without restarting (implement custom HotReloadSource interface)
 
-> **Note**: `app.EnableRBAC()` follows the same factory function pattern used throughout GoFr for datasource registration. Just like you use `app.AddMongo(db)` to register MongoDB, you use `app.EnableRBAC()` to register and configure RBAC. When using RBAC options (e.g., `&rbac.JWTExtractor{}`), you must import the rbac package: `import "gofr.dev/pkg/gofr/rbac"`.
+> **Note**: `app.EnableRBAC(provider, configFile)` follows the same factory function pattern used throughout GoFr for datasource registration. Just like you use `app.AddMongo(db)` to register MongoDB, you use `app.EnableRBAC(provider, configFile)` to register and configure RBAC. You must import the rbac package: `import "gofr.dev/pkg/gofr/rbac"`.
 
 ## Quick Start
 
@@ -24,15 +25,18 @@ package main
 
 import (
 	"gofr.dev/pkg/gofr"
+	"gofr.dev/pkg/gofr/rbac"
 )
 
 func main() {
 	app := gofr.New()
 
+	// Create RBAC provider
+	provider := rbac.NewProvider()
+
 	// Enable RBAC with permissions
 	// Config file defines all permissions and route mappings
-	// EnableRBAC is a factory function that registers RBAC automatically
-	app.EnableRBAC() // Uses configs/rbac.json by default
+	app.EnableRBAC(provider, "") // Uses configs/rbac.json by default
 
 	// Example routes - permissions checked automatically by middleware
 	app.GET("/api/users", getAllUsers)        // Auto-checked: users:read
@@ -48,151 +52,200 @@ func main() {
 ```json
 {
   "roleHeader": "X-User-Role",
-  "route": {
-    "/api/*": ["admin", "editor"]
-  },
-  "permissions": {
-    "rolePermissions": {
-      "admin": ["users:read", "users:write", "users:delete"],
-      "editor": ["users:read", "users:write"],
-      "viewer": ["users:read"]
+  "roles": [
+    {
+      "name": "admin",
+      "permissions": ["users:read", "users:write", "users:delete"]
     },
-    "routePermissionRules": [
-      {
-        "methods": ["GET"],
-        "regex": "^/api/users(/.*)?$",
-        "permission": "users:read"
-      },
-      {
-        "methods": ["POST", "PUT"],
-        "regex": "^/api/users(/.*)?$",
-        "permission": "users:write"
-      },
-      {
-        "methods": ["DELETE"],
-        "regex": "^/api/users/\\d+$",
-        "permission": "users:delete"
-      }
-    ]
-  }
+    {
+      "name": "editor",
+      "permissions": ["users:read", "users:write"],
+      "inheritsFrom": ["viewer"]
+    },
+    {
+      "name": "viewer",
+      "permissions": ["users:read"]
+    }
+  ],
+  "endpoints": [
+    {
+      "path": "/api/users",
+      "methods": ["GET"],
+      "requiredPermission": "users:read"
+    },
+    {
+      "path": "/api/users",
+      "methods": ["POST", "PUT"],
+      "requiredPermission": "users:write"
+    },
+    {
+      "path": "/api/users/{id}",
+      "methods": ["DELETE"],
+      "regex": "^/api/users/\\d+$",
+      "requiredPermission": "users:delete"
+    }
+  ]
 }
 ```
 
 ## How Permissions Work
 
-### Two-Tier Authorization System
+### Pure Permission-Based Authorization
 
-GoFr's RBAC middleware implements a **two-tier authorization system**:
+GoFr's RBAC middleware implements a **pure permission-based authorization system**:
 
-1. **Permission-Based Check** (Primary) - Checks if user's role has the required permission
-2. **Role-Based Check** (Fallback) - Falls back to route-based role checking if permission check fails
+1. **Extract Role** - Get user's role from header or JWT
+2. **Match Endpoint** - Find endpoint configuration for the request
+3. **Get Required Permission** - Get permission required for the endpoint
+4. **Check Role Permissions** - Verify if role has the required permission
+5. **Authorization Decision** - Allow or deny based on permission check
 
-```go
-// Check permission-based access if enabled
-if config.EnablePermissions && config.PermissionConfig != nil {
-    if err := CheckPermission(reqWithRole, config.PermissionConfig); err == nil {
-        authorized = true
-        authReason = "permission-based"
-    }
-}
-
-// Check role-based access (if not already authorized by permissions)
-if !authorized {
-    if isRoleAllowed(role, route, config) {
-        authorized = true
-        authReason = "role-based"
-    }
-}
-```
-
-**Benefits of Fallback**:
-- Provides safety net when permission mappings are missing
-- Allows gradual migration from role-based to permission-based
-- Ensures routes are always protected even if permission config is incomplete
+**No fallback to role-based checks** - all authorization is permission-based for consistency and security.
 
 ### Permission Flow
 
-1. **Request arrives** → Middleware extracts user role
-2. **Permission check** → Checks if route matches a permission rule
-3. **Role validation** → Verifies if user's role has the required permission
-4. **Fallback** → If no permission mapping exists, falls back to role-based check
-5. **Authorization decision** → Allow or deny based on the checks
+1. **Request arrives** → Middleware extracts user role (from header or JWT)
+2. **Match endpoint** → Find matching endpoint configuration (method + path)
+3. **Get required permission** → Extract `requiredPermission` from endpoint config
+4. **Check role permissions** → Verify if role's permissions include the required permission
+5. **Authorization decision** → Allow if role has permission, deny otherwise
+
+**Example Flow:**
+```
+Request: GET /api/users (Header: X-User-Role: editor)
+  ↓
+Extract role: "editor"
+  ↓
+Match endpoint: {path: "/api/users", methods: ["GET"], requiredPermission: "users:read"}
+  ↓
+Get role permissions: ["users:read", "users:write"] (includes inherited from viewer)
+  ↓
+Check permission: "users:read" in ["users:read", "users:write"] → ✅ Allowed
+```
 
 ## Configuration
 
-### Role-Centric Permission Model
+### Unified Configuration Format
 
-GoFr uses a **role-centric** permission model, which is more intuitive than the traditional permission-centric model:
+GoFr uses a **unified configuration format** that combines roles and endpoints in a single, intuitive structure:
 
 ```json
 {
-  "rolePermissions": {
-    "admin": ["users:read", "users:write", "users:delete"],
-    "editor": ["users:read", "users:write"],
-    "viewer": ["users:read"]
-  }
+  "roleHeader": "X-User-Role",
+  "roles": [
+    {
+      "name": "admin",
+      "permissions": ["users:read", "users:write", "users:delete"]
+    },
+    {
+      "name": "editor",
+      "permissions": ["users:read", "users:write"],
+      "inheritsFrom": ["viewer"]
+    },
+    {
+      "name": "viewer",
+      "permissions": ["users:read"]
+    }
+  ],
+  "endpoints": [
+    {
+      "path": "/api/users",
+      "methods": ["GET"],
+      "requiredPermission": "users:read"
+    },
+    {
+      "path": "/api/users",
+      "methods": ["POST", "PUT"],
+      "requiredPermission": "users:write"
+    },
+    {
+      "path": "/api/users/{id}",
+      "methods": ["DELETE"],
+      "regex": "^/api/users/\\d+$",
+      "requiredPermission": "users:delete"
+    }
+  ]
 }
 ```
 
-**Why Role-Centric?**
-- ✅ Easy to see what a role can do (all permissions in one place)
-- ✅ Better for understanding role capabilities
-- ✅ More maintainable as roles change
-- ✅ Aligns with how developers think about access control
+**Why Unified Format?**
+- ✅ Single source of truth - all RBAC rules in one place
+- ✅ Easy to understand - see roles and endpoints together
+- ✅ Role inheritance - roles can inherit permissions from other roles
+- ✅ Flexible route matching - supports path patterns, wildcards, and regex
 
-### Structured Route Permission Rules
+### Role Definition
 
-The new `routePermissionRules` format provides flexible, structured route-to-permission mapping:
+Roles define what permissions they have:
 
 ```json
 {
-  "routePermissionRules": [
+  "roles": [
     {
-      "methods": ["GET"],
-      "regex": "^/api/users(/.*)?$",
-      "permission": "users:read"
+      "name": "admin",
+      "permissions": ["*:*"]  // Wildcard: all permissions
     },
     {
-      "methods": ["POST", "PUT"],
-      "path": "/api/users",
-      "permission": "users:write"
+      "name": "editor",
+      "permissions": ["users:read", "users:write"],
+      "inheritsFrom": ["viewer"]  // Inherits viewer's permissions
     },
     {
-      "methods": ["DELETE"],
-      "regex": "^/api/users/\\d+$",
-      "permission": "users:delete"
+      "name": "viewer",
+      "permissions": ["users:read"]
     }
   ]
 }
 ```
 
 **Fields**:
-- `methods` (array): HTTP methods (GET, POST, PUT, DELETE, PATCH, etc.). Empty or `["*"]` matches all methods
-- `path` (string): Path pattern (supports wildcards). Used when `regex` is not provided
-- `regex` (string): Regular expression pattern. Takes precedence over `path` if both are provided
-- `permission` (string): Required permission for matching routes
+- `name` (string, required): Role name
+- `permissions` (array): List of permissions for this role (format: "resource:action")
+- `inheritsFrom` (array): List of role names to inherit permissions from
 
-**Benefits**:
-- ✅ Supports multiple HTTP methods per rule
-- ✅ Flexible regex patterns for complex route matching
-- ✅ More readable than string-based `"METHOD /path"` format
-- ✅ Easier to maintain and extend
+### Endpoint Definition
 
-### Legacy Format Support
-
-For backward compatibility, the legacy `routePermissions` format is still supported:
+Endpoints define which permission is required for each route:
 
 ```json
 {
-  "routePermissions": {
-    "GET /api/users": "users:read",
-    "POST /api/users": "users:write",
-    "DELETE /api/users": "users:delete"
-  }
+  "endpoints": [
+    {
+      "path": "/api/users",
+      "methods": ["GET"],
+      "requiredPermission": "users:read"
+    },
+    {
+      "path": "/api/users",
+      "methods": ["POST", "PUT"],
+      "requiredPermission": "users:write"
+    },
+    {
+      "path": "/api/users/{id}",
+      "methods": ["DELETE"],
+      "regex": "^/api/users/\\d+$",
+      "requiredPermission": "users:delete"
+    },
+    {
+      "path": "/health",
+      "methods": ["GET"],
+      "public": true  // Bypasses authorization
+    }
+  ]
 }
 ```
 
-> **Note**: `routePermissionRules` takes precedence over `routePermissions` if both are provided.
+**Fields**:
+- `path` (string): Route path pattern (supports wildcards like `/api/*`)
+- `regex` (string): Regular expression pattern (takes precedence over `path`)
+- `methods` (array): HTTP methods (GET, POST, PUT, DELETE, etc.). Use `["*"]` for all methods
+- `requiredPermission` (string): Required permission (format: "resource:action"). **Required** unless `public: true`
+- `public` (boolean): If `true`, endpoint bypasses authorization
+
+**Route Matching Priority**:
+1. Exact match: `"/api/users"` matches exactly `/api/users`
+2. Wildcard: `"/api/*"` matches `/api/users`, `/api/posts`, etc.
+3. Regex: `"^/api/users/\\d+$"` matches `/api/users/123`, `/api/users/456`, etc.
 
 ## Permission Naming Conventions
 
@@ -217,22 +270,20 @@ Use the format: `resource:action`
 
 ## Automatic Route Protection
 
-With the new API, middleware automatically checks permissions based on `routePermissionRules`. You **don't need** to add `RequirePermission()` at the route level:
+Middleware automatically checks permissions based on endpoint configuration. You **don't need** to add any wrappers at the route level:
 
 ```go
 // ✅ Good: Middleware automatically checks permissions
-app.GET("/api/users", getAllUsers)
-app.POST("/api/users", createUser)
-app.DELETE("/api/users/:id", deleteUser)
-
-// ❌ Not needed: Middleware already checks permissions
-// app.DELETE("/api/users/:id", gofr.RequirePermission("users:delete", config, deleteUser))
+app.GET("/api/users", getAllUsers)      // Checks: users:read
+app.POST("/api/users", createUser)      // Checks: users:write
+app.DELETE("/api/users/:id", deleteUser) // Checks: users:delete
 ```
 
-**When to use `RequirePermission()`**:
-- For programmatic checks within handlers
-- For dynamic, conditional permissions
-- For fine-grained checks that can't be expressed in route rules
+**All authorization is handled by middleware** - you just define routes normally. The middleware:
+1. Extracts the user's role
+2. Matches the request to an endpoint configuration
+3. Checks if the role has the required permission
+4. Allows or denies the request automatically
 
 ## Implementation Patterns
 
@@ -243,10 +294,18 @@ app.DELETE("/api/users/:id", deleteUser)
 **Example**: [Permission-Based RBAC (Header) Example](https://github.com/gofr-dev/gofr/tree/main/examples/rbac/permissions-header)
 
 ```go
+import (
+	"gofr.dev/pkg/gofr"
+	"gofr.dev/pkg/gofr/rbac"
+)
+
 app := gofr.New()
 
+// Create RBAC provider
+provider := rbac.NewProvider()
+
 // Enable RBAC - config file defines roleHeader and permissions
-app.EnableRBAC() // Uses configs/rbac.json by default
+app.EnableRBAC(provider, "") // Uses configs/rbac.json by default
 ```
 
 ### 2. Permission-Based RBAC (JWT)
@@ -256,13 +315,22 @@ app.EnableRBAC() // Uses configs/rbac.json by default
 **Example**: [Permission-Based RBAC (JWT) Example](https://github.com/gofr-dev/gofr/tree/main/examples/rbac/permissions-jwt)
 
 ```go
+import (
+	"gofr.dev/pkg/gofr"
+	"gofr.dev/pkg/gofr/rbac"
+)
+
 app := gofr.New()
 
-// Enable OAuth middleware
+// Enable OAuth middleware first (required for JWT validation)
 app.EnableOAuth("https://auth.example.com/.well-known/jwks.json", 10)
 
+// Create RBAC provider
+provider := rbac.NewProvider()
+
 // Enable RBAC with JWT and permissions
-app.EnableRBAC("", &rbac.JWTExtractor{Claim: "role"})
+// Config file sets: "jwtClaimPath": "role"
+app.EnableRBAC(provider, "") // Uses default config path: configs/rbac.json
 ```
 
 ## Common Patterns
@@ -271,31 +339,43 @@ app.EnableRBAC("", &rbac.JWTExtractor{Claim: "role"})
 
 ```json
 {
-  "rolePermissions": {
-    "admin": ["users:create", "users:read", "users:update", "users:delete"],
-    "editor": ["users:create", "users:read", "users:update"],
-    "viewer": ["users:read"]
-  },
-  "routePermissionRules": [
+  "roles": [
     {
+      "name": "admin",
+      "permissions": ["users:create", "users:read", "users:update", "users:delete"]
+    },
+    {
+      "name": "editor",
+      "permissions": ["users:create", "users:read", "users:update"],
+      "inheritsFrom": ["viewer"]
+    },
+    {
+      "name": "viewer",
+      "permissions": ["users:read"]
+    }
+  ],
+  "endpoints": [
+    {
+      "path": "/api/users",
       "methods": ["POST"],
-      "regex": "^/api/users$",
-      "permission": "users:create"
+      "requiredPermission": "users:create"
     },
     {
+      "path": "/api/users",
       "methods": ["GET"],
-      "regex": "^/api/users(/.*)?$",
-      "permission": "users:read"
+      "requiredPermission": "users:read"
     },
     {
+      "path": "/api/users/{id}",
       "methods": ["PUT", "PATCH"],
       "regex": "^/api/users/\\d+$",
-      "permission": "users:update"
+      "requiredPermission": "users:update"
     },
     {
+      "path": "/api/users/{id}",
       "methods": ["DELETE"],
       "regex": "^/api/users/\\d+$",
-      "permission": "users:delete"
+      "requiredPermission": "users:delete"
     }
   ]
 }
@@ -305,21 +385,30 @@ app.EnableRBAC("", &rbac.JWTExtractor{Claim: "role"})
 
 ```json
 {
-  "rolePermissions": {
-    "admin": ["own:posts:read", "own:posts:write", "all:posts:read", "all:posts:write"],
-    "author": ["own:posts:read", "own:posts:write"],
-    "viewer": ["own:posts:read", "all:posts:read"]
-  },
-  "routePermissionRules": [
+  "roles": [
     {
-      "methods": ["GET"],
-      "regex": "^/api/posts/my-posts$",
-      "permission": "own:posts:read"
+      "name": "admin",
+      "permissions": ["own:posts:read", "own:posts:write", "all:posts:read", "all:posts:write"]
     },
     {
+      "name": "author",
+      "permissions": ["own:posts:read", "own:posts:write"]
+    },
+    {
+      "name": "viewer",
+      "permissions": ["own:posts:read", "all:posts:read"]
+    }
+  ],
+  "endpoints": [
+    {
+      "path": "/api/posts/my-posts",
       "methods": ["GET"],
-      "regex": "^/api/posts(/.*)?$",
-      "permission": "all:posts:read"
+      "requiredPermission": "own:posts:read"
+    },
+    {
+      "path": "/api/posts",
+      "methods": ["GET"],
+      "requiredPermission": "all:posts:read"
     }
   ]
 }
@@ -327,40 +416,65 @@ app.EnableRBAC("", &rbac.JWTExtractor{Claim: "role"})
 
 ## Best Practices
 
-### 1. Use Role-Centric Permissions
+### 1. Use Unified Configuration Format
 
 ```json
 {
-  "rolePermissions": {
-    "admin": ["users:read", "users:write", "users:delete"],
-    "editor": ["users:read", "users:write"],
-    "viewer": ["users:read"]
-  }
-}
-```
-
-**Benefits**:
-- Easy to see what each role can do
-- Better for understanding role capabilities
-- More maintainable
-
-### 2. Use Structured Route Rules
-
-```json
-{
-  "routePermissionRules": [
+  "roles": [
     {
+      "name": "admin",
+      "permissions": ["users:read", "users:write", "users:delete"]
+    },
+    {
+      "name": "editor",
+      "permissions": ["users:read", "users:write"],
+      "inheritsFrom": ["viewer"]
+    },
+    {
+      "name": "viewer",
+      "permissions": ["users:read"]
+    }
+  ],
+  "endpoints": [
+    {
+      "path": "/api/users",
       "methods": ["GET"],
-      "regex": "^/api/users(/.*)?$",
-      "permission": "users:read"
+      "requiredPermission": "users:read"
     }
   ]
 }
 ```
 
 **Benefits**:
-- Supports multiple HTTP methods
-- Flexible regex patterns
+- Single source of truth - all RBAC rules in one place
+- Easy to see what each role can do
+- Role inheritance reduces duplication
+- More maintainable
+
+### 2. Use Flexible Route Patterns
+
+```json
+{
+  "endpoints": [
+    {
+      "path": "/api/users",
+      "methods": ["GET"],
+      "requiredPermission": "users:read"
+    },
+    {
+      "path": "/api/users/{id}",
+      "methods": ["DELETE"],
+      "regex": "^/api/users/\\d+$",
+      "requiredPermission": "users:delete"
+    }
+  ]
+}
+```
+
+**Benefits**:
+- Supports multiple HTTP methods per endpoint
+- Flexible regex patterns for complex routes
+- Path patterns with wildcards
 - More readable and maintainable
 
 ### 3. Use Consistent Permission Naming
@@ -383,30 +497,40 @@ app.EnableRBAC("", &rbac.JWTExtractor{Claim: "role"})
 
 ```json
 {
-  "rolePermissions": {
-    "admin": [
-      "users:read", "users:write", "users:delete",
-      "posts:read", "posts:write", "posts:delete",
-      "orders:read", "orders:approve", "orders:cancel"
-    ]
-  }
+  "roles": [
+    {
+      "name": "admin",
+      "permissions": [
+        "users:read", "users:write", "users:delete",
+        "posts:read", "posts:write", "posts:delete",
+        "orders:read", "orders:approve", "orders:cancel"
+      ]
+    }
+  ]
 }
 ```
 
-### 5. Use Fallback Routes
+### 5. Use Role Inheritance
 
-Always define fallback routes in your config file:
+Avoid duplicating permissions by using role inheritance:
 
 ```json
 {
-  "route": {
-    "/api/*": ["admin", "editor"],
-    "*": ["viewer"]
-  }
+  "roles": [
+    {
+      "name": "editor",
+      "permissions": ["users:write", "posts:write"],
+      "inheritsFrom": ["viewer"]  // Inherits viewer's read permissions
+    },
+    {
+      "name": "viewer",
+      "permissions": ["users:read", "posts:read"]
+    }
+  ]
 }
 ```
 
-This ensures routes without explicit permission mappings are still protected.
+This ensures roles automatically get inherited permissions without duplication.
 
 ### 6. Document Permission Requirements
 
@@ -446,31 +570,95 @@ app.DELETE("/api/users/:id", deleteUser)
 
 ### Permission Check Not Working
 
-1. **Verify `rolePermissions` is configured** - Check that roles have permissions assigned
-2. **Check route rule format** - Ensure `routePermissionRules` match your routes correctly
-3. **Verify role extraction** - Ensure role is being extracted correctly
-4. **Check permission mapping** - Ensure route matches a permission rule
-5. **Review fallback** - Check if role-based fallback is allowing access
+1. **Verify `roles[].permissions` is configured** - Check that roles have permissions assigned
+2. **Check endpoint configuration** - Ensure `endpoints[].requiredPermission` matches your routes correctly
+3. **Verify role extraction** - Ensure role is being extracted correctly (check `roleHeader` or `jwtClaimPath`)
+4. **Check permission mapping** - Ensure route matches an endpoint configuration
+5. **Review role inheritance** - Check if inherited permissions are correct
 
 ### Permission Always Denied
 
 1. **Check role assignment** - Verify user's role has the required permission
-2. **Review permission config** - Ensure `rolePermissions` is properly set
+2. **Review role permissions** - Ensure `roles[].permissions` includes the required permission
 3. **Check route matching** - Verify route pattern/regex matches exactly
 4. **Enable debug logging** - Check audit logs for authorization decisions
+5. **Check role inheritance** - Verify inherited permissions are included
 
 ### Permission Always Allowed
 
-1. **Check fallback routes** - Fallback might be too permissive
-2. **Verify permission check** - Ensure `PermissionConfig` is set
-3. **Review route mapping** - Ensure route matches a permission rule
+1. **Check public endpoints** - Verify endpoint is not marked as `public: true`
+2. **Review endpoint configuration** - Ensure `endpoints[].requiredPermission` is set correctly
+3. **Check route matching** - Ensure route matches the correct endpoint configuration
+4. **Verify permission check** - Check audit logs to see if permission check is being performed
+
+## Hot Reloading
+
+RBAC supports hot reloading of configuration without restarting the application. To enable hot reload, implement the `gofr.HotReloadSource` interface:
+
+```go
+// HotReloadSource interface
+type HotReloadSource interface {
+    // FetchConfig fetches the updated RBAC configuration
+    // Returns the config data (JSON or YAML bytes) and error
+    FetchConfig() ([]byte, error)
+}
+```
+
+**Example: Custom Hot Reload Implementation**
+
+```go
+package main
+
+import (
+    "gofr.dev/pkg/gofr"
+    "gofr.dev/pkg/gofr/rbac"
+)
+
+// Your custom hot reload source
+type CustomHotReloadSource struct {
+    // Your implementation details
+}
+
+func (c *CustomHotReloadSource) FetchConfig() ([]byte, error) {
+    // Fetch config from your source (database, file, API, etc.)
+    // Return JSON or YAML bytes
+    return []byte(`{"roles":[...],"endpoints":[...]}`), nil
+}
+
+func main() {
+    app := gofr.New()
+    
+    provider := rbac.NewProvider()
+    app.EnableRBAC(provider, "configs/rbac.json")
+    
+    // Configure hot reload in OnStart
+    app.OnStart(func(ctx *gofr.Context) error {
+        source := &CustomHotReloadSource{}
+        return provider.EnableHotReload(source)
+    })
+    
+    app.Run()
+}
+```
+
+**Configuration** (in `configs/rbac.json`):
+
+```json
+{
+  "roles": [...],
+  "endpoints": [...],
+  "hotReload": {
+    "enabled": true,
+    "intervalSeconds": 60
+  }
+}
+```
 
 ## Related Documentation
 
 - [Role-Based Access Control (RBAC)](./rbac/page.md) - Complete RBAC guide
 - [HTTP Authentication](https://gofr.dev/docs/advanced-guide/http-authentication) - Authentication methods
 - [Permission-Based RBAC Examples](https://github.com/gofr-dev/gofr/tree/main/examples/rbac) - Working examples
-- [RBAC Architecture](./rbac/ARCHITECTURE.md) - Code execution flow
 
 ## Examples
 
