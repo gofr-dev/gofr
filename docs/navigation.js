@@ -86,12 +86,7 @@ export const navigation = [
             {
                 title: 'Role-Based Access Control (RBAC)',
                 href: '/docs/advanced-guide/rbac',
-                desc: "Implement comprehensive Role-Based Access Control with support for roles, permissions, hierarchy, JWT integration, and database-based role extraction."
-            },
-            {
-                title: 'Permission-Based Access Control',
-                href: '/docs/advanced-guide/rbac-permissions',
-                desc: "Learn how to implement fine-grained permission-based access control with route-to-permission mapping, role-to-permission assignment, and handler-level permission checks."
+                desc: "Implement comprehensive Role-Based Access Control with support for roles, permissions, hierarchy, JWT integration, hot reloading, and fine-grained permission-based authorization."
             },
             {
                 title: 'Circuit Breaker Support',
