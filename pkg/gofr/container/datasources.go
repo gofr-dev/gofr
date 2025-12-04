@@ -837,4 +837,3 @@ type InfluxDBProvider interface {
 
 	provider
 }
-
