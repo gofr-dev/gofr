@@ -91,7 +91,7 @@ func checkEndpointAuthorization(role string, endpoint *EndpointMapping, config *
 		return true, "public-endpoint"
 	}
 
-	// Get required permissions (support both new array and old string for backward compatibility)
+	// Get required permissions
 	requiredPerms := endpoint.RequiredPermissions
 
 	// If no permission requirement found, deny (fail secure)

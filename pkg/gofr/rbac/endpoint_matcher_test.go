@@ -23,7 +23,7 @@ func TestMatchEndpoint(t *testing.T) {
 			method: "GET",
 			route:  "/api/users",
 			endpoints: []EndpointMapping{
-				{Path: "/api/users", Methods: []string{"GET"}, RequiredPermission: "users:read"},
+				{Path: "/api/users", Methods: []string{"GET"}, RequiredPermissions: []string{"users:read"}},
 			},
 			expectedMatch:  true,
 			expectedPublic: false,
@@ -43,7 +43,7 @@ func TestMatchEndpoint(t *testing.T) {
 			method: "POST",
 			route:  "/api/users",
 			endpoints: []EndpointMapping{
-				{Path: "/api/users", Methods: []string{"GET"}, RequiredPermission: "users:read"},
+				{Path: "/api/users", Methods: []string{"GET"}, RequiredPermissions: []string{"users:read"}},
 			},
 			expectedMatch:  false,
 			expectedPublic: false,
@@ -53,7 +53,7 @@ func TestMatchEndpoint(t *testing.T) {
 			method: "POST",
 			route:  "/api",
 			endpoints: []EndpointMapping{
-				{Path: "/api", Methods: []string{"*"}, RequiredPermission: "api:*"},
+				{Path: "/api", Methods: []string{"*"}, RequiredPermissions: []string{"api:*"}},
 			},
 			expectedMatch:  true,
 			expectedPublic: false,
@@ -63,7 +63,7 @@ func TestMatchEndpoint(t *testing.T) {
 			method: "GET",
 			route:  "/api/users",
 			endpoints: []EndpointMapping{
-				{Path: "/api/*", Methods: []string{"GET"}, RequiredPermission: "api:read"},
+				{Path: "/api/*", Methods: []string{"GET"}, RequiredPermissions: []string{"api:read"}},
 			},
 			expectedMatch:  true,
 			expectedPublic: false,
@@ -73,7 +73,7 @@ func TestMatchEndpoint(t *testing.T) {
 			method: "GET",
 			route:  "/api/users/123",
 			endpoints: []EndpointMapping{
-				{Regex: "^/api/users/\\d+$", Methods: []string{"GET"}, RequiredPermission: "users:read"},
+				{Regex: "^/api/users/\\d+$", Methods: []string{"GET"}, RequiredPermissions: []string{"users:read"}},
 			},
 			expectedMatch:  true,
 			expectedPublic: false,
@@ -83,7 +83,7 @@ func TestMatchEndpoint(t *testing.T) {
 			method: "GET",
 			route:  "/api/posts",
 			endpoints: []EndpointMapping{
-				{Path: "/api/users", Methods: []string{"GET"}, RequiredPermission: "users:read"},
+				{Path: "/api/users", Methods: []string{"GET"}, RequiredPermissions: []string{"users:read"}},
 			},
 			expectedMatch:  false,
 			expectedPublic: false,
@@ -93,7 +93,7 @@ func TestMatchEndpoint(t *testing.T) {
 			method: "POST",
 			route:  "/api",
 			endpoints: []EndpointMapping{
-				{Path: "/api", Methods: []string{}, RequiredPermission: "api:*"},
+				{Path: "/api", Methods: []string{}, RequiredPermissions: []string{"api:*"}},
 			},
 			expectedMatch:  true,
 			expectedPublic: false,
@@ -272,7 +272,7 @@ func TestCheckEndpointAuthorization(t *testing.T) {
 			desc: "authorizes role with exact permission",
 			role:  "admin",
 			endpoint: &EndpointMapping{
-				RequiredPermission: "users:read",
+				RequiredPermissions: []string{"users:read"},
 			},
 			config: &Config{
 				Roles: []RoleDefinition{
@@ -286,7 +286,7 @@ func TestCheckEndpointAuthorization(t *testing.T) {
 			desc: "denies role with wildcard permission (wildcards not supported)",
 			role:  "admin",
 			endpoint: &EndpointMapping{
-				RequiredPermission: "users:read",
+				RequiredPermissions: []string{"users:read"},
 			},
 			config: &Config{
 				Roles: []RoleDefinition{
@@ -300,7 +300,7 @@ func TestCheckEndpointAuthorization(t *testing.T) {
 			desc: "denies role with resource wildcard (wildcards not supported)",
 			role:  "admin",
 			endpoint: &EndpointMapping{
-				RequiredPermission: "users:read",
+				RequiredPermissions: []string{"users:read"},
 			},
 			config: &Config{
 				Roles: []RoleDefinition{
@@ -314,7 +314,7 @@ func TestCheckEndpointAuthorization(t *testing.T) {
 			desc: "denies role without permission",
 			role:  "viewer",
 			endpoint: &EndpointMapping{
-				RequiredPermission: "users:write",
+				RequiredPermissions: []string{"users:write"},
 			},
 			config: &Config{
 				Roles: []RoleDefinition{
@@ -328,7 +328,7 @@ func TestCheckEndpointAuthorization(t *testing.T) {
 			desc: "denies when requiredPermission is empty",
 			role:  "admin",
 			endpoint: &EndpointMapping{
-				RequiredPermission: "",
+				RequiredPermissions: []string{},
 			},
 			config: &Config{
 				Roles: []RoleDefinition{
@@ -342,7 +342,7 @@ func TestCheckEndpointAuthorization(t *testing.T) {
 			desc: "denies when role has no permissions",
 			role:  "guest",
 			endpoint: &EndpointMapping{
-				RequiredPermission: "users:read",
+				RequiredPermissions: []string{"users:read"},
 			},
 			config: &Config{
 				Roles: []RoleDefinition{
@@ -356,7 +356,7 @@ func TestCheckEndpointAuthorization(t *testing.T) {
 			desc: "authorizes with inherited permissions",
 			role:  "editor",
 			endpoint: &EndpointMapping{
-				RequiredPermission: "users:read",
+				RequiredPermissions: []string{"users:read"},
 			},
 			config: &Config{
 				Roles: []RoleDefinition{
@@ -409,20 +409,6 @@ func TestCheckEndpointAuthorization(t *testing.T) {
 			expectedAuthorized: false,
 			expectedReason:     "",
 		},
-		{
-			desc: "backward compatibility - works with old RequiredPermission string",
-			role:  "viewer",
-			endpoint: &EndpointMapping{
-				RequiredPermission: "users:read",
-			},
-			config: &Config{
-				Roles: []RoleDefinition{
-					{Name: "viewer", Permissions: []string{"users:read"}},
-				},
-			},
-			expectedAuthorized: true,
-			expectedReason:     "permission-based",
-		},
 	}
 
 	for i, tc := range testCases {
@@ -451,7 +437,7 @@ func TestGetEndpointForRequest(t *testing.T) {
 			request: httptest.NewRequest("GET", "/api/users", nil),
 			config: &Config{
 				Endpoints: []EndpointMapping{
-					{Path: "/api/users", Methods: []string{"GET"}, RequiredPermission: "users:read"},
+					{Path: "/api/users", Methods: []string{"GET"}, RequiredPermissions: []string{"users:read"}},
 				},
 			},
 			expectedMatch:  true,
@@ -482,7 +468,7 @@ func TestGetEndpointForRequest(t *testing.T) {
 			request: httptest.NewRequest("POST", "/api/posts", nil),
 			config: &Config{
 				Endpoints: []EndpointMapping{
-					{Path: "/api/users", Methods: []string{"GET"}, RequiredPermission: "users:read"},
+					{Path: "/api/users", Methods: []string{"GET"}, RequiredPermissions: []string{"users:read"}},
 				},
 			},
 			expectedMatch:  false,

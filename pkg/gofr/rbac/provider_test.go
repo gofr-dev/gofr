@@ -70,8 +70,8 @@ func TestProvider_LoadPermissions(t *testing.T) {
 		{
 			desc: "loads valid json config",
 			fileContent: `{
-				"roles": [{"name": "admin", "permissions": ["*:*"]}],
-				"endpoints": [{"path": "/api", "methods": ["GET"], "requiredPermission": "admin:*"}]
+				"roles": [{"name": "admin", "permissions": ["admin:read", "admin:write"]}],
+				"endpoints": [{"path": "/api", "methods": ["GET"], "requiredPermissions": ["admin:read"]}]
 			}`,
 			fileName:     "test_load.json",
 			expectError:  false,
@@ -81,11 +81,11 @@ func TestProvider_LoadPermissions(t *testing.T) {
 			desc: "loads valid yaml config",
 			fileContent: `roles:
   - name: admin
-    permissions: ["*:*"]
+    permissions: ["admin:read", "admin:write"]
 endpoints:
   - path: /api
     methods: ["GET"]
-    requiredPermission: admin:*`,
+    requiredPermissions: ["admin:read"]`,
 			fileName:     "test_load.yaml",
 			expectError:  false,
 			expectConfig: true,
@@ -162,8 +162,8 @@ func TestProvider_LoadPermissions_WithLogger(t *testing.T) {
 	for i, tc := range testCases {
 		t.Run(tc.desc, func(t *testing.T) {
 			fileContent := `{
-				"roles": [{"name": "admin", "permissions": ["*:*"]}],
-				"endpoints": [{"path": "/api", "methods": ["GET"], "requiredPermission": "admin:*"}]
+				"roles": [{"name": "admin", "permissions": ["admin:read", "admin:write"]}],
+				"endpoints": [{"path": "/api", "methods": ["GET"], "requiredPermissions": ["admin:read"]}]
 			}`
 
 			path, err := createTestFile("test_logger.json", fileContent)
@@ -196,7 +196,7 @@ func TestProvider_GetMiddleware(t *testing.T) {
 					{Name: "admin", Permissions: []string{"*:*"}},
 				},
 				Endpoints: []EndpointMapping{
-					{Path: "/api", Methods: []string{"GET"}, RequiredPermission: "admin:*"},
+					{Path: "/api", Methods: []string{"GET"}, RequiredPermissions: []string{"admin:read", "admin:write"}},
 				},
 			},
 			expectPassthrough: false,

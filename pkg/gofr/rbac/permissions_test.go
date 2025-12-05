@@ -9,6 +9,15 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+// mockContextValueGetter is a mock context that implements Value method
+type mockContextValueGetter struct {
+	value func(key interface{}) interface{}
+}
+
+func (m *mockContextValueGetter) Value(key interface{}) interface{} {
+	return m.value(key)
+}
+
 func TestHasPermission(t *testing.T) {
 	config := &PermissionConfig{
 		Permissions: map[string][]string{
@@ -347,7 +356,7 @@ func TestRequirePermission(t *testing.T) {
 
 			wrapped := RequirePermission(tt.permission, config, handlerFunc)
 
-			// Create mock context that implements ContextValueGetter
+			// Create mock context that implements Value method
 			ctx := &mockContextValueGetter{
 				value: func(key interface{}) interface{} {
 					if key == userRole {

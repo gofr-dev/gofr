@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestNewRoleHierarchy(t *testing.T) {
@@ -218,11 +219,18 @@ func TestRoleHierarchy_HasAnyRole(t *testing.T) {
 
 func TestIsRoleAllowedWithHierarchy(t *testing.T) {
 	config := &Config{
-		RouteWithPermissions: map[string][]string{
-			"/api/users": {"editor", "viewer"},
-			"/api/admin": {"admin"},
+		Roles: []RoleDefinition{
+			{Name: "admin", Permissions: []string{"admin:read"}},
+			{Name: "editor", Permissions: []string{"users:read"}},
+			{Name: "viewer", Permissions: []string{"users:read"}},
+		},
+		Endpoints: []EndpointMapping{
+			{Path: "/api/users", Methods: []string{"GET"}, RequiredPermissions: []string{"users:read"}},
+			{Path: "/api/admin", Methods: []string{"GET"}, RequiredPermissions: []string{"admin:read"}},
 		},
 	}
+	err := config.processUnifiedConfig()
+	require.NoError(t, err)
 
 	hierarchy := map[string][]string{
 		"admin": {"editor", "viewer"},
@@ -282,10 +290,15 @@ func TestIsRoleAllowedWithHierarchy(t *testing.T) {
 
 func TestIsRoleAllowedWithHierarchy_NilHierarchy(t *testing.T) {
 	config := &Config{
-		RouteWithPermissions: map[string][]string{
-			"/api/users": {"admin"},
+		Roles: []RoleDefinition{
+			{Name: "admin", Permissions: []string{"users:read"}},
+		},
+		Endpoints: []EndpointMapping{
+			{Path: "/api/users", Methods: []string{"GET"}, RequiredPermissions: []string{"users:read"}},
 		},
 	}
+	err := config.processUnifiedConfig()
+	require.NoError(t, err)
 
 	// Should fallback to regular role check
 	got := IsRoleAllowedWithHierarchy("admin", "/api/users", config, nil)

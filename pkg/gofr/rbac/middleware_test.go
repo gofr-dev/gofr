@@ -44,7 +44,7 @@ func TestMiddleware(t *testing.T) {
 			desc: "denies request when no endpoint match",
 			config: &Config{
 				Endpoints: []EndpointMapping{
-					{Path: "/api/users", Methods: []string{"GET"}, RequiredPermission: "users:read"},
+					{Path: "/api/users", Methods: []string{"GET"}, RequiredPermissions: []string{"users:read"}},
 				},
 			},
 			request: httptest.NewRequest("GET", "/api/posts", nil),
@@ -56,10 +56,10 @@ func TestMiddleware(t *testing.T) {
 			config: &Config{
 				RoleHeader: "X-User-Role",
 				Roles: []RoleDefinition{
-					{Name: "admin", Permissions: []string{"admin:*"}},
+					{Name: "admin", Permissions: []string{"admin:read", "admin:write"}},
 				},
 				Endpoints: []EndpointMapping{
-					{Path: "/api", Methods: []string{"GET"}, RequiredPermission: "admin:*"},
+					{Path: "/api", Methods: []string{"GET"}, RequiredPermissions: []string{"admin:read"}},
 				},
 			},
 			request: httptest.NewRequest("GET", "/api", nil),
@@ -71,10 +71,10 @@ func TestMiddleware(t *testing.T) {
 			config: &Config{
 				RoleHeader: "X-User-Role",
 				Roles: []RoleDefinition{
-					{Name: "admin", Permissions: []string{"admin:*"}},
+					{Name: "admin", Permissions: []string{"admin:read", "admin:write"}},
 				},
 				Endpoints: []EndpointMapping{
-					{Path: "/api", Methods: []string{"GET"}, RequiredPermission: "admin:*"},
+					{Path: "/api", Methods: []string{"GET"}, RequiredPermissions: []string{"admin:read"}},
 				},
 			},
 			request: func() *http.Request {
@@ -93,7 +93,7 @@ func TestMiddleware(t *testing.T) {
 					{Name: "viewer", Permissions: []string{"users:read"}},
 				},
 				Endpoints: []EndpointMapping{
-					{Path: "/api", Methods: []string{"GET"}, RequiredPermission: "users:write"},
+					{Path: "/api", Methods: []string{"GET"}, RequiredPermissions: []string{"users:write"}},
 				},
 			},
 			request: func() *http.Request {

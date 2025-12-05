@@ -218,7 +218,7 @@ func (c *Config) processUnifiedConfig() error {
 					return fmt.Errorf("endpoint %s %s must specify requiredPermissions (or be public)", methodUpper, endpoint.Path)
 				}
 
-				// Store first permission in map for backward compatibility with GetEndpointPermission
+				// Store first permission in map for GetEndpointPermission
 				// Note: This is a limitation - we store only the first permission
 				// The full array is checked in checkEndpointAuthorization
 				c.endpointPermissionMap[key] = requiredPerms[0]
