@@ -268,8 +268,9 @@ func Test_Run_HelpCommand(t *testing.T) {
 	})
 
 	assert.Contains(t, logs, "Available commands:")
-	assert.Contains(t, logs, "  log  Logs a message")
-	assert.Contains(t, logs, "       Help: logging messages to the terminal")
+	assert.Contains(t, logs, "  log")
+	assert.Contains(t, logs, "Logs a message")
+	assert.Contains(t, logs, "Help: logging messages to the terminal")
 }
 
 func Test_Run_HelpCommandLong(t *testing.T) {
@@ -291,8 +292,9 @@ func Test_Run_HelpCommandLong(t *testing.T) {
 	})
 
 	assert.Contains(t, logs, "Available commands:")
-	assert.Contains(t, logs, "  log  Logs a message")
-	assert.Contains(t, logs, "       Help: logging messages to the terminal")
+	assert.Contains(t, logs, "  log")
+	assert.Contains(t, logs, "Logs a message")
+	assert.Contains(t, logs, "Help: logging messages to the terminal")
 }
 
 func Test_Run_UnknownCommandShowsHelp(t *testing.T) {
@@ -318,8 +320,9 @@ func Test_Run_UnknownCommandShowsHelp(t *testing.T) {
 
 	assert.Contains(t, errLogs, "No Command Found!")
 	assert.Contains(t, logs, "Available commands:")
-	assert.Contains(t, logs, "  log  Logs a message")
-	assert.Contains(t, logs, "       Help: logging messages to the terminal")
+	assert.Contains(t, logs, "  log")
+	assert.Contains(t, logs, "Logs a message")
+	assert.Contains(t, logs, "Help: logging messages to the terminal")
 }
 
 func Test_Run_handler_help(t *testing.T) {
