@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"gofr.dev/pkg/gofr/logging"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -12,12 +11,16 @@ import (
 	"strings"
 	"sync"
 
+	"gofr.dev/pkg/gofr/logging"
 	"gopkg.in/yaml.v3"
 )
 
 var (
 	// errUnsupportedFormat is returned when the config file format is not supported.
 	errUnsupportedFormat = errors.New("unsupported config file format")
+
+	// ErrEndpointMissingPermissions is returned when an endpoint doesn't specify requiredPermissions and is not public.
+	ErrEndpointMissingPermissions = errors.New("endpoint must specify requiredPermissions (or be public)")
 )
 
 // RoleDefinition defines a role with its permissions and inheritance.
@@ -99,7 +102,7 @@ type Config struct {
 	endpointPermissionMap map[string]string   `json:"-" yaml:"-"` // Key: "METHOD:/path", Value: permission
 	publicEndpointsMap    map[string]bool     `json:"-" yaml:"-"` // Key: "METHOD:/path", Value: true if public
 
-	// Mutex for thread-safe access to maps
+	// Mutex for thread-safe access to maps (for future hot-reload support)
 	mu sync.RWMutex `json:"-" yaml:"-"`
 }
 
@@ -151,80 +154,112 @@ func (c *Config) processUnifiedConfig() error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
-	// Initialize internal maps
+	c.initializeMaps()
+	c.buildRolePermissionsMap()
+
+	return c.buildEndpointPermissionMap()
+}
+
+// initializeMaps initializes internal maps.
+func (c *Config) initializeMaps() {
 	c.rolePermissionsMap = make(map[string][]string)
 	c.endpointPermissionMap = make(map[string]string)
 	c.publicEndpointsMap = make(map[string]bool)
+}
 
-	// Build role permissions map from Roles (role->permission mapping)
+// buildRolePermissionsMap builds the role permissions map from Roles.
+func (c *Config) buildRolePermissionsMap() {
 	for _, roleDef := range c.Roles {
-		// Start with role's own permissions
 		permissions := make([]string, len(roleDef.Permissions))
 		copy(permissions, roleDef.Permissions)
 
-		// Add inherited permissions
-		if len(roleDef.InheritsFrom) > 0 {
-			for _, inheritedRoleName := range roleDef.InheritsFrom {
-				// Find inherited role definition
-				for _, inheritedRole := range c.Roles {
-					if inheritedRole.Name == inheritedRoleName {
-						// Add inherited role's permissions
-						permissions = append(permissions, inheritedRole.Permissions...)
-						// Recursively add permissions from roles inherited by this role
-						if len(inheritedRole.InheritsFrom) > 0 {
-							inheritedPerms := c.getEffectivePermissions(inheritedRoleName)
-							permissions = append(permissions, inheritedPerms...)
-						}
-						break
-					}
-				}
-			}
-		}
-
-		// Store permissions for this role
+		permissions = c.addInheritedPermissions(roleDef, permissions)
 		c.rolePermissionsMap[roleDef.Name] = permissions
 	}
+}
 
-	// Build endpoint permission map from Endpoints (route&method->permission mapping)
+// addInheritedPermissions adds inherited permissions to a role.
+func (c *Config) addInheritedPermissions(roleDef RoleDefinition, permissions []string) []string {
+	if len(roleDef.InheritsFrom) == 0 {
+		return permissions
+	}
+
+	for _, inheritedRoleName := range roleDef.InheritsFrom {
+		permissions = c.collectInheritedPermissions(inheritedRoleName, permissions)
+	}
+
+	return permissions
+}
+
+// collectInheritedPermissions collects permissions from an inherited role.
+func (c *Config) collectInheritedPermissions(inheritedRoleName string, permissions []string) []string {
+	for _, inheritedRole := range c.Roles {
+		if inheritedRole.Name == inheritedRoleName {
+			permissions = append(permissions, inheritedRole.Permissions...)
+
+			if len(inheritedRole.InheritsFrom) > 0 {
+				inheritedPerms := c.getEffectivePermissions(inheritedRoleName)
+				permissions = append(permissions, inheritedPerms...)
+			}
+
+			break
+		}
+	}
+
+	return permissions
+}
+
+// buildEndpointPermissionMap builds the endpoint permission map from Endpoints.
+func (c *Config) buildEndpointPermissionMap() error {
 	for _, endpoint := range c.Endpoints {
-		// Build method list (handle "*" as all methods)
 		methods := endpoint.Methods
 		if len(methods) == 0 {
 			methods = []string{"*"}
 		}
 
-		// Create keys for each method
-		for _, method := range methods {
-			// Normalize method to uppercase
-			methodUpper := strings.ToUpper(method)
-
-			// Create key: "METHOD:/path" or "METHOD:regex"
-			var key string
-			if endpoint.Regex != "" {
-				key = fmt.Sprintf("%s:%s", methodUpper, endpoint.Regex)
-			} else {
-				key = fmt.Sprintf("%s:%s", methodUpper, endpoint.Path)
-			}
-
-			// Store public endpoint
-			if endpoint.Public {
-				c.publicEndpointsMap[key] = true
-			} else {
-				// Get required permissions
-				requiredPerms := endpoint.RequiredPermissions
-
-				// Validate that permissions are specified
-				if len(requiredPerms) == 0 {
-					return fmt.Errorf("endpoint %s %s must specify requiredPermissions (or be public)", methodUpper, endpoint.Path)
-				}
-
-				// Store first permission in map for GetEndpointPermission
-				// Note: This is a limitation - we store only the first permission
-				// The full array is checked in checkEndpointAuthorization
-				c.endpointPermissionMap[key] = requiredPerms[0]
-			}
+		if err := c.processEndpointMethods(&endpoint, methods); err != nil {
+			return err
 		}
 	}
+
+	return nil
+}
+
+// processEndpointMethods processes methods for an endpoint.
+func (c *Config) processEndpointMethods(endpoint *EndpointMapping, methods []string) error {
+	for _, method := range methods {
+		methodUpper := strings.ToUpper(method)
+		key := c.buildEndpointKey(endpoint, methodUpper)
+
+		if err := c.storeEndpointMapping(endpoint, key, methodUpper); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+// buildEndpointKey builds the key for an endpoint.
+func (*Config) buildEndpointKey(endpoint *EndpointMapping, methodUpper string) string {
+	if endpoint.Regex != "" {
+		return fmt.Sprintf("%s:%s", methodUpper, endpoint.Regex)
+	}
+
+	return fmt.Sprintf("%s:%s", methodUpper, endpoint.Path)
+}
+
+// storeEndpointMapping stores an endpoint mapping.
+func (c *Config) storeEndpointMapping(endpoint *EndpointMapping, key, methodUpper string) error {
+	if endpoint.Public {
+		c.publicEndpointsMap[key] = true
+		return nil
+	}
+
+	if len(endpoint.RequiredPermissions) == 0 {
+		return fmt.Errorf("%w: %s %s", ErrEndpointMissingPermissions, methodUpper, endpoint.Path)
+	}
+
+	c.endpointPermissionMap[key] = endpoint.RequiredPermissions[0]
 
 	return nil
 }
@@ -232,13 +267,16 @@ func (c *Config) processUnifiedConfig() error {
 // getEffectivePermissions recursively gets all permissions for a role including inherited ones.
 func (c *Config) getEffectivePermissions(roleName string) []string {
 	var permissions []string
+
 	visited := make(map[string]bool)
 
 	var collectPermissions func(string)
+
 	collectPermissions = func(name string) {
 		if visited[name] {
 			return
 		}
+
 		visited[name] = true
 
 		// Find role definition
@@ -249,12 +287,14 @@ func (c *Config) getEffectivePermissions(roleName string) []string {
 				for _, inheritedName := range roleDef.InheritsFrom {
 					collectPermissions(inheritedName)
 				}
+
 				break
 			}
 		}
 	}
 
 	collectPermissions(roleName)
+
 	return permissions
 }
 
@@ -262,6 +302,7 @@ func (c *Config) getEffectivePermissions(roleName string) []string {
 func (c *Config) GetRolePermissions(role string) []string {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
+
 	return c.rolePermissionsMap[role]
 }
 
@@ -272,50 +313,66 @@ func (c *Config) GetEndpointPermission(method, path string) (string, bool) {
 	defer c.mu.RUnlock()
 
 	methodUpper := strings.ToUpper(method)
-
-	// Try exact match first: "METHOD:/path"
 	key := fmt.Sprintf("%s:%s", methodUpper, path)
-	if public, ok := c.publicEndpointsMap[key]; ok && public {
-		return "", true // Public endpoint
+
+	// Try exact match first
+	if perm, isPublic := c.checkExactMatch(key); isPublic || perm != "" {
+		return perm, isPublic
 	}
+
+	// Try pattern and regex matching
+	return c.checkPatternMatch(methodUpper, path)
+}
+
+// checkExactMatch checks for an exact endpoint match.
+func (c *Config) checkExactMatch(key string) (permission string, isPublic bool) {
+	if public, ok := c.publicEndpointsMap[key]; ok && public {
+		return "", true
+	}
+
 	if perm, ok := c.endpointPermissionMap[key]; ok {
 		return perm, false
 	}
 
-	// Try pattern matching for wildcards (e.g., "/api/*")
-	for key, perm := range c.endpointPermissionMap {
-		if strings.HasPrefix(key, methodUpper+":") {
-			pattern := strings.TrimPrefix(key, methodUpper+":")
-			if matchesPathPattern(pattern, path) {
-				return perm, false
-			}
-		}
-	}
+	return "", false
+}
 
-	// Try regex matching
+// checkPatternMatch checks for pattern and regex matches.
+func (c *Config) checkPatternMatch(methodUpper, path string) (permission string, isPublic bool) {
+	// Try pattern matching for wildcards
 	for key, perm := range c.endpointPermissionMap {
-		if strings.HasPrefix(key, methodUpper+":") {
-			regexPattern := strings.TrimPrefix(key, methodUpper+":")
-			if matched, _ := regexp.MatchString(regexPattern, path); matched {
-				return perm, false
-			}
+		if c.matchesKey(key, methodUpper, path) {
+			return perm, false
 		}
 	}
 
 	// Check public endpoints with pattern/regex
 	for key := range c.publicEndpointsMap {
-		if strings.HasPrefix(key, methodUpper+":") {
-			pattern := strings.TrimPrefix(key, methodUpper+":")
-			if matchesPathPattern(pattern, path) {
-				return "", true // Public endpoint
-			}
-			if matched, _ := regexp.MatchString(pattern, path); matched {
-				return "", true // Public endpoint
-			}
+		if c.matchesKey(key, methodUpper, path) {
+			return "", true
 		}
 	}
 
-	return "", false // Not found
+	return "", false
+}
+
+// matchesKey checks if a key matches the given method and path.
+func (*Config) matchesKey(key, methodUpper, path string) bool {
+	if !strings.HasPrefix(key, methodUpper+":") {
+		return false
+	}
+
+	pattern := strings.TrimPrefix(key, methodUpper+":")
+
+	// Try path pattern match
+	if matchesPathPattern(pattern, path) {
+		return true
+	}
+
+	// Try regex match
+	matched, _ := regexp.MatchString(pattern, path)
+
+	return matched
 }
 
 // matchesPathPattern checks if path matches pattern (supports wildcards).

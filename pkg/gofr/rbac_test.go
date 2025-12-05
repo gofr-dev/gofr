@@ -38,7 +38,8 @@ func TestEnableRBAC(t *testing.T) {
 			provider:   &mockRBACProvider{},
 			configFile: "test_rbac.json",
 			setupFiles: func() (string, error) {
-				content := `{"roles":[{"name":"admin","permissions":["*:*"]}],"endpoints":[{"path":"/api","methods":["GET"],"requiredPermission":"admin:*"}]}`
+				content := `{"roles":[{"name":"admin","permissions":["admin:read"]}],` +
+					`"endpoints":[{"path":"/api","methods":["GET"],"requiredPermissions":["admin:read"]}]}`
 				return createTestConfigFile("test_rbac.json", content)
 			},
 			cleanupFiles: func(path string) {
@@ -214,15 +215,16 @@ func createTestConfigFile(filename, content string) (string, error) {
 		}
 	}
 
-	err := os.WriteFile(filename, []byte(content), 0644)
+	err := os.WriteFile(filename, []byte(content), 0600)
+
 	return filename, err
 }
 
-// mockRBACProvider is a mock implementation of RBACProvider for testing
-// This avoids import cycle by not importing rbac package
+// mockRBACProvider is a mock implementation of RBACProvider for testing.
+// This avoids import cycle by not importing rbac package.
 type mockRBACProvider struct {
-	config      any
-	loadErr     error
+	config       any
+	loadErr      error
 	middlewareFn func(http.Handler) http.Handler
 }
 
@@ -232,7 +234,7 @@ func (m *mockRBACProvider) LoadPermissions(file string) (any, error) {
 	}
 	// For testing, we'll use a simple struct that satisfies the interface
 	// In real usage, this would be *rbac.Config
-	return map[string]interface{}{"file": file}, nil
+	return map[string]any{"file": file}, nil
 }
 
 func (m *mockRBACProvider) GetMiddleware(config any) func(http.Handler) http.Handler {
@@ -240,6 +242,7 @@ func (m *mockRBACProvider) GetMiddleware(config any) func(http.Handler) http.Han
 	if m.middlewareFn != nil {
 		return m.middlewareFn
 	}
+
 	return func(handler http.Handler) http.Handler {
 		return handler
 	}

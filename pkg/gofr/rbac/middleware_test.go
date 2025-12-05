@@ -9,127 +9,170 @@ import (
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-
 	"gofr.dev/pkg/gofr/http/middleware"
 	"gofr.dev/pkg/gofr/logging"
 )
 
-func TestMiddleware(t *testing.T) {
-	testCases := []struct {
-		desc           string
-		config         *Config
-		request        *http.Request
-		expectedStatus int
-		expectedBody   string
-	}{
-		{
-			desc:   "allows request when config is nil",
-			config: nil,
-			request: httptest.NewRequest("GET", "/api", nil),
-			expectedStatus: http.StatusOK,
-			expectedBody:   "OK",
-		},
-		{
-			desc: "allows public endpoint",
-			config: &Config{
-				Endpoints: []EndpointMapping{
-					{Path: "/health", Methods: []string{"GET"}, Public: true},
-				},
-			},
-			request: httptest.NewRequest("GET", "/health", nil),
-			expectedStatus: http.StatusOK,
-			expectedBody:   "OK",
-		},
-		{
-			desc: "denies request when no endpoint match",
-			config: &Config{
-				Endpoints: []EndpointMapping{
-					{Path: "/api/users", Methods: []string{"GET"}, RequiredPermissions: []string{"users:read"}},
-				},
-			},
-			request: httptest.NewRequest("GET", "/api/posts", nil),
-			expectedStatus: http.StatusForbidden,
-			expectedBody:   "Forbidden: Access denied",
-		},
-		{
-			desc: "denies request when role not found",
-			config: &Config{
-				RoleHeader: "X-User-Role",
-				Roles: []RoleDefinition{
-					{Name: "admin", Permissions: []string{"admin:read", "admin:write"}},
-				},
-				Endpoints: []EndpointMapping{
-					{Path: "/api", Methods: []string{"GET"}, RequiredPermissions: []string{"admin:read"}},
-				},
-			},
-			request: httptest.NewRequest("GET", "/api", nil),
-			expectedStatus: http.StatusUnauthorized,
-			expectedBody:   "Unauthorized: Missing or invalid role",
-		},
-		{
-			desc: "allows request with valid role and permission",
-			config: &Config{
-				RoleHeader: "X-User-Role",
-				Roles: []RoleDefinition{
-					{Name: "admin", Permissions: []string{"admin:read", "admin:write"}},
-				},
-				Endpoints: []EndpointMapping{
-					{Path: "/api", Methods: []string{"GET"}, RequiredPermissions: []string{"admin:read"}},
-				},
-			},
-			request: func() *http.Request {
-				req := httptest.NewRequest("GET", "/api", nil)
-				req.Header.Set("X-User-Role", "admin")
-				return req
-			}(),
-			expectedStatus: http.StatusOK,
-			expectedBody:   "OK",
-		},
-		{
-			desc: "denies request with invalid permission",
-			config: &Config{
-				RoleHeader: "X-User-Role",
-				Roles: []RoleDefinition{
-					{Name: "viewer", Permissions: []string{"users:read"}},
-				},
-				Endpoints: []EndpointMapping{
-					{Path: "/api", Methods: []string{"GET"}, RequiredPermissions: []string{"users:write"}},
-				},
-			},
-			request: func() *http.Request {
-				req := httptest.NewRequest("GET", "/api", nil)
-				req.Header.Set("X-User-Role", "viewer")
-				return req
-			}(),
-			expectedStatus: http.StatusForbidden,
-			expectedBody:   "Forbidden: Access denied",
+func TestMiddleware_NilConfig(t *testing.T) {
+	middlewareFunc := Middleware(nil)
+	require.NotNil(t, middlewareFunc)
+
+	handler := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte("OK"))
+	})
+
+	wrapped := middlewareFunc(handler)
+	w := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/api", http.NoBody)
+	wrapped.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusOK, w.Code)
+	assert.Contains(t, w.Body.String(), "OK")
+}
+
+func TestMiddleware_PublicEndpoint(t *testing.T) {
+	config := &Config{
+		Endpoints: []EndpointMapping{
+			{Path: "/health", Methods: []string{"GET"}, Public: true},
 		},
 	}
+	err := config.processUnifiedConfig()
+	require.NoError(t, err)
 
-	for i, tc := range testCases {
-		t.Run(tc.desc, func(t *testing.T) {
-			if tc.config != nil {
-				err := tc.config.processUnifiedConfig()
-				require.NoError(t, err, "TEST[%d], Failed.\n%s", i, tc.desc)
-			}
+	middlewareFunc := Middleware(config)
+	require.NotNil(t, middlewareFunc)
 
-			middlewareFunc := Middleware(tc.config)
-			require.NotNil(t, middlewareFunc, "TEST[%d], Failed.\n%s", i, tc.desc)
+	handler := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte("OK"))
+	})
 
-			handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-				w.WriteHeader(http.StatusOK)
-				w.Write([]byte("OK"))
-			})
+	wrapped := middlewareFunc(handler)
+	w := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/health", http.NoBody)
+	wrapped.ServeHTTP(w, req)
 
-			wrapped := middlewareFunc(handler)
+	assert.Equal(t, http.StatusOK, w.Code)
+	assert.Contains(t, w.Body.String(), "OK")
+}
 
-			w := httptest.NewRecorder()
-			wrapped.ServeHTTP(w, tc.request)
-
-			assert.Equal(t, tc.expectedStatus, w.Code, "TEST[%d], Failed.\n%s", i, tc.desc)
-			assert.Contains(t, w.Body.String(), tc.expectedBody, "TEST[%d], Failed.\n%s", i, tc.desc)
-		})
+func TestMiddleware_NoEndpointMatch(t *testing.T) {
+	config := &Config{
+		Endpoints: []EndpointMapping{
+			{Path: "/api/users", Methods: []string{"GET"}, RequiredPermissions: []string{"users:read"}},
+		},
 	}
+	err := config.processUnifiedConfig()
+	require.NoError(t, err)
+
+	middlewareFunc := Middleware(config)
+	require.NotNil(t, middlewareFunc)
+
+	handler := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte("OK"))
+	})
+
+	wrapped := middlewareFunc(handler)
+	w := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/api/posts", http.NoBody)
+	wrapped.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusForbidden, w.Code)
+	assert.Contains(t, w.Body.String(), "Forbidden: Access denied")
+}
+
+func TestMiddleware_RoleNotFound(t *testing.T) {
+	config := &Config{
+		RoleHeader: "X-User-Role",
+		Roles: []RoleDefinition{
+			{Name: "admin", Permissions: []string{"admin:read", "admin:write"}},
+		},
+		Endpoints: []EndpointMapping{
+			{Path: "/api", Methods: []string{"GET"}, RequiredPermissions: []string{"admin:read"}},
+		},
+	}
+	err := config.processUnifiedConfig()
+	require.NoError(t, err)
+
+	middlewareFunc := Middleware(config)
+	require.NotNil(t, middlewareFunc)
+
+	handler := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte("OK"))
+	})
+
+	wrapped := middlewareFunc(handler)
+	w := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/api", http.NoBody)
+	wrapped.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusUnauthorized, w.Code)
+	assert.Contains(t, w.Body.String(), "Unauthorized: Missing or invalid role")
+}
+
+func TestMiddleware_ValidRoleAndPermission(t *testing.T) {
+	config := &Config{
+		RoleHeader: "X-User-Role",
+		Roles: []RoleDefinition{
+			{Name: "admin", Permissions: []string{"admin:read", "admin:write"}},
+		},
+		Endpoints: []EndpointMapping{
+			{Path: "/api", Methods: []string{"GET"}, RequiredPermissions: []string{"admin:read"}},
+		},
+	}
+	err := config.processUnifiedConfig()
+	require.NoError(t, err)
+
+	middlewareFunc := Middleware(config)
+	require.NotNil(t, middlewareFunc)
+
+	handler := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte("OK"))
+	})
+
+	wrapped := middlewareFunc(handler)
+	w := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/api", http.NoBody)
+	req.Header.Set("X-User-Role", "admin")
+	wrapped.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusOK, w.Code)
+	assert.Contains(t, w.Body.String(), "OK")
+}
+
+func TestMiddleware_InvalidPermission(t *testing.T) {
+	config := &Config{
+		RoleHeader: "X-User-Role",
+		Roles: []RoleDefinition{
+			{Name: "viewer", Permissions: []string{"users:read"}},
+		},
+		Endpoints: []EndpointMapping{
+			{Path: "/api", Methods: []string{"GET"}, RequiredPermissions: []string{"users:write"}},
+		},
+	}
+	err := config.processUnifiedConfig()
+	require.NoError(t, err)
+
+	middlewareFunc := Middleware(config)
+	require.NotNil(t, middlewareFunc)
+
+	handler := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte("OK"))
+	})
+
+	wrapped := middlewareFunc(handler)
+	w := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/api", http.NoBody)
+	req.Header.Set("X-User-Role", "viewer")
+	wrapped.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusForbidden, w.Code)
+	assert.Contains(t, w.Body.String(), "Forbidden: Access denied")
 }
 
 func TestExtractRole(t *testing.T) {
@@ -146,7 +189,7 @@ func TestExtractRole(t *testing.T) {
 				RoleHeader: "X-User-Role",
 			},
 			request: func() *http.Request {
-				req := httptest.NewRequest("GET", "/api", nil)
+				req := httptest.NewRequest(http.MethodGet, "/api", http.NoBody)
 				req.Header.Set("X-User-Role", "admin")
 				return req
 			}(),
@@ -160,7 +203,7 @@ func TestExtractRole(t *testing.T) {
 				JWTClaimPath: "role",
 			},
 			request: func() *http.Request {
-				req := httptest.NewRequest("GET", "/api", nil)
+				req := httptest.NewRequest(http.MethodGet, "/api", http.NoBody)
 				req.Header.Set("X-User-Role", "viewer")
 				claims := jwt.MapClaims{"role": "admin"}
 				ctx := context.WithValue(req.Context(), middleware.JWTClaim, claims)
@@ -174,7 +217,7 @@ func TestExtractRole(t *testing.T) {
 			config: &Config{
 				JWTClaimPath: "role",
 			},
-			request: httptest.NewRequest("GET", "/api", nil),
+			request:      httptest.NewRequest(http.MethodGet, "/api", http.NoBody),
 			expectedRole: "",
 			expectError:  true,
 		},
@@ -183,14 +226,14 @@ func TestExtractRole(t *testing.T) {
 			config: &Config{
 				RoleHeader: "X-User-Role",
 			},
-			request: httptest.NewRequest("GET", "/api", nil),
+			request:      httptest.NewRequest(http.MethodGet, "/api", http.NoBody),
 			expectedRole: "",
 			expectError:  true,
 		},
 		{
-			desc: "returns error when no role extraction configured",
-			config: &Config{},
-			request: httptest.NewRequest("GET", "/api", nil),
+			desc:         "returns error when no role extraction configured",
+			config:       &Config{},
+			request:      httptest.NewRequest(http.MethodGet, "/api", http.NoBody),
 			expectedRole: "",
 			expectError:  true,
 		},
@@ -202,7 +245,8 @@ func TestExtractRole(t *testing.T) {
 
 			if tc.expectError {
 				require.Error(t, err, "TEST[%d], Failed.\n%s", i, tc.desc)
-				assert.Equal(t, "", role, "TEST[%d], Failed.\n%s", i, tc.desc)
+				assert.Empty(t, role, "TEST[%d], Failed.\n%s", i, tc.desc)
+
 				return
 			}
 
@@ -227,7 +271,7 @@ func TestExtractRoleFromJWT(t *testing.T) {
 				"role": "admin",
 			},
 			expectedRole: "admin",
-			expectError: false,
+			expectError:  false,
 		},
 		{
 			desc:      "extracts role from array claim",
@@ -236,7 +280,7 @@ func TestExtractRoleFromJWT(t *testing.T) {
 				"roles": []any{"admin", "user"},
 			},
 			expectedRole: "admin",
-			expectError: false,
+			expectError:  false,
 		},
 		{
 			desc:      "extracts role from nested claim",
@@ -247,14 +291,14 @@ func TestExtractRoleFromJWT(t *testing.T) {
 				},
 			},
 			expectedRole: "admin",
-			expectError: false,
+			expectError:  false,
 		},
 		{
-			desc:      "returns error when claims not in context",
-			claimPath: "role",
-			claims:    nil,
+			desc:         "returns error when claims not in context",
+			claimPath:    "role",
+			claims:       nil,
 			expectedRole: "",
-			expectError: true,
+			expectError:  true,
 		},
 		{
 			desc:      "returns error when claim path not found",
@@ -263,7 +307,7 @@ func TestExtractRoleFromJWT(t *testing.T) {
 				"role": "admin",
 			},
 			expectedRole: "",
-			expectError: true,
+			expectError:  true,
 		},
 		{
 			desc:      "converts non-string role to string",
@@ -272,13 +316,13 @@ func TestExtractRoleFromJWT(t *testing.T) {
 				"role": 123,
 			},
 			expectedRole: "123",
-			expectError: false,
+			expectError:  false,
 		},
 	}
 
 	for i, tc := range testCases {
 		t.Run(tc.desc, func(t *testing.T) {
-			req := httptest.NewRequest("GET", "/api", nil)
+			req := httptest.NewRequest(http.MethodGet, "/api", http.NoBody)
 
 			if tc.claims != nil {
 				ctx := context.WithValue(req.Context(), middleware.JWTClaim, tc.claims)
@@ -289,7 +333,8 @@ func TestExtractRoleFromJWT(t *testing.T) {
 
 			if tc.expectError {
 				require.Error(t, err, "TEST[%d], Failed.\n%s", i, tc.desc)
-				assert.Equal(t, "", role, "TEST[%d], Failed.\n%s", i, tc.desc)
+				assert.Empty(t, role, "TEST[%d], Failed.\n%s", i, tc.desc)
+
 				return
 			}
 
@@ -363,6 +408,7 @@ func TestExtractClaimValue(t *testing.T) {
 			if tc.expectError {
 				require.Error(t, err, "TEST[%d], Failed.\n%s", i, tc.desc)
 				assert.Nil(t, result, "TEST[%d], Failed.\n%s", i, tc.desc)
+
 				return
 			}
 
@@ -448,6 +494,7 @@ func TestExtractArrayClaim(t *testing.T) {
 	for i, tc := range testCases {
 		t.Run(tc.desc, func(t *testing.T) {
 			idx := 0
+
 			for j, c := range tc.path {
 				if c == '[' {
 					idx = j
@@ -460,6 +507,7 @@ func TestExtractArrayClaim(t *testing.T) {
 			if tc.expectError {
 				require.Error(t, err, "TEST[%d], Failed.\n%s", i, tc.desc)
 				assert.Nil(t, result, "TEST[%d], Failed.\n%s", i, tc.desc)
+
 				return
 			}
 
@@ -539,6 +587,7 @@ func TestExtractNestedClaim(t *testing.T) {
 			if tc.expectError {
 				require.Error(t, err, "TEST[%d], Failed.\n%s", i, tc.desc)
 				assert.Nil(t, result, "TEST[%d], Failed.\n%s", i, tc.desc)
+
 				return
 			}
 
@@ -577,7 +626,7 @@ func TestLogAuditEvent(t *testing.T) {
 
 	for i, tc := range testCases {
 		t.Run(tc.desc, func(t *testing.T) {
-			req := httptest.NewRequest("GET", "/api", nil)
+			req := httptest.NewRequest(http.MethodGet, "/api", http.NoBody)
 			logAuditEvent(tc.logger, req, "admin", "/api", tc.allowed, "test-reason")
 
 			if tc.logger != nil {
@@ -621,9 +670,9 @@ func TestHandleAuthError(t *testing.T) {
 			desc: "uses custom error handler when provided",
 			config: &Config{
 				Logger: &mockLogger{logs: []string{}},
-				ErrorHandler: func(w http.ResponseWriter, r *http.Request, role, route string, err error) {
+				ErrorHandler: func(w http.ResponseWriter, _ *http.Request, _, _ string, _ error) {
 					w.WriteHeader(http.StatusTeapot)
-					w.Write([]byte("Custom error"))
+					_, _ = w.Write([]byte("Custom error"))
 				},
 			},
 			err:            ErrAccessDenied,
@@ -636,7 +685,7 @@ func TestHandleAuthError(t *testing.T) {
 	for i, tc := range testCases {
 		t.Run(tc.desc, func(t *testing.T) {
 			w := httptest.NewRecorder()
-			req := httptest.NewRequest("GET", "/api", nil)
+			req := httptest.NewRequest(http.MethodGet, "/api", http.NoBody)
 
 			handleAuthError(w, req, tc.config, "admin", "/api", tc.err)
 
@@ -645,4 +694,3 @@ func TestHandleAuthError(t *testing.T) {
 		})
 	}
 }
-

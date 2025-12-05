@@ -8,7 +8,6 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-
 	"gofr.dev/pkg/gofr/logging"
 )
 
@@ -120,16 +119,19 @@ endpoints:
 			if tc.fileContent != "" {
 				path, err := createTestFile(tc.fileName, tc.fileContent)
 				require.NoError(t, err, "TEST[%d], Failed.\n%s", i, tc.desc)
+
 				filePath = path
 				defer os.Remove(filePath)
 			}
 
 			p := NewProvider()
+
 			config, err := p.LoadPermissions(tc.fileName)
 
 			if tc.expectError {
 				require.Error(t, err, "TEST[%d], Failed.\n%s", i, tc.desc)
 				require.Nil(t, config, "TEST[%d], Failed.\n%s", i, tc.desc)
+
 				return
 			}
 
@@ -168,6 +170,7 @@ func TestProvider_LoadPermissions_WithLogger(t *testing.T) {
 
 			path, err := createTestFile("test_logger.json", fileContent)
 			require.NoError(t, err, "TEST[%d], Failed.\n%s", i, tc.desc)
+
 			defer os.Remove(path)
 
 			p := NewProvider()
@@ -221,7 +224,7 @@ func TestProvider_GetMiddleware(t *testing.T) {
 
 			require.NotNil(t, middlewareFunc, "TEST[%d], Failed.\n%s", i, tc.desc)
 
-			handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			handler := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 				w.WriteHeader(http.StatusOK)
 			})
 
@@ -241,7 +244,8 @@ func createTestFile(filename, content string) (string, error) {
 		}
 	}
 
-	err := os.WriteFile(filename, []byte(content), 0644)
+	err := os.WriteFile(filename, []byte(content), 0600)
+
 	return filename, err
 }
 
@@ -249,18 +253,18 @@ type mockLogger struct {
 	logs []string
 }
 
-func (m *mockLogger) Debug(args ...any)                 { m.logs = append(m.logs, "DEBUG") }
-func (m *mockLogger) Debugf(format string, args ...any) { m.logs = append(m.logs, "DEBUGF") }
-func (m *mockLogger) Log(args ...any)                   { m.logs = append(m.logs, "LOG") }
-func (m *mockLogger) Logf(format string, args ...any)   { m.logs = append(m.logs, "LOGF") }
-func (m *mockLogger) Info(args ...any)                  { m.logs = append(m.logs, "INFO") }
-func (m *mockLogger) Infof(format string, args ...any)  { m.logs = append(m.logs, "INFOF") }
-func (m *mockLogger) Notice(args ...any)                { m.logs = append(m.logs, "NOTICE") }
-func (m *mockLogger) Noticef(format string, args ...any) { m.logs = append(m.logs, "NOTICEF") }
-func (m *mockLogger) Error(args ...any)                 { m.logs = append(m.logs, "ERROR") }
-func (m *mockLogger) Errorf(format string, args ...any) { m.logs = append(m.logs, "ERRORF") }
-func (m *mockLogger) Warn(args ...any)                  { m.logs = append(m.logs, "WARN") }
-func (m *mockLogger) Warnf(format string, args ...any)  { m.logs = append(m.logs, "WARNF") }
-func (m *mockLogger) Fatal(args ...any)                 { m.logs = append(m.logs, "FATAL") }
-func (m *mockLogger) Fatalf(format string, args ...any) { m.logs = append(m.logs, "FATALF") }
-func (m *mockLogger) ChangeLevel(level logging.Level) {}
+func (m *mockLogger) Debug(_ ...any)             { m.logs = append(m.logs, "DEBUG") }
+func (m *mockLogger) Debugf(_ string, _ ...any)  { m.logs = append(m.logs, "DEBUGF") }
+func (m *mockLogger) Log(_ ...any)               { m.logs = append(m.logs, "LOG") }
+func (m *mockLogger) Logf(_ string, _ ...any)    { m.logs = append(m.logs, "LOGF") }
+func (m *mockLogger) Info(_ ...any)              { m.logs = append(m.logs, "INFO") }
+func (m *mockLogger) Infof(_ string, _ ...any)   { m.logs = append(m.logs, "INFOF") }
+func (m *mockLogger) Notice(_ ...any)            { m.logs = append(m.logs, "NOTICE") }
+func (m *mockLogger) Noticef(_ string, _ ...any) { m.logs = append(m.logs, "NOTICEF") }
+func (m *mockLogger) Error(_ ...any)             { m.logs = append(m.logs, "ERROR") }
+func (m *mockLogger) Errorf(_ string, _ ...any)  { m.logs = append(m.logs, "ERRORF") }
+func (m *mockLogger) Warn(_ ...any)              { m.logs = append(m.logs, "WARN") }
+func (m *mockLogger) Warnf(_ string, _ ...any)   { m.logs = append(m.logs, "WARNF") }
+func (m *mockLogger) Fatal(_ ...any)             { m.logs = append(m.logs, "FATAL") }
+func (m *mockLogger) Fatalf(_ string, _ ...any)  { m.logs = append(m.logs, "FATALF") }
+func (*mockLogger) ChangeLevel(logging.Level)    {}

@@ -19,6 +19,7 @@ func matchEndpoint(method, route string, endpoints []EndpointMapping) (*Endpoint
 			if matchesEndpointPattern(endpoint, route) {
 				return endpoint, true
 			}
+
 			continue
 		}
 
@@ -85,7 +86,7 @@ func matchesEndpointPattern(endpoint *EndpointMapping, route string) bool {
 // checkEndpointAuthorization checks if the user's role is authorized for the endpoint.
 // Pure permission-based: checks if role has ANY of the required permissions (OR logic).
 // Uses the endpoint parameter directly instead of re-looking it up.
-func checkEndpointAuthorization(role string, endpoint *EndpointMapping, config *Config) (bool, string) {
+func checkEndpointAuthorization(role string, endpoint *EndpointMapping, config *Config) (allowed bool, reason string) {
 	// Public endpoints are always allowed
 	if endpoint.Public {
 		return true, "public-endpoint"
