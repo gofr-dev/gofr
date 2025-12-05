@@ -119,8 +119,6 @@ func TestHTTPService_Get(t *testing.T) {
 
 	service := newService(t, server)
 
-
-
 	resp, err := service.Get(t.Context(), "test-path",
 		map[string]any{"key": "value", "name": []string{"gofr", "test"}})
 
