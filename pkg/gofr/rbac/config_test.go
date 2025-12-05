@@ -43,8 +43,8 @@ func TestLoadPermissions(t *testing.T) {
 		{
 			desc: "loads valid json config",
 			fileContent: `{
-				"roles": [{"name": "admin", "permissions": ["*:*"]}],
-				"endpoints": [{"path": "/api", "methods": ["GET"], "requiredPermission": "admin:*"}]
+				"roles": [{"name": "admin", "permissions": ["admin:read", "admin:write"]}],
+				"endpoints": [{"path": "/api", "methods": ["GET"], "requiredPermissions": ["admin:read"]}]
 			}`,
 			fileName:     "test_config.json",
 			expectError:  false,
@@ -54,11 +54,11 @@ func TestLoadPermissions(t *testing.T) {
 			desc: "loads valid yaml config",
 			fileContent: `roles:
   - name: admin
-    permissions: ["*:*"]
+    permissions: ["admin:read", "admin:write"]
 endpoints:
   - path: /api
     methods: ["GET"]
-    requiredPermission: admin:*`,
+    requiredPermissions: ["admin:read"]`,
 			fileName:     "test_config.yaml",
 			expectError:  false,
 			expectConfig: true,
@@ -101,7 +101,7 @@ endpoints:
 			expectConfig: false,
 		},
 		{
-			desc: "returns error for endpoint without requiredPermission",
+			desc: "returns error for endpoint without requiredPermissions",
 			fileContent: `{
 				"roles": [{"name": "admin", "permissions": ["*:*"]}],
 				"endpoints": [{"path": "/api", "methods": ["GET"]}]
@@ -244,7 +244,7 @@ func TestConfig_GetEndpointPermission(t *testing.T) {
 			desc: "returns permission for exact match",
 			config: &Config{
 				Endpoints: []EndpointMapping{
-					{Path: "/api/users", Methods: []string{"GET"}, RequiredPermission: "users:read"},
+					{Path: "/api/users", Methods: []string{"GET"}, RequiredPermissions: []string{"users:read"}},
 				},
 			},
 			method:         "GET",
@@ -270,7 +270,7 @@ func TestConfig_GetEndpointPermission(t *testing.T) {
 			desc: "returns empty for non-existent endpoint",
 			config: &Config{
 				Endpoints: []EndpointMapping{
-					{Path: "/api/users", Methods: []string{"GET"}, RequiredPermission: "users:read"},
+					{Path: "/api/users", Methods: []string{"GET"}, RequiredPermissions: []string{"users:read"}},
 				},
 			},
 			method:         "POST",
@@ -283,7 +283,7 @@ func TestConfig_GetEndpointPermission(t *testing.T) {
 			desc: "matches wildcard pattern",
 			config: &Config{
 				Endpoints: []EndpointMapping{
-					{Path: "/api/*", Methods: []string{"GET"}, RequiredPermission: "api:read"},
+					{Path: "/api/*", Methods: []string{"GET"}, RequiredPermissions: []string{"api:read"}},
 				},
 			},
 			method:         "GET",
@@ -296,7 +296,7 @@ func TestConfig_GetEndpointPermission(t *testing.T) {
 			desc: "matches regex pattern",
 			config: &Config{
 				Endpoints: []EndpointMapping{
-					{Regex: "^/api/users/\\d+$", Methods: []string{"GET"}, RequiredPermission: "users:read"},
+					{Regex: "^/api/users/\\d+$", Methods: []string{"GET"}, RequiredPermissions: []string{"users:read"}},
 				},
 			},
 			method:         "GET",
@@ -309,7 +309,7 @@ func TestConfig_GetEndpointPermission(t *testing.T) {
 			desc: "does not match * method in GetEndpointPermission (handled by matchEndpoint)",
 			config: &Config{
 				Endpoints: []EndpointMapping{
-					{Path: "/api", Methods: []string{"*"}, RequiredPermission: "api:*"},
+					{Path: "/api", Methods: []string{"*"}, RequiredPermissions: []string{"api:*"}},
 				},
 			},
 			method:         "GET",
@@ -322,7 +322,7 @@ func TestConfig_GetEndpointPermission(t *testing.T) {
 			desc: "matches method case-insensitive",
 			config: &Config{
 				Endpoints: []EndpointMapping{
-					{Path: "/api", Methods: []string{"get"}, RequiredPermission: "api:read"},
+					{Path: "/api", Methods: []string{"get"}, RequiredPermissions: []string{"api:read"}},
 				},
 			},
 			method:         "GET",
@@ -359,7 +359,7 @@ func TestConfig_processUnifiedConfig(t *testing.T) {
 					{Name: "admin", Permissions: []string{"*:*"}},
 				},
 				Endpoints: []EndpointMapping{
-					{Path: "/api", Methods: []string{"GET"}, RequiredPermission: "admin:*"},
+					{Path: "/api", Methods: []string{"GET"}, RequiredPermissions: []string{"admin:*"}},
 				},
 			},
 			expectError: false,
@@ -372,13 +372,13 @@ func TestConfig_processUnifiedConfig(t *testing.T) {
 					{Name: "editor", Permissions: []string{"users:write"}, InheritsFrom: []string{"viewer"}},
 				},
 				Endpoints: []EndpointMapping{
-					{Path: "/api/users", Methods: []string{"GET"}, RequiredPermission: "users:read"},
+					{Path: "/api/users", Methods: []string{"GET"}, RequiredPermissions: []string{"users:read"}},
 				},
 			},
 			expectError: false,
 		},
 		{
-			desc: "returns error for endpoint without requiredPermission",
+			desc: "returns error for endpoint without requiredPermissions",
 			config: &Config{
 				Roles: []RoleDefinition{
 					{Name: "admin", Permissions: []string{"*:*"}},
@@ -408,7 +408,7 @@ func TestConfig_processUnifiedConfig(t *testing.T) {
 					{Name: "admin", Permissions: []string{"*:*"}},
 				},
 				Endpoints: []EndpointMapping{
-					{Path: "/api", Methods: []string{}, RequiredPermission: "admin:*"},
+					{Path: "/api", Methods: []string{}, RequiredPermissions: []string{"admin:*"}},
 				},
 			},
 			expectError: false,
@@ -420,7 +420,7 @@ func TestConfig_processUnifiedConfig(t *testing.T) {
 					{Name: "admin", Permissions: []string{"*:*"}},
 				},
 				Endpoints: []EndpointMapping{
-					{Regex: "^/api/users/\\d+$", Methods: []string{"GET"}, RequiredPermission: "admin:*"},
+					{Regex: "^/api/users/\\d+$", Methods: []string{"GET"}, RequiredPermissions: []string{"admin:*"}},
 				},
 			},
 			expectError: false,
@@ -632,8 +632,8 @@ func TestExtractNestedClaim_Additional(t *testing.T) {
 			if tc.expectError {
 				require.Error(t, err, "TEST[%d], Failed.\n%s", i, tc.desc)
 				assert.Nil(t, result, "TEST[%d], Failed.\n%s", i, tc.desc)
-				return
-			}
+		return
+	}
 
 			require.NoError(t, err, "TEST[%d], Failed.\n%s", i, tc.desc)
 			assert.Equal(t, tc.expected, result, "TEST[%d], Failed.\n%s", i, tc.desc)

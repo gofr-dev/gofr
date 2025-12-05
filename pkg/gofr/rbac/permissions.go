@@ -14,6 +14,9 @@ var (
 	ErrPermissionDenied = errors.New("forbidden: permission denied")
 )
 
+// HandlerFunc is a function type for handlers that accept context and return (any, error).
+type HandlerFunc func(ctx interface{}) (any, error)
+
 // PermissionConfig holds permission-based access control configuration.
 type PermissionConfig struct {
 	// Permissions maps permission names to allowed roles

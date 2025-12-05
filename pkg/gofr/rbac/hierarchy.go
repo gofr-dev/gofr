@@ -113,6 +113,36 @@ func (h *RoleHierarchy) HasAnyRole(ctx context.Context, requiredRoles []string) 
 	return false
 }
 
+// isRoleAllowed checks if a role is allowed for a route using the config-based permission system.
+// Note: The system uses permissions, not direct role-to-route mapping.
+func isRoleAllowed(role, route string, config *Config) bool {
+	if config == nil {
+		return false
+	}
+
+	// Check all HTTP methods to see if role has permission for this route
+	methods := []string{"GET", "POST", "PUT", "DELETE", "PATCH"}
+	
+	for _, method := range methods {
+		// Check if endpoint exists and get required permissions
+		perm, isPublic := config.GetEndpointPermission(method, route)
+		if isPublic {
+			return true
+		}
+		if perm != "" {
+			// Check if role has the required permission
+			rolePerms := config.GetRolePermissions(role)
+			for _, rolePerm := range rolePerms {
+				if rolePerm == perm {
+					return true
+				}
+			}
+		}
+	}
+	
+	return false
+}
+
 // IsRoleAllowedWithHierarchy checks if a role is allowed, considering hierarchy.
 func IsRoleAllowedWithHierarchy(role, route string, config *Config, hierarchy *RoleHierarchy) bool {
 	if hierarchy == nil {
