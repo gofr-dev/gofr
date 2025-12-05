@@ -9,7 +9,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"go.opentelemetry.io/otel"
+	sdktrace "go.opentelemetry.io/otel/sdk/trace"
 	"go.uber.org/mock/gomock"
 
 	"gofr.dev/pkg/gofr/logging"
@@ -83,7 +83,7 @@ func TestHTTPService_createAndSendRequest(t *testing.T) {
 		service := &httpService{
 			Client:  http.DefaultClient,
 			url:     server.URL,
-			Tracer:  otel.Tracer("gofr-http-client"),
+			Tracer:  sdktrace.NewTracerProvider().Tracer("gofr-http-client"),
 			Logger:  logging.NewMockLogger(logging.INFO),
 			Metrics: metrics,
 		}
@@ -119,7 +119,7 @@ func TestHTTPService_Get(t *testing.T) {
 
 	service := newService(t, server)
 
-	// TODO : Nil Correlation ID is coming in logs, it has to be fixed
+
 
 	resp, err := service.Get(t.Context(), "test-path",
 		map[string]any{"key": "value", "name": []string{"gofr", "test"}})
@@ -397,7 +397,7 @@ func TestHTTPService_DeleteWithHeaders(t *testing.T) {
 func TestHTTPService_createAndSendRequestCreateRequestFailure(t *testing.T) {
 	service := &httpService{
 		Client: http.DefaultClient,
-		Tracer: otel.Tracer("gofr-http-client"),
+		Tracer: sdktrace.NewTracerProvider().Tracer("gofr-http-client"),
 		Logger: logging.NewMockLogger(logging.INFO),
 	}
 
@@ -416,7 +416,7 @@ func TestHTTPService_createAndSendRequestServerError(t *testing.T) {
 
 	service := &httpService{
 		Client:  http.DefaultClient,
-		Tracer:  otel.Tracer("gofr-http-client"),
+		Tracer:  sdktrace.NewTracerProvider().Tracer("gofr-http-client"),
 		Logger:  logging.NewMockLogger(logging.INFO),
 		Metrics: metrics,
 	}
@@ -455,10 +455,12 @@ func validateResponse(t *testing.T, resp *http.Response, err error, hasError boo
 func newService(t *testing.T, server *httptest.Server) *httpService {
 	t.Helper()
 
+	tp := sdktrace.NewTracerProvider()
+
 	return &httpService{
 		Client: http.DefaultClient,
 		url:    server.URL,
-		Tracer: otel.Tracer("gofr-http-client"),
+		Tracer: tp.Tracer("gofr-http-client"),
 		Logger: logging.NewMockLogger(logging.INFO),
 	}
 }
