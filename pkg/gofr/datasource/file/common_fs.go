@@ -46,6 +46,7 @@ type CommonFileSystem struct {
 	registerHistogram sync.Once
 	connected         bool
 	disableRetry      bool
+	ProviderName      string // Provider name for observability (e.g., "Azure", "GCS", "S3")
 }
 
 // Connect calls the provider's Connect and performs common bookkeeping (metrics / logs / observe).
@@ -602,6 +603,16 @@ func (c *CommonFileSystem) Rename(oldname, newname string) error {
 	return nil
 }
 
+// getProviderName returns the provider name for observability.
+// If ProviderName is set, it returns that; otherwise returns "Common".
+func (c *CommonFileSystem) getProviderName() string {
+	if c.ProviderName != "" {
+		return c.ProviderName
+	}
+
+	return "Common"
+}
+
 // Observe is a helper method to centralize observability for all operations.
 func (c *CommonFileSystem) Observe(operation string, startTime time.Time, status, message *string) {
 	ObserveOperation(&OperationObservability{
@@ -610,7 +621,7 @@ func (c *CommonFileSystem) Observe(operation string, startTime time.Time, status
 		Metrics:   c.Metrics,
 		Operation: operation,
 		Location:  c.Location,
-		Provider:  "Common", // Providers can override this in their own Observe methods
+		Provider:  c.getProviderName(),
 		StartTime: startTime,
 		Status:    status,
 		Message:   message,
