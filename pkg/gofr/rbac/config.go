@@ -4,15 +4,14 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"gofr.dev/pkg/gofr/logging"
 	"net/http"
 	"os"
 	"path/filepath"
 	"regexp"
 	"strings"
 	"sync"
-	"time"
 
-	"gofr.dev/pkg/gofr"
 	"gopkg.in/yaml.v3"
 )
 
@@ -20,18 +19,6 @@ var (
 	// errUnsupportedFormat is returned when the config file format is not supported.
 	errUnsupportedFormat = errors.New("unsupported config file format")
 )
-
-// Logger interface is used by RBAC package to log information.
-type Logger interface {
-	Debug(args ...any)
-	Debugf(format string, args ...any)
-	Info(args ...any)
-	Infof(format string, args ...any)
-	Error(args ...any)
-	Errorf(format string, args ...any)
-	Warn(args ...any)
-	Warnf(format string, args ...any)
-}
 
 // RoleDefinition defines a role with its permissions and inheritance.
 // Pure config-based: only role->permission mapping is supported.
@@ -65,11 +52,12 @@ type EndpointMapping struct {
 	// Example: ["GET", "POST"]
 	Methods []string `json:"methods" yaml:"methods"`
 
-	// RequiredPermission is the permission required to access this endpoint (format: "resource:action")
-	// Example: "users:read"
+	// RequiredPermissions is a list of permissions required to access this endpoint (format: "resource:action")
+	// User needs to have ANY of these permissions (OR logic)
+	// Example: ["users:read"] or ["users:read", "users:admin"]
 	// This is checked against the role's permissions
-	// REQUIRED: All endpoints must specify requiredPermission (except public endpoints)
-	RequiredPermission string `json:"requiredPermission,omitempty" yaml:"requiredPermission,omitempty"`
+	// REQUIRED: All endpoints must specify requiredPermissions (except public endpoints)
+	RequiredPermissions []string `json:"requiredPermissions,omitempty" yaml:"requiredPermissions,omitempty"`
 
 	// Public indicates this endpoint is publicly accessible (bypasses authorization)
 	// Example: true for /health, /metrics endpoints
@@ -103,42 +91,24 @@ type Config struct {
 	// Logger is the logger instance for audit logging
 	// Set automatically by EnableRBAC - users don't need to configure this
 	// Audit logging is automatically performed when RBAC is enabled
-	Logger Logger `json:"-" yaml:"-"`
-
-	// HotReloadConfig configures hot reloading of RBAC config
-	// If nil, hot reloading is disabled
-	HotReloadConfig *HotReloadConfig `json:"hotReload,omitempty" yaml:"hotReload,omitempty"`
+	Logger logging.Logger `json:"-" yaml:"-"`
 
 	// Internal maps built from unified config (not in JSON/YAML)
-	// These are populated by processUnifiedConfig() and updated by hot reload
+	// These are populated by processUnifiedConfig()
 	rolePermissionsMap    map[string][]string `json:"-" yaml:"-"`
 	endpointPermissionMap map[string]string   `json:"-" yaml:"-"` // Key: "METHOD:/path", Value: permission
 	publicEndpointsMap    map[string]bool     `json:"-" yaml:"-"` // Key: "METHOD:/path", Value: true if public
 
-	// Mutex for thread-safe hot reload updates
+	// Mutex for thread-safe access to maps
 	mu sync.RWMutex `json:"-" yaml:"-"`
 }
 
 // SetLogger sets the logger for audit logging.
 // This is called automatically by EnableRBAC - users don't need to configure this.
 func (c *Config) SetLogger(logger any) {
-	if l, ok := logger.(Logger); ok {
+	if l, ok := logger.(logging.Logger); ok {
 		c.Logger = l
 	}
-}
-
-// HotReloadConfig configures hot reloading of RBAC configuration.
-type HotReloadConfig struct {
-	// Enabled enables hot reloading
-	Enabled bool `json:"enabled" yaml:"enabled"`
-
-	// IntervalSeconds is the interval in seconds between hot reload checks
-	// Example: 60 means check every 60 seconds
-	IntervalSeconds int `json:"intervalSeconds" yaml:"intervalSeconds"`
-
-	// Source is the hot reload source (Redis, HTTP service, etc.)
-	// Must implement gofr.HotReloadSource interface
-	Source gofr.HotReloadSource `json:"-" yaml:"-"`
 }
 
 // LoadPermissions loads RBAC configuration from a JSON or YAML file.
@@ -177,7 +147,6 @@ func LoadPermissions(path string) (*Config, error) {
 
 // processUnifiedConfig processes the unified Roles and Endpoints config
 // and builds internal maps for efficient lookup.
-// This is called at startup and during hot reload.
 func (c *Config) processUnifiedConfig() error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
@@ -241,11 +210,18 @@ func (c *Config) processUnifiedConfig() error {
 			if endpoint.Public {
 				c.publicEndpointsMap[key] = true
 			} else {
-				// Store permission requirement
-				if endpoint.RequiredPermission == "" {
-					return fmt.Errorf("endpoint %s %s must specify requiredPermission (or be public)", methodUpper, endpoint.Path)
+				// Get required permissions
+				requiredPerms := endpoint.RequiredPermissions
+
+				// Validate that permissions are specified
+				if len(requiredPerms) == 0 {
+					return fmt.Errorf("endpoint %s %s must specify requiredPermissions (or be public)", methodUpper, endpoint.Path)
 				}
-				c.endpointPermissionMap[key] = endpoint.RequiredPermission
+
+				// Store first permission in map for backward compatibility with GetEndpointPermission
+				// Note: This is a limitation - we store only the first permission
+				// The full array is checked in checkEndpointAuthorization
+				c.endpointPermissionMap[key] = requiredPerms[0]
 			}
 		}
 	}
@@ -281,7 +257,6 @@ func (c *Config) getEffectivePermissions(roleName string) []string {
 	collectPermissions(roleName)
 	return permissions
 }
-
 
 // GetRolePermissions returns the permissions for a role (thread-safe).
 func (c *Config) GetRolePermissions(role string) []string {
@@ -362,100 +337,4 @@ func matchesPathPattern(pattern, path string) bool {
 	}
 
 	return false
-}
-
-// StartHotReload starts the hot reload mechanism if configured.
-// This should be called after the config is loaded and the application is ready.
-func (c *Config) StartHotReload() {
-	if c.HotReloadConfig == nil || !c.HotReloadConfig.Enabled {
-		return
-	}
-
-	if c.HotReloadConfig.Source == nil {
-		if c.Logger != nil {
-			c.Logger.Warn("Hot reload enabled but no source configured")
-		}
-		return
-	}
-
-	interval := time.Duration(c.HotReloadConfig.IntervalSeconds) * time.Second
-	if interval <= 0 {
-		interval = 60 * time.Second // Default: 60 seconds
-	}
-
-	go c.hotReloadLoop(interval)
-
-	if c.Logger != nil {
-		c.Logger.Infof("RBAC hot reload started (interval: %v)", interval)
-	}
-}
-
-// hotReloadLoop runs the hot reload loop.
-func (c *Config) hotReloadLoop(interval time.Duration) {
-	ticker := time.NewTicker(interval)
-	defer ticker.Stop()
-
-	for range ticker.C {
-		if err := c.reloadConfig(); err != nil {
-			if c.Logger != nil {
-				c.Logger.Errorf("Failed to reload RBAC config: %v", err)
-			}
-		} else if c.Logger != nil {
-			c.Logger.Debug("RBAC config reloaded successfully")
-		}
-	}
-}
-
-// reloadConfig fetches and applies updated config from hot reload source.
-func (c *Config) reloadConfig() error {
-	// Fetch updated config from source
-	data, err := c.HotReloadConfig.Source.FetchConfig()
-	if err != nil {
-		return fmt.Errorf("failed to fetch config from source: %w", err)
-	}
-
-	// Parse the config
-	var newConfig Config
-
-	// Try to detect format (JSON or YAML)
-	var parseErr error
-	if strings.Contains(string(data), "---") || strings.HasPrefix(strings.TrimSpace(string(data)), "{") == false {
-		// Likely YAML
-		parseErr = yaml.Unmarshal(data, &newConfig)
-	} else {
-		// Likely JSON
-		parseErr = json.Unmarshal(data, &newConfig)
-	}
-
-	if parseErr != nil {
-		// Try the other format
-		if parseErr = yaml.Unmarshal(data, &newConfig); parseErr != nil {
-			if parseErr = json.Unmarshal(data, &newConfig); parseErr != nil {
-				return fmt.Errorf("failed to parse config: %w", parseErr)
-			}
-		}
-	}
-
-	// Preserve runtime settings
-	newConfig.Logger = c.Logger
-	newConfig.ErrorHandler = c.ErrorHandler
-	newConfig.RoleHeader = c.RoleHeader
-	newConfig.JWTClaimPath = c.JWTClaimPath
-	newConfig.HotReloadConfig = c.HotReloadConfig
-
-	// Process the new config
-	if err := newConfig.processUnifiedConfig(); err != nil {
-		return fmt.Errorf("failed to process new config: %w", err)
-	}
-
-	// Atomically swap the maps
-	c.mu.Lock()
-	c.Roles = newConfig.Roles
-	c.Endpoints = newConfig.Endpoints
-	c.rolePermissionsMap = newConfig.rolePermissionsMap
-	c.endpointPermissionMap = newConfig.endpointPermissionMap
-	c.publicEndpointsMap = newConfig.publicEndpointsMap
-	c.mu.Unlock()
-
-	return nil
 }

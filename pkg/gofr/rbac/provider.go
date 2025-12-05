@@ -1,17 +1,14 @@
 package rbac
 
 import (
-	"fmt"
 	"net/http"
-
-	"gofr.dev/pkg/gofr"
 )
 
 // Provider is the RBAC provider implementation.
 // Provider implements gofr.RBACProvider interface.
 type Provider struct {
 	config *Config // Store the loaded config
-	logger any      // Store the logger (set via UseLogger)
+	logger any     // Store the logger (set via UseLogger)
 }
 
 // NewProvider creates a new RBAC provider.
@@ -59,23 +56,4 @@ func (p *Provider) GetMiddleware(config any) func(http.Handler) http.Handler {
 	}
 
 	return Middleware(rbacConfig)
-}
-
-// EnableHotReload enables hot reloading with the given source.
-// This should be called in app.OnStart after Redis/HTTP services are available.
-// The config file must have hotReload.enabled: true for this to work.
-func (p *Provider) EnableHotReload(source gofr.HotReloadSource) error {
-	if p.config == nil {
-		return fmt.Errorf("config not loaded - call EnableRBAC first")
-	}
-
-	if p.config.HotReloadConfig == nil || !p.config.HotReloadConfig.Enabled {
-		return nil // Hot reload not enabled in config, silently return
-	}
-
-	// Set the source and start hot reload internally
-	p.config.HotReloadConfig.Source = source
-	p.config.StartHotReload() // Internal method on Config
-
-	return nil
 }

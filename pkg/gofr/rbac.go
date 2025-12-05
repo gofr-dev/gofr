@@ -15,19 +15,6 @@ type RBACProvider interface {
 	// GetMiddleware returns the middleware function for the given config
 	// The returned function should be compatible with http.Handler middleware pattern
 	GetMiddleware(config any) func(http.Handler) http.Handler
-
-	// EnableHotReload enables hot reloading with the given source.
-	// This should be called in app.OnStart after Redis/HTTP services are available.
-	// The config file must have hotReload.enabled: true for this to work.
-	EnableHotReload(source HotReloadSource) error
-}
-
-// HotReloadSource is the interface for RBAC hot reload sources.
-// Implementations can fetch updated RBAC config from Redis, HTTP service, etc.
-type HotReloadSource interface {
-	// FetchConfig fetches the updated RBAC configuration
-	// Returns the config data (JSON or YAML bytes) and error
-	FetchConfig() ([]byte, error)
 }
 
 const (
@@ -36,6 +23,10 @@ const (
 	defaultRBACYAMLPath = "configs/rbac.yaml"
 	defaultRBACYMLPath  = "configs/rbac.yml"
 )
+
+// DefaultRBACConfig is a constant that can be passed to EnableRBAC to use default config paths.
+// When passed, EnableRBAC will try: configs/rbac.json, configs/rbac.yaml, configs/rbac.yml
+const DefaultRBACConfig = ""
 
 // EnableRBAC enables RBAC by loading configuration from a JSON or YAML file.
 // This is a factory function that registers RBAC implementations and sets up the middleware.
@@ -54,16 +45,14 @@ const (
 //
 //	app := gofr.New()
 //	provider := rbac.NewProvider()
-//	app.EnableRBAC(provider, "configs/rbac.json") // Uses default path if empty
+//	app.EnableRBAC(provider, "configs/rbac.json") // Custom path
+//	// Or use default paths:
+//	app.EnableRBAC(provider, gofr.DefaultRBACConfig) // Tries configs/rbac.json, configs/rbac.yaml, configs/rbac.yml
 //
 // Role extraction is configured in the config file:
 // - Set "roleHeader" for header-based extraction (e.g., "X-User-Role")
 // - Set "jwtClaimPath" for JWT-based extraction (e.g., "role", "roles[0]")
 //
-// Hot reload can be configured in the config file:
-// - Set "hotReload.enabled": true
-// - Set "hotReload.intervalSeconds": 60
-// - Configure hot reload source programmatically (Redis/HTTP service)
 func (a *App) EnableRBAC(provider RBACProvider, configFile string) {
 	if provider == nil {
 		a.Logger().Error("RBAC provider is required. Create one using: provider := rbac.NewProvider()")
@@ -91,10 +80,6 @@ func (a *App) EnableRBAC(provider RBACProvider, configFile string) {
 	}
 
 	a.Logger().Infof("Loaded RBAC config from %s", filePath)
-
-	// Note: Hot reload is not started here because the source (Redis/HTTP) needs to be
-	// configured in app.OnStart hook after Redis/HTTP services are available.
-	// Users should configure hot reload source in app.OnStart and call config.StartHotReload()
 
 	// Apply middleware using the provider
 	middlewareFunc := provider.GetMiddleware(config)

@@ -9,17 +9,8 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"gofr.dev/pkg/gofr"
+	"gofr.dev/pkg/gofr/logging"
 )
-
-type mockHotReloadSource struct {
-	data []byte
-	err  error
-}
-
-func (m *mockHotReloadSource) FetchConfig() ([]byte, error) {
-	return m.data, m.err
-}
 
 func TestNewProvider(t *testing.T) {
 	testCases := []struct {
@@ -241,92 +232,6 @@ func TestProvider_GetMiddleware(t *testing.T) {
 	}
 }
 
-func TestProvider_EnableHotReload(t *testing.T) {
-	testCases := []struct {
-		desc          string
-		setupConfig   func() *Config
-		source        gofr.HotReloadSource
-		expectError   bool
-		expectStarted bool
-	}{
-		{
-			desc: "returns error when config not loaded",
-			setupConfig: func() *Config {
-				return nil
-			},
-			source:        &mockHotReloadSource{},
-			expectError:   true,
-			expectStarted: false,
-		},
-		{
-			desc: "returns nil when hot reload not enabled",
-			setupConfig: func() *Config {
-				return &Config{
-					HotReloadConfig: &HotReloadConfig{
-						Enabled: false,
-					},
-				}
-			},
-			source:        &mockHotReloadSource{},
-			expectError:   false,
-			expectStarted: false,
-		},
-		{
-			desc: "returns nil when hot reload config is nil",
-			setupConfig: func() *Config {
-				return &Config{
-					HotReloadConfig: nil,
-				}
-			},
-			source:        &mockHotReloadSource{},
-			expectError:   false,
-			expectStarted: false,
-		},
-		{
-			desc: "starts hot reload when enabled",
-			setupConfig: func() *Config {
-				config := &Config{
-					HotReloadConfig: &HotReloadConfig{
-						Enabled:         true,
-						IntervalSeconds: 1,
-					},
-					Logger: &mockLogger{},
-				}
-				config.processUnifiedConfig()
-				return config
-			},
-			source: &mockHotReloadSource{
-				data: []byte(`{"roles":[],"endpoints":[]}`),
-			},
-			expectError:   false,
-			expectStarted: true,
-		},
-	}
-
-	for i, tc := range testCases {
-		t.Run(tc.desc, func(t *testing.T) {
-			p := NewProvider()
-
-			if tc.setupConfig != nil {
-				p.config = tc.setupConfig()
-			}
-
-			err := p.EnableHotReload(tc.source)
-
-			if tc.expectError {
-				require.Error(t, err, "TEST[%d], Failed.\n%s", i, tc.desc)
-				return
-			}
-
-			require.NoError(t, err, "TEST[%d], Failed.\n%s", i, tc.desc)
-
-			if tc.expectStarted {
-				require.NotNil(t, p.config.HotReloadConfig.Source, "TEST[%d], Failed.\n%s", i, tc.desc)
-			}
-		})
-	}
-}
-
 func createTestFile(filename, content string) (string, error) {
 	dir := filepath.Dir(filename)
 	if dir != "." && dir != "" {
@@ -346,9 +251,16 @@ type mockLogger struct {
 
 func (m *mockLogger) Debug(args ...any)                 { m.logs = append(m.logs, "DEBUG") }
 func (m *mockLogger) Debugf(format string, args ...any) { m.logs = append(m.logs, "DEBUGF") }
+func (m *mockLogger) Log(args ...any)                   { m.logs = append(m.logs, "LOG") }
+func (m *mockLogger) Logf(format string, args ...any)   { m.logs = append(m.logs, "LOGF") }
 func (m *mockLogger) Info(args ...any)                  { m.logs = append(m.logs, "INFO") }
 func (m *mockLogger) Infof(format string, args ...any)  { m.logs = append(m.logs, "INFOF") }
+func (m *mockLogger) Notice(args ...any)                { m.logs = append(m.logs, "NOTICE") }
+func (m *mockLogger) Noticef(format string, args ...any) { m.logs = append(m.logs, "NOTICEF") }
 func (m *mockLogger) Error(args ...any)                 { m.logs = append(m.logs, "ERROR") }
 func (m *mockLogger) Errorf(format string, args ...any) { m.logs = append(m.logs, "ERRORF") }
 func (m *mockLogger) Warn(args ...any)                  { m.logs = append(m.logs, "WARN") }
 func (m *mockLogger) Warnf(format string, args ...any)  { m.logs = append(m.logs, "WARNF") }
+func (m *mockLogger) Fatal(args ...any)                 { m.logs = append(m.logs, "FATAL") }
+func (m *mockLogger) Fatalf(format string, args ...any) { m.logs = append(m.logs, "FATALF") }
+func (m *mockLogger) ChangeLevel(level logging.Level) {}

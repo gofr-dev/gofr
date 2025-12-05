@@ -51,7 +51,7 @@ func TestEnableRBAC(t *testing.T) {
 		{
 			desc:       "valid provider with default config path",
 			provider:   &mockRBACProvider{},
-			configFile: "",
+			configFile: DefaultRBACConfig,
 			setupFiles: func() (string, error) {
 				content := `{"roles":[{"name":"viewer","permissions":["users:read"]}],"endpoints":[{"path":"/health","methods":["GET"],"public":true}]}`
 				return createTestConfigFile("configs/rbac.json", content)
@@ -243,10 +243,6 @@ func (m *mockRBACProvider) GetMiddleware(config any) func(http.Handler) http.Han
 	return func(handler http.Handler) http.Handler {
 		return handler
 	}
-}
-
-func (m *mockRBACProvider) EnableHotReload(source HotReloadSource) error {
-	return nil
 }
 
 func TestApp_EnableRBAC_Integration(t *testing.T) {
