@@ -30,7 +30,7 @@ type Middleware func(handler http.Handler) http.Handler
 
 // NewRouter creates a new Router instance.
 func NewRouter() *Router {
-	muxRouter := mux.NewRouter().StrictSlash(false)
+	muxRouter := mux.NewRouter().StrictSlash(true)
 	routes := make([]string, 0)
 	r := &Router{
 		Router:           *muxRouter,
