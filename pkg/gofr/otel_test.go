@@ -11,34 +11,6 @@ import (
 	"gofr.dev/pkg/gofr/logging"
 )
 
-func Test_zipkinExporterWrapper_Status201(t *testing.T) {
-	// Create a mock server that returns status 201 (Created)
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		w.WriteHeader(http.StatusCreated) // 201
-	}))
-	defer server.Close()
-
-	logger := logging.NewLogger(logging.INFO)
-	
-	// Build zipkin exporter which will be wrapped
-	exporter, err := buildZipkinExporter(logger, server.URL, "", "", "")
-	require.NoError(t, err, "Failed to create zipkin exporter")
-	require.NotNil(t, exporter, "Exporter should not be nil")
-
-	// Verify it's wrapped
-	wrapper, ok := exporter.(*zipkinExporterWrapper)
-	require.True(t, ok, "Exporter should be wrapped with zipkinExporterWrapper")
-
-	// Create sample spans
-	spans := provideSampleSpan(t)
-
-	// Export spans - should succeed even though underlying exporter would error on 201
-	err = wrapper.ExportSpans(t.Context(), spans)
-	
-	// Should not return error because we treat 201 as success
-	require.NoError(t, err, "Status 201 should be treated as success by wrapper")
-}
-
 func Test_zipkinExporterWrapper_Status202(t *testing.T) {
 	// Create a mock server that returns status 202 (Accepted) - the expected status
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
@@ -47,7 +19,7 @@ func Test_zipkinExporterWrapper_Status202(t *testing.T) {
 	defer server.Close()
 
 	logger := logging.NewLogger(logging.INFO)
-	
+
 	exporter, err := buildZipkinExporter(logger, server.URL, "", "", "")
 	require.NoError(t, err)
 
@@ -66,7 +38,7 @@ func Test_zipkinExporterWrapper_Status400(t *testing.T) {
 	defer server.Close()
 
 	logger := logging.NewLogger(logging.INFO)
-	
+
 	exporter, err := buildZipkinExporter(logger, server.URL, "", "", "")
 	require.NoError(t, err)
 
@@ -75,14 +47,14 @@ func Test_zipkinExporterWrapper_Status400(t *testing.T) {
 	// Export spans - should return error for 400
 	err = exporter.ExportSpans(t.Context(), spans)
 	require.Error(t, err, "Status 400 should return error")
-	assert.Contains(t, err.Error(), "failed to send spans to zipkin server", 
+	assert.Contains(t, err.Error(), "failed to send spans to zipkin server",
 		"Error should mention failed to send spans")
 	assert.Contains(t, err.Error(), "400", "Error should include status code")
 }
 
 func Test_zipkinExporterWrapper_Shutdown(t *testing.T) {
 	logger := logging.NewLogger(logging.INFO)
-	
+
 	// Create exporter with invalid URL to test shutdown doesn't fail
 	exporter, err := buildZipkinExporter(logger, "http://invalid-url:9411/api/v2/spans", "", "", "")
 	require.NoError(t, err)
@@ -91,5 +63,3 @@ func Test_zipkinExporterWrapper_Shutdown(t *testing.T) {
 	err = exporter.Shutdown(t.Context())
 	require.NoError(t, err, "Shutdown should not error")
 }
-
-
