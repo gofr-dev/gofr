@@ -41,10 +41,11 @@ func New(config *Config, logger datasource.Logger, metrics file.StorageMetrics) 
 
 	fs := &fileSystem{
 		CommonFileSystem: &file.CommonFileSystem{
-			Provider: adapter,
-			Location: location,
-			Logger:   logger,
-			Metrics:  metrics,
+			Provider:     adapter,
+			Location:     location,
+			Logger:       logger,
+			Metrics:      metrics,
+			ProviderName: "FTP",
 		},
 	}
 
