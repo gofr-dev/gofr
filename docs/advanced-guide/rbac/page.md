@@ -26,7 +26,7 @@ func main() {
 	provider := rbac.NewProvider()
 	app.EnableRBAC(provider, "configs/rbac.json") // Custom path
 	// Or use default paths:
-	app.EnableRBAC(provider, gofr.DefaultRBACConfig) // Tries configs/rbac.json, configs/rbac.yaml, configs/rbac.yml
+	// app.EnableRBAC(provider, gofr.DefaultRBACConfig) // Tries configs/rbac.json, configs/rbac.yaml, configs/rbac.yml
 	
 	app.GET("/api/users", handler)
 	app.Run()
@@ -102,7 +102,7 @@ The middleware automatically handles all authorization - you just define routes 
 }
 ```
 
-**Precedence**: If both are set, JWT takes precedence.
+**Precedence**: If both are set, **only JWT is considered**. The header is not checked when `jwtClaimPath` is configured, even if JWT extraction fails.
 
 **JWT Claim Path Formats**:
 - `"role"` → `{"role": "admin"}`
