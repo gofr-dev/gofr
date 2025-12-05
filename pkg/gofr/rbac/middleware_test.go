@@ -11,6 +11,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"gofr.dev/pkg/gofr/http/middleware"
+	"gofr.dev/pkg/gofr/logging"
 )
 
 func TestMiddleware(t *testing.T) {
@@ -55,7 +56,7 @@ func TestMiddleware(t *testing.T) {
 			config: &Config{
 				RoleHeader: "X-User-Role",
 				Roles: []RoleDefinition{
-					{Name: "admin", Permissions: []string{"*:*"}},
+					{Name: "admin", Permissions: []string{"admin:*"}},
 				},
 				Endpoints: []EndpointMapping{
 					{Path: "/api", Methods: []string{"GET"}, RequiredPermission: "admin:*"},
@@ -70,7 +71,7 @@ func TestMiddleware(t *testing.T) {
 			config: &Config{
 				RoleHeader: "X-User-Role",
 				Roles: []RoleDefinition{
-					{Name: "admin", Permissions: []string{"*:*"}},
+					{Name: "admin", Permissions: []string{"admin:*"}},
 				},
 				Endpoints: []EndpointMapping{
 					{Path: "/api", Methods: []string{"GET"}, RequiredPermission: "admin:*"},
@@ -550,7 +551,7 @@ func TestExtractNestedClaim(t *testing.T) {
 func TestLogAuditEvent(t *testing.T) {
 	testCases := []struct {
 		desc     string
-		logger   Logger
+		logger   logging.Logger
 		allowed  bool
 		expected int
 	}{

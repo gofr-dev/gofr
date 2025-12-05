@@ -2,8 +2,6 @@ module gofr.dev/pkg/gofr/rbac
 
 go 1.25
 
-replace gofr.dev => ../../..
-
 require (
 	github.com/golang-jwt/jwt/v5 v5.3.0
 	github.com/stretchr/testify v1.11.1

@@ -83,7 +83,7 @@ func matchesEndpointPattern(endpoint *EndpointMapping, route string) bool {
 }
 
 // checkEndpointAuthorization checks if the user's role is authorized for the endpoint.
-// Pure permission-based: only checks if role has the required permission.
+// Pure permission-based: checks if role has ANY of the required permissions (OR logic).
 // Uses the endpoint parameter directly instead of re-looking it up.
 func checkEndpointAuthorization(role string, endpoint *EndpointMapping, config *Config) (bool, string) {
 	// Public endpoints are always allowed
@@ -91,11 +91,11 @@ func checkEndpointAuthorization(role string, endpoint *EndpointMapping, config *
 		return true, "public-endpoint"
 	}
 
-	// Get required permission from the endpoint directly
-	requiredPermission := endpoint.RequiredPermission
+	// Get required permissions (support both new array and old string for backward compatibility)
+	requiredPerms := endpoint.RequiredPermissions
 
 	// If no permission requirement found, deny (fail secure)
-	if requiredPermission == "" {
+	if len(requiredPerms) == 0 {
 		return false, ""
 	}
 
@@ -105,17 +105,12 @@ func checkEndpointAuthorization(role string, endpoint *EndpointMapping, config *
 		return false, ""
 	}
 
-	// Check if role has the required permission
-	for _, perm := range rolePerms {
-		// Exact match
-		if perm == requiredPermission || perm == "*:*" {
-			return true, "permission-based"
-		}
-
-		// Wildcard permission match (e.g., "users:*" matches "users:read")
-		if strings.HasSuffix(perm, ":*") {
-			permPrefix := strings.TrimSuffix(perm, ":*")
-			if strings.HasPrefix(requiredPermission, permPrefix+":") {
+	// Check if role has ANY of the required permissions (OR logic)
+	// Only exact matches are supported - wildcards are NOT supported in permissions
+	for _, requiredPerm := range requiredPerms {
+		for _, perm := range rolePerms {
+			// Exact match only - no wildcard support
+			if perm == requiredPerm {
 				return true, "permission-based"
 			}
 		}

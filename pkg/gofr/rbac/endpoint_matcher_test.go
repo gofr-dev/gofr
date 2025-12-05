@@ -283,7 +283,7 @@ func TestCheckEndpointAuthorization(t *testing.T) {
 			expectedReason:     "permission-based",
 		},
 		{
-			desc: "authorizes role with wildcard permission",
+			desc: "denies role with wildcard permission (wildcards not supported)",
 			role:  "admin",
 			endpoint: &EndpointMapping{
 				RequiredPermission: "users:read",
@@ -293,11 +293,11 @@ func TestCheckEndpointAuthorization(t *testing.T) {
 					{Name: "admin", Permissions: []string{"*:*"}},
 				},
 			},
-			expectedAuthorized: true,
-			expectedReason:     "permission-based",
+			expectedAuthorized: false,
+			expectedReason:     "",
 		},
 		{
-			desc: "authorizes role with resource wildcard",
+			desc: "denies role with resource wildcard (wildcards not supported)",
 			role:  "admin",
 			endpoint: &EndpointMapping{
 				RequiredPermission: "users:read",
@@ -307,8 +307,8 @@ func TestCheckEndpointAuthorization(t *testing.T) {
 					{Name: "admin", Permissions: []string{"users:*"}},
 				},
 			},
-			expectedAuthorized: true,
-			expectedReason:     "permission-based",
+			expectedAuthorized: false,
+			expectedReason:     "",
 		},
 		{
 			desc: "denies role without permission",
@@ -362,6 +362,62 @@ func TestCheckEndpointAuthorization(t *testing.T) {
 				Roles: []RoleDefinition{
 					{Name: "viewer", Permissions: []string{"users:read"}},
 					{Name: "editor", Permissions: []string{"users:write"}, InheritsFrom: []string{"viewer"}},
+				},
+			},
+			expectedAuthorized: true,
+			expectedReason:     "permission-based",
+		},
+		{
+			desc: "authorizes with multiple required permissions (OR logic - has first)",
+			role:  "viewer",
+			endpoint: &EndpointMapping{
+				RequiredPermissions: []string{"users:read", "users:admin"},
+			},
+			config: &Config{
+				Roles: []RoleDefinition{
+					{Name: "viewer", Permissions: []string{"users:read"}},
+				},
+			},
+			expectedAuthorized: true,
+			expectedReason:     "permission-based",
+		},
+		{
+			desc: "authorizes with multiple required permissions (OR logic - has second)",
+			role:  "admin",
+			endpoint: &EndpointMapping{
+				RequiredPermissions: []string{"users:read", "users:admin"},
+			},
+			config: &Config{
+				Roles: []RoleDefinition{
+					{Name: "admin", Permissions: []string{"users:admin"}},
+				},
+			},
+			expectedAuthorized: true,
+			expectedReason:     "permission-based",
+		},
+		{
+			desc: "denies when role has none of the required permissions",
+			role:  "guest",
+			endpoint: &EndpointMapping{
+				RequiredPermissions: []string{"users:read", "users:write"},
+			},
+			config: &Config{
+				Roles: []RoleDefinition{
+					{Name: "guest", Permissions: []string{"posts:read"}},
+				},
+			},
+			expectedAuthorized: false,
+			expectedReason:     "",
+		},
+		{
+			desc: "backward compatibility - works with old RequiredPermission string",
+			role:  "viewer",
+			endpoint: &EndpointMapping{
+				RequiredPermission: "users:read",
+			},
+			config: &Config{
+				Roles: []RoleDefinition{
+					{Name: "viewer", Permissions: []string{"users:read"}},
 				},
 			},
 			expectedAuthorized: true,

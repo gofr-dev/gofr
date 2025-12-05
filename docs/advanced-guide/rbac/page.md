@@ -1,15 +1,14 @@
 # Role-Based Access Control (RBAC) in GoFr
 
-Role-Based Access Control (RBAC) is a security mechanism that restricts access to resources based on user roles and permissions. GoFr provides a pure config-based RBAC middleware that supports multiple authentication methods, fine-grained permissions, role inheritance, and hot reloading.
+Role-Based Access Control (RBAC) is a security mechanism that restricts access to resources based on user roles and permissions. GoFr provides a pure config-based RBAC middleware that supports multiple authentication methods, fine-grained permissions, and role inheritance.
 
 ## Overview
 
 - ✅ **Pure Config-Based** - All authorization rules in JSON/YAML files
-- ✅ **Two-Level Mapping** - Role→Permission and Route&Method→Permission only
+- ✅ **Two-Level Authorization Model** - Roles define permissions, endpoints require permissions (no direct role-to-route mapping)
 - ✅ **Multiple Auth Methods** - Header-based and JWT-based role extraction
-- ✅ **Permission-Based** - Fine-grained permissions (`resource:action` format)
+- ✅ **Permission-Based** - Fine-grained permissions 
 - ✅ **Role Inheritance** - Roles inherit permissions from other roles
-- ✅ **Hot Reloading** - Update permissions without restarting
 
 ## Quick Start
 
@@ -25,7 +24,9 @@ func main() {
 	app := gofr.New()
 	
 	provider := rbac.NewProvider()
-	app.EnableRBAC(provider, "configs/rbac.json") // or "" for default paths
+	app.EnableRBAC(provider, "configs/rbac.json") // Custom path
+	// Or use default paths:
+	app.EnableRBAC(provider, gofr.DefaultRBACConfig) // Tries configs/rbac.json, configs/rbac.yaml, configs/rbac.yml
 	
 	app.GET("/api/users", handler)
 	app.Run()
@@ -40,7 +41,7 @@ func main() {
   "roles": [
     {
       "name": "admin",
-      "permissions": ["*:*"]
+      "permissions": ["users:read", "users:write", "users:delete", "posts:read", "posts:write"]
     },
     {
       "name": "editor",
@@ -61,12 +62,12 @@ func main() {
     {
       "path": "/api/users",
       "methods": ["GET"],
-      "requiredPermission": "users:read"
+      "requiredPermissions": ["users:read"]
     },
     {
       "path": "/api/users",
       "methods": ["POST"],
-      "requiredPermission": "users:write"
+      "requiredPermissions": ["users:write"]
     }
   ]
 }
@@ -115,7 +116,7 @@ The middleware automatically handles all authorization - you just define routes 
   "roles": [
     {
       "name": "admin",
-      "permissions": ["*:*"]  // Wildcard: all permissions
+      "permissions": ["users:read", "users:write", "users:delete", "posts:read", "posts:write"]  // Explicit permissions (wildcards not supported)
     },
     {
       "name": "editor",
@@ -145,18 +146,18 @@ The middleware automatically handles all authorization - you just define routes 
     {
       "path": "/api/users",
       "methods": ["GET"],
-      "requiredPermission": "users:read"
+      "requiredPermissions": ["users:read"]
     },
     {
-      "path": "/api/users/{id}",
+      "path": "/api/users/{id}",  // For reference only - path param doesn't work for matching
+      "regex": "^/api/users/\\d+$",  // Regex for strict validation (numeric IDs only)
       "methods": ["DELETE"],
-      "regex": "^/api/users/\\d+$",  // Regex takes precedence over path
-      "requiredPermission": "users:delete"
+      "requiredPermissions": ["users:delete"]
     },
     {
-      "path": "/api/admin/*",  // Wildcard pattern
+      "path": "/api/admin/*",  // Wildcard pattern - matches all sub-paths
       "methods": ["*"],  // All methods
-      "requiredPermission": "admin:*"
+      "requiredPermissions": ["admin:read", "admin:write"]  // Multiple permissions (OR logic)
     }
   ]
 }
@@ -167,88 +168,40 @@ The middleware automatically handles all authorization - you just define routes 
 - **Wildcard**: `"/api/*"` matches `/api/users`, `/api/posts`, etc.
 - **Regex**: `"^/api/users/\\d+$"` matches `/api/users/123`, etc.
 
-**Hot Reload Configuration** (`configs/rbac.json`):
+### Path Parameters
 
+For endpoints with path parameters (e.g., `/api/users/{id}`), the `{id}` syntax in the `path` field is **documentation only** and does not work for matching. You must use either a **wildcard** or **regex** pattern.
+
+**Use Wildcard (`/*`) for Simple Cases**:
 ```json
 {
-  "roles": [...],
-  "endpoints": [...],
-  "hotReload": {
-    "enabled": true,
-    "intervalSeconds": 60
-  }
+  "path": "/api/users/*",
+  "methods": ["DELETE"],
+  "requiredPermissions": ["users:delete"]
 }
 ```
+- ✅ Matches: `/api/users/123`, `/api/users/abc`, `/api/users/anything`
+- Simple and flexible, but accepts any value
 
-**Hot Reload Interface**:
-
-```go
-type HotReloadSource interface {
-    FetchConfig() ([]byte, error)
+**Use Regex for Strict Validation**:
+```json
+{
+  "path": "/api/users/{id}",  // Documentation only
+  "regex": "^/api/users/\\d+$",  // Only matches numeric IDs
+  "methods": ["DELETE"],
+  "requiredPermissions": ["users:delete"]
 }
 ```
+- ✅ Matches: `/api/users/123`, `/api/users/456`
+- ❌ Does not match: `/api/users/abc`, `/api/users/123abc`
+- Provides strict validation (numeric IDs, UUIDs, etc.)
 
-Implement this interface to fetch config from any source (Redis, database, HTTP service, etc.).
+**Common Regex Patterns**:
+- Numeric IDs: `"^/api/users/\\d+$"` (matches `/api/users/123`)
+- UUIDs: `"^/api/users/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"` (matches `/api/users/550e8400-e29b-41d4-a716-446655440000`)
+- Alphanumeric: `"^/api/users/[a-zA-Z0-9]+$"` (matches `/api/users/user123`)
 
-## Complete Example with Hot Reload
-
-```go
-package main
-
-import (
-  "context"
-  "errors"
-
-  "github.com/redis/go-redis/v9"
-  "gofr.dev/pkg/gofr"
-  "gofr.dev/pkg/gofr/container"
-  "gofr.dev/pkg/gofr/rbac"
-)
-
-// RedisHotReloadSource implements HotReloadSource for Redis
-type RedisHotReloadSource struct {
-  redis container.Redis
-  key   string
-}
-
-func (r *RedisHotReloadSource) FetchConfig() ([]byte, error) {
-  val, err := r.redis.Get(context.Background(), r.key).Result()
-  if err != nil {
-    if errors.Is(err, redis.Nil) {
-      return nil, errors.New("config not found in Redis")
-    }
-    return nil, err
-  }
-  return []byte(val), nil
-}
-
-func main() {
-  app := gofr.New()
-
-  provider := rbac.NewProvider()
-  app.EnableRBAC(provider, "configs/rbac.json")
-
-  // Configure hot reload in OnStart
-  app.OnStart(func(ctx *gofr.Context) error {
-    source := &RedisHotReloadSource{
-      redis: ctx.Redis,
-      key:   "rbac:config",
-    }
-    return provider.EnableHotReload(source)
-  })
-
-  app.GET("/api/users", func(ctx *gofr.Context) (interface{}, error) {
-    // Role is already validated by middleware
-    // For JWT-based: use ctx.GetAuthInfo().GetClaims()["role"]
-    // For header-based: use ctx.Request.Header().Get("X-User-Role")
-    claims := ctx.GetAuthInfo().GetClaims()
-    role, _ := claims["role"].(string)
-    return map[string]string{"userRole": role}, nil
-  })
-
-  app.Run()
-}
-```
+**Note**: When both `path` and `regex` are provided, `regex` takes precedence and `path` is ignored for matching (but can be kept for documentation).
 
 ## JWT-Based RBAC
 
@@ -323,6 +276,32 @@ Use the format: `resource:action`
 **Avoid inconsistent formats**:
 - ❌ `"read_users"`, `"writeUsers"`, `"DELETE_POSTS"`
 - ✅ `"users:read"`, `"users:write"`, `"posts:delete"`
+
+### Wildcards Not Supported
+
+**Important**: Wildcards are **NOT supported** in permissions. Only exact matches are allowed.
+
+- ❌ `"*:*"` - Does not match all permissions
+- ❌ `"users:*"` - Does not match all user permissions
+- ✅ `"users:read"` - Exact match only
+- ✅ `"users:write"` - Exact match only
+
+If you need multiple permissions, specify them explicitly:
+```json
+{
+  "name": "admin",
+  "permissions": ["users:read", "users:write", "users:delete", "posts:read", "posts:write"]
+}
+```
+
+Or use role inheritance to avoid duplication:
+```json
+{
+  "name": "editor",
+  "permissions": ["users:write", "posts:write"],
+  "inheritsFrom": ["viewer"]  // Inherits viewer's permissions
+}
+```
 
 ## Common Patterns
 
@@ -418,7 +397,6 @@ Use the format: `resource:action`
 - **Use consistent naming** - Follow `resource:action` format (e.g., `users:read`, `posts:write`)
 - **Group related permissions** - Organize by resource type
 - **Version control configs** - Track RBAC changes in git
-- **Set appropriate hot reload interval** - 60-300 seconds recommended
 
 ## Troubleshooting
 

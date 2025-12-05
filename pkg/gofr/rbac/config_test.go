@@ -1,14 +1,15 @@
 package rbac
 
 import (
-	"github.com/golang-jwt/jwt/v5"
 	"os"
 	"path/filepath"
 	"testing"
-	"time"
 
+	"github.com/golang-jwt/jwt/v5"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"gofr.dev/pkg/gofr/logging"
 )
 
 type mockLoggerForConfig struct {
@@ -17,21 +18,19 @@ type mockLoggerForConfig struct {
 
 func (m *mockLoggerForConfig) Debug(args ...any)                 { m.logs = append(m.logs, "DEBUG") }
 func (m *mockLoggerForConfig) Debugf(format string, args ...any) { m.logs = append(m.logs, "DEBUGF") }
+func (m *mockLoggerForConfig) Log(args ...any)                   { m.logs = append(m.logs, "LOG") }
+func (m *mockLoggerForConfig) Logf(format string, args ...any)   { m.logs = append(m.logs, "LOGF") }
 func (m *mockLoggerForConfig) Info(args ...any)                  { m.logs = append(m.logs, "INFO") }
 func (m *mockLoggerForConfig) Infof(format string, args ...any)  { m.logs = append(m.logs, "INFOF") }
+func (m *mockLoggerForConfig) Notice(args ...any)                { m.logs = append(m.logs, "NOTICE") }
+func (m *mockLoggerForConfig) Noticef(format string, args ...any) { m.logs = append(m.logs, "NOTICEF") }
 func (m *mockLoggerForConfig) Error(args ...any)                 { m.logs = append(m.logs, "ERROR") }
 func (m *mockLoggerForConfig) Errorf(format string, args ...any) { m.logs = append(m.logs, "ERRORF") }
 func (m *mockLoggerForConfig) Warn(args ...any)                  { m.logs = append(m.logs, "WARN") }
 func (m *mockLoggerForConfig) Warnf(format string, args ...any)  { m.logs = append(m.logs, "WARNF") }
-
-type mockHotReloadSourceForConfig struct {
-	data []byte
-	err  error
-}
-
-func (m *mockHotReloadSourceForConfig) FetchConfig() ([]byte, error) {
-	return m.data, m.err
-}
+func (m *mockLoggerForConfig) Fatal(args ...any)                 { m.logs = append(m.logs, "FATAL") }
+func (m *mockLoggerForConfig) Fatalf(format string, args ...any) { m.logs = append(m.logs, "FATALF") }
+func (m *mockLoggerForConfig) ChangeLevel(level logging.Level) {}
 
 func TestLoadPermissions(t *testing.T) {
 	testCases := []struct {
@@ -444,154 +443,6 @@ func TestConfig_processUnifiedConfig(t *testing.T) {
 	}
 }
 
-func TestConfig_StartHotReload(t *testing.T) {
-	testCases := []struct {
-		desc          string
-		config        *Config
-		expectStarted bool
-	}{
-		{
-			desc: "does not start when hot reload disabled",
-			config: &Config{
-				HotReloadConfig: &HotReloadConfig{
-					Enabled: false,
-				},
-			},
-			expectStarted: false,
-		},
-		{
-			desc: "does not start when hot reload config is nil",
-			config: &Config{
-				HotReloadConfig: nil,
-			},
-			expectStarted: false,
-		},
-		{
-			desc: "does not start when source is nil",
-			config: &Config{
-				HotReloadConfig: &HotReloadConfig{
-					Enabled: true,
-					Source:  nil,
-				},
-				Logger: &mockLoggerForConfig{},
-			},
-			expectStarted: false,
-		},
-		{
-			desc: "starts hot reload when enabled with source",
-			config: &Config{
-				HotReloadConfig: &HotReloadConfig{
-					Enabled:         true,
-					IntervalSeconds: 1,
-					Source: &mockHotReloadSourceForConfig{
-						data: []byte(`{"roles":[],"endpoints":[]}`),
-					},
-				},
-				Logger: &mockLoggerForConfig{},
-			},
-			expectStarted: true,
-		},
-		{
-			desc: "uses default interval when interval is zero",
-			config: &Config{
-				HotReloadConfig: &HotReloadConfig{
-					Enabled:         true,
-					IntervalSeconds: 0,
-					Source: &mockHotReloadSourceForConfig{
-						data: []byte(`{"roles":[],"endpoints":[]}`),
-					},
-				},
-				Logger: &mockLoggerForConfig{},
-			},
-			expectStarted: true,
-		},
-	}
-
-	for i, tc := range testCases {
-		t.Run(tc.desc, func(t *testing.T) {
-			tc.config.processUnifiedConfig()
-			tc.config.StartHotReload()
-
-			time.Sleep(100 * time.Millisecond)
-
-			if tc.expectStarted {
-				require.NotNil(t, tc.config.HotReloadConfig.Source, "TEST[%d], Failed.\n%s", i, tc.desc)
-			}
-		})
-	}
-}
-
-func TestConfig_reloadConfig(t *testing.T) {
-	testCases := []struct {
-		desc        string
-		source      *mockHotReloadSourceForConfig
-		expectError bool
-	}{
-		{
-			desc: "reloads config successfully",
-			source: &mockHotReloadSourceForConfig{
-				data: []byte(`{
-					"roles": [{"name": "admin", "permissions": ["*:*"]}],
-					"endpoints": [{"path": "/api", "methods": ["GET"], "requiredPermission": "admin:*"}]
-				}`),
-			},
-			expectError: false,
-		},
-		{
-			desc: "returns error when source fetch fails",
-			source: &mockHotReloadSourceForConfig{
-				err: assert.AnError,
-			},
-			expectError: true,
-		},
-		{
-			desc: "returns error for invalid json",
-			source: &mockHotReloadSourceForConfig{
-				data: []byte(`invalid json{`),
-			},
-			expectError: true,
-		},
-		{
-			desc: "reloads config with yaml format",
-			source: &mockHotReloadSourceForConfig{
-				data: []byte(`roles:
-  - name: admin
-    permissions: ["*:*"]`),
-			},
-			expectError: false,
-		},
-	}
-
-	for i, tc := range testCases {
-		t.Run(tc.desc, func(t *testing.T) {
-			config := &Config{
-				Roles: []RoleDefinition{
-					{Name: "viewer", Permissions: []string{"users:read"}},
-				},
-				Endpoints: []EndpointMapping{
-					{Path: "/api", Methods: []string{"GET"}, RequiredPermission: "users:read"},
-				},
-				HotReloadConfig: &HotReloadConfig{
-					Source: tc.source,
-				},
-				Logger: &mockLoggerForConfig{},
-			}
-
-			err := config.processUnifiedConfig()
-			require.NoError(t, err, "TEST[%d], Failed.\n%s", i, tc.desc)
-
-			err = config.reloadConfig()
-
-			if tc.expectError {
-				require.Error(t, err, "TEST[%d], Failed.\n%s", i, tc.desc)
-				return
-			}
-
-			require.NoError(t, err, "TEST[%d], Failed.\n%s", i, tc.desc)
-		})
-	}
-}
-
 func TestMatchesPathPattern(t *testing.T) {
 	testCases := []struct {
 		desc     string
@@ -727,60 +578,6 @@ func TestConfig_getEffectivePermissions(t *testing.T) {
 			result := tc.config.getEffectivePermissions(tc.roleName)
 
 			assert.Equal(t, tc.expectedPerms, result, "TEST[%d], Failed.\n%s", i, tc.desc)
-		})
-	}
-}
-
-func TestConfig_hotReloadLoop(t *testing.T) {
-	testCases := []struct {
-		desc         string
-		config       *Config
-		source       *mockHotReloadSourceForConfig
-		expectReload bool
-	}{
-		{
-			desc: "reloads config successfully in loop",
-			config: &Config{
-				HotReloadConfig: &HotReloadConfig{
-					Enabled:         true,
-					IntervalSeconds: 1,
-				},
-				Logger: &mockLoggerForConfig{logs: []string{}},
-			},
-			source: &mockHotReloadSourceForConfig{
-				data: []byte(`{"roles":[],"endpoints":[]}`),
-			},
-			expectReload: true,
-		},
-		{
-			desc: "handles reload errors in loop",
-			config: &Config{
-				HotReloadConfig: &HotReloadConfig{
-					Enabled:         true,
-					IntervalSeconds: 1,
-				},
-				Logger: &mockLoggerForConfig{logs: []string{}},
-			},
-			source: &mockHotReloadSourceForConfig{
-				err: assert.AnError,
-			},
-			expectReload: true,
-		},
-	}
-
-	for i, tc := range testCases {
-		t.Run(tc.desc, func(t *testing.T) {
-			tc.config.HotReloadConfig.Source = tc.source
-			tc.config.processUnifiedConfig()
-
-			go tc.config.hotReloadLoop(100 * time.Millisecond)
-
-			time.Sleep(250 * time.Millisecond)
-
-			if tc.expectReload {
-				mockLog := tc.config.Logger.(*mockLoggerForConfig)
-				assert.Greater(t, len(mockLog.logs), 0, "TEST[%d], Failed.\n%s", i, tc.desc)
-			}
 		})
 	}
 }
