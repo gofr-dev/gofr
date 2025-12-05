@@ -8,7 +8,6 @@ import (
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-
 	"gofr.dev/pkg/gofr/logging"
 )
 
@@ -16,126 +15,128 @@ type mockLoggerForConfig struct {
 	logs []string
 }
 
-func (m *mockLoggerForConfig) Debug(args ...any)                 { m.logs = append(m.logs, "DEBUG") }
-func (m *mockLoggerForConfig) Debugf(format string, args ...any) { m.logs = append(m.logs, "DEBUGF") }
-func (m *mockLoggerForConfig) Log(args ...any)                   { m.logs = append(m.logs, "LOG") }
-func (m *mockLoggerForConfig) Logf(format string, args ...any)   { m.logs = append(m.logs, "LOGF") }
-func (m *mockLoggerForConfig) Info(args ...any)                  { m.logs = append(m.logs, "INFO") }
-func (m *mockLoggerForConfig) Infof(format string, args ...any)  { m.logs = append(m.logs, "INFOF") }
-func (m *mockLoggerForConfig) Notice(args ...any)                { m.logs = append(m.logs, "NOTICE") }
-func (m *mockLoggerForConfig) Noticef(format string, args ...any) { m.logs = append(m.logs, "NOTICEF") }
-func (m *mockLoggerForConfig) Error(args ...any)                 { m.logs = append(m.logs, "ERROR") }
-func (m *mockLoggerForConfig) Errorf(format string, args ...any) { m.logs = append(m.logs, "ERRORF") }
-func (m *mockLoggerForConfig) Warn(args ...any)                  { m.logs = append(m.logs, "WARN") }
-func (m *mockLoggerForConfig) Warnf(format string, args ...any)  { m.logs = append(m.logs, "WARNF") }
-func (m *mockLoggerForConfig) Fatal(args ...any)                 { m.logs = append(m.logs, "FATAL") }
-func (m *mockLoggerForConfig) Fatalf(format string, args ...any) { m.logs = append(m.logs, "FATALF") }
-func (m *mockLoggerForConfig) ChangeLevel(level logging.Level) {}
+func (m *mockLoggerForConfig) Debug(_ ...any)             { m.logs = append(m.logs, "DEBUG") }
+func (m *mockLoggerForConfig) Debugf(_ string, _ ...any)  { m.logs = append(m.logs, "DEBUGF") }
+func (m *mockLoggerForConfig) Log(_ ...any)               { m.logs = append(m.logs, "LOG") }
+func (m *mockLoggerForConfig) Logf(_ string, _ ...any)    { m.logs = append(m.logs, "LOGF") }
+func (m *mockLoggerForConfig) Info(_ ...any)              { m.logs = append(m.logs, "INFO") }
+func (m *mockLoggerForConfig) Infof(_ string, _ ...any)   { m.logs = append(m.logs, "INFOF") }
+func (m *mockLoggerForConfig) Notice(_ ...any)            { m.logs = append(m.logs, "NOTICE") }
+func (m *mockLoggerForConfig) Noticef(_ string, _ ...any) { m.logs = append(m.logs, "NOTICEF") }
+func (m *mockLoggerForConfig) Error(_ ...any)             { m.logs = append(m.logs, "ERROR") }
+func (m *mockLoggerForConfig) Errorf(_ string, _ ...any)  { m.logs = append(m.logs, "ERRORF") }
+func (m *mockLoggerForConfig) Warn(_ ...any)              { m.logs = append(m.logs, "WARN") }
+func (m *mockLoggerForConfig) Warnf(_ string, _ ...any)   { m.logs = append(m.logs, "WARNF") }
+func (m *mockLoggerForConfig) Fatal(_ ...any)             { m.logs = append(m.logs, "FATAL") }
+func (m *mockLoggerForConfig) Fatalf(_ string, _ ...any)  { m.logs = append(m.logs, "FATALF") }
+func (*mockLoggerForConfig) ChangeLevel(logging.Level)    {}
 
-func TestLoadPermissions(t *testing.T) {
-	testCases := []struct {
-		desc         string
-		fileContent  string
-		fileName     string
-		expectError  bool
-		expectConfig bool
-	}{
-		{
-			desc: "loads valid json config",
-			fileContent: `{
-				"roles": [{"name": "admin", "permissions": ["admin:read", "admin:write"]}],
-				"endpoints": [{"path": "/api", "methods": ["GET"], "requiredPermissions": ["admin:read"]}]
-			}`,
-			fileName:     "test_config.json",
-			expectError:  false,
-			expectConfig: true,
-		},
-		{
-			desc: "loads valid yaml config",
-			fileContent: `roles:
+func TestLoadPermissions_ValidConfigs(t *testing.T) {
+	t.Run("loads valid json config", func(t *testing.T) {
+		fileContent := `{
+			"roles": [{"name": "admin", "permissions": ["admin:read", "admin:write"]}],
+			"endpoints": [{"path": "/api", "methods": ["GET"], "requiredPermissions": ["admin:read"]}]
+		}`
+		path, err := createTestConfigFile("test_config.json", fileContent)
+		require.NoError(t, err)
+
+		defer os.Remove(path)
+
+		config, err := LoadPermissions("test_config.json")
+		require.NoError(t, err)
+		require.NotNil(t, config)
+		assert.NotNil(t, config.rolePermissionsMap)
+	})
+
+	t.Run("loads valid yaml config", func(t *testing.T) {
+		fileContent := `roles:
   - name: admin
     permissions: ["admin:read", "admin:write"]
 endpoints:
   - path: /api
     methods: ["GET"]
-    requiredPermissions: ["admin:read"]`,
-			fileName:     "test_config.yaml",
-			expectError:  false,
-			expectConfig: true,
-		},
-		{
-			desc: "loads valid yml config",
-			fileContent: `roles:
+    requiredPermissions: ["admin:read"]`
+		path, err := createTestConfigFile("test_config.yaml", fileContent)
+		require.NoError(t, err)
+
+		defer os.Remove(path)
+
+		config, err := LoadPermissions("test_config.yaml")
+		require.NoError(t, err)
+		require.NotNil(t, config)
+		assert.NotNil(t, config.rolePermissionsMap)
+	})
+
+	t.Run("loads valid yml config", func(t *testing.T) {
+		fileContent := `roles:
   - name: viewer
-    permissions: ["users:read"]`,
-			fileName:     "test_config.yml",
-			expectError:  false,
-			expectConfig: true,
-		},
-		{
-			desc:         "returns error for non-existent file",
-			fileContent:  "",
-			fileName:     "nonexistent.json",
-			expectError:  true,
-			expectConfig: false,
-		},
-		{
-			desc:         "returns error for invalid json",
-			fileContent:  `invalid json{`,
-			fileName:     "test_invalid.json",
-			expectError:  true,
-			expectConfig: false,
-		},
-		{
-			desc:         "returns error for invalid yaml",
-			fileContent:  `invalid: yaml: [`,
-			fileName:     "test_invalid.yaml",
-			expectError:  true,
-			expectConfig: false,
-		},
-		{
-			desc:         "returns error for unsupported format",
-			fileContent:  `some content`,
-			fileName:     "test.txt",
-			expectError:  true,
-			expectConfig: false,
-		},
-		{
-			desc: "returns error for endpoint without requiredPermissions",
-			fileContent: `{
-				"roles": [{"name": "admin", "permissions": ["*:*"]}],
-				"endpoints": [{"path": "/api", "methods": ["GET"]}]
-			}`,
-			fileName:     "test_missing_perm.json",
-			expectError:  true,
-			expectConfig: false,
-		},
-	}
+    permissions: ["users:read"]`
+		path, err := createTestConfigFile("test_config.yml", fileContent)
+		require.NoError(t, err)
 
-	for i, tc := range testCases {
-		t.Run(tc.desc, func(t *testing.T) {
-			var filePath string
+		defer os.Remove(path)
 
-			if tc.fileContent != "" {
-				path, err := createTestConfigFile(tc.fileName, tc.fileContent)
-				require.NoError(t, err, "TEST[%d], Failed.\n%s", i, tc.desc)
-				filePath = path
-				defer os.Remove(filePath)
-			}
+		config, err := LoadPermissions("test_config.yml")
+		require.NoError(t, err)
+		require.NotNil(t, config)
+		assert.NotNil(t, config.rolePermissionsMap)
+	})
+}
 
-			config, err := LoadPermissions(tc.fileName)
+func TestLoadPermissions_ErrorCases(t *testing.T) {
+	t.Run("returns error for non-existent file", func(t *testing.T) {
+		config, err := LoadPermissions("nonexistent.json")
+		require.Error(t, err)
+		require.Nil(t, config)
+	})
 
-			if tc.expectError {
-				require.Error(t, err, "TEST[%d], Failed.\n%s", i, tc.desc)
-				require.Nil(t, config, "TEST[%d], Failed.\n%s", i, tc.desc)
-				return
-			}
+	t.Run("returns error for invalid json", func(t *testing.T) {
+		path, err := createTestConfigFile("test_invalid.json", `invalid json{`)
+		require.NoError(t, err)
 
-			require.NoError(t, err, "TEST[%d], Failed.\n%s", i, tc.desc)
-			require.NotNil(t, config, "TEST[%d], Failed.\n%s", i, tc.desc)
-			assert.NotNil(t, config.rolePermissionsMap, "TEST[%d], Failed.\n%s", i, tc.desc)
-		})
-	}
+		defer os.Remove(path)
+
+		config, err := LoadPermissions("test_invalid.json")
+		require.Error(t, err)
+		require.Nil(t, config)
+	})
+
+	t.Run("returns error for invalid yaml", func(t *testing.T) {
+		path, err := createTestConfigFile("test_invalid.yaml", `invalid: yaml: [`)
+		require.NoError(t, err)
+
+		defer os.Remove(path)
+
+		config, err := LoadPermissions("test_invalid.yaml")
+		require.Error(t, err)
+		require.Nil(t, config)
+	})
+
+	t.Run("returns error for unsupported format", func(t *testing.T) {
+		path, err := createTestConfigFile("test.txt", `some content`)
+		require.NoError(t, err)
+
+		defer os.Remove(path)
+
+		config, err := LoadPermissions("test.txt")
+		require.Error(t, err)
+		require.Nil(t, config)
+	})
+
+	t.Run("returns error for endpoint without requiredPermissions", func(t *testing.T) {
+		fileContent := `{
+			"roles": [{"name": "admin", "permissions": ["*:*"]}],
+			"endpoints": [{"path": "/api", "methods": ["GET"]}]
+		}`
+		path, err := createTestConfigFile("test_missing_perm.json", fileContent)
+		require.NoError(t, err)
+
+		defer os.Remove(path)
+
+		config, err := LoadPermissions("test_missing_perm.json")
+		require.Error(t, err)
+		require.Nil(t, config)
+	})
 }
 
 func TestConfig_SetLogger(t *testing.T) {
@@ -169,6 +170,7 @@ func TestConfig_SetLogger(t *testing.T) {
 			if tc.expectSet {
 				require.NotNil(t, config.Logger, "TEST[%d], Failed.\n%s", i, tc.desc)
 				assert.Equal(t, tc.logger, config.Logger, "TEST[%d], Failed.\n%s", i, tc.desc)
+
 				return
 			}
 
@@ -230,120 +232,88 @@ func TestConfig_GetRolePermissions(t *testing.T) {
 	}
 }
 
-func TestConfig_GetEndpointPermission(t *testing.T) {
-	testCases := []struct {
-		desc           string
-		config         *Config
-		method         string
-		path           string
-		expectedPerm   string
-		expectedPublic bool
-		expectedFound  bool
-	}{
-		{
-			desc: "returns permission for exact match",
-			config: &Config{
-				Endpoints: []EndpointMapping{
-					{Path: "/api/users", Methods: []string{"GET"}, RequiredPermissions: []string{"users:read"}},
-				},
-			},
-			method:         "GET",
-			path:           "/api/users",
-			expectedPerm:   "users:read",
-			expectedPublic: false,
-			expectedFound:  true,
-		},
-		{
-			desc: "returns public for public endpoint",
-			config: &Config{
-				Endpoints: []EndpointMapping{
-					{Path: "/health", Methods: []string{"GET"}, Public: true},
-				},
-			},
-			method:         "GET",
-			path:           "/health",
-			expectedPerm:   "",
-			expectedPublic: true,
-			expectedFound:  true,
-		},
-		{
-			desc: "returns empty for non-existent endpoint",
-			config: &Config{
-				Endpoints: []EndpointMapping{
-					{Path: "/api/users", Methods: []string{"GET"}, RequiredPermissions: []string{"users:read"}},
-				},
-			},
-			method:         "POST",
-			path:           "/api/posts",
-			expectedPerm:   "",
-			expectedPublic: false,
-			expectedFound:  false,
-		},
-		{
-			desc: "matches wildcard pattern",
-			config: &Config{
-				Endpoints: []EndpointMapping{
-					{Path: "/api/*", Methods: []string{"GET"}, RequiredPermissions: []string{"api:read"}},
-				},
-			},
-			method:         "GET",
-			path:           "/api/users",
-			expectedPerm:   "api:read",
-			expectedPublic: false,
-			expectedFound:  true,
-		},
-		{
-			desc: "matches regex pattern",
-			config: &Config{
-				Endpoints: []EndpointMapping{
-					{Regex: "^/api/users/\\d+$", Methods: []string{"GET"}, RequiredPermissions: []string{"users:read"}},
-				},
-			},
-			method:         "GET",
-			path:           "/api/users/123",
-			expectedPerm:   "users:read",
-			expectedPublic: false,
-			expectedFound:  true,
-		},
-		{
-			desc: "does not match * method in GetEndpointPermission (handled by matchEndpoint)",
-			config: &Config{
-				Endpoints: []EndpointMapping{
-					{Path: "/api", Methods: []string{"*"}, RequiredPermissions: []string{"api:*"}},
-				},
-			},
-			method:         "GET",
-			path:           "/api",
-			expectedPerm:   "",
-			expectedPublic: false,
-			expectedFound:  false,
-		},
-		{
-			desc: "matches method case-insensitive",
-			config: &Config{
-				Endpoints: []EndpointMapping{
-					{Path: "/api", Methods: []string{"get"}, RequiredPermissions: []string{"api:read"}},
-				},
-			},
-			method:         "GET",
-			path:           "/api",
-			expectedPerm:   "api:read",
-			expectedPublic: false,
-			expectedFound:  true,
+func TestConfig_GetEndpointPermission_ExactMatch(t *testing.T) {
+	config := &Config{
+		Endpoints: []EndpointMapping{
+			{Path: "/api/users", Methods: []string{"GET"}, RequiredPermissions: []string{"users:read"}},
 		},
 	}
+	err := config.processUnifiedConfig()
+	require.NoError(t, err)
 
-	for i, tc := range testCases {
-		t.Run(tc.desc, func(t *testing.T) {
-			err := tc.config.processUnifiedConfig()
-			require.NoError(t, err, "TEST[%d], Failed.\n%s", i, tc.desc)
+	perm, isPublic := config.GetEndpointPermission("GET", "/api/users")
+	assert.Equal(t, "users:read", perm)
+	assert.False(t, isPublic)
+}
 
-			perm, isPublic := tc.config.GetEndpointPermission(tc.method, tc.path)
-
-			assert.Equal(t, tc.expectedPerm, perm, "TEST[%d], Failed.\n%s", i, tc.desc)
-			assert.Equal(t, tc.expectedPublic, isPublic, "TEST[%d], Failed.\n%s", i, tc.desc)
-		})
+func TestConfig_GetEndpointPermission_PublicEndpoint(t *testing.T) {
+	config := &Config{
+		Endpoints: []EndpointMapping{
+			{Path: "/health", Methods: []string{"GET"}, Public: true},
+		},
 	}
+	err := config.processUnifiedConfig()
+	require.NoError(t, err)
+
+	perm, isPublic := config.GetEndpointPermission("GET", "/health")
+	assert.Empty(t, perm)
+	assert.True(t, isPublic)
+}
+
+func TestConfig_GetEndpointPermission_NotFound(t *testing.T) {
+	config := &Config{
+		Endpoints: []EndpointMapping{
+			{Path: "/api/users", Methods: []string{"GET"}, RequiredPermissions: []string{"users:read"}},
+		},
+	}
+	err := config.processUnifiedConfig()
+	require.NoError(t, err)
+
+	perm, isPublic := config.GetEndpointPermission("POST", "/api/posts")
+	assert.Empty(t, perm)
+	assert.False(t, isPublic)
+}
+
+func TestConfig_GetEndpointPermission_WildcardPattern(t *testing.T) {
+	config := &Config{
+		Endpoints: []EndpointMapping{
+			{Path: "/api/*", Methods: []string{"GET"}, RequiredPermissions: []string{"api:read"}},
+		},
+	}
+	err := config.processUnifiedConfig()
+	require.NoError(t, err)
+
+	perm, isPublic := config.GetEndpointPermission("GET", "/api/users")
+	assert.Equal(t, "api:read", perm)
+	assert.False(t, isPublic)
+}
+
+func TestConfig_GetEndpointPermission_RegexPattern(t *testing.T) {
+	config := &Config{
+		Endpoints: []EndpointMapping{
+			{Regex: "^/api/users/\\d+$", Methods: []string{"GET"}, RequiredPermissions: []string{"users:read"}},
+		},
+	}
+	err := config.processUnifiedConfig()
+	require.NoError(t, err)
+
+	perm, isPublic := config.GetEndpointPermission("GET", "/api/users/123")
+	assert.Equal(t, "users:read", perm)
+	assert.False(t, isPublic)
+}
+
+func TestConfig_GetEndpointPermission_CaseInsensitive(t *testing.T) {
+	config := &Config{
+		Endpoints: []EndpointMapping{
+			{Path: "/api", Methods: []string{"get"}, RequiredPermissions: []string{"api:read"}},
+		},
+	}
+	err := config.processUnifiedConfig()
+	require.NoError(t, err)
+
+	perm, isPublic := config.GetEndpointPermission("GET", "/api")
+	assert.Equal(t, "api:read", perm)
+	assert.False(t, isPublic)
 }
 
 func TestConfig_processUnifiedConfig(t *testing.T) {
@@ -506,7 +476,8 @@ func createTestConfigFile(filename, content string) (string, error) {
 		}
 	}
 
-	err := os.WriteFile(filename, []byte(content), 0644)
+	err := os.WriteFile(filename, []byte(content), 0600)
+
 	return filename, err
 }
 
@@ -632,8 +603,9 @@ func TestExtractNestedClaim_Additional(t *testing.T) {
 			if tc.expectError {
 				require.Error(t, err, "TEST[%d], Failed.\n%s", i, tc.desc)
 				assert.Nil(t, result, "TEST[%d], Failed.\n%s", i, tc.desc)
-		return
-	}
+
+				return
+			}
 
 			require.NoError(t, err, "TEST[%d], Failed.\n%s", i, tc.desc)
 			assert.Equal(t, tc.expected, result, "TEST[%d], Failed.\n%s", i, tc.desc)
@@ -681,6 +653,7 @@ func TestExtractArrayClaim_Additional(t *testing.T) {
 	for i, tc := range testCases {
 		t.Run(tc.desc, func(t *testing.T) {
 			idx := 0
+
 			for j, c := range tc.path {
 				if c == '[' {
 					idx = j
@@ -693,6 +666,7 @@ func TestExtractArrayClaim_Additional(t *testing.T) {
 			if tc.expectError {
 				require.Error(t, err, "TEST[%d], Failed.\n%s", i, tc.desc)
 				assert.Nil(t, result, "TEST[%d], Failed.\n%s", i, tc.desc)
+
 				return
 			}
 

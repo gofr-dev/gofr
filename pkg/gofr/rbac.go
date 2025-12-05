@@ -25,7 +25,7 @@ const (
 )
 
 // DefaultRBACConfig is a constant that can be passed to EnableRBAC to use default config paths.
-// When passed, EnableRBAC will try: configs/rbac.json, configs/rbac.yaml, configs/rbac.yml
+// When passed, EnableRBAC will try: configs/rbac.json, configs/rbac.yaml, configs/rbac.yml.
 const DefaultRBACConfig = ""
 
 // EnableRBAC enables RBAC by loading configuration from a JSON or YAML file.
@@ -51,8 +51,7 @@ const DefaultRBACConfig = ""
 //
 // Role extraction is configured in the config file:
 // - Set "roleHeader" for header-based extraction (e.g., "X-User-Role")
-// - Set "jwtClaimPath" for JWT-based extraction (e.g., "role", "roles[0]")
-//
+// - Set "jwtClaimPath" for JWT-based extraction (e.g., "role", "roles[0]").
 func (a *App) EnableRBAC(provider RBACProvider, configFile string) {
 	if provider == nil {
 		a.Logger().Error("RBAC provider is required. Create one using: provider := rbac.NewProvider()")

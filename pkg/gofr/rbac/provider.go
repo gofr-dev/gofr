@@ -46,7 +46,7 @@ func (p *Provider) LoadPermissions(file string) (any, error) {
 
 // GetMiddleware returns the middleware function for the given config.
 // All authorization is handled via unified config (Roles and Endpoints).
-func (p *Provider) GetMiddleware(config any) func(http.Handler) http.Handler {
+func (*Provider) GetMiddleware(config any) func(http.Handler) http.Handler {
 	rbacConfig, ok := config.(*Config)
 	if !ok {
 		// If config is not *Config, return passthrough middleware

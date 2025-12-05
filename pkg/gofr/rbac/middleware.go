@@ -22,6 +22,33 @@ var (
 
 	// ErrRoleNotFound is returned when role cannot be extracted from request.
 	ErrRoleNotFound = errors.New("unauthorized: role not found")
+
+	// ErrJWTClaimsNotFound is returned when JWT claims are not found in request context.
+	ErrJWTClaimsNotFound = errors.New("JWT claims not found in request context")
+
+	// ErrEmptyClaimPath is returned when claim path is empty.
+	ErrEmptyClaimPath = errors.New("empty claim path")
+
+	// ErrClaimPathNotFound is returned when a claim path is not found in JWT claims.
+	ErrClaimPathNotFound = errors.New("claim path not found")
+
+	// ErrInvalidArrayNotation is returned when array notation is invalid.
+	ErrInvalidArrayNotation = errors.New("invalid array notation")
+
+	// ErrInvalidArrayIndex is returned when array index is invalid.
+	ErrInvalidArrayIndex = errors.New("invalid array index")
+
+	// ErrClaimKeyNotFound is returned when a claim key is not found.
+	ErrClaimKeyNotFound = errors.New("claim key not found")
+
+	// ErrClaimValueNotArray is returned when a claim value is not an array.
+	ErrClaimValueNotArray = errors.New("claim value is not an array")
+
+	// ErrArrayIndexOutOfBounds is returned when array index is out of bounds.
+	ErrArrayIndexOutOfBounds = errors.New("array index out of bounds")
+
+	// ErrInvalidClaimStructure is returned when claim structure is invalid.
+	ErrInvalidClaimStructure = errors.New("invalid claim structure")
 )
 
 // Middleware creates an HTTP middleware function that enforces RBAC authorization.
@@ -140,7 +167,7 @@ func extractRoleFromJWT(r *http.Request, claimPath string) (string, error) {
 	// Get JWT claims from context (set by OAuth middleware)
 	claims, ok := r.Context().Value(middleware.JWTClaim).(jwt.MapClaims)
 	if !ok || claims == nil {
-		return "", fmt.Errorf("JWT claims not found in request context")
+		return "", fmt.Errorf("%w", ErrJWTClaimsNotFound)
 	}
 
 	// Extract role using the configured claim path
@@ -166,7 +193,7 @@ func extractRoleFromJWT(r *http.Request, claimPath string) (string, error) {
 //   - "permissions.role" -> claims["permissions"].(map[string]any)["role"]
 func extractClaimValue(claims jwt.MapClaims, path string) (any, error) {
 	if path == "" {
-		return nil, fmt.Errorf("empty claim path")
+		return nil, fmt.Errorf("%w", ErrEmptyClaimPath)
 	}
 
 	// Handle array notation: "roles[0]"
@@ -182,7 +209,7 @@ func extractClaimValue(claims jwt.MapClaims, path string) (any, error) {
 	// Simple key lookup
 	value, ok := claims[path]
 	if !ok {
-		return nil, fmt.Errorf("claim path not found: %s", path)
+		return nil, fmt.Errorf("%w: %s", ErrClaimPathNotFound, path)
 	}
 
 	return value, nil
@@ -195,27 +222,28 @@ func extractArrayClaim(claims jwt.MapClaims, path string, idx int) (any, error) 
 
 	// Extract array index
 	if !strings.HasPrefix(arrayPath, "[") || !strings.HasSuffix(arrayPath, "]") {
-		return nil, fmt.Errorf("invalid array notation: %s", path)
+		return nil, fmt.Errorf("%w: %s", ErrInvalidArrayNotation, path)
 	}
 
 	indexStr := strings.Trim(arrayPath, "[]")
+
 	var index int
 	if _, err := fmt.Sscanf(indexStr, "%d", &index); err != nil {
-		return nil, fmt.Errorf("invalid array index: %s", indexStr)
+		return nil, fmt.Errorf("%w: %s", ErrInvalidArrayIndex, indexStr)
 	}
 
 	value, ok := claims[key]
 	if !ok {
-		return nil, fmt.Errorf("claim key not found: %s", key)
+		return nil, fmt.Errorf("%w: %s", ErrClaimKeyNotFound, key)
 	}
 
 	arr, ok := value.([]any)
 	if !ok {
-		return nil, fmt.Errorf("claim value is not an array: %s", key)
+		return nil, fmt.Errorf("%w: %s", ErrClaimValueNotArray, key)
 	}
 
 	if index < 0 || index >= len(arr) {
-		return nil, fmt.Errorf("array index out of bounds: %d (length: %d)", index, len(arr))
+		return nil, fmt.Errorf("%w: %d (length: %d)", ErrArrayIndexOutOfBounds, index, len(arr))
 	}
 
 	return arr[index], nil
@@ -224,43 +252,58 @@ func extractArrayClaim(claims jwt.MapClaims, path string, idx int) (any, error) 
 // extractNestedClaim extracts a value from nested structure in JWT claims.
 func extractNestedClaim(claims jwt.MapClaims, path string) (any, error) {
 	parts := strings.Split(path, ".")
+
 	var current any = claims
 
 	for i, part := range parts {
-		if i == len(parts)-1 {
-			// Last part - return the value
-			if m, ok := current.(map[string]any); ok {
-				value, exists := m[part]
-				if !exists {
-					return nil, fmt.Errorf("claim path not found: %s", path)
-				}
-				return value, nil
-			}
-			if m, ok := current.(jwt.MapClaims); ok {
-				value, exists := m[part]
-				if !exists {
-					return nil, fmt.Errorf("claim path not found: %s", path)
-				}
-				return value, nil
-			}
-			return nil, fmt.Errorf("invalid claim structure: %s", strings.Join(parts[:i+1], "."))
+		isLast := i == len(parts)-1
+		if isLast {
+			return extractFinalClaimValue(current, part, path, parts, i)
 		}
 
 		// Navigate through nested structure
-		if m, ok := current.(map[string]any); ok {
-			current = m[part]
-		} else if m, ok := current.(jwt.MapClaims); ok {
-			current = m[part]
-		} else {
-			return nil, fmt.Errorf("invalid claim structure: %s", strings.Join(parts[:i+1], "."))
-		}
-
+		current = navigateNestedClaim(current, part)
 		if current == nil {
-			return nil, fmt.Errorf("claim path not found: %s", strings.Join(parts[:i+1], "."))
+			return nil, fmt.Errorf("%w: %s", ErrClaimPathNotFound, strings.Join(parts[:i+1], "."))
 		}
 	}
 
-	return nil, fmt.Errorf("claim path not found: %s", path)
+	return nil, fmt.Errorf("%w: %s", ErrClaimPathNotFound, path)
+}
+
+// extractFinalClaimValue extracts the final value from a claim path.
+func extractFinalClaimValue(current any, part, path string, parts []string, i int) (any, error) {
+	if m, ok := current.(map[string]any); ok {
+		value, exists := m[part]
+		if !exists {
+			return nil, fmt.Errorf("%w: %s", ErrClaimPathNotFound, path)
+		}
+
+		return value, nil
+	}
+
+	if m, ok := current.(jwt.MapClaims); ok {
+		value, exists := m[part]
+		if !exists {
+			return nil, fmt.Errorf("%w: %s", ErrClaimPathNotFound, path)
+		}
+
+		return value, nil
+	}
+
+	return nil, fmt.Errorf("%w: %s", ErrInvalidClaimStructure, strings.Join(parts[:i+1], "."))
+}
+
+// navigateNestedClaim navigates through nested claim structures.
+func navigateNestedClaim(current any, part string) any {
+	switch v := current.(type) {
+	case map[string]any:
+		return v[part]
+	case jwt.MapClaims:
+		return v[part]
+	default:
+		return nil
+	}
 }
 
 // logAuditEvent logs authorization decisions for audit purposes.

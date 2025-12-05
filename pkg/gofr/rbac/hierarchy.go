@@ -6,7 +6,7 @@ import (
 )
 
 // RoleHierarchy manages role inheritance relationships.
-// Example: admin > editor > author > viewer
+// Example: admin > editor > author > viewer.
 type RoleHierarchy struct {
 	// hierarchy maps roles to their inherited roles
 	// Example: "admin": ["editor", "author", "viewer"]
@@ -122,13 +122,14 @@ func isRoleAllowed(role, route string, config *Config) bool {
 
 	// Check all HTTP methods to see if role has permission for this route
 	methods := []string{"GET", "POST", "PUT", "DELETE", "PATCH"}
-	
+
 	for _, method := range methods {
 		// Check if endpoint exists and get required permissions
 		perm, isPublic := config.GetEndpointPermission(method, route)
 		if isPublic {
 			return true
 		}
+
 		if perm != "" {
 			// Check if role has the required permission
 			rolePerms := config.GetRolePermissions(role)
@@ -139,7 +140,7 @@ func isRoleAllowed(role, route string, config *Config) bool {
 			}
 		}
 	}
-	
+
 	return false
 }
 
@@ -162,4 +163,3 @@ func IsRoleAllowedWithHierarchy(role, route string, config *Config, hierarchy *R
 
 	return false
 }
-
