@@ -1,6 +1,7 @@
 package gofr
 
 import (
+	"fmt"
 	"os"
 	"testing"
 
@@ -107,7 +108,7 @@ func Test_Run_SuccessRouteWithSpecialCharacters(t *testing.T) {
 		})
 
 		assert.Contains(t, logs, "handler called", "TEST[%d] Failed.\n %s", i, tc.desc)
-		assert.NotContains(t, logs, "No Command Found!", "TEST[%d] Failed.\n %s", i, tc.desc)
+		assert.NotContains(t, logs, fmt.Sprintf("'%s' is not a valid command.", tc.args[1]), "TEST[%d] Failed.\n %s", i, tc.desc)
 	}
 }
 
@@ -137,7 +138,7 @@ func Test_Run_ErrorRouteWithSpecialCharacters(t *testing.T) {
 		})
 
 		assert.NotContains(t, logs, "handler called", "TEST[%d] Failed.\n %s", i, tc.desc)
-		assert.Contains(t, logs, "No Command Found!", "TEST[%d] Failed.\n %s", i, tc.desc)
+		assert.Contains(t, logs, fmt.Sprintf("'%s' is not a valid command.", tc.args[1]), "TEST[%d] Failed.\n %s", i, tc.desc)
 	}
 }
 
@@ -172,7 +173,7 @@ func Test_Run_ErrorNotARegisteredCommand(t *testing.T) {
 		c.Run(container.NewContainer(config.NewEnvFile("", logging.NewMockLogger(logging.DEBUG))))
 	})
 
-	assert.Contains(t, logs, "No Command Found!")
+	assert.Contains(t, logs, "'log' is not a valid command.")
 }
 
 func Test_Run_ErrorWhenOnlyParamAreGiven(t *testing.T) {
@@ -192,7 +193,7 @@ func Test_Run_ErrorWhenOnlyParamAreGiven(t *testing.T) {
 		c.Run(container.NewContainer(config.NewEnvFile("", logging.NewMockLogger(logging.DEBUG))))
 	})
 
-	assert.Contains(t, logs, "No Command Found!")
+	assert.Contains(t, logs, "'-route' is not a valid command.")
 	assert.NotContains(t, logs, "handler called of route -route")
 }
 
@@ -210,7 +211,7 @@ func Test_Run_ErrorRouteRegisteredButNilHandler(t *testing.T) {
 		c.Run(container.NewContainer(config.NewEnvFile("", logging.NewMockLogger(logging.DEBUG))))
 	})
 
-	assert.Contains(t, logs, "No Command Found!")
+	assert.Contains(t, logs, "'route' is not a valid command.")
 }
 
 func Test_Run_ErrorNoArgumentGiven(t *testing.T) {
@@ -225,7 +226,7 @@ func Test_Run_ErrorNoArgumentGiven(t *testing.T) {
 		})
 	})
 
-	assert.Contains(t, errlog, "No Command Found!")
+	assert.Contains(t, errlog, "'' is not a valid command.")
 	assert.Contains(t, out, "Available commands:")
 }
 
@@ -318,7 +319,7 @@ func Test_Run_UnknownCommandShowsHelp(t *testing.T) {
 		})
 	})
 
-	assert.Contains(t, errLogs, "No Command Found!")
+	assert.Contains(t, errLogs, "'unknown' is not a valid command.")
 	assert.Contains(t, logs, "Available commands:")
 	assert.Contains(t, logs, "  log")
 	assert.Contains(t, logs, "Logs a message")
