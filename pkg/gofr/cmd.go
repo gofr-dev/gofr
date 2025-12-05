@@ -162,7 +162,7 @@ func (cmd *cmd) printHelp() {
 		fmt.Printf("  %-*s  %s\n", maxLen, r.pattern, r.description)
 
 		if r.help != "" {
-			fmt.Printf("    Help: %s\n", r.help)
+			fmt.Printf("  %-*s  Help: %s\n", maxLen, "", r.help)
 		}
 	}
 }
