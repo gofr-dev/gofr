@@ -5,7 +5,6 @@ import (
 	"errors"
 	"time"
 
-	"gofr.dev/pkg/gofr/datasource"
 	"gofr.dev/pkg/gofr/datasource/file"
 )
 
@@ -30,8 +29,9 @@ type Config struct {
 }
 
 // New creates and validates a new Azure File Storage file system.
-// Returns error if connection fails.
-func New(config *Config, logger datasource.Logger, metrics file.StorageMetrics) (file.FileSystemProvider, error) {
+// Returns error if configuration is invalid.
+// Connection will be established when Connect() is called.
+func New(config *Config) (file.FileSystemProvider, error) {
 	if config == nil {
 		return nil, errInvalidConfig
 	}
@@ -54,33 +54,8 @@ func New(config *Config, logger datasource.Logger, metrics file.StorageMetrics) 
 		CommonFileSystem: &file.CommonFileSystem{
 			Provider:     adapter,
 			Location:     config.ShareName,
-			Logger:       logger,
-			Metrics:      metrics,
 			ProviderName: "Azure", // Set provider name for observability
 		},
-	}
-
-	ctx, cancel := context.WithTimeout(context.Background(), defaultTimeout)
-	defer cancel()
-
-	if logger != nil {
-		logger.Debugf("Attempting to connect to Azure File Share %s (timeout: %v)", config.ShareName, defaultTimeout)
-	}
-
-	// Use CommonFileSystem.Connect for bookkeeping
-	if err := fs.CommonFileSystem.Connect(ctx); err != nil {
-		if logger != nil {
-			logger.Warnf("Azure File Share %s not available, starting background retry: %v", config.ShareName, err)
-		}
-
-		go fs.startRetryConnect()
-
-		return fs, nil
-	}
-
-	// Connected successfully
-	if logger != nil {
-		logger.Debugf("Successfully connected to Azure File Share %s", config.ShareName)
 	}
 
 	return fs, nil
@@ -95,7 +70,26 @@ func (f *azureFileSystem) Connect() {
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTimeout)
 	defer cancel()
 
-	_ = f.CommonFileSystem.Connect(ctx)
+	if f.CommonFileSystem.Logger != nil {
+		f.CommonFileSystem.Logger.Debugf("Attempting to connect to Azure File Share %s (timeout: %v)",
+			f.CommonFileSystem.Location, defaultTimeout)
+	}
+
+	// Use CommonFileSystem.Connect for bookkeeping
+	if err := f.CommonFileSystem.Connect(ctx); err != nil {
+		if f.CommonFileSystem.Logger != nil {
+			f.CommonFileSystem.Logger.Warnf("Azure File Share %s not available, starting background retry: %v", f.CommonFileSystem.Location, err)
+		}
+
+		go f.startRetryConnect()
+
+		return
+	}
+
+	// Connected successfully
+	if f.CommonFileSystem.Logger != nil {
+		f.CommonFileSystem.Logger.Debugf("Successfully connected to Azure File Share %s", f.CommonFileSystem.Location)
+	}
 }
 
 // startRetryConnect repeatedly calls provider.Connect until success.
