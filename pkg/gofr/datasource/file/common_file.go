@@ -360,7 +360,7 @@ func (f *CommonFile) observe(operation string, startTime time.Time, status, mess
 		Metrics:   f.metrics,
 		Operation: operation,
 		Location:  f.location,
-		Provider:  "GoFr-File",
+		Provider:  "FILE",
 		StartTime: startTime,
 		Status:    status,
 		Message:   message,
