@@ -28,8 +28,13 @@ func cleanString(query *string) string {
 	return strings.TrimSpace(regexpSpaces.ReplaceAllString(*query, " "))
 }
 
-// PrettyPrint formats and prints the log entry to the provided writer.
+// PrettyPrint formats and prints the log entry to the provided writer with proper column alignment.
 func (fl *OperationLog) PrettyPrint(writer io.Writer) {
-	fmt.Fprintf(writer, "\u001B[38;5;8m%-32s \u001B[38;5;148m%-6s\u001B[0m %8d\u001B[38;5;8mµs\u001B[0m %-10s \u001B[0m %-48s \n",
-		cleanString(&fl.Operation), fl.Provider, fl.Duration, cleanString(fl.Status), cleanString(fl.Message))
+	operation := cleanString(&fl.Operation)
+	provider := fl.Provider
+	status := cleanString(fl.Status)
+	message := cleanString(fl.Message)
+
+	fmt.Fprintf(writer, "\u001B[38;5;8m%-24s \u001B[38;5;148m%-13s\u001B[0m %8d\u001B[38;5;8mµs\u001B[0m %-10s %s\n",
+		operation, provider, fl.Duration, status, message)
 }
