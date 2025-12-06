@@ -29,7 +29,8 @@ var (
 	errFailedToDeleteObject    = errors.New("failed to delete object")
 	errFailedToListObjects     = errors.New("failed to list objects")
 	errFailedToListDirectory   = errors.New("failed to list directory")
-	errWriterAlreadyClosed     = errors.New("writer already closed") // Add this
+	errWriterAlreadyClosed     = errors.New("writer already closed")
+	errFTPConfigInvalid        = errors.New("invalid FTP configuration: host and port are required")
 )
 
 // Config represents the FTP configuration.
@@ -57,6 +58,10 @@ func (s *storageAdapter) Connect(_ context.Context) error {
 
 	if s.cfg == nil {
 		return errFTPConfigNil
+	}
+
+	if s.cfg.Host == "" || s.cfg.Port <= 0 {
+		return errFTPConfigInvalid
 	}
 
 	// Set default timeout if not specified

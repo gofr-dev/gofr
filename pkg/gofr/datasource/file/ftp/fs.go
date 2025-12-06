@@ -6,12 +6,12 @@ import (
 	"fmt"
 	"time"
 
-	"gofr.dev/pkg/gofr/datasource"
 	"gofr.dev/pkg/gofr/datasource/file"
 )
 
 var (
-	errInvalidConfig = errors.New("invalid FTP configuration: host and port are required")
+	errInvalidConfig   = errors.New("invalid FTP configuration: host and port are required")
+	errInvalidProvider = errors.New("invalid FTP provider")
 )
 
 const defaultTimeout = 10 * time.Second
@@ -22,9 +22,9 @@ type fileSystem struct {
 
 // New creates and validates a new FTP file system.
 // Returns error if connection fails or configuration is invalid.
-func New(config *Config, logger datasource.Logger, metrics file.StorageMetrics) (file.FileSystemProvider, error) {
-	if config == nil || config.Host == "" || config.Port <= 0 {
-		return nil, errInvalidConfig
+func New(config *Config) file.FileSystemProvider {
+	if config == nil {
+		config = &Config{}
 	}
 
 	// Set default dial timeout if not specified
@@ -34,37 +34,37 @@ func New(config *Config, logger datasource.Logger, metrics file.StorageMetrics) 
 
 	adapter := &storageAdapter{cfg: config}
 
-	location := fmt.Sprintf("%s:%d", config.Host, config.Port)
-	if config.RemoteDir != "" && config.RemoteDir != "/" {
-		location = fmt.Sprintf("%s:%d%s", config.Host, config.Port, config.RemoteDir)
-	}
+	location := buildLocation(config)
 
 	fs := &fileSystem{
 		CommonFileSystem: &file.CommonFileSystem{
 			Provider:     adapter,
 			Location:     location,
-			Logger:       logger,
-			Metrics:      metrics,
 			ProviderName: "FTP",
 		},
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), defaultTimeout)
-	defer cancel()
+	return fs
+}
 
-	// Attempt initial connection via CommonFileSystem.Connect
-	if err := fs.CommonFileSystem.Connect(ctx); err != nil {
-		if logger != nil {
-			logger.Warnf("FTP server %s not available, starting background retry: %v", config.Host, err)
-		}
-
-		go fs.startRetryConnect()
-
-		return fs, nil
+// buildLocation creates the location string for metrics/logging.
+func buildLocation(config *Config) string {
+	if config.Host == "" {
+		return "ftp://unconfigured"
 	}
 
-	// Connected successfully
-	return fs, nil
+	port := config.Port
+	if port == 0 {
+		port = 21 // Default FTP port
+	}
+
+	location := fmt.Sprintf("%s:%d", config.Host, port)
+
+	if config.RemoteDir != "" && config.RemoteDir != "/" {
+		location = fmt.Sprintf("%s:%d%s", config.Host, port, config.RemoteDir)
+	}
+
+	return location
 }
 
 // Connect tries a single immediate connect via provider; on failure it starts a background retry.
@@ -73,10 +73,36 @@ func (f *fileSystem) Connect() {
 		return
 	}
 
+	// Validate configuration before attempting connection
+	if err := f.validateConfig(); err != nil {
+		if f.CommonFileSystem.Logger != nil {
+			f.CommonFileSystem.Logger.Errorf("Invalid FTP configuration: %v", err)
+		}
+
+		return
+	}
+
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTimeout)
 	defer cancel()
 
-	_ = f.CommonFileSystem.Connect(ctx)
+	err := f.CommonFileSystem.Connect(ctx)
+	if err != nil {
+		// Log warning if logger is available
+		if f.CommonFileSystem.Logger != nil {
+			f.CommonFileSystem.Logger.Warnf("FTP server %s not available, starting background retry: %v",
+				f.CommonFileSystem.Location, err)
+		}
+
+		// Start background retry
+		go f.startRetryConnect()
+
+		return
+	}
+
+	// Connected successfully
+	if f.CommonFileSystem.Logger != nil {
+		f.CommonFileSystem.Logger.Infof("FTP connection established to server %s", f.CommonFileSystem.Location)
+	}
 }
 
 // startRetryConnect retries connection every 30 seconds until success.
@@ -113,4 +139,19 @@ func (f *fileSystem) startRetryConnect() {
 			f.CommonFileSystem.Logger.Debugf("FTP retry failed, will try again: %v", err)
 		}
 	}
+}
+
+// validateConfig checks if the configuration is valid.
+func (f *fileSystem) validateConfig() error {
+	adapter, ok := f.CommonFileSystem.Provider.(*storageAdapter)
+	if !ok {
+		return errInvalidProvider
+	}
+
+	cfg := adapter.cfg
+	if cfg == nil || cfg.Host == "" || cfg.Port <= 0 {
+		return errInvalidConfig
+	}
+
+	return nil
 }
