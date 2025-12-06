@@ -610,7 +610,7 @@ func (c *CommonFileSystem) getProviderName() string {
 		return c.ProviderName
 	}
 
-	return "Common"
+	return "COMMON"
 }
 
 // Observe is a helper method to centralize observability for all operations.
