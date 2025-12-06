@@ -15,7 +15,7 @@ import (
 var errConnectionFailed = errors.New("connection failed")
 
 func TestNew_NilConfig(t *testing.T) {
-	fs, err := New(nil, nil, nil)
+	fs, err := New(nil)
 
 	require.Error(t, err)
 	assert.Nil(t, fs)
@@ -25,7 +25,7 @@ func TestNew_NilConfig(t *testing.T) {
 func TestNew_EmptyShareName(t *testing.T) {
 	config := &Config{ShareName: ""}
 
-	fs, err := New(config, nil, nil)
+	fs, err := New(config)
 
 	require.Error(t, err)
 	assert.Nil(t, fs)
@@ -39,7 +39,7 @@ func TestNew_EmptyAccountName(t *testing.T) {
 		AccountKey:  "testkey",
 	}
 
-	fs, err := New(config, nil, nil)
+	fs, err := New(config)
 
 	require.Error(t, err)
 	assert.Nil(t, fs)
@@ -53,7 +53,7 @@ func TestNew_EmptyAccountKey(t *testing.T) {
 		AccountKey:  "",
 	}
 
-	fs, err := New(config, nil, nil)
+	fs, err := New(config)
 
 	require.Error(t, err)
 	assert.Nil(t, fs)
@@ -72,6 +72,14 @@ func TestNew_ConnectionFailure_StartsRetry(t *testing.T) {
 		AccountKey:  "invalid-key",
 		ShareName:   "non-existent-share",
 	}
+
+	fs, err := New(config)
+	require.NoError(t, err)
+	require.NotNil(t, fs)
+
+	// Set logger and metrics via UseLogger/UseMetrics
+	fs.UseLogger(mockLogger)
+	fs.UseMetrics(mockMetrics)
 
 	// Expect debug log for connection attempt
 	mockLogger.EXPECT().Debugf(
@@ -99,10 +107,8 @@ func TestNew_ConnectionFailure_StartsRetry(t *testing.T) {
 		gomock.Any(), // Share name
 	).MaxTimes(1)
 
-	fs, err := New(config, mockLogger, mockMetrics)
-
-	require.NoError(t, err)
-	require.NotNil(t, fs)
+	// Now call Connect which will attempt connection and start retry
+	fs.Connect()
 
 	time.Sleep(100 * time.Millisecond)
 
@@ -115,6 +121,7 @@ func TestAzureFileSystem_Connect_AlreadyConnected(t *testing.T) {
 
 	mockLogger := file.NewMockLogger(ctrl)
 	mockMetrics := file.NewMockMetrics(ctrl)
+	mockProvider := file.NewMockStorageProvider(ctrl)
 
 	config := &Config{
 		AccountName: "testaccount",
@@ -122,18 +129,28 @@ func TestAzureFileSystem_Connect_AlreadyConnected(t *testing.T) {
 		ShareName:   "testshare",
 	}
 
-	mockLogger.EXPECT().Debugf(gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
-	mockLogger.EXPECT().Debugf(gomock.Any(), gomock.Any()).AnyTimes()
-	mockMetrics.EXPECT().NewHistogram(file.AppFileStats, gomock.Any(), gomock.Any())
-	mockLogger.EXPECT().Infof("connected to %s", "testshare").MaxTimes(1)
-	mockLogger.EXPECT().Warnf(gomock.Any(), gomock.Any(), gomock.Any()).MaxTimes(1)
-	mockLogger.EXPECT().Debug(gomock.Any()).AnyTimes()
-	mockMetrics.EXPECT().RecordHistogram(gomock.Any(), file.AppFileStats, gomock.Any(), gomock.Any()).AnyTimes()
-
-	fs, err := New(config, mockLogger, mockMetrics)
+	fs, err := New(config)
 	require.NoError(t, err)
 
-	// If already connected, Connect() should return immediately
+	// Set logger and metrics via UseLogger/UseMetrics
+	fs.UseLogger(mockLogger)
+	fs.UseMetrics(mockMetrics)
+
+	// Replace provider with mock for successful connection
+	fs.(*azureFileSystem).CommonFileSystem.Provider = mockProvider
+
+	mockLogger.EXPECT().Debugf("Attempting to connect to Azure File Share %s (timeout: %v)", "testshare", gomock.Any())
+	mockMetrics.EXPECT().NewHistogram(file.AppFileStats, gomock.Any(), gomock.Any())
+	mockProvider.EXPECT().Connect(gomock.Any()).Return(nil)
+	mockLogger.EXPECT().Infof("connected to %s", "testshare")
+	mockLogger.EXPECT().Debugf("Successfully connected to Azure File Share %s", "testshare")
+	mockLogger.EXPECT().Debug(gomock.Any())
+	mockMetrics.EXPECT().RecordHistogram(gomock.Any(), file.AppFileStats, gomock.Any(), gomock.Any())
+
+	// First Connect() call - will attempt connection and succeed
+	fs.(*azureFileSystem).Connect()
+
+	// If already connected, Connect() should return immediately (no more calls expected)
 	fs.(*azureFileSystem).Connect()
 
 	fs.(*azureFileSystem).CommonFileSystem.SetDisableRetry(true)
@@ -152,21 +169,35 @@ func TestAzureFileSystem_Connect_NotConnected(t *testing.T) {
 		ShareName:   "testshare",
 	}
 
-	mockLogger.EXPECT().Debugf(gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
-	mockLogger.EXPECT().Debugf(gomock.Any(), gomock.Any()).AnyTimes()
-	mockMetrics.EXPECT().NewHistogram(file.AppFileStats, gomock.Any(), gomock.Any())
-	mockLogger.EXPECT().Warnf(gomock.Any(), gomock.Any(), gomock.Any()).MaxTimes(1)
-	mockLogger.EXPECT().Debug(gomock.Any()).AnyTimes()
-	mockMetrics.EXPECT().RecordHistogram(gomock.Any(), file.AppFileStats, gomock.Any(), gomock.Any()).AnyTimes()
-
-	fs, err := New(config, mockLogger, mockMetrics)
+	fs, err := New(config)
 	require.NoError(t, err)
 
-	// Mark as not connected
+	// Set logger and metrics via UseLogger/UseMetrics
+	fs.UseLogger(mockLogger)
+	fs.UseMetrics(mockMetrics)
+
+	mockLogger.EXPECT().Debugf("Attempting to connect to Azure File Share %s (timeout: %v)", "testshare", gomock.Any())
+	mockMetrics.EXPECT().NewHistogram(file.AppFileStats, gomock.Any(), gomock.Any())
+	mockLogger.EXPECT().Debug(gomock.Any())
+	mockMetrics.EXPECT().RecordHistogram(gomock.Any(), file.AppFileStats, gomock.Any(), gomock.Any())
+	mockLogger.EXPECT().Warnf("Azure File Share %s not available, starting background retry: %v", "testshare", gomock.Any())
+	// Expect logRetryStart from the goroutine (may or may not be called depending on timing)
+	mockLogger.EXPECT().Debugf(
+		"Starting background retry for Azure File Share %s (retry interval: 1 minute)",
+		"testshare",
+	).MaxTimes(1)
+
+	// Call Connect - should attempt to connect and start retry
+	fs.(*azureFileSystem).Connect()
+
+	// Give goroutine time to start
+	time.Sleep(50 * time.Millisecond)
+
+	// Mark as not connected and disable retry to stop the goroutine
 	fs.(*azureFileSystem).CommonFileSystem.SetDisableRetry(true)
 
-	// Call Connect - should attempt to connect
-	fs.(*azureFileSystem).Connect()
+	// Give goroutine time to check the flag and exit
+	time.Sleep(50 * time.Millisecond)
 }
 
 func TestAzureFileSystem_startRetryConnect(t *testing.T) {
@@ -182,6 +213,13 @@ func TestAzureFileSystem_startRetryConnect(t *testing.T) {
 		ShareName:   "testshare",
 	}
 
+	fs, err := New(config)
+	require.NoError(t, err)
+
+	// Set logger and metrics via UseLogger/UseMetrics
+	fs.UseLogger(mockLogger)
+	fs.UseMetrics(mockMetrics)
+
 	mockLogger.EXPECT().Debugf(gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
 	mockLogger.EXPECT().Debugf(gomock.Any(), gomock.Any()).AnyTimes()
 	mockMetrics.EXPECT().NewHistogram(file.AppFileStats, gomock.Any(), gomock.Any())
@@ -189,8 +227,8 @@ func TestAzureFileSystem_startRetryConnect(t *testing.T) {
 	mockLogger.EXPECT().Debug(gomock.Any())
 	mockMetrics.EXPECT().RecordHistogram(gomock.Any(), file.AppFileStats, gomock.Any(), gomock.Any())
 
-	fs, err := New(config, mockLogger, mockMetrics)
-	require.NoError(t, err)
+	// Call Connect which will start retry on failure
+	fs.Connect()
 
 	// Disable retry to stop the goroutine quickly
 	fs.(*azureFileSystem).CommonFileSystem.SetDisableRetry(true)
@@ -212,6 +250,13 @@ func TestAzureFileSystem_startRetryConnect_RetryDisabled(t *testing.T) {
 		ShareName:   "testshare",
 	}
 
+	fs, err := New(config)
+	require.NoError(t, err)
+
+	// Set logger and metrics via UseLogger/UseMetrics
+	fs.UseLogger(mockLogger)
+	fs.UseMetrics(mockMetrics)
+
 	mockLogger.EXPECT().Debugf(gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
 	mockLogger.EXPECT().Debugf(gomock.Any(), gomock.Any()).AnyTimes()
 	mockMetrics.EXPECT().NewHistogram(file.AppFileStats, gomock.Any(), gomock.Any())
@@ -219,11 +264,11 @@ func TestAzureFileSystem_startRetryConnect_RetryDisabled(t *testing.T) {
 	mockLogger.EXPECT().Debug(gomock.Any())
 	mockMetrics.EXPECT().RecordHistogram(gomock.Any(), file.AppFileStats, gomock.Any(), gomock.Any())
 
-	fs, err := New(config, mockLogger, mockMetrics)
-	require.NoError(t, err)
-
 	// Disable retry immediately - retry loop should exit
 	fs.(*azureFileSystem).CommonFileSystem.SetDisableRetry(true)
+
+	// Call Connect which would start retry, but retry is disabled
+	fs.Connect()
 
 	// Give it a moment to check the retry disabled flag
 	time.Sleep(50 * time.Millisecond)
@@ -321,7 +366,7 @@ func TestNew_NilLogger(t *testing.T) {
 		ShareName:   "testshare",
 	}
 
-	fs, err := New(config, nil, nil)
+	fs, err := New(config)
 
 	require.NoError(t, err)
 	require.NotNil(t, fs)
@@ -344,11 +389,27 @@ func TestAzureFileSystem_Connect_NotConnected_WithLogger(t *testing.T) {
 		},
 	}
 
+	mockLogger.EXPECT().Debugf("Attempting to connect to Azure File Share %s (timeout: %v)", "testshare", gomock.Any())
 	mockMetrics.EXPECT().NewHistogram(file.AppFileStats, gomock.Any(), gomock.Any())
 	mockLogger.EXPECT().Debug(gomock.Any())
 	mockMetrics.EXPECT().RecordHistogram(gomock.Any(), file.AppFileStats, gomock.Any(), gomock.Any())
+	mockLogger.EXPECT().Warnf("Azure File Share %s not available, starting background retry: %v", "testshare", gomock.Any())
+	// Expect logRetryStart from the goroutine
+	mockLogger.EXPECT().Debugf(
+		"Starting background retry for Azure File Share %s (retry interval: 1 minute)",
+		"testshare",
+	)
 
 	fs.Connect()
+
+	// Give goroutine time to start
+	time.Sleep(100 * time.Millisecond)
+
+	// Disable retry to stop the goroutine
+	fs.CommonFileSystem.SetDisableRetry(true)
+
+	// Give goroutine time to check the flag and exit
+	time.Sleep(100 * time.Millisecond)
 }
 
 func TestAzureFileSystem_logRetryStart_WithLogger(t *testing.T) {
@@ -617,9 +678,11 @@ func TestAzureFileSystem_Connect_WhenNotConnected(t *testing.T) {
 	// Ensure not connected
 	assert.False(t, fs.CommonFileSystem.IsConnected())
 
+	mockLogger.EXPECT().Debugf("Attempting to connect to Azure File Share %s (timeout: %v)", "testshare", gomock.Any())
 	mockMetrics.EXPECT().NewHistogram(file.AppFileStats, gomock.Any(), gomock.Any())
 	mockProvider.EXPECT().Connect(gomock.Any()).Return(nil)
 	mockLogger.EXPECT().Infof("connected to %s", "testshare")
+	mockLogger.EXPECT().Debugf("Successfully connected to Azure File Share %s", "testshare")
 	mockLogger.EXPECT().Debug(gomock.Any())
 	mockMetrics.EXPECT().RecordHistogram(gomock.Any(), file.AppFileStats, gomock.Any(), gomock.Any())
 
