@@ -11,41 +11,30 @@ import (
 )
 
 func TestNew_NilConfig(t *testing.T) {
-	fs, err := New(nil, nil, nil)
+	fs := New(nil)
 
-	require.Error(t, err)
-	assert.Nil(t, fs)
-	assert.ErrorIs(t, err, errInvalidConfig)
+	require.NotNil(t, fs)
+	assert.Equal(t, "ftp://unconfigured", fs.(*fileSystem).CommonFileSystem.Location)
 }
 
 func TestNew_EmptyHost(t *testing.T) {
 	config := &Config{Host: "", Port: 2121}
 
-	fs, err := New(config, nil, nil)
+	fs := New(config)
 
-	require.Error(t, err)
-	assert.Nil(t, fs)
-	assert.ErrorIs(t, err, errInvalidConfig)
-}
+	require.NotNil(t, fs)
 
-func TestNew_InvalidPort_Negative(t *testing.T) {
-	config := &Config{Host: "localhost", Port: -1}
-
-	fs, err := New(config, nil, nil)
-
-	require.Error(t, err)
-	assert.Nil(t, fs)
-	assert.ErrorIs(t, err, errInvalidConfig)
+	assert.Equal(t, "ftp://unconfigured", fs.(*fileSystem).CommonFileSystem.Location)
 }
 
 func TestNew_PortZero(t *testing.T) {
 	config := &Config{Host: "localhost", Port: 0}
 
-	fs, err := New(config, nil, nil)
+	fs := New(config)
 
-	require.Error(t, err)
-	assert.Nil(t, fs)
-	assert.ErrorIs(t, err, errInvalidConfig)
+	require.NotNil(t, fs)
+	// Port 0 will default to 21 in buildLocation
+	assert.Equal(t, "localhost:21", fs.(*fileSystem).CommonFileSystem.Location)
 }
 
 func TestNew_ConnectionFailure_StartsRetry(t *testing.T) {
@@ -62,6 +51,13 @@ func TestNew_ConnectionFailure_StartsRetry(t *testing.T) {
 		Password: "testpass",
 	}
 
+	fs := New(config)
+	require.NotNil(t, fs)
+
+	// Inject logger and metrics (mimicking AddFileStore behavior)
+	fs.UseLogger(mockLogger)
+	fs.UseMetrics(mockMetrics)
+
 	mockLogger.EXPECT().Warnf(
 		"FTP server %s not available, starting background retry: %v",
 		gomock.Any(),
@@ -72,10 +68,7 @@ func TestNew_ConnectionFailure_StartsRetry(t *testing.T) {
 	mockLogger.EXPECT().Debug(gomock.Any()).AnyTimes()
 	mockMetrics.EXPECT().RecordHistogram(gomock.Any(), file.AppFileStats, gomock.Any(), gomock.Any()).AnyTimes()
 
-	fs, err := New(config, mockLogger, mockMetrics)
-
-	require.NoError(t, err)
-	require.NotNil(t, fs)
+	fs.Connect()
 
 	time.Sleep(100 * time.Millisecond)
 
@@ -96,6 +89,15 @@ func TestNew_Success(t *testing.T) {
 		Password: "testpass",
 	}
 
+	fs := New(config)
+	require.NotNil(t, fs)
+
+	assert.Equal(t, "localhost:2121", fs.(*fileSystem).CommonFileSystem.Location)
+
+	// Inject logger and metrics
+	fs.UseLogger(mockLogger)
+	fs.UseMetrics(mockMetrics)
+
 	mockMetrics.EXPECT().NewHistogram(file.AppFileStats, gomock.Any(), gomock.Any())
 
 	mockLogger.EXPECT().Infof("connected to %s", "localhost:2121").MaxTimes(1)
@@ -108,12 +110,7 @@ func TestNew_Success(t *testing.T) {
 	mockLogger.EXPECT().Debug(gomock.Any()).AnyTimes()
 	mockMetrics.EXPECT().RecordHistogram(gomock.Any(), file.AppFileStats, gomock.Any(), gomock.Any()).AnyTimes()
 
-	fs, err := New(config, mockLogger, mockMetrics)
-
-	require.NoError(t, err)
-	require.NotNil(t, fs)
-
-	assert.Equal(t, "localhost:2121", fs.(*fileSystem).CommonFileSystem.Location)
+	fs.Connect()
 }
 
 func TestNew_WithRemoteDir(t *testing.T) {
@@ -131,6 +128,16 @@ func TestNew_WithRemoteDir(t *testing.T) {
 		RemoteDir: "/uploads",
 	}
 
+	fs := New(config)
+
+	require.NotNil(t, fs)
+
+	assert.Equal(t, "localhost:2121/uploads", fs.(*fileSystem).CommonFileSystem.Location)
+
+	// Inject logger and metrics
+	fs.UseLogger(mockLogger)
+	fs.UseMetrics(mockMetrics)
+
 	mockMetrics.EXPECT().NewHistogram(file.AppFileStats, gomock.Any(), gomock.Any())
 
 	mockLogger.EXPECT().Infof("connected to %s", "localhost:2121/uploads").MaxTimes(1)
@@ -143,12 +150,7 @@ func TestNew_WithRemoteDir(t *testing.T) {
 	mockLogger.EXPECT().Debug(gomock.Any()).AnyTimes()
 	mockMetrics.EXPECT().RecordHistogram(gomock.Any(), file.AppFileStats, gomock.Any(), gomock.Any()).AnyTimes()
 
-	fs, err := New(config, mockLogger, mockMetrics)
-
-	require.NoError(t, err)
-	require.NotNil(t, fs)
-
-	assert.Equal(t, "localhost:2121/uploads", fs.(*fileSystem).CommonFileSystem.Location)
+	fs.Connect()
 }
 
 func TestNew_WithRootRemoteDir(t *testing.T) {
@@ -166,6 +168,15 @@ func TestNew_WithRootRemoteDir(t *testing.T) {
 		RemoteDir: "/",
 	}
 
+	fs := New(config)
+	require.NotNil(t, fs)
+
+	assert.Equal(t, "localhost:2121", fs.(*fileSystem).CommonFileSystem.Location)
+
+	// Inject logger and metrics
+	fs.UseLogger(mockLogger)
+	fs.UseMetrics(mockMetrics)
+
 	mockMetrics.EXPECT().NewHistogram(file.AppFileStats, gomock.Any(), gomock.Any())
 
 	mockLogger.EXPECT().Infof("connected to %s", "localhost:2121").MaxTimes(1)
@@ -178,20 +189,12 @@ func TestNew_WithRootRemoteDir(t *testing.T) {
 	mockLogger.EXPECT().Debug(gomock.Any()).AnyTimes()
 	mockMetrics.EXPECT().RecordHistogram(gomock.Any(), file.AppFileStats, gomock.Any(), gomock.Any()).AnyTimes()
 
-	fs, err := New(config, mockLogger, mockMetrics)
-
-	require.NoError(t, err)
-	require.NotNil(t, fs)
-
-	assert.Equal(t, "localhost:2121", fs.(*fileSystem).CommonFileSystem.Location)
+	fs.Connect()
 }
 
 func TestNew_WithCustomDialTimeout(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
-
-	mockLogger := file.NewMockLogger(ctrl)
-	mockMetrics := file.NewMockMetrics(ctrl)
 
 	config := &Config{
 		Host:        "localhost",
@@ -201,22 +204,12 @@ func TestNew_WithCustomDialTimeout(t *testing.T) {
 		DialTimeout: 3 * time.Second,
 	}
 
-	mockMetrics.EXPECT().NewHistogram(file.AppFileStats, gomock.Any(), gomock.Any())
+	fs := New(config)
 
-	mockLogger.EXPECT().Infof("connected to %s", "localhost:2121").MaxTimes(1)
-	mockLogger.EXPECT().Warnf(
-		"FTP server %s not available, starting background retry: %v",
-		gomock.Any(),
-		gomock.Any(),
-	).MaxTimes(1)
-
-	mockLogger.EXPECT().Debug(gomock.Any()).AnyTimes()
-	mockMetrics.EXPECT().RecordHistogram(gomock.Any(), file.AppFileStats, gomock.Any(), gomock.Any()).AnyTimes()
-
-	fs, err := New(config, mockLogger, mockMetrics)
-
-	require.NoError(t, err)
 	require.NotNil(t, fs)
+
+	adapter := fs.(*fileSystem).CommonFileSystem.Provider.(*storageAdapter)
+	assert.Equal(t, 3*time.Second, adapter.cfg.DialTimeout)
 }
 
 func TestConnect_AlreadyConnected(t *testing.T) {
