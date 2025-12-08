@@ -3,6 +3,7 @@ package gofr
 import (
 	"context"
 	"fmt"
+	"regexp"
 	"strconv"
 	"strings"
 
@@ -147,17 +148,24 @@ type otelErrorHandler struct {
 	logger logging.Logger
 }
 
+var statusCodeRegex = regexp.MustCompile(`status (\d+)`)
+
 func (o *otelErrorHandler) Handle(e error) {
-	// 201 is a success status code, but the zipkin exporter treats it as an error.
-	// The exporter does not export the error type, so we have to match on the error message.
-	// We check for "status 201" and ensure it's not part of a larger number (e.g. 2010).
+	if e == nil {
+		return
+	}
+
+	// Try to unwrap and check for specific error types
+	// (Check OpenTelemetry/Zipkin error types if they exist)
+
 	msg := e.Error()
-	if strings.Contains(msg, "status 201") {
-		// Check if "201" is at the end of the message or followed by a non-digit
-		idx := strings.Index(msg, "status 201")
-		if idx != -1 {
-			end := idx + len("status 201")
-			if end == len(msg) || (end < len(msg) && (msg[end] < '0' || msg[end] > '9')) {
+
+	// Use regex for reliable status code extraction
+	matches := statusCodeRegex.FindStringSubmatch(msg)
+	if len(matches) >= 2 {
+		if code, err := strconv.Atoi(matches[1]); err == nil {
+			// Ignore success codes (201 Created, 202 Accepted, 204 No Content)
+			if code >= 200 && code < 300 {
 				return
 			}
 		}
