@@ -159,13 +159,22 @@ func TestMatchesEndpointPattern(t *testing.T) {
 			expected: true,
 		},
 		{
-			desc: "regex takes precedence over path",
+			desc: "regex takes precedence over path when regex matches",
 			endpoint: &EndpointMapping{
 				Path:  "/api/users",
 				Regex: "^/api/users/\\d+$",
 			},
 			route:    "/api/users/123",
 			expected: true,
+		},
+		{
+			desc: "regex takes precedence - no fallback to path when regex doesn't match",
+			endpoint: &EndpointMapping{
+				Path:  "/api/users",
+				Regex: "^/api/users/\\d+$",
+			},
+			route:    "/api/users",
+			expected: false, // Regex doesn't match, should NOT fall back to path
 		},
 		{
 			desc: "matches wildcard pattern",

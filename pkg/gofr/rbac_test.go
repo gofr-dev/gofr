@@ -103,8 +103,16 @@ func TestEnableRBAC(t *testing.T) {
 			app := New()
 			app.EnableRBAC(tc.provider)
 
-			require.Equal(t, tc.middlewareSet, app.httpServer != nil && app.httpServer.router != nil,
-				"TEST[%d], Failed.\n%s", i, tc.desc)
+			// Check if middleware was actually called (which means it was added to router)
+			mockProvider, ok := tc.provider.(*mockRBACProvider)
+			if ok {
+				require.Equal(t, tc.middlewareSet, mockProvider.middlewareCalled,
+					"TEST[%d], Failed.\n%s", i, tc.desc)
+			} else {
+				// For nil provider case, just check that httpServer exists (it always does after New())
+				require.NotNil(t, app.httpServer, "TEST[%d], Failed.\n%s", i, tc.desc)
+				require.NotNil(t, app.httpServer.router, "TEST[%d], Failed.\n%s", i, tc.desc)
+			}
 		})
 	}
 }
@@ -126,9 +134,10 @@ func createTestConfigFile(filename, content string) (string, error) {
 // mockRBACProvider is a mock implementation of RBACProvider for testing.
 // This avoids import cycle by not importing rbac package.
 type mockRBACProvider struct {
-	configPath   string
-	loadErr      error
-	middlewareFn func(http.Handler) http.Handler
+	configPath       string
+	loadErr          error
+	middlewareFn     func(http.Handler) http.Handler
+	middlewareCalled bool // Track if ApplyMiddleware was called
 }
 
 func (*mockRBACProvider) UseLogger(_ any) {
@@ -152,6 +161,7 @@ func (m *mockRBACProvider) LoadPermissions() error {
 }
 
 func (m *mockRBACProvider) ApplyMiddleware() func(http.Handler) http.Handler {
+	m.middlewareCalled = true
 	if m.middlewareFn != nil {
 		return m.middlewareFn
 	}
