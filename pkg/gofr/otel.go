@@ -3,6 +3,7 @@ package gofr
 import (
 	"context"
 	"fmt"
+	"net/http"
 	"regexp"
 	"strconv"
 	"strings"
@@ -33,7 +34,10 @@ func (a *App) initTracer() {
 	)
 	otel.SetTracerProvider(tp)
 	otel.SetTextMapPropagator(propagation.NewCompositeTextMapPropagator(propagation.TraceContext{}, propagation.Baggage{}))
-	otel.SetErrorHandler(&otelErrorHandler{logger: a.container.Logger})
+	otel.SetErrorHandler(&otelErrorHandler{
+		logger:          a.container.Logger,
+		statusCodeRegex: regexp.MustCompile(`status (\d+)`),
+	})
 
 	traceExporter := a.Config.Get("TRACE_EXPORTER")
 	tracerURL := a.Config.Get("TRACER_URL")
@@ -145,10 +149,9 @@ func buildGoFrExporter(logger logging.Logger, url string) sdktrace.SpanExporter 
 }
 
 type otelErrorHandler struct {
-	logger logging.Logger
+	logger          logging.Logger
+	statusCodeRegex *regexp.Regexp
 }
-
-var statusCodeRegex = regexp.MustCompile(`status (\d+)`)
 
 func (o *otelErrorHandler) Handle(e error) {
 	if e == nil {
@@ -161,11 +164,11 @@ func (o *otelErrorHandler) Handle(e error) {
 	msg := e.Error()
 
 	// Use regex for reliable status code extraction
-	matches := statusCodeRegex.FindStringSubmatch(msg)
+	matches := o.statusCodeRegex.FindStringSubmatch(msg)
 	if len(matches) >= 2 {
 		if code, err := strconv.Atoi(matches[1]); err == nil {
 			// Ignore success codes (201 Created, 202 Accepted, 204 No Content)
-			if code >= 200 && code < 300 {
+			if code >= http.StatusOK && code < 300 {
 				return
 			}
 		}
