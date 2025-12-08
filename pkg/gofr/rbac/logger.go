@@ -1,15 +1,14 @@
 package rbac
 
-// Logger defines methods for logging that RBAC uses.
-// This interface matches the methods used by RBAC for audit logging and error reporting.
+// Logger defines the logging interface for RBAC.
+// It matches GoFr's logging.Logger interface methods used by RBAC.
 type Logger interface {
-	// Infof logs a formatted info message.
-	Infof(pattern string, args ...any)
-	// Errorf logs a formatted error message.
-	Errorf(pattern string, args ...any)
-	// Warnf logs a formatted warning message.
-	Warnf(pattern string, args ...any)
-	// Debugf logs a formatted debug message.
-	Debugf(pattern string, args ...any)
+	Debug(args ...any)
+	Debugf(format string, args ...any)
+	Info(args ...any)
+	Infof(format string, args ...any)
+	Error(args ...any)
+	Errorf(format string, args ...any)
+	Warn(args ...any)
+	Warnf(format string, args ...any)
 }
-

@@ -11,6 +11,7 @@ import (
 	"strings"
 	"sync"
 
+	"go.opentelemetry.io/otel/trace"
 	"gopkg.in/yaml.v3"
 )
 
@@ -95,22 +96,22 @@ type Config struct {
 	// Audit logging is automatically performed when RBAC is enabled
 	Logger Logger `json:"-" yaml:"-"`
 
+	// Metrics is the metrics instance for RBAC metrics
+	// Set automatically by EnableRBAC
+	Metrics Metrics `json:"-" yaml:"-"`
+
+	// Tracer is the tracer instance for RBAC tracing
+	// Set automatically by EnableRBAC
+	Tracer trace.Tracer `json:"-" yaml:"-"`
+
 	// Internal maps built from unified config (not in JSON/YAML)
 	// These are populated by processUnifiedConfig()
 	rolePermissionsMap    map[string][]string `json:"-" yaml:"-"`
-	endpointPermissionMap map[string]string   `json:"-" yaml:"-"` // Key: "METHOD:/path", Value: permission
-	publicEndpointsMap    map[string]bool     `json:"-" yaml:"-"` // Key: "METHOD:/path", Value: true if public
+	endpointPermissionMap map[string][]string  `json:"-" yaml:"-"` // Key: "METHOD:/path", Value: []permissions
+	publicEndpointsMap    map[string]bool      `json:"-" yaml:"-"` // Key: "METHOD:/path", Value: true if public
 
 	// Mutex for thread-safe access to maps (for future hot-reload support)
 	mu sync.RWMutex `json:"-" yaml:"-"`
-}
-
-// SetLogger sets the logger for audit logging which asserts the Logger interface.
-// This is called automatically by EnableRBAC - users don't need to configure this.
-func (c *Config) SetLogger(logger any) {
-	if l, ok := logger.(Logger); ok {
-		c.Logger = l
-	}
 }
 
 // LoadPermissions loads RBAC configuration from a JSON or YAML file.
@@ -139,12 +140,29 @@ func LoadPermissions(path string) (*Config, error) {
 		return nil, fmt.Errorf("unsupported config file format: %s (supported: .json, .yaml, .yml): %w", ext, errUnsupportedFormat)
 	}
 
+	// Validate config before processing
+	if err := config.validate(); err != nil {
+		return nil, fmt.Errorf("invalid RBAC config: %w", err)
+	}
+
 	// Process unified config to build internal maps
 	if err := config.processUnifiedConfig(); err != nil {
 		return nil, fmt.Errorf("failed to process unified config: %w", err)
 	}
 
 	return &config, nil
+}
+
+// validate validates the RBAC configuration.
+func (c *Config) validate() error {
+	// Validate endpoints: non-public endpoints must have RequiredPermissions
+	for i, endpoint := range c.Endpoints {
+		if !endpoint.Public && len(endpoint.RequiredPermissions) == 0 {
+			return fmt.Errorf("endpoint[%d]: %w: %s", i, ErrEndpointMissingPermissions, endpoint.Path)
+		}
+	}
+
+	return nil
 }
 
 // processUnifiedConfig processes the unified Roles and Endpoints config
@@ -162,50 +180,18 @@ func (c *Config) processUnifiedConfig() error {
 // initializeMaps initializes internal maps.
 func (c *Config) initializeMaps() {
 	c.rolePermissionsMap = make(map[string][]string)
-	c.endpointPermissionMap = make(map[string]string)
+	c.endpointPermissionMap = make(map[string][]string)
 	c.publicEndpointsMap = make(map[string]bool)
 }
 
 // buildRolePermissionsMap builds the role permissions map from Roles.
+// Uses getEffectivePermissions() for consistent inheritance logic.
 func (c *Config) buildRolePermissionsMap() {
 	for _, roleDef := range c.Roles {
-		permissions := make([]string, len(roleDef.Permissions))
-		copy(permissions, roleDef.Permissions)
-
-		permissions = c.addInheritedPermissions(roleDef, permissions)
+		// Use getEffectivePermissions() for consistent inheritance handling
+		permissions := c.getEffectivePermissions(roleDef.Name)
 		c.rolePermissionsMap[roleDef.Name] = permissions
 	}
-}
-
-// addInheritedPermissions adds inherited permissions to a role.
-func (c *Config) addInheritedPermissions(roleDef RoleDefinition, permissions []string) []string {
-	if len(roleDef.InheritsFrom) == 0 {
-		return permissions
-	}
-
-	for _, inheritedRoleName := range roleDef.InheritsFrom {
-		permissions = c.collectInheritedPermissions(inheritedRoleName, permissions)
-	}
-
-	return permissions
-}
-
-// collectInheritedPermissions collects permissions from an inherited role.
-func (c *Config) collectInheritedPermissions(inheritedRoleName string, permissions []string) []string {
-	for _, inheritedRole := range c.Roles {
-		if inheritedRole.Name == inheritedRoleName {
-			permissions = append(permissions, inheritedRole.Permissions...)
-
-			if len(inheritedRole.InheritsFrom) > 0 {
-				inheritedPerms := c.getEffectivePermissions(inheritedRoleName)
-				permissions = append(permissions, inheritedPerms...)
-			}
-
-			break
-		}
-	}
-
-	return permissions
 }
 
 // buildEndpointPermissionMap builds the endpoint permission map from Endpoints.
@@ -258,7 +244,10 @@ func (c *Config) storeEndpointMapping(endpoint *EndpointMapping, key, methodUppe
 		return fmt.Errorf("%w: %s %s", ErrEndpointMissingPermissions, methodUpper, endpoint.Path)
 	}
 
-	c.endpointPermissionMap[key] = endpoint.RequiredPermissions[0]
+	// Store all required permissions (not just the first one)
+	permissions := make([]string, len(endpoint.RequiredPermissions))
+	copy(permissions, endpoint.RequiredPermissions)
+	c.endpointPermissionMap[key] = permissions
 
 	return nil
 }
@@ -305,9 +294,10 @@ func (c *Config) GetRolePermissions(role string) []string {
 	return c.rolePermissionsMap[role]
 }
 
-// GetEndpointPermission returns the required permission for an endpoint (thread-safe).
-// Returns empty string if endpoint is public or not found.
-func (c *Config) GetEndpointPermission(method, path string) (string, bool) {
+// GetEndpointPermission returns the required permissions for an endpoint (thread-safe).
+// Returns empty slice if endpoint is public or not found.
+// Returns all required permissions (user needs ANY of them - OR logic).
+func (c *Config) GetEndpointPermission(method, path string) ([]string, bool) {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 
@@ -315,8 +305,8 @@ func (c *Config) GetEndpointPermission(method, path string) (string, bool) {
 	key := fmt.Sprintf("%s:%s", methodUpper, path)
 
 	// Try exact match first
-	if perm, isPublic := c.checkExactMatch(key); isPublic || perm != "" {
-		return perm, isPublic
+	if perms, isPublic := c.checkExactMatch(key); isPublic || len(perms) > 0 {
+		return perms, isPublic
 	}
 
 	// Try pattern and regex matching
@@ -324,35 +314,36 @@ func (c *Config) GetEndpointPermission(method, path string) (string, bool) {
 }
 
 // checkExactMatch checks for an exact endpoint match.
-func (c *Config) checkExactMatch(key string) (permission string, isPublic bool) {
+func (c *Config) checkExactMatch(key string) (permissions []string, isPublic bool) {
 	if public, ok := c.publicEndpointsMap[key]; ok && public {
-		return "", true
+		return nil, true
 	}
 
-	if perm, ok := c.endpointPermissionMap[key]; ok {
-		return perm, false
+	if perms, ok := c.endpointPermissionMap[key]; ok {
+		return perms, false
 	}
 
-	return "", false
+	return nil, false
 }
 
 // checkPatternMatch checks for pattern and regex matches.
-func (c *Config) checkPatternMatch(methodUpper, path string) (permission string, isPublic bool) {
+func (c *Config) checkPatternMatch(methodUpper, path string) (permissions []string, isPublic bool) {
 	// Try pattern matching for wildcards
-	for key, perm := range c.endpointPermissionMap {
+	// Note: We iterate over the map while holding RLock, which is safe for read-only operations
+	for key, perms := range c.endpointPermissionMap {
 		if c.matchesKey(key, methodUpper, path) {
-			return perm, false
+			return perms, false
 		}
 	}
 
 	// Check public endpoints with pattern/regex
 	for key := range c.publicEndpointsMap {
 		if c.matchesKey(key, methodUpper, path) {
-			return "", true
+			return nil, true
 		}
 	}
 
-	return "", false
+	return nil, false
 }
 
 // matchesKey checks if a key matches the given method and path.

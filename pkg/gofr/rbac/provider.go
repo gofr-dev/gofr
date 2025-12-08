@@ -79,7 +79,14 @@ func (p *Provider) UseLogger(logger any) {
 func (p *Provider) UseMetrics(metrics any) {
 	if m, ok := metrics.(Metrics); ok {
 		p.metrics = m
+		p.registerMetrics()
 	}
+}
+
+func (p *Provider) registerMetrics() {
+	p.metrics.NewHistogram("rbac_authorization_duration", "Duration of RBAC authorization checks", 0.0001, 0.0005, 0.001, 0.005, 0.01, 0.05, 0.1, 0.5, 1)
+	p.metrics.NewCounter("rbac_authorization_decisions", "Number of RBAC authorization decisions")
+	p.metrics.NewCounter("rbac_role_extraction_failures", "Number of failed role extractions")
 }
 
 // UseTracer sets the tracer for the provider.
@@ -105,7 +112,17 @@ func (p *Provider) LoadPermissions() error {
 
 	// Set logger on config if available (automatic audit logging)
 	if p.logger != nil {
-		config.SetLogger(p.logger)
+		config.Logger = p.logger
+	}
+
+	// Set metrics on config if available
+	if p.metrics != nil {
+		config.Metrics = p.metrics
+	}
+
+	// Set tracer on config if available
+	if p.tracer != nil {
+		config.Tracer = p.tracer
 	}
 
 	return nil
