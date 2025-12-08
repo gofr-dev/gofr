@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -227,8 +228,12 @@ func TestGetIP_XForwardedFor(t *testing.T) {
 	req.Header.Set("X-Forwarded-For", "203.0.113.1, 198.51.100.1")
 	req.RemoteAddr = "192.168.1.1:12345"
 
-	ip := getIP(req)
-	assert.Equal(t, "203.0.113.1", ip, "Should extract first IP from X-Forwarded-For")
+	ip := getIP(req, true)
+	assert.Equal(t, "203.0.113.1", ip, "Should extract first IP from X-Forwarded-For when trusting proxies")
+
+	// Without trusting proxies, should use RemoteAddr
+	ip = getIP(req, false)
+	assert.Equal(t, "192.168.1.1", ip, "Should use RemoteAddr when not trusting proxies")
 }
 
 func TestGetIP_XRealIP(t *testing.T) {
@@ -236,15 +241,19 @@ func TestGetIP_XRealIP(t *testing.T) {
 	req.Header.Set("X-Real-IP", "203.0.113.5")
 	req.RemoteAddr = "192.168.1.1:12345"
 
-	ip := getIP(req)
-	assert.Equal(t, "203.0.113.5", ip, "Should extract IP from X-Real-IP")
+	ip := getIP(req, true)
+	assert.Equal(t, "203.0.113.5", ip, "Should extract IP from X-Real-IP when trusting proxies")
+
+	// Without trusting proxies, should use RemoteAddr
+	ip = getIP(req, false)
+	assert.Equal(t, "192.168.1.1", ip, "Should use RemoteAddr when not trusting proxies")
 }
 
 func TestGetIP_RemoteAddr(t *testing.T) {
 	req := httptest.NewRequest(http.MethodGet, "/test", http.NoBody)
 	req.RemoteAddr = "192.168.1.1:12345"
 
-	ip := getIP(req)
+	ip := getIP(req, false)
 	assert.Equal(t, "192.168.1.1", ip, "Should extract IP from RemoteAddr")
 }
 
@@ -254,6 +263,168 @@ func TestGetIP_Priority(t *testing.T) {
 	req.Header.Set("X-Real-IP", "203.0.113.2")
 	req.RemoteAddr = "192.168.1.1:12345"
 
-	ip := getIP(req)
-	assert.Equal(t, "203.0.113.1", ip, "X-Forwarded-For should have highest priority")
+	ip := getIP(req, true)
+	assert.Equal(t, "203.0.113.1", ip, "X-Forwarded-For should have highest priority when trusting proxies")
+}
+
+func TestRateLimiter_RetryAfterHeader(t *testing.T) {
+	metrics := newRateLimiterMockMetrics()
+	config := RateLimiterConfig{
+		RequestsPerSecond: 2,
+		Burst:             1,
+		PerIP:             false,
+	}
+
+	handler := RateLimiter(config, metrics)(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}))
+
+	// First request should succeed
+	req := httptest.NewRequest(http.MethodGet, "/test", http.NoBody)
+	rr := httptest.NewRecorder()
+	handler.ServeHTTP(rr, req)
+	assert.Equal(t, http.StatusOK, rr.Code)
+
+	// Second request should be rate limited and include Retry-After header
+	req = httptest.NewRequest(http.MethodGet, "/test", http.NoBody)
+	rr = httptest.NewRecorder()
+	handler.ServeHTTP(rr, req)
+	assert.Equal(t, http.StatusTooManyRequests, rr.Code)
+	assert.NotEmpty(t, rr.Header().Get("Retry-After"), "Retry-After header should be set")
+}
+
+func TestRateLimiterConfig_Validate(t *testing.T) {
+	tests := []struct {
+		name    string
+		config  RateLimiterConfig
+		wantErr bool
+	}{
+		{
+			name: "valid config",
+			config: RateLimiterConfig{
+				RequestsPerSecond: 10,
+				Burst:             20,
+				PerIP:             true,
+			},
+			wantErr: false,
+		},
+		{
+			name: "zero RequestsPerSecond",
+			config: RateLimiterConfig{
+				RequestsPerSecond: 0,
+				Burst:             20,
+				PerIP:             true,
+			},
+			wantErr: true,
+		},
+		{
+			name: "negative RequestsPerSecond",
+			config: RateLimiterConfig{
+				RequestsPerSecond: -5,
+				Burst:             20,
+				PerIP:             true,
+			},
+			wantErr: true,
+		},
+		{
+			name: "zero Burst",
+			config: RateLimiterConfig{
+				RequestsPerSecond: 10,
+				Burst:             0,
+				PerIP:             true,
+			},
+			wantErr: true,
+		},
+		{
+			name: "negative Burst",
+			config: RateLimiterConfig{
+				RequestsPerSecond: 10,
+				Burst:             -5,
+				PerIP:             true,
+			},
+			wantErr: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := tt.config.Validate()
+			if tt.wantErr {
+				assert.Error(t, err)
+			} else {
+				assert.NoError(t, err)
+			}
+		})
+	}
+}
+
+func TestMemoryRateLimiterStore_StopCleanupMultipleCalls(_ *testing.T) {
+	config := RateLimiterConfig{
+		RequestsPerSecond: 10,
+		Burst:             20,
+		PerIP:             true,
+	}
+
+	store := NewMemoryRateLimiterStore(config).(*memoryRateLimiterStore)
+	ctx := context.Background()
+
+	// Start cleanup
+	store.StartCleanup(ctx)
+
+	// Stop multiple times - should not panic
+	store.StopCleanup()
+	store.StopCleanup()
+	store.StopCleanup()
+
+	// Test passes if no panic occurs
+}
+
+func TestMemoryRateLimiterStore_Cleanup(t *testing.T) {
+	config := RateLimiterConfig{
+		RequestsPerSecond: 10,
+		Burst:             20,
+		PerIP:             true,
+	}
+
+	store := NewMemoryRateLimiterStore(config).(*memoryRateLimiterStore)
+	ctx := context.Background()
+
+	// Add some entries
+	allowed1, _, _ := store.Allow(ctx, "ip1", config)
+	allowed2, _, _ := store.Allow(ctx, "ip2", config)
+	allowed3, _, _ := store.Allow(ctx, "ip3", config)
+
+	assert.True(t, allowed1 && allowed2 && allowed3, "All initial requests should be allowed")
+
+	// Verify entries exist
+	count := 0
+
+	store.limiters.Range(func(_, _ any) bool {
+		count++
+		return true
+	})
+
+	assert.Equal(t, 3, count, "Should have 3 entries")
+
+	// Manually trigger cleanup with a threshold that marks all as stale
+	// Set lastAccess to past time
+	store.limiters.Range(func(_ any, value any) bool {
+		entry := value.(*limiterEntry)
+		atomic.StoreInt64(&entry.lastAccess, time.Now().Unix()-3600) // 1 hour ago
+
+		return true
+	})
+
+	// Run cleanup with 10 minute threshold
+	store.cleanup(10 * time.Minute)
+
+	// Verify stale entries were removed
+	count = 0
+
+	store.limiters.Range(func(_, _ any) bool {
+		count++
+		return true
+	})
+
+	assert.Equal(t, 0, count, "Stale entries should be removed")
 }
