@@ -9,7 +9,6 @@ import (
 
 	"github.com/golang-jwt/jwt/v5"
 	"gofr.dev/pkg/gofr/http/middleware"
-	"gofr.dev/pkg/gofr/logging"
 )
 
 type authMethod int
@@ -309,7 +308,7 @@ func navigateNestedClaim(current any, part string) any {
 // logAuditEvent logs authorization decisions for audit purposes.
 // This is called automatically by the middleware when Logger is set.
 // Users don't need to configure this - it uses the provided logger automatically.
-func logAuditEvent(logger logging.Logger, r *http.Request, role, route string, allowed bool, reason string) {
+func logAuditEvent(logger Logger, r *http.Request, role, route string, allowed bool, reason string) {
 	if logger == nil {
 		return // Skip logging if no logger provided
 	}

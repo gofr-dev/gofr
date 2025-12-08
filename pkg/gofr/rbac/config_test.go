@@ -38,12 +38,12 @@ func TestLoadPermissions_ValidConfigs(t *testing.T) {
 			"endpoints": [{"path": "/api", "methods": ["GET"], "requiredPermissions": ["admin:read"]}]
 		}`
 		path, err := createTestConfigFile("test_config.json", fileContent)
-		require.NoError(t, err)
+	require.NoError(t, err)
 
 		defer os.Remove(path)
 
 		config, err := LoadPermissions("test_config.json")
-		require.NoError(t, err)
+	require.NoError(t, err)
 		require.NotNil(t, config)
 		assert.NotNil(t, config.rolePermissionsMap)
 	})
@@ -57,12 +57,12 @@ endpoints:
     methods: ["GET"]
     requiredPermissions: ["admin:read"]`
 		path, err := createTestConfigFile("test_config.yaml", fileContent)
-		require.NoError(t, err)
+	require.NoError(t, err)
 
 		defer os.Remove(path)
 
 		config, err := LoadPermissions("test_config.yaml")
-		require.NoError(t, err)
+	require.NoError(t, err)
 		require.NotNil(t, config)
 		assert.NotNil(t, config.rolePermissionsMap)
 	})
@@ -72,12 +72,12 @@ endpoints:
   - name: viewer
     permissions: ["users:read"]`
 		path, err := createTestConfigFile("test_config.yml", fileContent)
-		require.NoError(t, err)
+	require.NoError(t, err)
 
 		defer os.Remove(path)
 
 		config, err := LoadPermissions("test_config.yml")
-		require.NoError(t, err)
+	require.NoError(t, err)
 		require.NotNil(t, config)
 		assert.NotNil(t, config.rolePermissionsMap)
 	})
@@ -92,18 +92,18 @@ func TestLoadPermissions_ErrorCases(t *testing.T) {
 
 	t.Run("returns error for invalid json", func(t *testing.T) {
 		path, err := createTestConfigFile("test_invalid.json", `invalid json{`)
-		require.NoError(t, err)
+	require.NoError(t, err)
 
 		defer os.Remove(path)
 
 		config, err := LoadPermissions("test_invalid.json")
-		require.Error(t, err)
+	require.Error(t, err)
 		require.Nil(t, config)
 	})
 
 	t.Run("returns error for invalid yaml", func(t *testing.T) {
 		path, err := createTestConfigFile("test_invalid.yaml", `invalid: yaml: [`)
-		require.NoError(t, err)
+	require.NoError(t, err)
 
 		defer os.Remove(path)
 
@@ -114,7 +114,7 @@ func TestLoadPermissions_ErrorCases(t *testing.T) {
 
 	t.Run("returns error for unsupported format", func(t *testing.T) {
 		path, err := createTestConfigFile("test.txt", `some content`)
-		require.NoError(t, err)
+	require.NoError(t, err)
 
 		defer os.Remove(path)
 
@@ -129,7 +129,7 @@ func TestLoadPermissions_ErrorCases(t *testing.T) {
 			"endpoints": [{"path": "/api", "methods": ["GET"]}]
 		}`
 		path, err := createTestConfigFile("test_missing_perm.json", fileContent)
-		require.NoError(t, err)
+	require.NoError(t, err)
 
 		defer os.Remove(path)
 
@@ -604,8 +604,8 @@ func TestExtractNestedClaim_Additional(t *testing.T) {
 				require.Error(t, err, "TEST[%d], Failed.\n%s", i, tc.desc)
 				assert.Nil(t, result, "TEST[%d], Failed.\n%s", i, tc.desc)
 
-				return
-			}
+		return
+	}
 
 			require.NoError(t, err, "TEST[%d], Failed.\n%s", i, tc.desc)
 			assert.Equal(t, tc.expected, result, "TEST[%d], Failed.\n%s", i, tc.desc)

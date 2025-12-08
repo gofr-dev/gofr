@@ -11,7 +11,6 @@ import (
 	"strings"
 	"sync"
 
-	"gofr.dev/pkg/gofr/logging"
 	"gopkg.in/yaml.v3"
 )
 
@@ -94,7 +93,7 @@ type Config struct {
 	// Logger is the logger instance for audit logging
 	// Set automatically by EnableRBAC - users don't need to configure this
 	// Audit logging is automatically performed when RBAC is enabled
-	Logger logging.Logger `json:"-" yaml:"-"`
+	Logger Logger `json:"-" yaml:"-"`
 
 	// Internal maps built from unified config (not in JSON/YAML)
 	// These are populated by processUnifiedConfig()
@@ -106,10 +105,10 @@ type Config struct {
 	mu sync.RWMutex `json:"-" yaml:"-"`
 }
 
-// SetLogger sets the logger for audit logging.
+// SetLogger sets the logger for audit logging which asserts the Logger interface.
 // This is called automatically by EnableRBAC - users don't need to configure this.
 func (c *Config) SetLogger(logger any) {
-	if l, ok := logger.(logging.Logger); ok {
+	if l, ok := logger.(Logger); ok {
 		c.Logger = l
 	}
 }
