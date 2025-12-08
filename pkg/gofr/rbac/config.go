@@ -347,6 +347,18 @@ func (c *Config) checkPatternMatch(methodUpper, path string) (permissions []stri
 }
 
 // matchesKey checks if a key matches the given method and path.
+// isRegexPattern detects if a pattern is likely a regex.
+// Checks for common regex indicators: starts with ^, ends with $, or contains regex special chars.
+func isRegexPattern(pattern string) bool {
+	return strings.HasPrefix(pattern, "^") || strings.HasSuffix(pattern, "$") ||
+		strings.Contains(pattern, "\\d") || strings.Contains(pattern, "\\w") ||
+		strings.Contains(pattern, "\\s") || strings.Contains(pattern, "[") ||
+		strings.Contains(pattern, "(") || strings.Contains(pattern, "?")
+}
+
+// Keys are built by buildEndpointKey which uses Regex if available, otherwise Path.
+// If pattern looks like a regex (starts with ^ or contains regex special chars), use regex matching exclusively.
+// Otherwise, use path pattern matching exclusively (no fallback to regex).
 func (*Config) matchesKey(key, methodUpper, path string) bool {
 	if !strings.HasPrefix(key, methodUpper+":") {
 		return false
@@ -354,15 +366,21 @@ func (*Config) matchesKey(key, methodUpper, path string) bool {
 
 	pattern := strings.TrimPrefix(key, methodUpper+":")
 
-	// Try path pattern match
-	if matchesPathPattern(pattern, path) {
-		return true
+	if isRegexPattern(pattern) {
+		// Try regex match first for regex patterns
+		matched, err := regexp.MatchString(pattern, path)
+		if err == nil && matched {
+			return true
+		}
+
+		// If regex pattern doesn't match, don't fall back to path pattern
+		return false
 	}
 
-	// Try regex match
-	matched, _ := regexp.MatchString(pattern, path)
-
-	return matched
+	// For path patterns, only try path matching
+	// Since buildEndpointKey already chooses between Regex and Path,
+	// if it's not detected as regex, it's a path pattern from buildEndpointKey
+	return matchesPathPattern(pattern, path)
 }
 
 // matchesPathPattern checks if path matches pattern (supports wildcards).

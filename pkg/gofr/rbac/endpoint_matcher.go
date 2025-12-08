@@ -55,16 +55,19 @@ func matchesHTTPMethod(method string, allowedMethods []string) bool {
 
 // matchesEndpointPattern checks if the route matches the endpoint pattern.
 // Method matching is handled separately in matchEndpoint before this function is called.
+// If Regex is provided, it takes precedence and is used exclusively (no fallback to Path).
 func matchesEndpointPattern(endpoint *EndpointMapping, route string) bool {
-	// Regex takes precedence
+	// Regex takes precedence - if provided, use it exclusively
 	if endpoint.Regex != "" {
 		matched, err := regexp.MatchString(endpoint.Regex, route)
-		if err == nil && matched {
-			return true
+		if err != nil {
+			return false // Invalid regex = no match
 		}
+
+		return matched // Return immediately - don't fall back to path
 	}
 
-	// Check path pattern
+	// Check path pattern only if regex is not provided
 	if endpoint.Path != "" {
 		// Use path.Match for pattern matching
 		if matched, _ := path.Match(endpoint.Path, route); matched {

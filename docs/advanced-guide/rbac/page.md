@@ -26,7 +26,7 @@ func main() {
 	provider := rbac.NewProvider("configs/rbac.json")
 	app.EnableRBAC(provider) // Custom path
 	// Or use default paths (empty string):
-	// provider := rbac.NewProvider("") // Tries configs/rbac.json, configs/rbac.yaml, configs/rbac.yml
+	// provider := rbac.NewProvider(rbac.DefaultRBACConfig) // Tries configs/rbac.json, configs/rbac.yaml, configs/rbac.yml
 	// app.EnableRBAC(provider)
 	
 	app.GET("/api/users", handler)
