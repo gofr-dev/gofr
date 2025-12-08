@@ -224,7 +224,7 @@ type mockRBACProvider struct {
 	middlewareFn func(http.Handler) http.Handler
 }
 
-func (m *mockRBACProvider) UseLogger(logger logging.Logger) {
+func (m *mockRBACProvider) UseLogger(logger any) {
 	// Mock implementation
 }
 

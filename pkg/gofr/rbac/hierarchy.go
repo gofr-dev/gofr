@@ -125,17 +125,19 @@ func isRoleAllowed(role, route string, config *Config) bool {
 
 	for _, method := range methods {
 		// Check if endpoint exists and get required permissions
-		perm, isPublic := config.GetEndpointPermission(method, route)
+		requiredPerms, isPublic := config.GetEndpointPermission(method, route)
 		if isPublic {
 			return true
 		}
 
-		if perm != "" {
-			// Check if role has the required permission
+		// Check if role has ANY of the required permissions (OR logic)
+		if len(requiredPerms) > 0 {
 			rolePerms := config.GetRolePermissions(role)
-			for _, rolePerm := range rolePerms {
-				if rolePerm == perm {
-					return true
+			for _, requiredPerm := range requiredPerms {
+				for _, rolePerm := range rolePerms {
+					if rolePerm == requiredPerm {
+						return true
+					}
 				}
 			}
 		}

@@ -1,6 +1,7 @@
 package rbac
 
 import (
+	"context"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -205,14 +206,22 @@ func TestProvider_UseMetrics(t *testing.T) {
 	testCases := []struct {
 		desc    string
 		metrics any
+		valid   bool
 	}{
 		{
-			desc:    "sets metrics",
+			desc:    "sets valid metrics",
+			metrics: &mockMetrics{},
+			valid:   true,
+		},
+		{
+			desc:    "does not set invalid metrics",
 			metrics: map[string]int{"test": 1},
+			valid:   false,
 		},
 		{
 			desc:    "sets nil metrics",
 			metrics: nil,
+			valid:   false,
 		},
 	}
 
@@ -221,7 +230,16 @@ func TestProvider_UseMetrics(t *testing.T) {
 			p := NewProvider("configs/rbac.json")
 			p.UseMetrics(tc.metrics)
 
-			assert.Equal(t, tc.metrics, p.metrics, "TEST[%d], Failed.\n%s", i, tc.desc)
+			if tc.valid {
+				assert.Equal(t, tc.metrics, p.metrics, "TEST[%d], Failed.\n%s", i, tc.desc)
+				// Check if metrics were registered
+				m, ok := tc.metrics.(*mockMetrics)
+				require.True(t, ok)
+				assert.True(t, m.histogramCreated, "NewHistogram should be called")
+				assert.True(t, m.counterCreated, "NewCounter should be called")
+			} else {
+				assert.Nil(t, p.metrics, "TEST[%d], Failed.\n%s", i, tc.desc)
+			}
 		})
 	}
 }
@@ -344,3 +362,34 @@ func (m *mockLogger) Warnf(_ string, _ ...any)   { m.logs = append(m.logs, "WARN
 func (m *mockLogger) Fatal(_ ...any)             { m.logs = append(m.logs, "FATAL") }
 func (m *mockLogger) Fatalf(_ string, _ ...any)  { m.logs = append(m.logs, "FATALF") }
 func (*mockLogger) ChangeLevel(logging.Level)    {}
+
+type mockMetrics struct {
+	histogramCreated bool
+	counterCreated   bool
+}
+
+func (m *mockMetrics) NewHistogram(name, desc string, buckets ...float64) {
+	m.histogramCreated = true
+}
+
+func (m *mockMetrics) RecordHistogram(ctx context.Context, name string, value float64, labels ...string) {
+}
+
+func (m *mockMetrics) NewCounter(name, desc string) {
+	m.counterCreated = true
+}
+
+func (m *mockMetrics) IncrementCounter(ctx context.Context, name string, labels ...string) {
+}
+
+func (m *mockMetrics) NewUpDownCounter(name, desc string) {
+}
+
+func (m *mockMetrics) NewGauge(name, desc string) {
+}
+
+func (m *mockMetrics) DeltaUpDownCounter(ctx context.Context, name string, value float64, labels ...string) {
+}
+
+func (m *mockMetrics) SetGauge(name string, value float64, labels ...string) {
+}

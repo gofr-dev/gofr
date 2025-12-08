@@ -25,8 +25,9 @@ func main() {
 	
 	provider := rbac.NewProvider("configs/rbac.json")
 	app.EnableRBAC(provider) // Custom path
-	// Or use default paths:
-	// app.EnableRBAC(provider, gofr.DefaultRBACConfig) // Tries configs/rbac.json, configs/rbac.yaml, configs/rbac.yml
+	// Or use default paths (empty string):
+	// provider := rbac.NewProvider("") // Tries configs/rbac.json, configs/rbac.yaml, configs/rbac.yml
+	// app.EnableRBAC(provider)
 	
 	app.GET("/api/users", handler)
 	app.Run()
@@ -328,24 +329,24 @@ Or use role inheritance to avoid duplication:
     {
       "path": "/api/users",
       "methods": ["POST"],
-      "requiredPermission": "users:create"
+      "requiredPermissions": ["users:create"]
     },
     {
       "path": "/api/users",
       "methods": ["GET"],
-      "requiredPermission": "users:read"
+      "requiredPermissions": ["users:read"]
     },
     {
       "path": "/api/users/{id}",
       "methods": ["PUT", "PATCH"],
       "regex": "^/api/users/\\d+$",
-      "requiredPermission": "users:update"
+      "requiredPermissions": ["users:update"]
     },
     {
       "path": "/api/users/{id}",
       "methods": ["DELETE"],
       "regex": "^/api/users/\\d+$",
-      "requiredPermission": "users:delete"
+      "requiredPermissions": ["users:delete"]
     }
   ]
 }
@@ -373,12 +374,12 @@ Or use role inheritance to avoid duplication:
     {
       "path": "/api/posts/my-posts",
       "methods": ["GET"],
-      "requiredPermission": "own:posts:read"
+      "requiredPermissions": ["own:posts:read"]
     },
     {
       "path": "/api/posts",
       "methods": ["GET"],
-      "requiredPermission": "all:posts:read"
+      "requiredPermissions": ["all:posts:read"]
     }
   ]
 }
@@ -407,7 +408,7 @@ Or use role inheritance to avoid duplication:
 
 **Permission checks failing**
 - Verify `roles[].permissions` is properly configured
-- Check that `endpoints[].requiredPermission` matches your routes correctly
+- Check that `endpoints[].requiredPermissions` matches your routes correctly
 - Ensure role has the required permission (check inherited permissions too)
 - Verify route pattern/regex matches exactly
 - Check role inheritance - ensure inherited permissions are included
@@ -419,7 +420,7 @@ Or use role inheritance to avoid duplication:
 
 **Permission always allowed**
 - Check public endpoints - verify endpoint is not marked as `public: true`
-- Review endpoint configuration - ensure `endpoints[].requiredPermission` is set correctly
+- Review endpoint configuration - ensure `endpoints[].requiredPermissions` is set correctly
 - Verify permission check - check audit logs to see if permission check is being performed
 
 **JWT role extraction failing**
@@ -446,7 +447,7 @@ To create a custom RBAC provider, implement the `gofr.RBACProvider` interface:
 ```go
 type RBACProvider interface {
     // UseLogger sets the logger for the provider
-    UseLogger(logger logging.Logger)
+    UseLogger(logger any)
 
     // UseMetrics sets the metrics for the provider
     UseMetrics(metrics any)
@@ -479,7 +480,7 @@ import (
 type CustomRBACProvider struct {
     configPath string
     config     *CustomConfig
-    logger     logging.Logger
+    logger     any
     metrics    any
     tracer     any
 }
@@ -490,7 +491,7 @@ func NewCustomRBACProvider(configPath string) *CustomRBACProvider {
     }
 }
 
-func (p *CustomRBACProvider) UseLogger(logger logging.Logger) {
+func (p *CustomRBACProvider) UseLogger(logger any) {
     p.logger = logger
 }
 
@@ -556,8 +557,6 @@ GoFr will automatically:
 - Call `UseLogger`, `UseMetrics`, and `UseTracer` with the app's logger, metrics, and tracer
 - Call `LoadPermissions()` to load your configuration
 - Call `ApplyMiddleware()` to get the middleware and register it
-
-This follows the same pattern as other GoFr datasources (like `DBResolver`), ensuring consistency across the framework.
 
 ## Related Documentation
 

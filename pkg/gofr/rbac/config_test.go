@@ -139,46 +139,6 @@ func TestLoadPermissions_ErrorCases(t *testing.T) {
 	})
 }
 
-func TestConfig_SetLogger(t *testing.T) {
-	testCases := []struct {
-		desc      string
-		logger    any
-		expectSet bool
-	}{
-		{
-			desc:      "sets logger when logger implements Logger interface",
-			logger:    &mockLoggerForConfig{},
-			expectSet: true,
-		},
-		{
-			desc:      "does not set logger when type mismatch",
-			logger:    "not a logger",
-			expectSet: false,
-		},
-		{
-			desc:      "does not set logger when nil",
-			logger:    nil,
-			expectSet: false,
-		},
-	}
-
-	for i, tc := range testCases {
-		t.Run(tc.desc, func(t *testing.T) {
-			config := &Config{}
-			config.SetLogger(tc.logger)
-
-			if tc.expectSet {
-				require.NotNil(t, config.Logger, "TEST[%d], Failed.\n%s", i, tc.desc)
-				assert.Equal(t, tc.logger, config.Logger, "TEST[%d], Failed.\n%s", i, tc.desc)
-
-				return
-			}
-
-			assert.Nil(t, config.Logger, "TEST[%d], Failed.\n%s", i, tc.desc)
-		})
-	}
-}
-
 func TestConfig_GetRolePermissions(t *testing.T) {
 	testCases := []struct {
 		desc          string
@@ -241,8 +201,8 @@ func TestConfig_GetEndpointPermission_ExactMatch(t *testing.T) {
 	err := config.processUnifiedConfig()
 	require.NoError(t, err)
 
-	perm, isPublic := config.GetEndpointPermission("GET", "/api/users")
-	assert.Equal(t, "users:read", perm)
+	perms, isPublic := config.GetEndpointPermission("GET", "/api/users")
+	assert.Equal(t, []string{"users:read"}, perms)
 	assert.False(t, isPublic)
 }
 
@@ -255,8 +215,8 @@ func TestConfig_GetEndpointPermission_PublicEndpoint(t *testing.T) {
 	err := config.processUnifiedConfig()
 	require.NoError(t, err)
 
-	perm, isPublic := config.GetEndpointPermission("GET", "/health")
-	assert.Empty(t, perm)
+	perms, isPublic := config.GetEndpointPermission("GET", "/health")
+	assert.Nil(t, perms)
 	assert.True(t, isPublic)
 }
 
@@ -269,8 +229,8 @@ func TestConfig_GetEndpointPermission_NotFound(t *testing.T) {
 	err := config.processUnifiedConfig()
 	require.NoError(t, err)
 
-	perm, isPublic := config.GetEndpointPermission("POST", "/api/posts")
-	assert.Empty(t, perm)
+	perms, isPublic := config.GetEndpointPermission("POST", "/api/posts")
+	assert.Nil(t, perms)
 	assert.False(t, isPublic)
 }
 
@@ -283,8 +243,8 @@ func TestConfig_GetEndpointPermission_WildcardPattern(t *testing.T) {
 	err := config.processUnifiedConfig()
 	require.NoError(t, err)
 
-	perm, isPublic := config.GetEndpointPermission("GET", "/api/users")
-	assert.Equal(t, "api:read", perm)
+	perms, isPublic := config.GetEndpointPermission("GET", "/api/users")
+	assert.Equal(t, []string{"api:read"}, perms)
 	assert.False(t, isPublic)
 }
 
@@ -297,8 +257,8 @@ func TestConfig_GetEndpointPermission_RegexPattern(t *testing.T) {
 	err := config.processUnifiedConfig()
 	require.NoError(t, err)
 
-	perm, isPublic := config.GetEndpointPermission("GET", "/api/users/123")
-	assert.Equal(t, "users:read", perm)
+	perms, isPublic := config.GetEndpointPermission("GET", "/api/users/123")
+	assert.Equal(t, []string{"users:read"}, perms)
 	assert.False(t, isPublic)
 }
 
@@ -311,8 +271,26 @@ func TestConfig_GetEndpointPermission_CaseInsensitive(t *testing.T) {
 	err := config.processUnifiedConfig()
 	require.NoError(t, err)
 
-	perm, isPublic := config.GetEndpointPermission("GET", "/api")
-	assert.Equal(t, "api:read", perm)
+	perms, isPublic := config.GetEndpointPermission("GET", "/api")
+	assert.Equal(t, []string{"api:read"}, perms)
+	assert.False(t, isPublic)
+}
+
+func TestConfig_GetEndpointPermission_MultiplePermissions(t *testing.T) {
+	config := &Config{
+		Endpoints: []EndpointMapping{
+			{
+				Path:                "/api/users",
+				Methods:             []string{"GET"},
+				RequiredPermissions: []string{"users:read", "users:admin"},
+			},
+		},
+	}
+	err := config.processUnifiedConfig()
+	require.NoError(t, err)
+
+	perms, isPublic := config.GetEndpointPermission("GET", "/api/users")
+	assert.Equal(t, []string{"users:read", "users:admin"}, perms)
 	assert.False(t, isPublic)
 }
 
@@ -675,3 +653,4 @@ func TestExtractArrayClaim_Additional(t *testing.T) {
 		})
 	}
 }
+

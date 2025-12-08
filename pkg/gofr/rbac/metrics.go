@@ -3,12 +3,15 @@ package rbac
 import "context"
 
 // Metrics defines methods for recording metrics that RBAC uses.
-// This interface allows RBAC to record authorization metrics (e.g., authorization decision latency).
+// It matches GoFr's container.Metrics interface.
 type Metrics interface {
-	// NewHistogram creates a new histogram metric with specified buckets.
+	NewCounter(name, desc string)
+	NewUpDownCounter(name, desc string)
 	NewHistogram(name, desc string, buckets ...float64)
+	NewGauge(name, desc string)
 
-	// RecordHistogram records a value in a histogram.
+	IncrementCounter(ctx context.Context, name string, labels ...string)
+	DeltaUpDownCounter(ctx context.Context, name string, value float64, labels ...string)
 	RecordHistogram(ctx context.Context, name string, value float64, labels ...string)
+	SetGauge(name string, value float64, labels ...string)
 }
-
