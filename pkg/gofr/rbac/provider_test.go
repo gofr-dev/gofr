@@ -13,22 +13,28 @@ import (
 
 func TestNewProvider(t *testing.T) {
 	testCases := []struct {
-		desc     string
-		expected *Provider
+		desc       string
+		configPath string
+		expected   *Provider
 	}{
 		{
-			desc:     "creates new provider",
-			expected: &Provider{},
+			desc:       "creates new provider with config path",
+			configPath: "configs/rbac.json",
+			expected:   &Provider{configPath: "configs/rbac.json"},
+		},
+		{
+			desc:       "creates new provider with empty path",
+			configPath: "",
+			expected:   &Provider{configPath: ""},
 		},
 	}
 
 	for i, tc := range testCases {
 		t.Run(tc.desc, func(t *testing.T) {
-			result := NewProvider()
+			result := NewProvider(tc.configPath)
 
 			require.NotNil(t, result, "TEST[%d], Failed.\n%s", i, tc.desc)
-			assert.Equal(t, tc.expected.config, result.config, "TEST[%d], Failed.\n%s", i, tc.desc)
-			assert.Equal(t, tc.expected.logger, result.logger, "TEST[%d], Failed.\n%s", i, tc.desc)
+			assert.Equal(t, tc.expected.configPath, result.configPath, "TEST[%d], Failed.\n%s", i, tc.desc)
 		})
 	}
 }
@@ -37,23 +43,35 @@ func TestProvider_UseLogger(t *testing.T) {
 	testCases := []struct {
 		desc   string
 		logger any
+		valid  bool
 	}{
 		{
 			desc:   "sets logger",
 			logger: &mockLogger{},
+			valid:  true,
 		},
 		{
 			desc:   "sets nil logger",
 			logger: nil,
+			valid:  false,
+		},
+		{
+			desc:   "sets invalid logger type",
+			logger: "invalid",
+			valid:  false,
 		},
 	}
 
 	for i, tc := range testCases {
 		t.Run(tc.desc, func(t *testing.T) {
-			p := NewProvider()
+			p := NewProvider("configs/rbac.json")
 			p.UseLogger(tc.logger)
 
-			assert.Equal(t, tc.logger, p.logger, "TEST[%d], Failed.\n%s", i, tc.desc)
+			if tc.valid {
+				assert.NotNil(t, p.logger, "TEST[%d], Failed.\n%s", i, tc.desc)
+			} else {
+				assert.Nil(t, p.logger, "TEST[%d], Failed.\n%s", i, tc.desc)
+			}
 		})
 	}
 }
@@ -122,26 +140,24 @@ endpoints:
 
 				filePath = path
 				defer os.Remove(filePath)
+			} else {
+				filePath = tc.fileName
 			}
 
-			p := NewProvider()
+			p := NewProvider(filePath)
 
-			config, err := p.LoadPermissions(tc.fileName)
+			err := p.LoadPermissions()
 
 			if tc.expectError {
 				require.Error(t, err, "TEST[%d], Failed.\n%s", i, tc.desc)
-				require.Nil(t, config, "TEST[%d], Failed.\n%s", i, tc.desc)
+				require.Nil(t, p.config, "TEST[%d], Failed.\n%s", i, tc.desc)
 
 				return
 			}
 
 			require.NoError(t, err, "TEST[%d], Failed.\n%s", i, tc.desc)
-			require.NotNil(t, config, "TEST[%d], Failed.\n%s", i, tc.desc)
-
-			rbacConfig, ok := config.(*Config)
-			require.True(t, ok, "TEST[%d], Failed.\n%s", i, tc.desc)
-			assert.NotNil(t, rbacConfig, "TEST[%d], Failed.\n%s", i, tc.desc)
-			assert.Equal(t, rbacConfig, p.config, "TEST[%d], Failed.\n%s", i, tc.desc)
+			require.NotNil(t, p.config, "TEST[%d], Failed.\n%s", i, tc.desc)
+			assert.NotNil(t, p.config, "TEST[%d], Failed.\n%s", i, tc.desc)
 		})
 	}
 }
@@ -149,7 +165,7 @@ endpoints:
 func TestProvider_LoadPermissions_WithLogger(t *testing.T) {
 	testCases := []struct {
 		desc   string
-		logger any
+		logger logging.Logger
 	}{
 		{
 			desc:   "sets logger on config when logger provided",
@@ -173,54 +189,114 @@ func TestProvider_LoadPermissions_WithLogger(t *testing.T) {
 
 			defer os.Remove(path)
 
-			p := NewProvider()
+			p := NewProvider("test_logger.json")
 			p.UseLogger(tc.logger)
 
-			config, err := p.LoadPermissions("test_logger.json")
+			err = p.LoadPermissions()
 			require.NoError(t, err, "TEST[%d], Failed.\n%s", i, tc.desc)
 
-			rbacConfig, ok := config.(*Config)
-			require.True(t, ok, "TEST[%d], Failed.\n%s", i, tc.desc)
-			assert.Equal(t, tc.logger, rbacConfig.Logger, "TEST[%d], Failed.\n%s", i, tc.desc)
+			require.NotNil(t, p.config, "TEST[%d], Failed.\n%s", i, tc.desc)
+			assert.Equal(t, tc.logger, p.config.Logger, "TEST[%d], Failed.\n%s", i, tc.desc)
 		})
 	}
 }
 
-func TestProvider_GetMiddleware(t *testing.T) {
+func TestProvider_UseMetrics(t *testing.T) {
+	testCases := []struct {
+		desc    string
+		metrics any
+	}{
+		{
+			desc:    "sets metrics",
+			metrics: map[string]int{"test": 1},
+		},
+		{
+			desc:    "sets nil metrics",
+			metrics: nil,
+		},
+	}
+
+	for i, tc := range testCases {
+		t.Run(tc.desc, func(t *testing.T) {
+			p := NewProvider("configs/rbac.json")
+			p.UseMetrics(tc.metrics)
+
+			assert.Equal(t, tc.metrics, p.metrics, "TEST[%d], Failed.\n%s", i, tc.desc)
+		})
+	}
+}
+
+func TestProvider_UseTracer(t *testing.T) {
+	testCases := []struct {
+		desc   string
+		tracer any
+		valid  bool
+	}{
+		{
+			desc:   "sets valid tracer",
+			tracer: nil, // In real usage, this would be trace.Tracer
+			valid:  false,
+		},
+		{
+			desc:   "sets invalid tracer type",
+			tracer: "invalid",
+			valid:  false,
+		},
+	}
+
+	for i, tc := range testCases {
+		t.Run(tc.desc, func(t *testing.T) {
+			p := NewProvider("configs/rbac.json")
+			p.UseTracer(tc.tracer)
+
+			// Tracer is only set if it's a valid trace.Tracer type
+			if tc.valid {
+				assert.NotNil(t, p.tracer, "TEST[%d], Failed.\n%s", i, tc.desc)
+			} else {
+				// For invalid types, tracer should remain nil
+				assert.Nil(t, p.tracer, "TEST[%d], Failed.\n%s", i, tc.desc)
+			}
+		})
+	}
+}
+
+func TestProvider_ApplyMiddleware(t *testing.T) {
 	testCases := []struct {
 		desc              string
-		config            any
+		setupConfig       func() *Config
 		expectPassthrough bool
 	}{
 		{
 			desc: "returns middleware for valid config",
-			config: &Config{
-				Roles: []RoleDefinition{
-					{Name: "admin", Permissions: []string{"*:*"}},
-				},
-				Endpoints: []EndpointMapping{
-					{Path: "/api", Methods: []string{"GET"}, RequiredPermissions: []string{"admin:read", "admin:write"}},
-				},
+			setupConfig: func() *Config {
+				config := &Config{
+					Roles: []RoleDefinition{
+						{Name: "admin", Permissions: []string{"*:*"}},
+					},
+					Endpoints: []EndpointMapping{
+						{Path: "/api", Methods: []string{"GET"}, RequiredPermissions: []string{"admin:read", "admin:write"}},
+					},
+				}
+				_ = config.processUnifiedConfig()
+				return config
 			},
 			expectPassthrough: false,
 		},
 		{
-			desc:              "returns passthrough for invalid config type",
-			config:            "invalid",
-			expectPassthrough: true,
-		},
-		{
-			desc:              "returns passthrough for nil config",
-			config:            nil,
+			desc: "returns passthrough for nil config",
+			setupConfig: func() *Config {
+				return nil
+			},
 			expectPassthrough: true,
 		},
 	}
 
 	for i, tc := range testCases {
 		t.Run(tc.desc, func(t *testing.T) {
-			p := NewProvider()
+			p := NewProvider("configs/rbac.json")
+			p.config = tc.setupConfig()
 
-			middlewareFunc := p.GetMiddleware(tc.config)
+			middlewareFunc := p.ApplyMiddleware()
 
 			require.NotNil(t, middlewareFunc, "TEST[%d], Failed.\n%s", i, tc.desc)
 

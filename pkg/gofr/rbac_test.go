@@ -1,6 +1,7 @@
 package gofr
 
 import (
+	"fmt"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -8,13 +9,13 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"gofr.dev/pkg/gofr/logging"
 )
 
 func TestEnableRBAC(t *testing.T) {
 	testCases := []struct {
 		desc          string
 		provider      RBACProvider
-		configFile    string
 		setupFiles    func() (string, error)
 		cleanupFiles  func(string)
 		expectedLogs  []string
@@ -22,9 +23,8 @@ func TestEnableRBAC(t *testing.T) {
 		middlewareSet bool
 	}{
 		{
-			desc:       "nil provider should log error",
-			provider:   nil,
-			configFile: "",
+			desc:     "nil provider should log error",
+			provider: nil,
 			setupFiles: func() (string, error) {
 				return "", nil
 			},
@@ -34,9 +34,8 @@ func TestEnableRBAC(t *testing.T) {
 			middlewareSet: false,
 		},
 		{
-			desc:       "valid provider with custom config file",
-			provider:   &mockRBACProvider{},
-			configFile: "test_rbac.json",
+			desc:     "valid provider with custom config file",
+			provider: &mockRBACProvider{configPath: "test_rbac.json"},
 			setupFiles: func() (string, error) {
 				content := `{"roles":[{"name":"admin","permissions":["admin:read"]}],` +
 					`"endpoints":[{"path":"/api","methods":["GET"],"requiredPermissions":["admin:read"]}]}`
@@ -50,9 +49,8 @@ func TestEnableRBAC(t *testing.T) {
 			middlewareSet: true,
 		},
 		{
-			desc:       "valid provider with default config path",
-			provider:   &mockRBACProvider{},
-			configFile: DefaultRBACConfig,
+			desc:     "valid provider with default config path",
+			provider: &mockRBACProvider{configPath: ""},
 			setupFiles: func() (string, error) {
 				content := `{"roles":[{"name":"viewer","permissions":["users:read"]}],"endpoints":[{"path":"/health","methods":["GET"],"public":true}]}`
 				return createTestConfigFile("configs/rbac.json", content)
@@ -66,21 +64,19 @@ func TestEnableRBAC(t *testing.T) {
 			middlewareSet: true,
 		},
 		{
-			desc:       "config file not found",
-			provider:   &mockRBACProvider{},
-			configFile: "nonexistent.json",
+			desc:     "config file not found",
+			provider: &mockRBACProvider{configPath: "nonexistent.json", loadErr: fmt.Errorf("config path not set")},
 			setupFiles: func() (string, error) {
 				return "", nil
 			},
 			cleanupFiles:  func(string) {},
-			expectedLogs:  []string{"RBAC config file not found"},
+			expectedLogs:  []string{"Failed to load RBAC config"},
 			expectedError: false,
 			middlewareSet: false,
 		},
 		{
-			desc:       "invalid config file format",
-			provider:   &mockRBACProvider{},
-			configFile: "invalid.json",
+			desc:     "invalid config file format",
+			provider: &mockRBACProvider{configPath: "invalid.json", loadErr: fmt.Errorf("failed to parse")},
 			setupFiles: func() (string, error) {
 				content := `invalid json content{`
 				return createTestConfigFile("invalid.json", content)
@@ -102,7 +98,7 @@ func TestEnableRBAC(t *testing.T) {
 			defer tc.cleanupFiles(filePath)
 
 			app := New()
-			app.EnableRBAC(tc.provider, tc.configFile)
+			app.EnableRBAC(tc.provider)
 
 			require.Equal(t, tc.middlewareSet, app.httpServer != nil && app.httpServer.router != nil,
 				"TEST[%d], Failed.\n%s", i, tc.desc)
@@ -223,22 +219,31 @@ func createTestConfigFile(filename, content string) (string, error) {
 // mockRBACProvider is a mock implementation of RBACProvider for testing.
 // This avoids import cycle by not importing rbac package.
 type mockRBACProvider struct {
-	config       any
+	configPath   string
 	loadErr      error
 	middlewareFn func(http.Handler) http.Handler
 }
 
-func (m *mockRBACProvider) LoadPermissions(file string) (any, error) {
-	if m.loadErr != nil {
-		return nil, m.loadErr
-	}
-	// For testing, we'll use a simple struct that satisfies the interface
-	// In real usage, this would be *rbac.Config
-	return map[string]any{"file": file}, nil
+func (m *mockRBACProvider) UseLogger(logger logging.Logger) {
+	// Mock implementation
 }
 
-func (m *mockRBACProvider) GetMiddleware(config any) func(http.Handler) http.Handler {
-	m.config = config
+func (m *mockRBACProvider) UseMetrics(metrics any) {
+	// Mock implementation
+}
+
+func (m *mockRBACProvider) UseTracer(tracer any) {
+	// Mock implementation
+}
+
+func (m *mockRBACProvider) LoadPermissions() error {
+	if m.loadErr != nil {
+		return m.loadErr
+	}
+	return nil
+}
+
+func (m *mockRBACProvider) ApplyMiddleware() func(http.Handler) http.Handler {
 	if m.middlewareFn != nil {
 		return m.middlewareFn
 	}
@@ -265,10 +270,10 @@ func TestApp_EnableRBAC_Integration(t *testing.T) {
 				],
 				"endpoints": [
 					{"path": "/health", "methods": ["GET"], "public": true},
-					{"path": "/api/users", "methods": ["GET"], "requiredPermission": "users:read"}
+					{"path": "/api/users", "methods": ["GET"], "requiredPermissions": ["users:read"]}
 				]
 			}`,
-			provider:    &mockRBACProvider{},
+			provider:    &mockRBACProvider{configPath: "test_integration.json"},
 			configFile:  "test_integration.json",
 			expectError: false,
 		},
@@ -280,10 +285,10 @@ func TestApp_EnableRBAC_Integration(t *testing.T) {
 					{"name": "editor", "permissions": ["users:write"], "inheritsFrom": ["viewer"]}
 				],
 				"endpoints": [
-					{"path": "/api/users", "methods": ["GET"], "requiredPermission": "users:read"}
+					{"path": "/api/users", "methods": ["GET"], "requiredPermissions": ["users:read"]}
 				]
 			}`,
-			provider:    &mockRBACProvider{},
+			provider:    &mockRBACProvider{configPath: "test_inheritance.json"},
 			configFile:  "test_inheritance.json",
 			expectError: false,
 		},
@@ -297,7 +302,7 @@ func TestApp_EnableRBAC_Integration(t *testing.T) {
 			defer os.Remove(path)
 
 			app := New()
-			app.EnableRBAC(tc.provider, tc.configFile)
+			app.EnableRBAC(tc.provider)
 
 			require.NotNil(t, app.httpServer, "TEST[%d], Failed.\n%s", i, tc.desc)
 			require.NotNil(t, app.httpServer.router, "TEST[%d], Failed.\n%s", i, tc.desc)

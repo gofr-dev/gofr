@@ -23,8 +23,8 @@ import (
 func main() {
 	app := gofr.New()
 	
-	provider := rbac.NewProvider()
-	app.EnableRBAC(provider, "configs/rbac.json") // Custom path
+	provider := rbac.NewProvider("configs/rbac.json")
+	app.EnableRBAC(provider) // Custom path
 	// Or use default paths:
 	// app.EnableRBAC(provider, gofr.DefaultRBACConfig) // Tries configs/rbac.json, configs/rbac.yaml, configs/rbac.yml
 	
@@ -429,6 +429,135 @@ Or use role inheritance to avoid duplication:
 **Config file not found**
 - Ensure config file exists at the specified path
 - Or use default paths (`configs/rbac.json`, `configs/rbac.yaml`, `configs/rbac.yml`)
+
+## Implementing Custom RBAC Providers
+
+GoFr's RBAC system is extensible - you can implement your own RBAC provider by implementing the `gofr.RBACProvider` interface. This allows you to:
+
+- Load RBAC configuration from custom sources (database, API, environment variables, etc.)
+- Implement custom authorization logic
+- Integrate with external authorization systems
+- Add custom middleware behavior
+
+### RBACProvider Interface
+
+To create a custom RBAC provider, implement the `gofr.RBACProvider` interface:
+
+```go
+type RBACProvider interface {
+    // UseLogger sets the logger for the provider
+    UseLogger(logger logging.Logger)
+
+    // UseMetrics sets the metrics for the provider
+    UseMetrics(metrics any)
+
+    // UseTracer sets the tracer for the provider
+    UseTracer(tracer any)
+
+    // LoadPermissions loads RBAC configuration from the stored config path
+    LoadPermissions() error
+
+    // ApplyMiddleware returns the middleware function using the stored config
+    // The returned function should be compatible with http.Handler middleware pattern
+    ApplyMiddleware() func(http.Handler) http.Handler
+}
+```
+
+### Example: Custom RBAC Provider
+
+Here's an example of implementing a custom RBAC provider that loads configuration from a database:
+
+```go
+package main
+
+import (
+    "net/http"
+    "gofr.dev/pkg/gofr"
+    "gofr.dev/pkg/gofr/logging"
+)
+
+type CustomRBACProvider struct {
+    configPath string
+    config     *CustomConfig
+    logger     logging.Logger
+    metrics    any
+    tracer     any
+}
+
+func NewCustomRBACProvider(configPath string) *CustomRBACProvider {
+    return &CustomRBACProvider{
+        configPath: configPath,
+    }
+}
+
+func (p *CustomRBACProvider) UseLogger(logger logging.Logger) {
+    p.logger = logger
+}
+
+func (p *CustomRBACProvider) UseMetrics(metrics any) {
+    p.metrics = metrics
+}
+
+func (p *CustomRBACProvider) UseTracer(tracer any) {
+    p.tracer = tracer
+}
+
+func (p *CustomRBACProvider) LoadPermissions() error {
+    // Load configuration from your custom source (database, API, etc.)
+    // For example, load from database:
+    // config, err := p.loadFromDatabase(p.configPath)
+    
+    // Store the loaded config
+    // p.config = config
+    
+    return nil
+}
+
+func (p *CustomRBACProvider) ApplyMiddleware() func(http.Handler) http.Handler {
+    if p.config == nil {
+        // Return passthrough middleware if config not loaded
+        return func(handler http.Handler) http.Handler {
+            return handler
+        }
+    }
+    
+    // Return your custom middleware implementation
+    return func(handler http.Handler) http.Handler {
+        return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+            // Your custom authorization logic here
+            // ...
+            handler.ServeHTTP(w, r)
+        })
+    }
+}
+
+func main() {
+    app := gofr.New()
+    
+    // Use your custom provider
+    provider := NewCustomRBACProvider("custom-config-path")
+    app.EnableRBAC(provider)
+    
+    app.Run()
+}
+```
+
+### Integration with GoFr
+
+Once you implement the `RBACProvider` interface, you can use it with GoFr's `EnableRBAC` method:
+
+```go
+app := gofr.New()
+customProvider := NewCustomRBACProvider("config-path")
+app.EnableRBAC(customProvider)
+```
+
+GoFr will automatically:
+- Call `UseLogger`, `UseMetrics`, and `UseTracer` with the app's logger, metrics, and tracer
+- Call `LoadPermissions()` to load your configuration
+- Call `ApplyMiddleware()` to get the middleware and register it
+
+This follows the same pattern as other GoFr datasources (like `DBResolver`), ensuring consistency across the framework.
 
 ## Related Documentation
 
