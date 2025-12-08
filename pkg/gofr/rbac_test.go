@@ -1,15 +1,18 @@
 package gofr
 
 import (
-	"fmt"
+	"errors"
 	"net/http"
 	"os"
 	"path/filepath"
 	"testing"
 
-	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"gofr.dev/pkg/gofr/logging"
+)
+
+var (
+	errConfigPathNotSet = errors.New("config path not set")
+	errFailedToParse    = errors.New("failed to parse")
 )
 
 func TestEnableRBAC(t *testing.T) {
@@ -65,7 +68,7 @@ func TestEnableRBAC(t *testing.T) {
 		},
 		{
 			desc:     "config file not found",
-			provider: &mockRBACProvider{configPath: "nonexistent.json", loadErr: fmt.Errorf("config path not set")},
+			provider: &mockRBACProvider{configPath: "nonexistent.json", loadErr: errConfigPathNotSet},
 			setupFiles: func() (string, error) {
 				return "", nil
 			},
@@ -76,7 +79,7 @@ func TestEnableRBAC(t *testing.T) {
 		},
 		{
 			desc:     "invalid config file format",
-			provider: &mockRBACProvider{configPath: "invalid.json", loadErr: fmt.Errorf("failed to parse")},
+			provider: &mockRBACProvider{configPath: "invalid.json", loadErr: errFailedToParse},
 			setupFiles: func() (string, error) {
 				content := `invalid json content{`
 				return createTestConfigFile("invalid.json", content)
@@ -106,102 +109,6 @@ func TestEnableRBAC(t *testing.T) {
 	}
 }
 
-func TestResolveRBACConfigPath(t *testing.T) {
-	testCases := []struct {
-		desc         string
-		configFile   string
-		setupFiles   func() ([]string, error)
-		cleanupFiles func([]string)
-		expectedPath string
-	}{
-		{
-			desc:       "custom path provided",
-			configFile: "custom.json",
-			setupFiles: func() ([]string, error) {
-				content := `{}`
-				path, err := createTestConfigFile("custom.json", content)
-				return []string{path}, err
-			},
-			cleanupFiles: func(paths []string) {
-				for _, p := range paths {
-					os.Remove(p)
-				}
-			},
-			expectedPath: "custom.json",
-		},
-		{
-			desc:       "empty path uses default json",
-			configFile: "",
-			setupFiles: func() ([]string, error) {
-				content := `{}`
-				path, err := createTestConfigFile("configs/rbac.json", content)
-				return []string{path}, err
-			},
-			cleanupFiles: func(paths []string) {
-				for _, p := range paths {
-					os.Remove(p)
-				}
-				os.Remove("configs")
-			},
-			expectedPath: "configs/rbac.json",
-		},
-		{
-			desc:       "empty path uses default yaml when json not found",
-			configFile: "",
-			setupFiles: func() ([]string, error) {
-				content := `roles: []`
-				path, err := createTestConfigFile("configs/rbac.yaml", content)
-				return []string{path}, err
-			},
-			cleanupFiles: func(paths []string) {
-				for _, p := range paths {
-					os.Remove(p)
-				}
-				os.Remove("configs")
-			},
-			expectedPath: "configs/rbac.yaml",
-		},
-		{
-			desc:       "empty path uses default yml when json and yaml not found",
-			configFile: "",
-			setupFiles: func() ([]string, error) {
-				content := `roles: []`
-				path, err := createTestConfigFile("configs/rbac.yml", content)
-				return []string{path}, err
-			},
-			cleanupFiles: func(paths []string) {
-				for _, p := range paths {
-					os.Remove(p)
-				}
-				os.Remove("configs")
-			},
-			expectedPath: "configs/rbac.yml",
-		},
-		{
-			desc:       "empty path returns empty when no defaults found",
-			configFile: "",
-			setupFiles: func() ([]string, error) {
-				return []string{}, nil
-			},
-			cleanupFiles: func([]string) {},
-			expectedPath: "",
-		},
-	}
-
-	for i, tc := range testCases {
-		t.Run(tc.desc, func(t *testing.T) {
-			paths, err := tc.setupFiles()
-			require.NoError(t, err, "TEST[%d], Failed.\n%s", i, tc.desc)
-
-			defer tc.cleanupFiles(paths)
-
-			result := resolveRBACConfigPath(tc.configFile)
-
-			assert.Equal(t, tc.expectedPath, result, "TEST[%d], Failed.\n%s", i, tc.desc)
-		})
-	}
-}
-
 func createTestConfigFile(filename, content string) (string, error) {
 	dir := filepath.Dir(filename)
 	if dir != "." && dir != "" {
@@ -224,15 +131,15 @@ type mockRBACProvider struct {
 	middlewareFn func(http.Handler) http.Handler
 }
 
-func (m *mockRBACProvider) UseLogger(logger any) {
+func (*mockRBACProvider) UseLogger(_ any) {
 	// Mock implementation
 }
 
-func (m *mockRBACProvider) UseMetrics(metrics any) {
+func (*mockRBACProvider) UseMetrics(_ any) {
 	// Mock implementation
 }
 
-func (m *mockRBACProvider) UseTracer(tracer any) {
+func (*mockRBACProvider) UseTracer(_ any) {
 	// Mock implementation
 }
 
@@ -240,6 +147,7 @@ func (m *mockRBACProvider) LoadPermissions() error {
 	if m.loadErr != nil {
 		return m.loadErr
 	}
+
 	return nil
 }
 

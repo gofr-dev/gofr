@@ -26,13 +26,6 @@ type RBACProvider interface {
 	ApplyMiddleware() func(http.Handler) http.Handler
 }
 
-const (
-	// Default RBAC config paths (tried in order).
-	defaultRBACJSONPath = "configs/rbac.json"
-	defaultRBACYAMLPath = "configs/rbac.yaml"
-	defaultRBACYMLPath  = "configs/rbac.yml"
-)
-
 // DefaultRBACConfig is a constant that can be passed to NewProvider to use default config paths.
 // When passed, NewProvider will try: configs/rbac.json, configs/rbac.yaml, configs/rbac.yml.
 const DefaultRBACConfig = ""
@@ -65,7 +58,7 @@ func (a *App) EnableRBAC(provider RBACProvider) {
 		return
 	}
 
-	// Set logger, metrics, and tracer automatically (same pattern as DBResolver)
+	// Set logger, metrics, and tracer automatically
 	provider.UseLogger(a.Logger())
 	provider.UseMetrics(a.Metrics())
 
