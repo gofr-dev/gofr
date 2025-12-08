@@ -2,7 +2,20 @@ package surrealdb
 
 import (
 	"context"
+
+	"github.com/surrealdb/surrealdb.go"
 )
+
+// DB defines the interface for SurrealDB database operations.
+// It wraps the underlying surrealdb.DB to enable testing and mocking.
+type DB interface {
+	// Use sets the namespace and database to use.
+	Use(ctx context.Context, namespace, database string) error
+	// SignIn authenticates a user.
+	SignIn(ctx context.Context, auth *surrealdb.Auth) (string, error)
+	// Info retrieves information about the current session.
+	Info(ctx context.Context) (any, error)
+}
 
 // Logger defines methods for logging debug, log, and error messages.
 type Logger interface {
@@ -14,22 +27,6 @@ type Logger interface {
 	Logf(pattern string, args ...any)
 	// Errorf logs a formatted error message
 	Errorf(pattern string, args ...any)
-}
-
-// Connection defines methods for interacting with a database connection.
-type Connection interface {
-	// Connect establishes a connection to the database.
-	Connect() error
-	// Close terminates the database connection.
-	Close() error
-	// Send executes a database operation with the given method and parameters.
-	Send(res any, method string, params ...any) error
-	// Use sets the active namespace and database for the connection.
-	Use(namespace string, database string) error
-	// Let sets a session variable in the connection.
-	Let(key string, value any) error
-	// Unset removes a session variable from the connection.
-	Unset(key string) error
 }
 
 // Metrics provides methods to record and manage application metrics.

@@ -92,7 +92,9 @@ func TraceHandler(c *gofr.Context) (any, error) {
 		return nil, err
 	}
 
-	_ = json.Unmarshal(b, &data)
+	if err := json.Unmarshal(b, &data); err != nil {
+		return nil, err
+	}
 
 	return data.Data, nil
 }
