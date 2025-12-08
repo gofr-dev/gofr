@@ -29,6 +29,10 @@ app.UseMiddleware(middleware.RateLimiter(rateLimiterConfig, app.Metrics()))
 - **PerIP**: 
   - `true`: Each IP address gets its own rate limit (recommended)
   - `false`: Global rate limit shared across all clients
+- **TrustedProxies**: *(Optional, default: `false`)*
+  - `true`: Trust `X-Forwarded-For` and `X-Real-IP` headers for client IP extraction
+  - `false`: Only use `RemoteAddr` (direct connection IP)
+  - **⚠️ Security Warning**: Only set to `true` if your application is behind a trusted reverse proxy (nginx, ALB, etc.). Without a trusted proxy, clients can spoof headers to bypass rate limits.
 
 ## Running the Example
 
@@ -144,7 +148,7 @@ rateLimiterConfig := middleware.RateLimiterConfig{
 
 - Rate limiter uses `golang.org/x/time/rate` for efficient token bucket implementation
 - Stale per-IP limiters are cleaned up automatically every 5 minutes
-- IP extraction order: `X-Forwarded-For` → `X-Real-IP` → `RemoteAddr`
+- IP extraction order: When `TrustedProxies` is enabled, the order is `X-Forwarded-For` → `X-Real-IP` → `RemoteAddr`. If `TrustedProxies` is disabled, only `RemoteAddr` is used.
 - Works seamlessly with other middleware (auth, logging, metrics)
 
 ### Single-Pod vs Multi-Pod Deployments

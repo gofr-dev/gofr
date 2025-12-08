@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"math"
 	"net"
 	"net/http"
 	"strings"
@@ -100,7 +101,9 @@ func RateLimiter(config RateLimiterConfig, metrics rateLimiterMetrics) func(http
 		config.Store = NewMemoryRateLimiterStore(config)
 	}
 
-	// Start cleanup routine
+	// Start cleanup routine with context.Background().
+	// The cleanup goroutine runs for the application lifetime.
+	// For graceful shutdown, call config.Store.StopCleanup() in your shutdown handler.
 	ctx := context.Background()
 	config.Store.StartCleanup(ctx)
 
@@ -128,12 +131,13 @@ func RateLimiter(config RateLimiterConfig, metrics rateLimiterMetrics) func(http
 
 			if !allowed {
 				// Set Retry-After header (RFC 6585)
-				w.Header().Set("Retry-After", fmt.Sprintf("%.0f", retryAfter.Seconds()))
+				// Use math.Ceil to ensure at least 1 second for sub-second delays
+				w.Header().Set("Retry-After", fmt.Sprintf("%.0f", math.Ceil(retryAfter.Seconds())))
 
 				// Increment rate limit exceeded metric
 				if metrics != nil {
 					metrics.IncrementCounter(r.Context(), "app_http_rate_limit_exceeded_total",
-						"path", r.URL.Path, "method", r.Method, "ip", getIP(r, config.TrustedProxies), "retry_after", retryAfter.String())
+						"path", r.URL.Path, "method", r.Method)
 				}
 
 				// Return 429 Too Many Requests

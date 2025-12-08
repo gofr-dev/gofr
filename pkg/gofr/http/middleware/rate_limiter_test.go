@@ -2,6 +2,7 @@ package middleware
 
 import (
 	"context"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"sync"
@@ -153,7 +154,7 @@ func TestRateLimiter_ConcurrentRequests(t *testing.T) {
 	for i := 0; i < 20; i++ {
 		wg.Add(1)
 
-		go func(_ int) {
+		go func() {
 			defer wg.Done()
 
 			req := httptest.NewRequest(http.MethodGet, "/test", http.NoBody)
@@ -170,7 +171,7 @@ func TestRateLimiter_ConcurrentRequests(t *testing.T) {
 			}
 
 			mu.Unlock()
-		}(i)
+		}()
 	}
 
 	wg.Wait()
@@ -358,7 +359,9 @@ func TestRateLimiterConfig_Validate(t *testing.T) {
 	}
 }
 
-func TestMemoryRateLimiterStore_StopCleanupMultipleCalls(_ *testing.T) {
+func TestMemoryRateLimiterStore_StopCleanupMultipleCalls(t *testing.T) {
+	t.Helper()
+
 	config := RateLimiterConfig{
 		RequestsPerSecond: 10,
 		Burst:             20,
@@ -427,4 +430,78 @@ func TestMemoryRateLimiterStore_Cleanup(t *testing.T) {
 	})
 
 	assert.Equal(t, 0, count, "Stale entries should be removed")
+}
+
+func TestRateLimiter_TrustedProxiesEnabled(t *testing.T) {
+	metrics := newRateLimiterMockMetrics()
+	config := RateLimiterConfig{
+		RequestsPerSecond: 2,
+		Burst:             2,
+		PerIP:             true,
+		TrustedProxies:    true, // Trust proxy headers
+	}
+
+	handler := RateLimiter(config, metrics)(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}))
+
+	// Send 2 requests from same X-Forwarded-For IP
+	for i := 0; i < 2; i++ {
+		req := httptest.NewRequest(http.MethodGet, "/test", http.NoBody)
+		req.RemoteAddr = "127.0.0.1:12345"               // Proxy IP
+		req.Header.Set("X-Forwarded-For", "203.0.113.1") // Client IP
+		rr := httptest.NewRecorder()
+		handler.ServeHTTP(rr, req)
+		assert.Equal(t, http.StatusOK, rr.Code)
+	}
+
+	// 3rd request from same X-Forwarded-For IP should be rate limited
+	req := httptest.NewRequest(http.MethodGet, "/test", http.NoBody)
+	req.RemoteAddr = "127.0.0.1:12345"
+	req.Header.Set("X-Forwarded-For", "203.0.113.1")
+
+	rr := httptest.NewRecorder()
+	handler.ServeHTTP(rr, req)
+	assert.Equal(t, http.StatusTooManyRequests, rr.Code, "Should rate limit based on X-Forwarded-For IP")
+
+	// Different X-Forwarded-For IP should have separate limit
+	req = httptest.NewRequest(http.MethodGet, "/test", http.NoBody)
+	req.RemoteAddr = "127.0.0.1:12345"               // Same proxy
+	req.Header.Set("X-Forwarded-For", "203.0.113.2") // Different client IP
+
+	rr = httptest.NewRecorder()
+	handler.ServeHTTP(rr, req)
+	assert.Equal(t, http.StatusOK, rr.Code, "Different client IP should have separate rate limit")
+}
+
+func TestRateLimiter_TrustedProxiesDisabled(t *testing.T) {
+	metrics := newRateLimiterMockMetrics()
+	config := RateLimiterConfig{
+		RequestsPerSecond: 2,
+		Burst:             2,
+		PerIP:             true,
+		TrustedProxies:    false, // Do not trust proxy headers
+	}
+
+	handler := RateLimiter(config, metrics)(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}))
+
+	// Send 2 requests with same RemoteAddr but different X-Forwarded-For
+	for i := 0; i < 2; i++ {
+		req := httptest.NewRequest(http.MethodGet, "/test", http.NoBody)
+		req.RemoteAddr = "127.0.0.1:12345"
+		req.Header.Set("X-Forwarded-For", fmt.Sprintf("203.0.113.%d", i+1)) // Different spoofed IPs
+		rr := httptest.NewRecorder()
+		handler.ServeHTTP(rr, req)
+		assert.Equal(t, http.StatusOK, rr.Code)
+	}
+	// 3rd request should be rate limited based on RemoteAddr, ignoring X-Forwarded-For
+	req := httptest.NewRequest(http.MethodGet, "/test", http.NoBody)
+	req.RemoteAddr = "127.0.0.1:12345"
+	req.Header.Set("X-Forwarded-For", "203.0.113.99") // Different spoofed IP
+
+	rr := httptest.NewRecorder()
+	handler.ServeHTTP(rr, req)
+	assert.Equal(t, http.StatusTooManyRequests, rr.Code, "Should rate limit based on RemoteAddr, ignoring spoofed headers")
 }

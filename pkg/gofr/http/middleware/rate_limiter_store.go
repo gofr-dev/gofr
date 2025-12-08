@@ -11,6 +11,9 @@ import (
 
 // RateLimiterStore abstracts the storage and cleanup for rate limiter buckets.
 // This interface matches the one defined in pkg/gofr/service for consistency.
+//
+// Note: The config parameter in Allow() is provided for interface compatibility.
+// Implementations may use a stored configuration and ignore this parameter.
 type RateLimiterStore interface {
 	Allow(ctx context.Context, key string, config RateLimiterConfig) (allowed bool, retryAfter time.Duration, err error)
 	StartCleanup(ctx context.Context)
