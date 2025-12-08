@@ -10,6 +10,7 @@ import (
 	"go.opentelemetry.io/otel"
 
 	"gofr.dev/pkg/gofr/container"
+	"gofr.dev/pkg/gofr/logging"
 	"gofr.dev/pkg/gofr/version"
 )
 
@@ -105,7 +106,7 @@ func (j *job) run(cntnr *container.Container) {
 
 	defer func() {
 		if r := recover(); r != nil {
-			c.Errorf("Panic in cron job %s: %v", j.name, r)
+			logging.LogPanic(r, c)
 		}
 
 		c.Infof("Finished cron job: %s in %s", j.name, time.Since(start))

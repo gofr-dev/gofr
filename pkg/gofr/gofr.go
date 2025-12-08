@@ -220,7 +220,7 @@ func (a *App) SubCommand(pattern string, handler Handler, options ...Options) {
 func (a *App) Migrate(migrationsMap map[int64]migration.Migrate) {
 	// TODO : Move panic recovery at central location which will manage for all the different cases.
 	defer func() {
-		panicRecovery(recover(), a.container.Logger)
+		logging.LogPanic(recover(), a.container.Logger)
 	}()
 
 	migration.Run(migrationsMap, a.container)
