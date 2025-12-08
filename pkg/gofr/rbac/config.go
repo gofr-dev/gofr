@@ -107,8 +107,8 @@ type Config struct {
 	// Internal maps built from unified config (not in JSON/YAML)
 	// These are populated by processUnifiedConfig()
 	rolePermissionsMap    map[string][]string `json:"-" yaml:"-"`
-	endpointPermissionMap map[string][]string  `json:"-" yaml:"-"` // Key: "METHOD:/path", Value: []permissions
-	publicEndpointsMap    map[string]bool      `json:"-" yaml:"-"` // Key: "METHOD:/path", Value: true if public
+	endpointPermissionMap map[string][]string `json:"-" yaml:"-"` // Key: "METHOD:/path", Value: []permissions
+	publicEndpointsMap    map[string]bool     `json:"-" yaml:"-"` // Key: "METHOD:/path", Value: true if public
 
 	// Mutex for thread-safe access to maps (for future hot-reload support)
 	mu sync.RWMutex `json:"-" yaml:"-"`

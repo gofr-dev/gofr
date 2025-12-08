@@ -368,28 +368,34 @@ type mockMetrics struct {
 	counterCreated   bool
 }
 
-func (m *mockMetrics) NewHistogram(name, desc string, buckets ...float64) {
+func (m *mockMetrics) NewHistogram(_, _ string, _ ...float64) {
 	m.histogramCreated = true
 }
 
-func (m *mockMetrics) RecordHistogram(ctx context.Context, name string, value float64, labels ...string) {
+func (*mockMetrics) RecordHistogram(_ context.Context, _ string, _ float64, _ ...string) {
+	// Mock implementation
 }
 
-func (m *mockMetrics) NewCounter(name, desc string) {
+func (m *mockMetrics) NewCounter(_, _ string) {
 	m.counterCreated = true
 }
 
-func (m *mockMetrics) IncrementCounter(ctx context.Context, name string, labels ...string) {
+func (*mockMetrics) IncrementCounter(_ context.Context, _ string, _ ...string) {
+	// Mock implementation
 }
 
-func (m *mockMetrics) NewUpDownCounter(name, desc string) {
+func (*mockMetrics) NewUpDownCounter(_, _ string) {
+	// Mock implementation
 }
 
-func (m *mockMetrics) NewGauge(name, desc string) {
+func (*mockMetrics) NewGauge(_, _ string) {
+	// Mock implementation
 }
 
-func (m *mockMetrics) DeltaUpDownCounter(ctx context.Context, name string, value float64, labels ...string) {
+func (*mockMetrics) DeltaUpDownCounter(_ context.Context, _ string, _ float64, _ ...string) {
+	// Mock implementation
 }
 
-func (m *mockMetrics) SetGauge(name string, value float64, labels ...string) {
+func (*mockMetrics) SetGauge(_ string, _ float64, _ ...string) {
+	// Mock implementation
 }

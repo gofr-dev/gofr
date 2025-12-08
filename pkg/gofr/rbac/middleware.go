@@ -7,11 +7,10 @@ import (
 	"net/http"
 	"strings"
 
+	"github.com/golang-jwt/jwt/v5"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/codes"
 	"go.opentelemetry.io/otel/trace"
-
-	"github.com/golang-jwt/jwt/v5"
 	"gofr.dev/pkg/gofr/http/middleware"
 )
 
@@ -62,87 +61,121 @@ func Middleware(config *Config) func(handler http.Handler) http.Handler {
 			// If config is nil, allow all requests (fail open)
 			if config == nil {
 				handler.ServeHTTP(w, r)
+
 				return
 			}
 
 			route := r.URL.Path
-
-			// Start tracing
-			if config.Tracer != nil {
-				var span trace.Span
-				ctx, s := config.Tracer.Start(r.Context(), "rbac.authorize")
-				span = s
-				defer span.End()
-
-				span.SetAttributes(
-					attribute.String("http.method", r.Method),
-					attribute.String("http.route", route),
-				)
-
-				// Update context
-				r = r.WithContext(ctx)
-			}
+			r = startTracing(r, config, route)
 
 			// Check if endpoint is public using unified Endpoints config
 			endpoint, isPublic := getEndpointForRequest(r, config)
 			if isPublic {
 				handler.ServeHTTP(w, r)
+
 				return
 			}
 
 			// If no endpoint match found, deny by default (fail secure)
 			if endpoint == nil {
-				if config.Metrics != nil {
-					config.Metrics.IncrementCounter(r.Context(), "rbac_authorization_decisions", "status", "denied", "reason", "endpoint_not_found")
-				}
+				recordMetrics(config, r, "denied", "endpoint_not_found", "")
 				handleAuthError(w, r, config, "", route, ErrAccessDenied)
+
 				return
 			}
 
 			// Extract role using header-based or JWT-based extraction
 			role, err := extractRole(r, config)
 			if err != nil {
-				if config.Metrics != nil {
-					config.Metrics.IncrementCounter(r.Context(), "rbac_role_extraction_failures")
-				}
+				recordRoleExtractionFailure(config, r)
 				handleAuthError(w, r, config, "", route, err)
+
 				return
 			}
 
 			// Update span with role
-			if config.Tracer != nil {
-				trace.SpanFromContext(r.Context()).SetAttributes(attribute.String("rbac.role", role))
-			}
+			updateSpanWithRole(config, r, role)
 
 			// Check authorization using unified endpoint-based authorization
 			authorized, authReason := checkEndpointAuthorization(role, endpoint, config)
 			if !authorized {
-				if config.Metrics != nil {
-					config.Metrics.IncrementCounter(r.Context(), "rbac_authorization_decisions", "status", "denied", "role", role)
-				}
+				recordMetrics(config, r, "denied", "", role)
 				handleAuthError(w, r, config, role, route, ErrAccessDenied)
+
 				return
 			}
 
-			if config.Metrics != nil {
-				config.Metrics.IncrementCounter(r.Context(), "rbac_authorization_decisions", "status", "allowed", "role", role)
-			}
-
-			// Update span status
-			if config.Tracer != nil {
-				trace.SpanFromContext(r.Context()).SetAttributes(attribute.Bool("rbac.authorized", true))
-			}
-
-			// Log audit event (always enabled when Logger is available)
-			// Audit logging is automatically performed using GoFr's logger
-			if config.Logger != nil {
-				logAuditEvent(config.Logger, r, role, route, true, authReason)
-			}
+			recordMetrics(config, r, "allowed", "", role)
+			updateSpanWithAuthStatus(config, r)
+			logAuditEventIfEnabled(config, r, role, route, authReason)
 
 			// Store role in context and continue
 			ctx := context.WithValue(r.Context(), userRole, role)
 			handler.ServeHTTP(w, r.WithContext(ctx))
 		})
+	}
+}
+
+// startTracing starts tracing for the request if tracer is available.
+func startTracing(r *http.Request, config *Config, route string) *http.Request {
+	if config.Tracer == nil {
+		return r
+	}
+
+	ctx, span := config.Tracer.Start(r.Context(), "rbac.authorize")
+	defer span.End()
+
+	span.SetAttributes(
+		attribute.String("http.method", r.Method),
+		attribute.String("http.route", route),
+	)
+
+	return r.WithContext(ctx)
+}
+
+// recordMetrics records authorization decision metrics.
+func recordMetrics(config *Config, r *http.Request, status, reason, role string) {
+	if config.Metrics == nil {
+		return
+	}
+
+	labels := []string{"status", status}
+	if reason != "" {
+		labels = append(labels, "reason", reason)
+	}
+
+	if role != "" {
+		labels = append(labels, "role", role)
+	}
+
+	config.Metrics.IncrementCounter(r.Context(), "rbac_authorization_decisions", labels...)
+}
+
+// recordRoleExtractionFailure records role extraction failure metrics.
+func recordRoleExtractionFailure(config *Config, r *http.Request) {
+	if config.Metrics != nil {
+		config.Metrics.IncrementCounter(r.Context(), "rbac_role_extraction_failures")
+	}
+}
+
+// updateSpanWithRole updates the span with the extracted role.
+func updateSpanWithRole(config *Config, r *http.Request, role string) {
+	if config.Tracer != nil {
+		trace.SpanFromContext(r.Context()).SetAttributes(attribute.String("rbac.role", role))
+	}
+}
+
+// updateSpanWithAuthStatus updates the span with authorization status.
+func updateSpanWithAuthStatus(config *Config, r *http.Request) {
+	if config.Tracer != nil {
+		trace.SpanFromContext(r.Context()).SetAttributes(attribute.Bool("rbac.authorized", true))
+	}
+}
+
+// logAuditEventIfEnabled logs audit event if logger is available.
+func logAuditEventIfEnabled(config *Config, r *http.Request, role, route, authReason string) {
+	if config.Logger != nil {
+		logAuditEvent(config.Logger, r, role, route, true, authReason)
 	}
 }
 

@@ -8,28 +8,7 @@ import (
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"gofr.dev/pkg/gofr/logging"
 )
-
-type mockLoggerForConfig struct {
-	logs []string
-}
-
-func (m *mockLoggerForConfig) Debug(_ ...any)             { m.logs = append(m.logs, "DEBUG") }
-func (m *mockLoggerForConfig) Debugf(_ string, _ ...any)  { m.logs = append(m.logs, "DEBUGF") }
-func (m *mockLoggerForConfig) Log(_ ...any)               { m.logs = append(m.logs, "LOG") }
-func (m *mockLoggerForConfig) Logf(_ string, _ ...any)    { m.logs = append(m.logs, "LOGF") }
-func (m *mockLoggerForConfig) Info(_ ...any)              { m.logs = append(m.logs, "INFO") }
-func (m *mockLoggerForConfig) Infof(_ string, _ ...any)   { m.logs = append(m.logs, "INFOF") }
-func (m *mockLoggerForConfig) Notice(_ ...any)            { m.logs = append(m.logs, "NOTICE") }
-func (m *mockLoggerForConfig) Noticef(_ string, _ ...any) { m.logs = append(m.logs, "NOTICEF") }
-func (m *mockLoggerForConfig) Error(_ ...any)             { m.logs = append(m.logs, "ERROR") }
-func (m *mockLoggerForConfig) Errorf(_ string, _ ...any)  { m.logs = append(m.logs, "ERRORF") }
-func (m *mockLoggerForConfig) Warn(_ ...any)              { m.logs = append(m.logs, "WARN") }
-func (m *mockLoggerForConfig) Warnf(_ string, _ ...any)   { m.logs = append(m.logs, "WARNF") }
-func (m *mockLoggerForConfig) Fatal(_ ...any)             { m.logs = append(m.logs, "FATAL") }
-func (m *mockLoggerForConfig) Fatalf(_ string, _ ...any)  { m.logs = append(m.logs, "FATALF") }
-func (*mockLoggerForConfig) ChangeLevel(logging.Level)    {}
 
 func TestLoadPermissions_ValidConfigs(t *testing.T) {
 	t.Run("loads valid json config", func(t *testing.T) {
@@ -38,12 +17,12 @@ func TestLoadPermissions_ValidConfigs(t *testing.T) {
 			"endpoints": [{"path": "/api", "methods": ["GET"], "requiredPermissions": ["admin:read"]}]
 		}`
 		path, err := createTestConfigFile("test_config.json", fileContent)
-	require.NoError(t, err)
+		require.NoError(t, err)
 
 		defer os.Remove(path)
 
 		config, err := LoadPermissions("test_config.json")
-	require.NoError(t, err)
+		require.NoError(t, err)
 		require.NotNil(t, config)
 		assert.NotNil(t, config.rolePermissionsMap)
 	})
@@ -57,12 +36,12 @@ endpoints:
     methods: ["GET"]
     requiredPermissions: ["admin:read"]`
 		path, err := createTestConfigFile("test_config.yaml", fileContent)
-	require.NoError(t, err)
+		require.NoError(t, err)
 
 		defer os.Remove(path)
 
 		config, err := LoadPermissions("test_config.yaml")
-	require.NoError(t, err)
+		require.NoError(t, err)
 		require.NotNil(t, config)
 		assert.NotNil(t, config.rolePermissionsMap)
 	})
@@ -72,12 +51,12 @@ endpoints:
   - name: viewer
     permissions: ["users:read"]`
 		path, err := createTestConfigFile("test_config.yml", fileContent)
-	require.NoError(t, err)
+		require.NoError(t, err)
 
 		defer os.Remove(path)
 
 		config, err := LoadPermissions("test_config.yml")
-	require.NoError(t, err)
+		require.NoError(t, err)
 		require.NotNil(t, config)
 		assert.NotNil(t, config.rolePermissionsMap)
 	})
@@ -92,18 +71,18 @@ func TestLoadPermissions_ErrorCases(t *testing.T) {
 
 	t.Run("returns error for invalid json", func(t *testing.T) {
 		path, err := createTestConfigFile("test_invalid.json", `invalid json{`)
-	require.NoError(t, err)
+		require.NoError(t, err)
 
 		defer os.Remove(path)
 
 		config, err := LoadPermissions("test_invalid.json")
-	require.Error(t, err)
+		require.Error(t, err)
 		require.Nil(t, config)
 	})
 
 	t.Run("returns error for invalid yaml", func(t *testing.T) {
 		path, err := createTestConfigFile("test_invalid.yaml", `invalid: yaml: [`)
-	require.NoError(t, err)
+		require.NoError(t, err)
 
 		defer os.Remove(path)
 
@@ -114,7 +93,7 @@ func TestLoadPermissions_ErrorCases(t *testing.T) {
 
 	t.Run("returns error for unsupported format", func(t *testing.T) {
 		path, err := createTestConfigFile("test.txt", `some content`)
-	require.NoError(t, err)
+		require.NoError(t, err)
 
 		defer os.Remove(path)
 
@@ -129,7 +108,7 @@ func TestLoadPermissions_ErrorCases(t *testing.T) {
 			"endpoints": [{"path": "/api", "methods": ["GET"]}]
 		}`
 		path, err := createTestConfigFile("test_missing_perm.json", fileContent)
-	require.NoError(t, err)
+		require.NoError(t, err)
 
 		defer os.Remove(path)
 
@@ -582,8 +561,8 @@ func TestExtractNestedClaim_Additional(t *testing.T) {
 				require.Error(t, err, "TEST[%d], Failed.\n%s", i, tc.desc)
 				assert.Nil(t, result, "TEST[%d], Failed.\n%s", i, tc.desc)
 
-		return
-	}
+				return
+			}
 
 			require.NoError(t, err, "TEST[%d], Failed.\n%s", i, tc.desc)
 			assert.Equal(t, tc.expected, result, "TEST[%d], Failed.\n%s", i, tc.desc)
@@ -653,4 +632,3 @@ func TestExtractArrayClaim_Additional(t *testing.T) {
 		})
 	}
 }
-
