@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
 
 	"gofr.dev/pkg/gofr/config"
@@ -445,7 +446,7 @@ func TestGetMySQLTLSParam(t *testing.T) {
 
 func TestRegisterMySQLTLSConfig_WithValidCA(t *testing.T) {
 	tests := []struct {
-		name      string
+		name       string
 		setupCerts func(t *testing.T) map[string]string
 		sslMode    string
 		wantErr    bool
@@ -453,6 +454,7 @@ func TestRegisterMySQLTLSConfig_WithValidCA(t *testing.T) {
 		{
 			name: "MySQL verify-ca with valid CA cert",
 			setupCerts: func(t *testing.T) map[string]string {
+				t.Helper()
 				caCertPath := createValidCACert(t)
 				t.Setenv("DB_TLS_CA_CERT", caCertPath)
 				return map[string]string{"ca": caCertPath}
@@ -463,6 +465,7 @@ func TestRegisterMySQLTLSConfig_WithValidCA(t *testing.T) {
 		{
 			name: "MySQL verify-full with valid CA cert",
 			setupCerts: func(t *testing.T) map[string]string {
+				t.Helper()
 				caCertPath := createValidCACert(t)
 				t.Setenv("DB_TLS_CA_CERT", caCertPath)
 				return map[string]string{"ca": caCertPath}
@@ -473,6 +476,7 @@ func TestRegisterMySQLTLSConfig_WithValidCA(t *testing.T) {
 		{
 			name: "MySQL with 127.0.0.1 hostname - uses localhost as ServerName",
 			setupCerts: func(t *testing.T) map[string]string {
+				t.Helper()
 				caCertPath := createValidCACert(t)
 				t.Setenv("DB_TLS_CA_CERT", caCertPath)
 				return map[string]string{"ca": caCertPath}
@@ -483,6 +487,7 @@ func TestRegisterMySQLTLSConfig_WithValidCA(t *testing.T) {
 		{
 			name: "MySQL with ::1 hostname - uses localhost as ServerName",
 			setupCerts: func(t *testing.T) map[string]string {
+				t.Helper()
 				caCertPath := createValidCACert(t)
 				t.Setenv("DB_TLS_CA_CERT", caCertPath)
 				return map[string]string{"ca": caCertPath}
@@ -513,7 +518,7 @@ func TestRegisterMySQLTLSConfig_WithValidCA(t *testing.T) {
 
 func TestRegisterMySQLTLSConfig_WithMutualTLS(t *testing.T) {
 	tests := []struct {
-		name      string
+		name       string
 		setupCerts func(t *testing.T) map[string]string
 		sslMode    string
 		wantErr    bool
@@ -521,6 +526,7 @@ func TestRegisterMySQLTLSConfig_WithMutualTLS(t *testing.T) {
 		{
 			name: "MySQL with valid CA and client certificates",
 			setupCerts: func(t *testing.T) map[string]string {
+				t.Helper()
 				caCertPath := createValidCACert(t)
 				clientCertPath, clientKeyPath := createValidClientCert(t)
 				t.Setenv("DB_TLS_CA_CERT", caCertPath)
@@ -534,6 +540,7 @@ func TestRegisterMySQLTLSConfig_WithMutualTLS(t *testing.T) {
 		{
 			name: "MySQL verify-full with mutual TLS",
 			setupCerts: func(t *testing.T) map[string]string {
+				t.Helper()
 				caCertPath := createValidCACert(t)
 				clientCertPath, clientKeyPath := createValidClientCert(t)
 				t.Setenv("DB_TLS_CA_CERT", caCertPath)
@@ -567,7 +574,7 @@ func TestRegisterMySQLTLSConfig_WithMutualTLS(t *testing.T) {
 
 func TestRegisterMySQLTLSConfig_PartialClientCert(t *testing.T) {
 	tests := []struct {
-		name      string
+		name       string
 		setupCerts func(t *testing.T) map[string]string
 		sslMode    string
 		wantErr    bool
@@ -575,6 +582,7 @@ func TestRegisterMySQLTLSConfig_PartialClientCert(t *testing.T) {
 		{
 			name: "MySQL with only client cert - no key provided",
 			setupCerts: func(t *testing.T) map[string]string {
+				t.Helper()
 				caCertPath := createValidCACert(t)
 				clientCertPath, _ := createValidClientCert(t)
 				t.Setenv("DB_TLS_CA_CERT", caCertPath)
@@ -587,6 +595,7 @@ func TestRegisterMySQLTLSConfig_PartialClientCert(t *testing.T) {
 		{
 			name: "MySQL with only client key - no cert provided",
 			setupCerts: func(t *testing.T) map[string]string {
+				t.Helper()
 				caCertPath := createValidCACert(t)
 				_, clientKeyPath := createValidClientCert(t)
 				t.Setenv("DB_TLS_CA_CERT", caCertPath)
@@ -619,7 +628,7 @@ func TestRegisterMySQLTLSConfig_PartialClientCert(t *testing.T) {
 
 func TestRegisterMySQLTLSConfig_InvalidClientCert(t *testing.T) {
 	tests := []struct {
-		name      string
+		name       string
 		setupCerts func(t *testing.T) map[string]string
 		sslMode    string
 		wantErr    bool
@@ -627,6 +636,7 @@ func TestRegisterMySQLTLSConfig_InvalidClientCert(t *testing.T) {
 		{
 			name: "MySQL with invalid client certificate file",
 			setupCerts: func(t *testing.T) map[string]string {
+				t.Helper()
 				caCertPath := createValidCACert(t)
 				invalidCertPath := createInvalidCert(t)
 				_, clientKeyPath := createValidClientCert(t)
@@ -641,6 +651,7 @@ func TestRegisterMySQLTLSConfig_InvalidClientCert(t *testing.T) {
 		{
 			name: "MySQL with invalid client key file",
 			setupCerts: func(t *testing.T) map[string]string {
+				t.Helper()
 				caCertPath := createValidCACert(t)
 				clientCertPath, _ := createValidClientCert(t)
 				invalidKeyPath := createInvalidCert(t)
@@ -668,7 +679,8 @@ func TestRegisterMySQLTLSConfig_InvalidClientCert(t *testing.T) {
 			}
 
 			err := registerMySQLTLSConfig(dbConfig, mockLogger)
-			assert.Error(t, err)
+
+			require.Error(t, err)
 			assert.Contains(t, err.Error(), "failed to load client certificate")
 		})
 	}
@@ -677,8 +689,8 @@ func TestRegisterMySQLTLSConfig_InvalidClientCert(t *testing.T) {
 func createValidCACert(t *testing.T) string {
 	t.Helper()
 
-	tmpFile, err := os.CreateTemp("", "test-ca-*.pem")
-	assert.NoError(t, err)
+	tmpFile, err := os.CreateTemp(t.TempDir(), "test-ca-*.pem")
+	require.NoError(t, err)
 
 	caCert := `-----BEGIN CERTIFICATE-----
 MIIDvTCCAqWgAwIBAgIUJz8pRPZUcAMOWjDIFs+5pA88kdswDQYJKoZIhvcNAQEL
@@ -705,18 +717,18 @@ uw==
 -----END CERTIFICATE-----`
 
 	_, err = tmpFile.WriteString(caCert)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	tmpFile.Close()
 
 	return tmpFile.Name()
 }
 
-func createValidClientCert(t *testing.T) (string, string) {
+func createValidClientCert(t *testing.T) (certName, keyName string) {
 	t.Helper()
 
-	certFile, err := os.CreateTemp("", "test-client-cert-*.pem")
-	assert.NoError(t, err)
+	certFile, err := os.CreateTemp(t.TempDir(), "test-client-cert-*.pem")
+	require.NoError(t, err)
 
 	clientCert := `-----BEGIN CERTIFICATE-----
 MIIDhjCCAm6gAwIBAgIBAjANBgkqhkiG9w0BAQsFADBmMQswCQYDVQQGEwJVUzEO
@@ -741,12 +753,12 @@ TA8/qi+HLJqT79lYy5YVA0d4PuOJVyuAla4Mv64uyOv3g8HYvIUaWdMJ
 -----END CERTIFICATE-----`
 
 	_, err = certFile.WriteString(clientCert)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	certFile.Close()
 
-	keyFile, err := os.CreateTemp("", "test-client-key-*.pem")
-	assert.NoError(t, err)
+	keyFile, err := os.CreateTemp(t.TempDir(), "test-client-key-*.pem")
+	require.NoError(t, err)
 
 	clientKey := `-----BEGIN PRIVATE KEY-----
 MIIEvQIBADANBgkqhkiG9w0BAQEFAASCBKcwggSjAgEAAoIBAQD0MRDuGzgd1Oao
@@ -778,7 +790,7 @@ RNJCjPCWqmCTE2F26ABGVXM=
 -----END PRIVATE KEY-----`
 
 	_, err = keyFile.WriteString(clientKey)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	keyFile.Close()
 
@@ -788,11 +800,11 @@ RNJCjPCWqmCTE2F26ABGVXM=
 func createInvalidCert(t *testing.T) string {
 	t.Helper()
 
-	tmpFile, err := os.CreateTemp("", "test-invalid-*.pem")
-	assert.NoError(t, err)
+	tmpFile, err := os.CreateTemp(t.TempDir(), "test-invalid-*.pem")
+	require.NoError(t, err)
 
 	_, err = tmpFile.WriteString("INVALID CERTIFICATE CONTENT")
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	tmpFile.Close()
 
@@ -804,4 +816,3 @@ func cleanupCerts(certPaths map[string]string) {
 		os.Remove(path)
 	}
 }
-

@@ -25,10 +25,14 @@ const (
 	cockroachDB    = "cockroachdb"
 	defaultDBPort  = 3306
 	requireSSLMode = "require"
+	tlsSkipVerify  = "tls=skip-verify"
 )
 
-var errUnsupportedDialect = fmt.Errorf(
-	"unsupported db dialect; supported dialects are - mysql, postgres, supabase, sqlite, %s", cockroachDB)
+var (
+	errUnsupportedDialect = fmt.Errorf(
+		"unsupported db dialect; supported dialects are - mysql, postgres, supabase, sqlite, %s", cockroachDB)
+	errFailedCACerts = fmt.Errorf("failed to append CA certificate")
+)
 
 // DBConfig has those members which are necessary variables while connecting to database.
 type DBConfig struct {
@@ -303,9 +307,9 @@ func getMySQLTLSParam(sslMode string) string {
 	case "preferred":
 		return "tls=preferred" // Try TLS, fallback to plain
 	case "require", "true":
-		return "tls=skip-verify" // TLS required but no cert validation
+		return tlsSkipVerify // TLS required but no cert validation
 	case "skip-verify":
-		return "tls=skip-verify" // Explicit skip verification
+		return tlsSkipVerify // Explicit skip verification
 	case "verify-ca", "verify-full":
 		return "tls=custom" // Use custom TLS config with CA verification
 	default:
@@ -316,7 +320,7 @@ func getMySQLTLSParam(sslMode string) string {
 // registerMySQLTLSConfig registers custom TLS configuration for MySQL if needed.
 func registerMySQLTLSConfig(dbConfig *DBConfig, logger datasource.Logger) error {
 	// Only for MySQL with verify-ca or verify-full
-	if dbConfig.Dialect != "mysql" {
+	if dbConfig.Dialect != dialectMysql {
 		return nil
 	}
 
@@ -331,8 +335,8 @@ func registerMySQLTLSConfig(dbConfig *DBConfig, logger datasource.Logger) error 
 		// Use system CA pool
 		tlsConfig := &tls.Config{
 			ServerName: getServerName(dbConfig.HostName),
+			MinVersion: tls.VersionTLS12,
 		}
-
 
 		return mysql.RegisterTLSConfig("custom", tlsConfig)
 	}
@@ -345,12 +349,13 @@ func registerMySQLTLSConfig(dbConfig *DBConfig, logger datasource.Logger) error 
 
 	caCertPool := x509.NewCertPool()
 	if !caCertPool.AppendCertsFromPEM(caCert) {
-		return fmt.Errorf("failed to append CA certificate")
+		return errFailedCACerts
 	}
 
 	tlsConfig := &tls.Config{
 		RootCAs:    caCertPool,
 		ServerName: dbConfig.HostName,
+		MinVersion: tls.VersionTLS12,
 	}
 
 	// Optional: Support client certificates (mutual TLS)
@@ -364,6 +369,7 @@ func registerMySQLTLSConfig(dbConfig *DBConfig, logger datasource.Logger) error 
 		}
 
 		tlsConfig.Certificates = []tls.Certificate{clientCert}
+
 		logger.Debug("loaded client certificate for mutual TLS")
 	}
 
@@ -375,5 +381,6 @@ func getServerName(hostname string) string {
 	if hostname == "127.0.0.1" || hostname == "::1" {
 		return "localhost"
 	}
+
 	return hostname
 }
