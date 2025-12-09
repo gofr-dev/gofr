@@ -2,6 +2,7 @@ package redis
 
 import (
 	"crypto/tls"
+	"errors"
 	"os"
 	"strings"
 	"testing"
@@ -11,11 +12,10 @@ import (
 	"github.com/redis/go-redis/v9"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-
 	"gofr.dev/pkg/gofr/config"
 )
 
-func TestValidateConfigs(t *testing.T) {
+func TestValidateConfigs(t *testing.T) { //nolint:funlen // Test function with many test cases
 	tests := []struct {
 		name        string
 		cfg         *Config
@@ -34,6 +34,8 @@ func TestValidateConfigs(t *testing.T) {
 			},
 			wantErr: false,
 			validateCfg: func(t *testing.T, cfg *Config) {
+				t.Helper()
+				t.Helper()
 				assert.Equal(t, "localhost:6379", cfg.Addr)
 				assert.Equal(t, 0, cfg.DB)
 			},
@@ -46,7 +48,9 @@ func TestValidateConfigs(t *testing.T) {
 			},
 			wantErr: true,
 			validateErr: func(t *testing.T, err error) {
-				assert.Equal(t, errAddrNotProvided, err)
+				t.Helper()
+				t.Helper()
+				require.Equal(t, errAddrNotProvided, err)
 			},
 		},
 		{
@@ -57,7 +61,9 @@ func TestValidateConfigs(t *testing.T) {
 			},
 			wantErr: true,
 			validateErr: func(t *testing.T, err error) {
-				assert.Error(t, err)
+				t.Helper()
+				t.Helper()
+				require.Error(t, err)
 				assert.Contains(t, err.Error(), "database number must be non-negative")
 			},
 		},
@@ -70,6 +76,8 @@ func TestValidateConfigs(t *testing.T) {
 			},
 			wantErr: false,
 			validateCfg: func(t *testing.T, cfg *Config) {
+				t.Helper()
+				t.Helper()
 				assert.Equal(t, 10, cfg.PoolSize)
 			},
 		},
@@ -82,6 +90,7 @@ func TestValidateConfigs(t *testing.T) {
 			},
 			wantErr: false,
 			validateCfg: func(t *testing.T, cfg *Config) {
+				t.Helper()
 				assert.Equal(t, 5*time.Second, cfg.DialTimeout)
 			},
 		},
@@ -94,6 +103,7 @@ func TestValidateConfigs(t *testing.T) {
 			},
 			wantErr: false,
 			validateCfg: func(t *testing.T, cfg *Config) {
+				t.Helper()
 				assert.Equal(t, 3*time.Second, cfg.ReadTimeout)
 			},
 		},
@@ -106,6 +116,7 @@ func TestValidateConfigs(t *testing.T) {
 			},
 			wantErr: false,
 			validateCfg: func(t *testing.T, cfg *Config) {
+				t.Helper()
 				assert.Equal(t, 3*time.Second, cfg.WriteTimeout)
 			},
 		},
@@ -115,22 +126,28 @@ func TestValidateConfigs(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			err := validateConfigs(tt.cfg)
 
+			require.Equal(t, tt.wantErr, err != nil, "error expectation mismatch")
+
 			if tt.wantErr {
 				require.Error(t, err)
+
 				if tt.validateErr != nil {
 					tt.validateErr(t, err)
 				}
-			} else {
-				require.NoError(t, err)
-				if tt.validateCfg != nil {
-					tt.validateCfg(t, tt.cfg)
-				}
+
+				return
+			}
+
+			require.NoError(t, err)
+
+			if tt.validateCfg != nil {
+				tt.validateCfg(t, tt.cfg)
 			}
 		})
 	}
 }
 
-func TestCreateRedisOptions(t *testing.T) {
+func TestCreateRedisOptions(t *testing.T) { //nolint:funlen // Test function with many test cases
 	tests := []struct {
 		name        string
 		cfg         *Config
@@ -154,6 +171,7 @@ func TestCreateRedisOptions(t *testing.T) {
 			},
 			wantErr: false,
 			validate: func(t *testing.T, options *redis.Options) {
+				t.Helper()
 				assert.Equal(t, "localhost:6379", options.Addr)
 				assert.Equal(t, "password", options.Password)
 				assert.Equal(t, 1, options.DB)
@@ -172,6 +190,7 @@ func TestCreateRedisOptions(t *testing.T) {
 			},
 			wantErr: false,
 			validate: func(t *testing.T, options *redis.Options) {
+				t.Helper()
 				assert.NotNil(t, options.TLSConfig)
 				assert.True(t, options.TLSConfig.InsecureSkipVerify)
 			},
@@ -186,18 +205,20 @@ func TestCreateRedisOptions(t *testing.T) {
 			},
 			wantErr: false,
 			validate: func(t *testing.T, options *redis.Options) {
+				t.Helper()
 				assert.Equal(t, 5*time.Minute, options.ConnMaxIdleTime)
 				assert.Equal(t, 30*time.Minute, options.ConnMaxLifetime)
 			},
 		},
 		{
 			name: "options with TLS cert files",
-			cfg: func() *Config {
+			cfg: func(t *testing.T) *Config {
+				t.Helper()
 				// Create temporary cert files
-				certFile, _ := os.CreateTemp("", "cert.pem")
-				keyFile, _ := os.CreateTemp("", "key.pem")
-				defer os.Remove(certFile.Name())
-				defer os.Remove(keyFile.Name())
+				certFile, _ := os.CreateTemp(t.TempDir(), "cert.pem")
+				keyFile, _ := os.CreateTemp(t.TempDir(), "key.pem")
+				_ = certFile.Close()
+				_ = keyFile.Close()
 
 				return &Config{
 					Addr: "localhost:6379",
@@ -207,10 +228,11 @@ func TestCreateRedisOptions(t *testing.T) {
 						KeyFile:  keyFile.Name(),
 					},
 				}
-			}(),
+			}(t),
 			wantErr: true, // Will fail because cert files are empty
 			validateErr: func(t *testing.T, err error) {
-				assert.Error(t, err)
+				t.Helper()
+				require.Error(t, err)
 				assert.Contains(t, err.Error(), "failed to create TLS config")
 			},
 		},
@@ -220,17 +242,23 @@ func TestCreateRedisOptions(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			options, err := createRedisOptions(tt.cfg)
 
+			require.Equal(t, tt.wantErr, err != nil, "error expectation mismatch")
+
 			if tt.wantErr {
 				require.Error(t, err)
+
 				if tt.validateErr != nil {
 					tt.validateErr(t, err)
 				}
-			} else {
-				require.NoError(t, err)
-				require.NotNil(t, options)
-				if tt.validate != nil {
-					tt.validate(t, options)
-				}
+
+				return
+			}
+
+			require.NoError(t, err)
+			require.NotNil(t, options)
+
+			if tt.validate != nil {
+				tt.validate(t, options)
 			}
 		})
 	}
@@ -251,6 +279,7 @@ func TestCreateTLSConfig(t *testing.T) {
 			},
 			wantErr: false,
 			validate: func(t *testing.T, tlsConfig *tls.Config) {
+				t.Helper()
 				assert.NotNil(t, tlsConfig)
 				assert.True(t, tlsConfig.InsecureSkipVerify)
 			},
@@ -263,7 +292,8 @@ func TestCreateTLSConfig(t *testing.T) {
 			},
 			wantErr: true,
 			validateErr: func(t *testing.T, err error) {
-				assert.Error(t, err)
+				t.Helper()
+				require.Error(t, err)
 				assert.Contains(t, err.Error(), "failed to load client certificate")
 			},
 		},
@@ -274,28 +304,30 @@ func TestCreateTLSConfig(t *testing.T) {
 			},
 			wantErr: true,
 			validateErr: func(t *testing.T, err error) {
-				assert.Error(t, err)
+				t.Helper()
+				require.Error(t, err)
 				assert.Contains(t, err.Error(), "failed to read CA certificate")
 			},
 		},
 		{
 			name: "TLS config with invalid CA cert content",
-			tlsConfig: func() *TLSConfig {
+			tlsConfig: func(t *testing.T) *TLSConfig {
+				t.Helper()
 				// Create temp file with invalid content
-				tmpFile, _ := os.CreateTemp("", "invalid-ca.pem")
-				tmpFile.WriteString("invalid cert content")
-				tmpFile.Close()
-				// Note: defer won't work in function literal, so we'll clean up in test
+				tmpFile, _ := os.CreateTemp(t.TempDir(), "invalid-ca.pem")
+				_, _ = tmpFile.WriteString("invalid cert content")
+				_ = tmpFile.Close()
 
 				return &TLSConfig{
 					CACertFile: tmpFile.Name(),
 				}
-			}(),
+			}(t),
 			wantErr: true,
 			validateErr: func(t *testing.T, err error) {
-				assert.Error(t, err)
+				t.Helper()
+				require.Error(t, err)
 				// Could be either parse error or file read error depending on timing
-				assert.True(t, err == errFailedToParseCACert || 
+				assert.True(t, errors.Is(err, errFailedToParseCACert) ||
 					strings.Contains(err.Error(), "failed to read CA certificate"))
 			},
 		},
@@ -303,26 +335,25 @@ func TestCreateTLSConfig(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Clean up temp files if created
-			if tt.name == "TLS config with invalid CA cert content" {
-				if tt.tlsConfig.CACertFile != "" {
-					defer os.Remove(tt.tlsConfig.CACertFile)
-				}
-			}
-
 			tlsConfig, err := createTLSConfig(tt.tlsConfig)
+
+			require.Equal(t, tt.wantErr, err != nil, "error expectation mismatch")
 
 			if tt.wantErr {
 				require.Error(t, err)
+
 				if tt.validateErr != nil {
 					tt.validateErr(t, err)
 				}
-			} else {
-				require.NoError(t, err)
-				require.NotNil(t, tlsConfig)
-				if tt.validate != nil {
-					tt.validate(t, tlsConfig)
-				}
+
+				return
+			}
+
+			require.NoError(t, err)
+			require.NotNil(t, tlsConfig)
+
+			if tt.validate != nil {
+				tt.validate(t, tlsConfig)
 			}
 		})
 	}
@@ -337,6 +368,7 @@ func TestIsConnected(t *testing.T) {
 		{
 			name: "connected client",
 			setupClient: func(t *testing.T) (*Client, func()) {
+				t.Helper()
 				s, err := miniredis.Run()
 				require.NoError(t, err)
 
@@ -356,7 +388,7 @@ func TestIsConnected(t *testing.T) {
 		},
 		{
 			name: "nil pubConn",
-			setupClient: func(t *testing.T) (*Client, func()) {
+			setupClient: func(_ *testing.T) (*Client, func()) {
 				return New(DefaultConfig()), func() {}
 			},
 			want: false,
@@ -364,6 +396,7 @@ func TestIsConnected(t *testing.T) {
 		{
 			name: "disconnected client",
 			setupClient: func(t *testing.T) (*Client, func()) {
+				t.Helper()
 				s, err := miniredis.Run()
 				require.NoError(t, err)
 
@@ -396,10 +429,10 @@ func TestIsConnected(t *testing.T) {
 
 func TestParseQueryArgs(t *testing.T) {
 	tests := []struct {
-		name     string
-		args     []any
+		name        string
+		args        []any
 		wantTimeout time.Duration
-		wantLimit int
+		wantLimit   int
 	}{
 		{
 			name:        "no args - defaults",
@@ -460,7 +493,7 @@ func TestParseQueryArgs(t *testing.T) {
 	}
 }
 
-func TestGetRedisPubSubConfig(t *testing.T) {
+func TestGetRedisPubSubConfig(t *testing.T) { //nolint:funlen // Test function with many test cases
 	tests := []struct {
 		name        string
 		setupConfig func() config.Config
@@ -474,6 +507,8 @@ func TestGetRedisPubSubConfig(t *testing.T) {
 				})
 			},
 			validate: func(t *testing.T, cfg *Config) {
+				t.Helper()
+
 				assert.Equal(t, "localhost:6380", cfg.Addr)
 			},
 		},
@@ -486,6 +521,7 @@ func TestGetRedisPubSubConfig(t *testing.T) {
 				})
 			},
 			validate: func(t *testing.T, cfg *Config) {
+				t.Helper()
 				assert.Equal(t, "redis.example.com:6381", cfg.Addr)
 			},
 		},
@@ -497,6 +533,8 @@ func TestGetRedisPubSubConfig(t *testing.T) {
 				})
 			},
 			validate: func(t *testing.T, cfg *Config) {
+				t.Helper()
+
 				assert.Equal(t, "redis.example.com:6379", cfg.Addr)
 			},
 		},
@@ -509,6 +547,8 @@ func TestGetRedisPubSubConfig(t *testing.T) {
 				})
 			},
 			validate: func(t *testing.T, cfg *Config) {
+				t.Helper()
+
 				assert.Equal(t, "secret123", cfg.Password)
 			},
 		},
@@ -521,6 +561,8 @@ func TestGetRedisPubSubConfig(t *testing.T) {
 				})
 			},
 			validate: func(t *testing.T, cfg *Config) {
+				t.Helper()
+
 				assert.Equal(t, 5, cfg.DB)
 			},
 		},
@@ -533,6 +575,7 @@ func TestGetRedisPubSubConfig(t *testing.T) {
 				})
 			},
 			validate: func(t *testing.T, cfg *Config) {
+				t.Helper()
 				assert.Equal(t, 3, cfg.DB)
 			},
 		},
@@ -547,6 +590,7 @@ func TestGetRedisPubSubConfig(t *testing.T) {
 				})
 			},
 			validate: func(t *testing.T, cfg *Config) {
+				t.Helper()
 				assert.Equal(t, 10*time.Second, cfg.DialTimeout)
 				assert.Equal(t, 5*time.Second, cfg.ReadTimeout)
 				assert.Equal(t, 5*time.Second, cfg.WriteTimeout)
@@ -556,14 +600,15 @@ func TestGetRedisPubSubConfig(t *testing.T) {
 			name: "with pool settings",
 			setupConfig: func() config.Config {
 				return config.NewMockConfig(map[string]string{
-					"REDIS_PUBSUB_ADDR":            "localhost:6379",
-					"REDIS_PUBSUB_POOL_SIZE":       "20",
-					"REDIS_PUBSUB_MIN_IDLE_CONNS":  "10",
-					"REDIS_PUBSUB_MAX_IDLE_CONNS":  "15",
-					"REDIS_PUBSUB_MAX_RETRIES":     "5",
+					"REDIS_PUBSUB_ADDR":           "localhost:6379",
+					"REDIS_PUBSUB_POOL_SIZE":      "20",
+					"REDIS_PUBSUB_MIN_IDLE_CONNS": "10",
+					"REDIS_PUBSUB_MAX_IDLE_CONNS": "15",
+					"REDIS_PUBSUB_MAX_RETRIES":    "5",
 				})
 			},
 			validate: func(t *testing.T, cfg *Config) {
+				t.Helper()
 				assert.Equal(t, 20, cfg.PoolSize)
 				assert.Equal(t, 10, cfg.MinIdleConns)
 				assert.Equal(t, 15, cfg.MaxIdleConns)
@@ -574,15 +619,16 @@ func TestGetRedisPubSubConfig(t *testing.T) {
 			name: "with TLS enabled",
 			setupConfig: func() config.Config {
 				return config.NewMockConfig(map[string]string{
-					"REDIS_PUBSUB_ADDR":                  "localhost:6379",
-					"REDIS_TLS_ENABLED":                  "true",
-					"REDIS_TLS_INSECURE_SKIP_VERIFY":     "true",
-					"REDIS_TLS_CA_CERT":                  "/path/to/ca.pem",
-					"REDIS_TLS_CERT":                     "/path/to/cert.pem",
-					"REDIS_TLS_KEY":                      "/path/to/key.pem",
+					"REDIS_PUBSUB_ADDR":              "localhost:6379",
+					"REDIS_TLS_ENABLED":              "true",
+					"REDIS_TLS_INSECURE_SKIP_VERIFY": "true",
+					"REDIS_TLS_CA_CERT":              "/path/to/ca.pem",
+					"REDIS_TLS_CERT":                 "/path/to/cert.pem",
+					"REDIS_TLS_KEY":                  "/path/to/key.pem",
 				})
 			},
 			validate: func(t *testing.T, cfg *Config) {
+				t.Helper()
 				require.NotNil(t, cfg.TLS)
 				assert.True(t, cfg.TLS.InsecureSkipVerify)
 				assert.Equal(t, "/path/to/ca.pem", cfg.TLS.CACertFile)
@@ -599,6 +645,7 @@ func TestGetRedisPubSubConfig(t *testing.T) {
 				})
 			},
 			validate: func(t *testing.T, cfg *Config) {
+				t.Helper()
 				assert.Equal(t, 5*time.Second, cfg.DialTimeout) // Default
 			},
 		},
@@ -611,6 +658,7 @@ func TestGetRedisPubSubConfig(t *testing.T) {
 				})
 			},
 			validate: func(t *testing.T, cfg *Config) {
+				t.Helper()
 				assert.Equal(t, 0, cfg.DB) // Default
 			},
 		},
@@ -623,6 +671,7 @@ func TestGetRedisPubSubConfig(t *testing.T) {
 				})
 			},
 			validate: func(t *testing.T, cfg *Config) {
+				t.Helper()
 				assert.Equal(t, 0, cfg.DB) // Default
 			},
 		},
@@ -632,8 +681,9 @@ func TestGetRedisPubSubConfig(t *testing.T) {
 				return config.NewMockConfig(map[string]string{})
 			},
 			validate: func(t *testing.T, cfg *Config) {
+				t.Helper()
 				assert.Equal(t, "localhost:6379", cfg.Addr) // Default
-				assert.Equal(t, 0, cfg.DB)                // Default
+				assert.Equal(t, 0, cfg.DB)                  // Default
 			},
 		},
 	}
@@ -708,4 +758,3 @@ func TestSanitizeRedisAddr(t *testing.T) {
 		})
 	}
 }
-

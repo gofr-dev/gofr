@@ -7,7 +7,7 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-func TestPrettyPrint(t *testing.T) {
+func TestPrettyPrint(t *testing.T) { //nolint:funlen // Test function with many test cases
 	tests := []struct {
 		name     string
 		log      *Log
@@ -25,6 +25,7 @@ func TestPrettyPrint(t *testing.T) {
 				Time:          1000,
 			},
 			validate: func(t *testing.T, output string) {
+				t.Helper()
 				assert.Contains(t, output, "12345-67890")
 				assert.Contains(t, output, "REDIS")
 				assert.Contains(t, output, "1000")
@@ -45,6 +46,7 @@ func TestPrettyPrint(t *testing.T) {
 				Time:          500,
 			},
 			validate: func(t *testing.T, output string) {
+				t.Helper()
 				assert.Contains(t, output, "abc-123")
 				assert.Contains(t, output, "SUB")
 				assert.Contains(t, output, "sub-topic")
@@ -63,6 +65,7 @@ func TestPrettyPrint(t *testing.T) {
 				Time:          0,
 			},
 			validate: func(t *testing.T, output string) {
+				t.Helper()
 				assert.Contains(t, output, "zero-time")
 				assert.Contains(t, output, "0")
 			},
@@ -79,6 +82,7 @@ func TestPrettyPrint(t *testing.T) {
 				Time:          0,
 			},
 			validate: func(t *testing.T, output string) {
+				t.Helper()
 				// Should not panic, just print empty values
 				assert.NotEmpty(t, output) // Should still produce output
 			},
@@ -95,6 +99,7 @@ func TestPrettyPrint(t *testing.T) {
 				Time:          1234,
 			},
 			validate: func(t *testing.T, output string) {
+				t.Helper()
 				assert.Contains(t, output, "very-long-correlation-id-that-exceeds-normal-length")
 			},
 		},
@@ -120,28 +125,28 @@ func TestLoggerAdapter(t *testing.T) {
 	}{
 		{
 			name: "Debug method",
-			setup: func(t *testing.T) *loggerAdapter {
+			setup: func(_ *testing.T) *loggerAdapter {
 				return &loggerAdapter{
 					Logger: &mockPubSubLogger{},
 				}
 			},
 			method: "Debug",
 			args:   []any{"test", "message"},
-			validate: func(t *testing.T, adapter *loggerAdapter) {
+			validate: func(_ *testing.T, adapter *loggerAdapter) {
 				// Should not panic
 				adapter.Debug("test", "message")
 			},
 		},
 		{
 			name: "Log method",
-			setup: func(t *testing.T) *loggerAdapter {
+			setup: func(_ *testing.T) *loggerAdapter {
 				return &loggerAdapter{
 					Logger: &mockPubSubLogger{},
 				}
 			},
 			method: "Log",
 			args:   []any{"log", "message"},
-			validate: func(t *testing.T, adapter *loggerAdapter) {
+			validate: func(_ *testing.T, adapter *loggerAdapter) {
 				// Should not panic
 				adapter.Log("log", "message")
 			},
@@ -156,13 +161,12 @@ func TestLoggerAdapter(t *testing.T) {
 	}
 }
 
-// mockPubSubLogger is a mock implementation of pubsub.Logger
+// mockPubSubLogger is a mock implementation of pubsub.Logger.
 type mockPubSubLogger struct{}
 
-func (m *mockPubSubLogger) Debugf(format string, args ...any) {}
-func (m *mockPubSubLogger) Debug(args ...any)                  {}
-func (m *mockPubSubLogger) Logf(format string, args ...any)   {}
-func (m *mockPubSubLogger) Log(args ...any)                   {}
-func (m *mockPubSubLogger) Errorf(format string, args ...any) {}
-func (m *mockPubSubLogger) Error(args ...any)                 {}
-
+func (*mockPubSubLogger) Debugf(_ string, _ ...any) {}
+func (*mockPubSubLogger) Debug(_ ...any)            {}
+func (*mockPubSubLogger) Logf(_ string, _ ...any)   {}
+func (*mockPubSubLogger) Log(_ ...any)              {}
+func (*mockPubSubLogger) Errorf(_ string, _ ...any) {}
+func (*mockPubSubLogger) Error(_ ...any)            {}

@@ -28,6 +28,7 @@ func TestNewRedisMessage(t *testing.T) {
 				return NewMockLogger(ctrl)
 			}(),
 			validate: func(t *testing.T, m *Message) {
+				t.Helper()
 				require.NotNil(t, m)
 				assert.NotNil(t, m.msg)
 				assert.NotNil(t, m.logger)
@@ -40,6 +41,7 @@ func TestNewRedisMessage(t *testing.T) {
 			msg:    &redis.Message{Channel: "test", Payload: "data"},
 			logger: nil,
 			validate: func(t *testing.T, m *Message) {
+				t.Helper()
 				require.NotNil(t, m)
 				assert.NotNil(t, m.msg)
 				assert.Nil(t, m.logger)
@@ -64,6 +66,7 @@ func TestCommit(t *testing.T) {
 		{
 			name: "commit with logger",
 			setupMsg: func(t *testing.T) *Message {
+				t.Helper()
 				ctrl := gomock.NewController(t)
 				mockLogger := NewMockLogger(ctrl)
 				mockLogger.EXPECT().Debugf("Message acknowledged (Redis PubSub doesn't require explicit acknowledgment)")
@@ -73,20 +76,20 @@ func TestCommit(t *testing.T) {
 					logger: mockLogger,
 				}
 			},
-			validate: func(t *testing.T, msg *Message) {
+			validate: func(_ *testing.T, msg *Message) {
 				// Commit should not panic
 				msg.Commit()
 			},
 		},
 		{
 			name: "commit without logger",
-			setupMsg: func(t *testing.T) *Message {
+			setupMsg: func(_ *testing.T) *Message {
 				return &Message{
 					msg:    &redis.Message{Channel: "test", Payload: "data"},
 					logger: nil,
 				}
 			},
-			validate: func(t *testing.T, msg *Message) {
+			validate: func(_ *testing.T, msg *Message) {
 				// Commit should not panic even without logger
 				msg.Commit()
 			},
@@ -100,4 +103,3 @@ func TestCommit(t *testing.T) {
 		})
 	}
 }
-

@@ -3,6 +3,7 @@ package redis
 import (
 	"context"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -10,20 +11,19 @@ import (
 	"github.com/redis/go-redis/v9"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"go.uber.org/mock/gomock"
 	"go.opentelemetry.io/otel/trace/noop"
-
+	"go.uber.org/mock/gomock"
 	"gofr.dev/pkg/gofr/config"
 	"gofr.dev/pkg/gofr/datasource"
 	"gofr.dev/pkg/gofr/datasource/pubsub"
 	"gofr.dev/pkg/gofr/logging"
-	"sync"
 )
+
+const testTopic = "test-topic"
 
 var (
 	//nolint:gochecknoglobals // used for testing purposes only
 	testMessage = []byte("test message")
-	testTopic   = "test-topic"
 )
 
 func TestNew(t *testing.T) {
@@ -36,6 +36,7 @@ func TestNew(t *testing.T) {
 			name: "with config",
 			cfg:  DefaultConfig(),
 			validate: func(t *testing.T, client *Client) {
+				t.Helper()
 				require.NotNil(t, client)
 				assert.NotNil(t, client.cfg)
 				assert.NotNil(t, client.receiveChan)
@@ -50,6 +51,7 @@ func TestNew(t *testing.T) {
 			name: "nil config",
 			cfg:  nil,
 			validate: func(t *testing.T, client *Client) {
+				t.Helper()
 				require.NotNil(t, client)
 				assert.NotNil(t, client.cfg)
 				assert.Equal(t, DefaultConfig().Addr, client.cfg.Addr)
@@ -60,6 +62,7 @@ func TestNew(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			client := New(tt.cfg)
+
 			tt.validate(t, client)
 		})
 	}
@@ -82,6 +85,7 @@ func TestNewClient(t *testing.T) {
 			},
 			expectNil: false,
 			validate: func(t *testing.T, client *Client) {
+				t.Helper()
 				require.NotNil(t, client)
 				assert.NotNil(t, client.pubConn)
 				assert.NotNil(t, client.subConn)
@@ -98,6 +102,7 @@ func TestNewClient(t *testing.T) {
 			},
 			expectNil: false, // DefaultConfig has address, so client is created
 			validate: func(t *testing.T, client *Client) {
+				t.Helper()
 				require.NotNil(t, client)
 				assert.Equal(t, "localhost:6379", client.cfg.Addr)
 			},
@@ -113,6 +118,7 @@ func TestNewClient(t *testing.T) {
 			},
 			expectNil: false,
 			validate: func(t *testing.T, client *Client) {
+				t.Helper()
 				require.NotNil(t, client)
 				assert.Equal(t, "localhost:6380", client.cfg.Addr)
 			},
@@ -123,18 +129,23 @@ func TestNewClient(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			mockConfig := tt.setupConfig()
 			mockLogger := logging.NewMockLogger(logging.DEBUG)
-	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
+
+			ctrl := gomock.NewController(t)
+			defer ctrl.Finish()
+
 			mockMetrics := NewMockMetrics(ctrl)
 
 			client := NewClient(mockConfig, mockLogger, mockMetrics)
 
 			if tt.expectNil {
-				assert.Nil(t, client)
-			} else {
-				tt.validate(t, client)
-				require.NoError(t, client.Close())
+				require.Nil(t, client)
+				return
 			}
+
+			require.NotNil(t, client)
+
+			tt.validate(t, client)
+			require.NoError(t, client.Close())
 		})
 	}
 }
@@ -146,20 +157,22 @@ func TestUseLogger(t *testing.T) {
 		validate func(t *testing.T, client *Client)
 	}{
 		{
-			name:   "with redis.Logger",
+			name: "with redis.Logger",
 			logger: func() Logger {
 				ctrl := gomock.NewController(t)
 				defer ctrl.Finish()
 				return NewMockLogger(ctrl)
 			}(),
 			validate: func(t *testing.T, client *Client) {
-	assert.NotNil(t, client.logger)
+				t.Helper()
+				assert.NotNil(t, client.logger)
 			},
 		},
 		{
 			name:   "with pubsub.Logger",
 			logger: &mockPubSubLogger{},
 			validate: func(t *testing.T, client *Client) {
+				t.Helper()
 				assert.NotNil(t, client.logger)
 			},
 		},
@@ -167,6 +180,7 @@ func TestUseLogger(t *testing.T) {
 			name:   "with nil logger",
 			logger: nil,
 			validate: func(t *testing.T, client *Client) {
+				t.Helper()
 				assert.Nil(t, client.logger)
 			},
 		},
@@ -174,8 +188,9 @@ func TestUseLogger(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-	client := New(DefaultConfig())
+			client := New(DefaultConfig())
 			client.UseLogger(tt.logger)
+
 			tt.validate(t, client)
 		})
 	}
@@ -190,18 +205,20 @@ func TestUseMetrics(t *testing.T) {
 		{
 			name: "with Metrics interface",
 			metrics: func() Metrics {
-	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
+				ctrl := gomock.NewController(t)
+				defer ctrl.Finish()
 				return NewMockMetrics(ctrl)
 			}(),
 			validate: func(t *testing.T, client *Client) {
+				t.Helper()
 				assert.NotNil(t, client.metrics)
 			},
 		},
 		{
-			name:   "with nil metrics",
+			name:    "with nil metrics",
 			metrics: nil,
 			validate: func(t *testing.T, client *Client) {
+				t.Helper()
 				assert.Nil(t, client.metrics)
 			},
 		},
@@ -209,8 +226,9 @@ func TestUseMetrics(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-	client := New(DefaultConfig())
+			client := New(DefaultConfig())
 			client.UseMetrics(tt.metrics)
+
 			tt.validate(t, client)
 		})
 	}
@@ -226,13 +244,15 @@ func TestUseTracer(t *testing.T) {
 			name:   "with trace.Tracer",
 			tracer: noop.NewTracerProvider().Tracer("test"),
 			validate: func(t *testing.T, client *Client) {
-	assert.NotNil(t, client.tracer)
+				t.Helper()
+				assert.NotNil(t, client.tracer)
 			},
 		},
 		{
 			name:   "with nil tracer",
 			tracer: nil,
 			validate: func(t *testing.T, client *Client) {
+				t.Helper()
 				assert.Nil(t, client.tracer)
 			},
 		},
@@ -242,12 +262,13 @@ func TestUseTracer(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			client := New(DefaultConfig())
 			client.UseTracer(tt.tracer)
+
 			tt.validate(t, client)
 		})
 	}
 }
 
-func TestConnect(t *testing.T) {
+func TestConnect(t *testing.T) { //nolint:funlen // Test function with many test cases
 	tests := []struct {
 		name        string
 		setupClient func(t *testing.T) (*Client, func())
@@ -256,18 +277,19 @@ func TestConnect(t *testing.T) {
 		{
 			name: "successful connection",
 			setupClient: func(t *testing.T) (*Client, func()) {
-	s, err := miniredis.Run()
-	require.NoError(t, err)
+				t.Helper()
+				s, err := miniredis.Run()
+				require.NoError(t, err)
 
-	cfg := DefaultConfig()
-	cfg.Addr = s.Addr()
+				cfg := DefaultConfig()
+				cfg.Addr = s.Addr()
 
-	client := New(cfg)
-	mockLogger := logging.NewMockLogger(logging.DEBUG)
-	client.UseLogger(mockLogger)
+				client := New(cfg)
+				mockLogger := logging.NewMockLogger(logging.DEBUG)
+				client.UseLogger(mockLogger)
 
-	client.Connect()
-	time.Sleep(100 * time.Millisecond)
+				client.Connect()
+				time.Sleep(100 * time.Millisecond)
 
 				return client, func() {
 					_ = client.Close()
@@ -275,14 +297,16 @@ func TestConnect(t *testing.T) {
 				}
 			},
 			validate: func(t *testing.T, client *Client) {
-	assert.NotNil(t, client.pubConn)
-	assert.NotNil(t, client.subConn)
-	assert.NotNil(t, client.queryConn)
+				t.Helper()
+				assert.NotNil(t, client.pubConn)
+				assert.NotNil(t, client.subConn)
+				assert.NotNil(t, client.queryConn)
 			},
 		},
 		{
 			name: "invalid config - empty address",
 			setupClient: func(t *testing.T) (*Client, func()) {
+				t.Helper()
 				ctrl := gomock.NewController(t)
 				mockLogger := NewMockLogger(ctrl)
 				mockLogger.EXPECT().Errorf("could not initialize Redis, error: %v", gomock.Any())
@@ -301,6 +325,7 @@ func TestConnect(t *testing.T) {
 				}
 			},
 			validate: func(t *testing.T, client *Client) {
+				t.Helper()
 				assert.Nil(t, client.pubConn)
 				assert.Nil(t, client.subConn)
 			},
@@ -308,31 +333,33 @@ func TestConnect(t *testing.T) {
 		{
 			name: "invalid config - invalid DB",
 			setupClient: func(t *testing.T) (*Client, func()) {
+				t.Helper()
 				ctrl := gomock.NewController(t)
-	mockLogger := NewMockLogger(ctrl)
-	mockLogger.EXPECT().Errorf("could not initialize Redis, error: %v", gomock.Any())
+				mockLogger := NewMockLogger(ctrl)
+				mockLogger.EXPECT().Errorf("could not initialize Redis, error: %v", gomock.Any())
 
-	cfg := &Config{
+				cfg := &Config{
 					Addr: "localhost:6379",
 					DB:   -1,
-	}
+				}
 
-	client := New(cfg)
-	client.UseLogger(mockLogger)
-	client.Connect()
+				client := New(cfg)
+				client.UseLogger(mockLogger)
+				client.Connect()
 
 				return client, func() {
 					ctrl.Finish()
 				}
 			},
 			validate: func(t *testing.T, client *Client) {
-	assert.Nil(t, client.pubConn)
-	assert.Nil(t, client.subConn)
+				t.Helper()
+				assert.Nil(t, client.pubConn)
+				assert.Nil(t, client.subConn)
 			},
 		},
 		{
 			name: "connection failure - invalid address",
-			setupClient: func(t *testing.T) (*Client, func()) {
+			setupClient: func(_ *testing.T) (*Client, func()) {
 				// Use real logger to avoid goroutine issues with mocks
 				mockLogger := logging.NewMockLogger(logging.DEBUG)
 
@@ -352,6 +379,7 @@ func TestConnect(t *testing.T) {
 				}
 			},
 			validate: func(t *testing.T, client *Client) {
+				t.Helper()
 				// Connections are created even if they fail
 				// The retry mechanism runs in background
 				assert.NotNil(t, client.pubConn) // Client is created, connection just fails
@@ -360,15 +388,16 @@ func TestConnect(t *testing.T) {
 		{
 			name: "query connection ping failure",
 			setupClient: func(t *testing.T) (*Client, func()) {
-	s, err := miniredis.Run()
-	require.NoError(t, err)
+				t.Helper()
+				s, err := miniredis.Run()
+				require.NoError(t, err)
 
-	cfg := DefaultConfig()
-	cfg.Addr = s.Addr()
+				cfg := DefaultConfig()
+				cfg.Addr = s.Addr()
 
-	client := New(cfg)
-	mockLogger := logging.NewMockLogger(logging.DEBUG)
-	client.UseLogger(mockLogger)
+				client := New(cfg)
+				mockLogger := logging.NewMockLogger(logging.DEBUG)
+				client.UseLogger(mockLogger)
 				client.Connect()
 				time.Sleep(100 * time.Millisecond)
 
@@ -385,6 +414,7 @@ func TestConnect(t *testing.T) {
 				}
 			},
 			validate: func(t *testing.T, client *Client) {
+				t.Helper()
 				// Query connection should be recreated
 				assert.NotNil(t, client.queryConn)
 			},
@@ -395,12 +425,13 @@ func TestConnect(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			client, cleanup := tt.setupClient(t)
 			defer cleanup()
+
 			tt.validate(t, client)
 		})
 	}
 }
 
-func TestPublish(t *testing.T) {
+func TestPublish(t *testing.T) { //nolint:funlen // Test function with many test cases
 	tests := []struct {
 		name        string
 		setupClient func(t *testing.T) (*Client, func())
@@ -413,17 +444,18 @@ func TestPublish(t *testing.T) {
 		{
 			name: "successful publish",
 			setupClient: func(t *testing.T) (*Client, func()) {
-	s, err := miniredis.Run()
-	require.NoError(t, err)
+				t.Helper()
+				s, err := miniredis.Run()
+				require.NoError(t, err)
 
-	cfg := DefaultConfig()
-	cfg.Addr = s.Addr()
+				cfg := DefaultConfig()
+				cfg.Addr = s.Addr()
 
-	client := New(cfg)
-	mockLogger := logging.NewMockLogger(logging.DEBUG)
-	client.UseLogger(mockLogger)
-	client.Connect()
-	time.Sleep(100 * time.Millisecond)
+				client := New(cfg)
+				mockLogger := logging.NewMockLogger(logging.DEBUG)
+				client.UseLogger(mockLogger)
+				client.Connect()
+				time.Sleep(100 * time.Millisecond)
 
 				return client, func() {
 					_ = client.Close()
@@ -433,32 +465,35 @@ func TestPublish(t *testing.T) {
 			topic:   testTopic,
 			message: testMessage,
 			setupMocks: func(t *testing.T, client *Client) {
-	ctrl := gomock.NewController(t)
-	mockMetrics := NewMockMetrics(ctrl)
-	client.UseMetrics(mockMetrics)
-	mockMetrics.EXPECT().IncrementCounter(gomock.Any(), "app_pubsub_publish_total_count", "topic", testTopic)
-	mockMetrics.EXPECT().IncrementCounter(gomock.Any(), "app_pubsub_publish_success_count", "topic", testTopic)
+				t.Helper()
+				ctrl := gomock.NewController(t)
+				mockMetrics := NewMockMetrics(ctrl)
+				client.UseMetrics(mockMetrics)
+				mockMetrics.EXPECT().IncrementCounter(gomock.Any(), "app_pubsub_publish_total_count", "topic", testTopic)
+				mockMetrics.EXPECT().IncrementCounter(gomock.Any(), "app_pubsub_publish_success_count", "topic", testTopic)
 			},
 			wantErr: false,
 		},
 		{
 			name: "no connection",
-			setupClient: func(t *testing.T) (*Client, func()) {
+			setupClient: func(_ *testing.T) (*Client, func()) {
 				return New(DefaultConfig()), func() {}
 			},
-			topic:   testTopic,
-			message: testMessage,
-			setupMocks: func(t *testing.T, client *Client) {},
-			wantErr: true,
+			topic:      testTopic,
+			message:    testMessage,
+			setupMocks: func(_ *testing.T, _ *Client) {},
+			wantErr:    true,
 			validateErr: func(t *testing.T, err error) {
+				t.Helper()
 				assert.Equal(t, errPublisherNotConfigured, err)
 			},
 		},
 		{
 			name: "empty topic",
 			setupClient: func(t *testing.T) (*Client, func()) {
+				t.Helper()
 				s, err := miniredis.Run()
-	require.NoError(t, err)
+				require.NoError(t, err)
 
 				cfg := DefaultConfig()
 				cfg.Addr = s.Addr()
@@ -472,26 +507,28 @@ func TestPublish(t *testing.T) {
 					s.Close()
 				}
 			},
-			topic:   "",
-			message: testMessage,
-			setupMocks: func(t *testing.T, client *Client) {},
-			wantErr: true,
+			topic:      "",
+			message:    testMessage,
+			setupMocks: func(_ *testing.T, _ *Client) {},
+			wantErr:    true,
 			validateErr: func(t *testing.T, err error) {
+				t.Helper()
 				assert.Equal(t, errPublisherNotConfigured, err)
 			},
 		},
 		{
 			name: "publish with disconnected client",
 			setupClient: func(t *testing.T) (*Client, func()) {
-	s, err := miniredis.Run()
-	require.NoError(t, err)
+				t.Helper()
+				s, err := miniredis.Run()
+				require.NoError(t, err)
 
-	cfg := DefaultConfig()
-	cfg.Addr = s.Addr()
+				cfg := DefaultConfig()
+				cfg.Addr = s.Addr()
 
-	client := New(cfg)
-	client.Connect()
-	time.Sleep(100 * time.Millisecond)
+				client := New(cfg)
+				client.Connect()
+				time.Sleep(100 * time.Millisecond)
 				s.Close() // Close Redis to simulate disconnection
 
 				return client, func() {
@@ -501,6 +538,7 @@ func TestPublish(t *testing.T) {
 			topic:   testTopic,
 			message: testMessage,
 			setupMocks: func(t *testing.T, client *Client) {
+				t.Helper()
 				ctrl := gomock.NewController(t)
 				mockMetrics := NewMockMetrics(ctrl)
 				client.UseMetrics(mockMetrics)
@@ -514,24 +552,30 @@ func TestPublish(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			client, cleanup := tt.setupClient(t)
 			defer cleanup()
+
 			tt.setupMocks(t, client)
 
-	ctx := context.Background()
+			ctx := context.Background()
 			err := client.Publish(ctx, tt.topic, tt.message)
 
+			require.Equal(t, tt.wantErr, err != nil, "error expectation mismatch")
+
 			if tt.wantErr {
-	require.Error(t, err)
+				require.Error(t, err)
+
 				if tt.validateErr != nil {
 					tt.validateErr(t, err)
 				}
-			} else {
-				require.NoError(t, err)
+
+				return
 			}
+
+			require.NoError(t, err)
 		})
 	}
 }
 
-func TestSubscribe(t *testing.T) {
+func TestSubscribe(t *testing.T) { //nolint:funlen // Test function with many test cases
 	tests := []struct {
 		name        string
 		setupClient func(t *testing.T) (*Client, func())
@@ -545,15 +589,16 @@ func TestSubscribe(t *testing.T) {
 		{
 			name: "successful subscribe",
 			setupClient: func(t *testing.T) (*Client, func()) {
-	s, err := miniredis.Run()
-	require.NoError(t, err)
+				t.Helper()
+				s, err := miniredis.Run()
+				require.NoError(t, err)
 
-	cfg := DefaultConfig()
-	cfg.Addr = s.Addr()
+				cfg := DefaultConfig()
+				cfg.Addr = s.Addr()
 
-	client := New(cfg)
-	mockLogger := logging.NewMockLogger(logging.DEBUG)
-	client.UseLogger(mockLogger)
+				client := New(cfg)
+				mockLogger := logging.NewMockLogger(logging.DEBUG)
+				client.UseLogger(mockLogger)
 				client.Connect()
 				time.Sleep(100 * time.Millisecond)
 
@@ -562,39 +607,43 @@ func TestSubscribe(t *testing.T) {
 					s.Close()
 				}
 			},
-			topic:      testTopic,
+			topic: testTopic,
 			setupMocks: func(t *testing.T, client *Client) {
-	ctrl := gomock.NewController(t)
-	mockMetrics := NewMockMetrics(ctrl)
-	client.UseMetrics(mockMetrics)
-	mockMetrics.EXPECT().IncrementCounter(gomock.Any(), "app_pubsub_subscribe_total_count", "topic", testTopic).AnyTimes()
-	mockMetrics.EXPECT().IncrementCounter(gomock.Any(), "app_pubsub_subscribe_success_count", "topic", testTopic).AnyTimes()
-	mockMetrics.EXPECT().IncrementCounter(gomock.Any(), "app_pubsub_publish_total_count", "topic", testTopic).AnyTimes()
-	mockMetrics.EXPECT().IncrementCounter(gomock.Any(), "app_pubsub_publish_success_count", "topic", testTopic).AnyTimes()
+				t.Helper()
+				ctrl := gomock.NewController(t)
+				mockMetrics := NewMockMetrics(ctrl)
+				client.UseMetrics(mockMetrics)
+				mockMetrics.EXPECT().IncrementCounter(gomock.Any(), "app_pubsub_subscribe_total_count", "topic", testTopic).AnyTimes()
+				mockMetrics.EXPECT().IncrementCounter(gomock.Any(), "app_pubsub_subscribe_success_count", "topic", testTopic).AnyTimes()
+				mockMetrics.EXPECT().IncrementCounter(gomock.Any(), "app_pubsub_publish_total_count", "topic", testTopic).AnyTimes()
+				mockMetrics.EXPECT().IncrementCounter(gomock.Any(), "app_pubsub_publish_success_count", "topic", testTopic).AnyTimes()
 			},
 			publishMsg: true,
 			wantErr:    false,
 			validateMsg: func(t *testing.T, msg *pubsub.Message) {
-	require.NotNil(t, msg)
-	assert.Equal(t, testTopic, msg.Topic)
-	assert.Equal(t, testMessage, msg.Value)
+				t.Helper()
+				require.NotNil(t, msg)
+				assert.Equal(t, testTopic, msg.Topic)
+				assert.Equal(t, testMessage, msg.Value)
 			},
 		},
 		{
 			name: "no connection",
-			setupClient: func(t *testing.T) (*Client, func()) {
+			setupClient: func(_ *testing.T) (*Client, func()) {
 				return New(DefaultConfig()), func() {}
 			},
 			topic:      testTopic,
-			setupMocks: func(t *testing.T, client *Client) {},
+			setupMocks: func(_ *testing.T, _ *Client) {},
 			wantErr:    true,
 			validateErr: func(t *testing.T, err error) {
+				t.Helper()
 				assert.Equal(t, errClientNotConnected, err)
 			},
 		},
 		{
 			name: "empty topic",
 			setupClient: func(t *testing.T) (*Client, func()) {
+				t.Helper()
 				s, err := miniredis.Run()
 				require.NoError(t, err)
 
@@ -611,34 +660,37 @@ func TestSubscribe(t *testing.T) {
 				}
 			},
 			topic:      "",
-			setupMocks: func(t *testing.T, client *Client) {},
+			setupMocks: func(_ *testing.T, _ *Client) {},
 			wantErr:    true,
 			validateErr: func(t *testing.T, err error) {
+				t.Helper()
 				assert.Equal(t, errEmptyTopicName, err)
 			},
 		},
 		{
 			name: "context timeout",
 			setupClient: func(t *testing.T) (*Client, func()) {
-	s, err := miniredis.Run()
-	require.NoError(t, err)
+				t.Helper()
+				s, err := miniredis.Run()
+				require.NoError(t, err)
 
-	cfg := DefaultConfig()
-	cfg.Addr = s.Addr()
+				cfg := DefaultConfig()
+				cfg.Addr = s.Addr()
 
-	client := New(cfg)
+				client := New(cfg)
 				mockLogger := logging.NewMockLogger(logging.DEBUG)
 				client.UseLogger(mockLogger)
-	client.Connect()
-	time.Sleep(100 * time.Millisecond)
+				client.Connect()
+				time.Sleep(100 * time.Millisecond)
 
 				return client, func() {
 					_ = client.Close()
 					s.Close()
 				}
 			},
-			topic:      testTopic,
+			topic: testTopic,
 			setupMocks: func(t *testing.T, client *Client) {
+				t.Helper()
 				ctrl := gomock.NewController(t)
 				mockMetrics := NewMockMetrics(ctrl)
 				client.UseMetrics(mockMetrics)
@@ -647,6 +699,7 @@ func TestSubscribe(t *testing.T) {
 			publishMsg: false,
 			wantErr:    false,
 			validateMsg: func(t *testing.T, msg *pubsub.Message) {
+				t.Helper()
 				assert.Nil(t, msg) // Should be nil due to timeout
 			},
 		},
@@ -656,6 +709,7 @@ func TestSubscribe(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			client, cleanup := tt.setupClient(t)
 			defer cleanup()
+
 			tt.setupMocks(t, client)
 
 			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
@@ -664,27 +718,35 @@ func TestSubscribe(t *testing.T) {
 			if tt.publishMsg {
 				go func() {
 					time.Sleep(200 * time.Millisecond)
+
 					_ = client.Publish(context.Background(), tt.topic, testMessage)
 				}()
 			}
 
 			msg, err := client.Subscribe(ctx, tt.topic)
 
+			require.Equal(t, tt.wantErr, err != nil, "error expectation mismatch")
+
 			if tt.wantErr {
-	require.Error(t, err)
+				require.Error(t, err)
+
 				if tt.validateErr != nil {
 					tt.validateErr(t, err)
 				}
-			} else {
-				if tt.validateMsg != nil {
-					tt.validateMsg(t, msg)
-				}
+
+				return
+			}
+
+			require.NoError(t, err)
+
+			if tt.validateMsg != nil {
+				tt.validateMsg(t, msg)
 			}
 		})
 	}
 }
 
-func TestUnsubscribe(t *testing.T) {
+func TestUnsubscribe(t *testing.T) { //nolint:funlen // Test function with many test cases
 	tests := []struct {
 		name        string
 		setupClient func(t *testing.T) (*Client, func())
@@ -696,31 +758,32 @@ func TestUnsubscribe(t *testing.T) {
 		{
 			name: "successful unsubscribe",
 			setupClient: func(t *testing.T) (*Client, func()) {
-	s, err := miniredis.Run()
-	require.NoError(t, err)
+				t.Helper()
+				s, err := miniredis.Run()
+				require.NoError(t, err)
 
-	cfg := DefaultConfig()
-	cfg.Addr = s.Addr()
+				cfg := DefaultConfig()
+				cfg.Addr = s.Addr()
 
-	client := New(cfg)
-	mockLogger := logging.NewMockLogger(logging.DEBUG)
-	client.UseLogger(mockLogger)
-	client.Connect()
-	time.Sleep(100 * time.Millisecond)
+				client := New(cfg)
+				mockLogger := logging.NewMockLogger(logging.DEBUG)
+				client.UseLogger(mockLogger)
+				client.Connect()
+				time.Sleep(100 * time.Millisecond)
 
 				// Subscribe first
 				ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
-	defer cancel()
+				defer cancel()
 
-	ctrl := gomock.NewController(t)
-	mockMetrics := NewMockMetrics(ctrl)
-	client.UseMetrics(mockMetrics)
-	mockMetrics.EXPECT().IncrementCounter(gomock.Any(), "app_pubsub_subscribe_total_count", "topic", testTopic).AnyTimes()
+				ctrl := gomock.NewController(t)
+				mockMetrics := NewMockMetrics(ctrl)
+				client.UseMetrics(mockMetrics)
+				mockMetrics.EXPECT().IncrementCounter(gomock.Any(), "app_pubsub_subscribe_total_count", "topic", testTopic).AnyTimes()
 
-	go func() {
-		_, _ = client.Subscribe(ctx, testTopic)
-	}()
-	time.Sleep(200 * time.Millisecond)
+				go func() {
+					_, _ = client.Subscribe(ctx, testTopic)
+				}()
+				time.Sleep(200 * time.Millisecond)
 
 				return client, func() {
 					_ = client.Close()
@@ -729,21 +792,22 @@ func TestUnsubscribe(t *testing.T) {
 				}
 			},
 			topic:      testTopic,
-			setupMocks: func(t *testing.T, client *Client) {},
+			setupMocks: func(_ *testing.T, _ *Client) {},
 			wantErr:    false,
 		},
 		{
 			name: "unsubscribe non-existent topic",
 			setupClient: func(t *testing.T) (*Client, func()) {
+				t.Helper()
 				s, err := miniredis.Run()
-	require.NoError(t, err)
+				require.NoError(t, err)
 
 				cfg := DefaultConfig()
 				cfg.Addr = s.Addr()
 
 				client := New(cfg)
 				client.Connect()
-	time.Sleep(100 * time.Millisecond)
+				time.Sleep(100 * time.Millisecond)
 
 				return client, func() {
 					_ = client.Close()
@@ -751,33 +815,35 @@ func TestUnsubscribe(t *testing.T) {
 				}
 			},
 			topic:      "non-existent-topic",
-			setupMocks: func(t *testing.T, client *Client) {},
+			setupMocks: func(_ *testing.T, _ *Client) {},
 			wantErr:    false,
 		},
 		{
 			name: "no connection",
-			setupClient: func(t *testing.T) (*Client, func()) {
+			setupClient: func(_ *testing.T) (*Client, func()) {
 				return New(DefaultConfig()), func() {}
 			},
 			topic:      testTopic,
-			setupMocks: func(t *testing.T, client *Client) {},
+			setupMocks: func(_ *testing.T, _ *Client) {},
 			wantErr:    true,
 			validateErr: func(t *testing.T, err error) {
+				t.Helper()
 				assert.Equal(t, errClientNotConnected, err)
 			},
 		},
 		{
 			name: "empty topic",
 			setupClient: func(t *testing.T) (*Client, func()) {
-	s, err := miniredis.Run()
-	require.NoError(t, err)
+				t.Helper()
+				s, err := miniredis.Run()
+				require.NoError(t, err)
 
-	cfg := DefaultConfig()
-	cfg.Addr = s.Addr()
+				cfg := DefaultConfig()
+				cfg.Addr = s.Addr()
 
-	client := New(cfg)
-	client.Connect()
-	time.Sleep(100 * time.Millisecond)
+				client := New(cfg)
+				client.Connect()
+				time.Sleep(100 * time.Millisecond)
 
 				return client, func() {
 					_ = client.Close()
@@ -785,9 +851,10 @@ func TestUnsubscribe(t *testing.T) {
 				}
 			},
 			topic:      "",
-			setupMocks: func(t *testing.T, client *Client) {},
+			setupMocks: func(_ *testing.T, _ *Client) {},
 			wantErr:    true,
 			validateErr: func(t *testing.T, err error) {
+				t.Helper()
 				assert.Equal(t, errEmptyTopicName, err)
 			},
 		},
@@ -797,23 +864,29 @@ func TestUnsubscribe(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			client, cleanup := tt.setupClient(t)
 			defer cleanup()
+
 			tt.setupMocks(t, client)
 
 			err := client.Unsubscribe(tt.topic)
 
+			require.Equal(t, tt.wantErr, err != nil, "error expectation mismatch")
+
 			if tt.wantErr {
-	require.Error(t, err)
+				require.Error(t, err)
+
 				if tt.validateErr != nil {
 					tt.validateErr(t, err)
 				}
-			} else {
-				require.NoError(t, err)
+
+				return
 			}
+
+			require.NoError(t, err)
 		})
 	}
 }
 
-func TestQuery(t *testing.T) {
+func TestQuery(t *testing.T) { //nolint:funlen // Test function with many test cases
 	tests := []struct {
 		name        string
 		setupClient func(t *testing.T) (*Client, func())
@@ -827,15 +900,16 @@ func TestQuery(t *testing.T) {
 		{
 			name: "successful query with messages",
 			setupClient: func(t *testing.T) (*Client, func()) {
-	s, err := miniredis.Run()
-	require.NoError(t, err)
+				t.Helper()
+				s, err := miniredis.Run()
+				require.NoError(t, err)
 
-	cfg := DefaultConfig()
-	cfg.Addr = s.Addr()
+				cfg := DefaultConfig()
+				cfg.Addr = s.Addr()
 
-	client := New(cfg)
-	client.Connect()
-	time.Sleep(100 * time.Millisecond)
+				client := New(cfg)
+				client.Connect()
+				time.Sleep(100 * time.Millisecond)
 
 				return client, func() {
 					_ = client.Close()
@@ -847,6 +921,7 @@ func TestQuery(t *testing.T) {
 			publishMsgs: []string{"message1", "message2"},
 			wantErr:     false,
 			validateRes: func(t *testing.T, result []byte) {
+				t.Helper()
 				assert.NotEmpty(t, result)
 				assert.Contains(t, string(result), "message1")
 				assert.Contains(t, string(result), "message2")
@@ -855,6 +930,7 @@ func TestQuery(t *testing.T) {
 		{
 			name: "query with timeout",
 			setupClient: func(t *testing.T) (*Client, func()) {
+				t.Helper()
 				s, err := miniredis.Run()
 				require.NoError(t, err)
 
@@ -875,12 +951,13 @@ func TestQuery(t *testing.T) {
 			publishMsgs: nil,
 			wantErr:     false,
 			validateRes: func(t *testing.T, result []byte) {
+				t.Helper()
 				assert.Empty(t, result) // No messages published, should be empty
 			},
 		},
 		{
 			name: "no connection",
-			setupClient: func(t *testing.T) (*Client, func()) {
+			setupClient: func(_ *testing.T) (*Client, func()) {
 				return New(DefaultConfig()), func() {}
 			},
 			topic:       testTopic,
@@ -888,21 +965,23 @@ func TestQuery(t *testing.T) {
 			publishMsgs: nil,
 			wantErr:     true,
 			validateErr: func(t *testing.T, err error) {
+				t.Helper()
 				assert.Equal(t, errClientNotConnected, err)
 			},
 		},
 		{
 			name: "empty topic",
 			setupClient: func(t *testing.T) (*Client, func()) {
-	s, err := miniredis.Run()
-	require.NoError(t, err)
+				t.Helper()
+				s, err := miniredis.Run()
+				require.NoError(t, err)
 
-	cfg := DefaultConfig()
-	cfg.Addr = s.Addr()
+				cfg := DefaultConfig()
+				cfg.Addr = s.Addr()
 
-	client := New(cfg)
-	client.Connect()
-	time.Sleep(100 * time.Millisecond)
+				client := New(cfg)
+				client.Connect()
+				time.Sleep(100 * time.Millisecond)
 
 				return client, func() {
 					_ = client.Close()
@@ -914,12 +993,14 @@ func TestQuery(t *testing.T) {
 			publishMsgs: nil,
 			wantErr:     true,
 			validateErr: func(t *testing.T, err error) {
+				t.Helper()
 				assert.Equal(t, errEmptyTopicName, err)
 			},
 		},
 		{
 			name: "query with limit",
 			setupClient: func(t *testing.T) (*Client, func()) {
+				t.Helper()
 				s, err := miniredis.Run()
 				require.NoError(t, err)
 
@@ -940,6 +1021,7 @@ func TestQuery(t *testing.T) {
 			publishMsgs: []string{"msg1", "msg2", "msg3"},
 			wantErr:     false,
 			validateRes: func(t *testing.T, result []byte) {
+				t.Helper()
 				// Should only get 1 message due to limit
 				resultStr := string(result)
 				assert.NotEmpty(t, resultStr)
@@ -955,13 +1037,15 @@ func TestQuery(t *testing.T) {
 			client, cleanup := tt.setupClient(t)
 			defer cleanup()
 
-	ctx := context.Background()
+			ctx := context.Background()
 
 			if len(tt.publishMsgs) > 0 {
-	go func() {
-		time.Sleep(100 * time.Millisecond)
+				go func() {
+					time.Sleep(100 * time.Millisecond)
+
 					for _, msg := range tt.publishMsgs {
 						_ = client.Publish(ctx, tt.topic, []byte(msg))
+
 						time.Sleep(50 * time.Millisecond)
 					}
 				}()
@@ -969,16 +1053,22 @@ func TestQuery(t *testing.T) {
 
 			result, err := client.Query(ctx, tt.topic, tt.args...)
 
+			require.Equal(t, tt.wantErr, err != nil, "error expectation mismatch")
+
 			if tt.wantErr {
-	require.Error(t, err)
+				require.Error(t, err)
+
 				if tt.validateErr != nil {
 					tt.validateErr(t, err)
 				}
-			} else {
-				require.NoError(t, err)
-				if tt.validateRes != nil {
-					tt.validateRes(t, result)
-				}
+
+				return
+			}
+
+			require.NoError(t, err)
+
+			if tt.validateRes != nil {
+				tt.validateRes(t, result)
 			}
 		})
 	}
@@ -993,15 +1083,16 @@ func TestHealth(t *testing.T) {
 		{
 			name: "health up",
 			setupClient: func(t *testing.T) (*Client, func()) {
-	s, err := miniredis.Run()
-	require.NoError(t, err)
+				t.Helper()
+				s, err := miniredis.Run()
+				require.NoError(t, err)
 
-	cfg := DefaultConfig()
-	cfg.Addr = s.Addr()
+				cfg := DefaultConfig()
+				cfg.Addr = s.Addr()
 
-	client := New(cfg)
-	client.Connect()
-	time.Sleep(100 * time.Millisecond)
+				client := New(cfg)
+				client.Connect()
+				time.Sleep(100 * time.Millisecond)
 
 				return client, func() {
 					_ = client.Close()
@@ -1009,6 +1100,7 @@ func TestHealth(t *testing.T) {
 				}
 			},
 			validate: func(t *testing.T, health datasource.Health) {
+				t.Helper()
 				assert.Equal(t, "UP", health.Status)
 				assert.Equal(t, "REDIS", health.Details["backend"])
 				assert.NotEmpty(t, health.Details["addr"])
@@ -1016,10 +1108,11 @@ func TestHealth(t *testing.T) {
 		},
 		{
 			name: "health down - no connection",
-			setupClient: func(t *testing.T) (*Client, func()) {
+			setupClient: func(_ *testing.T) (*Client, func()) {
 				return New(DefaultConfig()), func() {}
 			},
 			validate: func(t *testing.T, health datasource.Health) {
+				t.Helper()
 				assert.Equal(t, "DOWN", health.Status)
 				assert.Equal(t, "REDIS", health.Details["backend"])
 			},
@@ -1027,15 +1120,16 @@ func TestHealth(t *testing.T) {
 		{
 			name: "health down - connection failed",
 			setupClient: func(t *testing.T) (*Client, func()) {
-	s, err := miniredis.Run()
-	require.NoError(t, err)
+				t.Helper()
+				s, err := miniredis.Run()
+				require.NoError(t, err)
 
-	cfg := DefaultConfig()
-	cfg.Addr = s.Addr()
+				cfg := DefaultConfig()
+				cfg.Addr = s.Addr()
 
-	client := New(cfg)
-	client.Connect()
-	time.Sleep(100 * time.Millisecond)
+				client := New(cfg)
+				client.Connect()
+				time.Sleep(100 * time.Millisecond)
 				s.Close() // Close Redis to simulate failure
 
 				return client, func() {
@@ -1043,8 +1137,9 @@ func TestHealth(t *testing.T) {
 				}
 			},
 			validate: func(t *testing.T, health datasource.Health) {
+				t.Helper()
 				assert.Equal(t, "DOWN", health.Status)
-	assert.Equal(t, "REDIS", health.Details["backend"])
+				assert.Equal(t, "REDIS", health.Details["backend"])
 			},
 		},
 	}
@@ -1054,7 +1149,7 @@ func TestHealth(t *testing.T) {
 			client, cleanup := tt.setupClient(t)
 			defer cleanup()
 
-	health := client.Health()
+			health := client.Health()
 			tt.validate(t, health)
 		})
 	}
@@ -1072,6 +1167,7 @@ func TestCreateTopic(t *testing.T) {
 			topic:   testTopic,
 			wantErr: false,
 			validate: func(t *testing.T, err error) {
+				t.Helper()
 				assert.NoError(t, err)
 			},
 		},
@@ -1080,6 +1176,7 @@ func TestCreateTopic(t *testing.T) {
 			topic:   "",
 			wantErr: false,
 			validate: func(t *testing.T, err error) {
+				t.Helper()
 				assert.NoError(t, err) // No-op, so no error
 			},
 		},
@@ -1088,7 +1185,7 @@ func TestCreateTopic(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			client := New(DefaultConfig())
-	ctx := context.Background()
+			ctx := context.Background()
 			err := client.CreateTopic(ctx, tt.topic)
 			tt.validate(t, err)
 		})
@@ -1107,6 +1204,7 @@ func TestDeleteTopic(t *testing.T) {
 			topic:   testTopic,
 			wantErr: false,
 			validate: func(t *testing.T, err error) {
+				t.Helper()
 				assert.NoError(t, err)
 			},
 		},
@@ -1115,6 +1213,7 @@ func TestDeleteTopic(t *testing.T) {
 			topic:   "",
 			wantErr: false,
 			validate: func(t *testing.T, err error) {
+				t.Helper()
 				assert.NoError(t, err) // No-op, so no error
 			},
 		},
@@ -1123,7 +1222,7 @@ func TestDeleteTopic(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			client := New(DefaultConfig())
-	ctx := context.Background()
+			ctx := context.Background()
 			err := client.DeleteTopic(ctx, tt.topic)
 			tt.validate(t, err)
 		})
@@ -1140,30 +1239,31 @@ func TestClose(t *testing.T) {
 		{
 			name: "close with connections",
 			setupClient: func(t *testing.T) (*Client, func()) {
-	s, err := miniredis.Run()
-	require.NoError(t, err)
+				t.Helper()
+				s, err := miniredis.Run()
+				require.NoError(t, err)
 
-	cfg := DefaultConfig()
-	cfg.Addr = s.Addr()
+				cfg := DefaultConfig()
+				cfg.Addr = s.Addr()
 
-	client := New(cfg)
-	client.Connect()
-	time.Sleep(100 * time.Millisecond)
+				client := New(cfg)
+				client.Connect()
+				time.Sleep(100 * time.Millisecond)
 
-	// Subscribe to create some state
-	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
-	defer cancel()
+				// Subscribe to create some state
+				ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
+				defer cancel()
 
-	ctrl := gomock.NewController(t)
-	mockMetrics := NewMockMetrics(ctrl)
-	client.UseMetrics(mockMetrics)
-	mockMetrics.EXPECT().IncrementCounter(gomock.Any(), "app_pubsub_subscribe_total_count", "topic", testTopic).AnyTimes()
-	mockMetrics.EXPECT().IncrementCounter(gomock.Any(), "app_pubsub_subscribe_success_count", "topic", testTopic).AnyTimes()
+				ctrl := gomock.NewController(t)
+				mockMetrics := NewMockMetrics(ctrl)
+				client.UseMetrics(mockMetrics)
+				mockMetrics.EXPECT().IncrementCounter(gomock.Any(), "app_pubsub_subscribe_total_count", "topic", testTopic).AnyTimes()
+				mockMetrics.EXPECT().IncrementCounter(gomock.Any(), "app_pubsub_subscribe_success_count", "topic", testTopic).AnyTimes()
 
-	go func() {
-		_, _ = client.Subscribe(ctx, testTopic)
-	}()
-	time.Sleep(200 * time.Millisecond)
+				go func() {
+					_, _ = client.Subscribe(ctx, testTopic)
+				}()
+				time.Sleep(200 * time.Millisecond)
 
 				return client, func() {
 					s.Close()
@@ -1172,16 +1272,18 @@ func TestClose(t *testing.T) {
 			},
 			wantErr: false,
 			validate: func(t *testing.T, err error) {
+				t.Helper()
 				assert.NoError(t, err)
 			},
 		},
 		{
 			name: "close without connections",
-			setupClient: func(t *testing.T) (*Client, func()) {
+			setupClient: func(_ *testing.T) (*Client, func()) {
 				return New(DefaultConfig()), func() {}
 			},
 			wantErr: false,
 			validate: func(t *testing.T, err error) {
+				t.Helper()
 				assert.NoError(t, err)
 			},
 		},
@@ -1198,7 +1300,6 @@ func TestClose(t *testing.T) {
 	}
 }
 
-
 func TestRetryConnect(t *testing.T) {
 	tests := []struct {
 		name        string
@@ -1207,7 +1308,7 @@ func TestRetryConnect(t *testing.T) {
 	}{
 		{
 			name: "retry connect triggers on connection failure",
-			setupClient: func(t *testing.T) (*Client, func()) {
+			setupClient: func(_ *testing.T) (*Client, func()) {
 				// Start with invalid address
 				cfg := &Config{
 					Addr:        "invalid:6379",
@@ -1228,6 +1329,7 @@ func TestRetryConnect(t *testing.T) {
 				}
 			},
 			validate: func(t *testing.T, client *Client) {
+				t.Helper()
 				// Connections are created even if they fail to connect
 				// The retry mechanism runs in background
 				assert.NotNil(t, client.pubConn) // Client is created, connection just fails
@@ -1239,6 +1341,7 @@ func TestRetryConnect(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			client, cleanup := tt.setupClient(t)
 			defer cleanup()
+
 			tt.validate(t, client)
 		})
 	}
@@ -1254,15 +1357,16 @@ func TestTestConnections(t *testing.T) {
 		{
 			name: "test connections success",
 			setupClient: func(t *testing.T) (*Client, func()) {
+				t.Helper()
 				s, err := miniredis.Run()
-	require.NoError(t, err)
+				require.NoError(t, err)
 
 				cfg := DefaultConfig()
 				cfg.Addr = s.Addr()
 
 				client := New(cfg)
 				client.Connect()
-	time.Sleep(100 * time.Millisecond)
+				time.Sleep(100 * time.Millisecond)
 
 				return client, func() {
 					_ = client.Close()
@@ -1271,22 +1375,25 @@ func TestTestConnections(t *testing.T) {
 			},
 			wantErr: false,
 			validate: func(t *testing.T, err error) {
+				t.Helper()
 				assert.NoError(t, err)
 			},
 		},
 		{
 			name: "test connections - nil pubConn",
-			setupClient: func(t *testing.T) (*Client, func()) {
+			setupClient: func(_ *testing.T) (*Client, func()) {
 				return New(DefaultConfig()), func() {}
 			},
 			wantErr: true,
 			validate: func(t *testing.T, err error) {
+				t.Helper()
 				assert.Equal(t, errClientNotConnected, err)
 			},
 		},
 		{
 			name: "test connections - nil subConn",
 			setupClient: func(t *testing.T) (*Client, func()) {
+				t.Helper()
 				client := New(DefaultConfig())
 				// Manually set pubConn but not subConn
 				s, err := miniredis.Run()
@@ -1303,6 +1410,7 @@ func TestTestConnections(t *testing.T) {
 			},
 			wantErr: true,
 			validate: func(t *testing.T, err error) {
+				t.Helper()
 				assert.Equal(t, errClientNotConnected, err)
 			},
 		},
@@ -1319,7 +1427,7 @@ func TestTestConnections(t *testing.T) {
 	}
 }
 
-func TestSubscribeToChannel(t *testing.T) {
+func TestSubscribeToChannel(t *testing.T) { //nolint:funlen // Test function with many test cases
 	tests := []struct {
 		name        string
 		setupClient func(t *testing.T) (*Client, func())
@@ -1330,7 +1438,8 @@ func TestSubscribeToChannel(t *testing.T) {
 		{
 			name: "subscribe with nil subConn",
 			setupClient: func(t *testing.T) (*Client, func()) {
-	client := New(DefaultConfig())
+				t.Helper()
+				client := New(DefaultConfig())
 				ctrl := gomock.NewController(t)
 				mockLogger := NewMockLogger(ctrl)
 				mockLogger.EXPECT().Errorf("subscriber connection is nil for topic '%s'", testTopic)
@@ -1341,8 +1450,8 @@ func TestSubscribeToChannel(t *testing.T) {
 				}
 			},
 			topic:      testTopic,
-			setupMocks: func(t *testing.T, client *Client) {},
-			validate: func(t *testing.T, client *Client) {
+			setupMocks: func(_ *testing.T, _ *Client) {},
+			validate: func(_ *testing.T, client *Client) {
 				ctx := context.Background()
 				client.subscribeToChannel(ctx, testTopic)
 				// Should return early without error
@@ -1351,8 +1460,9 @@ func TestSubscribeToChannel(t *testing.T) {
 		{
 			name: "subscribe with channel full scenario",
 			setupClient: func(t *testing.T) (*Client, func()) {
+				t.Helper()
 				s, err := miniredis.Run()
-	require.NoError(t, err)
+				require.NoError(t, err)
 
 				cfg := DefaultConfig()
 				cfg.Addr = s.Addr()
@@ -1378,8 +1488,8 @@ func TestSubscribeToChannel(t *testing.T) {
 				}
 			},
 			topic:      testTopic,
-			setupMocks: func(t *testing.T, client *Client) {},
-			validate: func(t *testing.T, client *Client) {
+			setupMocks: func(_ *testing.T, _ *Client) {},
+			validate: func(_ *testing.T, client *Client) {
 				ctx, cancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
 				defer cancel()
 
@@ -1397,6 +1507,7 @@ func TestSubscribeToChannel(t *testing.T) {
 		{
 			name: "subscribe with context cancellation",
 			setupClient: func(t *testing.T) (*Client, func()) {
+				t.Helper()
 				s, err := miniredis.Run()
 				require.NoError(t, err)
 
@@ -1415,8 +1526,9 @@ func TestSubscribeToChannel(t *testing.T) {
 				}
 			},
 			topic:      testTopic,
-			setupMocks: func(t *testing.T, client *Client) {},
+			setupMocks: func(_ *testing.T, _ *Client) {},
 			validate: func(t *testing.T, client *Client) {
+				t.Helper()
 				ctx, cancel := context.WithCancel(context.Background())
 
 				// Start subscription
@@ -1442,6 +1554,7 @@ func TestSubscribeToChannel(t *testing.T) {
 		{
 			name: "subscribe with nil message",
 			setupClient: func(t *testing.T) (*Client, func()) {
+				t.Helper()
 				s, err := miniredis.Run()
 				require.NoError(t, err)
 
@@ -1460,8 +1573,8 @@ func TestSubscribeToChannel(t *testing.T) {
 				}
 			},
 			topic:      testTopic,
-			setupMocks: func(t *testing.T, client *Client) {},
-			validate: func(t *testing.T, client *Client) {
+			setupMocks: func(_ *testing.T, _ *Client) {},
+			validate: func(_ *testing.T, client *Client) {
 				ctx, cancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
 				defer cancel()
 
@@ -1476,6 +1589,7 @@ func TestSubscribeToChannel(t *testing.T) {
 		{
 			name: "subscribe with closed channel",
 			setupClient: func(t *testing.T) (*Client, func()) {
+				t.Helper()
 				s, err := miniredis.Run()
 				require.NoError(t, err)
 
@@ -1494,8 +1608,8 @@ func TestSubscribeToChannel(t *testing.T) {
 				}
 			},
 			topic:      testTopic,
-			setupMocks: func(t *testing.T, client *Client) {},
-			validate: func(t *testing.T, client *Client) {
+			setupMocks: func(_ *testing.T, _ *Client) {},
+			validate: func(_ *testing.T, client *Client) {
 				ctx, cancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
 				defer cancel()
 
@@ -1522,13 +1636,14 @@ func TestSubscribeToChannel(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			client, cleanup := tt.setupClient(t)
 			defer cleanup()
+
 			tt.setupMocks(t, client)
 			tt.validate(t, client)
 		})
 	}
 }
 
-func TestRestartSubscriptions(t *testing.T) {
+func TestRestartSubscriptions(t *testing.T) { //nolint:funlen // Test function with many test cases
 	tests := []struct {
 		name        string
 		setupClient func(t *testing.T) (*Client, func())
@@ -1537,15 +1652,16 @@ func TestRestartSubscriptions(t *testing.T) {
 		{
 			name: "restart with active subscriptions and waitgroups",
 			setupClient: func(t *testing.T) (*Client, func()) {
-	s, err := miniredis.Run()
-	require.NoError(t, err)
+				t.Helper()
+				s, err := miniredis.Run()
+				require.NoError(t, err)
 
-	cfg := DefaultConfig()
-	cfg.Addr = s.Addr()
+				cfg := DefaultConfig()
+				cfg.Addr = s.Addr()
 
-	client := New(cfg)
-	mockLogger := logging.NewMockLogger(logging.DEBUG)
-	client.UseLogger(mockLogger)
+				client := New(cfg)
+				mockLogger := logging.NewMockLogger(logging.DEBUG)
+				client.UseLogger(mockLogger)
 				client.Connect()
 				time.Sleep(100 * time.Millisecond)
 
@@ -1573,19 +1689,21 @@ func TestRestartSubscriptions(t *testing.T) {
 				}
 			},
 			validate: func(t *testing.T, client *Client) {
+				t.Helper()
 				client.restartSubscriptions()
 
 				client.mu.RLock()
-				assert.Equal(t, 0, len(client.subStarted))
-				assert.Equal(t, 0, len(client.subCancel))
-				assert.Equal(t, 0, len(client.subPubSub))
-				assert.Equal(t, 0, len(client.subWg))
+				assert.Empty(t, client.subStarted)
+				assert.Empty(t, client.subCancel)
+				assert.Empty(t, client.subPubSub)
+				assert.Empty(t, client.subWg)
 				client.mu.RUnlock()
 			},
 		},
 		{
 			name: "restart with timeout on waitgroup",
 			setupClient: func(t *testing.T) (*Client, func()) {
+				t.Helper()
 				s, err := miniredis.Run()
 				require.NoError(t, err)
 
@@ -1595,19 +1713,19 @@ func TestRestartSubscriptions(t *testing.T) {
 				client := New(cfg)
 				mockLogger := logging.NewMockLogger(logging.DEBUG)
 				client.UseLogger(mockLogger)
-	client.Connect()
-	time.Sleep(100 * time.Millisecond)
+				client.Connect()
+				time.Sleep(100 * time.Millisecond)
 
 				// Set up subscription with waitgroup that won't complete
-	client.mu.Lock()
-	client.subStarted[testTopic] = struct{}{}
-	client.receiveChan[testTopic] = make(chan *pubsub.Message, 10)
-	_, cancel := context.WithCancel(context.Background())
-	client.subCancel[testTopic] = cancel
+				client.mu.Lock()
+				client.subStarted[testTopic] = struct{}{}
+				client.receiveChan[testTopic] = make(chan *pubsub.Message, 10)
+				_, cancel := context.WithCancel(context.Background())
+				client.subCancel[testTopic] = cancel
 				wg := &sync.WaitGroup{}
 				wg.Add(1) // Never call Done(), will timeout
 				client.subWg[testTopic] = wg
-	client.mu.Unlock()
+				client.mu.Unlock()
 
 				return client, func() {
 					_ = client.Close()
@@ -1615,17 +1733,19 @@ func TestRestartSubscriptions(t *testing.T) {
 				}
 			},
 			validate: func(t *testing.T, client *Client) {
+				t.Helper()
 				// This should handle timeout gracefully
-	client.restartSubscriptions()
+				client.restartSubscriptions()
 
-	client.mu.RLock()
-				assert.Equal(t, 0, len(client.subStarted))
-	client.mu.RUnlock()
+				client.mu.RLock()
+				assert.Empty(t, client.subStarted)
+				client.mu.RUnlock()
 			},
 		},
 		{
 			name: "restart with subscription without cancel",
 			setupClient: func(t *testing.T) (*Client, func()) {
+				t.Helper()
 				s, err := miniredis.Run()
 				require.NoError(t, err)
 
@@ -1653,6 +1773,7 @@ func TestRestartSubscriptions(t *testing.T) {
 				}
 			},
 			validate: func(t *testing.T, client *Client) {
+				t.Helper()
 				client.restartSubscriptions()
 
 				client.mu.RLock()
@@ -1663,6 +1784,7 @@ func TestRestartSubscriptions(t *testing.T) {
 		{
 			name: "restart with subscription without pubSub",
 			setupClient: func(t *testing.T) (*Client, func()) {
+				t.Helper()
 				s, err := miniredis.Run()
 				require.NoError(t, err)
 
@@ -1687,6 +1809,7 @@ func TestRestartSubscriptions(t *testing.T) {
 				}
 			},
 			validate: func(t *testing.T, client *Client) {
+				t.Helper()
 				client.restartSubscriptions()
 
 				client.mu.RLock()
@@ -1697,6 +1820,7 @@ func TestRestartSubscriptions(t *testing.T) {
 		{
 			name: "restart with no subscriptions",
 			setupClient: func(t *testing.T) (*Client, func()) {
+				t.Helper()
 				s, err := miniredis.Run()
 				require.NoError(t, err)
 
@@ -1713,6 +1837,7 @@ func TestRestartSubscriptions(t *testing.T) {
 				}
 			},
 			validate: func(t *testing.T, client *Client) {
+				t.Helper()
 				// Call restartSubscriptions with no active subscriptions
 				client.restartSubscriptions()
 
@@ -1728,11 +1853,11 @@ func TestRestartSubscriptions(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			client, cleanup := tt.setupClient(t)
 			defer cleanup()
+
 			tt.validate(t, client)
 		})
 	}
 }
-
 
 func TestPublishErrorHandling(t *testing.T) {
 	tests := []struct {
@@ -1747,6 +1872,7 @@ func TestPublishErrorHandling(t *testing.T) {
 		{
 			name: "publish with error from redis",
 			setupClient: func(t *testing.T) (*Client, func()) {
+				t.Helper()
 				s, err := miniredis.Run()
 				require.NoError(t, err)
 
@@ -1767,6 +1893,7 @@ func TestPublishErrorHandling(t *testing.T) {
 			topic:   testTopic,
 			message: testMessage,
 			setupMocks: func(t *testing.T, client *Client) {
+				t.Helper()
 				ctrl := gomock.NewController(t)
 				mockMetrics := NewMockMetrics(ctrl)
 				client.UseMetrics(mockMetrics)
@@ -1777,6 +1904,7 @@ func TestPublishErrorHandling(t *testing.T) {
 		{
 			name: "publish with disconnected client",
 			setupClient: func(t *testing.T) (*Client, func()) {
+				t.Helper()
 				s, err := miniredis.Run()
 				require.NoError(t, err)
 
@@ -1796,6 +1924,7 @@ func TestPublishErrorHandling(t *testing.T) {
 			topic:   testTopic,
 			message: testMessage,
 			setupMocks: func(t *testing.T, client *Client) {
+				t.Helper()
 				ctrl := gomock.NewController(t)
 				mockMetrics := NewMockMetrics(ctrl)
 				client.UseMetrics(mockMetrics)
@@ -1809,19 +1938,25 @@ func TestPublishErrorHandling(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			client, cleanup := tt.setupClient(t)
 			defer cleanup()
+
 			tt.setupMocks(t, client)
 
 			ctx := context.Background()
 			err := client.Publish(ctx, tt.topic, tt.message)
 
+			require.Equal(t, tt.wantErr, err != nil, "error expectation mismatch")
+
 			if tt.wantErr {
 				require.Error(t, err)
+
 				if tt.validateErr != nil {
 					tt.validateErr(t, err)
 				}
-			} else {
-				require.NoError(t, err)
+
+				return
 			}
+
+			require.NoError(t, err)
 		})
 	}
 }
@@ -1838,6 +1973,7 @@ func TestQueryEdgeCases(t *testing.T) {
 		{
 			name: "query with nil queryConn falls back to subConn",
 			setupClient: func(t *testing.T) (*Client, func()) {
+				t.Helper()
 				s, err := miniredis.Run()
 				require.NoError(t, err)
 
@@ -1859,7 +1995,8 @@ func TestQueryEdgeCases(t *testing.T) {
 			topic:   testTopic,
 			args:    []any{1 * time.Second, 1},
 			wantErr: false,
-			validate: func(t *testing.T, result []byte, err error) {
+			validate: func(t *testing.T, _ []byte, err error) {
+				t.Helper()
 				// Should work with subConn fallback
 				assert.NoError(t, err)
 			},
@@ -1867,6 +2004,7 @@ func TestQueryEdgeCases(t *testing.T) {
 		{
 			name: "query with nil subConn when queryConn is nil",
 			setupClient: func(t *testing.T) (*Client, func()) {
+				t.Helper()
 				s, err := miniredis.Run()
 				require.NoError(t, err)
 
@@ -1889,7 +2027,8 @@ func TestQueryEdgeCases(t *testing.T) {
 			topic:   testTopic,
 			args:    []any{},
 			wantErr: true,
-			validate: func(t *testing.T, result []byte, err error) {
+			validate: func(t *testing.T, _ []byte, err error) {
+				t.Helper()
 				assert.Equal(t, errClientNotConnected, err)
 			},
 		},
@@ -1903,11 +2042,19 @@ func TestQueryEdgeCases(t *testing.T) {
 			ctx := context.Background()
 			result, err := client.Query(ctx, tt.topic, tt.args...)
 
+			require.Equal(t, tt.wantErr, err != nil, "error expectation mismatch")
+
 			if tt.wantErr {
 				require.Error(t, err)
-			} else {
-				require.NoError(t, err)
+
+				if tt.validate != nil {
+					tt.validate(t, result, err)
+				}
+
+				return
 			}
+
+			require.NoError(t, err)
 
 			if tt.validate != nil {
 				tt.validate(t, result, err)
@@ -1916,7 +2063,7 @@ func TestQueryEdgeCases(t *testing.T) {
 	}
 }
 
-func TestUnsubscribeEdgeCases(t *testing.T) {
+func TestUnsubscribeEdgeCases(t *testing.T) { //nolint:funlen // Test function with many test cases
 	tests := []struct {
 		name        string
 		setupClient func(t *testing.T) (*Client, func())
@@ -1927,6 +2074,7 @@ func TestUnsubscribeEdgeCases(t *testing.T) {
 		{
 			name: "unsubscribe with timeout on waitgroup",
 			setupClient: func(t *testing.T) (*Client, func()) {
+				t.Helper()
 				s, err := miniredis.Run()
 				require.NoError(t, err)
 
@@ -1959,6 +2107,7 @@ func TestUnsubscribeEdgeCases(t *testing.T) {
 			topic:   testTopic,
 			wantErr: false,
 			validate: func(t *testing.T, err error) {
+				t.Helper()
 				// Should handle timeout gracefully
 				assert.NoError(t, err)
 			},
@@ -1966,6 +2115,7 @@ func TestUnsubscribeEdgeCases(t *testing.T) {
 		{
 			name: "unsubscribe with unsubscribe error",
 			setupClient: func(t *testing.T) (*Client, func()) {
+				t.Helper()
 				s, err := miniredis.Run()
 				require.NoError(t, err)
 
@@ -1999,6 +2149,7 @@ func TestUnsubscribeEdgeCases(t *testing.T) {
 			topic:   testTopic,
 			wantErr: false,
 			validate: func(t *testing.T, err error) {
+				t.Helper()
 				// Should continue even if unsubscribe has error
 				assert.NoError(t, err)
 			},
@@ -2012,12 +2163,17 @@ func TestUnsubscribeEdgeCases(t *testing.T) {
 
 			err := client.Unsubscribe(tt.topic)
 
+			require.Equal(t, tt.wantErr, err != nil, "error expectation mismatch")
+
 			if tt.wantErr {
 				require.Error(t, err)
-			} else {
-				if tt.validate != nil {
-					tt.validate(t, err)
-				}
+				return
+			}
+
+			require.NoError(t, err)
+
+			if tt.validate != nil {
+				tt.validate(t, err)
 			}
 		})
 	}
@@ -2032,6 +2188,7 @@ func TestHealthEdgeCases(t *testing.T) {
 		{
 			name: "health with nil logger",
 			setupClient: func(t *testing.T) (*Client, func()) {
+				t.Helper()
 				s, err := miniredis.Run()
 				require.NoError(t, err)
 
@@ -2049,12 +2206,14 @@ func TestHealthEdgeCases(t *testing.T) {
 				}
 			},
 			validate: func(t *testing.T, health datasource.Health) {
+				t.Helper()
 				assert.Equal(t, "UP", health.Status)
 			},
 		},
 		{
 			name: "health with ping error",
 			setupClient: func(t *testing.T) (*Client, func()) {
+				t.Helper()
 				s, err := miniredis.Run()
 				require.NoError(t, err)
 
@@ -2073,6 +2232,7 @@ func TestHealthEdgeCases(t *testing.T) {
 				}
 			},
 			validate: func(t *testing.T, health datasource.Health) {
+				t.Helper()
 				assert.Equal(t, "DOWN", health.Status)
 			},
 		},
@@ -2098,6 +2258,7 @@ func TestCloseEdgeCases(t *testing.T) {
 		{
 			name: "close with connection errors",
 			setupClient: func(t *testing.T) (*Client, func()) {
+				t.Helper()
 				s, err := miniredis.Run()
 				require.NoError(t, err)
 
@@ -2118,6 +2279,7 @@ func TestCloseEdgeCases(t *testing.T) {
 				}
 			},
 			validate: func(t *testing.T, err error) {
+				t.Helper()
 				// Close should handle errors gracefully
 				assert.NoError(t, err)
 			},
@@ -2125,6 +2287,7 @@ func TestCloseEdgeCases(t *testing.T) {
 		{
 			name: "close with active subscriptions",
 			setupClient: func(t *testing.T) (*Client, func()) {
+				t.Helper()
 				s, err := miniredis.Run()
 				require.NoError(t, err)
 
@@ -2158,6 +2321,7 @@ func TestCloseEdgeCases(t *testing.T) {
 				}
 			},
 			validate: func(t *testing.T, err error) {
+				t.Helper()
 				assert.NoError(t, err)
 			},
 		},
@@ -2174,7 +2338,7 @@ func TestCloseEdgeCases(t *testing.T) {
 	}
 }
 
-func TestValidateSubscribe(t *testing.T) {
+func TestValidateSubscribe(t *testing.T) { //nolint:funlen // Test function with many test cases
 	tests := []struct {
 		name        string
 		setupClient func(t *testing.T) (*Client, func())
@@ -2184,18 +2348,20 @@ func TestValidateSubscribe(t *testing.T) {
 	}{
 		{
 			name: "nil subConn",
-			setupClient: func(t *testing.T) (*Client, func()) {
+			setupClient: func(_ *testing.T) (*Client, func()) {
 				return New(DefaultConfig()), func() {}
 			},
 			topic:   testTopic,
 			wantErr: true,
 			validateErr: func(t *testing.T, err error) {
+				t.Helper()
 				assert.Equal(t, errClientNotConnected, err)
 			},
 		},
 		{
 			name: "not connected",
 			setupClient: func(t *testing.T) (*Client, func()) {
+				t.Helper()
 				s, err := miniredis.Run()
 				require.NoError(t, err)
 
@@ -2222,12 +2388,14 @@ func TestValidateSubscribe(t *testing.T) {
 			topic:   testTopic,
 			wantErr: true,
 			validateErr: func(t *testing.T, err error) {
+				t.Helper()
 				assert.Equal(t, errClientNotConnected, err)
 			},
 		},
 		{
 			name: "empty topic",
 			setupClient: func(t *testing.T) (*Client, func()) {
+				t.Helper()
 				s, err := miniredis.Run()
 				require.NoError(t, err)
 
@@ -2246,12 +2414,14 @@ func TestValidateSubscribe(t *testing.T) {
 			topic:   "",
 			wantErr: true,
 			validateErr: func(t *testing.T, err error) {
+				t.Helper()
 				assert.Equal(t, errEmptyTopicName, err)
 			},
 		},
 		{
 			name: "valid subscription",
 			setupClient: func(t *testing.T) (*Client, func()) {
+				t.Helper()
 				s, err := miniredis.Run()
 				require.NoError(t, err)
 
@@ -2279,15 +2449,19 @@ func TestValidateSubscribe(t *testing.T) {
 
 			err := client.validateSubscribe(tt.topic)
 
+			require.Equal(t, tt.wantErr, err != nil, "error expectation mismatch")
+
 			if tt.wantErr {
 				require.Error(t, err)
+
 				if tt.validateErr != nil {
 					tt.validateErr(t, err)
 				}
-			} else {
-				require.NoError(t, err)
+
+				return
 			}
+
+			require.NoError(t, err)
 		})
 	}
 }
-

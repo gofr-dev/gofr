@@ -46,29 +46,31 @@ type Client struct {
 // sanitizeRedisAddr removes credentials from a Redis address for safe logging.
 // It handles Redis URI format (redis://user:password@host:port) and plain host:port format.
 func sanitizeRedisAddr(addr string) string {
-	// Handle Redis URI format: redis://user:password@host:port/db
-	if strings.Contains(addr, "@") {
-		// Find the last @ symbol to handle edge cases with multiple @ symbols
-		lastAt := strings.LastIndex(addr, "@")
-		if lastAt >= 0 && lastAt < len(addr)-1 {
-			// Extract the host:port part (after last @)
-			hostPart := addr[lastAt+1:]
-			
-			// Check if there's a scheme (redis:// or rediss://)
-			if strings.HasPrefix(addr, "redis://") {
-				return "redis://" + hostPart
-			}
-			if strings.HasPrefix(addr, "rediss://") {
-				return "rediss://" + hostPart
-			}
-			
-			// No scheme, just return host:port
-			return hostPart
-		}
+	if !strings.Contains(addr, "@") {
+		return addr
 	}
-	
-	// No credentials found, return as-is (safe for host:port format)
-	return addr
+
+	lastAt := strings.LastIndex(addr, "@")
+	if lastAt < 0 || lastAt >= len(addr)-1 {
+		return addr
+	}
+
+	hostPart := addr[lastAt+1:]
+
+	return sanitizeRedisAddrWithScheme(addr, hostPart)
+}
+
+// sanitizeRedisAddrWithScheme adds the scheme back to the sanitized address.
+func sanitizeRedisAddrWithScheme(original, hostPart string) string {
+	if strings.HasPrefix(original, "redis://") {
+		return "redis://" + hostPart
+	}
+
+	if strings.HasPrefix(original, "rediss://") {
+		return "rediss://" + hostPart
+	}
+
+	return hostPart
 }
 
 // New creates a new Redis PubSub client.
@@ -139,59 +141,74 @@ func (r *Client) UseTracer(tracer any) {
 // Connect establishes connections to Redis for publishing and subscribing.
 func (r *Client) Connect() {
 	if err := validateConfigs(r.cfg); err != nil {
-		if r.logger != nil {
-			r.logger.Errorf("could not initialize Redis, error: %v", err)
-		}
+		r.logError("could not initialize Redis, error: %v", err)
 
 		return
 	}
 
-	if r.logger != nil {
-		r.logger.Debugf("connecting to Redis at '%s'", sanitizeRedisAddr(r.cfg.Addr))
-	}
+	r.logDebug("connecting to Redis at '%s'", sanitizeRedisAddr(r.cfg.Addr))
 
 	options, err := createRedisOptions(r.cfg)
 	if err != nil {
-		if r.logger != nil {
-			r.logger.Errorf("failed to create Redis options: %v", err)
-		}
+		r.logError("failed to create Redis options: %v", err)
 
 		return
 	}
 
-	// Create publisher connection
-	r.pubConn = redis.NewClient(options)
-
-	// Create subscriber connection (separate connection for blocking operations)
-	subOptions := *options
-	r.subConn = redis.NewClient(&subOptions)
-
-	// Create query connection (separate connection for Query operations to avoid conflicts)
-	queryOptions := *options
-	r.queryConn = redis.NewClient(&queryOptions)
+	r.createConnections(options)
 
 	if err := r.testConnections(); err != nil {
-		if r.logger != nil {
-			r.logger.Errorf("failed to connect to Redis at '%s', error: %v", sanitizeRedisAddr(r.cfg.Addr), err)
-		}
+		r.logError("failed to connect to Redis at '%s', error: %v", sanitizeRedisAddr(r.cfg.Addr), err)
 
 		go r.retryConnect()
 
 		return
 	}
 
-	// Test query connection
+	r.testQueryConnection()
+
+	r.logInfo("connected to Redis at '%s'", sanitizeRedisAddr(r.cfg.Addr))
+}
+
+// createConnections creates all Redis connections.
+func (r *Client) createConnections(options *redis.Options) {
+	r.pubConn = redis.NewClient(options)
+
+	subOptions := *options
+	r.subConn = redis.NewClient(&subOptions)
+
+	queryOptions := *options
+	r.queryConn = redis.NewClient(&queryOptions)
+}
+
+// testQueryConnection tests the query connection.
+func (r *Client) testQueryConnection() {
 	ctx, cancel := context.WithTimeout(context.Background(), r.cfg.DialTimeout)
 	defer cancel()
 
 	if err := r.queryConn.Ping(ctx).Err(); err != nil {
-		if r.logger != nil {
-			r.logger.Errorf("failed to connect query connection to Redis at '%s', error: %v", sanitizeRedisAddr(r.cfg.Addr), err)
-		}
+		r.logError("failed to connect query connection to Redis at '%s', error: %v", sanitizeRedisAddr(r.cfg.Addr), err)
 	}
+}
 
+// logError logs an error if logger is available.
+func (r *Client) logError(format string, args ...any) {
 	if r.logger != nil {
-		r.logger.Logf("connected to Redis at '%s'", sanitizeRedisAddr(r.cfg.Addr))
+		r.logger.Errorf(format, args...)
+	}
+}
+
+// logDebug logs a debug message if logger is available.
+func (r *Client) logDebug(format string, args ...any) {
+	if r.logger != nil {
+		r.logger.Debugf(format, args...)
+	}
+}
+
+// logInfo logs an info message if logger is available.
+func (r *Client) logInfo(format string, args ...any) {
+	if r.logger != nil {
+		r.logger.Logf(format, args...)
 	}
 }
 
@@ -226,57 +243,63 @@ func (r *Client) retryConnect() {
 
 		options, err := createRedisOptions(r.cfg)
 		if err != nil {
-			if r.logger != nil {
-				r.logger.Errorf("failed to create Redis options during retry: %v", err)
-			}
+			r.logError("failed to create Redis options during retry: %v", err)
 
 			continue
 		}
 
-		// Recreate connections
-		if r.pubConn != nil {
-			_ = r.pubConn.Close()
-		}
+		r.recreateConnections(options)
 
-		if r.subConn != nil {
-			_ = r.subConn.Close()
-		}
-
-		if r.queryConn != nil {
-			_ = r.queryConn.Close()
-		}
-
-		r.pubConn = redis.NewClient(options)
-		subOptions := *options
-		r.subConn = redis.NewClient(&subOptions)
-		queryOptions := *options
-		r.queryConn = redis.NewClient(&queryOptions)
-
-		ctx, cancel := context.WithTimeout(context.Background(), r.cfg.DialTimeout)
-		pubErr := r.pubConn.Ping(ctx).Err()
-		subErr := r.subConn.Ping(ctx).Err()
-		queryErr := r.queryConn.Ping(ctx).Err()
-
-		cancel()
-
-		if pubErr != nil || subErr != nil || queryErr != nil {
-			if r.logger != nil {
-				r.logger.Errorf("could not connect to Redis at '%s', pub error: %v, sub error: %v, query error: %v",
-					sanitizeRedisAddr(r.cfg.Addr), pubErr, subErr, queryErr)
-			}
-
+		if !r.testAllConnections() {
 			continue
 		}
 
-		if r.logger != nil {
-			r.logger.Logf("reconnected to Redis at '%s'", sanitizeRedisAddr(r.cfg.Addr))
-		}
+		r.logInfo("reconnected to Redis at '%s'", sanitizeRedisAddr(r.cfg.Addr))
 
 		// Restart subscriptions if they were active
 		r.restartSubscriptions()
 
 		return
 	}
+}
+
+// recreateConnections closes existing connections and creates new ones.
+func (r *Client) recreateConnections(options *redis.Options) {
+	r.closeConnection(&r.pubConn)
+	r.closeConnection(&r.subConn)
+	r.closeConnection(&r.queryConn)
+
+	r.pubConn = redis.NewClient(options)
+	subOptions := *options
+	r.subConn = redis.NewClient(&subOptions)
+	queryOptions := *options
+	r.queryConn = redis.NewClient(&queryOptions)
+}
+
+// closeConnection safely closes a connection if it's not nil.
+func (*Client) closeConnection(conn **redis.Client) {
+	if *conn != nil {
+		_ = (*conn).Close()
+	}
+}
+
+// testAllConnections tests all three connections and returns true if all succeed.
+func (r *Client) testAllConnections() bool {
+	ctx, cancel := context.WithTimeout(context.Background(), r.cfg.DialTimeout)
+	defer cancel()
+
+	pubErr := r.pubConn.Ping(ctx).Err()
+	subErr := r.subConn.Ping(ctx).Err()
+	queryErr := r.queryConn.Ping(ctx).Err()
+
+	if pubErr != nil || subErr != nil || queryErr != nil {
+		r.logError("could not connect to Redis at '%s', pub error: %v, sub error: %v, query error: %v",
+			sanitizeRedisAddr(r.cfg.Addr), pubErr, subErr, queryErr)
+
+		return false
+	}
+
+	return true
 }
 
 // restartSubscriptions restarts all active subscriptions after reconnection.
@@ -487,57 +510,59 @@ func (r *Client) waitForMessage(ctx context.Context, spanCtx context.Context, sp
 // subscribeToChannel subscribes to a Redis channel and forwards messages to the receive channel.
 func (r *Client) subscribeToChannel(ctx context.Context, topic string) {
 	if r.subConn == nil {
-		if r.logger != nil {
-			r.logger.Errorf("subscriber connection is nil for topic '%s'", topic)
-		}
+		r.logError("subscriber connection is nil for topic '%s'", topic)
 
 		return
 	}
 
 	redisPubSub := r.subConn.Subscribe(ctx, topic)
 	if redisPubSub == nil {
-		if r.logger != nil {
-			r.logger.Errorf("failed to create PubSub connection for topic '%s'", topic)
-		}
+		r.logError("failed to create PubSub connection for topic '%s'", topic)
 
 		return
 	}
 
-	// Store PubSub connection for potential unsubscribe
-	r.mu.Lock()
-	r.subPubSub[topic] = redisPubSub
-	r.mu.Unlock()
+	r.storePubSubConnection(topic, redisPubSub)
 
-	defer func() {
-		if redisPubSub != nil {
-			redisPubSub.Close()
-		}
-
-		// Clean up from map
-		r.mu.Lock()
-		delete(r.subPubSub, topic)
-		r.mu.Unlock()
-	}()
+	defer r.cleanupPubSubConnection(topic, redisPubSub)
 
 	ch := redisPubSub.Channel()
 	if ch == nil {
-		if r.logger != nil {
-			r.logger.Errorf("failed to get channel from PubSub for topic '%s'", topic)
-		}
+		r.logError("failed to get channel from PubSub for topic '%s'", topic)
 
 		return
 	}
 
+	r.processMessages(ctx, topic, ch)
+}
+
+// storePubSubConnection stores the PubSub connection for potential unsubscribe.
+func (r *Client) storePubSubConnection(topic string, pubSub *redis.PubSub) {
+	r.mu.Lock()
+	r.subPubSub[topic] = pubSub
+	r.mu.Unlock()
+}
+
+// cleanupPubSubConnection cleans up the PubSub connection.
+func (r *Client) cleanupPubSubConnection(topic string, pubSub *redis.PubSub) {
+	if pubSub != nil {
+		pubSub.Close()
+	}
+
+	r.mu.Lock()
+	delete(r.subPubSub, topic)
+	r.mu.Unlock()
+}
+
+// processMessages processes messages from the Redis channel.
+func (r *Client) processMessages(ctx context.Context, topic string, ch <-chan *redis.Message) {
 	for {
 		select {
 		case <-ctx.Done():
 			return
 		case msg, ok := <-ch:
 			if !ok {
-				// Channel closed, try to reconnect
-				if r.logger != nil {
-					r.logger.Debugf("Redis subscription channel closed for topic '%s', attempting reconnect", topic)
-				}
+				r.logDebug("Redis subscription channel closed for topic '%s', attempting reconnect", topic)
 
 				return
 			}
@@ -546,31 +571,33 @@ func (r *Client) subscribeToChannel(ctx context.Context, topic string) {
 				continue
 			}
 
-			// Create pubsub.Message
-			m := pubsub.NewMessage(ctx)
-			m.Topic = topic
-			m.Value = []byte(msg.Payload)
-			m.Committer = newRedisMessage(msg, r.logger)
-
-			// Check if channel is closed before writing (race condition fix)
-			r.mu.RLock()
-			msgChan, exists := r.receiveChan[topic]
-			closed := r.chanClosed[topic]
-			r.mu.RUnlock()
-
-			if exists && !closed {
-				select {
-				case msgChan <- m:
-				case <-ctx.Done():
-					return
-				default:
-					// Channel full, log warning
-					if r.logger != nil {
-						r.logger.Debugf("message channel full for topic '%s', dropping message", topic)
-					}
-				}
-			}
+			r.handleMessage(ctx, topic, msg)
 		}
+	}
+}
+
+// handleMessage handles a single message from Redis.
+func (r *Client) handleMessage(ctx context.Context, topic string, msg *redis.Message) {
+	m := pubsub.NewMessage(ctx)
+	m.Topic = topic
+	m.Value = []byte(msg.Payload)
+	m.Committer = newRedisMessage(msg, r.logger)
+
+	r.mu.RLock()
+	msgChan, exists := r.receiveChan[topic]
+	closed := r.chanClosed[topic]
+	r.mu.RUnlock()
+
+	if !exists || closed {
+		return
+	}
+
+	select {
+	case msgChan <- m:
+	case <-ctx.Done():
+		return
+	default:
+		r.logDebug("message channel full for topic '%s', dropping message", topic)
 	}
 }
 
@@ -633,74 +660,96 @@ func (r *Client) Unsubscribe(topic string) error {
 	}
 
 	r.mu.Lock()
-	defer r.mu.Unlock()
-
-	// Check if subscription exists
 	_, exists := r.subStarted[topic]
+	r.mu.Unlock()
+
 	if !exists {
-		// Already unsubscribed or never subscribed
 		return nil
 	}
 
-	// Mark channel as closed first to prevent writes
+	r.mu.Lock()
 	r.chanClosed[topic] = true
+	r.mu.Unlock()
 
-	// Unsubscribe from Redis channel first (before canceling context)
-	if pubSub, ok := r.subPubSub[topic]; ok && pubSub != nil {
-		ctx, cancel := context.WithTimeout(context.Background(), unsubscribeOpTimeout)
-		if err := pubSub.Unsubscribe(ctx, topic); err != nil {
-			if r.logger != nil {
-				r.logger.Errorf("error while unsubscribing from Redis channel '%s', error: %v", topic, err)
-			}
+	r.unsubscribeFromRedis(topic)
+	r.cancelSubscription(topic)
+	r.waitForGoroutine(topic)
+	r.cleanupSubscription(topic)
 
-			// Continue with cleanup even if unsubscribe fails
-		}
+	r.logDebug("unsubscribed from Redis channel '%s'", topic)
 
-		cancel()
+	return nil
+}
+
+// unsubscribeFromRedis unsubscribes from the Redis channel.
+func (r *Client) unsubscribeFromRedis(topic string) {
+	r.mu.RLock()
+	pubSub, ok := r.subPubSub[topic]
+	r.mu.RUnlock()
+
+	if !ok || pubSub == nil {
+		return
 	}
 
-	// Cancel the subscription context to stop the goroutine
-	// The goroutine will handle closing the PubSub connection in its defer
+	ctx, cancel := context.WithTimeout(context.Background(), unsubscribeOpTimeout)
+	defer cancel()
+
+	if err := pubSub.Unsubscribe(ctx, topic); err != nil {
+		r.logError("error while unsubscribing from Redis channel '%s', error: %v", topic, err)
+	}
+}
+
+// cancelSubscription cancels the subscription context.
+func (r *Client) cancelSubscription(topic string) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
 	if cancel, ok := r.subCancel[topic]; ok {
 		cancel()
 		delete(r.subCancel, topic)
 	}
+}
 
-	// Wait for goroutine to finish (with timeout)
-	if wg, ok := r.subWg[topic]; ok {
-		done := make(chan struct{})
+// waitForGoroutine waits for the subscription goroutine to finish.
+func (r *Client) waitForGoroutine(topic string) {
+	r.mu.RLock()
+	wg, ok := r.subWg[topic]
+	r.mu.RUnlock()
 
-		go func() {
-			wg.Wait()
-			close(done)
-		}()
-
-		select {
-		case <-done:
-		case <-time.After(goroutineWaitTimeout):
-			if r.logger != nil {
-				r.logger.Debugf("timeout waiting for subscription goroutine for topic '%s'", topic)
-			}
-		}
-
-		delete(r.subWg, topic)
+	if !ok {
+		return
 	}
 
-	// Close and remove the receive channel (after goroutine is done or timed out)
+	done := make(chan struct{})
+
+	go func() {
+		wg.Wait()
+		close(done)
+	}()
+
+	select {
+	case <-done:
+	case <-time.After(goroutineWaitTimeout):
+		r.logDebug("timeout waiting for subscription goroutine for topic '%s'", topic)
+	}
+
+	r.mu.Lock()
+	delete(r.subWg, topic)
+	r.mu.Unlock()
+}
+
+// cleanupSubscription cleans up subscription resources.
+func (r *Client) cleanupSubscription(topic string) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
 	if ch, ok := r.receiveChan[topic]; ok {
 		close(ch)
 		delete(r.receiveChan, topic)
 	}
 
-	// Remove from started subscriptions and closed tracking
 	delete(r.subStarted, topic)
 	delete(r.chanClosed, topic)
-
-	if r.logger != nil {
-		r.logger.Debugf("unsubscribed from Redis channel '%s'", topic)
-	}
-
-	return nil
 }
 
 // Query retrieves messages from a Redis channel.
@@ -714,14 +763,9 @@ func (r *Client) Query(ctx context.Context, query string, args ...any) ([]byte, 
 		return nil, errEmptyTopicName
 	}
 
-	// Use queryConn if available, otherwise fallback to subConn
-	connToUse := r.queryConn
+	connToUse := r.getQueryConnection()
 	if connToUse == nil {
-		if r.subConn == nil {
-			return nil, errClientNotConnected
-		}
-
-		connToUse = r.subConn
+		return nil, errClientNotConnected
 	}
 
 	timeout, limit := parseQueryArgs(args...)
@@ -729,7 +773,6 @@ func (r *Client) Query(ctx context.Context, query string, args ...any) ([]byte, 
 	queryCtx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
 
-	// Subscribe to channel for query using query connection
 	redisPubSub := connToUse.Subscribe(queryCtx, query)
 	if redisPubSub == nil {
 		return nil, errPubSubConnectionFailed
@@ -742,17 +785,31 @@ func (r *Client) Query(ctx context.Context, query string, args ...any) ([]byte, 
 		return nil, errPubSubChannelFailed
 	}
 
+	return r.collectMessages(queryCtx, ch, limit), nil
+}
+
+// getQueryConnection returns the query connection or falls back to subConn.
+func (r *Client) getQueryConnection() *redis.Client {
+	if r.queryConn != nil {
+		return r.queryConn
+	}
+
+	return r.subConn
+}
+
+// collectMessages collects messages from the channel up to the limit.
+func (*Client) collectMessages(ctx context.Context, ch <-chan *redis.Message, limit int) []byte {
 	var result []byte
 
 	collected := 0
 
 	for collected < limit {
 		select {
-		case <-queryCtx.Done():
-			return result, nil
+		case <-ctx.Done():
+			return result
 		case msg, ok := <-ch:
 			if !ok {
-				return result, nil
+				return result
 			}
 
 			if msg == nil {
@@ -768,28 +825,52 @@ func (r *Client) Query(ctx context.Context, query string, args ...any) ([]byte, 
 		}
 	}
 
-	return result, nil
+	return result
 }
 
 // Close closes all Redis connections.
 func (r *Client) Close() error {
-	var errs []error
+	r.markAllChannelsClosed()
+	r.cancelAllSubscriptions()
+	r.unsubscribeAllChannels()
+	r.waitForAllGoroutines()
+	r.cleanupAllSubscriptions()
 
-	// Cancel all subscriptions and wait for goroutines
+	errs := r.closeAllConnections()
+
+	if len(errs) > 0 {
+		return errors.Join(errs...)
+	}
+
+	return nil
+}
+
+// markAllChannelsClosed marks all channels as closed.
+func (r *Client) markAllChannelsClosed() {
 	r.mu.Lock()
+	defer r.mu.Unlock()
 
-	// Mark all channels as closed first
 	for topic := range r.receiveChan {
 		r.chanClosed[topic] = true
 	}
+}
 
-	// Cancel all subscription contexts
+// cancelAllSubscriptions cancels all subscription contexts.
+func (r *Client) cancelAllSubscriptions() {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
 	for topic, cancel := range r.subCancel {
 		cancel()
 		delete(r.subCancel, topic)
 	}
+}
 
-	// Unsubscribe from all Redis channels
+// unsubscribeAllChannels unsubscribes from all Redis channels.
+func (r *Client) unsubscribeAllChannels() {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
 	for topic, pubSub := range r.subPubSub {
 		if pubSub != nil {
 			_ = pubSub.Unsubscribe(context.Background(), topic)
@@ -797,41 +878,38 @@ func (r *Client) Close() error {
 
 		delete(r.subPubSub, topic)
 	}
+}
 
-	r.mu.Unlock()
+// waitForAllGoroutines waits for all subscription goroutines to finish.
+func (r *Client) waitForAllGoroutines() {
+	r.mu.RLock()
+	topics := make([]string, 0, len(r.subWg))
 
-	// Wait for all goroutines to finish (outside lock to avoid deadlock)
-	for topic, wg := range r.subWg {
-		done := make(chan struct{})
-
-		go func(w *sync.WaitGroup) {
-			w.Wait()
-			close(done)
-		}(wg)
-
-		select {
-		case <-done:
-		case <-time.After(goroutineWaitTimeout):
-			if r.logger != nil {
-				r.logger.Debugf("timeout waiting for subscription goroutine for topic '%s'", topic)
-			}
-		}
+	for topic := range r.subWg {
+		topics = append(topics, topic)
 	}
 
-	// Close channels after goroutines are done
+	r.mu.RUnlock()
+
+	for _, topic := range topics {
+		r.waitForGoroutine(topic)
+	}
+}
+
+// cleanupAllSubscriptions cleans up all subscription resources.
+func (r *Client) cleanupAllSubscriptions() {
 	r.mu.Lock()
+	defer r.mu.Unlock()
 
 	for topic, ch := range r.receiveChan {
 		close(ch)
 		delete(r.receiveChan, topic)
 	}
 
-	// Clear subscription state
 	for topic := range r.subStarted {
 		delete(r.subStarted, topic)
 	}
 
-	// Clear WaitGroups and closed tracking
 	for topic := range r.subWg {
 		delete(r.subWg, topic)
 	}
@@ -839,11 +917,12 @@ func (r *Client) Close() error {
 	for topic := range r.chanClosed {
 		delete(r.chanClosed, topic)
 	}
+}
 
-	r.mu.Unlock()
+// closeAllConnections closes all Redis connections.
+func (r *Client) closeAllConnections() []error {
+	var errs []error
 
-	// Close connections
-	// Ignore "client is closed" errors as connections may already be closed
 	if r.pubConn != nil {
 		if err := r.pubConn.Close(); err != nil && !strings.Contains(err.Error(), "client is closed") {
 			errs = append(errs, err)
@@ -862,11 +941,7 @@ func (r *Client) Close() error {
 		}
 	}
 
-	if len(errs) > 0 {
-		return errors.Join(errs...)
-	}
-
-	return nil
+	return errs
 }
 
 // loggerAdapter adapts pubsub.Logger to our Logger interface.

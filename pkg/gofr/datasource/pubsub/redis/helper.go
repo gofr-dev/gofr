@@ -89,7 +89,7 @@ func createRedisOptions(conf *Config) (*redis.Options, error) {
 //
 //nolint:gosec // InsecureSkipVerify may be set by user for testing/development
 func createTLSConfig(tlsConf *TLSConfig) (*tls.Config, error) {
-	config := &tls.Config{
+	tlsConfig := &tls.Config{
 		InsecureSkipVerify: tlsConf.InsecureSkipVerify,
 	}
 
@@ -100,7 +100,7 @@ func createTLSConfig(tlsConf *TLSConfig) (*tls.Config, error) {
 			return nil, fmt.Errorf("failed to load client certificate: %w", err)
 		}
 
-		config.Certificates = []tls.Certificate{cert}
+		tlsConfig.Certificates = []tls.Certificate{cert}
 	}
 
 	// Load CA certificate if provided
@@ -116,10 +116,10 @@ func createTLSConfig(tlsConf *TLSConfig) (*tls.Config, error) {
 			return nil, errFailedToParseCACert
 		}
 
-		config.RootCAs = caCertPool
+		tlsConfig.RootCAs = caCertPool
 	}
 
-	return config, nil
+	return tlsConfig, nil
 }
 
 // isConnected checks if the Redis client is connected.
@@ -177,93 +177,112 @@ func parseQueryArgs(args ...any) (timeout time.Duration, limit int) {
 func getRedisPubSubConfig(c config.Config) *Config {
 	cfg := DefaultConfig()
 
-	// Read address - prefer REDIS_PUBSUB_ADDR, fallback to REDIS_HOST:REDIS_PORT
+	parseAddress(c, cfg)
+	cfg.Password = c.Get("REDIS_PASSWORD")
+	parseDatabase(c, cfg)
+	parseTimeouts(c, cfg)
+	parsePoolSettings(c, cfg)
+	parseMaxRetries(c, cfg)
+	parseTLSConfig(c, cfg)
+
+	return cfg
+}
+
+// parseAddress parses the Redis address from config.
+func parseAddress(c config.Config, cfg *Config) {
 	if addr := c.Get("REDIS_PUBSUB_ADDR"); addr != "" {
 		cfg.Addr = addr
-	} else if host := c.Get("REDIS_HOST"); host != "" {
+
+		return
+	}
+
+	if host := c.Get("REDIS_HOST"); host != "" {
 		port := c.GetOrDefault("REDIS_PORT", "6379")
 		cfg.Addr = fmt.Sprintf("%s:%s", host, port)
 	}
+}
 
-	// Read password
-	cfg.Password = c.Get("REDIS_PASSWORD")
-
-	// Read database - prefer REDIS_PUBSUB_DB, fallback to REDIS_DB
+// parseDatabase parses the database number from config.
+func parseDatabase(c config.Config, cfg *Config) {
 	if dbStr := c.Get("REDIS_PUBSUB_DB"); dbStr != "" {
 		if db, err := strconv.Atoi(dbStr); err == nil && db >= 0 {
 			cfg.DB = db
 		}
-	} else if dbStr := c.Get("REDIS_DB"); dbStr != "" {
+
+		return
+	}
+
+	if dbStr := c.Get("REDIS_DB"); dbStr != "" {
 		if db, err := strconv.Atoi(dbStr); err == nil && db >= 0 {
 			cfg.DB = db
 		}
 	}
+}
 
-	// Parse timeouts
-	if timeout := c.Get("REDIS_PUBSUB_DIAL_TIMEOUT"); timeout != "" {
+// parseTimeouts parses timeout settings from config.
+func parseTimeouts(c config.Config, cfg *Config) {
+	parseDuration(c, "REDIS_PUBSUB_DIAL_TIMEOUT", func(d time.Duration) { cfg.DialTimeout = d })
+	parseDuration(c, "REDIS_PUBSUB_READ_TIMEOUT", func(d time.Duration) { cfg.ReadTimeout = d })
+	parseDuration(c, "REDIS_PUBSUB_WRITE_TIMEOUT", func(d time.Duration) { cfg.WriteTimeout = d })
+}
+
+// parsePoolSettings parses connection pool settings from config.
+func parsePoolSettings(c config.Config, cfg *Config) {
+	parseInt(c, "REDIS_PUBSUB_POOL_SIZE", func(n int) { cfg.PoolSize = n }, func(n int) bool { return n > 0 })
+	parseInt(c, "REDIS_PUBSUB_MIN_IDLE_CONNS", func(n int) { cfg.MinIdleConns = n }, func(n int) bool { return n >= 0 })
+	parseInt(c, "REDIS_PUBSUB_MAX_IDLE_CONNS", func(n int) { cfg.MaxIdleConns = n }, func(n int) bool { return n >= 0 })
+}
+
+// parseDuration parses a duration from config and applies it if valid.
+func parseDuration(c config.Config, key string, setter func(time.Duration)) {
+	if timeout := c.Get(key); timeout != "" {
 		if d, err := time.ParseDuration(timeout); err == nil && d > 0 {
-			cfg.DialTimeout = d
+			setter(d)
 		}
 	}
+}
 
-	if timeout := c.Get("REDIS_PUBSUB_READ_TIMEOUT"); timeout != "" {
-		if d, err := time.ParseDuration(timeout); err == nil && d > 0 {
-			cfg.ReadTimeout = d
+// parseInt parses an integer from config and applies it if valid.
+func parseInt(c config.Config, key string, setter func(int), validator func(int) bool) {
+	if val := c.Get(key); val != "" {
+		if n, err := strconv.Atoi(val); err == nil && validator(n) {
+			setter(n)
 		}
 	}
+}
 
-	if timeout := c.Get("REDIS_PUBSUB_WRITE_TIMEOUT"); timeout != "" {
-		if d, err := time.ParseDuration(timeout); err == nil && d > 0 {
-			cfg.WriteTimeout = d
-		}
-	}
-
-	// Parse connection pool settings
-	if poolSize := c.Get("REDIS_PUBSUB_POOL_SIZE"); poolSize != "" {
-		if size, err := strconv.Atoi(poolSize); err == nil && size > 0 {
-			cfg.PoolSize = size
-		}
-	}
-
-	if minIdle := c.Get("REDIS_PUBSUB_MIN_IDLE_CONNS"); minIdle != "" {
-		if n, err := strconv.Atoi(minIdle); err == nil && n >= 0 {
-			cfg.MinIdleConns = n
-		}
-	}
-
-	if maxIdle := c.Get("REDIS_PUBSUB_MAX_IDLE_CONNS"); maxIdle != "" {
-		if n, err := strconv.Atoi(maxIdle); err == nil && n >= 0 {
-			cfg.MaxIdleConns = n
-		}
-	}
-
-	// Parse max retries
+// parseMaxRetries parses max retries setting from config.
+func parseMaxRetries(c config.Config, cfg *Config) {
 	if retries := c.Get("REDIS_PUBSUB_MAX_RETRIES"); retries != "" {
 		if n, err := strconv.Atoi(retries); err == nil && n >= 0 {
 			cfg.MaxRetries = n
 		}
 	}
+}
 
-	// Setup TLS if enabled
-	if c.Get("REDIS_TLS_ENABLED") == "true" {
-		tlsConfig := &TLSConfig{
-			InsecureSkipVerify: c.Get("REDIS_TLS_INSECURE_SKIP_VERIFY") == "true",
-		}
+// parseTLSConfig parses TLS configuration from config.
+func parseTLSConfig(c config.Config, cfg *Config) {
+	const tlsEnabled = "true"
 
-		if caCert := c.Get("REDIS_TLS_CA_CERT"); caCert != "" {
-			tlsConfig.CACertFile = caCert
-		}
-
-		if cert := c.Get("REDIS_TLS_CERT"); cert != "" {
-			tlsConfig.CertFile = cert
-		}
-
-		if key := c.Get("REDIS_TLS_KEY"); key != "" {
-			tlsConfig.KeyFile = key
-		}
-
-		cfg.TLS = tlsConfig
+	if c.Get("REDIS_TLS_ENABLED") != tlsEnabled {
+		return
 	}
 
-	return cfg
+	tlsConfig := &TLSConfig{
+		InsecureSkipVerify: c.Get("REDIS_TLS_INSECURE_SKIP_VERIFY") == tlsEnabled,
+	}
+
+	if caCert := c.Get("REDIS_TLS_CA_CERT"); caCert != "" {
+		tlsConfig.CACertFile = caCert
+	}
+
+	if cert := c.Get("REDIS_TLS_CERT"); cert != "" {
+		tlsConfig.CertFile = cert
+	}
+
+	if key := c.Get("REDIS_TLS_KEY"); key != "" {
+		tlsConfig.KeyFile = key
+	}
+
+	cfg.TLS = tlsConfig
 }
