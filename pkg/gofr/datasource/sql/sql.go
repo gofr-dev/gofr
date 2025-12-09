@@ -2,13 +2,17 @@ package sql
 
 import (
 	"context"
+	"crypto/tls"
+	"crypto/x509"
 	"database/sql"
 	"fmt"
+	"os"
 	"strconv"
 	"strings"
 	"time"
 
 	"github.com/XSAM/otelsql"
+	"github.com/go-sql-driver/mysql"
 	_ "github.com/lib/pq" // used for concrete implementation of the database driver.
 	_ "modernc.org/sqlite"
 
@@ -77,6 +81,17 @@ func NewSQL(configs config.Config, logger datasource.Logger, metrics Metrics) *D
 	// if Hostname is not provided, we won't try to connect to DB
 	if dbConfig.Dialect != sqlite && dbConfig.HostName == "" {
 		logger.Errorf("connection to %s failed: host name is empty.", dbConfig.Dialect)
+	}
+
+	// Register MySQL TLS config if needed (BEFORE opening connection)
+	if err := registerMySQLTLSConfig(dbConfig, logger); err != nil {
+		if strings.Contains(strings.ToLower(dbConfig.SSLMode), "verify") {
+			logger.Errorf("failed to register MySQL TLS config: %v", err)
+
+			return nil
+		}
+
+		logger.Warnf("failed to register MySQL TLS config: %v", err)
 	}
 
 	logger.Debugf("generating database connection string for '%s'", dbConfig.Dialect)
@@ -203,7 +218,7 @@ func getDBConfig(configs config.Config) *DBConfig {
 		Database:    configs.Get("DB_NAME"),
 		MaxOpenConn: maxOpenConn,
 		MaxIdleConn: maxIdleConn,
-		// only for postgres
+		// Supported for postgres, supabase, cockroachdb, and mysql
 		SSLMode: configs.GetOrDefault("DB_SSL_MODE", "disable"),
 		Charset: configs.Get("DB_CHARSET"),
 	}
@@ -216,14 +231,20 @@ func getDBConnectionString(dbConfig *DBConfig) (string, error) {
 			dbConfig.Charset = "utf8"
 		}
 
-		return fmt.Sprintf("%s:%s@tcp(%s:%s)/%s?charset=%s&parseTime=True&loc=Local&interpolateParams=true",
+		connStr := fmt.Sprintf("%s:%s@tcp(%s:%s)/%s?charset=%s&parseTime=True&loc=Local&interpolateParams=true",
 			dbConfig.User,
 			dbConfig.Password,
 			dbConfig.HostName,
 			dbConfig.Port,
 			dbConfig.Database,
 			dbConfig.Charset,
-		), nil
+		)
+
+		if tlsParam := getMySQLTLSParam(dbConfig.SSLMode); tlsParam != "" {
+			connStr = fmt.Sprintf("%s&%s", connStr, tlsParam)
+		}
+
+		return connStr, nil
 	case dialectPostgres, supabaseDialect, cockroachDB:
 		return fmt.Sprintf("host=%s port=%s user=%s password=%s dbname=%s sslmode=%s",
 			dbConfig.HostName, dbConfig.Port, dbConfig.User, dbConfig.Password, dbConfig.Database, dbConfig.SSLMode), nil
@@ -271,4 +292,88 @@ func printConnectionFailureLog(action string, dbconfig *DBConfig, logger datasou
 		logger.Errorf("could not %s '%s' user to '%s' database at '%s:%s', error: %v",
 			action, dbconfig.User, dbconfig.Database, dbconfig.HostName, dbconfig.Port, err)
 	}
+}
+
+// getMySQLTLSParam converts the generic DB_SSL_MODE to MySQL-specific TLS parameter.
+// For custom CA certificates, use DB_TLS_CA_CERT environment variable.
+func getMySQLTLSParam(sslMode string) string {
+	switch strings.ToLower(sslMode) {
+	case "disable", "false":
+		return "" // No TLS - insecure
+	case "preferred":
+		return "tls=preferred" // Try TLS, fallback to plain
+	case "require", "true":
+		return "tls=skip-verify" // TLS required but no cert validation
+	case "skip-verify":
+		return "tls=skip-verify" // Explicit skip verification
+	case "verify-ca", "verify-full":
+		return "tls=custom" // Use custom TLS config with CA verification
+	default:
+		return "" // Default to no TLS
+	}
+}
+
+// registerMySQLTLSConfig registers custom TLS configuration for MySQL if needed.
+func registerMySQLTLSConfig(dbConfig *DBConfig, logger datasource.Logger) error {
+	// Only for MySQL with verify-ca or verify-full
+	if dbConfig.Dialect != "mysql" {
+		return nil
+	}
+
+	if !strings.Contains(strings.ToLower(dbConfig.SSLMode), "verify") {
+		return nil // skip-verify doesn't need custom config
+	}
+
+	caCertPath := os.Getenv("DB_TLS_CA_CERT")
+	if caCertPath == "" {
+		logger.Warn("DB_SSL_MODE=verify-ca requires DB_TLS_CA_CERT. Falling back to system CA pool")
+
+		// Use system CA pool
+		tlsConfig := &tls.Config{
+			ServerName: getServerName(dbConfig.HostName),
+		}
+
+
+		return mysql.RegisterTLSConfig("custom", tlsConfig)
+	}
+
+	// Load custom CA certificate
+	caCert, err := os.ReadFile(caCertPath)
+	if err != nil {
+		return fmt.Errorf("failed to read CA certificate from %s: %w", caCertPath, err)
+	}
+
+	caCertPool := x509.NewCertPool()
+	if !caCertPool.AppendCertsFromPEM(caCert) {
+		return fmt.Errorf("failed to append CA certificate")
+	}
+
+	tlsConfig := &tls.Config{
+		RootCAs:    caCertPool,
+		ServerName: dbConfig.HostName,
+	}
+
+	// Optional: Support client certificates (mutual TLS)
+	clientCertPath := os.Getenv("DB_TLS_CLIENT_CERT")
+	clientKeyPath := os.Getenv("DB_TLS_CLIENT_KEY")
+
+	if clientCertPath != "" && clientKeyPath != "" {
+		clientCert, err := tls.LoadX509KeyPair(clientCertPath, clientKeyPath)
+		if err != nil {
+			return fmt.Errorf("failed to load client certificate: %w", err)
+		}
+
+		tlsConfig.Certificates = []tls.Certificate{clientCert}
+		logger.Debug("loaded client certificate for mutual TLS")
+	}
+
+	return mysql.RegisterTLSConfig("custom", tlsConfig)
+}
+
+func getServerName(hostname string) string {
+	// For localhost/127.0.0.1, use "localhost" explicitly
+	if hostname == "127.0.0.1" || hostname == "::1" {
+		return "localhost"
+	}
+	return hostname
 }
