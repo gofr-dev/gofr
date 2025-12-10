@@ -329,10 +329,23 @@ func TestTraceHandler(t *testing.T) {
 		Body:       io.NopCloser(strings.NewReader(`{"data":"mock data"}`)),
 	}
 
+	// Create the test context FIRST
 	ctx := createTestContext(http.MethodGet, "/trace", mockContainer)
 
+	// TraceHandler calls Trace() twice, which modifies ctx.Context each time:
+	// 1. defer c.Trace("traceHandler").End() - modifies ctx.Context
+	// 2. span2 := c.Trace("some-sample-work") - modifies ctx.Context again
+	// We need to simulate this exact sequence to get the actual context that will be used
+	defer ctx.Trace("traceHandler").End() // First Trace() call (same as TraceHandler)
+	span2 := ctx.Trace("some-sample-work") // Second Trace() call (same as TraceHandler)
+	defer span2.End()
+	
+	// Now ctx.Context has been modified by both Trace() calls, matching what TraceHandler does
+	// TraceHandler calls: c.GetHTTPService("anotherService").Get(c, "redis", nil)
+	// When passing 'c' (*gofr.Context) to Get(), Go uses the embedded context.Context
+	// which is now the modified context after both Trace() calls
 	httpService.EXPECT().Get(
-		ctx,
+		ctx.Context, // ✅ Use the context after both Trace() calls (no gomock.Any needed!)
 		"redis",
 		nil, // queryParams is nil in TraceHandler
 	).Return(mockResp, nil)
