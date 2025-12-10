@@ -29,13 +29,10 @@ type Mocks struct {
 	PubSub        *MockPubSubProvider
 	Couchbase     *MockCouchbase
 	File          *file.MockFileSystemProvider
-	// Deprecated: Use HTTPServices map instead. This field is kept for backward compatibility only and will be removed in a future version.
-	HTTPService *service.MockHTTP
-	// Map of service names to their mock instances. Use this to set different expectations for different services.
-	HTTPServices map[string]*service.MockHTTP
-	Metrics      *MockMetrics
-	Oracle       *MockOracleDB
-	ScyllaDB     *MockScyllaDB
+	HTTPService   *service.MockHTTP
+	Metrics       *MockMetrics
+	Oracle        *MockOracleDB
+	ScyllaDB      *MockScyllaDB
 }
 
 type options func(c *Container, ctrl *gomock.Controller) any
@@ -43,17 +40,12 @@ type options func(c *Container, ctrl *gomock.Controller) any
 func WithMockHTTPService(httpServiceNames ...string) options { //nolint:revive // WithMockHTTPService returns an
 	// exported type intentionally; options are internal and subject to change.
 	return func(c *Container, ctrl *gomock.Controller) any {
-		// Create a separate mock instance for each service name
-		// This allows different services to have different expectations
-		serviceMocks := make(map[string]*service.MockHTTP)
+		mockservice := service.NewMockHTTP(ctrl)
 		for _, s := range httpServiceNames {
-			mockservice := service.NewMockHTTP(ctrl)
 			c.Services[s] = mockservice
-			serviceMocks[s] = mockservice
 		}
 
-		// Return the map of service mocks
-		return serviceMocks
+		return mockservice
 	}
 }
 
@@ -114,30 +106,13 @@ func NewMockContainer(t *testing.T, options ...options) (*Container, *Mocks) {
 
 	var httpMock *service.MockHTTP
 
-	httpServiceMocks := make(map[string]*service.MockHTTP)
-
-	// Initialize Services map BEFORE processing options so WithMockHTTPService can populate it
 	container.Services = make(map[string]service.HTTP)
 
 	for _, option := range options {
 		optionsAdded := option(container, ctrl)
 
-		// Check if the option returned a map of HTTP service mocks
-		switch val := optionsAdded.(type) {
-		case map[string]*service.MockHTTP:
-			// Merge the service mocks into our map
-			for name, mock := range val {
-				httpServiceMocks[name] = mock
-			}
-			// Set httpMock to the first service mock for backward compatibility
-			if httpMock == nil && len(val) > 0 {
-				for _, mock := range val {
-					httpMock = mock
-					break
-				}
-			}
-		case *service.MockHTTP:
-			// Legacy support: if a single mock is returned, use it
+		val, ok := optionsAdded.(*service.MockHTTP)
+		if ok {
 			httpMock = val
 		}
 	}
@@ -156,8 +131,7 @@ func NewMockContainer(t *testing.T, options ...options) (*Container, *Mocks) {
 		Mongo:         container.Mongo.(*MockMongo),
 		KVStore:       container.KVStore.(*MockKVStore),
 		File:          container.File.(*file.MockFileSystemProvider),
-		HTTPService:   httpMock,         // Backward compatibility: first service mock or nil
-		HTTPServices:  httpServiceMocks, // Map of all service mocks
+		HTTPService:   httpMock,
 		DGraph:        container.DGraph.(*MockDgraph),
 		OpenTSDB:      container.OpenTSDB.(*MockOpenTSDB),
 		ArangoDB:      container.ArangoDB.(*MockArangoDBProvider),

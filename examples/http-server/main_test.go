@@ -1,19 +1,5 @@
 package main
 
-// This test file demonstrates how to test handlers in GoFr.
-//
-// Key Concepts:
-// 1. GoFr wraps http.Request using gofrHTTP.NewRequest(req)
-// 2. Handlers receive gofr.Context which contains the wrapped request
-// 3. Use mux.SetURLVars() to set path parameters for ctx.PathParam()
-// 4. Each HTTP service registered with WithMockHTTPService gets its own separate mock instance
-// 5. Expectations set on one service do NOT affect other services
-// 6. Always use mocks.HTTPServices["serviceName"] when you have multiple services
-//
-// For detailed documentation, see:
-// - https://gofr.dev/docs/references/testing (Official GoFr Testing Guide)
-// - https://gofr.dev/docs/references/context (GoFr Context Documentation)
-
 import (
 	"context"
 	"encoding/json"
@@ -36,7 +22,6 @@ import (
 	"gofr.dev/pkg/gofr/config"
 	"gofr.dev/pkg/gofr/container"
 	"gofr.dev/pkg/gofr/datasource/redis"
-	gofrHTTP "gofr.dev/pkg/gofr/http"
 	"gofr.dev/pkg/gofr/logging"
 	"gofr.dev/pkg/gofr/testutil"
 )
@@ -273,17 +258,9 @@ func (m *MockRequest) Bind(i any) error {
 }
 
 // createTestContext sets up a GoFr context for unit tests with a given URL and optional mock container.
-// This demonstrates how GoFr wraps http.Request into gofr.Request.
-//
-// Note: For path parameters, use mux.SetURLVars() before calling this function.
-// See TestHandler_WithPathParams example for usage with path parameters.
 func createTestContext(method, url string, mockContainer *container.Container) *gofr.Context {
-	// Create standard HTTP request
 	req := httptest.NewRequest(method, url, nil)
-	req.Header.Set("Content-Type", "application/json")
-
-	// Wrap with GoFr's Request wrapper (this is how GoFr wraps requests)
-	gofrReq := gofrHTTP.NewRequest(req)
+	mockReq := NewMockRequest(req)
 
 	var c *container.Container
 	if mockContainer != nil {
@@ -296,7 +273,7 @@ func createTestContext(method, url string, mockContainer *container.Container) *
 
 	return &gofr.Context{
 		Context:       req.Context(),
-		Request:       gofrReq,
+		Request:       mockReq,
 		Container:     c,
 		ContextLogger: *logging.NewContextLogger(req.Context(), logger),
 	}
@@ -340,36 +317,22 @@ func TestMysqlHandler(t *testing.T) {
 }
 
 func TestTraceHandler(t *testing.T) {
-	// Register HTTP service - each service gets its own separate mock instance
 	mockContainer, mocks := container.NewMockContainer(t, container.WithMockHTTPService("anotherService"))
 
 	// Redis expectations
 	mocks.Redis.EXPECT().Ping(gomock.Any()).Return(nil).Times(5)
 
-	// Create the test context FIRST
-	ctx := createTestContext(http.MethodGet, "/trace", mockContainer)
-
-	// TraceHandler calls Trace() twice, which modifies ctx.Context each time:
-	// 1. defer c.Trace("traceHandler").End() - modifies ctx.Context
-	// 2. span2 := c.Trace("some-sample-work") - modifies ctx.Context again
-	// We need to simulate this exact sequence to get the actual context that will be used
-	defer ctx.Trace("traceHandler").End()  // First Trace() call (same as TraceHandler)
-	span2 := ctx.Trace("some-sample-work") // Second Trace() call (same as TraceHandler)
-	defer span2.End()
-
-	// HTTP service mock - use mocks.HTTPServices["serviceName"] to access the specific service
-	// Important: Use the map keyed by service name, not mocks.HTTPService (singular)
+	// HTTP service mock
+	httpService := mocks.HTTPService
 	mockResp := &http.Response{
 		StatusCode: http.StatusOK,
 		Body:       io.NopCloser(strings.NewReader(`{"data":"mock data"}`)),
 	}
 
-	// Now ctx.Context has been modified by both Trace() calls, matching what TraceHandler does
-	// TraceHandler calls: c.GetHTTPService("anotherService").Get(c, "redis", nil)
-	// When passing 'c' (*gofr.Context) to Get(), Go uses the embedded context.Context
-	// which is now the modified context after both Trace() calls
-	mocks.HTTPServices["anotherService"].EXPECT().Get(
-		ctx.Context, // Use the context after both Trace() calls (use gomock.Any to avoid this!)
+	ctx := createTestContext(http.MethodGet, "/trace", mockContainer)
+
+	httpService.EXPECT().Get(
+		ctx,
 		"redis",
 		nil, // queryParams is nil in TraceHandler
 	).Return(mockResp, nil)
