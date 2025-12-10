@@ -2,6 +2,7 @@ package container
 
 import (
 	"bytes"
+	"context"
 	"net/http/httptest"
 	"testing"
 
@@ -53,6 +54,88 @@ func Test_HttpServiceMock(t *testing.T) {
 
 	err = resp.Body.Close()
 	require.NoError(t, err)
+}
+
+// Test_HttpServiceMockWithServiceName verifies that WithMockHTTPService works correctly
+// when service names are provided, and that mocks.HTTPService matches the service in container
+func Test_HttpServiceMockWithServiceName(t *testing.T) {
+	serviceName := "test-service"
+	container, mocks := NewMockContainer(t, WithMockHTTPService(serviceName))
+
+	// Verify that the service is registered in the container
+	serviceFromContainer := container.GetHTTPService(serviceName)
+	require.NotNil(t, serviceFromContainer, "Service should be registered in container")
+
+	// CRITICAL: Verify that mocks.HTTPService is the SAME instance as the service in container
+	assert.Equal(t, mocks.HTTPService, serviceFromContainer,
+		"mocks.HTTPService should be the same instance as container.Services[serviceName]")
+
+	// Test that we can set expectations on mocks.HTTPService and they work for the service in container
+	mockResp := httptest.NewRecorder()
+	mockResp.Body = bytes.NewBufferString(`{"data":"test"}`)
+	mockResp.Code = 200
+	result := mockResp.Result()
+
+	// Set expectation on mocks.HTTPService
+	mocks.HTTPService.EXPECT().Get(
+		gomock.Any(), // Use gomock.Any() for context to avoid context mismatch
+		"test-path",
+		gomock.Any(), // Use gomock.Any() for queryParams
+	).Return(result, nil)
+
+	// Call the service from container - should match the expectation
+	resp, err := serviceFromContainer.Get(context.Background(), "test-path", map[string]any{
+		"key": "value",
+	})
+
+	require.NoError(t, err)
+	assert.NotNil(t, resp)
+	assert.Equal(t, 200, resp.StatusCode)
+
+	err = result.Body.Close()
+	require.NoError(t, err)
+
+	err = resp.Body.Close()
+	require.NoError(t, err)
+}
+
+// Test_HttpServiceMockMultipleServices verifies that multiple services share the same mock instance
+func Test_HttpServiceMockMultipleServices(t *testing.T) {
+	serviceNames := []string{"service1", "service2", "service3"}
+	container, mocks := NewMockContainer(t, WithMockHTTPService(serviceNames...))
+
+	// Verify all services are registered
+	for _, name := range serviceNames {
+		service := container.GetHTTPService(name)
+		require.NotNil(t, service, "Service %s should be registered", name)
+		// All services should be the same mock instance
+		assert.Equal(t, mocks.HTTPService, service,
+			"Service %s should be the same instance as mocks.HTTPService", name)
+	}
+
+	// Test that expectations set on mocks.HTTPService work for all services
+	mockResp := httptest.NewRecorder()
+	mockResp.Body = bytes.NewBufferString(`{"data":"test"}`)
+	mockResp.Code = 200
+	result := mockResp.Result()
+
+	// Set expectation once
+	mocks.HTTPService.EXPECT().Get(
+		gomock.Any(),
+		"test-path",
+		gomock.Any(),
+	).Return(result, nil).Times(len(serviceNames))
+
+	// Call each service - all should match the same expectation
+	for _, name := range serviceNames {
+		service := container.GetHTTPService(name)
+		resp, err := service.Get(context.Background(), "test-path", map[string]any{})
+		require.NoError(t, err)
+		assert.NotNil(t, resp)
+		resp.Body.Close()
+	}
+
+	result.Body.Close()
 }
 
 func TestExpectSelect_ValidCases(t *testing.T) {
