@@ -188,33 +188,81 @@ func TestAdd(t *testing.T) {
 
 ```
 
-## Example of Unit Testing an HTTP Service Using GoFr
+## Example of Unit Testing a Handler with Mock HTTP Services
 
-The example below demonstrates how to mock and test HTTP services created from `AddHTTPService()` method on your app.
+The example below demonstrates how to test HTTP handlers that use HTTP services created from `AddHTTPService()` method on your app.
 
 ```go
 import (
-	"context"
 	"io"
 	"net/http"
+	"net/http/httptest"
 	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"gofr.dev/pkg/gofr"
 	"gofr.dev/pkg/gofr/container"
+	gofrHttp "gofr.dev/pkg/gofr/http"
 )
 
-func TestHTTPServiceEndpoint(t *testing.T) {
-	httpService := container.WithMockHTTPService("ABCService")
-	mockContainer, mocks := container.NewMockContainer(t, httpService)
+// Handler that calls an HTTP service
+func CreateProductHandler(ctx *gofr.Context) (any, error) {
+	var productRequest struct {
+		Description string `json:"description"`
+	}
+	
+	if err := ctx.Bind(&productRequest); err != nil {
+		return nil, err
+	}
 
-	mocks.HTTPService.EXPECT().Post(
-		t.Context(),
+	// Get the HTTP service registered with name "ABCService"
+	service := ctx.GetHTTPService("ABCService")
+	
+	resp, err := service.Post(
+		ctx.Context,
+		"/api/Product",
+		nil,
+		[]byte(`{"description":"`+productRequest.Description+`"}`),
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+	
+	body, _ := io.ReadAll(resp.Body)
+	return string(body), nil
+}
+
+func TestCreateProductHandler(t *testing.T) {
+	// Register the HTTP service with the service name used in your code
+	mockContainer, mocks := container.NewMockContainer(t, 
+		container.WithMockHTTPService("ABCService"),
+	)
+
+	// Create the test context FIRST to get the exact context that will be used
+	req := httptest.NewRequest(
+		http.MethodPost,
+		"/api/Product",
+		strings.NewReader(`{"description": "Test Product"}`),
+	)
+	req.Header.Set("Content-Type", "application/json")
+
+	ctx := &gofr.Context{
+		Context:   req.Context(), // Use the context from the request
+		Request:   gofrHttp.NewRequest(req),
+		Container: mockContainer,
+	}
+
+	// Set expectations using the exact context from the gofr.Context
+	// Use mocks.HTTPServices["serviceName"] to set expectations for the specific service
+	mocks.HTTPServices["ABCService"].EXPECT().Post(
+		ctx.Context, // ✅ Use the exact context from gofr.Context
 		"/api/Product", 
 		nil,
-		map[string]any{"description": "Test Product"},
+		[]byte(`{"description":"Test Product"}`),
 	).Return(&http.Response{
 		StatusCode: http.StatusOK,
 		Body: io.NopCloser(strings.NewReader(`{
@@ -224,41 +272,211 @@ func TestHTTPServiceEndpoint(t *testing.T) {
 		}`)),
 	}, nil)
 
-	var req *http.Request
-
-	req = httptest.NewRequest(
-		http.MethodPost,
-		"/api/Product",
-		io.NopCloser(strings.NewReader(`{
-			"description": "Test Product",
-		}`)),
-	)
-
-	req.Header.Set("Content-Type", "application/json")
-
-	request := gofrHttp.NewRequest(req)
-
-	ctx := &gofr.Context{
-		Context:   t.Context(),
-		Request:   req,
-		Container: mockContainer,
-	}
-
-	createProductResponse, err := CreateProduct(ctx, createProductsRequest)
+	// Now call your handler - the expectation will match
+	result, err := CreateProductHandler(ctx)
 
 	assert.NoError(t, err)
-	assert.Equal(t, 1, product.ID)
-	assert.Equal(t, "Test Product", product.Description)
+	assert.Contains(t, result.(string), "Test Product")
 }
 ```
 
-- Tests will fail if the mocked HTTPService is not called as expected.
-- `WithMockHTTPService` is passed to `NewMockContainer`, allowing us to configure expected HTTP requests and corresponding responses.
+### Important Notes
+
+- **Context Matching**: Always use the exact context from your `gofr.Context` (`ctx.Context`) in expectations. gomock compares contexts by reference, not value, so using `t.Context()` or `context.Background()` will fail.
+- **Service Registration**: `WithMockHTTPService("serviceName")` registers the service with the specified name. Each service gets its own separate mock instance.
+- **Multiple Services**: Use `mocks.HTTPServices["serviceName"]` to access and set different expectations for each service. Each service has its own mock instance, so expectations are independent.
+- **Tests will fail** if the mocked HTTPService is not called as expected or if the context doesn't match.
+
+### Testing HTTP Handlers with Mock Services
+
+When you register multiple services with `WithMockHTTPService`, each service gets its own separate mock instance. This allows you to set different expectations for each service using the `mocks.HTTPServices` map. Use table-driven tests to cover multiple scenarios:
+
+```go
+import (
+	"context"
+	"errors"
+	"io"
+	"net/http"
+	"net/http/httptest"
+	"strings"
+	"testing"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+	"gofr.dev/pkg/gofr"
+	"gofr.dev/pkg/gofr/container"
+	gofrHttp "gofr.dev/pkg/gofr/http"
+)
+
+// Handler that calls HTTP services
+func UserProfileHandler(ctx *gofr.Context) (any, error) {
+	userID := ctx.PathParam("id")
+	service := ctx.GetHTTPService("userService")
+	
+	resp, err := service.Get(ctx.Context, "/users/"+userID, nil)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+	
+	body, _ := io.ReadAll(resp.Body)
+	return string(body), nil
+}
+
+// Handler that calls multiple HTTP services
+func OrderDetailsHandler(ctx *gofr.Context) (any, error) {
+	orderID := ctx.PathParam("id")
+	
+	paymentService := ctx.GetHTTPService("paymentService")
+	paymentResp, err := paymentService.Get(ctx.Context, "/payments/"+orderID, nil)
+	if err != nil {
+		return nil, err
+	}
+	defer paymentResp.Body.Close()
+	
+	shippingService := ctx.GetHTTPService("shippingService")
+	shippingResp, err := shippingService.Get(ctx.Context, "/shipping/"+orderID, nil)
+	if err != nil {
+		return nil, err
+	}
+	defer shippingResp.Body.Close()
+	
+	return map[string]string{
+		"payment_status":  "completed",
+		"shipping_status": "in_transit",
+	}, nil
+}
+
+func TestHTTPHandlers(t *testing.T) {
+	tests := []struct {
+		name           string
+		handler        func(*gofr.Context) (any, error)
+		serviceNames   []string
+		setupMocks     func(*container.Mocks, *gofr.Context)
+		requestPath    string
+		wantErr        bool
+		wantErrMsg     string
+		validateResult func(*testing.T, any)
+	}{
+		{
+			name:         "single service success",
+			handler:      UserProfileHandler,
+			serviceNames: []string{"userService"},
+			setupMocks: func(mocks *container.Mocks, ctx *gofr.Context) {
+				mockResp := &http.Response{
+					StatusCode: http.StatusOK,
+					Body:       io.NopCloser(strings.NewReader(`{"id":"123","name":"John Doe"}`)),
+				}
+				mocks.HTTPServices["userService"].EXPECT().Get(
+					ctx.Context,
+					"/users/123",
+					nil,
+				).Return(mockResp, nil)
+			},
+			requestPath: "/users/123",
+			wantErr:     false,
+			validateResult: func(t *testing.T, result any) {
+				assert.Contains(t, result.(string), "John Doe")
+			},
+		},
+		{
+			name:         "single service error",
+			handler:      UserProfileHandler,
+			serviceNames: []string{"userService"},
+			setupMocks: func(mocks *container.Mocks, ctx *gofr.Context) {
+				mocks.HTTPServices["userService"].EXPECT().Get(
+					ctx.Context,
+					"/users/123",
+					nil,
+				).Return(nil, errors.New("service unavailable"))
+			},
+			requestPath: "/users/123",
+			wantErr:     true,
+			wantErrMsg:  "service unavailable",
+		},
+		{
+			name:         "multiple services success",
+			handler:      OrderDetailsHandler,
+			serviceNames: []string{"paymentService", "shippingService"},
+			setupMocks: func(mocks *container.Mocks, ctx *gofr.Context) {
+				paymentResp := &http.Response{
+					StatusCode: http.StatusOK,
+					Body:       io.NopCloser(strings.NewReader(`{"status":"completed"}`)),
+				}
+				shippingResp := &http.Response{
+					StatusCode: http.StatusOK,
+					Body:       io.NopCloser(strings.NewReader(`{"status":"in_transit"}`)),
+				}
+				mocks.HTTPServices["paymentService"].EXPECT().Get(
+					ctx.Context,
+					"/payments/456",
+					nil,
+				).Return(paymentResp, nil)
+				mocks.HTTPServices["shippingService"].EXPECT().Get(
+					ctx.Context,
+					"/shipping/456",
+					nil,
+				).Return(shippingResp, nil)
+			},
+			requestPath: "/orders/456",
+			wantErr:    false,
+			validateResult: func(t *testing.T, result any) {
+				resultMap := result.(map[string]string)
+				assert.Equal(t, "completed", resultMap["payment_status"])
+				assert.Equal(t, "in_transit", resultMap["shipping_status"])
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Register HTTP services
+			mockContainer, mocks := container.NewMockContainer(t,
+				container.WithMockHTTPService(tt.serviceNames...),
+			)
+
+			// Create test request and context
+			req := httptest.NewRequest(http.MethodGet, tt.requestPath, nil)
+			ctx := &gofr.Context{
+				Context:   req.Context(),
+				Request:   gofrHttp.NewRequest(req),
+				Container: mockContainer,
+			}
+
+			// Set up mock expectations
+			tt.setupMocks(mocks, ctx)
+
+			// Call the handler
+			result, err := tt.handler(ctx)
+
+			if tt.wantErr {
+				require.Error(t, err)
+				assert.Contains(t, err.Error(), tt.wantErrMsg)
+				assert.Nil(t, result)
+			} else {
+				require.NoError(t, err)
+				if tt.validateResult != nil {
+					tt.validateResult(t, result)
+				}
+			}
+		})
+	}
+}
+```
+
+**Key Points**:
+- Each service registered via `WithMockHTTPService` gets its own separate mock instance
+- Always use `mocks.HTTPServices["serviceName"]` to access and set expectations for a specific service
+- Always create the `gofr.Context` with the exact request context (`req.Context()`) that will be used in the handler
+- Set expectations on the mock services before calling the handler
+- Test both success and error scenarios to ensure your handlers handle all cases correctly
 
 ### Summary
 
 - **Mocking Database Interactions**: Use GoFr mock container to simulate database interactions.
+- **Mocking HTTP Services**: Use `WithMockHTTPService("serviceName")` to register and mock HTTP services.
+- **Context Matching**: Always use `ctx.Context` from your `gofr.Context` in mock expectations, not `t.Context()` or `context.Background()`.
 - **Define Test Cases**: Create table-driven tests to handle various scenarios.
 - **Run and Validate**: Ensure that your tests check for expected results, and handle errors correctly.
 
-This approach guarantees that your database interactions are tested independently, allowing you to simulate different responses and errors hassle-free.
+This approach guarantees that your database and HTTP service interactions are tested independently, allowing you to simulate different responses and errors hassle-free.
