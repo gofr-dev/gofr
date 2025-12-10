@@ -67,6 +67,7 @@ go get -u gofr.dev/pkg/gofr
 ## 🏃 **Running GoFr**
 
 Here's a simple example to get a GoFr application up and running:
+Make sure you have Go 1.24+ installed and added to your PATH before running these commands.
 
 ```go
 package main
