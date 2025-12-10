@@ -23,7 +23,6 @@ import (
 	"gofr.dev/pkg/gofr/container"
 	"gofr.dev/pkg/gofr/datasource/redis"
 	"gofr.dev/pkg/gofr/logging"
-	"gofr.dev/pkg/gofr/service"
 	"gofr.dev/pkg/gofr/testutil"
 )
 
@@ -318,7 +317,7 @@ func TestMysqlHandler(t *testing.T) {
 }
 
 func TestTraceHandler(t *testing.T) {
-	mockContainer, mocks := container.NewMockContainer(t, container.WithMockHTTPService())
+	mockContainer, mocks := container.NewMockContainer(t, container.WithMockHTTPService("anotherService"))
 
 	// Redis expectations
 	mocks.Redis.EXPECT().Ping(gomock.Any()).Return(nil).Times(5)
@@ -329,14 +328,14 @@ func TestTraceHandler(t *testing.T) {
 		StatusCode: http.StatusOK,
 		Body:       io.NopCloser(strings.NewReader(`{"data":"mock data"}`)),
 	}
-	httpService.EXPECT().Get(gomock.Any(), "redis", gomock.Any()).Return(mockResp, nil)
-
-	// Attach service to container
-	mockContainer.Services = map[string]service.HTTP{
-		"anotherService": httpService,
-	}
 
 	ctx := createTestContext(http.MethodGet, "/trace", mockContainer)
+
+	httpService.EXPECT().Get(
+		ctx,
+		"redis",
+		nil, // queryParams is nil in TraceHandler
+	).Return(mockResp, nil)
 
 	resp, err := TraceHandler(ctx)
 	assert.NoError(t, err)

@@ -141,48 +141,13 @@ func NewMockContainer(t *testing.T, options ...options) (*Container, *Mocks) {
 		Metrics:       mockMetrics,
 		Oracle:        container.Oracle.(*MockOracleDB),
 		ScyllaDB:      container.ScyllaDB.(*MockScyllaDB),
+		Couchbase:     container.Couchbase.(*MockCouchbase),
 	}
 
 	container.metricsManager = mocks.Metrics
 	// TODO: Remove this expectation from mock container (previous generalization) to the actual tests where their expectations are being set.
 	mocks.Metrics.EXPECT().RecordHistogram(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(),
 		gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
-
-	for _, option := range options {
-		optionsAdded := option(container, ctrl)
-
-		val, ok := optionsAdded.(*service.MockHTTP)
-		if ok {
-			mocks.HTTPService = val
-		}
-	}
-
-	// Setup expectations/mockmetrics
-	container.Redis.(*MockRedis).EXPECT().Close().AnyTimes()
-
-	mockMetrics = NewMockMetrics(ctrl)
-	container.metricsManager = mockMetrics
-
-	mocks = Mocks{
-		Redis:         container.Redis.(*MockRedis),
-		SQL:           sqlMockWrapper,
-		Clickhouse:    container.Clickhouse.(*MockClickhouse),
-		Cassandra:     container.Cassandra.(*MockCassandraWithContext),
-		Mongo:         container.Mongo.(*MockMongo),
-		KVStore:       container.KVStore.(*MockKVStore),
-		File:          container.File.(*file.MockFileSystemProvider),
-		HTTPService:   httpMock,
-		DGraph:        container.DGraph.(*MockDgraph),
-		OpenTSDB:      container.OpenTSDB.(*MockOpenTSDB),
-		ArangoDB:      container.ArangoDB.(*MockArangoDBProvider),
-		SurrealDB:     container.SurrealDB.(*MockSurrealDB),
-		Elasticsearch: container.Elasticsearch.(*MockElasticsearch),
-		PubSub:        container.PubSub.(*MockPubSubProvider),
-		Metrics:       mockMetrics,
-		Oracle:        container.Oracle.(*MockOracleDB),
-		ScyllaDB:      container.ScyllaDB.(*MockScyllaDB),
-		Couchbase:     container.Couchbase.(*MockCouchbase),
-	}
 
 	return container, &mocks
 }
