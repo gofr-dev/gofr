@@ -270,13 +270,10 @@ func createTestContext(method, url string, mockContainer *container.Container) *
 		c = &container.Container{Logger: logging.NewLogger(logging.DEBUG)}
 	}
 
-	logger := c.Logger
-
 	return &gofr.Context{
-		Context:       req.Context(),
-		Request:       mockReq,
-		Container:     c,
-		ContextLogger: *logging.NewContextLogger(req.Context(), logger),
+		Context:   req.Context(),
+		Request:   mockReq,
+		Container: c,
 	}
 }
 

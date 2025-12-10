@@ -33,8 +33,6 @@ type Context struct {
 
 	// Terminal needs to be public as CMD applications need to access various terminal user interface(TUI) features.
 	Out terminal.Output
-
-	logging.ContextLogger
 }
 
 type AuthInfo interface {
@@ -158,23 +156,25 @@ func (a *authInfo) GetAPIKey() string {
 // }
 
 func newContext(w Responder, r Request, c *container.Container) *Context {
+	c.Logger = logging.NewContextLogger(r.Context(), c.Logger)
+
 	return &Context{
-		Context:       r.Context(),
-		Request:       r,
-		responder:     w,
-		Container:     c,
-		ContextLogger: *logging.NewContextLogger(r.Context(), c.Logger),
+		Context:   r.Context(),
+		Request:   r,
+		responder: w,
+		Container: c,
 	}
 }
 
 func newCMDContext(w Responder, r Request, c *container.Container, out terminal.Output) *Context {
+	c.Logger = logging.NewContextLogger(r.Context(), c.Logger)
+
 	return &Context{
-		Context:       r.Context(),
-		responder:     w,
-		Request:       r,
-		Container:     c,
-		Out:           out,
-		ContextLogger: *logging.NewContextLogger(r.Context(), c.Logger),
+		Context:   r.Context(),
+		responder: w,
+		Request:   r,
+		Container: c,
+		Out:       out,
 	}
 }
 

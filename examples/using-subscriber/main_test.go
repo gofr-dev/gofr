@@ -10,7 +10,6 @@ import (
 
 	"gofr.dev/pkg/gofr"
 	"gofr.dev/pkg/gofr/container"
-	"gofr.dev/pkg/gofr/logging"
 	"gofr.dev/pkg/gofr/testutil"
 )
 
@@ -49,9 +48,8 @@ func TestProductSubscribe_BindError(t *testing.T) {
 	mockContainer, _ := container.NewMockContainer(t)
 
 	ctx := &gofr.Context{
-		Request:       &errorRequest{},
-		Container:     mockContainer,
-		ContextLogger: *logging.NewContextLogger(context.Background(), mockContainer.Logger),
+		Request:   &errorRequest{},
+		Container: mockContainer,
 	}
 
 	err := productHandler(ctx)
@@ -65,9 +63,8 @@ func TestOrderSubscribe_BindError(t *testing.T) {
 	mockContainer, _ := container.NewMockContainer(t)
 
 	ctx := &gofr.Context{
-		Request:       &errorRequest{},
-		Container:     mockContainer,
-		ContextLogger: *logging.NewContextLogger(context.Background(), mockContainer.Logger),
+		Request:   &errorRequest{},
+		Container: mockContainer,
 	}
 
 	err := orderHandler(ctx)
@@ -100,9 +97,8 @@ func (r *successProductRequest) Params(string) []string  { return nil }
 func TestProductHandler_Success(t *testing.T) {
 	mockContainer, _ := container.NewMockContainer(t)
 	ctx := &gofr.Context{
-		Request:       &successProductRequest{},
-		Container:     mockContainer,
-		ContextLogger: *logging.NewContextLogger(context.Background(), mockContainer.Logger),
+		Request:   &successProductRequest{},
+		Container: mockContainer,
 	}
 
 	err := productHandler(ctx)
@@ -134,9 +130,8 @@ func (r *successOrderRequest) Params(string) []string  { return nil }
 func TestOrderHandler_Success(t *testing.T) {
 	mockContainer, _ := container.NewMockContainer(t)
 	ctx := &gofr.Context{
-		Request:       &successOrderRequest{},
-		Container:     mockContainer,
-		ContextLogger: *logging.NewContextLogger(context.Background(), mockContainer.Logger),
+		Request:   &successOrderRequest{},
+		Container: mockContainer,
 	}
 	err := orderHandler(ctx)
 	if err != nil {

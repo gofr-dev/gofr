@@ -102,13 +102,12 @@ func TestCMDRun_ProgressContextCancelled(t *testing.T) {
 	container := &container.Container{
 		Logger: logging.NewMockLogger(logging.ERROR),
 	}
-	
+
 	res, err := progress(&gofr.Context{
-		Context:       ctx,
-		Request:       cmd.NewRequest([]string{"command", "progress"}),
-		Container:     container,
-		Out:           terminal.New(),
-		ContextLogger: *logging.NewContextLogger(ctx, container.Logger),
+		Context:   ctx,
+		Request:   cmd.NewRequest([]string{"command", "progress"}),
+		Container: container,
+		Out:       terminal.New(),
 	})
 
 	assert.Empty(t, res)

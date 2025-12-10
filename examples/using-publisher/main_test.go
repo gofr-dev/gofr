@@ -5,12 +5,13 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"gofr.dev/pkg/gofr/testutil"
 	"net/http"
 	"net/http/httptest"
 	"os"
 	"testing"
 	"time"
+
+	"gofr.dev/pkg/gofr/testutil"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -18,7 +19,6 @@ import (
 
 	"gofr.dev/pkg/gofr"
 	"gofr.dev/pkg/gofr/container"
-	"gofr.dev/pkg/gofr/logging"
 )
 
 func TestMain(m *testing.M) {
@@ -128,10 +128,9 @@ func testHandler(t *testing.T, name string, handler func(*gofr.Context) (interfa
 
 	t.Run(name, func(t *testing.T) {
 		ctx := &gofr.Context{
-			Context:       context.Background(),
-			Request:       &testRequest{Request: httptest.NewRequest(http.MethodPost, "/", bytes.NewReader([]byte(body))), body: body},
-			Container:     container,
-			ContextLogger: *logging.NewContextLogger(context.Background(), container.Logger),
+			Context:   context.Background(),
+			Request:   &testRequest{Request: httptest.NewRequest(http.MethodPost, "/", bytes.NewReader([]byte(body))), body: body},
+			Container: container,
 		}
 
 		result, err := handler(ctx)
