@@ -334,8 +334,9 @@ For more information on setting up and using NATS JetStream, refer to the offici
 
 ### Redis Pub/Sub
 
-Redis Pub/Sub is a lightweight messaging system that allows applications to publish and subscribe to channels. 
-GoFr supports Redis Pub/Sub as a message broker, providing a simple and efficient way to implement pub/sub patterns.
+Redis Pub/Sub is a lightweight messaging system. GoFr supports two modes:
+1. **PubSub Mode** (Default): Standard Redis Pub/Sub (fire-and-forget, no persistence).
+2. **Streams Mode**: Uses Redis Streams for persistent messaging with consumer groups and acknowledgments.
 
 #### Configs
 
@@ -358,12 +359,75 @@ GoFr supports Redis Pub/Sub as a message broker, providing a simple and efficien
 
 ---
 
-- `REDIS_ADDR`
-- Address to connect to Redis server (host:port).
+- `REDIS_PUBSUB_MODE`
+- Operation mode: `pubsub` or `streams`.
 - `-`
-- `localhost:6379`
-- `localhost:6379` or `redis.example.com:6380`
-- host:port format
+- `pubsub`
+- `streams`
+- `pubsub`, `streams`
+
+---
+
+- `REDIS_STREAMS_CONSUMER_GROUP`
+- Consumer group name (Required for streams mode).
+- `+` (if mode=streams)
+-
+- `my-group`
+- String
+
+---
+
+- `REDIS_STREAMS_CONSUMER_NAME`
+- Unique consumer name (Optional).
+- `-`
+- `hostname`
+- `my-consumer`
+- String
+
+---
+
+- `REDIS_STREAMS_BLOCK_TIMEOUT`
+- Blocking duration for reading new messages.
+- `-`
+- `5s`
+- `2s`
+- Duration
+
+---
+
+- `REDIS_STREAMS_MAXLEN`
+- Maximum length of the stream (approximate).
+- `-`
+- `0` (unlimited)
+- `1000`
+- Integer
+
+---
+
+- `REDIS_HOST`
+- Hostname of the Redis server.
+- `+`
+- `localhost`
+- `redis.example.com`
+- String
+
+---
+
+- `REDIS_PORT`
+- Port of the Redis server.
+- `-`
+- `6379`
+- `6380`
+- Integer
+
+---
+
+- `REDIS_USER`
+- Username for Redis authentication (if required).
+- `-`
+- `""`
+- `myuser`
+- String
 
 ---
 
@@ -385,141 +449,60 @@ GoFr supports Redis Pub/Sub as a message broker, providing a simple and efficien
 
 ---
 
-- `REDIS_MAX_RETRIES`
-- Maximum number of retries for failed commands.
-- `-`
-- `3`
-- `5`
-- Positive integer
-
----
-
-- `REDIS_DIAL_TIMEOUT`
-- Timeout for establishing connections.
-- `-`
-- `5s`
-- `10s`
-- Duration (e.g., 5s, 10s)
-
----
-
-- `REDIS_READ_TIMEOUT`
-- Timeout for socket reads.
-- `-`
-- `3s`
-- `5s`
-- Duration
-
----
-
-- `REDIS_WRITE_TIMEOUT`
-- Timeout for socket writes.
-- `-`
-- `3s`
-- `5s`
-- Duration
-
----
-
-- `REDIS_POOL_SIZE`
-- Maximum number of socket connections in the pool.
-- `-`
-- `10`
-- `20`
-- Positive integer
-
----
-
-- `REDIS_MIN_IDLE_CONNS`
-- Minimum number of idle connections.
-- `-`
-- `5`
-- `10`
-- Positive integer
-
----
-
-- `REDIS_MAX_IDLE_CONNS`
-- Maximum number of idle connections.
-- `-`
-- `10`
-- `20`
-- Positive integer
-
----
-
-- `REDIS_CONN_MAX_IDLE_TIME`
-- Maximum amount of time a connection may be idle.
-- `-`
-- `5m`
-- `10m`
-- Duration
-
----
-
-- `REDIS_CONN_MAX_LIFETIME`
-- Maximum amount of time a connection may be reused.
-- `-`
-- `30m`
-- `1h`
-- Duration
-
----
-
-- `REDIS_TLS_CERT_FILE`
-- Path to the TLS certificate file.
-- `-`
-- `""`
-- `/path/to/cert.pem`
-- Path
-
----
-
-- `REDIS_TLS_KEY_FILE`
-- Path to the TLS key file.
-- `-`
-- `""`
-- `/path/to/key.pem`
-- Path
-
----
-
-- `REDIS_TLS_CA_CERT_FILE`
-- Path to the TLS CA certificate file.
-- `-`
-- `""`
-- `/path/to/ca.pem`
-- Path
-
----
-
-- `REDIS_TLS_INSECURE_SKIP_VERIFY`
-- Skip TLS certificate verification.
+- `REDIS_TLS_ENABLED`
+- Enable TLS for Redis connections.
 - `-`
 - `false`
 - `true`
 - Boolean
 
+---
+
+- `REDIS_TLS_CA_CERT`
+- Path to the TLS CA certificate file (or PEM-encoded certificate string).
+- `-`
+- `""`
+- `/path/to/ca.pem`
+- Path or PEM string
+
+---
+
+- `REDIS_TLS_CERT`
+- Path to the TLS certificate file (or PEM-encoded certificate string).
+- `-`
+- `""`
+- `/path/to/cert.pem`
+- Path or PEM string
+
+---
+
+- `REDIS_TLS_KEY`
+- Path to the TLS key file (or PEM-encoded key string).
+- `-`
+- `""`
+- `/path/to/key.pem`
+- Path or PEM string
+
 {% /table %}
 
 ```dotenv
 PUBSUB_BACKEND=REDIS
-REDIS_ADDR=localhost:6379
+REDIS_HOST=localhost
+REDIS_PORT=6379
+REDIS_USER=myuser
 REDIS_PASSWORD=mypassword
 REDIS_DB=0
-REDIS_MAX_RETRIES=3
-REDIS_DIAL_TIMEOUT=5s
-REDIS_READ_TIMEOUT=3s
-REDIS_WRITE_TIMEOUT=3s
-REDIS_POOL_SIZE=10
-REDIS_MIN_IDLE_CONNS=5
-REDIS_MAX_IDLE_CONNS=10
-REDIS_CONN_MAX_IDLE_TIME=5m
-REDIS_CONN_MAX_LIFETIME=30m
-REDIS_TLS_CERT_FILE=/path/to/cert.pem
-REDIS_TLS_KEY_FILE=/path/to/key.pem
-REDIS_TLS_CA_CERT_FILE=/path/to/ca.pem
-REDIS_TLS_INSECURE_SKIP_VERIFY=false
+REDIS_TLS_ENABLED=true
+REDIS_TLS_CA_CERT=/path/to/ca.pem
+REDIS_TLS_CERT=/path/to/cert.pem
+REDIS_TLS_KEY=/path/to/key.pem
+
+# For Streams mode
+REDIS_PUBSUB_MODE=streams
+REDIS_STREAMS_CONSUMER_GROUP=my-group
+REDIS_STREAMS_CONSUMER_NAME=my-consumer
+REDIS_STREAMS_BLOCK_TIMEOUT=5s
+REDIS_STREAMS_MAXLEN=1000
 ```
 
 #### Docker setup
@@ -558,8 +541,24 @@ docker run -d \
 > **Note**: Redis Pub/Sub uses channels (topics) that are created automatically on first publish/subscribe. 
 > Channels cannot be explicitly created or deleted - they exist as long as there are active subscriptions.
 
-> **Note**: Redis Pub/Sub provides at-most-once delivery semantics. Messages are not persisted, 
-> so if a subscriber is not connected when a message is published, it will not receive that message.
+> **Note**: Redis Pub/Sub (in default mode) provides at-most-once delivery semantics. Messages are not persisted.
+> Use `REDIS_PUBSUB_MODE=streams` for persistence and at-least-once delivery semantics.
+
+#### Examples
+
+GoFr provides two example projects demonstrating Redis PubSub:
+
+1. **Channels Mode** (`examples/redis-pubsub-channels/`): Demonstrates non-persistent messaging using Redis Pub/Sub channels. Messages are fire-and-forget and do not survive app restarts.
+
+2. **Streams Mode** (`examples/redis-pubsub-streams/`): Demonstrates persistent messaging using Redis Streams with consumer groups and acknowledgments. Messages persist and are processed even after app restarts.
+
+Each example includes:
+- Docker Compose setup for Redis
+- Complete application code
+- Test scripts with curl commands
+- README with usage instructions
+
+See the example directories for detailed usage and testing instructions.
 
 ### Azure Event Hubs
 GoFr supports Event Hubs starting gofr version v1.22.0.

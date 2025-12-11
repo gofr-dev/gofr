@@ -23,7 +23,6 @@ use (
 	./pkg/gofr/datasource/oracle
 	./pkg/gofr/datasource/pubsub/eventhub
 	./pkg/gofr/datasource/pubsub/nats
-	./pkg/gofr/datasource/pubsub/redis
 	./pkg/gofr/datasource/scylladb
 	./pkg/gofr/datasource/solr
 	./pkg/gofr/datasource/surrealdb

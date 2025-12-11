@@ -27,8 +27,7 @@ import (
 	"gofr.dev/pkg/gofr/datasource/pubsub/google"
 	"gofr.dev/pkg/gofr/datasource/pubsub/kafka"
 	"gofr.dev/pkg/gofr/datasource/pubsub/mqtt"
-	redisPubSub "gofr.dev/pkg/gofr/datasource/pubsub/redis"
-	"gofr.dev/pkg/gofr/datasource/redis"
+	gofrRedis "gofr.dev/pkg/gofr/datasource/redis"
 	"gofr.dev/pkg/gofr/datasource/sql"
 	"gofr.dev/pkg/gofr/logging"
 	"gofr.dev/pkg/gofr/logging/remotelogger"
@@ -126,10 +125,18 @@ func (c *Container) Create(conf config.Config) {
 	c.Metrics().SetGauge("app_info", 1,
 		"app_name", c.GetAppName(), "app_version", c.GetAppVersion(), "framework_version", version.Framework)
 
-	c.Redis = redis.NewClient(conf, c.Logger, c.metricsManager)
+	c.Redis = gofrRedis.NewClient(conf, c.Logger, c.metricsManager)
 
 	c.SQL = sql.NewSQL(conf, c.Logger, c.metricsManager)
 
+	c.createPubSub(conf)
+
+	c.File = file.NewLocalFileSystem(c.Logger)
+
+	c.WSManager = websocket.New()
+}
+
+func (c *Container) createPubSub(conf config.Config) {
 	switch strings.ToUpper(conf.Get("PUBSUB_BACKEND")) {
 	case "KAFKA":
 		if conf.Get("PUBSUB_BROKER") != "" {
@@ -171,15 +178,15 @@ func (c *Container) Create(conf config.Config) {
 	case "MQTT":
 		c.PubSub = c.createMqttPubSub(conf)
 	case "REDIS":
-		// Auto-initialize Redis PubSub from config (similar to Redis DB)
-		if pubsubClient := redisPubSub.NewClient(conf, c.Logger, c.metricsManager); pubsubClient != nil {
-			c.PubSub = pubsubClient
+		// Redis PubSub is automatically initialized in Redis.NewClient when PUBSUB_BACKEND=REDIS
+		// Use the embedded PubSub from the Redis client
+		if c.Redis != nil {
+			// Type assert to access PubSub field
+			if redisClient, ok := c.Redis.(*gofrRedis.Redis); ok && redisClient != nil && redisClient.PubSub != nil {
+				c.PubSub = redisClient.PubSub
+			}
 		}
 	}
-
-	c.File = file.NewLocalFileSystem(c.Logger)
-
-	c.WSManager = websocket.New()
 }
 
 func (c *Container) Close() error {

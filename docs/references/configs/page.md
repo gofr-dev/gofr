@@ -307,52 +307,101 @@ This document lists all the configuration options supported by the GoFr framewor
 
 - Name
 - Description
+- Default Value
 
 ---
 
 -  REDIS_HOST
 -  Hostname of the Redis server.
+-  localhost
 
 ---
 
 -  REDIS_PORT
 -  Port of the Redis server.
+-  6379
 
 ---
 
 - REDIS_USER
-- Username for the Redis server.
+- Username for the Redis server (optional).
+-  ""
 
 ---
 
 - REDIS_PASSWORD
-- Password for the Redis server.
+- Password for the Redis server (optional).
+-  ""
 
 ---
 
 - REDIS_DB
 - Database number to use for the Redis server.
+-  0
 
 ---
 
 - REDIS_TLS_ENABLED
-- Enable TLS for Redis connections
-- false
+- Enable TLS for Redis connections.
+-  false
 
 ---
 
 - REDIS_TLS_CA_CERT
-- Path to the TLS CA certificate file for Redis
+- Path to the TLS CA certificate file for Redis (or PEM-encoded string).
+-  ""
 
 ---
 
 - REDIS_TLS_CERT
-- Path to the TLS certificate file for Redis
+- Path to the TLS certificate file for Redis (or PEM-encoded string).
+-  ""
 
 ---
 
 - REDIS_TLS_KEY
-- Path to the TLS key file for Redis
+- Path to the TLS key file for Redis (or PEM-encoded string).
+-  ""
+
+{% /table %}
+
+**Redis PubSub Configuration:**
+
+{% table %}
+
+- Name
+- Description
+- Default Value
+
+---
+
+- REDIS_PUBSUB_MODE
+- Operation mode: `pubsub` or `streams`.
+- pubsub
+
+---
+
+- REDIS_STREAMS_CONSUMER_GROUP
+- Consumer group name (required for streams mode).
+-  ""
+
+---
+
+- REDIS_STREAMS_CONSUMER_NAME
+- Unique consumer name (optional, auto-generated if empty).
+-  ""
+
+---
+
+- REDIS_STREAMS_BLOCK_TIMEOUT
+- Blocking duration for reading new messages.
+-  5s
+
+---
+
+- REDIS_STREAMS_MAXLEN
+- Maximum length of the stream (approximate).
+-  0 (unlimited)
 
 {% /table %}
 
