@@ -162,9 +162,10 @@ func NewClient(c config.Config, logger datasource.Logger, metrics Metrics) *Redi
 
 	// Initialize PubSub if PUBSUB_BACKEND=REDIS
 	pubsubBackend := c.Get("PUBSUB_BACKEND")
-	logger.Debugf("PUBSUB_BACKEND config value: '%s'", pubsubBackend)
 
 	if strings.EqualFold(pubsubBackend, "REDIS") {
+		logger.Debug("PUBSUB_BACKEND is set to REDIS, initializing PubSub")
+
 		r.PubSub = newPubSub(r, rc)
 	} else {
 		logger.Debug("PubSub not initialized because PUBSUB_BACKEND is not REDIS")
@@ -174,7 +175,7 @@ func NewClient(c config.Config, logger datasource.Logger, metrics Metrics) *Redi
 }
 
 // retryConnect handles the retry mechanism for connecting to Redis.
-func retryConnect(client *redis.Client, conf *Config, logger datasource.Logger) {
+func retryConnect(client *redis.Client, _ *Config, logger datasource.Logger) {
 	for {
 		time.Sleep(defaultRetryTimeout)
 
@@ -188,12 +189,12 @@ func retryConnect(client *redis.Client, conf *Config, logger datasource.Logger) 
 				logger.Errorf("could not add tracing instrumentation, error: %s", err)
 			}
 
-			logger.Infof("connected to redis at %s:%d on database %d", conf.HostName, conf.Port, conf.DB)
+			logger.Info("connected to redis successfully")
 
 			return
 		}
 
-		logger.Errorf("could not connect to redis at '%s:%d' , error: %s", conf.HostName, conf.Port, err)
+		logger.Errorf("could not connect to redis, error: %s", err)
 	}
 }
 
