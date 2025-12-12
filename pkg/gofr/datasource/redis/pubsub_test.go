@@ -384,7 +384,7 @@ func testHealthCheck(t *testing.T, client *Redis) {
 
 	h := client.PubSub.Health()
 	assert.Equal(t, "UP", h.Status)
-	assert.Equal(t, "pubsub", h.Details["mode"])
+	assert.Equal(t, "streams", h.Details["mode"]) // Default mode is now streams
 }
 
 func testStreamConfigError(t *testing.T, client *Redis) {

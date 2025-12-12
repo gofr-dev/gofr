@@ -32,8 +32,9 @@ func TestGetRedisConfig_Defaults(t *testing.T) {
 	assert.Equal(t, defaultRedisPort, conf.Port)
 	assert.Equal(t, 0, conf.DB)
 	assert.Nil(t, conf.TLS)
-	assert.Nil(t, conf.PubSubStreamsConfig)
-	assert.Equal(t, "pubsub", conf.PubSubMode) // Default mode
+	// PubSubStreamsConfig is initialized when mode is streams (default)
+	assert.NotNil(t, conf.PubSubStreamsConfig)
+	assert.Equal(t, "streams", conf.PubSubMode) // Default mode is now streams
 }
 
 func TestGetRedisConfig_InvalidPortAndDB(t *testing.T) {

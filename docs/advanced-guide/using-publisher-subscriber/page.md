@@ -335,8 +335,8 @@ For more information on setting up and using NATS JetStream, refer to the offici
 ### Redis Pub/Sub
 
 Redis Pub/Sub is a lightweight messaging system. GoFr supports two modes:
-1. **PubSub Mode** (Default): Standard Redis Pub/Sub (fire-and-forget, no persistence).
-2. **Streams Mode**: Uses Redis Streams for persistent messaging with consumer groups and acknowledgments.
+1. **Streams Mode** (Default): Uses Redis Streams for persistent messaging with consumer groups and acknowledgments.
+2. **PubSub Mode**: Standard Redis Pub/Sub (fire-and-forget, no persistence).
 
 #### Configs
 
@@ -362,8 +362,8 @@ Redis Pub/Sub is a lightweight messaging system. GoFr supports two modes:
 - `REDIS_PUBSUB_MODE`
 - Operation mode: `pubsub` or `streams`.
 - `-`
-- `pubsub`
 - `streams`
+- `pubsub`
 - `pubsub`, `streams`
 
 ---
@@ -497,12 +497,14 @@ REDIS_TLS_CA_CERT=/path/to/ca.pem
 REDIS_TLS_CERT=/path/to/cert.pem
 REDIS_TLS_KEY=/path/to/key.pem
 
-# For Streams mode
-REDIS_PUBSUB_MODE=streams
+# Streams mode (default) - requires consumer group
 REDIS_STREAMS_CONSUMER_GROUP=my-group
 REDIS_STREAMS_CONSUMER_NAME=my-consumer
 REDIS_STREAMS_BLOCK_TIMEOUT=5s
 REDIS_STREAMS_MAXLEN=1000
+
+# To use PubSub mode instead, set:
+# REDIS_PUBSUB_MODE=pubsub
 ```
 
 #### Docker setup
@@ -541,24 +543,8 @@ docker run -d \
 > **Note**: Redis Pub/Sub uses channels (topics) that are created automatically on first publish/subscribe. 
 > Channels cannot be explicitly created or deleted - they exist as long as there are active subscriptions.
 
-> **Note**: Redis Pub/Sub (in default mode) provides at-most-once delivery semantics. Messages are not persisted.
-> Use `REDIS_PUBSUB_MODE=streams` for persistence and at-least-once delivery semantics.
-
-#### Examples
-
-GoFr provides two example projects demonstrating Redis PubSub:
-
-1. **Channels Mode** (`examples/redis-pubsub-channels/`): Demonstrates non-persistent messaging using Redis Pub/Sub channels. Messages are fire-and-forget and do not survive app restarts.
-
-2. **Streams Mode** (`examples/redis-pubsub-streams/`): Demonstrates persistent messaging using Redis Streams with consumer groups and acknowledgments. Messages persist and are processed even after app restarts.
-
-Each example includes:
-- Docker Compose setup for Redis
-- Complete application code
-- Test scripts with curl commands
-- README with usage instructions
-
-See the example directories for detailed usage and testing instructions.
+> **Note**: By default, Redis Pub/Sub uses Streams mode which provides persistence and at-least-once delivery semantics with consumer groups and acknowledgments.
+> Use `REDIS_PUBSUB_MODE=pubsub` for fire-and-forget messaging with at-most-once delivery semantics (messages are not persisted).
 
 ### Azure Event Hubs
 GoFr supports Event Hubs starting gofr version v1.22.0.

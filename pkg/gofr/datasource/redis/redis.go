@@ -14,6 +14,8 @@ import (
 
 	otel "github.com/redis/go-redis/extra/redisotel/v9"
 	"github.com/redis/go-redis/v9"
+	otelglobal "go.opentelemetry.io/otel"
+	oteltrace "go.opentelemetry.io/otel/trace"
 
 	"gofr.dev/pkg/gofr/config"
 	"gofr.dev/pkg/gofr/datasource"
@@ -93,7 +95,13 @@ type PubSub struct {
 	client *redis.Client
 
 	// Parent Redis for accessing config, logger, metrics
+	// parent.logger: Logger instance from the parent Redis client for logging operations
+	// parent.metrics: Metrics instance from the parent Redis client for recording metrics
+	// parent.config: Configuration from the parent Redis client (includes PubSubMode, StreamsConfig, etc.)
 	parent *Redis
+
+	// Tracer for OpenTelemetry distributed tracing
+	tracer oteltrace.Tracer
 
 	// Subscription management
 	receiveChan     map[string]chan *pubsub.Message
@@ -296,6 +304,7 @@ func newPubSub(parent *Redis, client *redis.Client) *PubSub {
 	ps := &PubSub{
 		client:          client,
 		parent:          parent,
+		tracer:          otelglobal.GetTracerProvider().Tracer("gofr"),
 		receiveChan:     make(map[string]chan *pubsub.Message),
 		subStarted:      make(map[string]struct{}),
 		subCancel:       make(map[string]context.CancelFunc),
@@ -313,16 +322,16 @@ func newPubSub(parent *Redis, client *redis.Client) *PubSub {
 
 // parsePubSubConfig parses PubSub configuration from environment variables.
 func parsePubSubConfig(c config.Config, redisConfig *Config) {
-	// Parse mode (default: "pubsub")
+	// Parse mode (default: streams)
 	mode := c.Get("REDIS_PUBSUB_MODE")
 	if mode == "" {
-		mode = "pubsub"
+		mode = modeStreams
 	}
 
 	redisConfig.PubSubMode = mode
 
-	// Parse Streams config if mode is "streams"
-	if mode == "streams" {
+	// Parse Streams config if mode is streams
+	if mode == modeStreams {
 		configStreams(c, redisConfig)
 	}
 }

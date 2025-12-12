@@ -10,7 +10,6 @@ import (
 	"time"
 
 	"github.com/redis/go-redis/v9"
-	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/trace"
 
 	"gofr.dev/pkg/gofr/datasource"
@@ -77,7 +76,7 @@ func (ps *PubSub) Publish(ctx context.Context, topic string, message []byte) err
 		return errPublisherNotConfigured
 	}
 
-	ctx, span := otel.GetTracerProvider().Tracer("gofr").Start(ctx, "redis-publish")
+	ctx, span := ps.tracer.Start(ctx, "redis-publish")
 	defer span.End()
 
 	if ps.parent.metrics != nil {
@@ -94,7 +93,7 @@ func (ps *PubSub) Publish(ctx context.Context, topic string, message []byte) err
 
 	mode := ps.parent.config.PubSubMode
 	if mode == "" {
-		mode = modePubSub
+		mode = modeStreams
 	}
 
 	if mode == modeStreams {
@@ -187,7 +186,7 @@ func (ps *PubSub) Subscribe(ctx context.Context, topic string) (*pubsub.Message,
 		}
 	}
 
-	spanCtx, span := otel.GetTracerProvider().Tracer("gofr").Start(ctx, "redis-subscribe")
+	spanCtx, span := ps.tracer.Start(ctx, "redis-subscribe")
 	defer span.End()
 
 	if ps.parent.metrics != nil {
@@ -231,7 +230,7 @@ func (ps *PubSub) ensureSubscription(_ context.Context, topic string) chan *pubs
 
 		mode := ps.parent.config.PubSubMode
 		if mode == "" {
-			mode = modePubSub
+			mode = modeStreams
 		}
 
 		for {
@@ -538,7 +537,7 @@ func (ps *PubSub) Health() datasource.Health {
 
 	mode := ps.parent.config.PubSubMode
 	if mode == "" {
-		mode = modePubSub
+		mode = modeStreams
 	}
 
 	res.Details["mode"] = mode
@@ -568,7 +567,7 @@ func (ps *PubSub) CreateTopic(ctx context.Context, name string) error {
 
 	mode := ps.parent.config.PubSubMode
 	if mode == "" {
-		mode = modePubSub
+		mode = modeStreams
 	}
 
 	if mode == modeStreams {
@@ -612,7 +611,7 @@ func (ps *PubSub) DeleteTopic(ctx context.Context, topic string) error {
 
 	mode := ps.parent.config.PubSubMode
 	if mode == "" {
-		mode = modePubSub
+		mode = modeStreams
 	}
 
 	if mode == modeStreams {
@@ -657,7 +656,7 @@ func (ps *PubSub) Unsubscribe(topic string) error {
 
 	mode := ps.parent.config.PubSubMode
 	if mode == "" {
-		mode = modePubSub
+		mode = modeStreams
 	}
 
 	if mode == modeStreams {
@@ -786,7 +785,7 @@ func (ps *PubSub) Query(ctx context.Context, query string, args ...any) ([]byte,
 
 	mode := ps.parent.config.PubSubMode
 	if mode == "" {
-		mode = modePubSub
+		mode = modeStreams
 	}
 
 	if mode == modeStreams {
@@ -1079,11 +1078,33 @@ func (ps *PubSub) monitorConnection(ctx context.Context) {
 }
 
 // resubscribeAll logs that resubscription is needed (handled by the subscribe loop).
+// The actual resubscription happens automatically in the subscribe loop when connection is restored.
 func (ps *PubSub) resubscribeAll() {
 	ps.mu.RLock()
 	defer ps.mu.RUnlock()
 
 	if len(ps.subStarted) > 0 {
 		ps.logInfo("Ensuring all subscriptions are active after reconnection")
+	}
+}
+
+// UseLogger sets the logger for the Redis PubSub client.
+func (ps *PubSub) UseLogger(logger any) {
+	if l, ok := logger.(datasource.Logger); ok && ps.parent != nil {
+		ps.parent.logger = l
+	}
+}
+
+// UseMetrics sets the metrics for the Redis PubSub client.
+func (ps *PubSub) UseMetrics(metrics any) {
+	if m, ok := metrics.(Metrics); ok && ps.parent != nil {
+		ps.parent.metrics = m
+	}
+}
+
+// UseTracer sets the tracer for the Redis PubSub client.
+func (ps *PubSub) UseTracer(tracer any) {
+	if t, ok := tracer.(trace.Tracer); ok {
+		ps.tracer = t
 	}
 }
