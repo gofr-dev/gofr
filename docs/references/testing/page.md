@@ -188,97 +188,9 @@ func TestAdd(t *testing.T) {
 
 ```
 
-## Example of Unit Testing a Handler with Mock HTTP Services
+## Testing HTTP Handlers with Mock Services
 
-The example below demonstrates how to test HTTP handlers that use HTTP services created from `AddHTTPService()` method on your app.
-
-```go
-import (
-	"io"
-	"net/http"
-	"net/http/httptest"
-	"strings"
-	"testing"
-
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
-
-	"gofr.dev/pkg/gofr"
-	"gofr.dev/pkg/gofr/container"
-	gofrHttp "gofr.dev/pkg/gofr/http"
-)
-
-// Handler that calls an HTTP service
-func CreateProductHandler(ctx *gofr.Context) (any, error) {
-	var productRequest struct {
-		Description string `json:"description"`
-	}
-	
-	if err := ctx.Bind(&productRequest); err != nil {
-		return nil, err
-	}
-
-	// Get the HTTP service registered with name "ABCService"
-	service := ctx.GetHTTPService("ABCService")
-	
-	resp, err := service.Post(
-		ctx.Context,
-		"/api/Product",
-		nil,
-		[]byte(`{"description":"`+productRequest.Description+`"}`),
-	)
-	if err != nil {
-		return nil, err
-	}
-	defer resp.Body.Close()
-	
-	body, _ := io.ReadAll(resp.Body)
-	return string(body), nil
-}
-
-func TestCreateProductHandler(t *testing.T) {
-	// Register the HTTP service with the service name used in your code
-	mockContainer, mocks := container.NewMockContainer(t, 
-		container.WithMockHTTPService("ABCService"),
-	)
-
-	// Create the test context FIRST to get the exact context that will be used
-	req := httptest.NewRequest(
-		http.MethodPost,
-		"/api/Product",
-		strings.NewReader(`{"description": "Test Product"}`),
-	)
-	req.Header.Set("Content-Type", "application/json")
-
-	ctx := &gofr.Context{
-		Context:   req.Context(), // Use the context from the request
-		Request:   gofrHttp.NewRequest(req),
-		Container: mockContainer,
-	}
-
-	// Set expectations using the exact context from the gofr.Context
-	// Use mocks.HTTPServices["serviceName"] to set expectations for the specific service
-	mocks.HTTPServices["ABCService"].EXPECT().Post(
-		ctx.Context, // ✅ Use the exact context from gofr.Context
-		"/api/Product", 
-		nil,
-		[]byte(`{"description":"Test Product"}`),
-	).Return(&http.Response{
-		StatusCode: http.StatusOK,
-		Body: io.NopCloser(strings.NewReader(`{
-			"id": 1,
-			"description": "Test Product",
-			"weight": 1.0
-		}`)),
-	}, nil)
-
-	// Now call your handler - the expectation will match
-	result, err := CreateProductHandler(ctx)
-
-	assert.NoError(t, err)
-	assert.Contains(t, result.(string), "Test Product")
-}
-```
+When you register multiple services with `WithMockHTTPService`, each service gets its own separate mock instance. This allows you to set different expectations for each service using the `mocks.HTTPServices` map. Use table-driven tests to cover multiple scenarios:
 
 ### Important Notes
 
@@ -286,10 +198,6 @@ func TestCreateProductHandler(t *testing.T) {
 - **Service Registration**: `WithMockHTTPService("serviceName")` registers the service with the specified name. Each service gets its own separate mock instance.
 - **Multiple Services**: Use `mocks.HTTPServices["serviceName"]` to access and set different expectations for each service. Each service has its own mock instance, so expectations are independent.
 - **Tests will fail** if the mocked HTTPService is not called as expected or if the context doesn't match.
-
-### Testing HTTP Handlers with Mock Services
-
-When you register multiple services with `WithMockHTTPService`, each service gets its own separate mock instance. This allows you to set different expectations for each service using the `mocks.HTTPServices` map. Use table-driven tests to cover multiple scenarios:
 
 ```go
 import (
