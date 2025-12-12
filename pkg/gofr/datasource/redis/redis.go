@@ -135,8 +135,6 @@ func NewClient(c config.Config, logger datasource.Logger, metrics Metrics) *Redi
 		return nil
 	}
 
-	logger.Debugf("connecting to redis at '%s:%d' on database %d", redisConfig.HostName, redisConfig.Port, redisConfig.DB)
-
 	// Redirect go-redis internal logs to Gofr logger for consistent formatting
 	// go-redis v9 supports SetLogger to customize logging
 	redisLogFilterOnce.Do(func() {

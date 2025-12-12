@@ -34,11 +34,8 @@ func newPubSubMessage(msg *redis.Message, logger datasource.Logger) *pubSubMessa
 	}
 }
 
-func (m *pubSubMessage) Commit() {
+func (*pubSubMessage) Commit() {
 	// Redis PubSub is fire-and-forget, so there's nothing to commit
-	if m.logger != nil {
-		m.logger.Debug("Message acknowledged (Redis PubSub doesn't require explicit acknowledgment)")
-	}
 }
 
 type streamMessage struct {
@@ -661,7 +658,6 @@ func (ps *PubSub) Unsubscribe(topic string) error {
 
 	if mode == modeStreams {
 		ps.cleanupStreamConsumers(topic)
-		ps.logDebug("unsubscribed from Redis stream '%s'", topic)
 
 		return nil
 	}
@@ -670,8 +666,6 @@ func (ps *PubSub) Unsubscribe(topic string) error {
 	ps.cancelSubscription(topic)
 	ps.waitForGoroutine(topic)
 	ps.cleanupSubscription(topic)
-
-	ps.logDebug("unsubscribed from Redis channel '%s'", topic)
 
 	return nil
 }

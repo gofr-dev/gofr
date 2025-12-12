@@ -2,7 +2,6 @@ package redis
 
 import (
 	"crypto/tls"
-	"fmt"
 	"os"
 	"testing"
 	"time"
@@ -21,10 +20,6 @@ func TestGetRedisConfig_Defaults(t *testing.T) {
 		"PUBSUB_BACKEND": "REDIS", // Required to trigger PubSub config parsing
 		"REDIS_HOST":     "localhost",
 	})
-
-	// Sanity check
-	val := mockConfig.Get("PUBSUB_BACKEND")
-	fmt.Printf("DEBUG: PUBSUB_BACKEND = '%s'\n", val)
 
 	conf := getRedisConfig(mockConfig, mockLogger)
 
