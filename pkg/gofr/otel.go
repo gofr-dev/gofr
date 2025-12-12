@@ -19,6 +19,15 @@ import (
 	"gofr.dev/pkg/gofr/logging"
 )
 
+const (
+	// minMatchesForStatusCode is the minimum number of regex matches needed to extract status code.
+	// Index 0 is the full match, index 1 is the captured group.
+	minMatchesForStatusCode = 2
+)
+
+// statusCodeRegex is precompiled to avoid overhead of compiling on each otelErrorHandler creation.
+var statusCodeRegex = regexp.MustCompile(`status (\d+)`)
+
 func (a *App) initTracer() {
 	traceRatio, err := strconv.ParseFloat(a.Config.GetOrDefault("TRACER_RATIO", "1"), 64)
 	if err != nil {
@@ -36,7 +45,7 @@ func (a *App) initTracer() {
 	otel.SetTextMapPropagator(propagation.NewCompositeTextMapPropagator(propagation.TraceContext{}, propagation.Baggage{}))
 	otel.SetErrorHandler(&otelErrorHandler{
 		logger:          a.container.Logger,
-		statusCodeRegex: regexp.MustCompile(`status (\d+)`),
+		statusCodeRegex: statusCodeRegex,
 	})
 
 	traceExporter := a.Config.Get("TRACE_EXPORTER")
@@ -165,7 +174,7 @@ func (o *otelErrorHandler) Handle(e error) {
 
 	// Use regex for reliable status code extraction
 	matches := o.statusCodeRegex.FindStringSubmatch(msg)
-	if len(matches) >= 2 {
+	if len(matches) >= minMatchesForStatusCode {
 		if code, err := strconv.Atoi(matches[1]); err == nil {
 			// Ignore success codes (201 Created, 202 Accepted, 204 No Content)
 			if code >= http.StatusOK && code < 300 {
