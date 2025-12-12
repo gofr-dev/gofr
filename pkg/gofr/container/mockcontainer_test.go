@@ -116,12 +116,12 @@ func Test_HttpServiceMockMultipleServices(t *testing.T) {
 	for _, name := range serviceNames {
 		service := container.GetHTTPService(name)
 		require.NotNil(t, service, "Service %s should be registered", name)
-		
+
 		// Verify the service is in the HTTPServices map
 		mock, exists := mocks.HTTPServices[name]
 		require.True(t, exists, "Service %s should be in HTTPServices map", name)
 		assert.Equal(t, mock, service, "Service %s should match the mock in HTTPServices map", name)
-		
+
 		// Verify each service has a different mock instance (use pointer comparison)
 		for _, otherName := range serviceNames {
 			if name != otherName {
