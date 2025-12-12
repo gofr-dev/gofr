@@ -3,7 +3,6 @@ package gofr
 import (
 	"context"
 	"fmt"
-	"regexp"
 	"strconv"
 	"strings"
 
@@ -17,15 +16,6 @@ import (
 
 	"gofr.dev/pkg/gofr/logging"
 )
-
-const (
-	// minMatchesForStatusCode is the minimum number of regex matches needed to extract status code.
-	// Index 0 is the full match, index 1 is the captured group.
-	minMatchesForStatusCode = 2
-)
-
-// statusCodeRegex is precompiled to avoid overhead of compiling on each otelErrorHandler creation.
-var statusCodeRegex = regexp.MustCompile(`status (\d+)`)
 
 func (a *App) initTracer() {
 	traceRatio, err := strconv.ParseFloat(a.Config.GetOrDefault("TRACER_RATIO", "1"), 64)
@@ -43,8 +33,7 @@ func (a *App) initTracer() {
 	otel.SetTracerProvider(tp)
 	otel.SetTextMapPropagator(propagation.NewCompositeTextMapPropagator(propagation.TraceContext{}, propagation.Baggage{}))
 	otel.SetErrorHandler(&otelErrorHandler{
-		logger:          a.container.Logger,
-		statusCodeRegex: statusCodeRegex,
+		logger: a.container.Logger,
 	})
 
 	traceExporter := a.Config.Get("TRACE_EXPORTER")
@@ -157,8 +146,7 @@ func buildGoFrExporter(logger logging.Logger, url string) sdktrace.SpanExporter 
 }
 
 type otelErrorHandler struct {
-	logger          logging.Logger
-	statusCodeRegex *regexp.Regexp
+	logger logging.Logger
 }
 
 func (o *otelErrorHandler) Handle(e error) {
