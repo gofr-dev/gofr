@@ -36,7 +36,9 @@ func Test_NewClient_InvalidPort(t *testing.T) {
 	mockConfig := config.NewMockConfig(map[string]string{"REDIS_HOST": "localhost", "REDIS_PORT": "&&^%%^&*"})
 
 	// The go-redis library may send multiple commands during initialization (hello, client, ping, etc.)
-	mockMetrics.EXPECT().RecordHistogram(gomock.Any(), "app_redis_stats", gomock.Any(), "hostname", gomock.Any(), "type", gomock.Any()).AnyTimes()
+	mockMetrics.EXPECT().RecordHistogram(
+		gomock.Any(), "app_redis_stats", gomock.Any(), "hostname", gomock.Any(), "type", gomock.Any(),
+	).AnyTimes()
 
 	client := NewClient(mockConfig, mockLogger, mockMetrics)
 	assert.NotNil(t, client.Client, "Test_NewClient_InvalidPort Failed! Expected redis client not to be nil")

@@ -10,7 +10,6 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
-	"regexp"
 	"strconv"
 	"testing"
 	"time"
@@ -319,7 +318,7 @@ func Test_otelErrorHandler(t *testing.T) {
 	logs := testutil.StderrOutputForFunc(func() {
 		h := otelErrorHandler{
 			logger:          logging.NewLogger(logging.DEBUG),
-			statusCodeRegex: regexp.MustCompile(`status (\d+)`),
+			statusCodeRegex: statusCodeRegex,
 		}
 		h.Handle(testutil.CustomError{ErrorMessage: "OTEL Error override"})
 	})
