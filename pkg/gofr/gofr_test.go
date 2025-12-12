@@ -317,8 +317,7 @@ func TestApp_MigratePanicRecovery(t *testing.T) {
 func Test_otelErrorHandler(t *testing.T) {
 	logs := testutil.StderrOutputForFunc(func() {
 		h := otelErrorHandler{
-			logger:          logging.NewLogger(logging.DEBUG),
-			statusCodeRegex: statusCodeRegex,
+			logger: logging.NewLogger(logging.DEBUG),
 		}
 		h.Handle(testutil.CustomError{ErrorMessage: "OTEL Error override"})
 	})
