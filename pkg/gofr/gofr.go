@@ -12,6 +12,7 @@ import (
 	"strings"
 
 	"github.com/gorilla/mux"
+	"go.opentelemetry.io/otel"
 	"golang.org/x/sync/errgroup"
 
 	"gofr.dev/pkg/gofr/config"
@@ -21,11 +22,14 @@ import (
 	"gofr.dev/pkg/gofr/metrics"
 	"gofr.dev/pkg/gofr/migration"
 	"gofr.dev/pkg/gofr/service"
+	"gofr.dev/pkg/gofr/version"
 )
 
 const (
 	configLocation = "./configs"
 )
+
+var errStartupHookPanic = errors.New("startup hook panicked")
 
 // App is the main application in the GoFr framework.
 type App struct {
@@ -50,16 +54,36 @@ type App struct {
 }
 
 func (a *App) runOnStartHooks(ctx context.Context) error {
+	// Create a span for the startup hooks execution,
+	tr := otel.GetTracerProvider().Tracer("gofr-" + version.Framework)
+
+	ctx, span := tr.Start(ctx, "startup-hooks")
+	defer span.End()
+
 	// Use the existing newContext function with noopRequest
 	gofrCtx := newContext(nil, noopRequest{}, a.container)
 
 	// Set the context for cancellation support
 	gofrCtx.Context = ctx
 
-	for _, hook := range a.onStartHooks {
-		if err := hook(gofrCtx); err != nil {
-			a.Logger().Errorf("OnStart hook failed: %v", err)
-			return err
+	for i, hook := range a.onStartHooks {
+		// Add panic recovery to prevent entire application crash
+		var hookErr error
+
+		func() {
+			defer func() {
+				if r := recover(); r != nil {
+					a.Logger().Errorf("OnStart hook %d panicked: %v", i, r)
+					hookErr = fmt.Errorf("hook %d: %w: %v", i, errStartupHookPanic, r)
+				}
+			}()
+
+			hookErr = hook(gofrCtx)
+		}()
+
+		if hookErr != nil {
+			a.Logger().Errorf("OnStart hook failed: %v", hookErr)
+			return hookErr
 		}
 
 		// Check if context was canceled

@@ -1203,4 +1203,37 @@ func TestApp_OnStart(t *testing.T) {
 
 		require.ErrorIs(t, err, errHookFailed, "Expected an error from runOnStartHooks")
 	})
+
+	// Test case 3: Verify trace context is properly set
+	t.Run("trace context", func(t *testing.T) {
+		app := New()
+
+		var traceID string
+
+		app.OnStart(func(ctx *Context) error {
+			// Verify that trace context is not empty
+			traceID = ctx.GetCorrelationID()
+			return nil
+		})
+
+		err := app.runOnStartHooks(t.Context())
+
+		require.NoError(t, err, "Expected no error from runOnStartHooks")
+		assert.NotEmpty(t, traceID, "Expected traceID to be set in OnStart hook context")
+		assert.NotEqual(t, "00000000000000000000000000000000", traceID, "Expected valid traceID, not zero value")
+	})
+
+	// Test case 4: Verify panic recovery
+	t.Run("panic recovery", func(t *testing.T) {
+		app := New()
+
+		app.OnStart(func(_ *Context) error {
+			panic("test panic")
+		})
+
+		err := app.runOnStartHooks(t.Context())
+
+		require.Error(t, err, "Expected error from panicked hook")
+		assert.Contains(t, err.Error(), "panicked", "Expected error message to mention panic")
+	})
 }
