@@ -93,8 +93,12 @@ This document lists all the configuration options supported by the GoFr framewor
 ---
 
 -  TRACER_AUTH_KEY
--  Authorization header for trace exporter requests.
--  Supported for zipkin, jaeger.
+-  Authorization header for trace exporter requests. Supported for zipkin, jaeger, otlp.
+
+---
+
+-  TRACER_HEADERS
+-  Custom authentication headers for trace exporter requests in comma-separated key=value format (e.g., "X-Api-Key=secret,Authorization=Bearer token"). Supported for zipkin, jaeger, otlp. Takes priority over TRACER_AUTH_KEY.
 
 ---
 
@@ -208,8 +212,26 @@ This document lists all the configuration options supported by the GoFr framewor
 ---
 
 -  DB_SSL_MODE
--  Currently supported only for PostgreSQL, with Default certificate file.
+-  TLS/SSL mode for database connections. Supported modes: **disable** (no TLS), **preferred** (attempts TLS, falls back to plain), **require** (enforces TLS, skips validation), **skip-verify** (enforces TLS, no certificate validation), **verify-ca** (enforces TLS, validates certificate against CA), **verify-full** (enforces TLS with full validation including hostname). Currently supported for MySQL/MariaDB and PostgreSQL.
 -  disable
+
+---
+
+- DB_TLS_CA_CERT
+- Path to CA certificate file for TLS connections. Required for **verify-ca** and **verify-full** SSL modes.
+- None
+
+---
+
+- DB_TLS_CLIENT_CERT
+- Path to client certificate file for mutual TLS authentication.
+- None
+
+---
+
+- DB_TLS_CLIENT_KEY
+- Path to client private key file for mutual TLS authentication.
+- None
 
 ---
 
