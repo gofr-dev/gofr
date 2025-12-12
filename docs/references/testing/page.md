@@ -201,14 +201,16 @@ When you register multiple services with `WithMockHTTPService`, each service get
 
 ```go
 import (
-	"context"
+	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
 
+	"github.com/gorilla/mux"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"gofr.dev/pkg/gofr"
@@ -216,50 +218,95 @@ import (
 	gofrHttp "gofr.dev/pkg/gofr/http"
 )
 
-// Handler that calls HTTP services
-func UserProfileHandler(ctx *gofr.Context) (any, error) {
-	userID := ctx.PathParam("id")
-	service := ctx.GetHTTPService("userService")
-	
-	resp, err := service.Get(ctx.Context, "/users/"+userID, nil)
-	if err != nil {
-		return nil, err
-	}
-	defer resp.Body.Close()
-	
-	body, _ := io.ReadAll(resp.Body)
-	return string(body), nil
-}
-
 // Handler that calls multiple HTTP services
+// This handler demonstrates calling two different services (paymentService and shippingService)
+// to fetch order details from different parts of the system.
 func OrderDetailsHandler(ctx *gofr.Context) (any, error) {
 	orderID := ctx.PathParam("id")
-	
+	if orderID == "" {
+		return nil, errors.New("order ID is required")
+	}
+
+	// First HTTP service call: Get payment details from paymentService
 	paymentService := ctx.GetHTTPService("paymentService")
 	paymentResp, err := paymentService.Get(ctx.Context, "/payments/"+orderID, nil)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to fetch payment details: %w", err)
 	}
 	defer paymentResp.Body.Close()
-	
+
+	var paymentData struct {
+		Status string `json:"status"`
+		Amount int    `json:"amount"`
+	}
+
+	paymentBody, err := io.ReadAll(paymentResp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read payment response: %w", err)
+	}
+
+	if err := json.Unmarshal(paymentBody, &paymentData); err != nil {
+		return nil, fmt.Errorf("failed to parse payment response: %w", err)
+	}
+
+	// Second HTTP service call: Get shipping details from shippingService
 	shippingService := ctx.GetHTTPService("shippingService")
 	shippingResp, err := shippingService.Get(ctx.Context, "/shipping/"+orderID, nil)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to fetch shipping details: %w", err)
 	}
 	defer shippingResp.Body.Close()
-	
-	return map[string]string{
-		"payment_status":  "completed",
-		"shipping_status": "in_transit",
+
+	var shippingData struct {
+		Status           string `json:"status"`
+		Tracking         string `json:"tracking"`
+		EstimatedDelivery string `json:"estimated_delivery"`
+	}
+
+	shippingBody, err := io.ReadAll(shippingResp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read shipping response: %w", err)
+	}
+
+	if err := json.Unmarshal(shippingBody, &shippingData); err != nil {
+		return nil, fmt.Errorf("failed to parse shipping response: %w", err)
+	}
+
+	// Combine results from both services
+	return map[string]any{
+		"order_id":          orderID,
+		"payment_status":    paymentData.Status,
+		"payment_amount":    paymentData.Amount,
+		"shipping_status":   shippingData.Status,
+		"tracking_number":   shippingData.Tracking,
+		"estimated_delivery": shippingData.EstimatedDelivery,
 	}, nil
 }
 
-func TestHTTPHandlers(t *testing.T) {
+func TestOrderDetailsHandler(t *testing.T) {
+	// Helper function to create test context with path parameters
+	createTestContext := func(path string, container *container.Container) *gofr.Context {
+		req := httptest.NewRequest(http.MethodGet, path, nil)
+		
+		// Set path parameters using mux.SetURLVars (required for ctx.PathParam to work)
+		if strings.Contains(path, "/orders/") {
+			parts := strings.Split(strings.Trim(path, "/"), "/")
+			if len(parts) >= 2 && parts[1] != "" {
+				req = mux.SetURLVars(req, map[string]string{"id": parts[1]})
+			}
+		}
+
+		return &gofr.Context{
+			Context:   req.Context(),
+			Request:   gofrHttp.NewRequest(req),
+			Container: container,
+		}
+	}
+
+	const testOrderID = "12345" // Reusable order ID for tests
+
 	tests := []struct {
 		name           string
-		handler        func(*gofr.Context) (any, error)
-		serviceNames   []string
 		setupMocks     func(*container.Mocks, *gofr.Context)
 		requestPath    string
 		wantErr        bool
@@ -267,95 +314,113 @@ func TestHTTPHandlers(t *testing.T) {
 		validateResult func(*testing.T, any)
 	}{
 		{
-			name:         "single service success",
-			handler:      UserProfileHandler,
-			serviceNames: []string{"userService"},
+			name: "successful order details retrieval",
 			setupMocks: func(mocks *container.Mocks, ctx *gofr.Context) {
-				mockResp := &http.Response{
-					StatusCode: http.StatusOK,
-					Body:       io.NopCloser(strings.NewReader(`{"id":"123","name":"John Doe"}`)),
-				}
-				mocks.HTTPServices["userService"].EXPECT().Get(
-					ctx.Context,
-					"/users/123",
-					nil,
-				).Return(mockResp, nil)
-			},
-			requestPath: "/users/123",
-			wantErr:     false,
-			validateResult: func(t *testing.T, result any) {
-				assert.Contains(t, result.(string), "John Doe")
-			},
-		},
-		{
-			name:         "single service error",
-			handler:      UserProfileHandler,
-			serviceNames: []string{"userService"},
-			setupMocks: func(mocks *container.Mocks, ctx *gofr.Context) {
-				mocks.HTTPServices["userService"].EXPECT().Get(
-					ctx.Context,
-					"/users/123",
-					nil,
-				).Return(nil, errors.New("service unavailable"))
-			},
-			requestPath: "/users/123",
-			wantErr:     true,
-			wantErrMsg:  "service unavailable",
-		},
-		{
-			name:         "multiple services success",
-			handler:      OrderDetailsHandler,
-			serviceNames: []string{"paymentService", "shippingService"},
-			setupMocks: func(mocks *container.Mocks, ctx *gofr.Context) {
+				// Set up expectation for paymentService - this is the first HTTP call in the handler
 				paymentResp := &http.Response{
 					StatusCode: http.StatusOK,
-					Body:       io.NopCloser(strings.NewReader(`{"status":"completed"}`)),
-				}
-				shippingResp := &http.Response{
-					StatusCode: http.StatusOK,
-					Body:       io.NopCloser(strings.NewReader(`{"status":"in_transit"}`)),
+					Body:       io.NopCloser(strings.NewReader(`{"status":"completed","amount":1500}`)),
 				}
 				mocks.HTTPServices["paymentService"].EXPECT().Get(
 					ctx.Context,
-					"/payments/456",
+					"/payments/"+testOrderID,
 					nil,
 				).Return(paymentResp, nil)
+
+				// Set up expectation for shippingService - this is the second HTTP call in the handler
+				// Note: Each service has its own independent mock instance
+				shippingResp := &http.Response{
+					StatusCode: http.StatusOK,
+					Body:       io.NopCloser(strings.NewReader(`{"status":"in_transit","tracking":"TRACK123","estimated_delivery":"2024-12-25"}`)),
+				}
 				mocks.HTTPServices["shippingService"].EXPECT().Get(
 					ctx.Context,
-					"/shipping/456",
+					"/shipping/"+testOrderID,
 					nil,
 				).Return(shippingResp, nil)
 			},
-			requestPath: "/orders/456",
-			wantErr:    false,
+			requestPath: "/orders/" + testOrderID,
+			wantErr:     false,
 			validateResult: func(t *testing.T, result any) {
-				resultMap := result.(map[string]string)
+				resultMap := result.(map[string]any)
+				assert.Equal(t, testOrderID, resultMap["order_id"])
 				assert.Equal(t, "completed", resultMap["payment_status"])
+				assert.Equal(t, 1500, resultMap["payment_amount"])
 				assert.Equal(t, "in_transit", resultMap["shipping_status"])
+				assert.Equal(t, "TRACK123", resultMap["tracking_number"])
+				assert.Equal(t, "2024-12-25", resultMap["estimated_delivery"])
 			},
+		},
+		{
+			name: "payment service error",
+			setupMocks: func(mocks *container.Mocks, ctx *gofr.Context) {
+				// Payment service returns an error - handler should fail before calling shipping service
+				mocks.HTTPServices["paymentService"].EXPECT().Get(
+					ctx.Context,
+					"/payments/"+testOrderID,
+					nil,
+				).Return(nil, errors.New("payment service unavailable"))
+
+				// Shipping service should NOT be called when payment service fails
+				// No expectation set for shippingService - test will fail if it's called
+			},
+			requestPath: "/orders/" + testOrderID,
+			wantErr:     true,
+			wantErrMsg:  "failed to fetch payment details",
+		},
+		{
+			name: "shipping service error",
+			setupMocks: func(mocks *container.Mocks, ctx *gofr.Context) {
+				// Payment service succeeds
+				paymentResp := &http.Response{
+					StatusCode: http.StatusOK,
+					Body:       io.NopCloser(strings.NewReader(`{"status":"completed","amount":1500}`)),
+				}
+				mocks.HTTPServices["paymentService"].EXPECT().Get(
+					ctx.Context,
+					"/payments/"+testOrderID,
+					nil,
+				).Return(paymentResp, nil)
+
+				// Shipping service returns an error - this is the second HTTP call
+				mocks.HTTPServices["shippingService"].EXPECT().Get(
+					ctx.Context,
+					"/shipping/"+testOrderID,
+					nil,
+				).Return(nil, errors.New("shipping service unavailable"))
+			},
+			requestPath: "/orders/" + testOrderID,
+			wantErr:     true,
+			wantErrMsg:  "failed to fetch shipping details",
+		},
+		{
+			name: "missing order ID",
+			setupMocks: func(mocks *container.Mocks, ctx *gofr.Context) {
+				// No service calls should be made when order ID is missing
+			},
+			requestPath: "/orders/",
+			wantErr:     true,
+			wantErrMsg:  "order ID is required",
 		},
 	}
 
+	// Register HTTP services once - each service gets its own separate mock instance
+	// Since all test cases use the same services, we can create the mock container outside the loop
+	mockContainer, mocks := container.NewMockContainer(t,
+		container.WithMockHTTPService("paymentService", "shippingService"),
+	)
+
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Register HTTP services
-			mockContainer, mocks := container.NewMockContainer(t,
-				container.WithMockHTTPService(tt.serviceNames...),
-			)
+			// Create test context using helper function
+			ctx := createTestContext(tt.requestPath, mockContainer)
 
-			// Create test request and context
-			req := httptest.NewRequest(http.MethodGet, tt.requestPath, nil)
-			ctx := &gofr.Context{
-				Context:   req.Context(),
-				Request:   gofrHttp.NewRequest(req),
-				Container: mockContainer,
-			}
-
-			// Set up mock expectations
+			// Set up mock expectations BEFORE calling the handler
+			// Each service's expectations are independent
 			tt.setupMocks(mocks, ctx)
 
 			// Call the handler
-			result, err := tt.handler(ctx)
+			result, err := OrderDetailsHandler(ctx)
 
 			if tt.wantErr {
 				require.Error(t, err)
