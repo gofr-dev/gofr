@@ -3,7 +3,6 @@ package gofr
 import (
 	"context"
 	"fmt"
-	"net/http"
 	"regexp"
 	"strconv"
 	"strings"
@@ -167,21 +166,12 @@ func (o *otelErrorHandler) Handle(e error) {
 		return
 	}
 
-	// Try to unwrap and check for specific error types
-	// (Check OpenTelemetry/Zipkin error types if they exist)
-
 	msg := e.Error()
 
-	// Use regex for reliable status code extraction
-	matches := o.statusCodeRegex.FindStringSubmatch(msg)
-	if len(matches) >= minMatchesForStatusCode {
-		if code, err := strconv.Atoi(matches[1]); err == nil {
-			// Ignore success codes (201 Created, 202 Accepted, 204 No Content)
-			if code >= http.StatusOK && code < 300 {
-				return
-			}
-		}
+	// Fast check: if message doesn't contain "status 2", it's not a 2xx code.
+	if strings.Contains(msg, "status 2") {
+		o.logger.Error(msg)
 	}
 
-	o.logger.Error(e.Error())
+	o.logger.Error(msg)
 }
