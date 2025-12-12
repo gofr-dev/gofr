@@ -12,7 +12,6 @@ import (
 	"strings"
 
 	"github.com/gorilla/mux"
-	"go.opentelemetry.io/otel"
 	"golang.org/x/sync/errgroup"
 
 	"gofr.dev/pkg/gofr/config"
@@ -22,7 +21,6 @@ import (
 	"gofr.dev/pkg/gofr/metrics"
 	"gofr.dev/pkg/gofr/migration"
 	"gofr.dev/pkg/gofr/service"
-	"gofr.dev/pkg/gofr/version"
 )
 
 const (
@@ -54,12 +52,6 @@ type App struct {
 }
 
 func (a *App) runOnStartHooks(ctx context.Context) error {
-	// Create a span for the startup hooks execution,
-	tr := otel.GetTracerProvider().Tracer("gofr-" + version.Framework)
-
-	ctx, span := tr.Start(ctx, "startup-hooks")
-	defer span.End()
-
 	// Use the existing newContext function with noopRequest
 	gofrCtx := newContext(nil, noopRequest{}, a.container)
 
