@@ -94,6 +94,26 @@ Visit [`localhost:8000/greet`](http://localhost:8000/greet) to see the result.
 
 ---
 
+## 📁 Sample Project Structure
+
+A typical GoFr microservice project may follow this structure:
+
+```
+.
+├── main.go              # Application entry point
+├── go.mod               # Go module file
+├── configs/             # Environment-specific configurations
+├── handlers/            # HTTP / gRPC request handlers
+├── middleware/          # Custom middlewares
+├── migrations/          # Database migration files
+├── cron/                # Cron job definitions
+└── README.md
+```
+
+This structure helps keep the application modular, scalable, and production-ready.
+
+---
+
 ## 📂 **More Examples**
 
 Explore a variety of ready-to-run examples in the [GoFr examples directory](https://github.com/gofr-dev/gofr/tree/development/examples).
