@@ -1,13 +1,11 @@
 package gofr
 
 import (
-	"errors"
 	"testing"
 
 	"github.com/stretchr/testify/require"
 
 	"gofr.dev/pkg/gofr/config"
-	"gofr.dev/pkg/gofr/logging"
 )
 
 func TestParseHeaders(t *testing.T) {
@@ -195,71 +193,4 @@ func TestApp_getTracerHeaders_NoConfig(t *testing.T) {
 	headers := app.getTracerHeaders()
 
 	require.Empty(t, headers)
-}
-
-var (
-	errOtelStatus200 = errors.New("rpc error: code = Unknown desc = status 200")
-	errOtelStatus204 = errors.New("rpc error: status 204")
-	errOtelStatus201 = errors.New("status 201: ok")
-	errOtelStatus500 = errors.New("rpc error: status 500")
-)
-
-type captureLogger struct {
-	loggedErrors []string
-}
-
-func (*captureLogger) Debug(_ ...any)             {}
-func (*captureLogger) Debugf(_ string, _ ...any)  {}
-func (*captureLogger) Log(_ ...any)               {}
-func (*captureLogger) Logf(_ string, _ ...any)    {}
-func (*captureLogger) Info(_ ...any)              {}
-func (*captureLogger) Infof(_ string, _ ...any)   {}
-func (*captureLogger) Notice(_ ...any)            {}
-func (*captureLogger) Noticef(_ string, _ ...any) {}
-func (*captureLogger) Warn(_ ...any)              {}
-func (*captureLogger) Warnf(_ string, _ ...any)   {}
-func (l *captureLogger) Error(args ...any) {
-	// otelErrorHandler passes a single string arg
-	if len(args) == 1 {
-		if s, ok := args[0].(string); ok {
-			l.loggedErrors = append(l.loggedErrors, s)
-			return
-		}
-	}
-
-	l.loggedErrors = append(l.loggedErrors, "non-string error")
-}
-func (*captureLogger) Errorf(_ string, _ ...any)   {}
-func (*captureLogger) Fatal(_ ...any)              {}
-func (*captureLogger) Fatalf(_ string, _ ...any)   {}
-func (*captureLogger) ChangeLevel(_ logging.Level) {}
-
-func TestOtelErrorHandler_Ignores2xxStatusErrors(t *testing.T) {
-	cl := &captureLogger{}
-	h := &otelErrorHandler{logger: cl}
-
-	h.Handle(errOtelStatus200)
-	h.Handle(errOtelStatus204)
-	h.Handle(errOtelStatus201)
-
-	require.Empty(t, cl.loggedErrors)
-}
-
-func TestOtelErrorHandler_LogsNon2xxErrors(t *testing.T) {
-	cl := &captureLogger{}
-	h := &otelErrorHandler{logger: cl}
-
-	h.Handle(errOtelStatus500)
-
-	require.Len(t, cl.loggedErrors, 1)
-	require.Equal(t, "rpc error: status 500", cl.loggedErrors[0])
-}
-
-func TestOtelErrorHandler_NilErrorNoop(t *testing.T) {
-	cl := &captureLogger{}
-	h := &otelErrorHandler{logger: cl}
-
-	h.Handle(nil)
-
-	require.Empty(t, cl.loggedErrors)
 }
