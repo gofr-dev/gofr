@@ -68,6 +68,15 @@ func Middleware(config *Config) func(handler http.Handler) http.Handler {
 			route := r.URL.Path
 			r = startTracing(r, config, route)
 
+			// End span at the end of the middleware function (covers all code paths)
+			// If tracing was started, the span will be in the context
+			if config.Tracer != nil {
+				span := trace.SpanFromContext(r.Context())
+				if span != nil {
+					defer span.End()
+				}
+			}
+
 			// Check if endpoint is public using unified Endpoints config
 			endpoint, isPublic := getEndpointForRequest(r, config)
 			if isPublic {
@@ -117,13 +126,13 @@ func Middleware(config *Config) func(handler http.Handler) http.Handler {
 }
 
 // startTracing starts tracing for the request if tracer is available.
+// The span is stored in the context and should be ended at the end of the middleware function.
 func startTracing(r *http.Request, config *Config, route string) *http.Request {
 	if config.Tracer == nil {
 		return r
 	}
 
 	ctx, span := config.Tracer.Start(r.Context(), "rbac.authorize")
-	defer span.End()
 
 	span.SetAttributes(
 		attribute.String("http.method", r.Method),

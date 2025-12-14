@@ -2,7 +2,6 @@ package rbac
 
 import (
 	"net/http"
-	"path"
 	"regexp"
 	"strings"
 )
@@ -10,13 +9,13 @@ import (
 // matchEndpoint checks if the request matches an endpoint configuration.
 // This is the primary authorization check using the unified Endpoints configuration.
 // Returns the matched endpoint and whether it's public.
-func matchEndpoint(method, route string, endpoints []EndpointMapping) (*EndpointMapping, bool) {
+func matchEndpoint(method, route string, endpoints []EndpointMapping, config *Config) (*EndpointMapping, bool) {
 	for i := range endpoints {
 		endpoint := &endpoints[i]
 
 		// Check if endpoint is public
 		if endpoint.Public {
-			if matchesEndpointPattern(endpoint, route) {
+			if matchesEndpointPattern(endpoint, route, config) {
 				return endpoint, true
 			}
 
@@ -29,7 +28,7 @@ func matchEndpoint(method, route string, endpoints []EndpointMapping) (*Endpoint
 		}
 
 		// Check route match
-		if matchesEndpointPattern(endpoint, route) {
+		if matchesEndpointPattern(endpoint, route, config) {
 			return endpoint, false
 		}
 	}
@@ -53,37 +52,53 @@ func matchesHTTPMethod(method string, allowedMethods []string) bool {
 	return false
 }
 
+// matchesRegexPattern matches a route against a regex pattern using precompiled regex if available.
+func matchesRegexPattern(pattern, route string, config *Config) bool {
+	if config == nil {
+		// Fallback to runtime compilation if config is not available
+		matched, err := regexp.MatchString(pattern, route)
+		return err == nil && matched
+	}
+
+	// Look up precompiled regex (stored with pattern as key during config processing)
+	config.mu.RLock()
+	compiled, exists := config.compiledRegexMap[pattern]
+	config.mu.RUnlock()
+
+	if exists {
+		return compiled.MatchString(route)
+	}
+
+	// Compile and cache if not found (fallback for runtime compilation)
+	compiled, err := regexp.Compile(pattern)
+	if err != nil {
+		return false // Invalid regex = no match
+	}
+
+	config.mu.Lock()
+	config.compiledRegexMap[pattern] = compiled
+	config.mu.Unlock()
+
+	return compiled.MatchString(route)
+}
+
 // matchesEndpointPattern checks if the route matches the endpoint pattern.
 // Method matching is handled separately in matchEndpoint before this function is called.
-// If Regex is provided, it takes precedence and is used exclusively (no fallback to Path).
-func matchesEndpointPattern(endpoint *EndpointMapping, route string) bool {
-	// Regex takes precedence - if provided, use it exclusively
-	if endpoint.Regex != "" {
-		matched, err := regexp.MatchString(endpoint.Regex, route)
-		if err != nil {
-			return false // Invalid regex = no match
-		}
-
-		return matched // Return immediately - don't fall back to path
+// Automatically detects if Path contains a regex pattern and uses appropriate matching.
+func matchesEndpointPattern(endpoint *EndpointMapping, route string, config *Config) bool {
+	if endpoint.Path == "" {
+		return false
 	}
 
-	// Check path pattern only if regex is not provided
-	if endpoint.Path != "" {
-		// Use path.Match for pattern matching
-		if matched, _ := path.Match(endpoint.Path, route); matched {
-			return true
-		}
+	pattern := endpoint.Path
 
-		// Check prefix match for patterns ending with /*
-		if strings.HasSuffix(endpoint.Path, "/*") {
-			prefix := strings.TrimSuffix(endpoint.Path, "/*")
-			if route == prefix || strings.HasPrefix(route, prefix+"/") {
-				return true
-			}
-		}
+	// Check if pattern is a regex (starts with ^, ends with $, or contains regex special chars)
+	if isRegexPattern(pattern) {
+		return matchesRegexPattern(pattern, route, config)
 	}
 
-	return false
+	// Check path pattern matching
+	return matchesPathPattern(pattern, route)
 }
 
 // checkEndpointAuthorization checks if the user's role is authorized for the endpoint.
@@ -133,5 +148,5 @@ func getEndpointForRequest(r *http.Request, config *Config) (*EndpointMapping, b
 	method := r.Method
 	route := r.URL.Path
 
-	return matchEndpoint(method, route, config.Endpoints)
+	return matchEndpoint(method, route, config.Endpoints, config)
 }

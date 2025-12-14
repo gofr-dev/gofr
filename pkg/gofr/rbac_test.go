@@ -137,7 +137,7 @@ type mockRBACProvider struct {
 	configPath       string
 	loadErr          error
 	middlewareFn     func(http.Handler) http.Handler
-	middlewareCalled bool // Track if ApplyMiddleware was called
+	middlewareCalled bool // Track if RBACMiddleware was called
 }
 
 func (*mockRBACProvider) UseLogger(_ any) {
@@ -160,7 +160,7 @@ func (m *mockRBACProvider) LoadPermissions() error {
 	return nil
 }
 
-func (m *mockRBACProvider) ApplyMiddleware() func(http.Handler) http.Handler {
+func (m *mockRBACProvider) RBACMiddleware() func(http.Handler) http.Handler {
 	m.middlewareCalled = true
 	if m.middlewareFn != nil {
 		return m.middlewareFn

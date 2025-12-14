@@ -138,9 +138,9 @@ func (p *Provider) LoadPermissions() error {
 	return nil
 }
 
-// ApplyMiddleware returns the middleware function using the stored config.
+// RBACMiddleware returns the middleware function using the stored config.
 // All authorization is handled via unified config (Roles and Endpoints).
-func (p *Provider) ApplyMiddleware() func(http.Handler) http.Handler {
+func (p *Provider) RBACMiddleware() func(http.Handler) http.Handler {
 	if p.config == nil {
 		// If config is not loaded, return passthrough middleware
 		return func(handler http.Handler) http.Handler {

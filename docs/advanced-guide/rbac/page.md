@@ -74,16 +74,7 @@ func main() {
 }
 ```
 
-> **⚠️ Security Note**: Header-based RBAC is **not secure** for public APIs. Use JWT-based RBAC for production.
-
-## How It Works
-
-1. **Role Extraction**: Extracts user role from header (`X-User-Role`) or JWT claims
-2. **Endpoint Matching**: Matches request method + path to endpoint configuration
-3. **Permission Check**: Verifies role has required permission for the endpoint
-4. **Authorization**: Allows or denies request based on permission check
-
-The middleware automatically handles all authorization - you just define routes normally.
+> **💡 Best Practice**: For production/public APIs, use JWT-based RBAC instead of header-based RBAC for better security.
 
 ## Configuration
 
@@ -150,8 +141,7 @@ The middleware automatically handles all authorization - you just define routes 
       "requiredPermissions": ["users:read"]
     },
     {
-      "path": "/api/users/{id}",  // For reference only - path param doesn't work for matching
-      "regex": "^/api/users/\\d+$",  // Regex for strict validation (numeric IDs only)
+      "path": "^/api/users/\\d+$",  // Regex pattern for strict validation (numeric IDs only) - automatically detected
       "methods": ["DELETE"],
       "requiredPermissions": ["users:delete"]
     },
@@ -187,8 +177,7 @@ For endpoints with path parameters (e.g., `/api/users/{id}`), the `{id}` syntax 
 **Use Regex for Strict Validation**:
 ```json
 {
-  "path": "/api/users/{id}",  // Documentation only
-  "regex": "^/api/users/\\d+$",  // Only matches numeric IDs
+  "path": "^/api/users/\\d+$",  // Regex pattern - automatically detected when starts with ^ or contains regex special chars
   "methods": ["DELETE"],
   "requiredPermissions": ["users:delete"]
 }
@@ -196,13 +185,14 @@ For endpoints with path parameters (e.g., `/api/users/{id}`), the `{id}` syntax 
 - ✅ Matches: `/api/users/123`, `/api/users/456`
 - ❌ Does not match: `/api/users/abc`, `/api/users/123abc`
 - Provides strict validation (numeric IDs, UUIDs, etc.)
+- Regex patterns are automatically detected and precompiled for better performance
 
 **Common Regex Patterns**:
 - Numeric IDs: `"^/api/users/\\d+$"` (matches `/api/users/123`)
 - UUIDs: `"^/api/users/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"` (matches `/api/users/550e8400-e29b-41d4-a716-446655440000`)
 - Alphanumeric: `"^/api/users/[a-zA-Z0-9]+$"` (matches `/api/users/user123`)
 
-**Note**: When both `path` and `regex` are provided, `regex` takes precedence and `path` is ignored for matching (but can be kept for documentation).
+**Note**: Regex patterns are automatically detected when the `path` field starts with `^`, ends with `$`, or contains regex special characters like `\d`, `\w`, `[`, `(`, `?`.
 
 ## JWT-Based RBAC
 
@@ -244,7 +234,10 @@ func handler(ctx *gofr.Context) (interface{}, error) {
 	
 	// Extract role using the same claim path as configured in rbac.json
 	// Example: if jwtClaimPath is "role"
-	role, _ := claims["role"].(string)
+	role, ok := claims["role"].(string)
+	if !ok {
+		return nil, errors.New("role not found in JWT claims")
+	}
 	
 	// Use role for business logic (e.g., personalize UI, filter data)
 	return map[string]string{"userRole": role}, nil
@@ -337,15 +330,13 @@ Or use role inheritance to avoid duplication:
       "requiredPermissions": ["users:read"]
     },
     {
-      "path": "/api/users/{id}",
+      "path": "^/api/users/\\d+$",
       "methods": ["PUT", "PATCH"],
-      "regex": "^/api/users/\\d+$",
       "requiredPermissions": ["users:update"]
     },
     {
-      "path": "/api/users/{id}",
+      "path": "^/api/users/\\d+$",
       "methods": ["DELETE"],
-      "regex": "^/api/users/\\d+$",
       "requiredPermissions": ["users:delete"]
     }
   ]
@@ -458,9 +449,9 @@ type RBACProvider interface {
     // LoadPermissions loads RBAC configuration from the stored config path
     LoadPermissions() error
 
-    // ApplyMiddleware returns the middleware function using the stored config
+    // RBACMiddleware returns the middleware function using the stored config
     // The returned function should be compatible with http.Handler middleware pattern
-    ApplyMiddleware() func(http.Handler) http.Handler
+    RBACMiddleware() func(http.Handler) http.Handler
 }
 ```
 
@@ -514,7 +505,7 @@ func (p *CustomRBACProvider) LoadPermissions() error {
     return nil
 }
 
-func (p *CustomRBACProvider) ApplyMiddleware() func(http.Handler) http.Handler {
+func (p *CustomRBACProvider) RBACMiddleware() func(http.Handler) http.Handler {
     if p.config == nil {
         // Return passthrough middleware if config not loaded
         return func(handler http.Handler) http.Handler {
@@ -556,7 +547,16 @@ app.EnableRBAC(customProvider)
 GoFr will automatically:
 - Call `UseLogger`, `UseMetrics`, and `UseTracer` with the app's logger, metrics, and tracer
 - Call `LoadPermissions()` to load your configuration
-- Call `ApplyMiddleware()` to get the middleware and register it
+- Call `RBACMiddleware()` to get the middleware and register it
+
+## How It Works
+
+1. **Role Extraction**: Extracts user role from header (`X-User-Role`) or JWT claims
+2. **Endpoint Matching**: Matches request method + path to endpoint configuration
+3. **Permission Check**: Verifies role has required permission for the endpoint
+4. **Authorization**: Allows or denies request based on permission check
+
+The middleware automatically handles all authorization - you just define routes normally.
 
 ## Related Documentation
 
