@@ -230,7 +230,7 @@ func TestConfig_GetEndpointPermission_WildcardPattern(t *testing.T) {
 func TestConfig_GetEndpointPermission_RegexPattern(t *testing.T) {
 	config := &Config{
 		Endpoints: []EndpointMapping{
-			{Regex: "^/api/users/\\d+$", Methods: []string{"GET"}, RequiredPermissions: []string{"users:read"}},
+			{Path: "^/api/users/\\d+$", Methods: []string{"GET"}, RequiredPermissions: []string{"users:read"}},
 		},
 	}
 	err := config.processUnifiedConfig()
@@ -347,7 +347,7 @@ func TestConfig_processUnifiedConfig(t *testing.T) {
 					{Name: "admin", Permissions: []string{"*:*"}},
 				},
 				Endpoints: []EndpointMapping{
-					{Regex: "^/api/users/\\d+$", Methods: []string{"GET"}, RequiredPermissions: []string{"admin:*"}},
+					{Path: "^/api/users/\\d+$", Methods: []string{"GET"}, RequiredPermissions: []string{"admin:*"}},
 				},
 			},
 			expectError: false,

@@ -418,7 +418,7 @@ func TestExtractClaimValue(t *testing.T) {
 	}
 }
 
-func TestExtractArrayClaim(t *testing.T) {
+func TestExtractArrayClaim_Basic(t *testing.T) {
 	testCases := []struct {
 		desc        string
 		claims      jwt.MapClaims
@@ -444,6 +444,28 @@ func TestExtractArrayClaim(t *testing.T) {
 			expected:    "user",
 			expectError: false,
 		},
+		{
+			desc: "handles array with mixed types",
+			claims: jwt.MapClaims{
+				"roles": []any{123, "admin", true},
+			},
+			path:        "roles[0]",
+			expected:    123,
+			expectError: false,
+		},
+	}
+
+	runExtractArrayClaimTests(t, testCases)
+}
+
+func TestExtractArrayClaim_Errors(t *testing.T) {
+	testCases := []struct {
+		desc        string
+		claims      jwt.MapClaims
+		path        string
+		expected    any
+		expectError bool
+	}{
 		{
 			desc: "returns error for invalid array notation",
 			claims: jwt.MapClaims{
@@ -489,7 +511,59 @@ func TestExtractArrayClaim(t *testing.T) {
 			expected:    nil,
 			expectError: true,
 		},
+		{
+			desc: "handles empty array",
+			claims: jwt.MapClaims{
+				"roles": []any{},
+			},
+			path:        "roles[0]",
+			expected:    nil,
+			expectError: true,
+		},
+		{
+			desc: "handles nil value in claims",
+			claims: jwt.MapClaims{
+				"roles": nil,
+			},
+			path:        "roles[0]",
+			expected:    nil,
+			expectError: true,
+		},
 	}
+
+	runExtractArrayClaimTests(t, testCases)
+}
+
+func TestExtractArrayClaim_EdgeCases(t *testing.T) {
+	testCases := []struct {
+		desc        string
+		claims      jwt.MapClaims
+		path        string
+		expected    any
+		expectError bool
+	}{
+		{
+			desc: "handles array with nil elements",
+			claims: jwt.MapClaims{
+				"roles": []any{nil, "admin"},
+			},
+			path:        "roles[0]",
+			expected:    nil,
+			expectError: false,
+		},
+	}
+
+	runExtractArrayClaimTests(t, testCases)
+}
+
+func runExtractArrayClaimTests(t *testing.T, testCases []struct {
+	desc        string
+	claims      jwt.MapClaims
+	path        string
+	expected    any
+	expectError bool
+}) {
+	t.Helper()
 
 	for i, tc := range testCases {
 		t.Run(tc.desc, func(t *testing.T) {
@@ -517,7 +591,7 @@ func TestExtractArrayClaim(t *testing.T) {
 	}
 }
 
-func TestExtractNestedClaim(t *testing.T) {
+func TestExtractNestedClaim_Basic(t *testing.T) {
 	testCases := []struct {
 		desc        string
 		claims      jwt.MapClaims
@@ -550,6 +624,30 @@ func TestExtractNestedClaim(t *testing.T) {
 			expectError: false,
 		},
 		{
+			desc: "handles array in nested structure",
+			claims: jwt.MapClaims{
+				"data": map[string]any{
+					"roles": []any{"admin", "user"},
+				},
+			},
+			path:        "data.roles",
+			expected:    []any{"admin", "user"},
+			expectError: false,
+		},
+	}
+
+	runExtractNestedClaimTests(t, testCases)
+}
+
+func TestExtractNestedClaim_Errors(t *testing.T) {
+	testCases := []struct {
+		desc        string
+		claims      jwt.MapClaims
+		path        string
+		expected    any
+		expectError bool
+	}{
+		{
 			desc: "returns error for non-existent path",
 			claims: jwt.MapClaims{
 				"permissions": map[string]any{
@@ -578,7 +676,63 @@ func TestExtractNestedClaim(t *testing.T) {
 			expected:    nil,
 			expectError: true,
 		},
+		{
+			desc: "handles empty nested map",
+			claims: jwt.MapClaims{
+				"permissions": map[string]any{},
+			},
+			path:        "permissions.role",
+			expected:    nil,
+			expectError: true,
+		},
+		{
+			desc: "handles deeply nested nil intermediate value",
+			claims: jwt.MapClaims{
+				"user": map[string]any{
+					"profile": nil,
+				},
+			},
+			path:        "user.profile.role",
+			expected:    nil,
+			expectError: true,
+		},
 	}
+
+	runExtractNestedClaimTests(t, testCases)
+}
+
+func TestExtractNestedClaim_EdgeCases(t *testing.T) {
+	testCases := []struct {
+		desc        string
+		claims      jwt.MapClaims
+		path        string
+		expected    any
+		expectError bool
+	}{
+		{
+			desc: "handles nil value in nested map",
+			claims: jwt.MapClaims{
+				"permissions": map[string]any{
+					"role": nil,
+				},
+			},
+			path:        "permissions.role",
+			expected:    nil,
+			expectError: false,
+		},
+	}
+
+	runExtractNestedClaimTests(t, testCases)
+}
+
+func runExtractNestedClaimTests(t *testing.T, testCases []struct {
+	desc        string
+	claims      jwt.MapClaims
+	path        string
+	expected    any
+	expectError bool
+}) {
+	t.Helper()
 
 	for i, tc := range testCases {
 		t.Run(tc.desc, func(t *testing.T) {

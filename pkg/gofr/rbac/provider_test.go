@@ -278,7 +278,7 @@ func TestProvider_UseTracer(t *testing.T) {
 	}
 }
 
-func TestProvider_ApplyMiddleware(t *testing.T) {
+func TestProvider_RBACMiddleware(t *testing.T) {
 	testCases := []struct {
 		desc              string
 		setupConfig       func() *Config
@@ -314,7 +314,7 @@ func TestProvider_ApplyMiddleware(t *testing.T) {
 			p := NewProvider("configs/rbac.json")
 			p.config = tc.setupConfig()
 
-			middlewareFunc := p.ApplyMiddleware()
+			middlewareFunc := p.RBACMiddleware()
 
 			require.NotNil(t, middlewareFunc, "TEST[%d], Failed.\n%s", i, tc.desc)
 

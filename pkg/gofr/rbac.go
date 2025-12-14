@@ -21,9 +21,9 @@ type RBACProvider interface {
 	// LoadPermissions loads RBAC configuration from the stored config path
 	LoadPermissions() error
 
-	// ApplyMiddleware returns the middleware function using the stored config
+	// RBACMiddleware returns the middleware function using the stored config
 	// The returned function should be compatible with http.Handler middleware pattern
-	ApplyMiddleware() func(http.Handler) http.Handler
+	RBACMiddleware() func(http.Handler) http.Handler
 }
 
 // DefaultRBACConfig is a constant that can be passed to NewProvider to use default config paths.
@@ -75,6 +75,6 @@ func (a *App) EnableRBAC(provider RBACProvider) {
 	a.Logger().Infof("Loaded RBAC config successfully")
 
 	// Apply middleware using the provider
-	middlewareFunc := provider.ApplyMiddleware()
+	middlewareFunc := provider.RBACMiddleware()
 	a.httpServer.router.Use(middlewareFunc)
 }

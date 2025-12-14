@@ -10,73 +10,105 @@ import (
 )
 
 func TestMatchEndpoint_ExactMatch(t *testing.T) {
-	endpoints := []EndpointMapping{
-		{Path: "/api/users", Methods: []string{"GET"}, RequiredPermissions: []string{"users:read"}},
+	config := &Config{
+		Endpoints: []EndpointMapping{
+			{Path: "/api/users", Methods: []string{"GET"}, RequiredPermissions: []string{"users:read"}},
+		},
 	}
-	endpoint, isPublic := matchEndpoint("GET", "/api/users", endpoints)
+	_ = config.processUnifiedConfig()
+	endpoints := config.Endpoints
+	endpoint, isPublic := matchEndpoint("GET", "/api/users", endpoints, config)
 	require.NotNil(t, endpoint)
 	assert.False(t, isPublic)
 }
 
 func TestMatchEndpoint_PublicEndpoint(t *testing.T) {
-	endpoints := []EndpointMapping{
-		{Path: "/health", Methods: []string{"GET"}, Public: true},
+	config := &Config{
+		Endpoints: []EndpointMapping{
+			{Path: "/health", Methods: []string{"GET"}, Public: true},
+		},
 	}
-	endpoint, isPublic := matchEndpoint("GET", "/health", endpoints)
+	_ = config.processUnifiedConfig()
+	endpoints := config.Endpoints
+	endpoint, isPublic := matchEndpoint("GET", "/health", endpoints, config)
 	require.NotNil(t, endpoint)
 	assert.True(t, isPublic)
 }
 
 func TestMatchEndpoint_DifferentMethod(t *testing.T) {
-	endpoints := []EndpointMapping{
-		{Path: "/api/users", Methods: []string{"GET"}, RequiredPermissions: []string{"users:read"}},
+	config := &Config{
+		Endpoints: []EndpointMapping{
+			{Path: "/api/users", Methods: []string{"GET"}, RequiredPermissions: []string{"users:read"}},
+		},
 	}
-	endpoint, isPublic := matchEndpoint("POST", "/api/users", endpoints)
+	_ = config.processUnifiedConfig()
+	endpoints := config.Endpoints
+	endpoint, isPublic := matchEndpoint("POST", "/api/users", endpoints, config)
 	require.Nil(t, endpoint)
 	assert.False(t, isPublic)
 }
 
 func TestMatchEndpoint_WildcardMethod(t *testing.T) {
-	endpoints := []EndpointMapping{
-		{Path: "/api", Methods: []string{"*"}, RequiredPermissions: []string{"api:*"}},
+	config := &Config{
+		Endpoints: []EndpointMapping{
+			{Path: "/api", Methods: []string{"*"}, RequiredPermissions: []string{"api:*"}},
+		},
 	}
-	endpoint, isPublic := matchEndpoint("POST", "/api", endpoints)
+	_ = config.processUnifiedConfig()
+	endpoints := config.Endpoints
+	endpoint, isPublic := matchEndpoint("POST", "/api", endpoints, config)
 	require.NotNil(t, endpoint)
 	assert.False(t, isPublic)
 }
 
 func TestMatchEndpoint_WildcardPath(t *testing.T) {
-	endpoints := []EndpointMapping{
-		{Path: "/api/*", Methods: []string{"GET"}, RequiredPermissions: []string{"api:read"}},
+	config := &Config{
+		Endpoints: []EndpointMapping{
+			{Path: "/api/*", Methods: []string{"GET"}, RequiredPermissions: []string{"api:read"}},
+		},
 	}
-	endpoint, isPublic := matchEndpoint("GET", "/api/users", endpoints)
+	_ = config.processUnifiedConfig()
+	endpoints := config.Endpoints
+	endpoint, isPublic := matchEndpoint("GET", "/api/users", endpoints, config)
 	require.NotNil(t, endpoint)
 	assert.False(t, isPublic)
 }
 
 func TestMatchEndpoint_RegexPattern(t *testing.T) {
-	endpoints := []EndpointMapping{
-		{Regex: "^/api/users/\\d+$", Methods: []string{"GET"}, RequiredPermissions: []string{"users:read"}},
+	config := &Config{
+		Endpoints: []EndpointMapping{
+			{Path: "^/api/users/\\d+$", Methods: []string{"GET"}, RequiredPermissions: []string{"users:read"}},
+		},
 	}
-	endpoint, isPublic := matchEndpoint("GET", "/api/users/123", endpoints)
+	_ = config.processUnifiedConfig()
+	endpoints := config.Endpoints
+	endpoint, isPublic := matchEndpoint("GET", "/api/users/123", endpoints, config)
 	require.NotNil(t, endpoint)
 	assert.False(t, isPublic)
 }
 
 func TestMatchEndpoint_NotFound(t *testing.T) {
-	endpoints := []EndpointMapping{
-		{Path: "/api/users", Methods: []string{"GET"}, RequiredPermissions: []string{"users:read"}},
+	config := &Config{
+		Endpoints: []EndpointMapping{
+			{Path: "/api/users", Methods: []string{"GET"}, RequiredPermissions: []string{"users:read"}},
+		},
 	}
-	endpoint, isPublic := matchEndpoint("GET", "/api/posts", endpoints)
+	_ = config.processUnifiedConfig()
+	endpoints := config.Endpoints
+	endpoint, isPublic := matchEndpoint("GET", "/api/posts", endpoints, config)
 	require.Nil(t, endpoint)
 	assert.False(t, isPublic)
 }
 
 func TestMatchEndpoint_EmptyMethods(t *testing.T) {
-	endpoints := []EndpointMapping{
-		{Path: "/api", Methods: []string{}, RequiredPermissions: []string{"api:*"}},
+	config := &Config{
+		Endpoints: []EndpointMapping{
+			{Path: "/api", Methods: []string{}, RequiredPermissions: []string{"api:*"}},
+		},
 	}
-	endpoint, isPublic := matchEndpoint("POST", "/api", endpoints)
+	_ = config.processUnifiedConfig()
+	endpoints := config.Endpoints
+	endpoint, isPublic := matchEndpoint("POST", "/api", endpoints, config)
 	require.NotNil(t, endpoint)
 	assert.False(t, isPublic)
 }
@@ -153,28 +185,10 @@ func TestMatchesEndpointPattern(t *testing.T) {
 		{
 			desc: "matches regex pattern",
 			endpoint: &EndpointMapping{
-				Regex: "^/api/users/\\d+$",
+				Path: "^/api/users/\\d+$",
 			},
 			route:    "/api/users/123",
 			expected: true,
-		},
-		{
-			desc: "regex takes precedence over path when regex matches",
-			endpoint: &EndpointMapping{
-				Path:  "/api/users",
-				Regex: "^/api/users/\\d+$",
-			},
-			route:    "/api/users/123",
-			expected: true,
-		},
-		{
-			desc: "regex takes precedence - no fallback to path when regex doesn't match",
-			endpoint: &EndpointMapping{
-				Path:  "/api/users",
-				Regex: "^/api/users/\\d+$",
-			},
-			route:    "/api/users",
-			expected: false, // Regex doesn't match, should NOT fall back to path
 		},
 		{
 			desc: "matches wildcard pattern",
@@ -203,16 +217,19 @@ func TestMatchesEndpointPattern(t *testing.T) {
 		{
 			desc: "does not match invalid regex",
 			endpoint: &EndpointMapping{
-				Regex: "[invalid",
+				Path: "[invalid",
 			},
 			route:    "/api/users",
 			expected: false,
 		},
 	}
 
+	config := &Config{}
+	_ = config.processUnifiedConfig()
+
 	for i, tc := range testCases {
 		t.Run(tc.desc, func(t *testing.T) {
-			result := matchesEndpointPattern(tc.endpoint, tc.route)
+			result := matchesEndpointPattern(tc.endpoint, tc.route, config)
 
 			assert.Equal(t, tc.expected, result, "TEST[%d], Failed.\n%s", i, tc.desc)
 		})

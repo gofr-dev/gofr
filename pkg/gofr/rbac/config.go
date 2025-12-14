@@ -42,13 +42,12 @@ type RoleDefinition struct {
 // Pure config-based: only route&method->permission mapping is supported.
 // No direct route to role mapping - all authorization is permission-based.
 type EndpointMapping struct {
-	// Path is the route path pattern (supports wildcards like /api/*)
-	// Example: "/api/users", "/api/users/*"
+	// Path is the route path pattern (supports wildcards like /api/* or regex patterns)
+	// Examples:
+	//   - "/api/users" (exact match)
+	//   - "/api/users/*" (wildcard pattern)
+	//   - "^/api/users/\\d+$" (regex pattern - automatically detected)
 	Path string `json:"path,omitempty" yaml:"path,omitempty"`
-
-	// Regex is a regular expression pattern for route matching (takes precedence over Path)
-	// Example: "^/api/users/\\d+$"
-	Regex string `json:"regex,omitempty" yaml:"regex,omitempty"`
 
 	// Methods is a list of HTTP methods (GET, POST, PUT, DELETE, PATCH, etc.)
 	// Use ["*"] to match all methods
@@ -106,9 +105,10 @@ type Config struct {
 
 	// Internal maps built from unified config (not in JSON/YAML)
 	// These are populated by processUnifiedConfig()
-	rolePermissionsMap    map[string][]string `json:"-" yaml:"-"`
-	endpointPermissionMap map[string][]string `json:"-" yaml:"-"` // Key: "METHOD:/path", Value: []permissions
-	publicEndpointsMap    map[string]bool     `json:"-" yaml:"-"` // Key: "METHOD:/path", Value: true if public
+	rolePermissionsMap    map[string][]string       `json:"-" yaml:"-"`
+	endpointPermissionMap map[string][]string       `json:"-" yaml:"-"` // Key: "METHOD:/path", Value: []permissions
+	publicEndpointsMap    map[string]bool           `json:"-" yaml:"-"` // Key: "METHOD:/path", Value: true if public
+	compiledRegexMap      map[string]*regexp.Regexp `json:"-" yaml:"-"` // Key: "METHOD:/path", Value: compiled regex
 
 	// Mutex for thread-safe access to maps (for future hot-reload support)
 	mu sync.RWMutex `json:"-" yaml:"-"`
@@ -182,6 +182,7 @@ func (c *Config) initializeMaps() {
 	c.rolePermissionsMap = make(map[string][]string)
 	c.endpointPermissionMap = make(map[string][]string)
 	c.publicEndpointsMap = make(map[string]bool)
+	c.compiledRegexMap = make(map[string]*regexp.Regexp)
 }
 
 // buildRolePermissionsMap builds the role permissions map from Roles.
@@ -225,12 +226,25 @@ func (c *Config) processEndpointMethods(endpoint *EndpointMapping, methods []str
 }
 
 // buildEndpointKey builds the key for an endpoint.
-func (*Config) buildEndpointKey(endpoint *EndpointMapping, methodUpper string) string {
-	if endpoint.Regex != "" {
-		return fmt.Sprintf("%s:%s", methodUpper, endpoint.Regex)
+// Uses Path field which may contain either a path pattern or a regex pattern.
+// Note: This is called during processUnifiedConfig which already holds a lock,
+// so we can directly access compiledRegexMap without acquiring another lock.
+func (c *Config) buildEndpointKey(endpoint *EndpointMapping, methodUpper string) string {
+	pattern := endpoint.Path
+
+	// If pattern looks like a regex, precompile it for performance
+	// Store with pattern as key (not full METHOD:pattern) since matchesKey
+	// uses pattern directly for lookup
+	if isRegexPattern(pattern) {
+		// We're already holding a lock from processUnifiedConfig, so access map directly
+		if _, exists := c.compiledRegexMap[pattern]; !exists {
+			if compiled, err := regexp.Compile(pattern); err == nil {
+				c.compiledRegexMap[pattern] = compiled
+			}
+		}
 	}
 
-	return fmt.Sprintf("%s:%s", methodUpper, endpoint.Path)
+	return fmt.Sprintf("%s:%s", methodUpper, pattern)
 }
 
 // storeEndpointMapping stores an endpoint mapping.
@@ -327,6 +341,8 @@ func (c *Config) checkExactMatch(key string) (permissions []string, isPublic boo
 }
 
 // checkPatternMatch checks for pattern and regex matches.
+// Note: This is called while already holding RLock from GetEndpointPermission.
+// matchesKey will acquire another RLock which is safe (read locks can be nested).
 func (c *Config) checkPatternMatch(methodUpper, path string) (permissions []string, isPublic bool) {
 	// Try pattern matching for wildcards
 	// Note: We iterate over the map while holding RLock, which is safe for read-only operations
@@ -346,7 +362,6 @@ func (c *Config) checkPatternMatch(methodUpper, path string) (permissions []stri
 	return nil, false
 }
 
-// matchesKey checks if a key matches the given method and path.
 // isRegexPattern detects if a pattern is likely a regex.
 // Checks for common regex indicators: starts with ^, ends with $, or contains regex special chars.
 func isRegexPattern(pattern string) bool {
@@ -356,10 +371,11 @@ func isRegexPattern(pattern string) bool {
 		strings.Contains(pattern, "(") || strings.Contains(pattern, "?")
 }
 
-// Keys are built by buildEndpointKey which uses Regex if available, otherwise Path.
+// matchesKey checks if a key matches the given method and path.
+// Keys are built by buildEndpointKey which uses Path (may contain regex patterns).
 // If pattern looks like a regex (starts with ^ or contains regex special chars), use regex matching exclusively.
 // Otherwise, use path pattern matching exclusively (no fallback to regex).
-func (*Config) matchesKey(key, methodUpper, path string) bool {
+func (c *Config) matchesKey(key, methodUpper, path string) bool {
 	if !strings.HasPrefix(key, methodUpper+":") {
 		return false
 	}
@@ -367,18 +383,29 @@ func (*Config) matchesKey(key, methodUpper, path string) bool {
 	pattern := strings.TrimPrefix(key, methodUpper+":")
 
 	if isRegexPattern(pattern) {
-		// Try regex match first for regex patterns
-		matched, err := regexp.MatchString(pattern, path)
-		if err == nil && matched {
-			return true
+		// Try to use precompiled regex for better performance
+		// Note: We may already be holding RLock from checkPatternMatch, but nested read locks are safe
+		c.mu.RLock()
+		compiled, exists := c.compiledRegexMap[pattern]
+		c.mu.RUnlock()
+
+		if exists {
+			return compiled.MatchString(path)
 		}
 
-		// If regex pattern doesn't match, don't fall back to path pattern
-		return false
+		// Fallback to runtime compilation if not precompiled (shouldn't happen if config was processed correctly)
+		// Compile with a timeout-safe approach - use MustCompile in a recover block or just MatchString
+		matched, err := regexp.MatchString(pattern, path)
+		if err != nil {
+			// Invalid regex - no match
+			return false
+		}
+
+		return matched
 	}
 
 	// For path patterns, only try path matching
-	// Since buildEndpointKey already chooses between Regex and Path,
+	// Since buildEndpointKey uses Path (which may contain regex patterns),
 	// if it's not detected as regex, it's a path pattern from buildEndpointKey
 	return matchesPathPattern(pattern, path)
 }
