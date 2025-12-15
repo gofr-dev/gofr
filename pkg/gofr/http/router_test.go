@@ -289,23 +289,31 @@ func TestDoubleSlashRouting(t *testing.T) {
 
 	router.Add("GET", "/hello", getHandler)
 	router.Add("POST", "/hello", postHandler)
+	router.Add("GET", "//hello", getHandler)
+	router.Add("POST", "//hello", postHandler)
 
-	// Test POST with double slash - should redirect with 301
+	// Test POST with double slash - should work directly
 	req := httptest.NewRequest("POST", "//hello", nil)
 	w := httptest.NewRecorder()
 	router.ServeHTTP(w, req)
 
-	if w.Code != http.StatusMovedPermanently {
-		t.Errorf("Expected 301 for POST //hello, got %d", w.Code)
+	if w.Code != http.StatusOK {
+		t.Errorf("Expected 200 for POST //hello, got %d", w.Code)
+	}
+	if w.Body.String() != "POST" {
+		t.Errorf("Expected POST response, got %s", w.Body.String())
 	}
 
-	// Test GET with double slash - should redirect with 301
+	// Test GET with double slash - should work directly
 	req2 := httptest.NewRequest("GET", "//hello", nil)
 	w2 := httptest.NewRecorder()
 	router.ServeHTTP(w2, req2)
 
-	if w2.Code != http.StatusMovedPermanently {
-		t.Errorf("Expected 301 for GET //hello, got %d", w2.Code)
+	if w2.Code != http.StatusOK {
+		t.Errorf("Expected 200 for GET //hello, got %d", w2.Code)
+	}
+	if w2.Body.String() != "GET" {
+		t.Errorf("Expected GET response, got %s", w2.Body.String())
 	}
 }
 
