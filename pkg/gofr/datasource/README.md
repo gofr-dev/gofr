@@ -31,12 +31,12 @@ New datasources should implement logging with the following levels:
 - INFO: Logs successful connection establishment.
 - WARN: Logs connection retrying
 
-> Additional logs can be added to enhance debugging and improving user experience.
+> Additional logs can be added to enhance debugging and improve user experience.
 
 5. Tracing
 
 GoFr supports tracing for all the datasources, for example for SQL it traces the request using https://github.com/XSAM/otelsql.
-If any official package or any widely used package is not available we have to implement our own, but in scope of a different ISSUE.
+If any official package or any widely used package is not available we have to implement our own, but in the scope of a different ISSUE.
 
 
 All logs should include:
@@ -47,7 +47,7 @@ All logs should include:
 
 ## Implementing New Datasources
 
-GoFr offers built-in support for popular datasources like SQL (MySQL, PostgreSQL, SQLite), Redis, and Pub/Sub (MQTT, Kafka, Google as backend). Including additional functionalities within the core GoFr binary would increase the application size unnecessarily.
+GoFr offers built-in support for popular datasources like SQL (MySQL, PostgreSQL, SQLite), Redis, and Pub/Sub (MQTT, Kafka, Google as a backend). Including additional functionalities within the core GoFr binary would increase the application size unnecessarily.
 
 Therefore, GoFr utilizes a pluggable approach for new datasources by separating implementation in the following way:
 
