@@ -186,7 +186,7 @@ func main() {
 		ShareName:   "myshare",
 		// Endpoint is optional, defaults to https://{AccountName}.file.core.windows.net
 		// Endpoint: "https://custom-endpoint.file.core.windows.net",
-	}, app.Logger(), app.Metrics())
+	})
 
 	if err != nil {
 		app.Logger().Fatalf("Failed to initialize Azure File Storage: %v", err)
