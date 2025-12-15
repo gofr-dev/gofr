@@ -289,10 +289,8 @@ func TestDoubleSlashRouting(t *testing.T) {
 
 	router.Add("GET", "/hello", getHandler)
 	router.Add("POST", "/hello", postHandler)
-	router.Add("GET", "//hello", getHandler)
-	router.Add("POST", "//hello", postHandler)
 
-	// Test POST with double slash - should work directly
+	// Test POST with double slash - should normalize to /hello and preserve method
 	req := httptest.NewRequest("POST", "//hello", nil)
 	w := httptest.NewRecorder()
 	router.ServeHTTP(w, req)
@@ -304,7 +302,7 @@ func TestDoubleSlashRouting(t *testing.T) {
 		t.Errorf("Expected POST response, got %s", w.Body.String())
 	}
 
-	// Test GET with double slash - should work directly
+	// Test GET with double slash - should normalize to /hello
 	req2 := httptest.NewRequest("GET", "//hello", nil)
 	w2 := httptest.NewRecorder()
 	router.ServeHTTP(w2, req2)
@@ -401,6 +399,34 @@ func TestStaticHandlerDirectCall(t *testing.T) {
 	}
 	if !strings.Contains(w.Body.String(), "direct content") {
 		t.Error("Expected file content to be served")
+	}
+}
+
+func TestNormalizePathMiddleware(t *testing.T) {
+	testHandler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Write([]byte(r.URL.Path))
+	})
+
+	handler := normalizePathMiddleware(testHandler)
+
+	tests := []struct {
+		input    string
+		expected string
+	}{
+		{"//hello", "/hello"},
+		{"///hello", "/hello"},
+		{"/hello//world", "/hello/world"},
+		{"/hello", "/hello"},
+	}
+
+	for _, tt := range tests {
+		req := httptest.NewRequest("GET", tt.input, nil)
+		w := httptest.NewRecorder()
+		handler.ServeHTTP(w, req)
+
+		if w.Body.String() != tt.expected {
+			t.Errorf("normalizePathMiddleware(%q) = %q, want %q", tt.input, w.Body.String(), tt.expected)
+		}
 	}
 }
 

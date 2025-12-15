@@ -38,8 +38,21 @@ func NewRouter() *Router {
 	}
 
 	r.Router = *muxRouter
+	
+	// Add middleware to normalize double slashes
+	r.Use(normalizePathMiddleware)
 
 	return r
+}
+
+// normalizePathMiddleware removes duplicate slashes from the path
+func normalizePathMiddleware(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if strings.Contains(r.URL.Path, "//") {
+			r.URL.Path = strings.ReplaceAll(r.URL.Path, "//", "/")
+		}
+		next.ServeHTTP(w, r)
+	})
 }
 
 // Add adds a new route with the given HTTP method, pattern, and handler, wrapping the handler with OpenTelemetry instrumentation.
