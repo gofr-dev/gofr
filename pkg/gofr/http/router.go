@@ -31,6 +31,7 @@ type Middleware func(handler http.Handler) http.Handler
 // NewRouter creates a new Router instance.
 func NewRouter() *Router {
 	muxRouter := mux.NewRouter()
+	muxRouter.SkipClean(false) // Enable path cleaning to normalize double slashes
 	routes := make([]string, 0)
 	r := &Router{
 		Router:           *muxRouter,
@@ -38,21 +39,8 @@ func NewRouter() *Router {
 	}
 
 	r.Router = *muxRouter
-	
-	// Add middleware to normalize double slashes
-	r.Use(normalizePathMiddleware)
 
 	return r
-}
-
-// normalizePathMiddleware removes duplicate slashes from the path
-func normalizePathMiddleware(next http.Handler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if strings.Contains(r.URL.Path, "//") {
-			r.URL.Path = strings.ReplaceAll(r.URL.Path, "//", "/")
-		}
-		next.ServeHTTP(w, r)
-	})
 }
 
 // Add adds a new route with the given HTTP method, pattern, and handler, wrapping the handler with OpenTelemetry instrumentation.

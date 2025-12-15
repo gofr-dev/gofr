@@ -402,34 +402,6 @@ func TestStaticHandlerDirectCall(t *testing.T) {
 	}
 }
 
-func TestNormalizePathMiddleware(t *testing.T) {
-	testHandler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Write([]byte(r.URL.Path))
-	})
-
-	handler := normalizePathMiddleware(testHandler)
-
-	tests := []struct {
-		input    string
-		expected string
-	}{
-		{"//hello", "/hello"},
-		{"///hello", "/hello"},
-		{"/hello//world", "/hello/world"},
-		{"/hello", "/hello"},
-	}
-
-	for _, tt := range tests {
-		req := httptest.NewRequest("GET", tt.input, nil)
-		w := httptest.NewRecorder()
-		handler.ServeHTTP(w, req)
-
-		if w.Body.String() != tt.expected {
-			t.Errorf("normalizePathMiddleware(%q) = %q, want %q", tt.input, w.Body.String(), tt.expected)
-		}
-	}
-}
-
 type mockLogger struct{}
 
 func (m *mockLogger) Debug(args ...interface{})                   {}
