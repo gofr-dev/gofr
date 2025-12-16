@@ -16,11 +16,6 @@ import (
 	"gofr.dev/pkg/gofr/datasource/pubsub"
 )
 
-const (
-	modePubSub  = "pubsub"
-	modeStreams = "streams"
-)
-
 // PubSub message types for Committer interface.
 type pubSubMessage struct {
 	msg    *redis.Message
@@ -57,7 +52,10 @@ func newStreamMessage(client *redis.Client, stream, group, id string, logger dat
 }
 
 func (m *streamMessage) Commit() {
-	err := m.client.XAck(context.Background(), m.stream, m.group, m.id).Err()
+	ctx, cancel := context.WithTimeout(context.Background(), defaultRetryTimeout)
+	defer cancel()
+
+	err := m.client.XAck(ctx, m.stream, m.group, m.id).Err()
 	if err != nil {
 		if m.logger != nil {
 			m.logger.Errorf("failed to acknowledge message %s in stream %s: %v", m.id, m.stream, err)
@@ -151,10 +149,7 @@ func (ps *PubSub) publishToStream(ctx context.Context, topic string, message []b
 	}
 
 	if ps.parent.logger != nil {
-		traceID := span.SpanContext().TraceID().String()
 		ps.logPubSub("PUB", topic, span, string(message), end.Microseconds(), id)
-
-		_ = traceID // Use traceID if needed
 	}
 
 	if ps.parent.metrics != nil {
@@ -208,7 +203,12 @@ func (ps *PubSub) ensureSubscription(_ context.Context, topic string) chan *pubs
 	}
 
 	// Initialize channel before starting subscription
-	ps.receiveChan[topic] = make(chan *pubsub.Message, messageBufferSize)
+	bufferSize := ps.parent.config.PubSubBufferSize
+	if bufferSize == 0 {
+		bufferSize = defaultPubSubBufferSize // fallback default
+	}
+
+	ps.receiveChan[topic] = make(chan *pubsub.Message, bufferSize)
 	ps.chanClosed[topic] = false
 
 	// Create cancel context for this subscription
@@ -398,11 +398,16 @@ func (ps *PubSub) createConsumerGroup(ctx context.Context, topic, group string) 
 
 func (ps *PubSub) consumeStreamMessages(ctx context.Context, topic, group, consumer string, block time.Duration) {
 	// Read new messages
+	bufferSize := ps.parent.config.PubSubBufferSize
+	if bufferSize == 0 {
+		bufferSize = defaultPubSubBufferSize // fallback default
+	}
+
 	streams, err := ps.client.XReadGroup(ctx, &redis.XReadGroupArgs{
 		Group:    group,
 		Consumer: consumer,
 		Streams:  []string{topic, ">"},
-		Count:    int64(messageBufferSize),
+		Count:    int64(bufferSize),
 		Block:    block,
 		NoAck:    false,
 	}).Result()
@@ -436,8 +441,9 @@ func (ps *PubSub) getConsumerName() string {
 	}
 
 	hostname, _ := os.Hostname()
+	pid := os.Getpid()
 
-	return fmt.Sprintf("consumer-%s-%d", hostname, time.Now().UnixNano())
+	return fmt.Sprintf("consumer-%s-%d-%d", hostname, pid, time.Now().UnixNano())
 }
 
 // processMessages processes messages from the Redis channel.
@@ -508,7 +514,7 @@ func (ps *PubSub) dispatchMessage(ctx context.Context, topic string, m *pubsub.M
 	case <-ctx.Done():
 		return
 	default:
-		ps.logDebug("message channel full for topic '%s', dropping message", topic)
+		ps.logError("message channel full for topic '%s', dropping message", topic)
 	}
 }
 
@@ -530,7 +536,7 @@ func (ps *PubSub) Health() datasource.Health {
 	}
 
 	addr := fmt.Sprintf("%s:%d", ps.parent.config.HostName, ps.parent.config.Port)
-	res.Details["addr"] = sanitizeRedisAddr(addr)
+	res.Details["addr"] = addr
 
 	mode := ps.parent.config.PubSubMode
 	if mode == "" {
@@ -732,7 +738,9 @@ func (ps *PubSub) cleanupSubscription(topic string) {
 	ps.mu.Lock()
 	defer ps.mu.Unlock()
 
-	if ch, ok := ps.receiveChan[topic]; ok {
+	if ch, ok := ps.receiveChan[topic]; ok && !ps.chanClosed[topic] {
+		ps.chanClosed[topic] = true
+
 		close(ch)
 		delete(ps.receiveChan, topic)
 	}
@@ -754,7 +762,9 @@ func (ps *PubSub) cleanupStreamConsumers(topic string) {
 		delete(ps.streamConsumers, topic)
 	}
 
-	if ch, ok := ps.receiveChan[topic]; ok {
+	if ch, ok := ps.receiveChan[topic]; ok && !ps.chanClosed[topic] {
+		ps.chanClosed[topic] = true
+
 		close(ch)
 		delete(ps.receiveChan, topic)
 	}
@@ -791,7 +801,7 @@ func (ps *PubSub) Query(ctx context.Context, query string, args ...any) ([]byte,
 
 // queryChannel retrieves messages from a Redis PubSub channel.
 func (ps *PubSub) queryChannel(ctx context.Context, query string, args ...any) ([]byte, error) {
-	timeout, limit := parseQueryArgs(args...)
+	timeout, limit := ps.parseQueryArgs(args...)
 
 	queryCtx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
@@ -813,7 +823,7 @@ func (ps *PubSub) queryChannel(ctx context.Context, query string, args ...any) (
 
 // queryStream retrieves messages from a Redis stream.
 func (ps *PubSub) queryStream(ctx context.Context, stream string, args ...any) ([]byte, error) {
-	timeout, limit := parseQueryArgs(args...)
+	timeout, limit := ps.parseQueryArgs(args...)
 
 	ctx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
@@ -879,10 +889,20 @@ func (*PubSub) collectMessages(ctx context.Context, ch <-chan *redis.Message, li
 }
 
 // parseQueryArgs parses query arguments (timeout, limit).
-func parseQueryArgs(args ...any) (timeout time.Duration, limit int) {
-	timeout = 5 * time.Second
-	limit = 10
+// It uses config defaults if not provided, but allows override via args.
+func (ps *PubSub) parseQueryArgs(args ...any) (timeout time.Duration, limit int) {
+	// Get defaults from config
+	timeout = ps.parent.config.PubSubQueryTimeout
+	if timeout == 0 {
+		timeout = defaultPubSubQueryTimeout // fallback default
+	}
 
+	limit = ps.parent.config.PubSubQueryLimit
+	if limit == 0 {
+		limit = defaultPubSubQueryLimit // fallback default
+	}
+
+	// Override with provided args
 	if len(args) > 0 {
 		if t, ok := args[0].(time.Duration); ok {
 			timeout = t
@@ -912,30 +932,6 @@ func (ps *PubSub) isConnected() bool {
 	return ps.client.Ping(ctx).Err() == nil
 }
 
-// sanitizeRedisAddr removes credentials from a Redis address for safe logging.
-func sanitizeRedisAddr(addr string) string {
-	if !strings.Contains(addr, "@") {
-		return addr
-	}
-
-	lastAt := strings.LastIndex(addr, "@")
-	if lastAt < 0 || lastAt >= len(addr)-1 {
-		return addr
-	}
-
-	hostPart := addr[lastAt+1:]
-
-	if strings.HasPrefix(addr, "redis://") {
-		return "redis://" + hostPart
-	}
-
-	if strings.HasPrefix(addr, "rediss://") {
-		return "rediss://" + hostPart
-	}
-
-	return hostPart
-}
-
 // logDebug logs a debug message.
 func (ps *PubSub) logDebug(format string, args ...any) {
 	if ps != nil && ps.parent != nil && ps.parent.logger != nil {
@@ -958,7 +954,7 @@ func (ps *PubSub) logInfo(format string, args ...any) {
 }
 
 // logPubSub logs a PubSub operation.
-func (ps *PubSub) logPubSub(mode, topic string, span trace.Span, _ string, _ int64, _ string) {
+func (ps *PubSub) logPubSub(mode, topic string, span trace.Span, messageValue string, duration int64, streamID string) {
 	if ps == nil || ps.parent == nil || ps.parent.logger == nil {
 		return
 	}
@@ -966,8 +962,14 @@ func (ps *PubSub) logPubSub(mode, topic string, span trace.Span, _ string, _ int
 	traceID := span.SpanContext().TraceID().String()
 	addr := fmt.Sprintf("%s:%d", ps.parent.config.HostName, ps.parent.config.Port)
 
-	// Create a simple log entry (can be enhanced with Log struct if needed)
-	ps.parent.logger.Debugf("%s %s %s %s", mode, topic, traceID, sanitizeRedisAddr(addr))
+	// Create a simple log entry
+	// Note: messageValue, duration, and streamID are available but not used in current simple format
+	// They can be used if we enhance the log format in the future
+	_ = messageValue
+	_ = duration
+	_ = streamID
+
+	ps.parent.logger.Debugf("%s %s %s %s", mode, topic, traceID, addr)
 }
 
 // Close closes all active subscriptions and cleans up resources.

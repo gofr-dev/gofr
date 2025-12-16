@@ -8,20 +8,27 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"go.uber.org/mock/gomock"
 
 	"gofr.dev/pkg/gofr/config"
 	"gofr.dev/pkg/gofr/logging"
 )
 
-func TestGetRedisConfig_Defaults(t *testing.T) {
+// testGetRedisConfig is a helper function that creates mock logger and config,
+// then returns the Redis config. This reduces code duplication in tests.
+func testGetRedisConfig(t *testing.T, configMap map[string]string) *Config {
+	t.Helper()
+
 	mockLogger := logging.NewMockLogger(logging.ERROR)
-	mockConfig := config.NewMockConfig(map[string]string{
+	mockConfig := config.NewMockConfig(configMap)
+
+	return getRedisConfig(mockConfig, mockLogger)
+}
+
+func TestGetRedisConfig_Defaults(t *testing.T) {
+	conf := testGetRedisConfig(t, map[string]string{
 		"PUBSUB_BACKEND": "REDIS", // Required to trigger PubSub config parsing
 		"REDIS_HOST":     "localhost",
 	})
-
-	conf := getRedisConfig(mockConfig, mockLogger)
 
 	assert.Equal(t, "localhost", conf.HostName)
 	assert.Equal(t, defaultRedisPort, conf.Port)
@@ -33,14 +40,11 @@ func TestGetRedisConfig_Defaults(t *testing.T) {
 }
 
 func TestGetRedisConfig_InvalidPortAndDB(t *testing.T) {
-	mockLogger := logging.NewMockLogger(logging.ERROR)
-	mockConfig := config.NewMockConfig(map[string]string{
+	conf := testGetRedisConfig(t, map[string]string{
 		"REDIS_HOST": "localhost",
 		"REDIS_PORT": "invalid",
 		"REDIS_DB":   "invalid",
 	})
-
-	conf := getRedisConfig(mockConfig, mockLogger)
 
 	assert.Equal(t, defaultRedisPort, conf.Port)
 	assert.Equal(t, 0, conf.DB)
@@ -71,8 +75,8 @@ func TestGetRedisConfig_TLS(t *testing.T) {
 	_, _ = keyFile.WriteString("-----BEGIN PRIVATE KEY-----\nMIIE\n-----END PRIVATE KEY-----")
 	_, _ = caFile.WriteString("-----BEGIN CERTIFICATE-----\nMIID\n-----END CERTIFICATE-----")
 
-	mockLogger := logging.NewMockLogger(logging.ERROR)
-	mockConfig := config.NewMockConfig(map[string]string{
+	// This will log errors because dummy content is not valid PEM, but it tests the path
+	conf := testGetRedisConfig(t, map[string]string{
 		"REDIS_HOST":        "localhost",
 		"REDIS_TLS_ENABLED": "true",
 		"REDIS_TLS_CERT":    certFile.Name(),
@@ -80,28 +84,18 @@ func TestGetRedisConfig_TLS(t *testing.T) {
 		"REDIS_TLS_CA_CERT": caFile.Name(),
 	})
 
-	// This will log errors because dummy content is not valid PEM, but it tests the path
-	conf := getRedisConfig(mockConfig, mockLogger)
-
 	assert.NotNil(t, conf.TLS)
 	assert.Equal(t, uint16(tls.VersionTLS12), conf.TLS.MinVersion)
 }
 
 func TestGetRedisConfig_TLS_InvalidFiles(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
-
-	mockLogger := logging.NewMockLogger(logging.ERROR)
-
-	mockConfig := config.NewMockConfig(map[string]string{
+	conf := testGetRedisConfig(t, map[string]string{
 		"REDIS_HOST":        "localhost",
 		"REDIS_TLS_ENABLED": "true",
 		"REDIS_TLS_CERT":    "nonexistent_cert.pem",
 		"REDIS_TLS_KEY":     "nonexistent_key.pem",
 		"REDIS_TLS_CA_CERT": "nonexistent_ca.pem",
 	})
-
-	conf := getRedisConfig(mockConfig, mockLogger)
 
 	assert.NotNil(t, conf.TLS)
 	// Should be empty as files failed to load
@@ -110,8 +104,7 @@ func TestGetRedisConfig_TLS_InvalidFiles(t *testing.T) {
 }
 
 func TestGetRedisConfig_PubSubStreams(t *testing.T) {
-	mockLogger := logging.NewMockLogger(logging.ERROR)
-	mockConfig := config.NewMockConfig(map[string]string{
+	conf := testGetRedisConfig(t, map[string]string{
 		"PUBSUB_BACKEND":               "REDIS",
 		"REDIS_HOST":                   "localhost",
 		"REDIS_PUBSUB_MODE":            "streams",
@@ -121,42 +114,34 @@ func TestGetRedisConfig_PubSubStreams(t *testing.T) {
 		"REDIS_STREAMS_BLOCK_TIMEOUT":  "2s",
 	})
 
-	conf := getRedisConfig(mockConfig, mockLogger)
-
 	assert.Equal(t, "streams", conf.PubSubMode)
+	require.NotNil(t, conf.PubSubStreamsConfig)
 
-	if assert.NotNil(t, conf.PubSubStreamsConfig) {
-		assert.Equal(t, "mygroup", conf.PubSubStreamsConfig.ConsumerGroup)
-		assert.Equal(t, "myconsumer", conf.PubSubStreamsConfig.ConsumerName)
-		assert.Equal(t, int64(1000), conf.PubSubStreamsConfig.MaxLen)
-		assert.Equal(t, 2*time.Second, conf.PubSubStreamsConfig.Block)
-	}
+	assert.Equal(t, "mygroup", conf.PubSubStreamsConfig.ConsumerGroup)
+	assert.Equal(t, "myconsumer", conf.PubSubStreamsConfig.ConsumerName)
+	assert.Equal(t, int64(1000), conf.PubSubStreamsConfig.MaxLen)
+	assert.Equal(t, 2*time.Second, conf.PubSubStreamsConfig.Block)
 }
 
 func TestGetRedisConfig_PubSubStreams_Defaults(t *testing.T) {
-	mockLogger := logging.NewMockLogger(logging.ERROR)
-	mockConfig := config.NewMockConfig(map[string]string{
+	conf := testGetRedisConfig(t, map[string]string{
 		"PUBSUB_BACKEND":               "REDIS",
 		"REDIS_HOST":                   "localhost",
 		"REDIS_PUBSUB_MODE":            "streams",
 		"REDIS_STREAMS_CONSUMER_GROUP": "mygroup",
 	})
 
-	conf := getRedisConfig(mockConfig, mockLogger)
-
 	assert.Equal(t, "streams", conf.PubSubMode)
+	require.NotNil(t, conf.PubSubStreamsConfig)
 
-	if assert.NotNil(t, conf.PubSubStreamsConfig) {
-		assert.Equal(t, "mygroup", conf.PubSubStreamsConfig.ConsumerGroup)
-		assert.Empty(t, conf.PubSubStreamsConfig.ConsumerName)
-		assert.Equal(t, int64(0), conf.PubSubStreamsConfig.MaxLen)
-		assert.Equal(t, 5*time.Second, conf.PubSubStreamsConfig.Block) // Default block
-	}
+	assert.Equal(t, "mygroup", conf.PubSubStreamsConfig.ConsumerGroup)
+	assert.Empty(t, conf.PubSubStreamsConfig.ConsumerName)
+	assert.Equal(t, int64(0), conf.PubSubStreamsConfig.MaxLen)
+	assert.Equal(t, 5*time.Second, conf.PubSubStreamsConfig.Block) // Default block
 }
 
 func TestGetRedisConfig_PubSubStreams_InvalidValues(t *testing.T) {
-	mockLogger := logging.NewMockLogger(logging.ERROR)
-	mockConfig := config.NewMockConfig(map[string]string{
+	conf := testGetRedisConfig(t, map[string]string{
 		"PUBSUB_BACKEND":               "REDIS",
 		"REDIS_HOST":                   "localhost",
 		"REDIS_PUBSUB_MODE":            "streams",
@@ -165,13 +150,10 @@ func TestGetRedisConfig_PubSubStreams_InvalidValues(t *testing.T) {
 		"REDIS_STREAMS_BLOCK_TIMEOUT":  "invalid",
 	})
 
-	conf := getRedisConfig(mockConfig, mockLogger)
-
 	assert.Equal(t, "streams", conf.PubSubMode)
+	require.NotNil(t, conf.PubSubStreamsConfig)
 
-	if assert.NotNil(t, conf.PubSubStreamsConfig) {
-		// Should use defaults
-		assert.Equal(t, int64(0), conf.PubSubStreamsConfig.MaxLen)
-		assert.Equal(t, 5*time.Second, conf.PubSubStreamsConfig.Block)
-	}
+	// Should use defaults
+	assert.Equal(t, int64(0), conf.PubSubStreamsConfig.MaxLen)
+	assert.Equal(t, 5*time.Second, conf.PubSubStreamsConfig.Block)
 }

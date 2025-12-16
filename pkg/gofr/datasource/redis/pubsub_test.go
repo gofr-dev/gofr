@@ -3,6 +3,7 @@ package redis
 import (
 	"context"
 	"errors"
+	"strings"
 	"testing"
 	"time"
 
@@ -18,6 +19,54 @@ import (
 	"gofr.dev/pkg/gofr/datasource/pubsub"
 	"gofr.dev/pkg/gofr/logging"
 )
+
+// TestPubSub_Query_Channel tests querying messages from a Redis PubSub channel.
+func TestPubSub_Query_Channel(t *testing.T) {
+	client, s := setupTest(t, map[string]string{
+		"REDIS_PUBSUB_MODE": "pubsub",
+	})
+	defer s.Close()
+	defer client.Close()
+
+	ctx := context.Background()
+	topic := "query-channel"
+
+	// Start Query in goroutine
+	type queryResult struct {
+		msgs []byte
+		err  error
+	}
+
+	resChan := make(chan queryResult)
+
+	go func() {
+		// Query blocks until limit or timeout.
+		msgs, err := client.PubSub.Query(ctx, topic, 2*time.Second, 2)
+		resChan <- queryResult{msgs, err}
+	}()
+
+	// Wait for Query to subscribe (approximate)
+	time.Sleep(200 * time.Millisecond)
+
+	// Publish messages
+	msgs := []string{"chan-msg1", "chan-msg2"}
+	for _, m := range msgs {
+		err := client.PubSub.Publish(ctx, topic, []byte(m))
+		require.NoError(t, err)
+		time.Sleep(50 * time.Millisecond)
+	}
+
+	// Wait for result
+	select {
+	case res := <-resChan:
+		require.NoError(t, res.err)
+
+		expected := strings.Join(msgs, "\n")
+		assert.Equal(t, expected, string(res.msgs))
+	case <-time.After(3 * time.Second):
+		t.Fatal("Query timed out")
+	}
+}
 
 var (
 	errMockPing        = errors.New("mock ping error")
@@ -247,12 +296,16 @@ func testChannelPublishSubscribe(t *testing.T, client *Redis) {
 	msg := []byte("hello")
 
 	ch := make(chan *pubsub.Message)
+	errCh := make(chan error)
 
 	go func() {
 		m, err := client.PubSub.Subscribe(ctx, topic)
-		if assert.NoError(t, err) {
-			ch <- m
+		if err != nil {
+			errCh <- err
+			return
 		}
+
+		ch <- m
 	}()
 
 	time.Sleep(100 * time.Millisecond)
@@ -261,6 +314,8 @@ func testChannelPublishSubscribe(t *testing.T, client *Redis) {
 	require.NoError(t, err)
 
 	select {
+	case err := <-errCh:
+		require.NoError(t, err)
 	case m := <-ch:
 		assert.Equal(t, string(msg), string(m.Value))
 	case <-time.After(2 * time.Second):
@@ -276,12 +331,17 @@ func testStreamPublishSubscribe(t *testing.T, client *Redis) {
 	msg := []byte("hello stream")
 
 	ch := make(chan *pubsub.Message)
+	errCh := make(chan error)
 
 	go func() {
 		m, err := client.PubSub.Subscribe(ctx, topic)
-		if assert.NoError(t, err) {
-			ch <- m
+		if err != nil {
+			errCh <- err
+
+			return
 		}
+
+		ch <- m
 	}()
 
 	time.Sleep(500 * time.Millisecond)
@@ -290,6 +350,8 @@ func testStreamPublishSubscribe(t *testing.T, client *Redis) {
 	require.NoError(t, err)
 
 	select {
+	case err := <-errCh:
+		require.NoError(t, err)
 	case m := <-ch:
 		assert.Equal(t, string(msg), string(m.Value))
 		m.Committer.Commit()
@@ -305,12 +367,17 @@ func testChannelQuery(t *testing.T, client *Redis) {
 	topic := "query-chan"
 
 	ch := make(chan []byte)
+	errCh := make(chan error)
 
 	go func() {
 		res, err := client.PubSub.Query(ctx, topic, 1*time.Second, 2)
-		if assert.NoError(t, err) {
-			ch <- res
+		if err != nil {
+			errCh <- err
+
+			return
 		}
+
+		ch <- res
 	}()
 
 	time.Sleep(100 * time.Millisecond)
@@ -319,6 +386,8 @@ func testChannelQuery(t *testing.T, client *Redis) {
 	_ = client.PubSub.Publish(ctx, topic, []byte("m2"))
 
 	select {
+	case err := <-errCh:
+		require.NoError(t, err)
 	case res := <-ch:
 		assert.Contains(t, string(res), "m1")
 		assert.Contains(t, string(res), "m2")
@@ -339,13 +408,71 @@ func testStreamQuery(t *testing.T, client *Redis) {
 	res, err := client.PubSub.Query(ctx, topic, 1*time.Second, 10)
 	require.NoError(t, err)
 
-	// Miniredis compatibility check
-	if len(res) == 0 {
-		t.Log("Miniredis returned empty result for Query/XRANGE")
-	} else {
-		assert.Contains(t, string(res), "sm1")
-		assert.Contains(t, string(res), "sm2")
+	// Note: This test may skip if miniredis returns empty results (known limitation)
+	// Miniredis compatibility is tested separately in TestPubSub_Query_Stream_MiniredisCompatibility
+	// For this test, we require results to be present to validate the query functionality
+	require.NotEmpty(t, res, "Query should return results (miniredis limitation may cause empty results)")
+	assert.Contains(t, string(res), "sm1")
+	assert.Contains(t, string(res), "sm2")
+}
+
+// TestPubSub_Query_Stream_Success tests successful stream query operations.
+// This test assumes results are available (miniredis compatibility is tested separately).
+func TestPubSub_Query_Stream_Success(t *testing.T) {
+	client, s := setupTest(t, map[string]string{
+		"REDIS_PUBSUB_MODE":            "streams",
+		"REDIS_STREAMS_CONSUMER_GROUP": "query-group",
+	})
+	defer s.Close()
+	defer client.Close()
+
+	ctx := context.Background()
+	topic := "query-stream-success"
+
+	// Publish some messages
+	msgs := []string{"stream-msg1", "stream-msg2", "stream-msg3"}
+	for _, m := range msgs {
+		err := client.PubSub.Publish(ctx, topic, []byte(m))
+		require.NoError(t, err)
 	}
+
+	// Query messages
+	results, err := client.PubSub.Query(ctx, topic, 1*time.Second, 10)
+	require.NoError(t, err)
+	require.NotEmpty(t, results, "Query should return results for successful case")
+
+	expected := strings.Join(msgs, "\n")
+	assert.Equal(t, expected, string(results))
+}
+
+// TestPubSub_Query_Stream_MiniredisCompatibility tests Miniredis compatibility for stream queries.
+// Miniredis may return empty results for XRANGE, which is acceptable behavior.
+func TestPubSub_Query_Stream_MiniredisCompatibility(t *testing.T) {
+	client, s := setupTest(t, map[string]string{
+		"REDIS_PUBSUB_MODE":            "streams",
+		"REDIS_STREAMS_CONSUMER_GROUP": "query-group",
+	})
+	defer s.Close()
+	defer client.Close()
+
+	ctx := context.Background()
+	topic := "query-stream-compat"
+
+	// Publish some messages
+	msgs := []string{"stream-msg1", "stream-msg2"}
+	for _, m := range msgs {
+		err := client.PubSub.Publish(ctx, topic, []byte(m))
+		require.NoError(t, err)
+	}
+
+	// Query messages
+	results, err := client.PubSub.Query(ctx, topic, 1*time.Second, 10)
+	require.NoError(t, err)
+
+	// Miniredis XRANGE may return empty results - this is acceptable
+	// The test passes regardless of whether results are empty or not
+	// This documents the known miniredis limitation
+	t.Logf("Query returned %d bytes (miniredis may return empty for XRANGE)", len(results))
 }
 
 func testDeleteTopicChannel(t *testing.T, client *Redis) {
