@@ -32,15 +32,15 @@ func (m *rateLimiterMockMetrics) IncrementCounter(_ context.Context, name string
 	m.counters[name]++
 }
 
-func (_ *rateLimiterMockMetrics) DeltaUpDownCounter(_ context.Context, _ string, _ float64, _ ...string) {
+func (*rateLimiterMockMetrics) DeltaUpDownCounter(_ context.Context, _ string, _ float64, _ ...string) {
 	// Not used in rate limiter tests
 }
 
-func (_ *rateLimiterMockMetrics) RecordHistogram(_ context.Context, _ string, _ float64, _ ...string) {
+func (*rateLimiterMockMetrics) RecordHistogram(_ context.Context, _ string, _ float64, _ ...string) {
 	// Not used in rate limiter tests
 }
 
-func (_ *rateLimiterMockMetrics) SetGauge(_ string, _ float64, _ ...string) {
+func (*rateLimiterMockMetrics) SetGauge(_ string, _ float64, _ ...string) {
 	// Not used in rate limiter tests
 }
 
