@@ -29,10 +29,13 @@ type Mocks struct {
 	PubSub        *MockPubSubProvider
 	Couchbase     *MockCouchbase
 	File          *file.MockFileSystemProvider
-	HTTPService   *service.MockHTTP
-	Metrics       *MockMetrics
-	Oracle        *MockOracleDB
-	ScyllaDB      *MockScyllaDB
+	// Deprecated: Use HTTPServices map instead. This field is kept for backward compatibility only and will be removed in a future version.
+	HTTPService *service.MockHTTP
+	// Map of service names to their mock instances. Use this to set different expectations for different services.
+	HTTPServices map[string]*service.MockHTTP
+	Metrics      *MockMetrics
+	Oracle       *MockOracleDB
+	ScyllaDB     *MockScyllaDB
 }
 
 type options func(c *Container, ctrl *gomock.Controller) any
@@ -40,12 +43,17 @@ type options func(c *Container, ctrl *gomock.Controller) any
 func WithMockHTTPService(httpServiceNames ...string) options { //nolint:revive // WithMockHTTPService returns an
 	// exported type intentionally; options are internal and subject to change.
 	return func(c *Container, ctrl *gomock.Controller) any {
-		mockservice := service.NewMockHTTP(ctrl)
+		// Create a separate mock instance for each service name
+		// This allows different services to have different expectations
+		serviceMocks := make(map[string]*service.MockHTTP)
 		for _, s := range httpServiceNames {
+			mockservice := service.NewMockHTTP(ctrl)
 			c.Services[s] = mockservice
+			serviceMocks[s] = mockservice
 		}
 
-		return mockservice
+		// Return the map of service mocks
+		return serviceMocks
 	}
 }
 
@@ -106,13 +114,30 @@ func NewMockContainer(t *testing.T, options ...options) (*Container, *Mocks) {
 
 	var httpMock *service.MockHTTP
 
+	httpServiceMocks := make(map[string]*service.MockHTTP)
+
+	// Initialize Services map BEFORE processing options so WithMockHTTPService can populate it
 	container.Services = make(map[string]service.HTTP)
 
 	for _, option := range options {
 		optionsAdded := option(container, ctrl)
 
-		val, ok := optionsAdded.(*service.MockHTTP)
-		if ok {
+		// Check if the option returned a map of HTTP service mocks
+		switch val := optionsAdded.(type) {
+		case map[string]*service.MockHTTP:
+			// Merge the service mocks into our map
+			for name, mock := range val {
+				httpServiceMocks[name] = mock
+			}
+			// Set httpMock to the first service mock for backward compatibility
+			if httpMock == nil && len(val) > 0 {
+				for _, mock := range val {
+					httpMock = mock
+					break
+				}
+			}
+		case *service.MockHTTP:
+			// Legacy support: if a single mock is returned, use it
 			httpMock = val
 		}
 	}
@@ -131,47 +156,8 @@ func NewMockContainer(t *testing.T, options ...options) (*Container, *Mocks) {
 		Mongo:         container.Mongo.(*MockMongo),
 		KVStore:       container.KVStore.(*MockKVStore),
 		File:          container.File.(*file.MockFileSystemProvider),
-		HTTPService:   httpMock,
-		DGraph:        container.DGraph.(*MockDgraph),
-		OpenTSDB:      container.OpenTSDB.(*MockOpenTSDB),
-		ArangoDB:      container.ArangoDB.(*MockArangoDBProvider),
-		SurrealDB:     container.SurrealDB.(*MockSurrealDB),
-		Elasticsearch: container.Elasticsearch.(*MockElasticsearch),
-		PubSub:        container.PubSub.(*MockPubSubProvider),
-		Metrics:       mockMetrics,
-		Oracle:        container.Oracle.(*MockOracleDB),
-		ScyllaDB:      container.ScyllaDB.(*MockScyllaDB),
-	}
-
-	container.metricsManager = mocks.Metrics
-	// TODO: Remove this expectation from mock container (previous generalization) to the actual tests where their expectations are being set.
-	mocks.Metrics.EXPECT().RecordHistogram(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(),
-		gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
-
-	for _, option := range options {
-		optionsAdded := option(container, ctrl)
-
-		val, ok := optionsAdded.(*service.MockHTTP)
-		if ok {
-			mocks.HTTPService = val
-		}
-	}
-
-	// Setup expectations/mockmetrics
-	container.Redis.(*MockRedis).EXPECT().Close().AnyTimes()
-
-	mockMetrics = NewMockMetrics(ctrl)
-	container.metricsManager = mockMetrics
-
-	mocks = Mocks{
-		Redis:         container.Redis.(*MockRedis),
-		SQL:           sqlMockWrapper,
-		Clickhouse:    container.Clickhouse.(*MockClickhouse),
-		Cassandra:     container.Cassandra.(*MockCassandraWithContext),
-		Mongo:         container.Mongo.(*MockMongo),
-		KVStore:       container.KVStore.(*MockKVStore),
-		File:          container.File.(*file.MockFileSystemProvider),
-		HTTPService:   httpMock,
+		HTTPService:   httpMock,         // Backward compatibility: first service mock or nil
+		HTTPServices:  httpServiceMocks, // Map of all service mocks
 		DGraph:        container.DGraph.(*MockDgraph),
 		OpenTSDB:      container.OpenTSDB.(*MockOpenTSDB),
 		ArangoDB:      container.ArangoDB.(*MockArangoDBProvider),
@@ -183,6 +169,11 @@ func NewMockContainer(t *testing.T, options ...options) (*Container, *Mocks) {
 		ScyllaDB:      container.ScyllaDB.(*MockScyllaDB),
 		Couchbase:     container.Couchbase.(*MockCouchbase),
 	}
+
+	container.metricsManager = mocks.Metrics
+	// TODO: Remove this expectation from mock container (previous generalization) to the actual tests where their expectations are being set.
+	mocks.Metrics.EXPECT().RecordHistogram(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(),
+		gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
 
 	return container, &mocks
 }
