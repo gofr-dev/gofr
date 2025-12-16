@@ -32,6 +32,18 @@ func (m *rateLimiterMockMetrics) IncrementCounter(_ context.Context, name string
 	m.counters[name]++
 }
 
+func (_ *rateLimiterMockMetrics) DeltaUpDownCounter(_ context.Context, _ string, _ float64, _ ...string) {
+	// Not used in rate limiter tests
+}
+
+func (_ *rateLimiterMockMetrics) RecordHistogram(_ context.Context, _ string, _ float64, _ ...string) {
+	// Not used in rate limiter tests
+}
+
+func (_ *rateLimiterMockMetrics) SetGauge(_ string, _ float64, _ ...string) {
+	// Not used in rate limiter tests
+}
+
 func (m *rateLimiterMockMetrics) GetCounter(name string) int {
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -450,6 +462,7 @@ func TestRateLimiter_TrustedProxiesEnabled(t *testing.T) {
 		req := httptest.NewRequest(http.MethodGet, "/test", http.NoBody)
 		req.RemoteAddr = "127.0.0.1:12345"               // Proxy IP
 		req.Header.Set("X-Forwarded-For", "203.0.113.1") // Client IP
+
 		rr := httptest.NewRecorder()
 		handler.ServeHTTP(rr, req)
 		assert.Equal(t, http.StatusOK, rr.Code)
@@ -492,6 +505,7 @@ func TestRateLimiter_TrustedProxiesDisabled(t *testing.T) {
 		req := httptest.NewRequest(http.MethodGet, "/test", http.NoBody)
 		req.RemoteAddr = "127.0.0.1:12345"
 		req.Header.Set("X-Forwarded-For", fmt.Sprintf("203.0.113.%d", i+1)) // Different spoofed IPs
+
 		rr := httptest.NewRecorder()
 		handler.ServeHTTP(rr, req)
 		assert.Equal(t, http.StatusOK, rr.Code)

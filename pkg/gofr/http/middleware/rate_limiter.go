@@ -13,11 +13,11 @@ import (
 )
 
 var (
-	// ErrInvalidRequestsPerSecond is returned when RequestsPerSecond is not positive.
-	ErrInvalidRequestsPerSecond = errors.New("requestsPerSecond must be positive")
+	// errInvalidRequestsPerSecond is returned when RequestsPerSecond is not positive.
+	errInvalidRequestsPerSecond = errors.New("requestsPerSecond must be positive")
 
-	// ErrInvalidBurst is returned when Burst is not positive.
-	ErrInvalidBurst = errors.New("burst must be positive")
+	// errInvalidBurst is returned when Burst is not positive.
+	errInvalidBurst = errors.New("burst must be positive")
 )
 
 // RateLimiterConfig holds configuration for rate limiting.
@@ -45,42 +45,61 @@ type RateLimiterConfig struct {
 // Validate checks if the configuration values are valid.
 func (c RateLimiterConfig) Validate() error {
 	if c.RequestsPerSecond <= 0 {
-		return ErrInvalidRequestsPerSecond
+		return errInvalidRequestsPerSecond
 	}
 
 	if c.Burst <= 0 {
-		return ErrInvalidBurst
+		return errInvalidBurst
 	}
 
 	return nil
 }
 
-type rateLimiterMetrics interface {
-	IncrementCounter(ctx context.Context, name string, labels ...string)
-}
-
 // getIP extracts the client IP address from the request.
 // If trustProxies is false, only RemoteAddr is used to prevent IP spoofing.
 func getIP(r *http.Request, trustProxies bool) string {
-	// Only trust proxy headers if explicitly configured
-	if trustProxies {
-		// Check X-Forwarded-For header first
-		forwarded := r.Header.Get("X-Forwarded-For")
-		if forwarded != "" {
-			// X-Forwarded-For can contain multiple IPs, take the first one
-			ips := strings.Split(forwarded, ",")
-			if len(ips) > 0 {
-				return strings.TrimSpace(ips[0])
-			}
-		}
-
-		// Check X-Real-IP header
-		if realIP := r.Header.Get("X-Real-IP"); realIP != "" {
-			return realIP
-		}
+	if !trustProxies {
+		return getRemoteAddr(r)
 	}
 
-	// Fall back to RemoteAddr (always used if not trusting proxies)
+	// Try X-Forwarded-For header first
+	if ip := getForwardedIP(r); ip != "" {
+		return ip
+	}
+
+	// Try X-Real-IP header
+	if ip := getRealIP(r); ip != "" {
+		return ip
+	}
+
+	// Fall back to RemoteAddr
+	return getRemoteAddr(r)
+}
+
+// getForwardedIP extracts IP from X-Forwarded-For header.
+func getForwardedIP(r *http.Request) string {
+	forwarded := r.Header.Get("X-Forwarded-For")
+	if forwarded == "" {
+		return ""
+	}
+
+	// X-Forwarded-For can contain multiple IPs, take the first one
+	ips := strings.Split(forwarded, ",")
+	if len(ips) == 0 {
+		return ""
+	}
+
+	return strings.TrimSpace(ips[0])
+}
+
+// getRealIP extracts IP from X-Real-IP header.
+func getRealIP(r *http.Request) string {
+	realIP := r.Header.Get("X-Real-IP")
+	return strings.TrimSpace(realIP)
+}
+
+// getRemoteAddr extracts IP from RemoteAddr.
+func getRemoteAddr(r *http.Request) string {
 	ip, _, err := net.SplitHostPort(r.RemoteAddr)
 	if err != nil {
 		return r.RemoteAddr
@@ -90,7 +109,7 @@ func getIP(r *http.Request, trustProxies bool) string {
 }
 
 // RateLimiter creates a middleware that limits requests based on the configuration.
-func RateLimiter(config RateLimiterConfig, metrics rateLimiterMetrics) func(http.Handler) http.Handler {
+func RateLimiter(config RateLimiterConfig, m metrics) func(http.Handler) http.Handler {
 	// Validate configuration
 	if err := config.Validate(); err != nil {
 		panic(fmt.Sprintf("invalid rate limiter config: %v", err))
@@ -135,8 +154,8 @@ func RateLimiter(config RateLimiterConfig, metrics rateLimiterMetrics) func(http
 				w.Header().Set("Retry-After", fmt.Sprintf("%.0f", math.Ceil(retryAfter.Seconds())))
 
 				// Increment rate limit exceeded metric
-				if metrics != nil {
-					metrics.IncrementCounter(r.Context(), "app_http_rate_limit_exceeded_total",
+				if m != nil {
+					m.IncrementCounter(r.Context(), "app_http_rate_limit_exceeded_total",
 						"path", r.URL.Path, "method", r.Method)
 				}
 

@@ -61,7 +61,10 @@ func (m *memoryRateLimiterStore) Allow(_ context.Context, key string, _ RateLimi
 		// Calculate retry-after duration
 		reservation := entry.limiter.Reserve()
 		if !reservation.OK() {
-			return false, time.Second, nil
+			// Burst exceeded - calculate delay based on request rate
+			// Time to wait for one token = 1 / RequestsPerSecond
+			delay := time.Duration(float64(time.Second) / cfg.RequestsPerSecond)
+			return false, delay, nil
 		}
 
 		delay := reservation.Delay()
