@@ -41,6 +41,55 @@ DB_DIALECT=mysql
 DB_CHARSET=utf8 #(optional)
 ```
 
+### TLS/SSL Configuration
+
+GoFr supports secure TLS connections to MySQL/MariaDB databases. Configure TLS by setting the `DB_SSL_MODE` environment variable and optionally providing certificate paths for enhanced security.
+
+#### Available SSL Modes
+
+| SSL Mode | Description |
+|----------|-------------|
+| `disable` | No TLS encryption (default) |
+| `preferred` | Attempts TLS, falls back to plain connection if unavailable |
+| `require` | Enforces TLS but skips certificate validation |
+| `skip-verify` | Enforces TLS without validating server certificate |
+| `verify-ca` | Enforces TLS and validates server certificate against CA |
+| `verify-full` | Enforces TLS with full certificate validation (including hostname) |
+
+#### TLS Environment Variables
+
+| Variable | Required | Description |
+|----------|----------|-------------|
+| `DB_SSL_MODE` | No | TLS mode (defaults to `disable`) |
+| `DB_TLS_CA_CERT` | Conditional | Path to CA certificate (required for `verify-ca`/`verify-full`) |
+| `DB_TLS_CLIENT_CERT` | No | Path to client certificate (for mutual TLS) |
+| `DB_TLS_CLIENT_KEY` | No | Path to client private key (for mutual TLS) |
+
+#### Example Configuration
+
+```dotenv
+# configs/.env
+DB_HOST=localhost
+DB_USER=root
+DB_PASSWORD=root123
+DB_NAME=test_db
+DB_PORT=3306
+DB_DIALECT=mysql
+
+# Basic TLS (no certificate validation)
+DB_SSL_MODE=require
+
+# OR with CA certificate validation (production)
+DB_SSL_MODE=verify-ca
+DB_TLS_CA_CERT=/path/to/ca-cert.pem
+
+# OR with mutual TLS (enhanced security)
+DB_SSL_MODE=verify-full
+DB_TLS_CA_CERT=/path/to/ca-cert.pem
+DB_TLS_CLIENT_CERT=/path/to/client-cert.pem
+DB_TLS_CLIENT_KEY=/path/to/client-key.pem
+```
+
 ## PostgreSQL
 
 ### Setup
