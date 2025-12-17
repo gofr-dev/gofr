@@ -204,9 +204,9 @@ func (o *otelErrorHandler) Handle(e error) {
 
 	msg := e.Error()
 
-	// Fast check: if message doesn't contain "status 2", it's not a 2xx code.
+	// Fast check: if a message contains "status 2", it's a 2xx code.
 	if strings.Contains(msg, "status 2") {
-		o.logger.Error(msg)
+		return
 	}
 
 	o.logger.Error(msg)
