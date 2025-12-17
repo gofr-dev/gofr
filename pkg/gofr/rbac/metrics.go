@@ -2,8 +2,8 @@ package rbac
 
 import "context"
 
-// Metrics defines methods for recording metrics that RBAC uses.
-// It matches GoFr's container.Metrics interface.
+// Metrics mirrors the GoFr's metrics interface so RBAC can emit metrics
+// without importing the concrete package (avoids import cycles).
 type Metrics interface {
 	NewCounter(name, desc string)
 	NewUpDownCounter(name, desc string)
