@@ -19,6 +19,11 @@ func main() {
 			Threshold: 4,
 			Interval:  1 * time.Second,
 		},
+		&service.RateLimiterConfig{
+			Requests: 10,
+			Window:   time.Second,
+			Burst:    15,
+		},
 		&service.HealthConfig{
 			HealthEndpoint: "breeds",
 		},

@@ -97,15 +97,42 @@ GoFr provides its user with additional configurational options while registering
 
 - **APIKeyConfig** - This option allows the user to set the `API-Key` Based authentication as the default auth for downstream HTTP Service.
 - **BasicAuthConfig** - This option allows the user to set basic auth (username and password) as the default auth for downstream HTTP Service.
+
+**Important:** The password must be base64 encoded in your configuration/environment variables. GoFr will decode it internally before creating the Authorization header.
+
+
+**Example:**
+```bash
+# Generate base64 encoded password
+echo -n "your-password" | base64
+# Output: eW91ci1wYXNzd29yZA==
+```
+
 - **OAuthConfig** - This option allows user to add `OAuth` as default auth for downstream HTTP Service.
 - **CircuitBreakerConfig** - This option allows the user to configure the GoFr Circuit Breaker's `threshold` and `interval` for the failing downstream HTTP Service calls. If the failing calls exceeds the threshold the circuit breaker will automatically be enabled.
 - **DefaultHeaders** - This option allows user to set some default headers that will be propagated to the downstream HTTP Service every time it is being called.
 - **HealthConfig** - This option allows user to add the `HealthEndpoint` along with `Timeout` to enable and perform the timely health checks for downstream HTTP Service.
 - **RetryConfig** - This option allows user to add the maximum number of retry count if before returning error if any downstream HTTP Service fails.
+- **RateLimiterConfig** -  This option allows user to configure rate limiting for downstream service calls using token bucket algorithm. It controls the request rate to prevent overwhelming dependent services and supports both in-memory and Redis-based implementations.
+
+**Rate Limiter Store: Customization**
+GoFr allows you to use a custom rate limiter store by implementing the RateLimiterStore interface.This enables integration with any backend (e.g., Redis, database, or custom logic)
+
+**Interface:**
+
+```go
+type RateLimiterStore interface {
+Allow(ctx context.Context, key string, config RateLimiterConfig) (allowed bool, retryAfter time.Duration, err error)
+StartCleanup(ctx context.Context)
+StopCleanup()
+}
+```
 
 #### Usage:
 
 ```go
+rc := redis.NewClient(a.Config, a.Logger(), a.Metrics())
+
 a.AddHTTPService("cat-facts", "https://catfact.ninja",
 	// ConnectionPoolConfig must be applied FIRST
 	&service.ConnectionPoolConfig{
@@ -134,5 +161,17 @@ a.AddHTTPService("cat-facts", "https://catfact.ninja",
   &service.RetryConfig{
       MaxRetries: 5
   },
+  
+  &service.RateLimiterConfig{
+	  Requests: 5,
+	  Window:   time.Minute,
+      Burst:     10,
+	  Store:    service.NewRedisRateLimiterStore(rc)}, // Skip this field to use in-memory store
+    },
 )
 ```
+
+**Best Practices:**
+- For distributed systems: It is strongly recommended to use Redis-based store (`NewRedisRateLimiterStore`) to ensure consistent rate limiting across multiple instances of your application.
+- For single-instance applications: The default in-memory store (`NewLocalRateLimiterStore`) is sufficient and provides better performance.
+- Rate configuration: Set Burst higher than Requests to allow short traffic bursts while maintaining average rate limits.

@@ -8,7 +8,7 @@ Supported data sources:
   - Key-value storages (Redis, BadgerDB)
   - Pub/Sub systems (Azure Event Hub, Google as backend, Kafka, MQTT)
   - Search engines (Solr)
-  - File systems (FTP, SFTP, S3)
+  - File systems (FTP, SFTP, S3, GCS, Azure File Storage)
 */
 package container
 
@@ -265,12 +265,12 @@ func (c *Container) registerFrameworkMetrics() {
 	}
 
 	{ // Redis metrics
-		redisBuckets := []float64{.05, .075, .1, .125, .15, .2, .3, .5, .75, 1, 1.25, 1.5, 2, 2.5, 3}
+		redisBuckets := getDefaultDatasourceBuckets()
 		c.Metrics().NewHistogram("app_redis_stats", "Response time of Redis commands in milliseconds.", redisBuckets...)
 	}
 
 	{ // SQL metrics
-		sqlBuckets := []float64{.05, .075, .1, .125, .15, .2, .3, .5, .75, 1, 2, 3, 4, 5, 7.5, 10}
+		sqlBuckets := getDefaultDatasourceBuckets()
 		c.Metrics().NewHistogram("app_sql_stats", "Response time of SQL queries in milliseconds.", sqlBuckets...)
 		c.Metrics().NewGauge("app_sql_open_connections", "Number of open SQL connections.")
 		c.Metrics().NewGauge("app_sql_inUse_connections", "Number of inUse SQL connections.")
@@ -331,4 +331,14 @@ func (c *Container) AddConnection(connID string, conn *websocket.Connection) {
 // RemoveConnection removes a WebSocket connection from the Manager.
 func (c *Container) RemoveConnection(connID string) {
 	c.WSManager.CloseConnection(connID)
+}
+
+// getDefaultDatasourceBuckets returns the standard histogram buckets for all datasource operations in milliseconds.
+// Covers 0-30s range to align with typical request timeout boundaries and provide consistent observability
+// across SQL, Redis, MongoDB, Cassandra, and other datasources.
+func getDefaultDatasourceBuckets() []float64 {
+	return []float64{
+		.05, .075, .1, .125, .15, .2, .3, .5, .75, 1, 2, 3, 5, 7.5, 10, // 0-10ms: fast operations
+		25, 50, 100, 250, 500, 1000, 5000, 10000, 30000, // 10ms-30s: slower operations
+	}
 }
