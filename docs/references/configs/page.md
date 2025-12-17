@@ -377,7 +377,7 @@ This document lists all the configuration options supported by the GoFr framewor
 
 - REDIS_PUBSUB_MODE
 - Operation mode: `pubsub` or `streams`.
-- pubsub
+- streams
 
 ---
 
@@ -404,6 +404,8 @@ This document lists all the configuration options supported by the GoFr framewor
 -  0 (unlimited)
 
 {% /table %}
+
+> If `REDIS_PUBSUB_MODE` is set to anything other than `streams` or `pubsub`, it falls back to `streams`.
 
 ### Pub/Sub
 

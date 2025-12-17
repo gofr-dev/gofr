@@ -157,3 +157,14 @@ func TestGetRedisConfig_PubSubStreams_InvalidValues(t *testing.T) {
 	assert.Equal(t, int64(0), conf.PubSubStreamsConfig.MaxLen)
 	assert.Equal(t, 5*time.Second, conf.PubSubStreamsConfig.Block)
 }
+
+func TestGetRedisConfig_PubSubMode_InvalidFallsBackToStreams(t *testing.T) {
+	conf := testGetRedisConfig(t, map[string]string{
+		"PUBSUB_BACKEND":    "REDIS",
+		"REDIS_HOST":        "localhost",
+		"REDIS_PUBSUB_MODE": "invalid-mode",
+	})
+
+	assert.Equal(t, "streams", conf.PubSubMode)
+	require.NotNil(t, conf.PubSubStreamsConfig)
+}

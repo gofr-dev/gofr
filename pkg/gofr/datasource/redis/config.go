@@ -17,6 +17,7 @@ import (
 
 const (
 	defaultRedisPort        = 6379
+	modePubSub              = "pubsub"
 	modeStreams             = "streams"
 	defaultPubSubBufferSize = 100
 	defaultPubSubQueryLimit = 10
@@ -111,8 +112,12 @@ func parsePubSubConfig(c config.Config, redisConfig *Config) {
 
 // parsePubSubMode parses the PubSub mode configuration.
 func parsePubSubMode(c config.Config, redisConfig *Config) {
-	mode := c.Get("REDIS_PUBSUB_MODE")
+	mode := strings.ToLower(c.Get("REDIS_PUBSUB_MODE"))
 	if mode == "" {
+		mode = modeStreams
+	}
+
+	if mode != modeStreams && mode != modePubSub {
 		mode = modeStreams
 	}
 
