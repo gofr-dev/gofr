@@ -88,6 +88,13 @@ func Customer(ctx *gofr.Context) (any, error) {
 
 GoFr provides its user with additional configurational options while registering HTTP service for communication. These are:
 
+- **ConnectionPoolConfig** - This option allows the user to configure HTTP connection pool settings to optimize performance for high-frequency requests. The default Go HTTP client has `MaxIdleConnsPerHost: 2`, which is often insufficient for microservices making frequent requests to the same host. This configuration allows customizing:
+  - `MaxIdleConns`: Maximum idle connections across all hosts (default: 100)
+  - `MaxIdleConnsPerHost`: Maximum idle connections per host (critical for performance, default Go value: 2)
+  - `IdleConnTimeout`: How long to keep idle connections alive (default: 90 seconds)
+  
+  **Important**: `ConnectionPoolConfig` must be applied **first** when using multiple options, as it needs access to the underlying HTTP client transport.
+
 - **APIKeyConfig** - This option allows the user to set the `API-Key` Based authentication as the default auth for downstream HTTP Service.
 - **BasicAuthConfig** - This option allows the user to set basic auth (username and password) as the default auth for downstream HTTP Service.
 - **OAuthConfig** - This option allows user to add `OAuth` as default auth for downstream HTTP Service.
@@ -100,6 +107,14 @@ GoFr provides its user with additional configurational options while registering
 
 ```go
 a.AddHTTPService("cat-facts", "https://catfact.ninja",
+	// ConnectionPoolConfig must be applied FIRST
+	&service.ConnectionPoolConfig{
+		MaxIdleConns:        100,              // Maximum idle connections across all hosts
+		MaxIdleConnsPerHost: 20,               // Maximum idle connections per host (increased from default 2)
+		IdleConnTimeout:     90 * time.Second, // Keep connections alive for 90 seconds
+	},
+	
+	// Other options can follow in any order
 	service.NewAPIKeyConfig("some-random-key"),
 	service.NewBasicAuthConfig("username", "password"),
 	
