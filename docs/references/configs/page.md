@@ -556,6 +556,24 @@ This document lists all the configuration options supported by the GoFr framewor
 
 ---
 
+-  REDIS_PUBSUB_BUFFER_SIZE
+-  Message channel buffer size for Redis Pub/Sub (channels/streams)
+-  100
+
+---
+
+-  REDIS_PUBSUB_QUERY_TIMEOUT
+-  Default timeout for Redis Pub/Sub Query operations
+-  5s
+
+---
+
+-  REDIS_PUBSUB_QUERY_LIMIT
+-  Default message limit for Redis Pub/Sub Query operations
+-  10
+
+---
+
 -  REDIS_ADDR
 -  Redis server address (host:port)
 -  localhost:6379

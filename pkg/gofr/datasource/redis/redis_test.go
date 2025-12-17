@@ -129,6 +129,36 @@ func TestRedis_PipelineQueryLogging(t *testing.T) {
 	assert.Contains(t, result, "set key1 value1 ex 60: OK")
 }
 
+func Test_redactHostname(t *testing.T) {
+	testCases := []struct {
+		name     string
+		input    string
+		expected string
+	}{
+		{
+			name:     "plain hostname unchanged",
+			input:    "localhost",
+			expected: "localhost",
+		},
+		{
+			name:     "uri without credentials unchanged",
+			input:    "redis://localhost:6379",
+			expected: "redis://localhost:6379",
+		},
+		{
+			name:     "uri with credentials redacted",
+			input:    "redis://user:pass@localhost:6379",
+			expected: "redis://[REDACTED]@localhost:6379",
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			assert.Equal(t, tc.expected, redactHostname(tc.input))
+		})
+	}
+}
+
 func TestRedis_Close(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()

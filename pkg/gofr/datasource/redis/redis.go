@@ -150,9 +150,9 @@ func NewClient(c config.Config, logger datasource.Logger, metrics Metrics) *Redi
 			logger.Errorf("could not add tracing instrumentation, error: %s", err)
 		}
 
-		logger.Infof("connected to redis at %s:%d on database %d", redisConfig.HostName, redisConfig.Port, redisConfig.DB)
+		logger.Infof("connected to redis at %s:%d on database %d", redactHostname(redisConfig.HostName), redisConfig.Port, redisConfig.DB)
 	} else {
-		logger.Errorf("could not connect to redis at '%s:%d' , error: %s", redisConfig.HostName, redisConfig.Port, err)
+		logger.Errorf("could not connect to redis at '%s:%d' , error: %s", redactHostname(redisConfig.HostName), redisConfig.Port, err)
 
 		go retryConnect(rc, redisConfig, logger)
 	}
@@ -252,9 +252,9 @@ func NewPubSub(conf config.Config, logger datasource.Logger, metrics Metrics) pu
 			logger.Errorf("could not add tracing instrumentation, error: %s", err)
 		}
 
-		logger.Infof("connected to redis at %s:%d on database %d", redisConfig.HostName, redisConfig.Port, redisConfig.DB)
+		logger.Infof("connected to redis at %s:%d on database %d", redactHostname(redisConfig.HostName), redisConfig.Port, redisConfig.DB)
 	} else {
-		logger.Errorf("could not connect to redis at '%s:%d' , error: %s", redisConfig.HostName, redisConfig.Port, err)
+		logger.Errorf("could not connect to redis at '%s:%d' , error: %s", redactHostname(redisConfig.HostName), redisConfig.Port, err)
 
 		go retryConnect(rc, redisConfig, logger)
 	}
@@ -291,6 +291,22 @@ func newPubSub(parent *Redis, client *redis.Client) *PubSub {
 	go ps.monitorConnection(ps.ctx)
 
 	return ps
+}
+
+// redactHostname redacts any credentials from a Redis hostname that may be in URI format.
+// If the hostname is a URI like redis://user:pass@host:port, credentials are replaced with [REDACTED].
+// Plain hostnames are returned unchanged.
+func redactHostname(hostname string) string {
+	if idx := strings.Index(hostname, "://"); idx != -1 {
+		scheme := hostname[:idx]
+		rest := hostname[idx+3:]
+
+		if atIdx := strings.Index(rest, "@"); atIdx != -1 {
+			return scheme + "://[REDACTED]@" + rest[atIdx+1:]
+		}
+	}
+
+	return hostname
 }
 
 // gofrRedisLogger implements redis.Logger interface to redirect go-redis logs to Gofr logger.
