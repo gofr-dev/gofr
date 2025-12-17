@@ -525,6 +525,84 @@ docker run -d \
 	redis:7-alpine redis-server --requirepass mypassword
 ```
 
+#### Configs
+{% table %}
+- Name
+- Description
+- Default
+- Example
+
+---
+
+- `REDIS_HOST`
+- Redis host
+- -
+- `localhost`
+
+---
+
+- `REDIS_PORT`
+- Redis port
+- `6379`
+- `6379`
+
+---
+
+- `REDIS_PUBSUB_MODE`
+- Pub/Sub mode: `streams` (default, at-least-once) or `pubsub` (at-most-once)
+- `streams`
+- `pubsub`
+
+---
+
+- `REDIS_STREAMS_CONSUMER_GROUP`
+- Consumer group (required in streams mode)
+- -
+- `mygroup`
+
+---
+
+- `REDIS_STREAMS_CONSUMER_NAME`
+- Consumer name (optional; auto-generated if empty)
+- -
+- `consumer-1`
+
+---
+
+- `REDIS_STREAMS_MAXLEN`
+- Max stream length (approximate) for trimming
+- `0` (unlimited)
+- `10000`
+
+---
+
+- `REDIS_STREAMS_BLOCK_TIMEOUT`
+- Block duration for stream reads
+- `5s`
+- `2s`
+
+---
+
+- `REDIS_PUBSUB_BUFFER_SIZE`
+- Channel/stream message buffer size
+- `100`
+- `1000`
+
+---
+
+- `REDIS_PUBSUB_QUERY_TIMEOUT`
+- Default timeout for `Query` operations
+- `5s`
+- `30s`
+
+---
+
+- `REDIS_PUBSUB_QUERY_LIMIT`
+- Default message limit for `Query` operations
+- `10`
+- `50`
+{% /table %}
+
 For Redis with TLS:
 
 ```shell
