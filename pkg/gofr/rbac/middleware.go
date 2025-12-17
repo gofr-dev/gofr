@@ -18,6 +18,8 @@ type authMethod int
 
 const userRole authMethod = 4
 
+const unknownRouteLabel = "<unmatched>"
+
 var (
 	// ErrAccessDenied is returned when a user doesn't have required role/permission.
 	ErrAccessDenied = errors.New("forbidden: access denied")
@@ -65,8 +67,15 @@ func Middleware(config *Config) func(handler http.Handler) http.Handler {
 				return
 			}
 
-			route := r.URL.Path
-			r = startTracing(r, config, route)
+			// Check if endpoint is public using unified Endpoints config
+			endpoint, isPublic := getEndpointForRequest(r, config)
+
+			routeLabel := unknownRouteLabel
+			if endpoint != nil && endpoint.Path != "" {
+				routeLabel = endpoint.Path
+			}
+
+			r = startTracing(r, config, routeLabel)
 
 			// End span at the end of the middleware function (covers all code paths)
 			// If tracing was started, the span will be in the context
@@ -77,8 +86,6 @@ func Middleware(config *Config) func(handler http.Handler) http.Handler {
 				}
 			}
 
-			// Check if endpoint is public using unified Endpoints config
-			endpoint, isPublic := getEndpointForRequest(r, config)
 			if isPublic {
 				handler.ServeHTTP(w, r)
 
@@ -88,7 +95,7 @@ func Middleware(config *Config) func(handler http.Handler) http.Handler {
 			// If no endpoint match found, deny by default (fail secure)
 			if endpoint == nil {
 				recordMetrics(config, r, "denied", "endpoint_not_found", "")
-				handleAuthError(w, r, config, "", route, ErrAccessDenied)
+				handleAuthError(w, r, config, "", routeLabel, ErrAccessDenied)
 
 				return
 			}
@@ -97,7 +104,7 @@ func Middleware(config *Config) func(handler http.Handler) http.Handler {
 			role, err := extractRole(r, config)
 			if err != nil {
 				recordRoleExtractionFailure(config, r)
-				handleAuthError(w, r, config, "", route, err)
+				handleAuthError(w, r, config, "", routeLabel, err)
 
 				return
 			}
@@ -109,14 +116,14 @@ func Middleware(config *Config) func(handler http.Handler) http.Handler {
 			authorized, authReason := checkEndpointAuthorization(role, endpoint, config)
 			if !authorized {
 				recordMetrics(config, r, "denied", "", role)
-				handleAuthError(w, r, config, role, route, ErrAccessDenied)
+				handleAuthError(w, r, config, role, routeLabel, ErrAccessDenied)
 
 				return
 			}
 
 			recordMetrics(config, r, "allowed", "", role)
 			updateSpanWithAuthStatus(config, r)
-			logAuditEventIfEnabled(config, r, role, route, authReason)
+			logAuditEventIfEnabled(config, r, role, routeLabel, authReason)
 
 			// Store role in context and continue
 			ctx := context.WithValue(r.Context(), userRole, role)
@@ -127,7 +134,8 @@ func Middleware(config *Config) func(handler http.Handler) http.Handler {
 
 // startTracing starts tracing for the request if tracer is available.
 // The span is stored in the context and should be ended at the end of the middleware function.
-func startTracing(r *http.Request, config *Config, route string) *http.Request {
+// Route label should be parameterized/static to avoid sensitive data in span attributes.
+func startTracing(r *http.Request, config *Config, routeLabel string) *http.Request {
 	if config.Tracer == nil {
 		return r
 	}
@@ -136,7 +144,7 @@ func startTracing(r *http.Request, config *Config, route string) *http.Request {
 
 	span.SetAttributes(
 		attribute.String("http.method", r.Method),
-		attribute.String("http.route", route),
+		attribute.String("http.route", routeLabel),
 	)
 
 	return r.WithContext(ctx)
@@ -410,6 +418,6 @@ func logAuditEvent(logger Logger, r *http.Request, role, route string, allowed b
 		status = "allowed"
 	}
 
-	logger.Infof("[RBAC Audit] %s %s - Role: %s - Route: %s - %s - Reason: %s",
-		r.Method, r.URL.Path, role, route, status, reason)
+	logger.Infof("[RBAC Audit] %s - Role: %s - Route: %s - %s - Reason: %s",
+		r.Method, role, route, status, reason)
 }
