@@ -47,7 +47,9 @@ type Logger interface {
 }
 
 type Metrics interface {
+	NewCounter(name, desc string)
 	NewHistogram(name, desc string, buckets ...float64)
 
+	IncrementCounter(ctx context.Context, name string, labels ...string)
 	RecordHistogram(ctx context.Context, name string, value float64, labels ...string)
 }

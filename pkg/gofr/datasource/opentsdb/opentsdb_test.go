@@ -25,6 +25,42 @@ var (
 	errRequestFailed = errors.New("request failed")
 )
 
+func TestUseMetricsRegistersMetrics(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	client := New(Config{Host: "localhost:4242"})
+
+	mockMetrics := NewMockMetrics(ctrl)
+	mockMetrics.EXPECT().NewHistogram(opentsdbOperationDurationName, gomock.Any(), gomock.Any()).Times(1)
+	mockMetrics.EXPECT().NewCounter(opentsdbOperationTotalName, gomock.Any()).Times(1)
+	mockMetrics.EXPECT().RecordHistogram(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
+	mockMetrics.EXPECT().IncrementCounter(gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
+
+	mockLogger := NewMockLogger(ctrl)
+	mockLogger.EXPECT().Debug(gomock.Any()).AnyTimes()
+	mockLogger.EXPECT().Debugf(gomock.Any(), gomock.Any()).AnyTimes()
+	mockLogger.EXPECT().Errorf(gomock.Any(), gomock.Any()).AnyTimes()
+	mockLogger.EXPECT().Logf(gomock.Any(), gomock.Any()).AnyTimes()
+
+	client.UseLogger(mockLogger)
+	client.UseMetrics(mockMetrics)
+	client.Connect()
+}
+
+func TestSendOperationStatsEmitsMetrics(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	mockMetrics := NewMockMetrics(ctrl)
+	mockLogger := NewMockLogger(ctrl)
+
+	mockLogger.EXPECT().Debug(gomock.Any()).Times(1)
+	mockMetrics.EXPECT().RecordHistogram(gomock.Any(), opentsdbOperationDurationName, gomock.Any(), gomock.Any()).Times(1)
+	mockMetrics.EXPECT().IncrementCounter(gomock.Any(), opentsdbOperationTotalName, gomock.Any()).Times(1)
+
+	status := statusSuccess
+	message := "ok"
+
+	sendOperationStats(context.Background(), mockLogger, mockMetrics, "localhost:4242", time.Now(), "Query", &status, &message, nil)
+}
+
 func TestSendRequestSuccess(t *testing.T) {
 	client, mockHTTP := setOpenTSDBTest(t)
 
