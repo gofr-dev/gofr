@@ -15,6 +15,7 @@ package container
 import (
 	"context"
 	"errors"
+	"fmt"
 	"strconv"
 	"strings"
 	"time"
@@ -139,48 +140,149 @@ func (c *Container) Create(conf config.Config) {
 func (c *Container) createPubSub(conf config.Config) {
 	switch strings.ToUpper(conf.Get("PUBSUB_BACKEND")) {
 	case "KAFKA":
-		if conf.Get("PUBSUB_BROKER") != "" {
-			partition, _ := strconv.Atoi(conf.GetOrDefault("PARTITION_SIZE", "0"))
-			offSet, _ := strconv.Atoi(conf.GetOrDefault("PUBSUB_OFFSET", "-1"))
-			batchSize, _ := strconv.Atoi(conf.GetOrDefault("KAFKA_BATCH_SIZE", strconv.Itoa(kafka.DefaultBatchSize)))
-			batchBytes, _ := strconv.Atoi(conf.GetOrDefault("KAFKA_BATCH_BYTES", strconv.Itoa(kafka.DefaultBatchBytes)))
-			batchTimeout, _ := strconv.Atoi(conf.GetOrDefault("KAFKA_BATCH_TIMEOUT", strconv.Itoa(kafka.DefaultBatchTimeout)))
-
-			tlsConf := kafka.TLSConfig{
-				CertFile:           conf.Get("KAFKA_TLS_CERT_FILE"),
-				KeyFile:            conf.Get("KAFKA_TLS_KEY_FILE"),
-				CACertFile:         conf.Get("KAFKA_TLS_CA_CERT_FILE"),
-				InsecureSkipVerify: conf.Get("KAFKA_TLS_INSECURE_SKIP_VERIFY") == "true",
-			}
-
-			pubsubBrokers := strings.Split(conf.Get("PUBSUB_BROKER"), ",")
-
-			c.PubSub = kafka.New(&kafka.Config{
-				Brokers:          pubsubBrokers,
-				Partition:        partition,
-				ConsumerGroupID:  conf.Get("CONSUMER_ID"),
-				OffSet:           offSet,
-				BatchSize:        batchSize,
-				BatchBytes:       batchBytes,
-				BatchTimeout:     batchTimeout,
-				SecurityProtocol: conf.Get("KAFKA_SECURITY_PROTOCOL"),
-				SASLMechanism:    conf.Get("KAFKA_SASL_MECHANISM"),
-				SASLUser:         conf.Get("KAFKA_SASL_USERNAME"),
-				SASLPassword:     conf.Get("KAFKA_SASL_PASSWORD"),
-				TLS:              tlsConf,
-			}, c.Logger, c.metricsManager)
-		}
+		c.createKafkaPubSub(conf)
 	case "GOOGLE":
-		c.PubSub = google.New(google.Config{
-			ProjectID:        conf.Get("GOOGLE_PROJECT_ID"),
-			SubscriptionName: conf.Get("GOOGLE_SUBSCRIPTION_NAME"),
-		}, c.Logger, c.metricsManager)
+		c.createGooglePubSub(conf)
 	case "MQTT":
 		c.PubSub = c.createMqttPubSub(conf)
 	case "REDIS":
-		// Redis PubSub is initialized via NewPubSub constructor, aligning with other PubSub implementations
-		c.PubSub = redis.NewPubSub(conf, c.Logger, c.metricsManager)
+		c.createRedisPubSub(conf)
 	}
+}
+
+func (c *Container) createKafkaPubSub(conf config.Config) {
+	if conf.Get("PUBSUB_BROKER") == "" {
+		return
+	}
+
+	partition, _ := strconv.Atoi(conf.GetOrDefault("PARTITION_SIZE", "0"))
+	offSet, _ := strconv.Atoi(conf.GetOrDefault("PUBSUB_OFFSET", "-1"))
+	batchSize, _ := strconv.Atoi(conf.GetOrDefault("KAFKA_BATCH_SIZE", strconv.Itoa(kafka.DefaultBatchSize)))
+	batchBytes, _ := strconv.Atoi(conf.GetOrDefault("KAFKA_BATCH_BYTES", strconv.Itoa(kafka.DefaultBatchBytes)))
+	batchTimeout, _ := strconv.Atoi(conf.GetOrDefault("KAFKA_BATCH_TIMEOUT", strconv.Itoa(kafka.DefaultBatchTimeout)))
+
+	tlsConf := kafka.TLSConfig{
+		CertFile:           conf.Get("KAFKA_TLS_CERT_FILE"),
+		KeyFile:            conf.Get("KAFKA_TLS_KEY_FILE"),
+		CACertFile:         conf.Get("KAFKA_TLS_CA_CERT_FILE"),
+		InsecureSkipVerify: conf.Get("KAFKA_TLS_INSECURE_SKIP_VERIFY") == "true",
+	}
+
+	pubsubBrokers := strings.Split(conf.Get("PUBSUB_BROKER"), ",")
+
+	c.PubSub = kafka.New(&kafka.Config{
+		Brokers:          pubsubBrokers,
+		Partition:        partition,
+		ConsumerGroupID:  conf.Get("CONSUMER_ID"),
+		OffSet:           offSet,
+		BatchSize:        batchSize,
+		BatchBytes:       batchBytes,
+		BatchTimeout:     batchTimeout,
+		SecurityProtocol: conf.Get("KAFKA_SECURITY_PROTOCOL"),
+		SASLMechanism:    conf.Get("KAFKA_SASL_MECHANISM"),
+		SASLUser:         conf.Get("KAFKA_SASL_USERNAME"),
+		SASLPassword:     conf.Get("KAFKA_SASL_PASSWORD"),
+		TLS:              tlsConf,
+	}, c.Logger, c.metricsManager)
+}
+
+func (c *Container) createGooglePubSub(conf config.Config) {
+	c.PubSub = google.New(google.Config{
+		ProjectID:        conf.Get("GOOGLE_PROJECT_ID"),
+		SubscriptionName: conf.Get("GOOGLE_SUBSCRIPTION_NAME"),
+	}, c.Logger, c.metricsManager)
+}
+
+func (c *Container) createRedisPubSub(conf config.Config) {
+	c.warnRedisPubSubSharedDB(conf)
+
+	// Redis PubSub is initialized via NewPubSub constructor, aligning with other PubSub implementations
+	c.PubSub = redis.NewPubSub(conf, c.Logger, c.metricsManager)
+}
+
+const (
+	redisPubSubModeStreams = "streams"
+	redisPubSubModePubSub  = "pubsub"
+)
+
+func (c *Container) warnRedisPubSubSharedDB(conf config.Config) {
+	// Warn (do not fail) when Redis PubSub (streams mode) is configured to use the same Redis logical DB
+	// as the primary Redis datasource. This can cause GoFr migrations to fail due to a key-type collision:
+	// - Redis migrations use a HASH key named `gofr_migrations`
+	// - Redis Streams mode uses STREAM keys for topics (including PubSub migrations topic `gofr_migrations`)
+	//
+	// Setting REDIS_PUBSUB_DB to a different DB avoids the collision.
+	if isNil(c.Redis) {
+		return
+	}
+
+	if redisPubSubEffectiveMode(conf) != redisPubSubModeStreams {
+		return
+	}
+
+	redisDBStr := conf.Get("REDIS_DB")
+	if redisDBStr == "" {
+		redisDBStr = "0"
+	}
+
+	redisDB, errRedis := strconv.Atoi(redisDBStr)
+	if errRedis != nil {
+		redisDB = 0
+	}
+
+	configuredPubSubDBStr := conf.Get("REDIS_PUBSUB_DB")
+
+	// If PubSub DB override is not set, PubSub will use REDIS_DB (same keyspace).
+	if configuredPubSubDBStr == "" {
+		c.Logger.Warnf(
+			"Redis PubSub Streams is using the same Redis DB as Redis datasource (REDIS_DB=%d, REDIS_PUBSUB_DB=%s). "+
+				"If you use GoFr migrations with Redis, this can fail due to `gofr_migrations` key-type collision (HASH vs STREAM). "+
+				"Set REDIS_PUBSUB_DB to a different DB (e.g., %s).",
+			redisDB,
+			configuredPubSubDBStr,
+			fmt.Sprintf("%d", redisDB+1),
+		)
+
+		return
+	}
+
+	pubsubDB, errPubSub := strconv.Atoi(configuredPubSubDBStr)
+	if errPubSub != nil {
+		// Invalid PubSub DB override is ignored by redis.NewPubSub, so it falls back to REDIS_DB (same keyspace).
+		c.Logger.Warnf(
+			"REDIS_PUBSUB_DB=%q is invalid. Redis PubSub Streams will fall back to REDIS_DB=%d. "+
+				"If you use GoFr migrations with Redis, this can fail due to `gofr_migrations` key-type collision (HASH vs STREAM). "+
+				"Set REDIS_PUBSUB_DB to a valid, different DB (e.g., %s).",
+			configuredPubSubDBStr,
+			redisDB,
+			fmt.Sprintf("%d", redisDB+1),
+		)
+
+		return
+	}
+
+	if redisDB != pubsubDB {
+		return
+	}
+
+	c.Logger.Warnf(
+		"Redis PubSub Streams is using the same Redis DB as Redis datasource (REDIS_DB=%d, REDIS_PUBSUB_DB=%s). "+
+			"If you use GoFr migrations with Redis, this can fail due to `gofr_migrations` key-type collision (HASH vs STREAM). "+
+			"Set REDIS_PUBSUB_DB to a different DB (e.g., %s).",
+		redisDB,
+		configuredPubSubDBStr,
+		fmt.Sprintf("%d", redisDB+1),
+	)
+}
+
+func redisPubSubEffectiveMode(conf config.Config) string {
+	mode := strings.ToLower(conf.Get("REDIS_PUBSUB_MODE"))
+	if mode == redisPubSubModePubSub {
+		return redisPubSubModePubSub
+	}
+
+	// Default and fallback is streams.
+	return redisPubSubModeStreams
 }
 
 func (c *Container) Close() error {
