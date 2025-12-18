@@ -4,7 +4,6 @@ import (
 	"context"
 	"crypto/tls"
 	"errors"
-	"fmt"
 	"strconv"
 	"strings"
 	"sync"
@@ -27,11 +26,6 @@ const (
 	defaultRetryTimeout  = 10 * time.Second
 	unsubscribeOpTimeout = 2 * time.Second
 	goroutineWaitTimeout = 5 * time.Second
-)
-
-var (
-	// redisLogFilterOnce ensures we only set up the logger once.
-	redisLogFilterOnce sync.Once //nolint:gochecknoglobals // This is a package-level singleton for logger setup
 )
 
 var (
@@ -136,7 +130,7 @@ func NewClient(c config.Config, logger datasource.Logger, metrics Metrics) *Redi
 
 	// Redirect go-redis internal logs to Gofr logger for consistent formatting
 	// go-redis v9 supports SetLogger to customize logging
-	redisLogFilterOnce.Do(func() {
+	redisInternalLoggerOnce.Do(func() {
 		redis.SetLogger(&gofrRedisLogger{logger: logger})
 	})
 
@@ -151,9 +145,9 @@ func NewClient(c config.Config, logger datasource.Logger, metrics Metrics) *Redi
 			logger.Errorf("could not add tracing instrumentation, error: %s", err)
 		}
 
-		logger.Infof("connected to redis at %s:%d on database %d", redactHostname(redisConfig.HostName), redisConfig.Port, redisConfig.DB)
+		logger.Infof("connected to redis at %s:%d on database %d", redactRedisHostname(redisConfig.HostName), redisConfig.Port, redisConfig.DB)
 	} else {
-		logger.Errorf("could not connect to redis at '%s:%d' , error: %s", redactHostname(redisConfig.HostName), redisConfig.Port, err)
+		logger.Errorf("could not connect to redis at '%s:%d' , error: %s", redactRedisHostname(redisConfig.HostName), redisConfig.Port, err)
 
 		go retryConnect(rc, redisConfig, logger)
 	}
@@ -252,7 +246,7 @@ func NewPubSub(conf config.Config, logger datasource.Logger, metrics Metrics) pu
 	}
 
 	// Redirect go-redis internal logs to Gofr logger for consistent formatting
-	redisLogFilterOnce.Do(func() {
+	redisInternalLoggerOnce.Do(func() {
 		redis.SetLogger(&gofrRedisLogger{logger: logger})
 	})
 
@@ -267,9 +261,9 @@ func NewPubSub(conf config.Config, logger datasource.Logger, metrics Metrics) pu
 			logger.Errorf("could not add tracing instrumentation, error: %s", err)
 		}
 
-		logger.Infof("connected to redis at %s:%d on database %d", redactHostname(redisConfig.HostName), redisConfig.Port, redisConfig.DB)
+		logger.Infof("connected to redis at %s:%d on database %d", redactRedisHostname(redisConfig.HostName), redisConfig.Port, redisConfig.DB)
 	} else {
-		logger.Errorf("could not connect to redis at '%s:%d' , error: %s", redactHostname(redisConfig.HostName), redisConfig.Port, err)
+		logger.Errorf("could not connect to redis at '%s:%d' , error: %s", redactRedisHostname(redisConfig.HostName), redisConfig.Port, err)
 
 		go retryConnect(rc, redisConfig, logger)
 	}
@@ -306,39 +300,6 @@ func newPubSub(parent *Redis, client *redis.Client) *PubSub {
 	go ps.monitorConnection(ps.ctx)
 
 	return ps
-}
-
-// redactHostname redacts any credentials from a Redis hostname that may be in URI format.
-// If the hostname is a URI like redis://user:pass@host:port, credentials are replaced with [REDACTED].
-// Plain hostnames are returned unchanged.
-func redactHostname(hostname string) string {
-	if idx := strings.Index(hostname, "://"); idx != -1 {
-		scheme := hostname[:idx]
-		rest := hostname[idx+3:]
-
-		if atIdx := strings.Index(rest, "@"); atIdx != -1 {
-			return scheme + "://[REDACTED]@" + rest[atIdx+1:]
-		}
-	}
-
-	return hostname
-}
-
-// gofrRedisLogger implements redis.Logger interface to redirect go-redis logs to Gofr logger.
-type gofrRedisLogger struct {
-	logger datasource.Logger
-}
-
-// Printf implements redis.Logger interface.
-func (l *gofrRedisLogger) Printf(_ context.Context, format string, v ...any) {
-	if l.logger != nil {
-		// Format the message
-		msg := fmt.Sprintf(format, v...)
-		// Log through Gofr logger as DEBUG level
-		// Connection pool retry attempts are logged here, while actual connection failures
-		// are already logged by Gofr at ERROR level in NewClient/retryConnect
-		l.logger.Debugf("%s", msg)
-	}
 }
 
 // TODO - if we make Redis an interface and expose from container we can avoid c.Redis(c, command) using methods on c and still pass c.

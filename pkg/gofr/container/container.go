@@ -360,7 +360,7 @@ func (c *Container) createGooglePubSub(conf config.Config) {
 }
 
 func (c *Container) createRedisPubSub(conf config.Config) {
-	c.warnRedisPubSubSharedDB(conf)
+	c.warnIfRedisPubSubSharesRedisDB(conf)
 
 	// Redis PubSub is initialized via NewPubSub constructor, aligning with other PubSub implementations.
 	c.PubSub = redis.NewPubSub(conf, c.Logger, c.metricsManager)
@@ -371,10 +371,10 @@ const (
 	redisPubSubModePubSub  = "pubsub"
 )
 
-func (c *Container) warnRedisPubSubSharedDB(conf config.Config) {
+func (c *Container) warnIfRedisPubSubSharesRedisDB(conf config.Config) {
 	// Warn (do not fail): if Redis PubSub (streams mode) shares the same Redis logical DB as the primary Redis datasource,
 	// GoFr migrations can later fail due to `gofr_migrations` key-type collision (HASH vs STREAM).
-	if isNil(c.Redis) || redisPubSubEffectiveMode(conf) != redisPubSubModeStreams {
+	if isNil(c.Redis) || effectiveRedisPubSubMode(conf) != redisPubSubModeStreams {
 		return
 	}
 
@@ -416,7 +416,7 @@ func (c *Container) warnRedisPubSubSharedDB(conf config.Config) {
 	}
 }
 
-func redisPubSubEffectiveMode(conf config.Config) string {
+func effectiveRedisPubSubMode(conf config.Config) string {
 	mode := strings.ToLower(conf.Get("REDIS_PUBSUB_MODE"))
 	if mode == redisPubSubModePubSub {
 		return redisPubSubModePubSub

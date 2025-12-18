@@ -18,14 +18,12 @@ import (
 
 // PubSub message types for Committer interface.
 type pubSubMessage struct {
-	msg    *redis.Message
-	logger datasource.Logger
+	msg *redis.Message
 }
 
-func newPubSubMessage(msg *redis.Message, logger datasource.Logger) *pubSubMessage {
+func newPubSubMessage(msg *redis.Message) *pubSubMessage {
 	return &pubSubMessage{
-		msg:    msg,
-		logger: logger,
+		msg: msg,
 	}
 }
 
@@ -472,7 +470,7 @@ func (ps *PubSub) handleMessage(ctx context.Context, topic string, msg *redis.Me
 	m := pubsub.NewMessage(ctx)
 	m.Topic = topic
 	m.Value = []byte(msg.Payload)
-	m.Committer = newPubSubMessage(msg, ps.parent.logger)
+	m.Committer = newPubSubMessage(msg)
 
 	ps.dispatchMessage(ctx, topic, m)
 }
@@ -632,11 +630,11 @@ func (ps *PubSub) DeleteTopic(ctx context.Context, topic string) error {
 	}
 
 	// Unsubscribe from the topic (this will clean up all resources)
-	return ps.Unsubscribe(topic)
+	return ps.unsubscribe(topic)
 }
 
-// Unsubscribe unsubscribes from a Redis channel or stream.
-func (ps *PubSub) Unsubscribe(topic string) error {
+// unsubscribe unsubscribes from a Redis channel or stream.
+func (ps *PubSub) unsubscribe(topic string) error {
 	if ps == nil || ps.client == nil {
 		return errClientNotConnected
 	}
@@ -1081,26 +1079,5 @@ func (ps *PubSub) resubscribeAll() {
 
 	if len(ps.subStarted) > 0 {
 		ps.logInfo("Ensuring all subscriptions are active after reconnection")
-	}
-}
-
-// UseLogger sets the logger for the Redis PubSub client.
-func (ps *PubSub) UseLogger(logger any) {
-	if l, ok := logger.(datasource.Logger); ok && ps.parent != nil {
-		ps.parent.logger = l
-	}
-}
-
-// UseMetrics sets the metrics for the Redis PubSub client.
-func (ps *PubSub) UseMetrics(metrics any) {
-	if m, ok := metrics.(Metrics); ok && ps.parent != nil {
-		ps.parent.metrics = m
-	}
-}
-
-// UseTracer sets the tracer for the Redis PubSub client.
-func (ps *PubSub) UseTracer(tracer any) {
-	if t, ok := tracer.(trace.Tracer); ok {
-		ps.tracer = t
 	}
 }

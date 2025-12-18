@@ -129,7 +129,7 @@ func TestRedis_PipelineQueryLogging(t *testing.T) {
 	assert.Contains(t, result, "set key1 value1 ex 60: OK")
 }
 
-func Test_redactHostname(t *testing.T) {
+func Test_redactRedisHostname(t *testing.T) {
 	testCases := []struct {
 		name     string
 		input    string
@@ -154,7 +154,7 @@ func Test_redactHostname(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			assert.Equal(t, tc.expected, redactHostname(tc.input))
+			assert.Equal(t, tc.expected, redactRedisHostname(tc.input))
 		})
 	}
 }

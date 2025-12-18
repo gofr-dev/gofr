@@ -793,7 +793,7 @@ func TestPubSub_Unsubscribe(t *testing.T) {
 	time.Sleep(100 * time.Millisecond)
 
 	// Unsubscribe
-	err := client.PubSub.Unsubscribe(topic)
+	err := client.PubSub.unsubscribe(topic)
 	require.NoError(t, err)
 }
 

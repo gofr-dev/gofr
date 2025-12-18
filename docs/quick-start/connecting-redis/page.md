@@ -58,12 +58,9 @@ These variables are stored in a `.env` file located within the `configs` directo
 - Redis database number (default: `0`)
 
 ---
-
-- REDIS_PUBSUB_DB
-- Redis database number to use only for Redis Pub/Sub (when `PUBSUB_BACKEND=REDIS`). If you use GoFr migrations with Redis and Redis Pub/Sub Streams mode together, keep this different from `REDIS_DB` to avoid `WRONGTYPE` errors on the `gofr_migrations` key.
-
----
 {% /table %}
+
+> For Redis Pub/Sub configuration, see `gofr/docs/advanced-guide/using-publisher-subscriber/page.md` (Redis Pub/Sub section).
 
 ## TLS Support (Optional):
 

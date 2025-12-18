@@ -338,161 +338,12 @@ Redis Pub/Sub is a lightweight messaging system. GoFr supports two modes:
 1. **Streams Mode** (Default): Uses Redis Streams for persistent messaging with consumer groups and acknowledgments.
 2. **PubSub Mode**: Standard Redis Pub/Sub (fire-and-forget, no persistence).
 
-#### Configs
+#### Redis connection
 
-{% table %}
-- Name
-- Description
-- Required
-- Default
-- Example
-- Valid format
+Redis Pub/Sub uses the same Redis connection configuration as the Redis datasource (`REDIS_HOST`, `REDIS_PORT`, `REDIS_DB`, TLS, etc.).
+See the config reference: `https://gofr.dev/docs/references/configs#redis`.
 
----
-
-- `PUBSUB_BACKEND`
-- Using Redis Pub/Sub as message broker.
-- `+`
--
-- `REDIS`
-- Not empty string
-
----
-
-- `REDIS_PUBSUB_MODE`
-- Operation mode: `pubsub` or `streams`.
-- `-`
-- `streams`
-- `pubsub`
-- `pubsub`, `streams`
-
----
-
-- `REDIS_STREAMS_CONSUMER_GROUP`
-- Consumer group name (Required for streams mode).
-- `+` (if mode=streams)
--
-- `my-group`
-- String
-
----
-
-- `REDIS_STREAMS_CONSUMER_NAME`
-- Unique consumer name (Optional).
-- `-`
-- `hostname`
-- `my-consumer`
-- String
-
----
-
-- `REDIS_STREAMS_BLOCK_TIMEOUT`
-- Blocking duration for reading new messages.
-- `-`
-- `5s`
-- `2s`
-- Duration
-
----
-
-- `REDIS_STREAMS_MAXLEN`
-- Maximum length of the stream (approximate).
-- `-`
-- `0` (unlimited)
-- `1000`
-- Integer
-
----
-
-- `REDIS_HOST`
-- Hostname of the Redis server.
-- `+`
-- `localhost`
-- `redis.example.com`
-- String
-
----
-
-- `REDIS_PORT`
-- Port of the Redis server.
-- `-`
-- `6379`
-- `6380`
-- Integer
-
----
-
-- `REDIS_USER`
-- Username for Redis authentication (if required).
-- `-`
-- `""`
-- `myuser`
-- String
-
----
-
-- `REDIS_PASSWORD`
-- Password for Redis authentication (if required).
-- `-`
-- `""`
-- `mypassword`
-- String
-
----
-
-- `REDIS_DB`
-- Database number to use (0-15).
-- `-`
-- `0`
-- `1`
-- Integer (0-15)
-
----
-
-- `REDIS_PUBSUB_DB`
-- Redis database number to use **only for Redis Pub/Sub** (when `PUBSUB_BACKEND=REDIS`). Recommended to keep this different from `REDIS_DB` when using GoFr migrations with Redis Streams mode to avoid key-type collisions on `gofr_migrations`.
-- `-`
-- `""` (falls back to `REDIS_DB`)
-- `1`
-- Integer (>=0)
-
----
-
-- `REDIS_TLS_ENABLED`
-- Enable TLS for Redis connections.
-- `-`
-- `false`
-- `true`
-- Boolean
-
----
-
-- `REDIS_TLS_CA_CERT`
-- Path to the TLS CA certificate file (or PEM-encoded certificate string).
-- `-`
-- `""`
-- `/path/to/ca.pem`
-- Path or PEM string
-
----
-
-- `REDIS_TLS_CERT`
-- Path to the TLS certificate file (or PEM-encoded certificate string).
-- `-`
-- `""`
-- `/path/to/cert.pem`
-- Path or PEM string
-
----
-
-- `REDIS_TLS_KEY`
-- Path to the TLS key file (or PEM-encoded key string).
-- `-`
-- `""`
-- `/path/to/key.pem`
-- Path or PEM string
-
-{% /table %}
+#### Example `.env`
 
 ```dotenv
 PUBSUB_BACKEND=REDIS
@@ -501,6 +352,7 @@ REDIS_PORT=6379
 REDIS_USER=myuser
 REDIS_PASSWORD=mypassword
 REDIS_DB=0
+REDIS_PUBSUB_DB=1
 REDIS_TLS_ENABLED=true
 REDIS_TLS_CA_CERT=/path/to/ca.pem
 REDIS_TLS_CERT=/path/to/cert.pem
@@ -534,7 +386,10 @@ docker run -d \
 	redis:7-alpine redis-server --requirepass mypassword
 ```
 
-#### Configs
+#### Pub/Sub configs
+
+The following configs apply specifically to Redis Pub/Sub behavior. For base Redis connection/TLS configs, refer to
+`https://gofr.dev/docs/references/configs#redis`.
 {% table %}
 - Name
 - Description
@@ -543,17 +398,10 @@ docker run -d \
 
 ---
 
-- `REDIS_HOST`
-- Redis host
+- `PUBSUB_BACKEND`
+- Set to `REDIS` to use Redis as the Pub/Sub backend.
 - -
-- `localhost`
-
----
-
-- `REDIS_PORT`
-- Redis port
-- `6379`
-- `6379`
+- `REDIS`
 
 ---
 
@@ -589,6 +437,13 @@ docker run -d \
 - Block duration for stream reads
 - `5s`
 - `2s`
+
+---
+
+- `REDIS_PUBSUB_DB`
+- Redis DB to use only for Redis Pub/Sub. Keep this different from `REDIS_DB` when using migrations + streams mode to avoid `WRONGTYPE` on `gofr_migrations`.
+- `""` (falls back to `REDIS_DB`)
+- `1`
 
 ---
 
