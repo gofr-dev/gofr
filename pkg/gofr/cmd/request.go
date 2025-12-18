@@ -112,7 +112,7 @@ func (r *Request) Bind(i any) error {
 		if !f.IsValid() || !f.CanSet() {
 			continue
 		}
-		//nolint:exhaustive // no need to add other cases
+		//nolint:exhaustive // Bind supports only basic field kinds.
 		switch f.Kind() {
 		case reflect.String:
 			f.SetString(v)
