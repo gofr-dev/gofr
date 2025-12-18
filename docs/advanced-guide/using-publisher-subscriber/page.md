@@ -449,6 +449,15 @@ Redis Pub/Sub is a lightweight messaging system. GoFr supports two modes:
 
 ---
 
+- `REDIS_PUBSUB_DB`
+- Redis database number to use **only for Redis Pub/Sub** (when `PUBSUB_BACKEND=REDIS`). Recommended to keep this different from `REDIS_DB` when using GoFr migrations with Redis Streams mode to avoid key-type collisions on `gofr_migrations`.
+- `-`
+- `""` (falls back to `REDIS_DB`)
+- `1`
+- Integer (>=0)
+
+---
+
 - `REDIS_TLS_ENABLED`
 - Enable TLS for Redis connections.
 - `-`
@@ -623,6 +632,11 @@ docker run -d \
 
 > **Note**: By default, Redis Pub/Sub uses Streams mode which provides persistence and at-least-once delivery semantics with consumer groups and acknowledgments.
 > Use `REDIS_PUBSUB_MODE=pubsub` for fire-and-forget messaging with at-most-once delivery semantics (messages are not persisted).
+
+> **Important**: If you are using **GoFr migrations** with **Redis** and also using **Redis Pub/Sub in Streams mode**, do not use the same Redis logical DB for both.
+> GoFr stores Redis migration state in a Redis **HASH** named `gofr_migrations`, while Redis Streams mode uses a Redis **STREAM** key for topics (including the PubSub migration topic `gofr_migrations`).
+> If both clients share the same DB, migrations can fail with `WRONGTYPE` errors.
+> Set `REDIS_PUBSUB_DB` to a different DB index (for example, `REDIS_DB=0` and `REDIS_PUBSUB_DB=1`).
 
 ### Azure Event Hubs
 GoFr supports Event Hubs starting gofr version v1.22.0.

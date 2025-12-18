@@ -397,6 +397,12 @@ This document lists all the configuration options supported by the GoFr framewor
 
 ---
 
+- REDIS_PUBSUB_DB
+- Redis database number to use only for Redis Pub/Sub (when `PUBSUB_BACKEND=REDIS`). Use a different DB than `REDIS_DB` when running GoFr migrations with Redis Streams mode to avoid `gofr_migrations` key-type collisions.
+- "" (falls back to `REDIS_DB`)
+
+---
+
 - REDIS_PUBSUB_MODE
 - Operation mode: `pubsub` or `streams`.
 - streams
@@ -428,6 +434,7 @@ This document lists all the configuration options supported by the GoFr framewor
 {% /table %}
 
 > If `REDIS_PUBSUB_MODE` is set to anything other than `streams` or `pubsub`, it falls back to `streams`.
+> If you are using GoFr migrations with Redis and Redis PubSub Streams mode together, set `REDIS_PUBSUB_DB` to a different DB than `REDIS_DB` to avoid `WRONGTYPE` errors on the `gofr_migrations` key.
 
 ### Pub/Sub
 

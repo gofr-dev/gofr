@@ -20,6 +20,55 @@ import (
 	"gofr.dev/pkg/gofr/logging"
 )
 
+func TestNewPubSub_UsesRedisPubSubDB(t *testing.T) {
+	s, err := miniredis.Run()
+	require.NoError(t, err)
+	t.Cleanup(s.Close)
+
+	ctrl := gomock.NewController(t)
+	t.Cleanup(ctrl.Finish)
+
+	mockMetrics := NewMockMetrics(ctrl)
+	mockMetrics.EXPECT().RecordHistogram(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
+	mockMetrics.EXPECT().IncrementCounter(gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
+
+	mockLogger := logging.NewMockLogger(logging.DEBUG)
+
+	// Create PubSub client with DB override.
+	ps := NewPubSub(config.NewMockConfig(map[string]string{
+		"PUBSUB_BACKEND":               "REDIS",
+		"REDIS_HOST":                   s.Host(),
+		"REDIS_PORT":                   s.Port(),
+		"REDIS_DB":                     "0",
+		"REDIS_PUBSUB_DB":              "1",
+		"REDIS_PUBSUB_MODE":            "streams",
+		"REDIS_STREAMS_CONSUMER_GROUP": "gofr",
+	}), mockLogger, mockMetrics)
+	require.NotNil(t, ps)
+
+	// Creating a topic in streams mode should create a STREAM key in the PubSub DB (DB 1).
+	err = ps.CreateTopic(context.Background(), "db-partition-topic")
+	require.NoError(t, err)
+
+	// Verify: DB 0 does not have the key.
+	rc0 := redis.NewClient(&redis.Options{Addr: s.Addr(), DB: 0})
+
+	t.Cleanup(func() { _ = rc0.Close() })
+
+	t0, err := rc0.Type(context.Background(), "db-partition-topic").Result()
+	require.NoError(t, err)
+	require.Equal(t, "none", t0)
+
+	// Verify: DB 1 has the stream.
+	rc1 := redis.NewClient(&redis.Options{Addr: s.Addr(), DB: 1})
+
+	t.Cleanup(func() { _ = rc1.Close() })
+
+	t1, err := rc1.Type(context.Background(), "db-partition-topic").Result()
+	require.NoError(t, err)
+	require.Equal(t, "stream", t1)
+}
+
 // TestPubSub_Query_Channel tests querying messages from a Redis PubSub channel.
 func TestPubSub_Query_Channel(t *testing.T) {
 	client, s := setupTest(t, map[string]string{

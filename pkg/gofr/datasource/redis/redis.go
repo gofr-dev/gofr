@@ -5,6 +5,7 @@ import (
 	"crypto/tls"
 	"errors"
 	"fmt"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -234,6 +235,20 @@ func NewPubSub(conf config.Config, logger datasource.Logger, metrics Metrics) pu
 	// if Hostname is not provided, we won't try to connect to Redis
 	if redisConfig.HostName == "" {
 		return nil
+	}
+
+	// Allow PubSub to use a different Redis logical DB than the primary Redis datasource.
+	// This prevents keyspace collisions (e.g., HASH vs STREAM on `gofr_migrations`) when Redis is used for both
+	// migrations and PubSub (streams mode).
+	//
+	// If not set or invalid, we fall back to REDIS_DB.
+	if dbStr := conf.Get("REDIS_PUBSUB_DB"); dbStr != "" {
+		if db, err := strconv.Atoi(dbStr); err == nil && db >= 0 {
+			redisConfig.DB = db
+			if redisConfig.Options != nil {
+				redisConfig.Options.DB = db
+			}
+		}
 	}
 
 	// Redirect go-redis internal logs to Gofr logger for consistent formatting
