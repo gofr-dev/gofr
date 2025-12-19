@@ -3,8 +3,9 @@ package redis
 import (
 	"context"
 	"fmt"
-	"gofr.dev/pkg/gofr/datasource"
 	"strings"
+
+	"gofr.dev/pkg/gofr/datasource"
 )
 
 // redactRedisHostname redacts any credentials from a Redis hostname that may be in URI format.
