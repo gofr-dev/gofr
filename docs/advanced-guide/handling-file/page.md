@@ -137,16 +137,10 @@ func main() {
 	app := gofr.New()
 
 	// Local setup with fake-gcs-server (uses STORAGE_EMULATOR_HOST)
-	fs, err := gcs.New(&gcs.Config{
+	app.AddFileStore(gcs.New(&gcs.Config{
 		BucketName: "my-bucket",
 		ProjectID:  "my-project-id",
-	}, app.Logger(), app.Metrics())
-
-	if err != nil {
-		app.Logger().Fatalf("Failed to initialize GCS: %v", err)
-	}
-
-	app.AddFileStore(fs)
+	}))
 
 	app.Run()
 }
@@ -159,18 +153,18 @@ For production, authenticate using one of these methods:
 ```go
 // Option 1: Using GOOGLE_APPLICATION_CREDENTIALS environment variable
 // Set: export GOOGLE_APPLICATION_CREDENTIALS=/path/to/credentials.json
-fs, err := gcs.New(&gcs.Config{
+app.AddFileStore(gcs.New(&gcs.Config{
 	BucketName: "my-bucket",
 	ProjectID:  "my-project-id",
-}, app.Logger(), app.Metrics())
+}))
 
 // Option 2: Using CredentialsJSON directly
 credJSON, _ := os.ReadFile("gcs-credentials.json")
-fs, err := gcs.New(&gcs.Config{
+app.AddFileStore(gcs.New(&gcs.Config{
 	BucketName:      "my-bucket",
 	CredentialsJSON: string(credJSON),
 	ProjectID:       "my-project-id",
-}, app.Logger(), app.Metrics())
+}))
 ```
 
 > **Note:** 
