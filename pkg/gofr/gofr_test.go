@@ -1203,4 +1203,18 @@ func TestApp_OnStart(t *testing.T) {
 
 		require.ErrorIs(t, err, errHookFailed, "Expected an error from runOnStartHooks")
 	})
+
+	// Test case 4: Verify panic recovery
+	t.Run("panic recovery", func(t *testing.T) {
+		app := New()
+
+		app.OnStart(func(_ *Context) error {
+			panic("test panic")
+		})
+
+		err := app.runOnStartHooks(t.Context())
+
+		require.Error(t, err, "Expected error from panicked hook")
+		assert.Contains(t, err.Error(), "panicked", "Expected error message to mention panic")
+	})
 }
