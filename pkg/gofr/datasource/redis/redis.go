@@ -130,9 +130,7 @@ func NewClient(c config.Config, logger datasource.Logger, metrics Metrics) *Redi
 
 	// Redirect go-redis internal logs to Gofr logger for consistent formatting
 	// go-redis v9 supports SetLogger to customize logging
-	redisInternalLoggerOnce.Do(func() {
-		redis.SetLogger(&gofrRedisLogger{logger: logger})
-	})
+	redis.SetLogger(&gofrRedisLogger{logger: logger})
 
 	rc := redis.NewClient(redisConfig.Options)
 	rc.AddHook(&redisHook{config: redisConfig, logger: logger, metrics: metrics})
@@ -246,9 +244,7 @@ func NewPubSub(conf config.Config, logger datasource.Logger, metrics Metrics) pu
 	}
 
 	// Redirect go-redis internal logs to Gofr logger for consistent formatting
-	redisInternalLoggerOnce.Do(func() {
-		redis.SetLogger(&gofrRedisLogger{logger: logger})
-	})
+	redis.SetLogger(&gofrRedisLogger{logger: logger})
 
 	rc := redis.NewClient(redisConfig.Options)
 	rc.AddHook(&redisHook{config: redisConfig, logger: logger, metrics: metrics})

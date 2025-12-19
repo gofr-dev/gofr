@@ -117,10 +117,10 @@ func TestGetRedisConfig_PubSubStreams(t *testing.T) {
 	assert.Equal(t, "streams", conf.PubSubMode)
 	require.NotNil(t, conf.PubSubStreamsConfig)
 
-	assert.Equal(t, "mygroup", conf.PubSubStreamsConfig.ConsumerGroup)
-	assert.Equal(t, "myconsumer", conf.PubSubStreamsConfig.ConsumerName)
-	assert.Equal(t, int64(1000), conf.PubSubStreamsConfig.MaxLen)
-	assert.Equal(t, 2*time.Second, conf.PubSubStreamsConfig.Block)
+		assert.Equal(t, "mygroup", conf.PubSubStreamsConfig.ConsumerGroup)
+		assert.Equal(t, "myconsumer", conf.PubSubStreamsConfig.ConsumerName)
+		assert.Equal(t, int64(1000), conf.PubSubStreamsConfig.MaxLen)
+		assert.Equal(t, 2*time.Second, conf.PubSubStreamsConfig.Block)
 }
 
 func TestGetRedisConfig_PubSubStreams_Defaults(t *testing.T) {
@@ -134,10 +134,10 @@ func TestGetRedisConfig_PubSubStreams_Defaults(t *testing.T) {
 	assert.Equal(t, "streams", conf.PubSubMode)
 	require.NotNil(t, conf.PubSubStreamsConfig)
 
-	assert.Equal(t, "mygroup", conf.PubSubStreamsConfig.ConsumerGroup)
-	assert.Empty(t, conf.PubSubStreamsConfig.ConsumerName)
-	assert.Equal(t, int64(0), conf.PubSubStreamsConfig.MaxLen)
-	assert.Equal(t, 5*time.Second, conf.PubSubStreamsConfig.Block) // Default block
+		assert.Equal(t, "mygroup", conf.PubSubStreamsConfig.ConsumerGroup)
+		assert.Empty(t, conf.PubSubStreamsConfig.ConsumerName)
+		assert.Equal(t, int64(0), conf.PubSubStreamsConfig.MaxLen)
+		assert.Equal(t, 5*time.Second, conf.PubSubStreamsConfig.Block) // Default block
 }
 
 func TestGetRedisConfig_PubSubStreams_InvalidValues(t *testing.T) {
@@ -153,9 +153,9 @@ func TestGetRedisConfig_PubSubStreams_InvalidValues(t *testing.T) {
 	assert.Equal(t, "streams", conf.PubSubMode)
 	require.NotNil(t, conf.PubSubStreamsConfig)
 
-	// Should use defaults
-	assert.Equal(t, int64(0), conf.PubSubStreamsConfig.MaxLen)
-	assert.Equal(t, 5*time.Second, conf.PubSubStreamsConfig.Block)
+		// Should use defaults
+		assert.Equal(t, int64(0), conf.PubSubStreamsConfig.MaxLen)
+		assert.Equal(t, 5*time.Second, conf.PubSubStreamsConfig.Block)
 }
 
 func TestGetRedisConfig_PubSubMode_InvalidFallsBackToStreams(t *testing.T) {
