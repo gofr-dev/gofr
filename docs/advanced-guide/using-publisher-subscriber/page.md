@@ -449,7 +449,7 @@ The following configs apply specifically to Redis Pub/Sub behavior. For base Red
 
 - `REDIS_PUBSUB_DB`
 - Redis DB to use only for Redis Pub/Sub. Keep this different from `REDIS_DB` when using migrations + streams mode to avoid `WRONGTYPE` on `gofr_migrations`.
-- `""` (falls back to `REDIS_DB`)
+- `15` (highest default Redis database)
 - `1`
 
 ---

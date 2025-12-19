@@ -3,57 +3,80 @@ package redis
 import (
 	"testing"
 
-	"github.com/alicebob/miniredis/v2"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"go.uber.org/mock/gomock"
 
-	"gofr.dev/pkg/gofr/config"
 	"gofr.dev/pkg/gofr/datasource"
-	"gofr.dev/pkg/gofr/logging"
 )
 
-func TestRedis_HealthHandlerError(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
+func testHealthCheck(t *testing.T, client *testRedisClient) {
+	t.Helper()
 
-	// Mock Redis server setup
-	s, err := miniredis.Run()
-	require.NoError(t, err)
-
-	defer s.Close()
-
-	mockMetric := NewMockMetrics(ctrl)
-	mockMetric.EXPECT().RecordHistogram(gomock.Any(), "app_redis_stats", gomock.Any(),
-		"hostname", gomock.Any(), "type", gomock.Any()).AnyTimes()
-
-	client := NewClient(config.NewMockConfig(map[string]string{
-		"REDIS_HOST": s.Host(),
-		"REDIS_PORT": s.Port(),
-	}), logging.NewMockLogger(logging.DEBUG), mockMetric)
-
-	require.NoError(t, err)
-
-	health := client.HealthCheck()
-
-	assert.Equal(t, datasource.Health{
-		Status:  "DOWN",
-		Details: map[string]any{"error": "section (Stats) is not supported", "host": s.Host() + ":" + s.Port()},
-	}, health)
+	h := client.PubSub.Health()
+	assert.Equal(t, "UP", h.Status)
+	assert.Equal(t, "streams", h.Details["mode"]) // Default mode is now streams
 }
 
-func TestRedisHealth_WithoutRedis(t *testing.T) {
-	client := Redis{
-		Client: nil,
-		logger: logging.NewMockLogger(logging.ERROR),
-		config: &Config{
-			HostName: "localhost",
-			Port:     2003,
-		},
-	}
+func TestPubSub_HealthDown(t *testing.T) {
+	client, mock := setupMockTest(t, nil)
+	defer client.Close()
 
-	health := client.HealthCheck()
+	// Test Health Down (Ping fails)
+	mock.ExpectPing().SetErr(errMockPing)
 
-	assert.Equal(t, datasource.StatusDown, health.Status)
-	assert.Equal(t, "redis not connected", health.Details["error"])
+	h := client.PubSub.Health()
+	assert.Equal(t, datasource.StatusDown, h.Status)
+	assert.Equal(t, "REDIS", h.Details["backend"])
+
+	assert.NoError(t, mock.ExpectationsWereMet())
+}
+
+func TestPubSub_HealthUp(t *testing.T) {
+	client, mock := setupMockTest(t, nil)
+	defer client.Close()
+
+	// Test Health Up (Ping succeeds)
+	mock.ExpectPing().SetVal("PONG")
+
+	h := client.PubSub.Health()
+	assert.Equal(t, datasource.StatusUp, h.Status)
+	assert.Equal(t, "REDIS", h.Details["backend"])
+
+	assert.NoError(t, mock.ExpectationsWereMet())
+}
+
+func TestPubSub_HealthDetails(t *testing.T) {
+	client, mock := setupMockTest(t, map[string]string{
+		"REDIS_HOST":        "localhost",
+		"REDIS_PORT":        "6380",
+		"REDIS_PUBSUB_MODE": "pubsub",
+	})
+	defer client.Close()
+
+	mock.ExpectPing().SetVal("PONG")
+
+	h := client.PubSub.Health()
+	assert.Equal(t, datasource.StatusUp, h.Status)
+	assert.Equal(t, "REDIS", h.Details["backend"])
+	assert.Equal(t, "localhost:6380", h.Details["addr"])
+	assert.Equal(t, "pubsub", h.Details["mode"])
+
+	assert.NoError(t, mock.ExpectationsWereMet())
+}
+
+func TestPubSub_HealthDefaultMode(t *testing.T) {
+	client, mock := setupMockTest(t, map[string]string{
+		"REDIS_HOST": "localhost",
+		"REDIS_PORT": "6379",
+		// REDIS_PUBSUB_MODE not set, should default to streams
+	})
+	defer client.Close()
+
+	mock.ExpectPing().SetVal("PONG")
+
+	h := client.PubSub.Health()
+	require.Equal(t, datasource.StatusUp, h.Status)
+	assert.Equal(t, "streams", h.Details["mode"], "should default to streams when not specified")
+
+	assert.NoError(t, mock.ExpectationsWereMet())
 }

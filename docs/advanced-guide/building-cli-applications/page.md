@@ -76,4 +76,4 @@ go build -o mycli
 ./mycli --help
 ```
 
-For more details, see the [sample-cmd example](../../../examples/sample-cmd).
+For more details, see the [sample-cmd example](https://github.com/gofr-dev/gofr/tree/main/examples/sample-cmd).

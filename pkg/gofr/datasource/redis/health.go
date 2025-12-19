@@ -1,42 +1,40 @@
-// Package redis provides a client for interacting with Redis key-value stores.This package allows creating and
-// managing Redis clients, executing Redis commands, and handling connections to Redis databases.
 package redis
 
 import (
 	"context"
-	"strconv"
-	"time"
+	"fmt"
 
 	"gofr.dev/pkg/gofr/datasource"
 )
 
-func (r *Redis) HealthCheck() datasource.Health {
-	h := datasource.Health{
-		Details: make(map[string]any),
+// Health returns the health status of the Redis PubSub connection.
+func (ps *PubSub) Health() datasource.Health {
+	res := datasource.Health{
+		Status: "DOWN",
+		Details: map[string]any{
+			"backend": "REDIS",
+		},
 	}
 
-	h.Details["host"] = r.config.HostName + ":" + strconv.Itoa(r.config.Port)
+	addr := fmt.Sprintf("%s:%d", ps.config.HostName, ps.config.Port)
+	res.Details["addr"] = addr
 
-	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	mode := ps.config.PubSubMode
+	if mode == "" {
+		mode = modeStreams
+	}
+
+	res.Details["mode"] = mode
+
+	ctx, cancel := context.WithTimeout(context.Background(), defaultRetryTimeout)
 	defer cancel()
 
-	if r.Client == nil {
-		h.Status = datasource.StatusDown
-		h.Details["error"] = "redis not connected"
-
-		return h
+	if err := ps.client.Ping(ctx).Err(); err != nil {
+		ps.logger.Errorf("PubSub health check failed: %v", err)
+		return res
 	}
 
-	info, err := r.InfoMap(ctx, "Stats").Result()
-	if err != nil {
-		h.Status = datasource.StatusDown
-		h.Details["error"] = err.Error()
+	res.Status = "UP"
 
-		return h
-	}
-
-	h.Status = datasource.StatusUp
-	h.Details["stats"] = info["Stats"]
-
-	return h
+	return res
 }

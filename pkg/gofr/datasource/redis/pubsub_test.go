@@ -15,7 +15,6 @@ import (
 	"go.uber.org/mock/gomock"
 
 	"gofr.dev/pkg/gofr/config"
-	"gofr.dev/pkg/gofr/datasource"
 	"gofr.dev/pkg/gofr/datasource/pubsub"
 	"gofr.dev/pkg/gofr/logging"
 )
@@ -564,14 +563,6 @@ func testDeleteTopicStream(t *testing.T, client *testRedisClient, s *miniredis.M
 	assert.False(t, exists)
 }
 
-func testHealthCheck(t *testing.T, client *testRedisClient) {
-	t.Helper()
-
-	h := client.PubSub.Health()
-	assert.Equal(t, "UP", h.Status)
-	assert.Equal(t, "streams", h.Details["mode"]) // Default mode is now streams
-}
-
 func testStreamConfigError(t *testing.T, client *testRedisClient) {
 	t.Helper()
 
@@ -776,20 +767,6 @@ func TestPubSub_MockQueryDeleteErrors(t *testing.T) {
 	assert.NoError(t, mock.ExpectationsWereMet())
 }
 
-func TestPubSub_HealthDown(t *testing.T) {
-	client, mock := setupMockTest(t, nil)
-	defer client.Close()
-
-	// Test Health Down (Ping fails)
-	mock.ExpectPing().SetErr(errMockPing)
-
-	h := client.PubSub.Health()
-	assert.Equal(t, datasource.StatusDown, h.Status)
-	assert.Equal(t, "REDIS", h.Details["backend"])
-
-	assert.NoError(t, mock.ExpectationsWereMet())
-}
-
 func TestPubSub_Unsubscribe(t *testing.T) {
 	client, s := setupTest(t, nil)
 	defer s.Close()
@@ -861,4 +838,568 @@ func TestPubSub_MonitorConnection(t *testing.T) {
 
 	// Clean up new server
 	s.Close()
+}
+
+func TestPubSub_ResubscribeAll(t *testing.T) {
+	t.Parallel()
+
+	client, s := setupTest(t, nil)
+	defer s.Close()
+	defer client.Close()
+
+	ctx := context.Background()
+	topic := "resub-topic"
+
+	// Subscribe to a topic
+	go func() {
+		_, _ = client.PubSub.Subscribe(ctx, topic)
+	}()
+
+	time.Sleep(100 * time.Millisecond)
+
+	// Call resubscribeAll directly
+	psClient := client.PubSub
+	psClient.resubscribeAll()
+
+	// Verify subscription still exists
+	psClient.mu.RLock()
+	_, exists := psClient.subStarted[topic]
+	psClient.mu.RUnlock()
+
+	assert.True(t, exists)
+}
+
+func TestPubSub_ResubscribeAll_NoSubscriptions(t *testing.T) {
+	t.Parallel()
+
+	client, s := setupTest(t, nil)
+	defer s.Close()
+	defer client.Close()
+
+	// Call resubscribeAll with no subscriptions
+	psClient := client.PubSub
+	psClient.resubscribeAll()
+
+	// Should not panic
+	psClient.mu.RLock()
+	count := len(psClient.subStarted)
+	psClient.mu.RUnlock()
+
+	assert.Equal(t, 0, count)
+}
+
+func TestPubSub_CleanupSubscription(t *testing.T) {
+	t.Parallel()
+
+	client, s := setupTest(t, map[string]string{
+		"REDIS_PUBSUB_MODE": "pubsub",
+	})
+	defer s.Close()
+	defer client.Close()
+
+	ctx := context.Background()
+	topic := "cleanup-topic"
+
+	// Subscribe to create subscription
+	go func() {
+		_, _ = client.PubSub.Subscribe(ctx, topic)
+	}()
+
+	time.Sleep(100 * time.Millisecond)
+
+	// Manually mark as closed and cleanup
+	psClient := client.PubSub
+	psClient.mu.Lock()
+	psClient.chanClosed[topic] = true
+	psClient.mu.Unlock()
+
+	psClient.cleanupSubscription(topic)
+
+	// Verify cleanup
+	psClient.mu.RLock()
+	_, exists := psClient.receiveChan[topic]
+	_, started := psClient.subStarted[topic]
+	psClient.mu.RUnlock()
+
+	assert.False(t, exists)
+	assert.False(t, started)
+}
+
+func TestPubSub_CleanupSubscription_NotClosed(t *testing.T) {
+	t.Parallel()
+
+	client, s := setupTest(t, map[string]string{
+		"REDIS_PUBSUB_MODE": "pubsub",
+	})
+	defer s.Close()
+	defer client.Close()
+
+	ctx := context.Background()
+	topic := "cleanup-not-closed-topic"
+
+	// Subscribe to create subscription
+	go func() {
+		_, _ = client.PubSub.Subscribe(ctx, topic)
+	}()
+
+	time.Sleep(100 * time.Millisecond)
+
+	// Cleanup without marking as closed
+	psClient := client.PubSub
+	psClient.cleanupSubscription(topic)
+
+	// Verify cleanup happened
+	psClient.mu.RLock()
+	_, exists := psClient.receiveChan[topic]
+	closed := psClient.chanClosed[topic]
+	psClient.mu.RUnlock()
+
+	assert.False(t, exists)
+	assert.True(t, closed)
+}
+
+func TestPubSub_CleanupStreamConsumers(t *testing.T) {
+	t.Parallel()
+
+	client, s := setupTest(t, map[string]string{
+		"REDIS_PUBSUB_MODE":            "streams",
+		"REDIS_STREAMS_CONSUMER_GROUP": "cleanup-grp",
+	})
+	defer s.Close()
+	defer client.Close()
+
+	ctx := context.Background()
+	topic := "cleanup-stream-topic"
+
+	// Create topic to set up consumer
+	err := client.PubSub.CreateTopic(ctx, topic)
+	require.NoError(t, err)
+
+	// Subscribe to create stream consumer
+	go func() {
+		_, _ = client.PubSub.Subscribe(ctx, topic)
+	}()
+
+	time.Sleep(200 * time.Millisecond)
+
+	// Cleanup stream consumers
+	psClient := client.PubSub
+	psClient.cleanupStreamConsumers(topic)
+
+	// Verify cleanup
+	psClient.mu.RLock()
+	_, exists := psClient.streamConsumers[topic]
+	_, started := psClient.subStarted[topic]
+	psClient.mu.RUnlock()
+
+	assert.False(t, exists)
+	assert.False(t, started)
+}
+
+func TestPubSub_CleanupStreamConsumers_WithCancel(t *testing.T) {
+	t.Parallel()
+
+	client, s := setupTest(t, map[string]string{
+		"REDIS_PUBSUB_MODE":            "streams",
+		"REDIS_STREAMS_CONSUMER_GROUP": "cleanup-cancel-grp",
+	})
+	defer s.Close()
+	defer client.Close()
+
+	ctx := context.Background()
+	topic := "cleanup-stream-cancel-topic"
+
+	// Create topic
+	err := client.PubSub.CreateTopic(ctx, topic)
+	require.NoError(t, err)
+
+	// Subscribe
+	go func() {
+		_, _ = client.PubSub.Subscribe(ctx, topic)
+	}()
+
+	time.Sleep(200 * time.Millisecond)
+
+	// Manually set up a cancel function
+	psClient := client.PubSub
+	psClient.mu.Lock()
+	ctxCancel, cancel := context.WithCancel(context.Background())
+	psClient.streamConsumers[topic] = &streamConsumer{
+		stream:   topic,
+		group:    "cleanup-cancel-grp",
+		consumer: "test-consumer",
+		cancel:   cancel,
+	}
+	psClient.mu.Unlock()
+
+	// Cleanup should call cancel
+	psClient.cleanupStreamConsumers(topic)
+
+	// Verify context was cancelled
+	assert.Error(t, ctxCancel.Err())
+}
+
+func TestPubSub_DispatchMessage_ChannelFull(t *testing.T) {
+	t.Parallel()
+
+	client, s := setupTest(t, map[string]string{
+		"REDIS_PUBSUB_MODE":      "pubsub",
+		"PUBSUB_BUFFER_SIZE":     "1", // Small buffer to test full channel
+		"REDIS_PUBSUB_BUFFER_SIZE": "1",
+	})
+	defer s.Close()
+	defer client.Close()
+
+	ctx := context.Background()
+	topic := "dispatch-full-topic"
+
+	// Subscribe
+	msgChan := client.PubSub.ensureSubscription(ctx, topic)
+
+	// Fill the channel
+	msgChan <- pubsub.NewMessage(ctx)
+
+	// Try to dispatch another message (should be dropped)
+	msg := pubsub.NewMessage(ctx)
+	msg.Topic = topic
+	msg.Value = []byte("dropped")
+
+	psClient := client.PubSub
+	psClient.dispatchMessage(ctx, topic, msg)
+
+	// Channel should still have only one message
+	assert.Equal(t, 1, len(msgChan))
+}
+
+func TestPubSub_DispatchMessage_ChannelClosed(t *testing.T) {
+	t.Parallel()
+
+	client, s := setupTest(t, map[string]string{
+		"REDIS_PUBSUB_MODE": "pubsub",
+	})
+	defer s.Close()
+	defer client.Close()
+
+	ctx := context.Background()
+	topic := "dispatch-closed-topic"
+
+	// Create subscription and close channel
+	msgChan := client.PubSub.ensureSubscription(ctx, topic)
+	psClient := client.PubSub
+	psClient.mu.Lock()
+	psClient.chanClosed[topic] = true
+	psClient.mu.Unlock()
+
+	// Try to dispatch message (should be ignored)
+	msg := pubsub.NewMessage(ctx)
+	msg.Topic = topic
+	msg.Value = []byte("ignored")
+
+	psClient.dispatchMessage(ctx, topic, msg)
+
+	// Should not panic
+	assert.NotNil(t, msgChan)
+}
+
+func TestPubSub_DispatchMessage_TopicNotExists(t *testing.T) {
+	t.Parallel()
+
+	client, s := setupTest(t, nil)
+	defer s.Close()
+	defer client.Close()
+
+	ctx := context.Background()
+	topic := "non-existent-topic"
+
+	msg := pubsub.NewMessage(ctx)
+	msg.Topic = topic
+	msg.Value = []byte("test")
+
+	psClient := client.PubSub
+	psClient.dispatchMessage(ctx, topic, msg)
+
+	// Should not panic
+	assert.NotNil(t, psClient)
+}
+
+
+func TestPubSub_CheckGroupExists_GroupExists(t *testing.T) {
+	t.Parallel()
+
+	client, s := setupTest(t, map[string]string{
+		"REDIS_PUBSUB_MODE":            "streams",
+		"REDIS_STREAMS_CONSUMER_GROUP": "check-grp",
+	})
+	defer s.Close()
+	defer client.Close()
+
+	ctx := context.Background()
+	topic := "check-group-topic"
+	group := "check-grp"
+
+	// Create stream and group
+	err := client.PubSub.CreateTopic(ctx, topic)
+	require.NoError(t, err)
+
+	psClient := client.PubSub
+	exists := psClient.checkGroupExists(ctx, topic, group)
+
+	assert.True(t, exists)
+}
+
+func TestPubSub_CheckGroupExists_GroupNotExists(t *testing.T) {
+	t.Parallel()
+
+	client, s := setupTest(t, map[string]string{
+		"REDIS_PUBSUB_MODE": "streams",
+	})
+	defer s.Close()
+	defer client.Close()
+
+	ctx := context.Background()
+	topic := "check-group-not-exists-topic"
+	group := "non-existent-group"
+
+	// Create stream without group
+	_, err := s.XAdd(topic, "0-1", []string{"payload", "data"})
+	require.NoError(t, err)
+
+	psClient := client.PubSub
+	exists := psClient.checkGroupExists(ctx, topic, group)
+
+	assert.False(t, exists)
+}
+
+func TestPubSub_CheckGroupExists_StreamNotExists(t *testing.T) {
+	t.Parallel()
+
+	client, s := setupTest(t, nil)
+	defer s.Close()
+	defer client.Close()
+
+	ctx := context.Background()
+	topic := "non-existent-stream"
+	group := "test-group"
+
+	psClient := client.PubSub
+	exists := psClient.checkGroupExists(ctx, topic, group)
+
+	assert.False(t, exists)
+}
+
+func TestPubSub_EnsureConsumerGroup_GroupExists(t *testing.T) {
+	t.Parallel()
+
+	client, s := setupTest(t, map[string]string{
+		"REDIS_PUBSUB_MODE":            "streams",
+		"REDIS_STREAMS_CONSUMER_GROUP": "ensure-grp",
+	})
+	defer s.Close()
+	defer client.Close()
+
+	ctx := context.Background()
+	topic := "ensure-group-topic"
+	group := "ensure-grp"
+
+	// Create group first
+	err := client.PubSub.CreateTopic(ctx, topic)
+	require.NoError(t, err)
+
+	psClient := client.PubSub
+	result := psClient.ensureConsumerGroup(ctx, topic, group)
+
+	assert.True(t, result)
+}
+
+func TestPubSub_EnsureConsumerGroup_CreateNew(t *testing.T) {
+	t.Parallel()
+
+	client, s := setupTest(t, map[string]string{
+		"REDIS_PUBSUB_MODE":            "streams",
+		"REDIS_STREAMS_CONSUMER_GROUP": "ensure-new-grp",
+	})
+	defer s.Close()
+	defer client.Close()
+
+	ctx := context.Background()
+	topic := "ensure-group-new-topic"
+	group := "ensure-new-grp"
+
+	// Create stream without group
+	_, err := s.XAdd(topic, "0-1", []string{"payload", "data"})
+	require.NoError(t, err)
+
+	psClient := client.PubSub
+	result := psClient.ensureConsumerGroup(ctx, topic, group)
+
+	assert.True(t, result)
+}
+
+func TestPubSub_GetConsumerName_WithConfig(t *testing.T) {
+	t.Parallel()
+
+	client, s := setupTest(t, map[string]string{
+		"REDIS_PUBSUB_MODE":            "streams",
+		"REDIS_STREAMS_CONSUMER_GROUP": "test-grp",
+		"REDIS_STREAMS_CONSUMER_NAME":  "custom-consumer",
+	})
+	defer s.Close()
+	defer client.Close()
+
+	psClient := client.PubSub
+	name := psClient.getConsumerName()
+
+	assert.Equal(t, "custom-consumer", name)
+}
+
+func TestPubSub_GetConsumerName_WithoutConfig(t *testing.T) {
+	t.Parallel()
+
+	client, s := setupTest(t, map[string]string{
+		"REDIS_PUBSUB_MODE":            "streams",
+		"REDIS_STREAMS_CONSUMER_GROUP": "test-grp",
+	})
+	defer s.Close()
+	defer client.Close()
+
+	psClient := client.PubSub
+	name := psClient.getConsumerName()
+
+	// Should generate a name with hostname, pid, and timestamp
+	assert.Contains(t, name, "consumer-")
+	assert.NotEqual(t, "", name)
+}
+
+
+func TestPubSub_UnsubscribeFromRedis_Error(t *testing.T) {
+	t.Parallel()
+
+	client, s := setupTest(t, map[string]string{
+		"REDIS_PUBSUB_MODE": "pubsub",
+	})
+	defer s.Close()
+	defer client.Close()
+
+	topic := "unsub-redis-err-topic"
+
+	// Set up subscription
+	ctx := context.Background()
+	msgChan := client.PubSub.ensureSubscription(ctx, topic)
+
+	psClient := client.PubSub
+	psClient.mu.Lock()
+	psClient.subPubSub[topic] = client.Redis.Client.Subscribe(ctx, topic)
+	psClient.mu.Unlock()
+
+	// Close Redis to simulate error
+	s.Close()
+
+	// Should handle error gracefully
+	psClient.unsubscribeFromRedis(topic)
+
+	assert.NotNil(t, msgChan)
+}
+
+func TestPubSub_UnsubscribeFromRedis_NotExists(t *testing.T) {
+	t.Parallel()
+
+	client, s := setupTest(t, map[string]string{
+		"REDIS_PUBSUB_MODE": "pubsub",
+	})
+	defer s.Close()
+	defer client.Close()
+
+	topic := "unsub-not-exists-topic"
+
+	psClient := client.PubSub
+	psClient.unsubscribeFromRedis(topic)
+
+	// Should not panic
+	assert.NotNil(t, psClient)
+}
+
+func TestPubSub_Close_WithSubscriptions(t *testing.T) {
+	t.Parallel()
+
+	client, s := setupTest(t, map[string]string{
+		"REDIS_PUBSUB_MODE": "pubsub",
+	})
+	defer s.Close()
+
+	ctx := context.Background()
+	topic := "close-sub-topic"
+
+	// Create multiple subscriptions
+	go func() {
+		_, _ = client.PubSub.Subscribe(ctx, topic)
+	}()
+
+	go func() {
+		_, _ = client.PubSub.Subscribe(ctx, "close-sub-topic-2")
+	}()
+
+	time.Sleep(200 * time.Millisecond)
+
+	// Close should clean up all subscriptions
+	err := client.PubSub.Close()
+	require.NoError(t, err)
+
+	// Verify cleanup
+	psClient := client.PubSub
+	psClient.mu.RLock()
+	subCount := len(psClient.subStarted)
+	chanCount := len(psClient.receiveChan)
+	psClient.mu.RUnlock()
+
+	assert.Equal(t, 0, subCount)
+	assert.Equal(t, 0, chanCount)
+}
+
+func TestPubSub_Close_NoSubscriptions(t *testing.T) {
+	t.Parallel()
+
+	client, s := setupTest(t, nil)
+	defer s.Close()
+
+	// Close with no subscriptions
+	err := client.PubSub.Close()
+	require.NoError(t, err)
+
+	// Should not panic
+	assert.NotNil(t, client.PubSub)
+}
+
+func TestPubSub_Close_WithStreamConsumers(t *testing.T) {
+	t.Parallel()
+
+	client, s := setupTest(t, map[string]string{
+		"REDIS_PUBSUB_MODE":            "streams",
+		"REDIS_STREAMS_CONSUMER_GROUP": "close-grp",
+	})
+	defer s.Close()
+
+	ctx := context.Background()
+	topic := "close-stream-topic"
+
+	// Create topic and subscribe
+	err := client.PubSub.CreateTopic(ctx, topic)
+	require.NoError(t, err)
+
+	go func() {
+		_, _ = client.PubSub.Subscribe(ctx, topic)
+	}()
+
+	time.Sleep(200 * time.Millisecond)
+
+	// Close should clean up stream consumers
+	err = client.PubSub.Close()
+	require.NoError(t, err)
+
+	// Verify cleanup
+	psClient := client.PubSub
+	psClient.mu.RLock()
+	consumerCount := len(psClient.streamConsumers)
+	psClient.mu.RUnlock()
+
+	assert.Equal(t, 0, consumerCount)
 }

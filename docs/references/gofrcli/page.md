@@ -101,9 +101,9 @@ func All() map[int64]migration.Migrate {
 }
 ```
 
-> **💡 Best Practice:** Learn about [organizing migrations by feature](../../docs/advanced-guide/handling-data-migrations#organizing-migrations-by-feature) to avoid creating one migration per table or operation.
+> **💡 Best Practice:** Learn about [organizing migrations by feature](https://gofr.dev/docs/advanced-guide/handling-data-migrations#organizing-migrations-by-feature) to avoid creating one migration per table or operation.
 
-For detailed instructions on handling database migrations, see the [handling-data-migrations documentation](../../docs/advanced-guide/handling-data-migrations)
+For detailed instructions on handling database migrations, see the [handling-data-migrations documentation](https://gofr.dev/docs/advanced-guide/handling-data-migrations)
 For more examples, see the [using-migrations](https://github.com/gofr-dev/gofr/tree/main/examples/using-migrations)
 ---
 
@@ -111,7 +111,7 @@ For more examples, see the [using-migrations](https://github.com/gofr-dev/gofr/t
 
    * The gofr wrap grpc command streamlines gRPC integration in a GoFr project by generating GoFr's context-aware structures.
    * It simplifies setting up gRPC handlers with minimal steps, and accessing datasources, adding tracing as well as custom metrics. Based on the proto file it creates the handler/client with GoFr's context.
-   For detailed instructions on using grpc with GoFr see the [gRPC documentation](../../advanced-guide/grpc/page.md)
+   For detailed instructions on using grpc with GoFr see the [gRPC documentation](https://gofr.dev/docs/advanced-guide/grpc)
 
 ### Command Usage
 **gRPC Server**

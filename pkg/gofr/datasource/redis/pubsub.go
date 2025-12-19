@@ -12,7 +12,6 @@ import (
 	"github.com/redis/go-redis/v9"
 	"go.opentelemetry.io/otel/trace"
 
-	"gofr.dev/pkg/gofr/datasource"
 	"gofr.dev/pkg/gofr/datasource/pubsub"
 )
 
@@ -430,38 +429,6 @@ func (ps *PubSub) dispatchMessage(ctx context.Context, topic string, m *pubsub.M
 	default:
 		ps.logger.Errorf("message channel full for topic '%s', dropping message", topic)
 	}
-}
-
-// Health returns the health status of the Redis PubSub connection.
-func (ps *PubSub) Health() datasource.Health {
-	res := datasource.Health{
-		Status: "DOWN",
-		Details: map[string]any{
-			"backend": "REDIS",
-		},
-	}
-
-	addr := fmt.Sprintf("%s:%d", ps.config.HostName, ps.config.Port)
-	res.Details["addr"] = addr
-
-	mode := ps.config.PubSubMode
-	if mode == "" {
-		mode = modeStreams
-	}
-
-	res.Details["mode"] = mode
-
-	ctx, cancel := context.WithTimeout(context.Background(), defaultRetryTimeout)
-	defer cancel()
-
-	if err := ps.client.Ping(ctx).Err(); err != nil {
-		ps.logger.Errorf("PubSub health check failed: %v", err)
-		return res
-	}
-
-	res.Status = "UP"
-
-	return res
 }
 
 // CreateTopic is a no-op for Redis PubSub (channels are created on first publish/subscribe).
