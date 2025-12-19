@@ -422,13 +422,13 @@ This document lists all the configuration options supported by the GoFr framewor
 ---
 
 - REDIS_STREAMS_BLOCK_TIMEOUT
-- Blocking duration for reading new messages.
+- Blocking duration for reading new messages. Enables efficient message consumption by allowing Redis to push messages immediately when available, avoiding constant polling. Lower values (1s-2s) provide faster detection but increase CPU usage. Higher values (10s-30s) reduce CPU usage, ideal for batch processing.
 -  5s
 
 ---
 
 - REDIS_STREAMS_MAXLEN
-- Maximum length of the stream (approximate).
+- Maximum length of the stream (approximate). Prevents streams from growing indefinitely and exhausting Redis memory. When the limit is reached, Redis automatically trims the oldest messages. Set to `0` for unlimited retention (not recommended for production).
 -  0 (unlimited)
 
 {% /table %}

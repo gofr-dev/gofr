@@ -434,9 +434,9 @@ The following configs apply specifically to Redis Pub/Sub behavior. For base Red
 ---
 
 - `REDIS_STREAMS_BLOCK_TIMEOUT`
-- Block duration for stream reads. Controls how long the consumer waits for new messages before timing out. Lower values reduce latency but increase CPU usage from frequent polling. Higher values reduce CPU usage but may delay message processing.
+- Block duration for stream reads using Redis `XREADGROUP`. This controls how long the consumer blocks waiting for new messages before the Redis call times out and retries. **Benefits of configuring this:** (1) **Resource efficiency** - Without blocking, consumers would constantly poll Redis, wasting CPU cycles and network bandwidth. Blocking allows Redis to push messages immediately when available. (2) **Latency vs CPU trade-off** - Lower values (e.g., `1s-2s`) provide faster message detection but increase CPU from frequent timeouts. Higher values (e.g., `10s-30s`) reduce CPU usage and network round-trips but may delay processing. (3) **Cost optimization** - In cloud/serverless environments, reducing CPU usage directly reduces costs. (4) **Battery efficiency** - Important for mobile/edge deployments where power consumption matters. Choose based on your latency requirements: real-time systems may use `1s-2s`, while batch processing can use `10s-30s`.
 - `5s`
-- `2s`
+- `2s` (low latency) or `30s` (low CPU)
 
 ---
 
