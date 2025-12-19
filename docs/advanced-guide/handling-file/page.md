@@ -143,6 +143,7 @@ func main() {
 	}))
 
 	app.Run()
+	app.Run()
 }
 ```
 
