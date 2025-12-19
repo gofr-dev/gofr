@@ -38,10 +38,11 @@ func New(config *Config, logger datasource.Logger, metrics file.StorageMetrics) 
 
 	fs := &fileSystem{
 		CommonFileSystem: &file.CommonFileSystem{
-			Provider: adapter,
-			Location: config.BucketName,
-			Logger:   logger,
-			Metrics:  metrics,
+			Provider:     adapter,
+			Location:     config.BucketName,
+			Logger:       logger,
+			Metrics:      metrics,
+			ProviderName: "GCS", // Set provider name for observability
 		},
 	}
 
