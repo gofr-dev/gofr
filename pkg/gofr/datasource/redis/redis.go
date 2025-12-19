@@ -32,7 +32,6 @@ var (
 	// PubSub errors.
 	errClientNotConnected       = errors.New("redis client not connected")
 	errEmptyTopicName           = errors.New("topic name cannot be empty")
-	errPublisherNotConfigured   = errors.New("redis publisher not configured")
 	errPubSubConnectionFailed   = errors.New("failed to create PubSub connection for query")
 	errPubSubChannelFailed      = errors.New("failed to get channel from PubSub for query")
 	errConsumerGroupNotProvided = errors.New("consumer group must be provided for streams mode")

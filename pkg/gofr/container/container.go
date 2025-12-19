@@ -383,8 +383,8 @@ func (c *Container) warnIfRedisPubSubSharesRedisDB(conf config.Config) {
 		redisDBStr = "0"
 	}
 
-	redisDB, errRedis := strconv.Atoi(redisDBStr)
-	if errRedis != nil {
+	redisDB, err := strconv.Atoi(redisDBStr)
+	if err != nil {
 		redisDB = 0
 	}
 
@@ -398,8 +398,8 @@ func (c *Container) warnIfRedisPubSubSharesRedisDB(conf config.Config) {
 		return
 	}
 
-	pubsubDB, errPubSub := strconv.Atoi(pubsubDBStr)
-	if errPubSub != nil {
+	pubsubDB, err := strconv.Atoi(pubsubDBStr)
+	if err != nil {
 		c.Logger.Warnf(
 			"REDIS_PUBSUB_DB is invalid; PubSub Streams falls back to REDIS_DB and migrations may fail " +
 				"(gofr_migrations HASH/STREAM). Set REDIS_PUBSUB_DB to a valid, different DB.",

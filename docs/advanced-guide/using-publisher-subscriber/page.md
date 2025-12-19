@@ -406,7 +406,7 @@ The following configs apply specifically to Redis Pub/Sub behavior. For base Red
 ---
 
 - `REDIS_PUBSUB_MODE`
-- Pub/Sub mode: `streams` (default, at-least-once) or `pubsub` (at-most-once)
+- Pub/Sub mode: `streams` (default, at-least-once) or `pubsub` (at-most-once). **Streams mode** provides message persistence, consumer groups, acknowledgments, and replay capability - ideal for reliable message processing, multi-consumer scenarios, and applications requiring message durability. **PubSub mode** offers fire-and-forget messaging with lower overhead - ideal for real-time notifications, event broadcasting, and scenarios where message loss is acceptable.
 - `streams`
 - `pubsub`
 
@@ -434,9 +434,16 @@ The following configs apply specifically to Redis Pub/Sub behavior. For base Red
 ---
 
 - `REDIS_STREAMS_BLOCK_TIMEOUT`
-- Block duration for stream reads
+- Block duration for stream reads. Controls how long the consumer waits for new messages before timing out. Lower values reduce latency but increase CPU usage from frequent polling. Higher values reduce CPU usage but may delay message processing.
 - `5s`
 - `2s`
+
+---
+
+- `REDIS_STREAMS_MAXLEN`
+- Max stream length (approximate) for trimming. Limits the number of messages in the stream to prevent unbounded memory growth. Useful for high-throughput scenarios where old messages can be discarded. Set to `0` for unlimited (messages persist until explicitly deleted).
+- `0` (unlimited)
+- `10000`
 
 ---
 
