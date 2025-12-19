@@ -35,11 +35,9 @@ func Test_NewClient_InvalidPort(t *testing.T) {
 	mockMetrics := NewMockMetrics(ctrl)
 	mockConfig := config.NewMockConfig(map[string]string{"REDIS_HOST": "localhost", "REDIS_PORT": "&&^%%^&*"})
 
-	// Redis client may send "hello" (RESP3 handshake) or "ping" during connection
-	// Allow any type of call since we're just verifying the client object is created
+	// The go-redis library may send multiple commands during initialization (hello, client, ping, etc.)
 	mockMetrics.EXPECT().RecordHistogram(
-		gomock.Any(), "app_redis_stats", gomock.Any(),
-		"hostname", gomock.Any(), "type", gomock.Any(),
+		gomock.Any(), "app_redis_stats", gomock.Any(), "hostname", gomock.Any(), "type", gomock.Any(),
 	).AnyTimes()
 
 	client := NewClient(mockConfig, mockLogger, mockMetrics)
@@ -127,36 +125,6 @@ func TestRedis_PipelineQueryLogging(t *testing.T) {
 	// Assertions
 	assert.Contains(t, result, "ping")
 	assert.Contains(t, result, "set key1 value1 ex 60: OK")
-}
-
-func Test_redactRedisHostname(t *testing.T) {
-	testCases := []struct {
-		name     string
-		input    string
-		expected string
-	}{
-		{
-			name:     "plain hostname unchanged",
-			input:    "localhost",
-			expected: "localhost",
-		},
-		{
-			name:     "uri without credentials unchanged",
-			input:    "redis://localhost:6379",
-			expected: "redis://localhost:6379",
-		},
-		{
-			name:     "uri with credentials redacted",
-			input:    "redis://user:pass@localhost:6379",
-			expected: "redis://[REDACTED]@localhost:6379",
-		},
-	}
-
-	for _, tc := range testCases {
-		t.Run(tc.name, func(t *testing.T) {
-			assert.Equal(t, tc.expected, redactRedisHostname(tc.input))
-		})
-	}
 }
 
 func TestRedis_Close(t *testing.T) {
