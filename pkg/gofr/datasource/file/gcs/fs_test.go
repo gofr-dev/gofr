@@ -11,21 +11,19 @@ import (
 )
 
 func TestNew_NilConfig(t *testing.T) {
-	fs, err := New(nil, nil, nil)
+	fs := New(nil)
 
-	require.Error(t, err)
-	assert.Nil(t, fs)
-	assert.ErrorIs(t, err, errInvalidConfig)
+	require.NotNil(t, fs)
+	assert.Empty(t, fs.(*fileSystem).CommonFileSystem.Location)
 }
 
 func TestNew_EmptyBucketName(t *testing.T) {
 	config := &Config{BucketName: ""}
 
-	fs, err := New(config, nil, nil)
+	fs := New(config)
 
-	require.Error(t, err)
-	assert.Nil(t, fs)
-	assert.ErrorIs(t, err, errInvalidConfig)
+	require.NotNil(t, fs)
+	assert.Empty(t, fs.(*fileSystem).CommonFileSystem.Location)
 }
 
 func TestNew_ConnectionFailure_StartsRetry(t *testing.T) {
@@ -40,6 +38,12 @@ func TestNew_ConnectionFailure_StartsRetry(t *testing.T) {
 		CredentialsJSON: `{"type":"service_account","project_id":"test"}`,
 	}
 
+	fs := New(config)
+	require.NotNil(t, fs)
+
+	fs.UseLogger(mockLogger)
+	fs.UseMetrics(mockMetrics)
+
 	// Expect warning about background retry (with error in format string)
 	mockLogger.EXPECT().Warnf(
 		"GCS bucket %s not available, starting background retry: %v",
@@ -52,10 +56,8 @@ func TestNew_ConnectionFailure_StartsRetry(t *testing.T) {
 	mockLogger.EXPECT().Debug(gomock.Any())
 	mockMetrics.EXPECT().RecordHistogram(gomock.Any(), file.AppFileStats, gomock.Any(), gomock.Any())
 
-	fs, err := New(config, mockLogger, mockMetrics)
-
-	require.NoError(t, err)
-	require.NotNil(t, fs)
+	// Now connect
+	fs.Connect()
 
 	time.Sleep(100 * time.Millisecond)
 
@@ -74,9 +76,16 @@ func TestNew_Success(t *testing.T) {
 		EndPoint:   "http://localhost:4443",
 	}
 
+	fs := New(config)
+	require.NotNil(t, fs)
+
+	// Inject logger and metrics (mimicking AddFileStore behavior)
+	fs.UseLogger(mockLogger)
+	fs.UseMetrics(mockMetrics)
+
 	mockMetrics.EXPECT().NewHistogram(file.AppFileStats, gomock.Any(), gomock.Any())
 
-	mockLogger.EXPECT().Infof("connected to %s", "test-bucket").MaxTimes(1)
+	mockLogger.EXPECT().Infof("GCS connection established to bucket %s", "test-bucket").MaxTimes(1)
 	mockLogger.EXPECT().Warnf(
 		"GCS bucket %s not available, starting background retry: %v",
 		"test-bucket",
@@ -86,10 +95,8 @@ func TestNew_Success(t *testing.T) {
 	mockLogger.EXPECT().Debug(gomock.Any())
 	mockMetrics.EXPECT().RecordHistogram(gomock.Any(), file.AppFileStats, gomock.Any(), gomock.Any())
 
-	fs, err := New(config, mockLogger, mockMetrics)
-
-	require.NoError(t, err)
-	require.NotNil(t, fs)
+	// Now connect
+	fs.Connect()
 
 	// If connected, verify state
 	if fs.(*fileSystem).CommonFileSystem.IsConnected() {
