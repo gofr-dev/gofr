@@ -286,3 +286,61 @@ func TestConnectionPoolConfig_ClonesDefaultTransport(t *testing.T) {
 	assert.Equal(t, defaultTransport.TLSHandshakeTimeout, transport.TLSHandshakeTimeout)
 	assert.NotNil(t, transport.Proxy, "Proxy function should be set from default transport")
 }
+
+func TestConnectionPoolConfig_AddOption_WithRateLimiterWrapper(t *testing.T) {
+	baseService := &httpService{
+		Client: &http.Client{},
+	}
+
+	rlConfig := &RateLimiterConfig{
+		Requests: 10,
+		Window:   time.Minute,
+		Burst:    20,
+	}
+
+	wrappedService := rlConfig.AddOption(baseService)
+
+	config := &ConnectionPoolConfig{
+		MaxIdleConns:        50,
+		MaxIdleConnsPerHost: 15,
+		IdleConnTimeout:     60 * time.Second,
+	}
+
+	result := config.AddOption(wrappedService)
+
+	assert.Equal(t, wrappedService, result)
+
+	transport, ok := baseService.Client.Transport.(*http.Transport)
+
+	assert.True(t, ok, "Transport should be of type *http.Transport")
+	assert.Equal(t, 50, transport.MaxIdleConns)
+	assert.Equal(t, 15, transport.MaxIdleConnsPerHost)
+	assert.Equal(t, 60*time.Second, transport.IdleConnTimeout)
+}
+
+func TestConnectionPoolConfig_AddOption_WithCustomHeaderWrapper(t *testing.T) {
+	baseService := &httpService{
+		Client: &http.Client{},
+	}
+
+	wrappedService := (&DefaultHeaders{
+		Headers: map[string]string{"X-Custom": "value"},
+	}).AddOption(baseService)
+
+	config := &ConnectionPoolConfig{
+		MaxIdleConns:        50,
+		MaxIdleConnsPerHost: 15,
+		IdleConnTimeout:     60 * time.Second,
+	}
+
+	result := config.AddOption(wrappedService)
+
+	assert.Equal(t, wrappedService, result)
+
+	transport, ok := baseService.Client.Transport.(*http.Transport)
+
+	assert.True(t, ok, "Transport should be of type *http.Transport")
+	assert.Equal(t, 50, transport.MaxIdleConns)
+	assert.Equal(t, 15, transport.MaxIdleConnsPerHost)
+	assert.Equal(t, 60*time.Second, transport.IdleConnTimeout)
+}

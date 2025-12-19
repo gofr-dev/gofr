@@ -89,9 +89,9 @@ func Customer(ctx *gofr.Context) (any, error) {
 GoFr provides its user with additional configurational options while registering HTTP service for communication. These are:
 
 - **ConnectionPoolConfig** - This option allows the user to configure HTTP connection pool settings to optimize performance for high-frequency requests. The default Go HTTP client has `MaxIdleConnsPerHost: 2`, which is often insufficient for microservices making frequent requests to the same host. This configuration allows customizing:
-  - `MaxIdleConns`: Maximum idle connections across all hosts (default: 100)
-  - `MaxIdleConnsPerHost`: Maximum idle connections per host (critical for performance, default Go value: 2)
-  - `IdleConnTimeout`: How long to keep idle connections alive (default: 90 seconds)
+  - `MaxIdleConns`: Maximum idle connections across all hosts. If not explicitly set (0), a default of 100 will be used.
+  - `MaxIdleConnsPerHost`: Maximum idle connections per host (critical for performance). If set to 0, Go's DefaultMaxIdleConnsPerHost (2) will be used. Negative values will cause validation error.
+  - `IdleConnTimeout`: How long to keep idle connections alive. If not explicitly set (0), a default of 90 seconds will be used.
   
   **Important**: `ConnectionPoolConfig` must be applied **first** when using multiple options, as it needs access to the underlying HTTP client transport.
 

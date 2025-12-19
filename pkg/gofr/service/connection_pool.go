@@ -32,20 +32,22 @@ var (
 //	)
 type ConnectionPoolConfig struct {
 	// MaxIdleConns controls the maximum number of idle (keep-alive) connections across all hosts.
-	// Zero means no limit. Negative values will cause validation error.
-	// Default (if not set): 100
+	// If not explicitly set (0), a default of 100 will be used.
+	// Negative values will cause validation error.
 	MaxIdleConns int
 
 	// MaxIdleConnsPerHost controls the maximum idle (keep-alive) connections to keep per-host.
 	// This is the critical setting for microservices making frequent requests to the same host.
-	// Zero uses DefaultMaxIdleConnsPerHost (2). Negative values will cause validation error.
+	// If set to 0, Go's DefaultMaxIdleConnsPerHost (2) will be used.
+	// Negative values will cause validation error.
 	// Default Go value: 2 (which is often insufficient for microservices)
 	// Recommended: 10-20 for typical microservices, higher for high-traffic services
 	MaxIdleConnsPerHost int
 
 	// IdleConnTimeout is the maximum amount of time an idle (keep-alive) connection will remain
-	// idle before closing itself. Zero means no limit. Negative values will cause validation error.
-	// Default (if not set): 90 seconds
+	// idle before closing itself.
+	// If not explicitly set (0), a default of 90 seconds will be used.
+	// Negative values will cause validation error.
 	IdleConnTimeout time.Duration
 }
 
@@ -79,19 +81,16 @@ func (c *ConnectionPoolConfig) AddOption(h HTTP) HTTP {
 
 	// Validate configuration before applying
 	if err := c.Validate(); err != nil {
-		// Log the error but don't fail - maintain backward compatibility
-		// In production, this would be logged through the service logger
 		return h
 	}
 
 	// Clone the default transport to preserve important settings like TLS timeouts and proxy configuration
 	transport := http.DefaultTransport.(*http.Transport).Clone()
 
-	// Apply connection pool settings
-	// Use sensible defaults if not specified
+	// Apply connection pool settings with defaults
 	if c.MaxIdleConns > 0 {
 		transport.MaxIdleConns = c.MaxIdleConns
-	} else if c.MaxIdleConns == 0 {
+	} else {
 		// Set a reasonable default if not specified
 		transport.MaxIdleConns = 100
 	}
@@ -103,7 +102,7 @@ func (c *ConnectionPoolConfig) AddOption(h HTTP) HTTP {
 
 	if c.IdleConnTimeout > 0 {
 		transport.IdleConnTimeout = c.IdleConnTimeout
-	} else if c.IdleConnTimeout == 0 {
+	} else {
 		// Set a reasonable default if not specified
 		transport.IdleConnTimeout = 90 * time.Second
 	}
@@ -140,6 +139,16 @@ func extractHTTPService(h HTTP) *httpService {
 	// Check if it's a custom health service wrapper
 	if chs, ok := h.(*customHealthService); ok {
 		return extractHTTPService(chs.HTTP)
+	}
+
+	// Check if it's a rate limiter wrapper
+	if rl, ok := h.(*rateLimiter); ok {
+		return extractHTTPService(rl.HTTP)
+	}
+
+	// Check if it's a custom header wrapper
+	if ch, ok := h.(*customHeader); ok {
+		return extractHTTPService(ch.HTTP)
 	}
 
 	// If we can't extract it, return nil
