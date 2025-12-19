@@ -101,6 +101,45 @@ func TestNew_Success(t *testing.T) {
 	}
 }
 
+func TestGCSFileSystem_Observe_ProviderName(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	mockLogger := file.NewMockLogger(ctrl)
+	mockMetrics := file.NewMockMetrics(ctrl)
+
+	fs := &fileSystem{
+		CommonFileSystem: &file.CommonFileSystem{
+			Location:     "test-bucket",
+			Logger:       mockLogger,
+			Metrics:      mockMetrics,
+			ProviderName: "GCS",
+		},
+	}
+
+	mockMetrics.EXPECT().RecordHistogram(
+		gomock.Any(),
+		file.AppFileStats,
+		gomock.Any(),
+		"type", gomock.Any(),
+		"status", gomock.Any(),
+		"provider", "GCS",
+	)
+
+	mockLogger.EXPECT().Debug(gomock.Any()).Do(func(log any) {
+		opLog, ok := log.(*file.OperationLog)
+		require.True(t, ok)
+		assert.Equal(t, "GCS", opLog.Provider)
+	})
+
+	operation := file.OpConnect
+	startTime := time.Now()
+	status := "SUCCESS"
+	message := "test message"
+
+	fs.Observe(operation, startTime, &status, &message)
+}
+
 func TestConnect_AlreadyConnected(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
