@@ -76,21 +76,17 @@ type Redis struct {
 	logger  datasource.Logger
 	config  *Config
 	metrics Metrics
-
-	// PubSub for Redis PubSub operations (separate struct, not embedded to avoid method conflicts)
-	PubSub *PubSub
 }
 
-// PubSub handles Redis PubSub operations, reusing the parent Redis connection.
+// PubSub handles Redis PubSub operations.
 type PubSub struct {
-	// Reference to parent Redis client connection (reused, not duplicated)
+	// Reference to Redis client connection
 	client *redis.Client
 
-	// Parent Redis for accessing config, logger, metrics
-	// parent.logger: Logger instance from the parent Redis client for logging operations
-	// parent.metrics: Metrics instance from the parent Redis client for recording metrics
-	// parent.config: Configuration from the parent Redis client (includes PubSubMode, StreamsConfig, etc.)
-	parent *Redis
+	// Configuration, logger, and metrics
+	config  *Config
+	logger  datasource.Logger
+	metrics Metrics
 
 	// Tracer for OpenTelemetry distributed tracing
 	tracer oteltrace.Tracer
@@ -127,10 +123,6 @@ func NewClient(c config.Config, logger datasource.Logger, metrics Metrics) *Redi
 		return nil
 	}
 
-	// Redirect go-redis internal logs to Gofr logger for consistent formatting
-	// go-redis v9 supports SetLogger to customize logging
-	redis.SetLogger(&gofrRedisLogger{logger: logger})
-
 	rc := redis.NewClient(redisConfig.Options)
 	rc.AddHook(&redisHook{config: redisConfig, logger: logger, metrics: metrics})
 
@@ -142,11 +134,11 @@ func NewClient(c config.Config, logger datasource.Logger, metrics Metrics) *Redi
 			logger.Errorf("could not add tracing instrumentation, error: %s", err)
 		}
 
-		logger.Infof("connected to redis at %s:%d on database %d", redactRedisHostname(redisConfig.HostName), redisConfig.Port, redisConfig.DB)
+		logger.Infof("connected to redis at %s:%d on database %d", redisConfig.HostName, redisConfig.Port, redisConfig.DB)
 	} else {
-		logger.Errorf("could not connect to redis at '%s:%d' , error: %s", redactRedisHostname(redisConfig.HostName), redisConfig.Port, err)
+		logger.Errorf("could not connect to redis at '%s:%d' , error: %s", redisConfig.HostName, redisConfig.Port, err)
 
-		go retryConnect(rc, redisConfig, logger)
+		go retryConnect(rc, logger)
 	}
 
 	r := &Redis{
@@ -156,22 +148,11 @@ func NewClient(c config.Config, logger datasource.Logger, metrics Metrics) *Redi
 		metrics: metrics,
 	}
 
-	// Initialize PubSub if PUBSUB_BACKEND=REDIS
-	pubsubBackend := c.Get("PUBSUB_BACKEND")
-
-	if strings.EqualFold(pubsubBackend, "REDIS") {
-		logger.Debug("PUBSUB_BACKEND is set to REDIS, initializing PubSub")
-
-		r.PubSub = newPubSub(r, rc)
-	} else {
-		logger.Debug("PubSub not initialized because PUBSUB_BACKEND is not REDIS")
-	}
-
 	return r
 }
 
 // retryConnect handles the retry mechanism for connecting to Redis.
-func retryConnect(client *redis.Client, _ *Config, logger datasource.Logger) {
+func retryConnect(client *redis.Client, logger datasource.Logger) {
 	for {
 		time.Sleep(defaultRetryTimeout)
 
@@ -195,19 +176,12 @@ func retryConnect(client *redis.Client, _ *Config, logger datasource.Logger) {
 }
 
 // Close shuts down the Redis client, ensuring the current dataset is saved before exiting.
-// Also closes PubSub if it was initialized.
 func (r *Redis) Close() error {
-	var err error
-
-	if r.PubSub != nil {
-		err = r.PubSub.Close()
-	}
-
 	if r.Client != nil {
-		err = errors.Join(err, r.Client.Close())
+		return r.Client.Close()
 	}
 
-	return err
+	return nil
 }
 
 // NewPubSub creates a new PubSub client that implements pubsub.Client interface.
@@ -232,18 +206,9 @@ func NewPubSub(conf config.Config, logger datasource.Logger, metrics Metrics) pu
 	// This prevents keyspace collisions (e.g., HASH vs STREAM on `gofr_migrations`) when Redis is used for both
 	// migrations and PubSub (streams mode).
 	//
-	// If not set or invalid, we fall back to REDIS_DB.
-	if dbStr := conf.Get("REDIS_PUBSUB_DB"); dbStr != "" {
-		if db, err := strconv.Atoi(dbStr); err == nil && db >= 0 {
-			redisConfig.DB = db
-			if redisConfig.Options != nil {
-				redisConfig.Options.DB = db
-			}
-		}
-	}
-
-	// Redirect go-redis internal logs to Gofr logger for consistent formatting
-	redis.SetLogger(&gofrRedisLogger{logger: logger})
+	// If not set or invalid, we default to database 15 (highest default Redis database)
+	// to avoid collisions with the main Redis database (typically 0).
+	setPubSubDB(conf, redisConfig)
 
 	rc := redis.NewClient(redisConfig.Options)
 	rc.AddHook(&redisHook{config: redisConfig, logger: logger, metrics: metrics})
@@ -256,31 +221,55 @@ func NewPubSub(conf config.Config, logger datasource.Logger, metrics Metrics) pu
 			logger.Errorf("could not add tracing instrumentation, error: %s", err)
 		}
 
-		logger.Infof("connected to redis at %s:%d on database %d", redactRedisHostname(redisConfig.HostName), redisConfig.Port, redisConfig.DB)
+		logger.Infof("connected to redis at %s:%d on database %d", redisConfig.HostName, redisConfig.Port, redisConfig.DB)
 	} else {
-		logger.Errorf("could not connect to redis at '%s:%d' , error: %s", redactRedisHostname(redisConfig.HostName), redisConfig.Port, err)
+		logger.Errorf("could not connect to redis at '%s:%d' , error: %s", redisConfig.HostName, redisConfig.Port, err)
 
-		go retryConnect(rc, redisConfig, logger)
+		go retryConnect(rc, logger)
 	}
 
-	r := &Redis{
-		Client:  rc,
-		config:  redisConfig,
-		logger:  logger,
-		metrics: metrics,
-	}
+	ps := newPubSub(rc, redisConfig, logger, metrics)
 
-	// Initialize PubSub
-	r.PubSub = newPubSub(r, rc)
-
-	return r.PubSub
+	return ps
 }
 
-// newPubSub creates a new PubSub instance that reuses the parent Redis connection.
-func newPubSub(parent *Redis, client *redis.Client) *PubSub {
+// setPubSubDB sets the PubSub database number from config or defaults to 15.
+func setPubSubDB(conf config.Config, redisConfig *Config) {
+	dbStr := conf.Get("REDIS_PUBSUB_DB")
+	if dbStr == "" {
+		redisConfig.DB = defaultPubSubDB
+		if redisConfig.Options != nil {
+			redisConfig.Options.DB = defaultPubSubDB
+		}
+
+		return
+	}
+
+	db, err := strconv.Atoi(dbStr)
+	if err != nil || db < 0 {
+		// Invalid value, use default
+		redisConfig.DB = defaultPubSubDB
+		if redisConfig.Options != nil {
+			redisConfig.Options.DB = defaultPubSubDB
+		}
+
+		return
+	}
+
+	// Valid value, use it
+	redisConfig.DB = db
+	if redisConfig.Options != nil {
+		redisConfig.Options.DB = db
+	}
+}
+
+// newPubSub creates a new PubSub instance.
+func newPubSub(client *redis.Client, redisCfg *Config, logger datasource.Logger, metrics Metrics) *PubSub {
 	ps := &PubSub{
 		client:          client,
-		parent:          parent,
+		config:          redisCfg,
+		logger:          logger,
+		metrics:         metrics,
 		tracer:          otelglobal.GetTracerProvider().Tracer("gofr"),
 		receiveChan:     make(map[string]chan *pubsub.Message),
 		subStarted:      make(map[string]struct{}),

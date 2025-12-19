@@ -21,7 +21,7 @@ func (ps *PubSub) Publish(ctx context.Context, topic string, message []byte) err
 	ctx, span := ps.tracer.Start(ctx, "redis-publish")
 	defer span.End()
 
-	ps.parent.metrics.IncrementCounter(ctx, "app_pubsub_publish_total_count", "topic", topic)
+	ps.metrics.IncrementCounter(ctx, "app_pubsub_publish_total_count", "topic", topic)
 
 	if topic == "" {
 		return errEmptyTopicName
@@ -31,7 +31,7 @@ func (ps *PubSub) Publish(ctx context.Context, topic string, message []byte) err
 		return errClientNotConnected
 	}
 
-	mode := ps.parent.config.PubSubMode
+	mode := ps.config.PubSubMode
 	if mode == "" {
 		mode = modeStreams
 	}
@@ -45,45 +45,42 @@ func (ps *PubSub) Publish(ctx context.Context, topic string, message []byte) err
 
 // publishToChannel publishes a message to a Redis PubSub channel.
 func (ps *PubSub) publishToChannel(ctx context.Context, topic string, message []byte, span trace.Span) error {
-	start := time.Now()
 	err := ps.client.Publish(ctx, topic, message).Err()
-	end := time.Since(start)
-
 	if err != nil {
-		ps.parent.logger.Errorf("failed to publish message to Redis channel '%s': %v", topic, err)
+		ps.logger.Errorf("failed to publish message to Redis channel '%s': %v", topic, err)
 		return err
 	}
 
-	ps.logPubSub("PUB", topic, span, string(message), end.Microseconds(), "")
-	ps.parent.metrics.IncrementCounter(ctx, "app_pubsub_publish_success_count", "topic", topic)
+	traceID := span.SpanContext().TraceID().String()
+	addr := fmt.Sprintf("%s:%d", ps.config.HostName, ps.config.Port)
+	ps.logger.Debugf("PUB %s %s %s", topic, traceID, addr)
+	ps.metrics.IncrementCounter(ctx, "app_pubsub_publish_success_count", "topic", topic)
 
 	return nil
 }
 
 // publishToStream publishes a message to a Redis stream.
 func (ps *PubSub) publishToStream(ctx context.Context, topic string, message []byte, span trace.Span) error {
-	start := time.Now()
-
 	args := &redis.XAddArgs{
 		Stream: topic,
 		Values: map[string]any{"payload": message},
 	}
 
-	if ps.parent.config.PubSubStreamsConfig != nil && ps.parent.config.PubSubStreamsConfig.MaxLen > 0 {
-		args.MaxLen = ps.parent.config.PubSubStreamsConfig.MaxLen
+	if ps.config.PubSubStreamsConfig != nil && ps.config.PubSubStreamsConfig.MaxLen > 0 {
+		args.MaxLen = ps.config.PubSubStreamsConfig.MaxLen
 		args.Approx = true
 	}
 
-	id, err := ps.client.XAdd(ctx, args).Result()
-	end := time.Since(start)
-
+	_, err := ps.client.XAdd(ctx, args).Result()
 	if err != nil {
-		ps.parent.logger.Errorf("failed to publish message to Redis stream '%s': %v", topic, err)
+		ps.logger.Errorf("failed to publish message to Redis stream '%s': %v", topic, err)
 		return err
 	}
 
-	ps.logPubSub("PUB", topic, span, string(message), end.Microseconds(), id)
-	ps.parent.metrics.IncrementCounter(ctx, "app_pubsub_publish_success_count", "topic", topic)
+	traceID := span.SpanContext().TraceID().String()
+	addr := fmt.Sprintf("%s:%d", ps.config.HostName, ps.config.Port)
+	ps.logger.Debugf("PUB %s %s %s", topic, traceID, addr)
+	ps.metrics.IncrementCounter(ctx, "app_pubsub_publish_success_count", "topic", topic)
 
 	return nil
 }
@@ -99,14 +96,14 @@ func (ps *PubSub) Subscribe(ctx context.Context, topic string) (*pubsub.Message,
 		case <-ctx.Done():
 			return nil, nil
 		case <-time.After(defaultRetryTimeout):
-			ps.logDebug("Redis not connected, retrying subscribe for topic '%s'", topic)
+			ps.logger.Debugf("Redis not connected, retrying subscribe for topic '%s'", topic)
 		}
 	}
 
 	spanCtx, span := ps.tracer.Start(ctx, "redis-subscribe")
 	defer span.End()
 
-	ps.parent.metrics.IncrementCounter(spanCtx, "app_pubsub_subscribe_total_count", "topic", topic)
+	ps.metrics.IncrementCounter(spanCtx, "app_pubsub_subscribe_total_count", "topic", topic)
 
 	msgChan := ps.ensureSubscription(ctx, topic)
 
@@ -126,7 +123,7 @@ func (ps *PubSub) ensureSubscription(_ context.Context, topic string) chan *pubs
 	}
 
 	// Initialize channel before starting subscription
-	bufferSize := ps.parent.config.PubSubBufferSize
+	bufferSize := ps.config.PubSubBufferSize
 	if bufferSize == 0 {
 		bufferSize = defaultPubSubBufferSize // fallback default
 	}
@@ -148,7 +145,7 @@ func (ps *PubSub) ensureSubscription(_ context.Context, topic string) chan *pubs
 		defer wg.Done()
 		defer cancel()
 
-		mode := ps.parent.config.PubSubMode
+		mode := ps.config.PubSubMode
 		if mode == "" {
 			mode = modeStreams
 		}
@@ -165,7 +162,7 @@ func (ps *PubSub) ensureSubscription(_ context.Context, topic string) chan *pubs
 			}
 
 			if subCtx.Err() == nil {
-				ps.logDebug("Subscription stopped for topic '%s', restarting...", topic)
+				ps.logger.Debugf("Subscription stopped for topic '%s', restarting...", topic)
 				time.Sleep(defaultRetryTimeout)
 			}
 		}
@@ -181,10 +178,12 @@ func (ps *PubSub) waitForMessage(ctx context.Context, spanCtx context.Context, s
 	topic string, msgChan chan *pubsub.Message) *pubsub.Message {
 	select {
 	case msg := <-msgChan:
-		ps.parent.metrics.IncrementCounter(spanCtx, "app_pubsub_subscribe_success_count", "topic", topic)
+		ps.metrics.IncrementCounter(spanCtx, "app_pubsub_subscribe_success_count", "topic", topic)
 
 		if msg != nil {
-			ps.logPubSub("SUB", topic, span, string(msg.Value), 0, "")
+			traceID := span.SpanContext().TraceID().String()
+			addr := fmt.Sprintf("%s:%d", ps.config.HostName, ps.config.Port)
+			ps.logger.Debugf("SUB %s %s %s", topic, traceID, addr)
 		}
 
 		return msg
@@ -197,7 +196,7 @@ func (ps *PubSub) waitForMessage(ctx context.Context, spanCtx context.Context, s
 func (ps *PubSub) subscribeToChannel(ctx context.Context, topic string) {
 	redisPubSub := ps.client.Subscribe(ctx, topic)
 	if redisPubSub == nil {
-		ps.logError("failed to create PubSub connection for topic '%s'", topic)
+		ps.logger.Errorf("failed to create PubSub connection for topic '%s'", topic)
 		return
 	}
 
@@ -217,7 +216,7 @@ func (ps *PubSub) subscribeToChannel(ctx context.Context, topic string) {
 
 	ch := redisPubSub.Channel()
 	if ch == nil {
-		ps.logError("failed to get channel from PubSub for topic '%s'", topic)
+		ps.logger.Errorf("failed to get channel from PubSub for topic '%s'", topic)
 		return
 	}
 
@@ -226,12 +225,12 @@ func (ps *PubSub) subscribeToChannel(ctx context.Context, topic string) {
 
 // subscribeToStream subscribes to a Redis stream via a consumer group.
 func (ps *PubSub) subscribeToStream(ctx context.Context, topic string) {
-	if ps.parent.config.PubSubStreamsConfig == nil || ps.parent.config.PubSubStreamsConfig.ConsumerGroup == "" {
-		ps.logError("consumer group not configured for stream '%s'", topic)
+	if ps.config.PubSubStreamsConfig == nil || ps.config.PubSubStreamsConfig.ConsumerGroup == "" {
+		ps.logger.Errorf("consumer group not configured for stream '%s'", topic)
 		return
 	}
 
-	group := ps.parent.config.PubSubStreamsConfig.ConsumerGroup
+	group := ps.config.PubSubStreamsConfig.ConsumerGroup
 
 	if !ps.ensureConsumerGroup(ctx, topic, group) {
 		return
@@ -240,7 +239,7 @@ func (ps *PubSub) subscribeToStream(ctx context.Context, topic string) {
 	consumer := ps.getConsumerName()
 	ps.storeStreamConsumer(topic, group, consumer)
 
-	block := ps.parent.config.PubSubStreamsConfig.Block
+	block := ps.config.PubSubStreamsConfig.Block
 	if block == 0 {
 		block = 5 * time.Second
 	}
@@ -310,14 +309,14 @@ func (ps *PubSub) createConsumerGroup(ctx context.Context, topic, group string) 
 	}
 
 	// Log error and return false to indicate failure
-	ps.parent.logger.Errorf("failed to create consumer group for stream '%s': %v", topic, err)
+	ps.logger.Errorf("failed to create consumer group for stream '%s': %v", topic, err)
 
 	return false
 }
 
 func (ps *PubSub) consumeStreamMessages(ctx context.Context, topic, group, consumer string, block time.Duration) {
 	// Read new messages
-	bufferSize := ps.parent.config.PubSubBufferSize
+	bufferSize := ps.config.PubSubBufferSize
 	if bufferSize == 0 {
 		bufferSize = defaultPubSubBufferSize // fallback default
 	}
@@ -331,19 +330,15 @@ func (ps *PubSub) consumeStreamMessages(ctx context.Context, topic, group, consu
 		NoAck:    false,
 	}).Result()
 	if err != nil {
-		if errors.Is(err, context.Canceled) {
+		switch {
+		case errors.Is(err, context.Canceled), errors.Is(err, redis.Nil):
+			return
+		default:
+			ps.logger.Errorf("failed to read from stream '%s': %v", topic, err)
+			time.Sleep(defaultRetryTimeout)
+
 			return
 		}
-
-		// Redis timeout
-		if errors.Is(err, redis.Nil) {
-			return
-		}
-
-		ps.logError("failed to read from stream '%s': %v", topic, err)
-		time.Sleep(defaultRetryTimeout)
-
-		return
 	}
 
 	for _, stream := range streams {
@@ -355,8 +350,8 @@ func (ps *PubSub) consumeStreamMessages(ctx context.Context, topic, group, consu
 
 // getConsumerName returns the configured consumer name or generates one.
 func (ps *PubSub) getConsumerName() string {
-	if ps.parent.config.PubSubStreamsConfig != nil && ps.parent.config.PubSubStreamsConfig.ConsumerName != "" {
-		return ps.parent.config.PubSubStreamsConfig.ConsumerName
+	if ps.config.PubSubStreamsConfig != nil && ps.config.PubSubStreamsConfig.ConsumerName != "" {
+		return ps.config.PubSubStreamsConfig.ConsumerName
 	}
 
 	hostname, _ := os.Hostname()
@@ -373,7 +368,7 @@ func (ps *PubSub) processMessages(ctx context.Context, topic string, ch <-chan *
 			return
 		case msg, ok := <-ch:
 			if !ok {
-				ps.logDebug("Redis subscription channel closed for topic '%s'", topic)
+				ps.logger.Debugf("Redis subscription channel closed for topic '%s'", topic)
 				return
 			}
 
@@ -400,7 +395,7 @@ func (ps *PubSub) handleMessage(ctx context.Context, topic string, msg *redis.Me
 func (ps *PubSub) handleStreamMessage(ctx context.Context, topic string, msg *redis.XMessage, group string) {
 	m := pubsub.NewMessage(ctx)
 	m.Topic = topic
-	m.Committer = newStreamMessage(ps.client, topic, group, msg.ID, ps.parent.logger)
+	m.Committer = newStreamMessage(ps.client, topic, group, msg.ID, ps.logger)
 
 	// Extract payload
 	if val, ok := msg.Values["payload"]; ok {
@@ -411,7 +406,7 @@ func (ps *PubSub) handleStreamMessage(ctx context.Context, topic string, msg *re
 			m.Value = v
 		}
 	} else {
-		ps.logDebug("received stream message without 'payload' key on topic '%s'", topic)
+		ps.logger.Debugf("received stream message without 'payload' key on topic '%s'", topic)
 	}
 
 	ps.dispatchMessage(ctx, topic, m)
@@ -433,7 +428,7 @@ func (ps *PubSub) dispatchMessage(ctx context.Context, topic string, m *pubsub.M
 	case <-ctx.Done():
 		return
 	default:
-		ps.logError("message channel full for topic '%s', dropping message", topic)
+		ps.logger.Errorf("message channel full for topic '%s', dropping message", topic)
 	}
 }
 
@@ -446,10 +441,10 @@ func (ps *PubSub) Health() datasource.Health {
 		},
 	}
 
-	addr := fmt.Sprintf("%s:%d", ps.parent.config.HostName, ps.parent.config.Port)
+	addr := fmt.Sprintf("%s:%d", ps.config.HostName, ps.config.Port)
 	res.Details["addr"] = addr
 
-	mode := ps.parent.config.PubSubMode
+	mode := ps.config.PubSubMode
 	if mode == "" {
 		mode = modeStreams
 	}
@@ -460,7 +455,7 @@ func (ps *PubSub) Health() datasource.Health {
 	defer cancel()
 
 	if err := ps.client.Ping(ctx).Err(); err != nil {
-		ps.parent.logger.Errorf("PubSub health check failed: %v", err)
+		ps.logger.Errorf("PubSub health check failed: %v", err)
 		return res
 	}
 
@@ -472,7 +467,7 @@ func (ps *PubSub) Health() datasource.Health {
 // CreateTopic is a no-op for Redis PubSub (channels are created on first publish/subscribe).
 // For Redis Streams, it creates the stream and consumer group.
 func (ps *PubSub) CreateTopic(ctx context.Context, name string) error {
-	mode := ps.parent.config.PubSubMode
+	mode := ps.config.PubSubMode
 	if mode == "" {
 		mode = modeStreams
 	}
@@ -487,11 +482,11 @@ func (ps *PubSub) CreateTopic(ctx context.Context, name string) error {
 
 // createStreamTopic creates a stream topic with consumer group.
 func (ps *PubSub) createStreamTopic(ctx context.Context, name string) error {
-	if ps.parent.config.PubSubStreamsConfig == nil || ps.parent.config.PubSubStreamsConfig.ConsumerGroup == "" {
+	if ps.config.PubSubStreamsConfig == nil || ps.config.PubSubStreamsConfig.ConsumerGroup == "" {
 		return errConsumerGroupNotProvided
 	}
 
-	group := ps.parent.config.PubSubStreamsConfig.ConsumerGroup
+	group := ps.config.PubSubStreamsConfig.ConsumerGroup
 
 	groupExists := ps.checkGroupExists(ctx, name, group)
 	if groupExists {
@@ -512,7 +507,7 @@ func (ps *PubSub) DeleteTopic(ctx context.Context, topic string) error {
 		return nil
 	}
 
-	mode := ps.parent.config.PubSubMode
+	mode := ps.config.PubSubMode
 	if mode == "" {
 		mode = modeStreams
 	}
@@ -553,7 +548,7 @@ func (ps *PubSub) unsubscribe(topic string) error {
 	ps.chanClosed[topic] = true
 	ps.mu.Unlock()
 
-	mode := ps.parent.config.PubSubMode
+	mode := ps.config.PubSubMode
 	if mode == "" {
 		mode = modeStreams
 	}
@@ -586,7 +581,7 @@ func (ps *PubSub) unsubscribeFromRedis(topic string) {
 	defer cancel()
 
 	if err := pubSub.Unsubscribe(ctx, topic); err != nil {
-		ps.logError("failed to unsubscribe from Redis channel '%s': %v", topic, err)
+		ps.logger.Errorf("failed to unsubscribe from Redis channel '%s': %v", topic, err)
 	}
 }
 
@@ -621,7 +616,7 @@ func (ps *PubSub) waitForGoroutine(topic string) {
 	select {
 	case <-done:
 	case <-time.After(goroutineWaitTimeout):
-		ps.logDebug("timeout waiting for subscription goroutine for topic '%s'", topic)
+		ps.logger.Debugf("timeout waiting for subscription goroutine for topic '%s'", topic)
 	}
 
 	ps.mu.Lock()
@@ -679,7 +674,7 @@ func (ps *PubSub) Query(ctx context.Context, query string, args ...any) ([]byte,
 		return nil, errEmptyTopicName
 	}
 
-	mode := ps.parent.config.PubSubMode
+	mode := ps.config.PubSubMode
 	if mode == "" {
 		mode = modeStreams
 	}
@@ -784,12 +779,12 @@ func (*PubSub) collectMessages(ctx context.Context, ch <-chan *redis.Message, li
 // It uses config defaults if not provided, but allows override via args.
 func (ps *PubSub) parseQueryArgs(args ...any) (timeout time.Duration, limit int) {
 	// Get defaults from config
-	timeout = ps.parent.config.PubSubQueryTimeout
+	timeout = ps.config.PubSubQueryTimeout
 	if timeout == 0 {
 		timeout = defaultPubSubQueryTimeout // fallback default
 	}
 
-	limit = ps.parent.config.PubSubQueryLimit
+	limit = ps.config.PubSubQueryLimit
 	if limit == 0 {
 		limit = defaultPubSubQueryLimit // fallback default
 	}
@@ -818,36 +813,6 @@ func (ps *PubSub) isConnected() bool {
 	defer cancel()
 
 	return ps.client.Ping(ctx).Err() == nil
-}
-
-// logDebug logs a debug message.
-func (ps *PubSub) logDebug(format string, args ...any) {
-	ps.parent.logger.Debugf(format, args...)
-}
-
-// logError logs an error message.
-func (ps *PubSub) logError(format string, args ...any) {
-	ps.parent.logger.Errorf(format, args...)
-}
-
-// logInfo logs an info message.
-func (ps *PubSub) logInfo(format string, args ...any) {
-	ps.parent.logger.Infof(format, args...)
-}
-
-// logPubSub logs a PubSub operation.
-func (ps *PubSub) logPubSub(mode, topic string, span trace.Span, messageValue string, duration int64, streamID string) {
-	traceID := span.SpanContext().TraceID().String()
-	addr := fmt.Sprintf("%s:%d", ps.parent.config.HostName, ps.parent.config.Port)
-
-	// Create a simple log entry
-	// Note: messageValue, duration, and streamID are available but not used in current simple format
-	// They can be used if we enhance the log format in the future
-	_ = messageValue
-	_ = duration
-	_ = streamID
-
-	ps.parent.logger.Debugf("%s %s %s %s", mode, topic, traceID, addr)
 }
 
 // Close closes all active subscriptions and cleans up resources.
@@ -911,7 +876,7 @@ func (ps *PubSub) waitForAllGoroutines() {
 		select {
 		case <-done:
 		case <-time.After(goroutineWaitTimeout):
-			ps.logDebug("timeout waiting for subscription goroutine for topic '%s'", topic)
+			ps.logger.Debugf("timeout waiting for subscription goroutine for topic '%s'", topic)
 		}
 
 		delete(ps.subWg, topic)
@@ -933,11 +898,11 @@ func (ps *PubSub) monitorConnection(ctx context.Context) {
 			connected := ps.isConnected()
 
 			if !connected && wasConnected {
-				ps.logError("Redis connection lost")
+				ps.logger.Errorf("Redis connection lost")
 
 				wasConnected = false
 			} else if connected && !wasConnected {
-				ps.logInfo("Redis connection restored")
+				ps.logger.Infof("Redis connection restored")
 
 				wasConnected = true
 
@@ -954,6 +919,6 @@ func (ps *PubSub) resubscribeAll() {
 	defer ps.mu.RUnlock()
 
 	if len(ps.subStarted) > 0 {
-		ps.logInfo("Ensuring all subscriptions are active after reconnection")
+		ps.logger.Infof("Ensuring all subscriptions are active after reconnection")
 	}
 }

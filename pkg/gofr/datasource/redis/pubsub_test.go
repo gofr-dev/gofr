@@ -127,7 +127,13 @@ var (
 	errMockDel         = errors.New("mock del error")
 )
 
-func setupTest(t *testing.T, conf map[string]string) (*Redis, *miniredis.Miniredis) {
+// testRedisClient is a test helper that wraps Redis and PubSub for backward compatibility with tests.
+type testRedisClient struct {
+	*Redis
+	PubSub *PubSub
+}
+
+func setupTest(t *testing.T, conf map[string]string) (*testRedisClient, *miniredis.Miniredis) {
 	t.Helper()
 
 	s, err := miniredis.Run()
@@ -149,12 +155,15 @@ func setupTest(t *testing.T, conf map[string]string) (*Redis, *miniredis.Minired
 	conf["PUBSUB_BACKEND"] = "REDIS"
 
 	client := NewClient(config.NewMockConfig(conf), mockLogger, mockMetrics)
-	require.NotNil(t, client.PubSub)
+	ps := NewPubSub(config.NewMockConfig(conf), mockLogger, mockMetrics)
+	require.NotNil(t, ps)
+	psClient, ok := ps.(*PubSub)
+	require.True(t, ok)
 
-	return client, s
+	return &testRedisClient{Redis: client, PubSub: psClient}, s
 }
 
-func setupMockTest(t *testing.T, conf map[string]string) (*Redis, redismock.ClientMock) {
+func setupMockTest(t *testing.T, conf map[string]string) (*testRedisClient, redismock.ClientMock) {
 	t.Helper()
 
 	db, mock := redismock.NewClientMock()
@@ -186,9 +195,9 @@ func setupMockTest(t *testing.T, conf map[string]string) (*Redis, redismock.Clie
 		metrics: mockMetrics,
 	}
 	// Initialize PubSub manually with mock client
-	r.PubSub = newPubSub(r, db)
+	ps := newPubSub(db, redisConfig, mockLogger, mockMetrics)
 
-	return r, mock
+	return &testRedisClient{Redis: r, PubSub: ps}, mock
 }
 
 func TestPubSub_Operations(t *testing.T) {
@@ -208,7 +217,7 @@ func TestPubSub_Operations(t *testing.T) {
 func getPubSubTestCases() []struct {
 	name    string
 	config  map[string]string
-	actions func(t *testing.T, client *Redis, s *miniredis.Miniredis)
+	actions func(t *testing.T, client *testRedisClient, s *miniredis.Miniredis)
 } {
 	return append(
 		getBasicTestCases(),
@@ -219,19 +228,19 @@ func getPubSubTestCases() []struct {
 func getBasicTestCases() []struct {
 	name    string
 	config  map[string]string
-	actions func(t *testing.T, client *Redis, s *miniredis.Miniredis)
+	actions func(t *testing.T, client *testRedisClient, s *miniredis.Miniredis)
 } {
 	return []struct {
 		name    string
 		config  map[string]string
-		actions func(t *testing.T, client *Redis, s *miniredis.Miniredis)
+		actions func(t *testing.T, client *testRedisClient, s *miniredis.Miniredis)
 	}{
 		{
 			name: "Channel Publish Subscribe",
 			config: map[string]string{
 				"REDIS_PUBSUB_MODE": "pubsub",
 			},
-			actions: func(t *testing.T, client *Redis, _ *miniredis.Miniredis) {
+			actions: func(t *testing.T, client *testRedisClient, _ *miniredis.Miniredis) {
 				t.Helper()
 				testChannelPublishSubscribe(t, client)
 			},
@@ -243,7 +252,7 @@ func getBasicTestCases() []struct {
 				"REDIS_STREAMS_CONSUMER_GROUP": "grp",
 				"REDIS_STREAMS_BLOCK_TIMEOUT":  "100ms",
 			},
-			actions: func(t *testing.T, client *Redis, _ *miniredis.Miniredis) {
+			actions: func(t *testing.T, client *testRedisClient, _ *miniredis.Miniredis) {
 				t.Helper()
 				testStreamPublishSubscribe(t, client)
 			},
@@ -253,7 +262,7 @@ func getBasicTestCases() []struct {
 			config: map[string]string{
 				"REDIS_PUBSUB_MODE": "pubsub",
 			},
-			actions: func(t *testing.T, client *Redis, _ *miniredis.Miniredis) {
+			actions: func(t *testing.T, client *testRedisClient, _ *miniredis.Miniredis) {
 				t.Helper()
 				testDeleteTopicChannel(t, client)
 			},
@@ -264,7 +273,7 @@ func getBasicTestCases() []struct {
 				"REDIS_PUBSUB_MODE":            "streams",
 				"REDIS_STREAMS_CONSUMER_GROUP": "dgrp",
 			},
-			actions: func(t *testing.T, client *Redis, s *miniredis.Miniredis) {
+			actions: func(t *testing.T, client *testRedisClient, s *miniredis.Miniredis) {
 				t.Helper()
 				testDeleteTopicStream(t, client, s)
 			},
@@ -272,7 +281,7 @@ func getBasicTestCases() []struct {
 		{
 			name:   "Health Check",
 			config: map[string]string{},
-			actions: func(t *testing.T, client *Redis, _ *miniredis.Miniredis) {
+			actions: func(t *testing.T, client *testRedisClient, _ *miniredis.Miniredis) {
 				t.Helper()
 				testHealthCheck(t, client)
 			},
@@ -283,7 +292,7 @@ func getBasicTestCases() []struct {
 				"REDIS_PUBSUB_MODE": "streams",
 				// Missing REDIS_STREAMS_CONSUMER_GROUP
 			},
-			actions: func(t *testing.T, client *Redis, _ *miniredis.Miniredis) {
+			actions: func(t *testing.T, client *testRedisClient, _ *miniredis.Miniredis) {
 				t.Helper()
 				testStreamConfigError(t, client)
 			},
@@ -295,7 +304,7 @@ func getBasicTestCases() []struct {
 				"REDIS_STREAMS_CONSUMER_GROUP": "maxlen-grp",
 				"REDIS_STREAMS_MAXLEN":         "5",
 			},
-			actions: func(t *testing.T, client *Redis, _ *miniredis.Miniredis) {
+			actions: func(t *testing.T, client *testRedisClient, _ *miniredis.Miniredis) {
 				t.Helper()
 				testStreamMaxLen(t, client)
 			},
@@ -306,19 +315,19 @@ func getBasicTestCases() []struct {
 func getQueryTestCases() []struct {
 	name    string
 	config  map[string]string
-	actions func(t *testing.T, client *Redis, s *miniredis.Miniredis)
+	actions func(t *testing.T, client *testRedisClient, s *miniredis.Miniredis)
 } {
 	return []struct {
 		name    string
 		config  map[string]string
-		actions func(t *testing.T, client *Redis, s *miniredis.Miniredis)
+		actions func(t *testing.T, client *testRedisClient, s *miniredis.Miniredis)
 	}{
 		{
 			name: "Channel Query",
 			config: map[string]string{
 				"REDIS_PUBSUB_MODE": "pubsub",
 			},
-			actions: func(t *testing.T, client *Redis, _ *miniredis.Miniredis) {
+			actions: func(t *testing.T, client *testRedisClient, _ *miniredis.Miniredis) {
 				t.Helper()
 				testChannelQuery(t, client)
 			},
@@ -329,7 +338,7 @@ func getQueryTestCases() []struct {
 				"REDIS_PUBSUB_MODE":            "streams",
 				"REDIS_STREAMS_CONSUMER_GROUP": "qgrp",
 			},
-			actions: func(t *testing.T, client *Redis, _ *miniredis.Miniredis) {
+			actions: func(t *testing.T, client *testRedisClient, _ *miniredis.Miniredis) {
 				t.Helper()
 				testStreamQuery(t, client)
 			},
@@ -337,7 +346,7 @@ func getQueryTestCases() []struct {
 	}
 }
 
-func testChannelPublishSubscribe(t *testing.T, client *Redis) {
+func testChannelPublishSubscribe(t *testing.T, client *testRedisClient) {
 	t.Helper()
 
 	ctx := context.Background()
@@ -372,7 +381,7 @@ func testChannelPublishSubscribe(t *testing.T, client *Redis) {
 	}
 }
 
-func testStreamPublishSubscribe(t *testing.T, client *Redis) {
+func testStreamPublishSubscribe(t *testing.T, client *testRedisClient) {
 	t.Helper()
 
 	ctx := context.Background()
@@ -409,7 +418,7 @@ func testStreamPublishSubscribe(t *testing.T, client *Redis) {
 	}
 }
 
-func testChannelQuery(t *testing.T, client *Redis) {
+func testChannelQuery(t *testing.T, client *testRedisClient) {
 	t.Helper()
 
 	ctx := context.Background()
@@ -445,7 +454,7 @@ func testChannelQuery(t *testing.T, client *Redis) {
 	}
 }
 
-func testStreamQuery(t *testing.T, client *Redis) {
+func testStreamQuery(t *testing.T, client *testRedisClient) {
 	t.Helper()
 
 	ctx := context.Background()
@@ -524,7 +533,7 @@ func TestPubSub_Query_Stream_MiniredisCompatibility(t *testing.T) {
 	t.Logf("Query returned %d bytes (miniredis may return empty for XRANGE)", len(results))
 }
 
-func testDeleteTopicChannel(t *testing.T, client *Redis) {
+func testDeleteTopicChannel(t *testing.T, client *testRedisClient) {
 	t.Helper()
 
 	ctx := context.Background()
@@ -540,7 +549,7 @@ func testDeleteTopicChannel(t *testing.T, client *Redis) {
 	require.NoError(t, err)
 }
 
-func testDeleteTopicStream(t *testing.T, client *Redis, s *miniredis.Miniredis) {
+func testDeleteTopicStream(t *testing.T, client *testRedisClient, s *miniredis.Miniredis) {
 	t.Helper()
 
 	ctx := context.Background()
@@ -555,7 +564,7 @@ func testDeleteTopicStream(t *testing.T, client *Redis, s *miniredis.Miniredis) 
 	assert.False(t, exists)
 }
 
-func testHealthCheck(t *testing.T, client *Redis) {
+func testHealthCheck(t *testing.T, client *testRedisClient) {
 	t.Helper()
 
 	h := client.PubSub.Health()
@@ -563,7 +572,7 @@ func testHealthCheck(t *testing.T, client *Redis) {
 	assert.Equal(t, "streams", h.Details["mode"]) // Default mode is now streams
 }
 
-func testStreamConfigError(t *testing.T, client *Redis) {
+func testStreamConfigError(t *testing.T, client *testRedisClient) {
 	t.Helper()
 
 	ctx := context.Background()
@@ -577,7 +586,7 @@ func testStreamConfigError(t *testing.T, client *Redis) {
 	assert.NotNil(t, ch)
 }
 
-func testStreamMaxLen(t *testing.T, client *Redis) {
+func testStreamMaxLen(t *testing.T, client *testRedisClient) {
 	t.Helper()
 
 	ctx := context.Background()
@@ -612,15 +621,19 @@ func TestPubSub_Errors(t *testing.T) {
 	}
 
 	client := NewClient(config.NewMockConfig(conf), mockLogger, mockMetrics)
+	ps := NewPubSub(config.NewMockConfig(conf), mockLogger, mockMetrics)
+	require.NotNil(t, ps)
+	psClient, ok := ps.(*PubSub)
+	require.True(t, ok)
 
-	require.NotNil(t, client.PubSub)
 	defer client.Close()
+	defer psClient.Close()
 
 	ctx := context.Background()
 	topic := "err-topic"
 
 	// Publish error
-	err = client.PubSub.Publish(ctx, topic, []byte("msg"))
+	err = psClient.Publish(ctx, topic, []byte("msg"))
 	require.Error(t, err)
 	// We check for connection error, but specific error might vary (dial error vs errClientNotConnected)
 	// ps.Publish checks isConnected() -> errClientNotConnected
@@ -633,7 +646,7 @@ func TestPubSub_Errors(t *testing.T) {
 	ctxCancel, cancel := context.WithCancel(context.Background())
 	cancel()
 
-	msg, err := client.PubSub.Subscribe(ctxCancel, topic)
+	msg, err := psClient.Subscribe(ctxCancel, topic)
 	require.NoError(t, err)
 	assert.Nil(t, msg)
 }
@@ -818,18 +831,22 @@ func TestPubSub_MonitorConnection(t *testing.T) {
 	}
 
 	client := NewClient(config.NewMockConfig(conf), mockLogger, mockMetrics)
-	require.NotNil(t, client.PubSub)
+	ps := NewPubSub(config.NewMockConfig(conf), mockLogger, mockMetrics)
+	require.NotNil(t, ps)
 
 	defer client.Close()
+	defer ps.Close()
 
 	// Ensure connected
-	assert.True(t, client.PubSub.isConnected())
+	psClient, ok := ps.(*PubSub)
+	require.True(t, ok)
+	assert.True(t, psClient.isConnected())
 
 	// Subscribe to a topic to verify resubscription logic
 	topic := "monitor-topic"
 
 	go func() {
-		_, _ = client.PubSub.Subscribe(context.Background(), topic)
+		_, _ = psClient.Subscribe(context.Background(), topic)
 	}()
 
 	time.Sleep(100 * time.Millisecond)
@@ -840,7 +857,7 @@ func TestPubSub_MonitorConnection(t *testing.T) {
 	// Wait for monitor to detect loss (interval is short in tests?)
 	// The defaultRetryTimeout is 10s, which is too long for unit tests.
 	// We rely on the fact that isConnected() will return false.
-	assert.False(t, client.PubSub.isConnected())
+	assert.False(t, psClient.isConnected())
 
 	// Clean up new server
 	s.Close()

@@ -17,6 +17,7 @@ import (
 
 const (
 	defaultRedisPort        = 6379
+	defaultPubSubDB         = 15 // Highest default Redis database (0-15)
 	modePubSub              = "pubsub"
 	modeStreams             = "streams"
 	defaultPubSubBufferSize = 100

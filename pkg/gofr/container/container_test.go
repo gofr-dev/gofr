@@ -303,52 +303,33 @@ func TestWarnRedisPubSubSharedDB_WarnsWhenPubSubDBUnset(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
-	var warns []string
-
-	logger := NewMockLogger(ctrl)
-	logger.EXPECT().Warnf(gomock.Any()).Do(func(format string, args ...any) {
-		warns = append(warns, fmt.Sprintf(format, args...))
-	}).Times(1)
-
 	c := &Container{
-		Logger: logger,
+		Logger: NewMockLogger(ctrl),
 		Redis:  NewMockRedis(ctrl), // non-nil
 	}
 
+	// No warning expected when REDIS_PUBSUB_DB is unset (defaults to DB 15, which is safe)
 	c.warnIfRedisPubSubSharesRedisDB(config.NewMockConfig(map[string]string{
 		"REDIS_PUBSUB_MODE": "streams",
 		"REDIS_DB":          "0",
 	}))
-
-	require.Len(t, warns, 1)
-	require.Contains(t, warns[0], "REDIS_PUBSUB_DB")
 }
 
 func TestWarnRedisPubSubSharedDB_WarnsWhenPubSubDBInvalid(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
-	var warns []string
-
-	logger := NewMockLogger(ctrl)
-	logger.EXPECT().Warnf(gomock.Any()).Do(func(format string, args ...any) {
-		warns = append(warns, fmt.Sprintf(format, args...))
-	}).Times(1)
-
 	c := &Container{
-		Logger: logger,
+		Logger: NewMockLogger(ctrl),
 		Redis:  NewMockRedis(ctrl), // non-nil
 	}
 
+	// No warning expected when REDIS_PUBSUB_DB is invalid (will use default DB 15, which is safe)
 	c.warnIfRedisPubSubSharesRedisDB(config.NewMockConfig(map[string]string{
 		"REDIS_PUBSUB_MODE": "streams",
 		"REDIS_DB":          "0",
 		"REDIS_PUBSUB_DB":   "not-a-number",
 	}))
-
-	require.Len(t, warns, 1)
-	require.Contains(t, warns[0], "REDIS_PUBSUB_DB")
-	require.NotContains(t, warns[0], "not-a-number")
 }
 
 func TestWarnRedisPubSubSharedDB_WarnsWhenPubSubDBEqualsRedisDB(t *testing.T) {
@@ -358,7 +339,8 @@ func TestWarnRedisPubSubSharedDB_WarnsWhenPubSubDBEqualsRedisDB(t *testing.T) {
 	var warns []string
 
 	logger := NewMockLogger(ctrl)
-	logger.EXPECT().Warnf(gomock.Any()).Do(func(format string, args ...any) {
+	// Warnf is called with format string + 2 integer arguments (pubsubDB, redisDB)
+	logger.EXPECT().Warnf(gomock.Any(), gomock.Any(), gomock.Any()).Do(func(format string, args ...any) {
 		warns = append(warns, fmt.Sprintf(format, args...))
 	}).Times(1)
 

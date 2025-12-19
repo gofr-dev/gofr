@@ -390,28 +390,22 @@ func (c *Container) warnIfRedisPubSubSharesRedisDB(conf config.Config) {
 
 	pubsubDBStr := conf.Get("REDIS_PUBSUB_DB")
 	if pubsubDBStr == "" {
-		c.Logger.Warnf(
-			"Redis PubSub Streams shares Redis DB with Redis; migrations may fail (gofr_migrations HASH/STREAM). " +
-				"Set REDIS_PUBSUB_DB to a different DB.",
-		)
-
+		// No warning needed - defaults to DB 15 which is safe and different from typical REDIS_DB (0)
 		return
 	}
 
+	// Only warn if user explicitly set it to the same as REDIS_DB
 	pubsubDB, err := strconv.Atoi(pubsubDBStr)
 	if err != nil {
-		c.Logger.Warnf(
-			"REDIS_PUBSUB_DB is invalid; PubSub Streams falls back to REDIS_DB and migrations may fail " +
-				"(gofr_migrations HASH/STREAM). Set REDIS_PUBSUB_DB to a valid, different DB.",
-		)
-
+		// Invalid value - will use default DB 15, no warning needed
 		return
 	}
 
-	if redisDB == pubsubDB {
+	if pubsubDB == redisDB {
 		c.Logger.Warnf(
-			"Redis PubSub Streams shares Redis DB with Redis; migrations may fail (gofr_migrations HASH/STREAM). " +
+			"REDIS_PUBSUB_DB (%d) is the same as REDIS_DB (%d); migrations may fail (gofr_migrations HASH/STREAM). "+
 				"Set REDIS_PUBSUB_DB to a different DB.",
+			pubsubDB, redisDB,
 		)
 	}
 }
