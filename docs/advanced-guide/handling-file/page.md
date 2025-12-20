@@ -103,66 +103,75 @@ func main() {
 
 ### Google Cloud Storage (GCS) Bucket as File-Store
 
-To run GCS File-Store locally we can use fake-gcs-server:
-`docker run -it --rm -p 4443:4443 -e STORAGE_EMULATOR_HOST=0.0.0.0:4443 fsouza/fake-gcs-server:latest`
+**Local Setup with fake-gcs-server:**
+
+1. Start fake-gcs-server with HTTP:
+```bash
+docker run -d --name fake-gcs-server -p 4443:4443 \
+  fsouza/fake-gcs-server -scheme http -port 4443
+```
+
+2. Create a bucket:
+```bash
+curl -X POST http://localhost:4443/storage/v1/b?project=my-project-id \
+  -H "Content-Type: application/json" \
+  -d '{"name":"my-bucket"}'
+```
+
+3. Set environment variable in your `configs/.env` file:
+```bash
+STORAGE_EMULATOR_HOST=localhost:4443
+```
+
+4. Connect to GCS in your application:
 
 ```go
 package main
 
 import (
 	"gofr.dev/pkg/gofr"
-
 	"gofr.dev/pkg/gofr/datasource/file/gcs"
 )
 
 func main() {
 	app := gofr.New()
 
-	// Option 1: Using JSON credentials with local emulator
-	fs, err := gcs.New(&gcs.Config{
-		EndPoint:        "http://localhost:4566",
-		BucketName:      "my-bucket",
-		CredentialsJSON: readFile("gcs-credentials.json"),
-		ProjectID:       "my-project-id",
-	})
+	// Local setup with fake-gcs-server (uses STORAGE_EMULATOR_HOST)
+	app.AddFileStore(gcs.New(&gcs.Config{
+		BucketName: "my-bucket",
+		ProjectID:  "my-project-id",
+	}))
 
-	if err != nil {
-		app.Logger().Fatalf("Failed to initialize GCS: %v", err)
-
-	}
-
-	app.AddFileStore(fs)
-
-    // Option 2: Using default credentials (GOOGLE_APPLICATION_CREDENTIALS)
-    // fs, err := gcs.New(&gcs.Config{
-    //     BucketName: "my-bucket",
-    //     ProjectID:  "my-project-id",
-    // }))
-
-    // Option 3: Direct connection to real GCS (no EndPoint)
-    // fs, err := gcs.New(&gcs.Config{
-    //     BucketName:      "my-bucket",
-    //     CredentialsJSON: readFile("prod-creds.json"),
-    //     ProjectID:       "my-project-id",
-    // }))
-	
+	app.Run()
 	app.Run()
 }
-
-// Helper function to read credentials file
-func readFile(filename string) []byte {
-    data, err := os.ReadFile(filename)
-    if err != nil {
-        log.Fatalf("Failed to read credentials file: %v", err)
-    }
-    return data
-}
-
 ```
 
-> **Note:** When connecting to the actual GCS service, authentication can be provided via CredentialsJSON or the GOOGLE_APPLICATION_CREDENTIALS environment variable.
-> When using fake-gcs-server, authentication is not required.
-> Currently supports one bucket per file-store instance.
+**Production Setup:**
+
+For production, authenticate using one of these methods:
+
+```go
+// Option 1: Using GOOGLE_APPLICATION_CREDENTIALS environment variable
+// Set: export GOOGLE_APPLICATION_CREDENTIALS=/path/to/credentials.json
+app.AddFileStore(gcs.New(&gcs.Config{
+	BucketName: "my-bucket",
+	ProjectID:  "my-project-id",
+}))
+
+// Option 2: Using CredentialsJSON directly
+credJSON, _ := os.ReadFile("gcs-credentials.json")
+app.AddFileStore(gcs.New(&gcs.Config{
+	BucketName:      "my-bucket",
+	CredentialsJSON: string(credJSON),
+	ProjectID:       "my-project-id",
+}))
+```
+
+> **Note:** 
+> - When `STORAGE_EMULATOR_HOST` is set, the client automatically connects to the local emulator without authentication.
+> - For production, use either `GOOGLE_APPLICATION_CREDENTIALS` environment variable or `CredentialsJSON` config field
+> - Currently supports one bucket per file-store instance
 
 ### Azure File Storage as File-Store
 
