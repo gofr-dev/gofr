@@ -55,7 +55,7 @@ const (
 	// and 'tsd.http.request.max_chunk = 40960' are all in the opentsdb.conf.
 	defaultMaxContentLength = 40960
 
-	opentsdbOperationDurationName = "app_opentsdb_operation_duration_us"
+	opentsdbOperationDurationName = "app_opentsdb_operation_duration"
 	opentsdbOperationTotalName    = "app_opentsdb_operation_total"
 )
 
@@ -138,21 +138,21 @@ func (c *Client) registerMetrics() {
 	}
 
 	durationBuckets := []float64{
-		1000,    // 1 ms
-		5000,    // 5 ms
-		10000,   // 10 ms
-		50000,   // 50 ms
-		100000,  // 100 ms
-		250000,  // 250 ms
-		500000,  // 500 ms
-		1000000, // 1 s
-		2000000, // 2 s
-		5000000, // 5 s
+		1,    // 1 ms
+		5,    // 5 ms
+		10,   // 10 ms
+		50,   // 50 ms
+		100,  // 100 ms
+		250,  // 250 ms
+		500,  // 500 ms
+		1000, // 1 s
+		2000, // 2 s
+		5000, // 5 s
 	}
 
 	c.metrics.NewHistogram(
 		opentsdbOperationDurationName,
-		"Duration of OpenTSDB operations in microseconds.",
+		"Duration of OpenTSDB operations in milliseconds.",
 		durationBuckets...,
 	)
 
