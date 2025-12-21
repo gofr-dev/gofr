@@ -50,7 +50,7 @@ func sendOperationStats(
 	logger.Debug(&QueryLog{
 		Operation: operation,
 		Status:    status,
-		Duration:  duration.Milliseconds(),
+		Duration:  duration.Microseconds(),
 		Message:   message,
 	})
 
