@@ -98,19 +98,32 @@ jobs:
                 
                 # If the line itself is too long, split it by words
                 if [ ${#line} -gt $CHUNK_SIZE ]; then
+                  # Function to find last space character position (UTF-8 safe)
+                  find_last_space_char_pos() {
+                    local str="$1"
+                    local len=${#str}
+                    local pos=-1
+                    # Search backwards through character positions
+                    for ((i=len-1; i>=0; i--)); do
+                      if [ "${str:$i:1}" = " " ]; then
+                        pos=$i
+                        break
+                      fi
+                    done
+                    echo "$pos"
+                  }
+                  
                   # Split long line by spaces, trying to keep words together
                   remaining_line="$line"
                   MIN_CHUNK_SIZE=100  # Minimum chunk size to avoid very small chunks
                   while [ ${#remaining_line} -gt $CHUNK_SIZE ]; do
-                    # Find the last space within the chunk size (search backwards from CHUNK_SIZE)
+                    # Find the last space within the chunk size (character-based search)
                     chunk_part="${remaining_line:0:$CHUNK_SIZE}"
-                    # Use rev and cut to find last space position
-                    last_space_pos=$(echo "$chunk_part" | rev | grep -ob ' ' | head -1 | cut -d: -f1 || echo "")
+                    last_space_char_pos=$(find_last_space_char_pos "$chunk_part")
                     
-                    if [ -n "$last_space_pos" ]; then
-                      # Calculate break point from start (CHUNK_SIZE - distance from end)
-                      break_point=$((CHUNK_SIZE - last_space_pos))
+                    if [ "$last_space_char_pos" -ge 0 ]; then
                       # Use the space if it results in a chunk of reasonable size
+                      break_point=$((last_space_char_pos + 1))  # +1 to include the space
                       if [ "$break_point" -ge $MIN_CHUNK_SIZE ]; then
                         chunk_part="${remaining_line:0:$break_point}"
                         remaining_line="${remaining_line:$break_point}"
