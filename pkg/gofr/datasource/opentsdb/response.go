@@ -271,7 +271,7 @@ func (c *Client) version(ctx context.Context, verResp *VersionResponse) error {
 
 	message := "version request failed"
 
-	defer sendOperationStats(c.logger, time.Now(), "Version", &status, &message, span)
+	defer sendOperationStats(ctx, c.logger, c.metrics, c.config.Host, time.Now(), "Version", &status, &message, span)
 
 	verEndpoint := fmt.Sprintf("%s%s", c.endpoint, versionPath)
 
@@ -341,7 +341,7 @@ func (c *Client) operateAnnotation(ctx context.Context, queryAnnotation, resp an
 
 	message := fmt.Sprintf("%v request failed", operation)
 
-	defer sendOperationStats(c.logger, time.Now(), operation, &status, &message, span)
+	defer sendOperationStats(ctx, c.logger, c.metrics, c.config.Host, time.Now(), operation, &status, &message, span)
 
 	annotation, ok := queryAnnotation.(*Annotation)
 	if !ok {

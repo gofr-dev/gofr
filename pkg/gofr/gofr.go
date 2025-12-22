@@ -27,6 +27,8 @@ const (
 	configLocation = "./configs"
 )
 
+var errStartupHookPanic = errors.New("startup hook panicked")
+
 // App is the main application in the GoFr framework.
 type App struct {
 	// Config can be used by applications to fetch custom configurations from environment or file.
@@ -56,10 +58,24 @@ func (a *App) runOnStartHooks(ctx context.Context) error {
 	// Set the context for cancellation support
 	gofrCtx.Context = ctx
 
-	for _, hook := range a.onStartHooks {
-		if err := hook(gofrCtx); err != nil {
-			a.Logger().Errorf("OnStart hook failed: %v", err)
-			return err
+	for i, hook := range a.onStartHooks {
+		// Add panic recovery to prevent entire application crash
+		var hookErr error
+
+		func() {
+			defer func() {
+				if r := recover(); r != nil {
+					a.Logger().Errorf("OnStart hook %d panicked: %v", i, r)
+					hookErr = fmt.Errorf("hook %d: %w: %v", i, errStartupHookPanic, r)
+				}
+			}()
+
+			hookErr = hook(gofrCtx)
+		}()
+
+		if hookErr != nil {
+			a.Logger().Errorf("OnStart hook failed: %v", hookErr)
+			return hookErr
 		}
 
 		// Check if context was canceled
