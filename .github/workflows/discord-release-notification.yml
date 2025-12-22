@@ -1,0 +1,150 @@
+# Discord Release Notification Workflow
+# 
+# This workflow sends release notes to Discord when a new release is published.
+# 
+# Setup:
+# 1. Create a Discord webhook URL in your Discord server settings
+# 2. Add the webhook URL as a secret named "DISCORD_WEBHOOK" in your GitHub repository
+#    (Settings -> Secrets and variables -> Actions -> New repository secret)
+# 
+# Features:
+# - Automatically splits long release notes into multiple messages (Discord has a 2000 char limit)
+# - Preserves formatting and line breaks
+# - Includes release tag, name, and link in the notification
+
+name: Discord Release Notification
+
+on:
+  release:
+    types: [published]
+
+jobs:
+  notify-discord:
+    name: Send Release Notes to Discord
+    runs-on: ubuntu-latest
+    steps:
+      - name: Send Release Notes to Discord
+        env:
+          DISCORD_WEBHOOK: ${{ secrets.DISCORD_WEBHOOK }}
+          RELEASE_TAG: ${{ github.event.release.tag_name }}
+          RELEASE_NAME: ${{ github.event.release.name }}
+          RELEASE_BODY: ${{ github.event.release.body }}
+          RELEASE_URL: ${{ github.event.release.html_url }}
+        run: |
+          # Function to send a message to Discord
+          send_discord_message() {
+            local content="$1"
+            curl -H "Content-Type: application/json" \
+              -X POST \
+              -d "{\"content\": $(echo "$content" | jq -Rs .)}" \
+              "$DISCORD_WEBHOOK"
+          }
+          
+          # Create the release notification header
+          header="🚀 **New Release: $RELEASE_NAME**\n\n"
+          header="${header}📦 **Tag:** \`$RELEASE_TAG\`\n"
+          header="${header}🔗 **Link:** $RELEASE_URL\n\n"
+          header="${header}---\n\n"
+          
+          # Get release notes
+          release_notes="$RELEASE_BODY"
+          
+          # If release notes are empty, use a default message
+          if [ -z "$release_notes" ] || [ "$release_notes" = "null" ]; then
+            release_notes="No release notes provided."
+          fi
+          
+          # Combine header and release notes
+          full_message="${header}${release_notes}"
+          
+          # Discord's message limit is 2000 characters
+          MAX_LENGTH=2000
+          CHUNK_SIZE=1800  # Reserve space for part indicators
+          
+          # Check if message exceeds Discord's limit
+          if [ ${#full_message} -le $MAX_LENGTH ]; then
+            # Send as single message
+            send_discord_message "$full_message"
+          else
+            # Send header first (it should be short enough)
+            send_discord_message "$header"
+            
+            # Split release notes into chunks
+            # Use a temporary file to handle the splitting properly
+            temp_file=$(mktemp)
+            echo "$release_notes" > "$temp_file"
+            
+            chunk_num=1
+            current_chunk=""
+            
+            # Read line by line to preserve formatting
+            while IFS= read -r line || [ -n "$line" ]; do
+              # Calculate what the chunk would look like with this line
+              if [ -z "$current_chunk" ]; then
+                test_chunk="$line"
+              else
+                test_chunk="$current_chunk\n$line"
+              fi
+              
+              # If adding this line would exceed the limit
+              if [ ${#test_chunk} -gt $CHUNK_SIZE ]; then
+                # Send current chunk if it has content
+                if [ -n "$current_chunk" ]; then
+                  chunk_header="📝 **Release Notes (Part $chunk_num):**\n\n"
+                  send_discord_message "${chunk_header}${current_chunk}"
+                  chunk_num=$((chunk_num + 1))
+                  sleep 0.5  # Small delay to avoid rate limiting
+                fi
+                
+                # If the line itself is too long, split it by words
+                if [ ${#line} -gt $CHUNK_SIZE ]; then
+                  # Split long line by spaces, trying to keep words together
+                  remaining_line="$line"
+                  while [ ${#remaining_line} -gt $CHUNK_SIZE ]; do
+                    # Find the last space within the chunk size (search backwards from CHUNK_SIZE)
+                    chunk_part="${remaining_line:0:$CHUNK_SIZE}"
+                    # Use rev and cut to find last space position
+                    last_space_pos=$(echo "$chunk_part" | rev | grep -ob ' ' | head -1 | cut -d: -f1 || echo "")
+                    
+                    if [ -n "$last_space_pos" ] && [ "$last_space_pos" -lt 200 ]; then
+                      # Break at the space (calculate position from start)
+                      break_point=$((CHUNK_SIZE - last_space_pos))
+                      chunk_part="${remaining_line:0:$break_point}"
+                      remaining_line="${remaining_line:$break_point}"
+                      # Remove leading space if present
+                      remaining_line="${remaining_line# }"
+                    else
+                      # Force break if no good space found
+                      chunk_part="${remaining_line:0:$CHUNK_SIZE}"
+                      remaining_line="${remaining_line:$CHUNK_SIZE}"
+                    fi
+                    
+                    chunk_header="📝 **Release Notes (Part $chunk_num):**\n\n"
+                    send_discord_message "${chunk_header}${chunk_part}"
+                    chunk_num=$((chunk_num + 1))
+                    sleep 0.5
+                  done
+                  current_chunk="$remaining_line"
+                else
+                  current_chunk="$line"
+                fi
+              else
+                # Add line to current chunk
+                if [ -z "$current_chunk" ]; then
+                  current_chunk="$line"
+                else
+                  current_chunk="$current_chunk\n$line"
+                fi
+              fi
+            done < "$temp_file"
+            
+            # Send remaining chunk
+            if [ -n "$current_chunk" ]; then
+              chunk_header="📝 **Release Notes (Part $chunk_num):**\n\n"
+              send_discord_message "${chunk_header}${current_chunk}"
+            fi
+            
+            # Clean up
+            rm -f "$temp_file"
+          fi
+
