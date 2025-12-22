@@ -100,21 +100,29 @@ jobs:
                 if [ ${#line} -gt $CHUNK_SIZE ]; then
                   # Split long line by spaces, trying to keep words together
                   remaining_line="$line"
+                  MIN_CHUNK_SIZE=100  # Minimum chunk size to avoid very small chunks
                   while [ ${#remaining_line} -gt $CHUNK_SIZE ]; do
                     # Find the last space within the chunk size (search backwards from CHUNK_SIZE)
                     chunk_part="${remaining_line:0:$CHUNK_SIZE}"
                     # Use rev and cut to find last space position
                     last_space_pos=$(echo "$chunk_part" | rev | grep -ob ' ' | head -1 | cut -d: -f1 || echo "")
                     
-                    if [ -n "$last_space_pos" ] && [ "$last_space_pos" -lt 200 ]; then
-                      # Break at the space (calculate position from start)
+                    if [ -n "$last_space_pos" ]; then
+                      # Calculate break point from start (CHUNK_SIZE - distance from end)
                       break_point=$((CHUNK_SIZE - last_space_pos))
-                      chunk_part="${remaining_line:0:$break_point}"
-                      remaining_line="${remaining_line:$break_point}"
-                      # Remove leading space if present
-                      remaining_line="${remaining_line# }"
+                      # Use the space if it results in a chunk of reasonable size
+                      if [ "$break_point" -ge $MIN_CHUNK_SIZE ]; then
+                        chunk_part="${remaining_line:0:$break_point}"
+                        remaining_line="${remaining_line:$break_point}"
+                        # Remove leading space if present
+                        remaining_line="${remaining_line# }"
+                      else
+                        # Space too close to start, force break at CHUNK_SIZE
+                        chunk_part="${remaining_line:0:$CHUNK_SIZE}"
+                        remaining_line="${remaining_line:$CHUNK_SIZE}"
+                      fi
                     else
-                      # Force break if no good space found
+                      # Force break if no space found
                       chunk_part="${remaining_line:0:$CHUNK_SIZE}"
                       remaining_line="${remaining_line:$CHUNK_SIZE}"
                     fi
