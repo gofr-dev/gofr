@@ -7,9 +7,9 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
-	"regexp"
 	"strings"
 
+	"github.com/gorilla/mux"
 	"go.opentelemetry.io/otel/trace"
 	"gopkg.in/yaml.v3"
 
@@ -23,6 +23,15 @@ var (
 
 	// ErrEndpointMissingPermissions is returned when an endpoint doesn't specify requiredPermissions and is not public.
 	ErrEndpointMissingPermissions = errors.New("endpoint must specify requiredPermissions (or be public)")
+
+	// errWildcardPatternNotSupported is returned when a wildcard pattern is used.
+	errWildcardPatternNotSupported = errors.New("wildcard pattern '/*' is not supported, use mux patterns instead")
+
+	// errRegexPatternNotSupported is returned when an old regex pattern is used.
+	errRegexPatternNotSupported = errors.New("regex pattern '^...$' is not supported, use mux patterns instead")
+
+	// errRegexIndicatorNotSupported is returned when regex indicators are used outside variable constraints.
+	errRegexIndicatorNotSupported = errors.New("regex pattern is not supported, use mux patterns instead")
 )
 
 // RoleDefinition defines a role with its permissions and inheritance.
@@ -44,11 +53,15 @@ type RoleDefinition struct {
 // Pure config-based: only route&method->permission mapping is supported.
 // No direct route to role mapping - all authorization is permission-based.
 type EndpointMapping struct {
-	// Path is the route path pattern (supports wildcards like /api/* or regex patterns)
+	// Path is the route path pattern using gorilla/mux syntax.
 	// Examples:
 	//   - "/api/users" (exact match)
-	//   - "/api/users/*" (wildcard pattern)
-	//   - "^/api/users/\\d+$" (regex pattern - automatically detected)
+	//   - "/api/users/{id}" (matches any single segment)
+	//   - "/api/users/{id:[0-9]+}" (matches numeric IDs only)
+	//   - "/api/{resource}" (single-level wildcard: matches /api/users, /api/posts)
+	//   - "/api/{path:.*}" (multi-level wildcard: matches /api/users/123, /api/posts/comments)
+	//   - "/api/{category}/posts" (middle variable: matches /api/tech/posts, /api/news/posts)
+	// Only mux-style patterns are supported. Wildcards (/*) and regex (^...$) are not supported.
 	Path string `json:"path,omitempty" yaml:"path,omitempty"`
 
 	// Methods is a list of HTTP methods (GET, POST, PUT, DELETE, PATCH, etc.)
@@ -111,7 +124,7 @@ type Config struct {
 	endpointPermissionMap map[string][]string         `json:"-" yaml:"-"` // Key: "METHOD:/path", Value: []permissions
 	publicEndpointsMap    map[string]bool             `json:"-" yaml:"-"` // Key: "METHOD:/path", Value: true if public
 	endpointMap           map[string]*EndpointMapping `json:"-" yaml:"-"` // Key: "METHOD:/path", Value: endpoint object
-	compiledRegexMap      map[string]*regexp.Regexp   `json:"-" yaml:"-"` // Key: pattern (not METHOD:pattern), Value: compiled regex
+	muxRouter             *mux.Router                 `json:"-" yaml:"-"` // Used for mux pattern matching
 }
 
 // LoadPermissions loads RBAC configuration from a JSON or YAML file.
@@ -146,6 +159,9 @@ func LoadPermissions(path string, logger datasource.Logger, metrics container.Me
 	config.Metrics = metrics
 	config.Tracer = tracer
 
+	// Initialize mux router for pattern matching
+	config.muxRouter = mux.NewRouter()
+
 	// Register metrics if provided
 	if metrics != nil {
 		registerMetrics(metrics)
@@ -179,9 +195,80 @@ func registerMetrics(metrics container.Metrics) {
 // validate validates the RBAC configuration.
 func (c *Config) validate() error {
 	// Validate endpoints: non-public endpoints must have RequiredPermissions
+	// Also validate that paths use mux patterns only (no wildcards or old regex)
 	for i, endpoint := range c.Endpoints {
 		if !endpoint.Public && len(endpoint.RequiredPermissions) == 0 {
 			return fmt.Errorf("endpoint[%d]: %w: %s", i, ErrEndpointMissingPermissions, endpoint.Path)
+		}
+
+		// Validate path pattern
+		if err := c.validateEndpointPath(endpoint.Path, i); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+// validateEndpointPath validates that an endpoint path uses mux patterns only.
+// Rejects wildcard patterns (/*) and old regex patterns (^...$).
+func (c *Config) validateEndpointPath(path string, index int) error {
+	if path == "" {
+		return nil // Empty path is handled elsewhere
+	}
+
+	// Reject wildcard patterns
+	if err := c.checkWildcardPattern(path, index); err != nil {
+		return err
+	}
+
+	// Reject old regex patterns
+	if err := c.checkRegexPattern(path, index); err != nil {
+		return err
+	}
+
+	// Reject regex indicators outside of variable constraints
+	if err := c.checkRegexIndicators(path, index); err != nil {
+		return err
+	}
+
+	// Validate mux pattern syntax if it contains variables
+	if isMuxPattern(path) {
+		if err := validateMuxPattern(path); err != nil {
+			return fmt.Errorf("endpoint[%d]: invalid mux pattern: %w", index, err)
+		}
+	}
+
+	return nil
+}
+
+// checkWildcardPattern checks if path contains wildcard pattern.
+func (*Config) checkWildcardPattern(path string, index int) error {
+	if strings.Contains(path, "/*") {
+		return fmt.Errorf("endpoint[%d]: %w: %s. Examples: /api/{resource} for single-level or /api/{path:.*} for multi-level",
+			index, errWildcardPatternNotSupported, path)
+	}
+
+	return nil
+}
+
+// checkRegexPattern checks if path contains old regex pattern.
+func (*Config) checkRegexPattern(path string, index int) error {
+	if strings.HasPrefix(path, "^") || strings.HasSuffix(path, "$") {
+		return fmt.Errorf("endpoint[%d]: %w: %s. Example: /api/users/{id:[0-9]+} instead of ^/api/users/\\d+$",
+			index, errRegexPatternNotSupported, path)
+	}
+
+	return nil
+}
+
+// checkRegexIndicators checks if path contains regex indicators outside variable constraints.
+func (*Config) checkRegexIndicators(path string, index int) error {
+	if strings.Contains(path, "\\d") || strings.Contains(path, "\\w") || strings.Contains(path, "\\s") {
+		// Only allow if it's inside a variable constraint like {id:[0-9]+}
+		if !strings.Contains(path, "{") || !strings.Contains(path, ":") {
+			return fmt.Errorf("endpoint[%d]: %w: %s. Example: /api/users/{id:[0-9]+}",
+				index, errRegexIndicatorNotSupported, path)
 		}
 	}
 
@@ -204,7 +291,7 @@ func (c *Config) initializeMaps() {
 	c.endpointPermissionMap = make(map[string][]string)
 	c.publicEndpointsMap = make(map[string]bool)
 	c.endpointMap = make(map[string]*EndpointMapping)
-	c.compiledRegexMap = make(map[string]*regexp.Regexp)
+	c.muxRouter = mux.NewRouter()
 }
 
 // buildRolePermissionsMap builds the role permissions map from Roles.
@@ -237,7 +324,7 @@ func (c *Config) buildEndpointPermissionMap() error {
 func (c *Config) processEndpointMethods(endpoint *EndpointMapping, methods []string) error {
 	for _, method := range methods {
 		methodUpper := strings.ToUpper(method)
-		key := c.buildEndpointKey(endpoint, methodUpper)
+		key := buildEndpointKey(endpoint, methodUpper)
 
 		if err := c.storeEndpointMapping(endpoint, key, methodUpper); err != nil {
 			return err
@@ -248,24 +335,9 @@ func (c *Config) processEndpointMethods(endpoint *EndpointMapping, methods []str
 }
 
 // buildEndpointKey builds the key for an endpoint.
-// Uses Path field which may contain either a path pattern or a regex pattern.
-// Note: This is called during processUnifiedConfig which already holds a lock,
-// so we can directly access compiledRegexMap without acquiring another lock.
-func (c *Config) buildEndpointKey(endpoint *EndpointMapping, methodUpper string) string {
+// Uses Path field which may contain mux patterns or exact paths.
+func buildEndpointKey(endpoint *EndpointMapping, methodUpper string) string {
 	pattern := endpoint.Path
-
-	// If pattern looks like a regex, precompile it for performance
-	// Store with pattern as key (not full METHOD:pattern) since matchesKey
-	// uses pattern directly for lookup
-	if isRegexPattern(pattern) {
-		// We're already holding a lock from processUnifiedConfig, so access map directly
-		if _, exists := c.compiledRegexMap[pattern]; !exists {
-			if compiled, err := regexp.Compile(pattern); err == nil {
-				c.compiledRegexMap[pattern] = compiled
-			}
-		}
-	}
-
 	return fmt.Sprintf("%s:%s", methodUpper, pattern)
 }
 
@@ -408,19 +480,9 @@ func (c *Config) checkPatternMatch(methodUpper, path string) (permissions []stri
 	return nil, false
 }
 
-// isRegexPattern detects if a pattern is likely a regex.
-// Checks for common regex indicators: starts with ^, ends with $, or contains regex special chars.
-func isRegexPattern(pattern string) bool {
-	return strings.HasPrefix(pattern, "^") || strings.HasSuffix(pattern, "$") ||
-		strings.Contains(pattern, "\\d") || strings.Contains(pattern, "\\w") ||
-		strings.Contains(pattern, "\\s") || strings.Contains(pattern, "[") ||
-		strings.Contains(pattern, "(") || strings.Contains(pattern, "?")
-}
-
 // matchesKey checks if a key matches the given method and path.
-// Keys are built by buildEndpointKey which uses Path (may contain regex patterns).
-// If pattern looks like a regex (starts with ^ or contains regex special chars), use regex matching exclusively.
-// Otherwise, use path pattern matching exclusively (no fallback to regex).
+// Keys are built by buildEndpointKey which uses Path (may contain mux patterns).
+// Uses mux Route.Match() for mux patterns, exact match for non-pattern paths.
 func (c *Config) matchesKey(key, methodUpper, path string) bool {
 	if !strings.HasPrefix(key, methodUpper+":") {
 		return false
@@ -428,33 +490,11 @@ func (c *Config) matchesKey(key, methodUpper, path string) bool {
 
 	pattern := strings.TrimPrefix(key, methodUpper+":")
 
-	if isRegexPattern(pattern) {
-		return matchesRegexPattern(pattern, path, c)
+	// For exact paths (no variables), use string comparison
+	if !isMuxPattern(pattern) {
+		return pattern == path
 	}
 
-	// For path patterns, only try path matching
-	// Since buildEndpointKey uses Path (which may contain regex patterns),
-	// if it's not detected as regex, it's a path pattern from buildEndpointKey
-	return matchesPathPattern(pattern, path)
-}
-
-// matchesPathPattern checks if path matches pattern (supports wildcards).
-func matchesPathPattern(pattern, path string) bool {
-	if pattern == "" {
-		return false
-	}
-
-	// Use path/filepath.Match for pattern matching
-	matched, _ := filepath.Match(pattern, path)
-	if matched {
-		return true
-	}
-
-	// Check prefix match for patterns ending with /*
-	if strings.HasSuffix(pattern, "/*") {
-		prefix := strings.TrimSuffix(pattern, "/*")
-		return path == prefix || strings.HasPrefix(path, prefix+"/")
-	}
-
-	return false
+	// For mux patterns, use Route.Match() from endpoint_matcher
+	return matchMuxPattern(pattern, methodUpper, path, c.muxRouter)
 }

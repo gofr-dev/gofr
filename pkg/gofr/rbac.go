@@ -16,6 +16,7 @@ import (
 // Usage:
 //
 //	// Use default paths (configs/rbac.json, configs/rbac.yaml, configs/rbac.yml)
+//	// Uses rbac.DefaultConfigPath internally
 //	app.EnableRBAC()
 //
 //	// Or with custom config path
@@ -29,7 +30,7 @@ func (a *App) EnableRBAC(configPath ...string) {
 	if len(configPath) > 0 {
 		path = configPath[0]
 	} else {
-		// Resolve default paths if empty
+		// Use rbac.DefaultConfigPath (empty string) to trigger default path resolution
 		path = rbac.ResolveRBACConfigPath(rbac.DefaultConfigPath)
 	}
 
