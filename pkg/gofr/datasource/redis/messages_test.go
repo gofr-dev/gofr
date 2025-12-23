@@ -3,6 +3,7 @@ package redis
 import (
 	"context"
 	"testing"
+	"time"
 
 	"github.com/go-redis/redismock/v9"
 	"github.com/redis/go-redis/v9"
@@ -10,6 +11,7 @@ import (
 	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
 
+	"gofr.dev/pkg/gofr/datasource/pubsub"
 	"gofr.dev/pkg/gofr/logging"
 )
 
@@ -25,20 +27,42 @@ func TestPubSubMessage_Commit(t *testing.T) {
 	ctx := context.Background()
 	topic := "pubsub-commit-topic"
 
-	// Subscribe to get a message with committer
+	// Start subscription first to ensure it's ready
+	msgChan := make(chan *pubsub.Message)
+	errChan := make(chan error)
+
 	go func() {
-		_ = client.PubSub.Publish(ctx, topic, []byte("test"))
+		msg, err := client.PubSub.Subscribe(ctx, topic)
+		if err != nil {
+			errChan <- err
+			return
+		}
+
+		msgChan <- msg
 	}()
 
-	msg, err := client.PubSub.Subscribe(ctx, topic)
-	require.NoError(t, err)
-	require.NotNil(t, msg)
-	require.NotNil(t, msg.Committer)
+	// Wait a bit for subscription to be ready
+	time.Sleep(100 * time.Millisecond)
 
-	// Commit should not panic
-	assert.NotPanics(t, func() {
-		msg.Committer.Commit()
-	})
+	// Then publish the message
+	err := client.PubSub.Publish(ctx, topic, []byte("test"))
+	require.NoError(t, err)
+
+	// Wait for message with timeout
+	select {
+	case err := <-errChan:
+		require.NoError(t, err)
+	case msg := <-msgChan:
+		require.NotNil(t, msg)
+		require.NotNil(t, msg.Committer)
+
+		// Commit should not panic
+		assert.NotPanics(t, func() {
+			msg.Committer.Commit()
+		})
+	case <-time.After(2 * time.Second):
+		t.Fatal("timeout waiting for message")
+	}
 }
 
 func TestNewStreamMessage(t *testing.T) {

@@ -24,9 +24,10 @@ const (
 	redisPingTimeout = 5 * time.Second
 
 	// PubSub constants.
-	defaultRetryTimeout  = 10 * time.Second
-	unsubscribeOpTimeout = 2 * time.Second
-	goroutineWaitTimeout = 5 * time.Second
+	defaultRetryTimeout    = 10 * time.Second
+	subscribeRetryInterval = 100 * time.Millisecond // Shorter interval for connection checks in Subscribe
+	unsubscribeOpTimeout   = 2 * time.Second
+	goroutineWaitTimeout   = 5 * time.Second
 )
 
 var (

@@ -90,11 +90,12 @@ func (ps *PubSub) Subscribe(ctx context.Context, topic string) (*pubsub.Message,
 		return nil, errEmptyTopicName
 	}
 
+	// Check connection with shorter retry interval to avoid long blocking
 	for !ps.isConnected() {
 		select {
 		case <-ctx.Done():
 			return nil, nil
-		case <-time.After(defaultRetryTimeout):
+		case <-time.After(subscribeRetryInterval):
 			ps.logger.Debugf("Redis not connected, retrying subscribe for topic '%s'", topic)
 		}
 	}
