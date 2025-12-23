@@ -214,10 +214,10 @@ func TestConfig_GetEndpointPermission_NotFound(t *testing.T) {
 	assert.False(t, isPublic)
 }
 
-func TestConfig_GetEndpointPermission_WildcardPattern(t *testing.T) {
+func TestConfig_GetEndpointPermission_MuxPattern(t *testing.T) {
 	config := &Config{
 		Endpoints: []EndpointMapping{
-			{Path: "/api/*", Methods: []string{"GET"}, RequiredPermissions: []string{"api:read"}},
+			{Path: "/api/{resource}", Methods: []string{"GET"}, RequiredPermissions: []string{"api:read"}},
 		},
 	}
 	err := config.processUnifiedConfig()
@@ -228,10 +228,10 @@ func TestConfig_GetEndpointPermission_WildcardPattern(t *testing.T) {
 	assert.False(t, isPublic)
 }
 
-func TestConfig_GetEndpointPermission_RegexPattern(t *testing.T) {
+func TestConfig_GetEndpointPermission_MuxPatternWithConstraint(t *testing.T) {
 	config := &Config{
 		Endpoints: []EndpointMapping{
-			{Path: "^/api/users/\\d+$", Methods: []string{"GET"}, RequiredPermissions: []string{"users:read"}},
+			{Path: "/api/users/{id:[0-9]+}", Methods: []string{"GET"}, RequiredPermissions: []string{"users:read"}},
 		},
 	}
 	err := config.processUnifiedConfig()
@@ -348,7 +348,7 @@ func TestConfig_processUnifiedConfig(t *testing.T) {
 					{Name: "admin", Permissions: []string{"*:*"}},
 				},
 				Endpoints: []EndpointMapping{
-					{Path: "^/api/users/\\d+$", Methods: []string{"GET"}, RequiredPermissions: []string{"admin:*"}},
+					{Path: "/api/users/{id:[0-9]+}", Methods: []string{"GET"}, RequiredPermissions: []string{"admin:*"}},
 				},
 			},
 			expectError: false,
@@ -371,60 +371,6 @@ func TestConfig_processUnifiedConfig(t *testing.T) {
 	}
 }
 
-func TestMatchesPathPattern(t *testing.T) {
-	testCases := []struct {
-		desc     string
-		pattern  string
-		path     string
-		expected bool
-	}{
-		{
-			desc:     "matches exact path",
-			pattern:  "/api/users",
-			path:     "/api/users",
-			expected: true,
-		},
-		{
-			desc:     "does not match different path",
-			pattern:  "/api/users",
-			path:     "/api/posts",
-			expected: false,
-		},
-		{
-			desc:     "matches wildcard pattern",
-			pattern:  "/api/*",
-			path:     "/api/users",
-			expected: true,
-		},
-		{
-			desc:     "matches wildcard pattern with exact prefix",
-			pattern:  "/api/*",
-			path:     "/api",
-			expected: true,
-		},
-		{
-			desc:     "does not match wildcard pattern with different prefix",
-			pattern:  "/api/*",
-			path:     "/v1/users",
-			expected: false,
-		},
-		{
-			desc:     "returns false for empty pattern",
-			pattern:  "",
-			path:     "/api/users",
-			expected: false,
-		},
-	}
-
-	for i, tc := range testCases {
-		t.Run(tc.desc, func(t *testing.T) {
-			result := matchesPathPattern(tc.pattern, tc.path)
-
-			assert.Equal(t, tc.expected, result, "TEST[%d], Failed.\n%s", i, tc.desc)
-		})
-	}
-}
-
 func createTestConfigFile(filename, content string) (string, error) {
 	dir := filepath.Dir(filename)
 	if dir != "." && dir != "" {
@@ -440,10 +386,10 @@ func createTestConfigFile(filename, content string) (string, error) {
 }
 
 func TestConfig_FindEndpointByPattern(t *testing.T) {
-	t.Run("finds endpoint with wildcard pattern", func(t *testing.T) {
+	t.Run("finds endpoint with mux pattern", func(t *testing.T) {
 		config := &Config{
 			Endpoints: []EndpointMapping{
-				{Path: "/api/*", Methods: []string{"GET"}, RequiredPermissions: []string{"api:read"}},
+				{Path: "/api/{resource}", Methods: []string{"GET"}, RequiredPermissions: []string{"api:read"}},
 			},
 		}
 		err := config.processUnifiedConfig()
@@ -451,14 +397,14 @@ func TestConfig_FindEndpointByPattern(t *testing.T) {
 
 		endpoint, isPublic := config.findEndpointByPattern("GET", "/api/users")
 		assert.NotNil(t, endpoint)
-		assert.Equal(t, "/api/*", endpoint.Path)
+		assert.Equal(t, "/api/{resource}", endpoint.Path)
 		assert.False(t, isPublic)
 	})
 
-	t.Run("finds endpoint with regex pattern", func(t *testing.T) {
+	t.Run("finds endpoint with mux pattern constraint", func(t *testing.T) {
 		config := &Config{
 			Endpoints: []EndpointMapping{
-				{Path: "^/api/users/\\d+$", Methods: []string{"GET"}, RequiredPermissions: []string{"users:read"}},
+				{Path: "/api/users/{id:[0-9]+}", Methods: []string{"GET"}, RequiredPermissions: []string{"users:read"}},
 			},
 		}
 		err := config.processUnifiedConfig()
@@ -472,7 +418,7 @@ func TestConfig_FindEndpointByPattern(t *testing.T) {
 	t.Run("finds public endpoint with pattern", func(t *testing.T) {
 		config := &Config{
 			Endpoints: []EndpointMapping{
-				{Path: "/public/*", Methods: []string{"GET"}, Public: true},
+				{Path: "/public/{path:.*}", Methods: []string{"GET"}, Public: true},
 			},
 		}
 		err := config.processUnifiedConfig()
@@ -486,7 +432,7 @@ func TestConfig_FindEndpointByPattern(t *testing.T) {
 	t.Run("returns nil when no pattern matches", func(t *testing.T) {
 		config := &Config{
 			Endpoints: []EndpointMapping{
-				{Path: "/api/*", Methods: []string{"GET"}, RequiredPermissions: []string{"api:read"}},
+				{Path: "/api/{resource}", Methods: []string{"GET"}, RequiredPermissions: []string{"api:read"}},
 			},
 		}
 		err := config.processUnifiedConfig()
@@ -500,7 +446,7 @@ func TestConfig_FindEndpointByPattern(t *testing.T) {
 	t.Run("returns nil when method doesn't match", func(t *testing.T) {
 		config := &Config{
 			Endpoints: []EndpointMapping{
-				{Path: "/api/*", Methods: []string{"GET"}, RequiredPermissions: []string{"api:read"}},
+				{Path: "/api/{resource}", Methods: []string{"GET"}, RequiredPermissions: []string{"api:read"}},
 			},
 		}
 		err := config.processUnifiedConfig()
@@ -526,45 +472,42 @@ func TestConfig_MatchesKey(t *testing.T) {
 		assert.True(t, result)
 	})
 
-	t.Run("matches wildcard pattern", func(t *testing.T) {
+	t.Run("matches mux pattern", func(t *testing.T) {
 		config := &Config{
 			Endpoints: []EndpointMapping{
-				{Path: "/api/*", Methods: []string{"GET"}, RequiredPermissions: []string{"api:read"}},
+				{Path: "/api/{resource}", Methods: []string{"GET"}, RequiredPermissions: []string{"api:read"}},
 			},
 		}
 		err := config.processUnifiedConfig()
 		require.NoError(t, err)
 
-		result := config.matchesKey("GET:/api/*", "GET", "/api/users")
+		result := config.matchesKey("GET:/api/{resource}", "GET", "/api/users")
 		assert.True(t, result)
 	})
 
-	t.Run("matches regex pattern with precompiled regex", func(t *testing.T) {
+	t.Run("matches mux pattern with constraint", func(t *testing.T) {
 		config := &Config{
 			Endpoints: []EndpointMapping{
-				{Path: "^/api/users/\\d+$", Methods: []string{"GET"}, RequiredPermissions: []string{"users:read"}},
+				{Path: "/api/users/{id:[0-9]+}", Methods: []string{"GET"}, RequiredPermissions: []string{"users:read"}},
 			},
 		}
 		err := config.processUnifiedConfig()
 		require.NoError(t, err)
 
-		result := config.matchesKey("GET:^/api/users/\\d+$", "GET", "/api/users/123")
+		result := config.matchesKey("GET:/api/users/{id:[0-9]+}", "GET", "/api/users/123")
 		assert.True(t, result)
 	})
 
-	t.Run("matches regex pattern with runtime compilation", func(t *testing.T) {
+	t.Run("matches mux pattern with constraint", func(t *testing.T) {
 		config := &Config{
 			Endpoints: []EndpointMapping{
-				{Path: "^/test/\\d+$", Methods: []string{"GET"}, RequiredPermissions: []string{"test:read"}},
+				{Path: "/test/{id:[0-9]+}", Methods: []string{"GET"}, RequiredPermissions: []string{"test:read"}},
 			},
 		}
 		err := config.processUnifiedConfig()
 		require.NoError(t, err)
 
-		// Remove from compiled map to force runtime compilation
-		delete(config.compiledRegexMap, "^/test/\\d+$")
-
-		result := config.matchesKey("GET:^/test/\\d+$", "GET", "/test/456")
+		result := config.matchesKey("GET:/test/{id:[0-9]+}", "GET", "/test/456")
 		assert.True(t, result)
 	})
 
@@ -581,19 +524,16 @@ func TestConfig_MatchesKey(t *testing.T) {
 		assert.False(t, result)
 	})
 
-	t.Run("returns false for invalid regex", func(t *testing.T) {
+	t.Run("returns false for invalid mux pattern", func(t *testing.T) {
 		config := &Config{
 			Endpoints: []EndpointMapping{
-				{Path: "[invalid", Methods: []string{"GET"}, RequiredPermissions: []string{"test:read"}},
+				{Path: "/api/invalid{", Methods: []string{"GET"}, RequiredPermissions: []string{"test:read"}},
 			},
 		}
 		err := config.processUnifiedConfig()
 		require.NoError(t, err)
 
-		// Remove from compiled map to force runtime compilation
-		delete(config.compiledRegexMap, "[invalid")
-
-		result := config.matchesKey("GET:[invalid", "GET", "/test")
+		result := config.matchesKey("GET:/api/invalid{", "GET", "/test")
 		assert.False(t, result)
 	})
 }

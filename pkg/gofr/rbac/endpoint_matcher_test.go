@@ -5,6 +5,7 @@ import (
 	"net/http/httptest"
 	"testing"
 
+	"github.com/gorilla/mux"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -61,10 +62,10 @@ func TestMatchEndpoint_WildcardMethod(t *testing.T) {
 	assert.False(t, isPublic)
 }
 
-func TestMatchEndpoint_WildcardPath(t *testing.T) {
+func TestMatchEndpoint_MuxPatternPath(t *testing.T) {
 	config := &Config{
 		Endpoints: []EndpointMapping{
-			{Path: "/api/*", Methods: []string{"GET"}, RequiredPermissions: []string{"api:read"}},
+			{Path: "/api/{resource}", Methods: []string{"GET"}, RequiredPermissions: []string{"api:read"}},
 		},
 	}
 	_ = config.processUnifiedConfig()
@@ -74,10 +75,10 @@ func TestMatchEndpoint_WildcardPath(t *testing.T) {
 	assert.False(t, isPublic)
 }
 
-func TestMatchEndpoint_RegexPattern(t *testing.T) {
+func TestMatchEndpoint_MuxPatternWithConstraint(t *testing.T) {
 	config := &Config{
 		Endpoints: []EndpointMapping{
-			{Path: "^/api/users/\\d+$", Methods: []string{"GET"}, RequiredPermissions: []string{"users:read"}},
+			{Path: "/api/users/{id:[0-9]+}", Methods: []string{"GET"}, RequiredPermissions: []string{"users:read"}},
 		},
 	}
 	_ = config.processUnifiedConfig()
@@ -183,27 +184,35 @@ func TestMatchesEndpointPattern(t *testing.T) {
 			expected: true,
 		},
 		{
-			desc: "matches regex pattern",
+			desc: "matches mux pattern with constraint",
 			endpoint: &EndpointMapping{
-				Path: "^/api/users/\\d+$",
+				Path: "/api/users/{id:[0-9]+}",
 			},
 			route:    "/api/users/123",
 			expected: true,
 		},
 		{
-			desc: "matches wildcard pattern",
+			desc: "matches mux pattern single variable",
 			endpoint: &EndpointMapping{
-				Path: "/api/*",
+				Path: "/api/{resource}",
 			},
 			route:    "/api/users",
 			expected: true,
 		},
 		{
-			desc: "matches wildcard pattern with exact prefix",
+			desc: "matches mux pattern with exact prefix",
 			endpoint: &EndpointMapping{
-				Path: "/api/*",
+				Path: "/api/{resource}",
 			},
 			route:    "/api",
+			expected: false, // /api/{resource} requires a segment after /api
+		},
+		{
+			desc: "matches mux pattern multi-level",
+			endpoint: &EndpointMapping{
+				Path: "/api/{path:.*}",
+			},
+			route:    "/api/users/123",
 			expected: true,
 		},
 		{
@@ -215,11 +224,19 @@ func TestMatchesEndpointPattern(t *testing.T) {
 			expected: false,
 		},
 		{
-			desc: "does not match invalid regex",
+			desc: "does not match invalid mux pattern",
 			endpoint: &EndpointMapping{
-				Path: "[invalid",
+				Path: "/api/{invalid",
 			},
 			route:    "/api/users",
+			expected: false,
+		},
+		{
+			desc: "does not match constraint violation",
+			endpoint: &EndpointMapping{
+				Path: "/api/users/{id:[0-9]+}",
+			},
+			route:    "/api/users/abc",
 			expected: false,
 		},
 	}
@@ -470,6 +487,184 @@ func TestGetEndpointForRequest(t *testing.T) {
 
 			require.Nil(t, endpoint, "TEST[%d], Failed.\n%s", i, tc.desc)
 			assert.False(t, isPublic, "TEST[%d], Failed.\n%s", i, tc.desc)
+		})
+	}
+}
+
+func TestIsMuxPattern(t *testing.T) {
+	testCases := []struct {
+		desc     string
+		pattern  string
+		expected bool
+	}{
+		{
+			desc:     "detects mux pattern with single variable",
+			pattern:  "/api/users/{id}",
+			expected: true,
+		},
+		{
+			desc:     "detects mux pattern with constraint",
+			pattern:  "/api/users/{id:[0-9]+}",
+			expected: true,
+		},
+		{
+			desc:     "detects mux pattern multi-level",
+			pattern:  "/api/{path:.*}",
+			expected: true,
+		},
+		{
+			desc:     "does not detect exact path",
+			pattern:  "/api/users",
+			expected: false,
+		},
+		{
+			desc:     "does not detect wildcard",
+			pattern:  "/api/*",
+			expected: false,
+		},
+		{
+			desc:     "does not detect regex",
+			pattern:  "^/api/users/\\d+$",
+			expected: false,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.desc, func(t *testing.T) {
+			result := isMuxPattern(tc.pattern)
+			assert.Equal(t, tc.expected, result)
+		})
+	}
+}
+
+func TestMatchMuxPattern(t *testing.T) {
+	router := mux.NewRouter()
+
+	testCases := []struct {
+		desc     string
+		pattern  string
+		method   string
+		path     string
+		expected bool
+	}{
+		{
+			desc:     "matches single variable",
+			pattern:  "/api/users/{id}",
+			method:   "GET",
+			path:     "/api/users/123",
+			expected: true,
+		},
+		{
+			desc:     "matches variable with constraint",
+			pattern:  "/api/users/{id:[0-9]+}",
+			method:   "GET",
+			path:     "/api/users/123",
+			expected: true,
+		},
+		{
+			desc:     "does not match constraint violation",
+			pattern:  "/api/users/{id:[0-9]+}",
+			method:   "GET",
+			path:     "/api/users/abc",
+			expected: false,
+		},
+		{
+			desc:     "matches multi-level pattern",
+			pattern:  "/api/{path:.*}",
+			method:   "GET",
+			path:     "/api/users/123",
+			expected: true,
+		},
+		{
+			desc:     "matches middle variable",
+			pattern:  "/api/{category}/posts",
+			method:   "GET",
+			path:     "/api/tech/posts",
+			expected: true,
+		},
+		{
+			desc:     "matches multiple variables",
+			pattern:  "/api/{category}/posts/{id:[0-9]+}",
+			method:   "GET",
+			path:     "/api/tech/posts/123",
+			expected: true,
+		},
+		{
+			desc:     "does not match different path",
+			pattern:  "/api/users/{id}",
+			method:   "GET",
+			path:     "/api/posts/123",
+			expected: false,
+		},
+		{
+			desc:     "returns false for nil router",
+			pattern:  "/api/users/{id}",
+			method:   "GET",
+			path:     "/api/users/123",
+			expected: false,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.desc, func(t *testing.T) {
+			var testRouter *mux.Router
+
+			if tc.desc != "returns false for nil router" {
+				testRouter = router
+			}
+
+			result := matchMuxPattern(tc.pattern, tc.method, tc.path, testRouter)
+			assert.Equal(t, tc.expected, result)
+		})
+	}
+}
+
+func TestValidateMuxPattern(t *testing.T) {
+	testCases := []struct {
+		desc        string
+		pattern     string
+		expectError bool
+	}{
+		{
+			desc:        "validates single variable",
+			pattern:     "/api/users/{id}",
+			expectError: false,
+		},
+		{
+			desc:        "validates variable with constraint",
+			pattern:     "/api/users/{id:[0-9]+}",
+			expectError: false,
+		},
+		{
+			desc:        "validates multi-level pattern",
+			pattern:     "/api/{path:.*}",
+			expectError: false,
+		},
+		{
+			desc:        "validates non-pattern path",
+			pattern:     "/api/users",
+			expectError: false,
+		},
+		{
+			desc:        "rejects unbalanced braces",
+			pattern:     "/api/users/{id",
+			expectError: true,
+		},
+		{
+			desc:        "rejects unbalanced braces close",
+			pattern:     "/api/users/id}",
+			expectError: true,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.desc, func(t *testing.T) {
+			err := validateMuxPattern(tc.pattern)
+			if tc.expectError {
+				assert.Error(t, err)
+			} else {
+				assert.NoError(t, err)
+			}
 		})
 	}
 }

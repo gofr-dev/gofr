@@ -23,6 +23,7 @@ func main() {
 	app := gofr.New()
 	
 	// Use default paths (configs/rbac.json, configs/rbac.yaml, configs/rbac.yml)
+	// Uses rbac.DefaultConfigPath internally (empty string triggers default path resolution)
 	// Tries configs/rbac.json, then configs/rbac.yaml, then configs/rbac.yml
 	app.EnableRBAC()
 	
@@ -141,58 +142,58 @@ func main() {
       "requiredPermissions": ["users:read"]
     },
     {
-      "path": "^/api/users/\\d+$",  // Regex pattern for strict validation (numeric IDs only) - automatically detected
+      "path": "/api/users/{id:[0-9]+}",  // Mux pattern with constraint (numeric IDs only)
       "methods": ["DELETE"],
       "requiredPermissions": ["users:delete"]
     },
     {
-      "path": "/api/admin/*",  // Wildcard pattern - matches all sub-paths
+      "path": "/api/{resource}",  // Single-level pattern - matches /api/users, /api/posts
+      "methods": ["GET"],
+      "requiredPermissions": ["api:read"]
+    },
+    {
+      "path": "/api/{path:.*}",  // Multi-level pattern - matches /api/users/123, /api/posts/comments
       "methods": ["*"],  // All methods
       "requiredPermissions": ["admin:read", "admin:write"]  // Multiple permissions (OR logic)
+    },
+    {
+      "path": "/api/{category}/posts",  // Middle variable - matches /api/tech/posts, /api/news/posts
+      "methods": ["GET"],
+      "requiredPermissions": ["posts:read"]
     }
   ]
 }
 ```
 
-**Route Patterns**:
+### Mux Pattern Syntax
+
+RBAC uses **gorilla/mux route pattern conventions** for endpoint matching. This ensures perfect alignment with how routes are registered in GoFr.
+
+**Pattern Types**:
 - **Exact**: `"/api/users"` matches exactly `/api/users`
-- **Wildcard**: `"/api/*"` matches `/api/users`, `/api/posts`, etc.
-- **Regex**: `"^/api/users/\\d+$"` matches `/api/users/123`, etc.
+- **Single Variable**: `"/api/users/{id}"` matches `/api/users/123`, `/api/users/abc` (any single segment)
+- **Variable with Constraint**: `"/api/users/{id:[0-9]+}"` matches `/api/users/123` (numeric IDs only)
+- **Single-Level Pattern**: `"/api/{resource}"` matches `/api/users`, `/api/posts` (one segment)
+- **Multi-Level Pattern**: `"/api/{path:.*}"` matches `/api/users/123`, `/api/posts/comments` (any depth)
+- **Middle Variable**: `"/api/{category}/posts"` matches `/api/tech/posts`, `/api/news/posts`
 
-### Path Parameters
+**Common Patterns**:
+- Numeric IDs: `"/api/users/{id:[0-9]+}"` (matches `/api/users/123`)
+- UUIDs: `"/api/users/{uuid:[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}}"` (matches `/api/users/550e8400-e29b-41d4-a716-446655440000`)
+- Alphanumeric: `"/api/users/{name:[a-zA-Z0-9]+}"` (matches `/api/users/user123`)
 
-For endpoints with path parameters (e.g., `/api/users/{id}`), the `{id}` syntax in the `path` field is **documentation only** and does not work for matching. You must use either a **wildcard** or **regex** pattern.
+**Grouped Endpoints**:
 
-**Use Wildcard (`/*`) for Simple Cases**:
-```json
-{
-  "path": "/api/users/*",
-  "methods": ["DELETE"],
-  "requiredPermissions": ["users:delete"]
-}
-```
-- ✅ Matches: `/api/users/123`, `/api/users/abc`, `/api/users/anything`
-- Simple and flexible, but accepts any value
+For endpoints that need to match multiple paths, use mux patterns:
 
-**Use Regex for Strict Validation**:
-```json
-{
-  "path": "^/api/users/\\d+$",  // Regex pattern - automatically detected when starts with ^ or contains regex special chars
-  "methods": ["DELETE"],
-  "requiredPermissions": ["users:delete"]
-}
-```
-- ✅ Matches: `/api/users/123`, `/api/users/456`
-- ❌ Does not match: `/api/users/abc`, `/api/users/123abc`
-- Provides strict validation (numeric IDs, UUIDs, etc.)
-- Regex patterns are automatically detected and precompiled for better performance
-
-**Common Regex Patterns**:
-- Numeric IDs: `"^/api/users/\\d+$"` (matches `/api/users/123`)
-- UUIDs: `"^/api/users/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"` (matches `/api/users/550e8400-e29b-41d4-a716-446655440000`)
-- Alphanumeric: `"^/api/users/[a-zA-Z0-9]+$"` (matches `/api/users/user123`)
-
-**Note**: Regex patterns are automatically detected when the `path` field starts with `^`, ends with `$`, or contains regex special characters like `\d`, `\w`, `[`, `(`, `?`.
+- **Single-level wildcard**: Use `"/api/{resource}"` instead of `"/api/*"`
+  - Matches: `/api/users`, `/api/posts` (one segment)
+  
+- **Multi-level wildcard**: Use `"/api/{path:.*}"` instead of `"/api/*"`
+  - Matches: `/api/users/123`, `/api/posts/comments` (any depth)
+  
+- **Middle variable**: Use `"/api/{category}/posts"` instead of `"/api/*/posts"`
+  - Matches: `/api/tech/posts`, `/api/news/posts`
 
 ## JWT-Based RBAC
 
@@ -204,7 +205,7 @@ app := gofr.New()
 // Enable OAuth middleware first (required for JWT validation)
 app.EnableOAuth("https://auth.example.com/.well-known/jwks.json", 10)
 
-// Enable RBAC with config path (or use app.EnableRBAC() for default paths)
+// Enable RBAC with config path (or use app.EnableRBAC() for default paths using rbac.DefaultConfigPath)
 app.EnableRBAC("configs/rbac.json")
 ```
 
@@ -225,22 +226,42 @@ For business logic, you can access the user's role from the request context:
 **JWT-Based RBAC** (when using JWT role extraction):
 
 ```go
+import (
+	"encoding/json"
+	"errors"
+	"fmt"
+	
+	"gofr.dev/pkg/gofr"
+)
+
+// JWTClaims represents the JWT claims structure
+type JWTClaims struct {
+	Role string `json:"role"`
+	Sub  string `json:"sub"`
+	// Add other claim fields as needed
+}
+
 func handler(ctx *gofr.Context) (interface{}, error) {
 	// Get JWT claims from context
-	claims := ctx.GetAuthInfo().GetClaims()
-	if claims == nil {
+	claimsMap := ctx.GetAuthInfo().GetClaims()
+	if claimsMap == nil {
 		return nil, errors.New("JWT claims not found")
 	}
 	
-	// Extract role using the same claim path as configured in rbac.json
-	// Example: if jwtClaimPath is "role"
-	role, ok := claims["role"].(string)
-	if !ok {
-		return nil, errors.New("role not found in JWT claims")
+	// Convert map claims to struct (recommended GoFr pattern)
+	var claims JWTClaims
+	claimsBytes, err := json.Marshal(claimsMap)
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal claims: %w", err)
+	}
+	
+	if err := json.Unmarshal(claimsBytes, &claims); err != nil {
+		return nil, fmt.Errorf("failed to unmarshal claims: %w", err)
 	}
 	
 	// Use role for business logic (e.g., personalize UI, filter data)
-	return map[string]string{"userRole": role}, nil
+	// The role field matches the jwtClaimPath configured in rbac.json
+	return map[string]string{"userRole": claims.Role}, nil
 }
 ```
 
@@ -331,12 +352,12 @@ Or use role inheritance to avoid duplication:
       "requiredPermissions": ["users:read"]
     },
     {
-      "path": "^/api/users/\\d+$",
+      "path": "/api/users/{id:[0-9]+}",
       "methods": ["PUT", "PATCH"],
       "requiredPermissions": ["users:update"]
     },
     {
-      "path": "^/api/users/\\d+$",
+      "path": "/api/users/{id:[0-9]+}",
       "methods": ["DELETE"],
       "requiredPermissions": ["users:delete"]
     }
@@ -402,7 +423,7 @@ Or use role inheritance to avoid duplication:
 - Verify `roles[].permissions` is properly configured
 - Check that `endpoints[].requiredPermissions` matches your routes correctly
 - Ensure role has the required permission (check inherited permissions too)
-- Verify route pattern/regex matches exactly
+- Verify route pattern matches exactly (mux patterns supported)
 - Check role inheritance - ensure inherited permissions are included
 
 **Permission always denied**

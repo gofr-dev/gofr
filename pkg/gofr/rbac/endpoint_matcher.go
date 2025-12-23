@@ -1,10 +1,18 @@
 package rbac
 
 import (
+	"errors"
 	"fmt"
 	"net/http"
-	"regexp"
+	"net/url"
 	"strings"
+
+	"github.com/gorilla/mux"
+)
+
+var (
+	// errUnbalancedBraces is returned when a mux pattern has unbalanced braces.
+	errUnbalancedBraces = errors.New("unbalanced braces in pattern")
 )
 
 // matchEndpoint checks if the request matches an endpoint configuration.
@@ -53,32 +61,68 @@ func matchesHTTPMethod(method string, allowedMethods []string) bool {
 	return false
 }
 
-// matchesRegexPattern matches a route against a regex pattern using precompiled regex if available.
-// Config is read-only after initialization, so no mutex is needed.
-func matchesRegexPattern(pattern, route string, config *Config) bool {
-	if config == nil {
-		// Fallback to runtime compilation if config is not available
-		matched, err := regexp.MatchString(pattern, route)
-		return err == nil && matched
+// isMuxPattern detects if a pattern contains mux-style variables.
+// Returns true if pattern contains { and }.
+func isMuxPattern(pattern string) bool {
+	return strings.Contains(pattern, "{") && strings.Contains(pattern, "}")
+}
+
+// matchMuxPattern uses mux Route.Match() to test if a path matches a mux pattern.
+// Creates a temporary mux Route and uses Route.Match() to test the pattern.
+// Handles all mux pattern types: {id}, {id:[0-9]+}, {path:.*}, etc.
+func matchMuxPattern(pattern, method, path string, router *mux.Router) bool {
+	if router == nil {
+		return false
 	}
 
-	// Look up precompiled regex (stored with pattern as key during config processing)
-	if compiled, exists := config.compiledRegexMap[pattern]; exists {
-		return compiled.MatchString(route)
+	// Create a temporary route with the pattern
+	route := router.NewRoute().Path(pattern)
+
+	// If method is specified, add it to the route
+	if method != "" {
+		route = route.Methods(method)
 	}
 
-	// Fallback to runtime compilation if not precompiled (shouldn't happen if config was processed correctly)
-	matched, err := regexp.MatchString(pattern, route)
-	if err != nil {
-		return false // Invalid regex = no match
+	// Create a mock request for matching
+	req := &http.Request{
+		Method: method,
+		URL: &url.URL{
+			Path: path,
+		},
 	}
 
-	return matched
+	// Use Route.Match() to test if the request matches the pattern
+	var match mux.RouteMatch
+
+	return route.Match(req, &match)
+}
+
+// validateMuxPattern validates mux pattern syntax.
+// Ensures balanced braces and validates regex constraints format.
+func validateMuxPattern(pattern string) error {
+	// Check for balanced braces
+	openCount := strings.Count(pattern, "{")
+
+	closeCount := strings.Count(pattern, "}")
+
+	if openCount != closeCount {
+		return fmt.Errorf("%w: %s", errUnbalancedBraces, pattern)
+	}
+
+	// Check that if there are closing braces, there must be opening braces
+	// A pattern like "/api/id}" should not be valid
+	if closeCount > 0 && openCount == 0 {
+		return fmt.Errorf("%w: %s", errUnbalancedBraces, pattern)
+	}
+
+	// Basic validation: check that braces are properly formatted
+	// More detailed validation would require parsing, which mux will do anyway
+	return nil
 }
 
 // matchesEndpointPattern checks if the route matches the endpoint pattern.
 // Method matching is handled separately in matchEndpoint before this function is called.
-// Automatically detects if Path contains a regex pattern and uses appropriate matching.
+// Uses mux Route.Match() for mux patterns, exact match for non-pattern paths.
 func matchesEndpointPattern(endpoint *EndpointMapping, route string, config *Config) bool {
 	if endpoint.Path == "" {
 		return false
@@ -86,13 +130,14 @@ func matchesEndpointPattern(endpoint *EndpointMapping, route string, config *Con
 
 	pattern := endpoint.Path
 
-	// Check if pattern is a regex (starts with ^, ends with $, or contains regex special chars)
-	if isRegexPattern(pattern) {
-		return matchesRegexPattern(pattern, route, config)
+	// Exact match for non-pattern paths
+	if !isMuxPattern(pattern) {
+		return pattern == route
 	}
 
-	// Check path pattern matching
-	return matchesPathPattern(pattern, route)
+	// Use mux Route.Match() for patterns
+	// Method is handled separately, so pass empty string here
+	return matchMuxPattern(pattern, "", route, config.muxRouter)
 }
 
 // checkEndpointAuthorization checks if the user's role is authorized for the endpoint.
@@ -134,7 +179,7 @@ func checkEndpointAuthorization(role string, endpoint *EndpointMapping, config *
 
 // getEndpointForRequest finds the matching endpoint configuration for a request.
 // This is the primary function used by the middleware to determine authorization requirements.
-// Uses optimized maps for O(1) exact matches, falls back to pattern matching for wildcards/regex.
+// Uses optimized maps for O(1) exact matches, falls back to pattern matching for mux patterns.
 func getEndpointForRequest(r *http.Request, config *Config) (*EndpointMapping, bool) {
 	if len(config.Endpoints) == 0 {
 		return nil, false
