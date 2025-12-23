@@ -12,8 +12,7 @@ import (
 )
 
 const (
-	healthCheckTimeout      = 1 * time.Second
-	healthCheckStatsTimeout = 500 * time.Millisecond
+	healthCheckTimeout = 1 * time.Second
 )
 
 // HealthCheck returns the health status of the Redis connection.
@@ -35,24 +34,10 @@ func (r *Redis) HealthCheck() datasource.Health {
 		return h
 	}
 
-	// First check if we can ping Redis to ensure connection is available
-	if err := r.Client.Ping(ctx).Err(); err != nil {
+	info, err := r.Client.InfoMap(ctx, "Stats").Result()
+	if err != nil {
 		h.Status = datasource.StatusDown
 		h.Details["error"] = err.Error()
-
-		return h
-	}
-
-	// If ping succeeds, try to get stats (with a fresh context to avoid timeout issues)
-	statsCtx, statsCancel := context.WithTimeout(context.Background(), healthCheckStatsTimeout)
-	defer statsCancel()
-
-	info, err := r.Client.InfoMap(statsCtx, "Stats").Result()
-	if err != nil {
-		// If InfoMap fails, we still consider it UP since Ping succeeded
-		// but log the error in details
-		h.Status = datasource.StatusUp
-		h.Details["stats_error"] = err.Error()
 
 		return h
 	}
