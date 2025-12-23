@@ -279,6 +279,10 @@ func (ps *PubSub) ensureConsumerGroup(ctx context.Context, topic, group string) 
 
 // checkGroupExists checks if a consumer group exists for the given stream.
 func (ps *PubSub) checkGroupExists(ctx context.Context, topic, group string) bool {
+	if !ps.isConnected() {
+		return false
+	}
+
 	groups, err := ps.client.XInfoGroups(ctx, topic).Result()
 	if err != nil {
 		// If XInfoGroups failed (e.g., stream doesn't exist), we'll create it with MKSTREAM
@@ -455,6 +459,7 @@ func (ps *PubSub) createStreamTopic(ctx context.Context, name string) error {
 
 	group := ps.config.PubSubStreamsConfig.ConsumerGroup
 
+	// checkGroupExists already calls isConnected()
 	groupExists := ps.checkGroupExists(ctx, name, group)
 	if groupExists {
 		return nil
@@ -480,7 +485,12 @@ func (ps *PubSub) DeleteTopic(ctx context.Context, topic string) error {
 	}
 
 	if mode == modeStreams {
+		if !ps.isConnected() {
+			return errClientNotConnected
+		}
+
 		ps.cleanupStreamConsumers(topic)
+
 		return ps.client.Del(ctx, topic).Err()
 	}
 
@@ -596,10 +606,13 @@ func (ps *PubSub) cleanupSubscription(topic string) {
 	ps.mu.Lock()
 	defer ps.mu.Unlock()
 
-	if ch, ok := ps.receiveChan[topic]; ok && !ps.chanClosed[topic] {
-		ps.chanClosed[topic] = true
+	if ch, ok := ps.receiveChan[topic]; ok {
+		if !ps.chanClosed[topic] {
+			ps.chanClosed[topic] = true
 
-		close(ch)
+			close(ch)
+		}
+
 		delete(ps.receiveChan, topic)
 	}
 
@@ -720,6 +733,14 @@ func (*PubSub) collectMessages(ctx context.Context, ch <-chan *redis.Message, li
 	collected := 0
 
 	for collected < limit {
+		// Check context first
+		select {
+		case <-ctx.Done():
+			return result
+		default:
+		}
+
+		// Then try to receive message
 		select {
 		case <-ctx.Done():
 			return result

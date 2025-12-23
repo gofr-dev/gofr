@@ -2,21 +2,16 @@ package redis
 
 import (
 	"context"
-	"errors"
 	"testing"
-	"time"
 
-	"github.com/alicebob/miniredis/v2"
 	"github.com/go-redis/redismock/v9"
 	"github.com/redis/go-redis/v9"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
 
-	"gofr.dev/pkg/gofr/config"
 	"gofr.dev/pkg/gofr/logging"
 )
-
 
 func TestPubSubMessage_Commit(t *testing.T) {
 	t.Parallel()
@@ -54,6 +49,7 @@ func TestNewStreamMessage(t *testing.T) {
 
 	mockLogger := logging.NewMockLogger(logging.DEBUG)
 	db, _ := redismock.NewClientMock()
+
 	t.Cleanup(func() { _ = db.Close() })
 
 	tests := []struct {
@@ -109,7 +105,6 @@ func TestNewStreamMessage(t *testing.T) {
 	}
 
 	for _, tt := range tests {
-		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
@@ -134,8 +129,8 @@ func TestStreamMessage_Commit_Success(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	t.Cleanup(ctrl.Finish)
 
-	mockLogger := logging.NewMockLogger(logging.DEBUG)
 	db, mock := redismock.NewClientMock()
+
 	t.Cleanup(func() { _ = db.Close() })
 
 	stream := "test-stream"
