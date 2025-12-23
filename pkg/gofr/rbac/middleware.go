@@ -55,6 +55,9 @@ var (
 
 	// errInvalidClaimStructure is returned when claim structure is invalid.
 	errInvalidClaimStructure = errors.New("invalid claim structure")
+
+	// errAuthorizationError is returned as a generic error message for unknown errors in traces.
+	errAuthorizationError = errors.New("authorization error")
 )
 
 // Middleware creates an HTTP middleware function that enforces RBAC authorization.
@@ -118,21 +121,16 @@ func Middleware(config *Config) func(handler http.Handler) http.Handler {
 				return
 			}
 
-			// Update span with role if tracing is enabled
-			if config.Tracer != nil {
-				trace.SpanFromContext(r.Context()).SetAttributes(attribute.String("rbac.role", role))
-			}
+			// Role not included in traces for privacy (roles are PII)
+			// Only include authorization status (safe boolean) - set below after authorization check
 
 			// Check authorization using unified endpoint-based authorization
 			authorized, authReason := checkEndpointAuthorization(role, endpoint, config)
 			if !authorized {
+				// Role not included in metrics to avoid high cardinality and PII concerns
+				// Only include status (allowed/denied) for aggregation
 				if config.Metrics != nil {
-					labels := []string{"status", "denied"}
-					if role != "" {
-						labels = append(labels, "role", role)
-					}
-
-					config.Metrics.IncrementCounter(r.Context(), "rbac_authorization_decisions", labels...)
+					config.Metrics.IncrementCounter(r.Context(), "rbac_authorization_decisions", "status", "denied")
 				}
 
 				handleAuthError(w, r, config, role, routeLabel, ErrAccessDenied)
@@ -141,13 +139,10 @@ func Middleware(config *Config) func(handler http.Handler) http.Handler {
 			}
 
 			// Record metrics and update span
+			// Role not included in metrics to avoid high cardinality and PII concerns
+			// Only include status (allowed/denied) for aggregation
 			if config.Metrics != nil {
-				labels := []string{"status", "allowed"}
-				if role != "" {
-					labels = append(labels, "role", role)
-				}
-
-				config.Metrics.IncrementCounter(r.Context(), "rbac_authorization_decisions", labels...)
+				config.Metrics.IncrementCounter(r.Context(), "rbac_authorization_decisions", "status", "allowed")
 			}
 
 			if config.Tracer != nil {
@@ -168,10 +163,12 @@ func Middleware(config *Config) func(handler http.Handler) http.Handler {
 // handleAuthError handles authorization errors with custom error handler or default response.
 func handleAuthError(w http.ResponseWriter, r *http.Request, config *Config, role, route string, err error) {
 	// Record error in span if tracing is enabled
+	// Sanitize error message to prevent information leakage
 	if config.Tracer != nil {
 		span := trace.SpanFromContext(r.Context())
-		span.RecordError(err)
-		span.SetStatus(codes.Error, err.Error())
+		safeErr := sanitizeErrorForTrace(err)
+		span.RecordError(safeErr)
+		span.SetStatus(codes.Error, safeErr.Error())
 	}
 
 	// Log audit event (always enabled when Logger is available)
@@ -378,4 +375,19 @@ func logAuditEvent(logger datasource.Logger, r *http.Request, role, route string
 
 	logger.Infof("[RBAC Audit] %s - Role: %s - Route: %s - %s - Reason: %s",
 		r.Method, role, route, status, reason)
+}
+
+// sanitizeErrorForTrace sanitizes error messages for traces to prevent information leakage.
+// Returns generic error messages that don't expose internal system details.
+func sanitizeErrorForTrace(err error) error {
+	if errors.Is(err, ErrRoleNotFound) {
+		return ErrRoleNotFound // Safe: generic error message
+	}
+
+	if errors.Is(err, ErrAccessDenied) {
+		return ErrAccessDenied // Safe: generic error message
+	}
+
+	// For unknown errors, return generic message to prevent information leakage
+	return errAuthorizationError
 }

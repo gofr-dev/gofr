@@ -493,6 +493,38 @@ This design allows you to:
 - Keep some routes unprotected (not in RBAC config)
 - Let the router handle 404s for non-existent routes
 
+## Security and Privacy
+
+### Telemetry Data Protection
+
+RBAC middleware implements industry-standard security practices to protect sensitive data:
+
+**Traces (OpenTelemetry):**
+- ✅ HTTP method and route patterns included
+- ✅ Authorization status (allowed/denied) included
+- ❌ Roles excluded (privacy protection - roles are PII)
+- ❌ Error messages sanitized (prevent information leakage)
+
+**Metrics:**
+- ✅ Authorization decision counts included
+- ✅ Status (allowed/denied) included
+- ❌ Roles excluded (avoid high cardinality and PII concerns)
+
+**Audit Logs:**
+- ✅ Roles included (required for compliance: SOC 2, PCI-DSS, NIST)
+- ✅ HTTP method, route, status, and reason included
+- ❌ No authorization tokens, headers, or request bodies logged
+- ❌ No user IDs or personal information logged
+
+### What's Never Logged
+
+RBAC middleware never logs:
+- Authorization tokens (Bearer tokens, API keys)
+- Request bodies or headers
+- User IDs or personal information
+- IP addresses in traces/metrics
+- Detailed error messages exposing internal details
+
 ## Related Documentation
 
 - [HTTP Authentication](https://gofr.dev/docs/advanced-guide/http-authentication) - Basic Auth, API Keys, OAuth 2.0

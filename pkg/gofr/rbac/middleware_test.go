@@ -2,6 +2,7 @@ package rbac
 
 import (
 	"context"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -855,17 +856,28 @@ func TestHandleAuthError(t *testing.T) {
 
 // mockLogger implements the datasource.Logger interface for testing.
 type mockLogger struct {
-	logs []string
+	errorLogs []string
+	infoLogs  []string // Capture actual log messages
+	logs      []string
 }
 
 func (m *mockLogger) Debug(_ ...any)            { m.logs = append(m.logs, "DEBUG") }
 func (m *mockLogger) Debugf(_ string, _ ...any) { m.logs = append(m.logs, "DEBUGF") }
 func (m *mockLogger) Info(_ ...any)             { m.logs = append(m.logs, "INFO") }
-func (m *mockLogger) Infof(_ string, _ ...any)  { m.logs = append(m.logs, "INFOF") }
-func (m *mockLogger) Error(_ ...any)            { m.logs = append(m.logs, "ERROR") }
-func (m *mockLogger) Errorf(_ string, _ ...any) { m.logs = append(m.logs, "ERRORF") }
-func (m *mockLogger) Warn(_ ...any)             { m.logs = append(m.logs, "WARN") }
-func (m *mockLogger) Warnf(_ string, _ ...any)  { m.logs = append(m.logs, "WARNF") }
+func (m *mockLogger) Infof(format string, args ...any) {
+	m.logs = append(m.logs, "INFOF")
+	m.infoLogs = append(m.infoLogs, fmt.Sprintf(format, args...))
+}
+
+func (m *mockLogger) Error(_ ...any) { m.logs = append(m.logs, "ERROR") }
+func (m *mockLogger) Errorf(format string, args ...any) {
+	m.logs = append(m.logs, "ERRORF")
+	m.errorLogs = append(m.errorLogs, fmt.Sprintf(format, args...))
+}
+
+func (m *mockLogger) Warn(_ ...any) { m.logs = append(m.logs, "WARN") }
+
+func (m *mockLogger) Warnf(_ string, _ ...any) { m.logs = append(m.logs, "WARNF") }
 
 func TestMiddleware_WithTracing(t *testing.T) {
 	t.Run("starts tracing when tracer is available", func(t *testing.T) {
@@ -944,6 +956,7 @@ type mockMetrics struct {
 	histogramCreated   bool
 	counterCreated     bool
 	counterIncremented map[string]bool
+	counterLabels      map[string][]string // Track labels for each counter call
 }
 
 func (m *mockMetrics) NewHistogram(_, _ string, _ ...float64) {
@@ -958,12 +971,17 @@ func (m *mockMetrics) NewCounter(_, _ string) {
 	m.counterCreated = true
 }
 
-func (m *mockMetrics) IncrementCounter(_ context.Context, name string, _ ...string) {
+func (m *mockMetrics) IncrementCounter(_ context.Context, name string, labels ...string) {
 	if m.counterIncremented == nil {
 		m.counterIncremented = make(map[string]bool)
 	}
 
+	if m.counterLabels == nil {
+		m.counterLabels = make(map[string][]string)
+	}
+
 	m.counterIncremented[name] = true
+	m.counterLabels[name] = labels
 }
 
 func (*mockMetrics) NewUpDownCounter(_, _ string) {
@@ -980,4 +998,216 @@ func (*mockMetrics) DeltaUpDownCounter(_ context.Context, _ string, _ float64, _
 
 func (*mockMetrics) SetGauge(_ string, _ float64, _ ...string) {
 	// Mock implementation
+}
+
+func TestMiddleware_RoleNotInMetrics(t *testing.T) {
+	t.Run("role is not included in metric labels", func(t *testing.T) {
+		mockMetrics := &mockMetrics{
+			counterIncremented: make(map[string]bool),
+			counterLabels:      make(map[string][]string),
+		}
+
+		config := &Config{
+			Endpoints: []EndpointMapping{
+				{Path: "/api", Methods: []string{"GET"}, RequiredPermissions: []string{"admin:read"}},
+			},
+			RoleHeader: "X-User-Role",
+			Metrics:    mockMetrics,
+		}
+		err := config.processUnifiedConfig()
+		require.NoError(t, err)
+
+		middlewareFunc := Middleware(config)
+		handler := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+			w.WriteHeader(http.StatusOK)
+		})
+
+		wrapped := middlewareFunc(handler)
+		w := httptest.NewRecorder()
+		req := httptest.NewRequest(http.MethodGet, "/api", http.NoBody)
+		req.Header.Set("X-User-Role", "admin")
+
+		// Setup role permissions
+		config.rolePermissionsMap = map[string][]string{
+			"admin": {"admin:read"},
+		}
+
+		wrapped.ServeHTTP(w, req)
+
+		assert.Equal(t, http.StatusOK, w.Code)
+		// Verify metrics were recorded
+		assert.True(t, mockMetrics.counterIncremented["rbac_authorization_decisions"])
+		// Verify role is NOT in labels (only status should be present)
+		labels := mockMetrics.counterLabels["rbac_authorization_decisions"]
+		assert.Contains(t, labels, "status", "status label should be present")
+		assert.Contains(t, labels, "allowed", "allowed status should be present")
+		// Verify role is NOT in labels
+		assert.NotContains(t, labels, "role", "role should not be in metric labels")
+		assert.NotContains(t, labels, "admin", "role value should not be in metric labels")
+	})
+
+	t.Run("role is not included in metric labels for denied requests", func(t *testing.T) {
+		mockMetrics := &mockMetrics{
+			counterIncremented: make(map[string]bool),
+			counterLabels:      make(map[string][]string),
+		}
+
+		config := &Config{
+			Endpoints: []EndpointMapping{
+				{Path: "/api", Methods: []string{"GET"}, RequiredPermissions: []string{"admin:read"}},
+			},
+			RoleHeader: "X-User-Role",
+			Metrics:    mockMetrics,
+		}
+		err := config.processUnifiedConfig()
+		require.NoError(t, err)
+
+		middlewareFunc := Middleware(config)
+		handler := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+			w.WriteHeader(http.StatusOK)
+		})
+
+		wrapped := middlewareFunc(handler)
+		w := httptest.NewRecorder()
+		req := httptest.NewRequest(http.MethodGet, "/api", http.NoBody)
+		req.Header.Set("X-User-Role", "viewer") // Role without permission
+
+		// Setup role permissions
+		config.rolePermissionsMap = map[string][]string{
+			"viewer": {"viewer:read"}, // Different permission
+		}
+
+		wrapped.ServeHTTP(w, req)
+
+		assert.Equal(t, http.StatusForbidden, w.Code)
+		// Verify metrics were recorded
+		assert.True(t, mockMetrics.counterIncremented["rbac_authorization_decisions"])
+		// Verify role is NOT in labels (only status should be present)
+		labels := mockMetrics.counterLabels["rbac_authorization_decisions"]
+		assert.Contains(t, labels, "status", "status label should be present")
+		assert.Contains(t, labels, "denied", "denied status should be present")
+		// Verify role is NOT in labels
+		assert.NotContains(t, labels, "role", "role should not be in metric labels")
+		assert.NotContains(t, labels, "viewer", "role value should not be in metric labels")
+	})
+}
+
+func TestMiddleware_RoleInAuditLogs(t *testing.T) {
+	t.Run("role is included in audit logs", func(t *testing.T) {
+		mockLog := &mockLogger{
+			logs:     []string{},
+			infoLogs: []string{},
+		}
+
+		config := &Config{
+			Endpoints: []EndpointMapping{
+				{Path: "/api", Methods: []string{"GET"}, RequiredPermissions: []string{"admin:read"}},
+			},
+			RoleHeader: "X-User-Role",
+			Logger:     mockLog,
+		}
+		err := config.processUnifiedConfig()
+		require.NoError(t, err)
+
+		middlewareFunc := Middleware(config)
+		handler := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+			w.WriteHeader(http.StatusOK)
+		})
+
+		wrapped := middlewareFunc(handler)
+		w := httptest.NewRecorder()
+		req := httptest.NewRequest(http.MethodGet, "/api", http.NoBody)
+		req.Header.Set("X-User-Role", "admin")
+
+		// Setup role permissions
+		config.rolePermissionsMap = map[string][]string{
+			"admin": {"admin:read"},
+		}
+
+		wrapped.ServeHTTP(w, req)
+
+		assert.Equal(t, http.StatusOK, w.Code)
+		// Verify audit log contains role
+		assert.NotEmpty(t, mockLog.infoLogs, "audit log should be written")
+		auditLog := mockLog.infoLogs[0]
+		assert.Contains(t, auditLog, "admin", "audit log should contain role")
+		assert.Contains(t, auditLog, "[RBAC Audit]", "audit log should have RBAC Audit prefix")
+		assert.Contains(t, auditLog, "Role:", "audit log should contain Role label")
+	})
+
+	t.Run("role is included in audit logs for denied requests", func(t *testing.T) {
+		mockLog := &mockLogger{
+			logs:     []string{},
+			infoLogs: []string{},
+		}
+
+		config := &Config{
+			Endpoints: []EndpointMapping{
+				{Path: "/api", Methods: []string{"GET"}, RequiredPermissions: []string{"admin:read"}},
+			},
+			RoleHeader: "X-User-Role",
+			Logger:     mockLog,
+		}
+		err := config.processUnifiedConfig()
+		require.NoError(t, err)
+
+		middlewareFunc := Middleware(config)
+		handler := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+			w.WriteHeader(http.StatusOK)
+		})
+
+		wrapped := middlewareFunc(handler)
+		w := httptest.NewRecorder()
+		req := httptest.NewRequest(http.MethodGet, "/api", http.NoBody)
+		req.Header.Set("X-User-Role", "viewer") // Role without permission
+
+		// Setup role permissions
+		config.rolePermissionsMap = map[string][]string{
+			"viewer": {"viewer:read"}, // Different permission
+		}
+
+		wrapped.ServeHTTP(w, req)
+
+		assert.Equal(t, http.StatusForbidden, w.Code)
+		// Verify audit log contains role
+		assert.NotEmpty(t, mockLog.infoLogs, "audit log should be written")
+		auditLog := mockLog.infoLogs[0]
+		assert.Contains(t, auditLog, "viewer", "audit log should contain role")
+		assert.Contains(t, auditLog, "[RBAC Audit]", "audit log should have RBAC Audit prefix")
+		assert.Contains(t, auditLog, "Role:", "audit log should contain Role label")
+	})
+}
+
+func TestSanitizeErrorForTrace(t *testing.T) {
+	t.Run("sanitizes known errors", func(t *testing.T) {
+		err := ErrRoleNotFound
+		sanitized := sanitizeErrorForTrace(err)
+		assert.Equal(t, ErrRoleNotFound, sanitized, "known errors should be returned as-is")
+	})
+
+	t.Run("sanitizes access denied errors", func(t *testing.T) {
+		err := ErrAccessDenied
+		sanitized := sanitizeErrorForTrace(err)
+		assert.Equal(t, ErrAccessDenied, sanitized, "known errors should be returned as-is")
+	})
+
+	t.Run("sanitizes unknown errors", func(t *testing.T) {
+		//nolint:err113 // Test intentionally uses dynamic errors to verify sanitization
+		testErr := fmt.Errorf("internal system error: database connection failed at 192.168.1.1")
+		sanitized := sanitizeErrorForTrace(testErr)
+		// Unknown errors should be sanitized to generic message
+		assert.Equal(t, "authorization error", sanitized.Error(), "unknown errors should be sanitized")
+		assert.NotContains(t, sanitized.Error(), "192.168.1.1", "sensitive information should be removed")
+		assert.NotContains(t, sanitized.Error(), "database connection", "internal details should be removed")
+	})
+
+	t.Run("sanitizes wrapped errors", func(t *testing.T) {
+		//nolint:err113 // Test intentionally uses dynamic errors to verify sanitization
+		testErr := fmt.Errorf("internal system error: secret key exposed")
+		err := fmt.Errorf("wrapped error: %w", testErr)
+		sanitized := sanitizeErrorForTrace(err)
+		// Wrapped unknown errors should be sanitized
+		assert.Equal(t, "authorization error", sanitized.Error(), "wrapped unknown errors should be sanitized")
+		assert.NotContains(t, sanitized.Error(), "secret key", "sensitive information should be removed")
+	})
 }
