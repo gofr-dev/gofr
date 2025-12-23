@@ -4,7 +4,6 @@ import (
 	"context"
 	"crypto/tls"
 	"errors"
-	"fmt"
 	"strconv"
 	"strings"
 	"sync"
@@ -184,39 +183,6 @@ func (r *Redis) Close() error {
 	}
 
 	return nil
-}
-
-// HealthCheck returns the health status of the Redis connection.
-func (r *Redis) HealthCheck() datasource.Health {
-	res := datasource.Health{
-		Status: datasource.StatusDown,
-		Details: map[string]any{
-			"backend": "REDIS",
-		},
-	}
-
-	if r.Client == nil {
-		res.Details["error"] = "client not initialized"
-		return res
-	}
-
-	addr := fmt.Sprintf("%s:%d", r.config.HostName, r.config.Port)
-	res.Details["addr"] = addr
-	res.Details["db"] = r.config.DB
-
-	ctx, cancel := context.WithTimeout(context.Background(), redisPingTimeout)
-	defer cancel()
-
-	if err := r.Client.Ping(ctx).Err(); err != nil {
-		r.logger.Errorf("Redis health check failed: %v", err)
-		res.Details["error"] = err.Error()
-
-		return res
-	}
-
-	res.Status = datasource.StatusUp
-
-	return res
 }
 
 // NewPubSub creates a new PubSub client that implements pubsub.Client interface.

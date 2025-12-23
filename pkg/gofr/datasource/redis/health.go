@@ -3,14 +3,63 @@ package redis
 import (
 	"context"
 	"fmt"
+	"strconv"
+	"time"
 
 	"gofr.dev/pkg/gofr/datasource"
 )
 
+// HealthCheck returns the health status of the Redis connection.
+func (r *Redis) HealthCheck() datasource.Health {
+	h := datasource.Health{
+		Details: make(map[string]any),
+		Status:  datasource.StatusDown,
+	}
+
+	h.Details["host"] = r.config.HostName + ":" + strconv.Itoa(r.config.Port)
+
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+
+	if r.Client == nil {
+		h.Status = datasource.StatusDown
+		h.Details["error"] = "redis not connected"
+
+		return h
+	}
+
+	// First check if we can ping Redis to ensure connection is available
+	if err := r.Client.Ping(ctx).Err(); err != nil {
+		h.Status = datasource.StatusDown
+		h.Details["error"] = err.Error()
+
+		return h
+	}
+
+	// If ping succeeds, try to get stats (with a fresh context to avoid timeout issues)
+	statsCtx, statsCancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
+	defer statsCancel()
+
+	info, err := r.Client.InfoMap(statsCtx, "Stats").Result()
+	if err != nil {
+		// If InfoMap fails, we still consider it UP since Ping succeeded
+		// but log the error in details
+		h.Status = datasource.StatusUp
+		h.Details["stats_error"] = err.Error()
+
+		return h
+	}
+
+	h.Status = datasource.StatusUp
+	h.Details["stats"] = info["Stats"]
+
+	return h
+}
+
 // Health returns the health status of the Redis PubSub connection.
 func (ps *PubSub) Health() datasource.Health {
 	res := datasource.Health{
-		Status: "DOWN",
+		Status: datasource.StatusDown,
 		Details: map[string]any{
 			"backend": "REDIS",
 		},
@@ -34,7 +83,7 @@ func (ps *PubSub) Health() datasource.Health {
 		return res
 	}
 
-	res.Status = "UP"
+	res.Status = datasource.StatusUp
 
 	return res
 }
