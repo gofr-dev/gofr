@@ -17,17 +17,17 @@ package main
 
 import (
 	"gofr.dev/pkg/gofr"
-	"gofr.dev/pkg/gofr/rbac"
 )
 
 func main() {
 	app := gofr.New()
 	
-	provider := rbac.NewProvider("configs/rbac.json")
-	app.EnableRBAC(provider) // Custom path
-	// Or use default paths (empty string):
-	// provider := rbac.NewProvider(rbac.DefaultRBACConfig) // Tries configs/rbac.json, configs/rbac.yaml, configs/rbac.yml
-	// app.EnableRBAC(provider)
+	// Use default paths (configs/rbac.json, configs/rbac.yaml, configs/rbac.yml)
+	// Tries configs/rbac.json, then configs/rbac.yaml, then configs/rbac.yml
+	app.EnableRBAC()
+	
+	// Or with custom config path
+	app.EnableRBAC("configs/custom-rbac.json")
 	
 	app.GET("/api/users", handler)
 	app.Run()
@@ -204,8 +204,8 @@ app := gofr.New()
 // Enable OAuth middleware first (required for JWT validation)
 app.EnableOAuth("https://auth.example.com/.well-known/jwks.json", 10)
 
-provider := rbac.NewProvider()
-app.EnableRBAC(provider, "configs/rbac.json")
+// Enable RBAC with config path (or use app.EnableRBAC() for default paths)
+app.EnableRBAC("configs/rbac.json")
 ```
 
 **Configuration** (`configs/rbac.json`):
@@ -306,11 +306,12 @@ Or use role inheritance to avoid duplication:
   "roles": [
     {
       "name": "admin",
-      "permissions": ["users:create", "users:read", "users:update", "users:delete"]
+      "permissions": ["users:delete"],
+      "inheritsFrom": ["editor"]
     },
     {
       "name": "editor",
-      "permissions": ["users:create", "users:read", "users:update"],
+      "permissions": ["users:create", "users:update"],
       "inheritsFrom": ["viewer"]
     },
     {
@@ -410,6 +411,7 @@ Or use role inheritance to avoid duplication:
 - Enable debug logging - check audit logs for authorization decisions
 
 **Permission always allowed**
+- Check if endpoint is in RBAC config - routes not in config are allowed to proceed
 - Check public endpoints - verify endpoint is not marked as `public: true`
 - Review endpoint configuration - ensure `endpoints[].requiredPermissions` is set correctly
 - Verify permission check - check audit logs to see if permission check is being performed
@@ -422,132 +424,11 @@ Or use role inheritance to avoid duplication:
 - Ensure config file exists at the specified path
 - Or use default paths (`configs/rbac.json`, `configs/rbac.yaml`, `configs/rbac.yml`)
 
-## Implementing Custom RBAC Providers
-
-GoFr's RBAC system is extensible - you can implement your own RBAC provider by implementing the `gofr.RBACProvider` interface. This allows you to:
-
-- Load RBAC configuration from custom sources (database, API, environment variables, etc.)
-- Implement custom authorization logic
-- Integrate with external authorization systems
-- Add custom middleware behavior
-
-### RBACProvider Interface
-
-To create a custom RBAC provider, implement the `gofr.RBACProvider` interface:
-
-```go
-type RBACProvider interface {
-    // UseLogger sets the logger for the provider
-    UseLogger(logger any)
-
-    // UseMetrics sets the metrics for the provider
-    UseMetrics(metrics any)
-
-    // UseTracer sets the tracer for the provider
-    UseTracer(tracer any)
-
-    // LoadPermissions loads RBAC configuration from the stored config path
-    LoadPermissions() error
-
-    // RBACMiddleware returns the middleware function using the stored config
-    // The returned function should be compatible with http.Handler middleware pattern
-    RBACMiddleware() func(http.Handler) http.Handler
-}
-```
-
-### Example: Custom RBAC Provider
-
-Here's an example of implementing a custom RBAC provider that loads configuration from a database:
-
-```go
-package main
-
-import (
-    "net/http"
-    "gofr.dev/pkg/gofr"
-    "gofr.dev/pkg/gofr/logging"
-)
-
-type CustomRBACProvider struct {
-    configPath string
-    config     *CustomConfig
-    logger     any
-    metrics    any
-    tracer     any
-}
-
-func NewCustomRBACProvider(configPath string) *CustomRBACProvider {
-    return &CustomRBACProvider{
-        configPath: configPath,
-    }
-}
-
-func (p *CustomRBACProvider) UseLogger(logger any) {
-    p.logger = logger
-}
-
-func (p *CustomRBACProvider) UseMetrics(metrics any) {
-    p.metrics = metrics
-}
-
-func (p *CustomRBACProvider) UseTracer(tracer any) {
-    p.tracer = tracer
-}
-
-func (p *CustomRBACProvider) LoadPermissions() error {
-    // Load configuration from your custom source (database, API, etc.)
-    // For example, load from database:
-    // config, err := p.loadFromDatabase(p.configPath)
-    
-    // Store the loaded config
-    // p.config = config
-    
-    return nil
-}
-
-func (p *CustomRBACProvider) RBACMiddleware() func(http.Handler) http.Handler {
-    if p.config == nil {
-        // Return passthrough middleware if config not loaded
-        return func(handler http.Handler) http.Handler {
-            return handler
-        }
-    }
-    
-    // Return your custom middleware implementation
-    return func(handler http.Handler) http.Handler {
-        return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-            // Your custom authorization logic here
-            // ...
-            handler.ServeHTTP(w, r)
-        })
-    }
-}
-
-func main() {
-    app := gofr.New()
-    
-    // Use your custom provider
-    provider := NewCustomRBACProvider("custom-config-path")
-    app.EnableRBAC(provider)
-    
-    app.Run()
-}
-```
-
-### Integration with GoFr
-
-Once you implement the `RBACProvider` interface, you can use it with GoFr's `EnableRBAC` method:
-
-```go
-app := gofr.New()
-customProvider := NewCustomRBACProvider("config-path")
-app.EnableRBAC(customProvider)
-```
-
-GoFr will automatically:
-- Call `UseLogger`, `UseMetrics`, and `UseTracer` with the app's logger, metrics, and tracer
-- Call `LoadPermissions()` to load your configuration
-- Call `RBACMiddleware()` to get the middleware and register it
+**Route not being protected by RBAC**
+- Verify the route is explicitly configured in `endpoints[]` array
+- Check that the path pattern matches exactly (case-sensitive)
+- Ensure HTTP method matches (or use `["*"]` for all methods)
+- Remember: Routes not in RBAC config are allowed to proceed (not blocked)
 
 ## How It Works
 
@@ -557,6 +438,39 @@ GoFr will automatically:
 4. **Authorization**: Allows or denies request based on permission check
 
 The middleware automatically handles all authorization - you just define routes normally.
+
+### Unmatched Routes Behavior
+
+**Important**: RBAC only enforces authorization for endpoints that are **explicitly configured** in the RBAC config file.
+
+- ✅ **Routes in RBAC config**: Authorization is enforced (requires valid role and permissions)
+- ✅ **Routes NOT in RBAC config**: Requests are allowed to proceed to normal route matching
+  - If the route exists in your application, it will be handled normally
+  - If the route doesn't exist, it will return 404 (route not registered)
+
+**Example**:
+```json
+{
+  "endpoints": [
+    {
+      "path": "/api/users",
+      "methods": ["GET"],
+      "requiredPermissions": ["users:read"]
+    }
+  ]
+}
+```
+
+In this configuration:
+- `GET /api/users` → **RBAC enforced** (requires `users:read` permission)
+- `POST /api/users` → **Not in RBAC config** → Allowed to proceed (may return 404 if route doesn't exist)
+- `GET /api/posts` → **Not in RBAC config** → Allowed to proceed (may return 404 if route doesn't exist)
+- `GET /health` → **Not in RBAC config** → Allowed to proceed (will work if route exists)
+
+This design allows you to:
+- Gradually add RBAC protection to specific endpoints
+- Keep some routes unprotected (not in RBAC config)
+- Let the router handle 404s for non-existent routes
 
 ## Related Documentation
 

@@ -9,10 +9,12 @@ import (
 	"path/filepath"
 	"regexp"
 	"strings"
-	"sync"
 
 	"go.opentelemetry.io/otel/trace"
 	"gopkg.in/yaml.v3"
+
+	"gofr.dev/pkg/gofr/container"
+	"gofr.dev/pkg/gofr/datasource"
 )
 
 var (
@@ -93,11 +95,11 @@ type Config struct {
 	// Logger is the logger instance for audit logging
 	// Set automatically by EnableRBAC - users don't need to configure this
 	// Audit logging is automatically performed when RBAC is enabled
-	Logger Logger `json:"-" yaml:"-"`
+	Logger datasource.Logger `json:"-" yaml:"-"`
 
 	// Metrics is the metrics instance for RBAC metrics
 	// Set automatically by EnableRBAC
-	Metrics Metrics `json:"-" yaml:"-"`
+	Metrics container.Metrics `json:"-" yaml:"-"`
 
 	// Tracer is the tracer instance for RBAC tracing
 	// Set automatically by EnableRBAC
@@ -105,19 +107,18 @@ type Config struct {
 
 	// Internal maps built from unified config (not in JSON/YAML)
 	// These are populated by processUnifiedConfig()
-	rolePermissionsMap    map[string][]string       `json:"-" yaml:"-"`
-	endpointPermissionMap map[string][]string       `json:"-" yaml:"-"` // Key: "METHOD:/path", Value: []permissions
-	publicEndpointsMap    map[string]bool           `json:"-" yaml:"-"` // Key: "METHOD:/path", Value: true if public
-	compiledRegexMap      map[string]*regexp.Regexp `json:"-" yaml:"-"` // Key: "METHOD:/path", Value: compiled regex
-
-	// Mutex for thread-safe access to maps (for future hot-reload support)
-	mu sync.RWMutex `json:"-" yaml:"-"`
+	rolePermissionsMap    map[string][]string         `json:"-" yaml:"-"`
+	endpointPermissionMap map[string][]string         `json:"-" yaml:"-"` // Key: "METHOD:/path", Value: []permissions
+	publicEndpointsMap    map[string]bool             `json:"-" yaml:"-"` // Key: "METHOD:/path", Value: true if public
+	endpointMap           map[string]*EndpointMapping `json:"-" yaml:"-"` // Key: "METHOD:/path", Value: endpoint object
+	compiledRegexMap      map[string]*regexp.Regexp   `json:"-" yaml:"-"` // Key: pattern (not METHOD:pattern), Value: compiled regex
 }
 
 // LoadPermissions loads RBAC configuration from a JSON or YAML file.
 // The file format is automatically detected based on the file extension.
 // Supported formats: .json, .yaml, .yml.
-func LoadPermissions(path string) (*Config, error) {
+// Dependencies (logger, metrics, tracer) are optional and can be set after loading.
+func LoadPermissions(path string, logger datasource.Logger, metrics container.Metrics, tracer trace.Tracer) (*Config, error) {
 	data, err := os.ReadFile(path)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read RBAC config file %s: %w", path, err)
@@ -140,6 +141,16 @@ func LoadPermissions(path string) (*Config, error) {
 		return nil, fmt.Errorf("unsupported config file format: %s (supported: .json, .yaml, .yml): %w", ext, errUnsupportedFormat)
 	}
 
+	// Set dependencies
+	config.Logger = logger
+	config.Metrics = metrics
+	config.Tracer = tracer
+
+	// Register metrics if provided
+	if metrics != nil {
+		registerMetrics(metrics)
+	}
+
 	// Validate config before processing
 	if err := config.validate(); err != nil {
 		return nil, fmt.Errorf("invalid RBAC config: %w", err)
@@ -151,6 +162,18 @@ func LoadPermissions(path string) (*Config, error) {
 	}
 
 	return &config, nil
+}
+
+// registerMetrics registers RBAC metrics with the metrics instance.
+func registerMetrics(metrics container.Metrics) {
+	buckets := []float64{0.0001, 0.0005, 0.001, 0.005, 0.01, 0.05, 0.1, 0.5, 1}
+	metrics.NewHistogram(
+		"rbac_authorization_duration",
+		"Duration of RBAC authorization checks",
+		buckets...,
+	)
+	metrics.NewCounter("rbac_authorization_decisions", "Number of RBAC authorization decisions")
+	metrics.NewCounter("rbac_role_extraction_failures", "Number of failed role extractions")
 }
 
 // validate validates the RBAC configuration.
@@ -167,10 +190,8 @@ func (c *Config) validate() error {
 
 // processUnifiedConfig processes the unified Roles and Endpoints config
 // and builds internal maps for efficient lookup.
+// Config is read-only after initialization, so no mutex is needed.
 func (c *Config) processUnifiedConfig() error {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-
 	c.initializeMaps()
 	c.buildRolePermissionsMap()
 
@@ -182,6 +203,7 @@ func (c *Config) initializeMaps() {
 	c.rolePermissionsMap = make(map[string][]string)
 	c.endpointPermissionMap = make(map[string][]string)
 	c.publicEndpointsMap = make(map[string]bool)
+	c.endpointMap = make(map[string]*EndpointMapping)
 	c.compiledRegexMap = make(map[string]*regexp.Regexp)
 }
 
@@ -249,6 +271,9 @@ func (c *Config) buildEndpointKey(endpoint *EndpointMapping, methodUpper string)
 
 // storeEndpointMapping stores an endpoint mapping.
 func (c *Config) storeEndpointMapping(endpoint *EndpointMapping, key, methodUpper string) error {
+	// Store endpoint object for fast lookup
+	c.endpointMap[key] = endpoint
+
 	if endpoint.Public {
 		c.publicEndpointsMap[key] = true
 		return nil
@@ -300,21 +325,17 @@ func (c *Config) getEffectivePermissions(roleName string) []string {
 	return permissions
 }
 
-// GetRolePermissions returns the permissions for a role (thread-safe).
+// GetRolePermissions returns the permissions for a role.
+// Config is read-only after initialization, so no mutex is needed.
 func (c *Config) GetRolePermissions(role string) []string {
-	c.mu.RLock()
-	defer c.mu.RUnlock()
-
 	return c.rolePermissionsMap[role]
 }
 
-// GetEndpointPermission returns the required permissions for an endpoint (thread-safe).
+// GetEndpointPermission returns the required permissions for an endpoint.
 // Returns empty slice if endpoint is public or not found.
 // Returns all required permissions (user needs ANY of them - OR logic).
+// Config is read-only after initialization, so no mutex is needed.
 func (c *Config) GetEndpointPermission(method, path string) ([]string, bool) {
-	c.mu.RLock()
-	defer c.mu.RUnlock()
-
 	methodUpper := strings.ToUpper(method)
 	key := fmt.Sprintf("%s:%s", methodUpper, path)
 
@@ -325,6 +346,17 @@ func (c *Config) GetEndpointPermission(method, path string) ([]string, bool) {
 
 	// Try pattern and regex matching
 	return c.checkPatternMatch(methodUpper, path)
+}
+
+// getExactEndpoint returns the endpoint for an exact key match (O(1) lookup).
+// Config is read-only after initialization, so no mutex is needed.
+func (c *Config) getExactEndpoint(key string) (*EndpointMapping, bool) {
+	if endpoint, ok := c.endpointMap[key]; ok {
+		isPublic := c.publicEndpointsMap[key]
+		return endpoint, isPublic
+	}
+
+	return nil, false
 }
 
 // checkExactMatch checks for an exact endpoint match.
@@ -340,12 +372,26 @@ func (c *Config) checkExactMatch(key string) (permissions []string, isPublic boo
 	return nil, false
 }
 
+// findEndpointByPattern finds an endpoint by pattern matching (wildcards/regex).
+// Only used when exact match fails, so this is O(n) but only for patterns.
+// Config is read-only after initialization, so no mutex is needed.
+func (c *Config) findEndpointByPattern(methodUpper, path string) (*EndpointMapping, bool) {
+	// Try pattern matching for wildcards/regex
+	// Iterate over endpointMap to find matching patterns
+	for key, endpoint := range c.endpointMap {
+		if c.matchesKey(key, methodUpper, path) {
+			isPublic := c.publicEndpointsMap[key]
+			return endpoint, isPublic
+		}
+	}
+
+	return nil, false
+}
+
 // checkPatternMatch checks for pattern and regex matches.
-// Note: This is called while already holding RLock from GetEndpointPermission.
-// matchesKey will acquire another RLock which is safe (read locks can be nested).
+// Config is read-only after initialization, so no mutex is needed.
 func (c *Config) checkPatternMatch(methodUpper, path string) (permissions []string, isPublic bool) {
 	// Try pattern matching for wildcards
-	// Note: We iterate over the map while holding RLock, which is safe for read-only operations
 	for key, perms := range c.endpointPermissionMap {
 		if c.matchesKey(key, methodUpper, path) {
 			return perms, false
@@ -383,25 +429,7 @@ func (c *Config) matchesKey(key, methodUpper, path string) bool {
 	pattern := strings.TrimPrefix(key, methodUpper+":")
 
 	if isRegexPattern(pattern) {
-		// Try to use precompiled regex for better performance
-		// Note: We may already be holding RLock from checkPatternMatch, but nested read locks are safe
-		c.mu.RLock()
-		compiled, exists := c.compiledRegexMap[pattern]
-		c.mu.RUnlock()
-
-		if exists {
-			return compiled.MatchString(path)
-		}
-
-		// Fallback to runtime compilation if not precompiled (shouldn't happen if config was processed correctly)
-		// Compile with a timeout-safe approach - use MustCompile in a recover block or just MatchString
-		matched, err := regexp.MatchString(pattern, path)
-		if err != nil {
-			// Invalid regex - no match
-			return false
-		}
-
-		return matched
+		return matchesRegexPattern(pattern, path, c)
 	}
 
 	// For path patterns, only try path matching

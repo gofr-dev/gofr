@@ -11,6 +11,8 @@ import (
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/codes"
 	"go.opentelemetry.io/otel/trace"
+
+	"gofr.dev/pkg/gofr/datasource"
 	"gofr.dev/pkg/gofr/http/middleware"
 )
 
@@ -57,6 +59,8 @@ var (
 
 // Middleware creates an HTTP middleware function that enforces RBAC authorization.
 // It extracts the user's role and checks if the role is allowed for the requested route.
+//
+//nolint:gocognit,gocyclo // Middleware complexity is acceptable due to multiple authorization paths
 func Middleware(config *Config) func(handler http.Handler) http.Handler {
 	return func(handler http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -75,15 +79,16 @@ func Middleware(config *Config) func(handler http.Handler) http.Handler {
 				routeLabel = endpoint.Path
 			}
 
-			r = startTracing(r, config, routeLabel)
-
-			// End span at the end of the middleware function (covers all code paths)
-			// If tracing was started, the span will be in the context
+			// Start tracing if tracer is available
 			if config.Tracer != nil {
-				span := trace.SpanFromContext(r.Context())
-				if span != nil {
-					defer span.End()
-				}
+				ctx, span := config.Tracer.Start(r.Context(), "rbac.authorize")
+				span.SetAttributes(
+					attribute.String("http.method", r.Method),
+					attribute.String("http.route", routeLabel),
+				)
+				r = r.WithContext(ctx)
+
+				defer span.End()
 			}
 
 			if isPublic {
@@ -92,10 +97,11 @@ func Middleware(config *Config) func(handler http.Handler) http.Handler {
 				return
 			}
 
-			// If no endpoint match found, deny by default (fail secure)
+			// If no endpoint match found in RBAC config, allow request to proceed to route matching
+			// RBAC only enforces authorization for endpoints that are explicitly configured
+			// Routes not in RBAC config are handled by normal route matching (may return 404 if route doesn't exist)
 			if endpoint == nil {
-				recordMetrics(config, r, "denied", "endpoint_not_found", "")
-				handleAuthError(w, r, config, "", routeLabel, ErrAccessDenied)
+				handler.ServeHTTP(w, r)
 
 				return
 			}
@@ -103,96 +109,59 @@ func Middleware(config *Config) func(handler http.Handler) http.Handler {
 			// Extract role using header-based or JWT-based extraction
 			role, err := extractRole(r, config)
 			if err != nil {
-				recordRoleExtractionFailure(config, r)
+				if config.Metrics != nil {
+					config.Metrics.IncrementCounter(r.Context(), "rbac_role_extraction_failures")
+				}
+
 				handleAuthError(w, r, config, "", routeLabel, err)
 
 				return
 			}
 
-			// Update span with role
-			updateSpanWithRole(config, r, role)
+			// Update span with role if tracing is enabled
+			if config.Tracer != nil {
+				trace.SpanFromContext(r.Context()).SetAttributes(attribute.String("rbac.role", role))
+			}
 
 			// Check authorization using unified endpoint-based authorization
 			authorized, authReason := checkEndpointAuthorization(role, endpoint, config)
 			if !authorized {
-				recordMetrics(config, r, "denied", "", role)
+				if config.Metrics != nil {
+					labels := []string{"status", "denied"}
+					if role != "" {
+						labels = append(labels, "role", role)
+					}
+
+					config.Metrics.IncrementCounter(r.Context(), "rbac_authorization_decisions", labels...)
+				}
+
 				handleAuthError(w, r, config, role, routeLabel, ErrAccessDenied)
 
 				return
 			}
 
-			recordMetrics(config, r, "allowed", "", role)
-			updateSpanWithAuthStatus(config, r)
-			logAuditEventIfEnabled(config, r, role, routeLabel, authReason)
+			// Record metrics and update span
+			if config.Metrics != nil {
+				labels := []string{"status", "allowed"}
+				if role != "" {
+					labels = append(labels, "role", role)
+				}
+
+				config.Metrics.IncrementCounter(r.Context(), "rbac_authorization_decisions", labels...)
+			}
+
+			if config.Tracer != nil {
+				trace.SpanFromContext(r.Context()).SetAttributes(attribute.Bool("rbac.authorized", true))
+			}
+
+			if config.Logger != nil {
+				logAuditEvent(config.Logger, r, role, routeLabel, true, authReason)
+			}
 
 			// Store role in context and continue
 			ctx := context.WithValue(r.Context(), userRole, role)
 			handler.ServeHTTP(w, r.WithContext(ctx))
 		})
-	}
-}
-
-// startTracing starts tracing for the request if tracer is available.
-// The span is stored in the context and should be ended at the end of the middleware function.
-// Route label should be parameterized/static to avoid sensitive data in span attributes.
-func startTracing(r *http.Request, config *Config, routeLabel string) *http.Request {
-	if config.Tracer == nil {
-		return r
-	}
-
-	ctx, span := config.Tracer.Start(r.Context(), "rbac.authorize")
-
-	span.SetAttributes(
-		attribute.String("http.method", r.Method),
-		attribute.String("http.route", routeLabel),
-	)
-
-	return r.WithContext(ctx)
-}
-
-// recordMetrics records authorization decision metrics.
-func recordMetrics(config *Config, r *http.Request, status, reason, role string) {
-	if config.Metrics == nil {
-		return
-	}
-
-	labels := []string{"status", status}
-	if reason != "" {
-		labels = append(labels, "reason", reason)
-	}
-
-	if role != "" {
-		labels = append(labels, "role", role)
-	}
-
-	config.Metrics.IncrementCounter(r.Context(), "rbac_authorization_decisions", labels...)
-}
-
-// recordRoleExtractionFailure records role extraction failure metrics.
-func recordRoleExtractionFailure(config *Config, r *http.Request) {
-	if config.Metrics != nil {
-		config.Metrics.IncrementCounter(r.Context(), "rbac_role_extraction_failures")
-	}
-}
-
-// updateSpanWithRole updates the span with the extracted role.
-func updateSpanWithRole(config *Config, r *http.Request, role string) {
-	if config.Tracer != nil {
-		trace.SpanFromContext(r.Context()).SetAttributes(attribute.String("rbac.role", role))
-	}
-}
-
-// updateSpanWithAuthStatus updates the span with authorization status.
-func updateSpanWithAuthStatus(config *Config, r *http.Request) {
-	if config.Tracer != nil {
-		trace.SpanFromContext(r.Context()).SetAttributes(attribute.Bool("rbac.authorized", true))
-	}
-}
-
-// logAuditEventIfEnabled logs audit event if logger is available.
-func logAuditEventIfEnabled(config *Config, r *http.Request, role, route, authReason string) {
-	if config.Logger != nil {
-		logAuditEvent(config.Logger, r, role, route, true, authReason)
 	}
 }
 
@@ -356,59 +325,48 @@ func extractNestedClaim(claims jwt.MapClaims, path string) (any, error) {
 
 	for i, part := range parts {
 		isLast := i == len(parts)-1
-		if isLast {
-			return extractFinalClaimValue(current, part, path, parts, i)
-		}
 
 		// Navigate through nested structure
-		current = navigateNestedClaim(current, part)
-		if current == nil {
+		var next any
+
+		var exists bool
+
+		switch v := current.(type) {
+		case map[string]any:
+			next, exists = v[part]
+		case jwt.MapClaims:
+			next, exists = v[part]
+		default:
+			if isLast {
+				return nil, fmt.Errorf("%w: %s", errInvalidClaimStructure, strings.Join(parts[:i+1], "."))
+			}
+
 			return nil, fmt.Errorf("%w: %s", errClaimPathNotFound, strings.Join(parts[:i+1], "."))
 		}
+
+		if !exists {
+			return nil, fmt.Errorf("%w: %s", errClaimPathNotFound, strings.Join(parts[:i+1], "."))
+		}
+
+		if isLast {
+			return next, nil // Return nil value if key exists but value is nil
+		}
+
+		// For intermediate paths, nil means invalid structure
+		if next == nil {
+			return nil, fmt.Errorf("%w: %s", errClaimPathNotFound, strings.Join(parts[:i+1], "."))
+		}
+
+		current = next
 	}
 
 	return nil, fmt.Errorf("%w: %s", errClaimPathNotFound, path)
 }
 
-// extractFinalClaimValue extracts the final value from a claim path.
-func extractFinalClaimValue(current any, part, path string, parts []string, i int) (any, error) {
-	if m, ok := current.(map[string]any); ok {
-		value, exists := m[part]
-		if !exists {
-			return nil, fmt.Errorf("%w: %s", errClaimPathNotFound, path)
-		}
-
-		return value, nil
-	}
-
-	if m, ok := current.(jwt.MapClaims); ok {
-		value, exists := m[part]
-		if !exists {
-			return nil, fmt.Errorf("%w: %s", errClaimPathNotFound, path)
-		}
-
-		return value, nil
-	}
-
-	return nil, fmt.Errorf("%w: %s", errInvalidClaimStructure, strings.Join(parts[:i+1], "."))
-}
-
-// navigateNestedClaim navigates through nested claim structures.
-func navigateNestedClaim(current any, part string) any {
-	switch v := current.(type) {
-	case map[string]any:
-		return v[part]
-	case jwt.MapClaims:
-		return v[part]
-	default:
-		return nil
-	}
-}
-
 // logAuditEvent logs authorization decisions for audit purposes.
 // This is called automatically by the middleware when Logger is set.
 // Users don't need to configure this - it uses the provided logger automatically.
-func logAuditEvent(logger Logger, r *http.Request, role, route string, allowed bool, reason string) {
+func logAuditEvent(logger datasource.Logger, r *http.Request, role, route string, allowed bool, reason string) {
 	if logger == nil {
 		return // Skip logging if no logger provided
 	}

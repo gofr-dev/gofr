@@ -9,8 +9,10 @@ import (
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"go.opentelemetry.io/otel/trace/noop"
+
+	"gofr.dev/pkg/gofr/datasource"
 	"gofr.dev/pkg/gofr/http/middleware"
-	"gofr.dev/pkg/gofr/logging"
 )
 
 func TestMiddleware_NilConfig(t *testing.T) {
@@ -79,8 +81,10 @@ func TestMiddleware_NoEndpointMatch(t *testing.T) {
 	req := httptest.NewRequest(http.MethodGet, "/api/posts", http.NoBody)
 	wrapped.ServeHTTP(w, req)
 
-	assert.Equal(t, http.StatusForbidden, w.Code)
-	assert.Contains(t, w.Body.String(), "Forbidden: Access denied")
+	// Routes not in RBAC config are handled by normal route matching
+	// So unmatched endpoints should be allowed through
+	assert.Equal(t, http.StatusOK, w.Code)
+	assert.Contains(t, w.Body.String(), "OK")
 }
 
 func TestMiddleware_RoleNotFound(t *testing.T) {
@@ -754,7 +758,7 @@ func runExtractNestedClaimTests(t *testing.T, testCases []struct {
 func TestLogAuditEvent(t *testing.T) {
 	testCases := []struct {
 		desc     string
-		logger   logging.Logger
+		logger   datasource.Logger
 		allowed  bool
 		expected int
 	}{
@@ -847,4 +851,133 @@ func TestHandleAuthError(t *testing.T) {
 			assert.Contains(t, w.Body.String(), tc.expectedBody, "TEST[%d], Failed.\n%s", i, tc.desc)
 		})
 	}
+}
+
+// mockLogger implements the datasource.Logger interface for testing.
+type mockLogger struct {
+	logs []string
+}
+
+func (m *mockLogger) Debug(_ ...any)            { m.logs = append(m.logs, "DEBUG") }
+func (m *mockLogger) Debugf(_ string, _ ...any) { m.logs = append(m.logs, "DEBUGF") }
+func (m *mockLogger) Info(_ ...any)             { m.logs = append(m.logs, "INFO") }
+func (m *mockLogger) Infof(_ string, _ ...any)  { m.logs = append(m.logs, "INFOF") }
+func (m *mockLogger) Error(_ ...any)            { m.logs = append(m.logs, "ERROR") }
+func (m *mockLogger) Errorf(_ string, _ ...any) { m.logs = append(m.logs, "ERRORF") }
+func (m *mockLogger) Warn(_ ...any)             { m.logs = append(m.logs, "WARN") }
+func (m *mockLogger) Warnf(_ string, _ ...any)  { m.logs = append(m.logs, "WARNF") }
+
+func TestMiddleware_WithTracing(t *testing.T) {
+	t.Run("starts tracing when tracer is available", func(t *testing.T) {
+		config := &Config{
+			Endpoints: []EndpointMapping{
+				{Path: "/api", Methods: []string{"GET"}, RequiredPermissions: []string{"admin:read"}},
+			},
+			RoleHeader: "X-User-Role",
+			Tracer:     noop.NewTracerProvider().Tracer("test"),
+		}
+		err := config.processUnifiedConfig()
+		require.NoError(t, err)
+
+		middlewareFunc := Middleware(config)
+		handler := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+			w.WriteHeader(http.StatusOK)
+		})
+
+		wrapped := middlewareFunc(handler)
+		w := httptest.NewRecorder()
+		req := httptest.NewRequest(http.MethodGet, "/api", http.NoBody)
+		req.Header.Set("X-User-Role", "admin")
+
+		// Setup role permissions
+		config.rolePermissionsMap = map[string][]string{
+			"admin": {"admin:read"},
+		}
+
+		wrapped.ServeHTTP(w, req)
+
+		assert.Equal(t, http.StatusOK, w.Code)
+	})
+}
+
+func TestMiddleware_WithMetrics(t *testing.T) {
+	t.Run("records metrics when metrics is available", func(t *testing.T) {
+		mockMetrics := &mockMetrics{
+			counterIncremented: make(map[string]bool),
+		}
+
+		config := &Config{
+			Endpoints: []EndpointMapping{
+				{Path: "/api", Methods: []string{"GET"}, RequiredPermissions: []string{"admin:read"}},
+			},
+			RoleHeader: "X-User-Role",
+			Metrics:    mockMetrics,
+		}
+		err := config.processUnifiedConfig()
+		require.NoError(t, err)
+
+		middlewareFunc := Middleware(config)
+		handler := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+			w.WriteHeader(http.StatusOK)
+		})
+
+		wrapped := middlewareFunc(handler)
+		w := httptest.NewRecorder()
+		req := httptest.NewRequest(http.MethodGet, "/api", http.NoBody)
+		req.Header.Set("X-User-Role", "admin")
+
+		// Setup role permissions
+		config.rolePermissionsMap = map[string][]string{
+			"admin": {"admin:read"},
+		}
+
+		wrapped.ServeHTTP(w, req)
+
+		assert.Equal(t, http.StatusOK, w.Code)
+		// Metrics should be recorded
+		assert.True(t, mockMetrics.counterIncremented["rbac_authorization_decisions"])
+	})
+}
+
+// mockMetrics implements the Metrics interface for testing.
+type mockMetrics struct {
+	histogramCreated   bool
+	counterCreated     bool
+	counterIncremented map[string]bool
+}
+
+func (m *mockMetrics) NewHistogram(_, _ string, _ ...float64) {
+	m.histogramCreated = true
+}
+
+func (*mockMetrics) RecordHistogram(_ context.Context, _ string, _ float64, _ ...string) {
+	// Mock implementation
+}
+
+func (m *mockMetrics) NewCounter(_, _ string) {
+	m.counterCreated = true
+}
+
+func (m *mockMetrics) IncrementCounter(_ context.Context, name string, _ ...string) {
+	if m.counterIncremented == nil {
+		m.counterIncremented = make(map[string]bool)
+	}
+
+	m.counterIncremented[name] = true
+}
+
+func (*mockMetrics) NewUpDownCounter(_, _ string) {
+	// Mock implementation
+}
+
+func (*mockMetrics) NewGauge(_, _ string) {
+	// Mock implementation
+}
+
+func (*mockMetrics) DeltaUpDownCounter(_ context.Context, _ string, _ float64, _ ...string) {
+	// Mock implementation
+}
+
+func (*mockMetrics) SetGauge(_ string, _ float64, _ ...string) {
+	// Mock implementation
 }

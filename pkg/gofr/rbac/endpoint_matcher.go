@@ -1,6 +1,7 @@
 package rbac
 
 import (
+	"fmt"
 	"net/http"
 	"regexp"
 	"strings"
@@ -53,6 +54,7 @@ func matchesHTTPMethod(method string, allowedMethods []string) bool {
 }
 
 // matchesRegexPattern matches a route against a regex pattern using precompiled regex if available.
+// Config is read-only after initialization, so no mutex is needed.
 func matchesRegexPattern(pattern, route string, config *Config) bool {
 	if config == nil {
 		// Fallback to runtime compilation if config is not available
@@ -61,25 +63,17 @@ func matchesRegexPattern(pattern, route string, config *Config) bool {
 	}
 
 	// Look up precompiled regex (stored with pattern as key during config processing)
-	config.mu.RLock()
-	compiled, exists := config.compiledRegexMap[pattern]
-	config.mu.RUnlock()
-
-	if exists {
+	if compiled, exists := config.compiledRegexMap[pattern]; exists {
 		return compiled.MatchString(route)
 	}
 
-	// Compile and cache if not found (fallback for runtime compilation)
-	compiled, err := regexp.Compile(pattern)
+	// Fallback to runtime compilation if not precompiled (shouldn't happen if config was processed correctly)
+	matched, err := regexp.MatchString(pattern, route)
 	if err != nil {
 		return false // Invalid regex = no match
 	}
 
-	config.mu.Lock()
-	config.compiledRegexMap[pattern] = compiled
-	config.mu.Unlock()
-
-	return compiled.MatchString(route)
+	return matched
 }
 
 // matchesEndpointPattern checks if the route matches the endpoint pattern.
@@ -140,13 +134,21 @@ func checkEndpointAuthorization(role string, endpoint *EndpointMapping, config *
 
 // getEndpointForRequest finds the matching endpoint configuration for a request.
 // This is the primary function used by the middleware to determine authorization requirements.
+// Uses optimized maps for O(1) exact matches, falls back to pattern matching for wildcards/regex.
 func getEndpointForRequest(r *http.Request, config *Config) (*EndpointMapping, bool) {
 	if len(config.Endpoints) == 0 {
 		return nil, false
 	}
 
-	method := r.Method
-	route := r.URL.Path
+	method := strings.ToUpper(r.Method)
+	path := r.URL.Path
+	key := fmt.Sprintf("%s:%s", method, path)
 
-	return matchEndpoint(method, route, config.Endpoints, config)
+	// Try exact match first (O(1) lookup)
+	if endpoint, isPublic := config.getExactEndpoint(key); endpoint != nil {
+		return endpoint, isPublic
+	}
+
+	// Try pattern matching (O(n) but only for patterns, not exact matches)
+	return config.findEndpointByPattern(method, path)
 }
