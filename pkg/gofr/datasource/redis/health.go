@@ -1,3 +1,5 @@
+// Package redis provides a client for interacting with Redis key-value stores.This package allows creating and
+// managing Redis clients, executing Redis commands, and handling connections to Redis databases.
 package redis
 
 import (
@@ -9,6 +11,11 @@ import (
 	"gofr.dev/pkg/gofr/datasource"
 )
 
+const (
+	healthCheckTimeout      = 1 * time.Second
+	healthCheckStatsTimeout = 500 * time.Millisecond
+)
+
 // HealthCheck returns the health status of the Redis connection.
 func (r *Redis) HealthCheck() datasource.Health {
 	h := datasource.Health{
@@ -18,7 +25,7 @@ func (r *Redis) HealthCheck() datasource.Health {
 
 	h.Details["host"] = r.config.HostName + ":" + strconv.Itoa(r.config.Port)
 
-	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), healthCheckTimeout)
 	defer cancel()
 
 	if r.Client == nil {
@@ -37,7 +44,7 @@ func (r *Redis) HealthCheck() datasource.Health {
 	}
 
 	// If ping succeeds, try to get stats (with a fresh context to avoid timeout issues)
-	statsCtx, statsCancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
+	statsCtx, statsCancel := context.WithTimeout(context.Background(), healthCheckStatsTimeout)
 	defer statsCancel()
 
 	info, err := r.Client.InfoMap(statsCtx, "Stats").Result()
