@@ -60,8 +60,6 @@ These variables are stored in a `.env` file located within the `configs` directo
 ---
 {% /table %}
 
-> For Redis Pub/Sub configuration, see [https://gofr.dev/docs/advanced-guide/using-publisher-subscriber](https://gofr.dev/docs/advanced-guide/using-publisher-subscriber) (Redis Pub/Sub section).
-
 ## TLS Support (Optional):
 
 {% table %}

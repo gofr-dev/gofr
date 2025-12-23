@@ -14,7 +14,6 @@ func TestAll(t *testing.T) {
 
 	expected := map[int64]migration.Migrate{
 		1721801313: createTopics(),
-		1722507180: seedRedis(),
 	}
 
 	// Check if the length of the maps match

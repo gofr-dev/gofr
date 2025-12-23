@@ -25,7 +25,7 @@ Before implementing gRPC streaming, ensure you have:
    go install gofr.dev/cli/gofr@latest
    ```
 
-For detailed setup instructions, refer to the [gRPC with GoFr documentation](https://gofr.dev/docs/advanced-guide/grpc).
+For detailed setup instructions, refer to the [gRPC with GoFr documentation](/docs/advanced-guide/grpc).
 
 ## Defining Streaming RPCs in Protocol Buffers
 
@@ -464,7 +464,7 @@ These examples demonstrate all three types of streaming with detailed error hand
 
 ## Further Reading
 
-- [gRPC with GoFr](https://gofr.dev/docs/advanced-guide/grpc) - General gRPC documentation
+- [gRPC with GoFr](/docs/advanced-guide/grpc) - General gRPC documentation
 - [gRPC Official Documentation](https://grpc.io/docs/what-is-grpc/introduction/) - Learn more about gRPC streaming concepts
 - [GoFr Examples](https://github.com/gofr-dev/gofr/tree/main/examples/grpc) - More gRPC examples
 

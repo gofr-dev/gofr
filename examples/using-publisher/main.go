@@ -12,10 +12,6 @@ func main() {
 
 	app.Migrate(migrations.All())
 
-	if app.Config.Get("MIGRATE_ONLY") == "true" {
-		return
-	}
-
 	app.POST("/publish-order", order)
 	app.POST("/publish-product", product)
 
