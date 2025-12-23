@@ -1,6 +1,7 @@
 package rbac
 
 import (
+	"context"
 	"os"
 	"path/filepath"
 	"testing"
@@ -21,7 +22,7 @@ func TestLoadPermissions_ValidConfigs(t *testing.T) {
 
 		defer os.Remove(path)
 
-		config, err := LoadPermissions("test_config.json")
+		config, err := LoadPermissions("test_config.json", nil, nil, nil)
 		require.NoError(t, err)
 		require.NotNil(t, config)
 		assert.NotNil(t, config.rolePermissionsMap)
@@ -40,7 +41,7 @@ endpoints:
 
 		defer os.Remove(path)
 
-		config, err := LoadPermissions("test_config.yaml")
+		config, err := LoadPermissions("test_config.yaml", nil, nil, nil)
 		require.NoError(t, err)
 		require.NotNil(t, config)
 		assert.NotNil(t, config.rolePermissionsMap)
@@ -55,7 +56,7 @@ endpoints:
 
 		defer os.Remove(path)
 
-		config, err := LoadPermissions("test_config.yml")
+		config, err := LoadPermissions("test_config.yml", nil, nil, nil)
 		require.NoError(t, err)
 		require.NotNil(t, config)
 		assert.NotNil(t, config.rolePermissionsMap)
@@ -64,7 +65,7 @@ endpoints:
 
 func TestLoadPermissions_ErrorCases(t *testing.T) {
 	t.Run("returns error for non-existent file", func(t *testing.T) {
-		config, err := LoadPermissions("nonexistent.json")
+		config, err := LoadPermissions("nonexistent.json", nil, nil, nil)
 		require.Error(t, err)
 		require.Nil(t, config)
 	})
@@ -75,7 +76,7 @@ func TestLoadPermissions_ErrorCases(t *testing.T) {
 
 		defer os.Remove(path)
 
-		config, err := LoadPermissions("test_invalid.json")
+		config, err := LoadPermissions("test_invalid.json", nil, nil, nil)
 		require.Error(t, err)
 		require.Nil(t, config)
 	})
@@ -86,7 +87,7 @@ func TestLoadPermissions_ErrorCases(t *testing.T) {
 
 		defer os.Remove(path)
 
-		config, err := LoadPermissions("test_invalid.yaml")
+		config, err := LoadPermissions("test_invalid.yaml", nil, nil, nil)
 		require.Error(t, err)
 		require.Nil(t, config)
 	})
@@ -97,7 +98,7 @@ func TestLoadPermissions_ErrorCases(t *testing.T) {
 
 		defer os.Remove(path)
 
-		config, err := LoadPermissions("test.txt")
+		config, err := LoadPermissions("test.txt", nil, nil, nil)
 		require.Error(t, err)
 		require.Nil(t, config)
 	})
@@ -112,7 +113,7 @@ func TestLoadPermissions_ErrorCases(t *testing.T) {
 
 		defer os.Remove(path)
 
-		config, err := LoadPermissions("test_missing_perm.json")
+		config, err := LoadPermissions("test_missing_perm.json", nil, nil, nil)
 		require.Error(t, err)
 		require.Nil(t, config)
 	})
@@ -437,6 +438,209 @@ func createTestConfigFile(filename, content string) (string, error) {
 
 	return filename, err
 }
+
+func TestConfig_FindEndpointByPattern(t *testing.T) {
+	t.Run("finds endpoint with wildcard pattern", func(t *testing.T) {
+		config := &Config{
+			Endpoints: []EndpointMapping{
+				{Path: "/api/*", Methods: []string{"GET"}, RequiredPermissions: []string{"api:read"}},
+			},
+		}
+		err := config.processUnifiedConfig()
+		require.NoError(t, err)
+
+		endpoint, isPublic := config.findEndpointByPattern("GET", "/api/users")
+		assert.NotNil(t, endpoint)
+		assert.Equal(t, "/api/*", endpoint.Path)
+		assert.False(t, isPublic)
+	})
+
+	t.Run("finds endpoint with regex pattern", func(t *testing.T) {
+		config := &Config{
+			Endpoints: []EndpointMapping{
+				{Path: "^/api/users/\\d+$", Methods: []string{"GET"}, RequiredPermissions: []string{"users:read"}},
+			},
+		}
+		err := config.processUnifiedConfig()
+		require.NoError(t, err)
+
+		endpoint, isPublic := config.findEndpointByPattern("GET", "/api/users/123")
+		assert.NotNil(t, endpoint)
+		assert.False(t, isPublic)
+	})
+
+	t.Run("finds public endpoint with pattern", func(t *testing.T) {
+		config := &Config{
+			Endpoints: []EndpointMapping{
+				{Path: "/public/*", Methods: []string{"GET"}, Public: true},
+			},
+		}
+		err := config.processUnifiedConfig()
+		require.NoError(t, err)
+
+		endpoint, isPublic := config.findEndpointByPattern("GET", "/public/files")
+		assert.NotNil(t, endpoint)
+		assert.True(t, isPublic)
+	})
+
+	t.Run("returns nil when no pattern matches", func(t *testing.T) {
+		config := &Config{
+			Endpoints: []EndpointMapping{
+				{Path: "/api/*", Methods: []string{"GET"}, RequiredPermissions: []string{"api:read"}},
+			},
+		}
+		err := config.processUnifiedConfig()
+		require.NoError(t, err)
+
+		endpoint, isPublic := config.findEndpointByPattern("GET", "/other/path")
+		assert.Nil(t, endpoint)
+		assert.False(t, isPublic)
+	})
+
+	t.Run("returns nil when method doesn't match", func(t *testing.T) {
+		config := &Config{
+			Endpoints: []EndpointMapping{
+				{Path: "/api/*", Methods: []string{"GET"}, RequiredPermissions: []string{"api:read"}},
+			},
+		}
+		err := config.processUnifiedConfig()
+		require.NoError(t, err)
+
+		endpoint, isPublic := config.findEndpointByPattern("POST", "/api/users")
+		assert.Nil(t, endpoint)
+		assert.False(t, isPublic)
+	})
+}
+
+func TestConfig_MatchesKey(t *testing.T) {
+	t.Run("matches exact path", func(t *testing.T) {
+		config := &Config{
+			Endpoints: []EndpointMapping{
+				{Path: "/api/users", Methods: []string{"GET"}, RequiredPermissions: []string{"users:read"}},
+			},
+		}
+		err := config.processUnifiedConfig()
+		require.NoError(t, err)
+
+		result := config.matchesKey("GET:/api/users", "GET", "/api/users")
+		assert.True(t, result)
+	})
+
+	t.Run("matches wildcard pattern", func(t *testing.T) {
+		config := &Config{
+			Endpoints: []EndpointMapping{
+				{Path: "/api/*", Methods: []string{"GET"}, RequiredPermissions: []string{"api:read"}},
+			},
+		}
+		err := config.processUnifiedConfig()
+		require.NoError(t, err)
+
+		result := config.matchesKey("GET:/api/*", "GET", "/api/users")
+		assert.True(t, result)
+	})
+
+	t.Run("matches regex pattern with precompiled regex", func(t *testing.T) {
+		config := &Config{
+			Endpoints: []EndpointMapping{
+				{Path: "^/api/users/\\d+$", Methods: []string{"GET"}, RequiredPermissions: []string{"users:read"}},
+			},
+		}
+		err := config.processUnifiedConfig()
+		require.NoError(t, err)
+
+		result := config.matchesKey("GET:^/api/users/\\d+$", "GET", "/api/users/123")
+		assert.True(t, result)
+	})
+
+	t.Run("matches regex pattern with runtime compilation", func(t *testing.T) {
+		config := &Config{
+			Endpoints: []EndpointMapping{
+				{Path: "^/test/\\d+$", Methods: []string{"GET"}, RequiredPermissions: []string{"test:read"}},
+			},
+		}
+		err := config.processUnifiedConfig()
+		require.NoError(t, err)
+
+		// Remove from compiled map to force runtime compilation
+		delete(config.compiledRegexMap, "^/test/\\d+$")
+
+		result := config.matchesKey("GET:^/test/\\d+$", "GET", "/test/456")
+		assert.True(t, result)
+	})
+
+	t.Run("returns false when method doesn't match", func(t *testing.T) {
+		config := &Config{
+			Endpoints: []EndpointMapping{
+				{Path: "/api/users", Methods: []string{"GET"}, RequiredPermissions: []string{"users:read"}},
+			},
+		}
+		err := config.processUnifiedConfig()
+		require.NoError(t, err)
+
+		result := config.matchesKey("GET:/api/users", "POST", "/api/users")
+		assert.False(t, result)
+	})
+
+	t.Run("returns false for invalid regex", func(t *testing.T) {
+		config := &Config{
+			Endpoints: []EndpointMapping{
+				{Path: "[invalid", Methods: []string{"GET"}, RequiredPermissions: []string{"test:read"}},
+			},
+		}
+		err := config.processUnifiedConfig()
+		require.NoError(t, err)
+
+		// Remove from compiled map to force runtime compilation
+		delete(config.compiledRegexMap, "[invalid")
+
+		result := config.matchesKey("GET:[invalid", "GET", "/test")
+		assert.False(t, result)
+	})
+}
+
+func TestLoadPermissions_RegisterMetrics(t *testing.T) {
+	t.Run("registers metrics when metrics is provided", func(t *testing.T) {
+		mockMetrics := &configMockMetrics{
+			histogramCreated: false,
+			counterCreated:   false,
+		}
+
+		fileContent := `{
+			"roles": [{"name": "admin", "permissions": ["admin:read"]}],
+			"endpoints": [{"path": "/api", "methods": ["GET"], "requiredPermissions": ["admin:read"]}]
+		}`
+		path, err := createTestConfigFile("test_metrics.json", fileContent)
+		require.NoError(t, err)
+
+		defer os.Remove(path)
+
+		_, err = LoadPermissions(path, nil, mockMetrics, nil)
+		require.NoError(t, err)
+
+		assert.True(t, mockMetrics.histogramCreated, "histogram should be created")
+		assert.True(t, mockMetrics.counterCreated, "counter should be created")
+	})
+}
+
+// configMockMetrics for config tests.
+type configMockMetrics struct {
+	histogramCreated bool
+	counterCreated   bool
+}
+
+func (m *configMockMetrics) NewHistogram(_, _ string, _ ...float64) {
+	m.histogramCreated = true
+}
+
+func (*configMockMetrics) RecordHistogram(_ context.Context, _ string, _ float64, _ ...string) {}
+func (m *configMockMetrics) NewCounter(_, _ string) {
+	m.counterCreated = true
+}
+func (*configMockMetrics) IncrementCounter(_ context.Context, _ string, _ ...string)              {}
+func (*configMockMetrics) NewUpDownCounter(_, _ string)                                           {}
+func (*configMockMetrics) NewGauge(_, _ string)                                                   {}
+func (*configMockMetrics) DeltaUpDownCounter(_ context.Context, _ string, _ float64, _ ...string) {}
+func (*configMockMetrics) SetGauge(_ string, _ float64, _ ...string)                              {}
 
 func TestConfig_getEffectivePermissions(t *testing.T) {
 	testCases := []struct {

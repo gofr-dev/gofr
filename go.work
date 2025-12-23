@@ -27,5 +27,4 @@ use (
 	./pkg/gofr/datasource/scylladb
 	./pkg/gofr/datasource/solr
 	./pkg/gofr/datasource/surrealdb
-	./pkg/gofr/rbac
 )
