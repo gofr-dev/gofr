@@ -393,6 +393,18 @@ func (mr *MockMetricsMockRecorder) NewHistogram(name, desc any, buckets ...any) 
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "NewHistogram", reflect.TypeOf((*MockMetrics)(nil).NewHistogram), varargs...)
 }
 
+// NewCounter mocks base method.
+func (m *MockMetrics) NewCounter(name, desc string) {
+	m.ctrl.T.Helper()
+	m.ctrl.Call(m, "NewCounter", name, desc)
+}
+
+// NewCounter indicates an expected call of NewCounter.
+func (mr *MockMetricsMockRecorder) NewCounter(name, desc any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "NewCounter", reflect.TypeOf((*MockMetrics)(nil).NewCounter), name, desc)
+}
+
 // RecordHistogram mocks base method.
 func (m *MockMetrics) RecordHistogram(ctx context.Context, name string, value float64, labels ...string) {
 	m.ctrl.T.Helper()
@@ -408,4 +420,21 @@ func (mr *MockMetricsMockRecorder) RecordHistogram(ctx, name, value any, labels 
 	mr.mock.ctrl.T.Helper()
 	varargs := append([]any{ctx, name, value}, labels...)
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "RecordHistogram", reflect.TypeOf((*MockMetrics)(nil).RecordHistogram), varargs...)
+}
+
+// IncrementCounter mocks base method.
+func (m *MockMetrics) IncrementCounter(ctx context.Context, name string, labels ...string) {
+	m.ctrl.T.Helper()
+	varargs := []any{ctx, name}
+	for _, a := range labels {
+		varargs = append(varargs, a)
+	}
+	m.ctrl.Call(m, "IncrementCounter", varargs...)
+}
+
+// IncrementCounter indicates an expected call of IncrementCounter.
+func (mr *MockMetricsMockRecorder) IncrementCounter(ctx, name any, labels ...any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	varargs := append([]any{ctx, name}, labels...)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "IncrementCounter", reflect.TypeOf((*MockMetrics)(nil).IncrementCounter), varargs...)
 }

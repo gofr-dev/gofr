@@ -32,7 +32,9 @@ func (a *App) initTracer() {
 	)
 	otel.SetTracerProvider(tp)
 	otel.SetTextMapPropagator(propagation.NewCompositeTextMapPropagator(propagation.TraceContext{}, propagation.Baggage{}))
-	otel.SetErrorHandler(&otelErrorHandler{logger: a.container.Logger})
+	otel.SetErrorHandler(&otelErrorHandler{
+		logger: a.container.Logger,
+	})
 
 	traceExporter := a.Config.Get("TRACE_EXPORTER")
 	tracerURL := a.Config.Get("TRACER_URL")
@@ -196,5 +198,16 @@ type otelErrorHandler struct {
 }
 
 func (o *otelErrorHandler) Handle(e error) {
-	o.logger.Error(e.Error())
+	if e == nil {
+		return
+	}
+
+	msg := e.Error()
+
+	// Fast check: if a message contains "status 2", it's a 2xx code.
+	if strings.Contains(msg, "status 2") {
+		return
+	}
+
+	o.logger.Error(msg)
 }
