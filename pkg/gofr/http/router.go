@@ -55,9 +55,7 @@ func (rou *Router) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Ensure path starts with "/" for HTTP routing
-	if !strings.HasPrefix(normalizedPath, "/") {
-		normalizedPath = "/" + normalizedPath
-	}
+	normalizedPath = "/" + strings.TrimLeft(normalizedPath, "/")
 
 	// Only modify if path changed
 	if originalPath != normalizedPath {
