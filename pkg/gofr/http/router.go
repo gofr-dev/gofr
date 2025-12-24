@@ -30,7 +30,7 @@ type Middleware func(handler http.Handler) http.Handler
 
 // NewRouter creates a new Router instance.
 func NewRouter() *Router {
-	muxRouter := mux.NewRouter().StrictSlash(false)
+	muxRouter := mux.NewRouter().StrictSlash(false).SkipClean(true)
 	routes := make([]string, 0)
 	r := &Router{
 		Router:           *muxRouter,
@@ -40,6 +40,59 @@ func NewRouter() *Router {
 	r.Router = *muxRouter
 
 	return r
+}
+
+// ServeHTTP implements http.Handler interface with path normalization.
+func (rou *Router) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	// Normalize the path before routing to handle double slashes
+	originalPath := r.URL.Path
+	normalizedPath := normalizePathSlashes(originalPath)
+
+	// Only modify if path changed
+	if originalPath != normalizedPath {
+		r.URL.Path = normalizedPath
+		if r.URL.RawPath != "" {
+			r.URL.RawPath = normalizedPath
+		}
+	}
+
+	// Delegate to the underlying Gorilla Mux router
+	rou.Router.ServeHTTP(w, r)
+}
+
+// normalizePathSlashes replaces multiple consecutive slashes with a single slash
+// while preserving a leading slash if present.
+func normalizePathSlashes(path string) string {
+	if path == "" {
+		return "/"
+	}
+
+	// Use strings.Builder for efficient string construction
+	var normalized strings.Builder
+	normalized.Grow(len(path))
+
+	prevSlash := false
+	for i := 0; i < len(path); i++ {
+		if path[i] == '/' {
+			if !prevSlash {
+				normalized.WriteByte('/')
+				prevSlash = true
+			}
+			// Skip consecutive slashes
+		} else {
+			normalized.WriteByte(path[i])
+			prevSlash = false
+		}
+	}
+
+	result := normalized.String()
+
+	// Ensure we always have at least "/"
+	if result == "" {
+		return "/"
+	}
+
+	return result
 }
 
 // Add adds a new route with the given HTTP method, pattern, and handler, wrapping the handler with OpenTelemetry instrumentation.
