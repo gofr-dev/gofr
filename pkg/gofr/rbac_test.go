@@ -6,6 +6,8 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/require"
+
+	"gofr.dev/pkg/gofr/testutil"
 )
 
 func TestEnableRBAC(t *testing.T) {
@@ -28,21 +30,6 @@ func TestEnableRBAC(t *testing.T) {
 			},
 			cleanupFiles: func(path string) {
 				os.Remove(path)
-			},
-			expectedLogs:  []string{"Loaded RBAC config"},
-			expectedError: false,
-			middlewareSet: true,
-		},
-		{
-			desc:       "valid config with default config path (no args)",
-			configPath: "", // Empty means use default
-			setupFiles: func() (string, error) {
-				content := `{"roles":[{"name":"viewer","permissions":["users:read"]}],"endpoints":[{"path":"/health","methods":["GET"],"public":true}]}`
-				return createTestConfigFile("configs/rbac.json", content)
-			},
-			cleanupFiles: func(path string) {
-				os.Remove(path)
-				os.Remove("configs")
 			},
 			expectedLogs:  []string{"Loaded RBAC config"},
 			expectedError: false,
@@ -77,17 +64,61 @@ func TestEnableRBAC(t *testing.T) {
 
 	for i, tc := range testCases {
 		t.Run(tc.desc, func(t *testing.T) {
+			// Set up free ports for HTTP, Metrics, and gRPC
+			_ = testutil.NewServerConfigs(t)
+
 			filePath, err := tc.setupFiles()
 			require.NoError(t, err, "TEST[%d], Failed.\n%s", i, tc.desc)
 
 			defer tc.cleanupFiles(filePath)
 
 			app := New()
-			if tc.configPath == "" {
-				app.EnableRBAC() // No args - uses default paths
-			} else {
-				app.EnableRBAC(tc.configPath) // With config path
-			}
+			app.EnableRBAC(tc.configPath)
+
+			// Check that httpServer and router exist
+			require.NotNil(t, app.httpServer, "TEST[%d], Failed.\n%s", i, tc.desc)
+			require.NotNil(t, app.httpServer.router, "TEST[%d], Failed.\n%s", i, tc.desc)
+		})
+	}
+}
+
+func TestEnableRBAC_WithDefaultConfigPath(t *testing.T) {
+	testCases := []struct {
+		desc          string
+		setupFiles    func() (string, error)
+		cleanupFiles  func(string)
+		expectedLogs  []string
+		expectedError bool
+		middlewareSet bool
+	}{
+		{
+			desc: "valid config with default config path (no args)",
+			setupFiles: func() (string, error) {
+				content := `{"roles":[{"name":"viewer","permissions":["users:read"]}],"endpoints":[{"path":"/health","methods":["GET"],"public":true}]}`
+				return createTestConfigFile("configs/rbac.json", content)
+			},
+			cleanupFiles: func(path string) {
+				os.Remove(path)
+				os.Remove("configs")
+			},
+			expectedLogs:  []string{"Loaded RBAC config"},
+			expectedError: false,
+			middlewareSet: true,
+		},
+	}
+
+	for i, tc := range testCases {
+		t.Run(tc.desc, func(t *testing.T) {
+			// Set up free ports for HTTP, Metrics, and gRPC
+			_ = testutil.NewServerConfigs(t)
+
+			filePath, err := tc.setupFiles()
+			require.NoError(t, err, "TEST[%d], Failed.\n%s", i, tc.desc)
+
+			defer tc.cleanupFiles(filePath)
+
+			app := New()
+			app.EnableRBAC()
 
 			// Check that httpServer and router exist
 			require.NotNil(t, app.httpServer, "TEST[%d], Failed.\n%s", i, tc.desc)
@@ -150,6 +181,9 @@ func TestApp_EnableRBAC_Integration(t *testing.T) {
 
 	for i, tc := range testCases {
 		t.Run(tc.desc, func(t *testing.T) {
+			// Set up free ports for HTTP, Metrics, and gRPC
+			_ = testutil.NewServerConfigs(t)
+
 			path, err := createTestConfigFile(tc.configFile, tc.configContent)
 			require.NoError(t, err, "TEST[%d], Failed.\n%s", i, tc.desc)
 

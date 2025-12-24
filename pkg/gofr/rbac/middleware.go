@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"net/http"
 	"strings"
 
@@ -21,6 +22,22 @@ type authMethod int
 const userRole authMethod = 4
 
 const unknownRouteLabel = "<unmatched>"
+
+// AuditLog represents a structured log entry for RBAC authorization decisions.
+// It follows the same pattern as HTTP RequestLog for consistency.
+type AuditLog struct {
+	CorrelationID string `json:"correlation_id,omitempty"`
+	Method        string `json:"method,omitempty"`
+	Route         string `json:"route,omitempty"`
+	Status        string `json:"status,omitempty"`
+	Role          string `json:"role,omitempty"`
+}
+
+// PrettyPrint formats the RBAC audit log for terminal output, matching HTTP log format.
+func (ral *AuditLog) PrettyPrint(writer io.Writer) {
+	fmt.Fprintf(writer, "\u001B[38;5;8m%s %-6s %11s %s %s [%s]\u001B[0m\n",
+		ral.CorrelationID, ral.Status, "", "RBAC", ral.Route, ral.Role)
+}
 
 var (
 	// ErrAccessDenied is returned when a user doesn't have required role/permission.
@@ -125,7 +142,7 @@ func Middleware(config *Config) func(handler http.Handler) http.Handler {
 			// Only include authorization status (safe boolean) - set below after authorization check
 
 			// Check authorization using unified endpoint-based authorization
-			authorized, authReason := checkEndpointAuthorization(role, endpoint, config)
+			authorized, _ := checkEndpointAuthorization(role, endpoint, config)
 			if !authorized {
 				// Role not included in metrics to avoid high cardinality and PII concerns
 				// Only include status (allowed/denied) for aggregation
@@ -150,7 +167,7 @@ func Middleware(config *Config) func(handler http.Handler) http.Handler {
 			}
 
 			if config.Logger != nil {
-				logAuditEvent(config.Logger, r, role, routeLabel, true, authReason)
+				logAuditEvent(config.Logger, r, role, routeLabel, true)
 			}
 
 			// Store role in context and continue
@@ -174,13 +191,7 @@ func handleAuthError(w http.ResponseWriter, r *http.Request, config *Config, rol
 	// Log audit event (always enabled when Logger is available)
 	// Audit logging is automatically performed using GoFr's logger
 	if config.Logger != nil {
-		reason := "access denied"
-
-		if errors.Is(err, ErrRoleNotFound) {
-			reason = "role not found"
-		}
-
-		logAuditEvent(config.Logger, r, role, route, false, reason)
+		logAuditEvent(config.Logger, r, role, route, false)
 	}
 
 	// Use custom error handler if provided
@@ -363,18 +374,33 @@ func extractNestedClaim(claims jwt.MapClaims, path string) (any, error) {
 // logAuditEvent logs authorization decisions for audit purposes.
 // This is called automatically by the middleware when Logger is set.
 // Users don't need to configure this - it uses the provided logger automatically.
-func logAuditEvent(logger datasource.Logger, r *http.Request, role, route string, allowed bool, reason string) {
+func logAuditEvent(logger datasource.Logger, r *http.Request, role, route string, allowed bool) {
 	if logger == nil {
 		return // Skip logging if no logger provided
 	}
 
-	status := "denied"
+	status := "REJ"
 	if allowed {
-		status = "allowed"
+		status = "ACC"
 	}
 
-	logger.Infof("[RBAC Audit] %s - Role: %s - Route: %s - %s - Reason: %s",
-		r.Method, role, route, status, reason)
+	// Extract correlation ID from trace context
+	correlationID := trace.SpanFromContext(r.Context()).SpanContext().TraceID().String()
+	if correlationID == "" || correlationID == "00000000000000000000000000000000" {
+		correlationID = "<no-trace>"
+	}
+
+	// Create structured audit log entry
+	auditLog := &AuditLog{
+		CorrelationID: correlationID,
+		Method:        r.Method,
+		Route:         route,
+		Status:        status,
+		Role:          role,
+	}
+
+	// Use structured logging at debug level (logger will handle JSON encoding or PrettyPrint)
+	logger.Debug(auditLog)
 }
 
 // sanitizeErrorForTrace sanitizes error messages for traces to prevent information leakage.

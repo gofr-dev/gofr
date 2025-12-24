@@ -786,7 +786,7 @@ func TestLogAuditEvent(t *testing.T) {
 	for i, tc := range testCases {
 		t.Run(tc.desc, func(t *testing.T) {
 			req := httptest.NewRequest(http.MethodGet, "/api", http.NoBody)
-			logAuditEvent(tc.logger, req, "admin", "/api", tc.allowed, "test-reason")
+			logAuditEvent(tc.logger, req, "admin", "/api", tc.allowed)
 
 			if tc.logger != nil {
 				mockLog := tc.logger.(*mockLogger)
@@ -859,11 +859,22 @@ type mockLogger struct {
 	errorLogs []string
 	infoLogs  []string // Capture actual log messages
 	logs      []string
+	infoArgs  []any // Capture structured log arguments (used for both Info and Debug)
 }
 
-func (m *mockLogger) Debug(_ ...any)            { m.logs = append(m.logs, "DEBUG") }
+func (m *mockLogger) Debug(args ...any) {
+	m.logs = append(m.logs, "DEBUG")
+	if len(args) > 0 {
+		m.infoArgs = append(m.infoArgs, args...)
+	}
+}
 func (m *mockLogger) Debugf(_ string, _ ...any) { m.logs = append(m.logs, "DEBUGF") }
-func (m *mockLogger) Info(_ ...any)             { m.logs = append(m.logs, "INFO") }
+func (m *mockLogger) Info(args ...any) {
+	m.logs = append(m.logs, "INFO")
+	if len(args) > 0 {
+		m.infoArgs = append(m.infoArgs, args...)
+	}
+}
 func (m *mockLogger) Infof(format string, args ...any) {
 	m.logs = append(m.logs, "INFOF")
 	m.infoLogs = append(m.infoLogs, fmt.Sprintf(format, args...))
@@ -1097,6 +1108,7 @@ func TestMiddleware_RoleInAuditLogs(t *testing.T) {
 		mockLog := &mockLogger{
 			logs:     []string{},
 			infoLogs: []string{},
+			infoArgs: []any{},
 		}
 
 		config := &Config{
@@ -1128,17 +1140,25 @@ func TestMiddleware_RoleInAuditLogs(t *testing.T) {
 
 		assert.Equal(t, http.StatusOK, w.Code)
 		// Verify audit log contains role
-		assert.NotEmpty(t, mockLog.infoLogs, "audit log should be written")
-		auditLog := mockLog.infoLogs[0]
-		assert.Contains(t, auditLog, "admin", "audit log should contain role")
-		assert.Contains(t, auditLog, "[RBAC Audit]", "audit log should have RBAC Audit prefix")
-		assert.Contains(t, auditLog, "Role:", "audit log should contain Role label")
+		assert.NotEmpty(t, mockLog.logs, "audit log should be written")
+		// Verify that Debug was called (structured logging)
+		assert.Contains(t, mockLog.logs, "DEBUG", "audit log should be written via Debug")
+		// Verify structured log contains AuditLog
+		assert.NotEmpty(t, mockLog.infoArgs, "audit log struct should be captured")
+		auditLog, ok := mockLog.infoArgs[0].(*AuditLog)
+		require.True(t, ok, "audit log should be AuditLog struct")
+		assert.Equal(t, "admin", auditLog.Role, "audit log should contain role")
+		assert.Equal(t, "ACC", auditLog.Status, "audit log should have ACC status")
+		assert.Equal(t, "GET", auditLog.Method, "audit log should contain method")
+		assert.Equal(t, "/api", auditLog.Route, "audit log should contain route")
+		assert.NotEmpty(t, auditLog.CorrelationID, "audit log should contain correlation ID")
 	})
 
 	t.Run("role is included in audit logs for denied requests", func(t *testing.T) {
 		mockLog := &mockLogger{
 			logs:     []string{},
 			infoLogs: []string{},
+			infoArgs: []any{},
 		}
 
 		config := &Config{
@@ -1170,11 +1190,17 @@ func TestMiddleware_RoleInAuditLogs(t *testing.T) {
 
 		assert.Equal(t, http.StatusForbidden, w.Code)
 		// Verify audit log contains role
-		assert.NotEmpty(t, mockLog.infoLogs, "audit log should be written")
-		auditLog := mockLog.infoLogs[0]
-		assert.Contains(t, auditLog, "viewer", "audit log should contain role")
-		assert.Contains(t, auditLog, "[RBAC Audit]", "audit log should have RBAC Audit prefix")
-		assert.Contains(t, auditLog, "Role:", "audit log should contain Role label")
+		assert.NotEmpty(t, mockLog.logs, "audit log should be written")
+		// Verify that Debug was called (structured logging)
+		assert.Contains(t, mockLog.logs, "DEBUG", "audit log should be written via Debug")
+		// Verify structured log contains AuditLog
+		assert.NotEmpty(t, mockLog.infoArgs, "audit log struct should be captured")
+		auditLog, ok := mockLog.infoArgs[0].(*AuditLog)
+		require.True(t, ok, "audit log should be AuditLog struct")
+		assert.Equal(t, "viewer", auditLog.Role, "audit log should contain role")
+		assert.Equal(t, "REJ", auditLog.Status, "audit log should have REJ status")
+		assert.Equal(t, "GET", auditLog.Method, "audit log should contain method")
+		assert.Equal(t, "/api", auditLog.Route, "audit log should contain route")
 	})
 }
 
