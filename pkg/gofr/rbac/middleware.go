@@ -35,8 +35,10 @@ type AuditLog struct {
 
 // PrettyPrint formats the RBAC audit log for terminal output, matching HTTP log format.
 func (ral *AuditLog) PrettyPrint(writer io.Writer) {
-	fmt.Fprintf(writer, "\u001B[38;5;8m%s %-6s %11s %s %s [%s]\u001B[0m\n",
-		ral.CorrelationID, ral.Status, "", "RBAC", ral.Route, ral.Role)
+	// Format: correlationID ACC/REJ <10chars space> RBAC [role]
+	// Route is removed from display, only role is shown (route still in struct for JSON logs)
+	fmt.Fprintf(writer, "\u001B[38;5;8m%s %-6s %10s %s [%s]\u001B[0m\n",
+		ral.CorrelationID, ral.Status, "", "RBAC", ral.Role)
 }
 
 var (
