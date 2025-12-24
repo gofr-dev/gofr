@@ -280,10 +280,6 @@ func (ps *PubSub) ensureConsumerGroup(ctx context.Context, topic, group string) 
 
 // checkGroupExists checks if a consumer group exists for the given stream.
 func (ps *PubSub) checkGroupExists(ctx context.Context, topic, group string) bool {
-	if !ps.isConnected() {
-		return false
-	}
-
 	groups, err := ps.client.XInfoGroups(ctx, topic).Result()
 	if err != nil {
 		// If XInfoGroups failed (e.g., stream doesn't exist), we'll create it with MKSTREAM
@@ -460,7 +456,6 @@ func (ps *PubSub) createStreamTopic(ctx context.Context, name string) error {
 
 	group := ps.config.PubSubStreamsConfig.ConsumerGroup
 
-	// checkGroupExists already calls isConnected()
 	groupExists := ps.checkGroupExists(ctx, name, group)
 	if groupExists {
 		return nil
@@ -734,14 +729,14 @@ func (*PubSub) collectMessages(ctx context.Context, ch <-chan *redis.Message, li
 	collected := 0
 
 	for collected < limit {
-		// Check context first
+		// Check context first before attempting to receive from channel
 		select {
 		case <-ctx.Done():
 			return result
 		default:
 		}
 
-		// Then try to receive message
+		// Now try to receive from channel, but also check context
 		select {
 		case <-ctx.Done():
 			return result

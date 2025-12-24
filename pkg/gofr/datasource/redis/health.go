@@ -19,7 +19,6 @@ const (
 func (r *Redis) HealthCheck() datasource.Health {
 	h := datasource.Health{
 		Details: make(map[string]any),
-		Status:  datasource.StatusDown,
 	}
 
 	h.Details["host"] = r.config.HostName + ":" + strconv.Itoa(r.config.Port)

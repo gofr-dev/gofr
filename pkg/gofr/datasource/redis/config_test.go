@@ -13,8 +13,6 @@ import (
 	"gofr.dev/pkg/gofr/logging"
 )
 
-// testGetRedisConfig is a helper function that creates mock logger and config,
-// then returns the Redis config. This reduces code duplication in tests.
 func testGetRedisConfig(t *testing.T, configMap map[string]string) *Config {
 	t.Helper()
 
@@ -51,7 +49,6 @@ func TestGetRedisConfig_InvalidPortAndDB(t *testing.T) {
 }
 
 func TestGetRedisConfig_TLS(t *testing.T) {
-	// Create temporary cert files
 	certFile, err := os.CreateTemp(t.TempDir(), "cert-*.pem")
 	require.NoError(t, err)
 
@@ -70,12 +67,10 @@ func TestGetRedisConfig_TLS(t *testing.T) {
 	defer os.Remove(caFile.Name())
 	defer caFile.Close()
 
-	// Write dummy content (not valid PEM, but enough to trigger file read)
 	_, _ = certFile.WriteString("-----BEGIN CERTIFICATE-----\nMIID\n-----END CERTIFICATE-----")
 	_, _ = keyFile.WriteString("-----BEGIN PRIVATE KEY-----\nMIIE\n-----END PRIVATE KEY-----")
 	_, _ = caFile.WriteString("-----BEGIN CERTIFICATE-----\nMIID\n-----END CERTIFICATE-----")
 
-	// This will log errors because dummy content is not valid PEM, but it tests the path
 	conf := testGetRedisConfig(t, map[string]string{
 		"REDIS_HOST":        "localhost",
 		"REDIS_TLS_ENABLED": "true",
@@ -98,7 +93,6 @@ func TestGetRedisConfig_TLS_InvalidFiles(t *testing.T) {
 	})
 
 	assert.NotNil(t, conf.TLS)
-	// Should be empty as files failed to load
 	assert.Empty(t, conf.TLS.Certificates)
 	assert.Nil(t, conf.TLS.RootCAs)
 }
@@ -153,7 +147,6 @@ func TestGetRedisConfig_PubSubStreams_InvalidValues(t *testing.T) {
 	assert.Equal(t, "streams", conf.PubSubMode)
 	require.NotNil(t, conf.PubSubStreamsConfig)
 
-	// Should use defaults
 	assert.Equal(t, int64(0), conf.PubSubStreamsConfig.MaxLen)
 	assert.Equal(t, 5*time.Second, conf.PubSubStreamsConfig.Block)
 }

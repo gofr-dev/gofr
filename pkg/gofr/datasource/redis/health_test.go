@@ -21,7 +21,6 @@ func TestPubSub_HealthDown(t *testing.T) {
 	client, mock := setupMockTest(t, nil)
 	defer client.Close()
 
-	// Test Health Down (Ping fails)
 	mock.ExpectPing().SetErr(errMockPing)
 
 	h := client.PubSub.Health()
@@ -35,7 +34,6 @@ func TestPubSub_HealthUp(t *testing.T) {
 	client, mock := setupMockTest(t, nil)
 	defer client.Close()
 
-	// Test Health Up (Ping succeeds)
 	mock.ExpectPing().SetVal("PONG")
 
 	h := client.PubSub.Health()
@@ -68,7 +66,6 @@ func TestPubSub_HealthDefaultMode(t *testing.T) {
 	client, mock := setupMockTest(t, map[string]string{
 		"REDIS_HOST": "localhost",
 		"REDIS_PORT": "6379",
-		// REDIS_PUBSUB_MODE not set, should default to streams
 	})
 	defer client.Close()
 

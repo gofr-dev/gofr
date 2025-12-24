@@ -33,7 +33,6 @@ func TestNewPubSub_UsesRedisPubSubDB(t *testing.T) {
 
 	mockLogger := logging.NewMockLogger(logging.DEBUG)
 
-	// Create PubSub client with DB override.
 	ps := NewPubSub(config.NewMockConfig(map[string]string{
 		"PUBSUB_BACKEND":               "REDIS",
 		"REDIS_HOST":                   s.Host(),
@@ -45,11 +44,9 @@ func TestNewPubSub_UsesRedisPubSubDB(t *testing.T) {
 	}), mockLogger, mockMetrics)
 	require.NotNil(t, ps)
 
-	// Creating a topic in streams mode should create a STREAM key in the PubSub DB (DB 1).
 	err = ps.CreateTopic(context.Background(), "db-partition-topic")
 	require.NoError(t, err)
 
-	// Verify: DB 0 does not have the key.
 	rc0 := redis.NewClient(&redis.Options{Addr: s.Addr(), DB: 0})
 
 	t.Cleanup(func() { _ = rc0.Close() })
@@ -58,7 +55,6 @@ func TestNewPubSub_UsesRedisPubSubDB(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, "none", t0)
 
-	// Verify: DB 1 has the stream.
 	rc1 := redis.NewClient(&redis.Options{Addr: s.Addr(), DB: 1})
 
 	t.Cleanup(func() { _ = rc1.Close() })
@@ -68,7 +64,6 @@ func TestNewPubSub_UsesRedisPubSubDB(t *testing.T) {
 	require.Equal(t, "stream", t1)
 }
 
-// TestPubSub_Query_Channel tests querying messages from a Redis PubSub channel.
 func TestPubSub_Query_Channel(t *testing.T) {
 	client, s := setupTest(t, map[string]string{
 		"REDIS_PUBSUB_MODE": "pubsub",
@@ -79,7 +74,6 @@ func TestPubSub_Query_Channel(t *testing.T) {
 	ctx := context.Background()
 	topic := "query-channel"
 
-	// Start Query in goroutine
 	type queryResult struct {
 		msgs []byte
 		err  error
@@ -88,15 +82,12 @@ func TestPubSub_Query_Channel(t *testing.T) {
 	resChan := make(chan queryResult)
 
 	go func() {
-		// Query blocks until limit or timeout.
 		msgs, err := client.PubSub.Query(ctx, topic, 2*time.Second, 2)
 		resChan <- queryResult{msgs, err}
 	}()
 
-	// Wait for Query to subscribe (approximate)
 	time.Sleep(200 * time.Millisecond)
 
-	// Publish messages
 	msgs := []string{"chan-msg1", "chan-msg2"}
 	for _, m := range msgs {
 		err := client.PubSub.Publish(ctx, topic, []byte(m))
@@ -104,7 +95,6 @@ func TestPubSub_Query_Channel(t *testing.T) {
 		time.Sleep(50 * time.Millisecond)
 	}
 
-	// Wait for result
 	select {
 	case res := <-resChan:
 		require.NoError(t, res.err)
@@ -127,7 +117,6 @@ var (
 	errBusyGroup       = errors.New("BUSYGROUP Consumer Group name already exists")
 )
 
-// testRedisClient is a test helper that wraps Redis and PubSub for backward compatibility with tests.
 type testRedisClient struct {
 	*Redis
 	PubSub *PubSub
@@ -182,19 +171,13 @@ func setupMockTest(t *testing.T, conf map[string]string) (*testRedisClient, redi
 	conf["PUBSUB_BACKEND"] = "REDIS"
 	conf["REDIS_HOST"] = "localhost"
 
-	// Create Redis client but replace the internal client with mock
-	// We can't easily replace the internal client of NewClient because it creates one.
-	// So we construct Redis manually.
-
 	redisConfig := getRedisConfig(config.NewMockConfig(conf), mockLogger)
 
 	r := &Redis{
-		Client:  db,
-		config:  redisConfig,
-		logger:  mockLogger,
-		metrics: mockMetrics,
+		Client: db,
+		config: redisConfig,
+		logger: mockLogger,
 	}
-	// Initialize PubSub manually with mock client
 	ps := newPubSub(db, redisConfig, mockLogger, mockMetrics)
 
 	return &testRedisClient{Redis: r, PubSub: ps}, mock
@@ -465,17 +448,11 @@ func testStreamQuery(t *testing.T, client *testRedisClient) {
 
 	res, err := client.PubSub.Query(ctx, topic, 1*time.Second, 10)
 	require.NoError(t, err)
-
-	// Note: This test may skip if miniredis returns empty results (known limitation)
-	// Miniredis compatibility is tested separately in TestPubSub_Query_Stream_MiniredisCompatibility
-	// For this test, we require results to be present to validate the query functionality
 	require.NotEmpty(t, res, "Query should return results (miniredis limitation may cause empty results)")
 	assert.Contains(t, string(res), "sm1")
 	assert.Contains(t, string(res), "sm2")
 }
 
-// TestPubSub_Query_Stream_Success tests successful stream query operations.
-// This test assumes results are available (miniredis compatibility is tested separately).
 func TestPubSub_Query_Stream_Success(t *testing.T) {
 	client, s := setupTest(t, map[string]string{
 		"REDIS_PUBSUB_MODE":            "streams",
@@ -487,7 +464,6 @@ func TestPubSub_Query_Stream_Success(t *testing.T) {
 	ctx := context.Background()
 	topic := "query-stream-success"
 
-	// Publish some messages
 	msgs := []string{"stream-msg1", "stream-msg2", "stream-msg3"}
 	for _, m := range msgs {
 		err := client.PubSub.Publish(ctx, topic, []byte(m))
@@ -503,8 +479,6 @@ func TestPubSub_Query_Stream_Success(t *testing.T) {
 	assert.Equal(t, expected, string(results))
 }
 
-// TestPubSub_Query_Stream_MiniredisCompatibility tests Miniredis compatibility for stream queries.
-// Miniredis may return empty results for XRANGE, which is acceptable behavior.
 func TestPubSub_Query_Stream_MiniredisCompatibility(t *testing.T) {
 	client, s := setupTest(t, map[string]string{
 		"REDIS_PUBSUB_MODE":            "streams",
@@ -516,7 +490,6 @@ func TestPubSub_Query_Stream_MiniredisCompatibility(t *testing.T) {
 	ctx := context.Background()
 	topic := "query-stream-compat"
 
-	// Publish some messages
 	msgs := []string{"stream-msg1", "stream-msg2"}
 	for _, m := range msgs {
 		err := client.PubSub.Publish(ctx, topic, []byte(m))
@@ -573,7 +546,6 @@ func testStreamConfigError(t *testing.T, client *testRedisClient) {
 	err := client.PubSub.CreateTopic(ctx, topic)
 	assert.Equal(t, errConsumerGroupNotProvided, err)
 
-	// Subscribe should also log error and return (non-blocking in goroutine)
 	ch := client.PubSub.ensureSubscription(ctx, topic)
 	assert.NotNil(t, ch)
 }
@@ -596,7 +568,6 @@ func TestPubSub_Errors(t *testing.T) {
 
 	host := s.Host()
 	port := s.Port()
-	// Close it immediately to test connection errors
 	s.Close()
 
 	ctrl := gomock.NewController(t)
@@ -624,17 +595,10 @@ func TestPubSub_Errors(t *testing.T) {
 	ctx := context.Background()
 	topic := "err-topic"
 
-	// Publish error
 	err = psClient.Publish(ctx, topic, []byte("msg"))
 	require.Error(t, err)
-	// We check for connection error, but specific error might vary (dial error vs errClientNotConnected)
-	// ps.Publish checks isConnected() -> errClientNotConnected
-	// But isConnected() returns false only if Ping fails.
-	// Ping fails with "dial tcp..." error.
-	// So isConnected returns false.
 	assert.Equal(t, errClientNotConnected, err)
 
-	// Subscribe error
 	ctxCancel, cancel := context.WithCancel(context.Background())
 	cancel()
 
@@ -649,16 +613,14 @@ func TestPubSub_MockErrors(t *testing.T) {
 	})
 	defer client.Close()
 
-	// Stop monitorConnection to avoid race conditions with Ping expectations
 	if client.PubSub != nil && client.PubSub.cancel != nil {
 		client.PubSub.cancel()
-		time.Sleep(10 * time.Millisecond) // Allow goroutine to exit
+		time.Sleep(10 * time.Millisecond)
 	}
 
 	ctx := context.Background()
 	topic := "mock-err-topic"
 
-	// Test Publish Error (Ping succeeds, Publish fails)
 	mock.ExpectPing().SetVal("PONG")
 	mock.ExpectPublish(topic, []byte("msg")).SetErr(errMockPublish)
 
@@ -666,7 +628,6 @@ func TestPubSub_MockErrors(t *testing.T) {
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), errMockPublish.Error())
 
-	// Verify expectations
 	assert.NoError(t, mock.ExpectationsWereMet())
 }
 
@@ -677,16 +638,14 @@ func TestPubSub_StreamMockErrors(t *testing.T) {
 	})
 	defer client.Close()
 
-	// Stop monitorConnection to avoid race conditions with Ping expectations
 	if client.PubSub != nil && client.PubSub.cancel != nil {
 		client.PubSub.cancel()
-		time.Sleep(10 * time.Millisecond) // Allow goroutine to exit
+		time.Sleep(10 * time.Millisecond)
 	}
 
 	ctx := context.Background()
 	topic := "mock-stream-err"
 
-	// Test Publish Error (Ping succeeds, XAdd fails)
 	mock.ExpectPing().SetVal("PONG")
 	mock.ExpectXAdd(&redis.XAddArgs{
 		Stream: topic,
@@ -697,16 +656,12 @@ func TestPubSub_StreamMockErrors(t *testing.T) {
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), errMockXAdd.Error())
 
-	// Test CreateTopic Error
-	// CreateTopic calls checkGroupExists which calls isConnected() (ping), then XInfoGroups, then XGroupCreateMkStream
-	mock.ExpectPing().SetVal("PONG")
-	mock.ExpectXInfoGroups(topic).SetVal([]redis.XInfoGroup{}) // Group doesn't exist yet
+	mock.ExpectXInfoGroups(topic).SetVal([]redis.XInfoGroup{})
 	mock.ExpectXGroupCreateMkStream(topic, "mock-grp", "$").SetErr(errMockGroup)
 	err = client.PubSub.CreateTopic(ctx, topic)
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), errMockGroup.Error())
 
-	// Verify expectations
 	assert.NoError(t, mock.ExpectationsWereMet())
 }
 
@@ -722,14 +677,9 @@ func TestPubSub_StreamSubscribeErrors(t *testing.T) {
 
 	topic := "mock-sub-err"
 
-	// Expectations for Subscribe loop:
-	// 1. Ping (isConnected check in waitForMessage) -> PONG
 	mock.ExpectPing().SetVal("PONG")
-
-	// 2. XGroupCreateMkStream (in subscribeToStream) -> Error
 	mock.ExpectXGroupCreateMkStream(topic, "mock-sub-grp", "$").SetErr(errMockGroupCreate)
 
-	// Start Subscribe
 	msg, err := client.PubSub.Subscribe(ctx, topic)
 
 	require.NoError(t, err)
@@ -749,7 +699,6 @@ func TestPubSub_MockQueryDeleteErrors(t *testing.T) {
 	ctx := context.Background()
 	topic := "mock-query-err"
 
-	// Test Query Error (Ping succeeds, XRangeN fails)
 	mock.ExpectPing().SetVal("PONG")
 	mock.ExpectXRangeN(topic, "-", "+", int64(10)).SetErr(errMockXRange)
 
@@ -758,7 +707,6 @@ func TestPubSub_MockQueryDeleteErrors(t *testing.T) {
 	assert.Nil(t, res)
 	assert.Contains(t, err.Error(), errMockXRange.Error())
 
-	// Test DeleteTopic Error (DeleteTopic calls isConnected() which triggers ping, then Del)
 	mock.ExpectPing().SetVal("PONG")
 	mock.ExpectDel(topic).SetErr(errMockDel)
 
@@ -777,20 +725,17 @@ func TestPubSub_Unsubscribe(t *testing.T) {
 	ctx := context.Background()
 	topic := "unsub-topic"
 
-	// Subscribe
 	go func() {
 		_, _ = client.PubSub.Subscribe(ctx, topic)
 	}()
 
 	time.Sleep(100 * time.Millisecond)
 
-	// Unsubscribe
 	err := client.PubSub.unsubscribe(topic)
 	require.NoError(t, err)
 }
 
 func TestPubSub_MonitorConnection(t *testing.T) {
-	// Start miniredis
 	s, err := miniredis.Run()
 	require.NoError(t, err)
 
@@ -816,12 +761,10 @@ func TestPubSub_MonitorConnection(t *testing.T) {
 	defer client.Close()
 	defer ps.Close()
 
-	// Ensure connected
 	psClient, ok := ps.(*PubSub)
 	require.True(t, ok)
 	assert.True(t, psClient.isConnected())
 
-	// Subscribe to a topic to verify resubscription logic
 	topic := "monitor-topic"
 
 	go func() {
@@ -830,15 +773,10 @@ func TestPubSub_MonitorConnection(t *testing.T) {
 
 	time.Sleep(100 * time.Millisecond)
 
-	// Stop Redis to simulate connection loss
 	s.Close()
 
-	// Wait for monitor to detect loss (interval is short in tests?)
-	// The defaultRetryTimeout is 10s, which is too long for unit tests.
-	// We rely on the fact that isConnected() will return false.
 	assert.False(t, psClient.isConnected())
 
-	// Clean up new server
 	s.Close()
 }
 
@@ -852,18 +790,15 @@ func TestPubSub_ResubscribeAll(t *testing.T) {
 	ctx := context.Background()
 	topic := "resub-topic"
 
-	// Subscribe to a topic
 	go func() {
 		_, _ = client.PubSub.Subscribe(ctx, topic)
 	}()
 
 	time.Sleep(100 * time.Millisecond)
 
-	// Call resubscribeAll directly
 	psClient := client.PubSub
 	psClient.resubscribeAll()
 
-	// Verify subscription still exists
 	psClient.mu.RLock()
 	_, exists := psClient.subStarted[topic]
 	psClient.mu.RUnlock()
@@ -878,11 +813,9 @@ func TestPubSub_ResubscribeAll_NoSubscriptions(t *testing.T) {
 	defer s.Close()
 	defer client.Close()
 
-	// Call resubscribeAll with no subscriptions
 	psClient := client.PubSub
 	psClient.resubscribeAll()
 
-	// Should not panic
 	psClient.mu.RLock()
 	count := len(psClient.subStarted)
 	psClient.mu.RUnlock()
@@ -909,7 +842,6 @@ func TestPubSub_CleanupSubscription(t *testing.T) {
 
 	time.Sleep(100 * time.Millisecond)
 
-	// Manually mark as closed and cleanup
 	psClient := client.PubSub
 	psClient.mu.Lock()
 	psClient.chanClosed[topic] = true
@@ -917,7 +849,6 @@ func TestPubSub_CleanupSubscription(t *testing.T) {
 
 	psClient.cleanupSubscription(topic)
 
-	// Verify cleanup
 	psClient.mu.RLock()
 	_, exists := psClient.receiveChan[topic]
 	_, started := psClient.subStarted[topic]
@@ -939,18 +870,15 @@ func TestPubSub_CleanupSubscription_NotClosed(t *testing.T) {
 	ctx := context.Background()
 	topic := "cleanup-not-closed-topic"
 
-	// Subscribe to create subscription
 	go func() {
 		_, _ = client.PubSub.Subscribe(ctx, topic)
 	}()
 
 	time.Sleep(100 * time.Millisecond)
 
-	// Cleanup without marking as closed
 	psClient := client.PubSub
 	psClient.cleanupSubscription(topic)
 
-	// Verify cleanup happened
 	psClient.mu.RLock()
 	_, exists := psClient.receiveChan[topic]
 	closed := psClient.chanClosed[topic]
@@ -973,22 +901,18 @@ func TestPubSub_CleanupStreamConsumers(t *testing.T) {
 	ctx := context.Background()
 	topic := "cleanup-stream-topic"
 
-	// Create topic to set up consumer
 	err := client.PubSub.CreateTopic(ctx, topic)
 	require.NoError(t, err)
 
-	// Subscribe to create stream consumer
 	go func() {
 		_, _ = client.PubSub.Subscribe(ctx, topic)
 	}()
 
 	time.Sleep(200 * time.Millisecond)
 
-	// Cleanup stream consumers
 	psClient := client.PubSub
 	psClient.cleanupStreamConsumers(topic)
 
-	// Verify cleanup
 	psClient.mu.RLock()
 	_, exists := psClient.streamConsumers[topic]
 	_, started := psClient.subStarted[topic]
@@ -1056,13 +980,9 @@ func TestPubSub_DispatchMessage_ChannelFull(t *testing.T) {
 	ctx := context.Background()
 	topic := "dispatch-full-topic"
 
-	// Subscribe
 	msgChan := client.PubSub.ensureSubscription(ctx, topic)
-
-	// Fill the channel
 	msgChan <- pubsub.NewMessage(ctx)
 
-	// Try to dispatch another message (should be dropped)
 	msg := pubsub.NewMessage(ctx)
 	msg.Topic = topic
 	msg.Value = []byte("dropped")
@@ -1070,7 +990,6 @@ func TestPubSub_DispatchMessage_ChannelFull(t *testing.T) {
 	psClient := client.PubSub
 	psClient.dispatchMessage(ctx, topic, msg)
 
-	// Channel should still have only one message
 	assert.Len(t, msgChan, 1)
 }
 
@@ -1086,21 +1005,18 @@ func TestPubSub_DispatchMessage_ChannelClosed(t *testing.T) {
 	ctx := context.Background()
 	topic := "dispatch-closed-topic"
 
-	// Create subscription and close channel
 	msgChan := client.PubSub.ensureSubscription(ctx, topic)
 	psClient := client.PubSub
 	psClient.mu.Lock()
 	psClient.chanClosed[topic] = true
 	psClient.mu.Unlock()
 
-	// Try to dispatch message (should be ignored)
 	msg := pubsub.NewMessage(ctx)
 	msg.Topic = topic
 	msg.Value = []byte("ignored")
 
 	psClient.dispatchMessage(ctx, topic, msg)
 
-	// Should not panic
 	assert.NotNil(t, msgChan)
 }
 
@@ -1121,7 +1037,6 @@ func TestPubSub_DispatchMessage_TopicNotExists(t *testing.T) {
 	psClient := client.PubSub
 	psClient.dispatchMessage(ctx, topic, msg)
 
-	// Should not panic
 	assert.NotNil(t, psClient)
 }
 
@@ -1139,7 +1054,6 @@ func TestPubSub_CheckGroupExists_GroupExists(t *testing.T) {
 	topic := "check-group-topic"
 	group := "check-grp"
 
-	// Create stream and group
 	err := client.PubSub.CreateTopic(ctx, topic)
 	require.NoError(t, err)
 
@@ -1162,7 +1076,6 @@ func TestPubSub_CheckGroupExists_GroupNotExists(t *testing.T) {
 	topic := "check-group-not-exists-topic"
 	group := "non-existent-group"
 
-	// Create stream without group
 	_, err := s.XAdd(topic, "0-1", []string{"payload", "data"})
 	require.NoError(t, err)
 
@@ -1203,7 +1116,6 @@ func TestPubSub_EnsureConsumerGroup_CreateNew(t *testing.T) {
 	topic := "ensure-group-new-topic"
 	group := "ensure-new-grp"
 
-	// Create stream without group
 	_, err := s.XAdd(topic, "0-1", []string{"payload", "data"})
 	require.NoError(t, err)
 
@@ -1243,7 +1155,6 @@ func TestPubSub_GetConsumerName_WithoutConfig(t *testing.T) {
 	psClient := client.PubSub
 	name := psClient.getConsumerName()
 
-	// Should generate a name with hostname, pid, and timestamp
 	assert.Contains(t, name, "consumer-")
 	assert.NotEmpty(t, name)
 }
@@ -1262,7 +1173,6 @@ func TestPubSub_UnsubscribeFromRedis_NotExists(t *testing.T) {
 	psClient := client.PubSub
 	psClient.unsubscribeFromRedis(topic)
 
-	// Should not panic
 	assert.NotNil(t, psClient)
 }
 
@@ -1277,7 +1187,6 @@ func TestPubSub_Close_WithSubscriptions(t *testing.T) {
 	ctx := context.Background()
 	topic := "close-sub-topic"
 
-	// Create multiple subscriptions
 	go func() {
 		_, _ = client.PubSub.Subscribe(ctx, topic)
 	}()
@@ -1288,11 +1197,9 @@ func TestPubSub_Close_WithSubscriptions(t *testing.T) {
 
 	time.Sleep(200 * time.Millisecond)
 
-	// Close should clean up all subscriptions
 	err := client.PubSub.Close()
 	require.NoError(t, err)
 
-	// Verify cleanup
 	psClient := client.PubSub
 	psClient.mu.RLock()
 	subCount := len(psClient.subStarted)
@@ -1309,11 +1216,9 @@ func TestPubSub_Close_NoSubscriptions(t *testing.T) {
 	client, s := setupTest(t, nil)
 	defer s.Close()
 
-	// Close with no subscriptions
 	err := client.PubSub.Close()
 	require.NoError(t, err)
 
-	// Should not panic
 	assert.NotNil(t, client.PubSub)
 }
 
@@ -1329,7 +1234,6 @@ func TestPubSub_Close_WithStreamConsumers(t *testing.T) {
 	ctx := context.Background()
 	topic := "close-stream-topic"
 
-	// Create topic and subscribe
 	err := client.PubSub.CreateTopic(ctx, topic)
 	require.NoError(t, err)
 
@@ -1339,11 +1243,9 @@ func TestPubSub_Close_WithStreamConsumers(t *testing.T) {
 
 	time.Sleep(200 * time.Millisecond)
 
-	// Close should clean up stream consumers
 	err = client.PubSub.Close()
 	require.NoError(t, err)
 
-	// Verify cleanup
 	psClient := client.PubSub
 	psClient.mu.RLock()
 	consumerCount := len(psClient.streamConsumers)
@@ -1351,8 +1253,6 @@ func TestPubSub_Close_WithStreamConsumers(t *testing.T) {
 
 	assert.Equal(t, 0, consumerCount)
 }
-
-// Tests from pubsub_subscription_test.go and pubsub_message_handling_test.go
 
 func TestPubSub_SubscribeToChannel_NilPubSub(t *testing.T) {
 	client, mock := setupMockTest(t, map[string]string{
@@ -1369,13 +1269,9 @@ func TestPubSub_SubscribeToChannel_NilPubSub(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	// Cancel context immediately so subscribeToChannel returns quickly
-	// No ping expected since context is canceled before Subscribe is called
 	cancel()
 
-	// subscribeToChannel should handle context cancellation gracefully
 	done := make(chan struct{})
-
 	go func() {
 		client.PubSub.subscribeToChannel(ctx, "test-topic")
 		close(done)
@@ -1383,7 +1279,6 @@ func TestPubSub_SubscribeToChannel_NilPubSub(t *testing.T) {
 
 	select {
 	case <-done:
-		// Expected - should return when context is canceled
 	case <-time.After(1 * time.Second):
 		t.Fatal("subscribeToChannel did not return")
 	}
@@ -1397,23 +1292,18 @@ func TestPubSub_SubscribeToChannel_NilChannel(t *testing.T) {
 	})
 	defer client.Close()
 
-	// Stop monitorConnection
 	if client.PubSub.cancel != nil {
 		client.PubSub.cancel()
 		time.Sleep(10 * time.Millisecond)
 	}
 
-	// Test nil channel handling in processMessages
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	// Create a channel that will be closed to simulate nil channel scenario
 	ch := make(chan *redis.Message)
 	close(ch)
 
-	// processMessages should return when channel is closed
 	done := make(chan struct{})
-
 	go func() {
 		client.PubSub.processMessages(ctx, "test-topic", ch)
 		close(done)
@@ -1421,7 +1311,6 @@ func TestPubSub_SubscribeToChannel_NilChannel(t *testing.T) {
 
 	select {
 	case <-done:
-		// Expected - processMessages should return
 	case <-time.After(1 * time.Second):
 		t.Fatal("processMessages did not return")
 	}
@@ -1436,7 +1325,6 @@ func TestPubSub_EnsureConsumerGroup_GroupNotExists(t *testing.T) {
 	})
 	defer client.Close()
 
-	// Stop monitorConnection to avoid race conditions
 	if client.PubSub.cancel != nil {
 		client.PubSub.cancel()
 		time.Sleep(10 * time.Millisecond)
@@ -1446,8 +1334,6 @@ func TestPubSub_EnsureConsumerGroup_GroupNotExists(t *testing.T) {
 	topic := "test-stream"
 	group := "test-group"
 
-	// Mock XInfoGroups to return empty (group doesn't exist)
-	mock.ExpectPing().SetVal("PONG")
 	mock.ExpectXInfoGroups(topic).SetVal([]redis.XInfoGroup{})
 	mock.ExpectXGroupCreateMkStream(topic, group, "$").SetVal("OK")
 
@@ -1464,7 +1350,6 @@ func TestPubSub_EnsureConsumerGroup_CreateFails(t *testing.T) {
 	})
 	defer client.Close()
 
-	// Stop monitorConnection to avoid race conditions
 	if client.PubSub.cancel != nil {
 		client.PubSub.cancel()
 		time.Sleep(10 * time.Millisecond)
@@ -1474,8 +1359,6 @@ func TestPubSub_EnsureConsumerGroup_CreateFails(t *testing.T) {
 	topic := "test-stream"
 	group := "test-group"
 
-	// Mock XInfoGroups to return empty, then XGroupCreateMkStream fails
-	mock.ExpectPing().SetVal("PONG")
 	mock.ExpectXInfoGroups(topic).SetVal([]redis.XInfoGroup{})
 	mock.ExpectXGroupCreateMkStream(topic, group, "$").SetErr(errMockGroup)
 
@@ -1492,7 +1375,6 @@ func TestPubSub_CheckGroupExists_Error(t *testing.T) {
 	})
 	defer client.Close()
 
-	// Stop monitorConnection to avoid race conditions
 	if client.PubSub.cancel != nil {
 		client.PubSub.cancel()
 		time.Sleep(10 * time.Millisecond)
@@ -1502,8 +1384,6 @@ func TestPubSub_CheckGroupExists_Error(t *testing.T) {
 	topic := "test-stream"
 	group := "test-group"
 
-	// Mock XInfoGroups to return error
-	mock.ExpectPing().SetVal("PONG")
 	mock.ExpectXInfoGroups(topic).SetErr(errMockGroup)
 
 	result := client.PubSub.checkGroupExists(ctx, topic, group)
@@ -1523,8 +1403,6 @@ func TestPubSub_CheckGroupExists_GroupFound(t *testing.T) {
 	topic := "test-stream"
 	group := "test-group"
 
-	// Mock XInfoGroups to return group list with matching group
-	mock.ExpectPing().SetVal("PONG")
 	mock.ExpectXInfoGroups(topic).SetVal([]redis.XInfoGroup{
 		{Name: "other-group"},
 		{Name: "test-group"},
@@ -1544,7 +1422,6 @@ func TestPubSub_CheckGroupExists_GroupNotFound(t *testing.T) {
 	})
 	defer client.Close()
 
-	// Stop monitorConnection to avoid race conditions
 	if client.PubSub.cancel != nil {
 		client.PubSub.cancel()
 		time.Sleep(10 * time.Millisecond)
@@ -1554,8 +1431,6 @@ func TestPubSub_CheckGroupExists_GroupNotFound(t *testing.T) {
 	topic := "test-stream"
 	group := "test-group"
 
-	// Mock XInfoGroups to return group list without matching group
-	mock.ExpectPing().SetVal("PONG")
 	mock.ExpectXInfoGroups(topic).SetVal([]redis.XInfoGroup{
 		{Name: "other-group"},
 		{Name: "another-group"},
@@ -1573,9 +1448,7 @@ func TestPubSub_CleanupSubscription_ChannelNotClosed(t *testing.T) {
 
 	topic := "test-topic"
 
-	// Set up subscription state
 	client.PubSub.mu.Lock()
-
 	ch := make(chan *pubsub.Message, 1)
 	client.PubSub.receiveChan[topic] = ch
 	client.PubSub.chanClosed[topic] = false
@@ -1584,7 +1457,6 @@ func TestPubSub_CleanupSubscription_ChannelNotClosed(t *testing.T) {
 
 	client.PubSub.cleanupSubscription(topic)
 
-	// Verify channel is closed
 	client.PubSub.mu.Lock()
 	_, exists := client.PubSub.receiveChan[topic]
 	_, startedExists := client.PubSub.subStarted[topic]
@@ -1604,9 +1476,7 @@ func TestPubSub_CleanupSubscription_ChannelAlreadyClosed(t *testing.T) {
 
 	topic := "test-topic"
 
-	// Set up subscription state with closed channel
 	client.PubSub.mu.Lock()
-
 	ch := make(chan *pubsub.Message)
 	close(ch)
 	client.PubSub.receiveChan[topic] = ch
@@ -1616,7 +1486,6 @@ func TestPubSub_CleanupSubscription_ChannelAlreadyClosed(t *testing.T) {
 
 	client.PubSub.cleanupSubscription(topic)
 
-	// Verify cleanup
 	client.PubSub.mu.Lock()
 	_, exists := client.PubSub.receiveChan[topic]
 	_, startedExists := client.PubSub.subStarted[topic]
@@ -1636,7 +1505,6 @@ func TestPubSub_CleanupSubscription_NoChannel(t *testing.T) {
 
 	topic := "test-topic"
 
-	// Set up subscription state without channel
 	client.PubSub.mu.Lock()
 	client.PubSub.subStarted[topic] = struct{}{}
 	client.PubSub.chanClosed[topic] = false
@@ -1644,7 +1512,6 @@ func TestPubSub_CleanupSubscription_NoChannel(t *testing.T) {
 
 	client.PubSub.cleanupSubscription(topic)
 
-	// Verify cleanup
 	client.PubSub.mu.Lock()
 	_, startedExists := client.PubSub.subStarted[topic]
 	_, closedExists := client.PubSub.chanClosed[topic]
@@ -1674,7 +1541,6 @@ func TestPubSub_DeleteTopic_PubSubMode_NoActiveSubscription(t *testing.T) {
 	})
 	defer client.Close()
 
-	// Stop monitorConnection to avoid race conditions
 	if client.PubSub.cancel != nil {
 		client.PubSub.cancel()
 		time.Sleep(10 * time.Millisecond)
@@ -1682,9 +1548,6 @@ func TestPubSub_DeleteTopic_PubSubMode_NoActiveSubscription(t *testing.T) {
 
 	ctx := context.Background()
 	topic := "test-topic"
-
-	// No active subscription - DeleteTopic doesn't call Redis for pubsub mode when no active subscription
-	// No mock expectations needed
 
 	err := client.PubSub.DeleteTopic(ctx, topic)
 	require.NoError(t, err)
@@ -1702,14 +1565,12 @@ func TestPubSub_DeleteTopic_PubSubMode_WithActiveSubscription(t *testing.T) {
 	ctx := context.Background()
 	topic := "test-topic"
 
-	// Start subscription
 	go func() {
 		_, _ = client.PubSub.Subscribe(ctx, topic)
 	}()
 
 	time.Sleep(100 * time.Millisecond)
 
-	// Delete topic (should unsubscribe)
 	err := client.PubSub.DeleteTopic(ctx, topic)
 	require.NoError(t, err)
 }
@@ -1724,7 +1585,6 @@ func TestPubSub_DeleteTopic_StreamMode(t *testing.T) {
 	ctx := context.Background()
 	topic := "test-stream"
 
-	// Mock Del for stream deletion
 	mock.ExpectPing().SetVal("PONG")
 	mock.ExpectDel(topic).SetVal(1)
 
@@ -1742,7 +1602,6 @@ func TestPubSub_UnsubscribeFromRedis_NoPubSub(t *testing.T) {
 
 	topic := "test-topic"
 
-	// No pubsub in map
 	client.PubSub.unsubscribeFromRedis(topic)
 
 	assert.NoError(t, mock.ExpectationsWereMet())
@@ -1756,14 +1615,12 @@ func TestPubSub_UnsubscribeFromRedis_NilPubSub(t *testing.T) {
 
 	topic := "test-topic"
 
-	// Set nil pubsub
 	client.PubSub.mu.Lock()
 	client.PubSub.subPubSub[topic] = nil
 	client.PubSub.mu.Unlock()
 
 	client.PubSub.unsubscribeFromRedis(topic)
 
-	// Cleanup
 	client.PubSub.mu.Lock()
 	delete(client.PubSub.subPubSub, topic)
 	client.PubSub.mu.Unlock()
@@ -1778,7 +1635,6 @@ func TestPubSub_UnsubscribeFromRedis_Error(t *testing.T) {
 	defer s.Close()
 	defer client.Close()
 
-	// Stop monitorConnection
 	if client.PubSub.cancel != nil {
 		client.PubSub.cancel()
 		time.Sleep(10 * time.Millisecond)
@@ -1787,20 +1643,16 @@ func TestPubSub_UnsubscribeFromRedis_Error(t *testing.T) {
 	topic := "test-topic"
 	ctx := context.Background()
 
-	// Create a real PubSub connection
 	redisPubSub := client.Redis.Client.Subscribe(ctx, topic)
 
 	client.PubSub.mu.Lock()
 	client.PubSub.subPubSub[topic] = redisPubSub
 	client.PubSub.mu.Unlock()
 
-	// Close Redis server to simulate error on Unsubscribe
 	s.Close()
 
-	// unsubscribeFromRedis should handle error gracefully (logs error but doesn't panic)
 	client.PubSub.unsubscribeFromRedis(topic)
 
-	// Cleanup
 	client.PubSub.mu.Lock()
 	delete(client.PubSub.subPubSub, topic)
 	client.PubSub.mu.Unlock()
@@ -1815,7 +1667,6 @@ func TestPubSub_CreateTopic_PubSubMode(t *testing.T) {
 	ctx := context.Background()
 	topic := "test-channel"
 
-	// CreateTopic should return nil for pubsub mode (channels auto-create)
 	err := client.PubSub.CreateTopic(ctx, topic)
 	require.NoError(t, err, "should return nil for pubsub mode")
 
@@ -1832,8 +1683,6 @@ func TestPubSub_CreateTopic_StreamMode_GroupExists(t *testing.T) {
 	ctx := context.Background()
 	topic := "test-stream"
 
-	// Mock group exists
-	mock.ExpectPing().SetVal("PONG")
 	mock.ExpectXInfoGroups(topic).SetVal([]redis.XInfoGroup{
 		{Name: "test-group"},
 	})
@@ -1854,8 +1703,6 @@ func TestPubSub_CreateTopic_StreamMode_BusyGroup(t *testing.T) {
 	ctx := context.Background()
 	topic := "test-stream"
 
-	// Mock group doesn't exist, but creation returns BUSYGROUP
-	mock.ExpectPing().SetVal("PONG")
 	mock.ExpectXInfoGroups(topic).SetVal([]redis.XInfoGroup{})
 	mock.ExpectXGroupCreateMkStream(topic, "test-group", "$").SetErr(errBusyGroup)
 
@@ -1892,13 +1739,9 @@ func TestPubSub_CollectMessages_ChannelClosed(t *testing.T) {
 
 func TestPubSub_CollectMessages_NilMessage(t *testing.T) {
 	ctx := context.Background()
-
 	ch := make(chan *redis.Message, 2)
-
 	ch <- nil
-
 	ch <- &redis.Message{Payload: "msg1"}
-
 	close(ch)
 
 	ps := &PubSub{}
@@ -1908,15 +1751,10 @@ func TestPubSub_CollectMessages_NilMessage(t *testing.T) {
 
 func TestPubSub_CollectMessages_ReachesLimit(t *testing.T) {
 	ctx := context.Background()
-
 	ch := make(chan *redis.Message, 3)
-
 	ch <- &redis.Message{Payload: "msg1"}
-
 	ch <- &redis.Message{Payload: "msg2"}
-
 	ch <- &redis.Message{Payload: "msg3"}
-
 	close(ch)
 
 	ps := &PubSub{}
@@ -1931,7 +1769,6 @@ func TestPubSub_ProcessMessages_ChannelClosed(t *testing.T) {
 	})
 	defer client.Close()
 
-	// Stop monitorConnection to avoid race conditions
 	if client.PubSub.cancel != nil {
 		client.PubSub.cancel()
 		time.Sleep(10 * time.Millisecond)
@@ -1943,9 +1780,7 @@ func TestPubSub_ProcessMessages_ChannelClosed(t *testing.T) {
 	ch := make(chan *redis.Message)
 	close(ch)
 
-	// processMessages should return when channel is closed
 	done := make(chan struct{})
-
 	go func() {
 		client.PubSub.processMessages(ctx, "test-topic", ch)
 		close(done)
@@ -1953,7 +1788,6 @@ func TestPubSub_ProcessMessages_ChannelClosed(t *testing.T) {
 
 	select {
 	case <-done:
-		// Expected - processMessages should return
 	case <-time.After(1 * time.Second):
 		t.Fatal("processMessages did not return when channel closed")
 	}
@@ -1967,7 +1801,6 @@ func TestPubSub_ProcessMessages_NilMessage(t *testing.T) {
 	})
 	defer client.Close()
 
-	// Stop monitorConnection to avoid race conditions
 	if client.PubSub.cancel != nil {
 		client.PubSub.cancel()
 		time.Sleep(10 * time.Millisecond)
@@ -1977,17 +1810,13 @@ func TestPubSub_ProcessMessages_NilMessage(t *testing.T) {
 	defer cancel()
 
 	ch := make(chan *redis.Message, 1)
-	ch <- nil // Send nil message
+	ch <- nil
 
 	go func() {
-		// Send a valid message after nil to allow processMessages to continue
 		time.Sleep(50 * time.Millisecond)
-
 		ch <- &redis.Message{Channel: "test", Payload: "data"}
-
 		time.Sleep(50 * time.Millisecond)
-
-		cancel() // Cancel to stop processing
+		cancel()
 	}()
 
 	client.PubSub.processMessages(ctx, "test-topic", ch)
@@ -2001,28 +1830,24 @@ func TestPubSub_ProcessMessages_ContextDone(t *testing.T) {
 	})
 	defer client.Close()
 
-	// Stop monitorConnection to avoid race conditions
 	if client.PubSub.cancel != nil {
 		client.PubSub.cancel()
 		time.Sleep(10 * time.Millisecond)
 	}
 
 	ctx, cancel := context.WithCancel(context.Background())
-
 	ch := make(chan *redis.Message)
 
 	done := make(chan struct{})
-
 	go func() {
 		client.PubSub.processMessages(ctx, "test-topic", ch)
 		close(done)
 	}()
 
-	cancel() // Cancel context immediately
+	cancel()
 
 	select {
 	case <-done:
-		// Expected
 	case <-time.After(1 * time.Second):
 		t.Fatal("processMessages did not return when context canceled")
 	}
@@ -2050,23 +1875,19 @@ func TestPubSub_DispatchMessage_ContextDone(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	topic := "test-topic"
 
-	// Create channel
 	client.PubSub.mu.Lock()
 	client.PubSub.receiveChan[topic] = make(chan *pubsub.Message, 1)
 	client.PubSub.chanClosed[topic] = false
 	client.PubSub.mu.Unlock()
 
-	// Fill channel to block
 	msg1 := pubsub.NewMessage(ctx)
 	client.PubSub.receiveChan[topic] <- msg1
 
-	// Cancel context and try to dispatch
 	cancel()
 
 	msg2 := pubsub.NewMessage(ctx)
 	client.PubSub.dispatchMessage(ctx, topic, msg2)
 
-	// Cleanup
 	client.PubSub.mu.Lock()
 	close(client.PubSub.receiveChan[topic])
 	delete(client.PubSub.receiveChan, topic)
@@ -2094,7 +1915,6 @@ func TestPubSub_HandleStreamMessage_StringPayload(t *testing.T) {
 		},
 	}
 
-	// Set up receive channel
 	client.PubSub.mu.Lock()
 	client.PubSub.receiveChan[topic] = make(chan *pubsub.Message, 1)
 	client.PubSub.chanClosed[topic] = false
@@ -2102,7 +1922,6 @@ func TestPubSub_HandleStreamMessage_StringPayload(t *testing.T) {
 
 	client.PubSub.handleStreamMessage(ctx, topic, msg, group)
 
-	// Verify message was dispatched
 	select {
 	case received := <-client.PubSub.receiveChan[topic]:
 		require.NotNil(t, received)
@@ -2113,7 +1932,6 @@ func TestPubSub_HandleStreamMessage_StringPayload(t *testing.T) {
 		t.Fatal("message was not dispatched")
 	}
 
-	// Cleanup
 	client.PubSub.mu.Lock()
 	close(client.PubSub.receiveChan[topic])
 	delete(client.PubSub.receiveChan, topic)
@@ -2141,7 +1959,6 @@ func TestPubSub_HandleStreamMessage_BytePayload(t *testing.T) {
 		},
 	}
 
-	// Set up receive channel
 	client.PubSub.mu.Lock()
 	client.PubSub.receiveChan[topic] = make(chan *pubsub.Message, 1)
 	client.PubSub.chanClosed[topic] = false
@@ -2149,7 +1966,6 @@ func TestPubSub_HandleStreamMessage_BytePayload(t *testing.T) {
 
 	client.PubSub.handleStreamMessage(ctx, topic, msg, group)
 
-	// Verify message was dispatched
 	select {
 	case received := <-client.PubSub.receiveChan[topic]:
 		require.NotNil(t, received)
@@ -2159,7 +1975,6 @@ func TestPubSub_HandleStreamMessage_BytePayload(t *testing.T) {
 		t.Fatal("message was not dispatched")
 	}
 
-	// Cleanup
 	client.PubSub.mu.Lock()
 	close(client.PubSub.receiveChan[topic])
 	delete(client.PubSub.receiveChan, topic)
@@ -2182,10 +1997,9 @@ func TestPubSub_HandleStreamMessage_MissingPayload(t *testing.T) {
 
 	msg := &redis.XMessage{
 		ID:     "123-0",
-		Values: map[string]any{}, // No payload key
+		Values: map[string]any{},
 	}
 
-	// Set up receive channel
 	client.PubSub.mu.Lock()
 	client.PubSub.receiveChan[topic] = make(chan *pubsub.Message, 1)
 	client.PubSub.chanClosed[topic] = false
@@ -2193,17 +2007,15 @@ func TestPubSub_HandleStreamMessage_MissingPayload(t *testing.T) {
 
 	client.PubSub.handleStreamMessage(ctx, topic, msg, group)
 
-	// Verify message was dispatched (even without payload)
 	select {
 	case received := <-client.PubSub.receiveChan[topic]:
 		require.NotNil(t, received)
 		assert.Equal(t, topic, received.Topic)
-		assert.Nil(t, received.Value) // No payload
+		assert.Nil(t, received.Value)
 	case <-time.After(100 * time.Millisecond):
 		t.Fatal("message was not dispatched")
 	}
 
-	// Cleanup
 	client.PubSub.mu.Lock()
 	close(client.PubSub.receiveChan[topic])
 	delete(client.PubSub.receiveChan, topic)
@@ -2227,11 +2039,10 @@ func TestPubSub_HandleStreamMessage_UnsupportedPayloadType(t *testing.T) {
 	msg := &redis.XMessage{
 		ID: "123-0",
 		Values: map[string]any{
-			"payload": 12345, // Unsupported type (int)
+			"payload": 12345,
 		},
 	}
 
-	// Set up receive channel
 	client.PubSub.mu.Lock()
 	client.PubSub.receiveChan[topic] = make(chan *pubsub.Message, 1)
 	client.PubSub.chanClosed[topic] = false
@@ -2239,17 +2050,15 @@ func TestPubSub_HandleStreamMessage_UnsupportedPayloadType(t *testing.T) {
 
 	client.PubSub.handleStreamMessage(ctx, topic, msg, group)
 
-	// Verify message was dispatched (payload will be nil for unsupported types)
 	select {
 	case received := <-client.PubSub.receiveChan[topic]:
 		require.NotNil(t, received)
 		assert.Equal(t, topic, received.Topic)
-		assert.Nil(t, received.Value) // Unsupported type results in nil
+		assert.Nil(t, received.Value)
 	case <-time.After(100 * time.Millisecond):
 		t.Fatal("message was not dispatched")
 	}
 
-	// Cleanup
 	client.PubSub.mu.Lock()
 	close(client.PubSub.receiveChan[topic])
 	delete(client.PubSub.receiveChan, topic)

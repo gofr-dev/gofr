@@ -73,9 +73,8 @@ type StreamsConfig struct {
 
 type Redis struct {
 	*redis.Client
-	logger  datasource.Logger
-	config  *Config
-	metrics Metrics
+	logger datasource.Logger
+	config *Config
 }
 
 // PubSub handles Redis PubSub operations.
@@ -142,10 +141,9 @@ func NewClient(c config.Config, logger datasource.Logger, metrics Metrics) *Redi
 	}
 
 	r := &Redis{
-		Client:  rc,
-		config:  redisConfig,
-		logger:  logger,
-		metrics: metrics,
+		Client: rc,
+		config: redisConfig,
+		logger: logger,
 	}
 
 	return r

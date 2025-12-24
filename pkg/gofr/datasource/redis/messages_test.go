@@ -27,7 +27,6 @@ func TestPubSubMessage_Commit(t *testing.T) {
 	ctx := context.Background()
 	topic := "pubsub-commit-topic"
 
-	// Start subscription first to ensure it's ready
 	msgChan := make(chan *pubsub.Message)
 	errChan := make(chan error)
 
@@ -41,14 +40,11 @@ func TestPubSubMessage_Commit(t *testing.T) {
 		msgChan <- msg
 	}()
 
-	// Wait a bit for subscription to be ready
 	time.Sleep(100 * time.Millisecond)
 
-	// Then publish the message
 	err := client.PubSub.Publish(ctx, topic, []byte("test"))
 	require.NoError(t, err)
 
-	// Wait for message with timeout
 	select {
 	case err := <-errChan:
 		require.NoError(t, err)
@@ -56,7 +52,6 @@ func TestPubSubMessage_Commit(t *testing.T) {
 		require.NotNil(t, msg)
 		require.NotNil(t, msg.Committer)
 
-		// Commit should not panic
 		assert.NotPanics(t, func() {
 			msg.Committer.Commit()
 		})
@@ -163,7 +158,6 @@ func TestStreamMessage_Commit_Success(t *testing.T) {
 
 	mock.ExpectXAck(stream, group, id).SetVal(1)
 
-	// Test stream message commit through actual stream subscription
 	client, s := setupTest(t, map[string]string{
 		"REDIS_PUBSUB_MODE":            "streams",
 		"REDIS_STREAMS_CONSUMER_GROUP": group,
@@ -173,7 +167,6 @@ func TestStreamMessage_Commit_Success(t *testing.T) {
 
 	ctx := context.Background()
 
-	// Create topic and publish
 	err := client.PubSub.CreateTopic(ctx, stream)
 	require.NoError(t, err)
 
@@ -181,13 +174,11 @@ func TestStreamMessage_Commit_Success(t *testing.T) {
 		_ = client.PubSub.Publish(ctx, stream, []byte("test"))
 	}()
 
-	// Subscribe to get message with committer
 	msg, err := client.PubSub.Subscribe(ctx, stream)
 	require.NoError(t, err)
 	require.NotNil(t, msg)
 	require.NotNil(t, msg.Committer)
 
-	// Commit should not panic
 	assert.NotPanics(t, func() {
 		msg.Committer.Commit()
 	})
@@ -196,7 +187,6 @@ func TestStreamMessage_Commit_Success(t *testing.T) {
 func TestStreamMessage_Commit_Error(t *testing.T) {
 	t.Parallel()
 
-	// Test stream message commit error handling
 	client, s := setupTest(t, map[string]string{
 		"REDIS_PUBSUB_MODE":            "streams",
 		"REDIS_STREAMS_CONSUMER_GROUP": "test-group",
@@ -207,7 +197,6 @@ func TestStreamMessage_Commit_Error(t *testing.T) {
 	ctx := context.Background()
 	stream := "test-stream-error"
 
-	// Create topic and publish
 	err := client.PubSub.CreateTopic(ctx, stream)
 	require.NoError(t, err)
 
@@ -215,16 +204,13 @@ func TestStreamMessage_Commit_Error(t *testing.T) {
 		_ = client.PubSub.Publish(ctx, stream, []byte("test"))
 	}()
 
-	// Subscribe to get message
 	msg, err := client.PubSub.Subscribe(ctx, stream)
 	require.NoError(t, err)
 	require.NotNil(t, msg)
 	require.NotNil(t, msg.Committer)
 
-	// Close Redis to simulate error
 	s.Close()
 
-	// Commit should handle error gracefully
 	assert.NotPanics(t, func() {
 		msg.Committer.Commit()
 	})
@@ -233,7 +219,6 @@ func TestStreamMessage_Commit_Error(t *testing.T) {
 func TestStreamMessage_Commit_Timeout(t *testing.T) {
 	t.Parallel()
 
-	// Test stream message commit with timeout
 	client, s := setupTest(t, map[string]string{
 		"REDIS_PUBSUB_MODE":            "streams",
 		"REDIS_STREAMS_CONSUMER_GROUP": "test-group",
@@ -244,7 +229,6 @@ func TestStreamMessage_Commit_Timeout(t *testing.T) {
 	ctx := context.Background()
 	stream := "test-stream-timeout"
 
-	// Create topic and publish
 	err := client.PubSub.CreateTopic(ctx, stream)
 	require.NoError(t, err)
 
@@ -252,13 +236,11 @@ func TestStreamMessage_Commit_Timeout(t *testing.T) {
 		_ = client.PubSub.Publish(ctx, stream, []byte("test"))
 	}()
 
-	// Subscribe to get message
 	msg, err := client.PubSub.Subscribe(ctx, stream)
 	require.NoError(t, err)
 	require.NotNil(t, msg)
 	require.NotNil(t, msg.Committer)
 
-	// Commit should handle timeout gracefully (uses defaultRetryTimeout internally)
 	assert.NotPanics(t, func() {
 		msg.Committer.Commit()
 	})
