@@ -16,15 +16,12 @@ import (
 )
 
 const (
-	defaultRedisPort        = 6379
-	defaultPubSubDB         = 15 // Highest default Redis database (0-15)
-	modePubSub              = "pubsub"
-	modeStreams             = "streams"
-	defaultPubSubBufferSize = 100
-	defaultPubSubQueryLimit = 10
-)
-
-const (
+	defaultRedisPort          = 6379
+	defaultPubSubDB           = 15 // Highest default Redis database (0-15)
+	modePubSub                = "pubsub"
+	modeStreams               = "streams"
+	defaultPubSubBufferSize   = 100
+	defaultPubSubQueryLimit   = 10
 	defaultPubSubQueryTimeout = 5 * time.Second
 )
 
@@ -113,10 +110,7 @@ func parsePubSubConfig(c config.Config, redisConfig *Config) {
 
 // parsePubSubMode parses the PubSub mode configuration.
 func parsePubSubMode(c config.Config, redisConfig *Config) {
-	mode := strings.ToLower(c.Get("REDIS_PUBSUB_MODE"))
-	if mode == "" {
-		mode = modeStreams
-	}
+	mode := strings.ToLower(c.GetOrDefault("REDIS_PUBSUB_MODE", modeStreams))
 
 	if mode != modeStreams && mode != modePubSub {
 		mode = modeStreams
@@ -132,54 +126,35 @@ func parsePubSubMode(c config.Config, redisConfig *Config) {
 
 // parsePubSubCommonConfig parses common PubSub configuration (buffer size, query timeout, query limit).
 func parsePubSubCommonConfig(c config.Config, redisConfig *Config) {
-	redisConfig.PubSubBufferSize = parseBufferSize(c)
-	redisConfig.PubSubQueryTimeout = parseQueryTimeout(c)
-	redisConfig.PubSubQueryLimit = parseQueryLimit(c)
-}
-
-// parseBufferSize parses the PubSub buffer size configuration.
-func parseBufferSize(c config.Config) int {
-	bufferSizeStr := c.Get("REDIS_PUBSUB_BUFFER_SIZE")
-	if bufferSizeStr == "" {
-		return defaultPubSubBufferSize
-	}
+	// Buffer Size
+	bufferSizeStr := c.GetOrDefault("REDIS_PUBSUB_BUFFER_SIZE", strconv.Itoa(defaultPubSubBufferSize))
 
 	bufferSize, err := strconv.Atoi(bufferSizeStr)
 	if err != nil || bufferSize <= 0 {
-		return defaultPubSubBufferSize
+		redisConfig.PubSubBufferSize = defaultPubSubBufferSize
+	} else {
+		redisConfig.PubSubBufferSize = bufferSize
 	}
 
-	return bufferSize
-}
-
-// parseQueryTimeout parses the PubSub query timeout configuration.
-func parseQueryTimeout(c config.Config) time.Duration {
-	timeoutStr := c.Get("REDIS_PUBSUB_QUERY_TIMEOUT")
-	if timeoutStr == "" {
-		return defaultPubSubQueryTimeout
-	}
+	// Query Timeout
+	timeoutStr := c.GetOrDefault("REDIS_PUBSUB_QUERY_TIMEOUT", defaultPubSubQueryTimeout.String())
 
 	timeout, err := time.ParseDuration(timeoutStr)
 	if err != nil {
-		return defaultPubSubQueryTimeout
+		redisConfig.PubSubQueryTimeout = defaultPubSubQueryTimeout
+	} else {
+		redisConfig.PubSubQueryTimeout = timeout
 	}
 
-	return timeout
-}
-
-// parseQueryLimit parses the PubSub query limit configuration.
-func parseQueryLimit(c config.Config) int {
-	limitStr := c.Get("REDIS_PUBSUB_QUERY_LIMIT")
-	if limitStr == "" {
-		return defaultPubSubQueryLimit
-	}
+	// Query Limit
+	limitStr := c.GetOrDefault("REDIS_PUBSUB_QUERY_LIMIT", strconv.Itoa(defaultPubSubQueryLimit))
 
 	limit, err := strconv.Atoi(limitStr)
 	if err != nil || limit <= 0 {
-		return defaultPubSubQueryLimit
+		redisConfig.PubSubQueryLimit = defaultPubSubQueryLimit
+	} else {
+		redisConfig.PubSubQueryLimit = limit
 	}
-
-	return limit
 }
 
 func configStreams(c config.Config, redisConfig *Config) {

@@ -226,15 +226,7 @@ func NewPubSub(conf config.Config, logger datasource.Logger, metrics Metrics) pu
 
 // setPubSubDB sets the PubSub database number from config or defaults to 15.
 func setPubSubDB(conf config.Config, redisConfig *Config) {
-	dbStr := conf.Get("REDIS_PUBSUB_DB")
-	if dbStr == "" {
-		redisConfig.DB = defaultPubSubDB
-		if redisConfig.Options != nil {
-			redisConfig.Options.DB = defaultPubSubDB
-		}
-
-		return
-	}
+	dbStr := conf.GetOrDefault("REDIS_PUBSUB_DB", strconv.Itoa(defaultPubSubDB))
 
 	db, err := strconv.Atoi(dbStr)
 	if err != nil || db < 0 {
