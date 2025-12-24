@@ -169,6 +169,8 @@ func main() {
 
 RBAC uses **gorilla/mux route pattern conventions** for endpoint matching. This ensures perfect alignment with how routes are registered in GoFr.
 
+**Important**: The RBAC middleware uses the same router configuration as GoFr's application router (`StrictSlash(false)`), ensuring consistent behavior for trailing slashes. This means `/api/users` and `/api/users/` are treated as the same route in both RBAC authorization checks and actual route matching.
+
 **Pattern Types**:
 - **Exact**: `"/api/users"` matches exactly `/api/users`
 - **Single Variable**: `"/api/users/{id}"` matches `/api/users/123`, `/api/users/abc` (any single segment)
@@ -228,10 +230,9 @@ For business logic, you can access the user's role from the request context:
 ```go
 import (
 	"encoding/json"
-	"errors"
-	"fmt"
 	
 	"gofr.dev/pkg/gofr"
+	"gofr.dev/pkg/gofr/http"
 )
 
 // JWTClaims represents the JWT claims structure
@@ -245,18 +246,18 @@ func handler(ctx *gofr.Context) (interface{}, error) {
 	// Get JWT claims from context
 	claimsMap := ctx.GetAuthInfo().GetClaims()
 	if claimsMap == nil {
-		return nil, errors.New("JWT claims not found")
+		return nil, http.ErrorInvalidParam{Params: []string{"authorization"}}
 	}
 	
 	// Convert map claims to struct (recommended GoFr pattern)
 	var claims JWTClaims
 	claimsBytes, err := json.Marshal(claimsMap)
 	if err != nil {
-		return nil, fmt.Errorf("failed to marshal claims: %w", err)
+		return nil, http.ErrorInvalidParam{Params: []string{"claims"}}
 	}
 	
 	if err := json.Unmarshal(claimsBytes, &claims); err != nil {
-		return nil, fmt.Errorf("failed to unmarshal claims: %w", err)
+		return nil, http.ErrorInvalidParam{Params: []string{"claims"}}
 	}
 	
 	// Use role for business logic (e.g., personalize UI, filter data)
