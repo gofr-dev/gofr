@@ -672,12 +672,22 @@ func TestPubSub_StreamSubscribeErrors(t *testing.T) {
 	})
 	defer client.Close()
 
+	// Stop monitorConnection to avoid extra Ping calls
+	if client.PubSub.cancel != nil {
+		client.PubSub.cancel()
+		time.Sleep(10 * time.Millisecond)
+	}
+
 	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
 	defer cancel()
 
 	topic := "mock-sub-err"
 
+	// Expect Ping for isConnected() check in Subscribe()
 	mock.ExpectPing().SetVal("PONG")
+	// Expect XInfoGroups for checkGroupExists() in ensureConsumerGroup()
+	mock.ExpectXInfoGroups(topic).SetVal([]redis.XInfoGroup{})
+	// Expect XGroupCreateMkStream which will return an error
 	mock.ExpectXGroupCreateMkStream(topic, "mock-sub-grp", "$").SetErr(errMockGroupCreate)
 
 	msg, err := client.PubSub.Subscribe(ctx, topic)
@@ -695,6 +705,12 @@ func TestPubSub_MockQueryDeleteErrors(t *testing.T) {
 		"REDIS_STREAMS_CONSUMER_GROUP": "mock-grp",
 	})
 	defer client.Close()
+
+	// Stop monitorConnection to avoid extra Ping calls
+	if client.PubSub.cancel != nil {
+		client.PubSub.cancel()
+		time.Sleep(10 * time.Millisecond)
+	}
 
 	ctx := context.Background()
 	topic := "mock-query-err"
@@ -1272,6 +1288,7 @@ func TestPubSub_SubscribeToChannel_NilPubSub(t *testing.T) {
 	cancel()
 
 	done := make(chan struct{})
+
 	go func() {
 		client.PubSub.subscribeToChannel(ctx, "test-topic")
 		close(done)
@@ -1304,6 +1321,7 @@ func TestPubSub_SubscribeToChannel_NilChannel(t *testing.T) {
 	close(ch)
 
 	done := make(chan struct{})
+
 	go func() {
 		client.PubSub.processMessages(ctx, "test-topic", ch)
 		close(done)
@@ -1449,6 +1467,7 @@ func TestPubSub_CleanupSubscription_ChannelNotClosed(t *testing.T) {
 	topic := "test-topic"
 
 	client.PubSub.mu.Lock()
+
 	ch := make(chan *pubsub.Message, 1)
 	client.PubSub.receiveChan[topic] = ch
 	client.PubSub.chanClosed[topic] = false
@@ -1477,6 +1496,7 @@ func TestPubSub_CleanupSubscription_ChannelAlreadyClosed(t *testing.T) {
 	topic := "test-topic"
 
 	client.PubSub.mu.Lock()
+
 	ch := make(chan *pubsub.Message)
 	close(ch)
 	client.PubSub.receiveChan[topic] = ch
@@ -1739,9 +1759,12 @@ func TestPubSub_CollectMessages_ChannelClosed(t *testing.T) {
 
 func TestPubSub_CollectMessages_NilMessage(t *testing.T) {
 	ctx := context.Background()
+
 	ch := make(chan *redis.Message, 2)
 	ch <- nil
+
 	ch <- &redis.Message{Payload: "msg1"}
+
 	close(ch)
 
 	ps := &PubSub{}
@@ -1751,10 +1774,14 @@ func TestPubSub_CollectMessages_NilMessage(t *testing.T) {
 
 func TestPubSub_CollectMessages_ReachesLimit(t *testing.T) {
 	ctx := context.Background()
+
 	ch := make(chan *redis.Message, 3)
 	ch <- &redis.Message{Payload: "msg1"}
+
 	ch <- &redis.Message{Payload: "msg2"}
+
 	ch <- &redis.Message{Payload: "msg3"}
+
 	close(ch)
 
 	ps := &PubSub{}
@@ -1781,6 +1808,7 @@ func TestPubSub_ProcessMessages_ChannelClosed(t *testing.T) {
 	close(ch)
 
 	done := make(chan struct{})
+
 	go func() {
 		client.PubSub.processMessages(ctx, "test-topic", ch)
 		close(done)
@@ -1814,7 +1842,9 @@ func TestPubSub_ProcessMessages_NilMessage(t *testing.T) {
 
 	go func() {
 		time.Sleep(50 * time.Millisecond)
+
 		ch <- &redis.Message{Channel: "test", Payload: "data"}
+
 		time.Sleep(50 * time.Millisecond)
 		cancel()
 	}()
@@ -1839,6 +1869,7 @@ func TestPubSub_ProcessMessages_ContextDone(t *testing.T) {
 	ch := make(chan *redis.Message)
 
 	done := make(chan struct{})
+
 	go func() {
 		client.PubSub.processMessages(ctx, "test-topic", ch)
 		close(done)
