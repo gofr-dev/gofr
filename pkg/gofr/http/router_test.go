@@ -179,32 +179,6 @@ func TestRouter_DoubleSlashPath_POST(t *testing.T) {
 	}
 }
 
-// TestRouter_PathNormalization tests the path normalization function directly.
-func TestRouter_PathNormalization(t *testing.T) {
-	tests := []struct {
-		input    string
-		expected string
-	}{
-		{input: "/hello", expected: "/hello"},
-		{input: "//hello", expected: "/hello"},
-		{input: "///hello", expected: "/hello"},
-		{input: "/hello//world", expected: "/hello/world"},
-		{input: "//hello//world//", expected: "/hello/world/"},
-		{input: "/", expected: "/"},
-		{input: "//", expected: "/"},
-		{input: "///", expected: "/"},
-		{input: "", expected: "/"},
-		{input: "/api//v1///users", expected: "/api/v1/users"},
-	}
-
-	for _, tc := range tests {
-		t.Run(tc.input, func(t *testing.T) {
-			result := normalizePathSlashes(tc.input)
-			assert.Equal(t, tc.expected, result, "Path normalization failed")
-		})
-	}
-}
-
 func Test_StaticFileServing_Static(t *testing.T) {
 	tempDir := t.TempDir()
 
