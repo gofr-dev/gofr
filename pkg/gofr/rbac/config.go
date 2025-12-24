@@ -160,7 +160,8 @@ func LoadPermissions(path string, logger datasource.Logger, metrics container.Me
 	config.Tracer = tracer
 
 	// Initialize mux router for pattern matching
-	config.muxRouter = mux.NewRouter()
+	// Use StrictSlash(false) to match the application router's behavior
+	config.muxRouter = mux.NewRouter().StrictSlash(false)
 
 	// Register metrics if provided
 	if metrics != nil {
@@ -291,7 +292,8 @@ func (c *Config) initializeMaps() {
 	c.endpointPermissionMap = make(map[string][]string)
 	c.publicEndpointsMap = make(map[string]bool)
 	c.endpointMap = make(map[string]*EndpointMapping)
-	c.muxRouter = mux.NewRouter()
+	// Use StrictSlash(false) to match the application router's behavior
+	c.muxRouter = mux.NewRouter().StrictSlash(false)
 }
 
 // buildRolePermissionsMap builds the role permissions map from Roles.
