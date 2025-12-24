@@ -67,20 +67,22 @@ func normalizePathSlashes(path string) string {
 		return "/"
 	}
 
-	// Use strings.Builder for efficient string construction
 	var normalized strings.Builder
 	normalized.Grow(len(path))
 
 	prevSlash := false
+
 	for i := 0; i < len(path); i++ {
 		if path[i] == '/' {
 			if !prevSlash {
 				normalized.WriteByte('/')
+
 				prevSlash = true
 			}
 			// Skip consecutive slashes
 		} else {
 			normalized.WriteByte(path[i])
+
 			prevSlash = false
 		}
 	}
