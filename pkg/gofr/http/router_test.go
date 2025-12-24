@@ -128,6 +128,58 @@ func TestRouter_DoubleSlashPath_GET(t *testing.T) {
 	}
 }
 
+// TestRouter_PathNormalization tests the path normalization function directly.
+func TestRouter_PathNormalization(t *testing.T) {
+	router := NewRouter()
+
+	// Register handlers for testing
+	router.Add(http.MethodGet, "/hello", http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte("hello"))
+	}))
+
+	router.Add(http.MethodGet, "/api/v1/users", http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte("users"))
+	}))
+
+	router.Add(http.MethodGet, "/bar", http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte("bar"))
+	}))
+
+	tests := []struct {
+		name         string
+		input        string
+		expectedCode int
+		expectedBody string
+	}{
+		{name: "simple path", input: "/hello", expectedCode: http.StatusOK, expectedBody: "hello"},
+		{name: "double slash", input: "//hello", expectedCode: http.StatusOK, expectedBody: "hello"},
+		{name: "triple slash", input: "///hello", expectedCode: http.StatusOK, expectedBody: "hello"},
+		{name: "multiple slashes in middle", input: "/api//v1///users", expectedCode: http.StatusOK, expectedBody: "users"},
+		{name: "current directory dot", input: "/.", expectedCode: http.StatusNotFound, expectedBody: "404 page not found\n"},
+		{name: "parent directory", input: "/..", expectedCode: http.StatusNotFound, expectedBody: "404 page not found\n"},
+		{name: "relative path no leading slash", input: "/hello", expectedCode: http.StatusOK, expectedBody: "hello"},
+		{name: "parent directory traversal", input: "/foo/../bar", expectedCode: http.StatusOK, expectedBody: "bar"},
+		{name: "parent directory with relative path", input: "/../hello", expectedCode: http.StatusOK, expectedBody: "hello"},
+		{name: "root path", input: "/", expectedCode: http.StatusNotFound, expectedBody: "404 page not found\n"},
+		{name: "empty path", input: "/", expectedCode: http.StatusNotFound, expectedBody: "404 page not found\n"},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			req := httptest.NewRequest(http.MethodGet, tc.input, http.NoBody)
+			rec := httptest.NewRecorder()
+
+			router.ServeHTTP(rec, req)
+
+			assert.Equal(t, tc.expectedCode, rec.Code, "Status code mismatch")
+			assert.Equal(t, tc.expectedBody, rec.Body.String(), "Response body mismatch")
+		})
+	}
+}
+
 // TestRouter_DoubleSlashPath_POST verifies that POST requests with double slashes
 // are normalized and routed correctly to the POST handler.
 func TestRouter_DoubleSlashPath_POST(t *testing.T) {
