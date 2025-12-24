@@ -48,6 +48,7 @@ func TestRedis_QueryLogging(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
+	// Mock Redis server setup
 	s, err := miniredis.Run()
 	require.NoError(t, err)
 
@@ -73,6 +74,7 @@ func TestRedis_QueryLogging(t *testing.T) {
 		assert.Equal(t, "OK", result)
 	})
 
+	// Assertions
 	assert.Contains(t, result, "ping")
 	assert.Contains(t, result, "set key value ex 60")
 }
@@ -81,6 +83,7 @@ func TestRedis_PipelineQueryLogging(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
+	// Mock Redis server setup
 	s, err := miniredis.Run()
 	require.NoError(t, err)
 
@@ -90,6 +93,7 @@ func TestRedis_PipelineQueryLogging(t *testing.T) {
 	mockMetric.EXPECT().RecordHistogram(gomock.Any(), "app_redis_stats", gomock.Any(),
 		"hostname", gomock.Any(), "type", gomock.Any()).AnyTimes()
 
+	// Execute Redis pipeline
 	result := testutil.StdoutOutputForFunc(func() {
 		mockLogger := logging.NewMockLogger(logging.DEBUG)
 		client := NewClient(config.NewMockConfig(map[string]string{
@@ -99,13 +103,16 @@ func TestRedis_PipelineQueryLogging(t *testing.T) {
 
 		require.NoError(t, err)
 
+		// Pipeline execution
 		pipe := client.Pipeline()
 		setCmd := pipe.Set(t.Context(), "key1", "value1", 1*time.Minute)
 		getCmd := pipe.Get(t.Context(), "key1")
 
+		// Pipeline Exec should return a non-nil error
 		_, err = pipe.Exec(t.Context())
 		require.NoError(t, err)
 
+		// Retrieve results
 		setResult, err := setCmd.Result()
 		require.NoError(t, err)
 		assert.Equal(t, "OK", setResult)
@@ -115,6 +122,7 @@ func TestRedis_PipelineQueryLogging(t *testing.T) {
 		assert.Equal(t, "value1", getResult)
 	})
 
+	// Assertions
 	assert.Contains(t, result, "ping")
 	assert.Contains(t, result, "set key1 value1 ex 60: OK")
 }
@@ -123,11 +131,13 @@ func TestRedis_Close(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
+	// Mock Redis server setup
 	s, err := miniredis.Run()
 	require.NoError(t, err)
 
 	defer s.Close()
 
+	// Mock metrics setup
 	mockMetric := NewMockMetrics(ctrl)
 	mockMetric.EXPECT().RecordHistogram(gomock.Any(), "app_redis_stats", gomock.Any(), "hostname",
 		gomock.Any(), "type", gomock.Any()).AnyTimes()

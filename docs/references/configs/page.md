@@ -422,7 +422,7 @@ This document lists all the configuration options supported by the GoFr framewor
 ---
 
 - REDIS_STREAMS_BLOCK_TIMEOUT
-- Blocking duration for reading new messages. Enables efficient message consumption by allowing Redis to push messages immediately when available, avoiding constant polling. Lower values (1s-2s) provide faster detection but increase CPU usage. Higher values (10s-30s) reduce CPU usage, ideal for batch processing.
+- Blocking duration for reading new messages using Redis `XREADGROUP`. Lower values (1s-2s) provide faster detection but increase CPU usage. Higher values (10s-30s) reduce CPU usage, ideal for batch processing.
 -  5s
 
 ---
@@ -434,7 +434,9 @@ This document lists all the configuration options supported by the GoFr framewor
 {% /table %}
 
 > If `REDIS_PUBSUB_MODE` is set to anything other than `streams` or `pubsub`, it falls back to `streams`.
-> If you are using GoFr migrations with Redis and Redis PubSub Streams mode together, set `REDIS_PUBSUB_DB` to a different DB than `REDIS_DB` to avoid `WRONGTYPE` errors on the `gofr_migrations` key.
+> If you are using GoFr migrations with Redis and Redis PubSub Streams mode together, set `REDIS_PUBSUB_DB` to a different DB than `REDIS_DB` to avoid `WRONGTYPE` errors on the `gofr_migrations` key. By default, `REDIS_DB` is `0` and `REDIS_PUBSUB_DB` is `15` (highest default Redis database), so they are already separated. If you change `REDIS_DB` from the default, ensure `REDIS_PUBSUB_DB` is set to a different DB index.
+
+> **Note on `REDIS_STREAMS_BLOCK_TIMEOUT`**: This configuration controls how long the consumer blocks waiting for new messages using Redis `XREADGROUP` before the call times out and retries. **Benefits of configuring this:** (1) **Resource efficiency** - Without blocking, consumers would constantly poll Redis, wasting CPU cycles and network bandwidth. Blocking allows Redis to push messages immediately when available. (2) **Latency vs CPU trade-off** - Lower values (e.g., `1s-2s`) provide faster message detection but increase CPU from frequent timeouts. Higher values (e.g., `10s-30s`) reduce CPU usage and network round-trips but may delay processing. (3) **Cost optimization** - In cloud/serverless environments, reducing CPU usage directly reduces costs. (4) **Battery efficiency** - Important for mobile/edge deployments where power consumption matters. Choose based on your latency requirements: real-time systems may use `1s-2s`, while batch processing can use `10s-30s`.
 
 ### Pub/Sub
 

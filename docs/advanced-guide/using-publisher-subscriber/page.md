@@ -434,7 +434,7 @@ The following configs apply specifically to Redis Pub/Sub behavior. For base Red
 ---
 
 - `REDIS_STREAMS_BLOCK_TIMEOUT`
-- Block duration for stream reads using Redis `XREADGROUP`. This controls how long the consumer blocks waiting for new messages before the Redis call times out and retries. **Benefits of configuring this:** (1) **Resource efficiency** - Without blocking, consumers would constantly poll Redis, wasting CPU cycles and network bandwidth. Blocking allows Redis to push messages immediately when available. (2) **Latency vs CPU trade-off** - Lower values (e.g., `1s-2s`) provide faster message detection but increase CPU from frequent timeouts. Higher values (e.g., `10s-30s`) reduce CPU usage and network round-trips but may delay processing. (3) **Cost optimization** - In cloud/serverless environments, reducing CPU usage directly reduces costs. (4) **Battery efficiency** - Important for mobile/edge deployments where power consumption matters. Choose based on your latency requirements: real-time systems may use `1s-2s`, while batch processing can use `10s-30s`.
+- Block duration for stream reads using Redis `XREADGROUP`. Controls how long the consumer blocks waiting for new messages before timing out. Lower values (1s-2s) provide faster detection but increase CPU usage. Higher values (10s-30s) reduce CPU usage, ideal for batch processing.
 - `5s`
 - `2s` (low latency) or `30s` (low CPU)
 
@@ -498,7 +498,9 @@ docker run -d \
 > **Important**: If you are using **GoFr migrations** with **Redis** and also using **Redis Pub/Sub in Streams mode**, do not use the same Redis logical DB for both.
 > GoFr stores Redis migration state in a Redis **HASH** named `gofr_migrations`, while Redis Streams mode uses a Redis **STREAM** key for topics (including the PubSub migration topic `gofr_migrations`).
 > If both clients share the same DB, migrations can fail with `WRONGTYPE` errors.
-> Set `REDIS_PUBSUB_DB` to a different DB index (for example, `REDIS_DB=0` and `REDIS_PUBSUB_DB=1`).
+> By default, `REDIS_DB` is `0` and `REDIS_PUBSUB_DB` is `15` (highest default Redis database), so they are already separated. If you change `REDIS_DB` from the default, ensure `REDIS_PUBSUB_DB` is set to a different DB index (for example, `REDIS_DB=0` and `REDIS_PUBSUB_DB=1`).
+
+> **Note on `REDIS_STREAMS_BLOCK_TIMEOUT`**: This configuration controls how long the consumer blocks waiting for new messages using Redis `XREADGROUP` before the call times out and retries. **Benefits of configuring this:** (1) **Resource efficiency** - Without blocking, consumers would constantly poll Redis, wasting CPU cycles and network bandwidth. Blocking allows Redis to push messages immediately when available. (2) **Latency vs CPU trade-off** - Lower values (e.g., `1s-2s`) provide faster message detection but increase CPU from frequent timeouts. Higher values (e.g., `10s-30s`) reduce CPU usage and network round-trips but may delay processing. (3) **Cost optimization** - In cloud/serverless environments, reducing CPU usage directly reduces costs. (4) **Battery efficiency** - Important for mobile/edge deployments where power consumption matters. Choose based on your latency requirements: real-time systems may use `1s-2s`, while batch processing can use `10s-30s`.
 
 ### Azure Event Hubs
 GoFr supports Event Hubs starting gofr version v1.22.0.

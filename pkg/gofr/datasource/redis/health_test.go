@@ -56,7 +56,7 @@ func TestPubSub_HealthDetails(t *testing.T) {
 	h := client.PubSub.Health()
 	assert.Equal(t, datasource.StatusUp, h.Status)
 	assert.Equal(t, "REDIS", h.Details["backend"])
-	assert.Equal(t, "localhost:6380", h.Details["addr"])
+	assert.Equal(t, "localhost:6380", h.Details["host"])
 	assert.Equal(t, "pubsub", h.Details["mode"])
 
 	assert.NoError(t, mock.ExpectationsWereMet())

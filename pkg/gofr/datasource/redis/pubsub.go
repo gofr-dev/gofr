@@ -44,15 +44,25 @@ func (ps *PubSub) Publish(ctx context.Context, topic string, message []byte) err
 
 // publishToChannel publishes a message to a Redis PubSub channel.
 func (ps *PubSub) publishToChannel(ctx context.Context, topic string, message []byte, span trace.Span) error {
+	start := time.Now()
 	err := ps.client.Publish(ctx, topic, message).Err()
+	end := time.Since(start)
+
 	if err != nil {
 		ps.logger.Errorf("failed to publish message to Redis channel '%s': %v", topic, err)
 		return err
 	}
 
-	traceID := span.SpanContext().TraceID().String()
 	addr := fmt.Sprintf("%s:%d", ps.config.HostName, ps.config.Port)
-	ps.logger.Debugf("PUB %s %s %s", topic, traceID, addr)
+	ps.logger.Debug(&pubsub.Log{
+		Mode:          "PUB",
+		CorrelationID: span.SpanContext().TraceID().String(),
+		MessageValue:  string(message),
+		Topic:         topic,
+		Host:          addr,
+		PubSubBackend: "REDIS",
+		Time:          end.Microseconds(),
+	})
 	ps.metrics.IncrementCounter(ctx, "app_pubsub_publish_success_count", "topic", topic)
 
 	return nil
@@ -70,15 +80,25 @@ func (ps *PubSub) publishToStream(ctx context.Context, topic string, message []b
 		args.Approx = true
 	}
 
+	start := time.Now()
 	_, err := ps.client.XAdd(ctx, args).Result()
+	end := time.Since(start)
+
 	if err != nil {
 		ps.logger.Errorf("failed to publish message to Redis stream '%s': %v", topic, err)
 		return err
 	}
 
-	traceID := span.SpanContext().TraceID().String()
 	addr := fmt.Sprintf("%s:%d", ps.config.HostName, ps.config.Port)
-	ps.logger.Debugf("PUB %s %s %s", topic, traceID, addr)
+	ps.logger.Debug(&pubsub.Log{
+		Mode:          "PUB",
+		CorrelationID: span.SpanContext().TraceID().String(),
+		MessageValue:  string(message),
+		Topic:         topic,
+		Host:          addr,
+		PubSubBackend: "REDIS",
+		Time:          end.Microseconds(),
+	})
 	ps.metrics.IncrementCounter(ctx, "app_pubsub_publish_success_count", "topic", topic)
 
 	return nil
@@ -103,11 +123,28 @@ func (ps *PubSub) Subscribe(ctx context.Context, topic string) (*pubsub.Message,
 	spanCtx, span := ps.tracer.Start(ctx, "redis-subscribe")
 	defer span.End()
 
-	ps.metrics.IncrementCounter(spanCtx, "app_pubsub_subscribe_total_count", "topic", topic)
+	// Determine mode and consumer group for metrics
+	mode := ps.config.PubSubMode
+	if mode == "" {
+		mode = modeStreams
+	}
 
+	var consumerGroup string
+	if mode == modeStreams && ps.config.PubSubStreamsConfig != nil {
+		consumerGroup = ps.config.PubSubStreamsConfig.ConsumerGroup
+	}
+
+	// Increment subscribe total count with consumer_group label if using streams
+	if consumerGroup != "" {
+		ps.metrics.IncrementCounter(spanCtx, "app_pubsub_subscribe_total_count", "topic", topic, "consumer_group", consumerGroup)
+	} else {
+		ps.metrics.IncrementCounter(spanCtx, "app_pubsub_subscribe_total_count", "topic", topic)
+	}
+
+	start := time.Now()
 	msgChan := ps.ensureSubscription(ctx, topic)
 
-	msg := ps.waitForMessage(ctx, spanCtx, span, topic, msgChan)
+	msg := ps.waitForMessage(ctx, spanCtx, span, topic, msgChan, start, consumerGroup)
 
 	return msg, nil
 }
@@ -175,15 +212,28 @@ func (ps *PubSub) ensureSubscription(_ context.Context, topic string) chan *pubs
 
 // waitForMessage waits for a message from the channel.
 func (ps *PubSub) waitForMessage(ctx context.Context, spanCtx context.Context, span trace.Span,
-	topic string, msgChan chan *pubsub.Message) *pubsub.Message {
+	topic string, msgChan chan *pubsub.Message, start time.Time, consumerGroup string) *pubsub.Message {
 	select {
 	case msg := <-msgChan:
-		ps.metrics.IncrementCounter(spanCtx, "app_pubsub_subscribe_success_count", "topic", topic)
+		// Increment subscribe success count with consumer_group label if using streams
+		if consumerGroup != "" {
+			ps.metrics.IncrementCounter(spanCtx, "app_pubsub_subscribe_success_count", "topic", topic, "consumer_group", consumerGroup)
+		} else {
+			ps.metrics.IncrementCounter(spanCtx, "app_pubsub_subscribe_success_count", "topic", topic)
+		}
 
 		if msg != nil {
-			traceID := span.SpanContext().TraceID().String()
+			end := time.Since(start)
 			addr := fmt.Sprintf("%s:%d", ps.config.HostName, ps.config.Port)
-			ps.logger.Debugf("SUB %s %s %s", topic, traceID, addr)
+			ps.logger.Debug(&pubsub.Log{
+				Mode:          "SUB",
+				CorrelationID: span.SpanContext().TraceID().String(),
+				MessageValue:  string(msg.Value),
+				Topic:         topic,
+				Host:          addr,
+				PubSubBackend: "REDIS",
+				Time:          end.Microseconds(),
+			})
 		}
 
 		return msg

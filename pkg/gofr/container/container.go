@@ -38,6 +38,11 @@ import (
 	"gofr.dev/pkg/gofr/websocket"
 )
 
+const (
+	redisPubSubModeStreams = "streams"
+	redisPubSubModePubSub  = "pubsub"
+)
+
 // Container is a collection of all common application level concerns. Things like Logger, Connection Pool for Redis
 // etc. which is shared across is placed here.
 type Container struct {
@@ -322,6 +327,13 @@ func (c *Container) createKafkaPubSub(conf config.Config) {
 	}
 
 	partition, _ := strconv.Atoi(conf.GetOrDefault("PARTITION_SIZE", "0"))
+	// PUBSUB_OFFSET determines the starting position for message consumption in Kafka.
+	// This allows control over whether to read historical messages or only new ones:
+	// - Default value -1: Start from the latest offset (only consume new messages after consumer starts)
+	// - Value 0: Start from the earliest offset (read all historical messages from the beginning)
+	// - Positive value: Start from a specific offset position (useful for resuming from a known point)
+	// This is particularly important for scenarios like message replay, recovery from failures,
+	// or when you only want to process messages that arrive after the consumer is initialized.
 	offSet, _ := strconv.Atoi(conf.GetOrDefault("PUBSUB_OFFSET", "-1"))
 	batchSize, _ := strconv.Atoi(conf.GetOrDefault("KAFKA_BATCH_SIZE", strconv.Itoa(kafka.DefaultBatchSize)))
 	batchBytes, _ := strconv.Atoi(conf.GetOrDefault("KAFKA_BATCH_BYTES", strconv.Itoa(kafka.DefaultBatchBytes)))
@@ -365,11 +377,6 @@ func (c *Container) createRedisPubSub(conf config.Config) {
 	// Redis PubSub is initialized via NewPubSub constructor, aligning with other PubSub implementations.
 	c.PubSub = redis.NewPubSub(conf, c.Logger, c.metricsManager)
 }
-
-const (
-	redisPubSubModeStreams = "streams"
-	redisPubSubModePubSub  = "pubsub"
-)
 
 func (c *Container) warnIfRedisPubSubSharesRedisDB(conf config.Config) {
 	// Warn (do not fail): if Redis PubSub (streams mode) shares the same Redis logical DB as the primary Redis datasource,

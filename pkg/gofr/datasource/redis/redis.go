@@ -188,12 +188,6 @@ func (r *Redis) Close() error {
 func NewPubSub(conf config.Config, logger datasource.Logger, metrics Metrics) pubsub.Client {
 	redisConfig := getRedisConfig(conf, logger)
 
-	// Always parse PubSub config for NewPubSub since we're explicitly creating a PubSub client.
-	// getRedisConfig() only parses PubSub config when PUBSUB_BACKEND=REDIS, but NewPubSub() can be
-	// called directly (not via container), so we need to ensure config is parsed here.
-	// If it was already parsed, parsePubSubConfig() will just set the same values (idempotent).
-	parsePubSubConfig(conf, redisConfig)
-
 	// if Hostname is not provided, we won't try to connect to Redis
 	if redisConfig.HostName == "" {
 		return nil

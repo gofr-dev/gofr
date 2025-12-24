@@ -57,7 +57,7 @@ func (ps *PubSub) Health() datasource.Health {
 	}
 
 	addr := fmt.Sprintf("%s:%d", ps.config.HostName, ps.config.Port)
-	res.Details["addr"] = addr
+	res.Details["host"] = addr
 
 	mode := ps.config.PubSubMode
 	if mode == "" {
