@@ -4,7 +4,7 @@ go 1.25
 
 require (
 	github.com/Azure/azure-sdk-for-go/sdk/azcore v1.20.0
-	github.com/Azure/azure-sdk-for-go/sdk/storage/azfile v1.2.0
+	github.com/Azure/azure-sdk-for-go/sdk/storage/azfile v1.5.3
 	github.com/stretchr/testify v1.11.1
 	go.uber.org/mock v0.6.0
 	gofr.dev v1.50.2
@@ -12,7 +12,6 @@ require (
 
 require (
 	github.com/Azure/azure-sdk-for-go/sdk/internal v1.11.2 // indirect
-	github.com/Azure/azure-sdk-for-go/sdk/storage/azblob v1.5.0 // indirect
 	github.com/davecgh/go-spew v1.1.2-0.20180830191138-d8f796af33cc // indirect
 	github.com/joho/godotenv v1.5.1 // indirect
 	github.com/pkg/errors v0.9.1 // indirect
