@@ -217,7 +217,7 @@ func Test_StaticFileServing_Static(t *testing.T) {
 		expectedBody     string
 	}{
 		{
-			name: "Serve existing file",
+			name: "Serve existing file from /static",
 			setupFiles: func() error {
 				return os.WriteFile(filepath.Join(tempDir, "test.txt"), []byte("Hello, World!"), 0600)
 			},
@@ -237,10 +237,29 @@ func Test_StaticFileServing_Static(t *testing.T) {
 			expectedBody:     "Hello, Root!",
 		},
 		{
+			name: "Serve existing file from /public",
+			setupFiles: func() error {
+				return os.WriteFile(filepath.Join(tempDir, "test.txt"), []byte("Hello, Public!"), 0600)
+			},
+			path:             "/public/test.txt",
+			staticServerPath: "/public",
+			expectedCode:     http.StatusOK,
+			expectedBody:     "Hello, Public!",
+		},
+		{
+			name: "Serve 404.html for non-existent file",
+			setupFiles: func() error {
+				return os.WriteFile(filepath.Join(tempDir, "404.html"), []byte("<html>404 Not Found</html>"), 0600)
+			},
+			path:             "/static/nonexistent.html",
+			staticServerPath: "/static",
+			expectedCode:     http.StatusNotFound,
+			expectedBody:     "<html>404 Not Found</html>",
+		},
+		{
 			name: "Serve default 404 message when 404.html is missing",
 			setupFiles: func() error {
-				// Don't create 404.html, just return nil to test default 404 behavior
-				return nil
+				return os.Remove(filepath.Join(tempDir, "404.html"))
 			},
 			path:             "/static/nonexistent.html",
 			staticServerPath: "/static",
