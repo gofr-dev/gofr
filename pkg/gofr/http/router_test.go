@@ -77,10 +77,9 @@ func TestRouterWithMiddleware(t *testing.T) {
 	assert.Equal(t, "applied", testHeaderValue, "Test_UseMiddleware Failed! header value mismatch.")
 }
 
-// TestRouter_DoubleSlashPath verifies that paths with double slashes (e.g., //hello)
-// are normalized to single slashes (/hello) and route correctly to the appropriate
-// handler based on HTTP method, without issuing redirects.
-func TestRouter_DoubleSlashPath(t *testing.T) {
+// TestRouter_DoubleSlashPath_GET verifies that GET requests with double slashes
+// are normalized and routed correctly to the GET handler.
+func TestRouter_DoubleSlashPath_GET(t *testing.T) {
 	router := NewRouter()
 
 	getHandlerCalled := false
@@ -89,108 +88,98 @@ func TestRouter_DoubleSlashPath(t *testing.T) {
 	// Register both GET and POST handlers for /hello
 	router.Add(http.MethodGet, "/hello", http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		getHandlerCalled = true
+
 		w.WriteHeader(http.StatusOK)
 		_, _ = w.Write([]byte("GET handler"))
 	}))
 
 	router.Add(http.MethodPost, "/hello", http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		postHandlerCalled = true
+
 		w.WriteHeader(http.StatusOK)
 		_, _ = w.Write([]byte("POST handler"))
 	}))
 
 	tests := []struct {
-		desc               string
-		method             string
-		path               string
-		expectedStatusCode int
-		expectedHandler    *bool
-		expectedBody       string
+		desc string
+		path string
 	}{
-		{
-			desc:               "GET request to //hello should normalize and route to GET handler",
-			method:             http.MethodGet,
-			path:               "//hello",
-			expectedStatusCode: http.StatusOK,
-			expectedHandler:    &getHandlerCalled,
-			expectedBody:       "GET handler",
-		},
-		{
-			desc:               "POST request to //hello should normalize and route to POST handler",
-			method:             http.MethodPost,
-			path:               "//hello",
-			expectedStatusCode: http.StatusOK,
-			expectedHandler:    &postHandlerCalled,
-			expectedBody:       "POST handler",
-		},
-		{
-			desc:               "GET request to /hello should work correctly",
-			method:             http.MethodGet,
-			path:               "/hello",
-			expectedStatusCode: http.StatusOK,
-			expectedHandler:    &getHandlerCalled,
-			expectedBody:       "GET handler",
-		},
-		{
-			desc:               "POST request to /hello should work correctly",
-			method:             http.MethodPost,
-			path:               "/hello",
-			expectedStatusCode: http.StatusOK,
-			expectedHandler:    &postHandlerCalled,
-			expectedBody:       "POST handler",
-		},
-		{
-			desc:               "GET request to ///hello (multiple slashes) should normalize correctly",
-			method:             http.MethodGet,
-			path:               "///hello",
-			expectedStatusCode: http.StatusOK,
-			expectedHandler:    &getHandlerCalled,
-			expectedBody:       "GET handler",
-		},
-		{
-			desc:               "POST request to ////hello should normalize and route to POST handler",
-			method:             http.MethodPost,
-			path:               "////hello",
-			expectedStatusCode: http.StatusOK,
-			expectedHandler:    &postHandlerCalled,
-			expectedBody:       "POST handler",
-		},
+		{desc: "GET request to /hello", path: "/hello"},
+		{desc: "GET request to //hello", path: "//hello"},
+		{desc: "GET request to ///hello", path: "///hello"},
 	}
 
 	for _, tc := range tests {
 		t.Run(tc.desc, func(t *testing.T) {
-			// Reset handler flags
 			getHandlerCalled = false
 			postHandlerCalled = false
 
-			req := httptest.NewRequest(tc.method, tc.path, http.NoBody)
+			req := httptest.NewRequest(http.MethodGet, tc.path, http.NoBody)
 			rec := httptest.NewRecorder()
 
 			router.ServeHTTP(rec, req)
 
-			// Verify status code
-			assert.Equal(t, tc.expectedStatusCode, rec.Code, "Status code mismatch")
-
-			// Verify correct handler was called
-			if tc.expectedHandler == &getHandlerCalled {
-				assert.True(t, getHandlerCalled, "GET handler should be called")
-				assert.False(t, postHandlerCalled, "POST handler should NOT be called")
-			} else if tc.expectedHandler == &postHandlerCalled {
-				assert.True(t, postHandlerCalled, "POST handler should be called")
-				assert.False(t, getHandlerCalled, "GET handler should NOT be called")
-			}
-
-			// Verify response body
-			assert.Equal(t, tc.expectedBody, rec.Body.String(), "Response body mismatch")
-
-			// Verify no redirect is issued
-			location := rec.Header().Get("Location")
-			assert.Empty(t, location, "No redirect should be issued")
+			assert.Equal(t, http.StatusOK, rec.Code, "Status code mismatch")
+			assert.True(t, getHandlerCalled, "GET handler should be called")
+			assert.False(t, postHandlerCalled, "POST handler should NOT be called")
+			assert.Equal(t, "GET handler", rec.Body.String(), "Response body mismatch")
+			assert.Empty(t, rec.Header().Get("Location"), "No redirect should be issued")
 		})
 	}
 }
 
-// TestRouter_PathNormalization tests the path normalization function directly
+// TestRouter_DoubleSlashPath_POST verifies that POST requests with double slashes
+// are normalized and routed correctly to the POST handler.
+func TestRouter_DoubleSlashPath_POST(t *testing.T) {
+	router := NewRouter()
+
+	getHandlerCalled := false
+	postHandlerCalled := false
+
+	// Register both GET and POST handlers for /hello
+	router.Add(http.MethodGet, "/hello", http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		getHandlerCalled = true
+
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte("GET handler"))
+	}))
+
+	router.Add(http.MethodPost, "/hello", http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		postHandlerCalled = true
+
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte("POST handler"))
+	}))
+
+	tests := []struct {
+		desc string
+		path string
+	}{
+		{desc: "POST request to /hello", path: "/hello"},
+		{desc: "POST request to //hello", path: "//hello"},
+		{desc: "POST request to ////hello", path: "////hello"},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.desc, func(t *testing.T) {
+			getHandlerCalled = false
+			postHandlerCalled = false
+
+			req := httptest.NewRequest(http.MethodPost, tc.path, http.NoBody)
+			rec := httptest.NewRecorder()
+
+			router.ServeHTTP(rec, req)
+
+			assert.Equal(t, http.StatusOK, rec.Code, "Status code mismatch")
+			assert.True(t, postHandlerCalled, "POST handler should be called")
+			assert.False(t, getHandlerCalled, "GET handler should NOT be called")
+			assert.Equal(t, "POST handler", rec.Body.String(), "Response body mismatch")
+			assert.Empty(t, rec.Header().Get("Location"), "No redirect should be issued")
+		})
+	}
+}
+
+// TestRouter_PathNormalization tests the path normalization function directly.
 func TestRouter_PathNormalization(t *testing.T) {
 	tests := []struct {
 		input    string
