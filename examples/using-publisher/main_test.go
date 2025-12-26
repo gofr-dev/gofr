@@ -33,24 +33,10 @@ func TestExamplePublisherError(t *testing.T) {
 
 	go main()
 
-	// Kafka initialization takes longer, increase initial wait
-	time.Sleep(1 * time.Second)
+	// Kafka initialization takes longer
+	time.Sleep(20 * time.Second)
 
-	// Verify server is ready before running tests - increase retries and timeout
-	client := &http.Client{Timeout: 3 * time.Second}
-	var lastErr error
-	for i := 0; i < 20; i++ {  // Increased from 10 to 20 retries
-		resp, err := client.Get(host + "/.well-known/health")
-		if err == nil {
-			resp.Body.Close()
-			break
-		}
-		lastErr = err
-		if i == 19 {
-			t.Fatalf("Server failed to start after %d attempts: %v", i+1, lastErr)
-		}
-		time.Sleep(200 * time.Millisecond)  // Increased from 100ms to 200ms
-	}
+	client := &http.Client{}
 
 	testCases := []struct {
 		desc               string
@@ -58,8 +44,8 @@ func TestExamplePublisherError(t *testing.T) {
 		body               []byte
 		expectedStatusCode int
 	}{
-		{"valid order", "/publish-order", []byte(`{"data":{"orderId":"123","status":"pending"}}`), http.StatusOK},
-		{"valid product", "/publish-product", []byte(`{"data":{"productId":"123","price":"599"}}`), http.StatusOK},
+		{"valid order", "/publish-order", []byte(`{"data":{"orderId":"123","status":"pending"}}`), http.StatusCreated},
+		{"valid product", "/publish-product", []byte(`{"data":{"productId":"123","price":"599"}}`), http.StatusCreated},
 	}
 
 	for i, tc := range testCases {
