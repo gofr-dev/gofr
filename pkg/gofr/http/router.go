@@ -43,7 +43,7 @@ func NewRouter() *Router {
 	return r
 }
 
-// ServeHTTP implements http.Handler interface with path normalization.
+// ServeHTTP implements [http.Handler] interface with path normalization.
 func (rou *Router) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	// Normalize the path before routing to handle double slashes
 	originalPath := r.URL.Path
