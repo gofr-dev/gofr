@@ -89,8 +89,9 @@ func TestHTTPHandlerURLError(t *testing.T) {
 
 	ctx.Container.Services = map[string]service.HTTP{"cat-facts": service.NewHTTPService("http://invalid", ctx.Logger, mockContainer.Metrics())}
 
+	// The metrics are recorded with the full URL including path and query params
 	mocks.Metrics.EXPECT().RecordHistogram(gomock.Any(), "app_http_service_response", gomock.Any(), gomock.Any(),
-		"http://invalid", "method", "GET", "status", gomock.Any())
+		"http://invalid/fact", "method", "GET", "status", gomock.Any())
 
 	resp, err := Handler(ctx)
 
