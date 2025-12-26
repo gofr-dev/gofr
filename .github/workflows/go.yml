@@ -136,14 +136,8 @@ jobs:
         shell: bash
 
       # Run tests with automatic retry on failures
-      - name: Test with Retry Logic
-        id: test
-        uses: nick-fields/retry@v3
-        with:
-          timeout_minutes: 5  # Maximum time for the tests to run
-          max_attempts: 2
-          retry_on: error
-          command: |
+      - name: Run Example Tests
+        run: |
             export APP_ENV=test
             # Run tests for the examples directory with coverage
             go test ./examples/... -v -short -covermode=atomic -coverprofile packageWithpbgo.cov -coverpkg=./examples/...
