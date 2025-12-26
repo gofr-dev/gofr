@@ -43,6 +43,7 @@ require (
 	golang.org/x/text v0.32.0
 	google.golang.org/api v0.258.0
 	google.golang.org/grpc v1.77.0
+	gopkg.in/yaml.v3 v3.0.1
 	google.golang.org/protobuf v1.36.11
 	modernc.org/sqlite v1.41.0
 )
