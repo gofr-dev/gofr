@@ -23,10 +23,10 @@ func TestMain(m *testing.M) {
 
 // TestCMDRunWithNoArg checks that if no subcommand is found then error comes on stderr.
 func TestCMDRunWithNoArg(t *testing.T) {
-	expErr := "No Command Found!\n"
 	output := testutil.StderrOutputForFunc(main)
 
-	assert.Equal(t, expErr, output, "TEST Failed.\n")
+	// The error message includes the invalid command name (test flags in this case)
+	assert.Contains(t, output, "is not a valid command.\n", "TEST Failed.\n")
 }
 
 func TestCMDRunWithProperArg(t *testing.T) {
@@ -102,7 +102,7 @@ func TestCMDRun_ProgressContextCancelled(t *testing.T) {
 	container := &container.Container{
 		Logger: logging.NewMockLogger(logging.ERROR),
 	}
-	
+
 	res, err := progress(&gofr.Context{
 		Context:       ctx,
 		Request:       cmd.NewRequest([]string{"command", "progress"}),
@@ -117,11 +117,11 @@ func TestCMDRun_ProgressContextCancelled(t *testing.T) {
 
 // TestCMDRunWithInvalidCommand tests that invalid commands return appropriate error
 func TestCMDRunWithInvalidCommand(t *testing.T) {
-	expErr := "No Command Found!\n"
 	os.Args = []string{"command", "invalid"}
 	output := testutil.StderrOutputForFunc(main)
 
-	assert.Equal(t, expErr, output, "TEST Failed.\n")
+	// The error message includes the invalid command name
+	assert.Contains(t, output, "'invalid' is not a valid command.\n", "TEST Failed.\n")
 }
 
 // TestCMDRunWithEmptyParams tests the params command with empty name parameter

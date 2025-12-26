@@ -32,7 +32,21 @@ func TestExamplePublisherError(t *testing.T) {
 	host := fmt.Sprint("http://localhost:", configs.HTTPPort)
 
 	go main()
-	time.Sleep(200 * time.Millisecond)
+	time.Sleep(500 * time.Millisecond)
+
+	// Verify server is ready before running tests
+	client := &http.Client{Timeout: 2 * time.Second}
+	for i := 0; i < 10; i++ {
+		resp, err := client.Get(host + "/.well-known/health")
+		if err == nil {
+			resp.Body.Close()
+			break
+		}
+		if i == 9 {
+			t.Fatalf("Server failed to start: %v", err)
+		}
+		time.Sleep(100 * time.Millisecond)
+	}
 
 	testCases := []struct {
 		desc               string
@@ -44,15 +58,13 @@ func TestExamplePublisherError(t *testing.T) {
 		{"valid product", "/publish-product", []byte(`{"data":{"productId":"123","price":"599"}}`), http.StatusOK},
 	}
 
-	client := http.Client{}
-
 	for i, tc := range testCases {
 		req, _ := http.NewRequest(http.MethodPost, host+tc.path, bytes.NewBuffer(tc.body))
 		req.Header.Set("content-type", "application/json")
 
 		resp, err := client.Do(req)
 		require.NoError(t, err, "TEST[%d] %s failed", i, tc.desc)
-		defer resp.Body.Close()
+		resp.Body.Close()
 
 		assert.Equal(t, tc.expectedStatusCode, resp.StatusCode, "TEST[%d] %s failed", i, tc.desc)
 	}
