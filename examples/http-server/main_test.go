@@ -366,10 +366,8 @@ func TestTraceHandler(t *testing.T) {
 
 	// Now ctx.Context has been modified by both Trace() calls, matching what TraceHandler does
 	// TraceHandler calls: c.GetHTTPService("anotherService").Get(c, "redis", nil)
-	// When passing 'c' (*gofr.Context) to Get(), Go uses the embedded context.Context
-	// which is now the modified context after both Trace() calls
 	mocks.HTTPServices["anotherService"].EXPECT().Get(
-		ctx.Context, // Use the context after both Trace() calls (use gomock.Any to avoid this!)
+		gomock.Any(), // Use gomock.Any() since TraceHandler passes *gofr.Context which satisfies context.Context
 		"redis",
 		nil, // queryParams is nil in TraceHandler
 	).Return(mockResp, nil)

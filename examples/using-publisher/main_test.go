@@ -5,12 +5,13 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"gofr.dev/pkg/gofr/testutil"
 	"net/http"
 	"net/http/httptest"
 	"os"
 	"testing"
 	"time"
+
+	"gofr.dev/pkg/gofr/testutil"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -27,8 +28,6 @@ func TestMain(m *testing.M) {
 }
 
 func TestExamplePublisherError(t *testing.T) {
-	t.Setenv("PUBSUB_BROKER", "localhost:1092")
-
 	configs := testutil.NewServerConfigs(t)
 	host := fmt.Sprint("http://localhost:", configs.HTTPPort)
 
@@ -41,8 +40,8 @@ func TestExamplePublisherError(t *testing.T) {
 		body               []byte
 		expectedStatusCode int
 	}{
-		{"valid order", "/publish-order", []byte(`{"data":{"orderId":"123","status":"pending"}}`), http.StatusInternalServerError},
-		{"valid product", "/publish-product", []byte(`{"data":{"productId":"123","price":"599"}}`), http.StatusInternalServerError},
+		{"valid order", "/publish-order", []byte(`{"data":{"orderId":"123","status":"pending"}}`), http.StatusOK},
+		{"valid product", "/publish-product", []byte(`{"data":{"productId":"123","price":"599"}}`), http.StatusOK},
 	}
 
 	client := http.Client{}

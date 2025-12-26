@@ -24,7 +24,7 @@ func TestMainInitialization(t *testing.T) {
 	log := testutil.StdoutOutputForFunc(func() {
 		go main()
 
-		time.Sleep(200 * time.Millisecond)
+		time.Sleep(500 * time.Millisecond) // Increased wait time for Kafka connection
 	})
 
 	expectedLog := "connected to 1 Kafka brokers"
