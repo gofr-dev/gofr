@@ -1,6 +1,8 @@
 module gofr.dev/pkg/gofr/datasource/scylladb
 
-go 1.25
+go 1.24.0
+
+toolchain go1.25.0
 
 require (
 	github.com/gocql/gocql v1.7.0

@@ -1,4 +1,6 @@
-go 1.25.0
+go 1.25
+
+toolchain go1.25.0
 
 use (
 	.
@@ -12,8 +14,8 @@ use (
 	./pkg/gofr/datasource/elasticsearch
 	./pkg/gofr/datasource/file/azure
 	./pkg/gofr/datasource/file/ftp
-	./pkg/gofr/datasource/file/s3
 	./pkg/gofr/datasource/file/gcs
+	./pkg/gofr/datasource/file/s3
 	./pkg/gofr/datasource/file/sftp
 	./pkg/gofr/datasource/influxdb
 	./pkg/gofr/datasource/kv-store/badger

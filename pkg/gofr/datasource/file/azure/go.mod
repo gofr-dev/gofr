@@ -1,6 +1,8 @@
 module gofr.dev/pkg/gofr/datasource/file/azure
 
-go 1.25
+go 1.24
+
+toolchain go1.25.0
 
 require (
 	github.com/Azure/azure-sdk-for-go/sdk/azcore v1.20.0

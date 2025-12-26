@@ -1,6 +1,8 @@
 module gofr.dev/pkg/gofr/datasource/file/sftp
 
-go 1.25
+go 1.24
+
+toolchain go1.25.0
 
 require (
 	github.com/pkg/sftp v1.13.10

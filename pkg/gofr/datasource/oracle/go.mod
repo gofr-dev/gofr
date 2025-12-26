@@ -1,6 +1,8 @@
 module gofr.dev/pkg/gofr/datasource/oracle
 
-go 1.25
+go 1.24
+
+toolchain go1.25.0
 
 require (
 	github.com/DATA-DOG/go-sqlmock v1.5.2

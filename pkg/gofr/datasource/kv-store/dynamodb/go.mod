@@ -1,6 +1,8 @@
 module gofr.dev/pkg/gofr/datasource/kv-store/dynamodb
 
-go 1.24.4
+go 1.24.0
+
+toolchain go1.25.0
 
 require (
 	github.com/aws/aws-sdk-go-v2 v1.40.0
