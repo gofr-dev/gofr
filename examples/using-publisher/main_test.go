@@ -32,20 +32,24 @@ func TestExamplePublisherError(t *testing.T) {
 	host := fmt.Sprint("http://localhost:", configs.HTTPPort)
 
 	go main()
-	time.Sleep(500 * time.Millisecond)
 
-	// Verify server is ready before running tests
-	client := &http.Client{Timeout: 2 * time.Second}
-	for i := 0; i < 10; i++ {
+	// Kafka initialization takes longer, increase initial wait
+	time.Sleep(1 * time.Second)
+
+	// Verify server is ready before running tests - increase retries and timeout
+	client := &http.Client{Timeout: 3 * time.Second}
+	var lastErr error
+	for i := 0; i < 20; i++ {  // Increased from 10 to 20 retries
 		resp, err := client.Get(host + "/.well-known/health")
 		if err == nil {
 			resp.Body.Close()
 			break
 		}
-		if i == 9 {
-			t.Fatalf("Server failed to start: %v", err)
+		lastErr = err
+		if i == 19 {
+			t.Fatalf("Server failed to start after %d attempts: %v", i+1, lastErr)
 		}
-		time.Sleep(100 * time.Millisecond)
+		time.Sleep(200 * time.Millisecond)  // Increased from 100ms to 200ms
 	}
 
 	testCases := []struct {
