@@ -7,7 +7,7 @@ Role-Based Access Control (RBAC) is a security mechanism that restricts access t
 - ✅ **Pure Config-Based** - All authorization rules in JSON/YAML files
 - ✅ **Two-Level Authorization Model** - Roles define permissions, endpoints require permissions (no direct role-to-route mapping)
 - ✅ **Multiple Auth Methods** - Header-based and JWT-based role extraction
-- ✅ **Permission-Based** - Fine-grained permissions 
+- ✅ **Permission-Based** - Fine-grained permissions
 - ✅ **Role Inheritance** - Roles inherit permissions from other roles
 
 ## Quick Start
@@ -76,6 +76,7 @@ func main() {
 ```
 
 > **💡 Best Practice**: For production/public APIs, use JWT-based RBAC instead of header-based RBAC for better security.
+
 
 ## Configuration
 
@@ -189,13 +190,13 @@ RBAC uses **gorilla/mux route pattern conventions** for endpoint matching. This 
 For endpoints that need to match multiple paths, use mux patterns:
 
 - **Single-level wildcard**: Use `"/api/{resource}"` instead of `"/api/*"`
-  - Matches: `/api/users`, `/api/posts` (one segment)
-  
+    - Matches: `/api/users`, `/api/posts` (one segment)
+
 - **Multi-level wildcard**: Use `"/api/{path:.*}"` instead of `"/api/*"`
-  - Matches: `/api/users/123`, `/api/posts/comments` (any depth)
-  
+    - Matches: `/api/users/123`, `/api/posts/comments` (any depth)
+
 - **Middle variable**: Use `"/api/{category}/posts"` instead of `"/api/*/posts"`
-  - Matches: `/api/tech/posts`, `/api/news/posts`
+    - Matches: `/api/tech/posts`, `/api/news/posts`
 
 ## JWT-Based RBAC
 
@@ -220,6 +221,7 @@ app.EnableRBAC("configs/rbac.json")
   "endpoints": [...]
 }
 ```
+
 
 ## Accessing Role in Handlers
 
@@ -268,6 +270,7 @@ func handler(ctx *gofr.Context) (interface{}, error) {
 
 **Note**: All authorization is handled automatically by the middleware. Accessing the role in handlers is only for business logic purposes (e.g., personalizing UI, filtering data).
 
+
 ## Permission Naming Conventions
 
 ### Recommended Format
@@ -277,9 +280,10 @@ Use the format: `resource:action`
 - **Resource**: The entity being accessed (e.g., `users`, `posts`, `orders`)
 - **Action**: The operation being performed (e.g., `read`, `write`, `delete`, `update`)
 
-### Examples
 
-```
+### Examples:
+
+```editorconfig
 "users:read"      // Read users
 "users:write"     // Create/update users
 "users:delete"    // Delete users
@@ -288,6 +292,8 @@ Use the format: `resource:action`
 "orders:approve"  // Approve orders
 "reports:export"  // Export reports
 ```
+
+
 
 **Avoid inconsistent formats**:
 - ❌ `"read_users"`, `"writeUsers"`, `"DELETE_POSTS"`
@@ -365,6 +371,8 @@ Or use role inheritance to avoid duplication:
   ]
 }
 ```
+
+
 
 ### Resource-Specific Permissions
 
@@ -467,8 +475,8 @@ The middleware automatically handles all authorization - you just define routes 
 
 - ✅ **Routes in RBAC config**: Authorization is enforced (requires valid role and permissions)
 - ✅ **Routes NOT in RBAC config**: Requests are allowed to proceed to normal route matching
-  - If the route exists in your application, it will be handled normally
-  - If the route doesn't exist, it will return 404 (route not registered)
+    - If the route exists in your application, it will be handled normally
+    - If the route doesn't exist, it will return 404 (route not registered)
 
 **Example**:
 ```json
