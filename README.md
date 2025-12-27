@@ -43,6 +43,11 @@ GoFr is designed to **simplify microservice development**, with key focuses on *
 15. **[Websockets](https://gofr.dev/docs/advanced-guide/websocket)**
 
 ---
+## 👶 Beginner Friendly Tip
+
+If you are new to GoFr, start by running the basic example shown above.
+Once the server is running, try modifying the `/greet` route to understand
+how request handling works in GoFr.
 
 ## 🚀 **Getting Started**
 
