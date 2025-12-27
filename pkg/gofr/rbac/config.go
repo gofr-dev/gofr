@@ -163,11 +163,6 @@ func LoadPermissions(path string, logger datasource.Logger, metrics container.Me
 	// Use StrictSlash(false) to match the application router's behavior
 	config.muxRouter = mux.NewRouter().StrictSlash(false)
 
-	// Register metrics if provided
-	if metrics != nil {
-		registerMetrics(metrics)
-	}
-
 	// Validate config before processing
 	if err := config.validate(); err != nil {
 		return nil, fmt.Errorf("invalid RBAC config: %w", err)
@@ -179,18 +174,6 @@ func LoadPermissions(path string, logger datasource.Logger, metrics container.Me
 	}
 
 	return &config, nil
-}
-
-// registerMetrics registers RBAC metrics with the metrics instance.
-func registerMetrics(metrics container.Metrics) {
-	buckets := []float64{0.0001, 0.0005, 0.001, 0.005, 0.01, 0.05, 0.1, 0.5, 1}
-	metrics.NewHistogram(
-		"rbac_authorization_duration",
-		"Duration of RBAC authorization checks",
-		buckets...,
-	)
-	metrics.NewCounter("rbac_authorization_decisions", "Number of RBAC authorization decisions")
-	metrics.NewCounter("rbac_role_extraction_failures", "Number of failed role extractions")
 }
 
 // validate validates the RBAC configuration.
