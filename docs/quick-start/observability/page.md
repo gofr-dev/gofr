@@ -566,7 +566,7 @@ and visualized in dashboards using tools like {% new-tab-link title="Grafana" hr
 
 Here's a sample Grafana dashboard utilizing GoFr's metrics:
 
-{% figure src="/metrics-dashboard.png" alt="Grafana Dashboard showing GoFr metrics including HTTP request rates, 
+{% figure src="/metrics-dashboard.png" alt="Grafana Dashboard showing GoFr metrics including HTTP request rates,
 response times, etc." caption="Example monitoring dashboard using GoFr's built-in metrics" /%}
 
 
@@ -597,7 +597,7 @@ a request as it travels through your distributed system by simply looking at the
 ### Configuration & Usage:
 
 GoFr has support for following trace-exporters:
-#### 1. [Zipkin](https://zipkin.io/): 
+#### 1. [Zipkin](https://zipkin.io/):
 
 To see the traces install zipkin image using the following Docker command:
 
@@ -694,3 +694,41 @@ TRACER_RATIO=0.1
 > `TRACER_RATIO` refers to the proportion of traces that are exported through sampling. It ranges between 0 and 1. By default, this ratio is set to 1, meaning all traces are exported.
 >
 > Open {% new-tab-link title="gofr-tracer" href="https://tracer.gofr.dev/" /%} and search by TraceID (correlationID) to see the trace.
+
+
+### Custom Authentication Headers
+
+Many observability platforms require custom headers for authentication. GoFr supports this through the `TRACER_HEADERS` configuration, which accepts comma-separated `key=value` pairs following the OpenTelemetry standard format.
+
+#### Usage Examples
+
+**Single Header:**
+```dotenv
+# Honeycomb
+TRACER_HEADERS="X-Honeycomb-Team=your_api_key"
+```
+
+**Multiple Headers:**
+```dotenv
+# Grafana Cloud with multiple headers
+TRACER_HEADERS="Authorization=Basic base64encodedcreds,X-Scope-OrgID=tenant-1"
+```
+
+```dotenv
+# API key with special characters
+TRACER_HEADERS="X-Api-Key=secret123,Authorization=Bearer token"
+```
+
+####  Configuration Example
+
+Here's an example for sending traces to Grafana Cloud with authentication:
+
+```dotenv
+APP_NAME=my-service
+
+# Grafana Cloud OTLP endpoint with authentication
+TRACE_EXPORTER=otlp
+TRACER_URL=otlp-gateway-prod-us-east-0.grafana.net:443
+TRACER_HEADERS="Authorization=Basic dXNlcm5hbWU6cGFzc3dvcmQ=,X-Scope-OrgID=123456"
+TRACER_RATIO=1.0
+```
