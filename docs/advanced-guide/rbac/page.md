@@ -413,7 +413,7 @@ Or use role inheritance to avoid duplication:
 - **Never use header-based RBAC for public APIs** - Use JWT-based RBAC
 - **Always validate JWT tokens** - Use proper JWKS endpoints with HTTPS
 - **Use HTTPS in production** - Protect tokens and headers
-- **Monitor audit logs** - Track authorization decisions
+- **Monitor logs** - Track authorization decisions
 
 ### Configuration
 - **Use role inheritance** - Avoid duplicating permissions (only specify additional ones)
@@ -438,13 +438,13 @@ Or use role inheritance to avoid duplication:
 **Permission always denied**
 - Check role assignment - verify user's role has the required permission
 - Review role permissions - ensure `roles[].permissions` includes the required permission
-- Enable debug logging - check audit logs for authorization decisions
+- Enable debug logging - check debug logs for authorization decisions
 
 **Permission always allowed**
 - Check if endpoint is in RBAC config - routes not in config are allowed to proceed
 - Check public endpoints - verify endpoint is not marked as `public: true`
 - Review endpoint configuration - ensure `endpoints[].requiredPermissions` is set correctly
-- Verify permission check - check audit logs to see if permission check is being performed
+- Verify permission check - check logs to see if permission check is being performed
 
 **JWT role extraction failing**
 - Ensure OAuth middleware is enabled before RBAC
@@ -519,7 +519,7 @@ RBAC middleware implements industry-standard security practices to protect sensi
 - ✅ Status (allowed/denied) included
 - ❌ Roles excluded (avoid high cardinality and PII concerns)
 
-**Audit Logs:**
+**Logs:**
 - ✅ Roles included (required for compliance: SOC 2, PCI-DSS, NIST)
 - ✅ HTTP method, route, status, and reason included
 - ❌ No authorization tokens, headers, or request bodies logged
