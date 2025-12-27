@@ -174,7 +174,7 @@ func TestScyllaBeginTransaction(t *testing.T) {
 
 func TestScyllaMigrator_Rollback(t *testing.T) {
 	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
+	t.Cleanup(ctrl.Finish)
 
 	mockContainer := &container.Container{
 		Logger: &panicLogger{},

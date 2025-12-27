@@ -14,7 +14,7 @@ import (
 
 func TestRedis_Get(t *testing.T) {
 	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
+	t.Cleanup(ctrl.Finish)
 
 	mockCmd := NewMockRedis(ctrl)
 	mockCmd.EXPECT().Get(t.Context(), "test_key").Return(&goRedis.StringCmd{})
@@ -27,7 +27,7 @@ func TestRedis_Get(t *testing.T) {
 
 func TestRedis_Set(t *testing.T) {
 	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
+	t.Cleanup(ctrl.Finish)
 
 	mockCmd := NewMockRedis(ctrl)
 	mockCmd.EXPECT().Set(t.Context(), "test_key", "test_value", time.Duration(0)).Return(&goRedis.StatusCmd{})
@@ -40,7 +40,7 @@ func TestRedis_Set(t *testing.T) {
 
 func TestRedis_Del(t *testing.T) {
 	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
+	t.Cleanup(ctrl.Finish)
 
 	mockCmd := NewMockRedis(ctrl)
 	mockCmd.EXPECT().Del(t.Context(), "test_key").Return(&goRedis.IntCmd{})
@@ -53,7 +53,7 @@ func TestRedis_Del(t *testing.T) {
 
 func TestRedis_Rename(t *testing.T) {
 	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
+	t.Cleanup(ctrl.Finish)
 
 	mockCmd := NewMockRedis(ctrl)
 	mockCmd.EXPECT().Rename(t.Context(), "test_key", "test_new_key").Return(&goRedis.StatusCmd{})
@@ -66,7 +66,7 @@ func TestRedis_Rename(t *testing.T) {
 
 func TestRedisMigrator_GetLastMigration(t *testing.T) {
 	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
+	t.Cleanup(ctrl.Finish)
 
 	c, mocks := container.NewMockContainer(t)
 	mockMigrator := NewMockmigrator(ctrl)
@@ -131,7 +131,7 @@ func TestRedisMigrator_GetLastMigration(t *testing.T) {
 
 func TestRedisMigrator_beginTransaction(t *testing.T) {
 	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
+	t.Cleanup(ctrl.Finish)
 
 	c, mocks := container.NewMockContainer(t)
 	mockMigrator := NewMockmigrator(ctrl)
