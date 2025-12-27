@@ -316,7 +316,9 @@ func TestApp_MigratePanicRecovery(t *testing.T) {
 
 func Test_otelErrorHandler(t *testing.T) {
 	logs := testutil.StderrOutputForFunc(func() {
-		h := otelErrorHandler{logging.NewLogger(logging.DEBUG)}
+		h := otelErrorHandler{
+			logger: logging.NewLogger(logging.DEBUG),
+		}
 		h.Handle(testutil.CustomError{ErrorMessage: "OTEL Error override"})
 	})
 
@@ -624,7 +626,7 @@ func Test_initTracer(t *testing.T) {
 		{"jaeger exporter with auth", mockConfig4, "Exporting traces to jaeger at localhost:4317"},
 		{"otlp exporter", mockConfig5, "Exporting traces to otlp at localhost:4317"},
 		{"otlp exporter with authKey", mockConfig6, "Exporting traces to otlp at localhost:4317"},
-		{"gofr exporter with default url", mockConfig7, "Exporting traces to GoFr at https://tracer.gofr.dev"},
+		{"gofr exporter with default url", mockConfig7, "Exporting traces to GoFr at https://tracer-api.gofr.dev/api/spans"},
 	}
 
 	for i, tc := range tests {
@@ -1202,5 +1204,19 @@ func TestApp_OnStart(t *testing.T) {
 		err := app.runOnStartHooks(t.Context())
 
 		require.ErrorIs(t, err, errHookFailed, "Expected an error from runOnStartHooks")
+	})
+
+	// Test case 4: Verify panic recovery
+	t.Run("panic recovery", func(t *testing.T) {
+		app := New()
+
+		app.OnStart(func(_ *Context) error {
+			panic("test panic")
+		})
+
+		err := app.runOnStartHooks(t.Context())
+
+		require.Error(t, err, "Expected error from panicked hook")
+		assert.Contains(t, err.Error(), "panicked", "Expected error message to mention panic")
 	})
 }
