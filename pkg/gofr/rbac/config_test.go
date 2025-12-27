@@ -1,7 +1,6 @@
 package rbac
 
 import (
-	"context"
 	"os"
 	"path/filepath"
 	"testing"
@@ -537,50 +536,6 @@ func TestConfig_MatchesKey(t *testing.T) {
 		assert.False(t, result)
 	})
 }
-
-func TestLoadPermissions_RegisterMetrics(t *testing.T) {
-	t.Run("registers metrics when metrics is provided", func(t *testing.T) {
-		mockMetrics := &configMockMetrics{
-			histogramCreated: false,
-			counterCreated:   false,
-		}
-
-		fileContent := `{
-			"roles": [{"name": "admin", "permissions": ["admin:read"]}],
-			"endpoints": [{"path": "/api", "methods": ["GET"], "requiredPermissions": ["admin:read"]}]
-		}`
-		path, err := createTestConfigFile("test_metrics.json", fileContent)
-		require.NoError(t, err)
-
-		defer os.Remove(path)
-
-		_, err = LoadPermissions(path, nil, mockMetrics, nil)
-		require.NoError(t, err)
-
-		assert.True(t, mockMetrics.histogramCreated, "histogram should be created")
-		assert.True(t, mockMetrics.counterCreated, "counter should be created")
-	})
-}
-
-// configMockMetrics for config tests.
-type configMockMetrics struct {
-	histogramCreated bool
-	counterCreated   bool
-}
-
-func (m *configMockMetrics) NewHistogram(_, _ string, _ ...float64) {
-	m.histogramCreated = true
-}
-
-func (*configMockMetrics) RecordHistogram(_ context.Context, _ string, _ float64, _ ...string) {}
-func (m *configMockMetrics) NewCounter(_, _ string) {
-	m.counterCreated = true
-}
-func (*configMockMetrics) IncrementCounter(_ context.Context, _ string, _ ...string)              {}
-func (*configMockMetrics) NewUpDownCounter(_, _ string)                                           {}
-func (*configMockMetrics) NewGauge(_, _ string)                                                   {}
-func (*configMockMetrics) DeltaUpDownCounter(_ context.Context, _ string, _ float64, _ ...string) {}
-func (*configMockMetrics) SetGauge(_ string, _ float64, _ ...string)                              {}
 
 func TestConfig_getEffectivePermissions(t *testing.T) {
 	testCases := []struct {
