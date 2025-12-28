@@ -63,15 +63,42 @@ func (ql *QueryLog) String() string {
 	}
 }
 
+// shouldLogQuery determines if a Redis command should be logged at DEBUG level.
+// Some commands are too noisy for high-throughput operations and are filtered out.
+// Metrics are still recorded for all commands regardless of this filter.
+func shouldLogQuery(query string) bool {
+	// Filter out noisy commands that occur frequently in pubsub operations:
+	// - "ping": Keep-alive checks, not useful for debugging
+	// - "xack": Acknowledgments happen for every message, redundant with SUB logs
+	// - "xreadgroup": Happens in tight loop, creates excessive noise
+	// - "xinfo": Consumer group info checks, very frequent
+	// - "hello": Redis protocol handshake, not useful for debugging
+	// - "pipeline": Pipeline operations, too verbose
+	noisyCommands := map[string]bool{
+		"ping":       true,
+		"xack":       true,
+		"xreadgroup": true,
+		"xinfo":      true,
+		"hello":      true,
+		"pipeline":   true,
+	}
+
+	return !noisyCommands[strings.ToLower(query)]
+}
+
 // logQuery logs the Redis query information.
 func (r *redisHook) sendOperationStats(start time.Time, query string, args ...any) {
 	duration := time.Since(start).Microseconds()
 
-	r.logger.Debug(&QueryLog{
-		Query:    query,
-		Duration: duration,
-		Args:     args,
-	})
+	// Only log if the command is not filtered out
+	// Metrics are always recorded regardless of logging
+	if shouldLogQuery(query) {
+		r.logger.Debug(&QueryLog{
+			Query:    query,
+			Duration: duration,
+			Args:     args,
+		})
+	}
 
 	r.metrics.RecordHistogram(context.Background(), "app_redis_stats",
 		float64(duration), "hostname", r.config.HostName, "type", query)
