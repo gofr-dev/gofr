@@ -150,7 +150,7 @@ func (ps *PubSub) Subscribe(ctx context.Context, topic string) (*pubsub.Message,
 }
 
 // ensureSubscription ensures a subscription is started for the topic.
-func (ps *PubSub) ensureSubscription(ctx context.Context, topic string) chan *pubsub.Message {
+func (ps *PubSub) ensureSubscription(_ context.Context, topic string) chan *pubsub.Message {
 	ps.mu.Lock()
 	defer ps.mu.Unlock()
 
@@ -466,24 +466,24 @@ func (ps *PubSub) consumeStreamMessages(ctx context.Context, topic, group, consu
 }
 
 // getChannelCapacity returns available channel capacity, pending read status, and count.
-func (ps *PubSub) getChannelCapacity(topic string) (int, bool, int64) {
+func (ps *PubSub) getChannelCapacity(topic string) (available int, pendingRead bool, count int64) {
 	ps.mu.RLock()
 	defer ps.mu.RUnlock()
 
 	msgChan, exists := ps.receiveChan[topic]
-	available := 0
+
 	if exists && !ps.chanClosed[topic] {
 		available = cap(msgChan) - len(msgChan)
 	}
 
-	pendingRead := ps.pendingRead[topic]
+	pendingRead = ps.pendingRead[topic]
 
 	bufferSize := ps.config.PubSubBufferSize
 	if bufferSize == 0 {
 		bufferSize = defaultPubSubBufferSize
 	}
 
-	count := int64(bufferSize)
+	count = int64(bufferSize)
 	if available < bufferSize {
 		count = int64(available)
 	}
@@ -532,7 +532,7 @@ func (ps *PubSub) markPendingRead(topic string) {
 }
 
 // hasMessages checks if streams contain any messages.
-func (ps *PubSub) hasMessages(streams []redis.XStream) bool {
+func (*PubSub) hasMessages(streams []redis.XStream) bool {
 	for _, stream := range streams {
 		if len(stream.Messages) > 0 {
 			return true
