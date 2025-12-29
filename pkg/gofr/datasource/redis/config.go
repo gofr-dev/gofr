@@ -163,7 +163,7 @@ func configStreams(c config.Config, redisConfig *Config) {
 		ConsumerName:  c.Get("REDIS_STREAMS_CONSUMER_NAME"),
 	}
 
-	streamsConfig.Block = 5 * time.Second // default
+	streamsConfig.Block = 1 * time.Second // default - reduced from 5s for better responsiveness
 	if blockStr := c.Get("REDIS_STREAMS_BLOCK_TIMEOUT"); blockStr != "" {
 		if block, err := time.ParseDuration(blockStr); err == nil {
 			streamsConfig.Block = block

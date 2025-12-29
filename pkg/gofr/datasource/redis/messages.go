@@ -2,6 +2,8 @@ package redis
 
 import (
 	"context"
+	"math"
+	"time"
 
 	"github.com/redis/go-redis/v9"
 
@@ -45,12 +47,32 @@ func newStreamMessage(client *redis.Client, stream, group, id string, logger dat
 }
 
 func (m *streamMessage) Commit() {
-	ctx, cancel := context.WithTimeout(context.Background(), defaultRetryTimeout)
-	defer cancel()
+	const maxRetries = 3
 
-	err := m.client.XAck(ctx, m.stream, m.group, m.id).Err()
-	if err != nil {
-		m.logger.Errorf("failed to acknowledge message %s in stream %s: %v", m.id, m.stream, err)
-		return
+	const baseDelay = 100 * time.Millisecond
+
+	const exponentialBase = 2
+
+	var err error
+
+	for attempt := 0; attempt < maxRetries; attempt++ {
+		ctx, cancel := context.WithTimeout(context.Background(), defaultRetryTimeout)
+
+		err = m.client.XAck(ctx, m.stream, m.group, m.id).Err()
+
+		cancel()
+
+		if err == nil {
+			return
+		}
+
+		// Exponential backoff: baseDelay * 2^attempt
+		if attempt < maxRetries-1 {
+			delay := time.Duration(float64(baseDelay) * math.Pow(exponentialBase, float64(attempt)))
+			time.Sleep(delay)
+		}
 	}
+
+	// All retries failed
+	m.logger.Errorf("failed to acknowledge message %s in stream %s after %d attempts: %v", m.id, m.stream, maxRetries, err)
 }

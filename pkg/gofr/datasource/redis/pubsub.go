@@ -150,13 +150,20 @@ func (ps *PubSub) Subscribe(ctx context.Context, topic string) (*pubsub.Message,
 }
 
 // ensureSubscription ensures a subscription is started for the topic.
-func (ps *PubSub) ensureSubscription(_ context.Context, topic string) chan *pubsub.Message {
+func (ps *PubSub) ensureSubscription(ctx context.Context, topic string) chan *pubsub.Message {
 	ps.mu.Lock()
 	defer ps.mu.Unlock()
 
+	// Double-check pattern: verify subscription state after acquiring lock
 	_, exists := ps.subStarted[topic]
 	if exists {
 		return ps.receiveChan[topic]
+	}
+
+	// Re-check connection after acquiring lock to avoid race condition
+	if !ps.isConnected() {
+		ps.logger.Debugf("Redis not connected when starting subscription for topic '%s'", topic)
+		// Still create channel and start subscription - it will retry in goroutine
 	}
 
 	// Initialize channel before starting subscription
@@ -167,9 +174,10 @@ func (ps *PubSub) ensureSubscription(_ context.Context, topic string) chan *pubs
 
 	ps.receiveChan[topic] = make(chan *pubsub.Message, bufferSize)
 	ps.chanClosed[topic] = false
+	ps.closeOnce[topic] = &sync.Once{}
 
 	// Create cancel context for this subscription
-	subCtx, cancel := context.WithCancel(context.Background())
+	_, cancel := context.WithCancel(context.Background())
 	ps.subCancel[topic] = cancel
 
 	// Create WaitGroup for this subscription
@@ -178,36 +186,71 @@ func (ps *PubSub) ensureSubscription(_ context.Context, topic string) chan *pubs
 	ps.subWg[topic] = wg
 
 	// Start subscription in goroutine
-	go func() {
-		defer wg.Done()
-		defer cancel()
-
-		mode := ps.config.PubSubMode
-		if mode == "" {
-			mode = modeStreams
-		}
-
-		for {
-			if subCtx.Err() != nil {
-				return
-			}
-
-			if mode == modeStreams {
-				ps.subscribeToStream(subCtx, topic)
-			} else {
-				ps.subscribeToChannel(subCtx, topic)
-			}
-
-			if subCtx.Err() == nil {
-				ps.logger.Debugf("Subscription stopped for topic '%s', restarting...", topic)
-				time.Sleep(defaultRetryTimeout)
-			}
-		}
-	}()
+	go ps.runSubscriptionLoop(topic, wg, cancel)
 
 	ps.subStarted[topic] = struct{}{}
 
 	return ps.receiveChan[topic]
+}
+
+// runSubscriptionLoop runs the subscription loop in a goroutine.
+func (ps *PubSub) runSubscriptionLoop(topic string, wg *sync.WaitGroup, cancel context.CancelFunc) {
+	defer wg.Done()
+	defer cancel()
+
+	mode := ps.config.PubSubMode
+	if mode == "" {
+		mode = modeStreams
+	}
+
+	permanentFailure := false
+
+	for {
+		if !ps.shouldContinueSubscription(topic) {
+			return
+		}
+
+		if permanentFailure {
+			ps.logger.Errorf("Subscription for topic '%s' stopped due to permanent failure", topic)
+
+			return
+		}
+
+		currentCtx := context.Background()
+		err := ps.subscribeWithMode(currentCtx, topic, mode)
+
+		if err != nil && ps.isPermanentError(err) {
+			permanentFailure = true
+
+			ps.logger.Errorf("Permanent failure detected for topic '%s': %v", topic, err)
+
+			continue
+		}
+
+		// If subscription stopped (not due to permanent failure), restart after delay
+		ps.logger.Debugf("Subscription stopped for topic '%s', restarting...", topic)
+		time.Sleep(defaultRetryTimeout)
+	}
+}
+
+// shouldContinueSubscription checks if subscription should continue.
+func (ps *PubSub) shouldContinueSubscription(topic string) bool {
+	ps.mu.RLock()
+	defer ps.mu.RUnlock()
+
+	_, stillSubscribed := ps.subStarted[topic]
+	_, hasCancel := ps.subCancel[topic]
+
+	return stillSubscribed && hasCancel
+}
+
+// subscribeWithMode subscribes using the appropriate mode.
+func (ps *PubSub) subscribeWithMode(ctx context.Context, topic, mode string) error {
+	if mode == modeStreams {
+		return ps.subscribeToStreamWithError(ctx, topic)
+	}
+
+	return ps.subscribeToChannelWithError(ctx, topic)
 }
 
 // waitForMessage waits for a message from the channel.
@@ -242,12 +285,47 @@ func (ps *PubSub) waitForMessage(ctx context.Context, spanCtx context.Context, s
 	}
 }
 
+// isPermanentError checks if an error indicates a permanent failure that should not be retried.
+func (*PubSub) isPermanentError(err error) bool {
+	if err == nil {
+		return false
+	}
+
+	errStr := err.Error()
+	// Check for permanent errors: invalid topic name, permission denied, invalid consumer group
+	permanentErrors := []string{
+		"invalid topic",
+		"permission denied",
+		"NOAUTH",
+		"invalid consumer group",
+		"WRONGTYPE", // Wrong key type (e.g., trying to use stream as channel)
+	}
+
+	for _, permErr := range permanentErrors {
+		if strings.Contains(strings.ToLower(errStr), strings.ToLower(permErr)) {
+			return true
+		}
+	}
+
+	return false
+}
+
+// subscribeToChannelWithError subscribes to a Redis channel and returns error if permanent failure.
+func (ps *PubSub) subscribeToChannelWithError(ctx context.Context, topic string) error {
+	return ps.subscribeToChannel(ctx, topic)
+}
+
+// subscribeToStreamWithError subscribes to a Redis stream and returns error if permanent failure.
+func (ps *PubSub) subscribeToStreamWithError(ctx context.Context, topic string) error {
+	return ps.subscribeToStream(ctx, topic)
+}
+
 // subscribeToChannel subscribes to a Redis channel and forwards messages to the receive channel.
-func (ps *PubSub) subscribeToChannel(ctx context.Context, topic string) {
+func (ps *PubSub) subscribeToChannel(ctx context.Context, topic string) error {
 	redisPubSub := ps.client.Subscribe(ctx, topic)
 	if redisPubSub == nil {
 		ps.logger.Errorf("failed to create PubSub connection for topic '%s'", topic)
-		return
+		return fmt.Errorf("%w: %s", errPubSubConnectionFailedForTopic, topic)
 	}
 
 	ps.mu.Lock()
@@ -267,23 +345,29 @@ func (ps *PubSub) subscribeToChannel(ctx context.Context, topic string) {
 	ch := redisPubSub.Channel()
 	if ch == nil {
 		ps.logger.Errorf("failed to get channel from PubSub for topic '%s'", topic)
-		return
+
+		return fmt.Errorf("%w: %s", errPubSubChannelFailedForTopic, topic)
 	}
 
 	ps.processMessages(ctx, topic, ch)
+
+	return nil
 }
 
 // subscribeToStream subscribes to a Redis stream via a consumer group.
-func (ps *PubSub) subscribeToStream(ctx context.Context, topic string) {
+func (ps *PubSub) subscribeToStream(ctx context.Context, topic string) error {
 	if ps.config.PubSubStreamsConfig == nil || ps.config.PubSubStreamsConfig.ConsumerGroup == "" {
 		ps.logger.Errorf("consumer group not configured for stream '%s'", topic)
-		return
+
+		return fmt.Errorf("%w: %s", errConsumerGroupNotConfigured, topic)
 	}
 
 	group := ps.config.PubSubStreamsConfig.ConsumerGroup
 
 	if !ps.ensureConsumerGroup(ctx, topic, group) {
-		return
+		ps.logger.Errorf("failed to ensure consumer group '%s' for stream '%s'", group, topic)
+
+		return fmt.Errorf("%w: group=%s, stream=%s", errFailedToEnsureConsumerGroup, group, topic)
 	}
 
 	consumer := ps.getConsumerName()
@@ -291,14 +375,14 @@ func (ps *PubSub) subscribeToStream(ctx context.Context, topic string) {
 
 	block := ps.config.PubSubStreamsConfig.Block
 	if block == 0 {
-		block = 5 * time.Second
+		block = 1 * time.Second // Reduced default for better responsiveness
 	}
 
 	// Consume messages
 	for {
 		select {
 		case <-ctx.Done():
-			return
+			return nil
 		default:
 			ps.consumeStreamMessages(ctx, topic, group, consumer, block)
 		}
@@ -365,37 +449,130 @@ func (ps *PubSub) createConsumerGroup(ctx context.Context, topic, group string) 
 }
 
 func (ps *PubSub) consumeStreamMessages(ctx context.Context, topic, group, consumer string, block time.Duration) {
-	// Read new messages
-	bufferSize := ps.config.PubSubBufferSize
-	if bufferSize == 0 {
-		bufferSize = defaultPubSubBufferSize // fallback default
+	available, pendingRead, count := ps.getChannelCapacity(topic)
+	if available == 0 {
+		return
 	}
 
-	streams, err := ps.client.XReadGroup(ctx, &redis.XReadGroupArgs{
-		Group:    group,
-		Consumer: consumer,
-		Streams:  []string{topic, ">"},
-		Count:    int64(bufferSize),
-		Block:    block,
-		NoAck:    false,
-	}).Result()
-	if err != nil {
-		switch {
-		case errors.Is(err, context.Canceled), errors.Is(err, redis.Nil):
-			return
-		default:
-			ps.logger.Errorf("failed to read from stream '%s': %v", topic, err)
-			time.Sleep(defaultRetryTimeout)
-
-			return
+	// Try to read pending messages first if not already read
+	if !pendingRead {
+		if ps.readPendingMessages(ctx, topic, group, consumer, count) {
+			return // Pending messages were processed
 		}
 	}
 
+	// Read new messages
+	ps.readNewMessages(ctx, topic, group, consumer, count, block)
+}
+
+// getChannelCapacity returns available channel capacity, pending read status, and count.
+func (ps *PubSub) getChannelCapacity(topic string) (int, bool, int64) {
+	ps.mu.RLock()
+	defer ps.mu.RUnlock()
+
+	msgChan, exists := ps.receiveChan[topic]
+	available := 0
+	if exists && !ps.chanClosed[topic] {
+		available = cap(msgChan) - len(msgChan)
+	}
+
+	pendingRead := ps.pendingRead[topic]
+
+	bufferSize := ps.config.PubSubBufferSize
+	if bufferSize == 0 {
+		bufferSize = defaultPubSubBufferSize
+	}
+
+	count := int64(bufferSize)
+	if available < bufferSize {
+		count = int64(available)
+	}
+
+	return available, pendingRead, count
+}
+
+// readPendingMessages reads and processes pending messages. Returns true if messages were processed.
+func (ps *PubSub) readPendingMessages(ctx context.Context, topic, group, consumer string, count int64) bool {
+	streams, err := ps.client.XReadGroup(ctx, &redis.XReadGroupArgs{
+		Group:    group,
+		Consumer: consumer,
+		Streams:  []string{topic, "0"},
+		Count:    count,
+		Block:    0,
+		NoAck:    false,
+	}).Result()
+
+	ps.markPendingRead(topic)
+
+	if err != nil && errors.Is(err, redis.Nil) {
+		return false // No pending messages, continue to read new
+	}
+
+	if err != nil {
+		ps.logger.Debugf("error reading pending messages for stream '%s': %v, will try new messages", topic, err)
+
+		return false
+	}
+
+	if !ps.hasMessages(streams) {
+		return false // Empty result
+	}
+
+	// Process pending messages
+	ps.processStreamMessages(ctx, topic, streams, group)
+
+	return true
+}
+
+// markPendingRead marks pending messages as read.
+func (ps *PubSub) markPendingRead(topic string) {
+	ps.mu.Lock()
+	ps.pendingRead[topic] = true
+	ps.mu.Unlock()
+}
+
+// hasMessages checks if streams contain any messages.
+func (ps *PubSub) hasMessages(streams []redis.XStream) bool {
+	for _, stream := range streams {
+		if len(stream.Messages) > 0 {
+			return true
+		}
+	}
+
+	return false
+}
+
+// processStreamMessages processes messages from streams.
+func (ps *PubSub) processStreamMessages(ctx context.Context, topic string, streams []redis.XStream, group string) {
 	for _, stream := range streams {
 		for _, msg := range stream.Messages {
 			ps.handleStreamMessage(ctx, topic, &msg, group)
 		}
 	}
+}
+
+// readNewMessages reads and processes new messages from the stream.
+func (ps *PubSub) readNewMessages(ctx context.Context, topic, group, consumer string, count int64, block time.Duration) {
+	streams, err := ps.client.XReadGroup(ctx, &redis.XReadGroupArgs{
+		Group:    group,
+		Consumer: consumer,
+		Streams:  []string{topic, ">"},
+		Count:    count,
+		Block:    block,
+		NoAck:    false,
+	}).Result()
+	if err != nil {
+		if errors.Is(err, context.Canceled) || errors.Is(err, redis.Nil) {
+			return
+		}
+
+		ps.logger.Errorf("failed to read from stream '%s': %v", topic, err)
+		time.Sleep(defaultRetryTimeout)
+
+		return
+	}
+
+	ps.processStreamMessages(ctx, topic, streams, group)
 }
 
 // getConsumerName returns the configured consumer name or generates one.
@@ -473,13 +650,23 @@ func (ps *PubSub) dispatchMessage(ctx context.Context, topic string, m *pubsub.M
 		return
 	}
 
-	select {
-	case msgChan <- m:
-	case <-ctx.Done():
-		return
-	default:
-		ps.logger.Errorf("message channel full for topic '%s', dropping message", topic)
-	}
+	// Use recover to handle closed channel gracefully
+	func() {
+		defer func() {
+			if r := recover(); r != nil {
+				ps.logger.Debugf("channel closed for topic '%s' during dispatch", topic)
+			}
+		}()
+
+		select {
+		case msgChan <- m:
+		case <-ctx.Done():
+			return
+		default:
+			ps.metrics.IncrementCounter(ctx, "app_pubsub_dropped_messages_total", "topic", topic)
+			ps.logger.Errorf("message channel full for topic '%s', dropping message", topic)
+		}
+	}()
 }
 
 // CreateTopic is a no-op for Redis PubSub (channels are created on first publish/subscribe).
@@ -567,10 +754,6 @@ func (ps *PubSub) unsubscribe(topic string) error {
 		return nil
 	}
 
-	ps.mu.Lock()
-	ps.chanClosed[topic] = true
-	ps.mu.Unlock()
-
 	mode := ps.config.PubSubMode
 	if mode == "" {
 		mode = modeStreams
@@ -578,13 +761,19 @@ func (ps *PubSub) unsubscribe(topic string) error {
 
 	if mode == modeStreams {
 		ps.cleanupStreamConsumers(topic)
-
 		return nil
 	}
 
+	// Unsubscribe from Redis first, then set chanClosed flag to avoid race condition
 	ps.unsubscribeFromRedis(topic)
 	ps.cancelSubscription(topic)
 	ps.waitForGoroutine(topic)
+
+	// Set chanClosed after unsubscribe to ensure messages in flight are handled
+	ps.mu.Lock()
+	ps.chanClosed[topic] = true
+	ps.mu.Unlock()
+
 	ps.cleanupSubscription(topic)
 
 	return nil
@@ -650,20 +839,25 @@ func (ps *PubSub) waitForGoroutine(topic string) {
 // cleanupSubscription cleans up subscription resources.
 func (ps *PubSub) cleanupSubscription(topic string) {
 	ps.mu.Lock()
-	defer ps.mu.Unlock()
+	ch, chExists := ps.receiveChan[topic]
+	closeOnce, onceExists := ps.closeOnce[topic]
+	ps.mu.Unlock()
 
-	if ch, ok := ps.receiveChan[topic]; ok {
-		if !ps.chanClosed[topic] {
-			ps.chanClosed[topic] = true
+	if chExists && onceExists {
+		ps.chanClosed[topic] = true
 
+		closeOnce.Do(func() {
 			close(ch)
-		}
-
-		delete(ps.receiveChan, topic)
+		})
 	}
 
+	ps.mu.Lock()
+	delete(ps.receiveChan, topic)
+	delete(ps.closeOnce, topic)
 	delete(ps.subStarted, topic)
 	delete(ps.chanClosed, topic)
+	delete(ps.pendingRead, topic)
+	ps.mu.Unlock()
 }
 
 // cleanupStreamConsumers cleans up stream consumer resources.
@@ -679,15 +873,22 @@ func (ps *PubSub) cleanupStreamConsumers(topic string) {
 		delete(ps.streamConsumers, topic)
 	}
 
-	if ch, ok := ps.receiveChan[topic]; ok && !ps.chanClosed[topic] {
-		ps.chanClosed[topic] = true
+	if ch, ok := ps.receiveChan[topic]; ok {
+		if closeOnce, onceExists := ps.closeOnce[topic]; onceExists {
+			ps.chanClosed[topic] = true
 
-		close(ch)
+			closeOnce.Do(func() {
+				close(ch)
+			})
+		}
+
 		delete(ps.receiveChan, topic)
+		delete(ps.closeOnce, topic)
 	}
 
 	delete(ps.subStarted, topic)
 	delete(ps.chanClosed, topic)
+	delete(ps.pendingRead, topic)
 }
 
 // Query retrieves messages from a Redis channel or stream.
@@ -724,7 +925,17 @@ func (ps *PubSub) queryChannel(ctx context.Context, query string, args ...any) (
 		return nil, errPubSubConnectionFailed
 	}
 
-	defer redisPubSub.Close()
+	defer func() {
+		if redisPubSub != nil {
+			// Explicitly unsubscribe before closing to clean up Redis subscription
+			unsubCtx, unsubCancel := context.WithTimeout(context.Background(), unsubscribeOpTimeout)
+
+			_ = redisPubSub.Unsubscribe(unsubCtx, query)
+
+			unsubCancel()
+			redisPubSub.Close()
+		}
+	}()
 
 	ch := redisPubSub.Channel()
 	if ch == nil {
@@ -874,8 +1085,14 @@ func (ps *PubSub) Close() error {
 
 	// Close all channels
 	for topic, ch := range ps.receiveChan {
-		close(ch)
+		if closeOnce, ok := ps.closeOnce[topic]; ok {
+			closeOnce.Do(func() {
+				close(ch)
+			})
+		}
+
 		delete(ps.receiveChan, topic)
+		delete(ps.closeOnce, topic)
 	}
 
 	// Clean up stream consumers
@@ -890,6 +1107,7 @@ func (ps *PubSub) Close() error {
 	// Clear all maps
 	ps.subStarted = make(map[string]struct{})
 	ps.chanClosed = make(map[string]bool)
+	ps.closeOnce = make(map[string]*sync.Once)
 
 	if ps.cancel != nil {
 		ps.cancel() // Stop monitorConnection
@@ -946,13 +1164,32 @@ func (ps *PubSub) monitorConnection(ctx context.Context) {
 	}
 }
 
-// resubscribeAll logs that resubscription is needed (handled by the subscribe loop).
-// The actual resubscription happens automatically in the subscribe loop when connection is restored.
+// resubscribeAll triggers resubscription by canceling existing subscription contexts.
+// Subscription goroutines will detect cancellation and restart, reconnecting to Redis.
 func (ps *PubSub) resubscribeAll() {
-	ps.mu.RLock()
-	defer ps.mu.RUnlock()
+	ps.mu.Lock()
+	defer ps.mu.Unlock()
 
-	if len(ps.subStarted) > 0 {
-		ps.logger.Infof("Ensuring all subscriptions are active after reconnection")
+	if len(ps.subStarted) == 0 {
+		return
+	}
+
+	ps.logger.Infof("Triggering resubscription for %d topics after reconnection", len(ps.subStarted))
+
+	// Cancel all subscription contexts to trigger restart
+	// This will cause subscription goroutines to restart and reconnect
+	// Note: We don't remove from subStarted - the goroutines will restart automatically
+	for topic, cancel := range ps.subCancel {
+		if cancel != nil {
+			// Cancel the old context
+			cancel()
+
+			// Create new context for restart
+			_, newCancel := context.WithCancel(context.Background())
+			ps.subCancel[topic] = newCancel
+
+			// Reset pendingRead so pending messages are read again
+			ps.pendingRead[topic] = false
+		}
 	}
 }

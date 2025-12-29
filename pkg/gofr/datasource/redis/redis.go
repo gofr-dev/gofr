@@ -30,11 +30,15 @@ const (
 
 var (
 	// PubSub errors.
-	errClientNotConnected       = errors.New("redis client not connected")
-	errEmptyTopicName           = errors.New("topic name cannot be empty")
-	errPubSubConnectionFailed   = errors.New("failed to create PubSub connection for query")
-	errPubSubChannelFailed      = errors.New("failed to get channel from PubSub for query")
-	errConsumerGroupNotProvided = errors.New("consumer group must be provided for streams mode")
+	errClientNotConnected             = errors.New("redis client not connected")
+	errEmptyTopicName                 = errors.New("topic name cannot be empty")
+	errPubSubConnectionFailed         = errors.New("failed to create PubSub connection for query")
+	errPubSubChannelFailed            = errors.New("failed to get channel from PubSub for query")
+	errConsumerGroupNotProvided       = errors.New("consumer group must be provided for streams mode")
+	errPubSubConnectionFailedForTopic = errors.New("failed to create PubSub connection for topic")
+	errPubSubChannelFailedForTopic    = errors.New("failed to get channel from PubSub for topic")
+	errConsumerGroupNotConfigured     = errors.New("consumer group not configured for stream")
+	errFailedToEnsureConsumerGroup    = errors.New("failed to ensure consumer group for stream")
 )
 
 type Config struct {
@@ -97,7 +101,9 @@ type PubSub struct {
 	subPubSub       map[string]*redis.PubSub // Track active PubSub connections for unsubscribe
 	subWg           map[string]*sync.WaitGroup
 	chanClosed      map[string]bool
+	closeOnce       map[string]*sync.Once // Ensure channels are closed only once
 	streamConsumers map[string]*streamConsumer
+	pendingRead     map[string]bool // Track if pending messages have been read for streams
 	mu              sync.RWMutex
 	ctx             context.Context
 	cancel          context.CancelFunc
@@ -260,7 +266,9 @@ func newPubSub(client *redis.Client, redisCfg *Config, logger datasource.Logger,
 		subPubSub:       make(map[string]*redis.PubSub),
 		subWg:           make(map[string]*sync.WaitGroup),
 		chanClosed:      make(map[string]bool),
+		closeOnce:       make(map[string]*sync.Once),
 		streamConsumers: make(map[string]*streamConsumer),
+		pendingRead:     make(map[string]bool),
 	}
 
 	ps.ctx, ps.cancel = context.WithCancel(context.Background())

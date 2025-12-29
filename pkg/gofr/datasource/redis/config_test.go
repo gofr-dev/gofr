@@ -131,7 +131,7 @@ func TestGetRedisConfig_PubSubStreams_Defaults(t *testing.T) {
 	assert.Equal(t, "mygroup", conf.PubSubStreamsConfig.ConsumerGroup)
 	assert.Empty(t, conf.PubSubStreamsConfig.ConsumerName)
 	assert.Equal(t, int64(0), conf.PubSubStreamsConfig.MaxLen)
-	assert.Equal(t, 5*time.Second, conf.PubSubStreamsConfig.Block) // Default block
+	assert.Equal(t, 1*time.Second, conf.PubSubStreamsConfig.Block) // Default block (reduced from 5s for better responsiveness)
 }
 
 func TestGetRedisConfig_PubSubStreams_InvalidValues(t *testing.T) {
@@ -148,7 +148,7 @@ func TestGetRedisConfig_PubSubStreams_InvalidValues(t *testing.T) {
 	require.NotNil(t, conf.PubSubStreamsConfig)
 
 	assert.Equal(t, int64(0), conf.PubSubStreamsConfig.MaxLen)
-	assert.Equal(t, 5*time.Second, conf.PubSubStreamsConfig.Block)
+	assert.Equal(t, 1*time.Second, conf.PubSubStreamsConfig.Block) // Falls back to default when invalid
 }
 
 func TestGetRedisConfig_PubSubMode_InvalidFallsBackToStreams(t *testing.T) {

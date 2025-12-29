@@ -1290,7 +1290,8 @@ func TestPubSub_SubscribeToChannel_NilPubSub(t *testing.T) {
 	done := make(chan struct{})
 
 	go func() {
-		client.PubSub.subscribeToChannel(ctx, "test-topic")
+		_ = client.PubSub.subscribeToChannel(ctx, "test-topic")
+
 		close(done)
 	}()
 
