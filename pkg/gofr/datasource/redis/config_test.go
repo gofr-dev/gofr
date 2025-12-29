@@ -131,7 +131,8 @@ func TestGetRedisConfig_PubSubStreams_Defaults(t *testing.T) {
 	assert.Equal(t, "mygroup", conf.PubSubStreamsConfig.ConsumerGroup)
 	assert.Empty(t, conf.PubSubStreamsConfig.ConsumerName)
 	assert.Equal(t, int64(0), conf.PubSubStreamsConfig.MaxLen)
-	assert.Equal(t, 1*time.Second, conf.PubSubStreamsConfig.Block) // Default block (reduced from 5s for better responsiveness)
+	assert.Equal(t, 1*time.Second, conf.PubSubStreamsConfig.Block)     // Default block (reduced from 5s for better responsiveness)
+	assert.InEpsilon(t, 0.7, conf.PubSubStreamsConfig.PELRatio, 0.001) // Default PEL ratio
 }
 
 func TestGetRedisConfig_PubSubStreams_InvalidValues(t *testing.T) {
@@ -148,7 +149,61 @@ func TestGetRedisConfig_PubSubStreams_InvalidValues(t *testing.T) {
 	require.NotNil(t, conf.PubSubStreamsConfig)
 
 	assert.Equal(t, int64(0), conf.PubSubStreamsConfig.MaxLen)
-	assert.Equal(t, 1*time.Second, conf.PubSubStreamsConfig.Block) // Falls back to default when invalid
+	assert.Equal(t, 1*time.Second, conf.PubSubStreamsConfig.Block)     // Falls back to default when invalid
+	assert.InEpsilon(t, 0.7, conf.PubSubStreamsConfig.PELRatio, 0.001) // Falls back to default when invalid
+}
+
+func TestGetRedisConfig_PubSubStreams_PELRatio(t *testing.T) {
+	conf := testGetRedisConfig(t, map[string]string{
+		"PUBSUB_BACKEND":               "REDIS",
+		"REDIS_HOST":                   "localhost",
+		"REDIS_PUBSUB_MODE":            "streams",
+		"REDIS_STREAMS_CONSUMER_GROUP": "mygroup",
+		"REDIS_STREAMS_PEL_RATIO":      "0.5",
+	})
+
+	assert.Equal(t, "streams", conf.PubSubMode)
+	require.NotNil(t, conf.PubSubStreamsConfig)
+	assert.InEpsilon(t, 0.5, conf.PubSubStreamsConfig.PELRatio, 0.001)
+}
+
+func TestGetRedisConfig_PubSubStreams_PELRatio_Invalid(t *testing.T) {
+	// Test invalid ratio (out of range) - should fall back to default
+	conf := testGetRedisConfig(t, map[string]string{
+		"PUBSUB_BACKEND":               "REDIS",
+		"REDIS_HOST":                   "localhost",
+		"REDIS_PUBSUB_MODE":            "streams",
+		"REDIS_STREAMS_CONSUMER_GROUP": "mygroup",
+		"REDIS_STREAMS_PEL_RATIO":      "1.5", // Invalid: > 1.0
+	})
+
+	assert.Equal(t, "streams", conf.PubSubMode)
+	require.NotNil(t, conf.PubSubStreamsConfig)
+	assert.InEpsilon(t, 0.7, conf.PubSubStreamsConfig.PELRatio, 0.001) // Should fall back to default
+
+	// Test invalid ratio (negative) - should fall back to default
+	conf2 := testGetRedisConfig(t, map[string]string{
+		"PUBSUB_BACKEND":               "REDIS",
+		"REDIS_HOST":                   "localhost",
+		"REDIS_PUBSUB_MODE":            "streams",
+		"REDIS_STREAMS_CONSUMER_GROUP": "mygroup",
+		"REDIS_STREAMS_PEL_RATIO":      "-0.1", // Invalid: < 0.0
+	})
+
+	require.NotNil(t, conf2.PubSubStreamsConfig)
+	assert.InEpsilon(t, 0.7, conf2.PubSubStreamsConfig.PELRatio, 0.001) // Should fall back to default
+
+	// Test invalid ratio (non-numeric) - should fall back to default
+	conf3 := testGetRedisConfig(t, map[string]string{
+		"PUBSUB_BACKEND":               "REDIS",
+		"REDIS_HOST":                   "localhost",
+		"REDIS_PUBSUB_MODE":            "streams",
+		"REDIS_STREAMS_CONSUMER_GROUP": "mygroup",
+		"REDIS_STREAMS_PEL_RATIO":      "invalid",
+	})
+
+	require.NotNil(t, conf3.PubSubStreamsConfig)
+	assert.InEpsilon(t, 0.7, conf3.PubSubStreamsConfig.PELRatio, 0.001) // Should fall back to default
 }
 
 func TestGetRedisConfig_PubSubMode_InvalidFallsBackToStreams(t *testing.T) {

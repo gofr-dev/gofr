@@ -1139,6 +1139,157 @@ func TestPubSub_DispatchMessage_TopicNotExists(t *testing.T) {
 	assert.NotNil(t, psClient)
 }
 
+func TestPubSub_CalculateMessageSplit_Ratio_0_0(t *testing.T) {
+	t.Parallel()
+
+	client, s := setupTest(t, map[string]string{
+		"REDIS_PUBSUB_MODE":            "streams",
+		"REDIS_STREAMS_CONSUMER_GROUP": "test-group",
+		"REDIS_STREAMS_PEL_RATIO":      "0.0",
+	})
+	defer s.Close()
+	defer client.Close()
+
+	psClient := client.PubSub
+	psClient.config.PubSubStreamsConfig.PELRatio = 0.0
+
+	pelCount, newCount := calculateMessageSplit(100, 0.0)
+	assert.Equal(t, int64(0), pelCount, "PEL count should be 0 for ratio 0.0")
+	assert.Equal(t, int64(100), newCount, "New count should be 100 for ratio 0.0")
+}
+
+func TestPubSub_CalculateMessageSplit_Ratio_1_0(t *testing.T) {
+	t.Parallel()
+
+	client, s := setupTest(t, map[string]string{
+		"REDIS_PUBSUB_MODE":            "streams",
+		"REDIS_STREAMS_CONSUMER_GROUP": "test-group",
+		"REDIS_STREAMS_PEL_RATIO":      "1.0",
+	})
+	defer s.Close()
+	defer client.Close()
+
+	psClient := client.PubSub
+	psClient.config.PubSubStreamsConfig.PELRatio = 1.0
+
+	pelCount, newCount := calculateMessageSplit(100, 1.0)
+	assert.Equal(t, int64(100), pelCount, "PEL count should be 100 for ratio 1.0")
+	assert.Equal(t, int64(0), newCount, "New count should be 0 for ratio 1.0")
+}
+
+func TestPubSub_CalculateMessageSplit_Ratio_0_5(t *testing.T) {
+	t.Parallel()
+
+	client, s := setupTest(t, map[string]string{
+		"REDIS_PUBSUB_MODE":            "streams",
+		"REDIS_STREAMS_CONSUMER_GROUP": "test-group",
+		"REDIS_STREAMS_PEL_RATIO":      "0.5",
+	})
+	defer s.Close()
+	defer client.Close()
+
+	psClient := client.PubSub
+	psClient.config.PubSubStreamsConfig.PELRatio = 0.5
+
+	pelCount, newCount := calculateMessageSplit(100, 0.5)
+	assert.Equal(t, int64(50), pelCount, "PEL count should be 50 for ratio 0.5")
+	assert.Equal(t, int64(50), newCount, "New count should be 50 for ratio 0.5")
+}
+
+func TestPubSub_CalculateMessageSplit_Ratio_0_7(t *testing.T) {
+	t.Parallel()
+
+	client, s := setupTest(t, map[string]string{
+		"REDIS_PUBSUB_MODE":            "streams",
+		"REDIS_STREAMS_CONSUMER_GROUP": "test-group",
+		"REDIS_STREAMS_PEL_RATIO":      "0.7",
+	})
+	defer s.Close()
+	defer client.Close()
+
+	psClient := client.PubSub
+	psClient.config.PubSubStreamsConfig.PELRatio = 0.7
+
+	pelCount, newCount := calculateMessageSplit(100, 0.7)
+	assert.Equal(t, int64(70), pelCount, "PEL count should be 70 for ratio 0.7")
+	assert.Equal(t, int64(30), newCount, "New count should be 30 for ratio 0.7")
+}
+
+func TestPubSub_CalculateMessageSplit_SmallCapacity(t *testing.T) {
+	t.Parallel()
+
+	client, s := setupTest(t, map[string]string{
+		"REDIS_PUBSUB_MODE":            "streams",
+		"REDIS_STREAMS_CONSUMER_GROUP": "test-group",
+		"REDIS_STREAMS_PEL_RATIO":      "0.7",
+	})
+	defer s.Close()
+	defer client.Close()
+
+	psClient := client.PubSub
+	psClient.config.PubSubStreamsConfig.PELRatio = 0.7
+
+	// Test with small capacity (10)
+	pelCount, newCount := calculateMessageSplit(10, 0.7)
+	assert.Equal(t, int64(7), pelCount, "PEL count should be 7 for capacity 10 with ratio 0.7")
+	assert.Equal(t, int64(3), newCount, "New count should be 3 for capacity 10 with ratio 0.7")
+	assert.Equal(t, int64(10), pelCount+newCount, "Total should equal capacity")
+}
+
+func TestPubSub_CalculateMessageSplit_ZeroCapacity(t *testing.T) {
+	t.Parallel()
+
+	client, s := setupTest(t, map[string]string{
+		"REDIS_PUBSUB_MODE":            "streams",
+		"REDIS_STREAMS_CONSUMER_GROUP": "test-group",
+	})
+	defer s.Close()
+	defer client.Close()
+
+	pelCount, newCount := calculateMessageSplit(0, 0.7)
+	assert.Equal(t, int64(0), pelCount, "PEL count should be 0 for zero capacity")
+	assert.Equal(t, int64(0), newCount, "New count should be 0 for zero capacity")
+}
+
+func TestPubSub_ConsumeStreamMessages_RatioBasedMixing(t *testing.T) {
+	t.Parallel()
+
+	client, s := setupTest(t, map[string]string{
+		"REDIS_PUBSUB_MODE":            "streams",
+		"REDIS_STREAMS_CONSUMER_GROUP": "test-group",
+		"REDIS_STREAMS_PEL_RATIO":      "0.5",
+		"REDIS_PUBSUB_BUFFER_SIZE":     "10",
+	})
+	defer s.Close()
+	defer client.Close()
+
+	ctx := context.Background()
+	topic := "ratio-mixing-topic"
+	group := "test-group"
+
+	// Create topic and consumer group
+	err := client.PubSub.CreateTopic(ctx, topic)
+	require.NoError(t, err)
+
+	// Ensure subscription to create channel
+	msgChan := client.PubSub.ensureSubscription(ctx, topic)
+	require.NotNil(t, msgChan)
+
+	// Verify ratio is set correctly
+	psClient := client.PubSub
+	require.NotNil(t, psClient.config.PubSubStreamsConfig)
+	assert.InEpsilon(t, 0.5, psClient.config.PubSubStreamsConfig.PELRatio, 0.001, "PEL ratio should be 0.5")
+
+	// Test that consumeStreamMessages can be called (it will check capacity and return if 0)
+	// Since channel is empty, available should be 10
+	available := psClient.getAvailableCapacity(topic)
+	assert.Positive(t, available, "Channel should have available capacity")
+
+	// Call consumeStreamMessages - it should attempt to read based on ratio
+	// This is a basic smoke test to ensure the function doesn't panic
+	psClient.consumeStreamMessages(ctx, topic, group, "test-consumer", 1*time.Second)
+}
+
 func TestPubSub_CheckGroupExists_GroupExists(t *testing.T) {
 	t.Parallel()
 

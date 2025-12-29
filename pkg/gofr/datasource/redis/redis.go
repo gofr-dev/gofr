@@ -73,6 +73,11 @@ type StreamsConfig struct {
 	// Block is the blocking duration for XREADGROUP (optional)
 	// If > 0, calls will block for this duration waiting for new messages
 	Block time.Duration
+
+	// PELRatio is the ratio of PEL (pending) messages to read (0.0-1.0)
+	// Default: 0.7 (70% PEL, 30% new messages)
+	// 0.0 = only new messages, 1.0 = only PEL messages
+	PELRatio float64
 }
 
 type Redis struct {

@@ -362,6 +362,7 @@ REDIS_TLS_KEY=/path/to/key.pem
 REDIS_STREAMS_CONSUMER_GROUP=my-group
 REDIS_STREAMS_CONSUMER_NAME=my-consumer
 REDIS_STREAMS_BLOCK_TIMEOUT=5s
+REDIS_STREAMS_PEL_RATIO=0.7  # 70% PEL, 30% new messages
 REDIS_STREAMS_MAXLEN=1000
 
 # To use PubSub mode instead, set:
@@ -386,7 +387,7 @@ docker run -d \
 	redis:7-alpine redis-server --requirepass mypassword
 ```
 
-#### Pub/Sub configs
+#### Redis configs
 
 The following configs apply specifically to Redis Pub/Sub behavior. For base Redis connection/TLS configs, refer to
 `https://gofr.dev/docs/references/configs#redis`.
@@ -406,14 +407,14 @@ The following configs apply specifically to Redis Pub/Sub behavior. For base Red
 ---
 
 - `REDIS_PUBSUB_MODE`
-- Pub/Sub mode: `streams` (default, at-least-once) or `pubsub` (at-most-once). **Streams mode** provides message persistence, consumer groups, acknowledgments, and replay capability - ideal for reliable message processing, multi-consumer scenarios, and applications requiring message durability. **PubSub mode** offers fire-and-forget messaging with lower overhead - ideal for real-time notifications, event broadcasting, and scenarios where message loss is acceptable.
+- Mode: `streams` (default, at-least-once) or `pubsub` (at-most-once)
 - `streams`
 - `pubsub`
 
 ---
 
 - `REDIS_STREAMS_CONSUMER_GROUP`
-- Consumer group (required in streams mode)
+- Consumer group name (required in streams mode)
 - -
 - `mygroup`
 
@@ -426,50 +427,50 @@ The following configs apply specifically to Redis Pub/Sub behavior. For base Red
 
 ---
 
-- `REDIS_STREAMS_MAXLEN`
-- Max stream length (approximate) for trimming
-- `0` (unlimited)
-- `10000`
-
----
-
 - `REDIS_STREAMS_BLOCK_TIMEOUT`
-- Block duration for stream reads using Redis `XREADGROUP`. Controls how long the consumer blocks waiting for new messages before timing out. Lower values (1s-2s) provide faster detection but increase CPU usage. Higher values (10s-30s) reduce CPU usage, ideal for batch processing.
+- Blocking timeout for stream reads. Lower values (1s-2s) = faster detection, higher CPU. Higher values (10s-30s) = lower CPU, higher latency.
 - `5s`
-- `2s` (low latency) or `30s` (low CPU)
+- `2s` or `30s`
+
+---
+
+- `REDIS_STREAMS_PEL_RATIO`
+- Ratio of PEL (pending) messages to read vs new messages (0.0-1.0). Controls the balance between processing retry messages and fresh messages. 0.0 = only new messages, 1.0 = only PEL messages, 0.7 = 70% PEL, 30% new.
+- `0.7`
+- `0.5` or `0.8`
 
 ---
 
 - `REDIS_STREAMS_MAXLEN`
-- Max stream length (approximate) for trimming. Limits the number of messages in the stream to prevent unbounded memory growth. Useful for high-throughput scenarios where old messages can be discarded. Set to `0` for unlimited (messages persist until explicitly deleted).
+- Max stream length for trimming (approximate). Set to `0` for unlimited.
 - `0` (unlimited)
 - `10000`
 
 ---
 
 - `REDIS_PUBSUB_DB`
-- Redis DB to use only for Redis Pub/Sub. Keep this different from `REDIS_DB` when using migrations + streams mode to avoid `WRONGTYPE` on `gofr_migrations`.
-- `15` (highest default Redis database)
+- Redis DB for Pub/Sub operations. Keep different from `REDIS_DB` when using migrations + streams mode.
+- `15`
 - `1`
 
 ---
 
 - `REDIS_PUBSUB_BUFFER_SIZE`
-- Channel/stream message buffer size
+- Message buffer size
 - `100`
 - `1000`
 
 ---
 
 - `REDIS_PUBSUB_QUERY_TIMEOUT`
-- Default timeout for `Query` operations
+- Timeout for Query operations
 - `5s`
 - `30s`
 
 ---
 
 - `REDIS_PUBSUB_QUERY_LIMIT`
-- Default message limit for `Query` operations
+- Message limit for Query operations
 - `10`
 - `50`
 {% /table %}
@@ -489,18 +490,7 @@ docker run -d \
 	--tls-ca-cert-file /tls/ca.crt
 ```
 
-> **Note**: Redis Pub/Sub uses channels (topics) that are created automatically on first publish/subscribe. 
-> Channels cannot be explicitly created or deleted - they exist as long as there are active subscriptions.
-
-> **Note**: By default, Redis Pub/Sub uses Streams mode which provides persistence and at-least-once delivery semantics with consumer groups and acknowledgments.
-> Use `REDIS_PUBSUB_MODE=pubsub` for fire-and-forget messaging with at-most-once delivery semantics (messages are not persisted).
-
-> **Important**: If you are using **GoFr migrations** with **Redis** and also using **Redis Pub/Sub in Streams mode**, do not use the same Redis logical DB for both.
-> GoFr stores Redis migration state in a Redis **HASH** named `gofr_migrations`, while Redis Streams mode uses a Redis **STREAM** key for topics (including the PubSub migration topic `gofr_migrations`).
-> If both clients share the same DB, migrations can fail with `WRONGTYPE` errors.
-> By default, `REDIS_DB` is `0` and `REDIS_PUBSUB_DB` is `15` (highest default Redis database), so they are already separated. If you change `REDIS_DB` from the default, ensure `REDIS_PUBSUB_DB` is set to a different DB index (for example, `REDIS_DB=0` and `REDIS_PUBSUB_DB=1`).
-
-> **Note on `REDIS_STREAMS_BLOCK_TIMEOUT`**: This configuration controls how long the consumer blocks waiting for new messages using Redis `XREADGROUP` before the call times out and retries. **Benefits of configuring this:** (1) **Resource efficiency** - Without blocking, consumers would constantly poll Redis, wasting CPU cycles and network bandwidth. Blocking allows Redis to push messages immediately when available. (2) **Latency vs CPU trade-off** - Lower values (e.g., `1s-2s`) provide faster message detection but increase CPU from frequent timeouts. Higher values (e.g., `10s-30s`) reduce CPU usage and network round-trips but may delay processing. (3) **Cost optimization** - In cloud/serverless environments, reducing CPU usage directly reduces costs. (4) **Battery efficiency** - Important for mobile/edge deployments where power consumption matters. Choose based on your latency requirements: real-time systems may use `1s-2s`, while batch processing can use `10s-30s`.
+> **Note**: Topics are auto-created on first publish. When using GoFr migrations with Streams mode, keep `REDIS_DB` and `REDIS_PUBSUB_DB` separate (defaults: 0 and 15). For `REDIS_STREAMS_BLOCK_TIMEOUT`: use 1s-2s for real-time or 10s-30s for batch processing.
 
 ### Azure Event Hubs
 GoFr supports Event Hubs starting gofr version v1.22.0.

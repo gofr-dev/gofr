@@ -449,50 +449,80 @@ func (ps *PubSub) createConsumerGroup(ctx context.Context, topic, group string) 
 }
 
 func (ps *PubSub) consumeStreamMessages(ctx context.Context, topic, group, consumer string, block time.Duration) {
-	available, pendingRead, count := ps.getChannelCapacity(topic)
+	available := ps.getAvailableCapacity(topic)
 	if available == 0 {
 		return
 	}
 
-	// Try to read pending messages first if not already read
-	if !pendingRead {
-		if ps.readPendingMessages(ctx, topic, group, consumer, count) {
-			return // Pending messages were processed
-		}
+	// Check if we should read from PEL
+	// pendingRead is false initially and after message drops, true after PEL is read
+	// This prevents re-reading the same pending messages before they're acknowledged
+	ps.mu.RLock()
+	alreadyReadPending := ps.pendingRead[topic]
+	ps.mu.RUnlock()
+
+	// Get PEL ratio from config (default 0.7 = 70% PEL, 30% new)
+	ratio := 0.7 // Default ratio
+	if ps.config.PubSubStreamsConfig != nil {
+		ratio = ps.config.PubSubStreamsConfig.PELRatio
 	}
 
-	// Read new messages
-	ps.readNewMessages(ctx, topic, group, consumer, count, block)
+	// Calculate split based on ratio
+	pelCount, newCount := calculateMessageSplit(available, ratio)
+
+	// Read from PEL only if we haven't already read pending messages
+	// This prevents duplicate processing before messages are acknowledged
+	if pelCount > 0 && !alreadyReadPending {
+		ps.readPendingMessages(ctx, topic, group, consumer, pelCount)
+		// Re-check capacity after PEL read to avoid wasting resources
+		available = ps.getAvailableCapacity(topic)
+		// Adjust newCount based on remaining capacity
+		newCount = min(newCount, int64(available))
+	}
+
+	// Read new messages if count > 0
+	if newCount > 0 {
+		ps.readNewMessages(ctx, topic, group, consumer, newCount, block)
+	}
 }
 
-// getChannelCapacity returns available channel capacity, pending read status, and count.
-func (ps *PubSub) getChannelCapacity(topic string) (available int, pendingRead bool, count int64) {
+// getAvailableCapacity returns the available channel capacity for the given topic.
+func (ps *PubSub) getAvailableCapacity(topic string) int {
 	ps.mu.RLock()
 	defer ps.mu.RUnlock()
 
 	msgChan, exists := ps.receiveChan[topic]
 
 	if exists && !ps.chanClosed[topic] {
-		available = cap(msgChan) - len(msgChan)
+		return cap(msgChan) - len(msgChan)
 	}
 
-	pendingRead = ps.pendingRead[topic]
+	return 0
+}
 
-	bufferSize := ps.config.PubSubBufferSize
-	if bufferSize == 0 {
-		bufferSize = defaultPubSubBufferSize
+// calculateMessageSplit calculates how many messages to read from PEL vs new messages
+// based on the configured ratio. Returns (pelCount, newCount).
+func calculateMessageSplit(available int, ratio float64) (pelCount, newCount int64) {
+	if available <= 0 {
+		return 0, 0
 	}
 
-	count = int64(bufferSize)
-	if available < bufferSize {
-		count = int64(available)
-	}
+	// Calculate PEL count based on ratio
+	pelCount = int64(float64(available) * ratio)
 
-	return available, pendingRead, count
+	// Remaining capacity goes to new messages
+	newCount = int64(available) - pelCount
+
+	return pelCount, newCount
 }
 
 // readPendingMessages reads and processes pending messages. Returns true if messages were processed.
+// The count parameter limits how many messages to read from PEL.
 func (ps *PubSub) readPendingMessages(ctx context.Context, topic, group, consumer string, count int64) bool {
+	if count <= 0 {
+		return false
+	}
+
 	streams, err := ps.client.XReadGroup(ctx, &redis.XReadGroupArgs{
 		Group:    group,
 		Consumer: consumer,
@@ -502,10 +532,11 @@ func (ps *PubSub) readPendingMessages(ctx context.Context, topic, group, consume
 		NoAck:    false,
 	}).Result()
 
+	// Mark that we attempted to read PEL (for tracking purposes)
 	ps.markPendingRead(topic)
 
 	if err != nil && errors.Is(err, redis.Nil) {
-		return false // No pending messages, continue to read new
+		return false // No pending messages
 	}
 
 	if err != nil {
@@ -552,7 +583,12 @@ func (ps *PubSub) processStreamMessages(ctx context.Context, topic string, strea
 }
 
 // readNewMessages reads and processes new messages from the stream.
+// The count parameter limits how many messages to read.
 func (ps *PubSub) readNewMessages(ctx context.Context, topic, group, consumer string, count int64, block time.Duration) {
+	if count <= 0 {
+		return
+	}
+
 	streams, err := ps.client.XReadGroup(ctx, &redis.XReadGroupArgs{
 		Group:    group,
 		Consumer: consumer,

@@ -161,6 +161,7 @@ func configStreams(c config.Config, redisConfig *Config) {
 	streamsConfig := &StreamsConfig{
 		ConsumerGroup: c.Get("REDIS_STREAMS_CONSUMER_GROUP"),
 		ConsumerName:  c.Get("REDIS_STREAMS_CONSUMER_NAME"),
+		PELRatio:      0.7, // Default: 70% PEL, 30% new messages
 	}
 
 	streamsConfig.Block = 1 * time.Second // default - reduced from 5s for better responsiveness
@@ -173,6 +174,16 @@ func configStreams(c config.Config, redisConfig *Config) {
 	if maxLenStr := c.Get("REDIS_STREAMS_MAXLEN"); maxLenStr != "" {
 		if maxLen, err := strconv.ParseInt(maxLenStr, 10, 64); err == nil {
 			streamsConfig.MaxLen = maxLen
+		}
+	}
+
+	// Parse PEL ratio (0.0-1.0)
+	if pelRatioStr := c.Get("REDIS_STREAMS_PEL_RATIO"); pelRatioStr != "" {
+		if pelRatio, err := strconv.ParseFloat(pelRatioStr, 64); err == nil {
+			// Validate range: 0.0 to 1.0
+			if pelRatio >= 0.0 && pelRatio <= 1.0 {
+				streamsConfig.PELRatio = pelRatio
+			}
 		}
 	}
 

@@ -75,7 +75,6 @@ func TestRedis_QueryLogging(t *testing.T) {
 	})
 
 	// Assertions
-	// Note: "ping" is filtered out by shouldLogQuery, so we don't check for it
 	assert.Contains(t, result, "set")
 	assert.Contains(t, result, "key")
 	assert.Contains(t, result, "value")
@@ -126,11 +125,7 @@ func TestRedis_PipelineQueryLogging(t *testing.T) {
 	})
 
 	// Assertions
-	// Note: "ping" is filtered out by shouldLogQuery
-	// Note: "pipeline" is also filtered out by shouldLogQuery (line 83 in hook.go)
-	// Pipeline operations are intentionally not logged to reduce noise
-	// The test verifies that pipeline operations work correctly, but we don't expect log output
-	// We only check that the connection message is present
+	// All Redis commands are now logged, including pipeline operations
 	assert.Contains(t, result, "connected to redis")
 }
 
