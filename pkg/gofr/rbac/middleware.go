@@ -144,22 +144,9 @@ func Middleware(config *Config) func(handler http.Handler) http.Handler {
 			// Check authorization using unified endpoint-based authorization
 			authorized, _ := checkEndpointAuthorization(role, endpoint, config)
 			if !authorized {
-				// Role not included in metrics to avoid high cardinality and PII concerns
-				// Only include status (allowed/denied) for aggregation
-				if config.Metrics != nil {
-					config.Metrics.IncrementCounter(r.Context(), "rbac_authorization_decisions", "status", "denied")
-				}
-
 				handleAuthError(w, r, config, role, routeLabel, ErrAccessDenied)
 
 				return
-			}
-
-			// Record metrics and update span
-			// Role not included in metrics to avoid high cardinality and PII concerns
-			// Only include status (allowed/denied) for aggregation
-			if config.Metrics != nil {
-				config.Metrics.IncrementCounter(r.Context(), "rbac_authorization_decisions", "status", "allowed")
 			}
 
 			if config.Tracer != nil {
