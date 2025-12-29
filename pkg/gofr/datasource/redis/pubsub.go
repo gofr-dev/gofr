@@ -467,22 +467,20 @@ func (ps *PubSub) consumeStreamMessages(ctx context.Context, topic, group, consu
 		ratio = ps.config.PubSubStreamsConfig.PELRatio
 	}
 
-	// Calculate split based on ratio
-	pelCount, newCount := calculateMessageSplit(available, ratio)
+	// Calculate PEL count based on ratio
+	pelCount := calculatePELCount(available, ratio)
 
-	// Read from PEL only if we haven't already read pending messages
-	// This prevents duplicate processing before messages are acknowledged
-	if pelCount > 0 && !alreadyReadPending {
+	// Read from PEL if allowed and count > 0
+	if !alreadyReadPending && pelCount > 0 {
 		ps.readPendingMessages(ctx, topic, group, consumer, pelCount)
-		// Re-check capacity after PEL read to avoid wasting resources
-		available = ps.getAvailableCapacity(topic)
-		// Adjust newCount based on remaining capacity
-		newCount = min(newCount, int64(available))
 	}
 
-	// Read new messages if count > 0
-	if newCount > 0 {
-		ps.readNewMessages(ctx, topic, group, consumer, newCount, block)
+	// Re-check capacity and fill remaining with new messages
+	// This ensures remaining capacity is always used, regardless of ratio
+	available = ps.getAvailableCapacity(topic)
+	if available > 0 {
+		// Fill ALL remaining capacity with new messages (not just newCount)
+		ps.readNewMessages(ctx, topic, group, consumer, int64(available), block)
 	}
 }
 
@@ -500,20 +498,14 @@ func (ps *PubSub) getAvailableCapacity(topic string) int {
 	return 0
 }
 
-// calculateMessageSplit calculates how many messages to read from PEL vs new messages
-// based on the configured ratio. Returns (pelCount, newCount).
-func calculateMessageSplit(available int, ratio float64) (pelCount, newCount int64) {
+// calculatePELCount calculates how many messages to read from PEL
+// based on the configured ratio and available capacity.
+func calculatePELCount(available int, ratio float64) int64 {
 	if available <= 0 {
-		return 0, 0
+		return 0
 	}
 
-	// Calculate PEL count based on ratio
-	pelCount = int64(float64(available) * ratio)
-
-	// Remaining capacity goes to new messages
-	newCount = int64(available) - pelCount
-
-	return pelCount, newCount
+	return int64(float64(available) * ratio)
 }
 
 // readPendingMessages reads and processes pending messages. Returns true if messages were processed.

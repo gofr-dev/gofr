@@ -435,7 +435,7 @@ The following configs apply specifically to Redis Pub/Sub behavior. For base Red
 ---
 
 - `REDIS_STREAMS_PEL_RATIO`
-- Ratio of PEL (pending) messages to read vs new messages (0.0-1.0). Controls the balance between processing retry messages and fresh messages. 0.0 = only new messages, 1.0 = only PEL messages, 0.7 = 70% PEL, 30% new.
+- Ratio of PEL (pending) messages to read vs new messages (0.0-1.0). Controls priority: ratio determines initial split, then remaining capacity is filled from the other source. 0.7 = prioritize 70% PEL, fill remaining with new. 0.0 = prioritize new, fill remaining with PEL. 1.0 = prioritize PEL, fill remaining with new.
 - `0.7`
 - `0.5` or `0.8`
 
