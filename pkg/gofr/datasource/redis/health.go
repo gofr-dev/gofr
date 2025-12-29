@@ -33,7 +33,7 @@ func (r *Redis) HealthCheck() datasource.Health {
 		return h
 	}
 
-	info, err := r.Client.InfoMap(ctx, "Stats").Result()
+	info, err := r.InfoMap(ctx, "Stats").Result()
 	if err != nil {
 		h.Status = datasource.StatusDown
 		h.Details["error"] = err.Error()

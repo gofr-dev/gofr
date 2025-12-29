@@ -1009,6 +1009,89 @@ func TestPubSub_DispatchMessage_ChannelFull(t *testing.T) {
 	assert.Len(t, msgChan, 1)
 }
 
+func TestPubSub_DispatchMessage_ChannelFull_Streams_ResetsPendingRead(t *testing.T) {
+	t.Parallel()
+
+	client, s := setupTest(t, map[string]string{
+		"REDIS_PUBSUB_MODE":            "streams",
+		"REDIS_STREAMS_CONSUMER_GROUP": "test-group",
+		"REDIS_PUBSUB_BUFFER_SIZE":     "1",
+	})
+	defer s.Close()
+	defer client.Close()
+
+	ctx := context.Background()
+	topic := "dispatch-stream-full-topic"
+
+	msgChan := client.PubSub.ensureSubscription(ctx, topic)
+	// Fill channel
+	msgChan <- pubsub.NewMessage(ctx)
+
+	// Create stream message with Committer
+	msg := pubsub.NewMessage(ctx)
+	msg.Topic = topic
+	msg.Value = []byte("dropped-stream-message")
+	msg.Committer = newStreamMessage(client.PubSub.client, topic, "test-group", "123-0", client.PubSub.logger)
+
+	psClient := client.PubSub
+	// Set pendingRead to true (simulating that PEL was already checked)
+	psClient.mu.Lock()
+	psClient.pendingRead[topic] = true
+	psClient.mu.Unlock()
+
+	psClient.dispatchMessage(ctx, topic, msg)
+
+	// Verify pendingRead was reset to false
+	psClient.mu.RLock()
+	pendingRead := psClient.pendingRead[topic]
+	psClient.mu.RUnlock()
+
+	assert.False(t, pendingRead, "pendingRead should be reset to false when stream message is dropped")
+	assert.Len(t, msgChan, 1, "channel should still have 1 message")
+}
+
+func TestPubSub_DispatchMessage_ChannelFull_PubSub_DoesNotResetPendingRead(t *testing.T) {
+	t.Parallel()
+
+	client, s := setupTest(t, map[string]string{
+		"REDIS_PUBSUB_MODE":        "pubsub",
+		"REDIS_PUBSUB_BUFFER_SIZE": "1",
+	})
+	defer s.Close()
+	defer client.Close()
+
+	ctx := context.Background()
+	topic := "dispatch-pubsub-full-topic"
+
+	msgChan := client.PubSub.ensureSubscription(ctx, topic)
+	// Fill channel
+	msgChan <- pubsub.NewMessage(ctx)
+
+	// Create pubsub message (not stream message)
+	msg := pubsub.NewMessage(ctx)
+	msg.Topic = topic
+	msg.Value = []byte("dropped-pubsub-message")
+	// PubSub messages also have Committer, but it's *pubSubMessage, not *streamMessage
+	redisMsg := &redis.Message{Payload: "test"}
+	msg.Committer = newPubSubMessage(redisMsg)
+
+	psClient := client.PubSub
+	// Set pendingRead to true (though it shouldn't matter for PubSub)
+	psClient.mu.Lock()
+	psClient.pendingRead[topic] = true
+	psClient.mu.Unlock()
+
+	psClient.dispatchMessage(ctx, topic, msg)
+
+	// Verify pendingRead was NOT reset (should remain true for PubSub)
+	psClient.mu.RLock()
+	pendingRead := psClient.pendingRead[topic]
+	psClient.mu.RUnlock()
+
+	assert.True(t, pendingRead, "pendingRead should NOT be reset for PubSub messages")
+	assert.Len(t, msgChan, 1, "channel should still have 1 message")
+}
+
 func TestPubSub_DispatchMessage_ChannelClosed(t *testing.T) {
 	t.Parallel()
 

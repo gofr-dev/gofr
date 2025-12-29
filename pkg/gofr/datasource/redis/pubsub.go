@@ -663,8 +663,22 @@ func (ps *PubSub) dispatchMessage(ctx context.Context, topic string, m *pubsub.M
 		case <-ctx.Done():
 			return
 		default:
-			ps.metrics.IncrementCounter(ctx, "app_pubsub_dropped_messages_total", "topic", topic)
+			// Channel full - drop message
 			ps.logger.Errorf("message channel full for topic '%s', dropping message", topic)
+
+			// Reset pendingRead for Streams mode so PEL is checked again
+			// This ensures dropped messages (which stay in PEL) are retried
+			if m.Committer != nil {
+				// Check if this is a stream message by type assertion
+				// Only reset for Streams mode, not PubSub mode
+				if _, isStreamMessage := m.Committer.(*streamMessage); isStreamMessage {
+					// Lock is necessary: map writes are not thread-safe
+					// Setting to false is idempotent, so safe to do without check
+					ps.mu.Lock()
+					ps.pendingRead[topic] = false
+					ps.mu.Unlock()
+				}
+			}
 		}
 	}()
 }
