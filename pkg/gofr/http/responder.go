@@ -57,11 +57,7 @@ func (r Responder) Respond(data any, err error) {
 	if encodeErr != nil {
 		r.w.WriteHeader(http.StatusInternalServerError)
 
-		errorResp := response{Error: map[string]any{"message": "failed to encode response as JSON"}}
-		errorJSON, _ := json.Marshal(errorResp)
-
-		_, _ = r.w.Write(errorJSON)
-		_, _ = r.w.Write([]byte("\n"))
+		_, _ = r.w.Write([]byte(`{"error":{"message": "failed to encode response as JSON"}}` + "\n"))
 
 		return
 	}
