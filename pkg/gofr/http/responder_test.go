@@ -563,7 +563,7 @@ func TestResponder_JSONEncodingFailure(t *testing.T) {
 
 		require.NoError(t, err, "TEST[%d] Failed: %s", i, tc.desc)
 
-		expectedBody := `{"error":{"message":"failed to encode response as JSON"}}` + "\n"
+		expectedBody := `{"error":{"message": "failed to encode response as JSON"}}` + "\n"
 		assert.Equal(t, expectedBody, body.String(), "TEST[%d] Failed: %s", i, tc.desc)
 
 		result.Body.Close()
@@ -590,6 +590,10 @@ func TestResponder_ValidEncodableData(t *testing.T) {
 
 		result := recorder.Result()
 
+		t.Cleanup(func() {
+			result.Body.Close()
+		})
+
 		assert.Equal(t, tc.expectedCode, result.StatusCode, "TEST[%d] Failed: %s", i, tc.desc)
 
 		body := new(bytes.Buffer)
@@ -598,7 +602,5 @@ func TestResponder_ValidEncodableData(t *testing.T) {
 		require.NoError(t, err, "TEST[%d] Failed: %s", i, tc.desc)
 
 		assert.NotEmpty(t, body.String(), "TEST[%d] Failed: %s", i, tc.desc)
-
-		result.Body.Close()
 	}
 }
