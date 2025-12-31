@@ -10,7 +10,7 @@ scaled and maintained according to its own requirement.
 ## Design choice
 
 In GoFr application if a user wants to use the Publisher-Subscriber design, it supports several message brokers, 
-including Apache Kafka, Google PubSub, MQTT, and NATS JetStream.
+including Apache Kafka, Google PubSub, MQTT, NATS JetStream, and Redis Pub/Sub.
 The initialization of the PubSub is done in an IoC container which handles the PubSub client dependency.
 With this, the control lies with the framework and thus promotes modularity, testability, and re-usability.
 Users can do publish and subscribe to multiple topics in a single application, by providing the topic name.
@@ -332,6 +332,166 @@ docker run -d \
 When subscribing or publishing using NATS JetStream, make sure to use the appropriate subject name that matches your stream configuration.
 For more information on setting up and using NATS JetStream, refer to the official NATS documentation.
 
+### Redis Pub/Sub
+
+Redis Pub/Sub is a lightweight messaging system. GoFr supports two modes:
+1. **Streams Mode** (Default): Uses Redis Streams for persistent messaging with consumer groups and acknowledgments.
+2. **PubSub Mode**: Standard Redis Pub/Sub (fire-and-forget, no persistence).
+
+#### Redis connection
+
+Redis Pub/Sub uses the same Redis connection configuration as the Redis datasource (`REDIS_HOST`, `REDIS_PORT`, `REDIS_DB`, TLS, etc.).
+See the config reference: `https://gofr.dev/docs/references/configs#redis`.
+
+#### Example `.env`
+
+```dotenv
+PUBSUB_BACKEND=REDIS
+REDIS_HOST=localhost
+REDIS_PORT=6379
+REDIS_USER=myuser
+REDIS_PASSWORD=mypassword
+REDIS_DB=0
+REDIS_PUBSUB_DB=1
+REDIS_TLS_ENABLED=true
+REDIS_TLS_CA_CERT=/path/to/ca.pem
+REDIS_TLS_CERT=/path/to/cert.pem
+REDIS_TLS_KEY=/path/to/key.pem
+
+# Streams mode (default) - requires consumer group
+REDIS_STREAMS_CONSUMER_GROUP=my-group
+REDIS_STREAMS_CONSUMER_NAME=my-consumer
+REDIS_STREAMS_BLOCK_TIMEOUT=5s
+REDIS_STREAMS_PEL_RATIO=0.7  # 70% PEL, 30% new messages
+REDIS_STREAMS_MAXLEN=1000
+
+# To use PubSub mode instead, set:
+# REDIS_PUBSUB_MODE=pubsub
+```
+
+#### Docker setup
+
+```shell
+docker run -d \
+	--name redis \
+	-p 6379:6379 \
+	redis:7-alpine
+```
+
+For Redis with password authentication:
+
+```shell
+docker run -d \
+	--name redis \
+	-p 6379:6379 \
+	redis:7-alpine redis-server --requirepass mypassword
+```
+
+#### Redis configs
+
+The following configs apply specifically to Redis Pub/Sub behavior. For base Redis connection/TLS configs, refer to
+`https://gofr.dev/docs/references/configs#redis`.
+{% table %}
+- Name
+- Description
+- Default
+- Example
+
+---
+
+- `PUBSUB_BACKEND`
+- Set to `REDIS` to use Redis as the Pub/Sub backend.
+- -
+- `REDIS`
+
+---
+
+- `REDIS_PUBSUB_MODE`
+- Mode: `streams` (default, at-least-once) or `pubsub` (at-most-once)
+- `streams`
+- `pubsub`
+
+---
+
+- `REDIS_STREAMS_CONSUMER_GROUP`
+- Consumer group name (required in streams mode)
+- -
+- `mygroup`
+
+---
+
+- `REDIS_STREAMS_CONSUMER_NAME`
+- Consumer name (optional; auto-generated if empty)
+- -
+- `consumer-1`
+
+---
+
+- `REDIS_STREAMS_BLOCK_TIMEOUT`
+- Blocking timeout for stream reads. Lower values (1s-2s) = faster detection, higher CPU. Higher values (10s-30s) = lower CPU, higher latency.
+- `5s`
+- `2s` or `30s`
+
+---
+
+- `REDIS_STREAMS_PEL_RATIO`
+- Ratio of PEL (pending) messages to read vs new messages (0.0-1.0). Ratio determines initial PEL allocation; all remaining capacity is always filled with new messages.
+- `0.7`
+- `0.5` or `0.8`
+
+---
+
+- `REDIS_STREAMS_MAXLEN`
+- Max stream length for trimming (approximate). Set to `0` for unlimited.
+- `0` (unlimited)
+- `10000`
+
+---
+
+- `REDIS_PUBSUB_DB`
+- Redis DB for Pub/Sub operations. Keep different from `REDIS_DB` when using migrations + streams mode.
+- `15`
+- `1`
+
+---
+
+- `REDIS_PUBSUB_BUFFER_SIZE`
+- Message buffer size
+- `100`
+- `1000`
+
+---
+
+- `REDIS_PUBSUB_QUERY_TIMEOUT`
+- Timeout for Query operations
+- `5s`
+- `30s`
+
+---
+
+- `REDIS_PUBSUB_QUERY_LIMIT`
+- Message limit for Query operations
+- `10`
+- `50`
+{% /table %}
+
+For Redis with TLS:
+
+```shell
+docker run -d \
+	--name redis \
+	-p 6379:6379 \
+	-v /path/to/certs:/tls \
+	redis:7-alpine redis-server \
+	--tls-port 6380 \
+	--port 0 \
+	--tls-cert-file /tls/redis.crt \
+	--tls-key-file /tls/redis.key \
+	--tls-ca-cert-file /tls/ca.crt
+```
+
+> **Note**: Topics are auto-created on first publish. When using GoFr migrations with Streams mode, keep `REDIS_DB` and `REDIS_PUBSUB_DB` separate (defaults: 0 and 15). For `REDIS_STREAMS_BLOCK_TIMEOUT`: use 1s-2s for real-time or 10s-30s for batch processing.
+
 ### Azure Event Hubs
 GoFr supports Event Hubs starting gofr version v1.22.0.
 
@@ -416,7 +576,7 @@ func (ctx *gofr.Context) error
 ```
 
 `Subscribe` method of GoFr App will continuously read a message from the configured `PUBSUB_BACKEND` which
-can be either `KAFKA` or `GOOGLE` as of now. These can be configured in the configs folder under `.env`
+can be `KAFKA`, `GOOGLE`, `MQTT`, `NATS`, `REDIS`, or `AZURE_EVENTHUB`. These can be configured in the configs folder under `.env`
 
 > The returned error determines which messages are to be committed and which ones are to be consumed again.
 
