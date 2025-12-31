@@ -62,6 +62,31 @@ the client can be retrieved as shown below:
 svc := ctx.GetHTTPService(<service_name>)
 ```
 
+#### Available Methods
+The HTTP service client provides methods for making requests to downstream services:
+
+- `Get(ctx, path, queryParams)` - Performs HTTP GET request
+
+- `Post(ctx, path, queryParams, body)` - Performs HTTP POST request
+
+- `Put(ctx, path, queryParams, body)` - Performs HTTP PUT request
+
+- `Patch(ctx, path, queryParams, body)` - Performs HTTP PATCH request
+
+- `Delete(ctx, path, body)` - Performs HTTP DELETE request
+
+**For scenarios requiring custom header propagation (authentication, tracing, context), use the `WithHeaders` variants:**
+
+- `GetWithHeaders(ctx, path, queryParams, headers)` - Performs HTTP GET request with custom headers
+
+- `PostWithHeaders(ctx, path, queryParams, body, headers)` - Performs HTTP POST request with custom headers
+
+- `PutWithHeaders(ctx, path, queryParams, body, headers)` - Performs HTTP PUT request with custom headers
+
+- `PatchWithHeaders(ctx, path, queryParams, body, headers)` - Performs HTTP PATCH request with custom headers
+
+- `DeleteWithHeaders(ctx, path, body, headers)` - Performs HTTP DELETE request with custom headers
+
 ```go  
 func Customer(ctx *gofr.Context) (any, error) {
 	// Get the payment service client
@@ -82,43 +107,18 @@ func Customer(ctx *gofr.Context) (any, error) {
 
 	return string(body), nil
 }
-```
 
-### Propagating Headers to Downstream Services
-GoFr provides *WithHeaders methods for forwarding custom headers to downstream services. This is essential for microservice patterns involving authentication,
-distributed tracing, and context propagation.
-
-**Available Methods:**
-
-- `GetWithHeaders(ctx, path, queryParams, headers)`
-
-- `PostWithHeaders(ctx, path, queryParams, body, headers)`
-
-- `PutWithHeaders(ctx, path, queryParams, body, headers)`
-
-- `PatchWithHeaders(ctx, path, queryParams, body, headers)`
-
-- `DeleteWithHeaders(ctx, path, body, headers)`
-
-#### Common Use Cases:
-
-- **JWT Token Forwarding:** Pass authentication tokens from gateway to internal services.
-
-- **Custom Context:** Forward business-specific headers across service boundaries
-
-#### Example: API Gateway Pattern
-
-```go
+// For microservice patterns involving authentication (ex: JWT Token Forwarding), use WithHeaders methods to forward custom headers.
 func GatewayHandler(ctx *gofr.Context) (any, error) {
-// Access authentication info from context
 authInfo := ctx.GetAuthInfo()
+claims := authInfo.GetClaims()
 
-// Prepare headers to forward
+userID, _ := claims.GetSubject()
+
 headers := map[string]string{
-"Authorization": "Bearer " + authInfo.GetClaims()["token"].(string),
+"X-User-ID": userID,
 }
 
-// Forward request with headers to user service
 userSvc := ctx.GetHTTPService("user-service")
 resp, err := userSvc.GetWithHeaders(ctx, "api/user/profile", nil, headers)
 if err != nil {
@@ -135,9 +135,6 @@ return nil, err
 return string(body), nil
 }
 ```
-
-> Note: Use ctx.GetAuthInfo() to access authentication details populated by GoFr's authentication middleware. See [GoFr Context docs](https://gofr.dev/docs/references/context#go-fr-context) for more details.
-
 
 ### Additional Configurational Options
 
