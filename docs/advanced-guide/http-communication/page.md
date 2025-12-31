@@ -84,6 +84,61 @@ func Customer(ctx *gofr.Context) (any, error) {
 }
 ```
 
+### Propagating Headers to Downstream Services
+GoFr provides *WithHeaders methods for forwarding custom headers to downstream services. This is essential for microservice patterns involving authentication,
+distributed tracing, and context propagation.
+
+**Available Methods:**
+
+- `GetWithHeaders(ctx, path, queryParams, headers)`
+
+- `PostWithHeaders(ctx, path, queryParams, body, headers)`
+
+- `PutWithHeaders(ctx, path, queryParams, body, headers)`
+
+- `PatchWithHeaders(ctx, path, queryParams, body, headers)`
+
+- `DeleteWithHeaders(ctx, path, body, headers)`
+
+#### Common Use Cases:
+
+- **JWT Token Forwarding:** Pass authentication tokens from gateway to internal services.
+
+- **Custom Context:** Forward business-specific headers across service boundaries
+
+#### Example: API Gateway Pattern
+
+```go
+func GatewayHandler(ctx *gofr.Context) (any, error) {
+// Access authentication info from context
+authInfo := ctx.GetAuthInfo()
+
+// Prepare headers to forward
+headers := map[string]string{
+"Authorization": "Bearer " + authInfo.GetClaims()["token"].(string),
+}
+
+// Forward request with headers to user service
+userSvc := ctx.GetHTTPService("user-service")
+resp, err := userSvc.GetWithHeaders(ctx, "api/user/profile", nil, headers)
+if err != nil {
+return nil, err
+}
+
+defer resp.Body.Close()
+
+body, err := io.ReadAll(resp.Body)
+if err != nil {
+return nil, err
+}
+
+return string(body), nil
+}
+```
+
+> Note: Use ctx.GetAuthInfo() to access authentication details populated by GoFr's authentication middleware. See [GoFr Context docs](https://gofr.dev/docs/references/context#go-fr-context) for more details.
+
+
 ### Additional Configurational Options
 
 GoFr provides its user with additional configurational options while registering HTTP service for communication. These are:
