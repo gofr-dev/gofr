@@ -65,27 +65,27 @@ svc := ctx.GetHTTPService(<service_name>)
 #### Available Methods
 The HTTP service client provides methods for making requests to downstream services:
 
-- `Get(ctx, path, queryParams)` - Performs HTTP GET request
+- `Get(ctx, path, queryParams)`
 
-- `Post(ctx, path, queryParams, body)` - Performs HTTP POST request
+- `Post(ctx, path, queryParams, body)`
 
-- `Put(ctx, path, queryParams, body)` - Performs HTTP PUT request
+- `Put(ctx, path, queryParams, body)`
 
-- `Patch(ctx, path, queryParams, body)` - Performs HTTP PATCH request
+- `Patch(ctx, path, queryParams, body)`
 
-- `Delete(ctx, path, body)` - Performs HTTP DELETE request
+- `Delete(ctx, path, body)`
 
-**For scenarios requiring custom header propagation (authentication, tracing, context), use the `WithHeaders` variants:**
+**For scenarios requiring custom header propagation (authentication, multi-tenancy, user identity propagation), use the `WithHeaders` variants:**
 
-- `GetWithHeaders(ctx, path, queryParams, headers)` - Performs HTTP GET request with custom headers
+- `GetWithHeaders(ctx, path, queryParams, headers)`
 
-- `PostWithHeaders(ctx, path, queryParams, body, headers)` - Performs HTTP POST request with custom headers
+- `PostWithHeaders(ctx, path, queryParams, body, headers)`
 
-- `PutWithHeaders(ctx, path, queryParams, body, headers)` - Performs HTTP PUT request with custom headers
+- `PutWithHeaders(ctx, path, queryParams, body, headers)`
 
-- `PatchWithHeaders(ctx, path, queryParams, body, headers)` - Performs HTTP PATCH request with custom headers
+- `PatchWithHeaders(ctx, path, queryParams, body, headers)`
 
-- `DeleteWithHeaders(ctx, path, body, headers)` - Performs HTTP DELETE request with custom headers
+- `DeleteWithHeaders(ctx, path, body, headers)`
 
 ```go  
 func Customer(ctx *gofr.Context) (any, error) {
@@ -110,29 +110,29 @@ func Customer(ctx *gofr.Context) (any, error) {
 
 // For microservice patterns involving authentication (ex: JWT Token Forwarding), use WithHeaders methods to forward custom headers.
 func GatewayHandler(ctx *gofr.Context) (any, error) {
-authInfo := ctx.GetAuthInfo()
-claims := authInfo.GetClaims()
+	authInfo := ctx.GetAuthInfo()
+	claims := authInfo.GetClaims()
 
-userID, _ := claims.GetSubject()
+	userID, _ := claims.GetSubject()
 
-headers := map[string]string{
-"X-User-ID": userID,
-}
+	headers := map[string]string{
+		"X-User-ID": userID,
+	}
 
-userSvc := ctx.GetHTTPService("user-service")
-resp, err := userSvc.GetWithHeaders(ctx, "api/user/profile", nil, headers)
-if err != nil {
-return nil, err
-}
+	userSvc := ctx.GetHTTPService("user-service")
+	resp, err := userSvc.GetWithHeaders(ctx, "api/user/profile", nil, headers)
+	if err != nil {
+		return nil, err
+	}
 
-defer resp.Body.Close()
+	defer resp.Body.Close()
 
-body, err := io.ReadAll(resp.Body)
-if err != nil {
-return nil, err
-}
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, err
+	}
 
-return string(body), nil
+	return string(body), nil
 }
 ```
 
