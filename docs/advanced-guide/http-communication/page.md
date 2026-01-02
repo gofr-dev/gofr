@@ -62,6 +62,31 @@ the client can be retrieved as shown below:
 svc := ctx.GetHTTPService(<service_name>)
 ```
 
+#### Available Methods
+The HTTP service client provides methods for making requests to downstream services:
+
+- `Get(ctx, path, queryParams)`
+
+- `Post(ctx, path, queryParams, body)`
+
+- `Put(ctx, path, queryParams, body)`
+
+- `Patch(ctx, path, queryParams, body)`
+
+- `Delete(ctx, path, body)`
+
+**For scenarios requiring custom header propagation (authentication, multi-tenancy, user identity propagation), use the `WithHeaders` variants:**
+
+- `GetWithHeaders(ctx, path, queryParams, headers)`
+
+- `PostWithHeaders(ctx, path, queryParams, body, headers)`
+
+- `PutWithHeaders(ctx, path, queryParams, body, headers)`
+
+- `PatchWithHeaders(ctx, path, queryParams, body, headers)`
+
+- `DeleteWithHeaders(ctx, path, body, headers)`
+
 ```go  
 func Customer(ctx *gofr.Context) (any, error) {
 	// Get the payment service client
@@ -69,6 +94,33 @@ func Customer(ctx *gofr.Context) (any, error) {
 
 	// Use the Get method to call the GET /user endpoint of payments service
 	resp, err := paymentSvc.Get(ctx, "user", nil)
+	if err != nil {
+		return nil, err
+	}
+
+	defer resp.Body.Close()
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, err
+	}
+
+	return string(body), nil
+}
+
+// For microservice patterns involving authentication (ex: JWT Token Forwarding), use WithHeaders methods to forward custom headers.
+func GatewayHandler(ctx *gofr.Context) (any, error) {
+	authInfo := ctx.GetAuthInfo()
+	claims := authInfo.GetClaims()
+
+	userID, _ := claims.GetSubject()
+
+	headers := map[string]string{
+		"X-User-ID": userID,
+	}
+
+	userSvc := ctx.GetHTTPService("user-service")
+	resp, err := userSvc.GetWithHeaders(ctx, "api/user/profile", nil, headers)
 	if err != nil {
 		return nil, err
 	}
