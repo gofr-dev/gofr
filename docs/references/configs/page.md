@@ -329,54 +329,117 @@ This document lists all the configuration options supported by the GoFr framewor
 
 - Name
 - Description
+- Default Value
 
 ---
 
 -  REDIS_HOST
 -  Hostname of the Redis server.
+-  localhost
 
 ---
 
 -  REDIS_PORT
 -  Port of the Redis server.
+-  6379
 
 ---
 
 - REDIS_USER
-- Username for the Redis server.
+- Username for the Redis server (optional).
+-  ""
 
 ---
 
 - REDIS_PASSWORD
-- Password for the Redis server.
+- Password for the Redis server (optional).
+-  ""
 
 ---
 
 - REDIS_DB
 - Database number to use for the Redis server.
+-  0
 
 ---
 
 - REDIS_TLS_ENABLED
-- Enable TLS for Redis connections
-- false
+- Enable TLS for Redis connections.
+-  false
 
 ---
 
 - REDIS_TLS_CA_CERT
-- Path to the TLS CA certificate file for Redis
+- Path to the TLS CA certificate file for Redis (or PEM-encoded string).
+-  ""
 
 ---
 
 - REDIS_TLS_CERT
-- Path to the TLS certificate file for Redis
+- Path to the TLS certificate file for Redis (or PEM-encoded string).
+-  ""
 
 ---
 
 - REDIS_TLS_KEY
-- Path to the TLS key file for Redis
+- Path to the TLS key file for Redis (or PEM-encoded string).
+-  ""
 
 {% /table %}
+
+**Redis PubSub Configuration:**
+
+{% table %}
+
+- Name
+- Description
+- Default Value
+
+---
+
+- REDIS_PUBSUB_DB
+- Redis database number to use only for Redis Pub/Sub (when `PUBSUB_BACKEND=REDIS`). Use a different DB than `REDIS_DB` when running GoFr migrations with Redis Streams mode to avoid `gofr_migrations` key-type collisions.
+- Default: `15` (highest default Redis database, 0-15)
+
+---
+
+- REDIS_PUBSUB_MODE
+- Operation mode: `pubsub` or `streams`.
+- streams
+
+---
+
+- REDIS_STREAMS_CONSUMER_GROUP
+- Consumer group name (required for streams mode).
+-  ""
+
+---
+
+- REDIS_STREAMS_CONSUMER_NAME
+- Unique consumer name (optional, auto-generated if empty).
+-  ""
+
+---
+
+- REDIS_STREAMS_BLOCK_TIMEOUT
+- Blocking duration for reading new messages using Redis `XREADGROUP`. Lower values (1s-2s) provide faster detection but increase CPU usage. Higher values (10s-30s) reduce CPU usage, ideal for batch processing.
+- 5s
+
+---
+
+- REDIS_STREAMS_PEL_RATIO
+- Ratio of PEL (pending) messages to read vs new messages (0.0-1.0). Controls balance between retry and fresh messages. 0.7 = 70% PEL, 30% new.
+- 0.7
+
+---
+
+- REDIS_STREAMS_MAXLEN
+- Maximum length of the stream (approximate). Prevents streams from growing indefinitely. Set to `0` for unlimited.
+- 0 (unlimited)
+
+{% /table %}
+
+> **Note**: When using GoFr migrations with Streams mode, keep `REDIS_DB` and `REDIS_PUBSUB_DB` separate (defaults: 0 and 15). For `REDIS_STREAMS_BLOCK_TIMEOUT`: use 1s-2s for real-time or 10s-30s for batch processing.
 
 ### Pub/Sub
 
@@ -391,7 +454,7 @@ This document lists all the configuration options supported by the GoFr framewor
 
 -  PUBSUB_BACKEND
 -  Pub/Sub message broker backend
--  kafka, google, mqtt, nats
+-  kafka, google, mqtt, nats, redis
 
 {% /table %}
 
