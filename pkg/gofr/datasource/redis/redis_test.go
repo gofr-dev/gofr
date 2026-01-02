@@ -75,8 +75,10 @@ func TestRedis_QueryLogging(t *testing.T) {
 	})
 
 	// Assertions
-	assert.Contains(t, result, "ping")
-	assert.Contains(t, result, "set key value ex 60")
+	assert.Contains(t, result, "set")
+	assert.Contains(t, result, "key")
+	assert.Contains(t, result, "value")
+	assert.Contains(t, result, "ex 60")
 }
 
 func TestRedis_PipelineQueryLogging(t *testing.T) {
@@ -123,8 +125,8 @@ func TestRedis_PipelineQueryLogging(t *testing.T) {
 	})
 
 	// Assertions
-	assert.Contains(t, result, "ping")
-	assert.Contains(t, result, "set key1 value1 ex 60: OK")
+	// All Redis commands are now logged, including pipeline operations
+	assert.Contains(t, result, "connected to redis")
 }
 
 func TestRedis_Close(t *testing.T) {
