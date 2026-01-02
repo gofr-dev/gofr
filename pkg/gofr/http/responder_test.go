@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"fmt"
 	"io"
+	"math"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -531,5 +532,75 @@ func TestResponder_XMLFileTemplate_ErrorStatusCodes(t *testing.T) {
 		r.Respond(tc.data, tc.err)
 
 		assert.Equal(t, tc.expectedCode, recorder.Code, "TEST[%d] Failed: %s", i, tc.desc)
+	}
+}
+
+func TestResponder_JSONEncodingFailure(t *testing.T) {
+	tests := []struct {
+		desc string
+		data any
+	}{
+		{"NaN value", math.NaN()},
+		{"positive infinity", math.Inf(1)},
+		{"negative infinity", math.Inf(-1)},
+		{"channel type", make(chan int)},
+		{"function type", func() {}},
+	}
+
+	for i, tc := range tests {
+		recorder := httptest.NewRecorder()
+		responder := NewResponder(recorder, http.MethodGet)
+
+		responder.Respond(tc.data, nil)
+
+		result := recorder.Result()
+
+		assert.Equal(t, http.StatusInternalServerError, result.StatusCode, "TEST[%d] Failed: %s", i, tc.desc)
+		assert.Equal(t, "application/json", result.Header.Get("Content-Type"), "TEST[%d] Failed: %s", i, tc.desc)
+
+		body := new(bytes.Buffer)
+		_, err := body.ReadFrom(result.Body)
+
+		require.NoError(t, err, "TEST[%d] Failed: %s", i, tc.desc)
+
+		expectedBody := `{"error":{"message": "failed to encode response as JSON"}}` + "\n"
+		assert.Equal(t, expectedBody, body.String(), "TEST[%d] Failed: %s", i, tc.desc)
+
+		require.NoError(t, result.Body.Close())
+	}
+}
+
+func TestResponder_ValidEncodableData(t *testing.T) {
+	tests := []struct {
+		desc         string
+		data         any
+		expectedCode int
+	}{
+		{"normal float", 42.5, http.StatusOK},
+		{"zero float", 0.0, http.StatusOK},
+		{"struct with floats", struct{ Temp float64 }{Temp: 98.6}, http.StatusOK},
+		{"map with numbers", map[string]float64{"value": 123.45}, http.StatusOK},
+	}
+
+	for i, tc := range tests {
+		recorder := httptest.NewRecorder()
+		responder := NewResponder(recorder, http.MethodGet)
+
+		responder.Respond(tc.data, nil)
+
+		result := recorder.Result()
+
+		t.Cleanup(func() {
+			require.NoError(t, result.Body.Close())
+		})
+
+		assert.Equal(t, tc.expectedCode, result.StatusCode, "TEST[%d] Failed: %s", i, tc.desc)
+
+		body := new(bytes.Buffer)
+		_, err := body.ReadFrom(result.Body)
+
+		require.NoError(t, err, "TEST[%d] Failed: %s", i, tc.desc)
+
+		assert.NotEmpty(t, body.String(), "TEST[%d] Failed: %s", i, tc.desc)
 	}
 }
