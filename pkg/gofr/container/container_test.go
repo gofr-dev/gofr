@@ -2,6 +2,7 @@ package container
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"testing"
 
@@ -251,4 +252,279 @@ func TestContainer_CreateSetsAppNameAndVersion(t *testing.T) {
 		assert.Equal(t, "gofr-app", c.GetAppName())
 		assert.Equal(t, "dev", c.GetAppVersion())
 	})
+}
+
+func TestRedisPubSubEffectiveMode(t *testing.T) {
+	tests := []struct {
+		desc     string
+		mode     string
+		expected string
+	}{
+		{desc: "explicit pubsub", mode: "pubsub", expected: redisPubSubModePubSub},
+		{desc: "explicit streams", mode: "streams", expected: redisPubSubModeStreams},
+		{desc: "empty defaults to streams", mode: "", expected: redisPubSubModeStreams},
+		{desc: "invalid falls back to streams", mode: "invalid", expected: redisPubSubModeStreams},
+	}
+
+	for _, tc := range tests {
+		conf := config.NewMockConfig(map[string]string{"REDIS_PUBSUB_MODE": tc.mode})
+		require.Equal(t, tc.expected, effectiveRedisPubSubMode(conf), tc.desc)
+	}
+}
+
+func TestWarnRedisPubSubSharedDB_NoWarnWhenRedisNil(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	c := &Container{Logger: NewMockLogger(ctrl)}
+
+	c.warnIfRedisPubSubSharesRedisDB(config.NewMockConfig(map[string]string{
+		"REDIS_PUBSUB_MODE": "streams",
+		"REDIS_DB":          "0",
+	}))
+}
+
+func TestWarnRedisPubSubSharedDB_NoWarnWhenModeIsPubSub(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	c := &Container{
+		Logger: NewMockLogger(ctrl),
+		Redis:  NewMockRedis(ctrl), // non-nil
+	}
+
+	c.warnIfRedisPubSubSharesRedisDB(config.NewMockConfig(map[string]string{
+		"REDIS_PUBSUB_MODE": "pubsub",
+		"REDIS_DB":          "0",
+	}))
+}
+
+func TestWarnRedisPubSubSharedDB_WarnsWhenPubSubDBUnset(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	c := &Container{
+		Logger: NewMockLogger(ctrl),
+		Redis:  NewMockRedis(ctrl), // non-nil
+	}
+
+	// No warning expected when REDIS_PUBSUB_DB is unset (defaults to DB 15, which is safe)
+	c.warnIfRedisPubSubSharesRedisDB(config.NewMockConfig(map[string]string{
+		"REDIS_PUBSUB_MODE": "streams",
+		"REDIS_DB":          "0",
+	}))
+}
+
+func TestWarnRedisPubSubSharedDB_WarnsWhenPubSubDBInvalid(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	c := &Container{
+		Logger: NewMockLogger(ctrl),
+		Redis:  NewMockRedis(ctrl), // non-nil
+	}
+
+	// No warning expected when REDIS_PUBSUB_DB is invalid (will use default DB 15, which is safe)
+	c.warnIfRedisPubSubSharesRedisDB(config.NewMockConfig(map[string]string{
+		"REDIS_PUBSUB_MODE": "streams",
+		"REDIS_DB":          "0",
+		"REDIS_PUBSUB_DB":   "not-a-number",
+	}))
+}
+
+func TestWarnRedisPubSubSharedDB_WarnsWhenPubSubDBEqualsRedisDB(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	var warns []string
+
+	logger := NewMockLogger(ctrl)
+	// Warnf is called with format string + 2 integer arguments (pubsubDB, redisDB)
+	logger.EXPECT().Warnf(gomock.Any(), gomock.Any(), gomock.Any()).Do(func(format string, args ...any) {
+		warns = append(warns, fmt.Sprintf(format, args...))
+	}).Times(1)
+
+	c := &Container{
+		Logger: logger,
+		Redis:  NewMockRedis(ctrl), // non-nil
+	}
+
+	c.warnIfRedisPubSubSharesRedisDB(config.NewMockConfig(map[string]string{
+		"REDIS_PUBSUB_MODE": "streams",
+		"REDIS_DB":          "0",
+		"REDIS_PUBSUB_DB":   "0",
+	}))
+
+	require.Len(t, warns, 1)
+	require.Contains(t, warns[0], "migrations may fail")
+}
+
+func TestWarnRedisPubSubSharedDB_NoWarnWhenPubSubDBDiffers(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	c := &Container{
+		Logger: NewMockLogger(ctrl),
+		Redis:  NewMockRedis(ctrl), // non-nil
+	}
+
+	c.warnIfRedisPubSubSharesRedisDB(config.NewMockConfig(map[string]string{
+		"REDIS_PUBSUB_MODE": "streams",
+		"REDIS_DB":          "0",
+		"REDIS_PUBSUB_DB":   "1",
+	}))
+}
+
+func TestCreatePubSub_DispatchBranches(t *testing.T) {
+	t.Run("kafka branch with empty broker does nothing", func(t *testing.T) {
+		ctrl := gomock.NewController(t)
+		defer ctrl.Finish()
+
+		c := &Container{Logger: NewMockLogger(ctrl)}
+		c.createPubSub(config.NewMockConfig(map[string]string{"PUBSUB_BACKEND": "KAFKA"}))
+		require.Nil(t, c.PubSub)
+	})
+
+	t.Run("google branch with missing configs returns nil client", func(t *testing.T) {
+		ctrl := gomock.NewController(t)
+		defer ctrl.Finish()
+
+		var errs []string
+
+		logger := NewMockLogger(ctrl)
+		// google.New uses Debugf with varying arg counts; allow both shapes.
+		logger.EXPECT().Debugf(gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
+		logger.EXPECT().Debugf(gomock.Any()).AnyTimes()
+		logger.EXPECT().Logf(gomock.Any(), gomock.Any()).AnyTimes()
+
+		logger.EXPECT().Errorf(gomock.Any(), gomock.Any()).Do(func(format string, args ...any) {
+			errs = append(errs, fmt.Sprintf(format, args...))
+		}).AnyTimes()
+
+		c := &Container{Logger: logger}
+		c.createPubSub(config.NewMockConfig(map[string]string{"PUBSUB_BACKEND": "GOOGLE"}))
+		require.Nil(t, c.PubSub)
+		require.NotEmpty(t, errs)
+	})
+
+	t.Run("redis branch with empty host returns nil client", func(t *testing.T) {
+		ctrl := gomock.NewController(t)
+		defer ctrl.Finish()
+
+		c := &Container{Logger: NewMockLogger(ctrl)}
+		c.createPubSub(config.NewMockConfig(map[string]string{"PUBSUB_BACKEND": "REDIS"}))
+		require.Nil(t, c.PubSub)
+	})
+}
+
+func TestWebsocketManagerHelpers(t *testing.T) {
+	m := ws.New()
+
+	c := &Container{
+		WSManager: m,
+	}
+
+	connID := "svc-1"
+	conn := &ws.Connection{}
+
+	c.AddConnection(connID, conn)
+
+	got := c.GetWSConnectionByServiceName(connID)
+	require.Equal(t, conn, got)
+
+	c.RemoveConnection(connID)
+	require.Nil(t, c.GetWSConnectionByServiceName(connID))
+}
+
+func TestContainer_registerFrameworkMetrics_RegistersExpectedMetrics(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	mockMetrics := NewMockMetrics(ctrl)
+
+	c := &Container{
+		Logger:         NewMockLogger(ctrl),
+		metricsManager: mockMetrics,
+	}
+
+	gauges := []string{
+		"app_info",
+		"app_go_routines",
+		"app_sys_memory_alloc",
+		"app_sys_total_alloc",
+		"app_go_numGC",
+		"app_go_sys",
+		"app_sql_open_connections",
+		"app_sql_inUse_connections",
+	}
+	for _, gauge := range gauges {
+		mockMetrics.EXPECT().NewGauge(gauge, gomock.Any()).Times(1)
+	}
+
+	counters := []string{
+		"app_pubsub_publish_total_count",
+		"app_pubsub_publish_success_count",
+		"app_pubsub_subscribe_total_count",
+		"app_pubsub_subscribe_success_count",
+	}
+	for _, counter := range counters {
+		mockMetrics.EXPECT().NewCounter(counter, gomock.Any()).Times(1)
+	}
+
+	httpBuckets := []float64{.001, .003, .005, .01, .02, .03, .05, .1, .2, .3, .5, .75, 1, 2, 3, 5, 10, 30}
+	dsBuckets := getDefaultDatasourceBuckets()
+
+	histograms := []struct {
+		name    string
+		buckets []float64
+	}{
+		{name: "app_http_response", buckets: httpBuckets},
+		{name: "app_http_service_response", buckets: httpBuckets},
+		{name: "app_redis_stats", buckets: dsBuckets},
+		{name: "app_sql_stats", buckets: dsBuckets},
+	}
+
+	for _, tc := range histograms {
+		bucketMatchers := make([]any, 0, len(tc.buckets))
+		for range tc.buckets {
+			bucketMatchers = append(bucketMatchers, gomock.Any())
+		}
+
+		mockMetrics.EXPECT().
+			NewHistogram(tc.name, gomock.Any(), bucketMatchers...).
+			Do(func(_ string, _ string, buckets ...float64) {
+				require.Equal(t, tc.buckets, buckets)
+			}).
+			Times(1)
+	}
+
+	c.registerFrameworkMetrics()
+}
+
+func TestGetDefaultDatasourceBuckets(t *testing.T) {
+	buckets := getDefaultDatasourceBuckets()
+	require.NotEmpty(t, buckets)
+
+	assert.InDelta(t, 0.05, buckets[0], 1e-12)
+	assert.InDelta(t, 30000.0, buckets[len(buckets)-1], 1e-12)
+
+	for i := 1; i < len(buckets); i++ {
+		assert.Greater(t, buckets[i], buckets[i-1])
+	}
+}
+
+func TestContainer_Close_ClosesWebsocketConnections(t *testing.T) {
+	c := &Container{
+		WSManager: ws.New(),
+	}
+
+	connID := "conn-1"
+	c.AddConnection(connID, &ws.Connection{})
+
+	require.Len(t, c.WSManager.ListConnections(), 1)
+
+	err := c.Close()
+	require.NoError(t, err)
+
+	require.Empty(t, c.WSManager.ListConnections())
 }
