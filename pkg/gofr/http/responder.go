@@ -1,7 +1,6 @@
 package http
 
 import (
-	"bytes"
 	"encoding/json"
 	"errors"
 	"net/http"
@@ -54,18 +53,18 @@ func (r Responder) Respond(data any, err error) {
 		r.w.Header().Set("Content-Type", "application/json")
 	}
 
-	var buf bytes.Buffer
+	jsonData, encodeErr := json.Marshal(resp)
+	if encodeErr != nil {
+		r.w.WriteHeader(http.StatusInternalServerError)
 
-	encoder := json.NewEncoder(&buf)
+		_, _ = r.w.Write([]byte(`{"error":{"message": "failed to encode response as JSON"}}` + "\n"))
 
-	if err := encoder.Encode(resp); err != nil {
-		// JSON encoding failed (e.g. NaN, Inf, unsupported types)
-		http.Error(r.w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
 		return
 	}
 
 	r.w.WriteHeader(statusCode)
-	_, _ = r.w.Write(buf.Bytes())
+	_, _ = r.w.Write(jsonData)
+	_, _ = r.w.Write([]byte("\n"))
 }
 
 // handleSpecialResponseTypes handles special response types that bypass JSON encoding.
