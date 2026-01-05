@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"net/http"
 	"os"
+	"path"
 	"path/filepath"
 	"strings"
 
@@ -30,7 +31,7 @@ type Middleware func(handler http.Handler) http.Handler
 
 // NewRouter creates a new Router instance.
 func NewRouter() *Router {
-	muxRouter := mux.NewRouter().StrictSlash(false)
+	muxRouter := mux.NewRouter().StrictSlash(false).SkipClean(true)
 	routes := make([]string, 0)
 	r := &Router{
 		Router:           *muxRouter,
@@ -40,6 +41,32 @@ func NewRouter() *Router {
 	r.Router = *muxRouter
 
 	return r
+}
+
+// ServeHTTP implements [http.Handler] interface with path normalization.
+func (rou *Router) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	// Normalize the path before routing to handle double slashes
+	originalPath := r.URL.Path
+	normalizedPath := path.Clean(originalPath)
+
+	// path.Clean returns "." for empty paths, convert to "/" for HTTP routing
+	if normalizedPath == "." {
+		normalizedPath = "/"
+	}
+
+	// Ensure path starts with "/" for HTTP routing
+	normalizedPath = "/" + strings.TrimLeft(normalizedPath, "/")
+
+	// Only modify if path changed
+	if originalPath != normalizedPath {
+		r.URL.Path = normalizedPath
+		if r.URL.RawPath != "" {
+			r.URL.RawPath = normalizedPath
+		}
+	}
+
+	// Delegate to the underlying Gorilla Mux router
+	rou.Router.ServeHTTP(w, r)
 }
 
 // Add adds a new route with the given HTTP method, pattern, and handler, wrapping the handler with OpenTelemetry instrumentation.
