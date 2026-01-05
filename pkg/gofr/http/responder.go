@@ -55,6 +55,7 @@ func (r Responder) Respond(data any, err error) {
 	}
 
 	var buf bytes.Buffer
+
 	encoder := json.NewEncoder(&buf)
 
 	if err := encoder.Encode(resp); err != nil {
@@ -65,7 +66,6 @@ func (r Responder) Respond(data any, err error) {
 
 	r.w.WriteHeader(statusCode)
 	_, _ = r.w.Write(buf.Bytes())
-
 }
 
 // handleSpecialResponseTypes handles special response types that bypass JSON encoding.
