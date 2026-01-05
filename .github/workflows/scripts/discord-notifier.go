@@ -99,36 +99,101 @@ func splitMessage(text string, limit int) []string {
 	lines := strings.Split(text, "\n")
 	
 	for _, line := range lines {
-		// Check for code block toggles
-		// Note: This is a simple check. It handles ```go, ``` etc.
-		if strings.HasPrefix(strings.TrimSpace(line), "```") {
-			inCodeBlock = !inCodeBlock
+		lineLen := utf8.RuneCountInString(line)
+		chunkLen := utf8.RuneCountInString(currentChunk)
+		
+		// Check for code block toggles *before* processing to know if we are entering/exiting
+		// Actually, standard markdown: if line starts with ```, it toggles.
+		// We need to know if we are *currently* in a block to decide overhead.
+		// But the toggle happens *on* this line.
+		// If line is "```go", we enter. If line is "```", we exit.
+		isToggle := strings.HasPrefix(strings.TrimSpace(line), "```")
+		
+		// Overhead calculation
+		// If we split now:
+		// 1. We need to add `\n` separator (1 char)
+		// 2. If inCodeBlock (and not toggling out), we need `\n` + ` ``` ` (4 chars) to close current.
+		overhead := 1
+		if inCodeBlock && !isToggle {
+			overhead += 4 // "\n```"
 		}
 
-		// Calculate potential length
-		// +1 for newline we stripped
-		potentialLen := utf8.RuneCountInString(currentChunk) + utf8.RuneCountInString(line) + 1
+		// Check if adding this line exceeds limit
+		if chunkLen+lineLen+overhead > limit {
+			// Must split
+			if currentChunk != "" {
+				if inCodeBlock && !isToggle {
+					// Close block in current chunk
+					currentChunk += "\n```"
+					chunks = append(chunks, currentChunk)
+					
+					// Re-open in next chunk
+					currentChunk = "```\n"
+				} else {
+					chunks = append(chunks, currentChunk)
+					currentChunk = ""
+				}
+			}
 
-		if potentialLen > limit {
-			// Must split here
-			if inCodeBlock {
-				// Close block in current chunk
-				currentChunk += "\n```"
-				chunks = append(chunks, currentChunk)
-				
-				// Re-open block in next chunk (assuming generic block for simplicity, 
-				// ideally we'd track the language)
-				currentChunk = "```\n" + line
+			// Now handle the line itself. If it's still too big (even for a new chunk), we must split it.
+			// Note: If we just re-opened a code block, currentChunk is "```\n" (4 chars).
+			// We need to fit `line` into `limit - len(currentChunk)`.
+			
+			// If the line fits in a fresh chunk (plus potential code block header), just add it.
+			if utf8.RuneCountInString(currentChunk)+lineLen <= limit {
+				if currentChunk == "" {
+					currentChunk = line
+				} else {
+					currentChunk += line // No newline needed if we just reset, but wait...
+					// If we reset currentChunk to "", we don't need newline.
+					// If we reset to "```\n", we already have newline.
+				}
 			} else {
-				chunks = append(chunks, currentChunk)
-				currentChunk = line
+				// Line is too long. Split it.
+				// We will split by characters for simplicity, or spaces if we want to be fancy.
+				// Given the constraints and "generalize" request, let's do simple char split for now 
+				// to ensure correctness, as word splitting is complex with Markdown.
+				
+				remaining := line
+				for len(remaining) > 0 {
+					// How much space do we have?
+					space := limit - utf8.RuneCountInString(currentChunk)
+					if space <= 0 {
+						// Should not happen if logic is correct, but safety:
+						chunks = append(chunks, currentChunk)
+						currentChunk = ""
+						space = limit
+					}
+					
+					if utf8.RuneCountInString(remaining) <= space {
+						currentChunk += remaining
+						remaining = ""
+					} else {
+						// Take what fits
+						// Need to be careful with multi-byte runes
+						runes := []rune(remaining)
+						take := runes[:space]
+						currentChunk += string(take)
+						remaining = string(runes[space:])
+						
+						// Chunk is full
+						chunks = append(chunks, currentChunk)
+						currentChunk = ""
+					}
+				}
 			}
 		} else {
+			// Fits
 			if currentChunk == "" {
 				currentChunk = line
 			} else {
 				currentChunk += "\n" + line
 			}
+		}
+
+		// Update state for next line
+		if isToggle {
+			inCodeBlock = !inCodeBlock
 		}
 	}
 
