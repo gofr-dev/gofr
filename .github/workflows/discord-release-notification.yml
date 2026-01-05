@@ -23,149 +23,17 @@ jobs:
     name: Send Release Notes to Discord
     runs-on: ubuntu-latest
     steps:
-      - name: Send Release Notes to Discord
+      - name: Set up Go
+        uses: actions/setup-go@v4
+        with:
+          go-version: '1.21'
+
+      - name: Send Release Notes
         env:
           DISCORD_WEBHOOK: ${{ secrets.DISCORD_WEBHOOK }}
           RELEASE_TAG: ${{ github.event.release.tag_name }}
           RELEASE_NAME: ${{ github.event.release.name }}
           RELEASE_BODY: ${{ github.event.release.body }}
           RELEASE_URL: ${{ github.event.release.html_url }}
-        run: |
-          # Function to send a message to Discord
-          send_discord_message() {
-            local content="$1"
-            curl -H "Content-Type: application/json" \
-              -X POST \
-              -d "{\"content\": $(echo "$content" | jq -Rs .)}" \
-              "$DISCORD_WEBHOOK"
-          }
-          
-          # Create the release notification header
-          header="🚀 **New Release: $RELEASE_NAME**\n\n"
-          header="${header}📦 **Tag:** \`$RELEASE_TAG\`\n"
-          header="${header}🔗 **Link:** $RELEASE_URL\n\n"
-          header="${header}---\n\n"
-          
-          # Get release notes
-          release_notes="$RELEASE_BODY"
-          
-          # If release notes are empty, use a default message
-          if [ -z "$release_notes" ] || [ "$release_notes" = "null" ]; then
-            release_notes="No release notes provided."
-          fi
-          
-          # Combine header and release notes
-          full_message="${header}${release_notes}"
-          
-          # Discord's message limit is 2000 characters
-          MAX_LENGTH=2000
-          CHUNK_SIZE=1800  # Reserve space for part indicators
-          
-          # Check if message exceeds Discord's limit
-          if [ ${#full_message} -le $MAX_LENGTH ]; then
-            # Send as single message
-            send_discord_message "$full_message"
-          else
-            # Send header first (it should be short enough)
-            send_discord_message "$header"
-            
-            # Split release notes into chunks
-            # Use a temporary file to handle the splitting properly
-            temp_file=$(mktemp)
-            echo "$release_notes" > "$temp_file"
-            
-            chunk_num=1
-            current_chunk=""
-            
-            # Read line by line to preserve formatting
-            while IFS= read -r line || [ -n "$line" ]; do
-              # Calculate what the chunk would look like with this line
-              if [ -z "$current_chunk" ]; then
-                test_chunk="$line"
-              else
-                test_chunk="$current_chunk\n$line"
-              fi
-              
-              # If adding this line would exceed the limit
-              if [ ${#test_chunk} -gt $CHUNK_SIZE ]; then
-                # Send current chunk if it has content
-                if [ -n "$current_chunk" ]; then
-                  chunk_header="📝 **Release Notes (Part $chunk_num):**\n\n"
-                  send_discord_message "${chunk_header}${current_chunk}"
-                  chunk_num=$((chunk_num + 1))
-                  sleep 0.5  # Small delay to avoid rate limiting
-                fi
-                
-                # If the line itself is too long, split it by words
-                if [ ${#line} -gt $CHUNK_SIZE ]; then
-                  # Function to find last space character position (UTF-8 safe)
-                  find_last_space_char_pos() {
-                    local str="$1"
-                    local len=${#str}
-                    local pos=-1
-                    # Search backwards through character positions
-                    for ((i=len-1; i>=0; i--)); do
-                      if [ "${str:$i:1}" = " " ]; then
-                        pos=$i
-                        break
-                      fi
-                    done
-                    echo "$pos"
-                  }
-                  
-                  # Split long line by spaces, trying to keep words together
-                  remaining_line="$line"
-                  MIN_CHUNK_SIZE=100  # Minimum chunk size to avoid very small chunks
-                  while [ ${#remaining_line} -gt $CHUNK_SIZE ]; do
-                    # Find the last space within the chunk size (character-based search)
-                    chunk_part="${remaining_line:0:$CHUNK_SIZE}"
-                    last_space_char_pos=$(find_last_space_char_pos "$chunk_part")
-                    
-                    if [ "$last_space_char_pos" -ge 0 ]; then
-                      # Use the space if it results in a chunk of reasonable size
-                      break_point=$((last_space_char_pos + 1))  # +1 to include the space
-                      if [ "$break_point" -ge $MIN_CHUNK_SIZE ]; then
-                        chunk_part="${remaining_line:0:$break_point}"
-                        remaining_line="${remaining_line:$break_point}"
-                        # Remove leading space if present
-                        remaining_line="${remaining_line# }"
-                      else
-                        # Space too close to start, force break at CHUNK_SIZE
-                        chunk_part="${remaining_line:0:$CHUNK_SIZE}"
-                        remaining_line="${remaining_line:$CHUNK_SIZE}"
-                      fi
-                    else
-                      # Force break if no space found
-                      chunk_part="${remaining_line:0:$CHUNK_SIZE}"
-                      remaining_line="${remaining_line:$CHUNK_SIZE}"
-                    fi
-                    
-                    chunk_header="📝 **Release Notes (Part $chunk_num):**\n\n"
-                    send_discord_message "${chunk_header}${chunk_part}"
-                    chunk_num=$((chunk_num + 1))
-                    sleep 0.5
-                  done
-                  current_chunk="$remaining_line"
-                else
-                  current_chunk="$line"
-                fi
-              else
-                # Add line to current chunk
-                if [ -z "$current_chunk" ]; then
-                  current_chunk="$line"
-                else
-                  current_chunk="$current_chunk\n$line"
-                fi
-              fi
-            done < "$temp_file"
-            
-            # Send remaining chunk
-            if [ -n "$current_chunk" ]; then
-              chunk_header="📝 **Release Notes (Part $chunk_num):**\n\n"
-              send_discord_message "${chunk_header}${current_chunk}"
-            fi
-            
-            # Clean up
-            rm -f "$temp_file"
-          fi
+        run: go run .github/workflows/scripts/discord-notifier.go
 
