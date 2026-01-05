@@ -79,7 +79,7 @@ func main() {
 		websocket.WithCompression(),                   // Enable compression
 	)
 
-	app.OverrideWebSocketUpgrader(wsUpgrader)
+	app.OverrideWebsocketUpgrader(wsUpgrader)
 
 	app.WebSocket("/ws", WSHandler)
 
