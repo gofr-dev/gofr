@@ -391,7 +391,7 @@ func TestBeginTransaction_ReplaceSQLTx(t *testing.T) {
 
 func TestCheckAndCreateMigrationTable_ErrorCreatingTable(t *testing.T) {
 	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
+	t.Cleanup(ctrl.Finish)
 
 	mockContainer, mocks := container.NewMockContainer(t)
 	mocks.SQL.ExpectExec(createSQLGoFrMigrationsTable).WillReturnError(errCreateTable)
