@@ -38,5 +38,5 @@ jobs:
           RELEASE_NAME: ${{ github.event.release.name }}
           RELEASE_BODY: ${{ github.event.release.body }}
           RELEASE_URL: ${{ github.event.release.html_url }}
-        run: go run .github/workflows/scripts/discord-notifier.go
+        run: go run .github/workflows/scripts/discord_notifier.go
 

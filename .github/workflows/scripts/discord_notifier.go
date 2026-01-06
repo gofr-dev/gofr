@@ -28,7 +28,6 @@ func main() {
 	}
 
 	releaseBody := os.Getenv("RELEASE_BODY")
-	releaseName := os.Getenv("RELEASE_NAME")
 	releaseTag := os.Getenv("RELEASE_TAG")
 	releaseURL := os.Getenv("RELEASE_URL")
 
