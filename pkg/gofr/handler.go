@@ -7,7 +7,6 @@ import (
 	"io"
 	"net/http"
 	"os"
-	"runtime/debug"
 	"time"
 
 	"github.com/gorilla/websocket"
@@ -144,10 +143,7 @@ func panicRecoveryHandler(re any, log logging.Logger, panicked chan struct{}) {
 	}
 
 	close(panicked)
-	log.Error(panicLog{
-		Error:      fmt.Sprint(re),
-		StackTrace: string(debug.Stack()),
-	})
+	logging.LogPanic(re, log)
 }
 
 // Log the error(if any) with traceID and errorMessage.

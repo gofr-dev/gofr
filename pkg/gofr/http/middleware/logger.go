@@ -13,6 +13,8 @@ import (
 	"time"
 
 	"go.opentelemetry.io/otel/trace"
+
+	"gofr.dev/pkg/gofr/logging"
 )
 
 var errHijackNotSupported = errors.New("response writer does not support hijacking")
@@ -169,30 +171,35 @@ func getIPAddress(r *http.Request) string {
 	return strings.TrimSpace(ipAddress)
 }
 
-type panicLog struct {
-	Error      string `json:"error,omitempty"`
-	StackTrace string `json:"stack_trace,omitempty"`
-}
-
 func panicRecovery(re any, w http.ResponseWriter, logger logger) {
 	if re == nil {
 		return
 	}
 
-	var e string
-	switch t := re.(type) {
-	case string:
-		e = t
-	case error:
-		e = t.Error()
-	default:
-		e = "Unknown panic type"
-	}
+	if l, ok := logger.(logging.Logger); ok {
+		logging.LogPanic(re, l)
+	} else {
+		// Fallback for custom logger implementations that might not satisfy logging.Logger fully
+		// although here we know it's likely our logger.
+		// For now, let's just manually log if casting fails, or best effort.
+		// Re-implement basic logging here to avoid circular dependency if logger interface is different?
+		// Actually, let's see imports. 'middleware' imports 'logging'.
+		// 'logging.Logger' interface matches 'logger' interface locally defined mostly.
+		var e string
+		switch t := re.(type) {
+		case string:
+			e = t
+		case error:
+			e = t.Error()
+		default:
+			e = "Unknown panic type"
+		}
 
-	logger.Error(panicLog{
-		Error:      e,
-		StackTrace: string(debug.Stack()),
-	})
+		logger.Error(map[string]interface{}{
+			"error":       e,
+			"stack_trace": string(debug.Stack()),
+		})
+	}
 
 	w.WriteHeader(http.StatusInternalServerError)
 

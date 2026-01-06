@@ -8,6 +8,7 @@ import (
 	cmd2 "gofr.dev/pkg/gofr/cmd"
 	"gofr.dev/pkg/gofr/cmd/terminal"
 	"gofr.dev/pkg/gofr/container"
+	"gofr.dev/pkg/gofr/logging"
 )
 
 type cmd struct {
@@ -35,6 +36,10 @@ func (e ErrCommandNotFound) Error() string {
 }
 
 func (cmd *cmd) Run(c *container.Container) {
+	defer func() {
+		logging.LogPanic(recover(), c.Logger)
+	}()
+
 	args := os.Args[1:] // First one is command itself
 	subCommand, showHelp, firstArg := parseArgs(args)
 
