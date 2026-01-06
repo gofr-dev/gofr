@@ -45,17 +45,17 @@ func sendOperationStats(
 	status, message *string,
 	span trace.Span,
 ) {
-	duration := time.Since(start).Microseconds()
+	duration := time.Since(start)
 
 	logger.Debug(&QueryLog{
 		Operation: operation,
 		Status:    status,
-		Duration:  duration,
+		Duration:  duration.Microseconds(),
 		Message:   message,
 	})
 
 	if span != nil {
-		span.SetAttributes(attribute.Int64(fmt.Sprintf("opentsdb.%v.duration", operation), duration))
+		span.SetAttributes(attribute.Int64(fmt.Sprintf("opentsdb.%v.duration", operation), duration.Microseconds()))
 		span.End()
 	}
 
@@ -74,7 +74,7 @@ func sendOperationStats(
 			labels = append(labels, "host", host)
 		}
 
-		metrics.RecordHistogram(ctx, opentsdbOperationDurationName, float64(duration), labels...)
+		metrics.RecordHistogram(ctx, opentsdbOperationDurationName, float64(duration.Milliseconds()), labels...)
 		metrics.IncrementCounter(ctx, opentsdbOperationTotalName, labels...)
 	}
 }
