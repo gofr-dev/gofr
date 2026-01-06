@@ -37,7 +37,7 @@ func main() {
 
 	// 1. Construct Header with release tag as clickable heading
 	header := "@everyone\n\n"
-	header += fmt.Sprintf("# [**Release %s**](%s)\n\n", releaseTag, releaseURL)
+	header += fmt.Sprintf("# [🌟 GoFr %s Released! 🌟](%s)\n\n", releaseTag, releaseURL)
 
 	fullMessage := header + releaseBody
 
