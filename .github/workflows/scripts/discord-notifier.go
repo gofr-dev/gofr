@@ -37,10 +37,8 @@ func main() {
 	}
 
 	// 1. Construct Header
-	header := fmt.Sprintf("🚀 **New Release: %s**\n\n", releaseName)
-	header += fmt.Sprintf("📦 **Tag:** `%s`\n", releaseTag)
-	header += fmt.Sprintf("🔗 **Link:** %s\n\n", releaseURL)
-	header += "---\n\n"
+	header := "@everyone\n\n"
+	header += fmt.Sprintf("🚀 **New Release: [%s](%s)**\n\n", releaseName, releaseURL)
 
 	fullMessage := header + releaseBody
 
@@ -49,25 +47,8 @@ func main() {
 
 	// 3. Send Chunks
 	for i, chunk := range chunks {
-		prefix := ""
-		if len(chunks) > 1 {
-			prefix = fmt.Sprintf("📝 **Release Notes (Part %d/%d):**\n\n", i+1, len(chunks))
-			// If it's the first chunk, we don't need the "Part 1" prefix if the header is already there,
-			// but for consistency in multi-part messages, it's often good.
-			// However, the header itself is distinct. Let's only add "Part X" if i > 0 or if we want to be explicit.
-			// Given the user's request for "generalizing", let's keep it simple:
-			// If > 1 chunk, prepend Part info to ALL chunks to avoid confusion.
-		}
-
-		// Special handling: The first chunk already has the nice header.
-		// If we prepend "Part 1/X" before "🚀 New Release", it looks ugly.
-		// Logic:
-		// Chunk 0: [Header] + [Body Part 1]
-		// Chunk 1: [Part 2/X] + [Body Part 2]
+		// No part labels - just send chunks as-is
 		finalContent := chunk
-		if i > 0 {
-			finalContent = prefix + chunk
-		}
 
 		err := sendToDiscord(webhookURL, finalContent)
 		if err != nil {
