@@ -36,11 +36,36 @@ func main() {
 		releaseBody = "No release notes provided."
 	}
 
-	// 1. Construct Header
+	// 1. Extract first heading from release body
+	lines := strings.Split(releaseBody, "\n")
+	var titleLine string
+	var bodyStartIndex int
+	
+	for i, line := range lines {
+		trimmed := strings.TrimSpace(line)
+		if strings.HasPrefix(trimmed, "# ") {
+			// Found the first heading - extract it without the #
+			titleLine = strings.TrimSpace(strings.TrimPrefix(trimmed, "#"))
+			bodyStartIndex = i + 1
+			break
+		}
+	}
+	
+	// If no heading found, use release name
+	if titleLine == "" {
+		titleLine = fmt.Sprintf("**Release %s**", releaseName)
+		bodyStartIndex = 0
+	}
+	
+	// 2. Construct Header with extracted title
 	header := "@everyone\n\n"
-	header += fmt.Sprintf("🚀 **New Release: [%s](%s)**\n\n", releaseName, releaseURL)
-
-	fullMessage := header + releaseBody
+	header += fmt.Sprintf("# [%s](%s)\n\n", titleLine, releaseURL)
+	
+	// 3. Get remaining body (skip the title line we extracted)
+	remainingBody := strings.Join(lines[bodyStartIndex:], "\n")
+	remainingBody = strings.TrimSpace(remainingBody)
+	
+	fullMessage := header + remainingBody
 
 	// 2. Split Message
 	chunks := splitMessage(fullMessage, chunkSize)
