@@ -8,6 +8,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"go.uber.org/mock/gomock"
 
 	"gofr.dev/pkg/gofr/logging"
 )
@@ -212,4 +213,30 @@ func TestRetryProvider_DeleteWithHeaders(t *testing.T) {
 	defer resp.Body.Close()
 
 	assert.Equal(t, http.StatusNoContent, resp.StatusCode)
+}
+
+func TestRetryProvider_Metrics(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	metrics := NewMockMetrics(ctrl)
+
+	// Expect IncrementCounter to be called
+	metrics.EXPECT().IncrementCounter(gomock.Any(), "app_http_retry_count").MinTimes(1)
+	metrics.EXPECT().RecordHistogram(gomock.Any(), "app_http_service_response", gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
+
+	// Create a mock HTTP server that fails
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusInternalServerError)
+	}))
+	defer server.Close()
+
+	// Create a new HTTP service instance with retry config and metrics
+	httpService := NewHTTPService(server.URL, logging.NewMockLogger(logging.INFO), metrics,
+		&RetryConfig{MaxRetries: 2})
+
+	// Make the request
+	resp, err := httpService.Get(t.Context(), "/test", nil)
+	require.NoError(t, err)
+	defer resp.Body.Close()
+
+	assert.Equal(t, http.StatusInternalServerError, resp.StatusCode)
 }

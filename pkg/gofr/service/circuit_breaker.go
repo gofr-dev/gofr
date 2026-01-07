@@ -34,6 +34,7 @@ type circuitBreaker struct {
 	threshold    int
 	interval     time.Duration
 	lastChecked  time.Time
+	metrics      Metrics
 
 	HTTP
 }
@@ -122,6 +123,9 @@ func (cb *circuitBreaker) startHealthChecks() {
 func (cb *circuitBreaker) openCircuit() {
 	cb.state = OpenState
 	cb.lastChecked = time.Now()
+	if cb.metrics != nil {
+		cb.metrics.IncrementCounter(context.Background(), "app_http_circuit_breaker_open_count")
+	}
 }
 
 // resetCircuit transitions the circuit breaker to the closed state.
@@ -144,7 +148,13 @@ func (cb *circuitBreaker) resetFailureCount() {
 }
 
 func (cb *CircuitBreakerConfig) AddOption(h HTTP) HTTP {
-	return NewCircuitBreaker(*cb, h)
+	circuitBreaker := NewCircuitBreaker(*cb, h)
+
+	if httpSvc := extractHTTPService(h); httpSvc != nil {
+		circuitBreaker.metrics = httpSvc.Metrics
+	}
+
+	return circuitBreaker
 }
 
 func (cb *circuitBreaker) tryCircuitRecovery() bool {

@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"net/http"
+	"time"
 )
 
 type RetryConfig struct {
@@ -10,15 +11,21 @@ type RetryConfig struct {
 }
 
 func (r *RetryConfig) AddOption(h HTTP) HTTP {
-	return &retryProvider{
+	rp := &retryProvider{
 		maxRetries: r.MaxRetries,
 		HTTP:       h,
 	}
+
+	if httpSvc := extractHTTPService(h); httpSvc != nil {
+		rp.metrics = httpSvc.Metrics
+	}
+
+	return rp
 }
 
 type retryProvider struct {
 	maxRetries int
-
+	metrics    Metrics
 	HTTP
 }
 
@@ -98,11 +105,18 @@ func (rp *retryProvider) doWithRetry(reqFunc func() (*http.Response, error)) (*h
 		err  error
 	)
 
-	for i := 0; i < rp.maxRetries; i++ {
+	for i := 0; i <= rp.maxRetries; i++ {
 		resp, err = reqFunc()
 		if err == nil && resp.StatusCode != http.StatusInternalServerError {
 			return resp, nil
 		}
+
+		if i > 0 && rp.metrics != nil {
+			rp.metrics.IncrementCounter(context.Background(), "app_http_retry_count")
+		}
+
+		// Exponential backoff: 2^i * 100ms
+		time.Sleep(time.Duration(1<<i) * 100 * time.Millisecond)
 	}
 
 	return resp, err

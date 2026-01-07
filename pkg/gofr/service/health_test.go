@@ -81,7 +81,7 @@ func TestHTTPService_HealthCheckTimeout(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(_ http.ResponseWriter, r *http.Request) {
 		assert.Equal(t, "/.well-known/alive", r.URL.Path)
 
-		time.Sleep(1 * time.Second)
+		time.Sleep(2 * time.Second)
 	}))
 
 	metrics.EXPECT().RecordHistogram(gomock.Any(), "app_http_service_response", gomock.Any(), "path", server.URL,

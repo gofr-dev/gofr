@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
@@ -31,6 +32,8 @@ func setupHTTPServiceTestServerForCircuitBreaker() (*httptest.Server, HTTP) {
 
 	mockMetric := &mockMetrics{}
 	mockMetric.On("RecordHistogram", mock.Anything, mock.Anything, mock.Anything, mock.Anything).
+		Return(nil)
+	mockMetric.On("IncrementCounter", mock.Anything, "app_http_circuit_breaker_open_count", mock.Anything).
 		Return(nil)
 
 	// Initialize HTTP service with custom transport, URL, tracer, logger, and metrics
@@ -592,6 +595,10 @@ func (m *mockMetrics) RecordHistogram(ctx context.Context, name string, value fl
 	m.Called(ctx, name, value, labels)
 }
 
+func (m *mockMetrics) IncrementCounter(ctx context.Context, name string, labels ...string) {
+	m.Called(ctx, name, labels)
+}
+
 type customTransport struct {
 }
 
@@ -605,4 +612,39 @@ func (*customTransport) RoundTrip(r *http.Request) (*http.Response, error) {
 	}
 
 	return nil, testutil.CustomError{ErrorMessage: "cb error"}
+}
+
+func TestCircuitBreaker_Metrics(t *testing.T) {
+	server := testServer()
+	defer server.Close()
+
+	mockMetric := &mockMetrics{}
+
+	mockMetric.On("RecordHistogram", mock.Anything, mock.Anything, mock.Anything, mock.Anything).
+		Return(nil)
+	mockMetric.On("IncrementCounter", mock.Anything, "app_http_circuit_breaker_open_count", mock.Anything).
+		Return(nil)
+
+	service := httpService{
+		Client:  &http.Client{Transport: &customTransport{}},
+		url:     server.URL,
+		Tracer:  otel.Tracer("gofr-http-client"),
+		Logger:  logging.NewMockLogger(logging.DEBUG),
+		Metrics: mockMetric,
+	}
+
+	cbConfig := CircuitBreakerConfig{
+		Threshold: 1,
+		Interval:  1 * time.Second,
+	}
+
+	httpServiceWithCB := cbConfig.AddOption(&service)
+
+	// Trigger failures to open circuit
+	for i := 0; i < 3; i++ {
+		_, _ = httpServiceWithCB.Get(t.Context(), "invalid", nil)
+	}
+
+	// Verify IncrementCounter was called
+	mockMetric.AssertCalled(t, "IncrementCounter", mock.Anything, "app_http_circuit_breaker_open_count", mock.Anything)
 }
