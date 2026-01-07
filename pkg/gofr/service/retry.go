@@ -3,7 +3,6 @@ package service
 import (
 	"context"
 	"net/http"
-	"time"
 )
 
 type RetryConfig struct {
@@ -117,9 +116,6 @@ func (rp *retryProvider) doWithRetry(reqFunc func() (*http.Response, error)) (*h
 		if i > 0 && rp.metrics != nil {
 			rp.metrics.IncrementCounter(context.Background(), "app_http_retry_count")
 		}
-
-		// Exponential backoff: 2^i * 100ms
-		time.Sleep(time.Duration(1<<i) * 100 * time.Millisecond)
 	}
 
 	return resp, err
