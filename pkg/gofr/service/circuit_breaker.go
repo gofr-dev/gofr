@@ -35,6 +35,7 @@ type circuitBreaker struct {
 	interval     time.Duration
 	lastChecked  time.Time
 	metrics      Metrics
+	serviceName  string
 
 	HTTP
 }
@@ -125,7 +126,8 @@ func (cb *circuitBreaker) openCircuit() {
 	cb.lastChecked = time.Now()
 
 	if cb.metrics != nil {
-		cb.metrics.IncrementCounter(context.Background(), "app_http_circuit_breaker_open_count")
+		cb.metrics.IncrementCounter(context.Background(), "app_http_circuit_breaker_open_count", "service", cb.serviceName)
+		cb.metrics.SetGauge("app_http_circuit_breaker_state", 1, "service", cb.serviceName)
 	}
 }
 
@@ -133,6 +135,10 @@ func (cb *circuitBreaker) openCircuit() {
 func (cb *circuitBreaker) resetCircuit() {
 	cb.state = ClosedState
 	cb.failureCount = 0
+
+	if cb.metrics != nil {
+		cb.metrics.SetGauge("app_http_circuit_breaker_state", 0, "service", cb.serviceName)
+	}
 }
 
 // handleFailure increments the failure count and opens the circuit if the threshold is reached.
@@ -153,8 +159,14 @@ func (cb *CircuitBreakerConfig) AddOption(h HTTP) HTTP {
 
 	if httpSvc := extractHTTPService(h); httpSvc != nil {
 		circuitBreaker.metrics = httpSvc.Metrics
+		circuitBreaker.serviceName = httpSvc.name
+
 		if circuitBreaker.metrics != nil {
 			circuitBreaker.metrics.NewCounter("app_http_circuit_breaker_open_count", "Total number of circuit breaker open events")
+			circuitBreaker.metrics.NewGauge("app_http_circuit_breaker_state", "Current state of the circuit breaker (0 for Closed, 1 for Open)")
+
+			// Initialize the gauge to 0 (Closed)
+			circuitBreaker.metrics.SetGauge("app_http_circuit_breaker_state", 0, "service", circuitBreaker.serviceName)
 		}
 	}
 

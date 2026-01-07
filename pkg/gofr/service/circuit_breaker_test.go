@@ -2,7 +2,6 @@ package service
 
 import (
 	"bytes"
-	"context"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -10,9 +9,9 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
 	"go.opentelemetry.io/otel"
+	"go.uber.org/mock/gomock"
 
 	"gofr.dev/pkg/gofr/logging"
 	"gofr.dev/pkg/gofr/testutil"
@@ -26,22 +25,24 @@ func testServer() *httptest.Server {
 	return httptest.NewServer(h)
 }
 
-func setupHTTPServiceTestServerForCircuitBreaker() (*httptest.Server, HTTP) {
+func setupHTTPServiceTestServerForCircuitBreaker(t *testing.T) (*httptest.Server, HTTP) {
 	// Start a test HTTP server
 	server := testServer()
 
-	mockMetric := &mockMetrics{}
-	mockMetric.On("RecordHistogram", mock.Anything, mock.Anything, mock.Anything, mock.Anything).
-		Return(nil)
-	mockMetric.On("NewCounter", mock.Anything, mock.Anything).Return().Maybe()
-	mockMetric.On("IncrementCounter", mock.Anything, "app_http_circuit_breaker_open_count", mock.Anything).
-		Return(nil)
-	mockMetric.On("NewCounter", mock.Anything, mock.Anything).Return().Maybe()
+	ctrl := gomock.NewController(t)
+	mockMetric := NewMockMetrics(ctrl)
+
+	mockMetric.EXPECT().RecordHistogram(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
+	mockMetric.EXPECT().NewCounter(gomock.Any(), gomock.Any()).AnyTimes()
+	mockMetric.EXPECT().IncrementCounter(gomock.Any(), "app_http_circuit_breaker_open_count", gomock.Any()).AnyTimes()
+	mockMetric.EXPECT().NewGauge(gomock.Any(), gomock.Any()).AnyTimes()
+	mockMetric.EXPECT().SetGauge(gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
 
 	// Initialize HTTP service with custom transport, URL, tracer, logger, and metrics
 	service := httpService{
 		Client:  &http.Client{Transport: &customTransport{}},
 		url:     server.URL,
+		name:    "test-service",
 		Tracer:  otel.Tracer("gofr-http-client"),
 		Logger:  logging.NewMockLogger(logging.DEBUG),
 		Metrics: mockMetric,
@@ -63,12 +64,13 @@ func TestHttpService_GetSuccessRequests(t *testing.T) {
 	server := testServer()
 	defer server.Close()
 
-	mockMetric := &mockMetrics{}
+	ctrl := gomock.NewController(t)
+	mockMetric := NewMockMetrics(ctrl)
 
-	mockMetric.On("RecordHistogram", mock.Anything, mock.Anything, mock.Anything, mock.Anything).
-		Return(nil)
-	mockMetric.On("NewCounter", mock.Anything, mock.Anything).Return().Maybe()
-	mockMetric.On("NewCounter", mock.Anything, mock.Anything).Return().Maybe()
+	mockMetric.EXPECT().RecordHistogram(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
+	mockMetric.EXPECT().NewCounter(gomock.Any(), gomock.Any()).AnyTimes()
+	mockMetric.EXPECT().NewGauge(gomock.Any(), gomock.Any()).AnyTimes()
+	mockMetric.EXPECT().SetGauge(gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
 
 	service := NewHTTPService(server.URL, logging.NewMockLogger(logging.DEBUG), mockMetric, &CircuitBreakerConfig{
 		Threshold: 1,
@@ -87,12 +89,13 @@ func TestHttpService_GetWithHeaderSuccessRequests(t *testing.T) {
 	server := testServer()
 	defer server.Close()
 
-	mockMetric := &mockMetrics{}
+	ctrl := gomock.NewController(t)
+	mockMetric := NewMockMetrics(ctrl)
 
-	mockMetric.On("RecordHistogram", mock.Anything, mock.Anything, mock.Anything, mock.Anything).
-		Return(nil)
-	mockMetric.On("NewCounter", mock.Anything, mock.Anything).Return().Maybe()
-	mockMetric.On("NewCounter", mock.Anything, mock.Anything).Return().Maybe()
+	mockMetric.EXPECT().RecordHistogram(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
+	mockMetric.EXPECT().NewCounter(gomock.Any(), gomock.Any()).AnyTimes()
+	mockMetric.EXPECT().NewGauge(gomock.Any(), gomock.Any()).AnyTimes()
+	mockMetric.EXPECT().SetGauge(gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
 
 	service := NewHTTPService(server.URL, logging.NewMockLogger(logging.DEBUG), mockMetric, &CircuitBreakerConfig{
 		Threshold: 1,
@@ -108,7 +111,7 @@ func TestHttpService_GetWithHeaderSuccessRequests(t *testing.T) {
 }
 
 func TestHttpService_GetCBOpenRequests(t *testing.T) {
-	server, service := setupHTTPServiceTestServerForCircuitBreaker()
+	server, service := setupHTTPServiceTestServerForCircuitBreaker(t)
 	defer server.Close()
 
 	// Test cases
@@ -139,7 +142,7 @@ func TestHttpService_GetCBOpenRequests(t *testing.T) {
 }
 
 func TestHttpService_GetWithHeaderCBOpenRequests(t *testing.T) {
-	server, service := setupHTTPServiceTestServerForCircuitBreaker()
+	server, service := setupHTTPServiceTestServerForCircuitBreaker(t)
 	defer server.Close()
 
 	// Test cases
@@ -173,11 +176,13 @@ func TestHttpService_PutSuccessRequests(t *testing.T) {
 	server := testServer()
 	defer server.Close()
 
-	mockMetric := &mockMetrics{}
+	ctrl := gomock.NewController(t)
+	mockMetric := NewMockMetrics(ctrl)
 
-	mockMetric.On("RecordHistogram", mock.Anything, mock.Anything, mock.Anything, mock.Anything).
-		Return(nil)
-	mockMetric.On("NewCounter", mock.Anything, mock.Anything).Return().Maybe()
+	mockMetric.EXPECT().RecordHistogram(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
+	mockMetric.EXPECT().NewCounter(gomock.Any(), gomock.Any()).AnyTimes()
+	mockMetric.EXPECT().NewGauge(gomock.Any(), gomock.Any()).AnyTimes()
+	mockMetric.EXPECT().SetGauge(gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
 
 	service := NewHTTPService(server.URL, logging.NewMockLogger(logging.DEBUG), mockMetric, &CircuitBreakerConfig{
 		Threshold: 1,
@@ -196,11 +201,13 @@ func TestHttpService_PutWithHeaderSuccessRequests(t *testing.T) {
 	server := testServer()
 	defer server.Close()
 
-	mockMetric := &mockMetrics{}
+	ctrl := gomock.NewController(t)
+	mockMetric := NewMockMetrics(ctrl)
 
-	mockMetric.On("RecordHistogram", mock.Anything, mock.Anything, mock.Anything, mock.Anything).
-		Return(nil)
-	mockMetric.On("NewCounter", mock.Anything, mock.Anything).Return().Maybe()
+	mockMetric.EXPECT().RecordHistogram(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
+	mockMetric.EXPECT().NewCounter(gomock.Any(), gomock.Any()).AnyTimes()
+	mockMetric.EXPECT().NewGauge(gomock.Any(), gomock.Any()).AnyTimes()
+	mockMetric.EXPECT().SetGauge(gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
 
 	service := NewHTTPService(server.URL, logging.NewMockLogger(logging.DEBUG), mockMetric, &CircuitBreakerConfig{
 		Threshold: 1,
@@ -216,7 +223,7 @@ func TestHttpService_PutWithHeaderSuccessRequests(t *testing.T) {
 }
 
 func TestHttpService_PutCBOpenRequests(t *testing.T) {
-	server, service := setupHTTPServiceTestServerForCircuitBreaker()
+	server, service := setupHTTPServiceTestServerForCircuitBreaker(t)
 	defer server.Close()
 
 	// Test cases
@@ -247,7 +254,7 @@ func TestHttpService_PutCBOpenRequests(t *testing.T) {
 }
 
 func TestHttpService_PutWithHeaderCBOpenRequests(t *testing.T) {
-	server, service := setupHTTPServiceTestServerForCircuitBreaker()
+	server, service := setupHTTPServiceTestServerForCircuitBreaker(t)
 	defer server.Close()
 
 	// Test cases
@@ -281,11 +288,13 @@ func TestHttpService_PatchSuccessRequests(t *testing.T) {
 	server := testServer()
 	defer server.Close()
 
-	mockMetric := &mockMetrics{}
+	ctrl := gomock.NewController(t)
+	mockMetric := NewMockMetrics(ctrl)
 
-	mockMetric.On("RecordHistogram", mock.Anything, mock.Anything, mock.Anything, mock.Anything).
-		Return(nil)
-	mockMetric.On("NewCounter", mock.Anything, mock.Anything).Return().Maybe()
+	mockMetric.EXPECT().RecordHistogram(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
+	mockMetric.EXPECT().NewCounter(gomock.Any(), gomock.Any()).AnyTimes()
+	mockMetric.EXPECT().NewGauge(gomock.Any(), gomock.Any()).AnyTimes()
+	mockMetric.EXPECT().SetGauge(gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
 
 	service := NewHTTPService(server.URL, logging.NewMockLogger(logging.DEBUG), mockMetric, &CircuitBreakerConfig{
 		Threshold: 1,
@@ -304,11 +313,13 @@ func TestHttpService_PatchWithHeaderSuccessRequests(t *testing.T) {
 	server := testServer()
 	defer server.Close()
 
-	mockMetric := &mockMetrics{}
+	ctrl := gomock.NewController(t)
+	mockMetric := NewMockMetrics(ctrl)
 
-	mockMetric.On("RecordHistogram", mock.Anything, mock.Anything, mock.Anything, mock.Anything).
-		Return(nil)
-	mockMetric.On("NewCounter", mock.Anything, mock.Anything).Return().Maybe()
+	mockMetric.EXPECT().RecordHistogram(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
+	mockMetric.EXPECT().NewCounter(gomock.Any(), gomock.Any()).AnyTimes()
+	mockMetric.EXPECT().NewGauge(gomock.Any(), gomock.Any()).AnyTimes()
+	mockMetric.EXPECT().SetGauge(gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
 
 	service := NewHTTPService(server.URL, logging.NewMockLogger(logging.DEBUG), mockMetric, &CircuitBreakerConfig{
 		Threshold: 1,
@@ -324,7 +335,7 @@ func TestHttpService_PatchWithHeaderSuccessRequests(t *testing.T) {
 }
 
 func TestHttpService_PatchCBOpenRequests(t *testing.T) {
-	server, service := setupHTTPServiceTestServerForCircuitBreaker()
+	server, service := setupHTTPServiceTestServerForCircuitBreaker(t)
 	defer server.Close()
 
 	// Test cases
@@ -355,7 +366,7 @@ func TestHttpService_PatchCBOpenRequests(t *testing.T) {
 }
 
 func TestHttpService_PatchWithHeaderCBOpenRequests(t *testing.T) {
-	server, service := setupHTTPServiceTestServerForCircuitBreaker()
+	server, service := setupHTTPServiceTestServerForCircuitBreaker(t)
 	defer server.Close()
 
 	// Test cases
@@ -389,11 +400,13 @@ func TestHttpService_PostSuccessRequests(t *testing.T) {
 	server := testServer()
 	defer server.Close()
 
-	mockMetric := &mockMetrics{}
+	ctrl := gomock.NewController(t)
+	mockMetric := NewMockMetrics(ctrl)
 
-	mockMetric.On("RecordHistogram", mock.Anything, mock.Anything, mock.Anything, mock.Anything).
-		Return(nil)
-	mockMetric.On("NewCounter", mock.Anything, mock.Anything).Return().Maybe()
+	mockMetric.EXPECT().RecordHistogram(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
+	mockMetric.EXPECT().NewCounter(gomock.Any(), gomock.Any()).AnyTimes()
+	mockMetric.EXPECT().NewGauge(gomock.Any(), gomock.Any()).AnyTimes()
+	mockMetric.EXPECT().SetGauge(gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
 
 	service := NewHTTPService(server.URL, logging.NewMockLogger(logging.DEBUG), mockMetric, &CircuitBreakerConfig{
 		Threshold: 1,
@@ -412,11 +425,13 @@ func TestHttpService_PostWithHeaderSuccessRequests(t *testing.T) {
 	server := testServer()
 	defer server.Close()
 
-	mockMetric := &mockMetrics{}
+	ctrl := gomock.NewController(t)
+	mockMetric := NewMockMetrics(ctrl)
 
-	mockMetric.On("RecordHistogram", mock.Anything, mock.Anything, mock.Anything, mock.Anything).
-		Return(nil)
-	mockMetric.On("NewCounter", mock.Anything, mock.Anything).Return().Maybe()
+	mockMetric.EXPECT().RecordHistogram(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
+	mockMetric.EXPECT().NewCounter(gomock.Any(), gomock.Any()).AnyTimes()
+	mockMetric.EXPECT().NewGauge(gomock.Any(), gomock.Any()).AnyTimes()
+	mockMetric.EXPECT().SetGauge(gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
 
 	service := NewHTTPService(server.URL, logging.NewMockLogger(logging.DEBUG), mockMetric, &CircuitBreakerConfig{
 		Threshold: 1,
@@ -432,7 +447,7 @@ func TestHttpService_PostWithHeaderSuccessRequests(t *testing.T) {
 }
 
 func TestHttpService_PostCBOpenRequests(t *testing.T) {
-	server, service := setupHTTPServiceTestServerForCircuitBreaker()
+	server, service := setupHTTPServiceTestServerForCircuitBreaker(t)
 	defer server.Close()
 
 	// Test cases
@@ -463,7 +478,7 @@ func TestHttpService_PostCBOpenRequests(t *testing.T) {
 }
 
 func TestHttpService_PostWithHeaderCBOpenRequests(t *testing.T) {
-	server, service := setupHTTPServiceTestServerForCircuitBreaker()
+	server, service := setupHTTPServiceTestServerForCircuitBreaker(t)
 	defer server.Close()
 
 	// Test cases
@@ -497,11 +512,13 @@ func TestHttpService_DeleteSuccessRequests(t *testing.T) {
 	server := testServer()
 	defer server.Close()
 
-	mockMetric := &mockMetrics{}
+	ctrl := gomock.NewController(t)
+	mockMetric := NewMockMetrics(ctrl)
 
-	mockMetric.On("RecordHistogram", mock.Anything, mock.Anything, mock.Anything, mock.Anything).
-		Return(nil)
-	mockMetric.On("NewCounter", mock.Anything, mock.Anything).Return().Maybe()
+	mockMetric.EXPECT().RecordHistogram(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
+	mockMetric.EXPECT().NewCounter(gomock.Any(), gomock.Any()).AnyTimes()
+	mockMetric.EXPECT().NewGauge(gomock.Any(), gomock.Any()).AnyTimes()
+	mockMetric.EXPECT().SetGauge(gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
 
 	service := NewHTTPService(server.URL, logging.NewMockLogger(logging.DEBUG), mockMetric, &CircuitBreakerConfig{
 		Threshold: 1,
@@ -520,11 +537,13 @@ func TestHttpService_DeleteWithHeaderSuccessRequests(t *testing.T) {
 	server := testServer()
 	defer server.Close()
 
-	mockMetric := &mockMetrics{}
+	ctrl := gomock.NewController(t)
+	mockMetric := NewMockMetrics(ctrl)
 
-	mockMetric.On("RecordHistogram", mock.Anything, mock.Anything, mock.Anything, mock.Anything).
-		Return(nil)
-	mockMetric.On("NewCounter", mock.Anything, mock.Anything).Return().Maybe()
+	mockMetric.EXPECT().RecordHistogram(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
+	mockMetric.EXPECT().NewCounter(gomock.Any(), gomock.Any()).AnyTimes()
+	mockMetric.EXPECT().NewGauge(gomock.Any(), gomock.Any()).AnyTimes()
+	mockMetric.EXPECT().SetGauge(gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
 
 	service := NewHTTPService(server.URL, logging.NewMockLogger(logging.DEBUG), mockMetric, &CircuitBreakerConfig{
 		Threshold: 1,
@@ -540,7 +559,7 @@ func TestHttpService_DeleteWithHeaderSuccessRequests(t *testing.T) {
 }
 
 func TestHttpService_DeleteCBOpenRequests(t *testing.T) {
-	server, service := setupHTTPServiceTestServerForCircuitBreaker()
+	server, service := setupHTTPServiceTestServerForCircuitBreaker(t)
 	defer server.Close()
 
 	// Test cases
@@ -571,7 +590,7 @@ func TestHttpService_DeleteCBOpenRequests(t *testing.T) {
 }
 
 func TestHttpService_DeleteWithHeaderCBOpenRequests(t *testing.T) {
-	server, service := setupHTTPServiceTestServerForCircuitBreaker()
+	server, service := setupHTTPServiceTestServerForCircuitBreaker(t)
 	defer server.Close()
 
 	// Test cases
@@ -601,52 +620,24 @@ func TestHttpService_DeleteWithHeaderCBOpenRequests(t *testing.T) {
 	}
 }
 
-type mockMetrics struct {
-	mock.Mock
-}
-
-func (m *mockMetrics) RecordHistogram(ctx context.Context, name string, value float64, labels ...string) {
-	m.Called(ctx, name, value, labels)
-}
-
-func (m *mockMetrics) IncrementCounter(ctx context.Context, name string, labels ...string) {
-	m.Called(ctx, name, labels)
-}
-
-func (m *mockMetrics) NewCounter(name, desc string) {
-	m.Called(name, desc)
-}
-
-type customTransport struct {
-}
-
-func (*customTransport) RoundTrip(r *http.Request) (*http.Response, error) {
-	if r.URL.Path == "/.well-known/alive" || r.URL.Path == "/success" {
-		return &http.Response{
-			Body:       io.NopCloser(bytes.NewBufferString("Hello World")),
-			StatusCode: http.StatusOK,
-			Request:    r,
-		}, nil
-	}
-
-	return nil, testutil.CustomError{ErrorMessage: "cb error"}
-}
-
 func TestCircuitBreaker_Metrics(t *testing.T) {
 	server := testServer()
 	defer server.Close()
 
-	mockMetric := &mockMetrics{}
+	ctrl := gomock.NewController(t)
+	mockMetric := NewMockMetrics(ctrl)
 
-	mockMetric.On("RecordHistogram", mock.Anything, mock.Anything, mock.Anything, mock.Anything).
-		Return(nil)
-	mockMetric.On("NewCounter", mock.Anything, mock.Anything).Return().Maybe()
-	mockMetric.On("IncrementCounter", mock.Anything, "app_http_circuit_breaker_open_count", mock.Anything).
-		Return(nil)
+	mockMetric.EXPECT().RecordHistogram(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
+	mockMetric.EXPECT().NewCounter(gomock.Any(), gomock.Any()).AnyTimes()
+	mockMetric.EXPECT().IncrementCounter(gomock.Any(), "app_http_circuit_breaker_open_count", "service", "test-service").MinTimes(1)
+	mockMetric.EXPECT().NewGauge(gomock.Any(), gomock.Any()).AnyTimes()
+	mockMetric.EXPECT().SetGauge("app_http_circuit_breaker_state", 1.0, "service", "test-service").MinTimes(1)
+	mockMetric.EXPECT().SetGauge("app_http_circuit_breaker_state", 0.0, "service", "test-service").AnyTimes()
 
 	service := httpService{
 		Client:  &http.Client{Transport: &customTransport{}},
 		url:     server.URL,
+		name:    "test-service",
 		Tracer:  otel.Tracer("gofr-http-client"),
 		Logger:  logging.NewMockLogger(logging.DEBUG),
 		Metrics: mockMetric,
@@ -666,7 +657,19 @@ func TestCircuitBreaker_Metrics(t *testing.T) {
 			_ = resp.Body.Close()
 		}
 	}
+}
 
-	// Verify IncrementCounter was called
-	mockMetric.AssertCalled(t, "IncrementCounter", mock.Anything, "app_http_circuit_breaker_open_count", mock.Anything)
+type customTransport struct {
+}
+
+func (*customTransport) RoundTrip(r *http.Request) (*http.Response, error) {
+	if r.URL.Path == "/.well-known/alive" || r.URL.Path == "/success" {
+		return &http.Response{
+			Body:       io.NopCloser(bytes.NewBufferString("Hello World")),
+			StatusCode: http.StatusOK,
+			Request:    r,
+		}, nil
+	}
+
+	return nil, testutil.CustomError{ErrorMessage: "cb error"}
 }

@@ -17,6 +17,8 @@ func (r *RetryConfig) AddOption(h HTTP) HTTP {
 
 	if httpSvc := extractHTTPService(h); httpSvc != nil {
 		rp.metrics = httpSvc.Metrics
+		rp.serviceName = httpSvc.name
+
 		if rp.metrics != nil {
 			rp.metrics.NewCounter("app_http_retry_count", "Total number of retry events")
 		}
@@ -26,8 +28,9 @@ func (r *RetryConfig) AddOption(h HTTP) HTTP {
 }
 
 type retryProvider struct {
-	maxRetries int
-	metrics    Metrics
+	maxRetries  int
+	metrics     Metrics
+	serviceName string
 	HTTP
 }
 
@@ -114,7 +117,7 @@ func (rp *retryProvider) doWithRetry(reqFunc func() (*http.Response, error)) (*h
 		}
 
 		if i > 0 && rp.metrics != nil {
-			rp.metrics.IncrementCounter(context.Background(), "app_http_retry_count")
+			rp.metrics.IncrementCounter(context.Background(), "app_http_retry_count", "service", rp.serviceName)
 		}
 	}
 

@@ -764,7 +764,7 @@
           "color": "rgba(255,0,255,0.7)"
         },
         "filterValues": {
-          "le": 1e-9
+          "le": 1e-09
         },
         "legend": {
           "show": false
@@ -1616,8 +1616,8 @@
             "uid": "${DataSource}"
           },
           "editorMode": "code",
-          "expr": "histogram_quantile(0.90, sum(rate(app_http_service_response_bucket{}[$__rate_interval])) by (le))",
-          "legendFormat": "90",
+          "expr": "histogram_quantile(0.90, sum(rate(app_http_service_response_bucket{}[$__rate_interval])) by (le, service))",
+          "legendFormat": "90 - {{service}}",
           "range": true,
           "refId": "A"
         },
@@ -1627,9 +1627,9 @@
             "uid": "${DataSource}"
           },
           "editorMode": "code",
-          "expr": "histogram_quantile(0.95, sum(rate(app_http_service_response_bucket{}[$__rate_interval])) by (le))",
+          "expr": "histogram_quantile(0.95, sum(rate(app_http_service_response_bucket{}[$__rate_interval])) by (le, service))",
           "hide": false,
-          "legendFormat": "95",
+          "legendFormat": "95 - {{service}}",
           "range": true,
           "refId": "B"
         },
@@ -1639,9 +1639,9 @@
             "uid": "${DataSource}"
           },
           "editorMode": "code",
-          "expr": "histogram_quantile(0.99, sum(rate(app_http_service_response_bucket{}[$__rate_interval])) by (le))",
+          "expr": "histogram_quantile(0.99, sum(rate(app_http_service_response_bucket{}[$__rate_interval])) by (le, service))",
           "hide": false,
-          "legendFormat": "99",
+          "legendFormat": "99 - {{service}}",
           "range": true,
           "refId": "C"
         },
@@ -1651,9 +1651,9 @@
             "uid": "${DataSource}"
           },
           "editorMode": "code",
-          "expr": "histogram_quantile(0.999, sum(rate(app_http_service_response_bucket{}[$__rate_interval])) by (le))",
+          "expr": "histogram_quantile(0.999, sum(rate(app_http_service_response_bucket{}[$__rate_interval])) by (le, service))",
           "hide": false,
-          "legendFormat": "99.9",
+          "legendFormat": "99.9 - {{service}}",
           "range": true,
           "refId": "D"
         }
@@ -1723,7 +1723,7 @@
           "color": "rgba(255,0,255,0.7)"
         },
         "filterValues": {
-          "le": 1e-9
+          "le": 1e-09
         },
         "legend": {
           "show": false
@@ -1752,7 +1752,7 @@
             "uid": "${DataSource}"
           },
           "editorMode": "code",
-          "expr": "sum(increase(app_http_service_response_bucket{}[$__rate_interval])) by (le)",
+          "expr": "sum(increase(app_http_service_response_bucket{}[$__rate_interval])) by (le, service)",
           "format": "heatmap",
           "legendFormat": "__auto",
           "range": true,
@@ -1870,8 +1870,8 @@
             "uid": "${DataSource}"
           },
           "editorMode": "code",
-          "expr": "sum by (path, method) (\n  increase(app_http_service_response_count{}[$__rate_interval])\n)",
-          "legendFormat": "__auto",
+          "expr": "sum by (path, method, service) (\n  increase(app_http_service_response_count{}[$__rate_interval])\n)",
+          "legendFormat": "{{service}} {{method}} {{path}}",
           "range": true,
           "refId": "A"
         },
@@ -2005,8 +2005,8 @@
             "uid": "${DataSource}"
           },
           "editorMode": "code",
-          "expr": "sum by (status) (\n  increase(app_http_service_response_count{}[$__rate_interval])\n)",
-          "legendFormat": "{{status}}",
+          "expr": "sum by (status, service) (\n  increase(app_http_service_response_count{}[$__rate_interval])\n)",
+          "legendFormat": "{{service}} - {{status}}",
           "range": true,
           "refId": "A"
         },
@@ -2482,6 +2482,290 @@
         "x": 0,
         "y": 82
       },
+      "id": 100,
+      "panels": [],
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "refId": "A"
+        }
+      ],
+      "title": "HTTP Service Resiliency",
+      "type": "row"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${DataSource}"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisBorderShow": false,
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "Retry Count",
+            "axisPlacement": "auto",
+            "barAlignment": 0,
+            "drawStyle": "line",
+            "fillOpacity": 10,
+            "gradientMode": "none",
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
+            "insertNulls": false,
+            "lineInterpolation": "linear",
+            "lineWidth": 1,
+            "pointSize": 5,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "showPoints": "never",
+            "spanNulls": false,
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          },
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 8,
+        "x": 0,
+        "y": 83
+      },
+      "id": 101,
+      "options": {
+        "legend": {
+          "calcs": [],
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "none"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DataSource}"
+          },
+          "editorMode": "code",
+          "expr": "sum by (service) (increase(app_http_retry_count{}[$__rate_interval]))",
+          "legendFormat": "{{service}}",
+          "range": true,
+          "refId": "A"
+        }
+      ],
+      "title": "HTTP Retry Count",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${DataSource}"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisBorderShow": false,
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "Open Count",
+            "axisPlacement": "auto",
+            "barAlignment": 0,
+            "drawStyle": "line",
+            "fillOpacity": 10,
+            "gradientMode": "none",
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
+            "insertNulls": false,
+            "lineInterpolation": "linear",
+            "lineWidth": 1,
+            "pointSize": 5,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "showPoints": "never",
+            "spanNulls": false,
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          },
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 8,
+        "x": 8,
+        "y": 83
+      },
+      "id": 102,
+      "options": {
+        "legend": {
+          "calcs": [],
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "none"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DataSource}"
+          },
+          "editorMode": "code",
+          "expr": "sum by (service) (increase(app_http_circuit_breaker_open_count{}[$__rate_interval]))",
+          "legendFormat": "{{service}}",
+          "range": true,
+          "refId": "A"
+        }
+      ],
+      "title": "Circuit Breaker Open Count",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${DataSource}"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "mappings": [
+            {
+              "options": {
+                "0": {
+                  "color": "green",
+                  "index": 0,
+                  "text": "Closed"
+                },
+                "1": {
+                  "color": "red",
+                  "index": 1,
+                  "text": "Open"
+                }
+              },
+              "type": "value"
+            }
+          ],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 8,
+        "x": 16,
+        "y": 83
+      },
+      "id": 103,
+      "options": {
+        "colorMode": "background",
+        "graphMode": "none",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "textMode": "value"
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DataSource}"
+          },
+          "editorMode": "code",
+          "expr": "app_http_circuit_breaker_state",
+          "legendFormat": "{{service}}",
+          "range": true,
+          "refId": "A"
+        }
+      ],
+      "title": "Circuit Breaker State",
+      "type": "stat"
+    },
+    {
+      "collapsed": false,
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 91
+      },
       "id": 30,
       "panels": [],
       "targets": [
@@ -2561,7 +2845,7 @@
         "h": 9,
         "w": 12,
         "x": 0,
-        "y": 83
+        "y": 92
       },
       "id": 34,
       "options": {
@@ -2694,7 +2978,7 @@
         "h": 9,
         "w": 12,
         "x": 12,
-        "y": 83
+        "y": 92
       },
       "id": 32,
       "options": {
@@ -2806,7 +3090,7 @@
         "h": 8,
         "w": 24,
         "x": 0,
-        "y": 92
+        "y": 101
       },
       "id": 58,
       "options": {
@@ -2915,7 +3199,7 @@
         "h": 6,
         "w": 24,
         "x": 0,
-        "y": 100
+        "y": 109
       },
       "id": 95,
       "options": {
@@ -3048,7 +3332,7 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 106
+        "y": 115
       },
       "id": 42,
       "panels": [],
@@ -3129,7 +3413,7 @@
         "h": 8,
         "w": 12,
         "x": 0,
-        "y": 107
+        "y": 116
       },
       "id": 36,
       "options": {
@@ -3262,7 +3546,7 @@
         "h": 8,
         "w": 12,
         "x": 12,
-        "y": 107
+        "y": 116
       },
       "id": 46,
       "options": {
@@ -3359,7 +3643,7 @@
         "h": 5,
         "w": 24,
         "x": 0,
-        "y": 115
+        "y": 124
       },
       "id": 107,
       "options": {
@@ -3497,7 +3781,7 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 120
+        "y": 129
       },
       "id": 60,
       "panels": [],
@@ -3544,7 +3828,7 @@
         "h": 4,
         "w": 24,
         "x": 0,
-        "y": 121
+        "y": 130
       },
       "id": 114,
       "options": {
@@ -3687,7 +3971,7 @@
         "h": 10,
         "w": 24,
         "x": 0,
-        "y": 125
+        "y": 134
       },
       "id": 62,
       "options": {
@@ -3798,7 +4082,7 @@
         "h": 9,
         "w": 12,
         "x": 0,
-        "y": 135
+        "y": 144
       },
       "id": 120,
       "options": {
@@ -3909,7 +4193,7 @@
         "h": 9,
         "w": 12,
         "x": 12,
-        "y": 135
+        "y": 144
       },
       "id": 121,
       "options": {
@@ -3965,7 +4249,7 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 144
+        "y": 153
       },
       "id": 48,
       "panels": [],
@@ -4012,7 +4296,7 @@
         "h": 8,
         "w": 24,
         "x": 0,
-        "y": 145
+        "y": 154
       },
       "id": 118,
       "options": {
@@ -4156,7 +4440,7 @@
         "h": 10,
         "w": 24,
         "x": 0,
-        "y": 153
+        "y": 162
       },
       "id": 64,
       "options": {
@@ -4269,7 +4553,7 @@
         "h": 8,
         "w": 12,
         "x": 0,
-        "y": 163
+        "y": 172
       },
       "id": 122,
       "options": {
@@ -4407,7 +4691,7 @@
         "h": 8,
         "w": 12,
         "x": 12,
-        "y": 163
+        "y": 172
       },
       "id": 123,
       "options": {

@@ -2,6 +2,8 @@
 
 GoFr automatically collects and publishes various metrics to help you monitor your application's health and performance. These metrics are exposed in Prometheus format on the metrics port (default: `2121`) at the `/metrics` endpoint.
 
+You can also visualize these metrics using our [Grafana Dashboard](https://grafana.com/grafana/dashboards/19905-gofr-dashboard/).
+
 ## Default Metrics
 
 ### Application Metrics
@@ -19,15 +21,16 @@ GoFr automatically collects and publishes various metrics to help you monitor yo
 
 | Name | Type | Description |
 | :--- | :--- | :--- |
-| `app_http_response` | histogram | Response time of HTTP requests in seconds |
+| `app_http_response` | histogram | Response time of HTTP requests in seconds | `path`, `method`, `status` |
 
 ### HTTP Service (Client) Metrics
 
 | Name | Type | Description |
 | :--- | :--- | :--- |
-| `app_http_service_response` | histogram | Response time of HTTP service requests in seconds |
-| `app_http_retry_count` | counter | Total number of retry events |
-| `app_http_circuit_breaker_open_count` | counter | Total number of circuit breaker open events |
+| `app_http_service_response` | histogram | Response time of HTTP service requests in seconds | `path`, `method`, `status`, `service` |
+| `app_http_retry_count` | counter | Total number of retry events | `service` |
+| `app_http_circuit_breaker_open_count` | counter | Total number of circuit breaker open events | `service` |
+| `app_http_circuit_breaker_state` | gauge | Current state of the circuit breaker (0 for Closed, 1 for Open) | `service` |
 
 ### Database Metrics
 

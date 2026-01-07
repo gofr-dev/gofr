@@ -219,9 +219,9 @@ func TestRetryProvider_Metrics(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	metrics := NewMockMetrics(ctrl)
 
-	// Expect NewCounter and IncrementCounter to be called
+	// Expect NewCounter and IncrementCounter to be called with labels
 	metrics.EXPECT().NewCounter("app_http_retry_count", gomock.Any()).AnyTimes()
-	metrics.EXPECT().IncrementCounter(gomock.Any(), "app_http_retry_count", gomock.Any()).MinTimes(1)
+	metrics.EXPECT().IncrementCounter(gomock.Any(), "app_http_retry_count", "service", "test-service").MinTimes(1)
 	metrics.EXPECT().RecordHistogram(gomock.Any(), "app_http_service_response", gomock.Any(),
 		gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
 
@@ -231,9 +231,9 @@ func TestRetryProvider_Metrics(t *testing.T) {
 	}))
 	defer server.Close()
 
-	// Create a new HTTP service instance with retry config and metrics
+	// Create a new HTTP service instance with retry config, metrics and name
 	httpService := NewHTTPService(server.URL, logging.NewMockLogger(logging.INFO), metrics,
-		&RetryConfig{MaxRetries: 2})
+		WithName("test-service"), &RetryConfig{MaxRetries: 2})
 
 	// Make the request
 	resp, err := httpService.Get(t.Context(), "/test", nil)
