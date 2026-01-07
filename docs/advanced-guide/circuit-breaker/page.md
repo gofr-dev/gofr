@@ -56,4 +56,10 @@ func main() {
 Circuit breaker state changes to open when number of consecutive failed requests increases the threshold.
 When it is in open state, GoFr makes request to the aliveness endpoint (default being - /.well-known/alive) at an equal interval of time provided in config.
 
+## Metrics
+
+GoFr publishes the following metric to track circuit breaker events:
+
+- `app_http_circuit_breaker_open_count`: Total number of times the circuit breaker has transitioned to the `Open` state.
+
 > ##### Check out the example of an inter-service HTTP communication along with circuit-breaker in GoFr: [Visit GitHub](https://github.com/gofr-dev/gofr/blob/main/examples/using-http-service/main.go)

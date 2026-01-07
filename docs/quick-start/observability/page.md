@@ -131,6 +131,18 @@ GoFr publishes metrics to port: _2121_ on _/metrics_ endpoint in Prometheus form
 - counter
 - Number of successful subscribe operations
 
+---
+
+- app_http_retry_count
+- counter
+- Total number of retry events
+
+---
+
+- app_http_circuit_breaker_open_count
+- counter
+- Total number of circuit breaker open events
+
 {% /table %}
 
 For example: When running the application locally, we can access the /metrics endpoint on port 2121 from: {% new-tab-link title="http://localhost:2121/metrics" href="http://localhost:2121/metrics" /%}

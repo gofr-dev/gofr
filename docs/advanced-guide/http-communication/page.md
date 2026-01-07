@@ -227,3 +227,11 @@ a.AddHTTPService("cat-facts", "https://catfact.ninja",
 - For distributed systems: It is strongly recommended to use Redis-based store (`NewRedisRateLimiterStore`) to ensure consistent rate limiting across multiple instances of your application.
 - For single-instance applications: The default in-memory store (`NewLocalRateLimiterStore`) is sufficient and provides better performance.
 - Rate configuration: Set Burst higher than Requests to allow short traffic bursts while maintaining average rate limits.
+
+## Metrics
+
+GoFr publishes the following metrics for HTTP service communication:
+
+- `app_http_retry_count`: Total number of retry events.
+- `app_http_circuit_breaker_open_count`: Total number of times the circuit breaker has transitioned to the `Open` state.
+- `app_http_service_response`: Response time of HTTP service requests in seconds (histogram).

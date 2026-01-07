@@ -123,6 +123,7 @@ func (cb *circuitBreaker) startHealthChecks() {
 func (cb *circuitBreaker) openCircuit() {
 	cb.state = OpenState
 	cb.lastChecked = time.Now()
+
 	if cb.metrics != nil {
 		cb.metrics.IncrementCounter(context.Background(), "app_http_circuit_breaker_open_count")
 	}
@@ -152,6 +153,9 @@ func (cb *CircuitBreakerConfig) AddOption(h HTTP) HTTP {
 
 	if httpSvc := extractHTTPService(h); httpSvc != nil {
 		circuitBreaker.metrics = httpSvc.Metrics
+		if circuitBreaker.metrics != nil {
+			circuitBreaker.metrics.NewCounter("app_http_circuit_breaker_open_count", "Total number of circuit breaker open events")
+		}
 	}
 
 	return circuitBreaker

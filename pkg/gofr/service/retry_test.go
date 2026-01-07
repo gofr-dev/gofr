@@ -219,12 +219,14 @@ func TestRetryProvider_Metrics(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	metrics := NewMockMetrics(ctrl)
 
-	// Expect IncrementCounter to be called
-	metrics.EXPECT().IncrementCounter(gomock.Any(), "app_http_retry_count").MinTimes(1)
-	metrics.EXPECT().RecordHistogram(gomock.Any(), "app_http_service_response", gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
+	// Expect NewCounter and IncrementCounter to be called
+	metrics.EXPECT().NewCounter("app_http_retry_count", gomock.Any()).AnyTimes()
+	metrics.EXPECT().IncrementCounter(gomock.Any(), "app_http_retry_count", gomock.Any()).MinTimes(1)
+	metrics.EXPECT().RecordHistogram(gomock.Any(), "app_http_service_response", gomock.Any(),
+		gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
 
 	// Create a mock HTTP server that fails
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusInternalServerError)
 	}))
 	defer server.Close()
@@ -236,6 +238,7 @@ func TestRetryProvider_Metrics(t *testing.T) {
 	// Make the request
 	resp, err := httpService.Get(t.Context(), "/test", nil)
 	require.NoError(t, err)
+
 	defer resp.Body.Close()
 
 	assert.Equal(t, http.StatusInternalServerError, resp.StatusCode)

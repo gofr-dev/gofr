@@ -274,6 +274,11 @@ export const navigation = [
                 desc: "GoFr provides a centralized collection of mocks to facilitate writing effective unit tests. Explore testing strategies and tools for GoFr applications, ensuring the code is robust, reliable, and maintainable."
             },
             {
+                title: 'Metrics',
+                href: '/docs/references/metrics',
+                desc: "Comprehensive list of all default metrics published by GoFr, including application, HTTP, database, and pub/sub metrics."
+            },
+            {
                 title: 'GoFr CLI',
                 href: '/docs/references/gofrcli',
                 desc: "GoFr CLI is the command line tool for initializing projects and performing tasks in accordance with GoFr framework."

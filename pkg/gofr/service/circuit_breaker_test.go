@@ -33,8 +33,10 @@ func setupHTTPServiceTestServerForCircuitBreaker() (*httptest.Server, HTTP) {
 	mockMetric := &mockMetrics{}
 	mockMetric.On("RecordHistogram", mock.Anything, mock.Anything, mock.Anything, mock.Anything).
 		Return(nil)
+	mockMetric.On("NewCounter", mock.Anything, mock.Anything).Return().Maybe()
 	mockMetric.On("IncrementCounter", mock.Anything, "app_http_circuit_breaker_open_count", mock.Anything).
 		Return(nil)
+	mockMetric.On("NewCounter", mock.Anything, mock.Anything).Return().Maybe()
 
 	// Initialize HTTP service with custom transport, URL, tracer, logger, and metrics
 	service := httpService{
@@ -65,6 +67,8 @@ func TestHttpService_GetSuccessRequests(t *testing.T) {
 
 	mockMetric.On("RecordHistogram", mock.Anything, mock.Anything, mock.Anything, mock.Anything).
 		Return(nil)
+	mockMetric.On("NewCounter", mock.Anything, mock.Anything).Return().Maybe()
+	mockMetric.On("NewCounter", mock.Anything, mock.Anything).Return().Maybe()
 
 	service := NewHTTPService(server.URL, logging.NewMockLogger(logging.DEBUG), mockMetric, &CircuitBreakerConfig{
 		Threshold: 1,
@@ -87,6 +91,8 @@ func TestHttpService_GetWithHeaderSuccessRequests(t *testing.T) {
 
 	mockMetric.On("RecordHistogram", mock.Anything, mock.Anything, mock.Anything, mock.Anything).
 		Return(nil)
+	mockMetric.On("NewCounter", mock.Anything, mock.Anything).Return().Maybe()
+	mockMetric.On("NewCounter", mock.Anything, mock.Anything).Return().Maybe()
 
 	service := NewHTTPService(server.URL, logging.NewMockLogger(logging.DEBUG), mockMetric, &CircuitBreakerConfig{
 		Threshold: 1,
@@ -171,6 +177,7 @@ func TestHttpService_PutSuccessRequests(t *testing.T) {
 
 	mockMetric.On("RecordHistogram", mock.Anything, mock.Anything, mock.Anything, mock.Anything).
 		Return(nil)
+	mockMetric.On("NewCounter", mock.Anything, mock.Anything).Return().Maybe()
 
 	service := NewHTTPService(server.URL, logging.NewMockLogger(logging.DEBUG), mockMetric, &CircuitBreakerConfig{
 		Threshold: 1,
@@ -193,6 +200,7 @@ func TestHttpService_PutWithHeaderSuccessRequests(t *testing.T) {
 
 	mockMetric.On("RecordHistogram", mock.Anything, mock.Anything, mock.Anything, mock.Anything).
 		Return(nil)
+	mockMetric.On("NewCounter", mock.Anything, mock.Anything).Return().Maybe()
 
 	service := NewHTTPService(server.URL, logging.NewMockLogger(logging.DEBUG), mockMetric, &CircuitBreakerConfig{
 		Threshold: 1,
@@ -277,6 +285,7 @@ func TestHttpService_PatchSuccessRequests(t *testing.T) {
 
 	mockMetric.On("RecordHistogram", mock.Anything, mock.Anything, mock.Anything, mock.Anything).
 		Return(nil)
+	mockMetric.On("NewCounter", mock.Anything, mock.Anything).Return().Maybe()
 
 	service := NewHTTPService(server.URL, logging.NewMockLogger(logging.DEBUG), mockMetric, &CircuitBreakerConfig{
 		Threshold: 1,
@@ -299,6 +308,7 @@ func TestHttpService_PatchWithHeaderSuccessRequests(t *testing.T) {
 
 	mockMetric.On("RecordHistogram", mock.Anything, mock.Anything, mock.Anything, mock.Anything).
 		Return(nil)
+	mockMetric.On("NewCounter", mock.Anything, mock.Anything).Return().Maybe()
 
 	service := NewHTTPService(server.URL, logging.NewMockLogger(logging.DEBUG), mockMetric, &CircuitBreakerConfig{
 		Threshold: 1,
@@ -383,6 +393,7 @@ func TestHttpService_PostSuccessRequests(t *testing.T) {
 
 	mockMetric.On("RecordHistogram", mock.Anything, mock.Anything, mock.Anything, mock.Anything).
 		Return(nil)
+	mockMetric.On("NewCounter", mock.Anything, mock.Anything).Return().Maybe()
 
 	service := NewHTTPService(server.URL, logging.NewMockLogger(logging.DEBUG), mockMetric, &CircuitBreakerConfig{
 		Threshold: 1,
@@ -405,6 +416,7 @@ func TestHttpService_PostWithHeaderSuccessRequests(t *testing.T) {
 
 	mockMetric.On("RecordHistogram", mock.Anything, mock.Anything, mock.Anything, mock.Anything).
 		Return(nil)
+	mockMetric.On("NewCounter", mock.Anything, mock.Anything).Return().Maybe()
 
 	service := NewHTTPService(server.URL, logging.NewMockLogger(logging.DEBUG), mockMetric, &CircuitBreakerConfig{
 		Threshold: 1,
@@ -489,6 +501,7 @@ func TestHttpService_DeleteSuccessRequests(t *testing.T) {
 
 	mockMetric.On("RecordHistogram", mock.Anything, mock.Anything, mock.Anything, mock.Anything).
 		Return(nil)
+	mockMetric.On("NewCounter", mock.Anything, mock.Anything).Return().Maybe()
 
 	service := NewHTTPService(server.URL, logging.NewMockLogger(logging.DEBUG), mockMetric, &CircuitBreakerConfig{
 		Threshold: 1,
@@ -511,6 +524,7 @@ func TestHttpService_DeleteWithHeaderSuccessRequests(t *testing.T) {
 
 	mockMetric.On("RecordHistogram", mock.Anything, mock.Anything, mock.Anything, mock.Anything).
 		Return(nil)
+	mockMetric.On("NewCounter", mock.Anything, mock.Anything).Return().Maybe()
 
 	service := NewHTTPService(server.URL, logging.NewMockLogger(logging.DEBUG), mockMetric, &CircuitBreakerConfig{
 		Threshold: 1,
@@ -599,6 +613,10 @@ func (m *mockMetrics) IncrementCounter(ctx context.Context, name string, labels 
 	m.Called(ctx, name, labels)
 }
 
+func (m *mockMetrics) NewCounter(name, desc string) {
+	m.Called(name, desc)
+}
+
 type customTransport struct {
 }
 
@@ -622,6 +640,7 @@ func TestCircuitBreaker_Metrics(t *testing.T) {
 
 	mockMetric.On("RecordHistogram", mock.Anything, mock.Anything, mock.Anything, mock.Anything).
 		Return(nil)
+	mockMetric.On("NewCounter", mock.Anything, mock.Anything).Return().Maybe()
 	mockMetric.On("IncrementCounter", mock.Anything, "app_http_circuit_breaker_open_count", mock.Anything).
 		Return(nil)
 
@@ -642,7 +661,10 @@ func TestCircuitBreaker_Metrics(t *testing.T) {
 
 	// Trigger failures to open circuit
 	for i := 0; i < 3; i++ {
-		_, _ = httpServiceWithCB.Get(t.Context(), "invalid", nil)
+		resp, _ := httpServiceWithCB.Get(t.Context(), "invalid", nil)
+		if resp != nil && resp.Body != nil {
+			_ = resp.Body.Close()
+		}
 	}
 
 	// Verify IncrementCounter was called
