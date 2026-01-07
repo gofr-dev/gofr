@@ -2,6 +2,7 @@
 
 GoFr, by default, manages observability in different ways once the server starts:
 
+## Logs
 Logs offer real-time information, providing valuable insights and immediate visibility into the ongoing state and activities of the system.
 It helps in identifying errors, debugging and troubleshooting, monitor performance, analyzing application usage, communications etc.
 
@@ -168,7 +169,6 @@ func InitCache(ctx *gofr.Context) {
         "Type", cacheType,
     )
 }
-
 ```
 **Output**
 ```Console
