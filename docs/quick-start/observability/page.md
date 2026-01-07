@@ -2,8 +2,6 @@
 
 GoFr, by default, manages observability in different ways once the server starts:
 
-## Logs
-
 Logs offer real-time information, providing valuable insights and immediate visibility into the ongoing state and activities of the system.
 It helps in identifying errors, debugging and troubleshooting, monitor performance, analyzing application usage, communications etc.
 
@@ -16,9 +14,9 @@ When the GoFr server runs, it prints a log for reading configs, database connect
 They contain information such as request's correlation ID, status codes, request time, etc.
 
 ### DEBUG
-This is the lowest priority level. It represents the most detailed/granual information.
+This is the lowest priority level. It represents the most detailed/granular information.
 
-**Color -** Grey
+**Note:** `DEBUG` logs should be enabled only in development or controlled troubleshooting scenarios.They are typically disabled in production environments due to performance overhead and security risks.
 
 
 #### **Usage Examples:**
@@ -75,6 +73,9 @@ DEBU [10:15:02] Loop step 2 - Processing User ID: 103
 
 ***3. Raw Data Payloads,Initialization and Database Internals -*** Used to debug API integrations, Initialization, Processing.
 
+> **Security Warning:** Logging raw request payloads is intended only for development or controlled debugging. Never enable such logs in production environments if payloads may contain Personally Identifiable Information (PII), credentials, authentication tokens, or other sensitive data.
+
+
 **Code Example**
 ```Go
 // InspectPayload simulates debugging an incoming request payload
@@ -99,64 +100,80 @@ DEBU [10:15:05] [SQL] Generated Query: SELECT * FROM users WHERE id=42
 #### **Examples of when Not to Use:**
 
 
-***1. Avoid Logging Critical Business Data:*** Do not utilize `DEBUG` for audit trails or essential transaction records. In production environments, this level is typically suppressed to optimize performance, resulting in the loss of critical business insights.
+***1. Production paths that run on every request*** Do not utilize `DEBUG` in production environments like request handlers, middleware, DB queries, cache lookups, auth checks, this level is typically suppressed to optimize performance.
 
 ***2. Prohibit PII Logging:*** Strictly avoid logging Personally Identifiable Information (PII) or credentials (e.g., passwords, tokens)As `DEBUG` is frequently used for raw variable dumps, there is a high risk of exposing sensitive data in plain text
 
 ---
 ### INFO
-Represents standard operational events. It is the default fallback level if an unknown level string is provided.
+`INFO` Represents normal operational events during application execution and acts as the default logging level when an invalid or unrecognized log level string is provided, ensuring baseline observability without excessive verbosity.
 
-**Color -** Cyan
+
 
 #### **Usage Examples:**
 
-***1. Server Starting -*** Initiating the application boot sequence and binding to the configured network ports.
+***1. Configuration Loading -*** Confirms successful loading and validation of application configuration.
 
 
 **Code Example**
 ```Go
-// Example: Server startup confirmation
-app.Logger().Info("Server started successfully on port 8000")
+// Log after application configuration is read and validated
+func LoadConfig(ctx *gofr.Context) {
+    configSource := "env"
+
+    ctx.Info(
+        "Application configuration loaded and validated",
+        "Source", configSource,
+    )
+}
+
 ```
 **Output-**
 ```Console
-INFO [14:05:02] Server started successfully on port 8000
+INFO [10:02:15] Application configuration loaded and validated Source: env
+
 ```
-***2. Job Completed -*** The scheduled background task has successfully finished execution and released all locked resources.
+***2. Database Ready -*** Indicates that the database connection has been successfully established.
 
 
 **Code Example**
 ```Go
-// RunExportJob simulates a background data export task
-func RunExportJob(ctx *gofr.Context) (interface{}, error) {
-    jobID := "EXP-2024-88"
-    records := 5000
-    duration := "1.2s"
+// Log after a successful database connection setup
+func InitDatabase(ctx *gofr.Context) {
+    dbHost := "localhost"
 
-    ctx.Info("Data export job completed successfully", "JobID", jobID, "Records", records, "Duration", duration)
-    return nil, nil
+    ctx.Info(
+        "Database connection is ready",
+        "Host", dbHost,
+    )
 }
+
+
 ```
 **Output**
 ```Console
-INFO [14:20:05] Data export job completed successfully JobID: EXP-2024-88 Records: 5000 Duration: 1.2s
+INFO [10:02:18] Database connection is ready Host: localhost
 ```
 
-***3. Health Check Passed -*** Routine diagnostic monitoring confirms that all system services are active and responding within normal parameters.
-
+***3. Cache intialized  -*** Indicates that the cache client is ready and available.
 
 **Code Example**
 ```Go
-// HealthHandler performs a routine system check
-func HealthHandler(ctx *gofr.Context) (interface{}, error) {
-    ctx.Info("Health Check Passed")
-    return "OK", nil
+// Log after cache client Initialization
+func InitCache(ctx *gofr.Context) {
+    cacheType := "redis"
+
+    ctx.Info(
+        "Cache client initialized successfully",
+        "Type", cacheType,
+    )
 }
+
 ```
 **Output**
 ```Console
-INFO [14:05:02] Health Check Passed
+INFO [10:02:20] Cache client initialized successfully Type: redis
+
 ```
 
 #### **Examples of when not to use**
@@ -165,12 +182,13 @@ INFO [14:05:02] Health Check Passed
 
 ***2. Avoid High-Frequency Saturation:*** 
 Do not emit `INFO` logs within tight loops or data-intensive processing blocks. Excessive logging at this level can rapidly saturate storage and obscure significant operational events with noise.
+
 ---
 
 ### NOTICE
 A level higher than `INFO` but lower than `WARN`. It shares the same visual prominence as a Warning but implies a "normal" condition rather than a problem. in simple words its used for events that are normal but rare and significant.
 
-**Color -** Yellow
+
 
 #### **Usage Examples:**
 
@@ -231,9 +249,9 @@ Do not apply this level to standard, high-volume request logs. `NOTICE `should b
 ---
 
 ### WARN
-it's Used when an anomaly had occurred, but the application recovered or continued execution.
+It is used when an anomaly had occurred, but the application recovered or continued execution.
 
-**Color -** Yellow
+
 
 #### **Usage Examples:**
 
@@ -297,7 +315,7 @@ Do not log warnings for standard behaviors or expected redundancies (false posit
 ### ERROR
 Indicates a failure event. This level routes logs to `stderr` (Standard Error), ensuring visibility to error tracking tools.
 
-**Color -** Red
+
 
 #### **Usage Examples:**
 
@@ -323,7 +341,7 @@ ERRO [10:20:01] DB Query Timeout: Analytics fetch took > 3000ms. Canceling opera
 
 **Code Example**
 ```Go
-// ProcessPayment handles payment processing logic
+// ProcessRequest simulates a downstream service failure
 func ProcessPayment(ctx *gofr.Context) (interface{}, error) {
     // Simulating a gateway failure
     ctx.Error("HTTP 500 Response: Payment gateway unreachable. Request ID: req_99")
@@ -366,9 +384,10 @@ Exercise caution when logging user input errors (e.g., `400 Bad Request`). Class
 ---
 
 ### FATAL
-The highest priority level. It represents a critical system failures where the application cannot function.
+The highest priority level. `FATAL` represents a critical system failures where the application cannot function. 
 
-**Color -** Red
+**Note:** `FATAL` terminates the process immediately and is intended only for startup-time failures, not runtime request handling.
+
 
 #### **Usage Examples:**
 
@@ -438,6 +457,8 @@ FATA [10:30:03] Boot Failure: Cannot connect to primary database. Connection ref
 ---
 
 {% figure src="/quick-start-logs.png" alt="Pretty Printed Logs" /%}
+
+
 
 Logs are well-structured, they are of type JSON when exported to a file, such that they can be pushed to logging systems such as {% new-tab-link title="Loki" href="https://grafana.com/oss/loki/" /%}, Elasticsearch, etc.
 
