@@ -26,17 +26,19 @@ func testServer() *httptest.Server {
 }
 
 func setupHTTPServiceTestServerForCircuitBreaker(t *testing.T) (*httptest.Server, HTTP) {
+	t.Helper()
+
 	// Start a test HTTP server
 	server := testServer()
 
 	ctrl := gomock.NewController(t)
 	mockMetric := NewMockMetrics(ctrl)
 
-	mockMetric.EXPECT().RecordHistogram(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
+	mockMetric.EXPECT().RecordHistogram(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(),
+		gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
 	mockMetric.EXPECT().NewCounter(gomock.Any(), gomock.Any()).AnyTimes()
-	mockMetric.EXPECT().IncrementCounter(gomock.Any(), "app_http_circuit_breaker_open_count", gomock.Any()).AnyTimes()
 	mockMetric.EXPECT().NewGauge(gomock.Any(), gomock.Any()).AnyTimes()
-	mockMetric.EXPECT().SetGauge(gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
+	mockMetric.EXPECT().SetGauge(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
 
 	// Initialize HTTP service with custom transport, URL, tracer, logger, and metrics
 	service := httpService{
@@ -629,7 +631,6 @@ func TestCircuitBreaker_Metrics(t *testing.T) {
 
 	mockMetric.EXPECT().RecordHistogram(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
 	mockMetric.EXPECT().NewCounter(gomock.Any(), gomock.Any()).AnyTimes()
-	mockMetric.EXPECT().IncrementCounter(gomock.Any(), "app_http_circuit_breaker_open_count", "service", "test-service").MinTimes(1)
 	mockMetric.EXPECT().NewGauge(gomock.Any(), gomock.Any()).AnyTimes()
 	mockMetric.EXPECT().SetGauge("app_http_circuit_breaker_state", 1.0, "service", "test-service").MinTimes(1)
 	mockMetric.EXPECT().SetGauge("app_http_circuit_breaker_state", 0.0, "service", "test-service").AnyTimes()

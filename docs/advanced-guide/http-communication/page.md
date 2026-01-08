@@ -232,6 +232,7 @@ a.AddHTTPService("cat-facts", "https://catfact.ninja",
 
 GoFr publishes the following metrics for HTTP service communication:
 
-- `app_http_retry_count`: Total number of retry events.
-- `app_http_circuit_breaker_open_count`: Total number of times the circuit breaker has transitioned to the `Open` state.
-- `app_http_service_response`: Response time of HTTP service requests in seconds (histogram).
+- `app_http_retry_count`: Total number of retry events. (labels: `service`)
+- `app_http_circuit_breaker_state`: Current state of the circuit breaker (0 for Closed, 1 for Open). (labels: `service`)
+- `app_http_service_response`: Response time of HTTP service requests in seconds (histogram). (labels: `service`, `path`, `method`, `status`)
+```

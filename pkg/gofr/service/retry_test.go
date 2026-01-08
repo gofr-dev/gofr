@@ -223,7 +223,8 @@ func TestRetryProvider_Metrics(t *testing.T) {
 	metrics.EXPECT().NewCounter("app_http_retry_count", gomock.Any()).AnyTimes()
 	metrics.EXPECT().IncrementCounter(gomock.Any(), "app_http_retry_count", "service", "test-service").MinTimes(1)
 	metrics.EXPECT().RecordHistogram(gomock.Any(), "app_http_service_response", gomock.Any(),
-		gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
+		gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(),
+		gomock.Any(), gomock.Any()).AnyTimes()
 
 	// Create a mock HTTP server that fails
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {

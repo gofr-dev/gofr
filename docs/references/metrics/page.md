@@ -29,7 +29,6 @@ You can also visualize these metrics using our [Grafana Dashboard](https://grafa
 | :--- | :--- | :--- |
 | `app_http_service_response` | histogram | Response time of HTTP service requests in seconds | `path`, `method`, `status`, `service` |
 | `app_http_retry_count` | counter | Total number of retry events | `service` |
-| `app_http_circuit_breaker_open_count` | counter | Total number of circuit breaker open events | `service` |
 | `app_http_circuit_breaker_state` | gauge | Current state of the circuit breaker (0 for Closed, 1 for Open) | `service` |
 
 ### Database Metrics

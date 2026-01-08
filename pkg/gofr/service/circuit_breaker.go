@@ -36,6 +36,7 @@ type circuitBreaker struct {
 	lastChecked  time.Time
 	metrics      Metrics
 	serviceName  string
+	stop         chan struct{}
 
 	HTTP
 }
@@ -49,6 +50,7 @@ func NewCircuitBreaker(config CircuitBreakerConfig, h HTTP) *circuitBreaker {
 		threshold: config.Threshold,
 		interval:  config.Interval,
 		HTTP:      h,
+		stop:      make(chan struct{}),
 	}
 
 	// Perform asynchronous health checks
@@ -60,30 +62,40 @@ func NewCircuitBreaker(config CircuitBreakerConfig, h HTTP) *circuitBreaker {
 // executeWithCircuitBreaker executes the given function with circuit breaker protection.
 func (cb *circuitBreaker) executeWithCircuitBreaker(ctx context.Context, f func(ctx context.Context) (*http.Response,
 	error)) (*http.Response, error) {
-	cb.mu.Lock()
-	defer cb.mu.Unlock()
+	cb.mu.RLock()
 
-	if cb.state == OpenState {
-		if time.Since(cb.lastChecked) > cb.interval {
-			// Check health before potentially closing the circuit
-			if cb.healthCheck(ctx) {
-				cb.resetCircuit()
-				return nil, nil
-			}
-		}
-
+	if cb.state == OpenState && time.Since(cb.lastChecked) <= cb.interval {
+		cb.mu.RUnlock()
 		return nil, ErrCircuitOpen
 	}
 
-	result, err := f(ctx)
-	if err != nil {
-		cb.handleFailure()
+	if cb.state == OpenState {
+		cb.mu.RUnlock()
+
+		if !cb.healthCheck(ctx) {
+			return nil, ErrCircuitOpen
+		}
+
+		cb.resetCircuit()
 	} else {
-		cb.resetFailureCount()
+		cb.mu.RUnlock()
 	}
 
-	if cb.failureCount > cb.threshold {
-		cb.openCircuit()
+	result, err := f(ctx)
+
+	cb.mu.Lock()
+	defer cb.mu.Unlock()
+
+	if err != nil || (result != nil && result.StatusCode >= 500) {
+		cb.failureCount++
+		if cb.failureCount > cb.threshold {
+			cb.openCircuitWithLock()
+		}
+	} else {
+		cb.failureCount = 0
+	}
+
+	if cb.state == OpenState {
 		return nil, ErrCircuitOpen
 	}
 
@@ -108,31 +120,43 @@ func (cb *circuitBreaker) healthCheck(ctx context.Context) bool {
 // startHealthChecks initiates periodic health checks.
 func (cb *circuitBreaker) startHealthChecks() {
 	ticker := time.NewTicker(cb.interval)
+	defer ticker.Stop()
 
-	for range ticker.C {
-		if cb.isOpen() {
-			go func() {
-				if cb.healthCheck(context.TODO()) {
+	for {
+		select {
+		case <-ticker.C:
+			if cb.isOpen() {
+				if cb.healthCheck(context.Background()) {
 					cb.resetCircuit()
 				}
-			}()
+			}
+		case <-cb.stop:
+			return
 		}
 	}
 }
 
 // openCircuit transitions the circuit breaker to the open state.
-func (cb *circuitBreaker) openCircuit() {
+
+func (cb *circuitBreaker) openCircuitWithLock() {
+	if cb.state == OpenState {
+		return
+	}
+
 	cb.state = OpenState
 	cb.lastChecked = time.Now()
 
 	if cb.metrics != nil {
-		cb.metrics.IncrementCounter(context.Background(), "app_http_circuit_breaker_open_count", "service", cb.serviceName)
 		cb.metrics.SetGauge("app_http_circuit_breaker_state", 1, "service", cb.serviceName)
 	}
 }
 
 // resetCircuit transitions the circuit breaker to the closed state.
 func (cb *circuitBreaker) resetCircuit() {
+	if cb.state == ClosedState {
+		return
+	}
+
 	cb.state = ClosedState
 	cb.failureCount = 0
 
@@ -141,17 +165,9 @@ func (cb *circuitBreaker) resetCircuit() {
 	}
 }
 
-// handleFailure increments the failure count and opens the circuit if the threshold is reached.
-func (cb *circuitBreaker) handleFailure() {
-	cb.failureCount++
-	if cb.failureCount > cb.threshold {
-		cb.openCircuit()
-	}
-}
-
-// resetFailureCount resets the failure count to zero.
-func (cb *circuitBreaker) resetFailureCount() {
-	cb.failureCount = 0
+func (cb *circuitBreaker) Close() error {
+	close(cb.stop)
+	return nil
 }
 
 func (cb *CircuitBreakerConfig) AddOption(h HTTP) HTTP {
@@ -162,8 +178,8 @@ func (cb *CircuitBreakerConfig) AddOption(h HTTP) HTTP {
 		circuitBreaker.serviceName = httpSvc.name
 
 		if circuitBreaker.metrics != nil {
-			circuitBreaker.metrics.NewCounter("app_http_circuit_breaker_open_count", "Total number of circuit breaker open events")
-			circuitBreaker.metrics.NewGauge("app_http_circuit_breaker_state", "Current state of the circuit breaker (0 for Closed, 1 for Open)")
+			registerGauge(circuitBreaker.metrics, "app_http_circuit_breaker_state",
+				"Current state of the circuit breaker (0 for Closed, 1 for Open)")
 
 			// Initialize the gauge to 0 (Closed)
 			circuitBreaker.metrics.SetGauge("app_http_circuit_breaker_state", 0, "service", circuitBreaker.serviceName)

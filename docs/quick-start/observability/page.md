@@ -139,9 +139,9 @@ GoFr publishes metrics to port: _2121_ on _/metrics_ endpoint in Prometheus form
 
 ---
 
-- app_http_circuit_breaker_open_count
-- counter
-- Total number of circuit breaker open events
+- app_http_circuit_breaker_state
+- gauge
+- Current state of the circuit breaker (0 for Closed, 1 for Open). Used for historical timeline visualization.
 
 {% /table %}
 
@@ -154,7 +154,7 @@ GoFr also supports creating {% new-tab-link newtab=false title="custom metrics" 
 These metrics can be easily consumed by monitoring systems like {% new-tab-link title="Prometheus" href="https://prometheus.io/" /%}
 and visualized in dashboards using tools like {% new-tab-link title="Grafana" href="https://grafana.com/" /%}.
 
-Here's a sample Grafana dashboard utilizing GoFr's metrics:
+Here's a sample Grafana dashboard utilizing GoFr's metrics. You can also use the official {% new-tab-link title="GoFr Grafana Dashboard" href="https://grafana.com/grafana/dashboards/19905-gofr-dashboard/" /%} or find the dashboard source in the {% new-tab-link title="GoFr repository" href="https://github.com/gofr-dev/gofr/tree/main/examples/http-server/docker/provisioning/dashboards/gofr-dashboard" /%}.
 
 {% figure src="/metrics-dashboard.png" alt="Grafana Dashboard showing GoFr metrics including HTTP request rates,
 response times, etc." caption="Example monitoring dashboard using GoFr's built-in metrics" /%}
