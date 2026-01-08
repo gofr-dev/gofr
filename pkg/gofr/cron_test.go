@@ -7,6 +7,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"go.uber.org/mock/gomock"
 
 	"gofr.dev/pkg/gofr/container"
 	"gofr.dev/pkg/gofr/testutil"
@@ -204,7 +205,15 @@ func TestCronTab_AddJob(t *testing.T) {
 		},
 	}
 
-	c := NewCron(nil)
+	// We need a mock container because NewCron now registers metrics
+	mockContainer, mocks := container.NewMockContainer(t)
+	// Expect metrics registration
+	mocks.Metrics.EXPECT().NewHistogram("app_cron_job_duration", gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
+	mocks.Metrics.EXPECT().NewCounter("app_cron_job_total", gomock.Any()).AnyTimes()
+	mocks.Metrics.EXPECT().NewCounter("app_cron_job_success", gomock.Any()).AnyTimes()
+	mocks.Metrics.EXPECT().NewCounter("app_cron_job_failures", gomock.Any()).AnyTimes()
+
+	c := NewCron(mockContainer)
 
 	for _, tc := range testCases {
 		err := c.AddJob(tc.schedule, "test-job", fn)
@@ -221,12 +230,27 @@ func TestCronTab_runScheduled(t *testing.T) {
 		day:       map[int]struct{}{1: {}},
 		month:     map[int]struct{}{1: {}},
 		dayOfWeek: map[int]struct{}{1: {}},
+		name:      "test-job",
 		fn:        func(*Context) { fmt.Println("hello from cron") },
 	}
 
 	// can make container nil as we are not testing the internal working of
 	// dependency function as it is user defined
-	mockContainer, _ := container.NewMockContainer(t)
+	// can make container nil as we are not testing the internal working of
+	// dependency function as it is user defined
+	mockContainer, mocks := container.NewMockContainer(t)
+
+	// Expect metrics registration
+	mocks.Metrics.EXPECT().NewHistogram("app_cron_job_duration", gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
+	mocks.Metrics.EXPECT().NewCounter("app_cron_job_total", gomock.Any()).AnyTimes()
+	mocks.Metrics.EXPECT().NewCounter("app_cron_job_success", gomock.Any()).AnyTimes()
+	mocks.Metrics.EXPECT().NewCounter("app_cron_job_failures", gomock.Any()).AnyTimes()
+
+	// Expect metrics recording during run
+	mocks.Metrics.EXPECT().IncrementCounter(gomock.Any(), "app_cron_job_total", "job", "test-job").Times(1)
+	mocks.Metrics.EXPECT().IncrementCounter(gomock.Any(), "app_cron_job_success", "job", "test-job").Times(1)
+	mocks.Metrics.EXPECT().RecordHistogram(gomock.Any(), "app_cron_job_duration", gomock.Any(), "job", "test-job").Times(1)
+
 	c := NewCron(mockContainer)
 
 	// Populate the job array for cron table

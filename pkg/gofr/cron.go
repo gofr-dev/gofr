@@ -66,6 +66,8 @@ func NewCron(cntnr *container.Container) *Crontab {
 		jobs:      make([]*job, 0),
 	}
 
+	c.registerMetrics()
+
 	go func() {
 		for t := range c.ticker.C {
 			c.runScheduled(t)
@@ -102,16 +104,42 @@ func (j *job) run(cntnr *container.Container) {
 	c.Infof("Starting cron job: %s", j.name)
 
 	start := time.Now()
-
 	defer func() {
-		if r := recover(); r != nil {
+		duration := time.Since(start).Milliseconds()
+
+		if m := cntnr.Metrics(); m != nil {
+			m.RecordHistogram(ctx, "app_cron_job_duration", float64(duration), "job", j.name)
+
+			if r := recover(); r != nil {
+				c.Errorf("Panic in cron job %s: %v", j.name, r)
+				m.IncrementCounter(ctx, "app_cron_job_failures", "job", j.name)
+			} else {
+				m.IncrementCounter(ctx, "app_cron_job_success", "job", j.name)
+			}
+
+		} else if r := recover(); r != nil {
 			c.Errorf("Panic in cron job %s: %v", j.name, r)
 		}
 
 		c.Infof("Finished cron job: %s in %s", j.name, time.Since(start))
 	}()
 
+	if m := cntnr.Metrics(); m != nil {
+		m.IncrementCounter(ctx, "app_cron_job_total", "job", j.name)
+	}
 	j.fn(c)
+}
+
+func (c *Crontab) registerMetrics() {
+	m := c.container.Metrics()
+	if m == nil {
+		return
+	}
+
+	m.NewHistogram("app_cron_job_duration", "Duration of cron job execution in milliseconds", 10, 100, 500, 1000, 5000)
+	m.NewCounter("app_cron_job_total", "Total number of cron job executions")
+	m.NewCounter("app_cron_job_success", "Number of successful cron job executions")
+	m.NewCounter("app_cron_job_failures", "Number of failed cron job executions")
 }
 
 // AddJob to cron tab, returns error if the cron syntax can't be parsed or is out of bounds.
