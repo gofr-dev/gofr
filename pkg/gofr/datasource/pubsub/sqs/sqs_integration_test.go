@@ -1,5 +1,3 @@
-// go:build integration
-
 package sqs
 
 import (
@@ -70,7 +68,11 @@ func TestIntegration_PublishAndSubscribe(t *testing.T) {
 	// Create queue
 	err := client.CreateTopic(ctx, queueName)
 	require.NoError(t, err)
-	defer client.DeleteTopic(ctx, queueName)
+
+	defer func() {
+		err = client.DeleteTopic(ctx, queueName)
+		assert.NoError(t, err)
+	}()
 
 	// Publish message
 	testMessage := map[string]string{
@@ -104,7 +106,11 @@ func TestIntegration_Query(t *testing.T) {
 	// Create queue
 	err := client.CreateTopic(ctx, queueName)
 	require.NoError(t, err)
-	defer client.DeleteTopic(ctx, queueName)
+
+	defer func() {
+		err = client.DeleteTopic(ctx, queueName)
+		assert.NoError(t, err)
+	}()
 
 	// Publish multiple messages
 	for i := 0; i < 3; i++ {
@@ -124,6 +130,7 @@ func TestIntegration_Query(t *testing.T) {
 
 	// Result should be a JSON array
 	var messages []map[string]int
+
 	err = json.Unmarshal(result, &messages)
 	require.NoError(t, err)
 	assert.GreaterOrEqual(t, len(messages), 1)
@@ -138,4 +145,3 @@ func TestIntegration_Health(t *testing.T) {
 	assert.Equal(t, "SQS", health.Details["backend"])
 	assert.Equal(t, testRegion, health.Details["region"])
 }
-

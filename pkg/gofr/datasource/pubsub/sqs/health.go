@@ -6,7 +6,6 @@ import (
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/service/sqs"
-
 	"gofr.dev/pkg/gofr/datasource"
 )
 
@@ -15,7 +14,7 @@ const healthCheckTimeout = 5 * time.Second
 // Health returns the health status of the SQS connection.
 func (c *Client) Health() datasource.Health {
 	health := datasource.Health{
-		Details: map[string]interface{}{
+		Details: map[string]any{
 			"backend": "SQS",
 			"region":  c.cfg.Region,
 		},
@@ -35,7 +34,6 @@ func (c *Client) Health() datasource.Health {
 	_, err := c.client.ListQueues(ctx, &sqs.ListQueuesInput{
 		MaxResults: aws.Int32(1),
 	})
-
 	if err != nil {
 		health.Status = datasource.StatusDown
 		health.Details["error"] = err.Error()
@@ -47,4 +45,3 @@ func (c *Client) Health() datasource.Health {
 
 	return health
 }
-

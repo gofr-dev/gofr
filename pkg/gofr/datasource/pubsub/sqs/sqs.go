@@ -2,6 +2,7 @@ package sqs
 
 import (
 	"context"
+	"errors"
 	"strings"
 	"sync"
 	"time"
@@ -13,14 +14,13 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/sqs/types"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/trace"
-
 	"gofr.dev/pkg/gofr/datasource/pubsub"
 )
 
 const (
 	defaultRetryDuration = 5 * time.Second
 	defaultQueryTimeout  = 30 * time.Second
-	defaultMaxMessages   = 10
+	defaultMaxMessages   = int32(10)
 )
 
 // Client represents an SQS client that implements the pubsub.Client interface.
@@ -106,7 +106,6 @@ func (c *Client) Connect() {
 	_, err = c.client.ListQueues(ctx, &sqs.ListQueuesInput{
 		MaxResults: aws.Int32(1),
 	})
-
 	if err != nil {
 		c.logger.Errorf("failed to connect to SQS: %v", err)
 		c.client = nil
@@ -236,7 +235,11 @@ func (c *Client) Subscribe(ctx context.Context, topic string) (*pubsub.Message, 
 
 	queueURL, err := c.getQueueURL(ctx, topic)
 	if err != nil {
-		c.logger.Errorf("failed to get queue URL for %s: %v", topic, err)
+		// Don't log error if context was canceled (graceful shutdown)
+		if !isContextCanceled(err) {
+			c.logger.Errorf("failed to get queue URL for %s: %v", topic, err)
+		}
+
 		return nil, err
 	}
 
@@ -257,7 +260,11 @@ func (c *Client) Subscribe(ctx context.Context, topic string) (*pubsub.Message, 
 
 	result, err := c.client.ReceiveMessage(ctx, input)
 	if err != nil {
-		c.logger.Errorf("failed to receive message from queue %s: %v", topic, err)
+		// Don't log error if context was canceled (graceful shutdown)
+		if !isContextCanceled(err) {
+			c.logger.Errorf("failed to receive message from queue %s: %v", topic, err)
+		}
+
 		return nil, err
 	}
 
@@ -312,7 +319,6 @@ func (c *Client) CreateTopic(ctx context.Context, name string) error {
 	_, err := c.client.CreateQueue(ctx, &sqs.CreateQueueInput{
 		QueueName: aws.String(name),
 	})
-
 	if err != nil {
 		c.logger.Errorf("failed to create queue %s: %v", name, err)
 		return err
@@ -343,7 +349,6 @@ func (c *Client) DeleteTopic(ctx context.Context, name string) error {
 	_, err = c.client.DeleteQueue(ctx, &sqs.DeleteQueueInput{
 		QueueUrl: aws.String(queueURL),
 	})
-
 	if err != nil {
 		c.logger.Errorf("failed to delete queue %s: %v", name, err)
 		return err
@@ -360,7 +365,7 @@ func (c *Client) DeleteTopic(ctx context.Context, name string) error {
 }
 
 // Query retrieves multiple messages from an SQS queue.
-// Args: [0] = limit (int, max 10)
+// Args: [0] = limit (int, max 10).
 func (c *Client) Query(ctx context.Context, query string, args ...any) ([]byte, error) {
 	if c.client == nil {
 		return nil, ErrClientNotConnected
@@ -381,6 +386,7 @@ func (c *Client) Query(ctx context.Context, query string, args ...any) ([]byte, 
 	readCtx := ctx
 	if _, hasDeadline := ctx.Deadline(); !hasDeadline {
 		var cancel context.CancelFunc
+
 		readCtx, cancel = context.WithTimeout(ctx, defaultQueryTimeout)
 		defer cancel()
 	}
@@ -390,7 +396,6 @@ func (c *Client) Query(ctx context.Context, query string, args ...any) ([]byte, 
 		MaxNumberOfMessages: limit,
 		WaitTimeSeconds:     c.cfg.WaitTimeSeconds,
 	})
-
 	if err != nil {
 		return nil, err
 	}
@@ -400,7 +405,7 @@ func (c *Client) Query(ctx context.Context, query string, args ...any) ([]byte, 
 	}
 
 	// Combine all message bodies
-	var messages []string
+	messages := make([]string, 0, len(result.Messages))
 	for _, msg := range result.Messages {
 		messages = append(messages, *msg.Body)
 	}
@@ -422,17 +427,19 @@ func (c *Client) Close() error {
 func (c *Client) getQueueURL(ctx context.Context, queueName string) (string, error) {
 	// Check cache first
 	c.cacheMu.RLock()
+
 	if url, ok := c.queueURLCache[queueName]; ok {
 		c.cacheMu.RUnlock()
+
 		return url, nil
 	}
+
 	c.cacheMu.RUnlock()
 
 	// Get queue URL from SQS
 	result, err := c.client.GetQueueUrl(ctx, &sqs.GetQueueUrlInput{
 		QueueName: aws.String(queueName),
 	})
-
 	if err != nil {
 		return "", ErrQueueNotFound
 	}
@@ -452,16 +459,14 @@ func (*Client) startTrace(ctx context.Context, name string) (context.Context, tr
 }
 
 // parseQueryArgs parses the query arguments for Query method.
-func (c *Client) parseQueryArgs(args ...any) int32 {
-	limit := int32(defaultMaxMessages)
-
+func (*Client) parseQueryArgs(args ...any) int32 {
 	if len(args) > 0 {
-		if l, ok := args[0].(int); ok && l > 0 && l <= 10 {
-			limit = int32(l)
+		if l, ok := args[0].(int32); ok && l > 0 && l <= 10 {
+			return l
 		}
 	}
 
-	return limit
+	return defaultMaxMessages
 }
 
 // truncateMessage truncates the message for logging purposes.
@@ -473,4 +478,24 @@ func truncateMessage(msg string) string {
 	}
 
 	return msg
+}
+
+// isContextCanceled checks if the error is due to context cancellation.
+// This is used to suppress error logs during graceful shutdown.
+func isContextCanceled(err error) bool {
+	if err == nil {
+		return false
+	}
+
+	// Check for standard context errors
+	if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
+		return true
+	}
+
+	// Check error message for "canceled" (AWS SDK wraps context errors)
+	errMsg := err.Error()
+
+	return strings.Contains(errMsg, "context canceled") ||
+		strings.Contains(errMsg, "context deadline exceeded") ||
+		strings.Contains(errMsg, "canceled")
 }

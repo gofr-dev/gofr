@@ -9,9 +9,9 @@ import (
 // mockgen command for generating mocks
 //go:generate mockgen -destination=mock_sqs.go -package=sqs github.com/aws/aws-sdk-go-v2/service/sqs Client
 
-// SQSClient interface wraps the SQS client methods used by the Client.
+// MockSQSClient interface wraps the SQS client methods used by the Client.
 // This interface is useful for mocking in tests.
-type SQSClient interface {
+type MockSQSClient interface {
 	SendMessage(ctx context.Context, params *sqs.SendMessageInput, optFns ...func(*sqs.Options)) (*sqs.SendMessageOutput, error)
 	ReceiveMessage(ctx context.Context, params *sqs.ReceiveMessageInput, optFns ...func(*sqs.Options)) (*sqs.ReceiveMessageOutput, error)
 	DeleteMessage(ctx context.Context, params *sqs.DeleteMessageInput, optFns ...func(*sqs.Options)) (*sqs.DeleteMessageOutput, error)

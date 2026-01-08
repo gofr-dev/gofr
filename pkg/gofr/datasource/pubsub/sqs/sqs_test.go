@@ -163,7 +163,8 @@ func TestClient_Subscribe_NotConnected(t *testing.T) {
 	client.UseMetrics(NewMockMetrics())
 
 	msg, err := client.Subscribe(context.Background(), "test-queue")
-	assert.ErrorIs(t, err, ErrClientNotConnected)
+
+	require.ErrorIs(t, err, ErrClientNotConnected)
 	assert.Nil(t, msg)
 }
 
@@ -188,7 +189,8 @@ func TestClient_Query_NotConnected(t *testing.T) {
 	client.UseLogger(NewMockLogger())
 
 	result, err := client.Query(context.Background(), "test-queue")
-	assert.ErrorIs(t, err, ErrClientNotConnected)
+
+	require.ErrorIs(t, err, ErrClientNotConnected)
 	assert.Nil(t, result)
 }
 
@@ -206,7 +208,8 @@ func TestClient_Close(t *testing.T) {
 	client.UseLogger(NewMockLogger())
 
 	err := client.Close()
-	assert.NoError(t, err)
+
+	require.NoError(t, err)
 	assert.Nil(t, client.client)
 }
 

@@ -52,7 +52,6 @@ func (m *Message) Commit() {
 		QueueUrl:      &m.queueURL,
 		ReceiptHandle: &m.receiptHandle,
 	})
-
 	if err != nil {
 		m.logger.Errorf("failed to commit (delete) message %s: %v", m.messageID, err)
 		return
