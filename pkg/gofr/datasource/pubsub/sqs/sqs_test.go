@@ -24,6 +24,13 @@ var (
 	errNoSuchHost              = errors.New("dial tcp: no such host")
 	errNetworkUnreachable      = errors.New("dial tcp: network is unreachable")
 	errMaxAttemptsExceeded     = errors.New("exceeded maximum number of attempts")
+	errMockSendMessage         = errors.New("mock send message error")
+	errMockReceiveMessage      = errors.New("mock receive message error")
+	errMockCreateQueue         = errors.New("mock create queue error")
+	errMockDeleteQueue         = errors.New("mock delete queue error")
+	errMockGetQueueURL         = errors.New("mock get queue url error")
+	errMockDeleteFailed        = errors.New("delete failed")
+	errMockListQueues          = errors.New("list queues failed")
 )
 
 func TestNew(t *testing.T) {
@@ -187,7 +194,7 @@ func TestClient_Subscribe_EmptyTopic(t *testing.T) {
 	client := newTestClient(&mockSQSClient{})
 
 	msg, err := client.Subscribe(context.Background(), "")
-	assert.ErrorIs(t, err, errEmptyQueueName)
+	require.ErrorIs(t, err, errEmptyQueueName)
 	assert.Nil(t, msg)
 }
 
@@ -199,7 +206,7 @@ func TestClient_Subscribe_Success(t *testing.T) {
 	require.NoError(t, err)
 	require.NotNil(t, msg)
 	assert.Equal(t, "test-queue", msg.Topic)
-	assert.Equal(t, `{"test":"data"}`, string(msg.Value))
+	assert.JSONEq(t, `{"test":"data"}`, string(msg.Value))
 }
 
 func TestClient_Subscribe_NoMessages(t *testing.T) {
@@ -211,7 +218,7 @@ func TestClient_Subscribe_NoMessages(t *testing.T) {
 	client := newTestClient(mockClient)
 
 	msg, err := client.Subscribe(context.Background(), "test-queue")
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.Nil(t, msg)
 }
 
@@ -224,7 +231,7 @@ func TestClient_Subscribe_GetQueueURLError(t *testing.T) {
 	client := newTestClient(mockClient)
 
 	msg, err := client.Subscribe(context.Background(), "test-queue")
-	assert.ErrorIs(t, err, errQueueNotFound)
+	require.ErrorIs(t, err, errQueueNotFound)
 	assert.Nil(t, msg)
 }
 
@@ -237,7 +244,7 @@ func TestClient_Subscribe_ReceiveMessageError(t *testing.T) {
 	client := newTestClient(mockClient)
 
 	msg, err := client.Subscribe(context.Background(), "test-queue")
-	assert.Error(t, err)
+	require.Error(t, err)
 	assert.Nil(t, msg)
 }
 
@@ -250,7 +257,7 @@ func TestClient_Subscribe_ContextCanceled(t *testing.T) {
 	client := newTestClient(mockClient)
 
 	msg, err := client.Subscribe(context.Background(), "test-queue")
-	assert.ErrorIs(t, err, context.Canceled)
+	require.ErrorIs(t, err, context.Canceled)
 	assert.Nil(t, msg)
 }
 
@@ -347,7 +354,7 @@ func TestClient_Query_EmptyQuery(t *testing.T) {
 	client := newTestClient(&mockSQSClient{})
 
 	result, err := client.Query(context.Background(), "")
-	assert.ErrorIs(t, err, errEmptyQueueName)
+	require.ErrorIs(t, err, errEmptyQueueName)
 	assert.Nil(t, result)
 }
 
@@ -378,7 +385,7 @@ func TestClient_Query_NoMessages(t *testing.T) {
 	client := newTestClient(mockClient)
 
 	result, err := client.Query(context.Background(), "test-queue")
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.Nil(t, result)
 }
 
@@ -391,7 +398,7 @@ func TestClient_Query_GetQueueURLError(t *testing.T) {
 	client := newTestClient(mockClient)
 
 	result, err := client.Query(context.Background(), "test-queue")
-	assert.ErrorIs(t, err, errQueueNotFound)
+	require.ErrorIs(t, err, errQueueNotFound)
 	assert.Nil(t, result)
 }
 
@@ -404,7 +411,7 @@ func TestClient_Query_ReceiveMessageError(t *testing.T) {
 	client := newTestClient(mockClient)
 
 	result, err := client.Query(context.Background(), "test-queue")
-	assert.Error(t, err)
+	require.Error(t, err)
 	assert.Nil(t, result)
 }
 

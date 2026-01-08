@@ -2,7 +2,6 @@ package sqs
 
 import (
 	"context"
-	"errors"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/service/sqs"
@@ -110,7 +109,7 @@ func (m *mockSQSClient) DeleteQueue(
 	return &sqs.DeleteQueueOutput{}, nil
 }
 
-//nolint:revive // GetQueueUrl matches AWS SDK method name
+//nolint:revive,staticcheck // GetQueueUrl matches AWS SDK method name
 func (m *mockSQSClient) GetQueueUrl(
 	ctx context.Context, params *sqs.GetQueueUrlInput, _ ...func(*sqs.Options),
 ) (*sqs.GetQueueUrlOutput, error) {
@@ -144,12 +143,3 @@ func newTestClient(mockClient *mockSQSClient) *Client {
 }
 
 // Test errors - static errors for testing purposes.
-var (
-	errMockSendMessage    = errors.New("mock send message error")
-	errMockReceiveMessage = errors.New("mock receive message error")
-	errMockCreateQueue    = errors.New("mock create queue error")
-	errMockDeleteQueue    = errors.New("mock delete queue error")
-	errMockGetQueueURL    = errors.New("mock get queue url error")
-	errMockDeleteFailed   = errors.New("delete failed")
-	errMockListQueues     = errors.New("list queues failed")
-)

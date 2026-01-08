@@ -24,3 +24,8 @@ type sqsClient interface {
 	ListQueues(ctx context.Context, params *sqs.ListQueuesInput,
 		optFns ...func(*sqs.Options)) (*sqs.ListQueuesOutput, error)
 }
+
+// Metrics interface for recording SQS metrics.
+type Metrics interface {
+	IncrementCounter(ctx context.Context, name string, labels ...string)
+}
