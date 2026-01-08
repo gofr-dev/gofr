@@ -23,6 +23,12 @@ const (
 	defaultMaxMessages   = int32(10)
 )
 
+var (
+	errClientNotConnected = errors.New("sqs client not connected")
+	errQueueNotFound = errors.New("sqs queue not found")
+	errEmptyQueueName = errors.New("queue name cannot be empty")
+)
+
 // Client represents an SQS client that implements the pubsub.Client interface.
 type Client struct {
 	client  *sqs.Client
@@ -93,7 +99,7 @@ func (c *Client) Connect() {
 		return
 	}
 
-	// Create SQS client with custom endpoint if provided (for LocalStack)
+	// Create SQS client with custom endpoint if provided.
 	opts := func(o *sqs.Options) {
 		if c.cfg.Endpoint != "" {
 			o.BaseEndpoint = aws.String(c.cfg.Endpoint)
@@ -162,11 +168,11 @@ func (c *Client) retryConnect() {
 // The topic parameter is the queue name (not the full URL).
 func (c *Client) Publish(ctx context.Context, topic string, message []byte) error {
 	if c.client == nil {
-		return ErrClientNotConnected
+		return errClientNotConnected
 	}
 
 	if topic == "" {
-		return ErrEmptyQueueName
+		return errEmptyQueueName
 	}
 
 	ctx, span := c.startTrace(ctx, "sqs-publish")
@@ -197,8 +203,6 @@ func (c *Client) Publish(ctx context.Context, topic string, message []byte) erro
 		return err
 	}
 
-	duration := time.Since(start)
-
 	c.logger.Debug(&Log{
 		Mode:          "PUB",
 		CorrelationID: span.SpanContext().TraceID().String(),
@@ -206,7 +210,7 @@ func (c *Client) Publish(ctx context.Context, topic string, message []byte) erro
 		Queue:         topic,
 		Host:          c.cfg.Region,
 		PubSubBackend: "SQS",
-		Time:          duration.Microseconds(),
+		Time:          time.Since(start).Microseconds(),
 	})
 
 	c.logger.Debugf("message published to queue %s with ID: %s", topic, *result.MessageId)
@@ -221,11 +225,11 @@ func (c *Client) Publish(ctx context.Context, topic string, message []byte) erro
 func (c *Client) Subscribe(ctx context.Context, topic string) (*pubsub.Message, error) {
 	if c.client == nil {
 		time.Sleep(c.cfg.RetryDuration)
-		return nil, ErrClientNotConnected
+		return nil, errClientNotConnected
 	}
 
 	if topic == "" {
-		return nil, ErrEmptyQueueName
+		return nil, errEmptyQueueName
 	}
 
 	ctx, span := c.startTrace(ctx, "sqs-subscribe")
@@ -235,7 +239,6 @@ func (c *Client) Subscribe(ctx context.Context, topic string) (*pubsub.Message, 
 
 	queueURL, err := c.getQueueURL(ctx, topic)
 	if err != nil {
-		// Don't log error if context was canceled (graceful shutdown)
 		if !isContextCanceled(err) {
 			c.logger.Errorf("failed to get queue URL for %s: %v", topic, err)
 		}
@@ -250,9 +253,6 @@ func (c *Client) Subscribe(ctx context.Context, topic string) (*pubsub.Message, 
 		MaxNumberOfMessages: 1, // Subscribe returns one message at a time
 		WaitTimeSeconds:     c.cfg.WaitTimeSeconds,
 		VisibilityTimeout:   c.cfg.VisibilityTimeout,
-		AttributeNames: []types.QueueAttributeName{
-			types.QueueAttributeNameAll,
-		},
 		MessageSystemAttributeNames: []types.MessageSystemAttributeName{
 			types.MessageSystemAttributeNameAll,
 		},
@@ -260,7 +260,6 @@ func (c *Client) Subscribe(ctx context.Context, topic string) (*pubsub.Message, 
 
 	result, err := c.client.ReceiveMessage(ctx, input)
 	if err != nil {
-		// Don't log error if context was canceled (graceful shutdown)
 		if !isContextCanceled(err) {
 			c.logger.Errorf("failed to receive message from queue %s: %v", topic, err)
 		}
@@ -307,11 +306,11 @@ func (c *Client) Subscribe(ctx context.Context, topic string) (*pubsub.Message, 
 // In SQS terminology, this creates a queue, not a topic.
 func (c *Client) CreateTopic(ctx context.Context, name string) error {
 	if c.client == nil {
-		return ErrClientNotConnected
+		return errClientNotConnected
 	}
 
 	if name == "" {
-		return ErrEmptyQueueName
+		return errEmptyQueueName
 	}
 
 	c.logger.Debugf("creating SQS queue: %s", name)
@@ -332,11 +331,11 @@ func (c *Client) CreateTopic(ctx context.Context, name string) error {
 // DeleteTopic deletes an SQS queue with the specified name.
 func (c *Client) DeleteTopic(ctx context.Context, name string) error {
 	if c.client == nil {
-		return ErrClientNotConnected
+		return errClientNotConnected
 	}
 
 	if name == "" {
-		return ErrEmptyQueueName
+		return errEmptyQueueName
 	}
 
 	queueURL, err := c.getQueueURL(ctx, name)
@@ -368,11 +367,11 @@ func (c *Client) DeleteTopic(ctx context.Context, name string) error {
 // Args: [0] = limit (int, max 10).
 func (c *Client) Query(ctx context.Context, query string, args ...any) ([]byte, error) {
 	if c.client == nil {
-		return nil, ErrClientNotConnected
+		return nil, errClientNotConnected
 	}
 
 	if query == "" {
-		return nil, ErrEmptyQueueName
+		return nil, errEmptyQueueName
 	}
 
 	queueURL, err := c.getQueueURL(ctx, query)
@@ -441,7 +440,7 @@ func (c *Client) getQueueURL(ctx context.Context, queueName string) (string, err
 		QueueName: aws.String(queueName),
 	})
 	if err != nil {
-		return "", ErrQueueNotFound
+		return "", errQueueNotFound
 	}
 
 	// Cache the result

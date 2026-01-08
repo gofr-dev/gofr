@@ -17,7 +17,6 @@ import (
 const (
 	testRegion   = "us-east-1"
 	testEndpoint = "http://localhost:4566"
-	testQueue    = "test-queue"
 )
 
 func getTestClient(t *testing.T) *Client {
@@ -130,7 +129,6 @@ func TestIntegration_Query(t *testing.T) {
 
 	// Result should be a JSON array
 	var messages []map[string]int
-
 	err = json.Unmarshal(result, &messages)
 	require.NoError(t, err)
 	assert.GreaterOrEqual(t, len(messages), 1)

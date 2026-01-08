@@ -8,19 +8,10 @@ import (
 
 // Message represents an SQS message that implements the Committer interface.
 type Message struct {
-	// receiptHandle is the unique identifier for the message, used for deletion.
 	receiptHandle string
-
-	// queueURL is the URL of the queue from which the message was received.
 	queueURL string
-
-	// messageID is the SQS message ID.
 	messageID string
-
-	// client is the SQS client used to delete the message.
 	client *sqs.Client
-
-	// logger is used for logging operations.
 	logger Logger
 }
 

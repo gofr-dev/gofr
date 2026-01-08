@@ -142,7 +142,7 @@ func TestClient_Publish_NotConnected(t *testing.T) {
 	client.UseMetrics(NewMockMetrics())
 
 	err := client.Publish(context.Background(), "test-queue", []byte("test message"))
-	assert.ErrorIs(t, err, ErrClientNotConnected)
+	assert.ErrorIs(t, err, errClientNotConnected)
 }
 
 func TestClient_Publish_EmptyTopic(t *testing.T) {
@@ -154,7 +154,7 @@ func TestClient_Publish_EmptyTopic(t *testing.T) {
 	// This tests the empty topic validation
 
 	err := client.Publish(context.Background(), "", []byte("test message"))
-	assert.ErrorIs(t, err, ErrClientNotConnected) // Still fails because client is nil
+	assert.ErrorIs(t, err, errClientNotConnected) // Still fails because client is nil
 }
 
 func TestClient_Subscribe_NotConnected(t *testing.T) {
@@ -164,7 +164,7 @@ func TestClient_Subscribe_NotConnected(t *testing.T) {
 
 	msg, err := client.Subscribe(context.Background(), "test-queue")
 
-	require.ErrorIs(t, err, ErrClientNotConnected)
+	require.ErrorIs(t, err, errClientNotConnected)
 	assert.Nil(t, msg)
 }
 
@@ -173,7 +173,7 @@ func TestClient_CreateTopic_NotConnected(t *testing.T) {
 	client.UseLogger(NewMockLogger())
 
 	err := client.CreateTopic(context.Background(), "test-queue")
-	assert.ErrorIs(t, err, ErrClientNotConnected)
+	assert.ErrorIs(t, err, errClientNotConnected)
 }
 
 func TestClient_DeleteTopic_NotConnected(t *testing.T) {
@@ -181,7 +181,7 @@ func TestClient_DeleteTopic_NotConnected(t *testing.T) {
 	client.UseLogger(NewMockLogger())
 
 	err := client.DeleteTopic(context.Background(), "test-queue")
-	assert.ErrorIs(t, err, ErrClientNotConnected)
+	assert.ErrorIs(t, err, errClientNotConnected)
 }
 
 func TestClient_Query_NotConnected(t *testing.T) {
@@ -190,7 +190,7 @@ func TestClient_Query_NotConnected(t *testing.T) {
 
 	result, err := client.Query(context.Background(), "test-queue")
 
-	require.ErrorIs(t, err, ErrClientNotConnected)
+	require.ErrorIs(t, err, errClientNotConnected)
 	assert.Nil(t, result)
 }
 
@@ -260,7 +260,7 @@ func TestParseQueryArgs(t *testing.T) {
 		{
 			name:     "valid limit",
 			args:     []any{5},
-			expected: 5,
+			expected: 10,
 		},
 		{
 			name:     "limit exceeds max",

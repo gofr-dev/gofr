@@ -4,48 +4,30 @@ import "time"
 
 // Config holds the configuration for the SQS client.
 type Config struct {
-	// Region is the AWS region where the SQS queue is located.
-	// Example: "us-east-1", "eu-west-1"
-	Region string
+	Region string // Region is the AWS region where the SQS queue is located. Example: "us-east-1", "eu-west-1"
 
-	// Endpoint is the custom endpoint URL for SQS.
-	// This is useful for local development with LocalStack.
-	// Example: "http://localhost:4566"
-	// If empty, the default AWS endpoint will be used.
-	Endpoint string
+	Endpoint string // Endpoint is the custom endpoint URL for SQS, the default AWS endpoint will be used.
 
-	// AccessKeyID is the AWS access key ID for authentication.
-	// If empty, the SDK will use the default credential chain.
-	AccessKeyID string
+	AccessKeyID string // AccessKeyID is the AWS access key ID for authentication.
 
-	// SecretAccessKey is the AWS secret access key for authentication.
-	// If empty, the SDK will use the default credential chain.
-	SecretAccessKey string
+	SecretAccessKey string // SecretAccessKey is the AWS secret access key for authentication.
 
-	// SessionToken is the AWS session token for temporary credentials.
-	// Optional - only needed when using temporary credentials.
-	SessionToken string
+	SessionToken string // SessionToken is the AWS session token for temporary credentials.(Optional).
 
-	// QueueURL is the URL of the SQS queue.
+	QueueURL string // QueueURL is the URL of the SQS queue.
 	// If not provided, the client will attempt to get/create the queue URL from QueueName.
 	// Example: "https://sqs.us-east-1.amazonaws.com/123456789012/my-queue"
-	QueueURL string
 
-	// MaxMessages is the maximum number of messages to receive in a single request (1-10).
-	// Default: 1
-	MaxMessages int32
+	MaxMessages int32 // MaxMessages is the maximum number of messages to receive in a single request (1-10). // Default: 1
 
-	// WaitTimeSeconds is the duration (in seconds) for which the call waits for a message to arrive.
+	WaitTimeSeconds int32 // WaitTimeSeconds is the duration (in seconds) for which the call waits for a message to arrive.
 	// This enables long polling. Default: 20 (maximum allowed by SQS)
-	WaitTimeSeconds int32
 
-	// VisibilityTimeout is the duration (in seconds) that a received message is hidden from subsequent retrieve requests.
 	// Default: 30 seconds
-	VisibilityTimeout int32
+	VisibilityTimeout int32 // VisibilityTimeout is the duration (in seconds) that a received message is hidden
+	// from subsequent retrieve requests.
 
-	// DelaySeconds is the length of time (in seconds) to delay a specific message. (0-900)
-	// Default: 0
-	DelaySeconds int32
+	DelaySeconds int32 // DelaySeconds is the length of time (in seconds) to delay a specific message. (0-900). // Default: 0
 
 	// RetryDuration is the duration to wait before retrying failed connection attempts.
 	// Default: 5 seconds
