@@ -20,7 +20,7 @@ func (c *Client) Health() datasource.Health {
 		},
 	}
 
-	if c.client == nil {
+	if c.conn == nil {
 		health.Status = datasource.StatusDown
 		health.Details["error"] = "client not connected"
 
@@ -31,7 +31,7 @@ func (c *Client) Health() datasource.Health {
 	defer cancel()
 
 	// Use ListQueues with MaxResults=1 as a lightweight health check
-	_, err := c.client.ListQueues(ctx, &sqs.ListQueuesInput{
+	_, err := c.conn.ListQueues(ctx, &sqs.ListQueuesInput{
 		MaxResults: aws.Int32(1),
 	})
 	if err != nil {

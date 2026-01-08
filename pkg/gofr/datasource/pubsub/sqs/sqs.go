@@ -49,7 +49,7 @@ const (
 
 // Client represents an SQS client that implements the pubsub.Client interface.
 type Client struct {
-	client  *sqs.Client
+	conn    sqsClient
 	cfg     *Config
 	logger  pubsub.Logger
 	metrics Metrics
@@ -128,15 +128,15 @@ func (c *Client) Connect() {
 		}
 	}
 
-	c.client = sqs.NewFromConfig(awsCfg, opts)
+	c.conn = sqs.NewFromConfig(awsCfg, opts)
 
 	// Verify connection by listing queues
-	_, err = c.client.ListQueues(ctx, &sqs.ListQueuesInput{
+	_, err = c.conn.ListQueues(ctx, &sqs.ListQueuesInput{
 		MaxResults: aws.Int32(1),
 	})
 	if err != nil {
 		c.logger.Errorf("failed to connect to SQS: %v", err)
-		c.client = nil
+		c.conn = nil
 
 		// Only start retry goroutine if not already retrying
 		if c.isRetrying.CompareAndSwap(false, true) {
@@ -204,13 +204,13 @@ func (c *Client) connectInternal() {
 		}
 	}
 
-	c.client = sqs.NewFromConfig(awsCfg, opts)
+	c.conn = sqs.NewFromConfig(awsCfg, opts)
 
-	_, err = c.client.ListQueues(ctx, &sqs.ListQueuesInput{
+	_, err = c.conn.ListQueues(ctx, &sqs.ListQueuesInput{
 		MaxResults: aws.Int32(1),
 	})
 	if err != nil {
-		c.client = nil
+		c.conn = nil
 	}
 }
 
@@ -219,7 +219,7 @@ func (c *Client) isConnected() bool {
 	c.connMu.Lock()
 	defer c.connMu.Unlock()
 
-	return c.client != nil
+	return c.conn != nil
 }
 
 // Publish sends a message to the specified SQS queue.
@@ -251,7 +251,7 @@ func (c *Client) Publish(ctx context.Context, topic string, message []byte) erro
 		MessageBody: aws.String(string(message)),
 	}
 
-	result, err := c.client.SendMessage(ctx, input)
+	result, err := c.conn.SendMessage(ctx, input)
 	if err != nil {
 		c.logger.Errorf("failed to publish message to queue %s: %v", topic, err)
 		return err
@@ -313,7 +313,7 @@ func (c *Client) Subscribe(ctx context.Context, topic string) (*pubsub.Message, 
 		},
 	}
 
-	result, err := c.client.ReceiveMessage(ctx, input)
+	result, err := c.conn.ReceiveMessage(ctx, input)
 	if err != nil {
 		// Only log non-transient errors, avoid flooding logs
 		if !isContextCanceled(err) && !isConnectionError(err) {
@@ -338,7 +338,8 @@ func (c *Client) Subscribe(ctx context.Context, topic string) (*pubsub.Message, 
 	msg.Committer = newMessage(
 		*sqsMsg.ReceiptHandle,
 		queueURL,
-		c.client,
+		c.conn,
+		c.logger,
 	)
 
 	c.logger.Debug(&pubsub.Log{
@@ -369,7 +370,7 @@ func (c *Client) CreateTopic(ctx context.Context, name string) error {
 
 	c.logger.Debugf("creating SQS queue: %s", name)
 
-	_, err := c.client.CreateQueue(ctx, &sqs.CreateQueueInput{
+	_, err := c.conn.CreateQueue(ctx, &sqs.CreateQueueInput{
 		QueueName: aws.String(name),
 	})
 	if err != nil {
@@ -399,7 +400,7 @@ func (c *Client) DeleteTopic(ctx context.Context, name string) error {
 
 	c.logger.Debugf("deleting SQS queue: %s", name)
 
-	_, err = c.client.DeleteQueue(ctx, &sqs.DeleteQueueInput{
+	_, err = c.conn.DeleteQueue(ctx, &sqs.DeleteQueueInput{
 		QueueUrl: aws.String(queueURL),
 	})
 	if err != nil {
@@ -444,7 +445,7 @@ func (c *Client) Query(ctx context.Context, query string, args ...any) ([]byte, 
 		defer cancel()
 	}
 
-	result, err := c.client.ReceiveMessage(readCtx, &sqs.ReceiveMessageInput{
+	result, err := c.conn.ReceiveMessage(readCtx, &sqs.ReceiveMessageInput{
 		QueueUrl:            aws.String(queueURL),
 		MaxNumberOfMessages: limit,
 		WaitTimeSeconds:     defaultWaitTimeSeconds,
@@ -473,7 +474,7 @@ func (c *Client) Close() error {
 	defer c.connMu.Unlock()
 
 	c.logger.Debug("closing SQS client")
-	c.client = nil
+	c.conn = nil
 
 	return nil
 }
@@ -493,7 +494,7 @@ func (c *Client) getQueueURL(ctx context.Context, queueName string) (string, err
 	c.cacheMu.RUnlock()
 
 	// Get queue URL from SQS
-	result, err := c.client.GetQueueUrl(ctx, &sqs.GetQueueUrlInput{
+	result, err := c.conn.GetQueueUrl(ctx, &sqs.GetQueueUrlInput{
 		QueueName: aws.String(queueName),
 	})
 	if err != nil {

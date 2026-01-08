@@ -5,11 +5,16 @@ import (
 	"errors"
 	"testing"
 
+	"github.com/aws/aws-sdk-go-v2/aws"
+	"github.com/aws/aws-sdk-go-v2/service/sqs"
+	"github.com/aws/aws-sdk-go-v2/service/sqs/types"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/trace"
 )
 
+// Test errors - static errors for testing purposes.
 var (
 	errWrappedContextCanceled  = errors.New("operation failed: context canceled")
 	errWrappedDeadlineExceeded = errors.New("timeout: context deadline exceeded")
@@ -54,12 +59,9 @@ func TestClient_UseLogger(t *testing.T) {
 	client.UseLogger(logger)
 	assert.NotNil(t, client.logger)
 
-	// Test with invalid type
 	client.UseLogger("invalid")
-	// Should still be the previous logger
 	assert.Equal(t, logger, client.logger)
 
-	// Test with nil
 	client.UseLogger(nil)
 	assert.Equal(t, logger, client.logger)
 }
@@ -71,12 +73,9 @@ func TestClient_UseMetrics(t *testing.T) {
 	client.UseMetrics(metrics)
 	assert.NotNil(t, client.metrics)
 
-	// Test with invalid type
 	client.UseMetrics("invalid")
-	// Should still be the previous metrics
 	assert.Equal(t, metrics, client.metrics)
 
-	// Test with nil
 	client.UseMetrics(nil)
 	assert.Equal(t, metrics, client.metrics)
 }
@@ -84,13 +83,16 @@ func TestClient_UseMetrics(t *testing.T) {
 func TestClient_UseTracer(t *testing.T) {
 	client := New(&Config{})
 
-	// Test with invalid type
 	client.UseTracer("invalid")
 	assert.Nil(t, client.tracer)
 
-	// Test with nil
 	client.UseTracer(nil)
 	assert.Nil(t, client.tracer)
+
+	// Test with valid tracer
+	tracer := otel.GetTracerProvider().Tracer("test")
+	client.UseTracer(tracer)
+	assert.NotNil(t, client.tracer)
 }
 
 func TestClient_Connect_NoRegion(t *testing.T) {
@@ -99,8 +101,7 @@ func TestClient_Connect_NoRegion(t *testing.T) {
 
 	client.Connect()
 
-	// Client should not be connected without region
-	assert.Nil(t, client.client)
+	assert.Nil(t, client.conn)
 }
 
 func TestClient_Connect_NoLogger(t *testing.T) {
@@ -108,16 +109,17 @@ func TestClient_Connect_NoLogger(t *testing.T) {
 
 	client.Connect()
 
-	// Client should not connect without logger
-	assert.Nil(t, client.client)
+	assert.Nil(t, client.conn)
 }
 
 func TestClient_isConnected(t *testing.T) {
 	client := New(&Config{Region: "us-east-1"})
 	client.UseLogger(NewMockLogger())
 
-	// Not connected initially
 	assert.False(t, client.isConnected())
+
+	client.conn = &mockSQSClient{}
+	assert.True(t, client.isConnected())
 }
 
 func TestClient_Publish_NotConnected(t *testing.T) {
@@ -130,12 +132,42 @@ func TestClient_Publish_NotConnected(t *testing.T) {
 }
 
 func TestClient_Publish_EmptyTopic(t *testing.T) {
-	client := New(&Config{Region: "us-east-1"})
-	client.UseLogger(NewMockLogger())
-	client.UseMetrics(NewMockMetrics())
+	client := newTestClient(&mockSQSClient{})
 
 	err := client.Publish(context.Background(), "", []byte("test message"))
-	assert.ErrorIs(t, err, errClientNotConnected) // Fails because client is nil
+	assert.ErrorIs(t, err, errEmptyQueueName)
+}
+
+func TestClient_Publish_Success(t *testing.T) {
+	mockClient := &mockSQSClient{}
+	client := newTestClient(mockClient)
+
+	err := client.Publish(context.Background(), "test-queue", []byte(`{"test":"data"}`))
+	assert.NoError(t, err)
+}
+
+func TestClient_Publish_GetQueueURLError(t *testing.T) {
+	mockClient := &mockSQSClient{
+		getQueueURLFunc: func(context.Context, *sqs.GetQueueUrlInput) (*sqs.GetQueueUrlOutput, error) {
+			return nil, errMockGetQueueURL
+		},
+	}
+	client := newTestClient(mockClient)
+
+	err := client.Publish(context.Background(), "test-queue", []byte("test"))
+	assert.ErrorIs(t, err, errQueueNotFound)
+}
+
+func TestClient_Publish_SendMessageError(t *testing.T) {
+	mockClient := &mockSQSClient{
+		sendMessageFunc: func(context.Context, *sqs.SendMessageInput) (*sqs.SendMessageOutput, error) {
+			return nil, errMockSendMessage
+		},
+	}
+	client := newTestClient(mockClient)
+
+	err := client.Publish(context.Background(), "test-queue", []byte("test"))
+	assert.Error(t, err)
 }
 
 func TestClient_Subscribe_NotConnected(t *testing.T) {
@@ -144,25 +176,81 @@ func TestClient_Subscribe_NotConnected(t *testing.T) {
 	client.UseMetrics(NewMockMetrics())
 
 	ctx, cancel := context.WithCancel(context.Background())
-	cancel() // Cancel immediately to avoid waiting
+	cancel()
 
 	msg, err := client.Subscribe(ctx, "test-queue")
-
 	require.ErrorIs(t, err, errClientNotConnected)
 	assert.Nil(t, msg)
 }
 
 func TestClient_Subscribe_EmptyTopic(t *testing.T) {
-	client := New(&Config{Region: "us-east-1"})
-	client.UseLogger(NewMockLogger())
-	client.UseMetrics(NewMockMetrics())
+	client := newTestClient(&mockSQSClient{})
 
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	msg, err := client.Subscribe(context.Background(), "")
+	assert.ErrorIs(t, err, errEmptyQueueName)
+	assert.Nil(t, msg)
+}
 
-	msg, err := client.Subscribe(ctx, "")
+func TestClient_Subscribe_Success(t *testing.T) {
+	mockClient := &mockSQSClient{}
+	client := newTestClient(mockClient)
 
-	require.ErrorIs(t, err, errClientNotConnected) // Fails because client is nil
+	msg, err := client.Subscribe(context.Background(), "test-queue")
+	require.NoError(t, err)
+	require.NotNil(t, msg)
+	assert.Equal(t, "test-queue", msg.Topic)
+	assert.Equal(t, `{"test":"data"}`, string(msg.Value))
+}
+
+func TestClient_Subscribe_NoMessages(t *testing.T) {
+	mockClient := &mockSQSClient{
+		receiveMessageFunc: func(context.Context, *sqs.ReceiveMessageInput) (*sqs.ReceiveMessageOutput, error) {
+			return &sqs.ReceiveMessageOutput{Messages: []types.Message{}}, nil
+		},
+	}
+	client := newTestClient(mockClient)
+
+	msg, err := client.Subscribe(context.Background(), "test-queue")
+	assert.NoError(t, err)
+	assert.Nil(t, msg)
+}
+
+func TestClient_Subscribe_GetQueueURLError(t *testing.T) {
+	mockClient := &mockSQSClient{
+		getQueueURLFunc: func(context.Context, *sqs.GetQueueUrlInput) (*sqs.GetQueueUrlOutput, error) {
+			return nil, errMockGetQueueURL
+		},
+	}
+	client := newTestClient(mockClient)
+
+	msg, err := client.Subscribe(context.Background(), "test-queue")
+	assert.ErrorIs(t, err, errQueueNotFound)
+	assert.Nil(t, msg)
+}
+
+func TestClient_Subscribe_ReceiveMessageError(t *testing.T) {
+	mockClient := &mockSQSClient{
+		receiveMessageFunc: func(context.Context, *sqs.ReceiveMessageInput) (*sqs.ReceiveMessageOutput, error) {
+			return nil, errMockReceiveMessage
+		},
+	}
+	client := newTestClient(mockClient)
+
+	msg, err := client.Subscribe(context.Background(), "test-queue")
+	assert.Error(t, err)
+	assert.Nil(t, msg)
+}
+
+func TestClient_Subscribe_ContextCanceled(t *testing.T) {
+	mockClient := &mockSQSClient{
+		receiveMessageFunc: func(context.Context, *sqs.ReceiveMessageInput) (*sqs.ReceiveMessageOutput, error) {
+			return nil, context.Canceled
+		},
+	}
+	client := newTestClient(mockClient)
+
+	msg, err := client.Subscribe(context.Background(), "test-queue")
+	assert.ErrorIs(t, err, context.Canceled)
 	assert.Nil(t, msg)
 }
 
@@ -175,11 +263,29 @@ func TestClient_CreateTopic_NotConnected(t *testing.T) {
 }
 
 func TestClient_CreateTopic_EmptyName(t *testing.T) {
-	client := New(&Config{Region: "us-east-1"})
-	client.UseLogger(NewMockLogger())
+	client := newTestClient(&mockSQSClient{})
 
 	err := client.CreateTopic(context.Background(), "")
-	assert.ErrorIs(t, err, errClientNotConnected) // Fails because client is nil
+	assert.ErrorIs(t, err, errEmptyQueueName)
+}
+
+func TestClient_CreateTopic_Success(t *testing.T) {
+	client := newTestClient(&mockSQSClient{})
+
+	err := client.CreateTopic(context.Background(), "test-queue")
+	assert.NoError(t, err)
+}
+
+func TestClient_CreateTopic_Error(t *testing.T) {
+	mockClient := &mockSQSClient{
+		createQueueFunc: func(context.Context, *sqs.CreateQueueInput) (*sqs.CreateQueueOutput, error) {
+			return nil, errMockCreateQueue
+		},
+	}
+	client := newTestClient(mockClient)
+
+	err := client.CreateTopic(context.Background(), "test-queue")
+	assert.Error(t, err)
 }
 
 func TestClient_DeleteTopic_NotConnected(t *testing.T) {
@@ -191,11 +297,41 @@ func TestClient_DeleteTopic_NotConnected(t *testing.T) {
 }
 
 func TestClient_DeleteTopic_EmptyName(t *testing.T) {
-	client := New(&Config{Region: "us-east-1"})
-	client.UseLogger(NewMockLogger())
+	client := newTestClient(&mockSQSClient{})
 
 	err := client.DeleteTopic(context.Background(), "")
-	assert.ErrorIs(t, err, errClientNotConnected) // Fails because client is nil
+	assert.ErrorIs(t, err, errEmptyQueueName)
+}
+
+func TestClient_DeleteTopic_Success(t *testing.T) {
+	client := newTestClient(&mockSQSClient{})
+
+	err := client.DeleteTopic(context.Background(), "test-queue")
+	assert.NoError(t, err)
+}
+
+func TestClient_DeleteTopic_GetQueueURLError(t *testing.T) {
+	mockClient := &mockSQSClient{
+		getQueueURLFunc: func(context.Context, *sqs.GetQueueUrlInput) (*sqs.GetQueueUrlOutput, error) {
+			return nil, errMockGetQueueURL
+		},
+	}
+	client := newTestClient(mockClient)
+
+	err := client.DeleteTopic(context.Background(), "test-queue")
+	assert.ErrorIs(t, err, errQueueNotFound)
+}
+
+func TestClient_DeleteTopic_DeleteQueueError(t *testing.T) {
+	mockClient := &mockSQSClient{
+		deleteQueueFunc: func(context.Context, *sqs.DeleteQueueInput) (*sqs.DeleteQueueOutput, error) {
+			return nil, errMockDeleteQueue
+		},
+	}
+	client := newTestClient(mockClient)
+
+	err := client.DeleteTopic(context.Background(), "test-queue")
+	assert.Error(t, err)
 }
 
 func TestClient_Query_NotConnected(t *testing.T) {
@@ -203,29 +339,96 @@ func TestClient_Query_NotConnected(t *testing.T) {
 	client.UseLogger(NewMockLogger())
 
 	result, err := client.Query(context.Background(), "test-queue")
-
 	require.ErrorIs(t, err, errClientNotConnected)
 	assert.Nil(t, result)
 }
 
 func TestClient_Query_EmptyQuery(t *testing.T) {
-	client := New(&Config{Region: "us-east-1"})
-	client.UseLogger(NewMockLogger())
+	client := newTestClient(&mockSQSClient{})
 
 	result, err := client.Query(context.Background(), "")
+	assert.ErrorIs(t, err, errEmptyQueueName)
+	assert.Nil(t, result)
+}
 
-	require.ErrorIs(t, err, errClientNotConnected) // Fails because client is nil
+func TestClient_Query_Success(t *testing.T) {
+	mockClient := &mockSQSClient{
+		receiveMessageFunc: func(context.Context, *sqs.ReceiveMessageInput) (*sqs.ReceiveMessageOutput, error) {
+			return &sqs.ReceiveMessageOutput{
+				Messages: []types.Message{
+					{Body: aws.String(`{"id":1}`)},
+					{Body: aws.String(`{"id":2}`)},
+				},
+			}, nil
+		},
+	}
+	client := newTestClient(mockClient)
+
+	result, err := client.Query(context.Background(), "test-queue", int32(5))
+	require.NoError(t, err)
+	assert.Equal(t, `[{"id":1},{"id":2}]`, string(result))
+}
+
+func TestClient_Query_NoMessages(t *testing.T) {
+	mockClient := &mockSQSClient{
+		receiveMessageFunc: func(context.Context, *sqs.ReceiveMessageInput) (*sqs.ReceiveMessageOutput, error) {
+			return &sqs.ReceiveMessageOutput{Messages: []types.Message{}}, nil
+		},
+	}
+	client := newTestClient(mockClient)
+
+	result, err := client.Query(context.Background(), "test-queue")
+	assert.NoError(t, err)
+	assert.Nil(t, result)
+}
+
+func TestClient_Query_GetQueueURLError(t *testing.T) {
+	mockClient := &mockSQSClient{
+		getQueueURLFunc: func(context.Context, *sqs.GetQueueUrlInput) (*sqs.GetQueueUrlOutput, error) {
+			return nil, errMockGetQueueURL
+		},
+	}
+	client := newTestClient(mockClient)
+
+	result, err := client.Query(context.Background(), "test-queue")
+	assert.ErrorIs(t, err, errQueueNotFound)
+	assert.Nil(t, result)
+}
+
+func TestClient_Query_ReceiveMessageError(t *testing.T) {
+	mockClient := &mockSQSClient{
+		receiveMessageFunc: func(context.Context, *sqs.ReceiveMessageInput) (*sqs.ReceiveMessageOutput, error) {
+			return nil, errMockReceiveMessage
+		},
+	}
+	client := newTestClient(mockClient)
+
+	result, err := client.Query(context.Background(), "test-queue")
+	assert.Error(t, err)
 	assert.Nil(t, result)
 }
 
 func TestClient_Close(t *testing.T) {
-	client := New(&Config{Region: "us-east-1"})
-	client.UseLogger(NewMockLogger())
+	client := newTestClient(&mockSQSClient{})
 
 	err := client.Close()
-
 	require.NoError(t, err)
 	assert.False(t, client.isConnected())
+}
+
+func TestClient_getQueueURL_Cached(t *testing.T) {
+	mockClient := &mockSQSClient{}
+	client := newTestClient(mockClient)
+
+	// First call - should call GetQueueUrl
+	url1, err := client.getQueueURL(context.Background(), "test-queue")
+	require.NoError(t, err)
+	assert.Contains(t, url1, "test-queue")
+
+	// Second call - should use cache
+	url2, err := client.getQueueURL(context.Background(), "test-queue")
+	require.NoError(t, err)
+	assert.Equal(t, url1, url2)
 }
 
 func TestParseQueryArgs(t *testing.T) {
@@ -234,61 +437,17 @@ func TestParseQueryArgs(t *testing.T) {
 		args     []any
 		expected int32
 	}{
-		{
-			name:     "no args",
-			args:     nil,
-			expected: defaultQueryMaxMessages,
-		},
-		{
-			name:     "empty args",
-			args:     []any{},
-			expected: defaultQueryMaxMessages,
-		},
-		{
-			name:     "valid int32 limit 1",
-			args:     []any{int32(1)},
-			expected: 1,
-		},
-		{
-			name:     "valid int32 limit 5",
-			args:     []any{int32(5)},
-			expected: 5,
-		},
-		{
-			name:     "valid int32 limit 10",
-			args:     []any{int32(10)},
-			expected: 10,
-		},
-		{
-			name:     "int32 limit exceeds max",
-			args:     []any{int32(15)},
-			expected: defaultQueryMaxMessages,
-		},
-		{
-			name:     "invalid type int",
-			args:     []any{5},
-			expected: defaultQueryMaxMessages,
-		},
-		{
-			name:     "invalid type string",
-			args:     []any{"invalid"},
-			expected: defaultQueryMaxMessages,
-		},
-		{
-			name:     "int32 zero",
-			args:     []any{int32(0)},
-			expected: defaultQueryMaxMessages,
-		},
-		{
-			name:     "int32 negative",
-			args:     []any{int32(-1)},
-			expected: defaultQueryMaxMessages,
-		},
-		{
-			name:     "multiple args uses first",
-			args:     []any{int32(5), int32(3)},
-			expected: 5,
-		},
+		{"no args", nil, defaultQueryMaxMessages},
+		{"empty args", []any{}, defaultQueryMaxMessages},
+		{"valid int32 limit 1", []any{int32(1)}, 1},
+		{"valid int32 limit 5", []any{int32(5)}, 5},
+		{"valid int32 limit 10", []any{int32(10)}, 10},
+		{"int32 limit exceeds max", []any{int32(15)}, defaultQueryMaxMessages},
+		{"invalid type int", []any{5}, defaultQueryMaxMessages},
+		{"invalid type string", []any{"invalid"}, defaultQueryMaxMessages},
+		{"int32 zero", []any{int32(0)}, defaultQueryMaxMessages},
+		{"int32 negative", []any{int32(-1)}, defaultQueryMaxMessages},
+		{"multiple args uses first", []any{int32(5), int32(3)}, 5},
 	}
 
 	for _, tt := range tests {
@@ -305,46 +464,14 @@ func TestIsContextCanceled(t *testing.T) {
 		err      error
 		expected bool
 	}{
-		{
-			name:     "nil error",
-			err:      nil,
-			expected: false,
-		},
-		{
-			name:     "context canceled",
-			err:      context.Canceled,
-			expected: true,
-		},
-		{
-			name:     "context deadline exceeded",
-			err:      context.DeadlineExceeded,
-			expected: true,
-		},
-		{
-			name:     "wrapped context canceled",
-			err:      errWrappedContextCanceled,
-			expected: true,
-		},
-		{
-			name:     "wrapped deadline exceeded",
-			err:      errWrappedDeadlineExceeded,
-			expected: true,
-		},
-		{
-			name:     "canceled keyword",
-			err:      errRequestCanceled,
-			expected: true,
-		},
-		{
-			name:     "other error",
-			err:      errClientNotConnected,
-			expected: false,
-		},
-		{
-			name:     "generic error",
-			err:      errGeneric,
-			expected: false,
-		},
+		{"nil error", nil, false},
+		{"context canceled", context.Canceled, true},
+		{"context deadline exceeded", context.DeadlineExceeded, true},
+		{"wrapped context canceled", errWrappedContextCanceled, true},
+		{"wrapped deadline exceeded", errWrappedDeadlineExceeded, true},
+		{"canceled keyword", errRequestCanceled, true},
+		{"other error", errClientNotConnected, false},
+		{"generic error", errGeneric, false},
 	}
 
 	for _, tt := range tests {
@@ -361,46 +488,14 @@ func TestIsConnectionError(t *testing.T) {
 		err      error
 		expected bool
 	}{
-		{
-			name:     "nil error",
-			err:      nil,
-			expected: false,
-		},
-		{
-			name:     "connection refused",
-			err:      errConnectionRefused,
-			expected: true,
-		},
-		{
-			name:     "no such host",
-			err:      errNoSuchHost,
-			expected: true,
-		},
-		{
-			name:     "network unreachable",
-			err:      errNetworkUnreachable,
-			expected: true,
-		},
-		{
-			name:     "max attempts exceeded",
-			err:      errMaxAttemptsExceeded,
-			expected: true,
-		},
-		{
-			name:     "queue not found",
-			err:      errQueueNotFound,
-			expected: false,
-		},
-		{
-			name:     "client not connected",
-			err:      errClientNotConnected,
-			expected: false,
-		},
-		{
-			name:     "generic error",
-			err:      errGeneric,
-			expected: false,
-		},
+		{"nil error", nil, false},
+		{"connection refused", errConnectionRefused, true},
+		{"no such host", errNoSuchHost, true},
+		{"network unreachable", errNetworkUnreachable, true},
+		{"max attempts exceeded", errMaxAttemptsExceeded, true},
+		{"queue not found", errQueueNotFound, false},
+		{"client not connected", errClientNotConnected, false},
+		{"generic error", errGeneric, false},
 	}
 
 	for _, tt := range tests {
@@ -415,7 +510,6 @@ func TestClient_startTrace(t *testing.T) {
 	client := New(&Config{Region: "us-east-1"})
 
 	ctx, span := client.startTrace(context.Background(), "test-span")
-
 	assert.NotNil(t, ctx)
 	assert.NotNil(t, span)
 	assert.Implements(t, (*trace.Span)(nil), span)
@@ -424,7 +518,6 @@ func TestClient_startTrace(t *testing.T) {
 }
 
 func TestErrors(t *testing.T) {
-	// Test error messages
 	assert.Equal(t, "sqs client not connected", errClientNotConnected.Error())
 	assert.Equal(t, "sqs queue not found", errQueueNotFound.Error())
 	assert.Equal(t, "queue name cannot be empty", errEmptyQueueName.Error())
