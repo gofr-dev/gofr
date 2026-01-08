@@ -5,6 +5,7 @@ import (
 	"errors"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
@@ -17,29 +18,49 @@ import (
 	"gofr.dev/pkg/gofr/datasource/pubsub"
 )
 
-const (
-	defaultRetryDuration = 5 * time.Second
-	defaultQueryTimeout  = 30 * time.Second
-	defaultMaxMessages   = int32(10)
-)
-
 var (
 	errClientNotConnected = errors.New("sqs client not connected")
-	errQueueNotFound = errors.New("sqs queue not found")
-	errEmptyQueueName = errors.New("queue name cannot be empty")
+	errQueueNotFound      = errors.New("sqs queue not found")
+	errEmptyQueueName     = errors.New("queue name cannot be empty")
+)
+
+// Config holds the configuration for the SQS client.
+type Config struct {
+	Region string // Region is the AWS region where the SQS queue is located.Example: "us-east-1", "eu-west-1"
+
+	Endpoint string // Endpoint is the custom endpoint URL for SQS.
+
+	AccessKeyID string // AccessKeyID is the AWS access key ID for authentication.
+
+	SecretAccessKey string // SecretAccessKey is the AWS secret access key for authentication.
+
+	SessionToken string // SessionToken is the AWS session token for temporary credentials.
+}
+
+// Internal configuration with sensible defaults managed by the framework.
+const (
+	defaultMaxMessages       = int32(1)
+	defaultWaitTimeSeconds   = int32(20)
+	defaultVisibilityTimeout = int32(30)
+	defaultRetryDuration     = 5 * time.Second
+	defaultQueryTimeout      = 30 * time.Second
+	defaultQueryMaxMessages  = int32(10)
 )
 
 // Client represents an SQS client that implements the pubsub.Client interface.
 type Client struct {
 	client  *sqs.Client
 	cfg     *Config
-	logger  Logger
+	logger  pubsub.Logger
 	metrics Metrics
 	tracer  trace.Tracer
 
 	// queueURLCache caches queue URLs to avoid repeated GetQueueUrl API calls.
 	queueURLCache map[string]string
 	cacheMu       sync.RWMutex
+
+	connMu     sync.Mutex
+	isRetrying atomic.Bool
 }
 
 // New creates a new SQS client with the provided configuration.
@@ -49,8 +70,6 @@ func New(cfg *Config) *Client {
 		cfg = &Config{}
 	}
 
-	cfg.setDefaults()
-
 	return &Client{
 		cfg:           cfg,
 		queueURLCache: make(map[string]string),
@@ -59,7 +78,7 @@ func New(cfg *Config) *Client {
 
 // UseLogger sets the logger for the SQS client.
 func (c *Client) UseLogger(logger any) {
-	if l, ok := logger.(Logger); ok {
+	if l, ok := logger.(pubsub.Logger); ok {
 		c.logger = l
 	}
 }
@@ -80,6 +99,9 @@ func (c *Client) UseTracer(tracer any) {
 
 // Connect establishes a connection to AWS SQS.
 func (c *Client) Connect() {
+	c.connMu.Lock()
+	defer c.connMu.Unlock()
+
 	if c.logger == nil {
 		return
 	}
@@ -116,7 +138,10 @@ func (c *Client) Connect() {
 		c.logger.Errorf("failed to connect to SQS: %v", err)
 		c.client = nil
 
-		go c.retryConnect()
+		// Only start retry goroutine if not already retrying
+		if c.isRetrying.CompareAndSwap(false, true) {
+			go c.retryConnect()
+		}
 
 		return
 	}
@@ -145,29 +170,62 @@ func (c *Client) loadAWSConfig(ctx context.Context) (aws.Config, error) {
 
 // retryConnect attempts to reconnect to SQS on failure.
 func (c *Client) retryConnect() {
-	retryDuration := c.cfg.RetryDuration
-	if retryDuration <= 0 {
-		retryDuration = defaultRetryDuration
-	}
+	defer c.isRetrying.Store(false)
 
 	for {
-		time.Sleep(retryDuration)
+		time.Sleep(defaultRetryDuration)
 
 		c.logger.Debugf("retrying connection to SQS...")
 
-		c.Connect()
+		c.connectInternal()
 
-		if c.client != nil {
-			c.logger.Log("successfully reconnected to SQS")
+		if c.isConnected() {
+			c.logger.Logf("successfully reconnected to SQS")
 			return
 		}
 	}
 }
 
+// connectInternal establishes connection without spawning retry goroutine.
+func (c *Client) connectInternal() {
+	c.connMu.Lock()
+	defer c.connMu.Unlock()
+
+	ctx := context.Background()
+
+	awsCfg, err := c.loadAWSConfig(ctx)
+	if err != nil {
+		return
+	}
+
+	opts := func(o *sqs.Options) {
+		if c.cfg.Endpoint != "" {
+			o.BaseEndpoint = aws.String(c.cfg.Endpoint)
+		}
+	}
+
+	c.client = sqs.NewFromConfig(awsCfg, opts)
+
+	_, err = c.client.ListQueues(ctx, &sqs.ListQueuesInput{
+		MaxResults: aws.Int32(1),
+	})
+	if err != nil {
+		c.client = nil
+	}
+}
+
+// isConnected checks if the client is connected.
+func (c *Client) isConnected() bool {
+	c.connMu.Lock()
+	defer c.connMu.Unlock()
+
+	return c.client != nil
+}
+
 // Publish sends a message to the specified SQS queue.
 // The topic parameter is the queue name (not the full URL).
 func (c *Client) Publish(ctx context.Context, topic string, message []byte) error {
-	if c.client == nil {
+	if !c.isConnected() {
 		return errClientNotConnected
 	}
 
@@ -193,21 +251,17 @@ func (c *Client) Publish(ctx context.Context, topic string, message []byte) erro
 		MessageBody: aws.String(string(message)),
 	}
 
-	if c.cfg.DelaySeconds > 0 {
-		input.DelaySeconds = c.cfg.DelaySeconds
-	}
-
 	result, err := c.client.SendMessage(ctx, input)
 	if err != nil {
 		c.logger.Errorf("failed to publish message to queue %s: %v", topic, err)
 		return err
 	}
 
-	c.logger.Debug(&Log{
+	c.logger.Debug(&pubsub.Log{
 		Mode:          "PUB",
 		CorrelationID: span.SpanContext().TraceID().String(),
-		MessageValue:  truncateMessage(string(message)),
-		Queue:         topic,
+		MessageValue:  string(message),
+		Topic:         topic,
 		Host:          c.cfg.Region,
 		PubSubBackend: "SQS",
 		Time:          time.Since(start).Microseconds(),
@@ -223,8 +277,8 @@ func (c *Client) Publish(ctx context.Context, topic string, message []byte) erro
 // Subscribe receives a single message from the specified SQS queue.
 // The topic parameter is the queue name (not the full URL).
 func (c *Client) Subscribe(ctx context.Context, topic string) (*pubsub.Message, error) {
-	if c.client == nil {
-		time.Sleep(c.cfg.RetryDuration)
+	if !c.isConnected() {
+		time.Sleep(defaultRetryDuration)
 		return nil, errClientNotConnected
 	}
 
@@ -239,8 +293,9 @@ func (c *Client) Subscribe(ctx context.Context, topic string) (*pubsub.Message, 
 
 	queueURL, err := c.getQueueURL(ctx, topic)
 	if err != nil {
-		if !isContextCanceled(err) {
-			c.logger.Errorf("failed to get queue URL for %s: %v", topic, err)
+		// Don't log for context cancellation or if it's a transient error
+		if !isContextCanceled(err) && !isConnectionError(err) {
+			c.logger.Errorf("queue %s not found: %v", topic, err)
 		}
 
 		return nil, err
@@ -250,9 +305,9 @@ func (c *Client) Subscribe(ctx context.Context, topic string) (*pubsub.Message, 
 
 	input := &sqs.ReceiveMessageInput{
 		QueueUrl:            aws.String(queueURL),
-		MaxNumberOfMessages: 1, // Subscribe returns one message at a time
-		WaitTimeSeconds:     c.cfg.WaitTimeSeconds,
-		VisibilityTimeout:   c.cfg.VisibilityTimeout,
+		MaxNumberOfMessages: defaultMaxMessages,
+		WaitTimeSeconds:     defaultWaitTimeSeconds,
+		VisibilityTimeout:   defaultVisibilityTimeout,
 		MessageSystemAttributeNames: []types.MessageSystemAttributeName{
 			types.MessageSystemAttributeNameAll,
 		},
@@ -260,7 +315,8 @@ func (c *Client) Subscribe(ctx context.Context, topic string) (*pubsub.Message, 
 
 	result, err := c.client.ReceiveMessage(ctx, input)
 	if err != nil {
-		if !isContextCanceled(err) {
+		// Only log non-transient errors, avoid flooding logs
+		if !isContextCanceled(err) && !isConnectionError(err) {
 			c.logger.Errorf("failed to receive message from queue %s: %v", topic, err)
 		}
 
@@ -282,16 +338,14 @@ func (c *Client) Subscribe(ctx context.Context, topic string) (*pubsub.Message, 
 	msg.Committer = newMessage(
 		*sqsMsg.ReceiptHandle,
 		queueURL,
-		*sqsMsg.MessageId,
 		c.client,
-		c.logger,
 	)
 
-	c.logger.Debug(&Log{
+	c.logger.Debug(&pubsub.Log{
 		Mode:          "SUB",
 		CorrelationID: span.SpanContext().TraceID().String(),
-		MessageValue:  truncateMessage(*sqsMsg.Body),
-		Queue:         topic,
+		MessageValue:  string(msg.Value),
+		Topic:         topic,
 		Host:          c.cfg.Region,
 		PubSubBackend: "SQS",
 		Time:          duration.Microseconds(),
@@ -305,7 +359,7 @@ func (c *Client) Subscribe(ctx context.Context, topic string) (*pubsub.Message, 
 // CreateTopic creates a new SQS queue with the specified name.
 // In SQS terminology, this creates a queue, not a topic.
 func (c *Client) CreateTopic(ctx context.Context, name string) error {
-	if c.client == nil {
+	if !c.isConnected() {
 		return errClientNotConnected
 	}
 
@@ -330,7 +384,7 @@ func (c *Client) CreateTopic(ctx context.Context, name string) error {
 
 // DeleteTopic deletes an SQS queue with the specified name.
 func (c *Client) DeleteTopic(ctx context.Context, name string) error {
-	if c.client == nil {
+	if !c.isConnected() {
 		return errClientNotConnected
 	}
 
@@ -364,9 +418,9 @@ func (c *Client) DeleteTopic(ctx context.Context, name string) error {
 }
 
 // Query retrieves multiple messages from an SQS queue.
-// Args: [0] = limit (int, max 10).
+// Args: [0] = limit (int32, max 10).
 func (c *Client) Query(ctx context.Context, query string, args ...any) ([]byte, error) {
-	if c.client == nil {
+	if !c.isConnected() {
 		return nil, errClientNotConnected
 	}
 
@@ -379,7 +433,7 @@ func (c *Client) Query(ctx context.Context, query string, args ...any) ([]byte, 
 		return nil, err
 	}
 
-	limit := c.parseQueryArgs(args...)
+	limit := parseQueryArgs(args...)
 
 	// Use provided context or add default timeout
 	readCtx := ctx
@@ -393,7 +447,7 @@ func (c *Client) Query(ctx context.Context, query string, args ...any) ([]byte, 
 	result, err := c.client.ReceiveMessage(readCtx, &sqs.ReceiveMessageInput{
 		QueueUrl:            aws.String(queueURL),
 		MaxNumberOfMessages: limit,
-		WaitTimeSeconds:     c.cfg.WaitTimeSeconds,
+		WaitTimeSeconds:     defaultWaitTimeSeconds,
 	})
 	if err != nil {
 		return nil, err
@@ -415,6 +469,9 @@ func (c *Client) Query(ctx context.Context, query string, args ...any) ([]byte, 
 // Close closes the SQS client connection.
 // SQS client doesn't require explicit closing, but we implement this for interface compliance.
 func (c *Client) Close() error {
+	c.connMu.Lock()
+	defer c.connMu.Unlock()
+
 	c.logger.Debug("closing SQS client")
 	c.client = nil
 
@@ -458,25 +515,14 @@ func (*Client) startTrace(ctx context.Context, name string) (context.Context, tr
 }
 
 // parseQueryArgs parses the query arguments for Query method.
-func (*Client) parseQueryArgs(args ...any) int32 {
+func parseQueryArgs(args ...any) int32 {
 	if len(args) > 0 {
 		if l, ok := args[0].(int32); ok && l > 0 && l <= 10 {
 			return l
 		}
 	}
 
-	return defaultMaxMessages
-}
-
-// truncateMessage truncates the message for logging purposes.
-func truncateMessage(msg string) string {
-	const maxLen = 100
-
-	if len(msg) > maxLen {
-		return msg[:maxLen] + "..."
-	}
-
-	return msg
+	return defaultQueryMaxMessages
 }
 
 // isContextCanceled checks if the error is due to context cancellation.
@@ -497,4 +543,19 @@ func isContextCanceled(err error) bool {
 	return strings.Contains(errMsg, "context canceled") ||
 		strings.Contains(errMsg, "context deadline exceeded") ||
 		strings.Contains(errMsg, "canceled")
+}
+
+// isConnectionError checks if the error is a connection-related error.
+// These errors are transient and don't need to be logged as errors during normal retry flow.
+func isConnectionError(err error) bool {
+	if err == nil {
+		return false
+	}
+
+	errMsg := err.Error()
+
+	return strings.Contains(errMsg, "connection refused") ||
+		strings.Contains(errMsg, "no such host") ||
+		strings.Contains(errMsg, "network is unreachable") ||
+		strings.Contains(errMsg, "exceeded maximum number of attempts")
 }

@@ -3,64 +3,29 @@
 
 package sqs
 
-import (
-	"context"
-)
+import "context"
 
-// MockLogger is a mock implementation of Logger interface.
-type MockLogger struct {
-	logs []string
-}
+// MockLogger is a mock implementation of pubsub.Logger interface.
+type MockLogger struct{}
 
 // NewMockLogger creates a new MockLogger.
 func NewMockLogger() *MockLogger {
-	return &MockLogger{
-		logs: make([]string, 0),
-	}
+	return &MockLogger{}
 }
 
-func (m *MockLogger) Debug(args ...any) {
-	// no-op
-}
-
-func (m *MockLogger) Debugf(pattern string, args ...any) {
-	// no-op
-}
-
-func (m *MockLogger) Log(args ...any) {
-	// no-op
-}
-
-func (m *MockLogger) Logf(pattern string, args ...any) {
-	// no-op
-}
-
-func (m *MockLogger) Error(args ...any) {
-	// no-op
-}
-
-func (m *MockLogger) Errorf(pattern string, args ...any) {
-	// no-op
-}
+func (*MockLogger) Debug(...any)            {}
+func (*MockLogger) Debugf(string, ...any)   {}
+func (*MockLogger) Log(...any)              {}
+func (*MockLogger) Logf(string, ...any)     {}
+func (*MockLogger) Error(...any)            {}
+func (*MockLogger) Errorf(string, ...any)   {}
 
 // MockMetrics is a mock implementation of Metrics interface.
-type MockMetrics struct {
-	counters map[string]int
-}
+type MockMetrics struct{}
 
 // NewMockMetrics creates a new MockMetrics.
 func NewMockMetrics() *MockMetrics {
-	return &MockMetrics{
-		counters: make(map[string]int),
-	}
+	return &MockMetrics{}
 }
 
-func (m *MockMetrics) IncrementCounter(ctx context.Context, name string, labels ...string) {
-	m.counters[name]++
-}
-
-// GetCounter returns the count for a specific counter.
-func (m *MockMetrics) GetCounter(name string) int {
-	return m.counters[name]
-}
-
+func (*MockMetrics) IncrementCounter(context.Context, string, ...string) {}
