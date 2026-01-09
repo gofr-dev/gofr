@@ -113,6 +113,9 @@ func (cb *circuitBreaker) startHealthChecks() {
 		if cb.isOpen() {
 			go func() {
 				if cb.healthCheck(context.TODO()) {
+					cb.mu.Lock()
+					defer cb.mu.Unlock()
+
 					cb.resetCircuit()
 				}
 			}()
@@ -173,9 +176,21 @@ func (cb *CircuitBreakerConfig) AddOption(h HTTP) HTTP {
 }
 
 func (cb *circuitBreaker) tryCircuitRecovery() bool {
-	if time.Since(cb.lastChecked) > cb.interval && cb.healthCheck(context.TODO()) {
-		cb.resetCircuit()
+	cb.mu.Lock()
+	defer cb.mu.Unlock()
+
+	if cb.state == ClosedState {
 		return true
+	}
+
+	if time.Since(cb.lastChecked) > cb.interval {
+		// Update lastChecked to prevent busy loop of health checks from other requests
+		cb.lastChecked = time.Now()
+
+		if cb.healthCheck(context.TODO()) {
+			cb.resetCircuit()
+			return true
+		}
 	}
 
 	return false
