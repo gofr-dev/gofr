@@ -649,8 +649,7 @@ func main() {
 
 {% /table %}
 
-> **Note**: SQS queues must be created before publishing or subscribing. Use AWS CLI, AWS Console, or the `CreateTopic` method in migrations to create queues programmatically.
-> **Note**: GoFr supports Standard Queues by default. Advanced features like Dead Letter Queues (DLQ) and Broadcast (SNS) can be configured at the infrastructure level.
+> **Note**: SQS queues must be created before publishing or subscribing. Use AWS CLI, AWS Console, or the `CreateTopic` method in migrations to create queues programmatically. GoFr supports Standard Queues by default—FIFO queues are not currently supported. Advanced features like Dead Letter Queues (DLQ) and Broadcast (SNS) can be configured at the infrastructure level.
 
 
 ## Subscribing
