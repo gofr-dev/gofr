@@ -156,7 +156,7 @@ func InitDatabase(ctx *gofr.Context) {
 INFO [10:02:18] Database connection is ready Host: localhost
 ```
 
-***3. Cache intialized  -*** Indicates that the cache client is ready and available.
+***3. Cache initialized  -*** Indicates that the cache client is ready and available.
 
 **Code Example**
 ```Go
@@ -334,7 +334,7 @@ func FetchAnalytics(ctx *gofr.Context) (interface{}, error) {
 ```
 **Output**
 ```Console
-ERRO [10:20:01] DB Query Timeout: Analytics fetch took > 3000ms. Canceling operation.
+ERROR [10:20:01] DB Query Timeout: Analytics fetch took > 3000ms. Canceling operation.
 ```
 ***2. 500 Internal Server Errors -*** An unexpected condition was encountered on the server side that prevented it from fulfilling the incoming request.
 
@@ -350,7 +350,7 @@ func ProcessPayment(ctx *gofr.Context) (interface{}, error) {
 ```
 **Output**
 ```Console
-ERRO [10:20:02] HTTP 500 Response: Payment gateway unreachable. Request ID: req_99
+ERROR [10:20:02] HTTP 500 Response: Payment gateway unreachable. Request ID: req_99
 ```
 
 ***3. null pointer exceptions -*** The code attempted to dereference a memory address that does not point to a valid object, causing a runtime panic.
@@ -371,7 +371,7 @@ func GetUserProfile(ctx *gofr.Context) (interface{}, error) {
 ```
 **Output**
 ```Console
-ERRO [10:20:03] Runtime Safety: Attempted to access methods on a nil 'User' object. Skipping.
+ERROR [10:20:03] Runtime Safety: Attempted to access methods on a nil 'User' object. Skipping.
 ```
 
 #### **Examples of when not to use**
