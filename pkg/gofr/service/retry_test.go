@@ -161,7 +161,7 @@ func TestRetryProvider_Patch_WithError(t *testing.T) {
 		checkAuthHeaders(t, r)
 		assert.Equal(t, http.MethodPatch, r.Method)
 
-		w.WriteHeader(http.StatusInternalServerError)
+		w.WriteHeader(http.StatusServiceUnavailable)
 	}))
 	defer server.Close()
 
@@ -175,7 +175,7 @@ func TestRetryProvider_Patch_WithError(t *testing.T) {
 
 	defer resp.Body.Close()
 
-	assert.Equal(t, http.StatusInternalServerError, resp.StatusCode)
+	assert.Equal(t, http.StatusServiceUnavailable, resp.StatusCode)
 }
 
 func TestRetryProvider_PatchWithHeaders(t *testing.T) {
@@ -228,7 +228,7 @@ func TestRetryProvider_Metrics(t *testing.T) {
 
 	// Create a mock HTTP server that fails
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		w.WriteHeader(http.StatusInternalServerError)
+		w.WriteHeader(http.StatusServiceUnavailable)
 	}))
 	defer server.Close()
 
@@ -242,5 +242,5 @@ func TestRetryProvider_Metrics(t *testing.T) {
 
 	defer resp.Body.Close()
 
-	assert.Equal(t, http.StatusInternalServerError, resp.StatusCode)
+	assert.Equal(t, http.StatusServiceUnavailable, resp.StatusCode)
 }

@@ -400,7 +400,7 @@ func TestHTTPService_createAndSendRequestServerError(t *testing.T) {
 	ctx := t.Context()
 
 	metrics.EXPECT().RecordHistogram(gomock.Any(), "app_http_service_response", gomock.Any(), "path", gomock.Any(),
-		"method", http.MethodPost, "status", fmt.Sprintf("%v", http.StatusInternalServerError))
+		"method", http.MethodPost, "status", fmt.Sprintf("%v", http.StatusServiceUnavailable))
 
 	// when params value is of type []string then last value is sent in request
 	resp, err := service.createAndSendRequest(ctx,

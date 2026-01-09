@@ -187,10 +187,10 @@ func (h *httpService) createAndSendRequest(ctx context.Context, method string, p
 	log.ResponseTime = respTime.Microseconds()
 
 	if err != nil {
-		log.ResponseCode = http.StatusInternalServerError
+		log.ResponseCode = http.StatusServiceUnavailable
 		h.Log(&ErrorLog{Log: log, ErrorMessage: err.Error()})
 
-		h.updateMetrics(clientTraceCtx, method, respTime.Seconds(), http.StatusInternalServerError)
+		h.updateMetrics(clientTraceCtx, method, respTime.Seconds(), http.StatusServiceUnavailable)
 
 		return resp, err
 	}

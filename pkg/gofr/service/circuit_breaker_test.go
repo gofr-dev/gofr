@@ -693,7 +693,7 @@ func TestCircuitBreaker_HTTP500_TripsCircuit(t *testing.T) {
 	// 1. First call returns 500. Failure count becomes 1.
 	resp, err := httpServiceWithCB.Get(t.Context(), "error-500", nil)
 	require.NoError(t, err) // 500 is not an error returned by Get
-	assert.Equal(t, http.StatusInternalServerError, resp.StatusCode)
+	assert.Equal(t, http.StatusServiceUnavailable, resp.StatusCode)
 	resp.Body.Close()
 
 	// 2. Second call returns 500. Failure count becomes 2. Threshold (1) exceeded. Circuit Opens immediately.
@@ -731,7 +731,7 @@ func (*customTransport) RoundTrip(r *http.Request) (*http.Response, error) {
 	if r.URL.Path == "/error-500" {
 		return &http.Response{
 			Body:       io.NopCloser(bytes.NewBufferString("Internal Server Error")),
-			StatusCode: http.StatusInternalServerError,
+			StatusCode: http.StatusServiceUnavailable,
 			Request:    r,
 		}, nil
 	}

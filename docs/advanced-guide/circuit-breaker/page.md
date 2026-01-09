@@ -20,6 +20,14 @@ The circuit breaker tracks consecutive failed requests for a downstream service.
 
 > GoFr's circuit breaker implementation does not use a **Half-Open** state. Instead, it relies on periodic asynchronous health checks to determine service recovery.
 
+## Failure Conditions
+
+The Circuit Breaker counts a request as "failed" if:
+1. An error occurs during the HTTP request (e.g., network timeout, connection refused).
+2. The response status code is **greater than 500** (e.g., 502, 503, 504).
+
+> **Note:** HTTP 500 Internal Server Error is **NOT** counted as a failure for the circuit breaker. This distinguishes between application bugs (500) and service availability issues (> 500).
+
 ## Health Check Requirement
 
 For the Circuit Breaker to recover from an **Open** state, the downstream service **must** expose a health check endpoint that returns a `200 OK` status code.
@@ -43,7 +51,7 @@ When using both Retry and Circuit Breaker patterns, the **order of wrapping** is
 > [!IMPORTANT]
 > Always ensure `Retry` is the outer layer by providing the `CircuitBreakerConfig` **before** the `RetryConfig` in the `AddHTTPService` options.
 
-> NOTE: Retries only occur when the target service responds with a 500 Internal Server Error. Errors like 400 Bad Request or 404 Not Found are considered non-transient and will not trigger retries.
+> NOTE: Retries only occur when the target service responds with a status code > 500 (e.g., 502 Bad Gateway, 503 Service Unavailable). 500 Internal Server Error and client errors (4xx) are considered non-transient or bug-related and will not trigger retries.
 ## Usage
 
 ```go
