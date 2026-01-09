@@ -232,8 +232,6 @@ func encodeQueryParameters(req *http.Request, queryParams map[string]any) {
 	req.URL.RawQuery = q.Encode()
 }
 
-
-
 type attributesOption map[string]string
 
 func (a attributesOption) AddOption(h HTTP) HTTP {
