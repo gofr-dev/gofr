@@ -2,7 +2,7 @@
 
 GoFr automatically collects and publishes various metrics to help you monitor your application's health and performance. These metrics are exposed in Prometheus format on the metrics port (default: `2121`) at the `/metrics` endpoint.
 
-You can also visualize these metrics using our [Grafana Dashboard](https://grafana.com/grafana/dashboards/19905-gofr-dashboard/).
+You can find the dashboard source in the [GoFr repository](https://github.com/gofr-dev/gofr/tree/main/examples/http-server/docker/provisioning/dashboards/gofr-dashboard).
 
 ## Default Metrics
 

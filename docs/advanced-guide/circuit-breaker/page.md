@@ -18,8 +18,17 @@ The circuit breaker tracks consecutive failed requests for a downstream service.
 
 - **Interval:** Once the circuit is open, GoFr starts a background goroutine that periodically checks the health of the service by making requests to its aliveness endpoint (by default: `/.well-known/alive`) at the specified interval. When the service is deemed healthy again, the circuit breaker transitions directly from **Open** to **Closed**, allowing requests to resume.
 
-> [!NOTE]
 > GoFr's circuit breaker implementation does not use a **Half-Open** state. Instead, it relies on periodic asynchronous health checks to determine service recovery.
+
+## Health Check Requirement
+
+For the Circuit Breaker to recover from an **Open** state, the downstream service **must** expose a health check endpoint that returns a `200 OK` status code.
+
+- **Default Endpoint:** `/.well-known/alive`
+- **Custom Endpoint:** Can be configured using `service.HealthConfig`.
+
+> [!WARNING]
+> If the downstream service does not have a valid health check endpoint (returns 404 or other errors), the Circuit Breaker will **never recover** and will remain permanently Open. Ensure your services implement the health endpoint correctly.
 
 ## Interaction with Retry
 
