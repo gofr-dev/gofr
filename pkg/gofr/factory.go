@@ -20,21 +20,10 @@ func New() *App {
 	app.container = container.NewContainer(app.Config)
 
 	app.initTracer()
-
-	// Metrics Server
-	port, err := strconv.Atoi(app.Config.Get("METRICS_PORT"))
-	if err != nil || port <= 0 {
-		port = defaultMetricPort
-	}
-
-	if !isPortAvailable(port) {
-		app.container.Logger.Fatalf("metrics port %d is blocked or unreachable", port)
-	}
-
-	app.metricServer = newMetricServer(port)
+	app.initMetricsServer()
 
 	// HTTP Server
-	port, err = strconv.Atoi(app.Config.Get("HTTP_PORT"))
+	port, err := strconv.Atoi(app.Config.Get("HTTP_PORT"))
 	if err != nil || port <= 0 {
 		port = defaultHTTPPort
 	}
@@ -92,4 +81,26 @@ func NewCMD() *App {
 	app.initTracer()
 
 	return app
+}
+
+// initMetricsServer initializes the metrics server based on configuration.
+// If METRICS_PORT is explicitly set to 0, the metrics server is disabled.
+func (a *App) initMetricsServer() {
+	metricsPortStr := a.Config.Get("METRICS_PORT")
+
+	if metricsPortStr == "0" {
+		a.container.Logger.Logf("Metrics server is disabled (METRICS_PORT=0)")
+		return
+	}
+
+	port, err := strconv.Atoi(metricsPortStr)
+	if err != nil || port <= 0 {
+		port = defaultMetricPort
+	}
+
+	if !isPortAvailable(port) {
+		a.container.Logger.Fatalf("metrics port %d is blocked or unreachable", port)
+	}
+
+	a.metricServer = newMetricServer(port)
 }
