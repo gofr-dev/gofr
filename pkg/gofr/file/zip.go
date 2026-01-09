@@ -15,8 +15,8 @@ const (
 )
 
 var (
-	errMaxFileSize    = errors.New("uncompressed file is greater than file size limit of 100MBs")
-	errPathTraversal  = errors.New("invalid file path: path traversal attempt detected")
+	errMaxFileSize   = errors.New("uncompressed file is greater than file size limit of 100MBs")
+	errPathTraversal = errors.New("invalid file path: path traversal attempt detected")
 )
 
 type Zip struct {
