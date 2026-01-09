@@ -218,6 +218,10 @@ func TestNewZip_PathTraversal_Error(t *testing.T) {
 		filename string
 	}{
 		{
+			name:     "absolute path unix",
+			filename: "/etc/passwd",
+		},
+		{
 			name:     "path traversal with parent directory",
 			filename: "../etc/passwd",
 		},
@@ -252,7 +256,8 @@ func TestNewZip_PathTraversal_Error(t *testing.T) {
 			z, err := NewZip(zipContent.Bytes())
 
 			require.Error(t, err)
-			assert.Equal(t, errPathTraversal, err)
+			require.ErrorIs(t, err, errPathTraversal)
+			assert.Contains(t, err.Error(), tt.filename)
 			assert.Nil(t, z)
 		})
 	}
@@ -326,7 +331,8 @@ func TestCreateLocalCopies_PathTraversal_Error(t *testing.T) {
 			err := mockZip.CreateLocalCopies(destDir)
 
 			require.Error(t, err)
-			assert.Equal(t, errPathTraversal, err)
+			require.ErrorIs(t, err, errPathTraversal)
+			assert.Contains(t, err.Error(), tt.filename)
 		})
 	}
 }

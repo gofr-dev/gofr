@@ -4,6 +4,7 @@ import (
 	"archive/zip"
 	"bytes"
 	"errors"
+	"fmt"
 	"io"
 	"os"
 	"path/filepath"
@@ -15,8 +16,8 @@ const (
 )
 
 var (
-	errMaxFileSize    = errors.New("uncompressed file is greater than file size limit of 100MBs")
-	errPathTraversal  = errors.New("invalid file path: path traversal attempt detected")
+	errMaxFileSize   = errors.New("uncompressed file is greater than file size limit of 100MBs")
+	errPathTraversal = errors.New("path traversal attempt detected")
 )
 
 type Zip struct {
@@ -34,10 +35,10 @@ func NewZip(content []byte) (*Zip, error) {
 	files := make(map[string]file)
 
 	for _, zrf := range zipReader.File {
-		// Validate file name to prevent path traversal attacks. Reject entries with absolute paths or path traversal sequences
+		// Validate file name to prevent path traversal attacks at ZIP parse time. Reject entries with absolute paths or path traversal sequences
 		cleanName := filepath.Clean(zrf.Name)
 		if filepath.IsAbs(cleanName) || strings.HasPrefix(cleanName, ".."+string(os.PathSeparator)) || cleanName == ".." {
-			return nil, errPathTraversal
+			return nil, fmt.Errorf("invalid file path %q: %w", zrf.Name, errPathTraversal)
 		}
 
 		f, err := zrf.Open()
@@ -50,8 +51,8 @@ func NewZip(content []byte) (*Zip, error) {
 			return nil, err
 		}
 
-		files[zrf.Name] = file{
-			name:    zrf.Name,
+		files[cleanName] = file{
+			name:    cleanName,
 			content: buf.Bytes(),
 			isDir:   zrf.FileInfo().IsDir(),
 			size:    zrf.FileInfo().Size(),
@@ -65,13 +66,14 @@ func NewZip(content []byte) (*Zip, error) {
 
 func (z *Zip) CreateLocalCopies(dest string) error {
 	dest = filepath.Clean(dest)
+	destPrefix := dest + string(os.PathSeparator)
 
 	for _, zf := range z.Files {
 		destPath := filepath.Clean(filepath.Join(dest, zf.name))
 
 		// Prevent Zip Slip / path traversal attack by ensuring the destination path is within the intended extraction directory
-		if !strings.HasPrefix(destPath, dest+string(os.PathSeparator)) && destPath != dest {
-			return errPathTraversal
+		if !strings.HasPrefix(destPath, destPrefix) && destPath != dest {
+			return fmt.Errorf("invalid file path %q: %w", zf.name, errPathTraversal)
 		}
 
 		if zf.isDir {
