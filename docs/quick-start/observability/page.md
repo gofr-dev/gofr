@@ -580,6 +580,14 @@ For example: When running the application locally, we can access the /metrics en
 
 GoFr also supports creating {% new-tab-link newtab=false title="custom metrics" href="/docs/advanced-guide/publishing-custom-metrics" /%}.
 
+### Disabling the Metrics Server
+
+To disable the metrics server entirely, set the `METRICS_PORT` environment variable to `0`:
+
+```dotenv
+METRICS_PORT=0
+```
+
 ### Example Dashboard
 
 These metrics can be easily consumed by monitoring systems like {% new-tab-link title="Prometheus" href="https://prometheus.io/" /%}
