@@ -24,6 +24,13 @@ var (
 type CircuitBreakerConfig struct {
 	Threshold int           // Threshold represents the max no of retry before switching the circuit breaker state.
 	Interval  time.Duration // Interval represents the time interval duration between hitting the HealthURL
+
+	// HealthEndpoint is the custom endpoint to use for health checks during circuit recovery.
+	// If not provided, the circuit breaker will use the default /.well-known/alive endpoint.
+	HealthEndpoint string
+	// HealthTimeout is the timeout in seconds for health check requests.
+	// If not provided, defaults to 5 seconds.
+	HealthTimeout int
 }
 
 // circuitBreaker represents a circuit breaker implementation.
@@ -35,6 +42,11 @@ type circuitBreaker struct {
 	interval     time.Duration
 	lastChecked  time.Time
 
+	// healthEndpoint is the custom endpoint to use for health checks during circuit recovery.
+	healthEndpoint string
+	// healthTimeout is the timeout in seconds for health check requests.
+	healthTimeout int
+
 	HTTP
 }
 
@@ -42,11 +54,18 @@ type circuitBreaker struct {
 //
 //nolint:revive // Allow returning unexported types as intended.
 func NewCircuitBreaker(config CircuitBreakerConfig, h HTTP) *circuitBreaker {
+	healthTimeout := config.HealthTimeout
+	if healthTimeout == 0 {
+		healthTimeout = defaultTimeout
+	}
+
 	cb := &circuitBreaker{
-		state:     ClosedState,
-		threshold: config.Threshold,
-		interval:  config.Interval,
-		HTTP:      h,
+		state:          ClosedState,
+		threshold:      config.Threshold,
+		interval:       config.Interval,
+		healthEndpoint: config.HealthEndpoint,
+		healthTimeout:  healthTimeout,
+		HTTP:           h,
 	}
 
 	// Perform asynchronous health checks
@@ -97,8 +116,18 @@ func (cb *circuitBreaker) isOpen() bool {
 }
 
 // healthCheck performs the health check for the circuit breaker.
+// If a custom healthEndpoint is configured, it uses that endpoint.
+// Otherwise, it falls back to the default /.well-known/alive endpoint.
 func (cb *circuitBreaker) healthCheck(ctx context.Context) bool {
-	resp := cb.HealthCheck(ctx)
+	var resp *Health
+
+	if cb.healthEndpoint != "" {
+		// Use the custom health endpoint configured in CircuitBreakerConfig
+		resp = cb.HTTP.getHealthResponseForEndpoint(ctx, cb.healthEndpoint, cb.healthTimeout)
+	} else {
+		// Fall back to the default health check (/.well-known/alive)
+		resp = cb.HTTP.HealthCheck(ctx)
+	}
 
 	return resp.Status == serviceUp
 }

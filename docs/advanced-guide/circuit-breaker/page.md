@@ -16,7 +16,15 @@ The circuit breaker tracks consecutive failed requests for a downstream service.
 
 
 
-- **Interval:** Once the circuit is open, GoFr starts a background goroutine that periodically checks the health of the service by making requests to its aliveness endpoint (by default: /.well-known/alive) at the specified interval. When the service is deemed healthy again, the circuit breaker closes, allowing requests to resume.
+- **Interval:** Once the circuit is open, GoFr starts a background goroutine that periodically checks the health of the service by making requests to its aliveness endpoint at the specified interval. When the service is deemed healthy again, the circuit breaker closes, allowing requests to resume.
+
+
+
+- **HealthEndpoint:** (Optional) A custom health endpoint to use for circuit breaker recovery checks. By default, GoFr uses `/.well-known/alive`. If the downstream service doesn't expose this endpoint, you can specify a custom endpoint (e.g., `health`, `status`, or any valid endpoint that returns HTTP 200 when the service is healthy).
+
+
+
+- **HealthTimeout:** (Optional) The timeout in seconds for health check requests. Defaults to 5 seconds if not specified.
 
 
 
@@ -41,8 +49,13 @@ func main() {
 		&service.CircuitBreakerConfig{
 			// Number of consecutive failed requests after which circuit breaker will be enabled
 			Threshold: 4,
-			// Time interval at which circuit breaker will hit the aliveness endpoint.
+			// Time interval at which circuit breaker will hit the health endpoint.
 			Interval: 1 * time.Second,
+			// Custom health endpoint for circuit breaker recovery (optional)
+			// Use this when the downstream service doesn't expose /.well-known/alive
+			HealthEndpoint: "health",
+			// Timeout for health check requests in seconds (optional, defaults to 5)
+			HealthTimeout: 10,
 		},
 	)
 
@@ -54,6 +67,6 @@ func main() {
 ```
 
 Circuit breaker state changes to open when number of consecutive failed requests increases the threshold.
-When it is in open state, GoFr makes request to the aliveness endpoint (default being - /.well-known/alive) at an equal interval of time provided in config.
+When it is in open state, GoFr makes request to the health endpoint (default being - /.well-known/alive, or the custom endpoint if configured) at an equal interval of time provided in config.
 
 > ##### Check out the example of an inter-service HTTP communication along with circuit-breaker in GoFr: [Visit GitHub](https://github.com/gofr-dev/gofr/blob/main/examples/using-http-service/main.go)
