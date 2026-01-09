@@ -2571,9 +2571,36 @@
             "mode": "palette-classic"
           },
           "custom": {
-            "fillOpacity": 70,
-            "lineWidth": 0,
-            "spanNulls": false
+            "axisBorderShow": false,
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "State",
+            "axisPlacement": "auto",
+            "barAlignment": 0,
+            "drawStyle": "line",
+            "fillOpacity": 0,
+            "gradientMode": "none",
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
+            "insertNulls": false,
+            "lineInterpolation": "stepAfter",
+            "lineWidth": 2,
+            "pointSize": 5,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "showPoints": "never",
+            "spanNulls": false,
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
           },
           "decimals": 0,
           "mappings": [
@@ -2581,16 +2608,18 @@
               "options": {
                 "0": {
                   "color": "green",
-                  "text": "0"
+                  "text": "Closed"
                 },
                 "1": {
                   "color": "red",
-                  "text": "1"
+                  "text": "Open"
                 }
               },
               "type": "value"
             }
           ],
+          "max": 1.2,
+          "min": -0.2,
           "thresholds": {
             "mode": "absolute",
             "steps": [
@@ -2603,7 +2632,8 @@
                 "value": 0.5
               }
             ]
-          }
+          },
+          "unit": "none"
         },
         "overrides": []
       },
@@ -2615,17 +2645,14 @@
       },
       "id": 103,
       "options": {
-        "alignValue": "left",
         "legend": {
+          "calcs": [],
           "displayMode": "list",
           "placement": "bottom",
           "showLegend": true
         },
-        "mergeValues": true,
-        "rowHeight": 0.9,
-        "showValue": "always",
         "tooltip": {
-          "mode": "single",
+          "mode": "multi",
           "sort": "none"
         }
       },
@@ -2643,7 +2670,7 @@
         }
       ],
       "title": "Circuit Breaker Status over Time",
-      "type": "state-timeline"
+      "type": "timeseries"
     },
     {
       "collapsed": false,
