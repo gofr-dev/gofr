@@ -37,7 +37,7 @@ func NewZip(content []byte) (*Zip, error) {
 	for _, zrf := range zipReader.File {
 		// Validate file name to prevent path traversal attacks at ZIP parse time. Reject entries with absolute paths or path traversal sequences
 		cleanName := filepath.Clean(zrf.Name)
-		if filepath.IsAbs(cleanName) || strings.HasPrefix(cleanName, ".."+string(os.PathSeparator)) || cleanName == ".." {
+		if isUnsafePath(cleanName, zrf.Name) {
 			return nil, fmt.Errorf("invalid file path %q: %w", zrf.Name, errPathTraversal)
 		}
 
@@ -118,4 +118,16 @@ func copyToBuffer(f io.ReadCloser, size uint64) (*bytes.Buffer, error) {
 	}
 
 	return buf, nil
+}
+
+// isUnsafePath checks if a path is unsafe (absolute, traversal, or Windows-specific patterns).
+func isUnsafePath(cleanName, originalName string) bool {
+	// Absolute path (current OS) or relative to current/parent directory
+	if filepath.IsAbs(cleanName) || cleanName == "." || cleanName == ".." ||
+		strings.HasPrefix(cleanName, ".."+string(os.PathSeparator)) {
+		return true
+	}
+
+	// Windows paths (checked on all platforms): drive letter (C:\) or UNC (\\server)
+	return (len(originalName) >= 2 && originalName[1] == ':') || strings.HasPrefix(originalName, "\\\\")
 }

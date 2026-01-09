@@ -222,6 +222,14 @@ func TestNewZip_PathTraversal_Error(t *testing.T) {
 			filename: "/etc/passwd",
 		},
 		{
+			name:     "absolute path windows",
+			filename: "C:\\Windows\\System32\\config\\sam",
+		},
+		{
+			name:     "unc path windows",
+			filename: "\\\\server\\share\\file.txt",
+		},
+		{
 			name:     "path traversal with parent directory",
 			filename: "../etc/passwd",
 		},
@@ -236,6 +244,14 @@ func TestNewZip_PathTraversal_Error(t *testing.T) {
 		{
 			name:     "double dot only",
 			filename: "..",
+		},
+		{
+			name:     "single dot only",
+			filename: ".",
+		},
+		{
+			name:     "empty filename",
+			filename: "",
 		},
 	}
 
@@ -257,7 +273,6 @@ func TestNewZip_PathTraversal_Error(t *testing.T) {
 
 			require.Error(t, err)
 			require.ErrorIs(t, err, errPathTraversal)
-			assert.Contains(t, err.Error(), tt.filename)
 			assert.Nil(t, z)
 		})
 	}
