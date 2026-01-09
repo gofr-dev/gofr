@@ -232,17 +232,21 @@ func encodeQueryParameters(req *http.Request, queryParams map[string]any) {
 	req.URL.RawQuery = q.Encode()
 }
 
-type nameOption string
 
-func (n nameOption) AddOption(h HTTP) HTTP {
+
+type attributesOption map[string]string
+
+func (a attributesOption) AddOption(h HTTP) HTTP {
 	if svc := extractHTTPService(h); svc != nil {
-		svc.name = string(n)
+		if name, ok := a["name"]; ok {
+			svc.name = name
+		}
 	}
 
 	return h
 }
 
-// WithName returns an Option that sets the name of the HTTP service.
-func WithName(name string) Options {
-	return nameOption(name)
+// WithAttributes returns an Option that sets the attributes of the HTTP service.
+func WithAttributes(attributes map[string]string) Options {
+	return attributesOption(attributes)
 }

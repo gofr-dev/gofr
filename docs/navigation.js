@@ -5,9 +5,10 @@ export const navigation = [
         links: [
             {
                 title: 'Hello Server',
-                href: '/docs/quick-start/introduction' ,
-                desc: "Getting started with how to write a server using GoFR with basic examples and explanations. Boost your productivity with efficient coding practices and learn to build scalable applications quickly."},
-               
+                href: '/docs/quick-start/introduction',
+                desc: "Getting started with how to write a server using GoFR with basic examples and explanations. Boost your productivity with efficient coding practices and learn to build scalable applications quickly."
+            },
+
             {
                 title: 'Configuration',
                 href: '/docs/quick-start/configuration',
@@ -273,11 +274,7 @@ export const navigation = [
                 href: '/docs/references/testing',
                 desc: "GoFr provides a centralized collection of mocks to facilitate writing effective unit tests. Explore testing strategies and tools for GoFr applications, ensuring the code is robust, reliable, and maintainable."
             },
-            {
-                title: 'Metrics',
-                href: '/docs/references/metrics',
-                desc: "Comprehensive list of all default metrics published by GoFr, including application, HTTP, database, and pub/sub metrics."
-            },
+
             {
                 title: 'GoFr CLI',
                 href: '/docs/references/gofrcli',

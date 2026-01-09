@@ -234,7 +234,7 @@ func TestRetryProvider_Metrics(t *testing.T) {
 
 	// Create a new HTTP service instance with retry config, metrics and name
 	httpService := NewHTTPService(server.URL, logging.NewMockLogger(logging.INFO), metrics,
-		WithName("test-service"), &RetryConfig{MaxRetries: 2})
+		WithAttributes(map[string]string{"name": "test-service"}), &RetryConfig{MaxRetries: 2})
 
 	// Make the request
 	resp, err := httpService.Get(t.Context(), "/test", nil)

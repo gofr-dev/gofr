@@ -29,6 +29,8 @@ They are instrumental in measuring and meeting service-level agreements (SLAs) t
 
 GoFr publishes metrics to port: _2121_ on _/metrics_ endpoint in Prometheus format.
 
+### Default Metrics
+
 {% table %}
 
 - Name
@@ -82,6 +84,7 @@ GoFr publishes metrics to port: _2121_ on _/metrics_ endpoint in Prometheus form
 - app_http_service_response
 - histogram
 - Response time of HTTP service requests in seconds
+
 
 ---
 

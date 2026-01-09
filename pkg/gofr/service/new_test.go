@@ -31,6 +31,12 @@ func TestNewHTTPService(t *testing.T) {
 			assert.NotNil(t, service, "TEST[%d], Failed.\n%s", i, tc.desc)
 		})
 	}
+
+	t.Run("WithAttributes", func(t *testing.T) {
+		service := NewHTTPService("http://example.com", nil, nil, WithAttributes(map[string]string{"name": "test-service"}))
+		httpSvc := service.(*httpService)
+		assert.Equal(t, "test-service", httpSvc.name)
+	})
 }
 
 func TestHTTPService_createAndSendRequest(t *testing.T) {
