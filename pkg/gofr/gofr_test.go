@@ -275,6 +275,21 @@ func TestApp_Metrics(t *testing.T) {
 	assert.NotNil(t, app.Metrics())
 }
 
+func TestApp_MetricsServerDisabled(t *testing.T) {
+	// Set METRICS_PORT=0 to disable the metrics server
+	t.Setenv("METRICS_PORT", "0")
+
+	logs := testutil.StdoutOutputForFunc(func() {
+		app := New()
+
+		// Verify that metricServer is nil when METRICS_PORT=0
+		assert.Nil(t, app.metricServer, "metrics server should be nil when METRICS_PORT=0")
+	})
+
+	// Verify log message is printed
+	assert.Contains(t, logs, "Metrics server is disabled (METRICS_PORT=0)")
+}
+
 func TestApp_AddAndGetHTTPService(t *testing.T) {
 	testutil.NewServerConfigs(t)
 
