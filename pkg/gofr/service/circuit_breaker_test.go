@@ -660,6 +660,62 @@ func TestCircuitBreaker_Metrics(t *testing.T) {
 	}
 }
 
+func TestCircuitBreaker_HTTP500_TripsCircuit(t *testing.T) {
+	server := testServer()
+	defer server.Close()
+
+	ctrl := gomock.NewController(t)
+	mockMetric := NewMockMetrics(ctrl)
+
+	// Expect metrics to be recorded
+	mockMetric.EXPECT().RecordHistogram(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
+	mockMetric.EXPECT().NewCounter(gomock.Any(), gomock.Any()).AnyTimes()
+	mockMetric.EXPECT().NewGauge(gomock.Any(), gomock.Any()).AnyTimes()
+	mockMetric.EXPECT().SetGauge(gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
+
+	service := httpService{
+		Client:  &http.Client{Transport: &customTransport{}},
+		url:     server.URL,
+		name:    "test-service",
+		Tracer:  otel.Tracer("gofr-http-client"),
+		Logger:  logging.NewMockLogger(logging.DEBUG),
+		Metrics: mockMetric,
+	}
+
+	// Threshold 1, Long Interval
+	cbConfig := CircuitBreakerConfig{
+		Threshold: 1,
+		Interval:  1 * time.Minute,
+	}
+
+	httpServiceWithCB := cbConfig.AddOption(&service)
+
+	// 1. First call returns 500. Failure count becomes 1.
+	resp, err := httpServiceWithCB.Get(t.Context(), "error-500", nil)
+	require.NoError(t, err) // 500 is not an error returned by Get
+	assert.Equal(t, http.StatusInternalServerError, resp.StatusCode)
+	resp.Body.Close()
+
+	// 2. Second call returns 500. Failure count becomes 2. Threshold (1) exceeded. Circuit Opens immediately.
+	// The request is executed, but the CB sees the failure count > threshold and returns ErrCircuitOpen.
+	resp, err = httpServiceWithCB.Get(t.Context(), "error-500", nil)
+	if resp != nil {
+		resp.Body.Close()
+	}
+
+	require.ErrorIs(t, err, ErrCircuitOpen)
+	assert.Nil(t, resp)
+
+	// 3. Third call should also fail with ErrCircuitOpen (Circuit is Open)
+	resp, err = httpServiceWithCB.Get(t.Context(), "error-500", nil)
+	if resp != nil {
+		resp.Body.Close()
+	}
+
+	require.ErrorIs(t, err, ErrCircuitOpen)
+	assert.Nil(t, resp)
+}
+
 type customTransport struct {
 }
 
@@ -668,6 +724,14 @@ func (*customTransport) RoundTrip(r *http.Request) (*http.Response, error) {
 		return &http.Response{
 			Body:       io.NopCloser(bytes.NewBufferString("Hello World")),
 			StatusCode: http.StatusOK,
+			Request:    r,
+		}, nil
+	}
+
+	if r.URL.Path == "/error-500" {
+		return &http.Response{
+			Body:       io.NopCloser(bytes.NewBufferString("Internal Server Error")),
+			StatusCode: http.StatusInternalServerError,
 			Request:    r,
 		}, nil
 	}

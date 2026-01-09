@@ -11,7 +11,7 @@ import (
 
 func TestMain(m *testing.M) {
 	os.Setenv("GOFR_TELEMETRY", "false")
-	os.Exit(m.Run())
+	m.Run()
 }
 
 func TestNewAPIKeyConfig(t *testing.T) {
