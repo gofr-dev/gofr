@@ -174,3 +174,180 @@ func TestCreateLocalCopies_Failure(t *testing.T) {
 	err := mockZip.CreateLocalCopies("test-bad")
 	require.Error(t, err, "Expected error when creating file with invalid name")
 }
+
+func TestNewZip_PathTraversal_Success(t *testing.T) {
+	tests := []struct {
+		name     string
+		filename string
+	}{
+		{
+			name:     "valid filename",
+			filename: "file.txt",
+		},
+		{
+			name:     "valid nested path",
+			filename: "dir/subdir/file.txt",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			zipContent := bytes.NewBuffer(nil)
+			zipWriter := zip.NewWriter(zipContent)
+
+			fileWriter, err := zipWriter.Create(tt.filename)
+			require.NoError(t, err)
+
+			_, err = fileWriter.Write([]byte("test content"))
+			require.NoError(t, err)
+
+			err = zipWriter.Close()
+			require.NoError(t, err)
+
+			z, err := NewZip(zipContent.Bytes())
+
+			require.NoError(t, err)
+			assert.NotNil(t, z)
+		})
+	}
+}
+
+func TestNewZip_PathTraversal_Error(t *testing.T) {
+	tests := []struct {
+		name     string
+		filename string
+	}{
+		{
+			name:     "absolute path unix",
+			filename: "/etc/passwd",
+		},
+		{
+			name:     "absolute path windows",
+			filename: "C:\\Windows\\System32\\config\\sam",
+		},
+		{
+			name:     "unc path windows",
+			filename: "\\\\server\\share\\file.txt",
+		},
+		{
+			name:     "path traversal with parent directory",
+			filename: "../etc/passwd",
+		},
+		{
+			name:     "path traversal with multiple parent dirs",
+			filename: "../../../../../../etc/passwd",
+		},
+		{
+			name:     "path traversal hidden in path",
+			filename: "foo/../../../etc/passwd",
+		},
+		{
+			name:     "double dot only",
+			filename: "..",
+		},
+		{
+			name:     "single dot only",
+			filename: ".",
+		},
+		{
+			name:     "empty filename",
+			filename: "",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			zipContent := bytes.NewBuffer(nil)
+			zipWriter := zip.NewWriter(zipContent)
+
+			fileWriter, err := zipWriter.Create(tt.filename)
+			require.NoError(t, err)
+
+			_, err = fileWriter.Write([]byte("test content"))
+			require.NoError(t, err)
+
+			err = zipWriter.Close()
+			require.NoError(t, err)
+
+			z, err := NewZip(zipContent.Bytes())
+
+			require.Error(t, err)
+			require.ErrorIs(t, err, errPathTraversal)
+			assert.Nil(t, z)
+		})
+	}
+}
+
+func TestCreateLocalCopies_PathTraversal_Success(t *testing.T) {
+	tests := []struct {
+		name     string
+		filename string
+	}{
+		{
+			name:     "valid filename",
+			filename: "file.txt",
+		},
+		{
+			name:     "valid nested path",
+			filename: "dir/subdir/file.txt",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			destDir := t.TempDir()
+
+			mockZip := &Zip{
+				Files: map[string]file{
+					tt.filename: {name: tt.filename, content: []byte("test content"), isDir: false, size: 12},
+				},
+			}
+
+			err := mockZip.CreateLocalCopies(destDir)
+
+			require.NoError(t, err)
+
+			expectedPath := filepath.Join(destDir, tt.filename)
+			_, statErr := os.Stat(expectedPath)
+			assert.NoError(t, statErr, "Expected file to exist at %s", expectedPath)
+		})
+	}
+}
+
+func TestCreateLocalCopies_PathTraversal_Error(t *testing.T) {
+	tests := []struct {
+		name     string
+		filename string
+	}{
+		{
+			name:     "path traversal with parent directory",
+			filename: "../etc/passwd",
+		},
+		{
+			name:     "path traversal with multiple parent dirs",
+			filename: "../../../../../../etc/passwd",
+		},
+		{
+			name:     "path traversal hidden in path",
+			filename: "foo/../../../etc/passwd",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			destDir := t.TempDir()
+
+			mockZip := &Zip{
+				Files: map[string]file{
+					tt.filename: {name: tt.filename, content: []byte("test content"), isDir: false, size: 12},
+				},
+			}
+
+			err := mockZip.CreateLocalCopies(destDir)
+
+			require.Error(t, err)
+			require.ErrorIs(t, err, errPathTraversal)
+			assert.Contains(t, err.Error(), tt.filename)
+		})
+	}
+}
