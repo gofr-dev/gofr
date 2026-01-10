@@ -164,7 +164,7 @@ echo -n "your-password" | base64
 - **CircuitBreakerConfig** - This option allows the user to configure the GoFr Circuit Breaker's `threshold` and `interval` for the failing downstream HTTP Service calls. If the failing calls exceeds the threshold the circuit breaker will automatically be enabled.
 - **DefaultHeaders** - This option allows user to set some default headers that will be propagated to the downstream HTTP Service every time it is being called.
 - **HealthConfig** - This option allows user to add the `HealthEndpoint` along with `Timeout` to enable and perform the timely health checks for downstream HTTP Service.
-- **RetryConfig** - This option allows user to add the maximum number of retry count if before returning error if any downstream HTTP Service fails.
+- **RetryConfig** - This option allows user to add the maximum number of retry count before returning error if any downstream HTTP Service fails. Retries are triggered for network errors and status codes **> 500** (e.g., 503 Service Unavailable). HTTP 500 is not retried.
 - **RateLimiterConfig** -  This option allows user to configure rate limiting for downstream service calls using token bucket algorithm. It controls the request rate to prevent overwhelming dependent services and supports both in-memory and Redis-based implementations.
 
 **Rate Limiter Store: Customization**
@@ -227,3 +227,12 @@ a.AddHTTPService("cat-facts", "https://catfact.ninja",
 - For distributed systems: It is strongly recommended to use Redis-based store (`NewRedisRateLimiterStore`) to ensure consistent rate limiting across multiple instances of your application.
 - For single-instance applications: The default in-memory store (`NewLocalRateLimiterStore`) is sufficient and provides better performance.
 - Rate configuration: Set Burst higher than Requests to allow short traffic bursts while maintaining average rate limits.
+
+## Metrics
+
+GoFr publishes the following metrics for HTTP service communication:
+
+- `app_http_retry_count`: Total number of retry events. (labels: `service`)
+- `app_http_circuit_breaker_state`: Current state of the circuit breaker (0 for Closed, 1 for Open). (labels: `service`)
+- `app_http_service_response`: Response time of HTTP service requests in seconds (histogram). (labels: `service`, `path`, `method`, `status`)
+```
