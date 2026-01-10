@@ -34,6 +34,8 @@ type circuitBreaker struct {
 	threshold    int
 	interval     time.Duration
 	lastChecked  time.Time
+	metrics      Metrics
+	serviceName  string
 
 	HTTP
 }
@@ -74,7 +76,7 @@ func (cb *circuitBreaker) executeWithCircuitBreaker(ctx context.Context, f func(
 	}
 
 	result, err := f(ctx)
-	if err != nil {
+	if err != nil || (result != nil && result.StatusCode > 500) {
 		cb.handleFailure()
 	} else {
 		cb.resetFailureCount()
@@ -111,6 +113,9 @@ func (cb *circuitBreaker) startHealthChecks() {
 		if cb.isOpen() {
 			go func() {
 				if cb.healthCheck(context.TODO()) {
+					cb.mu.Lock()
+					defer cb.mu.Unlock()
+
 					cb.resetCircuit()
 				}
 			}()
@@ -122,12 +127,20 @@ func (cb *circuitBreaker) startHealthChecks() {
 func (cb *circuitBreaker) openCircuit() {
 	cb.state = OpenState
 	cb.lastChecked = time.Now()
+
+	if cb.metrics != nil {
+		cb.metrics.SetGauge("app_http_circuit_breaker_state", 1, "service", cb.serviceName)
+	}
 }
 
 // resetCircuit transitions the circuit breaker to the closed state.
 func (cb *circuitBreaker) resetCircuit() {
 	cb.state = ClosedState
 	cb.failureCount = 0
+
+	if cb.metrics != nil {
+		cb.metrics.SetGauge("app_http_circuit_breaker_state", 0, "service", cb.serviceName)
+	}
 }
 
 // handleFailure increments the failure count and opens the circuit if the threshold is reached.
@@ -144,13 +157,40 @@ func (cb *circuitBreaker) resetFailureCount() {
 }
 
 func (cb *CircuitBreakerConfig) AddOption(h HTTP) HTTP {
-	return NewCircuitBreaker(*cb, h)
+	circuitBreaker := NewCircuitBreaker(*cb, h)
+
+	if httpSvc := extractHTTPService(h); httpSvc != nil {
+		circuitBreaker.metrics = httpSvc.Metrics
+		circuitBreaker.serviceName = httpSvc.name
+
+		if circuitBreaker.metrics != nil {
+			registerGauge(circuitBreaker.metrics, "app_http_circuit_breaker_state",
+				"Current state of the circuit breaker (0 for Closed, 1 for Open)")
+
+			// Initialize the gauge to 0 (Closed)
+			circuitBreaker.metrics.SetGauge("app_http_circuit_breaker_state", 0, "service", circuitBreaker.serviceName)
+		}
+	}
+
+	return circuitBreaker
 }
 
 func (cb *circuitBreaker) tryCircuitRecovery() bool {
-	if time.Since(cb.lastChecked) > cb.interval && cb.healthCheck(context.TODO()) {
-		cb.resetCircuit()
+	cb.mu.Lock()
+	defer cb.mu.Unlock()
+
+	if cb.state == ClosedState {
 		return true
+	}
+
+	if time.Since(cb.lastChecked) > cb.interval {
+		// Update lastChecked to prevent busy loop of health checks from other requests
+		cb.lastChecked = time.Now()
+
+		if cb.healthCheck(context.TODO()) {
+			cb.resetCircuit()
+			return true
+		}
 	}
 
 	return false
