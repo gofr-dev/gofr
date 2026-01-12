@@ -24,13 +24,6 @@ var (
 type CircuitBreakerConfig struct {
 	Threshold int           // Threshold represents the max no of retry before switching the circuit breaker state.
 	Interval  time.Duration // Interval represents the time interval duration between hitting the HealthURL
-
-	// HealthEndpoint is the custom endpoint to use for health checks during circuit recovery.
-	// If not provided, the circuit breaker will use the default /.well-known/alive endpoint.
-	HealthEndpoint string
-	// HealthTimeout is the timeout in seconds for health check requests.
-	// If not provided, defaults to 5 seconds.
-	HealthTimeout int
 }
 
 // circuitBreaker represents a circuit breaker implementation.
@@ -56,18 +49,12 @@ type circuitBreaker struct {
 //
 //nolint:revive // Allow returning unexported types as intended.
 func NewCircuitBreaker(config CircuitBreakerConfig, h HTTP) *circuitBreaker {
-	healthTimeout := config.HealthTimeout
-	if healthTimeout == 0 {
-		healthTimeout = defaultTimeout
-	}
-
 	cb := &circuitBreaker{
-		state:          ClosedState,
-		threshold:      config.Threshold,
-		interval:       config.Interval,
-		healthEndpoint: config.HealthEndpoint,
-		healthTimeout:  healthTimeout,
-		HTTP:           h,
+		state:         ClosedState,
+		threshold:     config.Threshold,
+		interval:      config.Interval,
+		healthTimeout: defaultTimeout,
+		HTTP:          h,
 	}
 
 	// Perform asynchronous health checks
@@ -183,6 +170,17 @@ func (cb *circuitBreaker) handleFailure() {
 // resetFailureCount resets the failure count to zero.
 func (cb *circuitBreaker) resetFailureCount() {
 	cb.failureCount = 0
+}
+
+// setHealthConfig updates the circuit breaker's health endpoint and timeout.
+// This is called by HealthConfig.AddOption when it wraps a circuit breaker,
+// ensuring the circuit breaker uses the same health endpoint for recovery checks.
+func (cb *circuitBreaker) setHealthConfig(endpoint string, timeout int) {
+	cb.mu.Lock()
+	defer cb.mu.Unlock()
+
+	cb.healthEndpoint = endpoint
+	cb.healthTimeout = timeout
 }
 
 func (cb *CircuitBreakerConfig) AddOption(h HTTP) HTTP {

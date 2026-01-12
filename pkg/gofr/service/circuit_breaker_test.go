@@ -771,39 +771,52 @@ func TestCircuitBreaker_CustomHealthEndpoint_Recovery(t *testing.T) {
 	server := testServer()
 	defer server.Close()
 
-	mockMetric := &mockMetrics{}
-	mockMetric.On("RecordHistogram", mock.Anything, mock.Anything, mock.Anything, mock.Anything).
-		Return(nil)
+	ctrl := gomock.NewController(t)
+	mockMetric := NewMockMetrics(ctrl)
+
+	mockMetric.EXPECT().RecordHistogram(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
+	mockMetric.EXPECT().NewCounter(gomock.Any(), gomock.Any()).AnyTimes()
+	mockMetric.EXPECT().NewGauge(gomock.Any(), gomock.Any()).AnyTimes()
+	mockMetric.EXPECT().SetGauge(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
 
 	// Initialize HTTP service with custom transport that only responds to custom health endpoint
-	service := httpService{
+	svc := httpService{
 		Client:  &http.Client{Transport: &customHealthEndpointTransport{healthEndpoint: "breeds"}},
 		url:     server.URL,
+		name:    "test-service",
 		Tracer:  otel.Tracer("gofr-http-client"),
 		Logger:  logging.NewMockLogger(logging.DEBUG),
 		Metrics: mockMetric,
 	}
 
-	// Circuit breaker configuration with custom health endpoint
+	// Circuit breaker configuration
 	cbConfig := CircuitBreakerConfig{
-		Threshold:      1,
-		Interval:       1,
-		HealthEndpoint: "breeds", // Custom endpoint instead of /.well-known/alive
+		Threshold: 1,
+		Interval:  1,
 	}
 
-	httpService := cbConfig.AddOption(&service)
+	// Health config with custom endpoint - this automatically updates the circuit breaker
+	healthConfig := HealthConfig{
+		HealthEndpoint: "breeds",
+	}
+
+	// Apply circuit breaker first, then health config
+	httpSvc := cbConfig.AddOption(&svc)
+	httpSvc = healthConfig.AddOption(httpSvc)
 
 	// First request fails - circuit opens
-	_, err := httpService.Get(t.Context(), "invalid", nil)
+	resp, err := httpSvc.Get(t.Context(), "invalid", nil)
 	require.Error(t, err)
+	require.NoError(t, resp.Body.Close())
 
 	// Second request fails - circuit is now open
-	_, err = httpService.Get(t.Context(), "invalid", nil)
+	resp, err = httpSvc.Get(t.Context(), "invalid", nil)
 	require.Error(t, err)
 	assert.Equal(t, ErrCircuitOpen, err)
+	require.NoError(t, resp.Body.Close())
 
 	// Third request should succeed as circuit recovers using custom health endpoint
-	resp, err := httpService.Get(t.Context(), "success", nil)
+	resp, err = httpSvc.Get(t.Context(), "success", nil)
 	require.NoError(t, err)
 	assert.NotNil(t, resp)
 	_ = resp.Body.Close()
@@ -813,12 +826,16 @@ func TestCircuitBreaker_DefaultHealthEndpoint_NoRecoveryWhenMissing(t *testing.T
 	server := testServer()
 	defer server.Close()
 
-	mockMetric := &mockMetrics{}
-	mockMetric.On("RecordHistogram", mock.Anything, mock.Anything, mock.Anything, mock.Anything).
-		Return(nil)
+	ctrl := gomock.NewController(t)
+	mockMetric := NewMockMetrics(ctrl)
+
+	mockMetric.EXPECT().RecordHistogram(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
+	mockMetric.EXPECT().NewCounter(gomock.Any(), gomock.Any()).AnyTimes()
+	mockMetric.EXPECT().NewGauge(gomock.Any(), gomock.Any()).AnyTimes()
+	mockMetric.EXPECT().SetGauge(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
 
 	// Initialize HTTP service with custom transport that doesn't have /.well-known/alive
-	service := httpService{
+	svc := httpService{
 		Client:  &http.Client{Transport: &customHealthEndpointTransport{healthEndpoint: "breeds"}},
 		url:     server.URL,
 		Tracer:  otel.Tracer("gofr-http-client"),
@@ -833,32 +850,39 @@ func TestCircuitBreaker_DefaultHealthEndpoint_NoRecoveryWhenMissing(t *testing.T
 		// HealthEndpoint not set - will use default /.well-known/alive which returns 404
 	}
 
-	httpService := cbConfig.AddOption(&service)
+	httpSvc := cbConfig.AddOption(&svc)
 
 	// First request fails - circuit opens
-	_, err := httpService.Get(t.Context(), "invalid", nil)
+	resp, err := httpSvc.Get(t.Context(), "invalid", nil)
 	require.Error(t, err)
+	require.NoError(t, resp.Body.Close())
 
 	// Second request fails - circuit is now open
-	_, err = httpService.Get(t.Context(), "invalid", nil)
+	resp, err = httpSvc.Get(t.Context(), "invalid", nil)
 	require.Error(t, err)
 	assert.Equal(t, ErrCircuitOpen, err)
+	require.NoError(t, resp.Body.Close())
 
 	// Third request should also fail - circuit cannot recover because /.well-known/alive returns 404
-	_, err = httpService.Get(t.Context(), "success", nil)
+	resp, err = httpSvc.Get(t.Context(), "success", nil)
 	require.Error(t, err)
 	assert.Equal(t, ErrCircuitOpen, err)
+	require.NoError(t, resp.Body.Close())
 }
 
 func TestCircuitBreaker_HealthEndpointWithTimeout(t *testing.T) {
 	server := testServer()
 	defer server.Close()
 
-	mockMetric := &mockMetrics{}
-	mockMetric.On("RecordHistogram", mock.Anything, mock.Anything, mock.Anything, mock.Anything).
-		Return(nil)
+	ctrl := gomock.NewController(t)
+	mockMetric := NewMockMetrics(ctrl)
 
-	service := httpService{
+	mockMetric.EXPECT().RecordHistogram(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
+	mockMetric.EXPECT().NewCounter(gomock.Any(), gomock.Any()).AnyTimes()
+	mockMetric.EXPECT().NewGauge(gomock.Any(), gomock.Any()).AnyTimes()
+	mockMetric.EXPECT().SetGauge(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
+
+	svc := httpService{
 		Client:  &http.Client{Transport: &customHealthEndpointTransport{healthEndpoint: "health"}},
 		url:     server.URL,
 		Tracer:  otel.Tracer("gofr-http-client"),
@@ -866,28 +890,35 @@ func TestCircuitBreaker_HealthEndpointWithTimeout(t *testing.T) {
 		Metrics: mockMetric,
 	}
 
-	// Circuit breaker configuration with custom health endpoint and timeout
+	// Circuit breaker configuration
 	cbConfig := CircuitBreakerConfig{
-		Threshold:      1,
-		Interval:       1,
-		HealthEndpoint: "health",
-		HealthTimeout:  10, // 10 seconds timeout
+		Threshold: 1,
+		Interval:  1,
 	}
 
-	httpService := cbConfig.AddOption(&service)
+	// Health config with custom endpoint and timeout
+	healthConfig := HealthConfig{
+		HealthEndpoint: "health",
+		Timeout:        10, // 10 seconds timeout
+	}
+
+	// Apply circuit breaker first, then health config
+	httpSvc := cbConfig.AddOption(&svc)
+	httpSvc = healthConfig.AddOption(httpSvc)
 
 	// First request fails - circuit opens
-	_, err := httpService.Get(t.Context(), "invalid", nil)
+	resp, err := httpSvc.Get(t.Context(), "invalid", nil)
 	require.Error(t, err)
+	require.NoError(t, resp.Body.Close())
 
 	// Second request fails - circuit is now open
-	_, err = httpService.Get(t.Context(), "invalid", nil)
+	resp, err = httpSvc.Get(t.Context(), "invalid", nil)
 	require.Error(t, err)
+	require.NoError(t, resp.Body.Close())
 
 	// Circuit should recover using custom health endpoint
-	resp, err := httpService.Get(t.Context(), "success", nil)
+	resp, err = httpSvc.Get(t.Context(), "success", nil)
 	require.NoError(t, err)
 	assert.NotNil(t, resp)
 	_ = resp.Body.Close()
 }
-
