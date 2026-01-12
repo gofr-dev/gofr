@@ -82,7 +82,7 @@ func (cb *circuitBreaker) executeWithCircuitBreaker(ctx context.Context, f func(
 	}
 
 	result, err := f(ctx)
-	if err != nil || (result != nil && result.StatusCode >= 500) {
+	if err != nil || (result != nil && result.StatusCode > 500) {
 		cb.handleFailure()
 	} else {
 		cb.resetFailureCount()
