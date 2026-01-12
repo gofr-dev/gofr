@@ -104,6 +104,7 @@ func TestHTTPHandlerResponseUnmarshalError(t *testing.T) {
 		w.WriteHeader(http.StatusOK)
 		w.Write([]byte(`{invalid body}`))
 	}))
+
 	defer server.Close()
 
 	logger := logging.NewLogger(logging.DEBUG)
