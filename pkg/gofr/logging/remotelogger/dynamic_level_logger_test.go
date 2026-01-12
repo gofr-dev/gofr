@@ -72,7 +72,7 @@ func Test_fetchAndUpdateLogLevel_InvalidResponse(t *testing.T) {
 
 		_, _ = w.Write([]byte(body))
 	}))
-	defer mockServer.Close()
+	t.Cleanup(mockServer.Close)
 
 	remoteService := service.NewHTTPService(mockServer.URL, logger, nil)
 
@@ -99,7 +99,7 @@ func Test_fetchAndUpdateLogLevel_InvalidLogLevel(t *testing.T) {
 		}`
 		_, _ = w.Write([]byte(body))
 	}))
-	defer mockServer.Close()
+	t.Cleanup(mockServer.Close)
 
 	remoteService2 := service.NewHTTPService(mockServer.URL, logger, nil)
 
@@ -120,7 +120,7 @@ func TestDynamicLoggerSuccess(t *testing.T) {
 		_, _ = w.Write([]byte(body))
 	}))
 
-	defer mockServer.Close()
+	t.Cleanup(mockServer.Close)
 
 	log := testutil.StdoutOutputForFunc(func() {
 		// Create a new remote logger with the mock server URL
@@ -306,7 +306,7 @@ func TestRemoteLogger_ConcurrentLevelAccess(t *testing.T) {
 		fmt.Fprintf(w, `{"data":{"serviceName":"test-service","logLevel":"%s"}}`, lvl)
 	}))
 
-	defer mockServer.Close()
+	t.Cleanup(mockServer.Close)
 
 	rl := &remoteLogger{
 		remoteURL:          mockServer.URL,
@@ -336,7 +336,7 @@ func TestLogLevelChangeToFatal_NoExit(t *testing.T) {
 
 		_, _ = w.Write([]byte(body))
 	}))
-	defer mockServer.Close()
+	t.Cleanup(mockServer.Close)
 
 	// This test succeeds if it completes without the process exiting
 	log := testutil.StdoutOutputForFunc(func() {
