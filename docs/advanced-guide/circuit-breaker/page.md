@@ -74,11 +74,6 @@ func main() {
 			Threshold: 4,
 			// Time interval at which circuit breaker will hit the health endpoint.
 			Interval: 1 * time.Second,
-			// Custom health endpoint for circuit breaker recovery (optional)
-			// Use this when the downstream service doesn't expose /.well-known/alive
-			HealthEndpoint: "health",
-			// Timeout for health check requests in seconds (optional, defaults to 5)
-			HealthTimeout: 10,
 		},
 	)
 
