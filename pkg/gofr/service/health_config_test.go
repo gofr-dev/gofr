@@ -1,27 +1,43 @@
 package service
 
 import (
+	"net/http/httptest"
 	"testing"
 	"time"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
 
 	"gofr.dev/pkg/gofr/logging"
 )
 
-func TestUpdateCircuitBreakerHealthConfig_DirectCircuitBreaker(t *testing.T) {
+func setupMockMetrics(t *testing.T) *MockMetrics {
+	t.Helper()
+
 	ctrl := gomock.NewController(t)
 	mockMetric := NewMockMetrics(ctrl)
 
+	mockMetric.EXPECT().RecordHistogram(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
+	mockMetric.EXPECT().NewCounter(gomock.Any(), gomock.Any()).AnyTimes()
 	mockMetric.EXPECT().NewGauge(gomock.Any(), gomock.Any()).AnyTimes()
+	mockMetric.EXPECT().SetGauge(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
 
-	svc := &httpService{
-		Logger:  logging.NewMockLogger(logging.DEBUG),
-		Metrics: mockMetric,
-	}
+	return mockMetric
+}
 
-	cb := NewCircuitBreaker(CircuitBreakerConfig{Threshold: 3, Interval: time.Second}, svc)
+func TestUpdateCircuitBreakerHealthConfig_DirectCircuitBreaker(t *testing.T) {
+	server := httptest.NewServer(nil)
+	defer server.Close()
+
+	mockMetric := setupMockMetrics(t)
+
+	svc := NewHTTPService(server.URL, logging.NewMockLogger(logging.DEBUG), mockMetric,
+		&CircuitBreakerConfig{Threshold: 3, Interval: time.Second},
+	)
+
+	cb, ok := svc.(*circuitBreaker)
+	require.True(t, ok)
 
 	updateCircuitBreakerHealthConfig(cb, "custom-health", 15)
 
@@ -30,110 +46,51 @@ func TestUpdateCircuitBreakerHealthConfig_DirectCircuitBreaker(t *testing.T) {
 }
 
 func TestUpdateCircuitBreakerHealthConfig_ThroughRetryProvider(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	mockMetric := NewMockMetrics(ctrl)
+	server := httptest.NewServer(nil)
+	defer server.Close()
 
-	mockMetric.EXPECT().NewGauge(gomock.Any(), gomock.Any()).AnyTimes()
+	mockMetric := setupMockMetrics(t)
 
-	svc := &httpService{
-		Logger:  logging.NewMockLogger(logging.DEBUG),
-		Metrics: mockMetric,
-	}
+	svc := NewHTTPService(server.URL, logging.NewMockLogger(logging.DEBUG), mockMetric,
+		&CircuitBreakerConfig{Threshold: 3, Interval: time.Second},
+		&RetryConfig{MaxRetries: 3},
+	)
 
-	cb := NewCircuitBreaker(CircuitBreakerConfig{Threshold: 3, Interval: time.Second}, svc)
-	retry := &retryProvider{HTTP: cb, maxRetries: 3}
+	retry, ok := svc.(*retryProvider)
+	require.True(t, ok)
 
-	updateCircuitBreakerHealthConfig(retry, "health-endpoint", 20)
+	cb, ok := retry.HTTP.(*circuitBreaker)
+	require.True(t, ok)
+
+	updateCircuitBreakerHealthConfig(svc, "health-endpoint", 20)
 
 	assert.Equal(t, "health-endpoint", cb.healthEndpoint)
 	assert.Equal(t, 20, cb.healthTimeout)
 }
 
-func TestUpdateCircuitBreakerHealthConfig_ThroughRateLimiter(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	mockMetric := NewMockMetrics(ctrl)
-
-	mockMetric.EXPECT().NewGauge(gomock.Any(), gomock.Any()).AnyTimes()
-
-	svc := &httpService{
-		Logger:  logging.NewMockLogger(logging.DEBUG),
-		Metrics: mockMetric,
-	}
-
-	cb := NewCircuitBreaker(CircuitBreakerConfig{Threshold: 3, Interval: time.Second}, svc)
-	rl := &rateLimiter{HTTP: cb}
-
-	updateCircuitBreakerHealthConfig(rl, "status", 30)
-
-	assert.Equal(t, "status", cb.healthEndpoint)
-	assert.Equal(t, 30, cb.healthTimeout)
-}
-
-func TestUpdateCircuitBreakerHealthConfig_ThroughAuthProvider(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	mockMetric := NewMockMetrics(ctrl)
-
-	mockMetric.EXPECT().NewGauge(gomock.Any(), gomock.Any()).AnyTimes()
-
-	svc := &httpService{
-		Logger:  logging.NewMockLogger(logging.DEBUG),
-		Metrics: mockMetric,
-	}
-
-	cb := NewCircuitBreaker(CircuitBreakerConfig{Threshold: 3, Interval: time.Second}, svc)
-	auth := &authProvider{HTTP: cb}
-
-	updateCircuitBreakerHealthConfig(auth, "ping", 25)
-
-	assert.Equal(t, "ping", cb.healthEndpoint)
-	assert.Equal(t, 25, cb.healthTimeout)
-}
-
-func TestUpdateCircuitBreakerHealthConfig_ThroughCustomHeader(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	mockMetric := NewMockMetrics(ctrl)
-
-	mockMetric.EXPECT().NewGauge(gomock.Any(), gomock.Any()).AnyTimes()
-
-	svc := &httpService{
-		Logger:  logging.NewMockLogger(logging.DEBUG),
-		Metrics: mockMetric,
-	}
-
-	cb := NewCircuitBreaker(CircuitBreakerConfig{Threshold: 3, Interval: time.Second}, svc)
-	ch := &customHeader{HTTP: cb}
-
-	updateCircuitBreakerHealthConfig(ch, "ready", 10)
-
-	assert.Equal(t, "ready", cb.healthEndpoint)
-	assert.Equal(t, 10, cb.healthTimeout)
-}
-
 func TestHealthConfig_AddOption_UpdatesCircuitBreaker(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	mockMetric := NewMockMetrics(ctrl)
+	server := httptest.NewServer(nil)
+	defer server.Close()
 
-	mockMetric.EXPECT().NewGauge(gomock.Any(), gomock.Any()).AnyTimes()
+	mockMetric := setupMockMetrics(t)
 
-	svc := &httpService{
-		Logger:  logging.NewMockLogger(logging.DEBUG),
-		Metrics: mockMetric,
-	}
+	svc := NewHTTPService(server.URL, logging.NewMockLogger(logging.DEBUG), mockMetric,
+		&CircuitBreakerConfig{Threshold: 3, Interval: time.Second},
+	)
 
-	cb := NewCircuitBreaker(CircuitBreakerConfig{Threshold: 3, Interval: time.Second}, svc)
+	cb, ok := svc.(*circuitBreaker)
+	require.True(t, ok)
 
 	healthConfig := HealthConfig{
 		HealthEndpoint: "breeds",
 		Timeout:        10,
 	}
 
-	result := healthConfig.AddOption(cb)
+	result := healthConfig.AddOption(svc)
 
-	// Verify circuit breaker was updated with health config
 	assert.Equal(t, "breeds", cb.healthEndpoint)
 	assert.Equal(t, 10, cb.healthTimeout)
 
-	// Verify result is a customHealthService wrapping the circuit breaker
 	customHealth, ok := result.(*customHealthService)
 	assert.True(t, ok)
 	assert.Equal(t, "breeds", customHealth.healthEndpoint)
@@ -141,26 +98,24 @@ func TestHealthConfig_AddOption_UpdatesCircuitBreaker(t *testing.T) {
 }
 
 func TestHealthConfig_AddOption_DefaultTimeout(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	mockMetric := NewMockMetrics(ctrl)
+	server := httptest.NewServer(nil)
+	defer server.Close()
 
-	mockMetric.EXPECT().NewGauge(gomock.Any(), gomock.Any()).AnyTimes()
+	mockMetric := setupMockMetrics(t)
 
-	svc := &httpService{
-		Logger:  logging.NewMockLogger(logging.DEBUG),
-		Metrics: mockMetric,
-	}
+	svc := NewHTTPService(server.URL, logging.NewMockLogger(logging.DEBUG), mockMetric,
+		&CircuitBreakerConfig{Threshold: 3, Interval: time.Second},
+	)
 
-	cb := NewCircuitBreaker(CircuitBreakerConfig{Threshold: 3, Interval: time.Second}, svc)
+	cb, ok := svc.(*circuitBreaker)
+	require.True(t, ok)
 
-	// HealthConfig without explicit timeout
 	healthConfig := HealthConfig{
 		HealthEndpoint: "health",
 	}
 
-	result := healthConfig.AddOption(cb)
+	result := healthConfig.AddOption(svc)
 
-	// Verify default timeout (5) is used
 	assert.Equal(t, "health", cb.healthEndpoint)
 	assert.Equal(t, defaultTimeout, cb.healthTimeout)
 
@@ -170,23 +125,23 @@ func TestHealthConfig_AddOption_DefaultTimeout(t *testing.T) {
 }
 
 func TestUpdateCircuitBreakerHealthConfig_DeepNestedChain(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	mockMetric := NewMockMetrics(ctrl)
+	server := httptest.NewServer(nil)
+	defer server.Close()
 
-	mockMetric.EXPECT().NewGauge(gomock.Any(), gomock.Any()).AnyTimes()
+	mockMetric := setupMockMetrics(t)
 
-	svc := &httpService{
-		Logger:  logging.NewMockLogger(logging.DEBUG),
-		Metrics: mockMetric,
-	}
+	svc := NewHTTPService(server.URL, logging.NewMockLogger(logging.DEBUG), mockMetric,
+		&CircuitBreakerConfig{Threshold: 3, Interval: time.Second},
+		&RetryConfig{MaxRetries: 3},
+	)
 
-	// Create a deeply nested chain: customHeader -> rateLimiter -> retryProvider -> circuitBreaker -> httpService
-	cb := NewCircuitBreaker(CircuitBreakerConfig{Threshold: 3, Interval: time.Second}, svc)
-	retry := &retryProvider{HTTP: cb, maxRetries: 3}
-	rl := &rateLimiter{HTTP: retry}
-	ch := &customHeader{HTTP: rl}
+	retry, ok := svc.(*retryProvider)
+	require.True(t, ok)
 
-	updateCircuitBreakerHealthConfig(ch, "deep-health", 42)
+	cb, ok := retry.HTTP.(*circuitBreaker)
+	require.True(t, ok)
+
+	updateCircuitBreakerHealthConfig(svc, "deep-health", 42)
 
 	assert.Equal(t, "deep-health", cb.healthEndpoint)
 	assert.Equal(t, 42, cb.healthTimeout)

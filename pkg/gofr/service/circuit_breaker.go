@@ -187,10 +187,6 @@ func (cb *CircuitBreakerConfig) AddOption(h HTTP) HTTP {
 		circuitBreaker.serviceName = httpSvc.name
 
 		if circuitBreaker.metrics != nil {
-			registerGauge(circuitBreaker.metrics, "app_http_circuit_breaker_state",
-				"Current state of the circuit breaker (0 for Closed, 1 for Open)")
-
-			// Initialize the gauge to 0 (Closed)
 			circuitBreaker.metrics.SetGauge("app_http_circuit_breaker_state", 0, "service", circuitBreaker.serviceName)
 		}
 	}

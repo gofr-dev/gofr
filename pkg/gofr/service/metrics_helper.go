@@ -20,15 +20,3 @@ func registerCounter(m Metrics, name, desc string) {
 	m.NewCounter(name, desc)
 	registeredMetrics[name] = true
 }
-
-func registerGauge(m Metrics, name, desc string) {
-	metricsMu.Lock()
-	defer metricsMu.Unlock()
-
-	if registeredMetrics[name] {
-		return
-	}
-
-	m.NewGauge(name, desc)
-	registeredMetrics[name] = true
-}
