@@ -82,7 +82,7 @@ func (cb *circuitBreaker) executeWithCircuitBreaker(ctx context.Context, f func(
 	}
 
 	result, err := f(ctx)
-	if err != nil || (result != nil && result.StatusCode > 500) {
+	if err != nil || (result != nil && result.StatusCode >= 500) {
 		cb.handleFailure()
 	} else {
 		cb.resetFailureCount()
@@ -111,10 +111,8 @@ func (cb *circuitBreaker) healthCheck(ctx context.Context) bool {
 	var resp *Health
 
 	if cb.healthEndpoint != "" {
-		// Use the custom health endpoint configured in CircuitBreakerConfig
 		resp = cb.HTTP.getHealthResponseForEndpoint(ctx, cb.healthEndpoint, cb.healthTimeout)
 	} else {
-		// Fall back to the default health check (/.well-known/alive)
 		resp = cb.HTTP.HealthCheck(ctx)
 	}
 
@@ -173,8 +171,6 @@ func (cb *circuitBreaker) resetFailureCount() {
 }
 
 // setHealthConfig updates the circuit breaker's health endpoint and timeout.
-// This is called by HealthConfig.AddOption when it wraps a circuit breaker,
-// ensuring the circuit breaker uses the same health endpoint for recovery checks.
 func (cb *circuitBreaker) setHealthConfig(endpoint string, timeout int) {
 	cb.mu.Lock()
 	defer cb.mu.Unlock()
