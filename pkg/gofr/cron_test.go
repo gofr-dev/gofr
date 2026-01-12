@@ -208,7 +208,11 @@ func TestCronTab_AddJob(t *testing.T) {
 	// We need a mock container because NewCron now registers metrics
 	mockContainer, mocks := container.NewMockContainer(t)
 	// Expect metrics registration
-	mocks.Metrics.EXPECT().NewHistogram("app_cron_job_duration", gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
+	mocks.Metrics.EXPECT().NewHistogram(
+		"app_cron_job_duration",
+		gomock.Any(), gomock.Any(), gomock.Any(),
+		gomock.Any(), gomock.Any(), gomock.Any(),
+	).AnyTimes()
 	mocks.Metrics.EXPECT().NewCounter("app_cron_job_total", gomock.Any()).AnyTimes()
 	mocks.Metrics.EXPECT().NewCounter("app_cron_job_success", gomock.Any()).AnyTimes()
 	mocks.Metrics.EXPECT().NewCounter("app_cron_job_failures", gomock.Any()).AnyTimes()
@@ -241,7 +245,11 @@ func TestCronTab_runScheduled(t *testing.T) {
 	mockContainer, mocks := container.NewMockContainer(t)
 
 	// Expect metrics registration
-	mocks.Metrics.EXPECT().NewHistogram("app_cron_job_duration", gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
+	mocks.Metrics.EXPECT().NewHistogram(
+		"app_cron_job_duration",
+		gomock.Any(), gomock.Any(), gomock.Any(),
+		gomock.Any(), gomock.Any(), gomock.Any(),
+	).AnyTimes()
 	mocks.Metrics.EXPECT().NewCounter("app_cron_job_total", gomock.Any()).AnyTimes()
 	mocks.Metrics.EXPECT().NewCounter("app_cron_job_success", gomock.Any()).AnyTimes()
 	mocks.Metrics.EXPECT().NewCounter("app_cron_job_failures", gomock.Any()).AnyTimes()
