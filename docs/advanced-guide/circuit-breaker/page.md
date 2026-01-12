@@ -16,19 +16,42 @@ The circuit breaker tracks consecutive failed requests for a downstream service.
 
 
 
-- **Interval:** Once the circuit is open, GoFr starts a background goroutine that periodically checks the health of the service by making requests to its aliveness endpoint at the specified interval. When the service is deemed healthy again, the circuit breaker closes, allowing requests to resume.
+- **Interval:** Once the circuit is open, GoFr starts a background goroutine that periodically checks the health of the service by making requests to its aliveness endpoint (by default: `/.well-known/alive`) at the specified interval. When the service is deemed healthy again, the circuit breaker transitions directly from **Open** to **Closed**, allowing requests to resume.
 
+> GoFr's circuit breaker implementation does not use a **Half-Open** state. Instead, it relies on periodic asynchronous health checks to determine service recovery.
 
+## Failure Conditions
 
-- **HealthEndpoint:** (Optional) A custom health endpoint to use for circuit breaker recovery checks. By default, GoFr uses `/.well-known/alive`. If the downstream service doesn't expose this endpoint, you can specify a custom endpoint (e.g., `health`, `status`, or any valid endpoint that returns HTTP 200 when the service is healthy).
+The Circuit Breaker counts a request as "failed" if:
+1. An error occurs during the HTTP request (e.g., network timeout, connection refused).
+2. The response status code is **greater than 500** (e.g., 502, 503, 504).
 
+> **Note:** HTTP 500 Internal Server Error is **NOT** counted as a failure for the circuit breaker. This distinguishes between application bugs (500) and service availability issues (> 500).
 
+## Health Check Requirement
 
-- **HealthTimeout:** (Optional) The timeout in seconds for health check requests. Defaults to 5 seconds if not specified.
+For the Circuit Breaker to recover from an **Open** state, the downstream service **must** expose a health check endpoint that returns a `200 OK` status code.
 
+- **Default Endpoint:** `/.well-known/alive`
+- **Custom Endpoint:** Can be configured using `service.HealthConfig`.
 
+> [!WARNING]
+> If the downstream service does not have a valid health check endpoint (returns 404 or other errors), the Circuit Breaker will **never recover** and will remain permanently Open. Ensure your services implement the health endpoint correctly.
 
-> NOTE: Retries only occur when the target service responds with a 500 Internal Server Error. Errors like 400 Bad Request or 404 Not Found are considered non-transient and will not trigger retries.
+## Interaction with Retry
+
+When using both Retry and Circuit Breaker patterns, the **order of wrapping** is critical for effective resilience:
+
+- **Recommended: Retry as the Outer Layer**
+  In this configuration, the `Retry` layer wraps the `Circuit Breaker`. Every single retry attempt is tracked by the circuit breaker. If a request retries 5 times, the circuit breaker sees 5 failures. This allows the circuit to trip quickly during a "retry storm," protecting the downstream service from excessive load.
+
+- **Non-Recommended: Circuit Breaker as the Outer Layer**
+  If the `Circuit Breaker` wraps the `Retry` layer, it only sees the **final result** of the entire retry loop. Even if a request retries 10 times internally, the circuit breaker only counts it as **1 failure**. This delays the circuit's reaction and can lead to hundreds of futile calls hitting a failing service before the breaker finally trips.
+
+> [!IMPORTANT]
+> Always ensure `Retry` is the outer layer by providing the `CircuitBreakerConfig` **before** the `RetryConfig` in the `AddHTTPService` options.
+
+> NOTE: Retries only occur when the target service responds with a status code > 500 (e.g., 502 Bad Gateway, 503 Service Unavailable). 500 Internal Server Error and client errors (4xx) are considered non-transient or bug-related and will not trigger retries.
 ## Usage
 
 ```go
@@ -68,5 +91,9 @@ func main() {
 
 Circuit breaker state changes to open when number of consecutive failed requests increases the threshold.
 When it is in open state, GoFr makes request to the health endpoint (default being - /.well-known/alive, or the custom endpoint if configured) at an equal interval of time provided in config.
+
+GoFr publishes the following metric to track circuit breaker state:
+
+- `app_http_circuit_breaker_state`: Current state of the circuit breaker (0 for Closed, 1 for Open). This metric is used to visualize a historical timeline of circuit transitions on the dashboard.
 
 > ##### Check out the example of an inter-service HTTP communication along with circuit-breaker in GoFr: [Visit GitHub](https://github.com/gofr-dev/gofr/blob/main/examples/using-http-service/main.go)

@@ -4,24 +4,24 @@ Publisher Subscriber is an architectural design pattern for asynchronous communi
 These could be different applications or different instances of the same application.
 Thus, the movement of messages between the components is made possible without the components being aware of each other's
 identities, meaning the components are decoupled.
-This makes the application/system more flexible and scalable as each component can be 
+This makes the application/system more flexible and scalable as each component can be
 scaled and maintained according to its own requirement.
 
 ## Design choice
 
-In GoFr application if a user wants to use the Publisher-Subscriber design, it supports several message brokers, 
+In GoFr application if a user wants to use the Publisher-Subscriber design, it supports several message brokers,
 including Apache Kafka, Google PubSub, MQTT, NATS JetStream, and Redis Pub/Sub.
 The initialization of the PubSub is done in an IoC container which handles the PubSub client dependency.
 With this, the control lies with the framework and thus promotes modularity, testability, and re-usability.
 Users can do publish and subscribe to multiple topics in a single application, by providing the topic name.
-Users can access the methods of the container to get the Publisher and Subscriber interface to perform subscription 
+Users can access the methods of the container to get the Publisher and Subscriber interface to perform subscription
 to get a single message or publish a message on the message broker.
 > Container is part of the GoFr Context
 
 ## Configuration and Setup
 
 Some of the configurations that are required to configure the PubSub backend that an application is to use
-that are specific for the type of message broker user wants to use. 
+that are specific for the type of message broker user wants to use.
 `PUBSUB_BACKEND` defines which message broker the application needs to use.
 
 ### Kafka
@@ -253,7 +253,7 @@ docker run -d \
 	eclipse-mosquitto:latest <path-to >/mosquitto.conf:/mosquitto/config/mosquitto.conf
 ```
 > **Note**: find the default mosquitto config file {% new-tab-link title="here" href="https://github.com/eclipse/mosquitto/blob/master/mosquitto.conf" /%}
- 
+
 ### NATS JetStream
 
 NATS JetStream is supported as an external PubSub provider, meaning if you're not using it, it won't be added to your binary.
@@ -473,7 +473,7 @@ The following configs apply specifically to Redis Pub/Sub behavior. For base Red
 - Message limit for Query operations
 - `10`
 - `50`
-{% /table %}
+  {% /table %}
 
 For Redis with TLS:
 
@@ -497,7 +497,7 @@ GoFr supports Event Hubs starting gofr version v1.22.0.
 
 While subscribing gofr reads from all the partitions of the consumer group provided in the configuration reducing hassle to manage them.
 
-#### Configs
+#### Setup
 
 Azure Event Hubs is supported as an external PubSub provider such that if you are not using it, it doesn't get added in your binary.
 
@@ -525,7 +525,7 @@ app := gofr.New()
 
 While subscribing/publishing from Event Hubs make sure to keep the topic-name same as event-hub name.
 
-#### Setup
+#### Configs
 
 1. To set up Azure Event Hubs refer the following [documentation](https://learn.microsoft.com/en-us/azure/event-hubs/event-hubs-create).
 
@@ -559,7 +559,97 @@ While subscribing/publishing from Event Hubs make sure to keep the topic-name sa
 
 {% /table %}
 
-#### Example
+
+### Amazon SQS
+
+GoFr supports Amazon Simple Queue Service (SQS) as an external PubSub provider. SQS is a fully managed message queuing service that enables you to decouple and scale microservices, distributed systems, and serverless applications.
+
+#### Setup
+Import the external driver for `sqs` using the following command.
+
+```bash
+go get gofr.dev/pkg/gofr/datasource/pubsub/sqs
+```
+
+Use the `AddPubSub` method of GoFr's app to connect.
+
+**Example**
+```go
+package main
+
+import (
+    "gofr.dev/pkg/gofr"
+    "gofr.dev/pkg/gofr/datasource/pubsub/sqs"
+)
+
+func main() {
+    app := gofr.New()
+
+    app.AddPubSub(sqs.New(&sqs.Config{
+        Region:          "us-east-1",
+        AccessKeyID:     "your-access-key-id",     // optional if using IAM roles
+        SecretAccessKey: "your-secret-access-key", // optional if using IAM roles
+        // Endpoint:     "http://localhost:4566", // optional: for LocalStack
+    }))
+
+    app.Run()
+}
+```
+
+> **Note**: When using IAM roles (e.g., on EC2 or ECS), you can omit `AccessKeyID` and `SecretAccessKey`. The SDK will automatically use the instance's IAM role credentials.
+
+#### Configs
+
+{% table %}
+- Name
+- Description
+- Required
+- Default
+- Example
+
+---
+
+- `Region`
+- AWS region where the SQS queue is located.
+- Yes
+- -
+- `us-east-1`
+
+---
+
+- `AccessKeyID`
+- AWS access key ID for authentication.
+- No
+- Uses default credential chain
+- `AKIAIOSFODNN7EXAMPLE`
+
+---
+
+- `SecretAccessKey`
+- AWS secret access key for authentication.
+- No
+- Uses default credential chain
+- `wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY`
+
+---
+
+- `SessionToken`
+- AWS session token for temporary credentials.
+- No
+- -
+- `FwoGZXIvYXdzE...`
+
+---
+
+- `Endpoint`
+- Custom endpoint URL for SQS. Useful for local development with LocalStack.
+- No
+- AWS default endpoint
+- `http://localhost:4566`
+
+{% /table %}
+
+> **Note**: SQS queues must be created before publishing or subscribing. Use AWS CLI, AWS Console, or the `CreateTopic` method in migrations to create queues programmatically. GoFr supports Standard Queues by default—FIFO queues are not currently supported. Advanced features like Dead Letter Queues (DLQ) and Broadcast (SNS) can be configured at the infrastructure level.
 
 
 ## Subscribing
@@ -567,7 +657,7 @@ Adding a subscriber is similar to adding an HTTP handler, which makes it easier 
 as it decoupled from the Sender/Publisher.
 Users can define a subscriber handler and do the message processing and
 use `app.Subscribe` to inject the handler into the application.
-This is inversion of control pattern, which lets the control stay with the framework and eases the development 
+This is inversion of control pattern, which lets the control stay with the framework and eases the development
 and debugging process.
 
 The subscriber handler has the following signature.
@@ -637,7 +727,7 @@ To facilitate this, user can access the publishing interface from `gofr Context(
 ctx.GetPublisher().Publish(ctx, "topic", msg)
 ```
 
-Users can provide the topic to which the message is to be published. 
+Users can provide the topic to which the message is to be published.
 GoFr also supports multiple topic publishing.
 This is beneficial as applications may need to send multiple kinds of messages in multiple topics.
 
