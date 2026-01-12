@@ -48,7 +48,7 @@ func TestHTTPService_HealthCheckErrorResponse(t *testing.T) {
 	metrics := NewMockMetrics(ctrl)
 
 	metrics.EXPECT().RecordHistogram(gomock.Any(), "app_http_service_response", gomock.Any(), "path", gomock.Any(),
-		"method", http.MethodGet, "status", fmt.Sprintf("%v", http.StatusInternalServerError))
+		"method", http.MethodGet, "status", fmt.Sprintf("%v", http.StatusServiceUnavailable))
 
 	service := NewHTTPService("http://test", logging.NewMockLogger(logging.INFO), metrics)
 
@@ -85,7 +85,7 @@ func TestHTTPService_HealthCheckTimeout(t *testing.T) {
 	}))
 
 	metrics.EXPECT().RecordHistogram(gomock.Any(), "app_http_service_response", gomock.Any(), "path", server.URL,
-		"method", http.MethodGet, "status", fmt.Sprintf("%v", http.StatusInternalServerError)).AnyTimes()
+		"method", http.MethodGet, "status", fmt.Sprintf("%v", http.StatusServiceUnavailable)).AnyTimes()
 
 	log := testutil.StdoutOutputForFunc(func() {
 		service := NewHTTPService(server.URL, logging.NewMockLogger(logging.INFO), metrics,

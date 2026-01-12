@@ -116,41 +116,22 @@ func (c *ConnectionPoolConfig) AddOption(h HTTP) HTTP {
 // extractHTTPService attempts to extract the base *httpService from a potentially wrapped HTTP service.
 // It handles the common wrapper types used in the service package.
 func extractHTTPService(h HTTP) *httpService {
-	// Direct type assertion
-	if httpSvc, ok := h.(*httpService); ok {
-		return httpSvc
+	switch v := h.(type) {
+	case *httpService:
+		return v
+	case *circuitBreaker:
+		return extractHTTPService(v.HTTP)
+	case *retryProvider:
+		return extractHTTPService(v.HTTP)
+	case *authProvider:
+		return extractHTTPService(v.HTTP)
+	case *customHealthService:
+		return extractHTTPService(v.HTTP)
+	case *rateLimiter:
+		return extractHTTPService(v.HTTP)
+	case *customHeader:
+		return extractHTTPService(v.HTTP)
+	default:
+		return nil
 	}
-
-	// Check if it's a circuit breaker wrapper
-	if cb, ok := h.(*circuitBreaker); ok {
-		return extractHTTPService(cb.HTTP)
-	}
-
-	// Check if it's a retry provider wrapper
-	if rp, ok := h.(*retryProvider); ok {
-		return extractHTTPService(rp.HTTP)
-	}
-
-	// Check if it's an auth provider wrapper (OAuth, BasicAuth, APIKey)
-	if ap, ok := h.(*authProvider); ok {
-		return extractHTTPService(ap.HTTP)
-	}
-
-	// Check if it's a custom health service wrapper
-	if chs, ok := h.(*customHealthService); ok {
-		return extractHTTPService(chs.HTTP)
-	}
-
-	// Check if it's a rate limiter wrapper
-	if rl, ok := h.(*rateLimiter); ok {
-		return extractHTTPService(rl.HTTP)
-	}
-
-	// Check if it's a custom header wrapper
-	if ch, ok := h.(*customHeader); ok {
-		return extractHTTPService(ch.HTTP)
-	}
-
-	// If we can't extract it, return nil
-	return nil
 }
