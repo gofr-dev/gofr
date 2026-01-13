@@ -40,6 +40,7 @@ type RateLimiterConfig struct {
 	PerIP             bool
 	Store             RateLimiterStore // Optional: defaults to in-memory store
 	TrustedProxies    bool             // If true, trust X-Forwarded-For and X-Real-IP headers
+	MaxKeys           int64            // Maximum unique rate limit keys (0 = default 100000)
 }
 
 // Validate checks if the configuration values are valid.
@@ -138,6 +139,11 @@ func RateLimiter(config RateLimiterConfig, m metrics) func(http.Handler) http.Ha
 			key := "global"
 			if config.PerIP {
 				key = getIP(r, config.TrustedProxies)
+				// Fix 2: Fallback to "unknown" if getIP returns empty string
+				// This prevents all requests from sharing the same bucket
+				if key == "" {
+					key = "unknown"
+				}
 			}
 
 			// Check rate limit

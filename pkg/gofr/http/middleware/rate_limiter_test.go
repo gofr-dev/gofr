@@ -519,3 +519,222 @@ func TestRateLimiter_TrustedProxiesDisabled(t *testing.T) {
 	handler.ServeHTTP(rr, req)
 	assert.Equal(t, http.StatusTooManyRequests, rr.Code, "Should rate limit based on RemoteAddr, ignoring spoofed headers")
 }
+
+// Tests for PR #2563 comment fixes.
+
+// TestGetIP_EmptyFallback tests Fix 2: Empty IP should fallback to "unknown".
+func TestGetIP_EmptyFallback(t *testing.T) {
+	req := httptest.NewRequest(http.MethodGet, "/test", http.NoBody)
+	// Set RemoteAddr to empty (malformed)
+	req.RemoteAddr = ""
+
+	ip := getIP(req, false)
+
+	// Even with empty RemoteAddr, getRemoteAddr returns it as-is
+	// The fix is in the middleware layer, not in getIP itself
+	// This test documents the current behavior
+	assert.Empty(t, ip, "getIP returns empty string for empty RemoteAddr")
+}
+
+// TestRateLimiter_EmptyIPFallback tests Fix 2: Rate limiter uses "unknown" key for empty IP.
+func TestRateLimiter_EmptyIPFallback(t *testing.T) {
+	metrics := newRateLimiterMockMetrics()
+	config := RateLimiterConfig{
+		RequestsPerSecond: 2,
+		Burst:             2,
+		PerIP:             true,
+	}
+
+	handler := RateLimiter(config, metrics)(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}))
+
+	// Send requests with empty RemoteAddr - should be grouped under "unknown"
+	for i := 0; i < 2; i++ {
+		req := httptest.NewRequest(http.MethodGet, "/test", http.NoBody)
+		req.RemoteAddr = ""
+		rr := httptest.NewRecorder()
+		handler.ServeHTTP(rr, req)
+		assert.Equal(t, http.StatusOK, rr.Code, "Request %d should succeed", i+1)
+	}
+
+	// 3rd request with empty RemoteAddr should be rate limited under "unknown" key
+	req := httptest.NewRequest(http.MethodGet, "/test", http.NoBody)
+	req.RemoteAddr = ""
+	rr := httptest.NewRecorder()
+	handler.ServeHTTP(rr, req)
+	assert.Equal(t, http.StatusTooManyRequests, rr.Code, "Empty RemoteAddr should use 'unknown' key and be rate limited")
+}
+
+// TestMemoryRateLimiterStore_CalculateSafeDelay tests Fix 4: Delay bounds checking.
+func TestMemoryRateLimiterStore_CalculateSafeDelay(t *testing.T) {
+	config := RateLimiterConfig{
+		RequestsPerSecond: 10,
+		Burst:             5,
+	}
+	store := NewMemoryRateLimiterStore(config).(*memoryRateLimiterStore)
+
+	tests := []struct {
+		name              string
+		requestsPerSecond float64
+		expectedMinDelay  time.Duration
+		expectedMaxDelay  time.Duration
+	}{
+		{
+			name:              "normal rate",
+			requestsPerSecond: 10,
+			expectedMinDelay:  time.Millisecond,
+			expectedMaxDelay:  time.Second,
+		},
+		{
+			name:              "zero rate returns max delay",
+			requestsPerSecond: 0,
+			expectedMinDelay:  time.Minute,
+			expectedMaxDelay:  time.Minute,
+		},
+		{
+			name:              "negative rate returns max delay",
+			requestsPerSecond: -5,
+			expectedMinDelay:  time.Minute,
+			expectedMaxDelay:  time.Minute,
+		},
+		{
+			name:              "very high rate returns min delay",
+			requestsPerSecond: 1e15,
+			expectedMinDelay:  time.Millisecond,
+			expectedMaxDelay:  time.Millisecond,
+		},
+		{
+			name:              "very low rate is capped at max delay",
+			requestsPerSecond: 0.0001,
+			expectedMinDelay:  time.Minute,
+			expectedMaxDelay:  time.Minute,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			delay := store.calculateSafeDelay(tt.requestsPerSecond)
+			assert.GreaterOrEqual(t, delay, tt.expectedMinDelay, "Delay should be >= expected min")
+			assert.LessOrEqual(t, delay, tt.expectedMaxDelay, "Delay should be <= expected max")
+		})
+	}
+}
+
+// TestMemoryRateLimiterStore_MaxKeysLimit tests Fix 5: Maximum keys limit.
+func TestMemoryRateLimiterStore_MaxKeysLimit(t *testing.T) {
+	maxKeys := int64(5)
+	config := RateLimiterConfig{
+		RequestsPerSecond: 10,
+		Burst:             5,
+		MaxKeys:           maxKeys,
+	}
+
+	store := NewMemoryRateLimiterStore(config).(*memoryRateLimiterStore)
+	ctx := context.Background()
+
+	// Add entries up to the limit
+	for i := int64(0); i < maxKeys; i++ {
+		key := fmt.Sprintf("ip-%d", i)
+		allowed, _, err := store.Allow(ctx, key, config)
+		require.NoError(t, err)
+		assert.True(t, allowed, "Request for key %s should be allowed", key)
+	}
+
+	// Verify we're at capacity
+	assert.Equal(t, maxKeys, atomic.LoadInt64(&store.keyCount), "Should have max keys")
+
+	// Additional new key should fail open (allow request, don't create limiter)
+	allowed, _, err := store.Allow(ctx, "overflow-key", config)
+	require.NoError(t, err)
+	assert.True(t, allowed, "Overflow request should fail open (be allowed)")
+
+	// Verify key count hasn't increased
+	assert.Equal(t, maxKeys, atomic.LoadInt64(&store.keyCount), "Key count should not exceed max")
+}
+
+// TestMemoryRateLimiterStore_ConcurrentLoadOrStore tests Fix 1: Concurrent key creation.
+func TestMemoryRateLimiterStore_ConcurrentLoadOrStore(t *testing.T) {
+	config := RateLimiterConfig{
+		RequestsPerSecond: 100,
+		Burst:             10,
+	}
+
+	store := NewMemoryRateLimiterStore(config).(*memoryRateLimiterStore)
+	ctx := context.Background()
+
+	var wg sync.WaitGroup
+
+	const (
+		numGoroutines = 100
+		key           = "concurrent-test-key"
+	)
+
+	successCount := int64(0)
+
+	// Launch many goroutines trying to access the same key concurrently
+	for i := 0; i < numGoroutines; i++ {
+		wg.Add(1)
+
+		go func() {
+			defer wg.Done()
+
+			allowed, _, err := store.Allow(ctx, key, config)
+			if err == nil && allowed {
+				atomic.AddInt64(&successCount, 1)
+			}
+		}()
+	}
+
+	wg.Wait()
+
+	// Verify only one entry exists for this key
+	entryCount := 0
+
+	store.limiters.Range(func(k, _ any) bool {
+		if k.(string) == key {
+			entryCount++
+		}
+
+		return true
+	})
+
+	assert.Equal(t, 1, entryCount, "Should have exactly one entry for the key")
+	assert.Equal(t, int64(1), atomic.LoadInt64(&store.keyCount), "Key count should be 1")
+
+	// Some requests should succeed (burst allows up to 10), others should be rate limited
+	assert.GreaterOrEqual(t, successCount, int64(1), "At least some requests should succeed")
+	assert.LessOrEqual(t, successCount, int64(10)+1, "Not more than burst+1 should succeed due to timing")
+}
+
+// TestMemoryRateLimiterStore_CleanupDecrementsKeyCount tests that cleanup decrements key count.
+func TestMemoryRateLimiterStore_CleanupDecrementsKeyCount(t *testing.T) {
+	config := RateLimiterConfig{
+		RequestsPerSecond: 10,
+		Burst:             5,
+	}
+
+	store := NewMemoryRateLimiterStore(config).(*memoryRateLimiterStore)
+	ctx := context.Background()
+
+	// Add some entries
+	for i := 0; i < 3; i++ {
+		_, _, _ = store.Allow(ctx, fmt.Sprintf("key-%d", i), config)
+	}
+
+	assert.Equal(t, int64(3), atomic.LoadInt64(&store.keyCount), "Should have 3 keys")
+
+	// Make all entries stale
+	store.limiters.Range(func(_ any, value any) bool {
+		entry := value.(*limiterEntry)
+		atomic.StoreInt64(&entry.lastAccess, time.Now().Unix()-3600) // 1 hour ago
+
+		return true
+	})
+
+	// Run cleanup
+	store.cleanup(10 * time.Minute)
+
+	// Verify key count is decremented
+	assert.Equal(t, int64(0), atomic.LoadInt64(&store.keyCount), "Key count should be 0 after cleanup")
+}

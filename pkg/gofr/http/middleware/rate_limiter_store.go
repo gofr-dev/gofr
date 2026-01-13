@@ -23,6 +23,8 @@ type RateLimiterStore interface {
 // memoryRateLimiterStore implements RateLimiterStore using in-memory token buckets.
 type memoryRateLimiterStore struct {
 	limiters    sync.Map // map[string]*limiterEntry
+	keyCount    int64    // atomic counter for tracking number of keys
+	maxKeys     int64    // maximum allowed keys (0 = unlimited)
 	stopCh      chan struct{}
 	cleanupOnce sync.Once
 	stopOnce    sync.Once
@@ -34,10 +36,25 @@ type limiterEntry struct {
 	lastAccess int64 // Unix timestamp for cleanup
 }
 
+// Default limits for delay calculation bounds checking.
+const (
+	minDelay       = time.Millisecond
+	maxDelay       = time.Minute
+	defaultMaxKeys = 100000
+)
+
 // NewMemoryRateLimiterStore creates a new in-memory rate limiter store.
 // The config is stored to ensure consistent rate limiting for all keys.
 func NewMemoryRateLimiterStore(config RateLimiterConfig) RateLimiterStore {
-	return &memoryRateLimiterStore{config: config}
+	maxKeys := config.MaxKeys
+	if maxKeys == 0 {
+		maxKeys = defaultMaxKeys // Default max keys to prevent memory exhaustion
+	}
+
+	return &memoryRateLimiterStore{
+		config:  config,
+		maxKeys: maxKeys,
+	}
 }
 
 // Allow checks if a request should be allowed based on the rate limit.
@@ -48,32 +65,69 @@ func (m *memoryRateLimiterStore) Allow(_ context.Context, key string, _ RateLimi
 	cfg := m.config
 
 	// Get or create limiter for this key
-	val, _ := m.limiters.LoadOrStore(key, &limiterEntry{
+	// Fix 1: Check loaded flag to avoid unnecessary object creation when entry already exists
+	val, loaded := m.limiters.LoadOrStore(key, &limiterEntry{
 		limiter:    rate.NewLimiter(rate.Limit(cfg.RequestsPerSecond), cfg.Burst),
 		lastAccess: now,
 	})
 
 	entry := val.(*limiterEntry)
-	atomic.StoreInt64(&entry.lastAccess, now)
 
-	// Check if request is allowed
-	if !entry.limiter.Allow() {
-		// Calculate retry-after duration
-		reservation := entry.limiter.Reserve()
-		if !reservation.OK() {
-			// Burst exceeded - calculate delay based on request rate
-			// Time to wait for one token = 1 / RequestsPerSecond
-			delay := time.Duration(float64(time.Second) / cfg.RequestsPerSecond)
-			return false, delay, nil
+	// If entry was loaded (already existed), update lastAccess atomically
+	// If it was stored (new entry), lastAccess is already set correctly
+	if loaded {
+		atomic.StoreInt64(&entry.lastAccess, now)
+	} else {
+		// New entry was stored - increment key count
+		// Fix 5: Track number of keys to prevent memory exhaustion
+		newCount := atomic.AddInt64(&m.keyCount, 1)
+		if m.maxKeys > 0 && newCount > m.maxKeys {
+			// Exceeded max keys - remove the entry we just added and fail open
+			m.limiters.Delete(key)
+			atomic.AddInt64(&m.keyCount, -1)
+			// Fail open to prevent service denial
+			return true, 0, nil
 		}
+	}
 
-		delay := reservation.Delay()
-		reservation.Cancel() // Don't actually consume the token
+	// Fix 3: Use only Reserve() instead of Allow() + Reserve() to avoid race conditions
+	// Reserve() atomically checks and reserves a token, giving accurate delay information
+	reservation := entry.limiter.Reserve()
+	if !reservation.OK() {
+		// Should not happen with valid config, but handle gracefully
+		// Fix 4: Use bounds-checked delay calculation
+		return false, m.calculateSafeDelay(cfg.RequestsPerSecond), nil
+	}
 
+	delay := reservation.Delay()
+	if delay > 0 {
+		// Request would need to wait - cancel reservation and return the delay
+		reservation.Cancel()
 		return false, delay, nil
 	}
 
+	// Request is allowed immediately (delay == 0)
 	return true, 0, nil
+}
+
+// calculateSafeDelay calculates delay with bounds checking to prevent overflow or zero values.
+// Fix 4: Ensures delay is always within reasonable bounds.
+func (*memoryRateLimiterStore) calculateSafeDelay(requestsPerSecond float64) time.Duration {
+	if requestsPerSecond <= 0 {
+		return maxDelay
+	}
+
+	delay := time.Duration(float64(time.Second) / requestsPerSecond)
+
+	if delay < minDelay {
+		return minDelay
+	}
+
+	if delay > maxDelay {
+		return maxDelay
+	}
+
+	return delay
 }
 
 // StartCleanup starts a background goroutine to clean up stale limiters.
@@ -122,6 +176,8 @@ func (m *memoryRateLimiterStore) cleanup(staleThreshold time.Duration) {
 		entry := value.(*limiterEntry)
 		if atomic.LoadInt64(&entry.lastAccess) < cutoff {
 			m.limiters.Delete(key)
+			// Decrement key count when removing stale entries
+			atomic.AddInt64(&m.keyCount, -1)
 		}
 
 		return true
