@@ -4,7 +4,7 @@ go 1.25
 
 require (
 	github.com/DATA-DOG/go-sqlmock v1.5.2
-	github.com/godror/godror v0.49.6
+	github.com/godror/godror v0.50.0
 	github.com/stretchr/testify v1.11.1
 	go.opentelemetry.io/otel v1.39.0
 	go.opentelemetry.io/otel/trace v1.39.0
