@@ -7,6 +7,10 @@ import (
 	"gofr.dev/pkg/gofr/container"
 )
 
+const (
+	scyllaDBMigrationTable = "gofr_migrations"
+)
+
 type scyllaDS struct {
 	ScyllaDB
 }
@@ -22,10 +26,6 @@ func (ds scyllaDS) apply(m migrator) migrator {
 		migrator: m,
 	}
 }
-
-const (
-	scyllaDBMigrationTable = "gofr_migrations"
-)
 
 func (s *scyllaMigrator) checkAndCreateMigrationTable(c *container.Container) error {
 	createTableQuery := fmt.Sprintf(`

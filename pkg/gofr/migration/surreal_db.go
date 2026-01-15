@@ -11,6 +11,12 @@ import (
 
 var errExecuteQuery = errors.New("failed to execute migration query")
 
+const (
+	getLastSurrealDBGoFrMigration   = `SELECT version FROM gofr_migrations ORDER BY version DESC LIMIT 1;`
+	insertSurrealDBGoFrMigrationRow = `CREATE gofr_migrations SET version = $version, method = $method, ` +
+		`start_time = $start_time, duration = $duration;`
+)
+
 type surrealDS struct {
 	client SurrealDB
 }
@@ -46,12 +52,6 @@ func (s surrealDS) apply(m migrator) migrator {
 		migrator:  m,
 	}
 }
-
-const (
-	getLastSurrealDBGoFrMigration   = `SELECT version FROM gofr_migrations ORDER BY version DESC LIMIT 1;`
-	insertSurrealDBGoFrMigrationRow = `CREATE gofr_migrations SET version = $version, method = $method, ` +
-		`start_time = $start_time, duration = $duration;`
-)
 
 func getMigrationTableQueries() []string {
 	return []string{

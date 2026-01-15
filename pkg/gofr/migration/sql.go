@@ -22,6 +22,10 @@ const (
 	insertGoFrMigrationRowMySQL = `INSERT INTO gofr_migrations (version, method, start_time,duration) VALUES (?, ?, ?, ?);`
 
 	insertGoFrMigrationRowPostgres = `INSERT INTO gofr_migrations (version, method, start_time,duration) VALUES ($1, $2, $3, $4);`
+
+	mysql    = "mysql"
+	postgres = "postgres"
+	sqlite   = "sqlite"
 )
 
 // database/sql is the package imported so named it sqlDS.
@@ -69,12 +73,6 @@ func (d *sqlMigrator) getLastMigration(c *container.Container) int64 {
 
 	return lastMigration
 }
-
-const (
-	mysql    = "mysql"
-	postgres = "postgres"
-	sqlite   = "sqlite"
-)
 
 func (d *sqlMigrator) commitMigration(c *container.Container, data transactionData) error {
 	switch c.SQL.Dialect() {

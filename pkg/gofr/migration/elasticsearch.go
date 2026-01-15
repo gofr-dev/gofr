@@ -8,6 +8,11 @@ import (
 	"gofr.dev/pkg/gofr/container"
 )
 
+const (
+	// elasticsearchMigrationIndex is the index used to track migrations.
+	elasticsearchMigrationIndex = "gofr_migrations"
+)
+
 // elasticsearchDS is the adapter struct that implements migration operations for Elasticsearch.
 type elasticsearchDS struct {
 	client Elasticsearch
@@ -18,11 +23,6 @@ type elasticsearchMigrator struct {
 	elasticsearchDS
 	migrator
 }
-
-const (
-	// elasticsearchMigrationIndex is the index used to track migrations.
-	elasticsearchMigrationIndex = "gofr_migrations"
-)
 
 // getLastElasticsearchMigrationQuery fetches the most recent migration version.
 func getLastElasticsearchMigrationQuery() map[string]any {

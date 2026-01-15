@@ -12,6 +12,8 @@ import (
 	"gofr.dev/pkg/gofr/container"
 )
 
+const dirPerm = 0755
+
 type openTSDBDS struct {
 	container.OpenTSDB
 	filePath string
@@ -29,8 +31,6 @@ type tsdbMigrationRecord struct {
 	StartTime string `json:"start_time"`
 	Duration  int64  `json:"duration"`
 }
-
-const dirPerm = 0755
 
 var errNilFileHandle = errors.New("failed to create migration file: received nil file handle")
 

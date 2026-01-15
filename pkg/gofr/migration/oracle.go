@@ -15,23 +15,6 @@ var (
 	errNestedTransactionNotSupported = errors.New("nested transactions not supported")
 )
 
-type oracleDS struct {
-	Oracle
-}
-
-type oracleMigrator struct {
-	Oracle
-	migrator
-}
-
-// Provides a wrapper to apply the oracle migrator logic.
-func (od oracleDS) apply(m migrator) migrator {
-	return &oracleMigrator{
-		Oracle:   od.Oracle,
-		migrator: m,
-	}
-}
-
 const (
 	checkAndCreateOracleMigrationTable = `
 BEGIN
@@ -56,6 +39,23 @@ INSERT INTO gofr_migrations (version, method, start_time, duration)
 VALUES (:1, :2, :3, :4)
 `
 )
+
+type oracleDS struct {
+	Oracle
+}
+
+type oracleMigrator struct {
+	Oracle
+	migrator
+}
+
+// Provides a wrapper to apply the oracle migrator logic.
+func (od oracleDS) apply(m migrator) migrator {
+	return &oracleMigrator{
+		Oracle:   od.Oracle,
+		migrator: m,
+	}
+}
 
 // Create migration table if it doesn't exist.
 func (om *oracleMigrator) checkAndCreateMigrationTable(c *container.Container) error {

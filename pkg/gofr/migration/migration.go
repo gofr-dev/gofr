@@ -19,6 +19,10 @@ var (
 	ErrLockReleaseFailed     = errors.New("failed to release migration lock")
 )
 
+const (
+	lockKey = "gofr_migrations_lock"
+)
+
 type MigrateFunc func(d Datasource) error
 
 type Migrate struct {
@@ -33,10 +37,6 @@ type transactionData struct {
 	RedisTx  goRedis.Pipeliner
 	OracleTx container.OracleTx
 }
-
-const (
-	lockKey = "gofr_migrations_lock"
-)
 
 func Run(migrationsMap map[int64]Migrate, c *container.Container) {
 	invalidKeys, keys := getKeys(migrationsMap)

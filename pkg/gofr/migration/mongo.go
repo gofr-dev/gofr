@@ -7,6 +7,10 @@ import (
 	"gofr.dev/pkg/gofr/container"
 )
 
+const (
+	mongoMigrationCollection = "gofr_migrations"
+)
+
 type mongoDS struct {
 	container.Mongo
 }
@@ -23,10 +27,6 @@ func (ds mongoDS) apply(m migrator) migrator {
 		migrator: m,
 	}
 }
-
-const (
-	mongoMigrationCollection = "gofr_migrations"
-)
 
 // checkAndCreateMigrationTable initializes a MongoDB collection if it doesn't exist.
 func (mg *mongoMigrator) checkAndCreateMigrationTable(_ *container.Container) error {

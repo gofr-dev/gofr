@@ -7,23 +7,6 @@ import (
 	"gofr.dev/pkg/gofr/container"
 )
 
-type clickHouseDS struct {
-	Clickhouse
-}
-
-type clickHouseMigrator struct {
-	Clickhouse
-
-	migrator
-}
-
-func (ch clickHouseDS) apply(m migrator) migrator {
-	return &clickHouseMigrator{
-		Clickhouse: ch.Clickhouse,
-		migrator:   m,
-	}
-}
-
 const (
 	CheckAndCreateChMigrationTable = `CREATE TABLE IF NOT EXISTS gofr_migrations
 (
@@ -40,6 +23,23 @@ ORDER BY (version, method);
 
 	insertChGoFrMigrationRow = `INSERT INTO gofr_migrations (version, method, start_time, duration) VALUES (?, ?, ?, ?);`
 )
+
+type clickHouseDS struct {
+	Clickhouse
+}
+
+type clickHouseMigrator struct {
+	Clickhouse
+
+	migrator
+}
+
+func (ch clickHouseDS) apply(m migrator) migrator {
+	return &clickHouseMigrator{
+		Clickhouse: ch.Clickhouse,
+		migrator:   m,
+	}
+}
 
 func (ch *clickHouseMigrator) checkAndCreateMigrationTable(c *container.Container) error {
 	if err := c.Clickhouse.Exec(context.Background(), CheckAndCreateChMigrationTable); err != nil {

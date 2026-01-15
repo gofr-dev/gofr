@@ -7,6 +7,15 @@ import (
 	"gofr.dev/pkg/gofr/container"
 )
 
+const (
+	checkAndCreateCassandraMigrationTable = `CREATE TABLE IF NOT EXISTS gofr_migrations (version bigint,
+    method text, start_time timestamp, duration bigint, PRIMARY KEY (version, method));`
+
+	getLastCassandraGoFrMigration = `SELECT version FROM gofr_migrations`
+
+	insertCassandraGoFrMigrationRow = `INSERT INTO gofr_migrations (version, method, start_time, duration) VALUES (?, ?, ?, ?);`
+)
+
 type cassandraDS struct {
 	container.CassandraWithContext
 }
@@ -23,15 +32,6 @@ func (cs cassandraDS) apply(m migrator) migrator {
 		migrator:             m,
 	}
 }
-
-const (
-	checkAndCreateCassandraMigrationTable = `CREATE TABLE IF NOT EXISTS gofr_migrations (version bigint,
-    method text, start_time timestamp, duration bigint, PRIMARY KEY (version, method));`
-
-	getLastCassandraGoFrMigration = `SELECT version FROM gofr_migrations`
-
-	insertCassandraGoFrMigrationRow = `INSERT INTO gofr_migrations (version, method, start_time, duration) VALUES (?, ?, ?, ?);`
-)
 
 func (cs *cassandraMigrator) checkAndCreateMigrationTable(c *container.Container) error {
 	if err := c.Cassandra.ExecWithCtx(context.Background(), checkAndCreateCassandraMigrationTable); err != nil {

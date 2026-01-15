@@ -7,17 +7,6 @@ import (
 	"gofr.dev/pkg/gofr/container"
 )
 
-// arangoDS is our adapter struct that will implement both interfaces.
-type arangoDS struct {
-	client ArangoDB
-}
-
-// arangoMigrator struct remains the same but uses our adapter.
-type arangoMigrator struct {
-	ArangoDB
-	migrator
-}
-
 const (
 	arangoMigrationDB         = "_system"
 	arangoMigrationCollection = "gofr_migrations"
@@ -37,6 +26,17 @@ const (
   } INTO gofr_migrations
 `
 )
+
+// arangoDS is our adapter struct that will implement both interfaces.
+type arangoDS struct {
+	client ArangoDB
+}
+
+// arangoMigrator struct remains the same but uses our adapter.
+type arangoMigrator struct {
+	ArangoDB
+	migrator
+}
 
 func (ds arangoDS) CreateDB(ctx context.Context, database string) error {
 	return ds.client.CreateDB(ctx, database)

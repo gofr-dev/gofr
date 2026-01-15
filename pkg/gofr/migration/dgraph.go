@@ -10,17 +10,6 @@ import (
 	"gofr.dev/pkg/gofr/container"
 )
 
-// dgraphDS is the adapter struct that implements migration operations.
-type dgraphDS struct {
-	client DGraph
-}
-
-// dgraphMigrator struct implements the migrator interface.
-type dgraphMigrator struct {
-	dgraphDS
-	migrator
-}
-
 const (
 	// dgraphSchema defines the migration schema with fully qualified predicate names.
 	dgraphSchema = `
@@ -45,6 +34,17 @@ const (
 		}
 	`
 )
+
+// dgraphDS is the adapter struct that implements migration operations.
+type dgraphDS struct {
+	client DGraph
+}
+
+// dgraphMigrator struct implements the migrator interface.
+type dgraphMigrator struct {
+	dgraphDS
+	migrator
+}
 
 // apply creates a new dgraphMigrator.
 func (ds dgraphDS) apply(m migrator) migrator {

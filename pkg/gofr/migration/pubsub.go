@@ -9,15 +9,15 @@ import (
 	"gofr.dev/pkg/gofr/container"
 )
 
-type pubsubDS struct {
-	client PubSub
-}
-
 const (
 	pubsubMigrationTopic = "gofr_migrations"
 	migrationTimeout     = 10 * time.Second
 	defaultQueryLimit    = 100
 )
+
+type pubsubDS struct {
+	client PubSub
+}
 
 type migrationRecord struct {
 	Version   int64  `json:"version"`
