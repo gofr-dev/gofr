@@ -126,7 +126,7 @@ func (m *redisMigrator) rollback(c *container.Container, data transactionData) {
 	c.Fatalf("Migration %v for Redis failed and rolled back", data.MigrationNumber)
 }
 
-func (*redisMigrator) AcquireLock(c *container.Container) error {
+func (*redisMigrator) Lock(c *container.Container) error {
 	// SETNX gofr_migrations_lock 1 EX 60
 	// We use a TTL of 60 seconds to ensure the lock is released if the process crashes.
 	ttl := 60 * time.Second
@@ -154,7 +154,7 @@ func (*redisMigrator) AcquireLock(c *container.Container) error {
 	return ErrLockAcquisitionFailed
 }
 
-func (*redisMigrator) ReleaseLock(c *container.Container) error {
+func (*redisMigrator) Unlock(c *container.Container) error {
 	err := c.Redis.Del(context.Background(), lockKey).Err()
 	if err != nil {
 		c.Errorf("unable to release redis lock: %v", err)

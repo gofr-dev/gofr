@@ -140,7 +140,7 @@ func (d *sqlMigrator) rollback(c *container.Container, data transactionData) {
 	c.Fatalf("Migration %v failed and rolled back", data.MigrationNumber)
 }
 
-func (d *sqlMigrator) AcquireLock(c *container.Container) error {
+func (d *sqlMigrator) Lock(c *container.Container) error {
 	// Start a transaction to get a dedicated connection from the pool
 	tx, err := c.SQL.Begin()
 	if err != nil {
@@ -197,7 +197,7 @@ func (d *sqlMigrator) AcquireLock(c *container.Container) error {
 	return ErrLockAcquisitionFailed
 }
 
-func (d *sqlMigrator) ReleaseLock(c *container.Container) error {
+func (d *sqlMigrator) Unlock(c *container.Container) error {
 	if d.lockTx == nil {
 		return nil
 	}

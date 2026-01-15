@@ -82,13 +82,13 @@ func acquireAllLocks(c *container.Container, lockers []Locker) []Locker {
 	acquiredLockers := make([]Locker, 0, len(lockers))
 
 	for _, l := range lockers {
-		err := l.AcquireLock(c)
+		err := l.Lock(c)
 		if err != nil {
 			c.Errorf("failed to acquire migration lock, err: %v", err)
 
 			// Release already acquired locks in reverse order
 			for i := len(acquiredLockers) - 1; i >= 0; i-- {
-				_ = acquiredLockers[i].ReleaseLock(c)
+				_ = acquiredLockers[i].Unlock(c)
 			}
 
 			return nil
@@ -102,7 +102,7 @@ func acquireAllLocks(c *container.Container, lockers []Locker) []Locker {
 
 func releaseAllLocks(c *container.Container, acquiredLockers []Locker) {
 	for i := len(acquiredLockers) - 1; i >= 0; i-- {
-		err := acquiredLockers[i].ReleaseLock(c)
+		err := acquiredLockers[i].Unlock(c)
 		if err != nil {
 			c.Errorf("failed to release migration lock, err: %v", err)
 		}

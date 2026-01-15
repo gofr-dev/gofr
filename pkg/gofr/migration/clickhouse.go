@@ -104,11 +104,11 @@ func (ch *clickHouseMigrator) rollback(c *container.Container, data transactionD
 	c.Fatalf("migration %v failed and rolled back", data.MigrationNumber)
 }
 
-func (*clickHouseMigrator) AcquireLock(*container.Container) error {
+func (*clickHouseMigrator) Lock(*container.Container) error {
 	return nil
 }
 
-func (*clickHouseMigrator) ReleaseLock(*container.Container) error {
+func (*clickHouseMigrator) Unlock(*container.Container) error {
 	return nil
 }
 

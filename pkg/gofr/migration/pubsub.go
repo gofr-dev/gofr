@@ -159,11 +159,11 @@ func (pm *pubsubMigrator) rollback(c *container.Container, data transactionData)
 	pm.migrator.rollback(c, data)
 }
 
-func (*pubsubMigrator) AcquireLock(*container.Container) error {
+func (*pubsubMigrator) Lock(*container.Container) error {
 	return nil
 }
 
-func (*pubsubMigrator) ReleaseLock(*container.Container) error {
+func (*pubsubMigrator) Unlock(*container.Container) error {
 	return nil
 }
 

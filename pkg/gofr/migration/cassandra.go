@@ -94,11 +94,11 @@ func (cs *cassandraMigrator) rollback(c *container.Container, data transactionDa
 	c.Fatalf("migration %v failed and rolled back", data.MigrationNumber)
 }
 
-func (*cassandraMigrator) AcquireLock(*container.Container) error {
+func (*cassandraMigrator) Lock(*container.Container) error {
 	return nil
 }
 
-func (*cassandraMigrator) ReleaseLock(*container.Container) error {
+func (*cassandraMigrator) Unlock(*container.Container) error {
 	return nil
 }
 

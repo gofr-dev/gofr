@@ -1423,18 +1423,18 @@ func (m *Mockmigrator) EXPECT() *MockmigratorMockRecorder {
 	return m.recorder
 }
 
-// AcquireLock mocks base method.
-func (m *Mockmigrator) AcquireLock(c *container.Container) error {
+// Lock mocks base method.
+func (m *Mockmigrator) Lock(c *container.Container) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "AcquireLock", c)
+	ret := m.ctrl.Call(m, "Lock", c)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
-// AcquireLock indicates an expected call of AcquireLock.
-func (mr *MockmigratorMockRecorder) AcquireLock(c any) *gomock.Call {
+// Lock indicates an expected call of Lock.
+func (mr *MockmigratorMockRecorder) Lock(c any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AcquireLock", reflect.TypeOf((*Mockmigrator)(nil).AcquireLock), c)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Lock", reflect.TypeOf((*Mockmigrator)(nil).Lock), c)
 }
 
 // Name mocks base method.
@@ -1451,18 +1451,18 @@ func (mr *MockmigratorMockRecorder) Name() *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Name", reflect.TypeOf((*Mockmigrator)(nil).Name))
 }
 
-// ReleaseLock mocks base method.
-func (m *Mockmigrator) ReleaseLock(c *container.Container) error {
+// Unlock mocks base method.
+func (m *Mockmigrator) Unlock(c *container.Container) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "ReleaseLock", c)
+	ret := m.ctrl.Call(m, "Unlock", c)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
-// ReleaseLock indicates an expected call of ReleaseLock.
-func (mr *MockmigratorMockRecorder) ReleaseLock(c any) *gomock.Call {
+// Unlock indicates an expected call of Unlock.
+func (mr *MockmigratorMockRecorder) Unlock(c any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ReleaseLock", reflect.TypeOf((*Mockmigrator)(nil).ReleaseLock), c)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Unlock", reflect.TypeOf((*Mockmigrator)(nil).Unlock), c)
 }
 
 // beginTransaction mocks base method.
@@ -1637,18 +1637,18 @@ func (m *MockLocker) EXPECT() *MockLockerMockRecorder {
 	return m.recorder
 }
 
-// AcquireLock mocks base method.
-func (m *MockLocker) AcquireLock(c *container.Container) error {
+// Lock mocks base method.
+func (m *MockLocker) Lock(c *container.Container) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "AcquireLock", c)
+	ret := m.ctrl.Call(m, "Lock", c)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
-// AcquireLock indicates an expected call of AcquireLock.
-func (mr *MockLockerMockRecorder) AcquireLock(c any) *gomock.Call {
+// Lock indicates an expected call of Lock.
+func (mr *MockLockerMockRecorder) Lock(c any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AcquireLock", reflect.TypeOf((*MockLocker)(nil).AcquireLock), c)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Lock", reflect.TypeOf((*MockLocker)(nil).Lock), c)
 }
 
 // Name mocks base method.
@@ -1665,16 +1665,16 @@ func (mr *MockLockerMockRecorder) Name() *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Name", reflect.TypeOf((*MockLocker)(nil).Name))
 }
 
-// ReleaseLock mocks base method.
-func (m *MockLocker) ReleaseLock(c *container.Container) error {
+// Unlock mocks base method.
+func (m *MockLocker) Unlock(c *container.Container) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "ReleaseLock", c)
+	ret := m.ctrl.Call(m, "Unlock", c)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
-// ReleaseLock indicates an expected call of ReleaseLock.
-func (mr *MockLockerMockRecorder) ReleaseLock(c any) *gomock.Call {
+// Unlock indicates an expected call of Unlock.
+func (mr *MockLockerMockRecorder) Unlock(c any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ReleaseLock", reflect.TypeOf((*MockLocker)(nil).ReleaseLock), c)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Unlock", reflect.TypeOf((*MockLocker)(nil).Unlock), c)
 }

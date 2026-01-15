@@ -179,11 +179,11 @@ func (dm *dgraphMigrator) rollback(c *container.Container, data transactionData)
 	c.Fatalf("Migration %v failed and rolled back", data.MigrationNumber)
 }
 
-func (*dgraphMigrator) AcquireLock(*container.Container) error {
+func (*dgraphMigrator) Lock(*container.Container) error {
 	return nil
 }
 
-func (*dgraphMigrator) ReleaseLock(*container.Container) error {
+func (*dgraphMigrator) Unlock(*container.Container) error {
 	return nil
 }
 

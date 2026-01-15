@@ -193,11 +193,11 @@ func (om *oracleMigrator) beginTransaction(c *container.Container) transactionDa
 	return td
 }
 
-func (*oracleMigrator) AcquireLock(*container.Container) error {
+func (*oracleMigrator) Lock(*container.Container) error {
 	return nil
 }
 
-func (*oracleMigrator) ReleaseLock(*container.Container) error {
+func (*oracleMigrator) Unlock(*container.Container) error {
 	return nil
 }
 

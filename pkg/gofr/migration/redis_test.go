@@ -152,7 +152,7 @@ func TestRedisMigrator_beginTransaction(t *testing.T) {
 
 var errRedis = errors.New("redis error")
 
-func TestRedisMigrator_AcquireLock(t *testing.T) {
+func TestRedisMigrator_Lock(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	t.Cleanup(ctrl.Finish)
 
@@ -163,7 +163,7 @@ func TestRedisMigrator_AcquireLock(t *testing.T) {
 		mocks.Redis.EXPECT().SetNX(gomock.Any(), lockKey, "1", 60*time.Second).
 			Return(goRedis.NewBoolResult(true, nil))
 
-		err := m.AcquireLock(c)
+		err := m.Lock(c)
 		require.NoError(t, err)
 	})
 
@@ -176,7 +176,7 @@ func TestRedisMigrator_AcquireLock(t *testing.T) {
 		mocks.Redis.EXPECT().SetNX(gomock.Any(), lockKey, "1", 60*time.Second).
 			Return(goRedis.NewBoolResult(true, nil))
 
-		err := m.AcquireLock(c)
+		err := m.Lock(c)
 		require.NoError(t, err)
 	})
 
@@ -184,13 +184,13 @@ func TestRedisMigrator_AcquireLock(t *testing.T) {
 		mocks.Redis.EXPECT().SetNX(gomock.Any(), lockKey, "1", 60*time.Second).
 			Return(goRedis.NewBoolResult(false, errRedis))
 
-		err := m.AcquireLock(c)
+		err := m.Lock(c)
 		require.Error(t, err)
 		assert.Equal(t, ErrLockAcquisitionFailed, err)
 	})
 }
 
-func TestRedisMigrator_ReleaseLock(t *testing.T) {
+func TestRedisMigrator_Unlock(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	t.Cleanup(ctrl.Finish)
 
@@ -201,7 +201,7 @@ func TestRedisMigrator_ReleaseLock(t *testing.T) {
 		mocks.Redis.EXPECT().Del(gomock.Any(), lockKey).
 			Return(goRedis.NewIntResult(1, nil))
 
-		err := m.ReleaseLock(c)
+		err := m.Unlock(c)
 		require.NoError(t, err)
 	})
 
@@ -209,7 +209,7 @@ func TestRedisMigrator_ReleaseLock(t *testing.T) {
 		mocks.Redis.EXPECT().Del(gomock.Any(), lockKey).
 			Return(goRedis.NewIntResult(0, errRedis))
 
-		err := m.ReleaseLock(c)
+		err := m.Unlock(c)
 		require.Error(t, err)
 		assert.Equal(t, ErrLockReleaseFailed, err)
 	})

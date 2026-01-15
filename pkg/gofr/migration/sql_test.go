@@ -404,7 +404,7 @@ func TestCheckAndCreateMigrationTable_ErrorCreatingTable(t *testing.T) {
 
 var errBegin = errors.New("begin error")
 
-func TestSQLMigrator_AcquireLock(t *testing.T) {
+func TestSQLMigrator_Lock(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	t.Cleanup(ctrl.Finish)
 
@@ -414,13 +414,13 @@ func TestSQLMigrator_AcquireLock(t *testing.T) {
 	t.Run("BeginTransactionError", func(t *testing.T) {
 		mocks.SQL.ExpectBegin().WillReturnError(errBegin)
 
-		err := m.AcquireLock(mockContainer)
+		err := m.Lock(mockContainer)
 		require.Error(t, err)
 		assert.Equal(t, ErrLockAcquisitionFailed, err)
 	})
 }
 
-func TestSQLMigrator_ReleaseLock(t *testing.T) {
+func TestSQLMigrator_Unlock(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	t.Cleanup(ctrl.Finish)
 
@@ -428,7 +428,7 @@ func TestSQLMigrator_ReleaseLock(t *testing.T) {
 	m := sqlMigrator{SQL: mockContainer.SQL}
 
 	t.Run("NoLockHeld", func(t *testing.T) {
-		err := m.ReleaseLock(mockContainer)
+		err := m.Unlock(mockContainer)
 		require.NoError(t, err)
 	})
 }
