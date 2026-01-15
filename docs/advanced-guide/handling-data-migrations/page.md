@@ -173,6 +173,25 @@ func addMonitoringFeature() migration.Migrate {
 - **Easier rollback:** Reverting a feature means reverting one migration, not tracking multiple related migrations
 - **Better organization:** Related changes stay together, making the codebase easier to understand
 
+## Distributed Locking
+
+GoFr ensures that migrations are executed safely in a distributed environment by using a locking mechanism. This prevents multiple instances of the application from running migrations simultaneously, which could lead to race conditions or data corruption.
+
+### How it works
+
+1.  **Acquire Lock:** Before starting any migration, the application attempts to acquire a distributed lock.
+    *   **SQL (MySQL/PostgreSQL):** Uses database-level advisory locks (`GET_LOCK` in MySQL, `pg_try_advisory_lock` in PostgreSQL).
+    *   **Redis:** Uses `SETNX` with a Time-To-Live (TTL) of 60 seconds.
+
+2.  **Wait & Retry:** If the lock is already held by another instance:
+    *   The application will wait and retry acquiring the lock.
+    *   It retries up to **140 times** with a **500ms** interval (approx. **70 seconds** total wait time).
+    *   This duration is chosen to exceed the Redis lock TTL (60s), ensuring that if a pod holding the lock crashes, waiting pods can eventually acquire the lock after it expires.
+
+3.  **Execute & Release:** Once the lock is acquired, the migrations are executed. The lock is released immediately after migrations complete or if an error occurs.
+
+> **Note:** For Redis, if a migration takes longer than 60 seconds, the lock might expire, potentially allowing another instance to acquire it. Ensure your individual migrations are performant or consider breaking them down.
+
 ## Migration Records
 
 **SQL**

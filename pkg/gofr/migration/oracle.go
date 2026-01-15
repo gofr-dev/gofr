@@ -26,7 +26,7 @@ type oracleMigrator struct {
 
 // Provides a wrapper to apply the oracle migrator logic.
 func (od oracleDS) apply(m migrator) migrator {
-	return oracleMigrator{
+	return &oracleMigrator{
 		Oracle:   od.Oracle,
 		migrator: m,
 	}
@@ -58,7 +58,7 @@ VALUES (:1, :2, :3, :4)
 )
 
 // Create migration table if it doesn't exist.
-func (om oracleMigrator) checkAndCreateMigrationTable(c *container.Container) error {
+func (om *oracleMigrator) checkAndCreateMigrationTable(c *container.Container) error {
 	err := om.Oracle.Exec(context.Background(), checkAndCreateOracleMigrationTable)
 	if err != nil {
 		c.Errorf("Failed to create Oracle migration table: %v", err)
@@ -70,7 +70,7 @@ func (om oracleMigrator) checkAndCreateMigrationTable(c *container.Container) er
 }
 
 // Get the last applied migration version.
-func (om oracleMigrator) getLastMigration(c *container.Container) int64 {
+func (om *oracleMigrator) getLastMigration(c *container.Container) int64 {
 	var results []map[string]any
 
 	err := om.Oracle.Select(context.Background(), &results, getLastOracleGoFrMigration)
@@ -92,7 +92,7 @@ func (om oracleMigrator) getLastMigration(c *container.Container) int64 {
 }
 
 // extractLastMigrationFromResults handles Oracle number type conversion.
-func (om oracleMigrator) extractLastMigrationFromResults(results []map[string]any) int64 {
+func (om *oracleMigrator) extractLastMigrationFromResults(results []map[string]any) int64 {
 	if len(results) == 0 {
 		return 0
 	}
@@ -106,7 +106,7 @@ func (om oracleMigrator) extractLastMigrationFromResults(results []map[string]an
 }
 
 // convertToInt64 converts various Oracle number types to int64.
-func (om oracleMigrator) convertToInt64(value any) int64 {
+func (om *oracleMigrator) convertToInt64(value any) int64 {
 	switch v := value.(type) {
 	case float64:
 		return int64(v)
@@ -135,7 +135,7 @@ func (oracleMigrator) parseStringValue(value any) int64 {
 }
 
 // Commit the migration and insert a record into the migration table.
-func (om oracleMigrator) commitMigration(c *container.Container, data transactionData) error {
+func (om *oracleMigrator) commitMigration(c *container.Container, data transactionData) error {
 	if data.OracleTx == nil {
 		c.Error("invalid Oracle transaction")
 		return errInvalidOracleTransaction
@@ -162,7 +162,7 @@ func (om oracleMigrator) commitMigration(c *container.Container, data transactio
 }
 
 // Rollback the migration transaction.
-func (om oracleMigrator) rollback(c *container.Container, data transactionData) {
+func (om *oracleMigrator) rollback(c *container.Container, data transactionData) {
 	if data.OracleTx != nil {
 		if err := data.OracleTx.Rollback(); err != nil {
 			c.Fatalf("unable to rollback Oracle transaction: %v", err)
@@ -176,7 +176,7 @@ func (om oracleMigrator) rollback(c *container.Container, data transactionData) 
 }
 
 // Begin a new migration transaction.
-func (om oracleMigrator) beginTransaction(c *container.Container) transactionData {
+func (om *oracleMigrator) beginTransaction(c *container.Container) transactionData {
 	// Begin a proper transaction
 	tx, err := om.Oracle.Begin()
 	if err != nil {
@@ -191,6 +191,18 @@ func (om oracleMigrator) beginTransaction(c *container.Container) transactionDat
 	c.Debug("Oracle Transaction begin successful")
 
 	return td
+}
+
+func (*oracleMigrator) AcquireLock(*container.Container) error {
+	return nil
+}
+
+func (*oracleMigrator) ReleaseLock(*container.Container) error {
+	return nil
+}
+
+func (*oracleMigrator) Name() string {
+	return "Oracle"
 }
 
 type oracleTransactionWrapper struct {

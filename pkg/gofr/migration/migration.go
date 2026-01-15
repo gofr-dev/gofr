@@ -1,14 +1,22 @@
 package migration
 
 import (
+	"errors"
 	"reflect"
+	"sort"
 	"time"
+	"unsafe"
 
 	"github.com/gogo/protobuf/sortkeys"
 	goRedis "github.com/redis/go-redis/v9"
 
 	"gofr.dev/pkg/gofr/container"
 	gofrSql "gofr.dev/pkg/gofr/datasource/sql"
+)
+
+var (
+	ErrLockAcquisitionFailed = errors.New("failed to acquire migration lock")
+	ErrLockReleaseFailed     = errors.New("failed to release migration lock")
 )
 
 type MigrateFunc func(d Datasource) error
@@ -25,6 +33,10 @@ type transactionData struct {
 	RedisTx  goRedis.Pipeliner
 	OracleTx container.OracleTx
 }
+
+const (
+	lockKey = "gofr_migrations_lock"
+)
 
 func Run(migrationsMap map[int64]Migrate, c *container.Container) {
 	invalidKeys, keys := getKeys(migrationsMap)
@@ -47,6 +59,15 @@ func Run(migrationsMap map[int64]Migrate, c *container.Container) {
 		return
 	}
 
+	lockers := getLockers(mg)
+	acquiredLockers := acquireAllLocks(c, lockers)
+
+	if acquiredLockers == nil && len(lockers) > 0 {
+		return
+	}
+
+	defer releaseAllLocks(c, acquiredLockers)
+
 	err := mg.checkAndCreateMigrationTable(c)
 	if err != nil {
 		c.Fatalf("failed to create gofr_migration table, err: %v", err)
@@ -54,6 +75,41 @@ func Run(migrationsMap map[int64]Migrate, c *container.Container) {
 		return
 	}
 
+	runMigrations(c, mg, &ds, migrationsMap, keys)
+}
+
+func acquireAllLocks(c *container.Container, lockers []Locker) []Locker {
+	acquiredLockers := make([]Locker, 0, len(lockers))
+
+	for _, l := range lockers {
+		err := l.AcquireLock(c)
+		if err != nil {
+			c.Errorf("failed to acquire migration lock, err: %v", err)
+
+			// Release already acquired locks in reverse order
+			for i := len(acquiredLockers) - 1; i >= 0; i-- {
+				_ = acquiredLockers[i].ReleaseLock(c)
+			}
+
+			return nil
+		}
+
+		acquiredLockers = append(acquiredLockers, l)
+	}
+
+	return acquiredLockers
+}
+
+func releaseAllLocks(c *container.Container, acquiredLockers []Locker) {
+	for i := len(acquiredLockers) - 1; i >= 0; i-- {
+		err := acquiredLockers[i].ReleaseLock(c)
+		if err != nil {
+			c.Errorf("failed to release migration lock, err: %v", err)
+		}
+	}
+}
+
+func runMigrations(c *container.Container, mg migrator, ds *Datasource, migrationsMap map[int64]Migrate, keys []int64) {
 	lastMigration := mg.getLastMigration(c)
 
 	for _, currentMigration := range keys {
@@ -78,7 +134,7 @@ func Run(migrationsMap map[int64]Migrate, c *container.Container) {
 		migrationInfo.StartTime = time.Now()
 		migrationInfo.MigrationNumber = currentMigration
 
-		err = migrationsMap[currentMigration].UP(ds)
+		err := migrationsMap[currentMigration].UP(*ds)
 		if err != nil {
 			c.Logger.Errorf("failed to run migration : [%v], err: %v", currentMigration, err)
 
@@ -132,6 +188,64 @@ type datasourceInitializer struct {
 	setDS         func()
 	apply         func(m migrator) migrator
 	logIdentifier string
+}
+
+func getLockers(mg migrator) []Locker {
+	var lockers []Locker
+
+	// Traverse the migrator chain and collect all lockers
+	// The chain is built such that the last added datasource is the outermost wrapper.
+	// We want a deterministic order, so we will collect them and then sort if necessary,
+	// or just rely on a fixed traversal if we can identify them.
+	for mg != nil {
+		// Check if the current migrator is one of our known locker types
+		// and add it to the list. We avoid adding the base Datasource as it's a no-op.
+		switch m := mg.(type) {
+		case *sqlMigrator, *redisMigrator:
+			lockers = append(lockers, m)
+		}
+
+		// Move to the next migrator in the chain
+		// We need to use reflection or a common interface to get the next migrator
+		// since 'migrator' is an unexported field in the structs.
+		mg = getNextMigrator(mg)
+	}
+
+	// Sort lockers by name to ensure deterministic order (prevent deadlocks)
+	sort.Slice(lockers, func(i, j int) bool {
+		return lockers[i].Name() < lockers[j].Name()
+	})
+
+	return lockers
+}
+
+func getNextMigrator(mg migrator) migrator {
+	val := reflect.ValueOf(mg)
+	if val.Kind() == reflect.Ptr {
+		val = val.Elem()
+	}
+
+	if val.Kind() != reflect.Struct {
+		return nil
+	}
+
+	field := val.FieldByName("migrator")
+	if !field.IsValid() {
+		return nil
+	}
+
+	// We need to use unsafe to access unexported fields to avoid panic
+	// "reflect.Value.Interface: cannot return value obtained from unexported field or method"
+	if !field.CanInterface() {
+		field = reflect.NewAt(field.Type(), unsafe.Pointer(field.UnsafeAddr())).Elem()
+	}
+
+	next, ok := field.Interface().(migrator)
+	if !ok {
+		return nil
+	}
+
+	return next
 }
 
 func initializeDatasources(c *container.Container, ds *Datasource, mg migrator) (migrator, bool) {

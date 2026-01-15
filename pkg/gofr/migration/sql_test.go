@@ -332,8 +332,8 @@ func TestApply(t *testing.T) {
 	ds := &sqlDS{SQL: mockContainer.SQL}
 	result := ds.apply(mockMigrator)
 
-	sqlMig, ok := result.(sqlMigrator)
-	require.True(t, ok, "Result should be an sqlMigrator")
+	sqlMig, ok := result.(*sqlMigrator)
+	require.True(t, ok, "Result should be an *sqlMigrator")
 	require.Equal(t, mockContainer.SQL, sqlMig.SQL, "SQL field should match")
 	require.Equal(t, mockMigrator, sqlMig.migrator, "Migrator field should match")
 }
@@ -400,4 +400,35 @@ func TestCheckAndCreateMigrationTable_ErrorCreatingTable(t *testing.T) {
 	err := m.checkAndCreateMigrationTable(mockContainer)
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "create table error")
+}
+
+var errBegin = errors.New("begin error")
+
+func TestSQLMigrator_AcquireLock(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	t.Cleanup(ctrl.Finish)
+
+	mockContainer, mocks := container.NewMockContainer(t)
+	m := sqlMigrator{SQL: mockContainer.SQL}
+
+	t.Run("BeginTransactionError", func(t *testing.T) {
+		mocks.SQL.ExpectBegin().WillReturnError(errBegin)
+
+		err := m.AcquireLock(mockContainer)
+		require.Error(t, err)
+		assert.Equal(t, ErrLockAcquisitionFailed, err)
+	})
+}
+
+func TestSQLMigrator_ReleaseLock(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	t.Cleanup(ctrl.Finish)
+
+	mockContainer, _ := container.NewMockContainer(t)
+	m := sqlMigrator{SQL: mockContainer.SQL}
+
+	t.Run("NoLockHeld", func(t *testing.T) {
+		err := m.ReleaseLock(mockContainer)
+		require.NoError(t, err)
+	})
 }

@@ -1,6 +1,7 @@
 package migration
 
 import (
+	"errors"
 	"testing"
 	"time"
 
@@ -147,4 +148,69 @@ func TestRedisMigrator_beginTransaction(t *testing.T) {
 	data := m.beginTransaction(c)
 
 	assert.Equal(t, transactionData{}, data, "TEST Failed.\n")
+}
+
+var errRedis = errors.New("redis error")
+
+func TestRedisMigrator_AcquireLock(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	t.Cleanup(ctrl.Finish)
+
+	c, mocks := container.NewMockContainer(t)
+	m := redisMigrator{Redis: mocks.Redis}
+
+	t.Run("Success", func(t *testing.T) {
+		mocks.Redis.EXPECT().SetNX(gomock.Any(), lockKey, "1", 60*time.Second).
+			Return(goRedis.NewBoolResult(true, nil))
+
+		err := m.AcquireLock(c)
+		require.NoError(t, err)
+	})
+
+	t.Run("RetrySuccess", func(t *testing.T) {
+		// First attempt fails (lock held)
+		mocks.Redis.EXPECT().SetNX(gomock.Any(), lockKey, "1", 60*time.Second).
+			Return(goRedis.NewBoolResult(false, nil))
+
+		// Second attempt succeeds
+		mocks.Redis.EXPECT().SetNX(gomock.Any(), lockKey, "1", 60*time.Second).
+			Return(goRedis.NewBoolResult(true, nil))
+
+		err := m.AcquireLock(c)
+		require.NoError(t, err)
+	})
+
+	t.Run("RedisError", func(t *testing.T) {
+		mocks.Redis.EXPECT().SetNX(gomock.Any(), lockKey, "1", 60*time.Second).
+			Return(goRedis.NewBoolResult(false, errRedis))
+
+		err := m.AcquireLock(c)
+		require.Error(t, err)
+		assert.Equal(t, ErrLockAcquisitionFailed, err)
+	})
+}
+
+func TestRedisMigrator_ReleaseLock(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	t.Cleanup(ctrl.Finish)
+
+	c, mocks := container.NewMockContainer(t)
+	m := redisMigrator{Redis: mocks.Redis}
+
+	t.Run("Success", func(t *testing.T) {
+		mocks.Redis.EXPECT().Del(gomock.Any(), lockKey).
+			Return(goRedis.NewIntResult(1, nil))
+
+		err := m.ReleaseLock(c)
+		require.NoError(t, err)
+	})
+
+	t.Run("Error", func(t *testing.T) {
+		mocks.Redis.EXPECT().Del(gomock.Any(), lockKey).
+			Return(goRedis.NewIntResult(0, errRedis))
+
+		err := m.ReleaseLock(c)
+		require.Error(t, err)
+		assert.Equal(t, ErrLockReleaseFailed, err)
+	})
 }

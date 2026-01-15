@@ -174,6 +174,14 @@ type Elasticsearch interface {
 	// following the Elasticsearch bulk API format.
 	// Useful for bulk operations during migrations.
 	Bulk(ctx context.Context, operations []map[string]any) (map[string]any, error)
+
+	Search(ctx context.Context, indices []string, query map[string]any) (map[string]any, error)
+
+	GetDocument(ctx context.Context, index, id string) (map[string]any, error)
+
+	UpdateDocument(ctx context.Context, index, id string, update map[string]any) error
+
+	HealthCheck(ctx context.Context) (any, error)
 }
 
 // keeping the migrator interface unexported as, right now it is not being implemented directly, by the externalDB drivers.
@@ -186,6 +194,8 @@ type migrator interface {
 
 	commitMigration(c *container.Container, data transactionData) error
 	rollback(c *container.Container, data transactionData)
+
+	Locker
 }
 
 type OpenTSDB interface {
@@ -197,4 +207,10 @@ type OpenTSDB interface {
 	PutAnnotation(ctx context.Context, annotation any, res any) error
 	// DeleteAnnotation removes an annotation from OpenTSDB using the 'DELETE /api/annotation' endpoint.
 	DeleteAnnotation(ctx context.Context, annotation any, res any) error
+}
+
+type Locker interface {
+	AcquireLock(c *container.Container) error
+	ReleaseLock(c *container.Container) error
+	Name() string
 }

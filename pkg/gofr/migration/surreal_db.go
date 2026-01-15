@@ -41,7 +41,7 @@ type surrealMigrator struct {
 }
 
 func (s surrealDS) apply(m migrator) migrator {
-	return surrealMigrator{
+	return &surrealMigrator{
 		SurrealDB: s.client,
 		migrator:  m,
 	}
@@ -65,7 +65,7 @@ func getMigrationTableQueries() []string {
 	}
 }
 
-func (s surrealMigrator) checkAndCreateMigrationTable(*container.Container) error {
+func (s *surrealMigrator) checkAndCreateMigrationTable(*container.Container) error {
 	if _, err := s.SurrealDB.Query(context.Background(), "USE NS test DB test", nil); err != nil {
 		return err
 	}
@@ -80,7 +80,7 @@ func (s surrealMigrator) checkAndCreateMigrationTable(*container.Container) erro
 	return nil
 }
 
-func (s surrealMigrator) getLastMigration(c *container.Container) int64 {
+func (s *surrealMigrator) getLastMigration(c *container.Container) int64 {
 	var lastMigration int64 // Default to 0 if no migrations found
 
 	result, err := s.SurrealDB.Query(context.Background(), getLastSurrealDBGoFrMigration, nil)
@@ -106,7 +106,7 @@ func (s surrealMigrator) getLastMigration(c *container.Container) int64 {
 	return lastMigration
 }
 
-func (s surrealMigrator) beginTransaction(c *container.Container) transactionData {
+func (s *surrealMigrator) beginTransaction(c *container.Container) transactionData {
 	data := s.migrator.beginTransaction(c)
 
 	c.Debug("surrealDB migrator begin successfully")
@@ -114,7 +114,7 @@ func (s surrealMigrator) beginTransaction(c *container.Container) transactionDat
 	return data
 }
 
-func (s surrealMigrator) commitMigration(c *container.Container, data transactionData) error {
+func (s *surrealMigrator) commitMigration(c *container.Container, data transactionData) error {
 	_, err := s.SurrealDB.Query(context.Background(), insertSurrealDBGoFrMigrationRow, map[string]any{
 		"version":    data.MigrationNumber,
 		"method":     "UP",
@@ -130,8 +130,20 @@ func (s surrealMigrator) commitMigration(c *container.Container, data transactio
 	return s.migrator.commitMigration(c, data)
 }
 
-func (s surrealMigrator) rollback(c *container.Container, data transactionData) {
+func (s *surrealMigrator) rollback(c *container.Container, data transactionData) {
 	s.migrator.rollback(c, data)
 
 	c.Fatalf("migration %v failed and rolled back", data.MigrationNumber)
+}
+
+func (*surrealMigrator) AcquireLock(*container.Container) error {
+	return nil
+}
+
+func (*surrealMigrator) ReleaseLock(*container.Container) error {
+	return nil
+}
+
+func (*surrealMigrator) Name() string {
+	return "SurrealDB"
 }

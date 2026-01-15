@@ -14,7 +14,7 @@ type redisDS struct {
 }
 
 func (r redisDS) apply(m migrator) migrator {
-	return redisMigrator{
+	return &redisMigrator{
 		Redis:    r.Redis,
 		migrator: m,
 	}
@@ -32,7 +32,7 @@ type redisData struct {
 	Duration  int64     `json:"duration"`
 }
 
-func (m redisMigrator) getLastMigration(c *container.Container) int64 {
+func (m *redisMigrator) getLastMigration(c *container.Container) int64 {
 	var lastMigration int64
 
 	table, err := c.Redis.HGetAll(context.Background(), "gofr_migrations").Result()
@@ -75,7 +75,7 @@ func (m redisMigrator) getLastMigration(c *container.Container) int64 {
 	return lastMigration
 }
 
-func (m redisMigrator) beginTransaction(c *container.Container) transactionData {
+func (m *redisMigrator) beginTransaction(c *container.Container) transactionData {
 	redisTx := c.Redis.TxPipeline()
 
 	cmt := m.migrator.beginTransaction(c)
@@ -87,7 +87,7 @@ func (m redisMigrator) beginTransaction(c *container.Container) transactionData 
 	return cmt
 }
 
-func (m redisMigrator) commitMigration(c *container.Container, data transactionData) error {
+func (m *redisMigrator) commitMigration(c *container.Container, data transactionData) error {
 	migrationVersion := strconv.FormatInt(data.MigrationNumber, 10)
 
 	jsonData, err := json.Marshal(redisData{
@@ -118,10 +118,55 @@ func (m redisMigrator) commitMigration(c *container.Container, data transactionD
 	return m.migrator.commitMigration(c, data)
 }
 
-func (m redisMigrator) rollback(c *container.Container, data transactionData) {
+func (m *redisMigrator) rollback(c *container.Container, data transactionData) {
 	data.RedisTx.Discard()
 
 	m.migrator.rollback(c, data)
 
 	c.Fatalf("Migration %v for Redis failed and rolled back", data.MigrationNumber)
+}
+
+func (*redisMigrator) AcquireLock(c *container.Container) error {
+	// SETNX gofr_migrations_lock 1 EX 60
+	// We use a TTL of 60 seconds to ensure the lock is released if the process crashes.
+	ttl := 60 * time.Second
+	retryInterval := 500 * time.Millisecond
+	maxRetries := 140 // Total wait time ~70 seconds
+
+	for i := 0; i < maxRetries; i++ {
+		status, err := c.Redis.SetNX(context.Background(), lockKey, "1", ttl).Result()
+		if err == nil && status {
+			c.Debug("Redis lock acquired successfully")
+
+			return nil
+		}
+
+		if err != nil {
+			c.Errorf("error while acquiring redis lock: %v", err)
+
+			return ErrLockAcquisitionFailed
+		}
+
+		c.Debugf("Redis lock already held, retrying in %v... (attempt %d/%d)", retryInterval, i+1, maxRetries)
+		time.Sleep(retryInterval)
+	}
+
+	return ErrLockAcquisitionFailed
+}
+
+func (*redisMigrator) ReleaseLock(c *container.Container) error {
+	err := c.Redis.Del(context.Background(), lockKey).Err()
+	if err != nil {
+		c.Errorf("unable to release redis lock: %v", err)
+
+		return ErrLockReleaseFailed
+	}
+
+	c.Debug("Redis lock released successfully")
+
+	return nil
+}
+
+func (*redisMigrator) Name() string {
+	return "Redis"
 }

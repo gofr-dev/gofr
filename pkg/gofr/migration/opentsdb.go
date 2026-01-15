@@ -280,3 +280,15 @@ func (om *openTSDBMigrator) rollback(c *container.Container, data transactionDat
 	om.migrator.rollback(c, data)
 	c.Fatalf("Migration %v failed.", data.MigrationNumber)
 }
+
+func (*openTSDBMigrator) AcquireLock(*container.Container) error {
+	return nil
+}
+
+func (*openTSDBMigrator) ReleaseLock(*container.Container) error {
+	return nil
+}
+
+func (*openTSDBMigrator) Name() string {
+	return "OpenTSDB"
+}

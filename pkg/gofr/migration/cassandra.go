@@ -18,7 +18,7 @@ type cassandraMigrator struct {
 }
 
 func (cs cassandraDS) apply(m migrator) migrator {
-	return cassandraMigrator{
+	return &cassandraMigrator{
 		CassandraWithContext: cs.CassandraWithContext,
 		migrator:             m,
 	}
@@ -33,7 +33,7 @@ const (
 	insertCassandraGoFrMigrationRow = `INSERT INTO gofr_migrations (version, method, start_time, duration) VALUES (?, ?, ?, ?);`
 )
 
-func (cs cassandraMigrator) checkAndCreateMigrationTable(c *container.Container) error {
+func (cs *cassandraMigrator) checkAndCreateMigrationTable(c *container.Container) error {
 	if err := c.Cassandra.ExecWithCtx(context.Background(), checkAndCreateCassandraMigrationTable); err != nil {
 		return err
 	}
@@ -41,7 +41,7 @@ func (cs cassandraMigrator) checkAndCreateMigrationTable(c *container.Container)
 	return cs.migrator.checkAndCreateMigrationTable(c)
 }
 
-func (cs cassandraMigrator) getLastMigration(c *container.Container) int64 {
+func (cs *cassandraMigrator) getLastMigration(c *container.Container) int64 {
 	var lastMigration int64 // Default to 0 if no migrations found
 
 	var lastMigrations []int64
@@ -68,7 +68,7 @@ func (cs cassandraMigrator) getLastMigration(c *container.Container) int64 {
 	return lastMigration
 }
 
-func (cs cassandraMigrator) beginTransaction(c *container.Container) transactionData {
+func (cs *cassandraMigrator) beginTransaction(c *container.Container) transactionData {
 	cmt := cs.migrator.beginTransaction(c)
 
 	c.Debug("cassandra migrator begin successfully")
@@ -76,7 +76,7 @@ func (cs cassandraMigrator) beginTransaction(c *container.Container) transaction
 	return cmt
 }
 
-func (cs cassandraMigrator) commitMigration(c *container.Container, data transactionData) error {
+func (cs *cassandraMigrator) commitMigration(c *container.Container, data transactionData) error {
 	err := cs.CassandraWithContext.ExecWithCtx(context.Background(), insertCassandraGoFrMigrationRow, data.MigrationNumber,
 		"UP", data.StartTime, time.Since(data.StartTime).Milliseconds())
 	if err != nil {
@@ -88,8 +88,20 @@ func (cs cassandraMigrator) commitMigration(c *container.Container, data transac
 	return cs.migrator.commitMigration(c, data)
 }
 
-func (cs cassandraMigrator) rollback(c *container.Container, data transactionData) {
+func (cs *cassandraMigrator) rollback(c *container.Container, data transactionData) {
 	cs.migrator.rollback(c, data)
 
 	c.Fatalf("migration %v failed and rolled back", data.MigrationNumber)
+}
+
+func (*cassandraMigrator) AcquireLock(*container.Container) error {
+	return nil
+}
+
+func (*cassandraMigrator) ReleaseLock(*container.Container) error {
+	return nil
+}
+
+func (*cassandraMigrator) Name() string {
+	return "Cassandra"
 }

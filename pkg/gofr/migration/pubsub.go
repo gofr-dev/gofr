@@ -45,13 +45,13 @@ func (ds pubsubDS) Query(ctx context.Context, query string, args ...any) ([]byte
 }
 
 func (ds pubsubDS) apply(m migrator) migrator {
-	return pubsubMigrator{
+	return &pubsubMigrator{
 		PubSub:   ds,
 		migrator: m,
 	}
 }
 
-func (pm pubsubMigrator) checkAndCreateMigrationTable(c *container.Container) error {
+func (pm *pubsubMigrator) checkAndCreateMigrationTable(c *container.Container) error {
 	err := pm.CreateTopic(context.Background(), pubsubMigrationTopic)
 	if err != nil {
 		c.Debug("Migration topic might already exist:", err)
@@ -60,7 +60,7 @@ func (pm pubsubMigrator) checkAndCreateMigrationTable(c *container.Container) er
 	return pm.migrator.checkAndCreateMigrationTable(c)
 }
 
-func (pm pubsubMigrator) getLastMigration(c *container.Container) int64 {
+func (pm *pubsubMigrator) getLastMigration(c *container.Container) int64 {
 	queryTopic := resolveMigrationTopic(c)
 
 	ctx, cancel := context.WithTimeout(context.Background(), migrationTimeout)
@@ -126,7 +126,7 @@ func extractLastVersion(c *container.Container, data []byte) int64 {
 	return lastVersion
 }
 
-func (pm pubsubMigrator) commitMigration(c *container.Container, data transactionData) error {
+func (pm *pubsubMigrator) commitMigration(c *container.Container, data transactionData) error {
 	record := migrationRecord{
 		Version:   data.MigrationNumber,
 		Method:    "UP",
@@ -149,4 +149,24 @@ func (pm pubsubMigrator) commitMigration(c *container.Container, data transactio
 	c.Debugf("Inserted record for migration %v in PubSub gofr_migrations topic", data.MigrationNumber)
 
 	return pm.migrator.commitMigration(c, data)
+}
+
+func (pm *pubsubMigrator) beginTransaction(c *container.Container) transactionData {
+	return pm.migrator.beginTransaction(c)
+}
+
+func (pm *pubsubMigrator) rollback(c *container.Container, data transactionData) {
+	pm.migrator.rollback(c, data)
+}
+
+func (*pubsubMigrator) AcquireLock(*container.Container) error {
+	return nil
+}
+
+func (*pubsubMigrator) ReleaseLock(*container.Container) error {
+	return nil
+}
+
+func (*pubsubMigrator) Name() string {
+	return "PubSub"
 }
