@@ -76,16 +76,26 @@ Use `OAuthUnaryInterceptor` and `OAuthStreamInterceptor`. These interceptors als
 
 ```go
 import (
+    "time"
+
     "gofr.dev/pkg/gofr"
     "gofr.dev/pkg/gofr/grpc/middleware"
     httpMiddleware "gofr.dev/pkg/gofr/http/middleware"
+    "gofr.dev/pkg/gofr/service"
 )
 
 func main() {
     app := gofr.New()
 
-    // You can use the same PublicKeyProvider used for HTTP OAuth
-    keyProvider := httpMiddleware.NewPublicKeyProvider("http://jwks-endpoint", 3600)
+    // 1. Create a HTTP Service to fetch JWKS
+    jwksService := service.NewHTTPService("http://jwks-endpoint", app.Logger(), app.Metrics())
+
+    // 2. Create the PublicKeyProvider using NewOAuth
+    keyProvider := httpMiddleware.NewOAuth(httpMiddleware.OauthConfigs{
+        Provider:        jwksService,
+        RefreshInterval: 1 * time.Hour,
+        Path:            "/.well-known/jwks.json", // Adjust path as needed
+    })
 
     // Add Unary Interceptor
     app.AddGRPCUnaryInterceptors(middleware.OAuthUnaryInterceptor(keyProvider))

@@ -40,7 +40,7 @@ type Metrics interface {
 	RecordHistogram(ctx context.Context, name string, value float64, labels ...string)
 }
 
-type Log struct {
+type gRPCLog struct {
 	ID           string `json:"id"`
 	StartTime    string `json:"startTime"`
 	ResponseTime int64  `json:"responseTime"`
@@ -49,17 +49,12 @@ type Log struct {
 	StreamType   string `json:"streamType,omitempty"`
 }
 
-// GRPCLog is a type alias for Log to maintain backward compatibility.
-//
-//nolint:revive // GRPCLog is required for backward compatibility
-type GRPCLog = Log
-
-// NewGRPCLogger returns a new instance of Log.
-func NewGRPCLogger() Log {
-	return Log{}
+//nolint:revive // We intend to keep it non-exported for ease in future changes without any breaking change.
+func NewgRPCLogger() gRPCLog {
+	return gRPCLog{}
 }
 
-func (l *Log) PrettyPrint(writer io.Writer) {
+func (l *gRPCLog) PrettyPrint(writer io.Writer) {
 	streamInfo := ""
 	if l.StreamType != "" {
 		streamInfo = fmt.Sprintf(" [%s]", l.StreamType)
@@ -86,7 +81,7 @@ func colorForGRPCCode(s int32) int {
 	return red
 }
 
-func (l Log) String() string {
+func (l gRPCLog) String() string {
 	line, _ := json.Marshal(l)
 	return string(line)
 }
@@ -115,10 +110,9 @@ func StreamObservabilityInterceptor(logger Logger, metrics Metrics) grpc.StreamS
 		err := handler(srv, wrappedStream)
 
 		streamType, grpcMethodName := getStreamTypeAndMethod(info)
-		metricName := "app_gRPC-Stream_stats"
 
-		// log and record metrics
-		logStreamRPC(ctx, logger, metrics, start, err, grpcMethodName, streamType, metricName)
+		// Log and record metrics
+		logStreamRPC(ctx, logger, metrics, start, err, grpcMethodName, streamType, "app_gRPC-Stream_stats")
 
 		return err
 	}
@@ -153,8 +147,7 @@ func (w *wrappedServerStream) Context() context.Context {
 	return w.ctx
 }
 
-// UnaryObservabilityInterceptor handles logging, metrics, and tracing for unary RPCs.
-func UnaryObservabilityInterceptor(logger Logger, metrics Metrics) grpc.UnaryServerInterceptor {
+func ObservabilityInterceptor(logger Logger, metrics Metrics) grpc.UnaryServerInterceptor {
 	tracer := otel.GetTracerProvider().Tracer("gofr", trace.WithInstrumentationVersion("v0.1"))
 
 	return func(ctx context.Context, req any, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (any, error) {
@@ -169,7 +162,8 @@ func UnaryObservabilityInterceptor(logger Logger, metrics Metrics) grpc.UnarySer
 		}
 
 		if info.FullMethod == healthCheck {
-			if service, ok := req.(*grpc_health_v1.HealthCheckRequest); ok {
+			service, ok := req.(*grpc_health_v1.HealthCheckRequest)
+			if ok {
 				info.FullMethod = fmt.Sprintf("%s	Service: %q", healthCheck, service.Service)
 			}
 		}
@@ -184,12 +178,6 @@ func UnaryObservabilityInterceptor(logger Logger, metrics Metrics) grpc.UnarySer
 
 func initializeSpanContext(ctx context.Context) context.Context {
 	md, _ := metadata.FromIncomingContext(ctx)
-
-	ctx = otel.GetTextMapPropagator().Extract(ctx, metadataCarrier(md))
-
-	if trace.SpanContextFromContext(ctx).IsValid() {
-		return ctx
-	}
 
 	traceIDHex := getMetadataValue(md, "x-gofr-traceid")
 	spanIDHex := getMetadataValue(md, "x-gofr-spanid")
@@ -213,15 +201,14 @@ func initializeSpanContext(ctx context.Context) context.Context {
 	return ctx
 }
 
-func (Log) DocumentRPCLog(ctx context.Context, logger Logger, metrics Metrics, start time.Time, err error, method, name string) {
+func (gRPCLog) DocumentRPCLog(ctx context.Context, logger Logger, metrics Metrics, start time.Time, err error, method, name string) {
 	logRPC(ctx, logger, metrics, start, err, method, name)
 }
 
-func logStreamRPC(ctx context.Context, logger Logger, metrics Metrics, start time.Time,
-	err error, method, streamType, metricName string) {
+func logStreamRPC(ctx context.Context, logger Logger, metrics Metrics, start time.Time, err error, method, streamType, metricName string) {
 	duration := time.Since(start)
 
-	logEntry := Log{
+	logEntry := gRPCLog{
 		ID:           getTraceID(ctx),
 		StartTime:    start.Format("2006-01-02T15:04:05.999999999-07:00"),
 		ResponseTime: duration.Microseconds(),
@@ -244,7 +231,7 @@ func logStreamRPC(ctx context.Context, logger Logger, metrics Metrics, start tim
 func logRPC(ctx context.Context, logger Logger, metrics Metrics, start time.Time, err error, method, name string) {
 	duration := time.Since(start)
 
-	logEntry := Log{
+	logEntry := gRPCLog{
 		ID:           trace.SpanFromContext(ctx).SpanContext().TraceID().String(),
 		StartTime:    start.Format("2006-01-02T15:04:05.999999999-07:00"),
 		ResponseTime: duration.Microseconds(),
@@ -278,7 +265,7 @@ func getTraceID(ctx context.Context) string {
 }
 
 // logGRPCEntry handles the actual logging with improved logic.
-func logGRPCEntry(logger Logger, logEntry *Log, method string) {
+func logGRPCEntry(logger Logger, logEntry *gRPCLog, method string) {
 	if logger == nil {
 		return
 	}
@@ -316,28 +303,4 @@ func getMetadataValue(md metadata.MD, key string) string {
 	}
 
 	return ""
-}
-
-type metadataCarrier metadata.MD
-
-func (m metadataCarrier) Get(key string) string {
-	values := metadata.MD(m).Get(key)
-	if len(values) > 0 {
-		return values[0]
-	}
-
-	return ""
-}
-
-func (m metadataCarrier) Set(key, value string) {
-	metadata.MD(m).Set(key, value)
-}
-
-func (m metadataCarrier) Keys() []string {
-	keys := make([]string, 0, len(m))
-	for k := range m {
-		keys = append(keys, k)
-	}
-
-	return keys
 }

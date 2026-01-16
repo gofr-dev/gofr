@@ -202,7 +202,7 @@ GoFr provides built-in interceptors for common authentication methods, ensuring 
 *   **API Key**: `APIKeyAuthUnaryInterceptor` and `APIKeyAuthStreamInterceptor`
 *   **OAuth (JWT)**: `OAuthUnaryInterceptor` and `OAuthStreamInterceptor`
 
-For detailed usage, refer to the [gRPC Authentication documentation](/docs/advanced-guide/grpc-authentication).
+For detailed usage, refer to the [gRPC Authentication documentation](https://gofr.dev/docs/advanced-guide/grpc-authentication).
 
 ## Built-in Observability
 
