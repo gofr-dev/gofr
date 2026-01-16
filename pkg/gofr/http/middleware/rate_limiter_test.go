@@ -520,9 +520,9 @@ func TestRateLimiter_TrustedProxiesDisabled(t *testing.T) {
 	assert.Equal(t, http.StatusTooManyRequests, rr.Code, "Should rate limit based on RemoteAddr, ignoring spoofed headers")
 }
 
-// Tests for PR #2563 comment fixes.
+// Tests for PR #2563 comment resolutions.
 
-// TestGetIP_EmptyFallback tests Fix 2: Empty IP should fallback to "unknown".
+// TestGetIP_EmptyFallback tests that empty IP should fallback to "unknown".
 func TestGetIP_EmptyFallback(t *testing.T) {
 	req := httptest.NewRequest(http.MethodGet, "/test", http.NoBody)
 	// Set RemoteAddr to empty (malformed)
@@ -536,7 +536,7 @@ func TestGetIP_EmptyFallback(t *testing.T) {
 	assert.Empty(t, ip, "getIP returns empty string for empty RemoteAddr")
 }
 
-// TestRateLimiter_EmptyIPFallback tests Fix 2: Rate limiter uses "unknown" key for empty IP.
+// TestRateLimiter_EmptyIPFallback tests that rate limiter uses "unknown" key for empty IP.
 func TestRateLimiter_EmptyIPFallback(t *testing.T) {
 	metrics := newRateLimiterMockMetrics()
 	config := RateLimiterConfig{
@@ -566,7 +566,7 @@ func TestRateLimiter_EmptyIPFallback(t *testing.T) {
 	assert.Equal(t, http.StatusTooManyRequests, rr.Code, "Empty RemoteAddr should use 'unknown' key and be rate limited")
 }
 
-// TestMemoryRateLimiterStore_CalculateSafeDelay tests Fix 4: Delay bounds checking.
+// TestMemoryRateLimiterStore_CalculateSafeDelay tests delay bounds checking.
 func TestMemoryRateLimiterStore_CalculateSafeDelay(t *testing.T) {
 	config := RateLimiterConfig{
 		RequestsPerSecond: 10,
@@ -621,7 +621,7 @@ func TestMemoryRateLimiterStore_CalculateSafeDelay(t *testing.T) {
 	}
 }
 
-// TestMemoryRateLimiterStore_MaxKeysLimit tests Fix 5: Maximum keys limit.
+// TestMemoryRateLimiterStore_MaxKeysLimit tests maximum keys limit.
 func TestMemoryRateLimiterStore_MaxKeysLimit(t *testing.T) {
 	maxKeys := int64(5)
 	config := RateLimiterConfig{
@@ -653,7 +653,7 @@ func TestMemoryRateLimiterStore_MaxKeysLimit(t *testing.T) {
 	assert.Equal(t, maxKeys, atomic.LoadInt64(&store.keyCount), "Key count should not exceed max")
 }
 
-// TestMemoryRateLimiterStore_ConcurrentLoadOrStore tests Fix 1: Concurrent key creation.
+// TestMemoryRateLimiterStore_ConcurrentLoadOrStore tests concurrent key creation.
 func TestMemoryRateLimiterStore_ConcurrentLoadOrStore(t *testing.T) {
 	config := RateLimiterConfig{
 		RequestsPerSecond: 100,

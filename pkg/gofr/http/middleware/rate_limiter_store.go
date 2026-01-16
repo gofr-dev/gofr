@@ -65,7 +65,7 @@ func (m *memoryRateLimiterStore) Allow(_ context.Context, key string, _ RateLimi
 	cfg := m.config
 
 	// Get or create limiter for this key
-	// Fix 1: Check loaded flag to avoid unnecessary object creation when entry already exists
+	// Check loaded flag to avoid unnecessary object creation when entry already exists
 	val, loaded := m.limiters.LoadOrStore(key, &limiterEntry{
 		limiter:    rate.NewLimiter(rate.Limit(cfg.RequestsPerSecond), cfg.Burst),
 		lastAccess: now,
@@ -78,8 +78,7 @@ func (m *memoryRateLimiterStore) Allow(_ context.Context, key string, _ RateLimi
 	if loaded {
 		atomic.StoreInt64(&entry.lastAccess, now)
 	} else {
-		// New entry was stored - increment key count
-		// Fix 5: Track number of keys to prevent memory exhaustion
+		// Track number of keys to prevent memory exhaustion
 		newCount := atomic.AddInt64(&m.keyCount, 1)
 		if m.maxKeys > 0 && newCount > m.maxKeys {
 			// Exceeded max keys - remove the entry we just added and fail open
@@ -90,12 +89,12 @@ func (m *memoryRateLimiterStore) Allow(_ context.Context, key string, _ RateLimi
 		}
 	}
 
-	// Fix 3: Use only Reserve() instead of Allow() + Reserve() to avoid race conditions
+	// Use only Reserve() instead of Allow() + Reserve() to avoid race conditions
 	// Reserve() atomically checks and reserves a token, giving accurate delay information
 	reservation := entry.limiter.Reserve()
 	if !reservation.OK() {
 		// Should not happen with valid config, but handle gracefully
-		// Fix 4: Use bounds-checked delay calculation
+		// Use bounds-checked delay calculation
 		return false, m.calculateSafeDelay(cfg.RequestsPerSecond), nil
 	}
 
@@ -111,7 +110,7 @@ func (m *memoryRateLimiterStore) Allow(_ context.Context, key string, _ RateLimi
 }
 
 // calculateSafeDelay calculates delay with bounds checking to prevent overflow or zero values.
-// Fix 4: Ensures delay is always within reasonable bounds.
+// Ensures delay is always within reasonable bounds.
 func (*memoryRateLimiterStore) calculateSafeDelay(requestsPerSecond float64) time.Duration {
 	if requestsPerSecond <= 0 {
 		return maxDelay

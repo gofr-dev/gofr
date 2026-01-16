@@ -139,7 +139,7 @@ func RateLimiter(config RateLimiterConfig, m metrics) func(http.Handler) http.Ha
 			key := "global"
 			if config.PerIP {
 				key = getIP(r, config.TrustedProxies)
-				// Fix 2: Fallback to "unknown" if getIP returns empty string
+				// Fallback to "unknown" if getIP returns empty string
 				// This prevents all requests from sharing the same bucket
 				if key == "" {
 					key = "unknown"
