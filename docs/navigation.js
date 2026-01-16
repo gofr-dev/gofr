@@ -85,6 +85,11 @@ export const navigation = [
                 desc: "Implement various HTTP authentication methods to secure your GoFR application and protect sensitive endpoints."
             },
             {
+                title: 'Role-Based Access Control (RBAC)',
+                href: '/docs/advanced-guide/rbac',
+                desc: "Implement comprehensive Role-Based Access Control with support for roles, permissions, hierarchy, JWT integration, and fine-grained permission-based authorization."
+            },
+            {
                 title: 'Circuit Breaker Support',
                 href: '/docs/advanced-guide/circuit-breaker',
                 desc: "Understand how to implement circuit breaker patterns to enhance the resilience of your services against failures."
@@ -163,11 +168,6 @@ export const navigation = [
                 title: 'Profiling in GoFr Applications',
                 href: '/docs/advanced-guide/debugging',
                 desc: "Discover GoFr auto-enables pprof profiling by leveraging its built-in configurations."
-            },
-            {
-                title: 'Adding Synchronous Startup Hooks',
-                href: '/docs/advanced-guide/startup-hooks',
-                desc: "Learn how to seed a database, warm up a cache, or perform other critical setup procedures, synchronously before starting your application."
             },
             {
                 title: 'Building CLI Applications',
@@ -274,6 +274,7 @@ export const navigation = [
                 href: '/docs/references/testing',
                 desc: "GoFr provides a centralized collection of mocks to facilitate writing effective unit tests. Explore testing strategies and tools for GoFr applications, ensuring the code is robust, reliable, and maintainable."
             },
+
             {
                 title: 'GoFr CLI',
                 href: '/docs/references/gofrcli',

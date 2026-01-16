@@ -444,6 +444,34 @@ func (s *ChatServiceGoFrServer) ServerStream(ctx *gofr.Context, stream ChatServi
 }
 ```
 
+## Adding Custom Stream interceptors
+
+For streaming RPCs (client-stream, server-stream, or bidirectional), GoFr allows you to add stream interceptors using `AddGRPCServerStreamInterceptors`. These are useful for handling logic that needs to span the entire lifetime of a stream.
+
+```go
+func main() {
+    app := gofr.New()
+
+    app.AddGRPCServerStreamInterceptors(streamAuthInterceptor)
+
+    // ... register your service
+    app.Run()
+}
+
+func streamAuthInterceptor(srv any, ss grpc.ServerStream, info *grpc.StreamServerInfo, handler grpc.StreamHandler) error {
+	// Example: Validate metadata for the entire stream
+	md, ok := metadata.FromIncomingContext(ss.Context())
+	if !ok || !isValidToken(md["auth-token"]) {
+		return status.Errorf(codes.Unauthenticated, "invalid stream token")
+	}
+
+	// If valid, continue processing the stream
+	return handler(srv, ss)
+}
+```
+
+For more details on adding additional interceptors and server options, refer to the [official gRPC Go package](https://pkg.go.dev/google.golang.org/grpc#ServerOption).
+
 ## Best Practices
 
 1. **Always handle `io.EOF`**: This is the normal way streams end
