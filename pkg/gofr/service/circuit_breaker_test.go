@@ -738,3 +738,192 @@ func (*customTransport) RoundTrip(r *http.Request) (*http.Response, error) {
 
 	return nil, testutil.CustomError{ErrorMessage: "cb error"}
 }
+
+func TestCircuitBreaker_CustomHealthEndpoint_Recovery(t *testing.T) {
+	// Server that returns 502 for /fail (triggers circuit breaker), 200 for /health and /success
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/health":
+			w.WriteHeader(http.StatusOK)
+		case "/fail":
+			w.WriteHeader(http.StatusBadGateway)
+		default:
+			w.WriteHeader(http.StatusOK)
+		}
+	}))
+	defer server.Close()
+
+	ctrl := gomock.NewController(t)
+	mockMetric := NewMockMetrics(ctrl)
+
+	mockMetric.EXPECT().RecordHistogram(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
+	mockMetric.EXPECT().NewCounter(gomock.Any(), gomock.Any()).AnyTimes()
+	mockMetric.EXPECT().NewGauge(gomock.Any(), gomock.Any()).AnyTimes()
+	mockMetric.EXPECT().SetGauge(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
+
+	httpSvc := NewHTTPService(server.URL,
+		logging.NewMockLogger(logging.DEBUG),
+		mockMetric,
+		&CircuitBreakerConfig{Threshold: 1, Interval: 200 * time.Millisecond},
+		&HealthConfig{HealthEndpoint: "health", Timeout: 5},
+	)
+
+	// First request returns 502 - failure count becomes 1, threshold not exceeded (1 > 1 is false)
+	resp, err := httpSvc.Get(t.Context(), "fail", nil)
+	require.NoError(t, err)
+	assert.Equal(t, http.StatusBadGateway, resp.StatusCode)
+	resp.Body.Close()
+
+	// Second request returns 502 - failure count becomes 2, exceeds threshold (2 > 1)
+	// Circuit opens and returns ErrCircuitOpen
+	resp, err = httpSvc.Get(t.Context(), "fail", nil)
+	if resp != nil && resp.Body != nil {
+		resp.Body.Close()
+	}
+
+	require.ErrorIs(t, err, ErrCircuitOpen)
+
+	// Third request - circuit is still open, returns ErrCircuitOpen
+	resp, err = httpSvc.Get(t.Context(), "fail", nil)
+	if resp != nil && resp.Body != nil {
+		resp.Body.Close()
+	}
+
+	require.ErrorIs(t, err, ErrCircuitOpen)
+
+	// Wait for interval to pass so circuit can attempt recovery via /health endpoint
+	time.Sleep(1 * time.Second)
+
+	// Fourth request - circuit should recover via /health endpoint and succeed
+	resp, err = httpSvc.Get(t.Context(), "success", nil)
+	require.NoError(t, err)
+	assert.Equal(t, http.StatusOK, resp.StatusCode)
+	resp.Body.Close()
+}
+
+func TestCircuitBreaker_DefaultHealthEndpoint_NoRecoveryWhenMissing(t *testing.T) {
+	// Server that returns 502 for /fail (triggers circuit breaker),
+	// 404 for /.well-known/alive (default health endpoint missing)
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/.well-known/alive":
+			w.WriteHeader(http.StatusNotFound) // Default health endpoint not available
+		case "/fail":
+			w.WriteHeader(http.StatusBadGateway)
+		default:
+			w.WriteHeader(http.StatusOK)
+		}
+	}))
+	defer server.Close()
+
+	ctrl := gomock.NewController(t)
+	mockMetric := NewMockMetrics(ctrl)
+
+	mockMetric.EXPECT().RecordHistogram(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
+	mockMetric.EXPECT().NewCounter(gomock.Any(), gomock.Any()).AnyTimes()
+	mockMetric.EXPECT().NewGauge(gomock.Any(), gomock.Any()).AnyTimes()
+	mockMetric.EXPECT().SetGauge(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
+
+	// No HealthConfig - will use default /.well-known/alive which returns 404
+	httpSvc := NewHTTPService(server.URL,
+		logging.NewMockLogger(logging.DEBUG),
+		mockMetric,
+		&CircuitBreakerConfig{Threshold: 1, Interval: 200 * time.Millisecond},
+	)
+
+	// First request returns 502 - failure count becomes 1, threshold not exceeded
+	resp, err := httpSvc.Get(t.Context(), "fail", nil)
+	require.NoError(t, err)
+	assert.Equal(t, http.StatusBadGateway, resp.StatusCode)
+	resp.Body.Close()
+
+	// Second request returns 502 - failure count becomes 2, exceeds threshold
+	// Circuit opens and returns ErrCircuitOpen
+	resp, err = httpSvc.Get(t.Context(), "fail", nil)
+	if resp != nil && resp.Body != nil {
+		resp.Body.Close()
+	}
+
+	require.ErrorIs(t, err, ErrCircuitOpen)
+
+	// Third request - circuit is still open
+	resp, err = httpSvc.Get(t.Context(), "fail", nil)
+	if resp != nil && resp.Body != nil {
+		resp.Body.Close()
+	}
+
+	require.ErrorIs(t, err, ErrCircuitOpen)
+
+	// Wait for interval to pass
+	time.Sleep(500 * time.Millisecond)
+
+	// Fourth request should also fail - circuit cannot recover because /.well-known/alive returns 404
+	resp, err = httpSvc.Get(t.Context(), "success", nil)
+	if resp != nil && resp.Body != nil {
+		resp.Body.Close()
+	}
+
+	require.ErrorIs(t, err, ErrCircuitOpen)
+}
+
+func TestCircuitBreaker_HealthEndpointWithTimeout(t *testing.T) {
+	// Server that returns 502 for /fail, 200 for /health and other paths
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/health":
+			w.WriteHeader(http.StatusOK)
+		case "/fail":
+			w.WriteHeader(http.StatusBadGateway)
+		default:
+			w.WriteHeader(http.StatusOK)
+		}
+	}))
+	defer server.Close()
+
+	ctrl := gomock.NewController(t)
+	mockMetric := NewMockMetrics(ctrl)
+
+	mockMetric.EXPECT().RecordHistogram(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
+	mockMetric.EXPECT().NewCounter(gomock.Any(), gomock.Any()).AnyTimes()
+	mockMetric.EXPECT().NewGauge(gomock.Any(), gomock.Any()).AnyTimes()
+	mockMetric.EXPECT().SetGauge(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
+
+	httpSvc := NewHTTPService(server.URL,
+		logging.NewMockLogger(logging.DEBUG),
+		mockMetric,
+		&CircuitBreakerConfig{Threshold: 1, Interval: 200 * time.Millisecond},
+		&HealthConfig{HealthEndpoint: "health", Timeout: 10},
+	)
+
+	// First request returns 502 - failure count becomes 1, threshold not exceeded
+	resp, err := httpSvc.Get(t.Context(), "fail", nil)
+	require.NoError(t, err)
+	assert.Equal(t, http.StatusBadGateway, resp.StatusCode)
+	resp.Body.Close()
+
+	// Second request returns 502 - failure count becomes 2, exceeds threshold
+	// Circuit opens and returns ErrCircuitOpen
+	resp, err = httpSvc.Get(t.Context(), "fail", nil)
+	if resp != nil && resp.Body != nil {
+		resp.Body.Close()
+	}
+
+	require.ErrorIs(t, err, ErrCircuitOpen)
+
+	// Third request - circuit is still open
+	resp, err = httpSvc.Get(t.Context(), "fail", nil)
+	if resp != nil && resp.Body != nil {
+		resp.Body.Close()
+	}
+
+	require.ErrorIs(t, err, ErrCircuitOpen)
+
+	// Wait for interval to pass so circuit can attempt recovery
+	time.Sleep(500 * time.Millisecond)
+
+	// Fourth request - circuit should recover using custom health endpoint
+	resp, err = httpSvc.Get(t.Context(), "success", nil)
+	require.NoError(t, err)
+	assert.Equal(t, http.StatusOK, resp.StatusCode)
+	resp.Body.Close()
+}
