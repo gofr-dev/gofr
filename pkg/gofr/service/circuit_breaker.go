@@ -99,14 +99,13 @@ func (cb *circuitBreaker) isOpen() bool {
 }
 
 func (cb *circuitBreaker) healthCheck(ctx context.Context) bool {
-	var resp *Health
-
-	// Read health config from parent httpService if available
 	if httpSvc := extractHTTPService(cb.HTTP); httpSvc != nil && httpSvc.healthEndpoint != "" {
-		resp = cb.HTTP.getHealthResponseForEndpoint(ctx, httpSvc.healthEndpoint, httpSvc.healthTimeout)
-	} else {
-		resp = cb.HTTP.HealthCheck(ctx)
+		resp := cb.HTTP.getHealthResponseForEndpoint(ctx, httpSvc.healthEndpoint, httpSvc.healthTimeout)
+
+		return resp.Status == serviceUp
 	}
+
+	resp := cb.HTTP.HealthCheck(ctx)
 
 	return resp.Status == serviceUp
 }
