@@ -96,7 +96,7 @@ func newGRPCServer(c *container.Container, port int, cfg config.Config) (*grpcSe
 	middleware := make([]grpc.UnaryServerInterceptor, 0)
 	middleware = append(middleware,
 		grpc_recovery.UnaryServerInterceptor(),
-		gofr_grpc.ObservabilityInterceptor(c.Logger, c.Metrics()))
+		gofr_grpc.UnaryObservabilityInterceptor(c.Logger, c.Metrics()))
 
 	streamMiddleware := make([]grpc.StreamServerInterceptor, 0)
 	streamMiddleware = append(streamMiddleware,

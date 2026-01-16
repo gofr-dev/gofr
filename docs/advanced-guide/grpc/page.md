@@ -194,32 +194,28 @@ func authInterceptor(ctx context.Context, req any, info *grpc.UnaryServerInfo, h
 }
 ```
 
-## Adding Custom Stream interceptors
+### Built-in Authentication Interceptors
 
-For streaming RPCs (client-stream, server-stream, or bidirectional), GoFr allows you to add stream interceptors using AddGRPCServerStreamInterceptors. These are useful for handling logic that needs to span the entire lifetime of a stream.
-```go
-func main() {
-    app := gofr.New()
+GoFr provides built-in interceptors for common authentication methods, ensuring parity with HTTP services. These can be found in `gofr.dev/pkg/gofr/grpc/middleware`.
 
-    app.AddGRPCServerStreamInterceptors(streamAuthInterceptor)
+*   **Basic Auth**: `BasicAuthUnaryInterceptor` and `BasicAuthStreamInterceptor`
+*   **API Key**: `APIKeyAuthUnaryInterceptor` and `APIKeyAuthStreamInterceptor`
+*   **OAuth (JWT)**: `OAuthUnaryInterceptor` and `OAuthStreamInterceptor`
 
-    // ... register your service
-    app.Run()
-}
+For detailed usage, refer to the [gRPC Authentication documentation](/docs/advanced-guide/grpc-authentication).
 
-func streamAuthInterceptor(srv any, ss grpc.ServerStream, info *grpc.StreamServerInfo, handler grpc.StreamHandler) error {
-	// Example: Validate metadata for the entire stream
-	md, ok := metadata.FromIncomingContext(ss.Context())
-	if !ok || !isValidToken(md["auth-token"]) {
-		return status.Errorf(codes.Unauthenticated, "invalid stream token")
-	}
+## Built-in Observability
 
-	// If valid, continue processing the stream
-	return handler(srv, ss)
-}
-```
+GoFr provides seamless observability for gRPC services, including standardized tracing, metrics, and logging.
 
-For more details on adding additional interceptors and server options, refer to the [official gRPC Go package](https://pkg.go.dev/google.golang.org/grpc#ServerOption).
+### Standardized OTEL Tracing
+
+GoFr's gRPC interceptors are fully compliant with OpenTelemetry (OTEL) standards. They automatically:
+1.  **Extract Context**: Use standard OTEL propagators to extract trace context from incoming metadata.
+2.  **Propagate Context**: Ensure trace information is passed down to your handlers via `gofr.Context`.
+3.  **Backward Compatibility**: Support GoFr's legacy headers (`x-gofr-traceid`, `x-gofr-spanid`) if standard OTEL headers are missing.
+
+This standardization allows GoFr services to integrate effortlessly with any OTEL-compatible monitoring tools like Jaeger, Zipkin, or SigNoz.
 
 ## Generating gRPC Client using `gofr wrap grpc client`
 

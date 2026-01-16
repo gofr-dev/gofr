@@ -27,13 +27,13 @@ func TestMain(m *testing.M) {
 	m.Run()
 }
 
-func TestNewgRPCLogger(t *testing.T) {
-	logger := NewgRPCLogger()
-	assert.Equal(t, gRPCLog{}, logger)
+func TestNewLogger(t *testing.T) {
+	logger := NewGRPCLogger()
+	assert.Equal(t, Log{}, logger)
 }
 
 func TestRPCLog_String(t *testing.T) {
-	l := gRPCLog{
+	l := Log{
 		ID:         "123",
 		StartTime:  "2020-01-01T12:12:12",
 		Method:     http.MethodGet,
@@ -46,7 +46,7 @@ func TestRPCLog_String(t *testing.T) {
 }
 
 func TestRPCLog_StringWithStreamType(t *testing.T) {
-	l := gRPCLog{
+	l := Log{
 		ID:         "123",
 		StartTime:  "2020-01-01T12:12:12",
 		Method:     "/test.Service/Method",
@@ -82,7 +82,7 @@ func TestRPCLog_PrettyPrint(t *testing.T) {
 	startTime := time.Now().String()
 
 	log := testutil.StdoutOutputForFunc(func() {
-		l := gRPCLog{
+		l := Log{
 			ID:           "1",
 			StartTime:    startTime,
 			ResponseTime: 10,
@@ -106,7 +106,7 @@ func TestRPCLog_PrettyPrint(t *testing.T) {
 func TestRPCLog_PrettyPrintWithStreamType(t *testing.T) {
 	var buf bytes.Buffer
 
-	l := gRPCLog{
+	l := Log{
 		ID:           "1",
 		StartTime:    "2023-01-01T12:00:00Z",
 		ResponseTime: 100,
@@ -179,14 +179,13 @@ func TestGetMetadataValue(t *testing.T) {
 }
 
 func TestGetTraceID(t *testing.T) {
-	assert.Equal(t, "00000000000000000000000000000000", getTraceID(t.Context()))
-	assert.Equal(t, "00000000000000000000000000000000", getTraceID(t.Context()))
+	assert.Equal(t, "00000000000000000000000000000000", getTraceID(context.Background()))
 }
 
 func TestWrappedServerStream_Context(t *testing.T) {
 	type contextKey string
 
-	originalCtx := t.Context()
+	originalCtx := context.Background()
 	newCtx := context.WithValue(originalCtx, contextKey("key"), "value")
 	wrapped := &wrappedServerStream{
 		ctx: newCtx,
@@ -205,12 +204,12 @@ func createMocks(t *testing.T) (*container.MockLogger, *container.MockMetrics, *
 	return mockLogger, mockMetrics, ctrl
 }
 
-func TestGRPCLog_DocumentRPCLog(t *testing.T) {
+func TestRPCLog_DocumentRPCLog(t *testing.T) {
 	mockLogger, mockMetrics, ctrl := createMocks(t)
 	defer ctrl.Finish()
 
-	log := gRPCLog{}
-	ctx := t.Context()
+	log := Log{}
+	ctx := context.Background()
 	start := time.Now()
 	err := status.Error(codes.Internal, "test error")
 	method := "test.method"
@@ -223,13 +222,13 @@ func TestGRPCLog_DocumentRPCLog(t *testing.T) {
 	log.DocumentRPCLog(ctx, mockLogger, mockMetrics, start, err, method, name)
 }
 
-func TestObservabilityInterceptor(t *testing.T) {
+func TestUnaryObservabilityInterceptor(t *testing.T) {
 	mockLogger, mockMetrics, ctrl := createMocks(t)
 	defer ctrl.Finish()
 
-	interceptor := ObservabilityInterceptor(mockLogger, mockMetrics)
+	interceptor := UnaryObservabilityInterceptor(mockLogger, mockMetrics)
 
-	ctx := t.Context()
+	ctx := context.Background()
 	req := "test request"
 	info := &grpc.UnaryServerInfo{
 		FullMethod: "/test.Service/Method",
@@ -249,13 +248,13 @@ func TestObservabilityInterceptor(t *testing.T) {
 	assert.Equal(t, "test response", resp)
 }
 
-func TestObservabilityInterceptor_WithError(t *testing.T) {
+func TestUnaryObservabilityInterceptor_WithError(t *testing.T) {
 	mockLogger, mockMetrics, ctrl := createMocks(t)
 	defer ctrl.Finish()
 
-	interceptor := ObservabilityInterceptor(mockLogger, mockMetrics)
+	interceptor := UnaryObservabilityInterceptor(mockLogger, mockMetrics)
 
-	ctx := t.Context()
+	ctx := context.Background()
 	req := "test request"
 	info := &grpc.UnaryServerInfo{
 		FullMethod: "/test.Service/Method",
@@ -276,13 +275,13 @@ func TestObservabilityInterceptor_WithError(t *testing.T) {
 	assert.Nil(t, resp)
 }
 
-func TestObservabilityInterceptor_HealthCheck(t *testing.T) {
+func TestUnaryObservabilityInterceptor_HealthCheck(t *testing.T) {
 	mockLogger, mockMetrics, ctrl := createMocks(t)
 	defer ctrl.Finish()
 
-	interceptor := ObservabilityInterceptor(mockLogger, mockMetrics)
+	interceptor := UnaryObservabilityInterceptor(mockLogger, mockMetrics)
 
-	ctx := t.Context()
+	ctx := context.Background()
 	req := &grpc_health_v1.HealthCheckRequest{
 		Service: "test-service",
 	}
@@ -411,17 +410,17 @@ func TestInitializeSpanContext_NoSpanCreated(t *testing.T) {
 	}{
 		{
 			name: "no metadata",
-			ctx:  t.Context(),
+			ctx:  context.Background(),
 		},
 		{
 			name: "missing trace id",
-			ctx: metadata.NewIncomingContext(t.Context(), metadata.Pairs(
+			ctx: metadata.NewIncomingContext(context.Background(), metadata.Pairs(
 				"x-gofr-spanid", "1234567890123456",
 			)),
 		},
 		{
 			name: "missing span id",
-			ctx: metadata.NewIncomingContext(t.Context(), metadata.Pairs(
+			ctx: metadata.NewIncomingContext(context.Background(), metadata.Pairs(
 				"x-gofr-traceid", "12345678901234567890123456789012",
 			)),
 		},
@@ -444,7 +443,7 @@ func TestInitializeSpanContext_SpanCreated(t *testing.T) {
 	}{
 		{
 			name: "valid trace context",
-			ctx: metadata.NewIncomingContext(t.Context(), metadata.Pairs(
+			ctx: metadata.NewIncomingContext(context.Background(), metadata.Pairs(
 				"x-gofr-traceid", "12345678901234567890123456789012",
 				"x-gofr-spanid", "1234567890123456",
 			)),
@@ -452,7 +451,7 @@ func TestInitializeSpanContext_SpanCreated(t *testing.T) {
 		},
 		{
 			name: "invalid trace id",
-			ctx: metadata.NewIncomingContext(t.Context(), metadata.Pairs(
+			ctx: metadata.NewIncomingContext(context.Background(), metadata.Pairs(
 				"x-gofr-traceid", "invalid",
 				"x-gofr-spanid", "1234567890123456",
 			)),
@@ -460,7 +459,7 @@ func TestInitializeSpanContext_SpanCreated(t *testing.T) {
 		},
 		{
 			name: "invalid span id",
-			ctx: metadata.NewIncomingContext(t.Context(), metadata.Pairs(
+			ctx: metadata.NewIncomingContext(context.Background(), metadata.Pairs(
 				"x-gofr-traceid", "12345678901234567890123456789012",
 				"x-gofr-spanid", "invalid",
 			)),
@@ -548,7 +547,7 @@ func (*mockServerStream) RecvMsg(_ any) error {
 func TestWrappedServerStream_Context_Comprehensive(t *testing.T) {
 	type testKey string
 
-	ctx := context.WithValue(t.Context(), testKey("test-key"), "test-value")
+	ctx := context.WithValue(context.Background(), testKey("test-key"), "test-value")
 
 	wrapped := &wrappedServerStream{
 		ServerStream: &mockServerStream{},
@@ -562,14 +561,14 @@ func TestWrappedServerStream_Context_Comprehensive(t *testing.T) {
 // Additional tests to reach 100% coverage.
 func TestGetTraceID_WithSpanContext(t *testing.T) {
 	// Test with context without span - this returns the default trace ID
-	ctx := t.Context()
+	ctx := context.Background()
 	traceID := getTraceID(ctx)
 	assert.Equal(t, "00000000000000000000000000000000", traceID)
 }
 
 func TestGetTraceID_WithValidSpan(t *testing.T) {
 	// Create a context with a valid span
-	ctx := t.Context()
+	ctx := context.Background()
 	span := trace.SpanFromContext(ctx)
 
 	// Test with valid span context
@@ -583,7 +582,7 @@ func TestGetTraceID_WithNilSpan(t *testing.T) {
 	// We'll use a context with a custom value that doesn't have a span
 	type customKey string
 
-	ctx := context.WithValue(t.Context(), customKey("custom-key"), "custom-value")
+	ctx := context.WithValue(context.Background(), customKey("custom-key"), "custom-value")
 
 	// Test with context that has nil span
 	traceID := getTraceID(ctx)
@@ -595,7 +594,7 @@ func TestLogGRPCEntry(t *testing.T) {
 	defer ctrl.Finish()
 
 	// Test logGRPCEntry function
-	log := &gRPCLog{
+	log := &Log{
 		ID:           "test-id",
 		StartTime:    "2023-01-01T12:00:00Z",
 		ResponseTime: 100,
@@ -614,7 +613,7 @@ func TestLogGRPCEntry_WithDebugMethod(t *testing.T) {
 	defer ctrl.Finish()
 
 	// Test logGRPCEntry function with debug method
-	log := &gRPCLog{
+	log := &Log{
 		ID:           "test-id",
 		StartTime:    "2023-01-01T12:00:00Z",
 		ResponseTime: 100,
@@ -633,7 +632,7 @@ func TestLogGRPCEntry_WithSendMethod(t *testing.T) {
 	defer ctrl.Finish()
 
 	// Test logGRPCEntry function with Send method
-	log := &gRPCLog{
+	log := &Log{
 		ID:           "test-id",
 		StartTime:    "2023-01-01T12:00:00Z",
 		ResponseTime: 100,
@@ -649,7 +648,7 @@ func TestLogGRPCEntry_WithSendMethod(t *testing.T) {
 
 func TestLogGRPCEntry_WithNilLogger(_ *testing.T) {
 	// Test logGRPCEntry function with nil logger
-	log := &gRPCLog{
+	log := &Log{
 		ID:           "test-id",
 		StartTime:    "2023-01-01T12:00:00Z",
 		ResponseTime: 100,
@@ -665,7 +664,7 @@ func TestRecordGRPCMetrics(t *testing.T) {
 	_, mockMetrics, ctrl := createMocks(t)
 	defer ctrl.Finish()
 
-	ctx := t.Context()
+	ctx := context.Background()
 
 	// Set up expectations
 	mockMetrics.EXPECT().RecordHistogram(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Times(1)
@@ -678,7 +677,7 @@ func TestRecordGRPCMetrics_WithStreamType(t *testing.T) {
 	_, mockMetrics, ctrl := createMocks(t)
 	defer ctrl.Finish()
 
-	ctx := t.Context()
+	ctx := context.Background()
 
 	// Set up expectations
 	mockMetrics.EXPECT().RecordHistogram(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Times(1)
@@ -687,8 +686,8 @@ func TestRecordGRPCMetrics_WithStreamType(t *testing.T) {
 	recordGRPCMetrics(ctx, mockMetrics, "test_metric", 100*time.Millisecond, "/test.Service/Method", "SERVER_STREAM")
 }
 
-func TestRecordGRPCMetrics_WithNilMetrics(t *testing.T) {
-	ctx := t.Context()
+func TestRecordGRPCMetrics_WithNilMetrics(_ *testing.T) {
+	ctx := context.Background()
 
 	// Test recordGRPCMetrics function with nil metrics
 	// This should not panic
