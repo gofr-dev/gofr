@@ -37,11 +37,6 @@ type circuitBreaker struct {
 	metrics      Metrics
 	serviceName  string
 
-	// healthEndpoint is the custom endpoint to use for health checks during circuit recovery.
-	healthEndpoint string
-	// healthTimeout is the timeout in seconds for health check requests.
-	healthTimeout int
-
 	HTTP
 }
 
@@ -50,11 +45,10 @@ type circuitBreaker struct {
 //nolint:revive // Allow returning unexported types as intended.
 func NewCircuitBreaker(config CircuitBreakerConfig, h HTTP) *circuitBreaker {
 	cb := &circuitBreaker{
-		state:         ClosedState,
-		threshold:     config.Threshold,
-		interval:      config.Interval,
-		healthTimeout: defaultTimeout,
-		HTTP:          h,
+		state:     ClosedState,
+		threshold: config.Threshold,
+		interval:  config.Interval,
+		HTTP:      h,
 	}
 
 	// Perform asynchronous health checks
@@ -104,14 +98,12 @@ func (cb *circuitBreaker) isOpen() bool {
 	return cb.state == OpenState
 }
 
-// healthCheck performs the health check for the circuit breaker.
-// If a custom healthEndpoint is configured, it uses that endpoint.
-// Otherwise, it falls back to the default /.well-known/alive endpoint.
 func (cb *circuitBreaker) healthCheck(ctx context.Context) bool {
 	var resp *Health
 
-	if cb.healthEndpoint != "" {
-		resp = cb.HTTP.getHealthResponseForEndpoint(ctx, cb.healthEndpoint, cb.healthTimeout)
+	// Read health config from parent httpService if available
+	if httpSvc := extractHTTPService(cb.HTTP); httpSvc != nil && httpSvc.healthEndpoint != "" {
+		resp = cb.HTTP.getHealthResponseForEndpoint(ctx, httpSvc.healthEndpoint, httpSvc.healthTimeout)
 	} else {
 		resp = cb.HTTP.HealthCheck(ctx)
 	}
@@ -170,15 +162,6 @@ func (cb *circuitBreaker) resetFailureCount() {
 	cb.failureCount = 0
 }
 
-// setHealthConfig updates the circuit breaker's health endpoint and timeout.
-func (cb *circuitBreaker) setHealthConfig(endpoint string, timeout int) {
-	cb.mu.Lock()
-	defer cb.mu.Unlock()
-
-	cb.healthEndpoint = endpoint
-	cb.healthTimeout = timeout
-}
-
 func (cb *CircuitBreakerConfig) AddOption(h HTTP) HTTP {
 	circuitBreaker := NewCircuitBreaker(*cb, h)
 
@@ -187,6 +170,7 @@ func (cb *CircuitBreakerConfig) AddOption(h HTTP) HTTP {
 		circuitBreaker.serviceName = httpSvc.name
 
 		if circuitBreaker.metrics != nil {
+			// Initialize the gauge to 0 (Closed) - gauge is already registered in container.go
 			circuitBreaker.metrics.SetGauge("app_http_circuit_breaker_state", 0, "service", circuitBreaker.serviceName)
 		}
 	}
