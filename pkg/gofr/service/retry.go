@@ -18,10 +18,6 @@ func (r *RetryConfig) AddOption(h HTTP) HTTP {
 	if httpSvc := extractHTTPService(h); httpSvc != nil {
 		rp.metrics = httpSvc.Metrics
 		rp.serviceName = httpSvc.name
-
-		if rp.metrics != nil {
-			registerCounter(rp.metrics, "app_http_retry_count", "Total number of retry events")
-		}
 	}
 
 	return rp
