@@ -25,7 +25,7 @@ func Test_MetricsGetHandler_MetricsNotRegistered(t *testing.T) {
 
 	logs := func() {
 		manager := NewMetricsManager(exporters.Prometheus("test-app", "v1.0.0"),
-			logging.NewMockLogger(logging.INFO))
+			logging.NewMockLogger(logging.INFO), nil)
 
 		handler := GetHandler(manager)
 
@@ -46,7 +46,7 @@ func Test_MetricsGetHandler_MetricsNotRegistered(t *testing.T) {
 
 func Test_MetricsGetHandler_SystemMetricsRegistered(t *testing.T) {
 	manager := NewMetricsManager(exporters.Prometheus("test-app", "v1.0.0"),
-		logging.NewMockLogger(logging.INFO))
+		logging.NewMockLogger(logging.INFO), nil)
 
 	// Registering the metrics because the values are being set in the GetHandler function.
 	manager.NewGauge("app_go_routines", "Number of Go routines running.")
@@ -78,7 +78,7 @@ func Test_MetricsGetHandler_SystemMetricsRegistered(t *testing.T) {
 
 func Test_MetricsGetHandler_RegisteredProfilingRoutes(t *testing.T) {
 	manager := NewMetricsManager(exporters.Prometheus("test-app", "v1.0.0"),
-		logging.NewMockLogger(logging.INFO))
+		logging.NewMockLogger(logging.INFO), nil)
 
 	// Registering the metrics because the values are being set in the GetHandler function.
 	manager.NewGauge("app_go_routines", "Number of Go routines running.")

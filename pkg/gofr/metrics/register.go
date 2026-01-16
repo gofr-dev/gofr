@@ -23,6 +23,8 @@ type Manager interface {
 	DeltaUpDownCounter(ctx context.Context, name string, value float64, labels ...string)
 	RecordHistogram(ctx context.Context, name string, value float64, labels ...string)
 	SetGauge(name string, value float64, labels ...string)
+
+	Shutdown(ctx context.Context) error
 }
 
 // Logger defines a simple interface for logging messages at different log levels.
@@ -37,6 +39,7 @@ type metricsManager struct {
 	meter  metric.Meter
 	store  Store
 	logger Logger
+	flush  func(context.Context) error
 }
 
 // Developer Note: float64Gauge is used instead of metric.Float64ObservableGauge because we need a synchronous gauge metric
@@ -48,11 +51,12 @@ type float64Gauge struct {
 }
 
 // NewMetricsManager creates a new metrics manager instance with the provided metric  meter and logger.
-func NewMetricsManager(meter metric.Meter, logger Logger) Manager {
+func NewMetricsManager(meter metric.Meter, logger Logger, flush func(context.Context) error) Manager {
 	return &metricsManager{
 		meter:  meter,
 		store:  newOtelStore(),
 		logger: logger,
+		flush:  flush,
 	}
 }
 

@@ -20,6 +20,7 @@ import (
 	"time"
 
 	_ "github.com/go-sql-driver/mysql" // This is required to be blank import
+	"go.opentelemetry.io/otel/metric"
 
 	"gofr.dev/pkg/gofr/config"
 	"gofr.dev/pkg/gofr/datasource/file"
@@ -119,7 +120,21 @@ func (c *Container) Create(conf config.Config) {
 
 	c.Logger.Debug("Container is being created")
 
-	c.metricsManager = metrics.NewMetricsManager(exporters.Prometheus(c.GetAppName(), c.GetAppVersion()), c.Logger)
+	var (
+		meter metric.Meter
+		flush func(context.Context) error
+	)
+
+	if pushGateway := conf.Get("METRICS_PUSH_GATEWAY_URL"); pushGateway != "" {
+		jobName := conf.GetOrDefault("METRICS_PUSH_GATEWAY_JOB_NAME", "gofr_app")
+		interval, _ := strconv.Atoi(conf.GetOrDefault("METRICS_PUSH_GATEWAY_INTERVAL", "15"))
+
+		meter, flush = exporters.PrometheusPush(c.GetAppName(), c.GetAppVersion(), pushGateway, jobName, interval)
+	} else {
+		meter = exporters.Prometheus(c.GetAppName(), c.GetAppVersion())
+	}
+
+	c.metricsManager = metrics.NewMetricsManager(meter, c.Logger, flush)
 
 	exporters.SendFrameworkStartupTelemetry(c.GetAppName(), c.GetAppVersion())
 
@@ -171,6 +186,10 @@ func (c *Container) Close() error {
 
 	for _, conn := range c.WSManager.ListConnections() {
 		c.WSManager.CloseConnection(conn)
+	}
+
+	if c.metricsManager != nil {
+		err = errors.Join(err, c.metricsManager.Shutdown(context.Background()))
 	}
 
 	return err
