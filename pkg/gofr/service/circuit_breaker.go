@@ -98,9 +98,14 @@ func (cb *circuitBreaker) isOpen() bool {
 	return cb.state == OpenState
 }
 
-// healthCheck performs the health check for the circuit breaker.
 func (cb *circuitBreaker) healthCheck(ctx context.Context) bool {
-	resp := cb.HealthCheck(ctx)
+	if httpSvc := extractHTTPService(cb.HTTP); httpSvc != nil && httpSvc.healthEndpoint != "" {
+		resp := cb.HTTP.getHealthResponseForEndpoint(ctx, httpSvc.healthEndpoint, httpSvc.healthTimeout)
+
+		return resp.Status == serviceUp
+	}
+
+	resp := cb.HTTP.HealthCheck(ctx)
 
 	return resp.Status == serviceUp
 }
@@ -164,10 +169,7 @@ func (cb *CircuitBreakerConfig) AddOption(h HTTP) HTTP {
 		circuitBreaker.serviceName = httpSvc.name
 
 		if circuitBreaker.metrics != nil {
-			registerGauge(circuitBreaker.metrics, "app_http_circuit_breaker_state",
-				"Current state of the circuit breaker (0 for Closed, 1 for Open)")
-
-			// Initialize the gauge to 0 (Closed)
+			// Initialize the gauge to 0 (Closed) - gauge is already registered in container.go
 			circuitBreaker.metrics.SetGauge("app_http_circuit_breaker_state", 0, "service", circuitBreaker.serviceName)
 		}
 	}
