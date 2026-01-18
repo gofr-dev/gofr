@@ -13,6 +13,12 @@ func (h *HealthConfig) AddOption(svc HTTP) HTTP {
 		h.Timeout = defaultTimeout
 	}
 
+	// Set health config on the parent httpService so other options can access it
+	if httpSvc := extractHTTPService(svc); httpSvc != nil {
+		httpSvc.healthEndpoint = h.HealthEndpoint
+		httpSvc.healthTimeout = h.Timeout
+	}
+
 	return &customHealthService{
 		healthEndpoint: h.HealthEndpoint,
 		timeout:        h.Timeout,
