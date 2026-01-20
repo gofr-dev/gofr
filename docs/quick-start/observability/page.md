@@ -9,7 +9,7 @@ It helps in identifying errors, debugging and troubleshooting, monitor performan
 GoFr logger allows customizing the log level, which provides flexibility to adjust logs based on specific needs.
 
 Logs are generated only for events equal to or above the specified log level; by default, GoFr logs at _INFO_ level.
-Log Level can be changed by setting the environment variable `LOG_LEVEL` value to _WARN,DEBUG,ERROR,NOTICE or FATAL_.
+Log Level can be changed by setting the environment variable `LOG_LEVEL` value to _DEBUG, INFO, NOTICE, WARN, ERROR or FATAL_.
 
 When the GoFr server runs, it prints a log for reading configs, database connection, requests, database queries, missing configs, etc.
 They contain information such as request's correlation ID, status codes, request time, etc.
@@ -72,7 +72,7 @@ DEBU [10:15:02] Loop step 1 - Processing User ID: 102
 DEBU [10:15:02] Loop step 2 - Processing User ID: 103
 ```
 
-***3. Raw Data Payloads,Initialization and Database Internals -*** Used to debug API integrations, Initialization, Processing.
+***3. Raw Data Payloads, Initialization and Database Internals -*** Used to debug API integrations, Initialization, Processing.
 
 > **Security Warning:** Logging raw request payloads is intended only for development or controlled debugging. Never enable such logs in production environments if payloads may contain Personally Identifiable Information (PII), credentials, authentication tokens, or other sensitive data.
 
@@ -128,7 +128,7 @@ func LoadConfig(ctx *gofr.Context) {
 }
 
 ```
-**Output-**
+**Output**
 ```Console
 INFO [10:02:15] Application configuration loaded and validated Source: env
 
@@ -155,7 +155,7 @@ func InitDatabase(ctx *gofr.Context) {
 INFO [10:02:18] Database connection is ready Host: localhost
 ```
 
-***3. Cache initialized  -*** Indicates that the cache client is ready and available.
+***3. Cache Initialized -*** Indicates that the cache client is ready and available.
 
 **Code Example**
 ```Go
@@ -175,7 +175,7 @@ INFO [10:02:20] Cache client initialized successfully Type: redis
 
 ```
 
-#### **Examples of when not to use**
+#### **Examples of when Not to Use:**
 
 ***1. Do Not Use for Exceptions:*** Refrain from using this level for error conditions.`INFO` logs are routed to standard output (`stdout`), causing them to be potentially overlooked by monitoring tools specifically configured to capture standard error (`stderr`) streams.
 
@@ -185,7 +185,7 @@ Do not emit `INFO` logs within tight loops or data-intensive processing blocks. 
 ---
 
 ### NOTICE
-A level higher than `INFO` but lower than `WARN`. It shares the same visual prominence as a Warning but implies a "normal" condition rather than a problem. in simple words its used for events that are normal but rare and significant.
+A level higher than `INFO` but lower than `WARN`. It shares the same visual prominence as a Warning but implies a "normal" condition rather than a problem. In simple words, it's used for events that are normal but rare and significant.
 
 
 
@@ -201,7 +201,7 @@ func TriggerReload(ctx *gofr.Context) (interface{}, error) {
     return "Config Reloaded", nil
 }
 ```
-**Output-**
+**Output**
 ```Console
 NOTI [14:05:03] Configuration hot-reload triggered by system admin
 ```
@@ -238,7 +238,7 @@ func InvalidateCache(ctx *gofr.Context) (interface{}, error) {
 NOTI [14:52:00] Cache Cleared
 ```
 
-#### **Examples of when not to use**
+#### **Examples of when Not to Use:**
 
 ***1. Misclassification of Failures:*** Do not utilize this level for error scenarios. `NOTICE` semantically implies a healthy system state; using it for failures creates ambiguity regarding system health.
 
@@ -246,7 +246,7 @@ NOTI [14:52:00] Cache Cleared
 Do not apply this level to standard, high-volume request logs. `NOTICE `should be reserved for distinct, infrequent state changes rather than repetitive per-request activities.
 
 ---
-
+### WARN
 `WARN` should represent abnormal runtime conditions that indicate instability or degraded operation (retries, fallbacks, transient failures), not long-term code hygiene issues like deprecated API usage. If something would show up repeatedly in a healthy system, it shouldn’t be a `WARN`, otherwise the signal gets diluted and operators start ignoring it.
 
 
@@ -284,7 +284,7 @@ func GetTimeoutConfig(ctx *gofr.Context) (interface{}, error) {
 WARN [14:55:00] Timeout config not found. Using fallback. fallback_value: 30s
 ```
 
-#### **Examples of when not to use**
+#### **Examples of when Not to Use:**
 
 ***1. Do Not Use for Definitive Failures:*** If a specific request or operation fails completely, do not categorize it as a `WARN`. This level implies the system "survived" or handled the issue gracefully; unrecoverable failures should be logged as `ERROR`.
 
@@ -339,7 +339,7 @@ func ProcessPayment(ctx *gofr.Context) (interface{}, error) {
 ERROR [10:20:02] Payment processing failed. error: payment gateway unreachable request_id: req_99
 ```
 
-***3. null pointer exceptions -*** The code attempted to dereference a memory address that does not point to a valid object, causing a runtime panic.
+***3. Null Pointer Exceptions -*** The code attempted to dereference a memory address that does not point to a valid object, causing a runtime panic.
 
 
 **Code Example**
@@ -360,7 +360,7 @@ func GetUserProfile(ctx *gofr.Context) (interface{}, error) {
 ERROR [10:20:03] Runtime Safety: Attempted to access methods on a nil 'User' object. Skipping.
 ```
 
-#### **Examples of when not to use**
+#### **Examples of when Not to Use:**
 
 ***1. Inappropriate for System-Wide Crashes:*** Do not use `ERROR` for unrecoverable startup failures that render the application non-functional (e.g., missing critical configuration). Such dependencies must be handled via `FATAL` to ensure immediate process termination
 
@@ -406,7 +406,7 @@ if !isSupportedVersion(currentVersion) {
 FATA [10:30:02] Incompatible Environment. required_version: 2.0 current_version: 1.5
 ```
 
-#### **Examples when not to use**
+#### **Examples of when Not to Use:**
 
 ***1. Strictly Prohibited During Request Handling:*** Never invoke `FATAL` during runtime request processing. This method executes `os.Exit(1)`, causing the entire server instance to terminate immediately. Using this for a runtime error (like a failed SQL query) causes a complete service outage rather than a single request failure.
 
