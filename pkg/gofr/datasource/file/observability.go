@@ -27,6 +27,7 @@ const (
 	OpStat      = "STAT"
 	OpChDir     = "CHDIR"
 	OpGetwd     = "GETWD"
+	OpSignedURL = "SignedURL"
 	OpRead      = "READ"
 	OpReadAt    = "READ_AT"
 	OpWrite     = "WRITE"

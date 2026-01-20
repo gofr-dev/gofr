@@ -2,6 +2,7 @@ package gcs
 
 import (
 	"context"
+	"os"
 	"time"
 
 	"gofr.dev/pkg/gofr/datasource/file"
@@ -102,4 +103,26 @@ func (f *fileSystem) startRetryConnect() {
 			f.CommonFileSystem.Logger.Debugf("GCS retry failed, will try again: %v", err)
 		}
 	}
+}
+
+func (f *fileSystem) Create(name string, opts ...*file.FileOptions) (file.File, error) {
+	ctx := context.Background()
+	var opt *file.FileOptions
+	if len(opts) > 0 {
+		opt = opts[0]
+	}
+	writer := f.Provider.(*storageAdapter).NewWriterWithOptions(ctx, name, opt)
+	return file.NewCommonFileWriter(
+		f.Provider,
+		name,
+		writer,
+		f.Logger,
+		f.Metrics,
+		f.Location,
+	), nil
+}
+
+func (f *fileSystem) SignedURL(name string, expiry time.Duration, opts ...*file.FileOptions) (string, error) {
+	ctx := context.Background()
+	return f.Provider.(*storageAdapter).SignedURL(ctx, name, expiry, opts...)
 }

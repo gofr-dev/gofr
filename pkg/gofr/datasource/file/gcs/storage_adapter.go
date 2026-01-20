@@ -2,9 +2,12 @@ package gcs
 
 import (
 	"context"
+	"encoding/json"
+	"encoding/pem"
 	"errors"
 	"fmt"
 	"io"
+	"time"
 
 	"cloud.google.com/go/storage"
 	"gofr.dev/pkg/gofr/datasource/file"
@@ -149,6 +152,27 @@ func (s *storageAdapter) NewWriter(ctx context.Context, name string) io.WriteClo
 	return s.bucket.Object(name).NewWriter(ctx)
 }
 
+// NewWriterWithOptions creates a writer for the given object with metadata support.
+func (s *storageAdapter) NewWriterWithOptions(ctx context.Context, name string, opts *file.FileOptions) io.WriteCloser {
+	if name == "" {
+		return &failWriter{err: errEmptyObjectName}
+	}
+
+	w := s.bucket.Object(name).NewWriter(ctx)
+	if opts != nil {
+		if opts.ContentType != "" {
+			w.ContentType = opts.ContentType
+		}
+		if opts.ContentDisposition != "" {
+			w.ContentDisposition = opts.ContentDisposition
+		}
+		if opts.Metadata != nil {
+			w.Metadata = opts.Metadata
+		}
+	}
+	return w
+}
+
 // failWriter is a helper for NewWriter validation errors.
 type failWriter struct {
 	err error
@@ -289,4 +313,54 @@ func (s *storageAdapter) ListDir(ctx context.Context, prefix string) ([]file.Obj
 	}
 
 	return objects, prefixes, nil
+}
+
+// SignedURL generates a signed URL for the given object with expiry and optional metadata.
+func (s *storageAdapter) SignedURL(_ context.Context, name string, expiry time.Duration, opts ...*file.FileOptions) (string, error) {
+	if s.cfg == nil || s.cfg.BucketName == "" {
+		return "", errors.New("GCS config or bucket name missing")
+	}
+	if name == "" {
+		return "", errEmptyObjectName
+	}
+	if s.cfg.CredentialsJSON == "" {
+		return "", errors.New("GCS credentials required for signed URL")
+	}
+
+	// Parse credentials JSON for service account email and private key
+	var cred struct {
+		ClientEmail string `json:"client_email"`
+		PrivateKey  string `json:"private_key"`
+	}
+	if err := json.Unmarshal([]byte(s.cfg.CredentialsJSON), &cred); err != nil {
+		return "", fmt.Errorf("failed to parse credentials: %w", err)
+	}
+
+	block, _ := pem.Decode([]byte(cred.PrivateKey))
+	if block == nil {
+		return "", errors.New("invalid private key PEM")
+	}
+
+	optsStruct := &storage.SignedURLOptions{
+		GoogleAccessID: cred.ClientEmail,
+		PrivateKey:     block.Bytes,
+		Method:         "GET",
+		Expires:        time.Now().Add(expiry),
+	}
+
+	// Set response headers if provided
+	if len(opts) > 0 && opts[0] != nil {
+		if opts[0].ContentType != "" {
+			optsStruct.ContentType = opts[0].ContentType
+		}
+		if opts[0].ContentDisposition != "" {
+			optsStruct.Headers = append(optsStruct.Headers, "response-content-disposition="+opts[0].ContentDisposition)
+		}
+	}
+
+	url, err := storage.SignedURL(s.cfg.BucketName, name, optsStruct)
+	if err != nil {
+		return "", fmt.Errorf("failed to generate signed URL: %w", err)
+	}
+	return url, nil
 }
