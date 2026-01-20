@@ -87,11 +87,13 @@ func TestHTTPService_createAndSendRequest(t *testing.T) {
 		}))
 
 		service := &httpService{
-			Client:  http.DefaultClient,
-			url:     server.URL,
-			Tracer:  trace.NewTracerProvider().Tracer("gofr-http-client"),
-			Logger:  logging.NewMockLogger(logging.INFO),
-			Metrics: metrics,
+			Client:         http.DefaultClient,
+			url:            server.URL,
+			Tracer:         trace.NewTracerProvider().Tracer("gofr-http-client"),
+			Logger:         logging.NewMockLogger(logging.INFO),
+			Metrics:        metrics,
+			healthEndpoint: "",
+			healthTimeout:  0,
 		}
 
 		metrics.EXPECT().RecordHistogram(gomock.Any(), "app_http_service_response", gomock.Any(), "path", server.URL,

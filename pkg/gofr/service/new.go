@@ -22,6 +22,11 @@ type httpService struct {
 	name string
 	Logger
 	Metrics
+
+	// healthEndpoint is the custom endpoint for health checks (shared across options)
+	healthEndpoint string
+	// healthTimeout is the timeout in seconds for health check requests
+	healthTimeout int
 }
 
 type HTTP interface {
