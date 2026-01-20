@@ -100,14 +100,13 @@ DEBU [10:15:05] [SQL] Generated Query: SELECT * FROM users WHERE id=42
 
 #### **Examples of when Not to Use:**
 
+***1. Redundant Framework Logging:*** Avoid manually logging information that GoFr already captures at the `DEBUG` level, such as raw SQL queries or basic request/response details, to prevent log duplication and unnecessary verbosity.
 
-***1. Production paths that run on every request*** Do not utilize `DEBUG` in production environments like request handlers, middleware, DB queries, cache lookups, auth checks, this level is typically suppressed to optimize performance.
-
-***2. Prohibit PII Logging:*** Strictly avoid logging Personally Identifiable Information (PII) or credentials (e.g., passwords, tokens)As `DEBUG` is frequently used for raw variable dumps, there is a high risk of exposing sensitive data in plain text
+***2. Prohibit PII Logging:*** Strictly avoid logging Personally Identifiable Information (PII) or credentials (e.g., passwords, tokens). As `DEBUG` is frequently used for raw variable dumps, there is a high risk of exposing sensitive data in plain text.
 
 ---
 ### INFO
-`INFO` Represents normal operational events during application execution and acts as the default logging level when an invalid or unrecognized log level string is provided, ensuring baseline observability without excessive verbosity.
+`INFO` Represents normal operational events during application execution and acts as the default logging level, ensuring baseline observability without excessive verbosity.
 
 
 
@@ -248,58 +247,41 @@ Do not apply this level to standard, high-volume request logs. `NOTICE `should b
 
 ---
 
-### WARN
-It is used when an anomaly had occurred, but the application recovered or continued execution.
+`WARN` should represent abnormal runtime conditions that indicate instability or degraded operation (retries, fallbacks, transient failures), not long-term code hygiene issues like deprecated API usage. If something would show up repeatedly in a healthy system, it shouldn’t be a `WARN`, otherwise the signal gets diluted and operators start ignoring it.
 
 
 
 #### **Usage Examples:**
 
-***1. Retrying database connection -*** Temporary connectivity loss detected. initiating an exponential backoff strategy to re-establish the link.
+***1. Database Connection Retry -*** Temporary connectivity loss detected. Initiating an exponential backoff strategy to re-establish the link.
 
 **Code Example**
 ```Go
 // ConnectWithRetry simulates a resilient database connection
 func ConnectWithRetry(ctx *gofr.Context) (interface{}, error) {
     // Simulating a failed attempt
-    ctx.Warn("Database connection timeout. Retrying in 2 seconds... (Attempt 1/3)")
+    ctx.Warn("Database connection timeout. Retrying...", "attempt", 1, "retry_after", "2s")
     return nil, nil
 }
 ```
 **Output**
 ```Console
-WARN [14:05:04] Database connection timeout. Retrying in 2 seconds... (Attempt 1/3)
+WARN [14:05:04] Database connection timeout. Retrying... attempt: 1 retry_after: 2s
 ```
-***2. Using fallback values -*** The external configuration service is unreachable, so the system is defaulting to hardcoded safe parameters to continue operation.
+***2. Fallback Configuration Used -*** The external configuration service is unreachable, so the system is defaulting to hardcoded safe parameters to continue operation.
 
 
 **Code Example**
 ```Go
 // GetTimeoutConfig retrieves config with a safe fallback
 func GetTimeoutConfig(ctx *gofr.Context) (interface{}, error) {
-    ctx.Warn("Timeout config not found. Using fallback: 30s")
+    ctx.Warn("Timeout config not found. Using fallback.", "fallback_value", "30s")
     return 30, nil
 }
 ```
 **Output**
 ```Console
-WARN [14:55:00] Timeout config not found. Using fallback: 30s
-```
-
-***3. Deprecated API usage -*** The application is calling an obsolete function or endpoint that will be removed in future versions; code migration is required.
-
-
-**Code Example**
-```Go
-// LoginV1 is an old endpoint scheduled for removal
-func LoginV1(ctx *gofr.Context) (interface{}, error) {
-    ctx.Warn("Deprecated API usage detected: /v1/login")
-    return nil, nil
-}
-```
-**Output**
-```Console
-WARN [14:56:00] Deprecated API usage detected: /v1/login
+WARN [14:55:00] Timeout config not found. Using fallback. fallback_value: 30s
 ```
 
 #### **Examples of when not to use**
@@ -319,38 +301,42 @@ Indicates a failure event. This level routes logs to `stderr` (Standard Error), 
 
 #### **Usage Examples:**
 
-***1. database timeouts -*** The database query exceeded the maximum execution time limit and was forcibly cancelled to prevent resource exhaustion.
+***1. Database Timeouts -*** The database query exceeded the maximum execution time limit and was forcibly cancelled to prevent resource exhaustion.
 
 **Code Example**
 ```Go
 // FetchAnalytics simulates a long-running query that times out
 func FetchAnalytics(ctx *gofr.Context) (interface{}, error) {
-    err := context.DeadlineExceeded
-    if err != nil {
-        ctx.Error("DB Query Timeout: Analytics fetch took > 3000ms. Canceling operation.")
-    }
+    // Logic to fetch analytics...
+    err := errors.New("query execution exceeded 3000ms")
+    
+    ctx.Error("DB Query Timeout: Analytics fetch failed.", "error", err)
+    
     return nil, err
 }
 ```
 **Output**
 ```Console
-ERROR [10:20:01] DB Query Timeout: Analytics fetch took > 3000ms. Canceling operation.
+ERROR [10:20:01] DB Query Timeout: Analytics fetch failed. error: query execution exceeded 3000ms
 ```
-***2. 500 Internal Server Errors -*** An unexpected condition was encountered on the server side that prevented it from fulfilling the incoming request.
+***2. External Service Failure -*** An unexpected condition was encountered when calling a downstream service that prevented it from fulfilling the request.
 
 
 **Code Example**
 ```Go
-// ProcessRequest simulates a downstream service failure
+// ProcessPayment simulates a downstream service failure
 func ProcessPayment(ctx *gofr.Context) (interface{}, error) {
     // Simulating a gateway failure
-    ctx.Error("HTTP 500 Response: Payment gateway unreachable. Request ID: req_99")
-    return nil, fmt.Errorf("gateway unreachable")
+    err := errors.New("payment gateway unreachable")
+    
+    ctx.Error("Payment processing failed.", "error", err, "request_id", "req_99")
+    
+    return nil, err
 }
 ```
 **Output**
 ```Console
-ERROR [10:20:02] HTTP 500 Response: Payment gateway unreachable. Request ID: req_99
+ERROR [10:20:02] Payment processing failed. error: payment gateway unreachable request_id: req_99
 ```
 
 ***3. null pointer exceptions -*** The code attempted to dereference a memory address that does not point to a valid object, causing a runtime panic.
@@ -391,57 +377,33 @@ The highest priority level. `FATAL` represents a critical system failures where 
 
 #### **Usage Examples:**
 
-***1. Port already in use -*** The application failed to bind to the network socket because another process is currently listening on the specified port.
+***1. Missing Critical Resource -*** The application cannot start because a mandatory resource, such as a cryptographic certificate or a required local file, is missing.
 
 **Code Example**
 ```Go
-// Context: The web server attempts to start, but the port is occupied
-port := ":8080"
-err := http.ListenAndServe(port, nil)
-
-if err != nil {
-    // The application cannot run without a network listener, so we crash
-    app.Logger().Fatal("Network Bind Failure: Port 8080 is already in use by another process.")
+// Context: Checking for a mandatory certificate before starting
+if _, err := os.Stat("/etc/certs/server.crt"); os.IsNotExist(err) {
+    app.Logger().Fatal("Startup Failure: Mandatory SSL certificate missing.", "path", "/etc/certs/server.crt")
 }
 ```
 **Output**
 ```Console
-FATA [10:30:01] Network Bind Failure: Port 8080 is already in use by another process.
+FATA [10:30:01] Startup Failure: Mandatory SSL certificate missing. path: /etc/certs/server.crt
 ```
-***2. Missing encryption keys -*** Essential security credentials required for signing tokens or encrypting data are absent from the environment variables.
+***2. Incompatible Environment -*** The application requires a specific environment or dependency version to function correctly and must shut down if it's not met.
 
 
 **Code Example**
 ```Go
-// Context: Checking environment variables for security keys before starting
-jwtKey := os.Getenv("JWT_PRIVATE_KEY")
-
-if jwtKey == "" {
-    // We cannot start the app insecurely, so we force a shutdown
-    app.Logger().Fatal("SECURITY CRITICAL: Missing encryption keys. JWT_PRIVATE_KEY is empty.")
+// Context: Verifying a required system dependency
+currentVersion := os.Getenv("DEP_VERSION")
+if !isSupportedVersion(currentVersion) {
+    app.Logger().Fatal("Incompatible Environment.", "required_version", "2.0", "current_version", currentVersion)
 }
 ```
 **Output**
 ```Console
-FATA [10:30:02] SECURITY CRITICAL: Missing encryption keys. JWT_PRIVATE_KEY is empty.
-```
-
-***3. Cannot connect to primary database on startup -*** The application is aborting the boot sequence because it cannot establish an initial connection to the required data store.
-
-
-**Code Example**
-```Go
-// Context: Initial "Ping" to the database during the boot sequence
-err := db.Ping()
-
-if err != nil {
-    // Unlike a runtime error, if the DB is gone at startup, the app is useless
-    app.Logger().Fatal("Boot Failure: Cannot connect to primary database. Connection refused.")
-}
-```
-**Output**
-```Console
-FATA [10:30:03] Boot Failure: Cannot connect to primary database. Connection refused.
+FATA [10:30:02] Incompatible Environment. required_version: 2.0 current_version: 1.5
 ```
 
 #### **Examples when not to use**
