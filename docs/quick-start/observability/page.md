@@ -364,8 +364,8 @@ ERROR [10:20:03] Runtime Safety: Attempted to access methods on a nil 'User' obj
 
 ***1. Inappropriate for System-Wide Crashes:*** Do not use `ERROR` for unrecoverable startup failures that render the application non-functional (e.g., missing critical configuration). Such dependencies must be handled via `FATAL` to ensure immediate process termination
 
-***2. Avoid Logging Client-Side Validation as System Errors*** 
-Exercise caution when logging user input errors (e.g., `400 Bad Request`). Classifying routine client-side validation failures as system ERRORs creates noise in alerting systems; `INFO` or `WARN` is often more
+***2. Avoid Logging Client-Side Validation as System ERROR*** 
+Exercise caution when logging user input error (e.g., `400 Bad Request`). Classifying routine client-side validation failures as system ERROR creates noise in alerting systems; `INFO` or `WARN` is often more
 
 ---
 
