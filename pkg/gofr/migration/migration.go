@@ -19,7 +19,11 @@ var (
 	errLockReleaseFailed     = errors.New("failed to release migration lock")
 )
 
-const lockKey = "gofr_migrations_lock"
+const (
+	lockKey       = "gofr_migrations_lock"
+	retryInterval = 500 * time.Millisecond
+	maxRetries    = 140 // Total wait time ~70 seconds
+)
 
 type MigrateFunc func(d Datasource) error
 

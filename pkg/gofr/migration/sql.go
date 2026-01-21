@@ -26,6 +26,8 @@ const (
 	mysql    = "mysql"
 	postgres = "postgres"
 	sqlite   = "sqlite"
+
+	sqlLockTimeout = 1 // timeout in seconds for GET_LOCK
 )
 
 // database/sql is the package imported so named it sqlDS.
@@ -149,9 +151,6 @@ func (d *sqlMigrator) Lock(c *container.Container) error {
 
 	d.lockTx = tx
 
-	retryInterval := 500 * time.Millisecond
-	maxRetries := 140 // Total wait time ~70 seconds
-
 	for i := 0; i < maxRetries; i++ {
 		var status int
 
@@ -161,7 +160,7 @@ func (d *sqlMigrator) Lock(c *container.Container) error {
 		case mysql:
 			// GET_LOCK returns 1 if acquired, 0 if timed out, NULL on error.
 			// We use a short 1s timeout in the DB and retry in Go for better control.
-			err = tx.QueryRow("SELECT GET_LOCK(?, 1)", lockKey).Scan(&status)
+			err = tx.QueryRow("SELECT GET_LOCK(?, ?)", lockKey, sqlLockTimeout).Scan(&status)
 		case postgres:
 			// pg_try_advisory_lock returns true if acquired, false otherwise.
 			var pgStatus bool
