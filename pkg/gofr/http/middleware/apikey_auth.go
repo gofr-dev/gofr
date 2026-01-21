@@ -16,10 +16,10 @@ var (
 
 // APIKeyAuthProvider represents a basic authentication provider.
 type APIKeyAuthProvider struct {
-	ValidateFunc                func(apiKey string) bool
-	ValidateFuncWithDatasources func(c *container.Container, apiKey string) bool
-	Container                   *container.Container
-	APIKeys                     []string
+	ValidateFunc               func(apiKey string) bool
+	ValidateFuncWithDatasource func(c *container.Container, apiKey string) bool
+	Container                  *container.Container
+	APIKeys                    []string
 }
 
 // NewAPIKeyAuthProvider instantiates an instance of type AuthProvider interface.
@@ -40,7 +40,7 @@ func NewAPIKeyAuthProviderWithValidateFunc(c *container.Container,
 	case validateFunc == nil:
 		return nil, errValidateFuncEmpty
 	default:
-		return &APIKeyAuthProvider{Container: c, ValidateFuncWithDatasources: validateFunc}, nil
+		return &APIKeyAuthProvider{Container: c, ValidateFuncWithDatasource: validateFunc}, nil
 	}
 }
 
@@ -64,8 +64,8 @@ func (*APIKeyAuthProvider) GetAuthMethod() AuthMethod {
 // validateAPIKey verifies the given apiKey as per the configured APIKeyAuthProvider.
 func (a *APIKeyAuthProvider) validateAPIKey(apiKey string) bool {
 	switch {
-	case a.ValidateFuncWithDatasources != nil:
-		return a.ValidateFuncWithDatasources(a.Container, apiKey)
+	case a.ValidateFuncWithDatasource != nil:
+		return a.ValidateFuncWithDatasource(a.Container, apiKey)
 	case a.ValidateFunc != nil:
 		return a.ValidateFunc(apiKey)
 	default:
@@ -79,7 +79,6 @@ func (a *APIKeyAuthProvider) validateAPIKey(apiKey string) bool {
 		// constant time compare with dummy key for timing attack mitigation
 		subtle.ConstantTimeCompare([]byte(apiKey), []byte(dummyValue))
 
-		// FIX 2: Add exactly one blank line before return
 		return false
 	}
 }

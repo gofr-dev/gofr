@@ -65,11 +65,11 @@ func (a *App) EnableBasicAuthWithFunc(validateFunc func(username, password strin
 func (a *App) EnableBasicAuthWithValidator(validateFunc func(c *container.Container, username, password string) bool) {
 	if a.httpServer != nil {
 		a.httpServer.router.Use(middleware.BasicAuthMiddleware(middleware.BasicAuthProvider{
-			ValidateFuncWithDatasources: validateFunc, Container: a.container}))
+			ValidateFuncWithDatasource: validateFunc, Container: a.container}))
 	}
 
 	if a.grpcServer != nil {
-		provider := grpcMiddleware.BasicAuthProvider{ValidateFuncWithDatasources: validateFunc, Container: a.container}
+		provider := grpcMiddleware.BasicAuthProvider{ValidateFuncWithDatasource: validateFunc, Container: a.container}
 		a.grpcServer.addUnaryInterceptors(grpcMiddleware.BasicAuthUnaryInterceptor(provider))
 		a.grpcServer.addStreamInterceptors(grpcMiddleware.BasicAuthStreamInterceptor(provider))
 	}
@@ -116,13 +116,13 @@ func (a *App) EnableAPIKeyAuthWithFunc(validateFunc func(apiKey string) bool) {
 func (a *App) EnableAPIKeyAuthWithValidator(validateFunc func(c *container.Container, apiKey string) bool) {
 	if a.httpServer != nil {
 		a.httpServer.router.Use(middleware.APIKeyAuthMiddleware(middleware.APIKeyAuthProvider{
-			ValidateFuncWithDatasources: validateFunc,
-			Container:                   a.container,
+			ValidateFuncWithDatasource: validateFunc,
+			Container:                  a.container,
 		}))
 	}
 
 	if a.grpcServer != nil {
-		provider := grpcMiddleware.APIKeyAuthProvider{ValidateFuncWithDatasources: validateFunc, Container: a.container}
+		provider := grpcMiddleware.APIKeyAuthProvider{ValidateFuncWithDatasource: validateFunc, Container: a.container}
 		a.grpcServer.addUnaryInterceptors(grpcMiddleware.APIKeyAuthUnaryInterceptor(provider))
 		a.grpcServer.addStreamInterceptors(grpcMiddleware.APIKeyAuthStreamInterceptor(provider))
 	}

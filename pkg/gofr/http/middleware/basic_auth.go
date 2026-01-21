@@ -12,10 +12,10 @@ import (
 
 // BasicAuthProvider represents a basic authentication provider.
 type BasicAuthProvider struct {
-	Users                       map[string]string
-	ValidateFunc                func(username, password string) bool
-	ValidateFuncWithDatasources func(c *container.Container, username, password string) bool
-	Container                   *container.Container
+	Users                      map[string]string
+	ValidateFunc               func(username, password string) bool
+	ValidateFuncWithDatasource func(c *container.Container, username, password string) bool
+	Container                  *container.Container
 }
 
 var (
@@ -42,7 +42,7 @@ func NewBasicAuthProviderWithValidateFunc(c *container.Container,
 		return nil, errContainerNil
 	}
 
-	return &BasicAuthProvider{ValidateFuncWithDatasources: validateFunc, Container: c}, nil
+	return &BasicAuthProvider{ValidateFuncWithDatasource: validateFunc, Container: c}, nil
 }
 
 // ExtractAuthHeader retrieves & returns validated value from auth header.
@@ -92,8 +92,8 @@ func parseBasicAuth(authHeader string) (username, password string, ok bool) {
 // validateCredentials checks the provided username and password against the BasicAuthProvider.
 func (a *BasicAuthProvider) validateCredentials(username, password string) bool {
 	switch {
-	case a.ValidateFuncWithDatasources != nil:
-		return a.ValidateFuncWithDatasources(a.Container, username, password)
+	case a.ValidateFuncWithDatasource != nil:
+		return a.ValidateFuncWithDatasource(a.Container, username, password)
 	case a.ValidateFunc != nil:
 		return a.ValidateFunc(username, password)
 	default:

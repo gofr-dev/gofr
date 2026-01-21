@@ -12,15 +12,15 @@ import (
 	"google.golang.org/grpc/status"
 
 	"gofr.dev/pkg/gofr/container"
-	httpMiddleware "gofr.dev/pkg/gofr/http/middleware"
+	auth "gofr.dev/pkg/gofr/http/middleware"
 )
 
 // BasicAuthProvider holds the configuration for basic authentication.
 type BasicAuthProvider struct {
-	Users                       map[string]string
-	ValidateFunc                func(username, password string) bool
-	ValidateFuncWithDatasources func(c *container.Container, username, password string) bool
-	Container                   *container.Container
+	Users                      map[string]string
+	ValidateFunc               func(username, password string) bool
+	ValidateFuncWithDatasource func(c *container.Container, username, password string) bool
+	Container                  *container.Container
 }
 
 // BasicAuthUnaryInterceptor returns a gRPC unary server interceptor that validates the Basic Auth credentials.
@@ -31,7 +31,7 @@ func BasicAuthUnaryInterceptor(provider BasicAuthProvider) grpc.UnaryServerInter
 			return nil, err
 		}
 
-		newCtx := context.WithValue(ctx, httpMiddleware.Username, username)
+		newCtx := context.WithValue(ctx, auth.Username, username)
 
 		return handler(newCtx, req)
 	}
@@ -45,7 +45,7 @@ func BasicAuthStreamInterceptor(provider BasicAuthProvider) grpc.StreamServerInt
 			return err
 		}
 
-		wrapped := &wrappedStream{ss, context.WithValue(ss.Context(), httpMiddleware.Username, username)}
+		wrapped := &wrappedStream{ss, context.WithValue(ss.Context(), auth.Username, username)}
 
 		return handler(srv, wrapped)
 	}
@@ -63,7 +63,7 @@ func validateBasicAuth(ctx context.Context, provider BasicAuthProvider) (string,
 	}
 
 	// Basic <base64>
-	parts := strings.SplitN(authHeader[0], " ", 2) //nolint:mnd // 2 is the number of parts in the header
+	parts := strings.SplitN(authHeader[0], " ", headerParts)
 	if len(parts) != 2 || !strings.EqualFold(parts[0], "Basic") {
 		return "", status.Error(codes.Unauthenticated, "invalid authorization header format")
 	}
@@ -86,8 +86,8 @@ func validateBasicAuth(ctx context.Context, provider BasicAuthProvider) (string,
 }
 
 func (b BasicAuthProvider) verifyCredentials(username, password string) bool {
-	if b.ValidateFuncWithDatasources != nil {
-		return b.ValidateFuncWithDatasources(b.Container, username, password)
+	if b.ValidateFuncWithDatasource != nil {
+		return b.ValidateFuncWithDatasource(b.Container, username, password)
 	}
 
 	if b.ValidateFunc != nil {

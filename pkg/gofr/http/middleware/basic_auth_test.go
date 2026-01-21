@@ -195,10 +195,10 @@ func TestBasicAuthMiddleware_validateCredentials(t *testing.T) {
 	for i, tc := range testCases {
 		t.Run(fmt.Sprintf("Test Case #%d", i), func(t *testing.T) {
 			provider := BasicAuthProvider{
-				Users:                       tc.users,
-				ValidateFunc:                tc.validateFunc,
-				ValidateFuncWithDatasources: tc.validateFuncWithDatasources,
-				Container:                   nil,
+				Users:                      tc.users,
+				ValidateFunc:               tc.validateFunc,
+				ValidateFuncWithDatasource: tc.validateFuncWithDatasources,
+				Container:                  nil,
 			}
 			success := provider.validateCredentials(tc.username, tc.password)
 			assert.Equal(t, tc.success, success)

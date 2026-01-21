@@ -48,8 +48,8 @@ func Test_NewAPIKeyAuthProviderWithValidateFunc(t *testing.T) {
 	}
 	c := container.Container{}
 	provider := APIKeyAuthProvider{
-		ValidateFuncWithDatasources: validateFunc,
-		Container:                   &c,
+		ValidateFuncWithDatasource: validateFunc,
+		Container:                  &c,
 	}
 	testCases := []struct {
 		validateFunc func(*container.Container, string) bool
@@ -76,7 +76,7 @@ func Test_NewAPIKeyAuthProviderWithValidateFunc(t *testing.T) {
 			expected, ok := tc.provider.(*APIKeyAuthProvider)
 			require.True(t, ok)
 			assert.Equal(t, expected.Container, apiAuthProvider.Container)
-			assert.NotNil(t, apiAuthProvider.ValidateFuncWithDatasources)
+			assert.NotNil(t, apiAuthProvider.ValidateFuncWithDatasource)
 			assert.Nil(t, apiAuthProvider.ValidateFunc)
 			assert.Empty(t, apiAuthProvider.APIKeys)
 		})
@@ -162,9 +162,9 @@ func Test_validateAPIKey(t *testing.T) {
 	for i, tc := range testCases {
 		t.Run(strconv.Itoa(i), func(t *testing.T) {
 			authProvider := APIKeyAuthProvider{
-				ValidateFunc:                tc.validateFunc,
-				ValidateFuncWithDatasources: tc.validateFuncDS,
-				APIKeys:                     tc.apiKeys,
+				ValidateFunc:               tc.validateFunc,
+				ValidateFuncWithDatasource: tc.validateFuncDS,
+				APIKeys:                    tc.apiKeys,
 			}
 			result := authProvider.validateAPIKey(tc.apiKey)
 			assert.Equal(t, tc.result, result)

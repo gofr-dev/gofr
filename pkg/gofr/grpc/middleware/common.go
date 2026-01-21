@@ -6,6 +6,8 @@ import (
 	"google.golang.org/grpc"
 )
 
+const headerParts = 2
+
 type wrappedStream struct {
 	grpc.ServerStream
 	ctx context.Context

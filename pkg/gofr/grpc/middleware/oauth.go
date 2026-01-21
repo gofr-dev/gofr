@@ -13,20 +13,17 @@ import (
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
 
-	httpMiddleware "gofr.dev/pkg/gofr/http/middleware"
+	auth "gofr.dev/pkg/gofr/http/middleware"
 )
 
 const (
 	jwtRegexPattern = "^[A-Za-z0-9-_]+\\.[A-Za-z0-9-_]+\\.[A-Za-z0-9-_]+$"
-	headerParts     = 2
 )
 
-var (
-	errKeyNotFound = errors.New("key not found")
-)
+var errKeyNotFound = errors.New("key not found")
 
 // OAuthUnaryInterceptor returns a gRPC unary server interceptor that validates the OAuth token.
-func OAuthUnaryInterceptor(key httpMiddleware.PublicKeyProvider, options ...jwt.ParserOption) grpc.UnaryServerInterceptor {
+func OAuthUnaryInterceptor(key auth.PublicKeyProvider, options ...jwt.ParserOption) grpc.UnaryServerInterceptor {
 	regex := regexp.MustCompile(jwtRegexPattern)
 
 	options = append(options, jwt.WithIssuedAt())
@@ -37,14 +34,14 @@ func OAuthUnaryInterceptor(key httpMiddleware.PublicKeyProvider, options ...jwt.
 			return nil, err
 		}
 
-		newCtx := context.WithValue(ctx, httpMiddleware.JWTClaim, claims)
+		newCtx := context.WithValue(ctx, auth.JWTClaim, claims)
 
 		return handler(newCtx, req)
 	}
 }
 
 // OAuthStreamInterceptor returns a gRPC stream server interceptor that validates the OAuth token.
-func OAuthStreamInterceptor(key httpMiddleware.PublicKeyProvider, options ...jwt.ParserOption) grpc.StreamServerInterceptor {
+func OAuthStreamInterceptor(key auth.PublicKeyProvider, options ...jwt.ParserOption) grpc.StreamServerInterceptor {
 	regex := regexp.MustCompile(jwtRegexPattern)
 
 	options = append(options, jwt.WithIssuedAt())
@@ -56,13 +53,13 @@ func OAuthStreamInterceptor(key httpMiddleware.PublicKeyProvider, options ...jwt
 		}
 
 		// We need to wrap the stream to inject the new context containing the claims.
-		wrapped := &wrappedStream{ss, context.WithValue(ss.Context(), httpMiddleware.JWTClaim, claims)}
+		wrapped := &wrappedStream{ss, context.WithValue(ss.Context(), auth.JWTClaim, claims)}
 
 		return handler(srv, wrapped)
 	}
 }
 
-func validateOAuth(ctx context.Context, key httpMiddleware.PublicKeyProvider, regex *regexp.Regexp,
+func validateOAuth(ctx context.Context, key auth.PublicKeyProvider, regex *regexp.Regexp,
 	options ...jwt.ParserOption) (jwt.Claims, error) {
 	md, ok := metadata.FromIncomingContext(ctx)
 	if !ok {

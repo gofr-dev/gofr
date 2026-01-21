@@ -17,7 +17,7 @@ import (
 	"github.com/stretchr/testify/require"
 	"google.golang.org/grpc/metadata"
 
-	httpMiddleware "gofr.dev/pkg/gofr/http/middleware"
+	auth "gofr.dev/pkg/gofr/http/middleware"
 )
 
 func TestOAuthIntegration_MockJWKS(t *testing.T) {
@@ -71,7 +71,7 @@ func TestOAuthIntegration_MockJWKS(t *testing.T) {
 
 	_, err := interceptor(ctx, nil, nil, func(handlerCtx context.Context, _ any) (any, error) {
 		// Verify claims are injected
-		injectedClaims, ok := handlerCtx.Value(httpMiddleware.JWTClaim).(jwt.MapClaims)
+		injectedClaims, ok := handlerCtx.Value(auth.JWTClaim).(jwt.MapClaims)
 		assert.True(t, ok)
 		assert.Equal(t, "test-user", injectedClaims["sub"])
 		assert.Equal(t, "admin", injectedClaims["role"])

@@ -9,12 +9,13 @@ import (
 
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/stretchr/testify/assert"
+	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
 
 	"gofr.dev/pkg/gofr/container"
-	httpMiddleware "gofr.dev/pkg/gofr/http/middleware"
+	auth "gofr.dev/pkg/gofr/http/middleware"
 )
 
 type mockKeyProvider struct {
@@ -33,78 +34,92 @@ func TestBasicAuthUnaryInterceptor(t *testing.T) {
 	users := map[string]string{"user": "pass"}
 	interceptor := BasicAuthUnaryInterceptor(BasicAuthProvider{Users: users})
 
-	tests := []struct {
-		name        string
-		ctx         context.Context
-		expectedErr error
-	}{
-		{
-			name:        "No Metadata",
-			ctx:         context.Background(),
-			expectedErr: status.Error(codes.Unauthenticated, "missing metadata"),
-		},
-		{
-			name:        "No Authorization Header",
-			ctx:         metadata.NewIncomingContext(context.Background(), metadata.MD{}),
-			expectedErr: status.Error(codes.Unauthenticated, "missing authorization header"),
-		},
-		{
-			name: "Invalid Format",
-			ctx: metadata.NewIncomingContext(context.Background(), metadata.MD{
-				"authorization": []string{"Bearer token"},
-			}),
-			expectedErr: status.Error(codes.Unauthenticated, "invalid authorization header format"),
-		},
-		{
-			name: "Invalid Base64",
-			ctx: metadata.NewIncomingContext(context.Background(), metadata.MD{
-				"authorization": []string{"Basic invalid-base64"},
-			}),
-			expectedErr: status.Error(codes.Unauthenticated, "invalid base64 credentials"),
-		},
-		{
-			name: "Invalid Credentials Format",
-			ctx: metadata.NewIncomingContext(context.Background(), metadata.MD{
-				"authorization": []string{"Basic " + base64.StdEncoding.EncodeToString([]byte("user"))},
-			}),
-			expectedErr: status.Error(codes.Unauthenticated, "invalid credentials format"),
-		},
-		{
-			name: "Wrong Password",
-			ctx: metadata.NewIncomingContext(context.Background(), metadata.MD{
-				"authorization": []string{"Basic " + base64.StdEncoding.EncodeToString([]byte("user:wrong"))},
-			}),
-			expectedErr: status.Error(codes.Unauthenticated, "invalid credentials"),
-		},
-		{
-			name: "Wrong User",
-			ctx: metadata.NewIncomingContext(context.Background(), metadata.MD{
-				"authorization": []string{"Basic " + base64.StdEncoding.EncodeToString([]byte("wrong:pass"))},
-			}),
-			expectedErr: status.Error(codes.Unauthenticated, "invalid credentials"),
-		},
-		{
-			name: "Success",
-			ctx: metadata.NewIncomingContext(context.Background(), metadata.MD{
-				"authorization": []string{"Basic " + base64.StdEncoding.EncodeToString([]byte("user:pass"))},
-			}),
-			expectedErr: nil,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			_, err := interceptor(tt.ctx, nil, nil, func(ctx context.Context, _ any) (any, error) {
-				if tt.expectedErr == nil {
-					username := ctx.Value(httpMiddleware.Username)
-					assert.Equal(t, "user", username)
-				}
-
-				return nil, nil
-			})
-			assert.Equal(t, tt.expectedErr, err)
+	t.Run("No Metadata", func(t *testing.T) {
+		ctx := context.Background()
+		_, err := interceptor(ctx, nil, nil, func(_ context.Context, _ any) (any, error) {
+			return nil, nil
 		})
-	}
+
+		assert.Equal(t, status.Error(codes.Unauthenticated, "missing metadata"), err)
+	})
+
+	t.Run("No Authorization Header", func(t *testing.T) {
+		ctx := metadata.NewIncomingContext(context.Background(), metadata.MD{})
+		_, err := interceptor(ctx, nil, nil, func(_ context.Context, _ any) (any, error) {
+			return nil, nil
+		})
+
+		assert.Equal(t, status.Error(codes.Unauthenticated, "missing authorization header"), err)
+	})
+
+	t.Run("Invalid Format", func(t *testing.T) {
+		ctx := metadata.NewIncomingContext(context.Background(), metadata.MD{
+			"authorization": []string{"Bearer token"},
+		})
+		_, err := interceptor(ctx, nil, nil, func(_ context.Context, _ any) (any, error) {
+			return nil, nil
+		})
+
+		assert.Equal(t, status.Error(codes.Unauthenticated, "invalid authorization header format"), err)
+	})
+
+	t.Run("Invalid Base64", func(t *testing.T) {
+		ctx := metadata.NewIncomingContext(context.Background(), metadata.MD{
+			"authorization": []string{"Basic invalid-base64"},
+		})
+		_, err := interceptor(ctx, nil, nil, func(_ context.Context, _ any) (any, error) {
+			return nil, nil
+		})
+
+		assert.Equal(t, status.Error(codes.Unauthenticated, "invalid base64 credentials"), err)
+	})
+
+	t.Run("Invalid Credentials Format", func(t *testing.T) {
+		ctx := metadata.NewIncomingContext(context.Background(), metadata.MD{
+			"authorization": []string{"Basic " + base64.StdEncoding.EncodeToString([]byte("user"))},
+		})
+		_, err := interceptor(ctx, nil, nil, func(_ context.Context, _ any) (any, error) {
+			return nil, nil
+		})
+
+		assert.Equal(t, status.Error(codes.Unauthenticated, "invalid credentials format"), err)
+	})
+
+	t.Run("Wrong Password", func(t *testing.T) {
+		ctx := metadata.NewIncomingContext(context.Background(), metadata.MD{
+			"authorization": []string{"Basic " + base64.StdEncoding.EncodeToString([]byte("user:wrong"))},
+		})
+		_, err := interceptor(ctx, nil, nil, func(_ context.Context, _ any) (any, error) {
+			return nil, nil
+		})
+
+		assert.Equal(t, status.Error(codes.Unauthenticated, "invalid credentials"), err)
+	})
+
+	t.Run("Wrong User", func(t *testing.T) {
+		ctx := metadata.NewIncomingContext(context.Background(), metadata.MD{
+			"authorization": []string{"Basic " + base64.StdEncoding.EncodeToString([]byte("wrong:pass"))},
+		})
+		_, err := interceptor(ctx, nil, nil, func(_ context.Context, _ any) (any, error) {
+			return nil, nil
+		})
+
+		assert.Equal(t, status.Error(codes.Unauthenticated, "invalid credentials"), err)
+	})
+
+	t.Run("Success", func(t *testing.T) {
+		ctx := metadata.NewIncomingContext(context.Background(), metadata.MD{
+			"authorization": []string{"Basic " + base64.StdEncoding.EncodeToString([]byte("user:pass"))},
+		})
+		_, err := interceptor(ctx, nil, nil, func(ctx context.Context, _ any) (any, error) {
+			username := ctx.Value(auth.Username)
+			assert.Equal(t, "user", username)
+
+			return nil, nil
+		})
+
+		assert.NoError(t, err)
+	})
 }
 
 func TestBasicAuthUnaryInterceptor_Validator(t *testing.T) {
@@ -118,7 +133,7 @@ func TestBasicAuthUnaryInterceptor_Validator(t *testing.T) {
 		})
 
 		_, err := interceptor(ctx, nil, nil, func(ctx context.Context, _ any) (any, error) {
-			username := ctx.Value(httpMiddleware.Username)
+			username := ctx.Value(auth.Username)
 			assert.Equal(t, "custom", username)
 
 			return nil, nil
@@ -131,13 +146,13 @@ func TestBasicAuthUnaryInterceptor_Validator(t *testing.T) {
 		validateFunc := func(_ *container.Container, username, password string) bool {
 			return username == "validator" && password == "pass"
 		}
-		interceptor := BasicAuthUnaryInterceptor(BasicAuthProvider{ValidateFuncWithDatasources: validateFunc})
+		interceptor := BasicAuthUnaryInterceptor(BasicAuthProvider{ValidateFuncWithDatasource: validateFunc})
 		ctx := metadata.NewIncomingContext(context.Background(), metadata.MD{
 			"authorization": []string{"Basic " + base64.StdEncoding.EncodeToString([]byte("validator:pass"))},
 		})
 
 		_, err := interceptor(ctx, nil, nil, func(ctx context.Context, _ any) (any, error) {
-			username := ctx.Value(httpMiddleware.Username)
+			username := ctx.Value(auth.Username)
 			assert.Equal(t, "validator", username)
 
 			return nil, nil
@@ -151,50 +166,48 @@ func TestAPIKeyAuthUnaryInterceptor(t *testing.T) {
 	keys := []string{"valid-key"}
 	interceptor := APIKeyAuthUnaryInterceptor(APIKeyAuthProvider{APIKeys: keys})
 
-	tests := []struct {
-		name        string
-		ctx         context.Context
-		expectedErr error
-	}{
-		{
-			name:        "No Metadata",
-			ctx:         context.Background(),
-			expectedErr: status.Error(codes.Unauthenticated, "missing metadata"),
-		},
-		{
-			name:        "No API Key Header",
-			ctx:         metadata.NewIncomingContext(context.Background(), metadata.MD{}),
-			expectedErr: status.Error(codes.Unauthenticated, "missing x-api-key header"),
-		},
-		{
-			name: "Invalid Key",
-			ctx: metadata.NewIncomingContext(context.Background(), metadata.MD{
-				"x-api-key": []string{"invalid-key"},
-			}),
-			expectedErr: status.Error(codes.Unauthenticated, "invalid api key"),
-		},
-		{
-			name: "Success",
-			ctx: metadata.NewIncomingContext(context.Background(), metadata.MD{
-				"x-api-key": []string{"valid-key"},
-			}),
-			expectedErr: nil,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			_, err := interceptor(tt.ctx, nil, nil, func(ctx context.Context, _ any) (any, error) {
-				if tt.expectedErr == nil {
-					apiKey := ctx.Value(httpMiddleware.APIKey)
-					assert.Equal(t, "valid-key", apiKey)
-				}
-
-				return nil, nil
-			})
-			assert.Equal(t, tt.expectedErr, err)
+	t.Run("No Metadata", func(t *testing.T) {
+		ctx := context.Background()
+		_, err := interceptor(ctx, nil, nil, func(_ context.Context, _ any) (any, error) {
+			return nil, nil
 		})
-	}
+
+		assert.Equal(t, status.Error(codes.Unauthenticated, "missing metadata"), err)
+	})
+
+	t.Run("No API Key Header", func(t *testing.T) {
+		ctx := metadata.NewIncomingContext(context.Background(), metadata.MD{})
+		_, err := interceptor(ctx, nil, nil, func(_ context.Context, _ any) (any, error) {
+			return nil, nil
+		})
+
+		assert.Equal(t, status.Error(codes.Unauthenticated, "missing x-api-key header"), err)
+	})
+
+	t.Run("Invalid Key", func(t *testing.T) {
+		ctx := metadata.NewIncomingContext(context.Background(), metadata.MD{
+			"x-api-key": []string{"invalid-key"},
+		})
+		_, err := interceptor(ctx, nil, nil, func(_ context.Context, _ any) (any, error) {
+			return nil, nil
+		})
+
+		assert.Equal(t, status.Error(codes.Unauthenticated, "invalid api key"), err)
+	})
+
+	t.Run("Success", func(t *testing.T) {
+		ctx := metadata.NewIncomingContext(context.Background(), metadata.MD{
+			"x-api-key": []string{"valid-key"},
+		})
+		_, err := interceptor(ctx, nil, nil, func(ctx context.Context, _ any) (any, error) {
+			apiKey := ctx.Value(auth.APIKey)
+			assert.Equal(t, "valid-key", apiKey)
+
+			return nil, nil
+		})
+
+		assert.NoError(t, err)
+	})
 }
 
 func TestAPIKeyAuthUnaryInterceptor_Validator(t *testing.T) {
@@ -208,7 +221,7 @@ func TestAPIKeyAuthUnaryInterceptor_Validator(t *testing.T) {
 		})
 
 		_, err := interceptor(ctx, nil, nil, func(ctx context.Context, _ any) (any, error) {
-			apiKey := ctx.Value(httpMiddleware.APIKey)
+			apiKey := ctx.Value(auth.APIKey)
 			assert.Equal(t, "custom-key", apiKey)
 
 			return nil, nil
@@ -221,13 +234,13 @@ func TestAPIKeyAuthUnaryInterceptor_Validator(t *testing.T) {
 		validateFunc := func(_ *container.Container, apiKey string) bool {
 			return apiKey == "validator-key"
 		}
-		interceptor := APIKeyAuthUnaryInterceptor(APIKeyAuthProvider{ValidateFuncWithDatasources: validateFunc})
+		interceptor := APIKeyAuthUnaryInterceptor(APIKeyAuthProvider{ValidateFuncWithDatasource: validateFunc})
 		ctx := metadata.NewIncomingContext(context.Background(), metadata.MD{
 			"x-api-key": []string{"validator-key"},
 		})
 
 		_, err := interceptor(ctx, nil, nil, func(ctx context.Context, _ any) (any, error) {
-			apiKey := ctx.Value(httpMiddleware.APIKey)
+			apiKey := ctx.Value(auth.APIKey)
 			assert.Equal(t, "validator-key", apiKey)
 
 			return nil, nil
@@ -252,60 +265,75 @@ func TestOAuthUnaryInterceptor(t *testing.T) {
 	token.Header["kid"] = "valid-kid"
 	validToken, _ := token.SignedString(privateKey)
 
-	tests := []struct {
-		name        string
-		ctx         context.Context
-		expectedErr error
-	}{
-		{
-			name:        "No Metadata",
-			ctx:         context.Background(),
-			expectedErr: status.Error(codes.Unauthenticated, "missing metadata"),
-		},
-		{
-			name:        "No Authorization Header",
-			ctx:         metadata.NewIncomingContext(context.Background(), metadata.MD{}),
-			expectedErr: status.Error(codes.Unauthenticated, "missing authorization header"),
-		},
-		{
-			name: "Invalid Format",
-			ctx: metadata.NewIncomingContext(context.Background(), metadata.MD{
-				"authorization": []string{"Token " + validToken},
-			}),
-			expectedErr: status.Error(codes.Unauthenticated, "invalid authorization header format"),
-		},
-		{
-			name: "Invalid Token",
-			ctx: metadata.NewIncomingContext(context.Background(), metadata.MD{
-				"authorization": []string{"Bearer invalid-token"},
-			}),
-			expectedErr: status.Error(codes.Unauthenticated, "jwt expected"),
-		},
-		{
-			name: "Success",
-			ctx: metadata.NewIncomingContext(context.Background(), metadata.MD{
-				"authorization": []string{"Bearer " + validToken},
-			}),
-			expectedErr: nil,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			_, err := interceptor(tt.ctx, nil, nil, func(ctx context.Context, _ any) (any, error) {
-				// Check if claims are in context
-				if tt.expectedErr == nil {
-					claims := ctx.Value(httpMiddleware.JWTClaim)
-					assert.NotNil(t, claims)
-				}
-
-				return nil, nil
-			})
-			if tt.expectedErr != nil {
-				assert.Error(t, err)
-			} else {
-				assert.NoError(t, err)
-			}
+	t.Run("No Metadata", func(t *testing.T) {
+		ctx := context.Background()
+		_, err := interceptor(ctx, nil, nil, func(_ context.Context, _ any) (any, error) {
+			return nil, nil
 		})
-	}
+
+		assert.Equal(t, status.Error(codes.Unauthenticated, "missing metadata"), err)
+	})
+
+	t.Run("No Authorization Header", func(t *testing.T) {
+		ctx := metadata.NewIncomingContext(context.Background(), metadata.MD{})
+		_, err := interceptor(ctx, nil, nil, func(_ context.Context, _ any) (any, error) {
+			return nil, nil
+		})
+
+		assert.Equal(t, status.Error(codes.Unauthenticated, "missing authorization header"), err)
+	})
+
+	t.Run("Invalid Format", func(t *testing.T) {
+		ctx := metadata.NewIncomingContext(context.Background(), metadata.MD{
+			"authorization": []string{"Token " + validToken},
+		})
+		_, err := interceptor(ctx, nil, nil, func(_ context.Context, _ any) (any, error) {
+			return nil, nil
+		})
+
+		assert.Equal(t, status.Error(codes.Unauthenticated, "invalid authorization header format"), err)
+	})
+
+	t.Run("Invalid Token", func(t *testing.T) {
+		ctx := metadata.NewIncomingContext(context.Background(), metadata.MD{
+			"authorization": []string{"Bearer invalid-token"},
+		})
+		_, err := interceptor(ctx, nil, nil, func(_ context.Context, _ any) (any, error) {
+			return nil, nil
+		})
+
+		assert.Equal(t, status.Error(codes.Unauthenticated, "jwt expected"), err)
+	})
+
+	t.Run("Success", func(t *testing.T) {
+		ctx := metadata.NewIncomingContext(context.Background(), metadata.MD{
+			"authorization": []string{"Bearer " + validToken},
+		})
+		_, err := interceptor(ctx, nil, nil, func(ctx context.Context, _ any) (any, error) {
+			claims := ctx.Value(auth.JWTClaim)
+			assert.NotNil(t, claims)
+
+			return nil, nil
+		})
+
+		assert.NoError(t, err)
+	})
+}
+
+type mockServerStream struct {
+	grpc.ServerStream
+	ctx context.Context
+}
+
+func (m *mockServerStream) Context() context.Context {
+	return m.ctx
+}
+
+func TestWrappedStream(t *testing.T) {
+	ctx := context.Background()
+	m := &mockServerStream{ctx: ctx}
+	newCtx := context.WithValue(ctx, auth.Username, "user")
+	w := &wrappedStream{ServerStream: m, ctx: newCtx}
+
+	assert.Equal(t, newCtx, w.Context())
 }
