@@ -145,6 +145,10 @@ func MyHandler(ctx *gofr.Context) (any, error) {
 
     // For OAuth
     claims := authInfo.GetClaims()
+    if claims != nil {
+        // Access specific claims (typecasting is required for specific claim values)
+        userID := claims["sub"].(string)
+    }
     
     return "Success", nil
 }
