@@ -144,7 +144,7 @@ func (d *sqlMigrator) Lock(c *container.Container) error {
 	if err != nil {
 		c.Errorf("unable to begin transaction for lock: %v", err)
 
-		return ErrLockAcquisitionFailed
+		return errLockAcquisitionFailed
 	}
 
 	d.lockTx = tx
@@ -183,7 +183,7 @@ func (d *sqlMigrator) Lock(c *container.Container) error {
 
 			c.Errorf("error while acquiring SQL lock: %v", err)
 
-			return ErrLockAcquisitionFailed
+			return errLockAcquisitionFailed
 		}
 
 		c.Debugf("SQL lock already held, retrying in %v... (attempt %d/%d)", retryInterval, i+1, maxRetries)
@@ -192,7 +192,7 @@ func (d *sqlMigrator) Lock(c *container.Container) error {
 
 	_ = tx.Rollback()
 
-	return ErrLockAcquisitionFailed
+	return errLockAcquisitionFailed
 }
 
 func (d *sqlMigrator) Unlock(c *container.Container) error {
@@ -212,7 +212,7 @@ func (d *sqlMigrator) Unlock(c *container.Container) error {
 
 			c.Errorf("unable to release lock: %v", err)
 
-			return ErrLockReleaseFailed
+			return errLockReleaseFailed
 		}
 
 		c.Debug("SQL lock released successfully")
@@ -223,7 +223,7 @@ func (d *sqlMigrator) Unlock(c *container.Container) error {
 
 			c.Errorf("unable to release lock: %v", err)
 
-			return ErrLockReleaseFailed
+			return errLockReleaseFailed
 		}
 
 		c.Debug("SQL lock released successfully")

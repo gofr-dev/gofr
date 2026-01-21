@@ -186,7 +186,7 @@ func TestRedisMigrator_Lock(t *testing.T) {
 
 		err := m.Lock(c)
 		require.Error(t, err)
-		assert.Equal(t, ErrLockAcquisitionFailed, err)
+		assert.Equal(t, errLockAcquisitionFailed, err)
 	})
 }
 
@@ -211,6 +211,6 @@ func TestRedisMigrator_Unlock(t *testing.T) {
 
 		err := m.Unlock(c)
 		require.Error(t, err)
-		assert.Equal(t, ErrLockReleaseFailed, err)
+		assert.Equal(t, errLockReleaseFailed, err)
 	})
 }

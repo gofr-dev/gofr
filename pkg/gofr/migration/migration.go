@@ -15,13 +15,11 @@ import (
 )
 
 var (
-	ErrLockAcquisitionFailed = errors.New("failed to acquire migration lock")
-	ErrLockReleaseFailed     = errors.New("failed to release migration lock")
+	errLockAcquisitionFailed = errors.New("failed to acquire migration lock")
+	errLockReleaseFailed     = errors.New("failed to release migration lock")
 )
 
-const (
-	lockKey = "gofr_migrations_lock"
-)
+const lockKey = "gofr_migrations_lock"
 
 type MigrateFunc func(d Datasource) error
 

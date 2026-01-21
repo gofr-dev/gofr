@@ -144,14 +144,14 @@ func (*redisMigrator) Lock(c *container.Container) error {
 		if err != nil {
 			c.Errorf("error while acquiring redis lock: %v", err)
 
-			return ErrLockAcquisitionFailed
+			return errLockAcquisitionFailed
 		}
 
 		c.Debugf("Redis lock already held, retrying in %v... (attempt %d/%d)", retryInterval, i+1, maxRetries)
 		time.Sleep(retryInterval)
 	}
 
-	return ErrLockAcquisitionFailed
+	return errLockAcquisitionFailed
 }
 
 func (*redisMigrator) Unlock(c *container.Container) error {
@@ -159,7 +159,7 @@ func (*redisMigrator) Unlock(c *container.Container) error {
 	if err != nil {
 		c.Errorf("unable to release redis lock: %v", err)
 
-		return ErrLockReleaseFailed
+		return errLockReleaseFailed
 	}
 
 	c.Debug("Redis lock released successfully")

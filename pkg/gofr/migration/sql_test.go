@@ -416,7 +416,7 @@ func TestSQLMigrator_Lock(t *testing.T) {
 
 		err := m.Lock(mockContainer)
 		require.Error(t, err)
-		assert.Equal(t, ErrLockAcquisitionFailed, err)
+		assert.Equal(t, errLockAcquisitionFailed, err)
 	})
 }
 
