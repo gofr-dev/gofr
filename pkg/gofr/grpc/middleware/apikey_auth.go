@@ -15,10 +15,10 @@ import (
 
 // APIKeyAuthProvider holds the configuration for API key authentication.
 type APIKeyAuthProvider struct {
-	APIKeys                    []string
-	ValidateFunc               func(apiKey string) bool
-	ValidateFuncWithDatasource func(c *container.Container, apiKey string) bool
-	Container                  *container.Container
+	APIKeys                     []string
+	ValidateFunc                func(apiKey string) bool
+	ValidateFuncWithDatasources func(c *container.Container, apiKey string) bool
+	Container                   *container.Container
 }
 
 // APIKeyAuthUnaryInterceptor returns a gRPC unary server interceptor that validates the API key.
@@ -71,8 +71,8 @@ func validateAPIKey(ctx context.Context, provider APIKeyAuthProvider) (string, e
 }
 
 func (a APIKeyAuthProvider) verifyAPIKey(apiKey string) bool {
-	if a.ValidateFuncWithDatasource != nil {
-		return a.ValidateFuncWithDatasource(a.Container, apiKey)
+	if a.ValidateFuncWithDatasources != nil {
+		return a.ValidateFuncWithDatasources(a.Container, apiKey)
 	}
 
 	if a.ValidateFunc != nil {

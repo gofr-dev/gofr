@@ -146,7 +146,7 @@ func TestBasicAuthUnaryInterceptor_Validator(t *testing.T) {
 		validateFunc := func(_ *container.Container, username, password string) bool {
 			return username == "validator" && password == "pass"
 		}
-		interceptor := BasicAuthUnaryInterceptor(BasicAuthProvider{ValidateFuncWithDatasource: validateFunc})
+		interceptor := BasicAuthUnaryInterceptor(BasicAuthProvider{ValidateFuncWithDatasources: validateFunc})
 		ctx := metadata.NewIncomingContext(context.Background(), metadata.MD{
 			"authorization": []string{"Basic " + base64.StdEncoding.EncodeToString([]byte("validator:pass"))},
 		})
@@ -234,7 +234,7 @@ func TestAPIKeyAuthUnaryInterceptor_Validator(t *testing.T) {
 		validateFunc := func(_ *container.Container, apiKey string) bool {
 			return apiKey == "validator-key"
 		}
-		interceptor := APIKeyAuthUnaryInterceptor(APIKeyAuthProvider{ValidateFuncWithDatasource: validateFunc})
+		interceptor := APIKeyAuthUnaryInterceptor(APIKeyAuthProvider{ValidateFuncWithDatasources: validateFunc})
 		ctx := metadata.NewIncomingContext(context.Background(), metadata.MD{
 			"x-api-key": []string{"validator-key"},
 		})

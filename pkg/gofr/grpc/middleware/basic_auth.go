@@ -17,10 +17,10 @@ import (
 
 // BasicAuthProvider holds the configuration for basic authentication.
 type BasicAuthProvider struct {
-	Users                      map[string]string
-	ValidateFunc               func(username, password string) bool
-	ValidateFuncWithDatasource func(c *container.Container, username, password string) bool
-	Container                  *container.Container
+	Users                       map[string]string
+	ValidateFunc                func(username, password string) bool
+	ValidateFuncWithDatasources func(c *container.Container, username, password string) bool
+	Container                   *container.Container
 }
 
 // BasicAuthUnaryInterceptor returns a gRPC unary server interceptor that validates the Basic Auth credentials.
@@ -86,8 +86,8 @@ func validateBasicAuth(ctx context.Context, provider BasicAuthProvider) (string,
 }
 
 func (b BasicAuthProvider) verifyCredentials(username, password string) bool {
-	if b.ValidateFuncWithDatasource != nil {
-		return b.ValidateFuncWithDatasource(b.Container, username, password)
+	if b.ValidateFuncWithDatasources != nil {
+		return b.ValidateFuncWithDatasources(b.Container, username, password)
 	}
 
 	if b.ValidateFunc != nil {
