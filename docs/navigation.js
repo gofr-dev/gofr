@@ -80,9 +80,9 @@ export const navigation = [
                 desc: "Get familiar with making HTTP requests and handling responses within your GoFr application to facilitate seamless communication."
             },
             {
-                title: 'HTTP Authentication',
-                href: '/docs/advanced-guide/http-authentication',
-                desc: "Implement various HTTP authentication methods to secure your GoFR application and protect sensitive endpoints."
+                title: 'Authentication',
+                href: '/docs/advanced-guide/authentication',
+                desc: "Implement various authentication methods to secure your GoFR application and protect sensitive endpoints across HTTP and gRPC."
             },
             {
                 title: 'Role-Based Access Control (RBAC)',
@@ -113,11 +113,6 @@ export const navigation = [
                 title: 'gRPC Streaming',
                 href: '/docs/advanced-guide/grpc-streaming',
                 desc: "Learn how to implement server-side, client-side, and bidirectional streaming in GoFr with built-in observability and error handling."
-            },
-            {
-                title: 'gRPC Authentication',
-                href: '/docs/advanced-guide/grpc-authentication',
-                desc: "Implement Basic Auth, API Key, and OAuth authentication for your gRPC services with built-in interceptors."
             },
             {
                 title: 'Using Pub/Sub',

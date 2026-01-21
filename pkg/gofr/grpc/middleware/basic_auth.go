@@ -11,13 +11,22 @@ import (
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
 
+	"gofr.dev/pkg/gofr/container"
 	httpMiddleware "gofr.dev/pkg/gofr/http/middleware"
 )
 
+// BasicAuthProvider holds the configuration for basic authentication.
+type BasicAuthProvider struct {
+	Users                       map[string]string
+	ValidateFunc                func(username, password string) bool
+	ValidateFuncWithDatasources func(c *container.Container, username, password string) bool
+	Container                   *container.Container
+}
+
 // BasicAuthUnaryInterceptor returns a gRPC unary server interceptor that validates the Basic Auth credentials.
-func BasicAuthUnaryInterceptor(users map[string]string) grpc.UnaryServerInterceptor {
+func BasicAuthUnaryInterceptor(provider BasicAuthProvider) grpc.UnaryServerInterceptor {
 	return func(ctx context.Context, req any, _ *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (any, error) {
-		username, err := validateBasicAuth(ctx, users)
+		username, err := validateBasicAuth(ctx, provider)
 		if err != nil {
 			return nil, err
 		}
@@ -29,9 +38,9 @@ func BasicAuthUnaryInterceptor(users map[string]string) grpc.UnaryServerIntercep
 }
 
 // BasicAuthStreamInterceptor returns a gRPC stream server interceptor that validates the Basic Auth credentials.
-func BasicAuthStreamInterceptor(users map[string]string) grpc.StreamServerInterceptor {
+func BasicAuthStreamInterceptor(provider BasicAuthProvider) grpc.StreamServerInterceptor {
 	return func(srv any, ss grpc.ServerStream, _ *grpc.StreamServerInfo, handler grpc.StreamHandler) error {
-		username, err := validateBasicAuth(ss.Context(), users)
+		username, err := validateBasicAuth(ss.Context(), provider)
 		if err != nil {
 			return err
 		}
@@ -42,7 +51,7 @@ func BasicAuthStreamInterceptor(users map[string]string) grpc.StreamServerInterc
 	}
 }
 
-func validateBasicAuth(ctx context.Context, users map[string]string) (string, error) {
+func validateBasicAuth(ctx context.Context, provider BasicAuthProvider) (string, error) {
 	md, ok := metadata.FromIncomingContext(ctx)
 	if !ok {
 		return "", status.Error(codes.Unauthenticated, "missing metadata")
@@ -69,16 +78,29 @@ func validateBasicAuth(ctx context.Context, users map[string]string) (string, er
 		return "", status.Error(codes.Unauthenticated, "invalid credentials format")
 	}
 
-	expectedPass, ok := users[username]
-	if !ok {
-		// Use dummy comparison to prevent timing attacks
-		subtle.ConstantTimeCompare([]byte(password), []byte("dummy"))
-		return "", status.Error(codes.Unauthenticated, "invalid credentials")
-	}
-
-	if subtle.ConstantTimeCompare([]byte(password), []byte(expectedPass)) != 1 {
+	if !provider.verifyCredentials(username, password) {
 		return "", status.Error(codes.Unauthenticated, "invalid credentials")
 	}
 
 	return username, nil
+}
+
+func (b BasicAuthProvider) verifyCredentials(username, password string) bool {
+	if b.ValidateFuncWithDatasources != nil {
+		return b.ValidateFuncWithDatasources(b.Container, username, password)
+	}
+
+	if b.ValidateFunc != nil {
+		return b.ValidateFunc(username, password)
+	}
+
+	expectedPass, ok := b.Users[username]
+	if !ok {
+		// Use dummy comparison to prevent timing attacks
+		subtle.ConstantTimeCompare([]byte(password), []byte("dummy"))
+
+		return false
+	}
+
+	return subtle.ConstantTimeCompare([]byte(password), []byte(expectedPass)) == 1
 }

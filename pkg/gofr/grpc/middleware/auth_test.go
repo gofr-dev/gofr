@@ -13,6 +13,7 @@ import (
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
 
+	"gofr.dev/pkg/gofr/container"
 	httpMiddleware "gofr.dev/pkg/gofr/http/middleware"
 )
 
@@ -30,7 +31,7 @@ func (m *mockKeyProvider) Get(kid string) *rsa.PublicKey {
 
 func TestBasicAuthUnaryInterceptor(t *testing.T) {
 	users := map[string]string{"user": "pass"}
-	interceptor := BasicAuthUnaryInterceptor(users)
+	interceptor := BasicAuthUnaryInterceptor(BasicAuthProvider{Users: users})
 
 	tests := []struct {
 		name        string
@@ -106,9 +107,49 @@ func TestBasicAuthUnaryInterceptor(t *testing.T) {
 	}
 }
 
+func TestBasicAuthUnaryInterceptor_Validator(t *testing.T) {
+	t.Run("Custom Validation Function Success", func(t *testing.T) {
+		validateFunc := func(username, password string) bool {
+			return username == "custom" && password == "pass"
+		}
+		interceptor := BasicAuthUnaryInterceptor(BasicAuthProvider{ValidateFunc: validateFunc})
+		ctx := metadata.NewIncomingContext(context.Background(), metadata.MD{
+			"authorization": []string{"Basic " + base64.StdEncoding.EncodeToString([]byte("custom:pass"))},
+		})
+
+		_, err := interceptor(ctx, nil, nil, func(ctx context.Context, _ any) (any, error) {
+			username := ctx.Value(httpMiddleware.Username)
+			assert.Equal(t, "custom", username)
+
+			return nil, nil
+		})
+
+		assert.NoError(t, err)
+	})
+
+	t.Run("Validator with Datasources Success", func(t *testing.T) {
+		validateFunc := func(_ *container.Container, username, password string) bool {
+			return username == "validator" && password == "pass"
+		}
+		interceptor := BasicAuthUnaryInterceptor(BasicAuthProvider{ValidateFuncWithDatasources: validateFunc})
+		ctx := metadata.NewIncomingContext(context.Background(), metadata.MD{
+			"authorization": []string{"Basic " + base64.StdEncoding.EncodeToString([]byte("validator:pass"))},
+		})
+
+		_, err := interceptor(ctx, nil, nil, func(ctx context.Context, _ any) (any, error) {
+			username := ctx.Value(httpMiddleware.Username)
+			assert.Equal(t, "validator", username)
+
+			return nil, nil
+		})
+
+		assert.NoError(t, err)
+	})
+}
+
 func TestAPIKeyAuthUnaryInterceptor(t *testing.T) {
 	keys := []string{"valid-key"}
-	interceptor := APIKeyAuthUnaryInterceptor(keys...)
+	interceptor := APIKeyAuthUnaryInterceptor(APIKeyAuthProvider{APIKeys: keys})
 
 	tests := []struct {
 		name        string
@@ -154,6 +195,46 @@ func TestAPIKeyAuthUnaryInterceptor(t *testing.T) {
 			assert.Equal(t, tt.expectedErr, err)
 		})
 	}
+}
+
+func TestAPIKeyAuthUnaryInterceptor_Validator(t *testing.T) {
+	t.Run("Custom Validation Function Success", func(t *testing.T) {
+		validateFunc := func(apiKey string) bool {
+			return apiKey == "custom-key"
+		}
+		interceptor := APIKeyAuthUnaryInterceptor(APIKeyAuthProvider{ValidateFunc: validateFunc})
+		ctx := metadata.NewIncomingContext(context.Background(), metadata.MD{
+			"x-api-key": []string{"custom-key"},
+		})
+
+		_, err := interceptor(ctx, nil, nil, func(ctx context.Context, _ any) (any, error) {
+			apiKey := ctx.Value(httpMiddleware.APIKey)
+			assert.Equal(t, "custom-key", apiKey)
+
+			return nil, nil
+		})
+
+		assert.NoError(t, err)
+	})
+
+	t.Run("Validator with Datasources Success", func(t *testing.T) {
+		validateFunc := func(_ *container.Container, apiKey string) bool {
+			return apiKey == "validator-key"
+		}
+		interceptor := APIKeyAuthUnaryInterceptor(APIKeyAuthProvider{ValidateFuncWithDatasources: validateFunc})
+		ctx := metadata.NewIncomingContext(context.Background(), metadata.MD{
+			"x-api-key": []string{"validator-key"},
+		})
+
+		_, err := interceptor(ctx, nil, nil, func(ctx context.Context, _ any) (any, error) {
+			apiKey := ctx.Value(httpMiddleware.APIKey)
+			assert.Equal(t, "validator-key", apiKey)
+
+			return nil, nil
+		})
+
+		assert.NoError(t, err)
+	})
 }
 
 func TestOAuthUnaryInterceptor(t *testing.T) {

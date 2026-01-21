@@ -9,13 +9,22 @@ import (
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
 
+	"gofr.dev/pkg/gofr/container"
 	httpMiddleware "gofr.dev/pkg/gofr/http/middleware"
 )
 
+// APIKeyAuthProvider holds the configuration for API key authentication.
+type APIKeyAuthProvider struct {
+	APIKeys                     []string
+	ValidateFunc                func(apiKey string) bool
+	ValidateFuncWithDatasources func(c *container.Container, apiKey string) bool
+	Container                   *container.Container
+}
+
 // APIKeyAuthUnaryInterceptor returns a gRPC unary server interceptor that validates the API key.
-func APIKeyAuthUnaryInterceptor(apiKeys ...string) grpc.UnaryServerInterceptor {
+func APIKeyAuthUnaryInterceptor(provider APIKeyAuthProvider) grpc.UnaryServerInterceptor {
 	return func(ctx context.Context, req any, _ *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (any, error) {
-		apiKey, err := validateAPIKey(ctx, apiKeys)
+		apiKey, err := validateAPIKey(ctx, provider)
 		if err != nil {
 			return nil, err
 		}
@@ -27,9 +36,9 @@ func APIKeyAuthUnaryInterceptor(apiKeys ...string) grpc.UnaryServerInterceptor {
 }
 
 // APIKeyAuthStreamInterceptor returns a gRPC stream server interceptor that validates the API key.
-func APIKeyAuthStreamInterceptor(apiKeys ...string) grpc.StreamServerInterceptor {
+func APIKeyAuthStreamInterceptor(provider APIKeyAuthProvider) grpc.StreamServerInterceptor {
 	return func(srv any, ss grpc.ServerStream, _ *grpc.StreamServerInfo, handler grpc.StreamHandler) error {
-		apiKey, err := validateAPIKey(ss.Context(), apiKeys)
+		apiKey, err := validateAPIKey(ss.Context(), provider)
 		if err != nil {
 			return err
 		}
@@ -40,7 +49,7 @@ func APIKeyAuthStreamInterceptor(apiKeys ...string) grpc.StreamServerInterceptor
 	}
 }
 
-func validateAPIKey(ctx context.Context, validKeys []string) (string, error) {
+func validateAPIKey(ctx context.Context, provider APIKeyAuthProvider) (string, error) {
 	md, ok := metadata.FromIncomingContext(ctx)
 	if !ok {
 		return "", status.Error(codes.Unauthenticated, "missing metadata")
@@ -54,14 +63,30 @@ func validateAPIKey(ctx context.Context, validKeys []string) (string, error) {
 
 	apiKey := values[0]
 
-	for _, key := range validKeys {
+	if !provider.verifyAPIKey(apiKey) {
+		return "", status.Error(codes.Unauthenticated, "invalid api key")
+	}
+
+	return apiKey, nil
+}
+
+func (a APIKeyAuthProvider) verifyAPIKey(apiKey string) bool {
+	if a.ValidateFuncWithDatasources != nil {
+		return a.ValidateFuncWithDatasources(a.Container, apiKey)
+	}
+
+	if a.ValidateFunc != nil {
+		return a.ValidateFunc(apiKey)
+	}
+
+	for _, key := range a.APIKeys {
 		if subtle.ConstantTimeCompare([]byte(apiKey), []byte(key)) == 1 {
-			return apiKey, nil
+			return true
 		}
 	}
 
 	// Constant time compare with dummy key to mitigate timing attacks
 	subtle.ConstantTimeCompare([]byte(apiKey), []byte("dummy"))
 
-	return "", status.Error(codes.Unauthenticated, "invalid api key")
+	return false
 }
