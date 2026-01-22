@@ -187,6 +187,10 @@ func (*dgraphMigrator) Unlock(*container.Container) error {
 	return nil
 }
 
+func (dm *dgraphMigrator) Next() migrator {
+	return dm.migrator
+}
+
 func (*dgraphMigrator) Name() string {
 	return "DGraph"
 }

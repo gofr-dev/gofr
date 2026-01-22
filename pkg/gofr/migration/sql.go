@@ -232,6 +232,10 @@ func (d *sqlMigrator) Unlock(c *container.Container) error {
 	return d.lockTx.Rollback()
 }
 
+func (d *sqlMigrator) Next() migrator {
+	return d.migrator
+}
+
 func (*sqlMigrator) Name() string {
 	return "SQL"
 }

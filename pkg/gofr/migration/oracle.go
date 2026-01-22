@@ -201,6 +201,10 @@ func (*oracleMigrator) Unlock(*container.Container) error {
 	return nil
 }
 
+func (om *oracleMigrator) Next() migrator {
+	return om.migrator
+}
+
 func (*oracleMigrator) Name() string {
 	return "Oracle"
 }

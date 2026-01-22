@@ -102,6 +102,10 @@ func (*cassandraMigrator) Unlock(*container.Container) error {
 	return nil
 }
 
+func (cs *cassandraMigrator) Next() migrator {
+	return cs.migrator
+}
+
 func (*cassandraMigrator) Name() string {
 	return "Cassandra"
 }

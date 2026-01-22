@@ -144,6 +144,10 @@ func (*surrealMigrator) Unlock(*container.Container) error {
 	return nil
 }
 
+func (s *surrealMigrator) Next() migrator {
+	return s.migrator
+}
+
 func (*surrealMigrator) Name() string {
 	return "SurrealDB"
 }

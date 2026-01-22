@@ -1493,6 +1493,20 @@ func (mr *MockmigratorMockRecorder) checkAndCreateMigrationTable(c any) *gomock.
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "checkAndCreateMigrationTable", reflect.TypeOf((*Mockmigrator)(nil).checkAndCreateMigrationTable), c)
 }
 
+// Next mocks base method.
+func (m *Mockmigrator) Next() migrator {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Next")
+	ret0, _ := ret[0].(migrator)
+	return ret0
+}
+
+// Next indicates an expected call of Next.
+func (mr *MockmigratorMockRecorder) Next() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Next", reflect.TypeOf((*Mockmigrator)(nil).Next))
+}
+
 // commitMigration mocks base method.
 func (m *Mockmigrator) commitMigration(c *container.Container, data transactionData) error {
 	m.ctrl.T.Helper()

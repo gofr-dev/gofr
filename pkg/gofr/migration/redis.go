@@ -168,6 +168,10 @@ func (*redisMigrator) Unlock(c *container.Container) error {
 	return nil
 }
 
+func (m *redisMigrator) Next() migrator {
+	return m.migrator
+}
+
 func (*redisMigrator) Name() string {
 	return "Redis"
 }

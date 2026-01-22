@@ -5,7 +5,6 @@ import (
 	"reflect"
 	"sort"
 	"time"
-	"unsafe"
 
 	"github.com/gogo/protobuf/sortkeys"
 	goRedis "github.com/redis/go-redis/v9"
@@ -195,22 +194,13 @@ type datasourceInitializer struct {
 func getLockers(mg migrator) []Locker {
 	var lockers []Locker
 
-	// Traverse the migrator chain and collect all lockers
+	// Traverse the migrator chain and collect all lockers.
 	// The chain is built such that the last added datasource is the outermost wrapper.
-	// We want a deterministic order, so we will collect them and then sort if necessary,
-	// or just rely on a fixed traversal if we can identify them.
 	for mg != nil {
-		// Check if the current migrator is one of our known locker types
-		// and add it to the list. We avoid adding the base Datasource as it's a no-op.
-		switch m := mg.(type) {
-		case *sqlMigrator, *redisMigrator:
-			lockers = append(lockers, m)
-		}
+		lockers = append(lockers, mg)
 
-		// Move to the next migrator in the chain
-		// We need to use reflection or a common interface to get the next migrator
-		// since 'migrator' is an unexported field in the structs.
-		mg = getNextMigrator(mg)
+		// Move to the next migrator in the chain.
+		mg = mg.Next()
 	}
 
 	// Sort lockers by name to ensure deterministic order (prevent deadlocks)
@@ -219,35 +209,6 @@ func getLockers(mg migrator) []Locker {
 	})
 
 	return lockers
-}
-
-func getNextMigrator(mg migrator) migrator {
-	val := reflect.ValueOf(mg)
-	if val.Kind() == reflect.Ptr {
-		val = val.Elem()
-	}
-
-	if val.Kind() != reflect.Struct {
-		return nil
-	}
-
-	field := val.FieldByName("migrator")
-	if !field.IsValid() {
-		return nil
-	}
-
-	// We need to use unsafe to access unexported fields to avoid panic
-	// "reflect.Value.Interface: cannot return value obtained from unexported field or method"
-	if !field.CanInterface() {
-		field = reflect.NewAt(field.Type(), unsafe.Pointer(field.UnsafeAddr())).Elem()
-	}
-
-	next, ok := field.Interface().(migrator)
-	if !ok {
-		return nil
-	}
-
-	return next
 }
 
 func initializeDatasources(c *container.Container, ds *Datasource, mg migrator) (migrator, bool) {

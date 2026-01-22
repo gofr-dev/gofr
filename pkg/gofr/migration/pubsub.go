@@ -167,6 +167,10 @@ func (*pubsubMigrator) Unlock(*container.Container) error {
 	return nil
 }
 
+func (pm *pubsubMigrator) Next() migrator {
+	return pm.migrator
+}
+
 func (*pubsubMigrator) Name() string {
 	return "PubSub"
 }

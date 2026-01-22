@@ -138,6 +138,10 @@ func (*arangoMigrator) Unlock(*container.Container) error {
 	return nil
 }
 
+func (am *arangoMigrator) Next() migrator {
+	return am.migrator
+}
+
 func (*arangoMigrator) Name() string {
 	return "ArangoDB"
 }

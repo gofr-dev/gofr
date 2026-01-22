@@ -52,6 +52,10 @@ func (*Datasource) Unlock(*container.Container) error {
 	return nil
 }
 
+func (*Datasource) Next() migrator {
+	return nil
+}
+
 func (*Datasource) Name() string {
 	return "Base"
 }

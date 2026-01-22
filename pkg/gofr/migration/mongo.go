@@ -101,6 +101,10 @@ func (*mongoMigrator) Unlock(*container.Container) error {
 	return nil
 }
 
+func (mg *mongoMigrator) Next() migrator {
+	return mg.migrator
+}
+
 func (*mongoMigrator) Name() string {
 	return "Mongo"
 }

@@ -289,6 +289,10 @@ func (*openTSDBMigrator) Unlock(*container.Container) error {
 	return nil
 }
 
+func (om *openTSDBMigrator) Next() migrator {
+	return om.migrator
+}
+
 func (*openTSDBMigrator) Name() string {
 	return "OpenTSDB"
 }

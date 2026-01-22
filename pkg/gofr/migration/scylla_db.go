@@ -114,6 +114,10 @@ func (*scyllaMigrator) Unlock(*container.Container) error {
 	return nil
 }
 
+func (s *scyllaMigrator) Next() migrator {
+	return s.migrator
+}
+
 func (*scyllaMigrator) Name() string {
 	return "ScyllaDB"
 }
