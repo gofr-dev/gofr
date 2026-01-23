@@ -60,12 +60,22 @@ func Run(migrationsMap map[int64]Migrate, c *container.Container) {
 		return
 	}
 
-	// Pre-check: only acquire locks if there are new migrations to run
+	// Create migration tables BEFORE acquiring locks (lock table must exist first)
+	err := mg.checkAndCreateMigrationTable(c)
+	if err != nil {
+		c.Fatalf("failed to create gofr_migration table, err: %v", err)
+
+		return
+	}
+
+	// Optimistic pre-check: only acquire locks if there MIGHT be new migrations
+	// This is a fast path to avoid lock contention when no migrations are needed
 	lastMigration := mg.getLastMigration(c)
 	if !hasNewMigrations(keys, lastMigration) {
 		return
 	}
 
+	// Acquire locks to ensure exclusive access during migration
 	lockers := getLockers(mg)
 	acquiredLockers, stopHeartbeat := acquireAllLocks(c, lockers)
 
@@ -76,13 +86,7 @@ func Run(migrationsMap map[int64]Migrate, c *container.Container) {
 	defer stopHeartbeat()
 	defer releaseAllLocks(c, acquiredLockers)
 
-	err := mg.checkAndCreateMigrationTable(c)
-	if err != nil {
-		c.Fatalf("failed to create gofr_migration table, err: %v", err)
-
-		return
-	}
-
+	// No need to check again - lock guarantees no other pod is modifying migrations
 	runMigrations(c, mg, &ds, migrationsMap, keys)
 }
 

@@ -135,9 +135,7 @@ func TestMigrationRunClickhouseMigrationFailureWhileCheckingTable(t *testing.T) 
 			}},
 		}
 
-		// Pre-check
-		mockClickHouse.EXPECT().Select(gomock.Any(), gomock.Any(), getLastChGoFrMigration).Return(nil)
-
+		// checkAndCreateMigrationTable is called first
 		mockClickHouse.EXPECT().Exec(gomock.Any(), CheckAndCreateChMigrationTable).Return(sql.ErrConnDone)
 
 		Run(migrationMap, mockContainer)
@@ -160,7 +158,10 @@ func TestMigrationRunClickhouseCurrentMigrationEqualLastMigration(t *testing.T) 
 
 	mockClickHouse, mockContainer := initializeClickHouseRunMocks(t)
 
-	// Pre-check returns 0, so migration 0 is skipped immediately
+	// checkAndCreateMigrationTable is called first
+	mockClickHouse.EXPECT().Exec(gomock.Any(), gomock.Any()).Return(nil)
+
+	// Then getLastMigration is called - returns 0, so migration 0 is skipped
 	mockClickHouse.EXPECT().Select(gomock.Any(), gomock.Any(), getLastChGoFrMigration).DoAndReturn(
 		func(_, dest, _ any, _ ...any) error {
 			v := reflect.ValueOf(dest).Elem()

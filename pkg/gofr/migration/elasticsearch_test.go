@@ -171,15 +171,7 @@ func TestMigrationRunElasticsearchMigrationFailureWhileCheckingTable(t *testing.
 			}},
 		}
 
-		// Pre-check
-		mockElasticsearch.EXPECT().Search(gomock.Any(), []string{elasticsearchMigrationIndex},
-			getLastElasticsearchMigrationQuery()).
-			Return(map[string]any{
-				"hits": map[string]any{
-					"hits": []any{},
-				},
-			}, nil)
-
+		// checkAndCreateMigrationTable is called first
 		// Mock the migration index check failure
 		mockElasticsearch.EXPECT().Search(gomock.Any(), []string{elasticsearchMigrationIndex}, gomock.Any()).
 			Return(nil, assert.AnError)
@@ -203,7 +195,16 @@ func TestMigrationRunElasticsearchCurrentMigrationEqualLastMigration(t *testing.
 
 	mockElasticsearch, mockContainer := initializeElasticsearchRunMocks(t)
 
-	// Pre-check returns 1, so migration 1 is skipped immediately
+	// checkAndCreateMigrationTable is called first
+	mockElasticsearch.EXPECT().Search(gomock.Any(), []string{elasticsearchMigrationIndex},
+		gomock.Any()).
+		Return(map[string]any{
+			"hits": map[string]any{
+				"hits": []any{},
+			},
+		}, nil)
+
+	// Then getLastMigration is called - returns 1, so migration 1 is skipped
 	mockElasticsearch.EXPECT().Search(gomock.Any(), []string{elasticsearchMigrationIndex},
 		getLastElasticsearchMigrationQuery()).
 		Return(map[string]any{

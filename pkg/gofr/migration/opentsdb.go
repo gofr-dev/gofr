@@ -59,8 +59,8 @@ func (om *openTSDBMigrator) checkAndCreateMigrationTable(c *container.Container)
 	// Check if file exists and is readable
 	if _, err := os.Stat(om.filePath); err == nil {
 		// File exists, validate it's proper JSON
-		if err := om.validateExistingFile(c); err != nil {
-			return err
+		if validationErr := om.validateExistingFile(c); validationErr != nil {
+			return validationErr
 		}
 	} else if !os.IsNotExist(err) {
 		// Some other error accessing the file
