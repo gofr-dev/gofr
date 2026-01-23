@@ -4,6 +4,7 @@ import (
 	"context"
 	"sync"
 
+	"github.com/prometheus/client_golang/prometheus"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/metric"
 )
@@ -39,10 +40,11 @@ type Logger interface {
 }
 
 type metricsManager struct {
-	meter  metric.Meter
-	store  Store
-	logger Logger
-	flush  func(context.Context) error
+	meter    metric.Meter
+	store    Store
+	logger   Logger
+	flush    func(context.Context) error
+	gatherer prometheus.Gatherer
 }
 
 // Developer Note: float64Gauge is used instead of metric.Float64ObservableGauge because we need a synchronous gauge metric
@@ -54,12 +56,14 @@ type float64Gauge struct {
 }
 
 // NewMetricsManager creates a new metrics manager instance with the provided metric  meter and logger.
-func NewMetricsManager(meter metric.Meter, logger Logger, flush func(context.Context) error) Manager {
+func NewMetricsManager(meter metric.Meter, logger Logger, flush func(context.Context) error,
+	gatherer prometheus.Gatherer) Manager {
 	return &metricsManager{
-		meter:  meter,
-		store:  newOtelStore(),
-		logger: logger,
-		flush:  flush,
+		meter:    meter,
+		store:    newOtelStore(),
+		logger:   logger,
+		flush:    flush,
+		gatherer: gatherer,
 	}
 }
 

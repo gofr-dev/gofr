@@ -125,13 +125,9 @@ func (c *Container) Create(conf config.Config) {
 		flush func(context.Context) error
 	)
 
-	if logExport, _ := strconv.ParseBool(conf.Get("METRICS_LOG_EXPORT")); logExport {
-		meter, flush = exporters.Log(c.GetAppName(), c.GetAppVersion(), c.Logger)
-	} else {
-		meter = exporters.Prometheus(c.GetAppName(), c.GetAppVersion())
-	}
+	meter, flush, gatherer := exporters.Prometheus(c.GetAppName(), c.GetAppVersion(), c.Logger)
 
-	c.metricsManager = metrics.NewMetricsManager(meter, c.Logger, flush)
+	c.metricsManager = metrics.NewMetricsManager(meter, c.Logger, flush, gatherer)
 
 	exporters.SendFrameworkStartupTelemetry(c.GetAppName(), c.GetAppVersion())
 
