@@ -130,15 +130,15 @@ func (am *arangoMigrator) rollback(c *container.Container, data transactionData)
 	c.Fatalf("Migration %v failed and rolled back", data.MigrationNumber)
 }
 
-func (*arangoMigrator) Lock(*container.Container) error {
+func (*arangoMigrator) Lock(*container.Container, string) error {
 	return nil
 }
 
-func (*arangoMigrator) Unlock(*container.Container) error {
+func (*arangoMigrator) Unlock(*container.Container, string) error {
 	return nil
 }
 
-func (*arangoMigrator) Refresh(*container.Container) error {
+func (*arangoMigrator) Refresh(*container.Container, string) error {
 	return nil
 }
 

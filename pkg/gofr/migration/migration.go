@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/gogo/protobuf/sortkeys"
+	"github.com/google/uuid"
 	goRedis "github.com/redis/go-redis/v9"
 
 	"gofr.dev/pkg/gofr/container"
@@ -76,14 +77,17 @@ func Run(migrationsMap map[int64]Migrate, c *container.Container) {
 
 	// Acquire locks to ensure exclusive access during migration
 	lockers := getLockers(mg)
-	acquiredLockers, stopHeartbeat := acquireAllLocks(c, lockers)
+	ownerID := uuid.New().String()
+	acquiredLockers, stopHeartbeat := acquireAllLocks(c, lockers, ownerID)
 
 	if acquiredLockers == nil && len(lockers) > 0 {
+		c.Fatalf("migration failed: could not acquire locks to run required migrations")
+
 		return
 	}
 
 	defer stopHeartbeat()
-	defer releaseAllLocks(c, acquiredLockers)
+	defer releaseAllLocks(c, acquiredLockers, ownerID)
 
 	// No need to check again - lock guarantees no other pod is modifying migrations
 	runMigrations(c, mg, &ds, migrationsMap, keys)
@@ -99,17 +103,17 @@ func hasNewMigrations(keys []int64, lastMigration int64) bool {
 	return false
 }
 
-func acquireAllLocks(c *container.Container, lockers []Locker) (acquiredLockers []Locker, stopHeartbeat func()) {
+func acquireAllLocks(c *container.Container, lockers []Locker, ownerID string) (acquiredLockers []Locker, stopHeartbeat func()) {
 	acquiredLockers = make([]Locker, 0, len(lockers))
 
 	for _, l := range lockers {
-		err := l.Lock(c)
+		err := l.Lock(c, ownerID)
 		if err != nil {
 			c.Errorf("failed to acquire migration lock, err: %v", err)
 
 			// Release already acquired locks in reverse order
 			for i := len(acquiredLockers) - 1; i >= 0; i-- {
-				_ = acquiredLockers[i].Unlock(c)
+				_ = acquiredLockers[i].Unlock(c, ownerID)
 			}
 
 			return nil, func() {}
@@ -135,7 +139,7 @@ func acquireAllLocks(c *container.Container, lockers []Locker) (acquiredLockers 
 			select {
 			case <-ticker.C:
 				for _, l := range acquiredLockers {
-					err := l.Refresh(c)
+					err := l.Refresh(c, ownerID)
 					if err != nil {
 						c.Errorf("failed to refresh migration lock for %s, err: %v", l.Name(), err)
 					}
@@ -151,9 +155,9 @@ func acquireAllLocks(c *container.Container, lockers []Locker) (acquiredLockers 
 	return acquiredLockers, stopHeartbeat
 }
 
-func releaseAllLocks(c *container.Container, acquiredLockers []Locker) {
+func releaseAllLocks(c *container.Container, acquiredLockers []Locker, ownerID string) {
 	for i := len(acquiredLockers) - 1; i >= 0; i-- {
-		err := acquiredLockers[i].Unlock(c)
+		err := acquiredLockers[i].Unlock(c, ownerID)
 		if err != nil {
 			c.Errorf("failed to release migration lock, err: %v", err)
 		}

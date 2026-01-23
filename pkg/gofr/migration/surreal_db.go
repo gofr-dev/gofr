@@ -136,15 +136,15 @@ func (s *surrealMigrator) rollback(c *container.Container, data transactionData)
 	c.Fatalf("migration %v failed and rolled back", data.MigrationNumber)
 }
 
-func (*surrealMigrator) Lock(*container.Container) error {
+func (*surrealMigrator) Lock(*container.Container, string) error {
 	return nil
 }
 
-func (*surrealMigrator) Unlock(*container.Container) error {
+func (*surrealMigrator) Unlock(*container.Container, string) error {
 	return nil
 }
 
-func (*surrealMigrator) Refresh(*container.Container) error {
+func (*surrealMigrator) Refresh(*container.Container, string) error {
 	return nil
 }
 

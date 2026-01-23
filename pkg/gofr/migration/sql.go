@@ -19,6 +19,7 @@ const (
 
 	createSQLGoFrMigrationLocksTable = `CREATE TABLE IF NOT EXISTS gofr_migration_locks (
     lock_key VARCHAR(255) PRIMARY KEY,
+    owner_id VARCHAR(255) NOT NULL,
     expires_at TIMESTAMP NOT NULL
 );`
 
@@ -147,15 +148,16 @@ func (d *sqlMigrator) rollback(c *container.Container, data transactionData) {
 	c.Fatalf("Migration %v failed and rolled back", data.MigrationNumber)
 }
 
-func (*sqlMigrator) Lock(c *container.Container) error {
+func (*sqlMigrator) Lock(c *container.Container, ownerID string) error {
 	for i := 0; ; i++ {
-		// 1. Clean up expired locks
-		_, _ = c.SQL.Exec("DELETE FROM gofr_migration_locks WHERE expires_at < ?", time.Now())
+		// 1. Clean up expired locks using database time to avoid clock skew issues
+		_, _ = c.SQL.Exec("DELETE FROM gofr_migration_locks WHERE expires_at < CURRENT_TIMESTAMP")
 
 		// 2. Try to acquire lock
 		expiresAt := time.Now().Add(sqlLockTTL)
 
-		_, err := c.SQL.Exec("INSERT INTO gofr_migration_locks (lock_key, expires_at) VALUES (?, ?)", lockKey, expiresAt)
+		_, err := c.SQL.Exec("INSERT INTO gofr_migration_locks (lock_key, owner_id, expires_at) VALUES (?, ?, ?)",
+			lockKey, ownerID, expiresAt)
 		if err == nil {
 			c.Debug("SQL lock acquired successfully")
 
@@ -167,8 +169,8 @@ func (*sqlMigrator) Lock(c *container.Container) error {
 	}
 }
 
-func (*sqlMigrator) Unlock(c *container.Container) error {
-	_, err := c.SQL.Exec("DELETE FROM gofr_migration_locks WHERE lock_key = ?", lockKey)
+func (*sqlMigrator) Unlock(c *container.Container, ownerID string) error {
+	_, err := c.SQL.Exec("DELETE FROM gofr_migration_locks WHERE lock_key = ? AND owner_id = ?", lockKey, ownerID)
 	if err != nil {
 		c.Errorf("unable to release SQL lock: %v", err)
 
@@ -180,10 +182,11 @@ func (*sqlMigrator) Unlock(c *container.Container) error {
 	return nil
 }
 
-func (*sqlMigrator) Refresh(c *container.Container) error {
+func (*sqlMigrator) Refresh(c *container.Container, ownerID string) error {
 	expiresAt := time.Now().Add(sqlLockTTL)
 
-	_, err := c.SQL.Exec("UPDATE gofr_migration_locks SET expires_at = ? WHERE lock_key = ?", expiresAt, lockKey)
+	_, err := c.SQL.Exec("UPDATE gofr_migration_locks SET expires_at = ? WHERE lock_key = ? AND owner_id = ?",
+		expiresAt, lockKey, ownerID)
 	if err != nil {
 		return err
 	}

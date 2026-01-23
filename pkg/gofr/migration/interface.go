@@ -212,8 +212,8 @@ type OpenTSDB interface {
 }
 
 type Locker interface {
-	Lock(c *container.Container) error
-	Unlock(c *container.Container) error
-	Refresh(c *container.Container) error
+	Lock(c *container.Container, ownerID string) error
+	Unlock(c *container.Container, ownerID string) error
+	Refresh(c *container.Container, ownerID string) error
 	Name() string
 }

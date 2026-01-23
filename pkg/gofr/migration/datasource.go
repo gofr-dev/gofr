@@ -44,15 +44,15 @@ func (*Datasource) commitMigration(c *container.Container, data transactionData)
 
 func (*Datasource) rollback(*container.Container, transactionData) {}
 
-func (*Datasource) Lock(*container.Container) error {
+func (*Datasource) Lock(*container.Container, string) error {
 	return nil
 }
 
-func (*Datasource) Unlock(*container.Container) error {
+func (*Datasource) Unlock(*container.Container, string) error {
 	return nil
 }
 
-func (*Datasource) Refresh(*container.Container) error {
+func (*Datasource) Refresh(*container.Container, string) error {
 	return nil
 }
 

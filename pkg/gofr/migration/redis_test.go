@@ -163,7 +163,7 @@ func TestRedisMigrator_Lock(t *testing.T) {
 		mocks.Redis.EXPECT().SetNX(gomock.Any(), lockKey, "1", 10*time.Second).
 			Return(goRedis.NewBoolResult(true, nil))
 
-		err := m.Lock(c)
+		err := m.Lock(c, "1")
 		require.NoError(t, err)
 	})
 
@@ -176,7 +176,7 @@ func TestRedisMigrator_Lock(t *testing.T) {
 		mocks.Redis.EXPECT().SetNX(gomock.Any(), lockKey, "1", 10*time.Second).
 			Return(goRedis.NewBoolResult(true, nil))
 
-		err := m.Lock(c)
+		err := m.Lock(c, "1")
 		require.NoError(t, err)
 	})
 
@@ -184,7 +184,7 @@ func TestRedisMigrator_Lock(t *testing.T) {
 		mocks.Redis.EXPECT().SetNX(gomock.Any(), lockKey, "1", 10*time.Second).
 			Return(goRedis.NewBoolResult(false, errRedis))
 
-		err := m.Lock(c)
+		err := m.Lock(c, "1")
 		require.Error(t, err)
 		assert.Equal(t, errLockAcquisitionFailed, err)
 	})
@@ -198,18 +198,18 @@ func TestRedisMigrator_Unlock(t *testing.T) {
 	m := redisMigrator{Redis: mocks.Redis}
 
 	t.Run("Success", func(t *testing.T) {
-		mocks.Redis.EXPECT().Del(gomock.Any(), lockKey).
-			Return(goRedis.NewIntResult(1, nil))
+		mocks.Redis.EXPECT().Eval(gomock.Any(), gomock.Any(), []string{lockKey}, "1").
+			Return(goRedis.NewCmdResult(int64(1), nil))
 
-		err := m.Unlock(c)
+		err := m.Unlock(c, "1")
 		require.NoError(t, err)
 	})
 
 	t.Run("Error", func(t *testing.T) {
-		mocks.Redis.EXPECT().Del(gomock.Any(), lockKey).
-			Return(goRedis.NewIntResult(0, errRedis))
+		mocks.Redis.EXPECT().Eval(gomock.Any(), gomock.Any(), []string{lockKey}, "1").
+			Return(goRedis.NewCmdResult(int64(0), errRedis))
 
-		err := m.Unlock(c)
+		err := m.Unlock(c, "1")
 		require.Error(t, err)
 		assert.Equal(t, errLockReleaseFailed, err)
 	})
@@ -223,18 +223,18 @@ func TestRedisMigrator_Refresh(t *testing.T) {
 	m := redisMigrator{Redis: mocks.Redis}
 
 	t.Run("Success", func(t *testing.T) {
-		mocks.Redis.EXPECT().Expire(gomock.Any(), lockKey, 10*time.Second).
-			Return(goRedis.NewBoolResult(true, nil))
+		mocks.Redis.EXPECT().Eval(gomock.Any(), gomock.Any(), []string{lockKey}, "1", 10).
+			Return(goRedis.NewCmdResult(int64(1), nil))
 
-		err := m.Refresh(c)
+		err := m.Refresh(c, "1")
 		require.NoError(t, err)
 	})
 
 	t.Run("Error", func(t *testing.T) {
-		mocks.Redis.EXPECT().Expire(gomock.Any(), lockKey, 10*time.Second).
-			Return(goRedis.NewBoolResult(false, errRedis))
+		mocks.Redis.EXPECT().Eval(gomock.Any(), gomock.Any(), []string{lockKey}, "1", 10).
+			Return(goRedis.NewCmdResult(int64(0), errRedis))
 
-		err := m.Refresh(c)
+		err := m.Refresh(c, "1")
 		require.Error(t, err)
 	})
 }

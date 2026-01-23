@@ -93,15 +93,15 @@ func (mg *mongoMigrator) rollback(c *container.Container, data transactionData) 
 	c.Fatalf("Migration %v failed.", data.MigrationNumber)
 }
 
-func (*mongoMigrator) Lock(*container.Container) error {
+func (*mongoMigrator) Lock(*container.Container, string) error {
 	return nil
 }
 
-func (*mongoMigrator) Unlock(*container.Container) error {
+func (*mongoMigrator) Unlock(*container.Container, string) error {
 	return nil
 }
 
-func (*mongoMigrator) Refresh(*container.Container) error {
+func (*mongoMigrator) Refresh(*container.Container, string) error {
 	return nil
 }
 

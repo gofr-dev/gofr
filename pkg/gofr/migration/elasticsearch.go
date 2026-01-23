@@ -175,15 +175,15 @@ func (em *elasticsearchMigrator) rollback(c *container.Container, data transacti
 	c.Fatalf("Migration %v failed.", data.MigrationNumber)
 }
 
-func (*elasticsearchMigrator) Lock(*container.Container) error {
+func (*elasticsearchMigrator) Lock(*container.Container, string) error {
 	return nil
 }
 
-func (*elasticsearchMigrator) Unlock(*container.Container) error {
+func (*elasticsearchMigrator) Unlock(*container.Container, string) error {
 	return nil
 }
 
-func (*elasticsearchMigrator) Refresh(*container.Container) error {
+func (*elasticsearchMigrator) Refresh(*container.Container, string) error {
 	return nil
 }
 

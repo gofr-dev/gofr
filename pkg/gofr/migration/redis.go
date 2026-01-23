@@ -12,8 +12,6 @@ import (
 const (
 	// redisLockTTL is the time-to-live for the redis lock to ensure it's released if the process crashes.
 	redisLockTTL = 10 * time.Second
-	// redisLockValue is the value stored in the redis lock key.
-	redisLockValue = "1"
 )
 
 type redisDS struct {
@@ -133,9 +131,9 @@ func (m *redisMigrator) rollback(c *container.Container, data transactionData) {
 	c.Fatalf("Migration %v for Redis failed and rolled back", data.MigrationNumber)
 }
 
-func (*redisMigrator) Lock(c *container.Container) error {
+func (*redisMigrator) Lock(c *container.Container, ownerID string) error {
 	for i := 0; ; i++ {
-		status, err := c.Redis.SetNX(context.Background(), lockKey, redisLockValue, redisLockTTL).Result()
+		status, err := c.Redis.SetNX(context.Background(), lockKey, ownerID, redisLockTTL).Result()
 		if err == nil && status {
 			c.Debug("Redis lock acquired successfully")
 
@@ -153,8 +151,17 @@ func (*redisMigrator) Lock(c *container.Container) error {
 	}
 }
 
-func (*redisMigrator) Unlock(c *container.Container) error {
-	err := c.Redis.Del(context.Background(), lockKey).Err()
+func (*redisMigrator) Unlock(c *container.Container, ownerID string) error {
+	// Use Lua script to ensure we only delete the lock if we own it
+	script := `
+		if redis.call("get", KEYS[1]) == ARGV[1] then
+			return redis.call("del", KEYS[1])
+		else
+			return 0
+		end
+	`
+
+	_, err := c.Redis.Eval(context.Background(), script, []string{lockKey}, ownerID).Result()
 	if err != nil {
 		c.Errorf("unable to release redis lock: %v", err)
 
@@ -166,8 +173,17 @@ func (*redisMigrator) Unlock(c *container.Container) error {
 	return nil
 }
 
-func (*redisMigrator) Refresh(c *container.Container) error {
-	err := c.Redis.Expire(context.Background(), lockKey, redisLockTTL).Err()
+func (*redisMigrator) Refresh(c *container.Container, ownerID string) error {
+	// Use Lua script to ensure we only refresh the lock if we own it
+	script := `
+		if redis.call("get", KEYS[1]) == ARGV[1] then
+			return redis.call("expire", KEYS[1], ARGV[2])
+		else
+			return 0
+		end
+	`
+
+	_, err := c.Redis.Eval(context.Background(), script, []string{lockKey}, ownerID, int(redisLockTTL.Seconds())).Result()
 	if err != nil {
 		return err
 	}

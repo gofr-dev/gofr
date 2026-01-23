@@ -412,14 +412,13 @@ func TestSQLMigrator_Lock(t *testing.T) {
 	m := sqlMigrator{SQL: mockContainer.SQL}
 
 	t.Run("LockSuccess", func(t *testing.T) {
-		mocks.SQL.ExpectExec("DELETE FROM gofr_migration_locks WHERE expires_at < ?").
-			WithArgs(sqlmock.AnyArg()).
+		mocks.SQL.ExpectExec("DELETE FROM gofr_migration_locks WHERE expires_at < CURRENT_TIMESTAMP").
 			WillReturnResult(mocks.SQL.NewResult(0, 0))
-		mocks.SQL.ExpectExec("INSERT INTO gofr_migration_locks (lock_key, expires_at) VALUES (?, ?)").
-			WithArgs(lockKey, sqlmock.AnyArg()).
+		mocks.SQL.ExpectExec("INSERT INTO gofr_migration_locks (lock_key, owner_id, expires_at) VALUES (?, ?, ?)").
+			WithArgs(lockKey, "1", sqlmock.AnyArg()).
 			WillReturnResult(mocks.SQL.NewResult(1, 1))
 
-		err := m.Lock(mockContainer)
+		err := m.Lock(mockContainer, "1")
 		require.NoError(t, err)
 	})
 }
@@ -432,11 +431,11 @@ func TestSQLMigrator_Unlock(t *testing.T) {
 	m := sqlMigrator{SQL: mockContainer.SQL}
 
 	t.Run("UnlockSuccess", func(t *testing.T) {
-		mocks.SQL.ExpectExec("DELETE FROM gofr_migration_locks WHERE lock_key = ?").
-			WithArgs(lockKey).
+		mocks.SQL.ExpectExec("DELETE FROM gofr_migration_locks WHERE lock_key = ? AND owner_id = ?").
+			WithArgs(lockKey, "1").
 			WillReturnResult(mocks.SQL.NewResult(0, 1))
 
-		err := m.Unlock(mockContainer)
+		err := m.Unlock(mockContainer, "1")
 		require.NoError(t, err)
 	})
 }
@@ -449,11 +448,11 @@ func TestSQLMigrator_Refresh(t *testing.T) {
 	m := sqlMigrator{SQL: mockContainer.SQL}
 
 	t.Run("RefreshSuccess", func(t *testing.T) {
-		mocks.SQL.ExpectExec("UPDATE gofr_migration_locks SET expires_at = ? WHERE lock_key = ?").
-			WithArgs(sqlmock.AnyArg(), lockKey).
+		mocks.SQL.ExpectExec("UPDATE gofr_migration_locks SET expires_at = ? WHERE lock_key = ? AND owner_id = ?").
+			WithArgs(sqlmock.AnyArg(), lockKey, "1").
 			WillReturnResult(mocks.SQL.NewResult(0, 1))
 
-		err := m.Refresh(mockContainer)
+		err := m.Refresh(mockContainer, "1")
 		require.NoError(t, err)
 	})
 }

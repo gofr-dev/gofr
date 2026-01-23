@@ -106,15 +106,15 @@ func (s *scyllaMigrator) rollback(c *container.Container, data transactionData) 
 	c.Fatalf("Migration %v failed.", data.MigrationNumber)
 }
 
-func (*scyllaMigrator) Lock(*container.Container) error {
+func (*scyllaMigrator) Lock(*container.Container, string) error {
 	return nil
 }
 
-func (*scyllaMigrator) Unlock(*container.Container) error {
+func (*scyllaMigrator) Unlock(*container.Container, string) error {
 	return nil
 }
 
-func (*scyllaMigrator) Refresh(*container.Container) error {
+func (*scyllaMigrator) Refresh(*container.Container, string) error {
 	return nil
 }
 

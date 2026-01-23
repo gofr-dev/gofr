@@ -194,15 +194,15 @@ func (om *oracleMigrator) beginTransaction(c *container.Container) transactionDa
 	return td
 }
 
-func (*oracleMigrator) Lock(*container.Container) error {
+func (*oracleMigrator) Lock(*container.Container, string) error {
 	return nil
 }
 
-func (*oracleMigrator) Unlock(*container.Container) error {
+func (*oracleMigrator) Unlock(*container.Container, string) error {
 	return nil
 }
 
-func (*oracleMigrator) Refresh(*container.Container) error {
+func (*oracleMigrator) Refresh(*container.Container, string) error {
 	return nil
 }
 

@@ -1424,17 +1424,17 @@ func (m *Mockmigrator) EXPECT() *MockmigratorMockRecorder {
 }
 
 // Lock mocks base method.
-func (m *Mockmigrator) Lock(c *container.Container) error {
+func (m *Mockmigrator) Lock(c *container.Container, ownerID string) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "Lock", c)
+	ret := m.ctrl.Call(m, "Lock", c, ownerID)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // Lock indicates an expected call of Lock.
-func (mr *MockmigratorMockRecorder) Lock(c any) *gomock.Call {
+func (mr *MockmigratorMockRecorder) Lock(c, ownerID any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Lock", reflect.TypeOf((*Mockmigrator)(nil).Lock), c)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Lock", reflect.TypeOf((*Mockmigrator)(nil).Lock), c, ownerID)
 }
 
 // Name mocks base method.
@@ -1451,32 +1451,46 @@ func (mr *MockmigratorMockRecorder) Name() *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Name", reflect.TypeOf((*Mockmigrator)(nil).Name))
 }
 
-// Refresh mocks base method.
-func (m *Mockmigrator) Refresh(c *container.Container) error {
+// Next mocks base method.
+func (m *Mockmigrator) Next() migrator {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "Refresh", c)
+	ret := m.ctrl.Call(m, "Next")
+	ret0, _ := ret[0].(migrator)
+	return ret0
+}
+
+// Next indicates an expected call of Next.
+func (mr *MockmigratorMockRecorder) Next() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Next", reflect.TypeOf((*Mockmigrator)(nil).Next))
+}
+
+// Refresh mocks base method.
+func (m *Mockmigrator) Refresh(c *container.Container, ownerID string) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Refresh", c, ownerID)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // Refresh indicates an expected call of Refresh.
-func (mr *MockmigratorMockRecorder) Refresh(c any) *gomock.Call {
+func (mr *MockmigratorMockRecorder) Refresh(c, ownerID any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Refresh", reflect.TypeOf((*Mockmigrator)(nil).Refresh), c)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Refresh", reflect.TypeOf((*Mockmigrator)(nil).Refresh), c, ownerID)
 }
 
 // Unlock mocks base method.
-func (m *Mockmigrator) Unlock(c *container.Container) error {
+func (m *Mockmigrator) Unlock(c *container.Container, ownerID string) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "Unlock", c)
+	ret := m.ctrl.Call(m, "Unlock", c, ownerID)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // Unlock indicates an expected call of Unlock.
-func (mr *MockmigratorMockRecorder) Unlock(c any) *gomock.Call {
+func (mr *MockmigratorMockRecorder) Unlock(c, ownerID any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Unlock", reflect.TypeOf((*Mockmigrator)(nil).Unlock), c)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Unlock", reflect.TypeOf((*Mockmigrator)(nil).Unlock), c, ownerID)
 }
 
 // beginTransaction mocks base method.
@@ -1505,20 +1519,6 @@ func (m *Mockmigrator) checkAndCreateMigrationTable(c *container.Container) erro
 func (mr *MockmigratorMockRecorder) checkAndCreateMigrationTable(c any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "checkAndCreateMigrationTable", reflect.TypeOf((*Mockmigrator)(nil).checkAndCreateMigrationTable), c)
-}
-
-// Next mocks base method.
-func (m *Mockmigrator) Next() migrator {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "Next")
-	ret0, _ := ret[0].(migrator)
-	return ret0
-}
-
-// Next indicates an expected call of Next.
-func (mr *MockmigratorMockRecorder) Next() *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Next", reflect.TypeOf((*Mockmigrator)(nil).Next))
 }
 
 // commitMigration mocks base method.
@@ -1666,17 +1666,17 @@ func (m *MockLocker) EXPECT() *MockLockerMockRecorder {
 }
 
 // Lock mocks base method.
-func (m *MockLocker) Lock(c *container.Container) error {
+func (m *MockLocker) Lock(c *container.Container, ownerID string) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "Lock", c)
+	ret := m.ctrl.Call(m, "Lock", c, ownerID)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // Lock indicates an expected call of Lock.
-func (mr *MockLockerMockRecorder) Lock(c any) *gomock.Call {
+func (mr *MockLockerMockRecorder) Lock(c, ownerID any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Lock", reflect.TypeOf((*MockLocker)(nil).Lock), c)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Lock", reflect.TypeOf((*MockLocker)(nil).Lock), c, ownerID)
 }
 
 // Name mocks base method.
@@ -1694,29 +1694,29 @@ func (mr *MockLockerMockRecorder) Name() *gomock.Call {
 }
 
 // Refresh mocks base method.
-func (m *MockLocker) Refresh(c *container.Container) error {
+func (m *MockLocker) Refresh(c *container.Container, ownerID string) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "Refresh", c)
+	ret := m.ctrl.Call(m, "Refresh", c, ownerID)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // Refresh indicates an expected call of Refresh.
-func (mr *MockLockerMockRecorder) Refresh(c any) *gomock.Call {
+func (mr *MockLockerMockRecorder) Refresh(c, ownerID any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Refresh", reflect.TypeOf((*MockLocker)(nil).Refresh), c)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Refresh", reflect.TypeOf((*MockLocker)(nil).Refresh), c, ownerID)
 }
 
 // Unlock mocks base method.
-func (m *MockLocker) Unlock(c *container.Container) error {
+func (m *MockLocker) Unlock(c *container.Container, ownerID string) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "Unlock", c)
+	ret := m.ctrl.Call(m, "Unlock", c, ownerID)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // Unlock indicates an expected call of Unlock.
-func (mr *MockLockerMockRecorder) Unlock(c any) *gomock.Call {
+func (mr *MockLockerMockRecorder) Unlock(c, ownerID any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Unlock", reflect.TypeOf((*MockLocker)(nil).Unlock), c)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Unlock", reflect.TypeOf((*MockLocker)(nil).Unlock), c, ownerID)
 }
