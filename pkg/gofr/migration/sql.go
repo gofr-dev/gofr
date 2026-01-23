@@ -150,11 +150,11 @@ func (d *sqlMigrator) rollback(c *container.Container, data transactionData) {
 
 func (*sqlMigrator) Lock(c *container.Container, ownerID string) error {
 	for i := 0; ; i++ {
-		// 1. Clean up expired locks using database time to avoid clock skew issues
-		_, _ = c.SQL.Exec("DELETE FROM gofr_migration_locks WHERE expires_at < CURRENT_TIMESTAMP")
+		// 1. Clean up expired locks using UTC time to avoid timezone mismatches
+		_, _ = c.SQL.Exec("DELETE FROM gofr_migration_locks WHERE expires_at < ?", time.Now().UTC())
 
 		// 2. Try to acquire lock
-		expiresAt := time.Now().Add(sqlLockTTL)
+		expiresAt := time.Now().UTC().Add(sqlLockTTL)
 
 		_, err := c.SQL.Exec("INSERT INTO gofr_migration_locks (lock_key, owner_id, expires_at) VALUES (?, ?, ?)",
 			lockKey, ownerID, expiresAt)
@@ -183,7 +183,7 @@ func (*sqlMigrator) Unlock(c *container.Container, ownerID string) error {
 }
 
 func (*sqlMigrator) Refresh(c *container.Container, ownerID string) error {
-	expiresAt := time.Now().Add(sqlLockTTL)
+	expiresAt := time.Now().UTC().Add(sqlLockTTL)
 
 	_, err := c.SQL.Exec("UPDATE gofr_migration_locks SET expires_at = ? WHERE lock_key = ? AND owner_id = ?",
 		expiresAt, lockKey, ownerID)

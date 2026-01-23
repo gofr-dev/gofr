@@ -412,7 +412,8 @@ func TestSQLMigrator_Lock(t *testing.T) {
 	m := sqlMigrator{SQL: mockContainer.SQL}
 
 	t.Run("LockSuccess", func(t *testing.T) {
-		mocks.SQL.ExpectExec("DELETE FROM gofr_migration_locks WHERE expires_at < CURRENT_TIMESTAMP").
+		mocks.SQL.ExpectExec("DELETE FROM gofr_migration_locks WHERE expires_at < ?").
+			WithArgs(sqlmock.AnyArg()).
 			WillReturnResult(mocks.SQL.NewResult(0, 0))
 		mocks.SQL.ExpectExec("INSERT INTO gofr_migration_locks (lock_key, owner_id, expires_at) VALUES (?, ?, ?)").
 			WithArgs(lockKey, "1", sqlmock.AnyArg()).

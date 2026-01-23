@@ -72,6 +72,8 @@ func Run(migrationsMap map[int64]Migrate, c *container.Container) {
 	// This is a fast path to avoid lock contention when no migrations are needed
 	lastMigration := mg.getLastMigration(c)
 	if !hasNewMigrations(keys, lastMigration) {
+		c.Infof("no new migrations to run")
+
 		return
 	}
 
@@ -186,7 +188,7 @@ func runMigrations(c *container.Container, mg migrator, ds *Datasource, migratio
 			ds.Oracle = &oracleTransactionWrapper{tx: migrationInfo.OracleTx}
 		}
 
-		migrationInfo.StartTime = time.Now()
+		migrationInfo.StartTime = time.Now().UTC()
 		migrationInfo.MigrationNumber = currentMigration
 
 		err := migrationsMap[currentMigration].UP(*ds)
