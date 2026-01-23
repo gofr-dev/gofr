@@ -23,30 +23,16 @@ type APIKeyAuthProvider struct {
 
 // APIKeyAuthUnaryInterceptor returns a gRPC unary server interceptor that validates the API key.
 func APIKeyAuthUnaryInterceptor(provider APIKeyAuthProvider) grpc.UnaryServerInterceptor {
-	return func(ctx context.Context, req any, _ *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (any, error) {
-		apiKey, err := validateAPIKey(ctx, provider)
-		if err != nil {
-			return nil, err
-		}
-
-		newCtx := context.WithValue(ctx, auth.APIKey, apiKey)
-
-		return handler(newCtx, req)
-	}
+	return NewAuthUnaryInterceptor(func(ctx context.Context) (any, error) {
+		return validateAPIKey(ctx, provider)
+	}, auth.APIKey)
 }
 
 // APIKeyAuthStreamInterceptor returns a gRPC stream server interceptor that validates the API key.
 func APIKeyAuthStreamInterceptor(provider APIKeyAuthProvider) grpc.StreamServerInterceptor {
-	return func(srv any, ss grpc.ServerStream, _ *grpc.StreamServerInfo, handler grpc.StreamHandler) error {
-		apiKey, err := validateAPIKey(ss.Context(), provider)
-		if err != nil {
-			return err
-		}
-
-		wrapped := &wrappedStream{ss, context.WithValue(ss.Context(), auth.APIKey, apiKey)}
-
-		return handler(srv, wrapped)
-	}
+	return NewAuthStreamInterceptor(func(ctx context.Context) (any, error) {
+		return validateAPIKey(ctx, provider)
+	}, auth.APIKey)
 }
 
 func validateAPIKey(ctx context.Context, provider APIKeyAuthProvider) (string, error) {

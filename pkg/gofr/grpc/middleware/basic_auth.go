@@ -25,30 +25,16 @@ type BasicAuthProvider struct {
 
 // BasicAuthUnaryInterceptor returns a gRPC unary server interceptor that validates the Basic Auth credentials.
 func BasicAuthUnaryInterceptor(provider BasicAuthProvider) grpc.UnaryServerInterceptor {
-	return func(ctx context.Context, req any, _ *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (any, error) {
-		username, err := validateBasicAuth(ctx, provider)
-		if err != nil {
-			return nil, err
-		}
-
-		newCtx := context.WithValue(ctx, auth.Username, username)
-
-		return handler(newCtx, req)
-	}
+	return NewAuthUnaryInterceptor(func(ctx context.Context) (any, error) {
+		return validateBasicAuth(ctx, provider)
+	}, auth.Username)
 }
 
 // BasicAuthStreamInterceptor returns a gRPC stream server interceptor that validates the Basic Auth credentials.
 func BasicAuthStreamInterceptor(provider BasicAuthProvider) grpc.StreamServerInterceptor {
-	return func(srv any, ss grpc.ServerStream, _ *grpc.StreamServerInfo, handler grpc.StreamHandler) error {
-		username, err := validateBasicAuth(ss.Context(), provider)
-		if err != nil {
-			return err
-		}
-
-		wrapped := &wrappedStream{ss, context.WithValue(ss.Context(), auth.Username, username)}
-
-		return handler(srv, wrapped)
-	}
+	return NewAuthStreamInterceptor(func(ctx context.Context) (any, error) {
+		return validateBasicAuth(ctx, provider)
+	}, auth.Username)
 }
 
 func validateBasicAuth(ctx context.Context, provider BasicAuthProvider) (string, error) {

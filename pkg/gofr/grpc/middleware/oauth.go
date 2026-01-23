@@ -28,16 +28,9 @@ func OAuthUnaryInterceptor(key auth.PublicKeyProvider, options ...jwt.ParserOpti
 
 	options = append(options, jwt.WithIssuedAt())
 
-	return func(ctx context.Context, req any, _ *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (any, error) {
-		claims, err := validateOAuth(ctx, key, regex, options...)
-		if err != nil {
-			return nil, err
-		}
-
-		newCtx := context.WithValue(ctx, auth.JWTClaim, claims)
-
-		return handler(newCtx, req)
-	}
+	return NewAuthUnaryInterceptor(func(ctx context.Context) (any, error) {
+		return validateOAuth(ctx, key, regex, options...)
+	}, auth.JWTClaim)
 }
 
 // OAuthStreamInterceptor returns a gRPC stream server interceptor that validates the OAuth token.
@@ -46,17 +39,9 @@ func OAuthStreamInterceptor(key auth.PublicKeyProvider, options ...jwt.ParserOpt
 
 	options = append(options, jwt.WithIssuedAt())
 
-	return func(srv any, ss grpc.ServerStream, _ *grpc.StreamServerInfo, handler grpc.StreamHandler) error {
-		claims, err := validateOAuth(ss.Context(), key, regex, options...)
-		if err != nil {
-			return err
-		}
-
-		// We need to wrap the stream to inject the new context containing the claims.
-		wrapped := &wrappedStream{ss, context.WithValue(ss.Context(), auth.JWTClaim, claims)}
-
-		return handler(srv, wrapped)
-	}
+	return NewAuthStreamInterceptor(func(ctx context.Context) (any, error) {
+		return validateOAuth(ctx, key, regex, options...)
+	}, auth.JWTClaim)
 }
 
 func validateOAuth(ctx context.Context, key auth.PublicKeyProvider, regex *regexp.Regexp,
