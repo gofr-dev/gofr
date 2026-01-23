@@ -196,9 +196,8 @@ When running multiple instances of your application (e.g., in Kubernetes or Dock
 - Heartbeat: Refreshes every 5 seconds for long migrations
 
 **Retry Behavior:**
-- Max retries: 140 attempts
+- Max retries: Indefinite (pods wait until migration is complete)
 - Retry interval: 500ms
-- Total wait time: ~70 seconds
 
 ### What This Means for You
 

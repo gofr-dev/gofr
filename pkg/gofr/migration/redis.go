@@ -134,7 +134,7 @@ func (m *redisMigrator) rollback(c *container.Container, data transactionData) {
 }
 
 func (*redisMigrator) Lock(c *container.Container) error {
-	for i := 0; i < maxRetries; i++ {
+	for i := 0; ; i++ {
 		status, err := c.Redis.SetNX(context.Background(), lockKey, redisLockValue, redisLockTTL).Result()
 		if err == nil && status {
 			c.Debug("Redis lock acquired successfully")
@@ -148,11 +148,9 @@ func (*redisMigrator) Lock(c *container.Container) error {
 			return errLockAcquisitionFailed
 		}
 
-		c.Debugf("Redis lock already held, retrying in %v... (attempt %d/%d)", retryInterval, i+1, maxRetries)
+		c.Debugf("Redis lock already held, retrying in %v... (attempt %d)", retryInterval, i+1)
 		time.Sleep(retryInterval)
 	}
-
-	return errLockAcquisitionFailed
 }
 
 func (*redisMigrator) Unlock(c *container.Container) error {

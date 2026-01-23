@@ -148,7 +148,7 @@ func (d *sqlMigrator) rollback(c *container.Container, data transactionData) {
 }
 
 func (*sqlMigrator) Lock(c *container.Container) error {
-	for i := 0; i < maxRetries; i++ {
+	for i := 0; ; i++ {
 		// 1. Clean up expired locks
 		_, _ = c.SQL.Exec("DELETE FROM gofr_migration_locks WHERE expires_at < ?", time.Now())
 
@@ -162,11 +162,9 @@ func (*sqlMigrator) Lock(c *container.Container) error {
 			return nil
 		}
 
-		c.Debugf("SQL lock already held, retrying in %v... (attempt %d/%d)", retryInterval, i+1, maxRetries)
+		c.Debugf("SQL lock already held, retrying in %v... (attempt %d)", retryInterval, i+1)
 		time.Sleep(retryInterval)
 	}
-
-	return errLockAcquisitionFailed
 }
 
 func (*sqlMigrator) Unlock(c *container.Container) error {
