@@ -24,6 +24,7 @@ type Manager interface {
 	RecordHistogram(ctx context.Context, name string, value float64, labels ...string)
 	SetGauge(name string, value float64, labels ...string)
 
+	Flush(ctx context.Context) error
 	Shutdown(ctx context.Context) error
 }
 
@@ -33,6 +34,8 @@ type Logger interface {
 	Errorf(format string, args ...any)
 	Warn(args ...any)
 	Warnf(format string, args ...any)
+	Info(args ...any)
+	Infof(format string, args ...any)
 }
 
 type metricsManager struct {

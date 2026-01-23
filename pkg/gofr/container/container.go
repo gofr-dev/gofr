@@ -125,11 +125,8 @@ func (c *Container) Create(conf config.Config) {
 		flush func(context.Context) error
 	)
 
-	if pushGateway := conf.Get("METRICS_PUSH_GATEWAY_URL"); pushGateway != "" {
-		jobName := conf.GetOrDefault("METRICS_PUSH_GATEWAY_JOB_NAME", "gofr_app")
-		interval, _ := strconv.Atoi(conf.GetOrDefault("METRICS_PUSH_GATEWAY_INTERVAL", "15"))
-
-		meter, flush = exporters.PrometheusPush(c.GetAppName(), c.GetAppVersion(), pushGateway, jobName, interval)
+	if logExport, _ := strconv.ParseBool(conf.Get("METRICS_LOG_EXPORT")); logExport {
+		meter, flush = exporters.Log(c.GetAppName(), c.GetAppVersion(), c.Logger)
 	} else {
 		meter = exporters.Prometheus(c.GetAppName(), c.GetAppVersion())
 	}

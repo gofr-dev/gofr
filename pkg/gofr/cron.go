@@ -117,6 +117,8 @@ func (j *job) run(cntnr *container.Container) {
 			} else {
 				m.IncrementCounter(ctx, "app_cron_job_success", "job", j.name)
 			}
+
+			_ = m.Flush(ctx)
 		} else if r := recover(); r != nil {
 			c.Errorf("Panic in cron job %s: %v", j.name, r)
 		}

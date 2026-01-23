@@ -258,6 +258,7 @@ func TestCronTab_runScheduled(t *testing.T) {
 	mocks.Metrics.EXPECT().IncrementCounter(gomock.Any(), "app_cron_job_total", "job", "test-job").Times(1)
 	mocks.Metrics.EXPECT().IncrementCounter(gomock.Any(), "app_cron_job_success", "job", "test-job").Times(1)
 	mocks.Metrics.EXPECT().RecordHistogram(gomock.Any(), "app_cron_job_duration", gomock.Any(), "job", "test-job").Times(1)
+	mocks.Metrics.EXPECT().Flush(gomock.Any()).Return(nil).Times(1)
 
 	c := NewCron(mockContainer)
 

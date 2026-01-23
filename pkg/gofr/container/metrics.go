@@ -12,4 +12,7 @@ type Metrics interface {
 	DeltaUpDownCounter(ctx context.Context, name string, value float64, labels ...string)
 	RecordHistogram(ctx context.Context, name string, value float64, labels ...string)
 	SetGauge(name string, value float64, labels ...string)
+
+	Flush(ctx context.Context) error
+	Shutdown(ctx context.Context) error
 }

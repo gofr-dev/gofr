@@ -159,6 +159,20 @@ func (mr *MockMetricsMockRecorder) SetGauge(name, value any, labels ...any) *gom
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetGauge", reflect.TypeOf((*MockMetrics)(nil).SetGauge), varargs...)
 }
 
+// Flush mocks base method.
+func (m *MockMetrics) Flush(ctx context.Context) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Flush", ctx)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// Flush indicates an expected call of Flush.
+func (mr *MockMetricsMockRecorder) Flush(ctx any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Flush", reflect.TypeOf((*MockMetrics)(nil).Flush), ctx)
+}
+
 // Shutdown mocks base method.
 func (m *MockMetrics) Shutdown(ctx context.Context) error {
 	m.ctrl.T.Helper()
