@@ -11,7 +11,7 @@ import (
 
 const (
 	// redisLockTTL is the time-to-live for the redis lock to ensure it's released if the process crashes.
-	redisLockTTL = 60 * time.Second
+	redisLockTTL = 10 * time.Second
 	// redisLockValue is the value stored in the redis lock key.
 	redisLockValue = "1"
 )
@@ -164,6 +164,17 @@ func (*redisMigrator) Unlock(c *container.Container) error {
 	}
 
 	c.Debug("Redis lock released successfully")
+
+	return nil
+}
+
+func (*redisMigrator) Refresh(c *container.Container) error {
+	err := c.Redis.Expire(context.Background(), lockKey, redisLockTTL).Err()
+	if err != nil {
+		return err
+	}
+
+	c.Debug("Redis lock refreshed successfully")
 
 	return nil
 }

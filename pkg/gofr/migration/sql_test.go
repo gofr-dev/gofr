@@ -5,6 +5,7 @@ import (
 	"errors"
 	"testing"
 
+	"github.com/DATA-DOG/go-sqlmock"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
@@ -238,6 +239,7 @@ func TestCheckAndCreateMigrationTableSuccess(t *testing.T) {
 	mockMigrator.EXPECT().checkAndCreateMigrationTable(mockContainer)
 
 	mocks.SQL.ExpectExec(createSQLGoFrMigrationsTable).WillReturnResult(mocks.SQL.NewResult(1, 1))
+	mocks.SQL.ExpectExec(createSQLGoFrMigrationLocksTable).WillReturnResult(mocks.SQL.NewResult(1, 1))
 
 	migrator := sqlMigrator{
 		SQL:      mockContainer.SQL,
@@ -402,8 +404,6 @@ func TestCheckAndCreateMigrationTable_ErrorCreatingTable(t *testing.T) {
 	assert.Contains(t, err.Error(), "create table error")
 }
 
-var errBegin = errors.New("begin error")
-
 func TestSQLMigrator_Lock(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	t.Cleanup(ctrl.Finish)
@@ -411,12 +411,16 @@ func TestSQLMigrator_Lock(t *testing.T) {
 	mockContainer, mocks := container.NewMockContainer(t)
 	m := sqlMigrator{SQL: mockContainer.SQL}
 
-	t.Run("BeginTransactionError", func(t *testing.T) {
-		mocks.SQL.ExpectBegin().WillReturnError(errBegin)
+	t.Run("LockSuccess", func(t *testing.T) {
+		mocks.SQL.ExpectExec("DELETE FROM gofr_migration_locks WHERE expires_at < ?").
+			WithArgs(sqlmock.AnyArg()).
+			WillReturnResult(mocks.SQL.NewResult(0, 0))
+		mocks.SQL.ExpectExec("INSERT INTO gofr_migration_locks (lock_key, expires_at) VALUES (?, ?)").
+			WithArgs(lockKey, sqlmock.AnyArg()).
+			WillReturnResult(mocks.SQL.NewResult(1, 1))
 
 		err := m.Lock(mockContainer)
-		require.Error(t, err)
-		assert.Equal(t, errLockAcquisitionFailed, err)
+		require.NoError(t, err)
 	})
 }
 
@@ -424,11 +428,32 @@ func TestSQLMigrator_Unlock(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	t.Cleanup(ctrl.Finish)
 
-	mockContainer, _ := container.NewMockContainer(t)
+	mockContainer, mocks := container.NewMockContainer(t)
 	m := sqlMigrator{SQL: mockContainer.SQL}
 
-	t.Run("NoLockHeld", func(t *testing.T) {
+	t.Run("UnlockSuccess", func(t *testing.T) {
+		mocks.SQL.ExpectExec("DELETE FROM gofr_migration_locks WHERE lock_key = ?").
+			WithArgs(lockKey).
+			WillReturnResult(mocks.SQL.NewResult(0, 1))
+
 		err := m.Unlock(mockContainer)
+		require.NoError(t, err)
+	})
+}
+
+func TestSQLMigrator_Refresh(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	t.Cleanup(ctrl.Finish)
+
+	mockContainer, mocks := container.NewMockContainer(t)
+	m := sqlMigrator{SQL: mockContainer.SQL}
+
+	t.Run("RefreshSuccess", func(t *testing.T) {
+		mocks.SQL.ExpectExec("UPDATE gofr_migration_locks SET expires_at = ? WHERE lock_key = ?").
+			WithArgs(sqlmock.AnyArg(), lockKey).
+			WillReturnResult(mocks.SQL.NewResult(0, 1))
+
+		err := m.Refresh(mockContainer)
 		require.NoError(t, err)
 	})
 }

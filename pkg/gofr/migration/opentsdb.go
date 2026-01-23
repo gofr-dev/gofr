@@ -59,14 +59,20 @@ func (om *openTSDBMigrator) checkAndCreateMigrationTable(c *container.Container)
 	// Check if file exists and is readable
 	if _, err := os.Stat(om.filePath); err == nil {
 		// File exists, validate it's proper JSON
-		return om.validateExistingFile(c)
+		if err := om.validateExistingFile(c); err != nil {
+			return err
+		}
 	} else if !os.IsNotExist(err) {
 		// Some other error accessing the file
 		return fmt.Errorf("unexpected error stating migration file: %w", err)
+	} else {
+		// File doesn't exist, create empty migration file
+		if err := om.createEmptyMigrationFile(c); err != nil {
+			return err
+		}
 	}
 
-	// File doesn't exist, create empty migration file
-	return om.createEmptyMigrationFile(c)
+	return om.migrator.checkAndCreateMigrationTable(c)
 }
 
 // validateExistingFile checks if the existing migration file is valid JSON.
@@ -286,6 +292,10 @@ func (*openTSDBMigrator) Lock(*container.Container) error {
 }
 
 func (*openTSDBMigrator) Unlock(*container.Container) error {
+	return nil
+}
+
+func (*openTSDBMigrator) Refresh(*container.Container) error {
 	return nil
 }
 

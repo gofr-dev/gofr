@@ -43,7 +43,7 @@ func (s *scyllaMigrator) checkAndCreateMigrationTable(c *container.Container) er
 		return err
 	}
 
-	return nil
+	return s.migrator.checkAndCreateMigrationTable(c)
 }
 
 type migrationRow struct {
@@ -111,6 +111,10 @@ func (*scyllaMigrator) Lock(*container.Container) error {
 }
 
 func (*scyllaMigrator) Unlock(*container.Container) error {
+	return nil
+}
+
+func (*scyllaMigrator) Refresh(*container.Container) error {
 	return nil
 }
 

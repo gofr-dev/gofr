@@ -67,6 +67,15 @@ func TestMigrationRunElasticsearchSuccess(t *testing.T) {
 
 		mockElasticsearch, mockContainer := initializeElasticsearchRunMocks(t)
 
+		// Pre-check
+		mockElasticsearch.EXPECT().Search(gomock.Any(), []string{elasticsearchMigrationIndex},
+			getLastElasticsearchMigrationQuery()).
+			Return(map[string]any{
+				"hits": map[string]any{
+					"hits": []any{},
+				},
+			}, nil)
+
 		// Mock the migration index check (index doesn't exist initially)
 		mockElasticsearch.EXPECT().Search(gomock.Any(), []string{elasticsearchMigrationIndex}, gomock.Any()).
 			Return(nil, assert.AnError)
@@ -75,7 +84,7 @@ func TestMigrationRunElasticsearchSuccess(t *testing.T) {
 		mockElasticsearch.EXPECT().CreateIndex(gomock.Any(), elasticsearchMigrationIndex, gomock.Any()).
 			Return(nil)
 
-		// Mock the last migration query (no migrations yet)
+		// Re-fetch after lock
 		mockElasticsearch.EXPECT().Search(gomock.Any(), []string{elasticsearchMigrationIndex},
 			getLastElasticsearchMigrationQuery()).
 			Return(map[string]any{
@@ -116,6 +125,15 @@ func TestMigrationRunElasticsearchMigrationFailure(t *testing.T) {
 			}},
 		}
 
+		// Pre-check
+		mockElasticsearch.EXPECT().Search(gomock.Any(), []string{elasticsearchMigrationIndex},
+			getLastElasticsearchMigrationQuery()).
+			Return(map[string]any{
+				"hits": map[string]any{
+					"hits": []any{},
+				},
+			}, nil)
+
 		// Mock the migration index check (index doesn't exist initially)
 		mockElasticsearch.EXPECT().Search(gomock.Any(), []string{elasticsearchMigrationIndex}, gomock.Any()).
 			Return(nil, assert.AnError)
@@ -124,7 +142,7 @@ func TestMigrationRunElasticsearchMigrationFailure(t *testing.T) {
 		mockElasticsearch.EXPECT().CreateIndex(gomock.Any(), elasticsearchMigrationIndex, gomock.Any()).
 			Return(nil)
 
-		// Mock the last migration query (no migrations yet)
+		// Re-fetch after lock
 		mockElasticsearch.EXPECT().Search(gomock.Any(), []string{elasticsearchMigrationIndex},
 			getLastElasticsearchMigrationQuery()).
 			Return(map[string]any{
@@ -153,6 +171,15 @@ func TestMigrationRunElasticsearchMigrationFailureWhileCheckingTable(t *testing.
 			}},
 		}
 
+		// Pre-check
+		mockElasticsearch.EXPECT().Search(gomock.Any(), []string{elasticsearchMigrationIndex},
+			getLastElasticsearchMigrationQuery()).
+			Return(map[string]any{
+				"hits": map[string]any{
+					"hits": []any{},
+				},
+			}, nil)
+
 		// Mock the migration index check failure
 		mockElasticsearch.EXPECT().Search(gomock.Any(), []string{elasticsearchMigrationIndex}, gomock.Any()).
 			Return(nil, assert.AnError)
@@ -168,42 +195,30 @@ func TestMigrationRunElasticsearchMigrationFailureWhileCheckingTable(t *testing.
 }
 
 func TestMigrationRunElasticsearchCurrentMigrationEqualLastMigration(t *testing.T) {
-	logs := testutil.StdoutOutputForFunc(func() {
-		migrationMap := map[int64]Migrate{
-			1: {UP: func(_ Datasource) error {
-				return nil
-			}},
-		}
+	migrationMap := map[int64]Migrate{
+		1: {UP: func(_ Datasource) error {
+			return nil
+		}},
+	}
 
-		mockElasticsearch, mockContainer := initializeElasticsearchRunMocks(t)
+	mockElasticsearch, mockContainer := initializeElasticsearchRunMocks(t)
 
-		// Mock the migration index check (index doesn't exist initially)
-		mockElasticsearch.EXPECT().Search(gomock.Any(), []string{elasticsearchMigrationIndex}, gomock.Any()).
-			Return(nil, assert.AnError)
-
-		// Mock the migration index creation
-		mockElasticsearch.EXPECT().CreateIndex(gomock.Any(), elasticsearchMigrationIndex, gomock.Any()).
-			Return(nil)
-
-		// Mock the last migration query (migration 1 already exists)
-		mockElasticsearch.EXPECT().Search(gomock.Any(), []string{elasticsearchMigrationIndex},
-			getLastElasticsearchMigrationQuery()).
-			Return(map[string]any{
-				"hits": map[string]any{
-					"hits": []any{
-						map[string]any{
-							"_source": map[string]any{
-								"version": float64(1),
-							},
+	// Pre-check returns 1, so migration 1 is skipped immediately
+	mockElasticsearch.EXPECT().Search(gomock.Any(), []string{elasticsearchMigrationIndex},
+		getLastElasticsearchMigrationQuery()).
+		Return(map[string]any{
+			"hits": map[string]any{
+				"hits": []any{
+					map[string]any{
+						"_source": map[string]any{
+							"version": float64(1),
 						},
 					},
 				},
-			}, nil)
+			},
+		}, nil)
 
-		Run(migrationMap, mockContainer)
-	})
-
-	assert.Contains(t, logs, "skipping migration 1")
+	Run(migrationMap, mockContainer)
 }
 
 func TestMigrationRunElasticsearchCommitError(t *testing.T) {
@@ -221,6 +236,15 @@ func TestMigrationRunElasticsearchCommitError(t *testing.T) {
 
 		mockElasticsearch, mockContainer := initializeElasticsearchRunMocks(t)
 
+		// Pre-check
+		mockElasticsearch.EXPECT().Search(gomock.Any(), []string{elasticsearchMigrationIndex},
+			getLastElasticsearchMigrationQuery()).
+			Return(map[string]any{
+				"hits": map[string]any{
+					"hits": []any{},
+				},
+			}, nil)
+
 		// Mock the migration index check (index doesn't exist initially)
 		mockElasticsearch.EXPECT().Search(gomock.Any(), []string{elasticsearchMigrationIndex}, gomock.Any()).
 			Return(nil, assert.AnError)
@@ -229,7 +253,7 @@ func TestMigrationRunElasticsearchCommitError(t *testing.T) {
 		mockElasticsearch.EXPECT().CreateIndex(gomock.Any(), elasticsearchMigrationIndex, gomock.Any()).
 			Return(nil)
 
-		// Mock the last migration query (no migrations yet)
+		// Re-fetch after lock
 		mockElasticsearch.EXPECT().Search(gomock.Any(), []string{elasticsearchMigrationIndex},
 			getLastElasticsearchMigrationQuery()).
 			Return(map[string]any{

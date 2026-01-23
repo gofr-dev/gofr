@@ -60,13 +60,20 @@ func Run(migrationsMap map[int64]Migrate, c *container.Container) {
 		return
 	}
 
+	// Pre-check: only acquire locks if there are new migrations to run
+	lastMigration := mg.getLastMigration(c)
+	if !hasNewMigrations(keys, lastMigration) {
+		return
+	}
+
 	lockers := getLockers(mg)
-	acquiredLockers := acquireAllLocks(c, lockers)
+	acquiredLockers, stopHeartbeat := acquireAllLocks(c, lockers)
 
 	if acquiredLockers == nil && len(lockers) > 0 {
 		return
 	}
 
+	defer stopHeartbeat()
 	defer releaseAllLocks(c, acquiredLockers)
 
 	err := mg.checkAndCreateMigrationTable(c)
@@ -79,8 +86,18 @@ func Run(migrationsMap map[int64]Migrate, c *container.Container) {
 	runMigrations(c, mg, &ds, migrationsMap, keys)
 }
 
-func acquireAllLocks(c *container.Container, lockers []Locker) []Locker {
-	acquiredLockers := make([]Locker, 0, len(lockers))
+func hasNewMigrations(keys []int64, lastMigration int64) bool {
+	for _, k := range keys {
+		if k > lastMigration {
+			return true
+		}
+	}
+
+	return false
+}
+
+func acquireAllLocks(c *container.Container, lockers []Locker) (acquiredLockers []Locker, stopHeartbeat func()) {
+	acquiredLockers = make([]Locker, 0, len(lockers))
 
 	for _, l := range lockers {
 		err := l.Lock(c)
@@ -92,13 +109,43 @@ func acquireAllLocks(c *container.Container, lockers []Locker) []Locker {
 				_ = acquiredLockers[i].Unlock(c)
 			}
 
-			return nil
+			return nil, func() {}
 		}
 
 		acquiredLockers = append(acquiredLockers, l)
 	}
 
-	return acquiredLockers
+	if len(acquiredLockers) == 0 {
+		return nil, func() {}
+	}
+
+	stopChan := make(chan struct{})
+
+	go func() {
+		// Refresh every 5 seconds for a 10-second TTL
+		const refreshInterval = 5
+
+		ticker := time.NewTicker(refreshInterval * time.Second)
+		defer ticker.Stop()
+
+		for {
+			select {
+			case <-ticker.C:
+				for _, l := range acquiredLockers {
+					err := l.Refresh(c)
+					if err != nil {
+						c.Errorf("failed to refresh migration lock for %s, err: %v", l.Name(), err)
+					}
+				}
+			case <-stopChan:
+				return
+			}
+		}
+	}()
+
+	stopHeartbeat = func() { close(stopChan) }
+
+	return acquiredLockers, stopHeartbeat
 }
 
 func releaseAllLocks(c *container.Container, acquiredLockers []Locker) {

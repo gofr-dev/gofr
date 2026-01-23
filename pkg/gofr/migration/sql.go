@@ -17,17 +17,21 @@ const (
     constraint primary_key primary key (version, method)
 );`
 
+	createSQLGoFrMigrationLocksTable = `CREATE TABLE IF NOT EXISTS gofr_migration_locks (
+    lock_key VARCHAR(255) PRIMARY KEY,
+    expires_at TIMESTAMP NOT NULL
+);`
+
 	getLastSQLGoFrMigration = `SELECT COALESCE(MAX(version), 0) FROM gofr_migrations;`
 
-	insertGoFrMigrationRowMySQL = `INSERT INTO gofr_migrations (version, method, start_time,duration) VALUES (?, ?, ?, ?);`
-
+	insertGoFrMigrationRowMySQL    = `INSERT INTO gofr_migrations (version, method, start_time,duration) VALUES (?, ?, ?, ?);`
 	insertGoFrMigrationRowPostgres = `INSERT INTO gofr_migrations (version, method, start_time,duration) VALUES ($1, $2, $3, $4);`
 
 	mysql    = "mysql"
 	postgres = "postgres"
 	sqlite   = "sqlite"
 
-	sqlLockTimeout = 1 // timeout in seconds for GET_LOCK
+	sqlLockTTL = 10 * time.Second
 )
 
 // database/sql is the package imported so named it sqlDS.
@@ -46,11 +50,14 @@ type sqlMigrator struct {
 	SQL
 
 	migrator
-	lockTx *gofrSql.Tx
 }
 
 func (d *sqlMigrator) checkAndCreateMigrationTable(c *container.Container) error {
 	if _, err := c.SQL.Exec(createSQLGoFrMigrationsTable); err != nil {
+		return err
+	}
+
+	if _, err := c.SQL.Exec(createSQLGoFrMigrationLocksTable); err != nil {
 		return err
 	}
 
@@ -140,96 +147,52 @@ func (d *sqlMigrator) rollback(c *container.Container, data transactionData) {
 	c.Fatalf("Migration %v failed and rolled back", data.MigrationNumber)
 }
 
-func (d *sqlMigrator) Lock(c *container.Container) error {
-	// Start a transaction to get a dedicated connection from the pool
-	tx, err := c.SQL.Begin()
-	if err != nil {
-		c.Errorf("unable to begin transaction for lock: %v", err)
-
-		return errLockAcquisitionFailed
-	}
-
-	d.lockTx = tx
-
+func (*sqlMigrator) Lock(c *container.Container) error {
 	for i := 0; i < maxRetries; i++ {
-		var status int
+		// 1. Clean up expired locks
+		_, _ = c.SQL.Exec("DELETE FROM gofr_migration_locks WHERE expires_at < ?", time.Now())
 
-		var err error
+		// 2. Try to acquire lock
+		expiresAt := time.Now().Add(sqlLockTTL)
 
-		switch c.SQL.Dialect() {
-		case mysql:
-			// GET_LOCK returns 1 if acquired, 0 if timed out, NULL on error.
-			// We use a short 1s timeout in the DB and retry in Go for better control.
-			err = tx.QueryRow("SELECT GET_LOCK(?, ?)", lockKey, sqlLockTimeout).Scan(&status)
-		case postgres:
-			// pg_try_advisory_lock returns true if acquired, false otherwise.
-			var pgStatus bool
-
-			err = tx.QueryRow("SELECT pg_try_advisory_lock(hashtext(?))", lockKey).Scan(&pgStatus)
-			if pgStatus {
-				status = 1
-			}
-		}
-
-		if err == nil && status == 1 {
+		_, err := c.SQL.Exec("INSERT INTO gofr_migration_locks (lock_key, expires_at) VALUES (?, ?)", lockKey, expiresAt)
+		if err == nil {
 			c.Debug("SQL lock acquired successfully")
 
 			return nil
-		}
-
-		if err != nil {
-			_ = tx.Rollback()
-
-			c.Errorf("error while acquiring SQL lock: %v", err)
-
-			return errLockAcquisitionFailed
 		}
 
 		c.Debugf("SQL lock already held, retrying in %v... (attempt %d/%d)", retryInterval, i+1, maxRetries)
 		time.Sleep(retryInterval)
 	}
 
-	_ = tx.Rollback()
-
 	return errLockAcquisitionFailed
 }
 
-func (d *sqlMigrator) Unlock(c *container.Container) error {
-	if d.lockTx == nil {
-		return nil
+func (*sqlMigrator) Unlock(c *container.Container) error {
+	_, err := c.SQL.Exec("DELETE FROM gofr_migration_locks WHERE lock_key = ?", lockKey)
+	if err != nil {
+		c.Errorf("unable to release SQL lock: %v", err)
+
+		return errLockReleaseFailed
 	}
 
-	defer func() {
-		d.lockTx = nil
-	}()
+	c.Debug("SQL lock released successfully")
 
-	switch c.SQL.Dialect() {
-	case mysql:
-		_, err := d.lockTx.Exec("SELECT RELEASE_LOCK(?)", lockKey)
-		if err != nil {
-			_ = d.lockTx.Rollback()
+	return nil
+}
 
-			c.Errorf("unable to release lock: %v", err)
+func (*sqlMigrator) Refresh(c *container.Container) error {
+	expiresAt := time.Now().Add(sqlLockTTL)
 
-			return errLockReleaseFailed
-		}
-
-		c.Debug("SQL lock released successfully")
-	case postgres:
-		_, err := d.lockTx.Exec("SELECT pg_advisory_unlock(hashtext(?))", lockKey)
-		if err != nil {
-			_ = d.lockTx.Rollback()
-
-			c.Errorf("unable to release lock: %v", err)
-
-			return errLockReleaseFailed
-		}
-
-		c.Debug("SQL lock released successfully")
+	_, err := c.SQL.Exec("UPDATE gofr_migration_locks SET expires_at = ? WHERE lock_key = ?", expiresAt, lockKey)
+	if err != nil {
+		return err
 	}
 
-	// Rolling back or committing the transaction will release the connection back to the pool.
-	return d.lockTx.Rollback()
+	c.Debug("SQL lock refreshed successfully")
+
+	return nil
 }
 
 func (d *sqlMigrator) Next() migrator {

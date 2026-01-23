@@ -29,13 +29,13 @@ func (ds mongoDS) apply(m migrator) migrator {
 }
 
 // checkAndCreateMigrationTable initializes a MongoDB collection if it doesn't exist.
-func (mg *mongoMigrator) checkAndCreateMigrationTable(_ *container.Container) error {
+func (mg *mongoMigrator) checkAndCreateMigrationTable(c *container.Container) error {
 	err := mg.Mongo.CreateCollection(context.Background(), mongoMigrationCollection)
 	if err != nil {
 		return err
 	}
 
-	return nil
+	return mg.migrator.checkAndCreateMigrationTable(c)
 }
 
 // getLastMigration retrieves the latest migration version from MongoDB.
@@ -98,6 +98,10 @@ func (*mongoMigrator) Lock(*container.Container) error {
 }
 
 func (*mongoMigrator) Unlock(*container.Container) error {
+	return nil
+}
+
+func (*mongoMigrator) Refresh(*container.Container) error {
 	return nil
 }
 

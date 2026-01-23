@@ -62,11 +62,12 @@ func (om *oracleMigrator) checkAndCreateMigrationTable(c *container.Container) e
 	err := om.Oracle.Exec(context.Background(), checkAndCreateOracleMigrationTable)
 	if err != nil {
 		c.Errorf("Failed to create Oracle migration table: %v", err)
-	} else {
-		c.Infof("Oracle migration table checked/created successfully")
+		return err
 	}
 
-	return err
+	c.Infof("Oracle migration table checked/created successfully")
+
+	return om.migrator.checkAndCreateMigrationTable(c)
 }
 
 // Get the last applied migration version.
@@ -198,6 +199,10 @@ func (*oracleMigrator) Lock(*container.Container) error {
 }
 
 func (*oracleMigrator) Unlock(*container.Container) error {
+	return nil
+}
+
+func (*oracleMigrator) Refresh(*container.Container) error {
 	return nil
 }
 

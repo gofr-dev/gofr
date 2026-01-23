@@ -112,6 +112,10 @@ func (*clickHouseMigrator) Unlock(*container.Container) error {
 	return nil
 }
 
+func (*clickHouseMigrator) Refresh(*container.Container) error {
+	return nil
+}
+
 func (ch *clickHouseMigrator) Next() migrator {
 	return ch.migrator
 }

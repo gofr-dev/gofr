@@ -65,7 +65,7 @@ func getMigrationTableQueries() []string {
 	}
 }
 
-func (s *surrealMigrator) checkAndCreateMigrationTable(*container.Container) error {
+func (s *surrealMigrator) checkAndCreateMigrationTable(c *container.Container) error {
 	if _, err := s.SurrealDB.Query(context.Background(), "USE NS test DB test", nil); err != nil {
 		return err
 	}
@@ -77,7 +77,7 @@ func (s *surrealMigrator) checkAndCreateMigrationTable(*container.Container) err
 		}
 	}
 
-	return nil
+	return s.migrator.checkAndCreateMigrationTable(c)
 }
 
 func (s *surrealMigrator) getLastMigration(c *container.Container) int64 {
@@ -141,6 +141,10 @@ func (*surrealMigrator) Lock(*container.Container) error {
 }
 
 func (*surrealMigrator) Unlock(*container.Container) error {
+	return nil
+}
+
+func (*surrealMigrator) Refresh(*container.Container) error {
 	return nil
 }
 

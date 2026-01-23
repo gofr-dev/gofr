@@ -160,7 +160,7 @@ func TestRedisMigrator_Lock(t *testing.T) {
 	m := redisMigrator{Redis: mocks.Redis}
 
 	t.Run("Success", func(t *testing.T) {
-		mocks.Redis.EXPECT().SetNX(gomock.Any(), lockKey, "1", 60*time.Second).
+		mocks.Redis.EXPECT().SetNX(gomock.Any(), lockKey, "1", 10*time.Second).
 			Return(goRedis.NewBoolResult(true, nil))
 
 		err := m.Lock(c)
@@ -169,11 +169,11 @@ func TestRedisMigrator_Lock(t *testing.T) {
 
 	t.Run("RetrySuccess", func(t *testing.T) {
 		// First attempt fails (lock held)
-		mocks.Redis.EXPECT().SetNX(gomock.Any(), lockKey, "1", 60*time.Second).
+		mocks.Redis.EXPECT().SetNX(gomock.Any(), lockKey, "1", 10*time.Second).
 			Return(goRedis.NewBoolResult(false, nil))
 
 		// Second attempt succeeds
-		mocks.Redis.EXPECT().SetNX(gomock.Any(), lockKey, "1", 60*time.Second).
+		mocks.Redis.EXPECT().SetNX(gomock.Any(), lockKey, "1", 10*time.Second).
 			Return(goRedis.NewBoolResult(true, nil))
 
 		err := m.Lock(c)
@@ -181,7 +181,7 @@ func TestRedisMigrator_Lock(t *testing.T) {
 	})
 
 	t.Run("RedisError", func(t *testing.T) {
-		mocks.Redis.EXPECT().SetNX(gomock.Any(), lockKey, "1", 60*time.Second).
+		mocks.Redis.EXPECT().SetNX(gomock.Any(), lockKey, "1", 10*time.Second).
 			Return(goRedis.NewBoolResult(false, errRedis))
 
 		err := m.Lock(c)
@@ -212,5 +212,29 @@ func TestRedisMigrator_Unlock(t *testing.T) {
 		err := m.Unlock(c)
 		require.Error(t, err)
 		assert.Equal(t, errLockReleaseFailed, err)
+	})
+}
+
+func TestRedisMigrator_Refresh(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	t.Cleanup(ctrl.Finish)
+
+	c, mocks := container.NewMockContainer(t)
+	m := redisMigrator{Redis: mocks.Redis}
+
+	t.Run("Success", func(t *testing.T) {
+		mocks.Redis.EXPECT().Expire(gomock.Any(), lockKey, 10*time.Second).
+			Return(goRedis.NewBoolResult(true, nil))
+
+		err := m.Refresh(c)
+		require.NoError(t, err)
+	})
+
+	t.Run("Error", func(t *testing.T) {
+		mocks.Redis.EXPECT().Expire(gomock.Any(), lockKey, 10*time.Second).
+			Return(goRedis.NewBoolResult(false, errRedis))
+
+		err := m.Refresh(c)
+		require.Error(t, err)
 	})
 }

@@ -128,7 +128,11 @@ func TestOracleMigration_RunMigrationSuccess(t *testing.T) {
 	}
 
 	// Set up mock expectations in the correct order
+	// Pre-check
+	mockOracle.EXPECT().Select(gomock.Any(), gomock.Any(), getLastOracleGoFrMigration).Return(nil)
+
 	mockOracle.EXPECT().Exec(gomock.Any(), checkAndCreateOracleMigrationTable).Return(nil)
+	// Re-fetch after lock
 	mockOracle.EXPECT().Select(gomock.Any(), gomock.Any(), getLastOracleGoFrMigration).Return(nil)
 	mockOracle.EXPECT().Begin().Return(mockTx, nil)
 

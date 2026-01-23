@@ -183,6 +183,10 @@ func (*elasticsearchMigrator) Unlock(*container.Container) error {
 	return nil
 }
 
+func (*elasticsearchMigrator) Refresh(*container.Container) error {
+	return nil
+}
+
 func (em *elasticsearchMigrator) Next() migrator {
 	return em.migrator
 }

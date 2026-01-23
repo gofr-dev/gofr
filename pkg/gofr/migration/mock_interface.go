@@ -1451,6 +1451,20 @@ func (mr *MockmigratorMockRecorder) Name() *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Name", reflect.TypeOf((*Mockmigrator)(nil).Name))
 }
 
+// Refresh mocks base method.
+func (m *Mockmigrator) Refresh(c *container.Container) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Refresh", c)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// Refresh indicates an expected call of Refresh.
+func (mr *MockmigratorMockRecorder) Refresh(c any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Refresh", reflect.TypeOf((*Mockmigrator)(nil).Refresh), c)
+}
+
 // Unlock mocks base method.
 func (m *Mockmigrator) Unlock(c *container.Container) error {
 	m.ctrl.T.Helper()
@@ -1677,6 +1691,20 @@ func (m *MockLocker) Name() string {
 func (mr *MockLockerMockRecorder) Name() *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Name", reflect.TypeOf((*MockLocker)(nil).Name))
+}
+
+// Refresh mocks base method.
+func (m *MockLocker) Refresh(c *container.Container) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Refresh", c)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// Refresh indicates an expected call of Refresh.
+func (mr *MockLockerMockRecorder) Refresh(c any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Refresh", reflect.TypeOf((*MockLocker)(nil).Refresh), c)
 }
 
 // Unlock mocks base method.
