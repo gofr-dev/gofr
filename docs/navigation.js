@@ -80,9 +80,9 @@ export const navigation = [
                 desc: "Get familiar with making HTTP requests and handling responses within your GoFr application to facilitate seamless communication."
             },
             {
-                title: 'HTTP Authentication',
-                href: '/docs/advanced-guide/http-authentication',
-                desc: "Implement various HTTP authentication methods to secure your GoFR application and protect sensitive endpoints."
+                title: 'Authentication',
+                href: '/docs/advanced-guide/authentication',
+                desc: "Implement various authentication methods to secure your GoFR application and protect sensitive endpoints across HTTP and gRPC."
             },
             {
                 title: 'Role-Based Access Control (RBAC)',
@@ -163,11 +163,6 @@ export const navigation = [
                 title: 'Profiling in GoFr Applications',
                 href: '/docs/advanced-guide/debugging',
                 desc: "Discover GoFr auto-enables pprof profiling by leveraging its built-in configurations."
-            },
-            {
-                title: 'Adding Synchronous Startup Hooks',
-                href: '/docs/advanced-guide/startup-hooks',
-                desc: "Learn how to seed a database, warm up a cache, or perform other critical setup procedures, synchronously before starting your application."
             },
             {
                 title: 'Building CLI Applications',

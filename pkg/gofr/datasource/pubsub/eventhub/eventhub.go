@@ -3,8 +3,6 @@ package eventhub
 import (
 	"context"
 	"errors"
-	"fmt"
-	"os"
 	"strings"
 	"time"
 
@@ -108,10 +106,6 @@ func (c *Client) validConfigs(cfg Config) bool {
 		c.logger.Error("containerConnectionString cannot be an empty")
 	}
 
-	if cfg.ConsumerGroup == "" {
-		cfg.ConsumerGroup = azeventhubs.DefaultConsumerGroup
-	}
-
 	return ok
 }
 
@@ -143,8 +137,8 @@ func (c *Client) Connect() {
 	}
 
 	if c.cfg.ConsumerGroup == "" {
-		c.cfg.ConsumerGroup = c.generateUniqueConsumerGroup()
-		c.logger.Debugf("Auto-generated consumer group: %s", c.cfg.ConsumerGroup)
+		c.cfg.ConsumerGroup = azeventhubs.DefaultConsumerGroup
+		c.logger.Debugf("Using default consumer group: %s", c.cfg.ConsumerGroup)
 	} else {
 		c.logger.Debugf("Using provided consumer group: %s", c.cfg.ConsumerGroup)
 	}
@@ -222,26 +216,6 @@ func (c *Client) Connect() {
 	c.checkPoint = checkpointStore
 
 	c.logger.Debug("Event Hub client initialization complete")
-}
-
-// generateUniqueConsumerGroup creates a unique consumer group for this instance.
-func (*Client) generateUniqueConsumerGroup() string {
-	// Try environment variables first (Kubernetes/Docker)
-	if podName := os.Getenv("POD_NAME"); podName != "" {
-		return fmt.Sprintf("gofr-%s", podName)
-	}
-
-	if hostname := os.Getenv("HOSTNAME"); hostname != "" {
-		return fmt.Sprintf("gofr-%s", hostname)
-	}
-
-	// Fallback to system hostname + process ID.
-	if hostname, err := os.Hostname(); err == nil {
-		return fmt.Sprintf("gofr-%s-%d", hostname, os.Getpid())
-	}
-
-	// Final fallback.
-	return fmt.Sprintf("gofr-instance-%d", time.Now().UnixNano())
 }
 
 // Subscribe checks all partitions for the first available event and returns it.
