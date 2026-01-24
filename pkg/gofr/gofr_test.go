@@ -1235,3 +1235,20 @@ func TestApp_OnStart(t *testing.T) {
 		assert.Contains(t, err.Error(), "panicked", "Expected error message to mention panic")
 	})
 }
+func TestUnifiedAuthenticationRegistration(t *testing.T) {
+	t.Setenv("METRICS_PORT", "0")
+	t.Setenv("HTTP_PORT", strconv.Itoa(testutil.GetFreePort(t)))
+
+	app := New()
+
+	// Enable various auth methods
+	app.EnableBasicAuth("user", "pass")
+	app.EnableAPIKeyAuth("key1")
+	app.EnableOAuth("http://jwks", 3600)
+
+	// Verify HTTP middleware count (approximate check)
+	// We can't easily inspect the router's middleware slice directly without reflection or exposing it,
+	// but we can check if the grpcServer has interceptors added.
+	assert.GreaterOrEqual(t, len(app.grpcServer.interceptors), 2, "gRPC unary interceptors should be registered")
+	assert.GreaterOrEqual(t, len(app.grpcServer.streamInterceptors), 2, "gRPC stream interceptors should be registered")
+}
