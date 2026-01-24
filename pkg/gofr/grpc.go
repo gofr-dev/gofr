@@ -275,3 +275,7 @@ func (g *grpcServer) addServerOptions(opts ...grpc.ServerOption) {
 func (g *grpcServer) addUnaryInterceptors(interceptors ...grpc.UnaryServerInterceptor) {
 	g.interceptors = append(g.interceptors, interceptors...)
 }
+
+func (g *grpcServer) addStreamInterceptors(interceptors ...grpc.StreamServerInterceptor) {
+	g.streamInterceptors = append(g.streamInterceptors, interceptors...)
+}
