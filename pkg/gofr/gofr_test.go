@@ -66,6 +66,12 @@ func TestGoFr_isPortAvailable(t *testing.T) {
 			if !tt.isAvailable {
 				g := New()
 
+				// Register a route to ensure HTTP server starts
+				// (HTTP server only starts when user routes are registered)
+				g.GET("/test", func(*Context) (any, error) {
+					return "test", nil
+				})
+
 				go g.Run()
 
 				time.Sleep(100 * time.Millisecond)
