@@ -3,7 +3,7 @@ module gofr.dev/pkg/gofr/datasource/file/gcs
 go 1.25.0
 
 require (
-	cloud.google.com/go/storage v1.58.0
+	cloud.google.com/go/storage v1.59.1
 	github.com/stretchr/testify v1.11.1
 	go.uber.org/mock v0.6.0
 	gofr.dev v1.54.0
