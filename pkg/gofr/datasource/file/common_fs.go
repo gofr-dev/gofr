@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"io"
 	"os"
 	"path"
 	"strings"
@@ -393,7 +392,7 @@ func (c *CommonFileSystem) Getwd() (string, error) {
 // ============= File Operations (NEW) =============
 
 // Create creates a new file for writing.
-func (c *CommonFileSystem) Create(name string, opts ...*FileOptions) (File, error) {
+func (c *CommonFileSystem) Create(name string) (File, error) {
 	var msg string
 
 	st := StatusError
@@ -403,18 +402,8 @@ func (c *CommonFileSystem) Create(name string, opts ...*FileOptions) (File, erro
 
 	ctx := context.Background()
 
-	var writer io.WriteCloser
-	if len(opts) > 0 && opts[0] != nil {
-		if p, ok := c.Provider.(interface {
-			NewWriterWithOptions(context.Context, string, *FileOptions) io.WriteCloser
-		}); ok {
-			writer = p.NewWriterWithOptions(ctx, name, opts[0])
-		} else {
-			writer = c.Provider.NewWriter(ctx, name)
-		}
-	} else {
-		writer = c.Provider.NewWriter(ctx, name)
-	}
+	// Create writer
+	writer := c.Provider.NewWriter(ctx, name)
 
 	st = StatusSuccess
 	msg = fmt.Sprintf("Created %q for writing", name)
@@ -614,35 +603,6 @@ func (c *CommonFileSystem) Rename(oldname, newname string) error {
 	return nil
 }
 
-// SignedURL generates a signed URL for a file with specified expiry and options.
-func (c *CommonFileSystem) SignedURL(name string, expiry time.Duration, opts ...*FileOptions) (string, error) {
-	var msg string
-
-	st := StatusError
-	startTime := time.Now()
-
-	defer c.Observe(OpSignedURL, startTime, &st, &msg)
-
-	_ = context.Background()
-
-	// Delegate to provider
-	if p, ok := c.Provider.(interface {
-		SignedURL(string, time.Duration, ...*FileOptions) (string, error)
-	}); ok {
-		url, err := p.SignedURL(name, expiry, opts...)
-		if err != nil {
-			msg = fmt.Sprintf("failed to generate signed URL for %q: %v", name, err)
-			return "", err
-		}
-		st = StatusSuccess
-		msg = fmt.Sprintf("Generated signed URL for %q", name)
-		return url, nil
-	}
-
-	msg = "SignedURL not supported by this provider"
-	return "", fmt.Errorf("SignedURL not supported by this provider")
-}
-
 // getProviderName returns the provider name for observability.
 // If ProviderName is set, it returns that; otherwise returns "Common".
 func (c *CommonFileSystem) getProviderName() string {
@@ -687,34 +647,60 @@ func (c *CommonFileSystem) SetConnected(connected bool) {
 	c.connected = connected
 }
 
-// FileOptions allows setting metadata and other options for file operations.
-type FileOptions struct {
-	ContentType        string
-	ContentDisposition string
-	Metadata           map[string]string // for custom metadata, extensible
+func (c *CommonFileSystem) CreateWithOptions(ctx context.Context, name string, opts *FileOptions) (File, error) {
+	var msg string
+	st := StatusError
+	startTime := time.Now()
+	defer c.Observe(OpCreate, startTime, &st, &msg)
+
+	// Try metadata-aware writer
+	if mw, ok := c.Provider.(MetadataWriter); ok {
+		writer := mw.NewWriterWithOptions(ctx, name, opts)
+		if writer == nil {
+			msg = "failed to create writer with options"
+			return nil, errWriterNil
+		}
+		st = StatusSuccess
+		msg = fmt.Sprintf("Created %q with metadata", name)
+		return NewCommonFileWriter(c.Provider, name, writer, c.Logger, c.Metrics, c.Location), nil
+	}
+
+	// Fallback: provider doesn't support metadata
+	if c.Logger != nil && opts != nil {
+		c.Logger.Debugf("Provider %s does not support metadata; creating file without metadata", c.ProviderName)
+	}
+
+	writer := c.Provider.NewWriter(ctx, name)
+	if writer == nil {
+		msg = "failed to create writer"
+		return nil, errWriterNil
+	}
+
+	st = StatusSuccess
+	msg = fmt.Sprintf("Created %q (metadata not supported)", name)
+	return NewCommonFileWriter(c.Provider, name, writer, c.Logger, c.Metrics, c.Location), nil
 }
 
-// FileSystem interface defines methods for file operations.
-type FileSystem interface {
-	// Common operations
-	Connect(ctx context.Context) error
-	UseLogger(logger any)
-	UseMetrics(metrics any)
+func (c *CommonFileSystem) GenerateSignedURL(ctx context.Context, name string, expiry time.Duration, opts *FileOptions) (string, error) {
+	var msg string
 
-	// Directory operations
-	Mkdir(name string, perm os.FileMode) error
-	MkdirAll(dirPath string, perm os.FileMode) error
-	RemoveAll(dirPath string) error
-	ReadDir(dir string) ([]FileInfo, error)
-	Stat(name string) (FileInfo, error)
-	ChDir(dir string) error
-	Getwd() (string, error)
+	st := StatusError
+	startTime := time.Now()
+	defer c.Observe(OpSignedURL, startTime, &st, &msg)
 
-	// File operations
-	Create(name string, opts ...*FileOptions) (File, error)
-	Open(name string) (File, error)
-	OpenFile(name string, flag int, perm os.FileMode) (File, error)
-	Remove(name string) error
-	Rename(oldname, newname string) error
-	SignedURL(name string, expiry time.Duration, opts ...*FileOptions) (string, error)
+	signer, ok := c.Provider.(SignedURLProvider)
+	if !ok {
+		msg = fmt.Sprintf("provider %s does not support signed URLs", c.ProviderName)
+		return "", fmt.Errorf("%w: %s", ErrSignedURLsNotSupported, c.ProviderName)
+	}
+
+	url, err := signer.SignedURL(ctx, name, expiry, opts)
+	if err != nil {
+		msg = fmt.Sprintf("failed to generate signed URL: %v", err)
+		return "", fmt.Errorf("failed to generate signed URL for %q: %w", name, err)
+	}
+
+	st = StatusSuccess
+	msg = fmt.Sprintf("Generated signed URL for %q (expires in %v)", name, expiry)
+	return url, nil
 }

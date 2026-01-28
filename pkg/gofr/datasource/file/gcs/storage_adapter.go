@@ -2,6 +2,7 @@ package gcs
 
 import (
 	"context"
+	"crypto/x509"
 	"encoding/json"
 	"encoding/pem"
 	"errors"
@@ -152,13 +153,14 @@ func (s *storageAdapter) NewWriter(ctx context.Context, name string) io.WriteClo
 	return s.bucket.Object(name).NewWriter(ctx)
 }
 
-// NewWriterWithOptions creates a writer for the given object with metadata support.
+// NewWriterWithOptions implements MetadataWriter.
 func (s *storageAdapter) NewWriterWithOptions(ctx context.Context, name string, opts *file.FileOptions) io.WriteCloser {
 	if name == "" {
 		return &failWriter{err: errEmptyObjectName}
 	}
 
 	w := s.bucket.Object(name).NewWriter(ctx)
+
 	if opts != nil {
 		if opts.ContentType != "" {
 			w.ContentType = opts.ContentType
@@ -170,6 +172,7 @@ func (s *storageAdapter) NewWriterWithOptions(ctx context.Context, name string, 
 			w.Metadata = opts.Metadata
 		}
 	}
+
 	return w
 }
 
@@ -316,7 +319,8 @@ func (s *storageAdapter) ListDir(ctx context.Context, prefix string) ([]file.Obj
 }
 
 // SignedURL generates a signed URL for the given object with expiry and optional metadata.
-func (s *storageAdapter) SignedURL(_ context.Context, name string, expiry time.Duration, opts ...*file.FileOptions) (string, error) {
+// Accepts a single *file.FileOptions to match the SignedURLProvider signature.
+func (s *storageAdapter) SignedURL(_ context.Context, name string, expiry time.Duration, opts *file.FileOptions) (string, error) {
 	if s.cfg == nil || s.cfg.BucketName == "" {
 		return "", errors.New("GCS config or bucket name missing")
 	}
@@ -341,20 +345,41 @@ func (s *storageAdapter) SignedURL(_ context.Context, name string, expiry time.D
 		return "", errors.New("invalid private key PEM")
 	}
 
+	// Try to parse PKCS8, then PKCS1
+	var privKeyBytes []byte
+	if block.Type == "PRIVATE KEY" || block.Type == "RSA PRIVATE KEY" || block.Type == "PRIVATE KEY" {
+		privKeyBytes = block.Bytes
+	}
+
+	// Ensure key can be parsed by x509; storage.SignedURL expects []byte private key
+	// (Note: cloud.google.com/go/storage SignedURL uses google SignedURLOptions with PrivateKey []byte)
+	if _, err := x509.ParsePKCS8PrivateKey(privKeyBytes); err != nil {
+		if _, err2 := x509.ParsePKCS1PrivateKey(privKeyBytes); err2 != nil {
+			// If both parsers failed, still pass raw bytes — some PEMs work directly
+			// but return error if clearly invalid
+			return "", fmt.Errorf("failed to parse private key: %v / %v", err, err2)
+		}
+	}
+
 	optsStruct := &storage.SignedURLOptions{
 		GoogleAccessID: cred.ClientEmail,
-		PrivateKey:     block.Bytes,
+		PrivateKey:     privKeyBytes,
 		Method:         "GET",
 		Expires:        time.Now().Add(expiry),
 	}
 
 	// Set response headers if provided
-	if len(opts) > 0 && opts[0] != nil {
-		if opts[0].ContentType != "" {
-			optsStruct.ContentType = opts[0].ContentType
+	if opts != nil {
+		if opts.ContentType != "" {
+			optsStruct.ContentType = opts.ContentType
 		}
-		if opts[0].ContentDisposition != "" {
-			optsStruct.Headers = append(optsStruct.Headers, "response-content-disposition="+opts[0].ContentDisposition)
+		if opts.ContentDisposition != "" {
+			// GCS SignedURLOptions uses QueryParameters to set response headers
+			if optsStruct := optsStruct; optsStruct.Headers == nil {
+				optsStruct.Headers = []string{fmt.Sprintf("response-content-disposition=%s", opts.ContentDisposition)}
+			} else {
+				optsStruct.Headers = append(optsStruct.Headers, fmt.Sprintf("response-content-disposition=%s", opts.ContentDisposition))
+			}
 		}
 	}
 

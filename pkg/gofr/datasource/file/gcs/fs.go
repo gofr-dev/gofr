@@ -2,7 +2,7 @@ package gcs
 
 import (
 	"context"
-	"os"
+	"fmt"
 	"time"
 
 	"gofr.dev/pkg/gofr/datasource/file"
@@ -22,7 +22,7 @@ type Config struct {
 	ProjectID       string
 }
 
-// New creates and validates a new GCS file system.
+// New creates and validates a new GCS file system (generic FileSystemProvider).
 func New(config *Config) file.FileSystemProvider {
 	if config == nil {
 		config = &Config{}
@@ -39,6 +39,17 @@ func New(config *Config) file.FileSystemProvider {
 	}
 
 	return fs
+}
+
+// NewCloudFileSystem returns a typed CloudFileSystem for consumers who need cloud-only
+// features (metadata and signed URLs). This is a convenience non-breaking helper that
+// simply constructs the same implementation and returns it typed to CloudFileSystem.
+func NewCloudFileSystem(config *Config) (file.CloudFileSystem, error) {
+	fsProv := New(config)
+	if cfs, ok := fsProv.(file.CloudFileSystem); ok {
+		return cfs, nil
+	}
+	return nil, fmt.Errorf("gcs provider does not implement cloud features")
 }
 
 // Connect tries a single immediate connect via provider; on failure it starts a background retry.
@@ -103,26 +114,4 @@ func (f *fileSystem) startRetryConnect() {
 			f.CommonFileSystem.Logger.Debugf("GCS retry failed, will try again: %v", err)
 		}
 	}
-}
-
-func (f *fileSystem) Create(name string, opts ...*file.FileOptions) (file.File, error) {
-	ctx := context.Background()
-	var opt *file.FileOptions
-	if len(opts) > 0 {
-		opt = opts[0]
-	}
-	writer := f.Provider.(*storageAdapter).NewWriterWithOptions(ctx, name, opt)
-	return file.NewCommonFileWriter(
-		f.Provider,
-		name,
-		writer,
-		f.Logger,
-		f.Metrics,
-		f.Location,
-	), nil
-}
-
-func (f *fileSystem) SignedURL(name string, expiry time.Duration, opts ...*file.FileOptions) (string, error) {
-	ctx := context.Background()
-	return f.Provider.(*storageAdapter).SignedURL(ctx, name, expiry, opts...)
 }

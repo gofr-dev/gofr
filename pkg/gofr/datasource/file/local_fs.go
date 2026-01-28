@@ -2,7 +2,6 @@ package file
 
 import (
 	"context"
-	"fmt"
 	"io"
 	"os"
 	"path/filepath"
@@ -23,7 +22,8 @@ type localFileSystem struct {
 }
 
 // NewLocalFileSystem creates a FileSystem for local filesystem operations.
-func NewLocalFileSystem(logger datasource.Logger) FileSystem {
+// It returns a FileSystemProvider so callers can treat it uniformly with other providers.
+func NewLocalFileSystem(logger datasource.Logger) FileSystemProvider {
 	provider := &localProvider{}
 
 	cfs := &CommonFileSystem{
@@ -36,12 +36,14 @@ func NewLocalFileSystem(logger datasource.Logger) FileSystem {
 	return &localFileSystem{CommonFileSystem: cfs}
 }
 
-// Implement Connect(ctx context.Context) error for interface compatibility.
-func (l *localFileSystem) Connect(ctx context.Context) error {
-	return l.CommonFileSystem.Connect(ctx)
+// Connect implements the no-arg Connect for FileSystemProvider compatibility.
+func (l *localFileSystem) Connect() {
+	// Local filesystem connect is a no-op but we call CommonFileSystem.Connect
+	// with a background context to set up any bookkeeping.
+	_ = l.CommonFileSystem.Connect(context.Background())
 }
 
-func (p *localProvider) Connect(_ context.Context) error {
+func (_ *localProvider) Connect(_ context.Context) error {
 	return nil
 }
 
@@ -178,14 +180,14 @@ func (*localProvider) ListDir(_ context.Context, prefix string) ([]ObjectInfo, [
 	return objects, dirs, nil
 }
 
-// SignedURL is not supported for local filesystems.
-func (l *localFileSystem) SignedURL(_ string, _ time.Duration, _ ...*FileOptions) (string, error) {
-	return "", fmt.Errorf("SignedURL is not supported for local files")
+// SignedURL is not supported for local filesystems. Implemented on the provider.
+func (*localProvider) SignedURL(_ context.Context, _ string, _ time.Duration, _ *FileOptions) (string, error) {
+	return "", ErrSignedURLsNotSupported
 }
 
-// Update Create to match interface.
-func (l *localFileSystem) Create(name string, opts ...*FileOptions) (File, error) {
-	return l.CommonFileSystem.Create(name, opts...)
+// Create creates a file for local filesystem using CommonFileSystem's implementation.
+func (l *localFileSystem) Create(name string) (File, error) {
+	return l.CommonFileSystem.Create(name)
 }
 
 // ============= Helper Types =============
