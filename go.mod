@@ -6,7 +6,7 @@ require (
 	cloud.google.com/go/pubsub v1.50.1
 	github.com/DATA-DOG/go-sqlmock v1.5.2
 	github.com/XSAM/otelsql v0.41.0
-	github.com/alicebob/miniredis/v2 v2.35.0
+	github.com/alicebob/miniredis/v2 v2.36.1
 	github.com/dgraph-io/dgo/v210 v210.0.0-20230328113526-b66f8ae53a2d
 	github.com/eclipse/paho.mqtt.golang v1.5.1
 	github.com/go-redis/redismock/v9 v9.2.0
