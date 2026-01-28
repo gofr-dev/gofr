@@ -152,13 +152,14 @@ func (s *storageAdapter) NewWriter(ctx context.Context, name string) io.WriteClo
 	return s.bucket.Object(name).NewWriter(ctx)
 }
 
-// NewWriterWithOptions creates a writer for the given object with metadata support.
+// NewWriterWithOptions implements MetadataWriter.
 func (s *storageAdapter) NewWriterWithOptions(ctx context.Context, name string, opts *file.FileOptions) io.WriteCloser {
 	if name == "" {
 		return &failWriter{err: errEmptyObjectName}
 	}
 
 	w := s.bucket.Object(name).NewWriter(ctx)
+
 	if opts != nil {
 		if opts.ContentType != "" {
 			w.ContentType = opts.ContentType
@@ -170,6 +171,7 @@ func (s *storageAdapter) NewWriterWithOptions(ctx context.Context, name string, 
 			w.Metadata = opts.Metadata
 		}
 	}
+
 	return w
 }
 
