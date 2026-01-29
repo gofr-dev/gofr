@@ -20,8 +20,9 @@ var (
 )
 
 const (
-	lockKey       = "gofr_migrations_lock"
-	retryInterval = 500 * time.Millisecond
+	lockKey          = "gofr_migrations_lock"
+	retryInterval    = 500 * time.Millisecond
+	migrationLockTTL = 15 * time.Second
 )
 
 type MigrateFunc func(d Datasource) error
@@ -80,7 +81,7 @@ func Run(migrationsMap map[int64]Migrate, c *container.Container) {
 	// Acquire locks to ensure exclusive access during migration
 	lockers := getLockers(mg)
 	ownerID := uuid.New().String()
-	acquiredLockers, stopHeartbeat := acquireAllLocks(c, lockers, ownerID)
+	acquiredLockers, stopRefresh := acquireAllLocks(c, lockers, ownerID)
 
 	if acquiredLockers == nil && len(lockers) > 0 {
 		c.Fatalf("migration failed: could not acquire locks to run required migrations")
@@ -88,7 +89,7 @@ func Run(migrationsMap map[int64]Migrate, c *container.Container) {
 		return
 	}
 
-	defer stopHeartbeat()
+	defer stopRefresh()
 	defer releaseAllLocks(c, acquiredLockers, ownerID)
 
 	// No need to check again - lock guarantees no other pod is modifying migrations
@@ -105,7 +106,7 @@ func hasNewMigrations(keys []int64, lastMigration int64) bool {
 	return false
 }
 
-func acquireAllLocks(c *container.Container, lockers []Locker, ownerID string) (acquiredLockers []Locker, stopHeartbeat func()) {
+func acquireAllLocks(c *container.Container, lockers []Locker, ownerID string) (acquiredLockers []Locker, stopRefresh func()) {
 	acquiredLockers = make([]Locker, 0, len(lockers))
 
 	for _, l := range lockers {
@@ -131,7 +132,7 @@ func acquireAllLocks(c *container.Container, lockers []Locker, ownerID string) (
 	stopChan := make(chan struct{})
 
 	go func() {
-		// Refresh every 5 seconds for a 10-second TTL
+		// Refresh every 5 seconds for a 15-second TTL
 		const refreshInterval = 5
 
 		ticker := time.NewTicker(refreshInterval * time.Second)
@@ -152,9 +153,9 @@ func acquireAllLocks(c *container.Container, lockers []Locker, ownerID string) (
 		}
 	}()
 
-	stopHeartbeat = func() { close(stopChan) }
+	stopRefresh = func() { close(stopChan) }
 
-	return acquiredLockers, stopHeartbeat
+	return acquiredLockers, stopRefresh
 }
 
 func releaseAllLocks(c *container.Container, acquiredLockers []Locker, ownerID string) {
