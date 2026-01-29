@@ -43,3 +43,23 @@ func (*Datasource) commitMigration(c *container.Container, data transactionData)
 }
 
 func (*Datasource) rollback(*container.Container, transactionData) {}
+
+func (*Datasource) Lock(*container.Container, string) error {
+	return nil
+}
+
+func (*Datasource) Unlock(*container.Container, string) error {
+	return nil
+}
+
+func (*Datasource) Refresh(*container.Container, string) error {
+	return nil
+}
+
+func (*Datasource) Next() migrator {
+	return nil
+}
+
+func (*Datasource) Name() string {
+	return "Base"
+}

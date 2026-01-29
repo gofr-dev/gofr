@@ -12,6 +12,8 @@ import (
 	"gofr.dev/pkg/gofr/container"
 )
 
+const dirPerm = 0755
+
 type openTSDBDS struct {
 	container.OpenTSDB
 	filePath string
@@ -29,8 +31,6 @@ type tsdbMigrationRecord struct {
 	StartTime string `json:"start_time"`
 	Duration  int64  `json:"duration"`
 }
-
-const dirPerm = 0755
 
 var errNilFileHandle = errors.New("failed to create migration file: received nil file handle")
 
@@ -59,14 +59,20 @@ func (om *openTSDBMigrator) checkAndCreateMigrationTable(c *container.Container)
 	// Check if file exists and is readable
 	if _, err := os.Stat(om.filePath); err == nil {
 		// File exists, validate it's proper JSON
-		return om.validateExistingFile(c)
+		if validationErr := om.validateExistingFile(c); validationErr != nil {
+			return validationErr
+		}
 	} else if !os.IsNotExist(err) {
 		// Some other error accessing the file
 		return fmt.Errorf("unexpected error stating migration file: %w", err)
+	} else {
+		// File doesn't exist, create empty migration file
+		if err := om.createEmptyMigrationFile(c); err != nil {
+			return err
+		}
 	}
 
-	// File doesn't exist, create empty migration file
-	return om.createEmptyMigrationFile(c)
+	return om.migrator.checkAndCreateMigrationTable(c)
 }
 
 // validateExistingFile checks if the existing migration file is valid JSON.
@@ -279,4 +285,24 @@ func (om *openTSDBMigrator) rollback(c *container.Container, data transactionDat
 	// Delegate to base migrator
 	om.migrator.rollback(c, data)
 	c.Fatalf("Migration %v failed.", data.MigrationNumber)
+}
+
+func (*openTSDBMigrator) Lock(*container.Container, string) error {
+	return nil
+}
+
+func (*openTSDBMigrator) Unlock(*container.Container, string) error {
+	return nil
+}
+
+func (*openTSDBMigrator) Refresh(*container.Container, string) error {
+	return nil
+}
+
+func (om *openTSDBMigrator) Next() migrator {
+	return om.migrator
+}
+
+func (*openTSDBMigrator) Name() string {
+	return "OpenTSDB"
 }

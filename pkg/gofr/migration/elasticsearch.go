@@ -8,6 +8,11 @@ import (
 	"gofr.dev/pkg/gofr/container"
 )
 
+const (
+	// elasticsearchMigrationIndex is the index used to track migrations.
+	elasticsearchMigrationIndex = "gofr_migrations"
+)
+
 // elasticsearchDS is the adapter struct that implements migration operations for Elasticsearch.
 type elasticsearchDS struct {
 	client Elasticsearch
@@ -18,11 +23,6 @@ type elasticsearchMigrator struct {
 	elasticsearchDS
 	migrator
 }
-
-const (
-	// elasticsearchMigrationIndex is the index used to track migrations.
-	elasticsearchMigrationIndex = "gofr_migrations"
-)
 
 // getLastElasticsearchMigrationQuery fetches the most recent migration version.
 func getLastElasticsearchMigrationQuery() map[string]any {
@@ -37,14 +37,14 @@ func getLastElasticsearchMigrationQuery() map[string]any {
 
 // apply creates a new elasticsearchMigrator.
 func (ds elasticsearchDS) apply(m migrator) migrator {
-	return elasticsearchMigrator{
+	return &elasticsearchMigrator{
 		elasticsearchDS: ds,
 		migrator:        m,
 	}
 }
 
 // checkAndCreateMigrationTable creates the migration tracking index if it doesn't exist.
-func (em elasticsearchMigrator) checkAndCreateMigrationTable(c *container.Container) error {
+func (em *elasticsearchMigrator) checkAndCreateMigrationTable(c *container.Container) error {
 	// Check if the migration index exists
 	query := map[string]any{
 		"query": map[string]any{
@@ -92,7 +92,7 @@ func (em elasticsearchMigrator) checkAndCreateMigrationTable(c *container.Contai
 }
 
 // getLastMigration retrieves the latest migration version from Elasticsearch.
-func (em elasticsearchMigrator) getLastMigration(c *container.Container) int64 {
+func (em *elasticsearchMigrator) getLastMigration(c *container.Container) int64 {
 	var lastMigration int64
 
 	result, err := c.Elasticsearch.Search(context.Background(), []string{elasticsearchMigrationIndex}, getLastElasticsearchMigrationQuery())
@@ -143,12 +143,12 @@ func extractLastMigrationVersion(result map[string]any) int64 {
 }
 
 // beginTransaction starts a new transaction (Elasticsearch doesn't support traditional transactions).
-func (em elasticsearchMigrator) beginTransaction(c *container.Container) transactionData {
+func (em *elasticsearchMigrator) beginTransaction(c *container.Container) transactionData {
 	return em.migrator.beginTransaction(c)
 }
 
 // commitMigration records the migration in the tracking index.
-func (em elasticsearchMigrator) commitMigration(c *container.Container, data transactionData) error {
+func (em *elasticsearchMigrator) commitMigration(c *container.Container, data transactionData) error {
 	migrationDoc := map[string]any{
 		"version":    data.MigrationNumber,
 		"method":     "UP",
@@ -170,7 +170,27 @@ func (em elasticsearchMigrator) commitMigration(c *container.Container, data tra
 }
 
 // rollback is a no-op for Elasticsearch migrations.
-func (em elasticsearchMigrator) rollback(c *container.Container, data transactionData) {
+func (em *elasticsearchMigrator) rollback(c *container.Container, data transactionData) {
 	em.migrator.rollback(c, data)
 	c.Fatalf("Migration %v failed.", data.MigrationNumber)
+}
+
+func (*elasticsearchMigrator) Lock(*container.Container, string) error {
+	return nil
+}
+
+func (*elasticsearchMigrator) Unlock(*container.Container, string) error {
+	return nil
+}
+
+func (*elasticsearchMigrator) Refresh(*container.Container, string) error {
+	return nil
+}
+
+func (em *elasticsearchMigrator) Next() migrator {
+	return em.migrator
+}
+
+func (*elasticsearchMigrator) Name() string {
+	return "Elasticsearch"
 }

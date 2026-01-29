@@ -14,7 +14,7 @@ type redisDS struct {
 }
 
 func (r redisDS) apply(m migrator) migrator {
-	return redisMigrator{
+	return &redisMigrator{
 		Redis:    r.Redis,
 		migrator: m,
 	}
@@ -32,7 +32,7 @@ type redisData struct {
 	Duration  int64     `json:"duration"`
 }
 
-func (m redisMigrator) getLastMigration(c *container.Container) int64 {
+func (m *redisMigrator) getLastMigration(c *container.Container) int64 {
 	var lastMigration int64
 
 	table, err := c.Redis.HGetAll(context.Background(), "gofr_migrations").Result()
@@ -75,7 +75,7 @@ func (m redisMigrator) getLastMigration(c *container.Container) int64 {
 	return lastMigration
 }
 
-func (m redisMigrator) beginTransaction(c *container.Container) transactionData {
+func (m *redisMigrator) beginTransaction(c *container.Container) transactionData {
 	redisTx := c.Redis.TxPipeline()
 
 	cmt := m.migrator.beginTransaction(c)
@@ -87,7 +87,7 @@ func (m redisMigrator) beginTransaction(c *container.Container) transactionData 
 	return cmt
 }
 
-func (m redisMigrator) commitMigration(c *container.Container, data transactionData) error {
+func (m *redisMigrator) commitMigration(c *container.Container, data transactionData) error {
 	migrationVersion := strconv.FormatInt(data.MigrationNumber, 10)
 
 	jsonData, err := json.Marshal(redisData{
@@ -118,10 +118,80 @@ func (m redisMigrator) commitMigration(c *container.Container, data transactionD
 	return m.migrator.commitMigration(c, data)
 }
 
-func (m redisMigrator) rollback(c *container.Container, data transactionData) {
+func (m *redisMigrator) rollback(c *container.Container, data transactionData) {
 	data.RedisTx.Discard()
 
 	m.migrator.rollback(c, data)
 
 	c.Fatalf("Migration %v for Redis failed and rolled back", data.MigrationNumber)
+}
+
+func (*redisMigrator) Lock(c *container.Container, ownerID string) error {
+	for i := 0; ; i++ {
+		status, err := c.Redis.SetNX(context.Background(), lockKey, ownerID, migrationLockTTL).Result()
+		if err == nil && status {
+			c.Debug("Redis lock acquired successfully")
+
+			return nil
+		}
+
+		if err != nil {
+			c.Errorf("error while acquiring redis lock: %v", err)
+
+			return errLockAcquisitionFailed
+		}
+
+		c.Debugf("Redis lock already held, retrying in %v... (attempt %d)", retryInterval, i+1)
+		time.Sleep(retryInterval)
+	}
+}
+
+func (*redisMigrator) Unlock(c *container.Container, ownerID string) error {
+	// Use Lua script to ensure we only delete the lock if we own it
+	script := `
+		if redis.call("get", KEYS[1]) == ARGV[1] then
+			return redis.call("del", KEYS[1])
+		else
+			return 0
+		end
+	`
+
+	_, err := c.Redis.Eval(context.Background(), script, []string{lockKey}, ownerID).Result()
+	if err != nil {
+		c.Errorf("unable to release redis lock: %v", err)
+
+		return errLockReleaseFailed
+	}
+
+	c.Debug("Redis lock released successfully")
+
+	return nil
+}
+
+func (*redisMigrator) Refresh(c *container.Container, ownerID string) error {
+	// Use Lua script to ensure we only refresh the lock if we own it
+	script := `
+		if redis.call("get", KEYS[1]) == ARGV[1] then
+			return redis.call("expire", KEYS[1], ARGV[2])
+		else
+			return 0
+		end
+	`
+
+	_, err := c.Redis.Eval(context.Background(), script, []string{lockKey}, ownerID, int(migrationLockTTL.Seconds())).Result()
+	if err != nil {
+		return err
+	}
+
+	c.Debug("Redis lock refreshed successfully")
+
+	return nil
+}
+
+func (m *redisMigrator) Next() migrator {
+	return m.migrator
+}
+
+func (*redisMigrator) Name() string {
+	return "Redis"
 }

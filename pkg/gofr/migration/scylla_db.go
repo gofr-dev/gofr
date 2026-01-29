@@ -7,6 +7,10 @@ import (
 	"gofr.dev/pkg/gofr/container"
 )
 
+const (
+	scyllaDBMigrationTable = "gofr_migrations"
+)
+
 type scyllaDS struct {
 	ScyllaDB
 }
@@ -17,17 +21,13 @@ type scyllaMigrator struct {
 }
 
 func (ds scyllaDS) apply(m migrator) migrator {
-	return scyllaMigrator{
+	return &scyllaMigrator{
 		ScyllaDB: ds.ScyllaDB,
 		migrator: m,
 	}
 }
 
-const (
-	scyllaDBMigrationTable = "gofr_migrations"
-)
-
-func (s scyllaMigrator) checkAndCreateMigrationTable(c *container.Container) error {
+func (s *scyllaMigrator) checkAndCreateMigrationTable(c *container.Container) error {
 	createTableQuery := fmt.Sprintf(`
 		CREATE TABLE IF NOT EXISTS %s (
 			version bigint PRIMARY KEY,
@@ -43,14 +43,14 @@ func (s scyllaMigrator) checkAndCreateMigrationTable(c *container.Container) err
 		return err
 	}
 
-	return nil
+	return s.migrator.checkAndCreateMigrationTable(c)
 }
 
 type migrationRow struct {
 	Version int64 `db:"version"`
 }
 
-func (s scyllaMigrator) getLastMigration(c *container.Container) int64 {
+func (s *scyllaMigrator) getLastMigration(c *container.Container) int64 {
 	var migrations []migrationRow
 
 	query := fmt.Sprintf("SELECT version FROM %s", scyllaDBMigrationTable)
@@ -75,11 +75,11 @@ func (s scyllaMigrator) getLastMigration(c *container.Container) int64 {
 	return max(lastVersion, lm2)
 }
 
-func (s scyllaMigrator) beginTransaction(c *container.Container) transactionData {
+func (s *scyllaMigrator) beginTransaction(c *container.Container) transactionData {
 	return s.migrator.beginTransaction(c)
 }
 
-func (s scyllaMigrator) commitMigration(c *container.Container, data transactionData) error {
+func (s *scyllaMigrator) commitMigration(c *container.Container, data transactionData) error {
 	insertStmt := fmt.Sprintf(`
 		INSERT INTO %s (version, method, start_time, duration)
 		VALUES (?, ?, ?, ?);
@@ -101,7 +101,27 @@ func (s scyllaMigrator) commitMigration(c *container.Container, data transaction
 	return s.migrator.commitMigration(c, data)
 }
 
-func (s scyllaMigrator) rollback(c *container.Container, data transactionData) {
+func (s *scyllaMigrator) rollback(c *container.Container, data transactionData) {
 	s.migrator.rollback(c, data)
 	c.Fatalf("Migration %v failed.", data.MigrationNumber)
+}
+
+func (*scyllaMigrator) Lock(*container.Container, string) error {
+	return nil
+}
+
+func (*scyllaMigrator) Unlock(*container.Container, string) error {
+	return nil
+}
+
+func (*scyllaMigrator) Refresh(*container.Container, string) error {
+	return nil
+}
+
+func (s *scyllaMigrator) Next() migrator {
+	return s.migrator
+}
+
+func (*scyllaMigrator) Name() string {
+	return "ScyllaDB"
 }

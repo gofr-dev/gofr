@@ -173,6 +173,59 @@ func addMonitoringFeature() migration.Migrate {
 - **Easier rollback:** Reverting a feature means reverting one migration, not tracking multiple related migrations
 - **Better organization:** Related changes stay together, making the codebase easier to understand
 
+## Multi-Instance Deployments
+
+When running multiple instances of your application (e.g., in Kubernetes or Docker Swarm), GoFr automatically coordinates migrations to ensure only one instance runs them at a time.
+
+### How It Works
+
+1. **Automatic Coordination:** When multiple instances start simultaneously, they coordinate using distributed locks
+2. **One Runs, Others Wait:** The first instance to acquire the lock runs migrations, while others wait
+3. **Fast Path:** If migrations are already complete, instances return immediately without acquiring locks
+
+### Lock Mechanism
+
+**SQL (MySQL/PostgreSQL/SQLite):**
+- Uses a dedicated `gofr_migration_locks` table
+- Lock TTL: 10 seconds
+- Heartbeat: Refreshes every 5 seconds for long migrations
+
+**Redis:**
+- Uses `SETNX` with TTL
+- Lock TTL: 10 seconds  
+- Heartbeat: Refreshes every 5 seconds for long migrations
+
+**Retry Behavior:**
+- Max retries: Indefinite (pods wait until migration is complete)
+- Retry interval: 500ms
+
+### What This Means for You
+
+**✅ No code changes needed** - Locking happens automatically
+
+**✅ Safe deployments** - Multiple instances won't corrupt data
+
+**✅ Long migrations supported** - Locks are automatically extended via heartbeat
+
+**✅ Crash recovery** - Locks auto-expire after 10 seconds if a pod crashes
+
+### Example Deployment
+
+\`\`\`yaml
+# docker-compose.yaml or Kubernetes deployment
+services:
+  app:
+    image: myapp:latest
+    replicas: 3  # All 3 instances coordinate automatically
+\`\`\`
+
+When you deploy:
+- Instance 1: Acquires lock → Runs migrations → Releases lock
+- Instance 2: Waits for lock → Sees migrations complete → Continues startup
+- Instance 3: Waits for lock → Sees migrations complete → Continues startup
+
+> **Note:** Single-instance deployments work exactly as before with no performance impact.
+
 ## Migration Records
 
 **SQL**

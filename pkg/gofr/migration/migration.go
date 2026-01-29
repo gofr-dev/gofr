@@ -1,14 +1,28 @@
 package migration
 
 import (
+	"errors"
 	"reflect"
+	"sort"
 	"time"
 
 	"github.com/gogo/protobuf/sortkeys"
+	"github.com/google/uuid"
 	goRedis "github.com/redis/go-redis/v9"
 
 	"gofr.dev/pkg/gofr/container"
 	gofrSql "gofr.dev/pkg/gofr/datasource/sql"
+)
+
+var (
+	errLockAcquisitionFailed = errors.New("failed to acquire migration lock")
+	errLockReleaseFailed     = errors.New("failed to release migration lock")
+)
+
+const (
+	lockKey          = "gofr_migrations_lock"
+	retryInterval    = 500 * time.Millisecond
+	migrationLockTTL = 15 * time.Second
 )
 
 type MigrateFunc func(d Datasource) error
@@ -47,6 +61,7 @@ func Run(migrationsMap map[int64]Migrate, c *container.Container) {
 		return
 	}
 
+	// Create migration tables BEFORE acquiring locks (lock table must exist first)
 	err := mg.checkAndCreateMigrationTable(c)
 	if err != nil {
 		c.Fatalf("failed to create gofr_migration table, err: %v", err)
@@ -54,6 +69,105 @@ func Run(migrationsMap map[int64]Migrate, c *container.Container) {
 		return
 	}
 
+	// Optimistic pre-check: only acquire locks if there MIGHT be new migrations
+	// This is a fast path to avoid lock contention when no migrations are needed
+	lastMigration := mg.getLastMigration(c)
+	if !hasNewMigrations(keys, lastMigration) {
+		c.Infof("no new migrations to run")
+
+		return
+	}
+
+	// Acquire locks to ensure exclusive access during migration
+	lockers := getLockers(mg)
+	ownerID := uuid.New().String()
+	acquiredLockers, stopRefresh := acquireAllLocks(c, lockers, ownerID)
+
+	if acquiredLockers == nil && len(lockers) > 0 {
+		c.Fatalf("migration failed: could not acquire locks to run required migrations")
+
+		return
+	}
+
+	defer stopRefresh()
+	defer releaseAllLocks(c, acquiredLockers, ownerID)
+
+	// No need to check again - lock guarantees no other pod is modifying migrations
+	runMigrations(c, mg, &ds, migrationsMap, keys)
+}
+
+func hasNewMigrations(keys []int64, lastMigration int64) bool {
+	for _, k := range keys {
+		if k > lastMigration {
+			return true
+		}
+	}
+
+	return false
+}
+
+func acquireAllLocks(c *container.Container, lockers []Locker, ownerID string) (acquiredLockers []Locker, stopRefresh func()) {
+	acquiredLockers = make([]Locker, 0, len(lockers))
+
+	for _, l := range lockers {
+		err := l.Lock(c, ownerID)
+		if err != nil {
+			c.Errorf("failed to acquire migration lock, err: %v", err)
+
+			// Release already acquired locks in reverse order
+			for i := len(acquiredLockers) - 1; i >= 0; i-- {
+				_ = acquiredLockers[i].Unlock(c, ownerID)
+			}
+
+			return nil, func() {}
+		}
+
+		acquiredLockers = append(acquiredLockers, l)
+	}
+
+	if len(acquiredLockers) == 0 {
+		return nil, func() {}
+	}
+
+	stopChan := make(chan struct{})
+
+	go func() {
+		// Refresh every 5 seconds for a 15-second TTL
+		const refreshInterval = 5
+
+		ticker := time.NewTicker(refreshInterval * time.Second)
+		defer ticker.Stop()
+
+		for {
+			select {
+			case <-ticker.C:
+				for _, l := range acquiredLockers {
+					err := l.Refresh(c, ownerID)
+					if err != nil {
+						c.Errorf("failed to refresh migration lock for %s, err: %v", l.Name(), err)
+					}
+				}
+			case <-stopChan:
+				return
+			}
+		}
+	}()
+
+	stopRefresh = func() { close(stopChan) }
+
+	return acquiredLockers, stopRefresh
+}
+
+func releaseAllLocks(c *container.Container, acquiredLockers []Locker, ownerID string) {
+	for i := len(acquiredLockers) - 1; i >= 0; i-- {
+		err := acquiredLockers[i].Unlock(c, ownerID)
+		if err != nil {
+			c.Errorf("failed to release migration lock, err: %v", err)
+		}
+	}
+}
+
+func runMigrations(c *container.Container, mg migrator, ds *Datasource, migrationsMap map[int64]Migrate, keys []int64) {
 	lastMigration := mg.getLastMigration(c)
 
 	for _, currentMigration := range keys {
@@ -75,10 +189,10 @@ func Run(migrationsMap map[int64]Migrate, c *container.Container) {
 			ds.Oracle = &oracleTransactionWrapper{tx: migrationInfo.OracleTx}
 		}
 
-		migrationInfo.StartTime = time.Now()
+		migrationInfo.StartTime = time.Now().UTC()
 		migrationInfo.MigrationNumber = currentMigration
 
-		err = migrationsMap[currentMigration].UP(ds)
+		err := migrationsMap[currentMigration].UP(*ds)
 		if err != nil {
 			c.Logger.Errorf("failed to run migration : [%v], err: %v", currentMigration, err)
 
@@ -132,6 +246,26 @@ type datasourceInitializer struct {
 	setDS         func()
 	apply         func(m migrator) migrator
 	logIdentifier string
+}
+
+func getLockers(mg migrator) []Locker {
+	var lockers []Locker
+
+	// Traverse the migrator chain and collect all lockers.
+	// The chain is built such that the last added datasource is the outermost wrapper.
+	for mg != nil {
+		lockers = append(lockers, mg)
+
+		// Move to the next migrator in the chain.
+		mg = mg.Next()
+	}
+
+	// Sort lockers by name to ensure deterministic order (prevent deadlocks)
+	sort.Slice(lockers, func(i, j int) bool {
+		return lockers[i].Name() < lockers[j].Name()
+	})
+
+	return lockers
 }
 
 func initializeDatasources(c *container.Container, ds *Datasource, mg migrator) (migrator, bool) {
