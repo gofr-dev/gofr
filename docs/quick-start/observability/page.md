@@ -3,19 +3,424 @@
 GoFr, by default, manages observability in different ways once the server starts:
 
 ## Logs
-
 Logs offer real-time information, providing valuable insights and immediate visibility into the ongoing state and activities of the system.
 It helps in identifying errors, debugging and troubleshooting, monitor performance, analyzing application usage, communications etc.
 
 GoFr logger allows customizing the log level, which provides flexibility to adjust logs based on specific needs.
 
 Logs are generated only for events equal to or above the specified log level; by default, GoFr logs at _INFO_ level.
-Log Level can be changed by setting the environment variable `LOG_LEVEL` value to _WARN,DEBUG,ERROR,NOTICE or FATAL_.
+Log Level can be changed by setting the environment variable `LOG_LEVEL` value to _DEBUG, INFO, NOTICE, WARN, ERROR or FATAL_.
 
 When the GoFr server runs, it prints a log for reading configs, database connection, requests, database queries, missing configs, etc.
 They contain information such as request's correlation ID, status codes, request time, etc.
 
+### DEBUG
+This is the lowest priority level. It represents the most detailed/granular information.
+
+**Note:** `DEBUG` logs should be enabled only in development or controlled troubleshooting scenarios.They are typically disabled in production environments due to performance overhead and security risks.
+
+
+#### **Usage Examples:**
+
+***1. Variable States and Intermediate Values -***
+It allows developers to verify that calculations, data transformations, and state changes are occurring exactly as intended before the final result is produced.
+
+**Code Example**
+	
+```Go
+// CalculateDiscount is a handler that calculates the final price
+func CalculateDiscount(ctx *gofr.Context) (interface{}, error) {
+    originalPrice := 150.00
+    discountRate := 0.20 // 20%
+    tax := 1.05          // 5% tax
+
+    ctx.Debug("Calc trace - Price:", originalPrice, "Discount:", discountRate, "Tax Multiplier:", tax)
+    
+    return nil, nil
+}
+```
+
+**Output**
+```Console
+
+DEBU [10:15:01] Calc trace - Price: 150 Discount: 0.2 Tax Multiplier: 1.05
+```
+
+***2. Control Flow and Loop Iterations -***
+ Conditional logic (if/else statements), and the step-by-step progress of iterative loops.
+
+**Code Example**
+
+```Go
+// ProcessBatch simulates processing a list of users
+func ProcessBatch(ctx *gofr.Context) (interface{}, error) {
+    userIds := []int{101, 102, 103}
+
+    ctx.Debug("Starting batch processing for", len(userIds), "users")
+
+    for i, id := range userIds {
+        ctx.Debug("Loop step", i, "- Processing User ID:", id)
+    }
+    return nil, nil
+}
+```
+**Output**
+```Console
+DEBU [10:15:02] Starting batch processing for 3 users
+DEBU [10:15:02] Loop step 0 - Processing User ID: 101
+DEBU [10:15:02] Loop step 1 - Processing User ID: 102
+DEBU [10:15:02] Loop step 2 - Processing User ID: 103
+```
+
+***3. Raw Data Payloads, Initialization and Database Internals -*** Used to debug API integrations, Initialization, Processing.
+
+> **Security Warning:** Logging raw request payloads is intended only for development or controlled debugging. Never enable such logs in production environments if payloads may contain Personally Identifiable Information (PII), credentials, authentication tokens, or other sensitive data.
+
+
+**Code Example**
+```Go
+// InspectPayload simulates debugging an incoming request payload
+func InspectPayload(ctx *gofr.Context) (interface{}, error) {
+    // 1. Raw Data Payload (Input)
+    data := `{"id": 42, "role": "admin"}`
+    ctx.Debug("[Payload] Received raw body:", data)
+
+    // 2. Database Internals (Processing)
+    query := fmt.Sprintf("SELECT * FROM users WHERE id=%d", 42)
+    ctx.Debug("[SQL] Generated Query:", query)
+    
+    return nil, nil
+}
+```
+**Output**
+```Console
+DEBU [10:15:05] [Payload] Received raw body: {"id": 42, "role": "admin"}
+DEBU [10:15:05] [SQL] Generated Query: SELECT * FROM users WHERE id=42
+```
+
+#### **Examples of when Not to Use:**
+
+***1. Redundant Framework Logging:*** Avoid manually logging information that GoFr already captures at the `DEBUG` level, such as raw SQL queries or basic request/response details, to prevent log duplication and unnecessary verbosity.
+
+***2. Prohibit PII Logging:*** Strictly avoid logging Personally Identifiable Information (PII) or credentials (e.g., passwords, tokens). As `DEBUG` is frequently used for raw variable dumps, there is a high risk of exposing sensitive data in plain text.
+
+---
+### INFO
+`INFO` Represents normal operational events during application execution and acts as the default logging level, ensuring baseline observability without excessive verbosity.
+
+
+
+#### **Usage Examples:**
+
+***1. Configuration Loading -*** Confirms successful loading and validation of application configuration.
+
+
+**Code Example**
+```Go
+// Log after application configuration is read and validated
+func LoadConfig(ctx *gofr.Context) {
+    configSource := "env"
+
+    ctx.Info(
+        "Application configuration loaded and validated",
+        "Source", configSource,
+    )
+}
+
+```
+**Output**
+```Console
+INFO [10:02:15] Application configuration loaded and validated Source: env
+
+```
+***2. Database Ready -*** Indicates that the database connection has been successfully established.
+
+
+**Code Example**
+```Go
+// Log after a successful database connection setup
+func InitDatabase(ctx *gofr.Context) {
+    dbHost := "localhost"
+
+    ctx.Info(
+        "Database connection is ready",
+        "Host", dbHost,
+    )
+}
+
+
+```
+**Output**
+```Console
+INFO [10:02:18] Database connection is ready Host: localhost
+```
+
+***3. Cache Initialized -*** Indicates that the cache client is ready and available.
+
+**Code Example**
+```Go
+// Log after cache client Initialization
+func InitCache(ctx *gofr.Context) {
+    cacheType := "redis"
+
+    ctx.Info(
+        "Cache client initialized successfully",
+        "Type", cacheType,
+    )
+}
+```
+**Output**
+```Console
+INFO [10:02:20] Cache client initialized successfully Type: redis
+
+```
+
+#### **Examples of when Not to Use:**
+
+***1. Do Not Use for Exceptions:*** Refrain from using this level for error conditions.`INFO` logs are routed to standard output (`stdout`), causing them to be potentially overlooked by monitoring tools specifically configured to capture standard error (`stderr`) streams.
+
+***2. Avoid High-Frequency Saturation:*** 
+Do not emit `INFO` logs within tight loops or data-intensive processing blocks. Excessive logging at this level can rapidly saturate storage and obscure significant operational events with noise.
+
+---
+
+### NOTICE
+A level higher than `INFO` but lower than `WARN`. It shares the same visual prominence as a Warning but implies a "normal" condition rather than a problem. In simple words, it's used for events that are normal but rare and significant.
+
+
+
+#### **Usage Examples:**
+
+***1. Configuration Reloaded -*** System settings have been hot-swapped dynamically without requiring a full application restart.
+
+**Code Example**
+```Go
+// TriggerReload is an admin handler to refresh configs
+func TriggerReload(ctx *gofr.Context) (interface{}, error) {
+    ctx.Notice("Configuration hot-reload triggered by system admin")
+    return "Config Reloaded", nil
+}
+```
+**Output**
+```Console
+NOTI [14:05:03] Configuration hot-reload triggered by system admin
+```
+***2. Switching to Secondary Database -*** Primary node connectivity was lost, so traffic is being automatically rerouted to the replica instance to maintain uptime.
+
+
+**Code Example**
+```Go
+// CheckDBConnection monitors database status
+func CheckDBConnection(ctx *gofr.Context) (interface{}, error) {
+    // Logic to detect primary DB failure...
+    ctx.Notice("Switching to Secondary Database")
+    return nil, nil
+}
+```
+**Output**
+```Console
+NOTI [14:52:00] Switching to Secondary Database
+```
+
+***3. Cache Cleared -*** The in-memory data store has been purged to ensure subsequent requests fetch fresh data directly from the source.
+
+
+**Code Example**
+```Go
+// InvalidateCache clears the application cache
+func InvalidateCache(ctx *gofr.Context) (interface{}, error) {
+    ctx.Notice("Cache Cleared")
+    return nil, nil
+}
+```
+**Output**
+```Console
+NOTI [14:52:00] Cache Cleared
+```
+
+#### **Examples of when Not to Use:**
+
+***1. Misclassification of Failures:*** Do not utilize this level for error scenarios. `NOTICE` semantically implies a healthy system state; using it for failures creates ambiguity regarding system health.
+
+***2. Avoid Routine Operations:*** 
+Do not apply this level to standard, high-volume request logs. `NOTICE `should be reserved for distinct, infrequent state changes rather than repetitive per-request activities.
+
+---
+### WARN
+`WARN` should represent abnormal runtime conditions that indicate instability or degraded operation (retries, fallbacks, transient failures), not long-term code hygiene issues like deprecated API usage. If something would show up repeatedly in a healthy system, it shouldn’t be a `WARN`, otherwise the signal gets diluted and operators start ignoring it.
+
+
+
+#### **Usage Examples:**
+
+***1. Database Connection Retry -*** Temporary connectivity loss detected. Initiating an exponential backoff strategy to re-establish the link.
+
+**Code Example**
+```Go
+// ConnectWithRetry simulates a resilient database connection
+func ConnectWithRetry(ctx *gofr.Context) (interface{}, error) {
+    // Simulating a failed attempt
+    ctx.Warn("Database connection timeout. Retrying...", "attempt", 1, "retry_after", "2s")
+    return nil, nil
+}
+```
+**Output**
+```Console
+WARN [14:05:04] Database connection timeout. Retrying... attempt: 1 retry_after: 2s
+```
+***2. Fallback Configuration Used -*** The external configuration service is unreachable, so the system is defaulting to hardcoded safe parameters to continue operation.
+
+
+**Code Example**
+```Go
+// GetTimeoutConfig retrieves config with a safe fallback
+func GetTimeoutConfig(ctx *gofr.Context) (interface{}, error) {
+    ctx.Warn("Timeout config not found. Using fallback.", "fallback_value", "30s")
+    return 30, nil
+}
+```
+**Output**
+```Console
+WARN [14:55:00] Timeout config not found. Using fallback. fallback_value: 30s
+```
+
+#### **Examples of when Not to Use:**
+
+***1. Do Not Use for Definitive Failures:*** If a specific request or operation fails completely, do not categorize it as a `WARN`. This level implies the system "survived" or handled the issue gracefully; unrecoverable failures should be logged as `ERROR`.
+
+***2. Avoid Precautionary Logging:*** 
+Do not log warnings for standard behaviors or expected redundancies (false positives). Overuse desensitizes operators to genuine alerts.
+
+
+---
+
+### ERROR
+Indicates a failure event. This level routes logs to `stderr` (Standard Error), ensuring visibility to error tracking tools.
+
+
+
+#### **Usage Examples:**
+
+***1. Database Timeouts -*** The database query exceeded the maximum execution time limit and was forcibly cancelled to prevent resource exhaustion.
+
+**Code Example**
+```Go
+// FetchAnalytics simulates a long-running query that times out
+func FetchAnalytics(ctx *gofr.Context) (interface{}, error) {
+    // Logic to fetch analytics...
+    err := errors.New("query execution exceeded 3000ms")
+    
+    ctx.Error("DB Query Timeout: Analytics fetch failed.", "error", err)
+    
+    return nil, err
+}
+```
+**Output**
+```Console
+ERROR [10:20:01] DB Query Timeout: Analytics fetch failed. error: query execution exceeded 3000ms
+```
+***2. External Service Failure -*** An unexpected condition was encountered when calling a downstream service that prevented it from fulfilling the request.
+
+
+**Code Example**
+```Go
+// ProcessPayment simulates a downstream service failure
+func ProcessPayment(ctx *gofr.Context) (interface{}, error) {
+    // Simulating a gateway failure
+    err := errors.New("payment gateway unreachable")
+    
+    ctx.Error("Payment processing failed.", "error", err, "request_id", "req_99")
+    
+    return nil, err
+}
+```
+**Output**
+```Console
+ERROR [10:20:02] Payment processing failed. error: payment gateway unreachable request_id: req_99
+```
+
+***3. Null Pointer Exceptions -*** The code attempted to dereference a memory address that does not point to a valid object, causing a runtime panic.
+
+
+**Code Example**
+```Go
+// GetUserProfile retrieves user data safely
+func GetUserProfile(ctx *gofr.Context) (interface{}, error) {
+    var userProfile *User // Currently nil
+    
+    if userProfile == nil {
+        ctx.Error("Runtime Safety: Attempted to access methods on a nil 'User' object. Skipping.")
+        return nil, fmt.Errorf("user not found")
+    }
+    return userProfile, nil
+}
+```
+**Output**
+```Console
+ERROR [10:20:03] Runtime Safety: Attempted to access methods on a nil 'User' object. Skipping.
+```
+
+#### **Examples of when Not to Use:**
+
+***1. Inappropriate for System-Wide Crashes:*** Do not use `ERROR` for unrecoverable startup failures that render the application non-functional (e.g., missing critical configuration). Such dependencies must be handled via `FATAL` to ensure immediate process termination
+
+***2. Avoid Logging Client-Side Validation as System ERROR*** 
+Exercise caution when logging user input error (e.g., `400 Bad Request`). Classifying routine client-side validation failures as system ERROR creates noise in alerting systems; `INFO` or `WARN` is often more
+
+---
+
+### FATAL
+The highest priority level. `FATAL` represents a critical system failures where the application cannot function. 
+
+**Note:** `FATAL` terminates the process immediately and is intended only for startup-time failures, not runtime request handling.
+
+
+#### **Usage Examples:**
+
+***1. Missing Critical Resource -*** The application cannot start because a mandatory resource, such as a cryptographic certificate or a required local file, is missing.
+
+**Code Example**
+```Go
+// Context: Checking for a mandatory certificate before starting
+if _, err := os.Stat("/etc/certs/server.crt"); os.IsNotExist(err) {
+    app.Logger().Fatal("Startup Failure: Mandatory SSL certificate missing.", "path", "/etc/certs/server.crt")
+}
+```
+**Output**
+```Console
+FATA [10:30:01] Startup Failure: Mandatory SSL certificate missing. path: /etc/certs/server.crt
+```
+***2. Incompatible Environment -*** The application requires a specific environment or dependency version to function correctly and must shut down if it's not met.
+
+
+**Code Example**
+```Go
+// Context: Verifying a required system dependency
+currentVersion := os.Getenv("DEP_VERSION")
+if !isSupportedVersion(currentVersion) {
+    app.Logger().Fatal("Incompatible Environment.", "required_version", "2.0", "current_version", currentVersion)
+}
+```
+**Output**
+```Console
+FATA [10:30:02] Incompatible Environment. required_version: 2.0 current_version: 1.5
+```
+
+#### **Examples of when Not to Use:**
+
+***1. Strictly Prohibited During Request Handling:*** Never invoke `FATAL` during runtime request processing. This method executes `os.Exit(1)`, causing the entire server instance to terminate immediately. Using this for a runtime error (like a failed SQL query) causes a complete service outage rather than a single request failure.
+
+
+---
+> **Note:** Performance & Log Volume.
+>1. Early Exit Optimization: The logger implements an "Early Exit" strategy. If the incoming log level is lower than the configured `LOG_LEVEL`, the function returns immediately before performing any formatting or allocation.
+>2. Locking Overhead: The terminal output utilizes a mutex lock to ensure thread safety.
+
+---
+
 {% figure src="/quick-start-logs.png" alt="Pretty Printed Logs" /%}
+
+
 
 Logs are well-structured, they are of type JSON when exported to a file, such that they can be pushed to logging systems such as {% new-tab-link title="Loki" href="https://grafana.com/oss/loki/" /%}, Elasticsearch, etc.
 
