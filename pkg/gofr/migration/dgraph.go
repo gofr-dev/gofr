@@ -103,7 +103,7 @@ func (dm dgraphMigrator) getLastMigration(c *container.Container) int64 {
 	resp, err := c.DGraph.Query(context.Background(), getLastMigrationQuery)
 	if err != nil {
 		c.Debug("Error fetching last migration:", err)
-		return 0
+		return -1
 	}
 
 	// If a response is returned, marshal it to JSON bytes then unmarshal into our response struct.
@@ -119,17 +119,23 @@ func (dm dgraphMigrator) getLastMigration(c *container.Container) int64 {
 			return 0
 		}
 
-		if len(response.Migrations) > 0 {
-			return response.Migrations[0].Version
-		}
+	}
+
+	var lastMigration int64
+	if len(response.Migrations) > 0 {
+		lastMigration = response.Migrations[0].Version
 	}
 
 	lm2 := dm.migrator.getLastMigration(c)
-	if lm2 > 0 {
+	if lm2 == -1 {
+		return -1
+	}
+
+	if lm2 > lastMigration {
 		return lm2
 	}
 
-	return 0
+	return lastMigration
 }
 
 // beginTransaction starts a new migration transaction.

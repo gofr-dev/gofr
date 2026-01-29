@@ -60,7 +60,7 @@ func (ch clickHouseMigrator) getLastMigration(c *container.Container) int64 {
 
 	err := c.Clickhouse.Select(context.Background(), &lastMigrations, getLastChGoFrMigration)
 	if err != nil {
-		return 0
+		return -1
 	}
 
 	c.Debugf("SQL last migration fetched value is: %v", lastMigration)
@@ -70,6 +70,9 @@ func (ch clickHouseMigrator) getLastMigration(c *container.Container) int64 {
 	}
 
 	lm2 := ch.migrator.getLastMigration(c)
+	if lm2 == -1 {
+		return -1
+	}
 
 	if lm2 > lastMigration {
 		return lm2

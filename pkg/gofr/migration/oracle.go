@@ -76,13 +76,24 @@ func (om oracleMigrator) getLastMigration(c *container.Container) int64 {
 	err := om.Oracle.Select(context.Background(), &results, getLastOracleGoFrMigration)
 	if err != nil {
 		c.Errorf("Failed to fetch last migration: %v", err)
-		return 0
+		return -1
+	}
+
+	if len(results) == 0 {
+		lm2 := om.migrator.getLastMigration(c)
+		if lm2 == -1 {
+			return -1
+		}
+		return lm2
 	}
 
 	oracleLastMigration := om.extractLastMigrationFromResults(results)
 	c.Debugf("Oracle last migration fetched value is: %v", oracleLastMigration)
 
 	baseLastMigration := om.migrator.getLastMigration(c)
+	if baseLastMigration == -1 {
+		return -1
+	}
 
 	if baseLastMigration > oracleLastMigration {
 		return baseLastMigration

@@ -85,7 +85,15 @@ func (s surrealMigrator) getLastMigration(c *container.Container) int64 {
 
 	result, err := s.SurrealDB.Query(context.Background(), getLastSurrealDBGoFrMigration, nil)
 	if err != nil {
-		return 0
+		return -1
+	}
+
+	if len(result) == 0 {
+		lm2 := s.migrator.getLastMigration(c)
+		if lm2 == -1 {
+			return -1
+		}
+		return lm2
 	}
 
 	if len(result) > 0 {
@@ -98,6 +106,9 @@ func (s surrealMigrator) getLastMigration(c *container.Container) int64 {
 	c.Debugf("surrealDB last migration fetched value is: %v", lastMigration)
 
 	lm2 := s.migrator.getLastMigration(c)
+	if lm2 == -1 {
+		return -1
+	}
 
 	if lm2 > lastMigration {
 		return lm2

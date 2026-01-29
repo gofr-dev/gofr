@@ -122,8 +122,15 @@ func (om *openTSDBMigrator) getLastMigration(c *container.Container) int64 {
 	migrations, err := om.loadMigrationsUnsafe()
 	if err != nil {
 		c.Errorf("Failed to load migrations: %v", err)
-		// Fallback to base migrator only
-		return om.migrator.getLastMigration(c)
+		return -1
+	}
+
+	if len(migrations) == 0 {
+		lm2 := om.migrator.getLastMigration(c)
+		if lm2 == -1 {
+			return -1
+		}
+		return lm2
 	}
 
 	var lastMigration int64
@@ -137,6 +144,9 @@ func (om *openTSDBMigrator) getLastMigration(c *container.Container) int64 {
 
 	// Get last migration from base migrator and return the maximum
 	baseMigration := om.migrator.getLastMigration(c)
+	if baseMigration == -1 {
+		return -1
+	}
 
 	return max(lastMigration, baseMigration)
 }

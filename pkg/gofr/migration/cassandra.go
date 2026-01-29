@@ -48,8 +48,17 @@ func (cs cassandraMigrator) getLastMigration(c *container.Container) int64 {
 
 	err := c.Cassandra.QueryWithCtx(context.Background(), &lastMigrations, getLastCassandraGoFrMigration)
 	if err != nil {
-		return 0
+		return -1
 	}
+
+	if len(lastMigrations) == 0 {
+		lm2 := cs.migrator.getLastMigration(c)
+		if lm2 == -1 {
+			return -1
+		}
+		return lm2
+	}
+
 
 	for _, version := range lastMigrations {
 		if version > lastMigration {
@@ -60,6 +69,9 @@ func (cs cassandraMigrator) getLastMigration(c *container.Container) int64 {
 	c.Debugf("cassandra last migration fetched value is: %v", lastMigration)
 
 	lm2 := cs.migrator.getLastMigration(c)
+	if lm2 == -1 {
+		return -1
+	}
 
 	if lm2 > lastMigration {
 		return lm2

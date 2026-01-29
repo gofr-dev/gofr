@@ -82,13 +82,26 @@ func (am arangoMigrator) getLastMigration(c *container.Container) int64 {
 	var lastMigrations []int64
 
 	err := c.ArangoDB.Query(context.Background(), arangoMigrationDB, getLastArangoMigration, nil, &lastMigrations)
-	if err != nil || len(lastMigrations) == 0 {
-		return 0
+	if err != nil {
+		return -1
+	}
+
+	if len(lastMigrations) == 0 {
+		// If no migrations found locally, check inner migrator
+		lm2 := am.migrator.getLastMigration(c)
+		if lm2 == -1 {
+			return -1
+		}
+		return lm2
 	}
 
 	c.Debugf("ArangoDB last migration fetched value is: %v", lastMigrations[0])
 
 	lm2 := am.migrator.getLastMigration(c)
+	if lm2 == -1 {
+		return -1
+	}
+
 	if lm2 > lastMigrations[0] {
 		return lm2
 	}

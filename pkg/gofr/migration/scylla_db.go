@@ -58,7 +58,15 @@ func (s scyllaMigrator) getLastMigration(c *container.Container) int64 {
 	err := s.ScyllaDB.Query(&migrations, query)
 	if err != nil {
 		c.Errorf("Failed to fetch migrations from ScyllaDB: %v", err)
-		return 0
+		return -1
+	}
+
+	if len(migrations) == 0 {
+		lm2 := s.migrator.getLastMigration(c)
+		if lm2 == -1 {
+			return -1
+		}
+		return lm2
 	}
 
 	var lastVersion int64
@@ -71,6 +79,9 @@ func (s scyllaMigrator) getLastMigration(c *container.Container) int64 {
 	c.Debugf("ScyllaDB last migration fetched value is: %v", lastVersion)
 
 	lm2 := s.migrator.getLastMigration(c)
+	if lm2 == -1 {
+		return -1
+	}
 
 	return max(lastVersion, lm2)
 }

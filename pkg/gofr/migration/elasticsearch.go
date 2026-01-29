@@ -98,13 +98,26 @@ func (em elasticsearchMigrator) getLastMigration(c *container.Container) int64 {
 	result, err := c.Elasticsearch.Search(context.Background(), []string{elasticsearchMigrationIndex}, getLastElasticsearchMigrationQuery())
 	if err != nil {
 		c.Errorf("Failed to fetch migrations from Elasticsearch: %v", err)
-		return 0
+		return -1
+	}
+
+	if hits, ok := result["hits"].(map[string]any); ok {
+		if hitsList, ok := hits["hits"].([]any); ok && len(hitsList) == 0 {
+			lm2 := em.migrator.getLastMigration(c)
+			if lm2 == -1 {
+				return -1
+			}
+			return lm2
+		}
 	}
 
 	lastMigration = extractLastMigrationVersion(result)
 	c.Debugf("Elasticsearch last migration fetched value is: %v", lastMigration)
 
 	lm2 := em.migrator.getLastMigration(c)
+	if lm2 == -1 {
+		return -1
+	}
 	if lm2 > lastMigration {
 		return lm2
 	}

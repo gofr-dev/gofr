@@ -69,11 +69,23 @@ func (pm pubsubMigrator) getLastMigration(c *container.Container) int64 {
 	result, err := c.PubSub.Query(ctx, queryTopic, int64(0), defaultQueryLimit)
 	if err != nil {
 		c.Errorf("Error querying migration topic: %v", err)
+		return -1
+	}
+
+	if len(result) == 0 {
+		lm2 := pm.migrator.getLastMigration(c)
+		if lm2 == -1 {
+			return -1
+		}
+		return lm2
 	}
 
 	pubsubLastMigration := extractLastVersion(c, result)
 
 	nextMigratorLastMigration := pm.migrator.getLastMigration(c)
+	if nextMigratorLastMigration == -1 {
+		return -1
+	}
 
 	if nextMigratorLastMigration > pubsubLastMigration {
 		return nextMigratorLastMigration

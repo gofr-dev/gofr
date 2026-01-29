@@ -51,7 +51,15 @@ func (mg mongoMigrator) getLastMigration(c *container.Container) int64 {
 	err := mg.Mongo.Find(context.Background(), mongoMigrationCollection, filter, &migrations)
 	if err != nil {
 		c.Errorf("Failed to fetch migrations from MongoDB: %v", err)
-		return 0
+		return -1
+	}
+
+	if len(migrations) == 0 {
+		lm2 := mg.migrator.getLastMigration(c)
+		if lm2 == -1 {
+			return -1
+		}
+		return lm2
 	}
 
 	// Identify the highest migration version.
@@ -62,6 +70,9 @@ func (mg mongoMigrator) getLastMigration(c *container.Container) int64 {
 	c.Debugf("MongoDB last migration fetched value is: %v", lastMigration)
 
 	lm2 := mg.migrator.getLastMigration(c)
+	if lm2 == -1 {
+		return -1
+	}
 
 	return max(lm2, lastMigration)
 }

@@ -1693,3 +1693,43 @@ func (mr *MockmigratorMockRecorder) rollback(c, data any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "rollback", reflect.TypeOf((*Mockmigrator)(nil).rollback), c, data)
 }
+
+// lock mocks base method.
+func (m *Mockmigrator) lock(c *container.Container) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "lock", c)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// lock indicates an expected call of lock.
+func (mr *MockmigratorMockRecorder) lock(c any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "lock", reflect.TypeOf((*Mockmigrator)(nil).lock), c)
+}
+
+// unlock mocks base method.
+func (m *Mockmigrator) unlock(c *container.Container) {
+	m.ctrl.T.Helper()
+	m.ctrl.Call(m, "unlock", c)
+}
+
+// unlock indicates an expected call of unlock.
+func (mr *MockmigratorMockRecorder) unlock(c any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "unlock", reflect.TypeOf((*Mockmigrator)(nil).unlock), c)
+}
+
+// refreshLock mocks base method.
+func (m *Mockmigrator) refreshLock(c *container.Container) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "refreshLock", c)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// refreshLock indicates an expected call of refreshLock.
+func (mr *MockmigratorMockRecorder) refreshLock(c any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "refreshLock", reflect.TypeOf((*Mockmigrator)(nil).refreshLock), c)
+}
