@@ -2,7 +2,7 @@ package gcs
 
 import (
 	"context"
-	"fmt"
+	"errors"
 	"time"
 
 	"gofr.dev/pkg/gofr/datasource/file"
@@ -41,15 +41,34 @@ func New(config *Config) file.FileSystemProvider {
 	return fs
 }
 
-// NewCloudFileSystem returns a typed CloudFileSystem for consumers who need cloud-only
-// features (metadata and signed URLs). This is a convenience non-breaking helper that
-// simply constructs the same implementation and returns it typed to CloudFileSystem.
+// NewCloudFileSystem creates a GCS filesystem with the CloudFileSystem interface.
+// This is a convenience wrapper around New() for users who need compile-time
+// verification that cloud-specific features (metadata, signed URLs) are available.
+//
+// Example:
+//
+//	cfs, err := gcs.NewCloudFileSystem(&gcs.Config{BucketName: "my-bucket"})
+//	if err != nil {
+//	    log.Fatal(err)
+//	}
+//
+//	// CreateWithOptions available without type assertion
+//	file, _ := cfs.CreateWithOptions(ctx, "file.csv", &file.FileOptions{
+//	    ContentType: "text/csv",
+//	})
+//
+// Note: New() returns FileSystemProvider which also supports these features
+// through type assertion. Use NewCloudFileSystem only when you want the
+// CloudFileSystem interface explicitly.
 func NewCloudFileSystem(config *Config) (file.CloudFileSystem, error) {
-	fsProv := New(config)
-	if cfs, ok := fsProv.(file.CloudFileSystem); ok {
-		return cfs, nil
+	fs := New(config)
+
+	cfs, ok := fs.(file.CloudFileSystem)
+	if !ok {
+		return nil, errors.New("provider does not support cloud features")
 	}
-	return nil, fmt.Errorf("gcs provider does not implement cloud features")
+
+	return cfs, nil
 }
 
 // Connect tries a single immediate connect via provider; on failure it starts a background retry.

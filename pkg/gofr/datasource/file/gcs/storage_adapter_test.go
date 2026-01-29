@@ -11,6 +11,7 @@ import (
 	"strconv"
 	"strings"
 	"testing"
+	"time"
 
 	"cloud.google.com/go/storage"
 	"github.com/stretchr/testify/assert"
@@ -663,4 +664,56 @@ func TestStorageAdapter_Health_Success(t *testing.T) {
 	err = adapter.Health(ctx)
 
 	require.NoError(t, err)
+}
+
+func TestValidateSignedURLInput(t *testing.T) {
+	tests := []struct {
+		name    string
+		objName string
+		expiry  time.Duration
+		opts    *file.FileOptions
+		wantErr error
+	}{
+		{
+			name:    "valid input",
+			objName: "file.txt",
+			expiry:  time.Hour,
+			opts:    &file.FileOptions{ContentType: "text/plain"},
+			wantErr: nil,
+		},
+		{
+			name:    "empty object name",
+			objName: "",
+			expiry:  time.Hour,
+			wantErr: errEmptyObjectName,
+		},
+		{
+			name:    "negative expiry",
+			objName: "file.txt",
+			expiry:  -time.Hour,
+			wantErr: errExpiryMustBePositive,
+		},
+		{
+			name:    "expiry too long",
+			objName: "file.txt",
+			expiry:  8 * 24 * time.Hour,
+			wantErr: errExpiryTooLong,
+		},
+		{
+			name:    "invalid content type",
+			objName: "file.txt",
+			expiry:  time.Hour,
+			opts:    &file.FileOptions{ContentType: "invalid"},
+			wantErr: errInvalidContentType,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := validateSignedURLInput(tt.objName, tt.expiry, tt.opts)
+			if !errors.Is(err, tt.wantErr) {
+				t.Errorf("validateSignedURLInput() error = %v, wantErr %v", err, tt.wantErr)
+			}
+		})
+	}
 }

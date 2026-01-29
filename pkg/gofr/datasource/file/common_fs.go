@@ -649,8 +649,10 @@ func (c *CommonFileSystem) SetConnected(connected bool) {
 
 func (c *CommonFileSystem) CreateWithOptions(ctx context.Context, name string, opts *FileOptions) (File, error) {
 	var msg string
+
 	st := StatusError
 	startTime := time.Now()
+
 	defer c.Observe(OpCreate, startTime, &st, &msg)
 
 	// Try metadata-aware writer
@@ -660,8 +662,10 @@ func (c *CommonFileSystem) CreateWithOptions(ctx context.Context, name string, o
 			msg = "failed to create writer with options"
 			return nil, errWriterNil
 		}
+
 		st = StatusSuccess
 		msg = fmt.Sprintf("Created %q with metadata", name)
+
 		return NewCommonFileWriter(c.Provider, name, writer, c.Logger, c.Metrics, c.Location), nil
 	}
 
@@ -677,7 +681,9 @@ func (c *CommonFileSystem) CreateWithOptions(ctx context.Context, name string, o
 	}
 
 	st = StatusSuccess
+
 	msg = fmt.Sprintf("Created %q (metadata not supported)", name)
+
 	return NewCommonFileWriter(c.Provider, name, writer, c.Logger, c.Metrics, c.Location), nil
 }
 
@@ -685,6 +691,7 @@ func (c *CommonFileSystem) GenerateSignedURL(ctx context.Context, name string, e
 	var msg string
 
 	st := StatusError
+
 	startTime := time.Now()
 	defer c.Observe(OpSignedURL, startTime, &st, &msg)
 
@@ -702,5 +709,6 @@ func (c *CommonFileSystem) GenerateSignedURL(ctx context.Context, name string, e
 
 	st = StatusSuccess
 	msg = fmt.Sprintf("Generated signed URL for %q (expires in %v)", name, expiry)
+
 	return url, nil
 }

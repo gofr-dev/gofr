@@ -12,48 +12,81 @@ import (
 
 var errNotImplemented = errors.New("not implemented")
 
+// basicProviderWithoutSignedURL implements only StorageProvider, NOT SignedURLProvider.
+type basicProviderWithoutSignedURL struct{}
+
+func (*basicProviderWithoutSignedURL) Connect(_ context.Context) error { return nil }
+func (*basicProviderWithoutSignedURL) NewReader(_ context.Context, _ string) (io.ReadCloser, error) {
+	return nil, errNotImplemented
+}
+func (*basicProviderWithoutSignedURL) NewRangeReader(_ context.Context, _ string, _, _ int64) (io.ReadCloser, error) {
+	return nil, errNotImplemented
+}
+func (*basicProviderWithoutSignedURL) NewWriter(_ context.Context, _ string) io.WriteCloser {
+	return &nopWriteCloser{}
+}
+func (*basicProviderWithoutSignedURL) DeleteObject(_ context.Context, _ string) error { return nil }
+func (*basicProviderWithoutSignedURL) CopyObject(_ context.Context, _, _ string) error {
+	return nil
+}
+func (*basicProviderWithoutSignedURL) StatObject(_ context.Context, name string) (*file.ObjectInfo, error) {
+	return &file.ObjectInfo{Name: name, Size: 10}, nil
+}
+func (*basicProviderWithoutSignedURL) ListObjects(_ context.Context, _ string) ([]string, error) {
+	return nil, nil
+}
+func (*basicProviderWithoutSignedURL) ListDir(_ context.Context, _ string) ([]file.ObjectInfo, []string, error) {
+	return nil, nil, nil
+}
+
 // fakeProvider implements the subset of StorageProvider + SignedURLProvider + MetadataWriter
 // so we can test CommonFileSystem behavior without real GCS.
 type fakeProvider struct {
 	calledNewWriterWithOptions bool
 	calledSignedURL            bool
+	signedURLError             error
+	lastOpts                   *file.FileOptions
 }
 
-func (_ *fakeProvider) Connect(_ context.Context) error {
+func (*fakeProvider) Connect(_ context.Context) error {
 	return nil
 }
 
-func (_ *fakeProvider) NewReader(_ context.Context, _ string) (io.ReadCloser, error) {
+func (*fakeProvider) NewReader(_ context.Context, _ string) (io.ReadCloser, error) {
 	return nil, errNotImplemented
 }
 
-func (_ *fakeProvider) NewRangeReader(_ context.Context, _ string, _ int64, _ int64) (io.ReadCloser, error) {
+func (*fakeProvider) NewRangeReader(_ context.Context, _ string, _, _ int64) (io.ReadCloser, error) {
 	return nil, errNotImplemented
 }
 
-func (_ *fakeProvider) NewWriter(_ context.Context, _ string) io.WriteCloser {
+func (*fakeProvider) NewWriter(_ context.Context, _ string) io.WriteCloser {
 	return &nopWriteCloser{}
 }
-func (_ *fakeProvider) DeleteObject(_ context.Context, _ string) error         { return nil }
-func (_ *fakeProvider) CopyObject(_ context.Context, _ string, _ string) error { return nil }
-func (_ *fakeProvider) StatObject(_ context.Context, name string) (*file.ObjectInfo, error) {
+func (*fakeProvider) DeleteObject(_ context.Context, _ string) error  { return nil }
+func (*fakeProvider) CopyObject(_ context.Context, _, _ string) error { return nil }
+func (*fakeProvider) StatObject(_ context.Context, name string) (*file.ObjectInfo, error) {
 	return &file.ObjectInfo{Name: name, Size: 10}, nil
 }
-func (_ *fakeProvider) ListObjects(_ context.Context, _ string) ([]string, error) { return nil, nil }
-func (_ *fakeProvider) ListDir(_ context.Context, _ string) ([]file.ObjectInfo, []string, error) {
+func (*fakeProvider) ListObjects(_ context.Context, _ string) ([]string, error) { return nil, nil }
+func (*fakeProvider) ListDir(_ context.Context, _ string) ([]file.ObjectInfo, []string, error) {
 	return nil, nil, nil
 }
 
 // MetadataWriter.
-func (_ *fakeProvider) NewWriterWithOptions(_ context.Context, _ string, _ *file.FileOptions) io.WriteCloser {
-	// record invocation by using a new instance's field is not possible with _ receiver
-	// create a temp provider to track invocation for test assertions
+func (f *fakeProvider) NewWriterWithOptions(_ context.Context, _ string, opts *file.FileOptions) io.WriteCloser {
+	f.calledNewWriterWithOptions = true
+	f.lastOpts = opts
+
 	return &nopWriteCloser{}
 }
 
-// SignedURLProvider.
-func (_ *fakeProvider) SignedURL(_ context.Context, _ string, _ time.Duration, _ *file.FileOptions) (string, error) {
-	// record invocation not required for this simplified provider
+func (f *fakeProvider) SignedURL(_ context.Context, _ string, _ time.Duration, _ *file.FileOptions) (string, error) {
+	f.calledSignedURL = true
+	if f.signedURLError != nil {
+		return "", f.signedURLError
+	}
+
 	return "https://signed.example/obj", nil
 }
 
@@ -67,13 +100,20 @@ func TestCreateWithOptions_UsesProviderNewWriterWithOptions(t *testing.T) {
 	fp := &fakeProvider{}
 	cfs := &file.CommonFileSystem{Provider: fp, Location: "b", ProviderName: "FAKE"}
 
-	_, err := cfs.CreateWithOptions(context.Background(), "obj", &file.FileOptions{ContentType: "text/csv"})
+	opts := &file.FileOptions{ContentType: "text/csv"}
+
+	_, err := cfs.CreateWithOptions(context.Background(), "obj", opts)
 	if err != nil {
 		t.Fatalf("expected no error, got %v", err)
 	}
 
-	// Note: fakeProvider implementation cannot record invocation with _ receiver.
-	// The test asserts no error and that writer creation succeeded.
+	if !fp.calledNewWriterWithOptions {
+		t.Error("expected NewWriterWithOptions to be called")
+	}
+
+	if fp.lastOpts.ContentType != "text/csv" {
+		t.Errorf("expected ContentType 'text/csv', got %q", fp.lastOpts.ContentType)
+	}
 }
 
 func TestGenerateSignedURL_DelegatesToProvider(t *testing.T) {
@@ -87,5 +127,15 @@ func TestGenerateSignedURL_DelegatesToProvider(t *testing.T) {
 
 	if signed != "https://signed.example/obj" {
 		t.Fatalf("unexpected signed url: %s", signed)
+	}
+}
+
+func TestGenerateSignedURL_ProviderDoesNotSupport(t *testing.T) {
+	basicProvider := &basicProviderWithoutSignedURL{} // Doesn't implement SignedURLProvider
+	cfs := &file.CommonFileSystem{Provider: basicProvider, ProviderName: "BASIC"}
+
+	_, err := cfs.GenerateSignedURL(context.Background(), "obj", time.Hour, nil)
+	if !errors.Is(err, file.ErrSignedURLsNotSupported) {
+		t.Errorf("expected ErrSignedURLsNotSupported, got %v", err)
 	}
 }

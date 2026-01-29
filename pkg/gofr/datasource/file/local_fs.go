@@ -5,7 +5,6 @@ import (
 	"io"
 	"os"
 	"path/filepath"
-	"time"
 
 	"gofr.dev/pkg/gofr/datasource"
 )
@@ -43,7 +42,7 @@ func (l *localFileSystem) Connect() {
 	_ = l.CommonFileSystem.Connect(context.Background())
 }
 
-func (_ *localProvider) Connect(_ context.Context) error {
+func (*localProvider) Connect(_ context.Context) error {
 	return nil
 }
 
@@ -115,15 +114,18 @@ func (*localProvider) CopyObject(_ context.Context, src, dst string) error {
 	if err != nil {
 		return err
 	}
+
 	defer func() { _ = srcFile.Close() }()
 
 	if mkdirErr := os.MkdirAll(filepath.Dir(dst), DefaultDirMode); mkdirErr != nil {
 		return mkdirErr
 	}
+
 	dstFile, err := os.Create(dst)
 	if err != nil {
 		return err
 	}
+
 	defer func() { _ = dstFile.Close() }()
 
 	_, err = io.Copy(dstFile, srcFile)
@@ -178,16 +180,6 @@ func (*localProvider) ListDir(_ context.Context, prefix string) ([]ObjectInfo, [
 	}
 
 	return objects, dirs, nil
-}
-
-// SignedURL is not supported for local filesystems. Implemented on the provider.
-func (*localProvider) SignedURL(_ context.Context, _ string, _ time.Duration, _ *FileOptions) (string, error) {
-	return "", ErrSignedURLsNotSupported
-}
-
-// Create creates a file for local filesystem using CommonFileSystem's implementation.
-func (l *localFileSystem) Create(name string) (File, error) {
-	return l.CommonFileSystem.Create(name)
 }
 
 // ============= Helper Types =============

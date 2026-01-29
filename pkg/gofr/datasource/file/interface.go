@@ -180,9 +180,16 @@ type CloudFileSystem interface {
 	SignedURLGenerator
 }
 
-// AsCloud attempts to cast a FileSystemProvider to a CloudFileSystem.
-// Returns the typed interface and true on success, otherwise false.
-func AsCloud(fs FileSystemProvider) (CloudFileSystem, bool) {
+// AsCloud is a convenience helper for checking if a FileSystemProvider
+// supports cloud-specific features. It's equivalent to type assertion
+// but provides a clearer intent in code.
+//
+// Example:
+//
+//	if cfs, ok := file.AsCloud(fs); ok {
+//	    url, _ := cfs.GenerateSignedURL(ctx, "file.csv", time.Hour, nil)
+//	}
+func AsCloud(fs FileSystem) (CloudFileSystem, bool) {
 	cfs, ok := fs.(CloudFileSystem)
 	return cfs, ok
 }

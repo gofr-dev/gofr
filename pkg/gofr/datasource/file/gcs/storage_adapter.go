@@ -8,6 +8,8 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"net/url"
+	"strings"
 	"time"
 
 	"cloud.google.com/go/storage"
@@ -32,10 +34,20 @@ var (
 	errFailedToCopyObject        = errors.New("failed to copy object")
 	errFailedToListObjects       = errors.New("failed to list objects")
 	errFailedToListDirectory     = errors.New("failed to list directory")
+
+	// Signed URL errors
+	errGCSConfigMissing        = errors.New("GCS config or bucket name missing")
+	errGCSCredentialsMissing   = errors.New("GCS credentials required for signed URL")
+	errInvalidPrivateKeyPEM    = errors.New("invalid private key PEM")
+	errInvalidPrivateKeyFormat = errors.New("invalid private key format")
+	errExpiryMustBePositive    = errors.New("expiry duration must be positive")
+	errExpiryTooLong           = errors.New("expiry cannot exceed 7 days for GCS signed URLs")
+	errInvalidContentType      = errors.New("invalid Content-Type format")
 )
 
 const (
-	contentTypeDirectory = "application/x-directory"
+	contentTypeDirectory  = "application/x-directory"
+	maxGCSSignedURLExpiry = 7 * 24 * time.Hour // 7 days
 )
 
 // storageAdapter adapts GCS client to implement file.StorageProvider.
@@ -318,74 +330,150 @@ func (s *storageAdapter) ListDir(ctx context.Context, prefix string) ([]file.Obj
 	return objects, prefixes, nil
 }
 
-// SignedURL generates a signed URL for the given object with expiry and optional metadata.
-// Accepts a single *file.FileOptions to match the SignedURLProvider signature.
-func (s *storageAdapter) SignedURL(_ context.Context, name string, expiry time.Duration, opts *file.FileOptions) (string, error) {
-	if s.cfg == nil || s.cfg.BucketName == "" {
-		return "", errors.New("GCS config or bucket name missing")
-	}
+// validateSignedURLInput validates input parameters for signed URL generation.
+func validateSignedURLInput(name string, expiry time.Duration, opts *file.FileOptions) error {
 	if name == "" {
-		return "", errEmptyObjectName
-	}
-	if s.cfg.CredentialsJSON == "" {
-		return "", errors.New("GCS credentials required for signed URL")
+		return errEmptyObjectName
 	}
 
-	// Parse credentials JSON for service account email and private key
+	if expiry <= 0 {
+		return errExpiryMustBePositive
+	}
+
+	if expiry > maxGCSSignedURLExpiry {
+		return errExpiryTooLong
+	}
+
+	if opts != nil && opts.ContentType != "" {
+		if !strings.Contains(opts.ContentType, "/") {
+			return fmt.Errorf("%w: %q", errInvalidContentType, opts.ContentType)
+		}
+	}
+
+	return nil
+}
+
+// parseServiceAccountCredentials extracts email and private key from credentials JSON.
+func parseServiceAccountCredentials(credentialsJSON string) (email string, privateKey []byte, err error) {
 	var cred struct {
 		ClientEmail string `json:"client_email"`
 		PrivateKey  string `json:"private_key"`
 	}
-	if err := json.Unmarshal([]byte(s.cfg.CredentialsJSON), &cred); err != nil {
-		return "", fmt.Errorf("failed to parse credentials: %w", err)
+
+	if err := json.Unmarshal([]byte(credentialsJSON), &cred); err != nil {
+		return "", nil, fmt.Errorf("failed to parse credentials: %w", err)
 	}
 
 	block, _ := pem.Decode([]byte(cred.PrivateKey))
 	if block == nil {
-		return "", errors.New("invalid private key PEM")
+		return "", nil, errInvalidPrivateKeyPEM
 	}
 
-	// Try to parse PKCS8, then PKCS1
-	var privKeyBytes []byte
-	if block.Type == "PRIVATE KEY" || block.Type == "RSA PRIVATE KEY" || block.Type == "PRIVATE KEY" {
-		privKeyBytes = block.Bytes
+	// Validate key format
+	if err := validatePrivateKey(block.Bytes); err != nil {
+		return "", nil, err
 	}
 
-	// Ensure key can be parsed by x509; storage.SignedURL expects []byte private key
-	// (Note: cloud.google.com/go/storage SignedURL uses google SignedURLOptions with PrivateKey []byte)
-	if _, err := x509.ParsePKCS8PrivateKey(privKeyBytes); err != nil {
-		if _, err2 := x509.ParsePKCS1PrivateKey(privKeyBytes); err2 != nil {
-			// If both parsers failed, still pass raw bytes — some PEMs work directly
-			// but return error if clearly invalid
-			return "", fmt.Errorf("failed to parse private key: %v / %v", err, err2)
+	return cred.ClientEmail, block.Bytes, nil
+}
+
+// validatePrivateKey checks if the private key can be parsed as PKCS8 or PKCS1.
+func validatePrivateKey(keyBytes []byte) error {
+	if _, err := x509.ParsePKCS8PrivateKey(keyBytes); err != nil {
+		if _, err2 := x509.ParsePKCS1PrivateKey(keyBytes); err2 != nil {
+			return fmt.Errorf("%w: PKCS8: %v, PKCS1: %v", errInvalidPrivateKeyFormat, err, err2)
 		}
 	}
+	return nil
+}
 
+// buildSignedURLOptions constructs GCS SignedURLOptions with optional metadata.
+func buildSignedURLOptions(email string, privateKey []byte, expiry time.Duration, opts *file.FileOptions) *storage.SignedURLOptions {
 	optsStruct := &storage.SignedURLOptions{
-		GoogleAccessID: cred.ClientEmail,
-		PrivateKey:     privKeyBytes,
+		GoogleAccessID: email,
+		PrivateKey:     privateKey,
 		Method:         "GET",
 		Expires:        time.Now().Add(expiry),
 	}
 
-	// Set response headers if provided
-	if opts != nil {
-		if opts.ContentType != "" {
-			optsStruct.ContentType = opts.ContentType
-		}
-		if opts.ContentDisposition != "" {
-			// GCS SignedURLOptions uses QueryParameters to set response headers
-			if optsStruct := optsStruct; optsStruct.Headers == nil {
-				optsStruct.Headers = []string{fmt.Sprintf("response-content-disposition=%s", opts.ContentDisposition)}
-			} else {
-				optsStruct.Headers = append(optsStruct.Headers, fmt.Sprintf("response-content-disposition=%s", opts.ContentDisposition))
-			}
-		}
+	if opts == nil {
+		return optsStruct
 	}
 
-	url, err := storage.SignedURL(s.cfg.BucketName, name, optsStruct)
+	// Set Content-Type
+	if opts.ContentType != "" {
+		optsStruct.ContentType = opts.ContentType
+	}
+
+	// Set Content-Disposition via query parameters
+	if opts.ContentDisposition != "" {
+		if optsStruct.QueryParameters == nil {
+			optsStruct.QueryParameters = make(url.Values)
+		}
+		// Sanitize to prevent header injection
+		sanitized := sanitizeContentDisposition(opts.ContentDisposition)
+		optsStruct.QueryParameters.Set("response-content-disposition", sanitized)
+	}
+
+	return optsStruct
+}
+
+// sanitizeContentDisposition removes newline characters to prevent header injection.
+func sanitizeContentDisposition(value string) string {
+	sanitized := strings.ReplaceAll(value, "\r", "")
+	sanitized = strings.ReplaceAll(sanitized, "\n", "")
+	return sanitized
+}
+
+// SignedURL generates a signed URL for the given object with expiry and optional metadata.
+// Accepts a single *file.FileOptions to match the SignedURLProvider signature.
+func (s *storageAdapter) SignedURL(ctx context.Context, name string, expiry time.Duration, opts *file.FileOptions) (string, error) {
+	// Check context cancellation
+	select {
+	case <-ctx.Done():
+		return "", ctx.Err()
+	default:
+	}
+
+	// Validate config
+	if s.cfg == nil || s.cfg.BucketName == "" {
+		return "", errGCSConfigMissing
+	}
+
+	if s.cfg.CredentialsJSON == "" {
+		return "", errGCSCredentialsMissing
+	}
+
+	// Validate inputs
+	if err := validateSignedURLInput(name, expiry, opts); err != nil {
+		return "", err
+	}
+
+	// Parse credentials
+	email, privateKey, err := parseServiceAccountCredentials(s.cfg.CredentialsJSON)
+	if err != nil {
+		return "", err
+	}
+
+	// Build signed URL options
+	signedOpts := buildSignedURLOptions(email, privateKey, expiry, opts)
+
+	// Generate signed URL
+	signedURL, err := storage.SignedURL(s.cfg.BucketName, name, signedOpts)
 	if err != nil {
 		return "", fmt.Errorf("failed to generate signed URL: %w", err)
 	}
-	return url, nil
+
+	// If a custom endpoint is configured (e.g., fake-gcs-server emulator),
+	// rewrite the signed URL to use its scheme+host so the signed URL points to emulator.
+	if s.cfg.EndPoint != "" {
+		if ep, err := url.Parse(s.cfg.EndPoint); err == nil {
+			if parsed, err := url.Parse(signedURL); err == nil {
+				parsed.Scheme = ep.Scheme
+				parsed.Host = ep.Host
+				signedURL = parsed.String()
+			}
+		}
+	}
+	return signedURL, nil
 }
