@@ -76,7 +76,7 @@ func (om *oracleMigrator) getLastMigration(c *container.Container) int64 {
 
 	err := om.Oracle.Select(context.Background(), &results, getLastOracleGoFrMigration)
 	if err != nil {
-		c.Errorf("Failed to fetch last migration: %v", err)
+		c.Errorf("Failed to fetch last migration from Oracle: %v", err)
 		return 0
 	}
 

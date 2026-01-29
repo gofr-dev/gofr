@@ -11,7 +11,7 @@ import (
 
 const (
 	pubsubMigrationTopic = "gofr_migrations"
-	migrationTimeout     = 10 * time.Second
+	migrationTimeout     = 15 * time.Second
 	defaultQueryLimit    = 100
 )
 

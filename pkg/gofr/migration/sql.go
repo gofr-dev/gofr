@@ -18,8 +18,8 @@ const (
 );`
 
 	createSQLGoFrMigrationLocksTable = `CREATE TABLE IF NOT EXISTS gofr_migration_locks (
-    lock_key VARCHAR(255) PRIMARY KEY,
-    owner_id VARCHAR(255) NOT NULL,
+    lock_key VARCHAR(64) PRIMARY KEY,
+    owner_id VARCHAR(64) NOT NULL,
     expires_at TIMESTAMP NOT NULL
 );`
 
@@ -31,8 +31,6 @@ const (
 	mysql    = "mysql"
 	postgres = "postgres"
 	sqlite   = "sqlite"
-
-	sqlLockTTL = 10 * time.Second
 )
 
 // database/sql is the package imported so named it sqlDS.
@@ -154,7 +152,7 @@ func (*sqlMigrator) Lock(c *container.Container, ownerID string) error {
 		_, _ = c.SQL.Exec("DELETE FROM gofr_migration_locks WHERE expires_at < ?", time.Now().UTC())
 
 		// 2. Try to acquire lock
-		expiresAt := time.Now().UTC().Add(sqlLockTTL)
+		expiresAt := time.Now().UTC().Add(migrationLockTTL)
 
 		_, err := c.SQL.Exec("INSERT INTO gofr_migration_locks (lock_key, owner_id, expires_at) VALUES (?, ?, ?)",
 			lockKey, ownerID, expiresAt)
@@ -183,7 +181,7 @@ func (*sqlMigrator) Unlock(c *container.Container, ownerID string) error {
 }
 
 func (*sqlMigrator) Refresh(c *container.Container, ownerID string) error {
-	expiresAt := time.Now().UTC().Add(sqlLockTTL)
+	expiresAt := time.Now().UTC().Add(migrationLockTTL)
 
 	_, err := c.SQL.Exec("UPDATE gofr_migration_locks SET expires_at = ? WHERE lock_key = ? AND owner_id = ?",
 		expiresAt, lockKey, ownerID)

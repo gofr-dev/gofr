@@ -160,7 +160,7 @@ func TestRedisMigrator_Lock(t *testing.T) {
 	m := redisMigrator{Redis: mocks.Redis}
 
 	t.Run("Success", func(t *testing.T) {
-		mocks.Redis.EXPECT().SetNX(gomock.Any(), lockKey, "1", 10*time.Second).
+		mocks.Redis.EXPECT().SetNX(gomock.Any(), lockKey, "1", 15*time.Second).
 			Return(goRedis.NewBoolResult(true, nil))
 
 		err := m.Lock(c, "1")
@@ -169,11 +169,11 @@ func TestRedisMigrator_Lock(t *testing.T) {
 
 	t.Run("RetrySuccess", func(t *testing.T) {
 		// First attempt fails (lock held)
-		mocks.Redis.EXPECT().SetNX(gomock.Any(), lockKey, "1", 10*time.Second).
+		mocks.Redis.EXPECT().SetNX(gomock.Any(), lockKey, "1", 15*time.Second).
 			Return(goRedis.NewBoolResult(false, nil))
 
 		// Second attempt succeeds
-		mocks.Redis.EXPECT().SetNX(gomock.Any(), lockKey, "1", 10*time.Second).
+		mocks.Redis.EXPECT().SetNX(gomock.Any(), lockKey, "1", 15*time.Second).
 			Return(goRedis.NewBoolResult(true, nil))
 
 		err := m.Lock(c, "1")
@@ -181,7 +181,7 @@ func TestRedisMigrator_Lock(t *testing.T) {
 	})
 
 	t.Run("RedisError", func(t *testing.T) {
-		mocks.Redis.EXPECT().SetNX(gomock.Any(), lockKey, "1", 10*time.Second).
+		mocks.Redis.EXPECT().SetNX(gomock.Any(), lockKey, "1", 15*time.Second).
 			Return(goRedis.NewBoolResult(false, errRedis))
 
 		err := m.Lock(c, "1")
@@ -223,7 +223,7 @@ func TestRedisMigrator_Refresh(t *testing.T) {
 	m := redisMigrator{Redis: mocks.Redis}
 
 	t.Run("Success", func(t *testing.T) {
-		mocks.Redis.EXPECT().Eval(gomock.Any(), gomock.Any(), []string{lockKey}, "1", 10).
+		mocks.Redis.EXPECT().Eval(gomock.Any(), gomock.Any(), []string{lockKey}, "1", 15).
 			Return(goRedis.NewCmdResult(int64(1), nil))
 
 		err := m.Refresh(c, "1")
@@ -231,7 +231,7 @@ func TestRedisMigrator_Refresh(t *testing.T) {
 	})
 
 	t.Run("Error", func(t *testing.T) {
-		mocks.Redis.EXPECT().Eval(gomock.Any(), gomock.Any(), []string{lockKey}, "1", 10).
+		mocks.Redis.EXPECT().Eval(gomock.Any(), gomock.Any(), []string{lockKey}, "1", 15).
 			Return(goRedis.NewCmdResult(int64(0), errRedis))
 
 		err := m.Refresh(c, "1")

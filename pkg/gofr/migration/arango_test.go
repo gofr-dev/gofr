@@ -15,7 +15,7 @@ import (
 
 func TestMain(m *testing.M) {
 	os.Setenv("GOFR_TELEMETRY", "false")
-	os.Exit(m.Run())
+	m.Run()
 }
 
 func arangoSetup(t *testing.T) (migrator, *container.MockArangoDBProvider, *container.Container) {

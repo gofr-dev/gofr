@@ -9,10 +9,7 @@ import (
 	"gofr.dev/pkg/gofr/container"
 )
 
-const (
-	// redisLockTTL is the time-to-live for the redis lock to ensure it's released if the process crashes.
-	redisLockTTL = 10 * time.Second
-)
+
 
 type redisDS struct {
 	Redis
@@ -133,7 +130,7 @@ func (m *redisMigrator) rollback(c *container.Container, data transactionData) {
 
 func (*redisMigrator) Lock(c *container.Container, ownerID string) error {
 	for i := 0; ; i++ {
-		status, err := c.Redis.SetNX(context.Background(), lockKey, ownerID, redisLockTTL).Result()
+		status, err := c.Redis.SetNX(context.Background(), lockKey, ownerID, migrationLockTTL).Result()
 		if err == nil && status {
 			c.Debug("Redis lock acquired successfully")
 
@@ -183,7 +180,7 @@ func (*redisMigrator) Refresh(c *container.Container, ownerID string) error {
 		end
 	`
 
-	_, err := c.Redis.Eval(context.Background(), script, []string{lockKey}, ownerID, int(redisLockTTL.Seconds())).Result()
+	_, err := c.Redis.Eval(context.Background(), script, []string{lockKey}, ownerID, int(migrationLockTTL.Seconds())).Result()
 	if err != nil {
 		return err
 	}

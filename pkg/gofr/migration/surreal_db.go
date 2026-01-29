@@ -85,6 +85,7 @@ func (s *surrealMigrator) getLastMigration(c *container.Container) int64 {
 
 	result, err := s.SurrealDB.Query(context.Background(), getLastSurrealDBGoFrMigration, nil)
 	if err != nil {
+		c.Errorf("Failed to fetch last migration from SurrealDB: %v", err)
 		return 0
 	}
 
