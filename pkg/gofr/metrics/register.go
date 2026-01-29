@@ -4,6 +4,7 @@ import (
 	"context"
 	"sync"
 
+	"github.com/prometheus/client_golang/prometheus"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/metric"
 )
@@ -23,6 +24,9 @@ type Manager interface {
 	DeltaUpDownCounter(ctx context.Context, name string, value float64, labels ...string)
 	RecordHistogram(ctx context.Context, name string, value float64, labels ...string)
 	SetGauge(name string, value float64, labels ...string)
+
+	Flush(ctx context.Context) error
+	Shutdown(ctx context.Context) error
 }
 
 // Logger defines a simple interface for logging messages at different log levels.
@@ -31,12 +35,16 @@ type Logger interface {
 	Errorf(format string, args ...any)
 	Warn(args ...any)
 	Warnf(format string, args ...any)
+	Info(args ...any)
+	Infof(format string, args ...any)
 }
 
 type metricsManager struct {
-	meter  metric.Meter
-	store  Store
-	logger Logger
+	meter    metric.Meter
+	store    Store
+	logger   Logger
+	flush    func(context.Context) error
+	gatherer prometheus.Gatherer
 }
 
 // Developer Note: float64Gauge is used instead of metric.Float64ObservableGauge because we need a synchronous gauge metric
@@ -48,11 +56,14 @@ type float64Gauge struct {
 }
 
 // NewMetricsManager creates a new metrics manager instance with the provided metric  meter and logger.
-func NewMetricsManager(meter metric.Meter, logger Logger) Manager {
+func NewMetricsManager(meter metric.Meter, logger Logger, flush func(context.Context) error,
+	gatherer prometheus.Gatherer) Manager {
 	return &metricsManager{
-		meter:  meter,
-		store:  newOtelStore(),
-		logger: logger,
+		meter:    meter,
+		store:    newOtelStore(),
+		logger:   logger,
+		flush:    flush,
+		gatherer: gatherer,
 	}
 }
 

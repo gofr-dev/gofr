@@ -14,8 +14,9 @@ import (
 )
 
 func Test_NewMetricsManagerSuccess(t *testing.T) {
-	metrics := NewMetricsManager(exporters.Prometheus("testing-app", "v1.0.0"),
-		logging.NewMockLogger(logging.INFO))
+	logger := logging.NewMockLogger(logging.INFO)
+	meter, flush, gatherer := exporters.Prometheus("testing-app", "v1.0.0", logger)
+	metrics := NewMetricsManager(meter, logger, flush, gatherer)
 
 	metrics.NewGauge("gauge-test", "this is metric to test gauge")
 	metrics.NewCounter("counter-test", "this is metric to test counter")
@@ -68,8 +69,9 @@ func Test_NewMetricsManagerSuccess(t *testing.T) {
 
 func Test_NewMetricsManagerMetricsNotRegistered(t *testing.T) {
 	logs := func() {
-		metrics := NewMetricsManager(exporters.Prometheus("testing-app", "v1.0.0"),
-			logging.NewMockLogger(logging.INFO))
+		logger := logging.NewMockLogger(logging.INFO)
+		meter, flush, gatherer := exporters.Prometheus("testing-app", "v1.0.0", logger)
+		metrics := NewMetricsManager(meter, logger, flush, gatherer)
 
 		metrics.SetGauge("gauge-test", 50)
 		metrics.IncrementCounter(t.Context(), "counter-test")
@@ -87,8 +89,9 @@ func Test_NewMetricsManagerMetricsNotRegistered(t *testing.T) {
 
 func Test_NewMetricsManagerInvalidMetricsName(t *testing.T) {
 	logs := func() {
-		metrics := NewMetricsManager(exporters.Prometheus("testing-app", "v1.0.0"),
-			logging.NewMockLogger(logging.INFO))
+		logger := logging.NewMockLogger(logging.INFO)
+		meter, flush, gatherer := exporters.Prometheus("testing-app", "v1.0.0", logger)
+		metrics := NewMetricsManager(meter, logger, flush, gatherer)
 
 		metrics.NewCounter("", "counter metric with empty name")
 		metrics.NewUpDownCounter("", "up-down-counter metric with empty name")
@@ -106,8 +109,9 @@ func Test_NewMetricsManagerInvalidMetricsName(t *testing.T) {
 
 func Test_NewMetricsManagerDuplicateMetricsRegistration(t *testing.T) {
 	logs := func() {
-		metrics := NewMetricsManager(exporters.Prometheus("testing-app", "v1.0.0"),
-			logging.NewMockLogger(logging.INFO))
+		logger := logging.NewMockLogger(logging.INFO)
+		meter, flush, gatherer := exporters.Prometheus("testing-app", "v1.0.0", logger)
+		metrics := NewMetricsManager(meter, logger, flush, gatherer)
 
 		metrics.NewGauge("gauge-test", "this is metric to test gauge")
 		metrics.NewCounter("counter-test", "this is metric to test counter")
@@ -130,8 +134,9 @@ func Test_NewMetricsManagerDuplicateMetricsRegistration(t *testing.T) {
 
 func Test_NewMetricsManagerInvalidLabelPairErrors(t *testing.T) {
 	logs := func() {
-		metrics := NewMetricsManager(exporters.Prometheus("testing-app", "v1.0.0"),
-			logging.NewMockLogger(logging.INFO))
+		logger := logging.NewMockLogger(logging.INFO)
+		meter, flush, gatherer := exporters.Prometheus("testing-app", "v1.0.0", logger)
+		metrics := NewMetricsManager(meter, logger, flush, gatherer)
 
 		metrics.NewCounter("counter-test", "this is metric to test counter")
 
@@ -146,8 +151,9 @@ func Test_NewMetricsManagerInvalidLabelPairErrors(t *testing.T) {
 
 func Test_NewMetricsManagerLabelHighCardinality(t *testing.T) {
 	logs := func() {
-		metrics := NewMetricsManager(exporters.Prometheus("testing-app", "v1.0.0"),
-			logging.NewMockLogger(logging.INFO))
+		logger := logging.NewMockLogger(logging.INFO)
+		meter, flush, gatherer := exporters.Prometheus("testing-app", "v1.0.0", logger)
+		metrics := NewMetricsManager(meter, logger, flush, gatherer)
 
 		metrics.NewCounter("counter-test", "this is metric to test counter")
 

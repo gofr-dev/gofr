@@ -6,15 +6,24 @@ import (
 	"runtime"
 
 	"github.com/gorilla/mux"
+	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 )
 
 // GetHandler creates a new HTTP handler that serves metrics collected by the provided metrics manager to the '/metrics' route.
 func GetHandler(m Manager) http.Handler {
-	var router = mux.NewRouter()
+	var (
+		router   = mux.NewRouter()
+		gatherer = prometheus.DefaultGatherer
+	)
+
+	if mm, ok := m.(*metricsManager); ok && mm.gatherer != nil {
+		gatherer = mm.gatherer
+	}
 
 	// Prometheus
-	router.NewRoute().Methods(http.MethodGet).Path("/metrics").Handler(systemMetricsHandler(m, promhttp.Handler()))
+	h := systemMetricsHandler(m, promhttp.HandlerFor(gatherer, promhttp.HandlerOpts{}))
+	router.NewRoute().Methods(http.MethodGet).Path("/metrics").Handler(h)
 
 	//   - /debug/pprof/cmdline
 	//   - /debug/pprof/profile

@@ -20,6 +20,7 @@ import (
 	"time"
 
 	_ "github.com/go-sql-driver/mysql" // This is required to be blank import
+	"go.opentelemetry.io/otel/metric"
 
 	"gofr.dev/pkg/gofr/config"
 	"gofr.dev/pkg/gofr/datasource/file"
@@ -119,7 +120,14 @@ func (c *Container) Create(conf config.Config) {
 
 	c.Logger.Debug("Container is being created")
 
-	c.metricsManager = metrics.NewMetricsManager(exporters.Prometheus(c.GetAppName(), c.GetAppVersion()), c.Logger)
+	var (
+		meter metric.Meter
+		flush func(context.Context) error
+	)
+
+	meter, flush, gatherer := exporters.Prometheus(c.GetAppName(), c.GetAppVersion(), c.Logger)
+
+	c.metricsManager = metrics.NewMetricsManager(meter, c.Logger, flush, gatherer)
 
 	exporters.SendFrameworkStartupTelemetry(c.GetAppName(), c.GetAppVersion())
 
@@ -171,6 +179,10 @@ func (c *Container) Close() error {
 
 	for _, conn := range c.WSManager.ListConnections() {
 		c.WSManager.CloseConnection(conn)
+	}
+
+	if c.metricsManager != nil {
+		err = errors.Join(err, c.metricsManager.Shutdown(context.Background()))
 	}
 
 	return err

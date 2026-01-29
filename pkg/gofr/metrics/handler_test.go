@@ -24,8 +24,9 @@ func Test_MetricsGetHandler_MetricsNotRegistered(t *testing.T) {
 	var server *httptest.Server
 
 	logs := func() {
-		manager := NewMetricsManager(exporters.Prometheus("test-app", "v1.0.0"),
-			logging.NewMockLogger(logging.INFO))
+		logger := logging.NewMockLogger(logging.INFO)
+		meter, flush, gatherer := exporters.Prometheus("test-app", "v1.0.0", logger)
+		manager := NewMetricsManager(meter, logger, flush, gatherer)
 
 		handler := GetHandler(manager)
 
@@ -45,8 +46,9 @@ func Test_MetricsGetHandler_MetricsNotRegistered(t *testing.T) {
 }
 
 func Test_MetricsGetHandler_SystemMetricsRegistered(t *testing.T) {
-	manager := NewMetricsManager(exporters.Prometheus("test-app", "v1.0.0"),
-		logging.NewMockLogger(logging.INFO))
+	logger := logging.NewMockLogger(logging.INFO)
+	meter, flush, gatherer := exporters.Prometheus("test-app", "v1.0.0", logger)
+	manager := NewMetricsManager(meter, logger, flush, gatherer)
 
 	// Registering the metrics because the values are being set in the GetHandler function.
 	manager.NewGauge("app_go_routines", "Number of Go routines running.")
@@ -77,8 +79,9 @@ func Test_MetricsGetHandler_SystemMetricsRegistered(t *testing.T) {
 }
 
 func Test_MetricsGetHandler_RegisteredProfilingRoutes(t *testing.T) {
-	manager := NewMetricsManager(exporters.Prometheus("test-app", "v1.0.0"),
-		logging.NewMockLogger(logging.INFO))
+	logger := logging.NewMockLogger(logging.INFO)
+	meter, flush, gatherer := exporters.Prometheus("test-app", "v1.0.0", logger)
+	manager := NewMetricsManager(meter, logger, flush, gatherer)
 
 	// Registering the metrics because the values are being set in the GetHandler function.
 	manager.NewGauge("app_go_routines", "Number of Go routines running.")
