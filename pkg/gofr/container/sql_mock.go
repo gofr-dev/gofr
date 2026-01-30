@@ -50,13 +50,13 @@ func emptyExpectation(m *sqlMockDB) {
 	}
 }
 
-func (m *sqlMockDB) Select(_ context.Context, value any, query string, args ...any) {
+func (m sqlMockDB) Select(_ context.Context, value any, query string, args ...any) {
 	if len(m.queryWithArgs) == 0 {
 		m.logger.Errorf("did not expect any calls for Select with query: %q", query)
 		return
 	}
 
-	defer emptyExpectation(m)
+	defer emptyExpectation(&m)
 
 	expectedText := m.queryWithArgs[0].queryText
 	expectedArgs := m.queryWithArgs[0].arguments
@@ -97,7 +97,7 @@ func (m *sqlMockDB) Select(_ context.Context, value any, query string, args ...a
 	}
 }
 
-func (m *sqlMockDB) HealthCheck() *datasource.Health {
+func (m sqlMockDB) HealthCheck() *datasource.Health {
 	if len(m.expectedHealthCheck) == 0 {
 		m.logger.Error("Did not expect any mock calls for HealthCheck")
 		return nil
@@ -113,7 +113,7 @@ func (m *sqlMockDB) HealthCheck() *datasource.Health {
 	return &d
 }
 
-func (m *sqlMockDB) Dialect() string {
+func (m sqlMockDB) Dialect() string {
 	if len(m.expectedDialect) == 0 {
 		m.logger.Error("Did not expect any mock calls for Dialect")
 		return ""
@@ -128,7 +128,7 @@ func (m *sqlMockDB) Dialect() string {
 	return string(expectedString)
 }
 
-func (m *sqlMockDB) finish(t *testing.T) {
+func (m sqlMockDB) finish(t *testing.T) {
 	t.Helper()
 
 	t.Cleanup(func() {
