@@ -114,7 +114,7 @@ func NewSQL(configs config.Config, logger datasource.Logger, metrics Metrics) *D
 		return nil
 	}
 
-	database := &DB{config: dbConfig, logger: logger, metrics: metrics}
+	database := &DB{config: dbConfig, logger: logger, metrics: metrics, stopSignal: make(chan struct{})}
 
 	printConnectionSuccessLog("connecting", database.config, logger)
 
@@ -137,7 +137,7 @@ func NewSQL(configs config.Config, logger datasource.Logger, metrics Metrics) *D
 
 	go retryConnection(database)
 
-	go pushDBMetrics(database.DB, metrics)
+	go pushDBMetrics(database, metrics)
 
 	return database
 }
@@ -171,10 +171,22 @@ func retryConnection(database *DB) {
 	const connRetryFrequencyInSeconds = 10
 
 	for {
+		select {
+		case <-database.stopSignal:
+			return
+		default:
+		}
+
 		if database.DB.PingContext(context.Background()) != nil {
 			database.logger.Info("retrying SQL database connection")
 
 			for {
+				select {
+				case <-database.stopSignal:
+					return
+				default:
+				}
+
 				err := database.DB.PingContext(context.Background())
 				if err == nil {
 					printConnectionSuccessLog("connected", database.config, database.logger)
@@ -184,11 +196,19 @@ func retryConnection(database *DB) {
 
 				printConnectionFailureLog("connect", database.config, database.logger, err)
 
-				time.Sleep(connRetryFrequencyInSeconds * time.Second)
+				select {
+				case <-time.After(connRetryFrequencyInSeconds * time.Second):
+				case <-database.stopSignal:
+					return
+				}
 			}
 		}
 
-		time.Sleep(connRetryFrequencyInSeconds * time.Second)
+		select {
+		case <-time.After(connRetryFrequencyInSeconds * time.Second):
+		case <-database.stopSignal:
+			return
+		}
 	}
 }
 
@@ -261,17 +281,27 @@ func getDBConnectionString(dbConfig *DBConfig) (string, error) {
 	}
 }
 
-func pushDBMetrics(db *sql.DB, metrics Metrics) {
+func pushDBMetrics(database *DB, metrics Metrics) {
 	const frequency = 10
 
 	for {
-		if db != nil {
-			stats := db.Stats()
+		select {
+		case <-database.stopSignal:
+			return
+		default:
+		}
+
+		if database.DB != nil {
+			stats := database.DB.Stats()
 
 			metrics.SetGauge("app_sql_open_connections", float64(stats.OpenConnections))
 			metrics.SetGauge("app_sql_inUse_connections", float64(stats.InUse))
 
-			time.Sleep(frequency * time.Second)
+			select {
+			case <-time.After(frequency * time.Second):
+			case <-database.stopSignal:
+				return
+			}
 		}
 	}
 }
