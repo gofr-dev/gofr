@@ -14,7 +14,7 @@ type redisDS struct {
 }
 
 func (r redisDS) apply(m migrator) migrator {
-	return &redisMigrator{
+	return redisMigrator{
 		Redis:    r.Redis,
 		migrator: m,
 	}
