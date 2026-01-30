@@ -3,7 +3,6 @@ package sql
 import (
 	"bytes"
 	"context"
-	"context"
 	"database/sql"
 	"sync"
 	"testing"
