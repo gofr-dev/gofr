@@ -1251,3 +1251,26 @@ func TestDB_sendOperationStats_RecordsMilliseconds(t *testing.T) {
 	duration := time.Since(start).Milliseconds()
 	assert.Equal(t, int64(1500), duration)
 }
+
+func TestTx_Exec_SafeWithNilMetrics(t *testing.T) {
+	db, mock := getDB(t, logging.INFO)
+	defer db.DB.Close()
+
+	// 2. FORCE nil metrics (Simulating the bug scenario)
+	db.metrics = nil
+
+	// 3. Begin transaction
+	mock.ExpectBegin()
+
+	tx, err := db.Begin()
+	require.NoError(t, err)
+
+	mock.ExpectExec("INSERT INTO users VALUES(.*)").
+		WillReturnResult(sqlmock.NewResult(1, 1))
+
+	assert.NotPanics(t, func() {
+		_, err = tx.Exec("INSERT INTO users VALUES(.*)", 1, "test")
+	}, "Tx.Exec should NOT panic when metrics are nil")
+
+	assert.NoError(t, err)
+}
