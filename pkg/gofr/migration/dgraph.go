@@ -48,7 +48,7 @@ type dgraphMigrator struct {
 
 // apply creates a new dgraphMigrator.
 func (ds dgraphDS) apply(m migrator) migrator {
-	return &dgraphMigrator{
+	return dgraphMigrator{
 		dgraphDS: ds,
 		migrator: m,
 	}
@@ -83,7 +83,7 @@ func (ds dgraphDS) DropField(ctx context.Context, fieldName string) error {
 }
 
 // checkAndCreateMigrationTable ensures migration schema exists.
-func (dm *dgraphMigrator) checkAndCreateMigrationTable(c *container.Container) error {
+func (dm dgraphMigrator) checkAndCreateMigrationTable(c *container.Container) error {
 	err := dm.ApplySchema(context.Background(), dgraphSchema)
 	if err != nil {
 		c.Debug("Migration schema might already exist:", err)
@@ -93,7 +93,7 @@ func (dm *dgraphMigrator) checkAndCreateMigrationTable(c *container.Container) e
 }
 
 // getLastMigration retrieves the last applied migration version.
-func (dm *dgraphMigrator) getLastMigration(c *container.Container) int64 {
+func (dm dgraphMigrator) getLastMigration(c *container.Container) int64 {
 	var response struct {
 		Migrations []struct {
 			Version int64 `json:"version"`
@@ -133,7 +133,7 @@ func (dm *dgraphMigrator) getLastMigration(c *container.Container) int64 {
 }
 
 // beginTransaction starts a new migration transaction.
-func (dm *dgraphMigrator) beginTransaction(c *container.Container) transactionData {
+func (dm dgraphMigrator) beginTransaction(c *container.Container) transactionData {
 	data := dm.migrator.beginTransaction(c)
 
 	c.Debug("Dgraph migrator begin successfully")
@@ -142,7 +142,7 @@ func (dm *dgraphMigrator) beginTransaction(c *container.Container) transactionDa
 }
 
 // commitMigration commits the migration and records its metadata.
-func (dm *dgraphMigrator) commitMigration(c *container.Container, data transactionData) error {
+func (dm dgraphMigrator) commitMigration(c *container.Container, data transactionData) error {
 	// Build the JSON payload for the migration record.
 	payload := map[string]any{
 		"migrations": []map[string]any{
@@ -173,28 +173,20 @@ func (dm *dgraphMigrator) commitMigration(c *container.Container, data transacti
 }
 
 // rollback handles migration failure and rollback.
-func (dm *dgraphMigrator) rollback(c *container.Container, data transactionData) {
+func (dm dgraphMigrator) rollback(c *container.Container, data transactionData) {
 	dm.migrator.rollback(c, data)
 
 	c.Fatalf("Migration %v failed and rolled back", data.MigrationNumber)
 }
 
-func (*dgraphMigrator) Lock(*container.Container, string) error {
-	return nil
+func (dm dgraphMigrator) lock(c *container.Container, ownerID string, stop <-chan struct{}, fail chan<- error) error {
+	return dm.migrator.lock(c, ownerID, stop, fail)
 }
 
-func (*dgraphMigrator) Unlock(*container.Container, string) error {
-	return nil
+func (dm dgraphMigrator) unlock(c *container.Container, ownerID string) error {
+	return dm.migrator.unlock(c, ownerID)
 }
 
-func (*dgraphMigrator) Refresh(*container.Container, string) error {
-	return nil
-}
-
-func (dm *dgraphMigrator) Next() migrator {
-	return dm.migrator
-}
-
-func (*dgraphMigrator) Name() string {
+func (dgraphMigrator) name() string {
 	return "DGraph"
 }

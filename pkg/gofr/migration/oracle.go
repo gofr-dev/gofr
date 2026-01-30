@@ -15,6 +15,23 @@ var (
 	errNestedTransactionNotSupported = errors.New("nested transactions not supported")
 )
 
+type oracleDS struct {
+	Oracle
+}
+
+type oracleMigrator struct {
+	Oracle
+	migrator
+}
+
+// Provides a wrapper to apply the oracle migrator logic.
+func (od oracleDS) apply(m migrator) migrator {
+	return oracleMigrator{
+		Oracle:   od.Oracle,
+		migrator: m,
+	}
+}
+
 const (
 	checkAndCreateOracleMigrationTable = `
 BEGIN
@@ -40,28 +57,12 @@ VALUES (:1, :2, :3, :4)
 `
 )
 
-type oracleDS struct {
-	Oracle
-}
-
-type oracleMigrator struct {
-	Oracle
-	migrator
-}
-
-// Provides a wrapper to apply the oracle migrator logic.
-func (od oracleDS) apply(m migrator) migrator {
-	return &oracleMigrator{
-		Oracle:   od.Oracle,
-		migrator: m,
-	}
-}
-
 // Create migration table if it doesn't exist.
-func (om *oracleMigrator) checkAndCreateMigrationTable(c *container.Container) error {
+func (om oracleMigrator) checkAndCreateMigrationTable(c *container.Container) error {
 	err := om.Oracle.Exec(context.Background(), checkAndCreateOracleMigrationTable)
 	if err != nil {
 		c.Errorf("Failed to create Oracle migration table: %v", err)
+
 		return err
 	}
 
@@ -71,12 +72,12 @@ func (om *oracleMigrator) checkAndCreateMigrationTable(c *container.Container) e
 }
 
 // Get the last applied migration version.
-func (om *oracleMigrator) getLastMigration(c *container.Container) int64 {
+func (om oracleMigrator) getLastMigration(c *container.Container) int64 {
 	var results []map[string]any
 
 	err := om.Oracle.Select(context.Background(), &results, getLastOracleGoFrMigration)
 	if err != nil {
-		c.Errorf("Failed to fetch last migration from Oracle: %v", err)
+		c.Errorf("Failed to fetch last migration: %v", err)
 		return 0
 	}
 
@@ -93,7 +94,7 @@ func (om *oracleMigrator) getLastMigration(c *container.Container) int64 {
 }
 
 // extractLastMigrationFromResults handles Oracle number type conversion.
-func (om *oracleMigrator) extractLastMigrationFromResults(results []map[string]any) int64 {
+func (om oracleMigrator) extractLastMigrationFromResults(results []map[string]any) int64 {
 	if len(results) == 0 {
 		return 0
 	}
@@ -107,7 +108,7 @@ func (om *oracleMigrator) extractLastMigrationFromResults(results []map[string]a
 }
 
 // convertToInt64 converts various Oracle number types to int64.
-func (om *oracleMigrator) convertToInt64(value any) int64 {
+func (om oracleMigrator) convertToInt64(value any) int64 {
 	switch v := value.(type) {
 	case float64:
 		return int64(v)
@@ -136,7 +137,7 @@ func (oracleMigrator) parseStringValue(value any) int64 {
 }
 
 // Commit the migration and insert a record into the migration table.
-func (om *oracleMigrator) commitMigration(c *container.Container, data transactionData) error {
+func (om oracleMigrator) commitMigration(c *container.Container, data transactionData) error {
 	if data.OracleTx == nil {
 		c.Error("invalid Oracle transaction")
 		return errInvalidOracleTransaction
@@ -163,7 +164,7 @@ func (om *oracleMigrator) commitMigration(c *container.Container, data transacti
 }
 
 // Rollback the migration transaction.
-func (om *oracleMigrator) rollback(c *container.Container, data transactionData) {
+func (om oracleMigrator) rollback(c *container.Container, data transactionData) {
 	if data.OracleTx != nil {
 		if err := data.OracleTx.Rollback(); err != nil {
 			c.Fatalf("unable to rollback Oracle transaction: %v", err)
@@ -177,7 +178,7 @@ func (om *oracleMigrator) rollback(c *container.Container, data transactionData)
 }
 
 // Begin a new migration transaction.
-func (om *oracleMigrator) beginTransaction(c *container.Container) transactionData {
+func (om oracleMigrator) beginTransaction(c *container.Container) transactionData {
 	// Begin a proper transaction
 	tx, err := om.Oracle.Begin()
 	if err != nil {
@@ -194,23 +195,15 @@ func (om *oracleMigrator) beginTransaction(c *container.Container) transactionDa
 	return td
 }
 
-func (*oracleMigrator) Lock(*container.Container, string) error {
-	return nil
+func (om oracleMigrator) lock(c *container.Container, ownerID string, stop <-chan struct{}, fail chan<- error) error {
+	return om.migrator.lock(c, ownerID, stop, fail)
 }
 
-func (*oracleMigrator) Unlock(*container.Container, string) error {
-	return nil
+func (om oracleMigrator) unlock(c *container.Container, ownerID string) error {
+	return om.migrator.unlock(c, ownerID)
 }
 
-func (*oracleMigrator) Refresh(*container.Container, string) error {
-	return nil
-}
-
-func (om *oracleMigrator) Next() migrator {
-	return om.migrator
-}
-
-func (*oracleMigrator) Name() string {
+func (oracleMigrator) name() string {
 	return "Oracle"
 }
 

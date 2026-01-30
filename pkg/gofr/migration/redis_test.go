@@ -13,6 +13,14 @@ import (
 	"gofr.dev/pkg/gofr/container"
 )
 
+var (
+	errRefreshFailed = errors.New("refresh failed")
+	errRedis         = errors.New("redis error")
+	errHSet          = errors.New("hset error")
+	errRedisExec     = errors.New("exec error")
+	errEval          = errors.New("eval error")
+)
+
 func TestRedis_Get(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	t.Cleanup(ctrl.Finish)
@@ -136,58 +144,134 @@ func TestRedisMigrator_beginTransaction(t *testing.T) {
 
 	c, mocks := container.NewMockContainer(t)
 	mockMigrator := NewMockmigrator(ctrl)
+	mockPipeliner := NewMockPipeliner(ctrl)
 
 	m := redisMigrator{
 		Redis:    mocks.Redis,
 		migrator: mockMigrator,
 	}
 
-	mocks.Redis.EXPECT().TxPipeline()
-	mockMigrator.EXPECT().beginTransaction(c)
+	mocks.Redis.EXPECT().TxPipeline().Return(mockPipeliner)
+	mockMigrator.EXPECT().beginTransaction(c).Return(transactionData{})
 
 	data := m.beginTransaction(c)
 
-	assert.Equal(t, transactionData{}, data, "TEST Failed.\n")
+	assert.Equal(t, mockPipeliner, data.RedisTx)
 }
 
-var errRedis = errors.New("redis error")
+func TestRedisMigrator_StartRefreshSuccess(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	t.Cleanup(ctrl.Finish)
+
+	c, mocks := container.NewMockContainer(t)
+	mockMigrator := NewMockmigrator(ctrl)
+	m := redisMigrator{Redis: mocks.Redis, migrator: mockMigrator}
+
+	stop := make(chan struct{})
+	fail := make(chan error, 1)
+
+	// The refresh happens every defaultRefresh interval (5 seconds)
+	// We expect at least one call within our test window
+	mocks.Redis.EXPECT().Eval(gomock.Any(), gomock.Any(), []string{lockKey}, "1", int(defaultLockTTL.Seconds())).
+		Return(goRedis.NewCmdResult(int64(1), nil)).MinTimes(1).MaxTimes(2)
+
+	go m.startRefresh(c, "1", stop, fail)
+
+	// Wait enough time for at least one refresh cycle
+	time.Sleep(defaultRefresh + 100*time.Millisecond)
+	close(stop)
+
+	// Give goroutine time to exit gracefully
+	time.Sleep(50 * time.Millisecond)
+
+	select {
+	case err := <-fail:
+		t.Errorf("Unexpected error: %v", err)
+	default:
+		// Success - no error received
+	}
+}
+
+func TestRedisMigrator_StartRefreshError(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	t.Cleanup(ctrl.Finish)
+
+	c, mocks := container.NewMockContainer(t)
+	mockMigrator := NewMockmigrator(ctrl)
+	m := redisMigrator{Redis: mocks.Redis, migrator: mockMigrator}
+
+	stop := make(chan struct{})
+	fail := make(chan error, 1)
+
+	mocks.Redis.EXPECT().Eval(gomock.Any(), gomock.Any(), []string{lockKey}, "1", int(defaultLockTTL.Seconds())).
+		Return(goRedis.NewCmdResult(int64(0), errRefreshFailed)).Times(1)
+
+	go m.startRefresh(c, "1", stop, fail)
+
+	select {
+	case err := <-fail:
+		assert.Equal(t, errRefreshFailed, err)
+	case <-time.After(defaultRefresh * 2):
+		t.Error("Expected error to be sent on fail channel, but timed out")
+	}
+
+	close(stop)
+}
+
+func TestRedisMigrator_StartRefreshLockLost(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	t.Cleanup(ctrl.Finish)
+
+	c, mocks := container.NewMockContainer(t)
+	mockMigrator := NewMockmigrator(ctrl)
+	m := redisMigrator{Redis: mocks.Redis, migrator: mockMigrator}
+
+	stop := make(chan struct{})
+	fail := make(chan error, 1)
+
+	// Lock returns 0, indicating lock was lost
+	mocks.Redis.EXPECT().Eval(gomock.Any(), gomock.Any(), []string{lockKey}, "1", int(defaultLockTTL.Seconds())).
+		Return(goRedis.NewCmdResult(int64(0), nil)).Times(1)
+
+	go m.startRefresh(c, "1", stop, fail)
+
+	select {
+	case err := <-fail:
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "lock lost or stolen")
+	case <-time.After(defaultRefresh * 2):
+		t.Error("Expected error to be sent on fail channel, but timed out")
+	}
+
+	close(stop)
+}
 
 func TestRedisMigrator_Lock(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	t.Cleanup(ctrl.Finish)
 
 	c, mocks := container.NewMockContainer(t)
-	m := redisMigrator{Redis: mocks.Redis}
+	mockMigrator := NewMockmigrator(ctrl)
+	m := redisMigrator{Redis: mocks.Redis, migrator: mockMigrator}
 
-	t.Run("Success", func(t *testing.T) {
-		mocks.Redis.EXPECT().SetNX(gomock.Any(), lockKey, "1", 15*time.Second).
-			Return(goRedis.NewBoolResult(true, nil))
+	stop := make(chan struct{})
+	fail := make(chan error, 1)
 
-		err := m.Lock(c, "1")
-		require.NoError(t, err)
-	})
+	// Test Success
+	mocks.Redis.EXPECT().SetNX(gomock.Any(), lockKey, "owner-1", defaultLockTTL).Return(goRedis.NewBoolResult(true, nil))
+	mockMigrator.EXPECT().lock(gomock.Any(), "owner-1", stop, fail).Return(nil)
 
-	t.Run("RetrySuccess", func(t *testing.T) {
-		// First attempt fails (lock held)
-		mocks.Redis.EXPECT().SetNX(gomock.Any(), lockKey, "1", 15*time.Second).
-			Return(goRedis.NewBoolResult(false, nil))
+	err := m.lock(c, "owner-1", stop, fail)
 
-		// Second attempt succeeds
-		mocks.Redis.EXPECT().SetNX(gomock.Any(), lockKey, "1", 15*time.Second).
-			Return(goRedis.NewBoolResult(true, nil))
+	require.NoError(t, err)
 
-		err := m.Lock(c, "1")
-		require.NoError(t, err)
-	})
+	// Test Error
+	mocks.Redis.EXPECT().SetNX(gomock.Any(), lockKey, "owner-1", defaultLockTTL).Return(goRedis.NewBoolResult(false, errRedis))
 
-	t.Run("RedisError", func(t *testing.T) {
-		mocks.Redis.EXPECT().SetNX(gomock.Any(), lockKey, "1", 15*time.Second).
-			Return(goRedis.NewBoolResult(false, errRedis))
+	err = m.lock(c, "owner-1", stop, fail)
+	assert.Equal(t, errLockAcquisitionFailed, err)
 
-		err := m.Lock(c, "1")
-		require.Error(t, err)
-		assert.Equal(t, errLockAcquisitionFailed, err)
-	})
+	close(stop)
 }
 
 func TestRedisMigrator_Unlock(t *testing.T) {
@@ -195,46 +279,139 @@ func TestRedisMigrator_Unlock(t *testing.T) {
 	t.Cleanup(ctrl.Finish)
 
 	c, mocks := container.NewMockContainer(t)
-	m := redisMigrator{Redis: mocks.Redis}
+	mockMigrator := NewMockmigrator(ctrl)
+	m := redisMigrator{Redis: mocks.Redis, migrator: mockMigrator}
 
-	t.Run("Success", func(t *testing.T) {
-		mocks.Redis.EXPECT().Eval(gomock.Any(), gomock.Any(), []string{lockKey}, "1").
-			Return(goRedis.NewCmdResult(int64(1), nil))
+	mocks.Redis.EXPECT().Eval(gomock.Any(), gomock.Any(), []string{lockKey}, "owner-1").Return(goRedis.NewCmdResult(int64(1), nil))
+	mockMigrator.EXPECT().unlock(gomock.Any(), "owner-1").Return(nil)
 
-		err := m.Unlock(c, "1")
-		require.NoError(t, err)
-	})
-
-	t.Run("Error", func(t *testing.T) {
-		mocks.Redis.EXPECT().Eval(gomock.Any(), gomock.Any(), []string{lockKey}, "1").
-			Return(goRedis.NewCmdResult(int64(0), errRedis))
-
-		err := m.Unlock(c, "1")
-		require.Error(t, err)
-		assert.Equal(t, errLockReleaseFailed, err)
-	})
+	err := m.unlock(c, "owner-1")
+	assert.NoError(t, err)
 }
 
-func TestRedisMigrator_Refresh(t *testing.T) {
+func TestRedisMigrator_CommitMigration(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	t.Cleanup(ctrl.Finish)
 
 	c, mocks := container.NewMockContainer(t)
-	m := redisMigrator{Redis: mocks.Redis}
+	mockMigrator := NewMockmigrator(ctrl)
+	mockPipeliner := NewMockPipeliner(ctrl)
 
-	t.Run("Success", func(t *testing.T) {
-		mocks.Redis.EXPECT().Eval(gomock.Any(), gomock.Any(), []string{lockKey}, "1", 15).
-			Return(goRedis.NewCmdResult(int64(1), nil))
+	m := redisMigrator{Redis: mocks.Redis, migrator: mockMigrator}
 
-		err := m.Refresh(c, "1")
-		require.NoError(t, err)
-	})
+	data := transactionData{
+		MigrationNumber: 1,
+		StartTime:       time.Now().Add(-1 * time.Second),
+		RedisTx:         mockPipeliner,
+	}
 
-	t.Run("Error", func(t *testing.T) {
-		mocks.Redis.EXPECT().Eval(gomock.Any(), gomock.Any(), []string{lockKey}, "1", 15).
-			Return(goRedis.NewCmdResult(int64(0), errRedis))
+	// Mock HSet and Exec
+	mockPipeliner.EXPECT().HSet(gomock.Any(), "gofr_migrations", gomock.Any()).Return(goRedis.NewIntResult(1, nil))
+	mockPipeliner.EXPECT().Exec(gomock.Any()).Return(nil, nil)
+	mockMigrator.EXPECT().commitMigration(c, data).Return(nil)
 
-		err := m.Refresh(c, "1")
-		require.Error(t, err)
-	})
+	err := m.commitMigration(c, data)
+	assert.NoError(t, err)
+}
+
+func TestRedisMigrator_CommitMigration_HSetError(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	t.Cleanup(ctrl.Finish)
+
+	c, mocks := container.NewMockContainer(t)
+	mockMigrator := NewMockmigrator(ctrl)
+	mockPipeliner := NewMockPipeliner(ctrl)
+	mockLogger := container.NewMockLogger(ctrl)
+	c.Logger = mockLogger
+
+	m := redisMigrator{Redis: mocks.Redis, migrator: mockMigrator}
+
+	data := transactionData{
+		MigrationNumber: 1,
+		StartTime:       time.Now(),
+		RedisTx:         mockPipeliner,
+	}
+
+	testErr := errHSet
+	mockPipeliner.EXPECT().HSet(gomock.Any(), "gofr_migrations", gomock.Any()).Return(goRedis.NewIntResult(0, testErr))
+	mockLogger.EXPECT().Errorf(gomock.Any(), gomock.Any(), gomock.Any()).Times(1)
+
+	err := m.commitMigration(c, data)
+	assert.Equal(t, testErr, err)
+}
+
+func TestRedisMigrator_CommitMigration_ExecError(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	t.Cleanup(ctrl.Finish)
+
+	c, mocks := container.NewMockContainer(t)
+	mockMigrator := NewMockmigrator(ctrl)
+	mockPipeliner := NewMockPipeliner(ctrl)
+	mockLogger := container.NewMockLogger(ctrl)
+	c.Logger = mockLogger
+
+	m := redisMigrator{Redis: mocks.Redis, migrator: mockMigrator}
+
+	data := transactionData{
+		MigrationNumber: 1,
+		StartTime:       time.Now(),
+		RedisTx:         mockPipeliner,
+	}
+
+	testErr := errRedisExec
+
+	mockPipeliner.EXPECT().HSet(gomock.Any(), "gofr_migrations", gomock.Any()).Return(goRedis.NewIntResult(1, nil))
+	mockPipeliner.EXPECT().Exec(gomock.Any()).Return(nil, testErr)
+	mockLogger.EXPECT().Errorf(gomock.Any(), gomock.Any(), gomock.Any()).Times(1)
+
+	err := m.commitMigration(c, data)
+	assert.Equal(t, testErr, err)
+}
+
+func TestRedisMigrator_Rollback(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	t.Cleanup(ctrl.Finish)
+
+	c, mocks := container.NewMockContainer(t)
+	mockMigrator := NewMockmigrator(ctrl)
+	mockPipeliner := NewMockPipeliner(ctrl)
+	mockLogger := container.NewMockLogger(ctrl)
+	c.Logger = mockLogger
+
+	m := redisMigrator{Redis: mocks.Redis, migrator: mockMigrator}
+
+	data := transactionData{
+		MigrationNumber: 1,
+		RedisTx:         mockPipeliner,
+	}
+
+	mockPipeliner.EXPECT().Discard()
+	mockMigrator.EXPECT().rollback(c, data)
+	mockLogger.EXPECT().Fatalf(gomock.Any(), gomock.Any())
+
+	m.rollback(c, data)
+}
+
+func TestRedisMigrator_UnlockError(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	t.Cleanup(ctrl.Finish)
+
+	c, mocks := container.NewMockContainer(t)
+	mockMigrator := NewMockmigrator(ctrl)
+	mockLogger := container.NewMockLogger(ctrl)
+	c.Logger = mockLogger
+
+	m := redisMigrator{Redis: mocks.Redis, migrator: mockMigrator}
+
+	testErr := errEval
+	mocks.Redis.EXPECT().Eval(gomock.Any(), gomock.Any(), []string{lockKey}, "owner-1").Return(goRedis.NewCmdResult(nil, testErr))
+	mockLogger.EXPECT().Errorf(gomock.Any(), gomock.Any()).AnyTimes()
+
+	err := m.unlock(c, "owner-1")
+	assert.Equal(t, errLockReleaseFailed, err)
+}
+
+func TestRedisMigrator_Name(t *testing.T) {
+	m := redisMigrator{}
+	assert.Equal(t, "Redis", m.name())
 }

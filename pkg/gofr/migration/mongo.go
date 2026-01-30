@@ -7,10 +7,6 @@ import (
 	"gofr.dev/pkg/gofr/container"
 )
 
-const (
-	mongoMigrationCollection = "gofr_migrations"
-)
-
 type mongoDS struct {
 	container.Mongo
 }
@@ -22,16 +18,22 @@ type mongoMigrator struct {
 
 // apply initializes mongoMigrator using the Mongo interface.
 func (ds mongoDS) apply(m migrator) migrator {
-	return &mongoMigrator{
+	return mongoMigrator{
 		Mongo:    ds.Mongo,
 		migrator: m,
 	}
 }
 
+const (
+	mongoMigrationCollection = "gofr_migrations"
+)
+
 // checkAndCreateMigrationTable initializes a MongoDB collection if it doesn't exist.
-func (mg *mongoMigrator) checkAndCreateMigrationTable(c *container.Container) error {
+func (mg mongoMigrator) checkAndCreateMigrationTable(c *container.Container) error {
 	err := mg.Mongo.CreateCollection(context.Background(), mongoMigrationCollection)
 	if err != nil {
+		c.Debug("Migration collection might already exist:", err)
+
 		return err
 	}
 
@@ -39,7 +41,7 @@ func (mg *mongoMigrator) checkAndCreateMigrationTable(c *container.Container) er
 }
 
 // getLastMigration retrieves the latest migration version from MongoDB.
-func (mg *mongoMigrator) getLastMigration(c *container.Container) int64 {
+func (mg mongoMigrator) getLastMigration(c *container.Container) int64 {
 	var lastMigration int64
 
 	var migrations []struct {
@@ -51,6 +53,7 @@ func (mg *mongoMigrator) getLastMigration(c *container.Container) int64 {
 	err := mg.Mongo.Find(context.Background(), mongoMigrationCollection, filter, &migrations)
 	if err != nil {
 		c.Errorf("Failed to fetch migrations from MongoDB: %v", err)
+
 		return 0
 	}
 
@@ -66,11 +69,11 @@ func (mg *mongoMigrator) getLastMigration(c *container.Container) int64 {
 	return max(lm2, lastMigration)
 }
 
-func (mg *mongoMigrator) beginTransaction(c *container.Container) transactionData {
+func (mg mongoMigrator) beginTransaction(c *container.Container) transactionData {
 	return mg.migrator.beginTransaction(c)
 }
 
-func (mg *mongoMigrator) commitMigration(c *container.Container, data transactionData) error {
+func (mg mongoMigrator) commitMigration(c *container.Container, data transactionData) error {
 	migrationDoc := map[string]any{
 		"version":    data.MigrationNumber,
 		"method":     "UP",
@@ -88,27 +91,19 @@ func (mg *mongoMigrator) commitMigration(c *container.Container, data transactio
 	return mg.migrator.commitMigration(c, data)
 }
 
-func (mg *mongoMigrator) rollback(c *container.Container, data transactionData) {
+func (mg mongoMigrator) rollback(c *container.Container, data transactionData) {
 	mg.migrator.rollback(c, data)
 	c.Fatalf("Migration %v failed.", data.MigrationNumber)
 }
 
-func (*mongoMigrator) Lock(*container.Container, string) error {
-	return nil
+func (mg mongoMigrator) lock(c *container.Container, ownerID string, stop <-chan struct{}, fail chan<- error) error {
+	return mg.migrator.lock(c, ownerID, stop, fail)
 }
 
-func (*mongoMigrator) Unlock(*container.Container, string) error {
-	return nil
+func (mg mongoMigrator) unlock(c *container.Container, ownerID string) error {
+	return mg.migrator.unlock(c, ownerID)
 }
 
-func (*mongoMigrator) Refresh(*container.Container, string) error {
-	return nil
-}
-
-func (mg *mongoMigrator) Next() migrator {
-	return mg.migrator
-}
-
-func (*mongoMigrator) Name() string {
+func (mongoMigrator) name() string {
 	return "Mongo"
 }

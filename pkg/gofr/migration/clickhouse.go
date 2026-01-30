@@ -7,6 +7,23 @@ import (
 	"gofr.dev/pkg/gofr/container"
 )
 
+type clickHouseDS struct {
+	Clickhouse
+}
+
+type clickHouseMigrator struct {
+	Clickhouse
+
+	migrator
+}
+
+func (ch clickHouseDS) apply(m migrator) migrator {
+	return clickHouseMigrator{
+		Clickhouse: ch.Clickhouse,
+		migrator:   m,
+	}
+}
+
 const (
 	CheckAndCreateChMigrationTable = `CREATE TABLE IF NOT EXISTS gofr_migrations
 (
@@ -24,24 +41,7 @@ ORDER BY (version, method);
 	insertChGoFrMigrationRow = `INSERT INTO gofr_migrations (version, method, start_time, duration) VALUES (?, ?, ?, ?);`
 )
 
-type clickHouseDS struct {
-	Clickhouse
-}
-
-type clickHouseMigrator struct {
-	Clickhouse
-
-	migrator
-}
-
-func (ch clickHouseDS) apply(m migrator) migrator {
-	return &clickHouseMigrator{
-		Clickhouse: ch.Clickhouse,
-		migrator:   m,
-	}
-}
-
-func (ch *clickHouseMigrator) checkAndCreateMigrationTable(c *container.Container) error {
+func (ch clickHouseMigrator) checkAndCreateMigrationTable(c *container.Container) error {
 	if err := c.Clickhouse.Exec(context.Background(), CheckAndCreateChMigrationTable); err != nil {
 		return err
 	}
@@ -49,7 +49,7 @@ func (ch *clickHouseMigrator) checkAndCreateMigrationTable(c *container.Containe
 	return ch.migrator.checkAndCreateMigrationTable(c)
 }
 
-func (ch *clickHouseMigrator) getLastMigration(c *container.Container) int64 {
+func (ch clickHouseMigrator) getLastMigration(c *container.Container) int64 {
 	type LastMigration struct {
 		Timestamp int64 `ch:"last_migration"`
 	}
@@ -78,7 +78,7 @@ func (ch *clickHouseMigrator) getLastMigration(c *container.Container) int64 {
 	return lastMigration
 }
 
-func (ch *clickHouseMigrator) beginTransaction(c *container.Container) transactionData {
+func (ch clickHouseMigrator) beginTransaction(c *container.Container) transactionData {
 	cmt := ch.migrator.beginTransaction(c)
 
 	c.Debug("Clickhouse Migrator begin successfully")
@@ -86,7 +86,7 @@ func (ch *clickHouseMigrator) beginTransaction(c *container.Container) transacti
 	return cmt
 }
 
-func (ch *clickHouseMigrator) commitMigration(c *container.Container, data transactionData) error {
+func (ch clickHouseMigrator) commitMigration(c *container.Container, data transactionData) error {
 	err := ch.Clickhouse.Exec(context.Background(), insertChGoFrMigrationRow, data.MigrationNumber,
 		"UP", data.StartTime, time.Since(data.StartTime).Milliseconds())
 	if err != nil {
@@ -98,28 +98,20 @@ func (ch *clickHouseMigrator) commitMigration(c *container.Container, data trans
 	return ch.migrator.commitMigration(c, data)
 }
 
-func (ch *clickHouseMigrator) rollback(c *container.Container, data transactionData) {
+func (ch clickHouseMigrator) rollback(c *container.Container, data transactionData) {
 	ch.migrator.rollback(c, data)
 
 	c.Fatalf("migration %v failed and rolled back", data.MigrationNumber)
 }
 
-func (*clickHouseMigrator) Lock(*container.Container, string) error {
-	return nil
+func (ch clickHouseMigrator) lock(c *container.Container, ownerID string, stop <-chan struct{}, fail chan<- error) error {
+	return ch.migrator.lock(c, ownerID, stop, fail)
 }
 
-func (*clickHouseMigrator) Unlock(*container.Container, string) error {
-	return nil
+func (ch clickHouseMigrator) unlock(c *container.Container, ownerID string) error {
+	return ch.migrator.unlock(c, ownerID)
 }
 
-func (*clickHouseMigrator) Refresh(*container.Container, string) error {
-	return nil
-}
-
-func (ch *clickHouseMigrator) Next() migrator {
-	return ch.migrator
-}
-
-func (*clickHouseMigrator) Name() string {
+func (clickHouseMigrator) name() string {
 	return "Clickhouse"
 }

@@ -11,12 +11,6 @@ import (
 
 var errExecuteQuery = errors.New("failed to execute migration query")
 
-const (
-	getLastSurrealDBGoFrMigration   = `SELECT version FROM gofr_migrations ORDER BY version DESC LIMIT 1;`
-	insertSurrealDBGoFrMigrationRow = `CREATE gofr_migrations SET version = $version, method = $method, ` +
-		`start_time = $start_time, duration = $duration;`
-)
-
 type surrealDS struct {
 	client SurrealDB
 }
@@ -47,11 +41,17 @@ type surrealMigrator struct {
 }
 
 func (s surrealDS) apply(m migrator) migrator {
-	return &surrealMigrator{
+	return surrealMigrator{
 		SurrealDB: s.client,
 		migrator:  m,
 	}
 }
+
+const (
+	getLastSurrealDBGoFrMigration   = `SELECT version FROM gofr_migrations ORDER BY version DESC LIMIT 1;`
+	insertSurrealDBGoFrMigrationRow = `CREATE gofr_migrations SET version = $version, method = $method, ` +
+		`start_time = $start_time, duration = $duration;`
+)
 
 func getMigrationTableQueries() []string {
 	return []string{
@@ -65,7 +65,7 @@ func getMigrationTableQueries() []string {
 	}
 }
 
-func (s *surrealMigrator) checkAndCreateMigrationTable(c *container.Container) error {
+func (s surrealMigrator) checkAndCreateMigrationTable(c *container.Container) error {
 	if _, err := s.SurrealDB.Query(context.Background(), "USE NS test DB test", nil); err != nil {
 		return err
 	}
@@ -80,12 +80,11 @@ func (s *surrealMigrator) checkAndCreateMigrationTable(c *container.Container) e
 	return s.migrator.checkAndCreateMigrationTable(c)
 }
 
-func (s *surrealMigrator) getLastMigration(c *container.Container) int64 {
+func (s surrealMigrator) getLastMigration(c *container.Container) int64 {
 	var lastMigration int64 // Default to 0 if no migrations found
 
 	result, err := s.SurrealDB.Query(context.Background(), getLastSurrealDBGoFrMigration, nil)
 	if err != nil {
-		c.Errorf("Failed to fetch last migration from SurrealDB: %v", err)
 		return 0
 	}
 
@@ -107,7 +106,7 @@ func (s *surrealMigrator) getLastMigration(c *container.Container) int64 {
 	return lastMigration
 }
 
-func (s *surrealMigrator) beginTransaction(c *container.Container) transactionData {
+func (s surrealMigrator) beginTransaction(c *container.Container) transactionData {
 	data := s.migrator.beginTransaction(c)
 
 	c.Debug("surrealDB migrator begin successfully")
@@ -115,7 +114,7 @@ func (s *surrealMigrator) beginTransaction(c *container.Container) transactionDa
 	return data
 }
 
-func (s *surrealMigrator) commitMigration(c *container.Container, data transactionData) error {
+func (s surrealMigrator) commitMigration(c *container.Container, data transactionData) error {
 	_, err := s.SurrealDB.Query(context.Background(), insertSurrealDBGoFrMigrationRow, map[string]any{
 		"version":    data.MigrationNumber,
 		"method":     "UP",
@@ -131,28 +130,20 @@ func (s *surrealMigrator) commitMigration(c *container.Container, data transacti
 	return s.migrator.commitMigration(c, data)
 }
 
-func (s *surrealMigrator) rollback(c *container.Container, data transactionData) {
+func (s surrealMigrator) rollback(c *container.Container, data transactionData) {
 	s.migrator.rollback(c, data)
 
 	c.Fatalf("migration %v failed and rolled back", data.MigrationNumber)
 }
 
-func (*surrealMigrator) Lock(*container.Container, string) error {
-	return nil
+func (s surrealMigrator) lock(c *container.Container, ownerID string, stop <-chan struct{}, fail chan<- error) error {
+	return s.migrator.lock(c, ownerID, stop, fail)
 }
 
-func (*surrealMigrator) Unlock(*container.Container, string) error {
-	return nil
+func (s surrealMigrator) unlock(c *container.Container, ownerID string) error {
+	return s.migrator.unlock(c, ownerID)
 }
 
-func (*surrealMigrator) Refresh(*container.Container, string) error {
-	return nil
-}
-
-func (s *surrealMigrator) Next() migrator {
-	return s.migrator
-}
-
-func (*surrealMigrator) Name() string {
+func (surrealMigrator) name() string {
 	return "SurrealDB"
 }

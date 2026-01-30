@@ -7,6 +7,17 @@ import (
 	"gofr.dev/pkg/gofr/container"
 )
 
+// arangoDS is our adapter struct that will implement both interfaces.
+type arangoDS struct {
+	client ArangoDB
+}
+
+// arangoMigrator struct remains the same but uses our adapter.
+type arangoMigrator struct {
+	ArangoDB
+	migrator
+}
+
 const (
 	arangoMigrationDB         = "_system"
 	arangoMigrationCollection = "gofr_migrations"
@@ -26,17 +37,6 @@ const (
   } INTO gofr_migrations
 `
 )
-
-// arangoDS is our adapter struct that will implement both interfaces.
-type arangoDS struct {
-	client ArangoDB
-}
-
-// arangoMigrator struct remains the same but uses our adapter.
-type arangoMigrator struct {
-	ArangoDB
-	migrator
-}
 
 func (ds arangoDS) CreateDB(ctx context.Context, database string) error {
 	return ds.client.CreateDB(ctx, database)
@@ -63,13 +63,13 @@ func (ds arangoDS) DropGraph(ctx context.Context, database, graph string) error 
 }
 
 func (ds arangoDS) apply(m migrator) migrator {
-	return &arangoMigrator{
+	return arangoMigrator{
 		ArangoDB: ds,
 		migrator: m,
 	}
 }
 
-func (am *arangoMigrator) checkAndCreateMigrationTable(c *container.Container) error {
+func (am arangoMigrator) checkAndCreateMigrationTable(c *container.Container) error {
 	err := am.CreateCollection(context.Background(), arangoMigrationDB, arangoMigrationCollection, false)
 	if err != nil {
 		c.Debug("Migration collection might already exist:", err)
@@ -78,7 +78,7 @@ func (am *arangoMigrator) checkAndCreateMigrationTable(c *container.Container) e
 	return am.migrator.checkAndCreateMigrationTable(c)
 }
 
-func (am *arangoMigrator) getLastMigration(c *container.Container) int64 {
+func (am arangoMigrator) getLastMigration(c *container.Container) int64 {
 	var lastMigrations []int64
 
 	err := c.ArangoDB.Query(context.Background(), arangoMigrationDB, getLastArangoMigration, nil, &lastMigrations)
@@ -96,7 +96,7 @@ func (am *arangoMigrator) getLastMigration(c *container.Container) int64 {
 	return lastMigrations[0]
 }
 
-func (am *arangoMigrator) beginTransaction(c *container.Container) transactionData {
+func (am arangoMigrator) beginTransaction(c *container.Container) transactionData {
 	data := am.migrator.beginTransaction(c)
 
 	c.Debug("ArangoDB migrator begin successfully")
@@ -104,7 +104,7 @@ func (am *arangoMigrator) beginTransaction(c *container.Container) transactionDa
 	return data
 }
 
-func (am *arangoMigrator) commitMigration(c *container.Container, data transactionData) error {
+func (am arangoMigrator) commitMigration(c *container.Container, data transactionData) error {
 	bindVars := map[string]any{
 		"version":    data.MigrationNumber,
 		"method":     "UP",
@@ -124,28 +124,20 @@ func (am *arangoMigrator) commitMigration(c *container.Container, data transacti
 	return am.migrator.commitMigration(c, data)
 }
 
-func (am *arangoMigrator) rollback(c *container.Container, data transactionData) {
+func (am arangoMigrator) rollback(c *container.Container, data transactionData) {
 	am.migrator.rollback(c, data)
 
 	c.Fatalf("Migration %v failed and rolled back", data.MigrationNumber)
 }
 
-func (*arangoMigrator) Lock(*container.Container, string) error {
-	return nil
+func (am arangoMigrator) lock(c *container.Container, ownerID string, stop <-chan struct{}, fail chan<- error) error {
+	return am.migrator.lock(c, ownerID, stop, fail)
 }
 
-func (*arangoMigrator) Unlock(*container.Container, string) error {
-	return nil
+func (am arangoMigrator) unlock(c *container.Container, ownerID string) error {
+	return am.migrator.unlock(c, ownerID)
 }
 
-func (*arangoMigrator) Refresh(*container.Container, string) error {
-	return nil
-}
-
-func (am *arangoMigrator) Next() migrator {
-	return am.migrator
-}
-
-func (*arangoMigrator) Name() string {
+func (arangoMigrator) name() string {
 	return "ArangoDB"
 }

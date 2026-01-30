@@ -20,9 +20,13 @@ var (
 )
 
 const (
-	lockKey          = "gofr_migrations_lock"
-	retryInterval    = 500 * time.Millisecond
-	migrationLockTTL = 15 * time.Second
+	// lockKey is the key used for distributed locking.
+	lockKey = "gofr_migrations_lock"
+
+	// Default values for configuration.
+	defaultRetry   = 500 * time.Millisecond
+	defaultLockTTL = 15 * time.Second
+	defaultRefresh = 5 * time.Second
 )
 
 type MigrateFunc func(d Datasource) error
@@ -78,22 +82,40 @@ func Run(migrationsMap map[int64]Migrate, c *container.Container) {
 		return
 	}
 
-	// Acquire locks to ensure exclusive access during migration
-	lockers := getLockers(mg)
 	ownerID := uuid.New().String()
-	acquiredLockers, stopRefresh := acquireAllLocks(c, lockers, ownerID)
+	stopRefresh := make(chan struct{})
+	refreshFailed := make(chan struct{})
+	failChan := make(chan error, 1)
 
-	if acquiredLockers == nil && len(lockers) > 0 {
-		c.Fatalf("migration failed: could not acquire locks to run required migrations")
+	if err = mg.lock(c, ownerID, stopRefresh, failChan); err != nil {
+		close(stopRefresh)
+
+		if unlockErr := mg.unlock(c, ownerID); unlockErr != nil {
+			c.Errorf("failed to cleanup lock after acquisition failure: %v", unlockErr)
+		}
+
+		c.Fatalf("migration failed: could not acquire locks, err: %v", err)
 
 		return
 	}
 
-	defer stopRefresh()
-	defer releaseAllLocks(c, acquiredLockers, ownerID)
+	go func() {
+		select {
+		case <-failChan:
+			close(refreshFailed)
+		case <-stopRefresh:
+		}
+	}()
 
-	// No need to check again - lock guarantees no other pod is modifying migrations
-	runMigrations(c, mg, &ds, migrationsMap, keys)
+	defer func() {
+		close(stopRefresh)
+
+		if err = mg.unlock(c, ownerID); err != nil {
+			c.Errorf("failed to unlock during cleanup: %v", err)
+		}
+	}()
+
+	runMigrations(c, mg, &ds, migrationsMap, keys, lastMigration, refreshFailed)
 }
 
 func hasNewMigrations(keys []int64, lastMigration int64) bool {
@@ -106,70 +128,8 @@ func hasNewMigrations(keys []int64, lastMigration int64) bool {
 	return false
 }
 
-func acquireAllLocks(c *container.Container, lockers []Locker, ownerID string) (acquiredLockers []Locker, stopRefresh func()) {
-	acquiredLockers = make([]Locker, 0, len(lockers))
-
-	for _, l := range lockers {
-		err := l.Lock(c, ownerID)
-		if err != nil {
-			c.Errorf("failed to acquire migration lock, err: %v", err)
-
-			// Release already acquired locks in reverse order
-			for i := len(acquiredLockers) - 1; i >= 0; i-- {
-				_ = acquiredLockers[i].Unlock(c, ownerID)
-			}
-
-			return nil, func() {}
-		}
-
-		acquiredLockers = append(acquiredLockers, l)
-	}
-
-	if len(acquiredLockers) == 0 {
-		return nil, func() {}
-	}
-
-	stopChan := make(chan struct{})
-
-	go func() {
-		// Refresh every 5 seconds for a 15-second TTL
-		const refreshInterval = 5
-
-		ticker := time.NewTicker(refreshInterval * time.Second)
-		defer ticker.Stop()
-
-		for {
-			select {
-			case <-ticker.C:
-				for _, l := range acquiredLockers {
-					err := l.Refresh(c, ownerID)
-					if err != nil {
-						c.Errorf("failed to refresh migration lock for %s, err: %v", l.Name(), err)
-					}
-				}
-			case <-stopChan:
-				return
-			}
-		}
-	}()
-
-	stopRefresh = func() { close(stopChan) }
-
-	return acquiredLockers, stopRefresh
-}
-
-func releaseAllLocks(c *container.Container, acquiredLockers []Locker, ownerID string) {
-	for i := len(acquiredLockers) - 1; i >= 0; i-- {
-		err := acquiredLockers[i].Unlock(c, ownerID)
-		if err != nil {
-			c.Errorf("failed to release migration lock, err: %v", err)
-		}
-	}
-}
-
-func runMigrations(c *container.Container, mg migrator, ds *Datasource, migrationsMap map[int64]Migrate, keys []int64) {
-	lastMigration := mg.getLastMigration(c)
-
+func runMigrations(c *container.Container, mg migrator, ds *Datasource, migrationsMap map[int64]Migrate,
+	keys []int64, lastMigration int64, refreshFailed <-chan struct{}) {
 	for _, currentMigration := range keys {
 		if currentMigration <= lastMigration {
 			c.Infof("skipping migration %v", currentMigration)
@@ -177,15 +137,34 @@ func runMigrations(c *container.Container, mg migrator, ds *Datasource, migratio
 			continue
 		}
 
-		c.Logger.Infof("running migration %v", currentMigration)
+		// Check if lock refresh failed before starting the migration
+		select {
+		case <-refreshFailed:
+			c.Fatalf("migration %v aborted: lock refresh failed", currentMigration)
+
+			return
+		default:
+		}
+
+		c.Infof("running migration %v", currentMigration)
 
 		migrationInfo := mg.beginTransaction(c)
+
+		// Check if lock refresh failed after starting the transaction but before execution
+		select {
+		case <-refreshFailed:
+			mg.rollback(c, migrationInfo)
+			c.Fatalf("migration %v aborted: lock refresh failed", currentMigration)
+
+			return
+		default:
+		}
 
 		// Replacing the objects in datasource object only for those Datasources which support transactions.
 		ds.SQL = migrationInfo.SQLTx
 		ds.Redis = migrationInfo.RedisTx
 
-		if migrationInfo.OracleTx != nil {
+		if !isNil(migrationInfo.OracleTx) {
 			ds.Oracle = &oracleTransactionWrapper{tx: migrationInfo.OracleTx}
 		}
 
@@ -193,9 +172,19 @@ func runMigrations(c *container.Container, mg migrator, ds *Datasource, migratio
 		migrationInfo.MigrationNumber = currentMigration
 
 		err := migrationsMap[currentMigration].UP(*ds)
-		if err != nil {
-			c.Logger.Errorf("failed to run migration : [%v], err: %v", currentMigration, err)
 
+		// Check if lock refresh failed during migration execution
+		select {
+		case <-refreshFailed:
+			mg.rollback(c, migrationInfo)
+			c.Fatalf("migration %v aborted: lock refresh failed during execution", currentMigration)
+
+			return
+		default:
+		}
+
+		if err != nil {
+			c.Errorf("failed to run migration : [%v], err: %v", currentMigration, err)
 			mg.rollback(c, migrationInfo)
 
 			return
@@ -212,21 +201,16 @@ func runMigrations(c *container.Container, mg migrator, ds *Datasource, migratio
 	}
 }
 
-func getKeys(migrationsMap map[int64]Migrate) (invalidKey, keys []int64) {
-	invalidKey = make([]int64, 0, len(migrationsMap))
-	keys = make([]int64, 0, len(migrationsMap))
-
-	for k, v := range migrationsMap {
-		if v.UP == nil {
-			invalidKey = append(invalidKey, k)
-
-			continue
+func getKeys(migrationsMap map[int64]Migrate) (invalidKeys, validKeys []int64) {
+	for k := range migrationsMap {
+		if migrationsMap[k].UP != nil {
+			validKeys = append(validKeys, k)
+		} else {
+			invalidKeys = append(invalidKeys, k)
 		}
-
-		keys = append(keys, k)
 	}
 
-	return invalidKey, keys
+	return invalidKeys, validKeys
 }
 
 func getMigrator(c *container.Container) (Datasource, migrator, bool) {
@@ -248,40 +232,48 @@ type datasourceInitializer struct {
 	logIdentifier string
 }
 
-func getLockers(mg migrator) []Locker {
-	var lockers []Locker
+func initializeDatasources(c *container.Container, ds *Datasource, mg migrator) (migrator, bool) {
+	initializers := getInitializers(c, ds)
 
-	// Traverse the migrator chain and collect all lockers.
-	// The chain is built such that the last added datasource is the outermost wrapper.
-	for mg != nil {
-		lockers = append(lockers, mg)
+	var active []datasourceInitializer
 
-		// Move to the next migrator in the chain.
-		mg = mg.Next()
+	for _, init := range initializers {
+		if init.condition() {
+			active = append(active, init)
+		}
 	}
 
-	// Sort lockers by name to ensure deterministic order (prevent deadlocks)
-	sort.Slice(lockers, func(i, j int) bool {
-		return lockers[i].Name() < lockers[j].Name()
+	if len(active) == 0 {
+		return nil, false
+	}
+
+	// Sort active initializers by name to ensure deterministic order
+	sort.Slice(active, func(i, j int) bool {
+		return active[i].logIdentifier < active[j].logIdentifier
 	})
 
-	return lockers
+	// Build the chain starting from the base Datasource
+	for i := len(active) - 1; i >= 0; i-- {
+		active[i].setDS()
+		mg = active[i].apply(mg)
+		c.Debugf("initialized data source for %s", active[i].logIdentifier)
+	}
+
+	return mg, true
 }
 
-func initializeDatasources(c *container.Container, ds *Datasource, mg migrator) (migrator, bool) {
-	var initialized bool
-
-	initializers := []datasourceInitializer{
+func getInitializers(c *container.Container, ds *Datasource) []datasourceInitializer {
+	return []datasourceInitializer{
 		{
 			condition:     func() bool { return !isNil(c.SQL) },
 			setDS:         func() { ds.SQL = c.SQL },
-			apply:         func(m migrator) migrator { return (&sqlDS{ds.SQL}).apply(m) },
+			apply:         func(m migrator) migrator { return (&sqlDS{c.SQL}).apply(m) },
 			logIdentifier: "SQL",
 		},
 		{
 			condition:     func() bool { return !isNil(c.Redis) },
 			setDS:         func() { ds.Redis = c.Redis },
-			apply:         func(m migrator) migrator { return redisDS{ds.Redis}.apply(m) },
+			apply:         func(m migrator) migrator { return redisDS{c.Redis}.apply(m) },
 			logIdentifier: "Redis",
 		},
 		{
@@ -293,7 +285,7 @@ func initializeDatasources(c *container.Container, ds *Datasource, mg migrator) 
 		{
 			condition:     func() bool { return !isNil(c.Clickhouse) },
 			setDS:         func() { ds.Clickhouse = c.Clickhouse },
-			apply:         func(m migrator) migrator { return clickHouseDS{ds.Clickhouse}.apply(m) },
+			apply:         func(m migrator) migrator { return clickHouseDS{c.Clickhouse}.apply(m) },
 			logIdentifier: "Clickhouse",
 		},
 		{
@@ -302,9 +294,8 @@ func initializeDatasources(c *container.Container, ds *Datasource, mg migrator) 
 			apply:         func(m migrator) migrator { return oracleDS{c.Oracle}.apply(m) },
 			logIdentifier: "Oracle",
 		},
-
 		{
-			condition:     func() bool { return c.PubSub != nil },
+			condition:     func() bool { return !isNil(c.PubSub) },
 			setDS:         func() { ds.PubSub = c.PubSub },
 			apply:         func(m migrator) migrator { return pubsubDS{c.PubSub}.apply(m) },
 			logIdentifier: "PubSub",
@@ -342,7 +333,7 @@ func initializeDatasources(c *container.Container, ds *Datasource, mg migrator) 
 		{
 			condition:     func() bool { return !isNil(c.OpenTSDB) },
 			setDS:         func() { ds.OpenTSDB = c.OpenTSDB },
-			apply:         func(m migrator) migrator { return openTSDBDS{c.OpenTSDB, "gofr_migrations.json"}.apply(m) },
+			apply:         func(m migrator) migrator { return (&openTSDBMigrator{filePath: "gofr_migrations.json", migrator: m}) },
 			logIdentifier: "OpenTSDB",
 		},
 		{
@@ -352,26 +343,19 @@ func initializeDatasources(c *container.Container, ds *Datasource, mg migrator) 
 			logIdentifier: "ScyllaDB",
 		},
 	}
-
-	for _, init := range initializers {
-		if !init.condition() {
-			continue
-		}
-
-		init.setDS()
-		mg = init.apply(mg)
-		initialized = true
-
-		c.Debugf("initialized data source for %s", init.logIdentifier)
-	}
-
-	return mg, initialized
 }
 
 func isNil(i any) bool {
-	// Get the value of the interface.
-	val := reflect.ValueOf(i)
+	if i == nil {
+		return true
+	}
 
-	// If the interface is not assigned or is nil, return true.
-	return !val.IsValid() || val.IsNil()
+	val := reflect.ValueOf(i)
+	k := val.Kind()
+
+	if k == reflect.Ptr || k == reflect.Interface || k == reflect.Slice || k == reflect.Map || k == reflect.Chan || k == reflect.Func {
+		return val.IsNil()
+	}
+
+	return false
 }

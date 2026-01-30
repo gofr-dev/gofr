@@ -24,42 +24,34 @@ type Datasource struct {
 
 // It is a base implementation for migration manager, on this other database drivers have been wrapped.
 
-func (*Datasource) checkAndCreateMigrationTable(*container.Container) error {
+func (Datasource) checkAndCreateMigrationTable(*container.Container) error {
 	return nil
 }
 
-func (*Datasource) getLastMigration(*container.Container) int64 {
+func (Datasource) getLastMigration(*container.Container) int64 {
 	return 0
 }
 
-func (*Datasource) beginTransaction(*container.Container) transactionData {
+func (Datasource) beginTransaction(*container.Container) transactionData {
 	return transactionData{}
 }
 
-func (*Datasource) commitMigration(c *container.Container, data transactionData) error {
+func (Datasource) commitMigration(c *container.Container, data transactionData) error {
 	c.Infof("Migration %v ran successfully", data.MigrationNumber)
 
 	return nil
 }
 
-func (*Datasource) rollback(*container.Container, transactionData) {}
+func (Datasource) rollback(*container.Container, transactionData) {}
 
-func (*Datasource) Lock(*container.Container, string) error {
+func (Datasource) lock(*container.Container, string, <-chan struct{}, chan<- error) error {
 	return nil
 }
 
-func (*Datasource) Unlock(*container.Container, string) error {
+func (Datasource) unlock(*container.Container, string) error {
 	return nil
 }
 
-func (*Datasource) Refresh(*container.Container, string) error {
-	return nil
-}
-
-func (*Datasource) Next() migrator {
-	return nil
-}
-
-func (*Datasource) Name() string {
+func (Datasource) name() string {
 	return "Base"
 }

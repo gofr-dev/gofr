@@ -219,9 +219,12 @@ func getFilePermissionTestCases() []struct {
 			},
 			expectedErr:     "failed to open existing migration file",
 			shouldFileExist: true,
-			cleanupFunc: func(_ *testing.T, filePath string) {
+			cleanupFunc: func(t *testing.T, filePath string) {
+				t.Helper()
 				// Restore permissions for cleanup
-				_ = os.Chmod(filePath, 0600)
+				if err := os.Chmod(filePath, 0600); err != nil {
+					t.Errorf("failed to chmod file during cleanup: %v", err)
+				}
 			},
 		},
 		{
@@ -237,10 +240,13 @@ func getFilePermissionTestCases() []struct {
 			},
 			expectedErr:     "failed to create migration file",
 			shouldFileExist: false,
-			cleanupFunc: func(_ *testing.T, filePath string) {
+			cleanupFunc: func(t *testing.T, filePath string) {
+				t.Helper()
 				// Restore permissions for cleanup
 				dir := filepath.Dir(filePath)
-				_ = os.Chmod(dir, 0755)
+				if err := os.Chmod(dir, 0755); err != nil {
+					t.Errorf("failed to chmod dir during cleanup: %v", err)
+				}
 			},
 		},
 	}
@@ -292,11 +298,14 @@ func getDirectoryTestCases() []struct {
 			},
 			expectedErr:     "failed to create migration directory",
 			shouldFileExist: false,
-			cleanupFunc: func(_ *testing.T, filePath string) {
+			cleanupFunc: func(t *testing.T, filePath string) {
+				t.Helper()
 				// Restore permissions for cleanup
 				dir := filepath.Dir(filePath)
 				parentDir := filepath.Dir(dir)
-				_ = os.Chmod(parentDir, 0755)
+				if err := os.Chmod(parentDir, 0755); err != nil {
+					t.Errorf("failed to chmod parent dir during cleanup: %v", err)
+				}
 			},
 		},
 	}

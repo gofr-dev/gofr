@@ -2,11 +2,15 @@ package migration
 
 import (
 	"context"
+	"errors"
+	"strings"
 	"time"
 
 	"gofr.dev/pkg/gofr/container"
 	gofrSql "gofr.dev/pkg/gofr/datasource/sql"
 )
+
+var errSQLLockRefreshFailed = errors.New("failed to refresh SQL lock: lock lost or stolen")
 
 const (
 	createSQLGoFrMigrationsTable = `CREATE TABLE IF NOT EXISTS gofr_migrations (
@@ -39,7 +43,7 @@ type sqlDS struct {
 }
 
 func (s *sqlDS) apply(m migrator) migrator {
-	return &sqlMigrator{
+	return sqlMigrator{
 		SQL:      s.SQL,
 		migrator: m,
 	}
@@ -51,7 +55,7 @@ type sqlMigrator struct {
 	migrator
 }
 
-func (d *sqlMigrator) checkAndCreateMigrationTable(c *container.Container) error {
+func (d sqlMigrator) checkAndCreateMigrationTable(c *container.Container) error {
 	if _, err := c.SQL.Exec(createSQLGoFrMigrationsTable); err != nil {
 		return err
 	}
@@ -63,7 +67,7 @@ func (d *sqlMigrator) checkAndCreateMigrationTable(c *container.Container) error
 	return d.migrator.checkAndCreateMigrationTable(c)
 }
 
-func (d *sqlMigrator) getLastMigration(c *container.Container) int64 {
+func (d sqlMigrator) getLastMigration(c *container.Container) int64 {
 	var lastMigration int64
 
 	err := c.SQL.QueryRowContext(context.Background(), getLastSQLGoFrMigration).Scan(&lastMigration)
@@ -82,7 +86,7 @@ func (d *sqlMigrator) getLastMigration(c *container.Container) int64 {
 	return lastMigration
 }
 
-func (d *sqlMigrator) commitMigration(c *container.Container, data transactionData) error {
+func (d sqlMigrator) commitMigration(c *container.Container, data transactionData) error {
 	switch c.SQL.Dialect() {
 	case mysql, sqlite:
 		err := insertMigrationRecord(data.SQLTx, insertGoFrMigrationRowMySQL, data.MigrationNumber, data.StartTime)
@@ -115,7 +119,7 @@ func insertMigrationRecord(tx *gofrSql.Tx, query string, version int64, startTim
 	return err
 }
 
-func (d *sqlMigrator) beginTransaction(c *container.Container) transactionData {
+func (d sqlMigrator) beginTransaction(c *container.Container) transactionData {
 	sqlTx, err := c.SQL.Begin()
 	if err != nil {
 		c.Errorf("unable to begin transaction: %v", err)
@@ -132,7 +136,7 @@ func (d *sqlMigrator) beginTransaction(c *container.Container) transactionData {
 	return cmt
 }
 
-func (d *sqlMigrator) rollback(c *container.Container, data transactionData) {
+func (d sqlMigrator) rollback(c *container.Container, data transactionData) {
 	if data.SQLTx == nil {
 		return
 	}
@@ -146,28 +150,93 @@ func (d *sqlMigrator) rollback(c *container.Container, data transactionData) {
 	c.Fatalf("Migration %v failed and rolled back", data.MigrationNumber)
 }
 
-func (*sqlMigrator) Lock(c *container.Container, ownerID string) error {
+func (d sqlMigrator) lock(c *container.Container, ownerID string, stop <-chan struct{}, fail chan<- error) error {
 	for i := 0; ; i++ {
 		// 1. Clean up expired locks using UTC time to avoid timezone mismatches
-		_, _ = c.SQL.Exec("DELETE FROM gofr_migration_locks WHERE expires_at < ?", time.Now().UTC())
+		_, err := c.SQL.Exec("DELETE FROM gofr_migration_locks WHERE expires_at < ?", time.Now().UTC())
+		if err != nil {
+			c.Errorf("failed to clean up expired locks: %v", err)
+		}
 
 		// 2. Try to acquire lock
-		expiresAt := time.Now().UTC().Add(migrationLockTTL)
+		expiresAt := time.Now().UTC().Add(defaultLockTTL)
 
-		_, err := c.SQL.Exec("INSERT INTO gofr_migration_locks (lock_key, owner_id, expires_at) VALUES (?, ?, ?)",
+		_, err = c.SQL.Exec("INSERT INTO gofr_migration_locks (lock_key, owner_id, expires_at) VALUES (?, ?, ?)",
 			lockKey, ownerID, expiresAt)
 		if err == nil {
 			c.Debug("SQL lock acquired successfully")
 
-			return nil
+			// Start refresh goroutine
+			go d.startRefresh(c, ownerID, stop, fail)
+
+			return d.migrator.lock(c, ownerID, stop, fail)
 		}
 
-		c.Debugf("SQL lock already held, retrying in %v... (attempt %d)", retryInterval, i+1)
-		time.Sleep(retryInterval)
+		if !isDuplicateKeyError(err) {
+			c.Errorf("error while acquiring sql lock: %v", err)
+
+			return errLockAcquisitionFailed
+		}
+
+		c.Debugf("SQL lock already held, retrying in %v... (attempt %d)", defaultRetry, i+1)
+		time.Sleep(defaultRetry)
 	}
 }
 
-func (*sqlMigrator) Unlock(c *container.Container, ownerID string) error {
+func isDuplicateKeyError(err error) bool {
+	msg := strings.ToLower(err.Error())
+
+	return strings.Contains(msg, "duplicate") ||
+		strings.Contains(msg, "unique constraint") ||
+		strings.Contains(msg, "integrity constraint") ||
+		strings.Contains(msg, "primary key constraint") ||
+		strings.Contains(msg, "constraint failed") // SQLite often returns "UNIQUE constraint failed" or "PRIMARY KEY constraint failed"
+}
+
+func (sqlMigrator) startRefresh(c *container.Container, ownerID string, stop <-chan struct{}, fail chan<- error) {
+	ticker := time.NewTicker(defaultRefresh)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-ticker.C:
+			expiresAt := time.Now().UTC().Add(defaultLockTTL)
+
+			res, err := c.SQL.Exec("UPDATE gofr_migration_locks SET expires_at = ? WHERE lock_key = ? AND owner_id = ?",
+				expiresAt, lockKey, ownerID)
+			if err != nil {
+				c.Errorf("failed to refresh SQL lock: %v", err)
+
+				fail <- err
+
+				return
+			}
+
+			rows, err := res.RowsAffected()
+			if err != nil {
+				c.Errorf("failed to check rows affected for SQL lock: %v", err)
+
+				fail <- err
+
+				return
+			}
+
+			if rows == 0 {
+				c.Errorf("%v", errSQLLockRefreshFailed)
+
+				fail <- errSQLLockRefreshFailed
+
+				return
+			}
+
+			c.Debug("SQL lock refreshed successfully")
+		case <-stop:
+			return
+		}
+	}
+}
+
+func (d sqlMigrator) unlock(c *container.Container, ownerID string) error {
 	_, err := c.SQL.Exec("DELETE FROM gofr_migration_locks WHERE lock_key = ? AND owner_id = ?", lockKey, ownerID)
 	if err != nil {
 		c.Errorf("unable to release SQL lock: %v", err)
@@ -177,27 +246,9 @@ func (*sqlMigrator) Unlock(c *container.Container, ownerID string) error {
 
 	c.Debug("SQL lock released successfully")
 
-	return nil
+	return d.migrator.unlock(c, ownerID)
 }
 
-func (*sqlMigrator) Refresh(c *container.Container, ownerID string) error {
-	expiresAt := time.Now().UTC().Add(migrationLockTTL)
-
-	_, err := c.SQL.Exec("UPDATE gofr_migration_locks SET expires_at = ? WHERE lock_key = ? AND owner_id = ?",
-		expiresAt, lockKey, ownerID)
-	if err != nil {
-		return err
-	}
-
-	c.Debug("SQL lock refreshed successfully")
-
-	return nil
-}
-
-func (d *sqlMigrator) Next() migrator {
-	return d.migrator
-}
-
-func (*sqlMigrator) Name() string {
+func (sqlMigrator) name() string {
 	return "SQL"
 }

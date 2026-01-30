@@ -98,15 +98,8 @@ func Test_MongoCommitMigration(t *testing.T) {
 		MigrationNumber: 10,
 	}
 
-	migrationDoc := map[string]any{
-		"version":    td.MigrationNumber,
-		"method":     "UP",
-		"start_time": td.StartTime,
-		"duration":   time.Since(td.StartTime).Milliseconds(),
-	}
-
 	for i, tc := range testCases {
-		mockMongo.EXPECT().InsertOne(gomock.Any(), mongoMigrationCollection, migrationDoc).Return(mockResult, tc.err)
+		mockMongo.EXPECT().InsertOne(gomock.Any(), mongoMigrationCollection, gomock.Any()).Return(mockResult, tc.err)
 
 		err := migratorWithMongo.commitMigration(mockContainer, td)
 

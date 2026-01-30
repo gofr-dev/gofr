@@ -113,13 +113,19 @@ func Test_OracleCommitMigration(t *testing.T) {
 
 func TestOracleMigration_RunMigrationSuccess(t *testing.T) {
 	mockOracle, mockContainer := initializeOracleRunMocks(t)
+
 	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
 
 	mockTx := container.NewMockOracleTx(ctrl)
 
 	ds := Datasource{Oracle: mockOracle}
 	od := oracleDS{Oracle: mockOracle}
-	_ = od.apply(&ds)
+
+	mg := od.apply(&ds)
+	if mg == nil {
+		t.Fatal("failed to apply oracle datasource")
+	}
 
 	migrationMap := map[int64]Migrate{
 		1: {UP: func(d Datasource) error {
@@ -127,23 +133,33 @@ func TestOracleMigration_RunMigrationSuccess(t *testing.T) {
 		}},
 	}
 
-	// Set up mock expectations in the correct order
-	// Pre-check
-	mockOracle.EXPECT().Select(gomock.Any(), gomock.Any(), getLastOracleGoFrMigration).Return(nil)
-
+	// 1. Create migration tables (called before lock acquisition)
 	mockOracle.EXPECT().Exec(gomock.Any(), checkAndCreateOracleMigrationTable).Return(nil)
-	// Re-fetch after lock
-	mockOracle.EXPECT().Select(gomock.Any(), gomock.Any(), getLastOracleGoFrMigration).Return(nil)
+
+	// 2. Optimistic pre-check: Get last migration before acquiring lock
+	mockOracle.EXPECT().Select(gomock.Any(), gomock.Any(), getLastOracleGoFrMigration).
+		DoAndReturn(func(_ context.Context, dest any, _ string, _ ...any) error {
+			results := dest.(*[]map[string]any)
+			*results = []map[string]any{
+				{"LAST_MIGRATION": int64(0)}, // No migrations yet
+			}
+			return nil
+		}).Times(1)
+
+	// 4. Begin transaction
 	mockOracle.EXPECT().Begin().Return(mockTx, nil)
 
-	// Migration execution through transaction wrapper
+	// 5. Execute migration
 	mockTx.EXPECT().ExecContext(gomock.Any(), "CREATE TABLE test (id INT)").Return(nil)
 
-	// Migration record insertion and commit
+	// 6. Insert migration record
 	mockTx.EXPECT().ExecContext(gomock.Any(), insertOracleGoFrMigrationRow,
 		int64(1), "UP", gomock.Any(), gomock.Any()).Return(nil)
+
+	// 7. Commit transaction
 	mockTx.EXPECT().Commit().Return(nil)
 
+	// Run migrations
 	Run(migrationMap, mockContainer)
 }
 

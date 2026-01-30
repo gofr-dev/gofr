@@ -162,24 +162,24 @@ type Elasticsearch interface {
 	DeleteIndex(ctx context.Context, index string) error
 
 	// IndexDocument indexes (creates or replaces) a single document.
-	// Useful for seeding data or adding configuration documents during migrations.
 	IndexDocument(ctx context.Context, index, id string, document any) error
 
+	// GetDocument retrieves a single document by ID.
+	GetDocument(ctx context.Context, index, id string) (map[string]any, error)
+
+	// UpdateDocument applies a partial update to an existing document.
+	UpdateDocument(ctx context.Context, index, id string, update map[string]any) error
+
 	// DeleteDocument removes a document by ID.
-	// Useful for removing specific documents during migrations.
 	DeleteDocument(ctx context.Context, index, id string) error
 
 	// Bulk executes multiple indexing/updating/deleting operations in one request.
 	// Each entry in `operations` should be a JSON‑serializable object
 	// following the Elasticsearch bulk API format.
-	// Useful for bulk operations during migrations.
 	Bulk(ctx context.Context, operations []map[string]any) (map[string]any, error)
 
+	// Search performs a search request.
 	Search(ctx context.Context, indices []string, query map[string]any) (map[string]any, error)
-
-	GetDocument(ctx context.Context, index, id string) (map[string]any, error)
-
-	UpdateDocument(ctx context.Context, index, id string, update map[string]any) error
 
 	HealthCheck(ctx context.Context) (any, error)
 }
@@ -195,9 +195,7 @@ type migrator interface {
 	commitMigration(c *container.Container, data transactionData) error
 	rollback(c *container.Container, data transactionData)
 
-	Next() migrator
-
-	Locker
+	locker
 }
 
 type OpenTSDB interface {
@@ -211,9 +209,8 @@ type OpenTSDB interface {
 	DeleteAnnotation(ctx context.Context, annotation any, res any) error
 }
 
-type Locker interface {
-	Lock(c *container.Container, ownerID string) error
-	Unlock(c *container.Container, ownerID string) error
-	Refresh(c *container.Container, ownerID string) error
-	Name() string
+type locker interface {
+	lock(c *container.Container, ownerID string, stop <-chan struct{}, fail chan<- error) error
+	unlock(c *container.Container, ownerID string) error
+	name() string
 }
