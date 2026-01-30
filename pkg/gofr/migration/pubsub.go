@@ -77,6 +77,7 @@ func (pm pubsubMigrator) getLastMigration(c *container.Container) int64 {
 		if lm2 == -1 {
 			return -1
 		}
+
 		return lm2
 	}
 

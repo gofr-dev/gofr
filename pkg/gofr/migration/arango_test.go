@@ -64,7 +64,7 @@ func Test_ArangoGetLastMigration(t *testing.T) {
 		resp int64
 	}{
 		{"no error", nil, 0},
-		{"query failed", context.DeadlineExceeded, 0},
+		{"query failed", context.DeadlineExceeded, -1},
 	}
 
 	var lastMigrations []int64

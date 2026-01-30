@@ -107,6 +107,7 @@ func (em elasticsearchMigrator) getLastMigration(c *container.Container) int64 {
 			if lm2 == -1 {
 				return -1
 			}
+
 			return lm2
 		}
 	}
@@ -118,6 +119,7 @@ func (em elasticsearchMigrator) getLastMigration(c *container.Container) int64 {
 	if lm2 == -1 {
 		return -1
 	}
+
 	if lm2 > lastMigration {
 		return lm2
 	}

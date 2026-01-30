@@ -58,7 +58,7 @@ func Test_CassandraGetLastMigration(t *testing.T) {
 		resp int64
 	}{
 		{"no error", nil, 0},
-		{"connection failed", sql.ErrConnDone, 0},
+		{"connection failed", sql.ErrConnDone, -1},
 	}
 
 	var lastMigration []int64

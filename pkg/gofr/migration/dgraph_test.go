@@ -64,7 +64,7 @@ func Test_DGraphGetLastMigration(t *testing.T) {
 			desc:     "query error",
 			err:      context.DeadlineExceeded,
 			mockResp: nil,
-			expected: 0,
+			expected: -1,
 		},
 		{
 			desc:     "empty response",

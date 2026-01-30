@@ -60,7 +60,7 @@ func Test_ClickHouseGetLastMigration(t *testing.T) {
 		resp int64
 	}{
 		{"no error", nil, 0},
-		{"connection failed", sql.ErrConnDone, 0},
+		{"connection failed", sql.ErrConnDone, -1},
 	}
 
 	for i, tc := range testCases {

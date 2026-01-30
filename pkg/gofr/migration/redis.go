@@ -3,8 +3,6 @@ package migration
 import (
 	"context"
 	"encoding/json"
-	"fmt"
-
 	"strconv"
 	"time"
 
@@ -19,7 +17,6 @@ func (r redisDS) apply(m migrator) migrator {
 	return &redisMigrator{
 		Redis:    r.Redis,
 		migrator: m,
-		ownerID:  fmt.Sprintf("%s-%d", getHostname(), time.Now().UnixNano()),
 	}
 }
 
@@ -27,7 +24,6 @@ type redisMigrator struct {
 	Redis
 
 	migrator
-	ownerID string
 }
 
 type redisData struct {
@@ -51,6 +47,7 @@ func (m redisMigrator) getLastMigration(c *container.Container) int64 {
 		if lm2 == -1 {
 			return -1
 		}
+
 		return lm2
 	}
 
@@ -140,71 +137,4 @@ func (m *redisMigrator) rollback(c *container.Container, data transactionData) {
 	m.migrator.rollback(c, data)
 
 	c.Fatalf("Migration %v for Redis failed and rolled back", data.MigrationNumber)
-}
-
-const (
-	redisLockKey = "gofr_migration_lock"
-	redisLockTTL = 15 * time.Second
-)
-
-func (m *redisMigrator) lock(c *container.Container) error {
-	for {
-		// Try to acquire lock
-		success, err := c.Redis.SetNX(context.Background(), redisLockKey, m.ownerID, redisLockTTL).Result()
-		if err != nil {
-			return err
-		}
-
-		if success {
-			c.Debugf("Acquired Redis migration lock with ownerID: %s", m.ownerID)
-			return nil
-		}
-
-		// Lock held by someone else, check if it's me (re-entrant? no, just wait)
-		// Or check if expired? Redis handles expiration.
-		// Just wait.
-		c.Infof("Redis migration lock held, waiting...")
-		time.Sleep(2 * time.Second)
-	}
-}
-
-func (m *redisMigrator) unlock(c *container.Container) {
-	// Only delete if we own it
-	script := `
-		if redis.call("get", KEYS[1]) == ARGV[1] then
-			return redis.call("del", KEYS[1])
-		else
-			return 0
-		end
-	`
-	_, err := c.Redis.Eval(context.Background(), script, []string{redisLockKey}, m.ownerID).Result()
-	if err != nil {
-		c.Errorf("failed to release Redis migration lock: %v", err)
-	} else {
-		c.Debugf("Released Redis migration lock for ownerID: %s", m.ownerID)
-	}
-
-	m.migrator.unlock(c)
-}
-
-func (m *redisMigrator) refreshLock(c *container.Container) error {
-	// Only refresh if we own it
-	script := `
-		if redis.call("get", KEYS[1]) == ARGV[1] then
-			return redis.call("expire", KEYS[1], ARGV[2])
-		else
-			return 0
-		end
-	`
-	res, err := c.Redis.Eval(context.Background(), script, []string{redisLockKey}, m.ownerID, int(redisLockTTL.Seconds())).Result()
-	if err != nil {
-		return err
-	}
-
-	if res == int64(0) {
-		return fmt.Errorf("failed to refresh Redis lock, lock lost or stolen")
-	}
-
-	c.Debugf("Refreshed Redis migration lock for ownerID: %s", m.ownerID)
-	return nil
 }

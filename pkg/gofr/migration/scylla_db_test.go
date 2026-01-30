@@ -108,7 +108,7 @@ func TestScyllaGetLastMigration(t *testing.T) {
 		expectedV int64
 	}{
 		{"no error with multiple versions", nil, []int64{1, 3, 9, 4}, 9},
-		{"query failed", errScyllaConn, nil, 0},
+		{"query failed", errScyllaConn, nil, -1},
 		{"empty result", nil, []int64{}, 0},
 	}
 

@@ -58,7 +58,7 @@ func Test_MongoGetLastMigration(t *testing.T) {
 		resp int64
 	}{
 		{"no error", nil, 0},
-		{"connection failed", errMongoConn, 0},
+		{"connection failed", errMongoConn, -1},
 	}
 
 	var migrations []struct {

@@ -203,7 +203,7 @@ func Test_PubSubGetLastMigration(t *testing.T) {
 		},
 		{
 			desc:           "query error but next migrator has value",
-			expectedResult: 4,
+			expectedResult: -1,
 			nextVersion:    4,
 			pubsubResult:   nil,
 			pubsubError:    errQuery,

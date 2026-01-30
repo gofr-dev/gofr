@@ -56,9 +56,9 @@ func (cs cassandraMigrator) getLastMigration(c *container.Container) int64 {
 		if lm2 == -1 {
 			return -1
 		}
+
 		return lm2
 	}
-
 
 	for _, version := range lastMigrations {
 		if version > lastMigration {

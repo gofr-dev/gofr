@@ -186,10 +186,6 @@ type migrator interface {
 
 	commitMigration(c *container.Container, data transactionData) error
 	rollback(c *container.Container, data transactionData)
-
-	lock(c *container.Container) error
-	unlock(c *container.Container)
-	refreshLock(c *container.Container) error
 }
 
 type OpenTSDB interface {

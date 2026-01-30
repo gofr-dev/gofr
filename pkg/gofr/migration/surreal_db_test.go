@@ -59,7 +59,7 @@ func Test_SurrealGetLastMigration(t *testing.T) {
 		resp int64
 	}{
 		{"no error", nil, 1},
-		{"query failed", context.DeadlineExceeded, 0},
+		{"query failed", context.DeadlineExceeded, -1},
 	}
 
 	for i, tc := range testCases {

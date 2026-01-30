@@ -118,7 +118,6 @@ func (dm dgraphMigrator) getLastMigration(c *container.Container) int64 {
 			c.Debug("Error unmarshalling migration response:", err)
 			return 0
 		}
-
 	}
 
 	var lastMigration int64

@@ -706,7 +706,7 @@ func Test_OpenTSDBGetLastMigration(t *testing.T) {
 				err = os.WriteFile(filePath, []byte("invalid json"), 0600)
 				require.NoError(t, err)
 			},
-			expectedResult: 0,
+			expectedResult: -1,
 		},
 	}
 

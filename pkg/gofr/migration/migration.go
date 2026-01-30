@@ -54,34 +54,6 @@ func Run(migrationsMap map[int64]Migrate, c *container.Container) {
 		return
 	}
 
-	if err := mg.lock(c); err != nil {
-		c.Errorf("failed to acquire migration lock: %v", err)
-
-		return
-	}
-
-	defer mg.unlock(c)
-
-	stopRefresh := make(chan bool)
-
-	go func() {
-		ticker := time.NewTicker(10 * time.Second)
-		defer ticker.Stop()
-
-		for {
-			select {
-			case <-ticker.C:
-				if err := mg.refreshLock(c); err != nil {
-					c.Errorf("failed to refresh migration lock: %v", err)
-				}
-			case <-stopRefresh:
-				return
-			}
-		}
-	}()
-
-	defer func() { stopRefresh <- true }()
-
 	lastMigration := mg.getLastMigration(c)
 	if lastMigration == -1 {
 		c.Errorf("migration failed: could not verify migration state from datasources")
