@@ -131,7 +131,7 @@ func (m redisMigrator) commitMigration(c *container.Container, data transactionD
 	return m.migrator.commitMigration(c, data)
 }
 
-func (m *redisMigrator) rollback(c *container.Container, data transactionData) {
+func (m redisMigrator) rollback(c *container.Container, data transactionData) {
 	data.RedisTx.Discard()
 
 	m.migrator.rollback(c, data)
