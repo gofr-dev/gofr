@@ -97,7 +97,7 @@ func (em elasticsearchMigrator) getLastMigration(c *container.Container) (int64,
 
 	result, err := c.Elasticsearch.Search(context.Background(), []string{elasticsearchMigrationIndex}, getLastElasticsearchMigrationQuery())
 	if err != nil {
-		return -1, err
+		return -1, fmt.Errorf("elasticsearch: %w", err)
 	}
 
 	if hits, ok := result["hits"].(map[string]any); ok {

@@ -2,6 +2,7 @@ package migration
 
 import (
 	"context"
+	"fmt"
 	"time"
 
 	"gofr.dev/pkg/gofr/container"
@@ -50,7 +51,7 @@ func (mg mongoMigrator) getLastMigration(c *container.Container) (int64, error) 
 
 	err := mg.Mongo.Find(context.Background(), mongoMigrationCollection, filter, &migrations)
 	if err != nil {
-		return -1, err
+		return -1, fmt.Errorf("mongo: %w", err)
 	}
 
 	if len(migrations) == 0 {

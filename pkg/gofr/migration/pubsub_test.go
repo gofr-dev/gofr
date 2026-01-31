@@ -244,7 +244,12 @@ func Test_PubSubGetLastMigration(t *testing.T) {
 			result, err := pm.getLastMigration(mockContainer)
 
 			assert.Equal(t, tc.expectedResult, result, "TEST[%v] %v Failed!", i, tc.desc)
-			assert.Equal(t, tc.expectedErr, err, "TEST[%v] %v Failed!", i, tc.desc)
+
+			if tc.expectedErr != nil {
+				assert.ErrorContains(t, err, tc.expectedErr.Error(), "TEST[%v] %v Failed!", i, tc.desc)
+			} else {
+				assert.NoError(t, err, "TEST[%v] %v Failed!", i, tc.desc)
+			}
 		})
 	}
 }

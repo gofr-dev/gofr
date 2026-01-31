@@ -75,7 +75,7 @@ func (om oracleMigrator) getLastMigration(c *container.Container) (int64, error)
 
 	err := om.Oracle.Select(context.Background(), &results, getLastOracleGoFrMigration)
 	if err != nil {
-		return -1, err
+		return -1, fmt.Errorf("oracle: %w", err)
 	}
 
 	if len(results) == 0 {

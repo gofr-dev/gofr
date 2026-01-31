@@ -121,7 +121,7 @@ func (om *openTSDBMigrator) getLastMigration(c *container.Container) (int64, err
 
 	migrations, err := om.loadMigrationsUnsafe()
 	if err != nil {
-		return -1, err
+		return -1, fmt.Errorf("opentsdb: %w", err)
 	}
 
 	if len(migrations) == 0 {

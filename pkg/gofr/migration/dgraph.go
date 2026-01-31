@@ -3,6 +3,7 @@ package migration
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"time"
 
 	"github.com/dgraph-io/dgo/v210/protos/api"
@@ -102,7 +103,7 @@ func (dm dgraphMigrator) getLastMigration(c *container.Container) (int64, error)
 
 	resp, err := c.DGraph.Query(context.Background(), getLastMigrationQuery)
 	if err != nil {
-		return -1, err
+		return -1, fmt.Errorf("dgraph: %w", err)
 	}
 
 	// If a response is returned, marshal it to JSON bytes then unmarshal into our response struct.
@@ -111,12 +112,12 @@ func (dm dgraphMigrator) getLastMigration(c *container.Container) (int64, error)
 
 		b, err = json.Marshal(resp)
 		if err != nil {
-			return 0, err
+			return 0, fmt.Errorf("dgraph: %w", err)
 		}
 
 		err = json.Unmarshal(b, &response)
 		if err != nil {
-			return 0, err
+			return 0, fmt.Errorf("dgraph: %w", err)
 		}
 	}
 

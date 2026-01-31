@@ -2,6 +2,7 @@ package migration
 
 import (
 	"context"
+	"fmt"
 	"time"
 
 	"gofr.dev/pkg/gofr/container"
@@ -60,7 +61,7 @@ func (ch clickHouseMigrator) getLastMigration(c *container.Container) (int64, er
 
 	err := c.Clickhouse.Select(context.Background(), &lastMigrations, getLastChGoFrMigration)
 	if err != nil {
-		return -1, err
+		return -1, fmt.Errorf("clickhouse: %w", err)
 	}
 
 	if len(lastMigrations) != 0 {

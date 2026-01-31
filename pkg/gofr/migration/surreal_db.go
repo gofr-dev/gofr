@@ -85,7 +85,7 @@ func (s surrealMigrator) getLastMigration(c *container.Container) (int64, error)
 
 	result, err := s.SurrealDB.Query(context.Background(), getLastSurrealDBGoFrMigration, nil)
 	if err != nil {
-		return -1, err
+		return -1, fmt.Errorf("surrealdb: %w", err)
 	}
 
 	if len(result) == 0 {

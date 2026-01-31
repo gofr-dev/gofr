@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"fmt"
 	"time"
 
 	"gofr.dev/pkg/gofr/container"
@@ -68,7 +69,7 @@ func (pm pubsubMigrator) getLastMigration(c *container.Container) (int64, error)
 
 	result, err := c.PubSub.Query(ctx, queryTopic, int64(0), defaultQueryLimit)
 	if err != nil {
-		return -1, err
+		return -1, fmt.Errorf("pubsub: %w", err)
 	}
 
 	if len(result) == 0 {

@@ -2,6 +2,7 @@ package migration
 
 import (
 	"context"
+	"fmt"
 	"time"
 
 	"gofr.dev/pkg/gofr/container"
@@ -48,7 +49,7 @@ func (cs cassandraMigrator) getLastMigration(c *container.Container) (int64, err
 
 	err := c.Cassandra.QueryWithCtx(context.Background(), &lastMigrations, getLastCassandraGoFrMigration)
 	if err != nil {
-		return -1, err
+		return -1, fmt.Errorf("cassandra: %w", err)
 	}
 
 	if len(lastMigrations) == 0 {

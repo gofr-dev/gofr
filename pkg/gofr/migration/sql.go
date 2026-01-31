@@ -2,6 +2,7 @@ package migration
 
 import (
 	"context"
+	"fmt"
 	"time"
 
 	"gofr.dev/pkg/gofr/container"
@@ -55,7 +56,7 @@ func (d sqlMigrator) getLastMigration(c *container.Container) (int64, error) {
 
 	err := c.SQL.QueryRowContext(context.Background(), getLastSQLGoFrMigration).Scan(&lastMigration)
 	if err != nil {
-		return -1, err
+		return -1, fmt.Errorf("sql: %w", err)
 	}
 
 	c.Debugf("SQL last migration fetched value is: %v", lastMigration)

@@ -57,7 +57,7 @@ func (s scyllaMigrator) getLastMigration(c *container.Container) (int64, error) 
 
 	err := s.ScyllaDB.Query(&migrations, query)
 	if err != nil {
-		return -1, err
+		return -1, fmt.Errorf("scylladb: %w", err)
 	}
 
 	if len(migrations) == 0 {

@@ -2,6 +2,7 @@ package migration
 
 import (
 	"context"
+	"fmt"
 	"time"
 
 	"gofr.dev/pkg/gofr/container"
@@ -83,7 +84,7 @@ func (am arangoMigrator) getLastMigration(c *container.Container) (int64, error)
 
 	err := c.ArangoDB.Query(context.Background(), arangoMigrationDB, getLastArangoMigration, nil, &lastMigrations)
 	if err != nil {
-		return -1, err
+		return -1, fmt.Errorf("arangodb: %w", err)
 	}
 
 	if len(lastMigrations) == 0 {

@@ -3,6 +3,7 @@ package migration
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"strconv"
 	"time"
 
@@ -37,7 +38,7 @@ func (m redisMigrator) getLastMigration(c *container.Container) (int64, error) {
 
 	table, err := c.Redis.HGetAll(context.Background(), "gofr_migrations").Result()
 	if err != nil {
-		return -1, err
+		return -1, fmt.Errorf("redis: %w", err)
 	}
 
 	if len(table) == 0 {
@@ -62,7 +63,7 @@ func (m redisMigrator) getLastMigration(c *container.Container) (int64, error) {
 
 		err = json.Unmarshal([]byte(value), &data)
 		if err != nil {
-			return -1, err
+			return -1, fmt.Errorf("redis: %w", err)
 		}
 	}
 

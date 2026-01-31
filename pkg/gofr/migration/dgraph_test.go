@@ -83,7 +83,12 @@ func Test_DGraphGetLastMigration(t *testing.T) {
 			resp, err := migratorWithDGraph.getLastMigration(mockContainer)
 
 			assert.Equal(t, tc.expected, resp, "TEST[%v] Failed!", i)
-			assert.Equal(t, tc.err, err, "TEST[%v] Failed!", i)
+
+			if tc.err != nil {
+				assert.ErrorContains(t, err, tc.err.Error(), "TEST[%v] Failed!", i)
+			} else {
+				assert.NoError(t, err, "TEST[%v] Failed!", i)
+			}
 		})
 	}
 }

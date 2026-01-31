@@ -70,7 +70,12 @@ func Test_SurrealGetLastMigration(t *testing.T) {
 		resp, err := migratorWithSurreal.getLastMigration(mockContainer)
 
 		assert.Equal(t, tc.resp, resp, "TEST[%v]\n %v Failed! ", i, tc.desc)
-		assert.Equal(t, tc.err, err, "TEST[%v]\n %v Failed! ", i, tc.desc)
+
+		if tc.err != nil {
+			assert.ErrorContains(t, err, tc.err.Error(), "TEST[%v]\n %v Failed! ", i, tc.desc)
+		} else {
+			assert.NoError(t, err, "TEST[%v]\n %v Failed! ", i, tc.desc)
+		}
 	}
 }
 
