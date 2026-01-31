@@ -219,12 +219,9 @@ func getFilePermissionTestCases() []struct {
 			},
 			expectedErr:     "failed to open existing migration file",
 			shouldFileExist: true,
-			cleanupFunc: func(t *testing.T, filePath string) {
-				t.Helper()
+			cleanupFunc: func(_ *testing.T, filePath string) {
 				// Restore permissions for cleanup
-				if err := os.Chmod(filePath, 0600); err != nil {
-					t.Errorf("failed to chmod file during cleanup: %v", err)
-				}
+				_ = os.Chmod(filePath, 0600)
 			},
 		},
 		{
@@ -240,13 +237,10 @@ func getFilePermissionTestCases() []struct {
 			},
 			expectedErr:     "failed to create migration file",
 			shouldFileExist: false,
-			cleanupFunc: func(t *testing.T, filePath string) {
-				t.Helper()
+			cleanupFunc: func(_ *testing.T, filePath string) {
 				// Restore permissions for cleanup
 				dir := filepath.Dir(filePath)
-				if err := os.Chmod(dir, 0755); err != nil {
-					t.Errorf("failed to chmod dir during cleanup: %v", err)
-				}
+				_ = os.Chmod(dir, 0755)
 			},
 		},
 	}
@@ -298,14 +292,11 @@ func getDirectoryTestCases() []struct {
 			},
 			expectedErr:     "failed to create migration directory",
 			shouldFileExist: false,
-			cleanupFunc: func(t *testing.T, filePath string) {
-				t.Helper()
+			cleanupFunc: func(_ *testing.T, filePath string) {
 				// Restore permissions for cleanup
 				dir := filepath.Dir(filePath)
 				parentDir := filepath.Dir(dir)
-				if err := os.Chmod(parentDir, 0755); err != nil {
-					t.Errorf("failed to chmod parent dir during cleanup: %v", err)
-				}
+				_ = os.Chmod(parentDir, 0755)
 			},
 		},
 	}
@@ -715,7 +706,7 @@ func Test_OpenTSDBGetLastMigration(t *testing.T) {
 				err = os.WriteFile(filePath, []byte("invalid json"), 0600)
 				require.NoError(t, err)
 			},
-			expectedResult: 0,
+			expectedResult: -1,
 		},
 	}
 
@@ -724,8 +715,14 @@ func Test_OpenTSDBGetLastMigration(t *testing.T) {
 			os.RemoveAll(filepath.Dir(filePath))
 			tc.setupFunc()
 
-			result := migratorWithOpenTSDB.getLastMigration(mockContainer)
+			result, err := migratorWithOpenTSDB.getLastMigration(mockContainer)
 			assert.Equal(t, tc.expectedResult, result, "TEST[%v] %v Failed!", i, tc.desc)
+
+			if tc.expectedResult == -1 {
+				assert.Error(t, err, "TEST[%v] %v Failed! Expected error", i, tc.desc)
+			} else {
+				assert.NoError(t, err, "TEST[%v] %v Failed! Unexpected error", i, tc.desc)
+			}
 		})
 	}
 }

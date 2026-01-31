@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"strconv"
 	"time"
 
@@ -35,17 +36,13 @@ type redisData struct {
 	Duration  int64     `json:"duration"`
 }
 
-func (m redisMigrator) getLastMigration(c *container.Container) int64 {
+func (m redisMigrator) getLastMigration(c *container.Container) (int64, error) {
 	var lastMigration int64
 
 	table, err := c.Redis.HGetAll(context.Background(), "gofr_migrations").Result()
 	if err != nil {
-		c.Logger.Errorf("failed to get migration record from Redis. err: %v", err)
-
-		return 0
+		return -1, fmt.Errorf("redis: %w", err)
 	}
-
-	val := make(map[int64]redisData)
 
 	for key, value := range table {
 		integerValue, _ := strconv.ParseInt(key, 10, 64)
@@ -54,28 +51,22 @@ func (m redisMigrator) getLastMigration(c *container.Container) int64 {
 			lastMigration = integerValue
 		}
 
-		d := []byte(value)
-
 		var data redisData
 
-		err = json.Unmarshal(d, &data)
+		err = json.Unmarshal([]byte(value), &data)
 		if err != nil {
-			c.Logger.Errorf("failed to unmarshal redis Migration data err: %v", err)
-
-			return 0
+			return -1, fmt.Errorf("redis: %w", err)
 		}
-
-		val[integerValue] = data
 	}
 
 	c.Debugf("Redis last migration fetched value is: %v", lastMigration)
 
-	last := m.migrator.getLastMigration(c)
-	if last > lastMigration {
-		return last
+	last, err := m.migrator.getLastMigration(c)
+	if err != nil {
+		return -1, err
 	}
 
-	return lastMigration
+	return max(lastMigration, last), nil
 }
 
 func (m redisMigrator) beginTransaction(c *container.Container) transactionData {

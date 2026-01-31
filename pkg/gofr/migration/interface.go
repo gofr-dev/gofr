@@ -162,6 +162,7 @@ type Elasticsearch interface {
 	DeleteIndex(ctx context.Context, index string) error
 
 	// IndexDocument indexes (creates or replaces) a single document.
+	// Useful for seeding data or adding configuration documents during migrations.
 	IndexDocument(ctx context.Context, index, id string, document any) error
 
 	// GetDocument retrieves a single document by ID.
@@ -171,11 +172,13 @@ type Elasticsearch interface {
 	UpdateDocument(ctx context.Context, index, id string, update map[string]any) error
 
 	// DeleteDocument removes a document by ID.
+	// Useful for removing specific documents during migrations.
 	DeleteDocument(ctx context.Context, index, id string) error
 
 	// Bulk executes multiple indexing/updating/deleting operations in one request.
 	// Each entry in `operations` should be a JSON‑serializable object
 	// following the Elasticsearch bulk API format.
+	// Useful for bulk operations during migrations.
 	Bulk(ctx context.Context, operations []map[string]any) (map[string]any, error)
 
 	// Search performs a search request.
@@ -188,7 +191,7 @@ type Elasticsearch interface {
 // keeping the implementations for externalDB at one place such that if any change in migration logic, we would change directly here.
 type migrator interface {
 	checkAndCreateMigrationTable(c *container.Container) error
-	getLastMigration(c *container.Container) int64
+	getLastMigration(c *container.Container) (int64, error)
 
 	beginTransaction(c *container.Container) transactionData
 

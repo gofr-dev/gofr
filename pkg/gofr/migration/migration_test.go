@@ -3,7 +3,6 @@ package migration
 import (
 	"database/sql"
 	"errors"
-	"reflect"
 	"testing"
 
 	"github.com/DATA-DOG/go-sqlmock"
@@ -148,36 +147,27 @@ func TestMigrationRunClickhouseMigrationFailureWhileCheckingTable(t *testing.T) 
 }
 
 func TestMigrationRunClickhouseCurrentMigrationEqualLastMigration(t *testing.T) {
-	migrationMap := map[int64]Migrate{
-		0: {UP: func(d Datasource) error {
-			err := d.Clickhouse.Exec(t.Context(), "SELECT * FROM users")
-			if err != nil {
-				return err
-			}
+	logs := testutil.StdoutOutputForFunc(func() {
+		migrationMap := map[int64]Migrate{
+			0: {UP: func(d Datasource) error {
+				err := d.Clickhouse.Exec(t.Context(), "SELECT * FROM users")
+				if err != nil {
+					return err
+				}
 
-			return nil
-		}},
-	}
+				return nil
+			}},
+		}
 
-	mockClickHouse, mockContainer := initializeClickHouseRunMocks(t)
+		mockClickHouse, mockContainer := initializeClickHouseRunMocks(t)
 
-	// checkAndCreateMigrationTable is called first
-	mockClickHouse.EXPECT().Exec(gomock.Any(), gomock.Any()).Return(nil)
+		mockClickHouse.EXPECT().Exec(gomock.Any(), CheckAndCreateChMigrationTable).Return(nil)
+		mockClickHouse.EXPECT().Select(gomock.Any(), gomock.Any(), getLastChGoFrMigration).Return(nil)
 
-	// Then getLastMigration is called - returns 0, so migration 0 is skipped
-	mockClickHouse.EXPECT().Select(gomock.Any(), gomock.Any(), getLastChGoFrMigration).DoAndReturn(
-		func(_, dest, _ any, _ ...any) error {
-			v := reflect.ValueOf(dest).Elem()
-			// Create a new slice of the same type as the destination
-			slice := reflect.MakeSlice(v.Type(), 1, 1)
-			// Set the first element's Timestamp field to 0
-			slice.Index(0).FieldByName("Timestamp").SetInt(0)
-			v.Set(slice)
+		Run(migrationMap, mockContainer)
+	})
 
-			return nil
-		})
-
-	Run(migrationMap, mockContainer)
+	assert.Contains(t, logs, "no new migrations to run")
 }
 
 func TestMigrationRunClickhouseCommitError(t *testing.T) {

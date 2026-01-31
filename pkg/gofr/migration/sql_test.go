@@ -123,7 +123,7 @@ func TestQueryRow(t *testing.T) {
 }
 
 func TestQueryRowContext(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 
 	t.Run("successful query row context", func(t *testing.T) {
 		var id int
@@ -201,7 +201,7 @@ func TestExec(t *testing.T) {
 }
 
 func TestExecContext(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 
 	t.Run("successful exec context", func(t *testing.T) {
 		mockContainer, mocks := container.NewMockContainer(t)
@@ -250,8 +250,12 @@ func TestCheckAndCreateMigrationTableSuccess(t *testing.T) {
 	mocks.SQL.ExpectExec(createSQLGoFrMigrationsTable).WillReturnResult(mocks.SQL.NewResult(1, 1))
 	mocks.SQL.ExpectExec(createSQLGoFrMigrationLocksTable).WillReturnResult(mocks.SQL.NewResult(1, 1))
 
-	mg := sqlMigrator{SQL: mockContainer.SQL, migrator: mockMigrator}
-	err := mg.checkAndCreateMigrationTable(mockContainer)
+	migrator := sqlMigrator{
+		SQL:      mockContainer.SQL,
+		migrator: mockMigrator,
+	}
+
+	err := migrator.checkAndCreateMigrationTable(mockContainer)
 
 	require.NoError(t, err, "TestCheckAndCreateMigrationTable: error while executing mock query")
 }
@@ -267,8 +271,12 @@ func TestCheckAndCreateMigrationTableExecError(t *testing.T) {
 
 	mocks.SQL.ExpectExec(createSQLGoFrMigrationsTable).WillReturnError(expectedErr)
 
-	mg := sqlMigrator{SQL: mockContainer.SQL, migrator: mockMigrator}
-	err := mg.checkAndCreateMigrationTable(mockContainer)
+	migrator := sqlMigrator{
+		SQL:      mockContainer.SQL,
+		migrator: mockMigrator,
+	}
+
+	err := migrator.checkAndCreateMigrationTable(mockContainer)
 
 	require.Error(t, err, "TestCheckAndCreateMigrationTable: expected an error while executing mock query")
 
@@ -349,11 +357,12 @@ func TestGetLastMigration_UseMigratorFallback(t *testing.T) {
 	mocks.SQL.ExpectQuery(getLastSQLGoFrMigration).
 		WillReturnRows(mocks.SQL.NewRows([]string{"version"}).AddRow(2))
 
-	mockMigrator.EXPECT().getLastMigration(mockContainer).Return(int64(5))
+	mockMigrator.EXPECT().getLastMigration(mockContainer).Return(int64(5), nil)
 
 	migrator := sqlMigrator{SQL: mockContainer.SQL, migrator: mockMigrator}
 
-	last := migrator.getLastMigration(mockContainer)
+	last, err := migrator.getLastMigration(mockContainer)
+	require.NoError(t, err)
 	require.Equal(t, int64(5), last, "Expected getLastMigration to return higher value from embedded migrator")
 }
 
@@ -365,11 +374,12 @@ func TestGetLastMigration_MigratorReturnsLesser(t *testing.T) {
 	mocks.SQL.ExpectQuery(getLastSQLGoFrMigration).
 		WillReturnRows(mocks.SQL.NewRows([]string{"version"}).AddRow(7))
 
-	mockMigrator.EXPECT().getLastMigration(mockContainer).Return(int64(5))
+	mockMigrator.EXPECT().getLastMigration(mockContainer).Return(int64(5), nil)
 
 	migrator := sqlMigrator{SQL: mockContainer.SQL, migrator: mockMigrator}
 
-	last := migrator.getLastMigration(mockContainer)
+	last, err := migrator.getLastMigration(mockContainer)
+	require.NoError(t, err)
 	require.Equal(t, int64(7), last, "Should return SQL migration value as it's higher")
 }
 
@@ -399,7 +409,7 @@ func TestCheckAndCreateMigrationTable_ErrorCreatingTable(t *testing.T) {
 	mockContainer, mocks := container.NewMockContainer(t)
 	mocks.SQL.ExpectExec(createSQLGoFrMigrationsTable).WillReturnError(errCreateTable)
 
-	m := sqlMigrator{SQL: mockContainer.SQL, migrator: &Datasource{}}
+	m := sqlMigrator{}
 	err := m.checkAndCreateMigrationTable(mockContainer)
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "create table error")

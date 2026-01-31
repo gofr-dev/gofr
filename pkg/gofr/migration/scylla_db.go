@@ -28,7 +28,7 @@ const (
 	scyllaDBMigrationTable = "gofr_migrations"
 )
 
-func (sm scyllaMigrator) checkAndCreateMigrationTable(c *container.Container) error {
+func (s scyllaMigrator) checkAndCreateMigrationTable(c *container.Container) error {
 	createTableQuery := fmt.Sprintf(`
 		CREATE TABLE IF NOT EXISTS %s (
 			version bigint PRIMARY KEY,
@@ -38,31 +38,32 @@ func (sm scyllaMigrator) checkAndCreateMigrationTable(c *container.Container) er
 		);
 	`, scyllaDBMigrationTable)
 
-	err := sm.ScyllaDB.Exec(createTableQuery)
+	err := s.ScyllaDB.Exec(createTableQuery)
 	if err != nil {
 		c.Errorf("Failed to create migration table: %v", err)
 		return err
 	}
 
-	return sm.migrator.checkAndCreateMigrationTable(c)
+	return s.migrator.checkAndCreateMigrationTable(c)
 }
 
 type migrationRow struct {
 	Version int64 `db:"version"`
 }
 
-func (sm scyllaMigrator) getLastMigration(c *container.Container) int64 {
-	var migrations []migrationRow
+func (s scyllaMigrator) getLastMigration(c *container.Container) (int64, error) {
+	var (
+		migrations  []migrationRow
+		lastVersion int64
+	)
 
 	query := fmt.Sprintf("SELECT version FROM %s", scyllaDBMigrationTable)
 
-	err := sm.ScyllaDB.Query(&migrations, query)
+	err := s.ScyllaDB.Query(&migrations, query)
 	if err != nil {
-		c.Errorf("Failed to fetch migrations from ScyllaDB: %v", err)
-		return 0
+		return -1, fmt.Errorf("scylladb: %w", err)
 	}
 
-	var lastVersion int64
 	for _, m := range migrations {
 		if m.Version > lastVersion {
 			lastVersion = m.Version
@@ -71,22 +72,25 @@ func (sm scyllaMigrator) getLastMigration(c *container.Container) int64 {
 
 	c.Debugf("ScyllaDB last migration fetched value is: %v", lastVersion)
 
-	lm2 := sm.migrator.getLastMigration(c)
+	lm2, err := s.migrator.getLastMigration(c)
+	if err != nil {
+		return -1, err
+	}
 
-	return max(lastVersion, lm2)
+	return max(lastVersion, lm2), nil
 }
 
-func (sm scyllaMigrator) beginTransaction(c *container.Container) transactionData {
-	return sm.migrator.beginTransaction(c)
+func (s scyllaMigrator) beginTransaction(c *container.Container) transactionData {
+	return s.migrator.beginTransaction(c)
 }
 
-func (sm scyllaMigrator) commitMigration(c *container.Container, data transactionData) error {
+func (s scyllaMigrator) commitMigration(c *container.Container, data transactionData) error {
 	insertStmt := fmt.Sprintf(`
 		INSERT INTO %s (version, method, start_time, duration)
 		VALUES (?, ?, ?, ?);
 	`, scyllaDBMigrationTable)
 
-	err := sm.ScyllaDB.Exec(insertStmt,
+	err := s.ScyllaDB.Exec(insertStmt,
 		data.MigrationNumber,
 		"UP",
 		data.StartTime,
@@ -99,20 +103,20 @@ func (sm scyllaMigrator) commitMigration(c *container.Container, data transactio
 
 	c.Debugf("Inserted migration record for version %v into ScyllaDB", data.MigrationNumber)
 
-	return sm.migrator.commitMigration(c, data)
+	return s.migrator.commitMigration(c, data)
 }
 
-func (sm scyllaMigrator) rollback(c *container.Container, data transactionData) {
-	sm.migrator.rollback(c, data)
+func (s scyllaMigrator) rollback(c *container.Container, data transactionData) {
+	s.migrator.rollback(c, data)
 	c.Fatalf("Migration %v failed.", data.MigrationNumber)
 }
 
-func (sm scyllaMigrator) lock(ctx context.Context, cancel context.CancelFunc, c *container.Container, ownerID string) error {
-	return sm.migrator.lock(ctx, cancel, c, ownerID)
+func (s scyllaMigrator) lock(ctx context.Context, cancel context.CancelFunc, c *container.Container, ownerID string) error {
+	return s.migrator.lock(ctx, cancel, c, ownerID)
 }
 
-func (sm scyllaMigrator) unlock(c *container.Container, ownerID string) error {
-	return sm.migrator.unlock(c, ownerID)
+func (s scyllaMigrator) unlock(c *container.Container, ownerID string) error {
+	return s.migrator.unlock(c, ownerID)
 }
 
 func (scyllaMigrator) name() string {

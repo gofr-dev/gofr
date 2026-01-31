@@ -3,6 +3,7 @@ package migration
 import (
 	"context"
 	"errors"
+	"fmt"
 	"strings"
 	"time"
 
@@ -67,23 +68,22 @@ func (d sqlMigrator) checkAndCreateMigrationTable(c *container.Container) error 
 	return d.migrator.checkAndCreateMigrationTable(c)
 }
 
-func (d sqlMigrator) getLastMigration(c *container.Container) int64 {
+func (d sqlMigrator) getLastMigration(c *container.Container) (int64, error) {
 	var lastMigration int64
 
 	err := c.SQL.QueryRowContext(context.Background(), getLastSQLGoFrMigration).Scan(&lastMigration)
 	if err != nil {
-		return 0
+		return -1, fmt.Errorf("sql: %w", err)
 	}
 
 	c.Debugf("SQL last migration fetched value is: %v", lastMigration)
 
-	lm2 := d.migrator.getLastMigration(c)
-
-	if lm2 > lastMigration {
-		return lm2
+	lm2, err := d.migrator.getLastMigration(c)
+	if err != nil {
+		return -1, err
 	}
 
-	return lastMigration
+	return max(lastMigration, lm2), nil
 }
 
 func (d sqlMigrator) commitMigration(c *container.Container, data transactionData) error {

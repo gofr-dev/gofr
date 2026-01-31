@@ -81,7 +81,13 @@ func Run(migrationsMap map[int64]Migrate, c *container.Container) {
 
 	// Optimistic pre-check: only acquire locks if there MIGHT be new migrations
 	// This is a fast path to avoid lock contention when no migrations are needed
-	lastMigration := mg.getLastMigration(c)
+	lastMigration, err := mg.getLastMigration(c)
+	if err != nil {
+		c.Fatalf("migration failed: could not verify migration state from datasources, err: %v", err)
+
+		return
+	}
+
 	if !hasNewMigrations(keys, lastMigration) {
 		c.Infof("no new migrations to run")
 

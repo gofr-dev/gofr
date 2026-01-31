@@ -2,6 +2,7 @@ package migration
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"testing"
 	"time"
@@ -90,9 +91,10 @@ func TestRedisMigrator_GetLastMigration(t *testing.T) {
 		desc                  string
 		mockedData            map[string]string
 		redisErr              error
-		unmarshalErr          error
 		migratorLastMigration int64
+		migratorErr           error
 		expectedLastMigration int64
+		expectedErr           error
 	}{
 		{
 			desc: "Successful",
@@ -106,7 +108,8 @@ func TestRedisMigrator_GetLastMigration(t *testing.T) {
 		{
 			desc:                  "ErrorFromHGetAll",
 			redisErr:              goRedis.ErrClosed,
-			expectedLastMigration: 0,
+			expectedLastMigration: -1,
+			expectedErr:           goRedis.ErrClosed,
 		},
 		{
 			desc: "UnmarshalError",
@@ -114,7 +117,8 @@ func TestRedisMigrator_GetLastMigration(t *testing.T) {
 				"1": `{"method":"UP","startTime":"2024-01-01T00:00:00Z","duration":1000}`,
 				"2": "invalid JSON data",
 			},
-			expectedLastMigration: 0,
+			expectedLastMigration: -1,
+			expectedErr:           &json.SyntaxError{},
 		},
 		{
 			desc: "lm2IsLessThanLastMigration",
@@ -131,11 +135,19 @@ func TestRedisMigrator_GetLastMigration(t *testing.T) {
 		mocks.Redis.EXPECT().HGetAll(gomock.Any(), "gofr_migrations").Return(
 			goRedis.NewMapStringStringResult(tc.mockedData, tc.redisErr))
 
-		mockMigrator.EXPECT().getLastMigration(gomock.Any()).Return(tc.migratorLastMigration).MaxTimes(2)
+		if tc.redisErr == nil && tc.desc != "UnmarshalError" {
+			mockMigrator.EXPECT().getLastMigration(gomock.Any()).Return(tc.migratorLastMigration, tc.migratorErr).MaxTimes(2)
+		}
 
-		lastMigration := m.getLastMigration(c)
+		lastMigration, err := m.getLastMigration(c)
 
 		assert.Equal(t, tc.expectedLastMigration, lastMigration, "TEST[%d], Failed.\n%s", i, tc.desc)
+
+		if tc.expectedErr != nil {
+			assert.Error(t, err, "TEST[%d], Failed.\n%s", i, tc.desc)
+		} else {
+			assert.NoError(t, err, "TEST[%d], Failed.\n%s", i, tc.desc)
+		}
 	}
 }
 

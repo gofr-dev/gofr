@@ -1466,11 +1466,12 @@ func (mr *MockmigratorMockRecorder) commitMigration(c, data any) *gomock.Call {
 }
 
 // getLastMigration mocks base method.
-func (m *Mockmigrator) getLastMigration(c *container.Container) int64 {
+func (m *Mockmigrator) getLastMigration(c *container.Container) (int64, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "getLastMigration", c)
 	ret0, _ := ret[0].(int64)
-	return ret0
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
 }
 
 // getLastMigration indicates an expected call of getLastMigration.
