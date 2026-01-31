@@ -5,6 +5,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"go.uber.org/mock/gomock"
 
 	"gofr.dev/pkg/gofr/container"
 	"gofr.dev/pkg/gofr/testutil"
@@ -20,8 +21,7 @@ func Test_getMigratorDatastoreNotInitialized(t *testing.T) {
 
 		mg.rollback(mockContainer, transactionData{})
 
-		lastMigration, err := mg.getLastMigration(mockContainer)
-		require.NoError(t, err)
+		lastMigration := mg.getLastMigration(mockContainer)
 		assert.Equal(t, int64(0), lastMigration, "TEST Failed \n Last Migration is not 0")
 		require.NoError(t, mg.checkAndCreateMigrationTable(mockContainer), "TEST Failed")
 		assert.Equal(t, transactionData{}, mg.beginTransaction(mockContainer), "TEST Failed")
@@ -29,4 +29,18 @@ func Test_getMigratorDatastoreNotInitialized(t *testing.T) {
 	})
 
 	assert.Contains(t, logs, "Migration 0 ran successfully", "TEST Failed")
+}
+
+func Test_lock_unlock(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	mockContainer, _ := container.NewMockContainer(t)
+	ds := Datasource{}
+
+	err := ds.lock(t.Context(), nil, mockContainer, "owner")
+	require.NoError(t, err)
+
+	err = ds.unlock(mockContainer, "owner")
+	require.NoError(t, err)
 }
