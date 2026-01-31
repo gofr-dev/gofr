@@ -349,11 +349,12 @@ func TestGetLastMigration_UseMigratorFallback(t *testing.T) {
 	mocks.SQL.ExpectQuery(getLastSQLGoFrMigration).
 		WillReturnRows(mocks.SQL.NewRows([]string{"version"}).AddRow(2))
 
-	mockMigrator.EXPECT().getLastMigration(mockContainer).Return(int64(5))
+	mockMigrator.EXPECT().getLastMigration(mockContainer).Return(int64(5), nil)
 
 	migrator := sqlMigrator{SQL: mockContainer.SQL, migrator: mockMigrator}
 
-	last := migrator.getLastMigration(mockContainer)
+	last, err := migrator.getLastMigration(mockContainer)
+	require.NoError(t, err)
 	require.Equal(t, int64(5), last, "Expected getLastMigration to return higher value from embedded migrator")
 }
 
@@ -365,11 +366,12 @@ func TestGetLastMigration_MigratorReturnsLesser(t *testing.T) {
 	mocks.SQL.ExpectQuery(getLastSQLGoFrMigration).
 		WillReturnRows(mocks.SQL.NewRows([]string{"version"}).AddRow(7))
 
-	mockMigrator.EXPECT().getLastMigration(mockContainer).Return(int64(5))
+	mockMigrator.EXPECT().getLastMigration(mockContainer).Return(int64(5), nil)
 
 	migrator := sqlMigrator{SQL: mockContainer.SQL, migrator: mockMigrator}
 
-	last := migrator.getLastMigration(mockContainer)
+	last, err := migrator.getLastMigration(mockContainer)
+	require.NoError(t, err)
 	require.Equal(t, int64(7), last, "Should return SQL migration value as it's higher")
 }
 

@@ -188,7 +188,7 @@ type Elasticsearch interface {
 // keeping the implementations for externalDB at one place such that if any change in migration logic, we would change directly here.
 type migrator interface {
 	checkAndCreateMigrationTable(c *container.Container) error
-	getLastMigration(c *container.Container) int64
+	getLastMigration(c *container.Container) (int64, error)
 
 	beginTransaction(c *container.Container) transactionData
 

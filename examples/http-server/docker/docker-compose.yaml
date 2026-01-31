@@ -9,12 +9,12 @@ services:
       TRACE_EXPORTER: gofr
       TRACER_RATIO: 0.1
       REDIS_HOST: redisdb
-      REDIS_PORT: 6379
+      REDIS_PORT: 2002
       DB_HOST: mysqldb
       DB_USER: root
       DB_PASSWORD: password
       DB_NAME: test
-      DB_PORT: 3306
+      DB_PORT: 2001
       DB_DIALECT: mysql
     ports:
       - "9000:9000"

@@ -137,7 +137,8 @@ func TestElasticsearchMigrator_getLastMigration_WithMigrations(t *testing.T) {
 	ds := elasticsearchDS{client: mockElasticsearch}
 	mg := elasticsearchMigrator{elasticsearchDS: ds, migrator: &Datasource{}}
 
-	lastMigration := mg.getLastMigration(mockContainer)
+	lastMigration, err := mg.getLastMigration(mockContainer)
+	require.NoError(t, err)
 	assert.Equal(t, int64(5), lastMigration)
 }
 
@@ -156,7 +157,8 @@ func TestElasticsearchMigrator_getLastMigration_NoMigrations(t *testing.T) {
 	ds := elasticsearchDS{client: mockElasticsearch}
 	mg := elasticsearchMigrator{elasticsearchDS: ds, migrator: &Datasource{}}
 
-	lastMigration := mg.getLastMigration(mockContainer)
+	lastMigration, err := mg.getLastMigration(mockContainer)
+	require.NoError(t, err)
 	assert.Equal(t, int64(0), lastMigration)
 }
 
