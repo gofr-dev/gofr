@@ -67,9 +67,10 @@ func Test_SurrealGetLastMigration(t *testing.T) {
 			map[string]any{"version": float64(tc.resp)},
 		}, tc.err)
 
-		resp := migratorWithSurreal.getLastMigration(mockContainer)
+		resp, err := migratorWithSurreal.getLastMigration(mockContainer)
 
 		assert.Equal(t, tc.resp, resp, "TEST[%v]\n %v Failed! ", i, tc.desc)
+		assert.Equal(t, tc.err, err, "TEST[%v]\n %v Failed! ", i, tc.desc)
 	}
 }
 

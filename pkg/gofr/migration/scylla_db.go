@@ -50,24 +50,18 @@ type migrationRow struct {
 	Version int64 `db:"version"`
 }
 
-func (s scyllaMigrator) getLastMigration(c *container.Container) int64 {
+func (s scyllaMigrator) getLastMigration(c *container.Container) (int64, error) {
 	var migrations []migrationRow
 
 	query := fmt.Sprintf("SELECT version FROM %s", scyllaDBMigrationTable)
 
 	err := s.ScyllaDB.Query(&migrations, query)
 	if err != nil {
-		c.Errorf("Failed to fetch migrations from ScyllaDB: %v", err)
-		return -1
+		return -1, err
 	}
 
 	if len(migrations) == 0 {
-		lm2 := s.migrator.getLastMigration(c)
-		if lm2 == -1 {
-			return -1
-		}
-
-		return lm2
+		return s.migrator.getLastMigration(c)
 	}
 
 	var lastVersion int64
@@ -79,12 +73,12 @@ func (s scyllaMigrator) getLastMigration(c *container.Container) int64 {
 
 	c.Debugf("ScyllaDB last migration fetched value is: %v", lastVersion)
 
-	lm2 := s.migrator.getLastMigration(c)
-	if lm2 == -1 {
-		return -1
+	lm2, err := s.migrator.getLastMigration(c)
+	if err != nil {
+		return -1, err
 	}
 
-	return max(lastVersion, lm2)
+	return max(lastVersion, lm2), nil
 }
 
 func (s scyllaMigrator) beginTransaction(c *container.Container) transactionData {

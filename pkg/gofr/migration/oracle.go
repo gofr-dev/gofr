@@ -70,37 +70,27 @@ func (om oracleMigrator) checkAndCreateMigrationTable(c *container.Container) er
 }
 
 // Get the last applied migration version.
-func (om oracleMigrator) getLastMigration(c *container.Container) int64 {
+func (om oracleMigrator) getLastMigration(c *container.Container) (int64, error) {
 	var results []map[string]any
 
 	err := om.Oracle.Select(context.Background(), &results, getLastOracleGoFrMigration)
 	if err != nil {
-		c.Errorf("Failed to fetch last migration: %v", err)
-		return -1
+		return -1, err
 	}
 
 	if len(results) == 0 {
-		lm2 := om.migrator.getLastMigration(c)
-		if lm2 == -1 {
-			return -1
-		}
-
-		return lm2
+		return om.migrator.getLastMigration(c)
 	}
 
 	oracleLastMigration := om.extractLastMigrationFromResults(results)
 	c.Debugf("Oracle last migration fetched value is: %v", oracleLastMigration)
 
-	baseLastMigration := om.migrator.getLastMigration(c)
-	if baseLastMigration == -1 {
-		return -1
+	baseLastMigration, err := om.migrator.getLastMigration(c)
+	if err != nil {
+		return -1, err
 	}
 
-	if baseLastMigration > oracleLastMigration {
-		return baseLastMigration
-	}
-
-	return oracleLastMigration
+	return max(baseLastMigration, oracleLastMigration), nil
 }
 
 // extractLastMigrationFromResults handles Oracle number type conversion.

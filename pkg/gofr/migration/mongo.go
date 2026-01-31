@@ -39,7 +39,7 @@ func (mg mongoMigrator) checkAndCreateMigrationTable(_ *container.Container) err
 }
 
 // getLastMigration retrieves the latest migration version from MongoDB.
-func (mg mongoMigrator) getLastMigration(c *container.Container) int64 {
+func (mg mongoMigrator) getLastMigration(c *container.Container) (int64, error) {
 	var lastMigration int64
 
 	var migrations []struct {
@@ -50,17 +50,18 @@ func (mg mongoMigrator) getLastMigration(c *container.Container) int64 {
 
 	err := mg.Mongo.Find(context.Background(), mongoMigrationCollection, filter, &migrations)
 	if err != nil {
-		c.Errorf("Failed to fetch migrations from MongoDB: %v", err)
-		return -1
+		return -1, err
 	}
 
 	if len(migrations) == 0 {
-		lm2 := mg.migrator.getLastMigration(c)
-		if lm2 == -1 {
-			return -1
+		var lm2 int64
+
+		lm2, err = mg.migrator.getLastMigration(c)
+		if err != nil {
+			return -1, err
 		}
 
-		return lm2
+		return lm2, nil
 	}
 
 	// Identify the highest migration version.
@@ -70,12 +71,12 @@ func (mg mongoMigrator) getLastMigration(c *container.Container) int64 {
 
 	c.Debugf("MongoDB last migration fetched value is: %v", lastMigration)
 
-	lm2 := mg.migrator.getLastMigration(c)
-	if lm2 == -1 {
-		return -1
+	lm2, err := mg.migrator.getLastMigration(c)
+	if err != nil {
+		return -1, err
 	}
 
-	return max(lm2, lastMigration)
+	return max(lm2, lastMigration), nil
 }
 
 func (mg mongoMigrator) beginTransaction(c *container.Container) transactionData {

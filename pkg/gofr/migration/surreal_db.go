@@ -80,42 +80,31 @@ func (s surrealMigrator) checkAndCreateMigrationTable(*container.Container) erro
 	return nil
 }
 
-func (s surrealMigrator) getLastMigration(c *container.Container) int64 {
+func (s surrealMigrator) getLastMigration(c *container.Container) (int64, error) {
 	var lastMigration int64 // Default to 0 if no migrations found
 
 	result, err := s.SurrealDB.Query(context.Background(), getLastSurrealDBGoFrMigration, nil)
 	if err != nil {
-		return -1
+		return -1, err
 	}
 
 	if len(result) == 0 {
-		lm2 := s.migrator.getLastMigration(c)
-		if lm2 == -1 {
-			return -1
-		}
-
-		return lm2
+		return s.migrator.getLastMigration(c)
 	}
 
-	if len(result) > 0 {
-		// Assuming the query returns a single row with the version
-		if version, ok := result[0].(map[string]any)["version"].(float64); ok {
-			lastMigration = int64(version)
-		}
+	// Assuming the query returns a single row with the version
+	if version, ok := result[0].(map[string]any)["version"].(float64); ok {
+		lastMigration = int64(version)
 	}
 
 	c.Debugf("surrealDB last migration fetched value is: %v", lastMigration)
 
-	lm2 := s.migrator.getLastMigration(c)
-	if lm2 == -1 {
-		return -1
+	lm2, err := s.migrator.getLastMigration(c)
+	if err != nil {
+		return -1, err
 	}
 
-	if lm2 > lastMigration {
-		return lm2
-	}
-
-	return lastMigration
+	return max(lastMigration, lm2), nil
 }
 
 func (s surrealMigrator) beginTransaction(c *container.Container) transactionData {

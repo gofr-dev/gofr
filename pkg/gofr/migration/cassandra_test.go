@@ -66,9 +66,10 @@ func Test_CassandraGetLastMigration(t *testing.T) {
 	for i, tc := range testCases {
 		mockCassandra.EXPECT().QueryWithCtx(gomock.Any(), &lastMigration, getLastCassandraGoFrMigration).Return(tc.err)
 
-		resp := migratorWithCassandra.getLastMigration(mockContainer)
+		resp, err := migratorWithCassandra.getLastMigration(mockContainer)
 
 		assert.Equal(t, tc.resp, resp, "TEST[%v]\n %v Failed! ", i, tc.desc)
+		assert.Equal(t, tc.err, err, "TEST[%v]\n %v Failed! ", i, tc.desc)
 	}
 }
 

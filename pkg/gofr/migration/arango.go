@@ -78,36 +78,31 @@ func (am arangoMigrator) checkAndCreateMigrationTable(c *container.Container) er
 	return am.migrator.checkAndCreateMigrationTable(c)
 }
 
-func (am arangoMigrator) getLastMigration(c *container.Container) int64 {
+func (am arangoMigrator) getLastMigration(c *container.Container) (int64, error) {
 	var lastMigrations []int64
 
 	err := c.ArangoDB.Query(context.Background(), arangoMigrationDB, getLastArangoMigration, nil, &lastMigrations)
 	if err != nil {
-		return -1
+		return -1, err
 	}
 
 	if len(lastMigrations) == 0 {
 		// If no migrations found locally, check inner migrator
-		lm2 := am.migrator.getLastMigration(c)
-		if lm2 == -1 {
-			return -1
-		}
-
-		return lm2
+		return am.migrator.getLastMigration(c)
 	}
 
 	c.Debugf("ArangoDB last migration fetched value is: %v", lastMigrations[0])
 
-	lm2 := am.migrator.getLastMigration(c)
-	if lm2 == -1 {
-		return -1
+	lm2, err := am.migrator.getLastMigration(c)
+	if err != nil {
+		return -1, err
 	}
 
 	if lm2 > lastMigrations[0] {
-		return lm2
+		return lm2, nil
 	}
 
-	return lastMigrations[0]
+	return lastMigrations[0], nil
 }
 
 func (am arangoMigrator) beginTransaction(c *container.Container) transactionData {

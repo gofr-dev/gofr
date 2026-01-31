@@ -131,9 +131,10 @@ func TestScyllaGetLastMigration(t *testing.T) {
 				return nil
 			})
 
-		got := migratorWithScylla.getLastMigration(mockContainer)
+		got, err := migratorWithScylla.getLastMigration(mockContainer)
 
 		assert.Equal(t, tc.expectedV, got, "TEST[%v] %s failed", i, tc.desc)
+		assert.Equal(t, tc.err, err, "TEST[%v] %s failed", i, tc.desc)
 	}
 }
 

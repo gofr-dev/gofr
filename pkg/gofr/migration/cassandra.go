@@ -41,23 +41,18 @@ func (cs cassandraMigrator) checkAndCreateMigrationTable(c *container.Container)
 	return cs.migrator.checkAndCreateMigrationTable(c)
 }
 
-func (cs cassandraMigrator) getLastMigration(c *container.Container) int64 {
+func (cs cassandraMigrator) getLastMigration(c *container.Container) (int64, error) {
 	var lastMigration int64 // Default to 0 if no migrations found
 
 	var lastMigrations []int64
 
 	err := c.Cassandra.QueryWithCtx(context.Background(), &lastMigrations, getLastCassandraGoFrMigration)
 	if err != nil {
-		return -1
+		return -1, err
 	}
 
 	if len(lastMigrations) == 0 {
-		lm2 := cs.migrator.getLastMigration(c)
-		if lm2 == -1 {
-			return -1
-		}
-
-		return lm2
+		return cs.migrator.getLastMigration(c)
 	}
 
 	for _, version := range lastMigrations {
@@ -68,16 +63,12 @@ func (cs cassandraMigrator) getLastMigration(c *container.Container) int64 {
 
 	c.Debugf("cassandra last migration fetched value is: %v", lastMigration)
 
-	lm2 := cs.migrator.getLastMigration(c)
-	if lm2 == -1 {
-		return -1
+	lm2, err := cs.migrator.getLastMigration(c)
+	if err != nil {
+		return -1, err
 	}
 
-	if lm2 > lastMigration {
-		return lm2
-	}
-
-	return lastMigration
+	return max(lastMigration, lm2), nil
 }
 
 func (cs cassandraMigrator) beginTransaction(c *container.Container) transactionData {

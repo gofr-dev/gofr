@@ -50,26 +50,26 @@ func (d sqlMigrator) checkAndCreateMigrationTable(c *container.Container) error 
 	return d.migrator.checkAndCreateMigrationTable(c)
 }
 
-func (d sqlMigrator) getLastMigration(c *container.Container) int64 {
+func (d sqlMigrator) getLastMigration(c *container.Container) (int64, error) {
 	var lastMigration int64
 
 	err := c.SQL.QueryRowContext(context.Background(), getLastSQLGoFrMigration).Scan(&lastMigration)
 	if err != nil {
-		return -1
+		return -1, err
 	}
 
 	c.Debugf("SQL last migration fetched value is: %v", lastMigration)
 
-	lm2 := d.migrator.getLastMigration(c)
-	if lm2 == -1 {
-		return -1
+	lm2, err := d.migrator.getLastMigration(c)
+	if err != nil {
+		return -1, err
 	}
 
 	if lm2 > lastMigration {
-		return lm2
+		return lm2, nil
 	}
 
-	return lastMigration
+	return lastMigration, nil
 }
 
 func (d sqlMigrator) commitMigration(c *container.Container, data transactionData) error {

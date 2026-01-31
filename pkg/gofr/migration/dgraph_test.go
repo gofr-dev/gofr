@@ -80,9 +80,10 @@ func Test_DGraphGetLastMigration(t *testing.T) {
 			mockDGraph.EXPECT().Query(gomock.Any(), getLastMigrationQuery).
 				Return(tc.mockResp, tc.err)
 
-			resp := migratorWithDGraph.getLastMigration(mockContainer)
+			resp, err := migratorWithDGraph.getLastMigration(mockContainer)
 
 			assert.Equal(t, tc.expected, resp, "TEST[%v] Failed!", i)
+			assert.Equal(t, tc.err, err, "TEST[%v] Failed!", i)
 		})
 	}
 }

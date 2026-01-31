@@ -66,9 +66,10 @@ func Test_ClickHouseGetLastMigration(t *testing.T) {
 	for i, tc := range testCases {
 		mockClickhouse.EXPECT().Select(gomock.Any(), gomock.Any(), getLastChGoFrMigration).Return(tc.err)
 
-		resp := mg.getLastMigration(mockContainer)
+		resp, err := mg.getLastMigration(mockContainer)
 
 		assert.Equal(t, tc.resp, resp, "TEST[%v]\n %v Failed! ", i, tc.desc)
+		assert.Equal(t, tc.err, err, "TEST[%v]\n %v Failed! ", i, tc.desc)
 	}
 }
 

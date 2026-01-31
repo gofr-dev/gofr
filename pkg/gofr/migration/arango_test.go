@@ -72,9 +72,10 @@ func Test_ArangoGetLastMigration(t *testing.T) {
 	for i, tc := range testCases {
 		mockArango.EXPECT().Query(gomock.Any(), arangoMigrationDB, getLastArangoMigration, nil, &lastMigrations).Return(tc.err)
 
-		resp := migratorWithArango.getLastMigration(mockContainer)
+		resp, err := migratorWithArango.getLastMigration(mockContainer)
 
 		assert.Equal(t, tc.resp, resp, "TEST[%v]\n %v Failed! ", i, tc.desc)
+		assert.Equal(t, tc.err, err, "TEST[%v]\n %v Failed! ", i, tc.desc)
 	}
 }
 

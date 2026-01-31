@@ -70,9 +70,10 @@ func Test_MongoGetLastMigration(t *testing.T) {
 	for i, tc := range testCases {
 		mockMongo.EXPECT().Find(gomock.Any(), mongoMigrationCollection, filter, &migrations).Return(tc.err)
 
-		resp := migratorWithMongo.getLastMigration(mockContainer)
+		resp, err := migratorWithMongo.getLastMigration(mockContainer)
 
 		assert.Equal(t, tc.resp, resp, "TEST[%v]\n %v Failed! ", i, tc.desc)
+		assert.Equal(t, tc.err, err, "TEST[%v]\n %v Failed! ", i, tc.desc)
 	}
 }
 

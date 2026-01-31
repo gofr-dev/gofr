@@ -64,8 +64,9 @@ func Test_OracleGetLastMigration(t *testing.T) {
 	for i, tc := range testCases {
 		mockOracle.EXPECT().Select(gomock.Any(), gomock.Any(), getLastOracleGoFrMigration).Return(tc.err)
 
-		resp := mg.getLastMigration(mockContainer)
+		resp, err := mg.getLastMigration(mockContainer)
 		assert.Equal(t, tc.resp, resp, "TEST[%d]: %s failed", i, tc.desc)
+		assert.Equal(t, tc.err, err, "TEST[%d]: %s failed", i, tc.desc)
 	}
 }
 
@@ -175,8 +176,9 @@ func TestOracleMigration_GetLastMigration_ReturnsZeroOnError(t *testing.T) {
 
 	mockOracle.EXPECT().Select(gomock.Any(), gomock.Any(), getLastOracleGoFrMigration).Return(sql.ErrConnDone)
 
-	lastMigration := mg.getLastMigration(mockContainer)
+	lastMigration, err := mg.getLastMigration(mockContainer)
 	assert.Equal(t, int64(-1), lastMigration)
+	assert.Equal(t, sql.ErrConnDone, err)
 }
 
 func initializeOracleRunMocks(t *testing.T) (*container.MockOracleDB, *container.Container) {
