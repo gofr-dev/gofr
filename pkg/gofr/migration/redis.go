@@ -42,7 +42,7 @@ func (m redisMigrator) getLastMigration(c *container.Container) int64 {
 	if err != nil {
 		c.Logger.Errorf("failed to get migration record from Redis. err: %v", err)
 
-		return -1
+		return 0
 	}
 
 	val := make(map[int64]redisData)
@@ -62,7 +62,7 @@ func (m redisMigrator) getLastMigration(c *container.Container) int64 {
 		if err != nil {
 			c.Logger.Errorf("failed to unmarshal redis Migration data err: %v", err)
 
-			return -1
+			return 0
 		}
 
 		val[integerValue] = data

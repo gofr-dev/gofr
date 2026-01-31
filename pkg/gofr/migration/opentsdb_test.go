@@ -715,7 +715,7 @@ func Test_OpenTSDBGetLastMigration(t *testing.T) {
 				err = os.WriteFile(filePath, []byte("invalid json"), 0600)
 				require.NoError(t, err)
 			},
-			expectedResult: -1,
+			expectedResult: 0,
 		},
 	}
 
@@ -724,14 +724,8 @@ func Test_OpenTSDBGetLastMigration(t *testing.T) {
 			os.RemoveAll(filepath.Dir(filePath))
 			tc.setupFunc()
 
-			result, err := migratorWithOpenTSDB.getLastMigration(mockContainer)
+			result := migratorWithOpenTSDB.getLastMigration(mockContainer)
 			assert.Equal(t, tc.expectedResult, result, "TEST[%v] %v Failed!", i, tc.desc)
-
-			if tc.expectedResult == -1 {
-				assert.Error(t, err, "TEST[%v] %v Failed! Expected error", i, tc.desc)
-			} else {
-				assert.NoError(t, err, "TEST[%v] %v Failed! Unexpected error", i, tc.desc)
-			}
 		})
 	}
 }

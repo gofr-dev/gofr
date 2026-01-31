@@ -58,7 +58,7 @@ func Test_CassandraGetLastMigration(t *testing.T) {
 		resp int64
 	}{
 		{"no error", nil, 0},
-		{"connection failed", sql.ErrConnDone, -1},
+		{"connection failed", sql.ErrConnDone, 0},
 	}
 
 	var lastMigration []int64
@@ -66,15 +66,9 @@ func Test_CassandraGetLastMigration(t *testing.T) {
 	for i, tc := range testCases {
 		mockCassandra.EXPECT().QueryWithCtx(gomock.Any(), &lastMigration, getLastCassandraGoFrMigration).Return(tc.err)
 
-		resp, err := migratorWithCassandra.getLastMigration(mockContainer)
+		resp := migratorWithCassandra.getLastMigration(mockContainer)
 
 		assert.Equal(t, tc.resp, resp, "TEST[%v]\n %v Failed! ", i, tc.desc)
-
-		if tc.err != nil {
-			assert.ErrorContains(t, err, tc.err.Error(), "TEST[%v]\n %v Failed! ", i, tc.desc)
-		} else {
-			assert.NoError(t, err, "TEST[%v]\n %v Failed! ", i, tc.desc)
-		}
 	}
 }
 

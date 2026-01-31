@@ -106,7 +106,7 @@ func TestRedisMigrator_GetLastMigration(t *testing.T) {
 		{
 			desc:                  "ErrorFromHGetAll",
 			redisErr:              goRedis.ErrClosed,
-			expectedLastMigration: -1,
+			expectedLastMigration: 0,
 		},
 		{
 			desc: "UnmarshalError",
@@ -114,7 +114,7 @@ func TestRedisMigrator_GetLastMigration(t *testing.T) {
 				"1": `{"method":"UP","startTime":"2024-01-01T00:00:00Z","duration":1000}`,
 				"2": "invalid JSON data",
 			},
-			expectedLastMigration: -1,
+			expectedLastMigration: 0,
 		},
 		{
 			desc: "lm2IsLessThanLastMigration",

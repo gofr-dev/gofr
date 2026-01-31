@@ -64,7 +64,7 @@ func Test_DGraphGetLastMigration(t *testing.T) {
 			desc:     "query error",
 			err:      context.DeadlineExceeded,
 			mockResp: nil,
-			expected: -1,
+			expected: 0,
 		},
 		{
 			desc:     "empty response",
@@ -80,15 +80,9 @@ func Test_DGraphGetLastMigration(t *testing.T) {
 			mockDGraph.EXPECT().Query(gomock.Any(), getLastMigrationQuery).
 				Return(tc.mockResp, tc.err)
 
-			resp, err := migratorWithDGraph.getLastMigration(mockContainer)
+			resp := migratorWithDGraph.getLastMigration(mockContainer)
 
 			assert.Equal(t, tc.expected, resp, "TEST[%v] Failed!", i)
-
-			if tc.err != nil {
-				assert.ErrorContains(t, err, tc.err.Error(), "TEST[%v] Failed!", i)
-			} else {
-				assert.NoError(t, err, "TEST[%v] Failed!", i)
-			}
 		})
 	}
 }
