@@ -1,6 +1,7 @@
 package migration
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -281,8 +282,8 @@ func (om *openTSDBMigrator) rollback(c *container.Container, data transactionDat
 	c.Fatalf("Migration %v failed.", data.MigrationNumber)
 }
 
-func (om *openTSDBMigrator) lock(c *container.Container, ownerID string, stop <-chan struct{}, fail chan<- error) error {
-	return om.migrator.lock(c, ownerID, stop, fail)
+func (om *openTSDBMigrator) lock(ctx context.Context, cancel context.CancelFunc, c *container.Container, ownerID string) error {
+	return om.migrator.lock(ctx, cancel, c, ownerID)
 }
 
 func (om *openTSDBMigrator) unlock(c *container.Container, ownerID string) error {

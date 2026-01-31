@@ -179,8 +179,8 @@ func (dm dgraphMigrator) rollback(c *container.Container, data transactionData) 
 	c.Fatalf("Migration %v failed and rolled back", data.MigrationNumber)
 }
 
-func (dm dgraphMigrator) lock(c *container.Container, ownerID string, stop <-chan struct{}, fail chan<- error) error {
-	return dm.migrator.lock(c, ownerID, stop, fail)
+func (dm dgraphMigrator) lock(ctx context.Context, cancel context.CancelFunc, c *container.Container, ownerID string) error {
+	return dm.migrator.lock(ctx, cancel, c, ownerID)
 }
 
 func (dm dgraphMigrator) unlock(c *container.Container, ownerID string) error {

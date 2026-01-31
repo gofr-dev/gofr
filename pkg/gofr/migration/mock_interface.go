@@ -1480,17 +1480,17 @@ func (mr *MockmigratorMockRecorder) getLastMigration(c any) *gomock.Call {
 }
 
 // lock mocks base method.
-func (m *Mockmigrator) lock(c *container.Container, ownerID string, stop <-chan struct{}, fail chan<- error) error {
+func (m *Mockmigrator) lock(ctx context.Context, cancel context.CancelFunc, c *container.Container, ownerID string) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "lock", c, ownerID, stop, fail)
+	ret := m.ctrl.Call(m, "lock", ctx, cancel, c, ownerID)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // lock indicates an expected call of lock.
-func (mr *MockmigratorMockRecorder) lock(c, ownerID, stop, fail any) *gomock.Call {
+func (mr *MockmigratorMockRecorder) lock(ctx, cancel, c, ownerID any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "lock", reflect.TypeOf((*Mockmigrator)(nil).lock), c, ownerID, stop, fail)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "lock", reflect.TypeOf((*Mockmigrator)(nil).lock), ctx, cancel, c, ownerID)
 }
 
 // name mocks base method.
@@ -1638,17 +1638,17 @@ func (m *Mocklocker) EXPECT() *MocklockerMockRecorder {
 }
 
 // lock mocks base method.
-func (m *Mocklocker) lock(c *container.Container, ownerID string, stop <-chan struct{}, fail chan<- error) error {
+func (m *Mocklocker) lock(ctx context.Context, cancel context.CancelFunc, c *container.Container, ownerID string) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "lock", c, ownerID, stop, fail)
+	ret := m.ctrl.Call(m, "lock", ctx, cancel, c, ownerID)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // lock indicates an expected call of lock.
-func (mr *MocklockerMockRecorder) lock(c, ownerID, stop, fail any) *gomock.Call {
+func (mr *MocklockerMockRecorder) lock(ctx, cancel, c, ownerID any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "lock", reflect.TypeOf((*Mocklocker)(nil).lock), c, ownerID, stop, fail)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "lock", reflect.TypeOf((*Mocklocker)(nil).lock), ctx, cancel, c, ownerID)
 }
 
 // name mocks base method.

@@ -130,8 +130,8 @@ func (am arangoMigrator) rollback(c *container.Container, data transactionData) 
 	c.Fatalf("Migration %v failed and rolled back", data.MigrationNumber)
 }
 
-func (am arangoMigrator) lock(c *container.Container, ownerID string, stop <-chan struct{}, fail chan<- error) error {
-	return am.migrator.lock(c, ownerID, stop, fail)
+func (am arangoMigrator) lock(ctx context.Context, cancel context.CancelFunc, c *container.Container, ownerID string) error {
+	return am.migrator.lock(ctx, cancel, c, ownerID)
 }
 
 func (am arangoMigrator) unlock(c *container.Container, ownerID string) error {

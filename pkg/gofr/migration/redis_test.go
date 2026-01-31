@@ -1,6 +1,7 @@
 package migration
 
 import (
+	"context"
 	"errors"
 	"testing"
 	"time"
@@ -167,28 +168,30 @@ func TestRedisMigrator_StartRefreshSuccess(t *testing.T) {
 	mockMigrator := NewMockmigrator(ctrl)
 	m := redisMigrator{Redis: mocks.Redis, migrator: mockMigrator}
 
-	stop := make(chan struct{})
-	fail := make(chan error, 1)
+	ctx, cancel := context.WithCancel(t.Context())
 
 	// The refresh happens every defaultRefresh interval (5 seconds)
 	// We expect at least one call within our test window
 	mocks.Redis.EXPECT().Eval(gomock.Any(), gomock.Any(), []string{lockKey}, "1", int(defaultLockTTL.Seconds())).
 		Return(goRedis.NewCmdResult(int64(1), nil)).MinTimes(1).MaxTimes(2)
 
-	go m.startRefresh(c, "1", stop, fail)
+	go m.startRefresh(ctx, cancel, c, "1")
 
 	// Wait enough time for at least one refresh cycle
 	time.Sleep(defaultRefresh + 100*time.Millisecond)
-	close(stop)
+	cancel()
 
 	// Give goroutine time to exit gracefully
 	time.Sleep(50 * time.Millisecond)
 
 	select {
-	case err := <-fail:
-		t.Errorf("Unexpected error: %v", err)
+	case <-ctx.Done():
+		// Check if it was canceled by us (success) or something else
+		if !errors.Is(ctx.Err(), context.Canceled) {
+			t.Errorf("Unexpected context error: %v", ctx.Err())
+		}
 	default:
-		// Success - no error received
+		t.Error("Expected context to be done")
 	}
 }
 
@@ -200,22 +203,20 @@ func TestRedisMigrator_StartRefreshError(t *testing.T) {
 	mockMigrator := NewMockmigrator(ctrl)
 	m := redisMigrator{Redis: mocks.Redis, migrator: mockMigrator}
 
-	stop := make(chan struct{})
-	fail := make(chan error, 1)
+	ctx, cancel := context.WithCancel(t.Context())
 
 	mocks.Redis.EXPECT().Eval(gomock.Any(), gomock.Any(), []string{lockKey}, "1", int(defaultLockTTL.Seconds())).
 		Return(goRedis.NewCmdResult(int64(0), errRefreshFailed)).Times(1)
 
-	go m.startRefresh(c, "1", stop, fail)
+	go m.startRefresh(ctx, cancel, c, "1")
 
 	select {
-	case err := <-fail:
-		assert.Equal(t, errRefreshFailed, err)
+	case <-ctx.Done():
+		// In this version, cancel() doesn't pass the error, but it does cancel the context.
+		require.Error(t, ctx.Err())
 	case <-time.After(defaultRefresh * 2):
-		t.Error("Expected error to be sent on fail channel, but timed out")
+		t.Error("Expected context to be canceled, but timed out")
 	}
-
-	close(stop)
 }
 
 func TestRedisMigrator_StartRefreshLockLost(t *testing.T) {
@@ -226,24 +227,20 @@ func TestRedisMigrator_StartRefreshLockLost(t *testing.T) {
 	mockMigrator := NewMockmigrator(ctrl)
 	m := redisMigrator{Redis: mocks.Redis, migrator: mockMigrator}
 
-	stop := make(chan struct{})
-	fail := make(chan error, 1)
+	ctx, cancel := context.WithCancel(t.Context())
 
 	// Lock returns 0, indicating lock was lost
 	mocks.Redis.EXPECT().Eval(gomock.Any(), gomock.Any(), []string{lockKey}, "1", int(defaultLockTTL.Seconds())).
 		Return(goRedis.NewCmdResult(int64(0), nil)).Times(1)
 
-	go m.startRefresh(c, "1", stop, fail)
+	go m.startRefresh(ctx, cancel, c, "1")
 
 	select {
-	case err := <-fail:
-		require.Error(t, err)
-		assert.Contains(t, err.Error(), "lock lost or stolen")
+	case <-ctx.Done():
+		require.Error(t, ctx.Err())
 	case <-time.After(defaultRefresh * 2):
-		t.Error("Expected error to be sent on fail channel, but timed out")
+		t.Error("Expected context to be canceled, but timed out")
 	}
-
-	close(stop)
 }
 
 func TestRedisMigrator_Lock(t *testing.T) {
@@ -254,24 +251,21 @@ func TestRedisMigrator_Lock(t *testing.T) {
 	mockMigrator := NewMockmigrator(ctrl)
 	m := redisMigrator{Redis: mocks.Redis, migrator: mockMigrator}
 
-	stop := make(chan struct{})
-	fail := make(chan error, 1)
+	ctx, cancel := context.WithCancel(t.Context())
 
 	// Test Success
 	mocks.Redis.EXPECT().SetNX(gomock.Any(), lockKey, "owner-1", defaultLockTTL).Return(goRedis.NewBoolResult(true, nil))
-	mockMigrator.EXPECT().lock(gomock.Any(), "owner-1", stop, fail).Return(nil)
+	mockMigrator.EXPECT().lock(ctx, gomock.Any(), gomock.Any(), "owner-1").Return(nil)
 
-	err := m.lock(c, "owner-1", stop, fail)
+	err := m.lock(ctx, cancel, c, "owner-1")
 
 	require.NoError(t, err)
 
 	// Test Error
 	mocks.Redis.EXPECT().SetNX(gomock.Any(), lockKey, "owner-1", defaultLockTTL).Return(goRedis.NewBoolResult(false, errRedis))
 
-	err = m.lock(c, "owner-1", stop, fail)
+	err = m.lock(ctx, cancel, c, "owner-1")
 	assert.Equal(t, errLockAcquisitionFailed, err)
-
-	close(stop)
 }
 
 func TestRedisMigrator_Unlock(t *testing.T) {

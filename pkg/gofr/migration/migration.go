@@ -1,6 +1,7 @@
 package migration
 
 import (
+	"context"
 	"errors"
 	"reflect"
 	"sort"
@@ -24,8 +25,13 @@ const (
 	lockKey = "gofr_migrations_lock"
 
 	// Default values for configuration.
-	defaultRetry   = 500 * time.Millisecond
+	defaultRetry = 500 * time.Millisecond
+	// defaultLockTTL is the duration for which the migration lock is valid.
+	// It is kept at 15 seconds to provide a safety margin for network jitters or transient failures.
 	defaultLockTTL = 15 * time.Second
+	// defaultRefresh is the interval at which the migration lock is renewed.
+	// A 5-second interval allows for up to 2 failed refresh attempts before the 15-second TTL expires,
+	// ensuring the lock stays robust while still allowing fairly quick recovery if a process crashes.
 	defaultRefresh = 5 * time.Second
 )
 
@@ -83,12 +89,10 @@ func Run(migrationsMap map[int64]Migrate, c *container.Container) {
 	}
 
 	ownerID := uuid.New().String()
-	stopRefresh := make(chan struct{})
-	refreshFailed := make(chan struct{})
-	failChan := make(chan error, 1)
+	ctx, cancel := context.WithCancel(context.Background())
 
-	if err = mg.lock(c, ownerID, stopRefresh, failChan); err != nil {
-		close(stopRefresh)
+	if err = mg.lock(ctx, cancel, c, ownerID); err != nil {
+		cancel()
 
 		if unlockErr := mg.unlock(c, ownerID); unlockErr != nil {
 			c.Errorf("failed to cleanup lock after acquisition failure: %v", unlockErr)
@@ -99,23 +103,15 @@ func Run(migrationsMap map[int64]Migrate, c *container.Container) {
 		return
 	}
 
-	go func() {
-		select {
-		case <-failChan:
-			close(refreshFailed)
-		case <-stopRefresh:
-		}
-	}()
-
 	defer func() {
-		close(stopRefresh)
+		cancel()
 
 		if err = mg.unlock(c, ownerID); err != nil {
 			c.Errorf("failed to unlock during cleanup: %v", err)
 		}
 	}()
 
-	runMigrations(c, mg, &ds, migrationsMap, keys, lastMigration, refreshFailed)
+	runMigrations(ctx, c, mg, &ds, migrationsMap, keys, lastMigration)
 }
 
 func hasNewMigrations(keys []int64, lastMigration int64) bool {
@@ -128,8 +124,8 @@ func hasNewMigrations(keys []int64, lastMigration int64) bool {
 	return false
 }
 
-func runMigrations(c *container.Container, mg migrator, ds *Datasource, migrationsMap map[int64]Migrate,
-	keys []int64, lastMigration int64, refreshFailed <-chan struct{}) {
+func runMigrations(ctx context.Context, c *container.Container, mg migrator, ds *Datasource, migrationsMap map[int64]Migrate,
+	keys []int64, lastMigration int64) {
 	for _, currentMigration := range keys {
 		if currentMigration <= lastMigration {
 			c.Infof("skipping migration %v", currentMigration)
@@ -139,7 +135,7 @@ func runMigrations(c *container.Container, mg migrator, ds *Datasource, migratio
 
 		// Check if lock refresh failed before starting the migration
 		select {
-		case <-refreshFailed:
+		case <-ctx.Done():
 			c.Fatalf("migration %v aborted: lock refresh failed", currentMigration)
 
 			return
@@ -152,7 +148,7 @@ func runMigrations(c *container.Container, mg migrator, ds *Datasource, migratio
 
 		// Check if lock refresh failed after starting the transaction but before execution
 		select {
-		case <-refreshFailed:
+		case <-ctx.Done():
 			mg.rollback(c, migrationInfo)
 			c.Fatalf("migration %v aborted: lock refresh failed", currentMigration)
 
@@ -175,7 +171,7 @@ func runMigrations(c *container.Container, mg migrator, ds *Datasource, migratio
 
 		// Check if lock refresh failed during migration execution
 		select {
-		case <-refreshFailed:
+		case <-ctx.Done():
 			mg.rollback(c, migrationInfo)
 			c.Fatalf("migration %v aborted: lock refresh failed during execution", currentMigration)
 

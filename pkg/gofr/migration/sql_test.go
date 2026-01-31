@@ -414,10 +414,8 @@ func TestSQLMigrator_Lock(t *testing.T) {
 	m := sqlMigrator{SQL: mockContainer.SQL, migrator: mockMigrator}
 
 	t.Run("LockSuccess", func(t *testing.T) {
-		stop := make(chan struct{})
-		fail := make(chan error, 1)
-
-		defer close(stop)
+		ctx, cancel := context.WithCancel(t.Context())
+		defer cancel()
 
 		mocks.SQL.ExpectExec("DELETE FROM gofr_migration_locks WHERE expires_at < ?").
 			WithArgs(sqlmock.AnyArg()).
@@ -426,9 +424,9 @@ func TestSQLMigrator_Lock(t *testing.T) {
 			WithArgs(lockKey, "1", sqlmock.AnyArg()).
 			WillReturnResult(mocks.SQL.NewResult(1, 1))
 
-		mockMigrator.EXPECT().lock(mockContainer, "1", stop, fail).Return(nil)
+		mockMigrator.EXPECT().lock(ctx, gomock.Any(), mockContainer, "1").Return(nil)
 
-		err := m.lock(mockContainer, "1", stop, fail)
+		err := m.lock(ctx, cancel, mockContainer, "1")
 		require.NoError(t, err)
 	})
 }
@@ -459,10 +457,8 @@ func TestSQLMigrator_LockRetrySuccess(t *testing.T) {
 	mockMigrator := NewMockmigrator(ctrl)
 	m := sqlMigrator{SQL: mockContainer.SQL, migrator: mockMigrator}
 
-	stop := make(chan struct{})
-	fail := make(chan error, 1)
-
-	defer close(stop)
+	ctx, cancel := context.WithCancel(t.Context())
+	defer cancel()
 
 	// First attempt: cleanup succeeds, but insert fails (lock held)
 	mocks.SQL.ExpectExec("DELETE FROM gofr_migration_locks WHERE expires_at < ?").
@@ -480,9 +476,9 @@ func TestSQLMigrator_LockRetrySuccess(t *testing.T) {
 		WithArgs(lockKey, "1", sqlmock.AnyArg()).
 		WillReturnResult(mocks.SQL.NewResult(1, 1))
 
-	mockMigrator.EXPECT().lock(mockContainer, "1", gomock.Any(), fail).Return(nil)
+	mockMigrator.EXPECT().lock(ctx, gomock.Any(), mockContainer, "1").Return(nil)
 
-	err := m.lock(mockContainer, "1", stop, fail)
+	err := m.lock(ctx, cancel, mockContainer, "1")
 	require.NoError(t, err)
 }
 
@@ -492,10 +488,8 @@ func TestSQLMigrator_LockAcquireError(t *testing.T) {
 	mockMigrator := NewMockmigrator(ctrl)
 	m := sqlMigrator{SQL: mockContainer.SQL, migrator: mockMigrator}
 
-	stop := make(chan struct{})
-	fail := make(chan error, 1)
-
-	defer close(stop)
+	ctx, cancel := context.WithCancel(t.Context())
+	defer cancel()
 
 	mocks.SQL.ExpectExec("DELETE FROM gofr_migration_locks WHERE expires_at < ?").
 		WithArgs(sqlmock.AnyArg()).
@@ -504,7 +498,7 @@ func TestSQLMigrator_LockAcquireError(t *testing.T) {
 		WithArgs(lockKey, "1", sqlmock.AnyArg()).
 		WillReturnError(errDB)
 
-	err := m.lock(mockContainer, "1", stop, fail)
+	err := m.lock(ctx, cancel, mockContainer, "1")
 	require.Error(t, err)
 	assert.Equal(t, errLockAcquisitionFailed, err)
 }
@@ -517,28 +511,29 @@ func TestSQLMigrator_StartRefreshSuccess(t *testing.T) {
 		migrator: NewMockmigrator(ctrl),
 	}
 
-	stop := make(chan struct{})
-	fail := make(chan error, 1)
+	ctx, cancel := context.WithCancel(t.Context())
 
 	// Expect at least one refresh within the defaultRefresh interval
 	mocks.SQL.ExpectExec("UPDATE gofr_migration_locks SET expires_at = ? WHERE lock_key = ? AND owner_id = ?").
 		WithArgs(sqlmock.AnyArg(), lockKey, "1").
 		WillReturnResult(mocks.SQL.NewResult(0, 1))
 
-	go m.startRefresh(mockContainer, "1", stop, fail)
+	go m.startRefresh(ctx, cancel, mockContainer, "1")
 
 	// Wait for at least one refresh cycle
 	time.Sleep(defaultRefresh + 100*time.Millisecond)
-	close(stop)
+	cancel()
 
 	// Give goroutine time to exit
 	time.Sleep(50 * time.Millisecond)
 
 	select {
-	case err := <-fail:
-		t.Errorf("Unexpected error: %v", err)
+	case <-ctx.Done():
+		if !errors.Is(ctx.Err(), context.Canceled) {
+			t.Errorf("Unexpected context error: %v", ctx.Err())
+		}
 	default:
-		// Success - no error
+		t.Error("Expected context to be done")
 	}
 
 	// Verify all expectations were met (at least one refresh happened)
@@ -555,23 +550,20 @@ func TestSQLMigrator_StartRefreshError(t *testing.T) {
 		migrator: NewMockmigrator(ctrl),
 	}
 
-	stop := make(chan struct{})
-	fail := make(chan error, 1)
+	ctx, cancel := context.WithCancel(t.Context())
 
 	mocks.SQL.ExpectExec("UPDATE gofr_migration_locks SET expires_at = ? WHERE lock_key = ? AND owner_id = ?").
 		WithArgs(sqlmock.AnyArg(), lockKey, "1").
 		WillReturnError(errUpdateFailed)
 
-	go m.startRefresh(mockContainer, "1", stop, fail)
+	go m.startRefresh(ctx, cancel, mockContainer, "1")
 
 	select {
-	case err := <-fail:
-		assert.Equal(t, errUpdateFailed, err)
+	case <-ctx.Done():
+		require.Error(t, ctx.Err())
 	case <-time.After(defaultRefresh * 2):
-		t.Error("Expected error to be sent on fail channel, but timed out")
+		t.Error("Expected context to be canceled, but timed out")
 	}
-
-	close(stop)
 }
 
 func TestSQLMigrator_CommitMigration(t *testing.T) {

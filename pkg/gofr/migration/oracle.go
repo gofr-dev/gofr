@@ -195,8 +195,8 @@ func (om oracleMigrator) beginTransaction(c *container.Container) transactionDat
 	return td
 }
 
-func (om oracleMigrator) lock(c *container.Container, ownerID string, stop <-chan struct{}, fail chan<- error) error {
-	return om.migrator.lock(c, ownerID, stop, fail)
+func (om oracleMigrator) lock(ctx context.Context, cancel context.CancelFunc, c *container.Container, ownerID string) error {
+	return om.migrator.lock(ctx, cancel, c, ownerID)
 }
 
 func (om oracleMigrator) unlock(c *container.Container, ownerID string) error {

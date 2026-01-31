@@ -210,7 +210,7 @@ type OpenTSDB interface {
 }
 
 type locker interface {
-	lock(c *container.Container, ownerID string, stop <-chan struct{}, fail chan<- error) error
+	lock(ctx context.Context, cancel context.CancelFunc, c *container.Container, ownerID string) error
 	unlock(c *container.Container, ownerID string) error
 	name() string
 }

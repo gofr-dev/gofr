@@ -150,7 +150,7 @@ func (d sqlMigrator) rollback(c *container.Container, data transactionData) {
 	c.Fatalf("Migration %v failed and rolled back", data.MigrationNumber)
 }
 
-func (d sqlMigrator) lock(c *container.Container, ownerID string, stop <-chan struct{}, fail chan<- error) error {
+func (d sqlMigrator) lock(ctx context.Context, cancel context.CancelFunc, c *container.Container, ownerID string) error {
 	for i := 0; ; i++ {
 		// 1. Clean up expired locks using UTC time to avoid timezone mismatches
 		_, err := c.SQL.Exec("DELETE FROM gofr_migration_locks WHERE expires_at < ?", time.Now().UTC())
@@ -167,9 +167,9 @@ func (d sqlMigrator) lock(c *container.Container, ownerID string, stop <-chan st
 			c.Debug("SQL lock acquired successfully")
 
 			// Start refresh goroutine
-			go d.startRefresh(c, ownerID, stop, fail)
+			go d.startRefresh(ctx, cancel, c, ownerID)
 
-			return d.migrator.lock(c, ownerID, stop, fail)
+			return d.migrator.lock(ctx, cancel, c, ownerID)
 		}
 
 		if !isDuplicateKeyError(err) {
@@ -193,7 +193,7 @@ func isDuplicateKeyError(err error) bool {
 		strings.Contains(msg, "constraint failed") // SQLite often returns "UNIQUE constraint failed" or "PRIMARY KEY constraint failed"
 }
 
-func (sqlMigrator) startRefresh(c *container.Container, ownerID string, stop <-chan struct{}, fail chan<- error) {
+func (sqlMigrator) startRefresh(ctx context.Context, cancel context.CancelFunc, c *container.Container, ownerID string) {
 	ticker := time.NewTicker(defaultRefresh)
 	defer ticker.Stop()
 
@@ -207,7 +207,7 @@ func (sqlMigrator) startRefresh(c *container.Container, ownerID string, stop <-c
 			if err != nil {
 				c.Errorf("failed to refresh SQL lock: %v", err)
 
-				fail <- err
+				cancel()
 
 				return
 			}
@@ -216,7 +216,7 @@ func (sqlMigrator) startRefresh(c *container.Container, ownerID string, stop <-c
 			if err != nil {
 				c.Errorf("failed to check rows affected for SQL lock: %v", err)
 
-				fail <- err
+				cancel()
 
 				return
 			}
@@ -224,23 +224,35 @@ func (sqlMigrator) startRefresh(c *container.Container, ownerID string, stop <-c
 			if rows == 0 {
 				c.Errorf("%v", errSQLLockRefreshFailed)
 
-				fail <- errSQLLockRefreshFailed
+				cancel()
 
 				return
 			}
 
 			c.Debug("SQL lock refreshed successfully")
-		case <-stop:
+		case <-ctx.Done():
 			return
 		}
 	}
 }
 
 func (d sqlMigrator) unlock(c *container.Container, ownerID string) error {
-	_, err := c.SQL.Exec("DELETE FROM gofr_migration_locks WHERE lock_key = ? AND owner_id = ?", lockKey, ownerID)
+	result, err := c.SQL.Exec("DELETE FROM gofr_migration_locks WHERE lock_key = ? AND owner_id = ?", lockKey, ownerID)
 	if err != nil {
 		c.Errorf("unable to release SQL lock: %v", err)
 
+		return errLockReleaseFailed
+	}
+
+	// Check if we actually deleted the lock (i.e., we still owned it)
+	rowsAffected, err := result.RowsAffected()
+	if err != nil {
+		c.Errorf("unable to check SQL lock release status: %v", err)
+		return errLockReleaseFailed
+	}
+
+	if rowsAffected == 0 {
+		c.Errorf("failed to release SQL lock: lock was already released or stolen")
 		return errLockReleaseFailed
 	}
 

@@ -159,8 +159,8 @@ func (pm pubsubMigrator) rollback(c *container.Container, data transactionData) 
 	pm.migrator.rollback(c, data)
 }
 
-func (pm pubsubMigrator) lock(c *container.Container, ownerID string, stop <-chan struct{}, fail chan<- error) error {
-	return pm.migrator.lock(c, ownerID, stop, fail)
+func (pm pubsubMigrator) lock(ctx context.Context, cancel context.CancelFunc, c *container.Container, ownerID string) error {
+	return pm.migrator.lock(ctx, cancel, c, ownerID)
 }
 
 func (pm pubsubMigrator) unlock(c *container.Container, ownerID string) error {

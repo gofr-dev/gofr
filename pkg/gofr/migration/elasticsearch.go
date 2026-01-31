@@ -175,8 +175,8 @@ func (em elasticsearchMigrator) rollback(c *container.Container, data transactio
 	c.Fatalf("Migration %v failed.", data.MigrationNumber)
 }
 
-func (em elasticsearchMigrator) lock(c *container.Container, ownerID string, stop <-chan struct{}, fail chan<- error) error {
-	return em.migrator.lock(c, ownerID, stop, fail)
+func (em elasticsearchMigrator) lock(ctx context.Context, cancel context.CancelFunc, c *container.Container, ownerID string) error {
+	return em.migrator.lock(ctx, cancel, c, ownerID)
 }
 
 func (em elasticsearchMigrator) unlock(c *container.Container, ownerID string) error {

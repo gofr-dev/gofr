@@ -96,8 +96,8 @@ func (mg mongoMigrator) rollback(c *container.Container, data transactionData) {
 	c.Fatalf("Migration %v failed.", data.MigrationNumber)
 }
 
-func (mg mongoMigrator) lock(c *container.Container, ownerID string, stop <-chan struct{}, fail chan<- error) error {
-	return mg.migrator.lock(c, ownerID, stop, fail)
+func (mg mongoMigrator) lock(ctx context.Context, cancel context.CancelFunc, c *container.Container, ownerID string) error {
+	return mg.migrator.lock(ctx, cancel, c, ownerID)
 }
 
 func (mg mongoMigrator) unlock(c *container.Container, ownerID string) error {

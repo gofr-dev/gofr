@@ -136,8 +136,8 @@ func (s surrealMigrator) rollback(c *container.Container, data transactionData) 
 	c.Fatalf("migration %v failed and rolled back", data.MigrationNumber)
 }
 
-func (s surrealMigrator) lock(c *container.Container, ownerID string, stop <-chan struct{}, fail chan<- error) error {
-	return s.migrator.lock(c, ownerID, stop, fail)
+func (s surrealMigrator) lock(ctx context.Context, cancel context.CancelFunc, c *container.Container, ownerID string) error {
+	return s.migrator.lock(ctx, cancel, c, ownerID)
 }
 
 func (s surrealMigrator) unlock(c *container.Container, ownerID string) error {

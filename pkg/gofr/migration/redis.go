@@ -129,16 +129,16 @@ func (m redisMigrator) rollback(c *container.Container, data transactionData) {
 	c.Fatalf("Migration %v for Redis failed and rolled back", data.MigrationNumber)
 }
 
-func (m redisMigrator) lock(c *container.Container, ownerID string, stop <-chan struct{}, fail chan<- error) error {
+func (m redisMigrator) lock(ctx context.Context, cancel context.CancelFunc, c *container.Container, ownerID string) error {
 	for i := 0; ; i++ {
 		status, err := c.Redis.SetNX(context.Background(), lockKey, ownerID, defaultLockTTL).Result()
 		if err == nil && status {
 			c.Debug("Redis lock acquired successfully")
 
 			// Start refresh goroutine
-			go m.startRefresh(c, ownerID, stop, fail)
+			go m.startRefresh(ctx, cancel, c, ownerID)
 
-			return m.migrator.lock(c, ownerID, stop, fail)
+			return m.migrator.lock(ctx, cancel, c, ownerID)
 		}
 
 		if err != nil {
@@ -152,7 +152,7 @@ func (m redisMigrator) lock(c *container.Container, ownerID string, stop <-chan 
 	}
 }
 
-func (redisMigrator) startRefresh(c *container.Container, ownerID string, stop <-chan struct{}, fail chan<- error) {
+func (redisMigrator) startRefresh(ctx context.Context, cancel context.CancelFunc, c *container.Container, ownerID string) {
 	ticker := time.NewTicker(defaultRefresh)
 	defer ticker.Stop()
 
@@ -172,7 +172,7 @@ func (redisMigrator) startRefresh(c *container.Container, ownerID string, stop <
 			if err != nil {
 				c.Errorf("failed to refresh Redis lock: %v", err)
 
-				fail <- err
+				cancel()
 
 				return
 			}
@@ -180,13 +180,13 @@ func (redisMigrator) startRefresh(c *container.Container, ownerID string, stop <
 			if val == int64(0) {
 				c.Errorf("%v", errRedisLockRefreshFailed)
 
-				fail <- errRedisLockRefreshFailed
+				cancel()
 
 				return
 			}
 
 			c.Debug("Redis lock refreshed successfully")
-		case <-stop:
+		case <-ctx.Done():
 			return
 		}
 	}
@@ -202,10 +202,17 @@ func (m redisMigrator) unlock(c *container.Container, ownerID string) error {
 		end
 	`
 
-	_, err := c.Redis.Eval(context.Background(), script, []string{lockKey}, ownerID).Result()
+	result, err := c.Redis.Eval(context.Background(), script, []string{lockKey}, ownerID).Result()
 	if err != nil {
 		c.Errorf("unable to release redis lock: %v", err)
 
+		return errLockReleaseFailed
+	}
+
+	// Check if the lock was actually deleted (result should be 1)
+	deleted, ok := result.(int64)
+	if !ok || deleted == 0 {
+		c.Errorf("failed to release Redis lock: lock was already released or stolen")
 		return errLockReleaseFailed
 	}
 
