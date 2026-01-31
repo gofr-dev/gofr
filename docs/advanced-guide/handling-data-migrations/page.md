@@ -187,12 +187,12 @@ When running multiple instances of your application (e.g., in Kubernetes or Dock
 
 **SQL (MySQL/PostgreSQL/SQLite):**
 - Uses a dedicated `gofr_migration_locks` table
-- Lock TTL: 10 seconds
+- Lock TTL: 15 seconds
 - Heartbeat: Refreshes every 5 seconds for long migrations
 
 **Redis:**
 - Uses `SETNX` with TTL
-- Lock TTL: 10 seconds  
+- Lock TTL: 15 seconds  
 - Heartbeat: Refreshes every 5 seconds for long migrations
 
 **Retry Behavior:**
@@ -207,7 +207,7 @@ When running multiple instances of your application (e.g., in Kubernetes or Dock
 
 **✅ Long migrations supported** - Locks are automatically extended via heartbeat
 
-**✅ Crash recovery** - Locks auto-expire after 10 seconds if a pod crashes
+**✅ Crash recovery** - Locks auto-expire after 15 seconds if a pod crashes
 
 ### Example Deployment
 

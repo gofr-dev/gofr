@@ -416,16 +416,18 @@ func TestCheckAndCreateMigrationTable_ErrorCreatingTable(t *testing.T) {
 }
 
 func TestSQLMigrator_Lock(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	t.Cleanup(ctrl.Finish)
-
-	mockContainer, mocks := container.NewMockContainer(t)
-	mockMigrator := NewMockmigrator(ctrl)
-	m := sqlMigrator{SQL: mockContainer.SQL, migrator: mockMigrator}
-
 	t.Run("LockSuccess", func(t *testing.T) {
+		ctrl := gomock.NewController(t)
+		defer ctrl.Finish()
+
+		mockContainer, mocks := container.NewMockContainer(t)
+		mockMigrator := NewMockmigrator(ctrl)
+		m := sqlMigrator{SQL: mockContainer.SQL, migrator: mockMigrator}
+
 		ctx, cancel := context.WithCancel(t.Context())
 		defer cancel()
+
+		mocks.SQL.ExpectDialect().WillReturnString("mysql")
 
 		mocks.SQL.ExpectExec("DELETE FROM gofr_migration_locks WHERE expires_at < ?").
 			WithArgs(sqlmock.AnyArg()).
@@ -442,14 +444,16 @@ func TestSQLMigrator_Lock(t *testing.T) {
 }
 
 func TestSQLMigrator_Unlock(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	t.Cleanup(ctrl.Finish)
-
-	mockContainer, mocks := container.NewMockContainer(t)
-	mockMigrator := NewMockmigrator(ctrl)
-	m := sqlMigrator{SQL: mockContainer.SQL, migrator: mockMigrator}
-
 	t.Run("UnlockSuccess", func(t *testing.T) {
+		ctrl := gomock.NewController(t)
+		defer ctrl.Finish()
+
+		mockContainer, mocks := container.NewMockContainer(t)
+		mockMigrator := NewMockmigrator(ctrl)
+		m := sqlMigrator{SQL: mockContainer.SQL, migrator: mockMigrator}
+
+		mocks.SQL.ExpectDialect().WillReturnString("mysql")
+
 		mocks.SQL.ExpectExec("DELETE FROM gofr_migration_locks WHERE lock_key = ? AND owner_id = ?").
 			WithArgs(lockKey, "1").
 			WillReturnResult(mocks.SQL.NewResult(0, 1))
@@ -469,6 +473,8 @@ func TestSQLMigrator_LockRetrySuccess(t *testing.T) {
 
 	ctx, cancel := context.WithCancel(t.Context())
 	defer cancel()
+
+	mocks.SQL.ExpectDialect().WillReturnString("mysql")
 
 	// First attempt: cleanup succeeds, but insert fails (lock held)
 	mocks.SQL.ExpectExec("DELETE FROM gofr_migration_locks WHERE expires_at < ?").
@@ -501,6 +507,8 @@ func TestSQLMigrator_LockAcquireError(t *testing.T) {
 	ctx, cancel := context.WithCancel(t.Context())
 	defer cancel()
 
+	mocks.SQL.ExpectDialect().WillReturnString("mysql")
+
 	mocks.SQL.ExpectExec("DELETE FROM gofr_migration_locks WHERE expires_at < ?").
 		WithArgs(sqlmock.AnyArg()).
 		WillReturnResult(mocks.SQL.NewResult(0, 0))
@@ -528,7 +536,7 @@ func TestSQLMigrator_StartRefreshSuccess(t *testing.T) {
 		WithArgs(sqlmock.AnyArg(), lockKey, "1").
 		WillReturnResult(mocks.SQL.NewResult(0, 1))
 
-	go m.startRefresh(ctx, cancel, mockContainer, "1")
+	go m.startRefresh(ctx, cancel, mockContainer, "1", "mysql")
 
 	// Wait for at least one refresh cycle
 	time.Sleep(defaultRefresh + 100*time.Millisecond)
@@ -566,7 +574,7 @@ func TestSQLMigrator_StartRefreshError(t *testing.T) {
 		WithArgs(sqlmock.AnyArg(), lockKey, "1").
 		WillReturnError(errUpdateFailed)
 
-	go m.startRefresh(ctx, cancel, mockContainer, "1")
+	go m.startRefresh(ctx, cancel, mockContainer, "1", "mysql")
 
 	select {
 	case <-ctx.Done():
@@ -730,6 +738,9 @@ func TestSQLMigrator_UnlockError(t *testing.T) {
 	m := sqlMigrator{SQL: mockContainer.SQL, migrator: mockMigrator}
 
 	testErr := errDB
+
+	mocks.SQL.ExpectDialect().WillReturnString("mysql")
+
 	mocks.SQL.ExpectExec("DELETE FROM gofr_migration_locks WHERE lock_key = ? AND owner_id = ?").
 		WithArgs("gofr_migrations_lock", "owner-1").WillReturnError(testErr)
 

@@ -249,7 +249,6 @@ func initializeDatasources(c *container.Container, ds *Datasource, mg migrator) 
 		return nil, false
 	}
 
-	// Sort active initializers by name to ensure deterministic order
 	sort.Slice(active, func(i, j int) bool {
 		return active[i].logIdentifier < active[j].logIdentifier
 	})

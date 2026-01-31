@@ -33,6 +33,18 @@ const (
 	insertGoFrMigrationRowMySQL    = `INSERT INTO gofr_migrations (version, method, start_time,duration) VALUES (?, ?, ?, ?);`
 	insertGoFrMigrationRowPostgres = `INSERT INTO gofr_migrations (version, method, start_time,duration) VALUES ($1, $2, $3, $4);`
 
+	deleteExpiredLocksMySQL    = "DELETE FROM gofr_migration_locks WHERE expires_at < ?"
+	deleteExpiredLocksPostgres = "DELETE FROM gofr_migration_locks WHERE expires_at < $1"
+
+	insertLockMySQL    = "INSERT INTO gofr_migration_locks (lock_key, owner_id, expires_at) VALUES (?, ?, ?)"
+	insertLockPostgres = "INSERT INTO gofr_migration_locks (lock_key, owner_id, expires_at) VALUES ($1, $2, $3)"
+
+	updateLockMySQL    = "UPDATE gofr_migration_locks SET expires_at = ? WHERE lock_key = ? AND owner_id = ?"
+	updateLockPostgres = "UPDATE gofr_migration_locks SET expires_at = $1 WHERE lock_key = $2 AND owner_id = $3"
+
+	deleteLockMySQL    = "DELETE FROM gofr_migration_locks WHERE lock_key = ? AND owner_id = ?"
+	deleteLockPostgres = "DELETE FROM gofr_migration_locks WHERE lock_key = $1 AND owner_id = $2"
+
 	mysql    = "mysql"
 	postgres = "postgres"
 	sqlite   = "sqlite"
@@ -87,7 +99,9 @@ func (d sqlMigrator) getLastMigration(c *container.Container) (int64, error) {
 }
 
 func (d sqlMigrator) commitMigration(c *container.Container, data transactionData) error {
-	switch c.SQL.Dialect() {
+	dialect := c.SQL.Dialect()
+
+	switch dialect {
 	case mysql, sqlite:
 		err := insertMigrationRecord(data.SQLTx, insertGoFrMigrationRowMySQL, data.MigrationNumber, data.StartTime)
 		if err != nil {
@@ -151,23 +165,35 @@ func (d sqlMigrator) rollback(c *container.Container, data transactionData) {
 }
 
 func (d sqlMigrator) lock(ctx context.Context, cancel context.CancelFunc, c *container.Container, ownerID string) error {
+	dialect := c.SQL.Dialect()
+
 	for i := 0; ; i++ {
-		// 1. Clean up expired locks using UTC time to avoid timezone mismatches
-		_, err := c.SQL.Exec("DELETE FROM gofr_migration_locks WHERE expires_at < ?", time.Now().UTC())
+		var cleanupQuery string
+		if dialect == postgres {
+			cleanupQuery = deleteExpiredLocksPostgres
+		} else {
+			cleanupQuery = deleteExpiredLocksMySQL
+		}
+
+		_, err := c.SQL.ExecContext(ctx, cleanupQuery, time.Now().UTC())
 		if err != nil {
 			c.Errorf("failed to clean up expired locks: %v", err)
 		}
 
-		// 2. Try to acquire lock
 		expiresAt := time.Now().UTC().Add(defaultLockTTL)
 
-		_, err = c.SQL.Exec("INSERT INTO gofr_migration_locks (lock_key, owner_id, expires_at) VALUES (?, ?, ?)",
-			lockKey, ownerID, expiresAt)
+		var insertQuery string
+		if dialect == postgres {
+			insertQuery = insertLockPostgres
+		} else {
+			insertQuery = insertLockMySQL
+		}
+
+		_, err = c.SQL.ExecContext(ctx, insertQuery, lockKey, ownerID, expiresAt)
 		if err == nil {
 			c.Debug("SQL lock acquired successfully")
 
-			// Start refresh goroutine
-			go d.startRefresh(ctx, cancel, c, ownerID)
+			go d.startRefresh(ctx, cancel, c, ownerID, dialect)
 
 			return d.migrator.lock(ctx, cancel, c, ownerID)
 		}
@@ -179,7 +205,12 @@ func (d sqlMigrator) lock(ctx context.Context, cancel context.CancelFunc, c *con
 		}
 
 		c.Debugf("SQL lock already held, retrying in %v... (attempt %d)", defaultRetry, i+1)
-		time.Sleep(defaultRetry)
+
+		select {
+		case <-time.After(defaultRetry):
+		case <-ctx.Done():
+			return ctx.Err()
+		}
 	}
 }
 
@@ -193,7 +224,7 @@ func isDuplicateKeyError(err error) bool {
 		strings.Contains(msg, "constraint failed") // SQLite often returns "UNIQUE constraint failed" or "PRIMARY KEY constraint failed"
 }
 
-func (sqlMigrator) startRefresh(ctx context.Context, cancel context.CancelFunc, c *container.Container, ownerID string) {
+func (sqlMigrator) startRefresh(ctx context.Context, cancel context.CancelFunc, c *container.Container, ownerID, dialect string) {
 	ticker := time.NewTicker(defaultRefresh)
 	defer ticker.Stop()
 
@@ -202,8 +233,14 @@ func (sqlMigrator) startRefresh(ctx context.Context, cancel context.CancelFunc, 
 		case <-ticker.C:
 			expiresAt := time.Now().UTC().Add(defaultLockTTL)
 
-			res, err := c.SQL.Exec("UPDATE gofr_migration_locks SET expires_at = ? WHERE lock_key = ? AND owner_id = ?",
-				expiresAt, lockKey, ownerID)
+			var updateQuery string
+			if dialect == postgres {
+				updateQuery = updateLockPostgres
+			} else {
+				updateQuery = updateLockMySQL
+			}
+
+			res, err := c.SQL.Exec(updateQuery, expiresAt, lockKey, ownerID)
 			if err != nil {
 				c.Errorf("failed to refresh SQL lock: %v", err)
 
@@ -237,7 +274,16 @@ func (sqlMigrator) startRefresh(ctx context.Context, cancel context.CancelFunc, 
 }
 
 func (d sqlMigrator) unlock(c *container.Container, ownerID string) error {
-	result, err := c.SQL.Exec("DELETE FROM gofr_migration_locks WHERE lock_key = ? AND owner_id = ?", lockKey, ownerID)
+	dialect := c.SQL.Dialect()
+
+	var deleteQuery string
+	if dialect == postgres {
+		deleteQuery = deleteLockPostgres
+	} else {
+		deleteQuery = deleteLockMySQL
+	}
+
+	result, err := c.SQL.Exec(deleteQuery, lockKey, ownerID)
 	if err != nil {
 		c.Errorf("unable to release SQL lock: %v", err)
 

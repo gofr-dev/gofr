@@ -79,9 +79,9 @@ func TestMigrationRunClickhouseSuccess(t *testing.T) {
 		mockClickHouse, mockContainer := initializeClickHouseRunMocks(t)
 
 		// Pre-check
+		mockClickHouse.EXPECT().Exec(gomock.Any(), CheckAndCreateChMigrationTable).Return(nil)
 		mockClickHouse.EXPECT().Select(gomock.Any(), gomock.Any(), getLastChGoFrMigration).Return(nil)
 
-		mockClickHouse.EXPECT().Exec(gomock.Any(), CheckAndCreateChMigrationTable).Return(nil)
 		mockClickHouse.EXPECT().Exec(gomock.Any(), "SELECT * FROM users").Return(nil)
 		mockClickHouse.EXPECT().Exec(gomock.Any(), insertChGoFrMigrationRow, int64(1),
 			"UP", gomock.Any(), gomock.Any()).Return(nil)
@@ -109,9 +109,9 @@ func TestMigrationRunClickhouseMigrationFailure(t *testing.T) {
 		}
 
 		// Pre-check
+		mockClickHouse.EXPECT().Exec(gomock.Any(), CheckAndCreateChMigrationTable).Return(nil)
 		mockClickHouse.EXPECT().Select(gomock.Any(), gomock.Any(), getLastChGoFrMigration).Return(nil)
 
-		mockClickHouse.EXPECT().Exec(gomock.Any(), CheckAndCreateChMigrationTable).Return(nil)
 		mockClickHouse.EXPECT().Exec(gomock.Any(), "SELECT * FROM users").Return(sql.ErrConnDone)
 
 		Run(migrationMap, mockContainer)
@@ -186,9 +186,9 @@ func TestMigrationRunClickhouseCommitError(t *testing.T) {
 		mockClickHouse, mockContainer := initializeClickHouseRunMocks(t)
 
 		// Pre-check
+		mockClickHouse.EXPECT().Exec(gomock.Any(), CheckAndCreateChMigrationTable).Return(nil)
 		mockClickHouse.EXPECT().Select(gomock.Any(), gomock.Any(), getLastChGoFrMigration).Return(nil)
 
-		mockClickHouse.EXPECT().Exec(gomock.Any(), CheckAndCreateChMigrationTable).Return(nil)
 		mockClickHouse.EXPECT().Exec(gomock.Any(), "SELECT * FROM users").Return(nil)
 		mockClickHouse.EXPECT().Exec(gomock.Any(), insertChGoFrMigrationRow, int64(1),
 			"UP", gomock.Any(), gomock.Any()).Return(sql.ErrConnDone)

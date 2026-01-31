@@ -122,11 +122,10 @@ func (m redisMigrator) rollback(c *container.Container, data transactionData) {
 
 func (m redisMigrator) lock(ctx context.Context, cancel context.CancelFunc, c *container.Container, ownerID string) error {
 	for i := 0; ; i++ {
-		status, err := c.Redis.SetNX(context.Background(), lockKey, ownerID, defaultLockTTL).Result()
+		status, err := c.Redis.SetNX(ctx, lockKey, ownerID, defaultLockTTL).Result()
 		if err == nil && status {
 			c.Debug("Redis lock acquired successfully")
 
-			// Start refresh goroutine
 			go m.startRefresh(ctx, cancel, c, ownerID)
 
 			return m.migrator.lock(ctx, cancel, c, ownerID)
@@ -139,7 +138,12 @@ func (m redisMigrator) lock(ctx context.Context, cancel context.CancelFunc, c *c
 		}
 
 		c.Debugf("Redis lock already held, retrying in %v... (attempt %d)", defaultRetry, i+1)
-		time.Sleep(defaultRetry)
+
+		select {
+		case <-time.After(defaultRetry):
+		case <-ctx.Done():
+			return ctx.Err()
+		}
 	}
 }
 
@@ -159,7 +163,7 @@ func (redisMigrator) startRefresh(ctx context.Context, cancel context.CancelFunc
 		end
 	`
 
-			val, err := c.Redis.Eval(context.Background(), script, []string{lockKey}, ownerID, int(defaultLockTTL.Seconds())).Result()
+			val, err := c.Redis.Eval(ctx, script, []string{lockKey}, ownerID, int(defaultLockTTL.Seconds())).Result()
 			if err != nil {
 				c.Errorf("failed to refresh Redis lock: %v", err)
 
