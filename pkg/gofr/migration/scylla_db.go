@@ -51,7 +51,10 @@ type migrationRow struct {
 }
 
 func (s scyllaMigrator) getLastMigration(c *container.Container) (int64, error) {
-	var migrations []migrationRow
+	var (
+		migrations  []migrationRow
+		lastVersion int64
+	)
 
 	query := fmt.Sprintf("SELECT version FROM %s", scyllaDBMigrationTable)
 
@@ -60,11 +63,6 @@ func (s scyllaMigrator) getLastMigration(c *container.Container) (int64, error) 
 		return -1, fmt.Errorf("scylladb: %w", err)
 	}
 
-	if len(migrations) == 0 {
-		return s.migrator.getLastMigration(c)
-	}
-
-	var lastVersion int64
 	for _, m := range migrations {
 		if m.Version > lastVersion {
 			lastVersion = m.Version

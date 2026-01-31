@@ -71,18 +71,20 @@ func (om oracleMigrator) checkAndCreateMigrationTable(c *container.Container) er
 
 // Get the last applied migration version.
 func (om oracleMigrator) getLastMigration(c *container.Container) (int64, error) {
-	var results []map[string]any
+	var (
+		results             []map[string]any
+		oracleLastMigration int64
+	)
 
 	err := om.Oracle.Select(context.Background(), &results, getLastOracleGoFrMigration)
 	if err != nil {
 		return -1, fmt.Errorf("oracle: %w", err)
 	}
 
-	if len(results) == 0 {
-		return om.migrator.getLastMigration(c)
+	if len(results) != 0 {
+		oracleLastMigration = om.extractLastMigrationFromResults(results)
 	}
 
-	oracleLastMigration := om.extractLastMigrationFromResults(results)
 	c.Debugf("Oracle last migration fetched value is: %v", oracleLastMigration)
 
 	baseLastMigration, err := om.migrator.getLastMigration(c)

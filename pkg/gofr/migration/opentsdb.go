@@ -119,16 +119,13 @@ func (om *openTSDBMigrator) getLastMigration(c *container.Container) (int64, err
 	om.mu.Lock()
 	defer om.mu.Unlock()
 
+	var lastMigration int64
+
 	migrations, err := om.loadMigrationsUnsafe()
 	if err != nil {
 		return -1, fmt.Errorf("opentsdb: %w", err)
 	}
 
-	if len(migrations) == 0 {
-		return om.migrator.getLastMigration(c)
-	}
-
-	var lastMigration int64
 	for _, m := range migrations {
 		if m.Version > lastMigration {
 			lastMigration = m.Version
@@ -137,7 +134,6 @@ func (om *openTSDBMigrator) getLastMigration(c *container.Container) (int64, err
 
 	c.Debugf("JSON migration file last migration: %v", lastMigration)
 
-	// Get last migration from base migrator and return the maximum
 	baseMigration, err := om.migrator.getLastMigration(c)
 	if err != nil {
 		return -1, err

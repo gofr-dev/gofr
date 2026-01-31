@@ -100,12 +100,6 @@ func (em elasticsearchMigrator) getLastMigration(c *container.Container) (int64,
 		return -1, fmt.Errorf("elasticsearch: %w", err)
 	}
 
-	if hits, ok := result["hits"].(map[string]any); ok {
-		if hitsList, ok := hits["hits"].([]any); ok && len(hitsList) == 0 {
-			return em.migrator.getLastMigration(c)
-		}
-	}
-
 	lastMigration = extractLastMigrationVersion(result)
 	c.Debugf("Elasticsearch last migration fetched value is: %v", lastMigration)
 

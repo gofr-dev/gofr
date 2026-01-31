@@ -106,7 +106,6 @@ func (dm dgraphMigrator) getLastMigration(c *container.Container) (int64, error)
 		return -1, fmt.Errorf("dgraph: %w", err)
 	}
 
-	// If a response is returned, marshal it to JSON bytes then unmarshal into our response struct.
 	if resp != nil {
 		var b []byte
 

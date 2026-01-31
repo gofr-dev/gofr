@@ -43,17 +43,14 @@ func (cs cassandraMigrator) checkAndCreateMigrationTable(c *container.Container)
 }
 
 func (cs cassandraMigrator) getLastMigration(c *container.Container) (int64, error) {
-	var lastMigration int64 // Default to 0 if no migrations found
-
-	var lastMigrations []int64
+	var (
+		lastMigration  int64
+		lastMigrations []int64
+	)
 
 	err := c.Cassandra.QueryWithCtx(context.Background(), &lastMigrations, getLastCassandraGoFrMigration)
 	if err != nil {
 		return -1, fmt.Errorf("cassandra: %w", err)
-	}
-
-	if len(lastMigrations) == 0 {
-		return cs.migrator.getLastMigration(c)
 	}
 
 	for _, version := range lastMigrations {

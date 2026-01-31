@@ -41,17 +41,6 @@ func (m redisMigrator) getLastMigration(c *container.Container) (int64, error) {
 		return -1, fmt.Errorf("redis: %w", err)
 	}
 
-	if len(table) == 0 {
-		var lm2 int64
-
-		lm2, err = m.migrator.getLastMigration(c)
-		if err != nil {
-			return -1, err
-		}
-
-		return lm2, nil
-	}
-
 	for key, value := range table {
 		integerValue, _ := strconv.ParseInt(key, 10, 64)
 
@@ -74,11 +63,7 @@ func (m redisMigrator) getLastMigration(c *container.Container) (int64, error) {
 		return -1, err
 	}
 
-	if last > lastMigration {
-		return last, nil
-	}
-
-	return lastMigration, nil
+	return max(lastMigration, last), nil
 }
 
 func (m redisMigrator) beginTransaction(c *container.Container) transactionData {

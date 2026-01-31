@@ -67,16 +67,16 @@ func (pm pubsubMigrator) getLastMigration(c *container.Container) (int64, error)
 	ctx, cancel := context.WithTimeout(context.Background(), migrationTimeout)
 	defer cancel()
 
+	var pubsubLastMigration int64
+
 	result, err := c.PubSub.Query(ctx, queryTopic, int64(0), defaultQueryLimit)
 	if err != nil {
 		return -1, fmt.Errorf("pubsub: %w", err)
 	}
 
-	if len(result) == 0 {
-		return pm.migrator.getLastMigration(c)
+	if len(result) != 0 {
+		pubsubLastMigration = extractLastVersion(c, result)
 	}
-
-	pubsubLastMigration := extractLastVersion(c, result)
 
 	nextMigratorLastMigration, err := pm.migrator.getLastMigration(c)
 	if err != nil {

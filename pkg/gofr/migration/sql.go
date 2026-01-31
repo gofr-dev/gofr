@@ -66,11 +66,7 @@ func (d sqlMigrator) getLastMigration(c *container.Container) (int64, error) {
 		return -1, err
 	}
 
-	if lm2 > lastMigration {
-		return lm2, nil
-	}
-
-	return lastMigration, nil
+	return max(lastMigration, lm2), nil
 }
 
 func (d sqlMigrator) commitMigration(c *container.Container, data transactionData) error {

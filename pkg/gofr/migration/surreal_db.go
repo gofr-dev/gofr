@@ -81,20 +81,17 @@ func (s surrealMigrator) checkAndCreateMigrationTable(*container.Container) erro
 }
 
 func (s surrealMigrator) getLastMigration(c *container.Container) (int64, error) {
-	var lastMigration int64 // Default to 0 if no migrations found
+	var lastMigration int64
 
 	result, err := s.SurrealDB.Query(context.Background(), getLastSurrealDBGoFrMigration, nil)
 	if err != nil {
 		return -1, fmt.Errorf("surrealdb: %w", err)
 	}
 
-	if len(result) == 0 {
-		return s.migrator.getLastMigration(c)
-	}
-
-	// Assuming the query returns a single row with the version
-	if version, ok := result[0].(map[string]any)["version"].(float64); ok {
-		lastMigration = int64(version)
+	if len(result) > 0 {
+		if version, ok := result[0].(map[string]any)["version"].(float64); ok {
+			lastMigration = int64(version)
+		}
 	}
 
 	c.Debugf("surrealDB last migration fetched value is: %v", lastMigration)

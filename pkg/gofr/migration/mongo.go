@@ -39,13 +39,13 @@ func (mg mongoMigrator) checkAndCreateMigrationTable(_ *container.Container) err
 	return nil
 }
 
-// getLastMigration retrieves the latest migration version from MongoDB.
 func (mg mongoMigrator) getLastMigration(c *container.Container) (int64, error) {
-	var lastMigration int64
-
-	var migrations []struct {
-		Version int64 `bson:"version"`
-	}
+	var (
+		lastMigration int64
+		migrations    []struct {
+			Version int64 `bson:"version"`
+		}
+	)
 
 	filter := make(map[string]any)
 
@@ -54,18 +54,6 @@ func (mg mongoMigrator) getLastMigration(c *container.Container) (int64, error) 
 		return -1, fmt.Errorf("mongo: %w", err)
 	}
 
-	if len(migrations) == 0 {
-		var lm2 int64
-
-		lm2, err = mg.migrator.getLastMigration(c)
-		if err != nil {
-			return -1, err
-		}
-
-		return lm2, nil
-	}
-
-	// Identify the highest migration version.
 	for _, migration := range migrations {
 		lastMigration = max(lastMigration, migration.Version)
 	}
@@ -77,7 +65,7 @@ func (mg mongoMigrator) getLastMigration(c *container.Container) (int64, error) 
 		return -1, err
 	}
 
-	return max(lm2, lastMigration), nil
+	return max(lastMigration, lm2), nil
 }
 
 func (mg mongoMigrator) beginTransaction(c *container.Container) transactionData {
