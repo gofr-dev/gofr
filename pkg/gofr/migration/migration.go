@@ -54,7 +54,12 @@ func Run(migrationsMap map[int64]Migrate, c *container.Container) {
 		return
 	}
 
-	lastMigration := mg.getLastMigration(c)
+	lastMigration, err := mg.getLastMigration(c)
+	if err != nil {
+		c.Fatalf("migration failed: could not verify migration state from datasources, err: %v", err)
+
+		return
+	}
 
 	for _, currentMigration := range keys {
 		if currentMigration <= lastMigration {

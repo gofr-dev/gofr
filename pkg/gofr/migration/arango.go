@@ -2,6 +2,7 @@ package migration
 
 import (
 	"context"
+	"fmt"
 	"time"
 
 	"gofr.dev/pkg/gofr/container"
@@ -78,22 +79,29 @@ func (am arangoMigrator) checkAndCreateMigrationTable(c *container.Container) er
 	return am.migrator.checkAndCreateMigrationTable(c)
 }
 
-func (am arangoMigrator) getLastMigration(c *container.Container) int64 {
-	var lastMigrations []int64
+func (am arangoMigrator) getLastMigration(c *container.Container) (int64, error) {
+	var (
+		lastMigrations []int64
+		lastMigration  int64
+	)
 
 	err := c.ArangoDB.Query(context.Background(), arangoMigrationDB, getLastArangoMigration, nil, &lastMigrations)
-	if err != nil || len(lastMigrations) == 0 {
-		return 0
+	if err != nil {
+		return -1, fmt.Errorf("arangodb: %w", err)
 	}
 
-	c.Debugf("ArangoDB last migration fetched value is: %v", lastMigrations[0])
-
-	lm2 := am.migrator.getLastMigration(c)
-	if lm2 > lastMigrations[0] {
-		return lm2
+	if len(lastMigrations) != 0 {
+		lastMigration = lastMigrations[0]
 	}
 
-	return lastMigrations[0]
+	c.Debugf("ArangoDB last migration fetched value is: %v", lastMigration)
+
+	lm2, err := am.migrator.getLastMigration(c)
+	if err != nil {
+		return -1, err
+	}
+
+	return max(lastMigration, lm2), nil
 }
 
 func (am arangoMigrator) beginTransaction(c *container.Container) transactionData {
