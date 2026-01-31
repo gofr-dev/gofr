@@ -2,6 +2,7 @@ package migration
 
 import (
 	"context"
+	"fmt"
 	"time"
 
 	"gofr.dev/pkg/gofr/container"
@@ -38,32 +39,33 @@ func (mg mongoMigrator) checkAndCreateMigrationTable(_ *container.Container) err
 	return nil
 }
 
-// getLastMigration retrieves the latest migration version from MongoDB.
-func (mg mongoMigrator) getLastMigration(c *container.Container) int64 {
-	var lastMigration int64
-
-	var migrations []struct {
-		Version int64 `bson:"version"`
-	}
+func (mg mongoMigrator) getLastMigration(c *container.Container) (int64, error) {
+	var (
+		lastMigration int64
+		migrations    []struct {
+			Version int64 `bson:"version"`
+		}
+	)
 
 	filter := make(map[string]any)
 
 	err := mg.Mongo.Find(context.Background(), mongoMigrationCollection, filter, &migrations)
 	if err != nil {
-		c.Errorf("Failed to fetch migrations from MongoDB: %v", err)
-		return 0
+		return -1, fmt.Errorf("mongo: %w", err)
 	}
 
-	// Identify the highest migration version.
 	for _, migration := range migrations {
 		lastMigration = max(lastMigration, migration.Version)
 	}
 
 	c.Debugf("MongoDB last migration fetched value is: %v", lastMigration)
 
-	lm2 := mg.migrator.getLastMigration(c)
+	lm2, err := mg.migrator.getLastMigration(c)
+	if err != nil {
+		return -1, err
+	}
 
-	return max(lm2, lastMigration)
+	return max(lastMigration, lm2), nil
 }
 
 func (mg mongoMigrator) beginTransaction(c *container.Container) transactionData {

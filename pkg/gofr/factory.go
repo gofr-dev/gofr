@@ -1,7 +1,6 @@
 package gofr
 
 import (
-	"net/http"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -10,7 +9,6 @@ import (
 	"gofr.dev/pkg/gofr/container"
 	"gofr.dev/pkg/gofr/http/middleware"
 	"gofr.dev/pkg/gofr/logging"
-	"gofr.dev/pkg/gofr/service"
 )
 
 // New creates an HTTP Server Application and returns that App.
@@ -33,12 +31,8 @@ func New() *App {
 	app.httpServer.keyFile = app.Config.GetOrDefault("KEY_FILE", "")
 	app.httpServer.staticFiles = make(map[string]string)
 
-	// Add Default routes
-	app.add(http.MethodGet, service.HealthPath, healthHandler)
-	app.add(http.MethodGet, service.AlivePath, liveHandler)
-	app.add(http.MethodGet, "/favicon.ico", faviconHandler)
-
-	app.checkAndAddOpenAPIDocumentation()
+	// Note: Default routes (health, alive, favicon, swagger) are registered in httpServerSetup()
+	// only when HTTP server actually starts. This prevents gRPC-only apps from starting HTTP server.
 
 	// gRPC Server
 	port, err = strconv.Atoi(app.Config.Get("GRPC_PORT"))
