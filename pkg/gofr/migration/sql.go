@@ -167,27 +167,22 @@ func (d sqlMigrator) rollback(c *container.Container, data transactionData) {
 func (d sqlMigrator) lock(ctx context.Context, cancel context.CancelFunc, c *container.Container, ownerID string) error {
 	dialect := c.SQL.Dialect()
 
-	for i := 0; ; i++ {
-		var cleanupQuery string
-		if dialect == postgres {
-			cleanupQuery = deleteExpiredLocksPostgres
-		} else {
-			cleanupQuery = deleteExpiredLocksMySQL
-		}
+	var cleanupQuery, insertQuery string
+	if dialect == postgres {
+		cleanupQuery = deleteExpiredLocksPostgres
+		insertQuery = insertLockPostgres
+	} else {
+		cleanupQuery = deleteExpiredLocksMySQL
+		insertQuery = insertLockMySQL
+	}
 
+	for i := 0; ; i++ {
 		_, err := c.SQL.ExecContext(ctx, cleanupQuery, time.Now().UTC())
 		if err != nil {
 			c.Errorf("failed to clean up expired locks: %v", err)
 		}
 
 		expiresAt := time.Now().UTC().Add(defaultLockTTL)
-
-		var insertQuery string
-		if dialect == postgres {
-			insertQuery = insertLockPostgres
-		} else {
-			insertQuery = insertLockMySQL
-		}
 
 		_, err = c.SQL.ExecContext(ctx, insertQuery, lockKey, ownerID, expiresAt)
 		if err == nil {
@@ -228,17 +223,17 @@ func (sqlMigrator) startRefresh(ctx context.Context, cancel context.CancelFunc, 
 	ticker := time.NewTicker(defaultRefresh)
 	defer ticker.Stop()
 
+	var updateQuery string
+	if dialect == postgres {
+		updateQuery = updateLockPostgres
+	} else {
+		updateQuery = updateLockMySQL
+	}
+
 	for {
 		select {
 		case <-ticker.C:
 			expiresAt := time.Now().UTC().Add(defaultLockTTL)
-
-			var updateQuery string
-			if dialect == postgres {
-				updateQuery = updateLockPostgres
-			} else {
-				updateQuery = updateLockMySQL
-			}
 
 			res, err := c.SQL.Exec(updateQuery, expiresAt, lockKey, ownerID)
 			if err != nil {
