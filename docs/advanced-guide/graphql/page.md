@@ -32,17 +32,36 @@ GoFr aggregates every `GraphQLQuery` and `GraphQLMutation` you register into a *
 
 ### Registration
 
-Use `app.GraphQLQuery` and `app.GraphQLMutation` to register your resolvers.
+Use `app.GraphQLQuery` and `app.GraphQLMutation` to register your resolvers with **declarative arguments**.
 
 ```go
 func main() {
     app := gofr.New()
 
-    // Register a Query
-    app.GraphQLQuery("getUser", GetUserHandler)
+    // Query without arguments
+    app.GraphQLQuery("hello", func(c *gofr.Context) (string, error) {
+        return "Hello, GraphQL!", nil
+    })
 
-    // Register a Mutation
-    app.GraphQLMutation("updateUser", UpdateUserHandler)
+    // Query with arguments (declarative style)
+    type GetUserArgs struct {
+        ID int `json:"id"`
+    }
+    
+    app.GraphQLQuery("user", func(c *gofr.Context, args GetUserArgs) (User, error) {
+        // GoFr automatically maps GraphQL arguments to the args struct
+        return fetchUser(c, args.ID)
+    })
+
+    // Mutation with arguments
+    type CreateUserArgs struct {
+        Name string `json:"name"`
+        Role string `json:"role"`
+    }
+    
+    app.GraphQLMutation("createUser", func(c *gofr.Context, args CreateUserArgs) (User, error) {
+        return createUser(c, args.Name, args.Role)
+    })
 
     app.Run()
 }
@@ -50,7 +69,15 @@ func main() {
 
 ### Writing Resolvers
 
-Resolvers in GoFr look exactly like standard HTTP handlers but return specific types instead of `any`.
+GraphQL resolvers in GoFr use **declarative arguments** - define your argument types as structs in the function signature, and GoFr will automatically:
+- Generate the GraphQL schema with proper argument types
+- Validate incoming arguments
+- Map them to your struct
+
+**Key Points:**
+- First parameter is always `*gofr.Context`
+- Second parameter (optional) is your arguments struct
+- Return type must be a **specific struct or slice**, not `any`
 
 ---
 
@@ -61,25 +88,31 @@ In standard REST/HTTP handlers, GoFr allows returning `any` because the response
 | Feature | REST (HTTP) | GraphQL |
 | :--- | :--- | :--- |
 | **Return Type** | `any` (Interface) | **Specific Structs/Slices** |
+| **Arguments** | Via `c.Param()` or `c.Bind()` | **Declarative in function signature** |
 | **Contract** | No Schema | **Auto-Generated Schema** |
-| **Why?** | REST only cares about the final JSON blob. | GoFr must "see" the struct fields to build the schema at startup. |
+| **Why?** | REST only cares about the final JSON blob. | GoFr must "see" the struct fields and arguments to build the schema at startup. |
 
-**Pro Tip:** If you return `any` in a GraphQL resolver, GoFr treats it as a **Scalar (String)**. This means clients won't be able to query specific fields like `{ user { name } }`. Always use structs to enable full introspection.
+**Pro Tip:** Always use specific struct types for both return values and arguments. This enables full GraphQL introspection and auto-documentation.
 
 ```go
 type User struct {
     ID   int    `json:"id"`
     Name string `json:"name"`
+    Role string `json:"role"`
 }
 
-// ✅ Correct: Returns 'User' so GoFr can build the schema fields
-func GetUserHandler(c *gofr.Context) (User, error) {
-    // ...
+type GetUserArgs struct {
+    ID int `json:"id"`
 }
 
-// ❌ Discouraged: Returns 'any', which prevents sub-field discovery (id, name)
-func GetUserHandler(c *gofr.Context) (any, error) {
-    // ...
+// ✅ Correct: Specific return type and declarative arguments
+func(c *gofr.Context, args GetUserArgs) (User, error) {
+    return User{ID: args.ID, Name: "Alice", Role: "Admin"}, nil
+}
+
+// ❌ Discouraged: Returns 'any', which prevents sub-field discovery
+func(c *gofr.Context, args GetUserArgs) (any, error) {
+    return map[string]any{"id": args.ID, "name": "Alice"}, nil
 }
 ```
 
