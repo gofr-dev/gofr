@@ -3,7 +3,6 @@ go 1.25.1
 use (
 	.
 	./examples/using-add-filestore
-	./examples/using-graphql
 	./pkg/gofr/datasource/arangodb
 	./pkg/gofr/datasource/cassandra
 	./pkg/gofr/datasource/clickhouse
