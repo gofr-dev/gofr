@@ -154,8 +154,14 @@ func (a *App) httpServerSetup() {
 
 	if a.graphqlManager != nil {
 		a.httpServer.router.NewRoute().Path("/graphql").Handler(a.graphqlManager.GetHandler())
-		a.httpServer.router.NewRoute().Path("/graphql/ui").Handler(a.graphqlManager.GetHandler())
-		a.container.Logger.Infof("Registered GraphQL endpoint at /graphql and Playground at /graphql/ui")
+
+		// Only register GraphQL Playground UI in non-production environments
+		if a.Config.Get("APP_ENV") != "production" {
+			a.httpServer.router.NewRoute().Path("/graphql/ui").Handler(a.graphqlManager.GetHandler())
+			a.container.Logger.Infof("Registered GraphQL endpoint at /graphql and Playground at /graphql/ui")
+		} else {
+			a.container.Logger.Infof("Registered GraphQL endpoint at /graphql")
+		}
 	}
 
 	a.httpServer.router.PathPrefix("/").Handler(handler{

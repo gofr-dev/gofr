@@ -35,14 +35,12 @@ func main() {
 		}, nil
 	})
 
-	// Query with arguments using c.Bind
-	app.GraphQLQuery("getUser", func(c *gofr.Context) (User, error) {
-		var args struct {
-			ID int `json:"id"`
-		}
+	// Query with arguments using declarative style (Highly Recommended)
+	type GetUserArgs struct {
+		ID int `json:"id"`
+	}
 
-		_ = c.Bind(&args)
-
+	app.GraphQLQuery("getUser", func(c *gofr.Context, args GetUserArgs) (User, error) {
 		if args.ID == 2 {
 			return User{ID: 2, Name: "Bob", Role: "User"}, nil
 		}
