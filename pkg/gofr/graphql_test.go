@@ -67,6 +67,7 @@ func TestGraphQL_Mutation(t *testing.T) {
 	reqBody := `{"query": "mutation { createUser(name: \"test\") { id name } }"}`
 	req := httptest.NewRequest(http.MethodPost, "/graphql", bytes.NewBufferString(reqBody))
 	req.Header.Set("Content-Type", "application/json")
+
 	resp := httptest.NewRecorder()
 
 	handler.ServeHTTP(resp, req)
@@ -96,6 +97,7 @@ func TestGraphQL_Health(t *testing.T) {
 	reqBody := `{"query": "{ gofr { status } }"}`
 	req := httptest.NewRequest(http.MethodPost, "/graphql", bytes.NewBufferString(reqBody))
 	req.Header.Set("Content-Type", "application/json")
+
 	resp := httptest.NewRecorder()
 
 	handler.ServeHTTP(resp, req)
@@ -158,6 +160,7 @@ func TestGraphQL_ComplexTypes(t *testing.T) {
 	reqBody := `{"query": "{ complexQuery { id score isAdmin tags } }"}`
 	req := httptest.NewRequest(http.MethodPost, "/graphql", bytes.NewBufferString(reqBody))
 	req.Header.Set("Content-Type", "application/json")
+
 	resp := httptest.NewRecorder()
 
 	handler.ServeHTTP(resp, req)
@@ -200,6 +203,7 @@ func TestGraphQL_ArgumentTypes(t *testing.T) {
 	reqBody := `{"query": "{ filter(name: \"test\", min: 10.5, active: true, ids: [1, 2]) }"}`
 	req := httptest.NewRequest(http.MethodPost, "/graphql", bytes.NewBufferString(reqBody))
 	req.Header.Set("Content-Type", "application/json")
+
 	resp := httptest.NewRecorder()
 
 	handler.ServeHTTP(resp, req)
@@ -230,6 +234,7 @@ func TestGraphQL_Errors(t *testing.T) {
 	reqBody := `{"query": "{ invalid }"}`
 	req := httptest.NewRequest(http.MethodPost, "/graphql", bytes.NewBufferString(reqBody))
 	req.Header.Set("Content-Type", "application/json")
+
 	resp := httptest.NewRecorder()
 
 	handler.ServeHTTP(resp, req)
@@ -259,6 +264,7 @@ func TestGraphQL_NestedTypes(t *testing.T) {
 	reqBody := `{"query": "{ profile { name address { city } } }"}`
 	req := httptest.NewRequest(http.MethodPost, "/graphql", bytes.NewBufferString(reqBody))
 	req.Header.Set("Content-Type", "application/json")
+
 	resp := httptest.NewRecorder()
 
 	handler.ServeHTTP(resp, req)
@@ -294,6 +300,7 @@ func TestGraphQL_PointerTypes(t *testing.T) {
 	reqBody := `{"query": "{ user { name } }"}`
 	req := httptest.NewRequest(http.MethodPost, "/graphql", bytes.NewBufferString(reqBody))
 	req.Header.Set("Content-Type", "application/json")
+
 	resp := httptest.NewRecorder()
 
 	handler.ServeHTTP(resp, req)
@@ -324,6 +331,7 @@ func TestGraphQL_ResolverError(t *testing.T) {
 	reqBody := `{"query": "{ fail }"}`
 	req := httptest.NewRequest(http.MethodPost, "/graphql", bytes.NewBufferString(reqBody))
 	req.Header.Set("Content-Type", "application/json")
+
 	resp := httptest.NewRecorder()
 
 	handler.ServeHTTP(resp, req)
