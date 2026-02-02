@@ -155,6 +155,11 @@ export const navigation = [
                 desc: "Explore how GoFr eases the process of WebSocket communication in your Golang application for real-time data exchange."
             },
             {
+                title: 'GraphQL',
+                href: '/docs/advanced-guide/graphql',
+                desc: "Learn how to build native, code-first GraphQL APIs in GoFr with automatic schema generation and interactive playground."
+            },
+            {
                 title: 'Serving-Static Files',
                 href: '/docs/advanced-guide/serving-static-files',
                 desc: "Know how GoFr automatically serves static content from a static folder in the application directory."

@@ -44,10 +44,10 @@ type App struct {
 	// container is unexported because this is an internal implementation and applications are provided access to it via Context
 	container *container.Container
 
-	grpcRegistered bool
-	httpRegistered bool
-
+	grpcRegistered      bool
+	httpRegistered      bool
 	subscriptionManager SubscriptionManager
+	graphqlManager      *graphQLManager
 	onStartHooks        []func(ctx *Context) error
 }
 
@@ -152,6 +152,12 @@ func (a *App) httpServerSetup() {
 		a.httpServer.router.AddStaticFiles(a.Logger(), endpoint, dirName)
 	}
 
+	if a.graphqlManager != nil {
+		a.httpServer.router.NewRoute().Path("/graphql").Handler(a.graphqlManager.GetHandler())
+		a.httpServer.router.NewRoute().Path("/graphql/ui").Handler(a.graphqlManager.GetHandler())
+		a.container.Logger.Infof("Registered GraphQL endpoint at /graphql and Playground at /graphql/ui")
+	}
+
 	a.httpServer.router.PathPrefix("/").Handler(handler{
 		function:  catchAllHandler,
 		container: a.container,
@@ -221,6 +227,26 @@ func (a *App) AddHTTPService(serviceName, serviceAddress string, options ...serv
 	options = append([]service.Options{service.WithAttributes(map[string]string{"name": serviceName})}, options...)
 
 	a.container.Services[serviceName] = service.NewHTTPService(serviceAddress, a.container.Logger, a.container.Metrics(), options...)
+}
+
+// GraphQLQuery registers a GraphQL query resolver.
+func (a *App) GraphQLQuery(name string, handler any) {
+	if a.graphqlManager == nil {
+		a.graphqlManager = newGraphQLManager(a.container)
+	}
+
+	a.httpRegistered = true
+	a.graphqlManager.RegisterQuery(name, handler)
+}
+
+// GraphQLMutation registers a GraphQL mutation resolver.
+func (a *App) GraphQLMutation(name string, handler any) {
+	if a.graphqlManager == nil {
+		a.graphqlManager = newGraphQLManager(a.container)
+	}
+
+	a.httpRegistered = true
+	a.graphqlManager.RegisterMutation(name, handler)
 }
 
 // Metrics returns the metrics manager associated with the App.
