@@ -26,6 +26,7 @@ func TestGraphQL_Query(t *testing.T) {
 	reqBody := `{"query": "{ hello }"}`
 	req := httptest.NewRequest(http.MethodPost, "/graphql", bytes.NewBufferString(reqBody))
 	req.Header.Set("Content-Type", "application/json")
+
 	resp := httptest.NewRecorder()
 
 	handler.ServeHTTP(resp, req)
@@ -173,7 +174,7 @@ func TestGraphQL_ComplexTypes(t *testing.T) {
 	require.NoError(t, err)
 
 	assert.Equal(t, 42, result.Data.ComplexQuery.ID)
-	assert.Equal(t, 99.5, result.Data.ComplexQuery.Score)
+	assert.InDelta(t, 99.5, result.Data.ComplexQuery.Score, 0.001)
 	assert.True(t, result.Data.ComplexQuery.IsAdmin)
 	assert.Equal(t, []string{"admin", "internal"}, result.Data.ComplexQuery.Tags)
 }
@@ -338,7 +339,7 @@ func TestGraphQL_ResolverError(t *testing.T) {
 
 	err := json.Unmarshal(resp.Body.Bytes(), &result)
 	require.NoError(t, err)
-	assert.Greater(t, len(result.Errors), 0)
+	assert.NotEmpty(t, result.Errors)
 	assert.Contains(t, result.Errors[0].Message, assert.AnError.Error())
 }
 
@@ -351,7 +352,7 @@ func TestGraphQL_EdgeCases(t *testing.T) {
 
 	app := New()
 	// Test map and interface conversion logic
-	app.GraphQLQuery("mapQuery", func(_ *Context, args MapArgs) (any, error) {
+	app.GraphQLQuery("mapQuery", func(_ *Context, _ MapArgs) (any, error) {
 		return "ok", nil
 	})
 
@@ -360,6 +361,7 @@ func TestGraphQL_EdgeCases(t *testing.T) {
 	reqBody := `{"query": "{ mapQuery(data: \"some-string\") }"}`
 	req := httptest.NewRequest(http.MethodPost, "/graphql", bytes.NewBufferString(reqBody))
 	req.Header.Set("Content-Type", "application/json")
+
 	resp := httptest.NewRecorder()
 
 	handler.ServeHTTP(resp, req)
@@ -373,9 +375,9 @@ func TestGraphQL_RequestMethods(t *testing.T) {
 
 	assert.Equal(t, "1", req.Param("id"))
 	assert.Equal(t, "test", req.Param("name"))
-	assert.Equal(t, "", req.Param("invalid"))
-	assert.Equal(t, "", req.PathParam("any"))
-	assert.Equal(t, "", req.HostName())
+	assert.Empty(t, req.Param("invalid"))
+	assert.Empty(t, req.PathParam("any"))
+	assert.Empty(t, req.HostName())
 	assert.Nil(t, req.Params("any"))
 	assert.NotNil(t, req.Context())
 
@@ -385,8 +387,9 @@ func TestGraphQL_RequestMethods(t *testing.T) {
 	}
 
 	var u User
+
 	err := req.Bind(&u)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.Equal(t, 1, u.ID)
 	assert.Equal(t, "test", u.Name)
 }
