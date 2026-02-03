@@ -82,7 +82,7 @@ func extractTraceLinks(headers []kafka.Header) []trace.Link {
 
 // startPublishSpan creates a new span for publishing with trace context injection.
 // Returns the updated context for logging and the headers with injected trace context.
-func startPublishSpan(ctx context.Context, topic string) (context.Context, trace.Span, []kafka.Header) {
+func startPublishSpan(ctx context.Context, _ string) (context.Context, trace.Span, []kafka.Header) {
 	ctx, span := otel.GetTracerProvider().Tracer("gofr").Start(ctx, "kafka-publish")
 
 	// Inject trace context into headers
@@ -94,7 +94,7 @@ func startPublishSpan(ctx context.Context, topic string) (context.Context, trace
 // startSubscribeSpan creates a new span for subscribing with links to the producer span.
 // If trace context exists in headers, creates a span linked to the producer.
 // Otherwise, creates an orphan span (new trace).
-func startSubscribeSpan(ctx context.Context, topic string, msgHeaders []kafka.Header) (context.Context, trace.Span) {
+func startSubscribeSpan(ctx context.Context, _ string, msgHeaders []kafka.Header) (context.Context, trace.Span) {
 	// Extract links from message headers
 	links := extractTraceLinks(msgHeaders)
 

@@ -23,7 +23,7 @@ func TestHeaderCarrier_GetSetKeys(t *testing.T) {
 	// Test Get
 	assert.Equal(t, "00-1234567890abcdef-fedcba0987654321-01", carrier.Get("traceparent"))
 	assert.Equal(t, "foo=bar", carrier.Get("tracestate"))
-	assert.Equal(t, "", carrier.Get("nonexistent"))
+	assert.Empty(t, carrier.Get("nonexistent"))
 
 	// Test Keys
 	keys := carrier.Keys()

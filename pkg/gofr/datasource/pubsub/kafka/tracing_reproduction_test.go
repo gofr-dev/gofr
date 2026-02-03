@@ -11,80 +11,21 @@ import (
 	oteltrace "go.opentelemetry.io/otel/trace"
 )
 
-// TestCurrentTracingBehavior demonstrates the current parent-child tracing behavior
-// in GoFr's Kafka pub/sub implementation.
-//
-// Key Observations:
-// 1. Publisher creates a span as child of incoming context
-// 2. Subscriber creates a span as child of incoming context
-// 3. NO trace context is injected into message headers
-// 4. NO trace context is extracted from message headers
-// 5. NO span links are used
-func TestCurrentTracingBehavior(t *testing.T) {
-	// Setup: Create a span recorder to capture spans
+// setupTestTracing creates a tracer provider with span recorder for testing.
+func setupTestTracing() (*tracetest.SpanRecorder, *trace.TracerProvider) {
 	spanRecorder := tracetest.NewSpanRecorder()
 	tracerProvider := trace.NewTracerProvider(
 		trace.WithSpanProcessor(spanRecorder),
 	)
 	otel.SetTracerProvider(tracerProvider)
 
-	// Simulate a root request context (e.g., incoming HTTP request)
-	rootCtx := context.Background()
-	tracer := tracerProvider.Tracer("test")
-	rootCtx, rootSpan := tracer.Start(rootCtx, "root-request")
-	defer rootSpan.End()
+	return spanRecorder, tracerProvider
+}
 
-	rootTraceID := rootSpan.SpanContext().TraceID()
-	rootSpanID := rootSpan.SpanContext().SpanID()
+// logSpanDetails logs span information for debugging.
+func logSpanDetails(t *testing.T, spans []trace.ReadOnlySpan) {
+	t.Helper()
 
-	t.Logf("Root Span Created:")
-	t.Logf("  TraceID: %s", rootTraceID)
-	t.Logf("  SpanID:  %s", rootSpanID)
-
-	// Step 1: Simulate Publishing
-	// The current implementation in kafka.go line 101:
-	// ctx, span := otel.GetTracerProvider().Tracer("gofr").Start(ctx, "kafka-publish")
-	publishCtx, publishSpan := otel.GetTracerProvider().Tracer("gofr").Start(rootCtx, "kafka-publish")
-	// Simulate publishing a message
-	message := map[string]string{"test": "data"}
-	msgBytes, _ := json.Marshal(message)
-	_ = msgBytes // Message is published, but NO trace context in headers
-	publishSpan.End()
-
-	publishTraceID := publishSpan.SpanContext().TraceID()
-	publishSpanID := publishSpan.SpanContext().SpanID()
-
-	t.Logf("\nPublish Span Created:")
-	t.Logf("  TraceID: %s", publishTraceID)
-	t.Logf("  SpanID:  %s", publishSpanID)
-	t.Logf("  Has same TraceID as root: %v", publishTraceID == rootTraceID)
-	t.Logf("  Is child of root span: true (parent-child relationship)")
-
-	// Step 2: Simulate Subscribing
-	// In a real async scenario, subscribe happens in a different context
-	// The current implementation in kafka.go line 183:
-	// ctx, span := otel.GetTracerProvider().Tracer("gofr").Start(ctx, "kafka-subscribe")
-	newSubscriberCtx := context.Background() // Fresh context, no relation to publisher
-	subscribeCtx, subscribeSpan := otel.GetTracerProvider().Tracer("gofr").Start(newSubscriberCtx, "kafka-subscribe")
-	// Simulate receiving the message
-	_ = publishCtx    // Message received, but NO trace context extracted from headers
-	_ = subscribeCtx
-	subscribeSpan.End()
-
-	subscribeTraceID := subscribeSpan.SpanContext().TraceID()
-	subscribeSpanID := subscribeSpan.SpanContext().SpanID()
-
-	t.Logf("\nSubscribe Span Created:")
-	t.Logf("  TraceID: %s", subscribeTraceID)
-	t.Logf("  SpanID:  %s", subscribeSpanID)
-	t.Logf("  Has same TraceID as publish: %v", subscribeTraceID == publishTraceID)
-	t.Logf("  Has same TraceID as root: %v", subscribeTraceID == rootTraceID)
-
-	// End root span
-	rootSpan.End()
-
-	// Analyze the recorded spans
-	spans := spanRecorder.Ended()
 	t.Logf("\n=== Span Analysis ===")
 	t.Logf("Total spans recorded: %d", len(spans))
 
@@ -93,15 +34,21 @@ func TestCurrentTracingBehavior(t *testing.T) {
 		t.Logf("  Name: %s", span.Name())
 		t.Logf("  TraceID: %s", span.SpanContext().TraceID())
 		t.Logf("  SpanID:  %s", span.SpanContext().SpanID())
+
 		if span.Parent().IsValid() {
 			t.Logf("  Parent SpanID: %s", span.Parent().SpanID())
 		} else {
 			t.Logf("  Parent: None (root span)")
 		}
+
 		t.Logf("  Links: %v", span.Links())
 	}
+}
 
-	// Document Current Behavior
+// logCurrentBehavior logs documentation about current behavior.
+func logCurrentBehavior(t *testing.T) {
+	t.Helper()
+
 	t.Log("\n=== CURRENT BEHAVIOR (Parent-Child) ===")
 	t.Log("✗ Publish span is CHILD of root request context")
 	t.Log("✗ Subscribe span starts a NEW trace (different TraceID)")
@@ -117,21 +64,67 @@ func TestCurrentTracingBehavior(t *testing.T) {
 	t.Log("✓ Supports fan-out (1→many) and fan-in (many→1) patterns")
 }
 
+// TestCurrentTracingBehavior demonstrates the current parent-child tracing behavior
+// in GoFr's Kafka pub/sub implementation.
+//
+// Key Observations:
+// 1. Publisher creates a span as child of incoming context
+// 2. Subscriber creates a span as child of incoming context
+// 3. NO trace context is injected into message headers
+// 4. NO trace context is extracted from message headers
+// 5. NO span links are used.
+func TestCurrentTracingBehavior(t *testing.T) {
+	spanRecorder, tracerProvider := setupTestTracing()
+	tracer := tracerProvider.Tracer("test")
+
+	// Simulate a root request context
+	rootCtx, rootSpan := tracer.Start(context.Background(), "root-request")
+	defer rootSpan.End()
+
+	t.Logf("Root Span Created:")
+	t.Logf("  TraceID: %s", rootSpan.SpanContext().TraceID())
+	t.Logf("  SpanID:  %s", rootSpan.SpanContext().SpanID())
+
+	// Step 1: Simulate Publishing
+	publishCtx, publishSpan := otel.GetTracerProvider().Tracer("gofr").Start(rootCtx, "kafka-publish")
+	message := map[string]string{"test": "data"}
+	msgBytes, _ := json.Marshal(message)
+	_ = msgBytes
+	publishSpan.End()
+
+	t.Logf("\nPublish Span Created:")
+	t.Logf("  TraceID: %s", publishSpan.SpanContext().TraceID())
+	t.Logf("  SpanID:  %s", publishSpan.SpanContext().SpanID())
+	t.Logf("  Has same TraceID as root: %v", publishSpan.SpanContext().TraceID() == rootSpan.SpanContext().TraceID())
+	t.Logf("  Is child of root span: true (parent-child relationship)")
+
+	// Step 2: Simulate Subscribing
+	newSubscriberCtx := context.Background()
+	subscribeCtx, subscribeSpan := otel.GetTracerProvider().Tracer("gofr").Start(newSubscriberCtx, "kafka-subscribe")
+	_ = publishCtx
+	_ = subscribeCtx
+	subscribeSpan.End()
+
+	t.Logf("\nSubscribe Span Created:")
+	t.Logf("  TraceID: %s", subscribeSpan.SpanContext().TraceID())
+	t.Logf("  SpanID:  %s", subscribeSpan.SpanContext().SpanID())
+	t.Logf("  Has same TraceID as publish: %v", subscribeSpan.SpanContext().TraceID() == publishSpan.SpanContext().TraceID())
+	t.Logf("  Has same TraceID as root: %v", subscribeSpan.SpanContext().TraceID() == rootSpan.SpanContext().TraceID())
+
+	rootSpan.End()
+
+	logSpanDetails(t, spanRecorder.Ended())
+	logCurrentBehavior(t)
+}
+
 // TestExpectedSpanLinksBehavior demonstrates how span links SHOULD work
 // according to OpenTelemetry messaging semantic conventions.
 func TestExpectedSpanLinksBehavior(t *testing.T) {
-	// Setup
-	spanRecorder := tracetest.NewSpanRecorder()
-	tracerProvider := trace.NewTracerProvider(
-		trace.WithSpanProcessor(spanRecorder),
-	)
-	otel.SetTracerProvider(tracerProvider)
-
+	spanRecorder, tracerProvider := setupTestTracing()
 	tracer := tracerProvider.Tracer("test")
 
 	// Root context
-	rootCtx := context.Background()
-	rootCtx, rootSpan := tracer.Start(rootCtx, "root-request")
+	rootCtx, rootSpan := tracer.Start(context.Background(), "root-request")
 
 	// Step 1: Publisher creates a span
 	_, publishSpan := tracer.Start(rootCtx, "kafka-publish")
@@ -142,38 +135,27 @@ func TestExpectedSpanLinksBehavior(t *testing.T) {
 	t.Logf("  TraceID: %s", publishSpanContext.TraceID())
 	t.Logf("  SpanID:  %s", publishSpanContext.SpanID())
 
-	// In the improved implementation, trace context would be injected here:
-	// propagator := otel.GetTextMapPropagator()
-	// carrier := make(map[string]string)
-	// propagator.Inject(publishCtx, propagation.MapCarrier(carrier))
-	// Then carrier would be added to kafka message headers
-
 	rootSpan.End()
 
 	// Step 2: Subscriber creates a span WITH LINK to publisher
-	newConsumerCtx := context.Background() // New context, simulating async consumption
-
-	// Create link to publisher span
-	link := oteltrace.Link{
-		SpanContext: publishSpanContext,
-	}
+	newConsumerCtx := context.Background()
+	link := oteltrace.Link{SpanContext: publishSpanContext}
 
 	_, subscribeSpan := tracer.Start(newConsumerCtx, "kafka-subscribe",
-		oteltrace.WithLinks(link), // KEY DIFFERENCE: Using span links!
+		oteltrace.WithLinks(link),
 	)
 	subscribeSpan.End()
 
-	subscribeSpanContext := subscribeSpan.SpanContext()
-
 	t.Logf("\nSubscriber Span (with link):")
-	t.Logf("  TraceID: %s", subscribeSpanContext.TraceID())
-	t.Logf("  SpanID:  %s", subscribeSpanContext.SpanID())
-	t.Logf("  Different trace? %v", subscribeSpanContext.TraceID() != publishSpanContext.TraceID())
+	t.Logf("  TraceID: %s", subscribeSpan.SpanContext().TraceID())
+	t.Logf("  SpanID:  %s", subscribeSpan.SpanContext().SpanID())
+	t.Logf("  Different trace? %v", subscribeSpan.SpanContext().TraceID() != publishSpanContext.TraceID())
 
 	// Analyze spans
 	spans := spanRecorder.Ended()
 
 	t.Logf("\n=== Span Analysis ===")
+
 	for i, span := range spans {
 		t.Logf("\nSpan %d:", i+1)
 		t.Logf("  Name: %s", span.Name())
@@ -188,11 +170,12 @@ func TestExpectedSpanLinksBehavior(t *testing.T) {
 
 		if len(span.Links()) > 0 {
 			t.Logf("  Links:")
-			for j, link := range span.Links() {
+
+			for j, l := range span.Links() {
 				t.Logf("    Link %d: TraceID=%s, SpanID=%s",
 					j+1,
-					link.SpanContext.TraceID(),
-					link.SpanContext.SpanID())
+					l.SpanContext.TraceID(),
+					l.SpanContext.SpanID())
 			}
 		}
 	}
