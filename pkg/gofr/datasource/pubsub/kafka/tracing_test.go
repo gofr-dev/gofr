@@ -55,6 +55,7 @@ func TestInjectTraceContext(t *testing.T) {
 
 	// Verify traceparent header was injected
 	var traceparent string
+
 	for _, h := range headers {
 		if h.Key == "traceparent" {
 			traceparent = string(h.Value)
@@ -80,6 +81,7 @@ func TestExtractTraceLinks(t *testing.T) {
 	// Create a producer span and inject context
 	ctx, producerSpan := tp.Tracer("test").Start(context.Background(), "producer-span")
 	headers := injectTraceContext(ctx, nil)
+
 	producerSpan.End()
 
 	// Extract links from headers
@@ -133,12 +135,14 @@ func TestStartPublishSpan(t *testing.T) {
 
 	// Verify headers contain trace context
 	var hasTraceparent bool
+
 	for _, h := range headers {
 		if h.Key == "traceparent" {
 			hasTraceparent = true
 			break
 		}
 	}
+
 	assert.True(t, hasTraceparent, "headers should contain traceparent")
 }
 
@@ -167,6 +171,7 @@ func TestStartSubscribeSpan_WithLinks(t *testing.T) {
 
 	// Find subscribe span and verify links
 	var subSpan *tracetest.SpanStub
+
 	for i := range spans {
 		if spans[i].Name == "kafka-subscribe" {
 			subSpan = &spans[i]

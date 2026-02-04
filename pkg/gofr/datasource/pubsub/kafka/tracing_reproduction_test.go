@@ -90,6 +90,7 @@ func TestCurrentTracingBehavior(t *testing.T) {
 	message := map[string]string{"test": "data"}
 	msgBytes, _ := json.Marshal(message)
 	_ = msgBytes
+
 	publishSpan.End()
 
 	t.Logf("\nPublish Span Created:")
@@ -103,6 +104,7 @@ func TestCurrentTracingBehavior(t *testing.T) {
 	subscribeCtx, subscribeSpan := otel.GetTracerProvider().Tracer("gofr").Start(newSubscriberCtx, "kafka-subscribe")
 	_ = publishCtx
 	_ = subscribeCtx
+
 	subscribeSpan.End()
 
 	t.Logf("\nSubscribe Span Created:")
