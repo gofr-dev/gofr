@@ -10,6 +10,7 @@ import (
 
 	"github.com/redis/go-redis/v9"
 
+	"gofr.dev/examples/http-server/migrations"
 	"gofr.dev/pkg/gofr"
 	"gofr.dev/pkg/gofr/datasource"
 )
@@ -18,8 +19,12 @@ func main() {
 	// Create a new application
 	a := gofr.New()
 
-	//HTTP service with default health check endpoint
-	a.AddHTTPService("anotherService", "http://localhost:9000")
+	// Add migrations
+	a.Migrate(migrations.All())
+
+	// HTTP service with default health check endpoint
+	addr := a.Config.GetOrDefault("ANOTHERSERVICE", "http://localhost:9000")
+	a.AddHTTPService("anotherService", addr)
 
 	// Add all the routes
 	a.GET("/hello", HelloHandler)
