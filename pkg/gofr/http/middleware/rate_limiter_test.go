@@ -520,8 +520,6 @@ func TestRateLimiter_TrustedProxiesDisabled(t *testing.T) {
 	assert.Equal(t, http.StatusTooManyRequests, rr.Code, "Should rate limit based on RemoteAddr, ignoring spoofed headers")
 }
 
-// Tests for PR #2563 comment resolutions.
-
 // TestGetIP_EmptyFallback tests that empty IP should fallback to "unknown".
 func TestGetIP_EmptyFallback(t *testing.T) {
 	req := httptest.NewRequest(http.MethodGet, "/test", http.NoBody)
