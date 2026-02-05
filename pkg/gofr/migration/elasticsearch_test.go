@@ -28,6 +28,9 @@ func initializeElasticsearchRunMocks(t *testing.T) (*MockElasticsearch, *contain
 	mockContainer.SurrealDB = nil
 	mockContainer.DGraph = nil
 	mockContainer.Clickhouse = nil
+	mockContainer.Oracle = nil
+	mockContainer.OpenTSDB = nil
+	mockContainer.ScyllaDB = nil
 	mockContainer.Logger = logging.NewMockLogger(logging.DEBUG)
 	mockContainer.Elasticsearch = mockElasticsearch
 
@@ -153,11 +156,11 @@ func TestMigrationRunElasticsearchMigrationFailureWhileCheckingTable(t *testing.
 			}},
 		}
 
-		// Mock the migration index check failure
+		// checkAndCreateMigrationTable: Check if index exists (error)
 		mockElasticsearch.EXPECT().Search(gomock.Any(), []string{elasticsearchMigrationIndex}, gomock.Any()).
 			Return(nil, assert.AnError)
 
-		// Mock the migration index creation failure
+		// checkAndCreateMigrationTable: Try to create index (fails)
 		mockElasticsearch.EXPECT().CreateIndex(gomock.Any(), elasticsearchMigrationIndex, gomock.Any()).
 			Return(assert.AnError)
 
@@ -203,7 +206,7 @@ func TestMigrationRunElasticsearchCurrentMigrationEqualLastMigration(t *testing.
 		Run(migrationMap, mockContainer)
 	})
 
-	assert.Contains(t, logs, "skipping migration 1")
+	assert.Contains(t, logs, "no new migrations to run")
 }
 
 func TestMigrationRunElasticsearchCommitError(t *testing.T) {
