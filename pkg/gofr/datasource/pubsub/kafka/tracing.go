@@ -5,8 +5,11 @@ import (
 
 	"github.com/segmentio/kafka-go"
 	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/trace"
 )
+
+const tracerName = "gofr.dev/pkg/gofr/datasource/pubsub/kafka"
 
 // headerCarrier implements propagation.TextMapCarrier for Kafka headers.
 type headerCarrier []kafka.Header
@@ -82,8 +85,17 @@ func extractTraceLinks(headers []kafka.Header) []trace.Link {
 
 // startPublishSpan creates a new span for publishing with trace context injection.
 // Returns the updated context for logging and the headers with injected trace context.
-func startPublishSpan(ctx context.Context, _ string) (context.Context, trace.Span, []kafka.Header) {
-	ctx, span := otel.GetTracerProvider().Tracer("gofr").Start(ctx, "kafka-publish")
+func startPublishSpan(ctx context.Context, topic string) (context.Context, trace.Span, []kafka.Header) {
+	opts := []trace.SpanStartOption{
+		trace.WithSpanKind(trace.SpanKindProducer),
+		trace.WithAttributes(
+			attribute.String("messaging.system", "kafka"),
+			attribute.String("messaging.destination.name", topic),
+			attribute.String("messaging.operation", "publish"),
+		),
+	}
+
+	ctx, span := otel.GetTracerProvider().Tracer(tracerName).Start(ctx, "kafka-publish", opts...)
 
 	// Inject trace context into headers
 	headers := injectTraceContext(ctx, nil)
@@ -94,17 +106,25 @@ func startPublishSpan(ctx context.Context, _ string) (context.Context, trace.Spa
 // startSubscribeSpan creates a new span for subscribing with links to the producer span.
 // If trace context exists in headers, creates a span linked to the producer.
 // Otherwise, creates an orphan span (new trace).
-func startSubscribeSpan(ctx context.Context, _ string, msgHeaders []kafka.Header) (context.Context, trace.Span) {
+func startSubscribeSpan(ctx context.Context, topic string, msgHeaders []kafka.Header) (context.Context, trace.Span) {
 	// Extract links from message headers
 	links := extractTraceLinks(msgHeaders)
 
 	// Create span with links if any exist
-	opts := []trace.SpanStartOption{}
+	opts := []trace.SpanStartOption{
+		trace.WithSpanKind(trace.SpanKindConsumer),
+		trace.WithAttributes(
+			attribute.String("messaging.system", "kafka"),
+			attribute.String("messaging.destination.name", topic),
+			attribute.String("messaging.operation", "receive"),
+		),
+	}
+
 	if len(links) > 0 {
 		opts = append(opts, trace.WithLinks(links...))
 	}
 
-	ctx, span := otel.GetTracerProvider().Tracer("gofr").Start(ctx, "kafka-subscribe", opts...)
+	ctx, span := otel.GetTracerProvider().Tracer(tracerName).Start(ctx, "kafka-subscribe", opts...)
 
 	return ctx, span
 }
