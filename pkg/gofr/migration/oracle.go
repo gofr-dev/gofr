@@ -197,6 +197,18 @@ func (om oracleMigrator) beginTransaction(c *container.Container) transactionDat
 	return td
 }
 
+func (om oracleMigrator) lock(ctx context.Context, cancel context.CancelFunc, c *container.Container, ownerID string) error {
+	return om.migrator.lock(ctx, cancel, c, ownerID)
+}
+
+func (om oracleMigrator) unlock(c *container.Container, ownerID string) error {
+	return om.migrator.unlock(c, ownerID)
+}
+
+func (oracleMigrator) name() string {
+	return "Oracle"
+}
+
 type oracleTransactionWrapper struct {
 	tx container.OracleTx
 }

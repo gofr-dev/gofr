@@ -1,6 +1,10 @@
 package migration
 
-import "gofr.dev/pkg/gofr/container"
+import (
+	"context"
+
+	"gofr.dev/pkg/gofr/container"
+)
 
 type Datasource struct {
 	// TODO Logger should not be embedded rather it should be a field.
@@ -43,3 +47,15 @@ func (*Datasource) commitMigration(c *container.Container, data transactionData)
 }
 
 func (*Datasource) rollback(*container.Container, transactionData) {}
+
+func (Datasource) lock(context.Context, context.CancelFunc, *container.Container, string) error {
+	return nil
+}
+
+func (Datasource) unlock(*container.Container, string) error {
+	return nil
+}
+
+func (Datasource) name() string {
+	return "Base"
+}

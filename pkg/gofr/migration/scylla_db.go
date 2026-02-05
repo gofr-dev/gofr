@@ -1,6 +1,7 @@
 package migration
 
 import (
+	"context"
 	"fmt"
 	"time"
 
@@ -43,7 +44,7 @@ func (s scyllaMigrator) checkAndCreateMigrationTable(c *container.Container) err
 		return err
 	}
 
-	return nil
+	return s.migrator.checkAndCreateMigrationTable(c)
 }
 
 type migrationRow struct {
@@ -108,4 +109,16 @@ func (s scyllaMigrator) commitMigration(c *container.Container, data transaction
 func (s scyllaMigrator) rollback(c *container.Container, data transactionData) {
 	s.migrator.rollback(c, data)
 	c.Fatalf("Migration %v failed.", data.MigrationNumber)
+}
+
+func (s scyllaMigrator) lock(ctx context.Context, cancel context.CancelFunc, c *container.Container, ownerID string) error {
+	return s.migrator.lock(ctx, cancel, c, ownerID)
+}
+
+func (s scyllaMigrator) unlock(c *container.Container, ownerID string) error {
+	return s.migrator.unlock(c, ownerID)
+}
+
+func (scyllaMigrator) name() string {
+	return "ScyllaDB"
 }
