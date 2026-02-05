@@ -130,6 +130,7 @@ func All() map[int64]migration.Migrate {
 ```
 
 **Why this is problematic:**
+
 - When reverting a feature, you want to revert all related changes together
 - When deploying, you want to deploy the entire feature atomically
 - Having multiple migrations for a single feature creates unnecessary complexity and potential inconsistencies
@@ -168,6 +169,7 @@ func addMonitoringFeature() migration.Migrate {
 ```
 
 **Benefits of this approach:**
+
 - **Atomic deployment:** The entire feature is deployed or reverted together
 - **Clear history:** Migration history reflects feature evolution, not granular operations
 - **Easier rollback:** Reverting a feature means reverting one migration, not tracking multiple related migrations
@@ -310,23 +312,16 @@ GoFr supports Elasticsearch document migrations, including **single-document** a
 
 ```go
 func addSingleProduct() migration.Migrate {
-	return migration.Migrate{
-		UP: func(d migration.Datasource) error {
-			product := map[string]any{
-				"title": "Laptop",
-				"price": 999.99,
-				"category": "electronics",
-		 	}
+ return migration.Migrate{
+	 UP: func(d migration.Datasource) error {
+			 product := map[string]any{
+			 "title": "Laptop",
+			 "price": 999.99,
+			 "category": "electronics",
+			 }
 
-		 	return d.Elasticsearch.IndexDocument(
-				context.Background(),
-			 	"products",
-			 	"1",
-			 	product,
-		 	)
-	 	},
-	}
-}
+		return d.Elasticsearch.IndexDocument( context.Background(), "products", "1", product, ) }, }
+		}
 ```
 
 ### Bulk Operation Migration
@@ -340,10 +335,9 @@ func bulkProducts() migration.Migrate {
 			{"title": "Phone", "price": 699.99, "category": "electronics"},
 			{"index": map[string]any{"_index": "products", "_id": "2"}},
 			{"title": "Mug", "price": 12.99, "category": "kitchen"},
-			 }
+			}
 
-		_, err := d.Elasticsearch.Bulk(context.Background(), operations)
-		return err },}
+		_, err := d.Elasticsearch.Bulk(context.Background(), operations) return err },}
 	}
 ```
 
