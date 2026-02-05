@@ -92,24 +92,23 @@ func (em elasticsearchMigrator) checkAndCreateMigrationTable(c *container.Contai
 }
 
 // getLastMigration retrieves the latest migration version from Elasticsearch.
-func (em elasticsearchMigrator) getLastMigration(c *container.Container) int64 {
+func (em elasticsearchMigrator) getLastMigration(c *container.Container) (int64, error) {
 	var lastMigration int64
 
 	result, err := c.Elasticsearch.Search(context.Background(), []string{elasticsearchMigrationIndex}, getLastElasticsearchMigrationQuery())
 	if err != nil {
-		c.Errorf("Failed to fetch migrations from Elasticsearch: %v", err)
-		return 0
+		return -1, fmt.Errorf("elasticsearch: %w", err)
 	}
 
 	lastMigration = extractLastMigrationVersion(result)
 	c.Debugf("Elasticsearch last migration fetched value is: %v", lastMigration)
 
-	lm2 := em.migrator.getLastMigration(c)
-	if lm2 > lastMigration {
-		return lm2
+	lm2, err := em.migrator.getLastMigration(c)
+	if err != nil {
+		return -1, err
 	}
 
-	return lastMigration
+	return max(lastMigration, lm2), nil
 }
 
 // extractLastMigrationVersion extracts the latest migration version from the Elasticsearch search result.

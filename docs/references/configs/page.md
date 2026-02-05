@@ -93,8 +93,12 @@ This document lists all the configuration options supported by the GoFr framewor
 ---
 
 -  TRACER_AUTH_KEY
--  Authorization header for trace exporter requests.
--  Supported for zipkin, jaeger.
+-  Authorization header for trace exporter requests. Supported for zipkin, jaeger, otlp.
+
+---
+
+-  TRACER_HEADERS
+-  Custom authentication headers for trace exporter requests in comma-separated key=value format (e.g., "X-Api-Key=secret,Authorization=Bearer token"). Supported for zipkin, jaeger, otlp. Takes priority over TRACER_AUTH_KEY.
 
 ---
 
@@ -106,6 +110,24 @@ This document lists all the configuration options supported by the GoFr framewor
 -  SHUTDOWN_GRACE_PERIOD
 -  Timeout duration for server shutdown process
 -  30s
+
+---
+
+-  GOFR_TELEMETRY
+-  Enable telemetry for GoFr framework usage
+-  true
+
+---
+
+-  LOG_DISABLE_PROBES
+-  Disable log probes for health checks
+-  false
+
+---
+
+-  GRPC_ENABLE_REFLECTION
+-  Enable gRPC server reflection
+-  false
 
 
 {% /table %}
@@ -190,10 +212,89 @@ This document lists all the configuration options supported by the GoFr framewor
 ---
 
 -  DB_SSL_MODE
--  Currently supported only for PostgreSQL, with Default certificate file.
+-  TLS/SSL mode for database connections. Supported modes: **disable** (no TLS), **preferred** (attempts TLS, falls back to plain), **require** (enforces TLS, skips validation), **skip-verify** (enforces TLS, no certificate validation), **verify-ca** (enforces TLS, validates certificate against CA), **verify-full** (enforces TLS with full validation including hostname). Currently supported for MySQL/MariaDB and PostgreSQL.
 -  disable
 
 ---
+
+- DB_TLS_CA_CERT
+- Path to CA certificate file for TLS connections. Required for **verify-ca** and **verify-full** SSL modes.
+- None
+
+---
+
+- DB_TLS_CLIENT_CERT
+- Path to client certificate file for mutual TLS authentication.
+- None
+
+---
+
+- DB_TLS_CLIENT_KEY
+- Path to client private key file for mutual TLS authentication.
+- None
+
+---
+
+- DB_REPLICA_HOSTS
+- Comma-separated list of replica database hosts. Used for read replicas.
+- None
+
+---
+
+- DB_REPLICA_PORTS
+- Comma-separated list of replica database ports. Used for read replicas.
+- None
+
+---
+
+- DB_REPLICA_USERS
+- Comma-separated list of replica database users. Used for read replicas.
+- None
+
+---
+
+- DB_REPLICA_PASSWORDS_
+- Comma-separated list of replica database passwords. Used for read replicas.
+- None
+
+---
+
+- DB_REPLICA_MAX_IDLE_CONNECTIONS
+- Maximum idle connections allowed for a replica
+- 50
+
+---
+
+- DB_REPLICA_MIN_IDLE_CONNECTIONS
+- Minimum idle connections for a replica
+- 10
+
+---
+
+- DB_REPLICA_DEFAULT_IDLE_CONNECTIONS
+- Idle connections used if no primary setting is provided
+- 10
+
+---
+
+- DB_REPLICA_MAX_OPEN_CONNECTIONS
+- Maximum open connections allowed for a replica
+- 200
+
+---
+
+- DB_REPLICA_MIN_OPEN_CONNECTIONS
+- Minimum open connections for a replica
+- 50
+
+---
+
+- DB_REPLICA_DEFAULT_OPEN_CONNECTIONS
+- Open connections used if no primary setting is provided
+- 100
+
+---
+
 
 - DB_CHARSET
 - The character set for database connection
@@ -228,33 +329,117 @@ This document lists all the configuration options supported by the GoFr framewor
 
 - Name
 - Description
+- Default Value
 
 ---
 
 -  REDIS_HOST
 -  Hostname of the Redis server.
+-  localhost
 
 ---
 
 -  REDIS_PORT
 -  Port of the Redis server.
+-  6379
 
 ---
 
 - REDIS_USER
-- Username for the Redis server.
+- Username for the Redis server (optional).
+-  ""
 
 ---
 
 - REDIS_PASSWORD
-- Password for the Redis server.
+- Password for the Redis server (optional).
+-  ""
 
 ---
 
 - REDIS_DB
 - Database number to use for the Redis server.
+-  0
+
+---
+
+- REDIS_TLS_ENABLED
+- Enable TLS for Redis connections.
+-  false
+
+---
+
+- REDIS_TLS_CA_CERT
+- Path to the TLS CA certificate file for Redis (or PEM-encoded string).
+-  ""
+
+---
+
+- REDIS_TLS_CERT
+- Path to the TLS certificate file for Redis (or PEM-encoded string).
+-  ""
+
+---
+
+- REDIS_TLS_KEY
+- Path to the TLS key file for Redis (or PEM-encoded string).
+-  ""
 
 {% /table %}
+
+**Redis PubSub Configuration:**
+
+{% table %}
+
+- Name
+- Description
+- Default Value
+
+---
+
+- REDIS_PUBSUB_DB
+- Redis database number to use only for Redis Pub/Sub (when `PUBSUB_BACKEND=REDIS`). Use a different DB than `REDIS_DB` when running GoFr migrations with Redis Streams mode to avoid `gofr_migrations` key-type collisions.
+- Default: `15` (highest default Redis database, 0-15)
+
+---
+
+- REDIS_PUBSUB_MODE
+- Operation mode: `pubsub` or `streams`.
+- streams
+
+---
+
+- REDIS_STREAMS_CONSUMER_GROUP
+- Consumer group name (required for streams mode).
+-  ""
+
+---
+
+- REDIS_STREAMS_CONSUMER_NAME
+- Unique consumer name (optional, auto-generated if empty).
+-  ""
+
+---
+
+- REDIS_STREAMS_BLOCK_TIMEOUT
+- Blocking duration for reading new messages using Redis `XREADGROUP`. Lower values (1s-2s) provide faster detection but increase CPU usage. Higher values (10s-30s) reduce CPU usage, ideal for batch processing.
+- 5s
+
+---
+
+- REDIS_STREAMS_PEL_RATIO
+- Ratio of PEL (pending) messages to read vs new messages (0.0-1.0). Controls balance between retry and fresh messages. 0.7 = 70% PEL, 30% new.
+- 0.7
+
+---
+
+- REDIS_STREAMS_MAXLEN
+- Maximum length of the stream (approximate). Prevents streams from growing indefinitely. Set to `0` for unlimited.
+- 0 (unlimited)
+
+{% /table %}
+
+> **Note**: When using GoFr migrations with Streams mode, keep `REDIS_DB` and `REDIS_PUBSUB_DB` separate (defaults: 0 and 15). For `REDIS_STREAMS_BLOCK_TIMEOUT`: use 1s-2s for real-time or 10s-30s for batch processing.
 
 ### Pub/Sub
 
@@ -269,7 +454,7 @@ This document lists all the configuration options supported by the GoFr framewor
 
 -  PUBSUB_BACKEND
 -  Pub/Sub message broker backend
--  kafka, google, mqtt, nats
+-  kafka, google, mqtt, nats, redis
 
 {% /table %}
 
@@ -481,3 +666,4 @@ This document lists all the configuration options supported by the GoFr framewor
 - creds.json
 
 {% /table %}
+

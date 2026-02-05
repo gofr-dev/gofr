@@ -1,7 +1,7 @@
 ## Contribution Guidelines
 * Minor changes can be done directly by editing code on GitHub. GitHub automatically creates a temporary branch and
   files a PR. This is only suitable for really small changes like: spelling fixes, variable name changes or error string
-  change etc. For larger commits, following steps are recommended.
+  change etc. For larger commits, the following steps are recommended.
 * (Optional) If you want to discuss your implementation with the users of GoFr, use the GitHub discussions of this repo.
 * Configure your editor to use goimports and golangci-lint on file changes. Any code which is not formatted using these
   tools, will fail on the pipeline.
@@ -16,7 +16,7 @@
   No PR should ever decrease the overall code coverage.
 * Once your code changes are done along with the test cases, submit a PR to development branch. Please note that all PRs
   are merged from feature branches to development first.
-* PR should be raised only when development is complete and the code is ready for review. This approach helps reduce the number of open pull requests and facilitates a more efficient review process for the team.
+* A PR should be raised only when development is complete and the code is ready for review. This approach helps reduce the number of open pull requests and facilitates a more efficient review process for the team.
 * All PRs need to be reviewed by at least 2 GoFr developers. They might reach out to you for any clarification.
 * Thank you for your contribution. :)
 
@@ -60,7 +60,6 @@ func TestFunctionName(t *testing.T) {
 ```console
 docker run --name mongodb -d -p 27017:27017 -e MONGO_INITDB_ROOT_USERNAME=user -e MONGO_INITDB_ROOT_PASSWORD=password mongodb/mongodb-community-server:latest
 docker run -d -p 21:21 -p 21000-21010:21000-21010 -e USERS='user|password' delfer/alpine-ftp-server
-```
 
 # the docker image is relatively unstable. Alternatively, refer to official guide of OpenTSDB to locally setup OpenTSDB env.
 # http://opentsdb.net/docs/build/html/installation.html#id1

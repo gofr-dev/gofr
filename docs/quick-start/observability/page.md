@@ -29,6 +29,8 @@ They are instrumental in measuring and meeting service-level agreements (SLAs) t
 
 GoFr publishes metrics to port: _2121_ on _/metrics_ endpoint in Prometheus format.
 
+### Default Metrics
+
 {% table %}
 
 - Name
@@ -83,6 +85,7 @@ GoFr publishes metrics to port: _2121_ on _/metrics_ endpoint in Prometheus form
 - histogram
 - Response time of HTTP service requests in seconds
 
+
 ---
 
 - app_sql_open_connections
@@ -131,20 +134,40 @@ GoFr publishes metrics to port: _2121_ on _/metrics_ endpoint in Prometheus form
 - counter
 - Number of successful subscribe operations
 
+---
+
+- app_http_retry_count
+- counter
+- Total number of retry events
+
+---
+
+- app_http_circuit_breaker_state
+- gauge
+- Current state of the circuit breaker (0 for Closed, 1 for Open). Used for historical timeline visualization.
+
 {% /table %}
 
 For example: When running the application locally, we can access the /metrics endpoint on port 2121 from: {% new-tab-link title="http://localhost:2121/metrics" href="http://localhost:2121/metrics" /%}
 
 GoFr also supports creating {% new-tab-link newtab=false title="custom metrics" href="/docs/advanced-guide/publishing-custom-metrics" /%}.
 
+### Disabling the Metrics Server
+
+To disable the metrics server entirely, set the `METRICS_PORT` environment variable to `0`:
+
+```dotenv
+METRICS_PORT=0
+```
+
 ### Example Dashboard
 
 These metrics can be easily consumed by monitoring systems like {% new-tab-link title="Prometheus" href="https://prometheus.io/" /%}
 and visualized in dashboards using tools like {% new-tab-link title="Grafana" href="https://grafana.com/" /%}.
 
-Here's a sample Grafana dashboard utilizing GoFr's metrics:
+You can find the dashboard source in the {% new-tab-link title="GoFr repository" href="https://github.com/gofr-dev/gofr/tree/main/examples/http-server/docker/provisioning/dashboards/gofr-dashboard" /%}.
 
-{% figure src="/metrics-dashboard.png" alt="Grafana Dashboard showing GoFr metrics including HTTP request rates, 
+{% figure src="/metrics-dashboard.png" alt="Grafana Dashboard showing GoFr metrics including HTTP request rates,
 response times, etc." caption="Example monitoring dashboard using GoFr's built-in metrics" /%}
 
 
@@ -175,7 +198,7 @@ a request as it travels through your distributed system by simply looking at the
 ### Configuration & Usage:
 
 GoFr has support for following trace-exporters:
-#### 1. [Zipkin](https://zipkin.io/): 
+#### 1. [Zipkin](https://zipkin.io/):
 
 To see the traces install zipkin image using the following Docker command:
 
@@ -272,3 +295,41 @@ TRACER_RATIO=0.1
 > `TRACER_RATIO` refers to the proportion of traces that are exported through sampling. It ranges between 0 and 1. By default, this ratio is set to 1, meaning all traces are exported.
 >
 > Open {% new-tab-link title="gofr-tracer" href="https://tracer.gofr.dev/" /%} and search by TraceID (correlationID) to see the trace.
+
+
+### Custom Authentication Headers
+
+Many observability platforms require custom headers for authentication. GoFr supports this through the `TRACER_HEADERS` configuration, which accepts comma-separated `key=value` pairs following the OpenTelemetry standard format.
+
+#### Usage Examples
+
+**Single Header:**
+```dotenv
+# Honeycomb
+TRACER_HEADERS="X-Honeycomb-Team=your_api_key"
+```
+
+**Multiple Headers:**
+```dotenv
+# Grafana Cloud with multiple headers
+TRACER_HEADERS="Authorization=Basic base64encodedcreds,X-Scope-OrgID=tenant-1"
+```
+
+```dotenv
+# API key with special characters
+TRACER_HEADERS="X-Api-Key=secret123,Authorization=Bearer token"
+```
+
+####  Configuration Example
+
+Here's an example for sending traces to Grafana Cloud with authentication:
+
+```dotenv
+APP_NAME=my-service
+
+# Grafana Cloud OTLP endpoint with authentication
+TRACE_EXPORTER=otlp
+TRACER_URL=otlp-gateway-prod-us-east-0.grafana.net:443
+TRACER_HEADERS="Authorization=Basic dXNlcm5hbWU6cGFzc3dvcmQ=,X-Scope-OrgID=123456"
+TRACER_RATIO=1.0
+```

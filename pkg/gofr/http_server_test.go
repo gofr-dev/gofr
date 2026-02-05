@@ -216,7 +216,9 @@ func createTempKeyFile(t *testing.T) string {
 		t.Fatalf("could not create temp key file: %v", err)
 	}
 
-	defer f.Close()
+	t.Cleanup(func() {
+		_ = f.Close()
+	})
 
 	return f.Name()
 }
@@ -230,7 +232,9 @@ func createTempCertFile(t *testing.T) string {
 		t.Fatalf("could not create temp cert file: %v", err)
 	}
 
-	defer f.Close()
+	t.Cleanup(func() {
+		_ = f.Close()
+	})
 
 	return f.Name()
 }
