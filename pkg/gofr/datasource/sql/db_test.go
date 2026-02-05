@@ -1152,7 +1152,9 @@ func TestClean(t *testing.T) {
 	assert.Empty(t, out)
 }
 func TestDB_CloseWhenNil(t *testing.T) {
-	db := &DB{}
+	db := &DB{
+		stopSignal: make(chan struct{}),
+	}
 	err := db.Close()
 	assert.NoError(t, err)
 }
@@ -1241,9 +1243,10 @@ func TestDB_sendOperationStats_RecordsMilliseconds(t *testing.T) {
 	mockMetrics := NewMockMetrics(ctrl)
 
 	db := &DB{
-		logger:  logging.NewMockLogger(logging.DEBUG),
-		config:  &DBConfig{HostName: "host", Database: "db"},
-		metrics: mockMetrics,
+		logger:     logging.NewMockLogger(logging.DEBUG),
+		config:     &DBConfig{HostName: "host", Database: "db"},
+		metrics:    mockMetrics,
+		stopSignal: make(chan struct{}),
 	}
 
 	start := time.Now().Add(-1500 * time.Millisecond) // 1.5 seconds ago

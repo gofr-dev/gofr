@@ -170,6 +170,8 @@ func pingToTestConnection(database *DB) *DB {
 func retryConnection(database *DB) {
 	const connRetryFrequencyInSeconds = 10
 
+	retryDuration := connRetryFrequencyInSeconds * time.Second
+
 	for {
 		select {
 		case <-database.stopSignal:
@@ -180,34 +182,40 @@ func retryConnection(database *DB) {
 		if database.DB.PingContext(context.Background()) != nil {
 			database.logger.Info("retrying SQL database connection")
 
-			for {
-				select {
-				case <-database.stopSignal:
-					return
-				default:
-				}
-
-				err := database.DB.PingContext(context.Background())
-				if err == nil {
-					printConnectionSuccessLog("connected", database.config, database.logger)
-
-					break
-				}
-
-				printConnectionFailureLog("connect", database.config, database.logger, err)
-
-				select {
-				case <-time.After(connRetryFrequencyInSeconds * time.Second):
-				case <-database.stopSignal:
-					return
-				}
+			if !attemptReconnection(database, retryDuration) {
+				return
 			}
 		}
 
 		select {
-		case <-time.After(connRetryFrequencyInSeconds * time.Second):
+		case <-time.After(retryDuration):
 		case <-database.stopSignal:
 			return
+		}
+	}
+}
+
+func attemptReconnection(database *DB, retryDuration time.Duration) bool {
+	for {
+		select {
+		case <-database.stopSignal:
+			return false
+		default:
+		}
+
+		err := database.DB.PingContext(context.Background())
+		if err == nil {
+			printConnectionSuccessLog("connected", database.config, database.logger)
+
+			return true
+		}
+
+		printConnectionFailureLog("connect", database.config, database.logger, err)
+
+		select {
+		case <-time.After(retryDuration):
+		case <-database.stopSignal:
+			return false
 		}
 	}
 }
