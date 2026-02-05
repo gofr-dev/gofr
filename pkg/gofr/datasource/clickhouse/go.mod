@@ -5,8 +5,8 @@ go 1.25
 require (
 	github.com/ClickHouse/clickhouse-go/v2 v2.42.0
 	github.com/stretchr/testify v1.11.1
-	go.opentelemetry.io/otel v1.39.0
-	go.opentelemetry.io/otel/trace v1.39.0
+	go.opentelemetry.io/otel v1.40.0
+	go.opentelemetry.io/otel/trace v1.40.0
 	go.uber.org/mock v0.6.0
 )
 
