@@ -94,3 +94,15 @@ func (cs cassandraMigrator) rollback(c *container.Container, data transactionDat
 
 	c.Fatalf("migration %v failed and rolled back", data.MigrationNumber)
 }
+
+func (cs cassandraMigrator) lock(ctx context.Context, cancel context.CancelFunc, c *container.Container, ownerID string) error {
+	return cs.migrator.lock(ctx, cancel, c, ownerID)
+}
+
+func (cs cassandraMigrator) unlock(c *container.Container, ownerID string) error {
+	return cs.migrator.unlock(c, ownerID)
+}
+
+func (cassandraMigrator) name() string {
+	return "Cassandra"
+}

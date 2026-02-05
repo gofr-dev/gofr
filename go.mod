@@ -18,7 +18,7 @@ require (
 	github.com/gorilla/websocket v1.5.3
 	github.com/grpc-ecosystem/go-grpc-middleware/v2 v2.3.3
 	github.com/joho/godotenv v1.5.1
-	github.com/lib/pq v1.10.9
+	github.com/lib/pq v1.11.1
 	github.com/pkg/errors v0.9.1
 	github.com/prometheus/client_golang v1.23.2
 	github.com/prometheus/otlptranslator v1.0.0

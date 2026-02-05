@@ -179,3 +179,15 @@ func (dm dgraphMigrator) rollback(c *container.Container, data transactionData) 
 
 	c.Fatalf("Migration %v failed and rolled back", data.MigrationNumber)
 }
+
+func (dm dgraphMigrator) lock(ctx context.Context, cancel context.CancelFunc, c *container.Container, ownerID string) error {
+	return dm.migrator.lock(ctx, cancel, c, ownerID)
+}
+
+func (dm dgraphMigrator) unlock(c *container.Container, ownerID string) error {
+	return dm.migrator.unlock(c, ownerID)
+}
+
+func (dgraphMigrator) name() string {
+	return "DGraph"
+}
