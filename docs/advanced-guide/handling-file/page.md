@@ -10,6 +10,7 @@ GoFr also supports FTP/SFTP file-store. Developers can also connect and use thei
 
 - **AWS S3**
 - **Google Cloud Storage (GCS)**
+- **Azure File Storage**
 
 The file-store can be initialized as follows:
 
@@ -102,66 +103,118 @@ func main() {
 
 ### Google Cloud Storage (GCS) Bucket as File-Store
 
-To run GCS File-Store locally we can use fake-gcs-server:
-`docker run -it --rm -p 4443:4443 -e STORAGE_EMULATOR_HOST=0.0.0.0:4443 fsouza/fake-gcs-server:latest`
+**Local Setup with fake-gcs-server:**
+
+1. Start fake-gcs-server with HTTP:
+```bash
+docker run -d --name fake-gcs-server -p 4443:4443 \
+  fsouza/fake-gcs-server -scheme http -port 4443
+```
+
+2. Create a bucket:
+```bash
+curl -X POST http://localhost:4443/storage/v1/b?project=my-project-id \
+  -H "Content-Type: application/json" \
+  -d '{"name":"my-bucket"}'
+```
+
+3. Set environment variable in your `configs/.env` file:
+```bash
+STORAGE_EMULATOR_HOST=localhost:4443
+```
+
+4. Connect to GCS in your application:
 
 ```go
 package main
 
 import (
 	"gofr.dev/pkg/gofr"
-
 	"gofr.dev/pkg/gofr/datasource/file/gcs"
 )
 
 func main() {
 	app := gofr.New()
 
-	// Option 1: Using JSON credentials with local emulator
-	fs, err := gcs.New(&gcs.Config{
-		EndPoint:        "http://localhost:4566",
-		BucketName:      "my-bucket",
-		CredentialsJSON: readFile("gcs-credentials.json"),
-		ProjectID:       "my-project-id",
+	// Local setup with fake-gcs-server (uses STORAGE_EMULATOR_HOST)
+	app.AddFileStore(gcs.New(&gcs.Config{
+		BucketName: "my-bucket",
+		ProjectID:  "my-project-id",
+	}))
+
+	app.Run()
+	app.Run()
+}
+```
+
+**Production Setup:**
+
+For production, authenticate using one of these methods:
+
+```go
+// Option 1: Using GOOGLE_APPLICATION_CREDENTIALS environment variable
+// Set: export GOOGLE_APPLICATION_CREDENTIALS=/path/to/credentials.json
+app.AddFileStore(gcs.New(&gcs.Config{
+	BucketName: "my-bucket",
+	ProjectID:  "my-project-id",
+}))
+
+// Option 2: Using CredentialsJSON directly
+credJSON, _ := os.ReadFile("gcs-credentials.json")
+app.AddFileStore(gcs.New(&gcs.Config{
+	BucketName:      "my-bucket",
+	CredentialsJSON: string(credJSON),
+	ProjectID:       "my-project-id",
+}))
+```
+
+> **Note:** 
+> - When `STORAGE_EMULATOR_HOST` is set, the client automatically connects to the local emulator without authentication.
+> - For production, use either `GOOGLE_APPLICATION_CREDENTIALS` environment variable or `CredentialsJSON` config field
+> - Currently supports one bucket per file-store instance
+
+### Azure File Storage as File-Store
+
+Azure File Storage provides fully managed file shares in the cloud. To use Azure File Storage with GoFr:
+
+```go
+package main
+
+import (
+	"gofr.dev/pkg/gofr"
+	"gofr.dev/pkg/gofr/datasource/file/azure"
+)
+
+func main() {
+	app := gofr.New()
+
+	// Create Azure File Storage filesystem
+	fs, err := azure.New(&azure.Config{
+		AccountName: "mystorageaccount",
+		AccountKey:  "myaccountkey",
+		ShareName:   "myshare",
+		// Endpoint is optional, defaults to https://{AccountName}.file.core.windows.net
+		// Endpoint: "https://custom-endpoint.file.core.windows.net",
 	})
 
 	if err != nil {
-		app.Logger().Fatalf("Failed to initialize GCS: %v", err)
-
+		app.Logger().Fatalf("Failed to initialize Azure File Storage: %v", err)
 	}
 
 	app.AddFileStore(fs)
 
-    // Option 2: Using default credentials (GOOGLE_APPLICATION_CREDENTIALS)
-    // fs, err := gcs.New(&gcs.Config{
-    //     BucketName: "my-bucket",
-    //     ProjectID:  "my-project-id",
-    // }))
-
-    // Option 3: Direct connection to real GCS (no EndPoint)
-    // fs, err := gcs.New(&gcs.Config{
-    //     BucketName:      "my-bucket",
-    //     CredentialsJSON: readFile("prod-creds.json"),
-    //     ProjectID:       "my-project-id",
-    // }))
-	
 	app.Run()
 }
-
-// Helper function to read credentials file
-func readFile(filename string) []byte {
-    data, err := os.ReadFile(filename)
-    if err != nil {
-        log.Fatalf("Failed to read credentials file: %v", err)
-    }
-    return data
-}
-
 ```
 
-> **Note:** When connecting to the actual GCS service, authentication can be provided via CredentialsJSON or the GOOGLE_APPLICATION_CREDENTIALS environment variable.
-> When using fake-gcs-server, authentication is not required.
-> Currently supports one bucket per file-store instance.
+> **Note:** 
+> - Azure File Storage uses file shares (similar to S3 buckets or GCS buckets)
+> - Authentication requires both `AccountName` and `AccountKey`
+> - The `Endpoint` field is optional and defaults to `https://{AccountName}.file.core.windows.net`
+> - Currently supports one file share per file-store instance
+> - The implementation automatically retries connection if the initial connection fails
+> - **Automatic parent directory creation**: When creating files in nested paths (e.g., `dir1/subdir/file.txt`), parent directories are automatically created, matching local filesystem behavior
+> - **Content type detection**: Content types are automatically detected based on file extensions (e.g., `.json` → `application/json`, `.txt` → `text/plain`)
 
 ### Creating Directory
 
@@ -205,6 +258,7 @@ currentDir, err := ctx.File.Chdir("sub_dir")
 
 > Note: This method attempts to change the directory, but S3's flat structure and fixed bucket
 > make this operation inapplicable. Similarly, GCS uses a flat structure where directories are simulated through object prefixes.
+> Azure File Storage supports directory operations natively, so `Chdir` works as expected.
 
 ### Read a Directory
 
@@ -227,7 +281,8 @@ for _, entry := range entries {
 ```
 
 > Note: In S3 and GCS, directories are represented as prefixes of file keys/object names. This method retrieves file
-> entries only from the immediate level within the specified directory.
+> entries only from the immediate level within the specified directory. Azure File Storage supports native directory
+> structures, so `ReadDir` works with actual directories.
 
 ### Creating and Save a File with Content
 
@@ -237,8 +292,13 @@ file, _ := ctx.File.Create("my_file.text")
 _, _ = file.Write([]byte("Hello World!"))
 
 // Closes and saves the file.
-	file.Close()
+file.Close()
 ```
+
+> **Note for Azure File Storage:**
+> - Files can be created in nested directories (e.g., `dir1/subdir/file.txt`). Parent directories are automatically created if they don't exist
+> - Content types are automatically detected based on file extensions (e.g., `.json`, `.txt`, `.csv`, `.xml`, `.html`, `.pdf`)
+> - This behavior matches local filesystem operations for consistency
 
 ### Reading file as CSV/JSON/TEXT
 
@@ -304,6 +364,8 @@ fmt.Printf("%v: %v Size: %v Last Modified Time : %v\n", entryType, entry.Name(),
 > - Names starting with "0" are interpreted as binary files, with the "0" prefix removed (S3 specific behavior).
 >
 > For directories, the method calculates the total size of all contained objects and returns the most recent modification time. For files, it directly returns the file's size and last modified time.
+>
+> Azure File Storage supports native file and directory structures, so `Stat` returns accurate metadata for both files and directories.
 
 ### Rename/Move a File
 
@@ -319,7 +381,7 @@ err := ctx.File.Rename("old_name.text", "new_name.text")
 
 `Remove` deletes a single file
 
-> Note: Currently, the S3 package supports the deletion of unversioned files from general-purpose buckets only. Directory buckets and versioned files are not supported for deletion by this method. GCS supports deletion of both files and empty directories.
+> Note: Currently, the S3 package supports the deletion of unversioned files from general-purpose buckets only. Directory buckets and versioned files are not supported for deletion by this method. GCS supports deletion of both files and empty directories. Azure File Storage supports deletion of both files and empty directories.
 
 ```go
 err := ctx.File.Remove("my_dir")
@@ -328,13 +390,14 @@ err := ctx.File.Remove("my_dir")
 The `RemoveAll` command deletes all subdirectories as well. If you delete the current working directory, such as "../currentDir", the working directory will be reset to its parent directory.
 
 > Note: In S3, RemoveAll only supports deleting directories and will return an error if a file path (as indicated by a file extension) is provided for S3.
-> GCS handles both files and directories.
+> GCS and Azure File Storage handle both files and directories.
 
 ```go
 err := ctx.File.RemoveAll("my_dir/my_text")
 ```
 
 > GoFr supports relative paths, allowing locations to be referenced relative to the current working directory. However, since S3 and GCS use
-> a flat file structure, all methods require a full path relative to the bucket.
+> a flat file structure, all methods require a full path relative to the bucket. Azure File Storage supports native directory structures,
+> so relative paths work as expected with directory navigation.
 
 > Errors have been skipped in the example to focus on the core logic, it is recommended to handle all the errors.

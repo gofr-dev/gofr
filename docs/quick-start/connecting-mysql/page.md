@@ -41,6 +41,55 @@ DB_DIALECT=mysql
 DB_CHARSET=utf8 #(optional)
 ```
 
+### TLS/SSL Configuration
+
+GoFr supports secure TLS connections to MySQL/MariaDB databases. Configure TLS by setting the `DB_SSL_MODE` environment variable and optionally providing certificate paths for enhanced security.
+
+#### Available SSL Modes
+
+| SSL Mode | Description |
+|----------|-------------|
+| `disable` | No TLS encryption (default) |
+| `preferred` | Attempts TLS, falls back to plain connection if unavailable |
+| `require` | Enforces TLS but skips certificate validation |
+| `skip-verify` | Enforces TLS without validating server certificate |
+| `verify-ca` | Enforces TLS and validates server certificate against CA |
+| `verify-full` | Enforces TLS with full certificate validation (including hostname) |
+
+#### TLS Environment Variables
+
+| Variable | Required | Description |
+|----------|----------|-------------|
+| `DB_SSL_MODE` | No | TLS mode (defaults to `disable`) |
+| `DB_TLS_CA_CERT` | Conditional | Path to CA certificate (required for `verify-ca`/`verify-full`) |
+| `DB_TLS_CLIENT_CERT` | No | Path to client certificate (for mutual TLS) |
+| `DB_TLS_CLIENT_KEY` | No | Path to client private key (for mutual TLS) |
+
+#### Example Configuration
+
+```dotenv
+# configs/.env
+DB_HOST=localhost
+DB_USER=root
+DB_PASSWORD=root123
+DB_NAME=test_db
+DB_PORT=3306
+DB_DIALECT=mysql
+
+# Basic TLS (no certificate validation)
+DB_SSL_MODE=require
+
+# OR with CA certificate validation (production)
+DB_SSL_MODE=verify-ca
+DB_TLS_CA_CERT=/path/to/ca-cert.pem
+
+# OR with mutual TLS (enhanced security)
+DB_SSL_MODE=verify-full
+DB_TLS_CA_CERT=/path/to/ca-cert.pem
+DB_TLS_CLIENT_CERT=/path/to/client-cert.pem
+DB_TLS_CLIENT_KEY=/path/to/client-key.pem
+```
+
 ## PostgreSQL
 
 ### Setup
@@ -239,3 +288,147 @@ Now when we access {% new-tab-link title="http://localhost:9000/customer" href="
 ```
 
 **Note:** When using PostgreSQL or Supabase, you may need to use `$1` instead of `?` in SQL queries, depending on your driver configuration.
+
+## Enabling Read/Write Splitting in MySQL (DBResolver)
+GoFr provides built-in support for read/write splitting using its `DBRESOLVER` module for **MySQL**.
+This feature automatically routes requests to the **primary database** or **read replicas** based on:
+
+- **HTTP Method**:
+    -   Write operations (`POST`, `PUT`, `PATCH`, `DELETE`) → Primary
+    -   Read operations (`GET`, `HEAD`, `OPTIONS`) → Replicas
+- **Route Configuration**: Force specific routes to always use the primary database for strong consistency
+
+### Installation
+
+Import the GoFr's dbresolver for MySQL:
+
+```shell
+go get gofr.dev/pkg/gofr/datasource/dbresolver@latest
+```
+
+### Configuration
+
+**1. Environment Variables**
+
+Configure the primary database in your .env file:
+
+```editorconfig
+# Primary database
+DB_HOST=localhost
+DB_PORT=3306
+DB_USER=root
+DB_PASSWORD=root123
+DB_NAME=test_db
+DB_DIALECT=mysql
+```
+
+**2. Initialize DBResolver**
+
+After importing the package, you can configure the DBResolver in your GoFr application using the `AddDBResolver` method.
+You can choose the load balancing strategy and enable fallback to primary:
+
+```go
+package main
+
+import (
+	"gofr.dev/pkg/gofr"
+	"gofr.dev/pkg/gofr/datasource/dbresolver"
+)
+
+type Customer struct {
+	ID   int    `db:"id"`
+	Name string `db:"name"`
+}
+
+func main() {
+	a := gofr.New()
+
+	// Initialize DB resolver with default settings
+	err := dbresolver.InitDBResolver(a, &dbresolver.Config{
+		Strategy:      dbresolver.StrategyRoundRobin, // use round-robin strategy or random strategy
+		ReadFallback:  true, // allow reads on primary if all replicas are down
+		MaxFailures:   3, 			  // number of allowed failures before marking a replica as down
+		TimeoutSec:    30, // timeout for marking a replica as down
+		PrimaryRoutes: []string{"/admin", "/api/payments/*"},
+
+		Replicas: []dbresolver.ReplicaCredential{
+			{
+				Host:     "localhost:3307",
+				User:     "replica_user1",
+				Password: "pass1",
+			},
+			{
+				Host:     "replica2.example.com:3308",
+				User:     "replica_user2",
+				Password: "pass2",
+			},
+			{
+				Host:     "replica3.example.com:3309",
+				User:     "replica_user3",
+				Password: "pass3",
+			},
+		},// routes that should go to primary
+	})
+	if err != nil {
+		a.Logger().Errorf("failed to initialize db resolver: %v", err)
+	}
+
+	// Read endpoint - goes to replica
+	a.GET("/customers", func(c *gofr.Context) (interface{}, error) {
+		var customers []Customer
+
+		c.SQL.Select(c, &customers, "SELECT id, name FROM customers")
+
+		return customers, err
+	})
+
+	// Write endpoint - goes to primary
+	a.POST("/customers", func(c *gofr.Context) (interface{}, error) {
+		var customer Customer
+
+		c.Bind(&customer)
+
+		_, err := c.SQL.Exec("INSERT INTO customers (name) VALUES (?)", customer.Name)
+
+		return customer, err
+	})
+
+	// Admin endpoint - forced to primary
+	a.GET("/admin/customers", func(c *gofr.Context) (interface{}, error) {
+		var customers []Customer
+
+		c.SQL.Select(c, &customers, "SELECT id, name FROM customers")
+
+		return customers, err
+	})
+
+	a.Run()
+}
+```
+
+**3. Connection Pool Tuning (Optional)**
+
+By default, replica pools are auto-scaled based on primary settings:
+
+```editorconfig
+# Defaults (automatically calculated)
+DB_MAX_IDLE_CONNECTION=2    → Replicas: 8 (2 × 4)
+DB_MAX_OPEN_CONNECTION=20   → Replicas: 40 (20 × 2)
+```
+
+Override with:
+
+```editorconfig
+DB_REPLICA_MAX_IDLE_CAP=100
+DB_REPLICA_MIN_IDLE=5
+DB_REPLICA_DEFAULT_IDLE=15
+
+DB_REPLICA_MAX_OPEN_CAP=500
+DB_REPLICA_MIN_OPEN=20
+DB_REPLICA_DEFAULT_OPEN=150
+```
+
+**Benefits**
+- Performance: Offloads read traffic from the primary, reducing latency.
+- Scalability: Easily scale reads by adding more replicas.
+- Resilience: Ensures high availability through automatic fallback.

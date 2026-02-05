@@ -37,7 +37,7 @@ func TestNewCMD(t *testing.T) {
 	// Without args we should get error on stderr.
 	outputWithoutArgs := testutil.StderrOutputForFunc(a.Run)
 
-	assert.Equal(t, "No Command Found!\n", outputWithoutArgs, "TEST Failed.\n%s", "Stderr output mismatch")
+	assert.Contains(t, outputWithoutArgs, "is not a valid command", "TEST Failed.\n%s", "Stderr output mismatch")
 }
 
 func TestGofr_readConfig(t *testing.T) {
@@ -65,6 +65,12 @@ func TestGoFr_isPortAvailable(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			if !tt.isAvailable {
 				g := New()
+
+				// Register a route to ensure HTTP server starts
+				// (HTTP server only starts when user routes are registered)
+				g.GET("/test", func(*Context) (any, error) {
+					return "test", nil
+				})
 
 				go g.Run()
 
@@ -275,6 +281,21 @@ func TestApp_Metrics(t *testing.T) {
 	assert.NotNil(t, app.Metrics())
 }
 
+func TestApp_MetricsServerDisabled(t *testing.T) {
+	// Set METRICS_PORT=0 to disable the metrics server
+	t.Setenv("METRICS_PORT", "0")
+
+	logs := testutil.StdoutOutputForFunc(func() {
+		app := New()
+
+		// Verify that metricServer is nil when METRICS_PORT=0
+		assert.Nil(t, app.metricServer, "metrics server should be nil when METRICS_PORT=0")
+	})
+
+	// Verify log message is printed
+	assert.Contains(t, logs, "Metrics server is disabled (METRICS_PORT=0)")
+}
+
 func TestApp_AddAndGetHTTPService(t *testing.T) {
 	testutil.NewServerConfigs(t)
 
@@ -316,7 +337,9 @@ func TestApp_MigratePanicRecovery(t *testing.T) {
 
 func Test_otelErrorHandler(t *testing.T) {
 	logs := testutil.StderrOutputForFunc(func() {
-		h := otelErrorHandler{logging.NewLogger(logging.DEBUG)}
+		h := otelErrorHandler{
+			logger: logging.NewLogger(logging.DEBUG),
+		}
 		h.Handle(testutil.CustomError{ErrorMessage: "OTEL Error override"})
 	})
 
@@ -624,7 +647,7 @@ func Test_initTracer(t *testing.T) {
 		{"jaeger exporter with auth", mockConfig4, "Exporting traces to jaeger at localhost:4317"},
 		{"otlp exporter", mockConfig5, "Exporting traces to otlp at localhost:4317"},
 		{"otlp exporter with authKey", mockConfig6, "Exporting traces to otlp at localhost:4317"},
-		{"gofr exporter with default url", mockConfig7, "Exporting traces to GoFr at https://tracer.gofr.dev"},
+		{"gofr exporter with default url", mockConfig7, "Exporting traces to GoFr at https://tracer-api.gofr.dev/api/spans"},
 	}
 
 	for i, tc := range tests {
@@ -1203,4 +1226,35 @@ func TestApp_OnStart(t *testing.T) {
 
 		require.ErrorIs(t, err, errHookFailed, "Expected an error from runOnStartHooks")
 	})
+
+	// Test case 4: Verify panic recovery
+	t.Run("panic recovery", func(t *testing.T) {
+		app := New()
+
+		app.OnStart(func(_ *Context) error {
+			panic("test panic")
+		})
+
+		err := app.runOnStartHooks(t.Context())
+
+		require.Error(t, err, "Expected error from panicked hook")
+		assert.Contains(t, err.Error(), "panicked", "Expected error message to mention panic")
+	})
+}
+func TestUnifiedAuthenticationRegistration(t *testing.T) {
+	t.Setenv("METRICS_PORT", "0")
+	t.Setenv("HTTP_PORT", strconv.Itoa(testutil.GetFreePort(t)))
+
+	app := New()
+
+	// Enable various auth methods
+	app.EnableBasicAuth("user", "pass")
+	app.EnableAPIKeyAuth("key1")
+	app.EnableOAuth("http://jwks", 3600)
+
+	// Verify HTTP middleware count (approximate check)
+	// We can't easily inspect the router's middleware slice directly without reflection or exposing it,
+	// but we can check if the grpcServer has interceptors added.
+	assert.GreaterOrEqual(t, len(app.grpcServer.interceptors), 2, "gRPC unary interceptors should be registered")
+	assert.GreaterOrEqual(t, len(app.grpcServer.streamInterceptors), 2, "gRPC stream interceptors should be registered")
 }

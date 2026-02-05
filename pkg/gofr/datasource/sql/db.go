@@ -44,25 +44,34 @@ func clean(query string) string {
 	return query
 }
 
-func (d *DB) sendOperationStats(start time.Time, queryType, query string, args ...any) {
+func sendStats(logger datasource.Logger, metrics Metrics, config *DBConfig, start time.Time, queryType, query string, args ...any) {
 	duration := time.Since(start).Milliseconds()
 
-	d.logger.Debug(&Log{
-		Type:     queryType,
-		Query:    query,
-		Duration: duration,
-		Args:     args,
-	})
+	if logger != nil {
+		logger.Debug(&Log{
+			Type:     queryType,
+			Query:    query,
+			Duration: duration,
+			Args:     args,
+		})
+	}
 
-	d.metrics.RecordHistogram(context.Background(), "app_sql_stats", float64(duration), "hostname", d.config.HostName,
-		"database", d.config.Database, "type", getOperationType(query))
+	// This contains the fix for the nil pointer dereference
+	if metrics != nil {
+		metrics.RecordHistogram(context.Background(), "app_sql_stats", float64(duration), "hostname", config.HostName,
+			"database", config.Database, "type", getOperationType(query))
+	}
+}
+
+func (d *DB) sendOperationStats(start time.Time, queryType, query string, args ...any) {
+	sendStats(d.logger, d.metrics, d.config, start, queryType, query, args...)
 }
 
 func getOperationType(query string) string {
 	query = strings.TrimSpace(query)
 	words := strings.Split(query, " ")
 
-	return words[0]
+	return strings.ToUpper(words[0])
 }
 
 func (d *DB) Query(query string, args ...any) (*sql.Rows, error) {
@@ -129,17 +138,7 @@ type Tx struct {
 }
 
 func (t *Tx) sendOperationStats(start time.Time, queryType, query string, args ...any) {
-	duration := time.Since(start).Milliseconds()
-
-	t.logger.Debug(&Log{
-		Type:     queryType,
-		Query:    query,
-		Duration: duration,
-		Args:     args,
-	})
-
-	t.metrics.RecordHistogram(context.Background(), "app_sql_stats", float64(duration), "hostname", t.config.HostName,
-		"database", t.config.Database, "type", getOperationType(query))
+	sendStats(t.logger, t.metrics, t.config, start, queryType, query, args...)
 }
 
 func (t *Tx) Query(query string, args ...any) (*sql.Rows, error) {

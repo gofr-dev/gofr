@@ -2472,6 +2472,208 @@
     },
     {
       "collapsed": false,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 82
+      },
+      "id": 100,
+      "panels": [],
+      "title": "Resilience (Outbound)",
+      "type": "row"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${DataSource}"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisBorderShow": false,
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "Retry Count",
+            "axisPlacement": "auto",
+            "barAlignment": 0,
+            "drawStyle": "line",
+            "fillOpacity": 10,
+            "lineWidth": 1,
+            "pointSize": 5,
+            "showPoints": "never",
+            "spanNulls": false,
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            }
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          },
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 7,
+        "w": 8,
+        "x": 0,
+        "y": 83
+      },
+      "id": 101,
+      "options": {
+        "legend": {
+          "calcs": [],
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "none"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DataSource}"
+          },
+          "editorMode": "code",
+          "expr": "sum by (service) (increase(app_http_retry_count{}[$__rate_interval]))",
+          "legendFormat": "{{service}}",
+          "range": true,
+          "refId": "A"
+        }
+      ],
+      "title": "HTTP Service Retries",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${DataSource}"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisBorderShow": false,
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "State",
+            "axisPlacement": "auto",
+            "barAlignment": 0,
+            "drawStyle": "line",
+            "fillOpacity": 0,
+            "gradientMode": "none",
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
+            "insertNulls": false,
+            "lineInterpolation": "stepAfter",
+            "lineWidth": 2,
+            "pointSize": 5,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "showPoints": "never",
+            "spanNulls": false,
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "decimals": 0,
+          "mappings": [
+            {
+              "options": {
+                "0": {
+                  "color": "green",
+                  "text": "Closed"
+                },
+                "1": {
+                  "color": "red",
+                  "text": "Open"
+                }
+              },
+              "type": "value"
+            }
+          ],
+          "max": 1.2,
+          "min": -0.2,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 0.5
+              }
+            ]
+          },
+          "unit": "none"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 7,
+        "w": 16,
+        "x": 8,
+        "y": 83
+      },
+      "id": 103,
+      "options": {
+        "legend": {
+          "calcs": [],
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "none"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DataSource}"
+          },
+          "editorMode": "code",
+          "expr": "app_http_circuit_breaker_state",
+          "legendFormat": "{{service}}",
+          "range": true,
+          "refId": "A"
+        }
+      ],
+      "title": "Circuit Breaker Status over Time",
+      "type": "timeseries"
+    },
+    {
+      "collapsed": false,
       "datasource": {
         "type": "prometheus",
         "uid": "prometheus"
@@ -2480,7 +2682,7 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 82
+        "y": 90
       },
       "id": 30,
       "panels": [],
@@ -2561,7 +2763,7 @@
         "h": 9,
         "w": 12,
         "x": 0,
-        "y": 83
+        "y": 91
       },
       "id": 34,
       "options": {
@@ -2694,7 +2896,7 @@
         "h": 9,
         "w": 12,
         "x": 12,
-        "y": 83
+        "y": 91
       },
       "id": 32,
       "options": {
@@ -2806,7 +3008,7 @@
         "h": 8,
         "w": 24,
         "x": 0,
-        "y": 92
+        "y": 100
       },
       "id": 58,
       "options": {
@@ -2915,7 +3117,7 @@
         "h": 6,
         "w": 24,
         "x": 0,
-        "y": 100
+        "y": 108
       },
       "id": 95,
       "options": {
@@ -3048,7 +3250,7 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 106
+        "y": 114
       },
       "id": 42,
       "panels": [],
@@ -3129,7 +3331,7 @@
         "h": 8,
         "w": 12,
         "x": 0,
-        "y": 107
+        "y": 115
       },
       "id": 36,
       "options": {
@@ -3262,7 +3464,7 @@
         "h": 8,
         "w": 12,
         "x": 12,
-        "y": 107
+        "y": 115
       },
       "id": 46,
       "options": {
@@ -3359,7 +3561,7 @@
         "h": 5,
         "w": 24,
         "x": 0,
-        "y": 115
+        "y": 123
       },
       "id": 107,
       "options": {
@@ -3497,7 +3699,7 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 120
+        "y": 128
       },
       "id": 60,
       "panels": [],
@@ -3544,7 +3746,7 @@
         "h": 4,
         "w": 24,
         "x": 0,
-        "y": 121
+        "y": 129
       },
       "id": 114,
       "options": {
@@ -3570,7 +3772,7 @@
           },
           "editorMode": "code",
           "exemplar": false,
-          "expr": "app_pubsub_subscribe_total_count_total{}",
+          "expr": "app_pubsub_subscribe_total_count{}",
           "format": "table",
           "instant": true,
           "range": false,
@@ -3687,7 +3889,7 @@
         "h": 10,
         "w": 24,
         "x": 0,
-        "y": 125
+        "y": 133
       },
       "id": 62,
       "options": {
@@ -3711,7 +3913,7 @@
           },
           "editorMode": "code",
           "exemplar": true,
-          "expr": "sum by (topic) (increase(app_pubsub_subscribe_total_count_total{}[$__rate_interval]))",
+          "expr": "sum by (topic) (increase(app_pubsub_subscribe_total_count{}[$__rate_interval]))",
           "legendFormat": "__auto",
           "range": true,
           "refId": "A"
@@ -3723,7 +3925,7 @@
           },
           "editorMode": "code",
           "exemplar": true,
-          "expr": "sum (increase(app_pubsub_subscribe_total_count_total{}[$__rate_interval]))",
+          "expr": "sum (increase(app_pubsub_subscribe_total_count{}[$__rate_interval]))",
           "hide": false,
           "legendFormat": "__auto",
           "range": true,
@@ -3798,7 +4000,7 @@
         "h": 9,
         "w": 12,
         "x": 0,
-        "y": 135
+        "y": 143
       },
       "id": 120,
       "options": {
@@ -3822,7 +4024,7 @@
           },
           "editorMode": "code",
           "exemplar": true,
-          "expr": "sum by (topic) (increase(app_pubsub_subscribe_success_count_total[$__rate_interval]))",
+          "expr": "sum by (topic) (increase(app_pubsub_subscribe_success_count[$__rate_interval]))",
           "legendFormat": "__auto",
           "range": true,
           "refId": "A"
@@ -3834,7 +4036,7 @@
           },
           "editorMode": "code",
           "exemplar": true,
-          "expr": "sum (increase(app_pubsub_subscribe_success_count_total{}[$__rate_interval]))",
+          "expr": "sum (increase(app_pubsub_subscribe_success_count{}[$__rate_interval]))",
           "hide": false,
           "legendFormat": "__auto",
           "range": true,
@@ -3909,7 +4111,7 @@
         "h": 9,
         "w": 12,
         "x": 12,
-        "y": 135
+        "y": 143
       },
       "id": 121,
       "options": {
@@ -3933,7 +4135,7 @@
           },
           "editorMode": "code",
           "exemplar": true,
-          "expr": "sum by (topic) (\n   increase(app_pubsub_subscribe_total_count_total{}[$__rate_interval])\n)\n-\nsum by (topic) (\n   increase(app_pubsub_subscribe_success_count_total{}[$__rate_interval])\n)",
+          "expr": "clamp_min(sum by (topic) (\n   increase(app_pubsub_subscribe_total_count{}[$__rate_interval])\n)\n-\nsum by (topic) (\n   increase(app_pubsub_subscribe_success_count{}[$__rate_interval])\n), 0)",
           "legendFormat": "__auto",
           "range": true,
           "refId": "A"
@@ -3945,7 +4147,7 @@
           },
           "editorMode": "code",
           "exemplar": true,
-          "expr": "sum (\n  increase(app_pubsub_subscribe_total_count_total{}[$__rate_interval])\n)\n-\nsum (\n  increase(app_pubsub_subscribe_success_count_total{}[$__rate_interval])\n)",
+          "expr": "clamp_min(sum (\n  increase(app_pubsub_subscribe_total_count{}[$__rate_interval])\n)\n-\nsum (\n  increase(app_pubsub_subscribe_success_count{}[$__rate_interval])\n), 0)",
           "hide": false,
           "legendFormat": "Total Failure",
           "range": true,
@@ -3965,7 +4167,7 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 144
+        "y": 152
       },
       "id": 48,
       "panels": [],
@@ -4012,7 +4214,7 @@
         "h": 8,
         "w": 24,
         "x": 0,
-        "y": 145
+        "y": 153
       },
       "id": 118,
       "options": {
@@ -4041,7 +4243,7 @@
           },
           "editorMode": "code",
           "exemplar": false,
-          "expr": "app_pubsub_publish_total_count_total{}",
+          "expr": "app_pubsub_publish_total_count{}",
           "format": "table",
           "instant": true,
           "legendFormat": "__auto",
@@ -4156,7 +4358,7 @@
         "h": 10,
         "w": 24,
         "x": 0,
-        "y": 153
+        "y": 161
       },
       "id": 64,
       "options": {
@@ -4180,7 +4382,7 @@
           },
           "editorMode": "code",
           "exemplar": true,
-          "expr": "sum by (topic) (increase(app_pubsub_publish_total_count_total{}[$__rate_interval]))",
+          "expr": "sum by (topic) (increase(app_pubsub_publish_total_count{}[$__rate_interval]))",
           "instant": false,
           "legendFormat": "{{topic}}({{consumerGroup}})",
           "range": true,
@@ -4193,7 +4395,7 @@
           },
           "editorMode": "code",
           "exemplar": true,
-          "expr": "sum (increase(app_pubsub_publish_total_count_total{}[$__rate_interval]))",
+          "expr": "sum (increase(app_pubsub_publish_total_count{}[$__rate_interval]))",
           "hide": false,
           "instant": false,
           "legendFormat": "Total",
@@ -4269,7 +4471,7 @@
         "h": 8,
         "w": 12,
         "x": 0,
-        "y": 163
+        "y": 171
       },
       "id": 122,
       "options": {
@@ -4293,7 +4495,7 @@
           },
           "editorMode": "code",
           "exemplar": true,
-          "expr": "sum by (topic) (\n   increase(app_pubsub_publish_success_count_total{}[$__rate_interval])\n)",
+          "expr": "sum by (topic) (\n   increase(app_pubsub_publish_success_count{}[$__rate_interval])\n)",
           "instant": false,
           "legendFormat": "__auto",
           "range": true,
@@ -4306,7 +4508,7 @@
           },
           "editorMode": "code",
           "exemplar": true,
-          "expr": "sum(\n  increase(app_pubsub_publish_success_count_total{}[$__rate_interval])\n)",
+          "expr": "sum(\n  increase(app_pubsub_publish_success_count{}[$__rate_interval])\n)",
           "hide": false,
           "instant": false,
           "legendFormat": "Total Success",
@@ -4407,7 +4609,7 @@
         "h": 8,
         "w": 12,
         "x": 12,
-        "y": 163
+        "y": 171
       },
       "id": 123,
       "options": {
@@ -4431,7 +4633,7 @@
           },
           "editorMode": "code",
           "exemplar": true,
-          "expr": "sum by (topic) (\n   increase(app_pubsub_publish_total_count_total{}[$__rate_interval])\n)\n-\nsum by (topic) (\n   increase(app_pubsub_publish_success_count_total{}[$__rate_interval])\n)",
+          "expr": "clamp_min(sum by (topic) (\n   increase(app_pubsub_publish_total_count{}[$__rate_interval])\n)\n-\nsum by (topic) (\n   increase(app_pubsub_publish_success_count{}[$__rate_interval])\n), 0)",
           "instant": false,
           "legendFormat": "__auto",
           "range": true,
@@ -4444,7 +4646,7 @@
           },
           "editorMode": "code",
           "exemplar": true,
-          "expr": "sum (\n  increase(app_pubsub_publish_total_count_total{}[$__rate_interval])\n)\n-\nsum (\n  increase(app_pubsub_publish_success_count_total{}[$__rate_interval])\n)",
+          "expr": "clamp_min(sum (\n  increase(app_pubsub_publish_total_count{}[$__rate_interval])\n)\n-\nsum (\n  increase(app_pubsub_publish_success_count{}[$__rate_interval])\n), 0)",
           "hide": false,
           "instant": false,
           "legendFormat": "Total Failure",

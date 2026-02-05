@@ -71,6 +71,22 @@ Response example:
 ]
 ```
 
+### XML responses
+
+If you need to respond with XML without JSON encoding, return `response.XML`. It bypasses JSON encoding just like `response.File` or `response.Template` and writes the bytes directly to the client. The `ContentType` defaults to `application/xml` but can be overridden.
+
+```go
+app.GET("/legacy/xml", func(ctx *gofr.Context) (any, error) {
+	payload := []byte(`<Response status="ok"><Message>Hello</Message></Response>`)
+
+	return response.XML{Content: payload}, nil
+})
+```
+
+```xml
+<Response status="ok"><Message>Hello</Message></Response>
+```
+
 ## Rendering Templates
 GoFr makes it easy to render HTML and HTMX templates directly from your handlers using the response.Template type.
 By convention, all template files—whether HTML or HTMX—should be placed inside a templates directory located at the root of your project.

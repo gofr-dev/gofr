@@ -7,12 +7,12 @@ import (
 	"time"
 
 	"github.com/Azure/azure-sdk-for-go/sdk/messaging/azeventhubs"
+	"github.com/coder/websocket"
 	"github.com/stretchr/testify/require"
 	"go.opentelemetry.io/otel"
 	"go.uber.org/mock/gomock"
 	"gofr.dev/pkg/gofr/datasource"
 	"gofr.dev/pkg/gofr/testutil"
-	"nhooyr.io/websocket"
 )
 
 func TestConnect(t *testing.T) {
@@ -439,4 +439,50 @@ func Test_GetEventHubName(t *testing.T) {
 	actualName := client.GetEventHubName()
 
 	require.Equal(t, expectedName, actualName, "GetEventHubName should return the configured EventhubName")
+}
+
+func TestConnect_ConsumerGroupDefaults(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	cfg := getTestConfigs()
+	cfg.ConsumerGroup = ""
+
+	client := New(cfg)
+	mockLogger := NewMockLogger(ctrl)
+
+	mockLogger.EXPECT().Debugf("Using default consumer group: %s", azeventhubs.DefaultConsumerGroup)
+	mockLogger.EXPECT().Debug(gomock.Any()).AnyTimes()
+	mockLogger.EXPECT().Errorf(gomock.Any(), gomock.Any()).AnyTimes()
+
+	client.UseLogger(mockLogger)
+	client.UseMetrics(NewMockMetrics(ctrl))
+
+	client.Connect()
+
+	require.Equal(t, azeventhubs.DefaultConsumerGroup, client.cfg.ConsumerGroup,
+		"Client should automatically switch to $Default consumer group when config is empty")
+}
+
+func TestConnect_ConsumerGroupProvided(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	cfg := getTestConfigs()
+	expectedGroup := "my-custom-group"
+	cfg.ConsumerGroup = expectedGroup
+
+	client := New(cfg)
+	mockLogger := NewMockLogger(ctrl)
+
+	mockLogger.EXPECT().Debugf("Using provided consumer group: %s", expectedGroup)
+	mockLogger.EXPECT().Debug(gomock.Any()).AnyTimes()
+	mockLogger.EXPECT().Errorf(gomock.Any(), gomock.Any()).AnyTimes()
+
+	client.UseLogger(mockLogger)
+	client.UseMetrics(NewMockMetrics(ctrl))
+
+	client.Connect()
+
+	require.Equal(t, expectedGroup, client.cfg.ConsumerGroup, "Client should respect the provided consumer group")
 }

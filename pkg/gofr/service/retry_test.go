@@ -8,6 +8,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"go.uber.org/mock/gomock"
 
 	"gofr.dev/pkg/gofr/logging"
 )
@@ -160,7 +161,7 @@ func TestRetryProvider_Patch_WithError(t *testing.T) {
 		checkAuthHeaders(t, r)
 		assert.Equal(t, http.MethodPatch, r.Method)
 
-		w.WriteHeader(http.StatusInternalServerError)
+		w.WriteHeader(http.StatusServiceUnavailable)
 	}))
 	defer server.Close()
 
@@ -174,7 +175,7 @@ func TestRetryProvider_Patch_WithError(t *testing.T) {
 
 	defer resp.Body.Close()
 
-	assert.Equal(t, http.StatusInternalServerError, resp.StatusCode)
+	assert.Equal(t, http.StatusServiceUnavailable, resp.StatusCode)
 }
 
 func TestRetryProvider_PatchWithHeaders(t *testing.T) {
@@ -212,4 +213,34 @@ func TestRetryProvider_DeleteWithHeaders(t *testing.T) {
 	defer resp.Body.Close()
 
 	assert.Equal(t, http.StatusNoContent, resp.StatusCode)
+}
+
+func TestRetryProvider_Metrics(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	metrics := NewMockMetrics(ctrl)
+
+	// Expect NewCounter and IncrementCounter to be called with labels
+	metrics.EXPECT().NewCounter("app_http_retry_count", gomock.Any()).AnyTimes()
+	metrics.EXPECT().IncrementCounter(gomock.Any(), "app_http_retry_count", "service", "test-service").MinTimes(1)
+	metrics.EXPECT().RecordHistogram(gomock.Any(), "app_http_service_response", gomock.Any(),
+		gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(),
+		gomock.Any(), gomock.Any()).AnyTimes()
+
+	// Create a mock HTTP server that fails
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusServiceUnavailable)
+	}))
+	defer server.Close()
+
+	// Create a new HTTP service instance with retry config, metrics and name
+	httpService := NewHTTPService(server.URL, logging.NewMockLogger(logging.INFO), metrics,
+		WithAttributes(map[string]string{"name": "test-service"}), &RetryConfig{MaxRetries: 2})
+
+	// Make the request
+	resp, err := httpService.Get(t.Context(), "/test", nil)
+	require.NoError(t, err)
+
+	defer resp.Body.Close()
+
+	assert.Equal(t, http.StatusServiceUnavailable, resp.StatusCode)
 }

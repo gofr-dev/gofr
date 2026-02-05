@@ -9,7 +9,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/sdk/trace"
 	"go.uber.org/mock/gomock"
 
 	"gofr.dev/pkg/gofr/logging"
@@ -31,6 +31,12 @@ func TestNewHTTPService(t *testing.T) {
 			assert.NotNil(t, service, "TEST[%d], Failed.\n%s", i, tc.desc)
 		})
 	}
+
+	t.Run("WithAttributes", func(t *testing.T) {
+		service := NewHTTPService("http://example.com", nil, nil, WithAttributes(map[string]string{"name": "test-service"}))
+		httpSvc := service.(*httpService)
+		assert.Equal(t, "test-service", httpSvc.name)
+	})
 }
 
 func TestHTTPService_createAndSendRequest(t *testing.T) {
@@ -81,11 +87,13 @@ func TestHTTPService_createAndSendRequest(t *testing.T) {
 		}))
 
 		service := &httpService{
-			Client:  http.DefaultClient,
-			url:     server.URL,
-			Tracer:  otel.Tracer("gofr-http-client"),
-			Logger:  logging.NewMockLogger(logging.INFO),
-			Metrics: metrics,
+			Client:         http.DefaultClient,
+			url:            server.URL,
+			Tracer:         trace.NewTracerProvider().Tracer("gofr-http-client"),
+			Logger:         logging.NewMockLogger(logging.INFO),
+			Metrics:        metrics,
+			healthEndpoint: "",
+			healthTimeout:  0,
 		}
 
 		metrics.EXPECT().RecordHistogram(gomock.Any(), "app_http_service_response", gomock.Any(), "path", server.URL,
@@ -118,9 +126,6 @@ func TestHTTPService_Get(t *testing.T) {
 	defer server.Close()
 
 	service := newService(t, server)
-
-	// TODO : Nil Correlation ID is coming in logs, it has to be fixed
-
 	resp, err := service.Get(t.Context(), "test-path",
 		map[string]any{"key": "value", "name": []string{"gofr", "test"}})
 
@@ -140,9 +145,6 @@ func TestHTTPService_GetWithHeaders(t *testing.T) {
 	defer server.Close()
 
 	service := newService(t, server)
-
-	// TODO : Nil Correlation ID is coming in logs, it has to be fixed
-
 	resp, err := service.GetWithHeaders(t.Context(), "test-path",
 		map[string]any{"key": "value", "name": []string{"gofr", "test"}},
 		map[string]string{"header1": "value1"})
@@ -171,9 +173,6 @@ func TestHTTPService_Put(t *testing.T) {
 	defer server.Close()
 
 	service := newService(t, server)
-
-	// TODO : Nil Correlation ID is coming in logs, it has to be fixed
-
 	resp, err := service.Put(t.Context(), "test-path",
 		map[string]any{"key": "value", "name": []string{"gofr", "test"}}, []byte("{Test Body}"))
 
@@ -202,9 +201,6 @@ func TestHTTPService_PutWithHeaders(t *testing.T) {
 	defer server.Close()
 
 	service := newService(t, server)
-
-	// TODO : Nil Correlation ID is coming in logs, it has to be fixed
-
 	resp, err := service.PutWithHeaders(t.Context(), "test-path",
 		map[string]any{"key": "value", "name": []string{"gofr", "test"}}, []byte("{Test Body}"),
 		map[string]string{"header1": "value1"})
@@ -233,9 +229,6 @@ func TestHTTPService_Patch(t *testing.T) {
 	defer server.Close()
 
 	service := newService(t, server)
-
-	// TODO : Nil Correlation ID is coming in logs, it has to be fixed
-
 	resp, err := service.Patch(t.Context(), "test-path",
 		map[string]any{"key": "value", "name": []string{"gofr", "test"}}, []byte("{Test Body}"))
 
@@ -264,9 +257,6 @@ func TestHTTPService_PatchWithHeaders(t *testing.T) {
 	defer server.Close()
 
 	service := newService(t, server)
-
-	// TODO : Nil Correlation ID is coming in logs, it has to be fixed
-
 	resp, err := service.PatchWithHeaders(t.Context(), "test-path",
 		map[string]any{"key": "value", "name": []string{"gofr", "test"}}, []byte("{Test Body}"),
 		map[string]string{"header1": "value1"})
@@ -295,9 +285,6 @@ func TestHTTPService_Post(t *testing.T) {
 	defer server.Close()
 
 	service := newService(t, server)
-
-	// TODO : Nil Correlation ID is coming in logs, it has to be fixed
-
 	resp, err := service.Post(t.Context(), "test-path",
 		map[string]any{"key": "value", "name": []string{"gofr", "test"}}, []byte("{Test Body}"))
 
@@ -326,9 +313,6 @@ func TestHTTPService_PostWithHeaders(t *testing.T) {
 	defer server.Close()
 
 	service := newService(t, server)
-
-	// TODO : Nil Correlation ID is coming in logs, it has to be fixed
-
 	resp, err := service.PostWithHeaders(t.Context(), "test-path",
 		map[string]any{"key": "value", "name": []string{"gofr", "test"}}, []byte("{Test Body}"),
 		map[string]string{"header1": "value1"})
@@ -356,9 +340,6 @@ func TestHTTPService_Delete(t *testing.T) {
 	defer server.Close()
 
 	service := newService(t, server)
-
-	// TODO : Nil Correlation ID is coming in logs, it has to be fixed
-
 	resp, err := service.Delete(t.Context(), "test-path", []byte("{Test Body}"))
 
 	validateResponse(t, resp, err, false)
@@ -385,9 +366,6 @@ func TestHTTPService_DeleteWithHeaders(t *testing.T) {
 	defer server.Close()
 
 	service := newService(t, server)
-
-	// TODO : Nil Correlation ID is coming in logs, it has to be fixed
-
 	resp, err := service.DeleteWithHeaders(t.Context(), "test-path", []byte("{Test Body}"),
 		map[string]string{"header1": "value1"})
 
@@ -397,7 +375,7 @@ func TestHTTPService_DeleteWithHeaders(t *testing.T) {
 func TestHTTPService_createAndSendRequestCreateRequestFailure(t *testing.T) {
 	service := &httpService{
 		Client: http.DefaultClient,
-		Tracer: otel.Tracer("gofr-http-client"),
+		Tracer: trace.NewTracerProvider().Tracer("gofr-http-client"),
 		Logger: logging.NewMockLogger(logging.INFO),
 	}
 
@@ -416,7 +394,7 @@ func TestHTTPService_createAndSendRequestServerError(t *testing.T) {
 
 	service := &httpService{
 		Client:  http.DefaultClient,
-		Tracer:  otel.Tracer("gofr-http-client"),
+		Tracer:  trace.NewTracerProvider().Tracer("gofr-http-client"),
 		Logger:  logging.NewMockLogger(logging.INFO),
 		Metrics: metrics,
 	}
@@ -424,7 +402,7 @@ func TestHTTPService_createAndSendRequestServerError(t *testing.T) {
 	ctx := t.Context()
 
 	metrics.EXPECT().RecordHistogram(gomock.Any(), "app_http_service_response", gomock.Any(), "path", gomock.Any(),
-		"method", http.MethodPost, "status", fmt.Sprintf("%v", http.StatusInternalServerError))
+		"method", http.MethodPost, "status", fmt.Sprintf("%v", http.StatusServiceUnavailable))
 
 	// when params value is of type []string then last value is sent in request
 	resp, err := service.createAndSendRequest(ctx,
@@ -455,10 +433,12 @@ func validateResponse(t *testing.T, resp *http.Response, err error, hasError boo
 func newService(t *testing.T, server *httptest.Server) *httpService {
 	t.Helper()
 
+	tp := trace.NewTracerProvider()
+
 	return &httpService{
 		Client: http.DefaultClient,
 		url:    server.URL,
-		Tracer: otel.Tracer("gofr-http-client"),
+		Tracer: tp.Tracer("gofr-http-client"),
 		Logger: logging.NewMockLogger(logging.INFO),
 	}
 }
