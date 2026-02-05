@@ -65,7 +65,7 @@ func getMigrationTableQueries() []string {
 	}
 }
 
-func (s surrealMigrator) checkAndCreateMigrationTable(*container.Container) error {
+func (s surrealMigrator) checkAndCreateMigrationTable(c *container.Container) error {
 	if _, err := s.SurrealDB.Query(context.Background(), "USE NS test DB test", nil); err != nil {
 		return err
 	}
@@ -77,7 +77,7 @@ func (s surrealMigrator) checkAndCreateMigrationTable(*container.Container) erro
 		}
 	}
 
-	return nil
+	return s.migrator.checkAndCreateMigrationTable(c)
 }
 
 func (s surrealMigrator) getLastMigration(c *container.Container) (int64, error) {
@@ -132,4 +132,16 @@ func (s surrealMigrator) rollback(c *container.Container, data transactionData) 
 	s.migrator.rollback(c, data)
 
 	c.Fatalf("migration %v failed and rolled back", data.MigrationNumber)
+}
+
+func (s surrealMigrator) lock(ctx context.Context, cancel context.CancelFunc, c *container.Container, ownerID string) error {
+	return s.migrator.lock(ctx, cancel, c, ownerID)
+}
+
+func (s surrealMigrator) unlock(c *container.Container, ownerID string) error {
+	return s.migrator.unlock(c, ownerID)
+}
+
+func (surrealMigrator) name() string {
+	return "SurrealDB"
 }

@@ -137,3 +137,15 @@ func (am arangoMigrator) rollback(c *container.Container, data transactionData) 
 
 	c.Fatalf("Migration %v failed and rolled back", data.MigrationNumber)
 }
+
+func (am arangoMigrator) lock(ctx context.Context, cancel context.CancelFunc, c *container.Container, ownerID string) error {
+	return am.migrator.lock(ctx, cancel, c, ownerID)
+}
+
+func (am arangoMigrator) unlock(c *container.Container, ownerID string) error {
+	return am.migrator.unlock(c, ownerID)
+}
+
+func (arangoMigrator) name() string {
+	return "ArangoDB"
+}

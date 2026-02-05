@@ -30,13 +30,15 @@ const (
 )
 
 // checkAndCreateMigrationTable initializes a MongoDB collection if it doesn't exist.
-func (mg mongoMigrator) checkAndCreateMigrationTable(_ *container.Container) error {
+func (mg mongoMigrator) checkAndCreateMigrationTable(c *container.Container) error {
 	err := mg.Mongo.CreateCollection(context.Background(), mongoMigrationCollection)
 	if err != nil {
+		c.Debug("Migration collection might already exist:", err)
+
 		return err
 	}
 
-	return nil
+	return mg.migrator.checkAndCreateMigrationTable(c)
 }
 
 func (mg mongoMigrator) getLastMigration(c *container.Container) (int64, error) {
@@ -54,6 +56,7 @@ func (mg mongoMigrator) getLastMigration(c *container.Container) (int64, error) 
 		return -1, fmt.Errorf("mongo: %w", err)
 	}
 
+	// Identify the highest migration version.
 	for _, migration := range migrations {
 		lastMigration = max(lastMigration, migration.Version)
 	}
@@ -93,4 +96,16 @@ func (mg mongoMigrator) commitMigration(c *container.Container, data transaction
 func (mg mongoMigrator) rollback(c *container.Container, data transactionData) {
 	mg.migrator.rollback(c, data)
 	c.Fatalf("Migration %v failed.", data.MigrationNumber)
+}
+
+func (mg mongoMigrator) lock(ctx context.Context, cancel context.CancelFunc, c *container.Container, ownerID string) error {
+	return mg.migrator.lock(ctx, cancel, c, ownerID)
+}
+
+func (mg mongoMigrator) unlock(c *container.Container, ownerID string) error {
+	return mg.migrator.unlock(c, ownerID)
+}
+
+func (mongoMigrator) name() string {
+	return "Mongo"
 }
