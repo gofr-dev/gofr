@@ -165,6 +165,12 @@ type Elasticsearch interface {
 	// Useful for seeding data or adding configuration documents during migrations.
 	IndexDocument(ctx context.Context, index, id string, document any) error
 
+	// GetDocument retrieves a single document by ID.
+	GetDocument(ctx context.Context, index, id string) (map[string]any, error)
+
+	// UpdateDocument applies a partial update to an existing document.
+	UpdateDocument(ctx context.Context, index, id string, update map[string]any) error
+
 	// DeleteDocument removes a document by ID.
 	// Useful for removing specific documents during migrations.
 	DeleteDocument(ctx context.Context, index, id string) error
@@ -174,6 +180,11 @@ type Elasticsearch interface {
 	// following the Elasticsearch bulk API format.
 	// Useful for bulk operations during migrations.
 	Bulk(ctx context.Context, operations []map[string]any) (map[string]any, error)
+
+	// Search performs a search request.
+	Search(ctx context.Context, indices []string, query map[string]any) (map[string]any, error)
+
+	HealthCheck(ctx context.Context) (any, error)
 }
 
 // keeping the migrator interface unexported as, right now it is not being implemented directly, by the externalDB drivers.
@@ -186,6 +197,8 @@ type migrator interface {
 
 	commitMigration(c *container.Container, data transactionData) error
 	rollback(c *container.Container, data transactionData)
+
+	locker
 }
 
 type OpenTSDB interface {
@@ -197,4 +210,10 @@ type OpenTSDB interface {
 	PutAnnotation(ctx context.Context, annotation any, res any) error
 	// DeleteAnnotation removes an annotation from OpenTSDB using the 'DELETE /api/annotation' endpoint.
 	DeleteAnnotation(ctx context.Context, annotation any, res any) error
+}
+
+type locker interface {
+	lock(ctx context.Context, cancel context.CancelFunc, c *container.Container, ownerID string) error
+	unlock(c *container.Container, ownerID string) error
+	name() string
 }
