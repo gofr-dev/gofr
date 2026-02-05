@@ -5,6 +5,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"go.uber.org/mock/gomock"
 
 	"gofr.dev/pkg/gofr/container"
 	"gofr.dev/pkg/gofr/testutil"
@@ -29,4 +30,18 @@ func Test_getMigratorDatastoreNotInitialized(t *testing.T) {
 	})
 
 	assert.Contains(t, logs, "Migration 0 ran successfully", "TEST Failed")
+}
+
+func Test_lock_unlock(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	mockContainer, _ := container.NewMockContainer(t)
+	ds := Datasource{}
+
+	err := ds.lock(t.Context(), nil, mockContainer, "owner")
+	require.NoError(t, err)
+
+	err = ds.unlock(mockContainer, "owner")
+	require.NoError(t, err)
 }
