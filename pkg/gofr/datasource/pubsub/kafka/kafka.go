@@ -197,13 +197,11 @@ func (k *kafkaClient) Subscribe(ctx context.Context, topic string) (*pubsub.Mess
 		k.reader[topic] = k.getNewReader(topic)
 	}
 
+	reader = k.reader[topic]
 	// Release the lock on the reader map after update
 	k.mu.Unlock()
 
 	start := time.Now()
-
-	// Read a single message from the topic
-	reader = k.reader[topic]
 
 	msg, err := reader.FetchMessage(ctx)
 	if err != nil {
