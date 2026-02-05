@@ -103,3 +103,15 @@ func (ch clickHouseMigrator) rollback(c *container.Container, data transactionDa
 
 	c.Fatalf("migration %v failed and rolled back", data.MigrationNumber)
 }
+
+func (ch clickHouseMigrator) lock(ctx context.Context, cancel context.CancelFunc, c *container.Container, ownerID string) error {
+	return ch.migrator.lock(ctx, cancel, c, ownerID)
+}
+
+func (ch clickHouseMigrator) unlock(c *container.Container, ownerID string) error {
+	return ch.migrator.unlock(c, ownerID)
+}
+
+func (clickHouseMigrator) name() string {
+	return "Clickhouse"
+}
