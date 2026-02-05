@@ -146,6 +146,24 @@ GoFr publishes metrics to port: _2121_ on _/metrics_ endpoint in Prometheus form
 - gauge
 - Current state of the circuit breaker (0 for Closed, 1 for Open). Used for historical timeline visualization.
 
+---
+
+- gofr_graphql_operations_total
+- counter
+- Total number of GraphQL operations received
+
+---
+
+- gofr_graphql_error_total
+- counter
+- Total number of GraphQL operations that returned an error
+
+---
+
+- gofr_graphql_request_duration
+- histogram
+- Response time of GraphQL requests in seconds
+
 {% /table %}
 
 For example: When running the application locally, we can access the /metrics endpoint on port 2121 from: {% new-tab-link title="http://localhost:2121/metrics" href="http://localhost:2121/metrics" /%}

@@ -158,10 +158,11 @@ func (a *App) httpServerSetup() {
 		// Only register GraphQL Playground UI in non-production environments
 		if a.Config.Get("APP_ENV") != "production" {
 			a.httpServer.router.NewRoute().Path("/graphql/ui").Handler(a.graphqlManager.GetHandler())
-			a.container.Logger.Infof("Registered GraphQL endpoint at /graphql and Playground at /graphql/ui")
-		} else {
-			a.container.Logger.Infof("Registered GraphQL endpoint at /graphql")
 		}
+	}
+
+	if a.container.Logger != nil {
+		a.container.Logger.Infof("Registered HTTP server on port: %d", a.httpServer.port)
 	}
 
 	a.httpServer.router.PathPrefix("/").Handler(handler{
@@ -263,6 +264,17 @@ func (a *App) Metrics() metrics.Manager {
 // Logger returns the logger instance associated with the App.
 func (a *App) Logger() logging.Logger {
 	return a.container.Logger
+}
+
+// Container returns the container instance associated with the App.
+func (a *App) Container() *container.Container {
+	return a.container
+}
+
+// Handle registers an http.Handler for a specific pattern.
+func (a *App) Handle(pattern string, handler http.Handler) {
+	a.httpRegistered = true
+	a.httpServer.router.NewRoute().PathPrefix(pattern).Handler(handler)
 }
 
 // SubCommand adds a sub-command to the CLI application.

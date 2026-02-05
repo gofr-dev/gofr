@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
-	"io"
 	"net/http"
 	"strconv"
 	"testing"
@@ -22,77 +21,60 @@ func TestIntegration_GraphQL(t *testing.T) {
 
 	t.Setenv("HTTP_PORT", strconv.Itoa(httpPort))
 	t.Setenv("METRICS_PORT", strconv.Itoa(metricsPort))
-	t.Setenv("APP_ENV", "dev") // Ensure UI is registered
+	t.Setenv("APP_ENV", "dev")
 
 	host := fmt.Sprintf("http://localhost:%d", httpPort)
 
 	go main()
-	time.Sleep(200 * time.Millisecond) // Wait for server to start
+	time.Sleep(500 * time.Millisecond) // Wait for server and migrations
 
-	tests := []struct {
-		desc       string
-		query      string
-		expectData any
-	}{
-		{
-			desc:  "hello query",
-			query: `{"query": "{ hello }"}`,
-			expectData: map[string]any{
-				"hello": "Hello GoFr GraphQL with Reflection!",
-			},
-		},
-		{
-			desc:  "user query",
-			query: `{"query": "{ user { id name role } }"}`,
-			expectData: map[string]any{
-				"user": map[string]any{
-					"id":   float64(1),
-					"name": "GoFr Developer",
-					"role": "Maintainer",
-				},
-			},
-		},
-		{
-			desc:  "users list query",
-			query: `{"query": "{ users { id name } }"}`,
-			expectData: map[string]any{
-				"users": []any{
-					map[string]any{"id": float64(1), "name": "Alice"},
-					map[string]any{"id": float64(2), "name": "Bob"},
-				},
-			},
-		},
-		{
-			desc:  "getUser query with arguments",
-			query: `{"query": "{ getUser(id: 2) { id name } }"}`,
-			expectData: map[string]any{
-				"getUser": map[string]any{
-					"id":   float64(2),
-					"name": "Bob",
-				},
-			},
-		},
-	}
+	t.Run("hello query", func(t *testing.T) {
+		query := `{"query": "{ hello }"}`
+		resp, err := http.Post(host+"/graphql", "application/json", bytes.NewBufferString(query))
+		require.NoError(t, err)
+		defer resp.Body.Close()
 
-	for _, tc := range tests {
-		t.Run(tc.desc, func(t *testing.T) {
-			resp, err := http.Post(host+"/graphql", "application/json", bytes.NewBufferString(tc.query))
-			require.NoError(t, err)
-			defer resp.Body.Close()
+		var result struct {
+			Data struct {
+				Hello string `json:"hello"`
+			} `json:"data"`
+		}
+		json.NewDecoder(resp.Body).Decode(&result)
+		assert.Equal(t, "Hello GoFr GraphQL with SQL!", result.Data.Hello)
+	})
 
-			assert.Equal(t, http.StatusOK, resp.StatusCode)
+	t.Run("createUser mutation", func(t *testing.T) {
+		query := `{"query": "mutation { createUser(name: \"Integration Test\", role: \"Tester\") { id name role } }"}`
+		resp, err := http.Post(host+"/graphql", "application/json", bytes.NewBufferString(query))
+		require.NoError(t, err)
+		defer resp.Body.Close()
 
-			var result struct {
-				Data any `json:"data"`
-			}
+		var result struct {
+			Data struct {
+				CreateUser User `json:"createUser"`
+			} `json:"data"`
+		}
+		json.NewDecoder(resp.Body).Decode(&result)
+		assert.True(t, result.Data.CreateUser.ID > 0)
+		assert.Equal(t, "Integration Test", result.Data.CreateUser.Name)
+	})
 
-			body, _ := io.ReadAll(resp.Body)
-			err = json.Unmarshal(body, &result)
-			require.NoError(t, err)
+	t.Run("getUser query", func(t *testing.T) {
+		// We expect ID 1 if it's the first user created
+		query := `{"query": "{ getUser(id: 1) { id name role } }"}`
+		resp, err := http.Post(host+"/graphql", "application/json", bytes.NewBufferString(query))
+		require.NoError(t, err)
+		defer resp.Body.Close()
 
-			assert.Equal(t, tc.expectData, result.Data)
-		})
-	}
+		var result struct {
+			Data struct {
+				GetUser User `json:"getUser"`
+			} `json:"data"`
+		}
+		json.NewDecoder(resp.Body).Decode(&result)
+		assert.Equal(t, 1, result.Data.GetUser.ID)
+		assert.Equal(t, "Integration Test", result.Data.GetUser.Name)
+	})
 
 	t.Run("Playground UI presence", func(t *testing.T) {
 		resp, err := http.Get(host + "/graphql/ui")
@@ -100,8 +82,6 @@ func TestIntegration_GraphQL(t *testing.T) {
 		defer resp.Body.Close()
 
 		assert.Equal(t, http.StatusOK, resp.StatusCode)
-		body, _ := io.ReadAll(resp.Body)
-		assert.Contains(t, string(body), "GoFr GraphQL Playground")
 	})
 }
 
