@@ -135,7 +135,18 @@ func TestOracleMigration_RunMigrationSuccess(t *testing.T) {
 
 	// Set up mock expectations in the correct order
 	mockOracle.EXPECT().Exec(gomock.Any(), checkAndCreateOracleMigrationTable).Return(nil)
-	mockOracle.EXPECT().Select(gomock.Any(), gomock.Any(), getLastOracleGoFrMigration).Return(nil)
+
+	// 2. Optimistic pre-check: Get last migration before acquiring lock
+	mockOracle.EXPECT().Select(gomock.Any(), gomock.Any(), getLastOracleGoFrMigration).
+		DoAndReturn(func(_ context.Context, dest any, _ string, _ ...any) error {
+			results := dest.(*[]map[string]any)
+			*results = []map[string]any{
+				{"LAST_MIGRATION": int64(0)}, // No migrations yet
+			}
+			return nil
+		}).Times(1)
+
+	// 4. Begin transaction
 	mockOracle.EXPECT().Begin().Return(mockTx, nil)
 
 	// Migration execution through transaction wrapper
@@ -144,8 +155,11 @@ func TestOracleMigration_RunMigrationSuccess(t *testing.T) {
 	// Migration record insertion and commit
 	mockTx.EXPECT().ExecContext(gomock.Any(), insertOracleGoFrMigrationRow,
 		int64(1), "UP", gomock.Any(), gomock.Any()).Return(nil)
+
+	// 7. Commit transaction
 	mockTx.EXPECT().Commit().Return(nil)
 
+	// Run migrations
 	Run(migrationMap, mockContainer)
 }
 
