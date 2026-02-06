@@ -14,7 +14,9 @@ Log Level can be changed by setting the environment variable `LOG_LEVEL` value t
 When the GoFr server runs, it prints a log for reading configs, database connection, requests, database queries, missing configs, etc.
 They contain information such as request's correlation ID, status codes, request time, etc.
 
-### DEBUG
+### Log Levels
+
+#### DEBUG
 This is the lowest priority level. It represents the most detailed/granular information.
 
 **Note:** `DEBUG` logs should be enabled only in development or controlled troubleshooting scenarios.They are typically disabled in production environments due to performance overhead and security risks.
@@ -26,7 +28,7 @@ ctx.Debug("Calc trace - Price:", 150, "Discount:", 0.2, "Tax Multiplier:", 1.05)
 ```
 
 ---
-### INFO
+#### INFO
 `INFO` Represents normal operational events during application execution and acts as the default logging level, ensuring baseline observability without excessive verbosity.
 
 
@@ -38,7 +40,7 @@ ctx.Info("Application configuration loaded", "Source", "env")
 
 ---
 
-### NOTICE
+#### NOTICE
 A level higher than `INFO` but lower than `WARN`. It shares the same visual prominence as a Warning but implies a "normal" condition rather than a problem. In simple words, it's used for events that are normal but rare and significant.
 
 
@@ -49,7 +51,7 @@ ctx.Notice("Configuration hot-reload triggered by system admin")
 ```
 
 ---
-### WARN
+#### WARN
 `WARN` should represent abnormal runtime conditions that indicate instability or degraded operation (retries, fallbacks, transient failures), not long-term code hygiene issues like deprecated API usage. If something would show up repeatedly in a healthy system, it shouldn’t be a `WARN`, otherwise the signal gets diluted and operators start ignoring it.
 
 
@@ -61,7 +63,7 @@ ctx.Warn("Database connection timeout. Retrying...", "attempt", 1, "retry_after"
 
 ---
 
-### ERROR
+#### ERROR
 Indicates a failure event. This level routes logs to `stderr` (Standard Error), ensuring visibility to error tracking tools.
 
 
@@ -73,7 +75,7 @@ ctx.Error("DB Query Timeout: Analytics fetch failed.", "error", errors.New("quer
 
 ---
 
-### FATAL
+#### FATAL
 The highest priority level. `FATAL` represents a critical system failures where the application cannot function. 
 
 **Note:** `FATAL` terminates the process immediately and is intended only for startup-time failures, not runtime request handling.
