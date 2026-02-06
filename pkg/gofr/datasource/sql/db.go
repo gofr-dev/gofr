@@ -11,6 +11,7 @@ import (
 	"reflect"
 	"regexp"
 	"strings"
+	"sync"
 	"time"
 
 	"gofr.dev/pkg/gofr/datasource"
@@ -20,9 +21,11 @@ import (
 type DB struct {
 	// contains unexported or private fields
 	*sql.DB
-	logger  datasource.Logger
-	config  *DBConfig
-	metrics Metrics
+	logger     datasource.Logger
+	config     *DBConfig
+	metrics    Metrics
+	stopSignal chan struct{}
+	closeOnce  sync.Once
 }
 
 type Log struct {
@@ -123,6 +126,10 @@ func (d *DB) Begin() (*Tx, error) {
 }
 
 func (d *DB) Close() error {
+	d.closeOnce.Do(func() {
+		close(d.stopSignal)
+	})
+
 	if d.DB != nil {
 		return d.DB.Close()
 	}

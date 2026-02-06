@@ -154,3 +154,23 @@ func (pm pubsubMigrator) commitMigration(c *container.Container, data transactio
 
 	return pm.migrator.commitMigration(c, data)
 }
+
+func (pm pubsubMigrator) beginTransaction(c *container.Container) transactionData {
+	return pm.migrator.beginTransaction(c)
+}
+
+func (pm pubsubMigrator) rollback(c *container.Container, data transactionData) {
+	pm.migrator.rollback(c, data)
+}
+
+func (pm pubsubMigrator) lock(ctx context.Context, cancel context.CancelFunc, c *container.Container, ownerID string) error {
+	return pm.migrator.lock(ctx, cancel, c, ownerID)
+}
+
+func (pm pubsubMigrator) unlock(c *container.Container, ownerID string) error {
+	return pm.migrator.unlock(c, ownerID)
+}
+
+func (pubsubMigrator) name() string {
+	return "PubSub"
+}
