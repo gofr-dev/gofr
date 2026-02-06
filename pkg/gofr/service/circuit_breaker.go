@@ -80,9 +80,7 @@ func (cb *circuitBreaker) executeWithCircuitBreaker(ctx context.Context, f func(
 	if err != nil || (result != nil && result.StatusCode > 500) {
 		cb.handleFailure()
 
-		if cb.failureCount > cb.threshold {
-			cb.openCircuit()
-
+		if cb.state == OpenState {
 			return nil, ErrCircuitOpen
 		}
 	} else {
