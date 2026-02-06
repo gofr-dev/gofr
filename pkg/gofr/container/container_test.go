@@ -538,8 +538,8 @@ func Test_getIntConfig(t *testing.T) {
 
 	logger := NewMockLogger(ctrl)
 	// Expect Warnf to be called when invalid integer is provided
-	// Warnf(format, val, key, default) => 4 arguments
-	logger.EXPECT().Warnf(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Times(1)
+	// We matched arguments explicitly to avoid any variadic matching issues
+	logger.EXPECT().Warnf(gomock.Any(), "invalid", "INVALID_INT", 10).Times(1)
 
 	conf := config.NewMockConfig(map[string]string{
 		"VALID_INT":   "123",

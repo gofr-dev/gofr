@@ -437,7 +437,9 @@ func getIntConfig(conf config.Config, key string, defaultValue int, log logging.
 
 	i, err := strconv.Atoi(value)
 	if err != nil {
-		log.Warnf("Invalid value '%s' for config '%s', using default: %d", value, key, defaultValue)
+		if log != nil {
+			log.Warnf("Invalid value '%s' for config '%s', using default: %d", value, key, defaultValue)
+		}
 		return defaultValue
 	}
 
