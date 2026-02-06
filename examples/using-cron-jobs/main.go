@@ -2,7 +2,6 @@ package main
 
 import (
 	"sync"
-	"time"
 
 	"gofr.dev/pkg/gofr"
 )
@@ -20,13 +19,7 @@ func main() {
 	// runs every second
 	app.AddCronJob("* * * * * *", "counter", count)
 
-	// setting the maximum duration of this application
-	time.Sleep(duration * time.Second)
-
-	// not running the app to close after we have completed the crons running
-	// since this is an example the cron will not be running forever
-	// to run cron forever, users can start the metric server or normal HTTP server
-	// app.Run()
+	app.Run()
 }
 
 func count(c *gofr.Context) {
