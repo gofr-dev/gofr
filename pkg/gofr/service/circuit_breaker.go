@@ -60,31 +60,31 @@ func NewCircuitBreaker(config CircuitBreakerConfig, h HTTP) *circuitBreaker {
 // executeWithCircuitBreaker executes the given function with circuit breaker protection.
 func (cb *circuitBreaker) executeWithCircuitBreaker(ctx context.Context, f func(ctx context.Context) (*http.Response,
 	error)) (*http.Response, error) {
-	cb.mu.Lock()
-	defer cb.mu.Unlock()
+	cb.mu.RLock()
+	isOpen := cb.state == OpenState
+	cb.mu.RUnlock()
 
-	if cb.state == OpenState {
-		if time.Since(cb.lastChecked) > cb.interval {
-			// Check health before potentially closing the circuit
-			if cb.healthCheck(ctx) {
-				cb.resetCircuit()
-				return nil, nil
-			}
+	if isOpen {
+		// Circuit is open - try recovery without holding lock
+		if !cb.tryCircuitRecovery() {
+			return nil, ErrCircuitOpen
 		}
-
-		return nil, ErrCircuitOpen
+		// Circuit recovered, proceed with request
 	}
 
 	result, err := f(ctx)
+
+	cb.mu.Lock()
+	defer cb.mu.Unlock()
+
 	if err != nil || (result != nil && result.StatusCode > 500) {
 		cb.handleFailure()
+
+		if cb.state == OpenState {
+			return nil, ErrCircuitOpen
+		}
 	} else {
 		cb.resetFailureCount()
-	}
-
-	if cb.failureCount > cb.threshold {
-		cb.openCircuit()
-		return nil, ErrCircuitOpen
 	}
 
 	return result, err
