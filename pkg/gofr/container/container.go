@@ -179,7 +179,7 @@ func (c *Container) Close() error {
 func (c *Container) createMqttPubSub(conf config.Config) pubsub.Client {
 	var qos byte
 
-	port, _ := strconv.Atoi(conf.Get("MQTT_PORT"))
+	port := getIntConfig(conf, "MQTT_PORT", 0, c.Logger)
 	order, _ := strconv.ParseBool(conf.GetOrDefault("MQTT_MESSAGE_ORDER", "false"))
 
 	retrieveRetained, _ := strconv.ParseBool(conf.GetOrDefault("MQTT_RETRIEVE_RETAINED", "false"))
@@ -328,7 +328,7 @@ func (c *Container) createKafkaPubSub(conf config.Config) {
 		return
 	}
 
-	partition, _ := strconv.Atoi(conf.GetOrDefault("PARTITION_SIZE", "0"))
+	partition := getIntConfig(conf, "PARTITION_SIZE", 0, c.Logger)
 	// PUBSUB_OFFSET determines the starting position for message consumption in Kafka.
 	// This allows control over whether to read historical messages or only new ones:
 	// - Default value -1: Start from the latest offset (only consume new messages after consumer starts)
@@ -336,10 +336,10 @@ func (c *Container) createKafkaPubSub(conf config.Config) {
 	// - Positive value: Start from a specific offset position (useful for resuming from a known point)
 	// This is particularly important for scenarios like message replay, recovery from failures,
 	// or when you only want to process messages that arrive after the consumer is initialized.
-	offSet, _ := strconv.Atoi(conf.GetOrDefault("PUBSUB_OFFSET", "-1"))
-	batchSize, _ := strconv.Atoi(conf.GetOrDefault("KAFKA_BATCH_SIZE", strconv.Itoa(kafka.DefaultBatchSize)))
-	batchBytes, _ := strconv.Atoi(conf.GetOrDefault("KAFKA_BATCH_BYTES", strconv.Itoa(kafka.DefaultBatchBytes)))
-	batchTimeout, _ := strconv.Atoi(conf.GetOrDefault("KAFKA_BATCH_TIMEOUT", strconv.Itoa(kafka.DefaultBatchTimeout)))
+	offSet := getIntConfig(conf, "PUBSUB_OFFSET", -1, c.Logger)
+	batchSize := getIntConfig(conf, "KAFKA_BATCH_SIZE", kafka.DefaultBatchSize, c.Logger)
+	batchBytes := getIntConfig(conf, "KAFKA_BATCH_BYTES", kafka.DefaultBatchBytes, c.Logger)
+	batchTimeout := getIntConfig(conf, "KAFKA_BATCH_TIMEOUT", kafka.DefaultBatchTimeout, c.Logger)
 
 	tlsConf := kafka.TLSConfig{
 		CertFile:           conf.Get("KAFKA_TLS_CERT_FILE"),
@@ -427,4 +427,19 @@ func effectiveRedisPubSubMode(conf config.Config) string {
 
 	// Default and fallback is streams.
 	return redisPubSubModeStreams
+}
+
+func getIntConfig(conf config.Config, key string, defaultValue int, log logging.Logger) int {
+	value := conf.Get(key)
+	if value == "" {
+		return defaultValue
+	}
+
+	i, err := strconv.Atoi(value)
+	if err != nil {
+		log.Warnf("Invalid value '%s' for config '%s', using default: %d", value, key, defaultValue)
+		return defaultValue
+	}
+
+	return i
 }
