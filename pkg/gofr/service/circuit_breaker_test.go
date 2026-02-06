@@ -5,6 +5,7 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"sync"
 	"testing"
 	"time"
 
@@ -926,4 +927,190 @@ func TestCircuitBreaker_HealthEndpointWithTimeout(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, http.StatusOK, resp.StatusCode)
 	resp.Body.Close()
+}
+
+// TestCircuitBreaker_ParallelExecution tests that requests execute in parallel.
+func TestCircuitBreaker_ParallelExecution(t *testing.T) {
+	requestCount := 0
+	mu := sync.Mutex{}
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		mu.Lock()
+
+		requestCount++
+
+		mu.Unlock()
+
+		time.Sleep(1 * time.Second) // Simulate slow endpoint
+		w.WriteHeader(http.StatusOK)
+
+		_, _ = w.Write([]byte(`{"status": "ok"}`))
+	}))
+	defer server.Close()
+
+	ctrl := gomock.NewController(t)
+	mockMetric := NewMockMetrics(ctrl)
+
+	mockMetric.EXPECT().RecordHistogram(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
+	mockMetric.EXPECT().NewCounter(gomock.Any(), gomock.Any()).AnyTimes()
+	mockMetric.EXPECT().NewGauge(gomock.Any(), gomock.Any()).AnyTimes()
+	mockMetric.EXPECT().SetGauge(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
+
+	httpSvc := NewHTTPService(server.URL, logging.NewMockLogger(logging.DEBUG), mockMetric,
+		&CircuitBreakerConfig{
+			Threshold: 10,
+			Interval:  5 * time.Second,
+		})
+
+	startTime := time.Now()
+
+	var wg sync.WaitGroup
+
+	numRequests := 5
+
+	errors := make([]error, numRequests)
+
+	// Launch 5 concurrent requests
+	for i := 0; i < numRequests; i++ {
+		wg.Add(1)
+
+		go func(index int) {
+			defer wg.Done()
+
+			resp, err := httpSvc.Get(t.Context(), "test", nil)
+			errors[index] = err
+
+			if err == nil && resp != nil {
+				_, _ = io.ReadAll(resp.Body)
+
+				_ = resp.Body.Close()
+			}
+		}(i)
+	}
+
+	wg.Wait()
+
+	totalTime := time.Since(startTime)
+
+	// Verify all requests completed successfully
+	for i := 0; i < numRequests; i++ {
+		require.NoError(t, errors[i], "Request %d should not error", i)
+	}
+
+	// All 5 requests should complete in ~2s (parallel)
+	assert.Less(t, totalTime, 4*time.Second, "Requests should execute in parallel")
+	assert.Equal(t, numRequests, requestCount, "All requests should have been processed")
+}
+
+// TestCircuitBreaker_ConcurrentFailures tests thread safety during concurrent failures.
+func TestCircuitBreaker_ConcurrentFailures(t *testing.T) {
+	failCount := 0
+	mu := sync.Mutex{}
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		mu.Lock()
+
+		failCount++
+
+		current := failCount
+
+		mu.Unlock()
+
+		// First 3 requests fail, rest succeed
+		if current <= 3 {
+			w.WriteHeader(http.StatusServiceUnavailable)
+		} else {
+			w.WriteHeader(http.StatusOK)
+		}
+	}))
+	defer server.Close()
+
+	ctrl := gomock.NewController(t)
+	mockMetric := NewMockMetrics(ctrl)
+
+	mockMetric.EXPECT().RecordHistogram(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
+	mockMetric.EXPECT().NewCounter(gomock.Any(), gomock.Any()).AnyTimes()
+	mockMetric.EXPECT().NewGauge(gomock.Any(), gomock.Any()).AnyTimes()
+	mockMetric.EXPECT().SetGauge(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
+
+	httpSvc := NewHTTPService(server.URL, logging.NewMockLogger(logging.DEBUG), mockMetric,
+		&CircuitBreakerConfig{
+			Threshold: 2,
+			Interval:  1 * time.Second,
+		})
+
+	var wg sync.WaitGroup
+
+	numRequests := 10
+
+	for i := 0; i < numRequests; i++ {
+		wg.Add(1)
+
+		go func() {
+			defer wg.Done()
+
+			resp, _ := httpSvc.Get(t.Context(), "test", nil)
+			if resp != nil {
+				_ = resp.Body.Close()
+			}
+		}()
+	}
+
+	wg.Wait()
+}
+
+// TestCircuitBreaker_MixedHTTPMethods tests parallel requests with different HTTP methods.
+func TestCircuitBreaker_MixedHTTPMethods(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		time.Sleep(1 * time.Second)
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer server.Close()
+
+	ctrl := gomock.NewController(t)
+	mockMetric := NewMockMetrics(ctrl)
+
+	mockMetric.EXPECT().RecordHistogram(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
+	mockMetric.EXPECT().NewCounter(gomock.Any(), gomock.Any()).AnyTimes()
+	mockMetric.EXPECT().NewGauge(gomock.Any(), gomock.Any()).AnyTimes()
+	mockMetric.EXPECT().SetGauge(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
+
+	httpSvc := NewHTTPService(server.URL, logging.NewMockLogger(logging.DEBUG), mockMetric,
+		&CircuitBreakerConfig{
+			Threshold: 5,
+			Interval:  2 * time.Second,
+		})
+
+	startTime := time.Now()
+
+	var wg sync.WaitGroup
+
+	// Test all HTTP methods in parallel
+	methods := []func() (*http.Response, error){
+		func() (*http.Response, error) { return httpSvc.Get(t.Context(), "test", nil) },
+		func() (*http.Response, error) { return httpSvc.Post(t.Context(), "test", nil, []byte(`{}`)) },
+		func() (*http.Response, error) { return httpSvc.Put(t.Context(), "test", nil, []byte(`{}`)) },
+		func() (*http.Response, error) { return httpSvc.Patch(t.Context(), "test", nil, []byte(`{}`)) },
+		func() (*http.Response, error) { return httpSvc.Delete(t.Context(), "test", []byte(`{}`)) },
+	}
+
+	for _, method := range methods {
+		wg.Add(1)
+
+		go func(fn func() (*http.Response, error)) {
+			defer wg.Done()
+
+			resp, err := fn()
+			if err == nil && resp != nil {
+				_ = resp.Body.Close()
+			}
+		}(method)
+	}
+
+	wg.Wait()
+
+	totalTime := time.Since(startTime)
+
+	// All 5 methods should complete in ~1s (parallel)
+	assert.Less(t, totalTime, 2*time.Second, "Different HTTP methods should execute in parallel")
 }
