@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"database/sql"
+	"sync"
 	"testing"
 	"time"
 
@@ -31,7 +32,14 @@ func getDB(t *testing.T, logLevel logging.Level) (*DB, sqlmock.Sqlmock) {
 		t.Fatalf("an error '%s' was not expected when opening a stub database connection", err)
 	}
 
-	db := &DB{mockDB, logging.NewMockLogger(logLevel), nil, nil}
+	db := &DB{
+		DB:         mockDB,
+		logger:     logging.NewMockLogger(logLevel),
+		metrics:    nil,
+		config:     nil, // Initializing config to nil as it's set in next line
+		stopSignal: make(chan struct{}),
+		closeOnce:  sync.Once{},
+	}
 	db.config = &DBConfig{}
 
 	return db, mock
@@ -1144,7 +1152,9 @@ func TestClean(t *testing.T) {
 	assert.Empty(t, out)
 }
 func TestDB_CloseWhenNil(t *testing.T) {
-	db := &DB{}
+	db := &DB{
+		stopSignal: make(chan struct{}),
+	}
 	err := db.Close()
 	assert.NoError(t, err)
 }
@@ -1233,9 +1243,10 @@ func TestDB_sendOperationStats_RecordsMilliseconds(t *testing.T) {
 	mockMetrics := NewMockMetrics(ctrl)
 
 	db := &DB{
-		logger:  logging.NewMockLogger(logging.DEBUG),
-		config:  &DBConfig{HostName: "host", Database: "db"},
-		metrics: mockMetrics,
+		logger:     logging.NewMockLogger(logging.DEBUG),
+		config:     &DBConfig{HostName: "host", Database: "db"},
+		metrics:    mockMetrics,
+		stopSignal: make(chan struct{}),
 	}
 
 	start := time.Now().Add(-1500 * time.Millisecond) // 1.5 seconds ago
