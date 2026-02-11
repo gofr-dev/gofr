@@ -189,6 +189,21 @@ func (mr *MockJetStreamMockRecorder) CreateOrUpdateObjectStore(ctx, cfg any) *go
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CreateOrUpdateObjectStore", reflect.TypeOf((*MockJetStream)(nil).CreateOrUpdateObjectStore), ctx, cfg)
 }
 
+// CreateOrUpdatePushConsumer mocks base method.
+func (m *MockJetStream) CreateOrUpdatePushConsumer(ctx context.Context, stream string, cfg jetstream.ConsumerConfig) (jetstream.PushConsumer, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "CreateOrUpdatePushConsumer", ctx, stream, cfg)
+	ret0, _ := ret[0].(jetstream.PushConsumer)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// CreateOrUpdatePushConsumer indicates an expected call of CreateOrUpdatePushConsumer.
+func (mr *MockJetStreamMockRecorder) CreateOrUpdatePushConsumer(ctx, stream, cfg any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CreateOrUpdatePushConsumer", reflect.TypeOf((*MockJetStream)(nil).CreateOrUpdatePushConsumer), ctx, stream, cfg)
+}
+
 // CreateOrUpdateStream mocks base method.
 func (m *MockJetStream) CreateOrUpdateStream(ctx context.Context, cfg jetstream.StreamConfig) (jetstream.Stream, error) {
 	m.ctrl.T.Helper()
@@ -202,6 +217,21 @@ func (m *MockJetStream) CreateOrUpdateStream(ctx context.Context, cfg jetstream.
 func (mr *MockJetStreamMockRecorder) CreateOrUpdateStream(ctx, cfg any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CreateOrUpdateStream", reflect.TypeOf((*MockJetStream)(nil).CreateOrUpdateStream), ctx, cfg)
+}
+
+// CreatePushConsumer mocks base method.
+func (m *MockJetStream) CreatePushConsumer(ctx context.Context, stream string, cfg jetstream.ConsumerConfig) (jetstream.PushConsumer, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "CreatePushConsumer", ctx, stream, cfg)
+	ret0, _ := ret[0].(jetstream.PushConsumer)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// CreatePushConsumer indicates an expected call of CreatePushConsumer.
+func (mr *MockJetStreamMockRecorder) CreatePushConsumer(ctx, stream, cfg any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CreatePushConsumer", reflect.TypeOf((*MockJetStream)(nil).CreatePushConsumer), ctx, stream, cfg)
 }
 
 // CreateStream mocks base method.
@@ -409,6 +439,21 @@ func (mr *MockJetStreamMockRecorder) OrderedConsumer(ctx, stream, cfg any) *gomo
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "OrderedConsumer", reflect.TypeOf((*MockJetStream)(nil).OrderedConsumer), ctx, stream, cfg)
 }
 
+// PauseConsumer mocks base method.
+func (m *MockJetStream) PauseConsumer(ctx context.Context, stream, consumer string, pauseUntil time.Time) (*jetstream.ConsumerPauseResponse, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "PauseConsumer", ctx, stream, consumer, pauseUntil)
+	ret0, _ := ret[0].(*jetstream.ConsumerPauseResponse)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// PauseConsumer indicates an expected call of PauseConsumer.
+func (mr *MockJetStreamMockRecorder) PauseConsumer(ctx, stream, consumer, pauseUntil any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "PauseConsumer", reflect.TypeOf((*MockJetStream)(nil).PauseConsumer), ctx, stream, consumer, pauseUntil)
+}
+
 // Publish mocks base method.
 func (m *MockJetStream) Publish(ctx context.Context, subject string, payload []byte, opts ...jetstream.PublishOpt) (*jetstream.PubAck, error) {
 	m.ctrl.T.Helper()
@@ -517,6 +562,36 @@ func (mr *MockJetStreamMockRecorder) PublishMsgAsync(msg any, opts ...any) *gomo
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "PublishMsgAsync", reflect.TypeOf((*MockJetStream)(nil).PublishMsgAsync), varargs...)
 }
 
+// PushConsumer mocks base method.
+func (m *MockJetStream) PushConsumer(ctx context.Context, stream, consumer string) (jetstream.PushConsumer, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "PushConsumer", ctx, stream, consumer)
+	ret0, _ := ret[0].(jetstream.PushConsumer)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// PushConsumer indicates an expected call of PushConsumer.
+func (mr *MockJetStreamMockRecorder) PushConsumer(ctx, stream, consumer any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "PushConsumer", reflect.TypeOf((*MockJetStream)(nil).PushConsumer), ctx, stream, consumer)
+}
+
+// ResumeConsumer mocks base method.
+func (m *MockJetStream) ResumeConsumer(ctx context.Context, stream, consumer string) (*jetstream.ConsumerPauseResponse, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "ResumeConsumer", ctx, stream, consumer)
+	ret0, _ := ret[0].(*jetstream.ConsumerPauseResponse)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// ResumeConsumer indicates an expected call of ResumeConsumer.
+func (mr *MockJetStreamMockRecorder) ResumeConsumer(ctx, stream, consumer any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ResumeConsumer", reflect.TypeOf((*MockJetStream)(nil).ResumeConsumer), ctx, stream, consumer)
+}
+
 // Stream mocks base method.
 func (m *MockJetStream) Stream(ctx context.Context, stream string) (jetstream.Stream, error) {
 	m.ctrl.T.Helper()
@@ -609,6 +684,21 @@ func (m *MockJetStream) UpdateObjectStore(ctx context.Context, cfg jetstream.Obj
 func (mr *MockJetStreamMockRecorder) UpdateObjectStore(ctx, cfg any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UpdateObjectStore", reflect.TypeOf((*MockJetStream)(nil).UpdateObjectStore), ctx, cfg)
+}
+
+// UpdatePushConsumer mocks base method.
+func (m *MockJetStream) UpdatePushConsumer(ctx context.Context, stream string, cfg jetstream.ConsumerConfig) (jetstream.PushConsumer, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "UpdatePushConsumer", ctx, stream, cfg)
+	ret0, _ := ret[0].(jetstream.PushConsumer)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// UpdatePushConsumer indicates an expected call of UpdatePushConsumer.
+func (mr *MockJetStreamMockRecorder) UpdatePushConsumer(ctx, stream, cfg any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UpdatePushConsumer", reflect.TypeOf((*MockJetStream)(nil).UpdatePushConsumer), ctx, stream, cfg)
 }
 
 // UpdateStream mocks base method.
@@ -723,6 +813,36 @@ func (mr *MockStreamMockRecorder) CreateOrUpdateConsumer(ctx, cfg any) *gomock.C
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CreateOrUpdateConsumer", reflect.TypeOf((*MockStream)(nil).CreateOrUpdateConsumer), ctx, cfg)
 }
 
+// CreateOrUpdatePushConsumer mocks base method.
+func (m *MockStream) CreateOrUpdatePushConsumer(ctx context.Context, cfg jetstream.ConsumerConfig) (jetstream.PushConsumer, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "CreateOrUpdatePushConsumer", ctx, cfg)
+	ret0, _ := ret[0].(jetstream.PushConsumer)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// CreateOrUpdatePushConsumer indicates an expected call of CreateOrUpdatePushConsumer.
+func (mr *MockStreamMockRecorder) CreateOrUpdatePushConsumer(ctx, cfg any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CreateOrUpdatePushConsumer", reflect.TypeOf((*MockStream)(nil).CreateOrUpdatePushConsumer), ctx, cfg)
+}
+
+// CreatePushConsumer mocks base method.
+func (m *MockStream) CreatePushConsumer(ctx context.Context, cfg jetstream.ConsumerConfig) (jetstream.PushConsumer, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "CreatePushConsumer", ctx, cfg)
+	ret0, _ := ret[0].(jetstream.PushConsumer)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// CreatePushConsumer indicates an expected call of CreatePushConsumer.
+func (mr *MockStreamMockRecorder) CreatePushConsumer(ctx, cfg any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CreatePushConsumer", reflect.TypeOf((*MockStream)(nil).CreatePushConsumer), ctx, cfg)
+}
+
 // DeleteConsumer mocks base method.
 func (m *MockStream) DeleteConsumer(ctx context.Context, consumer string) error {
 	m.ctrl.T.Helper()
@@ -835,6 +955,21 @@ func (mr *MockStreamMockRecorder) OrderedConsumer(ctx, cfg any) *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "OrderedConsumer", reflect.TypeOf((*MockStream)(nil).OrderedConsumer), ctx, cfg)
 }
 
+// PauseConsumer mocks base method.
+func (m *MockStream) PauseConsumer(ctx context.Context, consumer string, pauseUntil time.Time) (*jetstream.ConsumerPauseResponse, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "PauseConsumer", ctx, consumer, pauseUntil)
+	ret0, _ := ret[0].(*jetstream.ConsumerPauseResponse)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// PauseConsumer indicates an expected call of PauseConsumer.
+func (mr *MockStreamMockRecorder) PauseConsumer(ctx, consumer, pauseUntil any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "PauseConsumer", reflect.TypeOf((*MockStream)(nil).PauseConsumer), ctx, consumer, pauseUntil)
+}
+
 // Purge mocks base method.
 func (m *MockStream) Purge(ctx context.Context, opts ...jetstream.StreamPurgeOpt) error {
 	m.ctrl.T.Helper()
@@ -854,6 +989,36 @@ func (mr *MockStreamMockRecorder) Purge(ctx any, opts ...any) *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Purge", reflect.TypeOf((*MockStream)(nil).Purge), varargs...)
 }
 
+// PushConsumer mocks base method.
+func (m *MockStream) PushConsumer(ctx context.Context, consumer string) (jetstream.PushConsumer, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "PushConsumer", ctx, consumer)
+	ret0, _ := ret[0].(jetstream.PushConsumer)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// PushConsumer indicates an expected call of PushConsumer.
+func (mr *MockStreamMockRecorder) PushConsumer(ctx, consumer any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "PushConsumer", reflect.TypeOf((*MockStream)(nil).PushConsumer), ctx, consumer)
+}
+
+// ResumeConsumer mocks base method.
+func (m *MockStream) ResumeConsumer(ctx context.Context, consumer string) (*jetstream.ConsumerPauseResponse, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "ResumeConsumer", ctx, consumer)
+	ret0, _ := ret[0].(*jetstream.ConsumerPauseResponse)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// ResumeConsumer indicates an expected call of ResumeConsumer.
+func (mr *MockStreamMockRecorder) ResumeConsumer(ctx, consumer any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ResumeConsumer", reflect.TypeOf((*MockStream)(nil).ResumeConsumer), ctx, consumer)
+}
+
 // SecureDeleteMsg mocks base method.
 func (m *MockStream) SecureDeleteMsg(ctx context.Context, seq uint64) error {
 	m.ctrl.T.Helper()
@@ -866,6 +1031,20 @@ func (m *MockStream) SecureDeleteMsg(ctx context.Context, seq uint64) error {
 func (mr *MockStreamMockRecorder) SecureDeleteMsg(ctx, seq any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SecureDeleteMsg", reflect.TypeOf((*MockStream)(nil).SecureDeleteMsg), ctx, seq)
+}
+
+// UnpinConsumer mocks base method.
+func (m *MockStream) UnpinConsumer(ctx context.Context, consumer, group string) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "UnpinConsumer", ctx, consumer, group)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// UnpinConsumer indicates an expected call of UnpinConsumer.
+func (mr *MockStreamMockRecorder) UnpinConsumer(ctx, consumer, group any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UnpinConsumer", reflect.TypeOf((*MockStream)(nil).UnpinConsumer), ctx, consumer, group)
 }
 
 // UpdateConsumer mocks base method.
@@ -881,6 +1060,21 @@ func (m *MockStream) UpdateConsumer(ctx context.Context, cfg jetstream.ConsumerC
 func (mr *MockStreamMockRecorder) UpdateConsumer(ctx, cfg any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UpdateConsumer", reflect.TypeOf((*MockStream)(nil).UpdateConsumer), ctx, cfg)
+}
+
+// UpdatePushConsumer mocks base method.
+func (m *MockStream) UpdatePushConsumer(ctx context.Context, cfg jetstream.ConsumerConfig) (jetstream.PushConsumer, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "UpdatePushConsumer", ctx, cfg)
+	ret0, _ := ret[0].(jetstream.PushConsumer)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// UpdatePushConsumer indicates an expected call of UpdatePushConsumer.
+func (mr *MockStreamMockRecorder) UpdatePushConsumer(ctx, cfg any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UpdatePushConsumer", reflect.TypeOf((*MockStream)(nil).UpdatePushConsumer), ctx, cfg)
 }
 
 // MockConsumer is a mock of Consumer interface.
