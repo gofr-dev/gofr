@@ -667,3 +667,147 @@ This document lists all the configuration options supported by the GoFr framewor
 
 {% /table %}
 
+## Built-in Metrics
+
+GoFr framework provides several built-in metrics to monitor application performance and health. These are exposed by default on the `/metrics` endpoint.
+
+{% table %}
+
+- Name
+- Type
+- Description
+
+---
+
+- app_go_numGC
+- gauge
+- Number of completed Garbage Collector cycles
+
+---
+
+- app_go_routines
+- gauge
+- Number of Go routines running
+
+---
+
+- app_go_sys
+- gauge
+- Number of total bytes of memory
+
+---
+
+- app_sys_memory_alloc
+- gauge
+- Number of bytes allocated for heap objects
+
+---
+
+- app_sys_total_alloc
+- gauge
+- Number of cumulative bytes allocated for heap objects
+
+---
+
+- app_info
+- gauge
+- Number of instances running with info of app and framework
+
+---
+
+- app_http_response
+- histogram
+- Response time of HTTP requests in **seconds**.
+
+---
+
+- app_http_service_response
+- histogram
+- Response time of HTTP service requests in **seconds**.
+
+---
+
+- app_sql_open_connections
+- gauge
+- Number of open SQL connections
+
+---
+
+- app_sql_inUse_connections
+- gauge
+- Number of inUse SQL connections
+
+---
+
+- app_sql_stats
+- histogram
+- Response time of SQL queries in **milliseconds**.
+
+---
+
+- app_redis_stats
+- histogram
+- Response time of Redis commands in **milliseconds**.
+
+---
+
+- app_pubsub_publish_total_count
+- counter
+- Number of total publish operations
+
+---
+
+- app_pubsub_publish_success_count
+- counter
+- Number of successful publish operations
+
+---
+
+- app_pubsub_subscribe_total_count
+- counter
+- Number of total subscribe operations
+
+---
+
+- app_pubsub_subscribe_success_count
+- counter
+- Number of successful subscribe operations
+
+---
+
+- app_http_retry_count
+- counter
+- Total number of retry events
+
+---
+
+- app_http_circuit_breaker_state
+- gauge
+- Current state of the circuit breaker (0 for Closed, 1 for Open). Used for historical timeline visualization.
+
+---
+
+- app_cron_job_total
+- counter
+- Total number of cron job executions. Labels: `job`, `func`.
+
+---
+
+- app_cron_job_success
+- counter
+- Number of successful cron job executions. Labels: `job`, `func`.
+
+---
+
+- app_cron_job_failures
+- counter
+- Number of failed cron job executions. Labels: `job`, `func`.
+
+---
+
+- app_cron_job_duration
+- histogram
+- Duration of cron job execution in **seconds**. Labels: `job`, `func`.
+
+{% /table %}
+
