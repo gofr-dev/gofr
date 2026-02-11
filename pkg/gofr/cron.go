@@ -4,8 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"reflect"
-	"runtime"
 	"sync"
 	"time"
 
@@ -47,9 +45,8 @@ type job struct {
 	month     map[int]struct{}
 	dayOfWeek map[int]struct{}
 
-	name         string
-	functionName string
-	fn           CronFunc
+	name string
+	fn   CronFunc
 }
 
 type tick struct {
@@ -112,13 +109,13 @@ func (j *job) run(cntnr *container.Container) {
 		duration := time.Since(start).Seconds()
 
 		if m := cntnr.Metrics(); m != nil {
-			m.RecordHistogram(ctx, "app_cron_job_duration", float64(duration), "job", j.name, "func", j.functionName)
+			m.RecordHistogram(ctx, "app_cron_job_duration", float64(duration), "job", j.name)
 
 			if r := recover(); r != nil {
 				c.Errorf("Panic in cron job %s: %v", j.name, r)
-				m.IncrementCounter(ctx, "app_cron_job_failures", "job", j.name, "func", j.functionName)
+				m.IncrementCounter(ctx, "app_cron_job_failures", "job", j.name)
 			} else {
-				m.IncrementCounter(ctx, "app_cron_job_success", "job", j.name, "func", j.functionName)
+				m.IncrementCounter(ctx, "app_cron_job_success", "job", j.name)
 			}
 		} else if r := recover(); r != nil {
 			c.Errorf("Panic in cron job %s: %v", j.name, r)
@@ -128,7 +125,7 @@ func (j *job) run(cntnr *container.Container) {
 	}()
 
 	if m := cntnr.Metrics(); m != nil {
-		m.IncrementCounter(ctx, "app_cron_job_total", "job", j.name, "func", j.functionName)
+		m.IncrementCounter(ctx, "app_cron_job_total", "job", j.name)
 	}
 
 	j.fn(c)
@@ -160,7 +157,6 @@ func (c *Crontab) AddJob(schedule, jobName string, fn CronFunc) error {
 
 	j.name = jobName
 	j.fn = fn
-	j.functionName = runtime.FuncForPC(reflect.ValueOf(fn).Pointer()).Name()
 
 	c.mu.Lock()
 	c.jobs = append(c.jobs, j)

@@ -789,25 +789,25 @@ GoFr framework provides several built-in metrics to monitor application performa
 
 - app_cron_job_total
 - counter
-- Total number of cron job executions. Labels: `job`, `func`.
+- Total number of cron job executions. Label: `job`.
 
 ---
 
 - app_cron_job_success
 - counter
-- Number of successful cron job executions. Labels: `job`, `func`.
+- Number of successful cron job executions. Label: `job`.
 
 ---
 
 - app_cron_job_failures
 - counter
-- Number of failed cron job executions. Labels: `job`, `func`.
+- Number of failed cron job executions. Label: `job`.
 
 ---
 
 - app_cron_job_duration
 - histogram
-- Duration of cron job execution in **seconds**. Labels: `job`, `func`.
+- Duration of cron job execution in **seconds**. Label: `job`.
 
 {% /table %}
 
