@@ -30,9 +30,10 @@ func NewSQLMocksWithConfig(t *testing.T, config *DBConfig) (*DB, sqlmock.Sqlmock
 		"hostname", gomock.Any(), "database", gomock.Any(), "type", gomock.Any()).AnyTimes()
 
 	return &DB{
-		DB:      db,
-		logger:  logging.NewMockLogger(logging.DEBUG),
-		config:  config,
-		metrics: mockMetrics,
+		DB:         db,
+		logger:     logging.NewMockLogger(logging.DEBUG),
+		config:     config,
+		metrics:    mockMetrics,
+		stopSignal: make(chan struct{}),
 	}, mock, mockMetrics
 }

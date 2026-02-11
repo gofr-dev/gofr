@@ -5,9 +5,10 @@ export const navigation = [
         links: [
             {
                 title: 'Hello Server',
-                href: '/docs/quick-start/introduction' ,
-                desc: "Getting started with how to write a server using GoFR with basic examples and explanations. Boost your productivity with efficient coding practices and learn to build scalable applications quickly."},
-               
+                href: '/docs/quick-start/introduction',
+                desc: "Getting started with how to write a server using GoFR with basic examples and explanations. Boost your productivity with efficient coding practices and learn to build scalable applications quickly."
+            },
+
             {
                 title: 'Configuration',
                 href: '/docs/quick-start/configuration',
@@ -79,9 +80,9 @@ export const navigation = [
                 desc: "Get familiar with making HTTP requests and handling responses within your GoFr application to facilitate seamless communication."
             },
             {
-                title: 'HTTP Authentication',
-                href: '/docs/advanced-guide/http-authentication',
-                desc: "Implement various HTTP authentication methods to secure your GoFR application and protect sensitive endpoints."
+                title: 'Authentication',
+                href: '/docs/advanced-guide/authentication',
+                desc: "Implement various authentication methods to secure your GoFR application and protect sensitive endpoints across HTTP and gRPC."
             },
             {
                 title: 'Role-Based Access Control (RBAC)',
@@ -162,11 +163,6 @@ export const navigation = [
                 title: 'Profiling in GoFr Applications',
                 href: '/docs/advanced-guide/debugging',
                 desc: "Discover GoFr auto-enables pprof profiling by leveraging its built-in configurations."
-            },
-            {
-                title: 'Adding Synchronous Startup Hooks',
-                href: '/docs/advanced-guide/startup-hooks',
-                desc: "Learn how to seed a database, warm up a cache, or perform other critical setup procedures, synchronously before starting your application."
             },
             {
                 title: 'Building CLI Applications',
@@ -273,6 +269,7 @@ export const navigation = [
                 href: '/docs/references/testing',
                 desc: "GoFr provides a centralized collection of mocks to facilitate writing effective unit tests. Explore testing strategies and tools for GoFr applications, ensuring the code is robust, reliable, and maintainable."
             },
+
             {
                 title: 'GoFr CLI',
                 href: '/docs/references/gofrcli',

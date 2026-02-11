@@ -25,7 +25,7 @@ Before implementing gRPC streaming, ensure you have:
    go install gofr.dev/cli/gofr@latest
    ```
 
-For detailed setup instructions, refer to the [gRPC with GoFr documentation](/docs/advanced-guide/grpc).
+For detailed setup instructions, refer to the [gRPC with GoFr documentation](https://gofr.dev/docs/advanced-guide/grpc).
 
 ## Defining Streaming RPCs in Protocol Buffers
 
@@ -444,6 +444,34 @@ func (s *ChatServiceGoFrServer) ServerStream(ctx *gofr.Context, stream ChatServi
 }
 ```
 
+## Adding Custom Stream interceptors
+
+For streaming RPCs (client-stream, server-stream, or bidirectional), GoFr allows you to add stream interceptors using `AddGRPCServerStreamInterceptors`. These are useful for handling logic that needs to span the entire lifetime of a stream.
+
+```go
+func main() {
+    app := gofr.New()
+
+    app.AddGRPCServerStreamInterceptors(streamAuthInterceptor)
+
+    // ... register your service
+    app.Run()
+}
+
+func streamAuthInterceptor(srv any, ss grpc.ServerStream, info *grpc.StreamServerInfo, handler grpc.StreamHandler) error {
+	// Example: Validate metadata for the entire stream
+	md, ok := metadata.FromIncomingContext(ss.Context())
+	if !ok || !isValidToken(md["auth-token"]) {
+		return status.Errorf(codes.Unauthenticated, "invalid stream token")
+	}
+
+	// If valid, continue processing the stream
+	return handler(srv, ss)
+}
+```
+
+For more details on adding additional interceptors and server options, refer to the [official gRPC Go package](https://pkg.go.dev/google.golang.org/grpc#ServerOption).
+
 ## Best Practices
 
 1. **Always handle `io.EOF`**: This is the normal way streams end
@@ -464,7 +492,7 @@ These examples demonstrate all three types of streaming with detailed error hand
 
 ## Further Reading
 
-- [gRPC with GoFr](/docs/advanced-guide/grpc) - General gRPC documentation
+- [gRPC with GoFr](https://gofr.dev/docs/advanced-guide/grpc) - General gRPC documentation
 - [gRPC Official Documentation](https://grpc.io/docs/what-is-grpc/introduction/) - Learn more about gRPC streaming concepts
 - [GoFr Examples](https://github.com/gofr-dev/gofr/tree/main/examples/grpc) - More gRPC examples
 

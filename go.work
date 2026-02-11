@@ -12,8 +12,8 @@ use (
 	./pkg/gofr/datasource/elasticsearch
 	./pkg/gofr/datasource/file/azure
 	./pkg/gofr/datasource/file/ftp
-	./pkg/gofr/datasource/file/s3
 	./pkg/gofr/datasource/file/gcs
+	./pkg/gofr/datasource/file/s3
 	./pkg/gofr/datasource/file/sftp
 	./pkg/gofr/datasource/influxdb
 	./pkg/gofr/datasource/kv-store/badger
@@ -24,6 +24,7 @@ use (
 	./pkg/gofr/datasource/oracle
 	./pkg/gofr/datasource/pubsub/eventhub
 	./pkg/gofr/datasource/pubsub/nats
+	./pkg/gofr/datasource/pubsub/sqs
 	./pkg/gofr/datasource/scylladb
 	./pkg/gofr/datasource/solr
 	./pkg/gofr/datasource/surrealdb

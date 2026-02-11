@@ -58,14 +58,20 @@ func Test_OracleGetLastMigration(t *testing.T) {
 		resp int64
 	}{
 		{"no error", nil, 0},
-		{"connection failed", sql.ErrConnDone, 0},
+		{"connection failed", sql.ErrConnDone, -1},
 	}
 
 	for i, tc := range testCases {
 		mockOracle.EXPECT().Select(gomock.Any(), gomock.Any(), getLastOracleGoFrMigration).Return(tc.err)
 
-		resp := mg.getLastMigration(mockContainer)
+		resp, err := mg.getLastMigration(mockContainer)
 		assert.Equal(t, tc.resp, resp, "TEST[%d]: %s failed", i, tc.desc)
+
+		if tc.err != nil {
+			assert.ErrorContains(t, err, tc.err.Error(), "TEST[%d]: %s failed", i, tc.desc)
+		} else {
+			assert.NoError(t, err, "TEST[%d]: %s failed", i, tc.desc)
+		}
 	}
 }
 
@@ -129,7 +135,18 @@ func TestOracleMigration_RunMigrationSuccess(t *testing.T) {
 
 	// Set up mock expectations in the correct order
 	mockOracle.EXPECT().Exec(gomock.Any(), checkAndCreateOracleMigrationTable).Return(nil)
-	mockOracle.EXPECT().Select(gomock.Any(), gomock.Any(), getLastOracleGoFrMigration).Return(nil)
+
+	// 2. Optimistic pre-check: Get last migration before acquiring lock
+	mockOracle.EXPECT().Select(gomock.Any(), gomock.Any(), getLastOracleGoFrMigration).
+		DoAndReturn(func(_ context.Context, dest any, _ string, _ ...any) error {
+			results := dest.(*[]map[string]any)
+			*results = []map[string]any{
+				{"LAST_MIGRATION": int64(0)}, // No migrations yet
+			}
+			return nil
+		}).Times(1)
+
+	// 4. Begin transaction
 	mockOracle.EXPECT().Begin().Return(mockTx, nil)
 
 	// Migration execution through transaction wrapper
@@ -138,8 +155,11 @@ func TestOracleMigration_RunMigrationSuccess(t *testing.T) {
 	// Migration record insertion and commit
 	mockTx.EXPECT().ExecContext(gomock.Any(), insertOracleGoFrMigrationRow,
 		int64(1), "UP", gomock.Any(), gomock.Any()).Return(nil)
+
+	// 7. Commit transaction
 	mockTx.EXPECT().Commit().Return(nil)
 
+	// Run migrations
 	Run(migrationMap, mockContainer)
 }
 
@@ -175,8 +195,9 @@ func TestOracleMigration_GetLastMigration_ReturnsZeroOnError(t *testing.T) {
 
 	mockOracle.EXPECT().Select(gomock.Any(), gomock.Any(), getLastOracleGoFrMigration).Return(sql.ErrConnDone)
 
-	lastMigration := mg.getLastMigration(mockContainer)
-	assert.Equal(t, int64(0), lastMigration)
+	lastMigration, err := mg.getLastMigration(mockContainer)
+	assert.Equal(t, int64(-1), lastMigration)
+	assert.ErrorContains(t, err, sql.ErrConnDone.Error())
 }
 
 func initializeOracleRunMocks(t *testing.T) (*container.MockOracleDB, *container.Container) {

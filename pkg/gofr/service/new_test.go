@@ -31,6 +31,12 @@ func TestNewHTTPService(t *testing.T) {
 			assert.NotNil(t, service, "TEST[%d], Failed.\n%s", i, tc.desc)
 		})
 	}
+
+	t.Run("WithAttributes", func(t *testing.T) {
+		service := NewHTTPService("http://example.com", nil, nil, WithAttributes(map[string]string{"name": "test-service"}))
+		httpSvc := service.(*httpService)
+		assert.Equal(t, "test-service", httpSvc.name)
+	})
 }
 
 func TestHTTPService_createAndSendRequest(t *testing.T) {
@@ -81,11 +87,13 @@ func TestHTTPService_createAndSendRequest(t *testing.T) {
 		}))
 
 		service := &httpService{
-			Client:  http.DefaultClient,
-			url:     server.URL,
-			Tracer:  trace.NewTracerProvider().Tracer("gofr-http-client"),
-			Logger:  logging.NewMockLogger(logging.INFO),
-			Metrics: metrics,
+			Client:         http.DefaultClient,
+			url:            server.URL,
+			Tracer:         trace.NewTracerProvider().Tracer("gofr-http-client"),
+			Logger:         logging.NewMockLogger(logging.INFO),
+			Metrics:        metrics,
+			healthEndpoint: "",
+			healthTimeout:  0,
 		}
 
 		metrics.EXPECT().RecordHistogram(gomock.Any(), "app_http_service_response", gomock.Any(), "path", server.URL,
@@ -394,7 +402,7 @@ func TestHTTPService_createAndSendRequestServerError(t *testing.T) {
 	ctx := t.Context()
 
 	metrics.EXPECT().RecordHistogram(gomock.Any(), "app_http_service_response", gomock.Any(), "path", gomock.Any(),
-		"method", http.MethodPost, "status", fmt.Sprintf("%v", http.StatusInternalServerError))
+		"method", http.MethodPost, "status", fmt.Sprintf("%v", http.StatusServiceUnavailable))
 
 	// when params value is of type []string then last value is sent in request
 	resp, err := service.createAndSendRequest(ctx,

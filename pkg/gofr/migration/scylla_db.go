@@ -1,6 +1,7 @@
 package migration
 
 import (
+	"context"
 	"fmt"
 	"time"
 
@@ -43,25 +44,26 @@ func (s scyllaMigrator) checkAndCreateMigrationTable(c *container.Container) err
 		return err
 	}
 
-	return nil
+	return s.migrator.checkAndCreateMigrationTable(c)
 }
 
 type migrationRow struct {
 	Version int64 `db:"version"`
 }
 
-func (s scyllaMigrator) getLastMigration(c *container.Container) int64 {
-	var migrations []migrationRow
+func (s scyllaMigrator) getLastMigration(c *container.Container) (int64, error) {
+	var (
+		migrations  []migrationRow
+		lastVersion int64
+	)
 
 	query := fmt.Sprintf("SELECT version FROM %s", scyllaDBMigrationTable)
 
 	err := s.ScyllaDB.Query(&migrations, query)
 	if err != nil {
-		c.Errorf("Failed to fetch migrations from ScyllaDB: %v", err)
-		return 0
+		return -1, fmt.Errorf("scylladb: %w", err)
 	}
 
-	var lastVersion int64
 	for _, m := range migrations {
 		if m.Version > lastVersion {
 			lastVersion = m.Version
@@ -70,9 +72,12 @@ func (s scyllaMigrator) getLastMigration(c *container.Container) int64 {
 
 	c.Debugf("ScyllaDB last migration fetched value is: %v", lastVersion)
 
-	lm2 := s.migrator.getLastMigration(c)
+	lm2, err := s.migrator.getLastMigration(c)
+	if err != nil {
+		return -1, err
+	}
 
-	return max(lastVersion, lm2)
+	return max(lastVersion, lm2), nil
 }
 
 func (s scyllaMigrator) beginTransaction(c *container.Container) transactionData {
@@ -104,4 +109,16 @@ func (s scyllaMigrator) commitMigration(c *container.Container, data transaction
 func (s scyllaMigrator) rollback(c *container.Container, data transactionData) {
 	s.migrator.rollback(c, data)
 	c.Fatalf("Migration %v failed.", data.MigrationNumber)
+}
+
+func (s scyllaMigrator) lock(ctx context.Context, cancel context.CancelFunc, c *container.Container, ownerID string) error {
+	return s.migrator.lock(ctx, cancel, c, ownerID)
+}
+
+func (s scyllaMigrator) unlock(c *container.Container, ownerID string) error {
+	return s.migrator.unlock(c, ownerID)
+}
+
+func (scyllaMigrator) name() string {
+	return "ScyllaDB"
 }

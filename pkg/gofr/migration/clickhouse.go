@@ -2,6 +2,7 @@ package migration
 
 import (
 	"context"
+	"fmt"
 	"time"
 
 	"gofr.dev/pkg/gofr/container"
@@ -49,7 +50,7 @@ func (ch clickHouseMigrator) checkAndCreateMigrationTable(c *container.Container
 	return ch.migrator.checkAndCreateMigrationTable(c)
 }
 
-func (ch clickHouseMigrator) getLastMigration(c *container.Container) int64 {
+func (ch clickHouseMigrator) getLastMigration(c *container.Container) (int64, error) {
 	type LastMigration struct {
 		Timestamp int64 `ch:"last_migration"`
 	}
@@ -60,22 +61,21 @@ func (ch clickHouseMigrator) getLastMigration(c *container.Container) int64 {
 
 	err := c.Clickhouse.Select(context.Background(), &lastMigrations, getLastChGoFrMigration)
 	if err != nil {
-		return 0
+		return -1, fmt.Errorf("clickhouse: %w", err)
 	}
-
-	c.Debugf("SQL last migration fetched value is: %v", lastMigration)
 
 	if len(lastMigrations) != 0 {
 		lastMigration = lastMigrations[0].Timestamp
 	}
 
-	lm2 := ch.migrator.getLastMigration(c)
+	c.Debugf("Clickhouse last migration fetched value is: %v", lastMigration)
 
-	if lm2 > lastMigration {
-		return lm2
+	lm2, err := ch.migrator.getLastMigration(c)
+	if err != nil {
+		return -1, err
 	}
 
-	return lastMigration
+	return max(lastMigration, lm2), nil
 }
 
 func (ch clickHouseMigrator) beginTransaction(c *container.Container) transactionData {
@@ -102,4 +102,16 @@ func (ch clickHouseMigrator) rollback(c *container.Container, data transactionDa
 	ch.migrator.rollback(c, data)
 
 	c.Fatalf("migration %v failed and rolled back", data.MigrationNumber)
+}
+
+func (ch clickHouseMigrator) lock(ctx context.Context, cancel context.CancelFunc, c *container.Container, ownerID string) error {
+	return ch.migrator.lock(ctx, cancel, c, ownerID)
+}
+
+func (ch clickHouseMigrator) unlock(c *container.Container, ownerID string) error {
+	return ch.migrator.unlock(c, ownerID)
+}
+
+func (clickHouseMigrator) name() string {
+	return "Clickhouse"
 }

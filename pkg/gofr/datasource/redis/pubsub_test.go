@@ -174,9 +174,10 @@ func setupMockTest(t *testing.T, conf map[string]string) (*testRedisClient, redi
 	redisConfig := getRedisConfig(config.NewMockConfig(conf), mockLogger)
 
 	r := &Redis{
-		Client: db,
-		config: redisConfig,
-		logger: mockLogger,
+		Client:     db,
+		config:     redisConfig,
+		logger:     mockLogger,
+		stopSignal: make(chan struct{}),
 	}
 	ps := newPubSub(db, redisConfig, mockLogger, mockMetrics)
 

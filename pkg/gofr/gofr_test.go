@@ -66,6 +66,12 @@ func TestGoFr_isPortAvailable(t *testing.T) {
 			if !tt.isAvailable {
 				g := New()
 
+				// Register a route to ensure HTTP server starts
+				// (HTTP server only starts when user routes are registered)
+				g.GET("/test", func(*Context) (any, error) {
+					return "test", nil
+				})
+
 				go g.Run()
 
 				time.Sleep(100 * time.Millisecond)
@@ -273,6 +279,21 @@ func TestApp_Metrics(t *testing.T) {
 	app := New()
 
 	assert.NotNil(t, app.Metrics())
+}
+
+func TestApp_MetricsServerDisabled(t *testing.T) {
+	// Set METRICS_PORT=0 to disable the metrics server
+	t.Setenv("METRICS_PORT", "0")
+
+	logs := testutil.StdoutOutputForFunc(func() {
+		app := New()
+
+		// Verify that metricServer is nil when METRICS_PORT=0
+		assert.Nil(t, app.metricServer, "metrics server should be nil when METRICS_PORT=0")
+	})
+
+	// Verify log message is printed
+	assert.Contains(t, logs, "Metrics server is disabled (METRICS_PORT=0)")
 }
 
 func TestApp_AddAndGetHTTPService(t *testing.T) {
@@ -1219,4 +1240,21 @@ func TestApp_OnStart(t *testing.T) {
 		require.Error(t, err, "Expected error from panicked hook")
 		assert.Contains(t, err.Error(), "panicked", "Expected error message to mention panic")
 	})
+}
+func TestUnifiedAuthenticationRegistration(t *testing.T) {
+	t.Setenv("METRICS_PORT", "0")
+	t.Setenv("HTTP_PORT", strconv.Itoa(testutil.GetFreePort(t)))
+
+	app := New()
+
+	// Enable various auth methods
+	app.EnableBasicAuth("user", "pass")
+	app.EnableAPIKeyAuth("key1")
+	app.EnableOAuth("http://jwks", 3600)
+
+	// Verify HTTP middleware count (approximate check)
+	// We can't easily inspect the router's middleware slice directly without reflection or exposing it,
+	// but we can check if the grpcServer has interceptors added.
+	assert.GreaterOrEqual(t, len(app.grpcServer.interceptors), 2, "gRPC unary interceptors should be registered")
+	assert.GreaterOrEqual(t, len(app.grpcServer.streamInterceptors), 2, "gRPC stream interceptors should be registered")
 }

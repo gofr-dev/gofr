@@ -140,6 +140,14 @@ func (a *App) httpServerSetup() {
 		}
 	}
 
+	// Register default routes - these are only added when HTTP server is actually starting
+	a.add(http.MethodGet, service.HealthPath, healthHandler)
+	a.add(http.MethodGet, service.AlivePath, liveHandler)
+	a.add(http.MethodGet, "/favicon.ico", faviconHandler)
+
+	// Add OpenAPI/Swagger routes if openapi.json exists
+	a.checkAndAddOpenAPIDocumentation()
+
 	for dirName, endpoint := range a.httpServer.staticFiles {
 		a.httpServer.router.AddStaticFiles(a.Logger(), endpoint, dirName)
 	}
@@ -209,6 +217,8 @@ func (a *App) AddHTTPService(serviceName, serviceAddress string, options ...serv
 	if _, ok := a.container.Services[serviceName]; ok {
 		a.container.Debugf("Service already registered Name: %v", serviceName)
 	}
+
+	options = append([]service.Options{service.WithAttributes(map[string]string{"name": serviceName})}, options...)
 
 	a.container.Services[serviceName] = service.NewHTTPService(serviceAddress, a.container.Logger, a.container.Metrics(), options...)
 }

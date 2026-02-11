@@ -82,8 +82,10 @@ type StreamsConfig struct {
 
 type Redis struct {
 	*redis.Client
-	logger datasource.Logger
-	config *Config
+	logger     datasource.Logger
+	config     *Config
+	stopSignal chan struct{}
+	closeOnce  sync.Once
 }
 
 // PubSub handles Redis PubSub operations.
@@ -139,6 +141,8 @@ func NewClient(c config.Config, logger datasource.Logger, metrics Metrics) *Redi
 	ctx, cancel := context.WithTimeout(context.TODO(), redisPingTimeout)
 	defer cancel()
 
+	stopSignal := make(chan struct{})
+
 	if err := rc.Ping(ctx).Err(); err == nil {
 		if err = otel.InstrumentTracing(rc); err != nil {
 			logger.Errorf("could not add tracing instrumentation, error: %s", err)
@@ -148,22 +152,27 @@ func NewClient(c config.Config, logger datasource.Logger, metrics Metrics) *Redi
 	} else {
 		logger.Errorf("could not connect to redis at '%s:%d' , error: %s", redisConfig.HostName, redisConfig.Port, err)
 
-		go retryConnect(rc, logger)
+		go retryConnect(rc, logger, stopSignal)
 	}
 
 	r := &Redis{
-		Client: rc,
-		config: redisConfig,
-		logger: logger,
+		Client:     rc,
+		config:     redisConfig,
+		logger:     logger,
+		stopSignal: stopSignal,
 	}
 
 	return r
 }
 
 // retryConnect handles the retry mechanism for connecting to Redis.
-func retryConnect(client *redis.Client, logger datasource.Logger) {
+func retryConnect(client *redis.Client, logger datasource.Logger, stopSignal <-chan struct{}) {
 	for {
-		time.Sleep(defaultRetryTimeout)
+		select {
+		case <-stopSignal:
+			return
+		case <-time.After(defaultRetryTimeout):
+		}
 
 		ctx, cancel := context.WithTimeout(context.Background(), redisPingTimeout)
 		err := client.Ping(ctx).Err()
@@ -186,6 +195,10 @@ func retryConnect(client *redis.Client, logger datasource.Logger) {
 
 // Close shuts down the Redis client, ensuring the current dataset is saved before exiting.
 func (r *Redis) Close() error {
+	r.closeOnce.Do(func() {
+		close(r.stopSignal)
+	})
+
 	if r.Client != nil {
 		return r.Client.Close()
 	}
@@ -215,6 +228,8 @@ func NewPubSub(conf config.Config, logger datasource.Logger, metrics Metrics) pu
 	rc := redis.NewClient(redisConfig.Options)
 	rc.AddHook(&redisHook{config: redisConfig, logger: logger, metrics: metrics})
 
+	ps := newPubSub(rc, redisConfig, logger, metrics)
+
 	ctx, cancel := context.WithTimeout(context.TODO(), redisPingTimeout)
 	defer cancel()
 
@@ -227,10 +242,8 @@ func NewPubSub(conf config.Config, logger datasource.Logger, metrics Metrics) pu
 	} else {
 		logger.Errorf("could not connect to redis at '%s:%d' , error: %s", redisConfig.HostName, redisConfig.Port, err)
 
-		go retryConnect(rc, logger)
+		go retryConnect(rc, logger, ps.ctx.Done())
 	}
-
-	ps := newPubSub(rc, redisConfig, logger, metrics)
 
 	return ps
 }

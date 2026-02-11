@@ -196,7 +196,8 @@ func authInterceptor(ctx context.Context, req any, info *grpc.UnaryServerInfo, h
 
 ## Adding Custom Stream interceptors
 
-For streaming RPCs (client-stream, server-stream, or bidirectional), GoFr allows you to add stream interceptors using AddGRPCServerStreamInterceptors. These are useful for handling logic that needs to span the entire lifetime of a stream.
+For streaming RPCs (client-stream, server-stream, or bidirectional), GoFr allows you to add stream interceptors using `AddGRPCServerStreamInterceptors`. These are useful for handling logic that needs to span the entire lifetime of a stream.
+
 ```go
 func main() {
     app := gofr.New()

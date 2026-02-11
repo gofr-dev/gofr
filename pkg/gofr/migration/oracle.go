@@ -70,25 +70,29 @@ func (om oracleMigrator) checkAndCreateMigrationTable(c *container.Container) er
 }
 
 // Get the last applied migration version.
-func (om oracleMigrator) getLastMigration(c *container.Container) int64 {
-	var results []map[string]any
+func (om oracleMigrator) getLastMigration(c *container.Container) (int64, error) {
+	var (
+		results             []map[string]any
+		oracleLastMigration int64
+	)
 
 	err := om.Oracle.Select(context.Background(), &results, getLastOracleGoFrMigration)
 	if err != nil {
-		c.Errorf("Failed to fetch last migration: %v", err)
-		return 0
+		return -1, fmt.Errorf("oracle: %w", err)
 	}
 
-	oracleLastMigration := om.extractLastMigrationFromResults(results)
+	if len(results) != 0 {
+		oracleLastMigration = om.extractLastMigrationFromResults(results)
+	}
+
 	c.Debugf("Oracle last migration fetched value is: %v", oracleLastMigration)
 
-	baseLastMigration := om.migrator.getLastMigration(c)
-
-	if baseLastMigration > oracleLastMigration {
-		return baseLastMigration
+	baseLastMigration, err := om.migrator.getLastMigration(c)
+	if err != nil {
+		return -1, err
 	}
 
-	return oracleLastMigration
+	return max(baseLastMigration, oracleLastMigration), nil
 }
 
 // extractLastMigrationFromResults handles Oracle number type conversion.
@@ -191,6 +195,18 @@ func (om oracleMigrator) beginTransaction(c *container.Container) transactionDat
 	c.Debug("Oracle Transaction begin successful")
 
 	return td
+}
+
+func (om oracleMigrator) lock(ctx context.Context, cancel context.CancelFunc, c *container.Container, ownerID string) error {
+	return om.migrator.lock(ctx, cancel, c, ownerID)
+}
+
+func (om oracleMigrator) unlock(c *container.Container, ownerID string) error {
+	return om.migrator.unlock(c, ownerID)
+}
+
+func (oracleMigrator) name() string {
+	return "Oracle"
 }
 
 type oracleTransactionWrapper struct {
