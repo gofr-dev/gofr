@@ -4,6 +4,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"reflect"
+	"runtime"
 	"sync"
 	"time"
 
@@ -45,8 +47,9 @@ type job struct {
 	month     map[int]struct{}
 	dayOfWeek map[int]struct{}
 
-	name string
-	fn   CronFunc
+	name         string
+	functionName string
+	fn           CronFunc
 }
 
 type tick struct {
@@ -106,16 +109,16 @@ func (j *job) run(cntnr *container.Container) {
 	start := time.Now()
 
 	defer func() {
-		duration := time.Since(start).Milliseconds()
+		duration := time.Since(start).Seconds()
 
 		if m := cntnr.Metrics(); m != nil {
-			m.RecordHistogram(ctx, "app_cron_job_duration", float64(duration), "job", j.name)
+			m.RecordHistogram(ctx, "app_cron_job_duration", float64(duration), "job", j.name, "func", j.functionName)
 
 			if r := recover(); r != nil {
 				c.Errorf("Panic in cron job %s: %v", j.name, r)
-				m.IncrementCounter(ctx, "app_cron_job_failures", "job", j.name)
+				m.IncrementCounter(ctx, "app_cron_job_failures", "job", j.name, "func", j.functionName)
 			} else {
-				m.IncrementCounter(ctx, "app_cron_job_success", "job", j.name)
+				m.IncrementCounter(ctx, "app_cron_job_success", "job", j.name, "func", j.functionName)
 			}
 		} else if r := recover(); r != nil {
 			c.Errorf("Panic in cron job %s: %v", j.name, r)
@@ -125,7 +128,7 @@ func (j *job) run(cntnr *container.Container) {
 	}()
 
 	if m := cntnr.Metrics(); m != nil {
-		m.IncrementCounter(ctx, "app_cron_job_total", "job", j.name)
+		m.IncrementCounter(ctx, "app_cron_job_total", "job", j.name, "func", j.functionName)
 	}
 
 	j.fn(c)
@@ -137,10 +140,10 @@ func (c *Crontab) registerMetrics() {
 		return
 	}
 
-	cronJobHistogramBuckets := []float64{10, 100, 500, 1000, 5000}
+	cronJobHistogramBuckets := []float64{.05, .1, .5, 1, 5, 10, 30, 60, 120, 300, 600, 1800, 3600}
 	m.NewHistogram(
 		"app_cron_job_duration",
-		"Duration of cron job execution in milliseconds",
+		"Duration of cron job execution in seconds",
 		cronJobHistogramBuckets...,
 	)
 	m.NewCounter("app_cron_job_total", "Total number of cron job executions")
@@ -157,6 +160,7 @@ func (c *Crontab) AddJob(schedule, jobName string, fn CronFunc) error {
 
 	j.name = jobName
 	j.fn = fn
+	j.functionName = runtime.FuncForPC(reflect.ValueOf(fn).Pointer()).Name()
 
 	c.mu.Lock()
 	c.jobs = append(c.jobs, j)

@@ -226,6 +226,30 @@ GoFr publishes metrics to port: _2121_ on _/metrics_ endpoint in Prometheus form
 - gauge
 - Current state of the circuit breaker (0 for Closed, 1 for Open). Used for historical timeline visualization.
 
+---
+
+- app_cron_job_total
+- counter
+- Total number of cron job executions. Labels: `job`, `func`.
+
+---
+
+- app_cron_job_success
+- counter
+- Number of successful cron job executions. Labels: `job`, `func`.
+
+---
+
+- app_cron_job_failures
+- counter
+- Number of failed cron job executions. Labels: `job`, `func`.
+
+---
+
+- app_cron_job_duration
+- histogram
+- Duration of cron job execution in seconds. Labels: `job`, `func`.
+
 {% /table %}
 
 For example: When running the application locally, we can access the /metrics endpoint on port 2121 from: {% new-tab-link title="http://localhost:2121/metrics" href="http://localhost:2121/metrics" /%}

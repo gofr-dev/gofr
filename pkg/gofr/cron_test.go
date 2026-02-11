@@ -208,11 +208,7 @@ func TestCronTab_AddJob(t *testing.T) {
 	// We need a mock container because NewCron now registers metrics
 	mockContainer, mocks := container.NewMockContainer(t)
 	// Expect metrics registration
-	mocks.Metrics.EXPECT().NewHistogram(
-		"app_cron_job_duration",
-		gomock.Any(), gomock.Any(), gomock.Any(),
-		gomock.Any(), gomock.Any(), gomock.Any(),
-	).AnyTimes()
+	mocks.Metrics.EXPECT().NewHistogram("app_cron_job_duration", gomock.Any(), gomock.Any()).AnyTimes()
 	mocks.Metrics.EXPECT().NewCounter("app_cron_job_total", gomock.Any()).AnyTimes()
 	mocks.Metrics.EXPECT().NewCounter("app_cron_job_success", gomock.Any()).AnyTimes()
 	mocks.Metrics.EXPECT().NewCounter("app_cron_job_failures", gomock.Any()).AnyTimes()
@@ -234,8 +230,9 @@ func TestCronTab_runScheduled(t *testing.T) {
 		day:       map[int]struct{}{1: {}},
 		month:     map[int]struct{}{1: {}},
 		dayOfWeek: map[int]struct{}{1: {}},
-		name:      "test-job",
-		fn:        func(*Context) { fmt.Println("hello from cron") },
+		name:         "test-job",
+		functionName: "func1",
+		fn:           func(*Context) { fmt.Println("hello from cron") },
 	}
 
 	// can make container nil as we are not testing the internal working of
@@ -245,19 +242,15 @@ func TestCronTab_runScheduled(t *testing.T) {
 	mockContainer, mocks := container.NewMockContainer(t)
 
 	// Expect metrics registration
-	mocks.Metrics.EXPECT().NewHistogram(
-		"app_cron_job_duration",
-		gomock.Any(), gomock.Any(), gomock.Any(),
-		gomock.Any(), gomock.Any(), gomock.Any(),
-	).AnyTimes()
+	mocks.Metrics.EXPECT().NewHistogram("app_cron_job_duration", gomock.Any(), gomock.Any()).AnyTimes()
 	mocks.Metrics.EXPECT().NewCounter("app_cron_job_total", gomock.Any()).AnyTimes()
 	mocks.Metrics.EXPECT().NewCounter("app_cron_job_success", gomock.Any()).AnyTimes()
 	mocks.Metrics.EXPECT().NewCounter("app_cron_job_failures", gomock.Any()).AnyTimes()
 
 	// Expect metrics recording during run
-	mocks.Metrics.EXPECT().IncrementCounter(gomock.Any(), "app_cron_job_total", "job", "test-job").Times(1)
-	mocks.Metrics.EXPECT().IncrementCounter(gomock.Any(), "app_cron_job_success", "job", "test-job").Times(1)
-	mocks.Metrics.EXPECT().RecordHistogram(gomock.Any(), "app_cron_job_duration", gomock.Any(), "job", "test-job").Times(1)
+	mocks.Metrics.EXPECT().IncrementCounter(gomock.Any(), "app_cron_job_total", gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Times(1)
+	mocks.Metrics.EXPECT().IncrementCounter(gomock.Any(), "app_cron_job_success", gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Times(1)
+	mocks.Metrics.EXPECT().RecordHistogram(gomock.Any(), "app_cron_job_duration", gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Times(1)
 
 	c := NewCron(mockContainer)
 
