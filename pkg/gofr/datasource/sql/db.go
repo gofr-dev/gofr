@@ -11,6 +11,7 @@ import (
 	"reflect"
 	"regexp"
 	"strings"
+	"sync"
 	"time"
 
 	"gofr.dev/pkg/gofr/datasource"
@@ -20,9 +21,11 @@ import (
 type DB struct {
 	// contains unexported or private fields
 	*sql.DB
-	logger  datasource.Logger
-	config  *DBConfig
-	metrics Metrics
+	logger     datasource.Logger
+	config     *DBConfig
+	metrics    Metrics
+	stopSignal chan struct{}
+	closeOnce  sync.Once
 }
 
 type Log struct {
@@ -44,18 +47,27 @@ func clean(query string) string {
 	return query
 }
 
-func (d *DB) sendOperationStats(start time.Time, queryType, query string, args ...any) {
+func sendStats(logger datasource.Logger, metrics Metrics, config *DBConfig, start time.Time, queryType, query string, args ...any) {
 	duration := time.Since(start).Milliseconds()
 
-	d.logger.Debug(&Log{
-		Type:     queryType,
-		Query:    query,
-		Duration: duration,
-		Args:     args,
-	})
+	if logger != nil {
+		logger.Debug(&Log{
+			Type:     queryType,
+			Query:    query,
+			Duration: duration,
+			Args:     args,
+		})
+	}
 
-	d.metrics.RecordHistogram(context.Background(), "app_sql_stats", float64(duration), "hostname", d.config.HostName,
-		"database", d.config.Database, "type", getOperationType(query))
+	// This contains the fix for the nil pointer dereference
+	if metrics != nil {
+		metrics.RecordHistogram(context.Background(), "app_sql_stats", float64(duration), "hostname", config.HostName,
+			"database", config.Database, "type", getOperationType(query))
+	}
+}
+
+func (d *DB) sendOperationStats(start time.Time, queryType, query string, args ...any) {
+	sendStats(d.logger, d.metrics, d.config, start, queryType, query, args...)
 }
 
 func getOperationType(query string) string {
@@ -114,6 +126,10 @@ func (d *DB) Begin() (*Tx, error) {
 }
 
 func (d *DB) Close() error {
+	d.closeOnce.Do(func() {
+		close(d.stopSignal)
+	})
+
 	if d.DB != nil {
 		return d.DB.Close()
 	}
@@ -129,17 +145,7 @@ type Tx struct {
 }
 
 func (t *Tx) sendOperationStats(start time.Time, queryType, query string, args ...any) {
-	duration := time.Since(start).Milliseconds()
-
-	t.logger.Debug(&Log{
-		Type:     queryType,
-		Query:    query,
-		Duration: duration,
-		Args:     args,
-	})
-
-	t.metrics.RecordHistogram(context.Background(), "app_sql_stats", float64(duration), "hostname", t.config.HostName,
-		"database", t.config.Database, "type", getOperationType(query))
+	sendStats(t.logger, t.metrics, t.config, start, queryType, query, args...)
 }
 
 func (t *Tx) Query(query string, args ...any) (*sql.Rows, error) {

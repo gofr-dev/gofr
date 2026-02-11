@@ -2,6 +2,7 @@ package migration
 
 import (
 	"context"
+	"fmt"
 	"time"
 
 	"gofr.dev/pkg/gofr/container"
@@ -41,14 +42,15 @@ func (cs cassandraMigrator) checkAndCreateMigrationTable(c *container.Container)
 	return cs.migrator.checkAndCreateMigrationTable(c)
 }
 
-func (cs cassandraMigrator) getLastMigration(c *container.Container) int64 {
-	var lastMigration int64 // Default to 0 if no migrations found
-
-	var lastMigrations []int64
+func (cs cassandraMigrator) getLastMigration(c *container.Container) (int64, error) {
+	var (
+		lastMigration  int64
+		lastMigrations []int64
+	)
 
 	err := c.Cassandra.QueryWithCtx(context.Background(), &lastMigrations, getLastCassandraGoFrMigration)
 	if err != nil {
-		return 0
+		return -1, fmt.Errorf("cassandra: %w", err)
 	}
 
 	for _, version := range lastMigrations {
@@ -59,13 +61,12 @@ func (cs cassandraMigrator) getLastMigration(c *container.Container) int64 {
 
 	c.Debugf("cassandra last migration fetched value is: %v", lastMigration)
 
-	lm2 := cs.migrator.getLastMigration(c)
-
-	if lm2 > lastMigration {
-		return lm2
+	lm2, err := cs.migrator.getLastMigration(c)
+	if err != nil {
+		return -1, err
 	}
 
-	return lastMigration
+	return max(lastMigration, lm2), nil
 }
 
 func (cs cassandraMigrator) beginTransaction(c *container.Container) transactionData {
@@ -92,4 +93,16 @@ func (cs cassandraMigrator) rollback(c *container.Container, data transactionDat
 	cs.migrator.rollback(c, data)
 
 	c.Fatalf("migration %v failed and rolled back", data.MigrationNumber)
+}
+
+func (cs cassandraMigrator) lock(ctx context.Context, cancel context.CancelFunc, c *container.Container, ownerID string) error {
+	return cs.migrator.lock(ctx, cancel, c, ownerID)
+}
+
+func (cs cassandraMigrator) unlock(c *container.Container, ownerID string) error {
+	return cs.migrator.unlock(c, ownerID)
+}
+
+func (cassandraMigrator) name() string {
+	return "Cassandra"
 }
