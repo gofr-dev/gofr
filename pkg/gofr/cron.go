@@ -104,6 +104,7 @@ func (j *job) run(cntnr *container.Container) {
 	c.Infof("Starting cron job: %s", j.name)
 
 	start := time.Now()
+
 	defer func() {
 		duration := time.Since(start).Milliseconds()
 
@@ -119,12 +120,14 @@ func (j *job) run(cntnr *container.Container) {
 		} else if r := recover(); r != nil {
 			c.Errorf("Panic in cron job %s: %v", j.name, r)
 		}
+
 		c.Infof("Finished cron job: %s in %s", j.name, time.Since(start))
 	}()
 
 	if m := cntnr.Metrics(); m != nil {
 		m.IncrementCounter(ctx, "app_cron_job_total", "job", j.name)
 	}
+
 	j.fn(c)
 }
 
@@ -134,11 +137,11 @@ func (c *Crontab) registerMetrics() {
 		return
 	}
 
-	const cronJobHistogramDefaultBuckets = 10
+	cronJobHistogramBuckets := []float64{10, 100, 500, 1000, 5000}
 	m.NewHistogram(
 		"app_cron_job_duration",
 		"Duration of cron job execution in milliseconds",
-		cronJobHistogramDefaultBuckets, 100, 500, 1000, 5000,
+		cronJobHistogramBuckets...,
 	)
 	m.NewCounter("app_cron_job_total", "Total number of cron job executions")
 	m.NewCounter("app_cron_job_success", "Number of successful cron job executions")
