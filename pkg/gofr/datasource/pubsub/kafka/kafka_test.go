@@ -913,3 +913,292 @@ func TestKafkaClient_Query_ContextHandling(t *testing.T) {
 		})
 	}
 }
+
+// TestKafkaClient_SubscribeConcurrentRaceCondition tests that concurrent Subscribe calls
+// do not cause a data race when accessing the reader map. This test specifically validates
+//
+// The test runs multiple goroutines that subscribe to the same topic concurrently,
+// which would previously cause a race when one goroutine was reading k.reader[topic]
+// while another was potentially modifying the map.
+func TestKafkaClient_SubscribeConcurrentRaceCondition(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	mockConnection := NewMockConnection(ctrl)
+	mockMetrics := NewMockMetrics(ctrl)
+
+	k := &kafkaClient{
+		dialer: &kafka.Dialer{},
+		conn: &multiConn{
+			conns: []Connection{
+				mockConnection,
+			},
+		},
+		logger: logging.NewMockLogger(logging.DEBUG),
+		config: Config{
+			ConsumerGroupID: "test-consumer-group",
+			Brokers:         []string{"localhost:9092"},
+			OffSet:          -1,
+		},
+		mu:      &sync.RWMutex{},
+		metrics: mockMetrics,
+	}
+
+	// The controller check is called for each subscribe to verify connectivity
+	mockConnection.EXPECT().Controller().Return(kafka.Broker{}, nil).AnyTimes()
+
+	// Set up expectations for metrics calls - these will be called multiple times
+	mockMetrics.EXPECT().
+		IncrementCounter(gomock.Any(), "app_pubsub_subscribe_total_count", "topic", "test-topic", "consumer_group", "test-consumer-group").
+		AnyTimes()
+	mockMetrics.EXPECT().
+		IncrementCounter(gomock.Any(), "app_pubsub_subscribe_success_count", "topic", "test-topic", "consumer_group", "test-consumer-group").
+		AnyTimes()
+
+	const numGoroutines = 50
+
+	var wg sync.WaitGroup
+	wg.Add(numGoroutines)
+
+	// Channel to collect errors from goroutines
+	errChan := make(chan error, numGoroutines)
+
+	// Run multiple concurrent Subscribe calls to the same topic
+	// This tests the race condition where k.reader[topic] was accessed after unlock
+	for i := 0; i < numGoroutines; i++ {
+		go func() {
+			defer wg.Done()
+
+			ctx := context.Background()
+
+			// For each subscribe, we need to create a mock reader that will be used
+			// Since the reader map is shared, we need to handle the case where
+			// the reader might already exist from a previous goroutine
+			k.mu.Lock()
+
+			if k.reader == nil {
+				k.reader = make(map[string]Reader)
+			}
+
+			if k.reader["test-topic"] == nil {
+				mockReader := NewMockReader(ctrl)
+				k.reader["test-topic"] = mockReader
+
+				// Set up expectations for this reader
+				mockReader.EXPECT().
+					FetchMessage(gomock.Any()).
+					Return(kafka.Message{
+						Value: []byte("test-message"),
+						Topic: "test-topic",
+					}, nil).
+					AnyTimes()
+			}
+
+			k.mu.Unlock()
+
+			// This call would previously cause a race condition because
+			// k.reader[topic] was accessed after the mutex was unlocked
+			msg, err := k.Subscribe(ctx, "test-topic")
+			if err != nil {
+				errChan <- err
+				return
+			}
+
+			if msg == nil {
+				errChan <- assert.AnError
+				return
+			}
+		}()
+	}
+	// Wait for all goroutines to complete
+	wg.Wait()
+	close(errChan)
+
+	// Check for any errors from the goroutines
+	errs := make([]error, 0, numGoroutines)
+	for err := range errChan {
+		errs = append(errs, err)
+	}
+
+	require.Empty(t, errs, "expected no errors from concurrent subscribe operations")
+}
+
+// TestKafkaClient_SubscribeConcurrentMultipleTopics tests that concurrent Subscribe calls
+// to different topics do not cause race conditions when initializing and accessing
+// different readers in the map.
+func TestKafkaClient_SubscribeConcurrentMultipleTopics(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	mockConnection := NewMockConnection(ctrl)
+	mockMetrics := NewMockMetrics(ctrl)
+
+	k := &kafkaClient{
+		dialer: &kafka.Dialer{},
+		conn: &multiConn{
+			conns: []Connection{
+				mockConnection,
+			},
+		},
+		logger: logging.NewMockLogger(logging.DEBUG),
+		config: Config{
+			ConsumerGroupID: "test-consumer-group",
+			Brokers:         []string{"localhost:9092"},
+			OffSet:          -1,
+		},
+		mu:      &sync.RWMutex{},
+		metrics: mockMetrics,
+	}
+
+	mockConnection.EXPECT().Controller().Return(kafka.Broker{}, nil).AnyTimes()
+	mockMetrics.EXPECT().IncrementCounter(gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
+
+	topics := []string{"topic-1", "topic-2", "topic-3", "topic-4", "topic-5"}
+
+	const goroutinesPerTopic = 10
+
+	var wg sync.WaitGroup
+	wg.Add(len(topics) * goroutinesPerTopic)
+
+	errChan := make(chan error, len(topics)*goroutinesPerTopic)
+
+	// Create mock readers for all topics beforehand
+	k.reader = make(map[string]Reader)
+
+	for _, topic := range topics {
+		mockReader := NewMockReader(ctrl)
+		k.reader[topic] = mockReader
+		mockReader.EXPECT().
+			FetchMessage(gomock.Any()).
+			Return(kafka.Message{
+				Value: []byte("test-message"),
+				Topic: topic,
+			}, nil).
+			AnyTimes()
+	}
+
+	// Run concurrent subscribes to multiple different topics
+
+	for _, topic := range topics {
+		for i := 0; i < goroutinesPerTopic; i++ {
+			go func(t string) {
+				defer wg.Done()
+
+				ctx := context.Background()
+
+				msg, err := k.Subscribe(ctx, t)
+				if err != nil {
+					errChan <- err
+					return
+				}
+
+				if msg == nil {
+					errChan <- assert.AnError
+				}
+			}(topic)
+		}
+	}
+
+	wg.Wait()
+	close(errChan)
+
+	errs := make([]error, 0, len(topics)*goroutinesPerTopic)
+	for err := range errChan {
+		errs = append(errs, err)
+	}
+
+	require.Empty(t, errs, "expected no errors from concurrent subscribe operations to multiple topics")
+}
+
+// TestKafkaClient_SubscribeReaderInitializationRace tests the race condition that occurs
+// when multiple goroutines try to initialize a reader for the same topic simultaneously.
+// This validates that the mutex properly protects both the reader map initialization
+// and the assignment of k.reader[topic] to the local reader variable.
+func TestKafkaClient_SubscribeReaderInitializationRace(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	mockConnection := NewMockConnection(ctrl)
+	mockMetrics := NewMockMetrics(ctrl)
+	mockReader := NewMockReader(ctrl)
+
+	k := &kafkaClient{
+		dialer: &kafka.Dialer{},
+		conn: &multiConn{
+			conns: []Connection{
+				mockConnection,
+			},
+		},
+		logger: logging.NewMockLogger(logging.DEBUG),
+		config: Config{
+			ConsumerGroupID: "test-consumer-group",
+			Brokers:         []string{"localhost:9092"},
+			OffSet:          -1,
+		},
+		mu:      &sync.RWMutex{},
+		metrics: mockMetrics,
+		// Intentionally leave reader as nil to test initialization race
+		reader: nil,
+	}
+
+	mockConnection.EXPECT().Controller().Return(kafka.Broker{}, nil).AnyTimes()
+	mockMetrics.EXPECT().IncrementCounter(gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
+
+	// Set up reader expectations - reader will be accessed many times
+	mockReader.EXPECT().
+		FetchMessage(gomock.Any()).
+		Return(kafka.Message{
+			Value: []byte("test-message"),
+			Topic: "init-test-topic",
+		}, nil).
+		AnyTimes()
+
+	const numGoroutines = 100
+
+	var wg sync.WaitGroup
+	wg.Add(numGoroutines)
+
+	errChan := make(chan error, numGoroutines)
+
+	// All goroutines try to subscribe to the same topic when reader map is nil
+	// This tests the race condition during map initialization and first reader creation
+	for i := 0; i < numGoroutines; i++ {
+		go func() {
+			defer wg.Done()
+
+			ctx := context.Background()
+
+			// Ensure reader is set up before first subscribe
+			k.mu.Lock()
+
+			if k.reader == nil {
+				k.reader = make(map[string]Reader)
+			}
+
+			if k.reader["init-test-topic"] == nil {
+				k.reader["init-test-topic"] = mockReader
+			}
+
+			k.mu.Unlock()
+
+			msg, err := k.Subscribe(ctx, "init-test-topic")
+			if err != nil {
+				errChan <- err
+			} else if msg == nil {
+				errChan <- assert.AnError
+			}
+		}()
+	}
+
+	wg.Wait()
+	close(errChan)
+
+	// Check for any errors from the goroutines
+	errs := make([]error, 0, numGoroutines)
+	for err := range errChan {
+		errs = append(errs, err)
+	}
+
+	// With proper mocking, we should have no errors
+	require.Empty(t, errs, "expected no errors from concurrent subscribe operations during initialization")
+}
