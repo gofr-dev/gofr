@@ -6,6 +6,7 @@ Managing repetitive tasks and maintaining consistency across large-scale applica
 
 * All-in-one command-line tool designed specifically for GoFr applications
 * Simplifies **database migrations** management
+* **Store Layer Generator** for type-safe data access code from YAML configurations
 * Abstracts **tracing**, **metrics** and structured **logging** for GoFr's gRPC server/client
 * Enforces standard **GoFr conventions** in new projects
 
@@ -206,3 +207,387 @@ func main() {
 ```
 For detailed instruction on setting up a gRPC server with GoFr see the [gRPC Client Documentation](https://gofr.dev/docs/advanced-guide/grpc#generating-tracing-enabled-g-rpc-client-using)
 For more examples refer [gRPC Examples](https://github.com/gofr-dev/gofr/tree/main/examples/grpc)
+
+---
+
+## 4. ***`store`***
+
+The `gofr store` command is a powerful code generator that creates type-safe data access layers from YAML configuration files. It eliminates boilerplate code for database operations while maintaining GoFr's best practices for observability and context management.
+
+### **Features**
+
+* **YAML-Driven Configuration**: Define your data models and queries in a simple, declarative format
+* **Type-Safe Code Generation**: Automatically generates Go interfaces and implementations with proper type checking
+* **GoFr Context Integration**: Generated methods seamlessly work with `*gofr.Context` for built-in observability
+* **Multiple Query Types**: Support for SELECT, INSERT, UPDATE, and DELETE operations
+* **Flexible Return Types**: Single records, multiple records, counts, or custom responses
+* **Model Generation**: Auto-generate Go structs with proper database and JSON tags
+* **Store Registry**: Centralized management of all generated stores
+
+### **Commands**
+
+#### **Initialize Store Configuration**
+
+Create a new `store.yaml` configuration file with example templates to get started quickly.
+
+```bash
+gofr store init
+```
+
+This creates a `store.yaml` file in your current directory with a complete example configuration including sample models and queries.
+
+#### **Generate Store Code**
+
+Generate Go code from your store configuration file.
+
+```bash
+gofr store generate
+```
+
+By default, this reads from `store.yaml` in the current directory and generates code according to the specified output directories.
+
+---
+
+### **Quick Start Example**
+
+**Step 1: Initialize Configuration**
+```bash
+gofr store init
+```
+
+**Step 2: Define Your Store in `store.yaml`**
+```yaml
+version: "1.0"
+
+stores:
+  - name: "user"
+    package: "user"
+    output_dir: "stores/user"
+    interface: "User"
+    implementation: "userStore"
+    queries:
+      - name: "GetUserByID"
+        sql: "SELECT id, name, email FROM users WHERE id = ?"
+        type: "select"
+        model: "User"
+        returns: "single"
+        params:
+          - name: "id"
+            type: "int64"
+        description: "Retrieves a user by their ID"
+
+      - name: "GetAllUsers"
+        sql: "SELECT id, name, email FROM users"
+        type: "select"
+        model: "User"
+        returns: "multiple"
+        description: "Retrieves all users"
+
+models:
+  - name: "User"
+    fields:
+      - name: "ID"
+        type: "int64"
+        tag: 'db:"id" json:"id"'
+      - name: "Name"
+        type: "string"
+        tag: 'db:"name" json:"name"'
+      - name: "Email"
+        type: "string"
+        tag: 'db:"email" json:"email"'
+```
+
+**Step 3: Generate Store Code**
+```bash
+gofr store generate
+```
+
+This generates the following structure:
+```
+stores/
+├── all.go              # Store registry (auto-generated)
+└── user/
+    ├── interface.go    # User interface definition
+    ├── store.go        # User store implementation
+    └── user.go         # User model struct
+```
+
+**Step 4: Use in Your Application**
+```go
+package main
+
+import (
+    "gofr.dev/pkg/gofr"
+    "your-project/stores/user"
+)
+
+func main() {
+    app := gofr.New()
+    
+    // Initialize the user store
+    userStore := user.NewUser()
+
+    // Use the store in your handlers
+    app.GET("/users/{id}", func(ctx *gofr.Context) (interface{}, error) {
+        id, _ := strconv.ParseInt(ctx.PathParam("id"), 10, 64)
+        return userStore.GetUserByID(ctx, id)
+    })
+
+    app.GET("/users", func(ctx *gofr.Context) (interface{}, error) {
+        return userStore.GetAllUsers(ctx)
+    })
+
+    app.Run()
+}
+```
+
+---
+
+### **Configuration Reference**
+
+#### **Store Configuration**
+
+Each store in the YAML file requires the following fields:
+
+| Field | Type | Description | Required |
+|-------|------|-------------|----------|
+| `name` | string | Store identifier used in registry | Yes |
+| `package` | string | Go package name for generated code | Yes |
+| `output_dir` | string | Directory path for generated files | Yes |
+| `interface` | string | Interface name (e.g., "User") | Yes |
+| `implementation` | string | Implementation struct name | Yes |
+| `queries` | array | List of database queries | Yes |
+
+#### **Query Types**
+
+The store generator supports four query types:
+
+* **`select`** - For SELECT queries (retrieval operations)
+* **`insert`** - For INSERT queries (creation operations)
+* **`update`** - For UPDATE queries (modification operations)
+* **`delete`** - For DELETE queries (removal operations)
+
+#### **Return Types**
+
+Specify how the query results should be returned:
+
+* **`single`** - Returns a single model instance
+* **`multiple`** - Returns a slice of models
+* **`count`** - Returns an `int64` count
+* **`custom`** - Returns `interface{}` for custom responses
+
+#### **Query Parameters**
+
+Each query can have parameters defined with:
+
+```yaml
+params:
+  - name: "id"
+    type: "int64"
+  - name: "email"
+    type: "string"
+```
+
+Supported parameter types include all Go primitive types, `time.Time`, and custom types.
+
+---
+
+### **Model Generation**
+
+#### **Generate New Models**
+
+Define models directly in the configuration:
+
+```yaml
+models:
+  - name: "User"
+    fields:
+      - name: "ID"
+        type: "int64"
+        tag: 'db:"id" json:"id"'
+      - name: "Name"
+        type: "string"
+        tag: 'db:"name" json:"name"'
+      - name: "CreatedAt"
+        type: "time.Time"
+        tag: 'db:"created_at" json:"created_at"'
+```
+
+This generates:
+```go
+type User struct {
+    ID        int64     `db:"id" json:"id"`
+    Name      string    `db:"name" json:"name"`
+    CreatedAt time.Time `db:"created_at" json:"created_at"`
+}
+
+func (User) TableName() string {
+    return "user"
+}
+```
+
+#### **Reference Existing Models**
+
+If you already have models defined elsewhere:
+
+```yaml
+models:
+  - name: "User"
+    path: "../models/user.go"
+    package: "your-project/models"
+```
+
+---
+
+### **Advanced Examples**
+
+#### **Multiple Stores**
+
+Manage different entities with separate stores:
+
+```yaml
+version: "1.0"
+
+stores:
+  - name: "user"
+    package: "user"
+    output_dir: "stores/user"
+    interface: "User"
+    implementation: "userStore"
+    queries: [...]
+
+  - name: "product"
+    package: "product"
+    output_dir: "stores/product"
+    interface: "Product"
+    implementation: "productStore"
+    queries: [...]
+
+models:
+  - name: "User"
+    fields: [...]
+  - name: "Product"
+    fields: [...]
+```
+
+#### **Complex Queries**
+
+```yaml
+queries:
+  - name: "SearchUsers"
+    sql: "SELECT id, name, email FROM users WHERE name LIKE ? OR email LIKE ?"
+    type: "select"
+    model: "User"
+    returns: "multiple"
+    params:
+      - name: "namePattern"
+        type: "string"
+      - name: "emailPattern"
+        type: "string"
+    description: "Search users by name or email pattern"
+
+  - name: "UpdateUserEmail"
+    sql: "UPDATE users SET email = ? WHERE id = ?"
+    type: "update"
+    returns: "count"
+    params:
+      - name: "email"
+        type: "string"
+      - name: "id"
+        type: "int64"
+    description: "Updates a user's email address"
+```
+
+#### **Using the Store Registry**
+
+Access all stores through the centralized registry:
+
+```go
+import "your-project/stores"
+
+func main() {
+    app := gofr.New()
+    
+    // Get all stores
+    allStores := stores.All()
+    
+    // Access specific store from registry
+    userStore := stores.GetStore("user").(user.User)
+    
+    // Use the store
+    app.GET("/users/{id}", func(ctx *gofr.Context) (interface{}, error) {
+        id, _ := strconv.ParseInt(ctx.PathParam("id"), 10, 64)
+        return userStore.GetUserByID(ctx, id)
+    })
+    
+    app.Run()
+}
+```
+
+---
+
+### **Generated Code Structure**
+
+#### **Interface (`interface.go`)**
+
+```go
+// Code generated by gofr.dev/cli/gofr. DO NOT EDIT.
+package user
+
+import "gofr.dev/pkg/gofr"
+
+type User interface {
+    GetUserByID(ctx *gofr.Context, id int64) (*User, error)
+    GetAllUsers(ctx *gofr.Context) ([]User, error)
+    SearchUsers(ctx *gofr.Context, namePattern, emailPattern string) ([]User, error)
+}
+```
+
+#### **Implementation (`store.go`)**
+
+```go
+// Code generated by gofr.dev/cli/gofr. DO NOT EDIT.
+package user
+
+type userStore struct{}
+
+func NewUser() User {
+    return &userStore{}
+}
+
+func (s *userStore) GetUserByID(ctx *gofr.Context, id int64) (*User, error) {
+    // TODO: Implement using ctx.SQL()
+    return &User{}, nil
+}
+
+func (s *userStore) GetAllUsers(ctx *gofr.Context) ([]User, error) {
+    // TODO: Implement using ctx.SQL()
+    return []User{}, nil
+}
+```
+
+---
+
+### **Best Practices**
+
+1. **Organize by Domain**: Group related queries in the same store (e.g., all user-related operations in the user store)
+
+2. **Use Descriptive Names**: Name your queries based on their business logic (e.g., `GetActiveUsers` instead of `SelectUsers`)
+
+3. **Leverage Type Safety**: Take advantage of strongly-typed parameters and return values to catch errors at compile time
+
+4. **Implement Query Logic**: The generator creates method signatures; implement the actual SQL execution using `ctx.SQL()` methods
+
+5. **Version Control**: Commit your `store.yaml` configuration file to track changes to your data access layer
+
+6. **Regenerate After Changes**: Run `gofr store generate` after modifying your configuration to update generated code
+
+7. **Don't Edit Generated Files**: Files marked with `DO NOT EDIT` should not be manually modified as they will be overwritten
+
+---
+
+### **Complete Example**
+
+For a complete working example of the store generator, see the [store example](https://github.com/gofr-dev/gofr-cli/tree/main/store/example.yaml) in the gofr-cli repository.
+
+For detailed configuration options and advanced usage, refer to the [Store Generator README](https://github.com/gofr-dev/gofr-cli/blob/main/store/README.md).
