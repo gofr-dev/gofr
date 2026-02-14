@@ -34,13 +34,24 @@ var (
 // Cleanup: The rate limiter starts a background goroutine that runs for the
 // application lifetime. This is acceptable for long-running servers but consider
 // calling Store.StopCleanup() in shutdown handlers if needed.
+//
+// KeyExtractor: Custom function to extract rate limiting key from requests.
+// Examples:
+//   - ExtractHeader("X-API-Key") - Rate limit by API key
+//   - ExtractBody("email") - Rate limit login by email
+//   - ExtractParam("user_id") - Rate limit by user ID
+//   - ExtractIP(false) - Rate limit by IP (same as PerIP=true)
+//
+// Priority: KeyExtractor (if set) takes precedence over PerIP. For backward compatibility,
+// PerIP=true is still supported when KeyExtractor is not set.
 type RateLimiterConfig struct {
 	RequestsPerSecond float64
 	Burst             int
-	PerIP             bool
+	PerIP             bool             // Keep for backward compatibility
 	Store             RateLimiterStore // Optional: defaults to in-memory store
 	TrustedProxies    bool             // If true, trust X-Forwarded-For and X-Real-IP headers
 	MaxKeys           int64            // Maximum unique rate limit keys (0 = default 100000)
+	KeyExtractor      KeyExtractor     // Optional: custom key extraction function
 }
 
 // Validate checks if the configuration values are valid.
@@ -135,16 +146,35 @@ func RateLimiter(config RateLimiterConfig, m metrics) func(http.Handler) http.Ha
 				return
 			}
 
-			// Determine the rate limit key (IP or global)
+			// Determine the rate limit key
 			key := "global"
-			if config.PerIP {
+			var keyErr error
+
+			// Priority 1: Custom KeyExtractor (if explicitly set)
+			if config.KeyExtractor != nil {
+				key, keyErr = config.KeyExtractor(r)
+				if keyErr != nil {
+					// If key extraction fails, use a fallback
+					// Log the error but don't fail the request
+					if m != nil {
+						m.IncrementCounter(r.Context(), "app_http_rate_limit_key_extraction_failed", 
+							"path", r.URL.Path, "error", keyErr.Error())
+					}
+					// Use IP as fallback
+					key = getIP(r, config.TrustedProxies)
+					if key == "" {
+						key = "unknown"
+					}
+				}
+			} else if config.PerIP {
+				// Priority 2: PerIP (backward compatibility)
 				key = getIP(r, config.TrustedProxies)
 				// Fallback to "unknown" if getIP returns empty string
-				// This prevents all requests from sharing the same bucket
 				if key == "" {
 					key = "unknown"
 				}
 			}
+			// Priority 3: Global (default when neither KeyExtractor nor PerIP is set)
 
 			// Check rate limit
 			allowed, retryAfter, err := config.Store.Allow(r.Context(), key, config)

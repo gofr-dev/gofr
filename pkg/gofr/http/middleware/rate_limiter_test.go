@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -735,4 +736,337 @@ func TestMemoryRateLimiterStore_CleanupDecrementsKeyCount(t *testing.T) {
 
 	// Verify key count is decremented
 	assert.Equal(t, int64(0), atomic.LoadInt64(&store.keyCount), "Key count should be 0 after cleanup")
+}
+
+func TestRateLimiter_KeyExtractorByHeader(t *testing.T) {
+	metrics := newRateLimiterMockMetrics()
+	config := RateLimiterConfig{
+		RequestsPerSecond: 2,
+		Burst:             2,
+		KeyExtractor:      ExtractHeader("X-API-Key"),
+	}
+
+	handler := RateLimiter(config, metrics)(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}))
+
+	// API Key 1: First 2 requests should succeed
+	for i := 0; i < 2; i++ {
+		req := httptest.NewRequest(http.MethodGet, "/test", http.NoBody)
+		req.Header.Set("X-API-Key", "key-123")
+		rr := httptest.NewRecorder()
+		handler.ServeHTTP(rr, req)
+		assert.Equal(t, http.StatusOK, rr.Code)
+	}
+
+	// API Key 1: 3rd request should be rate limited
+	req := httptest.NewRequest(http.MethodGet, "/test", http.NoBody)
+	req.Header.Set("X-API-Key", "key-123")
+	rr := httptest.NewRecorder()
+	handler.ServeHTTP(rr, req)
+	assert.Equal(t, http.StatusTooManyRequests, rr.Code)
+
+	// API Key 2: Should still be able to make requests (different limiter)
+	req = httptest.NewRequest(http.MethodGet, "/test", http.NoBody)
+	req.Header.Set("X-API-Key", "key-456")
+	rr = httptest.NewRecorder()
+	handler.ServeHTTP(rr, req)
+	assert.Equal(t, http.StatusOK, rr.Code)
+}
+
+func TestRateLimiter_KeyExtractorByParam(t *testing.T) {
+	metrics := newRateLimiterMockMetrics()
+	config := RateLimiterConfig{
+		RequestsPerSecond: 2,
+		Burst:             2,
+		KeyExtractor:      ExtractParam("user_id"),
+	}
+
+	handler := RateLimiter(config, metrics)(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}))
+
+	// User 1: First 2 requests should succeed
+	for i := 0; i < 2; i++ {
+		req := httptest.NewRequest(http.MethodGet, "/test?user_id=user123", http.NoBody)
+		rr := httptest.NewRecorder()
+		handler.ServeHTTP(rr, req)
+		assert.Equal(t, http.StatusOK, rr.Code)
+	}
+
+	// User 1: 3rd request should be rate limited
+	req := httptest.NewRequest(http.MethodGet, "/test?user_id=user123", http.NoBody)
+	rr := httptest.NewRecorder()
+	handler.ServeHTTP(rr, req)
+	assert.Equal(t, http.StatusTooManyRequests, rr.Code)
+
+	// User 2: Should still be able to make requests
+	req = httptest.NewRequest(http.MethodGet, "/test?user_id=user456", http.NoBody)
+	rr = httptest.NewRecorder()
+	handler.ServeHTTP(rr, req)
+	assert.Equal(t, http.StatusOK, rr.Code)
+}
+
+func TestRateLimiter_KeyExtractorByBody(t *testing.T) {
+	metrics := newRateLimiterMockMetrics()
+	config := RateLimiterConfig{
+		RequestsPerSecond: 2,
+		Burst:             2,
+		KeyExtractor:      ExtractBody("email"),
+	}
+
+	handler := RateLimiter(config, metrics)(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}))
+
+	// Email 1: First 2 requests should succeed
+	for i := 0; i < 2; i++ {
+		body := `{"email":"user1@example.com","password":"secret"}`
+		req := httptest.NewRequest(http.MethodPost, "/login", strings.NewReader(body))
+		req.Header.Set("Content-Type", "application/json")
+		rr := httptest.NewRecorder()
+		handler.ServeHTTP(rr, req)
+		assert.Equal(t, http.StatusOK, rr.Code)
+	}
+
+	// Email 1: 3rd request should be rate limited
+	body := `{"email":"user1@example.com","password":"secret"}`
+	req := httptest.NewRequest(http.MethodPost, "/login", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	rr := httptest.NewRecorder()
+	handler.ServeHTTP(rr, req)
+	assert.Equal(t, http.StatusTooManyRequests, rr.Code)
+
+	// Email 2: Should still be able to make requests
+	body = `{"email":"user2@example.com","password":"secret"}`
+	req = httptest.NewRequest(http.MethodPost, "/login", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	rr = httptest.NewRecorder()
+	handler.ServeHTTP(rr, req)
+	assert.Equal(t, http.StatusOK, rr.Code)
+}
+
+func TestRateLimiter_KeyExtractorFallback(t *testing.T) {
+	metrics := newRateLimiterMockMetrics()
+	config := RateLimiterConfig{
+		RequestsPerSecond: 2,
+		Burst:             2,
+		KeyExtractor:      ExtractHeader("X-API-Key"), // Header not present, will fallback to IP
+	}
+
+	handler := RateLimiter(config, metrics)(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}))
+
+	// Make requests without X-API-Key header (will fallback to IP)
+	for i := 0; i < 2; i++ {
+		req := httptest.NewRequest(http.MethodGet, "/test", http.NoBody)
+		req.RemoteAddr = "192.168.1.1:12345"
+		rr := httptest.NewRecorder()
+		handler.ServeHTTP(rr, req)
+		assert.Equal(t, http.StatusOK, rr.Code)
+	}
+
+	// 3rd request from same IP should be rate limited
+	req := httptest.NewRequest(http.MethodGet, "/test", http.NoBody)
+	req.RemoteAddr = "192.168.1.1:12345"
+	rr := httptest.NewRecorder()
+	handler.ServeHTTP(rr, req)
+	assert.Equal(t, http.StatusTooManyRequests, rr.Code)
+
+	// Verify key extraction failure was recorded
+	assert.Greater(t, metrics.GetCounter("app_http_rate_limit_key_extraction_failed"), 0)
+}
+
+func TestRateLimiter_KeyExtractorCombined(t *testing.T) {
+	metrics := newRateLimiterMockMetrics()
+	config := RateLimiterConfig{
+		RequestsPerSecond: 2,
+		Burst:             2,
+		KeyExtractor: ExtractCombined(
+			ExtractHeader("X-API-Key"),
+			ExtractIP(false),
+		),
+	}
+
+	handler := RateLimiter(config, metrics)(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}))
+
+	// With API Key: Use API key for rate limiting
+	for i := 0; i < 2; i++ {
+		req := httptest.NewRequest(http.MethodGet, "/test", http.NoBody)
+		req.Header.Set("X-API-Key", "my-key")
+		req.RemoteAddr = "192.168.1.1:12345"
+		rr := httptest.NewRecorder()
+		handler.ServeHTTP(rr, req)
+		assert.Equal(t, http.StatusOK, rr.Code)
+	}
+
+	// 3rd request with same API key should be rate limited
+	req := httptest.NewRequest(http.MethodGet, "/test", http.NoBody)
+	req.Header.Set("X-API-Key", "my-key")
+	req.RemoteAddr = "192.168.1.1:12345"
+	rr := httptest.NewRecorder()
+	handler.ServeHTTP(rr, req)
+	assert.Equal(t, http.StatusTooManyRequests, rr.Code)
+
+	// Without API Key: Falls back to IP
+	req = httptest.NewRequest(http.MethodGet, "/test", http.NoBody)
+	req.RemoteAddr = "192.168.1.2:12345"
+	rr = httptest.NewRecorder()
+	handler.ServeHTTP(rr, req)
+	assert.Equal(t, http.StatusOK, rr.Code)
+}
+
+func TestRateLimiter_BackwardCompatibilityPerIP(t *testing.T) {
+	metrics := newRateLimiterMockMetrics()
+	
+	// Old configuration with PerIP should still work
+	config := RateLimiterConfig{
+		RequestsPerSecond: 2,
+		Burst:             2,
+		PerIP:             true,
+	}
+
+	handler := RateLimiter(config, metrics)(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}))
+
+	// First 2 requests should succeed
+	for i := 0; i < 2; i++ {
+		req := httptest.NewRequest(http.MethodGet, "/test", http.NoBody)
+		req.RemoteAddr = "192.168.1.1:12345"
+		rr := httptest.NewRecorder()
+		handler.ServeHTTP(rr, req)
+		assert.Equal(t, http.StatusOK, rr.Code)
+	}
+
+	// 3rd request should be rate limited
+	req := httptest.NewRequest(http.MethodGet, "/test", http.NoBody)
+	req.RemoteAddr = "192.168.1.1:12345"
+	rr := httptest.NewRecorder()
+	handler.ServeHTTP(rr, req)
+	assert.Equal(t, http.StatusTooManyRequests, rr.Code)
+}
+
+func TestRateLimiter_KeyExtractorTakesPrecedenceOverPerIP(t *testing.T) {
+	metrics := newRateLimiterMockMetrics()
+	
+	// When both PerIP and KeyExtractor are set, KeyExtractor should take precedence
+	config := RateLimiterConfig{
+		RequestsPerSecond: 2,
+		Burst:             2,
+		PerIP:             true,
+		KeyExtractor:      ExtractHeader("X-API-Key"),
+	}
+
+	handler := RateLimiter(config, metrics)(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}))
+
+	// Make requests with different API keys from same IP - each key gets its own limit
+	for i := 0; i < 2; i++ {
+		req := httptest.NewRequest(http.MethodGet, "/test", http.NoBody)
+		req.Header.Set("X-API-Key", "key-"+fmt.Sprint(i))
+		req.RemoteAddr = "192.168.1.1:12345"
+		rr := httptest.NewRecorder()
+		handler.ServeHTTP(rr, req)
+		assert.Equal(t, http.StatusOK, rr.Code)
+	}
+
+	// 3rd request with first API key should still work (KeyExtractor limits by key, not IP)
+	req := httptest.NewRequest(http.MethodGet, "/test", http.NoBody)
+	req.Header.Set("X-API-Key", "key-0")
+	req.RemoteAddr = "192.168.1.1:12345"
+	rr := httptest.NewRecorder()
+	handler.ServeHTTP(rr, req)
+	assert.Equal(t, http.StatusOK, rr.Code)
+}
+
+func TestRateLimiter_KeyExtractorStatic(t *testing.T) {
+	metrics := newRateLimiterMockMetrics()
+	config := RateLimiterConfig{
+		RequestsPerSecond: 2,
+		Burst:             2,
+		KeyExtractor:      ExtractStatic("global-limit"),
+	}
+
+	handler := RateLimiter(config, metrics)(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}))
+
+	// All requests share the same global limit
+	for i := 0; i < 2; i++ {
+		req := httptest.NewRequest(http.MethodGet, "/test", http.NoBody)
+		req.RemoteAddr = fmt.Sprintf("192.168.1.%d:12345", i+1)
+		rr := httptest.NewRecorder()
+		handler.ServeHTTP(rr, req)
+		assert.Equal(t, http.StatusOK, rr.Code)
+	}
+
+	// 3rd request from different IP should still be rate limited (global limit)
+	req := httptest.NewRequest(http.MethodGet, "/test", http.NoBody)
+	req.RemoteAddr = "192.168.1.99:12345"
+	rr := httptest.NewRecorder()
+	handler.ServeHTTP(rr, req)
+	assert.Equal(t, http.StatusTooManyRequests, rr.Code)
+}
+
+func TestRateLimiter_CustomKeyExtractor(t *testing.T) {
+	metrics := newRateLimiterMockMetrics()
+	
+	// Custom extractor that combines tenant and user
+	customExtractor := func(r *http.Request) (string, error) {
+		tenant := r.Header.Get("X-Tenant-ID")
+		user := r.Header.Get("X-User-ID")
+		if tenant == "" || user == "" {
+			return "", ErrKeyNotFound
+		}
+		return tenant + ":" + user, nil
+	}
+
+	config := RateLimiterConfig{
+		RequestsPerSecond: 2,
+		Burst:             2,
+		KeyExtractor:      customExtractor,
+	}
+
+	handler := RateLimiter(config, metrics)(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}))
+
+	// Tenant1:User1 - First 2 requests should succeed
+	for i := 0; i < 2; i++ {
+		req := httptest.NewRequest(http.MethodGet, "/test", http.NoBody)
+		req.Header.Set("X-Tenant-ID", "tenant1")
+		req.Header.Set("X-User-ID", "user1")
+		rr := httptest.NewRecorder()
+		handler.ServeHTTP(rr, req)
+		assert.Equal(t, http.StatusOK, rr.Code)
+	}
+
+	// Tenant1:User1 - 3rd request should be rate limited
+	req := httptest.NewRequest(http.MethodGet, "/test", http.NoBody)
+	req.Header.Set("X-Tenant-ID", "tenant1")
+	req.Header.Set("X-User-ID", "user1")
+	rr := httptest.NewRecorder()
+	handler.ServeHTTP(rr, req)
+	assert.Equal(t, http.StatusTooManyRequests, rr.Code)
+
+	// Tenant1:User2 - Different user, should succeed
+	req = httptest.NewRequest(http.MethodGet, "/test", http.NoBody)
+	req.Header.Set("X-Tenant-ID", "tenant1")
+	req.Header.Set("X-User-ID", "user2")
+	rr = httptest.NewRecorder()
+	handler.ServeHTTP(rr, req)
+	assert.Equal(t, http.StatusOK, rr.Code)
+
+	// Tenant2:User1 - Different tenant, should succeed
+	req = httptest.NewRequest(http.MethodGet, "/test", http.NoBody)
+	req.Header.Set("X-Tenant-ID", "tenant2")
+	req.Header.Set("X-User-ID", "user1")
+	rr = httptest.NewRecorder()
+	handler.ServeHTTP(rr, req)
+	assert.Equal(t, http.StatusOK, rr.Code)
 }
