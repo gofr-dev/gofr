@@ -223,6 +223,7 @@ func (om oracleMigrator) lock(ctx context.Context, cancel context.CancelFunc, c 
 
 		if err := om.Oracle.Exec(ctx, insertOracleLock, lockKey, ownerID, expiresAt); err != nil {
 			c.Debug("Oracle lock acquired successfully")
+			
 			go om.startRefresh(ctx, cancel, c, ownerID)
 		}
 
@@ -249,6 +250,7 @@ func (om oracleMigrator) startRefresh(ctx context.Context, cancel context.Cancel
 				cancel()
 				return
 			}
+			
 			c.Debugf("Oracle lock refreshed successfully")
 		case <-ctx.Done():
 			return
