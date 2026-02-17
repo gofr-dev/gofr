@@ -237,7 +237,7 @@ func (om oracleMigrator) lock(ctx context.Context, cancel context.CancelFunc, c 
 	}
 }
 
-func (om oracleMigrator) startRefresh(ctx context.Context, cancel context.CancelFunc, c *container.Container, ownerID string) {
+func (oracleMigrator) startRefresh(ctx context.Context, cancel context.CancelFunc, c *container.Container, ownerID string) {
 	ticker := time.NewTicker(defaultRefresh)
 	defer ticker.Stop()
 
