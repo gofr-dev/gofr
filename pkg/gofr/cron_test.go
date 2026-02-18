@@ -8,7 +8,6 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
-
 	"gofr.dev/pkg/gofr/container"
 	"gofr.dev/pkg/gofr/testutil"
 )
@@ -631,4 +630,45 @@ func TestCron_parsePart(t *testing.T) {
 			assert.Equal(t, test.expected, output, "TEST[%d] - Expected: %v, got: %v", i, test.expected, output)
 		})
 	}
+}
+
+func TestCronTab_runScheduled_PanicWithMetrics(t *testing.T) {
+	logs := testutil.StderrOutputForFunc(func() {
+		mockContainer, mocks := container.NewMockContainer(t)
+
+		// Expect metrics registration
+		mocks.Metrics.EXPECT().NewHistogram("app_cron_job_duration", gomock.Any(), gomock.Any()).Times(1)
+		mocks.Metrics.EXPECT().NewCounter("app_cron_job_total", gomock.Any()).Times(1)
+		mocks.Metrics.EXPECT().NewCounter("app_cron_job_success", gomock.Any()).Times(1)
+		mocks.Metrics.EXPECT().NewCounter("app_cron_job_failures", gomock.Any()).Times(1)
+
+		// Expect metrics recording during panic
+		mocks.Metrics.EXPECT().IncrementCounter(gomock.Any(), "app_cron_job_total", "job", "panic-job").Times(1)
+		mocks.Metrics.EXPECT().RecordHistogram(gomock.Any(), "app_cron_job_duration", gomock.Any(), "job", "panic-job").Times(1)
+		mocks.Metrics.EXPECT().IncrementCounter(gomock.Any(), "app_cron_job_failures", "job", "panic-job").Times(1)
+
+		j := &job{
+			sec:       map[int]struct{}{1: {}},
+			min:       map[int]struct{}{1: {}},
+			hour:      map[int]struct{}{1: {}},
+			day:       map[int]struct{}{1: {}},
+			month:     map[int]struct{}{1: {}},
+			dayOfWeek: map[int]struct{}{1: {}},
+			name:      "panic-job",
+			fn: func(*Context) {
+				panic("simulated panic in cron job")
+			},
+		}
+
+		c := NewCron(mockContainer)
+		c.jobs = []*job{j}
+
+		c.runScheduled(time.Date(2024, 1, 1, 1, 1, 1, 1, time.Local))
+
+		// Wait for goroutine to complete
+		time.Sleep(200 * time.Millisecond)
+	})
+
+	assert.Contains(t, logs, "Panic in cron job panic-job")
+	assert.Contains(t, logs, "simulated panic in cron job")
 }
