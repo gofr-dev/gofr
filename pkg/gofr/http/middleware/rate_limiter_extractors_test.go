@@ -225,6 +225,13 @@ func TestExtractBody(t *testing.T) {
 			field:         "count",
 			expectedError: ErrKeyNotFound,
 		},
+		{
+			name:          "Body too large returns error",
+			body:          strings.Repeat("x", 1024*1024+1), // 1MB + 1 byte
+			contentType:   "application/json",
+			field:         "email",
+			expectedError: ErrBodyTooLarge,
+		},
 	}
 
 	for _, tt := range tests {
@@ -311,6 +318,14 @@ func TestExtractCombined(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestExtractCombined_NoPanic(t *testing.T) {
+	t.Run("Panics when no extractors provided", func(t *testing.T) {
+		assert.Panics(t, func() {
+			ExtractCombined()
+		})
+	})
 }
 
 func TestExtractStatic(t *testing.T) {
