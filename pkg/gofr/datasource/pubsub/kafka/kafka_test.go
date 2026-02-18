@@ -917,7 +917,7 @@ func TestKafkaClient_Query_ContextHandling(t *testing.T) {
 func TestKafkaClient_Subscribe_RaceDetector(t *testing.T) {
 	// This test is specifically designed to trigger race conditions
 	// Run with: go test -race
-	
+
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
@@ -941,7 +941,7 @@ func TestKafkaClient_Subscribe_RaceDetector(t *testing.T) {
 	// Create mock reader
 	mockReader := NewMockReader(ctrl)
 	mockReader.EXPECT().FetchMessage(gomock.Any()).DoAndReturn(
-		func(ctx context.Context) (kafka.Message, error) {
+		func(_ context.Context) (kafka.Message, error) {
 			// Add small delay to increase chance of race
 			time.Sleep(time.Microsecond)
 			return kafka.Message{
@@ -955,7 +955,7 @@ func TestKafkaClient_Subscribe_RaceDetector(t *testing.T) {
 
 	ctx := context.Background()
 	numGoroutines := 100
-	
+
 	var wg sync.WaitGroup
 	wg.Add(numGoroutines)
 
@@ -963,11 +963,11 @@ func TestKafkaClient_Subscribe_RaceDetector(t *testing.T) {
 	for i := 0; i < numGoroutines; i++ {
 		go func() {
 			defer wg.Done()
-			client.Subscribe(ctx, "race-test-topic")
+			_ = client.Subscribe(ctx, "race-test-topic")
 		}()
 	}
 
 	wg.Wait()
-	
+
 	// If we reach here without race detector complaints, the fix works
 }
