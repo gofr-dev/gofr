@@ -1071,6 +1071,7 @@ func TestNewSetsHTTPRegisteredWhenStaticDirExists(t *testing.T) {
 	testutil.NewServerConfigs(t)
 
 	createPublicDirectory(t, defaultPublicStaticDir, []byte("<html></html>"))
+
 	defer os.Remove("static/indexTest.html")
 
 	app := New()
