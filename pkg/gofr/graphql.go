@@ -9,6 +9,7 @@ import (
 	"os"
 	"reflect"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/graphql-go/graphql"
@@ -41,6 +42,9 @@ type graphQLManager struct {
 	mutations   map[string]any
 	schema      graphql.Schema
 	schemaBuilt bool
+	buildOnce   sync.Once
+	buildErr    error
+	mu          sync.RWMutex
 	tracer      trace.Tracer
 	typeCache   map[string]graphql.Output
 }
@@ -61,11 +65,44 @@ func newGraphQLManager(c *container.Container) *graphQLManager {
 }
 
 func (m *graphQLManager) RegisterQuery(name string, handler any) {
+	if err := m.validateHandler(handler); err != nil {
+		m.container.Errorf("invalid GraphQL query handler for %s: %v", name, err)
+		return
+	}
+
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
 	m.queries[name] = handler
 }
 
 func (m *graphQLManager) RegisterMutation(name string, handler any) {
+	if err := m.validateHandler(handler); err != nil {
+		m.container.Errorf("invalid GraphQL mutation handler for %s: %v", name, err)
+		return
+	}
+
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
 	m.mutations[name] = handler
+}
+
+func (m *graphQLManager) validateHandler(h any) error {
+	v := reflect.TypeOf(h)
+	if v.Kind() != reflect.Func {
+		return fmt.Errorf("handler must be a function")
+	}
+
+	if v.NumIn() != 1 || v.In(0) != reflect.TypeOf(&Context{}) {
+		return fmt.Errorf("handler must accept exactly one argument of type *gofr.Context")
+	}
+
+	if v.NumOut() != 2 || !v.Out(1).Implements(reflect.TypeOf((*error)(nil)).Elem()) {
+		return fmt.Errorf("handler must return (any, error)")
+	}
+
+	return nil
 }
 
 func (m *graphQLManager) buildSchema() error {
@@ -90,14 +127,21 @@ func (m *graphQLManager) buildSchema() error {
 	}
 
 	// Bridge gqlparser AST to graphql-go Schema
-	queryFields := m.buildFields(gqlSchema.Query, m.queries, gqlSchema)
-	mutationFields := m.buildFields(gqlSchema.Mutation, m.mutations, gqlSchema)
+	queryFields, err := m.buildFields(gqlSchema.Query, m.queries, gqlSchema)
+	if err != nil {
+		return err
+	}
+
+	mutationFields, err := m.buildFields(gqlSchema.Mutation, m.mutations, gqlSchema)
+	if err != nil {
+		return err
+	}
 
 	// Add special gofr health field by default if it's not already there
 	if _, ok := queryFields[gofrKey]; !ok {
 		queryFields[gofrKey] = &graphql.Field{
 			Type: graphql.NewObject(graphql.ObjectConfig{
-				Name: "GofrInfo",
+				Name: "GofrHealthInfo",
 				Fields: graphql.Fields{
 					"status":  &graphql.Field{Type: graphql.String},
 					"name":    &graphql.Field{Type: graphql.String},
@@ -134,23 +178,29 @@ func (m *graphQLManager) buildSchema() error {
 	return nil
 }
 
-func (m *graphQLManager) buildFields(obj *ast.Definition, handlers map[string]any, schema *ast.Schema) graphql.Fields {
+func (m *graphQLManager) buildFields(obj *ast.Definition, handlers map[string]any, schema *ast.Schema) (graphql.Fields, error) {
 	fields := graphql.Fields{}
 
 	if obj == nil {
-		return fields
+		return fields, nil
 	}
 
 	for _, field := range obj.Fields {
+		m.mu.RLock()
 		handler, ok := handlers[field.Name]
+		m.mu.RUnlock()
+
 		if !ok {
 			// Add special gofr health field if defined in schema but no custom handler registered
-			if field.Name != gofrKey {
+			if field.Name == gofrKey {
+				handler = func(c *Context) (any, error) {
+					return m.container.Health(c.Context), nil
+				}
+			} else if strings.HasPrefix(field.Name, "__") {
+				// Skip internal GraphQL fields like __schema, __type, etc.
 				continue
-			}
-
-			handler = func(c *Context) (any, error) {
-				return m.container.Health(c.Context), nil
+			} else {
+				return nil, fmt.Errorf("resolver missing for field: %s", field.Name)
 			}
 		}
 
@@ -161,7 +211,7 @@ func (m *graphQLManager) buildFields(obj *ast.Definition, handlers map[string]an
 		}
 	}
 
-	return fields
+	return fields, nil
 }
 
 func (m *graphQLManager) mapArgs(args ast.ArgumentDefinitionList, schema *ast.Schema) graphql.FieldConfigArgument {
@@ -211,10 +261,6 @@ func (m *graphQLManager) getCustomInputType(name string, schema *ast.Schema) gra
 	def, ok := schema.Types[name]
 	if ok && def.Kind == ast.InputObject {
 		fields := graphql.InputObjectConfigFieldMap{}
-		obj := graphql.NewInputObject(graphql.InputObjectConfig{
-			Name:   name,
-			Fields: fields,
-		})
 
 		for _, f := range def.Fields {
 			fields[f.Name] = &graphql.InputObjectFieldConfig{
@@ -222,9 +268,13 @@ func (m *graphQLManager) getCustomInputType(name string, schema *ast.Schema) gra
 			}
 		}
 
-		return obj
+		return graphql.NewInputObject(graphql.InputObjectConfig{
+			Name:   name,
+			Fields: fields,
+		})
 	}
 
+	m.container.Errorf("unsupported GraphQL input type: %s", name)
 	return graphql.String // Fallback
 }
 
@@ -314,18 +364,22 @@ func (m *graphQLManager) getResolver(name string, h any) graphql.FieldResolveFn 
 }
 
 func (m *graphQLManager) Handle(w http.ResponseWriter, r *http.Request) {
-	if !m.schemaBuilt {
-		if err := m.buildSchema(); err != nil {
-			m.container.Errorf("GraphQL build error: %v", err)
-			w.WriteHeader(http.StatusInternalServerError)
+	m.buildOnce.Do(func() {
+		m.buildErr = m.buildSchema()
+	})
 
-			_, errWrite := w.Write([]byte(err.Error()))
-			if errWrite != nil {
-				m.container.Errorf("error writing response: %v", errWrite)
-			}
+	if m.buildErr != nil {
+		m.container.Errorf("GraphQL build error: %v", m.buildErr)
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusInternalServerError)
 
-			return
-		}
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"errors": []map[string]any{
+				{"message": m.buildErr.Error()},
+			},
+		})
+
+		return
 	}
 
 	if r.Method == http.MethodGet && strings.HasSuffix(r.URL.Path, "/ui") {
@@ -347,7 +401,14 @@ func (m *graphQLManager) handleGraphQLRequest(w http.ResponseWriter, r *http.Req
 
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		m.container.Metrics().IncrementCounter(r.Context(), "gofr_graphql_error_total", "operation_name", "unknown", "type", "unknown")
+		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusBadRequest)
+
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"errors": []map[string]any{
+				{"message": "invalid JSON request body"},
+			},
+		})
 
 		return
 	}

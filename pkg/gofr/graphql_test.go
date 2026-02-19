@@ -58,9 +58,10 @@ func TestGraphQL_Query(t *testing.T) {
 
 func TestGraphQL_Mutation(t *testing.T) {
 	t.Setenv("METRICS_PORT", "0")
-	setupSchema(t, `type User { id: Int name: String } type Query { hello: String } type Mutation { createUser(name: String): User }`)
+	setupSchema(t, `type User { id: Int name: String } type Query { dummy: String } type Mutation { createUser(name: String): User }`)
 
 	app := New()
+	app.GraphQLQuery("dummy", func(_ *Context) (any, error) { return "ok", nil })
 	app.GraphQLMutation("createUser", func(c *Context) (any, error) {
 		var args struct {
 			Name string `json:"name"`
@@ -102,7 +103,7 @@ func TestGraphQL_Mutation(t *testing.T) {
 
 func TestGraphQL_Health(t *testing.T) {
 	t.Setenv("METRICS_PORT", "0")
-	setupSchema(t, `type Query { dummy: String gofr: GofrInfo } type GofrInfo { status: String }`)
+	setupSchema(t, `type Query { dummy: String }`)
 
 	app := New()
 	app.GraphQLQuery("dummy", func(_ *Context) (any, error) { return "ok", nil })

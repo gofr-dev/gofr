@@ -86,8 +86,8 @@ func main() {
 
 ### 1. Returns `any`
 Unlike standard HTTP handlers which allow `any` but lose structure, GraphQL handlers in GoFr return `any` while **maintaining the contract** defined in your `.graphqls` file.
-- GoFr validates the returned object against the schema.
-- If the object does not match, GoFr returns an error with the partial data.
+- GoFr leverages the underlying `graphql-go` engine to validate the returned object against your defined schema.
+- If the object does not match the schema types, GoFr returns an error in the `errors` array with partial data where applicable.
 
 ### 2. HTTP Status Codes
 

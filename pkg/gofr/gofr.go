@@ -153,11 +153,11 @@ func (a *App) httpServerSetup() {
 	}
 
 	if a.graphqlManager != nil {
-		a.httpServer.router.NewRoute().Path("/graphql").Handler(a.graphqlManager.GetHandler())
+		a.httpServer.router.NewRoute().Methods(http.MethodPost).Path("/graphql").Handler(a.graphqlManager.GetHandler())
 
 		// Only register GraphQL Playground UI in non-production environments
 		if a.Config.Get("APP_ENV") != "production" {
-			a.httpServer.router.NewRoute().Path("/graphql/ui").Handler(a.graphqlManager.GetHandler())
+			a.httpServer.router.NewRoute().Methods(http.MethodGet).Path("/graphql/ui").Handler(a.graphqlManager.GetHandler())
 		}
 	}
 
@@ -274,7 +274,18 @@ func (a *App) Container() *container.Container {
 // Handle registers an http.Handler for a specific pattern.
 func (a *App) Handle(pattern string, handler http.Handler) {
 	a.httpRegistered = true
-	a.httpServer.router.NewRoute().PathPrefix(pattern).Handler(handler)
+	a.httpServer.router.NewRoute().
+		PathPrefix(pattern).
+		Handler(handler).
+		Methods(
+			http.MethodGet,
+			http.MethodHead,
+			http.MethodPost,
+			http.MethodPut,
+			http.MethodPatch,
+			http.MethodDelete,
+			http.MethodOptions,
+		)
 }
 
 // SubCommand adds a sub-command to the CLI application.

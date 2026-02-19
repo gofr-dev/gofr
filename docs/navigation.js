@@ -157,7 +157,7 @@ export const navigation = [
             {
                 title: 'GraphQL',
                 href: '/docs/advanced-guide/graphql',
-                desc: "Learn how to build native, code-first GraphQL APIs in GoFr with automatic schema generation and interactive playground."
+                desc: 'Learn how to build native GraphQL APIs in GoFr using a schema-first approach with a ./configs/schema.graphqls file and an interactive playground.'
             },
             {
                 title: 'Serving-Static Files',
