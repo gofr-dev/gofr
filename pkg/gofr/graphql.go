@@ -149,27 +149,19 @@ func (m *graphQLManager) buildFields(obj *ast.Definition, handlers map[string]an
 				continue
 			}
 
-			handler = func(p graphql.ResolveParams) (any, error) {
-				return m.container.Health(p.Context), nil
+			handler = func(c *Context) (any, error) {
+				return m.container.Health(c.Context), nil
 			}
 		}
 
 		fields[field.Name] = &graphql.Field{
 			Type:    m.mapType(field.Type, schema),
 			Args:    m.mapArgs(field.Arguments, schema),
-			Resolve: m.getExactResolver(field.Name, handler),
+			Resolve: m.getResolver(field.Name, handler),
 		}
 	}
 
 	return fields
-}
-
-func (m *graphQLManager) getExactResolver(name string, handler any) graphql.FieldResolveFn {
-	if fn, ok := handler.(func(graphql.ResolveParams) (any, error)); ok {
-		return fn
-	}
-
-	return m.getResolver(name, handler)
 }
 
 func (m *graphQLManager) mapArgs(args ast.ArgumentDefinitionList, schema *ast.Schema) graphql.FieldConfigArgument {
@@ -292,8 +284,8 @@ func (m *graphQLManager) getCustomOutputType(name string, schema *ast.Schema) gr
 	return obj
 }
 
-// getResolver remains to bind handlers to GraphQL fields.
-// It uses reflection to inject *gofr.Context and manual argument binding using c.Bind().
+// getResolver binds a handler of type func(*gofr.Context) (any, error) to a GraphQL field.
+// Arguments are accessed inside the handler via c.Bind().
 func (m *graphQLManager) getResolver(name string, h any) graphql.FieldResolveFn {
 	v := reflect.ValueOf(h)
 
