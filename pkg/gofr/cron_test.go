@@ -10,6 +10,7 @@ import (
 	"go.uber.org/mock/gomock"
 
 	"gofr.dev/pkg/gofr/container"
+	"gofr.dev/pkg/gofr/logging"
 	"gofr.dev/pkg/gofr/testutil"
 )
 
@@ -633,43 +634,87 @@ func TestCron_parsePart(t *testing.T) {
 	}
 }
 
-func TestCronTab_runScheduled_PanicWithMetrics(t *testing.T) {
-	logs := testutil.StderrOutputForFunc(func() {
-		mockContainer, mocks := container.NewMockContainer(t)
+func TestCronTab_runScheduled_Panic(t *testing.T) {
+	testCases := []struct {
+		desc               string
+		setupContainer     func(t *testing.T) *container.Container
+		jobName            string
+		panicMessage       string
+		expectMetricsCalls bool
+	}{
+		{
+			desc: "panic with metrics",
+			setupContainer: func(t *testing.T) *container.Container {
+				t.Helper()
 
-		// Expect metrics registration
-		mocks.Metrics.EXPECT().NewHistogram("app_cron_job_duration", gomock.Any(), gomock.Any()).Times(1)
-		mocks.Metrics.EXPECT().NewCounter("app_cron_job_total", gomock.Any()).Times(1)
-		mocks.Metrics.EXPECT().NewCounter("app_cron_job_success", gomock.Any()).Times(1)
-		mocks.Metrics.EXPECT().NewCounter("app_cron_job_failures", gomock.Any()).Times(1)
+				mockContainer, mocks := container.NewMockContainer(t)
 
-		// Expect metrics recording during panic
-		mocks.Metrics.EXPECT().IncrementCounter(gomock.Any(), "app_cron_job_total", "job", "panic-job").Times(1)
-		mocks.Metrics.EXPECT().RecordHistogram(gomock.Any(), "app_cron_job_duration", gomock.Any(), "job", "panic-job").Times(1)
-		mocks.Metrics.EXPECT().IncrementCounter(gomock.Any(), "app_cron_job_failures", "job", "panic-job").Times(1)
+				// Expect metrics registration
+				mocks.Metrics.EXPECT().NewHistogram("app_cron_job_duration", gomock.Any(), gomock.Any()).Times(1)
+				mocks.Metrics.EXPECT().NewCounter("app_cron_job_total", gomock.Any()).Times(1)
+				mocks.Metrics.EXPECT().NewCounter("app_cron_job_success", gomock.Any()).Times(1)
+				mocks.Metrics.EXPECT().NewCounter("app_cron_job_failures", gomock.Any()).Times(1)
 
-		j := &job{
-			sec:       map[int]struct{}{1: {}},
-			min:       map[int]struct{}{1: {}},
-			hour:      map[int]struct{}{1: {}},
-			day:       map[int]struct{}{1: {}},
-			month:     map[int]struct{}{1: {}},
-			dayOfWeek: map[int]struct{}{1: {}},
-			name:      "panic-job",
-			fn: func(*Context) {
-				panic("simulated panic in cron job")
+				// Expect metrics recording during panic
+				mocks.Metrics.EXPECT().IncrementCounter(gomock.Any(), "app_cron_job_total", "job", "panic-job").Times(1)
+				mocks.Metrics.EXPECT().RecordHistogram(gomock.Any(), "app_cron_job_duration", gomock.Any(), "job", "panic-job").Times(1)
+				mocks.Metrics.EXPECT().IncrementCounter(gomock.Any(), "app_cron_job_failures", "job", "panic-job").Times(1)
+
+				return mockContainer
 			},
-		}
+			jobName:            "panic-job",
+			panicMessage:       "simulated panic with metrics",
+			expectMetricsCalls: true,
+		},
+		{
+			desc: "panic without metrics",
+			setupContainer: func(*testing.T) *container.Container {
+				return &container.Container{
+					Logger: logging.NewMockLogger(logging.INFO),
+				}
+			},
+			jobName:            "panic-job-no-metrics",
+			panicMessage:       "simulated panic without metrics",
+			expectMetricsCalls: false,
+		},
+	}
 
-		c := NewCron(mockContainer)
-		c.jobs = []*job{j}
+	for _, tc := range testCases {
+		t.Run(tc.desc, func(t *testing.T) {
+			logs := testutil.StderrOutputForFunc(func() {
+				cntnr := tc.setupContainer(t)
 
-		c.runScheduled(time.Date(2024, 1, 1, 1, 1, 1, 1, time.Local))
+				j := &job{
+					sec:       map[int]struct{}{1: {}},
+					min:       map[int]struct{}{1: {}},
+					hour:      map[int]struct{}{1: {}},
+					day:       map[int]struct{}{1: {}},
+					month:     map[int]struct{}{1: {}},
+					dayOfWeek: map[int]struct{}{1: {}},
+					name:      tc.jobName,
+					fn: func(*Context) {
+						panic(tc.panicMessage)
+					},
+				}
 
-		// Wait for goroutine to complete
-		time.Sleep(200 * time.Millisecond)
-	})
+				var c *Crontab
+				if tc.expectMetricsCalls {
+					c = NewCron(cntnr)
+					c.jobs = []*job{j}
+				} else {
+					c = &Crontab{
+						ticker:    time.NewTicker(time.Second),
+						container: cntnr,
+						jobs:      []*job{j},
+					}
+				}
 
-	assert.Contains(t, logs, "Panic in cron job panic-job")
-	assert.Contains(t, logs, "simulated panic in cron job")
+				c.runScheduled(time.Date(2024, 1, 1, 1, 1, 1, 1, time.Local))
+				time.Sleep(200 * time.Millisecond)
+			})
+
+			assert.Contains(t, logs, fmt.Sprintf("Panic in cron job %s", tc.jobName))
+			assert.Contains(t, logs, tc.panicMessage)
+		})
+	}
 }

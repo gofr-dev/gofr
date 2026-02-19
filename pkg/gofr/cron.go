@@ -121,7 +121,7 @@ func (j *job) run(cntnr *container.Container) {
 			c.Errorf("Panic in cron job %s: %v", j.name, r)
 		}
 
-		c.Infof("Finished cron job: %s in %s", j.name, time.Since(start))
+		c.Infof("Finished cron job: %s in %s", j.name, duration)
 	}()
 
 	if m := cntnr.Metrics(); m != nil {
