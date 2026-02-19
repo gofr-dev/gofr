@@ -182,6 +182,7 @@ func (c *Container) createMqttPubSub(conf config.Config) pubsub.Client {
 	port, err := strconv.Atoi(conf.GetOrDefault("MQTT_PORT", "0"))
 	if err != nil {
 		c.Logger.Warnf("Invalid value for MQTT_PORT, using default: 0")
+
 		port = 0
 	}
 	order, _ := strconv.ParseBool(conf.GetOrDefault("MQTT_MESSAGE_ORDER", "false"))
@@ -335,6 +336,7 @@ func (c *Container) createKafkaPubSub(conf config.Config) {
 	partition, err := strconv.Atoi(conf.GetOrDefault("PARTITION_SIZE", "0"))
 	if err != nil {
 		c.Logger.Warnf("Invalid value for PARTITION_SIZE, using default: 0")
+
 		partition = 0
 	}
 
@@ -348,24 +350,28 @@ func (c *Container) createKafkaPubSub(conf config.Config) {
 	offSet, err := strconv.Atoi(conf.GetOrDefault("PUBSUB_OFFSET", "-1"))
 	if err != nil {
 		c.Logger.Warnf("Invalid value for PUBSUB_OFFSET, using default: -1")
+
 		offSet = -1
 	}
 
 	batchSize, err := strconv.Atoi(conf.GetOrDefault("KAFKA_BATCH_SIZE", strconv.Itoa(kafka.DefaultBatchSize)))
 	if err != nil {
 		c.Logger.Warnf("Invalid value for KAFKA_BATCH_SIZE, using default: %d", kafka.DefaultBatchSize)
+
 		batchSize = kafka.DefaultBatchSize
 	}
 
 	batchBytes, err := strconv.Atoi(conf.GetOrDefault("KAFKA_BATCH_BYTES", strconv.Itoa(kafka.DefaultBatchBytes)))
 	if err != nil {
 		c.Logger.Warnf("Invalid value for KAFKA_BATCH_BYTES, using default: %d", kafka.DefaultBatchBytes)
+
 		batchBytes = kafka.DefaultBatchBytes
 	}
 
 	batchTimeout, err := strconv.Atoi(conf.GetOrDefault("KAFKA_BATCH_TIMEOUT", strconv.Itoa(kafka.DefaultBatchTimeout)))
 	if err != nil {
 		c.Logger.Warnf("Invalid value for KAFKA_BATCH_TIMEOUT, using default: %d", kafka.DefaultBatchTimeout)
+
 		batchTimeout = kafka.DefaultBatchTimeout
 	}
 
