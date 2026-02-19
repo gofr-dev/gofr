@@ -9,7 +9,7 @@ import (
 	"go.opentelemetry.io/otel/trace"
 )
 
-const tracerName = "gofr.dev/pkg/gofr/datasource/pubsub/kafka"
+const tracerName = "gofr-kafka"
 
 // headerCarrier implements propagation.TextMapCarrier for Kafka headers.
 type headerCarrier []kafka.Header
