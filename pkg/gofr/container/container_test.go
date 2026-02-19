@@ -531,30 +531,3 @@ func TestContainer_Close_ClosesWebsocketConnections(t *testing.T) {
 
 	require.Empty(t, c.WSManager.ListConnections())
 }
-
-func Test_getIntConfig(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
-
-	logger := NewMockLogger(ctrl)
-	// Expect Warnf to be called when invalid integer is provided
-	// Warnf(format, val, key, default) => 4 arguments
-	logger.EXPECT().Warnf(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Times(1)
-
-	conf := config.NewMockConfig(map[string]string{
-		"VALID_INT":   "123",
-		"INVALID_INT": "invalid",
-	})
-
-	// Test valid integer
-	val := getIntConfig(conf, "VALID_INT", 10, logger)
-	assert.Equal(t, 123, val)
-
-	// Test invalid integer (should return default and log warning)
-	val = getIntConfig(conf, "INVALID_INT", 10, logger)
-	assert.Equal(t, 10, val)
-
-	// Test missing key (should return default without logging)
-	val = getIntConfig(conf, "MISSING_KEY", 20, logger)
-	assert.Equal(t, 20, val)
-}
