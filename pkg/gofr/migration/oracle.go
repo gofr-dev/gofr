@@ -221,10 +221,19 @@ func (om oracleMigrator) lock(ctx context.Context, cancel context.CancelFunc, c 
 
 		expiresAt := time.Now().UTC().Add(defaultLockTTL)
 
-		if err := om.Oracle.Exec(ctx, insertOracleLock, lockKey, ownerID, expiresAt); err != nil {
+		err := om.Oracle.Exec(ctx, insertOracleLock, lockKey, ownerID, expiresAt)
+		if err == nil {
 			c.Debug("Oracle lock acquired successfully")
-			
+
 			go om.startRefresh(ctx, cancel, c, ownerID)
+
+			return om.migrator.lock(ctx, cancel, c, ownerID)
+		}
+
+		if !isDuplicateKeyError(err) {
+			c.Errorf("error while acquiring Oracle lock: %v", err)
+
+			return errLockAcquisitionFailed
 		}
 
 		c.Debugf("Oracle lock already held, retrying in %v... (attempt %d)", defaultRetry, i+1)
