@@ -209,8 +209,9 @@ For detailed instruction on setting up a gRPC server with GoFr see the [gRPC Cli
 For more examples refer [gRPC Examples](https://github.com/gofr-dev/gofr/tree/main/examples/grpc)
 
 ---
-
 ## 4. ***`store`***
+
+> **Available since:** `gofr-cli` **v0.8.1**
 
 The `gofr store` command is a code generator that creates type-safe data access layers from YAML configuration files. It eliminates boilerplate code while maintaining GoFr's best practices for observability and context management.
 
