@@ -3,6 +3,7 @@ package migration
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"time"
 
 	"github.com/dgraph-io/dgo/v210/protos/api"
@@ -93,7 +94,7 @@ func (dm dgraphMigrator) checkAndCreateMigrationTable(c *container.Container) er
 }
 
 // getLastMigration retrieves the last applied migration version.
-func (dm dgraphMigrator) getLastMigration(c *container.Container) int64 {
+func (dm dgraphMigrator) getLastMigration(c *container.Container) (int64, error) {
 	var response struct {
 		Migrations []struct {
 			Version int64 `json:"version"`
@@ -102,34 +103,34 @@ func (dm dgraphMigrator) getLastMigration(c *container.Container) int64 {
 
 	resp, err := c.DGraph.Query(context.Background(), getLastMigrationQuery)
 	if err != nil {
-		c.Debug("Error fetching last migration:", err)
-		return 0
+		return -1, fmt.Errorf("dgraph: %w", err)
 	}
 
-	// If a response is returned, marshal it to JSON bytes then unmarshal into our response struct.
 	if resp != nil {
-		b, err := json.Marshal(resp)
+		var b []byte
+
+		b, err = json.Marshal(resp)
 		if err != nil {
-			c.Debug("Error marshaling response:", err)
-			return 0
+			return 0, fmt.Errorf("dgraph: %w", err)
 		}
 
-		if err := json.Unmarshal(b, &response); err != nil {
-			c.Debug("Error unmarshalling migration response:", err)
-			return 0
-		}
-
-		if len(response.Migrations) > 0 {
-			return response.Migrations[0].Version
+		err = json.Unmarshal(b, &response)
+		if err != nil {
+			return 0, fmt.Errorf("dgraph: %w", err)
 		}
 	}
 
-	lm2 := dm.migrator.getLastMigration(c)
-	if lm2 > 0 {
-		return lm2
+	var lastMigration int64
+	if len(response.Migrations) > 0 {
+		lastMigration = response.Migrations[0].Version
 	}
 
-	return 0
+	lm2, err := dm.migrator.getLastMigration(c)
+	if err != nil {
+		return -1, err
+	}
+
+	return max(lastMigration, lm2), nil
 }
 
 // beginTransaction starts a new migration transaction.
@@ -177,4 +178,16 @@ func (dm dgraphMigrator) rollback(c *container.Container, data transactionData) 
 	dm.migrator.rollback(c, data)
 
 	c.Fatalf("Migration %v failed and rolled back", data.MigrationNumber)
+}
+
+func (dm dgraphMigrator) lock(ctx context.Context, cancel context.CancelFunc, c *container.Container, ownerID string) error {
+	return dm.migrator.lock(ctx, cancel, c, ownerID)
+}
+
+func (dm dgraphMigrator) unlock(c *container.Container, ownerID string) error {
+	return dm.migrator.unlock(c, ownerID)
+}
+
+func (dgraphMigrator) name() string {
+	return "DGraph"
 }

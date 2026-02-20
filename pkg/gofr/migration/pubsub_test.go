@@ -170,10 +170,11 @@ func Test_PubSubCommitMigration_PublishError(t *testing.T) {
 type mockNextMigrator struct {
 	migrator
 	version int64
+	err     error
 }
 
-func (m mockNextMigrator) getLastMigration(*container.Container) int64 {
-	return m.version
+func (m mockNextMigrator) getLastMigration(*container.Container) (int64, error) {
+	return m.version, m.err
 }
 
 func Test_PubSubGetLastMigration(t *testing.T) {
@@ -183,6 +184,8 @@ func Test_PubSubGetLastMigration(t *testing.T) {
 		pubsubResult   []byte
 		pubsubError    error
 		nextVersion    int64
+		nextErr        error
+		expectedErr    error
 	}{
 		{
 			desc:           "pubsub has higher version than next migrator",
@@ -203,10 +206,11 @@ func Test_PubSubGetLastMigration(t *testing.T) {
 		},
 		{
 			desc:           "query error but next migrator has value",
-			expectedResult: 4,
+			expectedResult: -1,
 			nextVersion:    4,
 			pubsubResult:   nil,
 			pubsubError:    errQuery,
+			expectedErr:    errQuery,
 		},
 		{
 			desc:           "empty result but next migrator has value",
@@ -229,7 +233,7 @@ func Test_PubSubGetLastMigration(t *testing.T) {
 				Query(gomock.Any(), pubsubMigrationTopic, int64(0), defaultQueryLimit).
 				Return(tc.pubsubResult, tc.pubsubError)
 
-			next := mockNextMigrator{version: tc.nextVersion}
+			next := mockNextMigrator{version: tc.nextVersion, err: tc.nextErr}
 
 			pm := pubsubMigrator{
 				PubSub:   pubsubDS{client: mockPubSub},
@@ -237,9 +241,15 @@ func Test_PubSubGetLastMigration(t *testing.T) {
 			}
 
 			// Call the method under test
-			result := pm.getLastMigration(mockContainer)
+			result, err := pm.getLastMigration(mockContainer)
 
 			assert.Equal(t, tc.expectedResult, result, "TEST[%v] %v Failed!", i, tc.desc)
+
+			if tc.expectedErr != nil {
+				assert.ErrorContains(t, err, tc.expectedErr.Error(), "TEST[%v] %v Failed!", i, tc.desc)
+			} else {
+				assert.NoError(t, err, "TEST[%v] %v Failed!", i, tc.desc)
+			}
 		})
 	}
 }
