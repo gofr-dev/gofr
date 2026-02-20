@@ -7,8 +7,10 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"go.uber.org/mock/gomock"
 
 	"gofr.dev/pkg/gofr/container"
+	"gofr.dev/pkg/gofr/logging"
 	"gofr.dev/pkg/gofr/testutil"
 )
 
@@ -204,7 +206,15 @@ func TestCronTab_AddJob(t *testing.T) {
 		},
 	}
 
-	c := NewCron(nil)
+	// We need a mock container because NewCron now registers metrics
+	mockContainer, mocks := container.NewMockContainer(t)
+	// Expect metrics registration
+	mocks.Metrics.EXPECT().NewHistogram("app_cron_job_duration", gomock.Any(), gomock.Any()).AnyTimes()
+	mocks.Metrics.EXPECT().NewCounter("app_cron_job_total", gomock.Any()).AnyTimes()
+	mocks.Metrics.EXPECT().NewCounter("app_cron_job_success", gomock.Any()).AnyTimes()
+	mocks.Metrics.EXPECT().NewCounter("app_cron_job_failures", gomock.Any()).AnyTimes()
+
+	c := NewCron(mockContainer)
 
 	for _, tc := range testCases {
 		err := c.AddJob(tc.schedule, "test-job", fn)
@@ -221,12 +231,27 @@ func TestCronTab_runScheduled(t *testing.T) {
 		day:       map[int]struct{}{1: {}},
 		month:     map[int]struct{}{1: {}},
 		dayOfWeek: map[int]struct{}{1: {}},
+		name:      "test-job",
 		fn:        func(*Context) { fmt.Println("hello from cron") },
 	}
 
 	// can make container nil as we are not testing the internal working of
 	// dependency function as it is user defined
-	mockContainer, _ := container.NewMockContainer(t)
+	// can make container nil as we are not testing the internal working of
+	// dependency function as it is user defined
+	mockContainer, mocks := container.NewMockContainer(t)
+
+	// Expect metrics registration
+	mocks.Metrics.EXPECT().NewHistogram("app_cron_job_duration", gomock.Any(), gomock.Any()).AnyTimes()
+	mocks.Metrics.EXPECT().NewCounter("app_cron_job_total", gomock.Any()).AnyTimes()
+	mocks.Metrics.EXPECT().NewCounter("app_cron_job_success", gomock.Any()).AnyTimes()
+	mocks.Metrics.EXPECT().NewCounter("app_cron_job_failures", gomock.Any()).AnyTimes()
+
+	// Expect metrics recording during run
+	mocks.Metrics.EXPECT().IncrementCounter(gomock.Any(), "app_cron_job_total", "job", "test-job").Times(1)
+	mocks.Metrics.EXPECT().IncrementCounter(gomock.Any(), "app_cron_job_success", "job", "test-job").Times(1)
+	mocks.Metrics.EXPECT().RecordHistogram(gomock.Any(), "app_cron_job_duration", gomock.Any(), "job", "test-job").Times(1)
+
 	c := NewCron(mockContainer)
 
 	// Populate the job array for cron table
@@ -605,6 +630,91 @@ func TestCron_parsePart(t *testing.T) {
 			assert.Len(t, output, len(test.expected), "TEST[%d] - Expected length: %v, got: %v", i, len(test.expected), len(output))
 
 			assert.Equal(t, test.expected, output, "TEST[%d] - Expected: %v, got: %v", i, test.expected, output)
+		})
+	}
+}
+
+func TestCronTab_runScheduled_Panic(t *testing.T) {
+	testCases := []struct {
+		desc               string
+		setupContainer     func(t *testing.T) *container.Container
+		jobName            string
+		panicMessage       string
+		expectMetricsCalls bool
+	}{
+		{
+			desc: "panic with metrics",
+			setupContainer: func(t *testing.T) *container.Container {
+				t.Helper()
+
+				mockContainer, mocks := container.NewMockContainer(t)
+
+				// Expect metrics registration
+				mocks.Metrics.EXPECT().NewHistogram("app_cron_job_duration", gomock.Any(), gomock.Any()).Times(1)
+				mocks.Metrics.EXPECT().NewCounter("app_cron_job_total", gomock.Any()).Times(1)
+				mocks.Metrics.EXPECT().NewCounter("app_cron_job_success", gomock.Any()).Times(1)
+				mocks.Metrics.EXPECT().NewCounter("app_cron_job_failures", gomock.Any()).Times(1)
+
+				// Expect metrics recording during panic
+				mocks.Metrics.EXPECT().IncrementCounter(gomock.Any(), "app_cron_job_total", "job", "panic-job").Times(1)
+				mocks.Metrics.EXPECT().RecordHistogram(gomock.Any(), "app_cron_job_duration", gomock.Any(), "job", "panic-job").Times(1)
+				mocks.Metrics.EXPECT().IncrementCounter(gomock.Any(), "app_cron_job_failures", "job", "panic-job").Times(1)
+
+				return mockContainer
+			},
+			jobName:            "panic-job",
+			panicMessage:       "simulated panic with metrics",
+			expectMetricsCalls: true,
+		},
+		{
+			desc: "panic without metrics",
+			setupContainer: func(*testing.T) *container.Container {
+				return &container.Container{
+					Logger: logging.NewMockLogger(logging.INFO),
+				}
+			},
+			jobName:            "panic-job-no-metrics",
+			panicMessage:       "simulated panic without metrics",
+			expectMetricsCalls: false,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.desc, func(t *testing.T) {
+			logs := testutil.StderrOutputForFunc(func() {
+				cntnr := tc.setupContainer(t)
+
+				j := &job{
+					sec:       map[int]struct{}{1: {}},
+					min:       map[int]struct{}{1: {}},
+					hour:      map[int]struct{}{1: {}},
+					day:       map[int]struct{}{1: {}},
+					month:     map[int]struct{}{1: {}},
+					dayOfWeek: map[int]struct{}{1: {}},
+					name:      tc.jobName,
+					fn: func(*Context) {
+						panic(tc.panicMessage)
+					},
+				}
+
+				var c *Crontab
+				if tc.expectMetricsCalls {
+					c = NewCron(cntnr)
+					c.jobs = []*job{j}
+				} else {
+					c = &Crontab{
+						ticker:    time.NewTicker(time.Second),
+						container: cntnr,
+						jobs:      []*job{j},
+					}
+				}
+
+				c.runScheduled(time.Date(2024, 1, 1, 1, 1, 1, 1, time.Local))
+				time.Sleep(200 * time.Millisecond)
+			})
+
+			assert.Contains(t, logs, fmt.Sprintf("Panic in cron job %s", tc.jobName))
+			assert.Contains(t, logs, tc.panicMessage)
 		})
 	}
 }
