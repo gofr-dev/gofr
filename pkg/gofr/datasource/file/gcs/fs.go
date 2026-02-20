@@ -2,7 +2,6 @@ package gcs
 
 import (
 	"context"
-	"errors"
 	"time"
 
 	"gofr.dev/pkg/gofr/datasource/file"
@@ -22,8 +21,12 @@ type Config struct {
 	ProjectID       string
 }
 
-// New creates and validates a new GCS file system (generic FileSystemProvider).
-func New(config *Config) file.FileSystemProvider {
+// New creates a new GCS filesystem and returns it as a CloudFileSystem.
+// CloudFileSystem is a superset of FileSystemProvider so it can be passed directly to
+// app.AddFileStore() without any conversion, while also giving callers compile-time
+// access to cloud-specific methods (CreateWithOptions, GenerateSignedURL) without
+// requiring a type assertion.
+func New(config *Config) file.CloudFileSystem {
 	if config == nil {
 		config = &Config{}
 	}
@@ -39,36 +42,6 @@ func New(config *Config) file.FileSystemProvider {
 	}
 
 	return fs
-}
-
-// NewCloudFileSystem creates a GCS filesystem with the CloudFileSystem interface.
-// This is a convenience wrapper around New() for users who need compile-time
-// verification that cloud-specific features (metadata, signed URLs) are available.
-//
-// Example:
-//
-//	cfs, err := gcs.NewCloudFileSystem(&gcs.Config{BucketName: "my-bucket"})
-//	if err != nil {
-//	    log.Fatal(err)
-//	}
-//
-//	// CreateWithOptions available without type assertion
-//	file, _ := cfs.CreateWithOptions(ctx, "file.csv", &file.FileOptions{
-//	    ContentType: "text/csv",
-//	})
-//
-// Note: New() returns FileSystemProvider which also supports these features
-// through type assertion. Use NewCloudFileSystem only when you want the
-// CloudFileSystem interface explicitly.
-func NewCloudFileSystem(config *Config) (file.CloudFileSystem, error) {
-	fs := New(config)
-
-	cfs, ok := fs.(file.CloudFileSystem)
-	if !ok {
-		return nil, errors.New("provider does not support cloud features")
-	}
-
-	return cfs, nil
 }
 
 // Connect tries a single immediate connect via provider; on failure it starts a background retry.

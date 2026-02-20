@@ -35,9 +35,8 @@ var (
 	errFailedToListObjects       = errors.New("failed to list objects")
 	errFailedToListDirectory     = errors.New("failed to list directory")
 
-	// Signed URL errors
-	errGCSConfigMissing        = errors.New("GCS config or bucket name missing")
-	errGCSCredentialsMissing   = errors.New("GCS credentials required for signed URL")
+	// Signed URL errors.
+	errGCSBucketNotConfigured  = errors.New("GCS bucket name is not configured")
 	errInvalidPrivateKeyPEM    = errors.New("invalid private key PEM")
 	errInvalidPrivateKeyFormat = errors.New("invalid private key format")
 	errExpiryMustBePositive    = errors.New("expiry duration must be positive")
@@ -55,6 +54,14 @@ type storageAdapter struct {
 	cfg    *Config
 	client *storage.Client
 	bucket *storage.BucketHandle
+
+	// saEmail and saPrivateKey hold parsed service-account credentials for signed URL
+	// generation. They are populated once during Connect() and reused on every call to
+	// SignedURL(), avoiding repeated JSON+PEM parsing per request.
+	// When empty, bucket.SignedURL falls back to the client's ambient credentials
+	// (Workload Identity, Application Default Credentials, etc.).
+	saEmail      string
+	saPrivateKey []byte
 }
 
 // Connect initializes the GCS client and validates bucket access.
@@ -77,7 +84,7 @@ func (s *storageAdapter) Connect(ctx context.Context) error {
 	case s.cfg.EndPoint != "":
 		client, err = storage.NewClient(ctx, option.WithEndpoint(s.cfg.EndPoint), option.WithoutAuthentication())
 	case s.cfg.CredentialsJSON != "":
-		client, err = storage.NewClient(ctx, option.WithCredentialsJSON([]byte(s.cfg.CredentialsJSON)))
+		client, err = storage.NewClient(ctx, option.WithCredentialsJSON([]byte(s.cfg.CredentialsJSON))) //nolint:staticcheck // deprecated
 	default:
 		client, err = storage.NewClient(ctx)
 	}
@@ -90,6 +97,22 @@ func (s *storageAdapter) Connect(ctx context.Context) error {
 	if _, err := bucket.Attrs(ctx); err != nil {
 		_ = client.Close()
 		return fmt.Errorf("bucket validation failed: %w", err)
+	}
+
+	// Parse and cache service-account credentials for signed URL signing.
+	// Done once at connect time so every SignedURL() call reuses the result instead of
+	// repeating JSON unmarshal + PEM decode + key parse on the hot path.
+	// When CredentialsJSON is absent (Workload Identity / ADC), saEmail and saPrivateKey
+	// remain empty and bucket.SignedURL will use the client's ambient credentials.
+	if s.cfg.CredentialsJSON != "" {
+		email, privateKey, parseErr := parseServiceAccountCredentials(s.cfg.CredentialsJSON)
+		if parseErr != nil {
+			_ = client.Close()
+			return fmt.Errorf("credentials cannot be used for signed URLs: %w", parseErr)
+		}
+
+		s.saEmail = email
+		s.saPrivateKey = privateKey
 	}
 
 	s.client = client
@@ -177,9 +200,11 @@ func (s *storageAdapter) NewWriterWithOptions(ctx context.Context, name string, 
 		if opts.ContentType != "" {
 			w.ContentType = opts.ContentType
 		}
+
 		if opts.ContentDisposition != "" {
 			w.ContentDisposition = opts.ContentDisposition
 		}
+
 		if opts.Metadata != nil {
 			w.Metadata = opts.Metadata
 		}
@@ -381,99 +406,125 @@ func parseServiceAccountCredentials(credentialsJSON string) (email string, priva
 func validatePrivateKey(keyBytes []byte) error {
 	if _, err := x509.ParsePKCS8PrivateKey(keyBytes); err != nil {
 		if _, err2 := x509.ParsePKCS1PrivateKey(keyBytes); err2 != nil {
-			return fmt.Errorf("%w: PKCS8: %v, PKCS1: %v", errInvalidPrivateKeyFormat, err, err2)
+			return fmt.Errorf("%w: PKCS8: %s, PKCS1: %s", errInvalidPrivateKeyFormat, err.Error(), err2.Error())
 		}
 	}
+
 	return nil
 }
 
 // buildSignedURLOptions constructs GCS SignedURLOptions with optional metadata.
+// When email and privateKey are empty (Workload Identity / ADC deployments), the
+// GoogleAccessID and PrivateKey fields are intentionally left unset so that
+// bucket.SignedURL falls back to IAM-based signing via the client's credentials.
 func buildSignedURLOptions(email string, privateKey []byte, expiry time.Duration, opts *file.FileOptions) *storage.SignedURLOptions {
-	optsStruct := &storage.SignedURLOptions{
-		GoogleAccessID: email,
-		PrivateKey:     privateKey,
-		Method:         "GET",
-		Expires:        time.Now().Add(expiry),
+	signedOpts := &storage.SignedURLOptions{
+		Method:  "GET",
+		Expires: time.Now().Add(expiry),
+		// V4 is the current recommended signing scheme; it supports additional
+		// query parameters (e.g., response-content-disposition) and is required
+		// for credentials that delegate to IAM signBlob (Workload Identity).
+		Scheme: storage.SigningSchemeV4,
+	}
+
+	// Only populate explicit HMAC credentials when available.
+	if email != "" {
+		signedOpts.GoogleAccessID = email
+	}
+
+	if len(privateKey) > 0 {
+		signedOpts.PrivateKey = privateKey
 	}
 
 	if opts == nil {
-		return optsStruct
+		return signedOpts
 	}
 
-	// Set Content-Type
 	if opts.ContentType != "" {
-		optsStruct.ContentType = opts.ContentType
+		signedOpts.ContentType = opts.ContentType
 	}
 
-	// Set Content-Disposition via query parameters
 	if opts.ContentDisposition != "" {
-		if optsStruct.QueryParameters == nil {
-			optsStruct.QueryParameters = make(url.Values)
+		if signedOpts.QueryParameters == nil {
+			signedOpts.QueryParameters = make(url.Values)
 		}
-		// Sanitize to prevent header injection
-		sanitized := sanitizeContentDisposition(opts.ContentDisposition)
-		optsStruct.QueryParameters.Set("response-content-disposition", sanitized)
+
+		signedOpts.QueryParameters.Set("response-content-disposition", sanitizeContentDisposition(opts.ContentDisposition))
 	}
 
-	return optsStruct
+	return signedOpts
 }
 
 // sanitizeContentDisposition removes newline characters to prevent header injection.
 func sanitizeContentDisposition(value string) string {
 	sanitized := strings.ReplaceAll(value, "\r", "")
 	sanitized = strings.ReplaceAll(sanitized, "\n", "")
+
 	return sanitized
 }
 
-// SignedURL generates a signed URL for the given object with expiry and optional metadata.
-// Accepts a single *file.FileOptions to match the SignedURLProvider signature.
+// SignedURL generates a time-limited signed URL for the given object.
+//
+// Signing strategy (in priority order):
+//  1. Explicit HMAC: when CredentialsJSON was provided at construction time, the
+//     parsed private key cached during Connect() is used for local RSA signing — no
+//     additional network calls are needed.
+//  2. Ambient credentials: when no CredentialsJSON is provided (e.g., Workload Identity
+//     on GKE/Cloud Run, Application Default Credentials), bucket.SignedURL delegates
+//     signing to the IAM signBlob API using the client's existing auth token.
+//
+// The signed URL always uses V4 signing and defaults to the GET method.
 func (s *storageAdapter) SignedURL(ctx context.Context, name string, expiry time.Duration, opts *file.FileOptions) (string, error) {
-	// Check context cancellation
 	select {
 	case <-ctx.Done():
 		return "", ctx.Err()
 	default:
 	}
 
-	// Validate config
 	if s.cfg == nil || s.cfg.BucketName == "" {
-		return "", errGCSConfigMissing
+		return "", errGCSBucketNotConfigured
 	}
 
-	if s.cfg.CredentialsJSON == "" {
-		return "", errGCSCredentialsMissing
+	if s.bucket == nil {
+		return "", errGCSClientNotInitialized
 	}
 
-	// Validate inputs
 	if err := validateSignedURLInput(name, expiry, opts); err != nil {
 		return "", err
 	}
 
-	// Parse credentials
-	email, privateKey, err := parseServiceAccountCredentials(s.cfg.CredentialsJSON)
-	if err != nil {
-		return "", err
-	}
+	// saEmail and saPrivateKey are populated during Connect() when CredentialsJSON is
+	// provided. When empty, bucket.SignedURL uses IAM-based signing (Workload Identity).
+	signedOpts := buildSignedURLOptions(s.saEmail, s.saPrivateKey, expiry, opts)
 
-	// Build signed URL options
-	signedOpts := buildSignedURLOptions(email, privateKey, expiry, opts)
-
-	// Generate signed URL
-	signedURL, err := storage.SignedURL(s.cfg.BucketName, name, signedOpts)
+	signedURL, err := s.bucket.SignedURL(name, signedOpts)
 	if err != nil {
 		return "", fmt.Errorf("failed to generate signed URL: %w", err)
 	}
 
-	// If a custom endpoint is configured (e.g., fake-gcs-server emulator),
-	// rewrite the signed URL to use its scheme+host so the signed URL points to emulator.
-	if s.cfg.EndPoint != "" {
-		if ep, err := url.Parse(s.cfg.EndPoint); err == nil {
-			if parsed, err := url.Parse(signedURL); err == nil {
-				parsed.Scheme = ep.Scheme
-				parsed.Host = ep.Host
-				signedURL = parsed.String()
-			}
-		}
+	return rewriteSignedURLEndpoint(signedURL, s.cfg.EndPoint), nil
+}
+
+// rewriteSignedURLEndpoint replaces the scheme and host of a GCS signed URL with those
+// of a custom endpoint. This is used to redirect signed URLs to a local emulator
+// (e.g., fake-gcs-server) during integration tests without changing the path or query.
+func rewriteSignedURLEndpoint(signedURL, endpoint string) string {
+	if endpoint == "" {
+		return signedURL
 	}
-	return signedURL, nil
+
+	ep, err := url.Parse(endpoint)
+	if err != nil {
+		return signedURL
+	}
+
+	parsed, err := url.Parse(signedURL)
+	if err != nil {
+		return signedURL
+	}
+
+	parsed.Scheme = ep.Scheme
+	parsed.Host = ep.Host
+
+	return parsed.String()
 }

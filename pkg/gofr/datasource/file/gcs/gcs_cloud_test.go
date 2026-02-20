@@ -7,18 +7,19 @@ import (
 	"gofr.dev/pkg/gofr/datasource/file/gcs"
 )
 
-func TestNewCloudFileSystem_ReturnsCloudInterface(t *testing.T) {
+// TestNew_ReturnsCloudFileSystem verifies that New() returns a value that satisfies
+// file.CloudFileSystem at compile time (implicit) and at runtime via AsCloud.
+func TestNew_ReturnsCloudFileSystem(t *testing.T) {
 	cfg := &gcs.Config{BucketName: "test-bucket"}
-	cfs, err := gcs.NewCloudFileSystem(cfg)
-	if err != nil {
-		t.Fatalf("expected no error, got %v", err)
-	}
+
+	cfs := gcs.New(cfg)
+
 	if cfs == nil {
-		t.Fatalf("expected CloudFileSystem, got nil")
+		t.Fatal("expected non-nil CloudFileSystem from New()")
 	}
 
-	// Also ensure AsCloud helper works
+	// AsCloud must succeed because New() explicitly declares CloudFileSystem.
 	if _, ok := file.AsCloud(cfs); !ok {
-		t.Fatalf("AsCloud should succeed for a cloud provider")
+		t.Fatal("AsCloud should succeed for a value returned by gcs.New()")
 	}
 }

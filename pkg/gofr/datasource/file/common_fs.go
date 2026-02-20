@@ -647,6 +647,9 @@ func (c *CommonFileSystem) SetConnected(connected bool) {
 	c.connected = connected
 }
 
+// CreateWithOptions creates a file with optional metadata (content-type, content-disposition,
+// custom key-value pairs). If the underlying provider does not implement MetadataWriter,
+// the file is created without metadata and a warning is logged.
 func (c *CommonFileSystem) CreateWithOptions(ctx context.Context, name string, opts *FileOptions) (File, error) {
 	var msg string
 
@@ -669,9 +672,10 @@ func (c *CommonFileSystem) CreateWithOptions(ctx context.Context, name string, o
 		return NewCommonFileWriter(c.Provider, name, writer, c.Logger, c.Metrics, c.Location), nil
 	}
 
-	// Fallback: provider doesn't support metadata
+	// Fallback: provider doesn't support metadata. Warn because the caller explicitly
+	// requested metadata that will be silently dropped.
 	if c.Logger != nil && opts != nil {
-		c.Logger.Debugf("Provider %s does not support metadata; creating file without metadata", c.ProviderName)
+		c.Logger.Warnf("provider %s does not support metadata; file will be created without the requested metadata", c.ProviderName)
 	}
 
 	writer := c.Provider.NewWriter(ctx, name)
@@ -687,6 +691,8 @@ func (c *CommonFileSystem) CreateWithOptions(ctx context.Context, name string, o
 	return NewCommonFileWriter(c.Provider, name, writer, c.Logger, c.Metrics, c.Location), nil
 }
 
+// GenerateSignedURL produces a time-limited pre-signed URL for the named object.
+// Returns ErrSignedURLsNotSupported if the underlying provider does not implement SignedURLProvider.
 func (c *CommonFileSystem) GenerateSignedURL(ctx context.Context, name string, expiry time.Duration, opts *FileOptions) (string, error) {
 	var msg string
 

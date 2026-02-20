@@ -155,11 +155,6 @@ type FileOptions struct {
 	Metadata           map[string]string `json:"metadata,omitempty"`
 }
 
-var (
-	// ErrSignedURLsNotSupported is returned when a provider does not implement signed URLs.
-	ErrSignedURLsNotSupported = errors.New("signed URLs not supported by provider")
-)
-
 // AdvancedFileOperations extends FileSystem with metadata support.
 type AdvancedFileOperations interface {
 	CreateWithOptions(ctx context.Context, name string, opts *FileOptions) (File, error)
@@ -195,6 +190,9 @@ func AsCloud(fs FileSystem) (CloudFileSystem, bool) {
 }
 
 var (
+	// ErrSignedURLsNotSupported is returned when a provider does not implement signed URLs.
+	ErrSignedURLsNotSupported = errors.New("signed URLs not supported by provider")
+
 	ErrOutOfRange   = errors.New("out of range")
 	ErrFileNotFound = os.ErrNotExist
 )
