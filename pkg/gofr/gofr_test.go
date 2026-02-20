@@ -960,7 +960,6 @@ func setupTestEnvironment(t *testing.T) (host string, htmlContent []byte) {
 
 	app.AddStaticFiles("gofrTest", "testdir")
 
-	app.httpRegistered = true
 	app.httpServer.port = configs.HTTPPort
 
 	go app.Run()
@@ -1066,6 +1065,21 @@ func TestStaticHandlerInvalidFilePath(t *testing.T) {
 
 	assert.Contains(t, logs, "no such file or directory")
 	assert.Contains(t, logs, "error in registering '/gofrTest' static endpoint")
+}
+
+func TestNewSetsHTTPRegisteredWhenStaticDirExists(t *testing.T) {
+	testutil.NewServerConfigs(t)
+
+	createPublicDirectory(t, defaultPublicStaticDir, []byte("<html></html>"))
+
+	defer os.Remove("static/indexTest.html")
+
+	app := New()
+
+	assert.True(t, app.httpRegistered,
+		"httpRegistered should be true when ./static directory exists")
+	assert.NotEmpty(t, app.httpServer.staticFiles,
+		"staticFiles map should contain the auto-detected directory")
 }
 
 func createPublicDirectory(t *testing.T, defaultPublicStaticDir string, htmlContent []byte) {

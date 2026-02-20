@@ -55,6 +55,7 @@ func New() *App {
 
 	if _, err = os.Stat(checkDirectory); err == nil {
 		app.httpServer.staticFiles[checkDirectory] = "/static"
+		app.httpRegistered = true
 	}
 
 	return app

@@ -9,7 +9,7 @@ import (
 	"time"
 
 	"github.com/segmentio/kafka-go"
-	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/trace"
 
 	"gofr.dev/pkg/gofr/datasource/pubsub"
 )
@@ -98,7 +98,7 @@ func New(conf *Config, logger pubsub.Logger, metrics Metrics) *kafkaClient { //n
 }
 
 func (k *kafkaClient) Publish(ctx context.Context, topic string, message []byte) error {
-	ctx, span := otel.GetTracerProvider().Tracer("gofr").Start(ctx, "kafka-publish")
+	ctx, span, headers := startPublishSpan(ctx, topic)
 	defer span.End()
 
 	k.metrics.IncrementCounter(ctx, "app_pubsub_publish_total_count", "topic", topic)
@@ -110,9 +110,10 @@ func (k *kafkaClient) Publish(ctx context.Context, topic string, message []byte)
 	start := time.Now()
 	err := k.writer.WriteMessages(ctx,
 		kafka.Message{
-			Topic: topic,
-			Value: message,
-			Time:  time.Now(),
+			Topic:   topic,
+			Value:   message,
+			Headers: headers,
+			Time:    time.Now(),
 		},
 	)
 	end := time.Since(start)
@@ -180,8 +181,8 @@ func (k *kafkaClient) Subscribe(ctx context.Context, topic string) (*pubsub.Mess
 		return &pubsub.Message{}, ErrConsumerGroupNotProvided
 	}
 
-	ctx, span := otel.GetTracerProvider().Tracer("gofr").Start(ctx, "kafka-subscribe")
-	defer span.End()
+	// Span will be created after fetching message to access headers
+	var span trace.Span
 
 	k.metrics.IncrementCounter(ctx, "app_pubsub_subscribe_total_count", "topic", topic, "consumer_group", k.config.ConsumerGroupID)
 
@@ -211,6 +212,10 @@ func (k *kafkaClient) Subscribe(ctx context.Context, topic string) (*pubsub.Mess
 
 		return nil, err
 	}
+
+	// Create span with links to producer span from message headers
+	ctx, span = startSubscribeSpan(ctx, topic, msg.Headers)
+	defer span.End()
 
 	m := pubsub.NewMessage(ctx)
 	m.Value = msg.Value
