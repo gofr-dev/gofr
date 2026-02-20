@@ -79,7 +79,7 @@ func (s *httpServer) run(c *container.Container) {
 		}
 
 		// Start HTTPS server with TLS
-		if err := s.srv.ListenAndServeTLS(s.certFile, s.keyFile); err != nil {
+		if err := s.srv.ListenAndServeTLS(s.certFile, s.keyFile); err != nil && !errors.Is(err, http.ErrServerClosed) {
 			c.Errorf("error while listening to https server, err: %v", err)
 		}
 
@@ -87,7 +87,7 @@ func (s *httpServer) run(c *container.Container) {
 	}
 
 	// If no certFile/keyFile is provided, run the HTTP server
-	if err := s.srv.ListenAndServe(); err != nil {
+	if err := s.srv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
 		c.Errorf("error while listening to http server, err: %v", err)
 	}
 }
