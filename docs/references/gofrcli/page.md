@@ -43,7 +43,7 @@ The CLI can be run directly from the terminal after installation. Here’s the g
 
 ## 1. ***`init`***
 
-   The init command initializes a new GoFr project. It sets up the foundational structure for the project and generates a basic "Hello World!" program as a starting point. This allows developers to quickly dive into building their application with a ready-made structure.
+The init command initializes a new GoFr project. It sets up the foundational structure for the project and generates a basic "Hello World!" program as a starting point. This allows developers to quickly dive into building their application with a ready-made structure.
 
 ### Command Usage
 ```bash
@@ -53,8 +53,8 @@ The CLI can be run directly from the terminal after installation. Here’s the g
 
 ## 2. ***`migrate create`***
 
-   The migrate create command generates a migration template file with pre-defined structure in your migrations directory.
-   This boilerplate code helps you maintain consistent patterns when writing database schema modifications across your project.
+The migrate create command generates a migration template file with pre-defined structure in your migrations directory.
+This boilerplate code helps you maintain consistent patterns when writing database schema modifications across your project.
 
 
 ### Command Usage
@@ -74,16 +74,16 @@ This command generates a migration directory which has the below files:
 package migrations
 
 import (
-    "gofr.dev/pkg/gofr/migration"
+  "gofr.dev/pkg/gofr/migration"
 )
 
 func create_employee_table() migration.Migrate {
-    return migration.Migrate{
-        UP: func(d migration.Datasource) error {
-            // write your migrations here
-            return nil
-        },
-    }
+  return migration.Migrate{
+    UP: func(d migration.Datasource) error {
+      // write your migrations here
+      return nil
+    },
+  }
 }
 ```
 2. An auto-generated all.go file that maintains a registry of all migrations:
@@ -92,27 +92,27 @@ func create_employee_table() migration.Migrate {
 package migrations
 
 import (
-    "gofr.dev/pkg/gofr/migration"
+  "gofr.dev/pkg/gofr/migration"
 )
 
 func All() map[int64]migration.Migrate {
-    return map[int64]migration.Migrate {
-        20250127152047: create_employee_table(),
-    }
+  return map[int64]migration.Migrate {
+    20250127152047: create_employee_table(),
+  }
 }
 ```
 
-> **💡 Best Practice:** Learn about [organizing migrations by feature](../../docs/advanced-guide/handling-data-migrations#organizing-migrations-by-feature) to avoid creating one migration per table or operation.
+> **💡 Best Practice:** Learn about [organizing migrations by feature](../../advanced-guide/handling-data-migrations#organizing-migrations-by-feature) to avoid creating one migration per table or operation.
 
-For detailed instructions on handling database migrations, see the [handling-data-migrations documentation](../../docs/advanced-guide/handling-data-migrations)
+For detailed instructions on handling database migrations, see the [handling-data-migrations documentation](../../advanced-guide/handling-data-migrations)
 For more examples, see the [using-migrations](https://github.com/gofr-dev/gofr/tree/main/examples/using-migrations)
 ---
 
 ## 3. ***`wrap grpc`***
 
-   * The gofr wrap grpc command streamlines gRPC integration in a GoFr project by generating GoFr's context-aware structures.
-   * It simplifies setting up gRPC handlers with minimal steps, and accessing datasources, adding tracing as well as custom metrics. Based on the proto file it creates the handler/client with GoFr's context.
-   For detailed instructions on using grpc with GoFr see the [gRPC documentation](../../advanced-guide/grpc/page.md)
+* The gofr wrap grpc command streamlines gRPC integration in a GoFr project by generating GoFr's context-aware structures.
+* It simplifies setting up gRPC handlers with minimal steps, and accessing datasources, adding tracing as well as custom metrics. Based on the proto file it creates the handler/client with GoFr's context.
+  For detailed instructions on using grpc with GoFr see the [gRPC documentation](../../advanced-guide/grpc)
 
 ### Command Usage
 **gRPC Server**
@@ -314,7 +314,7 @@ gofr store generate
 ```
 
 This generates:
-```
+```text
 stores/
 ├── store.yaml          # Central Configuration
 ├── all.go              # Store registry factory (auto-generated)
@@ -383,7 +383,7 @@ models:
 ```
 
 **Generated structure:**
-```
+```text
 stores/
 ├── all.go
 ├── user/
@@ -399,9 +399,9 @@ stores/
 **Using the registry with multiple stores:**
 ```go
 import (
-    "your-project/stores"
-    "your-project/stores/user"
-    "your-project/stores/product"
+"your-project/stores"
+"your-project/stores/user"
+"your-project/stores/product"
 )
 
 // stores.GetStore returns a factory-created instance
@@ -478,13 +478,13 @@ models:
 This generates:
 ```go
 type User struct {
-    ID        int64     `db:"id" json:"id"`
-    Name      string    `db:"name" json:"name"`
-    CreatedAt time.Time `db:"created_at" json:"created_at"`
+ID        int64     `db:"id" json:"id"`
+Name      string    `db:"name" json:"name"`
+CreatedAt time.Time `db:"created_at" json:"created_at"`
 }
 
 func (User) TableName() string {
-    return "user"
+return "user"
 }
 ```
 
@@ -512,8 +512,8 @@ package user
 import "gofr.dev/pkg/gofr"
 
 type UserStore interface {
-    GetUserByID(ctx *gofr.Context, id int64) (User, error)
-    GetAllUsers(ctx *gofr.Context) ([]User, error)
+  GetUserByID(ctx *gofr.Context, id int64) (User, error)
+  GetAllUsers(ctx *gofr.Context) ([]User, error)
 }
 ```
 
@@ -526,19 +526,19 @@ package user
 type userStore struct{}
 
 func NewUserStore() UserStore {
-    return &userStore{}
+   return &userStore{}
 }
 
 func (s *userStore) GetUserByID(ctx *gofr.Context, id int64) (User, error) {
-    // TODO: Implement using ctx.SQL()
-    var result User
-    // err := ctx.SQL().QueryRowContext(ctx, sql, id).Scan(&result.ID, ...)
-    return result, nil
+   // TODO: Implement using ctx.SQL()
+   var result User
+   // err := ctx.SQL().QueryRowContext(ctx, sql, id).Scan(&result.ID, ...)
+   return result, nil
 }
 
 func (s *userStore) GetAllUsers(ctx *gofr.Context) ([]User, error) {
-    // TODO: Implement using ctx.SQL()
-    return []User{}, nil
+   // TODO: Implement using ctx.SQL()
+   return []User{}, nil
 }
 ```
 
