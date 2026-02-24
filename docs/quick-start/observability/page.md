@@ -3,19 +3,99 @@
 GoFr, by default, manages observability in different ways once the server starts:
 
 ## Logs
-
 Logs offer real-time information, providing valuable insights and immediate visibility into the ongoing state and activities of the system.
 It helps in identifying errors, debugging and troubleshooting, monitor performance, analyzing application usage, communications etc.
 
 GoFr logger allows customizing the log level, which provides flexibility to adjust logs based on specific needs.
 
 Logs are generated only for events equal to or above the specified log level; by default, GoFr logs at _INFO_ level.
-Log Level can be changed by setting the environment variable `LOG_LEVEL` value to _WARN,DEBUG,ERROR,NOTICE or FATAL_.
+Log Level can be changed by setting the environment variable `LOG_LEVEL` value to _DEBUG, INFO, NOTICE, WARN, ERROR or FATAL_.
 
 When the GoFr server runs, it prints a log for reading configs, database connection, requests, database queries, missing configs, etc.
 They contain information such as request's correlation ID, status codes, request time, etc.
 
+### Log Levels
+
+#### DEBUG
+This is the lowest priority level. It represents the most detailed/granular information.
+
+**Note:** `DEBUG` logs should be enabled only in development or controlled troubleshooting scenarios.They are typically disabled in production environments due to performance overhead and security risks.
+
+
+**Example**
+```Go
+ctx.Debug("Calc trace - Price:", 150, "Discount:", 0.2, "Tax Multiplier:", 1.05)
+```
+
+---
+#### INFO
+`INFO` Represents normal operational events during application execution and acts as the default logging level, ensuring baseline observability without excessive verbosity.
+
+
+
+**Example**
+```Go
+ctx.Info("Application configuration loaded", "Source", "env")
+```
+
+---
+
+#### NOTICE
+A level higher than `INFO` but lower than `WARN`. It shares the same visual prominence as a Warning but implies a "normal" condition rather than a problem. In simple words, it's used for events that are normal but rare and significant.
+
+
+
+**Example**
+```Go
+ctx.Notice("Configuration hot-reload triggered by system admin")
+```
+
+---
+#### WARN
+`WARN` should represent abnormal runtime conditions that indicate instability or degraded operation (retries, fallbacks, transient failures), not long-term code hygiene issues like deprecated API usage. If something would show up repeatedly in a healthy system, it shouldn’t be a `WARN`, otherwise the signal gets diluted and operators start ignoring it.
+
+
+
+**Example**
+```Go
+ctx.Warn("Database connection timeout. Retrying...", "attempt", 1, "retry_after", "2s")
+```
+
+---
+
+#### ERROR
+Indicates a failure event. This level routes logs to `stderr` (Standard Error), ensuring visibility to error tracking tools.
+
+
+
+**Example**
+```Go
+ctx.Error("DB Query Timeout: Analytics fetch failed.", "error", errors.New("query execution exceeded 3000ms"))
+```
+
+---
+
+#### FATAL
+The highest priority level. `FATAL` represents a critical system failures where the application cannot function. 
+
+**Note:** `FATAL` terminates the process immediately and is intended only for startup-time failures, not runtime request handling.
+
+
+**Example**
+```Go
+app.Logger().Fatal("Startup Failure: Mandatory SSL certificate missing.", "path", "/etc/certs/server.crt")
+```
+
+---
+> **Note:** Performance & Log Volume.
+>1. Early Exit Optimization: The logger implements an "Early Exit" strategy. If the incoming log level is lower than the configured `LOG_LEVEL`, the function returns immediately before performing any formatting or allocation.
+>2. Locking Overhead: The terminal output utilizes a mutex lock to ensure thread safety.
+
+---
+
 {% figure src="/quick-start-logs.png" alt="Pretty Printed Logs" /%}
+
+
 
 Logs are well-structured, they are of type JSON when exported to a file, such that they can be pushed to logging systems such as {% new-tab-link title="Loki" href="https://grafana.com/oss/loki/" /%}, Elasticsearch, etc.
 
@@ -163,6 +243,30 @@ GoFr publishes metrics to port: _2121_ on _/metrics_ endpoint in Prometheus form
 - gofr_graphql_request_duration
 - histogram
 - Response time of GraphQL requests in seconds
+
+---
+
+- app_cron_job_total
+- counter
+- Total number of cron job executions. Label: `job`.
+
+---
+
+- app_cron_job_success
+- counter
+- Number of successful cron job executions. Label: `job`.
+
+---
+
+- app_cron_job_failures
+- counter
+- Number of failed cron job executions. Label: `job`.
+
+---
+
+- app_cron_job_duration
+- histogram
+- Duration of cron job execution in seconds. Label: `job`.
 
 {% /table %}
 

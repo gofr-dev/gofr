@@ -74,4 +74,15 @@ func main() {
 }
 ```
 
+### Cron job metrics
+
+GoFr automatically collects metrics for all registered cron jobs. These metrics are available on the `/metrics` endpoint (default port 2121) and include:
+
+- `app_cron_job_total`: Total number of times a cron job has been triggered.
+- `app_cron_job_success`: Number of successful executions.
+- `app_cron_job_failures`: Number of failed executions (including panics).
+- `app_cron_job_duration`: Duration of execution in **seconds**.
+
+Each metric is labeled with the `job` (user-defined name) to allow fine-grained filtering and monitoring.
+
 > #### Check out the example on how to add cron jobs in GoFr: [Visit GitHub](https://github.com/gofr-dev/gofr/blob/main/examples/using-cron-jobs/main.go)
