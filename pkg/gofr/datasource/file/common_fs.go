@@ -656,7 +656,7 @@ func (c *CommonFileSystem) CreateWithOptions(ctx context.Context, name string, o
 	st := StatusError
 	startTime := time.Now()
 
-	defer c.Observe(OpCreate, startTime, &st, &msg)
+	defer c.Observe(OpCreateWithOptions, startTime, &st, &msg)
 
 	// Try metadata-aware writer
 	if mw, ok := c.Provider.(MetadataWriter); ok {

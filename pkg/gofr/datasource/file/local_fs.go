@@ -182,6 +182,12 @@ func (*localProvider) ListDir(_ context.Context, prefix string) ([]ObjectInfo, [
 	return objects, dirs, nil
 }
 
+// Deprecated: New is a backward-compatible wrapper for NewLocalFileSystem and will be
+// removed in a future major version. Use NewLocalFileSystem instead.
+func New(logger datasource.Logger) FileSystem {
+	return NewLocalFileSystem(logger)
+}
+
 // ============= Helper Types =============
 
 // limitedReadCloser wraps a ReadCloser with a byte limit.

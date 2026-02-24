@@ -46,6 +46,7 @@ type fakeProvider struct {
 	calledSignedURL            bool
 	signedURLError             error
 	lastOpts                   *file.FileOptions
+	returnNilWriter            bool
 }
 
 func (*fakeProvider) Connect(_ context.Context) error {
@@ -77,6 +78,10 @@ func (*fakeProvider) ListDir(_ context.Context, _ string) ([]file.ObjectInfo, []
 func (f *fakeProvider) NewWriterWithOptions(_ context.Context, _ string, opts *file.FileOptions) io.WriteCloser {
 	f.calledNewWriterWithOptions = true
 	f.lastOpts = opts
+
+	if f.returnNilWriter {
+		return nil
+	}
 
 	return &nopWriteCloser{}
 }
@@ -137,5 +142,15 @@ func TestGenerateSignedURL_ProviderDoesNotSupport(t *testing.T) {
 	_, err := cfs.GenerateSignedURL(context.Background(), "obj", time.Hour, nil)
 	if !errors.Is(err, file.ErrSignedURLsNotSupported) {
 		t.Errorf("expected ErrSignedURLsNotSupported, got %v", err)
+	}
+}
+
+func TestCreateWithOptions_NilWriterReturnsError(t *testing.T) {
+	fp := &fakeProvider{returnNilWriter: true}
+	cfs := &file.CommonFileSystem{Provider: fp, Location: "b", ProviderName: "FAKE"}
+
+	_, err := cfs.CreateWithOptions(context.Background(), "obj", nil)
+	if err == nil {
+		t.Fatal("expected error when NewWriterWithOptions returns nil, got nil")
 	}
 }

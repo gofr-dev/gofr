@@ -46,7 +46,8 @@ var (
 
 const (
 	contentTypeDirectory  = "application/x-directory"
-	maxGCSSignedURLExpiry = 7 * 24 * time.Hour // 7 days
+	contentTypePartsCount = 2
+	maxGCSSignedURLExpiry = 7 * 24 * time.Hour // 7 days// type/subtype
 )
 
 // storageAdapter adapts GCS client to implement file.StorageProvider.
@@ -62,6 +63,11 @@ type storageAdapter struct {
 	// (Workload Identity, Application Default Credentials, etc.).
 	saEmail      string
 	saPrivateKey []byte
+
+	// credParseErr holds any error encountered when parsing CredentialsJSON during Connect().
+	// Connect() does not fail on a parse error so that users who never call GenerateSignedURL
+	// are unaffected. The error is returned lazily from SignedURL() if it is non-nil.
+	credParseErr error
 }
 
 // Connect initializes the GCS client and validates bucket access.
@@ -104,15 +110,18 @@ func (s *storageAdapter) Connect(ctx context.Context) error {
 	// repeating JSON unmarshal + PEM decode + key parse on the hot path.
 	// When CredentialsJSON is absent (Workload Identity / ADC), saEmail and saPrivateKey
 	// remain empty and bucket.SignedURL will use the client's ambient credentials.
+	// Parse and cache service-account credentials for signed URL signing.
+	// If parsing fails we do NOT abort Connect() — the GCS client is already valid and
+	// all non-signed-URL operations will work normally. The parse error is stored and
+	// returned lazily from SignedURL() so only callers of that method are affected.
 	if s.cfg.CredentialsJSON != "" {
 		email, privateKey, parseErr := parseServiceAccountCredentials(s.cfg.CredentialsJSON)
 		if parseErr != nil {
-			_ = client.Close()
-			return fmt.Errorf("credentials cannot be used for signed URLs: %w", parseErr)
+			s.credParseErr = fmt.Errorf("credentials cannot be used for signed URLs: %w", parseErr)
+		} else {
+			s.saEmail = email
+			s.saPrivateKey = privateKey
 		}
-
-		s.saEmail = email
-		s.saPrivateKey = privateKey
 	}
 
 	s.client = client
@@ -192,6 +201,10 @@ func (s *storageAdapter) NewWriter(ctx context.Context, name string) io.WriteClo
 func (s *storageAdapter) NewWriterWithOptions(ctx context.Context, name string, opts *file.FileOptions) io.WriteCloser {
 	if name == "" {
 		return &failWriter{err: errEmptyObjectName}
+	}
+
+	if s.bucket == nil {
+		return &failWriter{err: errGCSClientNotInitialized}
 	}
 
 	w := s.bucket.Object(name).NewWriter(ctx)
@@ -370,7 +383,8 @@ func validateSignedURLInput(name string, expiry time.Duration, opts *file.FileOp
 	}
 
 	if opts != nil && opts.ContentType != "" {
-		if !strings.Contains(opts.ContentType, "/") {
+		parts := strings.SplitN(opts.ContentType, "/", contentTypePartsCount)
+		if len(parts) != contentTypePartsCount || parts[0] == "" || parts[1] == "" {
 			return fmt.Errorf("%w: %q", errInvalidContentType, opts.ContentType)
 		}
 	}
@@ -491,6 +505,11 @@ func (s *storageAdapter) SignedURL(ctx context.Context, name string, expiry time
 
 	if err := validateSignedURLInput(name, expiry, opts); err != nil {
 		return "", err
+	}
+
+	// Return any credential parse error that was deferred from Connect().
+	if s.credParseErr != nil {
+		return "", s.credParseErr
 	}
 
 	// saEmail and saPrivateKey are populated during Connect() when CredentialsJSON is
