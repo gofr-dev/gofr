@@ -3,7 +3,7 @@ module gofr.dev/pkg/gofr/datasource/arangodb
 go 1.25
 
 require (
-	github.com/arangodb/go-driver/v2 v2.1.6
+	github.com/arangodb/go-driver/v2 v2.2.0
 	github.com/stretchr/testify v1.11.1
 	go.opentelemetry.io/otel v1.40.0
 	go.opentelemetry.io/otel/trace v1.40.0
