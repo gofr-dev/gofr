@@ -59,7 +59,8 @@ func TraceHandler(c *gofr.Context) (any, error) {
 	defer c.Trace("traceHandler").End()
 
 	span2 := c.Trace("some-sample-work")
-	<-time.After(time.Millisecond * 1) //nolint:wsl    // Waiting for 1ms to simulate workload
+	// Waiting for 1ms to simulate workload
+	<-time.After(time.Millisecond * 1) //nolint:wsl
 	defer span2.End()
 
 	// Ping redis 5 times concurrently and wait.
@@ -75,7 +76,7 @@ func TraceHandler(c *gofr.Context) (any, error) {
 	}
 	wg.Wait()
 
-	//Call to Another service
+	// Call to Another service
 	resp, err := c.GetHTTPService("anotherService").Get(c, "redis", nil)
 	if err != nil {
 		return nil, err
