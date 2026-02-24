@@ -179,7 +179,10 @@ func (c *Container) Close() error {
 func (c *Container) createMqttPubSub(conf config.Config) pubsub.Client {
 	var qos byte
 
-	port, _ := strconv.Atoi(conf.Get("MQTT_PORT"))
+	port, err := strconv.Atoi(conf.GetOrDefault("MQTT_PORT", "0"))
+	if err != nil {
+		c.Logger.Error("Invalid value for MQTT_PORT, using default: 0")
+	}
 	order, _ := strconv.ParseBool(conf.GetOrDefault("MQTT_MESSAGE_ORDER", "false"))
 
 	retrieveRetained, _ := strconv.ParseBool(conf.GetOrDefault("MQTT_RETRIEVE_RETAINED", "false"))
@@ -328,7 +331,11 @@ func (c *Container) createKafkaPubSub(conf config.Config) {
 		return
 	}
 
-	partition, _ := strconv.Atoi(conf.GetOrDefault("PARTITION_SIZE", "0"))
+	partition, err := strconv.Atoi(conf.GetOrDefault("PARTITION_SIZE", "0"))
+	if err != nil {
+		c.Logger.Error("Invalid value for PARTITION_SIZE, using default: 0")
+	}
+
 	// PUBSUB_OFFSET determines the starting position for message consumption in Kafka.
 	// This allows control over whether to read historical messages or only new ones:
 	// - Default value -1: Start from the latest offset (only consume new messages after consumer starts)
@@ -336,10 +343,25 @@ func (c *Container) createKafkaPubSub(conf config.Config) {
 	// - Positive value: Start from a specific offset position (useful for resuming from a known point)
 	// This is particularly important for scenarios like message replay, recovery from failures,
 	// or when you only want to process messages that arrive after the consumer is initialized.
-	offSet, _ := strconv.Atoi(conf.GetOrDefault("PUBSUB_OFFSET", "-1"))
-	batchSize, _ := strconv.Atoi(conf.GetOrDefault("KAFKA_BATCH_SIZE", strconv.Itoa(kafka.DefaultBatchSize)))
-	batchBytes, _ := strconv.Atoi(conf.GetOrDefault("KAFKA_BATCH_BYTES", strconv.Itoa(kafka.DefaultBatchBytes)))
-	batchTimeout, _ := strconv.Atoi(conf.GetOrDefault("KAFKA_BATCH_TIMEOUT", strconv.Itoa(kafka.DefaultBatchTimeout)))
+	offSet, err := strconv.Atoi(conf.GetOrDefault("PUBSUB_OFFSET", "-1"))
+	if err != nil {
+		c.Logger.Error("Invalid value for PUBSUB_OFFSET, using default: -1")
+	}
+
+	batchSize, err := strconv.Atoi(conf.GetOrDefault("KAFKA_BATCH_SIZE", strconv.Itoa(kafka.DefaultBatchSize)))
+	if err != nil {
+		c.Logger.Errorf("Invalid value for KAFKA_BATCH_SIZE, using default: %d", kafka.DefaultBatchSize)
+	}
+
+	batchBytes, err := strconv.Atoi(conf.GetOrDefault("KAFKA_BATCH_BYTES", strconv.Itoa(kafka.DefaultBatchBytes)))
+	if err != nil {
+		c.Logger.Errorf("Invalid value for KAFKA_BATCH_BYTES, using default: %d", kafka.DefaultBatchBytes)
+	}
+
+	batchTimeout, err := strconv.Atoi(conf.GetOrDefault("KAFKA_BATCH_TIMEOUT", strconv.Itoa(kafka.DefaultBatchTimeout)))
+	if err != nil {
+		c.Logger.Errorf("Invalid value for KAFKA_BATCH_TIMEOUT, using default: %d", kafka.DefaultBatchTimeout)
+	}
 
 	tlsConf := kafka.TLSConfig{
 		CertFile:           conf.Get("KAFKA_TLS_CERT_FILE"),
