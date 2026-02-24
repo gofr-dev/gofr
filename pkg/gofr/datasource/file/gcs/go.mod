@@ -7,7 +7,7 @@ require (
 	github.com/stretchr/testify v1.11.1
 	go.uber.org/mock v0.6.0
 	gofr.dev v1.54.3
-	google.golang.org/api v0.266.0
+	google.golang.org/api v0.268.0
 )
 
 require (
