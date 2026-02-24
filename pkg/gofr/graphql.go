@@ -25,6 +25,11 @@ import (
 
 var (
 	errSchemaMissing = errors.New("GraphQL schema file missing: ./configs/schema.graphqls")
+
+	errHandlerMustBeFunction     = errors.New("handler must be a function")
+	errHandlerMustAcceptContext  = errors.New("handler must accept exactly one argument of type *gofr.Context")
+	errHandlerMustReturnAnyError = errors.New("handler must return (any, error)")
+	errResolverMissing           = errors.New("resolver missing for field")
 )
 
 const (
@@ -88,18 +93,18 @@ func (m *graphQLManager) RegisterMutation(name string, handler any) {
 	m.mutations[name] = handler
 }
 
-func (m *graphQLManager) validateHandler(h any) error {
+func (*graphQLManager) validateHandler(h any) error {
 	v := reflect.TypeOf(h)
 	if v.Kind() != reflect.Func {
-		return fmt.Errorf("handler must be a function")
+		return errHandlerMustBeFunction
 	}
 
 	if v.NumIn() != 1 || v.In(0) != reflect.TypeOf(&Context{}) {
-		return fmt.Errorf("handler must accept exactly one argument of type *gofr.Context")
+		return errHandlerMustAcceptContext
 	}
 
 	if v.NumOut() != 2 || !v.Out(1).Implements(reflect.TypeOf((*error)(nil)).Elem()) {
-		return fmt.Errorf("handler must return (any, error)")
+		return errHandlerMustReturnAnyError
 	}
 
 	return nil
@@ -187,7 +192,9 @@ func (m *graphQLManager) buildFields(obj *ast.Definition, handlers map[string]an
 
 	for _, field := range obj.Fields {
 		m.mu.RLock()
+
 		handler, ok := handlers[field.Name]
+
 		m.mu.RUnlock()
 
 		if !ok {
@@ -200,7 +207,7 @@ func (m *graphQLManager) buildFields(obj *ast.Definition, handlers map[string]an
 				// Skip internal GraphQL fields like __schema, __type, etc.
 				continue
 			} else {
-				return nil, fmt.Errorf("resolver missing for field: %s", field.Name)
+				return nil, fmt.Errorf("%w: %s", errResolverMissing, field.Name)
 			}
 		}
 
@@ -275,6 +282,7 @@ func (m *graphQLManager) getCustomInputType(name string, schema *ast.Schema) gra
 	}
 
 	m.container.Errorf("unsupported GraphQL input type: %s", name)
+
 	return graphql.String // Fallback
 }
 
