@@ -1,13 +1,74 @@
 package main
 
-import "gofr.dev/pkg/gofr"
+import (
+	"gofr.dev/pkg/gofr"
+	"gofr.dev/examples/using-graphql/migrations"
+)
 
-func main() {
+// User is the domain type used in GraphQL resolvers and integration tests.
+type User struct {
+	ID   int    `json:"id"`
+	Name string `json:"name"`
+	Role string `json:"role"`
+}
+
+// NewApp constructs and configures the GoFr application. It is extracted from
+// main() so that integration tests can start and stop the server directly.
+func NewApp() *gofr.App {
 	app := gofr.New()
 
+	app.Migrate(migrations.All())
+
 	app.GraphQLQuery("hello", func(c *gofr.Context) (interface{}, error) {
-		return "world", nil
+		return "Hello GoFr GraphQL with SQL!", nil
 	})
 
-	app.Run()
+	app.GraphQLQuery("getUser", func(c *gofr.Context) (interface{}, error) {
+		var args struct {
+			ID int `json:"id"`
+		}
+
+		if err := c.Bind(&args); err != nil {
+			return nil, err
+		}
+
+		var u User
+
+		err := c.SQL.QueryRowContext(c, "SELECT id, name, role FROM users WHERE id = ?", args.ID).
+			Scan(&u.ID, &u.Name, &u.Role)
+		if err != nil {
+			return nil, err
+		}
+
+		return u, nil
+	})
+
+	app.GraphQLMutation("createUser", func(c *gofr.Context) (interface{}, error) {
+		var args struct {
+			Name string `json:"name"`
+			Role string `json:"role"`
+		}
+
+		if err := c.Bind(&args); err != nil {
+			return nil, err
+		}
+
+		result, err := c.SQL.ExecContext(c, "INSERT INTO users (name, role) VALUES (?, ?)", args.Name, args.Role)
+		if err != nil {
+			return nil, err
+		}
+
+		id, err := result.LastInsertId()
+		if err != nil {
+			return nil, err
+		}
+
+		return User{ID: int(id), Name: args.Name, Role: args.Role}, nil
+	})
+
+	return app
+}
+
+func main() {
+	NewApp().Run()
 }

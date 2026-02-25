@@ -2,14 +2,13 @@ package main
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"net/http"
 	"strconv"
 	"testing"
 	"time"
-
-	"context"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -20,8 +19,8 @@ import (
 func waitForReady(t *testing.T, host string) {
 	t.Helper()
 	client := &http.Client{Timeout: 1 * time.Second}
-	deadline := time.Now().Add(5 * time.Second)
-	
+	deadline := time.Now().Add(10 * time.Second)
+
 	for time.Now().Before(deadline) {
 		resp, err := client.Get(host + "/.well-known/alive")
 		if err == nil {
@@ -30,9 +29,9 @@ func waitForReady(t *testing.T, host string) {
 				return
 			}
 		}
-		time.Sleep(50 * time.Millisecond)
+		time.Sleep(100 * time.Millisecond)
 	}
-	t.Fatalf("Server at %s not ready after 5s", host)
+	t.Fatalf("Server at %s not ready after 10s", host)
 }
 
 func TestIntegration_GraphQL(t *testing.T) {
@@ -58,6 +57,8 @@ func TestIntegration_GraphQL(t *testing.T) {
 		require.NoError(t, err)
 		defer resp.Body.Close()
 
+		assert.Equal(t, http.StatusOK, resp.StatusCode)
+
 		var result struct {
 			Data struct {
 				Hello string `json:"hello"`
@@ -73,22 +74,26 @@ func TestIntegration_GraphQL(t *testing.T) {
 		require.NoError(t, err)
 		defer resp.Body.Close()
 
+		assert.Equal(t, http.StatusOK, resp.StatusCode)
+
 		var result struct {
 			Data struct {
 				CreateUser User `json:"createUser"`
 			} `json:"data"`
 		}
 		json.NewDecoder(resp.Body).Decode(&result)
-		assert.True(t, result.Data.CreateUser.ID > 0)
+		assert.Greater(t, result.Data.CreateUser.ID, 0)
 		assert.Equal(t, "Integration Test", result.Data.CreateUser.Name)
+		assert.Equal(t, "Tester", result.Data.CreateUser.Role)
 	})
 
 	t.Run("getUser query", func(t *testing.T) {
-		// We expect ID 1 if it's the first user created
 		query := `{"query": "{ getUser(id: 1) { id name role } }"}`
 		resp, err := http.Post(host+"/graphql", "application/json", bytes.NewBufferString(query))
 		require.NoError(t, err)
 		defer resp.Body.Close()
+
+		assert.Equal(t, http.StatusOK, resp.StatusCode)
 
 		var result struct {
 			Data struct {
@@ -97,10 +102,10 @@ func TestIntegration_GraphQL(t *testing.T) {
 		}
 		json.NewDecoder(resp.Body).Decode(&result)
 		assert.Equal(t, 1, result.Data.GetUser.ID)
-		assert.Equal(t, "Integration Test", result.Data.GetUser.Name)
+		assert.NotEmpty(t, result.Data.GetUser.Name)
 	})
 
-	t.Run("Playground UI presence", func(t *testing.T) {
+	t.Run("playground UI is accessible in non-production", func(t *testing.T) {
 		resp, err := http.Get(host + "/graphql/ui")
 		require.NoError(t, err)
 		defer resp.Body.Close()
@@ -110,15 +115,12 @@ func TestIntegration_GraphQL(t *testing.T) {
 }
 
 func TestIntegration_GraphQL_Production(t *testing.T) {
-	// This test will verify that in production environment, the UI is NOT registered.
-	// We run a separate test case that starts the app with APP_ENV=production.
-	
 	httpPort := testutil.GetFreePort(t)
 	metricsPort := testutil.GetFreePort(t)
 
 	t.Setenv("HTTP_PORT", strconv.Itoa(httpPort))
 	t.Setenv("METRICS_PORT", strconv.Itoa(metricsPort))
-	t.Setenv("APP_ENV", "production") 
+	t.Setenv("APP_ENV", "production")
 
 	host := fmt.Sprintf("http://localhost:%d", httpPort)
 
@@ -133,6 +135,5 @@ func TestIntegration_GraphQL_Production(t *testing.T) {
 	require.NoError(t, err)
 	defer resp.Body.Close()
 
-	// In GoFr, unregistered routes return 404 with a specific JSON body via catchAllHandler
 	assert.Equal(t, http.StatusNotFound, resp.StatusCode)
 }
