@@ -41,6 +41,7 @@ func TestGraphQL_Query(t *testing.T) {
 	req.Header.Set("Content-Type", "application/json")
 
 	resp := httptest.NewRecorder()
+	app.graphqlManager.buildErr = app.graphqlManager.buildSchema()
 	app.graphqlManager.Handle(resp, req)
 
 	assert.Equal(t, http.StatusOK, resp.Code)
@@ -80,6 +81,7 @@ func TestGraphQL_Mutation(t *testing.T) {
 	req.Header.Set("Content-Type", "application/json")
 
 	resp := httptest.NewRecorder()
+	app.graphqlManager.buildErr = app.graphqlManager.buildSchema()
 	app.graphqlManager.Handle(resp, req)
 
 	assert.Equal(t, http.StatusOK, resp.Code)
@@ -113,6 +115,7 @@ func TestGraphQL_Health(t *testing.T) {
 	req.Header.Set("Content-Type", "application/json")
 
 	resp := httptest.NewRecorder()
+	app.graphqlManager.buildErr = app.graphqlManager.buildSchema()
 	app.graphqlManager.Handle(resp, req)
 
 	assert.Equal(t, http.StatusOK, resp.Code)
@@ -196,6 +199,7 @@ func TestGraphQL_ArgumentTypes(t *testing.T) {
 	req.Header.Set("Content-Type", "application/json")
 
 	resp := httptest.NewRecorder()
+	app.graphqlManager.buildErr = app.graphqlManager.buildSchema()
 	app.graphqlManager.Handle(resp, req)
 
 	assert.Equal(t, http.StatusOK, resp.Code)
@@ -232,6 +236,7 @@ func TestGraphQL_Errors(t *testing.T) {
 	req.Header.Set("Content-Type", "application/json")
 
 	resp := httptest.NewRecorder()
+	app.graphqlManager.buildErr = app.graphqlManager.buildSchema()
 	app.graphqlManager.Handle(resp, req)
 
 	assert.Equal(t, http.StatusInternalServerError, resp.Code)
@@ -251,6 +256,7 @@ func TestGraphQL_ResolverError(t *testing.T) {
 	req.Header.Set("Content-Type", "application/json")
 
 	resp := httptest.NewRecorder()
+	app.graphqlManager.buildErr = app.graphqlManager.buildSchema()
 	app.graphqlManager.Handle(resp, req)
 
 	assert.Equal(t, http.StatusUnprocessableEntity, resp.Code)

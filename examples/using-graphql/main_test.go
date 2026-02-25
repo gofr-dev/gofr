@@ -9,11 +9,31 @@ import (
 	"testing"
 	"time"
 
+	"context"
+
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"gofr.dev/pkg/gofr/testutil"
 )
+
+func waitForReady(t *testing.T, host string) {
+	t.Helper()
+	client := &http.Client{Timeout: 1 * time.Second}
+	deadline := time.Now().Add(5 * time.Second)
+	
+	for time.Now().Before(deadline) {
+		resp, err := client.Get(host + "/.well-known/alive")
+		if err == nil {
+			resp.Body.Close()
+			if resp.StatusCode == http.StatusOK {
+				return
+			}
+		}
+		time.Sleep(50 * time.Millisecond)
+	}
+	t.Fatalf("Server at %s not ready after 5s", host)
+}
 
 func TestIntegration_GraphQL(t *testing.T) {
 	httpPort := testutil.GetFreePort(t)
@@ -25,8 +45,12 @@ func TestIntegration_GraphQL(t *testing.T) {
 
 	host := fmt.Sprintf("http://localhost:%d", httpPort)
 
-	go main()
-	time.Sleep(500 * time.Millisecond) // Wait for server and migrations
+	app := NewApp()
+	go app.Run()
+
+	waitForReady(t, host)
+
+	defer app.Shutdown(context.Background())
 
 	t.Run("hello query", func(t *testing.T) {
 		query := `{"query": "{ hello }"}`
@@ -98,8 +122,12 @@ func TestIntegration_GraphQL_Production(t *testing.T) {
 
 	host := fmt.Sprintf("http://localhost:%d", httpPort)
 
-	go main()
-	time.Sleep(200 * time.Millisecond)
+	app := NewApp()
+	go app.Run()
+
+	waitForReady(t, host)
+
+	defer app.Shutdown(context.Background())
 
 	resp, err := http.Get(host + "/graphql/ui")
 	require.NoError(t, err)

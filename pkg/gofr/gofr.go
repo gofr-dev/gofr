@@ -152,14 +152,7 @@ func (a *App) httpServerSetup() {
 		a.httpServer.router.AddStaticFiles(a.Logger(), endpoint, dirName)
 	}
 
-	if a.graphqlManager != nil {
-		a.httpServer.router.NewRoute().Methods(http.MethodPost).Path("/graphql").Handler(a.graphqlManager.GetHandler())
-
-		// Only register GraphQL Playground UI in non-production environments
-		if a.Config.Get("APP_ENV") != "production" {
-			a.httpServer.router.NewRoute().Methods(http.MethodGet).Path("/graphql/ui").Handler(a.graphqlManager.GetHandler())
-		}
-	}
+	a.setupGraphQL()
 
 	if a.container.Logger != nil {
 		a.container.Logger.Infof("Registered HTTP server on port: %d", a.httpServer.port)
@@ -237,7 +230,7 @@ func (a *App) AddHTTPService(serviceName, serviceAddress string, options ...serv
 }
 
 // GraphQLQuery registers a GraphQL query resolver.
-func (a *App) GraphQLQuery(name string, handler any) {
+func (a *App) GraphQLQuery(name string, handler Handler) {
 	if a.graphqlManager == nil {
 		a.graphqlManager = newGraphQLManager(a.container)
 	}
@@ -247,7 +240,7 @@ func (a *App) GraphQLQuery(name string, handler any) {
 }
 
 // GraphQLMutation registers a GraphQL mutation resolver.
-func (a *App) GraphQLMutation(name string, handler any) {
+func (a *App) GraphQLMutation(name string, handler Handler) {
 	if a.graphqlManager == nil {
 		a.graphqlManager = newGraphQLManager(a.container)
 	}
@@ -264,28 +257,6 @@ func (a *App) Metrics() metrics.Manager {
 // Logger returns the logger instance associated with the App.
 func (a *App) Logger() logging.Logger {
 	return a.container.Logger
-}
-
-// Container returns the container instance associated with the App.
-func (a *App) Container() *container.Container {
-	return a.container
-}
-
-// Handle registers an http.Handler for a specific pattern.
-func (a *App) Handle(pattern string, handler http.Handler) {
-	a.httpRegistered = true
-	a.httpServer.router.NewRoute().
-		PathPrefix(pattern).
-		Handler(handler).
-		Methods(
-			http.MethodGet,
-			http.MethodHead,
-			http.MethodPost,
-			http.MethodPut,
-			http.MethodPatch,
-			http.MethodDelete,
-			http.MethodOptions,
-		)
 }
 
 // SubCommand adds a sub-command to the CLI application.
@@ -423,4 +394,20 @@ func (a *App) AddStaticFiles(endpoint, filePath string) {
 //	})
 func (a *App) OnStart(hook func(ctx *Context) error) {
 	a.onStartHooks = append(a.onStartHooks, hook)
+}
+
+func (a *App) setupGraphQL() {
+	if a.graphqlManager != nil {
+		a.graphqlManager.buildErr = a.graphqlManager.buildSchema()
+		if a.graphqlManager.buildErr != nil {
+			a.container.Logger.Fatalf("GraphQL build error: %v", a.graphqlManager.buildErr)
+		}
+
+		a.httpServer.router.NewRoute().Methods(http.MethodPost).Path("/graphql").Handler(a.graphqlManager.GetHandler())
+
+		// Only register GraphQL Playground UI in non-production environments
+		if a.Config.Get("APP_ENV") != "production" {
+			a.httpServer.router.NewRoute().Methods(http.MethodGet).PathPrefix("/graphql/ui").Handler(a.graphqlManager.GetHandler())
+		}
+	}
 }

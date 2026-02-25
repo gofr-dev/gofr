@@ -7,7 +7,7 @@ GoFr provides a **Schema-First** approach to building GraphQL APIs. This means y
 To enable GraphQL, you MUST provide a schema file at the following location:
 `./configs/schema.graphqls`
 
-If this file is missing or invalid, GoFr will log an error and return a `500 Internal Server Error` when the `/graphql` endpoint is first accessed.
+If this file is missing or invalid, GoFr will log a fatal error and the application will fail to start. This fail-fast behavior ensures schema issues are caught at deployment rather than runtime.
 
 ## Core Concepts
 
@@ -98,7 +98,6 @@ GoFr is opinionated about HTTP status codes in GraphQL responses. Unlike the sta
 | `200 OK` | Query or mutation succeeded with no errors. |
 | `400 Bad Request` | The request body is not valid JSON. |
 | `422 Unprocessable Entity` | A resolver returned an error, or GraphQL validation failed (e.g. querying a field not in the schema). |
-| `500 Internal Server Error` | The schema file (`./configs/schema.graphqls`) is missing or could not be parsed. |
 
 **Error response body** (for `422`):
 ```json
@@ -116,6 +115,9 @@ GoFr is opinionated about HTTP status codes in GraphQL responses. Unlike the sta
 
 ### 3. Argument Binding
 Instead of declarative arguments in the function signature, you use the standard `c.Bind()` method. GoFr automatically maps the GraphQL `args` map to your struct using JSON tags.
+
+### 4. Unsupported Types
+Currently, GraphQL `Enum` types are explicitly not supported in resolvers. If an Enum type is defined in the schema and a resolver attempts to map it, GoFr will return an error during schema initialization at startup.
 
 ---
 

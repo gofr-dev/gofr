@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"net/http"
 	"os"
-	"reflect"
 	"strings"
 	"sync"
 	"time"
@@ -26,10 +25,7 @@ import (
 var (
 	errSchemaMissing = errors.New("GraphQL schema file missing: ./configs/schema.graphqls")
 
-	errHandlerMustBeFunction     = errors.New("handler must be a function")
-	errHandlerMustAcceptContext  = errors.New("handler must accept exactly one argument of type *gofr.Context")
-	errHandlerMustReturnAnyError = errors.New("handler must return (any, error)")
-	errResolverMissing           = errors.New("resolver missing for field")
+	errResolverMissing = errors.New("resolver missing for field")
 )
 
 const (
@@ -42,16 +38,14 @@ const (
 )
 
 type graphQLManager struct {
-	container   *container.Container
-	queries     map[string]any
-	mutations   map[string]any
-	schema      graphql.Schema
-	schemaBuilt bool
-	buildOnce   sync.Once
-	buildErr    error
-	mu          sync.RWMutex
-	tracer      trace.Tracer
-	typeCache   map[string]graphql.Output
+	container *container.Container
+	queries   map[string]Handler
+	mutations map[string]Handler
+	schema    graphql.Schema
+	buildErr  error
+	mu        sync.RWMutex
+	tracer    trace.Tracer
+	typeCache map[string]graphql.Output
 }
 
 func newGraphQLManager(c *container.Container) *graphQLManager {
@@ -62,52 +56,25 @@ func newGraphQLManager(c *container.Container) *graphQLManager {
 
 	return &graphQLManager{
 		container: c,
-		queries:   make(map[string]any),
-		mutations: make(map[string]any),
+		queries:   make(map[string]Handler),
+		mutations: make(map[string]Handler),
 		tracer:    otel.Tracer("gofr-graphql"),
 		typeCache: make(map[string]graphql.Output),
 	}
 }
 
-func (m *graphQLManager) RegisterQuery(name string, handler any) {
-	if err := m.validateHandler(handler); err != nil {
-		m.container.Errorf("invalid GraphQL query handler for %s: %v", name, err)
-		return
-	}
-
+func (m *graphQLManager) RegisterQuery(name string, handler Handler) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
 	m.queries[name] = handler
 }
 
-func (m *graphQLManager) RegisterMutation(name string, handler any) {
-	if err := m.validateHandler(handler); err != nil {
-		m.container.Errorf("invalid GraphQL mutation handler for %s: %v", name, err)
-		return
-	}
-
+func (m *graphQLManager) RegisterMutation(name string, handler Handler) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
 	m.mutations[name] = handler
-}
-
-func (*graphQLManager) validateHandler(h any) error {
-	v := reflect.TypeOf(h)
-	if v.Kind() != reflect.Func {
-		return errHandlerMustBeFunction
-	}
-
-	if v.NumIn() != 1 || v.In(0) != reflect.TypeOf(&Context{}) {
-		return errHandlerMustAcceptContext
-	}
-
-	if v.NumOut() != 2 || !v.Out(1).Implements(reflect.TypeOf((*error)(nil)).Elem()) {
-		return errHandlerMustReturnAnyError
-	}
-
-	return nil
 }
 
 func (m *graphQLManager) buildSchema() error {
@@ -178,12 +145,10 @@ func (m *graphQLManager) buildSchema() error {
 		return fmt.Errorf("failed to build graphql-go schema: %w", err)
 	}
 
-	m.schemaBuilt = true
-
 	return nil
 }
 
-func (m *graphQLManager) buildFields(obj *ast.Definition, handlers map[string]any, schema *ast.Schema) (graphql.Fields, error) {
+func (m *graphQLManager) buildFields(obj *ast.Definition, handlers map[string]Handler, schema *ast.Schema) (graphql.Fields, error) {
 	fields := graphql.Fields{}
 
 	if obj == nil {
@@ -281,6 +246,11 @@ func (m *graphQLManager) getCustomInputType(name string, schema *ast.Schema) gra
 		})
 	}
 
+	if def != nil && def.Kind == ast.Enum {
+		m.container.Errorf("GraphQL Enum type not yet supported: %s", name)
+		return graphql.String
+	}
+
 	m.container.Errorf("unsupported GraphQL input type: %s", name)
 
 	return graphql.String // Fallback
@@ -321,6 +291,11 @@ func (m *graphQLManager) getCoreOutputType(name string, schema *ast.Schema) grap
 
 func (m *graphQLManager) getCustomOutputType(name string, schema *ast.Schema) graphql.Output {
 	def, ok := schema.Types[name]
+	if def != nil && def.Kind == ast.Enum {
+		m.container.Errorf("GraphQL Enum type not yet supported: %s", name)
+		return graphql.String
+	}
+
 	if !ok || def.Kind != ast.Object {
 		return graphql.String // Fallback
 	}
@@ -342,11 +317,9 @@ func (m *graphQLManager) getCustomOutputType(name string, schema *ast.Schema) gr
 	return obj
 }
 
-// getResolver binds a handler of type func(*gofr.Context) (any, error) to a GraphQL field.
+// getResolver binds a handler of type gofr.Handler to a GraphQL field.
 // Arguments are accessed inside the handler via c.Bind().
-func (m *graphQLManager) getResolver(name string, h any) graphql.FieldResolveFn {
-	v := reflect.ValueOf(h)
-
+func (m *graphQLManager) getResolver(name string, h Handler) graphql.FieldResolveFn {
 	return func(p graphql.ResolveParams) (any, error) {
 		ctx, span := m.tracer.Start(p.Context, "graphql-resolver-"+name)
 		defer span.End()
@@ -356,26 +329,17 @@ func (m *graphQLManager) getResolver(name string, h any) graphql.FieldResolveFn 
 
 		c.Debugf("Executing GraphQL Resolver: %s, Args: %v", name, p.Args)
 
-		// Prepare arguments for function call. Only Context is passed.
-		args := []reflect.Value{reflect.ValueOf(c)}
-
-		results := v.Call(args)
-
-		err := results[1].Interface()
+		res, err := h(c)
 		if err != nil {
 			m.container.Errorf("GraphQL Resolver %s failed: %v", name, err)
-			return nil, err.(error)
+			return nil, err
 		}
 
-		return results[0].Interface(), nil
+		return res, nil
 	}
 }
 
 func (m *graphQLManager) Handle(w http.ResponseWriter, r *http.Request) {
-	m.buildOnce.Do(func() {
-		m.buildErr = m.buildSchema()
-	})
-
 	if m.buildErr != nil {
 		m.container.Errorf("GraphQL build error: %v", m.buildErr)
 		w.Header().Set("Content-Type", "application/json")
@@ -390,8 +354,8 @@ func (m *graphQLManager) Handle(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if r.Method == http.MethodGet && strings.HasSuffix(r.URL.Path, "/ui") {
-		m.renderPlayground(w)
+	if r.Method == http.MethodGet && strings.HasPrefix(r.URL.Path, "/graphql/ui") {
+		m.renderPlayground(w, r)
 		return
 	}
 
@@ -447,8 +411,11 @@ func (m *graphQLManager) handleGraphQLRequest(w http.ResponseWriter, r *http.Req
 		Schema:         m.schema,
 		RequestString:  req.Query,
 		VariableValues: req.Variables,
+		OperationName:  req.OperationName,
 		Context:        ctx,
 	})
+
+	w.Header().Set("Content-Type", "application/json")
 
 	// Custom Error and Status Code Logic
 	if len(result.Errors) > 0 {
@@ -470,13 +437,9 @@ func (m *graphQLManager) handleGraphQLRequest(w http.ResponseWriter, r *http.Req
 	}
 }
 
-func (*graphQLManager) renderPlayground(w http.ResponseWriter) {
+func (*graphQLManager) renderPlayground(w http.ResponseWriter, _ *http.Request) {
 	w.Header().Set("Content-Type", "text/html")
-
-	_, err := w.Write([]byte(graphqlPlayground))
-	if err != nil {
-		return
-	}
+	_, _ = w.Write([]byte(graphiqlHTML))
 }
 
 func (m *graphQLManager) GetHandler() http.Handler {
@@ -512,24 +475,27 @@ func (r *graphQLRequest) Context() context.Context { return r.ctx }
 func (*graphQLRequest) HostName() string           { return "" }
 func (*graphQLRequest) Params(string) []string     { return nil }
 
-const graphqlPlayground = `
-<!DOCTYPE html>
-<html>
+const graphiqlHTML = `<!DOCTYPE html>
+<html lang="en">
 <head>
     <title>GoFr GraphQL Playground</title>
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/graphql-playground-react/build/static/css/index.css" />
-    <link rel="shortcut icon" href="https://cdn.jsdelivr.net/npm/graphql-playground-react/build/favicon.png" />
-    <script src="https://cdn.jsdelivr.net/npm/graphql-playground-react/build/static/js/middleware.js"></script>
+    <style>
+        body { height: 100%; margin: 0; width: 100%; overflow: hidden; }
+        #graphiql { height: 100vh; }
+    </style>
+    <link rel="stylesheet" href="https://unpkg.com/graphiql/graphiql.min.css" />
 </head>
 <body>
-    <div id="root"></div>
+    <div id="graphiql">Loading...</div>
+    <script src="https://unpkg.com/react@17/umd/react.production.min.js"></script>
+    <script src="https://unpkg.com/react-dom@17/umd/react-dom.production.min.js"></script>
+    <script src="https://unpkg.com/graphiql/graphiql.min.js"></script>
     <script>
-        window.addEventListener('load', function (event) {
-            GraphQLPlayground.init(document.getElementById('root'), {
-                endpoint: '/graphql'
-            })
-        })
+        const fetcher = GraphiQL.createFetcher({ url: '/graphql' });
+        ReactDOM.render(
+            React.createElement(GraphiQL, { fetcher: fetcher, defaultQuery: '{ hello }' }),
+            document.getElementById('graphiql')
+        );
     </script>
 </body>
-</html>
-`
+</html>`
