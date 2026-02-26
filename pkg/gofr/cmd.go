@@ -57,7 +57,10 @@ func (cmd *cmd) Run(c *container.Container) {
 		return
 	}
 
-	ctx.responder.Respond(r.handler(ctx))
+	func() {
+		defer NewRecoveryHandler(c.Logger, "cmd:"+r.pattern).Recover()
+		ctx.responder.Respond(r.handler(ctx))
+	}()
 }
 
 // parseArgs parses command line arguments and returns subCommand, showHelp flag, and firstArg.

@@ -144,7 +144,8 @@ func panicRecoveryHandler(re any, log logging.Logger, panicked chan struct{}) {
 	}
 
 	close(panicked)
-	log.Error(panicLog{
+	log.Error(RecoveryLog{
+		Component:  "http-handler",
 		Error:      fmt.Sprint(re),
 		StackTrace: string(debug.Stack()),
 	})

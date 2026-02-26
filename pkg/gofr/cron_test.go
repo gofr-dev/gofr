@@ -713,7 +713,7 @@ func TestCronTab_runScheduled_Panic(t *testing.T) {
 				time.Sleep(200 * time.Millisecond)
 			})
 
-			assert.Contains(t, logs, fmt.Sprintf("Panic in cron job %s", tc.jobName))
+			assert.Contains(t, logs, fmt.Sprintf("cron-job:%s", tc.jobName))
 			assert.Contains(t, logs, tc.panicMessage)
 		})
 	}

@@ -104,6 +104,7 @@ func (j *job) run(cntnr *container.Container) {
 	c.Infof("Starting cron job: %s", j.name)
 
 	start := time.Now()
+	panicked := false
 
 	defer func() {
 		duration := time.Since(start).Seconds()
@@ -111,18 +112,19 @@ func (j *job) run(cntnr *container.Container) {
 		if m := cntnr.Metrics(); m != nil {
 			m.RecordHistogram(ctx, "app_cron_job_duration", float64(duration), "job", j.name)
 
-			if r := recover(); r != nil {
-				c.Errorf("Panic in cron job %s: %v", j.name, r)
+			if panicked {
 				m.IncrementCounter(ctx, "app_cron_job_failures", "job", j.name)
 			} else {
 				m.IncrementCounter(ctx, "app_cron_job_success", "job", j.name)
 			}
-		} else if r := recover(); r != nil {
-			c.Errorf("Panic in cron job %s: %v", j.name, r)
 		}
 
 		c.Infof("Finished cron job: %s in %s", j.name, duration)
 	}()
+
+	defer NewRecoveryHandler(cntnr.Logger, "cron-job:"+j.name).RecoverWithCallback(func(_ error) {
+		panicked = true
+	})
 
 	if m := cntnr.Metrics(); m != nil {
 		m.IncrementCounter(ctx, "app_cron_job_total", "job", j.name)
