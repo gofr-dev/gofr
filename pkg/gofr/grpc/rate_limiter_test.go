@@ -94,7 +94,7 @@ func (a fakeAddr) Network() string {
 
 	return "tcp"
 }
-func (a fakeAddr) String() string  { return string(a) }
+func (a fakeAddr) String() string { return string(a) }
 
 func Test_first(t *testing.T) {
 	tests := []struct {

@@ -57,7 +57,6 @@ func first(vals []string) string {
 	return vals[0]
 }
 
-
 func normalizeIP(s string) string {
 	if s == "" {
 		return ""
@@ -108,7 +107,6 @@ func retryAfterSeconds(durSeconds float64) string {
 	return fmt.Sprintf("%.0f", secs)
 }
 
-
 func UnaryRateLimitInterceptor(config httpmw.RateLimiterConfig, m Metrics) grpc.UnaryServerInterceptor {
 	if err := config.Validate(); err != nil {
 		panic(fmt.Sprintf("invalid rate limiter config: %v", err))
@@ -120,12 +118,12 @@ func UnaryRateLimitInterceptor(config httpmw.RateLimiterConfig, m Metrics) grpc.
 
 	config.Store.StartCleanup(context.Background())
 
-		return func(ctx context.Context, req any, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (any, error) {
-			key := rateLimitKeyGlobal
+	return func(ctx context.Context, req any, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (any, error) {
+		key := rateLimitKeyGlobal
 		if config.PerIP {
 			key = getIP(ctx, config.TrustedProxies)
 			if key == "" {
-					key = rateLimitKeyUnknown
+				key = rateLimitKeyUnknown
 			}
 		}
 
