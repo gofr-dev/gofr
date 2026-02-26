@@ -158,17 +158,21 @@ func (a *authInfo) GetAPIKey() string {
 // }
 
 func newContext(w Responder, r Request, c *container.Container) *Context {
-	return &Context{
+	ctx := &Context{
 		Context:       r.Context(),
 		Request:       r,
 		responder:     w,
 		Container:     c,
 		ContextLogger: *logging.NewContextLogger(r.Context(), c.Logger),
 	}
+
+	ctx.Container.Logger = logging.NewContextLogger(r.Context(), c.Logger)
+
+	return ctx
 }
 
 func newCMDContext(w Responder, r Request, c *container.Container, out terminal.Output) *Context {
-	return &Context{
+	ctx := &Context{
 		Context:       r.Context(),
 		responder:     w,
 		Request:       r,
@@ -176,6 +180,10 @@ func newCMDContext(w Responder, r Request, c *container.Container, out terminal.
 		Out:           out,
 		ContextLogger: *logging.NewContextLogger(r.Context(), c.Logger),
 	}
+
+	ctx.Container.Logger = logging.NewContextLogger(r.Context(), c.Logger)
+
+	return ctx
 }
 
 func (c *Context) GetCorrelationID() string {
