@@ -87,7 +87,6 @@ type fakeAddr string
 func (a fakeAddr) Network() string { return "tcp" }
 func (a fakeAddr) String() string  { return string(a) }
 
-
 func Test_first(t *testing.T) {
 	tests := []struct {
 		name string
@@ -106,7 +105,6 @@ func Test_first(t *testing.T) {
 		})
 	}
 }
-
 
 func Test_normalizeIP(t *testing.T) {
 	tests := []struct {
@@ -130,7 +128,6 @@ func Test_normalizeIP(t *testing.T) {
 		})
 	}
 }
-
 
 func Test_getForwardedIP(t *testing.T) {
 	tests := []struct {
@@ -158,7 +155,6 @@ func Test_getForwardedIP(t *testing.T) {
 		})
 	}
 }
-
 
 func Test_getRealIP(t *testing.T) {
 	tests := []struct {
@@ -349,21 +345,18 @@ func TestUnaryRateLimitInterceptor_PerIPLimit(t *testing.T) {
 		return grpc.NewContextWithServerTransportStream(ctx, nil)
 	}
 
-	// IP1: exhaust burst
 	for i := 0; i < 2; i++ {
 		resp, err := interceptor(ctxForIP("10.0.0.1"), "req", info, handler)
 		require.NoError(t, err)
 		assert.Equal(t, "ok", resp)
 	}
 
-	// IP1: should be rate limited
 	_, err := interceptor(ctxForIP("10.0.0.1"), "req", info, handler)
 	require.Error(t, err)
 
 	st, _ := status.FromError(err)
 	assert.Equal(t, codes.ResourceExhausted, st.Code())
 
-	// IP2: different limiter, should still succeed
 	resp, err := interceptor(ctxForIP("10.0.0.2"), "req", info, handler)
 	require.NoError(t, err)
 	assert.Equal(t, "ok", resp)
@@ -390,7 +383,6 @@ func TestUnaryRateLimitInterceptor_EmptyIPFallback(t *testing.T) {
 		assert.Equal(t, "ok", resp)
 	}
 
-	// 3rd request grouped under "unknown" should be limited
 	_, err := interceptor(ctx, "req", info, handler)
 	require.Error(t, err)
 
@@ -457,21 +449,17 @@ func TestUnaryRateLimitInterceptor_TokenRefill(t *testing.T) {
 
 	ctx := grpc.NewContextWithServerTransportStream(context.Background(), nil)
 
-	// Exhaust burst
 	for i := 0; i < 2; i++ {
 		resp, err := interceptor(ctx, "req", info, handler)
 		require.NoError(t, err)
 		assert.Equal(t, "ok", resp)
 	}
 
-	// Should be rate limited
 	_, err := interceptor(ctx, "req", info, handler)
 	require.Error(t, err)
 
-	// Wait for token refill (200ms = 1 token at 5 req/sec)
 	time.Sleep(220 * time.Millisecond)
 
-	// Should succeed after refill
 	resp, err := interceptor(ctx, "req", info, handler)
 	require.NoError(t, err)
 	assert.Equal(t, "ok", resp)
@@ -549,14 +537,12 @@ func TestUnaryRateLimitInterceptor_TrustedProxiesDisabled(t *testing.T) {
 		return grpc.NewContextWithServerTransportStream(ctx, nil)
 	}
 
-	// All requests share 127.0.0.1 regardless of spoofed headers
 	for i := 0; i < 2; i++ {
 		resp, err := interceptor(makeCtx("203.0.113."+string(rune('1'+i))), "req", info, handler)
 		require.NoError(t, err)
 		assert.Equal(t, "ok", resp)
 	}
 
-	// 3rd request should be limited based on peer addr, ignoring spoofed header
 	_, err := interceptor(makeCtx("203.0.113.99"), "req", info, handler)
 	require.Error(t, err)
 
@@ -669,20 +655,17 @@ func TestStreamRateLimitInterceptor_PerIPLimit(t *testing.T) {
 		return &rateLimitMockStream{ctx: ctx}
 	}
 
-	// IP1: exhaust burst
 	for i := 0; i < 2; i++ {
 		err := interceptor(nil, streamForIP("10.0.0.1"), info, handler)
 		require.NoError(t, err)
 	}
 
-	// IP1: should be rate limited
 	err := interceptor(nil, streamForIP("10.0.0.1"), info, handler)
 	require.Error(t, err)
 
 	st, _ := status.FromError(err)
 	assert.Equal(t, codes.ResourceExhausted, st.Code())
 
-	// IP2: different limiter, should succeed
 	err = interceptor(nil, streamForIP("10.0.0.2"), info, handler)
 	require.NoError(t, err)
 }
@@ -751,7 +734,6 @@ func TestStreamRateLimitInterceptor_DeniedNilMetrics(t *testing.T) {
 	assert.Equal(t, codes.ResourceExhausted, st.Code())
 }
 
-
 func TestStreamRateLimitInterceptor_RetryAfterHeader(t *testing.T) {
 	store := &fakeStore{allowed: false, retryAfter: 5 * time.Second}
 	cfg := httpmw.RateLimiterConfig{
@@ -795,15 +777,12 @@ func TestStreamRateLimitInterceptor_TokenRefill(t *testing.T) {
 		require.NoError(t, err)
 	}
 
-	// Should be rate limited
 	ss := &rateLimitMockStream{ctx: context.Background()}
 	err := interceptor(nil, ss, info, handler)
 	require.Error(t, err)
 
-	// Wait for token refill
 	time.Sleep(220 * time.Millisecond)
 
-	// Should succeed after refill
 	ss = &rateLimitMockStream{ctx: context.Background()}
 	err = interceptor(nil, ss, info, handler)
 	require.NoError(t, err)
