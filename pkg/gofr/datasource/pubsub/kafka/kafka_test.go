@@ -962,7 +962,7 @@ func TestKafkaClient_Subscribe_RaceDetector(t *testing.T) {
 	for i := 0; i < numGoroutines; i++ {
 		go func() {
 			defer wg.Done()
-			
+
 			_, _ = client.Subscribe(ctx, "race-test-topic")
 		}()
 	}
