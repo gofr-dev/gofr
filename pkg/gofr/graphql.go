@@ -29,12 +29,12 @@ var (
 )
 
 const (
-	gofrKey = "gofr"
-	stringT = "String"
-	idT     = "ID"
-	intT    = "Int"
-	floatT  = "Float"
-	boolT   = "Boolean"
+	healthKey = "health"
+	stringT   = "String"
+	idT       = "ID"
+	intT      = "Int"
+	floatT    = "Float"
+	boolT     = "Boolean"
 )
 
 type graphQLManager struct {
@@ -46,6 +46,7 @@ type graphQLManager struct {
 	mu        sync.RWMutex
 	tracer    trace.Tracer
 	typeCache map[string]graphql.Output
+	enumCache map[string]*graphql.Enum
 }
 
 func newGraphQLManager(c *container.Container) *graphQLManager {
@@ -60,6 +61,7 @@ func newGraphQLManager(c *container.Container) *graphQLManager {
 		mutations: make(map[string]Handler),
 		tracer:    otel.Tracer("gofr-graphql"),
 		typeCache: make(map[string]graphql.Output),
+		enumCache: make(map[string]*graphql.Enum),
 	}
 }
 
@@ -109,11 +111,11 @@ func (m *graphQLManager) buildSchema() error {
 		return err
 	}
 
-	// Add special gofr health field by default if it's not already there
-	if _, ok := queryFields[gofrKey]; !ok {
-		queryFields[gofrKey] = &graphql.Field{
+	// Add special health field by default if it's not already there
+	if _, ok := queryFields[healthKey]; !ok {
+		queryFields[healthKey] = &graphql.Field{
 			Type: graphql.NewObject(graphql.ObjectConfig{
-				Name: "GofrHealthInfo",
+				Name: "HealthInfo",
 				Fields: graphql.Fields{
 					"status":  &graphql.Field{Type: graphql.String},
 					"name":    &graphql.Field{Type: graphql.String},
@@ -163,8 +165,8 @@ func (m *graphQLManager) buildFields(obj *ast.Definition, handlers map[string]Ha
 		m.mu.RUnlock()
 
 		if !ok {
-			// Add special gofr health field if defined in schema but no custom handler registered
-			if field.Name == gofrKey {
+			// Add special health field if defined in schema but no custom handler registered
+			if field.Name == healthKey {
 				handler = func(c *Context) (any, error) {
 					return m.container.Health(c.Context), nil
 				}
@@ -247,13 +249,34 @@ func (m *graphQLManager) getCustomInputType(name string, schema *ast.Schema) gra
 	}
 
 	if def != nil && def.Kind == ast.Enum {
-		m.container.Errorf("GraphQL Enum type not yet supported: %s", name)
-		return graphql.String
+		return m.getEnum(def)
 	}
 
 	m.container.Errorf("unsupported GraphQL input type: %s", name)
 
 	return graphql.String // Fallback
+}
+
+func (m *graphQLManager) getEnum(def *ast.Definition) *graphql.Enum {
+	if e, ok := m.enumCache[def.Name]; ok {
+		return e
+	}
+
+	config := graphql.EnumConfig{
+		Name:   def.Name,
+		Values: graphql.EnumValueConfigMap{},
+	}
+
+	for _, val := range def.EnumValues {
+		config.Values[val.Name] = &graphql.EnumValueConfig{
+			Value: val.Name,
+		}
+	}
+
+	e := graphql.NewEnum(config)
+	m.enumCache[def.Name] = e
+
+	return e
 }
 
 func (m *graphQLManager) mapType(t *ast.Type, schema *ast.Schema) graphql.Output {
@@ -292,8 +315,7 @@ func (m *graphQLManager) getCoreOutputType(name string, schema *ast.Schema) grap
 func (m *graphQLManager) getCustomOutputType(name string, schema *ast.Schema) graphql.Output {
 	def, ok := schema.Types[name]
 	if def != nil && def.Kind == ast.Enum {
-		m.container.Errorf("GraphQL Enum type not yet supported: %s", name)
-		return graphql.String
+		return m.getEnum(def)
 	}
 
 	if !ok || def.Kind != ast.Object {
@@ -421,15 +443,12 @@ func (m *graphQLManager) handleGraphQLRequest(w http.ResponseWriter, r *http.Req
 	if len(result.Errors) > 0 {
 		m.container.Metrics().IncrementCounter(ctx, "gofr_graphql_error_total", "operation_name", opName, "type", opType)
 
-		// If there are errors (possibly validation or resolver errors), we return 422 vs 200
-		w.WriteHeader(http.StatusUnprocessableEntity)
-
 		if result.Data != nil {
 			m.container.Debugf("GraphQL result partially matched schema. Errors: %v", result.Errors)
 		}
-	} else {
-		w.WriteHeader(http.StatusOK)
 	}
+
+	w.WriteHeader(http.StatusOK)
 
 	err := json.NewEncoder(w).Encode(result)
 	if err != nil {

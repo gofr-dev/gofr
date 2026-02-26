@@ -110,7 +110,7 @@ func TestGraphQL_Health(t *testing.T) {
 	app := New()
 	app.GraphQLQuery("dummy", func(_ *Context) (any, error) { return "ok", nil })
 
-	reqBody := `{"query": "{ gofr { status } }"}`
+	reqBody := `{"query": "{ health { status } }"}`
 	req := httptest.NewRequest(http.MethodPost, "/graphql", bytes.NewBufferString(reqBody))
 	req.Header.Set("Content-Type", "application/json")
 
@@ -122,15 +122,15 @@ func TestGraphQL_Health(t *testing.T) {
 
 	var result struct {
 		Data struct {
-			Gofr struct {
+			Health struct {
 				Status string `json:"status"`
-			} `json:"gofr"`
+			} `json:"health"`
 		} `json:"data"`
 	}
 
 	err := json.Unmarshal(resp.Body.Bytes(), &result)
 	require.NoError(t, err)
-	assert.NotEmpty(t, result.Data.Gofr.Status)
+	assert.NotEmpty(t, result.Data.Health.Status)
 }
 
 func TestGraphQL_Playground(t *testing.T) {
@@ -259,7 +259,7 @@ func TestGraphQL_ResolverError(t *testing.T) {
 	app.graphqlManager.buildErr = app.graphqlManager.buildSchema()
 	app.graphqlManager.Handle(resp, req)
 
-	assert.Equal(t, http.StatusUnprocessableEntity, resp.Code)
+	assert.Equal(t, http.StatusOK, resp.Code)
 
 	var result struct {
 		Data   any `json:"data"`
@@ -297,4 +297,47 @@ func TestGraphQL_RequestMethods(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, 1, u.ID)
 	assert.Equal(t, "test", u.Name)
+}
+
+func TestGraphQL_Enums(t *testing.T) {
+	t.Setenv("METRICS_PORT", "0")
+	setupSchema(t, `
+		enum Role { ADMIN USER }
+		type User { id: Int role: Role }
+		type Query { user(role: Role): User }
+	`)
+
+	app := New()
+	app.GraphQLQuery("user", func(c *Context) (any, error) {
+		var args struct {
+			Role string `json:"role"`
+		}
+
+		_ = c.Bind(&args)
+
+		return map[string]any{"id": 1, "role": args.Role}, nil
+	})
+
+	reqBody := `{"query": "{ user(role: ADMIN) { id role } }"}`
+	req := httptest.NewRequest(http.MethodPost, "/graphql", bytes.NewBufferString(reqBody))
+	req.Header.Set("Content-Type", "application/json")
+
+	resp := httptest.NewRecorder()
+	app.graphqlManager.buildErr = app.graphqlManager.buildSchema()
+	app.graphqlManager.Handle(resp, req)
+
+	assert.Equal(t, http.StatusOK, resp.Code)
+
+	var result struct {
+		Data struct {
+			User struct {
+				ID   int    `json:"id"`
+				Role string `json:"role"`
+			} `json:"user"`
+		} `json:"data"`
+	}
+
+	err := json.Unmarshal(resp.Body.Bytes(), &result)
+	require.NoError(t, err)
+	assert.Equal(t, "ADMIN", result.Data.User.Role)
 }

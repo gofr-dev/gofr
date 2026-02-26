@@ -18,10 +18,10 @@ Queries are used to fetch data. In GoFr, a Query resolver is a function that tak
 Mutations are used to modify data. They follow the same signature as Queries but are intended for side effects.
 
 ### 3. Automatic Health Check
-GoFr automatically injects a `gofr` field into your root `Query` type (if not already present). This allows you to check the application health via GraphQL:
+GoFr automatically injects a `health` field into your root `Query` type (if not already present). This allows you to check the application health via GraphQL:
 ```graphql
 query {
-    gofr {
+    health {
         status
         name
         version
@@ -91,15 +91,14 @@ Unlike standard HTTP handlers which allow `any` but lose structure, GraphQL hand
 
 ### 2. HTTP Status Codes
 
-GoFr is opinionated about HTTP status codes in GraphQL responses. Unlike the standard GraphQL-over-HTTP spec (which always returns `200`), GoFr surfaces errors at the HTTP layer to make them visible to standard monitoring and alerting tools without requiring response body inspection.
+GoFr follows the standard GraphQL-over-HTTP convention by returning `200 OK` for all successfully processed requests, including those with resolver errors. This ensures that the response body is the source of truth for execution results.
 
 | Status Code | Condition |
 |---|---|
-| `200 OK` | Query or mutation succeeded with no errors. |
+| `200 OK` | The request was processed (regardless of whether it returned data or errors). |
 | `400 Bad Request` | The request body is not valid JSON. |
-| `422 Unprocessable Entity` | A resolver returned an error, or GraphQL validation failed (e.g. querying a field not in the schema). |
 
-**Error response body** (for `422`):
+**Error response body**:
 ```json
 {
   "data": null,
@@ -116,8 +115,8 @@ GoFr is opinionated about HTTP status codes in GraphQL responses. Unlike the sta
 ### 3. Argument Binding
 Instead of declarative arguments in the function signature, you use the standard `c.Bind()` method. GoFr automatically maps the GraphQL `args` map to your struct using JSON tags.
 
-### 4. Unsupported Types
-Currently, GraphQL `Enum` types are explicitly not supported in resolvers. If an Enum type is defined in the schema and a resolver attempts to map it, GoFr will return an error during schema initialization at startup.
+### 4. Supported Types
+GoFr supports all standard GraphQL scalar types (`String`, `Int`, `Float`, `Boolean`, `ID`), as well as `Object` and `Enum` types. These are automatically mapped between your GraphQL schema and Go structs/maps.
 
 ---
 
@@ -168,7 +167,7 @@ GoFr automatically instruments your GraphQL API with OpenTelemetry traces:
 GoFr exports several GraphQL-specific metrics, all tagged by `operation_name` and `type` (query/mutation):
 
 - **`gofr_graphql_operations_total`**: Total number of GraphQL operations received.
-- **`gofr_graphql_error_total`**: Total operations that resulted in an error (resolver error or validation failure). Incremented on any `422` response.
+- **`gofr_graphql_error_total`**: Total operations that resulted in an error (resolver error or validation failure).
 - **`gofr_graphql_request_duration`**: Histogram of the entire request lifecycle in seconds.
 
 > **Note:** The `operation_name` tag is sourced from the `operationName` field in the POST body. For anonymous operations, it defaults to `"unknown"`.
@@ -179,5 +178,5 @@ GoFr exports several GraphQL-specific metrics, all tagged by `operation_name` an
 
 1.  **Keep Schema and Logic in sync**: Since the schema is defined in a separate file, ensure field names in your Go maps/structs match the field names in `schema.graphqls`.
 2.  **Use c.Bind()**: Always use `c.Bind()` for accessing arguments to benefit from GoFr's internal mapping and validation.
-3.  **Error Handling**: Return errors from your handlers. GoFr will include them in the `errors` array of the GraphQL response and return `422 Unprocessable Entity`.
+3.  **Error Handling**: Return errors from your handlers. GoFr will include them in the `errors` array of the GraphQL response while still returning `200 OK`.
 4.  **Name your operations**: Use `operationName` in your requests so that metrics are tagged meaningfully (e.g., `GetUser` instead of `unknown`).
