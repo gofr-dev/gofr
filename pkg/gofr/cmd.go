@@ -26,16 +26,44 @@ type route struct {
 type Options func(c *route)
 
 // ErrCommandNotFound is an empty struct used to represent a specific error when a command is not found.
-type ErrCommandNotFound struct{}
+type ErrCommandNotFound struct {
+	Command string
+}
 
-func (ErrCommandNotFound) Error() string {
-	return "No Command Found!"
+func (e ErrCommandNotFound) Error() string {
+	return fmt.Sprintf("'%s' is not a valid command.", e.Command)
 }
 
 func (cmd *cmd) Run(c *container.Container) {
 	args := os.Args[1:] // First one is command itself
-	subCommand := ""
-	showHelp := false
+	subCommand, showHelp, firstArg := parseArgs(args)
+
+	if showHelp && subCommand == "" {
+		cmd.printHelp()
+		return
+	}
+
+	r := cmd.handler(subCommand)
+	ctx := newCMDContext(&cmd2.Responder{}, cmd2.NewRequest(args), c, cmd.out)
+
+	commandForError := getCommandForError(subCommand, firstArg)
+
+	if cmd.noCommandResponse(r, ctx, commandForError) {
+		return
+	}
+
+	if showHelp {
+		cmd.out.Println(r.help)
+		return
+	}
+
+	ctx.responder.Respond(r.handler(ctx))
+}
+
+// parseArgs parses command line arguments and returns subCommand, showHelp flag, and firstArg.
+func parseArgs(args []string) (subCommand string, showHelp bool, firstArg string) {
+	subCommand = ""
+	showHelp = false
 
 	for _, a := range args {
 		if a == "" {
@@ -48,43 +76,41 @@ func (cmd *cmd) Run(c *container.Container) {
 			continue
 		}
 
+		if firstArg == "" {
+			firstArg = a
+		}
+
 		if a[0] != '-' {
 			subCommand = subCommand + " " + a
 		}
 	}
 
-	if showHelp && subCommand == "" {
-		cmd.printHelp()
-		return
+	return subCommand, showHelp, firstArg
+}
+
+// getCommandForError returns the command string to use in error messages.
+func getCommandForError(subCommand, firstArg string) string {
+	commandForError := strings.TrimSpace(subCommand)
+
+	if commandForError == "" && firstArg != "" {
+		commandForError = firstArg
 	}
 
-	r := cmd.handler(subCommand)
-	ctx := newCMDContext(&cmd2.Responder{}, cmd2.NewRequest(args), c, cmd.out)
-
-	// handling if route is not found or the handler is nil
-	if cmd.noCommandResponse(r, ctx) {
-		return
-	}
-
-	if showHelp {
-		cmd.out.Println(r.help)
-		return
-	}
-
-	ctx.responder.Respond(r.handler(ctx))
+	return commandForError
 }
 
 // noCommandResponse responds with error when no route with the given subcommand is not found or handler is nil.
-func (cmd *cmd) noCommandResponse(r *route, ctx *Context) bool {
+func (cmd *cmd) noCommandResponse(r *route, ctx *Context, subCommand string) bool {
 	if r == nil {
-		ctx.responder.Respond(nil, ErrCommandNotFound{})
+		ctx.responder.Respond(nil, ErrCommandNotFound{Command: strings.TrimSpace(subCommand)})
+		fmt.Println()
 		cmd.printHelp()
 
 		return true
 	}
 
 	if r.handler == nil {
-		ctx.responder.Respond(nil, ErrCommandNotFound{})
+		ctx.responder.Respond(nil, ErrCommandNotFound{Command: strings.TrimSpace(subCommand)})
 
 		return true
 	}
@@ -150,15 +176,25 @@ func (cmd *cmd) addRoute(pattern string, handler Handler, options ...Options) {
 func (cmd *cmd) printHelp() {
 	fmt.Println("Available commands:")
 
-	for _, r := range cmd.routes {
-		fmt.Printf("\n  %s\n", r.pattern)
+	var maxPatternLen, maxDescLen int
 
-		if r.description != "" {
-			fmt.Printf("    Description: %s\n", r.description)
+	for _, r := range cmd.routes {
+		if len(r.pattern) > maxPatternLen {
+			maxPatternLen = len(r.pattern)
 		}
+
+		if len(r.description) > maxDescLen {
+			maxDescLen = len(r.description)
+		}
+	}
+
+	for _, r := range cmd.routes {
+		fmt.Printf("  %-*s  %-*s", maxPatternLen, r.pattern, maxDescLen, r.description)
 
 		if r.help != "" {
-			fmt.Printf("    Help: %s\n", r.help)
+			fmt.Printf("  Help: %s", r.help)
 		}
+
+		fmt.Println()
 	}
 }

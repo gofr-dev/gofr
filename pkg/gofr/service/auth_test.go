@@ -65,6 +65,7 @@ func TestAuthProvider(t *testing.T) {
 	for i, tc := range testCases {
 		t.Run(fmt.Sprintf("Test Case #%d", i), func(t *testing.T) {
 			var server *httptest.Server
+
 			switch tc.authOption.(type) {
 			case *OAuthConfig:
 				server = oAuthServer

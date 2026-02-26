@@ -1,7 +1,6 @@
 package gofr
 
 import (
-	"net/http"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -10,7 +9,6 @@ import (
 	"gofr.dev/pkg/gofr/container"
 	"gofr.dev/pkg/gofr/http/middleware"
 	"gofr.dev/pkg/gofr/logging"
-	"gofr.dev/pkg/gofr/service"
 )
 
 // New creates an HTTP Server Application and returns that App.
@@ -20,21 +18,10 @@ func New() *App {
 	app.container = container.NewContainer(app.Config)
 
 	app.initTracer()
-
-	// Metrics Server
-	port, err := strconv.Atoi(app.Config.Get("METRICS_PORT"))
-	if err != nil || port <= 0 {
-		port = defaultMetricPort
-	}
-
-	if !isPortAvailable(port) {
-		app.container.Logger.Fatalf("metrics port %d is blocked or unreachable", port)
-	}
-
-	app.metricServer = newMetricServer(port)
+	app.initMetricsServer()
 
 	// HTTP Server
-	port, err = strconv.Atoi(app.Config.Get("HTTP_PORT"))
+	port, err := strconv.Atoi(app.Config.Get("HTTP_PORT"))
 	if err != nil || port <= 0 {
 		port = defaultHTTPPort
 	}
@@ -44,12 +31,8 @@ func New() *App {
 	app.httpServer.keyFile = app.Config.GetOrDefault("KEY_FILE", "")
 	app.httpServer.staticFiles = make(map[string]string)
 
-	// Add Default routes
-	app.add(http.MethodGet, service.HealthPath, healthHandler)
-	app.add(http.MethodGet, service.AlivePath, liveHandler)
-	app.add(http.MethodGet, "/favicon.ico", faviconHandler)
-
-	app.checkAndAddOpenAPIDocumentation()
+	// Note: Default routes (health, alive, favicon, swagger) are registered in httpServerSetup()
+	// only when HTTP server actually starts. This prevents gRPC-only apps from starting HTTP server.
 
 	// gRPC Server
 	port, err = strconv.Atoi(app.Config.Get("GRPC_PORT"))
@@ -57,7 +40,12 @@ func New() *App {
 		port = defaultGRPCPort
 	}
 
-	app.grpcServer = newGRPCServer(app.container, port, app.Config)
+	app.grpcServer, err = newGRPCServer(app.container, port, app.Config)
+
+	// Continue without gRPC server rather than failing the entire app
+	if err != nil {
+		app.container.Logger.Errorf("failed to create gRPC server: %v", err)
+	}
 
 	app.subscriptionManager = newSubscriptionManager(app.container)
 
@@ -67,6 +55,7 @@ func New() *App {
 
 	if _, err = os.Stat(checkDirectory); err == nil {
 		app.httpServer.staticFiles[checkDirectory] = "/static"
+		app.httpRegistered = true
 	}
 
 	return app
@@ -87,4 +76,26 @@ func NewCMD() *App {
 	app.initTracer()
 
 	return app
+}
+
+// initMetricsServer initializes the metrics server based on configuration.
+// If METRICS_PORT is explicitly set to 0, the metrics server is disabled.
+func (a *App) initMetricsServer() {
+	metricsPortStr := a.Config.Get("METRICS_PORT")
+
+	if metricsPortStr == "0" {
+		a.container.Logger.Logf("Metrics server is disabled (METRICS_PORT=0)")
+		return
+	}
+
+	port, err := strconv.Atoi(metricsPortStr)
+	if err != nil || port <= 0 {
+		port = defaultMetricPort
+	}
+
+	if !isPortAvailable(port) {
+		a.container.Logger.Fatalf("metrics port %d is blocked or unreachable", port)
+	}
+
+	a.metricServer = newMetricServer(port)
 }

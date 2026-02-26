@@ -1,13 +1,18 @@
 package sql
 
 import (
+	"context"
+	"crypto/tls"
+	"crypto/x509"
 	"database/sql"
 	"fmt"
+	"os"
 	"strconv"
 	"strings"
 	"time"
 
 	"github.com/XSAM/otelsql"
+	"github.com/go-sql-driver/mysql"
 	_ "github.com/lib/pq" // used for concrete implementation of the database driver.
 	_ "modernc.org/sqlite"
 
@@ -20,10 +25,14 @@ const (
 	cockroachDB    = "cockroachdb"
 	defaultDBPort  = 3306
 	requireSSLMode = "require"
+	tlsSkipVerify  = "tls=skip-verify"
 )
 
-var errUnsupportedDialect = fmt.Errorf(
-	"unsupported db dialect; supported dialects are - mysql, postgres, supabase, sqlite, %s", cockroachDB)
+var (
+	errUnsupportedDialect = fmt.Errorf(
+		"unsupported db dialect; supported dialects are - mysql, postgres, supabase, sqlite, %s", cockroachDB)
+	errFailedCACerts = fmt.Errorf("failed to append CA certificate")
+)
 
 // DBConfig has those members which are necessary variables while connecting to database.
 type DBConfig struct {
@@ -69,13 +78,24 @@ func NewSQL(configs config.Config, logger datasource.Logger, metrics Metrics) *D
 		setupSupabaseDefaults(dbConfig, configs, logger)
 	}
 
+	if dbConfig.Dialect == "" {
+		return nil
+	}
+
 	// if Hostname is not provided, we won't try to connect to DB
 	if dbConfig.Dialect != sqlite && dbConfig.HostName == "" {
 		logger.Errorf("connection to %s failed: host name is empty.", dbConfig.Dialect)
 	}
 
-	if dbConfig.Dialect == "" {
-		return nil
+	// Register MySQL TLS config if needed (BEFORE opening connection)
+	if err := registerMySQLTLSConfig(dbConfig, logger); err != nil {
+		if strings.Contains(strings.ToLower(dbConfig.SSLMode), "verify") {
+			logger.Errorf("failed to register MySQL TLS config: %v", err)
+
+			return nil
+		}
+
+		logger.Warnf("failed to register MySQL TLS config: %v", err)
 	}
 
 	logger.Debugf("generating database connection string for '%s'", dbConfig.Dialect)
@@ -89,13 +109,12 @@ func NewSQL(configs config.Config, logger datasource.Logger, metrics Metrics) *D
 	logger.Debugf("registering sql dialect '%s' for traces", dbConfig.Dialect)
 
 	otelRegisteredDialect, err := registerOtel(dbConfig.Dialect, logger)
-
 	if err != nil {
 		logger.Errorf("could not register sql dialect '%s' for traces, error: %s", dbConfig.Dialect, err)
 		return nil
 	}
 
-	database := &DB{config: dbConfig, logger: logger, metrics: metrics}
+	database := &DB{config: dbConfig, logger: logger, metrics: metrics, stopSignal: make(chan struct{})}
 
 	printConnectionSuccessLog("connecting", database.config, logger)
 
@@ -118,7 +137,7 @@ func NewSQL(configs config.Config, logger datasource.Logger, metrics Metrics) *D
 
 	go retryConnection(database)
 
-	go pushDBMetrics(database.DB, metrics)
+	go pushDBMetrics(database, metrics)
 
 	return database
 }
@@ -137,7 +156,7 @@ func registerOtel(dialect string, logger datasource.Logger) (string, error) {
 }
 
 func pingToTestConnection(database *DB) *DB {
-	if err := database.DB.Ping(); err != nil {
+	if err := database.DB.PingContext(context.Background()); err != nil {
 		printConnectionFailureLog("connect", database.config, database.logger, err)
 
 		return database
@@ -151,25 +170,53 @@ func pingToTestConnection(database *DB) *DB {
 func retryConnection(database *DB) {
 	const connRetryFrequencyInSeconds = 10
 
+	retryDuration := connRetryFrequencyInSeconds * time.Second
+
 	for {
-		if database.DB.Ping() != nil {
+		select {
+		case <-database.stopSignal:
+			return
+		default:
+		}
+
+		if database.DB.PingContext(context.Background()) != nil {
 			database.logger.Info("retrying SQL database connection")
 
-			for {
-				err := database.DB.Ping()
-				if err == nil {
-					printConnectionSuccessLog("connected", database.config, database.logger)
-
-					break
-				}
-
-				printConnectionFailureLog("connect", database.config, database.logger, err)
-
-				time.Sleep(connRetryFrequencyInSeconds * time.Second)
+			if !attemptReconnection(database, retryDuration) {
+				return
 			}
 		}
 
-		time.Sleep(connRetryFrequencyInSeconds * time.Second)
+		select {
+		case <-time.After(retryDuration):
+		case <-database.stopSignal:
+			return
+		}
+	}
+}
+
+func attemptReconnection(database *DB, retryDuration time.Duration) bool {
+	for {
+		select {
+		case <-database.stopSignal:
+			return false
+		default:
+		}
+
+		err := database.DB.PingContext(context.Background())
+		if err == nil {
+			printConnectionSuccessLog("connected", database.config, database.logger)
+
+			return true
+		}
+
+		printConnectionFailureLog("connect", database.config, database.logger, err)
+
+		select {
+		case <-time.After(retryDuration):
+		case <-database.stopSignal:
+			return false
+		}
 	}
 }
 
@@ -203,7 +250,7 @@ func getDBConfig(configs config.Config) *DBConfig {
 		Database:    configs.Get("DB_NAME"),
 		MaxOpenConn: maxOpenConn,
 		MaxIdleConn: maxIdleConn,
-		// only for postgres
+		// Supported for postgres, supabase, cockroachdb, and mysql
 		SSLMode: configs.GetOrDefault("DB_SSL_MODE", "disable"),
 		Charset: configs.Get("DB_CHARSET"),
 	}
@@ -216,14 +263,20 @@ func getDBConnectionString(dbConfig *DBConfig) (string, error) {
 			dbConfig.Charset = "utf8"
 		}
 
-		return fmt.Sprintf("%s:%s@tcp(%s:%s)/%s?charset=%s&parseTime=True&loc=Local&interpolateParams=true",
+		connStr := fmt.Sprintf("%s:%s@tcp(%s:%s)/%s?charset=%s&parseTime=True&loc=Local&interpolateParams=true",
 			dbConfig.User,
 			dbConfig.Password,
 			dbConfig.HostName,
 			dbConfig.Port,
 			dbConfig.Database,
 			dbConfig.Charset,
-		), nil
+		)
+
+		if tlsParam := getMySQLTLSParam(dbConfig.SSLMode); tlsParam != "" {
+			connStr = fmt.Sprintf("%s&%s", connStr, tlsParam)
+		}
+
+		return connStr, nil
 	case dialectPostgres, supabaseDialect, cockroachDB:
 		return fmt.Sprintf("host=%s port=%s user=%s password=%s dbname=%s sslmode=%s",
 			dbConfig.HostName, dbConfig.Port, dbConfig.User, dbConfig.Password, dbConfig.Database, dbConfig.SSLMode), nil
@@ -236,17 +289,27 @@ func getDBConnectionString(dbConfig *DBConfig) (string, error) {
 	}
 }
 
-func pushDBMetrics(db *sql.DB, metrics Metrics) {
+func pushDBMetrics(database *DB, metrics Metrics) {
 	const frequency = 10
 
 	for {
-		if db != nil {
-			stats := db.Stats()
+		select {
+		case <-database.stopSignal:
+			return
+		default:
+		}
+
+		if database.DB != nil {
+			stats := database.DB.Stats()
 
 			metrics.SetGauge("app_sql_open_connections", float64(stats.OpenConnections))
 			metrics.SetGauge("app_sql_inUse_connections", float64(stats.InUse))
 
-			time.Sleep(frequency * time.Second)
+			select {
+			case <-time.After(frequency * time.Second):
+			case <-database.stopSignal:
+				return
+			}
 		}
 	}
 }
@@ -271,4 +334,91 @@ func printConnectionFailureLog(action string, dbconfig *DBConfig, logger datasou
 		logger.Errorf("could not %s '%s' user to '%s' database at '%s:%s', error: %v",
 			action, dbconfig.User, dbconfig.Database, dbconfig.HostName, dbconfig.Port, err)
 	}
+}
+
+// getMySQLTLSParam converts the generic DB_SSL_MODE to MySQL-specific TLS parameter.
+// For custom CA certificates, use DB_TLS_CA_CERT environment variable.
+func getMySQLTLSParam(sslMode string) string {
+	switch strings.ToLower(sslMode) {
+	case "disable", "false":
+		return "" // No TLS - insecure
+	case "preferred":
+		return "tls=preferred" // Try TLS, fallback to plain
+	case "require", "true":
+		return tlsSkipVerify // TLS required but no cert validation
+	case "skip-verify":
+		return tlsSkipVerify // Explicit skip verification
+	case "verify-ca", "verify-full":
+		return "tls=custom" // Use custom TLS config with CA verification
+	default:
+		return "" // Default to no TLS
+	}
+}
+
+// registerMySQLTLSConfig registers custom TLS configuration for MySQL if needed.
+func registerMySQLTLSConfig(dbConfig *DBConfig, logger datasource.Logger) error {
+	// Only for MySQL with verify-ca or verify-full
+	if dbConfig.Dialect != dialectMysql {
+		return nil
+	}
+
+	if !strings.Contains(strings.ToLower(dbConfig.SSLMode), "verify") {
+		return nil // skip-verify doesn't need custom config
+	}
+
+	caCertPath := os.Getenv("DB_TLS_CA_CERT")
+	if caCertPath == "" {
+		logger.Warn("DB_SSL_MODE=verify-ca requires DB_TLS_CA_CERT. Falling back to system CA pool")
+
+		// Use system CA pool
+		tlsConfig := &tls.Config{
+			ServerName: getServerName(dbConfig.HostName),
+			MinVersion: tls.VersionTLS12,
+		}
+
+		return mysql.RegisterTLSConfig("custom", tlsConfig)
+	}
+
+	// Load custom CA certificate
+	caCert, err := os.ReadFile(caCertPath)
+	if err != nil {
+		return fmt.Errorf("failed to read CA certificate from %s: %w", caCertPath, err)
+	}
+
+	caCertPool := x509.NewCertPool()
+	if !caCertPool.AppendCertsFromPEM(caCert) {
+		return errFailedCACerts
+	}
+
+	tlsConfig := &tls.Config{
+		RootCAs:    caCertPool,
+		ServerName: dbConfig.HostName,
+		MinVersion: tls.VersionTLS12,
+	}
+
+	// Optional: Support client certificates (mutual TLS)
+	clientCertPath := os.Getenv("DB_TLS_CLIENT_CERT")
+	clientKeyPath := os.Getenv("DB_TLS_CLIENT_KEY")
+
+	if clientCertPath != "" && clientKeyPath != "" {
+		clientCert, err := tls.LoadX509KeyPair(clientCertPath, clientKeyPath)
+		if err != nil {
+			return fmt.Errorf("failed to load client certificate: %w", err)
+		}
+
+		tlsConfig.Certificates = []tls.Certificate{clientCert}
+
+		logger.Debug("loaded client certificate for mutual TLS")
+	}
+
+	return mysql.RegisterTLSConfig("custom", tlsConfig)
+}
+
+func getServerName(hostname string) string {
+	// For localhost/127.0.0.1, use "localhost" explicitly
+	if hostname == "127.0.0.1" || hostname == "::1" {
+		return "localhost"
+	}
+
+	return hostname
 }

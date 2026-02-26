@@ -54,6 +54,9 @@ const (
 	// Unit is bytes, and assumes that config items of 'tsd.http.request.enable_chunked = true'
 	// and 'tsd.http.request.max_chunk = 40960' are all in the opentsdb.conf.
 	defaultMaxContentLength = 40960
+
+	opentsdbOperationDurationName = "app_opentsdb_operation_duration"
+	opentsdbOperationTotalName    = "app_opentsdb_operation_total"
 )
 
 //nolint:gochecknoglobals // this variable is being set again with a mockserver response for testing HealthCheck endpoint.
@@ -128,9 +131,42 @@ func (c *Client) UseTracer(tracer any) {
 	}
 }
 
+// registerMetrics initializes OpenTSDB metrics once when a metrics provider is injected.
+func (c *Client) registerMetrics() {
+	if c.metrics == nil {
+		return
+	}
+
+	durationBuckets := []float64{
+		1,    // 1 ms
+		5,    // 5 ms
+		10,   // 10 ms
+		50,   // 50 ms
+		100,  // 100 ms
+		250,  // 250 ms
+		500,  // 500 ms
+		1000, // 1 s
+		2000, // 2 s
+		5000, // 5 s
+	}
+
+	c.metrics.NewHistogram(
+		opentsdbOperationDurationName,
+		"Duration of OpenTSDB operations in milliseconds.",
+		durationBuckets...,
+	)
+
+	c.metrics.NewCounter(
+		opentsdbOperationTotalName,
+		"Total OpenTSDB operations.",
+	)
+}
+
 // Connect initializes an HTTP client for OpenTSDB using the provided configuration.
 // If the configuration is invalid or the endpoint is unreachable, an error is logged.
 func (c *Client) Connect() {
+	c.registerMetrics()
+
 	span := c.addTrace(context.Background(), "Connect")
 
 	if span != nil {
@@ -164,7 +200,7 @@ func (c *Client) PutDataPoints(ctx context.Context, datas any, queryParam string
 
 	message := "Put request failed"
 
-	defer sendOperationStats(c.logger, time.Now(), "PutDataPoints", &status, &message, span)
+	defer sendOperationStats(ctx, c.logger, c.metrics, c.config.Host, time.Now(), "PutDataPoints", &status, &message, span)
 
 	putResp, ok := resp.(*PutResponse)
 	if !ok {
@@ -215,7 +251,7 @@ func (c *Client) QueryDataPoints(ctx context.Context, parameters, resp any) erro
 
 	message := "QueryDatapoints request failed"
 
-	defer sendOperationStats(c.logger, time.Now(), "Query", &status, &message, span)
+	defer sendOperationStats(ctx, c.logger, c.metrics, c.config.Host, time.Now(), "Query", &status, &message, span)
 
 	param, ok := parameters.(*QueryParam)
 	if !ok {
@@ -258,7 +294,7 @@ func (c *Client) QueryLatestDataPoints(ctx context.Context, parameters, resp any
 
 	message := "QueryLatestDataPoints request failed"
 
-	defer sendOperationStats(c.logger, time.Now(), "QueryLastDataPoints", &status, &message, span)
+	defer sendOperationStats(ctx, c.logger, c.metrics, c.config.Host, time.Now(), "QueryLastDataPoints", &status, &message, span)
 
 	param, ok := parameters.(*QueryLastParam)
 	if !ok {
@@ -303,7 +339,7 @@ func (c *Client) QueryAnnotation(ctx context.Context, queryAnnoParam map[string]
 
 	message := "QueryAnnotation request failed"
 
-	defer sendOperationStats(c.logger, time.Now(), "QueryAnnotation", &status, &message, span)
+	defer sendOperationStats(ctx, c.logger, c.metrics, c.config.Host, time.Now(), "QueryAnnotation", &status, &message, span)
 
 	annResp, ok := resp.(*AnnotationResponse)
 	if !ok {
@@ -362,7 +398,7 @@ func (c *Client) GetAggregators(ctx context.Context, resp any) error {
 
 	message := "GetAggregators request failed"
 
-	defer sendOperationStats(c.logger, time.Now(), "GetAggregators", &status, &message, span)
+	defer sendOperationStats(ctx, c.logger, c.metrics, c.config.Host, time.Now(), "GetAggregators", &status, &message, span)
 
 	aggreResp, ok := resp.(*AggregatorsResponse)
 	if !ok {
@@ -391,7 +427,7 @@ func (c *Client) HealthCheck(ctx context.Context) (any, error) {
 
 	message := "HealthCheck request failed"
 
-	defer sendOperationStats(c.logger, time.Now(), "HealthCheck", &status, &message, span)
+	defer sendOperationStats(ctx, c.logger, c.metrics, c.config.Host, time.Now(), "HealthCheck", &status, &message, span)
 
 	h := Health{
 		Details: make(map[string]any),

@@ -18,9 +18,15 @@ import (
 type httpService struct {
 	*http.Client
 	trace.Tracer
-	url string
+	url  string
+	name string
 	Logger
 	Metrics
+
+	// healthEndpoint is the custom endpoint for health checks (shared across options)
+	healthEndpoint string
+	// healthTimeout is the timeout in seconds for health check requests
+	healthTimeout int
 }
 
 type HTTP interface {
@@ -76,6 +82,7 @@ func NewHTTPService(serviceAddress string, logger Logger, metrics Metrics, optio
 	}
 
 	var svc HTTP
+
 	svc = h
 
 	// if options are given, then add them to the httpService struct
@@ -185,10 +192,10 @@ func (h *httpService) createAndSendRequest(ctx context.Context, method string, p
 	log.ResponseTime = respTime.Microseconds()
 
 	if err != nil {
-		log.ResponseCode = http.StatusInternalServerError
+		log.ResponseCode = http.StatusServiceUnavailable
 		h.Log(&ErrorLog{Log: log, ErrorMessage: err.Error()})
 
-		h.updateMetrics(clientTraceCtx, method, respTime.Seconds(), http.StatusInternalServerError)
+		h.updateMetrics(clientTraceCtx, method, respTime.Seconds(), http.StatusServiceUnavailable)
 
 		return resp, err
 	}
@@ -203,8 +210,13 @@ func (h *httpService) createAndSendRequest(ctx context.Context, method string, p
 
 func (h *httpService) updateMetrics(ctx context.Context, method string, timeTaken float64, statusCode int) {
 	if h.Metrics != nil {
-		h.RecordHistogram(ctx, "app_http_service_response", timeTaken, "path", h.url, "method", method,
-			"status", fmt.Sprintf("%v", statusCode))
+		labels := []string{"path", h.url, "method", method, "status", fmt.Sprintf("%v", statusCode)}
+
+		if h.name != "" {
+			labels = append(labels, "service", h.name)
+		}
+
+		h.RecordHistogram(ctx, "app_http_service_response", timeTaken, labels...)
 	}
 }
 
@@ -223,4 +235,21 @@ func encodeQueryParameters(req *http.Request, queryParams map[string]any) {
 	}
 
 	req.URL.RawQuery = q.Encode()
+}
+
+type attributesOption map[string]string
+
+func (a attributesOption) AddOption(h HTTP) HTTP {
+	if svc := extractHTTPService(h); svc != nil {
+		if name, ok := a["name"]; ok {
+			svc.name = name
+		}
+	}
+
+	return h
+}
+
+// WithAttributes returns an Option that sets the attributes of the HTTP service.
+func WithAttributes(attributes map[string]string) Options {
+	return attributesOption(attributes)
 }

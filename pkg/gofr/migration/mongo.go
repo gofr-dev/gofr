@@ -2,6 +2,7 @@ package migration
 
 import (
 	"context"
+	"fmt"
 	"time"
 
 	"gofr.dev/pkg/gofr/container"
@@ -29,29 +30,30 @@ const (
 )
 
 // checkAndCreateMigrationTable initializes a MongoDB collection if it doesn't exist.
-func (mg mongoMigrator) checkAndCreateMigrationTable(_ *container.Container) error {
+func (mg mongoMigrator) checkAndCreateMigrationTable(c *container.Container) error {
 	err := mg.Mongo.CreateCollection(context.Background(), mongoMigrationCollection)
 	if err != nil {
+		c.Debug("Migration collection might already exist:", err)
+
 		return err
 	}
 
-	return nil
+	return mg.migrator.checkAndCreateMigrationTable(c)
 }
 
-// getLastMigration retrieves the latest migration version from MongoDB.
-func (mg mongoMigrator) getLastMigration(c *container.Container) int64 {
-	var lastMigration int64
-
-	var migrations []struct {
-		Version int64 `bson:"version"`
-	}
+func (mg mongoMigrator) getLastMigration(c *container.Container) (int64, error) {
+	var (
+		lastMigration int64
+		migrations    []struct {
+			Version int64 `bson:"version"`
+		}
+	)
 
 	filter := make(map[string]any)
 
 	err := mg.Mongo.Find(context.Background(), mongoMigrationCollection, filter, &migrations)
 	if err != nil {
-		c.Errorf("Failed to fetch migrations from MongoDB: %v", err)
-		return 0
+		return -1, fmt.Errorf("mongo: %w", err)
 	}
 
 	// Identify the highest migration version.
@@ -61,9 +63,12 @@ func (mg mongoMigrator) getLastMigration(c *container.Container) int64 {
 
 	c.Debugf("MongoDB last migration fetched value is: %v", lastMigration)
 
-	lm2 := mg.migrator.getLastMigration(c)
+	lm2, err := mg.migrator.getLastMigration(c)
+	if err != nil {
+		return -1, err
+	}
 
-	return max(lm2, lastMigration)
+	return max(lastMigration, lm2), nil
 }
 
 func (mg mongoMigrator) beginTransaction(c *container.Container) transactionData {
@@ -77,8 +82,8 @@ func (mg mongoMigrator) commitMigration(c *container.Container, data transaction
 		"start_time": data.StartTime,
 		"duration":   time.Since(data.StartTime).Milliseconds(),
 	}
-	_, err := mg.Mongo.InsertOne(context.Background(), mongoMigrationCollection, migrationDoc)
 
+	_, err := mg.Mongo.InsertOne(context.Background(), mongoMigrationCollection, migrationDoc)
 	if err != nil {
 		return err
 	}
@@ -91,4 +96,16 @@ func (mg mongoMigrator) commitMigration(c *container.Container, data transaction
 func (mg mongoMigrator) rollback(c *container.Container, data transactionData) {
 	mg.migrator.rollback(c, data)
 	c.Fatalf("Migration %v failed.", data.MigrationNumber)
+}
+
+func (mg mongoMigrator) lock(ctx context.Context, cancel context.CancelFunc, c *container.Container, ownerID string) error {
+	return mg.migrator.lock(ctx, cancel, c, ownerID)
+}
+
+func (mg mongoMigrator) unlock(c *container.Container, ownerID string) error {
+	return mg.migrator.unlock(c, ownerID)
+}
+
+func (mongoMigrator) name() string {
+	return "Mongo"
 }

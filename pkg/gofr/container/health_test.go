@@ -36,14 +36,12 @@ func TestContainer_Health(t *testing.T) {
 		expected := getExpectedData(tc.datasourceHealth, tc.appHealth, srv.URL)
 
 		expectedJSONdata, _ := json.Marshal(expected)
-
 		c, mocks := NewMockContainer(t)
 
 		registerMocks(mocks, tc.datasourceHealth)
 
 		c.appName = "test-app"
 		c.appVersion = "test"
-
 		c.Services = make(map[string]service.HTTP)
 		c.Services["test-service"] = service.NewHTTPService(srv.URL, logger, nil)
 
@@ -99,6 +97,14 @@ func registerMocks(mocks *Mocks, health string) {
 		},
 	}, nil)
 
+	mocks.Oracle.EXPECT().HealthCheck(gomock.Any()).Return(datasource.Health{
+		Status: health,
+		Details: map[string]any{
+			"host":  "localhost:1521",
+			"error": "oracle not connected",
+		},
+	}, nil)
+
 	mocks.KVStore.EXPECT().HealthCheck(gomock.Any()).Return(datasource.Health{
 		Status: health,
 		Details: map[string]any{
@@ -138,6 +144,14 @@ func registerMocks(mocks *Mocks, health string) {
 			"error": "elasticsearch not connected",
 		},
 	}, nil)
+
+	mocks.Couchbase.EXPECT().HealthCheck(gomock.Any()).Return(datasource.Health{
+		Status: health,
+		Details: map[string]any{
+			"host":  "localhost:9000",
+			"error": "couchbase not connected",
+		},
+	}, nil)
 }
 
 func getExpectedData(datasourceHealth, appHealth, srvURL string) map[string]any {
@@ -164,6 +178,12 @@ func getExpectedData(datasourceHealth, appHealth, srvURL string) map[string]any 
 			Status: datasourceHealth, Details: map[string]any{
 				"host":  "localhost:6379",
 				"error": "clickhouse not connected",
+			},
+		},
+		"oracle": datasource.Health{
+			Status: datasourceHealth, Details: map[string]any{
+				"host":  "localhost:1521",
+				"error": "oracle not connected",
 			},
 		},
 		"cassandra": datasource.Health{
@@ -198,6 +218,12 @@ func getExpectedData(datasourceHealth, appHealth, srvURL string) map[string]any 
 			Status: datasourceHealth, Details: map[string]any{
 				"host":  "localhost:9200",
 				"error": "elasticsearch not connected",
+			},
+		},
+		"couchbase": datasource.Health{
+			Status: datasourceHealth, Details: map[string]any{
+				"host":  "localhost:9000",
+				"error": "couchbase not connected",
 			},
 		},
 		"pubsub": datasource.Health{

@@ -27,6 +27,8 @@ const (
 	configLocation = "./configs"
 )
 
+var errStartupHookPanic = errors.New("startup hook panicked")
+
 // App is the main application in the GoFr framework.
 type App struct {
 	// Config can be used by applications to fetch custom configurations from environment or file.
@@ -56,10 +58,24 @@ func (a *App) runOnStartHooks(ctx context.Context) error {
 	// Set the context for cancellation support
 	gofrCtx.Context = ctx
 
-	for _, hook := range a.onStartHooks {
-		if err := hook(gofrCtx); err != nil {
-			a.Logger().Errorf("OnStart hook failed: %v", err)
-			return err
+	for i, hook := range a.onStartHooks {
+		// Add panic recovery to prevent entire application crash
+		var hookErr error
+
+		func() {
+			defer func() {
+				if r := recover(); r != nil {
+					a.Logger().Errorf("OnStart hook %d panicked: %v", i, r)
+					hookErr = fmt.Errorf("hook %d: %w: %v", i, errStartupHookPanic, r)
+				}
+			}()
+
+			hookErr = hook(gofrCtx)
+		}()
+
+		if hookErr != nil {
+			a.Logger().Errorf("OnStart hook failed: %v", hookErr)
+			return hookErr
 		}
 
 		// Check if context was canceled
@@ -101,7 +117,9 @@ func (a *App) Shutdown(ctx context.Context) error {
 }
 
 func isPortAvailable(port int) bool {
-	conn, err := net.DialTimeout("tcp", fmt.Sprintf(":%d", port), checkPortTimeout)
+	dialer := net.Dialer{Timeout: checkPortTimeout}
+
+	conn, err := dialer.DialContext(context.Background(), "tcp", fmt.Sprintf(":%d", port))
 	if err != nil {
 		return true
 	}
@@ -121,6 +139,14 @@ func (a *App) httpServerSetup() {
 			a.container.Error("invalid value of config REQUEST_TIMEOUT.")
 		}
 	}
+
+	// Register default routes - these are only added when HTTP server is actually starting
+	a.add(http.MethodGet, service.HealthPath, healthHandler)
+	a.add(http.MethodGet, service.AlivePath, liveHandler)
+	a.add(http.MethodGet, "/favicon.ico", faviconHandler)
+
+	// Add OpenAPI/Swagger routes if openapi.json exists
+	a.checkAndAddOpenAPIDocumentation()
 
 	for dirName, endpoint := range a.httpServer.staticFiles {
 		a.httpServer.router.AddStaticFiles(a.Logger(), endpoint, dirName)
@@ -191,6 +217,8 @@ func (a *App) AddHTTPService(serviceName, serviceAddress string, options ...serv
 	if _, ok := a.container.Services[serviceName]; ok {
 		a.container.Debugf("Service already registered Name: %v", serviceName)
 	}
+
+	options = append([]service.Options{service.WithAttributes(map[string]string{"name": serviceName})}, options...)
 
 	a.container.Services[serviceName] = service.NewHTTPService(serviceAddress, a.container.Logger, a.container.Metrics(), options...)
 }

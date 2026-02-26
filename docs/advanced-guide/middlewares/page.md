@@ -67,3 +67,52 @@ func main() {
 }
 ```
 
+## Rate Limiter Middleware in GoFr
+
+GoFr provides a built-in rate limiter middleware to protect your API from abuse and ensure fair resource distribution. 
+It uses a token bucket algorithm for smooth rate limiting with configurable burst capacity.
+
+### Features
+
+- **Token Bucket Algorithm**: Allows smooth rate limiting with configurable burst capacity
+- **Per-IP Rate Limiting**: Each client IP gets its own rate limit (configurable)
+- **Health Check Exemption**: `/.well-known/alive` and `/.well-known/health` endpoints are automatically exempt
+- **Prometheus Metrics**: Track rate limit violations via `app_http_rate_limit_exceeded_total` counter
+- **429 Status Code**: Returns standard HTTP 429 (Too Many Requests) when limit is exceeded
+
+### Configuration
+
+```go
+import (
+	"gofr.dev/pkg/gofr"
+	"gofr.dev/pkg/gofr/http/middleware"
+)
+
+func main() {
+	app := gofr.New()
+
+	// Configure rate limiter
+	rateLimiterConfig := middleware.RateLimiterConfig{
+		RequestsPerSecond: 5,    // Average requests per second
+		Burst:             10,   // Maximum burst size
+		PerIP:             true, // Enable per-IP limiting
+	}
+
+	// Add rate limiter middleware
+	app.UseMiddleware(middleware.RateLimiter(rateLimiterConfig, app.Metrics()))
+
+	app.GET("/api/resource", handler)
+	app.Run()
+}
+```
+
+### Parameters
+
+- `RequestsPerSecond`: Average number of requests allowed per second
+- `Burst`: Maximum number of requests that can be made in a burst (allows temporary spikes)
+- `PerIP`: Set to `true` for per-IP limiting (recommended) or `false` for global rate limit across all clients
+- `TrustedProxies`: *(Optional)* Set to `true` to trust `X-Forwarded-For` and `X-Real-IP` headers for IP extraction. Only enable when behind a trusted reverse proxy.
+
+> **Security Warning**: Only set `TrustedProxies: true` if your application is behind a trusted reverse proxy (nginx, ALB, etc.). 
+> Without a trusted proxy, clients can spoof headers to bypass rate limits.
+

@@ -1,14 +1,38 @@
 package migration
 
 import (
+	"context"
+	"errors"
 	"reflect"
+	"sort"
 	"time"
 
 	"github.com/gogo/protobuf/sortkeys"
+	"github.com/google/uuid"
 	goRedis "github.com/redis/go-redis/v9"
 
 	"gofr.dev/pkg/gofr/container"
 	gofrSql "gofr.dev/pkg/gofr/datasource/sql"
+)
+
+var (
+	errLockAcquisitionFailed = errors.New("failed to acquire migration lock")
+	errLockReleaseFailed     = errors.New("failed to release migration lock")
+)
+
+const (
+	// lockKey is the key used for distributed locking.
+	lockKey = "gofr_migrations_lock"
+
+	// Default values for configuration.
+	defaultRetry = 500 * time.Millisecond
+	// defaultLockTTL is the duration for which the migration lock is valid.
+	// It is kept at 15 seconds to provide a safety margin for network jitters or transient failures.
+	defaultLockTTL = 15 * time.Second
+	// defaultRefresh is the interval at which the migration lock is renewed.
+	// A 5-second interval allows for up to 2 failed refresh attempts before the 15-second TTL expires,
+	// ensuring the lock stays robust while still allowing fairly quick recovery if a process crashes.
+	defaultRefresh = 5 * time.Second
 )
 
 type MigrateFunc func(d Datasource) error
@@ -21,8 +45,9 @@ type transactionData struct {
 	StartTime       time.Time
 	MigrationNumber int64
 
-	SQLTx   *gofrSql.Tx
-	RedisTx goRedis.Pipeliner
+	SQLTx    *gofrSql.Tx
+	RedisTx  goRedis.Pipeliner
+	OracleTx container.OracleTx
 }
 
 func Run(migrationsMap map[int64]Migrate, c *container.Container) {
@@ -47,6 +72,7 @@ func Run(migrationsMap map[int64]Migrate, c *container.Container) {
 		return
 	}
 
+	// Create migration tables BEFORE acquiring locks (lock table must exist first)
 	err := mg.checkAndCreateMigrationTable(c)
 	if err != nil {
 		c.Fatalf("failed to create gofr_migration table, err: %v", err)
@@ -54,8 +80,59 @@ func Run(migrationsMap map[int64]Migrate, c *container.Container) {
 		return
 	}
 
-	lastMigration := mg.getLastMigration(c)
+	// Optimistic pre-check: only acquire locks if there MIGHT be new migrations
+	// This is a fast path to avoid lock contention when no migrations are needed
+	lastMigration, err := mg.getLastMigration(c)
+	if err != nil {
+		c.Fatalf("migration failed: could not verify migration state from datasources, err: %v", err)
 
+		return
+	}
+
+	if !hasNewMigrations(keys, lastMigration) {
+		c.Infof("no new migrations to run")
+
+		return
+	}
+
+	ownerID := uuid.New().String()
+	ctx, cancel := context.WithCancel(context.Background())
+
+	if err = mg.lock(ctx, cancel, c, ownerID); err != nil {
+		cancel()
+
+		if unlockErr := mg.unlock(c, ownerID); unlockErr != nil {
+			c.Errorf("failed to cleanup lock after acquisition failure: %v", unlockErr)
+		}
+
+		c.Fatalf("migration failed: could not acquire locks, err: %v", err)
+
+		return
+	}
+
+	defer func() {
+		cancel()
+
+		if err = mg.unlock(c, ownerID); err != nil {
+			c.Errorf("failed to unlock during cleanup: %v", err)
+		}
+	}()
+
+	runMigrations(ctx, c, mg, &ds, migrationsMap, keys, lastMigration)
+}
+
+func hasNewMigrations(keys []int64, lastMigration int64) bool {
+	for _, k := range keys {
+		if k > lastMigration {
+			return true
+		}
+	}
+
+	return false
+}
+
+func runMigrations(ctx context.Context, c *container.Container, mg migrator, ds *Datasource, migrationsMap map[int64]Migrate,
+	keys []int64, lastMigration int64) {
 	for _, currentMigration := range keys {
 		if currentMigration <= lastMigration {
 			c.Infof("skipping migration %v", currentMigration)
@@ -63,21 +140,54 @@ func Run(migrationsMap map[int64]Migrate, c *container.Container) {
 			continue
 		}
 
-		c.Logger.Infof("running migration %v", currentMigration)
+		// Check if lock refresh failed before starting the migration
+		select {
+		case <-ctx.Done():
+			c.Fatalf("migration %v aborted: lock refresh failed", currentMigration)
+
+			return
+		default:
+		}
+
+		c.Infof("running migration %v", currentMigration)
 
 		migrationInfo := mg.beginTransaction(c)
+
+		// Check if lock refresh failed after starting the transaction but before execution
+		select {
+		case <-ctx.Done():
+			mg.rollback(c, migrationInfo)
+			c.Fatalf("migration %v aborted: lock refresh failed", currentMigration)
+
+			return
+		default:
+		}
 
 		// Replacing the objects in datasource object only for those Datasources which support transactions.
 		ds.SQL = migrationInfo.SQLTx
 		ds.Redis = migrationInfo.RedisTx
 
-		migrationInfo.StartTime = time.Now()
+		if !isNil(migrationInfo.OracleTx) {
+			ds.Oracle = &oracleTransactionWrapper{tx: migrationInfo.OracleTx}
+		}
+
+		migrationInfo.StartTime = time.Now().UTC()
 		migrationInfo.MigrationNumber = currentMigration
 
-		err = migrationsMap[currentMigration].UP(ds)
-		if err != nil {
-			c.Logger.Errorf("failed to run migration : [%v], err: %v", currentMigration, err)
+		err := migrationsMap[currentMigration].UP(*ds)
 
+		// Check if lock refresh failed during migration execution
+		select {
+		case <-ctx.Done():
+			mg.rollback(c, migrationInfo)
+			c.Fatalf("migration %v aborted: lock refresh failed during execution", currentMigration)
+
+			return
+		default:
+		}
+
+		if err != nil {
+			c.Errorf("failed to run migration : [%v], err: %v", currentMigration, err)
 			mg.rollback(c, migrationInfo)
 
 			return
@@ -94,21 +204,16 @@ func Run(migrationsMap map[int64]Migrate, c *container.Container) {
 	}
 }
 
-func getKeys(migrationsMap map[int64]Migrate) (invalidKey, keys []int64) {
-	invalidKey = make([]int64, 0, len(migrationsMap))
-	keys = make([]int64, 0, len(migrationsMap))
-
-	for k, v := range migrationsMap {
-		if v.UP == nil {
-			invalidKey = append(invalidKey, k)
-
-			continue
+func getKeys(migrationsMap map[int64]Migrate) (invalidKeys, validKeys []int64) {
+	for k := range migrationsMap {
+		if migrationsMap[k].UP != nil {
+			validKeys = append(validKeys, k)
+		} else {
+			invalidKeys = append(invalidKeys, k)
 		}
-
-		keys = append(keys, k)
 	}
 
-	return invalidKey, keys
+	return invalidKeys, validKeys
 }
 
 func getMigrator(c *container.Container) (Datasource, migrator, bool) {
@@ -131,19 +236,46 @@ type datasourceInitializer struct {
 }
 
 func initializeDatasources(c *container.Container, ds *Datasource, mg migrator) (migrator, bool) {
-	var initialized bool
+	initializers := getInitializers(c, ds)
 
-	initializers := []datasourceInitializer{
+	var active []datasourceInitializer
+
+	for _, init := range initializers {
+		if init.condition() {
+			active = append(active, init)
+		}
+	}
+
+	if len(active) == 0 {
+		return nil, false
+	}
+
+	sort.Slice(active, func(i, j int) bool {
+		return active[i].logIdentifier < active[j].logIdentifier
+	})
+
+	// Build the chain starting from the base Datasource
+	for i := len(active) - 1; i >= 0; i-- {
+		active[i].setDS()
+		mg = active[i].apply(mg)
+		c.Debugf("initialized data source for %s", active[i].logIdentifier)
+	}
+
+	return mg, true
+}
+
+func getInitializers(c *container.Container, ds *Datasource) []datasourceInitializer {
+	return []datasourceInitializer{
 		{
 			condition:     func() bool { return !isNil(c.SQL) },
 			setDS:         func() { ds.SQL = c.SQL },
-			apply:         func(m migrator) migrator { return (&sqlDS{ds.SQL}).apply(m) },
+			apply:         func(m migrator) migrator { return (&sqlDS{c.SQL}).apply(m) },
 			logIdentifier: "SQL",
 		},
 		{
 			condition:     func() bool { return !isNil(c.Redis) },
 			setDS:         func() { ds.Redis = c.Redis },
-			apply:         func(m migrator) migrator { return redisDS{ds.Redis}.apply(m) },
+			apply:         func(m migrator) migrator { return redisDS{c.Redis}.apply(m) },
 			logIdentifier: "Redis",
 		},
 		{
@@ -155,11 +287,17 @@ func initializeDatasources(c *container.Container, ds *Datasource, mg migrator) 
 		{
 			condition:     func() bool { return !isNil(c.Clickhouse) },
 			setDS:         func() { ds.Clickhouse = c.Clickhouse },
-			apply:         func(m migrator) migrator { return clickHouseDS{ds.Clickhouse}.apply(m) },
+			apply:         func(m migrator) migrator { return clickHouseDS{c.Clickhouse}.apply(m) },
 			logIdentifier: "Clickhouse",
 		},
 		{
-			condition:     func() bool { return c.PubSub != nil },
+			condition:     func() bool { return !isNil(c.Oracle) },
+			setDS:         func() { ds.Oracle = c.Oracle },
+			apply:         func(m migrator) migrator { return oracleDS{c.Oracle}.apply(m) },
+			logIdentifier: "Oracle",
+		},
+		{
+			condition:     func() bool { return !isNil(c.PubSub) },
 			setDS:         func() { ds.PubSub = c.PubSub },
 			apply:         func(m migrator) migrator { return pubsubDS{c.PubSub}.apply(m) },
 			logIdentifier: "PubSub",
@@ -197,7 +335,7 @@ func initializeDatasources(c *container.Container, ds *Datasource, mg migrator) 
 		{
 			condition:     func() bool { return !isNil(c.OpenTSDB) },
 			setDS:         func() { ds.OpenTSDB = c.OpenTSDB },
-			apply:         func(m migrator) migrator { return openTSDBDS{c.OpenTSDB, "gofr_migrations.json"}.apply(m) },
+			apply:         func(m migrator) migrator { return (&openTSDBMigrator{filePath: "gofr_migrations.json", migrator: m}) },
 			logIdentifier: "OpenTSDB",
 		},
 		{
@@ -207,26 +345,19 @@ func initializeDatasources(c *container.Container, ds *Datasource, mg migrator) 
 			logIdentifier: "ScyllaDB",
 		},
 	}
-
-	for _, init := range initializers {
-		if !init.condition() {
-			continue
-		}
-
-		init.setDS()
-		mg = init.apply(mg)
-		initialized = true
-
-		c.Debugf("initialized data source for %s", init.logIdentifier)
-	}
-
-	return mg, initialized
 }
 
 func isNil(i any) bool {
-	// Get the value of the interface
-	val := reflect.ValueOf(i)
+	if i == nil {
+		return true
+	}
 
-	// If the interface is not assigned or is nil, return true
-	return !val.IsValid() || val.IsNil()
+	val := reflect.ValueOf(i)
+	k := val.Kind()
+
+	if k == reflect.Ptr || k == reflect.Interface || k == reflect.Slice || k == reflect.Map || k == reflect.Chan || k == reflect.Func {
+		return val.IsNil()
+	}
+
+	return false
 }

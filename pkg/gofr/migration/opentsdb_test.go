@@ -706,7 +706,7 @@ func Test_OpenTSDBGetLastMigration(t *testing.T) {
 				err = os.WriteFile(filePath, []byte("invalid json"), 0600)
 				require.NoError(t, err)
 			},
-			expectedResult: 0,
+			expectedResult: -1,
 		},
 	}
 
@@ -715,8 +715,14 @@ func Test_OpenTSDBGetLastMigration(t *testing.T) {
 			os.RemoveAll(filepath.Dir(filePath))
 			tc.setupFunc()
 
-			result := migratorWithOpenTSDB.getLastMigration(mockContainer)
+			result, err := migratorWithOpenTSDB.getLastMigration(mockContainer)
 			assert.Equal(t, tc.expectedResult, result, "TEST[%v] %v Failed!", i, tc.desc)
+
+			if tc.expectedResult == -1 {
+				assert.Error(t, err, "TEST[%v] %v Failed! Expected error", i, tc.desc)
+			} else {
+				assert.NoError(t, err, "TEST[%v] %v Failed! Unexpected error", i, tc.desc)
+			}
 		})
 	}
 }
@@ -748,6 +754,7 @@ func Test_OpenTSDBCommitMigration_ConcurrentAccess(t *testing.T) {
 				StartTime:       time.Now().Add(-time.Duration(migrationNum) * time.Millisecond),
 				MigrationNumber: int64(migrationNum),
 			}
+
 			err := migratorWithOpenTSDB.commitMigration(mockContainer, txData)
 			errCh <- err
 		}(i)
@@ -808,6 +815,7 @@ func Test_OpenTSDBCommitMigration_ConcurrentDuplicates(t *testing.T) {
 				StartTime:       time.Now(),
 				MigrationNumber: migrationNumber,
 			}
+
 			err := migratorWithOpenTSDB.commitMigration(mockContainer, txData)
 			errCh <- err
 		}()
@@ -867,6 +875,7 @@ func Test_OpenTSDBCommitMigration_JSONFormatValidation(t *testing.T) {
 
 	// Should be properly indented JSON
 	var rawData []tsdbMigrationRecord
+
 	err = json.Unmarshal(content, &rawData)
 	require.NoError(t, err)
 

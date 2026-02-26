@@ -5,8 +5,10 @@ export const navigation = [
         links: [
             {
                 title: 'Hello Server',
-                href: '/docs/quick-start/introduction' ,
-                desc: "Getting started with how to write a server using GoFR with basic examples and explanations. Boost your productivity with efficient coding practices and learn to build scalable applications quickly."},
+                href: '/docs/quick-start/introduction',
+                desc: "Getting started with how to write a server using GoFR with basic examples and explanations. Boost your productivity with efficient coding practices and learn to build scalable applications quickly."
+            },
+
             {
                 title: 'Configuration',
                 href: '/docs/quick-start/configuration',
@@ -78,9 +80,14 @@ export const navigation = [
                 desc: "Get familiar with making HTTP requests and handling responses within your GoFr application to facilitate seamless communication."
             },
             {
-                title: 'HTTP Authentication',
-                href: '/docs/advanced-guide/http-authentication',
-                desc: "Implement various HTTP authentication methods to secure your GoFR application and protect sensitive endpoints."
+                title: 'Authentication',
+                href: '/docs/advanced-guide/authentication',
+                desc: "Implement various authentication methods to secure your GoFR application and protect sensitive endpoints across HTTP and gRPC."
+            },
+            {
+                title: 'Role-Based Access Control (RBAC)',
+                href: '/docs/advanced-guide/rbac',
+                desc: "Implement comprehensive Role-Based Access Control with support for roles, permissions, hierarchy, JWT integration, and fine-grained permission-based authorization."
             },
             {
                 title: 'Circuit Breaker Support',
@@ -103,6 +110,11 @@ export const navigation = [
                 desc: "Step-by-step guide on writing a gRPC server in GoFr to facilitate efficient communication between services."
             },
             {
+                title: 'gRPC Streaming',
+                href: '/docs/advanced-guide/grpc-streaming',
+                desc: "Learn how to implement server-side, client-side, and bidirectional streaming in GoFr with built-in observability and error handling."
+            },
+            {
                 title: 'Using Pub/Sub',
                 href: '/docs/advanced-guide/using-publisher-subscriber',
                 desc: "Discover how to GoFr seamlessly allows to integrate different Pub/Sub systems in your application for effective messaging and event-driven architectures."
@@ -110,7 +122,7 @@ export const navigation = [
             {
                 title: 'Key Value Store',
                 href: '/docs/advanced-guide/key-value-store',
-                desc: "Explore how to implement and manage a key-value store in your GoFr application for fast and efficient data retrieval."
+                desc: "Explore how to implement and manage a key-value store in your GoFr application for fast and efficient data retrieval. Supports BadgerDB, NATS-KV, and DynamoDB."
             },
             {
                 title: 'Dealing with SQL',
@@ -151,7 +163,12 @@ export const navigation = [
                 title: 'Profiling in GoFr Applications',
                 href: '/docs/advanced-guide/debugging',
                 desc: "Discover GoFr auto-enables pprof profiling by leveraging its built-in configurations."
-            }
+            },
+            {
+                title: 'Building CLI Applications',
+                href: '/docs/advanced-guide/building-cli-applications',
+                desc: "Learn to build powerful command-line interface (CLI) applications using GoFr's app.NewCMD(), offering a robust framework for command-line tools."
+            },
         ],
     },
     {
@@ -183,6 +200,11 @@ export const navigation = [
                 desc: "Learn how to connect to and interact with CockroachDB in GoFr."
             },
             {
+                title: "Couchbase",
+                href: "/docs/datasources/couchbase",
+                desc: "Learn how to connect to and interact with couchbase database in GoFr."
+            },
+            {
                 title: "DGraph",
                 href: "/docs/datasources/dgraph",
                 desc: "Learn how to connect to and interact with dgraph database in GoFr."
@@ -196,6 +218,11 @@ export const navigation = [
                 title: "OpenTSDB",
                 href: "/docs/datasources/opentsdb",
                 desc: "Learn how to connect to and interact with opentsdb database in GoFr."
+            },
+            {
+                title: "OracleDB",
+                href: "/docs/datasources/oracle",
+                desc: "Learn how to connect to and interact with oracle database in GoFr."
             },
             {
                 title: "ScyllaDB",
@@ -217,6 +244,11 @@ export const navigation = [
                 href: "/docs/datasources/elasticsearch",
                 desc: "Learn how to connect to and interact with elasticsearch in GoFr."
             },
+            {
+                title: "InfluxDB",
+                href: "/docs/datasources/influxdb",
+                desc: "Learn how to connect to and interact with influxdb in GoFr."
+            },
         ],
     },
     {
@@ -237,6 +269,7 @@ export const navigation = [
                 href: '/docs/references/testing',
                 desc: "GoFr provides a centralized collection of mocks to facilitate writing effective unit tests. Explore testing strategies and tools for GoFr applications, ensuring the code is robust, reliable, and maintainable."
             },
+
             {
                 title: 'GoFr CLI',
                 href: '/docs/references/gofrcli',

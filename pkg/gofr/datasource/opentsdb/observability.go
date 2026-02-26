@@ -35,19 +35,47 @@ func (ql *QueryLog) PrettyPrint(writer io.Writer) {
 		clean(&ql.Operation), "OPENTSDB", ql.Duration, clean(ql.Status), clean(ql.Message))
 }
 
-func sendOperationStats(logger Logger, start time.Time, operation string, status, message *string, span trace.Span) {
-	duration := time.Since(start).Microseconds()
+func sendOperationStats(
+	ctx context.Context,
+	logger Logger,
+	metrics Metrics,
+	host string,
+	start time.Time,
+	operation string,
+	status, message *string,
+	span trace.Span,
+) {
+	duration := time.Since(start)
 
 	logger.Debug(&QueryLog{
 		Operation: operation,
 		Status:    status,
-		Duration:  duration,
+		Duration:  duration.Microseconds(),
 		Message:   message,
 	})
 
 	if span != nil {
-		span.SetAttributes(attribute.Int64(fmt.Sprintf("opentsdb.%v.duration", operation), duration))
+		span.SetAttributes(attribute.Int64(fmt.Sprintf("opentsdb.%v.duration", operation), duration.Microseconds()))
 		span.End()
+	}
+
+	if metrics != nil {
+		statusLabel := ""
+		if status != nil {
+			statusLabel = *status
+		}
+
+		labels := []string{"operation", operation}
+		if statusLabel != "" {
+			labels = append(labels, "status", statusLabel)
+		}
+
+		if host != "" {
+			labels = append(labels, "host", host)
+		}
+
+		metrics.RecordHistogram(ctx, opentsdbOperationDurationName, float64(duration.Milliseconds()), labels...)
+		metrics.IncrementCounter(ctx, opentsdbOperationTotalName, labels...)
 	}
 }
 

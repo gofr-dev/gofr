@@ -46,7 +46,7 @@ func TestAddAuthorizationHeader_BasicAuth(t *testing.T) {
 			username: "username",
 			password: "cGFzc3dvcmQ=",
 			headers:  nil,
-			response: map[string]string{AuthHeader: "basic dXNlcm5hbWU6cGFzc3dvcmQ="},
+			response: map[string]string{AuthHeader: "Basic dXNlcm5hbWU6cGFzc3dvcmQ="},
 		},
 		{
 			username: "username",
@@ -59,7 +59,7 @@ func TestAddAuthorizationHeader_BasicAuth(t *testing.T) {
 			username: "username",
 			password: "cGFzc3dvcmQ=",
 			headers:  map[string]string{"header-key": "existing-value"},
-			response: map[string]string{"header-key": "existing-value", AuthHeader: "basic dXNlcm5hbWU6cGFzc3dvcmQ="},
+			response: map[string]string{"header-key": "existing-value", AuthHeader: "Basic dXNlcm5hbWU6cGFzc3dvcmQ="},
 			err:      nil,
 		},
 	}
@@ -83,7 +83,7 @@ func TestAddAuthorizationHeader_BasicAuth(t *testing.T) {
 func setupBasicAuthHTTPServer(t *testing.T, config *BasicAuthConfig) *httptest.Server {
 	t.Helper()
 
-	validHeader := "basic " + base64.StdEncoding.EncodeToString([]byte(config.UserName+":"+config.Password))
+	validHeader := "Basic " + base64.StdEncoding.EncodeToString([]byte(config.UserName+":"+config.Password))
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		statusCode := http.StatusOK
 		if r.Header.Get(AuthHeader) != validHeader {

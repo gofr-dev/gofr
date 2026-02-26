@@ -46,7 +46,7 @@ func (c *BasicAuthConfig) addAuthorizationHeader(_ context.Context, headers map[
 	}
 
 	encodedAuth := base64.StdEncoding.EncodeToString([]byte(c.UserName + ":" + c.Password))
-	headers[AuthHeader] = "basic " + encodedAuth
+	headers[AuthHeader] = "Basic " + encodedAuth
 
 	return headers, nil
 }

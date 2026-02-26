@@ -8,7 +8,7 @@ Supported data sources:
   - Key-value storages (Redis, BadgerDB)
   - Pub/Sub systems (Azure Event Hub, Google as backend, Kafka, MQTT)
   - Search engines (Solr)
-  - File systems (FTP, SFTP, S3)
+  - File systems (FTP, SFTP, S3, GCS, Azure File Storage)
 */
 package container
 
@@ -38,6 +38,11 @@ import (
 	"gofr.dev/pkg/gofr/websocket"
 )
 
+const (
+	redisPubSubModeStreams = "streams"
+	redisPubSubModePubSub  = "pubsub"
+)
+
 // Container is a collection of all common application level concerns. Things like Logger, Connection Pool for Redis
 // etc. which is shared across is placed here.
 type Container struct {
@@ -65,6 +70,9 @@ type Container struct {
 	SurrealDB     SurrealDB
 	ArangoDB      ArangoDB
 	Elasticsearch Elasticsearch
+	Oracle        OracleDB
+	Couchbase     Couchbase
+	InfluxDB      InfluxDB
 
 	KVStore KVStore
 
@@ -113,6 +121,8 @@ func (c *Container) Create(conf config.Config) {
 
 	c.metricsManager = metrics.NewMetricsManager(exporters.Prometheus(c.GetAppName(), c.GetAppVersion()), c.Logger)
 
+	exporters.SendFrameworkStartupTelemetry(c.GetAppName(), c.GetAppVersion())
+
 	// Register framework metrics
 	c.registerFrameworkMetrics()
 
@@ -124,51 +134,24 @@ func (c *Container) Create(conf config.Config) {
 
 	c.SQL = sql.NewSQL(conf, c.Logger, c.metricsManager)
 
-	switch strings.ToUpper(conf.Get("PUBSUB_BACKEND")) {
-	case "KAFKA":
-		if conf.Get("PUBSUB_BROKER") != "" {
-			partition, _ := strconv.Atoi(conf.GetOrDefault("PARTITION_SIZE", "0"))
-			offSet, _ := strconv.Atoi(conf.GetOrDefault("PUBSUB_OFFSET", "-1"))
-			batchSize, _ := strconv.Atoi(conf.GetOrDefault("KAFKA_BATCH_SIZE", strconv.Itoa(kafka.DefaultBatchSize)))
-			batchBytes, _ := strconv.Atoi(conf.GetOrDefault("KAFKA_BATCH_BYTES", strconv.Itoa(kafka.DefaultBatchBytes)))
-			batchTimeout, _ := strconv.Atoi(conf.GetOrDefault("KAFKA_BATCH_TIMEOUT", strconv.Itoa(kafka.DefaultBatchTimeout)))
+	c.createPubSub(conf)
 
-			tlsConf := kafka.TLSConfig{
-				CertFile:           conf.Get("KAFKA_TLS_CERT_FILE"),
-				KeyFile:            conf.Get("KAFKA_TLS_KEY_FILE"),
-				CACertFile:         conf.Get("KAFKA_TLS_CA_CERT_FILE"),
-				InsecureSkipVerify: conf.Get("KAFKA_TLS_INSECURE_SKIP_VERIFY") == "true",
-			}
-
-			pubsubBrokers := strings.Split(conf.Get("PUBSUB_BROKER"), ",")
-
-			c.PubSub = kafka.New(&kafka.Config{
-				Brokers:          pubsubBrokers,
-				Partition:        partition,
-				ConsumerGroupID:  conf.Get("CONSUMER_ID"),
-				OffSet:           offSet,
-				BatchSize:        batchSize,
-				BatchBytes:       batchBytes,
-				BatchTimeout:     batchTimeout,
-				SecurityProtocol: conf.Get("KAFKA_SECURITY_PROTOCOL"),
-				SASLMechanism:    conf.Get("KAFKA_SASL_MECHANISM"),
-				SASLUser:         conf.Get("KAFKA_SASL_USERNAME"),
-				SASLPassword:     conf.Get("KAFKA_SASL_PASSWORD"),
-				TLS:              tlsConf,
-			}, c.Logger, c.metricsManager)
-		}
-	case "GOOGLE":
-		c.PubSub = google.New(google.Config{
-			ProjectID:        conf.Get("GOOGLE_PROJECT_ID"),
-			SubscriptionName: conf.Get("GOOGLE_SUBSCRIPTION_NAME"),
-		}, c.Logger, c.metricsManager)
-	case "MQTT":
-		c.PubSub = c.createMqttPubSub(conf)
-	}
-
-	c.File = file.New(c.Logger)
+	c.File = file.NewLocalFileSystem(c.Logger)
 
 	c.WSManager = websocket.New()
+}
+
+func (c *Container) createPubSub(conf config.Config) {
+	switch strings.ToUpper(conf.Get("PUBSUB_BACKEND")) {
+	case "KAFKA":
+		c.createKafkaPubSub(conf)
+	case "GOOGLE":
+		c.createGooglePubSub(conf)
+	case "MQTT":
+		c.PubSub = c.createMqttPubSub(conf)
+	case "REDIS":
+		c.createRedisPubSub(conf)
+	}
 }
 
 func (c *Container) Close() error {
@@ -196,7 +179,10 @@ func (c *Container) Close() error {
 func (c *Container) createMqttPubSub(conf config.Config) pubsub.Client {
 	var qos byte
 
-	port, _ := strconv.Atoi(conf.Get("MQTT_PORT"))
+	port, err := strconv.Atoi(conf.GetOrDefault("MQTT_PORT", "0"))
+	if err != nil {
+		c.Logger.Error("Invalid value for MQTT_PORT, using default: 0")
+	}
 	order, _ := strconv.ParseBool(conf.GetOrDefault("MQTT_MESSAGE_ORDER", "false"))
 
 	retrieveRetained, _ := strconv.ParseBool(conf.GetOrDefault("MQTT_RETRIEVE_RETAINED", "false"))
@@ -257,15 +243,17 @@ func (c *Container) registerFrameworkMetrics() {
 		httpBuckets := []float64{.001, .003, .005, .01, .02, .03, .05, .1, .2, .3, .5, .75, 1, 2, 3, 5, 10, 30}
 		c.Metrics().NewHistogram("app_http_response", "Response time of HTTP requests in seconds.", httpBuckets...)
 		c.Metrics().NewHistogram("app_http_service_response", "Response time of HTTP service requests in seconds.", httpBuckets...)
+		c.Metrics().NewCounter("app_http_retry_count", "Total number of retry events")
+		c.Metrics().NewGauge("app_http_circuit_breaker_state", "Current state of the circuit breaker (0 for Closed, 1 for Open)")
 	}
 
 	{ // Redis metrics
-		redisBuckets := []float64{.05, .075, .1, .125, .15, .2, .3, .5, .75, 1, 1.25, 1.5, 2, 2.5, 3}
+		redisBuckets := getDefaultDatasourceBuckets()
 		c.Metrics().NewHistogram("app_redis_stats", "Response time of Redis commands in milliseconds.", redisBuckets...)
 	}
 
 	{ // SQL metrics
-		sqlBuckets := []float64{.05, .075, .1, .125, .15, .2, .3, .5, .75, 1, 2, 3, 4, 5, 7.5, 10}
+		sqlBuckets := getDefaultDatasourceBuckets()
 		c.Metrics().NewHistogram("app_sql_stats", "Response time of SQL queries in milliseconds.", sqlBuckets...)
 		c.Metrics().NewGauge("app_sql_open_connections", "Number of open SQL connections.")
 		c.Metrics().NewGauge("app_sql_inUse_connections", "Number of inUse SQL connections.")
@@ -296,12 +284,21 @@ func (c *Container) GetSubscriber() pubsub.Subscriber {
 
 // GetConnectionFromContext retrieves a WebSocket connection from the context using the Manager.
 func (c *Container) GetConnectionFromContext(ctx context.Context) *websocket.Connection {
-	connID, ok := ctx.Value(websocket.WSConnectionKey).(string)
-	if !ok {
+	if c.WSManager == nil {
 		return nil
 	}
 
-	return c.WSManager.GetWebsocketConnection(connID)
+	// First check if connection is directly stored in context
+	if conn, ok := ctx.Value(websocket.WSConnectionKey).(*websocket.Connection); ok {
+		return conn
+	}
+
+	// Fallback to connection ID lookup
+	if connID, ok := ctx.Value(websocket.WSConnectionKey).(string); ok {
+		return c.WSManager.GetWebsocketConnection(connID)
+	}
+
+	return nil
 }
 
 // GetWSConnectionByServiceName retrieves a WebSocket connection by its service name.
@@ -317,4 +314,139 @@ func (c *Container) AddConnection(connID string, conn *websocket.Connection) {
 // RemoveConnection removes a WebSocket connection from the Manager.
 func (c *Container) RemoveConnection(connID string) {
 	c.WSManager.CloseConnection(connID)
+}
+
+// getDefaultDatasourceBuckets returns the standard histogram buckets for all datasource operations in milliseconds.
+// Covers 0-30s range to align with typical request timeout boundaries and provide consistent observability
+// across SQL, Redis, MongoDB, Cassandra, and other datasources.
+func getDefaultDatasourceBuckets() []float64 {
+	return []float64{
+		.05, .075, .1, .125, .15, .2, .3, .5, .75, 1, 2, 3, 5, 7.5, 10, // 0-10ms: fast operations
+		25, 50, 100, 250, 500, 1000, 5000, 10000, 30000, // 10ms-30s: slower operations
+	}
+}
+
+func (c *Container) createKafkaPubSub(conf config.Config) {
+	if conf.Get("PUBSUB_BROKER") == "" {
+		return
+	}
+
+	partition, err := strconv.Atoi(conf.GetOrDefault("PARTITION_SIZE", "0"))
+	if err != nil {
+		c.Logger.Error("Invalid value for PARTITION_SIZE, using default: 0")
+	}
+
+	// PUBSUB_OFFSET determines the starting position for message consumption in Kafka.
+	// This allows control over whether to read historical messages or only new ones:
+	// - Default value -1: Start from the latest offset (only consume new messages after consumer starts)
+	// - Value 0: Start from the earliest offset (read all historical messages from the beginning)
+	// - Positive value: Start from a specific offset position (useful for resuming from a known point)
+	// This is particularly important for scenarios like message replay, recovery from failures,
+	// or when you only want to process messages that arrive after the consumer is initialized.
+	offSet, err := strconv.Atoi(conf.GetOrDefault("PUBSUB_OFFSET", "-1"))
+	if err != nil {
+		c.Logger.Error("Invalid value for PUBSUB_OFFSET, using default: -1")
+	}
+
+	batchSize, err := strconv.Atoi(conf.GetOrDefault("KAFKA_BATCH_SIZE", strconv.Itoa(kafka.DefaultBatchSize)))
+	if err != nil {
+		c.Logger.Errorf("Invalid value for KAFKA_BATCH_SIZE, using default: %d", kafka.DefaultBatchSize)
+	}
+
+	batchBytes, err := strconv.Atoi(conf.GetOrDefault("KAFKA_BATCH_BYTES", strconv.Itoa(kafka.DefaultBatchBytes)))
+	if err != nil {
+		c.Logger.Errorf("Invalid value for KAFKA_BATCH_BYTES, using default: %d", kafka.DefaultBatchBytes)
+	}
+
+	batchTimeout, err := strconv.Atoi(conf.GetOrDefault("KAFKA_BATCH_TIMEOUT", strconv.Itoa(kafka.DefaultBatchTimeout)))
+	if err != nil {
+		c.Logger.Errorf("Invalid value for KAFKA_BATCH_TIMEOUT, using default: %d", kafka.DefaultBatchTimeout)
+	}
+
+	tlsConf := kafka.TLSConfig{
+		CertFile:           conf.Get("KAFKA_TLS_CERT_FILE"),
+		KeyFile:            conf.Get("KAFKA_TLS_KEY_FILE"),
+		CACertFile:         conf.Get("KAFKA_TLS_CA_CERT_FILE"),
+		InsecureSkipVerify: conf.Get("KAFKA_TLS_INSECURE_SKIP_VERIFY") == "true",
+	}
+
+	pubsubBrokers := strings.Split(conf.Get("PUBSUB_BROKER"), ",")
+
+	c.PubSub = kafka.New(&kafka.Config{
+		Brokers:          pubsubBrokers,
+		Partition:        partition,
+		ConsumerGroupID:  conf.Get("CONSUMER_ID"),
+		OffSet:           offSet,
+		BatchSize:        batchSize,
+		BatchBytes:       batchBytes,
+		BatchTimeout:     batchTimeout,
+		SecurityProtocol: conf.Get("KAFKA_SECURITY_PROTOCOL"),
+		SASLMechanism:    conf.Get("KAFKA_SASL_MECHANISM"),
+		SASLUser:         conf.Get("KAFKA_SASL_USERNAME"),
+		SASLPassword:     conf.Get("KAFKA_SASL_PASSWORD"),
+		TLS:              tlsConf,
+	}, c.Logger, c.metricsManager)
+}
+
+func (c *Container) createGooglePubSub(conf config.Config) {
+	c.PubSub = google.New(google.Config{
+		ProjectID:        conf.Get("GOOGLE_PROJECT_ID"),
+		SubscriptionName: conf.Get("GOOGLE_SUBSCRIPTION_NAME"),
+	}, c.Logger, c.metricsManager)
+}
+
+func (c *Container) createRedisPubSub(conf config.Config) {
+	c.warnIfRedisPubSubSharesRedisDB(conf)
+
+	// Redis PubSub is initialized via NewPubSub constructor, aligning with other PubSub implementations.
+	c.PubSub = redis.NewPubSub(conf, c.Logger, c.metricsManager)
+}
+
+func (c *Container) warnIfRedisPubSubSharesRedisDB(conf config.Config) {
+	// Warn (do not fail): if Redis PubSub (streams mode) shares the same Redis logical DB as the primary Redis datasource,
+	// GoFr migrations can later fail due to `gofr_migrations` key-type collision (HASH vs STREAM).
+	if isNil(c.Redis) || effectiveRedisPubSubMode(conf) != redisPubSubModeStreams {
+		return
+	}
+
+	redisDBStr := conf.Get("REDIS_DB")
+	if redisDBStr == "" {
+		redisDBStr = "0"
+	}
+
+	redisDB, err := strconv.Atoi(redisDBStr)
+	if err != nil {
+		redisDB = 0
+	}
+
+	pubsubDBStr := conf.Get("REDIS_PUBSUB_DB")
+	if pubsubDBStr == "" {
+		// No warning needed - defaults to DB 15 which is safe and different from typical REDIS_DB (0)
+		return
+	}
+
+	// Only warn if user explicitly set it to the same as REDIS_DB
+	pubsubDB, err := strconv.Atoi(pubsubDBStr)
+	if err != nil {
+		// Invalid value - will use default DB 15, no warning needed
+		return
+	}
+
+	if pubsubDB == redisDB {
+		c.Logger.Warnf(
+			"REDIS_PUBSUB_DB (%d) is the same as REDIS_DB (%d); migrations may fail (gofr_migrations HASH/STREAM). "+
+				"Set REDIS_PUBSUB_DB to a different DB.",
+			pubsubDB, redisDB,
+		)
+	}
+}
+
+func effectiveRedisPubSubMode(conf config.Config) string {
+	mode := strings.ToLower(conf.Get("REDIS_PUBSUB_MODE"))
+	if mode == redisPubSubModePubSub {
+		return redisPubSubModePubSub
+	}
+
+	// Default and fallback is streams.
+	return redisPubSubModeStreams
 }

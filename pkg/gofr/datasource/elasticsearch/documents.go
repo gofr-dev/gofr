@@ -124,7 +124,6 @@ func (c *Client) UpdateDocument(ctx context.Context, index, id string, update ma
 	}
 
 	res, err := req.Do(tracedCtx, c.client)
-
 	if err != nil {
 		return fmt.Errorf("%w: updating document: %w", errOperation, err)
 	}
@@ -161,7 +160,6 @@ func (c *Client) DeleteDocument(ctx context.Context, index, id string) error {
 	}
 
 	res, err := req.Do(tracedCtx, c.client)
-
 	if err != nil {
 		return fmt.Errorf("%w: deleting document: %w", errOperation, err)
 	}

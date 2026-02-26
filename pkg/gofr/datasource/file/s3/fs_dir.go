@@ -54,11 +54,11 @@ func (f *FileSystem) Mkdir(name string, _ os.FileMode) error {
 
 	for _, dir := range directories {
 		currentdir = path.Join(currentdir, dir)
+
 		_, err := f.conn.PutObject(context.TODO(), &s3.PutObjectInput{
 			Bucket: aws.String(f.config.BucketName),
 			Key:    aws.String(currentdir + "/"),
 		})
-
 		if err != nil {
 			msg = fmt.Sprintf("failed to create directory %q on s3: %v", currentdir, err)
 			return err
@@ -108,7 +108,6 @@ func (f *FileSystem) RemoveAll(name string) error {
 		Bucket: aws.String(f.config.BucketName),
 		Prefix: aws.String(name + "/"),
 	})
-
 	if err != nil {
 		msg = fmt.Sprintf("Error retrieving objects: %v", err)
 		return err
@@ -128,7 +127,6 @@ func (f *FileSystem) RemoveAll(name string) error {
 			Objects: objects,
 		},
 	})
-
 	if err != nil {
 		f.logger.Errorf("Error while deleting directory: %v", err)
 		return err
@@ -187,7 +185,6 @@ func (f *FileSystem) ReadDir(name string) ([]file.FileInfo, error) {
 		Bucket: aws.String(f.config.BucketName),
 		Prefix: aws.String(filePath),
 	})
-
 	if err != nil {
 		msg = fmt.Sprintf("Error retrieving objects: %v", err)
 		return nil, err
@@ -265,7 +262,6 @@ func (f *FileSystem) renameDirectory(st, msg *string, oldPath, newPath string) e
 		Bucket: aws.String(f.config.BucketName),
 		Prefix: aws.String(oldPath + "/"),
 	})
-
 	if err != nil {
 		f.logger.Errorf("Error while listing objects: %v", err)
 		return err
@@ -274,6 +270,7 @@ func (f *FileSystem) renameDirectory(st, msg *string, oldPath, newPath string) e
 	// copying objects to new path
 	for _, obj := range entries.Contents {
 		newFilePath := strings.Replace(*obj.Key, oldPath, newPath, 1)
+
 		_, err = f.conn.CopyObject(context.TODO(), &s3.CopyObjectInput{
 			Bucket:             aws.String(f.config.BucketName),
 			CopySource:         aws.String(f.config.BucketName + "/" + *obj.Key),
@@ -281,7 +278,6 @@ func (f *FileSystem) renameDirectory(st, msg *string, oldPath, newPath string) e
 			ContentType:        aws.String(mime.TypeByExtension(path.Ext(newPath))),
 			ContentDisposition: aws.String("attachment"),
 		})
-
 		if err != nil {
 			*msg = fmt.Sprintf("Failed to copy objects to directory %q", newPath)
 			return err
@@ -339,7 +335,6 @@ func (f *FileSystem) Stat(name string) (file.FileInfo, error) {
 		Bucket: aws.String(f.config.BucketName),
 		Prefix: aws.String(name),
 	})
-
 	if err != nil {
 		f.logger.Errorf("Error returning file info: %v", err)
 		return nil, err

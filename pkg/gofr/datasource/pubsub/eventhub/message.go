@@ -14,8 +14,15 @@ type Message struct {
 
 func (a *Message) Commit() {
 	// Update the checkpoint with the latest event received
-	err := a.processor.UpdateCheckpoint(context.Background(), a.event, nil)
-	if err != nil {
-		a.logger.Errorf("failed to acknowledge event with eventID %v", a.event.MessageID)
+	if a.processor != nil {
+		err := a.processor.UpdateCheckpoint(context.Background(), a.event, nil)
+		if err != nil {
+			a.logger.Errorf("failed to acknowledge event with eventID %v: %v", a.event.MessageID, err)
+			return
+		}
+
+		a.logger.Debugf("Message committed via processor checkpoint (MessageID: %v)", a.event.MessageID)
+	} else {
+		a.logger.Debugf("Message acknowledged (direct read mode)")
 	}
 }

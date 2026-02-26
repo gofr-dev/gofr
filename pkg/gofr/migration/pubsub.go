@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"fmt"
 	"time"
 
 	"gofr.dev/pkg/gofr/container"
@@ -60,26 +61,29 @@ func (pm pubsubMigrator) checkAndCreateMigrationTable(c *container.Container) er
 	return pm.migrator.checkAndCreateMigrationTable(c)
 }
 
-func (pm pubsubMigrator) getLastMigration(c *container.Container) int64 {
+func (pm pubsubMigrator) getLastMigration(c *container.Container) (int64, error) {
 	queryTopic := resolveMigrationTopic(c)
 
 	ctx, cancel := context.WithTimeout(context.Background(), migrationTimeout)
 	defer cancel()
 
+	var pubsubLastMigration int64
+
 	result, err := c.PubSub.Query(ctx, queryTopic, int64(0), defaultQueryLimit)
 	if err != nil {
-		c.Errorf("Error querying migration topic: %v", err)
+		return -1, fmt.Errorf("pubsub: %w", err)
 	}
 
-	pubsubLastMigration := extractLastVersion(c, result)
-
-	nextMigratorLastMigration := pm.migrator.getLastMigration(c)
-
-	if nextMigratorLastMigration > pubsubLastMigration {
-		return nextMigratorLastMigration
+	if len(result) != 0 {
+		pubsubLastMigration = extractLastVersion(c, result)
 	}
 
-	return pubsubLastMigration
+	nextMigratorLastMigration, err := pm.migrator.getLastMigration(c)
+	if err != nil {
+		return -1, err
+	}
+
+	return max(pubsubLastMigration, nextMigratorLastMigration), nil
 }
 
 func resolveMigrationTopic(c *container.Container) string {
@@ -149,4 +153,24 @@ func (pm pubsubMigrator) commitMigration(c *container.Container, data transactio
 	c.Debugf("Inserted record for migration %v in PubSub gofr_migrations topic", data.MigrationNumber)
 
 	return pm.migrator.commitMigration(c, data)
+}
+
+func (pm pubsubMigrator) beginTransaction(c *container.Container) transactionData {
+	return pm.migrator.beginTransaction(c)
+}
+
+func (pm pubsubMigrator) rollback(c *container.Container, data transactionData) {
+	pm.migrator.rollback(c, data)
+}
+
+func (pm pubsubMigrator) lock(ctx context.Context, cancel context.CancelFunc, c *container.Container, ownerID string) error {
+	return pm.migrator.lock(ctx, cancel, c, ownerID)
+}
+
+func (pm pubsubMigrator) unlock(c *container.Container, ownerID string) error {
+	return pm.migrator.unlock(c, ownerID)
+}
+
+func (pubsubMigrator) name() string {
+	return "PubSub"
 }

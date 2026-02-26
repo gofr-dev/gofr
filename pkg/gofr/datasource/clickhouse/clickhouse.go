@@ -85,6 +85,7 @@ func (c *Client) Connect() {
 	addresses := strings.Split(c.config.Hosts, ",")
 
 	ctx := context.Background()
+
 	c.conn, err = clickhouse.Open(&clickhouse.Options{
 		Addr: addresses,
 		Auth: clickhouse.Auth{
@@ -93,7 +94,6 @@ func (c *Client) Connect() {
 			Password: c.config.Password,
 		},
 	})
-
 	if err != nil {
 		c.logger.Errorf("error while connecting to Clickhouse %v", err)
 
@@ -186,6 +186,7 @@ func (c *Client) sendOperationStats(start time.Time, methodType, query string, m
 
 	if span != nil {
 		defer span.End()
+
 		span.SetAttributes(attribute.Int64(fmt.Sprintf("clickhouse.%v.duration", method), duration))
 	}
 
@@ -198,7 +199,7 @@ func getOperationType(query string) string {
 	query = strings.TrimSpace(query)
 	words := strings.Split(query, " ")
 
-	return words[0]
+	return strings.ToUpper(words[0])
 }
 
 type Health struct {

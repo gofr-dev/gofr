@@ -734,7 +734,6 @@ func TestClient_Connect_Success(t *testing.T) {
     "number": "8.0.0"
    }
   }`))
-
 		if err != nil {
 			t.Error("failed to write response: ", err)
 		}

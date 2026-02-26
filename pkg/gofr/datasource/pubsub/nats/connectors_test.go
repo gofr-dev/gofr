@@ -42,6 +42,7 @@ func TestDefaultJetStreamCreator_New(t *testing.T) {
 		// Create a real NATS connection
 		nc, err := nats.Connect(url)
 		require.NoError(t, err)
+
 		defer nc.Close()
 
 		// Wrap the real connection

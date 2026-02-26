@@ -298,6 +298,7 @@ func (c *Client) sendOperationStats(ctx context.Context, ql *QueryLog, startTime
 
 	if span != nil {
 		defer span.End()
+
 		span.SetAttributes(
 			attribute.String("solr.type", ql.Type),
 			attribute.Int64(fmt.Sprintf("solr.%v.duration", method), duration))

@@ -2,7 +2,9 @@ package http
 
 import (
 	"bytes"
+	"fmt"
 	"io"
+	"math"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -14,6 +16,8 @@ import (
 	resTypes "gofr.dev/pkg/gofr/http/response"
 )
 
+var errTest = fmt.Errorf("internal server error")
+
 func TestResponder(t *testing.T) {
 	tests := []struct {
 		desc         string
@@ -21,6 +25,23 @@ func TestResponder(t *testing.T) {
 		contentType  string
 		expectedBody []byte
 	}{
+		{
+			desc: "xml response type default content type",
+			data: resTypes.XML{
+				Content: []byte(`<Response status="ok"><Message>Hello</Message></Response>`),
+			},
+			contentType:  "application/xml",
+			expectedBody: []byte(`<Response status="ok"><Message>Hello</Message></Response>`),
+		},
+		{
+			desc: "xml response type custom content type",
+			data: resTypes.XML{
+				Content:     []byte(`<soapenv:Envelope></soapenv:Envelope>`),
+				ContentType: "application/soap+xml",
+			},
+			contentType:  "application/soap+xml",
+			expectedBody: []byte(`<soapenv:Envelope></soapenv:Envelope>`),
+		},
 		{
 			desc:         "raw response type",
 			data:         resTypes.Raw{Data: []byte("raw data")},
@@ -101,6 +122,13 @@ func TestResponder_getStatusCode(t *testing.T) {
 			map[string]any{"message": http.ErrHandlerTimeout.Error()}},
 		{"partial content with error", http.MethodGet, "partial response", ErrorInvalidRoute{},
 			http.StatusPartialContent, map[string]any{"message": ErrorInvalidRoute{}.Error()}},
+		{"request timeout error", http.MethodGet, nil, ErrorRequestTimeout{},
+			http.StatusRequestTimeout,
+			map[string]any{"message": ErrorRequestTimeout{}.Error()}},
+		{"client closed request error", http.MethodGet, nil, ErrorClientClosedRequest{}, 499,
+			map[string]any{"message": ErrorClientClosedRequest{}.Error()}},
+		{"server timeout error", http.MethodGet, nil, ErrorRequestTimeout{}, http.StatusRequestTimeout,
+			map[string]any{"message": ErrorRequestTimeout{}.Error()}},
 	}
 
 	for i, tc := range tests {
@@ -141,6 +169,10 @@ func TestRespondWithApplicationJSON(t *testing.T) {
 		{"error response with partial response", sampleData, sampleError,
 			http.StatusPartialContent,
 			`{"error":{"message":"route not registered"},"data":{"message":"Hello World"}}`},
+		{"client closed request - no response", nil, ErrorClientClosedRequest{},
+			StatusClientClosedRequest, `{"error":{"message":"client closed request"}}`},
+		{"server timeout error", nil, ErrorRequestTimeout{},
+			http.StatusRequestTimeout, `{"error":{"message":"request timed out"}}`},
 	}
 
 	for i, tc := range tests {
@@ -383,4 +415,192 @@ func TestResponder_RedirectResponse_Head(t *testing.T) {
 	assert.Equal(t, redirectURL, recorder.Header().Get("Location"),
 		"Redirect should set the Location header")
 	assert.Empty(t, recorder.Body.String(), "Redirect response should not have a body")
+}
+
+func TestResponder_ClientClosedRequestHandling(t *testing.T) {
+	recorder := httptest.NewRecorder()
+	responder := NewResponder(recorder, http.MethodGet)
+
+	// ErrorClientClosedRequest should not send any response
+	responder.Respond(nil, ErrorClientClosedRequest{})
+
+	assert.Equal(t, 499, recorder.Code)
+	assert.JSONEq(t, `{"error":{"message":"client closed request"}}`, recorder.Body.String())
+}
+
+func TestResponder_ContentTypePreservation(t *testing.T) {
+	tests := []struct {
+		desc              string
+		presetContentType string
+		expectedType      string
+	}{
+		{
+			desc:              "preset content type should be preserved",
+			presetContentType: "text/event-stream",
+			expectedType:      "text/event-stream",
+		},
+		{
+			desc:              "no preset content type - defaults to application/json",
+			presetContentType: "",
+			expectedType:      "application/json",
+		},
+	}
+
+	for i, tc := range tests {
+		recorder := httptest.NewRecorder()
+
+		// Simulate SetCustomHeaders by manually setting Content-Type header before calling Respond
+		if tc.presetContentType != "" {
+			recorder.Header().Set("Content-Type", tc.presetContentType)
+		}
+
+		responder := NewResponder(recorder, http.MethodGet)
+		responder.Respond("Test data", nil)
+
+		contentType := recorder.Header().Get("Content-Type")
+
+		assert.Equal(t, tc.expectedType, contentType, "TEST[%d] Failed: %s", i, tc.desc)
+	}
+}
+
+// TestResponder_XMLFileTemplate_ErrorStatusCodes verifies that XML, File, and Template responses
+// return appropriate error status codes when errors occur, not always 200 OK.
+func TestResponder_XMLFileTemplate_ErrorStatusCodes(t *testing.T) {
+	tests := []struct {
+		desc         string
+		data         any
+		err          error
+		expectedCode int
+	}{
+		{
+			desc: "XML response with 404 error should return 404",
+			data: resTypes.XML{
+				Content: []byte(`<Response><Error>Not Found</Error></Response>`),
+			},
+			err:          ErrorEntityNotFound{Name: "id", Value: "123"},
+			expectedCode: http.StatusNotFound,
+		},
+		{
+			desc: "XML response with 500 error should return 500",
+			data: resTypes.XML{
+				Content: []byte(`<Response><Error>Internal Error</Error></Response>`),
+			},
+			err:          errTest,
+			expectedCode: http.StatusInternalServerError,
+		},
+		{
+			desc: "File response with 404 error should return 404",
+			data: resTypes.File{
+				ContentType: "image/png",
+				Content:     []byte("fake image data"),
+			},
+			err:          ErrorEntityNotFound{Name: "file", Value: "test.png"},
+			expectedCode: http.StatusNotFound,
+		},
+		{
+			desc: "File response with 500 error should return 500",
+			data: resTypes.File{
+				ContentType: "application/pdf",
+				Content:     []byte("fake pdf data"),
+			},
+			err:          errTest,
+			expectedCode: http.StatusInternalServerError,
+		},
+		{
+			desc: "XML response with no error should return 200",
+			data: resTypes.XML{
+				Content: []byte(`<Response><Status>OK</Status></Response>`),
+			},
+			err:          nil,
+			expectedCode: http.StatusOK,
+		},
+		{
+			desc: "File response with no error should return 200",
+			data: resTypes.File{
+				ContentType: "text/plain",
+				Content:     []byte("file content"),
+			},
+			err:          nil,
+			expectedCode: http.StatusOK,
+		},
+	}
+
+	for i, tc := range tests {
+		recorder := httptest.NewRecorder()
+		r := NewResponder(recorder, http.MethodGet)
+
+		r.Respond(tc.data, tc.err)
+
+		assert.Equal(t, tc.expectedCode, recorder.Code, "TEST[%d] Failed: %s", i, tc.desc)
+	}
+}
+
+func TestResponder_JSONEncodingFailure(t *testing.T) {
+	tests := []struct {
+		desc string
+		data any
+	}{
+		{"NaN value", math.NaN()},
+		{"positive infinity", math.Inf(1)},
+		{"negative infinity", math.Inf(-1)},
+		{"channel type", make(chan int)},
+		{"function type", func() {}},
+	}
+
+	for i, tc := range tests {
+		recorder := httptest.NewRecorder()
+		responder := NewResponder(recorder, http.MethodGet)
+
+		responder.Respond(tc.data, nil)
+
+		result := recorder.Result()
+
+		assert.Equal(t, http.StatusInternalServerError, result.StatusCode, "TEST[%d] Failed: %s", i, tc.desc)
+		assert.Equal(t, "application/json", result.Header.Get("Content-Type"), "TEST[%d] Failed: %s", i, tc.desc)
+
+		body := new(bytes.Buffer)
+		_, err := body.ReadFrom(result.Body)
+
+		require.NoError(t, err, "TEST[%d] Failed: %s", i, tc.desc)
+
+		expectedBody := `{"error":{"message": "failed to encode response as JSON"}}` + "\n"
+		assert.Equal(t, expectedBody, body.String(), "TEST[%d] Failed: %s", i, tc.desc)
+
+		require.NoError(t, result.Body.Close())
+	}
+}
+
+func TestResponder_ValidEncodableData(t *testing.T) {
+	tests := []struct {
+		desc         string
+		data         any
+		expectedCode int
+	}{
+		{"normal float", 42.5, http.StatusOK},
+		{"zero float", 0.0, http.StatusOK},
+		{"struct with floats", struct{ Temp float64 }{Temp: 98.6}, http.StatusOK},
+		{"map with numbers", map[string]float64{"value": 123.45}, http.StatusOK},
+	}
+
+	for i, tc := range tests {
+		recorder := httptest.NewRecorder()
+		responder := NewResponder(recorder, http.MethodGet)
+
+		responder.Respond(tc.data, nil)
+
+		result := recorder.Result()
+
+		t.Cleanup(func() {
+			require.NoError(t, result.Body.Close())
+		})
+
+		assert.Equal(t, tc.expectedCode, result.StatusCode, "TEST[%d] Failed: %s", i, tc.desc)
+
+		body := new(bytes.Buffer)
+		_, err := body.ReadFrom(result.Body)
+
+		require.NoError(t, err, "TEST[%d] Failed: %s", i, tc.desc)
+
+		assert.NotEmpty(t, body.String(), "TEST[%d] Failed: %s", i, tc.desc)
+	}
 }

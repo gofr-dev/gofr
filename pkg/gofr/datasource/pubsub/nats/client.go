@@ -141,6 +141,7 @@ func (c *Client) SubscribeWithHandler(ctx context.Context, subject string, handl
 
 	go func() {
 		defer cancel() // Ensure the cancellation is handled properly
+
 		c.processMessages(subCtx, cons, subject, handler)
 	}()
 

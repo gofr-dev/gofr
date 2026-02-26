@@ -19,7 +19,6 @@ func NewSQLMocksWithConfig(t *testing.T, config *DBConfig) (*DB, sqlmock.Sqlmock
 	t.Helper()
 
 	db, mock, err := sqlmock.New(sqlmock.QueryMatcherOption(sqlmock.QueryMatcherEqual))
-
 	if err != nil {
 		t.Fatalf("an error '%s' was not expected when opening a stub database connection", err)
 	}
@@ -31,9 +30,10 @@ func NewSQLMocksWithConfig(t *testing.T, config *DBConfig) (*DB, sqlmock.Sqlmock
 		"hostname", gomock.Any(), "database", gomock.Any(), "type", gomock.Any()).AnyTimes()
 
 	return &DB{
-		DB:      db,
-		logger:  logging.NewMockLogger(logging.DEBUG),
-		config:  config,
-		metrics: mockMetrics,
+		DB:         db,
+		logger:     logging.NewMockLogger(logging.DEBUG),
+		config:     config,
+		metrics:    mockMetrics,
+		stopSignal: make(chan struct{}),
 	}, mock, mockMetrics
 }

@@ -103,6 +103,7 @@ func (a *App) startMetricsServer(wg *sync.WaitGroup) {
 
 		go func(m *metricServer) {
 			defer wg.Done()
+
 			m.Run(a.container)
 		}(a.metricServer)
 	}
@@ -116,6 +117,7 @@ func (a *App) startHTTPServer(wg *sync.WaitGroup) {
 
 		go func(s *httpServer) {
 			defer wg.Done()
+
 			s.run(a.container)
 		}(a.httpServer)
 	}
@@ -128,6 +130,7 @@ func (a *App) startGRPCServer(wg *sync.WaitGroup) {
 
 		go func(s *grpcServer) {
 			defer wg.Done()
+
 			s.Run(a.container)
 		}(a.grpcServer)
 	}

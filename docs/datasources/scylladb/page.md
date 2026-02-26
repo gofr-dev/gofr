@@ -1,5 +1,14 @@
-## ScyllaDB
+# ScyllaDB
 
+## Configuration
+To connect to `ScyllaDB`, you need to provide the following environment variables:
+- `HOST`: The hostname or IP address of your ScyllaDB server.
+- `KEYSPACE`: The top level namespace.
+- `PORT`: The port number.
+- `USERNAME`: The username for connecting to the database.
+- `PASSWORD`: The password for the specified user.
+
+## Setup
 GoFr supports pluggable ScyllaDB drivers. It defines an interface that specifies the required methods for interacting
 with ScyllaDB. Any driver implementation that adheres to this interface can be integrated into GoFr using the
 `app.AddScyllaDB()` method.
@@ -50,7 +59,6 @@ package main
 
 import (
 	"github.com/gocql/gocql"
-
 	"gofr.dev/pkg/gofr"
 	"gofr.dev/pkg/gofr/datasource/scylladb"
 	"gofr.dev/pkg/gofr/http"
@@ -66,11 +74,11 @@ func main() {
 	app := gofr.New()
 
 	client := scylladb.New(scylladb.Config{
-		Host:     "localhost",
-		Keyspace: "my_keyspace",
-		Port:     2025,
-		Username: "root",
-		Password: "password",
+		Host:     app.Config.Get("HOST"),
+		Keyspace: app.Config.Get("KEYSPACE"),
+		Port:     app.Config.Get("PORT"),
+		Username: app.Config.Get("USERNAME"),
+		Password: app.Config.Get("PASSWORD"),
 	})
 
 	app.AddScyllaDB(client)

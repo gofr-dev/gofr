@@ -113,8 +113,10 @@ func TestShutdown_ServerStopsListening(t *testing.T) {
 	defer cancel()
 
 	errChan := make(chan error, 1)
+
 	go func() {
 		time.Sleep(100 * time.Millisecond)
+
 		errChan <- server.Shutdown(ctx)
 	}()
 
@@ -150,8 +152,10 @@ func TestShutdown_ServerContextDeadline(t *testing.T) {
 
 	// Simulate a delay in the shutdown process to trigger context timeout
 	shutdownCh := make(chan error, 1)
+
 	go func() {
 		time.Sleep(100 * time.Millisecond) // Delay longer than the context timeout
+
 		shutdownCh <- server.Shutdown(ctx)
 	}()
 
@@ -212,7 +216,9 @@ func createTempKeyFile(t *testing.T) string {
 		t.Fatalf("could not create temp key file: %v", err)
 	}
 
-	defer f.Close()
+	t.Cleanup(func() {
+		_ = f.Close()
+	})
 
 	return f.Name()
 }
@@ -226,7 +232,9 @@ func createTempCertFile(t *testing.T) string {
 		t.Fatalf("could not create temp cert file: %v", err)
 	}
 
-	defer f.Close()
+	t.Cleanup(func() {
+		_ = f.Close()
+	})
 
 	return f.Name()
 }

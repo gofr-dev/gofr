@@ -144,6 +144,7 @@ func (m *MQTT) createMqttHandler(_ context.Context, topic string, msgs chan *pub
 		m.metrics.IncrementCounter(ctx, "app_pubsub_subscribe_total_count", "topic", topic)
 
 		var messg = pubsub.NewMessage(context.WithoutCancel(ctx))
+
 		messg.Topic = msg.Topic()
 		messg.Value = msg.Payload()
 		messg.MetaData = map[string]string{

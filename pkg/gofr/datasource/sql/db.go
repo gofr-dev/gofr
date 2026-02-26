@@ -11,6 +11,7 @@ import (
 	"reflect"
 	"regexp"
 	"strings"
+	"sync"
 	"time"
 
 	"gofr.dev/pkg/gofr/datasource"
@@ -20,9 +21,11 @@ import (
 type DB struct {
 	// contains unexported or private fields
 	*sql.DB
-	logger  datasource.Logger
-	config  *DBConfig
-	metrics Metrics
+	logger     datasource.Logger
+	config     *DBConfig
+	metrics    Metrics
+	stopSignal chan struct{}
+	closeOnce  sync.Once
 }
 
 type Log struct {
@@ -44,30 +47,39 @@ func clean(query string) string {
 	return query
 }
 
+func sendStats(logger datasource.Logger, metrics Metrics, config *DBConfig, start time.Time, queryType, query string, args ...any) {
+	duration := time.Since(start).Milliseconds()
+
+	if logger != nil {
+		logger.Debug(&Log{
+			Type:     queryType,
+			Query:    query,
+			Duration: duration,
+			Args:     args,
+		})
+	}
+
+	// This contains the fix for the nil pointer dereference
+	if metrics != nil {
+		metrics.RecordHistogram(context.Background(), "app_sql_stats", float64(duration), "hostname", config.HostName,
+			"database", config.Database, "type", getOperationType(query))
+	}
+}
+
 func (d *DB) sendOperationStats(start time.Time, queryType, query string, args ...any) {
-	duration := time.Since(start).Microseconds()
-
-	d.logger.Debug(&Log{
-		Type:     queryType,
-		Query:    query,
-		Duration: duration,
-		Args:     args,
-	})
-
-	d.metrics.RecordHistogram(context.Background(), "app_sql_stats", float64(duration), "hostname", d.config.HostName,
-		"database", d.config.Database, "type", getOperationType(query))
+	sendStats(d.logger, d.metrics, d.config, start, queryType, query, args...)
 }
 
 func getOperationType(query string) string {
 	query = strings.TrimSpace(query)
 	words := strings.Split(query, " ")
 
-	return words[0]
+	return strings.ToUpper(words[0])
 }
 
 func (d *DB) Query(query string, args ...any) (*sql.Rows, error) {
 	defer d.sendOperationStats(time.Now(), "Query", query, args...)
-	return d.DB.Query(query, args...)
+	return d.DB.QueryContext(context.Background(), query, args...)
 }
 
 func (d *DB) QueryContext(ctx context.Context, query string, args ...any) (*sql.Rows, error) {
@@ -81,7 +93,7 @@ func (d *DB) Dialect() string {
 
 func (d *DB) QueryRow(query string, args ...any) *sql.Row {
 	defer d.sendOperationStats(time.Now(), "QueryRow", query, args...)
-	return d.DB.QueryRow(query, args...)
+	return d.DB.QueryRowContext(context.Background(), query, args...)
 }
 
 func (d *DB) QueryRowContext(ctx context.Context, query string, args ...any) *sql.Row {
@@ -91,7 +103,7 @@ func (d *DB) QueryRowContext(ctx context.Context, query string, args ...any) *sq
 
 func (d *DB) Exec(query string, args ...any) (sql.Result, error) {
 	defer d.sendOperationStats(time.Now(), "Exec", query, args...)
-	return d.DB.Exec(query, args...)
+	return d.DB.ExecContext(context.Background(), query, args...)
 }
 
 func (d *DB) ExecContext(ctx context.Context, query string, args ...any) (sql.Result, error) {
@@ -101,11 +113,11 @@ func (d *DB) ExecContext(ctx context.Context, query string, args ...any) (sql.Re
 
 func (d *DB) Prepare(query string) (*sql.Stmt, error) {
 	defer d.sendOperationStats(time.Now(), "Prepare", query)
-	return d.DB.Prepare(query)
+	return d.DB.PrepareContext(context.Background(), query)
 }
 
 func (d *DB) Begin() (*Tx, error) {
-	tx, err := d.DB.Begin()
+	tx, err := d.DB.BeginTx(context.Background(), nil)
 	if err != nil {
 		return nil, err
 	}
@@ -114,6 +126,10 @@ func (d *DB) Begin() (*Tx, error) {
 }
 
 func (d *DB) Close() error {
+	d.closeOnce.Do(func() {
+		close(d.stopSignal)
+	})
+
 	if d.DB != nil {
 		return d.DB.Close()
 	}
@@ -129,27 +145,17 @@ type Tx struct {
 }
 
 func (t *Tx) sendOperationStats(start time.Time, queryType, query string, args ...any) {
-	duration := time.Since(start).Microseconds()
-
-	t.logger.Debug(&Log{
-		Type:     queryType,
-		Query:    query,
-		Duration: duration,
-		Args:     args,
-	})
-
-	t.metrics.RecordHistogram(context.Background(), "app_sql_stats", float64(duration), "hostname", t.config.HostName,
-		"database", t.config.Database, "type", getOperationType(query))
+	sendStats(t.logger, t.metrics, t.config, start, queryType, query, args...)
 }
 
 func (t *Tx) Query(query string, args ...any) (*sql.Rows, error) {
 	defer t.sendOperationStats(time.Now(), "TxQuery", query, args...)
-	return t.Tx.Query(query, args...)
+	return t.Tx.QueryContext(context.Background(), query, args...)
 }
 
 func (t *Tx) QueryRow(query string, args ...any) *sql.Row {
 	defer t.sendOperationStats(time.Now(), "TxQueryRow", query, args...)
-	return t.Tx.QueryRow(query, args...)
+	return t.Tx.QueryRowContext(context.Background(), query, args...)
 }
 
 func (t *Tx) QueryRowContext(ctx context.Context, query string, args ...any) *sql.Row {
@@ -159,7 +165,7 @@ func (t *Tx) QueryRowContext(ctx context.Context, query string, args ...any) *sq
 
 func (t *Tx) Exec(query string, args ...any) (sql.Result, error) {
 	defer t.sendOperationStats(time.Now(), "TxExec", query, args...)
-	return t.Tx.Exec(query, args...)
+	return t.Tx.ExecContext(context.Background(), query, args...)
 }
 
 func (t *Tx) ExecContext(ctx context.Context, query string, args ...any) (sql.Result, error) {
@@ -169,7 +175,7 @@ func (t *Tx) ExecContext(ctx context.Context, query string, args ...any) (sql.Re
 
 func (t *Tx) Prepare(query string) (*sql.Stmt, error) {
 	defer t.sendOperationStats(time.Now(), "TxPrepare", query)
-	return t.Tx.Prepare(query)
+	return t.Tx.PrepareContext(context.Background(), query)
 }
 
 func (t *Tx) Commit() error {
@@ -318,6 +324,7 @@ func (*DB) rowsToStruct(rows *sql.Rows, vo reflect.Value) {
 			fields = append(fields, v.Field(i).Addr().Interface())
 		} else {
 			var i any
+
 			fields = append(fields, &i)
 		}
 	}

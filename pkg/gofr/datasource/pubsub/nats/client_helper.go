@@ -287,7 +287,6 @@ func (c *Client) createConsumer(ctx context.Context, js jetstream.JetStream, str
 		DeliverPolicy: jetstream.DeliverAllPolicy,
 		AckWait:       c.Config.MaxWait,
 	})
-
 	if err != nil {
 		c.logger.Errorf("failed to create consumer for query: %v", err)
 
