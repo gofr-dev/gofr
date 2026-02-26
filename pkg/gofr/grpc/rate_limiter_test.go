@@ -19,6 +19,11 @@ import (
 	httpmw "gofr.dev/pkg/gofr/http/middleware"
 )
 
+var (
+	errStoreFailure = errors.New("store failure")
+	errRedisDown    = errors.New("redis down")
+)
+
 type rateLimiterMockMetrics struct {
 	mu       sync.Mutex
 	counters map[string]int
@@ -84,7 +89,11 @@ func (*fakeStore) StopCleanup()                 {}
 
 type fakeAddr string
 
-func (a fakeAddr) Network() string { return "tcp" }
+func (a fakeAddr) Network() string {
+	_ = a
+
+	return "tcp"
+}
 func (a fakeAddr) String() string  { return string(a) }
 
 func Test_first(t *testing.T) {
@@ -391,7 +400,7 @@ func TestUnaryRateLimitInterceptor_EmptyIPFallback(t *testing.T) {
 }
 
 func TestUnaryRateLimitInterceptor_StoreError_FailsOpen(t *testing.T) {
-	store := &fakeStore{err: errors.New("store failure")}
+	store := &fakeStore{err: errStoreFailure}
 	cfg := httpmw.RateLimiterConfig{
 		RequestsPerSecond: 10,
 		Burst:             5,
@@ -698,7 +707,7 @@ func TestStreamRateLimitInterceptor_EmptyIPFallback(t *testing.T) {
 }
 
 func TestStreamRateLimitInterceptor_StoreError_FailsOpen(t *testing.T) {
-	store := &fakeStore{err: errors.New("redis down")}
+	store := &fakeStore{err: errRedisDown}
 	cfg := httpmw.RateLimiterConfig{
 		RequestsPerSecond: 10,
 		Burst:             5,
@@ -816,8 +825,9 @@ func TestStreamRateLimitInterceptor_ConcurrentRequests(t *testing.T) {
 			ctx := metadata.NewIncomingContext(context.Background(), md)
 			ss := &rateLimitMockStream{ctx: ctx}
 
-			err := interceptor(nil, ss, info,
-				func(any, grpc.ServerStream) error { return nil })
+			err := interceptor(nil, ss, info, func(any, grpc.ServerStream) error {
+				return nil
+			})
 
 			if err == nil {
 				atomic.AddInt64(&successCount, 1)

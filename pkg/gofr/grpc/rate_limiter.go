@@ -7,14 +7,19 @@ import (
 	"net"
 	"strings"
 
-	httpmw "gofr.dev/pkg/gofr/http/middleware"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/peer"
 	"google.golang.org/grpc/status"
+
+	httpmw "gofr.dev/pkg/gofr/http/middleware"
 )
 
+const (
+	rateLimitKeyGlobal  = "global"
+	rateLimitKeyUnknown = "unknown"
+)
 
 func getForwardedIP(ctx context.Context) string {
 	md, ok := metadata.FromIncomingContext(ctx)
@@ -40,6 +45,7 @@ func getRealIP(ctx context.Context) string {
 	if !ok {
 		return ""
 	}
+
 	return normalizeIP(strings.TrimSpace(first(md.Get("x-real-ip"))))
 }
 
@@ -47,6 +53,7 @@ func first(vals []string) string {
 	if len(vals) == 0 {
 		return ""
 	}
+
 	return vals[0]
 }
 
@@ -67,6 +74,7 @@ func normalizeIP(s string) string {
 	if ip == nil {
 		return ""
 	}
+
 	return ip.String()
 }
 
@@ -75,6 +83,7 @@ func getIP(ctx context.Context, trustProxy bool) string {
 		if ip := getForwardedIP(ctx); ip != "" {
 			return ip
 		}
+
 		if ip := getRealIP(ctx); ip != "" {
 			return ip
 		}
@@ -104,18 +113,19 @@ func UnaryRateLimitInterceptor(config httpmw.RateLimiterConfig, m Metrics) grpc.
 	if err := config.Validate(); err != nil {
 		panic(fmt.Sprintf("invalid rate limiter config: %v", err))
 	}
+
 	if config.Store == nil {
 		config.Store = httpmw.NewMemoryRateLimiterStore(config)
 	}
 
 	config.Store.StartCleanup(context.Background())
 
-	return func(ctx context.Context, req any, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (any, error) {
-		key := "global"
+		return func(ctx context.Context, req any, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (any, error) {
+			key := rateLimitKeyGlobal
 		if config.PerIP {
 			key = getIP(ctx, config.TrustedProxies)
 			if key == "" {
-				key = "unknown"
+					key = rateLimitKeyUnknown
 			}
 		}
 
@@ -147,6 +157,7 @@ func StreamRateLimitInterceptor(config httpmw.RateLimiterConfig, m Metrics) grpc
 	if err := config.Validate(); err != nil {
 		panic(fmt.Sprintf("invalid rate limiter config: %v", err))
 	}
+
 	if config.Store == nil {
 		config.Store = httpmw.NewMemoryRateLimiterStore(config)
 	}
@@ -156,12 +167,11 @@ func StreamRateLimitInterceptor(config httpmw.RateLimiterConfig, m Metrics) grpc
 	return func(srv any, ss grpc.ServerStream, info *grpc.StreamServerInfo, handler grpc.StreamHandler) error {
 		streamCtx := ss.Context()
 
-		key := "global"
+		key := rateLimitKeyGlobal
 		if config.PerIP {
-			
 			key = getIP(streamCtx, config.TrustedProxies)
 			if key == "" {
-				key = "unknown"
+				key = rateLimitKeyUnknown
 			}
 		}
 
