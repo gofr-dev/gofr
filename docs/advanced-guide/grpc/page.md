@@ -222,6 +222,80 @@ func streamAuthInterceptor(srv any, ss grpc.ServerStream, info *grpc.StreamServe
 
 For more details on adding additional interceptors and server options, refer to the [official gRPC Go package](https://pkg.go.dev/google.golang.org/grpc#ServerOption).
 
+## Rate Limiter Interceptor for gRPC
+
+GoFr provides built-in rate limiter interceptors for gRPC to protect your services from abuse and ensure fair resource distribution.
+It uses the same token bucket algorithm and configuration as the HTTP rate limiter, applied to both unary and streaming RPCs.
+
+### Features
+
+- **Token Bucket Algorithm**: Allows smooth rate limiting with configurable burst capacity
+- **Per-IP Rate Limiting**: Each client IP gets its own rate limit bucket (configurable)
+- **Unary and Stream Support**: Separate interceptors for unary RPCs and streaming RPCs
+- **Prometheus Metrics**: Track rate limit violations via `app_grpc_rate_limit_exceeded_total` counter
+- **gRPC Status Code**: Returns `RESOURCE_EXHAUSTED` (gRPC code 8) with a `retry-after` metadata header when the limit is exceeded
+- **Fail-Open on Errors**: If the rate limiter store encounters an error, requests are allowed through to avoid service denial
+
+### Configuration
+
+```go
+import (
+	"gofr.dev/pkg/gofr"
+	gofrGrpc "gofr.dev/pkg/gofr/grpc"
+	"gofr.dev/pkg/gofr/http/middleware"
+)
+
+func main() {
+	app := gofr.New()
+
+	// Configure rate limiter (shared config for both unary and stream)
+	rateLimiterConfig := middleware.RateLimiterConfig{
+		RequestsPerSecond: 5,    // Average requests per second
+		Burst:             10,   // Maximum burst size
+		PerIP:             true, // Enable per-IP limiting
+	}
+
+	// Add rate limiter interceptors for gRPC
+	app.AddGRPCUnaryInterceptors(gofrGrpc.UnaryRateLimitInterceptor(rateLimiterConfig, app.Metrics()))
+	app.AddGRPCServerStreamInterceptors(gofrGrpc.StreamRateLimitInterceptor(rateLimiterConfig, app.Metrics()))
+
+	// Register your gRPC service
+	packageName.Register<SERVICE_NAME>ServerWithGofr(app, &packageName.New<SERVICE_NAME>GoFrServer())
+
+	app.Run()
+}
+```
+
+### Parameters
+
+The gRPC rate limiter uses the same `middleware.RateLimiterConfig` as the HTTP rate limiter:
+
+- `RequestsPerSecond`: Average number of requests allowed per second
+- `Burst`: Maximum number of requests that can be made in a burst (allows temporary spikes)
+- `PerIP`: Set to `true` for per-IP limiting (recommended) or `false` for a global rate limit across all clients
+- `TrustedProxies`: *(Optional)* Set to `true` to trust `X-Forwarded-For` and `X-Real-IP` gRPC metadata headers for IP extraction. Only enable when behind a trusted reverse proxy.
+
+> **Security Warning**: Only set `TrustedProxies: true` if your application is behind a trusted reverse proxy (nginx, ALB, etc.).
+> Without a trusted proxy, clients can spoof metadata headers to bypass rate limits.
+
+### Behavior on Rate Limit Exceeded
+
+When a client exceeds the rate limit:
+
+1. The interceptor returns a gRPC error with status code `RESOURCE_EXHAUSTED`
+2. A `retry-after` response metadata header is set, indicating how many seconds the client should wait before retrying
+3. The `app_grpc_rate_limit_exceeded_total` Prometheus counter is incremented with `method` and `type` (`unary` or `stream`) labels
+
+### IP Extraction
+
+When `PerIP` is enabled, the client IP is determined in the following order:
+
+1. `X-Forwarded-For` gRPC metadata (first IP, only when `TrustedProxies: true`)
+2. `X-Real-IP` gRPC metadata (only when `TrustedProxies: true`)
+3. gRPC peer address (direct connection IP)
+
+If no IP can be determined, requests are grouped under an `unknown` key to prevent them from sharing the global bucket.
+
 ## Generating gRPC Client using `gofr wrap grpc client`
 
 **1. Use the `gofr wrap grpc client` Command:**
