@@ -21,6 +21,10 @@ const (
 	rateLimitKeyUnknown = "unknown"
 )
 
+type CounterMetrics interface {
+	IncrementCounter(ctx context.Context, name string, labels ...string)
+}
+
 func getForwardedIP(ctx context.Context) string {
 	md, ok := metadata.FromIncomingContext(ctx)
 	if !ok {
@@ -107,7 +111,7 @@ func retryAfterSeconds(durSeconds float64) string {
 	return fmt.Sprintf("%.0f", secs)
 }
 
-func UnaryRateLimitInterceptor(config httpmw.RateLimiterConfig, m Metrics) grpc.UnaryServerInterceptor {
+func UnaryRateLimitInterceptor(config httpmw.RateLimiterConfig, m CounterMetrics) grpc.UnaryServerInterceptor {
 	if err := config.Validate(); err != nil {
 		panic(fmt.Sprintf("invalid rate limiter config: %v", err))
 	}
@@ -151,7 +155,7 @@ func UnaryRateLimitInterceptor(config httpmw.RateLimiterConfig, m Metrics) grpc.
 	}
 }
 
-func StreamRateLimitInterceptor(config httpmw.RateLimiterConfig, m Metrics) grpc.StreamServerInterceptor {
+func StreamRateLimitInterceptor(config httpmw.RateLimiterConfig, m CounterMetrics) grpc.StreamServerInterceptor {
 	if err := config.Validate(); err != nil {
 		panic(fmt.Sprintf("invalid rate limiter config: %v", err))
 	}

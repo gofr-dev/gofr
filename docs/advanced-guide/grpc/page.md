@@ -249,15 +249,23 @@ func main() {
 	app := gofr.New()
 
 	// Configure rate limiter (shared config for both unary and stream)
-	rateLimiterConfig := middleware.RateLimiterConfig{
+	cfg := middleware.RateLimiterConfig{
 		RequestsPerSecond: 5,    // Average requests per second
 		Burst:             10,   // Maximum burst size
 		PerIP:             true, // Enable per-IP limiting
 	}
 
+	// IMPORTANT: create ONE shared store if you want a single budget
+	// for both unary and stream RPCs. If Store is left nil, each
+	// interceptor will create its own in-memory store and limits
+	// will be enforced independently.
+	store := middleware.NewMemoryRateLimiterStore(cfg)
+	cfg.Store = store
+
 	// Add rate limiter interceptors for gRPC
-	app.AddGRPCUnaryInterceptors(gofrGrpc.UnaryRateLimitInterceptor(rateLimiterConfig, app.Metrics()))
-	app.AddGRPCServerStreamInterceptors(gofrGrpc.StreamRateLimitInterceptor(rateLimiterConfig, app.Metrics()))
+	// Pass app.Metrics() to emit Prometheus counters, or nil to disable metrics.
+	app.AddGRPCUnaryInterceptors(gofrGrpc.UnaryRateLimitInterceptor(cfg, app.Metrics()))
+	app.AddGRPCServerStreamInterceptors(gofrGrpc.StreamRateLimitInterceptor(cfg, app.Metrics()))
 
 	// Register your gRPC service
 	packageName.Register<SERVICE_NAME>ServerWithGofr(app, &packageName.New<SERVICE_NAME>GoFrServer())

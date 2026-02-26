@@ -37,7 +37,6 @@ type Logger interface {
 }
 
 type Metrics interface {
-	IncrementCounter(ctx context.Context, name string, labels ...string)
 	RecordHistogram(ctx context.Context, name string, value float64, labels ...string)
 }
 

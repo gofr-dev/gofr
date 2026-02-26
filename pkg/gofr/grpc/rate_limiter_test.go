@@ -828,7 +828,6 @@ func TestStreamRateLimitInterceptor_ConcurrentRequests(t *testing.T) {
 			err := interceptor(nil, ss, info, func(any, grpc.ServerStream) error {
 				return nil
 			})
-
 			if err == nil {
 				atomic.AddInt64(&successCount, 1)
 			} else {
