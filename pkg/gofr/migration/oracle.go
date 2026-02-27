@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"strconv"
+	"strings"
 	"time"
 
 	"gofr.dev/pkg/gofr/container"
@@ -55,18 +56,51 @@ FROM gofr_migrations
 INSERT INTO gofr_migrations (version, method, start_time, duration)
 VALUES (:1, :2, :3, :4)
 `
+	checkAndCreateOracleMigrationLocksTable = `
+BEGIN
+	EXECUTE IMMEDIATE 'CREATE TABLE gofr_migration_locks (
+		lock_key VARCHAR2(64) PRIMARY KEY,
+		owner_id VARCHAR2(64) NOT NULL,
+		expires_at TIMESTAMP NOT NULL
+		)';
+EXCEPTION
+	WHEN OTHERS THEN
+		IF SQLCODE != -955 THEN RAISE; END IF;
+END;
+`
+	deleteExpiredOracleLocks = `DELETE FROM gofr_migration_locks WHERE expires_at < :1`
+	insertOracleLock         = `INSERT INTO gofr_migration_locks (lock_key, owner_id, expires_at) VALUES (:1, :2, :3)`
+	updateOracleLock         = `
+BEGIN
+	UPDATE gofr_migration_locks SET expires_at = :1 WHERE lock_key = :2 AND owner_id = :3;
+	IF SQL%ROWCOUNT = 0 THEN
+		RAISE_APPLICATION_ERROR(-20001, 'lock refresh failed: no rows updated');
+	END IF;
+END;
+`
+	deleteOracleLock = `
+BEGIN
+	DELETE FROM gofr_migration_locks WHERE lock_key = :1 AND owner_id = :2;
+	IF SQL%ROWCOUNT = 0 THEN
+		RAISE_APPLICATION_ERROR(-20002, 'lock release failed: lock was already released or stolen');
+	END IF;
+END;
+`
 )
 
 // Create migration table if it doesn't exist.
 func (om oracleMigrator) checkAndCreateMigrationTable(c *container.Container) error {
-	err := om.Oracle.Exec(context.Background(), checkAndCreateOracleMigrationTable)
-	if err != nil {
-		c.Errorf("Failed to create Oracle migration table: %v", err)
-	} else {
-		c.Infof("Oracle migration table checked/created successfully")
+	if err := om.Oracle.Exec(context.Background(), checkAndCreateOracleMigrationTable); err != nil {
+		c.Errorf("failed to create Oracle migration table: %v", err)
+		return err
 	}
 
-	return err
+	if err := om.Oracle.Exec(context.Background(), checkAndCreateOracleMigrationLocksTable); err != nil {
+		c.Errorf("failed to create Oracle migration locks table: %v", err)
+		return err
+	}
+
+	return om.migrator.checkAndCreateMigrationTable(c)
 }
 
 // Get the last applied migration version.
@@ -198,10 +232,76 @@ func (om oracleMigrator) beginTransaction(c *container.Container) transactionDat
 }
 
 func (om oracleMigrator) lock(ctx context.Context, cancel context.CancelFunc, c *container.Container, ownerID string) error {
-	return om.migrator.lock(ctx, cancel, c, ownerID)
+	for i := 0; ; i++ {
+		if err := om.Oracle.Exec(ctx, deleteExpiredOracleLocks, time.Now().UTC()); err != nil {
+			c.Debugf("failed to clean up expired Oracle locks: %v", err)
+		}
+
+		expiresAt := time.Now().UTC().Add(defaultLockTTL)
+
+		err := om.Oracle.Exec(ctx, insertOracleLock, lockKey, ownerID, expiresAt)
+		if err == nil {
+			c.Debug("Oracle lock acquired successfully")
+
+			go om.startRefresh(ctx, cancel, c, ownerID)
+
+			return om.migrator.lock(ctx, cancel, c, ownerID)
+		}
+
+		if !isOracleDuplicateKeyError(err) {
+			c.Errorf("error while acquiring Oracle lock: %v", err)
+
+			return errLockAcquisitionFailed
+		}
+
+		c.Debugf("Oracle lock already held, retrying in %v... (attempt %d)", defaultRetry, i+1)
+
+		select {
+		case <-time.After(defaultRetry):
+		case <-ctx.Done():
+			return ctx.Err()
+		}
+	}
+}
+
+func (om oracleMigrator) startRefresh(ctx context.Context, cancel context.CancelFunc, c *container.Container, ownerID string) {
+	ticker := time.NewTicker(defaultRefresh)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-ticker.C:
+			expiresAt := time.Now().UTC().Add(defaultLockTTL)
+			if err := om.Oracle.Exec(ctx, updateOracleLock, expiresAt, lockKey, ownerID); err != nil {
+				c.Errorf("failed to refresh Oracle lock (lock may have been stolen): %v", err)
+				cancel()
+
+				return
+			}
+
+			c.Debugf("Oracle lock refreshed successfully")
+		case <-ctx.Done():
+			return
+		}
+	}
+}
+
+// isOracleDuplicateKeyError checks for Oracle unique constraint violation (ORA-00001) in addition
+// to the generic patterns checked by isDuplicateKeyError, to avoid relying solely on driver-specific
+// message formatting.
+func isOracleDuplicateKeyError(err error) bool {
+	msg := strings.ToLower(err.Error())
+	return strings.Contains(msg, "ora-00001") || isDuplicateKeyError(err)
 }
 
 func (om oracleMigrator) unlock(c *container.Container, ownerID string) error {
+	if err := om.Oracle.Exec(context.Background(), deleteOracleLock, lockKey, ownerID); err != nil {
+		c.Errorf("unable to release Oracle lock: %v", err)
+		return errLockReleaseFailed
+	}
+
+	c.Debug("Oracle lock released successfully")
+
 	return om.migrator.unlock(c, ownerID)
 }
 
