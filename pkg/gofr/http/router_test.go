@@ -317,6 +317,60 @@ func Test_StaticFileServing_Static(t *testing.T) {
 	runStaticFileTests(t, tempDir, testCases)
 }
 
+func Test_isRestrictedFile(t *testing.T) {
+	tests := []struct {
+		name          string
+		directoryName string
+		url           string
+		absPath       string
+		expected      bool
+	}{
+		{
+			name:          "file inside static directory is not restricted",
+			directoryName: "/app/public",
+			url:           "/index.html",
+			absPath:       "/app/public/index.html",
+			expected:      false,
+		},
+		{
+			name:          "openapi.json inside static directory is restricted",
+			directoryName: "/app/public",
+			url:           "/openapi.json",
+			absPath:       "/app/public/openapi.json",
+			expected:      true,
+		},
+		{
+			name:          "file outside static directory is restricted",
+			directoryName: "/app/public",
+			url:           "/secret.txt",
+			absPath:       "/app/secret.txt",
+			expected:      true,
+		},
+		{
+			name:          "sibling directory with shared prefix is restricted",
+			directoryName: "/app/public",
+			url:           "/secret.txt",
+			absPath:       "/app/publicother/secret.txt",
+			expected:      true,
+		},
+		{
+			name:          "nested file inside static directory is not restricted",
+			directoryName: "/app/public",
+			url:           "/sub/page.html",
+			absPath:       "/app/public/sub/page.html",
+			expected:      false,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			cfg := staticFileConfig{directoryName: tc.directoryName}
+			result := cfg.isRestrictedFile(tc.url, tc.absPath)
+			assert.Equal(t, tc.expected, result)
+		})
+	}
+}
+
 func runStaticFileTests(t *testing.T, tempDir string, testCases []struct {
 	name             string
 	setupFiles       func() error
