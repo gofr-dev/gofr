@@ -13,7 +13,6 @@ import (
 	"github.com/aws/aws-sdk-go-v2/credentials"
 	"github.com/aws/aws-sdk-go-v2/service/sqs"
 	"github.com/aws/aws-sdk-go-v2/service/sqs/types"
-	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/trace"
 	"gofr.dev/pkg/gofr/datasource/pubsub"
 )
@@ -233,7 +232,7 @@ func (c *Client) Publish(ctx context.Context, topic string, message []byte) erro
 		return errEmptyQueueName
 	}
 
-	ctx, span := c.startTrace(ctx, "sqs-publish")
+	ctx, span, traceAttrs := startPublishSpan(ctx, topic)
 	defer span.End()
 
 	c.metrics.IncrementCounter(ctx, "app_pubsub_publish_total_count", "topic", topic)
@@ -247,8 +246,9 @@ func (c *Client) Publish(ctx context.Context, topic string, message []byte) erro
 	start := time.Now()
 
 	input := &sqs.SendMessageInput{
-		QueueUrl:    aws.String(queueURL),
-		MessageBody: aws.String(string(message)),
+		QueueUrl:          aws.String(queueURL),
+		MessageBody:       aws.String(string(message)),
+		MessageAttributes: traceAttrs,
 	}
 
 	result, err := c.conn.SendMessage(ctx, input)
@@ -286,8 +286,8 @@ func (c *Client) Subscribe(ctx context.Context, topic string) (*pubsub.Message, 
 		return nil, errEmptyQueueName
 	}
 
-	ctx, span := c.startTrace(ctx, "sqs-subscribe")
-	defer span.End()
+	// Span will be created after fetching message to access attributes for span links
+	var span trace.Span
 
 	c.metrics.IncrementCounter(ctx, "app_pubsub_subscribe_total_count", "topic", topic)
 
@@ -308,6 +308,9 @@ func (c *Client) Subscribe(ctx context.Context, topic string) (*pubsub.Message, 
 		MaxNumberOfMessages: defaultMaxMessages,
 		WaitTimeSeconds:     defaultWaitTimeSeconds,
 		VisibilityTimeout:   defaultVisibilityTimeout,
+		MessageAttributeNames: []string{
+			"All",
+		},
 		MessageSystemAttributeNames: []types.MessageSystemAttributeName{
 			types.MessageSystemAttributeNameAll,
 		},
@@ -329,6 +332,10 @@ func (c *Client) Subscribe(ctx context.Context, topic string) (*pubsub.Message, 
 
 	sqsMsg := result.Messages[0]
 	duration := time.Since(start)
+
+	// Create span with links to producer span from message attributes
+	ctx, span = startSubscribeSpan(ctx, topic, sqsMsg.MessageAttributes)
+	defer span.End()
 
 	// Create pubsub message
 	msg := pubsub.NewMessage(ctx)
@@ -507,12 +514,6 @@ func (c *Client) getQueueURL(ctx context.Context, queueName string) (string, err
 	c.cacheMu.Unlock()
 
 	return *result.QueueUrl, nil
-}
-
-// startTrace starts a new trace span using the global OpenTelemetry tracer provider.
-// This ensures proper trace propagation from the incoming context.
-func (*Client) startTrace(ctx context.Context, name string) (context.Context, trace.Span) {
-	return otel.GetTracerProvider().Tracer("gofr").Start(ctx, name)
 }
 
 // parseQueryArgs parses the query arguments for Query method.

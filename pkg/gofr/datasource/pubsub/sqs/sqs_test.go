@@ -513,13 +513,12 @@ func TestIsConnectionError(t *testing.T) {
 	}
 }
 
-func TestClient_startTrace(t *testing.T) {
-	client := New(&Config{Region: "us-east-1"})
-
-	ctx, span := client.startTrace(context.Background(), "test-span")
+func TestStartPublishSpan_CreatesValidSpan(t *testing.T) {
+	ctx, span, attrs := startPublishSpan(context.Background(), "test-queue")
 	assert.NotNil(t, ctx)
 	assert.NotNil(t, span)
 	assert.Implements(t, (*trace.Span)(nil), span)
+	assert.NotNil(t, attrs)
 
 	span.End()
 }
