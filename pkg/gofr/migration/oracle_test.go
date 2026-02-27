@@ -18,6 +18,8 @@ import (
 var (
 	errOracleDuplicateKey = errors.New("unique constraint violated")
 	errOracleSystemError  = errors.New("ORA-01017: invalid username/password")
+	errOracleLockLost     = errors.New("ORA-20001: lock refresh failed: no rows updated")
+	errOracleLockStolen   = errors.New("ORA-20002: lock release failed: lock was already released or stolen")
 )
 
 func oracleSetup(t *testing.T) (migrator, *container.MockOracleDB, *container.Container) {
@@ -346,6 +348,23 @@ func TestOracleMigrator_Unlock(t *testing.T) {
 		err := m.unlock(mockContainer, "owner-1")
 		assert.Equal(t, errLockReleaseFailed, err)
 	})
+
+	t.Run("UnlockLockStolen", func(t *testing.T) {
+		ctrl := gomock.NewController(t)
+		t.Cleanup(ctrl.Finish)
+
+		mockContainer, mocks := container.NewMockContainer(t)
+		mockMigrator := NewMockmigrator(ctrl)
+		m := oracleMigrator{Oracle: mocks.Oracle, migrator: mockMigrator}
+		mockContainer.Oracle = mocks.Oracle
+
+		// PL/SQL raises error when 0 rows deleted (lock was stolen)
+		mocks.Oracle.EXPECT().Exec(gomock.Any(), deleteOracleLock, lockKey, "owner-1").
+			Return(errOracleLockStolen)
+
+		err := m.unlock(mockContainer, "owner-1")
+		assert.Equal(t, errLockReleaseFailed, err)
+	})
 }
 
 func TestOracleMigrator_StartRefresh(t *testing.T) {
@@ -403,6 +422,32 @@ func TestOracleMigrator_StartRefresh(t *testing.T) {
 			require.Error(t, ctx.Err())
 		case <-time.After(defaultRefresh * 2):
 			t.Error("expected context to be canceled after refresh error, but timed out")
+		}
+	})
+
+	t.Run("RefreshLockLost", func(t *testing.T) {
+		ctrl := gomock.NewController(t)
+		t.Cleanup(ctrl.Finish)
+
+		mockContainer, mocks := container.NewMockContainer(t)
+		mockMigrator := NewMockmigrator(ctrl)
+		m := oracleMigrator{Oracle: mocks.Oracle, migrator: mockMigrator}
+		mockContainer.Oracle = mocks.Oracle
+
+		ctx, cancel := context.WithCancel(t.Context())
+
+		// PL/SQL raises error when 0 rows updated (lock was stolen)
+		mocks.Oracle.EXPECT().
+			Exec(gomock.Any(), updateOracleLock, gomock.Any(), lockKey, "owner-1").
+			Return(errOracleLockLost).Times(1)
+
+		go m.startRefresh(ctx, cancel, mockContainer, "owner-1")
+
+		select {
+		case <-ctx.Done():
+			require.Error(t, ctx.Err())
+		case <-time.After(defaultRefresh * 2):
+			t.Error("expected context to be canceled after lock loss, but timed out")
 		}
 	})
 }
