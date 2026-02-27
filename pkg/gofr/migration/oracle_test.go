@@ -503,7 +503,7 @@ func TestOracleMigrator_ConvertToInt64(t *testing.T) {
 		{"int", int(7), 7},
 		{"parseable string", "123", 123},
 		{"negative string", "-5", -5},
-		{"unparseable string", "not-a-number", 0},
+		{"unparsable string", "not-a-number", 0},
 		{"empty string", "", 0},
 		{"nil (becomes <nil>)", nil, 0},
 	}

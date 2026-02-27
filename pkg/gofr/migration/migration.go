@@ -54,6 +54,7 @@ func Run(migrationsMap map[int64]Migrate, c *container.Container) {
 	invalidKeys, keys := getKeys(migrationsMap)
 	if len(invalidKeys) > 0 {
 		c.Errorf("migration run failed! UP not defined for the following keys: %v", invalidKeys)
+
 		return
 	}
 
