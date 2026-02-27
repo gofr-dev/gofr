@@ -98,6 +98,20 @@ func startPublishSpan(ctx context.Context, topic string) (context.Context, trace
 	return ctx, span, attrs
 }
 
+// extractMessageAttrs extracts string map attributes from message metadata.
+// Returns nil if metadata is nil or not of type map[string]string.
+func extractMessageAttrs(metaData any) map[string]string {
+	if metaData == nil {
+		return nil
+	}
+
+	if attrs, ok := metaData.(map[string]string); ok {
+		return attrs
+	}
+
+	return nil
+}
+
 // startSubscribeSpan creates a new span for subscribing with links to the producer span.
 // If trace context exists in message attributes, creates a span linked to the producer.
 // Otherwise, creates an orphan span (new trace).

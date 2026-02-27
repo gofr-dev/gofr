@@ -214,14 +214,7 @@ func (g *googleClient) Subscribe(ctx context.Context, topic string) (*pubsub.Mes
 	select {
 	case m := <-g.receiveChan[topic]:
 		// Create span with links to producer span from message attributes
-		var msgAttrs map[string]string
-		if m.MetaData != nil {
-			if attrs, ok := m.MetaData.(map[string]string); ok {
-				msgAttrs = attrs
-			}
-		}
-
-		spanCtx, span := startSubscribeSpan(ctx, topic, msgAttrs)
+		spanCtx, span := startSubscribeSpan(ctx, topic, extractMessageAttrs(m.MetaData))
 		defer span.End()
 
 		g.metrics.IncrementCounter(spanCtx, "app_pubsub_subscribe_success_count", "topic", topic, "subscription_name",
