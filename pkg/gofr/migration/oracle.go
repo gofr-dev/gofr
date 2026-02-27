@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"strconv"
+	"strings"
 	"time"
 
 	"gofr.dev/pkg/gofr/container"
@@ -75,12 +76,13 @@ END;
 
 // Create migration table if it doesn't exist.
 func (om oracleMigrator) checkAndCreateMigrationTable(c *container.Container) error {
-	err := om.Oracle.Exec(context.Background(), checkAndCreateOracleMigrationTable)
-	if err != nil {
+	if err := om.Oracle.Exec(context.Background(), checkAndCreateOracleMigrationTable); err != nil {
+		c.Errorf("failed to create Oracle migration table: %v", err)
 		return err
 	}
 
 	if err := om.Oracle.Exec(context.Background(), checkAndCreateOracleMigrationLocksTable); err != nil {
+		c.Errorf("failed to create Oracle migration locks table: %v", err)
 		return err
 	}
 
@@ -217,7 +219,9 @@ func (om oracleMigrator) beginTransaction(c *container.Container) transactionDat
 
 func (om oracleMigrator) lock(ctx context.Context, cancel context.CancelFunc, c *container.Container, ownerID string) error {
 	for i := 0; ; i++ {
-		_ = om.Oracle.Exec(ctx, deleteExpiredOracleLocks, time.Now().UTC())
+		if err := om.Oracle.Exec(ctx, deleteExpiredOracleLocks, time.Now().UTC()); err != nil {
+			c.Debugf("failed to clean up expired Oracle locks: %v", err)
+		}
 
 		expiresAt := time.Now().UTC().Add(defaultLockTTL)
 
@@ -230,7 +234,7 @@ func (om oracleMigrator) lock(ctx context.Context, cancel context.CancelFunc, c 
 			return om.migrator.lock(ctx, cancel, c, ownerID)
 		}
 
-		if !isDuplicateKeyError(err) {
+		if !isOracleDuplicateKeyError(err) {
 			c.Errorf("error while acquiring Oracle lock: %v", err)
 
 			return errLockAcquisitionFailed
@@ -255,16 +259,25 @@ func (oracleMigrator) startRefresh(ctx context.Context, cancel context.CancelFun
 		case <-ticker.C:
 			expiresAt := time.Now().UTC().Add(defaultLockTTL)
 			if err := c.Oracle.Exec(ctx, updateOracleLock, expiresAt, lockKey, ownerID); err != nil {
-				c.Error("failed to refresh Oracle lock: %v", err)
+				c.Errorf("failed to refresh Oracle lock: %v", err)
 				cancel()
+
 				return
 			}
-			
+
 			c.Debugf("Oracle lock refreshed successfully")
 		case <-ctx.Done():
 			return
 		}
 	}
+}
+
+// isOracleDuplicateKeyError checks for Oracle unique constraint violation (ORA-00001) in addition
+// to the generic patterns checked by isDuplicateKeyError, to avoid relying solely on driver-specific
+// message formatting.
+func isOracleDuplicateKeyError(err error) bool {
+	msg := strings.ToLower(err.Error())
+	return strings.Contains(msg, "ora-00001") || isDuplicateKeyError(err)
 }
 
 func (om oracleMigrator) unlock(c *container.Container, ownerID string) error {
@@ -274,6 +287,7 @@ func (om oracleMigrator) unlock(c *container.Container, ownerID string) error {
 	}
 
 	c.Debug("Oracle lock released successfully")
+
 	return om.migrator.unlock(c, ownerID)
 }
 
