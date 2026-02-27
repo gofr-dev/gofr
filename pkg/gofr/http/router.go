@@ -136,7 +136,7 @@ func (staticConfig staticFileConfig) staticHandler(fileServer http.Handler) http
 func (staticConfig staticFileConfig) isRestrictedFile(url, absPath string) bool {
 	fileName := filepath.Base(url)
 
-	return !strings.HasPrefix(absPath, staticConfig.directoryName) || fileName == DefaultSwaggerFileName
+	return !strings.HasPrefix(absPath, staticConfig.directoryName+string(os.PathSeparator)) || fileName == DefaultSwaggerFileName
 }
 
 // Validates file existence and permissions.
