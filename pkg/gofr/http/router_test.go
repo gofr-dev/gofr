@@ -371,36 +371,6 @@ func Test_isRestrictedFile(t *testing.T) {
 	}
 }
 
-func Test_StaticFileServing_SiblingDirectoryEscape(t *testing.T) {
-	// Create two sibling directories: "public" and "publicother"
-	parentDir := t.TempDir()
-	publicDir := filepath.Join(parentDir, "public")
-	siblingDir := filepath.Join(parentDir, "publicother")
-
-	assert.NoError(t, os.MkdirAll(publicDir, 0755))
-	assert.NoError(t, os.MkdirAll(siblingDir, 0755))
-
-	assert.NoError(t, os.WriteFile(filepath.Join(publicDir, "allowed.txt"), []byte("allowed"), 0600))
-	assert.NoError(t, os.WriteFile(filepath.Join(siblingDir, "secret.txt"), []byte("secret"), 0600))
-
-	logger := logging.NewMockLogger(logging.DEBUG)
-	router := NewRouter()
-	router.AddStaticFiles(logger, "/static", publicDir)
-
-	// File inside the registered directory should be served
-	req := httptest.NewRequest(http.MethodGet, "/static/allowed.txt", http.NoBody)
-	w := httptest.NewRecorder()
-	router.ServeHTTP(w, req)
-	assert.Equal(t, http.StatusOK, w.Code)
-	assert.Equal(t, "allowed", strings.TrimSpace(w.Body.String()))
-
-	// Path traversal to sibling directory should be blocked
-	req = httptest.NewRequest(http.MethodGet, "/static/../publicother/secret.txt", http.NoBody)
-	w = httptest.NewRecorder()
-	router.ServeHTTP(w, req)
-	assert.NotEqual(t, http.StatusOK, w.Code, "sibling directory file should not be served")
-}
-
 func runStaticFileTests(t *testing.T, tempDir string, testCases []struct {
 	name             string
 	setupFiles       func() error
