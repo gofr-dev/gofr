@@ -11,7 +11,6 @@ import (
 	"time"
 
 	gcPubSub "cloud.google.com/go/pubsub"
-	"go.opentelemetry.io/otel"
 	"google.golang.org/api/iterator"
 
 	"gofr.dev/pkg/gofr/datasource/pubsub"
@@ -112,7 +111,7 @@ func connect(conf Config, logger pubsub.Logger) (*gcPubSub.Client, error) {
 }
 
 func (g *googleClient) Publish(ctx context.Context, topic string, message []byte) error {
-	ctx, span := otel.GetTracerProvider().Tracer("gofr").Start(ctx, "publish-gcp")
+	ctx, span, traceAttrs := startPublishSpan(ctx, topic)
 	defer span.End()
 
 	g.metrics.IncrementCounter(ctx, "app_pubsub_publish_total_count", "topic", topic)
@@ -127,6 +126,7 @@ func (g *googleClient) Publish(ctx context.Context, topic string, message []byte
 	start := time.Now()
 	result := t.Publish(ctx, &gcPubSub.Message{
 		Data:        message,
+		Attributes:  traceAttrs,
 		PublishTime: time.Now(),
 	})
 	end := time.Since(start)
@@ -166,18 +166,15 @@ func (g *googleClient) Subscribe(ctx context.Context, topic string) (*pubsub.Mes
 		return nil, errClientNotConnected
 	}
 
-	spanCtx, span := otel.GetTracerProvider().Tracer("gofr").Start(ctx, "gcp-subscribe")
-	defer span.End()
-
-	g.metrics.IncrementCounter(spanCtx, "app_pubsub_subscribe_total_count", "topic", topic, "subscription_name", g.Config.SubscriptionName)
+	g.metrics.IncrementCounter(ctx, "app_pubsub_subscribe_total_count", "topic", topic, "subscription_name", g.Config.SubscriptionName)
 
 	if _, ok := g.subStarted[topic]; !ok {
-		t, err := g.getTopic(spanCtx, topic)
+		t, err := g.getTopic(ctx, topic)
 		if err != nil {
 			return nil, err
 		}
 
-		subscription, err := g.getSubscription(spanCtx, t)
+		subscription, err := g.getSubscription(ctx, t)
 		if err != nil {
 			return nil, err
 		}
@@ -216,6 +213,10 @@ func (g *googleClient) Subscribe(ctx context.Context, topic string) (*pubsub.Mes
 
 	select {
 	case m := <-g.receiveChan[topic]:
+		// Create span with links to producer span from message attributes
+		spanCtx, span := startSubscribeSpan(ctx, topic, extractMessageAttrs(m.MetaData))
+		defer span.End()
+
 		g.metrics.IncrementCounter(spanCtx, "app_pubsub_subscribe_success_count", "topic", topic, "subscription_name",
 			g.Config.SubscriptionName)
 
