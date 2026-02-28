@@ -181,6 +181,7 @@ func (h sseHTTPHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		defer func() {
 			if re := recover(); re != nil {
 				h.container.Logger.Errorf("SSE handler panicked: %v", re)
+
 				handlerDone <- errHandlerPanicked
 			}
 
@@ -193,7 +194,14 @@ func (h sseHTTPHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	h.drainLoop(w, r, rc, stream, handlerDone, traceID)
 }
 
-func (h sseHTTPHandler) drainLoop(w http.ResponseWriter, r *http.Request, rc *http.ResponseController, stream *SSEStream, handlerDone <-chan error, traceID string) {
+func (h sseHTTPHandler) drainLoop(
+	w http.ResponseWriter,
+	r *http.Request,
+	rc *http.ResponseController,
+	stream *SSEStream,
+	handlerDone <-chan error,
+	traceID string,
+) {
 	heartbeat := time.NewTicker(sseHeartbeatInterval)
 	defer heartbeat.Stop()
 
