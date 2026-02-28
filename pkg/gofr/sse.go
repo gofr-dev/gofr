@@ -2,6 +2,7 @@ package gofr
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"strings"
@@ -43,7 +44,11 @@ func newSSEStream() *SSEStream {
 	}
 }
 
-var errStreamClosed = fmt.Errorf("client disconnected: stream closed")
+var (
+	errStreamClosed          = errors.New("client disconnected: stream closed")
+	errStreamingNotSupported = errors.New("streaming not supported: ResponseWriter does not implement http.Flusher")
+	errHandlerPanicked       = errors.New("SSE handler panicked")
+)
 
 // Send enqueues a formatted SSE event.
 func (s *SSEStream) Send(event SSEEvent) error {
@@ -138,8 +143,6 @@ func formatSSEData(data any) (string, error) {
 	}
 }
 
-var errStreamingNotSupported = fmt.Errorf("streaming not supported: ResponseWriter does not implement http.Flusher")
-
 // sseHTTPHandler implements http.Handler for SSE endpoints.
 type sseHTTPHandler struct {
 	function  SSEHandler
@@ -165,6 +168,7 @@ func (h sseHTTPHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 
 	traceID := trace.SpanFromContext(r.Context()).SpanContext().TraceID().String()
+
 	stream := newSSEStream()
 	defer close(stream.done)
 
@@ -177,7 +181,7 @@ func (h sseHTTPHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		defer func() {
 			if re := recover(); re != nil {
 				h.container.Logger.Errorf("SSE handler panicked: %v", re)
-				handlerDone <- fmt.Errorf("SSE handler panicked: %v", re)
+				handlerDone <- errHandlerPanicked
 			}
 
 			close(stream.events)
@@ -186,6 +190,10 @@ func (h sseHTTPHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		handlerDone <- h.function(ctx, stream)
 	}()
 
+	h.drainLoop(w, r, rc, stream, handlerDone, traceID)
+}
+
+func (h sseHTTPHandler) drainLoop(w http.ResponseWriter, r *http.Request, rc *http.ResponseController, stream *SSEStream, handlerDone <-chan error, traceID string) {
 	heartbeat := time.NewTicker(sseHeartbeatInterval)
 	defer heartbeat.Stop()
 

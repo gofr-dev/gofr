@@ -50,7 +50,7 @@ func Test_formatSSEData_UnsupportedType(t *testing.T) {
 	ch := make(chan int)
 	_, err := formatSSEData(ch)
 
-	assert.Error(t, err)
+	require.Error(t, err)
 	assert.Contains(t, err.Error(), "failed to marshal SSE data")
 }
 
@@ -193,10 +193,10 @@ func TestSSEHTTPHandler_BlockedSenderNoLeak(t *testing.T) {
 	handlerExited := make(chan struct{})
 
 	h := sseHTTPHandler{
-		function: func(ctx *Context, stream *SSEStream) error {
+		function: func(_ *Context, stream *SSEStream) error {
 			defer close(handlerExited)
 
-					for i := 0; i < sseEventBufferSize+100; i++ {
+			for i := 0; i < sseEventBufferSize+100; i++ {
 				if err := stream.SendData(i); err != nil {
 					return err
 				}
@@ -308,7 +308,7 @@ func TestSSEHTTPHandler_ClientDisconnect(t *testing.T) {
 	handlerStarted := make(chan struct{})
 
 	h := sseHTTPHandler{
-		function: func(ctx *Context, stream *SSEStream) error {
+		function: func(ctx *Context, _ *SSEStream) error {
 			close(handlerStarted)
 			<-ctx.Done()
 
@@ -381,7 +381,7 @@ func TestSSEHTTPHandler_StreamingLoop(t *testing.T) {
 	c := &container.Container{Logger: logging.NewLogger(logging.FATAL)}
 
 	h := sseHTTPHandler{
-		function: func(ctx *Context, stream *SSEStream) error {
+		function: func(_ *Context, stream *SSEStream) error {
 			for i := 0; i < 5; i++ {
 				if err := stream.Send(SSEEvent{
 					ID:   string(rune('0' + i)),
@@ -468,9 +468,9 @@ type nonFlushableWriter struct {
 	header http.Header
 }
 
-func (n *nonFlushableWriter) Header() http.Header      { return n.header }
-func (n *nonFlushableWriter) Write([]byte) (int, error) { return 0, nil }
-func (n *nonFlushableWriter) WriteHeader(int)           {}
+func (n *nonFlushableWriter) Header() http.Header     { return n.header }
+func (*nonFlushableWriter) Write([]byte) (int, error) { return 0, nil }
+func (*nonFlushableWriter) WriteHeader(int)           {}
 
 func TestApp_SSE_Integration(t *testing.T) {
 	configs := testutil.NewServerConfigs(t)
@@ -494,7 +494,12 @@ func TestApp_SSE_Integration(t *testing.T) {
 	var err error
 
 	for i := 0; i < 50; i++ {
-		resp, err = http.Get(configs.HTTPHost + "/events")
+		req, reqErr := http.NewRequestWithContext(context.Background(), http.MethodGet, configs.HTTPHost+"/events", http.NoBody)
+		if reqErr != nil {
+			t.Fatalf("create request: %v", reqErr)
+		}
+
+		resp, err = http.DefaultClient.Do(req)
 		if err == nil {
 			break
 		}
@@ -503,6 +508,7 @@ func TestApp_SSE_Integration(t *testing.T) {
 	}
 
 	require.NoError(t, err)
+
 	defer resp.Body.Close()
 
 	assert.Equal(t, "text/event-stream", resp.Header.Get("Content-Type"))
@@ -538,9 +544,14 @@ func TestApp_SSE_Integration_ClientDisconnect(t *testing.T) {
 	go app.Run()
 
 	for i := 0; i < 50; i++ {
-		resp, err := http.Get(configs.HTTPHost + "/.well-known/alive")
-		if err == nil {
-			resp.Body.Close()
+		req, reqErr := http.NewRequestWithContext(context.Background(), http.MethodGet, configs.HTTPHost+"/.well-known/alive", http.NoBody)
+		if reqErr != nil {
+			t.Fatalf("create request: %v", reqErr)
+		}
+
+		probe, doErr := http.DefaultClient.Do(req)
+		if doErr == nil {
+			probe.Body.Close()
 
 			break
 		}

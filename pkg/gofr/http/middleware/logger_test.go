@@ -357,6 +357,6 @@ type nonFlushableWriter struct {
 	header http.Header
 }
 
-func (n *nonFlushableWriter) Header() http.Header      { return n.header }
-func (*nonFlushableWriter) Write([]byte) (int, error)   { return 0, nil }
-func (*nonFlushableWriter) WriteHeader(int)             {}
+func (n *nonFlushableWriter) Header() http.Header     { return n.header }
+func (*nonFlushableWriter) Write([]byte) (int, error) { return 0, nil }
+func (*nonFlushableWriter) WriteHeader(int)           {}
