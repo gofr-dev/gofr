@@ -320,3 +320,43 @@ type mockAddr struct{}
 
 func (*mockAddr) Network() string { return "tcp" }
 func (*mockAddr) String() string  { return "127.0.0.1:8080" }
+
+func Test_StatusResponseWriter_Flush_Supported(t *testing.T) {
+	rr := httptest.NewRecorder()
+	srw := &StatusResponseWriter{ResponseWriter: rr}
+
+	// httptest.ResponseRecorder implements http.Flusher.
+	assert.NotPanics(t, func() {
+		srw.Flush()
+	})
+
+	assert.True(t, rr.Flushed, "expected recorder to be flushed")
+}
+
+func Test_StatusResponseWriter_Flush_NotSupported(t *testing.T) {
+	writer := &nonFlushableWriter{header: http.Header{}}
+	srw := &StatusResponseWriter{ResponseWriter: writer}
+
+	// Should not panic even if the underlying writer doesn't support Flusher.
+	assert.NotPanics(t, func() {
+		srw.Flush()
+	})
+}
+
+func Test_StatusResponseWriter_Unwrap(t *testing.T) {
+	rr := httptest.NewRecorder()
+	srw := &StatusResponseWriter{ResponseWriter: rr}
+
+	unwrapped := srw.Unwrap()
+
+	assert.Equal(t, rr, unwrapped, "expected Unwrap to return the underlying ResponseWriter")
+}
+
+// nonFlushableWriter is a ResponseWriter that does NOT implement http.Flusher.
+type nonFlushableWriter struct {
+	header http.Header
+}
+
+func (n *nonFlushableWriter) Header() http.Header      { return n.header }
+func (*nonFlushableWriter) Write([]byte) (int, error)   { return 0, nil }
+func (*nonFlushableWriter) WriteHeader(int)             {}

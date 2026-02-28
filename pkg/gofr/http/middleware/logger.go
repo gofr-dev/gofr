@@ -47,6 +47,18 @@ func (w *StatusResponseWriter) Hijack() (net.Conn, *bufio.ReadWriter, error) {
 	return nil, nil, fmt.Errorf("%w: cannot hijack connection", errHijackNotSupported)
 }
 
+// Flush delegates to the underlying http.Flusher if supported.
+func (w *StatusResponseWriter) Flush() {
+	if flusher, ok := w.ResponseWriter.(http.Flusher); ok {
+		flusher.Flush()
+	}
+}
+
+// Unwrap returns the underlying ResponseWriter for http.ResponseController.
+func (w *StatusResponseWriter) Unwrap() http.ResponseWriter {
+	return w.ResponseWriter
+}
+
 // RequestLog represents a log entry for HTTP requests.
 type RequestLog struct {
 	TraceID      string `json:"trace_id,omitempty"`
