@@ -17,8 +17,9 @@ import (
 )
 
 const (
-	rateLimitKeyGlobal  = "global"
-	rateLimitKeyUnknown = "unknown"
+	rateLimitKeyGlobal      = "global"
+	rateLimitKeyUnknown     = "unknown"
+	grpcHealthServicePrefix = "/grpc.health.v1.Health/"
 )
 
 type CounterMetrics interface {
@@ -123,6 +124,10 @@ func UnaryRateLimitInterceptor(ctx context.Context, config httpmw.RateLimiterCon
 	config.Store.StartCleanup(ctx)
 
 	return func(ctx context.Context, req any, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (any, error) {
+		if strings.HasPrefix(info.FullMethod, grpcHealthServicePrefix) {
+			return handler(ctx, req)
+		}
+
 		key := rateLimitKeyGlobal
 		if config.PerIP {
 			key = getIP(ctx, config.TrustedProxies)
@@ -167,6 +172,10 @@ func StreamRateLimitInterceptor(ctx context.Context, config httpmw.RateLimiterCo
 	config.Store.StartCleanup(ctx)
 
 	return func(srv any, ss grpc.ServerStream, info *grpc.StreamServerInfo, handler grpc.StreamHandler) error {
+		if strings.HasPrefix(info.FullMethod, grpcHealthServicePrefix) {
+			return handler(srv, ss)
+		}
+
 		streamCtx := ss.Context()
 
 		key := rateLimitKeyGlobal
