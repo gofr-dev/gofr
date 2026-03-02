@@ -111,7 +111,7 @@ func retryAfterSeconds(durSeconds float64) string {
 	return fmt.Sprintf("%.0f", secs)
 }
 
-func UnaryRateLimitInterceptor(config httpmw.RateLimiterConfig, m CounterMetrics) grpc.UnaryServerInterceptor {
+func UnaryRateLimitInterceptor(ctx context.Context, config httpmw.RateLimiterConfig, m CounterMetrics) grpc.UnaryServerInterceptor {
 	if err := config.Validate(); err != nil {
 		panic(fmt.Sprintf("invalid rate limiter config: %v", err))
 	}
@@ -120,7 +120,7 @@ func UnaryRateLimitInterceptor(config httpmw.RateLimiterConfig, m CounterMetrics
 		config.Store = httpmw.NewMemoryRateLimiterStore(config)
 	}
 
-	config.Store.StartCleanup(context.Background())
+	config.Store.StartCleanup(ctx)
 
 	return func(ctx context.Context, req any, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (any, error) {
 		key := rateLimitKeyGlobal
@@ -155,7 +155,7 @@ func UnaryRateLimitInterceptor(config httpmw.RateLimiterConfig, m CounterMetrics
 	}
 }
 
-func StreamRateLimitInterceptor(config httpmw.RateLimiterConfig, m CounterMetrics) grpc.StreamServerInterceptor {
+func StreamRateLimitInterceptor(ctx context.Context, config httpmw.RateLimiterConfig, m CounterMetrics) grpc.StreamServerInterceptor {
 	if err := config.Validate(); err != nil {
 		panic(fmt.Sprintf("invalid rate limiter config: %v", err))
 	}
@@ -164,7 +164,7 @@ func StreamRateLimitInterceptor(config httpmw.RateLimiterConfig, m CounterMetric
 		config.Store = httpmw.NewMemoryRateLimiterStore(config)
 	}
 
-	config.Store.StartCleanup(context.Background())
+	config.Store.StartCleanup(ctx)
 
 	return func(srv any, ss grpc.ServerStream, info *grpc.StreamServerInfo, handler grpc.StreamHandler) error {
 		streamCtx := ss.Context()

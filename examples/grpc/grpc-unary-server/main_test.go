@@ -144,6 +144,9 @@ func TestHelloProtoMethods(t *testing.T) {
 func TestIntegration_UnaryServer_RateLimited(t *testing.T) {
 	configs := testutil.NewServerConfigs(t)
 
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
 	go func() {
 		app := gofr.New()
 
@@ -153,7 +156,7 @@ func TestIntegration_UnaryServer_RateLimited(t *testing.T) {
 		}
 
 		app.AddGRPCUnaryInterceptors(
-			gofrGrpc.UnaryRateLimitInterceptor(rateLimiterCfg, app.Metrics()),
+			gofrGrpc.UnaryRateLimitInterceptor(ctx, rateLimiterCfg, app.Metrics()),
 		)
 
 		server.RegisterHelloServerWithGofr(app, server.NewHelloGoFrServer())

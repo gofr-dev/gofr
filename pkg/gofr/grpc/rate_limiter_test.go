@@ -292,7 +292,7 @@ func TestUnaryRateLimitInterceptor_PanicsOnInvalidConfig(t *testing.T) {
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			assert.Panics(t, func() {
-				UnaryRateLimitInterceptor(tc.config, nil)
+				UnaryRateLimitInterceptor(context.Background(), tc.config, nil)
 			})
 		})
 	}
@@ -300,7 +300,7 @@ func TestUnaryRateLimitInterceptor_PanicsOnInvalidConfig(t *testing.T) {
 
 func TestUnaryRateLimitInterceptor_DefaultStore(t *testing.T) {
 	cfg := httpmw.RateLimiterConfig{RequestsPerSecond: 10, Burst: 5}
-	interceptor := UnaryRateLimitInterceptor(cfg, nil)
+	interceptor := UnaryRateLimitInterceptor(context.Background(), cfg, nil)
 	require.NotNil(t, interceptor)
 }
 
@@ -312,7 +312,7 @@ func TestUnaryRateLimitInterceptor_GlobalLimit(t *testing.T) {
 		PerIP:             false,
 	}
 
-	interceptor := UnaryRateLimitInterceptor(config, metrics)
+	interceptor := UnaryRateLimitInterceptor(context.Background(), config, metrics)
 	info := &grpc.UnaryServerInfo{FullMethod: "/svc/Method"}
 	handler := func(_ context.Context, _ any) (any, error) { return "ok", nil }
 
@@ -343,7 +343,7 @@ func TestUnaryRateLimitInterceptor_PerIPLimit(t *testing.T) {
 		TrustedProxies:    true,
 	}
 
-	interceptor := UnaryRateLimitInterceptor(config, metrics)
+	interceptor := UnaryRateLimitInterceptor(context.Background(), config, metrics)
 	info := &grpc.UnaryServerInfo{FullMethod: "/svc/Method"}
 	handler := func(_ context.Context, _ any) (any, error) { return "ok", nil }
 
@@ -380,7 +380,7 @@ func TestUnaryRateLimitInterceptor_EmptyIPFallback(t *testing.T) {
 		TrustedProxies:    false,
 	}
 
-	interceptor := UnaryRateLimitInterceptor(config, metrics)
+	interceptor := UnaryRateLimitInterceptor(context.Background(), config, metrics)
 	info := &grpc.UnaryServerInfo{FullMethod: "/svc/Method"}
 	handler := func(_ context.Context, _ any) (any, error) { return "ok", nil }
 
@@ -407,7 +407,7 @@ func TestUnaryRateLimitInterceptor_StoreError_FailsOpen(t *testing.T) {
 		Store:             store,
 	}
 
-	interceptor := UnaryRateLimitInterceptor(cfg, nil)
+	interceptor := UnaryRateLimitInterceptor(context.Background(), cfg, nil)
 
 	resp, err := interceptor(context.Background(), "req",
 		&grpc.UnaryServerInfo{FullMethod: "/svc/Method"},
@@ -425,7 +425,7 @@ func TestUnaryRateLimitInterceptor_DeniedNilMetrics(t *testing.T) {
 		Store:             store,
 	}
 
-	interceptor := UnaryRateLimitInterceptor(cfg, nil)
+	interceptor := UnaryRateLimitInterceptor(context.Background(), cfg, nil)
 
 	ctx := grpc.NewContextWithServerTransportStream(context.Background(), nil)
 
@@ -452,7 +452,7 @@ func TestUnaryRateLimitInterceptor_TokenRefill(t *testing.T) {
 		PerIP:             false,
 	}
 
-	interceptor := UnaryRateLimitInterceptor(config, metrics)
+	interceptor := UnaryRateLimitInterceptor(context.Background(), config, metrics)
 	info := &grpc.UnaryServerInfo{FullMethod: "/svc/Method"}
 	handler := func(_ context.Context, _ any) (any, error) { return "ok", nil }
 
@@ -483,7 +483,7 @@ func TestUnaryRateLimitInterceptor_ConcurrentRequests(t *testing.T) {
 		TrustedProxies:    true,
 	}
 
-	interceptor := UnaryRateLimitInterceptor(config, metrics)
+	interceptor := UnaryRateLimitInterceptor(context.Background(), config, metrics)
 	info := &grpc.UnaryServerInfo{FullMethod: "/svc/Method"}
 	handler := func(_ context.Context, _ any) (any, error) { return "ok", nil }
 
@@ -534,7 +534,7 @@ func TestUnaryRateLimitInterceptor_TrustedProxiesDisabled(t *testing.T) {
 		TrustedProxies:    false,
 	}
 
-	interceptor := UnaryRateLimitInterceptor(config, metrics)
+	interceptor := UnaryRateLimitInterceptor(context.Background(), config, metrics)
 	info := &grpc.UnaryServerInfo{FullMethod: "/svc/Method"}
 	handler := func(_ context.Context, _ any) (any, error) { return "ok", nil }
 
@@ -567,7 +567,7 @@ func TestUnaryRateLimitInterceptor_RetryAfterHeader(t *testing.T) {
 		Store:             store,
 	}
 
-	interceptor := UnaryRateLimitInterceptor(cfg, nil)
+	interceptor := UnaryRateLimitInterceptor(context.Background(), cfg, nil)
 
 	ctx := grpc.NewContextWithServerTransportStream(context.Background(), nil)
 
@@ -604,7 +604,7 @@ func TestStreamRateLimitInterceptor_PanicsOnInvalidConfig(t *testing.T) {
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			assert.Panics(t, func() {
-				StreamRateLimitInterceptor(tc.config, nil)
+				StreamRateLimitInterceptor(context.Background(), tc.config, nil)
 			})
 		})
 	}
@@ -612,7 +612,7 @@ func TestStreamRateLimitInterceptor_PanicsOnInvalidConfig(t *testing.T) {
 
 func TestStreamRateLimitInterceptor_DefaultStore(t *testing.T) {
 	cfg := httpmw.RateLimiterConfig{RequestsPerSecond: 10, Burst: 5}
-	interceptor := StreamRateLimitInterceptor(cfg, nil)
+	interceptor := StreamRateLimitInterceptor(context.Background(), cfg, nil)
 	require.NotNil(t, interceptor)
 }
 
@@ -624,7 +624,7 @@ func TestStreamRateLimitInterceptor_GlobalLimit(t *testing.T) {
 		PerIP:             false,
 	}
 
-	interceptor := StreamRateLimitInterceptor(config, metrics)
+	interceptor := StreamRateLimitInterceptor(context.Background(), config, metrics)
 	info := &grpc.StreamServerInfo{FullMethod: "/svc/Stream"}
 	handler := func(any, grpc.ServerStream) error { return nil }
 
@@ -653,7 +653,7 @@ func TestStreamRateLimitInterceptor_PerIPLimit(t *testing.T) {
 		TrustedProxies:    true,
 	}
 
-	interceptor := StreamRateLimitInterceptor(config, metrics)
+	interceptor := StreamRateLimitInterceptor(context.Background(), config, metrics)
 	info := &grpc.StreamServerInfo{FullMethod: "/svc/Stream"}
 	handler := func(any, grpc.ServerStream) error { return nil }
 
@@ -688,7 +688,7 @@ func TestStreamRateLimitInterceptor_EmptyIPFallback(t *testing.T) {
 		TrustedProxies:    false,
 	}
 
-	interceptor := StreamRateLimitInterceptor(config, metrics)
+	interceptor := StreamRateLimitInterceptor(context.Background(), config, metrics)
 	info := &grpc.StreamServerInfo{FullMethod: "/svc/Stream"}
 	handler := func(any, grpc.ServerStream) error { return nil }
 
@@ -714,7 +714,7 @@ func TestStreamRateLimitInterceptor_StoreError_FailsOpen(t *testing.T) {
 		Store:             store,
 	}
 
-	interceptor := StreamRateLimitInterceptor(cfg, nil)
+	interceptor := StreamRateLimitInterceptor(context.Background(), cfg, nil)
 
 	ss := &rateLimitMockStream{ctx: context.Background()}
 	err := interceptor(nil, ss, &grpc.StreamServerInfo{FullMethod: "/svc/Stream"},
@@ -731,7 +731,7 @@ func TestStreamRateLimitInterceptor_DeniedNilMetrics(t *testing.T) {
 		Store:             store,
 	}
 
-	interceptor := StreamRateLimitInterceptor(cfg, nil)
+	interceptor := StreamRateLimitInterceptor(context.Background(), cfg, nil)
 
 	ss := &rateLimitMockStream{ctx: context.Background()}
 	err := interceptor(nil, ss, &grpc.StreamServerInfo{FullMethod: "/svc/Stream"},
@@ -752,7 +752,7 @@ func TestStreamRateLimitInterceptor_RetryAfterHeader(t *testing.T) {
 	}
 
 	metrics := newRateLimiterMockMetrics()
-	interceptor := StreamRateLimitInterceptor(cfg, metrics)
+	interceptor := StreamRateLimitInterceptor(context.Background(), cfg, metrics)
 
 	ss := &rateLimitMockStream{ctx: context.Background()}
 	err := interceptor(nil, ss, &grpc.StreamServerInfo{FullMethod: "/svc/Stream"},
@@ -775,7 +775,7 @@ func TestStreamRateLimitInterceptor_TokenRefill(t *testing.T) {
 		PerIP:             false,
 	}
 
-	interceptor := StreamRateLimitInterceptor(config, metrics)
+	interceptor := StreamRateLimitInterceptor(context.Background(), config, metrics)
 	info := &grpc.StreamServerInfo{FullMethod: "/svc/Stream"}
 	handler := func(any, grpc.ServerStream) error { return nil }
 
@@ -806,7 +806,7 @@ func TestStreamRateLimitInterceptor_ConcurrentRequests(t *testing.T) {
 		TrustedProxies:    true,
 	}
 
-	interceptor := StreamRateLimitInterceptor(config, metrics)
+	interceptor := StreamRateLimitInterceptor(context.Background(), config, metrics)
 	info := &grpc.StreamServerInfo{FullMethod: "/svc/Stream"}
 
 	var (

@@ -240,6 +240,8 @@ It uses the same token bucket algorithm and configuration as the HTTP rate limit
 
 ```go
 import (
+	"context"
+
 	"gofr.dev/pkg/gofr"
 	gofrGrpc "gofr.dev/pkg/gofr/grpc"
 	"gofr.dev/pkg/gofr/http/middleware"
@@ -247,6 +249,12 @@ import (
 
 func main() {
 	app := gofr.New()
+
+	// ctx controls the lifetime of the rate limiter's background cleanup goroutine.
+	// Cancelling this context stops cleanup gracefully, preventing goroutine leaks
+	// during rolling restarts. In production, tie this to your server's shutdown signal.
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
 
 	// Configure rate limiter (shared config for both unary and stream)
 	cfg := middleware.RateLimiterConfig{
@@ -264,8 +272,8 @@ func main() {
 
 	// Add rate limiter interceptors for gRPC
 	// Pass app.Metrics() to emit Prometheus counters, or nil to disable metrics.
-	app.AddGRPCUnaryInterceptors(gofrGrpc.UnaryRateLimitInterceptor(cfg, app.Metrics()))
-	app.AddGRPCServerStreamInterceptors(gofrGrpc.StreamRateLimitInterceptor(cfg, app.Metrics()))
+	app.AddGRPCUnaryInterceptors(gofrGrpc.UnaryRateLimitInterceptor(ctx, cfg, app.Metrics()))
+	app.AddGRPCServerStreamInterceptors(gofrGrpc.StreamRateLimitInterceptor(ctx, cfg, app.Metrics()))
 
 	// Register your gRPC service
 	packageName.Register<SERVICE_NAME>ServerWithGofr(app, &packageName.New<SERVICE_NAME>GoFrServer())
@@ -277,6 +285,9 @@ func main() {
 > **Note**: The example above creates a single shared store so unary and stream RPCs draw from the **same** token bucket.
 > If you want **independent limits** for each call type (e.g., high throughput for unary, tight limits for streams),
 > omit the shared store and pass separate configs — see [Separate Limits for Unary and Stream RPCs](#separate-limits-for-unary-and-stream-rpcs) below.
+
+> **Graceful Shutdown**: The `ctx` parameter controls the lifetime of the background cleanup goroutine that evicts expired token buckets.
+> Cancel this context when the server shuts down to prevent goroutine leaks during rolling restarts.
 
 ### Parameters
 
@@ -325,8 +336,8 @@ streamCfg := middleware.RateLimiterConfig{
 	PerIP:             true,
 }
 
-app.AddGRPCUnaryInterceptors(gofrGrpc.UnaryRateLimitInterceptor(unaryCfg, app.Metrics()))
-app.AddGRPCServerStreamInterceptors(gofrGrpc.StreamRateLimitInterceptor(streamCfg, app.Metrics()))
+app.AddGRPCUnaryInterceptors(gofrGrpc.UnaryRateLimitInterceptor(ctx, unaryCfg, app.Metrics()))
+app.AddGRPCServerStreamInterceptors(gofrGrpc.StreamRateLimitInterceptor(ctx, streamCfg, app.Metrics()))
 ```
 
 Each config creates its own store (when `Store` is nil), so the limits are completely independent. If you instead want a **single shared budget** across both call types, create one store and assign it to both configs as shown in the [Configuration](#configuration) example above.
