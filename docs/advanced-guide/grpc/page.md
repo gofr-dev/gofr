@@ -274,6 +274,10 @@ func main() {
 }
 ```
 
+> **Note**: The example above creates a single shared store so unary and stream RPCs draw from the **same** token bucket.
+> If you want **independent limits** for each call type (e.g., high throughput for unary, tight limits for streams),
+> omit the shared store and pass separate configs — see [Separate Limits for Unary and Stream RPCs](#separate-limits-for-unary-and-stream-rpcs) below.
+
 ### Parameters
 
 The gRPC rate limiter uses the same `middleware.RateLimiterConfig` as the HTTP rate limiter:
@@ -303,6 +307,29 @@ When `PerIP` is enabled, the client IP is determined in the following order:
 3. gRPC peer address (direct connection IP)
 
 If no IP can be determined, requests are grouped under an `unknown` key to prevent them from sharing the global bucket.
+
+### Separate Limits for Unary and Stream RPCs
+
+Unary calls and stream connections often have very different resource costs. You can pass independent configurations to each interceptor to enforce separate budgets — for example, allowing a high rate for lightweight unary calls while tightly limiting new stream connections:
+
+```go
+unaryCfg := middleware.RateLimiterConfig{
+	RequestsPerSecond: 100, // High throughput for lightweight unary calls
+	Burst:             50,
+	PerIP:             true,
+}
+
+streamCfg := middleware.RateLimiterConfig{
+	RequestsPerSecond: 5, // Streams are long-lived and expensive
+	Burst:             3,
+	PerIP:             true,
+}
+
+app.AddGRPCUnaryInterceptors(gofrGrpc.UnaryRateLimitInterceptor(unaryCfg, app.Metrics()))
+app.AddGRPCServerStreamInterceptors(gofrGrpc.StreamRateLimitInterceptor(streamCfg, app.Metrics()))
+```
+
+Each config creates its own store (when `Store` is nil), so the limits are completely independent. If you instead want a **single shared budget** across both call types, create one store and assign it to both configs as shown in the [Configuration](#configuration) example above.
 
 ## Generating gRPC Client using `gofr wrap grpc client`
 
