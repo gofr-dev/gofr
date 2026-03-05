@@ -176,7 +176,7 @@ func (m *MQTT) Query(ctx context.Context, query string, args ...any) ([]byte, er
 }
 
 func (m *MQTT) Publish(ctx context.Context, topic string, message []byte) error {
-	ctx, span, _ := startPublishSpan(ctx, topic)
+	ctx, span, _ := startPublishSpan(ctx, topic) // attrs not transmittable in MQTT 3.1.1
 	defer span.End()
 
 	m.metrics.IncrementCounter(ctx, "app_pubsub_publish_total_count", "topic", topic)

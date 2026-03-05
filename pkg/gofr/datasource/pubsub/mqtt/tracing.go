@@ -38,8 +38,6 @@ func (c attributeCarrier) Keys() []string {
 }
 
 // injectTraceContext injects the current trace context into MQTT message metadata.
-// Note: MQTT 3.1.1 does not support user properties, so the returned map
-// cannot be transmitted to the broker. This is retained for MQTT 5.0 readiness.
 func injectTraceContext(ctx context.Context, attrs map[string]string) map[string]string {
 	if attrs == nil {
 		attrs = make(map[string]string)
