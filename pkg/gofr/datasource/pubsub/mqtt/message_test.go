@@ -16,7 +16,7 @@ type mockMessage struct {
 	retained  bool
 	topic     string
 	messageID int
-	pyload    string
+	payload   string
 }
 
 func (m mockMessage) Duplicate() bool {
@@ -44,7 +44,7 @@ func (m mockMessage) MessageID() uint16 {
 }
 
 func (m mockMessage) Payload() []byte {
-	return []byte(m.pyload)
+	return []byte(m.payload)
 }
 
 func (mockMessage) Ack() {
