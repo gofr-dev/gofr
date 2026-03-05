@@ -128,7 +128,7 @@ func TestMQTT_Disconnect(t *testing.T) {
 	ctx := t.Context()
 
 	mockMetrics.EXPECT().
-		IncrementCounter(ctx, "app_pubsub_publish_total_count", "topic", "test")
+		IncrementCounter(gomock.Any(), "app_pubsub_publish_total_count", "topic", "test")
 
 	mockClient.EXPECT().Disconnect(uint(1))
 
@@ -177,9 +177,9 @@ func TestMQTT_PublishSuccess(t *testing.T) {
 		ctx := t.Context()
 
 		mockMetrics.EXPECT().
-			IncrementCounter(ctx, "app_pubsub_publish_total_count", "topic", "test/topic")
+			IncrementCounter(gomock.Any(), "app_pubsub_publish_total_count", "topic", "test/topic")
 		mockMetrics.EXPECT().
-			IncrementCounter(ctx, "app_pubsub_publish_success_count", "topic", "test/topic")
+			IncrementCounter(gomock.Any(), "app_pubsub_publish_success_count", "topic", "test/topic")
 
 		mockClient.EXPECT().Publish("test/topic", mockConfigs.QoS, mockConfigs.RetrieveRetained, msg).
 			Return(mockToken)
@@ -205,7 +205,7 @@ func TestMQTT_PublishFailure(t *testing.T) {
 	ctx := t.Context()
 	// case where the client has been disconnected, resulting in a Publishing failure
 	mockMetrics.EXPECT().
-		IncrementCounter(ctx, "app_pubsub_publish_total_count", "topic", "test/topic")
+		IncrementCounter(gomock.Any(), "app_pubsub_publish_total_count", "topic", "test/topic")
 
 	mockClient.EXPECT().Disconnect(uint(1))
 	// Disconnect the client

@@ -7,7 +7,6 @@ import (
 	"time"
 
 	mqtt "github.com/eclipse/paho.mqtt.golang"
-	"go.opentelemetry.io/otel"
 
 	"gofr.dev/pkg/gofr/datasource"
 	"gofr.dev/pkg/gofr/datasource/pubsub"
@@ -177,7 +176,7 @@ func (m *MQTT) Query(ctx context.Context, query string, args ...any) ([]byte, er
 }
 
 func (m *MQTT) Publish(ctx context.Context, topic string, message []byte) error {
-	_, span := otel.GetTracerProvider().Tracer("gofr").Start(ctx, "mqtt-publish")
+	ctx, span, _ := startPublishSpan(ctx, topic)
 	defer span.End()
 
 	m.metrics.IncrementCounter(ctx, "app_pubsub_publish_total_count", "topic", topic)

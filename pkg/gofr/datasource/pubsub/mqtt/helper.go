@@ -11,7 +11,6 @@ import (
 	"time"
 
 	mqtt "github.com/eclipse/paho.mqtt.golang"
-	"go.opentelemetry.io/otel"
 
 	"gofr.dev/pkg/gofr/datasource/pubsub"
 )
@@ -137,7 +136,7 @@ func (*MQTT) handleContextDone(queryCtx context.Context, topicName string, buffe
 func (m *MQTT) createMqttHandler(_ context.Context, topic string, msgs chan *pubsub.Message) mqtt.MessageHandler {
 	return func(_ mqtt.Client, msg mqtt.Message) {
 		ctx := context.Background()
-		ctx, span := otel.GetTracerProvider().Tracer("gofr").Start(ctx, "mqtt-subscribe")
+		ctx, span := startSubscribeSpan(ctx, topic, nil)
 
 		defer span.End()
 
