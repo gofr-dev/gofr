@@ -284,7 +284,7 @@ Explanation:
 **Method** : It indicates whether the migration ran in UP or DOWN mode.
 (For now only method UP is supported)
 
-> **Note**: For Redis migration using **Streams mode**, a consumer group ID is mandatory. An empty string (`""`) for the group ID will result in an error during subscription, however, publishing will still succeed.
+> **Note**: For Redis migration using **Streams mode**, a consumer group ID is mandatory. An empty group ID will result in an error during subscription, however, publishing will still succeed.
 
 ### Migrations in Cassandra
 
@@ -400,23 +400,20 @@ func bulkProducts() migration.Migrate {
 
 GoFr provides support for interacting with PubSub systems during migrations. This is particularly useful for setting up your infrastructure (e.g., creating or deleting topics) before your application logic starts using them.
 
-### Non-Authoritative Version Tracking
-
-Unlike SQL or Redis, which GoFr uses to store the authoritative record of which migrations have been executed, **PubSub is non-authoritative**. 
-
-**Why this is important:**
-Many PubSub backends (like Redis Streams or Kafka) persist messages even after they are consumed. If GoFr used the PubSub bus as a source of truth for migration versions, "ghost data" from previous runs or other environments could interfere with the migration process, causing legitimate migrations to be skipped.
+GoFr does not store migration records in PubSub. Migration version tracking is handled exclusively by primary data stores (SQL or Redis) that support atomicity and locking. This is because many PubSub backends (like Redis Streams or Kafka) persist messages even after they are consumed. If the PubSub bus were used as a source of truth for migration versions, stale data from previous runs or other environments could interfere with the migration process, causing legitimate migrations to be skipped.
 
 ### Configuration Requirements
 
 When using PubSub in migrations, keep in mind the configuration requirements of your backend:
 
 - **Publishing**: Generally only requires connection details (brokers, host, etc.).
-- **Subscribing**: Requires a **Consumer Group ID** (e.g., `CONSUMER_ID` for Kafka or `REDIS_STREAMS_CONSUMER_GROUP` for Redis Streams). An **empty string (`""`)** or missing value will cause an error when attempting to subscribe, whereas publishing will still function correctly.
+- **Subscribing**: Requires a **Consumer Group ID** (e.g., `CONSUMER_ID` for Kafka or `REDIS_STREAMS_CONSUMER_GROUP` for Redis Streams). An empty or missing value will cause an error when attempting to subscribe, whereas publishing will still function correctly.
 
-### Usage Example
+### Usage Examples
 
-You can use the `PubSub` data source inside your `UP` migrations just like any other driver:
+You can use the `PubSub` data source inside your `UP` migrations just like any other driver.
+
+**Creating a topic during migration:**
 
 ```go
 func setupMessagingFeature() migration.Migrate {
@@ -428,6 +425,19 @@ func setupMessagingFeature() migration.Migrate {
             }
 
             return nil
+        },
+    }
+}
+```
+
+**Publishing a message to an existing topic (topic not created by migration):**
+
+```go
+func seedInitialEvents() migration.Migrate {
+    return migration.Migrate{
+        UP: func(d migration.Datasource) error {
+            // Publish a seed message to a pre-existing topic
+            return d.PubSub.Publish(context.Background(), "order-events", []byte(`{"event":"system-initialized"}`))
         },
     }
 }
