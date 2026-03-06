@@ -284,6 +284,8 @@ Explanation:
 **Method** : It indicates whether the migration ran in UP or DOWN mode.
 (For now only method UP is supported)
 
+> **Note**: For Redis migration using **Streams mode**, a consumer group ID is mandatory. An empty group ID will result in an error during subscription, however, publishing will still succeed.
+
 ### Migrations in Cassandra
 
 `GoFr` provides support for migrations in Cassandra but does not guarantee atomicity for individual DML commands. To achieve atomicity during migrations, users can leverage batch operations using the `NewBatch`, `BatchQuery`, and `ExecuteBatch` methods. These methods allow multiple queries to be executed as a single atomic operation.
@@ -392,6 +394,53 @@ func bulkProducts() migration.Migrate {
 
 		_, err := d.Elasticsearch.Bulk(context.Background(), operations) return err },}
 	}
+```
+
+## PubSub in Migrations
+
+GoFr provides support for interacting with PubSub systems during migrations. This is particularly useful for setting up your infrastructure (e.g., creating or deleting topics) before your application logic starts using them.
+
+GoFr does not store migration records in PubSub. Migration version tracking is handled exclusively by primary data stores (SQL or Redis) that support atomicity and locking. This is because many PubSub backends (like Redis Streams or Kafka) persist messages even after they are consumed. If the PubSub bus were used as a source of truth for migration versions, stale data from previous runs or other environments could interfere with the migration process, causing legitimate migrations to be skipped.
+
+### Configuration Requirements
+
+When using PubSub in migrations, keep in mind the configuration requirements of your backend:
+
+- **Publishing**: Generally only requires connection details (brokers, host, etc.).
+- **Subscribing**: Requires a **Consumer Group ID** (e.g., `CONSUMER_ID` for Kafka or `REDIS_STREAMS_CONSUMER_GROUP` for Redis Streams). An empty or missing value will cause an error when attempting to subscribe, whereas publishing will still function correctly.
+
+### Usage Examples
+
+You can use the `PubSub` data source inside your `UP` migrations just like any other driver.
+
+**Creating a topic during migration:**
+
+```go
+func setupMessagingFeature() migration.Migrate {
+    return migration.Migrate{
+        UP: func(d migration.Datasource) error {
+            // Create a topic required for the new feature
+            if err := d.PubSub.CreateTopic(context.Background(), "user-registrations"); err != nil {
+                return err
+            }
+
+            return nil
+        },
+    }
+}
+```
+
+**Publishing a message to an existing topic (topic not created by migration):**
+
+```go
+func seedInitialEvents() migration.Migrate {
+    return migration.Migrate{
+        UP: func(d migration.Datasource) error {
+            // Publish a seed message to a pre-existing topic
+            return d.PubSub.Publish(context.Background(), "order-events", []byte(`{"event":"system-initialized"}`))
+        },
+    }
+}
 ```
 
 > ##### Check out the example to add and run migrations in GoFr: [Visit GitHub](https://github.com/gofr-dev/gofr/blob/main/examples/using-migrations/main.go)

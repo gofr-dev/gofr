@@ -1,255 +1,171 @@
 package migration
 
 import (
+	"context"
 	"errors"
 	"testing"
 	"time"
 
+	"github.com/alicebob/miniredis/v2"
+	"github.com/redis/go-redis/v9"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
 
+	"gofr.dev/pkg/gofr/config"
 	"gofr.dev/pkg/gofr/container"
 )
 
-var (
-	errTopic = errors.New("topic error")
-	errQuery = errors.New("query error")
-)
+var errTopic = errors.New("error topic")
 
-func pubsubTestSetup(t *testing.T) (migrator, *container.MockPubSubProvider, *container.Container) {
-	t.Helper()
-
-	mockContainer, mocks := container.NewMockContainer(t)
-
-	ds := Datasource{PubSub: mockContainer.PubSub}
-
-	pubsubDB := pubsubDS{client: mockContainer.PubSub}
-	migratorWithPubSub := pubsubDB.apply(&ds)
-
-	mockContainer.PubSub = mocks.PubSub
-
-	return migratorWithPubSub, mocks.PubSub, mockContainer
-}
-
-func Test_CreateTopic(t *testing.T) {
+func Test_pubsubDS_Methods(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
-	mockPubSub := container.NewMockPubSubProvider(ctrl)
+	mockPubSub := NewMockPubSub(ctrl)
 	ds := pubsubDS{client: mockPubSub}
 
-	testCases := []struct {
-		desc     string
-		topic    string
-		mockErr  error
-		expected error
-	}{
-		{"successfully create topic", "test-topic", nil, nil},
-		{"error creating topic", "test-topic", errTopic, errTopic},
-	}
+	ctx := t.Context()
 
-	for _, tc := range testCases {
-		mockPubSub.EXPECT().CreateTopic(t.Context(), tc.topic).Return(tc.mockErr)
+	t.Run("CreateTopic", func(t *testing.T) {
+		mockPubSub.EXPECT().CreateTopic(ctx, "test").Return(nil)
+		require.NoError(t, ds.CreateTopic(ctx, "test"))
 
-		err := ds.CreateTopic(t.Context(), tc.topic)
+		mockPubSub.EXPECT().CreateTopic(ctx, "test").Return(errTopic)
+		assert.Equal(t, errTopic, ds.CreateTopic(ctx, "test"))
+	})
 
-		assert.Equal(t, tc.expected, err, tc.desc)
-	}
+	t.Run("DeleteTopic", func(t *testing.T) {
+		mockPubSub.EXPECT().DeleteTopic(ctx, "test").Return(nil)
+		require.NoError(t, ds.DeleteTopic(ctx, "test"))
+
+		mockPubSub.EXPECT().DeleteTopic(ctx, "test").Return(errTopic)
+		assert.Equal(t, errTopic, ds.DeleteTopic(ctx, "test"))
+	})
+
+	t.Run("Query", func(t *testing.T) {
+		mockPubSub.EXPECT().Query(ctx, "query", "arg1").Return([]byte("result"), nil)
+		res, err := ds.Query(ctx, "query", "arg1")
+		require.NoError(t, err)
+		assert.Equal(t, []byte("result"), res)
+
+		mockPubSub.EXPECT().Query(ctx, "query").Return(nil, errTopic)
+		_, err = ds.Query(ctx, "query")
+		assert.Equal(t, errTopic, err)
+	})
 }
 
-func Test_DeleteTopic(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
+func Test_pubsubDS_apply(t *testing.T) {
+	c, _ := container.NewMockContainer(t)
+	ds := &Datasource{}
 
-	mockPubSub := container.NewMockPubSubProvider(ctrl)
-	ds := pubsubDS{client: mockPubSub}
+	p := pubsubDS{client: c.PubSub}
 
-	testCases := []struct {
-		desc     string
-		topic    string
-		mockErr  error
-		expected error
-	}{
-		{"successfully delete topic", "test-topic", nil, nil},
-		{"error deleting topic", "test-topic", errTopic, errTopic},
-	}
+	// apply should return a pubsubMigrator that wraps the passed migrator
+	result := p.apply(ds)
 
-	for _, tc := range testCases {
-		mockPubSub.EXPECT().DeleteTopic(t.Context(), tc.topic).Return(tc.mockErr)
-
-		err := ds.DeleteTopic(t.Context(), tc.topic)
-
-		assert.Equal(t, tc.expected, err, tc.desc)
-	}
+	pm, ok := result.(pubsubMigrator)
+	assert.True(t, ok, "result should be a pubsubMigrator")
+	assert.Equal(t, ds, pm.migrator, "pubsubMigrator should wrap the passed migrator")
 }
 
-func Test_Query(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
+func Test_pubsubMigrator_Delegation(t *testing.T) {
+	c, _ := container.NewMockContainer(t)
+	ds := &Datasource{}
+	p := pubsubMigrator{PubSub: pubsubDS{client: c.PubSub}, migrator: ds}
 
-	mockPubSub := container.NewMockPubSubProvider(ctrl)
-	ds := pubsubDS{client: mockPubSub}
+	// All these methods should delegate to the base migrator (ds) without error
+	require.NoError(t, p.checkAndCreateMigrationTable(c))
 
-	testCases := []struct {
-		desc     string
-		query    string
-		args     []any
-		mockResp []byte
-		mockErr  error
-		expected []byte
-		err      error
-	}{
-		{"successful query", "SELECT * FROM test", []any{1, 2}, []byte("result"), nil, []byte("result"), nil},
-		{"error in query", "SELECT * FROM test", []any{1, 2}, nil, errQuery, nil, errQuery},
-	}
+	v, err := p.getLastMigration(c)
+	require.NoError(t, err)
+	assert.Equal(t, int64(0), v)
 
-	for _, tc := range testCases {
-		mockPubSub.EXPECT().Query(
-			gomock.Eq(t.Context()), gomock.Eq(tc.query), gomock.Eq(tc.args[0]), gomock.Eq(tc.args[1]),
-		).Return(tc.mockResp, tc.mockErr)
+	assert.NotNil(t, p.beginTransaction(c))
+	require.NoError(t, p.commitMigration(c, transactionData{}))
 
-		resp, err := ds.Query(t.Context(), tc.query, tc.args...)
+	// Should not panic
+	p.rollback(c, transactionData{})
+	require.NoError(t, p.lock(context.TODO(), nil, c, "owner"))
+	require.NoError(t, p.unlock(c, "owner"))
 
-		assert.Equal(t, tc.expected, resp, tc.desc)
-		assert.Equal(t, tc.err, err, tc.desc)
-	}
+	assert.Equal(t, "PubSub", p.name())
 }
 
-func Test_PubSubCheckAndCreateMigrationTable(t *testing.T) {
-	migratorWithPubSub, mockPubSub, mockContainer := pubsubTestSetup(t)
+func Test_PubSub_GhostDataConflict(t *testing.T) {
+	// Setup miniredis
+	s := miniredis.RunT(t)
 
-	testCases := []struct {
-		desc string
-		err  error
-	}{
-		{"no error", nil},
-		{"topic already exists", nil},
-	}
+	// Setup Container with Redis and PubSub pointing to the same miniredis using built-in MockConfig
+	conf := config.NewMockConfig(map[string]string{
+		"APP_NAME":          "integration-test",
+		"REDIS_HOST":        s.Host(),
+		"REDIS_PORT":        s.Port(),
+		"REDIS_DB":          "0",
+		"PUBSUB_BACKEND":    "REDIS",
+		"REDIS_PUBSUB_DB":   "1",
+		"REDIS_PUBSUB_MODE": "streams",
+	})
 
-	for i, tc := range testCases {
-		mockPubSub.EXPECT().CreateTopic(gomock.Any(), pubsubMigrationTopic).Return(tc.err)
+	c := container.NewContainer(conf)
+	defer c.Close()
 
-		err := migratorWithPubSub.checkAndCreateMigrationTable(mockContainer)
-
-		assert.Equal(t, tc.err, err, "TEST[%v]\n %v Failed! ", i, tc.desc)
-	}
-}
-
-func Test_PubSubCommitMigration_Success(t *testing.T) {
-	migratorWithPubSub, mockPubSub, mockContainer := pubsubTestSetup(t)
-
-	fixedTime := time.Date(2023, 1, 1, 12, 0, 0, 0, time.UTC)
-	data := transactionData{
-		MigrationNumber: 123,
-		StartTime:       fixedTime,
-	}
-
-	mockPubSub.EXPECT().Publish(gomock.Any(), pubsubMigrationTopic, gomock.Any()).Return(nil)
-
-	err := migratorWithPubSub.commitMigration(mockContainer, data)
-
-	assert.NoError(t, err, "Successful migration commit should not return an error")
-}
-
-func Test_PubSubCommitMigration_PublishError(t *testing.T) {
-	migratorWithPubSub, mockPubSub, mockContainer := pubsubTestSetup(t)
-
-	fixedTime := time.Date(2023, 1, 1, 12, 0, 0, 0, time.UTC)
-	data := transactionData{
-		MigrationNumber: 123,
-		StartTime:       fixedTime,
-	}
-
-	mockPubSub.EXPECT().Publish(gomock.Any(), pubsubMigrationTopic, gomock.Any()).Return(errTopic)
-
-	err := migratorWithPubSub.commitMigration(mockContainer, data)
-
-	assert.Equal(t, errTopic, err, "Publish error should be returned")
-}
-
-type mockNextMigrator struct {
-	migrator
-	version int64
-	err     error
-}
-
-func (m mockNextMigrator) getLastMigration(*container.Container) (int64, error) {
-	return m.version, m.err
-}
-
-func Test_PubSubGetLastMigration(t *testing.T) {
-	testCases := []struct {
-		desc           string
-		expectedResult int64
-		pubsubResult   []byte
-		pubsubError    error
-		nextVersion    int64
-		nextErr        error
-		expectedErr    error
-	}{
-		{
-			desc:           "pubsub has higher version than next migrator",
-			expectedResult: 3,
-			nextVersion:    2,
-			pubsubResult: []byte(`{"version":1,"method":"UP","start_time":1625000000000,"duration":100}
-{"version":3,"method":"UP","start_time":1625000200000,"duration":150}
-{"version":2,"method":"DOWN","start_time":1625000100000,"duration":120}`),
-			pubsubError: nil,
+	// Seed Ghost Data in PubSub DB (DB 1)
+	client := redis.NewClient(&redis.Options{Addr: s.Addr(), DB: 1})
+	err := client.XAdd(context.Background(), &redis.XAddArgs{
+		Stream: "gofr_migrations",
+		Values: map[string]any{
+			"payload": `{"version":20260101000000,"method":"UP","start_time":1700000000,"duration":100}`,
 		},
-		{
-			desc:           "next migrator has higher version than pubsub",
-			expectedResult: 5,
-			nextVersion:    5,
-			pubsubResult: []byte(`{"version":1,"method":"UP","start_time":1625000000000,"duration":100}
-{"version":3,"method":"UP","start_time":1625000200000,"duration":150}`),
-			pubsubError: nil,
-		},
-		{
-			desc:           "query error but next migrator has value",
-			expectedResult: -1,
-			nextVersion:    4,
-			pubsubResult:   nil,
-			pubsubError:    errQuery,
-			expectedErr:    errQuery,
-		},
-		{
-			desc:           "empty result but next migrator has value",
-			expectedResult: 3,
-			nextVersion:    3,
-			pubsubResult:   []byte{},
-			pubsubError:    nil,
-		},
-	}
+	}).Err()
+	require.NoError(t, err)
 
-	for i, tc := range testCases {
-		t.Run(tc.desc, func(t *testing.T) {
-			ctrl := gomock.NewController(t)
-			defer ctrl.Finish()
+	// Run Migration Check
+	base := &Datasource{Redis: c.Redis}
+	rm := redisMigrator{Redis: c.Redis, migrator: base}
+	ps := pubsubDS{client: c.PubSub}
+	pm := ps.apply(rm)
 
-			mockContainer, mocks := container.NewMockContainer(t)
-			mockPubSub := mocks.PubSub
+	version, err := pm.getLastMigration(c)
+	require.NoError(t, err)
 
-			mockPubSub.EXPECT().
-				Query(gomock.Any(), pubsubMigrationTopic, int64(0), defaultQueryLimit).
-				Return(tc.pubsubResult, tc.pubsubError)
+	assert.Equal(t, int64(0), version, "Migration version should be 0, ignoring ghost data in PubSub")
+}
 
-			next := mockNextMigrator{version: tc.nextVersion, err: tc.nextErr}
+func Test_PubSub_NoEntryAdded(t *testing.T) {
+	s := miniredis.RunT(t)
 
-			pm := pubsubMigrator{
-				PubSub:   pubsubDS{client: mockPubSub},
-				migrator: next,
-			}
+	conf := config.NewMockConfig(map[string]string{
+		"REDIS_HOST":      s.Host(),
+		"REDIS_PORT":      s.Port(),
+		"PUBSUB_BACKEND":  "REDIS",
+		"REDIS_PUBSUB_DB": "1",
+	})
 
-			// Call the method under test
-			result, err := pm.getLastMigration(mockContainer)
+	c := container.NewContainer(conf)
+	defer c.Close()
 
-			assert.Equal(t, tc.expectedResult, result, "TEST[%v] %v Failed!", i, tc.desc)
+	base := &Datasource{Redis: c.Redis}
+	rm := redisMigrator{Redis: c.Redis, migrator: base}
+	ps := pubsubDS{client: c.PubSub}
+	pm := ps.apply(rm)
 
-			if tc.expectedErr != nil {
-				assert.ErrorContains(t, err, tc.expectedErr.Error(), "TEST[%v] %v Failed!", i, tc.desc)
-			} else {
-				assert.NoError(t, err, "TEST[%v] %v Failed!", i, tc.desc)
-			}
-		})
-	}
+	data := pm.beginTransaction(c)
+	data.MigrationNumber = 20240304
+	data.StartTime = time.Now()
+
+	err := pm.commitMigration(c, data)
+	require.NoError(t, err)
+
+	// Check if entry was added to DB 1 (it should NOT be)
+	client := redis.NewClient(&redis.Options{Addr: s.Addr(), DB: 1})
+	count, err := client.XLen(context.Background(), "gofr_migrations").Result()
+	require.NoError(t, err)
+	assert.Equal(t, int64(0), count, "No migration entry should be added to PubSub backend")
+
+	// Check if entry was added to DB 0
+	client0 := redis.NewClient(&redis.Options{Addr: s.Addr(), DB: 0})
+	exists, err := client0.HExists(context.Background(), "gofr_migrations", "20240304").Result()
+	require.NoError(t, err)
+	assert.True(t, exists, "Migration entry should be added to primary Redis DB")
 }

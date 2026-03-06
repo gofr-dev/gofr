@@ -432,6 +432,8 @@ The following configs apply specifically to Redis Pub/Sub behavior. For base Red
 - `5s`
 - `2s` or `30s`
 
+> **Important**: If `REDIS_STREAMS_CONSUMER_GROUP` is empty or not provided, an error will occur when attempting to subscribe. However, publishing will work correctly without it.
+
 ---
 
 - `REDIS_STREAMS_PEL_RATIO`
