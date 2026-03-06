@@ -58,7 +58,7 @@ func normalizeIP(s string) string {
 }
 
 // extractHeaderIP reads a single metadata header value from the incoming context
-// and returns the normalised IP. For X-Forwarded-For it takes only the first
+// and returns the normalized IP. For X-Forwarded-For it takes only the first
 // comma-separated entry (the original client IP).
 func extractHeaderIP(md metadata.MD, key string, firstCSV bool) string {
 	vals := md.Get(key)
