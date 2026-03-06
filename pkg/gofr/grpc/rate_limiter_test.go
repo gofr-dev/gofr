@@ -3,6 +3,7 @@ package grpc
 import (
 	"context"
 	"errors"
+	"fmt"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -10,6 +11,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"google.golang.org/genproto/googleapis/rpc/errdetails"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/metadata"
@@ -49,6 +51,29 @@ func (m *rateLimiterMockMetrics) GetCounter(name string) int {
 	defer m.mu.Unlock()
 
 	return m.counters[name]
+}
+
+type mockLogger struct {
+	mu   sync.Mutex
+	logs []string
+}
+
+func (*mockLogger) Info(_ ...any)             {}
+func (*mockLogger) Debug(_ ...any)            {}
+func (*mockLogger) Fatalf(_ string, _ ...any) {}
+
+func (m *mockLogger) Errorf(format string, args ...any) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	m.logs = append(m.logs, fmt.Sprintf(format, args...))
+}
+
+func (m *mockLogger) errorCount() int {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	return len(m.logs)
 }
 
 type rateLimitMockStream struct {
@@ -96,25 +121,6 @@ func (a fakeAddr) Network() string {
 }
 func (a fakeAddr) String() string { return string(a) }
 
-func Test_first(t *testing.T) {
-	tests := []struct {
-		name string
-		vals []string
-		want string
-	}{
-		{name: "nil slice", vals: nil, want: ""},
-		{name: "empty slice", vals: []string{}, want: ""},
-		{name: "single element", vals: []string{"a"}, want: "a"},
-		{name: "multiple elements", vals: []string{"a", "b", "c"}, want: "a"},
-	}
-
-	for _, tc := range tests {
-		t.Run(tc.name, func(t *testing.T) {
-			assert.Equal(t, tc.want, first(tc.vals))
-		})
-	}
-}
-
 func Test_normalizeIP(t *testing.T) {
 	tests := []struct {
 		name  string
@@ -138,54 +144,34 @@ func Test_normalizeIP(t *testing.T) {
 	}
 }
 
-func Test_getForwardedIP(t *testing.T) {
+func Test_extractHeaderIP(t *testing.T) {
 	tests := []struct {
-		name string
-		md   metadata.MD
-		want string
+		name     string
+		md       metadata.MD
+		key      string
+		firstCSV bool
+		want     string
 	}{
-		{name: "no metadata", md: nil, want: ""},
-		{name: "no xff header", md: metadata.MD{}, want: ""},
-		{name: "empty xff value", md: metadata.Pairs("x-forwarded-for", ""), want: ""},
-		{name: "single valid IP", md: metadata.Pairs("x-forwarded-for", "10.0.0.1"), want: "10.0.0.1"},
-		{name: "multiple IPs takes first", md: metadata.Pairs("x-forwarded-for", "10.0.0.1, 10.0.0.2, 10.0.0.3"), want: "10.0.0.1"},
-		{name: "invalid IP returns empty", md: metadata.Pairs("x-forwarded-for", "bad-ip"), want: ""},
-		{name: "whitespace trimmed", md: metadata.Pairs("x-forwarded-for", "  10.0.0.1  "), want: "10.0.0.1"},
+		{name: "no header present", md: metadata.MD{}, key: "x-forwarded-for", firstCSV: true, want: ""},
+		{name: "empty value", md: metadata.Pairs("x-forwarded-for", ""), key: "x-forwarded-for", firstCSV: true, want: ""},
+		{name: "single valid IP", md: metadata.Pairs("x-forwarded-for", "10.0.0.1"), key: "x-forwarded-for", firstCSV: true, want: "10.0.0.1"},
+		{
+			name: "multiple IPs takes first", key: "x-forwarded-for", firstCSV: true, want: "10.0.0.1",
+			md: metadata.Pairs("x-forwarded-for", "10.0.0.1, 10.0.0.2, 10.0.0.3"),
+		},
+		{name: "invalid IP returns empty", md: metadata.Pairs("x-forwarded-for", "bad-ip"), key: "x-forwarded-for", firstCSV: true, want: ""},
+		{
+			name: "whitespace trimmed", key: "x-forwarded-for", firstCSV: true, want: "10.0.0.1",
+			md: metadata.Pairs("x-forwarded-for", "  10.0.0.1  "),
+		},
+		{name: "x-real-ip valid", md: metadata.Pairs("x-real-ip", "10.0.0.5"), key: "x-real-ip", firstCSV: false, want: "10.0.0.5"},
+		{name: "x-real-ip whitespace", md: metadata.Pairs("x-real-ip", "  10.0.0.5  "), key: "x-real-ip", firstCSV: false, want: "10.0.0.5"},
+		{name: "x-real-ip invalid", md: metadata.Pairs("x-real-ip", "bogus"), key: "x-real-ip", firstCSV: false, want: ""},
 	}
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			ctx := context.Background()
-			if tc.md != nil {
-				ctx = metadata.NewIncomingContext(ctx, tc.md)
-			}
-
-			assert.Equal(t, tc.want, getForwardedIP(ctx))
-		})
-	}
-}
-
-func Test_getRealIP(t *testing.T) {
-	tests := []struct {
-		name string
-		md   metadata.MD
-		want string
-	}{
-		{name: "no metadata", md: nil, want: ""},
-		{name: "no x-real-ip header", md: metadata.MD{}, want: ""},
-		{name: "valid IP", md: metadata.Pairs("x-real-ip", "10.0.0.5"), want: "10.0.0.5"},
-		{name: "whitespace trimmed", md: metadata.Pairs("x-real-ip", "  10.0.0.5  "), want: "10.0.0.5"},
-		{name: "invalid IP returns empty", md: metadata.Pairs("x-real-ip", "bogus"), want: ""},
-	}
-
-	for _, tc := range tests {
-		t.Run(tc.name, func(t *testing.T) {
-			ctx := context.Background()
-			if tc.md != nil {
-				ctx = metadata.NewIncomingContext(ctx, tc.md)
-			}
-
-			assert.Equal(t, tc.want, getRealIP(ctx))
+			assert.Equal(t, tc.want, extractHeaderIP(tc.md, tc.key, tc.firstCSV))
 		})
 	}
 }
@@ -292,7 +278,7 @@ func TestUnaryRateLimitInterceptor_PanicsOnInvalidConfig(t *testing.T) {
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			assert.Panics(t, func() {
-				UnaryRateLimitInterceptor(context.Background(), tc.config, nil)
+				UnaryRateLimitInterceptor(context.Background(), tc.config, nil, nil)
 			})
 		})
 	}
@@ -300,7 +286,7 @@ func TestUnaryRateLimitInterceptor_PanicsOnInvalidConfig(t *testing.T) {
 
 func TestUnaryRateLimitInterceptor_DefaultStore(t *testing.T) {
 	cfg := httpmw.RateLimiterConfig{RequestsPerSecond: 10, Burst: 5}
-	interceptor := UnaryRateLimitInterceptor(context.Background(), cfg, nil)
+	interceptor := UnaryRateLimitInterceptor(context.Background(), cfg, nil, nil)
 	require.NotNil(t, interceptor)
 }
 
@@ -312,7 +298,8 @@ func TestUnaryRateLimitInterceptor_GlobalLimit(t *testing.T) {
 		PerIP:             false,
 	}
 
-	interceptor := UnaryRateLimitInterceptor(context.Background(), config, metrics)
+	logger := &mockLogger{}
+	interceptor := UnaryRateLimitInterceptor(context.Background(), config, logger, metrics)
 	info := &grpc.UnaryServerInfo{FullMethod: "/svc/Method"}
 	handler := func(_ context.Context, _ any) (any, error) { return "ok", nil }
 
@@ -332,6 +319,7 @@ func TestUnaryRateLimitInterceptor_GlobalLimit(t *testing.T) {
 	require.True(t, ok)
 	assert.Equal(t, codes.ResourceExhausted, st.Code())
 	assert.Equal(t, 1, metrics.GetCounter("app_grpc_rate_limit_exceeded_total"))
+	assert.Equal(t, 1, logger.errorCount(), "Logger should have recorded one rate-limit violation")
 }
 
 func TestUnaryRateLimitInterceptor_PerIPLimit(t *testing.T) {
@@ -343,7 +331,7 @@ func TestUnaryRateLimitInterceptor_PerIPLimit(t *testing.T) {
 		TrustedProxies:    true,
 	}
 
-	interceptor := UnaryRateLimitInterceptor(context.Background(), config, metrics)
+	interceptor := UnaryRateLimitInterceptor(context.Background(), config, nil, metrics)
 	info := &grpc.UnaryServerInfo{FullMethod: "/svc/Method"}
 	handler := func(_ context.Context, _ any) (any, error) { return "ok", nil }
 
@@ -380,7 +368,7 @@ func TestUnaryRateLimitInterceptor_EmptyIPFallback(t *testing.T) {
 		TrustedProxies:    false,
 	}
 
-	interceptor := UnaryRateLimitInterceptor(context.Background(), config, metrics)
+	interceptor := UnaryRateLimitInterceptor(context.Background(), config, nil, metrics)
 	info := &grpc.UnaryServerInfo{FullMethod: "/svc/Method"}
 	handler := func(_ context.Context, _ any) (any, error) { return "ok", nil }
 
@@ -407,7 +395,7 @@ func TestUnaryRateLimitInterceptor_StoreError_FailsOpen(t *testing.T) {
 		Store:             store,
 	}
 
-	interceptor := UnaryRateLimitInterceptor(context.Background(), cfg, nil)
+	interceptor := UnaryRateLimitInterceptor(context.Background(), cfg, nil, nil)
 
 	resp, err := interceptor(context.Background(), "req",
 		&grpc.UnaryServerInfo{FullMethod: "/svc/Method"},
@@ -425,7 +413,7 @@ func TestUnaryRateLimitInterceptor_DeniedNilMetrics(t *testing.T) {
 		Store:             store,
 	}
 
-	interceptor := UnaryRateLimitInterceptor(context.Background(), cfg, nil)
+	interceptor := UnaryRateLimitInterceptor(context.Background(), cfg, nil, nil)
 
 	ctx := grpc.NewContextWithServerTransportStream(context.Background(), nil)
 
@@ -452,7 +440,7 @@ func TestUnaryRateLimitInterceptor_TokenRefill(t *testing.T) {
 		PerIP:             false,
 	}
 
-	interceptor := UnaryRateLimitInterceptor(context.Background(), config, metrics)
+	interceptor := UnaryRateLimitInterceptor(context.Background(), config, nil, metrics)
 	info := &grpc.UnaryServerInfo{FullMethod: "/svc/Method"}
 	handler := func(_ context.Context, _ any) (any, error) { return "ok", nil }
 
@@ -483,7 +471,7 @@ func TestUnaryRateLimitInterceptor_ConcurrentRequests(t *testing.T) {
 		TrustedProxies:    true,
 	}
 
-	interceptor := UnaryRateLimitInterceptor(context.Background(), config, metrics)
+	interceptor := UnaryRateLimitInterceptor(context.Background(), config, nil, metrics)
 	info := &grpc.UnaryServerInfo{FullMethod: "/svc/Method"}
 	handler := func(_ context.Context, _ any) (any, error) { return "ok", nil }
 
@@ -534,7 +522,7 @@ func TestUnaryRateLimitInterceptor_TrustedProxiesDisabled(t *testing.T) {
 		TrustedProxies:    false,
 	}
 
-	interceptor := UnaryRateLimitInterceptor(context.Background(), config, metrics)
+	interceptor := UnaryRateLimitInterceptor(context.Background(), config, nil, metrics)
 	info := &grpc.UnaryServerInfo{FullMethod: "/svc/Method"}
 	handler := func(_ context.Context, _ any) (any, error) { return "ok", nil }
 
@@ -567,7 +555,7 @@ func TestUnaryRateLimitInterceptor_RetryAfterHeader(t *testing.T) {
 		Store:             store,
 	}
 
-	interceptor := UnaryRateLimitInterceptor(context.Background(), cfg, nil)
+	interceptor := UnaryRateLimitInterceptor(context.Background(), cfg, nil, nil)
 
 	ctx := grpc.NewContextWithServerTransportStream(context.Background(), nil)
 
@@ -580,6 +568,14 @@ func TestUnaryRateLimitInterceptor_RetryAfterHeader(t *testing.T) {
 	st, ok := status.FromError(err)
 	require.True(t, ok)
 	assert.Equal(t, codes.ResourceExhausted, st.Code())
+
+	// Assert RetryInfo is present in error details
+	details := st.Details()
+	require.Len(t, details, 1, "Error should contain exactly one detail")
+
+	retryInfo, ok := details[0].(*errdetails.RetryInfo)
+	require.True(t, ok, "Detail should be RetryInfo")
+	assert.Equal(t, 3*time.Second, retryInfo.GetRetryDelay().AsDuration(), "RetryDelay should match retryAfter")
 }
 
 func TestStreamRateLimitInterceptor_PanicsOnInvalidConfig(t *testing.T) {
@@ -604,7 +600,7 @@ func TestStreamRateLimitInterceptor_PanicsOnInvalidConfig(t *testing.T) {
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			assert.Panics(t, func() {
-				StreamRateLimitInterceptor(context.Background(), tc.config, nil)
+				StreamRateLimitInterceptor(context.Background(), tc.config, nil, nil)
 			})
 		})
 	}
@@ -612,19 +608,20 @@ func TestStreamRateLimitInterceptor_PanicsOnInvalidConfig(t *testing.T) {
 
 func TestStreamRateLimitInterceptor_DefaultStore(t *testing.T) {
 	cfg := httpmw.RateLimiterConfig{RequestsPerSecond: 10, Burst: 5}
-	interceptor := StreamRateLimitInterceptor(context.Background(), cfg, nil)
+	interceptor := StreamRateLimitInterceptor(context.Background(), cfg, nil, nil)
 	require.NotNil(t, interceptor)
 }
 
 func TestStreamRateLimitInterceptor_GlobalLimit(t *testing.T) {
 	metrics := newRateLimiterMockMetrics()
+	logger := &mockLogger{}
 	config := httpmw.RateLimiterConfig{
 		RequestsPerSecond: 2,
 		Burst:             2,
 		PerIP:             false,
 	}
 
-	interceptor := StreamRateLimitInterceptor(context.Background(), config, metrics)
+	interceptor := StreamRateLimitInterceptor(context.Background(), config, logger, metrics)
 	info := &grpc.StreamServerInfo{FullMethod: "/svc/Stream"}
 	handler := func(any, grpc.ServerStream) error { return nil }
 
@@ -642,6 +639,7 @@ func TestStreamRateLimitInterceptor_GlobalLimit(t *testing.T) {
 	require.True(t, ok)
 	assert.Equal(t, codes.ResourceExhausted, st.Code())
 	assert.Equal(t, 1, metrics.GetCounter("app_grpc_rate_limit_exceeded_total"))
+	assert.Equal(t, 1, logger.errorCount(), "Logger should have recorded one rate-limit violation")
 }
 
 func TestStreamRateLimitInterceptor_PerIPLimit(t *testing.T) {
@@ -653,7 +651,7 @@ func TestStreamRateLimitInterceptor_PerIPLimit(t *testing.T) {
 		TrustedProxies:    true,
 	}
 
-	interceptor := StreamRateLimitInterceptor(context.Background(), config, metrics)
+	interceptor := StreamRateLimitInterceptor(context.Background(), config, nil, metrics)
 	info := &grpc.StreamServerInfo{FullMethod: "/svc/Stream"}
 	handler := func(any, grpc.ServerStream) error { return nil }
 
@@ -688,7 +686,7 @@ func TestStreamRateLimitInterceptor_EmptyIPFallback(t *testing.T) {
 		TrustedProxies:    false,
 	}
 
-	interceptor := StreamRateLimitInterceptor(context.Background(), config, metrics)
+	interceptor := StreamRateLimitInterceptor(context.Background(), config, nil, metrics)
 	info := &grpc.StreamServerInfo{FullMethod: "/svc/Stream"}
 	handler := func(any, grpc.ServerStream) error { return nil }
 
@@ -714,7 +712,7 @@ func TestStreamRateLimitInterceptor_StoreError_FailsOpen(t *testing.T) {
 		Store:             store,
 	}
 
-	interceptor := StreamRateLimitInterceptor(context.Background(), cfg, nil)
+	interceptor := StreamRateLimitInterceptor(context.Background(), cfg, nil, nil)
 
 	ss := &rateLimitMockStream{ctx: context.Background()}
 	err := interceptor(nil, ss, &grpc.StreamServerInfo{FullMethod: "/svc/Stream"},
@@ -731,7 +729,7 @@ func TestStreamRateLimitInterceptor_DeniedNilMetrics(t *testing.T) {
 		Store:             store,
 	}
 
-	interceptor := StreamRateLimitInterceptor(context.Background(), cfg, nil)
+	interceptor := StreamRateLimitInterceptor(context.Background(), cfg, nil, nil)
 
 	ss := &rateLimitMockStream{ctx: context.Background()}
 	err := interceptor(nil, ss, &grpc.StreamServerInfo{FullMethod: "/svc/Stream"},
@@ -752,15 +750,26 @@ func TestStreamRateLimitInterceptor_RetryAfterHeader(t *testing.T) {
 	}
 
 	metrics := newRateLimiterMockMetrics()
-	interceptor := StreamRateLimitInterceptor(context.Background(), cfg, metrics)
+	interceptor := StreamRateLimitInterceptor(context.Background(), cfg, nil, metrics)
 
 	ss := &rateLimitMockStream{ctx: context.Background()}
 	err := interceptor(nil, ss, &grpc.StreamServerInfo{FullMethod: "/svc/Stream"},
 		func(any, grpc.ServerStream) error { return nil })
 
 	require.Error(t, err)
-	assert.Equal(t, "5", ss.headerMD.Get("retry-after")[0])
 	assert.Equal(t, 1, metrics.GetCounter("app_grpc_rate_limit_exceeded_total"))
+
+	// Assert RetryInfo is present in error details
+	st, ok := status.FromError(err)
+	require.True(t, ok)
+	assert.Equal(t, codes.ResourceExhausted, st.Code())
+
+	details := st.Details()
+	require.Len(t, details, 1, "Error should contain exactly one detail")
+
+	retryInfo, ok := details[0].(*errdetails.RetryInfo)
+	require.True(t, ok, "Detail should be RetryInfo")
+	assert.Equal(t, 5*time.Second, retryInfo.GetRetryDelay().AsDuration(), "RetryDelay should match retryAfter")
 }
 
 func TestStreamRateLimitInterceptor_TokenRefill(t *testing.T) {
@@ -775,7 +784,7 @@ func TestStreamRateLimitInterceptor_TokenRefill(t *testing.T) {
 		PerIP:             false,
 	}
 
-	interceptor := StreamRateLimitInterceptor(context.Background(), config, metrics)
+	interceptor := StreamRateLimitInterceptor(context.Background(), config, nil, metrics)
 	info := &grpc.StreamServerInfo{FullMethod: "/svc/Stream"}
 	handler := func(any, grpc.ServerStream) error { return nil }
 
@@ -806,7 +815,7 @@ func TestStreamRateLimitInterceptor_ConcurrentRequests(t *testing.T) {
 		TrustedProxies:    true,
 	}
 
-	interceptor := StreamRateLimitInterceptor(context.Background(), config, metrics)
+	interceptor := StreamRateLimitInterceptor(context.Background(), config, nil, metrics)
 	info := &grpc.StreamServerInfo{FullMethod: "/svc/Stream"}
 
 	var (
