@@ -93,10 +93,10 @@ func TestConnectionManager_Publish(t *testing.T) {
 	message := []byte("test message")
 
 	gomock.InOrder(
-		mockMetrics.EXPECT().IncrementCounter(ctx, "app_pubsub_publish_total_count", "subject", subject),
+		mockMetrics.EXPECT().IncrementCounter(gomock.Any(), "app_pubsub_publish_total_count", "subject", subject),
 		mockConn.EXPECT().Status().Return(nats.CONNECTED),
-		mockJS.EXPECT().Publish(ctx, subject, message).Return(&jetstream.PubAck{}, nil),
-		mockMetrics.EXPECT().IncrementCounter(ctx, "app_pubsub_publish_success_count", "subject", subject),
+		mockJS.EXPECT().PublishMsg(gomock.Any(), gomock.Any()).Return(&jetstream.PubAck{}, nil),
+		mockMetrics.EXPECT().IncrementCounter(gomock.Any(), "app_pubsub_publish_success_count", "subject", subject),
 	)
 
 	err := cm.Publish(ctx, subject, message, mockMetrics)

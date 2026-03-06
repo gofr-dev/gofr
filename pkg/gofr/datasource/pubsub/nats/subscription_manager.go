@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/nats-io/nats.go/jetstream"
+	"go.opentelemetry.io/otel/trace"
 	"gofr.dev/pkg/gofr/datasource/pubsub"
 )
 
@@ -171,24 +172,28 @@ func (sm *SubscriptionManager) processFetchedMessages(
 	buffer chan *pubsub.Message,
 	logger pubsub.Logger) error {
 	for msg := range msgs.Messages() {
-		pubsubMsg := sm.createPubSubMessage(msg, topic)
+		pubsubMsg, span := sm.createPubSubMessage(msg, topic)
 
 		if !sm.sendToBuffer(pubsubMsg, buffer) {
 			logger.Logf("Message buffer is full for topic %s. Consider increasing buffer size or processing messages faster.", topic)
 		}
+
+		span.End()
 	}
 
 	return sm.checkBatchError(msgs, topic, logger)
 }
 
-func (*SubscriptionManager) createPubSubMessage(msg jetstream.Msg, topic string) *pubsub.Message {
-	pubsubMsg := pubsub.NewMessage(context.Background()) // Pass a context if needed
+func (*SubscriptionManager) createPubSubMessage(msg jetstream.Msg, topic string) (*pubsub.Message, trace.Span) {
+	ctx, span := startSubscribeSpan(context.Background(), topic, msg.Headers())
+
+	pubsubMsg := pubsub.NewMessage(ctx)
 	pubsubMsg.Topic = topic
 	pubsubMsg.Value = msg.Data()
 	pubsubMsg.MetaData = msg.Headers()
 	pubsubMsg.Committer = &natsCommitter{msg: msg}
 
-	return pubsubMsg
+	return pubsubMsg, span
 }
 
 func (*SubscriptionManager) sendToBuffer(msg *pubsub.Message, buffer chan *pubsub.Message) bool {

@@ -122,7 +122,16 @@ func (cm *ConnectionManager) Publish(ctx context.Context, subject string, messag
 		return err
 	}
 
-	_, err := cm.jStream.Publish(ctx, subject, message)
+	ctx, span, headers := startPublishSpan(ctx, subject)
+	defer span.End()
+
+	msg := &nats.Msg{
+		Subject: subject,
+		Data:    message,
+		Header:  headers,
+	}
+
+	_, err := cm.jStream.PublishMsg(ctx, msg)
 	if err != nil {
 		cm.logger.Errorf("failed to publish message to NATS jStream: %v", err)
 		return err
