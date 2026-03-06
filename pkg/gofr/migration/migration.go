@@ -298,7 +298,7 @@ func getInitializers(c *container.Container, ds *Datasource) []datasourceInitial
 		{
 			condition:     func() bool { return !isNil(c.PubSub) },
 			setDS:         func() { ds.PubSub = c.PubSub },
-			apply:         func(m migrator) migrator { return pubsubDS{c.PubSub}.apply(m) },
+			apply:         func(m migrator) migrator { return pubsubDS{client: c.PubSub}.apply(m) },
 			logIdentifier: "PubSub",
 		},
 		{
