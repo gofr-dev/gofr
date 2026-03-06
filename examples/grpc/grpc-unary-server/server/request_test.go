@@ -111,8 +111,8 @@ func TestHelloRequestWrapper_Bind(t *testing.T) {
 		}
 
 		// Test Bind method with non-pointer (should fail)
-		var target HelloRequest
-		err := req.Bind(target)
+		// Using a string instead of HelloRequest to avoid copying sync.Mutex from protoimpl.MessageState.
+		err := req.Bind("not-a-pointer")
 
 		assert.Error(t, err, "Bind should fail with non-pointer")
 		assert.Contains(t, err.Error(), "expected a pointer", "Error message should indicate pointer expected")

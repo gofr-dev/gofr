@@ -156,7 +156,7 @@ func TestIntegration_UnaryServer_RateLimited(t *testing.T) {
 		}
 
 		app.AddGRPCUnaryInterceptors(
-			gofrGrpc.UnaryRateLimitInterceptor(ctx, rateLimiterCfg, app.Metrics()),
+			gofrGrpc.UnaryRateLimitInterceptor(ctx, rateLimiterCfg, nil, app.Metrics()),
 		)
 
 		server.RegisterHelloServerWithGofr(app, server.NewHelloGoFrServer())
