@@ -8,4 +8,4 @@ type Responder interface {
 
 type noopResponder struct{}
 
-func (n noopResponder) Respond(_ any, _ error) {}
+func (noopResponder) Respond(_ any, _ error) {}

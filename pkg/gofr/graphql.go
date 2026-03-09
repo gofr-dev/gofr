@@ -345,10 +345,12 @@ func (m *graphQLManager) getResolver(name string, h Handler) graphql.FieldResolv
 	}
 }
 
+const maxRequestBodySize = 32 << 20 // 32 MB
+
 func (m *graphQLManager) Handle(w http.ResponseWriter, r *http.Request) {
 	// Standard request protection - addressing review point 6 (bypassing middleware benefits)
 	// Apply body size limit (using 32MB default as per GoFr's multipart decoder)
-	r.Body = http.MaxBytesReader(w, r.Body, 32<<20)
+	r.Body = http.MaxBytesReader(w, r.Body, maxRequestBodySize)
 
 	// Standard panic recovery for raw HTTP handler
 	defer func() {

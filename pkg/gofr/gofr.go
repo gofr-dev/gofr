@@ -255,9 +255,11 @@ func (a *App) GraphQLQuery(name string, handler Handler) {
 	}
 
 	a.mu.Lock()
+
 	if a.graphqlManager == nil {
 		a.graphqlManager = newGraphQLManager(a.container)
 	}
+
 	a.mu.Unlock()
 
 	a.httpRegistered = true
@@ -273,9 +275,11 @@ func (a *App) GraphQLMutation(name string, handler Handler) {
 	}
 
 	a.mu.Lock()
+
 	if a.graphqlManager == nil {
 		a.graphqlManager = newGraphQLManager(a.container)
 	}
+
 	a.mu.Unlock()
 
 	a.httpRegistered = true

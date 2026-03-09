@@ -33,15 +33,8 @@ func TestGraphQL_Query(t *testing.T) {
 	setupSchema(t, `type Query { hello: String }`)
 
 	app := New()
-	// Mock a custom config reader or just rely on default for now if possible, 
-	// but setupSchema currently writes to ./configs which is hardcoded in graphql.go.
-	// Point 11 mentioned replacing this with t.TempDir().
-	// I'll update graphql.go's internal schema loading to be more testable if needed,
-	// but for now let's just use the current approach with t.TempDir but we need to CHDIR.
-	oldWd, _ := os.Getwd()
 	tmpDir := setupSchema(t, `type Query { hello: String }`)
-	os.Chdir(tmpDir)
-	defer os.Chdir(oldWd)
+	t.Chdir(tmpDir)
 
 	app.GraphQLQuery("hello", func(_ *Context) (any, error) {
 		return "world", nil
@@ -72,10 +65,10 @@ func TestGraphQL_Query(t *testing.T) {
 
 func TestGraphQL_Mutation(t *testing.T) {
 	t.Setenv("METRICS_PORT", "0")
-	oldWd, _ := os.Getwd()
-	tmpDir := setupSchema(t, `type User { id: Int name: String } type Query { dummy: String } type Mutation { createUser(name: String): User }`)
-	os.Chdir(tmpDir)
-	defer os.Chdir(oldWd)
+
+	tmpDir := setupSchema(t, `type User { id: Int name: String } type Query { dummy: String }
+		type Mutation { createUser(name: String): User }`)
+	t.Chdir(tmpDir)
 
 	app := New()
 	app.GraphQLQuery("dummy", func(_ *Context) (any, error) { return "ok", nil })
@@ -136,10 +129,8 @@ func TestGraphQL_Playground(t *testing.T) {
 			t.Setenv("METRICS_PORT", "0")
 			t.Setenv("APP_ENV", tc.appEnv)
 
-			oldWd, _ := os.Getwd()
 			tmpDir := setupSchema(t, `type Query { dummy: String }`)
-			_ = os.Chdir(tmpDir)
-			defer os.Chdir(oldWd)
+			t.Chdir(tmpDir)
 
 			app := New()
 			app.GraphQLQuery("dummy", func(_ *Context) (any, error) { return "ok", nil })
@@ -163,13 +154,12 @@ func TestGraphQL_Playground(t *testing.T) {
 
 func TestGraphQL_ArgumentTypes(t *testing.T) {
 	t.Setenv("METRICS_PORT", "0")
-	oldWd, _ := os.Getwd()
+
 	tmpDir := setupSchema(t, `type Query { 
 		user(id: Int, score: Float, isAdmin: Boolean, tags: [String]): DetailedUser 
 	} 
 	type DetailedUser { id: Int score: Float isAdmin: Boolean tags: [String] }`)
-	_ = os.Chdir(tmpDir)
-	defer os.Chdir(oldWd)
+	t.Chdir(tmpDir)
 
 	app := New()
 	app.GraphQLQuery("user", func(c *Context) (any, error) {
@@ -233,10 +223,9 @@ func TestGraphQL_BuildFailure(t *testing.T) {
 
 func TestGraphQL_ResolverError(t *testing.T) {
 	t.Setenv("METRICS_PORT", "0")
-	oldWd, _ := os.Getwd()
+
 	tmpDir := setupSchema(t, `type Query { fail: String }`)
-	_ = os.Chdir(tmpDir)
-	defer os.Chdir(oldWd)
+	t.Chdir(tmpDir)
 
 	app := New()
 	app.GraphQLQuery("fail", func(_ *Context) (any, error) {
@@ -295,14 +284,13 @@ func TestGraphQL_RequestMethods(t *testing.T) {
 
 func TestGraphQL_Enums(t *testing.T) {
 	t.Setenv("METRICS_PORT", "0")
-	oldWd, _ := os.Getwd()
+
 	tmpDir := setupSchema(t, `
 		enum Role { ADMIN USER }
 		type User { id: Int role: Role }
 		type Query { user(role: Role): User }
 	`)
-	_ = os.Chdir(tmpDir)
-	defer os.Chdir(oldWd)
+	t.Chdir(tmpDir)
 
 	app := New()
 	app.GraphQLQuery("user", func(c *Context) (any, error) {
@@ -345,10 +333,8 @@ func TestGraphQL_Enums(t *testing.T) {
 }
 
 func TestGraphQL_OperationName(t *testing.T) {
-	oldWd, _ := os.Getwd()
 	tmpDir := setupSchema(t, `type Query { a: String, b: String }`)
-	os.Chdir(tmpDir)
-	defer os.Chdir(oldWd)
+	t.Chdir(tmpDir)
 
 	app := New()
 	app.GraphQLQuery("a", func(_ *Context) (any, error) { return "valA", nil })
@@ -370,22 +356,27 @@ func TestGraphQL_OperationName(t *testing.T) {
 			B string `json:"b"`
 		} `json:"data"`
 	}
-	json.Unmarshal(resp.Body.Bytes(), &result)
+
+	err = json.Unmarshal(resp.Body.Bytes(), &result)
+	require.NoError(t, err)
+
 	assert.Equal(t, "valB", result.Data.B)
 }
 
 func TestGraphQL_Variables(t *testing.T) {
-	oldWd, _ := os.Getwd()
 	tmpDir := setupSchema(t, `type Query { user(id: Int): User } type User { id: Int }`)
-	os.Chdir(tmpDir)
-	defer os.Chdir(oldWd)
+	t.Chdir(tmpDir)
 
 	app := New()
 	app.GraphQLQuery("user", func(c *Context) (any, error) {
 		var args struct {
 			ID int `json:"id"`
 		}
-		c.Bind(&args)
+
+		err := c.Bind(&args)
+		if err != nil {
+			return nil, err
+		}
 
 		return args, nil
 	})
@@ -407,15 +398,16 @@ func TestGraphQL_Variables(t *testing.T) {
 			} `json:"user"`
 		} `json:"data"`
 	}
-	json.Unmarshal(resp.Body.Bytes(), &result)
+
+	err = json.Unmarshal(resp.Body.Bytes(), &result)
+	require.NoError(t, err)
+
 	assert.Equal(t, 123, result.Data.User.ID)
 }
 
 func TestGraphQL_MalformedQuery(t *testing.T) {
-	oldWd, _ := os.Getwd()
 	tmpDir := setupSchema(t, `type Query { hello: String }`)
-	os.Chdir(tmpDir)
-	defer os.Chdir(oldWd)
+	t.Chdir(tmpDir)
 
 	app := New()
 	app.GraphQLQuery("hello", func(_ *Context) (any, error) { return "ok", nil })
@@ -433,6 +425,9 @@ func TestGraphQL_MalformedQuery(t *testing.T) {
 	var result struct {
 		Errors []any `json:"errors"`
 	}
-	json.Unmarshal(resp.Body.Bytes(), &result)
+
+	err = json.Unmarshal(resp.Body.Bytes(), &result)
+	require.NoError(t, err)
+
 	assert.NotEmpty(t, result.Errors)
 }
