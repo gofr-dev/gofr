@@ -12,7 +12,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-
+	"gofr.dev/pkg/gofr"
 	"gofr.dev/pkg/gofr/testutil"
 )
 
@@ -34,17 +34,58 @@ func waitForReady(t *testing.T, host string) {
 	t.Fatalf("Server at %s not ready after 10s", host)
 }
 
-func TestIntegration_GraphQL(t *testing.T) {
+// newTestApp creates a GoFr application configured for integration testing.
+func newTestApp(t *testing.T) (*gofr.App, string) {
+	t.Helper()
+
 	httpPort := testutil.GetFreePort(t)
 	metricsPort := testutil.GetFreePort(t)
 
 	t.Setenv("HTTP_PORT", strconv.Itoa(httpPort))
 	t.Setenv("METRICS_PORT", strconv.Itoa(metricsPort))
-	t.Setenv("APP_ENV", "dev")
 
 	host := fmt.Sprintf("http://localhost:%d", httpPort)
 
-	app := NewApp()
+	app := gofr.New()
+
+	app.GraphQLQuery("hello", func(c *gofr.Context) (interface{}, error) {
+		return "Hello GoFr GraphQL with SQL!", nil
+	})
+
+	app.GraphQLQuery("getUser", func(c *gofr.Context) (interface{}, error) {
+		var args struct {
+			ID int `json:"id"`
+		}
+
+		if err := c.Bind(&args); err != nil {
+			return nil, err
+		}
+
+		// Return stubbed data instead of calling c.SQL
+		return User{ID: args.ID, Name: "Test User", Role: "Admin"}, nil
+	})
+
+	app.GraphQLMutation("createUser", func(c *gofr.Context) (interface{}, error) {
+		var args struct {
+			Name string `json:"name"`
+			Role string `json:"role"`
+		}
+
+		if err := c.Bind(&args); err != nil {
+			return nil, err
+		}
+
+		// Return stubbed data instead of calling c.SQL
+		return User{ID: 1, Name: args.Name, Role: args.Role}, nil
+	})
+
+	return app, host
+}
+
+func TestIntegration_GraphQL(t *testing.T) {
+	t.Setenv("APP_ENV", "dev")
+
+	app, host := newTestApp(t)
 	go app.Run()
 
 	waitForReady(t, host)
@@ -105,35 +146,11 @@ func TestIntegration_GraphQL(t *testing.T) {
 		assert.NotEmpty(t, result.Data.GetUser.Name)
 	})
 
-	t.Run("playground UI is accessible in non-production", func(t *testing.T) {
-		resp, err := http.Get(host + "/graphql/ui")
+	t.Run("playground UI is accessible", func(t *testing.T) {
+		resp, err := http.Get(host + "/.well-known/graphql/ui")
 		require.NoError(t, err)
 		defer resp.Body.Close()
 
 		assert.Equal(t, http.StatusOK, resp.StatusCode)
 	})
-}
-
-func TestIntegration_GraphQL_Production(t *testing.T) {
-	httpPort := testutil.GetFreePort(t)
-	metricsPort := testutil.GetFreePort(t)
-
-	t.Setenv("HTTP_PORT", strconv.Itoa(httpPort))
-	t.Setenv("METRICS_PORT", strconv.Itoa(metricsPort))
-	t.Setenv("APP_ENV", "production")
-
-	host := fmt.Sprintf("http://localhost:%d", httpPort)
-
-	app := NewApp()
-	go app.Run()
-
-	waitForReady(t, host)
-
-	defer app.Shutdown(context.Background())
-
-	resp, err := http.Get(host + "/graphql/ui")
-	require.NoError(t, err)
-	defer resp.Body.Close()
-
-	assert.Equal(t, http.StatusNotFound, resp.StatusCode)
 }

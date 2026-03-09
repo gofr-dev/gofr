@@ -29,12 +29,15 @@ var (
 )
 
 const (
-	healthKey = "health"
-	stringT   = "String"
-	idT       = "ID"
-	intT      = "Int"
-	floatT    = "Float"
-	boolT     = "Boolean"
+	graphqlString  = "String"
+	graphqlID      = "ID"
+	graphqlInt     = "Int"
+	graphqlFloat   = "Float"
+	graphqlBoolean = "Boolean"
+
+	graphqlSuccess = "success"
+	graphqlError   = "error"
+	graphqlUnknown = "unknown"
 )
 
 type graphQLManager struct {
@@ -50,10 +53,12 @@ type graphQLManager struct {
 }
 
 func newGraphQLManager(c *container.Container) *graphQLManager {
-	c.Metrics().NewCounter("gofr_graphql_operations_total", "total Number of GraphQL operations received")
-	c.Metrics().NewCounter("gofr_graphql_error_total", "total Number of GraphQL operations that returned an error")
-	c.Metrics().NewHistogram("gofr_graphql_request_duration", "execution time of GraphQL requests",
-		0.001, 0.005, 0.01, 0.05, 0.1, 0.5, 1, 5, 10) //nolint:mnd // histogram buckets
+	// GraphQL metrics are registered here (not in registerFrameworkMetrics) because
+	// GraphQL is an opt-in feature. Metrics are only created when resolvers are registered.
+	c.Metrics().NewCounter("app_graphql_operations_total", "Total number of GraphQL operations received.")
+	c.Metrics().NewCounter("app_graphql_error_total", "Total number of GraphQL operations that returned an error.")
+	c.Metrics().NewHistogram("app_graphql_request_duration", "Response time of GraphQL requests in seconds.",
+		.001, .003, .005, .01, .02, .03, .05, .1, .2, .3, .5, .75, 1, 2, 3, 5, 10, 30) //nolint:mnd // histogram buckets
 
 	return &graphQLManager{
 		container: c,
@@ -111,23 +116,6 @@ func (m *graphQLManager) buildSchema() error {
 		return err
 	}
 
-	// Add special health field by default if it's not already there
-	if _, ok := queryFields[healthKey]; !ok {
-		queryFields[healthKey] = &graphql.Field{
-			Type: graphql.NewObject(graphql.ObjectConfig{
-				Name: "HealthInfo",
-				Fields: graphql.Fields{
-					"status":  &graphql.Field{Type: graphql.String},
-					"name":    &graphql.Field{Type: graphql.String},
-					"version": &graphql.Field{Type: graphql.String},
-				},
-			}),
-			Resolve: func(p graphql.ResolveParams) (any, error) {
-				return m.container.Health(p.Context), nil
-			},
-		}
-	}
-
 	schemaConfig := graphql.SchemaConfig{
 		Query: graphql.NewObject(graphql.ObjectConfig{
 			Name:   "Query",
@@ -165,17 +153,12 @@ func (m *graphQLManager) buildFields(obj *ast.Definition, handlers map[string]Ha
 		m.mu.RUnlock()
 
 		if !ok {
-			// Add special health field if defined in schema but no custom handler registered
-			if field.Name == healthKey {
-				handler = func(c *Context) (any, error) {
-					return m.container.Health(c.Context), nil
-				}
-			} else if strings.HasPrefix(field.Name, "__") {
+			if strings.HasPrefix(field.Name, "__") {
 				// Skip internal GraphQL fields like __schema, __type, etc.
 				continue
-			} else {
-				return nil, fmt.Errorf("%w: %s", errResolverMissing, field.Name)
 			}
+
+			return nil, fmt.Errorf("%w: %s", errResolverMissing, field.Name)
 		}
 
 		fields[field.Name] = &graphql.Field{
@@ -218,13 +201,13 @@ func (m *graphQLManager) mapInputType(t *ast.Type, schema *ast.Schema) graphql.I
 
 func (m *graphQLManager) getCoreInputType(name string, schema *ast.Schema) graphql.Input {
 	switch name {
-	case stringT, idT:
+	case graphqlString, graphqlID:
 		return graphql.String
-	case intT:
+	case graphqlInt:
 		return graphql.Int
-	case floatT:
+	case graphqlFloat:
 		return graphql.Float
-	case boolT:
+	case graphqlBoolean:
 		return graphql.Boolean
 	default:
 		return m.getCustomInputType(name, schema)
@@ -299,13 +282,13 @@ func (m *graphQLManager) mapType(t *ast.Type, schema *ast.Schema) graphql.Output
 
 func (m *graphQLManager) getCoreOutputType(name string, schema *ast.Schema) graphql.Output {
 	switch name {
-	case stringT, idT:
+	case graphqlString, graphqlID:
 		return graphql.String
-	case intT:
+	case graphqlInt:
 		return graphql.Int
-	case floatT:
+	case graphqlFloat:
 		return graphql.Float
-	case boolT:
+	case graphqlBoolean:
 		return graphql.Boolean
 	default:
 		return m.getCustomOutputType(name, schema)
@@ -364,20 +347,15 @@ func (m *graphQLManager) getResolver(name string, h Handler) graphql.FieldResolv
 func (m *graphQLManager) Handle(w http.ResponseWriter, r *http.Request) {
 	if m.buildErr != nil {
 		m.container.Errorf("GraphQL build error: %v", m.buildErr)
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusInternalServerError)
-
-		_ = json.NewEncoder(w).Encode(map[string]any{
-			"errors": []map[string]any{
-				{"message": m.buildErr.Error()},
-			},
-		})
+		m.respondWithErrors(w, http.StatusInternalServerError, m.buildErr.Error())
 
 		return
 	}
 
-	if r.Method == http.MethodGet && strings.HasPrefix(r.URL.Path, "/graphql/ui") {
-		m.renderPlayground(w, r)
+	if r.Method != http.MethodPost {
+		w.Header().Set("Allow", http.MethodPost)
+		m.respondWithErrors(w, http.StatusMethodNotAllowed, "GraphQL only supports POST requests")
+
 		return
 	}
 
@@ -385,51 +363,48 @@ func (m *graphQLManager) Handle(w http.ResponseWriter, r *http.Request) {
 }
 
 func (m *graphQLManager) handleGraphQLRequest(w http.ResponseWriter, r *http.Request) {
-	start := time.Now()
-
-	var req struct {
-		Query         string         `json:"query"`
-		OperationName string         `json:"operationName"`
-		Variables     map[string]any `json:"variables"`
+	ct := r.Header.Get("Content-Type")
+	if ct != "" && !strings.HasPrefix(ct, "application/json") {
+		m.respondWithErrors(w, http.StatusUnsupportedMediaType, "Content-Type must be application/json")
+		return
 	}
 
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		m.container.Metrics().IncrementCounter(r.Context(), "gofr_graphql_error_total", "operation_name", "unknown", "type", "unknown")
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusBadRequest)
+	start := time.Now()
 
-		_ = json.NewEncoder(w).Encode(map[string]any{
-			"errors": []map[string]any{
-				{"message": "invalid JSON request body"},
-			},
-		})
+	req, err := m.parseGraphQLRequest(r)
+	if err != nil {
+		m.container.Metrics().IncrementCounter(r.Context(), "app_graphql_error_total", "operation_name", graphqlUnknown, "type", graphqlUnknown)
+		m.respondWithErrors(w, http.StatusBadRequest, "invalid JSON request body")
 
 		return
 	}
 
 	opName := req.OperationName
 	if opName == "" {
-		opName = "unknown"
+		opName = graphqlUnknown
 	}
 
-	// Detect operation type
-	opType := "query"
-	if astDoc, err := parser.ParseQuery(&ast.Source{Input: req.Query}); err == nil && len(astDoc.Operations) > 0 {
-		opType = string(astDoc.Operations[0].Operation)
-	}
+	opType := m.getOperationType(req.Query)
 
 	ctx, span := m.tracer.Start(r.Context(), "graphql-request")
 	span.SetAttributes(attribute.String("graphql.operation_name", opName), attribute.String("graphql.operation_type", opType))
 
+	var result *graphql.Result
+
 	defer func() {
-		m.container.Metrics().RecordHistogram(ctx, "gofr_graphql_request_duration",
-			time.Since(start).Seconds(), "operation_name", opName, "type", opType)
+		status := graphqlSuccess
+		if result != nil && len(result.Errors) > 0 {
+			status = graphqlError
+		}
+
+		m.container.Metrics().RecordHistogram(ctx, "app_graphql_request_duration",
+			time.Since(start).Seconds(), "operation_name", opName, "type", opType, "status", status)
 		span.End()
 	}()
 
-	m.container.Metrics().IncrementCounter(ctx, "gofr_graphql_operations_total", "operation_name", opName, "type", opType)
+	m.container.Metrics().IncrementCounter(ctx, "app_graphql_operations_total", "operation_name", opName, "type", opType)
 
-	result := graphql.Do(graphql.Params{
+	result = graphql.Do(graphql.Params{
 		Schema:         m.schema,
 		RequestString:  req.Query,
 		VariableValues: req.Variables,
@@ -439,9 +414,8 @@ func (m *graphQLManager) handleGraphQLRequest(w http.ResponseWriter, r *http.Req
 
 	w.Header().Set("Content-Type", "application/json")
 
-	// Custom Error and Status Code Logic
 	if len(result.Errors) > 0 {
-		m.container.Metrics().IncrementCounter(ctx, "gofr_graphql_error_total", "operation_name", opName, "type", opType)
+		m.container.Metrics().IncrementCounter(ctx, "app_graphql_error_total", "operation_name", opName, "type", opType)
 
 		if result.Data != nil {
 			m.container.Debugf("GraphQL result partially matched schema. Errors: %v", result.Errors)
@@ -450,17 +424,45 @@ func (m *graphQLManager) handleGraphQLRequest(w http.ResponseWriter, r *http.Req
 
 	w.WriteHeader(http.StatusOK)
 
-	err := json.NewEncoder(w).Encode(result)
+	err = json.NewEncoder(w).Encode(result)
 	if err != nil {
 		m.container.Errorf("error encoding GraphQL response: %v", err)
 	}
 }
 
-func (*graphQLManager) renderPlayground(w http.ResponseWriter, _ *http.Request) {
-	w.Header().Set("Content-Type", "text/html")
-	_, _ = w.Write([]byte(graphiqlHTML))
+type gqlRequest struct {
+	Query         string         `json:"query"`
+	OperationName string         `json:"operationName"`
+	Variables     map[string]any `json:"variables"`
 }
 
+func (*graphQLManager) parseGraphQLRequest(r *http.Request) (gqlRequest, error) {
+	var req gqlRequest
+
+	err := json.NewDecoder(r.Body).Decode(&req)
+
+	return req, err
+}
+
+func (*graphQLManager) getOperationType(query string) string {
+	opType := "query"
+	if astDoc, err := parser.ParseQuery(&ast.Source{Input: query}); err == nil && len(astDoc.Operations) > 0 {
+		opType = string(astDoc.Operations[0].Operation)
+	}
+
+	return opType
+}
+
+func (*graphQLManager) respondWithErrors(w http.ResponseWriter, status int, message string) {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(status)
+
+	_ = json.NewEncoder(w).Encode(map[string]any{
+		"errors": []map[string]any{
+			{"message": message},
+		},
+	})
+}
 func (m *graphQLManager) GetHandler() http.Handler {
 	return http.HandlerFunc(m.Handle)
 }

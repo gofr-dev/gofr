@@ -1,8 +1,8 @@
 package main
 
 import (
-	"gofr.dev/pkg/gofr"
 	"gofr.dev/examples/using-graphql/migrations"
+	"gofr.dev/pkg/gofr"
 )
 
 // User is the domain type used in GraphQL resolvers and integration tests.
@@ -12,17 +12,17 @@ type User struct {
 	Role string `json:"role"`
 }
 
-// NewApp constructs and configures the GoFr application. It is extracted from
-// main() so that integration tests can start and stop the server directly.
-func NewApp() *gofr.App {
+func main() {
 	app := gofr.New()
 
 	app.Migrate(migrations.All())
 
+	// Example: curl -X POST http://localhost:9091/graphql -H "Content-Type: application/json" -d '{"query": "{ hello }"}'
 	app.GraphQLQuery("hello", func(c *gofr.Context) (interface{}, error) {
 		return "Hello GoFr GraphQL with SQL!", nil
 	})
 
+	// Example: curl -X POST -H "Content-Type: application/json" -d '{"query": "query GetUser($id: Int) { getUser(id: $id) { name role } }", "variables": {"id": 1}}' http://localhost:9091/graphql
 	app.GraphQLQuery("getUser", func(c *gofr.Context) (interface{}, error) {
 		var args struct {
 			ID int `json:"id"`
@@ -43,6 +43,7 @@ func NewApp() *gofr.App {
 		return u, nil
 	})
 
+	// Example: curl -X POST -H "Content-Type: application/json" -d '{"query": "mutation CreateUser($name: String, $role: String) { createUser(name: $name, role: $role) { id name } }", "variables": {"name": "New User", "role": "admin"}}' http://localhost:9091/graphql
 	app.GraphQLMutation("createUser", func(c *gofr.Context) (interface{}, error) {
 		var args struct {
 			Name string `json:"name"`
@@ -66,9 +67,5 @@ func NewApp() *gofr.App {
 		return User{ID: int(id), Name: args.Name, Role: args.Role}, nil
 	})
 
-	return app
-}
-
-func main() {
-	NewApp().Run()
+	app.Run()
 }

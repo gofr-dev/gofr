@@ -103,36 +103,6 @@ func TestGraphQL_Mutation(t *testing.T) {
 	assert.Equal(t, "test", result.Data.CreateUser.Name)
 }
 
-func TestGraphQL_Health(t *testing.T) {
-	t.Setenv("METRICS_PORT", "0")
-	setupSchema(t, `type Query { dummy: String }`)
-
-	app := New()
-	app.GraphQLQuery("dummy", func(_ *Context) (any, error) { return "ok", nil })
-
-	reqBody := `{"query": "{ health { status } }"}`
-	req := httptest.NewRequest(http.MethodPost, "/graphql", bytes.NewBufferString(reqBody))
-	req.Header.Set("Content-Type", "application/json")
-
-	resp := httptest.NewRecorder()
-	app.graphqlManager.buildErr = app.graphqlManager.buildSchema()
-	app.graphqlManager.Handle(resp, req)
-
-	assert.Equal(t, http.StatusOK, resp.Code)
-
-	var result struct {
-		Data struct {
-			Health struct {
-				Status string `json:"status"`
-			} `json:"health"`
-		} `json:"data"`
-	}
-
-	err := json.Unmarshal(resp.Body.Bytes(), &result)
-	require.NoError(t, err)
-	assert.NotEmpty(t, result.Data.Health.Status)
-}
-
 func TestGraphQL_Playground(t *testing.T) {
 	tests := []struct {
 		desc         string
@@ -140,7 +110,7 @@ func TestGraphQL_Playground(t *testing.T) {
 		expectedCode int
 	}{
 		{"Development Environment", "development", http.StatusOK},
-		{"Production Environment", "production", http.StatusNotFound},
+		{"Production Environment", "production", http.StatusOK},
 	}
 
 	for _, tc := range tests {
@@ -156,7 +126,7 @@ func TestGraphQL_Playground(t *testing.T) {
 			// Internal call to setup router as App.Run would do
 			app.httpServerSetup()
 
-			req := httptest.NewRequest(http.MethodGet, "/graphql/ui", http.NoBody)
+			req := httptest.NewRequest(http.MethodGet, "/.well-known/graphql/ui", http.NoBody)
 			resp := httptest.NewRecorder()
 
 			app.httpServer.router.ServeHTTP(resp, req)

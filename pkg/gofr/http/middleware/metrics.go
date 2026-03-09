@@ -42,6 +42,11 @@ func Metrics(metrics metrics) func(inner http.Handler) http.Handler {
 
 			// this has to be called in the end so that status code is populated
 			defer func(res *StatusResponseWriter, req *http.Request) {
+				// Skip recording for /graphql — it has its own dedicated metrics (app_graphql_*)
+				if path == "/graphql" {
+					return
+				}
+
 				duration := time.Since(start)
 
 				metrics.RecordHistogram(context.Background(), "app_http_response", duration.Seconds(),

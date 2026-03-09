@@ -6,8 +6,6 @@ type User {
 
 type Query {
     hello: String
-    user: User
-    users: [User]
     getUser(id: Int): User
 }
 
