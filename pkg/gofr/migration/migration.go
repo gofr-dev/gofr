@@ -94,10 +94,14 @@ func Run(migrationsMap map[int64]Migrate, c *container.Container) {
 		return
 	}
 
+	acquireLockAndRun(c, mg, &ds, migrationsMap, keys)
+}
+
+func acquireLockAndRun(c *container.Container, mg migrator, ds *Datasource, migrationsMap map[int64]Migrate, keys []int64) {
 	ownerID := uuid.New().String()
 	ctx, cancel := context.WithCancel(context.Background())
 
-	if err = mg.lock(ctx, cancel, c, ownerID); err != nil {
+	if err := mg.lock(ctx, cancel, c, ownerID); err != nil {
 		cancel()
 
 		if unlockErr := mg.unlock(c, ownerID); unlockErr != nil {
@@ -112,12 +116,27 @@ func Run(migrationsMap map[int64]Migrate, c *container.Container) {
 	defer func() {
 		cancel()
 
-		if err = mg.unlock(c, ownerID); err != nil {
+		if err := mg.unlock(c, ownerID); err != nil {
 			c.Errorf("failed to unlock during cleanup: %v", err)
 		}
 	}()
 
-	runMigrations(ctx, c, mg, &ds, migrationsMap, keys, lastMigration)
+	// Re-fetch lastMigration under the lock to avoid racing with another pod
+	// that may have completed the same migration between our pre-check and lock acquisition.
+	lastMigration, err := mg.getLastMigration(c)
+	if err != nil {
+		c.Fatalf("migration failed: could not verify migration state under lock, err: %v", err)
+
+		return
+	}
+
+	if !hasNewMigrations(keys, lastMigration) {
+		c.Infof("no new migrations to run (verified under lock)")
+
+		return
+	}
+
+	runMigrations(ctx, c, mg, ds, migrationsMap, keys, lastMigration)
 }
 
 func hasNewMigrations(keys []int64, lastMigration int64) bool {

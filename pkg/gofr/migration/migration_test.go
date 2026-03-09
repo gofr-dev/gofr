@@ -80,7 +80,7 @@ func TestMigrationRunClickhouseSuccess(t *testing.T) {
 
 		// Pre-check
 		mockClickHouse.EXPECT().Exec(gomock.Any(), CheckAndCreateChMigrationTable).Return(nil)
-		mockClickHouse.EXPECT().Select(gomock.Any(), gomock.Any(), getLastChGoFrMigration).Return(nil)
+		mockClickHouse.EXPECT().Select(gomock.Any(), gomock.Any(), getLastChGoFrMigration).Return(nil).Times(2)
 
 		mockClickHouse.EXPECT().Exec(gomock.Any(), "SELECT * FROM users").Return(nil)
 		mockClickHouse.EXPECT().Exec(gomock.Any(), insertChGoFrMigrationRow, int64(1),
@@ -110,7 +110,7 @@ func TestMigrationRunClickhouseMigrationFailure(t *testing.T) {
 
 		// Pre-check
 		mockClickHouse.EXPECT().Exec(gomock.Any(), CheckAndCreateChMigrationTable).Return(nil)
-		mockClickHouse.EXPECT().Select(gomock.Any(), gomock.Any(), getLastChGoFrMigration).Return(nil)
+		mockClickHouse.EXPECT().Select(gomock.Any(), gomock.Any(), getLastChGoFrMigration).Return(nil).Times(2)
 
 		mockClickHouse.EXPECT().Exec(gomock.Any(), "SELECT * FROM users").Return(sql.ErrConnDone)
 
@@ -187,7 +187,7 @@ func TestMigrationRunClickhouseCommitError(t *testing.T) {
 
 		// Pre-check
 		mockClickHouse.EXPECT().Exec(gomock.Any(), CheckAndCreateChMigrationTable).Return(nil)
-		mockClickHouse.EXPECT().Select(gomock.Any(), gomock.Any(), getLastChGoFrMigration).Return(nil)
+		mockClickHouse.EXPECT().Select(gomock.Any(), gomock.Any(), getLastChGoFrMigration).Return(nil).Times(2)
 
 		mockClickHouse.EXPECT().Exec(gomock.Any(), "SELECT * FROM users").Return(nil)
 		mockClickHouse.EXPECT().Exec(gomock.Any(), insertChGoFrMigrationRow, int64(1),
@@ -340,10 +340,13 @@ func TestMigration_CommitFailure(t *testing.T) {
 	mocks.SQL.ExpectExec("INSERT INTO gofr_migration_locks (lock_key, owner_id, expires_at) VALUES (?, ?, ?)").
 		WithArgs("gofr_migrations_lock", sqlmock.AnyArg(), sqlmock.AnyArg()).WillReturnResult(sqlmock.NewResult(1, 1))
 
-	// 4. beginTransaction
+	// 4. re-fetch getLastMigration under lock
+	mocks.SQL.ExpectQuery("SELECT COALESCE(MAX(version), 0) FROM gofr_migrations;").WillReturnRows(sqlmock.NewRows([]string{"MAX"}).AddRow(0))
+
+	// 5. beginTransaction
 	mocks.SQL.ExpectBegin()
 
-	// 5. commitMigration fails
+	// 6. commitMigration fails
 	testErr := errGenericCommit
 
 	mocks.SQL.ExpectDialect().WillReturnString("mysql")
@@ -351,10 +354,10 @@ func TestMigration_CommitFailure(t *testing.T) {
 		WillReturnResult(sqlmock.NewResult(1, 1))
 	mocks.SQL.ExpectCommit().WillReturnError(testErr)
 
-	// 6. rollback in runMigrations
+	// 7. rollback in runMigrations
 	mocks.SQL.ExpectRollback()
 
-	// 7. unlock in defer
+	// 8. unlock in defer
 	mocks.SQL.ExpectExec("DELETE FROM gofr_migration_locks WHERE lock_key = ? AND owner_id = ?").
 		WithArgs("gofr_migrations_lock", sqlmock.AnyArg()).WillReturnResult(sqlmock.NewResult(1, 1))
 

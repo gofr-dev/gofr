@@ -150,7 +150,7 @@ func TestOracleMigration_RunMigrationSuccess(t *testing.T) {
 	// 2. Create migration lock table
 	mockOracle.EXPECT().Exec(gomock.Any(), checkAndCreateOracleMigrationLocksTable).Return(nil)
 
-	// 3. Optimistic pre-check: get last migration before acquiring lock
+	// 3. Optimistic pre-check + re-fetch under lock: get last migration
 	mockOracle.EXPECT().Select(gomock.Any(), gomock.Any(), getLastOracleGoFrMigration).
 		DoAndReturn(func(_ context.Context, dest any, _ string, _ ...any) error {
 			results := dest.(*[]map[string]any)
@@ -158,7 +158,7 @@ func TestOracleMigration_RunMigrationSuccess(t *testing.T) {
 				{"LAST_MIGRATION": int64(0)},
 			}
 			return nil
-		}).Times(1)
+		}).Times(2)
 
 	// 4. Acquire lock: clean up expired rows
 	mockOracle.EXPECT().Exec(gomock.Any(), deleteExpiredOracleLocks, gomock.Any()).Return(nil)
