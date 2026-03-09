@@ -98,6 +98,17 @@ func TestStorageAdapter_NewWriter_EmptyName(t *testing.T) {
 	assert.ErrorIs(t, err, errEmptyObjectName)
 }
 
+func TestStorageAdapter_NewWriter_NilBucket(t *testing.T) {
+	adapter := &storageAdapter{cfg: &Config{BucketName: "bucket"}}
+
+	writer := adapter.NewWriter(context.Background(), "obj.csv")
+
+	require.NotNil(t, writer)
+
+	_, err := writer.Write([]byte("data"))
+	assert.ErrorIs(t, err, errGCSClientNotInitialized)
+}
+
 func TestStorageAdapter_StatObject_EmptyName(t *testing.T) {
 	adapter := &storageAdapter{}
 

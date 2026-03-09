@@ -10,7 +10,10 @@ import (
 	"gofr.dev/pkg/gofr/datasource/file"
 )
 
-var errNotImplemented = errors.New("not implemented")
+var (
+	errNotImplemented = errors.New("not implemented")
+	errSigningFailed  = errors.New("signing failed")
+)
 
 // basicProviderWithoutSignedURL implements only StorageProvider, NOT SignedURLProvider.
 type basicProviderWithoutSignedURL struct{}
@@ -142,6 +145,21 @@ func TestGenerateSignedURL_ProviderDoesNotSupport(t *testing.T) {
 	_, err := cfs.GenerateSignedURL(context.Background(), "obj", time.Hour, nil)
 	if !errors.Is(err, file.ErrSignedURLsNotSupported) {
 		t.Errorf("expected ErrSignedURLsNotSupported, got %v", err)
+	}
+}
+
+func TestGenerateSignedURL_ProviderError(t *testing.T) {
+	fp := &fakeProvider{signedURLError: errSigningFailed}
+	cfs := &file.CommonFileSystem{Provider: fp, ProviderName: "FAKE"}
+
+	_, err := cfs.GenerateSignedURL(context.Background(), "obj", time.Hour, nil)
+	if err == nil {
+		t.Fatal("expected error when provider returns signing error, got nil")
+	}
+
+	// GenerateSignedURL wraps the provider error; the original sentinel must be reachable.
+	if !errors.Is(err, errSigningFailed) {
+		t.Errorf("expected error to wrap %v, got: %v", errSigningFailed, err)
 	}
 }
 

@@ -675,7 +675,7 @@ func (c *CommonFileSystem) CreateWithOptions(ctx context.Context, name string, o
 	// Fallback: provider doesn't support metadata. Warn because the caller explicitly
 	// requested metadata that will be silently dropped.
 	if c.Logger != nil && opts != nil {
-		c.Logger.Warnf("provider %s does not support metadata; file will be created without the requested metadata", c.ProviderName)
+		c.Logger.Warnf("provider %s does not support metadata; file %q will be created without the requested metadata", c.ProviderName, name)
 	}
 
 	writer := c.Provider.NewWriter(ctx, name)

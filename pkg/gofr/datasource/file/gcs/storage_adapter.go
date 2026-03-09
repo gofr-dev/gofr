@@ -47,7 +47,7 @@ var (
 const (
 	contentTypeDirectory  = "application/x-directory"
 	contentTypePartsCount = 2
-	maxGCSSignedURLExpiry = 7 * 24 * time.Hour // 7 days// type/subtype
+	maxGCSSignedURLExpiry = 7 * 24 * time.Hour // 7 days
 )
 
 // storageAdapter adapts GCS client to implement file.StorageProvider.
@@ -110,7 +110,6 @@ func (s *storageAdapter) Connect(ctx context.Context) error {
 	// repeating JSON unmarshal + PEM decode + key parse on the hot path.
 	// When CredentialsJSON is absent (Workload Identity / ADC), saEmail and saPrivateKey
 	// remain empty and bucket.SignedURL will use the client's ambient credentials.
-	// Parse and cache service-account credentials for signed URL signing.
 	// If parsing fails we do NOT abort Connect() — the GCS client is already valid and
 	// all non-signed-URL operations will work normally. The parse error is stored and
 	// returned lazily from SignedURL() so only callers of that method are affected.
@@ -186,18 +185,23 @@ func (s *storageAdapter) NewRangeReader(ctx context.Context, name string, offset
 }
 
 // NewWriter creates a writer for the given object.
+// Note: GCS NewWriter never returns an error synchronously; errors are deferred until Write/Close.
 func (s *storageAdapter) NewWriter(ctx context.Context, name string) io.WriteCloser {
-	// GCS NewWriter never returns an error (deferred until Write/Close)
-	// But we should validate input
 	if name == "" {
-		// Return a no-op writer that fails on Write
 		return &failWriter{err: errEmptyObjectName}
+	}
+
+	if s.bucket == nil {
+		return &failWriter{err: errGCSClientNotInitialized}
 	}
 
 	return s.bucket.Object(name).NewWriter(ctx)
 }
 
 // NewWriterWithOptions implements MetadataWriter.
+// Note: ContentType is passed to GCS as-is without format validation; GCS itself accepts any
+// string as content-type on upload. Strict type/subtype format validation only applies to
+// SignedURL via validateSignedURLInput, where the value is included in the request signature.
 func (s *storageAdapter) NewWriterWithOptions(ctx context.Context, name string, opts *file.FileOptions) io.WriteCloser {
 	if name == "" {
 		return &failWriter{err: errEmptyObjectName}
@@ -533,7 +537,7 @@ func rewriteSignedURLEndpoint(signedURL, endpoint string) string {
 	}
 
 	ep, err := url.Parse(endpoint)
-	if err != nil {
+	if err != nil || ep.Scheme == "" || ep.Host == "" {
 		return signedURL
 	}
 
