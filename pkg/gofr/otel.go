@@ -8,7 +8,7 @@ import (
 
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc"
-	"go.opentelemetry.io/otel/exporters/zipkin"
+	"go.opentelemetry.io/otel/exporters/zipkin" //nolint:staticcheck // deprecated but kept for backward compatibility
 	"go.opentelemetry.io/otel/propagation"
 	"go.opentelemetry.io/otel/sdk/resource"
 	sdktrace "go.opentelemetry.io/otel/sdk/trace"
@@ -140,6 +140,9 @@ func (a *App) getExporter(name, host, port, url string) (sdktrace.SpanExporter, 
 	case "otlp", "jaeger":
 		exporter, err = buildOtlpExporter(a.Logger(), name, url, host, port, headers)
 	case "zipkin":
+		a.Logger().Warn("TRACE_EXPORTER=zipkin is deprecated and will be removed in a future release. " +
+			"Consider using TRACE_EXPORTER=otlp instead. See https://opentelemetry.io/blog/2025/deprecating-zipkin-exporters/")
+
 		exporter, err = buildZipkinExporter(a.Logger(), url, host, port, headers)
 	case gofrTraceExporter:
 		exporter = buildGoFrExporter(a.Logger(), url)
