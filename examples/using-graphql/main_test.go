@@ -86,11 +86,14 @@ func TestIntegration_GraphQL(t *testing.T) {
 	t.Setenv("APP_ENV", "dev")
 
 	app, host := newTestApp(t)
+
+	t.Cleanup(func() {
+		app.Shutdown(context.Background())
+	})
+
 	go app.Run()
 
 	waitForReady(t, host)
-
-	defer app.Shutdown(context.Background())
 
 	t.Run("hello query", func(t *testing.T) {
 		query := `{"query": "{ hello }"}`

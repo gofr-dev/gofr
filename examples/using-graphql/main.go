@@ -18,12 +18,12 @@ func main() {
 	app.Migrate(migrations.All())
 
 	// Example: curl -X POST http://localhost:9091/graphql -H "Content-Type: application/json" -d '{"query": "{ hello }"}'
-	app.GraphQLQuery("hello", func(c *gofr.Context) (interface{}, error) {
-		return "Hello GoFr GraphQL with SQL!", nil
+	app.GraphQLQuery("hello", func(c *gofr.Context) (any, error) {
+		return "Hello GoFr GraphQL!", nil
 	})
 
 	// Example: curl -X POST -H "Content-Type: application/json" -d '{"query": "query GetUser($id: Int) { getUser(id: $id) { name role } }", "variables": {"id": 1}}' http://localhost:9091/graphql
-	app.GraphQLQuery("getUser", func(c *gofr.Context) (interface{}, error) {
+	app.GraphQLQuery("getUser", func(c *gofr.Context) (any, error) {
 		var args struct {
 			ID int `json:"id"`
 		}
@@ -32,19 +32,19 @@ func main() {
 			return nil, err
 		}
 
-		var u User
+		var user User
 
 		err := c.SQL.QueryRowContext(c, "SELECT id, name, role FROM users WHERE id = ?", args.ID).
-			Scan(&u.ID, &u.Name, &u.Role)
+			Scan(&user.ID, &user.Name, &user.Role)
 		if err != nil {
 			return nil, err
 		}
 
-		return u, nil
+		return user, nil
 	})
 
 	// Example: curl -X POST -H "Content-Type: application/json" -d '{"query": "mutation CreateUser($name: String, $role: String) { createUser(name: $name, role: $role) { id name } }", "variables": {"name": "New User", "role": "admin"}}' http://localhost:9091/graphql
-	app.GraphQLMutation("createUser", func(c *gofr.Context) (interface{}, error) {
+	app.GraphQLMutation("createUser", func(c *gofr.Context) (any, error) {
 		var args struct {
 			Name string `json:"name"`
 			Role string `json:"role"`

@@ -5,3 +5,7 @@ package gofr
 type Responder interface {
 	Respond(data any, err error)
 }
+
+type noopResponder struct{}
+
+func (n noopResponder) Respond(_ any, _ error) {}

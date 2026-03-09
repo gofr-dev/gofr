@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"sync"
 
 	"github.com/gorilla/mux"
 	"golang.org/x/sync/errgroup"
@@ -50,6 +51,7 @@ type App struct {
 	subscriptionManager SubscriptionManager
 	graphqlManager      *graphQLManager
 	onStartHooks        []func(ctx *Context) error
+	mu                  sync.Mutex
 }
 
 func (a *App) runOnStartHooks(ctx context.Context) error {
@@ -252,9 +254,11 @@ func (a *App) GraphQLQuery(name string, handler Handler) {
 		a.container.Logger.Fatalf("http port %d is blocked or unreachable", a.httpServer.port)
 	}
 
+	a.mu.Lock()
 	if a.graphqlManager == nil {
 		a.graphqlManager = newGraphQLManager(a.container)
 	}
+	a.mu.Unlock()
 
 	a.httpRegistered = true
 	a.graphqlManager.RegisterQuery(name, handler)
@@ -268,9 +272,11 @@ func (a *App) GraphQLMutation(name string, handler Handler) {
 		a.container.Logger.Fatalf("http port %d is blocked or unreachable", a.httpServer.port)
 	}
 
+	a.mu.Lock()
 	if a.graphqlManager == nil {
 		a.graphqlManager = newGraphQLManager(a.container)
 	}
+	a.mu.Unlock()
 
 	a.httpRegistered = true
 	a.graphqlManager.RegisterMutation(name, handler)
@@ -425,9 +431,9 @@ func (a *App) OnStart(hook func(ctx *Context) error) {
 
 func (a *App) setupGraphQL() {
 	if a.graphqlManager != nil {
-		a.graphqlManager.buildErr = a.graphqlManager.buildSchema()
-		if a.graphqlManager.buildErr != nil {
-			a.container.Logger.Fatalf("GraphQL build error: %v", a.graphqlManager.buildErr)
+		err := a.graphqlManager.buildSchema()
+		if err != nil {
+			a.container.Logger.Fatalf("GraphQL build error: %v", err)
 		}
 
 		// Functional endpoint: served via POST per spec to ensure data safety and consistency.

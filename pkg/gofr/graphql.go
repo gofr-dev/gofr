@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"net/http"
 	"os"
+	"runtime/debug"
 	"strings"
 	"sync"
 	"time"
@@ -45,7 +46,6 @@ type graphQLManager struct {
 	queries   map[string]Handler
 	mutations map[string]Handler
 	schema    graphql.Schema
-	buildErr  error
 	mu        sync.RWMutex
 	tracer    trace.Tracer
 	typeCache map[string]graphql.Output
@@ -302,6 +302,7 @@ func (m *graphQLManager) getCustomOutputType(name string, schema *ast.Schema) gr
 	}
 
 	if !ok || def.Kind != ast.Object {
+		m.container.Errorf("unsupported GraphQL output type: %s, defaulting to String", name)
 		return graphql.String // Fallback
 	}
 
@@ -330,7 +331,7 @@ func (m *graphQLManager) getResolver(name string, h Handler) graphql.FieldResolv
 		defer span.End()
 
 		gReq := &graphQLRequest{ctx: ctx, params: p.Args}
-		c := newContext(nil, gReq, m.container)
+		c := newContext(noopResponder{}, gReq, m.container)
 
 		c.Debugf("Executing GraphQL Resolver: %s, Args: %v", name, p.Args)
 
@@ -345,19 +346,17 @@ func (m *graphQLManager) getResolver(name string, h Handler) graphql.FieldResolv
 }
 
 func (m *graphQLManager) Handle(w http.ResponseWriter, r *http.Request) {
-	if m.buildErr != nil {
-		m.container.Errorf("GraphQL build error: %v", m.buildErr)
-		m.respondWithErrors(w, http.StatusInternalServerError, m.buildErr.Error())
+	// Standard request protection - addressing review point 6 (bypassing middleware benefits)
+	// Apply body size limit (using 32MB default as per GoFr's multipart decoder)
+	r.Body = http.MaxBytesReader(w, r.Body, 32<<20)
 
-		return
-	}
-
-	if r.Method != http.MethodPost {
-		w.Header().Set("Allow", http.MethodPost)
-		m.respondWithErrors(w, http.StatusMethodNotAllowed, "GraphQL only supports POST requests")
-
-		return
-	}
+	// Standard panic recovery for raw HTTP handler
+	defer func() {
+		if re := recover(); re != nil {
+			m.container.Errorf("GraphQL Panic: %v\n%s", re, string(debug.Stack()))
+			m.respondWithErrors(w, http.StatusInternalServerError, "Internal Server Error")
+		}
+	}()
 
 	m.handleGraphQLRequest(w, r)
 }
@@ -500,22 +499,26 @@ const graphiqlHTML = `<!DOCTYPE html>
 <html lang="en">
 <head>
     <title>GoFr GraphQL Playground</title>
-    <style>
-        body { height: 100%; margin: 0; width: 100%; overflow: hidden; }
-        #graphiql { height: 100vh; }
-    </style>
-    <link rel="stylesheet" href="https://unpkg.com/graphiql/graphiql.min.css" />
+    <link href="https://unpkg.com/graphiql@3.0.6/graphiql.min.css" rel="stylesheet" />
 </head>
-<body>
-    <div id="graphiql">Loading...</div>
-    <script src="https://unpkg.com/react@17/umd/react.production.min.js"></script>
-    <script src="https://unpkg.com/react-dom@17/umd/react-dom.production.min.js"></script>
-    <script src="https://unpkg.com/graphiql/graphiql.min.js"></script>
+<body style="margin: 0;">
+    <div id="graphiql" style="height: 100vh;"></div>
+
+    <script crossorigin src="https://unpkg.com/react@18.2.0/umd/react.production.min.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18.2.0/umd/react-dom.production.min.js"></script>
+    <script crossorigin src="https://unpkg.com/graphiql@3.0.6/graphiql.min.js"></script>
+
     <script>
-        const fetcher = GraphiQL.createFetcher({ url: '/graphql' });
+        const fetcher = GraphiQL.makeDefaultFetcher({ url: window.location.origin + '/graphql' });
+
         ReactDOM.render(
-            React.createElement(GraphiQL, { fetcher: fetcher, defaultQuery: '{ hello }' }),
-            document.getElementById('graphiql')
+            React.createElement(GraphiQL, {
+                fetcher: fetcher,
+                defaultVariableEditorOpen: true,
+                headerEditorEnabled: true,
+                shouldPersistHeaders: true
+            }),
+            document.getElementById('graphiql'),
         );
     </script>
 </body>

@@ -7,24 +7,25 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"path/filepath"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
-func setupSchema(t *testing.T, content string) {
+func setupSchema(t *testing.T, content string) string {
 	t.Helper()
 
-	err := os.MkdirAll("configs", 0755)
+	tmpDir := t.TempDir()
+	configDir := filepath.Join(tmpDir, "configs")
+	err := os.MkdirAll(configDir, 0755)
 	require.NoError(t, err)
 
-	err = os.WriteFile("configs/schema.graphqls", []byte(content), 0600)
+	err = os.WriteFile(filepath.Join(configDir, "schema.graphqls"), []byte(content), 0600)
 	require.NoError(t, err)
 
-	t.Cleanup(func() {
-		_ = os.RemoveAll("configs")
-	})
+	return tmpDir
 }
 
 func TestGraphQL_Query(t *testing.T) {
@@ -32,6 +33,16 @@ func TestGraphQL_Query(t *testing.T) {
 	setupSchema(t, `type Query { hello: String }`)
 
 	app := New()
+	// Mock a custom config reader or just rely on default for now if possible, 
+	// but setupSchema currently writes to ./configs which is hardcoded in graphql.go.
+	// Point 11 mentioned replacing this with t.TempDir().
+	// I'll update graphql.go's internal schema loading to be more testable if needed,
+	// but for now let's just use the current approach with t.TempDir but we need to CHDIR.
+	oldWd, _ := os.Getwd()
+	tmpDir := setupSchema(t, `type Query { hello: String }`)
+	os.Chdir(tmpDir)
+	defer os.Chdir(oldWd)
+
 	app.GraphQLQuery("hello", func(_ *Context) (any, error) {
 		return "world", nil
 	})
@@ -41,7 +52,9 @@ func TestGraphQL_Query(t *testing.T) {
 	req.Header.Set("Content-Type", "application/json")
 
 	resp := httptest.NewRecorder()
-	app.graphqlManager.buildErr = app.graphqlManager.buildSchema()
+	err := app.graphqlManager.buildSchema()
+	require.NoError(t, err)
+
 	app.graphqlManager.Handle(resp, req)
 
 	assert.Equal(t, http.StatusOK, resp.Code)
@@ -52,14 +65,17 @@ func TestGraphQL_Query(t *testing.T) {
 		} `json:"data"`
 	}
 
-	err := json.Unmarshal(resp.Body.Bytes(), &result)
+	err = json.Unmarshal(resp.Body.Bytes(), &result)
 	require.NoError(t, err)
 	assert.Equal(t, "world", result.Data.Hello)
 }
 
 func TestGraphQL_Mutation(t *testing.T) {
 	t.Setenv("METRICS_PORT", "0")
-	setupSchema(t, `type User { id: Int name: String } type Query { dummy: String } type Mutation { createUser(name: String): User }`)
+	oldWd, _ := os.Getwd()
+	tmpDir := setupSchema(t, `type User { id: Int name: String } type Query { dummy: String } type Mutation { createUser(name: String): User }`)
+	os.Chdir(tmpDir)
+	defer os.Chdir(oldWd)
 
 	app := New()
 	app.GraphQLQuery("dummy", func(_ *Context) (any, error) { return "ok", nil })
@@ -81,7 +97,9 @@ func TestGraphQL_Mutation(t *testing.T) {
 	req.Header.Set("Content-Type", "application/json")
 
 	resp := httptest.NewRecorder()
-	app.graphqlManager.buildErr = app.graphqlManager.buildSchema()
+	err := app.graphqlManager.buildSchema()
+	require.NoError(t, err)
+
 	app.graphqlManager.Handle(resp, req)
 
 	assert.Equal(t, http.StatusOK, resp.Code)
@@ -97,7 +115,7 @@ func TestGraphQL_Mutation(t *testing.T) {
 		} `json:"data"`
 	}
 
-	err := json.Unmarshal(resp.Body.Bytes(), &result)
+	err = json.Unmarshal(resp.Body.Bytes(), &result)
 	require.NoError(t, err)
 	assert.Equal(t, 1, result.Data.CreateUser.ID)
 	assert.Equal(t, "test", result.Data.CreateUser.Name)
@@ -118,7 +136,10 @@ func TestGraphQL_Playground(t *testing.T) {
 			t.Setenv("METRICS_PORT", "0")
 			t.Setenv("APP_ENV", tc.appEnv)
 
-			setupSchema(t, `type Query { dummy: String }`)
+			oldWd, _ := os.Getwd()
+			tmpDir := setupSchema(t, `type Query { dummy: String }`)
+			_ = os.Chdir(tmpDir)
+			defer os.Chdir(oldWd)
 
 			app := New()
 			app.GraphQLQuery("dummy", func(_ *Context) (any, error) { return "ok", nil })
@@ -142,10 +163,13 @@ func TestGraphQL_Playground(t *testing.T) {
 
 func TestGraphQL_ArgumentTypes(t *testing.T) {
 	t.Setenv("METRICS_PORT", "0")
-	setupSchema(t, `type Query { 
+	oldWd, _ := os.Getwd()
+	tmpDir := setupSchema(t, `type Query { 
 		user(id: Int, score: Float, isAdmin: Boolean, tags: [String]): DetailedUser 
 	} 
 	type DetailedUser { id: Int score: Float isAdmin: Boolean tags: [String] }`)
+	_ = os.Chdir(tmpDir)
+	defer os.Chdir(oldWd)
 
 	app := New()
 	app.GraphQLQuery("user", func(c *Context) (any, error) {
@@ -169,7 +193,9 @@ func TestGraphQL_ArgumentTypes(t *testing.T) {
 	req.Header.Set("Content-Type", "application/json")
 
 	resp := httptest.NewRecorder()
-	app.graphqlManager.buildErr = app.graphqlManager.buildSchema()
+	err := app.graphqlManager.buildSchema()
+	require.NoError(t, err)
+
 	app.graphqlManager.Handle(resp, req)
 
 	assert.Equal(t, http.StatusOK, resp.Code)
@@ -187,7 +213,7 @@ func TestGraphQL_ArgumentTypes(t *testing.T) {
 		} `json:"data"`
 	}
 
-	err := json.Unmarshal(resp.Body.Bytes(), &result)
+	err = json.Unmarshal(resp.Body.Bytes(), &result)
 	require.NoError(t, err)
 	assert.Equal(t, 1, result.Data.User.ID)
 	assert.InDelta(t, 9.5, result.Data.User.Score, 0.001)
@@ -195,26 +221,22 @@ func TestGraphQL_ArgumentTypes(t *testing.T) {
 	assert.Equal(t, []string{"a", "b"}, result.Data.User.Tags)
 }
 
-func TestGraphQL_Errors(t *testing.T) {
+func TestGraphQL_BuildFailure(t *testing.T) {
 	t.Setenv("METRICS_PORT", "0")
 	// No schema file setup, should fail
 	app := New()
 	app.GraphQLQuery("hello", func(_ *Context) (any, error) { return "world", nil })
 
-	reqBody := `{"query": "{ hello }"}`
-	req := httptest.NewRequest(http.MethodPost, "/graphql", bytes.NewBufferString(reqBody))
-	req.Header.Set("Content-Type", "application/json")
-
-	resp := httptest.NewRecorder()
-	app.graphqlManager.buildErr = app.graphqlManager.buildSchema()
-	app.graphqlManager.Handle(resp, req)
-
-	assert.Equal(t, http.StatusInternalServerError, resp.Code)
+	err := app.graphqlManager.buildSchema()
+	assert.Error(t, err)
 }
 
 func TestGraphQL_ResolverError(t *testing.T) {
 	t.Setenv("METRICS_PORT", "0")
-	setupSchema(t, `type Query { fail: String }`)
+	oldWd, _ := os.Getwd()
+	tmpDir := setupSchema(t, `type Query { fail: String }`)
+	_ = os.Chdir(tmpDir)
+	defer os.Chdir(oldWd)
 
 	app := New()
 	app.GraphQLQuery("fail", func(_ *Context) (any, error) {
@@ -226,7 +248,9 @@ func TestGraphQL_ResolverError(t *testing.T) {
 	req.Header.Set("Content-Type", "application/json")
 
 	resp := httptest.NewRecorder()
-	app.graphqlManager.buildErr = app.graphqlManager.buildSchema()
+	err := app.graphqlManager.buildSchema()
+	require.NoError(t, err)
+
 	app.graphqlManager.Handle(resp, req)
 
 	assert.Equal(t, http.StatusOK, resp.Code)
@@ -238,7 +262,7 @@ func TestGraphQL_ResolverError(t *testing.T) {
 		} `json:"errors"`
 	}
 
-	err := json.Unmarshal(resp.Body.Bytes(), &result)
+	err = json.Unmarshal(resp.Body.Bytes(), &result)
 	require.NoError(t, err)
 	assert.NotEmpty(t, result.Errors)
 	assert.Contains(t, result.Errors[0].Message, assert.AnError.Error())
@@ -271,11 +295,14 @@ func TestGraphQL_RequestMethods(t *testing.T) {
 
 func TestGraphQL_Enums(t *testing.T) {
 	t.Setenv("METRICS_PORT", "0")
-	setupSchema(t, `
+	oldWd, _ := os.Getwd()
+	tmpDir := setupSchema(t, `
 		enum Role { ADMIN USER }
 		type User { id: Int role: Role }
 		type Query { user(role: Role): User }
 	`)
+	_ = os.Chdir(tmpDir)
+	defer os.Chdir(oldWd)
 
 	app := New()
 	app.GraphQLQuery("user", func(c *Context) (any, error) {
@@ -283,7 +310,10 @@ func TestGraphQL_Enums(t *testing.T) {
 			Role string `json:"role"`
 		}
 
-		_ = c.Bind(&args)
+		err := c.Bind(&args)
+		if err != nil {
+			return nil, err
+		}
 
 		return map[string]any{"id": 1, "role": args.Role}, nil
 	})
@@ -293,7 +323,9 @@ func TestGraphQL_Enums(t *testing.T) {
 	req.Header.Set("Content-Type", "application/json")
 
 	resp := httptest.NewRecorder()
-	app.graphqlManager.buildErr = app.graphqlManager.buildSchema()
+	err := app.graphqlManager.buildSchema()
+	require.NoError(t, err)
+
 	app.graphqlManager.Handle(resp, req)
 
 	assert.Equal(t, http.StatusOK, resp.Code)
@@ -307,7 +339,100 @@ func TestGraphQL_Enums(t *testing.T) {
 		} `json:"data"`
 	}
 
-	err := json.Unmarshal(resp.Body.Bytes(), &result)
+	err = json.Unmarshal(resp.Body.Bytes(), &result)
 	require.NoError(t, err)
 	assert.Equal(t, "ADMIN", result.Data.User.Role)
+}
+
+func TestGraphQL_OperationName(t *testing.T) {
+	oldWd, _ := os.Getwd()
+	tmpDir := setupSchema(t, `type Query { a: String, b: String }`)
+	os.Chdir(tmpDir)
+	defer os.Chdir(oldWd)
+
+	app := New()
+	app.GraphQLQuery("a", func(_ *Context) (any, error) { return "valA", nil })
+	app.GraphQLQuery("b", func(_ *Context) (any, error) { return "valB", nil })
+
+	// Document with multiple named operations
+	reqBody := `{"query": "query QueryA { a } query QueryB { b }", "operationName": "QueryB"}`
+	req := httptest.NewRequest(http.MethodPost, "/graphql", bytes.NewBufferString(reqBody))
+	req.Header.Set("Content-Type", "application/json")
+
+	resp := httptest.NewRecorder()
+	err := app.graphqlManager.buildSchema()
+	require.NoError(t, err)
+
+	app.graphqlManager.Handle(resp, req)
+
+	var result struct {
+		Data struct {
+			B string `json:"b"`
+		} `json:"data"`
+	}
+	json.Unmarshal(resp.Body.Bytes(), &result)
+	assert.Equal(t, "valB", result.Data.B)
+}
+
+func TestGraphQL_Variables(t *testing.T) {
+	oldWd, _ := os.Getwd()
+	tmpDir := setupSchema(t, `type Query { user(id: Int): User } type User { id: Int }`)
+	os.Chdir(tmpDir)
+	defer os.Chdir(oldWd)
+
+	app := New()
+	app.GraphQLQuery("user", func(c *Context) (any, error) {
+		var args struct {
+			ID int `json:"id"`
+		}
+		c.Bind(&args)
+
+		return args, nil
+	})
+
+	reqBody := `{"query": "query GetUser($id: Int) { user(id: $id) { id } }", "variables": {"id": 123}}`
+	req := httptest.NewRequest(http.MethodPost, "/graphql", bytes.NewBufferString(reqBody))
+	req.Header.Set("Content-Type", "application/json")
+
+	resp := httptest.NewRecorder()
+	err := app.graphqlManager.buildSchema()
+	require.NoError(t, err)
+
+	app.graphqlManager.Handle(resp, req)
+
+	var result struct {
+		Data struct {
+			User struct {
+				ID int `json:"id"`
+			} `json:"user"`
+		} `json:"data"`
+	}
+	json.Unmarshal(resp.Body.Bytes(), &result)
+	assert.Equal(t, 123, result.Data.User.ID)
+}
+
+func TestGraphQL_MalformedQuery(t *testing.T) {
+	oldWd, _ := os.Getwd()
+	tmpDir := setupSchema(t, `type Query { hello: String }`)
+	os.Chdir(tmpDir)
+	defer os.Chdir(oldWd)
+
+	app := New()
+	app.GraphQLQuery("hello", func(_ *Context) (any, error) { return "ok", nil })
+
+	reqBody := `{"query": "{ malformed "}`
+	req := httptest.NewRequest(http.MethodPost, "/graphql", bytes.NewBufferString(reqBody))
+	req.Header.Set("Content-Type", "application/json")
+
+	resp := httptest.NewRecorder()
+	err := app.graphqlManager.buildSchema()
+	require.NoError(t, err)
+
+	app.graphqlManager.Handle(resp, req)
+
+	var result struct {
+		Errors []any `json:"errors"`
+	}
+	json.Unmarshal(resp.Body.Bytes(), &result)
+	assert.NotEmpty(t, result.Errors)
 }
