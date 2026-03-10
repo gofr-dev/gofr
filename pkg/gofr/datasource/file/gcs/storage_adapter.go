@@ -13,9 +13,12 @@ import (
 	"time"
 
 	"cloud.google.com/go/storage"
-	"gofr.dev/pkg/gofr/datasource/file"
+	"golang.org/x/oauth2/google"
 	"google.golang.org/api/iterator"
 	"google.golang.org/api/option"
+
+	"gofr.dev/pkg/gofr/datasource"
+	"gofr.dev/pkg/gofr/datasource/file"
 )
 
 var (
@@ -40,14 +43,12 @@ var (
 	errInvalidPrivateKeyPEM    = errors.New("invalid private key PEM")
 	errInvalidPrivateKeyFormat = errors.New("invalid private key format")
 	errExpiryMustBePositive    = errors.New("expiry duration must be positive")
-	errExpiryTooLong           = errors.New("expiry cannot exceed 7 days for GCS signed URLs")
 	errInvalidContentType      = errors.New("invalid Content-Type format")
 )
 
 const (
 	contentTypeDirectory  = "application/x-directory"
 	contentTypePartsCount = 2
-	maxGCSSignedURLExpiry = 7 * 24 * time.Hour // 7 days
 )
 
 // storageAdapter adapts GCS client to implement file.StorageProvider.
@@ -64,10 +65,7 @@ type storageAdapter struct {
 	saEmail      string
 	saPrivateKey []byte
 
-	// credParseErr holds any error encountered when parsing CredentialsJSON during Connect().
-	// Connect() does not fail on a parse error so that users who never call GenerateSignedURL
-	// are unaffected. The error is returned lazily from SignedURL() if it is non-nil.
-	credParseErr error
+	logger datasource.Logger
 }
 
 // Connect initializes the GCS client and validates bucket access.
@@ -81,22 +79,9 @@ func (s *storageAdapter) Connect(ctx context.Context) error {
 		return errGCSConfigNil
 	}
 
-	var (
-		client *storage.Client
-		err    error
-	)
-
-	switch {
-	case s.cfg.EndPoint != "":
-		client, err = storage.NewClient(ctx, option.WithEndpoint(s.cfg.EndPoint), option.WithoutAuthentication())
-	case s.cfg.CredentialsJSON != "":
-		client, err = storage.NewClient(ctx, option.WithCredentialsJSON([]byte(s.cfg.CredentialsJSON))) //nolint:staticcheck // deprecated
-	default:
-		client, err = storage.NewClient(ctx)
-	}
-
+	client, err := s.createStorageClient(ctx)
 	if err != nil {
-		return fmt.Errorf("failed to create storage client: %w", err)
+		return err
 	}
 
 	bucket := client.Bucket(s.cfg.BucketName)
@@ -110,13 +95,15 @@ func (s *storageAdapter) Connect(ctx context.Context) error {
 	// repeating JSON unmarshal + PEM decode + key parse on the hot path.
 	// When CredentialsJSON is absent (Workload Identity / ADC), saEmail and saPrivateKey
 	// remain empty and bucket.SignedURL will use the client's ambient credentials.
-	// If parsing fails we do NOT abort Connect() — the GCS client is already valid and
-	// all non-signed-URL operations will work normally. The parse error is stored and
-	// returned lazily from SignedURL() so only callers of that method are affected.
+	// If parsing fails we log a warning and continue — the GCS client is already valid and
+	// all non-signed-URL operations will work normally. Signed URL calls will fall back to
+	// IAM-based signing via ambient credentials.
 	if s.cfg.CredentialsJSON != "" {
 		email, privateKey, parseErr := parseServiceAccountCredentials(s.cfg.CredentialsJSON)
 		if parseErr != nil {
-			s.credParseErr = fmt.Errorf("credentials cannot be used for signed URLs: %w", parseErr)
+			if s.logger != nil {
+				s.logger.Errorf("credentials cannot be used for signed URLs: %v; signed URL calls will use ambient credentials", parseErr)
+			}
 		} else {
 			s.saEmail = email
 			s.saPrivateKey = privateKey
@@ -127,6 +114,23 @@ func (s *storageAdapter) Connect(ctx context.Context) error {
 	s.bucket = bucket
 
 	return nil
+}
+
+// createStorageClient creates a GCS storage client based on the configured authentication method.
+func (s *storageAdapter) createStorageClient(ctx context.Context) (*storage.Client, error) {
+	switch {
+	case s.cfg.EndPoint != "":
+		return storage.NewClient(ctx, option.WithEndpoint(s.cfg.EndPoint), option.WithoutAuthentication())
+	case s.cfg.CredentialsJSON != "":
+		conf, err := google.JWTConfigFromJSON([]byte(s.cfg.CredentialsJSON), storage.ScopeFullControl)
+		if err != nil {
+			return nil, fmt.Errorf("failed to create storage client: %w", err)
+		}
+
+		return storage.NewClient(ctx, option.WithTokenSource(conf.TokenSource(ctx)))
+	default:
+		return storage.NewClient(ctx)
+	}
 }
 
 // Health checks if the GCS connection is healthy by verifying bucket access.
@@ -382,10 +386,6 @@ func validateSignedURLInput(name string, expiry time.Duration, opts *file.FileOp
 		return errExpiryMustBePositive
 	}
 
-	if expiry > maxGCSSignedURLExpiry {
-		return errExpiryTooLong
-	}
-
 	if opts != nil && opts.ContentType != "" {
 		parts := strings.SplitN(opts.ContentType, "/", contentTypePartsCount)
 		if len(parts) != contentTypePartsCount || parts[0] == "" || parts[1] == "" {
@@ -509,11 +509,6 @@ func (s *storageAdapter) SignedURL(ctx context.Context, name string, expiry time
 
 	if err := validateSignedURLInput(name, expiry, opts); err != nil {
 		return "", err
-	}
-
-	// Return any credential parse error that was deferred from Connect().
-	if s.credParseErr != nil {
-		return "", s.credParseErr
 	}
 
 	// saEmail and saPrivateKey are populated during Connect() when CredentialsJSON is

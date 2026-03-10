@@ -231,8 +231,7 @@ import "gofr.dev/pkg/gofr/datasource/file"
 
 cfs, ok := file.AsCloud(c.File)
 if !ok {
-    // File store is local, FTP, SFTP, or a cloud provider without cloud feature support
-    return nil, fmt.Errorf("cloud operations not supported by this file store")
+    return nil, file.ErrSignedURLsNotSupported
 }
 ```
 
@@ -269,7 +268,7 @@ if err != nil {
     return nil, err
 }
 
-return map[string]string{"download_url": url}, nil
+return url, nil
 ```
 
 Pass `FileOptions` as the last argument to override the `Content-Disposition` header that the signed URL serves — useful when the object was uploaded without a disposition header but you want the browser to treat it as a download:

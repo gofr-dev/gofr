@@ -22,8 +22,9 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
-	"gofr.dev/pkg/gofr/datasource/file"
 	"google.golang.org/api/option"
+
+	"gofr.dev/pkg/gofr/datasource/file"
 )
 
 var errTest = errors.New("test error")
@@ -710,12 +711,6 @@ func TestValidateSignedURLInput(t *testing.T) {
 			wantErr: errExpiryMustBePositive,
 		},
 		{
-			name:    "expiry too long",
-			objName: "file.txt",
-			expiry:  8 * 24 * time.Hour,
-			wantErr: errExpiryTooLong,
-		},
-		{
 			name:    "invalid content type",
 			objName: "file.txt",
 			expiry:  time.Hour,
@@ -1146,7 +1141,8 @@ func TestStorageAdapter_Connect_InvalidCredentials_DoesNotFailConnect(t *testing
 	defer srv.Close()
 
 	// Valid GCS credentials structure but with a non-parseable private key.
-	// Connect() must succeed — the GCS client works fine. Only SignedURL() should fail.
+	// Connect() must succeed — the GCS client works fine. The parse warning is logged and
+	// saEmail/saPrivateKey remain empty; signed URL calls fall back to ambient credentials.
 	garbage := pem.EncodeToMemory(&pem.Block{Type: "PRIVATE KEY", Bytes: []byte("garbage")})
 	encoded, err := json.Marshal(string(garbage))
 	require.NoError(t, err)
@@ -1164,10 +1160,9 @@ func TestStorageAdapter_Connect_InvalidCredentials_DoesNotFailConnect(t *testing
 	// Connect must succeed even with un-parseable signing credentials.
 	require.NoError(t, adapter.Connect(t.Context()))
 
-	// The parse error is surfaced only when GenerateSignedURL is actually called.
-	_, signedErr := adapter.SignedURL(t.Context(), "obj", time.Hour, nil)
-	require.Error(t, signedErr)
-	assert.Contains(t, signedErr.Error(), "credentials cannot be used for signed URLs")
+	// saEmail and saPrivateKey remain empty when credential parsing fails.
+	assert.Empty(t, adapter.saEmail)
+	assert.Empty(t, adapter.saPrivateKey)
 }
 
 func TestStorageAdapter_Connect_NoCredentials_DoesNotCache(t *testing.T) {

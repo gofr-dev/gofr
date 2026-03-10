@@ -166,9 +166,8 @@ type SignedURLGenerator interface {
 }
 
 // CloudFileSystem combines common cloud storage capabilities.
-// This is a convenience interface for type assertions by consumers who need
-// cloud-only features like metadata support and signed URLs. It intentionally
-// does NOT expose any provider-specific concrete type so it remains non-breaking.
+// It is a convenience interface for type assertions by consumers who need
+// cloud-specific features like metadata support and signed URLs.
 type CloudFileSystem interface {
 	FileSystemProvider
 	AdvancedFileOperations

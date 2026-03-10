@@ -4,6 +4,7 @@ import (
 	"context"
 	"time"
 
+	"gofr.dev/pkg/gofr/datasource"
 	"gofr.dev/pkg/gofr/datasource/file"
 )
 
@@ -11,6 +12,7 @@ const defaultTimeout = 10 * time.Second
 
 type fileSystem struct {
 	*file.CommonFileSystem
+	adapter *storageAdapter
 }
 
 // Config represents the gcs configuration.
@@ -39,9 +41,19 @@ func New(config *Config) file.CloudFileSystem {
 			Location:     config.BucketName,
 			ProviderName: "GCS", // Set provider name for observability
 		},
+		adapter: adapter,
 	}
 
 	return fs
+}
+
+// UseLogger sets the logger on both the common file system and the storage adapter.
+func (f *fileSystem) UseLogger(logger any) {
+	f.CommonFileSystem.UseLogger(logger)
+
+	if l, ok := logger.(datasource.Logger); ok {
+		f.adapter.logger = l
+	}
 }
 
 // Connect tries a single immediate connect via provider; on failure it starts a background retry.
