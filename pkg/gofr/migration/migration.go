@@ -89,7 +89,7 @@ func Run(migrationsMap map[int64]Migrate, c *container.Container) {
 	}
 
 	if !hasNewMigrations(keys, lastMigration) {
-		c.Infof("no new migrations to run")
+		c.Info("no new migrations to run")
 
 		return
 	}
@@ -131,7 +131,7 @@ func acquireLockAndRun(c *container.Container, mg migrator, ds *Datasource, migr
 	}
 
 	if !hasNewMigrations(keys, lastMigration) {
-		c.Infof("no new migrations to run (verified under lock)")
+		c.Info("no new migrations to run (verified under lock)")
 
 		return
 	}
