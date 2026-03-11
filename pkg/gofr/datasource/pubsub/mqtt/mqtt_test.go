@@ -336,7 +336,7 @@ func Test_getHandler(t *testing.T) {
 		retained:  false,
 		topic:     "test/topic",
 		messageID: 123,
-		pyload:    "hello from sub func",
+		payload:   "hello from sub func",
 	})
 }
 
@@ -627,8 +627,8 @@ func TestMQTT_createQueryMessageHandler(t *testing.T) {
 
 	handler := mq.createQueryMessageHandler(t.Context(), msgChan, topic)
 
-	mockMsg1 := &mockMessage{topic: topic, pyload: "message 1", messageID: 123, qos: 1, retained: false}
-	mockMsg2 := &mockMessage{topic: topic, pyload: "message 2 (dropped)", messageID: 124, qos: 1, retained: false}
+	mockMsg1 := &mockMessage{topic: topic, payload: "message 1", messageID: 123, qos: 1, retained: false}
+	mockMsg2 := &mockMessage{topic: topic, payload: "message 2 (dropped)", messageID: 124, qos: 1, retained: false}
 
 	// Send first message
 	handler(nil, mockMsg1)
@@ -773,7 +773,7 @@ func TestMQTT_Query_SuccessCases(t *testing.T) {
 				time.Sleep(10 * time.Millisecond)
 
 				for _, msg := range tc.messages {
-					capturedHandler(nil, &mockMessage{topic: topic, pyload: msg, qos: int(mockConfigs.QoS)})
+					capturedHandler(nil, &mockMessage{topic: topic, payload: msg, qos: int(mockConfigs.QoS)})
 				}
 			}()
 
