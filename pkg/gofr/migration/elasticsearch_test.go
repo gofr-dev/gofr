@@ -78,14 +78,14 @@ func TestMigrationRunElasticsearchSuccess(t *testing.T) {
 		mockElasticsearch.EXPECT().CreateIndex(gomock.Any(), elasticsearchMigrationIndex, gomock.Any()).
 			Return(nil)
 
-		// Mock the last migration query (no migrations yet)
+		// Mock the last migration query (no migrations yet) — called twice: pre-check + under lock
 		mockElasticsearch.EXPECT().Search(gomock.Any(), []string{elasticsearchMigrationIndex},
 			getLastElasticsearchMigrationQuery()).
 			Return(map[string]any{
 				"hits": map[string]any{
 					"hits": []any{},
 				},
-			}, nil)
+			}, nil).Times(2)
 
 		// Mock the migration operations
 		mockElasticsearch.EXPECT().CreateIndex(gomock.Any(), "test-index", gomock.Any()).
@@ -127,14 +127,14 @@ func TestMigrationRunElasticsearchMigrationFailure(t *testing.T) {
 		mockElasticsearch.EXPECT().CreateIndex(gomock.Any(), elasticsearchMigrationIndex, gomock.Any()).
 			Return(nil)
 
-		// Mock the last migration query (no migrations yet)
+		// Mock the last migration query (no migrations yet) — called twice: pre-check + under lock
 		mockElasticsearch.EXPECT().Search(gomock.Any(), []string{elasticsearchMigrationIndex},
 			getLastElasticsearchMigrationQuery()).
 			Return(map[string]any{
 				"hits": map[string]any{
 					"hits": []any{},
 				},
-			}, nil)
+			}, nil).Times(2)
 
 		// Mock the migration operation failure
 		mockElasticsearch.EXPECT().CreateIndex(gomock.Any(), "test-index", gomock.Any()).
@@ -232,14 +232,14 @@ func TestMigrationRunElasticsearchCommitError(t *testing.T) {
 		mockElasticsearch.EXPECT().CreateIndex(gomock.Any(), elasticsearchMigrationIndex, gomock.Any()).
 			Return(nil)
 
-		// Mock the last migration query (no migrations yet)
+		// Mock the last migration query (no migrations yet) — called twice: pre-check + under lock
 		mockElasticsearch.EXPECT().Search(gomock.Any(), []string{elasticsearchMigrationIndex},
 			getLastElasticsearchMigrationQuery()).
 			Return(map[string]any{
 				"hits": map[string]any{
 					"hits": []any{},
 				},
-			}, nil)
+			}, nil).Times(2)
 
 		// Mock the migration operation success
 		mockElasticsearch.EXPECT().CreateIndex(gomock.Any(), "test-index", gomock.Any()).
