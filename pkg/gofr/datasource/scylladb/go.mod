@@ -1,13 +1,13 @@
 module gofr.dev/pkg/gofr/datasource/scylladb
 
-go 1.25
+go 1.25.0
 
 require (
 	github.com/gocql/gocql v1.7.0
 	github.com/stoewer/go-strcase v1.3.1
 	github.com/stretchr/testify v1.11.1
-	go.opentelemetry.io/otel v1.40.0
-	go.opentelemetry.io/otel/trace v1.40.0
+	go.opentelemetry.io/otel v1.42.0
+	go.opentelemetry.io/otel/trace v1.42.0
 	go.uber.org/mock v0.6.0
 )
 
