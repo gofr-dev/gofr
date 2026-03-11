@@ -33,7 +33,7 @@ These are the architectural pillars of GoFr. Violations are **bugs**, not style 
 - **Type assertions on interfaces are a code smell.** If you take an interface and type-assert to a concrete type, you might as well take the concrete type directly.
 
 ### Dependencies as Parameters
-- Configuration injected, never read via `os.Getenv()` or global singletons.
+- Configuration should be injected and preferably accessed via GoFr's Config abstraction; avoid ad-hoc `os.Getenv()` outside dedicated config/bootstrap code, and never rely on global singletons.
 - All external dependencies abstracted as interfaces at the boundary.
 - "A little copying is better than a little dependency" — minimize external deps.
 
@@ -63,10 +63,10 @@ GoFr uses semantic error types that map to HTTP status codes and log levels.
 - `ErrorRecordNotFound` — specific 404 for missing records
 
 ### Rules
-- **All custom errors must implement `StatusCode() int` and `LogLevel() logging.Level`.** Untyped errors default to 500 + ERROR level.
+- **Implement `StatusCode()` and `LogLevel()` only when you need custom behavior.** HTTP status is taken from `StatusCode()` when the error implements `http.StatusCodeResponder`; otherwise responses default to 500. Log level is taken from `LogLevel()` when present; defaults to ERROR if not implemented.
 - **Choose the right error type.** Don't return 500 for user input errors. Don't return 404 for server failures.
 - **Wrap errors with context** — use `%w` for wrapping. `err113` linter enforces this.
-- **Don't log AND return errors in library code.** The framework's response handler logs automatically based on `LogLevel()`. Double-logging confuses operators.
+- **Don't log AND return errors in library code.** The framework's request handler/middleware layer logs automatically based on `LogLevel()`. Double-logging confuses operators.
 
 ## 4. Logging Standards
 
@@ -100,10 +100,10 @@ GoFr wraps ALL handler returns in `{"data": ..., "error": ...}`. Special types (
 ## 6. Testing Standards
 
 ### Framework & Conventions
-- **Testing library:** `testify` (`assert` for soft checks, `require` for fatal checks) + `uber-go/mock` for mocking.
+- **Testing library:** `testify` (`assert` for soft checks, `require` for fatal checks) + `go.uber.org/mock` for mocking.
 - **Table-driven tests** for multiple scenarios. Each case uses `t.Run(tc.name, ...)`.
 - **Test naming:** `Test<FunctionName>` with descriptive subtests.
-- **Coverage:** No PR may decrease existing coverage. Code Climate enforces this.
+- **Coverage:** No PR may decrease existing coverage. CI enforces this via qlty (see `.github/workflows/go.yml`).
 - **Integration tests:** Required for major features. Services run via Docker containers.
 - **Test utilities:** `testutil.NewServerConfigs(t)` for dynamic port allocation.
 
@@ -157,7 +157,7 @@ GoFr uses **golangci-lint v2** with 45+ linters. Key constraints:
 - Exported functions MUST have godoc comments. `revive:exported` enforces this.
 - New config keys must be documented and follow existing naming conventions (uppercase underscore).
 - Response envelope format (`{"data": ..., "error": ...}`) is a public contract — changes break all downstream users.
-- New error types must implement both `StatusCode()` and `LogLevel()` — missing either breaks the response pipeline.
+- For new error types, implement `StatusCode()` when you need a non-500 status, and implement `LogLevel()` when the error should log at a non-ERROR level (the pipeline defaults to 500/ERROR otherwise).
 
 ## 10. Documentation Requirements
 
@@ -188,7 +188,7 @@ These principles come from the Go team, Rob Pike's Go Proverbs, Effective Go, an
 - **Errors are values.** They can be programmed, compared, stored, passed. Use this — don't just `if err != nil { return err }` everywhere. Consider sentinel errors, error types, wrapping with `%w`.
 - **Don't just check errors, handle them gracefully.** Add context when wrapping (`fmt.Errorf("failed to connect to %s: %w", host, err)`). The caller should understand what failed without reading the source.
 - **Error strings should not be capitalized or end with punctuation.** They get composed: `fmt.Errorf("query users: %w", err)` reads naturally. `"Query users."` does not.
-- **Only handle an error once.** Either log it or return it. Never both. (GoFr's `Responder` logs automatically based on `LogLevel()`.)
+- **Only handle an error once.** Either log it or return it. Never both. (GoFr's request handler/middleware logs automatically based on `LogLevel()`.)
 
 ### Interfaces & Types
 - **The bigger the interface, the weaker the abstraction.** `io.Reader` (1 method) is powerful. An interface with 20 methods is a concrete type in disguise.
