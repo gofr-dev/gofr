@@ -60,6 +60,16 @@ type StorageProvider interface {
 	ListDir(ctx context.Context, prefix string) (objects []ObjectInfo, prefixes []string, err error)
 }
 
+// MetadataWriter is an optional extension for StorageProvider.
+type MetadataWriter interface {
+	NewWriterWithOptions(ctx context.Context, name string, opts *FileOptions) io.WriteCloser
+}
+
+// SignedURLProvider is an optional extension for StorageProvider.
+type SignedURLProvider interface {
+	SignedURL(ctx context.Context, name string, expiry time.Duration, opts *FileOptions) (string, error)
+}
+
 // ObjectInfo represents cloud storage object metadata.
 type ObjectInfo struct {
 	Name         string
@@ -132,7 +142,56 @@ type FileSystemProvider interface {
 	Connect()
 }
 
+// ============================================================
+// OPTIONAL CAPABILITY INTERFACES
+// ============================================================
+
+// FileOptions represents optional file metadata for Create/Sign operations.
+//
+//nolint:revive // keep name FileOptions for clarity across packages
+type FileOptions struct {
+	ContentType        string            `json:"content_type,omitempty"`
+	ContentDisposition string            `json:"content_disposition,omitempty"`
+	Metadata           map[string]string `json:"metadata,omitempty"`
+}
+
+// AdvancedFileOperations extends FileSystem with metadata support.
+type AdvancedFileOperations interface {
+	CreateWithOptions(ctx context.Context, name string, opts *FileOptions) (File, error)
+}
+
+// SignedURLGenerator provides secure, time-limited URL generation.
+type SignedURLGenerator interface {
+	GenerateSignedURL(ctx context.Context, name string, expiry time.Duration, opts *FileOptions) (string, error)
+}
+
+// CloudFileSystem combines common cloud storage capabilities.
+// It is a convenience interface for type assertions by consumers who need
+// cloud-specific features like metadata support and signed URLs.
+type CloudFileSystem interface {
+	FileSystemProvider
+	AdvancedFileOperations
+	SignedURLGenerator
+}
+
+// AsCloud is a convenience helper for checking if a FileSystemProvider
+// supports cloud-specific features. It's equivalent to type assertion
+// but provides a clearer intent in code.
+//
+// Example:
+//
+//	if cfs, ok := file.AsCloud(fs); ok {
+//	    url, _ := cfs.GenerateSignedURL(ctx, "file.csv", time.Hour, nil)
+//	}
+func AsCloud(fs FileSystem) (CloudFileSystem, bool) {
+	cfs, ok := fs.(CloudFileSystem)
+	return cfs, ok
+}
+
 var (
+	// ErrSignedURLsNotSupported is returned when a provider does not implement signed URLs.
+	ErrSignedURLsNotSupported = errors.New("signed URLs not supported by provider")
+
 	ErrOutOfRange   = errors.New("out of range")
 	ErrFileNotFound = os.ErrNotExist
 )
