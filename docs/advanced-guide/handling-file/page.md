@@ -216,6 +216,75 @@ func main() {
 > - **Automatic parent directory creation**: When creating files in nested paths (e.g., `dir1/subdir/file.txt`), parent directories are automatically created, matching local filesystem behavior
 > - **Content type detection**: Content types are automatically detected based on file extensions (e.g., `.json` → `application/json`, `.txt` → `text/plain`)
 
+## Cloud-Specific Operations
+
+Beyond the standard filesystem interface, some cloud storage providers support richer capabilities — setting file metadata on upload and generating secure, time-limited download URLs. These are available through the `CloudFileSystem` interface.
+
+> **Note:** These operations are currently supported only for **Google Cloud Storage (GCS)**. Other cloud providers may gain support in future releases.
+
+### Checking Cloud Support
+
+Use `file.AsCloud()` to safely check whether the configured file store supports cloud-specific operations. This avoids a raw type assertion and returns a typed interface:
+
+```go
+import "gofr.dev/pkg/gofr/datasource/file"
+
+cfs, ok := file.AsCloud(c.File)
+if !ok {
+    return nil, file.ErrSignedURLsNotSupported
+}
+```
+
+### Uploading a File with Metadata
+
+`CreateWithOptions` works like `Create` but lets you set a `Content-Type`, `Content-Disposition`, and arbitrary key-value metadata on the object at upload time:
+
+```go
+f, err := cfs.CreateWithOptions(c, "reports/q1.csv", &file.FileOptions{
+    ContentType:        "text/csv",
+    ContentDisposition: `attachment; filename="q1.csv"`,
+    Metadata: map[string]string{
+        "uploaded-by":    "invoice-service",
+        "report-quarter": "Q1-2026",
+    },
+})
+if err != nil {
+    return nil, err
+}
+defer f.Close()
+
+_, err = f.Write(csvData)
+```
+
+Setting `ContentDisposition` ensures browsers download the file as an attachment rather than attempting to render it inline. Custom `Metadata` fields are stored on the GCS object and visible in the GCS console and `gsutil` output.
+
+### Generating a Signed URL
+
+`GenerateSignedURL` creates a time-limited, pre-authenticated URL that allows anyone with the link to download the file — no GCS credentials required on the client side:
+
+```go
+url, err := cfs.GenerateSignedURL(c, "reports/q1.csv", 15*time.Minute, nil)
+if err != nil {
+    return nil, err
+}
+
+return url, nil
+```
+
+Pass `FileOptions` as the last argument to override the `Content-Disposition` header that the signed URL serves — useful when the object was uploaded without a disposition header but you want the browser to treat it as a download:
+
+```go
+url, err := cfs.GenerateSignedURL(c, "reports/q1.csv", 1*time.Hour, &file.FileOptions{
+    ContentDisposition: `attachment; filename="report.csv"`,
+})
+```
+
+> **Note:**
+> - Signed URLs require the GCS service account to have the `iam.serviceAccounts.signBlob` IAM permission.
+> - The URL is pre-authenticated — anyone who has it can download the file until it expires.
+> - Expiry is measured from the moment `GenerateSignedURL` is called.
+> - `file.AsCloud` returns `(nil, false)` for local, FTP, and SFTP file stores — always check the `ok` result.
+
 ### Creating Directory
 
 To create a single directory
