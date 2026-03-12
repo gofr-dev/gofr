@@ -50,6 +50,11 @@ type Query {
 In GoFr, resolvers strictly take `*gofr.Context`. You use `c.Bind()` to extract arguments.
 
 ```go
+type User struct {
+    ID   int    `json:"id"`
+    Name string `json:"name"`
+}
+
 func main() {
     app := gofr.New()
 
@@ -62,10 +67,10 @@ func main() {
             return nil, err
         }
 
-        // Return 'any' - GoFr validates this against the schema at runtime
-        return map[string]any{
-            "id":   args.ID,
-            "name": "Antigravity",
+        // Return a struct - GoFr validates this against the schema at runtime
+        return User{
+            ID:   args.ID,
+            Name: "Antigravity",
         }, nil
     })
 
@@ -114,7 +119,7 @@ GoFr follows the standard GraphQL-over-HTTP convention by returning `200 OK` for
 Instead of declarative arguments in the function signature, you use the standard `c.Bind()` method. GoFr automatically maps the GraphQL `args` map to your struct using JSON tags.
 
 ### 4. Supported Types
-GoFr supports all standard GraphQL scalar types (`String`, `Int`, `Float`, `Boolean`, `ID`), as well as `Object` and `Enum` types. These are automatically mapped between your GraphQL schema and Go structs/maps.
+GoFr supports all standard GraphQL types including scalars, objects, enums, and input types. For a complete reference on the GraphQL type system, see the [official GraphQL documentation](https://graphql.org/learn/schema/).
 
 ---
 
@@ -196,19 +201,22 @@ This distinction is important because GraphQL often returns `200 OK` even when b
 
 GoFr's GraphQL implementation is designed for simplicity and strict adherence to standards while maintaining the framework's "sane defaults" philosophy.
 
-### 1. Why POST-only?
+### 1. Why `GraphQLQuery` / `GraphQLMutation` instead of `app.POST`?
+GoFr provides dedicated `GraphQLQuery` and `GraphQLMutation` methods rather than reusing `app.POST("/graphql", ...)` because the framework handles schema validation, resolver dispatch, per-field tracing, and automatic metrics internally. A raw POST handler would require you to implement all of this manually.
+
+### 2. Why POST-only?
 Per the [GraphQL-over-HTTP specification](https://github.com/graphql/graphql-over-http), all GraphQL operations (including Queries) should be performed via `POST`.
 - **Security**: Preventing Queries over `GET` avoids accidentally exposing sensitive parameters in server logs or browser history.
 - **Consistency**: All operations use the same interaction model, simplifying middleware and observability.
 
-### 2. Why only Query and Mutation?
+### 3. Why only Query and Mutation?
 Currently, GoFr supports the two most common operation types:
 - **Query**: For read-only data fetching.
 - **Mutation**: For operations that cause side effects.
 
 **Subscriptions** (real-time updates) are currently not supported as they require a persistent stateful connection (like WebSockets), which deviates from the stateless, request-response model of GoFr's standard HTTP handlers.
 
-### 3. Single Schema File
+### 4. Single Schema File
 GoFr enforces a single `./configs/schema.graphqls` file to ensure a "Single Source of Truth" for your API contract. While you can register many resolvers, they must all belong to this single unified schema. This prevents fragmentation and makes the API easier to document and maintain.
 
 ---

@@ -34,6 +34,8 @@ func main() {
 
 		var user User
 
+		// Errors returned from resolvers are automatically placed in the GraphQL
+		// response "errors" array with a 200 OK status, per the GraphQL spec.
 		err := c.SQL.QueryRowContext(c, "SELECT id, name, role FROM users WHERE id = ?", args.ID).
 			Scan(&user.ID, &user.Name, &user.Role)
 		if err != nil {
