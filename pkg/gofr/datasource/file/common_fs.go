@@ -646,3 +646,75 @@ func (c *CommonFileSystem) IsRetryDisabled() bool {
 func (c *CommonFileSystem) SetConnected(connected bool) {
 	c.connected = connected
 }
+
+// CreateWithOptions creates a file with optional metadata (content-type, content-disposition,
+// custom key-value pairs). If the underlying provider does not implement MetadataWriter,
+// the file is created without metadata and a warning is logged.
+func (c *CommonFileSystem) CreateWithOptions(ctx context.Context, name string, opts *FileOptions) (File, error) {
+	var msg string
+
+	st := StatusError
+	startTime := time.Now()
+
+	defer c.Observe(OpCreateWithOptions, startTime, &st, &msg)
+
+	// Try metadata-aware writer
+	if mw, ok := c.Provider.(MetadataWriter); ok {
+		writer := mw.NewWriterWithOptions(ctx, name, opts)
+		if writer == nil {
+			msg = "failed to create writer with options"
+			return nil, errWriterNil
+		}
+
+		st = StatusSuccess
+		msg = fmt.Sprintf("Created %q with metadata", name)
+
+		return NewCommonFileWriter(c.Provider, name, writer, c.Logger, c.Metrics, c.Location), nil
+	}
+
+	// Fallback: provider doesn't support metadata. Warn because the caller explicitly
+	// requested metadata that will be silently dropped.
+	if c.Logger != nil && opts != nil {
+		c.Logger.Warnf("provider %s does not support metadata; file %q will be created without the requested metadata", c.ProviderName, name)
+	}
+
+	writer := c.Provider.NewWriter(ctx, name)
+	if writer == nil {
+		msg = "failed to create writer"
+		return nil, errWriterNil
+	}
+
+	st = StatusSuccess
+
+	msg = fmt.Sprintf("Created %q (metadata not supported)", name)
+
+	return NewCommonFileWriter(c.Provider, name, writer, c.Logger, c.Metrics, c.Location), nil
+}
+
+// GenerateSignedURL produces a time-limited pre-signed URL for the named object.
+// Returns ErrSignedURLsNotSupported if the underlying provider does not implement SignedURLProvider.
+func (c *CommonFileSystem) GenerateSignedURL(ctx context.Context, name string, expiry time.Duration, opts *FileOptions) (string, error) {
+	var msg string
+
+	st := StatusError
+
+	startTime := time.Now()
+	defer c.Observe(OpSignedURL, startTime, &st, &msg)
+
+	signer, ok := c.Provider.(SignedURLProvider)
+	if !ok {
+		msg = fmt.Sprintf("provider %s does not support signed URLs", c.ProviderName)
+		return "", fmt.Errorf("%w: %s", ErrSignedURLsNotSupported, c.ProviderName)
+	}
+
+	url, err := signer.SignedURL(ctx, name, expiry, opts)
+	if err != nil {
+		msg = fmt.Sprintf("failed to generate signed URL: %v", err)
+		return "", fmt.Errorf("failed to generate signed URL for %q: %w", name, err)
+	}
+
+	st = StatusSuccess
+	msg = fmt.Sprintf("Generated signed URL for %q (expires in %v)", name, expiry)
+
+	return url, nil
+}

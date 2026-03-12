@@ -45,7 +45,7 @@ func TestNew_ConnectionFailure_StartsRetry(t *testing.T) {
 	fs.UseMetrics(mockMetrics)
 
 	// Expect warning about background retry (with error in format string)
-	mockLogger.EXPECT().Warnf(
+	mockLogger.EXPECT().Errorf(
 		"GCS bucket %s not available, starting background retry: %v",
 		"non-existent-bucket",
 		gomock.Any(), // Error message varies
@@ -86,7 +86,7 @@ func TestNew_Success(t *testing.T) {
 	mockMetrics.EXPECT().NewHistogram(file.AppFileStats, gomock.Any(), gomock.Any())
 
 	mockLogger.EXPECT().Infof("GCS connection established to bucket %s", "test-bucket").MaxTimes(1)
-	mockLogger.EXPECT().Warnf(
+	mockLogger.EXPECT().Errorf(
 		"GCS bucket %s not available, starting background retry: %v",
 		"test-bucket",
 		gomock.Any(),
