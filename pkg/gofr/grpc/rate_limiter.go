@@ -1,3 +1,21 @@
+// Package grpc provides gRPC-related additions within the GoFr framework.
+//
+// # Rate Limiting
+//
+// The rate limiter interceptors use a token bucket algorithm (via the shared
+// RateLimiterStore) to control request throughput for both unary and streaming
+// RPCs. Key implementation details:
+//
+//   - IP extraction priority (when PerIP=true and TrustedProxies=true):
+//     X-Forwarded-For (first CSV entry) → X-Real-IP → gRPC peer address.
+//   - normalizeIP strips port/bracket notation and validates via net.ParseIP.
+//   - Fail-open: if the store returns an error, the request is allowed through
+//     to avoid self-inflicted denial of service.
+//   - Health check bypass: requests to /grpc.health.v1.Health/* are never
+//     rate-limited, preventing probe failures and cascading pod restarts.
+//   - retry-after: returned as both gRPC response metadata and an errdetails.RetryInfo
+//     proto in the status details. The unary path uses grpc.SendHeader; the stream
+//     path uses ss.SendHeader to ensure the header is actually delivered.
 package grpc
 
 import (
@@ -24,10 +42,6 @@ const (
 	rateLimitKeyUnknown     = "unknown"
 	grpcHealthServicePrefix = "/grpc.health.v1.Health/"
 )
-
-type CounterMetrics interface {
-	IncrementCounter(ctx context.Context, name string, labels ...string)
-}
 
 // normalizeIP strips port and bracket notation, then validates via net.ParseIP.
 // It returns the canonical string form or "" if the input is not a valid IP.
@@ -119,7 +133,8 @@ func retryAfterSeconds(durSeconds float64) string {
 	return fmt.Sprintf("%.0f", secs)
 }
 
-func rateLimitExhaustedError(ctx context.Context, retryAfter time.Duration) error {
+// buildRateLimitStatus constructs the gRPC status with RetryInfo details.
+func buildRateLimitStatus(retryAfter time.Duration) error {
 	st := status.New(codes.ResourceExhausted, "rate limit exceeded")
 	retryDetail := &errdetails.RetryInfo{
 		RetryDelay: durationpb.New(retryAfter),
@@ -127,36 +142,85 @@ func rateLimitExhaustedError(ctx context.Context, retryAfter time.Duration) erro
 
 	st, _ = st.WithDetails(retryDetail)
 
-	_ = grpc.SendHeader(ctx, metadata.Pairs("retry-after", retryAfterSeconds(retryAfter.Seconds())))
-
 	return st.Err()
 }
 
-func UnaryRateLimitInterceptor(
-	ctx context.Context, cfg httpmw.RateLimiterConfig, l Logger, m CounterMetrics,
-) grpc.UnaryServerInterceptor {
+// unaryRateLimitExhaustedError sends retry-after header via grpc.SendHeader (works for unary RPCs)
+// and returns the ResourceExhausted status.
+func unaryRateLimitExhaustedError(ctx context.Context, retryAfter time.Duration) error {
+	_ = grpc.SendHeader(ctx, metadata.Pairs("retry-after", retryAfterSeconds(retryAfter.Seconds())))
+
+	return buildRateLimitStatus(retryAfter)
+}
+
+// streamRateLimitExhaustedError sends retry-after header via ss.SendHeader (required for streams,
+// since grpc.SendHeader is a no-op in the stream path) and returns the ResourceExhausted status.
+func streamRateLimitExhaustedError(ss grpc.ServerStream, retryAfter time.Duration) error {
+	_ = ss.SendHeader(metadata.Pairs("retry-after", retryAfterSeconds(retryAfter.Seconds())))
+
+	return buildRateLimitStatus(retryAfter)
+}
+
+// newRateLimiterStore validates the config, initializes a default in-memory store
+// if none is provided, and starts the background cleanup goroutine.
+func newRateLimiterStore(ctx context.Context, cfg *httpmw.RateLimiterConfig) {
 	if err := cfg.Validate(); err != nil {
 		panic(fmt.Sprintf("invalid rate limiter config: %v", err))
 	}
 
 	if cfg.Store == nil {
-		cfg.Store = httpmw.NewMemoryRateLimiterStore(cfg)
+		cfg.Store = httpmw.NewMemoryRateLimiterStore(*cfg)
 	}
 
 	cfg.Store.StartCleanup(ctx)
+}
+
+// resolveRateLimitKey determines the rate limit bucket key based on config.
+func resolveRateLimitKey(ctx context.Context, cfg httpmw.RateLimiterConfig) string {
+	if !cfg.PerIP {
+		return rateLimitKeyGlobal
+	}
+
+	key := getIP(ctx, cfg.TrustedProxies)
+	if key == "" {
+		return rateLimitKeyUnknown
+	}
+
+	return key
+}
+
+// recordRateLimitViolation logs and increments the counter metric for a rate limit violation.
+func recordRateLimitViolation(ctx context.Context, l Logger, m Metrics, key, method, callType string) {
+	if l != nil {
+		l.Info(fmt.Sprintf("rate limit exceeded for key: %s, method: %s", key, method))
+	}
+
+	type counterMetrics interface {
+		IncrementCounter(ctx context.Context, name string, labels ...string)
+	}
+
+	if cm, ok := m.(counterMetrics); ok {
+		cm.IncrementCounter(ctx, "app_grpc_rate_limit_exceeded_total",
+			"method", method,
+			"type", callType,
+		)
+	}
+}
+
+// UnaryRateLimitInterceptor returns a gRPC unary server interceptor that enforces
+// rate limiting using the provided configuration. Pass app.Logger() and app.Metrics()
+// for logging and Prometheus counter support.
+func UnaryRateLimitInterceptor(
+	ctx context.Context, cfg httpmw.RateLimiterConfig, l Logger, m Metrics,
+) grpc.UnaryServerInterceptor {
+	newRateLimiterStore(ctx, &cfg)
 
 	return func(ctx context.Context, req any, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (any, error) {
 		if strings.HasPrefix(info.FullMethod, grpcHealthServicePrefix) {
 			return handler(ctx, req)
 		}
 
-		key := rateLimitKeyGlobal
-		if cfg.PerIP {
-			key = getIP(ctx, cfg.TrustedProxies)
-			if key == "" {
-				key = rateLimitKeyUnknown
-			}
-		}
+		key := resolveRateLimitKey(ctx, cfg)
 
 		allowed, retryAfter, err := cfg.Store.Allow(ctx, key, cfg)
 		if err != nil {
@@ -164,36 +228,22 @@ func UnaryRateLimitInterceptor(
 		}
 
 		if !allowed {
-			if l != nil {
-				l.Errorf("rate limit exceeded for key: %s, method: %s", key, info.FullMethod)
-			}
+			recordRateLimitViolation(ctx, l, m, key, info.FullMethod, "unary")
 
-			if m != nil {
-				m.IncrementCounter(ctx, "app_grpc_rate_limit_exceeded_total",
-					"method", info.FullMethod,
-					"type", "unary",
-				)
-			}
-
-			return nil, rateLimitExhaustedError(ctx, retryAfter)
+			return nil, unaryRateLimitExhaustedError(ctx, retryAfter)
 		}
 
 		return handler(ctx, req)
 	}
 }
 
+// StreamRateLimitInterceptor returns a gRPC stream server interceptor that enforces
+// rate limiting on stream creation using the provided configuration. Pass app.Logger()
+// and app.Metrics() for logging and Prometheus counter support.
 func StreamRateLimitInterceptor(
-	ctx context.Context, cfg httpmw.RateLimiterConfig, l Logger, m CounterMetrics,
+	ctx context.Context, cfg httpmw.RateLimiterConfig, l Logger, m Metrics,
 ) grpc.StreamServerInterceptor {
-	if err := cfg.Validate(); err != nil {
-		panic(fmt.Sprintf("invalid rate limiter config: %v", err))
-	}
-
-	if cfg.Store == nil {
-		cfg.Store = httpmw.NewMemoryRateLimiterStore(cfg)
-	}
-
-	cfg.Store.StartCleanup(ctx)
+	newRateLimiterStore(ctx, &cfg)
 
 	return func(srv any, ss grpc.ServerStream, info *grpc.StreamServerInfo, handler grpc.StreamHandler) error {
 		if strings.HasPrefix(info.FullMethod, grpcHealthServicePrefix) {
@@ -202,13 +252,7 @@ func StreamRateLimitInterceptor(
 
 		streamCtx := ss.Context()
 
-		key := rateLimitKeyGlobal
-		if cfg.PerIP {
-			key = getIP(streamCtx, cfg.TrustedProxies)
-			if key == "" {
-				key = rateLimitKeyUnknown
-			}
-		}
+		key := resolveRateLimitKey(streamCtx, cfg)
 
 		allowed, retryAfter, err := cfg.Store.Allow(streamCtx, key, cfg)
 		if err != nil {
@@ -216,18 +260,9 @@ func StreamRateLimitInterceptor(
 		}
 
 		if !allowed {
-			if l != nil {
-				l.Errorf("rate limit exceeded for key: %s, method: %s", key, info.FullMethod)
-			}
+			recordRateLimitViolation(streamCtx, l, m, key, info.FullMethod, "stream")
 
-			if m != nil {
-				m.IncrementCounter(streamCtx, "app_grpc_rate_limit_exceeded_total",
-					"method", info.FullMethod,
-					"type", "stream",
-				)
-			}
-
-			return rateLimitExhaustedError(streamCtx, retryAfter)
+			return streamRateLimitExhaustedError(ss, retryAfter)
 		}
 
 		return handler(srv, ss)

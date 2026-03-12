@@ -26,6 +26,8 @@ var (
 	errRedisDown    = errors.New("redis down")
 )
 
+// rateLimiterMockMetrics implements both Metrics (RecordHistogram) and the
+// counterMetrics optional interface (IncrementCounter) used by the rate limiter.
 type rateLimiterMockMetrics struct {
 	mu       sync.Mutex
 	counters map[string]int
@@ -53,23 +55,25 @@ func (m *rateLimiterMockMetrics) GetCounter(name string) int {
 	return m.counters[name]
 }
 
-type mockLogger struct {
+type infoCapturingLogger struct {
 	mu   sync.Mutex
 	logs []string
 }
 
-func (*mockLogger) Info(_ ...any)             {}
-func (*mockLogger) Debug(_ ...any)            {}
-func (*mockLogger) Fatalf(_ string, _ ...any) {}
-
-func (m *mockLogger) Errorf(format string, args ...any) {
+func (m *infoCapturingLogger) Info(args ...any) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
-	m.logs = append(m.logs, fmt.Sprintf(format, args...))
+	for _, a := range args {
+		m.logs = append(m.logs, fmt.Sprintf("%v", a))
+	}
 }
 
-func (m *mockLogger) errorCount() int {
+func (*infoCapturingLogger) Debug(_ ...any)            {}
+func (*infoCapturingLogger) Fatalf(_ string, _ ...any) {}
+func (*infoCapturingLogger) Errorf(_ string, _ ...any) {}
+
+func (m *infoCapturingLogger) logCount() int {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
@@ -95,9 +99,13 @@ func (s *rateLimitMockStream) SetHeader(md metadata.MD) error {
 	return nil
 }
 
-func (*rateLimitMockStream) SendMsg(any) error            { return nil }
-func (*rateLimitMockStream) RecvMsg(any) error            { return nil }
-func (*rateLimitMockStream) SendHeader(metadata.MD) error { return nil }
+func (s *rateLimitMockStream) SendHeader(md metadata.MD) error {
+	s.headerMD = md
+	return nil
+}
+
+func (*rateLimitMockStream) SendMsg(any) error { return nil }
+func (*rateLimitMockStream) RecvMsg(any) error { return nil }
 
 type fakeStore struct {
 	allowed    bool
@@ -298,7 +306,7 @@ func TestUnaryRateLimitInterceptor_GlobalLimit(t *testing.T) {
 		PerIP:             false,
 	}
 
-	logger := &mockLogger{}
+	logger := &infoCapturingLogger{}
 	interceptor := UnaryRateLimitInterceptor(context.Background(), config, logger, metrics)
 	info := &grpc.UnaryServerInfo{FullMethod: "/svc/Method"}
 	handler := func(_ context.Context, _ any) (any, error) { return "ok", nil }
@@ -319,7 +327,7 @@ func TestUnaryRateLimitInterceptor_GlobalLimit(t *testing.T) {
 	require.True(t, ok)
 	assert.Equal(t, codes.ResourceExhausted, st.Code())
 	assert.Equal(t, 1, metrics.GetCounter("app_grpc_rate_limit_exceeded_total"))
-	assert.Equal(t, 1, logger.errorCount(), "Logger should have recorded one rate-limit violation")
+	assert.Equal(t, 1, logger.logCount(), "Logger should have recorded one rate-limit violation")
 }
 
 func TestUnaryRateLimitInterceptor_PerIPLimit(t *testing.T) {
@@ -578,6 +586,24 @@ func TestUnaryRateLimitInterceptor_RetryAfterHeader(t *testing.T) {
 	assert.Equal(t, 3*time.Second, retryInfo.GetRetryDelay().AsDuration(), "RetryDelay should match retryAfter")
 }
 
+func TestUnaryRateLimitInterceptor_SkipsHealthCheck(t *testing.T) {
+	store := &fakeStore{allowed: false, retryAfter: 1 * time.Second}
+	cfg := httpmw.RateLimiterConfig{
+		RequestsPerSecond: 10,
+		Burst:             5,
+		Store:             store,
+	}
+
+	interceptor := UnaryRateLimitInterceptor(context.Background(), cfg, nil, nil)
+
+	resp, err := interceptor(context.Background(), "req",
+		&grpc.UnaryServerInfo{FullMethod: "/grpc.health.v1.Health/Check"},
+		func(context.Context, any) (any, error) { return "healthy", nil })
+
+	require.NoError(t, err)
+	assert.Equal(t, "healthy", resp)
+}
+
 func TestStreamRateLimitInterceptor_PanicsOnInvalidConfig(t *testing.T) {
 	tests := []struct {
 		name   string
@@ -614,7 +640,7 @@ func TestStreamRateLimitInterceptor_DefaultStore(t *testing.T) {
 
 func TestStreamRateLimitInterceptor_GlobalLimit(t *testing.T) {
 	metrics := newRateLimiterMockMetrics()
-	logger := &mockLogger{}
+	logger := &infoCapturingLogger{}
 	config := httpmw.RateLimiterConfig{
 		RequestsPerSecond: 2,
 		Burst:             2,
@@ -639,7 +665,7 @@ func TestStreamRateLimitInterceptor_GlobalLimit(t *testing.T) {
 	require.True(t, ok)
 	assert.Equal(t, codes.ResourceExhausted, st.Code())
 	assert.Equal(t, 1, metrics.GetCounter("app_grpc_rate_limit_exceeded_total"))
-	assert.Equal(t, 1, logger.errorCount(), "Logger should have recorded one rate-limit violation")
+	assert.Equal(t, 1, logger.logCount(), "Logger should have recorded one rate-limit violation")
 }
 
 func TestStreamRateLimitInterceptor_PerIPLimit(t *testing.T) {
@@ -770,6 +796,29 @@ func TestStreamRateLimitInterceptor_RetryAfterHeader(t *testing.T) {
 	retryInfo, ok := details[0].(*errdetails.RetryInfo)
 	require.True(t, ok, "Detail should be RetryInfo")
 	assert.Equal(t, 5*time.Second, retryInfo.GetRetryDelay().AsDuration(), "RetryDelay should match retryAfter")
+
+	// Assert retry-after metadata was sent via ss.SendHeader (not grpc.SendHeader)
+	require.NotNil(t, ss.headerMD, "Stream should have received retry-after header via SendHeader")
+	retryAfterVals := ss.headerMD.Get("retry-after")
+	require.Len(t, retryAfterVals, 1, "Should have exactly one retry-after value")
+	assert.Equal(t, "5", retryAfterVals[0], "retry-after should be 5 seconds")
+}
+
+func TestStreamRateLimitInterceptor_SkipsHealthCheck(t *testing.T) {
+	store := &fakeStore{allowed: false, retryAfter: 1 * time.Second}
+	cfg := httpmw.RateLimiterConfig{
+		RequestsPerSecond: 10,
+		Burst:             5,
+		Store:             store,
+	}
+
+	interceptor := StreamRateLimitInterceptor(context.Background(), cfg, nil, nil)
+
+	ss := &rateLimitMockStream{ctx: context.Background()}
+	err := interceptor(nil, ss, &grpc.StreamServerInfo{FullMethod: "/grpc.health.v1.Health/Watch"},
+		func(any, grpc.ServerStream) error { return nil })
+
+	require.NoError(t, err, "Health check streams should bypass rate limiting")
 }
 
 func TestStreamRateLimitInterceptor_TokenRefill(t *testing.T) {
