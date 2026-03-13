@@ -30,6 +30,7 @@ func setupOTel(t *testing.T) (*tracetest.InMemoryExporter, *sdktrace.TracerProvi
 
 	t.Cleanup(func() {
 		_ = tp.Shutdown(context.Background())
+
 		otel.SetTracerProvider(prevTP)
 		otel.SetTextMapPropagator(prevProp)
 	})
