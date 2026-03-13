@@ -9,9 +9,14 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials/insecure"
+	"google.golang.org/grpc/status"
 
 	"gofr.dev/examples/grpc/grpc-unary-server/server"
+	"gofr.dev/pkg/gofr"
+	gofrGrpc "gofr.dev/pkg/gofr/grpc"
+	"gofr.dev/pkg/gofr/http/middleware"
 	"gofr.dev/pkg/gofr/testutil"
 )
 
@@ -134,4 +139,52 @@ func TestHelloProtoMethods(t *testing.T) {
 	resp := &server.HelloResponse{Message: "Hello World"}
 	assert.Equal(t, "Hello World", resp.GetMessage())
 	assert.Equal(t, "message:\"Hello World\"", resp.String())
+}
+
+func TestIntegration_UnaryServer_RateLimited(t *testing.T) {
+	configs := testutil.NewServerConfigs(t)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	go func() {
+		app := gofr.New()
+
+		rateLimiterCfg := middleware.RateLimiterConfig{
+			RequestsPerSecond: 2,
+			Burst:             2,
+		}
+
+		app.AddGRPCUnaryInterceptors(
+			gofrGrpc.UnaryRateLimitInterceptor(ctx, rateLimiterCfg, app.Logger(), app.Metrics()),
+		)
+
+		server.RegisterHelloServerWithGofr(app, server.NewHelloGoFrServer())
+
+		app.Run()
+	}()
+
+	time.Sleep(200 * time.Millisecond)
+
+	conn, err := grpc.NewClient(configs.GRPCHost, grpc.WithTransportCredentials(insecure.NewCredentials()))
+	require.NoError(t, err, "Failed to connect to rate-limited server")
+
+	defer conn.Close()
+
+	client := server.NewHelloClient(conn)
+
+	// Should succeed
+	for i := 0; i < 2; i++ {
+		resp, callErr := client.SayHello(context.Background(), &server.HelloRequest{Name: "gofr"})
+		require.NoError(t, callErr, "Request %d should succeed within burst", i+1)
+		assert.Equal(t, "Hello gofr!", resp.GetMessage())
+	}
+
+	// Should hit the rate limit
+	_, callErr := client.SayHello(context.Background(), &server.HelloRequest{Name: "gofr"})
+	require.Error(t, callErr, "3rd request should be rate limited")
+
+	st, ok := status.FromError(callErr)
+	require.True(t, ok, "Error should be a gRPC status")
+	assert.Equal(t, codes.ResourceExhausted, st.Code(), "Should return RESOURCE_EXHAUSTED")
 }

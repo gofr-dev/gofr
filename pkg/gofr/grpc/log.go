@@ -157,7 +157,7 @@ func ObservabilityInterceptor(logger Logger, metrics Metrics) grpc.UnaryServerIn
 		ctx, span := tracer.Start(ctx, info.FullMethod)
 
 		resp, err := handler(ctx, req)
-		if err != nil {
+		if err != nil && isServerError(err) {
 			logger.Errorf("error while handling gRPC request to method %q: %q", info.FullMethod, err)
 		}
 
@@ -294,6 +294,28 @@ func recordGRPCMetrics(ctx context.Context, metrics Metrics, name string, durati
 	}
 
 	metrics.RecordHistogram(ctx, name, durationMs, labels...)
+}
+
+// isServerError returns true if the gRPC error represents a server-side error.
+// Client errors like ResourceExhausted, InvalidArgument, NotFound, etc. are not
+// considered server errors and should not be logged at ERROR level.
+func isServerError(err error) bool {
+	s, ok := status.FromError(err)
+	if !ok {
+		return true
+	}
+
+	switch s.Code() {
+	case codes.InvalidArgument, codes.NotFound, codes.AlreadyExists,
+		codes.PermissionDenied, codes.Unauthenticated, codes.ResourceExhausted,
+		codes.FailedPrecondition, codes.OutOfRange, codes.Canceled:
+		return false
+	case codes.OK, codes.Unknown, codes.DeadlineExceeded, codes.Aborted,
+		codes.Unimplemented, codes.Internal, codes.Unavailable, codes.DataLoss:
+		return true
+	default:
+		return true
+	}
 }
 
 // Helper function to safely extract a value from metadata.

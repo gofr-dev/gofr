@@ -41,6 +41,7 @@ func setupGRPCMetricExpectations(mockMetrics *container.MockMetrics) {
 	mockMetrics.EXPECT().NewGauge("grpc_server_status", "gRPC server status (1=running, 0=stopped)").AnyTimes()
 	mockMetrics.EXPECT().NewCounter("grpc_server_errors_total", "Total gRPC server errors").AnyTimes()
 	mockMetrics.EXPECT().NewCounter("grpc_services_registered_total", "Total gRPC services registered").AnyTimes()
+	mockMetrics.EXPECT().NewCounter("app_grpc_rate_limit_exceeded_total", "Total gRPC requests rejected by rate limiter").AnyTimes()
 	mockMetrics.EXPECT().SetGauge("grpc_server_status", gomock.Any()).AnyTimes()
 	mockMetrics.EXPECT().IncrementCounter(gomock.Any(), "grpc_server_errors_total").AnyTimes()
 	mockMetrics.EXPECT().RecordHistogram(gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()

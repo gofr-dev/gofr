@@ -687,6 +687,63 @@ func TestRecordGRPCMetrics_WithStreamType(t *testing.T) {
 	recordGRPCMetrics(ctx, mockMetrics, "test_metric", 100*time.Millisecond, "/test.Service/Method", "SERVER_STREAM")
 }
 
+func TestIsServerError(t *testing.T) {
+	tests := []struct {
+		name     string
+		err      error
+		expected bool
+	}{
+		{"Internal is server error", status.Error(codes.Internal, "internal"), true},
+		{"Unknown is server error", status.Error(codes.Unknown, "unknown"), true},
+		{"Unavailable is server error", status.Error(codes.Unavailable, "unavailable"), true},
+		{"DataLoss is server error", status.Error(codes.DataLoss, "data loss"), true},
+		{"DeadlineExceeded is server error", status.Error(codes.DeadlineExceeded, "timeout"), true},
+		{"Aborted is server error", status.Error(codes.Aborted, "aborted"), true},
+		{"Unimplemented is server error", status.Error(codes.Unimplemented, "unimplemented"), true},
+		{"ResourceExhausted is not server error", status.Error(codes.ResourceExhausted, "rate limit"), false},
+		{"InvalidArgument is not server error", status.Error(codes.InvalidArgument, "bad arg"), false},
+		{"NotFound is not server error", status.Error(codes.NotFound, "not found"), false},
+		{"PermissionDenied is not server error", status.Error(codes.PermissionDenied, "denied"), false},
+		{"Unauthenticated is not server error", status.Error(codes.Unauthenticated, "unauth"), false},
+		{"AlreadyExists is not server error", status.Error(codes.AlreadyExists, "exists"), false},
+		{"FailedPrecondition is not server error", status.Error(codes.FailedPrecondition, "precondition"), false},
+		{"OutOfRange is not server error", status.Error(codes.OutOfRange, "range"), false},
+		{"Canceled is not server error", status.Error(codes.Canceled, "canceled"), false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			assert.Equal(t, tt.expected, isServerError(tt.err))
+		})
+	}
+}
+
+func TestObservabilityInterceptor_WithClientError(t *testing.T) {
+	mockLogger, mockMetrics, ctrl := createMocks(t)
+	defer ctrl.Finish()
+
+	interceptor := ObservabilityInterceptor(mockLogger, mockMetrics)
+
+	ctx := t.Context()
+	req := "test request"
+	info := &grpc.UnaryServerInfo{
+		FullMethod: "/test.Service/Method",
+	}
+
+	handler := func(_ context.Context, _ any) (any, error) {
+		return nil, status.Error(codes.ResourceExhausted, "rate limit exceeded")
+	}
+
+	// Errorf should NOT be called for client errors like ResourceExhausted
+	mockLogger.EXPECT().Info(gomock.Any()).Times(1)
+	mockMetrics.EXPECT().RecordHistogram(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Times(1)
+
+	resp, err := interceptor(ctx, req, info, handler)
+
+	require.Error(t, err)
+	assert.Nil(t, resp)
+}
+
 func TestRecordGRPCMetrics_WithNilMetrics(t *testing.T) {
 	ctx := t.Context()
 
