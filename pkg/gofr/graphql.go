@@ -52,15 +52,19 @@ type GraphQLLog struct {
 }
 
 func (l *GraphQLLog) PrettyPrint(writer io.Writer) {
+	opType := "GraphQL Query"
+	if l.Type == "mutation" {
+		opType = "GraphQL Mutation"
+	}
+
 	if l.Error != "" {
-		fmt.Fprintf(writer, "\u001B[38;5;8m%-32s \u001B[38;5;24m%-6s\u001B[0m %s\n",
-			l.Resolver, "GQL", l.Error)
+		fmt.Fprintf(writer, "\u001B[38;5;8m%s %s: %s \n", l.Resolver, opType, l.Error)
 
 		return
 	}
 
-	fmt.Fprintf(writer, "\u001B[38;5;8m%-32s \u001B[38;5;24m%-6s\u001B[0m %8d\u001B[38;5;8mµs\u001B[0m %s\n",
-		l.Resolver, "GQL", l.Duration, l.Type)
+	fmt.Fprintf(writer, "\u001B[38;5;8m%s %8d\u001B[38;5;8mµs\u001B[0m %s \n",
+		l.Resolver, l.Duration, opType)
 }
 
 type graphQLManager struct {
