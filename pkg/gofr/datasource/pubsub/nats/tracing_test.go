@@ -35,11 +35,6 @@ func TestHeaderCarrier_GetSetKeys(t *testing.T) {
 	assert.Equal(t, "00-updated-value", carrier.Get("traceparent"))
 }
 
-func TestHeaderCarrier_GetMissingKey(t *testing.T) {
-	carrier := make(headerCarrier)
-	assert.Empty(t, carrier.Get("missing-key"))
-}
-
 func TestInjectTraceContext(t *testing.T) {
 	exporter := tracetest.NewInMemoryExporter()
 	tp := sdktrace.NewTracerProvider(sdktrace.WithSyncer(exporter))

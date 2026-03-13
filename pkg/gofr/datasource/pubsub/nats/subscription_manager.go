@@ -9,7 +9,6 @@ import (
 	"time"
 
 	"github.com/nats-io/nats.go/jetstream"
-	"go.opentelemetry.io/otel/trace"
 	"gofr.dev/pkg/gofr/datasource/pubsub"
 )
 
@@ -142,7 +141,7 @@ func (sm *SubscriptionManager) consumeMessages(
 }
 
 func (sm *SubscriptionManager) fetchAndProcessMessages(
-	_ context.Context,
+	ctx context.Context,
 	cons jetstream.Consumer,
 	topic string,
 	buffer chan *pubsub.Message,
@@ -153,7 +152,7 @@ func (sm *SubscriptionManager) fetchAndProcessMessages(
 		return sm.handleFetchError(err, topic, logger)
 	}
 
-	return sm.processFetchedMessages(msgs, topic, buffer, logger)
+	return sm.processFetchedMessages(ctx, msgs, topic, buffer, logger)
 }
 
 func (*SubscriptionManager) handleFetchError(err error, topic string, logger pubsub.Logger) error {
@@ -167,33 +166,32 @@ func (*SubscriptionManager) handleFetchError(err error, topic string, logger pub
 }
 
 func (sm *SubscriptionManager) processFetchedMessages(
+	ctx context.Context,
 	msgs jetstream.MessageBatch,
 	topic string,
 	buffer chan *pubsub.Message,
 	logger pubsub.Logger) error {
 	for msg := range msgs.Messages() {
-		pubsubMsg, span := sm.createPubSubMessage(msg, topic)
+		pubsubMsg := sm.createPubSubMessage(ctx, msg, topic)
 
 		if !sm.sendToBuffer(pubsubMsg, buffer) {
 			logger.Logf("Message buffer is full for topic %s. Consider increasing buffer size or processing messages faster.", topic)
 		}
-
-		span.End()
 	}
 
 	return sm.checkBatchError(msgs, topic, logger)
 }
 
-func (*SubscriptionManager) createPubSubMessage(msg jetstream.Msg, topic string) (*pubsub.Message, trace.Span) {
-	ctx, span := startSubscribeSpan(context.Background(), topic, msg.Headers())
+func (*SubscriptionManager) createPubSubMessage(ctx context.Context, msg jetstream.Msg, topic string) *pubsub.Message {
+	spanCtx, span := startSubscribeSpan(ctx, topic, msg.Headers())
 
-	pubsubMsg := pubsub.NewMessage(ctx)
+	pubsubMsg := pubsub.NewMessage(spanCtx)
 	pubsubMsg.Topic = topic
 	pubsubMsg.Value = msg.Data()
 	pubsubMsg.MetaData = msg.Headers()
-	pubsubMsg.Committer = &natsCommitter{msg: msg}
+	pubsubMsg.Committer = &natsCommitter{msg: msg, span: span}
 
-	return pubsubMsg, span
+	return pubsubMsg
 }
 
 func (*SubscriptionManager) sendToBuffer(msg *pubsub.Message, buffer chan *pubsub.Message) bool {
