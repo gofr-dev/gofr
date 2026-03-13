@@ -1,16 +1,19 @@
 package nats
 
 import (
+	"context"
 	"testing"
 
 	"github.com/nats-io/nats.go/jetstream"
 	"github.com/stretchr/testify/assert"
+	"go.opentelemetry.io/otel/trace/noop"
 	"go.uber.org/mock/gomock"
 )
 
 // createTestCommitter is a helper function for tests to create a natsCommitter.
 func createTestCommitter(msg jetstream.Msg) *natsCommitter {
-	return &natsCommitter{msg: msg}
+	_, span := noop.NewTracerProvider().Tracer("test").Start(context.Background(), "test")
+	return &natsCommitter{msg: msg, span: span}
 }
 
 func TestNATSCommitter_Commit(t *testing.T) {

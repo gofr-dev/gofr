@@ -8,6 +8,10 @@ import (
 	"github.com/nats-io/nats.go/jetstream"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/propagation"
+	sdktrace "go.opentelemetry.io/otel/sdk/trace"
+	"go.opentelemetry.io/otel/sdk/trace/tracetest"
 	"go.uber.org/mock/gomock"
 	"gofr.dev/pkg/gofr/datasource/pubsub"
 	"gofr.dev/pkg/gofr/logging"
@@ -185,6 +189,44 @@ func createMockMessageBatch(ctrl *gomock.Controller) jetstream.MessageBatch {
 	mockBatch.EXPECT().Error().Return(nil).AnyTimes()
 
 	return mockBatch
+}
+
+func TestSubscriptionManager_createPubSubMessage(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	exporter := tracetest.NewInMemoryExporter()
+	tp := sdktrace.NewTracerProvider(sdktrace.WithSyncer(exporter))
+
+	otel.SetTracerProvider(tp)
+	otel.SetTextMapPropagator(propagation.TraceContext{})
+
+	t.Cleanup(func() {
+		_ = tp.Shutdown(context.Background())
+	})
+
+	mockMsg := NewMockMsg(ctrl)
+	mockMsg.EXPECT().Data().Return([]byte("test message"))
+	mockMsg.EXPECT().Headers().Return(nil).Times(2)
+
+	sm := newSubscriptionManager(1)
+	ctx := t.Context()
+	topic := "test.topic"
+
+	msg := sm.createPubSubMessage(ctx, mockMsg, topic)
+
+	require.NotNil(t, msg)
+	assert.Equal(t, topic, msg.Topic)
+	assert.Equal(t, []byte("test message"), msg.Value)
+
+	// Verify the message context carries a valid span.
+	require.NotNil(t, msg.Context())
+
+	// Verify the committer holds the subscribe span and ends it on Commit.
+	committer, ok := msg.Committer.(*natsCommitter)
+	require.True(t, ok, "Committer should be a *natsCommitter")
+	assert.NotNil(t, committer.span)
+	assert.True(t, committer.span.SpanContext().IsValid())
 }
 
 func TestSubscriptionManager_Close(t *testing.T) {
