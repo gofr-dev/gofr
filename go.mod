@@ -16,6 +16,7 @@ require (
 	github.com/google/uuid v1.6.0
 	github.com/gorilla/mux v1.8.1
 	github.com/gorilla/websocket v1.5.3
+	github.com/graphql-go/graphql v0.8.1
 	github.com/grpc-ecosystem/go-grpc-middleware/v2 v2.3.3
 	github.com/joho/godotenv v1.5.1
 	github.com/lib/pq v1.11.2
@@ -26,6 +27,7 @@ require (
 	github.com/redis/go-redis/v9 v9.18.0
 	github.com/segmentio/kafka-go v0.4.50
 	github.com/stretchr/testify v1.11.1
+	github.com/vektah/gqlparser/v2 v2.5.31
 	go.opentelemetry.io/contrib/instrumentation/net/http/httptrace/otelhttptrace v0.66.0
 	go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp v0.66.0
 	go.opentelemetry.io/otel v1.42.0
@@ -58,6 +60,7 @@ require (
 	cloud.google.com/go/iam v1.5.3 // indirect
 	cloud.google.com/go/pubsub/v2 v2.0.0 // indirect
 	filippo.io/edwards25519 v1.1.1 // indirect
+	github.com/agnivade/levenshtein v1.2.1 // indirect
 	github.com/aws/aws-sdk-go-v2 v1.32.7 // indirect
 	github.com/aws/aws-sdk-go-v2/config v1.28.7 // indirect
 	github.com/aws/aws-sdk-go-v2/credentials v1.17.48 // indirect
