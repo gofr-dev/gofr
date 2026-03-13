@@ -37,10 +37,11 @@ const (
 	graphqlFloat   = "Float"
 	graphqlBoolean = "Boolean"
 
-	graphqlQuery   = "query"
-	graphqlSuccess = "success"
-	graphqlError   = "error"
-	graphqlUnknown = "unknown"
+	graphqlQuery    = "query"
+	graphqlMutation = "mutation"
+	graphqlSuccess  = "success"
+	graphqlError    = "error"
+	graphqlUnknown  = "unknown"
 )
 
 // GraphQLLog represents a logged GraphQL resolver execution.
@@ -53,7 +54,7 @@ type GraphQLLog struct {
 
 func (l *GraphQLLog) PrettyPrint(writer io.Writer) {
 	opType := "GraphQL Query"
-	if l.Type == "mutation" {
+	if l.Type == graphqlMutation {
 		opType = "GraphQL Mutation"
 	}
 
@@ -380,7 +381,7 @@ func (m *graphQLManager) getResolverType(name string) string {
 	defer m.mu.RUnlock()
 
 	if _, ok := m.mutations[name]; ok {
-		return "mutation"
+		return graphqlMutation
 	}
 
 	return graphqlQuery
