@@ -5126,7 +5126,7 @@
       },
       "gridPos": {
         "h": 8,
-        "w": 12,
+        "w": 24,
         "x": 0,
         "y": 195
       },
@@ -5182,81 +5182,6 @@
           "expr": "histogram_quantile(0.999, sum(rate(app_graphql_request_duration_bucket{}[$__rate_interval])) by (le))",
           "legendFormat": "p99.9",
           "refId": "D"
-        }
-      ]
-    },
-    {
-      "datasource": {
-        "type": "prometheus",
-        "uid": "${DataSource}"
-      },
-      "fieldConfig": {
-        "defaults": {
-          "color": {
-            "mode": "scheme",
-            "schemeName": "Oranges",
-            "steps": 128
-          },
-          "custom": {
-            "hideFrom": {
-              "legend": false,
-              "tooltip": false,
-              "viz": false
-            }
-          }
-        },
-        "overrides": []
-      },
-      "gridPos": {
-        "h": 8,
-        "w": 12,
-        "x": 12,
-        "y": 195
-      },
-      "id": 138,
-      "options": {
-        "calculate": true,
-        "calculation": {
-          "xBuckets": {
-            "mode": "size"
-          },
-          "yBuckets": {
-            "mode": "size"
-          }
-        },
-        "cellGap": 2,
-        "color": {
-          "exponent": 0.5,
-          "fill": "dark-orange",
-          "mode": "scheme",
-          "reverse": false,
-          "scale": "exponential",
-          "scheme": "Oranges",
-          "steps": 128
-        },
-        "tooltip": {
-          "show": true,
-          "yHistogram": false
-        },
-        "yAxis": {
-          "axisPlacement": "left",
-          "reverse": false,
-          "unit": "s",
-          "max": 0.05
-        }
-      },
-      "title": "Request Latency Distribution",
-      "type": "heatmap",
-      "targets": [
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "${DataSource}"
-          },
-          "expr": "sum(increase(app_graphql_request_duration_bucket{le!=\"+Inf\",le!=\"30\",le!=\"10\",le!=\"5\",le!=\"3\",le!=\"2\",le!=\"1\",le!=\"0.75\",le!=\"0.5\",le!=\"0.3\",le!=\"0.2\",le!=\"0.1\"}[$__rate_interval])) by (le)",
-          "legendFormat": "{{le}}",
-          "refId": "A",
-          "format": "heatmap"
         }
       ]
     },
