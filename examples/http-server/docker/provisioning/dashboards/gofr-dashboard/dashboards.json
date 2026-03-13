@@ -4760,17 +4760,6 @@
             "uid": "${DataSource}"
           },
           "editorMode": "code",
-          "expr": "histogram_quantile(0.50, sum(rate(app_graphql_request_duration_bucket{}[$__rate_interval])) by (le))",
-          "legendFormat": "50",
-          "range": true,
-          "refId": "50"
-        },
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "${DataSource}"
-          },
-          "editorMode": "code",
           "expr": "histogram_quantile(0.90, sum(rate(app_graphql_request_duration_bucket{}[$__rate_interval])) by (le))",
           "legendFormat": "90",
           "range": true,
@@ -5130,10 +5119,10 @@
             "uid": "${DataSource}"
           },
           "editorMode": "code",
-          "expr": "histogram_quantile(0.99, sum by (le, operation_name, type) (rate(app_graphql_request_duration_bucket{}[$__rate_interval])))",
-          "legendFormat": "{{operation_name}} ({{type}}) p99",
+          "expr": "histogram_quantile(0.90, sum by (le, operation_name, type) (rate(app_graphql_request_duration_bucket{}[$__rate_interval])))",
+          "legendFormat": "{{operation_name}} ({{type}}) p90",
           "range": true,
-          "refId": "A"
+          "refId": "p90"
         },
         {
           "datasource": {
@@ -5141,10 +5130,32 @@
             "uid": "${DataSource}"
           },
           "editorMode": "code",
-          "expr": "histogram_quantile(0.50, sum by (le, operation_name, type) (rate(app_graphql_request_duration_bucket{}[$__rate_interval])))",
-          "legendFormat": "{{operation_name}} ({{type}}) p50",
+          "expr": "histogram_quantile(0.95, sum by (le, operation_name, type) (rate(app_graphql_request_duration_bucket{}[$__rate_interval])))",
+          "legendFormat": "{{operation_name}} ({{type}}) p95",
           "range": true,
-          "refId": "B"
+          "refId": "p95"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DataSource}"
+          },
+          "editorMode": "code",
+          "expr": "histogram_quantile(0.99, sum by (le, operation_name, type) (rate(app_graphql_request_duration_bucket{}[$__rate_interval])))",
+          "legendFormat": "{{operation_name}} ({{type}}) p99",
+          "range": true,
+          "refId": "p99"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DataSource}"
+          },
+          "editorMode": "code",
+          "expr": "histogram_quantile(0.999, sum by (le, operation_name, type) (rate(app_graphql_request_duration_bucket{}[$__rate_interval])))",
+          "legendFormat": "{{operation_name}} ({{type}}) p99.9",
+          "range": true,
+          "refId": "p99.9"
         }
       ],
       "title": "Latency by Operation",
@@ -5246,10 +5257,10 @@
             "uid": "${DataSource}"
           },
           "editorMode": "code",
-          "expr": "histogram_quantile(0.99, sum by (le, type) (rate(app_graphql_request_duration_bucket{}[$__rate_interval])))",
-          "legendFormat": "{{type}} p99",
+          "expr": "histogram_quantile(0.90, sum by (le, type) (rate(app_graphql_request_duration_bucket{}[$__rate_interval])))",
+          "legendFormat": "{{type}} p90",
           "range": true,
-          "refId": "A"
+          "refId": "p90"
         },
         {
           "datasource": {
@@ -5257,10 +5268,32 @@
             "uid": "${DataSource}"
           },
           "editorMode": "code",
-          "expr": "histogram_quantile(0.50, sum by (le, type) (rate(app_graphql_request_duration_bucket{}[$__rate_interval])))",
-          "legendFormat": "{{type}} p50",
+          "expr": "histogram_quantile(0.95, sum by (le, type) (rate(app_graphql_request_duration_bucket{}[$__rate_interval])))",
+          "legendFormat": "{{type}} p95",
           "range": true,
-          "refId": "B"
+          "refId": "p95"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DataSource}"
+          },
+          "editorMode": "code",
+          "expr": "histogram_quantile(0.99, sum by (le, type) (rate(app_graphql_request_duration_bucket{}[$__rate_interval])))",
+          "legendFormat": "{{type}} p99",
+          "range": true,
+          "refId": "p99"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DataSource}"
+          },
+          "editorMode": "code",
+          "expr": "histogram_quantile(0.999, sum by (le, type) (rate(app_graphql_request_duration_bucket{}[$__rate_interval])))",
+          "legendFormat": "{{type}} p99.9",
+          "range": true,
+          "refId": "p99.9"
         }
       ],
       "title": "Latency by Operation Type",
