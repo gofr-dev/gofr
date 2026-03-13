@@ -116,6 +116,7 @@ func registerGRPCMetrics(c *container.Container) {
 	c.Metrics().NewGauge("grpc_server_status", "gRPC server status (1=running, 0=stopped)")
 	c.Metrics().NewCounter("grpc_server_errors_total", "Total gRPC server errors")
 	c.Metrics().NewCounter("grpc_services_registered_total", "Total gRPC services registered")
+	c.Metrics().NewCounter("app_grpc_rate_limit_exceeded_total", "Total gRPC requests rejected by rate limiter")
 }
 
 func (g *grpcServer) createServer() error {
