@@ -6,8 +6,8 @@ require (
 	github.com/nats-io/nats-server/v2 v2.11.12
 	github.com/nats-io/nats.go v1.48.0
 	github.com/stretchr/testify v1.11.1
-	go.opentelemetry.io/otel v1.41.0
-	go.opentelemetry.io/otel/sdk v1.40.0
+	go.opentelemetry.io/otel v1.42.0
+	go.opentelemetry.io/otel/sdk v1.42.0
 	go.opentelemetry.io/otel/trace v1.42.0
 	go.uber.org/mock v0.6.0
 	gofr.dev v1.54.4

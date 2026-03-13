@@ -13,6 +13,30 @@ import (
 	"go.opentelemetry.io/otel/sdk/trace/tracetest"
 )
 
+// setupOTel installs a real in-memory tracer provider and TraceContext propagator,
+// returning the exporter so callers can inspect recorded spans.
+// All globals are restored when t finishes.
+func setupOTel(t *testing.T) (*tracetest.InMemoryExporter, *sdktrace.TracerProvider) {
+	t.Helper()
+
+	exporter := tracetest.NewInMemoryExporter()
+	tp := sdktrace.NewTracerProvider(sdktrace.WithSyncer(exporter))
+
+	prevTP := otel.GetTracerProvider()
+	prevProp := otel.GetTextMapPropagator()
+
+	otel.SetTracerProvider(tp)
+	otel.SetTextMapPropagator(propagation.TraceContext{})
+
+	t.Cleanup(func() {
+		_ = tp.Shutdown(context.Background())
+		otel.SetTracerProvider(prevTP)
+		otel.SetTextMapPropagator(prevProp)
+	})
+
+	return exporter, tp
+}
+
 func TestHeaderCarrier_GetSetKeys(t *testing.T) {
 	carrier := make(headerCarrier)
 
@@ -36,14 +60,7 @@ func TestHeaderCarrier_GetSetKeys(t *testing.T) {
 }
 
 func TestInjectTraceContext(t *testing.T) {
-	exporter := tracetest.NewInMemoryExporter()
-	tp := sdktrace.NewTracerProvider(sdktrace.WithSyncer(exporter))
-	otel.SetTracerProvider(tp)
-	otel.SetTextMapPropagator(propagation.TraceContext{})
-
-	defer func() {
-		_ = tp.Shutdown(context.Background())
-	}()
+	_, tp := setupOTel(t)
 
 	ctx, span := tp.Tracer("test").Start(context.Background(), "test-span")
 	defer span.End()
@@ -58,14 +75,7 @@ func TestInjectTraceContext(t *testing.T) {
 }
 
 func TestInjectTraceContext_PreservesExistingHeaders(t *testing.T) {
-	exporter := tracetest.NewInMemoryExporter()
-	tp := sdktrace.NewTracerProvider(sdktrace.WithSyncer(exporter))
-	otel.SetTracerProvider(tp)
-	otel.SetTextMapPropagator(propagation.TraceContext{})
-
-	defer func() {
-		_ = tp.Shutdown(context.Background())
-	}()
+	_, tp := setupOTel(t)
 
 	ctx, span := tp.Tracer("test").Start(context.Background(), "test-span")
 	defer span.End()
@@ -82,14 +92,7 @@ func TestInjectTraceContext_PreservesExistingHeaders(t *testing.T) {
 }
 
 func TestExtractTraceLinks(t *testing.T) {
-	exporter := tracetest.NewInMemoryExporter()
-	tp := sdktrace.NewTracerProvider(sdktrace.WithSyncer(exporter))
-	otel.SetTracerProvider(tp)
-	otel.SetTextMapPropagator(propagation.TraceContext{})
-
-	defer func() {
-		_ = tp.Shutdown(context.Background())
-	}()
+	_, tp := setupOTel(t)
 
 	ctx, producerSpan := tp.Tracer("test").Start(context.Background(), "producer-span")
 	headers := injectTraceContext(ctx, nil)
@@ -104,44 +107,25 @@ func TestExtractTraceLinks(t *testing.T) {
 }
 
 func TestExtractTraceLinks_NoHeaders(t *testing.T) {
-	exporter := tracetest.NewInMemoryExporter()
-	tp := sdktrace.NewTracerProvider(sdktrace.WithSyncer(exporter))
-	otel.SetTracerProvider(tp)
-	otel.SetTextMapPropagator(propagation.TraceContext{})
-
-	defer func() {
-		_ = tp.Shutdown(context.Background())
-	}()
+	setupOTel(t)
 
 	links := extractTraceLinks(nil)
 	assert.Nil(t, links, "should return nil for nil headers")
 }
 
 func TestExtractTraceLinks_EmptyHeaders(t *testing.T) {
-	exporter := tracetest.NewInMemoryExporter()
-	tp := sdktrace.NewTracerProvider(sdktrace.WithSyncer(exporter))
-	otel.SetTracerProvider(tp)
-	otel.SetTextMapPropagator(propagation.TraceContext{})
-
-	defer func() {
-		_ = tp.Shutdown(context.Background())
-	}()
+	setupOTel(t)
 
 	links := extractTraceLinks(make(nats.Header))
 	assert.Nil(t, links, "should return nil for empty headers")
 }
 
 func TestStartPublishSpan(t *testing.T) {
-	exporter := tracetest.NewInMemoryExporter()
-	tp := sdktrace.NewTracerProvider(sdktrace.WithSyncer(exporter))
-	otel.SetTracerProvider(tp)
-	otel.SetTextMapPropagator(propagation.TraceContext{})
+	_, tp := setupOTel(t)
 
-	defer func() {
-		_ = tp.Shutdown(context.Background())
-	}()
+	tracer := tp.Tracer(tracerName)
 
-	ctx, span, headers := startPublishSpan(context.Background(), "test-subject")
+	ctx, span, headers := startPublishSpan(context.Background(), tracer, "test-subject")
 	defer span.End()
 
 	require.NotNil(t, span)
@@ -153,19 +137,14 @@ func TestStartPublishSpan(t *testing.T) {
 }
 
 func TestStartSubscribeSpan_WithLinks(t *testing.T) {
-	exporter := tracetest.NewInMemoryExporter()
-	tp := sdktrace.NewTracerProvider(sdktrace.WithSyncer(exporter))
-	otel.SetTracerProvider(tp)
-	otel.SetTextMapPropagator(propagation.TraceContext{})
+	exporter, tp := setupOTel(t)
 
-	defer func() {
-		_ = tp.Shutdown(context.Background())
-	}()
+	tracer := tp.Tracer(tracerName)
 
-	_, producerSpan, headers := startPublishSpan(context.Background(), "test-subject")
+	_, producerSpan, headers := startPublishSpan(context.Background(), tracer, "test-subject")
 	producerSpan.End()
 
-	_, subscribeSpan := startSubscribeSpan(context.Background(), "test-subject", headers)
+	_, subscribeSpan := startSubscribeSpan(context.Background(), tracer, "test-subject", headers)
 	subscribeSpan.End()
 
 	spans := exporter.GetSpans()
@@ -187,16 +166,11 @@ func TestStartSubscribeSpan_WithLinks(t *testing.T) {
 }
 
 func TestStartSubscribeSpan_NoLinks(t *testing.T) {
-	exporter := tracetest.NewInMemoryExporter()
-	tp := sdktrace.NewTracerProvider(sdktrace.WithSyncer(exporter))
-	otel.SetTracerProvider(tp)
-	otel.SetTextMapPropagator(propagation.TraceContext{})
+	exporter, tp := setupOTel(t)
 
-	defer func() {
-		_ = tp.Shutdown(context.Background())
-	}()
+	tracer := tp.Tracer(tracerName)
 
-	_, subscribeSpan := startSubscribeSpan(context.Background(), "test-subject", nil)
+	_, subscribeSpan := startSubscribeSpan(context.Background(), tracer, "test-subject", nil)
 	subscribeSpan.End()
 
 	spans := exporter.GetSpans()

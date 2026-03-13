@@ -1,6 +1,8 @@
 package nats
 
 import (
+	"bytes"
+	"fmt"
 	"testing"
 	"time"
 
@@ -13,6 +15,21 @@ import (
 	"gofr.dev/pkg/gofr/datasource"
 	"gofr.dev/pkg/gofr/logging"
 )
+
+// natsMsgMatcher is a gomock matcher that validates nats.Msg fields.
+type natsMsgMatcher struct {
+	subject string
+	data    []byte
+}
+
+func (m natsMsgMatcher) Matches(x any) bool {
+	msg, ok := x.(*nats.Msg)
+	return ok && msg.Subject == m.subject && bytes.Equal(msg.Data, m.data)
+}
+
+func (m natsMsgMatcher) String() string {
+	return fmt.Sprintf("nats.Msg{Subject: %q, Data: %q}", m.subject, m.data)
+}
 
 func TestNewConnectionManager(t *testing.T) {
 	cfg := &Config{Server: "nats://localhost:4222"}
@@ -95,7 +112,7 @@ func TestConnectionManager_Publish(t *testing.T) {
 	gomock.InOrder(
 		mockMetrics.EXPECT().IncrementCounter(gomock.Any(), "app_pubsub_publish_total_count", "subject", subject),
 		mockConn.EXPECT().Status().Return(nats.CONNECTED),
-		mockJS.EXPECT().PublishMsg(gomock.Any(), gomock.Any()).Return(&jetstream.PubAck{}, nil),
+		mockJS.EXPECT().PublishMsg(gomock.Any(), natsMsgMatcher{subject: subject, data: message}).Return(&jetstream.PubAck{}, nil),
 		mockMetrics.EXPECT().IncrementCounter(gomock.Any(), "app_pubsub_publish_success_count", "subject", subject),
 	)
 

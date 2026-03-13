@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/nats-io/nats.go/jetstream"
+	"go.opentelemetry.io/otel"
 	"gofr.dev/pkg/gofr/datasource/pubsub"
 )
 
@@ -183,7 +184,7 @@ func (sm *SubscriptionManager) processFetchedMessages(
 }
 
 func (*SubscriptionManager) createPubSubMessage(ctx context.Context, msg jetstream.Msg, topic string) *pubsub.Message {
-	spanCtx, span := startSubscribeSpan(ctx, topic, msg.Headers())
+	spanCtx, span := startSubscribeSpan(ctx, otel.GetTracerProvider().Tracer(tracerName), topic, msg.Headers())
 
 	pubsubMsg := pubsub.NewMessage(spanCtx)
 	pubsubMsg.Topic = topic

@@ -80,7 +80,7 @@ func extractTraceLinks(headers nats.Header) []trace.Link {
 
 // startPublishSpan creates a new span for publishing with trace context injection.
 // Returns the updated context, the span, and NATS headers with injected trace context.
-func startPublishSpan(ctx context.Context, subject string) (context.Context, trace.Span, nats.Header) {
+func startPublishSpan(ctx context.Context, tracer trace.Tracer, subject string) (context.Context, trace.Span, nats.Header) {
 	opts := []trace.SpanStartOption{
 		trace.WithSpanKind(trace.SpanKindProducer),
 		trace.WithAttributes(
@@ -90,7 +90,7 @@ func startPublishSpan(ctx context.Context, subject string) (context.Context, tra
 		),
 	}
 
-	ctx, span := otel.GetTracerProvider().Tracer(tracerName).Start(ctx, "nats-publish", opts...)
+	ctx, span := tracer.Start(ctx, "nats-publish", opts...)
 
 	headers := injectTraceContext(ctx, nil)
 
@@ -100,7 +100,7 @@ func startPublishSpan(ctx context.Context, subject string) (context.Context, tra
 // startSubscribeSpan creates a new span for subscribing with links to the producer span.
 // If trace context exists in message headers, creates a span linked to the producer.
 // Otherwise, creates an orphan span (new trace).
-func startSubscribeSpan(ctx context.Context, topic string, headers nats.Header) (context.Context, trace.Span) {
+func startSubscribeSpan(ctx context.Context, tracer trace.Tracer, topic string, headers nats.Header) (context.Context, trace.Span) {
 	links := extractTraceLinks(headers)
 
 	opts := []trace.SpanStartOption{
@@ -116,7 +116,7 @@ func startSubscribeSpan(ctx context.Context, topic string, headers nats.Header) 
 		opts = append(opts, trace.WithLinks(links...))
 	}
 
-	ctx, span := otel.GetTracerProvider().Tracer(tracerName).Start(ctx, "nats-subscribe", opts...)
+	ctx, span := tracer.Start(ctx, "nats-subscribe", opts...)
 
 	return ctx, span
 }
