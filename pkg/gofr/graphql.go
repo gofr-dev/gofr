@@ -59,13 +59,14 @@ func (l *GraphQLLog) PrettyPrint(writer io.Writer) {
 	}
 
 	if l.Error != "" {
-		fmt.Fprintf(writer, "\u001B[38;5;8m%s %s: %s \n", l.Resolver, opType, l.Error)
+		fmt.Fprintf(writer, "\u001B[38;5;202m%-6s\u001B[0m %8d\u001B[38;5;8mµs\u001B[0m %s %s: %s \n",
+			"FAIL", l.Duration, opType, l.Resolver, l.Error)
 
 		return
 	}
 
-	fmt.Fprintf(writer, "\u001B[38;5;8m%s %8d\u001B[38;5;8mµs\u001B[0m %s \n",
-		l.Resolver, l.Duration, opType)
+	fmt.Fprintf(writer, "\u001B[38;5;34m%-6s\u001B[0m %8d\u001B[38;5;8mµs\u001B[0m %s %s \n",
+		"OK", l.Duration, opType, l.Resolver)
 }
 
 type graphQLManager struct {
@@ -365,12 +366,14 @@ func (m *graphQLManager) getResolver(name string, h Handler) graphql.FieldResolv
 		res, err := h(c)
 		duration := time.Since(start).Microseconds()
 
+		resolverType := m.getResolverType(name)
+
 		if err != nil {
-			c.Error(&GraphQLLog{Resolver: name, Error: err.Error()})
+			c.Error(&GraphQLLog{Resolver: name, Type: resolverType, Duration: duration, Error: err.Error()})
 			return nil, err
 		}
 
-		c.Debug(&GraphQLLog{Resolver: name, Type: m.getResolverType(name), Duration: duration})
+		c.Debug(&GraphQLLog{Resolver: name, Type: resolverType, Duration: duration})
 
 		return res, nil
 	}
