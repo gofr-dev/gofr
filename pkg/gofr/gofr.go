@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"sync"
 
 	"github.com/gorilla/mux"
 	"golang.org/x/sync/errgroup"
@@ -17,6 +18,7 @@ import (
 	"gofr.dev/pkg/gofr/config"
 	"gofr.dev/pkg/gofr/container"
 	gofrHTTP "gofr.dev/pkg/gofr/http"
+	"gofr.dev/pkg/gofr/http/response"
 	"gofr.dev/pkg/gofr/logging"
 	"gofr.dev/pkg/gofr/metrics"
 	"gofr.dev/pkg/gofr/migration"
@@ -44,11 +46,12 @@ type App struct {
 	// container is unexported because this is an internal implementation and applications are provided access to it via Context
 	container *container.Container
 
-	grpcRegistered bool
-	httpRegistered bool
-
+	grpcRegistered      bool
+	httpRegistered      bool
 	subscriptionManager SubscriptionManager
+	graphqlManager      *graphQLManager
 	onStartHooks        []func(ctx *Context) error
+	mu                  sync.Mutex
 }
 
 func (a *App) runOnStartHooks(ctx context.Context) error {
@@ -148,8 +151,19 @@ func (a *App) httpServerSetup() {
 	// Add OpenAPI/Swagger routes if openapi.json exists
 	a.checkAndAddOpenAPIDocumentation()
 
+	// Register GraphQL Playground UI under /.well-known/ if GraphQL is enabled
+	if a.graphqlManager != nil {
+		a.add(http.MethodGet, "/.well-known/graphql/ui", playgroundHandler)
+	}
+
 	for dirName, endpoint := range a.httpServer.staticFiles {
 		a.httpServer.router.AddStaticFiles(a.Logger(), endpoint, dirName)
+	}
+
+	a.setupGraphQL()
+
+	if a.container.Logger != nil {
+		a.container.Logger.Infof("Registered HTTP server on port: %d", a.httpServer.port)
 	}
 
 	a.httpServer.router.PathPrefix("/").Handler(handler{
@@ -221,6 +235,55 @@ func (a *App) AddHTTPService(serviceName, serviceAddress string, options ...serv
 	options = append([]service.Options{service.WithAttributes(map[string]string{"name": serviceName})}, options...)
 
 	a.container.Services[serviceName] = service.NewHTTPService(serviceAddress, a.container.Logger, a.container.Metrics(), options...)
+}
+
+// GraphQLQuery registers a named query resolver for the GraphQL schema.
+//
+// Developer Notes:
+//   - GraphQL uses dedicated methods (GraphQLQuery, GraphQLMutation) instead of standard HTTP verb
+//     methods (GET, POST) because GraphQL operations are distinguished by type in the request body,
+//     not by HTTP method. All operations are served through a single POST /graphql endpoint.
+//   - POST-only is intentional: it is the required method per the GraphQL-over-HTTP spec. GET is
+//     optional and only useful for CDN caching, which adds complexity without clear benefit here.
+//   - Only query and mutation are supported for now. Subscriptions require a persistent connection
+//     (WebSocket) and are out of scope for this initial implementation.
+//   - The resolver name must match a field in the Query type defined in ./configs/schema.graphqls.
+//     Multiple resolvers can be registered, but all resolve fields within that single schema file.
+func (a *App) GraphQLQuery(name string, handler Handler) {
+	if !a.httpRegistered && !isPortAvailable(a.httpServer.port) {
+		a.container.Logger.Fatalf("http port %d is blocked or unreachable", a.httpServer.port)
+	}
+
+	a.mu.Lock()
+
+	if a.graphqlManager == nil {
+		a.graphqlManager = newGraphQLManager(a.container)
+	}
+
+	a.mu.Unlock()
+
+	a.httpRegistered = true
+	a.graphqlManager.RegisterQuery(name, handler)
+}
+
+// GraphQLMutation registers a named mutation resolver for the GraphQL schema.
+// See GraphQLQuery for design rationale. Mutations follow the same pattern but are intended
+// for operations with side effects (create, update, delete).
+func (a *App) GraphQLMutation(name string, handler Handler) {
+	if !a.httpRegistered && !isPortAvailable(a.httpServer.port) {
+		a.container.Logger.Fatalf("http port %d is blocked or unreachable", a.httpServer.port)
+	}
+
+	a.mu.Lock()
+
+	if a.graphqlManager == nil {
+		a.graphqlManager = newGraphQLManager(a.container)
+	}
+
+	a.mu.Unlock()
+
+	a.httpRegistered = true
+	a.graphqlManager.RegisterMutation(name, handler)
 }
 
 // Metrics returns the metrics manager associated with the App.
@@ -368,4 +431,21 @@ func (a *App) AddStaticFiles(endpoint, filePath string) {
 //	})
 func (a *App) OnStart(hook func(ctx *Context) error) {
 	a.onStartHooks = append(a.onStartHooks, hook)
+}
+
+func (a *App) setupGraphQL() {
+	if a.graphqlManager != nil {
+		err := a.graphqlManager.buildSchema()
+		if err != nil {
+			a.container.Logger.Fatalf("GraphQL build error: %v", err)
+		}
+
+		// Functional endpoint: served via POST per spec to ensure data safety and consistency.
+		a.httpServer.router.NewRoute().Methods(http.MethodPost).Path("/graphql").Handler(a.graphqlManager.GetHandler())
+	}
+}
+
+// playgroundHandler serves the GraphQL interactive playground UI.
+func playgroundHandler(_ *Context) (any, error) {
+	return response.File{Content: []byte(graphiqlHTML), ContentType: "text/html"}, nil
 }
