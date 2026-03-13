@@ -547,21 +547,21 @@ const graphiqlHTML = `<!DOCTYPE html>
 <body style="margin: 0;">
     <div id="graphiql" style="height: 100vh;"></div>
 
-    <script crossorigin src="https://unpkg.com/react@18.2.0/umd/react.production.min.js"></script>
-    <script crossorigin src="https://unpkg.com/react-dom@18.2.0/umd/react-dom.production.min.js"></script>
-    <script crossorigin src="https://unpkg.com/graphiql@3.0.6/graphiql.min.js"></script>
+    <script src="https://unpkg.com/react@18.2.0/umd/react.production.min.js" crossorigin></script>
+    <script src="https://unpkg.com/react-dom@18.2.0/umd/react-dom.production.min.js" crossorigin></script>
+    <script src="https://unpkg.com/graphiql@3.0.6/graphiql.min.js" crossorigin></script>
 
     <script>
-        const fetcher = GraphiQL.makeDefaultFetcher({ url: window.location.origin + '/graphql' });
+        const fetcher = GraphiQL.createFetcher({ url: window.location.origin + '/graphql' });
+        const root = ReactDOM.createRoot(document.getElementById('graphiql'));
 
-        ReactDOM.render(
+        root.render(
             React.createElement(GraphiQL, {
                 fetcher: fetcher,
                 defaultVariableEditorOpen: true,
                 headerEditorEnabled: true,
                 shouldPersistHeaders: true
             }),
-            document.getElementById('graphiql'),
         );
     </script>
 </body>
