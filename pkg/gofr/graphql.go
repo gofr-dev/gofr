@@ -425,12 +425,7 @@ func (m *graphQLManager) handleGraphQLRequest(w http.ResponseWriter, r *http.Req
 		return
 	}
 
-	opName := req.OperationName
-	if opName == "" {
-		opName = graphqlUnknown
-	}
-
-	opType := m.getOperationType(req.Query)
+	opName, opType := m.parseOperation(req.Query, req.OperationName)
 
 	ctx, span := m.tracer.Start(r.Context(), "graphql-request")
 	span.SetAttributes(attribute.String("graphql.operation_name", opName), attribute.String("graphql.operation_type", opType))
@@ -486,13 +481,33 @@ func (*graphQLManager) parseGraphQLRequest(r *http.Request) (gqlRequest, error) 
 	return req, err
 }
 
-func (*graphQLManager) getOperationType(query string) string {
-	opType := graphqlQuery
-	if astDoc, err := parser.ParseQuery(&ast.Source{Input: query}); err == nil && len(astDoc.Operations) > 0 {
-		opType = string(astDoc.Operations[0].Operation)
+func (*graphQLManager) parseOperation(query, operationName string) (opName, opType string) {
+	opName = operationName
+	opType = graphqlQuery
+
+	astDoc, err := parser.ParseQuery(&ast.Source{Input: query})
+	if err != nil || len(astDoc.Operations) == 0 {
+		if opName == "" {
+			opName = graphqlUnknown
+		}
+
+		return opName, opType
 	}
 
-	return opType
+	op := astDoc.Operations[0]
+	opType = string(op.Operation)
+
+	if opName == "" && len(op.SelectionSet) > 0 {
+		if field, ok := op.SelectionSet[0].(*ast.Field); ok {
+			opName = field.Name
+		}
+	}
+
+	if opName == "" {
+		opName = graphqlUnknown
+	}
+
+	return opName, opType
 }
 
 func (*graphQLManager) respondWithErrors(w http.ResponseWriter, status int, message string) {

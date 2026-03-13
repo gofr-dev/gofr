@@ -1,0 +1,38 @@
+version: '3.8'
+
+services:
+  mysqldb:
+    image: mysql:8.0.30
+    environment:
+      MYSQL_ROOT_PASSWORD: password
+      MYSQL_DATABASE: test
+    ports:
+      - "2001:3306"
+    networks:
+      - gofr-network
+
+  prometheus:
+    image: prom/prometheus:latest
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./prometheus:/etc/prometheus
+    networks:
+      - gofr-network
+
+  grafana:
+    image: grafana/grafana:latest
+    ports:
+      - "3000:3000"
+    environment:
+      GF_SECURITY_ADMIN_USER: admin
+      GF_SECURITY_ADMIN_PASSWORD: admin
+    volumes:
+      - ./provisioning:/etc/grafana/provisioning
+    depends_on:
+      - prometheus
+    networks:
+      - gofr-network
+
+networks:
+  gofr-network:
