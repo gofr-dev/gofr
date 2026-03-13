@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"net/http"
 	"os"
 	"runtime/debug"
@@ -36,10 +37,31 @@ const (
 	graphqlFloat   = "Float"
 	graphqlBoolean = "Boolean"
 
+	graphqlQuery   = "query"
 	graphqlSuccess = "success"
 	graphqlError   = "error"
 	graphqlUnknown = "unknown"
 )
+
+// GraphQLLog represents a logged GraphQL resolver execution.
+type GraphQLLog struct {
+	Resolver string `json:"resolver"`
+	Type     string `json:"type"`
+	Duration int64  `json:"duration"`
+	Error    string `json:"error,omitempty"`
+}
+
+func (l *GraphQLLog) PrettyPrint(writer io.Writer) {
+	if l.Error != "" {
+		fmt.Fprintf(writer, "\u001B[38;5;8m%-32s \u001B[38;5;24m%-6s\u001B[0m %s\n",
+			l.Resolver, "GQL", l.Error)
+
+		return
+	}
+
+	fmt.Fprintf(writer, "\u001B[38;5;8m%-32s \u001B[38;5;24m%-6s\u001B[0m %8d\u001B[38;5;8mµs\u001B[0m %s\n",
+		l.Resolver, "GQL", l.Duration, l.Type)
+}
 
 type graphQLManager struct {
 	container *container.Container
@@ -330,19 +352,34 @@ func (m *graphQLManager) getResolver(name string, h Handler) graphql.FieldResolv
 		ctx, span := m.tracer.Start(p.Context, "graphql-resolver-"+name)
 		defer span.End()
 
+		start := time.Now()
+
 		gReq := &graphQLRequest{ctx: ctx, params: p.Args}
 		c := newContext(noopResponder{}, gReq, m.container)
 
-		c.Debugf("Executing GraphQL Resolver: %s, Args: %v", name, p.Args)
-
 		res, err := h(c)
+		duration := time.Since(start).Microseconds()
+
 		if err != nil {
-			m.container.Errorf("GraphQL Resolver %s failed: %v", name, err)
+			c.Error(&GraphQLLog{Resolver: name, Error: err.Error()})
 			return nil, err
 		}
 
+		c.Debug(&GraphQLLog{Resolver: name, Type: m.getResolverType(name), Duration: duration})
+
 		return res, nil
 	}
+}
+
+func (m *graphQLManager) getResolverType(name string) string {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+
+	if _, ok := m.mutations[name]; ok {
+		return "mutation"
+	}
+
+	return graphqlQuery
 }
 
 const maxRequestBodySize = 32 << 20 // 32 MB
@@ -417,10 +454,6 @@ func (m *graphQLManager) handleGraphQLRequest(w http.ResponseWriter, r *http.Req
 
 	if len(result.Errors) > 0 {
 		m.container.Metrics().IncrementCounter(ctx, "app_graphql_error_total", "operation_name", opName, "type", opType)
-
-		if result.Data != nil {
-			m.container.Debugf("GraphQL result partially matched schema. Errors: %v", result.Errors)
-		}
 	}
 
 	w.WriteHeader(http.StatusOK)
@@ -446,7 +479,7 @@ func (*graphQLManager) parseGraphQLRequest(r *http.Request) (gqlRequest, error) 
 }
 
 func (*graphQLManager) getOperationType(query string) string {
-	opType := "query"
+	opType := graphqlQuery
 	if astDoc, err := parser.ParseQuery(&ast.Source{Input: query}); err == nil && len(astDoc.Operations) > 0 {
 		opType = string(astDoc.Operations[0].Operation)
 	}
