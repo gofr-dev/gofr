@@ -210,6 +210,7 @@ func TestSSEStream_ConcurrentSend(t *testing.T) {
 	for i := 0; i < count; i++ {
 		go func(i int) {
 			defer wg.Done()
+
 			_ = stream.SendData(i)
 		}(i)
 	}
@@ -222,7 +223,8 @@ func TestSSEStream_ConcurrentSend(t *testing.T) {
 	// in writing to the underlying buffer, which is expected for concurrent access without sync.
 	// This test verifies no panics occur during concurrent sends.
 	dataCount := strings.Count(body, "data:")
-	assert.Greater(t, dataCount, 0, "at least some events should be written")
+
+	assert.Positive(t, dataCount, "at least some events should be written")
 }
 
 func TestSSEStream_StreamingLoop(t *testing.T) {
@@ -326,7 +328,7 @@ func TestSSEResponse_Integration_ClientDisconnect(t *testing.T) {
 	handlerExited := make(chan struct{})
 
 	app.GET("/stream", func(c *Context) (any, error) {
-		return SSEResponse(func( stream *SSEStream) error {
+		return SSEResponse(func(stream *SSEStream) error {
 			defer close(handlerExited)
 
 			_ = stream.SendData("connected")
