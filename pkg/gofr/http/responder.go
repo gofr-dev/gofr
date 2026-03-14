@@ -75,6 +75,10 @@ func (r Responder) handleSpecialResponseTypes(data any, err error) bool {
 	statusCode := r.getStatusCodeForSpecialResponse(data, err)
 
 	switch v := data.(type) {
+	case resTypes.SSE:
+		r.handleSSEResponse(v)
+		return true
+
 	case resTypes.File:
 		r.w.Header().Set("Content-Type", v.ContentType)
 		r.w.WriteHeader(statusCode)
@@ -275,4 +279,22 @@ func isNil(i any) bool {
 	v := reflect.ValueOf(i)
 
 	return v.Kind() == reflect.Ptr && v.IsNil()
+}
+
+// handleSSEResponse handles Server-Sent Events responses.
+// It sets appropriate headers, creates the stream, and calls the user's stream function.
+func (r Responder) handleSSEResponse(sse resTypes.SSE) {
+	// Set SSE headers
+	r.w.Header().Set("Content-Type", "text/event-stream")
+	r.w.Header().Set("Cache-Control", "no-cache")
+	r.w.Header().Set("Connection", "keep-alive")
+	r.w.Header().Set("X-Accel-Buffering", "no")
+	r.w.WriteHeader(http.StatusOK)
+
+	// Initial flush to establish connection
+	rc := http.NewResponseController(r.w)
+	_ = rc.Flush()
+
+	// Intercept and stream events using the handler's callback
+	_ = sse.Stream(r.w)
 }

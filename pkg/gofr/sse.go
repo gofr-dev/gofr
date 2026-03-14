@@ -2,67 +2,78 @@ package gofr
 
 import (
 	"encoding/json"
-	"errors"
 	"fmt"
 	"net/http"
 	"strings"
-	"time"
 
-	"go.opentelemetry.io/otel/trace"
-
-	"gofr.dev/pkg/gofr/container"
-	gofrHTTP "gofr.dev/pkg/gofr/http"
-	"gofr.dev/pkg/gofr/logging"
+	"gofr.dev/pkg/gofr/http/response"
 )
-
-const (
-	sseHeartbeatInterval = 15 * time.Second
-	sseEventBufferSize   = 64
-)
-
-// SSEHandler is the function signature for SSE endpoints.
-type SSEHandler func(ctx *Context, stream *SSEStream) error
 
 // SSEEvent represents a single Server-Sent Event.
 type SSEEvent struct {
-	Name  string
-	Data  any
-	ID    string
-	Retry int
+	Name  string // Event type (event: field)
+	Data  any    // Event data (data: field) - strings pass through, others are JSON-encoded
+	ID    string // Event ID (id: field)
+	Retry int    // Reconnection time in milliseconds (retry: field)
 }
 
-// SSEStream decouples event production from network I/O via a buffered channel.
+// SSEStream writes Server-Sent Events directly to the HTTP response.
+// It wraps an http.ResponseWriter and flushes after each event.
 type SSEStream struct {
-	events chan string
-	done   chan struct{} // closed when ServeHTTP exits
+	w  http.ResponseWriter
+	rc *http.ResponseController
 }
 
-func newSSEStream() *SSEStream {
-	return &SSEStream{
-		events: make(chan string, sseEventBufferSize),
-		done:   make(chan struct{}),
+// SSEFunc is the callback signature for SSE handlers.
+// The function receives an SSEStream to write events.
+type SSEFunc func(stream *SSEStream) error
+
+// SSEResponse creates an SSE response that can be returned from a handler.
+// The callback function is called by the Responder to produce SSE events.
+//
+// Example:
+//
+//	app.GET("/events", func(c *gofr.Context) (any, error) {
+//	    return gofr.SSEResponse(func(stream *gofr.SSEStream) error {
+//	        for i := 0; i < 10; i++ {
+//	            if err := stream.SendEvent("counter", i); err != nil {
+//	                return err
+//	            }
+//	            time.Sleep(time.Second)
+//	        }
+//	        return nil
+//	    }), nil
+//	})
+func SSEResponse(callback SSEFunc) response.SSE {
+	return response.SSE{
+		Stream: func(w http.ResponseWriter) error {
+			stream := &SSEStream{
+				w:  w,
+				rc: http.NewResponseController(w),
+			}
+			return callback(stream)
+		},
 	}
 }
 
-var (
-	errStreamClosed          = errors.New("client disconnected: stream closed")
-	errStreamingNotSupported = errors.New("streaming not supported: ResponseWriter does not implement http.Flusher")
-	errHandlerPanicked       = errors.New("SSE handler panicked")
-)
+// Send writes a formatted SSE event to the stream and flushes.
+func (s *SSEStream) Send(event any) error {
+	sseEvent, ok := event.(SSEEvent)
+	if !ok {
+		// If not an SSEEvent, treat as data-only event
+		return s.SendData(event)
+	}
 
-// Send enqueues a formatted SSE event.
-func (s *SSEStream) Send(event SSEEvent) error {
-	raw, err := formatEvent(event)
+	raw, err := formatEvent(sseEvent)
 	if err != nil {
 		return err
 	}
 
-	select {
-	case s.events <- raw:
-		return nil
-	case <-s.done:
-		return errStreamClosed
+	if _, err := fmt.Fprint(s.w, raw); err != nil {
+		return err
 	}
+
+	return s.rc.Flush()
 }
 
 // SendData is shorthand for Send(SSEEvent{Data: data}).
@@ -75,7 +86,8 @@ func (s *SSEStream) SendEvent(name string, data any) error {
 	return s.Send(SSEEvent{Name: name, Data: data})
 }
 
-// SendComment enqueues an SSE comment (: prefix).
+// SendComment writes an SSE comment (: prefix) to the stream.
+// Comments are often used as keep-alive heartbeats.
 func (s *SSEStream) SendComment(text string) error {
 	var sb strings.Builder
 
@@ -85,12 +97,11 @@ func (s *SSEStream) SendComment(text string) error {
 
 	sb.WriteString("\n")
 
-	select {
-	case s.events <- sb.String():
-		return nil
-	case <-s.done:
-		return errStreamClosed
+	if _, err := fmt.Fprint(s.w, sb.String()); err != nil {
+		return err
 	}
+
+	return s.rc.Flush()
 }
 
 // formatEvent builds the wire-format string for one SSE event.
@@ -141,136 +152,4 @@ func formatSSEData(data any) (string, error) {
 
 		return string(b), nil
 	}
-}
-
-// sseHTTPHandler implements http.Handler for SSE endpoints.
-type sseHTTPHandler struct {
-	function  SSEHandler
-	container *container.Container
-}
-
-var _ http.Handler = sseHTTPHandler{}
-
-func (h sseHTTPHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	rc := http.NewResponseController(w)
-
-	w.Header().Set("Content-Type", "text/event-stream")
-	w.Header().Set("Cache-Control", "no-cache")
-	w.Header().Set("Connection", "keep-alive")
-	w.Header().Set("X-Accel-Buffering", "no")
-	w.WriteHeader(http.StatusOK)
-
-	if err := rc.Flush(); err != nil {
-		ctx := newContext(gofrHTTP.NewResponder(w, r.Method), gofrHTTP.NewRequest(r), h.container)
-		ctx.responder.Respond(nil, errStreamingNotSupported)
-
-		return
-	}
-
-	traceID := trace.SpanFromContext(r.Context()).SpanContext().TraceID().String()
-
-	stream := newSSEStream()
-	defer close(stream.done)
-
-	ctx := newContext(gofrHTTP.NewResponder(w, r.Method), gofrHTTP.NewRequest(r), h.container)
-	ctx.Context = r.Context()
-
-	handlerDone := make(chan error, 1)
-
-	go func() {
-		defer func() {
-			if re := recover(); re != nil {
-				h.container.Logger.Errorf("SSE handler panicked: %v", re)
-
-				handlerDone <- errHandlerPanicked
-			}
-
-			close(stream.events)
-		}()
-
-		handlerDone <- h.function(ctx, stream)
-	}()
-
-	h.drainLoop(w, r, rc, stream, handlerDone, traceID)
-}
-
-func (h sseHTTPHandler) drainLoop(
-	w http.ResponseWriter,
-	r *http.Request,
-	rc *http.ResponseController,
-	stream *SSEStream,
-	handlerDone <-chan error,
-	traceID string,
-) {
-	heartbeat := time.NewTicker(sseHeartbeatInterval)
-	defer heartbeat.Stop()
-
-	for {
-		select {
-		case <-r.Context().Done():
-			h.container.Logger.Debugf("SSE client disconnected: traceID=%s", traceID)
-			return
-
-		case msg, ok := <-stream.events:
-			if !ok {
-				if err := <-handlerDone; err != nil {
-					h.logError(traceID, err)
-				}
-
-				return
-			}
-
-			if _, err := fmt.Fprint(w, msg); err != nil {
-				return
-			}
-
-			_ = rc.Flush()
-
-		case <-heartbeat.C:
-			if _, err := fmt.Fprint(w, ": heartbeat\n\n"); err != nil {
-				return
-			}
-
-			_ = rc.Flush()
-		}
-	}
-}
-
-func (h sseHTTPHandler) logError(traceID string, err error) {
-	if err == nil {
-		return
-	}
-
-	errorLog := &ErrorLogEntry{TraceID: traceID, Error: err.Error()}
-	loggerHelper := h.container.Logger.Error
-
-	switch logging.GetLogLevelForError(err) {
-	case logging.ERROR:
-	case logging.INFO:
-		loggerHelper = h.container.Logger.Info
-	case logging.NOTICE:
-		loggerHelper = h.container.Logger.Notice
-	case logging.DEBUG:
-		loggerHelper = h.container.Logger.Debug
-	case logging.WARN:
-		loggerHelper = h.container.Logger.Warn
-	case logging.FATAL:
-		loggerHelper = h.container.Logger.Fatal
-	}
-
-	loggerHelper(errorLog)
-}
-
-// SSE registers a GET handler for Server-Sent Events on the given pattern.
-func (a *App) SSE(pattern string, handler SSEHandler) {
-	if !a.httpRegistered && !isPortAvailable(a.httpServer.port) {
-		a.container.Logger.Fatalf("http port %d is blocked or unreachable", a.httpServer.port)
-	}
-
-	a.httpRegistered = true
-
-	a.httpServer.router.Add("GET", pattern, sseHTTPHandler{
-		function:  handler,
-		container: a.container,
-	})
 }
