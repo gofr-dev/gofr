@@ -121,6 +121,7 @@ func handleRequestLog(srw *StatusResponseWriter, r *http.Request, start time.Tim
 		SpanID:       spanID,
 		StartTime:    start.Format("2006-01-02T15:04:05.999999999-07:00"),
 		ResponseTime: time.Since(start).Nanoseconds() / 1000,
+		ResponseUnit: "µs",
 		Method:       r.Method,
 		UserAgent:    r.UserAgent(),
 		IP:           getIPAddress(r),
