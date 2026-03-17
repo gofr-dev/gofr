@@ -183,6 +183,7 @@ func (c *Container) createMqttPubSub(conf config.Config) pubsub.Client {
 	if err != nil {
 		c.Logger.Error("Invalid value for MQTT_PORT, using default: 0")
 	}
+
 	order, _ := strconv.ParseBool(conf.GetOrDefault("MQTT_MESSAGE_ORDER", "false"))
 
 	retrieveRetained, _ := strconv.ParseBool(conf.GetOrDefault("MQTT_RETRIEVE_RETAINED", "false"))

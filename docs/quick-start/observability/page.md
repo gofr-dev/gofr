@@ -228,6 +228,24 @@ GoFr publishes metrics to port: _2121_ on _/metrics_ endpoint in Prometheus form
 
 ---
 
+- app_graphql_operations_total
+- counter
+- Total number of GraphQL operations received. Labels: `operation_name`, `type`.
+
+---
+
+- app_graphql_error_total
+- counter
+- Total number of GraphQL operations that returned an error. Labels: `operation_name`, `type`.
+
+---
+
+- app_graphql_request_duration
+- histogram
+- Response time of GraphQL requests in seconds. Labels: `operation_name`, `type`, `status`.
+
+---
+
 - app_cron_job_total
 - counter
 - Total number of cron job executions. Label: `job`.

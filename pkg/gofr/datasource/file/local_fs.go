@@ -20,7 +20,8 @@ type localFileSystem struct {
 	*CommonFileSystem
 }
 
-// NewLocalFileSystem creates a FileSystemProvider for local filesystem operations.
+// NewLocalFileSystem creates a FileSystem for local filesystem operations.
+// It returns a FileSystemProvider so callers can treat it uniformly with other providers.
 func NewLocalFileSystem(logger datasource.Logger) FileSystemProvider {
 	provider := &localProvider{}
 
@@ -34,17 +35,18 @@ func NewLocalFileSystem(logger datasource.Logger) FileSystemProvider {
 	return &localFileSystem{CommonFileSystem: cfs}
 }
 
-func (*localProvider) Connect(context.Context) error {
-	return nil
-}
-
-// ============= StorageProvider Implementation =============
-
+// Connect implements the no-arg Connect for FileSystemProvider compatibility.
 func (l *localFileSystem) Connect() {
+	// Local filesystem connect is a no-op but we call CommonFileSystem.Connect
+	// with a background context to set up any bookkeeping.
 	_ = l.CommonFileSystem.Connect(context.Background())
 }
 
-func (*localProvider) Health(context.Context) error {
+func (*localProvider) Connect(_ context.Context) error {
+	return nil
+}
+
+func (*localProvider) Health(_ context.Context) error {
 	return nil // Local FS is always healthy
 }
 
@@ -113,7 +115,7 @@ func (*localProvider) CopyObject(_ context.Context, src, dst string) error {
 		return err
 	}
 
-	defer srcFile.Close()
+	defer func() { _ = srcFile.Close() }()
 
 	if mkdirErr := os.MkdirAll(filepath.Dir(dst), DefaultDirMode); mkdirErr != nil {
 		return mkdirErr
@@ -123,7 +125,8 @@ func (*localProvider) CopyObject(_ context.Context, src, dst string) error {
 	if err != nil {
 		return err
 	}
-	defer dstFile.Close()
+
+	defer func() { _ = dstFile.Close() }()
 
 	_, err = io.Copy(dstFile, srcFile)
 
@@ -179,24 +182,10 @@ func (*localProvider) ListDir(_ context.Context, prefix string) ([]ObjectInfo, [
 	return objects, dirs, nil
 }
 
-type fileSystem struct {
-	*localFileSystem
-}
-
-// New initializes local filesystem with logger (backward compatible wrapper).
+// Deprecated: New is a backward-compatible wrapper for NewLocalFileSystem and will be
+// removed in a future major version. Use NewLocalFileSystem instead.
 func New(logger datasource.Logger) FileSystem {
-	provider := &localProvider{}
-
-	cfs := &CommonFileSystem{
-		Provider: provider,
-		Location: "local",
-		Logger:   logger,
-		Metrics:  nil,
-	}
-
-	lfs := &localFileSystem{CommonFileSystem: cfs}
-
-	return &fileSystem{localFileSystem: lfs}
+	return NewLocalFileSystem(logger)
 }
 
 // ============= Helper Types =============
