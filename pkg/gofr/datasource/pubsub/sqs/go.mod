@@ -11,7 +11,7 @@ require (
 	go.opentelemetry.io/otel v1.42.0
 	go.opentelemetry.io/otel/sdk v1.42.0
 	go.opentelemetry.io/otel/trace v1.42.0
-	gofr.dev v1.54.4
+	gofr.dev v1.55.0
 )
 
 require (
