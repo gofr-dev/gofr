@@ -59,6 +59,7 @@ func (cmd *cmd) Run(c *container.Container) {
 
 	func() {
 		defer NewRecoveryHandler(c.Logger, "cmd:"+r.pattern).Recover()
+
 		ctx.responder.Respond(r.handler(ctx))
 	}()
 }

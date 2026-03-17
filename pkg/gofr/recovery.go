@@ -36,14 +36,14 @@ func NewRecoveryHandler(logger logging.Logger, component string) *RecoveryHandle
 // Recover handles panic recovery and logs the error with stack trace.
 // It should be called with defer at the beginning of any function that needs panic recovery.
 func (r *RecoveryHandler) Recover() {
-	if rec := recover(); rec != nil { //nolint:revive
+	if rec := recover(); rec != nil { //nolint:revive // recover() must be called in deferred function
 		_ = r.handlePanic(rec)
 	}
 }
 
 // RecoverWithCallback handles panic recovery and executes a callback function if a panic occurs.
 func (r *RecoveryHandler) RecoverWithCallback(callback func(error)) {
-	if rec := recover(); rec != nil { //nolint:revive
+	if rec := recover(); rec != nil { //nolint:revive // recover() must be called in deferred function
 		err := r.handlePanic(rec)
 		if callback != nil {
 			callback(err)
@@ -53,8 +53,9 @@ func (r *RecoveryHandler) RecoverWithCallback(callback func(error)) {
 
 // RecoverWithChannel handles panic recovery and sends a signal to a channel if a panic occurs.
 func (r *RecoveryHandler) RecoverWithChannel(panicChan chan<- struct{}) {
-	if rec := recover(); rec != nil { //nolint:revive
+	if rec := recover(); rec != nil { //nolint:revive // recover() must be called in deferred function
 		_ = r.handlePanic(rec)
+
 		if panicChan != nil {
 			close(panicChan)
 		}
@@ -89,6 +90,7 @@ func (r *RecoveryHandler) handlePanic(rec any) error {
 func SafeGo(logger logging.Logger, component string, fn func()) {
 	go func() {
 		defer NewRecoveryHandler(logger, component).Recover()
+
 		fn()
 	}()
 }
@@ -97,6 +99,7 @@ func SafeGo(logger logging.Logger, component string, fn func()) {
 func SafeGoWithCallback(logger logging.Logger, component string, fn func(), callback func(error)) {
 	go func() {
 		defer NewRecoveryHandler(logger, component).RecoverWithCallback(callback)
+
 		fn()
 	}()
 }
