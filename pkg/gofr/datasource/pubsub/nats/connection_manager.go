@@ -5,6 +5,7 @@ import (
 
 	"github.com/nats-io/nats.go"
 	"github.com/nats-io/nats.go/jetstream"
+	"go.opentelemetry.io/otel"
 	"gofr.dev/pkg/gofr/datasource"
 	"gofr.dev/pkg/gofr/datasource/pubsub"
 )
@@ -122,7 +123,16 @@ func (cm *ConnectionManager) Publish(ctx context.Context, subject string, messag
 		return err
 	}
 
-	_, err := cm.jStream.Publish(ctx, subject, message)
+	ctx, span, headers := startPublishSpan(ctx, otel.GetTracerProvider().Tracer(tracerName), subject)
+	defer span.End()
+
+	msg := &nats.Msg{
+		Subject: subject,
+		Data:    message,
+		Header:  headers,
+	}
+
+	_, err := cm.jStream.PublishMsg(ctx, msg)
 	if err != nil {
 		cm.logger.Errorf("failed to publish message to NATS jStream: %v", err)
 		return err

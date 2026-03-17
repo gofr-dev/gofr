@@ -222,6 +222,114 @@ func streamAuthInterceptor(srv any, ss grpc.ServerStream, info *grpc.StreamServe
 
 For more details on adding additional interceptors and server options, refer to the [official gRPC Go package](https://pkg.go.dev/google.golang.org/grpc#ServerOption).
 
+## Rate Limiter Interceptor for gRPC
+
+GoFr provides built-in rate limiter interceptors for gRPC to protect your services from abuse and ensure fair resource distribution.
+It uses the same token bucket algorithm and configuration as the HTTP rate limiter, applied to both unary and streaming RPCs.
+
+### Features
+
+- **Token Bucket Algorithm**: Allows smooth rate limiting with configurable burst capacity
+- **Per-IP Rate Limiting**: Each client IP gets its own rate limit bucket (configurable)
+- **Unary and Stream Support**: Separate interceptors for unary RPCs and streaming RPCs
+- **Prometheus Metrics**: Track rate limit violations via `app_grpc_rate_limit_exceeded_total` counter
+- **gRPC Status Code**: Returns `RESOURCE_EXHAUSTED` (gRPC code 8) with a `retry-after` metadata header when the limit is exceeded
+
+### Configuration
+
+```go
+import (
+	"context"
+
+	"gofr.dev/pkg/gofr"
+	gofrGrpc "gofr.dev/pkg/gofr/grpc"
+	"gofr.dev/pkg/gofr/http/middleware"
+)
+
+func main() {
+	app := gofr.New()
+
+	// ctx controls the lifetime of the rate limiter's background cleanup goroutine.
+	// Cancelling this context stops cleanup gracefully, preventing goroutine leaks
+	// during rolling restarts. In production, tie this to your server's shutdown signal.
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	// Configure rate limiter (shared config for both unary and stream)
+	cfg := middleware.RateLimiterConfig{
+		RequestsPerSecond: 5,    // Average requests per second
+		Burst:             10,   // Maximum burst size
+		PerIP:             true, // Enable per-IP limiting
+	}
+
+	// IMPORTANT: create ONE shared store if you want a single budget
+	// for both unary and stream RPCs. If Store is left nil, each
+	// interceptor will create its own in-memory store and limits
+	// will be enforced independently.
+	store := middleware.NewMemoryRateLimiterStore(cfg)
+	cfg.Store = store
+
+	// Add rate limiter interceptors for gRPC
+	app.AddGRPCUnaryInterceptors(gofrGrpc.UnaryRateLimitInterceptor(ctx, cfg, app.Logger(), app.Metrics()))
+	app.AddGRPCServerStreamInterceptors(gofrGrpc.StreamRateLimitInterceptor(ctx, cfg, app.Logger(), app.Metrics()))
+
+	// Register your gRPC service
+	packageName.Register<SERVICE_NAME>ServerWithGofr(app, &packageName.New<SERVICE_NAME>GoFrServer())
+
+	app.Run()
+}
+```
+
+> **Note**: The example above creates a single shared store so unary and stream RPCs draw from the **same** token bucket.
+> If you want **independent limits** for each call type (e.g., high throughput for unary, tight limits for streams),
+> omit the shared store and pass separate configs — see [Separate Limits for Unary and Stream RPCs](#separate-limits-for-unary-and-stream-rpcs) below.
+
+> **Graceful Shutdown**: The `ctx` parameter controls the lifetime of the background cleanup goroutine that evicts expired token buckets.
+> Cancel this context when the server shuts down to prevent goroutine leaks during rolling restarts.
+
+### Parameters
+
+The gRPC rate limiter uses the same `middleware.RateLimiterConfig` as the HTTP rate limiter:
+
+- `RequestsPerSecond`: Average number of requests allowed per second
+- `Burst`: Maximum number of requests that can be made in a burst (allows temporary spikes)
+- `PerIP`: Set to `true` for per-IP limiting (recommended) or `false` for a global rate limit across all clients
+- `TrustedProxies`: *(Optional)* Set to `true` to trust `X-Forwarded-For` and `X-Real-IP` gRPC metadata headers for IP extraction. Only enable when behind a trusted reverse proxy.
+
+> **Security Warning**: Only set `TrustedProxies: true` if your application is behind a trusted reverse proxy (nginx, ALB, etc.).
+> Without a trusted proxy, clients can spoof metadata headers to bypass rate limits.
+
+### Behavior on Rate Limit Exceeded
+
+When a client exceeds the rate limit:
+
+1. The interceptor returns a gRPC error with status code `RESOURCE_EXHAUSTED`
+2. A `retry-after` response metadata header is set, indicating how many seconds the client should wait before retrying
+3. The `app_grpc_rate_limit_exceeded_total` Prometheus counter is incremented with `method` and `type` (`unary` or `stream`) labels
+
+### Separate Limits for Unary and Stream RPCs
+
+Unary calls and stream connections often have very different resource costs. You can pass independent configurations to each interceptor to enforce separate budgets — for example, allowing a high rate for lightweight unary calls while tightly limiting new stream connections:
+
+```go
+unaryCfg := middleware.RateLimiterConfig{
+	RequestsPerSecond: 100, // High throughput for lightweight unary calls
+	Burst:             50,
+	PerIP:             true,
+}
+
+streamCfg := middleware.RateLimiterConfig{
+	RequestsPerSecond: 5, // Streams are long-lived and expensive
+	Burst:             3,
+	PerIP:             true,
+}
+
+app.AddGRPCUnaryInterceptors(gofrGrpc.UnaryRateLimitInterceptor(ctx, unaryCfg, app.Logger(), app.Metrics()))
+app.AddGRPCServerStreamInterceptors(gofrGrpc.StreamRateLimitInterceptor(ctx, streamCfg, app.Logger(), app.Metrics()))
+```
+
+Each config creates its own store (when `Store` is nil), so the limits are completely independent. If you instead want a **single shared budget** across both call types, create one store and assign it to both configs as shown in the [Configuration](#configuration) example above.
+
 ## Generating gRPC Client using `gofr wrap grpc client`
 
 **1. Use the `gofr wrap grpc client` Command:**
