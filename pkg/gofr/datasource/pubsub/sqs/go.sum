@@ -67,8 +67,8 @@ go.opentelemetry.io/otel/trace v1.42.0 h1:OUCgIPt+mzOnaUTpOQcBiM/PLQ/Op7oq6g4Len
 go.opentelemetry.io/otel/trace v1.42.0/go.mod h1:f3K9S+IFqnumBkKhRJMeaZeNk9epyhnCmQh/EysQCdc=
 go.uber.org/goleak v1.3.0 h1:2K3zAYmnTNqV73imy9J1T3WC+gmCePx2hEGkimedGto=
 go.uber.org/goleak v1.3.0/go.mod h1:CoHD4mav9JJNrW/WLlf7HGZPjdw8EucARQHekz1X6bE=
-gofr.dev v1.54.4 h1:DLaekdp3H6Fa9CkAbJxtxwyC7ie1NamoX2wQQDmFe7o=
-gofr.dev v1.54.4/go.mod h1:j2wN9Ri3eQOZ49EjkOwQgZeZLFM70tAgoxpyUPOSqs8=
+gofr.dev v1.55.0 h1:Ipvk4eBgIv3iuYCCANj8iNKo2sxWelv880A43nLxshQ=
+gofr.dev v1.55.0/go.mod h1:W7AHXoLehhOTWqTtMk4oLpkEjSKpHV85D8dpEEuZHjw=
 golang.org/x/sys v0.41.0 h1:Ivj+2Cp/ylzLiEU89QhWblYnOE9zerudt9Ftecq2C6k=
 golang.org/x/sys v0.41.0/go.mod h1:OgkHotnGiDImocRcuBABYBEXf8A9a87e/uXjp9XT3ks=
 golang.org/x/term v0.40.0 h1:36e4zGLqU4yhjlmxEaagx2KuYbJq3EwY8K943ZsHcvg=
