@@ -781,7 +781,8 @@
         "yAxis": {
           "axisPlacement": "left",
           "reverse": false,
-          "unit": "s"
+          "unit": "s",
+          "max": 0.1
         }
       },
       "pluginVersion": "10.3.3",
@@ -794,7 +795,7 @@
           },
           "editorMode": "code",
           "exemplar": true,
-          "expr": "sum(increase(app_http_response_bucket{}[$__rate_interval])) by (le)",
+          "expr": "sum(increase(app_http_response_bucket{le!~\"10|30|\\\\+Inf\"}[$__rate_interval])) by (le)",
           "format": "heatmap",
           "instant": false,
           "legendFormat": "{{le}}",
@@ -1740,7 +1741,8 @@
         "yAxis": {
           "axisPlacement": "left",
           "reverse": false,
-          "unit": "s"
+          "unit": "s",
+          "max": 0.1
         }
       },
       "pluginVersion": "10.3.3",
@@ -1752,7 +1754,7 @@
             "uid": "${DataSource}"
           },
           "editorMode": "code",
-          "expr": "sum(increase(app_http_service_response_bucket{}[$__rate_interval])) by (le)",
+          "expr": "sum(increase(app_http_service_response_bucket{le!~\"10|30|\\\\+Inf\"}[$__rate_interval])) by (le)",
           "format": "heatmap",
           "legendFormat": "__auto",
           "range": true,
