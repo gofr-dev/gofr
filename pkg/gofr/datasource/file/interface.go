@@ -50,7 +50,7 @@ type StorageProvider interface {
 
 	NewReader(ctx context.Context, name string) (io.ReadCloser, error)
 	NewRangeReader(ctx context.Context, name string, offset, length int64) (io.ReadCloser, error)
-	NewWriter(ctx context.Context, name string) io.WriteCloser
+	NewWriter(ctx context.Context, name string) (io.WriteCloser, error)
 
 	DeleteObject(ctx context.Context, name string) error
 	CopyObject(ctx context.Context, src, dst string) error
@@ -62,7 +62,7 @@ type StorageProvider interface {
 
 // MetadataWriter is an optional extension for StorageProvider.
 type MetadataWriter interface {
-	NewWriterWithOptions(ctx context.Context, name string, opts *FileOptions) io.WriteCloser
+	NewWriterWithOptions(ctx context.Context, name string, opts *FileOptions) (io.WriteCloser, error)
 }
 
 // SignedURLProvider is an optional extension for StorageProvider.

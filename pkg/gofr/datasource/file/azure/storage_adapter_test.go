@@ -3,7 +3,6 @@ package azure
 import (
 	"context"
 	"crypto/tls"
-	"errors"
 	"io"
 	"mime"
 	"net/http"
@@ -18,8 +17,6 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
-
-var errTest = errors.New("test error")
 
 // TestStorageAdapter_Connect tests the Connect method with table-driven tests.
 func TestStorageAdapter_Connect(t *testing.T) {
@@ -225,22 +222,20 @@ func TestStorageAdapter_NewRangeReader(t *testing.T) {
 func TestStorageAdapter_NewWriter_EmptyName(t *testing.T) {
 	adapter := &storageAdapter{}
 
-	writer := adapter.NewWriter(context.Background(), "")
+	writer, err := adapter.NewWriter(context.Background(), "")
 
-	require.NotNil(t, writer)
-	n, err := writer.Write([]byte("test"))
-	assert.Equal(t, 0, n)
-	require.Error(t, err)
+	require.Nil(t, writer)
 	require.ErrorIs(t, err, errEmptyObjectName)
 }
 
-// TestStorageAdapter_NewWriter_ValidName tests NewWriter with valid name.
-func TestStorageAdapter_NewWriter_ValidName(t *testing.T) {
+// TestStorageAdapter_NewWriter_NoClient tests NewWriter returns error when share client is not initialized.
+func TestStorageAdapter_NewWriter_NoClient(t *testing.T) {
 	adapter := &storageAdapter{cfg: &Config{ShareName: "test"}}
 
-	writer := adapter.NewWriter(context.Background(), "file.txt")
+	writer, err := adapter.NewWriter(context.Background(), "file.txt")
 
-	require.NotNil(t, writer)
+	require.Nil(t, writer)
+	require.ErrorIs(t, err, errAzureClientNotInitialized)
 }
 
 // TestAzureWriter_Write_Success tests successful write operation.
@@ -508,50 +503,6 @@ func TestStorageAdapter_ListDir(t *testing.T) {
 	}
 }
 
-// TestFailWriter tests the failWriter implementation with table-driven tests.
-func TestFailWriter(t *testing.T) {
-	tests := []struct {
-		name        string
-		writer      *failWriter
-		data        []byte
-		writeN      int
-		writeErr    error
-		closeErr    error
-		description string
-	}{
-		{
-			name:        "write_error",
-			writer:      &failWriter{err: errTest},
-			data:        []byte("test"),
-			writeN:      0,
-			writeErr:    errTest,
-			closeErr:    errTest,
-			description: "Should return error on write and close",
-		},
-		{
-			name:        "empty_object_name_error",
-			writer:      &failWriter{err: errEmptyObjectName},
-			data:        []byte("data"),
-			writeN:      0,
-			writeErr:    errEmptyObjectName,
-			closeErr:    errEmptyObjectName,
-			description: "Should return empty object name error",
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			n, err := tt.writer.Write(tt.data)
-			assert.Equal(t, tt.writeN, n)
-
-			require.ErrorIs(t, err, tt.writeErr)
-
-			err = tt.writer.Close()
-			assert.ErrorIs(t, err, tt.closeErr)
-		})
-	}
-}
-
 // TestBytesReadSeekCloser_Read_Success tests successful read operation.
 func TestBytesReadSeekCloser_Read_Success(t *testing.T) {
 	brsc := &bytesReadSeekCloser{data: []byte("hello world")}
@@ -757,7 +708,25 @@ func TestGetParentDir(t *testing.T) {
 
 // TestNewWriter_SetsContentType tests that NewWriter sets content type based on file extension.
 func TestNewWriter_SetsContentType(t *testing.T) {
-	adapter := &storageAdapter{cfg: &Config{ShareName: "test"}}
+	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodPut {
+			w.WriteHeader(http.StatusCreated)
+			return
+		}
+
+		http.NotFound(w, r)
+	})
+
+	srv := setupAzureTestServer(t, handler)
+	defer srv.Close()
+
+	shareClient, err := createTestShareClient(t, srv.URL)
+	require.NoError(t, err)
+
+	adapter := &storageAdapter{
+		cfg:         &Config{ShareName: "test"},
+		shareClient: shareClient,
+	}
 
 	testCases := []struct {
 		name        string
@@ -782,7 +751,8 @@ func TestNewWriter_SetsContentType(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			writer := adapter.NewWriter(context.Background(), tc.name)
+			writer, err := adapter.NewWriter(context.Background(), tc.name)
+			require.NoError(t, err)
 			require.NotNil(t, writer)
 		})
 	}
@@ -831,7 +801,26 @@ func TestContentTypeDetection_Logic(t *testing.T) {
 
 // TestCreateNewFile_SetsContentType tests that createNewFile sets content type based on file extension.
 func TestCreateNewFile_SetsContentType(t *testing.T) {
-	adapter := &storageAdapter{cfg: &Config{ShareName: "test"}}
+	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// Accept all file creation requests
+		if r.Method == http.MethodPut {
+			w.WriteHeader(http.StatusCreated)
+			return
+		}
+
+		http.NotFound(w, r)
+	})
+
+	srv := setupAzureTestServer(t, handler)
+	defer srv.Close()
+
+	shareClient, err := createTestShareClient(t, srv.URL)
+	require.NoError(t, err)
+
+	adapter := &storageAdapter{
+		cfg:         &Config{ShareName: "test"},
+		shareClient: shareClient,
+	}
 
 	testCases := []struct {
 		filename   string
@@ -845,7 +834,8 @@ func TestCreateNewFile_SetsContentType(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.filename, func(t *testing.T) {
-			writer := adapter.NewWriter(context.Background(), tc.filename)
+			writer, err := adapter.NewWriter(context.Background(), tc.filename)
+			require.NoError(t, err)
 			require.NotNil(t, writer)
 		})
 	}
@@ -1415,7 +1405,8 @@ func TestStorageAdapter_NewWriter_Success(t *testing.T) {
 		shareClient: shareClient,
 	}
 
-	writer := adapter.NewWriter(context.Background(), "test.txt")
+	writer, err := adapter.NewWriter(context.Background(), "test.txt")
+	require.NoError(t, err)
 	require.NotNil(t, writer)
 
 	// Write some data
@@ -1492,7 +1483,8 @@ func TestStorageAdapter_NewWriter_ExistingFile(t *testing.T) {
 				shareClient: shareClient,
 			}
 
-			writer := adapter.NewWriter(context.Background(), "existing.txt")
+			writer, err := adapter.NewWriter(context.Background(), "existing.txt")
+			require.NoError(t, err)
 			require.NotNil(t, writer)
 
 			// Write data
@@ -1543,7 +1535,8 @@ func TestStorageAdapter_NewWriter_NewFile(t *testing.T) {
 		shareClient: shareClient,
 	}
 
-	writer := adapter.NewWriter(context.Background(), "newfile.txt")
+	writer, err := adapter.NewWriter(context.Background(), "newfile.txt")
+	require.NoError(t, err)
 	require.NotNil(t, writer)
 
 	// Write data
@@ -1590,7 +1583,8 @@ func TestStorageAdapter_ResizeAndUpload_NoResize(t *testing.T) {
 		shareClient: shareClient,
 	}
 
-	writer := adapter.NewWriter(context.Background(), "file.txt")
+	writer, err := adapter.NewWriter(context.Background(), "file.txt")
+	require.NoError(t, err)
 	require.NotNil(t, writer)
 
 	// Write data smaller than existing file
@@ -1632,7 +1626,8 @@ func TestStorageAdapter_ResizeAndUpload_NilProps(t *testing.T) {
 		shareClient: shareClient,
 	}
 
-	writer := adapter.NewWriter(context.Background(), "file.txt")
+	writer, err := adapter.NewWriter(context.Background(), "file.txt")
+	require.NoError(t, err)
 	require.NotNil(t, writer)
 
 	// Write data
@@ -1678,7 +1673,8 @@ func TestStorageAdapter_ResizeAndUpload_ResizeError(t *testing.T) {
 		shareClient: shareClient,
 	}
 
-	writer := adapter.NewWriter(context.Background(), "file.txt")
+	writer, err := adapter.NewWriter(context.Background(), "file.txt")
+	require.NoError(t, err)
 	require.NotNil(t, writer)
 
 	// Write data larger than existing file (triggers resize)

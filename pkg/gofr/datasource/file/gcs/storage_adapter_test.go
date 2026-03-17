@@ -88,24 +88,18 @@ func TestStorageAdapter_NewRangeReader_InvalidOffset(t *testing.T) {
 func TestStorageAdapter_NewWriter_EmptyName(t *testing.T) {
 	adapter := &storageAdapter{}
 
-	writer := adapter.NewWriter(context.Background(), "")
+	writer, err := adapter.NewWriter(context.Background(), "")
 
-	require.NotNil(t, writer)
-
-	// Verify it's a fail writer
-	n, err := writer.Write([]byte("test"))
-	assert.Equal(t, 0, n)
+	assert.Nil(t, writer)
 	assert.ErrorIs(t, err, errEmptyObjectName)
 }
 
 func TestStorageAdapter_NewWriter_NilBucket(t *testing.T) {
 	adapter := &storageAdapter{cfg: &Config{BucketName: "bucket"}}
 
-	writer := adapter.NewWriter(context.Background(), "obj.csv")
+	writer, err := adapter.NewWriter(context.Background(), "obj.csv")
 
-	require.NotNil(t, writer)
-
-	_, err := writer.Write([]byte("data"))
+	assert.Nil(t, writer)
 	assert.ErrorIs(t, err, errGCSClientNotInitialized)
 }
 
@@ -162,42 +156,6 @@ func TestStorageAdapter_CopyObject_SameSourceAndDest(t *testing.T) {
 
 	require.Error(t, err)
 	assert.ErrorIs(t, err, errSameSourceAndDest)
-}
-
-func TestFailWriter_Write(t *testing.T) {
-	testErr := errTest
-	fw := &failWriter{err: testErr}
-
-	n, err := fw.Write([]byte("test"))
-
-	assert.Equal(t, 0, n)
-	assert.Equal(t, testErr, err)
-}
-
-func TestFailWriter_Close(t *testing.T) {
-	testErr := errTest
-	fw := &failWriter{err: testErr}
-
-	err := fw.Close()
-
-	assert.Equal(t, testErr, err)
-}
-
-func TestFailWriter_WriteEmptyObjectNameError(t *testing.T) {
-	fw := &failWriter{err: errEmptyObjectName}
-
-	n, err := fw.Write([]byte("data"))
-
-	assert.Equal(t, 0, n)
-	assert.ErrorIs(t, err, errEmptyObjectName)
-}
-
-func TestFailWriter_CloseEmptyObjectNameError(t *testing.T) {
-	fw := &failWriter{err: errEmptyObjectName}
-
-	err := fw.Close()
-
-	assert.ErrorIs(t, err, errEmptyObjectName)
 }
 
 func TestMockStorageProvider_NewReader_Success(t *testing.T) {
@@ -943,22 +901,18 @@ func TestRewriteSignedURLEndpoint_InvalidEndpoint(t *testing.T) {
 func TestStorageAdapter_NewWriterWithOptions_EmptyName(t *testing.T) {
 	adapter := &storageAdapter{}
 
-	w := adapter.NewWriterWithOptions(context.Background(), "", nil)
+	w, err := adapter.NewWriterWithOptions(context.Background(), "", nil)
 
-	require.NotNil(t, w)
-
-	_, err := w.Write([]byte("data"))
+	assert.Nil(t, w)
 	assert.ErrorIs(t, err, errEmptyObjectName)
 }
 
 func TestStorageAdapter_NewWriterWithOptions_NilBucket(t *testing.T) {
 	adapter := &storageAdapter{cfg: &Config{BucketName: "bucket"}}
 
-	w := adapter.NewWriterWithOptions(context.Background(), "obj.csv", nil)
+	w, err := adapter.NewWriterWithOptions(context.Background(), "obj.csv", nil)
 
-	require.NotNil(t, w)
-
-	_, err := w.Write([]byte("data"))
+	assert.Nil(t, w)
 	assert.ErrorIs(t, err, errGCSClientNotInitialized)
 }
 
@@ -991,7 +945,8 @@ func TestStorageAdapter_NewWriterWithOptions_PropagatesOptions(t *testing.T) {
 
 	// NewWriterWithOptions must return a non-nil writer without panicking.
 	// (Internal field propagation is verified by reading the *storage.Writer fields.)
-	w := adapter.NewWriterWithOptions(t.Context(), "report.csv", opts)
+	w, err := adapter.NewWriterWithOptions(t.Context(), "report.csv", opts)
+	require.NoError(t, err)
 	require.NotNil(t, w)
 
 	// The GCS writer buffers writes locally; Write() should not return an error

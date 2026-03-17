@@ -22,9 +22,6 @@ var (
 
 	// errWriteAtNotSupported is returned when WriteAt is called on cloud storage.
 	errWriteAtNotSupported = errors.New("WriteAt not supported for cloud storage")
-
-	// errWriterNil is returned when NewWriter returns nil.
-	errWriterNil = errors.New("NewWriter returned nil")
 )
 
 // File permission constants.

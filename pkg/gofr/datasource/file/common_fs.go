@@ -139,14 +139,15 @@ func (c *CommonFileSystem) Mkdir(name string, _ os.FileMode) error {
 	}
 
 	// Create empty object to represent directory
-	writer := c.Provider.NewWriter(ctx, objName)
-	if writer == nil {
-		return errWriterNil
+	writer, err := c.Provider.NewWriter(ctx, objName)
+	if err != nil {
+		msg = fmt.Sprintf("failed to create writer: %v", err)
+		return err
 	}
 	defer writer.Close()
 
 	// Write minimal content for directory marker
-	_, err := writer.Write([]byte(""))
+	_, err = writer.Write([]byte(""))
 	if err != nil {
 		if strings.Contains(err.Error(), "is a directory") {
 			st = StatusSuccess
@@ -403,7 +404,11 @@ func (c *CommonFileSystem) Create(name string) (File, error) {
 	ctx := context.Background()
 
 	// Create writer
-	writer := c.Provider.NewWriter(ctx, name)
+	writer, err := c.Provider.NewWriter(ctx, name)
+	if err != nil {
+		msg = fmt.Sprintf("failed to create writer for %q: %v", name, err)
+		return nil, err
+	}
 
 	st = StatusSuccess
 	msg = fmt.Sprintf("Created %q for writing", name)
@@ -533,9 +538,9 @@ func (c *CommonFileSystem) handleWriteFlags(name string, flag int) (File, error)
 	if flag&os.O_APPEND != 0 {
 		ctx := context.Background()
 
-		writer := c.Provider.NewWriter(ctx, name)
-		if writer == nil {
-			return nil, errWriterNil
+		writer, err := c.Provider.NewWriter(ctx, name)
+		if err != nil {
+			return nil, err
 		}
 
 		return &CommonFile{
@@ -660,10 +665,10 @@ func (c *CommonFileSystem) CreateWithOptions(ctx context.Context, name string, o
 
 	// Try metadata-aware writer
 	if mw, ok := c.Provider.(MetadataWriter); ok {
-		writer := mw.NewWriterWithOptions(ctx, name, opts)
-		if writer == nil {
-			msg = "failed to create writer with options"
-			return nil, errWriterNil
+		writer, err := mw.NewWriterWithOptions(ctx, name, opts)
+		if err != nil {
+			msg = fmt.Sprintf("failed to create writer with options: %v", err)
+			return nil, err
 		}
 
 		st = StatusSuccess
@@ -678,10 +683,10 @@ func (c *CommonFileSystem) CreateWithOptions(ctx context.Context, name string, o
 		c.Logger.Warnf("provider %s does not support metadata; file %q will be created without the requested metadata", c.ProviderName, name)
 	}
 
-	writer := c.Provider.NewWriter(ctx, name)
-	if writer == nil {
-		msg = "failed to create writer"
-		return nil, errWriterNil
+	writer, err := c.Provider.NewWriter(ctx, name)
+	if err != nil {
+		msg = fmt.Sprintf("failed to create writer: %v", err)
+		return nil, err
 	}
 
 	st = StatusSuccess

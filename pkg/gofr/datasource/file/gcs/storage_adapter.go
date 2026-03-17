@@ -188,30 +188,29 @@ func (s *storageAdapter) NewRangeReader(ctx context.Context, name string, offset
 }
 
 // NewWriter creates a writer for the given object.
-// Note: GCS NewWriter never returns an error synchronously; errors are deferred until Write/Close.
-func (s *storageAdapter) NewWriter(ctx context.Context, name string) io.WriteCloser {
+func (s *storageAdapter) NewWriter(ctx context.Context, name string) (io.WriteCloser, error) {
 	if name == "" {
-		return &failWriter{err: errEmptyObjectName}
+		return nil, errEmptyObjectName
 	}
 
 	if s.bucket == nil {
-		return &failWriter{err: errGCSClientNotInitialized}
+		return nil, errGCSClientNotInitialized
 	}
 
-	return s.bucket.Object(name).NewWriter(ctx)
+	return s.bucket.Object(name).NewWriter(ctx), nil
 }
 
 // NewWriterWithOptions implements MetadataWriter.
 // Note: ContentType is passed to GCS as-is without format validation; GCS itself accepts any
 // string as content-type on upload. Strict type/subtype format validation only applies to
 // SignedURL via validateSignedURLInput, where the value is included in the request signature.
-func (s *storageAdapter) NewWriterWithOptions(ctx context.Context, name string, opts *file.FileOptions) io.WriteCloser {
+func (s *storageAdapter) NewWriterWithOptions(ctx context.Context, name string, opts *file.FileOptions) (io.WriteCloser, error) {
 	if name == "" {
-		return &failWriter{err: errEmptyObjectName}
+		return nil, errEmptyObjectName
 	}
 
 	if s.bucket == nil {
-		return &failWriter{err: errGCSClientNotInitialized}
+		return nil, errGCSClientNotInitialized
 	}
 
 	w := s.bucket.Object(name).NewWriter(ctx)
@@ -230,20 +229,7 @@ func (s *storageAdapter) NewWriterWithOptions(ctx context.Context, name string, 
 		}
 	}
 
-	return w
-}
-
-// failWriter is a helper for NewWriter validation errors.
-type failWriter struct {
-	err error
-}
-
-func (fw *failWriter) Write([]byte) (int, error) {
-	return 0, fw.err
-}
-
-func (fw *failWriter) Close() error {
-	return fw.err
+	return w, nil
 }
 
 // StatObject returns metadata for the given object.

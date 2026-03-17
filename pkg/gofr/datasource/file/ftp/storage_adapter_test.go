@@ -23,7 +23,6 @@ var (
 	errTest551      = errors.New("551 File not available")
 	errTestNotFound = errors.New("requested file not found")
 	errTestTimeout  = errors.New("connection timeout")
-	errTestGeneric  = errors.New("test error")
 )
 
 // Test helpers
@@ -245,22 +244,18 @@ func TestStorageAdapter_NewRangeReader_NotFound(t *testing.T) {
 func TestStorageAdapter_NewWriter_EmptyName(t *testing.T) {
 	adapter := &storageAdapter{}
 
-	writer := adapter.NewWriter(context.Background(), "")
+	writer, err := adapter.NewWriter(context.Background(), "")
 
-	n, err := writer.Write([]byte("test"))
-
-	assert.Equal(t, 0, n)
+	assert.Nil(t, writer)
 	require.ErrorIs(t, err, errEmptyObjectName)
 }
 
 func TestStorageAdapter_NewWriter_NilClient(t *testing.T) {
 	adapter := &storageAdapter{cfg: &Config{}}
 
-	writer := adapter.NewWriter(context.Background(), "test.txt")
+	writer, err := adapter.NewWriter(context.Background(), "test.txt")
 
-	n, err := writer.Write([]byte("test"))
-
-	assert.Equal(t, 0, n)
+	assert.Nil(t, writer)
 	require.ErrorIs(t, err, errFTPClientNotInitialized)
 }
 
@@ -272,10 +267,11 @@ func TestStorageAdapter_NewWriter_Success(t *testing.T) {
 	require.NoError(t, adapter.Connect(context.Background()))
 
 	testData := []byte("hello world")
-	writer := adapter.NewWriter(context.Background(), "test.txt")
-
-	n, err := writer.Write(testData)
+	writer, err := adapter.NewWriter(context.Background(), "test.txt")
 	require.NoError(t, err)
+
+	n, writeErr := writer.Write(testData)
+	require.NoError(t, writeErr)
 	assert.Equal(t, len(testData), n)
 	require.NoError(t, writer.Close())
 
@@ -315,25 +311,6 @@ func TestFTPWriter_Close_AlreadyClosed(t *testing.T) {
 	err := writer.Close()
 
 	require.NoError(t, err)
-}
-
-// FailWriter Tests
-
-func TestFailWriter_Write(t *testing.T) {
-	fw := &failWriter{err: errTestGeneric}
-
-	n, err := fw.Write([]byte("test"))
-
-	assert.Equal(t, 0, n)
-	require.ErrorIs(t, err, errTestGeneric)
-}
-
-func TestFailWriter_Close(t *testing.T) {
-	fw := &failWriter{err: errTestGeneric}
-
-	err := fw.Close()
-
-	require.ErrorIs(t, err, errTestGeneric)
 }
 
 // DeleteObject Tests
