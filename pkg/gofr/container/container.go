@@ -77,6 +77,13 @@ type Container struct {
 	KVStore KVStore
 
 	File file.FileSystem
+
+	meterProvider meterProviderShutdowner
+	pushGateway   *exporters.PushGateway
+}
+
+type meterProviderShutdowner interface {
+	Shutdown(ctx context.Context) error
 }
 
 func NewContainer(conf config.Config) *Container {
@@ -119,7 +126,9 @@ func (c *Container) Create(conf config.Config) {
 
 	c.Logger.Debug("Container is being created")
 
-	c.metricsManager = metrics.NewMetricsManager(exporters.Prometheus(c.GetAppName(), c.GetAppVersion()), c.Logger)
+	meter, provider := exporters.Prometheus(c.GetAppName(), c.GetAppVersion())
+	c.meterProvider = provider
+	c.metricsManager = metrics.NewMetricsManager(meter, c.Logger)
 
 	exporters.SendFrameworkStartupTelemetry(c.GetAppName(), c.GetAppVersion())
 
@@ -173,7 +182,20 @@ func (c *Container) Close() error {
 		c.WSManager.CloseConnection(conn)
 	}
 
+	if c.pushGateway != nil {
+		err = errors.Join(err, c.pushGateway.Push(context.Background()))
+	}
+
+	if c.meterProvider != nil {
+		err = errors.Join(err, c.meterProvider.Shutdown(context.Background()))
+	}
+
 	return err
+}
+
+// SetPushGateway configures a Prometheus Pushgateway for pushing metrics on close.
+func (c *Container) SetPushGateway(pg *exporters.PushGateway) {
+	c.pushGateway = pg
 }
 
 func (c *Container) createMqttPubSub(conf config.Config) pubsub.Client {

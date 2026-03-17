@@ -11,7 +11,6 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"gofr.dev/pkg/gofr/logging"
-	"gofr.dev/pkg/gofr/metrics/exporters"
 	"gofr.dev/pkg/gofr/testutil"
 )
 
@@ -24,7 +23,7 @@ func Test_MetricsGetHandler_MetricsNotRegistered(t *testing.T) {
 	var server *httptest.Server
 
 	logs := func() {
-		manager := NewMetricsManager(exporters.Prometheus("test-app", "v1.0.0"),
+		manager := newTestMetricsManager("test-app",
 			logging.NewMockLogger(logging.INFO))
 
 		handler := GetHandler(manager)
@@ -45,7 +44,7 @@ func Test_MetricsGetHandler_MetricsNotRegistered(t *testing.T) {
 }
 
 func Test_MetricsGetHandler_SystemMetricsRegistered(t *testing.T) {
-	manager := NewMetricsManager(exporters.Prometheus("test-app", "v1.0.0"),
+	manager := newTestMetricsManager("test-app",
 		logging.NewMockLogger(logging.INFO))
 
 	// Registering the metrics because the values are being set in the GetHandler function.
@@ -77,7 +76,7 @@ func Test_MetricsGetHandler_SystemMetricsRegistered(t *testing.T) {
 }
 
 func Test_MetricsGetHandler_RegisteredProfilingRoutes(t *testing.T) {
-	manager := NewMetricsManager(exporters.Prometheus("test-app", "v1.0.0"),
+	manager := newTestMetricsManager("test-app",
 		logging.NewMockLogger(logging.INFO))
 
 	// Registering the metrics because the values are being set in the GetHandler function.

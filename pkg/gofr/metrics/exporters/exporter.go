@@ -12,23 +12,25 @@ import (
 	"gofr.dev/pkg/gofr/version"
 )
 
-func Prometheus(appName, appVersion string) metric.Meter {
+func Prometheus(appName, appVersion string) (metric.Meter, *metricSdk.MeterProvider) {
 	exporter, err := prometheus.New(
 		prometheus.WithoutTargetInfo(),
 		prometheus.WithTranslationStrategy(otlptranslator.NoTranslation))
 	if err != nil {
-		return nil
+		return nil, nil
 	}
 
-	meter := metricSdk.NewMeterProvider(
+	provider := metricSdk.NewMeterProvider(
 		metricSdk.WithReader(exporter),
 		metricSdk.WithResource(resource.NewWithAttributes(
 			semconv.SchemaURL,
 			semconv.ServiceNameKey.String(appName),
 			attribute.String("framework_version", version.Framework),
-		))).Meter(appName, metric.WithInstrumentationVersion(appVersion))
+		)))
 
-	return meter
+	meter := provider.Meter(appName, metric.WithInstrumentationVersion(appVersion))
+
+	return meter, provider
 }
 
 // TODO : OTLPStdOut and OTLPMetricHTTP are not being used but has to be modified such that user can decide the exporter.

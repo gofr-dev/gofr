@@ -1,9 +1,11 @@
 package gofr
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"strings"
+	"time"
 
 	cmd2 "gofr.dev/pkg/gofr/cmd"
 	"gofr.dev/pkg/gofr/cmd/terminal"
@@ -35,6 +37,8 @@ func (e ErrCommandNotFound) Error() string {
 }
 
 func (cmd *cmd) Run(c *container.Container) {
+	registerCMDMetrics(c)
+
 	args := os.Args[1:] // First one is command itself
 	subCommand, showHelp, firstArg := parseArgs(args)
 
@@ -57,7 +61,35 @@ func (cmd *cmd) Run(c *container.Container) {
 		return
 	}
 
-	ctx.responder.Respond(r.handler(ctx))
+	cmdName := strings.TrimSpace(subCommand)
+
+	start := time.Now()
+	data, err := r.handler(ctx)
+	duration := time.Since(start).Seconds()
+
+	if m := c.Metrics(); m != nil {
+		m.RecordHistogram(context.Background(), "app_cmd_duration_seconds", duration, "command", cmdName)
+
+		if err != nil {
+			m.IncrementCounter(context.Background(), "app_cmd_errors_total", "command", cmdName)
+		} else {
+			m.IncrementCounter(context.Background(), "app_cmd_success_total", "command", cmdName)
+		}
+	}
+
+	ctx.responder.Respond(data, err)
+}
+
+func registerCMDMetrics(c *container.Container) {
+	m := c.Metrics()
+	if m == nil {
+		return
+	}
+
+	cmdBuckets := []float64{.001, .005, .01, .05, .1, .5, 1, 2, 5, 10, 30, 60}
+	m.NewHistogram("app_cmd_duration_seconds", "Duration of CLI command execution in seconds", cmdBuckets...)
+	m.NewCounter("app_cmd_success_total", "Total number of successful CLI command executions")
+	m.NewCounter("app_cmd_errors_total", "Total number of failed CLI command executions")
 }
 
 // parseArgs parses command line arguments and returns subCommand, showHelp flag, and firstArg.

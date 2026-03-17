@@ -16,6 +16,7 @@ import (
 	gofrRedis "gofr.dev/pkg/gofr/datasource/redis"
 	gofrSql "gofr.dev/pkg/gofr/datasource/sql"
 	"gofr.dev/pkg/gofr/logging"
+	"gofr.dev/pkg/gofr/metrics/exporters"
 	"gofr.dev/pkg/gofr/service"
 	ws "gofr.dev/pkg/gofr/websocket"
 )
@@ -514,6 +515,42 @@ func TestGetDefaultDatasourceBuckets(t *testing.T) {
 	for i := 1; i < len(buckets); i++ {
 		assert.Greater(t, buckets[i], buckets[i-1])
 	}
+}
+
+func TestContainer_SetPushGateway(t *testing.T) {
+	c := &Container{}
+
+	assert.Nil(t, c.pushGateway)
+
+	pg := &exporters.PushGateway{}
+	c.SetPushGateway(pg)
+
+	assert.Equal(t, pg, c.pushGateway)
+}
+
+func TestContainer_Close_PushesMetricsWhenPushGatewaySet(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	mockRedis := NewMockRedis(ctrl)
+	mockRedis.EXPECT().Close().Return(nil)
+
+	mockDB, sqlMock, _ := gofrSql.NewSQLMocks(t)
+	sqlMock.ExpectClose()
+
+	c := NewContainer(config.NewMockConfig(nil))
+	c.SQL = &sqlMockDB{mockDB, &expectedQuery{}, logging.NewLogger(logging.DEBUG)}
+	c.Redis = mockRedis
+	c.PubSub = &MockPubSub{}
+
+	// Set a pushgateway that will fail to connect — we just verify Close doesn't panic
+	// and returns the push error
+	pg := exporters.NewPushGateway("http://localhost:1", "test-job", c.Logger)
+	c.SetPushGateway(pg)
+
+	err := c.Close()
+	// Push will fail since there's no server at localhost:1, but Close should not panic
+	require.Error(t, err)
 }
 
 func TestContainer_Close_ClosesWebsocketConnections(t *testing.T) {

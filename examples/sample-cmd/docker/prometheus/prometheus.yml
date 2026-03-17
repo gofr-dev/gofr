@@ -1,0 +1,10 @@
+global:
+  scrape_interval:     15s
+  evaluation_interval: 15s
+
+scrape_configs:
+  - job_name: 'pushgateway'
+    honor_labels: true
+    scrape_interval: 5s
+    static_configs:
+      - targets: ['pushgateway:9091']

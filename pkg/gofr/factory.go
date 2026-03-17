@@ -9,6 +9,7 @@ import (
 	"gofr.dev/pkg/gofr/container"
 	"gofr.dev/pkg/gofr/http/middleware"
 	"gofr.dev/pkg/gofr/logging"
+	"gofr.dev/pkg/gofr/metrics/exporters"
 )
 
 // New creates an HTTP Server Application and returns that App.
@@ -74,6 +75,11 @@ func NewCMD() *App {
 
 	app.container.Create(app.Config)
 	app.initTracer()
+
+	if url := app.Config.Get("METRICS_PUSH_GATEWAY_URL"); url != "" {
+		jobName := app.Config.GetOrDefault("APP_NAME", "gofr-app")
+		app.container.SetPushGateway(exporters.NewPushGateway(url, jobName, app.container.Logger))
+	}
 
 	return app
 }
