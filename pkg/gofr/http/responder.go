@@ -19,7 +19,7 @@ type sseLogger interface {
 	Debugf(format string, args ...any)
 }
 
-// ResponderOption configures optional Responder behaviour.
+// ResponderOption configures optional Responder behavior.
 type ResponderOption func(*Responder)
 
 // WithLogger attaches a logger to the Responder for debug-level SSE error logging.
@@ -305,7 +305,7 @@ func isNil(i any) bool {
 // handleSSEResponse handles Server-Sent Events responses.
 //
 // TODO: SSE connections block for the full connection lifetime, causing the logging middleware
-// and response histogram to record the entire duration. Consider labelling SSE in the histogram.
+// and response histogram to record the entire duration. Consider labeling SSE in the histogram.
 func (r Responder) handleSSEResponse(sse resTypes.SSE) {
 	callback, ok := sse.Callback.(func(http.ResponseWriter, *http.ResponseController) error)
 	if !ok || callback == nil {
