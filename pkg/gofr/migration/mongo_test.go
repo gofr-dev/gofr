@@ -1,6 +1,7 @@
 package migration
 
 import (
+	"context"
 	"errors"
 	"testing"
 	"time"
@@ -12,6 +13,7 @@ import (
 )
 
 var errMongoConn = errors.New("error connecting to mongo")
+var errMongoDuplicateKey = errors.New("duplicate key")
 
 func mongoSetup(t *testing.T) (migrator, *container.MockMongo, *container.Container) {
 	t.Helper()
@@ -43,6 +45,11 @@ func Test_MongoCheckAndCreateMigrationTable(t *testing.T) {
 
 	for i, tc := range testCases {
 		mockMongo.EXPECT().CreateCollection(gomock.Any(), mongoMigrationCollection).Return(tc.err)
+
+		if tc.err == nil {
+			mockMongo.EXPECT().CreateCollection(gomock.Any(), mongoLockCollection).Return(nil)
+		}
+
 		err := migratorWithMongo.checkAndCreateMigrationTable(mockContainer)
 
 		assert.Equal(t, tc.err, err, "TEST[%v]\n %v Failed! ", i, tc.desc)
@@ -118,4 +125,72 @@ func Test_MongoCommitMigration(t *testing.T) {
 
 		assert.Equal(t, tc.err, err, "TEST[%v]\n %v Failed! ", i, tc.desc)
 	}
+}
+
+func Test_MongoLock(t *testing.T) {
+	migratorWithMongo, mockMongo, mockContainer := mongoSetup(t)
+	mockResult := struct{}{}
+
+	t.Run("lock acquired", func(t *testing.T) {
+		ctx, cancel := context.WithCancel(t.Context())
+		defer cancel()
+
+		mockMongo.EXPECT().DeleteOne(gomock.Any(), mongoLockCollection, gomock.Any()).Return(int64(0), nil)
+		mockMongo.EXPECT().InsertOne(gomock.Any(), mongoLockCollection, gomock.Any()).Return(mockResult, nil)
+
+		err := migratorWithMongo.lock(ctx, cancel, mockContainer, "owner-1")
+		assert.NoError(t, err)
+	})
+
+	t.Run("insert error returns acquisition failed", func(t *testing.T) {
+		ctx, cancel := context.WithCancel(t.Context())
+		defer cancel()
+
+		mockMongo.EXPECT().DeleteOne(gomock.Any(), mongoLockCollection, gomock.Any()).Return(int64(0), nil)
+		mockMongo.EXPECT().InsertOne(gomock.Any(), mongoLockCollection, gomock.Any()).Return(nil, errMongoConn)
+
+		err := migratorWithMongo.lock(ctx, cancel, mockContainer, "owner-1")
+		assert.ErrorIs(t, err, errLockAcquisitionFailed)
+	})
+
+	t.Run("duplicate key then context canceled", func(t *testing.T) {
+		ctx, cancel := context.WithCancel(t.Context())
+
+		mockMongo.EXPECT().DeleteOne(gomock.Any(), mongoLockCollection, gomock.Any()).AnyTimes()
+		mockMongo.EXPECT().InsertOne(gomock.Any(), mongoLockCollection, gomock.Any()).
+			Return(nil, errMongoDuplicateKey).AnyTimes()
+
+		go func() {
+			time.Sleep(20 * time.Millisecond)
+			cancel()
+		}()
+
+		err := migratorWithMongo.lock(ctx, cancel, mockContainer, "owner-1")
+		assert.ErrorIs(t, err, context.Canceled)
+	})
+}
+
+func Test_MongoUnlock(t *testing.T) {
+	migratorWithMongo, mockMongo, mockContainer := mongoSetup(t)
+
+	t.Run("success", func(t *testing.T) {
+		mockMongo.EXPECT().DeleteOne(gomock.Any(), mongoLockCollection, gomock.Any()).Return(int64(1), nil)
+
+		err := migratorWithMongo.unlock(mockContainer, "owner-1")
+		assert.NoError(t, err)
+	})
+
+	t.Run("delete error", func(t *testing.T) {
+		mockMongo.EXPECT().DeleteOne(gomock.Any(), mongoLockCollection, gomock.Any()).Return(int64(0), errMongoConn)
+
+		err := migratorWithMongo.unlock(mockContainer, "owner-1")
+		assert.ErrorIs(t, err, errLockReleaseFailed)
+	})
+
+	t.Run("deleted count zero", func(t *testing.T) {
+		mockMongo.EXPECT().DeleteOne(gomock.Any(), mongoLockCollection, gomock.Any()).Return(int64(0), nil)
+
+		err := migratorWithMongo.unlock(mockContainer, "owner-1")
+		assert.ErrorIs(t, err, errLockReleaseFailed)
+	})
 }
