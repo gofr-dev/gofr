@@ -11,6 +11,7 @@ func main() {
 	app := gofr.New()
 
 	// Stream the current time every second.
+	// c.Context.Done() fires on both client disconnect and server shutdown.
 	app.GET("/events", func(c *gofr.Context) (any, error) {
 		return gofr.SSEResponse(func(stream *gofr.SSEStream) error {
 			ticker := time.NewTicker(time.Second)
@@ -21,6 +22,7 @@ func main() {
 			for {
 				select {
 				case <-c.Context.Done():
+					// Graceful cleanup: release resources, close DB cursors, etc.
 					return nil
 				case t := <-ticker.C:
 					if err := stream.Send(gofr.SSEEvent{
@@ -40,16 +42,17 @@ func main() {
 	// A countdown that sends 11 events and closes.
 	app.GET("/countdown", func(c *gofr.Context) (any, error) {
 		return gofr.SSEResponse(func(stream *gofr.SSEStream) error {
+			ticker := time.NewTicker(500 * time.Millisecond)
+			defer ticker.Stop()
+
 			for i := 10; i >= 0; i-- {
 				select {
 				case <-c.Context.Done():
 					return nil
-				default:
+				case <-ticker.C:
 					if err := stream.SendEvent("countdown", map[string]int{"remaining": i}); err != nil {
 						return err
 					}
-
-					time.Sleep(500 * time.Millisecond)
 				}
 			}
 

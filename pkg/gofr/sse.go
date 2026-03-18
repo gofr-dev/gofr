@@ -5,9 +5,15 @@ import (
 	"fmt"
 	"net/http"
 	"strings"
+	"sync"
+	"time"
 
 	"gofr.dev/pkg/gofr/http/response"
 )
+
+// defaultHeartbeatInterval is the interval between automatic heartbeat comments.
+// Keeps the connection alive through proxies/load balancers with idle timeouts.
+const defaultHeartbeatInterval = 15 * time.Second
 
 // SSEEvent represents a single Server-Sent Event.
 type SSEEvent struct {
@@ -18,10 +24,11 @@ type SSEEvent struct {
 }
 
 // SSEStream writes Server-Sent Events directly to the HTTP response.
-// It wraps an http.ResponseWriter and flushes after each event.
+// It is safe for concurrent use; a mutex serializes all writes.
 type SSEStream struct {
 	w  http.ResponseWriter
 	rc *http.ResponseController
+	mu sync.Mutex
 }
 
 // SSEFunc is the callback signature for SSE handlers.
@@ -29,7 +36,8 @@ type SSEStream struct {
 type SSEFunc func(stream *SSEStream) error
 
 // SSEResponse creates an SSE response that can be returned from a handler.
-// The callback function is called by the Responder to produce SSE events.
+// A heartbeat comment is automatically sent every 15s to keep the connection
+// alive through proxies with idle timeouts.
 //
 // Example:
 //
@@ -46,44 +54,32 @@ type SSEFunc func(stream *SSEStream) error
 //	})
 func SSEResponse(callback SSEFunc) response.SSE {
 	return response.SSE{
-		Stream: func(w http.ResponseWriter) error {
-			stream := &SSEStream{
-				w:  w,
-				rc: http.NewResponseController(w),
-			}
+		Callback: func(w http.ResponseWriter, rc *http.ResponseController) error {
+			stream := &SSEStream{w: w, rc: rc}
+
+			done := make(chan struct{})
+			go stream.runHeartbeat(done, defaultHeartbeatInterval)
+
+			defer close(done)
+
 			return callback(stream)
 		},
 	}
 }
 
 // Send writes a formatted SSE event to the stream and flushes.
-func (s *SSEStream) Send(event any) error {
-	sseEvent, ok := event.(SSEEvent)
-	if !ok {
-		// If not an SSEEvent, treat as data-only event
-		return s.SendData(event)
-	}
-
-	raw, err := formatEvent(sseEvent)
-	if err != nil {
-		return err
-	}
-
-	if _, err := fmt.Fprint(s.w, raw); err != nil {
-		return err
-	}
-
-	return s.rc.Flush()
+func (s *SSEStream) Send(event SSEEvent) error {
+	return s.writeEvent(event)
 }
 
 // SendData is shorthand for Send(SSEEvent{Data: data}).
 func (s *SSEStream) SendData(data any) error {
-	return s.Send(SSEEvent{Data: data})
+	return s.writeEvent(SSEEvent{Data: data})
 }
 
 // SendEvent is shorthand for Send(SSEEvent{Name: name, Data: data}).
 func (s *SSEStream) SendEvent(name string, data any) error {
-	return s.Send(SSEEvent{Name: name, Data: data})
+	return s.writeEvent(SSEEvent{Name: name, Data: data})
 }
 
 // SendComment writes an SSE comment (: prefix) to the stream.
@@ -97,11 +93,49 @@ func (s *SSEStream) SendComment(text string) error {
 
 	sb.WriteString("\n")
 
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
 	if _, err := fmt.Fprint(s.w, sb.String()); err != nil {
 		return err
 	}
 
 	return s.rc.Flush()
+}
+
+// writeEvent formats, writes, and flushes a single SSE event.
+func (s *SSEStream) writeEvent(event SSEEvent) error {
+	raw, err := formatEvent(event)
+	if err != nil {
+		return err
+	}
+
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	if _, err := fmt.Fprint(s.w, raw); err != nil {
+		return err
+	}
+
+	return s.rc.Flush()
+}
+
+// runHeartbeat sends periodic comment frames to keep the connection alive
+// through proxies that kill idle connections. Stops when done is closed.
+func (s *SSEStream) runHeartbeat(done <-chan struct{}, interval time.Duration) {
+	ticker := time.NewTicker(interval)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-done:
+			return
+		case <-ticker.C:
+			if err := s.SendComment("heartbeat"); err != nil {
+				return
+			}
+		}
+	}
 }
 
 // formatEvent builds the wire-format string for one SSE event.

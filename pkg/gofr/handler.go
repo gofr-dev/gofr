@@ -53,7 +53,7 @@ func (el *ErrorLogEntry) PrettyPrint(writer io.Writer) {
 }
 
 func (h handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	c := newContext(gofrHTTP.NewResponder(w, r.Method), gofrHTTP.NewRequest(r), h.container)
+	c := newContext(gofrHTTP.NewResponder(w, r.Method, gofrHTTP.WithLogger(h.container.Logger)), gofrHTTP.NewRequest(r), h.container)
 
 	traceID := trace.SpanFromContext(r.Context()).SpanContext().TraceID().String()
 
@@ -108,7 +108,11 @@ func (h handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		resp.SetCustomHeaders(w)
 	}
 
-	// Handler function completed
+	// SSE streams are long-lived; bypass request timeout like WebSocket.
+	if _, ok := result.(response.SSE); ok {
+		c.Context = r.Context()
+	}
+
 	c.responder.Respond(result, err)
 }
 

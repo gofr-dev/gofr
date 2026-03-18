@@ -198,8 +198,43 @@ func TestSSEStream_Send_JSONStruct(t *testing.T) {
 	assert.Equal(t, "id: 1\nevent: notification\ndata: {\"title\":\"Hello\",\"message\":\"World\"}\n\n", w.Body.String())
 }
 
+// safeFlushRecorder is a thread-safe ResponseWriter for concurrent tests.
+type safeFlushRecorder struct {
+	mu      sync.Mutex
+	buf     []byte
+	headers http.Header
+}
+
+func newSafeFlushRecorder() *safeFlushRecorder {
+	return &safeFlushRecorder{headers: http.Header{}}
+}
+
+func (s *safeFlushRecorder) Header() http.Header { return s.headers }
+
+func (s *safeFlushRecorder) Write(b []byte) (int, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	s.buf = append(s.buf, b...)
+
+	return len(b), nil
+}
+
+func (*safeFlushRecorder) WriteHeader(int) {}
+
+func (*safeFlushRecorder) Flush() {}
+
+func (s *safeFlushRecorder) Unwrap() http.ResponseWriter { return s }
+
+func (s *safeFlushRecorder) String() string {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	return string(s.buf)
+}
+
 func TestSSEStream_ConcurrentSend(t *testing.T) {
-	w := newFlushRecorder()
+	w := newSafeFlushRecorder()
 	stream := &SSEStream{w: w, rc: http.NewResponseController(w)}
 	count := 50
 
@@ -217,14 +252,12 @@ func TestSSEStream_ConcurrentSend(t *testing.T) {
 
 	wg.Wait()
 
-	body := w.Body.String()
+	body := w.String()
 
-	// Count the number of "data:" occurrences - may be less than count due to race conditions
-	// in writing to the underlying buffer, which is expected for concurrent access without sync.
-	// This test verifies no panics occur during concurrent sends.
+	// With the mutex, all events should be written without corruption.
 	dataCount := strings.Count(body, "data:")
 
-	assert.Positive(t, dataCount, "at least some events should be written")
+	assert.Equal(t, count, dataCount, "all events should be written with mutex protection")
 }
 
 func TestSSEStream_StreamingLoop(t *testing.T) {
@@ -266,6 +299,29 @@ func TestSSEStream_NoFlusher(t *testing.T) {
 	assert.Error(t, err) // Flush returns error for non-flushable writer
 }
 
+func TestSSEStream_Heartbeat(t *testing.T) {
+	w := newSafeFlushRecorder()
+	rc := http.NewResponseController(w)
+	stream := &SSEStream{w: w, rc: rc}
+
+	done := make(chan struct{})
+
+	// Use a short interval for testing
+	go stream.runHeartbeat(done, 50*time.Millisecond)
+
+	// Wait for at least 2 heartbeats
+	time.Sleep(150 * time.Millisecond)
+	close(done)
+
+	// Small wait for goroutine to fully stop
+	time.Sleep(10 * time.Millisecond)
+
+	body := w.String()
+	heartbeatCount := strings.Count(body, ": heartbeat")
+
+	assert.GreaterOrEqual(t, heartbeatCount, 2, "should have at least 2 heartbeat comments")
+}
+
 func TestSSEResponse_Integration(t *testing.T) {
 	configs := testutil.NewServerConfigs(t)
 
@@ -285,24 +341,27 @@ func TestSSEResponse_Integration(t *testing.T) {
 
 	go app.Run()
 
-	var resp *http.Response
-
-	var err error
-
+	// Wait for server to start using the alive endpoint (more reliable)
 	for i := 0; i < 50; i++ {
-		req, reqErr := http.NewRequestWithContext(context.Background(), http.MethodGet, configs.HTTPHost+"/events", http.NoBody)
+		req, reqErr := http.NewRequestWithContext(context.Background(), http.MethodGet, configs.HTTPHost+"/.well-known/alive", http.NoBody)
 		if reqErr != nil {
 			t.Fatalf("create request: %v", reqErr)
 		}
 
-		resp, err = http.DefaultClient.Do(req)
-		if err == nil {
+		probe, doErr := http.DefaultClient.Do(req)
+		if doErr == nil {
+			probe.Body.Close()
+
 			break
 		}
 
 		time.Sleep(100 * time.Millisecond)
 	}
 
+	req, reqErr := http.NewRequestWithContext(context.Background(), http.MethodGet, configs.HTTPHost+"/events", http.NoBody)
+	require.NoError(t, reqErr)
+
+	resp, err := http.DefaultClient.Do(req)
 	require.NoError(t, err)
 
 	defer resp.Body.Close()
@@ -376,4 +435,15 @@ func TestSSEResponse_Integration_ClientDisconnect(t *testing.T) {
 	case <-time.After(5 * time.Second):
 		t.Fatal("handler did not exit after client disconnect")
 	}
+}
+
+func TestSSEResponse_NilCallback(t *testing.T) {
+	w := newFlushRecorder()
+	stream := &SSEStream{w: w, rc: http.NewResponseController(w)}
+
+	// Verify SSEStream can be constructed and used even without SSEResponse
+	err := stream.SendData("direct write")
+	require.NoError(t, err)
+
+	assert.Contains(t, w.Body.String(), "data: direct write")
 }
