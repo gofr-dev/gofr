@@ -10,7 +10,7 @@ scaled and maintained according to its own requirement.
 ## Design choice
 
 In GoFr application if a user wants to use the Publisher-Subscriber design, it supports several message brokers,
-including Apache Kafka, Google PubSub, MQTT, NATS JetStream, and Redis Pub/Sub.
+including Apache Kafka, Google PubSub, MQTT, NATS JetStream, Redis Pub/Sub, Azure Event Hubs, and Amazon SQS.
 The initialization of the PubSub is done in an IoC container which handles the PubSub client dependency.
 With this, the control lies with the framework and thus promotes modularity, testability, and re-usability.
 Users can do publish and subscribe to multiple topics in a single application, by providing the topic name.
@@ -475,7 +475,8 @@ The following configs apply specifically to Redis Pub/Sub behavior. For base Red
 - Message limit for Query operations
 - `10`
 - `50`
-  {% /table %}
+
+{% /table %}
 
 For Redis with TLS:
 
@@ -653,6 +654,39 @@ func main() {
 
 > **Note**: SQS queues must be created before publishing or subscribing. Use AWS CLI, AWS Console, or the `CreateTopic` method in migrations to create queues programmatically. GoFr supports Standard Queues by default—FIFO queues are not currently supported. Advanced features like Dead Letter Queues (DLQ) and Broadcast (SNS) can be configured at the infrastructure level.
 
+#### LocalStack setup (local development)
+
+[LocalStack](https://localstack.cloud/) emulates AWS services locally, making it ideal for development and testing without an AWS account.
+
+```shell
+docker run -d \
+	--name localstack \
+	-p 4566:4566 \
+	-e SERVICES=sqs \
+	localstack/localstack:latest
+```
+
+After LocalStack is running, create queues using the AWS CLI:
+
+```shell
+aws --endpoint-url=http://localhost:4566 --region us-east-1 \
+	sqs create-queue --queue-name order-logs
+
+aws --endpoint-url=http://localhost:4566 --region us-east-1 \
+	sqs create-queue --queue-name products
+```
+
+When using LocalStack, set the `Endpoint` field in `sqs.Config` to point at LocalStack and use dummy credentials:
+
+```go
+app.AddPubSub(sqs.New(&sqs.Config{
+    Region:          "us-east-1",
+    Endpoint:        "http://localhost:4566",
+    AccessKeyID:     "test",
+    SecretAccessKey: "test",
+}))
+```
+
 
 ## Subscribing
 Adding a subscriber is similar to adding an HTTP handler, which makes it easier to develop scalable applications,
@@ -668,7 +702,7 @@ func (ctx *gofr.Context) error
 ```
 
 `Subscribe` method of GoFr App will continuously read a message from the configured `PUBSUB_BACKEND` which
-can be `KAFKA`, `GOOGLE`, `MQTT`, `NATS`, `REDIS`, or `AZURE_EVENTHUB`. These can be configured in the configs folder under `.env`
+can be `KAFKA`, `GOOGLE`, `MQTT`, `NATS`, `REDIS`, or `AZURE_EVENTHUB`. For external providers like NATS JetStream, Azure Event Hubs, and Amazon SQS, use `app.AddPubSub()` instead. These can be configured in the configs folder under `.env`
 
 > The returned error determines which messages are to be committed and which ones are to be consumed again.
 
