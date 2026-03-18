@@ -53,6 +53,7 @@ type RequestLog struct {
 	SpanID       string `json:"span_id,omitempty"`
 	StartTime    string `json:"start_time,omitempty"`
 	ResponseTime int64  `json:"response_time,omitempty"`
+	ResponseUnit string `json:"latencyUnit,omitempty"`
 	Method       string `json:"method,omitempty"`
 	UserAgent    string `json:"user_agent,omitempty"`
 	IP           string `json:"ip,omitempty"`
