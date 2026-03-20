@@ -2,6 +2,7 @@ package gofr
 
 import (
 	"net/http"
+	"net/url"
 	"time"
 
 	"github.com/golang-jwt/jwt/v5"
@@ -112,11 +113,25 @@ func (a *App) EnableOAuth(jwksEndpoint string,
 	refreshInterval int,
 	options ...jwt.ParserOption,
 ) {
-	a.AddHTTPService("gofr_oauth", jwksEndpoint)
+	parsedURL, err := url.Parse(jwksEndpoint)
+	if err != nil {
+		a.container.Errorf("invalid JWKS endpoint URL: %v", err)
+		return
+	}
+
+	baseURL := parsedURL.Scheme + "://" + parsedURL.Host
+	jwksPath := parsedURL.Path
+
+	if parsedURL.RawQuery != "" {
+		jwksPath += "?" + parsedURL.RawQuery
+	}
+
+	a.AddHTTPService("gofr_oauth", baseURL)
 
 	oauthOption := middleware.OauthConfigs{
 		Provider:        a.container.GetHTTPService("gofr_oauth"),
 		RefreshInterval: time.Second * time.Duration(refreshInterval),
+		Path:            jwksPath,
 	}
 
 	publicKeyProvider := middleware.NewOAuth(oauthOption)
