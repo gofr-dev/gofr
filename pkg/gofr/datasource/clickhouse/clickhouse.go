@@ -136,7 +136,7 @@ func (c *Client) Exec(ctx context.Context, query string, args ...any) error {
 	return err
 }
 
-// Select method allows a set of response rows to be marshaled into a slice of structs with a single invocation..
+// Select method allows a set of response rows to be marshaled into a slice of structs with a single invocation.
 // DB column names should be defined in the struct in `ch` tag.
 // Example Usages:
 //
