@@ -36,10 +36,10 @@ func Test_MongoCheckAndCreateMigrationTable(t *testing.T) {
 	migratorWithMongo, mockMongo, mockContainer := mongoSetup(t)
 
 	testCases := []struct {
-		desc                  string
-		firstCreateCollErr    error
-		secondCreateCollErr   error
-		expectedErr           error
+		desc                string
+		firstCreateCollErr  error
+		secondCreateCollErr error
+		expectedErr         error
 	}{
 		{"no error", nil, nil, nil},
 		{"first create collection failed", errMongoConn, nil, errMongoConn},
@@ -201,168 +201,98 @@ func Test_MongoUnlock(t *testing.T) {
 func Test_MongoStartRefresh(t *testing.T) {
 	_, mockMongo, mockContainer := mongoSetup(t)
 
-	t.Run("refresh succeeds with modified documents", func(t *testing.T) {
-		ctx, cancel := context.WithCancel(t.Context())
-		defer cancel()
+	type refreshTestCase struct {
+		desc              string
+		modified          int64
+		updateErr         error
+		repeatRefreshCall bool
+		cancelAfterTick   bool
+		expectCtxCanceled bool
+	}
 
-		// Mock first UpdateOne call to succeed
-		mockMongo.EXPECT().UpdateOne(gomock.Any(), mongoLockCollection, gomock.Any(), gomock.Any()).
-			Return(int64(1), nil).
-			Times(1)
+	startRefreshAndWait := func(t *testing.T, mg mongoMigrator, ctx context.Context, cancel context.CancelFunc) chan struct{} {
+		t.Helper()
 
-		// Create mongoMigrator directly to test startRefresh
-		mg := mongoMigrator{Mongo: mockMongo, migrator: &Datasource{}}
-
-		// Start refresh in goroutine
 		done := make(chan struct{})
+
 		go func() {
 			mg.startRefresh(ctx, cancel, mockContainer, "owner-1")
 			close(done)
 		}()
 
-		// Wait for the ticker to fire (5 seconds)
 		time.Sleep(5500 * time.Millisecond)
 
-		// Cancel context
-		cancel()
+		return done
+	}
 
-		// Wait for goroutine to finish
+	waitForRefreshExit := func(t *testing.T, done chan struct{}, failureMsg string) {
+		t.Helper()
+
 		select {
 		case <-done:
 		case <-time.After(2 * time.Second):
-			t.Fatal("startRefresh did not exit after context cancellation")
+			t.Fatal(failureMsg)
 		}
-	})
+	}
 
-	t.Run("refresh fails with update error", func(t *testing.T) {
-		ctx, cancel := context.WithCancel(t.Context())
-		defer cancel()
+	testCases := []refreshTestCase{
+		{
+			desc:            "refresh succeeds with modified documents",
+			modified:        1,
+			cancelAfterTick: true,
+		},
+		{
+			desc:      "refresh fails with update error",
+			modified:  0,
+			updateErr: errMongoConn,
+		},
+		{
+			desc:              "refresh detects lock theft when modified count is zero",
+			modified:          0,
+			expectCtxCanceled: true,
+		},
+		{
+			desc:            "refresh exits when context is canceled",
+			modified:        1,
+			cancelAfterTick: true,
+		},
+		{
+			desc:              "refresh continues on successful updates",
+			modified:          1,
+			repeatRefreshCall: true,
+			cancelAfterTick:   true,
+		},
+	}
 
-		// Mock UpdateOne to fail
-		mockMongo.EXPECT().UpdateOne(gomock.Any(), mongoLockCollection, gomock.Any(), gomock.Any()).
-			Return(int64(0), errMongoConn).
-			Times(1)
+	for _, tc := range testCases {
+		t.Run(tc.desc, func(t *testing.T) {
+			ctx, cancel := context.WithCancel(t.Context())
+			defer cancel()
 
-		// Create mongoMigrator directly
-		mg := mongoMigrator{Mongo: mockMongo, migrator: &Datasource{}}
+			expectedCall := mockMongo.EXPECT().UpdateOne(gomock.Any(), mongoLockCollection, gomock.Any(), gomock.Any()).
+				Return(tc.modified, tc.updateErr)
+			if tc.repeatRefreshCall {
+				expectedCall.AnyTimes()
+			} else {
+				expectedCall.Times(1)
+			}
 
-		// Start refresh in goroutine
-		done := make(chan struct{})
-		go func() {
-			mg.startRefresh(ctx, cancel, mockContainer, "owner-1")
-			close(done)
-		}()
+			mg := mongoMigrator{Mongo: mockMongo, migrator: &Datasource{}}
+			done := startRefreshAndWait(t, mg, ctx, cancel)
 
-		// Wait for the ticker to fire (5 seconds)
-		time.Sleep(5500 * time.Millisecond)
+			if tc.cancelAfterTick {
+				cancel()
+			}
 
-		// Wait for goroutine to finish
-		select {
-		case <-done:
-		case <-time.After(2 * time.Second):
-			t.Fatal("startRefresh did not exit when update failed")
-		}
-	})
+			waitForRefreshExit(t, done, "startRefresh did not exit as expected")
 
-	t.Run("refresh detects lock theft when modified count is zero", func(t *testing.T) {
-		ctx, cancel := context.WithCancel(t.Context())
-		defer cancel()
-
-		// Mock UpdateOne to return 0 modified (lock was stolen/expired)
-		mockMongo.EXPECT().UpdateOne(gomock.Any(), mongoLockCollection, gomock.Any(), gomock.Any()).
-			Return(int64(0), nil).
-			Times(1)
-
-		// Create mongoMigrator directly
-		mg := mongoMigrator{Mongo: mockMongo, migrator: &Datasource{}}
-
-		// Start refresh in goroutine
-		done := make(chan struct{})
-		go func() {
-			mg.startRefresh(ctx, cancel, mockContainer, "owner-1")
-			close(done)
-		}()
-
-		// Wait for the ticker to fire (5 seconds)
-		time.Sleep(5500 * time.Millisecond)
-
-		// Wait for goroutine to finish
-		select {
-		case <-done:
-		case <-time.After(2 * time.Second):
-			t.Fatal("startRefresh did not exit when modified count was zero")
-		}
-
-		// Verify context was cancelled
-		select {
-		case <-ctx.Done():
-		default:
-			t.Error("expected context to be cancelled when lock is stolen")
-		}
-	})
-
-	t.Run("refresh exits when context is cancelled", func(t *testing.T) {
-		ctx, cancel := context.WithCancel(t.Context())
-
-		// Mock UpdateOne to succeed on first call
-		mockMongo.EXPECT().UpdateOne(gomock.Any(), mongoLockCollection, gomock.Any(), gomock.Any()).
-			Return(int64(1), nil).
-			Times(1)
-
-		// Create mongoMigrator directly
-		mg := mongoMigrator{Mongo: mockMongo, migrator: &Datasource{}}
-
-		// Start refresh in goroutine
-		done := make(chan struct{})
-		go func() {
-			mg.startRefresh(ctx, cancel, mockContainer, "owner-1")
-			close(done)
-		}()
-
-		// Wait for the ticker to fire (5 seconds)
-		time.Sleep(5500 * time.Millisecond)
-
-		// Cancel context
-		cancel()
-
-		// Wait for goroutine to finish
-		select {
-		case <-done:
-		case <-time.After(2 * time.Second):
-			t.Fatal("startRefresh did not exit after context cancellation")
-		}
-	})
-
-	t.Run("refresh continues on successful updates", func(t *testing.T) {
-		ctx, cancel := context.WithCancel(t.Context())
-		defer cancel()
-
-		// Mock UpdateOne to succeed multiple times
-		mockMongo.EXPECT().UpdateOne(gomock.Any(), mongoLockCollection, gomock.Any(), gomock.Any()).
-			Return(int64(1), nil).
-			AnyTimes()
-
-		// Create mongoMigrator directly
-		mg := mongoMigrator{Mongo: mockMongo, migrator: &Datasource{}}
-
-		// Start refresh in goroutine
-		done := make(chan struct{})
-		go func() {
-			mg.startRefresh(ctx, cancel, mockContainer, "owner-1")
-			close(done)
-		}()
-
-		// Let it tick at least once
-		time.Sleep(5500 * time.Millisecond)
-
-		// Cancel context
-		cancel()
-
-		// Wait for goroutine to finish
-		select {
-		case <-done:
-		case <-time.After(2 * time.Second):
-			t.Fatal("startRefresh did not exit after context cancellation")
-		}
-	})
+			if tc.expectCtxCanceled {
+				select {
+				case <-ctx.Done():
+				default:
+					t.Error("expected context to be canceled when lock is stolen")
+				}
+			}
+		})
+	}
 }
