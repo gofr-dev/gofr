@@ -120,6 +120,16 @@ func (a *App) EnableOAuth(jwksEndpoint string,
 		return
 	}
 
+	if parsedURL.Scheme == "" || parsedURL.Host == "" {
+		a.container.Errorf("invalid JWKS endpoint URL: missing scheme or host in %q", jwksEndpoint)
+		return
+	}
+
+	if parsedURL.Scheme != "http" && parsedURL.Scheme != "https" {
+		a.container.Errorf("invalid JWKS endpoint URL: unsupported scheme %q", parsedURL.Scheme)
+		return
+	}
+
 	baseURL := parsedURL.Scheme + "://" + parsedURL.Host
 	jwksPath := strings.TrimPrefix(parsedURL.Path, "/")
 

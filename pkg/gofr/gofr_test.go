@@ -469,6 +469,37 @@ func TestEnableOAuth_HealthCheckEndpoint(t *testing.T) {
 	assert.Equal(t, http.StatusOK, resp.StatusCode, "JWKS fetch should hit the correct path without double slash")
 }
 
+func TestEnableOAuth_InvalidEndpoints(t *testing.T) {
+	invalidEndpoints := []string{
+		"",
+		"not-a-url",
+		"/.well-known/jwks.json",
+		"http://",
+		"ftp://host/.well-known/jwks.json",
+	}
+
+	for _, endpoint := range invalidEndpoints {
+		t.Run(endpoint, func(t *testing.T) {
+			port := testutil.GetFreePort(t)
+			c := container.NewContainer(config.NewMockConfig(nil))
+
+			a := &App{
+				httpServer: &httpServer{
+					router: gofrHTTP.NewRouter(),
+					port:   port,
+				},
+				container: c,
+			}
+
+			a.EnableOAuth(endpoint, 600)
+
+			// Service should NOT be registered for invalid endpoints
+			assert.Nil(t, a.container.GetHTTPService("gofr_oauth"),
+				"gofr_oauth service should not be registered for invalid endpoint: %q", endpoint)
+		})
+	}
+}
+
 func encodeBasicAuthorization(t *testing.T, arg string) string {
 	t.Helper()
 
