@@ -421,6 +421,46 @@ func TestEnableBasicAuthWithFunc(t *testing.T) {
 	assert.Equal(t, http.StatusUnauthorized, resp.StatusCode, "TestEnableBasicAuthWithFunc Failed!")
 }
 
+func TestEnableOAuth_HealthCheckEndpoint(t *testing.T) {
+	port := testutil.GetFreePort(t)
+
+	// Mock server that serves both /.well-known/alive and /.well-known/jwks.json
+	mockServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/.well-known/alive":
+			w.WriteHeader(http.StatusOK)
+		case "/.well-known/jwks.json":
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write([]byte(`{"keys":[]}`))
+		default:
+			w.WriteHeader(http.StatusNotFound)
+		}
+	}))
+	defer mockServer.Close()
+
+	c := container.NewContainer(config.NewMockConfig(nil))
+
+	a := &App{
+		httpServer: &httpServer{
+			router: gofrHTTP.NewRouter(),
+			port:   port,
+		},
+		container: c,
+	}
+
+	// Pass full JWKS URL with path — the fix should extract the base URL
+	a.EnableOAuth(mockServer.URL+"/.well-known/jwks.json", 600)
+
+	// Verify the service is registered
+	oauthService := a.container.GetHTTPService("gofr_oauth")
+	require.NotNil(t, oauthService, "gofr_oauth service should be registered")
+
+	// Health check should hit mockServer/.well-known/alive (not mockServer/.well-known/jwks.json/.well-known/alive)
+	health := oauthService.HealthCheck(t.Context())
+	assert.Equal(t, "UP", health.Status, "Health check should hit the host root, not the JWKS path")
+}
+
 func encodeBasicAuthorization(t *testing.T, arg string) string {
 	t.Helper()
 
