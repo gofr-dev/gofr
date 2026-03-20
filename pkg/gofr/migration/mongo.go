@@ -2,12 +2,15 @@ package migration
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strings"
 	"time"
 
 	"gofr.dev/pkg/gofr/container"
 )
+
+var errMongoLockRefreshFailed = errors.New("failed to refresh MongoDB lock: lock lost or stolen")
 
 type mongoDS struct {
 	container.Mongo
@@ -136,8 +139,16 @@ func (mg mongoMigrator) startRefresh(ctx context.Context, cancel context.CancelF
 				},
 			}
 
-			if err := mg.Mongo.UpdateOne(ctx, mongoLockCollection, filter, update); err != nil {
+			modified, err := mg.Mongo.UpdateOne(ctx, mongoLockCollection, filter, update)
+			if err != nil {
 				c.Errorf("failed to refresh mongo lock: %v", err)
+				cancel()
+
+				return
+			}
+
+			if modified == 0 {
+				c.Errorf("%v", errMongoLockRefreshFailed)
 				cancel()
 
 				return
