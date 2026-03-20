@@ -120,7 +120,7 @@ func (k *kafkaClient) getWriterStatsAsMap() map[string]any {
 	return writerStats
 }
 
-// convertStructToMap tries to convert any struct to a map representation by first marshaling it to JSON, then unmarshalling into a map.
+// convertStructToMap tries to convert any struct to a map representation by first marshaling it to JSON, then unmarshaling into a map.
 func convertStructToMap(input, output any) error {
 	body, err := json.Marshal(input)
 	if err != nil {

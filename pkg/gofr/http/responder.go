@@ -13,7 +13,7 @@ var (
 	errEmptyResponse = errors.New("internal server error")
 )
 
-// NewResponder creates a new Responder instance from the given http.ResponseWriter..
+// NewResponder creates a new Responder instance from the given http.ResponseWriter.
 func NewResponder(w http.ResponseWriter, method string) *Responder {
 	return &Responder{w: w, method: method}
 }
