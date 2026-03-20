@@ -250,7 +250,7 @@ func main() {
 	app := gofr.New()
 
 	// ctx controls the lifetime of the rate limiter's background cleanup goroutine.
-	// Cancelling this context stops cleanup gracefully, preventing goroutine leaks
+	// Canceling this context stops cleanup gracefully, preventing goroutine leaks
 	// during rolling restarts. In production, tie this to your server's shutdown signal.
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
