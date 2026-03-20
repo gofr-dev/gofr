@@ -36,23 +36,26 @@ func Test_MongoCheckAndCreateMigrationTable(t *testing.T) {
 	migratorWithMongo, mockMongo, mockContainer := mongoSetup(t)
 
 	testCases := []struct {
-		desc string
-		err  error
+		desc                  string
+		firstCreateCollErr    error
+		secondCreateCollErr   error
+		expectedErr           error
 	}{
-		{"no error", nil},
-		{"connection failed", errMongoConn},
+		{"no error", nil, nil, nil},
+		{"first create collection failed", errMongoConn, nil, errMongoConn},
+		{"second create collection failed", nil, errMongoConn, errMongoConn},
 	}
 
 	for i, tc := range testCases {
-		mockMongo.EXPECT().CreateCollection(gomock.Any(), mongoMigrationCollection).Return(tc.err)
+		mockMongo.EXPECT().CreateCollection(gomock.Any(), mongoMigrationCollection).Return(tc.firstCreateCollErr)
 
-		if tc.err == nil {
-			mockMongo.EXPECT().CreateCollection(gomock.Any(), mongoLockCollection).Return(nil)
+		if tc.firstCreateCollErr == nil {
+			mockMongo.EXPECT().CreateCollection(gomock.Any(), mongoLockCollection).Return(tc.secondCreateCollErr)
 		}
 
 		err := migratorWithMongo.checkAndCreateMigrationTable(mockContainer)
 
-		assert.Equal(t, tc.err, err, "TEST[%v]\n %v Failed! ", i, tc.desc)
+		assert.Equal(t, tc.expectedErr, err, "TEST[%v]\n %v Failed! ", i, tc.desc)
 	}
 }
 
@@ -192,5 +195,174 @@ func Test_MongoUnlock(t *testing.T) {
 
 		err := migratorWithMongo.unlock(mockContainer, "owner-1")
 		assert.ErrorIs(t, err, errLockReleaseFailed)
+	})
+}
+
+func Test_MongoStartRefresh(t *testing.T) {
+	_, mockMongo, mockContainer := mongoSetup(t)
+
+	t.Run("refresh succeeds with modified documents", func(t *testing.T) {
+		ctx, cancel := context.WithCancel(t.Context())
+		defer cancel()
+
+		// Mock first UpdateOne call to succeed
+		mockMongo.EXPECT().UpdateOne(gomock.Any(), mongoLockCollection, gomock.Any(), gomock.Any()).
+			Return(int64(1), nil).
+			Times(1)
+
+		// Create mongoMigrator directly to test startRefresh
+		mg := mongoMigrator{Mongo: mockMongo, migrator: &Datasource{}}
+
+		// Start refresh in goroutine
+		done := make(chan struct{})
+		go func() {
+			mg.startRefresh(ctx, cancel, mockContainer, "owner-1")
+			close(done)
+		}()
+
+		// Wait for the ticker to fire (5 seconds)
+		time.Sleep(5500 * time.Millisecond)
+
+		// Cancel context
+		cancel()
+
+		// Wait for goroutine to finish
+		select {
+		case <-done:
+		case <-time.After(2 * time.Second):
+			t.Fatal("startRefresh did not exit after context cancellation")
+		}
+	})
+
+	t.Run("refresh fails with update error", func(t *testing.T) {
+		ctx, cancel := context.WithCancel(t.Context())
+		defer cancel()
+
+		// Mock UpdateOne to fail
+		mockMongo.EXPECT().UpdateOne(gomock.Any(), mongoLockCollection, gomock.Any(), gomock.Any()).
+			Return(int64(0), errMongoConn).
+			Times(1)
+
+		// Create mongoMigrator directly
+		mg := mongoMigrator{Mongo: mockMongo, migrator: &Datasource{}}
+
+		// Start refresh in goroutine
+		done := make(chan struct{})
+		go func() {
+			mg.startRefresh(ctx, cancel, mockContainer, "owner-1")
+			close(done)
+		}()
+
+		// Wait for the ticker to fire (5 seconds)
+		time.Sleep(5500 * time.Millisecond)
+
+		// Wait for goroutine to finish
+		select {
+		case <-done:
+		case <-time.After(2 * time.Second):
+			t.Fatal("startRefresh did not exit when update failed")
+		}
+	})
+
+	t.Run("refresh detects lock theft when modified count is zero", func(t *testing.T) {
+		ctx, cancel := context.WithCancel(t.Context())
+		defer cancel()
+
+		// Mock UpdateOne to return 0 modified (lock was stolen/expired)
+		mockMongo.EXPECT().UpdateOne(gomock.Any(), mongoLockCollection, gomock.Any(), gomock.Any()).
+			Return(int64(0), nil).
+			Times(1)
+
+		// Create mongoMigrator directly
+		mg := mongoMigrator{Mongo: mockMongo, migrator: &Datasource{}}
+
+		// Start refresh in goroutine
+		done := make(chan struct{})
+		go func() {
+			mg.startRefresh(ctx, cancel, mockContainer, "owner-1")
+			close(done)
+		}()
+
+		// Wait for the ticker to fire (5 seconds)
+		time.Sleep(5500 * time.Millisecond)
+
+		// Wait for goroutine to finish
+		select {
+		case <-done:
+		case <-time.After(2 * time.Second):
+			t.Fatal("startRefresh did not exit when modified count was zero")
+		}
+
+		// Verify context was cancelled
+		select {
+		case <-ctx.Done():
+		default:
+			t.Error("expected context to be cancelled when lock is stolen")
+		}
+	})
+
+	t.Run("refresh exits when context is cancelled", func(t *testing.T) {
+		ctx, cancel := context.WithCancel(t.Context())
+
+		// Mock UpdateOne to succeed on first call
+		mockMongo.EXPECT().UpdateOne(gomock.Any(), mongoLockCollection, gomock.Any(), gomock.Any()).
+			Return(int64(1), nil).
+			Times(1)
+
+		// Create mongoMigrator directly
+		mg := mongoMigrator{Mongo: mockMongo, migrator: &Datasource{}}
+
+		// Start refresh in goroutine
+		done := make(chan struct{})
+		go func() {
+			mg.startRefresh(ctx, cancel, mockContainer, "owner-1")
+			close(done)
+		}()
+
+		// Wait for the ticker to fire (5 seconds)
+		time.Sleep(5500 * time.Millisecond)
+
+		// Cancel context
+		cancel()
+
+		// Wait for goroutine to finish
+		select {
+		case <-done:
+		case <-time.After(2 * time.Second):
+			t.Fatal("startRefresh did not exit after context cancellation")
+		}
+	})
+
+	t.Run("refresh continues on successful updates", func(t *testing.T) {
+		ctx, cancel := context.WithCancel(t.Context())
+		defer cancel()
+
+		// Mock UpdateOne to succeed multiple times
+		mockMongo.EXPECT().UpdateOne(gomock.Any(), mongoLockCollection, gomock.Any(), gomock.Any()).
+			Return(int64(1), nil).
+			AnyTimes()
+
+		// Create mongoMigrator directly
+		mg := mongoMigrator{Mongo: mockMongo, migrator: &Datasource{}}
+
+		// Start refresh in goroutine
+		done := make(chan struct{})
+		go func() {
+			mg.startRefresh(ctx, cancel, mockContainer, "owner-1")
+			close(done)
+		}()
+
+		// Let it tick at least once
+		time.Sleep(5500 * time.Millisecond)
+
+		// Cancel context
+		cancel()
+
+		// Wait for goroutine to finish
+		select {
+		case <-done:
+		case <-time.After(2 * time.Second):
+			t.Fatal("startRefresh did not exit after context cancellation")
+		}
 	})
 }

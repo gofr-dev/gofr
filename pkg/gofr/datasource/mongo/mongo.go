@@ -255,15 +255,19 @@ func (c *Client) UpdateByID(ctx context.Context, collection string, id, update a
 }
 
 // UpdateOne updates a single document in the specified collection based on the provided filter.
-func (c *Client) UpdateOne(ctx context.Context, collection string, filter, update any) error {
+func (c *Client) UpdateOne(ctx context.Context, collection string, filter, update any) (int64, error) {
 	tracerCtx, span := c.addTrace(ctx, "updateOne", collection)
 
-	_, err := c.Database.Collection(collection).UpdateOne(tracerCtx, filter, update)
+	res, err := c.Database.Collection(collection).UpdateOne(tracerCtx, filter, update)
 
 	defer c.sendOperationStats(&QueryLog{Query: "updateOne", Collection: collection, Filter: filter, Update: update},
 		time.Now(), "updateOne", span)
 
-	return err
+	if err != nil {
+		return 0, err
+	}
+
+	return res.ModifiedCount, nil
 }
 
 // UpdateMany updates multiple documents in the specified collection based on the provided filter.
