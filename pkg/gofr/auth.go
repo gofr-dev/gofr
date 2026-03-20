@@ -3,6 +3,7 @@ package gofr
 import (
 	"net/http"
 	"net/url"
+	"strings"
 	"time"
 
 	"github.com/golang-jwt/jwt/v5"
@@ -120,7 +121,7 @@ func (a *App) EnableOAuth(jwksEndpoint string,
 	}
 
 	baseURL := parsedURL.Scheme + "://" + parsedURL.Host
-	jwksPath := parsedURL.Path
+	jwksPath := strings.TrimPrefix(parsedURL.Path, "/")
 
 	if parsedURL.RawQuery != "" {
 		jwksPath += "?" + parsedURL.RawQuery

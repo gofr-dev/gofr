@@ -459,6 +459,14 @@ func TestEnableOAuth_HealthCheckEndpoint(t *testing.T) {
 	// Health check should hit mockServer/.well-known/alive (not mockServer/.well-known/jwks.json/.well-known/alive)
 	health := oauthService.HealthCheck(t.Context())
 	assert.Equal(t, "UP", health.Status, "Health check should hit the host root, not the JWKS path")
+
+	// JWKS fetch should hit mockServer/.well-known/jwks.json (not mockServer//.well-known/jwks.json)
+	resp, err := oauthService.GetWithHeaders(t.Context(), ".well-known/jwks.json", nil, nil)
+	require.NoError(t, err)
+
+	defer resp.Body.Close()
+
+	assert.Equal(t, http.StatusOK, resp.StatusCode, "JWKS fetch should hit the correct path without double slash")
 }
 
 func encodeBasicAuthorization(t *testing.T, arg string) string {
