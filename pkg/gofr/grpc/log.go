@@ -44,6 +44,7 @@ type gRPCLog struct {
 	ID           string `json:"id"`
 	StartTime    string `json:"startTime"`
 	ResponseTime int64  `json:"responseTime"`
+	ResponseUnit string `json:"responseUnit"`
 	Method       string `json:"method"`
 	StatusCode   int32  `json:"statusCode"`
 	StreamType   string `json:"streamType,omitempty"`
