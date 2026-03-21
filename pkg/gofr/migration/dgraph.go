@@ -3,6 +3,7 @@ package migration
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"time"
 
@@ -20,6 +21,12 @@ type dgraphDS struct {
 type dgraphMigrator struct {
 	dgraphDS
 	migrator
+}
+
+type dgraphTxn interface {
+	Mutate(ctx context.Context, mu *api.Mutation) (*api.Response, error)
+	Commit(ctx context.Context) error
+	Discard(ctx context.Context) error
 }
 
 const (
@@ -45,6 +52,10 @@ const (
 			}
 		}
 	`
+)
+
+var (
+	errInvalidDgraphTxn = errors.New("invalid dgraph transaction type")
 )
 
 // apply creates a new dgraphMigrator.
@@ -144,6 +155,8 @@ func (dm dgraphMigrator) beginTransaction(c *container.Container) transactionDat
 
 // commitMigration commits the migration and records its metadata.
 func (dm dgraphMigrator) commitMigration(c *container.Container, data transactionData) error {
+	ctx := context.Background()
+
 	// Build the JSON payload for the migration record.
 	payload := map[string]any{
 		"migrations": []map[string]any{
@@ -161,9 +174,21 @@ func (dm dgraphMigrator) commitMigration(c *container.Container, data transactio
 		return err
 	}
 
-	_, err = c.DGraph.Mutate(context.Background(), &api.Mutation{
+	tx, ok := c.DGraph.NewTxn().(dgraphTxn)
+	if !ok {
+		return errInvalidDgraphTxn
+	}
+
+	defer tx.Discard(ctx)
+
+	_, err = tx.Mutate(ctx, &api.Mutation{
 		SetJson: jsonPayload,
 	})
+	if err != nil {
+		return err
+	}
+
+	err = tx.Commit(ctx)
 	if err != nil {
 		return err
 	}

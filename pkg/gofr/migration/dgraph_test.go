@@ -5,6 +5,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/dgraph-io/dgo/v210/protos/api"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
@@ -12,6 +13,29 @@ import (
 	"gofr.dev/pkg/gofr/container"
 	"gofr.dev/pkg/gofr/testutil"
 )
+
+type mockDgraphTxn struct {
+	mutateErr  error
+	commitErr  error
+	commitDone bool
+	discarded  bool
+}
+
+func (m *mockDgraphTxn) Mutate(context.Context, *api.Mutation) (*api.Response, error) {
+	return nil, m.mutateErr
+}
+
+func (m *mockDgraphTxn) Commit(context.Context) error {
+	m.commitDone = true
+
+	return m.commitErr
+}
+
+func (m *mockDgraphTxn) Discard(context.Context) error {
+	m.discarded = true
+
+	return nil
+}
 
 func dgraphSetup(t *testing.T) (migrator, *container.MockDgraph, *container.Container) {
 	t.Helper()
@@ -99,11 +123,14 @@ func Test_DGraphCommitMigration(t *testing.T) {
 	timeNow := time.Now()
 
 	testCases := []struct {
-		desc string
-		err  error
+		desc      string
+		mutateErr error
+		commitErr error
+		err       error
 	}{
-		{"success", nil},
-		{"mutation failed", context.DeadlineExceeded},
+		{"success", nil, nil, nil},
+		{"mutation failed", context.DeadlineExceeded, nil, context.DeadlineExceeded},
+		{"commit failed", nil, context.Canceled, context.Canceled},
 	}
 
 	td := transactionData{
@@ -112,11 +139,19 @@ func Test_DGraphCommitMigration(t *testing.T) {
 	}
 
 	for i, tc := range testCases {
-		mockDGraph.EXPECT().Mutate(gomock.Any(), gomock.Any()).Return(nil, tc.err)
+		tx := &mockDgraphTxn{mutateErr: tc.mutateErr, commitErr: tc.commitErr}
+		mockDGraph.EXPECT().NewTxn().Return(tx)
 
 		err := migratorWithDGraph.commitMigration(mockContainer, td)
 
 		assert.Equal(t, tc.err, err, "TEST[%v]\n %v Failed!", i, tc.desc)
+		assert.True(t, tx.discarded, "TEST[%v]\n %v Failed!", i, tc.desc)
+
+		if tc.mutateErr == nil {
+			assert.True(t, tx.commitDone, "TEST[%v]\n %v Failed!", i, tc.desc)
+		} else {
+			assert.False(t, tx.commitDone, "TEST[%v]\n %v Failed!", i, tc.desc)
+		}
 	}
 }
 
