@@ -132,7 +132,7 @@ func TestMQTT_Disconnect(t *testing.T) {
 
 	mockClient.EXPECT().Disconnect(uint(1))
 
-	mockClient.EXPECT().Publish("test", mockConfigs.QoS, mockConfigs.RetrieveRetained, msg).Return(mockToken)
+	mockClient.EXPECT().Publish("test", mockConfigs.QoS, mockConfigs.RetrieveRetained, gomock.Any()).Return(mockToken)
 
 	mockToken.EXPECT().Wait().Return(true)
 	mockToken.EXPECT().Error().Return(errToken).Times(3)
@@ -181,7 +181,7 @@ func TestMQTT_PublishSuccess(t *testing.T) {
 		mockMetrics.EXPECT().
 			IncrementCounter(ctx, "app_pubsub_publish_success_count", "topic", "test/topic")
 
-		mockClient.EXPECT().Publish("test/topic", mockConfigs.QoS, mockConfigs.RetrieveRetained, msg).
+		mockClient.EXPECT().Publish("test/topic", mockConfigs.QoS, mockConfigs.RetrieveRetained, gomock.Any()).
 			Return(mockToken)
 
 		mockToken.EXPECT().Wait().Return(true)
@@ -211,7 +211,7 @@ func TestMQTT_PublishFailure(t *testing.T) {
 	// Disconnect the client
 	_ = client.Disconnect(1)
 
-	mockClient.EXPECT().Publish("test/topic", mockConfigs.QoS, mockConfigs.RetrieveRetained, msg).Return(mockToken)
+	mockClient.EXPECT().Publish("test/topic", mockConfigs.QoS, mockConfigs.RetrieveRetained, gomock.Any()).Return(mockToken)
 	mockToken.EXPECT().Wait().Return(true)
 	mockToken.EXPECT().Error().Return(errToken).Times(3)
 

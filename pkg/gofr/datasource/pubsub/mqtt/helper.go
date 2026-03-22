@@ -11,7 +11,6 @@ import (
 	"time"
 
 	mqtt "github.com/eclipse/paho.mqtt.golang"
-	"go.opentelemetry.io/otel"
 
 	"gofr.dev/pkg/gofr/datasource/pubsub"
 )
@@ -45,8 +44,10 @@ func (m *MQTT) createQueryMessageHandler(ctx context.Context, msgChan chan<- *pu
 		messageCtx := context.WithoutCancel(ctx)
 		message := pubsub.NewMessage(messageCtx)
 
+		_, payload := unwrapPayload(msg.Payload())
+
 		message.Topic = msg.Topic()
-		message.Value = msg.Payload()
+		message.Value = payload
 		message.MetaData = map[string]string{
 			"qos":       string(msg.Qos()),
 			"retained":  strconv.FormatBool(msg.Retained()),
@@ -136,8 +137,8 @@ func (*MQTT) handleContextDone(queryCtx context.Context, topicName string, buffe
 }
 func (m *MQTT) createMqttHandler(_ context.Context, topic string, msgs chan *pubsub.Message) mqtt.MessageHandler {
 	return func(_ mqtt.Client, msg mqtt.Message) {
-		ctx := context.Background()
-		ctx, span := otel.GetTracerProvider().Tracer("gofr").Start(ctx, "mqtt-subscribe")
+		traceHeaders, payload := unwrapPayload(msg.Payload())
+		ctx, span := startSubscribeSpan(context.Background(), topic, traceHeaders)
 
 		defer span.End()
 
@@ -146,7 +147,7 @@ func (m *MQTT) createMqttHandler(_ context.Context, topic string, msgs chan *pub
 		var messg = pubsub.NewMessage(context.WithoutCancel(ctx))
 
 		messg.Topic = msg.Topic()
-		messg.Value = msg.Payload()
+		messg.Value = payload
 		messg.MetaData = map[string]string{
 			"qos":       string(msg.Qos()),
 			"retained":  strconv.FormatBool(msg.Retained()),
@@ -161,7 +162,7 @@ func (m *MQTT) createMqttHandler(_ context.Context, topic string, msgs chan *pub
 		m.logger.Debug(&pubsub.Log{
 			Mode:          "SUB",
 			CorrelationID: span.SpanContext().TraceID().String(),
-			MessageValue:  string(msg.Payload()),
+			MessageValue:  string(payload),
 			Topic:         msg.Topic(),
 			Host:          m.config.Hostname,
 			PubSubBackend: "MQTT",
@@ -171,9 +172,11 @@ func (m *MQTT) createMqttHandler(_ context.Context, topic string, msgs chan *pub
 
 func getHandler(subscribeFunc SubscribeFunc) func(client mqtt.Client, msg mqtt.Message) {
 	return func(_ mqtt.Client, msg mqtt.Message) {
+		_, payload := unwrapPayload(msg.Payload())
+
 		pubsubMsg := &pubsub.Message{
 			Topic: msg.Topic(),
-			Value: msg.Payload(),
+			Value: payload,
 			MetaData: map[string]string{
 				"qos":       string(msg.Qos()),
 				"retained":  strconv.FormatBool(msg.Retained()),

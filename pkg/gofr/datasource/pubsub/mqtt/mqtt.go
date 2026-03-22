@@ -7,7 +7,6 @@ import (
 	"time"
 
 	mqtt "github.com/eclipse/paho.mqtt.golang"
-	"go.opentelemetry.io/otel"
 
 	"gofr.dev/pkg/gofr/datasource"
 	"gofr.dev/pkg/gofr/datasource/pubsub"
@@ -177,14 +176,15 @@ func (m *MQTT) Query(ctx context.Context, query string, args ...any) ([]byte, er
 }
 
 func (m *MQTT) Publish(ctx context.Context, topic string, message []byte) error {
-	_, span := otel.GetTracerProvider().Tracer("gofr").Start(ctx, "mqtt-publish")
+	_, span, traceHeaders := startPublishSpan(ctx, topic)
 	defer span.End()
 
 	m.metrics.IncrementCounter(ctx, "app_pubsub_publish_total_count", "topic", topic)
 
 	s := time.Now()
 
-	token := m.Client.Publish(topic, m.config.QoS, m.config.RetrieveRetained, message)
+	wrappedMsg := wrapPayload(traceHeaders, message)
+	token := m.Client.Publish(topic, m.config.QoS, m.config.RetrieveRetained, wrappedMsg)
 
 	// Check for errors during publishing (More on error reporting
 	// https://pkg.go.dev/github.com/eclipse/paho.mqtt.golang#readme-error-handling)
