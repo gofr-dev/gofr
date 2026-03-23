@@ -71,9 +71,10 @@ func (cmd *cmd) Run(c *container.Container) {
 		m.RecordHistogram(context.Background(), "app_cmd_duration_seconds", duration, "command", cmdName)
 
 		if err != nil {
-			m.IncrementCounter(context.Background(), "app_cmd_errors_total", "command", cmdName)
+			m.IncrementCounter(context.Background(), "app_cmd_failures", "command", cmdName)
 		} else {
-			m.IncrementCounter(context.Background(), "app_cmd_success_total", "command", cmdName)
+			m.IncrementCounter(context.Background(), "app_cmd_success", "command", cmdName)
+			m.SetGauge("app_cmd_last_success_timestamp", float64(time.Now().Unix()), "command", cmdName)
 		}
 	}
 
@@ -86,10 +87,11 @@ func registerCMDMetrics(c *container.Container) {
 		return
 	}
 
-	cmdBuckets := []float64{.001, .005, .01, .05, .1, .5, 1, 2, 5, 10, 30, 60}
+	cmdBuckets := []float64{.001, .005, .01, .05, .1, .5, 1, 2, 5, 10, 30, 60, 120, 300, 600}
 	m.NewHistogram("app_cmd_duration_seconds", "Duration of CLI command execution in seconds", cmdBuckets...)
-	m.NewCounter("app_cmd_success_total", "Total number of successful CLI command executions")
-	m.NewCounter("app_cmd_errors_total", "Total number of failed CLI command executions")
+	m.NewCounter("app_cmd_success", "Number of successful CLI command executions")
+	m.NewCounter("app_cmd_failures", "Number of failed CLI command executions")
+	m.NewGauge("app_cmd_last_success_timestamp", "Unix timestamp of the last successful CLI command execution")
 }
 
 // parseArgs parses command line arguments and returns subCommand, showHelp flag, and firstArg.

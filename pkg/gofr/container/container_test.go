@@ -2,6 +2,7 @@ package container
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"testing"
@@ -16,7 +17,6 @@ import (
 	gofrRedis "gofr.dev/pkg/gofr/datasource/redis"
 	gofrSql "gofr.dev/pkg/gofr/datasource/sql"
 	"gofr.dev/pkg/gofr/logging"
-	"gofr.dev/pkg/gofr/metrics/exporters"
 	"gofr.dev/pkg/gofr/service"
 	ws "gofr.dev/pkg/gofr/websocket"
 )
@@ -517,15 +517,16 @@ func TestGetDefaultDatasourceBuckets(t *testing.T) {
 	}
 }
 
-func TestContainer_SetPushGateway(t *testing.T) {
-	c := &Container{}
+var errPushGatewayUnreachable = errors.New("pushgateway unreachable")
 
-	assert.Nil(t, c.pushGateway)
+type mockMetricsPusher struct {
+	pushCalled bool
+	pushErr    error
+}
 
-	pg := &exporters.PushGateway{}
-	c.SetPushGateway(pg)
-
-	assert.Equal(t, pg, c.pushGateway)
+func (m *mockMetricsPusher) Push(_ context.Context) error {
+	m.pushCalled = true
+	return m.pushErr
 }
 
 func TestContainer_Close_PushesMetricsWhenPushGatewaySet(t *testing.T) {
@@ -543,14 +544,46 @@ func TestContainer_Close_PushesMetricsWhenPushGatewaySet(t *testing.T) {
 	c.Redis = mockRedis
 	c.PubSub = &MockPubSub{}
 
-	// Set a pushgateway that will fail to connect — we just verify Close doesn't panic
-	// and returns the push error
-	pg := exporters.NewPushGateway("http://localhost:1", "test-job", c.Logger)
+	pg := &mockMetricsPusher{}
 	c.SetPushGateway(pg)
 
 	err := c.Close()
-	// Push will fail since there's no server at localhost:1, but Close should not panic
+	require.NoError(t, err)
+	assert.True(t, pg.pushCalled, "Push should be called on Close")
+}
+
+func TestContainer_Close_PushGatewayError(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	mockRedis := NewMockRedis(ctrl)
+	mockRedis.EXPECT().Close().Return(nil)
+
+	mockDB, sqlMock, _ := gofrSql.NewSQLMocks(t)
+	sqlMock.ExpectClose()
+
+	c := NewContainer(config.NewMockConfig(nil))
+	c.SQL = &sqlMockDB{mockDB, &expectedQuery{}, logging.NewLogger(logging.DEBUG)}
+	c.Redis = mockRedis
+	c.PubSub = &MockPubSub{}
+
+	pg := &mockMetricsPusher{pushErr: errPushGatewayUnreachable}
+	c.SetPushGateway(pg)
+
+	err := c.Close()
 	require.Error(t, err)
+	assert.Contains(t, err.Error(), "pushgateway unreachable")
+	assert.True(t, pg.pushCalled)
+}
+
+func TestContainer_Close_NilPushGateway(t *testing.T) {
+	c := &Container{
+		WSManager: ws.New(),
+	}
+
+	// Close should not panic when pushGateway is nil
+	err := c.Close()
+	require.NoError(t, err)
 }
 
 func TestContainer_Close_ClosesWebsocketConnections(t *testing.T) {

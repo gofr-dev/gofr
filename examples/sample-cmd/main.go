@@ -29,6 +29,27 @@ func main() {
 
 	app.SubCommand("progress", progress)
 
+	// A command that always fails — useful for verifying failure metrics
+	app.SubCommand("fail", func(_ *gofr.Context) (any, error) {
+		return nil, fmt.Errorf("simulated failure for metrics testing")
+	}, gofr.AddDescription("Always fails (for testing failure metrics)"))
+
+	// A command that simulates a slow batch job — verifies extended histogram buckets
+	app.SubCommand("batch", func(c *gofr.Context) (any, error) {
+		duration := 3 * time.Second
+
+		if d := c.Param("duration"); d != "" {
+			parsed, err := time.ParseDuration(d)
+			if err == nil {
+				duration = parsed
+			}
+		}
+
+		time.Sleep(duration)
+
+		return fmt.Sprintf("Batch completed in %s", duration), nil
+	}, gofr.AddDescription("Simulates a batch job with configurable duration"))
+
 	// Run the command-line application
 	app.Run()
 }
