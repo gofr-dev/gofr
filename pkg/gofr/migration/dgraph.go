@@ -179,7 +179,11 @@ func (dm dgraphMigrator) commitMigration(c *container.Container, data transactio
 		return errInvalidDgraphTxn
 	}
 
-	defer tx.Discard(ctx)
+	defer func() {
+		if err := tx.Discard(ctx); err != nil {
+			c.Error("dgraph: transaction discard failed", err)
+		}
+	}()
 
 	_, err = tx.Mutate(ctx, &api.Mutation{
 		SetJson: jsonPayload,
