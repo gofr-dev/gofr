@@ -3,7 +3,6 @@ package http
 import (
 	"encoding/json"
 	"errors"
-	"fmt"
 	"net/http"
 	"reflect"
 
@@ -307,10 +306,9 @@ func isNil(i any) bool {
 // TODO: SSE connections block for the full connection lifetime, causing the logging middleware
 // and response histogram to record the entire duration. Consider labeling SSE in the histogram.
 func (r Responder) handleSSEResponse(sse resTypes.SSE) {
-	callback, ok := sse.Callback.(func(http.ResponseWriter, *http.ResponseController) error)
-	if !ok || callback == nil {
+	if sse.Callback == nil {
 		if r.logger != nil {
-			r.logger.Debugf("SSE response has nil or invalid callback")
+			r.logger.Debugf("SSE response has nil callback")
 		}
 
 		return
@@ -325,9 +323,9 @@ func (r Responder) handleSSEResponse(sse resTypes.SSE) {
 	rc := http.NewResponseController(r.w)
 	_ = rc.Flush()
 
-	if err := callback(r.w, rc); err != nil {
+	if err := sse.Callback(r.w, rc); err != nil {
 		if r.logger != nil {
-			r.logger.Debugf(fmt.Sprintf("SSE stream error: %v", err))
+			r.logger.Debugf("SSE stream error: %v", err)
 		}
 	}
 }

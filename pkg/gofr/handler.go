@@ -108,7 +108,9 @@ func (h handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		resp.SetCustomHeaders(w)
 	}
 
-	// SSE streams are long-lived; bypass request timeout like WebSocket.
+	// SSE streams are long-lived; bypass request timeout.
+	// SSEResponse() is instant struct creation, so done always fires before timeout
+	// for any practical timeout value. If timeout wins, result is nil and this is a no-op.
 	if _, ok := result.(response.SSE); ok {
 		c.Context = r.Context()
 	}

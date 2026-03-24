@@ -3,6 +3,7 @@ package gofr
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -254,7 +255,6 @@ func TestSSEStream_ConcurrentSend(t *testing.T) {
 
 	body := w.String()
 
-	// With the mutex, all events should be written without corruption.
 	dataCount := strings.Count(body, "data:")
 
 	assert.Equal(t, count, dataCount, "all events should be written with mutex protection")
@@ -294,9 +294,8 @@ func TestSSEStream_NoFlusher(t *testing.T) {
 	w := &nonFlushableWriter{header: http.Header{}}
 	stream := &SSEStream{w: w, rc: http.NewResponseController(w)}
 
-	// Should not panic, but Flush will fail silently
 	err := stream.SendData("test")
-	assert.Error(t, err) // Flush returns error for non-flushable writer
+	assert.Error(t, err)
 }
 
 func TestSSEStream_Heartbeat(t *testing.T) {
@@ -306,14 +305,11 @@ func TestSSEStream_Heartbeat(t *testing.T) {
 
 	done := make(chan struct{})
 
-	// Use a short interval for testing
 	go stream.runHeartbeat(done, 50*time.Millisecond)
 
-	// Wait for at least 2 heartbeats
 	time.Sleep(150 * time.Millisecond)
 	close(done)
 
-	// Small wait for goroutine to fully stop
 	time.Sleep(10 * time.Millisecond)
 
 	body := w.String()
@@ -326,6 +322,13 @@ func TestSSEResponse_Integration(t *testing.T) {
 	configs := testutil.NewServerConfigs(t)
 
 	app := New()
+
+	t.Cleanup(func() {
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+
+		_ = app.Shutdown(ctx)
+	})
 
 	app.GET("/events", func(_ *Context) (any, error) {
 		return SSEResponse(func(stream *SSEStream) error {
@@ -341,7 +344,7 @@ func TestSSEResponse_Integration(t *testing.T) {
 
 	go app.Run()
 
-	// Wait for server to start using the alive endpoint (more reliable)
+	// Wait for server readiness via alive endpoint.
 	for i := 0; i < 50; i++ {
 		req, reqErr := http.NewRequestWithContext(context.Background(), http.MethodGet, configs.HTTPHost+"/.well-known/alive", http.NoBody)
 		if reqErr != nil {
@@ -384,6 +387,13 @@ func TestSSEResponse_Integration_ClientDisconnect(t *testing.T) {
 
 	app := New()
 
+	t.Cleanup(func() {
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+
+		_ = app.Shutdown(ctx)
+	})
+
 	handlerExited := make(chan struct{})
 
 	app.GET("/stream", func(c *Context) (any, error) {
@@ -400,7 +410,7 @@ func TestSSEResponse_Integration_ClientDisconnect(t *testing.T) {
 
 	go app.Run()
 
-	// Wait for server to start
+	// Wait for server readiness via alive endpoint.
 	for i := 0; i < 50; i++ {
 		req, reqErr := http.NewRequestWithContext(context.Background(), http.MethodGet, configs.HTTPHost+"/.well-known/alive", http.NoBody)
 		if reqErr != nil {
@@ -441,9 +451,22 @@ func TestSSEResponse_NilCallback(t *testing.T) {
 	w := newFlushRecorder()
 	stream := &SSEStream{w: w, rc: http.NewResponseController(w)}
 
-	// Verify SSEStream can be constructed and used even without SSEResponse
 	err := stream.SendData("direct write")
 	require.NoError(t, err)
 
 	assert.Contains(t, w.Body.String(), "data: direct write")
+}
+
+func TestSSEResponse_CallbackError(t *testing.T) {
+	w := newFlushRecorder()
+	rc := http.NewResponseController(w)
+	testErr := errors.New("stream failed")
+
+	sse := SSEResponse(func(_ *SSEStream) error {
+		return testErr
+	})
+
+	// Call the callback directly, simulating what the responder does.
+	err := sse.Callback(w, rc)
+	assert.ErrorIs(t, err, testErr)
 }

@@ -12,7 +12,6 @@ import (
 )
 
 // defaultHeartbeatInterval is the interval between automatic heartbeat comments.
-// Keeps the connection alive through proxies/load balancers with idle timeouts.
 const defaultHeartbeatInterval = 15 * time.Second
 
 // SSEEvent represents a single Server-Sent Event.
@@ -38,6 +37,9 @@ type SSEFunc func(stream *SSEStream) error
 // SSEResponse creates an SSE response that can be returned from a handler.
 // A heartbeat comment is automatically sent every 15s to keep the connection
 // alive through proxies with idle timeouts.
+//
+// SSE handlers should return near-instantly (SSEResponse is just struct creation).
+// The long-lived streaming callback runs later inside Respond().
 //
 // Example:
 //

@@ -22,7 +22,6 @@ func main() {
 			for {
 				select {
 				case <-c.Context.Done():
-					// Graceful cleanup: release resources, close DB cursors, etc.
 					return nil
 				case t := <-ticker.C:
 					if err := stream.Send(gofr.SSEEvent{

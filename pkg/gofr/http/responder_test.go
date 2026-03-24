@@ -604,3 +604,38 @@ func TestResponder_ValidEncodableData(t *testing.T) {
 		assert.NotEmpty(t, body.String(), "TEST[%d] Failed: %s", i, tc.desc)
 	}
 }
+
+func TestResponder_SSE_NilCallback(t *testing.T) {
+	w := httptest.NewRecorder()
+	r := NewResponder(w, http.MethodGet)
+
+	// Zero-value SSE has nil Callback — should not panic.
+	r.Respond(resTypes.SSE{}, nil)
+
+	// No SSE headers should be set since callback is nil.
+	assert.Empty(t, w.Header().Get("Content-Type"))
+}
+
+// mockSSELogger captures Debugf calls for test assertions.
+type mockSSELogger struct {
+	messages []string
+}
+
+func (m *mockSSELogger) Debugf(format string, args ...any) {
+	m.messages = append(m.messages, fmt.Sprintf(format, args...))
+}
+
+func TestResponder_SSE_CallbackError(t *testing.T) {
+	w := httptest.NewRecorder()
+	logger := &mockSSELogger{}
+	r := NewResponder(w, http.MethodGet, WithLogger(logger))
+
+	r.Respond(resTypes.SSE{
+		Callback: func(_ http.ResponseWriter, _ *http.ResponseController) error {
+			return fmt.Errorf("test error")
+		},
+	}, nil)
+
+	require.Len(t, logger.messages, 1)
+	assert.Contains(t, logger.messages[0], "test error")
+}
