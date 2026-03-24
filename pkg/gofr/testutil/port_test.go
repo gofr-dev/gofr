@@ -48,8 +48,6 @@ func TestNewServerConfigs(t *testing.T) {
 	assert.Equal(t, env.GRPCHost, "localhost:"+grpcPortEnv, "GRPCHost should match environment variable")
 }
 
-// ...existing code...
-
 func TestServiceConfigs_Get(t *testing.T) {
 	cfg := &ServiceConfigs{
 		HTTPPort:    8080,
