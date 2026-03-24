@@ -19,6 +19,7 @@ type mongoDS struct {
 type mongoMigrator struct {
 	container.Mongo
 	migrator
+	testInterval time.Duration // Used for testing; if non-zero, overrides defaultRefresh
 }
 
 // apply initializes mongoMigrator using the Mongo interface.
@@ -31,8 +32,8 @@ func (ds mongoDS) apply(m migrator) migrator {
 
 const (
 	mongoMigrationCollection = "gofr_migrations"
-	mongoLockCollection      = "migration_locks"
-	mongoLockDocumentID      = "migration_lock"
+	mongoLockCollection      = "gofr_migration_locks"
+	mongoLockDocumentID      = "gofr_migrations_lock"
 )
 
 func isMongoCollectionExistsError(err error) bool {
@@ -119,7 +120,12 @@ func (mg mongoMigrator) rollback(c *container.Container, data transactionData) {
 }
 
 func (mg mongoMigrator) startRefresh(ctx context.Context, cancel context.CancelFunc, c *container.Container, ownerID string) {
-	ticker := time.NewTicker(defaultRefresh)
+	interval := defaultRefresh
+	if mg.testInterval > 0 {
+		interval = mg.testInterval
+	}
+
+	ticker := time.NewTicker(interval)
 	defer ticker.Stop()
 
 	for {
