@@ -14,6 +14,8 @@ import (
 
 var errMongoConn = errors.New("error connecting to mongo")
 var errMongoDuplicateKey = errors.New("duplicate key")
+var errMongoNamespaceExists = errors.New("NamespaceExists: collection already exists")
+var errMongoAlreadyExists = errors.New("already exists")
 
 func mongoSetup(t *testing.T) (migrator, *container.MockMongo, *container.Container) {
 	t.Helper()
@@ -42,6 +44,8 @@ func Test_MongoCheckAndCreateMigrationTable(t *testing.T) {
 		expectedErr         error
 	}{
 		{"no error", nil, nil, nil},
+		{"first collection already exists", errMongoNamespaceExists, nil, nil},
+		{"second collection already exists", nil, errMongoAlreadyExists, nil},
 		{"first create collection failed", errMongoConn, nil, errMongoConn},
 		{"second create collection failed", nil, errMongoConn, errMongoConn},
 	}
@@ -49,7 +53,7 @@ func Test_MongoCheckAndCreateMigrationTable(t *testing.T) {
 	for i, tc := range testCases {
 		mockMongo.EXPECT().CreateCollection(gomock.Any(), mongoMigrationCollection).Return(tc.firstCreateCollErr)
 
-		if tc.firstCreateCollErr == nil {
+		if tc.firstCreateCollErr == nil || isMongoCollectionExistsError(tc.firstCreateCollErr) {
 			mockMongo.EXPECT().CreateCollection(gomock.Any(), mongoLockCollection).Return(tc.secondCreateCollErr)
 		}
 
@@ -220,7 +224,7 @@ func Test_MongoStartRefresh(t *testing.T) {
 			close(done)
 		}()
 
-		time.Sleep(5500 * time.Millisecond)
+		time.Sleep(15 * time.Millisecond)
 
 		return done
 	}
@@ -277,7 +281,7 @@ func Test_MongoStartRefresh(t *testing.T) {
 				expectedCall.Times(1)
 			}
 
-			mg := mongoMigrator{Mongo: mockMongo, migrator: &Datasource{}}
+			mg := mongoMigrator{Mongo: mockMongo, migrator: &Datasource{}, testInterval: 10 * time.Millisecond}
 			done := startRefreshAndWait(t, mg, ctx, cancel)
 
 			if tc.cancelAfterTick {
