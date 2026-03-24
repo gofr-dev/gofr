@@ -16,7 +16,10 @@ import (
 	resTypes "gofr.dev/pkg/gofr/http/response"
 )
 
-var errTest = fmt.Errorf("internal server error")
+var (
+	errTest            = fmt.Errorf("internal server error") // Existing
+	errSSECallbackTest = fmt.Errorf("test error")
+)
 
 func TestResponder(t *testing.T) {
 	tests := []struct {
@@ -632,10 +635,10 @@ func TestResponder_SSE_CallbackError(t *testing.T) {
 
 	r.Respond(resTypes.SSE{
 		Callback: func(_ http.ResponseWriter, _ *http.ResponseController) error {
-			return fmt.Errorf("test error")
+			return errSSECallbackTest
 		},
 	}, nil)
 
 	require.Len(t, logger.messages, 1)
-	assert.Contains(t, logger.messages[0], "test error")
+	assert.Contains(t, logger.messages[0], errSSECallbackTest.Error())
 }

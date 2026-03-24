@@ -3,7 +3,7 @@ package gofr
 import (
 	"context"
 	"encoding/json"
-	"errors"
+	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -17,6 +17,8 @@ import (
 
 	"gofr.dev/pkg/gofr/testutil"
 )
+
+var errSSEStreamFailed = fmt.Errorf("stream failed")
 
 func Test_formatSSEData(t *testing.T) {
 	tests := []struct {
@@ -460,13 +462,12 @@ func TestSSEResponse_NilCallback(t *testing.T) {
 func TestSSEResponse_CallbackError(t *testing.T) {
 	w := newFlushRecorder()
 	rc := http.NewResponseController(w)
-	testErr := errors.New("stream failed")
 
 	sse := SSEResponse(func(_ *SSEStream) error {
-		return testErr
+		return errSSEStreamFailed
 	})
 
 	// Call the callback directly, simulating what the responder does.
 	err := sse.Callback(w, rc)
-	assert.ErrorIs(t, err, testErr)
+	assert.ErrorIs(t, err, errSSEStreamFailed)
 }
