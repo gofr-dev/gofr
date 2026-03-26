@@ -20,8 +20,7 @@ import (
 var (
 	errDB     = testutil.CustomError{ErrorMessage: "DB error"}
 	errSyntax = testutil.CustomError{ErrorMessage: "syntax error"}
-	errTx     = testutil.CustomError{ErrorMessage: "error starting transaction"}
-	errbegin  = testutil.CustomError{ErrorMessage: "begin failed"}
+	errBegin  = testutil.CustomError{ErrorMessage: "begin failed"}
 )
 
 func getDB(t *testing.T, logLevel logging.Level) (*DB, sqlmock.Sqlmock) {
@@ -35,31 +34,42 @@ func getDB(t *testing.T, logLevel logging.Level) (*DB, sqlmock.Sqlmock) {
 	db := &DB{
 		DB:         mockDB,
 		logger:     logging.NewMockLogger(logLevel),
-		metrics:    nil,
-		config:     nil, // Initializing config to nil as it's set in next line
+		config:     &DBConfig{},
 		stopSignal: make(chan struct{}),
 		closeOnce:  sync.Once{},
 	}
-	db.config = &DBConfig{}
 
 	return db, mock
 }
+
+func getTransaction(db *DB, mock sqlmock.Sqlmock) *Tx {
+	mock.ExpectBegin()
+
+	tx, _ := db.Begin()
+
+	return tx
+}
+
+// setupMetrics attaches a mock Metrics to db with one RecordHistogram expectation.
+// opType accepts a specific string (e.g. "SELECT") or gomock.Any().
+func setupMetrics(t *testing.T, db *DB, opType any) {
+	t.Helper()
+
+	m := NewMockMetrics(gomock.NewController(t))
+	db.metrics = m
+	m.EXPECT().RecordHistogram(gomock.Any(), "app_sql_stats",
+		gomock.Any(), "hostname", gomock.Any(), "database", gomock.Any(), "type", opType)
+}
+
+// --- DB.Select tests ---
 
 func TestDB_SelectSingleColumnFromIntToString(t *testing.T) {
 	db, mock := getDB(t, logging.INFO)
 	defer db.DB.Close()
 
-	rows := sqlmock.NewRows([]string{"id"}).
-		AddRow(1).
-		AddRow(2)
 	mock.ExpectQuery("select id from users").
-		WillReturnRows(rows)
-
-	ctrl := gomock.NewController(t)
-	mockMetrics := NewMockMetrics(ctrl)
-	db.metrics = mockMetrics
-	mockMetrics.EXPECT().RecordHistogram(gomock.Any(), "app_sql_stats",
-		gomock.Any(), "hostname", gomock.Any(), "database", gomock.Any(), "type", gomock.Any())
+		WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow(1).AddRow(2))
+	setupMetrics(t, db, gomock.Any())
 
 	ids := make([]string, 0)
 	db.Select(t.Context(), &ids, "select id from users")
@@ -71,17 +81,9 @@ func TestDB_SelectSingleColumnFromStringToString(t *testing.T) {
 	db, mock := getDB(t, logging.INFO)
 	defer db.DB.Close()
 
-	rows := sqlmock.NewRows([]string{"id"}).
-		AddRow("1").
-		AddRow("2")
 	mock.ExpectQuery("select id from users").
-		WillReturnRows(rows)
-
-	ctrl := gomock.NewController(t)
-	mockMetrics := NewMockMetrics(ctrl)
-	db.metrics = mockMetrics
-	mockMetrics.EXPECT().RecordHistogram(gomock.Any(), "app_sql_stats",
-		gomock.Any(), "hostname", gomock.Any(), "database", gomock.Any(), "type", gomock.Any())
+		WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow("1").AddRow("2"))
+	setupMetrics(t, db, gomock.Any())
 
 	ids := make([]string, 0)
 	db.Select(t.Context(), &ids, "select id from users")
@@ -93,17 +95,9 @@ func TestDB_SelectSingleColumnFromIntToInt(t *testing.T) {
 	db, mock := getDB(t, logging.INFO)
 	defer db.DB.Close()
 
-	rows := sqlmock.NewRows([]string{"id"}).
-		AddRow(1).
-		AddRow(2)
 	mock.ExpectQuery("select id from users").
-		WillReturnRows(rows)
-
-	ctrl := gomock.NewController(t)
-	mockMetrics := NewMockMetrics(ctrl)
-	db.metrics = mockMetrics
-	mockMetrics.EXPECT().RecordHistogram(gomock.Any(), "app_sql_stats",
-		gomock.Any(), "hostname", gomock.Any(), "database", gomock.Any(), "type", gomock.Any())
+		WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow(1).AddRow(2))
+	setupMetrics(t, db, gomock.Any())
 
 	ids := make([]int, 0)
 	db.Select(t.Context(), &ids, "select id from users")
@@ -111,54 +105,53 @@ func TestDB_SelectSingleColumnFromIntToInt(t *testing.T) {
 	assert.Equal(t, []int{1, 2}, ids, "TEST Failed.\n")
 }
 
-func TestDB_SelectSingleColumnFromIntToCustomInt(t *testing.T) {
-	db, mock := getDB(t, logging.INFO)
-	defer db.DB.Close()
+func TestDB_SelectSingleColumnCustomTypes(t *testing.T) {
+	type (
+		CustomInt int
+		CustomStr string
+	)
 
-	rows := sqlmock.NewRows([]string{"id"}).
-		AddRow(1).
-		AddRow(2)
-	mock.ExpectQuery("select id from users").
-		WillReturnRows(rows)
+	t.Run("int to CustomInt", func(t *testing.T) {
+		db, mock := getDB(t, logging.INFO)
+		defer db.DB.Close()
 
-	ctrl := gomock.NewController(t)
-	mockMetrics := NewMockMetrics(ctrl)
-	db.metrics = mockMetrics
-	mockMetrics.EXPECT().RecordHistogram(gomock.Any(), "app_sql_stats",
-		gomock.Any(), "hostname", gomock.Any(), "database", gomock.Any(), "type", gomock.Any())
+		mock.ExpectQuery("select id from users").
+			WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow(1).AddRow(2))
+		setupMetrics(t, db, gomock.Any())
 
-	type CustomInt int
+		ids := make([]CustomInt, 0)
+		db.Select(t.Context(), &ids, "select id from users")
 
-	ids := make([]CustomInt, 0)
+		assert.Equal(t, []CustomInt{1, 2}, ids, "TEST Failed.\n")
+	})
 
-	db.Select(t.Context(), &ids, "select id from users")
+	t.Run("string to CustomInt", func(t *testing.T) {
+		db, mock := getDB(t, logging.INFO)
+		defer db.DB.Close()
 
-	assert.Equal(t, []CustomInt{1, 2}, ids, "TEST Failed.\n")
-}
+		mock.ExpectQuery("select id from users").
+			WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow("1").AddRow("2"))
+		setupMetrics(t, db, gomock.Any())
 
-func TestDB_SelectSingleColumnFromStringToCustomInt(t *testing.T) {
-	db, mock := getDB(t, logging.INFO)
-	defer db.DB.Close()
+		ids := make([]CustomInt, 0)
+		db.Select(t.Context(), &ids, "select id from users")
 
-	rows := sqlmock.NewRows([]string{"id"}).
-		AddRow("1").
-		AddRow("2")
-	mock.ExpectQuery("select id from users").
-		WillReturnRows(rows)
+		assert.Equal(t, []CustomInt{1, 2}, ids, "TEST Failed.\n")
+	})
 
-	ctrl := gomock.NewController(t)
-	mockMetrics := NewMockMetrics(ctrl)
-	db.metrics = mockMetrics
-	mockMetrics.EXPECT().RecordHistogram(gomock.Any(), "app_sql_stats",
-		gomock.Any(), "hostname", gomock.Any(), "database", gomock.Any(), "type", gomock.Any())
+	t.Run("string to CustomStr", func(t *testing.T) {
+		db, mock := getDB(t, logging.INFO)
+		defer db.DB.Close()
 
-	type CustomInt int
+		mock.ExpectQuery("select id from users").
+			WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow("1").AddRow("2"))
+		setupMetrics(t, db, gomock.Any())
 
-	ids := make([]CustomInt, 0)
+		ids := make([]CustomStr, 0)
+		db.Select(t.Context(), &ids, "select id from users")
 
-	db.Select(t.Context(), &ids, "select id from users")
-
-	assert.Equal(t, []CustomInt{1, 2}, ids, "TEST Failed.\n")
+		assert.Equal(t, []CustomStr{"1", "2"}, ids, "TEST Failed.\n")
+	})
 }
 
 func TestDB_SelectContextError(t *testing.T) {
@@ -185,158 +178,6 @@ func TestDB_SelectDataPointerError(t *testing.T) {
 	assert.Contains(t, out, "we did not get a pointer. data is not settable.", "TEST Failed.\n")
 }
 
-func TestDB_SelectSingleColumnFromStringToCustomString(t *testing.T) {
-	db, mock := getDB(t, logging.INFO)
-	defer db.DB.Close()
-
-	rows := sqlmock.NewRows([]string{"id"}).
-		AddRow("1").
-		AddRow("2")
-	mock.ExpectQuery("select id from users").
-		WillReturnRows(rows)
-
-	ctrl := gomock.NewController(t)
-	mockMetrics := NewMockMetrics(ctrl)
-	db.metrics = mockMetrics
-	mockMetrics.EXPECT().RecordHistogram(gomock.Any(), "app_sql_stats",
-		gomock.Any(), "hostname", gomock.Any(), "database", gomock.Any(), "type", gomock.Any())
-
-	type CustomStr string
-
-	ids := make([]CustomStr, 0)
-
-	db.Select(t.Context(), &ids, "select id from users")
-
-	assert.Equal(t, []CustomStr{"1", "2"}, ids, "TEST Failed.\n")
-}
-
-func TestDB_SelectSingleRowMultiColumn(t *testing.T) {
-	db, mock := getDB(t, logging.INFO)
-	defer db.DB.Close()
-
-	rows := sqlmock.NewRows([]string{"id", "name", "image"}).
-		AddRow("1", "Vikash", "http://via.placeholder.com/150")
-	mock.ExpectQuery("select 1 user").
-		WillReturnRows(rows)
-
-	ctrl := gomock.NewController(t)
-	mockMetrics := NewMockMetrics(ctrl)
-	db.metrics = mockMetrics
-	mockMetrics.EXPECT().RecordHistogram(gomock.Any(), "app_sql_stats",
-		gomock.Any(), "hostname", gomock.Any(), "database", gomock.Any(), "type", gomock.Any())
-
-	type user struct {
-		Name  string
-		ID    int
-		Image string
-	}
-
-	u := user{}
-
-	db.Select(t.Context(), &u, "select 1 user")
-
-	assert.Equal(t, user{
-		Name:  "Vikash",
-		ID:    1,
-		Image: "http://via.placeholder.com/150",
-	}, u, "TEST Failed.\n")
-}
-
-func TestDB_SelectSingleRowMultiColumnWithTags(t *testing.T) {
-	db, mock := getDB(t, logging.INFO)
-	defer db.DB.Close()
-
-	rows := sqlmock.NewRows([]string{"id", "name", "image_url"}).
-		AddRow("1", "Vikash", "http://via.placeholder.com/150")
-	mock.ExpectQuery("select 1 user").
-		WillReturnRows(rows)
-
-	ctrl := gomock.NewController(t)
-	mockMetrics := NewMockMetrics(ctrl)
-	db.metrics = mockMetrics
-	mockMetrics.EXPECT().RecordHistogram(gomock.Any(), "app_sql_stats",
-		gomock.Any(), "hostname", gomock.Any(), "database", gomock.Any(), "type", gomock.Any())
-
-	type user struct {
-		Name  string
-		ID    int
-		Image string `db:"image_url"`
-	}
-
-	u := user{}
-
-	db.Select(t.Context(), &u, "select 1 user")
-
-	assert.Equal(t, user{
-		Name:  "Vikash",
-		ID:    1,
-		Image: "http://via.placeholder.com/150",
-	}, u, "TEST Failed.\n")
-}
-
-func TestDB_SelectMultiRowMultiColumnWithTags(t *testing.T) {
-	db, mock := getDB(t, logging.INFO)
-	defer db.DB.Close()
-
-	rows := sqlmock.NewRows([]string{"id", "name", "image_url"}).
-		AddRow("1", "Vikash", "http://via.placeholder.com/150").
-		AddRow("2", "Gofr", "")
-	mock.ExpectQuery("select users").
-		WillReturnRows(rows)
-
-	ctrl := gomock.NewController(t)
-	mockMetrics := NewMockMetrics(ctrl)
-	db.metrics = mockMetrics
-	mockMetrics.EXPECT().RecordHistogram(gomock.Any(), "app_sql_stats",
-		gomock.Any(), "hostname", gomock.Any(), "database", gomock.Any(), "type", gomock.Any())
-
-	type user struct {
-		Name  string
-		ID    int
-		Image string `db:"image_url"`
-	}
-
-	users := []user{}
-
-	db.Select(t.Context(), &users, "select users")
-
-	assert.Equal(t, []user{
-		{
-			Name:  "Vikash",
-			ID:    1,
-			Image: "http://via.placeholder.com/150",
-		},
-		{
-			Name: "Gofr",
-			ID:   2,
-		},
-	}, users, "TEST Failed.\n")
-}
-
-func TestDB_SelectSingleColumnError(t *testing.T) {
-	ids := make([]string, 0)
-
-	out := testutil.StderrOutputForFunc(func() {
-		db, mock := getDB(t, logging.INFO)
-		defer db.DB.Close()
-
-		mock.ExpectQuery("select id from users").
-			WillReturnError(errDB)
-
-		ctrl := gomock.NewController(t)
-		mockMetrics := NewMockMetrics(ctrl)
-		db.metrics = mockMetrics
-		mockMetrics.EXPECT().RecordHistogram(gomock.Any(), "app_sql_stats",
-			gomock.Any(), "hostname", gomock.Any(), "database", gomock.Any(), "type", gomock.Any())
-
-		db.Select(t.Context(), &ids, "select id from users")
-	})
-
-	assert.Contains(t, out, "DB error", "TEST Failed.\n")
-
-	assert.Equal(t, []string{}, ids, "TEST Failed.\n")
-}
-
 func TestDB_SelectDataPointerNotExpected(t *testing.T) {
 	m := make(map[int]int)
 
@@ -350,148 +191,284 @@ func TestDB_SelectDataPointerNotExpected(t *testing.T) {
 	assert.Contains(t, out, "a pointer to map was not expected.", "TEST Failed.\n")
 }
 
-func TestDB_Query(t *testing.T) {
-	var (
-		rows *sql.Rows
-		err  error
-	)
+func TestDB_SelectSingleColumnError(t *testing.T) {
+	ids := make([]string, 0)
 
-	out := testutil.StdoutOutputForFunc(func() {
-		db, mock := getDB(t, logging.DEBUG)
+	out := testutil.StderrOutputForFunc(func() {
+		db, mock := getDB(t, logging.INFO)
 		defer db.DB.Close()
 
-		ctrl := gomock.NewController(t)
-		mockMetrics := NewMockMetrics(ctrl)
+		mock.ExpectQuery("select id from users").WillReturnError(errDB)
+		setupMetrics(t, db, gomock.Any())
 
-		db.metrics = mockMetrics
-
-		mock.ExpectQuery("SELECT 1").
-			WillReturnRows(sqlmock.NewRows([]string{"1"}).AddRow("1"))
-		mockMetrics.EXPECT().RecordHistogram(gomock.Any(), "app_sql_stats",
-			gomock.Any(), "hostname", gomock.Any(), "database", gomock.Any(), "type", "SELECT")
-
-		rows, err = db.Query("SELECT 1")
-		require.NoError(t, err)
-		require.NoError(t, rows.Err())
-		assert.NotNil(t, rows)
+		db.Select(t.Context(), &ids, "select id from users")
 	})
 
-	assert.Contains(t, out, "Query SELECT 1")
+	assert.Contains(t, out, "DB error", "TEST Failed.\n")
+	assert.Equal(t, []string{}, ids, "TEST Failed.\n")
 }
 
-func TestDB_QueryError(t *testing.T) {
-	var (
-		rows *sql.Rows
-		err  error
-	)
+func TestDB_SelectSingleRowMultiColumn(t *testing.T) {
+	db, mock := getDB(t, logging.INFO)
+	defer db.DB.Close()
 
-	out := testutil.StdoutOutputForFunc(func() {
-		db, mock := getDB(t, logging.DEBUG)
+	mock.ExpectQuery("select 1 user").
+		WillReturnRows(sqlmock.NewRows([]string{"id", "name", "image"}).
+			AddRow("1", "Vikash", "http://via.placeholder.com/150"))
+	setupMetrics(t, db, gomock.Any())
+
+	type user struct {
+		Name  string
+		ID    int
+		Image string
+	}
+
+	u := user{}
+	db.Select(t.Context(), &u, "select 1 user")
+
+	assert.Equal(t, user{Name: "Vikash", ID: 1, Image: "http://via.placeholder.com/150"}, u, "TEST Failed.\n")
+}
+
+func TestDB_SelectSingleRowMultiColumnWithTags(t *testing.T) {
+	db, mock := getDB(t, logging.INFO)
+	defer db.DB.Close()
+
+	mock.ExpectQuery("select 1 user").
+		WillReturnRows(sqlmock.NewRows([]string{"id", "name", "image_url"}).
+			AddRow("1", "Vikash", "http://via.placeholder.com/150"))
+	setupMetrics(t, db, gomock.Any())
+
+	type user struct {
+		Name  string
+		ID    int
+		Image string `db:"image_url"`
+	}
+
+	u := user{}
+	db.Select(t.Context(), &u, "select 1 user")
+
+	assert.Equal(t, user{Name: "Vikash", ID: 1, Image: "http://via.placeholder.com/150"}, u, "TEST Failed.\n")
+}
+
+func TestDB_SelectMultiRowMultiColumnWithTags(t *testing.T) {
+	db, mock := getDB(t, logging.INFO)
+	defer db.DB.Close()
+
+	mock.ExpectQuery("select users").
+		WillReturnRows(sqlmock.NewRows([]string{"id", "name", "image_url"}).
+			AddRow("1", "Vikash", "http://via.placeholder.com/150").
+			AddRow("2", "Gofr", ""))
+	setupMetrics(t, db, gomock.Any())
+
+	type user struct {
+		Name  string
+		ID    int
+		Image string `db:"image_url"`
+	}
+
+	users := []user{}
+	db.Select(t.Context(), &users, "select users")
+
+	assert.Equal(t, []user{
+		{Name: "Vikash", ID: 1, Image: "http://via.placeholder.com/150"},
+		{Name: "Gofr", ID: 2},
+	}, users, "TEST Failed.\n")
+}
+
+func TestDB_SelectSliceRowsClosed(t *testing.T) {
+	db, mock := getDB(t, logging.INFO)
+	defer db.DB.Close()
+
+	mockRows := sqlmock.NewRows([]string{"id"}).AddRow(1).AddRow(2)
+	mock.ExpectQuery("select id from users").WillReturnRows(mockRows)
+
+	setupMetrics(t, db, gomock.Any())
+
+	ids := make([]int, 0)
+	db.Select(t.Context(), &ids, "select id from users")
+
+	assert.NoError(t, mock.ExpectationsWereMet(), "rows were not closed after Select on slice")
+}
+
+func TestDB_SelectStructRowsClosed(t *testing.T) {
+	db, mock := getDB(t, logging.INFO)
+	defer db.DB.Close()
+
+	type user struct {
+		ID   int
+		Name string
+	}
+
+	mockRows := sqlmock.NewRows([]string{"id", "name"}).AddRow(1, "Alice")
+	mock.ExpectQuery("select from users").WillReturnRows(mockRows)
+	setupMetrics(t, db, gomock.Any())
+
+	u := user{}
+	db.Select(t.Context(), &u, "select from users")
+
+	assert.NoError(t, mock.ExpectationsWereMet(), "rows were not closed after Select on struct")
+}
+
+func TestDB_SelectSliceRowsIterationError(t *testing.T) {
+	rowIterErr := testutil.CustomError{ErrorMessage: "row iteration error"}
+
+	out := testutil.StderrOutputForFunc(func() {
+		db, mock := getDB(t, logging.INFO)
 		defer db.DB.Close()
 
-		ctrl := gomock.NewController(t)
-		mockMetrics := NewMockMetrics(ctrl)
+		mock.ExpectQuery("select id from users").
+			WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow(1).AddRow(2).RowError(1, rowIterErr))
+		setupMetrics(t, db, gomock.Any())
 
-		db.metrics = mockMetrics
-
-		mock.ExpectQuery("SELECT ").
-			WillReturnError(errSyntax)
-		mockMetrics.EXPECT().RecordHistogram(gomock.Any(), "app_sql_stats",
-			gomock.Any(), "hostname", gomock.Any(), "database", gomock.Any(), "type", "SELECT")
-
-		rows, err = db.Query("SELECT")
-		if !assert.Nil(t, rows) {
-			require.NoError(t, rows.Err())
-		}
-
-		require.Error(t, err)
-		assert.Equal(t, errSyntax, err)
+		ids := make([]int, 0)
+		db.Select(t.Context(), &ids, "select id from users")
 	})
 
-	assert.Contains(t, out, "Query SELECT")
+	assert.Contains(t, out, "row iteration error", "rows.Err() value should be logged, not the query error")
+}
+
+func TestDB_SelectStructRowsIterationError(t *testing.T) {
+	rowIterErr := testutil.CustomError{ErrorMessage: "row iteration error"}
+
+	out := testutil.StderrOutputForFunc(func() {
+		db, mock := getDB(t, logging.INFO)
+		defer db.DB.Close()
+
+		type user struct {
+			ID   int
+			Name string
+		}
+
+		mock.ExpectQuery("select from users").
+			WillReturnRows(sqlmock.NewRows([]string{"id", "name"}).AddRow(1, "Alice").AddRow(2, "Bob").RowError(1, rowIterErr))
+		setupMetrics(t, db, gomock.Any())
+
+		u := user{}
+		db.Select(t.Context(), &u, "select from users")
+	})
+
+	assert.Contains(t, out, "row iteration error", "rows.Err() value should be logged, not the query error")
+}
+
+// --- DB method tests ---
+
+func TestDB_Query(t *testing.T) {
+	tests := []struct {
+		name        string
+		query       string
+		setupMock   func(sqlmock.Sqlmock)
+		wantErr     bool
+		logContains string
+	}{
+		{
+			name:  "success",
+			query: "SELECT 1",
+			setupMock: func(mock sqlmock.Sqlmock) {
+				mock.ExpectQuery("SELECT 1").WillReturnRows(sqlmock.NewRows([]string{"1"}).AddRow("1"))
+			},
+			logContains: "Query SELECT 1",
+		},
+		{
+			name:  "error",
+			query: "SELECT",
+			setupMock: func(mock sqlmock.Sqlmock) {
+				mock.ExpectQuery("SELECT ").WillReturnError(errSyntax)
+			},
+			wantErr:     true,
+			logContains: "Query SELECT",
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			out := testutil.StdoutOutputForFunc(func() {
+				db, mock := getDB(t, logging.DEBUG)
+				defer db.DB.Close()
+
+				setupMetrics(t, db, "SELECT")
+
+				tc.setupMock(mock)
+
+				rows, err := db.Query(tc.query)
+				if tc.wantErr {
+					require.Error(t, err)
+					assert.Nil(t, rows)
+				} else {
+					require.NoError(t, err)
+					require.NoError(t, rows.Err())
+					assert.NotNil(t, rows)
+				}
+			})
+
+			assert.Contains(t, out, tc.logContains)
+		})
+	}
 }
 
 func TestDB_QueryContext(t *testing.T) {
-	var (
-		rows *sql.Rows
-		err  error
-	)
+	tests := []struct {
+		name        string
+		query       string
+		setupMock   func(sqlmock.Sqlmock)
+		wantErr     bool
+		logContains string
+	}{
+		{
+			name:  "success",
+			query: "SELECT 1",
+			setupMock: func(mock sqlmock.Sqlmock) {
+				mock.ExpectQuery("SELECT 1").WillReturnRows(sqlmock.NewRows([]string{"1"}).AddRow("1"))
+			},
+			logContains: "QueryContext SELECT 1",
+		},
+		{
+			name:  "error",
+			query: "SELECT",
+			setupMock: func(mock sqlmock.Sqlmock) {
+				mock.ExpectQuery("SELECT ").WillReturnError(errSyntax)
+			},
+			wantErr:     true,
+			logContains: "QueryContext SELECT",
+		},
+	}
 
-	out := testutil.StdoutOutputForFunc(func() {
-		db, mock := getDB(t, logging.DEBUG)
-		defer db.DB.Close()
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			out := testutil.StdoutOutputForFunc(func() {
+				db, mock := getDB(t, logging.DEBUG)
+				defer db.DB.Close()
 
-		ctrl := gomock.NewController(t)
-		mockMetrics := NewMockMetrics(ctrl)
+				setupMetrics(t, db, "SELECT")
 
-		db.metrics = mockMetrics
+				tc.setupMock(mock)
 
-		mock.ExpectQuery("SELECT 1").
-			WillReturnRows(sqlmock.NewRows([]string{"1"}).AddRow("1"))
-		mockMetrics.EXPECT().RecordHistogram(gomock.Any(), "app_sql_stats",
-			gomock.Any(), "hostname", gomock.Any(), "database", gomock.Any(), "type", "SELECT")
+				rows, err := db.QueryContext(t.Context(), tc.query)
+				if tc.wantErr {
+					require.Error(t, err)
+					assert.Nil(t, rows)
+				} else {
+					require.NoError(t, err)
+					require.NoError(t, rows.Err())
+					assert.NotNil(t, rows)
+				}
+			})
 
-		rows, err = db.QueryContext(t.Context(), "SELECT 1")
-		require.NoError(t, err)
-		require.NoError(t, rows.Err())
-		assert.NotNil(t, rows)
-	})
-
-	assert.Contains(t, out, "QueryContext SELECT 1")
-}
-
-func TestDB_QueryContextError(t *testing.T) {
-	var (
-		rows *sql.Rows
-		err  error
-	)
-
-	out := testutil.StdoutOutputForFunc(func() {
-		db, mock := getDB(t, logging.DEBUG)
-		defer db.DB.Close()
-
-		ctrl := gomock.NewController(t)
-		mockMetrics := NewMockMetrics(ctrl)
-
-		db.metrics = mockMetrics
-
-		mock.ExpectQuery("SELECT ").
-			WillReturnError(errSyntax)
-		mockMetrics.EXPECT().RecordHistogram(gomock.Any(), "app_sql_stats",
-			gomock.Any(), "hostname", gomock.Any(), "database", gomock.Any(), "type", "SELECT")
-
-		rows, err = db.QueryContext(t.Context(), "SELECT")
-		if !assert.Nil(t, rows) {
-			require.NoError(t, rows.Err())
-		}
-
-		require.Error(t, err)
-		assert.Equal(t, errSyntax, err)
-	})
-
-	assert.Contains(t, out, "QueryContext SELECT")
+			assert.Contains(t, out, tc.logContains)
+		})
+	}
 }
 
 func TestDB_QueryRow(t *testing.T) {
-	var (
-		row *sql.Row
-	)
-
 	out := testutil.StdoutOutputForFunc(func() {
 		db, mock := getDB(t, logging.DEBUG)
 		defer db.DB.Close()
 
-		ctrl := gomock.NewController(t)
-		mockMetrics := NewMockMetrics(ctrl)
-
-		db.metrics = mockMetrics
+		setupMetrics(t, db, "SELECT")
 
 		mock.ExpectQuery("SELECT name FROM employee WHERE id = ?").WithArgs(1).
 			WillReturnRows(sqlmock.NewRows([]string{"name"}).AddRow("jhon"))
-		mockMetrics.EXPECT().RecordHistogram(gomock.Any(), "app_sql_stats",
-			gomock.Any(), "hostname", gomock.Any(), "database", gomock.Any(), "type", "SELECT")
 
-		row = db.QueryRow("SELECT name FROM employee WHERE id = ?", 1)
+		row := db.QueryRow("SELECT name FROM employee WHERE id = ?", 1)
 		assert.NotNil(t, row)
 	})
 
@@ -499,24 +476,15 @@ func TestDB_QueryRow(t *testing.T) {
 }
 
 func TestDB_QueryRowContext(t *testing.T) {
-	var (
-		row *sql.Row
-	)
-
 	out := testutil.StdoutOutputForFunc(func() {
 		db, mock := getDB(t, logging.DEBUG)
 		defer db.DB.Close()
 
-		ctrl := gomock.NewController(t)
-		mockMetrics := NewMockMetrics(ctrl)
-
-		db.metrics = mockMetrics
+		setupMetrics(t, db, "SELECT")
 
 		mock.ExpectQuery("SELECT name FROM employee WHERE id = ?").WithArgs(1)
-		mockMetrics.EXPECT().RecordHistogram(gomock.Any(), "app_sql_stats",
-			gomock.Any(), "hostname", gomock.Any(), "database", gomock.Any(), "type", "SELECT")
 
-		row = db.QueryRowContext(t.Context(), "SELECT name FROM employee WHERE id = ?", 1)
+		row := db.QueryRowContext(t.Context(), "SELECT name FROM employee WHERE id = ?", 1)
 		assert.NotNil(t, row)
 	})
 
@@ -524,193 +492,207 @@ func TestDB_QueryRowContext(t *testing.T) {
 }
 
 func TestDB_Exec(t *testing.T) {
-	var (
-		res sql.Result
-		err error
-	)
+	tests := []struct {
+		name        string
+		query       string
+		setupMock   func(sqlmock.Sqlmock)
+		wantErr     bool
+		logContains string
+	}{
+		{
+			name:  "success",
+			query: "INSERT INTO employee VALUES(?, ?)",
+			setupMock: func(mock sqlmock.Sqlmock) {
+				mock.ExpectExec("INSERT INTO employee VALUES(?, ?)").
+					WithArgs(2, "doe").WillReturnResult(sqlmock.NewResult(1, 1))
+			},
+			logContains: "Exec INSERT INTO employee VALUES(?, ?)",
+		},
+		{
+			name:  "error",
+			query: "INSERT INTO employee VALUES(?, ?",
+			setupMock: func(mock sqlmock.Sqlmock) {
+				mock.ExpectExec("INSERT INTO employee VALUES(?, ?").
+					WithArgs(2, "doe").WillReturnError(errSyntax)
+			},
+			wantErr:     true,
+			logContains: "Exec INSERT INTO employee VALUES(?, ?",
+		},
+	}
 
-	out := testutil.StdoutOutputForFunc(func() {
-		db, mock := getDB(t, logging.DEBUG)
-		defer db.DB.Close()
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			out := testutil.StdoutOutputForFunc(func() {
+				db, mock := getDB(t, logging.DEBUG)
+				defer db.DB.Close()
 
-		ctrl := gomock.NewController(t)
-		mockMetrics := NewMockMetrics(ctrl)
+				setupMetrics(t, db, "INSERT")
 
-		db.metrics = mockMetrics
+				tc.setupMock(mock)
 
-		mock.ExpectExec("INSERT INTO employee VALUES(?, ?)").
-			WithArgs(2, "doe").WillReturnResult(sqlmock.NewResult(1, 1))
-		mockMetrics.EXPECT().RecordHistogram(gomock.Any(), "app_sql_stats",
-			gomock.Any(), "hostname", gomock.Any(), "database", gomock.Any(), "type", "INSERT")
+				res, err := db.Exec(tc.query, 2, "doe")
+				if tc.wantErr {
+					require.Error(t, err)
+					assert.Nil(t, res)
+				} else {
+					require.NoError(t, err)
+					assert.NotNil(t, res)
+				}
+			})
 
-		res, err = db.Exec("INSERT INTO employee VALUES(?, ?)", 2, "doe")
-		require.NoError(t, err)
-		assert.NotNil(t, res)
-	})
-
-	assert.Contains(t, out, "Exec INSERT INTO employee VALUES(?, ?)")
-}
-
-func TestDB_ExecError(t *testing.T) {
-	var (
-		res sql.Result
-		err error
-	)
-
-	out := testutil.StdoutOutputForFunc(func() {
-		db, mock := getDB(t, logging.DEBUG)
-		defer db.DB.Close()
-
-		ctrl := gomock.NewController(t)
-		mockMetrics := NewMockMetrics(ctrl)
-
-		db.metrics = mockMetrics
-
-		mock.ExpectExec("INSERT INTO employee VALUES(?, ?").
-			WithArgs(2, "doe").WillReturnError(errSyntax)
-		mockMetrics.EXPECT().RecordHistogram(gomock.Any(), "app_sql_stats",
-			gomock.Any(), "hostname", gomock.Any(), "database", gomock.Any(), "type", "INSERT")
-
-		res, err = db.Exec("INSERT INTO employee VALUES(?, ?", 2, "doe")
-		assert.Nil(t, res)
-		require.Error(t, err)
-		assert.Equal(t, errSyntax, err)
-	})
-
-	assert.Contains(t, out, "Exec INSERT INTO employee VALUES(?, ?")
+			assert.Contains(t, out, tc.logContains)
+		})
+	}
 }
 
 func TestDB_ExecContext(t *testing.T) {
-	var (
-		res sql.Result
-		err error
-	)
+	tests := []struct {
+		name        string
+		setupMock   func(sqlmock.Sqlmock)
+		wantErr     bool
+		logContains string
+	}{
+		{
+			name: "success",
+			setupMock: func(mock sqlmock.Sqlmock) {
+				mock.ExpectExec("INSERT INTO employee VALUES(?, ?)").
+					WithArgs(2, "doe").WillReturnResult(sqlmock.NewResult(1, 1))
+			},
+			logContains: "ExecContext INSERT INTO employee VALUES(?, ?)",
+		},
+		{
+			name: "error",
+			setupMock: func(mock sqlmock.Sqlmock) {
+				mock.ExpectExec("INSERT INTO employee VALUES(?, ?)").
+					WithArgs(2, "doe").WillReturnError(errSyntax)
+			},
+			wantErr:     true,
+			logContains: "ExecContext INSERT INTO employee VALUES(?, ?)",
+		},
+	}
 
-	out := testutil.StdoutOutputForFunc(func() {
-		db, mock := getDB(t, logging.DEBUG)
-		defer db.DB.Close()
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			out := testutil.StdoutOutputForFunc(func() {
+				db, mock := getDB(t, logging.DEBUG)
+				defer db.DB.Close()
 
-		ctrl := gomock.NewController(t)
-		mockMetrics := NewMockMetrics(ctrl)
+				setupMetrics(t, db, "INSERT")
 
-		db.metrics = mockMetrics
+				tc.setupMock(mock)
 
-		mock.ExpectExec(`INSERT INTO employee VALUES(?, ?)`).
-			WithArgs(2, "doe").WillReturnResult(sqlmock.NewResult(1, 1))
-		mockMetrics.EXPECT().RecordHistogram(gomock.Any(), "app_sql_stats",
-			gomock.Any(), "hostname", gomock.Any(), "database", gomock.Any(), "type", "INSERT")
+				res, err := db.ExecContext(t.Context(), "INSERT INTO employee VALUES(?, ?)", 2, "doe")
+				if tc.wantErr {
+					require.Error(t, err)
+					assert.Nil(t, res)
+				} else {
+					require.NoError(t, err)
+					assert.NotNil(t, res)
+				}
+			})
 
-		res, err = db.ExecContext(t.Context(), "INSERT INTO employee VALUES(?, ?)", 2, "doe")
-		require.NoError(t, err)
-		assert.NotNil(t, res)
-	})
-
-	assert.Contains(t, out, "ExecContext INSERT INTO employee VALUES(?, ?)")
-}
-
-func TestDB_ExecContextError(t *testing.T) {
-	var (
-		res sql.Result
-		err error
-	)
-
-	out := testutil.StdoutOutputForFunc(func() {
-		db, mock := getDB(t, logging.DEBUG)
-		defer db.DB.Close()
-
-		ctrl := gomock.NewController(t)
-		mockMetrics := NewMockMetrics(ctrl)
-
-		db.metrics = mockMetrics
-
-		mock.ExpectExec(`INSERT INTO employee VALUES(?, ?)`).
-			WithArgs(2, "doe").WillReturnResult(sqlmock.NewResult(1, 1))
-		mockMetrics.EXPECT().RecordHistogram(gomock.Any(), "app_sql_stats",
-			gomock.Any(), "hostname", gomock.Any(), "database", gomock.Any(), "type", "INSERT")
-
-		res, err = db.ExecContext(t.Context(), "INSERT INTO employee VALUES(?, ?)", 2, "doe")
-		require.NoError(t, err)
-		assert.NotNil(t, res)
-	})
-
-	assert.Contains(t, out, "ExecContext INSERT INTO employee VALUES(?, ?)")
+			assert.Contains(t, out, tc.logContains)
+		})
+	}
 }
 
 func TestDB_Prepare(t *testing.T) {
-	var (
-		stmt *sql.Stmt
-		err  error
-	)
+	tests := []struct {
+		name        string
+		setupMock   func(sqlmock.Sqlmock)
+		wantErr     bool
+		logContains string
+	}{
+		{
+			name: "success",
+			setupMock: func(mock sqlmock.Sqlmock) {
+				mock.ExpectPrepare("SELECT name FROM employee WHERE id = ?")
+			},
+			logContains: "Prepare SELECT name FROM employee WHERE id = ?",
+		},
+		{
+			name: "error",
+			setupMock: func(mock sqlmock.Sqlmock) {
+				mock.ExpectPrepare("SELECT name FROM employee WHERE id = ?").WillReturnError(errSyntax)
+			},
+			wantErr:     true,
+			logContains: "Prepare SELECT name FROM employee WHERE id = ?",
+		},
+	}
 
-	out := testutil.StdoutOutputForFunc(func() {
-		db, mock := getDB(t, logging.DEBUG)
-		defer db.DB.Close()
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			out := testutil.StdoutOutputForFunc(func() {
+				db, mock := getDB(t, logging.DEBUG)
+				defer db.DB.Close()
 
-		ctrl := gomock.NewController(t)
-		mockMetrics := NewMockMetrics(ctrl)
+				setupMetrics(t, db, "SELECT")
 
-		db.metrics = mockMetrics
+				tc.setupMock(mock)
 
-		mock.ExpectPrepare("SELECT name FROM employee WHERE id = ?")
-		mockMetrics.EXPECT().RecordHistogram(gomock.Any(), "app_sql_stats",
-			gomock.Any(), "hostname", gomock.Any(), "database", gomock.Any(), "type", "SELECT")
+				stmt, err := db.Prepare("SELECT name FROM employee WHERE id = ?")
+				if tc.wantErr {
+					require.Error(t, err)
+					assert.Nil(t, stmt)
+				} else {
+					require.NoError(t, err)
+					assert.NotNil(t, stmt)
+				}
+			})
 
-		stmt, err = db.Prepare("SELECT name FROM employee WHERE id = ?")
-		require.NoError(t, err)
-		assert.NotNil(t, stmt)
-	})
-
-	assert.Contains(t, out, "Prepare SELECT name FROM employee WHERE id = ?")
-}
-
-func TestDB_PrepareError(t *testing.T) {
-	var (
-		stmt *sql.Stmt
-		err  error
-	)
-
-	out := testutil.StdoutOutputForFunc(func() {
-		db, mock := getDB(t, logging.DEBUG)
-		defer db.DB.Close()
-
-		ctrl := gomock.NewController(t)
-		mockMetrics := NewMockMetrics(ctrl)
-
-		db.metrics = mockMetrics
-
-		mock.ExpectPrepare("SELECT name FROM employee WHERE id = ?")
-		mockMetrics.EXPECT().RecordHistogram(gomock.Any(), "app_sql_stats",
-			gomock.Any(), "hostname", gomock.Any(), "database", gomock.Any(), "type", "SELECT")
-
-		stmt, err = db.Prepare("SELECT name FROM employee WHERE id = ?")
-		require.NoError(t, err)
-		assert.NotNil(t, stmt)
-	})
-
-	assert.Contains(t, out, "Prepare SELECT name FROM employee WHERE id = ?")
+			assert.Contains(t, out, tc.logContains)
+		})
+	}
 }
 
 func TestDB_Begin(t *testing.T) {
-	db, mock := getDB(t, logging.INFO)
+	tests := []struct {
+		name    string
+		setup   func(sqlmock.Sqlmock)
+		wantErr error
+	}{
+		{
+			name:  "success",
+			setup: func(mock sqlmock.Sqlmock) { mock.ExpectBegin() },
+		},
+		{
+			name:    "error",
+			setup:   func(mock sqlmock.Sqlmock) { mock.ExpectBegin().WillReturnError(errBegin) },
+			wantErr: errBegin,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			db, mock := getDB(t, logging.INFO)
+			defer db.DB.Close()
+
+			tc.setup(mock)
+
+			tx, err := db.Begin()
+			if tc.wantErr != nil {
+				require.Error(t, err)
+				assert.Equal(t, tc.wantErr, err)
+				assert.Nil(t, tx)
+			} else {
+				require.NoError(t, err)
+				assert.NotNil(t, tx)
+			}
+		})
+	}
+}
+
+func TestDB_BeginTx(t *testing.T) {
+	db, mock := getDB(t, logging.DEBUG)
+	defer db.DB.Close()
+
+	db.metrics = NewMockMetrics(gomock.NewController(t))
 
 	mock.ExpectBegin()
 
-	tx, err := db.Begin()
-
-	assert.NotNil(t, tx)
+	tx, err := db.BeginTx(t.Context(), &sql.TxOptions{Isolation: sql.LevelReadCommitted})
 	require.NoError(t, err)
-}
-
-func TestDB_BeginError(t *testing.T) {
-	db, mock := getDB(t, logging.INFO)
-
-	mock.ExpectBegin().WillReturnError(errTx)
-
-	tx, err := db.Begin()
-
-	assert.Nil(t, tx)
-	require.Error(t, err)
-	assert.Equal(t, errTx, err)
+	assert.NotNil(t, tx)
 }
 
 func TestDB_Close(t *testing.T) {
@@ -723,100 +705,151 @@ func TestDB_Close(t *testing.T) {
 	require.NoError(t, err)
 }
 
-func getTransaction(db *DB, mock sqlmock.Sqlmock) *Tx {
-	mock.ExpectBegin()
-
-	tx, _ := db.Begin()
-
-	return tx
+func TestDB_CloseWhenNil(t *testing.T) {
+	db := &DB{stopSignal: make(chan struct{})}
+	assert.NoError(t, db.Close())
 }
+
+func TestDB_Dialect(t *testing.T) {
+	db, _ := getDB(t, logging.INFO)
+	defer db.Close()
+
+	db.config.Dialect = "postgresql"
+	require.Equal(t, "postgresql", db.Dialect())
+}
+
+func TestDB_Ping(t *testing.T) {
+	tests := []struct {
+		name    string
+		setup   func(sqlmock.Sqlmock)
+		wantErr error
+	}{
+		{
+			name: "success",
+			setup: func(mock sqlmock.Sqlmock) {
+				mock.ExpectPing()
+				mock.ExpectPing().WillReturnError(nil)
+			},
+		},
+		{
+			name:    "failure",
+			setup:   func(mock sqlmock.Sqlmock) { mock.ExpectPing().WillReturnError(sql.ErrConnDone) },
+			wantErr: sql.ErrConnDone,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			db, mock := getDB(t, logging.DEBUG)
+			defer db.DB.Close()
+
+			db.metrics = NewMockMetrics(gomock.NewController(t))
+
+			tc.setup(mock)
+
+			err := db.PingContext(t.Context())
+			if tc.wantErr != nil {
+				assert.Equal(t, tc.wantErr, err)
+			} else {
+				assert.NoError(t, err)
+			}
+		})
+	}
+}
+
+func TestDB_sendOperationStats_RecordsMilliseconds(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	mockMetrics := NewMockMetrics(ctrl)
+
+	db := &DB{
+		logger:     logging.NewMockLogger(logging.DEBUG),
+		config:     &DBConfig{HostName: "host", Database: "db"},
+		metrics:    mockMetrics,
+		stopSignal: make(chan struct{}),
+	}
+
+	start := time.Now().Add(-1500 * time.Millisecond) // 1.5 seconds ago
+
+	mockMetrics.EXPECT().RecordHistogram(
+		gomock.Any(), "app_sql_stats", float64(1500),
+		"hostname", "host", "database", "db", "type", "SELECT",
+	)
+
+	db.sendOperationStats(start, "SELECT", "SELECT * FROM users")
+
+	duration := time.Since(start).Milliseconds()
+	assert.Equal(t, int64(1500), duration)
+}
+
+// --- Tx method tests ---
 
 func TestTx_Query(t *testing.T) {
-	var (
-		rows *sql.Rows
-		err  error
-	)
+	tests := []struct {
+		name        string
+		query       string
+		setupMock   func(sqlmock.Sqlmock)
+		wantErr     bool
+		logContains string
+	}{
+		{
+			name:  "success",
+			query: "SELECT 1",
+			setupMock: func(mock sqlmock.Sqlmock) {
+				mock.ExpectQuery("SELECT 1").WillReturnRows(sqlmock.NewRows([]string{"1"}).AddRow("1"))
+			},
+			logContains: "Query SELECT 1",
+		},
+		{
+			name:  "error",
+			query: "SELECT",
+			setupMock: func(mock sqlmock.Sqlmock) {
+				mock.ExpectQuery("SELECT ").WillReturnError(errSyntax)
+			},
+			wantErr:     true,
+			logContains: "Query SELECT",
+		},
+	}
 
-	out := testutil.StdoutOutputForFunc(func() {
-		db, mock := getDB(t, logging.DEBUG)
-		ctrl := gomock.NewController(t)
-		mockMetrics := NewMockMetrics(ctrl)
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			out := testutil.StdoutOutputForFunc(func() {
+				db, mock := getDB(t, logging.DEBUG)
+				defer db.DB.Close()
 
-		db.metrics = mockMetrics
+				setupMetrics(t, db, "SELECT")
 
-		tx := getTransaction(db, mock)
+				tx := getTransaction(db, mock)
+				tc.setupMock(mock)
 
-		defer db.DB.Close()
+				rows, err := tx.Query(tc.query)
+				if tc.wantErr {
+					require.Error(t, err)
+					assert.Nil(t, rows)
+				} else {
+					require.NoError(t, err)
+					require.NoError(t, rows.Err())
+					assert.NotNil(t, rows)
+				}
+			})
 
-		mock.ExpectQuery("SELECT 1").
-			WillReturnRows(sqlmock.NewRows([]string{"1"}).AddRow("1"))
-		mockMetrics.EXPECT().RecordHistogram(gomock.Any(), "app_sql_stats",
-			gomock.Any(), "hostname", gomock.Any(), "database", gomock.Any(), "type", "SELECT")
-
-		rows, err = tx.Query("SELECT 1")
-		require.NoError(t, err)
-		assert.NotNil(t, rows)
-		require.NoError(t, rows.Err())
-	})
-
-	assert.Contains(t, out, "Query SELECT 1")
-}
-
-func TestTx_QueryError(t *testing.T) {
-	var (
-		rows *sql.Rows
-		err  error
-	)
-
-	out := testutil.StdoutOutputForFunc(func() {
-		db, mock := getDB(t, logging.DEBUG)
-		defer db.DB.Close()
-
-		ctrl := gomock.NewController(t)
-		mockMetrics := NewMockMetrics(ctrl)
-
-		db.metrics = mockMetrics
-		tx := getTransaction(db, mock)
-
-		mock.ExpectQuery("SELECT ").
-			WillReturnError(errSyntax)
-		mockMetrics.EXPECT().RecordHistogram(gomock.Any(), "app_sql_stats",
-			gomock.Any(), "hostname", gomock.Any(), "database", gomock.Any(), "type", "SELECT")
-
-		rows, err = tx.Query("SELECT")
-		if !assert.Nil(t, rows) {
-			require.NoError(t, rows.Err())
-		}
-
-		require.Error(t, err)
-		assert.Equal(t, errSyntax, err)
-	})
-
-	assert.Contains(t, out, "Query SELECT")
+			assert.Contains(t, out, tc.logContains)
+		})
+	}
 }
 
 func TestTx_QueryRow(t *testing.T) {
-	var (
-		row *sql.Row
-	)
-
 	out := testutil.StdoutOutputForFunc(func() {
 		db, mock := getDB(t, logging.DEBUG)
 		defer db.DB.Close()
 
-		ctrl := gomock.NewController(t)
-		mockMetrics := NewMockMetrics(ctrl)
-
-		db.metrics = mockMetrics
+		setupMetrics(t, db, "SELECT")
 
 		tx := getTransaction(db, mock)
 
 		mock.ExpectQuery("SELECT name FROM employee WHERE id = ?").WithArgs(1).
 			WillReturnRows(sqlmock.NewRows([]string{"name"}).AddRow("jhon"))
-		mockMetrics.EXPECT().RecordHistogram(gomock.Any(), "app_sql_stats",
-			gomock.Any(), "hostname", gomock.Any(), "database", gomock.Any(), "type", "SELECT")
 
-		row = tx.QueryRow("SELECT name FROM employee WHERE id = ?", 1)
+		row := tx.QueryRow("SELECT name FROM employee WHERE id = ?", 1)
 		assert.NotNil(t, row)
 	})
 
@@ -824,26 +857,17 @@ func TestTx_QueryRow(t *testing.T) {
 }
 
 func TestTx_QueryRowContext(t *testing.T) {
-	var (
-		row *sql.Row
-	)
-
 	out := testutil.StdoutOutputForFunc(func() {
 		db, mock := getDB(t, logging.DEBUG)
 		defer db.DB.Close()
 
-		ctrl := gomock.NewController(t)
-		mockMetrics := NewMockMetrics(ctrl)
-
-		db.metrics = mockMetrics
+		setupMetrics(t, db, "SELECT")
 
 		tx := getTransaction(db, mock)
 
 		mock.ExpectQuery("SELECT name FROM employee WHERE id = ?").WithArgs(1)
-		mockMetrics.EXPECT().RecordHistogram(gomock.Any(), "app_sql_stats",
-			gomock.Any(), "hostname", gomock.Any(), "database", gomock.Any(), "type", "SELECT")
 
-		row = tx.QueryRowContext(t.Context(), "SELECT name FROM employee WHERE id = ?", 1)
+		row := tx.QueryRowContext(t.Context(), "SELECT name FROM employee WHERE id = ?", 1)
 		assert.NotNil(t, row)
 	})
 
@@ -851,281 +875,268 @@ func TestTx_QueryRowContext(t *testing.T) {
 }
 
 func TestTx_Exec(t *testing.T) {
-	var (
-		res sql.Result
-		err error
-	)
+	tests := []struct {
+		name        string
+		query       string
+		setupMock   func(sqlmock.Sqlmock)
+		wantErr     bool
+		logContains string
+	}{
+		{
+			name:  "success",
+			query: "INSERT INTO employee VALUES(?, ?)",
+			setupMock: func(mock sqlmock.Sqlmock) {
+				mock.ExpectExec("INSERT INTO employee VALUES(?, ?)").
+					WithArgs(2, "doe").WillReturnResult(sqlmock.NewResult(1, 1))
+			},
+			logContains: "TxExec INSERT INTO employee VALUES(?, ?)",
+		},
+		{
+			name:  "error",
+			query: "INSERT INTO employee VALUES(?, ?",
+			setupMock: func(mock sqlmock.Sqlmock) {
+				mock.ExpectExec("INSERT INTO employee VALUES(?, ?").
+					WithArgs(2, "doe").WillReturnError(errSyntax)
+			},
+			wantErr:     true,
+			logContains: "TxExec INSERT INTO employee VALUES(?, ?",
+		},
+	}
 
-	out := testutil.StdoutOutputForFunc(func() {
-		db, mock := getDB(t, logging.DEBUG)
-		defer db.DB.Close()
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			out := testutil.StdoutOutputForFunc(func() {
+				db, mock := getDB(t, logging.DEBUG)
+				defer db.DB.Close()
 
-		ctrl := gomock.NewController(t)
-		mockMetrics := NewMockMetrics(ctrl)
+				setupMetrics(t, db, "INSERT")
 
-		db.metrics = mockMetrics
+				tx := getTransaction(db, mock)
+				tc.setupMock(mock)
 
-		tx := getTransaction(db, mock)
+				res, err := tx.Exec(tc.query, 2, "doe")
+				if tc.wantErr {
+					require.Error(t, err)
+					assert.Nil(t, res)
+				} else {
+					require.NoError(t, err)
+					assert.NotNil(t, res)
+				}
+			})
 
-		mock.ExpectExec("INSERT INTO employee VALUES(?, ?)").
-			WithArgs(2, "doe").WillReturnResult(sqlmock.NewResult(1, 1))
-		mockMetrics.EXPECT().RecordHistogram(gomock.Any(), "app_sql_stats",
-			gomock.Any(), "hostname", gomock.Any(), "database", gomock.Any(), "type", "INSERT")
-
-		res, err = tx.Exec("INSERT INTO employee VALUES(?, ?)", 2, "doe")
-		require.NoError(t, err)
-		assert.NotNil(t, res)
-	})
-
-	assert.Contains(t, out, "TxExec INSERT INTO employee VALUES(?, ?)")
-}
-
-func TestTx_ExecError(t *testing.T) {
-	var (
-		res sql.Result
-		err error
-	)
-
-	out := testutil.StdoutOutputForFunc(func() {
-		db, mock := getDB(t, logging.DEBUG)
-		defer db.DB.Close()
-
-		ctrl := gomock.NewController(t)
-		mockMetrics := NewMockMetrics(ctrl)
-
-		db.metrics = mockMetrics
-
-		tx := getTransaction(db, mock)
-
-		mock.ExpectExec("INSERT INTO employee VALUES(?, ?").
-			WithArgs(2, "doe").WillReturnError(errSyntax)
-		mockMetrics.EXPECT().RecordHistogram(gomock.Any(), "app_sql_stats",
-			gomock.Any(), "hostname", gomock.Any(), "database", gomock.Any(), "type", "INSERT")
-
-		res, err = tx.Exec("INSERT INTO employee VALUES(?, ?", 2, "doe")
-		assert.Nil(t, res)
-		require.Error(t, err)
-		assert.Equal(t, errSyntax, err)
-	})
-
-	assert.Contains(t, out, "TxExec INSERT INTO employee VALUES(?, ?")
+			assert.Contains(t, out, tc.logContains)
+		})
+	}
 }
 
 func TestTx_ExecContext(t *testing.T) {
-	var (
-		res sql.Result
-		err error
-	)
+	tests := []struct {
+		name        string
+		setupMock   func(sqlmock.Sqlmock)
+		wantErr     bool
+		logContains string
+	}{
+		{
+			name: "success",
+			setupMock: func(mock sqlmock.Sqlmock) {
+				mock.ExpectExec("INSERT INTO employee VALUES(?, ?)").
+					WithArgs(2, "doe").WillReturnResult(sqlmock.NewResult(1, 1))
+			},
+			logContains: "ExecContext INSERT INTO employee VALUES(?, ?)",
+		},
+		{
+			name: "error",
+			setupMock: func(mock sqlmock.Sqlmock) {
+				mock.ExpectExec("INSERT INTO employee VALUES(?, ?)").
+					WithArgs(2, "doe").WillReturnError(errSyntax)
+			},
+			wantErr:     true,
+			logContains: "ExecContext INSERT INTO employee VALUES(?, ?)",
+		},
+	}
 
-	out := testutil.StdoutOutputForFunc(func() {
-		db, mock := getDB(t, logging.DEBUG)
-		defer db.DB.Close()
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			out := testutil.StdoutOutputForFunc(func() {
+				db, mock := getDB(t, logging.DEBUG)
+				defer db.DB.Close()
 
-		ctrl := gomock.NewController(t)
-		mockMetrics := NewMockMetrics(ctrl)
+				setupMetrics(t, db, "INSERT")
 
-		db.metrics = mockMetrics
+				tx := getTransaction(db, mock)
+				tc.setupMock(mock)
 
-		tx := getTransaction(db, mock)
+				res, err := tx.ExecContext(t.Context(), "INSERT INTO employee VALUES(?, ?)", 2, "doe")
+				if tc.wantErr {
+					require.Error(t, err)
+					assert.Nil(t, res)
+				} else {
+					require.NoError(t, err)
+					assert.NotNil(t, res)
+				}
+			})
 
-		mock.ExpectExec(`INSERT INTO employee VALUES(?, ?)`).
-			WithArgs(2, "doe").WillReturnResult(sqlmock.NewResult(1, 1))
-		mockMetrics.EXPECT().RecordHistogram(gomock.Any(), "app_sql_stats",
-			gomock.Any(), "hostname", gomock.Any(), "database", gomock.Any(), "type", "INSERT")
-
-		res, err = tx.ExecContext(t.Context(), "INSERT INTO employee VALUES(?, ?)", 2, "doe")
-		require.NoError(t, err)
-		assert.NotNil(t, res)
-	})
-
-	assert.Contains(t, out, "ExecContext INSERT INTO employee VALUES(?, ?)")
-}
-
-func TestTx_ExecContextError(t *testing.T) {
-	var (
-		res sql.Result
-		err error
-	)
-
-	out := testutil.StdoutOutputForFunc(func() {
-		db, mock := getDB(t, logging.DEBUG)
-		defer db.DB.Close()
-
-		ctrl := gomock.NewController(t)
-		mockMetrics := NewMockMetrics(ctrl)
-
-		db.metrics = mockMetrics
-
-		tx := getTransaction(db, mock)
-
-		mock.ExpectExec(`INSERT INTO employee VALUES(?, ?)`).
-			WithArgs(2, "doe").WillReturnResult(sqlmock.NewResult(1, 1))
-		mockMetrics.EXPECT().RecordHistogram(gomock.Any(), "app_sql_stats",
-			gomock.Any(), "hostname", gomock.Any(), "database", gomock.Any(), "type", "INSERT")
-
-		res, err = tx.ExecContext(t.Context(), "INSERT INTO employee VALUES(?, ?)", 2, "doe")
-		require.NoError(t, err)
-		assert.NotNil(t, res)
-	})
-
-	assert.Contains(t, out, "ExecContext INSERT INTO employee VALUES(?, ?)")
+			assert.Contains(t, out, tc.logContains)
+		})
+	}
 }
 
 func TestTx_Prepare(t *testing.T) {
-	var (
-		stmt *sql.Stmt
-		err  error
-	)
+	tests := []struct {
+		name        string
+		setupMock   func(sqlmock.Sqlmock)
+		wantErr     bool
+		logContains string
+	}{
+		{
+			name: "success",
+			setupMock: func(mock sqlmock.Sqlmock) {
+				mock.ExpectPrepare("SELECT name FROM employee WHERE id = ?")
+			},
+			logContains: "Prepare SELECT name FROM employee WHERE id = ?",
+		},
+		{
+			name: "error",
+			setupMock: func(mock sqlmock.Sqlmock) {
+				mock.ExpectPrepare("SELECT name FROM employee WHERE id = ?").WillReturnError(errSyntax)
+			},
+			wantErr:     true,
+			logContains: "Prepare SELECT name FROM employee WHERE id = ?",
+		},
+	}
 
-	out := testutil.StdoutOutputForFunc(func() {
-		db, mock := getDB(t, logging.DEBUG)
-		defer db.DB.Close()
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			out := testutil.StdoutOutputForFunc(func() {
+				db, mock := getDB(t, logging.DEBUG)
+				defer db.DB.Close()
 
-		ctrl := gomock.NewController(t)
-		mockMetrics := NewMockMetrics(ctrl)
+				setupMetrics(t, db, "SELECT")
 
-		db.metrics = mockMetrics
+				tx := getTransaction(db, mock)
+				tc.setupMock(mock)
 
-		tx := getTransaction(db, mock)
+				stmt, err := tx.Prepare("SELECT name FROM employee WHERE id = ?")
+				if tc.wantErr {
+					require.Error(t, err)
+					assert.Nil(t, stmt)
+				} else {
+					require.NoError(t, err)
+					assert.NotNil(t, stmt)
+				}
+			})
 
-		mock.ExpectPrepare("SELECT name FROM employee WHERE id = ?")
-		mockMetrics.EXPECT().RecordHistogram(gomock.Any(), "app_sql_stats",
-			gomock.Any(), "hostname", gomock.Any(), "database", gomock.Any(), "type", "SELECT")
-
-		stmt, err = tx.Prepare("SELECT name FROM employee WHERE id = ?")
-		require.NoError(t, err)
-		assert.NotNil(t, stmt)
-	})
-
-	assert.Contains(t, out, "Prepare SELECT name FROM employee WHERE id = ?")
-}
-
-func TestTx_PrepareError(t *testing.T) {
-	var (
-		stmt *sql.Stmt
-		err  error
-	)
-
-	out := testutil.StdoutOutputForFunc(func() {
-		db, mock := getDB(t, logging.DEBUG)
-		defer db.DB.Close()
-
-		ctrl := gomock.NewController(t)
-		mockMetrics := NewMockMetrics(ctrl)
-
-		db.metrics = mockMetrics
-
-		tx := getTransaction(db, mock)
-
-		mock.ExpectPrepare("SELECT name FROM employee WHERE id = ?")
-		mockMetrics.EXPECT().RecordHistogram(gomock.Any(), "app_sql_stats",
-			gomock.Any(), "hostname", gomock.Any(), "database", gomock.Any(), "type", "SELECT")
-
-		stmt, err = tx.Prepare("SELECT name FROM employee WHERE id = ?")
-		require.NoError(t, err)
-		assert.NotNil(t, stmt)
-	})
-
-	assert.Contains(t, out, "Prepare SELECT name FROM employee WHERE id = ?")
+			assert.Contains(t, out, tc.logContains)
+		})
+	}
 }
 
 func TestTx_Commit(t *testing.T) {
-	var err error
+	tests := []struct {
+		name    string
+		setup   func(sqlmock.Sqlmock)
+		wantErr error
+	}{
+		{
+			name:  "success",
+			setup: func(mock sqlmock.Sqlmock) { mock.ExpectCommit() },
+		},
+		{
+			name:    "error",
+			setup:   func(mock sqlmock.Sqlmock) { mock.ExpectCommit().WillReturnError(errDB) },
+			wantErr: errDB,
+		},
+	}
 
-	out := testutil.StdoutOutputForFunc(func() {
-		db, mock := getDB(t, logging.DEBUG)
-		ctrl := gomock.NewController(t)
-		mockMetrics := NewMockMetrics(ctrl)
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			out := testutil.StdoutOutputForFunc(func() {
+				db, mock := getDB(t, logging.DEBUG)
+				defer db.DB.Close()
 
-		defer db.DB.Close()
+				setupMetrics(t, db, "COMMIT")
 
-		db.metrics = mockMetrics
-		tx := getTransaction(db, mock)
+				tx := getTransaction(db, mock)
+				tc.setup(mock)
 
-		mockMetrics.EXPECT().RecordHistogram(gomock.Any(), "app_sql_stats",
-			gomock.Any(), "hostname", gomock.Any(), "database", gomock.Any(), "type", "COMMIT")
-		mock.ExpectCommit()
+				err := tx.Commit()
+				if tc.wantErr != nil {
+					require.Error(t, err)
+					assert.Equal(t, tc.wantErr, err)
+				} else {
+					require.NoError(t, err)
+				}
+			})
 
-		err = tx.Commit()
-		require.NoError(t, err)
-	})
-
-	assert.Contains(t, out, "TxCommit COMMIT")
+			assert.Contains(t, out, "TxCommit COMMIT")
+		})
+	}
 }
 
-func TestTx_CommitError(t *testing.T) {
-	var err error
+func TestTx_Rollback(t *testing.T) {
+	tests := []struct {
+		name    string
+		setup   func(sqlmock.Sqlmock)
+		wantErr error
+	}{
+		{
+			name:  "success",
+			setup: func(mock sqlmock.Sqlmock) { mock.ExpectRollback() },
+		},
+		{
+			name:    "error",
+			setup:   func(mock sqlmock.Sqlmock) { mock.ExpectRollback().WillReturnError(errDB) },
+			wantErr: errDB,
+		},
+	}
 
-	out := testutil.StdoutOutputForFunc(func() {
-		db, mock := getDB(t, logging.DEBUG)
-		ctrl := gomock.NewController(t)
-		mockMetrics := NewMockMetrics(ctrl)
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			out := testutil.StdoutOutputForFunc(func() {
+				db, mock := getDB(t, logging.DEBUG)
+				defer db.DB.Close()
 
-		defer db.DB.Close()
+				setupMetrics(t, db, "ROLLBACK")
 
-		db.metrics = mockMetrics
-		tx := getTransaction(db, mock)
+				tx := getTransaction(db, mock)
+				tc.setup(mock)
 
-		mockMetrics.EXPECT().RecordHistogram(gomock.Any(), "app_sql_stats",
-			gomock.Any(), "hostname", gomock.Any(), "database", gomock.Any(), "type", "COMMIT")
-		mock.ExpectCommit().WillReturnError(errDB)
+				err := tx.Rollback()
+				if tc.wantErr != nil {
+					require.Error(t, err)
+					assert.Equal(t, tc.wantErr, err)
+				} else {
+					require.NoError(t, err)
+				}
+			})
 
-		err = tx.Commit()
-		require.Error(t, err)
-		assert.Equal(t, errDB, err)
-	})
-
-	assert.Contains(t, out, "TxCommit COMMIT")
+			assert.Contains(t, out, "TxRollback ROLLBACK")
+		})
+	}
 }
 
-func TestTx_RollBack(t *testing.T) {
-	var err error
+func TestTx_Exec_SafeWithNilMetrics(t *testing.T) {
+	db, mock := getDB(t, logging.INFO)
+	defer db.DB.Close()
 
-	out := testutil.StdoutOutputForFunc(func() {
-		db, mock := getDB(t, logging.DEBUG)
-		ctrl := gomock.NewController(t)
-		mockMetrics := NewMockMetrics(ctrl)
+	db.metrics = nil
 
-		defer db.DB.Close()
+	mock.ExpectBegin()
 
-		db.metrics = mockMetrics
-		tx := getTransaction(db, mock)
+	tx, err := db.Begin()
+	require.NoError(t, err)
 
-		mockMetrics.EXPECT().RecordHistogram(gomock.Any(), "app_sql_stats",
-			gomock.Any(), "hostname", gomock.Any(), "database", gomock.Any(), "type", "ROLLBACK")
-		mock.ExpectRollback()
+	mock.ExpectExec("INSERT INTO users VALUES(.*)").
+		WillReturnResult(sqlmock.NewResult(1, 1))
 
-		err = tx.Rollback()
-		require.NoError(t, err)
-	})
+	assert.NotPanics(t, func() {
+		_, err = tx.Exec("INSERT INTO users VALUES(.*)", 1, "test")
+	}, "Tx.Exec should NOT panic when metrics are nil")
 
-	assert.Contains(t, out, "TxRollback ROLLBACK")
+	assert.NoError(t, err)
 }
 
-func TestTx_RollbackError(t *testing.T) {
-	var err error
-
-	out := testutil.StdoutOutputForFunc(func() {
-		db, mock := getDB(t, logging.DEBUG)
-		ctrl := gomock.NewController(t)
-		mockMetrics := NewMockMetrics(ctrl)
-
-		defer db.DB.Close()
-
-		db.metrics = mockMetrics
-		tx := getTransaction(db, mock)
-
-		mockMetrics.EXPECT().RecordHistogram(gomock.Any(), "app_sql_stats",
-			gomock.Any(), "hostname", gomock.Any(), "database", gomock.Any(), "type", "ROLLBACK")
-		mock.ExpectRollback().WillReturnError(errDB)
-
-		err = tx.Rollback()
-		require.Error(t, err)
-		assert.Equal(t, errDB, err)
-	})
-
-	assert.Contains(t, out, "TxRollback ROLLBACK")
-}
+// --- Utility tests ---
 
 func TestPrettyPrint(t *testing.T) {
 	b := make([]byte, 0)
@@ -1144,144 +1155,36 @@ func TestPrettyPrint(t *testing.T) {
 		w.String())
 }
 
-func TestClean(t *testing.T) {
-	query := ""
-
-	out := clean(query)
-
-	assert.Empty(t, out)
-}
-func TestDB_CloseWhenNil(t *testing.T) {
-	db := &DB{
-		stopSignal: make(chan struct{}),
-	}
-	err := db.Close()
-	assert.NoError(t, err)
-}
-func TestDB_BeginTx(t *testing.T) {
-	db, mock := getDB(t, logging.DEBUG)
-	defer db.DB.Close()
-
-	ctrl := gomock.NewController(t)
-	db.metrics = NewMockMetrics(ctrl)
-
-	mock.ExpectBegin()
-
-	tx, err := db.BeginTx(t.Context(), &sql.TxOptions{Isolation: sql.LevelReadCommitted})
-	require.NoError(t, err)
-	assert.NotNil(t, tx)
-}
-func TestDB_PingSuccess(t *testing.T) {
-	db, mock := getDB(t, logging.DEBUG)
-	defer db.DB.Close()
-
-	ctrl := gomock.NewController(t)
-	db.metrics = NewMockMetrics(ctrl)
-
-	mock.ExpectPing()
-	mock.ExpectPing().WillReturnError(nil)
-
-	err := db.PingContext(t.Context())
-	assert.NoError(t, err)
-}
-
-func TestDB_PingFailure(t *testing.T) {
-	db, mock := getDB(t, logging.DEBUG)
-	defer db.DB.Close()
-
-	mock.ExpectPing().WillReturnError(sql.ErrConnDone)
-
-	err := db.PingContext(t.Context())
-	assert.Equal(t, sql.ErrConnDone, err)
-}
-func TestGetOperationType_EdgeCases(t *testing.T) {
-	require.Empty(t, getOperationType(""))
-	require.Empty(t, getOperationType("   "))
-	require.Equal(t, "SELECT", getOperationType("  SELECT * FROM users"))
-}
-func TestClean_EmptyString(t *testing.T) {
-	require.Empty(t, clean(""))
-	require.Equal(t, "SELECT", clean("  SELECT  "))
-}
-func TestDB_Dialect(t *testing.T) {
-	db, _ := getDB(t, logging.INFO)
-	defer db.Close()
-
-	db.config.Dialect = "postgresql"
-	require.Equal(t, "postgresql", db.Dialect())
-}
 func TestGetOperationType(t *testing.T) {
 	tests := []struct {
 		query    string
 		expected string
 	}{
 		{"SELECT * FROM users", "SELECT"},
+		{"  SELECT * FROM users", "SELECT"},
 		{"  INSERT INTO users", "INSERT"},
 		{"UPDATE users SET name = ?", "UPDATE"},
 		{"DELETE FROM users", "DELETE"},
 		{"", ""},
+		{"   ", ""},
 	}
 
-	for _, test := range tests {
-		result := getOperationType(test.query)
-		require.Equal(t, test.expected, result)
+	for _, tc := range tests {
+		assert.Equal(t, tc.expected, getOperationType(tc.query))
 	}
 }
-func TestDB_Begin_Error(t *testing.T) {
-	db, mock := getDB(t, logging.DEBUG)
-	defer db.DB.Close()
 
-	mock.ExpectBegin().WillReturnError(errbegin)
-
-	tx, err := db.Begin()
-	require.Error(t, err)
-	assert.Nil(t, tx)
-}
-
-func TestDB_sendOperationStats_RecordsMilliseconds(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	mockMetrics := NewMockMetrics(ctrl)
-
-	db := &DB{
-		logger:     logging.NewMockLogger(logging.DEBUG),
-		config:     &DBConfig{HostName: "host", Database: "db"},
-		metrics:    mockMetrics,
-		stopSignal: make(chan struct{}),
+func TestClean(t *testing.T) {
+	tests := []struct {
+		input    string
+		expected string
+	}{
+		{"", ""},
+		{"  SELECT  ", "SELECT"},
+		{"SELECT   *   FROM   users", "SELECT * FROM users"},
 	}
 
-	start := time.Now().Add(-1500 * time.Millisecond) // 1.5 seconds ago
-
-	// Expect RecordHistogram to be called with duration 1500 (milliseconds)
-	mockMetrics.EXPECT().RecordHistogram(
-		gomock.Any(), "app_sql_stats", float64(1500),
-		"hostname", "host", "database", "db", "type", "SELECT",
-	)
-
-	db.sendOperationStats(start, "SELECT", "SELECT * FROM users")
-
-	duration := time.Since(start).Milliseconds()
-	assert.Equal(t, int64(1500), duration)
-}
-
-func TestTx_Exec_SafeWithNilMetrics(t *testing.T) {
-	db, mock := getDB(t, logging.INFO)
-	defer db.DB.Close()
-
-	// 2. FORCE nil metrics (Simulating the bug scenario)
-	db.metrics = nil
-
-	// 3. Begin transaction
-	mock.ExpectBegin()
-
-	tx, err := db.Begin()
-	require.NoError(t, err)
-
-	mock.ExpectExec("INSERT INTO users VALUES(.*)").
-		WillReturnResult(sqlmock.NewResult(1, 1))
-
-	assert.NotPanics(t, func() {
-		_, err = tx.Exec("INSERT INTO users VALUES(.*)", 1, "test")
-	}, "Tx.Exec should NOT panic when metrics are nil")
-
-	assert.NoError(t, err)
+	for _, tc := range tests {
+		assert.Equal(t, tc.expected, clean(tc.input))
+	}
 }
