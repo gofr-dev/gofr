@@ -9,6 +9,7 @@ import (
 	"gofr.dev/pkg/gofr/container"
 	"gofr.dev/pkg/gofr/http/middleware"
 	"gofr.dev/pkg/gofr/logging"
+	"gofr.dev/pkg/gofr/metrics/exporters"
 )
 
 // New creates an HTTP Server Application and returns that App.
@@ -74,6 +75,20 @@ func NewCMD() *App {
 
 	app.container.Create(app.Config)
 	app.initTracer()
+
+	if url := app.Config.Get("METRICS_PUSH_GATEWAY_URL"); url != "" {
+		jobName := app.Config.Get("APP_NAME")
+		if jobName == "" {
+			jobName = filepath.Base(os.Args[0])
+		}
+
+		// Use a dedicated registry that only collects app metrics (no Go runtime/process
+		// collectors) so Pushgateway groups stay clean and consistent with pull-based scraping.
+		appRegistry, meter, provider := exporters.NewAppRegistry(app.container.GetAppName(), app.container.GetAppVersion())
+		app.container.SetMeterProvider(provider)
+		app.container.SetMetricsManager(meter)
+		app.container.SetPushGateway(exporters.NewPushGateway(url, jobName, appRegistry, app.container.Logger))
+	}
 
 	return app
 }

@@ -1,6 +1,7 @@
 package exporters
 
 import (
+	promclient "github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/otlptranslator"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/exporters/prometheus"
@@ -12,23 +13,53 @@ import (
 	"gofr.dev/pkg/gofr/version"
 )
 
-func Prometheus(appName, appVersion string) metric.Meter {
+func Prometheus(appName, appVersion string) (metric.Meter, *metricSdk.MeterProvider) {
 	exporter, err := prometheus.New(
 		prometheus.WithoutTargetInfo(),
 		prometheus.WithTranslationStrategy(otlptranslator.NoTranslation))
 	if err != nil {
-		return nil
+		return nil, nil
 	}
 
-	meter := metricSdk.NewMeterProvider(
+	provider := metricSdk.NewMeterProvider(
 		metricSdk.WithReader(exporter),
 		metricSdk.WithResource(resource.NewWithAttributes(
 			semconv.SchemaURL,
 			semconv.ServiceNameKey.String(appName),
 			attribute.String("framework_version", version.Framework),
-		))).Meter(appName, metric.WithInstrumentationVersion(appVersion))
+		)))
 
-	return meter
+	meter := provider.Meter(appName, metric.WithInstrumentationVersion(appVersion))
+
+	return meter, provider
+}
+
+// NewAppRegistry creates a dedicated Prometheus registry that collects only
+// application metrics (via the OTel exporter), excluding Go runtime/process
+// collectors. This is used by Pushgateway so CLI apps don't push redundant
+// go_* and process_* metrics into every job group.
+func NewAppRegistry(appName, appVersion string) (*promclient.Registry, metric.Meter, *metricSdk.MeterProvider) {
+	registry := promclient.NewRegistry()
+
+	exporter, err := prometheus.New(
+		prometheus.WithoutTargetInfo(),
+		prometheus.WithTranslationStrategy(otlptranslator.NoTranslation),
+		prometheus.WithRegisterer(registry))
+	if err != nil {
+		return nil, nil, nil
+	}
+
+	provider := metricSdk.NewMeterProvider(
+		metricSdk.WithReader(exporter),
+		metricSdk.WithResource(resource.NewWithAttributes(
+			semconv.SchemaURL,
+			semconv.ServiceNameKey.String(appName),
+			attribute.String("framework_version", version.Framework),
+		)))
+
+	meter := provider.Meter(appName, metric.WithInstrumentationVersion(appVersion))
+
+	return registry, meter, provider
 }
 
 // TODO : OTLPStdOut and OTLPMetricHTTP are not being used but has to be modified such that user can decide the exporter.

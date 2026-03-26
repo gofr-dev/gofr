@@ -20,6 +20,7 @@ import (
 	"time"
 
 	_ "github.com/go-sql-driver/mysql" // This is required to be blank import
+	"go.opentelemetry.io/otel/metric"
 
 	"gofr.dev/pkg/gofr/config"
 	"gofr.dev/pkg/gofr/datasource/file"
@@ -41,6 +42,8 @@ import (
 const (
 	redisPubSubModeStreams = "streams"
 	redisPubSubModePubSub  = "pubsub"
+
+	pushGatewayTimeout = 10 * time.Second
 )
 
 // Container is a collection of all common application level concerns. Things like Logger, Connection Pool for Redis
@@ -77,6 +80,17 @@ type Container struct {
 	KVStore KVStore
 
 	File file.FileSystem
+
+	meterProvider meterProviderShutdowner
+	pushGateway   metricsPusher
+}
+
+type meterProviderShutdowner interface {
+	Shutdown(ctx context.Context) error
+}
+
+type metricsPusher interface {
+	Push(ctx context.Context) error
 }
 
 func NewContainer(conf config.Config) *Container {
@@ -119,7 +133,9 @@ func (c *Container) Create(conf config.Config) {
 
 	c.Logger.Debug("Container is being created")
 
-	c.metricsManager = metrics.NewMetricsManager(exporters.Prometheus(c.GetAppName(), c.GetAppVersion()), c.Logger)
+	meter, provider := exporters.Prometheus(c.GetAppName(), c.GetAppVersion())
+	c.meterProvider = provider
+	c.metricsManager = metrics.NewMetricsManager(meter, c.Logger)
 
 	exporters.SendFrameworkStartupTelemetry(c.GetAppName(), c.GetAppVersion())
 
@@ -173,7 +189,37 @@ func (c *Container) Close() error {
 		c.WSManager.CloseConnection(conn)
 	}
 
+	if c.pushGateway != nil {
+		pushCtx, cancel := context.WithTimeout(context.Background(), pushGatewayTimeout)
+		defer cancel()
+
+		err = errors.Join(err, c.pushGateway.Push(pushCtx))
+	}
+
+	if c.meterProvider != nil {
+		err = errors.Join(err, c.meterProvider.Shutdown(context.Background()))
+	}
+
 	return err
+}
+
+// SetPushGateway configures a Prometheus Pushgateway for pushing metrics on close.
+func (c *Container) SetPushGateway(pg metricsPusher) {
+	c.pushGateway = pg
+}
+
+// SetMeterProvider replaces the meter provider (used when CLI apps switch
+// to a dedicated registry for Pushgateway).
+func (c *Container) SetMeterProvider(mp meterProviderShutdowner) {
+	c.meterProvider = mp
+}
+
+// SetMetricsManager replaces the metrics manager with one backed by the given meter.
+func (c *Container) SetMetricsManager(meter metric.Meter) {
+	c.metricsManager = metrics.NewMetricsManager(meter, c.Logger)
+	c.registerFrameworkMetrics()
+	c.Metrics().SetGauge("app_info", 1,
+		"app_name", c.GetAppName(), "app_version", c.GetAppVersion(), "framework_version", version.Framework)
 }
 
 func (c *Container) createMqttPubSub(conf config.Config) pubsub.Client {

@@ -13,8 +13,14 @@ import (
 	"gofr.dev/pkg/gofr/testutil"
 )
 
+// newTestMetricsManager creates a MetricsManager for tests, discarding the MeterProvider.
+func newTestMetricsManager(appName string, logger Logger) Manager {
+	meter, _ := exporters.Prometheus(appName, "v1.0.0")
+	return NewMetricsManager(meter, logger)
+}
+
 func Test_NewMetricsManagerSuccess(t *testing.T) {
-	metrics := NewMetricsManager(exporters.Prometheus("testing-app", "v1.0.0"),
+	metrics := newTestMetricsManager("testing-app",
 		logging.NewMockLogger(logging.INFO))
 
 	metrics.NewGauge("gauge-test", "this is metric to test gauge")
@@ -68,7 +74,7 @@ func Test_NewMetricsManagerSuccess(t *testing.T) {
 
 func Test_NewMetricsManagerMetricsNotRegistered(t *testing.T) {
 	logs := func() {
-		metrics := NewMetricsManager(exporters.Prometheus("testing-app", "v1.0.0"),
+		metrics := newTestMetricsManager("testing-app",
 			logging.NewMockLogger(logging.INFO))
 
 		metrics.SetGauge("gauge-test", 50)
@@ -87,7 +93,7 @@ func Test_NewMetricsManagerMetricsNotRegistered(t *testing.T) {
 
 func Test_NewMetricsManagerInvalidMetricsName(t *testing.T) {
 	logs := func() {
-		metrics := NewMetricsManager(exporters.Prometheus("testing-app", "v1.0.0"),
+		metrics := newTestMetricsManager("testing-app",
 			logging.NewMockLogger(logging.INFO))
 
 		metrics.NewCounter("", "counter metric with empty name")
@@ -106,7 +112,7 @@ func Test_NewMetricsManagerInvalidMetricsName(t *testing.T) {
 
 func Test_NewMetricsManagerDuplicateMetricsRegistration(t *testing.T) {
 	logs := func() {
-		metrics := NewMetricsManager(exporters.Prometheus("testing-app", "v1.0.0"),
+		metrics := newTestMetricsManager("testing-app",
 			logging.NewMockLogger(logging.INFO))
 
 		metrics.NewGauge("gauge-test", "this is metric to test gauge")
@@ -130,7 +136,7 @@ func Test_NewMetricsManagerDuplicateMetricsRegistration(t *testing.T) {
 
 func Test_NewMetricsManagerInvalidLabelPairErrors(t *testing.T) {
 	logs := func() {
-		metrics := NewMetricsManager(exporters.Prometheus("testing-app", "v1.0.0"),
+		metrics := newTestMetricsManager("testing-app",
 			logging.NewMockLogger(logging.INFO))
 
 		metrics.NewCounter("counter-test", "this is metric to test counter")
@@ -146,7 +152,7 @@ func Test_NewMetricsManagerInvalidLabelPairErrors(t *testing.T) {
 
 func Test_NewMetricsManagerLabelHighCardinality(t *testing.T) {
 	logs := func() {
-		metrics := NewMetricsManager(exporters.Prometheus("testing-app", "v1.0.0"),
+		metrics := newTestMetricsManager("testing-app",
 			logging.NewMockLogger(logging.INFO))
 
 		metrics.NewCounter("counter-test", "this is metric to test counter")

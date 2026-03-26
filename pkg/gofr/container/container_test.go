@@ -2,6 +2,7 @@ package container
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"testing"
@@ -514,6 +515,75 @@ func TestGetDefaultDatasourceBuckets(t *testing.T) {
 	for i := 1; i < len(buckets); i++ {
 		assert.Greater(t, buckets[i], buckets[i-1])
 	}
+}
+
+var errPushGatewayUnreachable = errors.New("pushgateway unreachable")
+
+type mockMetricsPusher struct {
+	pushCalled bool
+	pushErr    error
+}
+
+func (m *mockMetricsPusher) Push(_ context.Context) error {
+	m.pushCalled = true
+	return m.pushErr
+}
+
+func TestContainer_Close_PushesMetricsWhenPushGatewaySet(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	mockRedis := NewMockRedis(ctrl)
+	mockRedis.EXPECT().Close().Return(nil)
+
+	mockDB, sqlMock, _ := gofrSql.NewSQLMocks(t)
+	sqlMock.ExpectClose()
+
+	c := NewContainer(config.NewMockConfig(nil))
+	c.SQL = &sqlMockDB{mockDB, &expectedQuery{}, logging.NewLogger(logging.DEBUG)}
+	c.Redis = mockRedis
+	c.PubSub = &MockPubSub{}
+
+	pg := &mockMetricsPusher{}
+	c.SetPushGateway(pg)
+
+	err := c.Close()
+	require.NoError(t, err)
+	assert.True(t, pg.pushCalled, "Push should be called on Close")
+}
+
+func TestContainer_Close_PushGatewayError(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	mockRedis := NewMockRedis(ctrl)
+	mockRedis.EXPECT().Close().Return(nil)
+
+	mockDB, sqlMock, _ := gofrSql.NewSQLMocks(t)
+	sqlMock.ExpectClose()
+
+	c := NewContainer(config.NewMockConfig(nil))
+	c.SQL = &sqlMockDB{mockDB, &expectedQuery{}, logging.NewLogger(logging.DEBUG)}
+	c.Redis = mockRedis
+	c.PubSub = &MockPubSub{}
+
+	pg := &mockMetricsPusher{pushErr: errPushGatewayUnreachable}
+	c.SetPushGateway(pg)
+
+	err := c.Close()
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "pushgateway unreachable")
+	assert.True(t, pg.pushCalled)
+}
+
+func TestContainer_Close_NilPushGateway(t *testing.T) {
+	c := &Container{
+		WSManager: ws.New(),
+	}
+
+	// Close should not panic when pushGateway is nil
+	err := c.Close()
+	require.NoError(t, err)
 }
 
 func TestContainer_Close_ClosesWebsocketConnections(t *testing.T) {

@@ -1,0 +1,53 @@
+# Grafana dashboard for CMD metrics is also available in
+# examples/http-server/docker/provisioning/dashboards/gofr-dashboard/dashboards.json
+# under the "CMD Metrics" row.
+
+version: '3.8'
+
+services:
+  sample-cmd:
+    build:
+      context: ../../../           # project root (so go.mod and go.sum are included)
+      dockerfile: examples/sample-cmd/Dockerfile
+    environment:
+      APP_NAME: sample-cmd
+      METRICS_PUSH_GATEWAY_URL: http://pushgateway:9091
+    depends_on:
+      - pushgateway
+    networks:
+      - gofr-network
+
+  pushgateway:
+    image: prom/pushgateway:latest
+    ports:
+      - "9091:9091"
+    networks:
+      - gofr-network
+
+  prometheus:
+    image: prom/prometheus:latest
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./prometheus:/etc/prometheus
+    depends_on:
+      - pushgateway
+    networks:
+      - gofr-network
+
+  grafana:
+    image: grafana/grafana:latest
+    ports:
+      - "3000:3000"
+    environment:
+      GF_SECURITY_ADMIN_USER: admin
+      GF_SECURITY_ADMIN_PASSWORD: password
+    volumes:
+      - ./provisioning:/etc/grafana/provisioning
+    depends_on:
+      - prometheus
+    networks:
+      - gofr-network
+
+networks:
+  gofr-network:

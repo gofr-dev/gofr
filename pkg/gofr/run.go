@@ -14,7 +14,18 @@ import (
 // Run starts the application. If it is an HTTP server, it will start the server.
 func (a *App) Run() {
 	if a.cmd != nil {
+		defer func() {
+			shutdownCtx, cancel := context.WithTimeout(context.Background(), shutDownTimeout)
+			defer cancel()
+
+			if err := a.Shutdown(shutdownCtx); err != nil {
+				a.Logger().Errorf("CLI shutdown error: %v", err)
+			}
+		}()
+
 		a.cmd.Run(a.container)
+
+		return
 	}
 
 	// Create a context that is canceled on receiving termination signals

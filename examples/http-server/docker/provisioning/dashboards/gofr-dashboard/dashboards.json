@@ -5306,6 +5306,492 @@
         }
       ],
       "type": "timeseries"
+    },
+    {
+      "collapsed": true,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 206
+      },
+      "id": 137,
+      "panels": [
+        {
+          "collapsed": false,
+          "gridPos": { "h": 1, "w": 24, "x": 0, "y": 207 },
+          "id": 150,
+          "panels": [],
+          "title": "Health Overview",
+          "type": "row"
+        },
+        {
+          "datasource": { "type": "prometheus", "uid": "${DataSource}" },
+          "description": "Number of distinct CLI jobs that have pushed metrics.",
+          "fieldConfig": {
+            "defaults": {
+              "color": { "mode": "thresholds" },
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  { "color": "blue", "value": null }
+                ]
+              },
+              "decimals": 0
+            },
+            "overrides": []
+          },
+          "gridPos": { "h": 4, "w": 4, "x": 0, "y": 208 },
+          "id": 151,
+          "options": {
+            "colorMode": "background",
+            "graphMode": "none",
+            "justifyMode": "center",
+            "orientation": "auto",
+            "reduceOptions": {
+              "calcs": ["lastNotNull"],
+              "fields": "",
+              "values": false
+            },
+            "textMode": "value"
+          },
+          "title": "Jobs Tracked",
+          "type": "stat",
+          "targets": [
+            {
+              "datasource": { "type": "prometheus", "uid": "${DataSource}" },
+              "expr": "count(count by (job) (push_time_seconds{job=~\"$job\"}))",
+              "legendFormat": "",
+              "refId": "A"
+            }
+          ]
+        },
+        {
+          "datasource": { "type": "prometheus", "uid": "${DataSource}" },
+          "description": "Time since the most recent push across all jobs. Indicates if jobs are running on schedule.",
+          "fieldConfig": {
+            "defaults": {
+              "color": { "mode": "thresholds" },
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  { "color": "green", "value": null },
+                  { "color": "yellow", "value": 120 },
+                  { "color": "red", "value": 300 }
+                ]
+              },
+              "unit": "s",
+              "decimals": 0
+            },
+            "overrides": []
+          },
+          "gridPos": { "h": 4, "w": 5, "x": 4, "y": 208 },
+          "id": 152,
+          "options": {
+            "colorMode": "background",
+            "graphMode": "none",
+            "justifyMode": "center",
+            "orientation": "auto",
+            "reduceOptions": {
+              "calcs": ["lastNotNull"],
+              "fields": "",
+              "values": false
+            },
+            "textMode": "value"
+          },
+          "title": "Last Push Age",
+          "type": "stat",
+          "targets": [
+            {
+              "datasource": { "type": "prometheus", "uid": "${DataSource}" },
+              "expr": "min(time() - push_time_seconds{job=~\"$job\"})",
+              "legendFormat": "",
+              "refId": "A"
+            }
+          ]
+        },
+        {
+          "datasource": { "type": "prometheus", "uid": "${DataSource}" },
+          "description": "Total successful CLI command executions across all jobs and instances.",
+          "fieldConfig": {
+            "defaults": {
+              "color": { "mode": "thresholds" },
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  { "color": "green", "value": null }
+                ]
+              },
+              "decimals": 0
+            },
+            "overrides": []
+          },
+          "gridPos": { "h": 4, "w": 5, "x": 9, "y": 208 },
+          "id": 153,
+          "options": {
+            "colorMode": "background",
+            "graphMode": "none",
+            "justifyMode": "center",
+            "orientation": "auto",
+            "reduceOptions": {
+              "calcs": ["lastNotNull"],
+              "fields": "",
+              "values": false
+            },
+            "textMode": "value"
+          },
+          "title": "Total Successes",
+          "type": "stat",
+          "targets": [
+            {
+              "datasource": { "type": "prometheus", "uid": "${DataSource}" },
+              "expr": "sum(app_cmd_success{job=~\"$job\", command=~\"$command\"})",
+              "legendFormat": "",
+              "refId": "A"
+            }
+          ]
+        },
+        {
+          "datasource": { "type": "prometheus", "uid": "${DataSource}" },
+          "description": "Total failed CLI command executions. Red on any failure.",
+          "fieldConfig": {
+            "defaults": {
+              "color": { "mode": "thresholds" },
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  { "color": "green", "value": null },
+                  { "color": "red", "value": 1 }
+                ]
+              },
+              "decimals": 0
+            },
+            "overrides": []
+          },
+          "gridPos": { "h": 4, "w": 5, "x": 14, "y": 208 },
+          "id": 154,
+          "options": {
+            "colorMode": "background",
+            "graphMode": "none",
+            "justifyMode": "center",
+            "orientation": "auto",
+            "reduceOptions": {
+              "calcs": ["lastNotNull"],
+              "fields": "",
+              "values": false
+            },
+            "textMode": "value"
+          },
+          "title": "Total Failures",
+          "type": "stat",
+          "targets": [
+            {
+              "datasource": { "type": "prometheus", "uid": "${DataSource}" },
+              "expr": "sum(app_cmd_failures{job=~\"$job\", command=~\"$command\"})",
+              "legendFormat": "",
+              "refId": "A"
+            }
+          ]
+        },
+        {
+          "datasource": { "type": "prometheus", "uid": "${DataSource}" },
+          "description": "Overall success rate across all jobs.",
+          "fieldConfig": {
+            "defaults": {
+              "color": { "mode": "thresholds" },
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  { "color": "red", "value": null },
+                  { "color": "yellow", "value": 80 },
+                  { "color": "green", "value": 95 }
+                ]
+              },
+              "unit": "percent",
+              "decimals": 1,
+              "min": 0,
+              "max": 100
+            },
+            "overrides": []
+          },
+          "gridPos": { "h": 4, "w": 5, "x": 19, "y": 208 },
+          "id": 155,
+          "options": {
+            "colorMode": "background",
+            "graphMode": "none",
+            "justifyMode": "center",
+            "orientation": "auto",
+            "reduceOptions": {
+              "calcs": ["lastNotNull"],
+              "fields": "",
+              "values": false
+            },
+            "textMode": "value"
+          },
+          "title": "Success Rate",
+          "type": "stat",
+          "targets": [
+            {
+              "datasource": { "type": "prometheus", "uid": "${DataSource}" },
+              "expr": "sum(app_cmd_success{job=~\"$job\", command=~\"$command\"}) / (sum(app_cmd_success{job=~\"$job\", command=~\"$command\"}) + sum(app_cmd_failures{job=~\"$job\", command=~\"$command\"})) * 100",
+              "legendFormat": "",
+              "refId": "A"
+            }
+          ]
+        },
+        {
+          "collapsed": false,
+          "gridPos": { "h": 1, "w": 24, "x": 0, "y": 212 },
+          "id": 160,
+          "panels": [],
+          "title": "Per-Job Breakdown",
+          "type": "row"
+        },
+        {
+          "datasource": { "type": "prometheus", "uid": "${DataSource}" },
+          "description": "All CLI jobs with success/failure counts, duration, and last push time.",
+          "fieldConfig": {
+            "defaults": {
+              "color": { "mode": "thresholds" },
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  { "color": "green", "value": null }
+                ]
+              },
+              "custom": {
+                "align": "auto",
+                "cellOptions": { "type": "auto" },
+                "inspect": false
+              }
+            },
+            "overrides": [
+              {
+                "matcher": { "id": "byName", "options": "Failures" },
+                "properties": [
+                  {
+                    "id": "thresholds",
+                    "value": {
+                      "mode": "absolute",
+                      "steps": [
+                        { "color": "green", "value": null },
+                        { "color": "red", "value": 1 }
+                      ]
+                    }
+                  },
+                  { "id": "custom.cellOptions", "value": { "type": "color-background" } }
+                ]
+              },
+              {
+                "matcher": { "id": "byName", "options": "Duration (p95)" },
+                "properties": [
+                  { "id": "unit", "value": "s" },
+                  { "id": "decimals", "value": 3 }
+                ]
+              },
+              {
+                "matcher": { "id": "byName", "options": "Last Success" },
+                "properties": [
+                  { "id": "unit", "value": "dateTimeFromNow" }
+                ]
+              }
+            ]
+          },
+          "gridPos": { "h": 8, "w": 24, "x": 0, "y": 213 },
+          "id": 161,
+          "options": {
+            "showHeader": true,
+            "cellHeight": "sm",
+            "footer": { "show": false },
+            "sortBy": [
+              { "displayName": "Failures", "desc": true }
+            ]
+          },
+          "title": "Job Status",
+          "type": "table",
+          "targets": [
+            {
+              "datasource": { "type": "prometheus", "uid": "${DataSource}" },
+              "expr": "sum(app_cmd_success{job=~\"$job\", command=~\"$command\"}) by (job, command)",
+              "legendFormat": "",
+              "refId": "A",
+              "format": "table",
+              "instant": true
+            },
+            {
+              "datasource": { "type": "prometheus", "uid": "${DataSource}" },
+              "expr": "sum(app_cmd_failures{job=~\"$job\", command=~\"$command\"}) by (job, command)",
+              "legendFormat": "",
+              "refId": "B",
+              "format": "table",
+              "instant": true
+            },
+            {
+              "datasource": { "type": "prometheus", "uid": "${DataSource}" },
+              "expr": "histogram_quantile(0.95, sum by (le, job, command) (app_cmd_duration_seconds_bucket{job=~\"$job\", command=~\"$command\"}))",
+              "legendFormat": "",
+              "refId": "C",
+              "format": "table",
+              "instant": true
+            },
+            {
+              "datasource": { "type": "prometheus", "uid": "${DataSource}" },
+              "expr": "app_cmd_last_success_timestamp{job=~\"$job\", command=~\"$command\"} * 1000",
+              "legendFormat": "",
+              "refId": "D",
+              "format": "table",
+              "instant": true
+            }
+          ],
+          "transformations": [
+            {
+              "id": "merge",
+              "options": {}
+            },
+            {
+              "id": "organize",
+              "options": {
+                "excludeByName": {
+                  "Time": true,
+                  "__name__": true,
+                  "instance": true,
+                  "otel_scope_name": true,
+                  "otel_scope_schema_url": true,
+                  "otel_scope_version": true
+                },
+                "renameByName": {
+                  "Value #A": "Successes",
+                  "Value #B": "Failures",
+                  "Value #C": "Duration (p95)",
+                  "Value #D": "Last Success",
+                  "job": "Job",
+                  "command": "Command"
+                }
+              }
+            }
+          ]
+        },
+        {
+          "collapsed": false,
+          "gridPos": { "h": 1, "w": 24, "x": 0, "y": 221 },
+          "id": 170,
+          "panels": [],
+          "title": "Duration Analysis",
+          "type": "row"
+        },
+        {
+          "datasource": { "type": "prometheus", "uid": "${DataSource}" },
+          "description": "Duration percentiles across all accumulated CLI runs per command.",
+          "fieldConfig": {
+            "defaults": {
+              "color": { "mode": "palette-classic" },
+              "custom": {
+                "axisBorderShow": false,
+                "axisCenteredZero": false,
+                "axisLabel": "",
+                "axisPlacement": "auto",
+                "barAlignment": 0,
+                "drawStyle": "bars",
+                "fillOpacity": 80,
+                "lineWidth": 0,
+                "pointSize": 5,
+                "showPoints": "never",
+                "spanNulls": false,
+                "stacking": { "group": "A", "mode": "none" },
+                "thresholdsStyle": { "mode": "off" }
+              },
+              "unit": "s",
+              "noValue": "-"
+            },
+            "overrides": []
+          },
+          "gridPos": { "h": 8, "w": 16, "x": 0, "y": 222 },
+          "id": 171,
+          "options": {
+            "legend": {
+              "calcs": ["lastNotNull", "max"],
+              "displayMode": "table",
+              "placement": "bottom"
+            },
+            "tooltip": { "mode": "multi", "sort": "desc" }
+          },
+          "title": "Run Duration (p95)",
+          "type": "timeseries",
+          "targets": [
+            {
+              "datasource": { "type": "prometheus", "uid": "${DataSource}" },
+              "expr": "histogram_quantile(0.50, sum by (le, command) (app_cmd_duration_seconds_bucket{job=~\"$job\", command=~\"$command\"}))",
+              "legendFormat": "p50 — {{command}}",
+              "refId": "A"
+            },
+            {
+              "datasource": { "type": "prometheus", "uid": "${DataSource}" },
+              "expr": "histogram_quantile(0.90, sum by (le, command) (app_cmd_duration_seconds_bucket{job=~\"$job\", command=~\"$command\"}))",
+              "legendFormat": "p90 — {{command}}",
+              "refId": "B"
+            },
+            {
+              "datasource": { "type": "prometheus", "uid": "${DataSource}" },
+              "expr": "histogram_quantile(0.95, sum by (le, command) (app_cmd_duration_seconds_bucket{job=~\"$job\", command=~\"$command\"}))",
+              "legendFormat": "p95 — {{command}}",
+              "refId": "C"
+            },
+            {
+              "datasource": { "type": "prometheus", "uid": "${DataSource}" },
+              "expr": "histogram_quantile(0.99, sum by (le, command) (app_cmd_duration_seconds_bucket{job=~\"$job\", command=~\"$command\"}))",
+              "legendFormat": "p99 — {{command}}",
+              "refId": "D"
+            }
+          ]
+        },
+        {
+          "datasource": { "type": "prometheus", "uid": "${DataSource}" },
+          "description": "Visual gauge of p95 duration per command. Yellow > 30s, Red > 120s.",
+          "fieldConfig": {
+            "defaults": {
+              "color": { "mode": "thresholds" },
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  { "color": "green", "value": null },
+                  { "color": "yellow", "value": 30 },
+                  { "color": "red", "value": 120 }
+                ]
+              },
+              "unit": "s",
+              "min": 0
+            },
+            "overrides": []
+          },
+          "gridPos": { "h": 8, "w": 8, "x": 16, "y": 222 },
+          "id": 172,
+          "options": {
+            "minVizHeight": 75,
+            "minVizWidth": 75,
+            "orientation": "horizontal",
+            "reduceOptions": {
+              "calcs": ["lastNotNull"],
+              "fields": "",
+              "values": false
+            },
+            "showThresholdLabels": false,
+            "showThresholdMarkers": true,
+            "sizing": "auto"
+          },
+          "title": "Last Duration by Command",
+          "type": "gauge",
+          "targets": [
+            {
+              "datasource": { "type": "prometheus", "uid": "${DataSource}" },
+              "expr": "histogram_quantile(0.95, sum by (le, command) (app_cmd_duration_seconds_bucket{job=~\"$job\", command=~\"$command\"}))",
+              "legendFormat": "{{command}}",
+              "refId": "A"
+            }
+          ]
+        }
+      ],
+      "title": "CMD Metrics",
+      "type": "row"
     }
   ],
   "refresh": "5s",
@@ -5357,6 +5843,54 @@
           "refId": "PrometheusVariableQueryEditor-VariableQuery"
         },
         "refresh": 1,
+        "regex": "",
+        "skipUrlSync": false,
+        "sort": 1,
+        "type": "query"
+      },
+      {
+        "current": {
+          "selected": false,
+          "text": "All",
+          "value": "$__all"
+        },
+        "datasource": {
+          "type": "prometheus",
+          "uid": "${DataSource}"
+        },
+        "definition": "label_values(push_time_seconds, job)",
+        "hide": 0,
+        "includeAll": true,
+        "label": "CLI Job",
+        "multi": true,
+        "name": "job",
+        "options": [],
+        "query": "label_values(push_time_seconds, job)",
+        "refresh": 2,
+        "regex": "",
+        "skipUrlSync": false,
+        "sort": 1,
+        "type": "query"
+      },
+      {
+        "current": {
+          "selected": false,
+          "text": "All",
+          "value": "$__all"
+        },
+        "datasource": {
+          "type": "prometheus",
+          "uid": "${DataSource}"
+        },
+        "definition": "label_values(app_cmd_duration_seconds_count{job=~\"$job\"}, command)",
+        "hide": 0,
+        "includeAll": true,
+        "label": "Command",
+        "multi": true,
+        "name": "command",
+        "options": [],
+        "query": "label_values(app_cmd_duration_seconds_count{job=~\"$job\"}, command)",
+        "refresh": 2,
         "regex": "",
         "skipUrlSync": false,
         "sort": 1,

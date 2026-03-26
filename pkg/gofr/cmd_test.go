@@ -326,6 +326,55 @@ func Test_Run_UnknownCommandShowsHelp(t *testing.T) {
 	assert.Contains(t, logs, "Help: logging messages to the terminal")
 }
 
+var errCommandFailed = fmt.Errorf("something went wrong")
+
+func Test_Run_SuccessRecordsMetrics(t *testing.T) {
+	os.Args = []string{"", "hello"}
+
+	c := cmd{}
+
+	c.addRoute("hello",
+		func(_ *Context) (any, error) {
+			return "Hello World", nil
+		},
+		AddDescription("Says hello"),
+	)
+
+	logs := testutil.StdoutOutputForFunc(func() {
+		c.Run(container.NewContainer(config.NewEnvFile("", logging.NewMockLogger(logging.DEBUG))))
+	})
+
+	assert.Contains(t, logs, "Hello World")
+}
+
+func Test_Run_ErrorRecordsMetrics(t *testing.T) {
+	os.Args = []string{"", "fail"}
+
+	c := cmd{}
+
+	c.addRoute("fail",
+		func(_ *Context) (any, error) {
+			return nil, errCommandFailed
+		},
+		AddDescription("Always fails"),
+	)
+
+	errLogs := testutil.StderrOutputForFunc(func() {
+		c.Run(container.NewContainer(config.NewEnvFile("", logging.NewMockLogger(logging.DEBUG))))
+	})
+
+	assert.Contains(t, errLogs, "something went wrong")
+}
+
+func Test_registerCMDMetrics_NilMetrics(t *testing.T) {
+	c := &container.Container{}
+
+	// Should not panic when Metrics() returns nil
+	assert.NotPanics(t, func() {
+		registerCMDMetrics(c)
+	})
+}
+
 func Test_Run_handler_help(t *testing.T) {
 	var old []string
 
