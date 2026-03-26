@@ -259,8 +259,8 @@ type Mongo interface {
 	UpdateByID(ctx context.Context, collection string, id any, update any) (int64, error)
 
 	// UpdateOne updates a single document in a collection based on a filter.
-	// It returns an error if any.
-	UpdateOne(ctx context.Context, collection string, filter any, update any) error
+	// It returns the number of documents updated and an error if any.
+	UpdateOne(ctx context.Context, collection string, filter any, update any) (int64, error)
 
 	// UpdateMany updates multiple documents in a collection based on a filter.
 	// It returns the number of documents updated and an error if any.
