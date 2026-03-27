@@ -197,6 +197,18 @@ func testWebSocketConnection(t *testing.T, wsURL string, messageChan chan string
 	time.Sleep(10 * time.Millisecond)
 }
 
+func TestContext_WriteMessageToSocket_NilConnection(t *testing.T) {
+	testContainer, _ := container.NewMockContainer(t)
+
+	testReq := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/ws", http.NoBody)
+	gofrReq := gofrHTTP.NewRequest(testReq)
+	ctx := newContext(gofrHTTP.NewResponder(httptest.NewRecorder(), http.MethodGet), gofrReq, testContainer)
+
+	err := ctx.WriteMessageToSocket("test message")
+
+	assert.ErrorIs(t, err, ErrConnectionNotFound)
+}
+
 func TestContext_WriteMessageToService(t *testing.T) {
 	if testing.Short() {
 		t.Skip("skipping test in short mode")
