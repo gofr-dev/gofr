@@ -253,6 +253,8 @@ func (d *DB) selectSlice(ctx context.Context, query string, args []any, rvo, rv 
 		return
 	}
 
+	defer rows.Close()
+
 	for rows.Next() {
 		val := reflect.New(rv.Type().Elem())
 
@@ -266,7 +268,7 @@ func (d *DB) selectSlice(ctx context.Context, query string, args []any, rvo, rv 
 	}
 
 	if rows.Err() != nil {
-		d.logger.Errorf("error parsing rows : %v", err)
+		d.logger.Errorf("error parsing rows : %v", rows.Err())
 		return
 	}
 
@@ -282,12 +284,14 @@ func (d *DB) selectStruct(ctx context.Context, query string, args []any, rv refl
 		return
 	}
 
+	defer rows.Close()
+
 	for rows.Next() {
 		d.rowsToStruct(rows, rv)
 	}
 
 	if rows.Err() != nil {
-		d.logger.Errorf("error parsing rows : %v", err)
+		d.logger.Errorf("error parsing rows : %v", rows.Err())
 		return
 	}
 }
