@@ -155,51 +155,53 @@ func (dm dgraphMigrator) beginTransaction(c *container.Container) transactionDat
 
 // commitMigration commits the migration and records its metadata.
 func (dm dgraphMigrator) commitMigration(c *container.Container, data transactionData) error {
-	ctx := context.Background()
+       ctx := context.Background()
 
-	// Build the JSON payload for the migration record.
-	payload := map[string]any{
-		"migrations": []map[string]any{
-			{
-				"migrations.version":    data.MigrationNumber,
-				"migrations.method":     "UP",
-				"migrations.start_time": data.StartTime.Format(time.RFC3339),
-				"migrations.duration":   time.Since(data.StartTime).Milliseconds(),
-			},
-		},
-	}
+       // Build the JSON payload for the migration record.
+       payload := map[string]any{
+	       "migrations": []map[string]any{
+		       {
+			       "migrations.version":    data.MigrationNumber,
+			       "migrations.method":     "UP",
+			       "migrations.start_time": data.StartTime.Format(time.RFC3339),
+			       "migrations.duration":   time.Since(data.StartTime).Milliseconds(),
+		       },
+	       },
+       }
 
-	jsonPayload, err := json.Marshal(payload)
-	if err != nil {
-		return err
-	}
+       jsonPayload, err := json.Marshal(payload)
+       if err != nil {
+	       return err
+       }
 
-	tx, ok := c.DGraph.NewTxn().(dgraphTxn)
-	if !ok {
-		return errInvalidDgraphTxn
-	}
+       tx, ok := c.DGraph.NewTxn().(dgraphTxn)
+       if !ok {
+	       return errInvalidDgraphTxn
+       }
 
-	defer func() {
-		if err := tx.Discard(ctx); err != nil {
-			c.Error("dgraph: transaction discard failed", err)
-		}
-	}()
+       defer func() {
+	       if err = tx.Discard(ctx); err != nil {
+		       c.Error("dgraph: transaction discard failed", err)
+	       }
+       }()
 
-	_, err = tx.Mutate(ctx, &api.Mutation{
-		SetJson: jsonPayload,
-	})
-	if err != nil {
-		return err
-	}
+       c.Debugf("Executing Dgraph migration mutation for version %v", data.MigrationNumber)
 
-	err = tx.Commit(ctx)
-	if err != nil {
-		return err
-	}
+       _, err = tx.Mutate(ctx, &api.Mutation{
+	       SetJson: jsonPayload,
+       })
+       if err != nil {
+	       return err
+       }
 
-	c.Debugf("Inserted record for migration %v in Dgraph migrations", data.MigrationNumber)
+       err = tx.Commit(ctx)
+       if err != nil {
+	       return err
+       }
 
-	return dm.migrator.commitMigration(c, data)
+       c.Debugf("Inserted record for migration %v in Dgraph migrations", data.MigrationNumber)
+
+       return dm.migrator.commitMigration(c, data)
 }
 
 // rollback handles migration failure and rollback.
