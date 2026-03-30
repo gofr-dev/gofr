@@ -273,7 +273,7 @@ func Test_MongoStartRefresh(t *testing.T) {
 			ctx, cancel := context.WithCancel(t.Context())
 			defer cancel()
 
-			expectedCall := mockMongo.EXPECT().UpdateOne(gomock.Any(), mongoLockCollection, gomock.Any(), gomock.Any()).
+			expectedCall := mockMongo.EXPECT().UpdateMany(gomock.Any(), mongoLockCollection, gomock.Any(), gomock.Any()).
 				Return(tc.modified, tc.updateErr)
 			if tc.repeatRefreshCall {
 				expectedCall.AnyTimes()
