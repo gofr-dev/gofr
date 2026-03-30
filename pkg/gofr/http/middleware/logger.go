@@ -140,7 +140,7 @@ func handleRequestLog(srw *StatusResponseWriter, r *http.Request, start time.Tim
 // isLogProbeDisabled checks if probes are disabled to skip logging for default probe paths
 // and additional health check paths of services.
 func isLogProbeDisabled(probes LogProbes, urlPath string) bool {
-	// if probes is not disabled, dont need to check for default probe paths
+	// if probes are not disabled, we don't need to check for default probe paths
 	if !probes.Disabled {
 		return false
 	}
