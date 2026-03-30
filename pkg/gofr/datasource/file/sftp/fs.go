@@ -48,7 +48,7 @@ func (f *FileSystem) UseMetrics(metrics any) {
 	}
 }
 
-// Connect establishes a connection to FileSystem and registers metrics using the provided configuration when the client was Created.
+// Connect establishes a connection to the SFTP server and registers metrics using the provided configuration.
 func (f *FileSystem) Connect() {
 	f.logger.Debugf("connecting to SFTP server with host `%v` and port `%v`", f.config.Host, f.config.Port)
 
@@ -248,7 +248,7 @@ func (f *FileSystem) ChDir(_ string) error {
 func (f *FileSystem) Getwd() (string, error) {
 	status := statusSuccess
 
-	defer f.sendOperationStats(&FileLog{Operation: "STAT", Location: "", Status: &status}, time.Now())
+	defer f.sendOperationStats(&FileLog{Operation: "GETWD", Location: "", Status: &status}, time.Now())
 
 	name, err := f.client.Getwd()
 	if err != nil {
