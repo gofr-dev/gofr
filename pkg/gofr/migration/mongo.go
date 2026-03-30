@@ -145,7 +145,7 @@ func (mg mongoMigrator) startRefresh(ctx context.Context, cancel context.CancelF
 				},
 			}
 
-			modified, err := mg.Mongo.UpdateOne(ctx, mongoLockCollection, filter, update)
+			modified, err := mg.Mongo.UpdateMany(ctx, mongoLockCollection, filter, update)
 			if err != nil {
 				c.Errorf("failed to refresh mongo lock: %v", err)
 				cancel()
