@@ -2,6 +2,7 @@ package http
 
 import (
 	"bytes"
+	"context"
 	"errors"
 	"io"
 	"mime/multipart"
@@ -316,4 +317,87 @@ func TestBind_BinaryOctetStream_NotPointerToByteSlice(t *testing.T) {
 	if !strings.Contains(err.Error(), "input is not a pointer to a byte slice: invalid input") {
 		t.Errorf("Expected error to contain: input is not a pointer to a byte slice: invalid input, got: %v", err)
 	}
+}
+
+func TestHostName_DefaultProto(t *testing.T) {
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "http://example.com/test", http.NoBody)
+	r := NewRequest(req)
+
+	hostname := r.HostName()
+
+	assert.Equal(t, "http://example.com", hostname)
+}
+
+func TestHostName_WithForwardedProto(t *testing.T) {
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "http://example.com/test", http.NoBody)
+	req.Header.Set("X-Forwarded-Proto", "https")
+
+	r := NewRequest(req)
+
+	hostname := r.HostName()
+
+	assert.Equal(t, "https://example.com", hostname)
+}
+
+func TestPathParam_NonExistent(t *testing.T) {
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/test", http.NoBody)
+	r := NewRequest(req)
+
+	result := r.PathParam("nonexistent")
+
+	assert.Empty(t, result)
+}
+
+func TestBody_MultipleReads(t *testing.T) {
+	bodyContent := `{"key":"value"}`
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/test", strings.NewReader(bodyContent))
+	r := NewRequest(req)
+
+	// First read
+	body1, err := r.body()
+	require.NoError(t, err)
+	assert.Equal(t, bodyContent, string(body1))
+
+	// Second read should return same content due to NopCloser reset
+	body2, err := r.body()
+	require.NoError(t, err)
+	assert.Equal(t, bodyContent, string(body2))
+}
+
+func TestBody_EmptyBody(t *testing.T) {
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/test", http.NoBody)
+	r := NewRequest(req)
+
+	body, err := r.body()
+
+	require.NoError(t, err)
+	assert.Empty(t, body)
+}
+
+func TestBind_UnsupportedContentType(t *testing.T) {
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/test", strings.NewReader("data"))
+	req.Header.Set("Content-Type", "text/plain")
+
+	r := NewRequest(req)
+
+	err := r.Bind(&struct{}{})
+
+	assert.NoError(t, err)
+}
+
+func TestParam_NonExistent(t *testing.T) {
+	req := NewRequest(httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/test", http.NoBody))
+
+	result := req.Param("missing")
+
+	assert.Empty(t, result)
+}
+
+func TestContext_ReturnsRequestContext(t *testing.T) {
+	httpReq := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/test", http.NoBody)
+	r := NewRequest(httpReq)
+
+	ctx := r.Context()
+
+	assert.Equal(t, httpReq.Context(), ctx)
 }
