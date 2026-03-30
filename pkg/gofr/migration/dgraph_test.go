@@ -1,79 +1,3 @@
-// --- Additional tests for Dgraph migration transaction ---
-type fakeNotTxn struct{}
-
-func Test_DGraphCommitMigration_InvalidTxn(t *testing.T) {
-	migratorWithDGraph, mockDGraph, mockContainer := dgraphSetup(t)
-
-	td := transactionData{
-		StartTime:       time.Now(),
-		MigrationNumber: 42,
-	}
-
-	// NewTxn returns a type that does NOT implement dgraphTxn
-	mockDGraph.EXPECT().NewTxn().Return(&fakeNotTxn{})
-
-	err := migratorWithDGraph.commitMigration(mockContainer, td)
-
-	assert.Equal(t, errInvalidDgraphTxn, err)
-}
-
-
-type mockDgraphTxn2 struct {
-	mutateErr   error
-	commitErr   error
-	discarded   bool
-	commitCalled bool
-}
-
-func (m *mockDgraphTxn2) Mutate(context.Context, *api.Mutation) (*api.Response, error) {
-	return nil, m.mutateErr
-}
-func (m *mockDgraphTxn2) Commit(context.Context) error {
-	m.commitCalled = true
-	return m.commitErr
-}
-func (m *mockDgraphTxn2) Discard(context.Context) error {
-	m.discarded = true
-	return nil
-}
-
-func Test_DGraphCommitMigration_MutateError(t *testing.T) {
-	migratorWithDGraph, mockDGraph, mockContainer := dgraphSetup(t)
-
-	td := transactionData{
-		StartTime:       time.Now(),
-		MigrationNumber: 43,
-	}
-
-	txn := &mockDgraphTxn2{mutateErr: errors.New("mutation failed")}
-	// NewTxn returns our mock txn
-	mockDGraph.EXPECT().NewTxn().Return(txn)
-
-	err := migratorWithDGraph.commitMigration(mockContainer, td)
-
-	assert.EqualError(t, err, "mutation failed")
-	assert.True(t, txn.discarded, "discard should be called on mutation error")
-	assert.False(t, txn.commitCalled, "commit should NOT be called on mutation error")
-}
-
-func Test_DGraphCommitMigration_CommitError(t *testing.T) {
-	migratorWithDGraph, mockDGraph, mockContainer := dgraphSetup(t)
-
-	td := transactionData{
-		StartTime:       time.Now(),
-		MigrationNumber: 44,
-	}
-
-	txn := &mockDgraphTxn2{commitErr: errors.New("commit failed")}
-	// NewTxn returns our mock txn
-	mockDGraph.EXPECT().NewTxn().Return(txn)
-
-	err := migratorWithDGraph.commitMigration(mockContainer, td)
-
-	assert.EqualError(t, err, "commit failed")
-	assert.True(t, txn.discarded, "discard should be called on commit error")
-	assert.True(t, txn.commitCalled, "commit should be called")
-}
 package migration
 
 import (
@@ -90,6 +14,80 @@ import (
 	"gofr.dev/pkg/gofr/container"
 	"gofr.dev/pkg/gofr/testutil"
 )
+
+func Test_DGraphCommitMigration_InvalidTxn(t *testing.T) {
+	migratorWithDGraph, mockDGraph, mockContainer := dgraphSetup(t)
+
+	td := transactionData{
+		StartTime:       time.Now(),
+		MigrationNumber: 42,
+	}
+
+	mockDGraph.EXPECT().NewTxn().Return(&fakeNotTxn{})
+
+	err := migratorWithDGraph.commitMigration(mockContainer, td)
+
+	assert.Equal(t, errInvalidDgraphTxn, err)
+}
+
+type fakeNotTxn struct{}
+
+type mockDgraphTxn2 struct {
+	mutateErr    error
+	commitErr    error
+	discarded    bool
+	commitCalled bool
+}
+
+func (m *mockDgraphTxn2) Mutate(context.Context, *api.Mutation) (*api.Response, error) {
+	return nil, m.mutateErr
+}
+
+func (m *mockDgraphTxn2) Commit(context.Context) error {
+	m.commitCalled = true
+	return m.commitErr
+}
+
+func (m *mockDgraphTxn2) Discard(context.Context) error {
+	m.discarded = true
+	return nil
+}
+
+func Test_DGraphCommitMigration_MutateError(t *testing.T) {
+	migratorWithDGraph, mockDGraph, mockContainer := dgraphSetup(t)
+
+	td := transactionData{
+		StartTime:       time.Now(),
+		MigrationNumber: 43,
+	}
+
+	txn := &mockDgraphTxn2{mutateErr: errors.New("mutation failed")}
+	mockDGraph.EXPECT().NewTxn().Return(txn)
+
+	err := migratorWithDGraph.commitMigration(mockContainer, td)
+
+	assert.EqualError(t, err, "mutation failed")
+	assert.True(t, txn.discarded)
+	assert.False(t, txn.commitCalled)
+}
+
+func Test_DGraphCommitMigration_CommitError(t *testing.T) {
+	migratorWithDGraph, mockDGraph, mockContainer := dgraphSetup(t)
+
+	td := transactionData{
+		StartTime:       time.Now(),
+		MigrationNumber: 44,
+	}
+
+	txn := &mockDgraphTxn2{commitErr: errors.New("commit failed")}
+	mockDGraph.EXPECT().NewTxn().Return(txn)
+
+	err := migratorWithDGraph.commitMigration(mockContainer, td)
+
+	assert.EqualError(t, err, "commit failed")
+	assert.True(t, txn.discarded)
+	assert.True(t, txn.commitCalled)
+}
 
 type mockDgraphTxn struct {
 	mutateErr  error
