@@ -63,7 +63,7 @@ type Mongo interface {
 	DeleteOne(ctx context.Context, collection string, filter any) (int64, error)
 	DeleteMany(ctx context.Context, collection string, filter any) (int64, error)
 	UpdateByID(ctx context.Context, collection string, id any, update any) (int64, error)
-	UpdateOne(ctx context.Context, collection string, filter any, update any) (int64, error)
+	UpdateOne(ctx context.Context, collection string, filter any, update any) error
 	UpdateMany(ctx context.Context, collection string, filter any, update any) (int64, error)
 	Drop(ctx context.Context, collection string) error
 	CreateCollection(ctx context.Context, name string) error
