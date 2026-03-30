@@ -86,6 +86,17 @@ func TestSetMiddlewareHeaders(t *testing.T) {
 				"Access-Control-Allow-Methods": "OPTIONS",
 			},
 		},
+		{
+			environmentConfig: map[string]string{
+				"Access-Control-Allow-Methods": "GET, POST, PUT, PATCH, DELETE, OPTIONS",
+			},
+			registeredRoutes: []string{"GET"},
+			expectedHeaders: map[string]string{
+				"Access-Control-Allow-Origin":  "*",
+				"Access-Control-Allow-Headers": allowedHeaders,
+				"Access-Control-Allow-Methods": "GET, POST, PUT, PATCH, DELETE, OPTIONS",
+			},
+		},
 	}
 
 	for _, tc := range testCases {
