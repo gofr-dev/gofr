@@ -14,12 +14,10 @@ type apiKeyConfig struct {
 	apiKey string
 }
 
-// GetHeaderKey returns the X-Api-Key header key.
 func (a *apiKeyConfig) GetHeaderKey() string {
 	return apiKeyHeader
 }
 
-// GetHeaderValue returns the API key value.
 func (a *apiKeyConfig) GetHeaderValue(_ context.Context) (string, error) {
 	return a.apiKey, nil
 }
@@ -29,7 +27,7 @@ func (a *apiKeyConfig) GetHeaderValue(_ context.Context) (string, error) {
 func NewAPIKeyConfig(apiKey string) (service.Options, error) {
 	apiKey = strings.TrimSpace(apiKey)
 	if apiKey == "" {
-		return nil, AuthErr{Message: "non empty api key is required"}
+		return nil, AuthErr{Message: "api key is required"}
 	}
 
 	return NewAuthOption(&apiKeyConfig{apiKey: apiKey}), nil

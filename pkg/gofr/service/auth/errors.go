@@ -22,3 +22,7 @@ func (o AuthErr) Error() string {
 		return fmt.Sprintf("%v: %v", o.Message, o.Err)
 	}
 }
+
+func (o AuthErr) Unwrap() error {
+	return o.Err
+}

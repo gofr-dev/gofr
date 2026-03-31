@@ -9,19 +9,17 @@ import (
 )
 
 type basicAuthConfig struct {
-	userName string
-	password string
+	userName    string
+	password    string
+	headerValue string
 }
 
-// GetHeaderKey returns the Authorization header key.
 func (c *basicAuthConfig) GetHeaderKey() string {
-	return AuthHeader
+	return service.AuthHeader
 }
 
-// GetHeaderValue returns the Base64-encoded Basic auth value.
 func (c *basicAuthConfig) GetHeaderValue(_ context.Context) (string, error) {
-	encodedAuth := base64.StdEncoding.EncodeToString([]byte(c.userName + ":" + c.password))
-	return "Basic " + encodedAuth, nil
+	return c.headerValue, nil
 }
 
 // NewBasicAuthConfig validates the provided credentials and returns a service.Options
@@ -44,5 +42,11 @@ func NewBasicAuthConfig(username, password string) (service.Options, error) {
 		return nil, AuthErr{Err: err, Message: "password should be base64 encoded"}
 	}
 
-	return NewAuthOption(&basicAuthConfig{userName: username, password: string(decodedPassword)}), nil
+	encoded := base64.StdEncoding.EncodeToString([]byte(username + ":" + string(decodedPassword)))
+
+	return NewAuthOption(&basicAuthConfig{
+		userName:    username,
+		password:    string(decodedPassword),
+		headerValue: "Basic " + encoded,
+	}), nil
 }

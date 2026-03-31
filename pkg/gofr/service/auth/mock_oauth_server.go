@@ -15,6 +15,8 @@ import (
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"gofr.dev/pkg/gofr/service"
 )
 
 const clientIDLength = 10
@@ -78,7 +80,7 @@ func setupOAuthHTTPServer(t *testing.T, clientID, clientSecret, audience string)
 	})
 
 	mux.HandleFunc(server.testURL, func(w http.ResponseWriter, r *http.Request) {
-		header := r.Header.Get(AuthHeader)
+		header := r.Header.Get(service.AuthHeader)
 		token := strings.Split(header, " ")
 
 		if len(token) <= 1 {
@@ -138,7 +140,7 @@ func (s *oAuthTestServer) generateToken(claims jwt.MapClaims) (string, error) {
 }
 
 func getClaims(r *http.Request) map[string]any {
-	claims := make(map[string]any, 0)
+	claims := make(map[string]any)
 
 	for key, value := range r.Form {
 		if key == "client_id" || key == "client_secret" || key == "grant_type" {

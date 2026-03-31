@@ -10,6 +10,9 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"golang.org/x/oauth2"
+	"golang.org/x/oauth2/clientcredentials"
+
+	"gofr.dev/pkg/gofr/service"
 )
 
 func TestNewOAuthConfig(t *testing.T) {
@@ -21,10 +24,10 @@ func TestNewOAuthConfig(t *testing.T) {
 		wantErr      bool
 		errMsg       string
 	}{
-		{name: "empty client id", wantErr: true, errMsg: "client id is mandatory"},
-		{name: "empty secret", clientID: "id", wantErr: true, errMsg: "client secret is mandatory"},
+		{name: "empty client id", wantErr: true, errMsg: "client id is required"},
+		{name: "empty secret", clientID: "id", wantErr: true, errMsg: "client secret is required"},
 		{name: "empty token url", clientID: "id", clientSecret: "secret", wantErr: true,
-			errMsg: "token url is mandatory"},
+			errMsg: "token url is required"},
 		{name: "invalid token url", clientID: "id", clientSecret: "secret", tokenURL: "invalid",
 			wantErr: true, errMsg: "empty host"},
 		{name: "valid config", clientID: "id", clientSecret: "secret",
@@ -64,7 +67,7 @@ func TestValidateTokenURL(t *testing.T) {
 			errMsg: "invalid host pattern, contains `..`"},
 		{name: "non http scheme", tokenURL: "ftp://www.example.com", wantErr: true,
 			errMsg: "invalid scheme, allowed http and https only"},
-		{name: "empty url", wantErr: true, errMsg: "token url is mandatory"},
+		{name: "empty url", wantErr: true, errMsg: "token url is required"},
 		{name: "missing host", tokenURL: "invalid_url_format", wantErr: true, errMsg: "empty host"},
 	}
 
@@ -86,7 +89,7 @@ func TestValidateTokenURL(t *testing.T) {
 
 func TestOAuthConfig_GetHeaderKey(t *testing.T) {
 	cfg := &oAuthConfig{}
-	assert.Equal(t, "Authorization", cfg.GetHeaderKey())
+	assert.Equal(t, service.AuthHeader, cfg.GetHeaderKey())
 }
 
 func TestOAuthConfig_GetHeaderValue(t *testing.T) {
@@ -99,37 +102,36 @@ func TestOAuthConfig_GetHeaderValue(t *testing.T) {
 	server := setupOAuthHTTPServer(t, clientID, clientSecret, "test-audience")
 
 	testCases := []struct {
-		name         string
-		clientID     string
-		clientSecret string
-		tokenURL     string
-		wantErr      bool
+		name    string
+		config  clientcredentials.Config
+		wantErr bool
 	}{
 		{
-			name:         "valid credentials",
-			clientID:     clientID,
-			clientSecret: clientSecret,
-			tokenURL:     server.URL + "/token",
+			name: "valid credentials",
+			config: clientcredentials.Config{
+				ClientID:       clientID,
+				ClientSecret:   clientSecret,
+				TokenURL:       server.URL + "/token",
+				EndpointParams: url.Values{"aud": {"test-audience"}},
+				AuthStyle:      oauth2.AuthStyleInParams,
+			},
 		},
 		{
-			name:         "invalid credentials",
-			clientID:     "wrong-id",
-			clientSecret: "wrong-secret",
-			tokenURL:     server.URL + "/token",
-			wantErr:      true,
+			name: "invalid credentials",
+			config: clientcredentials.Config{
+				ClientID:     "wrong-id",
+				ClientSecret: "wrong-secret",
+				TokenURL:     server.URL + "/token",
+				AuthStyle:    oauth2.AuthStyleInParams,
+			},
+			wantErr: true,
 		},
 	}
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			cfg := &oAuthConfig{
-				clientID:     tc.clientID,
-				clientSecret: tc.clientSecret,
-				tokenURL:     tc.tokenURL,
-				endpointParams: url.Values{
-					"aud": {"test-audience"},
-				},
-				authStyle: oauth2.AuthStyleInParams,
+				tokenSource: tc.config.TokenSource(context.Background()),
 			}
 
 			value, err := cfg.GetHeaderValue(context.Background())

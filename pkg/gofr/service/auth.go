@@ -5,7 +5,6 @@ import (
 	"net/http"
 )
 
-// Deprecated: Use gofr.dev/pkg/gofr/service/auth package instead.
 const AuthHeader = "Authorization"
 
 type authProvider struct {

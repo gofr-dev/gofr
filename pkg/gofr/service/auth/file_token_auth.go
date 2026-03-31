@@ -33,6 +33,7 @@ type fileTokenAuthConfig struct {
 	mu              sync.RWMutex
 	token           string
 	done            chan struct{}
+	closeOnce       sync.Once
 }
 
 // NewFileTokenAuthConfig creates an auth provider that reads a bearer token from a file
@@ -73,12 +74,10 @@ func NewFileTokenAuthConfig(fs file.FileSystem, tokenFilePath string,
 	return f, nil
 }
 
-// GetHeaderKey returns the Authorization header key.
 func (*fileTokenAuthConfig) GetHeaderKey() string {
-	return AuthHeader
+	return service.AuthHeader
 }
 
-// GetHeaderValue returns "Bearer <token>" with the current cached token.
 func (f *fileTokenAuthConfig) GetHeaderValue(_ context.Context) (string, error) {
 	f.mu.RLock()
 	token := f.token
@@ -91,14 +90,20 @@ func (f *fileTokenAuthConfig) GetHeaderValue(_ context.Context) (string, error) 
 	return "Bearer " + token, nil
 }
 
-// AddOption implements service.Options.
 func (f *fileTokenAuthConfig) AddOption(h service.HTTP) service.HTTP {
-	return NewAuthOption(f).AddOption(h)
+	adapter := &authOptionAdapter{provider: f}
+
+	return &authProvider{
+		auth: adapter.addHeader,
+		HTTP: h,
+	}
 }
 
-// Close stops the background token refresh goroutine.
 func (f *fileTokenAuthConfig) Close() error {
-	close(f.done)
+	f.closeOnce.Do(func() {
+		close(f.done)
+	})
+
 	return nil
 }
 

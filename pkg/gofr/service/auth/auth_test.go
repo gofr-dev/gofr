@@ -7,7 +7,6 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
-	"os"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -18,23 +17,16 @@ import (
 	"gofr.dev/pkg/gofr/service"
 )
 
-func TestMain(m *testing.M) {
-	os.Setenv("GOFR_TELEMETRY", "false")
-	m.Run()
-}
-
 func TestAuthProvider(t *testing.T) {
-	// Setup BasicAuth server
 	basicAuthServer := setupTestServer(t, func(r *http.Request) int {
 		expected := "Basic " + base64.StdEncoding.EncodeToString([]byte("username:password"))
-		if r.Header.Get(AuthHeader) == expected {
+		if r.Header.Get(service.AuthHeader) == expected {
 			return http.StatusOK
 		}
 
 		return http.StatusUnauthorized
 	})
 
-	// Setup APIKey server
 	apiKeyServer := setupTestServer(t, func(r *http.Request) int {
 		if r.Header.Get("X-Api-Key") == "valid-key" {
 			return http.StatusOK
@@ -43,7 +35,6 @@ func TestAuthProvider(t *testing.T) {
 		return http.StatusUnauthorized
 	})
 
-	// Setup OAuth server
 	clientID, err := generateRandomString(clientIDLength)
 	require.NoError(t, err)
 
@@ -55,7 +46,7 @@ func TestAuthProvider(t *testing.T) {
 	validBasicAuth, err := NewBasicAuthConfig("username", "cGFzc3dvcmQ=")
 	require.NoError(t, err)
 
-	invalidBasicAuth := NewAuthOption(&basicAuthConfig{userName: "username", password: "wrong"})
+	invalidBasicAuth := NewAuthOption(&basicAuthConfig{userName: "username", password: "wrong", headerValue: "Basic wrong"})
 
 	validAPIKey, err := NewAPIKeyConfig("valid-key")
 	require.NoError(t, err)
@@ -81,7 +72,7 @@ func TestAuthProvider(t *testing.T) {
 		{name: "invalid api key", server: apiKeyServer, authOption: invalidAPIKey, statusCode: http.StatusUnauthorized},
 		{name: "valid oauth", server: oauthServer, authOption: validOAuth, statusCode: http.StatusOK},
 		{name: "existing auth header collision", server: basicAuthServer, authOption: validBasicAuth,
-			headers: map[string]string{AuthHeader: "existing"}, wantErr: true},
+			headers: map[string]string{service.AuthHeader: "existing"}, wantErr: true},
 	}
 
 	httpMethods := []string{http.MethodGet, http.MethodPost, http.MethodPut, http.MethodPatch, http.MethodDelete}
@@ -95,12 +86,11 @@ func TestAuthProvider(t *testing.T) {
 
 				if tc.wantErr {
 					assert.Error(t, err)
-					return
+					continue
 				}
 
 				if err != nil {
-					// OAuth errors (e.g., invalid credentials)
-					return
+					continue
 				}
 
 				assert.Equal(t, tc.statusCode, resp.StatusCode,

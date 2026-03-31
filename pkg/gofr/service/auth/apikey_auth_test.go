@@ -15,8 +15,8 @@ func TestNewAPIKeyConfig(t *testing.T) {
 		wantErr bool
 		errMsg  string
 	}{
-		{name: "empty key", apiKey: "", wantErr: true, errMsg: "non empty api key is required"},
-		{name: "whitespace key", apiKey: "  ", wantErr: true, errMsg: "non empty api key is required"},
+		{name: "empty key", apiKey: "", wantErr: true, errMsg: "api key is required"},
+		{name: "whitespace key", apiKey: "  ", wantErr: true, errMsg: "api key is required"},
 		{name: "valid key", apiKey: "my-api-key"},
 		{name: "trimmed whitespace", apiKey: "  my-api-key  "},
 	}
@@ -45,21 +45,9 @@ func TestAPIKeyConfig_GetHeaderKey(t *testing.T) {
 }
 
 func TestAPIKeyConfig_GetHeaderValue(t *testing.T) {
-	testCases := []struct {
-		name      string
-		apiKey    string
-		wantValue string
-	}{
-		{name: "returns raw key", apiKey: "my-secret-key", wantValue: "my-secret-key"},
-	}
+	cfg := &apiKeyConfig{apiKey: "my-secret-key"}
 
-	for _, tc := range testCases {
-		t.Run(tc.name, func(t *testing.T) {
-			cfg := &apiKeyConfig{apiKey: tc.apiKey}
-
-			value, err := cfg.GetHeaderValue(context.Background())
-			require.NoError(t, err)
-			assert.Equal(t, tc.wantValue, value)
-		})
-	}
+	value, err := cfg.GetHeaderValue(context.Background())
+	require.NoError(t, err)
+	assert.Equal(t, "my-secret-key", value)
 }

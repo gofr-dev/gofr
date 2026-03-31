@@ -13,36 +13,20 @@ import (
 )
 
 type oAuthConfig struct {
-	clientID       string
-	clientSecret   string
-	tokenURL       string
-	scopes         []string
-	endpointParams url.Values
-	authStyle      oauth2.AuthStyle
+	tokenSource oauth2.TokenSource
 }
 
-// GetHeaderKey returns the Authorization header key.
 func (c *oAuthConfig) GetHeaderKey() string {
-	return AuthHeader
+	return service.AuthHeader
 }
 
-// GetHeaderValue performs the OAuth2 client credentials exchange and returns the bearer token.
 func (c *oAuthConfig) GetHeaderValue(ctx context.Context) (string, error) {
-	cc := clientcredentials.Config{
-		ClientID:       c.clientID,
-		ClientSecret:   c.clientSecret,
-		TokenURL:       c.tokenURL,
-		Scopes:         c.scopes,
-		EndpointParams: c.endpointParams,
-		AuthStyle:      c.authStyle,
-	}
-
-	token, err := cc.TokenSource(ctx).Token()
+	token, err := c.tokenSource.Token()
 	if err != nil {
 		return "", err
 	}
 
-	return fmt.Sprintf("%v %v", token.Type(), token.AccessToken), nil
+	return fmt.Sprintf("%s %s", token.Type(), token.AccessToken), nil
 }
 
 // NewOAuthConfig validates the provided OAuth2 client credentials and returns a service.Options
@@ -50,24 +34,28 @@ func (c *oAuthConfig) GetHeaderValue(ctx context.Context) (string, error) {
 func NewOAuthConfig(clientID, secret, tokenURL string, scopes []string,
 	params url.Values, authStyle oauth2.AuthStyle) (service.Options, error) {
 	if clientID == "" {
-		return nil, AuthErr{nil, "client id is mandatory"}
+		return nil, AuthErr{nil, "client id is required"}
 	}
 
 	if secret == "" {
-		return nil, AuthErr{nil, "client secret is mandatory"}
+		return nil, AuthErr{nil, "client secret is required"}
 	}
 
 	if err := validateTokenURL(tokenURL); err != nil {
 		return nil, err
 	}
 
+	cc := clientcredentials.Config{
+		ClientID:       clientID,
+		ClientSecret:   secret,
+		TokenURL:       tokenURL,
+		Scopes:         scopes,
+		EndpointParams: params,
+		AuthStyle:      authStyle,
+	}
+
 	config := &oAuthConfig{
-		clientID:       clientID,
-		clientSecret:   secret,
-		tokenURL:       tokenURL,
-		scopes:         scopes,
-		endpointParams: params,
-		authStyle:      authStyle,
+		tokenSource: cc.TokenSource(context.Background()),
 	}
 
 	return NewAuthOption(config), nil
@@ -75,7 +63,7 @@ func NewOAuthConfig(clientID, secret, tokenURL string, scopes []string,
 
 func validateTokenURL(tokenURL string) error {
 	if tokenURL == "" {
-		return AuthErr{nil, "token url is mandatory"}
+		return AuthErr{nil, "token url is required"}
 	}
 
 	u, err := url.Parse(tokenURL)

@@ -7,6 +7,8 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"gofr.dev/pkg/gofr/service"
 )
 
 func TestNewBasicAuthConfig(t *testing.T) {
@@ -48,31 +50,17 @@ func TestNewBasicAuthConfig(t *testing.T) {
 
 func TestBasicAuthConfig_GetHeaderKey(t *testing.T) {
 	cfg := &basicAuthConfig{userName: "user", password: "pass"}
-	assert.Equal(t, "Authorization", cfg.GetHeaderKey())
+	assert.Equal(t, service.AuthHeader, cfg.GetHeaderKey())
 }
 
 func TestBasicAuthConfig_GetHeaderValue(t *testing.T) {
-	testCases := []struct {
-		name      string
-		username  string
-		password  string
-		wantValue string
-	}{
-		{
-			name:      "standard credentials",
-			username:  "user",
-			password:  "password",
-			wantValue: "Basic " + base64.StdEncoding.EncodeToString([]byte("user:password")),
-		},
+	cfg := &basicAuthConfig{
+		userName:    "user",
+		password:    "password",
+		headerValue: "Basic " + base64.StdEncoding.EncodeToString([]byte("user:password")),
 	}
 
-	for _, tc := range testCases {
-		t.Run(tc.name, func(t *testing.T) {
-			cfg := &basicAuthConfig{userName: tc.username, password: tc.password}
-
-			value, err := cfg.GetHeaderValue(context.Background())
-			require.NoError(t, err)
-			assert.Equal(t, tc.wantValue, value)
-		})
-	}
+	value, err := cfg.GetHeaderValue(context.Background())
+	require.NoError(t, err)
+	assert.Equal(t, "Basic "+base64.StdEncoding.EncodeToString([]byte("user:password")), value)
 }

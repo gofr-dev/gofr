@@ -8,17 +8,10 @@ import (
 	"gofr.dev/pkg/gofr/service"
 )
 
-// AuthHeader is the standard HTTP Authorization header key.
-const AuthHeader = "Authorization"
-
 // AuthProvider provides authentication credentials for outgoing HTTP requests.
 // Implementations return a static header key and a dynamic header value.
-// The common wrapper handles nil header init, collision detection, and HTTP delegation.
 type AuthProvider interface {
-	// GetHeaderKey returns the HTTP header name (e.g., "Authorization", "X-Api-Key").
 	GetHeaderKey() string
-
-	// GetHeaderValue returns the header value (e.g., "Bearer <token>", "Basic <encoded>").
 	GetHeaderValue(ctx context.Context) (string, error)
 }
 
@@ -38,8 +31,7 @@ func (a *authOptionAdapter) AddOption(h service.HTTP) service.HTTP {
 	}
 }
 
-// addHeader is the common wrapper that handles nil init, collision detection, and injection.
-// Individual AuthProvider implementations only return their key + value; they never touch headers.
+// addHeader handles nil init, collision detection, and header injection.
 func (a *authOptionAdapter) addHeader(ctx context.Context, headers map[string]string) (map[string]string, error) {
 	if headers == nil {
 		headers = make(map[string]string)
@@ -48,7 +40,7 @@ func (a *authOptionAdapter) addHeader(ctx context.Context, headers map[string]st
 	key := a.provider.GetHeaderKey()
 
 	if existing, exists := headers[key]; exists {
-		return headers, fmt.Errorf("value %v already exists for header %v", existing, key)
+		return headers, AuthErr{Message: fmt.Sprintf("value %v already exists for header %v", existing, key)}
 	}
 
 	value, err := a.provider.GetHeaderValue(ctx)
@@ -61,8 +53,6 @@ func (a *authOptionAdapter) addHeader(ctx context.Context, headers map[string]st
 	return headers, nil
 }
 
-// authProvider is the HTTP decorator that injects auth headers into all outgoing requests.
-// It embeds service.HTTP to satisfy the full interface including unexported methods.
 type authProvider struct {
 	auth func(context.Context, map[string]string) (map[string]string, error)
 	service.HTTP
