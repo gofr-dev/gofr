@@ -7,7 +7,6 @@ import (
 
 	"gofr.dev/pkg/gofr"
 	"gofr.dev/pkg/gofr/datasource/file"
-	"gofr.dev/pkg/gofr/logging"
 	"gofr.dev/pkg/gofr/service"
 	"gofr.dev/pkg/gofr/service/auth"
 )
@@ -35,8 +34,9 @@ func main() {
 
 	// Option 2: Call AddOption directly on an existing HTTP service.
 	// Logger and metrics must be set manually since AddOption does not inject them.
-	svc := service.NewHTTPService("https://api.example.com", logging.NewMockLogger(logging.INFO), nil)
+	svc := service.NewHTTPService("https://api.example.com", logger, a.Metrics())
 	tokenAuth.(service.Observable).UseLogger(logger)
+	tokenAuth.(service.Observable).UseMetrics(a.Metrics())
 
 	svc = tokenAuth.AddOption(svc)
 
