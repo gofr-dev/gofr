@@ -2,9 +2,7 @@ package auth
 
 import (
 	"context"
-	"fmt"
 	"net/url"
-	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -30,7 +28,7 @@ func TestNewOAuthConfig(t *testing.T) {
 			errMsg: "token url is required"},
 		{name: "invalid token url", clientID: "id", clientSecret: "secret", tokenURL: "invalid",
 			wantErr: true, errMsg: "empty host"},
-		{name: "valid config", clientID: "id", clientSecret: "secret",
+		{name: "valid config", clientID: "id", clientSecret: "secret", //nolint:gosec // test credentials
 			tokenURL: "https://auth.example.com/token"},
 	}
 
@@ -52,6 +50,7 @@ func TestNewOAuthConfig(t *testing.T) {
 	}
 }
 
+//nolint:gosec // test URLs
 func TestValidateTokenURL(t *testing.T) {
 	testCases := []struct {
 		name     string
@@ -137,13 +136,11 @@ func TestOAuthTokenSource_Token(t *testing.T) {
 			token, err := src.Token(context.Background())
 
 			if tc.wantErr {
-				assert.Error(t, err)
+				require.Error(t, err)
 				return
 			}
 
 			require.NoError(t, err)
-			assert.True(t, strings.HasPrefix("Bearer "+token, "Bearer "),
-				fmt.Sprintf("expected non-empty token, got: %s", token))
 			assert.NotEmpty(t, token)
 		})
 	}

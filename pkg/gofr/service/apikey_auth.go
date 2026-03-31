@@ -11,7 +11,9 @@ import (
 // #nosec G101
 const xAPIKeyHeader = "X-Api-Key"
 
-// Deprecated: Use auth.NewAPIKeyConfig from gofr.dev/pkg/gofr/service/auth instead.
+// APIKeyConfig is deprecated. Use auth.NewAPIKeyConfig from gofr.dev/pkg/gofr/service/auth instead.
+//
+// Deprecated: Use gofr.dev/pkg/gofr/service/auth.NewAPIKeyConfig instead.
 type APIKeyConfig struct {
 	APIKey string
 }

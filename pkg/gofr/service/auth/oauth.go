@@ -29,11 +29,11 @@ func (o *oAuthTokenSource) Token(_ context.Context) (string, error) {
 func NewOAuthConfig(clientID, secret, tokenURL string, scopes []string,
 	params url.Values, authStyle oauth2.AuthStyle) (service.Options, error) {
 	if clientID == "" {
-		return nil, AuthErr{nil, "client id is required"}
+		return nil, Err{nil, "client id is required"}
 	}
 
 	if secret == "" {
-		return nil, AuthErr{nil, "client secret is required"}
+		return nil, Err{nil, "client secret is required"}
 	}
 
 	if err := validateTokenURL(tokenURL); err != nil {
@@ -56,22 +56,22 @@ func NewOAuthConfig(clientID, secret, tokenURL string, scopes []string,
 
 func validateTokenURL(tokenURL string) error {
 	if tokenURL == "" {
-		return AuthErr{nil, "token url is required"}
+		return Err{nil, "token url is required"}
 	}
 
 	u, err := url.Parse(tokenURL)
 
 	switch {
 	case err != nil:
-		return AuthErr{err, "error in token URL"}
+		return Err{err, "error in token URL"}
 	case u.Host == "" || u.Scheme == "":
-		return AuthErr{err, "empty host"}
+		return Err{err, "empty host"}
 	case strings.Contains(u.Host, ".."):
-		return AuthErr{nil, "invalid host pattern, contains `..`"}
+		return Err{nil, "invalid host pattern, contains `..`"}
 	case strings.HasSuffix(u.Host, "."):
-		return AuthErr{nil, "invalid host pattern, ends with `.`"}
+		return Err{nil, "invalid host pattern, ends with `.`"}
 	case u.Scheme != "http" && u.Scheme != "https":
-		return AuthErr{nil, "invalid scheme, allowed http and https only"}
+		return Err{nil, "invalid scheme, allowed http and https only"}
 	default:
 		return nil
 	}

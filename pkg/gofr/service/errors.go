@@ -4,7 +4,9 @@ import (
 	"fmt"
 )
 
-// Deprecated: Use auth.AuthErr from gofr.dev/pkg/gofr/service/auth instead.
+// AuthErr is deprecated. Use auth.Err from gofr.dev/pkg/gofr/service/auth instead.
+//
+// Deprecated: Use gofr.dev/pkg/gofr/service/auth.Err instead.
 type AuthErr struct {
 	Err     error
 	Message string

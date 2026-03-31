@@ -24,7 +24,7 @@ func main() {
 		a.Logger().Fatalf("failed to create file token auth: %v", err)
 	}
 
-	defer tokenAuth.Close()
+	defer tokenAuth.(io.Closer).Close()
 
 	a.AddHTTPService("k8s-api", "https://kubernetes.default.svc", tokenAuth)
 

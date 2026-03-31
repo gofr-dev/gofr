@@ -14,7 +14,7 @@ type basicAuthConfig struct {
 	headerValue string
 }
 
-func (c *basicAuthConfig) GetHeaderKey() string {
+func (*basicAuthConfig) GetHeaderKey() string {
 	return service.AuthHeader
 }
 
@@ -30,16 +30,16 @@ func NewBasicAuthConfig(username, password string) (service.Options, error) {
 	password = strings.TrimSpace(password)
 
 	if username == "" {
-		return nil, AuthErr{Message: "username is required"}
+		return nil, Err{Message: "username is required"}
 	}
 
 	if password == "" {
-		return nil, AuthErr{Message: "password is required"}
+		return nil, Err{Message: "password is required"}
 	}
 
 	decodedPassword, err := base64.StdEncoding.DecodeString(password)
 	if err != nil || string(decodedPassword) == password {
-		return nil, AuthErr{Err: err, Message: "password should be base64 encoded"}
+		return nil, Err{Err: err, Message: "password should be base64 encoded"}
 	}
 
 	encoded := base64.StdEncoding.EncodeToString([]byte(username + ":" + string(decodedPassword)))

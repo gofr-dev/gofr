@@ -1,16 +1,19 @@
 package auth
 
 import (
+	"errors"
 	"fmt"
 )
 
-// AuthErr represents an authentication configuration error.
-type AuthErr struct {
+var errEmptyTokenFile = errors.New("token file is empty")
+
+// Err represents an authentication configuration error.
+type Err struct {
 	Err     error
 	Message string
 }
 
-func (o AuthErr) Error() string {
+func (o Err) Error() string {
 	switch {
 	case o.Message == "" && o.Err == nil:
 		return "unknown error"
@@ -23,6 +26,6 @@ func (o AuthErr) Error() string {
 	}
 }
 
-func (o AuthErr) Unwrap() error {
+func (o Err) Unwrap() error {
 	return o.Err
 }

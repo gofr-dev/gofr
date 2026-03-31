@@ -3,7 +3,6 @@ package auth
 import (
 	"context"
 	"encoding/base64"
-	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -82,10 +81,10 @@ func TestAuthProvider(t *testing.T) {
 			httpService := service.NewHTTPService(tc.server.URL, logging.NewMockLogger(logging.INFO), nil, tc.authOption)
 
 			for _, method := range httpMethods {
-				resp, err := callHTTPService(t.Context(), httpService, method, tc.headers)
+				resp, err := callHTTPMethod(t.Context(), httpService, method, tc.headers)
 
 				if tc.wantErr {
-					assert.Error(t, err)
+					require.Error(t, err)
 					continue
 				}
 
@@ -93,8 +92,7 @@ func TestAuthProvider(t *testing.T) {
 					continue
 				}
 
-				assert.Equal(t, tc.statusCode, resp.StatusCode,
-					fmt.Sprintf("method %s: expected %d, got %d", method, tc.statusCode, resp.StatusCode))
+				assert.Equal(t, tc.statusCode, resp.StatusCode)
 
 				resp.Body.Close()
 			}
@@ -114,27 +112,37 @@ func setupTestServer(t *testing.T, check func(r *http.Request) int) *httptest.Se
 	return server
 }
 
-func callHTTPService(ctx context.Context, svc service.HTTP, method string,
+func callHTTPMethod(ctx context.Context, svc service.HTTP, method string,
 	headers map[string]string) (resp *http.Response, err error) {
 	path := "test"
 	queryParams := map[string]any{"key": "value"}
 	body := []byte("body")
 
 	if headers != nil {
-		switch method {
-		case http.MethodGet:
-			return svc.GetWithHeaders(ctx, path, queryParams, headers)
-		case http.MethodPost:
-			return svc.PostWithHeaders(ctx, path, queryParams, body, headers)
-		case http.MethodPut:
-			return svc.PutWithHeaders(ctx, path, queryParams, body, headers)
-		case http.MethodPatch:
-			return svc.PatchWithHeaders(ctx, path, queryParams, body, headers)
-		case http.MethodDelete:
-			return svc.DeleteWithHeaders(ctx, path, body, headers)
-		}
+		return callWithHeaders(ctx, svc, method, path, queryParams, body, headers)
 	}
 
+	return callWithoutHeaders(ctx, svc, method, path, queryParams, body)
+}
+
+func callWithHeaders(ctx context.Context, svc service.HTTP, method, path string,
+	queryParams map[string]any, body []byte, headers map[string]string) (*http.Response, error) {
+	switch method {
+	case http.MethodGet:
+		return svc.GetWithHeaders(ctx, path, queryParams, headers)
+	case http.MethodPost:
+		return svc.PostWithHeaders(ctx, path, queryParams, body, headers)
+	case http.MethodPut:
+		return svc.PutWithHeaders(ctx, path, queryParams, body, headers)
+	case http.MethodPatch:
+		return svc.PatchWithHeaders(ctx, path, queryParams, body, headers)
+	default:
+		return svc.DeleteWithHeaders(ctx, path, body, headers)
+	}
+}
+
+func callWithoutHeaders(ctx context.Context, svc service.HTTP, method, path string,
+	queryParams map[string]any, body []byte) (*http.Response, error) {
 	switch method {
 	case http.MethodGet:
 		return svc.Get(ctx, path, queryParams)
@@ -144,9 +152,7 @@ func callHTTPService(ctx context.Context, svc service.HTTP, method string,
 		return svc.Put(ctx, path, queryParams, body)
 	case http.MethodPatch:
 		return svc.Patch(ctx, path, queryParams, body)
-	case http.MethodDelete:
+	default:
 		return svc.Delete(ctx, path, body)
 	}
-
-	return nil, fmt.Errorf("unknown method: %s", method)
 }

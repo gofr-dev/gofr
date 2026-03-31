@@ -8,9 +8,9 @@ import (
 	"gofr.dev/pkg/gofr/service"
 )
 
-// AuthProvider provides authentication credentials for outgoing HTTP requests.
+// Provider provides authentication credentials for outgoing HTTP requests.
 // Implementations return a static header key and a dynamic header value.
-type AuthProvider interface {
+type Provider interface {
 	GetHeaderKey() string
 	GetHeaderValue(ctx context.Context) (string, error)
 }
@@ -22,8 +22,8 @@ type TokenSource interface {
 	Token(ctx context.Context) (string, error)
 }
 
-// NewAuthOption wraps any AuthProvider into a service.Options for use with AddHTTPService.
-func NewAuthOption(p AuthProvider) service.Options {
+// NewAuthOption wraps any Provider into a service.Options for use with AddHTTPService.
+func NewAuthOption(p Provider) service.Options {
 	return &authOptionAdapter{provider: p}
 }
 
@@ -37,7 +37,19 @@ type bearerAuthProvider struct {
 	source TokenSource
 }
 
-func (b *bearerAuthProvider) GetHeaderKey() string {
+func (b *bearerAuthProvider) UseLogger(logger service.Logger) {
+	if obs, ok := b.source.(service.Observable); ok {
+		obs.UseLogger(logger)
+	}
+}
+
+func (b *bearerAuthProvider) UseMetrics(metrics service.Metrics) {
+	if obs, ok := b.source.(service.Observable); ok {
+		obs.UseMetrics(metrics)
+	}
+}
+
+func (*bearerAuthProvider) GetHeaderKey() string {
 	return service.AuthHeader
 }
 
@@ -51,7 +63,19 @@ func (b *bearerAuthProvider) GetHeaderValue(ctx context.Context) (string, error)
 }
 
 type authOptionAdapter struct {
-	provider AuthProvider
+	provider Provider
+}
+
+func (a *authOptionAdapter) UseLogger(logger service.Logger) {
+	if obs, ok := a.provider.(service.Observable); ok {
+		obs.UseLogger(logger)
+	}
+}
+
+func (a *authOptionAdapter) UseMetrics(metrics service.Metrics) {
+	if obs, ok := a.provider.(service.Observable); ok {
+		obs.UseMetrics(metrics)
+	}
 }
 
 func (a *authOptionAdapter) AddOption(h service.HTTP) service.HTTP {
@@ -70,7 +94,7 @@ func (a *authOptionAdapter) addHeader(ctx context.Context, headers map[string]st
 	key := a.provider.GetHeaderKey()
 
 	if existing, exists := headers[key]; exists {
-		return headers, AuthErr{Message: fmt.Sprintf("value %v already exists for header %v", existing, key)}
+		return headers, Err{Message: fmt.Sprintf("value %v already exists for header %v", existing, key)}
 	}
 
 	value, err := a.provider.GetHeaderValue(ctx)

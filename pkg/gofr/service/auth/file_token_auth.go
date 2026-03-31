@@ -14,17 +14,9 @@ import (
 
 const (
 	// DefaultTokenFilePath is the standard Kubernetes projected service account token mount path.
-	DefaultTokenFilePath   = "/var/run/secrets/kubernetes.io/serviceaccount/token"
+	DefaultTokenFilePath   = "/var/run/secrets/kubernetes.io/serviceaccount/token" //nolint:gosec // not a credential, it's a file path
 	defaultRefreshInterval = 30 * time.Second
 )
-
-// FileTokenProvider provides a file-backed TokenSource with lifecycle management
-// for the background refresh goroutine.
-type FileTokenProvider interface {
-	TokenSource
-	service.Options
-	Close() error
-}
 
 type fileTokenSource struct {
 	fs              file.FileSystem
@@ -34,18 +26,22 @@ type fileTokenSource struct {
 	token           string
 	done            chan struct{}
 	closeOnce       sync.Once
+	logger          service.Logger
+	metrics         service.Metrics
 }
 
-// NewFileTokenAuthConfig creates an auth provider that reads a bearer token from a file
+// NewFileTokenAuthConfig creates a service.Options that reads a bearer token from a file
 // and periodically re-reads it to support token rotation (e.g., Kubernetes projected
 // service account tokens).
+//
+// The returned value also implements io.Closer — call Close() to stop the background refresh.
 //
 // If tokenFilePath is empty, it defaults to DefaultTokenFilePath.
 // If refreshInterval is zero or negative, it defaults to 30s.
 func NewFileTokenAuthConfig(fs file.FileSystem, tokenFilePath string,
-	refreshInterval time.Duration) (FileTokenProvider, error) {
+	refreshInterval time.Duration) (service.Options, error) {
 	if fs == nil {
-		return nil, AuthErr{Message: "file system is required"}
+		return nil, Err{Message: "file system is required"}
 	}
 
 	if tokenFilePath == "" {
@@ -54,7 +50,7 @@ func NewFileTokenAuthConfig(fs file.FileSystem, tokenFilePath string,
 
 	token, err := readToken(fs, tokenFilePath)
 	if err != nil {
-		return nil, AuthErr{Err: err, Message: fmt.Sprintf("failed to read token from %s", tokenFilePath)}
+		return nil, Err{Err: err, Message: fmt.Sprintf("failed to read token from %s", tokenFilePath)}
 	}
 
 	if refreshInterval <= 0 {
@@ -80,7 +76,7 @@ func (f *fileTokenSource) Token(_ context.Context) (string, error) {
 	f.mu.RUnlock()
 
 	if token == "" {
-		return "", AuthErr{Message: "no token available"}
+		return "", Err{Message: "no token available"}
 	}
 
 	return token, nil
@@ -88,6 +84,14 @@ func (f *fileTokenSource) Token(_ context.Context) (string, error) {
 
 func (f *fileTokenSource) AddOption(h service.HTTP) service.HTTP {
 	return NewBearerAuthOption(f).AddOption(h)
+}
+
+func (f *fileTokenSource) UseLogger(logger service.Logger) {
+	f.logger = logger
+}
+
+func (f *fileTokenSource) UseMetrics(metrics service.Metrics) {
+	f.metrics = metrics
 }
 
 func (f *fileTokenSource) Close() error {
@@ -109,7 +113,10 @@ func (f *fileTokenSource) refreshLoop() {
 		case <-ticker.C:
 			token, err := readToken(f.fs, f.tokenFilePath)
 			if err != nil {
-				// Keep last good token on transient read errors.
+				if f.logger != nil {
+					f.logger.Log(fmt.Sprintf("failed to refresh token from %s: %v", f.tokenFilePath, err))
+				}
+
 				continue
 			}
 
@@ -134,7 +141,7 @@ func readToken(fs file.FileSystem, path string) (string, error) {
 
 	token := strings.TrimSpace(string(data))
 	if token == "" {
-		return "", fmt.Errorf("token file is empty")
+		return "", errEmptyTokenFile
 	}
 
 	return token, nil

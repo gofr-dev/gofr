@@ -11,6 +11,7 @@ import (
 	"gofr.dev/pkg/gofr/service"
 )
 
+//nolint:gosec // test credentials used throughout
 func TestNewBasicAuthConfig(t *testing.T) {
 	testCases := []struct {
 		name     string
@@ -19,13 +20,17 @@ func TestNewBasicAuthConfig(t *testing.T) {
 		wantErr  bool
 		errMsg   string
 	}{
-		{name: "empty username", username: "", password: "cGFzc3dvcmQ=", wantErr: true, errMsg: "username is required"},
-		{name: "whitespace username", username: "  ", password: "cGFzc3dvcmQ=", wantErr: true, errMsg: "username is required"},
-		{name: "empty password", username: "user", password: "", wantErr: true, errMsg: "password is required"},
-		{name: "invalid base64 password", username: "user", password: "cGFzc3dvcmQ===", wantErr: true,
+		{name: "empty username", password: "cGFzc3dvcmQ=",
+			wantErr: true, errMsg: "username is required"},
+		{name: "whitespace username", username: "  ",
+			password: "cGFzc3dvcmQ=", wantErr: true, errMsg: "username is required"},
+		{name: "empty password", username: "user",
+			wantErr: true, errMsg: "password is required"},
+		{name: "invalid base64 password", username: "user",
+			password: "cGFzc3dvcmQ===", wantErr: true,
 			errMsg: "password should be base64 encoded"},
-		{name: "non-encoded password", username: "user", password: "plaintext", wantErr: true,
-			errMsg: "password should be base64 encoded"},
+		{name: "non-encoded password", username: "user", password: "plaintext",
+			wantErr: true, errMsg: "password should be base64 encoded"},
 		{name: "valid credentials", username: "user", password: "cGFzc3dvcmQ="},
 		{name: "trimmed whitespace", username: "  user  ", password: "  cGFzc3dvcmQ="},
 	}

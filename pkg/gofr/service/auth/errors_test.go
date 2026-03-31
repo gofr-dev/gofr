@@ -1,16 +1,15 @@
 package auth
 
 import (
-	"errors"
 	"fmt"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 )
 
-func TestAuthErr_Error(t *testing.T) {
-	errTest := errors.New("message inside error")
+var errTest = fmt.Errorf("message inside error")
 
+func TestErr_Error(t *testing.T) {
 	testCases := []struct {
 		name     string
 		err      error
@@ -26,7 +25,7 @@ func TestAuthErr_Error(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			authErr := AuthErr{tc.err, tc.message}
+			authErr := Err{tc.err, tc.message}
 			assert.Equal(t, tc.expected, authErr.Error())
 		})
 	}

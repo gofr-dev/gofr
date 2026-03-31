@@ -14,7 +14,7 @@ type apiKeyConfig struct {
 	apiKey string
 }
 
-func (a *apiKeyConfig) GetHeaderKey() string {
+func (*apiKeyConfig) GetHeaderKey() string {
 	return apiKeyHeader
 }
 
@@ -27,7 +27,7 @@ func (a *apiKeyConfig) GetHeaderValue(_ context.Context) (string, error) {
 func NewAPIKeyConfig(apiKey string) (service.Options, error) {
 	apiKey = strings.TrimSpace(apiKey)
 	if apiKey == "" {
-		return nil, AuthErr{Message: "api key is required"}
+		return nil, Err{Message: "api key is required"}
 	}
 
 	return NewAuthOption(&apiKeyConfig{apiKey: apiKey}), nil

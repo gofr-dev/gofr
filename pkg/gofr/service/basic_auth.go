@@ -7,7 +7,9 @@ import (
 	"strings"
 )
 
-// Deprecated: Use auth.NewBasicAuthConfig from gofr.dev/pkg/gofr/service/auth instead.
+// BasicAuthConfig is deprecated. Use auth.NewBasicAuthConfig from gofr.dev/pkg/gofr/service/auth instead.
+//
+// Deprecated: Use gofr.dev/pkg/gofr/service/auth.NewBasicAuthConfig instead.
 type BasicAuthConfig struct {
 	UserName string
 	Password string

@@ -5,6 +5,7 @@ import (
 	"context"
 	"errors"
 	"io"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -28,10 +29,12 @@ func setupMockFS(ctrl *gomock.Controller, content string, openErr error) *file.M
 	mockFile := file.NewMockFile(ctrl)
 	mockFile.EXPECT().Read(gomock.Any()).DoAndReturn(func(p []byte) (int, error) {
 		reader := bytes.NewReader([]byte(content))
+
 		n, err := reader.Read(p)
 		if err != nil {
 			return n, err
 		}
+
 		return n, io.EOF
 	}).AnyTimes()
 	mockFile.EXPECT().Close().Return(nil).AnyTimes()
@@ -113,21 +116,21 @@ func TestNewFileTokenAuthConfig(t *testing.T) {
 				fs = tc.fs(ctrl)
 			}
 
-			provider, err := NewFileTokenAuthConfig(fs, tc.tokenFilePath, tc.refreshInterval)
+			opt, err := NewFileTokenAuthConfig(fs, tc.tokenFilePath, tc.refreshInterval)
 
 			if tc.wantErr {
 				require.Error(t, err)
 				assert.Contains(t, err.Error(), tc.errContains)
-				assert.Nil(t, provider)
+				assert.Nil(t, opt)
 
 				return
 			}
 
 			require.NoError(t, err)
-			require.NotNil(t, provider)
+			require.NotNil(t, opt)
 
 			t.Cleanup(func() {
-				provider.Close()
+				opt.(io.Closer).Close()
 			})
 		})
 	}
@@ -140,7 +143,7 @@ func TestFileTokenSource_Token(t *testing.T) {
 		wantValue string
 		wantErr   bool
 	}{
-		{
+		{ //nolint:gosec // test token
 			name:      "valid token",
 			token:     "my-jwt-token-value",
 			wantValue: "my-jwt-token-value",
@@ -219,34 +222,74 @@ func TestFileTokenSource_RefreshLoop(t *testing.T) {
 				mockFS.EXPECT().Open(gomock.Any()).Return(refreshFile, nil).AnyTimes()
 			}
 
-			provider, err := NewFileTokenAuthConfig(mockFS, "/path/token", 50*time.Millisecond)
+			opt, err := NewFileTokenAuthConfig(mockFS, "/path/token", 50*time.Millisecond)
 			require.NoError(t, err)
 
-			t.Cleanup(func() { provider.Close() })
+			src := opt.(*fileTokenSource)
+
+			t.Cleanup(func() { src.Close() })
 
 			time.Sleep(100 * time.Millisecond)
 
-			token, err := provider.Token(context.Background())
+			token, err := src.Token(context.Background())
 			require.NoError(t, err)
 			assert.Equal(t, tc.expectedToken, token)
 		})
 	}
 }
 
+func TestFileTokenSource_RefreshLoop_LogsWarning(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	mockFS := file.NewMockFileSystem(ctrl)
+
+	// Initial read succeeds
+	initialFile := file.NewMockFile(ctrl)
+	initialFile.EXPECT().Read(gomock.Any()).DoAndReturn(func(p []byte) (int, error) {
+		n := copy(p, "initial-token")
+		return n, io.EOF
+	})
+	initialFile.EXPECT().Close().Return(nil)
+	mockFS.EXPECT().Open(gomock.Any()).Return(initialFile, nil)
+
+	// Refresh reads fail
+	mockFS.EXPECT().Open(gomock.Any()).Return(nil, errFileNotFound).AnyTimes()
+
+	opt, err := NewFileTokenAuthConfig(mockFS, "/path/token", 50*time.Millisecond)
+	require.NoError(t, err)
+
+	src := opt.(*fileTokenSource)
+
+	ml := &mockLogger{}
+	src.UseLogger(ml)
+
+	t.Cleanup(func() { src.Close() })
+
+	time.Sleep(100 * time.Millisecond)
+
+	assert.True(t, ml.logged.Load(), "expected logger.Log to be called on refresh error")
+}
+
 func TestFileTokenSource_Close(t *testing.T) {
 	ctrl := gomock.NewController(t)
 
-	provider, err := NewFileTokenAuthConfig(
+	opt, err := NewFileTokenAuthConfig(
 		setupMockFS(ctrl, "test-token", nil),
 		"/path/token",
 		time.Minute,
 	)
 	require.NoError(t, err)
 
-	err = provider.Close()
-	assert.NoError(t, err)
+	err = opt.(io.Closer).Close()
+	require.NoError(t, err)
 
 	// Double close should not panic.
-	err = provider.Close()
-	assert.NoError(t, err)
+	err = opt.(io.Closer).Close()
+	require.NoError(t, err)
 }
+
+// mockLogger tracks whether Log was called (thread-safe).
+type mockLogger struct {
+	logged atomic.Bool
+}
+
+func (m *mockLogger) Log(...any) { m.logged.Store(true) }
