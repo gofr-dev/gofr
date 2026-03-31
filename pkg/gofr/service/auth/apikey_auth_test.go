@@ -18,7 +18,7 @@ func TestNewAPIKeyConfig(t *testing.T) {
 		{name: "empty key", apiKey: "", wantErr: true, errMsg: "api key is required"},
 		{name: "whitespace key", apiKey: "  ", wantErr: true, errMsg: "api key is required"},
 		{name: "valid key", apiKey: "my-api-key"},
-		{name: "trimmed whitespace", apiKey: "  my-api-key  "}, //nolint:gosec // test credentials
+		{name: "trimmed whitespace", apiKey: "  my-api-key  "},
 	}
 
 	for _, tc := range testCases {

@@ -14,7 +14,7 @@ import (
 
 const (
 	// DefaultTokenFilePath is the standard Kubernetes projected service account token mount path.
-	DefaultTokenFilePath   = "/var/run/secrets/kubernetes.io/serviceaccount/token" //nolint:gosec // not a credential, it's a file path
+	DefaultTokenFilePath   = "/var/run/secrets/kubernetes.io/serviceaccount/token" // #nosec G101 -- file path, not a credential
 	defaultRefreshInterval = 30 * time.Second
 )
 

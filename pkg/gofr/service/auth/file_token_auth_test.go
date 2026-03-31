@@ -143,7 +143,7 @@ func TestFileTokenSource_Token(t *testing.T) {
 		wantValue string
 		wantErr   bool
 	}{
-		{ //nolint:gosec // test token
+		{
 			name:      "valid token",
 			token:     "my-jwt-token-value",
 			wantValue: "my-jwt-token-value",

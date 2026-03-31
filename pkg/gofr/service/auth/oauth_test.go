@@ -28,7 +28,7 @@ func TestNewOAuthConfig(t *testing.T) {
 			errMsg: "token url is required"},
 		{name: "invalid token url", clientID: "id", clientSecret: "secret", tokenURL: "invalid",
 			wantErr: true, errMsg: "empty host"},
-		{name: "valid config", clientID: "id", clientSecret: "secret", //nolint:gosec // test credentials
+		{name: "valid config", clientID: "id", clientSecret: "secret",
 			tokenURL: "https://auth.example.com/token"},
 	}
 
@@ -50,7 +50,6 @@ func TestNewOAuthConfig(t *testing.T) {
 	}
 }
 
-//nolint:gosec // test URLs
 func TestValidateTokenURL(t *testing.T) {
 	testCases := []struct {
 		name     string

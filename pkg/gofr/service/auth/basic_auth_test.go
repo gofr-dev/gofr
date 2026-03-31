@@ -11,7 +11,6 @@ import (
 	"gofr.dev/pkg/gofr/service"
 )
 
-//nolint:gosec // test credentials used throughout
 func TestNewBasicAuthConfig(t *testing.T) {
 	testCases := []struct {
 		name     string
