@@ -1,10 +1,10 @@
-package service
+package auth
 
 import (
 	"fmt"
 )
 
-// Deprecated: Use auth.AuthErr from gofr.dev/pkg/gofr/service/auth instead.
+// AuthErr represents an authentication configuration error.
 type AuthErr struct {
 	Err     error
 	Message string

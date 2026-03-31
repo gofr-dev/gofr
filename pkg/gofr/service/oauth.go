@@ -12,6 +12,8 @@ import (
 
 // OAuthConfig describes a 2-legged OAuth2 flow, with both the
 // client application information and the server's endpoint URLs.
+//
+// Deprecated: Use auth.NewOAuthConfig from gofr.dev/pkg/gofr/service/auth instead.
 type OAuthConfig struct {
 	// ClientID is the application's ID.
 	ClientID string
@@ -38,6 +40,7 @@ func (c *OAuthConfig) AddOption(svc HTTP) HTTP {
 	return &authProvider{auth: c.addAuthorizationHeader, HTTP: svc}
 }
 
+// Deprecated: Use auth.NewOAuthConfig from gofr.dev/pkg/gofr/service/auth instead.
 func NewOAuthConfig(clientID, secret, tokenURL string, scopes []string, params url.Values, authStyle oauth2.AuthStyle) (Options, error) {
 	if clientID == "" {
 		return nil, AuthErr{nil, "client id is mandatory"}
