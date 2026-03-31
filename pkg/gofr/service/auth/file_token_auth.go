@@ -18,15 +18,15 @@ const (
 	defaultRefreshInterval = 30 * time.Second
 )
 
-// FileTokenProvider extends AuthProvider with lifecycle management for the background
-// token refresh goroutine.
+// FileTokenProvider provides a file-backed TokenSource with lifecycle management
+// for the background refresh goroutine.
 type FileTokenProvider interface {
-	AuthProvider
+	TokenSource
 	service.Options
 	Close() error
 }
 
-type fileTokenAuthConfig struct {
+type fileTokenSource struct {
 	fs              file.FileSystem
 	tokenFilePath   string
 	refreshInterval time.Duration
@@ -61,7 +61,7 @@ func NewFileTokenAuthConfig(fs file.FileSystem, tokenFilePath string,
 		refreshInterval = defaultRefreshInterval
 	}
 
-	f := &fileTokenAuthConfig{
+	f := &fileTokenSource{
 		fs:              fs,
 		tokenFilePath:   tokenFilePath,
 		refreshInterval: refreshInterval,
@@ -74,11 +74,7 @@ func NewFileTokenAuthConfig(fs file.FileSystem, tokenFilePath string,
 	return f, nil
 }
 
-func (*fileTokenAuthConfig) GetHeaderKey() string {
-	return service.AuthHeader
-}
-
-func (f *fileTokenAuthConfig) GetHeaderValue(_ context.Context) (string, error) {
+func (f *fileTokenSource) Token(_ context.Context) (string, error) {
 	f.mu.RLock()
 	token := f.token
 	f.mu.RUnlock()
@@ -87,19 +83,14 @@ func (f *fileTokenAuthConfig) GetHeaderValue(_ context.Context) (string, error) 
 		return "", AuthErr{Message: "no token available"}
 	}
 
-	return "Bearer " + token, nil
+	return token, nil
 }
 
-func (f *fileTokenAuthConfig) AddOption(h service.HTTP) service.HTTP {
-	adapter := &authOptionAdapter{provider: f}
-
-	return &authProvider{
-		auth: adapter.addHeader,
-		HTTP: h,
-	}
+func (f *fileTokenSource) AddOption(h service.HTTP) service.HTTP {
+	return NewBearerAuthOption(f).AddOption(h)
 }
 
-func (f *fileTokenAuthConfig) Close() error {
+func (f *fileTokenSource) Close() error {
 	f.closeOnce.Do(func() {
 		close(f.done)
 	})
@@ -107,7 +98,7 @@ func (f *fileTokenAuthConfig) Close() error {
 	return nil
 }
 
-func (f *fileTokenAuthConfig) refreshLoop() {
+func (f *fileTokenSource) refreshLoop() {
 	ticker := time.NewTicker(f.refreshInterval)
 	defer ticker.Stop()
 

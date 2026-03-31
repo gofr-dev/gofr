@@ -87,12 +87,12 @@ func TestValidateTokenURL(t *testing.T) {
 	}
 }
 
-func TestOAuthConfig_GetHeaderKey(t *testing.T) {
-	cfg := &oAuthConfig{}
-	assert.Equal(t, service.AuthHeader, cfg.GetHeaderKey())
+func TestOAuthTokenSource_GetHeaderKey(t *testing.T) {
+	provider := &bearerAuthProvider{source: &oAuthTokenSource{}}
+	assert.Equal(t, service.AuthHeader, provider.GetHeaderKey())
 }
 
-func TestOAuthConfig_GetHeaderValue(t *testing.T) {
+func TestOAuthTokenSource_Token(t *testing.T) {
 	clientID, err := generateRandomString(clientIDLength)
 	require.NoError(t, err)
 
@@ -130,11 +130,11 @@ func TestOAuthConfig_GetHeaderValue(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			cfg := &oAuthConfig{
-				tokenSource: tc.config.TokenSource(context.Background()),
+			src := &oAuthTokenSource{
+				source: tc.config.TokenSource(context.Background()),
 			}
 
-			value, err := cfg.GetHeaderValue(context.Background())
+			token, err := src.Token(context.Background())
 
 			if tc.wantErr {
 				assert.Error(t, err)
@@ -142,8 +142,9 @@ func TestOAuthConfig_GetHeaderValue(t *testing.T) {
 			}
 
 			require.NoError(t, err)
-			assert.True(t, strings.HasPrefix(value, "Bearer "),
-				fmt.Sprintf("expected Bearer prefix, got: %s", value))
+			assert.True(t, strings.HasPrefix("Bearer "+token, "Bearer "),
+				fmt.Sprintf("expected non-empty token, got: %s", token))
+			assert.NotEmpty(t, token)
 		})
 	}
 }

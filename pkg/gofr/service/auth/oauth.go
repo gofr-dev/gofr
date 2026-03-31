@@ -2,7 +2,6 @@ package auth
 
 import (
 	"context"
-	"fmt"
 	"net/url"
 	"strings"
 
@@ -12,21 +11,17 @@ import (
 	"gofr.dev/pkg/gofr/service"
 )
 
-type oAuthConfig struct {
-	tokenSource oauth2.TokenSource
+type oAuthTokenSource struct {
+	source oauth2.TokenSource
 }
 
-func (c *oAuthConfig) GetHeaderKey() string {
-	return service.AuthHeader
-}
-
-func (c *oAuthConfig) GetHeaderValue(ctx context.Context) (string, error) {
-	token, err := c.tokenSource.Token()
+func (o *oAuthTokenSource) Token(_ context.Context) (string, error) {
+	token, err := o.source.Token()
 	if err != nil {
 		return "", err
 	}
 
-	return fmt.Sprintf("%s %s", token.Type(), token.AccessToken), nil
+	return token.AccessToken, nil
 }
 
 // NewOAuthConfig validates the provided OAuth2 client credentials and returns a service.Options
@@ -54,11 +49,9 @@ func NewOAuthConfig(clientID, secret, tokenURL string, scopes []string,
 		AuthStyle:      authStyle,
 	}
 
-	config := &oAuthConfig{
-		tokenSource: cc.TokenSource(context.Background()),
-	}
-
-	return NewAuthOption(config), nil
+	return NewBearerAuthOption(&oAuthTokenSource{
+		source: cc.TokenSource(context.Background()),
+	}), nil
 }
 
 func validateTokenURL(tokenURL string) error {

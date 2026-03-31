@@ -15,9 +15,39 @@ type AuthProvider interface {
 	GetHeaderValue(ctx context.Context) (string, error)
 }
 
+// TokenSource provides raw token values for bearer-style authentication.
+// Implementations are responsible only for obtaining the token string;
+// the bearer header format ("Bearer <token>") is handled by NewBearerAuthOption.
+type TokenSource interface {
+	Token(ctx context.Context) (string, error)
+}
+
 // NewAuthOption wraps any AuthProvider into a service.Options for use with AddHTTPService.
 func NewAuthOption(p AuthProvider) service.Options {
 	return &authOptionAdapter{provider: p}
+}
+
+// NewBearerAuthOption creates a service.Options that injects "Authorization: Bearer <token>"
+// using the provided TokenSource.
+func NewBearerAuthOption(src TokenSource) service.Options {
+	return NewAuthOption(&bearerAuthProvider{source: src})
+}
+
+type bearerAuthProvider struct {
+	source TokenSource
+}
+
+func (b *bearerAuthProvider) GetHeaderKey() string {
+	return service.AuthHeader
+}
+
+func (b *bearerAuthProvider) GetHeaderValue(ctx context.Context) (string, error) {
+	token, err := b.source.Token(ctx)
+	if err != nil {
+		return "", err
+	}
+
+	return "Bearer " + token, nil
 }
 
 type authOptionAdapter struct {

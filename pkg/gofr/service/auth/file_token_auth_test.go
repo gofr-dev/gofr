@@ -133,22 +133,7 @@ func TestNewFileTokenAuthConfig(t *testing.T) {
 	}
 }
 
-func TestFileTokenAuthConfig_GetHeaderKey(t *testing.T) {
-	ctrl := gomock.NewController(t)
-
-	provider, err := NewFileTokenAuthConfig(
-		setupMockFS(ctrl, "test-token", nil),
-		"/path/token",
-		time.Minute,
-	)
-	require.NoError(t, err)
-
-	t.Cleanup(func() { provider.Close() })
-
-	assert.Equal(t, "Authorization", provider.GetHeaderKey())
-}
-
-func TestFileTokenAuthConfig_GetHeaderValue(t *testing.T) {
+func TestFileTokenSource_Token(t *testing.T) {
 	testCases := []struct {
 		name      string
 		token     string
@@ -158,7 +143,7 @@ func TestFileTokenAuthConfig_GetHeaderValue(t *testing.T) {
 		{
 			name:      "valid token",
 			token:     "my-jwt-token-value",
-			wantValue: "Bearer my-jwt-token-value",
+			wantValue: "my-jwt-token-value",
 		},
 		{
 			name:    "empty token",
@@ -169,12 +154,12 @@ func TestFileTokenAuthConfig_GetHeaderValue(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			cfg := &fileTokenAuthConfig{
+			src := &fileTokenSource{
 				token: tc.token,
 				done:  make(chan struct{}),
 			}
 
-			value, err := cfg.GetHeaderValue(context.Background())
+			value, err := src.Token(context.Background())
 
 			if tc.wantErr {
 				assert.Error(t, err)
@@ -187,7 +172,7 @@ func TestFileTokenAuthConfig_GetHeaderValue(t *testing.T) {
 	}
 }
 
-func TestFileTokenAuthConfig_RefreshLoop(t *testing.T) {
+func TestFileTokenSource_RefreshLoop(t *testing.T) {
 	testCases := []struct {
 		name          string
 		initialToken  string
@@ -214,7 +199,6 @@ func TestFileTokenAuthConfig_RefreshLoop(t *testing.T) {
 			ctrl := gomock.NewController(t)
 			mockFS := file.NewMockFileSystem(ctrl)
 
-			// First call for initial read
 			initialFile := file.NewMockFile(ctrl)
 			initialFile.EXPECT().Read(gomock.Any()).DoAndReturn(func(p []byte) (int, error) {
 				n := copy(p, tc.initialToken)
@@ -223,7 +207,6 @@ func TestFileTokenAuthConfig_RefreshLoop(t *testing.T) {
 			initialFile.EXPECT().Close().Return(nil)
 			mockFS.EXPECT().Open(gomock.Any()).Return(initialFile, nil)
 
-			// Second call for refresh
 			if tc.refreshErr != nil {
 				mockFS.EXPECT().Open(gomock.Any()).Return(nil, tc.refreshErr).AnyTimes()
 			} else {
@@ -241,17 +224,16 @@ func TestFileTokenAuthConfig_RefreshLoop(t *testing.T) {
 
 			t.Cleanup(func() { provider.Close() })
 
-			// Wait for at least one refresh cycle
 			time.Sleep(100 * time.Millisecond)
 
-			value, err := provider.GetHeaderValue(context.Background())
+			token, err := provider.Token(context.Background())
 			require.NoError(t, err)
-			assert.Equal(t, "Bearer "+tc.expectedToken, value)
+			assert.Equal(t, tc.expectedToken, token)
 		})
 	}
 }
 
-func TestFileTokenAuthConfig_Close(t *testing.T) {
+func TestFileTokenSource_Close(t *testing.T) {
 	ctrl := gomock.NewController(t)
 
 	provider, err := NewFileTokenAuthConfig(
@@ -261,6 +243,10 @@ func TestFileTokenAuthConfig_Close(t *testing.T) {
 	)
 	require.NoError(t, err)
 
+	err = provider.Close()
+	assert.NoError(t, err)
+
+	// Double close should not panic.
 	err = provider.Close()
 	assert.NoError(t, err)
 }
