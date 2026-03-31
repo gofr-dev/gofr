@@ -7,26 +7,40 @@ import (
 
 	"gofr.dev/pkg/gofr"
 	"gofr.dev/pkg/gofr/datasource/file"
+	"gofr.dev/pkg/gofr/logging"
+	"gofr.dev/pkg/gofr/service"
 	"gofr.dev/pkg/gofr/service/auth"
 )
 
 func main() {
 	a := gofr.New()
 
+	logger := a.Logger()
 	tokenPath := a.Config.GetOrDefault("FILE_TOKEN_PATH", auth.DefaultTokenFilePath)
 
 	tokenAuth, err := auth.NewFileTokenAuthConfig(
-		file.NewLocalFileSystem(a.Logger()),
+		file.NewLocalFileSystem(logger),
 		tokenPath,
 		30*time.Second,
 	)
 	if err != nil {
-		a.Logger().Fatalf("failed to create file token auth: %v", err)
+		logger.Fatalf("failed to create file token auth: %v", err)
 	}
 
 	defer tokenAuth.(io.Closer).Close()
 
+	// Option 1: Pass as option to AddHTTPService.
+	// Logger and metrics are injected automatically via the Observable interface.
 	a.AddHTTPService("k8s-api", "https://kubernetes.default.svc", tokenAuth)
+
+	// Option 2: Call AddOption directly on an existing HTTP service.
+	// Logger and metrics must be set manually since AddOption does not inject them.
+	svc := service.NewHTTPService("https://api.example.com", logging.NewMockLogger(logging.INFO), nil)
+	tokenAuth.(service.Observable).UseLogger(logger)
+
+	svc = tokenAuth.AddOption(svc)
+
+	_ = svc
 
 	a.GET("/pods", PodHandler)
 
