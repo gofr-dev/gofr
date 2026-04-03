@@ -24,24 +24,70 @@ func Test_CORS(t *testing.T) {
 	tests := []struct {
 		name             string
 		method           string
+		origin           string
+		config           map[string]string
 		registeredRoutes *[]string
 		respBody         string
 		respCode         int
+		expOriginHeader  string
+		expVary          string
 	}{
-		{"GET passes through", http.MethodGet, &[]string{"GET,POST"}, "Sample Response", http.StatusFound},
-		{"OPTIONS returns 200", http.MethodOptions, &[]string{"PUT,DELETE,GET,POST"}, "", http.StatusOK},
+		{
+			name:             "wildcard GET",
+			method:           http.MethodGet,
+			registeredRoutes: &[]string{"GET,POST"},
+			respBody:         "Sample Response",
+			respCode:         http.StatusFound,
+			expOriginHeader:  "*",
+		},
+		{
+			name:             "wildcard OPTIONS",
+			method:           http.MethodOptions,
+			registeredRoutes: &[]string{"PUT,DELETE,GET,POST"},
+			respCode:         http.StatusOK,
+			expOriginHeader:  "*",
+		},
+		{
+			name:   "multiple origins matched",
+			method: http.MethodGet,
+			origin: "https://admin.example.com",
+			config: map[string]string{
+				"Access-Control-Allow-Origin": "https://app.example.com,https://admin.example.com",
+			},
+			registeredRoutes: &[]string{"GET"},
+			respBody:         "Sample Response",
+			respCode:         http.StatusFound,
+			expOriginHeader:  "https://admin.example.com",
+			expVary:          "Origin",
+		},
+		{
+			name:   "multiple origins not matched",
+			method: http.MethodGet,
+			origin: "https://evil.com",
+			config: map[string]string{
+				"Access-Control-Allow-Origin": "https://app.example.com,https://admin.example.com",
+			},
+			registeredRoutes: &[]string{"GET"},
+			respBody:         "Sample Response",
+			respCode:         http.StatusFound,
+		},
 	}
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			handler := CORS(nil, tc.registeredRoutes)(
+			handler := CORS(tc.config, tc.registeredRoutes)(
 				&MockHandlerForCORS{statusCode: http.StatusFound, response: "Sample Response"})
 
 			req := httptest.NewRequest(tc.method, "/hello", http.NoBody)
+			if tc.origin != "" {
+				req.Header.Set("Origin", tc.origin)
+			}
+
 			w := httptest.NewRecorder()
 			handler.ServeHTTP(w, req)
 
-			assert.Equal(t, "*", w.Header().Get("Access-Control-Allow-Origin"))
+			assert.Equal(t, tc.expOriginHeader, w.Header().Get("Access-Control-Allow-Origin"))
+			assert.Equal(t, tc.expVary, w.Header().Get("Vary"))
 			assert.Equal(t, tc.respCode, w.Code)
 			assert.Equal(t, tc.respBody, w.Body.String())
 		})
@@ -117,6 +163,7 @@ func setMiddlewareHeadersTestCases() []struct {
 				"Access-Control-Allow-Origin":  "https://example.com",
 				"Access-Control-Allow-Headers": allowedHeaders,
 				"Access-Control-Allow-Methods": "OPTIONS",
+				"Vary":                         "Origin",
 			},
 		},
 		{
@@ -144,6 +191,7 @@ func setMiddlewareHeadersTestCases() []struct {
 				"Access-Control-Allow-Origin":  "https://b.com",
 				"Access-Control-Allow-Headers": allowedHeaders,
 				"Access-Control-Allow-Methods": "GET, OPTIONS",
+				"Vary":                         "Origin",
 			},
 		},
 		{
