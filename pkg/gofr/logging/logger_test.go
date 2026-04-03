@@ -281,3 +281,22 @@ func TestNewFileLogger_NilPath(t *testing.T) {
 	assert.Equal(t, io.Discard, logger.normalOut)
 	assert.Equal(t, io.Discard, logger.errorOut)
 }
+
+func TestNewFileLogger_Close(t *testing.T) {
+	tempFile, err := os.CreateTemp(t.TempDir(), "gofr_test_log_*.log")
+	require.NoError(t, err)
+
+	tempFile.Close() // Close it since NewFileLogger will open it.
+
+	l := NewFileLogger(tempFile.Name())
+
+	closer, ok := l.(io.Closer)
+	require.True(t, ok, "logger should implement io.Closer")
+
+	err = closer.Close()
+	require.NoError(t, err)
+
+	// verify that subsequent Close calls do not panic
+	err = closer.Close()
+	assert.ErrorIs(t, err, os.ErrClosed)
+}

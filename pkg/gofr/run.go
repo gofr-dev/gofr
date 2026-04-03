@@ -3,6 +3,7 @@ package gofr
 import (
 	"context"
 	"errors"
+	"io"
 	"net/http"
 	"os"
 	"os/signal"
@@ -15,6 +16,12 @@ import (
 func (a *App) Run() {
 	if a.cmd != nil {
 		a.cmd.Run(a.container)
+
+		if closer, ok := a.container.Logger.(io.Closer); ok {
+			closer.Close()
+		}
+
+		return
 	}
 
 	// Create a context that is canceled on receiving termination signals
