@@ -47,6 +47,7 @@ type logger struct {
 	errorOut   io.Writer
 	isTerminal bool
 	lock       chan struct{}
+	file       *os.File
 }
 
 type logEntry struct {
@@ -144,8 +145,8 @@ func (l *logger) Fatal(args ...any) {
 	l.logf(FATAL, "", args...)
 
 	// Flush output before exiting
-	if f, ok := l.errorOut.(*os.File); ok {
-		_ = f.Sync() // Ignore sync error as we're about to exit
+	if l.file != nil {
+		_ = l.file.Sync() // Ignore sync error as we're about to exit
 	}
 
 	//nolint:revive // exit status is 1 as it denotes failure as signified by Fatal log
@@ -156,8 +157,8 @@ func (l *logger) Fatalf(format string, args ...any) {
 	l.logf(FATAL, format, args...)
 
 	// Flush output before exiting
-	if f, ok := l.errorOut.(*os.File); ok {
-		_ = f.Sync() // Ignore sync error as we're about to exit
+	if l.file != nil {
+		_ = l.file.Sync() // Ignore sync error as we're about to exit
 	}
 
 	//nolint:revive // exit status is 1 as it denotes failure as signified by Fatal log
@@ -227,8 +228,17 @@ func NewFileLogger(path string) Logger {
 
 	l.normalOut = f
 	l.errorOut = f
+	l.file = f
 
 	return l
+}
+
+func (l *logger) Close() error {
+	if l.file != nil {
+		return l.file.Close()
+	}
+
+	return nil
 }
 
 func checkIfTerminal(w io.Writer) bool {
