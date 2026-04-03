@@ -286,8 +286,6 @@ func TestNewFileLogger_Close(t *testing.T) {
 	tempFile, err := os.CreateTemp(t.TempDir(), "gofr_test_log_*.log")
 	require.NoError(t, err)
 
-	defer os.Remove(tempFile.Name())
-
 	tempFile.Close() // Close it since NewFileLogger will open it.
 
 	l := NewFileLogger(tempFile.Name())
