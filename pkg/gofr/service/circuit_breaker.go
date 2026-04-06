@@ -92,8 +92,8 @@ func (cb *circuitBreaker) executeWithCircuitBreaker(ctx context.Context, f func(
 
 // isOpen returns true if the circuit breaker is in the open state.
 func (cb *circuitBreaker) isOpen() bool {
-	cb.mu.Lock()
-	defer cb.mu.Unlock()
+	cb.mu.RLock()
+	defer cb.mu.RUnlock()
 
 	return cb.state == OpenState
 }
