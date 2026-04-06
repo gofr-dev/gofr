@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"net"
 	"net/http"
 	"os"
@@ -110,11 +111,12 @@ func (a *App) Shutdown(ctx context.Context) error {
 		err = errors.Join(err, a.metricServer.Shutdown(ctx))
 	}
 
-	if err != nil {
-		return err
-	}
-
 	a.container.Logger.Info("Application shutdown complete")
+
+	// Close logger file if applicable
+	if closer, ok := a.container.Logger.(io.Closer); ok {
+		err = errors.Join(err, closer.Close())
+	}
 
 	return err
 }
