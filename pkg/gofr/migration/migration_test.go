@@ -6,7 +6,10 @@ import (
 	"testing"
 
 	"github.com/DATA-DOG/go-sqlmock"
+	"github.com/alicebob/miniredis/v2"
+	goRedis "github.com/redis/go-redis/v9"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
 
 	"gofr.dev/pkg/gofr/container"
@@ -494,4 +497,251 @@ func Test_RunMigrations_SkipAlreadyRun(t *testing.T) {
 	mockLogger.EXPECT().Infof(gomock.Any(), gomock.Any()).AnyTimes()
 
 	Run(migrationMap, mockContainer)
+}
+
+// TestEndToEnd_OnlySQLUsed_RedisNotRecorded tests the full migration run flow
+// where a migration only uses SQL — Redis should NOT get a migration record.
+func TestEndToEnd_OnlySQLUsed_RedisNotRecorded(t *testing.T) {
+	mockContainer, mocks := container.NewMockContainer(t)
+
+	// Disable all datasources except SQL and Redis
+	mockContainer.Cassandra = nil
+	mockContainer.Clickhouse = nil
+	mockContainer.Mongo = nil
+	mockContainer.ArangoDB = nil
+	mockContainer.Elasticsearch = nil
+	mockContainer.Oracle = nil
+	mockContainer.PubSub = nil
+	mockContainer.DGraph = nil
+	mockContainer.SurrealDB = nil
+	mockContainer.OpenTSDB = nil
+	mockContainer.ScyllaDB = nil
+
+	// Use a real miniredis for Redis transactions (needed by redisMigrator)
+	s, _ := miniredis.Run()
+	defer s.Close()
+
+	realRedisClient := goRedis.NewClient(&goRedis.Options{Addr: s.Addr()})
+
+	// Mock Redis is used for container (has HealthCheck), but real client for transactions
+	mocks.Redis.EXPECT().HGetAll(gomock.Any(), "gofr_migrations").
+		Return(goRedis.NewMapStringStringResult(map[string]string{}, nil)).Times(2)
+	mocks.Redis.EXPECT().TxPipeline().Return(realRedisClient.TxPipeline())
+
+	// Redis lock/unlock expectations
+	mocks.Redis.EXPECT().SetNX(gomock.Any(), lockKey, gomock.Any(), defaultLockTTL).
+		Return(goRedis.NewBoolResult(true, nil))
+	mocks.Redis.EXPECT().Eval(gomock.Any(), gomock.Any(), []string{lockKey}, gomock.Any(), int(defaultLockTTL.Seconds())).
+		Return(goRedis.NewCmdResult(int64(1), nil)).AnyTimes()
+	mocks.Redis.EXPECT().Eval(gomock.Any(), gomock.Any(), []string{lockKey}, gomock.Any()).
+		Return(goRedis.NewCmdResult(int64(1), nil))
+
+	mockContainer.Logger = logging.NewMockLogger(logging.DEBUG)
+
+	migrationMap := map[int64]Migrate{
+		1: {UP: func(d Datasource) error {
+			// Only use SQL, NOT Redis
+			_, err := d.SQL.Exec("CREATE TABLE test (id INT)")
+			return err
+		}},
+	}
+
+	// 1. checkAndCreateMigrationTable
+	mocks.SQL.ExpectExec(createSQLGoFrMigrationsTable).WillReturnResult(sqlmock.NewResult(0, 0))
+	mocks.SQL.ExpectExec(createSQLGoFrMigrationLocksTable).WillReturnResult(sqlmock.NewResult(0, 0))
+
+	// 2. getLastMigration (pre-check)
+	mocks.SQL.ExpectQuery(getLastSQLGoFrMigration).WillReturnRows(sqlmock.NewRows([]string{"MAX"}).AddRow(0))
+
+	// 3. lock (SQL side)
+	mocks.SQL.ExpectDialect().WillReturnString("mysql")
+	mocks.SQL.ExpectExec("DELETE FROM gofr_migration_locks WHERE expires_at < ?").
+		WithArgs(sqlmock.AnyArg()).WillReturnResult(sqlmock.NewResult(0, 0))
+	mocks.SQL.ExpectExec("INSERT INTO gofr_migration_locks (lock_key, owner_id, expires_at) VALUES (?, ?, ?)").
+		WithArgs("gofr_migrations_lock", sqlmock.AnyArg(), sqlmock.AnyArg()).
+		WillReturnResult(sqlmock.NewResult(1, 1))
+
+	// 4. getLastMigration under lock
+	mocks.SQL.ExpectQuery(getLastSQLGoFrMigration).WillReturnRows(sqlmock.NewRows([]string{"MAX"}).AddRow(0))
+
+	// 5. beginTransaction
+	mocks.SQL.ExpectBegin()
+
+	// 6. The migration UP function calls SQL.Exec
+	mocks.SQL.ExpectExec("CREATE TABLE test (id INT)").WillReturnResult(sqlmock.NewResult(0, 0))
+
+	// 7. commitMigration — SQL was used so INSERT into gofr_migrations should happen
+	mocks.SQL.ExpectDialect().WillReturnString("mysql")
+	mocks.SQL.ExpectExec("INSERT INTO gofr_migrations (version, method, start_time,duration) VALUES (?, ?, ?, ?);").
+		WithArgs(int64(1), "UP", sqlmock.AnyArg(), sqlmock.AnyArg()).
+		WillReturnResult(sqlmock.NewResult(1, 1))
+	mocks.SQL.ExpectCommit()
+
+	// 8. unlock (SQL side)
+	mocks.SQL.ExpectDialect().WillReturnString("mysql")
+	mocks.SQL.ExpectExec("DELETE FROM gofr_migration_locks WHERE lock_key = ? AND owner_id = ?").
+		WithArgs("gofr_migrations_lock", sqlmock.AnyArg()).WillReturnResult(sqlmock.NewResult(1, 1))
+
+	Run(migrationMap, mockContainer)
+
+	// Verify: Redis should NOT have a migration record since the migration only used SQL
+	val := s.HGet("gofr_migrations", "1")
+	assert.Empty(t, val, "Redis should NOT have migration record when migration only used SQL")
+
+	// Verify all SQL expectations were met
+	err := mocks.SQL.ExpectationsWereMet()
+	assert.NoError(t, err, "all SQL expectations should be met")
+}
+
+// TestEndToEnd_ClickhouseOnly_MigrationUsesClickhouse tests the flow with only Clickhouse
+// connected, where the migration uses Clickhouse — only Clickhouse should get a record.
+func TestEndToEnd_ClickhouseOnly_MigrationUsesClickhouse(t *testing.T) {
+	mockClickHouse := NewMockClickhouse(gomock.NewController(t))
+
+	mockContainer, _ := container.NewMockContainer(t)
+	mockContainer.SQL = nil
+	mockContainer.Redis = nil
+	mockContainer.Mongo = nil
+	mockContainer.Cassandra = nil
+	mockContainer.PubSub = nil
+	mockContainer.ArangoDB = nil
+	mockContainer.SurrealDB = nil
+	mockContainer.DGraph = nil
+	mockContainer.Elasticsearch = nil
+	mockContainer.OpenTSDB = nil
+	mockContainer.ScyllaDB = nil
+	mockContainer.Oracle = nil
+	mockContainer.Logger = logging.NewMockLogger(logging.DEBUG)
+	mockContainer.Clickhouse = mockClickHouse
+
+	migrationMap := map[int64]Migrate{
+		1: {UP: func(d Datasource) error {
+			return d.Clickhouse.Exec(t.Context(), "CREATE TABLE metrics (id UInt64) ENGINE = MergeTree()")
+		}},
+	}
+
+	// Pre-check
+	mockClickHouse.EXPECT().Exec(gomock.Any(), CheckAndCreateChMigrationTable).Return(nil)
+	mockClickHouse.EXPECT().Select(gomock.Any(), gomock.Any(), getLastChGoFrMigration).Return(nil).Times(2)
+
+	// Migration UP
+	mockClickHouse.EXPECT().Exec(gomock.Any(), "CREATE TABLE metrics (id UInt64) ENGINE = MergeTree()").Return(nil)
+
+	// commitMigration: Clickhouse was used, so INSERT should happen
+	mockClickHouse.EXPECT().Exec(gomock.Any(), insertChGoFrMigrationRow, int64(1),
+		"UP", gomock.Any(), gomock.Any()).Return(nil)
+
+	Run(migrationMap, mockContainer)
+}
+
+// TestEndToEnd_ClickhouseOnly_MigrationDoesNotUseClickhouse verifies that
+// when a migration does NOT use the connected Clickhouse, no record is written.
+func TestEndToEnd_ClickhouseOnly_MigrationDoesNotUseClickhouse(t *testing.T) {
+	mockClickHouse := NewMockClickhouse(gomock.NewController(t))
+
+	mockContainer, _ := container.NewMockContainer(t)
+	mockContainer.SQL = nil
+	mockContainer.Redis = nil
+	mockContainer.Mongo = nil
+	mockContainer.Cassandra = nil
+	mockContainer.PubSub = nil
+	mockContainer.ArangoDB = nil
+	mockContainer.SurrealDB = nil
+	mockContainer.DGraph = nil
+	mockContainer.Elasticsearch = nil
+	mockContainer.OpenTSDB = nil
+	mockContainer.ScyllaDB = nil
+	mockContainer.Oracle = nil
+	mockContainer.Logger = logging.NewMockLogger(logging.DEBUG)
+	mockContainer.Clickhouse = mockClickHouse
+
+	migrationMap := map[int64]Migrate{
+		1: {UP: func(_ Datasource) error {
+			// Does NOT use any datasource
+			return nil
+		}},
+	}
+
+	// Pre-check
+	mockClickHouse.EXPECT().Exec(gomock.Any(), CheckAndCreateChMigrationTable).Return(nil)
+	mockClickHouse.EXPECT().Select(gomock.Any(), gomock.Any(), getLastChGoFrMigration).Return(nil).Times(2)
+
+	// commitMigration: Clickhouse was NOT used, so INSERT should NOT happen
+
+	Run(migrationMap, mockContainer)
+
+	assert.True(t, mockClickHouse.ctrl.Satisfied(), "no unexpected Clickhouse calls should have been made")
+}
+
+// TestEndToEnd_MultiDB_OnlySQLUsed verifies that when SQL+Clickhouse are connected
+// but only SQL is used, only SQL gets the migration record.
+func TestEndToEnd_MultiDB_OnlySQLUsed(t *testing.T) {
+	mockClickHouse := NewMockClickhouse(gomock.NewController(t))
+
+	mockContainer, mocks := container.NewMockContainer(t)
+	mockContainer.Redis = nil
+	mockContainer.Mongo = nil
+	mockContainer.Cassandra = nil
+	mockContainer.PubSub = nil
+	mockContainer.ArangoDB = nil
+	mockContainer.SurrealDB = nil
+	mockContainer.DGraph = nil
+	mockContainer.Elasticsearch = nil
+	mockContainer.OpenTSDB = nil
+	mockContainer.ScyllaDB = nil
+	mockContainer.Oracle = nil
+	mockContainer.Logger = logging.NewMockLogger(logging.DEBUG)
+	mockContainer.Clickhouse = mockClickHouse
+
+	migrationMap := map[int64]Migrate{
+		1: {UP: func(d Datasource) error {
+			_, err := d.SQL.Exec("CREATE TABLE users (id INT)")
+			return err
+		}},
+	}
+
+	// checkAndCreateMigrationTable (SQL + Clickhouse)
+	mocks.SQL.ExpectExec(createSQLGoFrMigrationsTable).WillReturnResult(sqlmock.NewResult(0, 0))
+	mocks.SQL.ExpectExec(createSQLGoFrMigrationLocksTable).WillReturnResult(sqlmock.NewResult(0, 0))
+	mockClickHouse.EXPECT().Exec(gomock.Any(), CheckAndCreateChMigrationTable).Return(nil)
+
+	// getLastMigration (pre-check) — both DBs queried
+	mocks.SQL.ExpectQuery(getLastSQLGoFrMigration).WillReturnRows(sqlmock.NewRows([]string{"MAX"}).AddRow(0))
+	mockClickHouse.EXPECT().Select(gomock.Any(), gomock.Any(), getLastChGoFrMigration).Return(nil)
+
+	// lock (SQL only — Clickhouse delegates to base)
+	mocks.SQL.ExpectDialect().WillReturnString("mysql")
+	mocks.SQL.ExpectExec("DELETE FROM gofr_migration_locks WHERE expires_at < ?").
+		WithArgs(sqlmock.AnyArg()).WillReturnResult(sqlmock.NewResult(0, 0))
+	mocks.SQL.ExpectExec("INSERT INTO gofr_migration_locks (lock_key, owner_id, expires_at) VALUES (?, ?, ?)").
+		WithArgs("gofr_migrations_lock", sqlmock.AnyArg(), sqlmock.AnyArg()).
+		WillReturnResult(sqlmock.NewResult(1, 1))
+
+	// getLastMigration (under lock)
+	mocks.SQL.ExpectQuery(getLastSQLGoFrMigration).WillReturnRows(sqlmock.NewRows([]string{"MAX"}).AddRow(0))
+	mockClickHouse.EXPECT().Select(gomock.Any(), gomock.Any(), getLastChGoFrMigration).Return(nil)
+
+	// beginTransaction
+	mocks.SQL.ExpectBegin()
+
+	// Migration UP — uses SQL only
+	mocks.SQL.ExpectExec("CREATE TABLE users (id INT)").WillReturnResult(sqlmock.NewResult(0, 0))
+
+	// commitMigration — SQL was used so INSERT happens, Clickhouse was NOT used so no INSERT
+	mocks.SQL.ExpectDialect().WillReturnString("mysql")
+	mocks.SQL.ExpectExec("INSERT INTO gofr_migrations (version, method, start_time,duration) VALUES (?, ?, ?, ?);").
+		WithArgs(int64(1), "UP", sqlmock.AnyArg(), sqlmock.AnyArg()).
+		WillReturnResult(sqlmock.NewResult(1, 1))
+	mocks.SQL.ExpectCommit()
+
+	// unlock
+	mocks.SQL.ExpectDialect().WillReturnString("mysql")
+	mocks.SQL.ExpectExec("DELETE FROM gofr_migration_locks WHERE lock_key = ? AND owner_id = ?").
+		WithArgs("gofr_migrations_lock", sqlmock.AnyArg()).WillReturnResult(sqlmock.NewResult(1, 1))
+
+	Run(migrationMap, mockContainer)
+
+	err := mocks.SQL.ExpectationsWereMet()
+	require.NoError(t, err)
+	assert.True(t, mockClickHouse.ctrl.Satisfied(), "Clickhouse should not have received INSERT for migration record")
 }

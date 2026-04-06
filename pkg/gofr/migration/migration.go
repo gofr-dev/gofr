@@ -48,6 +48,11 @@ type transactionData struct {
 	SQLTx    *gofrSql.Tx
 	RedisTx  goRedis.Pipeliner
 	OracleTx container.OracleTx
+
+	// UsedDatasources tracks which datasources were actually accessed
+	// during the migration UP function execution. Only datasources
+	// present in this map will have their migration records committed.
+	UsedDatasources map[string]bool
 }
 
 func Run(migrationsMap map[int64]Migrate, c *container.Container) {
@@ -189,10 +194,18 @@ func runMigrations(ctx context.Context, c *container.Container, mg migrator, ds 
 			ds.Oracle = &oracleTransactionWrapper{tx: migrationInfo.OracleTx}
 		}
 
+		// Wrap all datasource fields with usage-tracking proxies so we know
+		// which databases the migration actually touches.
+		used := installTrackers(ds)
+
 		migrationInfo.StartTime = time.Now().UTC()
 		migrationInfo.MigrationNumber = currentMigration
 
 		err := migrationsMap[currentMigration].UP(*ds)
+
+		// Record which datasources were used so commitMigration only
+		// writes migration records to the databases that were touched.
+		migrationInfo.UsedDatasources = used
 
 		// Check if lock refresh failed during migration execution
 		select {
