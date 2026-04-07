@@ -156,6 +156,10 @@ func (om *openTSDBMigrator) commitMigration(c *container.Container, data transac
 		return err
 	}
 
+	if !data.UsedDatasources[dsOpenTSDB] {
+		return nil
+	}
+
 	// Then record it in our JSON file
 	om.mu.Lock()
 	defer om.mu.Unlock()
