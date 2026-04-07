@@ -50,7 +50,14 @@ func SwaggerUIHandler(c *Context) (any, error) {
 
 	split := strings.Split(fileName, ".")
 
-	ct := mime.TypeByExtension("." + split[1])
+	var ct string
+	if len(split) > 1 {
+		ct = mime.TypeByExtension("." + split[len(split)-1])
+	}
+
+	if ct == "" {
+		ct = "application/octet-stream"
+	}
 
 	// Return the rendered HTML as a string
 	return response.File{Content: data, ContentType: ct}, nil
