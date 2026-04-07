@@ -179,18 +179,20 @@ func (om oracleMigrator) commitMigration(c *container.Container, data transactio
 		return errInvalidOracleTransaction
 	}
 
-	// Insert migration record using the transaction.
-	err := data.OracleTx.ExecContext(context.Background(), insertOracleGoFrMigrationRow,
-		data.MigrationNumber, "UP", data.StartTime, time.Since(data.StartTime).Milliseconds())
-	if err != nil {
-		c.Errorf("failed to insert migration record: %v", err)
+	if data.UsedDatasources[dsOracle] {
+		// Insert migration record using the transaction.
+		err := data.OracleTx.ExecContext(context.Background(), insertOracleGoFrMigrationRow,
+			data.MigrationNumber, "UP", data.StartTime, time.Since(data.StartTime).Milliseconds())
+		if err != nil {
+			c.Errorf("failed to insert migration record: %v", err)
 
-		return err
+			return err
+		}
+
+		c.Debugf("inserted record for migration %v in Oracle gofr_migrations table", data.MigrationNumber)
 	}
 
-	c.Debugf("inserted record for migration %v in Oracle gofr_migrations table", data.MigrationNumber)
-
-	// Commit the transaction.
+	// Always commit the transaction to avoid leaving dangling transactions.
 	if err := data.OracleTx.Commit(); err != nil {
 		c.Errorf("failed to commit Oracle transaction: %v", err)
 		return err

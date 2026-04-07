@@ -483,7 +483,8 @@ func Test_UpdateCommands(t *testing.T) {
 		mt.AddMockResponses(mtest.CreateSuccessResponse())
 		// Create a document to insert
 
-		err := cl.UpdateOne(context.Background(), mt.Coll.Name(), bson.D{{Key: "name", Value: "test"}}, bson.M{"$set": bson.M{"name": "testing"}})
+		err := cl.UpdateOne(context.Background(), mt.Coll.Name(), bson.D{{Key: "name", Value: "test"}},
+			bson.M{"$set": bson.M{"name": "testing"}})
 
 		assert.NoError(t, err)
 	})

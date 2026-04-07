@@ -113,17 +113,19 @@ func (s surrealMigrator) beginTransaction(c *container.Container) transactionDat
 }
 
 func (s surrealMigrator) commitMigration(c *container.Container, data transactionData) error {
-	_, err := s.SurrealDB.Query(context.Background(), insertSurrealDBGoFrMigrationRow, map[string]any{
-		"version":    data.MigrationNumber,
-		"method":     "UP",
-		"start_time": data.StartTime,
-		"duration":   time.Since(data.StartTime).Milliseconds(),
-	})
-	if err != nil {
-		return err
-	}
+	if data.UsedDatasources[dsSurrealDB] {
+		_, err := s.SurrealDB.Query(context.Background(), insertSurrealDBGoFrMigrationRow, map[string]any{
+			"version":    data.MigrationNumber,
+			"method":     "UP",
+			"start_time": data.StartTime,
+			"duration":   time.Since(data.StartTime).Milliseconds(),
+		})
+		if err != nil {
+			return err
+		}
 
-	c.Debugf("inserted record for migration %v in surrealDB gofr_migrations table", data.MigrationNumber)
+		c.Debugf("inserted record for migration %v in surrealDB gofr_migrations table", data.MigrationNumber)
+	}
 
 	return s.migrator.commitMigration(c, data)
 }

@@ -20,7 +20,7 @@
 </div>
 
 ## 🎯 **Goal**
-GoFr is designed to **simplify microservice development**, with key focuses on **Kubernetes deployment** and **out-of-the-box observability**. While capable of building generic applications, **microservices** remain at its core.
+GoFr is designed to **simplify microservice development**, with a key focus on **Kubernetes deployment** and **out-of-the-box observability**. While capable of building generic applications, **microservices** remain at its core.
 
 ---
 

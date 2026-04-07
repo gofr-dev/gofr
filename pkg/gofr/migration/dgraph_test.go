@@ -109,6 +109,7 @@ func Test_DGraphCommitMigration(t *testing.T) {
 	td := transactionData{
 		StartTime:       timeNow,
 		MigrationNumber: 10,
+		UsedDatasources: map[string]bool{dsDGraph: true},
 	}
 
 	for i, tc := range testCases {

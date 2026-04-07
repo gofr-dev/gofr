@@ -40,6 +40,40 @@ func TestNewCMD(t *testing.T) {
 	assert.Contains(t, outputWithoutArgs, "is not a valid command", "TEST Failed.\n%s", "Stderr output mismatch")
 }
 
+func TestNewCMD_FileLoggerClosedAfterRun(t *testing.T) {
+	tempFile, err := os.CreateTemp(t.TempDir(), "gofr_cmd_test_log_*.log")
+	require.NoError(t, err)
+
+	tempFile.Close() // Close it since NewFileLogger will open it.
+	t.Setenv("CMD_LOGS_FILE", tempFile.Name())
+
+	originalArgs := os.Args
+	os.Args = []string{"", "test-log"}
+
+	t.Cleanup(func() { os.Args = originalArgs })
+
+	a := NewCMD()
+
+	a.SubCommand("test-log", func(c *Context) (any, error) {
+		c.Logger.Info("test log message in cmd")
+		return "handler called", nil
+	})
+
+	a.Run()
+
+	logBytes, err := os.ReadFile(tempFile.Name())
+	require.NoError(t, err)
+
+	assert.Contains(t, string(logBytes), "test log message in cmd")
+
+	// Verify the logger is closed by checking if another Close() call returns an error.
+	closer, ok := a.container.Logger.(io.Closer)
+	require.True(t, ok, "logger should implement io.Closer")
+
+	err = closer.Close()
+	assert.ErrorIs(t, err, os.ErrClosed)
+}
+
 func TestGofr_readConfig(t *testing.T) {
 	app := App{}
 
@@ -419,6 +453,85 @@ func TestEnableBasicAuthWithFunc(t *testing.T) {
 	defer resp.Body.Close()
 
 	assert.Equal(t, http.StatusUnauthorized, resp.StatusCode, "TestEnableBasicAuthWithFunc Failed!")
+}
+
+func TestEnableOAuth_HealthCheckEndpoint(t *testing.T) {
+	port := testutil.GetFreePort(t)
+
+	// Mock server that serves both /.well-known/alive and /.well-known/jwks.json
+	mockServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/.well-known/alive":
+			w.WriteHeader(http.StatusOK)
+		case "/.well-known/jwks.json":
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write([]byte(`{"keys":[]}`))
+		default:
+			w.WriteHeader(http.StatusNotFound)
+		}
+	}))
+	defer mockServer.Close()
+
+	c := container.NewContainer(config.NewMockConfig(nil))
+
+	a := &App{
+		httpServer: &httpServer{
+			router: gofrHTTP.NewRouter(),
+			port:   port,
+		},
+		container: c,
+	}
+
+	// Pass full JWKS URL with path — the fix should extract the base URL
+	a.EnableOAuth(mockServer.URL+"/.well-known/jwks.json", 600)
+
+	// Verify the service is registered
+	oauthService := a.container.GetHTTPService("gofr_oauth")
+	require.NotNil(t, oauthService, "gofr_oauth service should be registered")
+
+	// Health check should hit mockServer/.well-known/alive (not mockServer/.well-known/jwks.json/.well-known/alive)
+	health := oauthService.HealthCheck(t.Context())
+	assert.Equal(t, "UP", health.Status, "Health check should hit the host root, not the JWKS path")
+
+	// JWKS fetch should hit mockServer/.well-known/jwks.json (not mockServer//.well-known/jwks.json)
+	resp, err := oauthService.GetWithHeaders(t.Context(), ".well-known/jwks.json", nil, nil)
+	require.NoError(t, err)
+
+	defer resp.Body.Close()
+
+	assert.Equal(t, http.StatusOK, resp.StatusCode, "JWKS fetch should hit the correct path without double slash")
+}
+
+func TestEnableOAuth_InvalidEndpoints(t *testing.T) {
+	invalidEndpoints := []string{
+		"",
+		"not-a-url",
+		"/.well-known/jwks.json",
+		"http://",
+		"ftp://host/.well-known/jwks.json",
+	}
+
+	for _, endpoint := range invalidEndpoints {
+		t.Run(endpoint, func(t *testing.T) {
+			port := testutil.GetFreePort(t)
+			c := container.NewContainer(config.NewMockConfig(nil))
+
+			a := &App{
+				httpServer: &httpServer{
+					router: gofrHTTP.NewRouter(),
+					port:   port,
+				},
+				container: c,
+			}
+
+			a.EnableOAuth(endpoint, 600)
+
+			// Service should NOT be registered for invalid endpoints
+			assert.Nil(t, a.container.GetHTTPService("gofr_oauth"),
+				"gofr_oauth service should not be registered for invalid endpoint: %q", endpoint)
+		})
+	}
 }
 
 func encodeBasicAuthorization(t *testing.T, arg string) string {

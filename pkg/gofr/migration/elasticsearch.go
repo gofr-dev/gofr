@@ -148,22 +148,24 @@ func (em elasticsearchMigrator) beginTransaction(c *container.Container) transac
 
 // commitMigration records the migration in the tracking index.
 func (em elasticsearchMigrator) commitMigration(c *container.Container, data transactionData) error {
-	migrationDoc := map[string]any{
-		"version":    data.MigrationNumber,
-		"method":     "UP",
-		"start_time": data.StartTime.Format(time.RFC3339),
-		"duration":   time.Since(data.StartTime).Milliseconds(),
+	if data.UsedDatasources[dsElasticsearch] {
+		migrationDoc := map[string]any{
+			"version":    data.MigrationNumber,
+			"method":     "UP",
+			"start_time": data.StartTime.Format(time.RFC3339),
+			"duration":   time.Since(data.StartTime).Milliseconds(),
+		}
+
+		// Use the migration number as the document ID for idempotency
+		docID := fmt.Sprintf("%d", data.MigrationNumber)
+
+		err := c.Elasticsearch.IndexDocument(context.Background(), elasticsearchMigrationIndex, docID, migrationDoc)
+		if err != nil {
+			return fmt.Errorf("failed to record migration: %w", err)
+		}
+
+		c.Debugf("Inserted record for migration %v in Elasticsearch gofr_migrations index", data.MigrationNumber)
 	}
-
-	// Use the migration number as the document ID for idempotency
-	docID := fmt.Sprintf("%d", data.MigrationNumber)
-
-	err := c.Elasticsearch.IndexDocument(context.Background(), elasticsearchMigrationIndex, docID, migrationDoc)
-	if err != nil {
-		return fmt.Errorf("failed to record migration: %w", err)
-	}
-
-	c.Debugf("Inserted record for migration %v in Elasticsearch gofr_migrations index", data.MigrationNumber)
 
 	return em.migrator.commitMigration(c, data)
 }
