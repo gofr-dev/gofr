@@ -26,7 +26,23 @@ type Datasource struct {
 	OpenTSDB      OpenTSDB
 }
 
-// It is a base implementation for migration manager, on this other database drivers have been wrapped.
+// Datasource key constants used in UsedDatasources map.
+const (
+	dsSQL           = "SQL"
+	dsRedis         = "Redis"
+	dsClickhouse    = "Clickhouse"
+	dsOracle        = "Oracle"
+	dsCassandra     = "Cassandra"
+	dsMongo         = "Mongo"
+	dsArangoDB      = "ArangoDB"
+	dsSurrealDB     = "SurrealDB"
+	dsDGraph        = "DGraph"
+	dsScyllaDB      = "ScyllaDB"
+	dsElasticsearch = "Elasticsearch"
+	dsOpenTSDB      = "OpenTSDB"
+)
+
+// Base implementation for migration manager, on this other database drivers have been wrapped.
 
 func (*Datasource) checkAndCreateMigrationTable(*container.Container) error {
 	return nil

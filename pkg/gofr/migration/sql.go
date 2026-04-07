@@ -99,27 +99,30 @@ func (d sqlMigrator) getLastMigration(c *container.Container) (int64, error) {
 }
 
 func (d sqlMigrator) commitMigration(c *container.Container, data transactionData) error {
-	dialect := c.SQL.Dialect()
+	if data.UsedDatasources[dsSQL] {
+		dialect := c.SQL.Dialect()
 
-	switch dialect {
-	case mysql, sqlite:
-		err := insertMigrationRecord(data.SQLTx, insertGoFrMigrationRowMySQL, data.MigrationNumber, data.StartTime)
-		if err != nil {
-			return err
+		switch dialect {
+		case mysql, sqlite:
+			err := insertMigrationRecord(data.SQLTx, insertGoFrMigrationRowMySQL, data.MigrationNumber, data.StartTime)
+			if err != nil {
+				return err
+			}
+
+			c.Debugf("inserted record for migration %v in gofr_migrations table", data.MigrationNumber)
+
+		case postgres:
+			err := insertMigrationRecord(data.SQLTx, insertGoFrMigrationRowPostgres, data.MigrationNumber, data.StartTime)
+			if err != nil {
+				return err
+			}
+
+			c.Debugf("inserted record for migration %v in gofr_migrations table", data.MigrationNumber)
 		}
-
-		c.Debugf("inserted record for migration %v in gofr_migrations table", data.MigrationNumber)
-
-	case postgres:
-		err := insertMigrationRecord(data.SQLTx, insertGoFrMigrationRowPostgres, data.MigrationNumber, data.StartTime)
-		if err != nil {
-			return err
-		}
-
-		c.Debugf("inserted record for migration %v in gofr_migrations table", data.MigrationNumber)
 	}
 
-	// Commit transaction
+	// Always commit the transaction regardless of whether SQL was used,
+	// to avoid leaving dangling transactions.
 	if err := data.SQLTx.Commit(); err != nil {
 		return err
 	}

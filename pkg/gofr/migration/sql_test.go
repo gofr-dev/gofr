@@ -601,6 +601,7 @@ func TestSQLMigrator_CommitMigration(t *testing.T) {
 		SQLTx:           tx,
 		MigrationNumber: 1,
 		StartTime:       time.Now().UTC(),
+		UsedDatasources: map[string]bool{dsSQL: true},
 	}
 
 	mocks.SQL.ExpectExec("INSERT INTO gofr_migrations (version, method, start_time,duration) VALUES (?, ?, ?, ?);").
@@ -627,6 +628,7 @@ func TestSQLMigrator_CommitMigration_Postgres(t *testing.T) {
 		MigrationNumber: 1,
 		StartTime:       time.Now().UTC(),
 		SQLTx:           tx,
+		UsedDatasources: map[string]bool{dsSQL: true},
 	}
 
 	mocks.SQL.ExpectDialect().WillReturnString("postgres")
@@ -655,6 +657,7 @@ func TestSQLMigrator_CommitMigration_ExecError(t *testing.T) {
 		MigrationNumber: 1,
 		StartTime:       time.Now().UTC(),
 		SQLTx:           tx,
+		UsedDatasources: map[string]bool{dsSQL: true},
 	}
 
 	testErr := errSQLExec
@@ -682,6 +685,7 @@ func TestSQLMigrator_CommitMigration_CommitError(t *testing.T) {
 		MigrationNumber: 1,
 		StartTime:       time.Now().UTC(),
 		SQLTx:           tx,
+		UsedDatasources: map[string]bool{dsSQL: true},
 	}
 
 	testErr := errSQLCommit
@@ -787,4 +791,59 @@ func TestSQLMigrator_CheckAndCreateMigrationTable_Error(t *testing.T) {
 func TestSQLMigrator_Name(t *testing.T) {
 	m := sqlMigrator{}
 	assert.Equal(t, "SQL", m.name())
+}
+
+func TestSQLMigrator_CommitMigration_SkipsWhenNotUsed(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	t.Cleanup(ctrl.Finish)
+
+	mockContainer, mocks := container.NewMockContainer(t)
+	mockMigrator := NewMockmigrator(ctrl)
+	m := sqlMigrator{SQL: mockContainer.SQL, migrator: mockMigrator}
+
+	mocks.SQL.ExpectBegin()
+	tx, _ := mockContainer.SQL.Begin()
+
+	data := transactionData{
+		SQLTx:           tx,
+		MigrationNumber: 1,
+		StartTime:       time.Now().UTC(),
+		UsedDatasources: map[string]bool{},
+	}
+
+	mocks.SQL.ExpectCommit()
+	mockMigrator.EXPECT().commitMigration(mockContainer, data).Return(nil)
+
+	err := m.commitMigration(mockContainer, data)
+	assert.NoError(t, err)
+}
+
+func TestSQLMigrator_CommitMigration_SkipInsert_StillCommitsTx(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	t.Cleanup(ctrl.Finish)
+
+	mockContainer, mocks := container.NewMockContainer(t)
+	mockMigrator := NewMockmigrator(ctrl)
+	m := sqlMigrator{SQL: mockContainer.SQL, migrator: mockMigrator}
+
+	mocks.SQL.ExpectBegin()
+	tx, _ := mockContainer.SQL.Begin()
+
+	data := transactionData{
+		SQLTx:           tx,
+		MigrationNumber: 1,
+		StartTime:       time.Now().UTC(),
+		UsedDatasources: map[string]bool{dsRedis: true}, // Only Redis used, not SQL
+	}
+
+	// Should NOT expect INSERT.
+	// Should expect Commit — transaction must be closed even if empty.
+	mocks.SQL.ExpectCommit()
+	mockMigrator.EXPECT().commitMigration(mockContainer, data).Return(nil)
+
+	err := m.commitMigration(mockContainer, data)
+	require.NoError(t, err)
+
+	err = mocks.SQL.ExpectationsWereMet()
+	require.NoError(t, err, "SQL transaction should have been committed even though SQL was not used")
 }

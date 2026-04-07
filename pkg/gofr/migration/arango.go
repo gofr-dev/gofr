@@ -113,21 +113,23 @@ func (am arangoMigrator) beginTransaction(c *container.Container) transactionDat
 }
 
 func (am arangoMigrator) commitMigration(c *container.Container, data transactionData) error {
-	bindVars := map[string]any{
-		"version":    data.MigrationNumber,
-		"method":     "UP",
-		"start_time": data.StartTime,
-		"duration":   time.Since(data.StartTime).Milliseconds(),
+	if data.UsedDatasources[dsArangoDB] {
+		bindVars := map[string]any{
+			"version":    data.MigrationNumber,
+			"method":     "UP",
+			"start_time": data.StartTime,
+			"duration":   time.Since(data.StartTime).Milliseconds(),
+		}
+
+		var result []map[string]any
+
+		err := c.ArangoDB.Query(context.Background(), arangoMigrationDB, insertArangoMigrationRecord, bindVars, &result)
+		if err != nil {
+			return err
+		}
+
+		c.Debugf("Inserted record for migration %v in ArangoDB gofr_migrations collection", data.MigrationNumber)
 	}
-
-	var result []map[string]any
-
-	err := c.ArangoDB.Query(context.Background(), arangoMigrationDB, insertArangoMigrationRecord, bindVars, &result)
-	if err != nil {
-		return err
-	}
-
-	c.Debugf("Inserted record for migration %v in ArangoDB gofr_migrations collection", data.MigrationNumber)
 
 	return am.migrator.commitMigration(c, data)
 }

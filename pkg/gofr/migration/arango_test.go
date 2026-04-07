@@ -100,6 +100,7 @@ func Test_ArangoCommitMigration(t *testing.T) {
 	td := transactionData{
 		StartTime:       timeNow,
 		MigrationNumber: 10,
+		UsedDatasources: map[string]bool{dsArangoDB: true},
 	}
 
 	for i, tc := range testCases {
