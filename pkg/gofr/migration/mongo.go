@@ -97,19 +97,21 @@ func (mg mongoMigrator) beginTransaction(c *container.Container) transactionData
 }
 
 func (mg mongoMigrator) commitMigration(c *container.Container, data transactionData) error {
-	migrationDoc := map[string]any{
-		"version":    data.MigrationNumber,
-		"method":     "UP",
-		"start_time": data.StartTime,
-		"duration":   time.Since(data.StartTime).Milliseconds(),
-	}
+	if data.UsedDatasources[dsMongo] {
+		migrationDoc := map[string]any{
+			"version":    data.MigrationNumber,
+			"method":     "UP",
+			"start_time": data.StartTime,
+			"duration":   time.Since(data.StartTime).Milliseconds(),
+		}
 
-	_, err := mg.Mongo.InsertOne(context.Background(), mongoMigrationCollection, migrationDoc)
-	if err != nil {
-		return err
-	}
+		_, err := mg.Mongo.InsertOne(context.Background(), mongoMigrationCollection, migrationDoc)
+		if err != nil {
+			return err
+		}
 
-	c.Debugf("Inserted record for migration %v in MongoDB gofr_migrations collection", data.MigrationNumber)
+		c.Debugf("Inserted record for migration %v in MongoDB gofr_migrations collection", data.MigrationNumber)
+	}
 
 	return mg.migrator.commitMigration(c, data)
 }
@@ -145,7 +147,7 @@ func (mg mongoMigrator) startRefresh(ctx context.Context, cancel context.CancelF
 				},
 			}
 
-			modified, err := mg.Mongo.UpdateOne(ctx, mongoLockCollection, filter, update)
+			modified, err := mg.Mongo.UpdateMany(ctx, mongoLockCollection, filter, update)
 			if err != nil {
 				c.Errorf("failed to refresh mongo lock: %v", err)
 				cancel()

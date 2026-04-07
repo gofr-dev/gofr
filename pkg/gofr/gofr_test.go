@@ -40,6 +40,40 @@ func TestNewCMD(t *testing.T) {
 	assert.Contains(t, outputWithoutArgs, "is not a valid command", "TEST Failed.\n%s", "Stderr output mismatch")
 }
 
+func TestNewCMD_FileLoggerClosedAfterRun(t *testing.T) {
+	tempFile, err := os.CreateTemp(t.TempDir(), "gofr_cmd_test_log_*.log")
+	require.NoError(t, err)
+
+	tempFile.Close() // Close it since NewFileLogger will open it.
+	t.Setenv("CMD_LOGS_FILE", tempFile.Name())
+
+	originalArgs := os.Args
+	os.Args = []string{"", "test-log"}
+
+	t.Cleanup(func() { os.Args = originalArgs })
+
+	a := NewCMD()
+
+	a.SubCommand("test-log", func(c *Context) (any, error) {
+		c.Logger.Info("test log message in cmd")
+		return "handler called", nil
+	})
+
+	a.Run()
+
+	logBytes, err := os.ReadFile(tempFile.Name())
+	require.NoError(t, err)
+
+	assert.Contains(t, string(logBytes), "test log message in cmd")
+
+	// Verify the logger is closed by checking if another Close() call returns an error.
+	closer, ok := a.container.Logger.(io.Closer)
+	require.True(t, ok, "logger should implement io.Closer")
+
+	err = closer.Close()
+	assert.ErrorIs(t, err, os.ErrClosed)
+}
+
 func TestGofr_readConfig(t *testing.T) {
 	app := App{}
 

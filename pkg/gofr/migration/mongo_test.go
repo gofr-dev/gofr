@@ -116,6 +116,7 @@ func Test_MongoCommitMigration(t *testing.T) {
 	td := transactionData{
 		StartTime:       timeNow,
 		MigrationNumber: 10,
+		UsedDatasources: map[string]bool{dsMongo: true},
 	}
 
 	migrationDoc := map[string]any{
@@ -273,7 +274,7 @@ func Test_MongoStartRefresh(t *testing.T) {
 			ctx, cancel := context.WithCancel(t.Context())
 			defer cancel()
 
-			expectedCall := mockMongo.EXPECT().UpdateOne(gomock.Any(), mongoLockCollection, gomock.Any(), gomock.Any()).
+			expectedCall := mockMongo.EXPECT().UpdateMany(gomock.Any(), mongoLockCollection, gomock.Any(), gomock.Any()).
 				Return(tc.modified, tc.updateErr)
 			if tc.repeatRefreshCall {
 				expectedCall.AnyTimes()
@@ -299,4 +300,17 @@ func Test_MongoStartRefresh(t *testing.T) {
 			}
 		})
 	}
+}
+
+func Test_MongoCommitMigration_SkipsWhenNotUsed(t *testing.T) {
+	migratorWithMongo, _, mockContainer := mongoSetup(t)
+
+	td := transactionData{
+		StartTime:       time.Now(),
+		MigrationNumber: 10,
+		UsedDatasources: map[string]bool{},
+	}
+
+	err := migratorWithMongo.commitMigration(mockContainer, td)
+	assert.NoError(t, err)
 }
