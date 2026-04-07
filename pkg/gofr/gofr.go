@@ -111,6 +111,10 @@ func (a *App) Shutdown(ctx context.Context) error {
 		err = errors.Join(err, a.metricServer.Shutdown(ctx))
 	}
 
+	if a.cron != nil {
+		a.cron.Stop()
+	}
+
 	a.container.Logger.Info("Application shutdown complete")
 
 	// Close logger file if applicable
