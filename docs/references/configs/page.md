@@ -156,6 +156,47 @@ This document lists all the configuration options supported by the GoFr framewor
 
 {% /table %}
 
+### CORS
+
+{% table %}
+
+- Name
+- Description
+- Default Value
+
+---
+
+- ACCESS_CONTROL_ALLOW_ORIGIN
+- Allowed origin(s) for cross-origin requests. Supports comma-separated values for multiple origins (e.g., `https://app.example.com,https://admin.example.com`).
+- `*`
+
+---
+
+- ACCESS_CONTROL_ALLOW_HEADERS
+- Allowed request headers for cross-origin requests.
+- Authorization, Content-Type, x-requested-with, origin, true-client-ip, X-Correlation-ID
+
+---
+
+- ACCESS_CONTROL_ALLOW_METHODS
+- Allowed HTTP methods. Automatically set from registered routes if not provided.
+
+---
+
+- ACCESS_CONTROL_ALLOW_CREDENTIALS
+- Allow credentials (cookies, HTTP authentication) in cross-origin requests.
+
+---
+
+- ACCESS_CONTROL_EXPOSE_HEADERS
+- Additional headers exposed to the client in cross-origin responses.
+
+---
+
+- ACCESS_CONTROL_MAX_AGE
+- Maximum time (in seconds) browsers can cache preflight responses.
+
+{% /table %}
 
 ## Datasource
 
