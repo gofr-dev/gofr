@@ -95,6 +95,7 @@ func Test_SurrealCommitMigration(t *testing.T) {
 	td := transactionData{
 		StartTime:       timeNow,
 		MigrationNumber: 10,
+		UsedDatasources: map[string]bool{dsSurrealDB: true},
 	}
 
 	for i, tc := range testCases {
@@ -182,5 +183,28 @@ func TestSurrealDS_DropDatabase(t *testing.T) {
 	surreal := surrealDS{client: mockSurreal}
 	err := surreal.DropDatabase(t.Context(), database)
 
+	assert.NoError(t, err)
+}
+
+func Test_SurrealCommitMigration_SkipsWhenNotUsed(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	t.Cleanup(ctrl.Finish)
+
+	mockSurreal := NewMockSurrealDB(ctrl)
+	mockMigrator := NewMockmigrator(ctrl)
+
+	m := surrealMigrator{SurrealDB: mockSurreal, migrator: mockMigrator}
+
+	c, _ := container.NewMockContainer(t)
+
+	data := transactionData{
+		MigrationNumber: 1,
+		StartTime:       time.Now(),
+		UsedDatasources: map[string]bool{},
+	}
+
+	mockMigrator.EXPECT().commitMigration(c, data).Return(nil)
+
+	err := m.commitMigration(c, data)
 	assert.NoError(t, err)
 }

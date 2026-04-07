@@ -94,6 +94,7 @@ func Test_CassandraCommitMigration(t *testing.T) {
 	td := transactionData{
 		StartTime:       timeNow,
 		MigrationNumber: 10,
+		UsedDatasources: map[string]bool{dsCassandra: true},
 	}
 
 	for i, tc := range testCases {
@@ -113,4 +114,26 @@ func Test_CassandraBeginTransaction(t *testing.T) {
 	})
 
 	assert.Contains(t, logs, "cassandra migrator begin successfully")
+}
+
+func Test_CassandraCommitMigration_SkipsWhenNotUsed(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	t.Cleanup(ctrl.Finish)
+
+	mockCass := container.NewMockCassandraWithContext(ctrl)
+	mockMigrator := NewMockmigrator(ctrl)
+	m := cassandraMigrator{CassandraWithContext: mockCass, migrator: mockMigrator}
+
+	c, _ := container.NewMockContainer(t)
+
+	data := transactionData{
+		MigrationNumber: 1,
+		StartTime:       time.Now(),
+		UsedDatasources: map[string]bool{},
+	}
+
+	mockMigrator.EXPECT().commitMigration(c, data).Return(nil)
+
+	err := m.commitMigration(c, data)
+	assert.NoError(t, err)
 }
