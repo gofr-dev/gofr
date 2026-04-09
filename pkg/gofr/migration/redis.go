@@ -84,25 +84,28 @@ func (m redisMigrator) beginTransaction(c *container.Container) transactionData 
 func (m redisMigrator) commitMigration(c *container.Container, data transactionData) error {
 	migrationVersion := strconv.FormatInt(data.MigrationNumber, 10)
 
-	jsonData, err := json.Marshal(redisData{
-		Method:    "UP",
-		StartTime: data.StartTime,
-		Duration:  time.Since(data.StartTime).Milliseconds(),
-	})
-	if err != nil {
-		c.Logger.Errorf("migration %v for Redis failed with err: %v", migrationVersion, err)
+	if data.UsedDatasources[dsRedis] {
+		jsonData, err := json.Marshal(redisData{
+			Method:    "UP",
+			StartTime: data.StartTime,
+			Duration:  time.Since(data.StartTime).Milliseconds(),
+		})
+		if err != nil {
+			c.Logger.Errorf("migration %v for Redis failed with err: %v", migrationVersion, err)
 
-		return err
+			return err
+		}
+
+		_, err = data.RedisTx.HSet(context.Background(), "gofr_migrations", map[string]string{migrationVersion: string(jsonData)}).Result()
+		if err != nil {
+			c.Logger.Errorf("migration %v for Redis failed with err: %v", migrationVersion, err)
+
+			return err
+		}
 	}
 
-	_, err = data.RedisTx.HSet(context.Background(), "gofr_migrations", map[string]string{migrationVersion: string(jsonData)}).Result()
-	if err != nil {
-		c.Logger.Errorf("migration %v for Redis failed with err: %v", migrationVersion, err)
-
-		return err
-	}
-
-	_, err = data.RedisTx.Exec(context.Background())
+	// Always execute the pipeline to avoid leaving dangling transactions.
+	_, err := data.RedisTx.Exec(context.Background())
 	if err != nil {
 		c.Logger.Errorf("migration %v for Redis failed with err: %v", migrationVersion, err)
 

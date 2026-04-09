@@ -116,6 +116,7 @@ func Test_MongoCommitMigration(t *testing.T) {
 	td := transactionData{
 		StartTime:       timeNow,
 		MigrationNumber: 10,
+		UsedDatasources: map[string]bool{dsMongo: true},
 	}
 
 	migrationDoc := map[string]any{
@@ -299,4 +300,17 @@ func Test_MongoStartRefresh(t *testing.T) {
 			}
 		})
 	}
+}
+
+func Test_MongoCommitMigration_SkipsWhenNotUsed(t *testing.T) {
+	migratorWithMongo, _, mockContainer := mongoSetup(t)
+
+	td := transactionData{
+		StartTime:       time.Now(),
+		MigrationNumber: 10,
+		UsedDatasources: map[string]bool{},
+	}
+
+	err := migratorWithMongo.commitMigration(mockContainer, td)
+	assert.NoError(t, err)
 }

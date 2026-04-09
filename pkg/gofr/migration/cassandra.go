@@ -78,13 +78,15 @@ func (cs cassandraMigrator) beginTransaction(c *container.Container) transaction
 }
 
 func (cs cassandraMigrator) commitMigration(c *container.Container, data transactionData) error {
-	err := cs.CassandraWithContext.ExecWithCtx(context.Background(), insertCassandraGoFrMigrationRow, data.MigrationNumber,
-		"UP", data.StartTime, time.Since(data.StartTime).Milliseconds())
-	if err != nil {
-		return err
-	}
+	if data.UsedDatasources[dsCassandra] {
+		err := cs.CassandraWithContext.ExecWithCtx(context.Background(), insertCassandraGoFrMigrationRow, data.MigrationNumber,
+			"UP", data.StartTime, time.Since(data.StartTime).Milliseconds())
+		if err != nil {
+			return err
+		}
 
-	c.Debugf("inserted record for migration %v in cassandra gofr_migrations table", data.MigrationNumber)
+		c.Debugf("inserted record for migration %v in cassandra gofr_migrations table", data.MigrationNumber)
+	}
 
 	return cs.migrator.commitMigration(c, data)
 }

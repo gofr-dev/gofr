@@ -85,23 +85,25 @@ func (s scyllaMigrator) beginTransaction(c *container.Container) transactionData
 }
 
 func (s scyllaMigrator) commitMigration(c *container.Container, data transactionData) error {
-	insertStmt := fmt.Sprintf(`
+	if data.UsedDatasources[dsScyllaDB] {
+		insertStmt := fmt.Sprintf(`
 		INSERT INTO %s (version, method, start_time, duration)
 		VALUES (?, ?, ?, ?);
 	`, scyllaDBMigrationTable)
 
-	err := s.ScyllaDB.Exec(insertStmt,
-		data.MigrationNumber,
-		"UP",
-		data.StartTime,
-		time.Since(data.StartTime).Milliseconds(),
-	)
-	if err != nil {
-		c.Errorf("Failed to insert migration record: %v", err)
-		return err
-	}
+		err := s.ScyllaDB.Exec(insertStmt,
+			data.MigrationNumber,
+			"UP",
+			data.StartTime,
+			time.Since(data.StartTime).Milliseconds(),
+		)
+		if err != nil {
+			c.Errorf("Failed to insert migration record: %v", err)
+			return err
+		}
 
-	c.Debugf("Inserted migration record for version %v into ScyllaDB", data.MigrationNumber)
+		c.Debugf("Inserted migration record for version %v into ScyllaDB", data.MigrationNumber)
+	}
 
 	return s.migrator.commitMigration(c, data)
 }
