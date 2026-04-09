@@ -380,8 +380,7 @@ func (ps *PubSub) subscribeToStream(ctx context.Context, topic string) error {
 		return fmt.Errorf("%w: group=%s, stream=%s", errFailedToEnsureConsumerGroup, group, topic)
 	}
 
-	consumer := ps.getConsumerName()
-	ps.storeStreamConsumer(topic, group, consumer)
+	consumer := ps.getOrCreateConsumerName(topic, group)
 
 	block := ps.config.PubSubStreamsConfig.Block
 	if block == 0 {
@@ -623,6 +622,23 @@ func (ps *PubSub) readNewMessages(ctx context.Context, topic, group, consumer st
 	}
 
 	ps.processStreamMessages(ctx, topic, streams, group)
+}
+
+// getOrCreateConsumerName returns the existing consumer name for a topic (preserving PEL
+// ownership across resubscribes) or generates a new one if none exists.
+func (ps *PubSub) getOrCreateConsumerName(topic, group string) string {
+	ps.mu.RLock()
+	existing, ok := ps.streamConsumers[topic]
+	ps.mu.RUnlock()
+
+	if ok && existing.consumer != "" {
+		return existing.consumer
+	}
+
+	consumer := ps.getConsumerName()
+	ps.storeStreamConsumer(topic, group, consumer)
+
+	return consumer
 }
 
 // getConsumerName returns the configured consumer name or generates one.

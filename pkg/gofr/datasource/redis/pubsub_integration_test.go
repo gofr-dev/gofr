@@ -381,3 +381,99 @@ func TestIntegration_MultipleTopicsCloseCleanly(t *testing.T) {
 	assert.Empty(t, ps.streamConsumers)
 	ps.mu.RUnlock()
 }
+
+// TestIntegration_ResubscribePreservesData validates that messages published
+// before resubscribe are not lost — the new goroutine reuses the same consumer
+// name so PEL entries are properly recovered.
+func TestIntegration_ResubscribePreservesData(t *testing.T) {
+	ps := setupIntegrationTest(t, map[string]string{
+		"REDIS_PUBSUB_BUFFER_SIZE": "10",
+	})
+
+	ctx := context.Background()
+	topic := fmt.Sprintf("data-preserve-test-%d", time.Now().UnixNano())
+
+	err := ps.CreateTopic(ctx, topic)
+	require.NoError(t, err)
+
+	t.Cleanup(func() {
+		_ = ps.DeleteTopic(ctx, topic)
+	})
+
+	// Start subscription (no competing reader)
+	msgChan := ps.ensureSubscription(ctx, topic)
+	require.NotNil(t, msgChan)
+
+	time.Sleep(300 * time.Millisecond)
+
+	// Record the consumer name before resubscribe
+	ps.mu.RLock()
+	oldConsumer := ps.streamConsumers[topic].consumer
+	ps.mu.RUnlock()
+	require.NotEmpty(t, oldConsumer)
+
+	// Publish messages BEFORE resubscribe
+	for i := 0; i < 3; i++ {
+		err := ps.Publish(ctx, topic, []byte(fmt.Sprintf("pre-resub-%d", i)))
+		require.NoError(t, err)
+	}
+
+	// Wait for messages to be consumed by the goroutine
+	time.Sleep(2 * time.Second)
+
+	// Drain the channel (messages consumed but NOT committed — they stay in PEL)
+	var preResubMessages []string
+
+	for {
+		select {
+		case msg := <-msgChan:
+			if msg != nil {
+				preResubMessages = append(preResubMessages, string(msg.Value))
+				// Intentionally NOT calling msg.Commit() — leaves them in PEL
+			}
+		default:
+			goto drained
+		}
+	}
+
+drained:
+
+	t.Logf("Drained %d messages before resubscribe: %v", len(preResubMessages), preResubMessages)
+
+	assert.Len(t, preResubMessages, 3, "Should have received all 3 pre-resubscribe messages")
+
+	// Trigger resubscription
+	ps.resubscribeAll()
+
+	// Verify consumer name is preserved
+	ps.mu.RLock()
+	newConsumer := ps.streamConsumers[topic].consumer
+	ps.mu.RUnlock()
+
+	assert.Equal(t, oldConsumer, newConsumer,
+		"Consumer name should be preserved across resubscribe to maintain PEL ownership")
+
+	t.Logf("Consumer name preserved: %s", newConsumer)
+
+	// The unACKed messages should be re-read from PEL by the new goroutine
+	// (same consumer name = same PEL entries)
+	var redelivered []string
+
+	timeout := time.After(5 * time.Second)
+
+	for i := 0; i < 3; i++ {
+		select {
+		case msg := <-msgChan:
+			if msg != nil {
+				redelivered = append(redelivered, string(msg.Value))
+				msg.Commit()
+			}
+		case <-timeout:
+			t.Logf("Got %d/%d redelivered messages: %v", len(redelivered), 3, redelivered)
+			break
+		}
+	}
+
+	t.Logf("Redelivered %d messages after resubscribe: %v", len(redelivered), redelivered)
+	assert.Len(t, redelivered, 3, "All unACKed messages should be redelivered from PEL after resubscribe")
+}
