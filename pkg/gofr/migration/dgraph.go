@@ -144,31 +144,33 @@ func (dm dgraphMigrator) beginTransaction(c *container.Container) transactionDat
 
 // commitMigration commits the migration and records its metadata.
 func (dm dgraphMigrator) commitMigration(c *container.Container, data transactionData) error {
-	// Build the JSON payload for the migration record.
-	payload := map[string]any{
-		"migrations": []map[string]any{
-			{
-				"migrations.version":    data.MigrationNumber,
-				"migrations.method":     "UP",
-				"migrations.start_time": data.StartTime.Format(time.RFC3339),
-				"migrations.duration":   time.Since(data.StartTime).Milliseconds(),
+	if data.UsedDatasources[dsDGraph] {
+		// Build the JSON payload for the migration record.
+		payload := map[string]any{
+			"migrations": []map[string]any{
+				{
+					"migrations.version":    data.MigrationNumber,
+					"migrations.method":     "UP",
+					"migrations.start_time": data.StartTime.Format(time.RFC3339),
+					"migrations.duration":   time.Since(data.StartTime).Milliseconds(),
+				},
 			},
-		},
-	}
+		}
 
-	jsonPayload, err := json.Marshal(payload)
-	if err != nil {
-		return err
-	}
+		jsonPayload, err := json.Marshal(payload)
+		if err != nil {
+			return err
+		}
 
-	_, err = c.DGraph.Mutate(context.Background(), &api.Mutation{
-		SetJson: jsonPayload,
-	})
-	if err != nil {
-		return err
-	}
+		_, err = c.DGraph.Mutate(context.Background(), &api.Mutation{
+			SetJson: jsonPayload,
+		})
+		if err != nil {
+			return err
+		}
 
-	c.Debugf("Inserted record for migration %v in Dgraph migrations", data.MigrationNumber)
+		c.Debugf("Inserted record for migration %v in Dgraph migrations", data.MigrationNumber)
+	}
 
 	return dm.migrator.commitMigration(c, data)
 }

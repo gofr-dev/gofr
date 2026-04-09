@@ -318,6 +318,7 @@ func TestRedisMigrator_CommitMigration(t *testing.T) {
 		MigrationNumber: 1,
 		StartTime:       time.Now().Add(-1 * time.Second),
 		RedisTx:         pipeliner,
+		UsedDatasources: map[string]bool{dsRedis: true},
 	}
 
 	mockMigrator.EXPECT().commitMigration(c, data).Return(nil)
@@ -349,6 +350,7 @@ func TestRedisMigrator_CommitMigration_ExecError(t *testing.T) {
 		MigrationNumber: 1,
 		StartTime:       time.Now(),
 		RedisTx:         client.TxPipeline(),
+		UsedDatasources: map[string]bool{dsRedis: true},
 	}
 
 	// We close the miniredis to simulate an execution error
@@ -407,4 +409,35 @@ func TestRedisMigrator_UnlockError(t *testing.T) {
 func TestRedisMigrator_Name(t *testing.T) {
 	m := redisMigrator{}
 	assert.Equal(t, "Redis", m.name())
+}
+
+func TestRedisMigrator_CommitMigration_SkipsWhenNotUsed(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	t.Cleanup(ctrl.Finish)
+
+	c, _ := container.NewMockContainer(t)
+	mockMigrator := NewMockmigrator(ctrl)
+
+	s, _ := miniredis.Run()
+	defer s.Close()
+
+	client := goRedis.NewClient(&goRedis.Options{Addr: s.Addr()})
+	m := redisMigrator{Redis: client, migrator: mockMigrator}
+
+	pipeliner := client.TxPipeline()
+
+	data := transactionData{
+		MigrationNumber: 1,
+		StartTime:       time.Now(),
+		RedisTx:         pipeliner,
+		UsedDatasources: map[string]bool{},
+	}
+
+	mockMigrator.EXPECT().commitMigration(c, data).Return(nil)
+
+	err := m.commitMigration(c, data)
+	require.NoError(t, err)
+
+	val := s.HGet("gofr_migrations", "1")
+	assert.Empty(t, val, "no migration record should be written when Redis was not used")
 }
