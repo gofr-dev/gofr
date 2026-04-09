@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -2433,4 +2434,390 @@ func TestPubSub_HandleStreamMessage_UnsupportedPayloadType(t *testing.T) {
 	client.PubSub.mu.Unlock()
 
 	assert.NoError(t, mock.ExpectationsWereMet())
+}
+
+// --- Tests for busy-spin fix, context propagation, and Close() deadlock ---
+
+func TestPubSub_ConsumeStreamMessages_ReturnsFalseWhenNoCapacity(t *testing.T) {
+	t.Parallel()
+
+	client, s := setupTest(t, map[string]string{
+		"REDIS_PUBSUB_MODE":            "streams",
+		"REDIS_STREAMS_CONSUMER_GROUP": "test-group",
+		"REDIS_PUBSUB_BUFFER_SIZE":     "1",
+	})
+	defer s.Close()
+	defer client.Close()
+
+	ctx := context.Background()
+	topic := "no-capacity-topic"
+	group := "test-group"
+
+	err := client.PubSub.CreateTopic(ctx, topic)
+	require.NoError(t, err)
+
+	// Create the subscription channel
+	msgChan := client.PubSub.ensureSubscription(ctx, topic)
+	require.NotNil(t, msgChan)
+
+	// Fill the channel to capacity
+	msgChan <- &pubsub.Message{Topic: topic, Value: []byte("filler")}
+
+	// Now capacity is 0 — consumeStreamMessages should return false
+	result := client.PubSub.consumeStreamMessages(ctx, topic, group, "test-consumer", 1*time.Second)
+	assert.False(t, result, "consumeStreamMessages should return false when channel has no capacity")
+}
+
+func TestPubSub_ConsumeStreamMessages_ReturnsTrueWhenCapacityAvailable(t *testing.T) {
+	t.Parallel()
+
+	client, s := setupTest(t, map[string]string{
+		"REDIS_PUBSUB_MODE":            "streams",
+		"REDIS_STREAMS_CONSUMER_GROUP": "test-group",
+		"REDIS_PUBSUB_BUFFER_SIZE":     "10",
+	})
+	defer s.Close()
+	defer client.Close()
+
+	ctx := context.Background()
+	topic := "has-capacity-topic"
+	group := "test-group"
+
+	err := client.PubSub.CreateTopic(ctx, topic)
+	require.NoError(t, err)
+
+	msgChan := client.PubSub.ensureSubscription(ctx, topic)
+	require.NotNil(t, msgChan)
+
+	// Channel is empty, capacity is 10 — should return true (work attempted)
+	result := client.PubSub.consumeStreamMessages(ctx, topic, group, "test-consumer", 100*time.Millisecond)
+	assert.True(t, result, "consumeStreamMessages should return true when capacity is available")
+}
+
+func TestPubSub_SubscribeToStream_ContextCancellationStopsLoop(t *testing.T) {
+	t.Parallel()
+
+	client, s := setupTest(t, map[string]string{
+		"REDIS_PUBSUB_MODE":            "streams",
+		"REDIS_STREAMS_CONSUMER_GROUP": "cancel-group",
+		"REDIS_PUBSUB_BUFFER_SIZE":     "10",
+		"REDIS_STREAMS_BLOCK_TIMEOUT":  "50ms", // Short block so XReadGroup returns quickly
+	})
+	defer s.Close()
+	defer client.Close()
+
+	topic := "cancel-stream-topic"
+	ctx := context.Background()
+
+	err := client.PubSub.CreateTopic(ctx, topic)
+	require.NoError(t, err)
+
+	// Call subscribeToStream directly with a cancelable context
+	cancelCtx, cancel := context.WithCancel(context.Background())
+	done := make(chan struct{})
+
+	// Manually set up channel so subscribeToStream has something to work with
+	client.PubSub.mu.Lock()
+	client.PubSub.receiveChan[topic] = make(chan *pubsub.Message, 10)
+	client.PubSub.chanClosed[topic] = false
+	client.PubSub.closeOnce[topic] = &sync.Once{}
+	client.PubSub.mu.Unlock()
+
+	go func() {
+		_ = client.PubSub.subscribeToStream(cancelCtx, topic)
+
+		close(done)
+	}()
+
+	// Let it run briefly
+	time.Sleep(100 * time.Millisecond)
+
+	// Cancel the context
+	cancel()
+
+	// subscribeToStream should exit after the current XReadGroup block completes
+	select {
+	case <-done:
+		// Success — goroutine exited
+	case <-time.After(1 * time.Second):
+		t.Fatal("subscribeToStream did not exit within 1s after context cancellation")
+	}
+}
+
+func TestPubSub_Close_StreamSubscription_NoDeadlock(t *testing.T) {
+	t.Parallel()
+
+	client, s := setupTest(t, map[string]string{
+		"REDIS_PUBSUB_MODE":            "streams",
+		"REDIS_STREAMS_CONSUMER_GROUP": "close-deadlock-grp",
+		"REDIS_PUBSUB_BUFFER_SIZE":     "5",
+	})
+	defer s.Close()
+
+	ctx := context.Background()
+	topic := "close-deadlock-topic"
+
+	err := client.PubSub.CreateTopic(ctx, topic)
+	require.NoError(t, err)
+
+	// Start a stream subscription
+	go func() {
+		_, _ = client.PubSub.Subscribe(ctx, topic)
+	}()
+
+	time.Sleep(200 * time.Millisecond)
+
+	// Close should complete quickly (not hit the 5s goroutineWaitTimeout)
+	closeDone := make(chan error)
+
+	go func() {
+		closeDone <- client.PubSub.Close()
+	}()
+
+	select {
+	case err := <-closeDone:
+		require.NoError(t, err)
+	case <-time.After(2 * time.Second):
+		t.Fatal("Close() deadlocked — did not complete within 2s")
+	}
+}
+
+func TestPubSub_Close_StreamSubscription_FullChannel_NoDeadlock(t *testing.T) {
+	t.Parallel()
+
+	client, s := setupTest(t, map[string]string{
+		"REDIS_PUBSUB_MODE":            "streams",
+		"REDIS_STREAMS_CONSUMER_GROUP": "close-full-grp",
+		"REDIS_PUBSUB_BUFFER_SIZE":     "1",
+	})
+	defer s.Close()
+
+	ctx := context.Background()
+	topic := "close-full-topic"
+
+	err := client.PubSub.CreateTopic(ctx, topic)
+	require.NoError(t, err)
+
+	// Start subscription
+	go func() {
+		_, _ = client.PubSub.Subscribe(ctx, topic)
+	}()
+
+	time.Sleep(200 * time.Millisecond)
+
+	// Fill the channel to trigger the backoff path
+	client.PubSub.mu.RLock()
+	msgChan := client.PubSub.receiveChan[topic]
+	client.PubSub.mu.RUnlock()
+
+	if msgChan != nil {
+		select {
+		case msgChan <- &pubsub.Message{Topic: topic, Value: []byte("filler")}:
+		default:
+		}
+	}
+
+	// Close should still complete quickly despite full channel
+	closeDone := make(chan error)
+
+	go func() {
+		closeDone <- client.PubSub.Close()
+	}()
+
+	select {
+	case err := <-closeDone:
+		require.NoError(t, err)
+	case <-time.After(2 * time.Second):
+		t.Fatal("Close() deadlocked with full channel — did not complete within 2s")
+	}
+}
+
+func TestPubSub_Close_StreamSubscription_GoroutineCleanup(t *testing.T) {
+	t.Parallel()
+
+	client, s := setupTest(t, map[string]string{
+		"REDIS_PUBSUB_MODE":            "streams",
+		"REDIS_STREAMS_CONSUMER_GROUP": "goroutine-exit-grp",
+		"REDIS_PUBSUB_BUFFER_SIZE":     "10",
+	})
+	defer s.Close()
+
+	ctx := context.Background()
+	topic := "goroutine-exit-topic"
+
+	err := client.PubSub.CreateTopic(ctx, topic)
+	require.NoError(t, err)
+
+	// Start subscription
+	go func() {
+		_, _ = client.PubSub.Subscribe(ctx, topic)
+	}()
+
+	time.Sleep(200 * time.Millisecond)
+
+	// Verify subscription is active
+	client.PubSub.mu.RLock()
+	_, hasStarted := client.PubSub.subStarted[topic]
+	client.PubSub.mu.RUnlock()
+	require.True(t, hasStarted, "Subscription should be active before Close")
+
+	err = client.PubSub.Close()
+	require.NoError(t, err)
+
+	// After Close, all subscription state should be cleaned up
+	client.PubSub.mu.RLock()
+	subCount := len(client.PubSub.subStarted)
+	chanCount := len(client.PubSub.receiveChan)
+	consumerCount := len(client.PubSub.streamConsumers)
+	wgCount := len(client.PubSub.subWg)
+	client.PubSub.mu.RUnlock()
+
+	assert.Equal(t, 0, subCount, "subStarted should be empty after Close")
+	assert.Equal(t, 0, chanCount, "receiveChan should be empty after Close")
+	assert.Equal(t, 0, consumerCount, "streamConsumers should be empty after Close")
+	assert.Equal(t, 0, wgCount, "subWg should be empty after Close")
+}
+
+func TestPubSub_DeleteTopic_StreamSubscription_StopsGoroutine(t *testing.T) {
+	t.Parallel()
+
+	client, s := setupTest(t, map[string]string{
+		"REDIS_PUBSUB_MODE":            "streams",
+		"REDIS_STREAMS_CONSUMER_GROUP": "unsub-grp",
+		"REDIS_PUBSUB_BUFFER_SIZE":     "10",
+	})
+	defer s.Close()
+	defer client.Close()
+
+	ctx := context.Background()
+	topic := "unsub-stream-topic"
+
+	err := client.PubSub.CreateTopic(ctx, topic)
+	require.NoError(t, err)
+
+	// Start subscription
+	go func() {
+		_, _ = client.PubSub.Subscribe(ctx, topic)
+	}()
+
+	time.Sleep(200 * time.Millisecond)
+
+	// Delete the topic (triggers cleanupStreamConsumers for streams mode)
+	deleteDone := make(chan error)
+
+	go func() {
+		deleteDone <- client.PubSub.DeleteTopic(ctx, topic)
+	}()
+
+	select {
+	case err := <-deleteDone:
+		require.NoError(t, err)
+	case <-time.After(2 * time.Second):
+		t.Fatal("DeleteTopic (unsubscribe) deadlocked — did not complete within 2s")
+	}
+
+	// Verify cleanup
+	client.PubSub.mu.RLock()
+	_, hasStarted := client.PubSub.subStarted[topic]
+	_, hasChan := client.PubSub.receiveChan[topic]
+	client.PubSub.mu.RUnlock()
+
+	assert.False(t, hasStarted, "subStarted should be cleared after unsubscribe")
+	assert.False(t, hasChan, "receiveChan should be cleared after unsubscribe")
+}
+
+func TestPubSub_Close_MultipleStreamTopics_NoDeadlock(t *testing.T) {
+	t.Parallel()
+
+	client, s := setupTest(t, map[string]string{
+		"REDIS_PUBSUB_MODE":            "streams",
+		"REDIS_STREAMS_CONSUMER_GROUP": "multi-close-grp",
+		"REDIS_PUBSUB_BUFFER_SIZE":     "5",
+	})
+	defer s.Close()
+
+	ctx := context.Background()
+	topics := []string{"multi-topic-1", "multi-topic-2", "multi-topic-3"}
+
+	for _, topic := range topics {
+		err := client.PubSub.CreateTopic(ctx, topic)
+		require.NoError(t, err)
+
+		topicCopy := topic
+
+		go func() {
+			_, _ = client.PubSub.Subscribe(ctx, topicCopy)
+		}()
+	}
+
+	time.Sleep(300 * time.Millisecond)
+
+	// Close with multiple active stream subscriptions
+	closeDone := make(chan error)
+
+	go func() {
+		closeDone <- client.PubSub.Close()
+	}()
+
+	select {
+	case err := <-closeDone:
+		require.NoError(t, err)
+	case <-time.After(3 * time.Second):
+		t.Fatal("Close() with multiple stream topics deadlocked")
+	}
+
+	client.PubSub.mu.RLock()
+	assert.Empty(t, client.PubSub.subStarted)
+	client.PubSub.mu.RUnlock()
+}
+
+func TestPubSub_RunSubscriptionLoop_RespectsContextCancellation(t *testing.T) {
+	t.Parallel()
+
+	client, s := setupTest(t, map[string]string{
+		"REDIS_PUBSUB_MODE":            "streams",
+		"REDIS_STREAMS_CONSUMER_GROUP": "loop-cancel-grp",
+		"REDIS_PUBSUB_BUFFER_SIZE":     "10",
+	})
+	defer s.Close()
+	defer client.Close()
+
+	topic := "loop-cancel-topic"
+	ctx := context.Background()
+
+	err := client.PubSub.CreateTopic(ctx, topic)
+	require.NoError(t, err)
+
+	// Set up the subscription state manually
+	client.PubSub.mu.Lock()
+	client.PubSub.receiveChan[topic] = make(chan *pubsub.Message, 10)
+	client.PubSub.chanClosed[topic] = false
+	client.PubSub.closeOnce[topic] = &sync.Once{}
+	client.PubSub.subStarted[topic] = struct{}{}
+	subCtx, cancel := context.WithCancel(context.Background())
+	client.PubSub.subCancel[topic] = cancel
+	client.PubSub.mu.Unlock()
+
+	wg := &sync.WaitGroup{}
+	wg.Add(1)
+
+	done := make(chan struct{})
+
+	go func() {
+		client.PubSub.runSubscriptionLoop(subCtx, topic, wg, cancel)
+		close(done)
+	}()
+
+	// Let the loop start
+	time.Sleep(100 * time.Millisecond)
+
+	// Cancel context — should stop the loop
+	cancel()
+
+	select {
+	case <-done:
+		// Success
+	case <-time.After(1 * time.Second):
+		t.Fatal("runSubscriptionLoop did not exit within 1s after context cancellation")
+	}
 }
