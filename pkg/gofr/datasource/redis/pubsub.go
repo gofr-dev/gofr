@@ -1273,32 +1273,52 @@ func (ps *PubSub) monitorConnection(ctx context.Context) {
 	}
 }
 
-// resubscribeAll triggers resubscription by canceling existing subscription contexts.
-// Subscription goroutines will detect cancellation and restart, reconnecting to Redis.
+// resubscribeAll stops all subscription goroutines and restarts them with fresh contexts.
+// Existing receive channels are preserved so buffered messages are not lost.
 func (ps *PubSub) resubscribeAll() {
 	ps.mu.Lock()
-	defer ps.mu.Unlock()
 
 	if len(ps.subStarted) == 0 {
+		ps.mu.Unlock()
+
 		return
 	}
 
 	ps.logger.Infof("Triggering resubscription for %d topics after reconnection", len(ps.subStarted))
 
-	// Cancel all subscription contexts to trigger restart
-	// This will cause subscription goroutines to restart and reconnect
-	// Note: We don't remove from subStarted - the goroutines will restart automatically
-	for topic, cancel := range ps.subCancel {
+	// Cancel all old subscription contexts
+	for _, cancel := range ps.subCancel {
 		if cancel != nil {
-			// Cancel the old context
 			cancel()
-
-			// Create new context for restart
-			_, newCancel := context.WithCancel(context.Background())
-			ps.subCancel[topic] = newCancel
-
-			// Reset pendingRead so pending messages are read again
-			ps.pendingRead[topic] = false
 		}
+	}
+
+	// Collect WaitGroups before releasing lock (same pattern as Close)
+	waitGroups := make(map[string]*sync.WaitGroup, len(ps.subWg))
+	for topic, wg := range ps.subWg {
+		waitGroups[topic] = wg
+	}
+
+	ps.mu.Unlock()
+
+	// Wait for old goroutines to exit outside the lock
+	ps.waitForAllGoroutines(waitGroups)
+
+	// Re-acquire lock and start new goroutines
+	ps.mu.Lock()
+	defer ps.mu.Unlock()
+
+	for topic := range ps.subStarted {
+		// Create new cancelable context and pass it to the goroutine
+		subCtx, cancel := context.WithCancel(context.Background())
+		ps.subCancel[topic] = cancel
+
+		wg := &sync.WaitGroup{}
+		wg.Add(1)
+		ps.subWg[topic] = wg
+
+		ps.pendingRead[topic] = false
+
+		go ps.runSubscriptionLoop(subCtx, topic, wg, cancel)
 	}
 }

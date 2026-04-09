@@ -2821,3 +2821,75 @@ func TestPubSub_RunSubscriptionLoop_RespectsContextCancellation(t *testing.T) {
 		t.Fatal("runSubscriptionLoop did not exit within 1s after context cancellation")
 	}
 }
+
+func TestPubSub_ResubscribeAll_StreamMode_RestartsGoroutine(t *testing.T) {
+	t.Parallel()
+
+	client, s := setupTest(t, map[string]string{
+		"REDIS_PUBSUB_MODE":            "streams",
+		"REDIS_STREAMS_CONSUMER_GROUP": "resub-stream-grp",
+		"REDIS_PUBSUB_BUFFER_SIZE":     "10",
+	})
+	defer s.Close()
+	defer client.Close()
+
+	ctx := context.Background()
+	topic := "resub-stream-topic"
+
+	err := client.PubSub.CreateTopic(ctx, topic)
+	require.NoError(t, err)
+
+	// Use ensureSubscription directly to start the background goroutine
+	// without a competing Subscribe reader
+	msgChan := client.PubSub.ensureSubscription(ctx, topic)
+	require.NotNil(t, msgChan)
+
+	time.Sleep(200 * time.Millisecond)
+
+	// Record old WaitGroup to verify it changes after resubscribe
+	client.PubSub.mu.RLock()
+	oldWg := client.PubSub.subWg[topic]
+	client.PubSub.mu.RUnlock()
+	require.NotNil(t, oldWg)
+
+	// Trigger resubscription (simulates reconnection)
+	resubDone := make(chan struct{})
+
+	go func() {
+		client.PubSub.resubscribeAll()
+
+		close(resubDone)
+	}()
+
+	select {
+	case <-resubDone:
+		// Success — resubscribeAll completed without deadlock
+	case <-time.After(3 * time.Second):
+		t.Fatal("resubscribeAll deadlocked")
+	}
+
+	// Verify subscription is still active with a NEW goroutine
+	client.PubSub.mu.RLock()
+	_, hasStarted := client.PubSub.subStarted[topic]
+	newCancel := client.PubSub.subCancel[topic]
+	newWg := client.PubSub.subWg[topic]
+	client.PubSub.mu.RUnlock()
+
+	assert.True(t, hasStarted, "subStarted should still exist after resubscribe")
+	assert.NotNil(t, newCancel, "new cancel func should exist")
+	assert.NotNil(t, newWg, "new WaitGroup should exist")
+	assert.NotSame(t, oldWg, newWg, "WaitGroup should be a new instance after resubscribe")
+
+	// Publish a message after resubscribe and read directly from the channel.
+	// This verifies the new goroutine is actively consuming from Redis.
+	err = client.PubSub.Publish(ctx, topic, []byte("after-resub"))
+	require.NoError(t, err)
+
+	select {
+	case msg := <-msgChan:
+		require.NotNil(t, msg)
+		assert.Equal(t, "after-resub", string(msg.Value))
+	case <-time.After(3 * time.Second):
+		t.Fatal("did not receive message after resubscription")
+	}
+}
