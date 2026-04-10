@@ -94,6 +94,7 @@ func Test_ClickHouseCommitMigration(t *testing.T) {
 	td := transactionData{
 		StartTime:       timeNow,
 		MigrationNumber: 10,
+		UsedDatasources: map[string]bool{dsClickhouse: true},
 	}
 
 	for i, tc := range testCases {
@@ -113,4 +114,50 @@ func Test_ClickHouseBeginTransaction(t *testing.T) {
 	})
 
 	assert.Contains(t, logs, "Clickhouse Migrator begin successfully")
+}
+
+func Test_ClickHouseCommitMigration_SkipsWhenNotUsed(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	t.Cleanup(ctrl.Finish)
+
+	mockCH := NewMockClickhouse(ctrl)
+	mockMigrator := NewMockmigrator(ctrl)
+
+	m := clickHouseMigrator{Clickhouse: mockCH, migrator: mockMigrator}
+
+	c, _ := container.NewMockContainer(t)
+
+	data := transactionData{
+		MigrationNumber: 1,
+		StartTime:       time.Now(),
+		UsedDatasources: map[string]bool{},
+	}
+
+	mockMigrator.EXPECT().commitMigration(c, data).Return(nil)
+
+	err := m.commitMigration(c, data)
+	assert.NoError(t, err)
+}
+
+func Test_ClickHouseCommitMigration_NilUsedDatasources(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	t.Cleanup(ctrl.Finish)
+
+	mockCH := NewMockClickhouse(ctrl)
+	mockMigrator := NewMockmigrator(ctrl)
+
+	m := clickHouseMigrator{Clickhouse: mockCH, migrator: mockMigrator}
+
+	c, _ := container.NewMockContainer(t)
+
+	data := transactionData{
+		MigrationNumber: 1,
+		StartTime:       time.Now(),
+		UsedDatasources: nil, // nil — map lookup returns false, so no insert should happen
+	}
+
+	mockMigrator.EXPECT().commitMigration(c, data).Return(nil)
+
+	err := m.commitMigration(c, data)
+	assert.NoError(t, err)
 }

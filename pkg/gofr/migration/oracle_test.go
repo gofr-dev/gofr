@@ -102,6 +102,7 @@ func Test_OracleCommitMigration(t *testing.T) {
 		StartTime:       timeNow,
 		MigrationNumber: 10,
 		OracleTx:        mockTxSuccess,
+		UsedDatasources: map[string]bool{dsOracle: true},
 	}
 
 	mockTxSuccess.EXPECT().
@@ -120,6 +121,7 @@ func Test_OracleCommitMigration(t *testing.T) {
 		StartTime:       timeNow,
 		MigrationNumber: 10,
 		OracleTx:        mockTxError,
+		UsedDatasources: map[string]bool{dsOracle: true},
 	}
 
 	mockTxError.EXPECT().
@@ -640,4 +642,32 @@ func initializeOracleRunMocks(t *testing.T) (*container.MockOracleDB, *container
 	mockContainer.Logger = logging.NewMockLogger(logging.DEBUG)
 
 	return mockOracle, mockContainer
+}
+
+func TestOracleMigrator_CommitMigration_SkipsWhenNotUsed(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	t.Cleanup(ctrl.Finish)
+
+	mockContainer, _ := container.NewMockContainer(t)
+	mockMigrator := NewMockmigrator(ctrl)
+	mockOracle := container.NewMockOracleDB(ctrl)
+
+	m := oracleMigrator{Oracle: mockOracle, migrator: mockMigrator}
+
+	mockTx := container.NewMockOracleTx(ctrl)
+
+	data := transactionData{
+		MigrationNumber: 1,
+		StartTime:       time.Now().UTC(),
+		OracleTx:        mockTx,
+		UsedDatasources: map[string]bool{},
+	}
+
+	// Should NOT expect ExecContext for INSERT.
+	// Should expect Commit (empty transaction).
+	mockTx.EXPECT().Commit().Return(nil)
+	mockMigrator.EXPECT().commitMigration(mockContainer, data).Return(nil)
+
+	err := m.commitMigration(mockContainer, data)
+	assert.NoError(t, err)
 }

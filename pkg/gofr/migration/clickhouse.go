@@ -87,13 +87,15 @@ func (ch clickHouseMigrator) beginTransaction(c *container.Container) transactio
 }
 
 func (ch clickHouseMigrator) commitMigration(c *container.Container, data transactionData) error {
-	err := ch.Clickhouse.Exec(context.Background(), insertChGoFrMigrationRow, data.MigrationNumber,
-		"UP", data.StartTime, time.Since(data.StartTime).Milliseconds())
-	if err != nil {
-		return err
-	}
+	if data.UsedDatasources[dsClickhouse] {
+		err := ch.Clickhouse.Exec(context.Background(), insertChGoFrMigrationRow, data.MigrationNumber,
+			"UP", data.StartTime, time.Since(data.StartTime).Milliseconds())
+		if err != nil {
+			return err
+		}
 
-	c.Debugf("inserted record for migration %v in clickhouse gofr_migrations table", data.MigrationNumber)
+		c.Debugf("inserted record for migration %v in clickhouse gofr_migrations table", data.MigrationNumber)
+	}
 
 	return ch.migrator.commitMigration(c, data)
 }
