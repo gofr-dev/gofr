@@ -37,6 +37,7 @@ type Crontab struct {
 	mu sync.RWMutex
 
 	done chan struct{}
+	once sync.Once
 }
 
 type job struct {
@@ -86,8 +87,10 @@ func NewCron(cntnr *container.Container) *Crontab {
 }
 
 func (c *Crontab) Stop() {
-	c.ticker.Stop()
-	close(c.done)
+	c.once.Do(func() {
+		c.ticker.Stop()
+		close(c.done)
+	})
 }
 
 func (c *Crontab) runScheduled(t time.Time) {
