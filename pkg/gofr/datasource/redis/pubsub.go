@@ -177,7 +177,7 @@ func (ps *PubSub) ensureSubscription(_ context.Context, topic string) chan *pubs
 	ps.closeOnce[topic] = &sync.Once{}
 
 	// Create cancel context for this subscription
-	_, cancel := context.WithCancel(context.Background())
+	subCtx, cancel := context.WithCancel(context.Background())
 	ps.subCancel[topic] = cancel
 
 	// Create WaitGroup for this subscription
@@ -186,7 +186,7 @@ func (ps *PubSub) ensureSubscription(_ context.Context, topic string) chan *pubs
 	ps.subWg[topic] = wg
 
 	// Start subscription in goroutine
-	go ps.runSubscriptionLoop(topic, wg, cancel)
+	go ps.runSubscriptionLoop(subCtx, topic, wg, cancel)
 
 	ps.subStarted[topic] = struct{}{}
 
@@ -194,7 +194,7 @@ func (ps *PubSub) ensureSubscription(_ context.Context, topic string) chan *pubs
 }
 
 // runSubscriptionLoop runs the subscription loop in a goroutine.
-func (ps *PubSub) runSubscriptionLoop(topic string, wg *sync.WaitGroup, cancel context.CancelFunc) {
+func (ps *PubSub) runSubscriptionLoop(ctx context.Context, topic string, wg *sync.WaitGroup, cancel context.CancelFunc) {
 	defer wg.Done()
 	defer cancel()
 
@@ -206,6 +206,12 @@ func (ps *PubSub) runSubscriptionLoop(topic string, wg *sync.WaitGroup, cancel c
 	permanentFailure := false
 
 	for {
+		select {
+		case <-ctx.Done():
+			return
+		default:
+		}
+
 		if !ps.shouldContinueSubscription(topic) {
 			return
 		}
@@ -216,8 +222,7 @@ func (ps *PubSub) runSubscriptionLoop(topic string, wg *sync.WaitGroup, cancel c
 			return
 		}
 
-		currentCtx := context.Background()
-		err := ps.subscribeWithMode(currentCtx, topic, mode)
+		err := ps.subscribeWithMode(ctx, topic, mode)
 
 		if err != nil && ps.isPermanentError(err) {
 			permanentFailure = true
@@ -229,7 +234,12 @@ func (ps *PubSub) runSubscriptionLoop(topic string, wg *sync.WaitGroup, cancel c
 
 		// If subscription stopped (not due to permanent failure), restart after delay
 		ps.logger.Debugf("Subscription stopped for topic '%s', restarting...", topic)
-		time.Sleep(defaultRetryTimeout)
+
+		select {
+		case <-ctx.Done():
+			return
+		case <-time.After(defaultRetryTimeout):
+		}
 	}
 }
 
@@ -370,8 +380,7 @@ func (ps *PubSub) subscribeToStream(ctx context.Context, topic string) error {
 		return fmt.Errorf("%w: group=%s, stream=%s", errFailedToEnsureConsumerGroup, group, topic)
 	}
 
-	consumer := ps.getConsumerName()
-	ps.storeStreamConsumer(topic, group, consumer)
+	consumer := ps.getOrCreateConsumerName(topic, group)
 
 	block := ps.config.PubSubStreamsConfig.Block
 	if block == 0 {
@@ -384,7 +393,15 @@ func (ps *PubSub) subscribeToStream(ctx context.Context, topic string) error {
 		case <-ctx.Done():
 			return nil
 		default:
-			ps.consumeStreamMessages(ctx, topic, group, consumer, block)
+			if !ps.consumeStreamMessages(ctx, topic, group, consumer, block) {
+				// No capacity available — back off to avoid busy-spinning CPU.
+				// Follows the same time.After + ctx.Done pattern used in Subscribe (line 118).
+				select {
+				case <-ctx.Done():
+					return nil
+				case <-time.After(subscribeRetryInterval):
+				}
+			}
 		}
 	}
 }
@@ -448,10 +465,12 @@ func (ps *PubSub) createConsumerGroup(ctx context.Context, topic, group string) 
 	return false
 }
 
-func (ps *PubSub) consumeStreamMessages(ctx context.Context, topic, group, consumer string, block time.Duration) {
+// consumeStreamMessages reads pending and new messages from the stream.
+// Returns true if work was attempted (capacity was available), false if the channel was full.
+func (ps *PubSub) consumeStreamMessages(ctx context.Context, topic, group, consumer string, block time.Duration) bool {
 	available := ps.getAvailableCapacity(topic)
 	if available == 0 {
-		return
+		return false
 	}
 
 	// Check if we should read from PEL
@@ -482,6 +501,8 @@ func (ps *PubSub) consumeStreamMessages(ctx context.Context, topic, group, consu
 		// Fill ALL remaining capacity with new messages (not just newCount)
 		ps.readNewMessages(ctx, topic, group, consumer, int64(available), block)
 	}
+
+	return true
 }
 
 // getAvailableCapacity returns the available channel capacity for the given topic.
@@ -601,6 +622,23 @@ func (ps *PubSub) readNewMessages(ctx context.Context, topic, group, consumer st
 	}
 
 	ps.processStreamMessages(ctx, topic, streams, group)
+}
+
+// getOrCreateConsumerName returns the existing consumer name for a topic (preserving PEL
+// ownership across resubscribes) or generates a new one if none exists.
+func (ps *PubSub) getOrCreateConsumerName(topic, group string) string {
+	ps.mu.RLock()
+	existing, ok := ps.streamConsumers[topic]
+	ps.mu.RUnlock()
+
+	if ok && existing.consumer != "" {
+		return existing.consumer
+	}
+
+	consumer := ps.getConsumerName()
+	ps.storeStreamConsumer(topic, group, consumer)
+
+	return consumer
 }
 
 // getConsumerName returns the configured consumer name or generates one.
@@ -905,7 +943,12 @@ func (ps *PubSub) cleanupSubscription(topic string) {
 // cleanupStreamConsumers cleans up stream consumer resources.
 func (ps *PubSub) cleanupStreamConsumers(topic string) {
 	ps.mu.Lock()
-	defer ps.mu.Unlock()
+
+	// Cancel subscription context to stop the goroutine via ctx.Done()
+	if cancel, ok := ps.subCancel[topic]; ok {
+		cancel()
+		delete(ps.subCancel, topic)
+	}
 
 	if c, ok := ps.streamConsumers[topic]; ok {
 		if c.cancel != nil {
@@ -914,6 +957,34 @@ func (ps *PubSub) cleanupStreamConsumers(topic string) {
 
 		delete(ps.streamConsumers, topic)
 	}
+
+	// Collect WaitGroup before releasing lock to avoid deadlock
+	wg, hasWg := ps.subWg[topic]
+	if hasWg {
+		delete(ps.subWg, topic)
+	}
+
+	ps.mu.Unlock()
+
+	// Wait for the goroutine outside the lock
+	if hasWg {
+		done := make(chan struct{})
+
+		go func() {
+			wg.Wait()
+			close(done)
+		}()
+
+		select {
+		case <-done:
+		case <-time.After(goroutineWaitTimeout):
+			ps.logger.Debugf("timeout waiting for subscription goroutine for topic '%s'", topic)
+		}
+	}
+
+	// Re-acquire lock for channel cleanup
+	ps.mu.Lock()
+	defer ps.mu.Unlock()
 
 	if ch, ok := ps.receiveChan[topic]; ok {
 		if closeOnce, onceExists := ps.closeOnce[topic]; onceExists {
@@ -1105,9 +1176,8 @@ func (ps *PubSub) isConnected() bool {
 // Close closes all active subscriptions and cleans up resources.
 func (ps *PubSub) Close() error {
 	ps.mu.Lock()
-	defer ps.mu.Unlock()
 
-	// Cancel all subscriptions
+	// Cancel all subscriptions — this signals goroutines to exit via ctx.Done()
 	for topic, cancel := range ps.subCancel {
 		cancel()
 		delete(ps.subCancel, topic)
@@ -1122,8 +1192,23 @@ func (ps *PubSub) Close() error {
 		delete(ps.subPubSub, topic)
 	}
 
-	// Wait for all goroutines
-	ps.waitForAllGoroutines()
+	// Collect wait groups before releasing the lock.
+	// Goroutines need ps.mu.RLock() to exit, so we must release
+	// the write lock before waiting — otherwise it deadlocks.
+	waitGroups := make(map[string]*sync.WaitGroup, len(ps.subWg))
+	for topic, wg := range ps.subWg {
+		waitGroups[topic] = wg
+		delete(ps.subWg, topic)
+	}
+
+	ps.mu.Unlock()
+
+	// Wait for goroutines WITHOUT holding the lock
+	ps.waitForAllGoroutines(waitGroups)
+
+	// Re-acquire lock for final cleanup
+	ps.mu.Lock()
+	defer ps.mu.Unlock()
 
 	// Close all channels
 	for topic, ch := range ps.receiveChan {
@@ -1158,8 +1243,8 @@ func (ps *PubSub) Close() error {
 	return nil
 }
 
-func (ps *PubSub) waitForAllGoroutines() {
-	for topic, wg := range ps.subWg {
+func (ps *PubSub) waitForAllGoroutines(waitGroups map[string]*sync.WaitGroup) {
+	for topic, wg := range waitGroups {
 		done := make(chan struct{})
 
 		go func() {
@@ -1172,8 +1257,6 @@ func (ps *PubSub) waitForAllGoroutines() {
 		case <-time.After(goroutineWaitTimeout):
 			ps.logger.Debugf("timeout waiting for subscription goroutine for topic '%s'", topic)
 		}
-
-		delete(ps.subWg, topic)
 	}
 }
 
@@ -1206,32 +1289,52 @@ func (ps *PubSub) monitorConnection(ctx context.Context) {
 	}
 }
 
-// resubscribeAll triggers resubscription by canceling existing subscription contexts.
-// Subscription goroutines will detect cancellation and restart, reconnecting to Redis.
+// resubscribeAll stops all subscription goroutines and restarts them with fresh contexts.
+// Existing receive channels are preserved so buffered messages are not lost.
 func (ps *PubSub) resubscribeAll() {
 	ps.mu.Lock()
-	defer ps.mu.Unlock()
 
 	if len(ps.subStarted) == 0 {
+		ps.mu.Unlock()
+
 		return
 	}
 
 	ps.logger.Infof("Triggering resubscription for %d topics after reconnection", len(ps.subStarted))
 
-	// Cancel all subscription contexts to trigger restart
-	// This will cause subscription goroutines to restart and reconnect
-	// Note: We don't remove from subStarted - the goroutines will restart automatically
-	for topic, cancel := range ps.subCancel {
+	// Cancel all old subscription contexts
+	for _, cancel := range ps.subCancel {
 		if cancel != nil {
-			// Cancel the old context
 			cancel()
-
-			// Create new context for restart
-			_, newCancel := context.WithCancel(context.Background())
-			ps.subCancel[topic] = newCancel
-
-			// Reset pendingRead so pending messages are read again
-			ps.pendingRead[topic] = false
 		}
+	}
+
+	// Collect WaitGroups before releasing lock (same pattern as Close)
+	waitGroups := make(map[string]*sync.WaitGroup, len(ps.subWg))
+	for topic, wg := range ps.subWg {
+		waitGroups[topic] = wg
+	}
+
+	ps.mu.Unlock()
+
+	// Wait for old goroutines to exit outside the lock
+	ps.waitForAllGoroutines(waitGroups)
+
+	// Re-acquire lock and start new goroutines
+	ps.mu.Lock()
+	defer ps.mu.Unlock()
+
+	for topic := range ps.subStarted {
+		// Create new cancelable context and pass it to the goroutine
+		subCtx, cancel := context.WithCancel(context.Background())
+		ps.subCancel[topic] = cancel
+
+		wg := &sync.WaitGroup{}
+		wg.Add(1)
+		ps.subWg[topic] = wg
+
+		ps.pendingRead[topic] = false
+
+		go ps.runSubscriptionLoop(subCtx, topic, wg, cancel)
 	}
 }
