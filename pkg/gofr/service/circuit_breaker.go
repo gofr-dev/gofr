@@ -179,22 +179,29 @@ func (cb *CircuitBreakerConfig) AddOption(h HTTP) HTTP {
 
 func (cb *circuitBreaker) tryCircuitRecovery() bool {
 	cb.mu.Lock()
-	defer cb.mu.Unlock()
 
 	if cb.state == ClosedState {
+		cb.mu.Unlock()
 		return true
 	}
 
 	if time.Since(cb.lastChecked) > cb.interval {
 		// Update lastChecked to prevent busy loop of health checks from other requests
 		cb.lastChecked = time.Now()
+		cb.mu.Unlock()
 
 		if cb.healthCheck(context.TODO()) {
+			cb.mu.Lock()
+			defer cb.mu.Unlock()
+
 			cb.resetCircuit()
 			return true
 		}
+
+		return false
 	}
 
+	cb.mu.Unlock()
 	return false
 }
 
