@@ -103,16 +103,16 @@ func (a *App) Shutdown(ctx context.Context) error {
 		err = errors.Join(err, a.grpcServer.Shutdown(ctx))
 	}
 
-	if a.container != nil {
-		err = errors.Join(err, a.container.Close())
+	if a.cron != nil {
+		a.cron.Stop()
 	}
 
 	if a.metricServer != nil {
 		err = errors.Join(err, a.metricServer.Shutdown(ctx))
 	}
 
-	if a.cron != nil {
-		a.cron.Stop()
+	if a.container != nil {
+		err = errors.Join(err, a.container.Close())
 	}
 
 	a.container.Logger.Info("Application shutdown complete")
