@@ -753,6 +753,7 @@ func Test_OpenTSDBCommitMigration_ConcurrentAccess(t *testing.T) {
 			txData := transactionData{
 				StartTime:       time.Now().Add(-time.Duration(migrationNum) * time.Millisecond),
 				MigrationNumber: int64(migrationNum),
+				UsedDatasources: map[string]bool{dsOpenTSDB: true},
 			}
 
 			err := migratorWithOpenTSDB.commitMigration(mockContainer, txData)
@@ -814,6 +815,7 @@ func Test_OpenTSDBCommitMigration_ConcurrentDuplicates(t *testing.T) {
 			txData := transactionData{
 				StartTime:       time.Now(),
 				MigrationNumber: migrationNumber,
+				UsedDatasources: map[string]bool{dsOpenTSDB: true},
 			}
 
 			err := migratorWithOpenTSDB.commitMigration(mockContainer, txData)
@@ -863,6 +865,7 @@ func Test_OpenTSDBCommitMigration_JSONFormatValidation(t *testing.T) {
 	txData := transactionData{
 		StartTime:       time.Now().Add(-100 * time.Millisecond),
 		MigrationNumber: 1,
+		UsedDatasources: map[string]bool{dsOpenTSDB: true},
 	}
 
 	err = migratorWithOpenTSDB.commitMigration(mockContainer, txData)
@@ -904,6 +907,7 @@ func Test_OpenTSDBCommitMigration_TimestampAccuracy(t *testing.T) {
 	txData := transactionData{
 		StartTime:       specificTime,
 		MigrationNumber: 1,
+		UsedDatasources: map[string]bool{dsOpenTSDB: true},
 	}
 
 	// Record time just before commit for duration calculation

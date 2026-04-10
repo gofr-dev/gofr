@@ -334,6 +334,7 @@ func TestElasticsearchMigrator_commitMigration_Success(t *testing.T) {
 	data := transactionData{
 		MigrationNumber: 1,
 		StartTime:       time.Now(),
+		UsedDatasources: map[string]bool{dsElasticsearch: true},
 	}
 
 	err := mg.commitMigration(mockContainer, data)
@@ -353,9 +354,36 @@ func TestElasticsearchMigrator_commitMigration_Failure(t *testing.T) {
 	data := transactionData{
 		MigrationNumber: 1,
 		StartTime:       time.Now(),
+		UsedDatasources: map[string]bool{dsElasticsearch: true},
 	}
 
 	err := mg.commitMigration(mockContainer, data)
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "failed to record migration")
+}
+
+func TestElasticsearchMigrator_commitMigration_SkipsWhenNotUsed(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	t.Cleanup(ctrl.Finish)
+
+	mockES := NewMockElasticsearch(ctrl)
+	mockMigrator := NewMockmigrator(ctrl)
+
+	m := elasticsearchMigrator{
+		elasticsearchDS: elasticsearchDS{client: mockES},
+		migrator:        mockMigrator,
+	}
+
+	c, _ := container.NewMockContainer(t)
+
+	data := transactionData{
+		MigrationNumber: 1,
+		StartTime:       time.Now(),
+		UsedDatasources: map[string]bool{},
+	}
+
+	mockMigrator.EXPECT().commitMigration(c, data).Return(nil)
+
+	err := m.commitMigration(c, data)
+	assert.NoError(t, err)
 }

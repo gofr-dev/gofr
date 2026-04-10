@@ -81,6 +81,9 @@ func (c *Context) Bind(i any) error {
 func (c *Context) WriteMessageToSocket(data any) error {
 	// Retrieve connection from context based on connectionID
 	conn := c.Container.GetConnectionFromContext(c.Context)
+	if conn == nil {
+		return ErrConnectionNotFound
+	}
 
 	message, err := serializeMessage(data)
 	if err != nil {
