@@ -136,5 +136,7 @@ func TestSwaggerUIHandler_NoFileExtension(t *testing.T) {
 	resp, err := SwaggerUIHandler(ctx)
 
 	assert.Nil(t, resp)
-	require.ErrorIs(t, err, errMissingFileExtension)
+
+	expectedErr := gofrHTTP.ErrorEntityNotFound{Name: "file", Value: "noextension"}
+	assert.Equal(t, expectedErr, err)
 }

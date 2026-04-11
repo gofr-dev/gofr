@@ -2,7 +2,6 @@ package gofr
 
 import (
 	"embed"
-	"errors"
 	"mime"
 	"net/http"
 	"os"
@@ -14,8 +13,6 @@ import (
 
 //go:embed static/*
 var fs embed.FS
-
-var errMissingFileExtension = errors.New("missing file extension")
 
 const (
 	OpenAPIJSON = "openapi.json"
@@ -46,7 +43,7 @@ func SwaggerUIHandler(c *Context) (any, error) {
 
 	ext := filepath.Ext(fileName)
 	if ext == "" {
-		return nil, errMissingFileExtension
+		return nil, gofrHTTP.ErrorEntityNotFound{Name: "file", Value: fileName}
 	}
 
 	data, err := fs.ReadFile("static/" + fileName)
