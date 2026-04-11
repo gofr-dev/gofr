@@ -194,7 +194,10 @@ func (cb *circuitBreaker) tryCircuitRecovery() bool {
 			cb.mu.Lock()
 			defer cb.mu.Unlock()
 
-			cb.resetCircuit()
+			if cb.state == OpenState {
+				cb.resetCircuit()
+			}
+
 			return true
 		}
 
