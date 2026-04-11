@@ -12,6 +12,7 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
+	"sync"
 	"testing"
 	"time"
 
@@ -1640,6 +1641,148 @@ func Test_add_RequestTimeout(t *testing.T) {
 			})
 
 			assert.Equal(t, tt.expectedRoutes, a.httpRegistered)
+		})
+	}
+}
+
+func TestNew_InvalidGRPCPort(t *testing.T) {
+	t.Setenv("METRICS_PORT", "0")
+	t.Setenv("HTTP_PORT", strconv.Itoa(testutil.GetFreePort(t)))
+	t.Setenv("GRPC_PORT", "-1")
+
+	app := New()
+
+	// gRPC server creation should fail gracefully, app should still be usable
+	assert.NotNil(t, app)
+	assert.NotNil(t, app.httpServer)
+}
+
+func TestNew_InvalidHTTPPort(t *testing.T) {
+	t.Setenv("METRICS_PORT", "0")
+	t.Setenv("HTTP_PORT", "invalid")
+
+	app := New()
+
+	// Should fall back to default HTTP port
+	assert.NotNil(t, app)
+	assert.NotNil(t, app.httpServer)
+}
+
+func TestInitMetricsServer_DefaultPort(t *testing.T) {
+	t.Setenv("METRICS_PORT", "")
+	t.Setenv("HTTP_PORT", strconv.Itoa(testutil.GetFreePort(t)))
+
+	app := New()
+
+	// metricServer should be initialized with default port
+	assert.NotNil(t, app.metricServer)
+}
+
+func TestStartGRPCServer_Registered(t *testing.T) {
+	t.Setenv("METRICS_PORT", "0")
+	t.Setenv("HTTP_PORT", strconv.Itoa(testutil.GetFreePort(t)))
+	t.Setenv("GRPC_PORT", strconv.Itoa(testutil.GetFreePort(t)))
+
+	app := New()
+	app.grpcRegistered = true
+
+	wg := sync.WaitGroup{}
+
+	// startGRPCServer should add to WaitGroup and launch the server
+	app.startGRPCServer(&wg)
+
+	// Give it a moment to start then shut down
+	time.Sleep(50 * time.Millisecond)
+
+	if app.grpcServer != nil && app.grpcServer.server != nil {
+		app.grpcServer.server.Stop()
+	}
+
+	wg.Wait()
+}
+
+func TestStartGRPCServer_NotRegistered(t *testing.T) {
+	t.Setenv("METRICS_PORT", "0")
+	t.Setenv("HTTP_PORT", strconv.Itoa(testutil.GetFreePort(t)))
+
+	app := New()
+	app.grpcRegistered = false
+
+	wg := sync.WaitGroup{}
+
+	// Should not add to WaitGroup when not registered
+	app.startGRPCServer(&wg)
+
+	// wg.Wait() should return immediately since nothing was added
+	wg.Wait()
+}
+
+func TestStartSubscriptionManager_NoSubscriptions(t *testing.T) {
+	t.Setenv("METRICS_PORT", "0")
+	t.Setenv("HTTP_PORT", strconv.Itoa(testutil.GetFreePort(t)))
+
+	app := New()
+
+	wg := sync.WaitGroup{}
+
+	app.startSubscriptionManager(t.Context(), &wg)
+
+	wg.Wait()
+}
+
+func Test_HTTPMethods(t *testing.T) {
+	tests := []struct {
+		name   string
+		method string
+		setup  func(a *App)
+	}{
+		{
+			name:   "PUT registers route",
+			method: http.MethodPut,
+			setup: func(a *App) {
+				a.PUT("/put", func(_ *Context) (any, error) { return "ok", nil })
+			},
+		},
+		{
+			name:   "POST registers route",
+			method: http.MethodPost,
+			setup: func(a *App) {
+				a.POST("/post", func(_ *Context) (any, error) { return "ok", nil })
+			},
+		},
+		{
+			name:   "DELETE registers route",
+			method: http.MethodDelete,
+			setup: func(a *App) {
+				a.DELETE("/delete", func(_ *Context) (any, error) { return "ok", nil })
+			},
+		},
+		{
+			name:   "PATCH registers route",
+			method: http.MethodPatch,
+			setup: func(a *App) {
+				a.PATCH("/patch", func(_ *Context) (any, error) { return "ok", nil })
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			port := testutil.GetFreePort(t)
+			mockContainer, _ := container.NewMockContainer(t)
+
+			a := &App{
+				httpServer: &httpServer{
+					router: gofrHTTP.NewRouter(),
+					port:   port,
+				},
+				container: mockContainer,
+				Config:    config.NewMockConfig(map[string]string{"REQUEST_TIMEOUT": "5"}),
+			}
+
+			tt.setup(a)
+
+			assert.True(t, a.httpRegistered)
 		})
 	}
 }
