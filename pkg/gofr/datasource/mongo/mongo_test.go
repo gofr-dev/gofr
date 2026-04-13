@@ -215,9 +215,9 @@ func Test_InsertCommands(t *testing.T) {
 	cl := Client{metrics: metrics, tracer: otel.GetTracerProvider().Tracer("gofr-mongo")}
 
 	metrics.EXPECT().RecordHistogram(context.Background(), "app_mongo_stats", gomock.Any(), "hostname",
-		gomock.Any(), "database", gomock.Any(), "type", gomock.Any()).Times(3)
+		gomock.Any(), "database", gomock.Any(), "type", gomock.Any()).Times(4)
 
-	logger.EXPECT().Debug(gomock.Any()).Times(3)
+	logger.EXPECT().Debug(gomock.Any()).Times(4)
 
 	cl.logger = logger
 
@@ -320,9 +320,9 @@ func Test_FindMultipleCommands(t *testing.T) {
 	cl := Client{metrics: metrics, tracer: otel.GetTracerProvider().Tracer("gofr-mongo")}
 
 	metrics.EXPECT().RecordHistogram(context.Background(), "app_mongo_stats", gomock.Any(), "hostname",
-		gomock.Any(), "database", gomock.Any(), "type", gomock.Any())
+		gomock.Any(), "database", gomock.Any(), "type", gomock.Any()).Times(3)
 
-	logger.EXPECT().Debug(gomock.Any())
+	logger.EXPECT().Debug(gomock.Any()).Times(3)
 
 	cl.logger = logger
 
@@ -394,9 +394,9 @@ func Test_FindOneCommands(t *testing.T) {
 	cl := Client{metrics: metrics, tracer: otel.GetTracerProvider().Tracer("gofr-mongo")}
 
 	metrics.EXPECT().RecordHistogram(context.Background(), "app_mongo_stats", gomock.Any(), "hostname",
-		gomock.Any(), "database", gomock.Any(), "type", gomock.Any())
+		gomock.Any(), "database", gomock.Any(), "type", gomock.Any()).Times(2)
 
-	logger.EXPECT().Debug(gomock.Any())
+	logger.EXPECT().Debug(gomock.Any()).Times(2)
 
 	cl.logger = logger
 
@@ -554,9 +554,9 @@ func Test_DeleteCommands(t *testing.T) {
 	cl := Client{metrics: metrics, tracer: otel.GetTracerProvider().Tracer("gofr-mongo")}
 
 	metrics.EXPECT().RecordHistogram(context.Background(), "app_mongo_stats", gomock.Any(), "hostname",
-		gomock.Any(), "database", gomock.Any(), "type", gomock.Any()).Times(2)
+		gomock.Any(), "database", gomock.Any(), "type", gomock.Any()).Times(4)
 
-	logger.EXPECT().Debug(gomock.Any()).Times(2)
+	logger.EXPECT().Debug(gomock.Any()).Times(4)
 
 	cl.logger = logger
 

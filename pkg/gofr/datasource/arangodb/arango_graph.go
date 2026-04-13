@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"time"
 
 	"github.com/arangodb/go-driver/v2/arangodb"
 )
@@ -33,19 +32,17 @@ type Graph struct {
 // Returns ErrGraphExists if the graph already exists.
 // Returns an error if the edgeDefinitions parameter is not of type *EdgeDefinition or is nil.
 func (g *Graph) CreateGraph(ctx context.Context, database, graph string, edgeDefinitions any) error {
-	tracerCtx, span := g.client.addTrace(ctx, "createGraph", map[string]string{"graph": graph})
-	startTime := time.Now()
+	ctx, done := g.client.instrumentOp(ctx, &QueryLog{Operation: "createGraph",
+		Database: database, Graph: graph})
+	defer done()
 
-	defer g.client.sendOperationStats(&QueryLog{Operation: "createGraph",
-		Database: database, Collection: graph}, startTime, "createGraph", span)
-
-	db, err := g.client.client.GetDatabase(tracerCtx, database, nil)
+	db, err := g.client.client.GetDatabase(ctx, database, nil)
 	if err != nil {
 		return err
 	}
 
 	// Check if the graph already exists
-	exists, err := db.GraphExists(tracerCtx, graph)
+	exists, err := db.GraphExists(ctx, graph)
 	if err != nil {
 		return err
 	}
@@ -77,7 +74,7 @@ func (g *Graph) CreateGraph(ctx context.Context, database, graph string, edgeDef
 		EdgeDefinitions: arangoEdgeDefs,
 	}
 
-	_, err = db.CreateGraph(tracerCtx, graph, options, nil)
+	_, err = db.CreateGraph(ctx, graph, options, nil)
 
 	return err
 }
@@ -90,23 +87,21 @@ func (g *Graph) CreateGraph(ctx context.Context, database, graph string, edgeDef
 //
 // Returns an error if the graph does not exist or if there is an issue with the database connection.
 func (g *Graph) DropGraph(ctx context.Context, database, graphName string) error {
-	tracerCtx, span := g.client.addTrace(ctx, "dropGraph", map[string]string{"graph": graphName})
-	startTime := time.Now()
+	ctx, done := g.client.instrumentOp(ctx, &QueryLog{Operation: "dropGraph",
+		Database: database, Graph: graphName})
+	defer done()
 
-	defer g.client.sendOperationStats(&QueryLog{Operation: "dropGraph",
-		Database: database}, startTime, "dropGraph", span)
-
-	db, err := g.client.client.GetDatabase(tracerCtx, database, nil)
+	db, err := g.client.client.GetDatabase(ctx, database, nil)
 	if err != nil {
 		return err
 	}
 
-	graph, err := db.Graph(tracerCtx, graphName, nil)
+	graph, err := db.Graph(ctx, graphName, nil)
 	if err != nil {
 		return err
 	}
 
-	err = graph.Remove(tracerCtx, &arangodb.RemoveGraphOptions{DropCollections: true})
+	err = graph.Remove(ctx, &arangodb.RemoveGraphOptions{DropCollections: true})
 	if err != nil {
 		return err
 	}
@@ -137,23 +132,20 @@ func (c *Client) GetEdges(ctx context.Context, dbName, graphName, edgeCollection
 		return fmt.Errorf("%w: must be *[]arangodb.EdgeDetails", errInvalidResponseType)
 	}
 
-	tracerCtx, span := c.addTrace(ctx, "getEdges", map[string]string{
-		"DB": dbName, "Graph": graphName, "Collection": edgeCollection, "Vertex": vertexID,
-	})
-	startTime := time.Now()
-
-	defer c.sendOperationStats(&QueryLog{
+	ctx, done := c.instrumentOp(ctx, &QueryLog{
 		Operation:  "getEdges",
 		Database:   dbName,
+		Graph:      graphName,
 		Collection: edgeCollection,
-	}, startTime, "getEdges", span)
+	})
+	defer done()
 
-	db, err := c.client.GetDatabase(tracerCtx, dbName, nil)
+	db, err := c.client.GetDatabase(ctx, dbName, nil)
 	if err != nil {
 		return err
 	}
 
-	edges, err := db.GetEdges(tracerCtx, edgeCollection, vertexID, nil)
+	edges, err := db.GetEdges(ctx, edgeCollection, vertexID, nil)
 	if err != nil {
 		return err
 	}

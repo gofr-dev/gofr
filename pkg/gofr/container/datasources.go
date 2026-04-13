@@ -187,6 +187,8 @@ type CassandraBatchWithContext interface {
 	ExecuteBatchCASWithCtx(ctx context.Context, name string, dest ...any) (bool, error)
 }
 
+// Deprecated: Use CassandraWithContext instead. Setup methods (UseLogger/UseMetrics/UseTracer/Connect)
+// are called automatically by App.AddCassandra.
 type CassandraProvider interface {
 	CassandraWithContext
 
@@ -201,6 +203,7 @@ type Clickhouse interface {
 	HealthChecker
 }
 
+// Deprecated: Use Clickhouse instead. Setup methods are called automatically by App.AddClickhouse.
 type ClickhouseProvider interface {
 	Clickhouse
 
@@ -222,6 +225,7 @@ type OracleTx interface {
 	Rollback() error
 }
 
+// Deprecated: Use OracleDB instead. Setup methods are called automatically by App.AddOracle.
 type OracleProvider interface {
 	OracleDB
 
@@ -290,8 +294,7 @@ type Transaction interface {
 	EndSession(context.Context)
 }
 
-// MongoProvider is an interface that extends Mongo with additional methods for logging, metrics, and connection management.
-// Which is used for initializing datasource.
+// Deprecated: Use Mongo instead. Setup methods are called automatically by App.AddMongo.
 type MongoProvider interface {
 	Mongo
 
@@ -335,25 +338,19 @@ type SurrealDB interface {
 	HealthChecker
 }
 
-// SurrealBDProvider is an interface that extends SurrealDB with additional methods for logging, metrics, or connection management.
-// It is typically used for initializing and managing SurrealDB-based data sources.
+// Deprecated: Use SurrealDB instead. Setup methods are called automatically by App.AddSurrealDB.
 type SurrealBDProvider interface {
 	SurrealDB
 
 	provider
 }
 
+// Deprecated: Setup methods are called automatically by App.Add* methods via duck typing.
+// Datasources only need to implement their behavior interface (e.g., Mongo, ArangoDB).
 type provider interface {
-	// UseLogger sets the logger for the Cassandra client.
 	UseLogger(logger any)
-
-	// UseMetrics sets the metrics for the Cassandra client.
 	UseMetrics(metrics any)
-
-	// UseTracer sets the tracer for the Cassandra client.
 	UseTracer(tracer any)
-
-	// Connect establishes a connection to Cassandra and registers metrics using the provided configuration when the client was Created.
 	Connect()
 }
 
@@ -371,12 +368,14 @@ type KVStore interface {
 	HealthChecker
 }
 
+// Deprecated: Use KVStore instead. Setup methods are called automatically by App.AddKVStore.
 type KVStoreProvider interface {
 	KVStore
 
 	provider
 }
 
+// Deprecated: Use pubsub.Client instead. Setup methods are called automatically by App.AddPubSub.
 type PubSubProvider interface {
 	pubsub.Client
 
@@ -398,6 +397,7 @@ type Solr interface {
 	HealthChecker
 }
 
+// Deprecated: Use Solr instead. Setup methods are called automatically by App.AddSolr.
 type SolrProvider interface {
 	Solr
 
@@ -484,12 +484,13 @@ type Dgraph interface {
 	HealthChecker
 }
 
-// DgraphProvider extends Dgraph with connection management capabilities.
+// Deprecated: Use Dgraph instead. Setup methods are called automatically by App.AddDgraph.
 type DgraphProvider interface {
 	Dgraph
 	provider
 }
 
+// Deprecated: Use OpenTSDB instead. Setup methods are called automatically by App.AddOpenTSDB.
 type OpenTSDBProvider interface {
 	OpenTSDB
 	provider
@@ -629,6 +630,7 @@ type ScyllaDB interface {
 	HealthChecker
 }
 
+// Deprecated: Use ScyllaDB instead. Setup methods are called automatically by App.AddScyllaDB.
 type ScyllaDBProvider interface {
 	ScyllaDB
 	provider
@@ -697,7 +699,7 @@ type ArangoDB interface {
 	HealthChecker
 }
 
-// ArangoDBProvider is an interface that extends ArangoDB with additional methods for logging, metrics, and connection management.
+// Deprecated: Use ArangoDB instead. Setup methods are called automatically by App.AddArangoDB.
 type ArangoDBProvider interface {
 	ArangoDB
 
@@ -737,7 +739,7 @@ type Elasticsearch interface {
 	HealthChecker
 }
 
-// ElasticsearchProvider an interface that extends Elasticsearch with additional methods for logging, metrics, and connection management.
+// Deprecated: Use Elasticsearch instead. Setup methods are called automatically by App.AddElasticsearch.
 type ElasticsearchProvider interface {
 	Elasticsearch
 
@@ -777,9 +779,7 @@ type Couchbase interface {
 	HealthChecker
 }
 
-// CouchbaseProvider is an interface that extends Couchbase with additional methods
-// for logging, metrics, tracing, and connection management, aligning with other
-// data source providers in your package.
+// Deprecated: Use Couchbase instead. Setup methods are called automatically by App.AddCouchbase.
 type CouchbaseProvider interface {
 	Couchbase
 
@@ -831,7 +831,7 @@ type InfluxDB interface {
 	HealthChecker
 }
 
-// InfluxDBProvider an interface that extends InfluxDB with additional methods for logging, metrics, and connection management.
+// Deprecated: Use InfluxDB instead. Setup methods are called automatically by App.AddInfluxDB.
 type InfluxDBProvider interface {
 	InfluxDB
 
