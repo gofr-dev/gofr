@@ -87,11 +87,6 @@ func NewHTTPService(serviceAddress string, logger Logger, metrics Metrics, optio
 
 	// if options are given, then add them to the httpService struct
 	for _, o := range options {
-		if obs, ok := o.(Observable); ok {
-			obs.UseLogger(logger)
-			obs.UseMetrics(metrics)
-		}
-
 		svc = o.AddOption(svc)
 	}
 

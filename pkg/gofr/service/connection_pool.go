@@ -131,6 +131,8 @@ func extractHTTPService(h HTTP) *httpService {
 		return extractHTTPService(v.HTTP)
 	case *customHeader:
 		return extractHTTPService(v.HTTP)
+	case interface{ Unwrap() HTTP }:
+		return extractHTTPService(v.Unwrap())
 	default:
 		return nil
 	}

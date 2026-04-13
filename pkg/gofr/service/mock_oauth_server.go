@@ -1,4 +1,4 @@
-package auth
+package service
 
 import (
 	"crypto/rand"
@@ -15,15 +15,13 @@ import (
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-
-	"gofr.dev/pkg/gofr/service"
 )
 
 const clientIDLength = 10
 const clientSecretLength = 24
 const privateKeyBits = 2048
 
-type oAuthTestServer struct {
+type oAuthTestSever struct {
 	tokenURL      string
 	clientID      string
 	clientSecret  string
@@ -33,16 +31,17 @@ type oAuthTestServer struct {
 	httpServer    *httptest.Server
 }
 
-func setupOAuthHTTPServer(t *testing.T, clientID, clientSecret, audience string) *httptest.Server {
+func setupOAuthHTTPServer(t *testing.T, config *OAuthConfig) *httptest.Server {
 	t.Helper()
 
-	server := oAuthTestServer{
+	server := oAuthTestSever{
 		tokenURL:      "/token",
 		testURL:       "/test",
-		audienceClaim: audience,
-		clientID:      clientID,
-		clientSecret:  clientSecret,
+		audienceClaim: config.EndpointParams.Get("aud"),
 	}
+
+	server.clientID = config.ClientID
+	server.clientSecret = config.ClientSecret
 
 	privateKey, err := rsa.GenerateKey(rand.Reader, privateKeyBits)
 	require.NoError(t, err, "failed to generate private key, aborting")
@@ -65,6 +64,7 @@ func setupOAuthHTTPServer(t *testing.T, clientID, clientSecret, audience string)
 			return
 		}
 
+		// Prepare the JSON response
 		w.Header().Set("Content-Type", "application/json")
 		w.Header().Set("Cache-Control", "no-store")
 		w.Header().Set("Pragma", "no-cache")
@@ -72,20 +72,19 @@ func setupOAuthHTTPServer(t *testing.T, clientID, clientSecret, audience string)
 		tokenResponse := map[string]any{
 			"access_token": accessToken,
 			"token_type":   "Bearer",
-			"expires_in":   3600,
-			"scope":        "read write",
+			"expires_in":   3600,         // Expires in 1 hour
+			"scope":        "read write", // Mock scope
 		}
 
 		_ = json.NewEncoder(w).Encode(tokenResponse)
 	})
 
 	mux.HandleFunc(server.testURL, func(w http.ResponseWriter, r *http.Request) {
-		header := r.Header.Get(service.AuthHeader)
+		header := r.Header.Get(AuthHeader)
 		token := strings.Split(header, " ")
 
 		if len(token) <= 1 {
 			w.WriteHeader(http.StatusUnauthorized)
-			return
 		}
 
 		parsedToken, _ := jwt.Parse(token[1], func(*jwt.Token) (any, error) {
@@ -110,7 +109,7 @@ func setupOAuthHTTPServer(t *testing.T, clientID, clientSecret, audience string)
 	return server.httpServer
 }
 
-func (s *oAuthTestServer) validateCredentials(r *http.Request) (errMessage string, statusCode int) {
+func (s *oAuthTestSever) validateCredentials(r *http.Request) (errMessage string, statusCode int) {
 	err := r.ParseForm()
 	if err != nil {
 		return "Failed to parse form", http.StatusBadRequest
@@ -120,10 +119,12 @@ func (s *oAuthTestServer) validateCredentials(r *http.Request) (errMessage strin
 	clientID := r.Form.Get("client_id")
 	clientSecret := r.Form.Get("client_secret")
 
+	// Basic validation
 	if grantType != "client_credentials" || clientID == "" || clientSecret == "" {
 		return "Invalid token request", http.StatusBadRequest
 	}
 
+	// Validate the authorization code
 	if s.clientID != clientID || s.clientSecret != clientSecret {
 		return "Invalid credentials", http.StatusUnauthorized
 	}
@@ -131,7 +132,7 @@ func (s *oAuthTestServer) validateCredentials(r *http.Request) (errMessage strin
 	return "", http.StatusOK
 }
 
-func (s *oAuthTestServer) generateToken(claims jwt.MapClaims) (string, error) {
+func (s *oAuthTestSever) generateToken(claims jwt.MapClaims) (string, error) {
 	claims["iat"] = time.Now().Unix()
 	claims["exp"] = time.Now().Add(time.Hour).Unix()
 	t := jwt.NewWithClaims(jwt.SigningMethodRS512, claims)
@@ -140,7 +141,7 @@ func (s *oAuthTestServer) generateToken(claims jwt.MapClaims) (string, error) {
 }
 
 func getClaims(r *http.Request) map[string]any {
-	claims := make(map[string]any)
+	claims := make(map[string]any, 0)
 
 	for key, value := range r.Form {
 		if key == "client_id" || key == "client_secret" || key == "grant_type" {
@@ -153,13 +154,16 @@ func getClaims(r *http.Request) map[string]any {
 	return claims
 }
 
+// Helper function to generate a random string.
 func generateRandomString(length int) (token string, err error) {
+	// Generate random bytes
 	b := make([]byte, length)
 
-	_, err = rand.Read(b)
+	_, err = rand.Read(b) // Use crypto/rand.Read
 	if err != nil {
 		return "", fmt.Errorf("failed to read random bytes: %w", err)
 	}
 
+	// Encode to base64 to make it URL-safe and human-readable (for tokens)
 	return base64.URLEncoding.EncodeToString(b), nil
 }

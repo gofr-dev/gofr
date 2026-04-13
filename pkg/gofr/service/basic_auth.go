@@ -7,9 +7,6 @@ import (
 	"strings"
 )
 
-// BasicAuthConfig is deprecated. Use auth.NewBasicAuthConfig from gofr.dev/pkg/gofr/service/auth instead.
-//
-// Deprecated: Use gofr.dev/pkg/gofr/service/auth.NewBasicAuthConfig instead.
 type BasicAuthConfig struct {
 	UserName string
 	Password string
@@ -19,7 +16,6 @@ func (c *BasicAuthConfig) AddOption(h HTTP) HTTP {
 	return &authProvider{auth: c.addAuthorizationHeader, HTTP: h}
 }
 
-// Deprecated: Use auth.NewBasicAuthConfig from gofr.dev/pkg/gofr/service/auth instead.
 func NewBasicAuthConfig(username, password string) (Options, error) {
 	username = strings.TrimSpace(username)
 	password = strings.TrimSpace(password)

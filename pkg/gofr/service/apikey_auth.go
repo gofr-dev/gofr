@@ -11,9 +11,6 @@ import (
 // #nosec G101
 const xAPIKeyHeader = "X-Api-Key"
 
-// APIKeyConfig is deprecated. Use auth.NewAPIKeyConfig from gofr.dev/pkg/gofr/service/auth instead.
-//
-// Deprecated: Use gofr.dev/pkg/gofr/service/auth.NewAPIKeyConfig instead.
 type APIKeyConfig struct {
 	APIKey string
 }
@@ -22,7 +19,6 @@ func (a *APIKeyConfig) AddOption(h HTTP) HTTP {
 	return &authProvider{auth: a.addAuthorizationHeader, HTTP: h}
 }
 
-// Deprecated: Use auth.NewAPIKeyConfig from gofr.dev/pkg/gofr/service/auth instead.
 func NewAPIKeyConfig(apiKey string) (Options, error) {
 	apiKey = strings.TrimSpace(apiKey)
 	if apiKey == "" {
