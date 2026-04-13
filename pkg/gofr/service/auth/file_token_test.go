@@ -12,12 +12,17 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"gofr.dev/pkg/gofr/datasource/file"
 	"gofr.dev/pkg/gofr/logging"
 	"gofr.dev/pkg/gofr/service"
 )
 
 func testLogger() service.Logger {
 	return logging.NewMockLogger(logging.ERROR)
+}
+
+func testFS() file.FileSystem {
+	return file.NewLocalFileSystem(logging.NewMockLogger(logging.ERROR))
 }
 
 func writeTokenFile(t *testing.T, content string) string {
@@ -31,22 +36,25 @@ func writeTokenFile(t *testing.T, content string) string {
 
 func TestNewFileTokenAuthConfig(t *testing.T) {
 	validPath := writeTokenFile(t, "initial-token")
+	fs := testFS()
 
 	tests := []struct {
 		name        string
+		fs          file.FileSystem
 		path        string
 		interval    time.Duration
 		expectError bool
 	}{
-		{"valid token", validPath, 0, false},
-		{"missing file", filepath.Join(t.TempDir(), "does-not-exist"), 0, true},
-		{"empty file", writeTokenFile(t, "   \n\t "), 0, true},
-		{"negative interval defaults to 30s", validPath, -1 * time.Second, false},
+		{"valid token", fs, validPath, 0, false},
+		{"nil file system", nil, validPath, 0, true},
+		{"missing file", fs, filepath.Join(t.TempDir(), "does-not-exist"), 0, true},
+		{"empty file", fs, writeTokenFile(t, "   \n\t "), 0, true},
+		{"negative interval defaults to 30s", fs, validPath, -1 * time.Second, false},
 	}
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			cfg, err := NewFileTokenAuthConfig(tc.path, tc.interval)
+			cfg, err := NewFileTokenAuthConfig(tc.fs, tc.path, tc.interval)
 			if tc.expectError {
 				require.Error(t, err)
 				assert.Nil(t, cfg)
@@ -69,7 +77,7 @@ func TestNewFileTokenAuthConfig(t *testing.T) {
 func TestFileTokenAuthConfig_CloseIsIdempotent(t *testing.T) {
 	path := writeTokenFile(t, "tok")
 
-	cfg, err := NewFileTokenAuthConfig(path, 50*time.Millisecond)
+	cfg, err := NewFileTokenAuthConfig(testFS(), path, 50*time.Millisecond)
 	require.NoError(t, err)
 
 	assert.NoError(t, cfg.Close())
@@ -79,7 +87,7 @@ func TestFileTokenAuthConfig_CloseIsIdempotent(t *testing.T) {
 func TestFileTokenAuthConfig_RefreshPicksUpRotation(t *testing.T) {
 	path := writeTokenFile(t, "token-v1")
 
-	cfg, err := NewFileTokenAuthConfig(path, 20*time.Millisecond)
+	cfg, err := NewFileTokenAuthConfig(testFS(), path, 20*time.Millisecond)
 	require.NoError(t, err)
 
 	t.Cleanup(func() { _ = cfg.Close() })
@@ -104,7 +112,7 @@ func TestFileTokenAuthConfig_InjectsBearerHeader(t *testing.T) {
 
 	path := writeTokenFile(t, "secret-token")
 
-	cfg, err := NewFileTokenAuthConfig(path, time.Hour)
+	cfg, err := NewFileTokenAuthConfig(testFS(), path, time.Hour)
 	require.NoError(t, err)
 
 	t.Cleanup(func() { _ = cfg.Close() })
@@ -128,7 +136,7 @@ func TestFileTokenAuthConfig_RejectsExistingAuthHeader(t *testing.T) {
 
 	path := writeTokenFile(t, "tok")
 
-	cfg, err := NewFileTokenAuthConfig(path, time.Hour)
+	cfg, err := NewFileTokenAuthConfig(testFS(), path, time.Hour)
 	require.NoError(t, err)
 
 	t.Cleanup(func() { _ = cfg.Close() })
@@ -159,7 +167,7 @@ func TestFileTokenAuthConfig_WorksWithConnectionPoolConfig(t *testing.T) {
 
 	path := writeTokenFile(t, "combo-token")
 
-	cfg, err := NewFileTokenAuthConfig(path, time.Hour)
+	cfg, err := NewFileTokenAuthConfig(testFS(), path, time.Hour)
 	require.NoError(t, err)
 
 	t.Cleanup(func() { _ = cfg.Close() })

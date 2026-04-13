@@ -7,12 +7,13 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"net/http"
-	"os"
 	"strings"
 	"sync"
 	"time"
 
+	"gofr.dev/pkg/gofr/datasource/file"
 	"gofr.dev/pkg/gofr/service"
 )
 
@@ -27,6 +28,7 @@ var (
 	errEmptyTokenFile    = errors.New("token file is empty")
 	errTokenUnavailable  = errors.New("no token available")
 	errAuthHeaderPresent = errors.New("authorization header already set on request")
+	errNilFileSystem     = errors.New("file system is required")
 )
 
 // FileTokenAuthConfig reads a bearer token from a file and periodically re-reads it
@@ -35,6 +37,7 @@ var (
 // The returned value implements service.Options and io.Closer. Call Close to stop
 // the background refresh goroutine; it is safe to call Close multiple times.
 type FileTokenAuthConfig struct {
+	fs              file.FileSystem
 	tokenFilePath   string
 	refreshInterval time.Duration
 
@@ -45,9 +48,17 @@ type FileTokenAuthConfig struct {
 	closeOnce sync.Once
 }
 
-// NewFileTokenAuthConfig constructs a FileTokenAuthConfig. If tokenFilePath is empty
-// it defaults to DefaultTokenFilePath. If refreshInterval is <= 0 it defaults to 30s.
-func NewFileTokenAuthConfig(tokenFilePath string, refreshInterval time.Duration) (*FileTokenAuthConfig, error) {
+// NewFileTokenAuthConfig constructs a FileTokenAuthConfig that reads tokens through
+// the supplied file.FileSystem. If tokenFilePath is empty it defaults to
+// DefaultTokenFilePath. If refreshInterval is <= 0 it defaults to 30s.
+//
+// Callers typically obtain fs via file.NewLocalFileSystem(app.Logger()).
+func NewFileTokenAuthConfig(fs file.FileSystem, tokenFilePath string,
+	refreshInterval time.Duration) (*FileTokenAuthConfig, error) {
+	if fs == nil {
+		return nil, errNilFileSystem
+	}
+
 	if tokenFilePath == "" {
 		tokenFilePath = DefaultTokenFilePath
 	}
@@ -56,12 +67,13 @@ func NewFileTokenAuthConfig(tokenFilePath string, refreshInterval time.Duration)
 		refreshInterval = defaultRefreshInterval
 	}
 
-	token, err := readToken(tokenFilePath)
+	token, err := readToken(fs, tokenFilePath)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read token from %s: %w", tokenFilePath, err)
 	}
 
 	f := &FileTokenAuthConfig{
+		fs:              fs,
 		tokenFilePath:   tokenFilePath,
 		refreshInterval: refreshInterval,
 		token:           token,
@@ -107,7 +119,7 @@ func (f *FileTokenAuthConfig) refreshLoop() {
 		case <-f.done:
 			return
 		case <-ticker.C:
-			token, err := readToken(f.tokenFilePath)
+			token, err := readToken(f.fs, f.tokenFilePath)
 			if err != nil {
 				continue
 			}
@@ -119,8 +131,15 @@ func (f *FileTokenAuthConfig) refreshLoop() {
 	}
 }
 
-func readToken(path string) (string, error) {
-	data, err := os.ReadFile(path) // #nosec G304 -- path is configured by the application
+func readToken(fs file.FileSystem, path string) (string, error) {
+	f, err := fs.Open(path)
+	if err != nil {
+		return "", err
+	}
+
+	defer func() { _ = f.Close() }()
+
+	data, err := io.ReadAll(f)
 	if err != nil {
 		return "", err
 	}
