@@ -97,6 +97,7 @@ func TestFileTokenAuthConfig_InjectsBearerHeader(t *testing.T) {
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		seenAuth = r.Header.Get("Authorization")
+
 		w.WriteHeader(http.StatusOK)
 	}))
 	t.Cleanup(srv.Close)
@@ -110,16 +111,19 @@ func TestFileTokenAuthConfig_InjectsBearerHeader(t *testing.T) {
 
 	svc := service.NewHTTPService(srv.URL, testLogger(), nil, cfg)
 
-	_, err = svc.Get(context.Background(), "", nil)
+	resp, err := svc.Get(context.Background(), "", nil)
 	require.NoError(t, err)
+
+	_ = resp.Body.Close()
 
 	assert.Equal(t, "Bearer secret-token", seenAuth)
 }
 
 func TestFileTokenAuthConfig_RejectsExistingAuthHeader(t *testing.T) {
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+	handler := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusOK)
-	}))
+	})
+	srv := httptest.NewServer(handler)
 	t.Cleanup(srv.Close)
 
 	path := writeTokenFile(t, "tok")
@@ -131,10 +135,14 @@ func TestFileTokenAuthConfig_RejectsExistingAuthHeader(t *testing.T) {
 
 	svc := service.NewHTTPService(srv.URL, testLogger(), nil, cfg)
 
-	_, err = svc.GetWithHeaders(context.Background(), "", nil, map[string]string{
+	resp, err := svc.GetWithHeaders(context.Background(), "", nil, map[string]string{
 		"Authorization": "Bearer pre-existing",
 	})
 	require.Error(t, err)
+
+	if resp != nil {
+		_ = resp.Body.Close()
+	}
 }
 
 // TestFileTokenAuthConfig_WorksWithConnectionPoolConfig locks in the regression
@@ -166,5 +174,8 @@ func TestFileTokenAuthConfig_WorksWithConnectionPoolConfig(t *testing.T) {
 
 	resp, err := svc.Get(context.Background(), "", nil)
 	require.NoError(t, err)
+
+	defer func() { _ = resp.Body.Close() }()
+
 	assert.Equal(t, http.StatusOK, resp.StatusCode)
 }

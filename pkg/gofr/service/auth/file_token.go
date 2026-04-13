@@ -24,8 +24,9 @@ const (
 )
 
 var (
-	errEmptyTokenFile   = errors.New("token file is empty")
-	errTokenUnavailable = errors.New("no token available")
+	errEmptyTokenFile    = errors.New("token file is empty")
+	errTokenUnavailable  = errors.New("no token available")
+	errAuthHeaderPresent = errors.New("authorization header already set on request")
 )
 
 // FileTokenAuthConfig reads a bearer token from a file and periodically re-reads it
@@ -150,7 +151,7 @@ func (d *fileTokenDecorator) inject(headers map[string]string) (map[string]strin
 	}
 
 	if existing, ok := headers[service.AuthHeader]; ok && existing != "" {
-		return nil, fmt.Errorf("value %v already exists for header %v", existing, service.AuthHeader)
+		return nil, errAuthHeaderPresent
 	}
 
 	token, err := d.source.currentToken()
