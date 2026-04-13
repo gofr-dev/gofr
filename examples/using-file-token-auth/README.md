@@ -43,5 +43,5 @@ Then:
 ```
 echo "my-local-token" > /tmp/my-token
 go run ./examples/using-file-token-auth
-curl http://localhost:9016/proxy
+curl http://localhost:8000/proxy
 ```
