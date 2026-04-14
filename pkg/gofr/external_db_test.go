@@ -46,6 +46,7 @@ func Test_tracerName(t *testing.T) {
 
 func Test_instrumentDatasource(t *testing.T) {
 	testutil.NewServerConfigs(t)
+
 	app := New()
 
 	ctrl := gomock.NewController(t)
@@ -63,6 +64,7 @@ func Test_instrumentDatasource(t *testing.T) {
 
 func Test_instrumentDatasource_PartialImplementation(t *testing.T) {
 	testutil.NewServerConfigs(t)
+
 	app := New()
 
 	ctrl := gomock.NewController(t)
@@ -119,6 +121,7 @@ func TestApp_AddArangoDB(t *testing.T) {
 
 func TestApp_AddClickhouse(t *testing.T) {
 	testutil.NewServerConfigs(t)
+
 	app := New()
 
 	ctrl := gomock.NewController(t)
@@ -175,6 +178,7 @@ func TestApp_AddOracle(t *testing.T) {
 
 func TestApp_AddKVStore(t *testing.T) {
 	testutil.NewServerConfigs(t)
+
 	app := New()
 
 	ctrl := gomock.NewController(t)
@@ -193,6 +197,7 @@ func TestApp_AddKVStore(t *testing.T) {
 
 func TestApp_AddSolr(t *testing.T) {
 	testutil.NewServerConfigs(t)
+
 	app := New()
 
 	ctrl := gomock.NewController(t)
@@ -211,6 +216,7 @@ func TestApp_AddSolr(t *testing.T) {
 
 func TestApp_AddFTP(t *testing.T) {
 	testutil.NewServerConfigs(t)
+
 	app := New()
 
 	ctrl := gomock.NewController(t)
@@ -228,6 +234,7 @@ func TestApp_AddFTP(t *testing.T) {
 
 func TestApp_AddFileStore(t *testing.T) {
 	testutil.NewServerConfigs(t)
+
 	app := New()
 
 	ctrl := gomock.NewController(t)
@@ -245,6 +252,7 @@ func TestApp_AddFileStore(t *testing.T) {
 
 func TestApp_AddOpenTSDB(t *testing.T) {
 	testutil.NewServerConfigs(t)
+
 	app := New()
 
 	ctrl := gomock.NewController(t)
@@ -263,6 +271,7 @@ func TestApp_AddOpenTSDB(t *testing.T) {
 
 func TestApp_AddScyllaDB(t *testing.T) {
 	testutil.NewServerConfigs(t)
+
 	app := New()
 
 	ctrl := gomock.NewController(t)
