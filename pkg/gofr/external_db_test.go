@@ -80,6 +80,7 @@ func Test_instrumentDatasource_PartialImplementation(t *testing.T) {
 
 func TestApp_AddMongo(t *testing.T) {
 	testutil.NewServerConfigs(t)
+
 	app := New()
 
 	ctrl := gomock.NewController(t)
@@ -136,6 +137,7 @@ func TestApp_AddClickhouse(t *testing.T) {
 
 func TestApp_AddCassandra(t *testing.T) {
 	testutil.NewServerConfigs(t)
+
 	app := New()
 
 	ctrl := gomock.NewController(t)
@@ -154,6 +156,7 @@ func TestApp_AddCassandra(t *testing.T) {
 
 func TestApp_AddOracle(t *testing.T) {
 	testutil.NewServerConfigs(t)
+
 	app := New()
 
 	ctrl := gomock.NewController(t)
