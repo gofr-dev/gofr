@@ -326,7 +326,7 @@ func (c *Client) addTrace(ctx context.Context, operation string, attributes map[
 // instrumentOp starts a trace span, captures the start time, and returns the traced context
 // along with a cleanup function. The cleanup function logs the operation, records metrics,
 // and ends the span. It should be deferred immediately after calling instrumentOp.
-func (c *Client) instrumentOp(ctx context.Context, ql *QueryLog) (context.Context, func()) {
+func (c *Client) instrumentOp(ctx context.Context, ql *QueryLog) (tracedCtx context.Context, done func()) {
 	tracerCtx, span := c.addTrace(ctx, ql.Operation, ql.traceAttrs())
 	startTime := time.Now()
 

@@ -182,7 +182,7 @@ func getDBHost(uri string) (host string, err error) {
 // instrumentOp starts tracing and returns a cleanup function that logs the query,
 // records metrics, and ends the span. The cleanup captures time.Now() before the
 // operation, ensuring accurate duration measurement.
-func (c *Client) instrumentOp(ctx context.Context, ql *QueryLog) (context.Context, func()) {
+func (c *Client) instrumentOp(ctx context.Context, ql *QueryLog) (tracedCtx context.Context, done func()) {
 	tracerCtx, span := c.addTrace(ctx, ql.Query, ql.Collection)
 	startTime := time.Now()
 
@@ -204,7 +204,7 @@ func (c *Client) instrumentOp(ctx context.Context, ql *QueryLog) (context.Contex
 
 // instrumentQuery builds a QueryLog and instruments the operation.
 func (c *Client) instrumentQuery(ctx context.Context, collection, operation string, filter, id, update any) (
-	context.Context, func()) {
+	tracedCtx context.Context, done func()) {
 	return c.instrumentOp(ctx, &QueryLog{
 		Query:      operation,
 		Collection: collection,
