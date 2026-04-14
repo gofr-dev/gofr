@@ -8,43 +8,36 @@ import (
 	"gofr.dev/pkg/gofr/datasource/pubsub"
 )
 
-// tracerName returns the OpenTelemetry tracer name for a datasource.
-// Returns empty string if tracing is not applicable for the type.
-//
-//nolint:cyclop // complexity from datasource count, not logic
+// tracerName returns the OpenTelemetry tracer name for a datasource,
+// or an empty string if tracing is not applicable for the type.
 func tracerName(ds any) string {
-	switch ds.(type) {
-	case container.Mongo:
-		return "gofr-mongo"
-	case container.ArangoDB:
-		return "gofr-arangodb"
-	case container.Clickhouse:
-		return "gofr-clickhouse"
-	case container.OracleDB:
-		return "gofr-oracle"
-	case container.CassandraWithContext:
-		return "gofr-cassandra"
-	case container.KVStore:
-		return "gofr-kvstore"
-	case container.Solr:
-		return "gofr-solr"
-	case container.Dgraph:
-		return "gofr-dgraph"
-	case container.OpenTSDB:
-		return "gofr-opentsdb"
-	case container.ScyllaDB:
-		return "gofr-scylladb"
-	case container.SurrealDB:
-		return "gofr-surrealdb"
-	case container.Elasticsearch:
-		return "gofr-elasticsearch"
-	case container.Couchbase:
-		return "gofr-couchbase"
-	case container.InfluxDB:
-		return "gofr-influxdb"
-	default:
-		return ""
+	matchers := []struct {
+		match func(any) bool
+		name  string
+	}{
+		{func(d any) bool { _, ok := d.(container.Mongo); return ok }, "gofr-mongo"},
+		{func(d any) bool { _, ok := d.(container.ArangoDB); return ok }, "gofr-arangodb"},
+		{func(d any) bool { _, ok := d.(container.Clickhouse); return ok }, "gofr-clickhouse"},
+		{func(d any) bool { _, ok := d.(container.OracleDB); return ok }, "gofr-oracle"},
+		{func(d any) bool { _, ok := d.(container.CassandraWithContext); return ok }, "gofr-cassandra"},
+		{func(d any) bool { _, ok := d.(container.KVStore); return ok }, "gofr-kvstore"},
+		{func(d any) bool { _, ok := d.(container.Solr); return ok }, "gofr-solr"},
+		{func(d any) bool { _, ok := d.(container.Dgraph); return ok }, "gofr-dgraph"},
+		{func(d any) bool { _, ok := d.(container.OpenTSDB); return ok }, "gofr-opentsdb"},
+		{func(d any) bool { _, ok := d.(container.ScyllaDB); return ok }, "gofr-scylladb"},
+		{func(d any) bool { _, ok := d.(container.SurrealDB); return ok }, "gofr-surrealdb"},
+		{func(d any) bool { _, ok := d.(container.Elasticsearch); return ok }, "gofr-elasticsearch"},
+		{func(d any) bool { _, ok := d.(container.Couchbase); return ok }, "gofr-couchbase"},
+		{func(d any) bool { _, ok := d.(container.InfluxDB); return ok }, "gofr-influxdb"},
 	}
+
+	for _, m := range matchers {
+		if m.match(ds) {
+			return m.name
+		}
+	}
+
+	return ""
 }
 
 // instrumentDatasource sets up logging, metrics, tracing, and connection for a datasource
