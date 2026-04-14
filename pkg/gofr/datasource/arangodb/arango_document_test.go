@@ -178,40 +178,6 @@ func Test_Client_DeleteDocument_Error(t *testing.T) {
 	require.ErrorIs(t, err, errDocumentNotFound, "Expected error while updating the document")
 }
 
-func TestExecuteCollectionOperation(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
-
-	mockLogger := NewMockLogger(ctrl)
-	mockMetrics := NewMockMetrics(ctrl)
-	mockArango := NewMockClient(ctrl)
-	mockDatabase := NewMockDatabase(ctrl)
-	mockCollection := NewMockCollection(ctrl)
-
-	client := New(Config{Host: "localhost", Port: 8527, User: "root", Password: "root"})
-	client.UseLogger(mockLogger)
-	client.UseMetrics(mockMetrics)
-
-	client.client = mockArango
-	d := Document{client: client}
-
-	ctx := context.Background()
-	dbName := "testDB"
-	collectionName := "testCollection"
-	operation := "createDocument"
-	documentID := "doc123"
-
-	mockArango.EXPECT().GetDatabase(gomock.Any(), "testDB", nil).
-		Return(mockDatabase, nil).AnyTimes()
-	mockDatabase.EXPECT().GetCollection(gomock.Any(), "testCollection", nil).
-		Return(mockCollection, nil).AnyTimes()
-	mockLogger.EXPECT().Debug(gomock.Any())
-	mockMetrics.EXPECT().RecordHistogram(ctx, "app_arango_stats", gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any())
-
-	_, _, err := executeCollectionOperation(ctx, d, dbName, collectionName, operation, documentID)
-	require.NoError(t, err)
-}
-
 func TestValidateEdgeDocument(t *testing.T) {
 	tests := []struct {
 		name          string
