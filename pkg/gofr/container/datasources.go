@@ -187,6 +187,11 @@ type CassandraBatchWithContext interface {
 	ExecuteBatchCASWithCtx(ctx context.Context, name string, dest ...any) (bool, error)
 }
 
+// CassandraProvider extends CassandraWithContext with logger/metrics/tracer setup hooks.
+//
+// Deprecated: AddCassandra now accepts [CassandraWithContext] directly via duck-typed
+// instrumentation. The Provider shim is retained only for backwards compatibility and
+// will be removed in a future release — implement [CassandraWithContext] instead.
 type CassandraProvider interface {
 	CassandraWithContext
 
@@ -201,6 +206,11 @@ type Clickhouse interface {
 	HealthChecker
 }
 
+// ClickhouseProvider extends Clickhouse with logger/metrics/tracer setup hooks.
+//
+// Deprecated: AddClickhouse now accepts [Clickhouse] directly via duck-typed
+// instrumentation. The Provider shim is retained only for backwards compatibility and
+// will be removed in a future release — implement [Clickhouse] instead.
 type ClickhouseProvider interface {
 	Clickhouse
 
@@ -222,6 +232,11 @@ type OracleTx interface {
 	Rollback() error
 }
 
+// OracleProvider extends OracleDB with logger/metrics/tracer setup hooks.
+//
+// Deprecated: AddOracle now accepts [OracleDB] directly via duck-typed
+// instrumentation. The Provider shim is retained only for backwards compatibility and
+// will be removed in a future release — implement [OracleDB] instead.
 type OracleProvider interface {
 	OracleDB
 
@@ -292,6 +307,10 @@ type Transaction interface {
 
 // MongoProvider is an interface that extends Mongo with additional methods for logging, metrics, and connection management.
 // Which is used for initializing datasource.
+//
+// Deprecated: AddMongo now accepts [Mongo] directly via duck-typed
+// instrumentation. The Provider shim is retained only for backwards compatibility and
+// will be removed in a future release — implement [Mongo] instead.
 type MongoProvider interface {
 	Mongo
 
@@ -337,6 +356,10 @@ type SurrealDB interface {
 
 // SurrealBDProvider is an interface that extends SurrealDB with additional methods for logging, metrics, or connection management.
 // It is typically used for initializing and managing SurrealDB-based data sources.
+//
+// Deprecated: AddSurrealDB now accepts [SurrealDB] directly via duck-typed
+// instrumentation. The Provider shim is retained only for backwards compatibility and
+// will be removed in a future release — implement [SurrealDB] instead.
 type SurrealBDProvider interface {
 	SurrealDB
 
@@ -371,12 +394,22 @@ type KVStore interface {
 	HealthChecker
 }
 
+// KVStoreProvider extends KVStore with logger/metrics/tracer setup hooks.
+//
+// Deprecated: AddKVStore now accepts [KVStore] directly via duck-typed
+// instrumentation. The Provider shim is retained only for backwards compatibility and
+// will be removed in a future release — implement [KVStore] instead.
 type KVStoreProvider interface {
 	KVStore
 
 	provider
 }
 
+// PubSubProvider extends pubsub.Client with logger/metrics/tracer setup hooks.
+//
+// Deprecated: AddPubSub now accepts [pubsub.Client] directly via duck-typed
+// instrumentation. The Provider shim is retained only for backwards compatibility and
+// will be removed in a future release — implement [pubsub.Client] instead.
 type PubSubProvider interface {
 	pubsub.Client
 
@@ -398,6 +431,11 @@ type Solr interface {
 	HealthChecker
 }
 
+// SolrProvider extends Solr with logger/metrics/tracer setup hooks.
+//
+// Deprecated: AddSolr now accepts [Solr] directly via duck-typed
+// instrumentation. The Provider shim is retained only for backwards compatibility and
+// will be removed in a future release — implement [Solr] instead.
 type SolrProvider interface {
 	Solr
 
@@ -485,11 +523,20 @@ type Dgraph interface {
 }
 
 // DgraphProvider extends Dgraph with connection management capabilities.
+//
+// Deprecated: AddDgraph now accepts [Dgraph] directly via duck-typed
+// instrumentation. The Provider shim is retained only for backwards compatibility and
+// will be removed in a future release — implement [Dgraph] instead.
 type DgraphProvider interface {
 	Dgraph
 	provider
 }
 
+// OpenTSDBProvider extends OpenTSDB with logger/metrics/tracer setup hooks.
+//
+// Deprecated: AddOpenTSDB now accepts [OpenTSDB] directly via duck-typed
+// instrumentation. The Provider shim is retained only for backwards compatibility and
+// will be removed in a future release — implement [OpenTSDB] instead.
 type OpenTSDBProvider interface {
 	OpenTSDB
 	provider
@@ -629,6 +676,11 @@ type ScyllaDB interface {
 	HealthChecker
 }
 
+// ScyllaDBProvider extends ScyllaDB with logger/metrics/tracer setup hooks.
+//
+// Deprecated: AddScyllaDB now accepts [ScyllaDB] directly via duck-typed
+// instrumentation. The Provider shim is retained only for backwards compatibility and
+// will be removed in a future release — implement [ScyllaDB] instead.
 type ScyllaDBProvider interface {
 	ScyllaDB
 	provider
@@ -698,6 +750,10 @@ type ArangoDB interface {
 }
 
 // ArangoDBProvider is an interface that extends ArangoDB with additional methods for logging, metrics, and connection management.
+//
+// Deprecated: AddArangoDB now accepts [ArangoDB] directly via duck-typed
+// instrumentation. The Provider shim is retained only for backwards compatibility and
+// will be removed in a future release — implement [ArangoDB] instead.
 type ArangoDBProvider interface {
 	ArangoDB
 
@@ -738,6 +794,10 @@ type Elasticsearch interface {
 }
 
 // ElasticsearchProvider an interface that extends Elasticsearch with additional methods for logging, metrics, and connection management.
+//
+// Deprecated: AddElasticsearch now accepts [Elasticsearch] directly via duck-typed
+// instrumentation. The Provider shim is retained only for backwards compatibility and
+// will be removed in a future release — implement [Elasticsearch] instead.
 type ElasticsearchProvider interface {
 	Elasticsearch
 
@@ -780,6 +840,10 @@ type Couchbase interface {
 // CouchbaseProvider is an interface that extends Couchbase with additional methods
 // for logging, metrics, tracing, and connection management, aligning with other
 // data source providers in your package.
+//
+// Deprecated: AddCouchbase now accepts [Couchbase] directly via duck-typed
+// instrumentation. The Provider shim is retained only for backwards compatibility and
+// will be removed in a future release — implement [Couchbase] instead.
 type CouchbaseProvider interface {
 	Couchbase
 
@@ -832,6 +896,10 @@ type InfluxDB interface {
 }
 
 // InfluxDBProvider an interface that extends InfluxDB with additional methods for logging, metrics, and connection management.
+//
+// Deprecated: AddInfluxDB now accepts [InfluxDB] directly via duck-typed
+// instrumentation. The Provider shim is retained only for backwards compatibility and
+// will be removed in a future release — implement [InfluxDB] instead.
 type InfluxDBProvider interface {
 	InfluxDB
 
