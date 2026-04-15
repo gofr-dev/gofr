@@ -97,19 +97,21 @@ func (mg mongoMigrator) beginTransaction(c *container.Container) transactionData
 }
 
 func (mg mongoMigrator) commitMigration(c *container.Container, data transactionData) error {
-	migrationDoc := map[string]any{
-		"version":    data.MigrationNumber,
-		"method":     "UP",
-		"start_time": data.StartTime,
-		"duration":   time.Since(data.StartTime).Milliseconds(),
-	}
+	if data.UsedDatasources[dsMongo] {
+		migrationDoc := map[string]any{
+			"version":    data.MigrationNumber,
+			"method":     "UP",
+			"start_time": data.StartTime,
+			"duration":   time.Since(data.StartTime).Milliseconds(),
+		}
 
-	_, err := mg.Mongo.InsertOne(context.Background(), mongoMigrationCollection, migrationDoc)
-	if err != nil {
-		return err
-	}
+		_, err := mg.Mongo.InsertOne(context.Background(), mongoMigrationCollection, migrationDoc)
+		if err != nil {
+			return err
+		}
 
-	c.Debugf("Inserted record for migration %v in MongoDB gofr_migrations collection", data.MigrationNumber)
+		c.Debugf("Inserted record for migration %v in MongoDB gofr_migrations collection", data.MigrationNumber)
+	}
 
 	return mg.migrator.commitMigration(c, data)
 }
