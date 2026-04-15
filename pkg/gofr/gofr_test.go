@@ -1242,6 +1242,36 @@ func Test_Shutdown(t *testing.T) {
 	assert.Contains(t, logs, "Application shutdown complete", "Test_Shutdown Failed!")
 }
 
+func TestShutdown_StopsCron(t *testing.T) {
+	testutil.NewServerConfigs(t)
+
+	app := New()
+
+	// Track whether the cron goroutine has exited via the done channel.
+	jobRan := make(chan struct{}, 1)
+
+	app.AddCronJob("* * * * * *", "shutdown-test-job", func(_ *Context) {
+		select {
+		case jobRan <- struct{}{}:
+		default:
+		}
+	})
+
+	require.NotNil(t, app.cron, "cron should be initialized after AddCronJob")
+
+	doneCh := app.cron.done
+
+	err := app.Shutdown(t.Context())
+	require.NoError(t, err, "Shutdown should not return an error")
+
+	select {
+	case _, ok := <-doneCh:
+		assert.False(t, ok, "cron done channel should be closed after Shutdown")
+	case <-time.After(time.Second):
+		t.Fatal("cron done channel was not closed within timeout — goroutine leak")
+	}
+}
+
 func TestApp_SubscriberInitialize(t *testing.T) {
 	t.Run("subscriber is initialized", func(t *testing.T) {
 		testutil.NewServerConfigs(t)
