@@ -184,6 +184,13 @@ func TestStartSubscribeSpan_WithLinks(t *testing.T) {
 	require.Len(t, subSpan.Links, 1, "subscribe span should have one link")
 	assert.Equal(t, producerSpan.SpanContext().TraceID(), subSpan.Links[0].SpanContext.TraceID())
 	assert.Equal(t, producerSpan.SpanContext().SpanID(), subSpan.Links[0].SpanContext.SpanID())
+
+	// Subscribe span must also be a CHILD of the producer span: same trace ID
+	// and parent span ID matches the producer's span ID.
+	assert.Equal(t, producerSpan.SpanContext().TraceID(), subSpan.SpanContext.TraceID(),
+		"subscribe span should share the producer's trace ID")
+	assert.Equal(t, producerSpan.SpanContext().SpanID(), subSpan.Parent.SpanID(),
+		"subscribe span's parent should be the producer span")
 }
 
 func TestStartSubscribeSpan_NoLinks(t *testing.T) {

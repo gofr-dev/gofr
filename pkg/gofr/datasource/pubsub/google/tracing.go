@@ -112,11 +112,17 @@ func extractMessageAttrs(metaData any) map[string]string {
 	return nil
 }
 
-// startSubscribeSpan creates a new span for subscribing with links to the producer span.
-// If trace context exists in message attributes, creates a span linked to the producer.
-// Otherwise, creates an orphan span (new trace).
+// startSubscribeSpan creates a new span for subscribing.
+// If trace context exists in message attributes, the consumer span becomes a
+// child of the producer's span (same trace ID), AND a span link is attached
+// so OTel-aware tools can still model fan-out. Otherwise, creates an orphan span.
 func startSubscribeSpan(ctx context.Context, topic string, msgAttrs map[string]string) (context.Context, trace.Span) {
-	links := extractTraceLinks(msgAttrs)
+	// Extract producer's trace context from attributes and use it as the parent.
+	parentCtx := ctx
+	if len(msgAttrs) > 0 {
+		carrier := attributeCarrier(msgAttrs)
+		parentCtx = otel.GetTextMapPropagator().Extract(ctx, carrier)
+	}
 
 	opts := []trace.SpanStartOption{
 		trace.WithSpanKind(trace.SpanKindConsumer),
@@ -127,11 +133,11 @@ func startSubscribeSpan(ctx context.Context, topic string, msgAttrs map[string]s
 		),
 	}
 
-	if len(links) > 0 {
+	if links := extractTraceLinks(msgAttrs); len(links) > 0 {
 		opts = append(opts, trace.WithLinks(links...))
 	}
 
-	ctx, span := otel.GetTracerProvider().Tracer(tracerName).Start(ctx, "gcp-subscribe", opts...)
+	ctx, span := otel.GetTracerProvider().Tracer(tracerName).Start(parentCtx, "gcp-subscribe", opts...)
 
 	return ctx, span
 }
