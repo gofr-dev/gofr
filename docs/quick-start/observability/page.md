@@ -317,6 +317,10 @@ When a request enters your GoFr application, GoFr automatically generates a corr
 to the response headers. This correlation ID is then propagated to all downstream requests. This means that user can track
 a request as it travels through your distributed system by simply looking at the correlation ID in the request headers.
 
+**Pub/Sub Tracing:**
+
+Tracing automatically extends across pub/sub boundaries. Every `Publish` injects the active trace context into the outgoing message (Kafka headers, NATS headers, Google Pub/Sub / SQS attributes, etc.) and every `Subscribe` extracts it to start the consumer span as a child of the producer — so an `HTTP → publish → subscribe → publish → subscribe` flow shows up as one connected trace. See {% new-tab-link newtab=false title="Publisher Subscriber → Distributed Tracing" href="/docs/advanced-guide/using-publisher-subscriber#distributed-tracing" /%} for details.
+
 ### Configuration & Usage:
 
 GoFr has support for following trace-exporters:

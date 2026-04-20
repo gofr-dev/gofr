@@ -811,3 +811,39 @@ func order(ctx *gofr.Context) (any, error) {
 > #### Check out the following examples on how to publish/subscribe to given topics:
 > ##### [Subscribing Topics](https://github.com/gofr-dev/gofr/blob/main/examples/using-subscriber/main.go)
 > ##### [Publishing Topics](https://github.com/gofr-dev/gofr/blob/main/examples/using-publisher/main.go)
+
+## Distributed Tracing
+
+GoFr automatically traces every publish and subscribe call across all supported pub/sub backends — Kafka, NATS JetStream, Google Pub/Sub, Amazon SQS, MQTT, Redis Pub/Sub and Azure Event Hubs. **No user code is required**: as long as `TRACE_EXPORTER` is configured (see {% new-tab-link newtab=false title="Observability → Tracing" href="/docs/quick-start/observability#tracing" /%}), the framework wires everything in.
+
+### How it works
+
+When you call `ctx.GetPublisher().Publish(ctx, topic, msg)`, GoFr:
+
+1. Starts a span named `<backend>-publish` (for example `kafka-publish`) with `SpanKind=Producer` and attributes `messaging.system`, `messaging.destination.name`, `messaging.operation=publish`.
+2. Injects the current trace context into the outgoing message using the W3C Trace Context propagator. For Kafka this rides in message headers; for Google Pub/Sub and SQS in message attributes; for NATS in message headers; and so on.
+
+When the message is delivered to a subscriber registered with `app.Subscribe(topic, handler)`, GoFr:
+
+1. Extracts the producer's trace context from the incoming message.
+2. Starts a span named `<backend>-subscribe` with `SpanKind=Consumer`, **as a child of the producer's span**. This means the consumer span shares the same `TraceID` as the publisher and lists the publisher's span as its parent.
+3. Also attaches an OpenTelemetry **span link** to the producer span. The link preserves fan-out semantics — a single message may be consumed by multiple consumer groups — for tools that surface them (Jaeger, Tempo, etc.).
+
+The result is that an end-to-end flow such as `HTTP → publish → subscribe → publish → subscribe` shows up as **one connected trace** in any tracing UI, with the full waterfall visible:
+
+```
+[api-gateway          ] POST /order         (root)
+[api-gateway          ] kafka-publish       child of POST /order
+[order-service        ] kafka-subscribe     child of api-gateway's publish   [+1 link]
+[order-service        ] kafka-publish       child of order-service's subscribe
+[notification-service ] kafka-subscribe     child of order-service's publish [+1 link]
+```
+
+### Sampling and scale
+
+GoFr's tracer uses `ParentBased(TraceIDRatioBased(TRACER_RATIO))` (see `pkg/gofr/otel.go`). Because the consumer span inherits the producer's sampling decision, head-based sampling via `TRACER_RATIO` is consistent across the entire chain — if the producer is sampled out, every downstream consumer span is dropped at creation as well.
+
+For high-throughput pipelines, set `TRACER_RATIO` below `1.0` (for example `0.1` for 10% sampling) to keep trace volume manageable. For very long-lived async sagas (where one trace stays open for hours), prefer tail-based sampling at the OpenTelemetry Collector tier.
+
+> [!NOTE]
+> Distributed tracing for pub/sub is fully transparent — the existing examples in {% new-tab-link title="examples/using-publisher" href="https://github.com/gofr-dev/gofr/tree/main/examples/using-publisher" /%} and {% new-tab-link title="examples/using-subscriber" href="https://github.com/gofr-dev/gofr/tree/main/examples/using-subscriber" /%} already produce connected traces without any tracing-specific code.
