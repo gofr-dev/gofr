@@ -98,16 +98,25 @@ func startPublishSpan(ctx context.Context, tracer trace.Tracer, subject string) 
 }
 
 // startSubscribeSpan creates a new span for subscribing.
-// If trace context exists in message headers, the consumer span becomes a child
-// of the producer's span (same trace ID), AND a span link is attached so
-// OTel-aware tools can still model fan-out. Otherwise, creates an orphan span.
+// If a valid trace context is found in message headers, the consumer span
+// becomes a child of the producer's span (same trace ID), AND a span link is
+// attached so OTel-aware tools can still model fan-out. Otherwise, the span
+// starts under whatever span (if any) is already in ctx.
 func startSubscribeSpan(ctx context.Context, tracer trace.Tracer, topic string, headers nats.Header) (context.Context, trace.Span) {
-	// Extract producer's trace context from headers and use it as the parent.
+	// Extract producer's trace context once and reuse for both parent and link
+	// to avoid parsing the same carrier twice.
 	parentCtx := ctx
+
+	var links []trace.Link
 
 	if len(headers) > 0 {
 		carrier := headerCarrier(headers)
-		parentCtx = otel.GetTextMapPropagator().Extract(ctx, carrier)
+		extractedCtx := otel.GetTextMapPropagator().Extract(ctx, carrier)
+
+		if spanCtx := trace.SpanContextFromContext(extractedCtx); spanCtx.IsValid() {
+			parentCtx = extractedCtx
+			links = []trace.Link{{SpanContext: spanCtx}}
+		}
 	}
 
 	opts := []trace.SpanStartOption{
@@ -119,7 +128,7 @@ func startSubscribeSpan(ctx context.Context, tracer trace.Tracer, topic string, 
 		),
 	}
 
-	if links := extractTraceLinks(headers); len(links) > 0 {
+	if len(links) > 0 {
 		opts = append(opts, trace.WithLinks(links...))
 	}
 
