@@ -104,6 +104,7 @@ func startPublishSpan(ctx context.Context, tracer trace.Tracer, subject string) 
 func startSubscribeSpan(ctx context.Context, tracer trace.Tracer, topic string, headers nats.Header) (context.Context, trace.Span) {
 	// Extract producer's trace context from headers and use it as the parent.
 	parentCtx := ctx
+
 	if len(headers) > 0 {
 		carrier := headerCarrier(headers)
 		parentCtx = otel.GetTextMapPropagator().Extract(ctx, carrier)

@@ -119,6 +119,7 @@ func extractMessageAttrs(metaData any) map[string]string {
 func startSubscribeSpan(ctx context.Context, topic string, msgAttrs map[string]string) (context.Context, trace.Span) {
 	// Extract producer's trace context from attributes and use it as the parent.
 	parentCtx := ctx
+
 	if len(msgAttrs) > 0 {
 		carrier := attributeCarrier(msgAttrs)
 		parentCtx = otel.GetTextMapPropagator().Extract(ctx, carrier)
