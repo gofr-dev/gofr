@@ -8,7 +8,7 @@ require (
 	go.uber.org/mock v0.6.0
 	gofr.dev v1.56.1
 	golang.org/x/oauth2 v0.36.0
-	google.golang.org/api v0.275.0
+	google.golang.org/api v0.276.0
 )
 
 require (
