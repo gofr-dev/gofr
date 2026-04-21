@@ -34,27 +34,40 @@ type SSEStream struct {
 // The function receives an SSEStream to write events.
 type SSEFunc func(stream *SSEStream) error
 
-// SSEResponse creates an SSE response that can be returned from a handler.
+// SSE represents a Server-Sent Events response.
+// Return this struct from a handler to stream events to the client.
 // A heartbeat comment is automatically sent every 15s to keep the connection
 // alive through proxies with idle timeouts.
-//
-// SSE handlers should return near-instantly (SSEResponse is just struct creation).
-// The long-lived streaming callback runs later inside Respond().
 //
 // Example:
 //
 //	app.GET("/events", func(c *gofr.Context) (any, error) {
-//	    return gofr.SSEResponse(func(stream *gofr.SSEStream) error {
-//	        for i := 0; i < 10; i++ {
-//	            if err := stream.SendEvent("counter", i); err != nil {
-//	                return err
+//	    return gofr.SSE{
+//	        Callback: func(stream *gofr.SSEStream) error {
+//	            for i := 0; i < 10; i++ {
+//	                if err := stream.SendEvent("counter", i); err != nil {
+//	                    return err
+//	                }
+//	                time.Sleep(time.Second)
 //	            }
-//	            time.Sleep(time.Second)
-//	        }
-//	        return nil
-//	    }), nil
+//	            return nil
+//	        },
+//	    }, nil
 //	})
-func SSEResponse(callback SSEFunc) response.SSE {
+type SSE struct {
+	Callback SSEFunc
+}
+
+// toResponseSSE converts the user-facing SSE struct into the internal response.SSE
+// type understood by the responder. It wraps the callback with SSEStream creation
+// and heartbeat management.
+func (s SSE) toResponseSSE() response.SSE {
+	if s.Callback == nil {
+		return response.SSE{Callback: nil}
+	}
+
+	cb := s.Callback
+
 	return response.SSE{
 		Callback: func(w http.ResponseWriter, rc *http.ResponseController) error {
 			stream := &SSEStream{w: w, rc: rc}
@@ -64,7 +77,7 @@ func SSEResponse(callback SSEFunc) response.SSE {
 
 			defer close(done)
 
-			return callback(stream)
+			return cb(stream)
 		},
 	}
 }

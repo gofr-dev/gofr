@@ -109,10 +109,11 @@ func (h handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// SSE streams are long-lived; bypass request timeout.
-	// SSEResponse() is instant struct creation, so done always fires before timeout
+	// SSE{} is instant struct creation, so done always fires before timeout
 	// for any practical timeout value. If timeout wins, result is nil and this is a no-op.
-	if _, ok := result.(response.SSE); ok {
+	if sseResp, ok := result.(SSE); ok {
 		c.Context = r.Context()
+		result = sseResp.toResponseSSE()
 	}
 
 	c.responder.Respond(result, err)

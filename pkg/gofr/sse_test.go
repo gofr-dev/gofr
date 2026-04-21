@@ -333,15 +333,17 @@ func TestSSEResponse_Integration(t *testing.T) {
 	})
 
 	app.GET("/events", func(_ *Context) (any, error) {
-		return SSEResponse(func(stream *SSEStream) error {
-			for i := 0; i < 3; i++ {
-				if err := stream.SendData(map[string]int{"count": i}); err != nil {
-					return err
+		return SSE{
+			Callback: func(stream *SSEStream) error {
+				for i := 0; i < 3; i++ {
+					if err := stream.SendData(map[string]int{"count": i}); err != nil {
+						return err
+					}
 				}
-			}
 
-			return nil
-		}), nil
+				return nil
+			},
+		}, nil
 	})
 
 	go app.Run()
@@ -399,15 +401,17 @@ func TestSSEResponse_Integration_ClientDisconnect(t *testing.T) {
 	handlerExited := make(chan struct{})
 
 	app.GET("/stream", func(c *Context) (any, error) {
-		return SSEResponse(func(stream *SSEStream) error {
-			defer close(handlerExited)
+		return SSE{
+			Callback: func(stream *SSEStream) error {
+				defer close(handlerExited)
 
-			_ = stream.SendData("connected")
+				_ = stream.SendData("connected")
 
-			<-c.Context.Done()
+				<-c.Context.Done()
 
-			return nil
-		}), nil
+				return nil
+			},
+		}, nil
 	})
 
 	go app.Run()
@@ -463,11 +467,15 @@ func TestSSEResponse_CallbackError(t *testing.T) {
 	w := newFlushRecorder()
 	rc := http.NewResponseController(w)
 
-	sse := SSEResponse(func(_ *SSEStream) error {
-		return errSSEStreamFailed
-	})
+	sse := SSE{
+		Callback: func(_ *SSEStream) error {
+			return errSSEStreamFailed
+		},
+	}
 
-	// Call the callback directly, simulating what the responder does.
-	err := sse.Callback(w, rc)
+	// Call the internal conversion and then the callback directly,
+	// simulating what the handler + responder does.
+	respSSE := sse.toResponseSSE()
+	err := respSSE.Callback(w, rc)
 	assert.ErrorIs(t, err, errSSEStreamFailed)
 }
