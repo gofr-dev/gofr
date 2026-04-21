@@ -55,34 +55,6 @@ func injectTraceContext(ctx context.Context, attrs map[string]types.MessageAttri
 	return attrs
 }
 
-// extractTraceLinks extracts the trace context from SQS message attributes
-// and returns span links to the producer span.
-// If no trace context is found, returns nil (creating an orphan span).
-func extractTraceLinks(attrs map[string]types.MessageAttributeValue) []trace.Link {
-	if len(attrs) == 0 {
-		return nil
-	}
-
-	carrier := attributeCarrier(attrs)
-
-	// Extract the context from attributes
-	extractedCtx := otel.GetTextMapPropagator().Extract(context.Background(), carrier)
-
-	// Get span context from extracted context
-	spanCtx := trace.SpanContextFromContext(extractedCtx)
-
-	// If valid span context exists, create a link to it
-	if spanCtx.IsValid() {
-		return []trace.Link{
-			{
-				SpanContext: spanCtx,
-			},
-		}
-	}
-
-	return nil
-}
-
 // startPublishSpan creates a new span for publishing with trace context injection.
 // Returns the updated context, the span, and message attributes with injected trace context.
 func startPublishSpan(ctx context.Context, topic string) (context.Context, trace.Span, map[string]types.MessageAttributeValue) {

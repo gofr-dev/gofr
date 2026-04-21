@@ -92,35 +92,6 @@ func TestInjectTraceContext_PreservesExistingHeaders(t *testing.T) {
 	assert.NotEmpty(t, traceparent, "traceparent should be injected alongside existing headers")
 }
 
-func TestExtractTraceLinks(t *testing.T) {
-	_, tp := setupOTel(t)
-
-	ctx, producerSpan := tp.Tracer("test").Start(context.Background(), "producer-span")
-	headers := injectTraceContext(ctx, nil)
-
-	producerSpan.End()
-
-	links := extractTraceLinks(headers)
-
-	require.Len(t, links, 1, "should have one link")
-	assert.Equal(t, producerSpan.SpanContext().TraceID(), links[0].SpanContext.TraceID())
-	assert.Equal(t, producerSpan.SpanContext().SpanID(), links[0].SpanContext.SpanID())
-}
-
-func TestExtractTraceLinks_NoHeaders(t *testing.T) {
-	setupOTel(t)
-
-	links := extractTraceLinks(nil)
-	assert.Nil(t, links, "should return nil for nil headers")
-}
-
-func TestExtractTraceLinks_EmptyHeaders(t *testing.T) {
-	setupOTel(t)
-
-	links := extractTraceLinks(make(nats.Header))
-	assert.Nil(t, links, "should return nil for empty headers")
-}
-
 func TestStartPublishSpan(t *testing.T) {
 	_, tp := setupOTel(t)
 
@@ -171,6 +142,11 @@ func TestStartSubscribeSpan_WithLinks(t *testing.T) {
 		"subscribe span should share the producer's trace ID")
 	assert.Equal(t, producerSpan.SpanContext().SpanID(), subSpan.Parent.SpanID(),
 		"subscribe span's parent should be the producer span")
+
+	// Subscribe span must inherit the producer's sampling decision via ParentBased
+	// — without this, head-based sampling (TRACER_RATIO) would drop halves of a trace.
+	assert.Equal(t, producerSpan.SpanContext().TraceFlags(), subSpan.SpanContext.TraceFlags(),
+		"subscribe span should inherit the producer's trace flags")
 }
 
 func TestStartSubscribeSpan_NoLinks(t *testing.T) {
@@ -185,4 +161,23 @@ func TestStartSubscribeSpan_NoLinks(t *testing.T) {
 	require.Len(t, spans, 1)
 
 	assert.Empty(t, spans[0].Links, "orphan span should have no links")
+}
+
+func TestStartSubscribeSpan_InvalidTraceparent(t *testing.T) {
+	// Non-empty headers with a malformed traceparent must not produce a parent
+	// or a link — the code falls back to an orphan span.
+	exporter, tp := setupOTel(t)
+
+	tracer := tp.Tracer(tracerName)
+
+	headers := nats.Header{}
+	headers.Set("traceparent", "not-a-valid-traceparent")
+
+	_, subscribeSpan := startSubscribeSpan(context.Background(), tracer, "test-subject", headers)
+	subscribeSpan.End()
+
+	spans := exporter.GetSpans()
+	require.Len(t, spans, 1)
+	assert.Empty(t, spans[0].Links, "invalid traceparent should produce no link")
+	assert.False(t, spans[0].Parent.IsValid(), "invalid traceparent should produce no parent")
 }

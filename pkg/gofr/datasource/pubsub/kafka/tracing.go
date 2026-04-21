@@ -58,31 +58,6 @@ func injectTraceContext(ctx context.Context, headers []kafka.Header) []kafka.Hea
 	return carrier
 }
 
-// extractTraceLinks extracts the trace context from Kafka message headers
-// and returns span links to the producer span.
-// If no trace context is found, returns empty links (creating an orphan span).
-func extractTraceLinks(headers []kafka.Header) []trace.Link {
-	carrier := headerCarrier(headers)
-
-	// Extract the context from headers
-	extractedCtx := otel.GetTextMapPropagator().Extract(context.Background(), &carrier)
-
-	// Get span context from extracted context
-	spanCtx := trace.SpanContextFromContext(extractedCtx)
-
-	// If valid span context exists, create a link to it
-	if spanCtx.IsValid() {
-		return []trace.Link{
-			{
-				SpanContext: spanCtx,
-			},
-		}
-	}
-
-	// No valid trace context found, return empty links (orphan span)
-	return nil
-}
-
 // startPublishSpan creates a new span for publishing with trace context injection.
 // Returns the updated context for logging and the headers with injected trace context.
 func startPublishSpan(ctx context.Context, topic string) (context.Context, trace.Span, []kafka.Header) {

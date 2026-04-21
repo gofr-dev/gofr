@@ -67,50 +67,6 @@ func TestInjectTraceContext(t *testing.T) {
 	assert.Contains(t, traceparent, span.SpanContext().TraceID().String())
 }
 
-func TestExtractTraceLinks(t *testing.T) {
-	// Setup tracer with W3C propagator
-	exporter := tracetest.NewInMemoryExporter()
-	tp := sdktrace.NewTracerProvider(sdktrace.WithSyncer(exporter))
-	otel.SetTracerProvider(tp)
-	otel.SetTextMapPropagator(propagation.TraceContext{})
-
-	defer func() {
-		_ = tp.Shutdown(context.Background())
-	}()
-
-	// Create a producer span and inject context
-	ctx, producerSpan := tp.Tracer("test").Start(context.Background(), "producer-span")
-	headers := injectTraceContext(ctx, nil)
-
-	producerSpan.End()
-
-	// Extract links from headers
-	links := extractTraceLinks(headers)
-
-	// Verify link to producer span
-	require.Len(t, links, 1, "should have one link")
-	assert.Equal(t, producerSpan.SpanContext().TraceID(), links[0].SpanContext.TraceID())
-	assert.Equal(t, producerSpan.SpanContext().SpanID(), links[0].SpanContext.SpanID())
-}
-
-func TestExtractTraceLinks_NoHeaders(t *testing.T) {
-	// Setup tracer
-	exporter := tracetest.NewInMemoryExporter()
-	tp := sdktrace.NewTracerProvider(sdktrace.WithSyncer(exporter))
-	otel.SetTracerProvider(tp)
-	otel.SetTextMapPropagator(propagation.TraceContext{})
-
-	defer func() {
-		_ = tp.Shutdown(context.Background())
-	}()
-
-	// Extract links from empty headers
-	links := extractTraceLinks(nil)
-
-	// Should return nil (orphan span)
-	assert.Nil(t, links, "should return nil for empty headers")
-}
-
 func TestStartPublishSpan(t *testing.T) {
 	// Setup tracer
 	exporter := tracetest.NewInMemoryExporter()
@@ -191,6 +147,11 @@ func TestStartSubscribeSpan_WithLinks(t *testing.T) {
 		"subscribe span should share the producer's trace ID")
 	assert.Equal(t, producerSpan.SpanContext().SpanID(), subSpan.Parent.SpanID(),
 		"subscribe span's parent should be the producer span")
+
+	// Subscribe span must inherit the producer's sampling decision via ParentBased
+	// — without this, head-based sampling (TRACER_RATIO) would drop halves of a trace.
+	assert.Equal(t, producerSpan.SpanContext().TraceFlags(), subSpan.SpanContext.TraceFlags(),
+		"subscribe span should inherit the producer's trace flags")
 }
 
 func TestStartSubscribeSpan_NoLinks(t *testing.T) {
@@ -214,6 +175,29 @@ func TestStartSubscribeSpan_NoLinks(t *testing.T) {
 
 	// Verify no links
 	assert.Empty(t, spans[0].Links, "orphan span should have no links")
+}
+
+func TestStartSubscribeSpan_InvalidTraceparent(t *testing.T) {
+	// Non-empty headers with a malformed traceparent must not produce a parent
+	// or a link — the code falls back to an orphan span.
+	exporter := tracetest.NewInMemoryExporter()
+	tp := sdktrace.NewTracerProvider(sdktrace.WithSyncer(exporter))
+	otel.SetTracerProvider(tp)
+	otel.SetTextMapPropagator(propagation.TraceContext{})
+
+	defer func() {
+		_ = tp.Shutdown(context.Background())
+	}()
+
+	headers := []kafka.Header{{Key: "traceparent", Value: []byte("not-a-valid-traceparent")}}
+
+	_, subscribeSpan := startSubscribeSpan(context.Background(), "test-topic", headers)
+	subscribeSpan.End()
+
+	spans := exporter.GetSpans()
+	require.Len(t, spans, 1)
+	assert.Empty(t, spans[0].Links, "invalid traceparent should produce no link")
+	assert.False(t, spans[0].Parent.IsValid(), "invalid traceparent should produce no parent")
 }
 
 func TestHeaderCarrier_ConvertFromKafkaHeaders(t *testing.T) {

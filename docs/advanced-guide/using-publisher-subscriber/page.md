@@ -814,7 +814,7 @@ func order(ctx *gofr.Context) (any, error) {
 
 ## Distributed Tracing
 
-GoFr automatically traces every publish and subscribe call across all supported pub/sub backends — Kafka, NATS JetStream, Google Pub/Sub, Amazon SQS, MQTT, Redis Pub/Sub and Azure Event Hubs. **No user code is required**: as long as `TRACE_EXPORTER` is configured (see {% new-tab-link newtab=false title="Observability → Tracing" href="/docs/quick-start/observability#tracing" /%}), the framework wires everything in.
+GoFr automatically traces every publish and subscribe call across Kafka, NATS JetStream, Google Pub/Sub, and Amazon SQS. **No user code is required**: as long as `TRACE_EXPORTER` is configured (see {% new-tab-link newtab=false title="Observability → Tracing" href="/docs/quick-start/observability#tracing" /%}), the framework wires everything in.
 
 ### How it works
 
