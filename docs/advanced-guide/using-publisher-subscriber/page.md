@@ -186,6 +186,7 @@ KAFKA_TLS_CERT_FILE=/path/to/cert.pem
 KAFKA_TLS_KEY_FILE=/path/to/key.pem
 KAFKA_TLS_CA_CERT_FILE=/path/to/ca.pem
 KAFKA_TLS_INSECURE_SKIP_VERIFY=true
+```
 
 #### Docker setup
 ```shell
