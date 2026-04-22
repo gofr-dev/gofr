@@ -100,58 +100,6 @@ func TestInjectTraceContext_PreservesExistingAttributes(t *testing.T) {
 	assert.True(t, ok, "traceparent should be injected alongside existing attributes")
 }
 
-func TestExtractTraceLinks(t *testing.T) {
-	exporter := tracetest.NewInMemoryExporter()
-	tp := sdktrace.NewTracerProvider(sdktrace.WithSyncer(exporter))
-	otel.SetTracerProvider(tp)
-	otel.SetTextMapPropagator(propagation.TraceContext{})
-
-	defer func() {
-		_ = tp.Shutdown(context.Background())
-	}()
-
-	// Create a producer span and inject context
-	ctx, producerSpan := tp.Tracer("test").Start(context.Background(), "producer-span")
-	attrs := injectTraceContext(ctx, nil)
-
-	producerSpan.End()
-
-	// Extract links from attributes
-	links := extractTraceLinks(attrs)
-
-	require.Len(t, links, 1, "should have one link")
-	assert.Equal(t, producerSpan.SpanContext().TraceID(), links[0].SpanContext.TraceID())
-	assert.Equal(t, producerSpan.SpanContext().SpanID(), links[0].SpanContext.SpanID())
-}
-
-func TestExtractTraceLinks_NoAttributes(t *testing.T) {
-	exporter := tracetest.NewInMemoryExporter()
-	tp := sdktrace.NewTracerProvider(sdktrace.WithSyncer(exporter))
-	otel.SetTracerProvider(tp)
-	otel.SetTextMapPropagator(propagation.TraceContext{})
-
-	defer func() {
-		_ = tp.Shutdown(context.Background())
-	}()
-
-	links := extractTraceLinks(nil)
-	assert.Nil(t, links, "should return nil for nil attributes")
-}
-
-func TestExtractTraceLinks_EmptyAttributes(t *testing.T) {
-	exporter := tracetest.NewInMemoryExporter()
-	tp := sdktrace.NewTracerProvider(sdktrace.WithSyncer(exporter))
-	otel.SetTracerProvider(tp)
-	otel.SetTextMapPropagator(propagation.TraceContext{})
-
-	defer func() {
-		_ = tp.Shutdown(context.Background())
-	}()
-
-	links := extractTraceLinks(make(map[string]types.MessageAttributeValue))
-	assert.Nil(t, links, "should return nil for empty attributes")
-}
-
 func TestStartPublishSpan(t *testing.T) {
 	exporter := tracetest.NewInMemoryExporter()
 	tp := sdktrace.NewTracerProvider(sdktrace.WithSyncer(exporter))
@@ -209,6 +157,18 @@ func TestStartSubscribeSpan_WithLinks(t *testing.T) {
 	require.Len(t, subSpan.Links, 1, "subscribe span should have one link")
 	assert.Equal(t, producerSpan.SpanContext().TraceID(), subSpan.Links[0].SpanContext.TraceID())
 	assert.Equal(t, producerSpan.SpanContext().SpanID(), subSpan.Links[0].SpanContext.SpanID())
+
+	// Subscribe span must also be a CHILD of the producer span: same trace ID
+	// and parent span ID matches the producer's span ID.
+	assert.Equal(t, producerSpan.SpanContext().TraceID(), subSpan.SpanContext.TraceID(),
+		"subscribe span should share the producer's trace ID")
+	assert.Equal(t, producerSpan.SpanContext().SpanID(), subSpan.Parent.SpanID(),
+		"subscribe span's parent should be the producer span")
+
+	// Subscribe span must inherit the producer's sampling decision via ParentBased
+	// — without this, head-based sampling (TRACER_RATIO) would drop halves of a trace.
+	assert.Equal(t, producerSpan.SpanContext().TraceFlags(), subSpan.SpanContext.TraceFlags(),
+		"subscribe span should inherit the producer's trace flags")
 }
 
 func TestStartSubscribeSpan_NoLinks(t *testing.T) {
@@ -228,4 +188,32 @@ func TestStartSubscribeSpan_NoLinks(t *testing.T) {
 	require.Len(t, spans, 1)
 
 	assert.Empty(t, spans[0].Links, "orphan span should have no links")
+}
+
+func TestStartSubscribeSpan_InvalidTraceparent(t *testing.T) {
+	// Non-empty attrs with a malformed traceparent must not produce a parent
+	// or a link — the code falls back to an orphan span.
+	exporter := tracetest.NewInMemoryExporter()
+	tp := sdktrace.NewTracerProvider(sdktrace.WithSyncer(exporter))
+	otel.SetTracerProvider(tp)
+	otel.SetTextMapPropagator(propagation.TraceContext{})
+
+	defer func() {
+		_ = tp.Shutdown(context.Background())
+	}()
+
+	attrs := map[string]types.MessageAttributeValue{
+		"traceparent": {
+			DataType:    aws.String("String"),
+			StringValue: aws.String("not-a-valid-traceparent"),
+		},
+	}
+
+	_, subscribeSpan := startSubscribeSpan(context.Background(), "test-queue", attrs)
+	subscribeSpan.End()
+
+	spans := exporter.GetSpans()
+	require.Len(t, spans, 1)
+	assert.Empty(t, spans[0].Links, "invalid traceparent should produce no link")
+	assert.False(t, spans[0].Parent.IsValid(), "invalid traceparent should produce no parent")
 }
