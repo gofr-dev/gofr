@@ -27,6 +27,13 @@ otel.GetTextMapPropagator().Inject(ctx, carrier)
 for k,v:=range carrier {
 event.Properties[k]=v
 }
+//Extract trace context from recieved event
+carrier := propogation.MapCarrier{}
+for k,v:=range event.Properties {
+if s, ok := v.(string); ok {
+carrier[k] = s
+}
+}
 func TestConnect(t *testing.T) {
 	ctrl := gomock.NewController(t)
 
