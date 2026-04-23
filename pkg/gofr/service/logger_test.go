@@ -11,7 +11,8 @@ func TestLog_PrettyPrint(t *testing.T) {
 	w := new(bytes.Buffer)
 
 	l := &Log{
-		ResponseTime:  100,
+		ResponseTime: 100,
+		ResponseUnit: "µs",
 		CorrelationID: "abc-test-correlation-id",
 		ResponseCode:  200,
 		HTTPMethod:    "GET",
@@ -29,7 +30,8 @@ func TestErrorLog_PrettyPrint(t *testing.T) {
 
 	l := &ErrorLog{
 		Log: &Log{
-			ResponseTime:  100,
+			ResponseTime: 100,
+			ResponseUnit: "µs",
 			CorrelationID: "abc-test-correlation-id",
 			ResponseCode:  200,
 			HTTPMethod:    "GET",
