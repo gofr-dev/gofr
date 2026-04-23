@@ -1180,6 +1180,27 @@ func TestStaticHandlerInvalidFilePath(t *testing.T) {
 	assert.Contains(t, logs, "error in registering '/gofrTest' static endpoint")
 }
 
+func TestAddStaticFilesGetWdError(t *testing.T) {
+	logs := testutil.StdoutOutputForFunc(func() {
+		testutil.NewServerConfigs(t)
+
+		app := New()
+
+		tmpDir := t.TempDir()
+		original, _ := os.Getwd()
+
+		_ = os.Chdir(tmpDir)
+		_ = os.Remove(tmpDir)
+
+		app.AddStaticFiles("gofrTest", "./somepath")
+
+		_ = os.Chdir(original)
+	})
+
+	assert.Contains(t, logs, "could not determine current working directory")
+}
+
+
 func TestNewSetsHTTPRegisteredWhenStaticDirExists(t *testing.T) {
 	testutil.NewServerConfigs(t)
 

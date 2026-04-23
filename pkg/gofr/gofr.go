@@ -401,10 +401,10 @@ func (a *App) AddStaticFiles(endpoint, filePath string) {
 	if strings.HasPrefix(filePath, "./") {
 		currentWorkingDir, err := os.Getwd()
 		if err != nil {
-			a.container.Logger.Errorf("error getting current working directory: %v", err)
-			return
+			a.container.Logger.Warnf("could not determine current working directory: %v", err)
+		} else {
+			filePath = filepath.Join(currentWorkingDir, filePath)
 		}
-		filePath = filepath.Join(currentWorkingDir, filePath)
 	}
 
 	endpoint = "/" + strings.TrimPrefix(endpoint, "/")
