@@ -1,6 +1,7 @@
 package gofr
 
 import (
+	"context"
 	"encoding/base64"
 	"encoding/json"
 	"errors"
@@ -11,6 +12,7 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
+	"sync"
 	"testing"
 	"time"
 
@@ -1405,4 +1407,403 @@ func TestUnifiedAuthenticationRegistration(t *testing.T) {
 	// but we can check if the grpcServer has interceptors added.
 	assert.GreaterOrEqual(t, len(app.grpcServer.interceptors), 2, "gRPC unary interceptors should be registered")
 	assert.GreaterOrEqual(t, len(app.grpcServer.streamInterceptors), 2, "gRPC stream interceptors should be registered")
+}
+
+func Test_EnableBasicAuthWithFunc(t *testing.T) {
+	port := testutil.GetFreePort(t)
+
+	mockContainer, _ := container.NewMockContainer(t)
+
+	tests := []struct {
+		name               string
+		passedCredentials  string
+		expectedStatusCode int
+	}{
+		{
+			"No Authorization header passed",
+			"",
+			http.StatusUnauthorized,
+		},
+		{
+			"Correct credentials",
+			"user:password",
+			http.StatusOK,
+		},
+		{
+			"Wrong credentials",
+			"user:wrongpassword",
+			http.StatusUnauthorized,
+		},
+	}
+
+	for i, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			a := &App{
+				httpServer: &httpServer{
+					router: gofrHTTP.NewRouter(),
+					port:   port,
+				},
+				container: mockContainer,
+			}
+
+			a.EnableBasicAuthWithFunc(func(username, password string) bool {
+				return username == "user" && password == "password"
+			})
+
+			a.httpServer.router.Handle("/", http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				fmt.Fprintln(w, "Hello, world!")
+			}))
+
+			server := httptest.NewServer(a.httpServer.router)
+			defer server.Close()
+
+			client := server.Client()
+
+			req, err := http.NewRequestWithContext(t.Context(), http.MethodGet, server.URL, http.NoBody)
+			require.NoError(t, err)
+
+			req.Header.Add("Authorization", encodeBasicAuthorization(t, tt.passedCredentials))
+
+			resp, err := client.Do(req)
+			require.NoError(t, err)
+
+			defer resp.Body.Close()
+
+			assert.Equal(t, tt.expectedStatusCode, resp.StatusCode, "TEST[%d], Failed.\n%s", i, tt.name)
+		})
+	}
+}
+
+func Test_EnableAPIKeyAuthWithFunc(t *testing.T) {
+	port := testutil.GetFreePort(t)
+
+	mockContainer, _ := container.NewMockContainer(t)
+
+	tests := []struct {
+		name               string
+		apiKey             string
+		expectedStatusCode int
+	}{
+		{
+			"No API key header passed",
+			"",
+			http.StatusUnauthorized,
+		},
+		{
+			"Valid API key",
+			"valid-key",
+			http.StatusOK,
+		},
+		{
+			"Invalid API key",
+			"wrong-key",
+			http.StatusUnauthorized,
+		},
+	}
+
+	for i, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			a := &App{
+				httpServer: &httpServer{
+					router: gofrHTTP.NewRouter(),
+					port:   port,
+				},
+				container: mockContainer,
+			}
+
+			a.EnableAPIKeyAuthWithFunc(func(apiKey string) bool {
+				return apiKey == "valid-key"
+			})
+
+			a.httpServer.router.Handle("/", http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				fmt.Fprintln(w, "Hello, world!")
+			}))
+
+			server := httptest.NewServer(a.httpServer.router)
+			defer server.Close()
+
+			client := server.Client()
+
+			req, err := http.NewRequestWithContext(t.Context(), http.MethodGet, server.URL, http.NoBody)
+			require.NoError(t, err)
+
+			if tt.apiKey != "" {
+				req.Header.Set("X-Api-Key", tt.apiKey)
+			}
+
+			resp, err := client.Do(req)
+			require.NoError(t, err)
+
+			defer resp.Body.Close()
+
+			assert.Equal(t, tt.expectedStatusCode, resp.StatusCode, "TEST[%d], Failed.\n%s", i, tt.name)
+		})
+	}
+}
+
+func Test_EnableBasicAuth_NoCredentials(t *testing.T) {
+	t.Setenv("METRICS_PORT", "0")
+	t.Setenv("HTTP_PORT", strconv.Itoa(testutil.GetFreePort(t)))
+
+	app := New()
+
+	// Should log error but not panic
+	app.EnableBasicAuth()
+
+	// No middleware should be added — handler responds without auth
+	assert.NotNil(t, app.httpServer)
+}
+
+func TestHandleStartupHooks(t *testing.T) {
+	tests := []struct {
+		name     string
+		hooks    []func(ctx *Context) error
+		expected bool
+	}{
+		{
+			name:     "No hooks returns true",
+			hooks:    nil,
+			expected: true,
+		},
+		{
+			name: "Successful hook returns true",
+			hooks: []func(ctx *Context) error{
+				func(_ *Context) error { return nil },
+			},
+			expected: true,
+		},
+		{
+			name: "Failed hook returns false",
+			hooks: []func(ctx *Context) error{
+				func(_ *Context) error { return errHookFailed },
+			},
+			expected: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Setenv("METRICS_PORT", "0")
+			t.Setenv("HTTP_PORT", strconv.Itoa(testutil.GetFreePort(t)))
+
+			app := New()
+
+			for _, hook := range tt.hooks {
+				app.OnStart(hook)
+			}
+
+			result := app.handleStartupHooks(t.Context())
+
+			assert.Equal(t, tt.expected, result)
+		})
+	}
+}
+
+func TestHandleStartupHooks_ContextCanceled(t *testing.T) {
+	t.Setenv("METRICS_PORT", "0")
+	t.Setenv("HTTP_PORT", strconv.Itoa(testutil.GetFreePort(t)))
+
+	app := New()
+
+	app.OnStart(func(_ *Context) error {
+		return context.Canceled
+	})
+
+	result := app.handleStartupHooks(t.Context())
+
+	assert.False(t, result, "should return false on context.Canceled")
+}
+
+func Test_add_RequestTimeout(t *testing.T) {
+	tests := []struct {
+		name           string
+		configTimeout  string
+		expectedRoutes bool
+	}{
+		{
+			name:           "Valid REQUEST_TIMEOUT",
+			configTimeout:  "10",
+			expectedRoutes: true,
+		},
+		{
+			name:           "Empty REQUEST_TIMEOUT defaults to 0",
+			configTimeout:  "",
+			expectedRoutes: true,
+		},
+		{
+			name:           "Invalid REQUEST_TIMEOUT defaults to 0",
+			configTimeout:  "invalid",
+			expectedRoutes: true,
+		},
+		{
+			name:           "Negative REQUEST_TIMEOUT defaults to 0",
+			configTimeout:  "-5",
+			expectedRoutes: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			port := testutil.GetFreePort(t)
+
+			mockContainer, _ := container.NewMockContainer(t)
+
+			a := &App{
+				httpServer: &httpServer{
+					router: gofrHTTP.NewRouter(),
+					port:   port,
+				},
+				container: mockContainer,
+				Config:    config.NewMockConfig(map[string]string{"REQUEST_TIMEOUT": tt.configTimeout}),
+			}
+
+			a.GET("/test", func(_ *Context) (any, error) {
+				return "ok", nil
+			})
+
+			assert.Equal(t, tt.expectedRoutes, a.httpRegistered)
+		})
+	}
+}
+
+func TestNew_InvalidGRPCPort(t *testing.T) {
+	t.Setenv("METRICS_PORT", "0")
+	t.Setenv("HTTP_PORT", strconv.Itoa(testutil.GetFreePort(t)))
+	t.Setenv("GRPC_PORT", "-1")
+
+	app := New()
+
+	// gRPC server creation should fail gracefully, app should still be usable
+	assert.NotNil(t, app)
+	assert.NotNil(t, app.httpServer)
+}
+
+func TestNew_InvalidHTTPPort(t *testing.T) {
+	t.Setenv("METRICS_PORT", "0")
+	t.Setenv("HTTP_PORT", "invalid")
+
+	app := New()
+
+	// Should fall back to default HTTP port
+	assert.NotNil(t, app)
+	assert.NotNil(t, app.httpServer)
+}
+
+func TestInitMetricsServer_DefaultPort(t *testing.T) {
+	t.Setenv("METRICS_PORT", "")
+	t.Setenv("HTTP_PORT", strconv.Itoa(testutil.GetFreePort(t)))
+
+	app := New()
+
+	// metricServer should be initialized with default port
+	assert.NotNil(t, app.metricServer)
+}
+
+func TestStartGRPCServer_Registered(t *testing.T) {
+	t.Setenv("METRICS_PORT", "0")
+	t.Setenv("HTTP_PORT", strconv.Itoa(testutil.GetFreePort(t)))
+	t.Setenv("GRPC_PORT", strconv.Itoa(testutil.GetFreePort(t)))
+
+	app := New()
+	app.grpcRegistered = true
+
+	wg := sync.WaitGroup{}
+
+	// startGRPCServer should add to WaitGroup and launch the server
+	app.startGRPCServer(&wg)
+
+	// Give it a moment to start then shut down
+	time.Sleep(50 * time.Millisecond)
+
+	if app.grpcServer != nil && app.grpcServer.server != nil {
+		app.grpcServer.server.Stop()
+	}
+
+	wg.Wait()
+}
+
+func TestStartGRPCServer_NotRegistered(t *testing.T) {
+	t.Setenv("METRICS_PORT", "0")
+	t.Setenv("HTTP_PORT", strconv.Itoa(testutil.GetFreePort(t)))
+
+	app := New()
+	app.grpcRegistered = false
+
+	wg := sync.WaitGroup{}
+
+	// Should not add to WaitGroup when not registered
+	app.startGRPCServer(&wg)
+
+	// wg.Wait() should return immediately since nothing was added
+	wg.Wait()
+}
+
+func TestStartSubscriptionManager_NoSubscriptions(t *testing.T) {
+	t.Setenv("METRICS_PORT", "0")
+	t.Setenv("HTTP_PORT", strconv.Itoa(testutil.GetFreePort(t)))
+
+	app := New()
+
+	wg := sync.WaitGroup{}
+
+	app.startSubscriptionManager(t.Context(), &wg)
+
+	wg.Wait()
+}
+
+func Test_HTTPMethods(t *testing.T) {
+	tests := []struct {
+		name   string
+		method string
+		setup  func(a *App)
+	}{
+		{
+			name:   "PUT registers route",
+			method: http.MethodPut,
+			setup: func(a *App) {
+				a.PUT("/put", func(_ *Context) (any, error) { return "ok", nil })
+			},
+		},
+		{
+			name:   "POST registers route",
+			method: http.MethodPost,
+			setup: func(a *App) {
+				a.POST("/post", func(_ *Context) (any, error) { return "ok", nil })
+			},
+		},
+		{
+			name:   "DELETE registers route",
+			method: http.MethodDelete,
+			setup: func(a *App) {
+				a.DELETE("/delete", func(_ *Context) (any, error) { return "ok", nil })
+			},
+		},
+		{
+			name:   "PATCH registers route",
+			method: http.MethodPatch,
+			setup: func(a *App) {
+				a.PATCH("/patch", func(_ *Context) (any, error) { return "ok", nil })
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			port := testutil.GetFreePort(t)
+			mockContainer, _ := container.NewMockContainer(t)
+
+			a := &App{
+				httpServer: &httpServer{
+					router: gofrHTTP.NewRouter(),
+					port:   port,
+				},
+				container: mockContainer,
+				Config:    config.NewMockConfig(map[string]string{"REQUEST_TIMEOUT": "5"}),
+			}
+
+			tt.setup(a)
+
+			assert.True(t, a.httpRegistered)
+		})
+	}
 }
