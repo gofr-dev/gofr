@@ -4,7 +4,12 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"testing"
 
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+
+	"gofr.dev/pkg/gofr/container"
 	"gofr.dev/pkg/gofr/datasource"
 	"gofr.dev/pkg/gofr/datasource/pubsub"
 	"gofr.dev/pkg/gofr/datasource/pubsub/kafka"
@@ -55,4 +60,47 @@ func (mockSubscriber) Subscribe(ctx context.Context, topic string) (*pubsub.Mess
 
 func (mockSubscriber) Close() error {
 	return nil
+}
+
+var errHandler = errors.New("handler error")
+
+func TestHandleSubscription_HandlerErrorReturned(t *testing.T) {
+	testContainer, _ := container.NewMockContainer(t)
+	testContainer.PubSub = mockSubscriber{}
+
+	sm := newSubscriptionManager(testContainer)
+
+	err := sm.handleSubscription(context.Background(), "test-topic", func(_ *Context) error {
+		return errHandler
+	})
+
+	require.Error(t, err)
+	assert.ErrorIs(t, err, errHandler)
+}
+
+func TestHandleSubscription_SuccessfulHandler(t *testing.T) {
+	testContainer, _ := container.NewMockContainer(t)
+	testContainer.PubSub = mockSubscriber{}
+
+	sm := newSubscriptionManager(testContainer)
+
+	err := sm.handleSubscription(context.Background(), "test-topic", func(_ *Context) error {
+		return nil
+	})
+
+	assert.NoError(t, err)
+}
+
+func TestHandleSubscription_SubscribeError(t *testing.T) {
+	testContainer, _ := container.NewMockContainer(t)
+	testContainer.PubSub = mockSubscriber{}
+
+	sm := newSubscriptionManager(testContainer)
+
+	err := sm.handleSubscription(context.Background(), "test-err", func(_ *Context) error {
+		return nil
+	})
+
+	require.Error(t, err)
+	assert.ErrorIs(t, err, kafka.ErrConsumerGroupNotProvided)
 }

@@ -67,9 +67,7 @@ func (s *SubscriptionManager) handleSubscription(ctx context.Context, topic stri
 		return handler(ctx)
 	}(msgCtx)
 	if err != nil {
-		s.container.Logger.Errorf("error in handler for topic %s: %v", topic, err)
-
-		return nil
+		return err
 	}
 
 	if msg.Committer != nil {
