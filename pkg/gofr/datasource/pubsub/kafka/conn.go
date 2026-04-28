@@ -46,13 +46,20 @@ func (k *kafkaClient) initialize(ctx context.Context) error {
 }
 
 func (k *kafkaClient) getNewReader(topic string) Reader {
+	// Snapshot the dialer under connMu — reconnectAdminLocked may swap it
+	// concurrently. Once handed to kafka.NewReader, the reader keeps its
+	// own reference; later reconnects do not affect existing readers.
+	k.connMu.RLock()
+	dialer := k.dialer
+	k.connMu.RUnlock()
+
 	reader := kafka.NewReader(kafka.ReaderConfig{
 		GroupID:     k.config.ConsumerGroupID,
 		Brokers:     k.config.Brokers,
 		Topic:       topic,
 		MinBytes:    defaultMinBytes,
 		MaxBytes:    defaultMaxBytes,
-		Dialer:      k.dialer,
+		Dialer:      dialer,
 		StartOffset: int64(k.config.OffSet),
 	})
 
