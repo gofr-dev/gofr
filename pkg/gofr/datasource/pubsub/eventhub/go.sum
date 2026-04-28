@@ -66,8 +66,8 @@ go.opentelemetry.io/otel/trace v1.43.0 h1:BkNrHpup+4k4w+ZZ86CZoHHEkohws8AY+WTX09
 go.opentelemetry.io/otel/trace v1.43.0/go.mod h1:/QJhyVBUUswCphDVxq+8mld+AvhXZLhe+8WVFxiFff0=
 go.uber.org/mock v0.6.0 h1:hyF9dfmbgIX5EfOdasqLsWD6xqpNZlXblLB/Dbnwv3Y=
 go.uber.org/mock v0.6.0/go.mod h1:KiVJ4BqZJaMj4svdfmHM0AUx4NJYO8ZNpPnZn1Z+BBU=
-gofr.dev v1.56.1 h1:A/k166gf7NEZzze9LMEPUucROrjsiloVOru7Ph5mmc8=
-gofr.dev v1.56.1/go.mod h1:QAB9NOcReRkuaKN9EbT4JHTWdG+49zGLiuHRR7FPP6M=
+gofr.dev v1.56.3 h1:eU0eLzxQ00kVLIbMBYTPVjIOW+7wi1/KcF2UZAlAhjQ=
+gofr.dev v1.56.3/go.mod h1:E8rY9zPcvX7MOfFoDMIxZ71QMjyZIZ0UUsO0nX6tUwA=
 golang.org/x/crypto v0.0.0-20190308221718-c2843e01d9a2/go.mod h1:djNgcEr1/C05ACkg1iLfiJU5Ep61QUkGW8qpdssI0+w=
 golang.org/x/crypto v0.0.0-20191011191535-87dc89f01550/go.mod h1:yigFU9vqHzYiE8UmvKecakEJjdnWj3jj499lnFckfCI=
 golang.org/x/crypto v0.50.0 h1:zO47/JPrL6vsNkINmLoo/PH1gcxpls50DNogFvB5ZGI=
