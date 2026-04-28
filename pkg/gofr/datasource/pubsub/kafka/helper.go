@@ -79,6 +79,16 @@ func (k *kafkaClient) retryConnect(ctx context.Context) {
 }
 
 func (k *kafkaClient) isConnected() bool {
+	k.connMu.RLock()
+	defer k.connMu.RUnlock()
+
+	return k.isConnectedLocked()
+}
+
+// isConnectedLocked probes the admin connection. The caller must already hold
+// connMu (read or write); used by ensureConnected to avoid re-acquiring the
+// lock between the unlocked fast path and the locked double-check.
+func (k *kafkaClient) isConnectedLocked() bool {
 	if k.conn == nil {
 		return false
 	}
@@ -86,6 +96,80 @@ func (k *kafkaClient) isConnected() bool {
 	_, err := k.conn.Controller()
 
 	return err == nil
+}
+
+// ensureConnected verifies the admin connection is alive and, if not, makes a
+// single attempt to re-dial the brokers. Kafka brokers silently drop idle TCP
+// connections after their configured idle timeout (default
+// connections.max.idle.ms = 10 min), so without a runtime reconnect path the
+// admin conn pool dialed once in initialize() stays stale forever and every
+// Subscribe/Query call returns errClientNotConnected even though the cluster
+// is healthy.
+//
+// The reconnect is serialized on connMu — a dedicated lock that does not
+// block subscribers holding the reader-map lock (k.mu). Only k.conn and
+// k.dialer are refreshed; in-flight writers and per-topic readers manage
+// their own connections via segmentio/kafka-go.
+func (k *kafkaClient) ensureConnected(ctx context.Context) bool {
+	if k.isConnected() {
+		return true
+	}
+
+	k.connMu.Lock()
+	defer k.connMu.Unlock()
+
+	// Re-check inside the write lock — another goroutine may have
+	// already reconnected while we were waiting on the mutex.
+	if k.isConnectedLocked() {
+		return true
+	}
+
+	if err := k.reconnectAdminLocked(ctx); err != nil {
+		k.logger.Errorf("kafka admin reconnect failed: %v", err)
+
+		return false
+	}
+
+	k.logger.Log("reconnected to kafka after stale admin connection")
+
+	return true
+}
+
+// reconnectAdminLocked re-dials the broker-facing admin connections used for
+// Controller/CreateTopic/DeleteTopic and the isConnected health probe. The
+// caller MUST hold connMu for writing. It deliberately does not touch the
+// writer or reader map — those keep their own connections.
+func (k *kafkaClient) reconnectAdminLocked(ctx context.Context) error {
+	dialer := k.dialer
+	if dialer == nil {
+		d, err := setupDialer(&k.config)
+		if err != nil {
+			return err
+		}
+
+		dialer = d
+	}
+
+	conns, err := connectToBrokers(ctx, k.config.Brokers, dialer, k.logger)
+	if err != nil {
+		return err
+	}
+
+	old := k.conn
+	k.conn = &multiConn{
+		conns:  conns,
+		dialer: dialer,
+	}
+	k.dialer = dialer
+
+	// Safe to close while holding the write lock: no other goroutine can
+	// be using the old multiConn because admin entry points all take
+	// connMu.RLock before touching k.conn.
+	if old != nil {
+		_ = old.Close()
+	}
+
+	return nil
 }
 
 func setupDialer(conf *Config) (*kafka.Dialer, error) {

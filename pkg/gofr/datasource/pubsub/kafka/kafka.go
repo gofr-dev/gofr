@@ -55,7 +55,15 @@ type kafkaClient struct {
 	writer Writer
 	reader map[string]Reader
 
+	// mu guards the reader map.
 	mu *sync.RWMutex
+	// connMu guards conn/dialer pointer swaps performed by reconnectAdmin.
+	// Read-lock holders use the admin connection concurrently; the
+	// write-lock holder swaps the pointer and closes the old multiConn.
+	// It is intentionally separate from mu so a stuck network probe inside
+	// ensureConnected cannot starve subscribers that hold mu for the
+	// reader map.
+	connMu sync.RWMutex
 
 	logger  pubsub.Logger
 	config  Config
@@ -147,7 +155,7 @@ func (k *kafkaClient) Publish(ctx context.Context, topic string, message []byte)
 }
 
 func (k *kafkaClient) Query(ctx context.Context, query string, args ...any) ([]byte, error) {
-	if !k.isConnected() {
+	if !k.ensureConnected(ctx) {
 		return nil, errClientNotConnected
 	}
 
@@ -169,7 +177,7 @@ func (k *kafkaClient) Query(ctx context.Context, query string, args ...any) ([]b
 }
 
 func (k *kafkaClient) Subscribe(ctx context.Context, topic string) (*pubsub.Message, error) {
-	if !k.isConnected() {
+	if !k.ensureConnected(ctx) {
 		time.Sleep(defaultRetryTimeout)
 
 		return nil, errClientNotConnected
@@ -254,9 +262,12 @@ func (k *kafkaClient) Close() (err error) {
 		err = errors.Join(err, k.writer.Close())
 	}
 
+	k.connMu.Lock()
 	if k.conn != nil {
 		err = errors.Join(k.conn.Close())
+		k.conn = nil
 	}
+	k.connMu.Unlock()
 
 	return err
 }

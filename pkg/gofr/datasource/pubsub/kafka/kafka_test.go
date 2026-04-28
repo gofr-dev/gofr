@@ -694,15 +694,53 @@ func TestKafkaClient_Subscribe_NotConnected(t *testing.T) {
 			},
 		},
 		logger: logging.NewMockLogger(logging.DEBUG),
+		mu:     &sync.RWMutex{},
 	}
 
-	mockConnection.EXPECT().Controller().Return(kafka.Broker{}, errClientNotConnected)
+	// ensureConnected probes Controller in the unlocked fast path and
+	// again under the write lock before attempting to reconnect.
+	mockConnection.EXPECT().Controller().Return(kafka.Broker{}, errClientNotConnected).AnyTimes()
 
 	msg, err = k.Subscribe(ctx, "test")
 
 	require.Error(t, err)
 	assert.Nil(t, msg)
 	assert.Equal(t, errClientNotConnected, err)
+}
+
+// TestEnsureConnected_ReconnectsAfterStaleAdminConn pins the runtime recovery
+// path: when the admin conn goes stale (broker idle timeout),
+// ensureConnected must replace k.conn instead of staying not-connected
+// forever. The brokers list uses the RFC 6761 reserved TLD ".invalid", which
+// is guaranteed unresolvable — so the re-dial fails deterministically. The
+// test asserts that the attempt is made and the failure surfaces.
+func TestEnsureConnected_ReconnectsAfterStaleAdminConn(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	staleConn := NewMockConnection(ctrl)
+	staleConn.EXPECT().Controller().Return(kafka.Broker{}, errClientNotConnected).AnyTimes()
+
+	k := &kafkaClient{
+		dialer: &kafka.Dialer{Timeout: time.Millisecond},
+		config: Config{Brokers: []string{"broker.invalid:0"}},
+		conn: &multiConn{
+			conns: []Connection{staleConn},
+		},
+		logger: logging.NewMockLogger(logging.DEBUG),
+		mu:     &sync.RWMutex{},
+	}
+
+	// Stale conn is detected, reconnect is attempted, but the unresolvable
+	// broker makes connectToBrokers fail — ensureConnected returns false.
+	assert.False(t, k.ensureConnected(t.Context()))
+
+	// reconnectAdminLocked itself surfaces the dial error; the caller must
+	// hold connMu for writing.
+	k.connMu.Lock()
+	err := k.reconnectAdminLocked(t.Context())
+	k.connMu.Unlock()
+	require.Error(t, err)
 }
 
 func TestKafkaClient_Query_Failures(t *testing.T) {
@@ -718,12 +756,14 @@ func TestKafkaClient_Query_Failures(t *testing.T) {
 			setupClient: func() *kafkaClient {
 				ctrl := gomock.NewController(t)
 				mockConnection := NewMockConnection(ctrl)
-				mockConnection.EXPECT().Controller().Return(kafka.Broker{}, errClientNotConnected)
+				mockConnection.EXPECT().Controller().Return(kafka.Broker{}, errClientNotConnected).AnyTimes()
 
 				return &kafkaClient{
 					conn: &multiConn{
 						conns: []Connection{mockConnection},
 					},
+					logger: logging.NewMockLogger(logging.DEBUG),
+					mu:     &sync.RWMutex{},
 				}
 			},
 			topic:       "test-topic",

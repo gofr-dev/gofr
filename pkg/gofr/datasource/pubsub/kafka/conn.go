@@ -60,14 +60,35 @@ func (k *kafkaClient) getNewReader(topic string) Reader {
 }
 
 func (k *kafkaClient) DeleteTopic(_ context.Context, name string) error {
+	k.connMu.RLock()
+	defer k.connMu.RUnlock()
+
+	if k.conn == nil {
+		return errClientNotConnected
+	}
+
 	return k.conn.DeleteTopics(name)
 }
 
 func (k *kafkaClient) Controller() (broker kafka.Broker, err error) {
+	k.connMu.RLock()
+	defer k.connMu.RUnlock()
+
+	if k.conn == nil {
+		return kafka.Broker{}, errClientNotConnected
+	}
+
 	return k.conn.Controller()
 }
 
 func (k *kafkaClient) CreateTopic(_ context.Context, name string) error {
+	k.connMu.RLock()
+	defer k.connMu.RUnlock()
+
+	if k.conn == nil {
+		return errClientNotConnected
+	}
+
 	topics := kafka.TopicConfig{Topic: name, NumPartitions: 1, ReplicationFactor: 1}
 
 	return k.conn.CreateTopics(topics)
