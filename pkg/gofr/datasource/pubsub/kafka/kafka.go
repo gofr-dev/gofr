@@ -263,10 +263,12 @@ func (k *kafkaClient) Close() (err error) {
 	}
 
 	k.connMu.Lock()
+
 	if k.conn != nil {
 		err = errors.Join(k.conn.Close())
 		k.conn = nil
 	}
+
 	k.connMu.Unlock()
 
 	return err

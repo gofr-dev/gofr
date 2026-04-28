@@ -252,6 +252,7 @@ func TestClose_ConcurrentEnsureConnected_NoRace(t *testing.T) {
 		// Stagger Close slightly so it lands during the ensureConnected
 		// loop above.
 		time.Sleep(time.Millisecond)
+
 		_ = k.Close()
 	}()
 
