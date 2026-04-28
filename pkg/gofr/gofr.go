@@ -399,8 +399,12 @@ func (a *App) AddStaticFiles(endpoint, filePath string) {
 
 	// update file path based on current directory if it starts with ./
 	if strings.HasPrefix(filePath, "./") {
-		currentWorkingDir, _ := os.Getwd()
-		filePath = filepath.Join(currentWorkingDir, filePath)
+		currentWorkingDir, err := os.Getwd()
+		if err != nil {
+			a.container.Logger.Warnf("could not determine current working directory: %v", err)
+		} else {
+			filePath = filepath.Join(currentWorkingDir, filePath)
+		}
 	}
 
 	endpoint = "/" + strings.TrimPrefix(endpoint, "/")
