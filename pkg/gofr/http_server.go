@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/http"
 	"os"
+	"sync"
 	"time"
 
 	"gofr.dev/pkg/gofr/container"
@@ -19,6 +20,7 @@ type httpServer struct {
 	port        int
 	ws          *websocket.Manager
 	srv         *http.Server
+	mu          sync.Mutex
 	certFile    string
 	keyFile     string
 	staticFiles map[string]string
@@ -58,18 +60,23 @@ func (s *httpServer) run(c *container.Container) {
 		middleware.WSHandlerUpgrade(c, s.ws),
 	)
 
+	s.mu.Lock()
 	if s.srv != nil {
+		s.mu.Unlock()
 		c.Logf("Server already running on port: %d", s.port)
+
 		return
 	}
 
 	c.Logf("Starting server on port: %d", s.port)
 
-	s.srv = &http.Server{
+	srv := &http.Server{
 		Addr:              fmt.Sprintf(":%d", s.port),
 		Handler:           s.router,
 		ReadHeaderTimeout: 5 * time.Second,
 	}
+	s.srv = srv
+	s.mu.Unlock()
 
 	// If both certFile and keyFile are provided, validate and run HTTPS server
 	if s.certFile != "" && s.keyFile != "" {
@@ -79,7 +86,7 @@ func (s *httpServer) run(c *container.Container) {
 		}
 
 		// Start HTTPS server with TLS
-		if err := s.srv.ListenAndServeTLS(s.certFile, s.keyFile); err != nil && !errors.Is(err, http.ErrServerClosed) {
+		if err := srv.ListenAndServeTLS(s.certFile, s.keyFile); err != nil && !errors.Is(err, http.ErrServerClosed) {
 			c.Errorf("error while listening to https server, err: %v", err)
 		}
 
@@ -87,20 +94,24 @@ func (s *httpServer) run(c *container.Container) {
 	}
 
 	// If no certFile/keyFile is provided, run the HTTP server
-	if err := s.srv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
+	if err := srv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
 		c.Errorf("error while listening to http server, err: %v", err)
 	}
 }
 
 func (s *httpServer) Shutdown(ctx context.Context) error {
-	if s.srv == nil {
+	s.mu.Lock()
+	srv := s.srv
+	s.mu.Unlock()
+
+	if srv == nil {
 		return nil
 	}
 
 	return ShutdownWithContext(ctx, func(ctx context.Context) error {
-		return s.srv.Shutdown(ctx)
+		return srv.Shutdown(ctx)
 	}, func() error {
-		if err := s.srv.Close(); err != nil {
+		if err := srv.Close(); err != nil {
 			return err
 		}
 
