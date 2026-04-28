@@ -110,7 +110,7 @@ func TestCommonFileSystem_Mkdir(t *testing.T) {
 
 				mockProvider.EXPECT().
 					NewWriter(gomock.Any(), expectedName).
-					Return(mockWriter)
+					Return(mockWriter, nil)
 
 				mockWriter.EXPECT().
 					Write([]byte("")).
@@ -617,7 +617,7 @@ func TestCommonFileSystem_Create_Success(t *testing.T) {
 
 	mockProvider.EXPECT().
 		NewWriter(gomock.Any(), "newfile.txt").
-		Return(mockWriter)
+		Return(mockWriter, nil)
 
 	f, err := fs.Create("newfile.txt")
 
@@ -720,7 +720,7 @@ func TestCommonFileSystem_OpenFile_Append_Success(t *testing.T) {
 
 	mockProvider.EXPECT().
 		NewWriter(gomock.Any(), "append.txt").
-		Return(mockWriter)
+		Return(mockWriter, nil)
 
 	f, err := fs.OpenFile("append.txt", os.O_APPEND|os.O_WRONLY, 0)
 	require.NoError(t, err)
@@ -735,7 +735,7 @@ func TestCommonFileSystem_OpenFile_Create_Success(t *testing.T) {
 
 	mockProvider.EXPECT().
 		NewWriter(gomock.Any(), "create.txt").
-		Return(mockWriter)
+		Return(mockWriter, nil)
 
 	f, err := fs.OpenFile("create.txt", os.O_CREATE|os.O_WRONLY, 0644)
 	require.NoError(t, err)
@@ -838,19 +838,19 @@ func TestCommonFileSystem_MkdirAll_Success(t *testing.T) {
 	//   deferred Close() -> nil
 	gomock.InOrder(
 		mockProvider.EXPECT().StatObject(gomock.Any(), "a/").Return(nil, errTest),
-		mockProvider.EXPECT().NewWriter(gomock.Any(), "a/").Return(mockWriter),
+		mockProvider.EXPECT().NewWriter(gomock.Any(), "a/").Return(mockWriter, nil),
 		mockWriter.EXPECT().Write([]byte("")).Return(0, nil),
 		mockWriter.EXPECT().Close().Return(nil), // explicit close
 		mockWriter.EXPECT().Close().Return(nil), // deferred close
 
 		mockProvider.EXPECT().StatObject(gomock.Any(), "a/b/").Return(nil, errTest),
-		mockProvider.EXPECT().NewWriter(gomock.Any(), "a/b/").Return(mockWriter),
+		mockProvider.EXPECT().NewWriter(gomock.Any(), "a/b/").Return(mockWriter, nil),
 		mockWriter.EXPECT().Write([]byte("")).Return(0, nil),
 		mockWriter.EXPECT().Close().Return(nil),
 		mockWriter.EXPECT().Close().Return(nil),
 
 		mockProvider.EXPECT().StatObject(gomock.Any(), "a/b/c/").Return(nil, errTest),
-		mockProvider.EXPECT().NewWriter(gomock.Any(), "a/b/c/").Return(mockWriter),
+		mockProvider.EXPECT().NewWriter(gomock.Any(), "a/b/c/").Return(mockWriter, nil),
 		mockWriter.EXPECT().Write([]byte("")).Return(0, nil),
 		mockWriter.EXPECT().Close().Return(nil),
 		mockWriter.EXPECT().Close().Return(nil),
@@ -880,7 +880,7 @@ func TestCommonFileSystem_MkdirAll_Mkdir_WriteError(t *testing.T) {
 	// For first component "x/" simulate Write error
 	gomock.InOrder(
 		mockProvider.EXPECT().StatObject(gomock.Any(), "x/").Return(nil, errTest),
-		mockProvider.EXPECT().NewWriter(gomock.Any(), "x/").Return(mockWriter),
+		mockProvider.EXPECT().NewWriter(gomock.Any(), "x/").Return(mockWriter, nil),
 		mockWriter.EXPECT().Write([]byte("")).Return(0, errTest),
 		mockWriter.EXPECT().Close().Return(nil), // deferred close after return
 	)

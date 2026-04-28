@@ -76,18 +76,18 @@ func (*localProvider) NewRangeReader(_ context.Context, name string, offset, len
 	return f, nil
 }
 
-func (*localProvider) NewWriter(_ context.Context, name string) io.WriteCloser {
+func (*localProvider) NewWriter(_ context.Context, name string) (io.WriteCloser, error) {
 	// Create parent directories if needed
 	if err := os.MkdirAll(filepath.Dir(name), dirPerm); err != nil {
-		return &failWriter{err: err}
+		return nil, err
 	}
 
 	f, err := os.Create(name)
 	if err != nil {
-		return &failWriter{err: err}
+		return nil, err
 	}
 
-	return f
+	return f, nil
 }
 
 func (*localProvider) StatObject(_ context.Context, name string) (*ObjectInfo, error) {
@@ -213,17 +213,4 @@ func (l *limitedReadCloser) Read(p []byte) (int, error) {
 
 func (l *limitedReadCloser) Close() error {
 	return l.rc.Close()
-}
-
-// failWriter is a WriteCloser that always returns an error.
-type failWriter struct {
-	err error
-}
-
-func (f *failWriter) Write([]byte) (int, error) {
-	return 0, f.err
-}
-
-func (f *failWriter) Close() error {
-	return f.err
 }

@@ -51,7 +51,7 @@ func TestLocalProvider_NewReaderAndNewRangeReader_LimitedAndFull(t *testing.T) {
 	assert.Equal(t, []byte("fgh"), rest)
 }
 
-func TestLocalProvider_NewWriter_CreateAndFailWriter(t *testing.T) {
+func TestLocalProvider_NewWriter_CreateAndError(t *testing.T) {
 	provider := &localProvider{}
 
 	tmp := t.TempDir()
@@ -59,7 +59,9 @@ func TestLocalProvider_NewWriter_CreateAndFailWriter(t *testing.T) {
 	// Successful writer: write file and verify contents
 	dst := filepath.Join(tmp, "out", "file.txt")
 
-	w := provider.NewWriter(t.Context(), dst)
+	w, err := provider.NewWriter(t.Context(), dst)
+
+	require.NoError(t, err)
 
 	n, err := w.Write([]byte("hello"))
 
@@ -79,13 +81,9 @@ func TestLocalProvider_NewWriter_CreateAndFailWriter(t *testing.T) {
 	require.NoError(t, err)
 
 	badPath := filepath.Join(parentFile, "child") // filepath.Dir(badPath) == parentFile (a file)
-	w2 := provider.NewWriter(t.Context(), badPath)
+	_, err = provider.NewWriter(t.Context(), badPath)
 
-	// Expect a failWriter (Write/Close return error)
-	_, w2Err := w2.Write([]byte("x"))
-
-	require.Error(t, w2Err)
-	require.Error(t, w2.Close())
+	require.Error(t, err)
 }
 
 func TestLocalProvider_Stat_Delete_Copy_List_ListDir(t *testing.T) {
@@ -190,16 +188,4 @@ func TestLimitedReadCloser_ReadsTillLimitAndEOF(t *testing.T) {
 	assert.Equal(t, 0, n2)
 	assert.Equal(t, io.EOF, err2)
 	require.NoError(t, lrc.Close())
-}
-
-func TestFailWriter_WriteAndCloseReturnError(t *testing.T) {
-	errExample := os.ErrPermission
-
-	fw := &failWriter{err: errExample}
-	_, wErr := fw.Write([]byte("x"))
-
-	require.Error(t, wErr)
-	require.ErrorIs(t, wErr, errExample)
-	require.Error(t, fw.Close())
-	require.ErrorIs(t, fw.Close(), errExample)
 }
