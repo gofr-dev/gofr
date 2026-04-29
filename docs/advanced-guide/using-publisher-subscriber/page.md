@@ -832,7 +832,7 @@ When the message is delivered to a subscriber registered with `app.Subscribe(top
 
 The result is that an end-to-end flow such as `HTTP → publish → subscribe → publish → subscribe` shows up as **one connected trace** in any tracing UI, with the full waterfall visible:
 
-```
+```text
 [api-gateway          ] POST /order         (root)
 [api-gateway          ] kafka-publish       child of POST /order
 [order-service        ] kafka-subscribe     child of api-gateway's publish   [+1 link]
