@@ -15,6 +15,11 @@ func (k *kafkaClient) Health() datasource.Health {
 		Details: make(map[string]any),
 	}
 
+	// Hold connMu across the whole health probe so reconnectAdmin cannot
+	// swap and close the conn we are reading from underneath us.
+	k.connMu.RLock()
+	defer k.connMu.RUnlock()
+
 	if k.conn == nil {
 		health.Details["error"] = "invalid connection type"
 		return health
