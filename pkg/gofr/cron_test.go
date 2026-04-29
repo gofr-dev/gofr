@@ -718,3 +718,80 @@ func TestCronTab_runScheduled_Panic(t *testing.T) {
 		})
 	}
 }
+
+func TestErrParsing_Error(t *testing.T) {
+	tests := []struct {
+		name     string
+		err      errParsing
+		expected string
+	}{
+		{
+			name:     "With base",
+			err:      errParsing{invalidPart: "abc", base: "abc/5"},
+			expected: "unable to parse abc part in abc/5",
+		},
+		{
+			name:     "Without base",
+			err:      errParsing{invalidPart: "xyz"},
+			expected: "unable to parse xyz",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			assert.Equal(t, tt.expected, tt.err.Error())
+		})
+	}
+}
+
+func TestErrOutOfRange_Error(t *testing.T) {
+	err := errOutOfRange{rangeVal: "65", input: "65-70", min: 0, max: 59}
+
+	expected := "out of range for 65 in 65-70. 65 must be in range 0-59"
+	assert.Equal(t, expected, err.Error())
+}
+
+func TestJob_tick_SecNilAndNonZeroSec(t *testing.T) {
+	// When sec is nil, tick should only match when t.sec == 0
+	j := &job{
+		min:       map[int]struct{}{30: {}},
+		hour:      map[int]struct{}{12: {}},
+		day:       map[int]struct{}{15: {}},
+		month:     map[int]struct{}{6: {}},
+		dayOfWeek: map[int]struct{}{},
+	}
+
+	tests := []struct {
+		name     string
+		tick     *tick
+		expected bool
+	}{
+		{
+			name:     "sec is nil and tick sec is 0 matches",
+			tick:     &tick{sec: 0, min: 30, hour: 12, day: 15, month: 6, dayOfWeek: 3},
+			expected: true,
+		},
+		{
+			name:     "sec is nil and tick sec is non-zero does not match",
+			tick:     &tick{sec: 15, min: 30, hour: 12, day: 15, month: 6, dayOfWeek: 3},
+			expected: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			assert.Equal(t, tt.expected, j.tick(tt.tick))
+		})
+	}
+}
+
+func TestNoopRequest(t *testing.T) {
+	n := noopRequest{}
+
+	assert.Equal(t, "gofr", n.HostName())
+	assert.Empty(t, n.Param("key"))
+	assert.Empty(t, n.PathParam("key"))
+	assert.Nil(t, n.Params("key"))
+	require.NoError(t, n.Bind(nil))
+	assert.NotNil(t, n.Context())
+}
