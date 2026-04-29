@@ -158,6 +158,7 @@ func TestScyllaCommitMigration(t *testing.T) {
 		td := transactionData{
 			MigrationNumber: 123,
 			StartTime:       time.Now(),
+			UsedDatasources: map[string]bool{dsScyllaDB: true},
 		}
 
 		mockScylla.EXPECT().
@@ -204,4 +205,27 @@ func TestScyllaMigrator_Rollback(t *testing.T) {
 	}()
 
 	s.rollback(mockContainer, data)
+}
+
+func TestScyllaCommitMigration_SkipsWhenNotUsed(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	t.Cleanup(ctrl.Finish)
+
+	mockScylla := NewMockScyllaDB(ctrl)
+	mockMigrator := NewMockmigrator(ctrl)
+
+	m := scyllaMigrator{ScyllaDB: mockScylla, migrator: mockMigrator}
+
+	c, _ := container.NewMockContainer(t)
+
+	data := transactionData{
+		MigrationNumber: 1,
+		StartTime:       time.Now(),
+		UsedDatasources: map[string]bool{},
+	}
+
+	mockMigrator.EXPECT().commitMigration(c, data).Return(nil)
+
+	err := m.commitMigration(c, data)
+	assert.NoError(t, err)
 }

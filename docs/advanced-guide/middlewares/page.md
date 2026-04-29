@@ -12,7 +12,10 @@ sent by GoFr by providing the suitable CORS configs.
 
 The CORS middleware provides the following overridable configs:
 
-- `ACCESS_CONTROL_ALLOW_ORIGIN`: Set the allowed origin(s) for cross-origin requests. By default, it allows all origins (*).
+- `ACCESS_CONTROL_ALLOW_ORIGIN`: Set the allowed origin(s) for cross-origin requests. By default, it allows all origins (`*`).
+  Supports comma-separated values for multiple origins (e.g., `https://app.example.com,https://admin.example.com`).
+  When multiple origins are configured, the middleware dynamically matches the request's `Origin` header and responds
+  with the matched origin, adding a `Vary: Origin` header for correct HTTP caching.
 - `ACCESS_CONTROL_ALLOW_HEADERS`: Define the allowed request headers (e.g., Authorization, Content-Type).
 - `ACCESS_CONTROL_ALLOW_CREDENTIALS`: Set to true to allow credentials (cookies, HTTP authentication) in requests.
 - `ACCESS_CONTROL_EXPOSE_HEADERS`: Specify additional headers exposed to the client.
