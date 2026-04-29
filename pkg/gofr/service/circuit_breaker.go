@@ -92,8 +92,8 @@ func (cb *circuitBreaker) executeWithCircuitBreaker(ctx context.Context, f func(
 
 // isOpen returns true if the circuit breaker is in the open state.
 func (cb *circuitBreaker) isOpen() bool {
-	cb.mu.Lock()
-	defer cb.mu.Unlock()
+	cb.mu.RLock()
+	defer cb.mu.RUnlock()
 
 	return cb.state == OpenState
 }
@@ -179,22 +179,32 @@ func (cb *CircuitBreakerConfig) AddOption(h HTTP) HTTP {
 
 func (cb *circuitBreaker) tryCircuitRecovery() bool {
 	cb.mu.Lock()
-	defer cb.mu.Unlock()
 
 	if cb.state == ClosedState {
+		cb.mu.Unlock()
 		return true
 	}
 
 	if time.Since(cb.lastChecked) > cb.interval {
 		// Update lastChecked to prevent busy loop of health checks from other requests
 		cb.lastChecked = time.Now()
+		cb.mu.Unlock()
 
 		if cb.healthCheck(context.TODO()) {
-			cb.resetCircuit()
+			cb.mu.Lock()
+			defer cb.mu.Unlock()
+
+			if cb.state == OpenState {
+				cb.resetCircuit()
+			}
+
 			return true
 		}
+
+		return false
 	}
 
+	cb.mu.Unlock()
 	return false
 }
 
