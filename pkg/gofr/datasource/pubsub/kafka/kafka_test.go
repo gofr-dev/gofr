@@ -774,7 +774,11 @@ func TestKafkaClient_Query_Failures(t *testing.T) {
 			setupClient: func() *kafkaClient {
 				ctrl := gomock.NewController(t)
 				mockConnection := NewMockConnection(ctrl)
-				mockConnection.EXPECT().Controller().Return(kafka.Broker{}, nil)
+				// Query short-circuits on the empty-topic check before
+				// ever touching ensureConnected, so Controller() must
+				// not be called. Allow zero or more calls so the test
+				// stays robust if the order is revisited.
+				mockConnection.EXPECT().Controller().Return(kafka.Broker{}, nil).AnyTimes()
 
 				return &kafkaClient{
 					conn: &multiConn{

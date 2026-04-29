@@ -16,6 +16,12 @@ type Conn struct {
 }
 
 // initialize creates and configures all Kafka client components.
+//
+// initialize is called once from New() before the client is returned, and
+// again from retryConnect() in a goroutine if the first attempt fails.
+// Because retryConnect runs concurrently with user-facing calls, the
+// k.conn / k.dialer writes must be serialized against the readers that
+// take connMu (Health, Controller, ensureConnected, getNewReader, ...).
 func (k *kafkaClient) initialize(ctx context.Context) error {
 	dialer, err := setupDialer(&k.config)
 	if err != nil {
@@ -37,8 +43,13 @@ func (k *kafkaClient) initialize(ctx context.Context) error {
 
 	k.logger.Logf("connected to %d Kafka brokers", len(conns))
 
+	k.connMu.Lock()
 	k.dialer = dialer
 	k.conn = multi
+	k.connMu.Unlock()
+
+	// writer and reader are not guarded by connMu — k.mu protects the
+	// reader map; writer is set once and never swapped.
 	k.writer = writer
 	k.reader = reader
 

@@ -125,11 +125,24 @@ func (k *kafkaClient) ensureConnected(ctx context.Context) bool {
 	}
 
 	if err := k.reconnectAdminLocked(ctx); err != nil {
-		k.logger.Errorf("kafka admin reconnect failed: %v", err)
+		// Throttle error-level logs: in a high-QPS service every
+		// failed Subscribe/Query would otherwise log Errorf, swamping
+		// the log pipeline while the cluster is unreachable. Log at
+		// error once per reconnectErrLogInterval; in between, log at
+		// debug so the failure is still observable when needed.
+		now := time.Now()
+		if now.After(k.reconnectErrLogAt) {
+			k.logger.Errorf("kafka admin reconnect failed: %v", err)
+			k.reconnectErrLogAt = now.Add(reconnectErrLogInterval)
+		} else {
+			k.logger.Debugf("kafka admin reconnect failed: %v", err)
+		}
 
 		return false
 	}
 
+	// Reset the throttle so the next outage starts with an Errorf again.
+	k.reconnectErrLogAt = time.Time{}
 	k.logger.Log("reconnected to kafka after stale admin connection")
 
 	return true
@@ -200,7 +213,13 @@ func setupDialer(conf *Config) (*kafka.Dialer, error) {
 }
 
 // connectToBrokers connects to Kafka brokers with context support.
-func connectToBrokers(ctx context.Context, brokers []string, dialer *kafka.Dialer, logger pubsub.Logger) ([]Connection, error) {
+//
+// Exposed as a var so tests can stub the network dial in reconnectAdminLocked
+// and initialize without spinning up a real broker. Production callers must
+// not reassign this.
+//
+//nolint:gochecknoglobals // Test seam — see doc above. Reassigned only from tests via t.Cleanup.
+var connectToBrokers = func(ctx context.Context, brokers []string, dialer *kafka.Dialer, logger pubsub.Logger) ([]Connection, error) {
 	conns := make([]Connection, 0)
 
 	if len(brokers) == 0 {

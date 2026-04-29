@@ -15,19 +15,24 @@ import (
 )
 
 const (
-	DefaultBatchSize       = 100
-	DefaultBatchBytes      = 1048576
-	DefaultBatchTimeout    = 1000
-	defaultMaxBytes        = 10e6 // 10MB
-	defaultMinBytes        = 10e3
-	defaultRetryTimeout    = 10 * time.Second
-	defaultReadTimeout     = 30 * time.Second
-	protocolPlainText      = "PLAINTEXT"
-	protocolSASL           = "SASL_PLAINTEXT"
-	protocolSSL            = "SSL"
-	protocolSASLSSL        = "SASL_SSL"
-	messageMultipleBrokers = "MULTIPLE_BROKERS"
-	brokerStatusUp         = "UP"
+	DefaultBatchSize    = 100
+	DefaultBatchBytes   = 1048576
+	DefaultBatchTimeout = 1000
+	defaultMaxBytes     = 10e6 // 10MB
+	defaultMinBytes     = 10e3
+	defaultRetryTimeout = 10 * time.Second
+	defaultReadTimeout  = 30 * time.Second
+	// reconnectErrLogInterval throttles error-level logs emitted when
+	// ensureConnected repeatedly fails to re-dial the broker. Repeated
+	// failures within this window are logged at debug level instead, so a
+	// long unreachable cluster does not spam stderr at request rate.
+	reconnectErrLogInterval = 60 * time.Second
+	protocolPlainText       = "PLAINTEXT"
+	protocolSASL            = "SASL_PLAINTEXT"
+	protocolSSL             = "SSL"
+	protocolSASLSSL         = "SASL_SSL"
+	messageMultipleBrokers  = "MULTIPLE_BROKERS"
+	brokerStatusUp          = "UP"
 )
 
 var errEmptyTopicName = errors.New("topic name cannot be empty")
@@ -64,6 +69,11 @@ type kafkaClient struct {
 	// ensureConnected cannot starve subscribers that hold mu for the
 	// reader map.
 	connMu sync.RWMutex
+	// reconnectErrLogAt is the earliest time at which the next reconnect
+	// failure may be logged at error level. Updated under connMu write lock
+	// in ensureConnected to throttle log spam when the cluster is
+	// unreachable for a sustained period.
+	reconnectErrLogAt time.Time
 
 	logger  pubsub.Logger
 	config  Config
@@ -155,12 +165,14 @@ func (k *kafkaClient) Publish(ctx context.Context, topic string, message []byte)
 }
 
 func (k *kafkaClient) Query(ctx context.Context, query string, args ...any) ([]byte, error) {
-	if !k.ensureConnected(ctx) {
-		return nil, errClientNotConnected
-	}
-
+	// Validate input before touching the network — no point re-dialing the
+	// broker for an obviously bad call.
 	if query == "" {
 		return nil, errEmptyTopicName
+	}
+
+	if !k.ensureConnected(ctx) {
+		return nil, errClientNotConnected
 	}
 
 	offset, limit := k.parseQueryArgs(args...)
@@ -265,7 +277,7 @@ func (k *kafkaClient) Close() (err error) {
 	k.connMu.Lock()
 
 	if k.conn != nil {
-		err = errors.Join(k.conn.Close())
+		err = errors.Join(err, k.conn.Close())
 		k.conn = nil
 	}
 
