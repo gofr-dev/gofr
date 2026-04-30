@@ -262,10 +262,10 @@ type fakeDBResolverProvider struct {
 	resolverDB container.DB
 }
 
-func (f *fakeDBResolverProvider) UseLogger(l any)      { f.logger = l }
-func (f *fakeDBResolverProvider) UseMetrics(m any)     { f.metrics = m }
-func (f *fakeDBResolverProvider) UseTracer(t any)      { f.tracer = t }
-func (f *fakeDBResolverProvider) Connect()             { f.connected = true }
+func (f *fakeDBResolverProvider) UseLogger(l any)           { f.logger = l }
+func (f *fakeDBResolverProvider) UseMetrics(m any)          { f.metrics = m }
+func (f *fakeDBResolverProvider) UseTracer(t any)           { f.tracer = t }
+func (f *fakeDBResolverProvider) Connect()                  { f.connected = true }
 func (f *fakeDBResolverProvider) GetResolver() container.DB { return f.resolverDB }
 
 func TestApp_AddDBResolver_WiresTracing(t *testing.T) {
@@ -275,6 +275,7 @@ func TestApp_AddDBResolver_WiresTracing(t *testing.T) {
 
 	db, _, _ := gofrSql.NewSQLMocksWithConfig(t, &gofrSql.DBConfig{Dialect: "mysql"})
 	defer db.Close()
+
 	app.container.SQL = db
 
 	resolved := &fakeDBResolverProvider{resolverDB: db}
