@@ -191,7 +191,9 @@ func (g *grpcServer) Shutdown(ctx context.Context) error {
 
 		return nil
 	}, func() error {
-		g.server.Stop()
+		if g.server != nil {
+			g.server.Stop()
+		}
 
 		return nil
 	})
