@@ -17,6 +17,7 @@ import (
 	gofrHTTP "gofr.dev/pkg/gofr/http"
 	"gofr.dev/pkg/gofr/http/response"
 	"gofr.dev/pkg/gofr/logging"
+	"gofr.dev/pkg/gofr/mcp"
 	"gofr.dev/pkg/gofr/static"
 )
 
@@ -41,6 +42,13 @@ type handler struct {
 	function       Handler
 	container      *container.Container
 	requestTimeout time.Duration
+	// mcpLearner is non-nil only when MCP_ENABLED is set. It is the
+	// state holder that learning Request wrappers feed into. method
+	// and path are captured at registration time so the wrapper can
+	// key recorded schemas without re-deriving from mux internals.
+	mcpLearner *mcp.Learner
+	method     string
+	path       string
 }
 
 type ErrorLogEntry struct {
@@ -53,7 +61,12 @@ func (el *ErrorLogEntry) PrettyPrint(writer io.Writer) {
 }
 
 func (h handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	c := newContext(gofrHTTP.NewResponder(w, r.Method), gofrHTTP.NewRequest(r), h.container)
+	req := Request(gofrHTTP.NewRequest(r))
+	if h.mcpLearner != nil && h.path != "" {
+		req = newLearningRequest(req, h.mcpLearner, h.method, h.path)
+	}
+
+	c := newContext(gofrHTTP.NewResponder(w, r.Method), req, h.container)
 
 	traceID := trace.SpanFromContext(r.Context()).SpanContext().TraceID().String()
 
@@ -101,6 +114,13 @@ func (h handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		handleWebSocketUpgrade(r)
 	case <-panicked:
 		err = gofrHTTP.ErrorPanicRecovery{}
+	}
+
+	// Record the return value's shape for MCP tool output schemas.
+	// Only do this on success; error returns don't represent the
+	// happy-path response shape.
+	if h.mcpLearner != nil && err == nil && result != nil {
+		h.mcpLearner.RecordReturn(h.method, h.path, result)
 	}
 
 	// Handle custom headers if 'result' is a 'Response'.

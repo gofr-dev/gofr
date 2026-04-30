@@ -21,6 +21,7 @@ import (
 	gofrHTTP "gofr.dev/pkg/gofr/http"
 	"gofr.dev/pkg/gofr/http/response"
 	"gofr.dev/pkg/gofr/logging"
+	"gofr.dev/pkg/gofr/mcp"
 	"gofr.dev/pkg/gofr/metrics"
 	"gofr.dev/pkg/gofr/migration"
 	"gofr.dev/pkg/gofr/service"
@@ -53,6 +54,12 @@ type App struct {
 	graphqlManager      *graphQLManager
 	onStartHooks        []func(ctx *Context) error
 	mu                  sync.Mutex
+
+	// MCP mode wiring. mcpLearner is non-nil only when MCP_ENABLED is
+	// set; nil means "MCP off". mcpAllowMutations gates POST/PUT/PATCH/
+	// DELETE exposure (off by default — mutations require MCP_ENABLED=full).
+	mcpLearner        *mcp.Learner
+	mcpAllowMutations bool
 }
 
 func (a *App) runOnStartHooks(ctx context.Context) error {
@@ -95,6 +102,15 @@ func (a *App) runOnStartHooks(ctx context.Context) error {
 // It shuts down the HTTP, gRPC, Metrics servers and closes the container's active connections to datasources.
 func (a *App) Shutdown(ctx context.Context) error {
 	var err error
+
+	// Persist learned MCP schemas before any servers go down so a
+	// crashing process still leaves warm schemas for the next boot.
+	if a.mcpLearner != nil {
+		if saveErr := a.mcpLearner.Save(); saveErr != nil {
+			a.container.Logger.Errorf("MCP schema persist failed: %v", saveErr)
+		}
+	}
+
 	if a.httpServer != nil {
 		err = errors.Join(err, a.httpServer.Shutdown(ctx))
 	}
@@ -163,6 +179,26 @@ func (a *App) httpServerSetup() {
 	}
 
 	a.setupGraphQL()
+
+	// MCP endpoint. Mounted last so the manifest sees every route the
+	// developer registered. The endpoint goes through the full mux —
+	// global middleware (CORS, auth, rate limit) protects /mcp itself,
+	// and per-route middleware protects the synthetic calls the bridge
+	// dispatches into the same router.
+	if a.mcpLearner != nil {
+		name, version := a.mcpServerInfo()
+
+		mcpServer := mcp.NewServer(
+			&a.httpServer.router.Router,
+			a.mcpLearner,
+			mcp.BuildOptions{AllowMutations: a.mcpAllowMutations},
+			name,
+			version,
+		)
+
+		a.httpServer.router.NewRoute().Methods(http.MethodPost).Path("/mcp").Handler(mcpServer)
+		a.container.Logger.Logf("MCP mode enabled at /mcp (mutations=%v)", a.mcpAllowMutations)
+	}
 
 	if a.container.Logger != nil {
 		a.container.Logger.Infof("Registered HTTP server on port: %d", a.httpServer.port)

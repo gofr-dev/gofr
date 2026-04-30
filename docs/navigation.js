@@ -95,6 +95,11 @@ export const navigation = [
                 desc: "Understand how to implement circuit breaker patterns to enhance the resilience of your services against failures."
             },
             {
+                title: 'MCP Mode for AI Assistants',
+                href: '/docs/advanced-guide/using-mcp',
+                desc: "Expose your existing GoFr endpoints as Model Context Protocol tools so Claude, Cursor, and other AI assistants can call them — with the same auth, observability, and handlers."
+            },
+            {
                 title: 'Monitoring Service Health',
                 href: '/docs/advanced-guide/monitoring-service-health',
                 desc: "Learn to monitor the health of your services effectively, ensuring optimal performance and quick issue resolution."
