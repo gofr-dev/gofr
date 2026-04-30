@@ -6,7 +6,6 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
-	"strings"
 
 	gofrHTTP "gofr.dev/pkg/gofr/http"
 	"gofr.dev/pkg/gofr/http/response"
@@ -42,15 +41,18 @@ func SwaggerUIHandler(c *Context) (any, error) {
 		fileName = "index.html"
 	}
 
+	ext := filepath.Ext(fileName)
+	if ext == "" {
+		return nil, gofrHTTP.ErrorEntityNotFound{Name: "file", Value: fileName}
+	}
+
 	data, err := fs.ReadFile("static/" + fileName)
 	if err != nil {
 		c.Errorf("Failed to read Swagger UI file %s from embedded file system: %v", fileName, err)
 		return nil, err
 	}
 
-	split := strings.Split(fileName, ".")
-
-	ct := mime.TypeByExtension("." + split[1])
+	ct := mime.TypeByExtension(ext)
 
 	// Return the rendered HTML as a string
 	return response.File{Content: data, ContentType: ct}, nil
