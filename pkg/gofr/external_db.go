@@ -29,6 +29,7 @@ func tracerName(ds any) string {
 		{func(d any) bool { _, ok := d.(container.Elasticsearch); return ok }, "gofr-elasticsearch"},
 		{func(d any) bool { _, ok := d.(container.Couchbase); return ok }, "gofr-couchbase"},
 		{func(d any) bool { _, ok := d.(container.InfluxDB); return ok }, "gofr-influxdb"},
+		{func(d any) bool { _, ok := d.(container.DBResolverProvider); return ok }, "gofr-dbresolver"},
 	}
 
 	for _, m := range matchers {
@@ -51,9 +52,12 @@ func (a *App) instrumentDatasource(ds any) {
 		m.UseMetrics(a.Metrics())
 	}
 
-	if name := tracerName(ds); name != "" {
-		if t, ok := ds.(interface{ UseTracer(any) }); ok {
+	if t, ok := ds.(interface{ UseTracer(any) }); ok {
+		if name := tracerName(ds); name != "" {
 			t.UseTracer(otel.GetTracerProvider().Tracer(name))
+		} else {
+			a.Logger().Warnf("datasource %T implements UseTracer but has no tracer name registered in tracerName(); "+
+				"tracing will be skipped — add a matcher arm in pkg/gofr/external_db.go", ds)
 		}
 	}
 

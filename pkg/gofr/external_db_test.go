@@ -10,6 +10,7 @@ import (
 
 	"gofr.dev/pkg/gofr/container"
 	"gofr.dev/pkg/gofr/datasource/file"
+	gofrSql "gofr.dev/pkg/gofr/datasource/sql"
 	"gofr.dev/pkg/gofr/testutil"
 )
 
@@ -34,6 +35,7 @@ func Test_tracerName(t *testing.T) {
 		{"Elasticsearch", container.NewMockElasticsearch(ctrl), "gofr-elasticsearch"},
 		{"Couchbase", container.NewMockCouchbase(ctrl), "gofr-couchbase"},
 		{"InfluxDB", container.NewMockInfluxDB(ctrl), "gofr-influxdb"},
+		{"DBResolver", &fakeDBResolverProvider{}, "gofr-dbresolver"},
 		{"Unknown", "not-a-datasource", ""},
 	}
 
@@ -248,6 +250,42 @@ func TestApp_AddFileStore(t *testing.T) {
 	app.AddFileStore(mock)
 
 	assert.Equal(t, mock, app.container.File)
+}
+
+// fakeDBResolverProvider satisfies container.DBResolverProvider without importing
+// the dbresolver package (which would create an import cycle through pkg/gofr).
+type fakeDBResolverProvider struct {
+	logger     any
+	metrics    any
+	tracer     any
+	connected  bool
+	resolverDB container.DB
+}
+
+func (f *fakeDBResolverProvider) UseLogger(l any)      { f.logger = l }
+func (f *fakeDBResolverProvider) UseMetrics(m any)     { f.metrics = m }
+func (f *fakeDBResolverProvider) UseTracer(t any)      { f.tracer = t }
+func (f *fakeDBResolverProvider) Connect()             { f.connected = true }
+func (f *fakeDBResolverProvider) GetResolver() container.DB { return f.resolverDB }
+
+func TestApp_AddDBResolver_WiresTracing(t *testing.T) {
+	testutil.NewServerConfigs(t)
+
+	app := New()
+
+	db, _, _ := gofrSql.NewSQLMocksWithConfig(t, &gofrSql.DBConfig{Dialect: "mysql"})
+	defer db.Close()
+	app.container.SQL = db
+
+	resolved := &fakeDBResolverProvider{resolverDB: db}
+
+	app.AddDBResolver(resolved)
+
+	assert.Equal(t, app.Logger(), resolved.logger)
+	assert.Equal(t, app.Metrics(), resolved.metrics)
+	assert.Equal(t, otel.GetTracerProvider().Tracer("gofr-dbresolver"), resolved.tracer)
+	assert.True(t, resolved.connected)
+	assert.Equal(t, container.DB(db), app.container.SQL)
 }
 
 func TestApp_AddOpenTSDB(t *testing.T) {
