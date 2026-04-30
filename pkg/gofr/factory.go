@@ -58,6 +58,10 @@ func New() *App {
 		app.httpRegistered = true
 	}
 
+	// Wire MCP mode if enabled. Done after the http server is set up
+	// so subsequent route registrations can pick up the learner.
+	app.initMCP()
+
 	return app
 }
 

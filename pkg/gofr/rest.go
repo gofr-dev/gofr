@@ -46,7 +46,48 @@ func (a *App) add(method, pattern string, h Handler) {
 		function:       h,
 		container:      a.container,
 		requestTimeout: time.Duration(reqTimeout) * time.Second,
+		mcpLearner:     a.mcpLearner,
+		method:         method,
+		path:           pattern,
 	})
+
+	// Seed the MCP manifest with the route — keeps tools/list complete
+	// even before any traffic has flowed through the route.
+	if a.mcpLearner != nil {
+		a.mcpLearner.Register(method, pattern, mcpPathParams(pattern))
+	}
+}
+
+// mcpPathParams extracts {name} placeholders from a mux path pattern.
+// Kept here rather than in the mcp package to avoid pulling regex
+// helpers across an extra import boundary on every route registration.
+func mcpPathParams(pattern string) []string {
+	var params []string
+
+	for i := 0; i < len(pattern); i++ {
+		if pattern[i] != '{' {
+			continue
+		}
+
+		j := i + 1
+
+		for j < len(pattern) && pattern[j] != '}' && pattern[j] != ':' {
+			j++
+		}
+
+		if j > i+1 {
+			params = append(params, pattern[i+1:j])
+		}
+
+		// Advance past the closing brace if there's a regex constraint.
+		for j < len(pattern) && pattern[j] != '}' {
+			j++
+		}
+
+		i = j
+	}
+
+	return params
 }
 
 // AddRESTHandlers creates and registers CRUD routes for the given struct, the struct should always be passed by reference.
