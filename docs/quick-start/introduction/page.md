@@ -1,9 +1,19 @@
-# Prerequisite
+---
+description: "Build your first GoFr REST API in under 5 minutes. Quick-start tutorial showing the minimal main.go for a Go HTTP service with built-in observability and zero boilerplate."
+nextjs:
+  metadata:
+    title: "Quick Start — Your First GoFr REST API in Go"
+    description: "Build your first GoFr REST API in under 5 minutes. The minimal main.go for a Go HTTP service with built-in observability and zero boilerplate."
+---
 
-- Go 1.24 or above.
-  To check the Go version, use the following command `go version`.
+# Hello, GoFr
 
-- Prior familiarity with Golang syntax is essential. {% new-tab-link title="Golang Tour" href="https://tour.golang.org/" /%} is highly recommended as it has an excellent guided tour.
+GoFr is an opinionated Go framework for production microservices. It bundles HTTP routing, structured logging, OpenTelemetry traces, Prometheus metrics, datasource clients, and graceful shutdown so you can focus on handler logic instead of plumbing. This page gets you from `go mod init` to a running, observable HTTP server in under five minutes.
+
+## Prerequisites
+
+- Go 1.24 or above. Check with `go version`.
+- Familiarity with Go syntax — the {% new-tab-link title="Golang Tour" href="https://tour.golang.org/" /%} is a good 30-minute primer if you're new.
 
 ## Write your first GoFr API
 
