@@ -25,7 +25,7 @@ Yes. The full source is at [github.com/gofr-dev/gofr](https://github.com/gofr-de
 {% /faq-item %}
 
 {% faq-item question="Who maintains GoFr?" %}
-GoFr is developed in the open by the GoFr team and a community of contributors. See the [Community page](/community) for how to get involved.
+GoFr is developed in the open by the GoFr team and a community of contributors. See the [team page](/team) for the current maintainers, and [github.com/gofr-dev/gofr](https://github.com/gofr-dev/gofr) for ways to get involved.
 {% /faq-item %}
 
 {% /faq %}

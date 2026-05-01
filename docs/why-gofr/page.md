@@ -54,7 +54,7 @@ Microservices often share the same supporting needs: structured logging, request
 
 With a minimal router, you compose these yourself by bringing libraries like `zap`, `otel-go`, `prometheus/client_golang`, `sqlx`, `sarama`, or `gobreaker`. That's a strength when you want full control over each layer; it's a cost when teams keep wiring similar combinations across many services.
 
-GoFr's wager is that this wiring is worth standardising as a shared default. Some teams will appreciate the time saved; others will prefer the precision of composing their own stack.
+GoFr's wager is that this wiring is worth standardizing as a shared default. Some teams will appreciate the time saved; others will prefer the precision of composing their own stack.
 
 ## What's actually in GoFr
 
