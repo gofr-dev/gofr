@@ -536,6 +536,6 @@ RBAC middleware never logs:
 
 ## Related Documentation
 
-- [HTTP Authentication](https://gofr.dev/docs/advanced-guide/http-authentication) - Basic Auth, API Keys, OAuth 2.0
+- [Authentication](https://gofr.dev/docs/advanced-guide/authentication) - Basic Auth, API Keys, OAuth 2.0
 - [HTTP Communication](https://gofr.dev/docs/advanced-guide/http-communication) - Inter-service HTTP calls
 - [Middlewares](https://gofr.dev/docs/advanced-guide/middlewares) - Custom middleware implementation

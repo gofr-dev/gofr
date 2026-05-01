@@ -46,4 +46,4 @@ func GetUser(ctx *gofr.Context)(any, error){
 	return "Connection to cockroachDB Successful.", nil
 }
 ```
-For more detailed examples and advanced usage, please refer to the [SQL usage guide](/advanced-guide/dealing-with-sql/).
+For more detailed examples and advanced usage, please refer to the [SQL usage guide](/docs/advanced-guide/dealing-with-sql/).
