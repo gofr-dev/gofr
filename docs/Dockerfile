@@ -21,6 +21,27 @@ COPY  docs/navigation.js /app/src/lib
 COPY  docs/events.json /app/src/app/events
 COPY  docs/testimonials.json /app/utils
 
+# Framework-content marketing pages. Live in this repo (not the website
+# repo) so maintainers can edit copy alongside framework changes in a
+# single PR. Layouts for these routes stay in the website — only the
+# .md content overlays here.
+COPY  docs/why-gofr     /app/src/app/why-gofr
+COPY  docs/comparison   /app/src/app/comparison
+COPY  docs/migrate      /app/src/app/migrate
+COPY  docs/learn        /app/src/app/learn
+COPY  docs/faq          /app/src/app/faq
+
+# Framework-knowledge data files. Same logic as events.json /
+# testimonials.json above — content describing the framework lives
+# with the framework.
+COPY  docs/team.json    /app/src/data/team.json
+COPY  docs/showcase/companies.json  /app/src/app/showcase/companies.json
+COPY  docs/examples/examples.json   /app/src/app/examples/examples.json
+
+# AGENTS.md — curated rules for AI coding assistants. Framework
+# knowledge, served at /AGENTS.md as a public file.
+COPY  docs/AGENTS.md    /app/public/AGENTS.md
+
 ENV NODE_ENV=production
 
 RUN npm install
