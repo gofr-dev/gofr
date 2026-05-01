@@ -6,6 +6,14 @@ on:
   push:
     branches:
       - development
+  # Daily refresh — runs an hour after the website's :stage cron
+  # (gofr-dev/website at 04:00 UTC) so :stage is freshly published
+  # before this rebuilds + redeploys against it.
+  schedule:
+    - cron: '0 5 * * *'
+  # Manual button for ad-hoc redeploys (e.g. right after a new GoFr
+  # release lands and you want stage to reflect it immediately).
+  workflow_dispatch:
 
 env:
   APP_NAME: gofr-website
@@ -48,17 +56,22 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Download UI Image
+      - name: Download UI Image (:stage tracks gofr-dev/website's main)
         run: |
-          docker pull ${{ env.WEBSITE_REGISTRY }}/gofr-dev/website:latest
+          docker pull ${{ env.WEBSITE_REGISTRY }}/gofr-dev/website:stage
 
       - name: Determine Image Tag
         id: determine-tag
+        # Append run_id so each workflow run produces a unique image
+        # tag — required for scheduled rebuilds (same SHA, fresh data
+        # inside the image) to actually roll out via kubectl. Without
+        # this, kubectl set image with an unchanged tag is a no-op and
+        # the daily data refresh never reaches the running pods.
         run: |
           if [[ "${{ github.ref }}" == refs/tags/* ]]; then
             TAG=${GITHUB_REF#refs/tags/}
           else
-            TAG=${{ github.sha }}
+            TAG=${{ github.sha }}-${{ github.run_id }}
           fi
           echo "TAG=$TAG" >> $GITHUB_ENV
 
@@ -69,6 +82,9 @@ jobs:
           push: true
           context: ./
           file: ./docs/Dockerfile
+          # Overlay framework docs onto the :stage source-bundle. Default
+          # in the Dockerfile is :latest (used by website-prod.yml).
+          build-args: WEBSITE_TAG=stage
           tags: us-central1-docker.pkg.dev/${{ env.GAR_PROJECT }}/${{ env.GAR_REGISTRY }}/${{ env.APP_NAME }}:${{ env.TAG }}
 
       - id: output-image

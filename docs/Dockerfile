@@ -1,4 +1,13 @@
-FROM ghcr.io/gofr-dev/website:latest AS builder
+# WEBSITE_TAG selects which published source-bundle of the website
+# repo to overlay docs onto. The two CI flows pass it explicitly:
+#   - .github/workflows/website-stage.yml → WEBSITE_TAG=stage
+#       (built from main of gofr-dev/website on every merge)
+#   - .github/workflows/website-prod.yml  → WEBSITE_TAG=latest
+#       (built from a tagged release of gofr-dev/website)
+# Default is `latest` so a hand-run `docker build -f docs/Dockerfile`
+# without any --build-arg still produces a prod-flavored image.
+ARG WEBSITE_TAG=latest
+FROM ghcr.io/gofr-dev/website:${WEBSITE_TAG} AS builder
 
 WORKDIR /app
 
