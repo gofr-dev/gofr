@@ -333,10 +333,11 @@ Add OTLP configs in `.env` file, your `.env` will be updated to:
 
 ```dotenv
 APP_NAME=test-service
-HTTP_PORT=9000
+HTTP_PORT=8000
 
 REDIS_HOST=localhost
-REDIS_PORT=6379
+REDIS_PORT=2002
+REDIS_PASSWORD=password
 
 DB_HOST=localhost
 DB_USER=root

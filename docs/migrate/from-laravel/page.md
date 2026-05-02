@@ -73,7 +73,9 @@ app.POST("/users", func(c *gofr.Context) (any, error) {
 If your Laravel resource is "controller + Eloquent model + standard CRUD", you can collapse it in GoFr to:
 
 ```go
-app.AddRESTHandlers(&User{})
+if err := app.AddRESTHandlers(&User{}); err != nil {
+    app.Logger().Fatal(err)
+}
 ```
 
 — which exposes `GET / POST / GET/{id} / PUT/{id} / DELETE/{id}` against your struct/table. See the [REST scaffolding guide](/docs/quick-start/add-rest-handlers).

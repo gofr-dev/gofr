@@ -55,7 +55,9 @@ type User struct {
 
 func main() {
     app := gofr.New()
-    app.AddRESTHandlers(&User{}) // GET, POST, GET/{id}, PUT/{id}, DELETE/{id}
+    if err := app.AddRESTHandlers(&User{}); err != nil { // GET, POST, GET/{id}, PUT/{id}, DELETE/{id}
+        app.Logger().Fatal(err)
+    }
     app.Run()
 }
 ```

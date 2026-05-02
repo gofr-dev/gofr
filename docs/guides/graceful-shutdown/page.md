@@ -36,7 +36,7 @@ The container's `Close` is what commits Pub/Sub offsets and lets SQL drivers fin
 
 ## OnStart hooks vs shutdown hooks
 
-GoFr exposes [OnStart hooks](/docs/advanced-guide/startup-hooks) for synchronous startup work (cache warmup, seeding). There is no public `OnShutdown` hook today; `App.Shutdown` is what gets called and it operates on the framework's own resources. If you need cleanup on exit, do it inside the lifetime of an OnStart hook by registering teardown via `t.Cleanup`-style wrappers around your own goroutines, or by closing your own resources from a goroutine that watches the same signal context.
+GoFr exposes [OnStart hooks](/docs/advanced-guide/startup-hooks) for synchronous startup work (cache warmup, seeding). There is no public `OnShutdown` hook today; `App.Shutdown` is what gets called and it operates on the framework's own resources. If you need cleanup on exit for resources you own (custom goroutines, file handles, third-party clients), use context-cancellation: pass a `context.Context` derived from `signal.NotifyContext(...)` into your goroutines and have each goroutine `defer` its own cleanup when that context is cancelled. The framework's `App.Shutdown` runs concurrently with this, so total wind-down stays within `SHUTDOWN_GRACE_PERIOD`.
 
 ## The Kubernetes termination flow
 

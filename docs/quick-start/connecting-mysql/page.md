@@ -33,10 +33,11 @@ After adding MySQL/MariaDB configs `.env` will be updated to the following. Use 
 ```dotenv
 # configs/.env
 APP_NAME=test-service
-HTTP_PORT=9000
+HTTP_PORT=8000
 
 REDIS_HOST=localhost
-REDIS_PORT=6379
+REDIS_PORT=2002
+REDIS_PASSWORD=password
 
 DB_HOST=localhost
 DB_USER=root
@@ -119,10 +120,11 @@ After adding PostgreSQL configs, `.env` will be updated to the following:
 ```dotenv
 # configs/.env
 APP_NAME=test-service
-HTTP_PORT=9000
+HTTP_PORT=8000
 
 REDIS_HOST=localhost
-REDIS_PORT=6379
+REDIS_PORT=2002
+REDIS_PASSWORD=password
 
 DB_HOST=localhost
 DB_USER=postgres
@@ -161,7 +163,7 @@ Add Supabase configuration to your `.env` file:
 ```dotenv
 # configs/.env
 APP_NAME=test-service
-HTTP_PORT=9000
+HTTP_PORT=8000
 
 # Supabase configuration
 DB_DIALECT=supabase

@@ -294,7 +294,7 @@ This document lists all the configuration options supported by the GoFr framewor
 
 ---
 
-- DB_REPLICA_PASSWORDS_
+- DB_REPLICA_PASSWORDS
 - Comma-separated list of replica database passwords. Used for read replicas.
 - None
 

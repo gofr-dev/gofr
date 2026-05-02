@@ -26,7 +26,7 @@ Similarly to Set the app-name user can add `APP_NAME`. For example:
 # configs/.env
 
 APP_NAME=test-service
-HTTP_PORT=9000
+HTTP_PORT=8001
 ```
 
 ## Configuring Environments in GoFr

@@ -76,7 +76,9 @@ app.POST("/users", func(c *gofr.Context) (any, error) {
 For the "scaffold User name:string email:string" case, GoFr offers:
 
 ```go
-app.AddRESTHandlers(&User{}) // GET, POST, GET/{id}, PUT/{id}, DELETE/{id}
+if err := app.AddRESTHandlers(&User{}); err != nil { // GET, POST, GET/{id}, PUT/{id}, DELETE/{id}
+    app.Logger().Fatal(err)
+}
 ```
 
 See the [REST scaffolding guide](/docs/quick-start/add-rest-handlers). For non-CRUD actions (Rails' `member` / `collection` routes), write a plain handler.

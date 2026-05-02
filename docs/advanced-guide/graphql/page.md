@@ -143,7 +143,7 @@ The `/graphql` endpoint accepts a JSON body with the following fields:
 curl -X POST \
   -H "Content-Type: application/json" \
   -d '{"query": "{ user(id: 1) { name } }"}' \
-  http://localhost:9091/graphql
+  http://localhost:8000/graphql
 ```
 
 **Named operation with variables:**
@@ -151,7 +151,7 @@ curl -X POST \
 curl -X POST \
   -H "Content-Type: application/json" \
   -d '{"query": "query GetUser($id: Int) { user(id: $id) { name } }", "operationName": "GetUser", "variables": {"id": 1}}' \
-  http://localhost:9091/graphql
+  http://localhost:8000/graphql
 ```
 
 ---
