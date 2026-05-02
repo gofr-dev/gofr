@@ -39,7 +39,7 @@ DB_MAX_IDLE_CONNECTION=5
 
 GoFr does not currently expose a knob for `SetConnMaxLifetime` / `SetConnMaxIdleTime`; rely on the database's own idle-timeout to recycle stale connections.
 
-For replica reads, the framework also recognises `DB_REPLICA_*` variables (hosts, ports, users, passwords, plus pool sizing). See [GoFr Configuration Options](/docs/references/configs) for the full list.
+For replica reads, the framework also recognizes `DB_REPLICA_*` variables (hosts, ports, users, passwords, plus pool sizing). See [GoFr Configuration Options](/docs/references/configs) for the full list.
 
 ### Sizing math
 

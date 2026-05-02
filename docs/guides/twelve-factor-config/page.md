@@ -129,7 +129,7 @@ Don't commit `Secret` manifests with real values to Git. Two well-supported opti
 - {% new-tab-link newtab=true title="Sealed Secrets" href="https://sealed-secrets.netlify.app/" /%} — encrypt the Secret manifest with a controller-held key; safe to commit.
 - {% new-tab-link newtab=true title="External Secrets Operator" href="https://external-secrets.io/" /%} — sync from Vault, AWS Secrets Manager, GCP Secret Manager, etc.
 
-GoFr does not need to know which one you use; both materialise a normal `Secret` that `envFrom` consumes.
+GoFr does not need to know which one you use; both materialize a normal `Secret` that `envFrom` consumes.
 
 ## When to use the `configs/` folder vs env
 
@@ -152,6 +152,6 @@ System environment variables always win. GoFr captures `os.Environ()` before loa
 Anywhere your platform supplies env vars: a `ConfigMap` key in Kubernetes, the shell in CI, or `configs/.local.env` for development. GoFr reads it on startup to pick the override file.
 {% /faq-item %}
 {% faq-item question="Can I use Vault or AWS Secrets Manager?" %}
-Yes, indirectly. Use External Secrets Operator (or a sidecar) to materialise a Kubernetes `Secret`, then reference it with `envFrom`. GoFr only sees env vars and doesn't care about the source.
+Yes, indirectly. Use External Secrets Operator (or a sidecar) to materialize a Kubernetes `Secret`, then reference it with `envFrom`. GoFr only sees env vars and doesn't care about the source.
 {% /faq-item %}
 {% /faq %}
