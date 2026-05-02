@@ -1,3 +1,11 @@
+---
+description: "Configure role-based access control in GoFr with the config-driven RBAC middleware. Supports multiple auth methods, fine-grained perms, and role inheritance."
+nextjs:
+  metadata:
+    title: "RBAC in GoFr — Role-Based Access Control Middleware"
+    description: "Configure role-based access control in GoFr with the config-driven RBAC middleware. Supports multiple auth methods, fine-grained perms, and role inheritance."
+---
+
 # Role-Based Access Control (RBAC) in GoFr
 
 Role-Based Access Control (RBAC) is a security mechanism that restricts access to resources based on user roles and permissions. GoFr provides a pure config-based RBAC middleware that supports multiple authentication methods, fine-grained permissions, and role inheritance.

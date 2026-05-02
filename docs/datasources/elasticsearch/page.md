@@ -1,3 +1,11 @@
+---
+description: "Use Elasticsearch with GoFr by injecting a driver via app.AddElasticsearch(). Index documents and search with traces, metrics, and structured logs included."
+nextjs:
+  metadata:
+    title: "Elasticsearch in GoFr — Full-Text Search Datasource"
+    description: "Use Elasticsearch with GoFr by injecting a driver via app.AddElasticsearch(). Index documents and search with traces, metrics, and structured logs included."
+---
+
 # Elasticsearch
 
 ## Configuration

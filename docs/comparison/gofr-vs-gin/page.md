@@ -1,9 +1,9 @@
 ---
-description: "GoFr vs Gin: when to use a minimal HTTP router (Gin) versus a full microservice framework (GoFr) with built-in observability, datasources, gRPC, and Pub/Sub. Honest comparison with code examples."
+description: "GoFr vs Gin: when to use a minimal HTTP router (Gin) versus a full microservice framework (GoFr) with observability, datasources, gRPC, and pub/sub."
 nextjs:
   metadata:
     title: "GoFr vs Gin — Choosing a Go Framework for Microservices"
-    description: "GoFr vs Gin: when to use a minimal HTTP router (Gin) versus a full microservice framework (GoFr) with built-in observability, datasources, gRPC, and Pub/Sub. Honest comparison with code examples."
+    description: "GoFr vs Gin: when to use a minimal HTTP router (Gin) versus a full microservice framework (GoFr) with observability, datasources, gRPC, and pub/sub."
 ---
 
 # GoFr vs Gin

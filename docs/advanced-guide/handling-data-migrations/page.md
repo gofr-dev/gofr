@@ -1,3 +1,11 @@
+---
+description: "Run versioned data migrations in GoFr for MySQL, Postgres, Redis, ClickHouse, and Cassandra. Track applied changes and reproduce schema state across envs."
+nextjs:
+  metadata:
+    title: "Data Migrations in GoFr — Versioned DB Schema Changes"
+    description: "Run versioned data migrations in GoFr for MySQL, Postgres, Redis, ClickHouse, and Cassandra. Track applied changes and reproduce schema state across envs."
+---
+
 # Handling Data Migrations
 
 If you make manual changes to your database, you must inform other developers so they can apply the same changes. Additionally, you need to keep track of which changes should be applied to production machines in the next deployment.

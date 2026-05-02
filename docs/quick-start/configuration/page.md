@@ -1,3 +1,11 @@
+---
+description: "Manage GoFr configuration via environment variables. Set HTTP_PORT, APP_NAME, log levels, datasources, and tracing through .env files in a 12-factor way."
+nextjs:
+  metadata:
+    title: "GoFr Configurations — Env Vars and 12-Factor Settings"
+    description: "Manage GoFr configuration via environment variables. Set HTTP_PORT, APP_NAME, log levels, datasources, and tracing through .env files in a 12-factor way."
+---
+
 # Configurations
 
 GoFr simplifies configuration management by reading configuration via environment variables.

@@ -1,3 +1,11 @@
+---
+description: "Build GraphQL APIs in GoFr with a schema-first workflow. Define queries and mutations in a .graphql file; GoFr handles execution, validation, and observability."
+nextjs:
+  metadata:
+    title: "GraphQL in GoFr — Schema-First APIs in Go"
+    description: "Build GraphQL APIs in GoFr with a schema-first workflow. Define queries and mutations in a .graphql file; GoFr handles execution, validation, and observability."
+---
+
 # GraphQL in GoFr
 
 GoFr provides a **Schema-First** approach to building GraphQL APIs. This means you define your API contract in a standard GraphQL schema file, and GoFr handles the execution, validation, and observability.

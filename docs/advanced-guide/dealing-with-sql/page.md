@@ -1,3 +1,11 @@
+---
+description: "Connect a GoFr service to MySQL, PostgreSQL, or SQLite via env-var configs. The framework manages the connection and exposes ctx.SQL with traces and metrics."
+nextjs:
+  metadata:
+    title: "Dealing with SQL in GoFr — MySQL, Postgres, SQLite"
+    description: "Connect a GoFr service to MySQL, PostgreSQL, or SQLite via env-var configs. The framework manages the connection and exposes ctx.SQL with traces and metrics."
+---
+
 # Dealing with SQL
 
 GoFr simplifies the process of connecting to SQL databases where one needs to add respective configs in .env,

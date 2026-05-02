@@ -1,3 +1,11 @@
+---
+description: "Use InfluxDB v2 from GoFr by injecting a driver that implements the framework's interface. Write and query time-series data with full observability."
+nextjs:
+  metadata:
+    title: "InfluxDB in GoFr — Time-Series Datasource Integration"
+    description: "Use InfluxDB v2 from GoFr by injecting a driver that implements the framework's interface. Write and query time-series data with full observability."
+---
+
 # InfluxDB
 GoFr supports injecting InfluxDB using an interface that defines the necessary methods to interact with InfluxDB v2+.  
 Any driver that implements this interface can be injected via the `app.AddInfluxDB()` method.

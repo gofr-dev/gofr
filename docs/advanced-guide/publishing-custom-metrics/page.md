@@ -1,3 +1,11 @@
+---
+description: "Emit custom Prometheus metrics from GoFr handlers. Register counters, gauges, and histograms on the metrics manager to expose service-specific telemetry."
+nextjs:
+  metadata:
+    title: "Publishing Custom Metrics in GoFr — Prometheus Counters"
+    description: "Emit custom Prometheus metrics from GoFr handlers. Register counters, gauges, and histograms on the metrics manager to expose service-specific telemetry."
+---
+
 # Publishing Custom Metrics
 
 GoFr publishes some {% new-tab-link newtab=false title="default metrics" href="/docs/quick-start/observability" /%}.

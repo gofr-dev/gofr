@@ -1,3 +1,11 @@
+---
+description: "Call other services from a GoFr handler with AddHTTPService. The instrumented client adds traces, metrics, retries, and circuit breakers to outbound HTTP calls."
+nextjs:
+  metadata:
+    title: "Inter-Service HTTP in GoFr — AddHTTPService Client"
+    description: "Call other services from a GoFr handler with AddHTTPService. The instrumented client adds traces, metrics, retries, and circuit breakers to outbound HTTP calls."
+---
+
 # Inter-Service HTTP Calls
 
 GoFr promotes microservice architecture and to facilitate the same, it provides the support to initialize HTTP services

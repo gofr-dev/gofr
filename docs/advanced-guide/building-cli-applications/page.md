@@ -1,3 +1,11 @@
+---
+description: "Build standalone command-line tools in GoFr with gofr.NewCMD(). Reuse the framework's logger, configs, and datasources without starting an HTTP server."
+nextjs:
+  metadata:
+    title: "Building CLI Applications in GoFr — gofr.NewCMD()"
+    description: "Build standalone command-line tools in GoFr with gofr.NewCMD(). Reuse the framework's logger, configs, and datasources without starting an HTTP server."
+---
+
 # Building CLI Applications
 
 GoFr provides a simple way to build command-line applications using `gofr.NewCMD()`. This creates standalone CLI tools without starting an HTTP server.

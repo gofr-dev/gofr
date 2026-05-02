@@ -1,3 +1,11 @@
+---
+description: "Connect GoFr to Couchbase via env vars (HOST, USER, PASSWORD, BUCKET). Use the pluggable driver for KV ops and N1QL queries with full observability."
+nextjs:
+  metadata:
+    title: "Couchbase in GoFr — Document Database Integration"
+    description: "Connect GoFr to Couchbase via env vars (HOST, USER, PASSWORD, BUCKET). Use the pluggable driver for KV ops and N1QL queries with full observability."
+---
+
 # Couchbase
 
 ## Configuration

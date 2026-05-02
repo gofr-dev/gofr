@@ -1,9 +1,9 @@
 ---
-description: "Frequently asked questions about GoFr — pricing, production readiness, supported protocols (gRPC, GraphQL, WebSockets), supported databases, deployment, observability, testing, and how it compares to net/http and Gin."
+description: "GoFr FAQ — pricing, production readiness, supported protocols (gRPC, GraphQL, WebSockets), datasources, deployment, observability, and testing."
 nextjs:
   metadata:
     title: "GoFr FAQ — Frequently Asked Questions"
-    description: "Frequently asked questions about GoFr — pricing, production readiness, supported protocols (gRPC, GraphQL, WebSockets), supported databases, deployment, observability, testing, and how it compares to net/http and Gin."
+    description: "GoFr FAQ — pricing, production readiness, supported protocols (gRPC, GraphQL, WebSockets), datasources, deployment, observability, and testing."
 ---
 
 # Frequently Asked Questions

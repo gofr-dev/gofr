@@ -1,9 +1,9 @@
 ---
-description: "Step-by-step migration from Gin to GoFr. Handler signature, middleware, binding, route groups, error handling, and gradual adoption strategy with side-by-side code examples."
+description: "Step-by-step migration from Gin to GoFr: handler signatures, middleware, binding, route groups, error handling, and gradual adoption with code examples."
 nextjs:
   metadata:
     title: "Migrate from Gin to GoFr — Code Translations and Examples"
-    description: "Step-by-step migration from Gin to GoFr. Handler signature, middleware, binding, route groups, error handling, and gradual adoption strategy with side-by-side code examples."
+    description: "Step-by-step migration from Gin to GoFr: handler signatures, middleware, binding, route groups, error handling, and gradual adoption with code examples."
 ---
 
 # Migrate from Gin to GoFr

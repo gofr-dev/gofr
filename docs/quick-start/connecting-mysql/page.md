@@ -1,3 +1,11 @@
+---
+description: "Connect GoFr to MySQL, MariaDB, PostgreSQL, or Supabase via env vars. GoFr auto-initializes the SQL client and exposes it on ctx.SQL with traces and metrics."
+nextjs:
+  metadata:
+    title: "Connecting MySQL in GoFr — Quick-Start SQL Setup"
+    description: "Connect GoFr to MySQL, MariaDB, PostgreSQL, or Supabase via env vars. GoFr auto-initializes the SQL client and exposes it on ctx.SQL with traces and metrics."
+---
+
 # Connecting to MySQL
 
 Just like Redis, GoFr supports connection to various SQL-compatible databases (MySQL, MariaDB, PostgreSQL, and Supabase) based on configuration variables.

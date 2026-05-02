@@ -1,3 +1,11 @@
+---
+description: "Add middleware to GoFr to intercept HTTP requests and responses. Implement auth, caching, logging, and cross-cutting concerns with composable wrappers."
+nextjs:
+  metadata:
+    title: "Middleware in GoFr — Request and Response Interceptors"
+    description: "Add middleware to GoFr to intercept HTTP requests and responses. Implement auth, caching, logging, and cross-cutting concerns with composable wrappers."
+---
+
 # Middleware in GoFr
 
 Middleware allows you intercepting and manipulating HTTP requests and responses flowing through your application's

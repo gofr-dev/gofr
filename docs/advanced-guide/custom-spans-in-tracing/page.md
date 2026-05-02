@@ -1,3 +1,11 @@
+---
+description: "Add custom OpenTelemetry spans to GoFr handlers for granular tracing. Wrap operations in named spans to surface latency in Jaeger, Tempo, or any OTLP backend."
+nextjs:
+  metadata:
+    title: "Custom Spans in GoFr Tracing — OpenTelemetry Granularity"
+    description: "Add custom OpenTelemetry spans to GoFr handlers for granular tracing. Wrap operations in named spans to surface latency in Jaeger, Tempo, or any OTLP backend."
+---
+
 # Custom Spans In Tracing
 
 GoFr's built-in tracing provides valuable insights into application's behavior. However, sometimes we might need 

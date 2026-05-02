@@ -1,3 +1,11 @@
+---
+description: "Adjust GoFr log levels at runtime via the remote log level service. Bump verbosity in production to debug an incident without redeploying the application."
+nextjs:
+  metadata:
+    title: "Remote Log Level Change in GoFr — Live Log Tuning"
+    description: "Adjust GoFr log levels at runtime via the remote log level service. Bump verbosity in production to debug an incident without redeploying the application."
+---
+
 # Remote Log Level Change
 
 GoFr makes it easy to adjust the details captured in the application's logs, even while it's running!

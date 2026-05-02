@@ -1,3 +1,11 @@
+---
+description: "Build pub/sub services in GoFr with Kafka, NATS, Google Pub/Sub, MQTT, and more. Decouple producers and consumers for scalable async event-driven architectures."
+nextjs:
+  metadata:
+    title: "Publisher-Subscriber in GoFr — Async Messaging Patterns"
+    description: "Build pub/sub services in GoFr with Kafka, NATS, Google Pub/Sub, MQTT, and more. Decouple producers and consumers for scalable async event-driven architectures."
+---
+
 # Publisher Subscriber
 
 Publisher Subscriber is an architectural design pattern for asynchronous communication between different entities.

@@ -1,3 +1,11 @@
+---
+description: "Reference of every GoFr configuration variable, grouped by category: HTTP, gRPC, datasources, observability, auth, and more — with defaults and value formats."
+nextjs:
+  metadata:
+    title: "GoFr Configuration Reference — Env Vars and Defaults"
+    description: "Reference of every GoFr configuration variable, grouped by category: HTTP, gRPC, datasources, observability, auth, and more — with defaults and value formats."
+---
+
 # GoFr Configuration Options
 
 This document lists all the configuration options supported by the GoFr framework. The configurations are grouped by category for better organization.

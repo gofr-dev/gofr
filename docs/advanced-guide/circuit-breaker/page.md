@@ -1,4 +1,16 @@
+---
+description: "Enable a circuit breaker on GoFr's inter-service HTTP client to fail fast on unhealthy upstreams, prevent cascading failures, and recover automatically."
+nextjs:
+  metadata:
+    title: "Circuit Breaker for Service-to-Service HTTP — GoFr"
+    description: "Enable a circuit breaker on GoFr's inter-service HTTP client to fail fast on unhealthy upstreams, prevent cascading failures, and recover automatically."
+---
+
 # Circuit Breaker in HTTP Communication
+
+{% answer %}
+GoFr's `AddHTTPService` registers an instrumented HTTP client and accepts a `service.CircuitBreakerConfig`. Configure it with a failure threshold and a polling interval. When the failure count crosses the threshold, the breaker opens and short-circuits subsequent requests for fast failure; the polling interval drives recovery checks against the upstream's health endpoint so traffic resumes automatically once the dependency is healthy again.
+{% /answer %}
 
 Calls to remote resources and services can fail due to temporary issues like slow network connections or timeouts, service unavailability. While transient faults can be mitigated using the "Retry pattern", there are cases where continual retries are futile, such as during severe service failures.
 

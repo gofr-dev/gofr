@@ -1,3 +1,11 @@
+---
+description: "Add authentication to a GoFr service with built-in middleware: HTTP Basic, API Key, OAuth 2.0, and JWT validation against JWKS endpoints, all via configuration."
+nextjs:
+  metadata:
+    title: "Authentication in GoFr — Basic, API Key, OAuth, JWT"
+    description: "Add authentication to a GoFr service with built-in middleware: HTTP Basic, API Key, OAuth 2.0, and JWT validation against JWKS endpoints, all via configuration."
+---
+
 # Authentication
 
 Authentication is a crucial aspect of web applications, controlling access to resources based on user roles or permissions. 

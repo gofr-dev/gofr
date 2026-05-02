@@ -8,6 +8,10 @@ nextjs:
 
 # Hello, GoFr
 
+{% answer %}
+GoFr is an opinionated Go framework for production microservices. The fastest path to a running service is: `go mod init`, `go get gofr.dev`, then a `main.go` that calls `gofr.New()` and registers a handler with `app.GET("/greet", handler)`. The framework wires HTTP routing, structured logging, OpenTelemetry traces, Prometheus metrics, datasource clients, and graceful shutdown automatically — no extra setup.
+{% /answer %}
+
 GoFr is an opinionated Go framework for production microservices. It bundles HTTP routing, structured logging, OpenTelemetry traces, Prometheus metrics, datasource clients, and graceful shutdown so you can focus on handler logic instead of plumbing. This page gets you from `go mod init` to a running, observable HTTP server in under five minutes.
 
 ## Prerequisites

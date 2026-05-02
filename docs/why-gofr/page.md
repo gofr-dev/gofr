@@ -1,9 +1,9 @@
 ---
-description: "Why use GoFr instead of Gin, Fiber, or a hand-rolled net/http stack? Built-in observability, 15+ datasource integrations, gRPC, GraphQL, WebSockets — designed for production microservices on Kubernetes."
+description: "Why use GoFr instead of Gin, Fiber, or net/http? Built-in observability, 15+ datasources, gRPC, GraphQL, WebSockets, and pub/sub for Go microservices."
 nextjs:
   metadata:
     title: "Why GoFr — An Opinionated Go Framework for Microservices"
-    description: "Why use GoFr instead of Gin, Fiber, or a hand-rolled net/http stack? Built-in observability, 15+ datasource integrations, gRPC, GraphQL, WebSockets — designed for production microservices on Kubernetes."
+    description: "Why use GoFr instead of Gin, Fiber, or net/http? Built-in observability, 15+ datasources, gRPC, GraphQL, WebSockets, and pub/sub for Go microservices."
 ---
 
 # Why GoFr?

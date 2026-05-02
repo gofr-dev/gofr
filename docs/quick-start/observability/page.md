@@ -1,3 +1,11 @@
+---
+description: "GoFr ships built-in observability: structured JSON logs, OpenTelemetry traces, and Prometheus metrics from server start, with no extra configuration required."
+nextjs:
+  metadata:
+    title: "Observability in GoFr — Logs, Traces, Metrics"
+    description: "GoFr ships built-in observability: structured JSON logs, OpenTelemetry traces, and Prometheus metrics from server start, with no extra configuration required."
+---
+
 # Observability
 
 GoFr, by default, manages observability in different ways once the server starts:

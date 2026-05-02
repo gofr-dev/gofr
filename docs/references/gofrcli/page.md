@@ -1,3 +1,11 @@
+---
+description: "Use the GoFr CLI to scaffold projects, generate boilerplate, and run framework-aware tasks. Speeds up repetitive work and keeps services consistent."
+nextjs:
+  metadata:
+    title: "GoFr CLI Reference — Project Scaffolding and Tooling"
+    description: "Use the GoFr CLI to scaffold projects, generate boilerplate, and run framework-aware tasks. Speeds up repetitive work and keeps services consistent."
+---
+
 # GoFR Command Line Interface
 
 Managing repetitive tasks and maintaining consistency across large-scale applications is challenging!
