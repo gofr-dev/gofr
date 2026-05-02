@@ -7,7 +7,7 @@ require (
 	github.com/Azure/azure-sdk-for-go/sdk/storage/azfile v1.5.4
 	github.com/stretchr/testify v1.11.1
 	go.uber.org/mock v0.6.0
-	gofr.dev v1.56.1
+	gofr.dev v1.56.3
 )
 
 require (
@@ -19,6 +19,6 @@ require (
 	github.com/rogpeppe/go-internal v1.14.1 // indirect
 	golang.org/x/net v0.53.0 // indirect
 	golang.org/x/text v0.36.0 // indirect
-	google.golang.org/api v0.273.0 // indirect
+	google.golang.org/api v0.276.0 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 )
