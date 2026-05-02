@@ -20,10 +20,10 @@ You have GoFr running in Kubernetes (see {% new-tab-link newtab=false title="Dep
 
 GoFr starts a separate HTTP server on `METRICS_PORT` (default `2121`) that serves Prometheus-format metrics at `/metrics`. Setting `METRICS_PORT=0` disables the server entirely — useful for short-lived CLI commands.
 
-A truncated sample:
+A truncated sample (label sets and HELP strings match the framework's actual output as of the current `pkg/gofr/container/container.go` registrations):
 
 ```text
-# HELP app_http_response Histogram for HTTP response time
+# HELP app_http_response Response time of HTTP requests in seconds.
 # TYPE app_http_response histogram
 app_http_response_bucket{path="/orders",method="GET",status="200",le="0.005"} 412
 app_http_response_bucket{path="/orders",method="GET",status="200",le="0.01"}  580
@@ -31,16 +31,16 @@ app_http_response_bucket{path="/orders",method="GET",status="200",le="+Inf"} 612
 app_http_response_sum{path="/orders",method="GET",status="200"} 4.21
 app_http_response_count{path="/orders",method="GET",status="200"} 612
 
-# HELP app_sql_open_connections Number of open SQL connections
+# HELP app_sql_open_connections Number of open SQL connections.
 # TYPE app_sql_open_connections gauge
-app_sql_open_connections{} 4
+app_sql_open_connections 4
 
 # HELP transaction_success used to track the count of successful transactions
 # TYPE transaction_success counter
-transaction_success_total{} 87
+transaction_success_total 87
 ```
 
-Default metric names are stable (`app_http_response`, `app_sql_*`, `app_redis_*`, etc.). Custom metrics you register via `app.Metrics().NewCounter(...)` appear with the name and labels you supplied.
+Default metric names are stable (`app_http_response`, `app_sql_*`, `app_redis_*`, etc.). The OpenTelemetry-to-Prometheus exporter additionally adds `otel_scope_*` labels to every series. Custom metrics you register via `app.Metrics().NewCounter(...)` appear with the name and labels you supplied. To see the live label set against your own service, run `curl http://localhost:2121/metrics` and inspect the output directly.
 
 ## Option 1: pod annotations (older clusters / vanilla Prometheus)
 

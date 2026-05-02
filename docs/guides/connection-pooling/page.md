@@ -101,10 +101,11 @@ func main() {
 }
 ```
 
-Two pitfalls to know:
+One pitfall to know:
 
-1. **`ConnectionPoolConfig` must be the first option.** Wrapping options (`CircuitBreakerConfig`, `RetryConfig`, OAuth) hide the underlying transport. Apply pool config first, then wrap.
-2. **Go's default `MaxIdleConnsPerHost` is 2.** That's almost always too low for a microservice talking to one downstream — bump it to 10–20 for typical traffic, higher for chatty services.
+- **Go's default `MaxIdleConnsPerHost` is 2.** That's almost always too low for a microservice talking to one downstream — bump it to 10–20 for typical traffic, higher for chatty services.
+
+You can pass `ConnectionPoolConfig` in any position among the `AddHTTPService` options. The framework's `extractHTTPService` helper recursively unwraps the circuit-breaker, retry, and auth wrappers when applying pool config, so option order does not matter.
 
 ## Verification
 
@@ -123,7 +124,7 @@ After a deploy, watch the connection count climb to roughly `replicas × DB_MAX_
 `DB_MAX_OPEN_CONNECTION` (default 0 = unlimited) and `DB_MAX_IDLE_CONNECTION` (default 2). They map to `SetMaxOpenConns` and `SetMaxIdleConns` respectively.
 {% /faq-item %}
 {% faq-item question="Why is my HTTP client only using 2 connections per host?" %}
-That's Go's `DefaultMaxIdleConnsPerHost`. Pass a `service.ConnectionPoolConfig` with `MaxIdleConnsPerHost: 20` as the first option to `AddHTTPService` so it's applied before the circuit-breaker/retry wrappers.
+That's Go's `DefaultMaxIdleConnsPerHost`. Pass a `service.ConnectionPoolConfig` with `MaxIdleConnsPerHost: 20` (in any position among the `AddHTTPService` options — the framework unwraps circuit-breaker/retry/auth wrappers regardless of order).
 {% /faq-item %}
 {% faq-item question="Should I cap DB_MAX_OPEN_CONNECTION on every service?" %}
 Yes. The default of `0` (unlimited) is fine for local development but lets a single misbehaving pod exhaust the database. Always set an explicit limit in production.

@@ -56,7 +56,9 @@ config:
   APP_ENV: staging
   LOG_LEVEL: DEBUG
   DB_HOST: postgres.staging.svc.cluster.local
-  TRACER_URL: http://otel-collector.observability.svc:4318
+  # GoFr's OTLP exporter speaks gRPC; use bare host:port (no http://) and the
+  # OTLP gRPC port 4317 (4318 is OTLP HTTP, which GoFr does NOT use).
+  TRACER_URL: otel-collector.observability.svc.cluster.local:4317
 ```
 
 ```yaml
@@ -66,7 +68,7 @@ image: { tag: 1.4.2 }
 config:
   APP_ENV: prod
   DB_HOST: postgres-primary.prod.svc.cluster.local
-  TRACER_URL: http://otel-collector.observability.svc:4318
+  TRACER_URL: otel-collector.observability.svc.cluster.local:4317
   DB_MAX_OPEN_CONNECTION: "20"
 ```
 

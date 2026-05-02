@@ -20,11 +20,12 @@ That means *any* deployment shape works correctness-wise. The CI/CD question is 
 
 ## Option A: Migrations on app start (default)
 
-The simplest setup. Every replica calls `app.Migrate(...)` before serving traffic. The first to acquire the lock runs the migration; others wait. After the migration finishes, all replicas continue startup.
+The simplest setup, and the default GoFr lifecycle. Every replica calls `app.Migrate(...)` in-process before serving traffic — there is no separate migration binary or subcommand. The first replica to acquire the lock runs the migration; the others observe the populated `gofr_migrations` table and no-op. After migrations finish, all replicas continue normal startup.
 
 Pros:
 - Zero extra infra. One artifact per service.
 - Migrations cannot drift from code — they ship in the same image.
+- Idempotent under concurrency: the lock plus the version table guarantee each migration runs exactly once across replicas.
 
 Cons:
 - A migration error fails the readiness probe of every replica simultaneously, which can take down healthy old pods if the rollout strategy isn't careful.
@@ -35,7 +36,27 @@ Use this for small services and early-stage projects.
 
 ## Option B: Helm pre-upgrade Job
 
-For multi-replica production services, run migrations as a Kubernetes Job triggered by Helm before the Deployment rolls forward. The Job uses the *same image* as the Deployment but with a different command that just runs migrations and exits.
+For multi-replica production services, run migrations as a Kubernetes Job triggered by Helm before the Deployment rolls forward. The Job uses the *same image* as the Deployment, but the GoFr binary itself is the entrypoint — there is no separate `migrate` binary or `gofr migrate` subcommand. You gate the migration-only behavior in your `main.go` with an env var (typically `MIGRATE_ONLY=true`); if set, register migrations, run them, and `os.Exit(0)` before starting the HTTP/gRPC servers.
+
+```go
+// main.go
+func main() {
+    app := gofr.New()
+    app.Migrate(migrations.All())
+
+    if os.Getenv("MIGRATE_ONLY") == "true" {
+        // app.Migrate() above ran the migrations synchronously and has
+        // already returned — there's nothing else to do in this mode.
+        // Exit before app.Run() so no HTTP/gRPC/metrics servers bind.
+        // The key point: this is the same binary as the serving app,
+        // gated by an env var. There is no separate `migrate` CLI.
+        return
+    }
+
+    // ... register handlers ...
+    app.Run()
+}
+```
 
 ```yaml
 apiVersion: batch/v1
@@ -54,16 +75,15 @@ spec:
       containers:
         - name: migrate
           image: "{{ .Values.image.repo }}:{{ .Values.image.tag }}"
-          command: ["/app/migrate"]
+          # No separate /app/migrate binary exists in GoFr; reuse the app
+          # entrypoint and toggle behavior with MIGRATE_ONLY.
+          env:
+            - name: MIGRATE_ONLY
+              value: "true"
           envFrom:
             - secretRef:
                 name: {{ .Release.Name }}-db
 ```
-
-Two ways to provide the `migrate` binary:
-
-1. Build a tiny migrator main that calls only `app.Migrate(migrations.All())` and exits — no HTTP/gRPC servers started.
-2. Run the same app binary with a `MIGRATE_ONLY=true` flag your `main.go` checks; if set, run migrations and `os.Exit(0)`.
 
 Pros:
 - Failed migration fails the Helm release atomically; the rollout never starts.
@@ -71,7 +91,7 @@ Pros:
 - Application pods see the new schema by the time they boot.
 
 Cons:
-- One more thing to template. The migrator image must always match the Deployment image SHA exactly.
+- One more thing to template. The migrator Job's image SHA must always match the Deployment image SHA.
 
 Use this for production.
 

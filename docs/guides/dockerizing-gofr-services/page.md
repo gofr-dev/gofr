@@ -43,7 +43,7 @@ Save this as `Dockerfile` at the repo root:
 ```dockerfile
 # syntax=docker/dockerfile:1.7
 
-ARG GO_VERSION=1.23
+ARG GO_VERSION=1.25
 ARG APP_VERSION=dev
 ARG GIT_COMMIT=unknown
 
@@ -85,8 +85,15 @@ USER nonroot:nonroot
 EXPOSE 8000 2121
 
 # /.well-known/alive is registered by GoFr automatically and returns 200 when the process is up.
-HEALTHCHECK --interval=30s --timeout=3s --start-period=10s --retries=3 \
-  CMD ["/app/app", "healthcheck"] || exit 1
+# NOTE: distroless/static has no shell and no wget/curl, so a Dockerfile HEALTHCHECK is
+# impractical on this base image. The recommended path is to omit HEALTHCHECK and rely on
+# Kubernetes liveness/readiness probes (see the Deploying to Kubernetes guide). If you do
+# need a docker-level healthcheck, switch the runtime stage to a base image that includes
+# wget (e.g. alpine) and use:
+#   HEALTHCHECK --interval=10s --timeout=2s --retries=5 \
+#     CMD wget -qO- http://localhost:8000/.well-known/alive || exit 1
+# There is NO `healthcheck` subcommand on the GoFr binary — `/app/app healthcheck` will
+# re-run the whole app and fail with a port-bind error.
 
 ENTRYPOINT ["/app/app"]
 ```
@@ -96,7 +103,7 @@ A few things worth calling out:
 - **`CGO_ENABLED=0`** produces a static binary — required because `distroless/static` has no glibc.
 - **`distroless/static-debian12:nonroot`** ships only the binary, CA certs, `/etc/passwd`, and timezone data. No shell, no package manager.
 - **`USER nonroot`** runs as UID 65532; combined with a read-only root filesystem in Kubernetes this satisfies most pod-security baselines.
-- **`HEALTHCHECK`** uses the `/.well-known/alive` endpoint that GoFr registers automatically (see {% new-tab-link newtab=false title="Monitoring Service Health" href="/docs/advanced-guide/monitoring-service-health" /%}). Distroless has no `curl`, so in standalone Docker you may want to add a tiny static `wget` or rely on Kubernetes probes instead — `HEALTHCHECK` above is illustrative; remove it if you only run on Kubernetes.
+- **Healthchecks** rely on the `/.well-known/alive` endpoint that GoFr registers automatically (see {% new-tab-link newtab=false title="Monitoring Service Health" href="/docs/advanced-guide/monitoring-service-health" /%}). There is no `healthcheck` subcommand on the GoFr binary, and `distroless/static` has no shell or `wget`/`curl` to call the endpoint, so a Dockerfile `HEALTHCHECK` directive does not work cleanly on this base image. On Kubernetes the standard path is to skip `HEALTHCHECK` entirely and use the Deployment's `livenessProbe`/`readinessProbe` (which `httpGet` the same `/.well-known/alive` and `/.well-known/health` paths). If you need a docker-level healthcheck, switch the runtime stage to a base image that includes `wget` (for example `alpine`) and use the commented form shown above.
 
 ## .dockerignore
 

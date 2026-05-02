@@ -86,7 +86,10 @@ data:
   DB_MAX_OPEN_CONNECTION: "20"
   DB_MAX_IDLE_CONNECTION: "5"
   TRACE_EXPORTER: otlp
-  TRACER_URL: http://otel-collector.observability.svc:4318
+  # GoFr's OTLP exporter speaks gRPC (otlptracegrpc). TRACER_URL must be a bare
+  # host:port — no http:// scheme — and the OTLP gRPC port is 4317 (4318 is OTLP
+  # HTTP, which GoFr does NOT use).
+  TRACER_URL: otel-collector.observability.svc.cluster.local:4317
 ---
 apiVersion: v1
 kind: Secret

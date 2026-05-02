@@ -37,7 +37,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-go@v5
         with:
-          go-version: '1.22'
+          go-version: '1.25'   # gofr.dev requires Go >= 1.25 (per its go.mod). Alternatively use `go-version-file: go.mod` to auto-track.
           cache: true       # caches modules + build cache automatically
       - run: go vet ./...
       - run: go test -race -coverprofile=cover.out ./...

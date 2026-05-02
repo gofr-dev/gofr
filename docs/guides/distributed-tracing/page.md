@@ -30,7 +30,7 @@ The HTTP server middleware extracts both on every inbound request (`pkg/gofr/htt
 
 ## Trace ID format
 
-W3C trace IDs are 16-byte (32 hex character) values; span IDs are 8-byte (16 hex). GoFr puts the trace ID into every log line as the `trace_id` field, which is how you correlate logs and traces.
+W3C trace IDs are 16-byte (32 hex character) values; span IDs are 8-byte (16 hex). When there is a trace context, GoFr surfaces the trace ID in two places in the JSON log envelope: at the top level as the `trace_id` field (omitted when no trace context is set), and inside `message` for HTTP request logs (alongside `span_id`, `method`, `uri`, etc.). That is how you correlate logs and traces — see [Production Logging](/docs/advanced-guide/production-logging) for the exact log shape and shipper configuration.
 
 A trace looks the same across HTTP and gRPC: the same trace ID, with each service contributing one or more spans.
 
@@ -112,6 +112,6 @@ W3C TraceContext (`traceparent`, `tracestate`) and W3C Baggage. They are registe
 Yes. Both protocols run through the same OpenTelemetry SDK and propagators in GoFr, so a trace that hops HTTP → gRPC → HTTP shows up as one trace in the backend.
 {% /faq-item %}
 {% faq-item question="How do I correlate logs with a trace?" %}
-GoFr puts the trace ID into every log line as the `trace_id` field. Search your logging backend for that value and you get every log entry for the request.
+When a request has a trace context, GoFr writes the trace ID into the JSON log envelope's top-level `trace_id` field and into the nested `message` object on HTTP request logs. Search your logging backend for that value, after configuring your shipper to extract it from both spots, and you get every log entry for the request.
 {% /faq-item %}
 {% /faq %}
