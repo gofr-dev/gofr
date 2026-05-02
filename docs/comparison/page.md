@@ -22,7 +22,6 @@ GoFr, Gin, Fiber, Echo, and Chi are all open-source projects in the same space, 
 | gRPC server (built-in) | Yes | No | No | No | No |
 | GraphQL server (built-in) | Yes | No | No | No | No |
 | WebSocket server + client | Yes | Via library | Yes (server) | Via library | Via library |
-| Server-Sent Events | Yes | Manual | Yes | Manual | Manual |
 | OpenTelemetry tracing (built-in) | Yes | Via library | Via library | Via library | Via library |
 | Prometheus metrics (built-in) | Yes | Via library | Via library | Via library | Via library |
 | Structured logging (built-in) | Yes | Via library | Via library | Via library | Via library |

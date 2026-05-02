@@ -176,7 +176,7 @@ Thresholds (5% errors, 500ms p95, 85% CPU saturation) are starting points — ca
 
 Don't ship hand-rolled dashboards if a community one will do. Good starting points:
 
-- **Go runtime:** the official Prometheus client_golang dashboard ([grafana.com/grafana/dashboards/6671](https://grafana.com/grafana/dashboards/6671)) covers GC, goroutines, heap.
+- **Go runtime:** search the [Grafana dashboard library](https://grafana.com/grafana/dashboards/?dataSource=prometheus&search=go) for an OpenTelemetry / `go_*` runtime dashboard covering GC, goroutines, and heap.
 - **Kubernetes pod resources:** kube-prometheus-stack ships `kubernetes-mixin` dashboards out of the box.
 - **HTTP RED method:** any RED-method dashboard (rate / errors / duration) works against `app_http_response_*`.
 

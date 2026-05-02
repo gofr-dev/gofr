@@ -14,7 +14,7 @@ GoFr supports Basic Auth, API key auth, and OAuth 2.0 JWT validation against a J
 
 ## What GoFr provides
 
-Three authentication methods are exposed on the App, all verified in `pkg/gofr/auth.go`:
+Three authentication categories are exposed on the App, all verified in `pkg/gofr/auth.go` — Basic auth, API-key auth, and OAuth/JWT — each with a static-credentials variant and a custom-validator variant:
 
 - `EnableBasicAuth(credentials...)` — pairs of username/password.
 - `EnableBasicAuthWithValidator(fn)` — custom validator with access to the container.
@@ -22,7 +22,7 @@ Three authentication methods are exposed on the App, all verified in `pkg/gofr/a
 - `EnableAPIKeyAuthWithValidator(fn)` — custom validator.
 - `EnableOAuth(jwksEndpoint, refreshIntervalSeconds, options ...jwt.ParserOption)` — JWT validation with periodic JWKS refresh.
 
-A single call enables auth on both HTTP and gRPC. `/.well-known/alive` is exempted by default; `/.well-known/health` is also exempted by default but should normally be re-protected.
+A single call enables auth on both HTTP and gRPC. The entire `/.well-known/*` prefix (including `/.well-known/alive` and `/.well-known/health`) is auth-exempt by default — see `pkg/gofr/http/middleware/validate.go`. Re-protect `health` if you publish it externally.
 
 For full code examples, see [Authentication](/docs/advanced-guide/authentication).
 

@@ -10,7 +10,7 @@ Requires Go 1.24+. Repo: <https://github.com/gofr-dev/gofr>.
 
 ## Core rules an assistant must know
 
-1. **One handler signature** for HTTP / gRPC / GraphQL / WebSocket / SSE / cron / CLI:
+1. **One handler signature** for HTTP / gRPC / GraphQL / WebSocket / cron / CLI:
    `func(c *gofr.Context) (any, error)`. Return value → `{"data": ...}`. Return error → error response.
 2. **Path params use `{name}`**, not `:name`. `app.GET("/users/{id}", h)`.
 3. **`c.PathParam("id")`** for path; **`c.Param("q")`** for query; **`c.Bind(&v)`** for body.

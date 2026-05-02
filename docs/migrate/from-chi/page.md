@@ -68,8 +68,8 @@ if err := c.Bind(&input); err != nil {
 |---|---|---|
 | Path param | `chi.URLParam(r, "id")` | `c.PathParam("id")` |
 | Query param | `r.URL.Query().Get("q")` | `c.Param("q")` |
-| Header | `r.Header.Get("X-Foo")` | `c.Request.Header.Get("X-Foo")` |
-| Raw `*http.Request` | `r` | `c.Request` |
+| Header | `r.Header.Get("X-Foo")` | Read in custom middleware (`func(http.Handler) http.Handler`) on the underlying `*http.Request`; `c.Request` is the abstract `gofr.Request` interface and does not expose `Header` |
+| Raw `*http.Request` | `r` | Not exposed on `c.Request`; `c.Request` is the `gofr.Request` interface (`Param`, `PathParam`, `Bind`, `HostName`, `Params`, `Context`). Reach the raw request through middleware if needed |
 
 ## Middleware
 
@@ -97,12 +97,10 @@ If you used `go-chi/render` for `render.JSON(w, r, v)`, the GoFr equivalent is j
 
 ## Datasources
 
-In a chi service you typically `sql.Open` yourself, manage a `*sql.DB`, set pool sizes, and instrument it. GoFr replaces all of that with:
+In a chi service you typically `sql.Open` yourself, manage a `*sql.DB`, set pool sizes, and instrument it. GoFr auto-initialises SQL and Redis from environment variables — set `DB_DIALECT`, `DB_HOST`, `DB_PORT`, `DB_USER`, `DB_PASSWORD`, `DB_NAME` (or `REDIS_HOST`, `REDIS_PORT`) in `configs/.env` and `gofr.New()` wires the connection. Other clients are registered explicitly with a provider:
 
 ```go
-app.AddSQL(/* read from .env */)
-app.AddRedis(...)
-app.AddMongo(...)
+app.AddMongo(mongo.New(mongo.Config{/* ... */}))
 ```
 
 Inside handlers, use `c.SQL`, `c.Redis`, `c.Mongo`. SQL (MySQL/Postgres/Oracle/SQLite/SQL Server), Redis, Mongo, Cassandra, ScyllaDB, Couchbase, ArangoDB, Dgraph, SurrealDB. SQL/Mongo/Redis/Dgraph migrations are first-class — see [migrations](/docs/advanced-guide/handling-data-migrations).

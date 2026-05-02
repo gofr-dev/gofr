@@ -34,11 +34,11 @@ kind: Ingress
 metadata:
   name: gofr-api
   annotations:
-    kubernetes.io/ingress.class: alb
     alb.ingress.kubernetes.io/scheme: internet-facing
     alb.ingress.kubernetes.io/target-type: ip
     alb.ingress.kubernetes.io/healthcheck-path: /.well-known/alive
 spec:
+  ingressClassName: alb
   rules: [...]
 ```
 
@@ -61,9 +61,8 @@ apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
   name: gofr-api
-  annotations:
-    kubernetes.io/ingress.class: gce
 spec:
+  ingressClassName: gce
   rules: [...]
 ```
 
@@ -86,7 +85,7 @@ Canonical docs: `https://cloud.google.com/kubernetes-engine/docs/concepts/ingres
 - Application Gateway Ingress Controller (AGIC) — uses an Azure Application Gateway, integrates with WAF.
 - NGINX Ingress Controller — vendor-neutral, runs anywhere.
 
-AGIC sample annotation: `kubernetes.io/ingress.class: azure/application-gateway`.
+AGIC sample (modern form): set `spec.ingressClassName: azure-application-gateway` on the Ingress instead of using the deprecated `kubernetes.io/ingress.class` annotation.
 
 **LoadBalancer.** A `Service: type=LoadBalancer` provisions an Azure Standard Load Balancer by default. For internal-only, add `service.beta.kubernetes.io/azure-load-balancer-internal: "true"`.
 

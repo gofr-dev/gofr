@@ -73,7 +73,7 @@ Circuit breaker, retry, rate limit, connection pool, and auth are configurable t
 ### gRPC, Pub/Sub, cron, WebSockets
 
 ```go
-app.GRPCRegisterService(...)               // gRPC
+app.RegisterService(serviceDesc, impl)      // gRPC
 app.Subscribe("orders", orderHandler)       // Pub/Sub (Kafka, NATS, etc.)
 app.AddCronJob("0 * * * *", "billing", run) // Cron
 app.WebSocket("/stream", wsHandler)         // WebSocket

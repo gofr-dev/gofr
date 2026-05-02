@@ -110,6 +110,6 @@ The first command verifies the running container actually has the env you expect
 No. Migrations applied in staging can break the schema prod relies on, and any data leakage is a compliance incident. Always run separate databases (or separate writable instances of the same engine).
 {% /faq-item %}
 {% faq-item question="How do I change log level without redeploying?" %}
-Set `REMOTE_LOG_URL` to a control-plane endpoint and adjust the level there — GoFr polls on `REMOTE_LOG_FETCH_INTERVAL` (default 15s). See the Remote Log Level Change guide.
+Set `REMOTE_LOG_URL` to a control-plane endpoint and adjust the level there — GoFr polls on `REMOTE_LOG_FETCH_INTERVAL` (an integer number of seconds; default `15`, i.e. 15s). See the Remote Log Level Change guide.
 {% /faq-item %}
 {% /faq %}

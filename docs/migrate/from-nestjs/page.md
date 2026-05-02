@@ -31,7 +31,7 @@ NestJS leans on TypeScript decorators and a runtime DI container assembled from 
 | `Interceptors` / `Guards` | GoFr middleware |
 | `@nestjs/microservices` (TCP/Redis/NATS/Kafka) | `app.Subscribe("topic", handler)` over Kafka, NATS, SQS, MQTT, Google Pub/Sub, Azure Event Hub |
 | `@nestjs/swagger` | Built-in Swagger UI from your `openapi.json` |
-| `@nestjs/typeorm`, `@nestjs/mongoose` | `app.AddSQL` / `app.AddMongo` + GoFr migrations |
+| `@nestjs/typeorm`, `@nestjs/mongoose` | SQL auto-initialised from `DB_DIALECT`/`DB_HOST`/etc. env vars; `app.AddMongo(provider)` for Mongo, plus GoFr migrations |
 | `@nestjs/schedule` (`@Cron`) | `app.AddCronJob(...)` |
 | `@nestjs/terminus` health | `/.well-known/health` (auto) |
 
@@ -96,7 +96,7 @@ If you have a typical "Nest CRUD module" — controller + service + entity + rep
 | Kafka | Built-in Kafka subscriber/publisher |
 | NATS | Built-in NATS subscriber/publisher |
 | Redis Pub/Sub | Use Redis client as datasource |
-| RabbitMQ | Use a community driver |
+| RabbitMQ (Nest's `Transport.RMQ`) | Not built into GoFr — use Kafka, NATS, SQS, MQTT, Google Pub/Sub, or Azure Event Hub instead, or bridge via a community driver |
 | MQTT | Built-in MQTT subscriber |
 
 Subscribe pattern:

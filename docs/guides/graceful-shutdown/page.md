@@ -24,14 +24,15 @@ Every production GoFr deployment on Kubernetes should be configured for graceful
 ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGINT, syscall.SIGTERM)
 ```
 
-When that context is canceled, a goroutine creates a timeout context using `SHUTDOWN_GRACE_PERIOD` (default `30s`) and calls `App.Shutdown`. `Shutdown` joins errors from:
+When that context is canceled, a goroutine creates a timeout context using `SHUTDOWN_GRACE_PERIOD` (default `30s`) and calls `App.Shutdown`. The order is fixed by the framework — see [`pkg/gofr/gofr.go:96-114`](https://github.com/gofr-dev/gofr/blob/main/pkg/gofr/gofr.go) — and `Shutdown` joins errors from each step:
 
-- `httpServer.Shutdown(ctx)` — stops accepting new connections, waits for in-flight handlers
-- `grpcServer.Shutdown(ctx)` — drains active streams
-- `metricServer.Shutdown(ctx)` — stops `/metrics`
-- `container.Close()` — closes SQL pools, Redis clients, Pub/Sub consumers, and other registered datasources
+1. `httpServer.Shutdown(ctx)` — stops accepting new connections, waits for in-flight handlers
+2. `grpcServer.Shutdown(ctx)` — drains active streams
+3. `container.Close()` — closes SQL pools, Redis clients, Pub/Sub consumers, and other registered datasources
+4. `metricServer.Shutdown(ctx)` — stops `/metrics`
+5. Logger close — if the logger implements `io.Closer`, its `Close()` is called last
 
-The container's `Close` is what commits Pub/Sub offsets and lets SQL drivers finish in-progress queries. Shutdown order is fixed by the framework — application code does not need to coordinate it.
+The container's `Close` is what commits Pub/Sub offsets and lets SQL drivers finish in-progress queries. Application code does not need to coordinate this order.
 
 ## OnStart hooks vs shutdown hooks
 

@@ -118,8 +118,15 @@ This is honest extra work; the trade-off is no implicit query generation surpris
 
 Django signals (`post_save`, etc.) don't translate directly — they're an in-process pub/sub. The cross-service equivalent is GoFr Pub/Sub: emit a domain event from the handler, subscribe in another service.
 
+Publish from inside a handler — `GetPublisher` is on `*gofr.Context`, and the payload must be `[]byte`:
+
 ```go
-app.GetPublisher().Publish(c, "user.created", payload)
+func handler(c *gofr.Context) (any, error) {
+    if err := c.GetPublisher().Publish(c, "user.created", []byte(`{"id":"1"}`)); err != nil {
+        return nil, err
+    }
+    return map[string]string{"status": "queued"}, nil
+}
 ```
 
 Subscribers (Kafka, NATS, SQS, MQTT, Google Pub/Sub, Azure Event Hub) are registered with `app.Subscribe`.

@@ -34,29 +34,30 @@ Cons:
 
 Use this for small services and early-stage projects.
 
-## Option B: Helm pre-upgrade Job
+## Option B: Separate `cmd/migrate` binary as a Helm pre-upgrade Job
 
-For multi-replica production services, run migrations as a Kubernetes Job triggered by Helm before the Deployment rolls forward. The Job uses the *same image* as the Deployment, but the GoFr binary itself is the entrypoint — there is no separate `migrate` binary or `gofr migrate` subcommand. You gate the migration-only behavior in your `main.go` with an env var (typically `MIGRATE_ONLY=true`); if set, register migrations, run them, and `os.Exit(0)` before starting the HTTP/gRPC servers.
+For multi-replica production services, run migrations as a Kubernetes Job triggered by Helm before the Deployment rolls forward. **There is no built-in `gofr migrate` CLI or `MIGRATE_ONLY` env mode in the framework.** Instead, organise your application as two binaries built from the same Go module: the serving binary (`cmd/server` or your existing `main.go`) and a small dedicated migration binary (`cmd/migrate`). The migration binary calls `gofr.New()`, registers migrations, calls `app.Migrate(...)` (which is synchronous and runs to completion before returning), and exits without ever calling `app.Run()`. This is application code organisation — not a framework knob.
 
 ```go
-// main.go
+// cmd/migrate/main.go
+package main
+
+import (
+    "gofr.dev/pkg/gofr"
+
+    "yourmodule/migrations"
+)
+
 func main() {
     app := gofr.New()
+    // app.Migrate runs migrations synchronously using GoFr's distributed lock
+    // and returns once they have completed (or failed). No app.Run() — this
+    // binary is intended to be invoked as a one-shot Job.
     app.Migrate(migrations.All())
-
-    if os.Getenv("MIGRATE_ONLY") == "true" {
-        // app.Migrate() above ran the migrations synchronously and has
-        // already returned — there's nothing else to do in this mode.
-        // Exit before app.Run() so no HTTP/gRPC/metrics servers bind.
-        // The key point: this is the same binary as the serving app,
-        // gated by an env var. There is no separate `migrate` CLI.
-        return
-    }
-
-    // ... register handlers ...
-    app.Run()
 }
 ```
+
+Build it as a separate binary in the same image (or a slimmer migrate-only image), and invoke it from the Helm pre-upgrade Job:
 
 ```yaml
 apiVersion: batch/v1
@@ -75,11 +76,8 @@ spec:
       containers:
         - name: migrate
           image: "{{ .Values.image.repo }}:{{ .Values.image.tag }}"
-          # No separate /app/migrate binary exists in GoFr; reuse the app
-          # entrypoint and toggle behavior with MIGRATE_ONLY.
-          env:
-            - name: MIGRATE_ONLY
-              value: "true"
+          # Invoke the dedicated migration binary built from cmd/migrate.
+          command: ["/app/migrate"]
           envFrom:
             - secretRef:
                 name: {{ .Release.Name }}-db
@@ -89,9 +87,10 @@ Pros:
 - Failed migration fails the Helm release atomically; the rollout never starts.
 - Job logs are clean and separately addressable: `kubectl logs job/...`.
 - Application pods see the new schema by the time they boot.
+- The migration binary is just Go code — no framework feature to learn beyond `app.Migrate`.
 
 Cons:
-- One more thing to template. The migrator Job's image SHA must always match the Deployment image SHA.
+- One more binary to build and template. The migrator Job's image SHA must always match the Deployment image SHA.
 
 Use this for production.
 

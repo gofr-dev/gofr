@@ -118,20 +118,29 @@ app.Subscribe("user.created", func(c *gofr.Context) error {
 })
 ```
 
-Supported backends: Kafka, NATS, SQS, MQTT, Google Pub/Sub, Azure Event Hub. Publish via `app.GetPublisher().Publish(c, topic, payload)`.
+Supported backends: Kafka, NATS, SQS, MQTT, Google Pub/Sub, Azure Event Hub. Publish from inside a handler — `GetPublisher` is on `*gofr.Context`, and the payload must be `[]byte`:
+
+```go
+func handler(c *gofr.Context) (any, error) {
+    if err := c.GetPublisher().Publish(c, "user.created", []byte(`{"id":"1"}`)); err != nil {
+        return nil, err
+    }
+    return map[string]string{"status": "queued"}, nil
+}
+```
 
 ## Artisan → GoFr CLI
 
 Laravel's Artisan commands (cleanup jobs, data backfills, one-off scripts) map onto GoFr's CLI / sub-command support — register sub-commands on the same app and invoke as `./mybinary <subcommand>`. See the [CLI command guide](/docs/advanced-guide/using-gofr-cli).
 
-For periodic work, use `app.AddCronJob(spec, fn)` instead of `php artisan schedule:run`.
+For periodic work, use `app.AddCronJob(schedule, jobName, fn)` (three arguments) instead of `php artisan schedule:run`, e.g. `app.AddCronJob("0 * * * *", "hourly-cleanup", func(ctx *gofr.Context) { /* ... */ })`.
 
 ## Datasources
 
+GoFr auto-initialises SQL and Redis from environment variables — set `DB_DIALECT`, `DB_HOST`, `DB_PORT`, `DB_USER`, `DB_PASSWORD`, `DB_NAME` (or `REDIS_HOST`, `REDIS_PORT`) in `configs/.env` and `gofr.New()` wires the connection. Other clients are registered explicitly with a provider:
+
 ```go
-app.AddSQL(/* read from .env */)
-app.AddRedis(...)
-app.AddMongo(...)
+app.AddMongo(mongo.New(mongo.Config{/* ... */}))
 ```
 
 SQL (MySQL/Postgres/Oracle/SQLite/SQL Server), Redis, Mongo, Cassandra, ScyllaDB, Couchbase, ArangoDB, Dgraph, SurrealDB are supported. File storage drivers cover Local, S3, GCS, Azure Blob, FTP, SFTP — useful when porting Laravel filesystem disks.
@@ -159,7 +168,7 @@ GoFr is API-first and doesn't ship a templating engine. For server-rendered HTML
 {% /faq-item %}
 
 {% faq-item question="What about Laravel Echo / WebSockets?" %}
-GoFr supports WebSocket and Server-Sent Events directly. Laravel Echo's broadcast pattern translates to a Pub/Sub backend fanning out to GoFr WebSocket connections.
+GoFr supports WebSocket directly. Laravel Echo's broadcast pattern translates to a Pub/Sub backend fanning out to GoFr WebSocket connections.
 {% /faq-item %}
 
 {% /faq %}

@@ -64,10 +64,10 @@ GoFr's positioning, [from the framework's README](https://github.com/gofr-dev/go
 
 Concretely:
 
-- **HTTP, gRPC, GraphQL, WebSockets, SSE, CLI** — one handler signature `func(*Context) (any, error)` across all of them.
+- **HTTP, gRPC, GraphQL, WebSockets, CLI** — one handler signature `func(*Context) (any, error)` across all of them.
 - **Auto CRUD handlers** — `app.AddRESTHandlers(&Entity{})` generates Create / Get / GetAll / Update / Delete endpoints from a struct.
 - **Observability built in** — OpenTelemetry traces (OTLP/Jaeger), Prometheus metrics, structured contextual logging. Configurable sampling. Remote log-level changes without restart.
-- **15+ datasources** — MySQL, PostgreSQL, Oracle, SQLite, MongoDB, Redis, Cassandra, ScyllaDB, ClickHouse, CockroachDB, Couchbase, DGraph, SurrealDB, ArangoDB, Elasticsearch, Solr, InfluxDB, OpenTSDB. All auto-instrumented.
+- **15+ datasources** — MySQL, PostgreSQL, Oracle, SQLite, MongoDB, Redis, Cassandra, ScyllaDB, ClickHouse, CockroachDB, Couchbase, DGraph, SurrealDB, ArangoDB, Elasticsearch, Solr, InfluxDB, OpenTSDB. KV-store backends include Badger, DynamoDB, and NATS. All auto-instrumented.
 - **Pub/Sub** — Kafka, NATS JetStream, Google Pub/Sub, AWS SQS, MQTT, Azure Event Hub.
 - **File storage** — local filesystem, Amazon S3, Google Cloud Storage, Azure Blob, FTP, SFTP — one interface.
 - **Service-to-service HTTP client** — circuit breaker, retry, rate limit, connection pool, Basic / API-key / OAuth auth — all configurable per service.

@@ -101,11 +101,22 @@ app.Subscribe("user.welcome", func(c *gofr.Context) error {
 })
 ```
 
-Backends: Kafka, NATS, SQS, MQTT, Google Pub/Sub, Azure Event Hub. Publish from a handler with `app.GetPublisher().Publish(c, topic, payload)`. For periodic jobs (cron-style), use `app.AddCronJob`.
+Backends: Kafka, NATS, SQS, MQTT, Google Pub/Sub, Azure Event Hub. Publish from inside a handler — `GetPublisher` is on `*gofr.Context`, and the payload must be `[]byte`:
+
+```go
+func handler(c *gofr.Context) (any, error) {
+    if err := c.GetPublisher().Publish(c, "user.welcome", []byte(`{"id":"1"}`)); err != nil {
+        return nil, err
+    }
+    return map[string]string{"status": "queued"}, nil
+}
+```
+
+For periodic jobs (cron-style), use `app.AddCronJob(schedule, jobName, fn)` — three arguments, e.g. `app.AddCronJob("0 * * * *", "hourly-report", reportFn)`.
 
 ## Action Cable → WebSocket
 
-GoFr supports WebSocket directly — register a WS handler on the app, manage connections, broadcast through your own routing or via Pub/Sub fan-out. Server-Sent Events are also supported.
+GoFr supports WebSocket directly — register a WS handler on the app, manage connections, broadcast through your own routing or via Pub/Sub fan-out.
 
 ## Concerns and before_action
 

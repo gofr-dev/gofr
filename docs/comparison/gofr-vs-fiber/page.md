@@ -16,7 +16,7 @@ nextjs:
 
 - **Performance** — built on `fasthttp`, regularly outperforms `net/http`-based frameworks on synthetic benchmarks.
 - **Express-like API** — feels natural for developers from Node.js.
-- **Built-in WebSocket and SSE** — rich HTTP feature set out of the box.
+- **Built-in WebSocket** — rich HTTP feature set out of the box.
 - **Active ecosystem** — many official middleware packages.
 
 ## Where they diverge
@@ -30,7 +30,7 @@ Fiber's foundation is `fasthttp`, which is **not compatible with `net/http`**. S
 Fiber focuses on HTTP. For other protocols, you'd add separate libraries (which works well — the Go ecosystem has good options for each). GoFr bundles those protocols under the same configuration and observability:
 
 ```go
-app.GRPCRegisterService(...)
+app.RegisterService(serviceDesc, impl) // gRPC service
 app.GraphQLQuery("user", userResolver)
 app.Subscribe("orders", orderHandler)
 app.AddCronJob("@hourly", "billing", run)

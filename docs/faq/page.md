@@ -46,10 +46,6 @@ Yes. GoFr supports schema-first GraphQL with queries, mutations, and an interact
 Yes — both server and client. Auto-reconnect, custom upgrader, and integrated observability. See [WebSockets in Go with GoFr](/docs/advanced-guide/websocket).
 {% /faq-item %}
 
-{% faq-item question="Does GoFr support Server-Sent Events (SSE)?" %}
-Yes. Return `gofr.SSE{}` from a handler and GoFr handles the streaming with automatic heartbeats.
-{% /faq-item %}
-
 {% faq-item question="Does GoFr support Pub/Sub?" %}
 Yes. Built-in support for Apache Kafka, NATS JetStream, Google Pub/Sub, MQTT, AWS SQS, and Azure Event Hub through one unified `Subscribe` / `Publish` API.
 {% /faq-item %}

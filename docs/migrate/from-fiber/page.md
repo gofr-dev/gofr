@@ -73,7 +73,7 @@ If your Fiber service used `adaptor.HTTPHandler` to wrap `net/http` middleware, 
 - **fasthttp libraries don't work with `net/http`.** If you depend on `valyala/fasthttp`-specific packages, plan to swap each for a `net/http` equivalent.
 - **`c.Locals` becomes `c.Set` / `c.Get`** for per-request data, or use the standard `context.Context` value mechanism.
 - **`adaptor.HTTPHandler`** wrappers you used to call `net/http` middleware from Fiber are now unnecessary — drop them.
-- **Streaming response patterns differ.** Fiber's `c.SendStream` maps to GoFr's `gofr.SSE{}` return type for SSE; for raw streaming, use `c.Response` directly.
+- **Streaming response patterns differ.** GoFr does not ship a built-in SSE responder; for raw streaming, write to the underlying `http.ResponseWriter` from a custom middleware.
 - **Compression / static-file middleware** that you composed in Fiber needs to be re-added explicitly in GoFr if you relied on it.
 
 ## Estimated effort

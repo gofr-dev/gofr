@@ -19,7 +19,7 @@ GoFr's logger writes JSON when the output is not a terminal (verified in `pkg/go
 | Field         | Source                                      |
 |---------------|---------------------------------------------|
 | `level`       | One of DEBUG, INFO, NOTICE, WARN, ERROR, FATAL |
-| `time`        | RFC3339 timestamp                           |
+| `time`        | RFC3339Nano timestamp (Go's default `time.Time` JSON marshaling, per `pkg/gofr/logging/logger.go:55`) |
 | `message`     | The argument passed to the logger — a string for app logs, or a structured object for HTTP request logs |
 | `trace_id`    | W3C trace ID, `omitempty` — present only when the call site supplies a trace context |
 | `gofrVersion` | Framework version baked into the binary     |
