@@ -150,7 +150,7 @@ func main() {
 	// Add a WebSocket service
 	err := app.AddWSService("notification-service", "ws://notifications.example.com/ws", nil, true, 5*time.Second)
 	if err != nil {
-		app.Logger.Errorf("Failed to add WebSocket service: %v", err)
+		app.Logger().Errorf("Failed to add WebSocket service: %v", err)
 		return
 	}
 

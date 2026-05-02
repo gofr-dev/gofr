@@ -12,10 +12,16 @@ Users can run MySQL/MariaDB and create a database locally using the following Do
 docker run --name gofr-mysql -e MYSQL_ROOT_PASSWORD=root123 -e MYSQL_DATABASE=test_db -p 3306:3306 -d mysql:8.0.30
 ```
 
-Access the `test_db` database and create a table customer with columns `id` and `name`. Change MySQL to MariaDB as needed: 
+MySQL takes ~10–15 seconds to bootstrap. Wait for it to be ready before running the next command:
 
 ```bash
-docker exec -it gofr-mysql mysql -uroot -proot123 test_db -e "CREATE TABLE customers (id INT AUTO_INCREMENT PRIMARY KEY, name VARCHAR(255) NOT NULL);"
+until docker exec gofr-mysql mysqladmin ping -uroot -proot123 --silent; do sleep 2; done
+```
+
+Access the `test_db` database and create a table customer with columns `id` and `name`. Change MySQL to MariaDB as needed:
+
+```bash
+docker exec gofr-mysql mysql -uroot -proot123 test_db -e "CREATE TABLE customers (id INT AUTO_INCREMENT PRIMARY KEY, name VARCHAR(255) NOT NULL);"
 ```
 
 Now that the database with the table is ready, we can connect our GoFr server to MySQL/MariaDB. 
@@ -103,7 +109,7 @@ docker run --name gofr-postgres -e POSTGRES_PASSWORD=postgres -e POSTGRES_DB=tes
 Access `test_db` database and create a table customer with columns `id` and `name`:
 
 ```bash
-docker exec -it gofr-postgres psql -U postgres test_db -c "CREATE TABLE customers (id SERIAL PRIMARY KEY, name VARCHAR(255) NOT NULL);"
+docker exec gofr-postgres psql -U postgres test_db -c "CREATE TABLE customers (id SERIAL PRIMARY KEY, name VARCHAR(255) NOT NULL);"
 ```
 
 ### Configuration & Usage

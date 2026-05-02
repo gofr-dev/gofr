@@ -85,7 +85,7 @@ type CreateUser struct {
 
 ## Auto-CRUD via AddRESTHandlers
 
-If you have a typical "Nest CRUD module" — controller + service + entity + repository — GoFr can generate the full CRUD surface for an entity with [`AddRESTHandlers`](/docs/advanced-guide/scaffolding-rest-server). One method registers `GET / POST / GET/{id} / PUT/{id} / DELETE/{id}` against your model.
+If you have a typical "Nest CRUD module" — controller + service + entity + repository — GoFr can generate the full CRUD surface for an entity with [`AddRESTHandlers`](/docs/quick-start/add-rest-handlers). One method registers `GET / POST / GET/{id} / PUT/{id} / DELETE/{id}` against your model.
 
 ## Microservices and Pub/Sub
 

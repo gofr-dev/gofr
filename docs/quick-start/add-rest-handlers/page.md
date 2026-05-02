@@ -104,7 +104,7 @@ func main() {
 	// AddRESTHandlers creates CRUD handles for the given entity
 	err := a.AddRESTHandlers(&user{})
 	if err != nil {
-		return
+		a.Logger().Fatal(err)
 	}
 
 	// Run the application

@@ -71,7 +71,7 @@ If your Fiber service used `adaptor.HTTPHandler` to wrap `net/http` middleware, 
 ## Common gotchas
 
 - **fasthttp libraries don't work with `net/http`.** If you depend on `valyala/fasthttp`-specific packages, plan to swap each for a `net/http` equivalent.
-- **`c.Locals` becomes `c.Set` / `c.Get`** for per-request data, or use the standard `context.Context` value mechanism.
+- **`c.Locals` has no direct equivalent.** `*gofr.Context` does not expose `Set` / `Get` methods for per-request locals. Either pass values through Go closures, or — since `*gofr.Context` embeds `context.Context` — use `context.WithValue(c, key, value)` and retrieve with `c.Value(key)`.
 - **`adaptor.HTTPHandler`** wrappers you used to call `net/http` middleware from Fiber are now unnecessary — drop them.
 - **Streaming response patterns differ.** GoFr does not ship a built-in SSE responder; for raw streaming, write to the underlying `http.ResponseWriter` from a custom middleware.
 - **Compression / static-file middleware** that you composed in Fiber needs to be re-added explicitly in GoFr if you relied on it.
@@ -90,7 +90,7 @@ A typical Fiber-based REST service migrates in 1–2 engineering days. The bigge
 {% faq %}
 
 {% faq-item question="Does GoFr support Fiber's request lifecycle features (Locals, etc.)?" %}
-Per-request data is handled via `c.Set` / `c.Get` on the GoFr Context, or the standard `context.Context` value mechanism.
+There is no `c.Locals`-style per-request locals API on `*gofr.Context`. Pass values through closures, or use the standard `context.Context` mechanism — `*gofr.Context` embeds `context.Context`, so `context.WithValue(c, key, value)` and `c.Value(key)` work.
 {% /faq-item %}
 
 {% faq-item question="Can I keep using fasthttp libraries with GoFr?" %}

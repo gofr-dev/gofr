@@ -284,7 +284,7 @@ To set up NATS JetStream, follow these steps:
 1. Import the external driver for NATS JetStream:
 
 ```bash
-go get gofr.dev/pkg/gofr/datasources/pubsub/nats
+go get gofr.dev/pkg/gofr/datasource/pubsub/nats
 ```
 
 2. Use the `AddPubSub` method to add the NATS JetStream driver to your application:

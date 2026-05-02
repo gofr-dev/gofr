@@ -80,7 +80,7 @@ If you previously offloaded CPU work via `run_in_threadpool`, in Go you simply c
 | Automatic OpenAPI at `/docs` | Drop your generated `openapi.json` into `static/` to serve via the built-in Swagger UI |
 | `response_model` | Return typed structs; the response shape is the struct |
 
-GoFr ships a Swagger UI that renders any `openapi.json` you place in the static directory — see the [openapi-documentation guide](/docs/advanced-guide/openapi-documentation).
+GoFr ships a Swagger UI that renders any `openapi.json` you place in the static directory — see the [Swagger documentation guide](/docs/advanced-guide/swagger-documentation).
 
 ## Dependency injection
 

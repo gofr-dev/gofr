@@ -76,7 +76,7 @@ If your Laravel resource is "controller + Eloquent model + standard CRUD", you c
 app.AddRESTHandlers(&User{})
 ```
 
-— which exposes `GET / POST / GET/{id} / PUT/{id} / DELETE/{id}` against your struct/table. See the [REST scaffolding guide](/docs/advanced-guide/scaffolding-rest-server).
+— which exposes `GET / POST / GET/{id} / PUT/{id} / DELETE/{id}` against your struct/table. See the [REST scaffolding guide](/docs/quick-start/add-rest-handlers).
 
 ## Validation
 
@@ -96,7 +96,7 @@ app.UseMiddleware(authMiddleware)
 app.UseMiddleware(rateLimiter)
 ```
 
-Authentication options ship in GoFr (Basic, API Key, OAuth-JWT — see [authentication](/docs/advanced-guide/http-authentication)) and you can layer RBAC on top.
+Authentication options ship in GoFr (Basic, API Key, OAuth-JWT — see [authentication](/docs/advanced-guide/authentication)) and you can layer RBAC on top.
 
 ## Eloquent → SQL drivers
 
@@ -131,7 +131,7 @@ func handler(c *gofr.Context) (any, error) {
 
 ## Artisan → GoFr CLI
 
-Laravel's Artisan commands (cleanup jobs, data backfills, one-off scripts) map onto GoFr's CLI / sub-command support — register sub-commands on the same app and invoke as `./mybinary <subcommand>`. See the [CLI command guide](/docs/advanced-guide/using-gofr-cli).
+Laravel's Artisan commands (cleanup jobs, data backfills, one-off scripts) map onto GoFr's CLI / sub-command support — register sub-commands on the same app and invoke as `./mybinary <subcommand>`. See the [CLI command guide](/docs/advanced-guide/building-cli-applications).
 
 For periodic work, use `app.AddCronJob(schedule, jobName, fn)` (three arguments) instead of `php artisan schedule:run`, e.g. `app.AddCronJob("0 * * * *", "hourly-cleanup", func(ctx *gofr.Context) { /* ... */ })`.
 

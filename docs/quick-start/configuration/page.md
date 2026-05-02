@@ -33,9 +33,9 @@ HTTP_PORT=9000
 GoFr uses an environment variable, `APP_ENV`, to determine the application's current environment. This variable also guides GoFr to load the corresponding environment file.
 
 ### Example:
-If `APP_ENV` is set to `dev`, GoFr will attempt to load the `.dev.env` file from the configs directory. If this file is not found, GoFr will default to loading the `.env` file.
+GoFr always loads `configs/.env` first (if present) as the base, then overlays `configs/.<APP_ENV>.env` on top. The overlay file's values override matching keys from `.env`; keys not set in the overlay continue to come from `.env`. If `APP_ENV` is unset, GoFr overlays `configs/.local.env` instead. System environment variables take precedence over both files.
 
-In the absence of the `APP_ENV` variable, GoFr will first attempt to load the `.local.env` file. If this file is not found, it will default to loading the `.env` file.
+For example, with `APP_ENV=dev` GoFr loads `configs/.env` and then overlays `configs/.dev.env`. Both files are loaded if both exist — the overlay does not replace `.env` wholesale.
 
 _For example, to run the application in the `dev` environment, use the following command:_
 

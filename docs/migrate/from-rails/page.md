@@ -79,7 +79,7 @@ For the "scaffold User name:string email:string" case, GoFr offers:
 app.AddRESTHandlers(&User{}) // GET, POST, GET/{id}, PUT/{id}, DELETE/{id}
 ```
 
-See the [REST scaffolding guide](/docs/advanced-guide/scaffolding-rest-server). For non-CRUD actions (Rails' `member` / `collection` routes), write a plain handler.
+See the [REST scaffolding guide](/docs/quick-start/add-rest-handlers). For non-CRUD actions (Rails' `member` / `collection` routes), write a plain handler.
 
 ## ActiveRecord → SQL drivers
 
@@ -133,7 +133,7 @@ Authentication options (Basic, API Key, OAuth-JWT) and RBAC are built in.
 
 ## CLI tasks (`rake`, generators)
 
-There is no Rails console, but for one-off tasks (data backfills, admin actions) GoFr supports CLI sub-commands on the same binary — see the [CLI command guide](/docs/advanced-guide/using-gofr-cli). Register a sub-command and invoke as `./mybinary <subcommand>`.
+There is no Rails console, but for one-off tasks (data backfills, admin actions) GoFr supports CLI sub-commands on the same binary — see the [CLI command guide](/docs/advanced-guide/building-cli-applications). Register a sub-command and invoke as `./mybinary <subcommand>`.
 
 ## Observability
 

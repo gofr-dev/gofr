@@ -494,8 +494,8 @@ This document lists all the configuration options supported by the GoFr framewor
 ---
 
 -  PUBSUB_BACKEND
--  Pub/Sub message broker backend
--  kafka, google, mqtt, nats, redis
+-  Pub/Sub message broker backend wired automatically by `gofr.New()`. Accepted values: `kafka`, `google`, `mqtt`, `redis` (case-insensitive). Other backends (NATS JetStream, AWS SQS, Azure Event Hub) are wired explicitly via `app.AddPubSub(...)`.
+-  
 
 {% /table %}
 
@@ -697,7 +697,7 @@ This document lists all the configuration options supported by the GoFr framewor
 ---
 
 -  NATS_SERVER
--  URL of the NATS server
+-  URL of the NATS server. The NATS driver is wired explicitly via `app.AddPubSub(...)`; this row is a convention only — the actual env-var name is whatever you read from `app.Config.Get(...)` and pass into `nats.Config.Server`.
 -  nats://localhost:4222
 
 ---

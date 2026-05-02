@@ -33,7 +33,7 @@ Fiber focuses on HTTP. For other protocols, you'd add separate libraries (which 
 app.RegisterService(serviceDesc, impl) // gRPC service
 app.GraphQLQuery("user", userResolver)
 app.Subscribe("orders", orderHandler)
-app.AddCronJob("@hourly", "billing", run)
+app.AddCronJob("0 * * * *", "billing", run) // every hour at :00
 ```
 
 ### Observability and datasources

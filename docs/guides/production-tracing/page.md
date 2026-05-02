@@ -117,8 +117,9 @@ GoFr sets up a `CompositeTextMapPropagator(TraceContext{}, Baggage{})`, so the W
 package main
 
 import (
+	"encoding/json"
+
 	"gofr.dev/pkg/gofr"
-	"gofr.dev/pkg/gofr/service"
 )
 
 func main() {
@@ -131,10 +132,16 @@ func main() {
 		defer span.End()
 
 		// The downstream span on payments will be a child of this trace.
-		var resp any
-		err := ctx.GetHTTPService("payments").
-			GetWithHeaders(ctx, "/charge", nil, nil, &resp)
+		// GetWithHeaders takes (ctx, path, queryParams, headers) and returns (*http.Response, error).
+		httpResp, err := ctx.GetHTTPService("payments").
+			GetWithHeaders(ctx, "/charge", nil, nil)
 		if err != nil {
+			return nil, err
+		}
+		defer httpResp.Body.Close()
+
+		var resp any
+		if err := json.NewDecoder(httpResp.Body).Decode(&resp); err != nil {
 			return nil, err
 		}
 

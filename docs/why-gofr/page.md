@@ -73,7 +73,7 @@ Concretely:
 - **Service-to-service HTTP client** — circuit breaker, retry, rate limit, connection pool, Basic / API-key / OAuth auth — all configurable per service.
 - **Migrations** — versioned for SQL, MongoDB, Redis, DGraph, and more.
 - **Auth & RBAC** — Basic, API key, OAuth (JWKS-validated JWT), config-driven role/permission mappings.
-- **Built-in Swagger UI** — drop your `openapi.json` in `configs/` and `/swagger` renders it.
+- **Built-in Swagger UI** — drop your `openapi.json` in `static/` and `/.well-known/swagger` renders it.
 - **Cron jobs** — 5- and 6-part expressions with auto-instrumented OpenTelemetry spans per job.
 - **Graceful shutdown + startup hooks** — `OnStart` for warmup; clean teardown of connections.
 

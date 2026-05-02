@@ -9,11 +9,13 @@ applies to both your HTTP and gRPC services.
 
 ## Exempted Paths
 
-By default, the authentication middleware exempts the following paths from authentication:
+By default, the authentication middleware exempts every path under `/.well-known/*` from authentication (the middleware's `isWellKnown` check uses `strings.HasPrefix(path, "/.well-known")`). This includes:
 
-- `/.well-known/alive`: Used for liveness probes, should be publicly accessible for health checks.
+- `/.well-known/alive` — liveness probe
+- `/.well-known/health` — readiness/health probe with datasource status
+- `/.well-known/swagger` — Swagger UI (when an `openapi.json` is present in `static/`)
 
-The health check endpoint `/.well-known/health` is exempted by default, but as it may contain sensitive information about the service and its dependencies, it is recommended to require authentication for it.
+If `/.well-known/health` exposes sensitive details about your datasources, scope its visibility at the network layer (private listener, mesh policy, or ingress rule) rather than expecting the auth middleware to gate it — the framework will not.
 
 ## 1. Basic Auth
 *Basic Authentication* is a simple authentication scheme where the user's credentials (username and password) are 

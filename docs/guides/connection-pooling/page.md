@@ -113,8 +113,11 @@ You can pass `ConnectionPoolConfig` in any position among the `AddHTTPService` o
 # SQL — Postgres
 psql -c "SELECT count(*) FROM pg_stat_activity WHERE datname='orders';"
 
-# In-cluster — pool gauges via /metrics
-curl http://orders-api.prod:2121/metrics | grep -E '(sql|redis)_open_connections'
+# In-cluster — SQL pool gauges and Redis command-latency histogram via /metrics
+# (GoFr exposes app_sql_open_connections + app_sql_inUse_connections gauges for SQL,
+# and app_sql_stats / app_redis_stats histograms for command latency. There is no
+# dedicated Redis pool gauge — observe pool pressure via app_redis_stats latency.)
+curl http://orders-api.prod:2121/metrics | grep -E 'app_sql_(open|inUse)_connections|app_(sql|redis)_stats'
 ```
 
 After a deploy, watch the connection count climb to roughly `replicas × DB_MAX_OPEN_CONNECTION` under steady load. If it exceeds that, something is bypassing the framework's datasource (e.g., a hand-rolled `sql.Open`).

@@ -27,7 +27,7 @@ git push tag v1.4.2 ──▶ CI builds image, signs, pushes
                   ──▶ deploy to prod     (APP_ENV=prod)
 ```
 
-GoFr reads `APP_ENV` to decide which override file to overlay on `configs/.env`. In Kubernetes, the override file is largely vestigial — every value comes from a `ConfigMap` or `Secret` injected with `envFrom` (see [Twelve-Factor Config](/docs/advanced-guide/twelve-factor-config)). `APP_ENV` still matters because GoFr logs it on startup and you can branch app behavior on it: `if app.Config.Get("APP_ENV") == "prod" { ... }`.
+GoFr reads `APP_ENV` to decide which override file to overlay on `configs/.env`. In Kubernetes, the override file is largely vestigial — every value comes from a `ConfigMap` or `Secret` injected with `envFrom` (see [Twelve-Factor Config](/docs/advanced-guide/twelve-factor-config)). Ship the same image to every environment and differentiate behavior through env / ConfigMap / Helm values rather than by branching on `APP_ENV` inside `main.go` — the moment two environments execute different code paths, the artifact you tested in staging stops being the artifact running in production.
 
 ## Namespace per env vs cluster per env
 

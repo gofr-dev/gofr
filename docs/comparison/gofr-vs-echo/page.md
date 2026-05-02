@@ -78,7 +78,7 @@ func main() {
 {% faq %}
 
 {% faq-item question="Does GoFr have an equivalent of Echo's grouped routes?" %}
-Yes — GoFr supports route grouping and per-group middleware via `app.UseMiddleware` and route prefixes.
+GoFr does not have a one-line `Group` equivalent. Replicate it by composing handlers with shared helpers and registering middleware globally with `app.UseMiddleware`.
 {% /faq-item %}
 
 {% faq-item question="Can I migrate Echo handlers to GoFr?" %}

@@ -67,6 +67,8 @@ import (
 	"context"
 	"encoding/json"
 	"net/http"
+	"strings"
+
 	"gofr.dev/pkg/gofr"
 	"gofr.dev/pkg/gofr/datasource/elasticsearch"
 )
@@ -75,10 +77,12 @@ func main() {
 	// Create a new application
 	app := gofr.New()
 
-	// Create Elasticsearch client with configuration
+	// Create Elasticsearch client with configuration.
+	// ADDRESSES is a comma-separated list of node URLs (e.g.
+	// "http://localhost:9200" or "http://es-1:9200,http://es-2:9200").
 	es := elasticsearch.New(elasticsearch.Config{
-		Addresses: app.Config.Get("ADDRESSES"),
-			Username:  app.Config.Get("USERNAME"),
+		Addresses: strings.Split(app.Config.Get("ADDRESSES"), ","),
+		Username:  app.Config.Get("USERNAME"),
 		Password:  app.Config.Get("PASSWORD"),
 	})
 

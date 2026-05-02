@@ -114,7 +114,7 @@ app.UseMiddleware(authMiddleware)
 app.UseMiddleware(rbacMiddleware)
 ```
 
-Built-in auth options include Basic, API Key, and OAuth/JWT — see [authentication](/docs/advanced-guide/http-authentication). RBAC is supported on top.
+Built-in auth options include Basic, API Key, and OAuth/JWT — see [authentication](/docs/advanced-guide/authentication). RBAC is supported on top.
 
 ## Datasources
 

@@ -60,7 +60,7 @@ func main() {
 }
 ```
 
-`AddRESTHandlers` reads the struct, infers the table, and exposes the five standard CRUD endpoints. For anything custom, fall back to plain `app.GET/POST/...` handlers. See the [REST scaffolding guide](/docs/advanced-guide/scaffolding-rest-server).
+`AddRESTHandlers` reads the struct, infers the table, and exposes the five standard CRUD endpoints. For anything custom, fall back to plain `app.GET/POST/...` handlers. See the [REST scaffolding guide](/docs/quick-start/add-rest-handlers).
 
 ## Custom views
 
@@ -100,7 +100,7 @@ Plan to replace queryset chains with explicit SQL. Migrate the data model with [
 
 ## Permissions and auth
 
-DRF's `permission_classes` map to a combination of GoFr authentication middleware (Basic, API Key, OAuth-JWT) and RBAC. See [HTTP authentication](/docs/advanced-guide/http-authentication). Per-request user identity is available via the request context.
+DRF's `permission_classes` map to a combination of GoFr authentication middleware (Basic, API Key, OAuth-JWT) and RBAC. See [authentication](/docs/advanced-guide/authentication). Per-request user identity is available via the request context.
 
 ## Pagination and filtering
 

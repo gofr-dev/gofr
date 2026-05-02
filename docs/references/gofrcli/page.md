@@ -12,7 +12,7 @@ Managing repetitive tasks and maintaining consistency across large-scale applica
 
 ## Prerequisites
 
-- Go 1.22 or above. To check Go version use the following command:
+- Go 1.25 or above. To check Go version use the following command:
 ```bash
   go version
 ```

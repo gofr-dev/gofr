@@ -30,7 +30,7 @@ The HTTP server middleware extracts both on every inbound request (`pkg/gofr/htt
 
 ## Trace ID format
 
-W3C trace IDs are 16-byte (32 hex character) values; span IDs are 8-byte (16 hex). When there is a trace context, GoFr surfaces the trace ID in two places in the JSON log envelope: at the top level as the `trace_id` field (omitted when no trace context is set), and inside `message` for HTTP request logs (alongside `span_id`, `method`, `uri`, etc.). That is how you correlate logs and traces — see [Production Logging](/docs/advanced-guide/production-logging) for the exact log shape and shipper configuration.
+W3C trace IDs are 16-byte (32 hex character) values; span IDs are 8-byte (16 hex). When a request carries a trace context, GoFr's logger writes the trace ID to the top-level `trace_id` field on the JSON log envelope (the field is `omitempty`, so it only appears when a trace context is set). On HTTP request logs specifically, the `message` field is itself a `RequestLog` struct that carries its own nested `trace_id` and `span_id` alongside `method`, `uri`, etc. — that nested copy is only present on the HTTP middleware's request log line, not on every log entry. Correlate logs and traces using either occurrence (see [Production Logging](/docs/advanced-guide/production-logging) for the exact log shape and shipper configuration).
 
 A trace looks the same across HTTP and gRPC: the same trace ID, with each service contributing one or more spans.
 

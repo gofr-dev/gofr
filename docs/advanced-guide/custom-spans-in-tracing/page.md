@@ -19,12 +19,14 @@ To add a custom trace to a request, GoFr context provides `Trace()` method, whic
 and returns a trace.Span. 
 
 ```go
-func MyHandler(c context.Context) error {
+import "gofr.dev/pkg/gofr"
+
+func MyHandler(c *gofr.Context) (any, error) {
 	span := c.Trace("my-custom-span")
-	defer span.Close()
+	defer span.End()
 
 	// Do some work here
-	return nil
+	return nil, nil
 }
 ```
 

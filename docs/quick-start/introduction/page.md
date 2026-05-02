@@ -63,7 +63,7 @@ Once the dependencies are synchronized, start the GoFr server using the followin
 This would start the server at 8000 port, `/greet` endpoint can be accessed from your browser at {% new-tab-link title="http://localhost:8000/greet" href="http://localhost:8000/greet" /%}, you would be able to see the output as following with _Status Code 200_ as per REST Standard.
 
 ```json
-{ "data": "Hello World!" }
+{"data":"Hello World!"}
 ```
 
 ## Understanding the example
