@@ -91,3 +91,24 @@ GoFr {% new-tab-link  newtab=false title="context" href="/docs/references/contex
 3. **Starting the server**
 
    When `app.Run()` is called, it configures, initiates, and runs the HTTP server, middlewares. It manages essential features such as routes for health check endpoints, metrics server, favicon etc. It starts the server on the default port 8000.
+
+## Default ports and endpoints
+
+Out of the box, `app.Run()` opens two listeners (a third is added when you use gRPC). If any of these ports are taken on your machine, GoFr will fail to start — set the matching env var in `configs/.env` to override.
+
+| Server | Default port | Override env var | Endpoints exposed |
+|---|---|---|---|
+| **HTTP** | `8000` | `HTTP_PORT` | Your routes, plus `/.well-known/health`, `/.well-known/alive`, `/.well-known/swagger`, `/favicon.ico` (and `/.well-known/graphql/ui` if GraphQL is enabled). |
+| **Metrics** (Prometheus) | `2121` | `METRICS_PORT` (set to `0` to disable) | `/metrics` (Prometheus exposition format). Scraped by Prometheus / kube-prometheus-stack. |
+| **gRPC** | `9000` | `GRPC_PORT` | Your registered gRPC services. Only opened if you call `app.RegisterService(...)`. |
+
+So a fresh `app := gofr.New(); app.Run()` is reachable at:
+
+- `http://localhost:8000/<your-routes>`
+- `http://localhost:8000/.well-known/alive` → `200 OK` (use this for K8s liveness probes)
+- `http://localhost:8000/.well-known/health` → JSON status of registered datasources (use this for readiness probes)
+- `http://localhost:2121/metrics` → Prometheus metrics
+
+All `/.well-known/*` paths are auth-exempt by default, so health probes don't need credentials.
+
+For the full list of configurable env vars, see [GoFr Configuration Options](/docs/references/configs).
