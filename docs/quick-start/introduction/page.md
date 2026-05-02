@@ -12,7 +12,7 @@ GoFr is an opinionated Go framework for production microservices. It bundles HTT
 
 ## Prerequisites
 
-- Go 1.24 or above. Check with `go version`.
+- Go 1.25 or above. Check with `go version`.
 - Familiarity with Go syntax — the {% new-tab-link title="Golang Tour" href="https://tour.golang.org/" /%} is a good 30-minute primer if you're new.
 
 ## Write your first GoFr API

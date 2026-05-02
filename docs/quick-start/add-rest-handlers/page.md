@@ -78,7 +78,7 @@ Now when posting data for the user struct, the `Id` we be auto-incremented and t
 package main
 
 import (
-	"gofr.dev/examples/using-crud-from-struct/migrations"
+	"gofr.dev/examples/using-add-rest-handlers/migrations"
 	"gofr.dev/pkg/gofr"
 )
 

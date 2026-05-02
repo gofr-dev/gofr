@@ -64,9 +64,14 @@ func main() {
 ### Service-to-service HTTP with circuit breaker
 
 ```go
+// Register a downstream service once at startup:
 app.AddHTTPService("payments", "https://payments.internal")
-// ...later:
-resp, err := app.Service("payments").Get(ctx, "/charge", params)
+
+// Inside any handler, look it up via the request context:
+func chargeHandler(ctx *gofr.Context) (any, error) {
+    resp, err := ctx.GetHTTPService("payments").Get(ctx, "/charge", nil)
+    // ...
+}
 ```
 Circuit breaker, retry, rate limit, connection pool, and auth are configurable through the service registration.
 

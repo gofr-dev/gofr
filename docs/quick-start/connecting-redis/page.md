@@ -17,7 +17,7 @@ docker run --name gofr-redis -p 2002:6379 -d \
 We can set a sample key `greeting` using the following command:
 
 ```bash
-docker exec -it gofr-redis bash -c 'redis-cli SET greeting "Hello from Redis."'
+docker exec -it gofr-redis bash -c 'redis-cli -a password SET greeting "Hello from Redis."'
 ```
 
 ## Configuration & Usage:

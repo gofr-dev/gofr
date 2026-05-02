@@ -6,7 +6,7 @@ when working on a GoFr project. It points at the specific docs you'll
 actually need rather than inlining everything.
 
 GoFr is an opinionated Go framework for microservices. Apache 2.0.
-Requires Go 1.24+. Repo: <https://github.com/gofr-dev/gofr>.
+Requires Go 1.25+. Repo: <https://github.com/gofr-dev/gofr>.
 
 ## Core rules an assistant must know
 
