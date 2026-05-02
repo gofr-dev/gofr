@@ -24,7 +24,7 @@ Run the following commands to create a migration file
   gofr migrate create -name=create_employee_table
 ```
 
-Add the `createTableEmployee` function given below in the created file in `migrations` directory.
+Add the `createEmployeeTable` function given below in the created file in `migrations` directory.
 
 **Filename : 20240226153000_create_employee_table.go**
 
@@ -42,7 +42,7 @@ const createTable = `CREATE TABLE IF NOT EXISTS employee
     contact_number varchar(10) not null
 );`
 
-func createTableEmployee() migration.Migrate {
+func createEmployeeTable() migration.Migrate {
 	return migration.Migrate{
 		UP: func(d migration.Datasource) error {
 			_, err := d.SQL.Exec(createTable)
@@ -71,7 +71,7 @@ import "gofr.dev/pkg/gofr/migration"
 
 func All() map[int64]migration.Migrate {
 	return map[int64]migration.Migrate{
-		20240226153000: createTableEmployee(),
+		20240226153000: createEmployeeTable(),
 	}
 }
 ```
@@ -102,10 +102,10 @@ func main() {
 }
 ```
 
-When we run the app we will see the following logs for migrations which ran successfully.
+When we run the app we will see the following log line for migrations which ran successfully. GoFr emits structured JSON to stdout by default:
 
-```bash
-INFO [16:55:46] Migration 20240226153000 ran successfully
+```json
+{"level":"INFO","time":"2024-02-26T16:55:46.123456789+05:30","message":"Migration 20240226153000 ran successfully","gofrVersion":"v1.56.4"}
 ```
 
 GoFr maintains the records in the database itself which helps in tracking which migrations have already been executed and ensures that only migrations that have never been run are executed.
@@ -320,7 +320,7 @@ const (
 	employeeDataCassandra = `INSERT INTO employee (id, name, gender, number) VALUES (?, ?, ?, ?);`
 )
 
-func createTableEmployeeCassandra() migration.Migrate {
+func createEmployeeTableCassandra() migration.Migrate {
 	return migration.Migrate{
 		UP: func(d migration.Datasource) error {
 			// Execute the create table statement
