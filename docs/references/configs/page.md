@@ -709,3 +709,7 @@ This document lists all the configuration options supported by the GoFr framewor
 {% /table %}
 
 
+
+## Related production guides
+
+- **12-Factor Configuration**: [Env-driven config, secrets, and environment parity](/docs/guides/twelve-factor-config) — apply 12-factor methodology to the configs documented above.

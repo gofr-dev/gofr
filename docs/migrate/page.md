@@ -1,9 +1,9 @@
 ---
-description: "Migration guides from Gin, Fiber, Express (Node), Flask (Python), and Spring Boot (Java) to GoFr. Concrete code translations and gradual-adoption strategies."
+description: "Migration guides to GoFr from Gin, Fiber, Echo, chi, Express, NestJS, Flask, FastAPI, Django REST, Spring Boot, ASP.NET Core, Laravel, and Rails. Concrete code translations and gradual-adoption strategies."
 nextjs:
   metadata:
-    title: "Migrate to GoFr — From Gin, Fiber, Express, Flask, Spring Boot"
-    description: "Migration guides from Gin, Fiber, Express (Node), Flask (Python), and Spring Boot (Java) to GoFr. Concrete code translations and gradual-adoption strategies."
+    title: "Migrate to GoFr — From Gin, Fiber, Echo, chi, Express, NestJS, Flask, FastAPI, Django REST, Spring Boot, ASP.NET Core, Laravel, Rails"
+    description: "Migration guides to GoFr from Gin, Fiber, Echo, chi, Express, NestJS, Flask, FastAPI, Django REST, Spring Boot, ASP.NET Core, Laravel, and Rails. Concrete code translations and gradual-adoption strategies."
 ---
 
 # Migrate to GoFr
@@ -22,12 +22,29 @@ Hand [https://gofr.dev/AGENTS.md](https://gofr.dev/AGENTS.md) to your coding ass
 
 - [Migrate from Gin →](/migrate/from-gin) — handler, middleware, binding, and group translations.
 - [Migrate from Fiber →](/migrate/from-fiber) — `net/http` semantics, datasource and observability differences.
+- [Migrate from Echo →](/migrate/from-echo) — Migration guide for Go developers moving from Echo to GoFr. Handler signature, middleware, route groups, binding, and gradual adoption with side-by-side examples.
+- [Migrate from chi →](/migrate/from-chi) — Migration guide for Go developers moving from chi router to GoFr framework. Handler signature, middleware, route groups, URL params, and the router-vs-framework trade-off.
 
-### From other ecosystems
+### From Node.js / TypeScript
 
 - [Migrate from Express (Node.js) →](/migrate/from-express) — JavaScript-to-Go mental model, async/await analogues.
-- [Migrate from Flask (Python) →](/migrate/from-flask) — Pythonic patterns and their Go equivalents.
+- [Migrate from NestJS →](/migrate/from-nestjs) — Migration guide for TypeScript developers moving from NestJS to GoFr. Controllers and decorators to handlers, modules to constructors, microservices to Pub/Sub.
+
+### From Python
+
+- [Migrate from Flask →](/migrate/from-flask) — Pythonic patterns and their Go equivalents.
+- [Migrate from FastAPI →](/migrate/from-fastapi) — Migration guide for Python developers moving from FastAPI to GoFr. Async/await to goroutines, Pydantic to Go structs, automatic OpenAPI to built-in Swagger UI.
+- [Migrate from Django REST →](/migrate/from-django-rest) — Migration guide for Python developers moving from Django REST Framework to GoFr. ViewSets to AddRESTHandlers, ORM to SQL drivers, permissions to RBAC, settings.py to .env.
+
+### From Java / .NET
+
 - [Migrate from Spring Boot (Java) →](/migrate/from-spring-boot) — DI, controllers, configuration, and observability mappings.
+- [Migrate from ASP.NET Core →](/migrate/from-aspnet-core) — Migration guide for C# developers moving from ASP.NET Core to GoFr. Controllers to handlers, DI container to constructors, appsettings.json to .env, OTLP exporter.
+
+### From PHP / Ruby
+
+- [Migrate from Laravel (PHP) →](/migrate/from-laravel) — Migration guide for PHP developers moving from Laravel to GoFr. Controllers to handlers, Eloquent to SQL drivers, Artisan to GoFr CLI, queues to Pub/Sub.
+- [Migrate from Rails (Ruby) →](/migrate/from-rails) — Migration guide for Ruby developers moving from Rails to GoFr. Controllers to handlers, ActiveRecord to SQL, Active Job to Pub/Sub, Action Cable to WebSocket.
 
 ## Recommended adoption strategy
 

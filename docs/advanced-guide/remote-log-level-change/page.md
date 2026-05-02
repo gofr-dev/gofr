@@ -45,3 +45,7 @@ The remote log level endpoint should return a JSON response in the following for
 - **logLevel:** The new log level user want to set for the specified service.
 
 GoFr parses this response and adjusts log levels based on the provided configurations.
+
+## Related production guides
+
+- **Production Logging**: [Levels, sampling, redaction, and shipping](/docs/guides/production-logging) — operate logs in production alongside remote level changes.

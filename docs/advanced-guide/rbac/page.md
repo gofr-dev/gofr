@@ -539,3 +539,7 @@ RBAC middleware never logs:
 - [Authentication](https://gofr.dev/docs/advanced-guide/authentication) - Basic Auth, API Keys, OAuth 2.0
 - [HTTP Communication](https://gofr.dev/docs/advanced-guide/http-communication) - Inter-service HTTP calls
 - [Middlewares](https://gofr.dev/docs/advanced-guide/middlewares) - Custom middleware implementation
+
+## Related production guides
+
+- **Auth in Kubernetes**: [Run RBAC-protected services on Kubernetes](/docs/guides/auth-in-kubernetes) — JWT verification keys and OIDC issuer wiring in cluster.

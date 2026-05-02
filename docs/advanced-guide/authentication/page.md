@@ -158,3 +158,7 @@ func MyHandler(ctx *gofr.Context) (any, error) {
 
 *   **Timing Attacks**: GoFr's Basic Auth and API Key interceptors use `subtle.ConstantTimeCompare` to prevent timing attacks.
 *   **TLS**: Always use TLS in production to encrypt the authentication credentials and tokens transmitted over the network.
+
+## Related production guides
+
+- **Auth in Kubernetes**: [Manage JWT keys, OIDC, and auth secrets on K8s](/docs/guides/auth-in-kubernetes) — secret rotation and key distribution for production auth.

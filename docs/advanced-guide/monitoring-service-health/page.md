@@ -120,3 +120,7 @@ Sample response of how it appears when all the services, and connected data sour
   }
 }
 ```
+
+## Related production guides
+
+- **Deploying to Kubernetes**: [Wire `/.well-known/alive` into liveness/readiness probes](/docs/guides/deploying-to-kubernetes) — make Kubernetes act on the health information GoFr exposes.

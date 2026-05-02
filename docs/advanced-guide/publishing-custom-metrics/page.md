@@ -226,3 +226,8 @@ Lower the cardinality, faster the query performance and lower the monitoring res
 ```
 
 > #### Check out the example on how to publish custom metrics in GoFr: [Visit GitHub](https://github.com/gofr-dev/gofr/blob/main/examples/using-custom-metrics/main.go)
+
+## Related production guides
+
+- **Prometheus on Kubernetes**: [Scrape and store custom metrics in production](/docs/guides/production-prometheus-kubernetes) — ServiceMonitors, recording rules, retention.
+- **Horizontal Pod Autoscaler**: [Drive autoscaling from custom metrics](/docs/guides/horizontal-pod-autoscaler) — scale GoFr services on the metrics you publish.

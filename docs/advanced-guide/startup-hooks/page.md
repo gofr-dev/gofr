@@ -57,3 +57,7 @@ func main() {
 
 This ensures that critical startup tasks are completed successfully before the application begins accepting traffic.
 
+
+## Related production guides
+
+- **Graceful Shutdown**: [Mirror your startup work on the way down](/docs/guides/graceful-shutdown) — close pools, drain queues, and finish in-flight requests cleanly.

@@ -32,3 +32,8 @@ In this example, **my-custom-span** is the name of the custom span that is added
 The defer statement ensures that the span is closed even if an error occurs to ensure that the trace is properly recorded.
 
 > ##### Check out the example of creating a custom span in GoFr: [Visit GitHub](https://github.com/gofr-dev/gofr/blob/main/examples/http-server/main.go#L58)
+
+## Related production guides
+
+- **Production Tracing**: [Configure OpenTelemetry exporters and samplers](/docs/guides/production-tracing) — wire your custom spans into a real OTLP collector.
+- **Distributed Tracing**: [End-to-end traces across services](/docs/guides/distributed-tracing) — propagate trace context for inter-service spans.

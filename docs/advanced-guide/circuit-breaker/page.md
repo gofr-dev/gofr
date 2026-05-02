@@ -92,3 +92,6 @@ GoFr publishes the following metric to track circuit breaker state:
 - `app_http_circuit_breaker_state`: Current state of the circuit breaker (0 for Closed, 1 for Open). This metric is used to visualize a historical timeline of circuit transitions on the dashboard.
 
 > ##### Check out the example of an inter-service HTTP communication along with circuit-breaker in GoFr: [Visit GitHub](https://github.com/gofr-dev/gofr/blob/main/examples/using-http-service/main.go)
+## Related production guides
+
+- **Service Mesh Integration**: [Layering GoFr's circuit breaker with mesh-level retries and outlier detection](/docs/guides/service-mesh-integration) — choosing app vs. mesh policies.

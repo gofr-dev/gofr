@@ -14,6 +14,7 @@ WORKDIR /app
 COPY  docs/quick-start /app/src/app/docs/quick-start
 COPY  docs/public/ /app/public
 COPY  docs/advanced-guide /app/src/app/docs/advanced-guide
+COPY  docs/guides         /app/src/app/docs/guides
 COPY docs/datasources /app/src/app/docs/datasources
 COPY  docs/references /app/src/app/docs/references
 COPY  docs/page.md /app/src/app/docs

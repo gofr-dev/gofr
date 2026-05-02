@@ -444,3 +444,7 @@ func seedInitialEvents() migration.Migrate {
 ```
 
 > ##### Check out the example to add and run migrations in GoFr: [Visit GitHub](https://github.com/gofr-dev/gofr/blob/main/examples/using-migrations/main.go)
+
+## Related production guides
+
+- **DB Migrations in CI/CD**: [Run migrations safely from a pipeline](/docs/guides/db-migrations-in-cicd) — ordering, gating, and rollback strategies for managed deploys.
