@@ -115,7 +115,7 @@ Never echo secrets into logs. Mask them by setting them as masked variables.
 
 ## Database migrations
 
-Run migrations as part of deploy, not as part of the image build. See [DB Migrations in CI/CD](/docs/advanced-guide/db-migrations-in-cicd) for the Helm pre-install hook and Job patterns.
+Run migrations as part of deploy, not as part of the image build. See [DB Migrations in CI/CD](/docs/guides/db-migrations-in-cicd) for the Helm pre-install hook and Job patterns.
 
 ## GitLab CI
 

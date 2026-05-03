@@ -16,7 +16,7 @@ A production GoFr container is a multi-stage build: compile a static, CGO-disabl
 
 Use this guide when you have a GoFr service running locally with `go run` and need to package it for a registry, CI, or Kubernetes. The output is a small (typically under 20 MB), non-root image that does not ship a shell or package manager — keeping the attack surface small for production.
 
-For Kubernetes manifests that consume this image, see {% new-tab-link newtab=false title="Deploying to Kubernetes" href="/docs/advanced-guide/deploying-to-kubernetes" /%}.
+For Kubernetes manifests that consume this image, see {% new-tab-link newtab=false title="Deploying to Kubernetes" href="/docs/guides/deploying-to-kubernetes" /%}.
 
 ## Project layout
 

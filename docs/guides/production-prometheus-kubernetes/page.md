@@ -14,7 +14,7 @@ GoFr exposes Prometheus metrics on a separate port (`METRICS_PORT`, default `212
 
 ## When to use this guide
 
-You have GoFr running in Kubernetes (see {% new-tab-link newtab=false title="Deploying to Kubernetes" href="/docs/advanced-guide/deploying-to-kubernetes" /%}) and either kube-prometheus-stack or a Prometheus instance scraping the cluster. This page covers the *operational* side — scraping, alerting, dashboards. For instrumenting code, see {% new-tab-link newtab=false title="Publishing Custom Metrics" href="/docs/advanced-guide/publishing-custom-metrics" /%}.
+You have GoFr running in Kubernetes (see {% new-tab-link newtab=false title="Deploying to Kubernetes" href="/docs/guides/deploying-to-kubernetes" /%}) and either kube-prometheus-stack or a Prometheus instance scraping the cluster. This page covers the *operational* side — scraping, alerting, dashboards. For instrumenting code, see {% new-tab-link newtab=false title="Publishing Custom Metrics" href="/docs/advanced-guide/publishing-custom-metrics" /%}.
 
 ## What `/metrics` looks like
 
@@ -186,7 +186,7 @@ For application-specific dashboards, build one panel per custom metric you regis
 
 If your Prometheus is built with exemplar support and the OpenTelemetry Collector is configured to attach exemplars to histogram buckets (via the OTLP `exemplars` feature in the SDK), you can click from a slow `histogram_quantile` panel in Grafana directly to the trace in Tempo or Jaeger. Wiring this end-to-end requires:
 
-1. GoFr exporting traces to a Collector (see {% new-tab-link newtab=false title="Production Tracing" href="/docs/advanced-guide/production-tracing" /%}).
+1. GoFr exporting traces to a Collector (see {% new-tab-link newtab=false title="Production Tracing" href="/docs/guides/production-tracing" /%}).
 2. The Collector forwarding metrics + exemplars to Prometheus.
 3. Grafana with the trace datasource correlated to the metrics datasource.
 

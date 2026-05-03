@@ -14,7 +14,7 @@ Deploy a GoFr service to Kubernetes by pointing the readiness probe at `/.well-k
 
 ## When to use this guide
 
-You have a GoFr service already containerized (see {% new-tab-link newtab=false title="Dockerizing GoFr Services" href="/docs/advanced-guide/dockerizing-gofr-services" /%}) and a Kubernetes cluster (kind, EKS, GKE, AKS, or on-prem). This guide covers the manifest set for a stateless HTTP service: Deployment, Service, ConfigMap, Secret, and an optional HorizontalPodAutoscaler.
+You have a GoFr service already containerized (see {% new-tab-link newtab=false title="Dockerizing GoFr Services" href="/docs/guides/dockerizing-gofr-services" /%}) and a Kubernetes cluster (kind, EKS, GKE, AKS, or on-prem). This guide covers the manifest set for a stateless HTTP service: Deployment, Service, ConfigMap, Secret, and an optional HorizontalPodAutoscaler.
 
 ## How GoFr features map to Kubernetes resources
 
@@ -26,7 +26,7 @@ You have a GoFr service already containerized (see {% new-tab-link newtab=false 
 | Graceful shutdown on SIGTERM | `terminationGracePeriodSeconds` | Drain in-flight requests |
 | `configs/.env` keys | `ConfigMap` + `envFrom` | Non-secret config |
 | DB passwords, API keys | `Secret` + `envFrom` | Mount via env, not files |
-| `/metrics` (port 2121) | named container port + ServiceMonitor | See {% new-tab-link newtab=false title="Production Prometheus on Kubernetes" href="/docs/advanced-guide/production-prometheus-kubernetes" /%} |
+| `/metrics` (port 2121) | named container port + ServiceMonitor | See {% new-tab-link newtab=false title="Production Prometheus on Kubernetes" href="/docs/guides/production-prometheus-kubernetes" /%} |
 
 ## Full manifest set
 
@@ -235,7 +235,7 @@ Set `terminationGracePeriodSeconds` to slightly more than your longest realistic
 - **Pin image tags** to a SHA or semantic version. `:latest` will not roll the Deployment when you push a new image.
 - **PodDisruptionBudget** with `minAvailable: 2` (or `maxUnavailable: 1`) protects you during node drains.
 - **Don't put `/metrics` behind authentication** in-cluster — Prometheus must scrape it, and `NetworkPolicy` is a cleaner control.
-- **Tracing sampling:** in production, `TRACER_RATIO=0.1` (10%) is a sensible starting point. See {% new-tab-link newtab=false title="Production Tracing" href="/docs/advanced-guide/production-tracing" /%}.
+- **Tracing sampling:** in production, `TRACER_RATIO=0.1` (10%) is a sensible starting point. See {% new-tab-link newtab=false title="Production Tracing" href="/docs/guides/production-tracing" /%}.
 
 ## Verification
 
