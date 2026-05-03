@@ -90,7 +90,7 @@ FastAPI's `Depends()` is replaced by either:
 
 ## Datasources
 
-FastAPI users typically reach for SQLAlchemy / Tortoise / Motor. In GoFr, SQL and Redis are auto-initialised from environment variables — set `DB_DIALECT`, `DB_HOST`, `DB_PORT`, `DB_USER`, `DB_PASSWORD`, `DB_NAME` (or `REDIS_HOST`, `REDIS_PORT`) in `configs/.env` and `gofr.New()` wires the connection for you. Other clients are registered explicitly with a provider, e.g.:
+FastAPI users typically reach for SQLAlchemy / Tortoise / Motor. In GoFr, SQL and Redis are auto-initialized from environment variables — set `DB_DIALECT`, `DB_HOST`, `DB_PORT`, `DB_USER`, `DB_PASSWORD`, `DB_NAME` (or `REDIS_HOST`, `REDIS_PORT`) in `configs/.env` and `gofr.New()` wires the connection for you. Other clients are registered explicitly with a provider, e.g.:
 
 ```go
 app.AddMongo(mongo.New(mongo.Config{/* ... */}))

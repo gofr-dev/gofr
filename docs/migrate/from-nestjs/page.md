@@ -31,7 +31,7 @@ NestJS leans on TypeScript decorators and a runtime DI container assembled from 
 | `Interceptors` / `Guards` | GoFr middleware |
 | `@nestjs/microservices` (TCP/Redis/NATS/Kafka) | `app.Subscribe("topic", handler)` over Kafka, NATS, SQS, MQTT, Google Pub/Sub, Azure Event Hub |
 | `@nestjs/swagger` | Built-in Swagger UI from your `openapi.json` |
-| `@nestjs/typeorm`, `@nestjs/mongoose` | SQL auto-initialised from `DB_DIALECT`/`DB_HOST`/etc. env vars; `app.AddMongo(provider)` for Mongo, plus GoFr migrations |
+| `@nestjs/typeorm`, `@nestjs/mongoose` | SQL auto-initialized from `DB_DIALECT`/`DB_HOST`/etc. env vars; `app.AddMongo(provider)` for Mongo, plus GoFr migrations |
 | `@nestjs/schedule` (`@Cron`) | `app.AddCronJob(...)` |
 | `@nestjs/terminus` health | `/.well-known/health` (auto) |
 

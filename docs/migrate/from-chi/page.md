@@ -97,7 +97,7 @@ If you used `go-chi/render` for `render.JSON(w, r, v)`, the GoFr equivalent is j
 
 ## Datasources
 
-In a chi service you typically `sql.Open` yourself, manage a `*sql.DB`, set pool sizes, and instrument it. GoFr auto-initialises SQL and Redis from environment variables — set `DB_DIALECT`, `DB_HOST`, `DB_PORT`, `DB_USER`, `DB_PASSWORD`, `DB_NAME` (or `REDIS_HOST`, `REDIS_PORT`) in `configs/.env` and `gofr.New()` wires the connection. Other clients are registered explicitly with a provider:
+In a chi service you typically `sql.Open` yourself, manage a `*sql.DB`, set pool sizes, and instrument it. GoFr auto-initializes SQL and Redis from environment variables — set `DB_DIALECT`, `DB_HOST`, `DB_PORT`, `DB_USER`, `DB_PASSWORD`, `DB_NAME` (or `REDIS_HOST`, `REDIS_PORT`) in `configs/.env` and `gofr.New()` wires the connection. Other clients are registered explicitly with a provider:
 
 ```go
 app.AddMongo(mongo.New(mongo.Config{/* ... */}))

@@ -139,7 +139,7 @@ For periodic work, use `app.AddCronJob(schedule, jobName, fn)` (three arguments)
 
 ## Datasources
 
-GoFr auto-initialises SQL and Redis from environment variables — set `DB_DIALECT`, `DB_HOST`, `DB_PORT`, `DB_USER`, `DB_PASSWORD`, `DB_NAME` (or `REDIS_HOST`, `REDIS_PORT`) in `configs/.env` and `gofr.New()` wires the connection. Other clients are registered explicitly with a provider:
+GoFr auto-initializes SQL and Redis from environment variables — set `DB_DIALECT`, `DB_HOST`, `DB_PORT`, `DB_USER`, `DB_PASSWORD`, `DB_NAME` (or `REDIS_HOST`, `REDIS_PORT`) in `configs/.env` and `gofr.New()` wires the connection. Other clients are registered explicitly with a provider:
 
 ```go
 app.AddMongo(mongo.New(mongo.Config{/* ... */}))

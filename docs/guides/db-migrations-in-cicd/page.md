@@ -36,7 +36,7 @@ Use this for small services and early-stage projects.
 
 ## Option B: Separate `cmd/migrate` binary as a Helm pre-upgrade Job
 
-For multi-replica production services, run migrations as a Kubernetes Job triggered by Helm before the Deployment rolls forward. **There is no built-in `gofr migrate` CLI or `MIGRATE_ONLY` env mode in the framework.** Instead, organise your application as two binaries built from the same Go module: the serving binary (`cmd/server` or your existing `main.go`) and a small dedicated migration binary (`cmd/migrate`). The migration binary calls `gofr.New()`, registers migrations, calls `app.Migrate(...)` (which is synchronous and runs to completion before returning), and exits without ever calling `app.Run()`. This is application code organisation — not a framework knob.
+For multi-replica production services, run migrations as a Kubernetes Job triggered by Helm before the Deployment rolls forward. **There is no built-in `gofr migrate` CLI or `MIGRATE_ONLY` env mode in the framework.** Instead, organize your application as two binaries built from the same Go module: the serving binary (`cmd/server` or your existing `main.go`) and a small dedicated migration binary (`cmd/migrate`). The migration binary calls `gofr.New()`, registers migrations, calls `app.Migrate(...)` (which is synchronous and runs to completion before returning), and exits without ever calling `app.Run()`. This is application code organization — not a framework knob.
 
 ```go
 // cmd/migrate/main.go
