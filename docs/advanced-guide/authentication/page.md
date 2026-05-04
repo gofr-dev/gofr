@@ -1,3 +1,11 @@
+---
+description: "Add authentication to a GoFr service with built-in middleware: HTTP Basic, API Key, OAuth 2.0, and JWT validation against JWKS endpoints, all via configuration."
+nextjs:
+  metadata:
+    title: "Authentication in GoFr — Basic, API Key, OAuth, JWT"
+    description: "Add authentication to a GoFr service with built-in middleware: HTTP Basic, API Key, OAuth 2.0, and JWT validation against JWKS endpoints, all via configuration."
+---
+
 # Authentication
 
 Authentication is a crucial aspect of web applications, controlling access to resources based on user roles or permissions. 
@@ -9,11 +17,13 @@ applies to both your HTTP and gRPC services.
 
 ## Exempted Paths
 
-By default, the authentication middleware exempts the following paths from authentication:
+By default, the authentication middleware exempts every path under `/.well-known/*` from authentication (the middleware's `isWellKnown` check uses `strings.HasPrefix(path, "/.well-known")`). This includes:
 
-- `/.well-known/alive`: Used for liveness probes, should be publicly accessible for health checks.
+- `/.well-known/alive` — liveness probe
+- `/.well-known/health` — readiness/health probe with datasource status
+- `/.well-known/swagger` — Swagger UI (when an `openapi.json` is present in `static/`)
 
-The health check endpoint `/.well-known/health` is exempted by default, but as it may contain sensitive information about the service and its dependencies, it is recommended to require authentication for it.
+If `/.well-known/health` exposes sensitive details about your datasources, scope its visibility at the network layer (private listener, mesh policy, or ingress rule) rather than expecting the auth middleware to gate it — the framework will not.
 
 ## 1. Basic Auth
 *Basic Authentication* is a simple authentication scheme where the user's credentials (username and password) are 
@@ -158,3 +168,7 @@ func MyHandler(ctx *gofr.Context) (any, error) {
 
 *   **Timing Attacks**: GoFr's Basic Auth and API Key interceptors use `subtle.ConstantTimeCompare` to prevent timing attacks.
 *   **TLS**: Always use TLS in production to encrypt the authentication credentials and tokens transmitted over the network.
+
+## Related production guides
+
+- **Auth in Kubernetes**: [Manage JWT keys, OIDC, and auth secrets on K8s](/docs/guides/auth-in-kubernetes) — secret rotation and key distribution for production auth.

@@ -1,3 +1,11 @@
+---
+description: "Schedule recurring tasks in GoFr with the built-in cron runner. Register handlers on cron expressions to automate cleanup, syncs, and periodic background work."
+nextjs:
+  metadata:
+    title: "Cron Jobs in GoFr — Scheduled Tasks Inside Your Service"
+    description: "Schedule recurring tasks in GoFr with the built-in cron runner. Register handlers on cron expressions to automate cleanup, syncs, and periodic background work."
+---
+
 # Cron job scheduling
 
 Cron is a task scheduler that allows user to automate commands or scripts to 

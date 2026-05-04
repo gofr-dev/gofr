@@ -1,3 +1,11 @@
+---
+description: "Connect a GoFr Go service to Redis via REDIS_HOST and REDIS_PORT. GoFr auto-initializes the client and exposes it on ctx.Redis with built-in observability."
+nextjs:
+  metadata:
+    title: "Connecting Redis in GoFr — Quick-Start Setup"
+    description: "Connect a GoFr Go service to Redis via REDIS_HOST and REDIS_PORT. GoFr auto-initializes the client and exposes it on ctx.Redis with built-in observability."
+---
+
 # Connecting to Redis
 
 GoFr simplifies the process of connecting to Redis.
@@ -17,7 +25,7 @@ docker run --name gofr-redis -p 2002:6379 -d \
 We can set a sample key `greeting` using the following command:
 
 ```bash
-docker exec -it gofr-redis bash -c 'redis-cli SET greeting "Hello from Redis."'
+docker exec gofr-redis redis-cli -a password SET greeting "Hello from Redis."
 ```
 
 ## Configuration & Usage:
