@@ -1,3 +1,11 @@
+---
+description: "Use a key-value store with GoFr's pluggable datasource interface. Inject Badger, NATS KV, or any compatible driver for fast NoSQL key-based reads and writes."
+nextjs:
+  metadata:
+    title: "Key-Value Store in GoFr — Pluggable KV Datasource"
+    description: "Use a key-value store with GoFr's pluggable datasource interface. Inject Badger, NATS KV, or any compatible driver for fast NoSQL key-based reads and writes."
+---
+
 # Key Value Store
 
 A key-value store is a type of NoSQL database that uses a simple data model: each item is stored as a pair consisting of a unique key and a value.

@@ -1,3 +1,11 @@
+---
+description: "Call other services from a GoFr handler with AddHTTPService. The instrumented client adds traces, metrics, retries, and circuit breakers to outbound HTTP calls."
+nextjs:
+  metadata:
+    title: "Inter-Service HTTP in GoFr — AddHTTPService Client"
+    description: "Call other services from a GoFr handler with AddHTTPService. The instrumented client adds traces, metrics, retries, and circuit breakers to outbound HTTP calls."
+---
+
 # Inter-Service HTTP Calls
 
 GoFr promotes microservice architecture and to facilitate the same, it provides the support to initialize HTTP services
@@ -235,3 +243,6 @@ GoFr publishes the following metrics for HTTP service communication:
 - `app_http_retry_count`: Total number of retry events. (labels: `service`)
 - `app_http_circuit_breaker_state`: Current state of the circuit breaker (0 for Closed, 1 for Open). (labels: `service`)
 - `app_http_service_response`: Response time of HTTP service requests in seconds (histogram). (labels: `service`, `path`, `method`, `status`)
+## Related production guides
+
+- **Distributed Tracing**: [Trace inter-service HTTP calls end-to-end](/docs/guides/distributed-tracing) — context propagation across GoFr's HTTP client.
