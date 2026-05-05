@@ -87,7 +87,7 @@ Yes. Built-in Prometheus metrics for HTTP requests, gRPC, cron jobs, GraphQL ope
 {% /faq-item %}
 
 {% faq-item question="Can I change log levels in production without restart?" %}
-Yes. GoFr supports remote log-level changes through a built-in admin endpoint.
+Yes. Point `REMOTE_LOG_URL` at an HTTP endpoint that returns the desired log level; GoFr's logger polls that URL and adjusts the in-process level on the fly (poll interval via `REMOTE_LOG_FETCH_INTERVAL`). The admin endpoint is one *you* operate — GoFr does not serve it on the service itself. See [Remote Log Level Change](/docs/advanced-guide/remote-log-level-change).
 {% /faq-item %}
 
 {% /faq %}
