@@ -66,7 +66,7 @@ For PostgreSQL with `max_connections=200`, 10 replicas, `DB_MAX_OPEN_CONNECTION=
 - Logs show repeated `dial tcp ...: i/o timeout` after a deploy that increased replica count.
 - Postgres `pg_stat_activity` count is at or near `max_connections`.
 
-GoFr's default datasource metrics include connection-pool gauges (active/idle); alert when `idle == 0` for more than a minute, or when active is at the configured max for sustained periods.
+GoFr's SQL datasource exports two pool gauges: `app_sql_open_connections` (total connections in the pool) and `app_sql_inUse_connections` (connections currently checked out by a query). Alert when `app_sql_inUse_connections` is at or near the `MaxOpenConns` ceiling for sustained periods — that's the saturation signal. There is no separate idle-connections gauge; idle = `open - inUse`, derive it in PromQL if you need to track it.
 
 ## Redis, Mongo, and other datasources
 

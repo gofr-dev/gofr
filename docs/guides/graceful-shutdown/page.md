@@ -87,7 +87,7 @@ For a service with 2s P99, that's 5s + 30s + 10s = 45–60s.
 - **SQL.** `database/sql` waits for active queries to finish on `Close()`. Long-running transactions can extend shutdown — keep request timeouts shorter than `SHUTDOWN_GRACE_PERIOD`.
 - **Redis / NoSQL.** Clients close idle connections immediately and wait for in-flight commands.
 - **Pub/Sub.** GoFr's subscription manager respects the shutdown context — consumers stop polling and commit current offsets where the broker supports it (Kafka, NATS JetStream).
-- **Cron jobs.** Running tasks complete; new tasks are not scheduled.
+- **Cron jobs.** GoFr's `App.Shutdown` drains HTTP, gRPC, and metrics servers and closes datasource connections — it does **not** stop the cron scheduler or wait for in-flight cron tasks. Cron jobs run with `context.Background()`, so they continue past SIGTERM and may be cut off when the container is killed at `terminationGracePeriodSeconds`. If you have long-running cron work that must finish, run it as a separate Kubernetes `Job` triggered by a `CronJob` resource instead of inside the same pod, so the pod's lifecycle doesn't interrupt it.
 
 ## Verification
 

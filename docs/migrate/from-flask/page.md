@@ -83,7 +83,7 @@ A GoFr service is a single binary. Each request is a goroutine. I/O is non-block
 - **`@app.errorhandler(Exception)` becomes explicit error returns.** Every error travels back as the second return value.
 - **Database sessions aren't `flask-sqlalchemy`.** GoFr's SQL client gives you a connection pool with raw queries; pair with `sqlc` for type-safe queries if you want ORM-like ergonomics.
 - **Decorators don't translate.** `@app.before_request` becomes middleware; `@app.errorhandler` becomes explicit error mapping in your handlers.
-- **`abort(404)` becomes `return nil, errSomething` mapped to 404 via GoFr's error handling.** See [Error Handling](/docs/advanced-guide/gofr-errors).
+- **`abort(404)` becomes `return nil, err` where `err` is a typed error that implements `StatusCode() int`.** A plain `error` serializes as a 500. Return one of GoFr's built-in error types (`http.ErrorEntityNotFound`, etc.) or define your own type satisfying the `StatusCode()` interface so the responder picks up the right HTTP code. See [Error Handling](/docs/advanced-guide/gofr-errors).
 
 ## Estimated effort per service
 

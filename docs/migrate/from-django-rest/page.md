@@ -135,7 +135,7 @@ Subscribers (Kafka, NATS, SQS, MQTT, Google Pub/Sub, Azure Event Hub) are regist
 
 ## Configuration
 
-`settings.py` and `django-environ` → `configs/.env` (with `configs/.env.production` etc. selected by `APP_ENV`). Read in code with `app.Config.Get(key)`.
+`settings.py` and `django-environ` → `configs/.env`, with `configs/.<APP_ENV>.env` overlaid on top (so `APP_ENV=production` reads `configs/.env` then `configs/.production.env` — note the dot prefix and `.env` suffix on the override file). Read keys in code with `app.Config.Get(key)`.
 
 ## Observability
 

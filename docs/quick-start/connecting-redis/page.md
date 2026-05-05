@@ -98,7 +98,7 @@ These variables are stored in a `.env` file located within the `configs` directo
 ---
 {% /table %}
 
-## ✅ Example `.env` File
+## Example `.env` File
 
 ```env
 REDIS_HOST=redis.example.com
