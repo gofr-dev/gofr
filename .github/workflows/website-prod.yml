@@ -90,9 +90,16 @@ jobs:
       # ghcr. The framework's docs/Dockerfile then resolves its
       # FROM ghcr.io/gofr-dev/website:${WEBSITE_TAG=latest} against
       # the local image.
+      #
+      # --target builder stops at the website Dockerfile's first
+      # stage, which contains /app source + node_modules + npm. The
+      # framework's docs/Dockerfile needs that to overlay docs and
+      # run `npm run build`; the default final nginx stage has no
+      # npm and would fail with `npm: not found`.
       - name: Build website source-bundle (with fresh data)
         run: |
           docker build \
+            --target builder \
             -t ghcr.io/gofr-dev/website:latest \
             -f ./website-src/Dockerfile \
             ./website-src/
