@@ -130,7 +130,7 @@ func listHandler(ctx *gofr.Context) (any, error) {
  data := TodoPageData{
   PageTitle: "My TODO list",
   Todos: []Todo{
-   {Title: "Expand on Gofr documentation ", Done: false},
+   {Title: "Expand on GoFr documentation ", Done: false},
    {Title: "Add more examples", Done: true},
    {Title: "Write some articles", Done: false},
   },
