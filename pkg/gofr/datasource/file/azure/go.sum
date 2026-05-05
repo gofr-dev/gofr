@@ -42,8 +42,8 @@ go.opentelemetry.io/otel/trace v1.43.0 h1:BkNrHpup+4k4w+ZZ86CZoHHEkohws8AY+WTX09
 go.opentelemetry.io/otel/trace v1.43.0/go.mod h1:/QJhyVBUUswCphDVxq+8mld+AvhXZLhe+8WVFxiFff0=
 go.uber.org/mock v0.6.0 h1:hyF9dfmbgIX5EfOdasqLsWD6xqpNZlXblLB/Dbnwv3Y=
 go.uber.org/mock v0.6.0/go.mod h1:KiVJ4BqZJaMj4svdfmHM0AUx4NJYO8ZNpPnZn1Z+BBU=
-gofr.dev v1.56.3 h1:eU0eLzxQ00kVLIbMBYTPVjIOW+7wi1/KcF2UZAlAhjQ=
-gofr.dev v1.56.3/go.mod h1:E8rY9zPcvX7MOfFoDMIxZ71QMjyZIZ0UUsO0nX6tUwA=
+gofr.dev v1.56.4 h1:GCnvTi9uZAQr73+Dor8728NO12ZhLXAH+xR5aAkFyRk=
+gofr.dev v1.56.4/go.mod h1:KAGsR3hgCddpeSH4Y+5nhg1gzw3HYoJEUCyXUJ02p80=
 golang.org/x/crypto v0.50.0 h1:zO47/JPrL6vsNkINmLoo/PH1gcxpls50DNogFvB5ZGI=
 golang.org/x/crypto v0.50.0/go.mod h1:3muZ7vA7PBCE6xgPX7nkzzjiUq87kRItoJQM1Yo8S+Q=
 golang.org/x/net v0.53.0 h1:d+qAbo5L0orcWAr0a9JweQpjXF19LMXJE8Ey7hwOdUA=
