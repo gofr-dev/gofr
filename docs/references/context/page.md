@@ -1,3 +1,11 @@
+---
+description: "GoFr's ctx is injected into every handler. It carries request data plus the container of dependencies — DBs, logger, HTTP clients, and metrics — for the cycle."
+nextjs:
+  metadata:
+    title: "GoFr Context Reference — Request Container API"
+    description: "GoFr's ctx is injected into every handler. It carries request data plus the container of dependencies — DBs, logger, HTTP clients, and metrics — for the cycle."
+---
+
 # GoFr Context
 
 GoFr context is an object injected by the GoFr handler. It contains all the request-specific data, for each

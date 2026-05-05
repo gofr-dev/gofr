@@ -1,3 +1,11 @@
+---
+description: "Use Dgraph from a GoFr service through the framework's pluggable datasource interface. Run GraphQL+- queries with built-in tracing, metrics, and logs."
+nextjs:
+  metadata:
+    title: "Dgraph in GoFr — Graph Database Integration"
+    description: "Use Dgraph from a GoFr service through the framework's pluggable datasource interface. Run GraphQL+- queries with built-in tracing, metrics, and logs."
+---
+
 # Dgraph
 
 ## Configuration

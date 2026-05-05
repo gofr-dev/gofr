@@ -1,3 +1,11 @@
+---
+description: "Use the GoFr CLI to scaffold projects, generate boilerplate, and run framework-aware tasks. Speeds up repetitive work and keeps services consistent."
+nextjs:
+  metadata:
+    title: "GoFr CLI Reference — Project Scaffolding and Tooling"
+    description: "Use the GoFr CLI to scaffold projects, generate boilerplate, and run framework-aware tasks. Speeds up repetitive work and keeps services consistent."
+---
+
 # GoFR Command Line Interface
 
 Managing repetitive tasks and maintaining consistency across large-scale applications is challenging!
@@ -12,7 +20,7 @@ Managing repetitive tasks and maintaining consistency across large-scale applica
 
 ## Prerequisites
 
-- Go 1.22 or above. To check Go version use the following command:
+- Go 1.25 or above. To check Go version use the following command:
 ```bash
   go version
 ```
@@ -102,9 +110,9 @@ func All() map[int64]migration.Migrate {
 }
 ```
 
-> **💡 Best Practice:** Learn about [organizing migrations by feature](../../advanced-guide/handling-data-migrations#organizing-migrations-by-feature) to avoid creating one migration per table or operation.
+> **💡 Best Practice:** Learn about [organizing migrations by feature](/docs/advanced-guide/handling-data-migrations#organizing-migrations-by-feature) to avoid creating one migration per table or operation.
 
-For detailed instructions on handling database migrations, see the [handling-data-migrations documentation](../../advanced-guide/handling-data-migrations)
+For detailed instructions on handling database migrations, see the [handling-data-migrations documentation](/docs/advanced-guide/handling-data-migrations)
 For more examples, see the [using-migrations](https://github.com/gofr-dev/gofr/tree/main/examples/using-migrations)
 ---
 
@@ -112,7 +120,7 @@ For more examples, see the [using-migrations](https://github.com/gofr-dev/gofr/t
 
 * The gofr wrap grpc command streamlines gRPC integration in a GoFr project by generating GoFr's context-aware structures.
 * It simplifies setting up gRPC handlers with minimal steps, and accessing datasources, adding tracing as well as custom metrics. Based on the proto file it creates the handler/client with GoFr's context.
-  For detailed instructions on using grpc with GoFr see the [gRPC documentation](../../advanced-guide/grpc)
+  For detailed instructions on using grpc with GoFr see the [gRPC documentation](/docs/advanced-guide/grpc)
 
 ### Command Usage
 **gRPC Server**
