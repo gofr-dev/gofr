@@ -58,11 +58,15 @@ func main() {
 
 Before starting the server, run the following command in your terminal to ensure you have downloaded and synchronized all required dependencies for your project.
 
-`go mod tidy`
+```bash
+go mod tidy
+```
 
 Once the dependencies are synchronized, start the GoFr server using the following command:
 
-`go run main.go`
+```bash
+go run main.go
+```
 
 This would start the server at 8000 port, `/greet` endpoint can be accessed from your browser at {% new-tab-link title="http://localhost:8000/greet" href="http://localhost:8000/greet" /%}, you would be able to see the output as following with _Status Code 200_ as per REST Standard.
 

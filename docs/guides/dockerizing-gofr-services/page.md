@@ -1,16 +1,18 @@
 ---
-description: "Dockerize a GoFr Go microservice with a multi-stage, distroless, non-root image and a healthcheck on /.well-known/alive."
+description: "Dockerize a GoFr Go microservice two ways — multi-stage distroless build, or copy a CI-built binary into a distroless non-root runtime."
 nextjs:
   metadata:
-    title: "Dockerizing GoFr Services - Multi-Stage Distroless Build"
-    description: "Dockerize a GoFr Go microservice with a multi-stage, distroless, non-root image and a healthcheck on /.well-known/alive."
+    title: "Dockerizing GoFr Services - Multi-Stage and Copy-Binary Variants"
+    description: "Dockerize a GoFr Go microservice two ways — multi-stage distroless build, or copy a CI-built binary into a distroless non-root runtime."
 ---
 
 # Dockerizing GoFr Services
 
 {% answer %}
-A production GoFr container is a multi-stage build: compile a static, CGO-disabled binary in a `golang:alpine` builder stage, then copy it into a `gcr.io/distroless/static-debian12:nonroot` runtime image. Docker reads configuration from environment variables (`HTTP_PORT`, `METRICS_PORT`, datasource URLs), and the built-in `/.well-known/alive` endpoint backs the container `HEALTHCHECK`.
+Two production-ready ways to ship GoFr in a container: a multi-stage build that compiles a static, CGO-disabled binary inside the image, or a copy-binary variant that lifts a CI-built binary into a minimal runtime. Both target `gcr.io/distroless/static-debian12:nonroot`, expose `HTTP_PORT` (8000) and `METRICS_PORT` (2121), read configuration from env vars, and rely on Kubernetes liveness/readiness probes (the `/.well-known/alive` and `/.well-known/health` endpoints GoFr registers) — Dockerfile `HEALTHCHECK` does not work cleanly on distroless.
 {% /answer %}
+
+{% howto name="Containerize a GoFr service (multi-stage)" description="Build a small, secure container image for a GoFr binary using a multi-stage Go build." steps=[{"name": "Add a multi-stage Dockerfile", "text": "Use a golang:1.25-alpine builder stage to compile a static binary, then copy it into a gcr.io/distroless/static-debian12:nonroot runtime stage."}, {"name": "Cache module downloads", "text": "COPY go.mod and go.sum first and run go mod download before copying source — combined with a BuildKit cache mount, Docker reuses module downloads across builds."}, {"name": "Compile a static binary", "text": "Set CGO_ENABLED=0 with -trimpath and use -ldflags to embed version/commit, so the runtime image needs no libc and stays minimal."}, {"name": "Run as non-root", "text": "distroless/static-debian12:nonroot already provides UID 65532; set USER nonroot:nonroot to use it."}, {"name": "Probe over HTTP from outside the container", "text": "distroless/static has no shell or wget/curl, so Dockerfile HEALTHCHECK is impractical. On Kubernetes, use livenessProbe/readinessProbe with httpGet on /.well-known/alive and /.well-known/health."}, {"name": "Build and tag", "text": "docker build with a short-SHA tag plus a semver alias so you can roll back by digest."}] /%}
 
 ## When to use this guide
 
@@ -36,7 +38,16 @@ my-service/
 
 GoFr loads `configs/.env` automatically when present, but in containers you should prefer real environment variables — that is what Kubernetes ConfigMaps and Secrets inject.
 
-## Multi-stage Dockerfile
+## Choose your variant
+
+Two production-ready paths. Pick based on where you want compilation to happen.
+
+| Variant | When to prefer |
+| --- | --- |
+| Multi-stage build | You want a single `docker build` to produce a release-grade image. Build context lives entirely in-repo. |
+| Copy pre-built binary | Your CI already produces a reproducible binary (e.g., signed/attested by SLSA, GoReleaser, etc.). The image build is a thin wrapper around that artifact, so it's faster and the build context is tiny. |
+
+## Variant A: Multi-stage Dockerfile
 
 Save this as `Dockerfile` at the repo root:
 
@@ -48,24 +59,30 @@ ARG APP_VERSION=dev
 ARG GIT_COMMIT=unknown
 
 # ---------- builder ----------
-FROM golang:${GO_VERSION}-alpine AS builder
+FROM --platform=$BUILDPLATFORM golang:${GO_VERSION}-alpine AS builder
 
-RUN apk add --no-cache git ca-certificates tzdata
+RUN apk add --no-cache git ca-certificates
 
 WORKDIR /src
 
 # Cache module downloads in their own layer.
 COPY go.mod go.sum ./
-RUN go mod download
+RUN --mount=type=cache,target=/go/pkg/mod \
+    go mod download
 
 # Copy source after deps so source edits don't bust the dep cache.
 COPY . .
 
 ARG APP_VERSION
 ARG GIT_COMMIT
+ARG TARGETOS
+ARG TARGETARCH
 
 # CGO=0 + -trimpath gives a static, reproducible binary.
-RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 \
+# TARGETOS/TARGETARCH come from BuildKit so the same Dockerfile builds for
+# linux/amd64 and linux/arm64 unchanged.
+RUN --mount=type=cache,target=/go/pkg/mod \
+    CGO_ENABLED=0 GOOS=${TARGETOS:-linux} GOARCH=${TARGETARCH:-amd64} \
     go build \
       -trimpath \
       -ldflags="-s -w -X main.version=${APP_VERSION} -X main.commit=${GIT_COMMIT}" \
@@ -77,33 +94,68 @@ FROM gcr.io/distroless/static-debian12:nonroot
 WORKDIR /app
 
 COPY --from=builder /out/app /app/app
-# Copy .env only if you want a baked-in default; in K8s prefer ConfigMaps.
-COPY --from=builder /src/configs /app/configs
 
 USER nonroot:nonroot
 
 EXPOSE 8000 2121
 
-# /.well-known/alive is registered by GoFr automatically and returns 200 when the process is up.
-# NOTE: distroless/static has no shell and no wget/curl, so a Dockerfile HEALTHCHECK is
-# impractical on this base image. The recommended path is to omit HEALTHCHECK and rely on
-# Kubernetes liveness/readiness probes (see the Deploying to Kubernetes guide). If you do
-# need a docker-level healthcheck, switch the runtime stage to a base image that includes
-# wget (e.g. alpine) and use:
-#   HEALTHCHECK --interval=10s --timeout=2s --retries=5 \
-#     CMD wget -qO- http://localhost:8000/.well-known/alive || exit 1
-# There is NO `healthcheck` subcommand on the GoFr binary — `/app/app healthcheck` will
-# re-run the whole app and fail with a port-bind error.
+# distroless/static has no shell and no wget/curl, so a Dockerfile HEALTHCHECK
+# is impractical here. On Kubernetes, use the Deployment's livenessProbe and
+# readinessProbe (httpGet on /.well-known/alive and /.well-known/health) — see
+# the Deploying to Kubernetes guide.
 
 ENTRYPOINT ["/app/app"]
 ```
 
 A few things worth calling out:
 
-- **`CGO_ENABLED=0`** produces a static binary — required because `distroless/static` has no glibc.
-- **`distroless/static-debian12:nonroot`** ships only the binary, CA certs, `/etc/passwd`, and timezone data. No shell, no package manager.
+- **`CGO_ENABLED=0`** produces a fully statically-linked binary with no dependency on `libc` or a dynamic linker at runtime — required because `distroless/static-debian12:nonroot` ships only the binary, CA certs, `/etc/passwd`, tzdata, and a non-root user. There is no `libc` (glibc, musl, anything), no shell, no package manager.
+- **`TARGETOS` / `TARGETARCH` ARGs** let one Dockerfile build for `linux/amd64` and `linux/arm64` via `docker buildx build --platform=linux/amd64,linux/arm64 …` — useful when developing on Apple Silicon and deploying to amd64 nodes (or vice versa).
+- **`-X main.version=…`** ldflags only inject values if your `main` package declares matching variables. Add `var (version, commit string)` near the top of `main.go` if you want `gofr.Logger().Info(version, commit)` to surface the build's git SHA.
 - **`USER nonroot`** runs as UID 65532; combined with a read-only root filesystem in Kubernetes this satisfies most pod-security baselines.
-- **Healthchecks** rely on the `/.well-known/alive` endpoint that GoFr registers automatically (see {% new-tab-link newtab=false title="Monitoring Service Health" href="/docs/advanced-guide/monitoring-service-health" /%}). There is no `healthcheck` subcommand on the GoFr binary, and `distroless/static` has no shell or `wget`/`curl` to call the endpoint, so a Dockerfile `HEALTHCHECK` directive does not work cleanly on this base image. On Kubernetes the standard path is to skip `HEALTHCHECK` entirely and use the Deployment's `livenessProbe`/`readinessProbe` (which `httpGet` the same `/.well-known/alive` and `/.well-known/health` paths). If you need a docker-level healthcheck, switch the runtime stage to a base image that includes `wget` (for example `alpine`) and use the commented form shown above.
+- **No bundled `configs/`**: env vars come from the platform (compose, K8s ConfigMap/Secret, cloud SSM/Secrets Manager). Do not `COPY configs/` into the runtime image — it tends to drift, and a populated `.env` is a secret. Bake only platform-independent defaults into your binary.
+- **Healthchecks** rely on `/.well-known/alive` (process up) and `/.well-known/health` (datasources reachable) that GoFr registers automatically. There is no `healthcheck` subcommand on the GoFr binary, and `distroless/static` has no shell or `wget`/`curl` to call the endpoint, so a Dockerfile `HEALTHCHECK` directive does not work cleanly on this base. On Kubernetes, use the Deployment's `livenessProbe` / `readinessProbe` instead (see the Deploying to Kubernetes guide).
+
+## Variant B: Copy a pre-built binary
+
+If your CI already produces a release-grade Go binary — reproducible flags, SLSA provenance, signed by cosign, whatever your supply chain looks like — you don't need a Go toolchain inside the image. Lift the binary in.
+
+Build the binary in CI:
+
+```bash
+CGO_ENABLED=0 GOOS=linux GOARCH=amd64 \
+  go build -trimpath -ldflags='-s -w' -o ./bin/app ./
+```
+
+Then this is the entire Dockerfile:
+
+```dockerfile
+# syntax=docker/dockerfile:1.7
+
+FROM gcr.io/distroless/static-debian12:nonroot
+
+WORKDIR /app
+
+# `./bin/app` is the binary your CI produced one step earlier.
+COPY ./bin/app /app/app
+
+USER nonroot:nonroot
+
+EXPOSE 8000 2121
+
+ENTRYPOINT ["/app/app"]
+```
+
+Why this is sometimes preferable:
+
+- **Faster image builds**: no Go toolchain, no module download, no compile step. The image build is a single `COPY`.
+- **Smaller build context**: `docker build` only needs `./bin/app` and the Dockerfile. Use a tight `.dockerignore` (or build with a custom context) so source isn't shipped to the daemon.
+- **Decoupled supply chain**: the binary and its provenance are signed once in CI and the image build never touches source. This matches SLSA Level 3+ patterns.
+
+When NOT to use this variant:
+
+- You want a single `docker build` to be the only entry-point for a fresh checkout. Variant A is more self-contained.
+- You're shipping arch-specific binaries from the same Dockerfile. Variant A's `TARGETARCH` flow is cleaner.
 
 ## .dockerignore
 
@@ -200,12 +252,13 @@ The exact env var names for each datasource (Mongo, Cassandra, etc.) are documen
 - **Read-only root FS:** in Kubernetes, set `readOnlyRootFilesystem: true` and mount an `emptyDir` if the service writes temp files.
 - **Don't bake secrets:** never `COPY` a populated `.env` into the runtime image. Inject via Kubernetes Secrets instead.
 - **Pin the Go version:** the `ARG GO_VERSION` lets CI build the same image deterministically.
-- **Build cache:** add `--mount=type=cache,target=/go/pkg/mod` with BuildKit to keep module cache warm between CI runs.
+- **Build cache:** Variant A's Dockerfile already includes the `--mount=type=cache,target=/go/pkg/mod` cache mount on both `go mod download` and `go build`; just use BuildKit (default in `docker buildx`, or set `DOCKER_BUILDKIT=1`) to keep the module cache warm between CI runs.
 
 ## Verification
 
+A hello-world GoFr service (no datasources) needs no env injection:
+
 ```bash
-# Build and run.
 docker build -t my-service:dev .
 docker run --rm -p 8000:8000 -p 2121:2121 my-service:dev
 
@@ -216,8 +269,31 @@ curl -s http://localhost:8000/.well-known/alive
 curl -s http://localhost:2121/metrics | head
 # # HELP app_http_response ...
 # # TYPE app_http_response histogram
+```
 
-# Inspect image size and layers.
+A real service with datasources needs env vars. Use `--env-file`:
+
+```bash
+cat > .env.dev <<'EOF'
+APP_NAME=my-service
+HTTP_PORT=8000
+METRICS_PORT=2121
+LOG_LEVEL=DEBUG
+REDIS_HOST=host.docker.internal
+REDIS_PORT=6379
+DB_HOST=host.docker.internal
+DB_PORT=5432
+DB_USER=gofr
+DB_PASSWORD=gofr
+DB_NAME=gofr
+DB_DIALECT=postgres
+EOF
+
+docker run --rm -p 8000:8000 -p 2121:2121 --env-file .env.dev my-service:dev
+
+# Same curl checks as above.
+
+# Inspect image size and layers:
 docker image inspect my-service:dev --format '{{.Size}}'
 docker history my-service:dev
 ```
