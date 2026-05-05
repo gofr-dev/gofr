@@ -112,7 +112,7 @@ A small Express service (10-20 routes, light DB usage) typically takes 2–4 eng
 {% faq %}
 
 {% faq-item question="Will my JSON contracts change?" %}
-GoFr wraps successful responses as `{"data": ...}` by default. If your existing Express clients expect a different envelope, you can return a wrapper struct from your handler that controls the shape.
+GoFr wraps successful responses as `{"data": ...}` by default — and a plain struct returned from a handler is always wrapped. If your existing Express clients expect a different envelope (or no envelope), return one of GoFr's special response types instead: `response.Raw{Data: …}` writes the value directly with no envelope, and `response.Response` lets you control the shape. The wrapper is only bypassed when you return one of these typed responses, not when you return an arbitrary struct.
 {% /faq-item %}
 
 {% faq-item question="What about NestJS or Fastify users?" %}
