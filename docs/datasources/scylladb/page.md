@@ -1,3 +1,11 @@
+---
+description: "Connect GoFr to ScyllaDB via the external driver. Run CQL queries against the high-throughput Cassandra-compatible store with traces and metrics."
+nextjs:
+  metadata:
+    title: "ScyllaDB in GoFr — Cassandra-Compatible Datasource"
+    description: "Connect GoFr to ScyllaDB via the external driver. Run CQL queries against the high-throughput Cassandra-compatible store with traces and metrics."
+---
+
 # ScyllaDB
 
 ## Configuration

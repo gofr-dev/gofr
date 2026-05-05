@@ -1,3 +1,11 @@
+---
+description: "Connect a GoFr service to MySQL, PostgreSQL, or SQLite via env-var configs. The framework manages the connection and exposes ctx.SQL with traces and metrics."
+nextjs:
+  metadata:
+    title: "Dealing with SQL in GoFr — MySQL, Postgres, SQLite"
+    description: "Connect a GoFr service to MySQL, PostgreSQL, or SQLite via env-var configs. The framework manages the connection and exposes ctx.SQL with traces and metrics."
+---
+
 # Dealing with SQL
 
 GoFr simplifies the process of connecting to SQL databases where one needs to add respective configs in .env,
@@ -37,3 +45,7 @@ DB_MAX_IDLE_CONNECTION=5 // Default 2
 DB_MAX_OPEN_CONNECTION=5 // Default unlimited
 ```
 > ##### Check out the example on how to add configuration for SQL in GoFr: [Visit GitHub](https://github.com/gofr-dev/gofr/blob/main/examples/http-server/configs/.env)
+
+## Related production guides
+
+- **Connection Pooling**: [Tune `DB_MAX_OPEN_CONNECTION` and friends for production load](/docs/guides/connection-pooling) — sizing pools to match traffic and DB capacity.

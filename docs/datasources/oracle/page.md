@@ -1,3 +1,11 @@
+---
+description: "Use Oracle Database from GoFr by injecting a compatible driver via the datasource interface. Run SQL with built-in traces, metrics, and structured logs."
+nextjs:
+  metadata:
+    title: "Oracle Database in GoFr — Pluggable Driver Integration"
+    description: "Use Oracle Database from GoFr by injecting a compatible driver via the datasource interface. Run SQL with built-in traces, metrics, and structured logs."
+---
+
 # OracleDB
 
 ## Configuration
