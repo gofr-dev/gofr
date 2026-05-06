@@ -737,6 +737,8 @@ func TestCrontab_Stop(t *testing.T) {
 	case <-time.After(100 * time.Millisecond):
 		t.Fatal("done channel is not closed")
 	}
+}
+
 func TestErrParsing_Error(t *testing.T) {
 	tests := []struct {
 		name     string
