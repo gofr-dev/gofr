@@ -1,3 +1,11 @@
+---
+description: "Auto-generate CRUD REST handlers from Go structs in GoFr. The framework wires up Create, Read, Update, and Delete routes so you can skip the boilerplate."
+nextjs:
+  metadata:
+    title: "Add REST Handlers in GoFr — CRUD from Go Structs"
+    description: "Auto-generate CRUD REST handlers from Go structs in GoFr. The framework wires up Create, Read, Update, and Delete routes so you can skip the boilerplate."
+---
+
 # Add REST Handlers
 
 GoFr simplifies the process of implementing CRUD (Create, Read, Update, Delete) operations by enabling the automatic generation of handlers directly from Go structs.
@@ -78,7 +86,7 @@ Now when posting data for the user struct, the `Id` we be auto-incremented and t
 package main
 
 import (
-	"gofr.dev/examples/using-crud-from-struct/migrations"
+	"gofr.dev/examples/using-add-rest-handlers/migrations"
 	"gofr.dev/pkg/gofr"
 )
 
@@ -104,7 +112,7 @@ func main() {
 	// AddRESTHandlers creates CRUD handles for the given entity
 	err := a.AddRESTHandlers(&user{})
 	if err != nil {
-		return
+		a.Logger().Fatal(err)
 	}
 
 	// Run the application
