@@ -28,7 +28,7 @@ type Oracle interface {
 
 This approach allows users to easily inject any compatible Oracle driver, providing both usability and the flexibility to use multiple databases in a GoFr application.
 
-## ⚠️ Important: Oracle Database Must Exist
+## Important: Oracle Database Must Exist
 
 **Before running your GoFr application, you must ensure that the Oracle database and the required schema (such as the `users` table) are already created.**
 

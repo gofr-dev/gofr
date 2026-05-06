@@ -59,7 +59,7 @@ func main() {
 
 **Gin** — pull in `otelgin`, `otelhttp`, `prometheus/client_golang`, `pgx`. Configure each. Wire them together. Make sure trace IDs propagate from request → DB query.
 
-**GoFr** — set `TRACER_HOST`, `METRICS_PORT`, and `DB_HOST` in `.env`. Call `c.SQL` to query. Traces, metrics, and structured logs are emitted automatically.
+**GoFr** — set `TRACE_EXPORTER`, `TRACER_URL`, `METRICS_PORT`, and `DB_HOST` in `.env`. Call `c.SQL` to query. Traces, metrics, and structured logs are emitted automatically. (`TRACER_HOST` / `TRACER_PORT` are deprecated — the runtime logs a warning if you set them; use `TRACER_URL` instead.)
 
 ### Service-to-service HTTP with circuit breaker
 

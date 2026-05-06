@@ -51,7 +51,7 @@ jobs:
           fetch-depth: 0
 
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v6
         with:
           node-version: 18.x
 
@@ -94,22 +94,29 @@ jobs:
           echo "TAG=$TAG" >> $GITHUB_ENV
 
       # Build the website source-bundle image locally with the
-      # freshly-refreshed data baked in. Tagged ghcr.io/...:latest
+      # freshly-refreshed data baked in. Tagged ghcr.io/...:stage
       # purely for the *local* docker daemon — we don't push it to
       # ghcr. The framework's docs/Dockerfile then resolves its
-      # FROM ghcr.io/gofr-dev/website:${WEBSITE_TAG=latest} against
+      # FROM ghcr.io/gofr-dev/website:${WEBSITE_TAG=stage} against
       # the local image.
+      #
+      # --target builder stops at the website Dockerfile's first
+      # stage, which contains /app source + node_modules + npm. The
+      # framework's docs/Dockerfile needs that to overlay docs and
+      # run `npm run build`; the default final nginx stage has no
+      # npm and would fail with `npm: not found`.
       - name: Build website source-bundle (with fresh data)
         run: |
           docker build \
-            -t ghcr.io/gofr-dev/website:latest \
+            --target builder \
+            -t ghcr.io/gofr-dev/website:stage \
             -f ./website-src/Dockerfile \
             ./website-src/
 
       - name: Build framework docs image
         run: |
           docker build \
-            --build-arg WEBSITE_TAG=latest \
+            --build-arg WEBSITE_TAG=stage \
             -t us-central1-docker.pkg.dev/${{ env.GAR_PROJECT }}/${{ env.GAR_REGISTRY }}/${{ env.APP_NAME }}:${{ env.TAG }} \
             -f ./docs/Dockerfile \
             .
