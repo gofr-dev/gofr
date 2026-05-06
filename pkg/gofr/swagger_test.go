@@ -2,6 +2,7 @@ package gofr
 
 import (
 	"bytes"
+	"context"
 	"errors"
 	"net/http"
 	"net/http/httptest"
@@ -120,4 +121,22 @@ func TestSwaggerUIHandler_Error(t *testing.T) {
 
 	assert.Nil(t, resp)
 	errors.Is(err, &os.PathError{Path: "/Users/raramuri/Projects/gofr.dev/gofr/pkg/gofr/static/abc.abc"})
+}
+
+func TestSwaggerUIHandler_NoFileExtension(t *testing.T) {
+	testContainer, _ := container.NewMockContainer(t)
+
+	testReq := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/.well-known/swagger/noextension", http.NoBody)
+	testReq = mux.SetURLVars(testReq, map[string]string{"name": "noextension"})
+
+	gofrReq := gofrHTTP.NewRequest(testReq)
+	ctx := newContext(gofrHTTP.NewResponder(httptest.NewRecorder(), http.MethodGet), gofrReq, testContainer)
+	ctx.ContextLogger = *logging.NewContextLogger(ctx, testContainer.Logger)
+
+	resp, err := SwaggerUIHandler(ctx)
+
+	assert.Nil(t, resp)
+
+	expectedErr := gofrHTTP.ErrorEntityNotFound{Name: "file", Value: "noextension"}
+	assert.Equal(t, expectedErr, err)
 }

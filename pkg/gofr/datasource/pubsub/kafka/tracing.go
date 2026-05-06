@@ -58,31 +58,6 @@ func injectTraceContext(ctx context.Context, headers []kafka.Header) []kafka.Hea
 	return carrier
 }
 
-// extractTraceLinks extracts the trace context from Kafka message headers
-// and returns span links to the producer span.
-// If no trace context is found, returns empty links (creating an orphan span).
-func extractTraceLinks(headers []kafka.Header) []trace.Link {
-	carrier := headerCarrier(headers)
-
-	// Extract the context from headers
-	extractedCtx := otel.GetTextMapPropagator().Extract(context.Background(), &carrier)
-
-	// Get span context from extracted context
-	spanCtx := trace.SpanContextFromContext(extractedCtx)
-
-	// If valid span context exists, create a link to it
-	if spanCtx.IsValid() {
-		return []trace.Link{
-			{
-				SpanContext: spanCtx,
-			},
-		}
-	}
-
-	// No valid trace context found, return empty links (orphan span)
-	return nil
-}
-
 // startPublishSpan creates a new span for publishing with trace context injection.
 // Returns the updated context for logging and the headers with injected trace context.
 func startPublishSpan(ctx context.Context, topic string) (context.Context, trace.Span, []kafka.Header) {
@@ -103,14 +78,28 @@ func startPublishSpan(ctx context.Context, topic string) (context.Context, trace
 	return ctx, span, headers
 }
 
-// startSubscribeSpan creates a new span for subscribing with links to the producer span.
-// If trace context exists in headers, creates a span linked to the producer.
-// Otherwise, creates an orphan span (new trace).
+// startSubscribeSpan creates a new span for subscribing.
+// If a valid trace context is found in headers, the consumer span becomes a
+// child of the producer's span (same trace ID), AND a span link is attached
+// so OTel-aware tools can still model fan-out semantics. Otherwise, the span
+// starts under whatever span (if any) is already in ctx.
 func startSubscribeSpan(ctx context.Context, topic string, msgHeaders []kafka.Header) (context.Context, trace.Span) {
-	// Extract links from message headers
-	links := extractTraceLinks(msgHeaders)
+	// Extract producer's trace context once and reuse for both parent and link
+	// to avoid parsing the same carrier twice.
+	parentCtx := ctx
 
-	// Create span with links if any exist
+	var links []trace.Link
+
+	if len(msgHeaders) > 0 {
+		carrier := headerCarrier(msgHeaders)
+		extractedCtx := otel.GetTextMapPropagator().Extract(ctx, &carrier)
+
+		if spanCtx := trace.SpanContextFromContext(extractedCtx); spanCtx.IsValid() {
+			parentCtx = extractedCtx
+			links = []trace.Link{{SpanContext: spanCtx}}
+		}
+	}
+
 	opts := []trace.SpanStartOption{
 		trace.WithSpanKind(trace.SpanKindConsumer),
 		trace.WithAttributes(
@@ -124,7 +113,7 @@ func startSubscribeSpan(ctx context.Context, topic string, msgHeaders []kafka.He
 		opts = append(opts, trace.WithLinks(links...))
 	}
 
-	ctx, span := otel.GetTracerProvider().Tracer(tracerName).Start(ctx, "kafka-subscribe", opts...)
+	ctx, span := otel.GetTracerProvider().Tracer(tracerName).Start(parentCtx, "kafka-subscribe", opts...)
 
 	return ctx, span
 }
