@@ -108,7 +108,7 @@ After moving to GoFr, several Gin-side helpers usually become unnecessary becaus
 
 - **`c.MustGet` has no direct equivalent.** Use `c.Get(key)` and handle the missing-value case explicitly.
 - **Gin's middleware ordering matters at registration time.** GoFr's default observability middleware runs before your custom `UseMiddleware` chain — assume tracing and metrics are already wired by the time your code runs.
-- **Response wrapping is different.** GoFr returns `{"data": ...}` on success and `{"error": ...}` on error. If your existing clients expect the raw object, return a wrapper struct that controls the envelope.
+- **Response wrapping is different.** GoFr returns `{"data": ...}` on success and `{"error": ...}` on error, and a plain struct returned from a handler is always wrapped. If your existing clients expect the raw object, return one of GoFr's special response types — `response.Raw{Data: …}` writes the payload directly with no envelope, and `response.Response` lets you control the shape. Returning an arbitrary struct does not bypass the envelope.
 - **No `gin.H{}`.** Use plain `map[string]any{}` or, better, named structs.
 - **Validation isn't built in.** Gin uses `binding:"required"` tags via go-playground/validator by default. With GoFr, pick your validator explicitly.
 

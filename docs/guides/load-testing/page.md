@@ -79,7 +79,7 @@ A 3-minute test should be reflected in a Grafana dashboard with at least these p
 
 When latency rises, look in this order:
 
-1. **Application CPU** — saturated CPU means you are compute-bound or doing too much per request. Profile with `pprof`. Add `app.GET("/debug/pprof/profile", ...)` only in non-prod.
+1. **Application CPU** — saturated CPU means you are compute-bound or doing too much per request. Profile with `pprof`: GoFr already mounts the standard `net/http/pprof` handlers (`/debug/pprof/`, `/debug/pprof/profile`, `/debug/pprof/heap`, etc.) on the metrics server (port `METRICS_PORT`, default 2121) — fetch a profile with `go tool pprof http://<host>:2121/debug/pprof/profile`. There's no need to register your own handler. In production, restrict access to that port to your internal network, since it exposes goroutine and heap profiles.
 2. **Database** — slow queries, connection pool exhaustion, lock waits. Check the SQL datasource's pool stats and DB-side metrics. `MaxOpenConns` is often the culprit.
 3. **Downstream services** — GoFr's outbound HTTP client metrics show which downstream is slowing. Circuit breaker transitions are visible via `app_http_circuit_breaker_state`.
 4. **GC** — long GC pauses correlate with allocation in hot paths. `go_gc_duration_seconds` and `runtime/metrics` show this.

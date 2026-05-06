@@ -110,7 +110,7 @@ Go does not have class-based DI like Spring. The conventions are:
 
 - **No annotation-driven anything.** Routing, validation, security, transactions — all explicit code, not annotations on classes.
 - **No JPA-style lazy loading.** SQL is explicit. If you depend on lazy-loaded relations, plan to do JOINs or eager-load explicitly.
-- **No `application-prod.yaml` / `application-staging.yaml` profile system.** Use multiple `.env` files (`configs/.env.production`, `configs/.env.staging`) and select via `APP_ENV`.
+- **No `application-prod.yaml` / `application-staging.yaml` profile system.** GoFr loads `configs/.env` and then overlays `configs/.<APP_ENV>.env` on top — so `APP_ENV=production` reads `configs/.env` then `configs/.production.env`. Note the dot prefix and `.env` suffix on the override file (not `.env.production`).
 - **No bean lifecycle.** Replace `@PostConstruct` / `@PreDestroy` with `OnStart` and graceful shutdown in `main`.
 - **Generics syntax is different from Java.** Go generics exist but are used sparingly; most code reads more like pre-generics Java.
 - **Dependency injection is wiring, not magic.** `@Autowired` field injection becomes constructor parameters, or `Wire` / `Fx` if you want a generated graph. See [Spring DI patterns and their Go equivalents](/docs/references/context).

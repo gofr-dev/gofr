@@ -95,7 +95,7 @@ DB_USER=root
 LOG_LEVEL=INFO
 ```
 
-Environment-specific files (`configs/.env.production`) layer on top — selected via `APP_ENV`. This is a natural fit for Kubernetes ConfigMaps and Secrets.
+Environment-specific overrides layer on top: GoFr reads `configs/.env` first, then overlays `configs/.<APP_ENV>.env` (so `APP_ENV=production` overlays `configs/.production.env`). Note the leading dot and the `.env` suffix on the override file. This is a natural fit for Kubernetes ConfigMaps and Secrets.
 
 ## Dependency injection
 

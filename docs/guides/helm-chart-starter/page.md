@@ -12,6 +12,19 @@ nextjs:
 This is a copy-paste reference Helm chart for a GoFr microservice. It assumes the application listens on the framework defaults — HTTP 8000, gRPC 9000, metrics 2121 — and uses `/.well-known/alive` and `/.well-known/health` for probes. Use it as the starting point for your own chart.
 {% /answer %}
 
+{% howto name="Package a GoFr service as a Helm chart" description="Build a minimal Helm chart for a GoFr microservice with templated Deployment, Service, ConfigMap, and probe wiring." steps=[{"name": "Create the chart skeleton", "text": "Generate Chart.yaml with appVersion plus apiVersion v2 and a values.yaml capturing image, replicas, env, resources, and probes."}, {"name": "Template the Deployment", "text": "In templates/deployment.yaml render replicas, image, envFrom (ConfigMap + Secret), readinessProbe at /.well-known/health and livenessProbe at /.well-known/alive."}, {"name": "Template the Service", "text": "In templates/service.yaml expose port 8000 (HTTP) and 2121 (metrics) as named ports for Prometheus scraping."}, {"name": "Wire ConfigMap and Secret", "text": "Mount values.env via ConfigMap for non-secrets and a separate Secret for credentials; both via envFrom."}, {"name": "Lint and template", "text": "Run helm lint and helm template to verify YAML output before installing."}, {"name": "Install and upgrade", "text": "helm install for first deploy, then helm upgrade --install on subsequent rollouts; tag image by digest for repeatability."}] /%}
+
+{% callout type="note" title="Prefer a maintained chart?" %}
+The reference chart below is intentionally minimal so you can read every line. If you'd rather depend on a maintained chart, the community chart at [zop/service](https://github.com/zopdev/helm-charts/tree/main/charts/service) covers the same shape (Deployment + Service + optional Ingress/HPA + probes).
+
+```bash
+helm repo add zop https://helm.zop.dev
+helm install my-app zop/service
+```
+
+Override values with `-f values.yaml` or `--set`; the chart's `values.schema.json` marks user-mutable fields with `"mutable": true`.
+{% /callout %}
+
 This is reference material, not a published chart. A future `gofr-dev/gofr-k8s-starter` repo could host a maintained version. For now, copy the files below into a `chart/` directory in your service repo.
 
 ## Layout

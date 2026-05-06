@@ -12,6 +12,8 @@ nextjs:
 Deploy a GoFr service to Kubernetes by pointing the readiness probe at `/.well-known/health`, the liveness probe at `/.well-known/alive`, and feeding non-secret config through a ConfigMap (`envFrom`) and credentials through a Secret. Set `terminationGracePeriodSeconds` higher than the longest in-flight request so GoFr's graceful shutdown can drain cleanly.
 {% /answer %}
 
+{% howto name="Deploy a GoFr service to Kubernetes" description="Containerize, apply manifests, wire health probes, and tune graceful shutdown." steps=[{"name":"Containerize the binary","text":"Build a multi-stage Dockerfile that compiles the GoFr binary statically and runs it on distroless or alpine."},{"name":"Apply Deployment and Service","text":"Apply a Deployment with replicas and resource requests, plus a ClusterIP Service exposing port 8000."},{"name":"Wire health probes","text":"Set readinessProbe httpGet path to /.well-known/health and livenessProbe to /.well-known/alive on port 8000."},{"name":"Inject configuration","text":"Feed non-secret env via ConfigMap and credentials via Secret, both attached with envFrom on the container."},{"name":"Tune graceful shutdown","text":"Set terminationGracePeriodSeconds higher than your longest in-flight request so SIGTERM drains cleanly."},{"name":"Roll out and verify","text":"kubectl rollout status, then port-forward and curl /.well-known/health to confirm datasources are reachable."}] /%}
+
 ## When to use this guide
 
 You have a GoFr service already containerized (see {% new-tab-link newtab=false title="Dockerizing GoFr Services" href="/docs/guides/dockerizing-gofr-services" /%}) and a Kubernetes cluster (kind, EKS, GKE, AKS, or on-prem). This guide covers the manifest set for a stateless HTTP service: Deployment, Service, ConfigMap, Secret, and an optional HorizontalPodAutoscaler.
@@ -26,7 +28,7 @@ You have a GoFr service already containerized (see {% new-tab-link newtab=false 
 | Graceful shutdown on SIGTERM | `terminationGracePeriodSeconds` | Drain in-flight requests |
 | `configs/.env` keys | `ConfigMap` + `envFrom` | Non-secret config |
 | DB passwords, API keys | `Secret` + `envFrom` | Mount via env, not files |
-| `/metrics` (port 2121) | named container port + ServiceMonitor | See {% new-tab-link newtab=false title="Production Prometheus on Kubernetes" href="/docs/guides/production-prometheus-kubernetes" /%} |
+| `/metrics` (port 2121) | named container port | OpenMetrics/Prometheus text format — scraped by any compatible collector (see below) |
 
 ## Full manifest set
 
@@ -186,7 +188,7 @@ spec:
       protocol: TCP
 ```
 
-Naming the metrics port `metrics` lets a Prometheus `ServiceMonitor` select it by name without hardcoding `2121`.
+Naming the metrics port `metrics` lets any OpenMetrics scraper (Prometheus `ServiceMonitor`, Grafana Alloy, OpenTelemetry Collector, VictoriaMetrics `VMServiceScrape`, Datadog Agent, etc.) select it by name without hardcoding `2121`.
 
 ### HorizontalPodAutoscaler (optional)
 
@@ -213,6 +215,18 @@ spec:
 ```
 
 For traffic-driven scaling, switch to a custom-metrics adapter against the `app_http_response` histogram GoFr exports (request rate or p95 latency).
+
+## Scraping metrics
+
+GoFr's `/metrics` endpoint exposes the OpenMetrics text format (Prometheus-compatible). Any collector that speaks OpenMetrics can scrape it — pick the one that matches your platform:
+
+- **Prometheus + ServiceMonitor** (kube-prometheus-stack) — the most common path. The Prometheus Operator's `ServiceMonitor` CRD selects services by label and scrapes the named `metrics` port. See {% new-tab-link newtab=false title="Production Prometheus on Kubernetes" href="/docs/guides/production-prometheus-kubernetes" /%}.
+- **Grafana Alloy** (the unified Grafana agent that supersedes Grafana Agent) — has a `prometheus.scrape` component that targets the same endpoint and can forward to Mimir, Cortex, or Cloud.
+- **OpenTelemetry Collector** — the `prometheus` receiver scrapes OpenMetrics endpoints; pair with an OTLP exporter to push metrics to Jaeger/Tempo-paired backends or any OTLP-aware vendor.
+- **VictoriaMetrics Operator** — uses `VMServiceScrape` (analogous to ServiceMonitor) if you've replaced Prometheus with VictoriaMetrics.
+- **Datadog Agent** — the OpenMetrics check (`openmetrics` integration) scrapes the same endpoint when you set the relevant pod annotations.
+
+GoFr does not ship config for any of these collectors — pick one and follow its install docs. The only contract on the GoFr side is the `/metrics` endpoint on `METRICS_PORT` (default 2121), which is named `metrics` in the Service so any of these scrapers can target it by name.
 
 ## Probes: why `/.well-known/health` for readiness, `/.well-known/alive` for liveness?
 
