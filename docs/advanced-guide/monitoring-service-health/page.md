@@ -1,3 +1,11 @@
+---
+description: "Health checks in GoFr probe each service's status and dependencies, helping detect failures, prevent cascades, and route traffic in distributed systems."
+nextjs:
+  metadata:
+    title: "Monitoring Service Health in GoFr — Health Checks"
+    description: "Health checks in GoFr probe each service's status and dependencies, helping detect failures, prevent cascades, and route traffic in distributed systems."
+---
+
 # Monitoring Service Health
 
 Health check in microservices refers to a mechanism or process implemented within each service to assess its operational status
@@ -120,3 +128,7 @@ Sample response of how it appears when all the services, and connected data sour
   }
 }
 ```
+
+## Related production guides
+
+- **Deploying to Kubernetes**: [Wire `/.well-known/alive` into liveness/readiness probes](/docs/guides/deploying-to-kubernetes) — make Kubernetes act on the health information GoFr exposes.

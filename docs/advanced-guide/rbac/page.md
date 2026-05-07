@@ -1,3 +1,11 @@
+---
+description: "Configure role-based access control in GoFr with the config-driven RBAC middleware. Supports multiple auth methods, fine-grained perms, and role inheritance."
+nextjs:
+  metadata:
+    title: "RBAC in GoFr — Role-Based Access Control Middleware"
+    description: "Configure role-based access control in GoFr with the config-driven RBAC middleware. Supports multiple auth methods, fine-grained perms, and role inheritance."
+---
+
 # Role-Based Access Control (RBAC) in GoFr
 
 Role-Based Access Control (RBAC) is a security mechanism that restricts access to resources based on user roles and permissions. GoFr provides a pure config-based RBAC middleware that supports multiple authentication methods, fine-grained permissions, and role inheritance.
@@ -536,6 +544,10 @@ RBAC middleware never logs:
 
 ## Related Documentation
 
-- [HTTP Authentication](https://gofr.dev/docs/advanced-guide/http-authentication) - Basic Auth, API Keys, OAuth 2.0
+- [Authentication](https://gofr.dev/docs/advanced-guide/authentication) - Basic Auth, API Keys, OAuth 2.0
 - [HTTP Communication](https://gofr.dev/docs/advanced-guide/http-communication) - Inter-service HTTP calls
 - [Middlewares](https://gofr.dev/docs/advanced-guide/middlewares) - Custom middleware implementation
+
+## Related production guides
+
+- **Auth in Kubernetes**: [Run RBAC-protected services on Kubernetes](/docs/guides/auth-in-kubernetes) — JWT verification keys and OIDC issuer wiring in cluster.

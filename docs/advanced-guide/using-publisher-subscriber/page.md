@@ -1,3 +1,11 @@
+---
+description: "Build pub/sub services in GoFr with Kafka, NATS, Google Pub/Sub, MQTT, and more. Decouple producers and consumers for scalable async event-driven architectures."
+nextjs:
+  metadata:
+    title: "Publisher-Subscriber in GoFr — Async Messaging Patterns"
+    description: "Build pub/sub services in GoFr with Kafka, NATS, Google Pub/Sub, MQTT, and more. Decouple producers and consumers for scalable async event-driven architectures."
+---
+
 # Publisher Subscriber
 
 Publisher Subscriber is an architectural design pattern for asynchronous communication between different entities.
@@ -284,7 +292,7 @@ To set up NATS JetStream, follow these steps:
 1. Import the external driver for NATS JetStream:
 
 ```bash
-go get gofr.dev/pkg/gofr/datasources/pubsub/nats
+go get gofr.dev/pkg/gofr/datasource/pubsub/nats
 ```
 
 2. Use the `AddPubSub` method to add the NATS JetStream driver to your application:
