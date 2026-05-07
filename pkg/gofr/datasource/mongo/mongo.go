@@ -179,185 +179,168 @@ func getDBHost(uri string) (host string, err error) {
 	return parsedURL.Hostname(), nil
 }
 
+// instrumentOp starts tracing and returns a cleanup function that logs the query,
+// records metrics, and ends the span. The cleanup captures time.Now() before the
+// operation, ensuring accurate duration measurement.
+func (c *Client) instrumentOp(ctx context.Context, ql *QueryLog) (tracedCtx context.Context, done func()) {
+	tracerCtx, span := c.addTrace(ctx, ql.Query, ql.Collection)
+	startTime := time.Now()
+
+	return tracerCtx, func() {
+		duration := time.Since(startTime).Microseconds()
+		ql.Duration = duration
+
+		c.logger.Debug(ql)
+
+		c.metrics.RecordHistogram(context.Background(), "app_mongo_stats", float64(duration),
+			"hostname", c.uri, "database", c.database, "type", ql.Query)
+
+		if span != nil {
+			span.SetAttributes(attribute.Int64(fmt.Sprintf("mongo.%v.duration", ql.Query), duration))
+			span.End()
+		}
+	}
+}
+
+// instrumentQuery builds a QueryLog and instruments the operation.
+func (c *Client) instrumentQuery(ctx context.Context, collection, operation string, filter, id, update any) (
+	tracedCtx context.Context, done func()) {
+	return c.instrumentOp(ctx, &QueryLog{
+		Query:      operation,
+		Collection: collection,
+		Filter:     filter,
+		ID:         id,
+		Update:     update,
+	})
+}
+
 // InsertOne inserts a single document into the specified collection.
 func (c *Client) InsertOne(ctx context.Context, collection string, document any) (any, error) {
-	tracerCtx, span := c.addTrace(ctx, "insertOne", collection)
+	ctx, done := c.instrumentQuery(ctx, collection, "insertOne", document, nil, nil)
+	defer done()
 
-	result, err := c.Database.Collection(collection).InsertOne(tracerCtx, document)
-
-	defer c.sendOperationStats(&QueryLog{Query: "insertOne", Collection: collection, Filter: document}, time.Now(),
-		"insert", span)
-
-	return result, err
+	return c.Database.Collection(collection).InsertOne(ctx, document)
 }
 
 // InsertMany inserts multiple documents into the specified collection.
 func (c *Client) InsertMany(ctx context.Context, collection string, documents []any) ([]any, error) {
-	tracerCtx, span := c.addTrace(ctx, "insertMany", collection)
+	ctx, done := c.instrumentQuery(ctx, collection, "insertMany", documents, nil, nil)
+	defer done()
 
-	res, err := c.Database.Collection(collection).InsertMany(tracerCtx, documents)
+	res, err := c.Database.Collection(collection).InsertMany(ctx, documents)
 	if err != nil {
 		return nil, err
 	}
-
-	defer c.sendOperationStats(&QueryLog{Query: "insertMany", Collection: collection, Filter: documents}, time.Now(),
-		"insertMany", span)
 
 	return res.InsertedIDs, nil
 }
 
 // Find retrieves documents from the specified collection based on the provided filter and binds response to result.
 func (c *Client) Find(ctx context.Context, collection string, filter, results any) error {
-	tracerCtx, span := c.addTrace(ctx, "find", collection)
+	ctx, done := c.instrumentQuery(ctx, collection, "find", filter, nil, nil)
+	defer done()
 
-	cur, err := c.Database.Collection(collection).Find(tracerCtx, filter)
+	cur, err := c.Database.Collection(collection).Find(ctx, filter)
 	if err != nil {
 		return err
 	}
 
 	defer cur.Close(ctx)
 
-	if err := cur.All(ctx, results); err != nil {
-		return err
-	}
-
-	defer c.sendOperationStats(&QueryLog{Query: "find", Collection: collection, Filter: filter}, time.Now(), "find",
-		span)
-
-	return nil
+	return cur.All(ctx, results)
 }
 
 // FindOne retrieves a single document from the specified collection based on the provided filter and binds response to result.
 func (c *Client) FindOne(ctx context.Context, collection string, filter, result any) error {
-	tracerCtx, span := c.addTrace(ctx, "findOne", collection)
+	ctx, done := c.instrumentQuery(ctx, collection, "findOne", filter, nil, nil)
+	defer done()
 
-	b, err := c.Database.Collection(collection).FindOne(tracerCtx, filter).Raw()
+	b, err := c.Database.Collection(collection).FindOne(ctx, filter).Raw()
 	if err != nil {
 		return err
 	}
-
-	defer c.sendOperationStats(&QueryLog{Query: "findOne", Collection: collection, Filter: filter}, time.Now(),
-		"findOne", span)
 
 	return bson.Unmarshal(b, result)
 }
 
 // UpdateByID updates a document in the specified collection by its ID.
 func (c *Client) UpdateByID(ctx context.Context, collection string, id, update any) (int64, error) {
-	tracerCtx, span := c.addTrace(ctx, "updateByID", collection)
+	ctx, done := c.instrumentQuery(ctx, collection, "updateByID", nil, id, update)
+	defer done()
 
-	res, err := c.Database.Collection(collection).UpdateByID(tracerCtx, id, update)
-
-	defer c.sendOperationStats(&QueryLog{Query: "updateByID", Collection: collection, ID: id, Update: update}, time.Now(),
-		"updateByID", span)
+	res, err := c.Database.Collection(collection).UpdateByID(ctx, id, update)
 
 	return res.ModifiedCount, err
 }
 
 // UpdateOne updates a single document in the specified collection based on the provided filter.
 func (c *Client) UpdateOne(ctx context.Context, collection string, filter, update any) error {
-	tracerCtx, span := c.addTrace(ctx, "updateOne", collection)
+	ctx, done := c.instrumentQuery(ctx, collection, "updateOne", filter, nil, update)
+	defer done()
 
-	_, err := c.Database.Collection(collection).UpdateOne(tracerCtx, filter, update)
-
-	defer c.sendOperationStats(&QueryLog{Query: "updateOne", Collection: collection, Filter: filter, Update: update},
-		time.Now(), "updateOne", span)
+	_, err := c.Database.Collection(collection).UpdateOne(ctx, filter, update)
 
 	return err
 }
 
 // UpdateMany updates multiple documents in the specified collection based on the provided filter.
 func (c *Client) UpdateMany(ctx context.Context, collection string, filter, update any) (int64, error) {
-	tracerCtx, span := c.addTrace(ctx, "updateMany", collection)
+	ctx, done := c.instrumentQuery(ctx, collection, "updateMany", filter, nil, update)
+	defer done()
 
-	res, err := c.Database.Collection(collection).UpdateMany(tracerCtx, filter, update)
-
-	defer c.sendOperationStats(&QueryLog{Query: "updateMany", Collection: collection, Filter: filter, Update: update}, time.Now(),
-		"updateMany", span)
+	res, err := c.Database.Collection(collection).UpdateMany(ctx, filter, update)
 
 	return res.ModifiedCount, err
 }
 
 // CountDocuments counts the number of documents in the specified collection based on the provided filter.
 func (c *Client) CountDocuments(ctx context.Context, collection string, filter any) (int64, error) {
-	tracerCtx, span := c.addTrace(ctx, "countDocuments", collection)
+	ctx, done := c.instrumentQuery(ctx, collection, "countDocuments", filter, nil, nil)
+	defer done()
 
-	result, err := c.Database.Collection(collection).CountDocuments(tracerCtx, filter)
-
-	defer c.sendOperationStats(&QueryLog{Query: "countDocuments", Collection: collection, Filter: filter}, time.Now(),
-		"countDocuments", span)
-
-	return result, err
+	return c.Database.Collection(collection).CountDocuments(ctx, filter)
 }
 
 // DeleteOne deletes a single document from the specified collection based on the provided filter.
 func (c *Client) DeleteOne(ctx context.Context, collection string, filter any) (int64, error) {
-	tracerCtx, span := c.addTrace(ctx, "deleteOne", collection)
+	ctx, done := c.instrumentQuery(ctx, collection, "deleteOne", filter, nil, nil)
+	defer done()
 
-	res, err := c.Database.Collection(collection).DeleteOne(tracerCtx, filter)
+	res, err := c.Database.Collection(collection).DeleteOne(ctx, filter)
 	if err != nil {
 		return 0, err
 	}
-
-	defer c.sendOperationStats(&QueryLog{Query: "deleteOne", Collection: collection, Filter: filter}, time.Now(),
-		"deleteOne", span)
 
 	return res.DeletedCount, nil
 }
 
 // DeleteMany deletes multiple documents from the specified collection based on the provided filter.
 func (c *Client) DeleteMany(ctx context.Context, collection string, filter any) (int64, error) {
-	tracerCtx, span := c.addTrace(ctx, "deleteMany", collection)
+	ctx, done := c.instrumentQuery(ctx, collection, "deleteMany", filter, nil, nil)
+	defer done()
 
-	res, err := c.Database.Collection(collection).DeleteMany(tracerCtx, filter)
+	res, err := c.Database.Collection(collection).DeleteMany(ctx, filter)
 	if err != nil {
 		return 0, err
 	}
-
-	defer c.sendOperationStats(&QueryLog{Query: "deleteMany", Collection: collection, Filter: filter}, time.Now(),
-		"deleteMany", span)
 
 	return res.DeletedCount, nil
 }
 
 // Drop drops the specified collection from the database.
 func (c *Client) Drop(ctx context.Context, collection string) error {
-	tracerCtx, span := c.addTrace(ctx, "drop", collection)
+	ctx, done := c.instrumentQuery(ctx, collection, "drop", nil, nil, nil)
+	defer done()
 
-	err := c.Database.Collection(collection).Drop(tracerCtx)
-
-	defer c.sendOperationStats(&QueryLog{Query: "drop", Collection: collection}, time.Now(), "drop", span)
-
-	return err
+	return c.Database.Collection(collection).Drop(ctx)
 }
 
 // CreateCollection creates the specified collection in the database.
 func (c *Client) CreateCollection(ctx context.Context, name string) error {
-	tracerCtx, span := c.addTrace(ctx, "createCollection", name)
+	ctx, done := c.instrumentQuery(ctx, name, "createCollection", nil, nil, nil)
+	defer done()
 
-	err := c.Database.CreateCollection(tracerCtx, name)
-
-	defer c.sendOperationStats(&QueryLog{Query: "createCollection", Collection: name}, time.Now(), "createCollection",
-		span)
-
-	return err
-}
-
-func (c *Client) sendOperationStats(ql *QueryLog, startTime time.Time, method string, span trace.Span) {
-	duration := time.Since(startTime).Microseconds()
-
-	ql.Duration = duration
-
-	c.logger.Debug(ql)
-
-	c.metrics.RecordHistogram(context.Background(), "app_mongo_stats", float64(duration), "hostname", c.uri,
-		"database", c.database, "type", ql.Query)
-
-	if span != nil {
-		defer span.End()
-
-		span.SetAttributes(attribute.Int64(fmt.Sprintf("mongo.%v.duration", method), duration))
-	}
+	return c.Database.CreateCollection(ctx, name)
 }
 
 type Health struct {
@@ -387,7 +370,8 @@ func (c *Client) HealthCheck(ctx context.Context) (any, error) {
 }
 
 func (c *Client) StartSession() (any, error) {
-	defer c.sendOperationStats(&QueryLog{Query: "startSession"}, time.Now(), "", nil)
+	_, done := c.instrumentQuery(context.Background(), "", "startSession", nil, nil, nil)
+	defer done()
 
 	s, err := c.Client().StartSession()
 	ses := &session{s}
