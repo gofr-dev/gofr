@@ -1,3 +1,11 @@
+---
+description: "Getting started with GoFr — an opinionated Go framework for production microservice development with built-in observability, datasource clients, gRPC, GraphQL, WebSockets, Pub/Sub, and zero-boilerplate REST handlers."
+nextjs:
+  metadata:
+    title: "GoFr Documentation — Getting Started with the Go Framework"
+    description: "Getting started with GoFr — an opinionated Go framework for production microservice development with built-in observability, datasource clients, gRPC, GraphQL, WebSockets, Pub/Sub, and zero-boilerplate REST handlers."
+---
+
 # Getting started
 
 GoFr is an opinionated web framework written in Go (Golang). It helps in building robust and scalable applications. This framework is designed to offer a user-friendly and familiar abstraction for all the developers. We prioritize simplicity over complexity.

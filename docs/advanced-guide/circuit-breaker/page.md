@@ -1,4 +1,16 @@
+---
+description: "Enable a circuit breaker on GoFr's inter-service HTTP client to fail fast on unhealthy upstreams, prevent cascading failures, and recover automatically."
+nextjs:
+  metadata:
+    title: "Circuit Breaker for Service-to-Service HTTP — GoFr"
+    description: "Enable a circuit breaker on GoFr's inter-service HTTP client to fail fast on unhealthy upstreams, prevent cascading failures, and recover automatically."
+---
+
 # Circuit Breaker in HTTP Communication
+
+{% answer %}
+GoFr's `AddHTTPService` registers an instrumented HTTP client and accepts a `service.CircuitBreakerConfig`. Configure it with a failure threshold and a polling interval. When the failure count crosses the threshold, the breaker opens and short-circuits subsequent requests for fast failure; the polling interval drives recovery checks against the upstream's health endpoint so traffic resumes automatically once the dependency is healthy again.
+{% /answer %}
 
 Calls to remote resources and services can fail due to temporary issues like slow network connections or timeouts, service unavailability. While transient faults can be mitigated using the "Retry pattern", there are cases where continual retries are futile, such as during severe service failures.
 
@@ -92,3 +104,6 @@ GoFr publishes the following metric to track circuit breaker state:
 - `app_http_circuit_breaker_state`: Current state of the circuit breaker (0 for Closed, 1 for Open). This metric is used to visualize a historical timeline of circuit transitions on the dashboard.
 
 > ##### Check out the example of an inter-service HTTP communication along with circuit-breaker in GoFr: [Visit GitHub](https://github.com/gofr-dev/gofr/blob/main/examples/using-http-service/main.go)
+## Related production guides
+
+- **Service Mesh Integration**: [Layering GoFr's circuit breaker with mesh-level retries and outlier detection](/docs/guides/service-mesh-integration) — choosing app vs. mesh policies.

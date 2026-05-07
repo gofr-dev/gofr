@@ -1,3 +1,11 @@
+---
+description: "Build real-time WebSocket endpoints in GoFr. Full-duplex channels for chat, notifications, and live updates with customizable upgrader options included."
+nextjs:
+  metadata:
+    title: "WebSockets in GoFr — Real-Time Bidirectional Channels"
+    description: "Build real-time WebSocket endpoints in GoFr. Full-duplex channels for chat, notifications, and live updates with customizable upgrader options included."
+---
+
 # Websockets
 
 WebSockets provide a full-duplex communication channel over a single, long-lived connection, making them ideal for 
@@ -150,7 +158,7 @@ func main() {
 	// Add a WebSocket service
 	err := app.AddWSService("notification-service", "ws://notifications.example.com/ws", nil, true, 5*time.Second)
 	if err != nil {
-		app.Logger.Errorf("Failed to add WebSocket service: %v", err)
+		app.Logger().Errorf("Failed to add WebSocket service: %v", err)
 		return
 	}
 

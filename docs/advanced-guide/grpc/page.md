@@ -1,3 +1,11 @@
+---
+description: "Build gRPC servers and clients in GoFr for high-performance RPC. Generate handlers from .proto files with built-in tracing, metrics, and structured logging."
+nextjs:
+  metadata:
+    title: "gRPC in GoFr — High-Performance RPC for Go Services"
+    description: "Build gRPC servers and clients in GoFr for high-performance RPC. Generate handlers from .proto files with built-in tracing, metrics, and structured logging."
+---
+
 # gRPC with Gofr
 
 We have already seen how GoFr can help ease the development of HTTP servers, but there are cases where performance is primarily required sacrificing flexibility. In these types of scenarios gRPC protocol comes into picture. {% new-tab-link title="gRPC" href="https://grpc.io/docs/what-is-grpc/introduction/" /%} is an open-source RPC(Remote Procedure Call) framework initially developed by Google.

@@ -1,3 +1,11 @@
+---
+description: "Connect GoFr to Couchbase via env vars (HOST, USER, PASSWORD, BUCKET). Use the pluggable driver for KV ops and N1QL queries with full observability."
+nextjs:
+  metadata:
+    title: "Couchbase in GoFr — Document Database Integration"
+    description: "Connect GoFr to Couchbase via env vars (HOST, USER, PASSWORD, BUCKET). Use the pluggable driver for KV ops and N1QL queries with full observability."
+---
+
 # Couchbase
 
 ## Configuration
@@ -60,10 +68,10 @@ type User struct {
 
 func main() {
     // Create a new GoFr application
-    a := gofr.New()
+    app := gofr.New()
 
     // Add the Couchbase datasource to the application
-    a.AddCouchbase(couchbase.New(&couchbase.Config{
+    app.AddCouchbase(couchbase.New(&couchbase.Config{
         Host:     app.Config.Get("HOST"),
         User:     app.Config.Get("USER"),
         Password: app.Config.Get("PASSWORD"),
@@ -71,12 +79,12 @@ func main() {
     }))
 
     // Add the routes
-    a.GET("/users/{id}", getUser)
-    a.POST("/users", createUser)
-	a.DELETE("/users/{id}", deleteUser)
+    app.GET("/users/{id}", getUser)
+    app.POST("/users", createUser)
+    app.DELETE("/users/{id}", deleteUser)
 
     // Run the application
-    a.Run()
+    app.Run()
 }
 
 func getUser(c *gofr.Context) (any, error) {

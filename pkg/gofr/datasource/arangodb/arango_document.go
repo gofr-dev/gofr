@@ -3,9 +3,6 @@ package arangodb
 import (
 	"context"
 	"errors"
-	"time"
-
-	"github.com/arangodb/go-driver/v2/arangodb"
 )
 
 var (
@@ -49,8 +46,11 @@ type Document struct {
 //
 // id, err := client.CreateDocument(ctx, "myDB", "edges", edgeDoc).
 func (d *Document) CreateDocument(ctx context.Context, dbName, collectionName string, document any) (string, error) {
-	collection, tracerCtx, err := executeCollectionOperation(ctx, *d, dbName, collectionName,
-		"createDocument", "")
+	ctx, done := d.client.instrumentOp(ctx, &QueryLog{Operation: "createDocument",
+		Database: dbName, Collection: collectionName})
+	defer done()
+
+	collection, err := d.client.getCollection(ctx, dbName, collectionName)
 	if err != nil {
 		return "", err
 	}
@@ -72,7 +72,7 @@ func (d *Document) CreateDocument(ctx context.Context, dbName, collectionName st
 	}
 
 	// Create the document in ArangoDB
-	meta, err := collection.CreateDocument(tracerCtx, document)
+	meta, err := collection.CreateDocument(ctx, document)
 	if err != nil {
 		return "", err
 	}
@@ -82,39 +82,48 @@ func (d *Document) CreateDocument(ctx context.Context, dbName, collectionName st
 
 // GetDocument retrieves a document by its ID from the specified collection.
 func (d *Document) GetDocument(ctx context.Context, dbName, collectionName, documentID string, result any) error {
-	collection, tracerCtx, err := executeCollectionOperation(ctx, *d, dbName, collectionName,
-		"getDocument", documentID)
+	ctx, done := d.client.instrumentOp(ctx, &QueryLog{Operation: "getDocument",
+		Database: dbName, Collection: collectionName, ID: documentID})
+	defer done()
+
+	collection, err := d.client.getCollection(ctx, dbName, collectionName)
 	if err != nil {
 		return err
 	}
 
-	_, err = collection.ReadDocument(tracerCtx, documentID, result)
+	_, err = collection.ReadDocument(ctx, documentID, result)
 
 	return err
 }
 
 // UpdateDocument updates an existing document in the specified collection.
 func (d *Document) UpdateDocument(ctx context.Context, dbName, collectionName, documentID string, document any) error {
-	collection, tracerCtx, err := executeCollectionOperation(ctx, *d, dbName, collectionName,
-		"updateDocument", documentID)
+	ctx, done := d.client.instrumentOp(ctx, &QueryLog{Operation: "updateDocument",
+		Database: dbName, Collection: collectionName, ID: documentID})
+	defer done()
+
+	collection, err := d.client.getCollection(ctx, dbName, collectionName)
 	if err != nil {
 		return err
 	}
 
-	_, err = collection.UpdateDocument(tracerCtx, documentID, document)
+	_, err = collection.UpdateDocument(ctx, documentID, document)
 
 	return err
 }
 
 // DeleteDocument deletes a document by its ID from the specified collection.
 func (d *Document) DeleteDocument(ctx context.Context, dbName, collectionName, documentID string) error {
-	collection, tracerCtx, err := executeCollectionOperation(ctx, *d, dbName, collectionName,
-		"deleteDocument", documentID)
+	ctx, done := d.client.instrumentOp(ctx, &QueryLog{Operation: "deleteDocument",
+		Database: dbName, Collection: collectionName, ID: documentID})
+	defer done()
+
+	collection, err := d.client.getCollection(ctx, dbName, collectionName)
 	if err != nil {
 		return err
 	}
 
-	_, err = collection.DeleteDocument(tracerCtx, documentID)
+	_, err = collection.DeleteDocument(ctx, documentID)
 
 	return err
 }
@@ -133,29 +142,6 @@ func (d *Document) isEdgeCollection(ctx context.Context, dbName, collectionName 
 
 	// ArangoDB type: 3 = Edge Collection, 2 = Document Collection
 	return properties.Type == arangoEdgeCollectionType, nil
-}
-
-func executeCollectionOperation(ctx context.Context, d Document, dbName, collectionName,
-	operation string, documentID string) (arangodb.Collection, context.Context, error) {
-	tracerCtx, span := d.client.addTrace(ctx, operation, map[string]string{"collection": collectionName})
-	startTime := time.Now()
-
-	ql := &QueryLog{Operation: operation,
-		Database:   dbName,
-		Collection: collectionName}
-
-	if documentID != "" {
-		ql.ID = documentID
-	}
-
-	defer d.client.sendOperationStats(ql, startTime, operation, span)
-
-	collection, err := d.client.getCollection(tracerCtx, dbName, collectionName)
-	if err != nil {
-		return nil, nil, err
-	}
-
-	return collection, tracerCtx, nil
 }
 
 // validateEdgeDocument ensures the document contains valid `_from` and `_to` fields when creating an edge.

@@ -1,3 +1,11 @@
+---
+description: "Serve static files such as images, favicons, and CSS from a GoFr service. Drop files into static/ and GoFr exposes them on a configurable route."
+nextjs:
+  metadata:
+    title: "Serving Static Files in GoFr — Assets, Images, Favicons"
+    description: "Serve static files such as images, favicons, and CSS from a GoFr service. Drop files into static/ and GoFr exposes them on a configurable route."
+---
+
 # Serving Static Files using GoFr
 
 Often, we are required to serve static content such as a default profile image, a favicon, or a background image for our 

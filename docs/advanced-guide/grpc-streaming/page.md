@@ -1,3 +1,11 @@
+---
+description: "Implement gRPC server, client, and bidirectional streaming in GoFr. Stream chat messages, telemetry, or large payloads over a single RPC with observability."
+nextjs:
+  metadata:
+    title: "gRPC Streaming in GoFr — Real-Time Bidirectional RPC"
+    description: "Implement gRPC server, client, and bidirectional streaming in GoFr. Stream chat messages, telemetry, or large payloads over a single RPC with observability."
+---
+
 # gRPC Streaming with GoFr
 
 GoFr provides comprehensive support for gRPC streaming, enabling efficient real-time communication between services. Streaming is particularly useful for scenarios where you need to send or receive multiple messages over a single connection, such as chat applications, real-time data feeds, or large file transfers.
