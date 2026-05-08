@@ -90,7 +90,7 @@ To run this code:
 $ go run main.go
 ```
 
-Visit [`localhost:8000/greet`](http://localhost:8000/greet) to see the result.
+Visit [`http://localhost:8000/greet`](http://localhost:8000/greet) to see the result.
 
 ---
 
@@ -109,8 +109,7 @@ Explore a variety of ready-to-run examples in the [GoFr examples directory](http
 
 ## 👍 **Contribute**
 
-Join Us in Making GoFr Better
-
+Join us in making GoFr better.
 **Share your experience**: If you’ve found GoFr helpful, consider writing a review or tutorial on platforms like **[Medium](https://medium.com/)**, **[Dev.to](https://dev.to/)**, or your personal blog. 
 Your insights could help others get started faster!
 
@@ -135,6 +134,6 @@ git clone git@github.com:gofr-dev/gofr.git
 
 If your PR is merged, or if you contribute by writing articles or promoting GoFr, we invite you to fill out [this form](https://forms.gle/R1Yz7ZzY3U5WWTgy5) to claim your GoFr merchandise as a token of our appreciation! 
 
-### Partners
+## 🤝 **Partners**
 
 <img src="https://resources.jetbrains.com/storage/products/company/brand/logos/jetbrains.png" alt="JetBrains logo" width="200"> 
