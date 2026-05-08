@@ -1,3 +1,11 @@
+---
+description: "Use Apache Cassandra with GoFr through the framework's pluggable driver. Run CQL with built-in tracing, metrics, and a uniform datasource API."
+nextjs:
+  metadata:
+    title: "Cassandra in GoFr — Pluggable Driver Integration"
+    description: "Use Apache Cassandra with GoFr through the framework's pluggable driver. Run CQL with built-in tracing, metrics, and a uniform datasource API."
+---
+
 # Cassandra
 GoFr supports pluggable Cassandra drivers. 
 

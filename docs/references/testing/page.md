@@ -1,3 +1,11 @@
+---
+description: "Write unit and integration tests for GoFr REST APIs. Mock the container's dependencies and assert handler responses, status codes, and headers reliably."
+nextjs:
+  metadata:
+    title: "Testing GoFr REST APIs — Handlers, Mocks, Assertions"
+    description: "Write unit and integration tests for GoFr REST APIs. Mock the container's dependencies and assert handler responses, status codes, and headers reliably."
+---
+
 # Testing REST APIs with GoFr
 
 Testing REST APIs ensures that your endpoints function correctly under various conditions. This guide demonstrates how to write tests for GoFr-based REST APIs.

@@ -1,3 +1,11 @@
+---
+description: "Connect GoFr to ClickHouse via the pluggable datasource interface. Run analytics queries with built-in tracing, metrics, and a uniform API across databases."
+nextjs:
+  metadata:
+    title: "ClickHouse in GoFr — Columnar Analytics Datasource"
+    description: "Connect GoFr to ClickHouse via the pluggable datasource interface. Run analytics queries with built-in tracing, metrics, and a uniform API across databases."
+---
+
 # ClickHouse
 
 ## Configuration
