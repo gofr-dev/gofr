@@ -15,7 +15,10 @@ import (
 	"gofr.dev/pkg/gofr/logging"
 )
 
-var errSubscription = errors.New("subscription error")
+var (
+	errSubscription = errors.New("subscription error")
+	errHandlerFail  = errors.New("handler failed")
+)
 
 func subscriptionError(err string) error {
 	return fmt.Errorf("%w: %s", errSubscription, err)
@@ -144,8 +147,7 @@ func TestSubscriptionManager_handleSubscription_HandlerErrorDoesNotCommit(t *tes
 	}
 	s := SubscriptionManager{container: c}
 
-	handlerErr := errors.New("handler failed")
-	err := s.handleSubscription(t.Context(), topicHandleSubErr, func(*Context) error { return handlerErr })
+	err := s.handleSubscription(t.Context(), topicHandleSubErr, func(*Context) error { return errHandlerFail })
 	require.NoError(t, err)
 	require.NotNil(t, ps.lastCommitter)
 	require.Zero(t, ps.lastCommitter.n, "handler error must not commit")
