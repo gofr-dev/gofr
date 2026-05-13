@@ -1,3 +1,11 @@
+---
+description: "Connect GoFr to CockroachDB, the cloud-native distributed SQL database compatible with Postgres. Run SQL with built-in tracing, metrics, and migrations."
+nextjs:
+  metadata:
+    title: "CockroachDB in GoFr — Distributed SQL Datasource"
+    description: "Connect GoFr to CockroachDB, the cloud-native distributed SQL database compatible with Postgres. Run SQL with built-in tracing, metrics, and migrations."
+---
+
 # CockroachDB
 
 GoFr provides support for CockroachDB, a cloud-native SQL database that is compatible with PostgreSQL.
@@ -46,4 +54,4 @@ func GetUser(ctx *gofr.Context)(any, error){
 	return "Connection to cockroachDB Successful.", nil
 }
 ```
-For more detailed examples and advanced usage, please refer to the [SQL usage guide](/advanced-guide/dealing-with-sql/).
+For more detailed examples and advanced usage, please refer to the [SQL usage guide](/docs/advanced-guide/dealing-with-sql/).

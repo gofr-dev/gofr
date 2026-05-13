@@ -1,6 +1,14 @@
+---
+description: "Build standalone command-line tools in GoFr with gofr.NewCMD(). Reuse the framework's logger, configs, and datasources without starting an HTTP server."
+nextjs:
+  metadata:
+    title: "Building CLI Applications in GoFr — gofr.NewCMD()"
+    description: "Build standalone command-line tools in GoFr with gofr.NewCMD(). Reuse the framework's logger, configs, and datasources without starting an HTTP server."
+---
+
 # Building CLI Applications
 
-GoFr provides a simple way to build command-line applications using `app.NewCMD()`. This creates standalone CLI tools without starting an HTTP server.
+GoFr provides a simple way to build command-line applications using `gofr.NewCMD()`. This creates standalone CLI tools without starting an HTTP server.
 
 ## Configuration
 To configure logging for CLI applications, set the following environment variable:
@@ -42,7 +50,7 @@ func main() {
 
 ## Key GoFr CLI Methods
 
-- **`app.NewCMD()`**: Initialize a CLI application
+- **`gofr.NewCMD()`**: Initialize a CLI application
 - **`app.SubCommand(name, handler, options...)`**: Add a subcommand
 - **`gofr.AddDescription(desc)`**: Add help description
 - **`gofr.AddHelp(help)`**: Add detailed help text
@@ -76,4 +84,4 @@ go build -o mycli
 ./mycli --help
 ```
 
-For more details, see the [sample-cmd example](../../../examples/sample-cmd).
+For more details, see the [sample-cmd example](https://github.com/gofr-dev/gofr/tree/main/examples/sample-cmd).

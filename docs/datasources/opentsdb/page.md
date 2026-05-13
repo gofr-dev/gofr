@@ -1,3 +1,11 @@
+---
+description: "Push and query time-series metrics in OpenTSDB from a GoFr service. Use PutDataPoints with summary or detailed responses, all with full observability."
+nextjs:
+  metadata:
+    title: "OpenTSDB in GoFr — Time-Series Metrics Datasource"
+    description: "Push and query time-series metrics in OpenTSDB from a GoFr service. Use PutDataPoints with summary or detailed responses, all with full observability."
+---
+
 # OpenTSDB
 
 

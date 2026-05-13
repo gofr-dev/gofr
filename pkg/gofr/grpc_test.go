@@ -354,6 +354,27 @@ func TestGRPC_Shutdown_BeforeStart(t *testing.T) {
 	assert.NoError(t, err, "Expected shutdown to succeed even if server was not started")
 }
 
+// TestGRPC_Shutdown_BeforeStart_ContextCanceled guards against a regression where
+// the force-close path of Shutdown dereferences g.server without a nil check.
+// When no service has been registered, g.server is nil; if the shutdown context
+// is already done, ShutdownWithContext invokes the force-close func, which
+// previously panicked with a nil pointer dereference.
+func TestGRPC_Shutdown_BeforeStart_ContextCanceled(t *testing.T) {
+	_, _, g := setupTestGRPCServer(t, 9999, false)
+
+	require.Nil(t, g.server, "precondition: server should be nil before any service is registered")
+
+	// Loop to maximize chance of force-close path winning the select inside ShutdownWithContext.
+	for i := 0; i < 50; i++ {
+		ctx, cancel := context.WithCancel(t.Context())
+		cancel()
+
+		assert.NotPanics(t, func() {
+			_ = g.Shutdown(ctx)
+		}, "Shutdown must not panic when server was never created")
+	}
+}
+
 func TestGRPC_ServerRun_WithInterceptorAndOptions(t *testing.T) {
 	freePort := testutil.GetFreePort(t)
 	c, _, g := setupTestGRPCServer(t, freePort, false)
