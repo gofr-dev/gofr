@@ -1,6 +1,6 @@
 module gofr.dev/pkg/gofr/datasource/influxdb
 
-go 1.25.0
+go 1.26.0
 
 require (
 	github.com/golang/mock v1.7.0-rc.1
