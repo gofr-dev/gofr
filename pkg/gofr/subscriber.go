@@ -68,6 +68,7 @@ func (s *SubscriptionManager) handleSubscription(ctx context.Context, topic stri
 		defer func() {
 			if r := recover(); r != nil {
 				panicRecovery(r, ctx.Logger)
+
 				err = errSubscriberHandlerPanic
 			}
 		}()
