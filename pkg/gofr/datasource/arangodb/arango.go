@@ -233,13 +233,10 @@ func (c *Client) validateConfig() error {
 //	    fmt.Printf("User: %+v\n", doc)
 //	}
 func (c *Client) Query(ctx context.Context, dbName, query string, bindVars map[string]any, result any, options ...map[string]any) error {
-	tracerCtx, span := c.addTrace(ctx, "query", map[string]string{"DB": dbName})
-	startTime := time.Now()
+	ctx, done := c.instrumentOp(ctx, &QueryLog{Operation: "query", Database: dbName, Query: query})
+	defer done()
 
-	defer c.sendOperationStats(&QueryLog{Operation: "query",
-		Database: dbName, Query: query}, startTime, "query", span)
-
-	db, err := c.client.GetDatabase(tracerCtx, dbName, nil)
+	db, err := c.client.GetDatabase(ctx, dbName, nil)
 	if err != nil {
 		return err
 	}
@@ -253,7 +250,7 @@ func (c *Client) Query(ctx context.Context, dbName, query string, bindVars map[s
 
 	queryOptions.BindVars = bindVars
 
-	cursor, err := db.Query(tracerCtx, query, &queryOptions)
+	cursor, err := db.Query(ctx, query, &queryOptions)
 	if err != nil {
 		return err
 	}
@@ -268,7 +265,7 @@ func (c *Client) Query(ctx context.Context, dbName, query string, bindVars map[s
 	for {
 		var doc map[string]any
 
-		_, err = cursor.ReadDocument(tracerCtx, &doc)
+		_, err = cursor.ReadDocument(ctx, &doc)
 		if arangoShared.IsNoMoreDocuments(err) {
 			break
 		}
@@ -326,21 +323,26 @@ func (c *Client) addTrace(ctx context.Context, operation string, attributes map[
 	return ctx, nil
 }
 
-func (c *Client) sendOperationStats(ql *QueryLog, startTime time.Time, method string, span trace.Span) {
-	duration := time.Since(startTime).Microseconds()
-	ql.Duration = duration
+// instrumentOp starts a trace span, captures the start time, and returns the traced context
+// along with a cleanup function. The cleanup function logs the operation, records metrics,
+// and ends the span. It should be deferred immediately after calling instrumentOp.
+func (c *Client) instrumentOp(ctx context.Context, ql *QueryLog) (tracedCtx context.Context, done func()) {
+	tracerCtx, span := c.addTrace(ctx, ql.Operation, ql.traceAttrs())
+	startTime := time.Now()
 
-	c.logger.Debug(ql)
+	return tracerCtx, func() {
+		duration := time.Since(startTime).Microseconds()
+		ql.Duration = duration
 
-	c.metrics.RecordHistogram(context.Background(), "app_arango_stats", float64(duration),
-		"endpoint", c.endpoint,
-		"type", ql.Query,
-	)
+		c.logger.Debug(ql)
 
-	if span != nil {
-		defer span.End()
+		c.metrics.RecordHistogram(context.Background(), "app_arango_stats", float64(duration),
+			"endpoint", c.endpoint, "type", ql.Operation)
 
-		span.SetAttributes(attribute.Int64(fmt.Sprintf("arangodb.%v.duration", method), duration))
+		if span != nil {
+			span.SetAttributes(attribute.Int64(fmt.Sprintf("arangodb.%v.duration", ql.Operation), duration))
+			span.End()
+		}
 	}
 }
 
