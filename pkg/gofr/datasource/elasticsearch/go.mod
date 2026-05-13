@@ -1,6 +1,6 @@
 module gofr.dev/pkg/gofr/datasource/elasticsearch
 
-go 1.25.0
+go 1.26.0
 
 require (
 	github.com/elastic/go-elasticsearch/v8 v8.19.3
