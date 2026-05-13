@@ -375,7 +375,7 @@ jobs:
       - name: Lint Root Module
         uses: golangci/golangci-lint-action@v9
         with:
-          version: v2.4.0
+          version: v2.12.2
           only-new-issues: true
           args: --timeout=5m
 
@@ -471,7 +471,7 @@ jobs:
       - name: Lint ${{ matrix.module }}
         uses: golangci/golangci-lint-action@v9
         with:
-          version: v2.4.0
+          version: v2.12.2
           working-directory: ${{ matrix.module }}
           only-new-issues: true
           args: --timeout=9m
