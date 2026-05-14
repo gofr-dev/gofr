@@ -1,11 +1,16 @@
 package middleware
 
 import (
+	"context"
 	"net/http"
 	"net/http/httptest"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/baggage"
+	"go.opentelemetry.io/otel/propagation"
 	"go.opentelemetry.io/otel/sdk/trace"
 	otelTrace "go.opentelemetry.io/otel/trace"
 )
@@ -28,4 +33,142 @@ func TestTrace(_ *testing.T) {
 	recorder := httptest.NewRecorder()
 
 	handler.ServeHTTP(recorder, req)
+}
+
+// installPropagators wires up the W3C TraceContext + Baggage propagator
+// pair that production GoFr installs in initTracer (otel.go). Returns a
+// cleanup that restores the previous propagator so tests do not leak
+// global state.
+func installPropagators(t *testing.T) {
+	t.Helper()
+
+	prev := otel.GetTextMapPropagator()
+	otel.SetTextMapPropagator(propagation.NewCompositeTextMapPropagator(
+		propagation.TraceContext{}, propagation.Baggage{},
+	))
+
+	t.Cleanup(func() { otel.SetTextMapPropagator(prev) })
+}
+
+// TestTracePropagation_Inbound asserts that the Tracer middleware
+// extracts an incoming W3C traceparent header and the handler observes
+// a span context whose trace ID matches the parent.
+//
+// This is the contract every PR touching the tracing path must keep:
+// distributed traces stay continuous across hops.
+func TestTracePropagation_Inbound(t *testing.T) {
+	installPropagators(t)
+
+	tp := trace.NewTracerProvider()
+	otel.SetTracerProvider(tp)
+
+	const (
+		wantTraceID = "4bf92f3577b34da6a3ce929d0e0e4736"
+		parentSpan  = "00f067aa0ba902b7"
+	)
+
+	var got otelTrace.SpanContext
+
+	handler := Tracer(http.HandlerFunc(func(_ http.ResponseWriter, r *http.Request) {
+		got = otelTrace.SpanContextFromContext(r.Context())
+	}))
+
+	req := httptest.NewRequest(http.MethodGet, "/dummy", http.NoBody)
+	req.Header.Set("traceparent", "00-"+wantTraceID+"-"+parentSpan+"-01")
+
+	handler.ServeHTTP(httptest.NewRecorder(), req)
+
+	require.True(t, got.IsValid(), "no span context observed in handler")
+	assert.Equal(t, wantTraceID, got.TraceID().String(),
+		"trace ID did not propagate from inbound traceparent")
+	assert.True(t, got.IsSampled(),
+		"sampled flag did not propagate from inbound traceparent (sampled=01)")
+}
+
+// TestTracePropagation_NoInboundHeader asserts that a request without
+// a traceparent header gets a new (valid) trace ID assigned by the
+// SDK — the middleware must not crash or skip span creation.
+func TestTracePropagation_NoInboundHeader(t *testing.T) {
+	installPropagators(t)
+
+	tp := trace.NewTracerProvider()
+	otel.SetTracerProvider(tp)
+
+	var got otelTrace.SpanContext
+
+	handler := Tracer(http.HandlerFunc(func(_ http.ResponseWriter, r *http.Request) {
+		got = otelTrace.SpanContextFromContext(r.Context())
+	}))
+
+	req := httptest.NewRequest(http.MethodGet, "/dummy", http.NoBody)
+
+	handler.ServeHTTP(httptest.NewRecorder(), req)
+
+	require.True(t, got.IsValid(), "expected a new valid span context when no inbound header")
+	assert.NotEqual(t, "00000000000000000000000000000000", got.TraceID().String())
+}
+
+// TestTracePropagation_BaggageInbound asserts that W3C Baggage from the
+// inbound request is parsed onto the request context and visible to the
+// handler. Required for downstream services to see the baggage members
+// the upstream set.
+func TestTracePropagation_BaggageInbound(t *testing.T) {
+	installPropagators(t)
+
+	tp := trace.NewTracerProvider()
+	otel.SetTracerProvider(tp)
+
+	var got baggage.Baggage
+
+	handler := Tracer(http.HandlerFunc(func(_ http.ResponseWriter, r *http.Request) {
+		got = baggage.FromContext(r.Context())
+	}))
+
+	req := httptest.NewRequest(http.MethodGet, "/dummy", http.NoBody)
+	req.Header.Set("baggage", "tenant=acme,region=us-east")
+
+	handler.ServeHTTP(httptest.NewRecorder(), req)
+
+	require.Equal(t, 2, got.Len(), "baggage members were not extracted")
+	assert.Equal(t, "acme", got.Member("tenant").Value())
+	assert.Equal(t, "us-east", got.Member("region").Value())
+}
+
+// TestTracePropagation_Outbound asserts that the W3C propagator that
+// GoFr installs is able to inject a traceparent header onto an
+// outbound request. This is the same code path the HTTP service client
+// uses (service/new.go calls otel.GetTextMapPropagator().Inject) — so
+// if this test passes, outbound services carry the trace.
+func TestTracePropagation_Outbound(t *testing.T) {
+	installPropagators(t)
+
+	tp := trace.NewTracerProvider()
+	otel.SetTracerProvider(tp)
+
+	// Construct a context carrying a known sampled span context — what a
+	// handler would have after the Tracer middleware extracted an
+	// inbound traceparent.
+	scfg := otelTrace.SpanContextConfig{
+		TraceID:    otelTrace.TraceID{1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16},
+		SpanID:     otelTrace.SpanID{1, 2, 3, 4, 5, 6, 7, 8},
+		TraceFlags: otelTrace.FlagsSampled,
+		Remote:     true,
+	}
+	ctx := otelTrace.ContextWithSpanContext(context.Background(), otelTrace.NewSpanContext(scfg))
+
+	bag, err := baggage.Parse("tenant=acme")
+	require.NoError(t, err)
+
+	ctx = baggage.ContextWithBaggage(ctx, bag)
+
+	outbound := httptest.NewRequest(http.MethodGet, "http://downstream/api", http.NoBody)
+	otel.GetTextMapPropagator().Inject(ctx, propagation.HeaderCarrier(outbound.Header))
+
+	tp1 := outbound.Header.Get("traceparent")
+	require.NotEmpty(t, tp1, "outbound request missing traceparent header")
+	assert.Contains(t, tp1, "0102030405060708090a0b0c0d0e0f10",
+		"outbound traceparent does not carry the parent trace ID")
+
+	assert.Equal(t, "tenant=acme", outbound.Header.Get("baggage"),
+		"outbound request did not inject baggage")
 }
