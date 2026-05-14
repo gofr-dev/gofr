@@ -148,7 +148,7 @@ func TestSubscriptionManager_handleSubscription_HandlerErrorDoesNotCommit(t *tes
 	s := SubscriptionManager{container: c}
 
 	err := s.handleSubscription(t.Context(), topicHandleSubErr, func(*Context) error { return errHandlerFail })
-	require.NoError(t, err)
+	require.ErrorIs(t, err, errHandlerFail, "handler error must propagate so startSubscriber can back off")
 	require.NotNil(t, ps.lastCommitter)
 	require.Zero(t, ps.lastCommitter.n, "handler error must not commit")
 }

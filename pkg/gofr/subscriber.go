@@ -43,7 +43,11 @@ func (s *SubscriptionManager) startSubscriber(ctx context.Context, topic string,
 				s.container.Logger.Errorf("error in subscription for topic %s: %v", topic, err)
 
 				delay = time.Second * 2
+
+				continue
 			}
+
+			delay = 0
 		}
 	}
 }
@@ -80,7 +84,7 @@ func (s *SubscriptionManager) handleSubscription(ctx context.Context, topic stri
 	}
 	if err != nil {
 		s.container.Logger.Errorf("error in handler for topic %s: %v", topic, err)
-		return nil
+		return err
 	}
 
 	if msg.Committer != nil {
