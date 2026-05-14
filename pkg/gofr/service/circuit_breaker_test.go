@@ -1179,6 +1179,7 @@ func TestCircuitBreaker_SlowHealthCheckDoesNotBlock(t *testing.T) {
 	go func() {
 		open := cb.isOpen()
 		recovered := cb.tryCircuitRecovery()
+
 		bDone <- bResult{isOpen: open, recovered: recovered}
 	}()
 
