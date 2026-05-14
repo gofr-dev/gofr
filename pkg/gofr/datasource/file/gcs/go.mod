@@ -1,6 +1,6 @@
 module gofr.dev/pkg/gofr/datasource/file/gcs
 
-go 1.25.0
+go 1.26.0
 
 require (
 	cloud.google.com/go/storage v1.62.1

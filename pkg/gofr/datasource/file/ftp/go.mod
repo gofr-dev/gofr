@@ -1,6 +1,6 @@
 module gofr.dev/pkg/gofr/datasource/file/ftp
 
-go 1.25.0
+go 1.26.0
 
 require (
 	github.com/goftp/file-driver v0.0.0-20180502053751-5d604a0fc0c9
