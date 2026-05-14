@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"net/http"
+	"net/http/httptest"
 	"os"
 	"testing"
 	"time"
@@ -11,12 +12,18 @@ import (
 	"github.com/gorilla/mux"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/sdk/resource"
+	sdktrace "go.opentelemetry.io/otel/sdk/trace"
+	"go.opentelemetry.io/otel/trace/noop"
 
 	"gofr.dev/pkg/gofr/config"
 	"gofr.dev/pkg/gofr/container"
 	gofrHTTP "gofr.dev/pkg/gofr/http"
+	"gofr.dev/pkg/gofr/http/middleware"
 	"gofr.dev/pkg/gofr/logging"
 	"gofr.dev/pkg/gofr/testutil"
+	"gofr.dev/pkg/gofr/websocket"
 )
 
 func TestRun_ServerStartsListening(t *testing.T) {
@@ -237,4 +244,126 @@ func createTempCertFile(t *testing.T) string {
 	})
 
 	return f.Name()
+}
+
+// benchDiscardResponseWriter is a zero-cost ResponseWriter for the
+// full-chain microbenchmarks. Avoids per-iter buffer allocation that
+// httptest.NewRecorder would add.
+type benchDiscardResponseWriter struct {
+	h    http.Header
+	code int
+}
+
+func (d *benchDiscardResponseWriter) Header() http.Header {
+	if d.h == nil {
+		d.h = http.Header{}
+	}
+
+	return d.h
+}
+
+func (d *benchDiscardResponseWriter) Write(b []byte) (int, error) { return len(b), nil }
+func (d *benchDiscardResponseWriter) WriteHeader(c int)           { d.code = c }
+
+// buildBenchRouter reconstructs the same middleware chain that
+// gofr.New() / newHTTPServer + httpServer.run wire — Tracer, Logging,
+// CORS, Metrics, WSHandlerUpgrade — so we can measure end-to-end request
+// cost through the real chain without binding to a port.
+//
+// Keep this in sync with newHTTPServer in http_server.go. Any change to
+// GoFr's middleware composition needs a matching change here.
+func buildBenchRouter(c *container.Container) http.Handler {
+	r := gofrHTTP.NewRouter()
+	wsManager := websocket.New()
+
+	r.Use(
+		middleware.Tracer,
+		middleware.Logging(middleware.LogProbes{}, c.Logger),
+		middleware.CORS(map[string]string{}, r.RegisteredRoutes),
+		middleware.Metrics(c.Metrics()),
+		middleware.WSHandlerUpgrade(c, wsManager),
+	)
+
+	r.Add(http.MethodGet, "/plaintext", http.HandlerFunc(
+		func(w http.ResponseWriter, _ *http.Request) {
+			w.Header().Set("Content-Type", "text/plain")
+			_, _ = w.Write([]byte("OK"))
+		},
+	))
+
+	r.Add(http.MethodGet, "/json", http.HandlerFunc(
+		func(w http.ResponseWriter, _ *http.Request) {
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = w.Write([]byte(`{"data":{"message":"hello"}}`))
+		},
+	))
+
+	return r
+}
+
+// BenchmarkRequest_FullChain is the end-to-end microbenchmark every perf
+// PR diffs against. Exercises the full middleware chain (tracer, logger,
+// CORS, metrics, websocket-upgrade) + router + handler + writer. Uses
+// OTel's default (noop) TracerProvider, so it isolates the framework
+// cost without SDK overhead. Pair with BenchmarkRequest_FullChain_SDK
+// to see the SDK delta.
+func BenchmarkRequest_FullChain(b *testing.B) {
+	c := container.NewContainer(config.NewMockConfig(map[string]string{"LOG_LEVEL": "ERROR"}))
+	h := buildBenchRouter(c)
+	req := httptest.NewRequest(http.MethodGet, "/plaintext", nil)
+	w := &benchDiscardResponseWriter{}
+
+	b.ReportAllocs()
+	b.ResetTimer()
+
+	for i := 0; i < b.N; i++ {
+		h.ServeHTTP(w, req)
+	}
+}
+
+// BenchmarkRequest_FullChain_JSON runs the same chain against the /json
+// handler. Pairs with the /json endpoint in the wrk benchmarks.
+func BenchmarkRequest_FullChain_JSON(b *testing.B) {
+	c := container.NewContainer(config.NewMockConfig(map[string]string{"LOG_LEVEL": "ERROR"}))
+	h := buildBenchRouter(c)
+	req := httptest.NewRequest(http.MethodGet, "/json", nil)
+	w := &benchDiscardResponseWriter{}
+
+	b.ReportAllocs()
+	b.ResetTimer()
+
+	for i := 0; i < b.N; i++ {
+		h.ServeHTTP(w, req)
+	}
+}
+
+// BenchmarkRequest_FullChain_SDK runs the same chain with an SDK
+// TracerProvider installed (ParentBased(TraceIDRatioBased(1.0)) —
+// today's real default from initTracer in otel.go). Recording spans
+// get built and discarded.
+//
+// Delta vs BenchmarkRequest_FullChain is what PR-1 is forecast to save
+// end-to-end for users without a TRACE_EXPORTER configured.
+func BenchmarkRequest_FullChain_SDK(b *testing.B) {
+	tp := sdktrace.NewTracerProvider(
+		sdktrace.WithResource(resource.Empty()),
+		sdktrace.WithSampler(sdktrace.ParentBased(sdktrace.TraceIDRatioBased(1.0))),
+	)
+	otel.SetTracerProvider(tp)
+
+	b.Cleanup(func() {
+		otel.SetTracerProvider(noop.NewTracerProvider())
+	})
+
+	c := container.NewContainer(config.NewMockConfig(map[string]string{"LOG_LEVEL": "ERROR"}))
+	h := buildBenchRouter(c)
+	req := httptest.NewRequest(http.MethodGet, "/plaintext", nil)
+	w := &benchDiscardResponseWriter{}
+
+	b.ReportAllocs()
+	b.ResetTimer()
+
+	for i := 0; i < b.N; i++ {
+		h.ServeHTTP(w, req)
+	}
 }

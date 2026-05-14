@@ -402,3 +402,73 @@ func runStaticFileTests(t *testing.T, tempDir string, testCases []struct {
 		})
 	}
 }
+
+// discardingResponseWriter is a zero-cost ResponseWriter for benchmarks
+// that should measure routing/handler cost without including the per-iter
+// allocation of httptest.NewRecorder. Shared across the http-package
+// benchmarks (router, responder).
+type discardingResponseWriter struct {
+	h http.Header
+}
+
+func (d *discardingResponseWriter) Header() http.Header {
+	if d.h == nil {
+		d.h = http.Header{}
+	}
+
+	return d.h
+}
+
+func (d *discardingResponseWriter) Write(b []byte) (int, error) { return len(b), nil }
+func (d *discardingResponseWriter) WriteHeader(int)             {}
+
+// emptyHandler is a no-op http.Handler used to isolate router cost from
+// any handler-side work.
+var emptyHandler = http.HandlerFunc(func(http.ResponseWriter, *http.Request) {})
+
+// BenchmarkRouter_Get_Static measures the per-request cost of routing
+// a request to an exact-match route (no path parameters). Closest
+// approximation to TFB's /plaintext routing cost.
+//
+// Hot path under measurement:
+//   - Router.ServeHTTP path normalization (ServeHTTP, this file)
+//   - gorilla/mux.Router.ServeHTTP route matching
+//   - otelhttp.NewHandler wrap (registered in Router.Add)
+//
+// PR targets that should move this number:
+//   - PR-12 (path-clean fast path) — small win
+//   - PR-17 (drop otelhttp wrap) — meaningful win
+//   - PR-N (gorilla/mux → chi) — largest win, separate initiative
+func BenchmarkRouter_Get_Static(b *testing.B) {
+	r := NewRouter()
+	r.Add(http.MethodGet, "/plaintext", emptyHandler)
+
+	req := httptest.NewRequest(http.MethodGet, "/plaintext", nil)
+	w := &discardingResponseWriter{}
+
+	b.ReportAllocs()
+	b.ResetTimer()
+
+	for i := 0; i < b.N; i++ {
+		r.ServeHTTP(w, req)
+	}
+}
+
+// BenchmarkRouter_Get_PathParam measures the per-request cost of routing
+// to a path with a parameter ({id}). Includes gorilla/mux's parameter
+// extraction overhead, which is part of why mux is slower than radix-tree
+// routers (chi, httprouter).
+func BenchmarkRouter_Get_PathParam(b *testing.B) {
+	r := NewRouter()
+	r.Add(http.MethodGet, "/users/{id}", emptyHandler)
+
+	req := httptest.NewRequest(http.MethodGet, "/users/42", nil)
+	w := &discardingResponseWriter{}
+
+	b.ReportAllocs()
+	b.ResetTimer()
+
+	for i := 0; i < b.N; i++ {
+		r.ServeHTTP(w, req)
+	}
+}

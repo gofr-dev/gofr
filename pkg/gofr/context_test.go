@@ -374,3 +374,26 @@ func TestContext_GetCorrelationID(t *testing.T) {
 		assert.Equal(t, expected, correlationID, "Expected empty TraceID when no span present")
 	})
 }
+
+// BenchmarkContext_New measures the cost of constructing a fresh
+// *gofr.Context per request via newContext. Today this allocates the
+// Context struct itself plus a ContextLogger that re-extracts the
+// traceID from the request context via trace.SpanFromContext.
+//
+// Future targets that move this number:
+//   - PR-7 (cache traceID once on Context) — avoids re-extraction.
+//   - Pool *gofr.Context (deferred — see FIXES.md Open Question).
+func BenchmarkContext_New(b *testing.B) {
+	c := container.NewContainer(config.NewMockConfig(map[string]string{"LOG_LEVEL": "ERROR"}))
+
+	req := httptest.NewRequest(http.MethodGet, "/bench", nil)
+	r := gofrHTTP.NewRequest(req)
+	w := gofrHTTP.NewResponder(httptest.NewRecorder(), http.MethodGet)
+
+	b.ReportAllocs()
+	b.ResetTimer()
+
+	for i := 0; i < b.N; i++ {
+		_ = newContext(w, r, c)
+	}
+}

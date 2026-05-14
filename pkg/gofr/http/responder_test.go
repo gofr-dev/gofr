@@ -604,3 +604,55 @@ func TestResponder_ValidEncodableData(t *testing.T) {
 		assert.NotEmpty(t, body.String(), "TEST[%d] Failed: %s", i, tc.desc)
 	}
 }
+
+// BenchmarkRespond_String measures the cost of responding with a string
+// value. Captures: envelope wrap into `{"data":"..."}`, json.Marshal,
+// three separate Write calls (responder.go:65-67).
+//
+// PR-3 target: a single Write with Content-Length set. Expect lower
+// ns/op and B/op after fix.
+func BenchmarkRespond_String(b *testing.B) {
+	r := NewResponder(&discardingResponseWriter{}, http.MethodGet)
+	data := "hello"
+
+	b.ReportAllocs()
+	b.ResetTimer()
+
+	for i := 0; i < b.N; i++ {
+		r.Respond(data, nil)
+	}
+}
+
+// BenchmarkRespond_Map measures a typical JSON response: a small map.
+// Closest match to GoFr's /json bench endpoint.
+func BenchmarkRespond_Map(b *testing.B) {
+	r := NewResponder(&discardingResponseWriter{}, http.MethodGet)
+	data := map[string]string{"message": "hello"}
+
+	b.ReportAllocs()
+	b.ResetTimer()
+
+	for i := 0; i < b.N; i++ {
+		r.Respond(data, nil)
+	}
+}
+
+// BenchmarkRespond_Struct measures the typed-struct response path
+// (uses reflection in json.Marshal). Representative of real API
+// handlers that return structs.
+func BenchmarkRespond_Struct(b *testing.B) {
+	type payload struct {
+		Message string `json:"message"`
+		ID      int    `json:"id"`
+	}
+
+	r := NewResponder(&discardingResponseWriter{}, http.MethodGet)
+	data := payload{Message: "hello", ID: 42}
+
+	b.ReportAllocs()
+	b.ResetTimer()
+
+	for i := 0; i < b.N; i++ {
+		r.Respond(data, nil)
+	}
+}

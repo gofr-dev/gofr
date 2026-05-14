@@ -1,8 +1,14 @@
 package gofr
 
 import (
+	"context"
 	"errors"
 	"testing"
+
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/sdk/resource"
+	sdktrace "go.opentelemetry.io/otel/sdk/trace"
+	"go.opentelemetry.io/otel/trace/noop"
 
 	"github.com/stretchr/testify/require"
 
@@ -262,4 +268,55 @@ func TestOtelErrorHandler_NilErrorNoop(t *testing.T) {
 	h.Handle(nil)
 
 	require.Empty(t, cl.loggedErrors)
+}
+
+// BenchmarkSpanStart_DefaultSDK measures the cost of starting a span
+// under today's default GoFr configuration: an SDK TracerProvider is
+// installed (with ParentBased(TraceIDRatioBased(1.0)) sampler — see
+// initTracer in otel.go) even when no TRACE_EXPORTER is configured.
+// The span is built, sampled, and discarded because there's no exporter.
+//
+// This is the cost that 100% of GoFr users without an exporter pay today.
+//
+// PR-1 target: when no TRACE_EXPORTER, install noop.NewTracerProvider()
+// and skip the SDK entirely. Delta vs BenchmarkSpanStart_Noop is the
+// expected win.
+func BenchmarkSpanStart_DefaultSDK(b *testing.B) {
+	tp := sdktrace.NewTracerProvider(
+		sdktrace.WithResource(resource.Empty()),
+		sdktrace.WithSampler(sdktrace.ParentBased(sdktrace.TraceIDRatioBased(1.0))),
+	)
+	otel.SetTracerProvider(tp)
+
+	b.Cleanup(func() {
+		otel.SetTracerProvider(noop.NewTracerProvider())
+	})
+
+	tr := otel.Tracer("gofr-bench")
+	ctx := context.Background()
+
+	b.ReportAllocs()
+	b.ResetTimer()
+
+	for i := 0; i < b.N; i++ {
+		_, span := tr.Start(ctx, "GET /plaintext")
+		span.End()
+	}
+}
+
+// BenchmarkSpanStart_Noop measures the cost of starting a span when a
+// noop TracerProvider is installed. This is the floor — what GoFr would
+// pay after PR-1 lands for users without an exporter.
+func BenchmarkSpanStart_Noop(b *testing.B) {
+	otel.SetTracerProvider(noop.NewTracerProvider())
+	tr := otel.Tracer("gofr-bench")
+	ctx := context.Background()
+
+	b.ReportAllocs()
+	b.ResetTimer()
+
+	for i := 0; i < b.N; i++ {
+		_, span := tr.Start(ctx, "GET /plaintext")
+		span.End()
+	}
 }
