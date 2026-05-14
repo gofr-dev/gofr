@@ -53,7 +53,7 @@ func (a *App) add(method, pattern string, h Handler) {
 func (a *App) AddRESTHandlers(object any) error {
 	cfg, err := scanEntity(object)
 	if err != nil {
-		a.container.Logger.Errorf(err.Error())
+		a.container.Logger.Errorf("%v", err)
 		return err
 	}
 
