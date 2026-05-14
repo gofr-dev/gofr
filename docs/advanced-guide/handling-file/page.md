@@ -1,3 +1,11 @@
+---
+description: "Read and write files across S3, GCS, Azure Blob, FTP, SFTP, and the local disk through GoFr's unified file store API — one interface, many storage backends."
+nextjs:
+  metadata:
+    title: "Handling Files in GoFr — Unified File Store API"
+    description: "Read and write files across S3, GCS, Azure Blob, FTP, SFTP, and the local disk through GoFr's unified file store API — one interface, many storage backends."
+---
+
 # Handling File
 
 GoFr simplifies the complexity of working with different file stores by offering a uniform API. This allows developers to interact with different storage systems using the same set of methods, without needing to understand the underlying implementation details of each file store.
