@@ -605,6 +605,111 @@ func TestResponder_ValidEncodableData(t *testing.T) {
 	}
 }
 
+// TestResponseEnvelopeSnapshot pins the on-the-wire byte shape of the
+// response envelope for the most common handler return types. Any
+// later refactor that changes the bytes a client sees will fail this
+// test — including ostensibly cosmetic things like field ordering,
+// the trailing newline, the Content-Type header, or the status code.
+//
+// If a change here is intended, update the expectations in this test
+// AND mention it in the PR body so the impact on clients is reviewed.
+func TestResponseEnvelopeSnapshot(t *testing.T) {
+	type sampleStruct struct {
+		ID   int    `json:"id"`
+		Name string `json:"name"`
+	}
+
+	cases := []struct {
+		name        string
+		method      string
+		data        any
+		err         error
+		wantStatus  int
+		wantCType   string
+		wantBody    string
+	}{
+		{
+			name:       "string-get",
+			method:     http.MethodGet,
+			data:       "hello",
+			wantStatus: http.StatusOK,
+			wantCType:  "application/json",
+			wantBody:   `{"data":"hello"}` + "\n",
+		},
+		{
+			name:       "map-get",
+			method:     http.MethodGet,
+			data:       map[string]string{"message": "hello"},
+			wantStatus: http.StatusOK,
+			wantCType:  "application/json",
+			wantBody:   `{"data":{"message":"hello"}}` + "\n",
+		},
+		{
+			name:       "struct-get",
+			method:     http.MethodGet,
+			data:       sampleStruct{ID: 42, Name: "alice"},
+			wantStatus: http.StatusOK,
+			wantCType:  "application/json",
+			wantBody:   `{"data":{"id":42,"name":"alice"}}` + "\n",
+		},
+		{
+			name:       "struct-post-201",
+			method:     http.MethodPost,
+			data:       sampleStruct{ID: 7, Name: "bob"},
+			wantStatus: http.StatusCreated,
+			wantCType:  "application/json",
+			wantBody:   `{"data":{"id":7,"name":"bob"}}` + "\n",
+		},
+		{
+			name:       "nil-post-202",
+			method:     http.MethodPost,
+			data:       nil,
+			wantStatus: http.StatusAccepted,
+			wantCType:  "application/json",
+			wantBody:   "{}\n",
+		},
+		{
+			name:       "nil-delete-204",
+			method:     http.MethodDelete,
+			data:       nil,
+			wantStatus: http.StatusNoContent,
+			wantCType:  "application/json",
+			wantBody:   "{}\n",
+		},
+		{
+			name:       "error-only-500",
+			method:     http.MethodGet,
+			data:       nil,
+			err:        fmt.Errorf("boom"),
+			wantStatus: http.StatusInternalServerError,
+			wantCType:  "application/json",
+			wantBody:   `{"error":{"message":"boom"}}` + "\n",
+		},
+		{
+			name:       "data-and-error-206",
+			method:     http.MethodGet,
+			data:       map[string]string{"partial": "ok"},
+			err:        fmt.Errorf("partial fail"),
+			wantStatus: http.StatusPartialContent,
+			wantCType:  "application/json",
+			wantBody:   `{"error":{"message":"partial fail"},"data":{"partial":"ok"}}` + "\n",
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			w := httptest.NewRecorder()
+			r := NewResponder(w, tc.method)
+
+			r.Respond(tc.data, tc.err)
+
+			assert.Equal(t, tc.wantStatus, w.Code, "status code")
+			assert.Equal(t, tc.wantCType, w.Header().Get("Content-Type"), "Content-Type")
+			assert.Equal(t, tc.wantBody, w.Body.String(), "body bytes")
+		})
+	}
+}
+
 // BenchmarkRespond_String measures the cost of responding with a string
 // value. Captures: envelope wrap into `{"data":"..."}`, json.Marshal,
 // three separate Write calls (responder.go:65-67).
