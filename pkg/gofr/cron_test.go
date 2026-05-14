@@ -719,6 +719,26 @@ func TestCronTab_runScheduled_Panic(t *testing.T) {
 	}
 }
 
+func TestCrontab_Stop(t *testing.T) {
+	mockContainer, mocks := container.NewMockContainer(t)
+
+	mocks.Metrics.EXPECT().NewHistogram("app_cron_job_duration", gomock.Any(), gomock.Any()).AnyTimes()
+	mocks.Metrics.EXPECT().NewCounter("app_cron_job_total", gomock.Any()).AnyTimes()
+	mocks.Metrics.EXPECT().NewCounter("app_cron_job_success", gomock.Any()).AnyTimes()
+	mocks.Metrics.EXPECT().NewCounter("app_cron_job_failures", gomock.Any()).AnyTimes()
+
+	c := NewCron(mockContainer)
+
+	c.Stop()
+
+	select {
+	case _, ok := <-c.done:
+		assert.False(t, ok, "done channel should be closed")
+	case <-time.After(100 * time.Millisecond):
+		t.Fatal("done channel is not closed")
+	}
+}
+
 func TestErrParsing_Error(t *testing.T) {
 	tests := []struct {
 		name     string

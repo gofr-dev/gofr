@@ -1,11 +1,11 @@
 module gofr.dev/examples/using-add-filestore
 
-go 1.25.0
+go 1.26.0
 
 require (
 	github.com/stretchr/testify v1.11.1
 	go.uber.org/mock v0.6.0
-	gofr.dev v1.56.3
+	gofr.dev v1.56.4
 	gofr.dev/pkg/gofr/datasource/file/ftp v0.2.2
 )
 
@@ -66,8 +66,8 @@ require (
 	github.com/redis/go-redis/extra/redisotel/v9 v9.18.0 // indirect
 	github.com/redis/go-redis/v9 v9.18.0 // indirect
 	github.com/remyoudompheng/bigfft v0.0.0-20230129092748-24d4a6f8daec // indirect
-	github.com/segmentio/kafka-go v0.4.50 // indirect
-	github.com/vektah/gqlparser/v2 v2.5.32 // indirect
+	github.com/segmentio/kafka-go v0.4.51 // indirect
+	github.com/vektah/gqlparser/v2 v2.5.33 // indirect
 	github.com/xdg-go/pbkdf2 v1.0.0 // indirect
 	github.com/xdg-go/scram v1.1.2 // indirect
 	github.com/xdg-go/stringprep v1.0.4 // indirect
@@ -106,5 +106,5 @@ require (
 	modernc.org/libc v1.72.0 // indirect
 	modernc.org/mathutil v1.7.1 // indirect
 	modernc.org/memory v1.11.0 // indirect
-	modernc.org/sqlite v1.49.1 // indirect
+	modernc.org/sqlite v1.50.0 // indirect
 )

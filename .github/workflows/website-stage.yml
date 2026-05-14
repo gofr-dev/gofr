@@ -6,6 +6,10 @@ on:
   push:
     branches:
       - development
+  # Manual escape hatch — useful right after a GoFr release lands and
+  # stage should reflect the new version / refreshed roadmap without
+  # waiting for the next push to development.
+  workflow_dispatch:
 
 env:
   APP_NAME: gofr-website
@@ -28,11 +32,44 @@ jobs:
       image: ${{ steps.output-image.outputs.image }}
     name: 🐳 Dockerize
     steps:
-      - name: Checkout Code
+      - name: Checkout framework code
         uses: actions/checkout@v6
 
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v4
+      # Pull the website source into a sibling directory so we can run
+      # its build pipeline against fresh data on every stage deploy.
+      # Identical pattern to website-prod.yml — same code path, same
+      # freshness guarantees, just different namespaces and creds.
+      - name: Checkout website source
+        uses: actions/checkout@v6
+        with:
+          repository: gofr-dev/website
+          ref: main
+          path: website-src
+          # Full history is required by utils/generate-doc-mtimes.mjs
+          # which reads `git log` per source file for the visible
+          # "Last updated" byline.
+          fetch-depth: 0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: 18.x
+
+      - name: Install website deps
+        working-directory: ./website-src
+        run: yarn install --frozen-lockfile
+
+      # Refresh GitHub-sourced data (releases, roadmap, team +
+      # contributor scores, doc mtimes, changelog RSS) so stage bakes
+      # in current state at deploy time. continue-on-error keeps the
+      # build moving if a fetch fails — each script has a snapshot
+      # fallback that preserves the previous JSON.
+      - name: Refresh website data from GitHub
+        working-directory: ./website-src
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: yarn refresh-data
+        continue-on-error: true
 
       - name: Login to GAR
         uses: docker/login-action@v4
@@ -41,35 +78,51 @@ jobs:
           username: _json_key
           password: ${{ secrets.GOFR_WEBSITE_GOFR_DEV_STG_DEPLOYMENT_KEY }}
 
-      - name: Log in to the GitHub Container registry
-        uses: docker/login-action@v4
-        with:
-          registry: ${{ env.WEBSITE_REGISTRY }}
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Download UI Image
-        run: |
-          docker pull ${{ env.WEBSITE_REGISTRY }}/gofr-dev/website:latest
-
       - name: Determine Image Tag
         id: determine-tag
+        # Append run_id so each workflow run produces a unique image
+        # tag — required for workflow_dispatch reruns (and any case
+        # where the same SHA is rebuilt) to actually roll out via
+        # kubectl. kubectl set image with an unchanged tag is a
+        # no-op; the run_id suffix forces the rollout.
         run: |
           if [[ "${{ github.ref }}" == refs/tags/* ]]; then
             TAG=${GITHUB_REF#refs/tags/}
           else
-            TAG=${{ github.sha }}
+            TAG=${{ github.sha }}-${{ github.run_id }}
           fi
           echo "TAG=$TAG" >> $GITHUB_ENV
 
+      # Build the website source-bundle image locally with the
+      # freshly-refreshed data baked in. Tagged ghcr.io/...:stage
+      # purely for the *local* docker daemon — we don't push it to
+      # ghcr. The framework's docs/Dockerfile then resolves its
+      # FROM ghcr.io/gofr-dev/website:${WEBSITE_TAG=stage} against
+      # the local image.
+      #
+      # --target builder stops at the website Dockerfile's first
+      # stage, which contains /app source + node_modules + npm. The
+      # framework's docs/Dockerfile needs that to overlay docs and
+      # run `npm run build`; the default final nginx stage has no
+      # npm and would fail with `npm: not found`.
+      - name: Build website source-bundle (with fresh data)
+        run: |
+          docker build \
+            --target builder \
+            -t ghcr.io/gofr-dev/website:stage \
+            -f ./website-src/Dockerfile \
+            ./website-src/
 
-      - name: Build and Push Image
-        uses: docker/build-push-action@v7
-        with:
-          push: true
-          context: ./
-          file: ./docs/Dockerfile
-          tags: us-central1-docker.pkg.dev/${{ env.GAR_PROJECT }}/${{ env.GAR_REGISTRY }}/${{ env.APP_NAME }}:${{ env.TAG }}
+      - name: Build framework docs image
+        run: |
+          docker build \
+            --build-arg WEBSITE_TAG=stage \
+            -t us-central1-docker.pkg.dev/${{ env.GAR_PROJECT }}/${{ env.GAR_REGISTRY }}/${{ env.APP_NAME }}:${{ env.TAG }} \
+            -f ./docs/Dockerfile \
+            .
+
+      - name: Push framework docs image to GAR
+        run: docker push us-central1-docker.pkg.dev/${{ env.GAR_PROJECT }}/${{ env.GAR_REGISTRY }}/${{ env.APP_NAME }}:${{ env.TAG }}
 
       - id: output-image
         run: echo "image=`echo us-central1-docker.pkg.dev/${{ env.GAR_PROJECT }}/${{ env.GAR_REGISTRY }}/${{ env.APP_NAME }}:${{ env.TAG }}`" >> "$GITHUB_OUTPUT"

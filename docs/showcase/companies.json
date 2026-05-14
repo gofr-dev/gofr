@@ -1,0 +1,11 @@
+[
+  { "name": "American Express", "industry": "Financial Services" },
+  { "name": "IBM", "industry": "Technology" },
+  { "name": "McAfee", "industry": "Cybersecurity" },
+  { "name": "Blinkit", "industry": "E-commerce" },
+  { "name": "Walmart", "industry": "Retail" },
+  { "name": "Doceree", "industry": "AdTech" },
+  { "name": "Mydbops", "industry": "Database Consulting" },
+  { "name": "Guidewire", "industry": "Insurance Technology" },
+  { "name": "Weave", "industry": "Technology" }
+]

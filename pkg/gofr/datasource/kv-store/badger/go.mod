@@ -1,6 +1,6 @@
 module gofr.dev/pkg/gofr/datasource/kv-store/badger
 
-go 1.25.0
+go 1.26.0
 
 require (
 	github.com/dgraph-io/badger/v4 v4.9.1

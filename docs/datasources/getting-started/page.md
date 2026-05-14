@@ -1,3 +1,11 @@
+---
+description: "GoFr uses interface-driven datasource integration. Inject any client that satisfies the contract and swap or add databases without changing handler code."
+nextjs:
+  metadata:
+    title: "GoFr Datasources — Getting Started with the Interface"
+    description: "GoFr uses interface-driven datasource integration. Inject any client that satisfies the contract and swap or add databases without changing handler code."
+---
+
 # Getting Started
 GoFr adopts an interface-driven architecture for datasource integration, providing a consistent way to work with various databases.
 Each datasource implements predefined interfaces that define core functionality, enabling you to inject any database client that satisfies these interface contracts.
