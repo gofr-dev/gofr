@@ -19,6 +19,8 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/trace/noop"
 
 	"gofr.dev/pkg/gofr/config"
 	"gofr.dev/pkg/gofr/container"
@@ -816,6 +818,46 @@ func Test_initTracer_invalidConfig(t *testing.T) {
 
 		assert.Contains(t, logMessage, tc.expectedLogMessage, "TEST[%d], Failed.\n%s", i, tc.desc)
 	}
+}
+
+// Test_initTracer_NoopWhenDisabled asserts that initTracer installs a non-recording
+// (noop) tracer provider when no TRACE_EXPORTER is configured. Spans started from
+// the global provider must not record — this is PR-1's contract.
+func Test_initTracer_NoopWhenDisabled(t *testing.T) {
+	mockContainer, _ := container.NewMockContainer(t)
+	a := App{
+		Config:    config.NewMockConfig(nil),
+		container: mockContainer,
+	}
+
+	a.initTracer()
+
+	_, span := otel.Tracer("gofr-test").Start(context.Background(), "probe")
+	defer span.End()
+
+	require.False(t, span.IsRecording(),
+		"expected non-recording span when TRACE_EXPORTER is unset; SDK provider is still installed")
+}
+
+// Test_initTracer_SDKWhenExporterSet asserts that initTracer installs the recording
+// SDK tracer provider when TRACE_EXPORTER is configured. Pair of Test_initTracer_NoopWhenDisabled.
+func Test_initTracer_SDKWhenExporterSet(t *testing.T) {
+	mockContainer, _ := container.NewMockContainer(t)
+	a := App{
+		Config: config.NewMockConfig(map[string]string{
+			"TRACE_EXPORTER": "gofr",
+		}),
+		container: mockContainer,
+	}
+
+	a.initTracer()
+	t.Cleanup(func() { otel.SetTracerProvider(noop.NewTracerProvider()) })
+
+	_, span := otel.Tracer("gofr-test").Start(context.Background(), "probe")
+	defer span.End()
+
+	require.True(t, span.IsRecording(),
+		"expected recording span when TRACE_EXPORTER=gofr; SDK provider should be installed")
 }
 
 func Test_UseMiddleware(t *testing.T) {

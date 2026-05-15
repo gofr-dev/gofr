@@ -13,24 +13,12 @@ import (
 	"go.opentelemetry.io/otel/sdk/resource"
 	sdktrace "go.opentelemetry.io/otel/sdk/trace"
 	semconv "go.opentelemetry.io/otel/semconv/v1.4.0"
+	"go.opentelemetry.io/otel/trace/noop"
 
 	"gofr.dev/pkg/gofr/logging"
 )
 
 func (a *App) initTracer() {
-	traceRatio, err := strconv.ParseFloat(a.Config.GetOrDefault("TRACER_RATIO", "1"), 64)
-	if err != nil {
-		a.container.Error(err)
-	}
-
-	tp := sdktrace.NewTracerProvider(
-		sdktrace.WithResource(resource.NewWithAttributes(
-			semconv.SchemaURL,
-			semconv.ServiceNameKey.String(a.container.GetAppName()),
-		)),
-		sdktrace.WithSampler(sdktrace.ParentBased(sdktrace.TraceIDRatioBased(traceRatio))),
-	)
-	otel.SetTracerProvider(tp)
 	otel.SetTextMapPropagator(propagation.NewCompositeTextMapPropagator(propagation.TraceContext{}, propagation.Baggage{}))
 	otel.SetErrorHandler(&otelErrorHandler{
 		logger: a.container.Logger,
@@ -44,8 +32,26 @@ func (a *App) initTracer() {
 	tracerPort := a.Config.GetOrDefault("TRACER_PORT", "9411")
 
 	if !isValidConfig(a.Logger(), traceExporter, tracerURL, tracerHost, tracerPort) {
+		// No exporter configured — install a noop provider so spans cost nothing.
+		// The SDK builds and discards spans even without an exporter, allocating
+		// ~2.7 KB / 1 alloc per request. Noop short-circuits to a stub.
+		otel.SetTracerProvider(noop.NewTracerProvider())
 		return
 	}
+
+	traceRatio, err := strconv.ParseFloat(a.Config.GetOrDefault("TRACER_RATIO", "1"), 64)
+	if err != nil {
+		a.container.Error(err)
+	}
+
+	tp := sdktrace.NewTracerProvider(
+		sdktrace.WithResource(resource.NewWithAttributes(
+			semconv.SchemaURL,
+			semconv.ServiceNameKey.String(a.container.GetAppName()),
+		)),
+		sdktrace.WithSampler(sdktrace.ParentBased(sdktrace.TraceIDRatioBased(traceRatio))),
+	)
+	otel.SetTracerProvider(tp)
 
 	exporter, err := a.getExporter(traceExporter, tracerHost, tracerPort, tracerURL)
 	if err != nil {
