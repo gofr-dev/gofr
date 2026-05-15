@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"strconv"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -706,6 +707,49 @@ func TestResponseEnvelopeSnapshot(t *testing.T) {
 			assert.Equal(t, tc.wantStatus, w.Code, "status code")
 			assert.Equal(t, tc.wantCType, w.Header().Get("Content-Type"), "Content-Type")
 			assert.Equal(t, tc.wantBody, w.Body.String(), "body bytes")
+		})
+	}
+}
+
+// TestResponder_ContentLengthMatchesBody asserts that Respond emits a
+// Content-Length header equal to the byte length of the response body
+// for every JSON envelope shape. Setting Content-Length is what allows
+// HTTP keep-alive to skip chunked encoding and the bufio.Writer to flush
+// once per response instead of three times. A future change that drops
+// or miscomputes Content-Length must fail this test.
+func TestResponder_ContentLengthMatchesBody(t *testing.T) {
+	type sampleStruct struct {
+		ID   int    `json:"id"`
+		Name string `json:"name"`
+	}
+
+	cases := []struct {
+		name   string
+		method string
+		data   any
+		err    error
+	}{
+		{"string-get", http.MethodGet, "hello", nil},
+		{"map-get", http.MethodGet, map[string]string{"message": "hello"}, nil},
+		{"struct-get", http.MethodGet, sampleStruct{ID: 42, Name: "alice"}, nil},
+		{"struct-post", http.MethodPost, sampleStruct{ID: 7, Name: "bob"}, nil},
+		{"nil-post", http.MethodPost, nil, nil},
+		{"nil-delete", http.MethodDelete, nil, nil},
+		{"error-only", http.MethodGet, nil, fmt.Errorf("boom")},
+		{"data-and-error", http.MethodGet, map[string]string{"partial": "ok"}, fmt.Errorf("partial fail")},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			w := httptest.NewRecorder()
+			r := NewResponder(w, tc.method)
+
+			r.Respond(tc.data, tc.err)
+
+			cl := w.Header().Get("Content-Length")
+			require.NotEmpty(t, cl, "Content-Length not set")
+			assert.Equal(t, strconv.Itoa(w.Body.Len()), cl,
+				"Content-Length %q does not match body byte length %d", cl, w.Body.Len())
 		})
 	}
 }

@@ -5,6 +5,7 @@ import (
 	"errors"
 	"net/http"
 	"reflect"
+	"strconv"
 
 	resTypes "gofr.dev/pkg/gofr/http/response"
 )
@@ -55,16 +56,24 @@ func (r Responder) Respond(data any, err error) {
 
 	jsonData, encodeErr := json.Marshal(resp)
 	if encodeErr != nil {
+		const errBody = `{"error":{"message": "failed to encode response as JSON"}}` + "\n"
+
+		r.w.Header().Set("Content-Length", strconv.Itoa(len(errBody)))
 		r.w.WriteHeader(http.StatusInternalServerError)
 
-		_, _ = r.w.Write([]byte(`{"error":{"message": "failed to encode response as JSON"}}` + "\n"))
+		_, _ = r.w.Write([]byte(errBody))
 
 		return
 	}
 
+	// Append the trailing newline into the marshalled buffer so the response
+	// goes out in a single Write call (was 2 calls + no Content-Length, which
+	// caused bufio.Writer to flush twice per response).
+	jsonData = append(jsonData, '\n')
+
+	r.w.Header().Set("Content-Length", strconv.Itoa(len(jsonData)))
 	r.w.WriteHeader(statusCode)
 	_, _ = r.w.Write(jsonData)
-	_, _ = r.w.Write([]byte("\n"))
 }
 
 // handleSpecialResponseTypes handles special response types that bypass JSON encoding.
