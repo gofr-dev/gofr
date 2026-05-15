@@ -96,10 +96,25 @@ func Logging(probes LogProbes, logger logger) func(inner http.Handler) http.Hand
 	return func(inner http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			srw := &StatusResponseWriter{ResponseWriter: w}
-			traceID := trace.SpanFromContext(r.Context()).SpanContext().TraceID().String()
-			spanID := trace.SpanFromContext(r.Context()).SpanContext().SpanID().String()
 
-			srw.Header().Set("X-Correlation-ID", traceID)
+			// Fetch SpanContext once and resolve trace/span IDs to strings only
+			// when they are valid. Under a noop tracer (the default after PR-1
+			// when no exporter is configured) the SpanContext is invalid and
+			// the IDs are all-zeros — recording "00000000…" in log lines is
+			// noise. Keep the X-Correlation-ID header populated for back-compat;
+			// the log line's omitempty drops the field when traceID is "".
+			sc := trace.SpanFromContext(r.Context()).SpanContext()
+
+			var traceID, spanID, hdrID string
+			if sc.IsValid() {
+				traceID = sc.TraceID().String()
+				spanID = sc.SpanID().String()
+				hdrID = traceID
+			} else {
+				hdrID = "00000000000000000000000000000000"
+			}
+
+			srw.Header().Set("X-Correlation-ID", hdrID)
 
 			defer func() { panicRecovery(recover(), srw, logger) }()
 
