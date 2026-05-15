@@ -52,7 +52,9 @@ type RequestLog struct {
 	TraceID      string `json:"trace_id,omitempty"`
 	SpanID       string `json:"span_id,omitempty"`
 	StartTime    string `json:"start_time,omitempty"`
-	ResponseTime int64  `json:"response_time,omitempty"`
+	// ResponseTime is always populated by handleRequestLog, so omitempty
+	// is intentionally absent — log aggregators treat the field as required.
+	ResponseTime int64  `json:"response_time"`
 	Method       string `json:"method,omitempty"`
 	UserAgent    string `json:"user_agent,omitempty"`
 	IP           string `json:"ip,omitempty"`
@@ -93,7 +95,6 @@ type logger interface {
 func Logging(probes LogProbes, logger logger) func(inner http.Handler) http.Handler {
 	return func(inner http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			start := time.Now()
 			srw := &StatusResponseWriter{ResponseWriter: w}
 			traceID := trace.SpanFromContext(r.Context()).SpanContext().TraceID().String()
 			spanID := trace.SpanFromContext(r.Context()).SpanContext().SpanID().String()
@@ -102,12 +103,15 @@ func Logging(probes LogProbes, logger logger) func(inner http.Handler) http.Hand
 
 			defer func() { panicRecovery(recover(), srw, logger) }()
 
-			// Skip logging for default probe paths if log probes are disabled
+			// Skip logging for default probe paths if log probes are disabled.
+			// time.Now() (vDSO call) is deferred past this so probe paths do
+			// not pay for a timestamp that is then thrown away.
 			if isLogProbeDisabled(probes, r.URL.Path) {
 				inner.ServeHTTP(w, r)
 				return
 			}
 
+			start := time.Now()
 			defer handleRequestLog(srw, r, start, traceID, spanID, logger)
 
 			inner.ServeHTTP(srw, r)

@@ -22,8 +22,6 @@ type metrics interface {
 func Metrics(metrics metrics) func(inner http.Handler) http.Handler {
 	return func(inner http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			start := time.Now()
-
 			srw := &StatusResponseWriter{ResponseWriter: w}
 
 			path, _ := mux.CurrentRoute(r).GetPathTemplate()
@@ -40,13 +38,18 @@ func Metrics(metrics metrics) func(inner http.Handler) http.Handler {
 
 			path = strings.TrimSuffix(path, "/")
 
+			// Skip recording for /graphql — it has its own dedicated metrics
+			// (app_graphql_*). time.Now() (vDSO call) is deferred past this
+			// branch so /graphql does not pay for a timestamp we throw away.
+			if path == "/graphql" {
+				inner.ServeHTTP(srw, r)
+				return
+			}
+
+			start := time.Now()
+
 			// this has to be called in the end so that status code is populated
 			defer func(res *StatusResponseWriter, req *http.Request) {
-				// Skip recording for /graphql — it has its own dedicated metrics (app_graphql_*)
-				if path == "/graphql" {
-					return
-				}
-
 				duration := time.Since(start)
 
 				metrics.RecordHistogram(context.Background(), "app_http_response", duration.Seconds(),
