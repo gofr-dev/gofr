@@ -53,15 +53,21 @@ type RequestLog struct {
 	TraceID      string `json:"trace_id,omitempty"`
 	SpanID       string `json:"span_id,omitempty"`
 	StartTime    string `json:"start_time,omitempty"`
-	// ResponseTime is always populated by handleRequestLog, so omitempty
-	// is intentionally absent — log aggregators treat the field as required.
-	ResponseTime int64  `json:"response_time"`
+	ResponseTime int64  `json:"response_time,omitempty"`
 	Method       string `json:"method,omitempty"`
 	UserAgent    string `json:"user_agent,omitempty"`
 	IP           string `json:"ip,omitempty"`
 	URI          string `json:"uri,omitempty"`
 	Response     int    `json:"response,omitempty"`
 }
+
+// zeroTraceID is the canonical 32-zero string the W3C trace-context
+// invalid TraceID prints to. We use it for the X-Correlation-ID
+// response header AND for the request-log field when no SpanContext
+// is in scope, so the wire shape is byte-for-byte identical to what
+// GoFr emitted before PR-7's internal optimisation.
+const zeroTraceID = "00000000000000000000000000000000"
+const zeroSpanID = "0000000000000000"
 
 func (rl *RequestLog) PrettyPrint(writer io.Writer) {
 	fmt.Fprintf(writer, "\u001B[38;5;8m%s \u001B[38;5;%dm%-6d\u001B[0m "+
@@ -122,21 +128,22 @@ func Logging(probes LogProbes, logger logger) func(inner http.Handler) http.Hand
 			// Fetch SpanContext once and resolve trace/span IDs to strings only
 			// when they are valid. Under a noop tracer (the default after PR-1
 			// when no exporter is configured) the SpanContext is invalid and
-			// the IDs are all-zeros — recording "00000000…" in log lines is
-			// noise. Keep the X-Correlation-ID header populated for back-compat;
-			// the log line's omitempty drops the field when traceID is "".
+			// the IDs are all-zeros — calling .String() on those is wasted
+			// allocation. Substitute the precomputed zero-string constants so
+			// the log line and the X-Correlation-ID response header carry
+			// byte-identical values to the pre-PR-7 wire shape.
 			sc := trace.SpanFromContext(r.Context()).SpanContext()
 
-			var traceID, spanID, hdrID string
+			var traceID, spanID string
 			if sc.IsValid() {
 				traceID = sc.TraceID().String()
 				spanID = sc.SpanID().String()
-				hdrID = traceID
 			} else {
-				hdrID = "00000000000000000000000000000000"
+				traceID = zeroTraceID
+				spanID = zeroSpanID
 			}
 
-			srw.Header().Set("X-Correlation-ID", hdrID)
+			srw.Header().Set("X-Correlation-ID", traceID)
 
 			defer func() { panicRecovery(recover(), srw, logger) }()
 

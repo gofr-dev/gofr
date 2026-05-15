@@ -13,9 +13,6 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"go.opentelemetry.io/otel"
-	sdktrace "go.opentelemetry.io/otel/sdk/trace"
-	"go.opentelemetry.io/otel/trace/noop"
 
 	"gofr.dev/pkg/gofr/logging"
 	"gofr.dev/pkg/gofr/testutil"
@@ -327,28 +324,17 @@ func (*mockAddr) Network() string { return "tcp" }
 func (*mockAddr) String() string  { return "127.0.0.1:8080" }
 
 // TestRequestLogSchemaSnapshot pins the JSON field set that the request
-// log line emits per HTTP request when tracing is enabled. Log aggregators
-// and dashboards built on top of these field names will break if we
-// rename or drop one.
-//
-// trace_id / span_id are conditional — they are only present when a valid
-// SpanContext is in scope (i.e., when a tracer middleware has run). To
-// pin the "tracing-on" schema this test installs a real SDK tracer and
-// pre-populates the request context with a valid span context. The
-// "tracing-off" case is covered by TestRequestLogSchemaSnapshot_NoTrace.
+// log line emits per HTTP request. Log aggregators and dashboards built
+// on top of these field names will break if we rename or drop one.
 //
 // We do not pin field VALUES (timestamps, IDs, durations vary by run) —
-// we pin the field NAMES.
+// we pin the field NAMES. Both the tracing-on and tracing-off paths
+// emit the same field set; trace_id / span_id default to the zero
+// strings ("00...0") when no SpanContext is in scope so log
+// aggregators always see the keys.
 func TestRequestLogSchemaSnapshot(t *testing.T) {
-	tp := sdktrace.NewTracerProvider()
-	otel.SetTracerProvider(tp)
-	t.Cleanup(func() { otel.SetTracerProvider(noop.NewTracerProvider()) })
-
 	out := testutil.StdoutOutputForFunc(func() {
-		ctx, span := tp.Tracer("snapshot-test").Start(t.Context(), "snapshot-span")
-		defer span.End()
-
-		req, _ := http.NewRequestWithContext(ctx, http.MethodGet, "http://dummy/users/42?x=1", http.NoBody)
+		req, _ := http.NewRequestWithContext(t.Context(), http.MethodGet, "http://dummy/users/42?x=1", http.NoBody)
 		req.Header.Set("User-Agent", "snapshot-test")
 		// NewRequestWithContext leaves these fields empty (the real HTTP
 		// server sets them on incoming requests). Set them explicitly so
@@ -360,7 +346,9 @@ func TestRequestLogSchemaSnapshot(t *testing.T) {
 
 		handler := Logging(LogProbes{}, logging.NewLogger(logging.INFO))(http.HandlerFunc(
 			func(w http.ResponseWriter, _ *http.Request) {
-				time.Sleep(time.Microsecond) // ensure response_time > 0
+				// Sleep so response_time is non-zero — the field has
+				// json:omitempty and is dropped on zero-duration handlers.
+				time.Sleep(time.Microsecond)
 				w.WriteHeader(http.StatusOK)
 			},
 		))
@@ -400,46 +388,4 @@ func TestRequestLogSchemaSnapshot(t *testing.T) {
 	assert.Equal(t, "GET", msg["method"])
 	assert.Equal(t, "/users/42?x=1", msg["uri"])
 	assert.Equal(t, "snapshot-test", msg["user_agent"])
-}
-
-// TestRequestLogSchemaSnapshot_NoTrace pins the request-log shape when no
-// tracer is active (noop provider) — trace_id / span_id MUST be omitted so
-// log aggregators do not record the all-zeros placeholder as a real ID.
-func TestRequestLogSchemaSnapshot_NoTrace(t *testing.T) {
-	otel.SetTracerProvider(noop.NewTracerProvider())
-
-	out := testutil.StdoutOutputForFunc(func() {
-		req, _ := http.NewRequestWithContext(t.Context(), http.MethodGet, "http://dummy/users/42?x=1", http.NoBody)
-		req.Header.Set("User-Agent", "snapshot-test")
-		req.RequestURI = "/users/42?x=1"
-		req.RemoteAddr = "1.2.3.4:5678"
-
-		rr := httptest.NewRecorder()
-
-		handler := Logging(LogProbes{}, logging.NewLogger(logging.INFO))(http.HandlerFunc(
-			func(w http.ResponseWriter, _ *http.Request) {
-				time.Sleep(time.Microsecond)
-				w.WriteHeader(http.StatusOK)
-			},
-		))
-
-		handler.ServeHTTP(rr, req)
-	})
-
-	idx := strings.Index(out, "{")
-	require.Greater(t, idx, -1, "expected JSON log line, got: %q", out)
-	end := strings.LastIndex(out, "}")
-	require.Greater(t, end, idx)
-
-	var entry map[string]any
-
-	require.NoError(t, json.Unmarshal([]byte(out[idx:end+1]), &entry))
-
-	msg, ok := entry["message"].(map[string]any)
-	require.True(t, ok, "message is not an object: %T", entry["message"])
-
-	assert.NotContains(t, msg, "trace_id",
-		"trace_id should be omitted when no valid SpanContext is in scope (saw %v)", msg["trace_id"])
-	assert.NotContains(t, msg, "span_id",
-		"span_id should be omitted when no valid SpanContext is in scope (saw %v)", msg["span_id"])
 }
