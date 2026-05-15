@@ -19,7 +19,21 @@ import (
 )
 
 func (a *App) initTracer() {
-	otel.SetTextMapPropagator(propagation.NewCompositeTextMapPropagator(propagation.TraceContext{}, propagation.Baggage{}))
+	// Install GoFr's default W3C TraceContext + Baggage propagator only if
+	// the user has not already configured one (e.g. B3, Jaeger). Detect the
+	// default OTel propagator by its empty Fields() — every user-configured
+	// propagator advertises at least one header field.
+	if existing := otel.GetTextMapPropagator(); len(existing.Fields()) == 0 {
+		otel.SetTextMapPropagator(propagation.NewCompositeTextMapPropagator(
+			propagation.TraceContext{}, propagation.Baggage{},
+		))
+	} else {
+		a.container.Logger.Warnf(
+			"custom OTel TextMap propagator already installed (fields=%v); GoFr will not override it",
+			existing.Fields(),
+		)
+	}
+
 	otel.SetErrorHandler(&otelErrorHandler{
 		logger: a.container.Logger,
 	})
