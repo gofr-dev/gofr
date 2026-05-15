@@ -22,7 +22,14 @@ type metrics interface {
 func Metrics(metrics metrics) func(inner http.Handler) http.Handler {
 	return func(inner http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			srw := &StatusResponseWriter{ResponseWriter: w}
+			// If an outer middleware (Logging) has already wrapped w in a
+			// StatusResponseWriter, reuse it instead of double-wrapping. Both
+			// middlewares only read status — a single wrapper captures it for
+			// both, saving one allocation per request.
+			srw, ok := w.(*StatusResponseWriter)
+			if !ok {
+				srw = &StatusResponseWriter{ResponseWriter: w}
+			}
 
 			path, _ := mux.CurrentRoute(r).GetPathTemplate()
 
