@@ -47,26 +47,73 @@ func NewRouter() *Router {
 func (rou *Router) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	// Normalize the path before routing to handle double slashes
 	originalPath := r.URL.Path
-	normalizedPath := path.Clean(originalPath)
 
-	// path.Clean returns "." for empty paths, convert to "/" for HTTP routing
-	if normalizedPath == "." {
-		normalizedPath = "/"
-	}
+	// Fast path: the vast majority of incoming paths are already canonical
+	// ("/users/42", "/api/v1/things"). Skip the path.Clean + string ops in
+	// that case so they only run for inputs that actually need normalising.
+	if !isCleanPath(originalPath) {
+		normalizedPath := path.Clean(originalPath)
 
-	// Ensure path starts with "/" for HTTP routing
-	normalizedPath = "/" + strings.TrimLeft(normalizedPath, "/")
+		// path.Clean returns "." for empty paths, convert to "/" for HTTP routing
+		if normalizedPath == "." {
+			normalizedPath = "/"
+		}
 
-	// Only modify if path changed
-	if originalPath != normalizedPath {
-		r.URL.Path = normalizedPath
-		if r.URL.RawPath != "" {
-			r.URL.RawPath = normalizedPath
+		// Ensure path starts with "/" for HTTP routing
+		normalizedPath = "/" + strings.TrimLeft(normalizedPath, "/")
+
+		// Only modify if path changed
+		if originalPath != normalizedPath {
+			r.URL.Path = normalizedPath
+			if r.URL.RawPath != "" {
+				r.URL.RawPath = normalizedPath
+			}
 		}
 	}
 
 	// Delegate to the underlying Gorilla Mux router
 	rou.Router.ServeHTTP(w, r)
+}
+
+// isCleanPath reports whether p is already canonical — starts with "/", no
+// "//", no "/.", no "/..", and no trailing slash (except the root). When
+// true, path.Clean(p) == p and the surrounding normalisation can be skipped.
+func isCleanPath(p string) bool {
+	if p == "" || p[0] != '/' {
+		return false
+	}
+
+	for i := 0; i < len(p); i++ {
+		if p[i] != '/' {
+			continue
+		}
+
+		if i+1 < len(p) && p[i+1] == '/' {
+			return false // "//"
+		}
+
+		if i+1 < len(p) && p[i+1] == '.' {
+			// "/." or "/.." with trailing or "/"
+			if i+2 == len(p) {
+				return false // trailing "/."
+			}
+
+			if p[i+2] == '/' {
+				return false // "/./"
+			}
+
+			if p[i+2] == '.' && (i+3 == len(p) || p[i+3] == '/') {
+				return false // "/.." or "/../"
+			}
+		}
+	}
+
+	// Trailing slash on a non-root path is not canonical.
+	if len(p) > 1 && p[len(p)-1] == '/' {
+		return false
+	}
+
+	return true
 }
 
 // Add adds a new route with the given HTTP method, pattern, and handler, wrapping the handler with OpenTelemetry instrumentation.

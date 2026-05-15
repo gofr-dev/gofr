@@ -128,6 +128,51 @@ func TestRouter_DoubleSlashPath_GET(t *testing.T) {
 	}
 }
 
+// TestIsCleanPath pins the fast-path predicate that ServeHTTP uses to skip
+// path.Clean for already-canonical URLs. A wrong negative would re-run the
+// normaliser pointlessly (performance regression); a wrong positive would
+// route a non-canonical URL without cleaning it (correctness regression).
+func TestIsCleanPath(t *testing.T) {
+	canonical := []string{
+		"/",
+		"/users",
+		"/api/v1/things",
+		"/users/42",
+		"/a/b/c/d",
+		"/path-with-dashes",
+		"/path.with.dots",
+		"/users/42.json",
+	}
+	dirty := []string{
+		"",                   // empty
+		"users",              // no leading slash
+		"//",                 // double slash root
+		"//users",            // leading double slash
+		"/users//42",         // mid double slash
+		"/.",                 // trailing /.
+		"/..",                // trailing /..
+		"/./users",           // /./
+		"/../users",          // /../
+		"/users/.",           // /.
+		"/users/..",          // /..
+		"/users/./42",        // /./ mid
+		"/users/../42",       // /../ mid
+		"/users/",            // trailing slash on non-root
+	}
+
+	for _, p := range canonical {
+		if !isCleanPath(p) {
+			t.Errorf("isCleanPath(%q) = false, want true", p)
+		}
+	}
+
+	for _, p := range dirty {
+		if isCleanPath(p) {
+			t.Errorf("isCleanPath(%q) = true, want false", p)
+		}
+	}
+}
+
 // TestRouter_PathNormalization tests the path normalization function directly.
 func TestRouter_PathNormalization(t *testing.T) {
 	router := NewRouter()
