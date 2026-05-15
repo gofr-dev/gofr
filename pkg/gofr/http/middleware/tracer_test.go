@@ -172,3 +172,77 @@ func TestTracePropagation_Outbound(t *testing.T) {
 	assert.Equal(t, "tenant=acme", outbound.Header.Get("baggage"),
 		"outbound request did not inject baggage")
 }
+
+// TestTracePropagation_BaggageRoundTrip exercises a full inbound→handler→outbound
+// loop and asserts every baggage member set upstream survives the trip. This is
+// the contract Phase-C PR-17 (drop otelhttp.NewHandler wrap) must keep: when we
+// stop relying on otelhttp's propagation glue and depend solely on the GoFr
+// tracer middleware + W3C propagator pair installed in PR-15, baggage round-trip
+// must remain byte-for-byte stable on the wire.
+func TestTracePropagation_BaggageRoundTrip(t *testing.T) {
+	installPropagators(t)
+
+	tp := trace.NewTracerProvider()
+	otel.SetTracerProvider(tp)
+
+	cases := []struct {
+		name    string
+		header  string
+		members map[string]string
+	}{
+		{
+			name:    "single member",
+			header:  "tenant=acme",
+			members: map[string]string{"tenant": "acme"},
+		},
+		{
+			name:    "multiple members",
+			header:  "tenant=acme,region=us-east,version=v1",
+			members: map[string]string{"tenant": "acme", "region": "us-east", "version": "v1"},
+		},
+		{
+			name:    "values with hyphens and dots",
+			header:  "service=user-api,env=prod.eu",
+			members: map[string]string{"service": "user-api", "env": "prod.eu"},
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			var observed baggage.Baggage
+
+			handler := Tracer(http.HandlerFunc(func(_ http.ResponseWriter, r *http.Request) {
+				observed = baggage.FromContext(r.Context())
+			}))
+
+			inbound := httptest.NewRequest(http.MethodGet, "/", http.NoBody)
+			inbound.Header.Set("baggage", tc.header)
+
+			handler.ServeHTTP(httptest.NewRecorder(), inbound)
+
+			require.Equal(t, len(tc.members), observed.Len(),
+				"handler did not observe all baggage members from inbound header %q", tc.header)
+
+			for k, want := range tc.members {
+				got := observed.Member(k).Value()
+				assert.Equal(t, want, got, "inbound baggage member %q lost or rewritten", k)
+			}
+
+			// Inject the same baggage back into an outbound request — round-trip.
+			outbound := httptest.NewRequest(http.MethodGet, "http://downstream/api", http.NoBody)
+			ctx := baggage.ContextWithBaggage(context.Background(), observed)
+			otel.GetTextMapPropagator().Inject(ctx, propagation.HeaderCarrier(outbound.Header))
+
+			outHdr := outbound.Header.Get("baggage")
+			require.NotEmpty(t, outHdr, "outbound request missing baggage header")
+
+			parsed, err := baggage.Parse(outHdr)
+			require.NoError(t, err, "outbound baggage header is not parseable: %q", outHdr)
+
+			for k, want := range tc.members {
+				got := parsed.Member(k).Value()
+				assert.Equal(t, want, got, "outbound baggage member %q lost or rewritten", k)
+			}
+		})
+	}
+}
