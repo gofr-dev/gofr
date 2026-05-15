@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"runtime/debug"
 	"strings"
+	"sync"
 	"time"
 
 	"go.opentelemetry.io/otel/trace"
@@ -92,10 +93,31 @@ type logger interface {
 }
 
 // Logging is a middleware which logs response status and time in milliseconds along with other data.
+//
+// The StatusResponseWriter wrapper allocated per request is pooled in a
+// closure-owned sync.Pool — the pool is constructed once per Logging()
+// invocation (typically once per app) and tied to this middleware's
+// lifetime, not the package, so we avoid a shared global. Reset() zeros
+// the writer fields before Put so a stale ResponseWriter pointer can
+// never leak across requests.
 func Logging(probes LogProbes, logger logger) func(inner http.Handler) http.Handler {
+	pool := sync.Pool{
+		New: func() any { return &StatusResponseWriter{} },
+	}
+
 	return func(inner http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			srw := &StatusResponseWriter{ResponseWriter: w}
+			srw := pool.Get().(*StatusResponseWriter)
+			srw.ResponseWriter = w
+			srw.status = 0
+			srw.wroteHeader = false
+
+			defer func() {
+				srw.ResponseWriter = nil
+				srw.status = 0
+				srw.wroteHeader = false
+				pool.Put(srw)
+			}()
 
 			// Fetch SpanContext once and resolve trace/span IDs to strings only
 			// when they are valid. Under a noop tracer (the default after PR-1
