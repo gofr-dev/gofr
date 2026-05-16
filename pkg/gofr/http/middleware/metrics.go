@@ -6,9 +6,11 @@ import (
 	"net/http"
 	"path/filepath"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/gorilla/mux"
+	"go.opentelemetry.io/otel/attribute"
 )
 
 type metrics interface {
@@ -18,8 +20,52 @@ type metrics interface {
 	SetGauge(name string, value float64, labels ...string)
 }
 
+// metricsAttrer is the optional fast-path interface — when the concrete
+// metrics implementation provides RecordHistogramAttrs, the middleware
+// uses pre-built attribute slices instead of the string varargs path,
+// avoiding the per-request attribute conversion in
+// metricsManager.getAttributes. Not part of the public metrics.Manager
+// interface, so external implementers are unaffected — they fall back to
+// RecordHistogram.
+type metricsAttrer interface {
+	RecordHistogramAttrs(ctx context.Context, name string, value float64, attrs ...attribute.KeyValue)
+}
+
+// routeMethodKey identifies a (path-template, method) pair for caching
+// the precomputed attribute slice for app_http_response.
+type routeMethodKey struct {
+	path, method string
+}
+
 // Metrics is a middleware that records request response time metrics using the provided metrics interface.
 func Metrics(metrics metrics) func(inner http.Handler) http.Handler {
+	// Per-middleware-instance caches (closure-owned, not package globals):
+	//   * routeAttrs maps (path, method) → [path-kv, method-kv]. The slice is
+	//     built once per unique route-method combination and reused for every
+	//     subsequent request. Bounded by routes × methods (typically <100
+	//     entries even for large APIs).
+	//   * statusAttrs maps int → attribute.KeyValue for the http status code.
+	//     Bounded by ~20 distinct status codes seen in practice.
+	//   * attrer is the type-asserted fast-path receiver, captured once if
+	//     available.
+	var (
+		routeAttrs  sync.Map // map[routeMethodKey][]attribute.KeyValue
+		statusAttrs sync.Map // map[int]attribute.KeyValue
+	)
+
+	statusAttr := func(code int) attribute.KeyValue {
+		if v, ok := statusAttrs.Load(code); ok {
+			return v.(attribute.KeyValue)
+		}
+
+		kv := attribute.Int("status", code)
+		statusAttrs.Store(code, kv)
+
+		return kv
+	}
+
+	attrer, hasAttrer := metrics.(metricsAttrer)
+
 	return func(inner http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			// If an outer middleware (Logging) has already wrapped w in a
@@ -59,6 +105,30 @@ func Metrics(metrics metrics) func(inner http.Handler) http.Handler {
 			defer func(res *StatusResponseWriter, req *http.Request) {
 				duration := time.Since(start)
 
+				if hasAttrer {
+					// Fast path: look up the cached (path, method) attribute
+					// pair, append the per-request status KV. The append
+					// allocates a 3-element backing array; we keep the cache
+					// at length 2 so append reads cap=2 and grows once to
+					// cap=4 — the typical Go small-slice behaviour.
+					key := routeMethodKey{path: path, method: req.Method}
+
+					base, ok := routeAttrs.Load(key)
+					if !ok {
+						b := []attribute.KeyValue{
+							attribute.String("path", path),
+							attribute.String("method", req.Method),
+						}
+						base, _ = routeAttrs.LoadOrStore(key, b)
+					}
+
+					full := append(base.([]attribute.KeyValue), statusAttr(res.status))
+					attrer.RecordHistogramAttrs(context.Background(), "app_http_response", duration.Seconds(), full...)
+
+					return
+				}
+
+				// Slow path: external metrics implementation, no fast method.
 				metrics.RecordHistogram(context.Background(), "app_http_response", duration.Seconds(),
 					"path", path, "method", req.Method, "status", fmt.Sprintf("%d", res.status))
 			}(srw, r)
