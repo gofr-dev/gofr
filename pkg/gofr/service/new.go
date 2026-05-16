@@ -147,8 +147,16 @@ func (h *httpService) createAndSendRequest(ctx context.Context, method string, p
 	ctx, span := h.Tracer.Start(ctx, uri)
 	defer span.End()
 
-	// Attach client-side trace handling for HTTP request.
-	clientTraceCtx := httptrace.WithClientTrace(ctx, otelhttptrace.NewClientTrace(ctx))
+	// Attach client-side trace handling for HTTP request, but only when
+	// the span is actually recording. otelhttptrace.NewClientTrace builds
+	// a httptrace.ClientTrace with many event callbacks (DNS, connect,
+	// TLS, etc.) — under a noop tracer (post PR-1, the default when no
+	// exporter is configured) those events are discarded, so the
+	// allocation is pure waste.
+	clientTraceCtx := ctx
+	if span.IsRecording() {
+		clientTraceCtx = httptrace.WithClientTrace(ctx, otelhttptrace.NewClientTrace(ctx))
+	}
 
 	// Create the HTTP request with the tracing context.
 	req, err := http.NewRequestWithContext(clientTraceCtx, method, uri, bytes.NewBuffer(body))
