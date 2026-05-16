@@ -290,6 +290,51 @@ func TestHandler_ServeHTTP_ContextCanceled(t *testing.T) {
 	assert.Contains(t, w.Body.String(), "client closed request", "Should contain error message")
 }
 
+// TestHandler_ServeHTTP_InlinePath_NormalResponse pins the byte shape of
+// a successful response on the inline (no-timeout, no-WS) path so a
+// refactor of the goroutine-elimination optimisation can not silently
+// drop bytes from the on-the-wire JSON envelope. Goroutine path is
+// exercised by TestHandler_ServeHTTP_Timeout.
+func TestHandler_ServeHTTP_InlinePath_NormalResponse(t *testing.T) {
+	w := httptest.NewRecorder()
+	r := httptest.NewRequest(http.MethodGet, "/", http.NoBody)
+
+	h := handler{
+		container: &container.Container{Logger: logging.NewLogger(logging.FATAL)},
+	}
+	h.function = func(*Context) (any, error) {
+		return map[string]string{"message": "hi"}, nil
+	}
+
+	h.ServeHTTP(w, r)
+
+	assert.Equal(t, http.StatusOK, w.Code)
+	assert.Contains(t, w.Body.String(), `{"data":{"message":"hi"}}`)
+}
+
+// TestHandler_ServeHTTP_InlinePath_HandlerError pins the wire shape when
+// the handler returns an error on the inline path. The "wire shape
+// preservation" claim is the whole point of this optimisation — if this
+// test fails, the optimisation is breaking error responses for users
+// without REQUEST_TIMEOUT.
+func TestHandler_ServeHTTP_InlinePath_HandlerError(t *testing.T) {
+	w := httptest.NewRecorder()
+	r := httptest.NewRequest(http.MethodGet, "/", http.NoBody)
+
+	h := handler{
+		container: &container.Container{Logger: logging.NewLogger(logging.FATAL)},
+	}
+	h.function = func(*Context) (any, error) {
+		return nil, gofrHTTP.ErrorEntityNotFound{}
+	}
+
+	h.ServeHTTP(w, r)
+
+	assert.Equal(t, http.StatusNotFound, w.Code)
+	assert.Contains(t, w.Body.String(), `"error"`)
+	assert.Contains(t, w.Body.String(), "No entity found")
+}
+
 func TestHandler_ServeHTTP_ContextTimeout(t *testing.T) {
 	w := httptest.NewRecorder()
 	r := httptest.NewRequest(http.MethodGet, "/", http.NoBody)

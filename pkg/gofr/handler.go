@@ -57,7 +57,9 @@ func (h handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	traceID := trace.SpanFromContext(r.Context()).SpanContext().TraceID().String()
 
-	if websocket.IsWebSocketUpgrade(r) {
+	isWebSocket := websocket.IsWebSocketUpgrade(r)
+
+	if isWebSocket {
 		// If the request is a WebSocket upgrade, do not apply the timeout
 		c.Context = r.Context()
 	} else if h.requestTimeout != 0 {
@@ -67,40 +69,101 @@ func (h handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		c.Context = ctx
 	}
 
-	done := make(chan struct{})
-	panicked := make(chan struct{})
-
 	var (
 		result any
 		err    error
 	)
 
-	go func() {
-		defer func() {
-			panicRecoveryHandler(recover(), h.container.Logger, panicked)
+	// Fast path: no server-side timeout and not a WebSocket upgrade. Run the
+	// handler inline with a defer/recover, avoiding the per-request
+	// goroutine + 2 channels + select that the timeout path needs. Saves
+	// ~3-4 KB allocations and a goroutine context switch per request — the
+	// dominant cost in handler.ServeHTTP per pprof.
+	//
+	// Cancellation detection still works: we read c.Context.Err() after the
+	// handler returns. The goroutine path's "abort on cancel" was already
+	// only a response-timing concept — Go can't kill goroutines, so the
+	// handler ran to completion in both designs. The only observable
+	// difference is when the disconnect-detected response is computed
+	// (after the handler finishes instead of when the select fires); the
+	// client never sees that response either way (TCP connection is gone).
+	//
+	// Response wire shape is byte-identical to the goroutine path because
+	// the resulting (result, err) pair is fed through the same
+	// c.responder.Respond.
+	if !isWebSocket && h.requestTimeout == 0 {
+		panicked := false
+
+		func() {
+			defer func() {
+				if re := recover(); re != nil {
+					h.container.Logger.Error(panicLog{
+						Error:      fmt.Sprint(re),
+						StackTrace: string(debug.Stack()),
+					})
+
+					err = gofrHTTP.ErrorPanicRecovery{}
+					panicked = true
+				}
+			}()
+
+			result, err = h.function(c)
 		}()
-		// Execute the handler function
-		result, err = h.function(c)
-		h.logError(traceID, err)
-		close(done)
-	}()
 
-	select {
-	case <-c.Context.Done():
-		// Handle different context cancellation scenarios
-		ctxErr := c.Context.Err()
-
-		// Server-side timeout occurred && fallback for other context errors
-		err = gofrHTTP.ErrorRequestTimeout{}
-
-		if errors.Is(ctxErr, context.Canceled) {
-			// Client canceled the request (e.g., closed browser tab)
-			err = gofrHTTP.ErrorClientClosedRequest{}
+		if !panicked {
+			h.logError(traceID, err)
 		}
-	case <-done:
-		handleWebSocketUpgrade(r)
-	case <-panicked:
-		err = gofrHTTP.ErrorPanicRecovery{}
+
+		// Map a cancelled / deadline-exceeded ctx to the right error so the
+		// wire shape matches the goroutine path:
+		//   - context.Canceled         → ErrorClientClosedRequest (HTTP 499)
+		//   - context.DeadlineExceeded → ErrorRequestTimeout      (HTTP 408)
+		// In both cases we drop the handler's result (which may have been
+		// computed despite the cancellation) so Respond emits the bare
+		// error envelope instead of a 206 Partial Content.
+		if ctxErr := c.Context.Err(); !panicked && ctxErr != nil {
+			result = nil
+			err = gofrHTTP.ErrorRequestTimeout{}
+
+			if errors.Is(ctxErr, context.Canceled) {
+				err = gofrHTTP.ErrorClientClosedRequest{}
+			}
+		}
+	} else {
+		// Goroutine path: needed when h.requestTimeout > 0 (we have to be
+		// able to abandon a handler that exceeds the deadline) or when the
+		// request is a WebSocket upgrade (the handler hijacks the
+		// connection; Respond is a no-op in that case anyway).
+		done := make(chan struct{})
+		panicked := make(chan struct{})
+
+		go func() {
+			defer func() {
+				panicRecoveryHandler(recover(), h.container.Logger, panicked)
+			}()
+			// Execute the handler function
+			result, err = h.function(c)
+			h.logError(traceID, err)
+			close(done)
+		}()
+
+		select {
+		case <-c.Context.Done():
+			// Handle different context cancellation scenarios
+			ctxErr := c.Context.Err()
+
+			// Server-side timeout occurred && fallback for other context errors
+			err = gofrHTTP.ErrorRequestTimeout{}
+
+			if errors.Is(ctxErr, context.Canceled) {
+				// Client canceled the request (e.g., closed browser tab)
+				err = gofrHTTP.ErrorClientClosedRequest{}
+			}
+		case <-done:
+			handleWebSocketUpgrade(r)
+		case <-panicked:
+			err = gofrHTTP.ErrorPanicRecovery{}
+		}
 	}
 
 	// Handle custom headers if 'result' is a 'Response'.
