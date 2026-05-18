@@ -203,60 +203,6 @@ func TestApp_getTracerHeaders_NoConfig(t *testing.T) {
 	require.Empty(t, headers)
 }
 
-// silentLogger discards all log output. Used by ratio-parsing tests where
-// we want to assert behavior on the return value, not on log content.
-type silentLogger struct{}
-
-func (*silentLogger) Debug(_ ...any)             {}
-func (*silentLogger) Debugf(_ string, _ ...any)  {}
-func (*silentLogger) Log(_ ...any)               {}
-func (*silentLogger) Logf(_ string, _ ...any)    {}
-func (*silentLogger) Info(_ ...any)              {}
-func (*silentLogger) Infof(_ string, _ ...any)   {}
-func (*silentLogger) Notice(_ ...any)            {}
-func (*silentLogger) Noticef(_ string, _ ...any) {}
-func (*silentLogger) Warn(_ ...any)              {}
-func (*silentLogger) Warnf(_ string, _ ...any)   {}
-func (*silentLogger) Error(_ ...any)             {}
-func (*silentLogger) Errorf(_ string, _ ...any)  {}
-func (*silentLogger) Fatal(_ ...any)             {}
-func (*silentLogger) Fatalf(_ string, _ ...any)  {}
-func (*silentLogger) ChangeLevel(_ logging.Level) {}
-
-// TestResolveTraceSampleRatio pins the env-var precedence and edge-case
-// handling for the trace sampler ratio. Any change here is a config
-// contract change and must be flagged in CHANGELOG.
-func TestResolveTraceSampleRatio(t *testing.T) {
-	cases := []struct {
-		name  string
-		env   map[string]string
-		want  float64
-		errOK bool
-	}{
-		{"default empty", map[string]string{}, 1.0, false},
-		{"new var explicit", map[string]string{"TRACE_SAMPLE_RATIO": "0.5"}, 0.5, false},
-		{"old var fallback", map[string]string{"TRACER_RATIO": "0.25"}, 0.25, false},
-		{"new beats old", map[string]string{"TRACE_SAMPLE_RATIO": "0.1", "TRACER_RATIO": "0.9"}, 0.1, false},
-		{"clamp negative", map[string]string{"TRACE_SAMPLE_RATIO": "-0.5"}, 1.0, false},
-		{"clamp gt one", map[string]string{"TRACE_SAMPLE_RATIO": "1.5"}, 1.0, false},
-		{"parse error", map[string]string{"TRACE_SAMPLE_RATIO": "not-a-number"}, 1.0, true},
-	}
-
-	for _, tc := range cases {
-		t.Run(tc.name, func(t *testing.T) {
-			got, err := resolveTraceSampleRatio(config.NewMockConfig(tc.env), &silentLogger{})
-
-			if tc.errOK {
-				require.Error(t, err)
-			} else {
-				require.NoError(t, err)
-			}
-
-			require.InDelta(t, tc.want, got, 1e-9)
-		})
-	}
-}
-
 var (
 	errOtelStatus200 = errors.New("rpc error: code = Unknown desc = status 200")
 	errOtelStatus204 = errors.New("rpc error: status 204")

@@ -53,7 +53,7 @@ func (a *App) initTracer() {
 		return
 	}
 
-	traceRatio, err := resolveTraceSampleRatio(a.Config, a.container.Logger)
+	traceRatio, err := strconv.ParseFloat(a.Config.GetOrDefault("TRACER_RATIO", "1"), 64)
 	if err != nil {
 		a.container.Error(err)
 	}
@@ -215,48 +215,6 @@ func buildGoFrExporter(logger logging.Logger, url string) sdktrace.SpanExporter 
 	logger.Infof("Exporting traces to GoFr at %s", url)
 
 	return NewExporter(url, logging.NewLogger(logging.INFO))
-}
-
-// resolveTraceSampleRatio resolves the sampling ratio for the SDK tracer.
-//
-// Preferred env var: TRACE_SAMPLE_RATIO (default "1.0" — head-sample everything).
-// Backward-compat:   TRACER_RATIO (older name, still honoured for users who
-//                    set it before the rename; logs a deprecation warning).
-//
-// Out-of-range values (negative, NaN, > 1.0) are logged and clamped to 1.0.
-type traceConfig interface {
-	Get(string) string
-	GetOrDefault(string, string) string
-}
-
-func resolveTraceSampleRatio(cfg traceConfig, logger logging.Logger) (float64, error) {
-	const (
-		newKey = "TRACE_SAMPLE_RATIO"
-		oldKey = "TRACER_RATIO"
-	)
-
-	raw := cfg.Get(newKey)
-	if raw == "" {
-		if legacy := cfg.Get(oldKey); legacy != "" {
-			logger.Warnf("%s is deprecated, prefer %s (same semantics)", oldKey, newKey)
-			raw = legacy
-		} else {
-			raw = "1.0"
-		}
-	}
-
-	ratio, err := strconv.ParseFloat(raw, 64)
-	if err != nil {
-		return 1.0, err
-	}
-
-	if ratio < 0 || ratio > 1 || ratio != ratio { // NaN: x != x
-		logger.Warnf("trace sample ratio %v is out of range [0,1]; clamping to 1.0", ratio)
-
-		return 1.0, nil
-	}
-
-	return ratio, nil
 }
 
 type otelErrorHandler struct {
