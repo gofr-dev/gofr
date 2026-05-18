@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
-	"time"
 
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc"
@@ -73,17 +72,7 @@ func (a *App) initTracer() {
 		a.container.Error(err)
 	}
 
-	// Tune BatchSpanProcessor for throughput. OTel defaults are
-	// BatchSize=512, Timeout=5s, QueueSize=2048 — fine for low-rate apps
-	// but at 100 k+ RPS the queue fills before the timer fires and every
-	// extra Enqueue acquires the queue lock. Cutting the batch size and
-	// extending the timeout amortises lock acquisitions across more spans
-	// per flush; expanding the queue absorbs short bursts without dropping.
-	batcher := sdktrace.NewBatchSpanProcessor(exporter,
-		sdktrace.WithMaxExportBatchSize(64),
-		sdktrace.WithBatchTimeout(10*time.Second),
-		sdktrace.WithMaxQueueSize(4096),
-	)
+	batcher := sdktrace.NewBatchSpanProcessor(exporter)
 	tp.RegisterSpanProcessor(batcher)
 }
 
