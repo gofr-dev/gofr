@@ -35,38 +35,6 @@ func TestTrace(_ *testing.T) {
 	handler.ServeHTTP(recorder, req)
 }
 
-// TestTracerNativeFlag_OffByDefault asserts the GOFR_PERF_NATIVE_TRACER
-// opt-in flag is OFF when the env var is unset. Critical because the
-// default chain still relies on otelhttp.NewHandler at the router level —
-// flipping this on without setting up the matching router behaviour
-// would lose HTTP semconv attributes silently.
-func TestTracerNativeFlag_OffByDefault(t *testing.T) {
-	t.Setenv("GOFR_PERF_NATIVE_TRACER", "")
-	require.False(t, nativeTracerEnabled(),
-		"expected GOFR_PERF_NATIVE_TRACER default to be off")
-}
-
-// TestTracerNativeFlag_AcceptsTrue asserts case-insensitive recognition
-// of the opt-in value. Stops typos like "TRUE" or "True" from silently
-// disabling the optimisation.
-func TestTracerNativeFlag_AcceptsTrue(t *testing.T) {
-	for _, v := range []string{"true", "TRUE", "True", "tRuE"} {
-		t.Run(v, func(t *testing.T) {
-			t.Setenv("GOFR_PERF_NATIVE_TRACER", v)
-			require.True(t, nativeTracerEnabled(),
-				"GOFR_PERF_NATIVE_TRACER=%q should enable", v)
-		})
-	}
-
-	for _, v := range []string{"", "false", "0", "yes", "on"} {
-		t.Run("off-"+v, func(t *testing.T) {
-			t.Setenv("GOFR_PERF_NATIVE_TRACER", v)
-			require.False(t, nativeTracerEnabled(),
-				"GOFR_PERF_NATIVE_TRACER=%q should NOT enable (only \"true\" does)", v)
-		})
-	}
-}
-
 // installPropagators wires up the W3C TraceContext + Baggage propagator
 // pair that production GoFr installs in initTracer (otel.go). Returns a
 // cleanup that restores the previous propagator so tests do not leak

@@ -9,18 +9,9 @@ import (
 	"strings"
 
 	"github.com/gorilla/mux"
-	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
 
 	"gofr.dev/pkg/gofr/logging"
 )
-
-// nativeTracerEnv is the feature-flag env var that opts the router out of
-// wrapping every route handler in otelhttp.NewHandler. When set to "true"
-// (default off), the Tracer middleware records HTTP semconv attributes on
-// its own span — saving the cost of otelhttp building a second span per
-// request. The flag is read once at NewRouter time so route registration
-// observes a stable value.
-const nativeTracerEnv = "GOFR_PERF_NATIVE_TRACER"
 
 const (
 	DefaultSwaggerFileName       = "openapi.json"
@@ -33,12 +24,6 @@ var errReadPermissionDenied = fmt.Errorf("file does not have read permission")
 type Router struct {
 	mux.Router
 	RegisteredRoutes *[]string
-	// nativeTracer skips the otelhttp.NewHandler wrap when true. Set from
-	// GOFR_PERF_NATIVE_TRACER at construction; defaults to false (existing
-	// behaviour) so this is opt-in only. When true, the framework's Tracer
-	// middleware records HTTP semconv attributes itself, avoiding the
-	// double-span and extra alloc cost of otelhttp wrapping every route.
-	nativeTracer bool
 }
 
 type Middleware func(handler http.Handler) http.Handler
@@ -50,7 +35,6 @@ func NewRouter() *Router {
 	r := &Router{
 		Router:           *muxRouter,
 		RegisteredRoutes: &routes,
-		nativeTracer:     strings.EqualFold(os.Getenv(nativeTracerEnv), "true"),
 	}
 
 	r.Router = *muxRouter
@@ -131,17 +115,13 @@ func isCleanPath(p string) bool {
 	return true
 }
 
-// Add adds a new route with the given HTTP method, pattern, and handler, wrapping the handler with OpenTelemetry instrumentation.
+// Add adds a new route with the given HTTP method, pattern, and handler.
 //
-// When GOFR_PERF_NATIVE_TRACER=true, the otelhttp.NewHandler wrap is
-// skipped. The framework's Tracer middleware records the same HTTP semconv
-// attributes (method, route, status) at lower cost — saving a per-request
-// child span and the otelhttp attribute slice grow.
+// HTTP semconv attributes (http.method, http.route, http.status_code) are
+// recorded on the request span by the framework's Tracer middleware
+// directly, avoiding the per-request child span and attribute slice grow
+// that an otelhttp.NewHandler wrap would add.
 func (rou *Router) Add(method, pattern string, handler http.Handler) {
-	if !rou.nativeTracer {
-		handler = otelhttp.NewHandler(handler, "gofr-router")
-	}
-
 	rou.Router.NewRoute().Methods(method).Path(pattern).Handler(handler)
 }
 
