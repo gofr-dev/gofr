@@ -65,7 +65,7 @@ func TestTracePropagation_Inbound(t *testing.T) {
 
 	const (
 		wantTraceID = "4bf92f3577b34da6a3ce929d0e0e4736"
-		parentSpan  = "00f067aa0ba902b7"
+		parentSpan  = "00f067aa0ba902b7" // spellchecker:disable-line
 	)
 
 	var got otelTrace.SpanContext
