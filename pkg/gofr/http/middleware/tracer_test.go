@@ -15,6 +15,14 @@ import (
 	otelTrace "go.opentelemetry.io/otel/trace"
 )
 
+// W3C TraceContext fixture values reused across the propagation tests.
+// Sourced from the W3C Trace Context spec's example traceparent header
+// (https://www.w3.org/TR/trace-context/).
+const (
+	w3cFixtureTraceID    = "4bf92f3577b34da6a3ce929d0e0e4736"
+	w3cFixtureParentSpan = "00f067aa0ba902b7" // spellchecker:disable-line
+)
+
 type MockHandlerForTracing struct{}
 
 // ServeHTTP is used for testing if the request context has traceId.
@@ -63,11 +71,6 @@ func TestTracePropagation_Inbound(t *testing.T) {
 	tp := trace.NewTracerProvider()
 	otel.SetTracerProvider(tp)
 
-	const (
-		wantTraceID = "4bf92f3577b34da6a3ce929d0e0e4736"
-		parentSpan  = "00f067aa0ba902b7" // spellchecker:disable-line
-	)
-
 	var got otelTrace.SpanContext
 
 	handler := Tracer(http.HandlerFunc(func(_ http.ResponseWriter, r *http.Request) {
@@ -75,12 +78,12 @@ func TestTracePropagation_Inbound(t *testing.T) {
 	}))
 
 	req := httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/dummy", http.NoBody)
-	req.Header.Set("Traceparent", "00-"+wantTraceID+"-"+parentSpan+"-01")
+	req.Header.Set("Traceparent", "00-"+w3cFixtureTraceID+"-"+w3cFixtureParentSpan+"-01")
 
 	handler.ServeHTTP(httptest.NewRecorder(), req)
 
 	require.True(t, got.IsValid(), "no span context observed in handler")
-	assert.Equal(t, wantTraceID, got.TraceID().String(),
+	assert.Equal(t, w3cFixtureTraceID, got.TraceID().String(),
 		"trace ID did not propagate from inbound traceparent")
 	assert.True(t, got.IsSampled(),
 		"sampled flag did not propagate from inbound traceparent (sampled=01)")

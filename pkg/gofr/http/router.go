@@ -77,44 +77,62 @@ func (rou *Router) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 // isCleanPath reports whether p is already canonical — starts with "/", no
 // "//", no "/.", no "/..", and no trailing slash (except the root). When
 // true, path.Clean(p) == p and the surrounding normalization can be skipped.
-//
-//nolint:gocyclo // single-pass canonical-path predicate; branches stay inlined for the fast path
 func isCleanPath(p string) bool {
 	if p == "" || p[0] != '/' {
 		return false
 	}
 
-	for i := 0; i < len(p); i++ {
-		if p[i] != '/' {
-			continue
-		}
-
-		if i+1 < len(p) && p[i+1] == '/' {
-			return false // "//"
-		}
-
-		if i+1 < len(p) && p[i+1] == '.' {
-			// "/." or "/.." with trailing or "/"
-			if i+2 == len(p) {
-				return false // trailing "/."
-			}
-
-			if p[i+2] == '/' {
-				return false // "/./"
-			}
-
-			if p[i+2] == '.' && (i+3 == len(p) || p[i+3] == '/') {
-				return false // "/.." or "/../"
-			}
-		}
-	}
-
-	// Trailing slash on a non-root path is not canonical.
-	if len(p) > 1 && p[len(p)-1] == '/' {
+	if hasNonRootTrailingSlash(p) {
 		return false
 	}
 
-	return true
+	return !hasDirtySegment(p)
+}
+
+// hasNonRootTrailingSlash reports whether p ends with '/' and is longer
+// than the root path.
+func hasNonRootTrailingSlash(p string) bool {
+	return len(p) > 1 && p[len(p)-1] == '/'
+}
+
+// hasDirtySegment reports whether p contains "//", "/.", or "/.." anywhere
+// between segments — any of which means path.Clean(p) would shorten p.
+func hasDirtySegment(p string) bool {
+	for i := 0; i < len(p); i++ {
+		if p[i] != '/' || i+1 >= len(p) {
+			continue
+		}
+
+		switch p[i+1] {
+		case '/':
+			return true
+		case '.':
+			if isDotSegment(p, i+1) {
+				return true
+			}
+		}
+	}
+
+	return false
+}
+
+// isDotSegment reports whether the dot at p[idx] starts a "." or ".."
+// segment (i.e., is followed by '/' or end-of-string, optionally with a
+// second '.' before that boundary).
+func isDotSegment(p string, idx int) bool {
+	if idx+1 == len(p) {
+		return true // trailing "/."
+	}
+
+	if p[idx+1] == '/' {
+		return true // "/./"
+	}
+
+	if p[idx+1] == '.' && (idx+2 == len(p) || p[idx+2] == '/') {
+		return true // "/.." or "/../"
+	}
+
+	return false
 }
 
 // Add adds a new route with the given HTTP method, pattern, and handler.

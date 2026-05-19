@@ -14,30 +14,10 @@ import (
 	"gofr.dev/pkg/gofr/version"
 )
 
-// methodAttr is a small static lookup for the http.method attribute key.
-// Building attribute.String("http.method", "GET") per request allocates a
-// KeyValue with a copy of the string header — pre-allocating the common
-// methods saves that on every request.
-//
-//nolint:gochecknoglobals // immutable lookup table for hot-path attribute reuse
-var methodAttr = map[string]attribute.KeyValue{
-	http.MethodGet:     attribute.String("http.method", http.MethodGet),
-	http.MethodPost:    attribute.String("http.method", http.MethodPost),
-	http.MethodPut:     attribute.String("http.method", http.MethodPut),
-	http.MethodDelete:  attribute.String("http.method", http.MethodDelete),
-	http.MethodPatch:   attribute.String("http.method", http.MethodPatch),
-	http.MethodHead:    attribute.String("http.method", http.MethodHead),
-	http.MethodOptions: attribute.String("http.method", http.MethodOptions),
-}
-
-// methodKV returns the precomputed KeyValue for known HTTP methods, falling
-// back to allocation for non-standard ones (rare; RFC 7231 lists only the
-// standard set).
+// methodKV constructs the http.method attribute. attribute.String returns
+// a value-type KeyValue; the inputs are short interned strings, so the
+// compiler stack-allocates the result without escaping to the heap.
 func methodKV(method string) attribute.KeyValue {
-	if kv, ok := methodAttr[method]; ok {
-		return kv
-	}
-
 	return attribute.String("http.method", method)
 }
 

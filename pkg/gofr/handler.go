@@ -43,6 +43,16 @@ type handler struct {
 	requestTimeout time.Duration
 }
 
+// handlerOutcome carries the (result, error) pair from the per-request
+// handler goroutine back to ServeHTTP. Sending it through a buffered
+// channel keeps the goroutine's writes invisible to the main goroutine
+// until the channel receive completes — no shared writable state across
+// the two goroutines.
+type handlerOutcome struct {
+	result any
+	err    error
+}
+
 type ErrorLogEntry struct {
 	TraceID string `json:"trace_id,omitempty"`
 	Error   string `json:"error,omitempty"`
@@ -52,7 +62,6 @@ func (el *ErrorLogEntry) PrettyPrint(writer io.Writer) {
 	fmt.Fprintf(writer, "\u001B[38;5;8m%s \u001B[38;5;%dm%s \n", el.TraceID, colorCodeError, el.Error)
 }
 
-//nolint:gocyclo,nestif // dual inline/goroutine path: splitting would add call overhead on the hot path
 func (h handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	c := newContext(gofrHTTP.NewResponder(w, r.Method), gofrHTTP.NewRequest(r), h.container)
 
@@ -75,113 +84,10 @@ func (h handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		err    error
 	)
 
-	// Fast path: no server-side timeout and not a WebSocket upgrade. Run the
-	// handler inline with a defer/recover, avoiding the per-request
-	// goroutine + 2 channels + select that the timeout path needs. Saves
-	// ~3-4 KB allocations and a goroutine context switch per request — the
-	// dominant cost in handler.ServeHTTP per pprof.
-	//
-	// Cancellation detection still works: we read c.Context.Err() after the
-	// handler returns. The goroutine path's "abort on cancel" was already
-	// only a response-timing concept — Go can't kill goroutines, so the
-	// handler ran to completion in both designs. The only observable
-	// difference is when the disconnect-detected response is computed
-	// (after the handler finishes instead of when the select fires); the
-	// client never sees that response either way (TCP connection is gone).
-	//
-	// Response wire shape is byte-identical to the goroutine path because
-	// the resulting (result, err) pair is fed through the same
-	// c.responder.Respond.
 	if !isWebSocket && h.requestTimeout == 0 {
-		panicked := false
-
-		func() {
-			defer func() {
-				if re := recover(); re != nil {
-					h.container.Logger.Error(panicLog{
-						Error:      fmt.Sprint(re),
-						StackTrace: string(debug.Stack()),
-					})
-
-					err = gofrHTTP.ErrorPanicRecovery{}
-					panicked = true
-				}
-			}()
-
-			result, err = h.function(c)
-		}()
-
-		if !panicked {
-			h.logError(traceID, err)
-		}
-
-		// Map a canceled / deadline-exceeded ctx to the right error so the
-		// wire shape matches the goroutine path:
-		//   - context.Canceled         → ErrorClientClosedRequest (HTTP 499)
-		//   - context.DeadlineExceeded → ErrorRequestTimeout      (HTTP 408)
-		// In both cases we drop the handler's result (which may have been
-		// computed despite the cancellation) so Respond emits the bare
-		// error envelope instead of a 206 Partial Content.
-		if ctxErr := c.Context.Err(); !panicked && ctxErr != nil {
-			result = nil
-			err = gofrHTTP.ErrorRequestTimeout{}
-
-			if errors.Is(ctxErr, context.Canceled) {
-				err = gofrHTTP.ErrorClientClosedRequest{}
-			}
-		}
+		result, err = h.serveInline(c, traceID)
 	} else {
-		// Goroutine path: needed when h.requestTimeout > 0 (we have to be
-		// able to abandon a handler that exceeds the deadline) or when the
-		// request is a WebSocket upgrade (the handler hijacks the
-		// connection; Respond is a no-op in that case anyway).
-		//
-		// The handler outcome is sent through a buffered channel rather than
-		// written to the outer (result, err) variables. This keeps the
-		// goroutine's writes invisible to the main goroutine until it reads
-		// from `done`, so there is no shared writable state between the two
-		// goroutines and `go test -race` stays clean. Buffer size 1 lets the
-		// handler goroutine finish writing and exit even after the main
-		// goroutine has already taken the ctx.Done or panicked branch.
-		type outcome struct {
-			result any
-			err    error
-		}
-
-		done := make(chan outcome, 1)
-		panicked := make(chan struct{})
-
-		go func() {
-			defer func() {
-				panicRecoveryHandler(recover(), h.container.Logger, panicked)
-			}()
-
-			res, e := h.function(c)
-			h.logError(traceID, e)
-
-			done <- outcome{res, e}
-		}()
-
-		select {
-		case <-c.Context.Done():
-			// Handle different context cancellation scenarios
-			ctxErr := c.Context.Err()
-
-			// Server-side timeout occurred && fallback for other context errors
-			err = gofrHTTP.ErrorRequestTimeout{}
-
-			if errors.Is(ctxErr, context.Canceled) {
-				// Client canceled the request (e.g., closed browser tab)
-				err = gofrHTTP.ErrorClientClosedRequest{}
-			}
-		case out := <-done:
-			result = out.result
-			err = out.err
-
-			handleWebSocketUpgrade(r)
-		case <-panicked:
-			err = gofrHTTP.ErrorPanicRecovery{}
-		}
+		result, err = h.serveWithGoroutine(c, traceID, r)
 	}
 
 	// Handle custom headers if 'result' is a 'Response'.
@@ -189,8 +95,110 @@ func (h handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		resp.SetCustomHeaders(w)
 	}
 
-	// Handler function completed
 	c.responder.Respond(result, err)
+}
+
+// serveInline runs the user handler in the calling goroutine. Used when
+// there is no server-side request timeout and the request is not a
+// WebSocket upgrade — the dominant case in pprof. Avoids the per-request
+// goroutine + 2 channels + select that serveWithGoroutine needs (~3-4 KB
+// allocations and a goroutine context switch per request).
+//
+// Cancellation still works: c.Context.Err() is checked after the handler
+// returns. The goroutine path's "abort on cancel" was always cosmetic —
+// Go can't kill a goroutine, so the handler ran to completion in both
+// designs. The client never sees the disconnect-detected response either
+// way (TCP connection is gone). Response wire shape is byte-identical to
+// serveWithGoroutine because the (result, err) pair feeds the same
+// Respond call.
+func (h handler) serveInline(c *Context, traceID string) (result any, err error) {
+	panicked := false
+
+	func() {
+		defer func() {
+			if re := recover(); re != nil {
+				h.container.Logger.Error(panicLog{
+					Error:      fmt.Sprint(re),
+					StackTrace: string(debug.Stack()),
+				})
+
+				err = gofrHTTP.ErrorPanicRecovery{}
+				panicked = true
+			}
+		}()
+
+		result, err = h.function(c)
+	}()
+
+	if !panicked {
+		h.logError(traceID, err)
+	}
+
+	// Map a canceled / deadline-exceeded ctx to the right error so the
+	// wire shape matches serveWithGoroutine:
+	//   - context.Canceled         → ErrorClientClosedRequest (HTTP 499)
+	//   - context.DeadlineExceeded → ErrorRequestTimeout      (HTTP 408)
+	// In both cases we drop the handler's result (which may have been
+	// computed despite the cancellation) so Respond emits the bare error
+	// envelope instead of a 206 Partial Content.
+	if ctxErr := c.Context.Err(); !panicked && ctxErr != nil {
+		result = nil
+		err = gofrHTTP.ErrorRequestTimeout{}
+
+		if errors.Is(ctxErr, context.Canceled) {
+			err = gofrHTTP.ErrorClientClosedRequest{}
+		}
+	}
+
+	return result, err
+}
+
+// serveWithGoroutine runs the user handler in a fresh goroutine and waits
+// on a select. Used when h.requestTimeout > 0 (the deadline branch must
+// be able to fire while the handler is still running) or when the request
+// is a WebSocket upgrade (handleWebSocketUpgrade has to see the request
+// after the handler hijacks the connection).
+//
+// The handler outcome is sent through a buffered channel rather than to
+// shared variables, so the goroutine never writes a memory location the
+// main goroutine reads — `go test -race` stays clean. Buffer size 1 lets
+// the handler goroutine finish writing and exit even after the main
+// goroutine has already taken the ctx.Done or panicked branch.
+func (h handler) serveWithGoroutine(c *Context, traceID string, r *http.Request) (result any, err error) {
+	done := make(chan handlerOutcome, 1)
+	panicked := make(chan struct{})
+
+	go func() {
+		defer func() {
+			panicRecoveryHandler(recover(), h.container.Logger, panicked)
+		}()
+
+		res, e := h.function(c)
+		h.logError(traceID, e)
+
+		done <- handlerOutcome{res, e}
+	}()
+
+	select {
+	case <-c.Context.Done():
+		// Server-side timeout or client cancellation. Map to the matching
+		// gofrHTTP error so Respond emits 408 (timeout) or 499 (client
+		// closed).
+		err = gofrHTTP.ErrorRequestTimeout{}
+
+		if errors.Is(c.Context.Err(), context.Canceled) {
+			err = gofrHTTP.ErrorClientClosedRequest{}
+		}
+	case out := <-done:
+		result = out.result
+		err = out.err
+
+		handleWebSocketUpgrade(r)
+	case <-panicked:
+		err = gofrHTTP.ErrorPanicRecovery{}
+	}
+
+	return result, err
 }
 
 func healthHandler(c *Context) (any, error) {

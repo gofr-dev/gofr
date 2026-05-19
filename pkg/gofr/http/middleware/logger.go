@@ -18,6 +18,15 @@ import (
 
 var errHijackNotSupported = errors.New("response writer does not support hijacking")
 
+// JSON envelope keys for the panic-recovery error response written by
+// panicRecovery. Defined as constants so the same spellings stay
+// consistent across the package and the goconst linter is satisfied.
+const (
+	envelopeCodeKey    = "code"
+	envelopeStatusKey  = "status"
+	envelopeMessageKey = "message"
+)
+
 // StatusResponseWriter Defines own Response Writer to be used for logging of status - as http.ResponseWriter does not let us read status.
 type StatusResponseWriter struct {
 	http.ResponseWriter
@@ -258,11 +267,10 @@ func panicRecovery(re any, w http.ResponseWriter, logger logger) {
 
 	w.WriteHeader(http.StatusInternalServerError)
 
-	//nolint:goconst // JSON envelope keys (status/message), not shared constants
 	res := map[string]any{
-		"code":    http.StatusInternalServerError,
-		"status":  "ERROR",
-		"message": "Some unexpected error has occurred",
+		envelopeCodeKey:    http.StatusInternalServerError,
+		envelopeStatusKey:  "ERROR",
+		envelopeMessageKey: "Some unexpected error has occurred",
 	}
 	_ = json.NewEncoder(w).Encode(res)
 }

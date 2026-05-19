@@ -467,11 +467,12 @@ func (d *discardingResponseWriter) Header() http.Header {
 func (*discardingResponseWriter) Write(b []byte) (int, error) { return len(b), nil }
 func (*discardingResponseWriter) WriteHeader(int)             {}
 
-// emptyHandler is a no-op http.Handler used to isolate router cost from
+// noopHandler returns an http.Handler that discards the request and
+// writes nothing. Used by router benchmarks to isolate router cost from
 // any handler-side work.
-//
-//nolint:gochecknoglobals // benchmark fixture: shared no-op handler across BenchmarkRouter_*
-var emptyHandler = http.HandlerFunc(func(http.ResponseWriter, *http.Request) {})
+func noopHandler() http.Handler {
+	return http.HandlerFunc(func(http.ResponseWriter, *http.Request) {})
+}
 
 // BenchmarkRouter_Get_Static measures the per-request cost of routing
 // a request to an exact-match route (no path parameters). Closest
@@ -488,7 +489,7 @@ var emptyHandler = http.HandlerFunc(func(http.ResponseWriter, *http.Request) {})
 //   - PR-N (gorilla/mux → chi) — largest win, separate initiative
 func BenchmarkRouter_Get_Static(b *testing.B) {
 	r := NewRouter()
-	r.Add(http.MethodGet, "/plaintext", emptyHandler)
+	r.Add(http.MethodGet, "/plaintext", noopHandler())
 
 	req := httptest.NewRequestWithContext(b.Context(), http.MethodGet, "/plaintext", http.NoBody)
 	w := &discardingResponseWriter{}
@@ -507,7 +508,7 @@ func BenchmarkRouter_Get_Static(b *testing.B) {
 // routers (chi, httprouter).
 func BenchmarkRouter_Get_PathParam(b *testing.B) {
 	r := NewRouter()
-	r.Add(http.MethodGet, "/users/{id}", emptyHandler)
+	r.Add(http.MethodGet, "/users/{id}", noopHandler())
 
 	req := httptest.NewRequestWithContext(b.Context(), http.MethodGet, "/users/42", http.NoBody)
 	w := &discardingResponseWriter{}

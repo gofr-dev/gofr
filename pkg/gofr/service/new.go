@@ -15,6 +15,15 @@ import (
 	"go.opentelemetry.io/otel/trace"
 )
 
+// Metric label names used for the app_http_service_response histogram.
+// Defined as constants so each emit-site uses the same spelling.
+const (
+	metricLabelPath    = "path"
+	metricLabelMethod  = "method"
+	metricLabelStatus  = "status"
+	metricLabelService = "service"
+)
+
 type httpService struct {
 	*http.Client
 	trace.Tracer
@@ -218,11 +227,14 @@ func (h *httpService) createAndSendRequest(ctx context.Context, method string, p
 
 func (h *httpService) updateMetrics(ctx context.Context, method string, timeTaken float64, statusCode int) {
 	if h.Metrics != nil {
-		//nolint:goconst // "status" is the metric label name, not a shared constant
-		labels := []string{"path", h.url, "method", method, "status", fmt.Sprintf("%v", statusCode)}
+		labels := []string{
+			metricLabelPath, h.url,
+			metricLabelMethod, method,
+			metricLabelStatus, fmt.Sprintf("%v", statusCode),
+		}
 
 		if h.name != "" {
-			labels = append(labels, "service", h.name)
+			labels = append(labels, metricLabelService, h.name)
 		}
 
 		h.RecordHistogram(ctx, "app_http_service_response", timeTaken, labels...)

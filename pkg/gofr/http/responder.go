@@ -14,6 +14,11 @@ var (
 	errEmptyResponse = errors.New("internal server error")
 )
 
+// jsonEncodeFailureBody is the fixed response body emitted when json.Marshal
+// fails inside Respond. It is a constant so the byte length can be served as
+// Content-Length without re-measuring.
+const jsonEncodeFailureBody = `{"error":{"message": "failed to encode response as JSON"}}` + "\n"
+
 // NewResponder creates a new Responder instance from the given http.ResponseWriter.
 func NewResponder(w http.ResponseWriter, method string) *Responder {
 	return &Responder{w: w, method: method}
@@ -56,12 +61,10 @@ func (r Responder) Respond(data any, err error) {
 
 	jsonData, encodeErr := json.Marshal(resp)
 	if encodeErr != nil {
-		const errBody = `{"error":{"message": "failed to encode response as JSON"}}` + "\n"
-
-		r.w.Header().Set("Content-Length", strconv.Itoa(len(errBody)))
+		r.w.Header().Set("Content-Length", strconv.Itoa(len(jsonEncodeFailureBody)))
 		r.w.WriteHeader(http.StatusInternalServerError)
 
-		_, _ = r.w.Write([]byte(errBody))
+		_, _ = r.w.Write([]byte(jsonEncodeFailureBody))
 
 		return
 	}
