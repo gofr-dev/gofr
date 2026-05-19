@@ -77,7 +77,13 @@ func Metrics(metrics metrics) func(inner http.Handler) http.Handler {
 				srw = &StatusResponseWriter{ResponseWriter: w}
 			}
 
-			path, _ := mux.CurrentRoute(r).GetPathTemplate()
+			// Guard against nil — mux.CurrentRoute is nil for unmatched routes
+			// (404). Calling .GetPathTemplate() on nil panics, so fall back to
+			// URL.Path for those cases.
+			var path string
+			if cr := mux.CurrentRoute(r); cr != nil {
+				path, _ = cr.GetPathTemplate()
+			}
 
 			ext := strings.ToLower(filepath.Ext(r.URL.Path))
 			switch ext {
@@ -106,11 +112,11 @@ func Metrics(metrics metrics) func(inner http.Handler) http.Handler {
 				duration := time.Since(start)
 
 				if hasAttrer {
-					// Fast path: look up the cached (path, method) attribute
-					// pair, append the per-request status KV. The append
-					// allocates a 3-element backing array; we keep the cache
-					// at length 2 so append reads cap=2 and grows once to
-					// cap=4 — the typical Go small-slice behavior.
+					// Fast path: copy the cached (path, method) attribute pair
+					// into a fixed 3-element local array and add the
+					// per-request status KV in slot 2. Avoids the per-request
+					// append-and-grow that occurs when growing a cap=2 slice
+					// to length 3.
 					key := routeMethodKey{path: path, method: req.Method}
 
 					base, ok := routeAttrs.Load(key)
@@ -122,8 +128,9 @@ func Metrics(metrics metrics) func(inner http.Handler) http.Handler {
 						base, _ = routeAttrs.LoadOrStore(key, b)
 					}
 
-					full := append(base.([]attribute.KeyValue), statusAttr(res.status))
-					attrer.RecordHistogramAttrs(context.Background(), "app_http_response", duration.Seconds(), full...)
+					b := base.([]attribute.KeyValue)
+					attrs := [3]attribute.KeyValue{b[0], b[1], statusAttr(res.status)}
+					attrer.RecordHistogramAttrs(context.Background(), "app_http_response", duration.Seconds(), attrs[:]...)
 
 					return
 				}

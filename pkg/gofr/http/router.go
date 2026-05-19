@@ -49,7 +49,7 @@ func (rou *Router) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	// Fast path: the vast majority of incoming paths are already canonical
 	// ("/users/42", "/api/v1/things"). Skip the path.Clean + string ops in
-	// that case so they only run for inputs that actually need normalising.
+	// that case so they only run for inputs that actually need normalizing.
 	if !isCleanPath(originalPath) {
 		normalizedPath := path.Clean(originalPath)
 
@@ -76,7 +76,7 @@ func (rou *Router) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 // isCleanPath reports whether p is already canonical — starts with "/", no
 // "//", no "/.", no "/..", and no trailing slash (except the root). When
-// true, path.Clean(p) == p and the surrounding normalisation can be skipped.
+// true, path.Clean(p) == p and the surrounding normalization can be skipped.
 //
 //nolint:gocyclo // single-pass canonical-path predicate; branches stay inlined for the fast path
 func isCleanPath(p string) bool {

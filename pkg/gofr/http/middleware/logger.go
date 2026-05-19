@@ -38,6 +38,19 @@ func (w *StatusResponseWriter) WriteHeader(status int) {
 	w.ResponseWriter.WriteHeader(status)
 }
 
+// Write implements http.ResponseWriter. When a handler calls Write without
+// first calling WriteHeader, net/http implicitly sends StatusOK on the
+// wire — record that explicitly here so logs / metrics / tracing see 200
+// instead of 0 for the common "just write the body" pattern.
+func (w *StatusResponseWriter) Write(b []byte) (int, error) {
+	if !w.wroteHeader {
+		w.status = http.StatusOK
+		w.wroteHeader = true
+	}
+
+	return w.ResponseWriter.Write(b)
+}
+
 // Hijack implements the http.Hijacker interface. So that we are able to upgrade to a websocket
 // connection that requires the responseWriter implementation to implement this method.
 func (w *StatusResponseWriter) Hijack() (net.Conn, *bufio.ReadWriter, error) {
@@ -65,7 +78,7 @@ type RequestLog struct {
 // invalid TraceID prints to. We use it for the X-Correlation-ID
 // response header AND for the request-log field when no SpanContext
 // is in scope, so the wire shape is byte-for-byte identical to what
-// GoFr emitted before PR-7's internal optimisation.
+// GoFr emitted before PR-7's internal optimization.
 const zeroTraceID = "00000000000000000000000000000000"
 const zeroSpanID = "0000000000000000"
 

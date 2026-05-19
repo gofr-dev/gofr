@@ -130,7 +130,7 @@ func TestRouter_DoubleSlashPath_GET(t *testing.T) {
 
 // TestIsCleanPath pins the fast-path predicate that ServeHTTP uses to skip
 // path.Clean for already-canonical URLs. A wrong negative would re-run the
-// normaliser pointlessly (performance regression); a wrong positive would
+// normalizer pointlessly (performance regression); a wrong positive would
 // route a non-canonical URL without cleaning it (correctness regression).
 func TestIsCleanPath(t *testing.T) {
 	canonical := []string{

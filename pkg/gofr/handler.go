@@ -135,17 +135,31 @@ func (h handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		// able to abandon a handler that exceeds the deadline) or when the
 		// request is a WebSocket upgrade (the handler hijacks the
 		// connection; Respond is a no-op in that case anyway).
-		done := make(chan struct{})
+		//
+		// The handler outcome is sent through a buffered channel rather than
+		// written to the outer (result, err) variables. This keeps the
+		// goroutine's writes invisible to the main goroutine until it reads
+		// from `done`, so there is no shared writable state between the two
+		// goroutines and `go test -race` stays clean. Buffer size 1 lets the
+		// handler goroutine finish writing and exit even after the main
+		// goroutine has already taken the ctx.Done or panicked branch.
+		type outcome struct {
+			result any
+			err    error
+		}
+
+		done := make(chan outcome, 1)
 		panicked := make(chan struct{})
 
 		go func() {
 			defer func() {
 				panicRecoveryHandler(recover(), h.container.Logger, panicked)
 			}()
-			// Execute the handler function
-			result, err = h.function(c)
-			h.logError(traceID, err)
-			close(done)
+
+			res, e := h.function(c)
+			h.logError(traceID, e)
+
+			done <- outcome{res, e}
 		}()
 
 		select {
@@ -160,7 +174,10 @@ func (h handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 				// Client canceled the request (e.g., closed browser tab)
 				err = gofrHTTP.ErrorClientClosedRequest{}
 			}
-		case <-done:
+		case out := <-done:
+			result = out.result
+			err = out.err
+
 			handleWebSocketUpgrade(r)
 		case <-panicked:
 			err = gofrHTTP.ErrorPanicRecovery{}

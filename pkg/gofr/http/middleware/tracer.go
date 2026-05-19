@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"strings"
 
+	"github.com/gorilla/mux"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/propagation"
@@ -40,6 +41,20 @@ func methodKV(method string) attribute.KeyValue {
 	return attribute.String("http.method", method)
 }
 
+// routeTemplate returns the matched route template (e.g. "/users/{id}") for
+// the request when gorilla/mux has resolved one, otherwise the raw URL path.
+// Used for the span name and http.route attribute so tracing cardinality
+// stays bounded by route count, not request count.
+func routeTemplate(r *http.Request) string {
+	if route := mux.CurrentRoute(r); route != nil {
+		if t, err := route.GetPathTemplate(); err == nil && t != "" {
+			return t
+		}
+	}
+
+	return r.URL.Path
+}
+
 // Tracer is a middleware that starts a new OpenTelemetry trace span for each
 // request and records the http.method, http.route and http.status_code
 // attributes on it.
@@ -65,11 +80,16 @@ func Tracer(inner http.Handler) http.Handler {
 		ctx = otel.GetTextMapPropagator().Extract(ctx, propagation.HeaderCarrier(r.Header))
 
 		method := strings.ToUpper(r.Method)
-		spanName := fmt.Sprintf("%s %s", method, r.URL.Path)
+		// Prefer the gorilla/mux route template (e.g. "/users/{id}") so the
+		// span name and http.route attribute do not explode to one unique
+		// value per concrete path (e.g. "/users/42"). Fall back to URL.Path
+		// when no route matched (404 / unknown route).
+		route := routeTemplate(r)
+		spanName := fmt.Sprintf("%s %s", method, route)
 
 		ctxOut, span := tr.Start(ctx, spanName, trace.WithAttributes(
 			methodKV(method),
-			attribute.String("http.route", r.URL.Path),
+			attribute.String("http.route", route),
 		))
 		defer span.End()
 

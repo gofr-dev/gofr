@@ -292,7 +292,7 @@ func TestHandler_ServeHTTP_ContextCanceled(t *testing.T) {
 
 // TestHandler_ServeHTTP_InlinePath_NormalResponse pins the byte shape of
 // a successful response on the inline (no-timeout, no-WS) path so a
-// refactor of the goroutine-elimination optimisation can not silently
+// refactor of the goroutine-elimination optimization can not silently
 // drop bytes from the on-the-wire JSON envelope. Goroutine path is
 // exercised by TestHandler_ServeHTTP_Timeout.
 func TestHandler_ServeHTTP_InlinePath_NormalResponse(t *testing.T) {
@@ -314,8 +314,8 @@ func TestHandler_ServeHTTP_InlinePath_NormalResponse(t *testing.T) {
 
 // TestHandler_ServeHTTP_InlinePath_HandlerError pins the wire shape when
 // the handler returns an error on the inline path. The "wire shape
-// preservation" claim is the whole point of this optimisation — if this
-// test fails, the optimisation is breaking error responses for users
+// preservation" claim is the whole point of this optimization — if this
+// test fails, the optimization is breaking error responses for users
 // without REQUEST_TIMEOUT.
 func TestHandler_ServeHTTP_InlinePath_HandlerError(t *testing.T) {
 	w := httptest.NewRecorder()
