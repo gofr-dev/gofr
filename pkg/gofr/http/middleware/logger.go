@@ -140,10 +140,13 @@ func Logging(probes LogProbes, logger logger) func(inner http.Handler) http.Hand
 			srw.status = 0
 			srw.wroteHeader = false
 
+			// Only the ResponseWriter pointer is cleared on Put — leaving it
+			// dangling would keep the previous request's writer (and its
+			// underlying *http.response, headers, etc.) alive until the pool
+			// entry is next claimed. status/wroteHeader are reset on the next
+			// Get above; resetting them here too is redundant.
 			defer func() {
 				srw.ResponseWriter = nil
-				srw.status = 0
-				srw.wroteHeader = false
 				pool.Put(srw)
 			}()
 

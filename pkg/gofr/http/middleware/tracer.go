@@ -19,6 +19,13 @@ import (
 // attribute key — that key is now deprecated in upstream semconv and
 // downstream dashboards built against current semconv versions miss the
 // attribute if we keep emitting the old key.
+//
+// Allocation note: the returned KeyValue + the underlying string are
+// hoisted into the variadic ...attribute.KeyValue slice passed to
+// trace.WithAttributes below, which the compiler escape-analyzes onto
+// the heap (verified via go build -gcflags='-m=2'). Factoring the
+// constructor into its own function does not avoid the alloc — it is
+// still useful as a single source of truth for the attribute key.
 func methodKV(method string) attribute.KeyValue {
 	return attribute.String("http.request.method", method)
 }
