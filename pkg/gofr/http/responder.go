@@ -13,15 +13,35 @@ var (
 	errEmptyResponse = errors.New("internal server error")
 )
 
+// sseLogger is a minimal logging interface used only for SSE error reporting.
+type sseLogger interface {
+	Debugf(format string, args ...any)
+}
+
+// ResponderOption configures optional Responder behavior.
+type ResponderOption func(*Responder)
+
+// WithLogger attaches a logger to the Responder for debug-level SSE error logging.
+func WithLogger(l sseLogger) ResponderOption {
+	return func(r *Responder) { r.logger = l }
+}
+
 // NewResponder creates a new Responder instance from the given http.ResponseWriter.
-func NewResponder(w http.ResponseWriter, method string) *Responder {
-	return &Responder{w: w, method: method}
+func NewResponder(w http.ResponseWriter, method string, opts ...ResponderOption) *Responder {
+	r := &Responder{w: w, method: method}
+
+	for _, o := range opts {
+		o(r)
+	}
+
+	return r
 }
 
 // Responder encapsulates an http.ResponseWriter and is responsible for crafting structured responses.
 type Responder struct {
 	w      http.ResponseWriter
 	method string
+	logger sseLogger
 }
 
 // Respond sends a response with the given data and handles potential errors, setting appropriate
@@ -75,6 +95,10 @@ func (r Responder) handleSpecialResponseTypes(data any, err error) bool {
 	statusCode := r.getStatusCodeForSpecialResponse(data, err)
 
 	switch v := data.(type) {
+	case resTypes.SSE:
+		r.handleSSEResponse(v)
+		return true
+
 	case resTypes.File:
 		r.w.Header().Set("Content-Type", v.ContentType)
 		r.w.WriteHeader(statusCode)
@@ -275,4 +299,33 @@ func isNil(i any) bool {
 	v := reflect.ValueOf(i)
 
 	return v.Kind() == reflect.Ptr && v.IsNil()
+}
+
+// handleSSEResponse handles Server-Sent Events responses.
+//
+// TODO: SSE connections block for the full connection lifetime, causing the logging middleware
+// and response histogram to record the entire duration. Consider labeling SSE in the histogram.
+func (r Responder) handleSSEResponse(sse resTypes.SSE) {
+	if sse.Callback == nil {
+		if r.logger != nil {
+			r.logger.Debugf("SSE response has nil callback")
+		}
+
+		return
+	}
+
+	r.w.Header().Set("Content-Type", "text/event-stream")
+	r.w.Header().Set("Cache-Control", "no-cache")
+	r.w.Header().Set("Connection", "keep-alive")
+	r.w.Header().Set("X-Accel-Buffering", "no")
+	r.w.WriteHeader(http.StatusOK)
+
+	rc := http.NewResponseController(r.w)
+	_ = rc.Flush()
+
+	if err := sse.Callback(r.w, rc); err != nil {
+		if r.logger != nil {
+			r.logger.Debugf("SSE stream error: %v", err)
+		}
+	}
 }
