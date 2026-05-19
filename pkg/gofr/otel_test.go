@@ -320,3 +320,35 @@ func BenchmarkSpanStart_Noop(b *testing.B) {
 		span.End()
 	}
 }
+
+// BenchmarkSpanStart_NeverSampleSDK measures the cost of starting a span
+// under the actual configuration initTracer installs when no
+// TRACE_EXPORTER is set: SDK provider with NeverSample. Spans get unique
+// TraceID/SpanID (needed for correlation IDs) but the SDK short-circuits
+// at the sampler — no attributes, events, batch processor, or exporter.
+//
+// Expected: slightly more than BenchmarkSpanStart_Noop (one
+// nonRecordingSpan + ID generation) but far below
+// BenchmarkSpanStart_DefaultSDK (full recording span allocation).
+func BenchmarkSpanStart_NeverSampleSDK(b *testing.B) {
+	tp := sdktrace.NewTracerProvider(
+		sdktrace.WithResource(resource.Empty()),
+		sdktrace.WithSampler(sdktrace.NeverSample()),
+	)
+	otel.SetTracerProvider(tp)
+
+	b.Cleanup(func() {
+		otel.SetTracerProvider(noop.NewTracerProvider())
+	})
+
+	tr := otel.Tracer("gofr-bench")
+	ctx := context.Background()
+
+	b.ReportAllocs()
+	b.ResetTimer()
+
+	for i := 0; i < b.N; i++ {
+		_, span := tr.Start(ctx, "GET /plaintext")
+		span.End()
+	}
+}

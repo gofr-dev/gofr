@@ -13,7 +13,6 @@ import (
 	"go.opentelemetry.io/otel/sdk/resource"
 	sdktrace "go.opentelemetry.io/otel/sdk/trace"
 	semconv "go.opentelemetry.io/otel/semconv/v1.4.0"
-	"go.opentelemetry.io/otel/trace/noop"
 
 	"gofr.dev/pkg/gofr/logging"
 )
@@ -46,10 +45,18 @@ func (a *App) initTracer() {
 	tracerPort := a.Config.GetOrDefault("TRACER_PORT", "9411")
 
 	if !isValidConfig(a.Logger(), traceExporter, tracerURL, tracerHost, tracerPort) {
-		// No exporter configured — install a noop provider so spans cost nothing.
-		// The SDK builds and discards spans even without an exporter, allocating
-		// ~2.7 KB / 1 alloc per request. Noop short-circuits to a stub.
-		otel.SetTracerProvider(noop.NewTracerProvider())
+		// No exporter configured — install a minimal SDK provider with
+		// NeverSample. Spans get a valid TraceID/SpanID so X-Correlation-ID
+		// and the trace_id log field stay unique per request, but the SDK
+		// short-circuits at the sampler: no attributes/events stored, no
+		// batch processor, no exporter. A previous attempt to install a
+		// pure noop provider here zeroed out correlation IDs across every
+		// request on the default (no-exporter) deployment.
+		tp := sdktrace.NewTracerProvider(
+			sdktrace.WithSampler(sdktrace.NeverSample()),
+		)
+		otel.SetTracerProvider(tp)
+
 		return
 	}
 

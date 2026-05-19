@@ -819,10 +819,13 @@ func Test_initTracer_invalidConfig(t *testing.T) {
 	}
 }
 
-// Test_initTracer_NoopWhenDisabled asserts that initTracer installs a non-recording
-// (noop) tracer provider when no TRACE_EXPORTER is configured. Spans started from
-// the global provider must not record — this is PR-1's contract.
-func Test_initTracer_NoopWhenDisabled(t *testing.T) {
+// Test_initTracer_NoSamplingButValidIDs asserts that initTracer installs a
+// non-recording SDK provider (NeverSample) when no TRACE_EXPORTER is
+// configured. Spans must NOT record, but their SpanContext must be valid
+// and carry a unique TraceID/SpanID per call. That guarantee keeps the
+// X-Correlation-ID response header and the request-log trace_id field
+// unique per request even on a deployment with tracing turned off.
+func Test_initTracer_NoSamplingButValidIDs(t *testing.T) {
 	mockContainer, _ := container.NewMockContainer(t)
 	a := App{
 		Config:    config.NewMockConfig(nil),
@@ -831,11 +834,18 @@ func Test_initTracer_NoopWhenDisabled(t *testing.T) {
 
 	a.initTracer()
 
-	_, span := otel.Tracer("gofr-test").Start(context.Background(), "probe")
-	defer span.End()
+	tr := otel.Tracer("gofr-test")
+	_, span1 := tr.Start(context.Background(), "probe-1")
+	_, span2 := tr.Start(context.Background(), "probe-2")
 
-	require.False(t, span.IsRecording(),
-		"expected non-recording span when TRACE_EXPORTER is unset; SDK provider is still installed")
+	defer span1.End()
+	defer span2.End()
+
+	sc1, sc2 := span1.SpanContext(), span2.SpanContext()
+
+	require.False(t, span1.IsRecording(), "spans must be non-recording when no exporter is configured")
+	require.True(t, sc1.IsValid(), "SpanContext must be valid so trace_id / correlation IDs stay unique")
+	require.NotEqual(t, sc1.TraceID(), sc2.TraceID(), "TraceIDs must differ across spans for correlation")
 }
 
 // Test_initTracer_SDKWhenExporterSet asserts that initTracer installs the recording
