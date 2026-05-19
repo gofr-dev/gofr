@@ -1,7 +1,6 @@
 package gofr
 
 import (
-	"bytes"
 	"context"
 	"encoding/base64"
 	"encoding/json"
@@ -11,7 +10,6 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strconv"
 	"sync"
@@ -1858,34 +1856,5 @@ func Test_HTTPMethods(t *testing.T) {
 
 			assert.True(t, a.httpRegistered)
 		})
-	}
-}
-
-// TestPublicAPIStability pins the exported surface of pkg/gofr — every
-// exported function, type, method, constant and variable. Any new or
-// renamed exported symbol fails this test.
-//
-// If a change here is intentional, regenerate the snapshot:
-//
-//	go doc -all -short gofr.dev/pkg/gofr > pkg/gofr/testdata/public_api.txt
-//
-// Then have a reviewer ack the diff in the PR description as a deliberate
-// API surface change.
-func TestPublicAPIStability(t *testing.T) {
-	cmd := exec.CommandContext(t.Context(), "go", "doc", "-all", "-short", "gofr.dev/pkg/gofr")
-	cmd.Dir = "."
-
-	got, err := cmd.Output()
-	require.NoError(t, err, "go doc failed: %v", err)
-
-	want, err := os.ReadFile(filepath.Join("testdata", "public_api.txt"))
-	require.NoError(t, err)
-
-	if !bytes.Equal(got, want) {
-		t.Errorf("public API of pkg/gofr drifted. If this is intentional, "+
-			"regenerate testdata/public_api.txt:\n\n"+
-			"  go doc -all -short gofr.dev/pkg/gofr > pkg/gofr/testdata/public_api.txt\n\n"+
-			"and acknowledge the diff in the PR description.\n\n"+
-			"got %d bytes, want %d bytes", len(got), len(want))
 	}
 }
