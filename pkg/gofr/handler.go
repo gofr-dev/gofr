@@ -52,6 +52,7 @@ func (el *ErrorLogEntry) PrettyPrint(writer io.Writer) {
 	fmt.Fprintf(writer, "\u001B[38;5;8m%s \u001B[38;5;%dm%s \n", el.TraceID, colorCodeError, el.Error)
 }
 
+//nolint:gocyclo,nestif // dual inline/goroutine path: splitting would add call overhead on the hot path
 func (h handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	c := newContext(gofrHTTP.NewResponder(w, r.Method), gofrHTTP.NewRequest(r), h.container)
 
@@ -114,7 +115,7 @@ func (h handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			h.logError(traceID, err)
 		}
 
-		// Map a cancelled / deadline-exceeded ctx to the right error so the
+		// Map a canceled / deadline-exceeded ctx to the right error so the
 		// wire shape matches the goroutine path:
 		//   - context.Canceled         → ErrorClientClosedRequest (HTTP 499)
 		//   - context.DeadlineExceeded → ErrorRequestTimeout      (HTTP 408)

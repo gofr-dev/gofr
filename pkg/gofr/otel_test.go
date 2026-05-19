@@ -5,12 +5,11 @@ import (
 	"errors"
 	"testing"
 
+	"github.com/stretchr/testify/require"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/sdk/resource"
 	sdktrace "go.opentelemetry.io/otel/sdk/trace"
 	"go.opentelemetry.io/otel/trace/noop"
-
-	"github.com/stretchr/testify/require"
 
 	"gofr.dev/pkg/gofr/config"
 	"gofr.dev/pkg/gofr/logging"
@@ -309,6 +308,7 @@ func BenchmarkSpanStart_DefaultSDK(b *testing.B) {
 // pay after PR-1 lands for users without an exporter.
 func BenchmarkSpanStart_Noop(b *testing.B) {
 	otel.SetTracerProvider(noop.NewTracerProvider())
+
 	tr := otel.Tracer("gofr-bench")
 	ctx := context.Background()
 

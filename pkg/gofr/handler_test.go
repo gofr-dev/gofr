@@ -297,7 +297,7 @@ func TestHandler_ServeHTTP_ContextCanceled(t *testing.T) {
 // exercised by TestHandler_ServeHTTP_Timeout.
 func TestHandler_ServeHTTP_InlinePath_NormalResponse(t *testing.T) {
 	w := httptest.NewRecorder()
-	r := httptest.NewRequest(http.MethodGet, "/", http.NoBody)
+	r := httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/", http.NoBody)
 
 	h := handler{
 		container: &container.Container{Logger: logging.NewLogger(logging.FATAL)},
@@ -319,7 +319,7 @@ func TestHandler_ServeHTTP_InlinePath_NormalResponse(t *testing.T) {
 // without REQUEST_TIMEOUT.
 func TestHandler_ServeHTTP_InlinePath_HandlerError(t *testing.T) {
 	w := httptest.NewRecorder()
-	r := httptest.NewRequest(http.MethodGet, "/", http.NoBody)
+	r := httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/", http.NoBody)
 
 	h := handler{
 		container: &container.Container{Logger: logging.NewLogger(logging.FATAL)},

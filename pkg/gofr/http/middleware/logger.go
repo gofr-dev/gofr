@@ -228,6 +228,7 @@ func panicRecovery(re any, w http.ResponseWriter, logger logger) {
 	}
 
 	var e string
+
 	switch t := re.(type) {
 	case string:
 		e = t
@@ -244,6 +245,11 @@ func panicRecovery(re any, w http.ResponseWriter, logger logger) {
 
 	w.WriteHeader(http.StatusInternalServerError)
 
-	res := map[string]any{"code": http.StatusInternalServerError, "status": "ERROR", "message": "Some unexpected error has occurred"}
+	//nolint:goconst // JSON envelope keys (status/message), not shared constants
+	res := map[string]any{
+		"code":    http.StatusInternalServerError,
+		"status":  "ERROR",
+		"message": "Some unexpected error has occurred",
+	}
 	_ = json.NewEncoder(w).Encode(res)
 }

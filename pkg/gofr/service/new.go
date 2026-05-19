@@ -218,6 +218,7 @@ func (h *httpService) createAndSendRequest(ctx context.Context, method string, p
 
 func (h *httpService) updateMetrics(ctx context.Context, method string, timeTaken float64, statusCode int) {
 	if h.Metrics != nil {
+		//nolint:goconst // "status" is the metric label name, not a shared constant
 		labels := []string{"path", h.url, "method", method, "status", fmt.Sprintf("%v", statusCode)}
 
 		if h.name != "" {

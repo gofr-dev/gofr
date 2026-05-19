@@ -77,6 +77,8 @@ func (rou *Router) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 // isCleanPath reports whether p is already canonical — starts with "/", no
 // "//", no "/.", no "/..", and no trailing slash (except the root). When
 // true, path.Clean(p) == p and the surrounding normalisation can be skipped.
+//
+//nolint:gocyclo // single-pass canonical-path predicate; branches stay inlined for the fast path
 func isCleanPath(p string) bool {
 	if p == "" || p[0] != '/' {
 		return false

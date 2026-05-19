@@ -144,20 +144,20 @@ func TestIsCleanPath(t *testing.T) {
 		"/users/42.json",
 	}
 	dirty := []string{
-		"",                   // empty
-		"users",              // no leading slash
-		"//",                 // double slash root
-		"//users",            // leading double slash
-		"/users//42",         // mid double slash
-		"/.",                 // trailing /.
-		"/..",                // trailing /..
-		"/./users",           // /./
-		"/../users",          // /../
-		"/users/.",           // /.
-		"/users/..",          // /..
-		"/users/./42",        // /./ mid
-		"/users/../42",       // /../ mid
-		"/users/",            // trailing slash on non-root
+		"",             // empty
+		"users",        // no leading slash
+		"//",           // double slash root
+		"//users",      // leading double slash
+		"/users//42",   // mid double slash
+		"/.",           // trailing /.
+		"/..",          // trailing /..
+		"/./users",     // /./
+		"/../users",    // /../
+		"/users/.",     // /.
+		"/users/..",    // /..
+		"/users/./42",  // /./ mid
+		"/users/../42", // /../ mid
+		"/users/",      // trailing slash on non-root
 	}
 
 	for _, p := range canonical {
@@ -464,11 +464,13 @@ func (d *discardingResponseWriter) Header() http.Header {
 	return d.h
 }
 
-func (d *discardingResponseWriter) Write(b []byte) (int, error) { return len(b), nil }
-func (d *discardingResponseWriter) WriteHeader(int)             {}
+func (*discardingResponseWriter) Write(b []byte) (int, error) { return len(b), nil }
+func (*discardingResponseWriter) WriteHeader(int)             {}
 
 // emptyHandler is a no-op http.Handler used to isolate router cost from
 // any handler-side work.
+//
+//nolint:gochecknoglobals // benchmark fixture: shared no-op handler across BenchmarkRouter_*
 var emptyHandler = http.HandlerFunc(func(http.ResponseWriter, *http.Request) {})
 
 // BenchmarkRouter_Get_Static measures the per-request cost of routing
@@ -488,7 +490,7 @@ func BenchmarkRouter_Get_Static(b *testing.B) {
 	r := NewRouter()
 	r.Add(http.MethodGet, "/plaintext", emptyHandler)
 
-	req := httptest.NewRequest(http.MethodGet, "/plaintext", nil)
+	req := httptest.NewRequestWithContext(b.Context(), http.MethodGet, "/plaintext", http.NoBody)
 	w := &discardingResponseWriter{}
 
 	b.ReportAllocs()
@@ -507,7 +509,7 @@ func BenchmarkRouter_Get_PathParam(b *testing.B) {
 	r := NewRouter()
 	r.Add(http.MethodGet, "/users/{id}", emptyHandler)
 
-	req := httptest.NewRequest(http.MethodGet, "/users/42", nil)
+	req := httptest.NewRequestWithContext(b.Context(), http.MethodGet, "/users/42", http.NoBody)
 	w := &discardingResponseWriter{}
 
 	b.ReportAllocs()

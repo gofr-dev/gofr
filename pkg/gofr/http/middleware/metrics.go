@@ -110,7 +110,7 @@ func Metrics(metrics metrics) func(inner http.Handler) http.Handler {
 					// pair, append the per-request status KV. The append
 					// allocates a 3-element backing array; we keep the cache
 					// at length 2 so append reads cap=2 and grows once to
-					// cap=4 — the typical Go small-slice behaviour.
+					// cap=4 — the typical Go small-slice behavior.
 					key := routeMethodKey{path: path, method: req.Method}
 
 					base, ok := routeAttrs.Load(key)

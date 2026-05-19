@@ -43,6 +43,7 @@ func installPropagators(t *testing.T) {
 	t.Helper()
 
 	prev := otel.GetTextMapPropagator()
+
 	otel.SetTextMapPropagator(propagation.NewCompositeTextMapPropagator(
 		propagation.TraceContext{}, propagation.Baggage{},
 	))
@@ -73,8 +74,8 @@ func TestTracePropagation_Inbound(t *testing.T) {
 		got = otelTrace.SpanContextFromContext(r.Context())
 	}))
 
-	req := httptest.NewRequest(http.MethodGet, "/dummy", http.NoBody)
-	req.Header.Set("traceparent", "00-"+wantTraceID+"-"+parentSpan+"-01")
+	req := httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/dummy", http.NoBody)
+	req.Header.Set("Traceparent", "00-"+wantTraceID+"-"+parentSpan+"-01")
 
 	handler.ServeHTTP(httptest.NewRecorder(), req)
 
@@ -100,7 +101,7 @@ func TestTracePropagation_NoInboundHeader(t *testing.T) {
 		got = otelTrace.SpanContextFromContext(r.Context())
 	}))
 
-	req := httptest.NewRequest(http.MethodGet, "/dummy", http.NoBody)
+	req := httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/dummy", http.NoBody)
 
 	handler.ServeHTTP(httptest.NewRecorder(), req)
 
@@ -124,8 +125,8 @@ func TestTracePropagation_BaggageInbound(t *testing.T) {
 		got = baggage.FromContext(r.Context())
 	}))
 
-	req := httptest.NewRequest(http.MethodGet, "/dummy", http.NoBody)
-	req.Header.Set("baggage", "tenant=acme,region=us-east")
+	req := httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/dummy", http.NoBody)
+	req.Header.Set("Baggage", "tenant=acme,region=us-east")
 
 	handler.ServeHTTP(httptest.NewRecorder(), req)
 
@@ -161,15 +162,15 @@ func TestTracePropagation_Outbound(t *testing.T) {
 
 	ctx = baggage.ContextWithBaggage(ctx, bag)
 
-	outbound := httptest.NewRequest(http.MethodGet, "http://downstream/api", http.NoBody)
+	outbound := httptest.NewRequestWithContext(t.Context(), http.MethodGet, "http://downstream/api", http.NoBody)
 	otel.GetTextMapPropagator().Inject(ctx, propagation.HeaderCarrier(outbound.Header))
 
-	tp1 := outbound.Header.Get("traceparent")
+	tp1 := outbound.Header.Get("Traceparent")
 	require.NotEmpty(t, tp1, "outbound request missing traceparent header")
 	assert.Contains(t, tp1, "0102030405060708090a0b0c0d0e0f10",
 		"outbound traceparent does not carry the parent trace ID")
 
-	assert.Equal(t, "tenant=acme", outbound.Header.Get("baggage"),
+	assert.Equal(t, "tenant=acme", outbound.Header.Get("Baggage"),
 		"outbound request did not inject baggage")
 }
 
@@ -215,8 +216,8 @@ func TestTracePropagation_BaggageRoundTrip(t *testing.T) {
 				observed = baggage.FromContext(r.Context())
 			}))
 
-			inbound := httptest.NewRequest(http.MethodGet, "/", http.NoBody)
-			inbound.Header.Set("baggage", tc.header)
+			inbound := httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/", http.NoBody)
+			inbound.Header.Set("Baggage", tc.header)
 
 			handler.ServeHTTP(httptest.NewRecorder(), inbound)
 
@@ -229,11 +230,11 @@ func TestTracePropagation_BaggageRoundTrip(t *testing.T) {
 			}
 
 			// Inject the same baggage back into an outbound request — round-trip.
-			outbound := httptest.NewRequest(http.MethodGet, "http://downstream/api", http.NoBody)
+			outbound := httptest.NewRequestWithContext(t.Context(), http.MethodGet, "http://downstream/api", http.NoBody)
 			ctx := baggage.ContextWithBaggage(context.Background(), observed)
 			otel.GetTextMapPropagator().Inject(ctx, propagation.HeaderCarrier(outbound.Header))
 
-			outHdr := outbound.Header.Get("baggage")
+			outHdr := outbound.Header.Get("Baggage")
 			require.NotEmpty(t, outHdr, "outbound request missing baggage header")
 
 			parsed, err := baggage.Parse(outHdr)

@@ -1,6 +1,7 @@
 package gofr
 
 import (
+	"bytes"
 	"context"
 	"encoding/base64"
 	"encoding/json"
@@ -1865,11 +1866,13 @@ func Test_HTTPMethods(t *testing.T) {
 // renamed exported symbol fails this test.
 //
 // If a change here is intentional, regenerate the snapshot:
-//   go doc -all -short gofr.dev/pkg/gofr > pkg/gofr/testdata/public_api.txt
+//
+//	go doc -all -short gofr.dev/pkg/gofr > pkg/gofr/testdata/public_api.txt
+//
 // Then have a reviewer ack the diff in the PR description as a deliberate
 // API surface change.
 func TestPublicAPIStability(t *testing.T) {
-	cmd := exec.Command("go", "doc", "-all", "-short", "gofr.dev/pkg/gofr")
+	cmd := exec.CommandContext(t.Context(), "go", "doc", "-all", "-short", "gofr.dev/pkg/gofr")
 	cmd.Dir = "."
 
 	got, err := cmd.Output()
@@ -1878,7 +1881,7 @@ func TestPublicAPIStability(t *testing.T) {
 	want, err := os.ReadFile(filepath.Join("testdata", "public_api.txt"))
 	require.NoError(t, err)
 
-	if string(got) != string(want) {
+	if !bytes.Equal(got, want) {
 		t.Errorf("public API of pkg/gofr drifted. If this is intentional, "+
 			"regenerate testdata/public_api.txt:\n\n"+
 			"  go doc -all -short gofr.dev/pkg/gofr > pkg/gofr/testdata/public_api.txt\n\n"+

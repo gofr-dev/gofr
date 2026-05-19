@@ -2,7 +2,7 @@ package http
 
 import (
 	"bytes"
-	"fmt"
+	"errors"
 	"io"
 	"math"
 	"net/http"
@@ -17,7 +17,11 @@ import (
 	resTypes "gofr.dev/pkg/gofr/http/response"
 )
 
-var errTest = fmt.Errorf("internal server error")
+var (
+	errTest        = errors.New("internal server error")
+	errBoom        = errors.New("boom")
+	errPartialFail = errors.New("partial fail")
+)
 
 func TestResponder(t *testing.T) {
 	tests := []struct {
@@ -621,13 +625,13 @@ func TestResponseEnvelopeSnapshot(t *testing.T) {
 	}
 
 	cases := []struct {
-		name        string
-		method      string
-		data        any
-		err         error
-		wantStatus  int
-		wantCType   string
-		wantBody    string
+		name       string
+		method     string
+		data       any
+		err        error
+		wantStatus int
+		wantCType  string
+		wantBody   string
 	}{
 		{
 			name:       "string-get",
@@ -681,7 +685,7 @@ func TestResponseEnvelopeSnapshot(t *testing.T) {
 			name:       "error-only-500",
 			method:     http.MethodGet,
 			data:       nil,
-			err:        fmt.Errorf("boom"),
+			err:        errBoom,
 			wantStatus: http.StatusInternalServerError,
 			wantCType:  "application/json",
 			wantBody:   `{"error":{"message":"boom"}}` + "\n",
@@ -690,7 +694,7 @@ func TestResponseEnvelopeSnapshot(t *testing.T) {
 			name:       "data-and-error-206",
 			method:     http.MethodGet,
 			data:       map[string]string{"partial": "ok"},
-			err:        fmt.Errorf("partial fail"),
+			err:        errPartialFail,
 			wantStatus: http.StatusPartialContent,
 			wantCType:  "application/json",
 			wantBody:   `{"error":{"message":"partial fail"},"data":{"partial":"ok"}}` + "\n",
@@ -735,8 +739,8 @@ func TestResponder_ContentLengthMatchesBody(t *testing.T) {
 		{"struct-post", http.MethodPost, sampleStruct{ID: 7, Name: "bob"}, nil},
 		{"nil-post", http.MethodPost, nil, nil},
 		{"nil-delete", http.MethodDelete, nil, nil},
-		{"error-only", http.MethodGet, nil, fmt.Errorf("boom")},
-		{"data-and-error", http.MethodGet, map[string]string{"partial": "ok"}, fmt.Errorf("partial fail")},
+		{"error-only", http.MethodGet, nil, errBoom},
+		{"data-and-error", http.MethodGet, map[string]string{"partial": "ok"}, errPartialFail},
 	}
 
 	for _, tc := range cases {

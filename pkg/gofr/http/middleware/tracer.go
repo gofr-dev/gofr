@@ -17,6 +17,8 @@ import (
 // Building attribute.String("http.method", "GET") per request allocates a
 // KeyValue with a copy of the string header — pre-allocating the common
 // methods saves that on every request.
+//
+//nolint:gochecknoglobals // immutable lookup table for hot-path attribute reuse
 var methodAttr = map[string]attribute.KeyValue{
 	http.MethodGet:     attribute.String("http.method", http.MethodGet),
 	http.MethodPost:    attribute.String("http.method", http.MethodPost),

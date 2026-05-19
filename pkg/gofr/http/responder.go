@@ -66,7 +66,7 @@ func (r Responder) Respond(data any, err error) {
 		return
 	}
 
-	// Append the trailing newline into the marshalled buffer so the response
+	// Append the trailing newline into the marshaled buffer so the response
 	// goes out in a single Write call (was 2 calls + no Content-Length, which
 	// caused bufio.Writer to flush twice per response).
 	jsonData = append(jsonData, '\n')

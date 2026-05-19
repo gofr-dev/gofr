@@ -261,9 +261,9 @@ func createTempCertFile(t *testing.T) string {
 //	CORS:             Access-Control-Allow-Origin echoed for the Origin header
 //	Metrics:          app_http_response histogram observation > 0
 //	WSHandlerUpgrade: presence is verified by the chain count (it runs only
-//	                  on Upgrade requests, so behaviour on a plain GET is a
+//	                  on Upgrade requests, so behavior on a plain GET is a
 //	                  no-op, but the wrap still has to exist for upgrades to
-//	                  work — separate test elsewhere covers upgrade behaviour)
+//	                  work — separate test elsewhere covers upgrade behavior)
 func TestMiddlewareChainShape(t *testing.T) {
 	var (
 		corsHeader     string
@@ -293,7 +293,7 @@ func TestMiddlewareChainShape(t *testing.T) {
 		// httpServer.run does, but without binding to a port.
 		s.router.Use(middleware.WSHandlerUpgrade(c, s.ws))
 
-		req := httptest.NewRequest(http.MethodGet, "/chain-check", nil)
+		req := httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/chain-check", http.NoBody)
 		req.Header.Set("Origin", "https://example.com")
 		req.RemoteAddr = "1.2.3.4:5678"
 		req.RequestURI = "/chain-check"
@@ -302,6 +302,7 @@ func TestMiddlewareChainShape(t *testing.T) {
 		s.router.ServeHTTP(rr, req)
 
 		resp := rr.Result()
+
 		t.Cleanup(func() { _ = resp.Body.Close() })
 
 		corsHeader = resp.Header.Get("Access-Control-Allow-Origin")
@@ -350,8 +351,8 @@ func (d *benchDiscardResponseWriter) Header() http.Header {
 	return d.h
 }
 
-func (d *benchDiscardResponseWriter) Write(b []byte) (int, error) { return len(b), nil }
-func (d *benchDiscardResponseWriter) WriteHeader(c int)           { d.code = c }
+func (*benchDiscardResponseWriter) Write(b []byte) (int, error) { return len(b), nil }
+func (d *benchDiscardResponseWriter) WriteHeader(c int)         { d.code = c }
 
 // buildBenchRouter reconstructs the same middleware chain that
 // gofr.New() / newHTTPServer + httpServer.run wire — Tracer, Logging,
@@ -398,7 +399,7 @@ func buildBenchRouter(c *container.Container) http.Handler {
 func BenchmarkRequest_FullChain(b *testing.B) {
 	c := container.NewContainer(config.NewMockConfig(map[string]string{"LOG_LEVEL": "ERROR"}))
 	h := buildBenchRouter(c)
-	req := httptest.NewRequest(http.MethodGet, "/plaintext", nil)
+	req := httptest.NewRequestWithContext(b.Context(), http.MethodGet, "/plaintext", http.NoBody)
 	w := &benchDiscardResponseWriter{}
 
 	b.ReportAllocs()
@@ -414,7 +415,7 @@ func BenchmarkRequest_FullChain(b *testing.B) {
 func BenchmarkRequest_FullChain_JSON(b *testing.B) {
 	c := container.NewContainer(config.NewMockConfig(map[string]string{"LOG_LEVEL": "ERROR"}))
 	h := buildBenchRouter(c)
-	req := httptest.NewRequest(http.MethodGet, "/json", nil)
+	req := httptest.NewRequestWithContext(b.Context(), http.MethodGet, "/json", http.NoBody)
 	w := &benchDiscardResponseWriter{}
 
 	b.ReportAllocs()
@@ -445,7 +446,7 @@ func BenchmarkRequest_FullChain_SDK(b *testing.B) {
 
 	c := container.NewContainer(config.NewMockConfig(map[string]string{"LOG_LEVEL": "ERROR"}))
 	h := buildBenchRouter(c)
-	req := httptest.NewRequest(http.MethodGet, "/plaintext", nil)
+	req := httptest.NewRequestWithContext(b.Context(), http.MethodGet, "/plaintext", http.NoBody)
 	w := &benchDiscardResponseWriter{}
 
 	b.ReportAllocs()

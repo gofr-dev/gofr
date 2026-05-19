@@ -386,7 +386,7 @@ func TestContext_GetCorrelationID(t *testing.T) {
 func BenchmarkContext_New(b *testing.B) {
 	c := container.NewContainer(config.NewMockConfig(map[string]string{"LOG_LEVEL": "ERROR"}))
 
-	req := httptest.NewRequest(http.MethodGet, "/bench", nil)
+	req := httptest.NewRequestWithContext(b.Context(), http.MethodGet, "/bench", http.NoBody)
 	r := gofrHTTP.NewRequest(req)
 	w := gofrHTTP.NewResponder(httptest.NewRecorder(), http.MethodGet)
 

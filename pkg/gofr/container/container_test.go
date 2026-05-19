@@ -556,6 +556,8 @@ func TestContainer_Close_ClosesWebsocketConnections(t *testing.T) {
 // in this package) does not interfere. Calls the production
 // registerFrameworkMetrics() so the contract is asserted against real
 // code, not a mirror.
+//
+//nolint:gocyclo,funlen // snapshot test enumerates each framework metric assertion linearly for diff-friendliness
 func TestFrameworkMetricsSnapshot(t *testing.T) {
 	reg := prometheus.NewRegistry()
 
@@ -620,7 +622,10 @@ func TestFrameworkMetricsSnapshot(t *testing.T) {
 	srv := httptest.NewServer(promhttp.HandlerFor(reg, promhttp.HandlerOpts{}))
 	t.Cleanup(srv.Close)
 
-	resp, err := http.Get(srv.URL)
+	req, err := http.NewRequestWithContext(t.Context(), http.MethodGet, srv.URL, http.NoBody)
+	require.NoError(t, err)
+
+	resp, err := http.DefaultClient.Do(req)
 	require.NoError(t, err)
 	t.Cleanup(func() { _ = resp.Body.Close() })
 
@@ -657,14 +662,14 @@ func TestFrameworkMetricsSnapshot(t *testing.T) {
 		help string
 		typ  string
 	}{
-		"app_info":                          {"Info for app_name, app_version and framework_version.", "gauge"},
-		"app_go_routines":                   {"Number of Go routines running.", "gauge"},
-		"app_sys_memory_alloc":              {"Number of bytes allocated for heap objects.", "gauge"},
-		"app_sys_total_alloc":               {"Number of cumulative bytes allocated for heap objects.", "gauge"},
-		"app_go_numGC":                      {"Number of completed Garbage Collector cycles.", "gauge"},
-		"app_go_sys":                        {"Number of total bytes of memory.", "gauge"},
-		"app_http_response":                 {"Response time of HTTP requests in seconds.", "histogram"},
-		"app_http_service_response":         {"Response time of HTTP service requests in seconds.", "histogram"},
+		"app_info":                           {"Info for app_name, app_version and framework_version.", "gauge"},
+		"app_go_routines":                    {"Number of Go routines running.", "gauge"},
+		"app_sys_memory_alloc":               {"Number of bytes allocated for heap objects.", "gauge"},
+		"app_sys_total_alloc":                {"Number of cumulative bytes allocated for heap objects.", "gauge"},
+		"app_go_numGC":                       {"Number of completed Garbage Collector cycles.", "gauge"},
+		"app_go_sys":                         {"Number of total bytes of memory.", "gauge"},
+		"app_http_response":                  {"Response time of HTTP requests in seconds.", "histogram"},
+		"app_http_service_response":          {"Response time of HTTP service requests in seconds.", "histogram"},
 		"app_http_retry_count":               {"Total number of retry events", "counter"},
 		"app_http_circuit_breaker_state":     {"Current state of the circuit breaker (0 for Closed, 1 for Open)", "gauge"},
 		"app_redis_stats":                    {"Response time of Redis commands in milliseconds.", "histogram"},
