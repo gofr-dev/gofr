@@ -270,6 +270,30 @@ func Test_StatusResponseWriter_WriteHeader_DuplicateCalls(t *testing.T) {
 	require.Equal(t, http.StatusOK, rr.Code, "expected recorder status 200")
 }
 
+// Test_StatusResponseWriter_ImplicitOK asserts that calling Write
+// without first calling WriteHeader records status=200 — matching
+// net/http's implicit-200 wire behavior. The common idiomatic handler
+// pattern is `w.Write([]byte("..."))` without an explicit WriteHeader;
+// before the Write() method on StatusResponseWriter was added, logs and
+// metrics for those handlers recorded status=0.
+func Test_StatusResponseWriter_ImplicitOK(t *testing.T) {
+	rr := httptest.NewRecorder()
+	srw := &StatusResponseWriter{ResponseWriter: rr}
+
+	_, err := srw.Write([]byte("ok"))
+	require.NoError(t, err)
+
+	require.Equal(t, http.StatusOK, srw.status,
+		"Write before WriteHeader must record status=200 (matches net/http implicit-200)")
+	require.True(t, srw.wroteHeader, "wroteHeader must be set after first Write")
+
+	// A subsequent explicit WriteHeader must be ignored (matches existing
+	// duplicate-call guard) so we cannot upgrade an already-implicit 200
+	// into something else after bytes have been written.
+	srw.WriteHeader(http.StatusInternalServerError)
+	require.Equal(t, http.StatusOK, srw.status, "explicit WriteHeader after Write must not overwrite")
+}
+
 func Test_StatusResponseWriter_Hijack_Supported(t *testing.T) {
 	rr := httptest.NewRecorder()
 	srw := &StatusResponseWriter{ResponseWriter: rr}

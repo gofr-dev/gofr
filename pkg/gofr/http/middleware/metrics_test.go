@@ -9,6 +9,7 @@ import (
 
 	"github.com/gorilla/mux"
 	"github.com/stretchr/testify/mock"
+	"github.com/stretchr/testify/require"
 )
 
 type mockMetrics struct {
@@ -87,6 +88,80 @@ func TestMetrics_StaticFile(t *testing.T) {
 
 	mockMetrics.AssertCalled(t, "RecordHistogram", mock.Anything, "app_http_response", mock.Anything,
 		[]string{"path", "/static/example.js", "method", "GET", "status", "200"})
+}
+
+// TestMetrics_GraphQLSkipsRootOnly asserts that the Metrics middleware
+// skips recording app_http_response for the canonical /graphql endpoint
+// (which emits its own app_graphql_* metrics) but DOES record for
+// sub-paths like /graphql/playground. A future change that broadens the
+// skip to a prefix match would silently drop sub-path metrics and must
+// fail this test.
+func TestMetrics_GraphQLSkipsRootOnly(t *testing.T) {
+	mockMetrics := &mockMetrics{}
+
+	// Allow any RecordHistogram call so we can later assert which paths
+	// were recorded (vs absent) explicitly.
+	mockMetrics.On("RecordHistogram",
+		mock.Anything, mock.Anything, mock.Anything, mock.Anything,
+	).Return(nil)
+
+	router := mux.NewRouter()
+	router.HandleFunc("/graphql", func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}).Methods(http.MethodGet).Name("/graphql")
+	router.HandleFunc("/graphql/playground", func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}).Methods(http.MethodGet).Name("/graphql/playground")
+
+	router.Use(Metrics(mockMetrics))
+
+	rootReq := httptest.NewRequest(http.MethodGet, "/graphql", http.NoBody)
+	router.ServeHTTP(httptest.NewRecorder(), rootReq)
+
+	playgroundReq := httptest.NewRequest(http.MethodGet, "/graphql/playground", http.NoBody)
+	router.ServeHTTP(httptest.NewRecorder(), playgroundReq)
+
+	// /graphql is skipped — no RecordHistogram call for it.
+	mockMetrics.AssertNotCalled(t, "RecordHistogram", mock.Anything, "app_http_response", mock.Anything,
+		[]string{"path", "/graphql", "method", "GET", "status", "200"})
+
+	// /graphql/playground is recorded — sub-paths still get metrics.
+	mockMetrics.AssertCalled(t, "RecordHistogram", mock.Anything, "app_http_response", mock.Anything,
+		[]string{"path", "/graphql/playground", "method", "GET", "status", "200"})
+}
+
+// TestMetrics_UnmatchedRouteDoesNotPanic asserts that the Metrics
+// middleware survives a request that hits no route (404 path), where
+// mux.CurrentRoute returns nil. Before this stack added the nil-guard,
+// .GetPathTemplate() on a nil route panicked and crashed the server on
+// any 404 — Copilot flagged this in review.
+//
+// We only assert the no-panic contract here; the (empty) path label
+// emitted in that case is current behavior and out of scope for this
+// regression test.
+func TestMetrics_UnmatchedRouteDoesNotPanic(t *testing.T) {
+	mockMetrics := &mockMetrics{}
+
+	mockMetrics.On("RecordHistogram",
+		mock.Anything, mock.Anything, mock.Anything, mock.Anything,
+	).Return(nil)
+
+	// Construct the handler chain WITHOUT a router so mux.CurrentRoute(r)
+	// returns nil for every request. Wrap a 404 handler with Metrics
+	// directly, exercising the nil-guard at metrics.go:84.
+	notFound := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusNotFound)
+	})
+
+	handler := Metrics(mockMetrics)(notFound)
+
+	req := httptest.NewRequest(http.MethodGet, "/no/such/route", http.NoBody)
+	rr := httptest.NewRecorder()
+
+	require.NotPanics(t, func() { handler.ServeHTTP(rr, req) },
+		"Metrics middleware must not panic when mux.CurrentRoute is nil")
+
+	require.Equal(t, http.StatusNotFound, rr.Code, "404 handler still ran end-to-end")
 }
 
 func TestMetrics_StaticFileWithQueryParam(t *testing.T) {

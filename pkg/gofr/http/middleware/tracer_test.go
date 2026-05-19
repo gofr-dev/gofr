@@ -6,12 +6,15 @@ import (
 	"net/http/httptest"
 	"testing"
 
+	"github.com/gorilla/mux"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/baggage"
 	"go.opentelemetry.io/otel/propagation"
 	"go.opentelemetry.io/otel/sdk/trace"
+	"go.opentelemetry.io/otel/sdk/trace/tracetest"
 	otelTrace "go.opentelemetry.io/otel/trace"
 )
 
@@ -249,4 +252,61 @@ func TestTracePropagation_BaggageRoundTrip(t *testing.T) {
 			}
 		})
 	}
+}
+
+// TestTracer_EmitsOTelHTTPSemconvAttributes asserts that the Tracer
+// middleware emits the OTel HTTP semconv ≥ v1.21 attribute keys:
+// http.request.method, http.route, http.response.status_code. A future
+// PR that regresses these back to the deprecated v1.4-era keys
+// (http.method, http.status_code) breaks downstream dashboards built
+// against the current semconv and must fail this test.
+//
+// We also assert the span name follows the OTel HTTP convention
+// "METHOD /route-template" (was the static "gofr-router" before this
+// stack removed the otelhttp.NewHandler wrap).
+func TestTracer_EmitsOTelHTTPSemconvAttributes(t *testing.T) {
+	rec := tracetest.NewSpanRecorder()
+	tp := trace.NewTracerProvider(trace.WithSpanProcessor(rec))
+	otel.SetTracerProvider(tp)
+
+	t.Cleanup(func() { _ = tp.Shutdown(t.Context()) })
+
+	router := mux.NewRouter()
+	router.Handle("/users/{id}", Tracer(http.HandlerFunc(
+		func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(http.StatusCreated) },
+	))).Methods(http.MethodGet)
+
+	req := httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/users/42", http.NoBody)
+	router.ServeHTTP(httptest.NewRecorder(), req)
+
+	spans := rec.Ended()
+	require.Len(t, spans, 1, "expected exactly one span recorded")
+
+	got := spans[0]
+
+	// Span name must follow "METHOD /route-template" semconv guidance —
+	// concrete URL (/users/42) would explode cardinality.
+	assert.Equal(t, "GET /users/{id}", got.Name(),
+		"span name must follow OTel HTTP semconv 'METHOD /route'")
+
+	attrs := make(map[attribute.Key]attribute.Value, len(got.Attributes()))
+	for _, kv := range got.Attributes() {
+		attrs[kv.Key] = kv.Value
+	}
+
+	require.Contains(t, attrs, attribute.Key("http.request.method"),
+		"missing http.request.method (current semconv); legacy http.method is deprecated")
+	require.Contains(t, attrs, attribute.Key("http.route"),
+		"missing http.route")
+	require.Contains(t, attrs, attribute.Key("http.response.status_code"),
+		"missing http.response.status_code (current semconv); legacy http.status_code is deprecated")
+
+	assert.NotContains(t, attrs, attribute.Key("http.method"),
+		"deprecated http.method key must not be emitted alongside http.request.method")
+	assert.NotContains(t, attrs, attribute.Key("http.status_code"),
+		"deprecated http.status_code key must not be emitted alongside http.response.status_code")
+
+	assert.Equal(t, "GET", attrs[attribute.Key("http.request.method")].AsString())
+	assert.Equal(t, "/users/{id}", attrs[attribute.Key("http.route")].AsString())
+	assert.Equal(t, int64(http.StatusCreated), attrs[attribute.Key("http.response.status_code")].AsInt64())
 }
