@@ -117,10 +117,7 @@ func (h handler) serveInline(c *Context, traceID string) (result any, err error)
 	func() {
 		defer func() {
 			if re := recover(); re != nil {
-				h.container.Logger.Error(panicLog{
-					Error:      fmt.Sprint(re),
-					StackTrace: string(debug.Stack()),
-				})
+				logPanic(h.container.Logger, re)
 
 				err = gofrHTTP.ErrorPanicRecovery{}
 				panicked = true
@@ -233,6 +230,14 @@ func panicRecoveryHandler(re any, log logging.Logger, panicked chan struct{}) {
 	}
 
 	close(panicked)
+	logPanic(log, re)
+}
+
+// logPanic emits the panicLog structure used by both serveInline and
+// serveWithGoroutine. Single definition prevents the two paths drifting
+// in what they record (error message, stack trace) for an otherwise
+// identical recover.
+func logPanic(log logging.Logger, re any) {
 	log.Error(panicLog{
 		Error:      fmt.Sprint(re),
 		StackTrace: string(debug.Stack()),

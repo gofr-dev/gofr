@@ -5,7 +5,6 @@ import (
 	"errors"
 	"net/http"
 	"reflect"
-	"strconv"
 
 	resTypes "gofr.dev/pkg/gofr/http/response"
 )
@@ -13,11 +12,6 @@ import (
 var (
 	errEmptyResponse = errors.New("internal server error")
 )
-
-// jsonEncodeFailureBody is the fixed response body emitted when json.Marshal
-// fails inside Respond. It is a constant so the byte length can be served as
-// Content-Length without re-measuring.
-const jsonEncodeFailureBody = `{"error":{"message": "failed to encode response as JSON"}}` + "\n"
 
 // NewResponder creates a new Responder instance from the given http.ResponseWriter.
 func NewResponder(w http.ResponseWriter, method string) *Responder {
@@ -61,22 +55,16 @@ func (r Responder) Respond(data any, err error) {
 
 	jsonData, encodeErr := json.Marshal(resp)
 	if encodeErr != nil {
-		r.w.Header().Set("Content-Length", strconv.Itoa(len(jsonEncodeFailureBody)))
 		r.w.WriteHeader(http.StatusInternalServerError)
 
-		_, _ = r.w.Write([]byte(jsonEncodeFailureBody))
+		_, _ = r.w.Write([]byte(`{"error":{"message": "failed to encode response as JSON"}}` + "\n"))
 
 		return
 	}
 
-	// Append the trailing newline into the marshaled buffer so the response
-	// goes out in a single Write call (was 2 calls + no Content-Length, which
-	// caused bufio.Writer to flush twice per response).
-	jsonData = append(jsonData, '\n')
-
-	r.w.Header().Set("Content-Length", strconv.Itoa(len(jsonData)))
 	r.w.WriteHeader(statusCode)
 	_, _ = r.w.Write(jsonData)
+	_, _ = r.w.Write([]byte("\n"))
 }
 
 // handleSpecialResponseTypes handles special response types that bypass JSON encoding.
