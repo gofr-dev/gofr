@@ -59,11 +59,12 @@ func Metrics(metrics metrics) func(inner http.Handler) http.Handler {
 		statusAttrs sync.Map // map[int]attribute.KeyValue
 	)
 
-	// Cache status attributes as STRINGs (not Int) so the fast path
-	// matches the slow path's varargs label type. metricsManager.getAttributes
-	// emits status as string for the slow path, and OTLP exporters
-	// distinguish KeyValue types — a mismatch would break user queries
-	// expecting the label to be a string across both code paths.
+	// Cache the status attribute with a string value (not Int) so the
+	// fast path matches the slow path's varargs label type.
+	// metricsManager.getAttributes emits status as a string for the slow
+	// path, and OTLP exporters distinguish KeyValue types — a mismatch
+	// would break user queries expecting the label to be a string across
+	// both code paths.
 	statusAttr := func(code int) attribute.KeyValue {
 		if v, ok := statusAttrs.Load(code); ok {
 			return v.(attribute.KeyValue)
