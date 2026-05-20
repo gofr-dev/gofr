@@ -99,10 +99,12 @@ func Tracer(inner http.Handler) http.Handler {
 			w = srw
 		}
 
+		// rw.Status() normalizes the zero-default to http.StatusOK when the
+		// handler called neither WriteHeader nor Write — net/http emits an
+		// implicit 200 in that case, so the span attribute must report 200
+		// rather than be omitted (or worse, recorded as 0).
 		defer func(s trace.Span, rw *StatusResponseWriter) {
-			if rw.status != 0 {
-				s.SetAttributes(attribute.Int("http.response.status_code", rw.status))
-			}
+			s.SetAttributes(attribute.Int("http.response.status_code", rw.Status()))
 		}(span, srw)
 
 		inner.ServeHTTP(w, r.WithContext(ctxOut))

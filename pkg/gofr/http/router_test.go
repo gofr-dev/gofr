@@ -481,11 +481,9 @@ func noopHandler() http.Handler {
 // Hot path under measurement:
 //   - Router.ServeHTTP path normalization (ServeHTTP, this file)
 //   - gorilla/mux.Router.ServeHTTP route matching
-//   - otelhttp.NewHandler wrap (registered in Router.Add)
 //
 // PR targets that should move this number:
 //   - PR-12 (path-clean fast path) — small win
-//   - PR-17 (drop otelhttp wrap) — meaningful win
 //   - PR-N (gorilla/mux → chi) — largest win, separate initiative
 func BenchmarkRouter_Get_Static(b *testing.B) {
 	r := NewRouter()

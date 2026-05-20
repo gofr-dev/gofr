@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/http"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -58,12 +59,17 @@ func Metrics(metrics metrics) func(inner http.Handler) http.Handler {
 		statusAttrs sync.Map // map[int]attribute.KeyValue
 	)
 
+	// Cache status attributes as STRINGs (not Int) so the fast path
+	// matches the slow path's varargs label type. metricsManager.getAttributes
+	// emits status as string for the slow path, and OTLP exporters
+	// distinguish KeyValue types — a mismatch would break user queries
+	// expecting the label to be a string across both code paths.
 	statusAttr := func(code int) attribute.KeyValue {
 		if v, ok := statusAttrs.Load(code); ok {
 			return v.(attribute.KeyValue)
 		}
 
-		kv := attribute.Int("status", code)
+		kv := attribute.String("status", strconv.Itoa(code))
 		statusAttrs.Store(code, kv)
 
 		return kv
@@ -82,12 +88,18 @@ func Metrics(metrics metrics) func(inner http.Handler) http.Handler {
 				srw = &StatusResponseWriter{ResponseWriter: w}
 			}
 
-			// Guard against nil — mux.CurrentRoute is nil for unmatched routes
-			// (404). Calling .GetPathTemplate() on nil panics, so fall back to
-			// URL.Path for those cases.
+			// mux.CurrentRoute is nil for unmatched routes (404), and even
+			// when matched, GetPathTemplate can return "" for routes built
+			// without an explicit Path() (e.g. PathPrefix-only handlers).
+			// Fall back to r.URL.Path in both cases so the metric carries a
+			// usable path label instead of caching an empty key.
 			var path string
 			if cr := mux.CurrentRoute(r); cr != nil {
 				path, _ = cr.GetPathTemplate()
+			}
+
+			if path == "" {
+				path = r.URL.Path
 			}
 
 			ext := strings.ToLower(filepath.Ext(r.URL.Path))
@@ -112,9 +124,13 @@ func Metrics(metrics metrics) func(inner http.Handler) http.Handler {
 
 			start := time.Now()
 
-			// this has to be called in the end so that status code is populated
+			// this has to be called in the end so that status code is populated.
+			// res.Status() normalizes a zero internal status (handler wrote
+			// nothing, net/http implicit-200) to http.StatusOK so neither the
+			// histogram nor the statusAttrs cache gets poisoned with status=0.
 			defer func(res *StatusResponseWriter, req *http.Request) {
 				duration := time.Since(start)
+				status := res.Status()
 
 				if hasAttrer {
 					// Fast path: copy the cached (path, method) attribute pair
@@ -134,7 +150,7 @@ func Metrics(metrics metrics) func(inner http.Handler) http.Handler {
 					}
 
 					b := base.([]attribute.KeyValue)
-					attrs := [3]attribute.KeyValue{b[0], b[1], statusAttr(res.status)}
+					attrs := [3]attribute.KeyValue{b[0], b[1], statusAttr(status)}
 					attrer.RecordHistogramAttrs(context.Background(), "app_http_response", duration.Seconds(), attrs[:]...)
 
 					return
@@ -142,7 +158,7 @@ func Metrics(metrics metrics) func(inner http.Handler) http.Handler {
 
 				// Slow path: external metrics implementation, no fast method.
 				metrics.RecordHistogram(context.Background(), "app_http_response", duration.Seconds(),
-					"path", path, "method", req.Method, "status", fmt.Sprintf("%d", res.status))
+					"path", path, "method", req.Method, "status", fmt.Sprintf("%d", status))
 			}(srw, r)
 
 			inner.ServeHTTP(srw, r)

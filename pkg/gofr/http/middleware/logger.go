@@ -60,6 +60,20 @@ func (w *StatusResponseWriter) Write(b []byte) (int, error) {
 	return w.ResponseWriter.Write(b)
 }
 
+// Status returns the response status code as it would actually appear on
+// the wire. If the handler called neither WriteHeader nor Write, the
+// internal field is still zero but net/http emits an implicit 200 once
+// the handler returns — Status() reports 200 in that case so logs,
+// metrics, and tracing all see a valid HTTP status instead of a
+// poisoned 0.
+func (w *StatusResponseWriter) Status() int {
+	if w.status == 0 {
+		return http.StatusOK
+	}
+
+	return w.status
+}
+
 // Hijack implements the http.Hijacker interface. So that we are able to upgrade to a websocket
 // connection that requires the responseWriter implementation to implement this method.
 func (w *StatusResponseWriter) Hijack() (net.Conn, *bufio.ReadWriter, error) {
@@ -189,6 +203,8 @@ func Logging(probes LogProbes, logger logger) func(inner http.Handler) http.Hand
 }
 
 func handleRequestLog(srw *StatusResponseWriter, r *http.Request, start time.Time, traceID, spanID string, logger logger) {
+	status := srw.Status()
+
 	l := &RequestLog{
 		TraceID:      traceID,
 		SpanID:       spanID,
@@ -198,11 +214,11 @@ func handleRequestLog(srw *StatusResponseWriter, r *http.Request, start time.Tim
 		UserAgent:    r.UserAgent(),
 		IP:           getIPAddress(r),
 		URI:          r.RequestURI,
-		Response:     srw.status,
+		Response:     status,
 	}
 
 	if logger != nil {
-		if srw.status >= http.StatusInternalServerError {
+		if status >= http.StatusInternalServerError {
 			logger.Error(l)
 		} else {
 			logger.Log(l)

@@ -849,7 +849,7 @@ func Test_initTracer_NoSamplingButValidIDs(t *testing.T) {
 }
 
 // Test_initTracer_SDKWhenExporterSet asserts that initTracer installs the recording
-// SDK tracer provider when TRACE_EXPORTER is configured. Pair of Test_initTracer_NoopWhenDisabled.
+// SDK tracer provider when TRACE_EXPORTER is configured. Pair of Test_initTracer_NoSamplingButValidIDs.
 func Test_initTracer_SDKWhenExporterSet(t *testing.T) {
 	mockContainer, _ := container.NewMockContainer(t)
 	a := App{
