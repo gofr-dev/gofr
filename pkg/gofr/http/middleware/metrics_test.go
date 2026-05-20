@@ -115,10 +115,10 @@ func TestMetrics_GraphQLSkipsRootOnly(t *testing.T) {
 
 	router.Use(Metrics(mockMetrics))
 
-	rootReq := httptest.NewRequest(http.MethodGet, "/graphql", http.NoBody)
+	rootReq := httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/graphql", http.NoBody)
 	router.ServeHTTP(httptest.NewRecorder(), rootReq)
 
-	playgroundReq := httptest.NewRequest(http.MethodGet, "/graphql/playground", http.NoBody)
+	playgroundReq := httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/graphql/playground", http.NoBody)
 	router.ServeHTTP(httptest.NewRecorder(), playgroundReq)
 
 	// /graphql is skipped — no RecordHistogram call for it.
@@ -155,7 +155,7 @@ func TestMetrics_UnmatchedRouteDoesNotPanic(t *testing.T) {
 
 	handler := Metrics(mockMetrics)(notFound)
 
-	req := httptest.NewRequest(http.MethodGet, "/no/such/route", http.NoBody)
+	req := httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/no/such/route", http.NoBody)
 	rr := httptest.NewRecorder()
 
 	require.NotPanics(t, func() { handler.ServeHTTP(rr, req) },

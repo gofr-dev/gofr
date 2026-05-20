@@ -37,6 +37,11 @@ type routeMethodKey struct {
 	path, method string
 }
 
+// graphqlPath is the canonical GraphQL endpoint that the Metrics
+// middleware skips — GraphQL has its own dedicated app_graphql_*
+// metrics, so recording app_http_response for it would double-count.
+const graphqlPath = "/graphql"
+
 // Metrics is a middleware that records request response time metrics using the provided metrics interface.
 func Metrics(metrics metrics) func(inner http.Handler) http.Handler {
 	// Per-middleware-instance caches (closure-owned, not package globals):
@@ -100,7 +105,7 @@ func Metrics(metrics metrics) func(inner http.Handler) http.Handler {
 			// Skip recording for /graphql — it has its own dedicated metrics
 			// (app_graphql_*). time.Now() (vDSO call) is deferred past this
 			// branch so /graphql does not pay for a timestamp we throw away.
-			if path == "/graphql" {
+			if path == graphqlPath {
 				inner.ServeHTTP(srw, r)
 				return
 			}
