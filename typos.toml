@@ -20,6 +20,7 @@ datas = "datas" 		# common errors on datum/data plural, but too many to fix
 mosquitto = "mosquitto" # this is a MQQT broker
 IIT = "IIT" 			# Indian Institute of Technology
 AKS = "AKS"             # Azure Kubernetes Service
+wrk = "wrk"             # HTTP load-generator binary (https://github.com/wg/wrk)
 # WARNING: Before adding new words here
 # Consider false-positive managements with inline comments as mentioned above
 

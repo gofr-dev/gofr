@@ -9,7 +9,6 @@ import (
 	"strings"
 
 	"github.com/gorilla/mux"
-	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
 
 	"gofr.dev/pkg/gofr/logging"
 )
@@ -47,21 +46,27 @@ func NewRouter() *Router {
 func (rou *Router) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	// Normalize the path before routing to handle double slashes
 	originalPath := r.URL.Path
-	normalizedPath := path.Clean(originalPath)
 
-	// path.Clean returns "." for empty paths, convert to "/" for HTTP routing
-	if normalizedPath == "." {
-		normalizedPath = "/"
-	}
+	// Fast path: the vast majority of incoming paths are already canonical
+	// ("/users/42", "/api/v1/things"). Skip the path.Clean + string ops in
+	// that case so they only run for inputs that actually need normalizing.
+	if !isCleanPath(originalPath) {
+		normalizedPath := path.Clean(originalPath)
 
-	// Ensure path starts with "/" for HTTP routing
-	normalizedPath = "/" + strings.TrimLeft(normalizedPath, "/")
+		// path.Clean returns "." for empty paths, convert to "/" for HTTP routing
+		if normalizedPath == "." {
+			normalizedPath = "/"
+		}
 
-	// Only modify if path changed
-	if originalPath != normalizedPath {
-		r.URL.Path = normalizedPath
-		if r.URL.RawPath != "" {
-			r.URL.RawPath = normalizedPath
+		// Ensure path starts with "/" for HTTP routing
+		normalizedPath = "/" + strings.TrimLeft(normalizedPath, "/")
+
+		// Only modify if path changed
+		if originalPath != normalizedPath {
+			r.URL.Path = normalizedPath
+			if r.URL.RawPath != "" {
+				r.URL.RawPath = normalizedPath
+			}
 		}
 	}
 
@@ -69,10 +74,75 @@ func (rou *Router) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	rou.Router.ServeHTTP(w, r)
 }
 
-// Add adds a new route with the given HTTP method, pattern, and handler, wrapping the handler with OpenTelemetry instrumentation.
+// isCleanPath reports whether p is already canonical — starts with "/", no
+// "//", no "/.", no "/..", and no trailing slash (except the root). When
+// true, path.Clean(p) == p and the surrounding normalization can be skipped.
+func isCleanPath(p string) bool {
+	if p == "" || p[0] != '/' {
+		return false
+	}
+
+	if hasNonRootTrailingSlash(p) {
+		return false
+	}
+
+	return !hasDirtySegment(p)
+}
+
+// hasNonRootTrailingSlash reports whether p ends with '/' and is longer
+// than the root path.
+func hasNonRootTrailingSlash(p string) bool {
+	return len(p) > 1 && p[len(p)-1] == '/'
+}
+
+// hasDirtySegment reports whether p contains "//", "/.", or "/.." anywhere
+// between segments — any of which means path.Clean(p) would shorten p.
+func hasDirtySegment(p string) bool {
+	for i := 0; i < len(p); i++ {
+		if p[i] != '/' || i+1 >= len(p) {
+			continue
+		}
+
+		switch p[i+1] {
+		case '/':
+			return true
+		case '.':
+			if isDotSegment(p, i+1) {
+				return true
+			}
+		}
+	}
+
+	return false
+}
+
+// isDotSegment reports whether the dot at p[idx] starts a "." or ".."
+// segment (i.e., is followed by '/' or end-of-string, optionally with a
+// second '.' before that boundary).
+func isDotSegment(p string, idx int) bool {
+	if idx+1 == len(p) {
+		return true // trailing "/."
+	}
+
+	if p[idx+1] == '/' {
+		return true // "/./"
+	}
+
+	if p[idx+1] == '.' && (idx+2 == len(p) || p[idx+2] == '/') {
+		return true // "/.." or "/../"
+	}
+
+	return false
+}
+
+// Add adds a new route with the given HTTP method, pattern, and handler.
+//
+// HTTP semconv attributes (http.method, http.route, http.status_code) are
+// recorded on the request span by the framework's Tracer middleware
+// directly, avoiding the per-request child span and attribute slice grow
+// that an otelhttp.NewHandler wrap would add.
 func (rou *Router) Add(method, pattern string, handler http.Handler) {
-	h := otelhttp.NewHandler(handler, "gofr-router")
-	rou.Router.NewRoute().Methods(method).Path(pattern).Handler(h)
+	rou.Router.NewRoute().Methods(method).Path(pattern).Handler(handler)
 }
 
 // UseMiddleware registers middlewares to the router.

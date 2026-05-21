@@ -128,6 +128,51 @@ func TestRouter_DoubleSlashPath_GET(t *testing.T) {
 	}
 }
 
+// TestIsCleanPath pins the fast-path predicate that ServeHTTP uses to skip
+// path.Clean for already-canonical URLs. A wrong negative would re-run the
+// normalizer pointlessly (performance regression); a wrong positive would
+// route a non-canonical URL without cleaning it (correctness regression).
+func TestIsCleanPath(t *testing.T) {
+	canonical := []string{
+		"/",
+		"/users",
+		"/api/v1/things",
+		"/users/42",
+		"/a/b/c/d",
+		"/path-with-dashes",
+		"/path.with.dots",
+		"/users/42.json",
+	}
+	dirty := []string{
+		"",             // empty
+		"users",        // no leading slash
+		"//",           // double slash root
+		"//users",      // leading double slash
+		"/users//42",   // mid double slash
+		"/.",           // trailing /.
+		"/..",          // trailing /..
+		"/./users",     // /./
+		"/../users",    // /../
+		"/users/.",     // /.
+		"/users/..",    // /..
+		"/users/./42",  // /./ mid
+		"/users/../42", // /../ mid
+		"/users/",      // trailing slash on non-root
+	}
+
+	for _, p := range canonical {
+		if !isCleanPath(p) {
+			t.Errorf("isCleanPath(%q) = false, want true", p)
+		}
+	}
+
+	for _, p := range dirty {
+		if isCleanPath(p) {
+			t.Errorf("isCleanPath(%q) = true, want false", p)
+		}
+	}
+}
+
 // TestRouter_PathNormalization tests the path normalization function directly.
 func TestRouter_PathNormalization(t *testing.T) {
 	router := NewRouter()
@@ -400,5 +445,76 @@ func runStaticFileTests(t *testing.T, tempDir string, testCases []struct {
 			assert.Equal(t, tc.expectedCode, w.Code)
 			assert.Equal(t, tc.expectedBody, strings.TrimSpace(w.Body.String()))
 		})
+	}
+}
+
+// discardingResponseWriter is a zero-cost ResponseWriter for benchmarks
+// that should measure routing/handler cost without including the per-iter
+// allocation of httptest.NewRecorder. Shared across the http-package
+// benchmarks (router, responder).
+type discardingResponseWriter struct {
+	h http.Header
+}
+
+func (d *discardingResponseWriter) Header() http.Header {
+	if d.h == nil {
+		d.h = http.Header{}
+	}
+
+	return d.h
+}
+
+func (*discardingResponseWriter) Write(b []byte) (int, error) { return len(b), nil }
+func (*discardingResponseWriter) WriteHeader(int)             {}
+
+// noopHandler returns an http.Handler that discards the request and
+// writes nothing. Used by router benchmarks to isolate router cost from
+// any handler-side work.
+func noopHandler() http.Handler {
+	return http.HandlerFunc(func(http.ResponseWriter, *http.Request) {})
+}
+
+// BenchmarkRouter_Get_Static measures the per-request cost of routing
+// a request to an exact-match route (no path parameters). Closest
+// approximation to TFB's /plaintext routing cost.
+//
+// Hot path under measurement:
+//   - Router.ServeHTTP path normalization (ServeHTTP, this file)
+//   - gorilla/mux.Router.ServeHTTP route matching
+//
+// PR targets that should move this number:
+//   - PR-12 (path-clean fast path) — small win
+//   - PR-N (gorilla/mux → chi) — largest win, separate initiative
+func BenchmarkRouter_Get_Static(b *testing.B) {
+	r := NewRouter()
+	r.Add(http.MethodGet, "/plaintext", noopHandler())
+
+	req := httptest.NewRequestWithContext(b.Context(), http.MethodGet, "/plaintext", http.NoBody)
+	w := &discardingResponseWriter{}
+
+	b.ReportAllocs()
+	b.ResetTimer()
+
+	for i := 0; i < b.N; i++ {
+		r.ServeHTTP(w, req)
+	}
+}
+
+// BenchmarkRouter_Get_PathParam measures the per-request cost of routing
+// to a path with a parameter ({id}). Includes gorilla/mux's parameter
+// extraction overhead, which is part of why mux is slower than radix-tree
+// routers (chi, httprouter).
+func BenchmarkRouter_Get_PathParam(b *testing.B) {
+	r := NewRouter()
+	r.Add(http.MethodGet, "/users/{id}", noopHandler())
+
+	req := httptest.NewRequestWithContext(b.Context(), http.MethodGet, "/users/42", http.NoBody)
+	w := &discardingResponseWriter{}
+
+	b.ReportAllocs()
+	b.ResetTimer()
+
+	for i := 0; i < b.N; i++ {
+		r.ServeHTTP(w, req)
 	}
 }

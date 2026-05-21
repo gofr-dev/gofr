@@ -10,12 +10,22 @@ import (
 	"net/http"
 	"runtime/debug"
 	"strings"
+	"sync"
 	"time"
 
 	"go.opentelemetry.io/otel/trace"
 )
 
 var errHijackNotSupported = errors.New("response writer does not support hijacking")
+
+// JSON envelope keys for the panic-recovery error response written by
+// panicRecovery. Defined as constants so the same spellings stay
+// consistent across the package and the goconst linter is satisfied.
+const (
+	envelopeCodeKey    = "code"
+	envelopeStatusKey  = "status"
+	envelopeMessageKey = "message"
+)
 
 // StatusResponseWriter Defines own Response Writer to be used for logging of status - as http.ResponseWriter does not let us read status.
 type StatusResponseWriter struct {
@@ -35,6 +45,33 @@ func (w *StatusResponseWriter) WriteHeader(status int) {
 	w.status = status
 	w.wroteHeader = true
 	w.ResponseWriter.WriteHeader(status)
+}
+
+// Write implements http.ResponseWriter. When a handler calls Write without
+// first calling WriteHeader, net/http implicitly sends StatusOK on the
+// wire — record that explicitly here so logs / metrics / tracing see 200
+// instead of 0 for the common "just write the body" pattern.
+func (w *StatusResponseWriter) Write(b []byte) (int, error) {
+	if !w.wroteHeader {
+		w.status = http.StatusOK
+		w.wroteHeader = true
+	}
+
+	return w.ResponseWriter.Write(b)
+}
+
+// Status returns the response status code as it would actually appear on
+// the wire. If the handler called neither WriteHeader nor Write, the
+// internal field is still zero but net/http emits an implicit 200 once
+// the handler returns — Status() reports 200 in that case so logs,
+// metrics, and tracing all see a valid HTTP status instead of a
+// poisoned 0.
+func (w *StatusResponseWriter) Status() int {
+	if w.status == 0 {
+		return http.StatusOK
+	}
+
+	return w.status
 }
 
 // Hijack implements the http.Hijacker interface. So that we are able to upgrade to a websocket
@@ -59,6 +96,14 @@ type RequestLog struct {
 	URI          string `json:"uri,omitempty"`
 	Response     int    `json:"response,omitempty"`
 }
+
+// zeroTraceID is the canonical 32-zero string the W3C trace-context
+// invalid TraceID prints to. We use it for the X-Correlation-ID
+// response header AND for the request-log field when no SpanContext
+// is in scope, so the wire shape is byte-for-byte identical to what
+// GoFr emitted before PR-7's internal optimization.
+const zeroTraceID = "00000000000000000000000000000000"
+const zeroSpanID = "0000000000000000"
 
 func (rl *RequestLog) PrettyPrint(writer io.Writer) {
 	fmt.Fprintf(writer, "\u001B[38;5;8m%s \u001B[38;5;%dm%-6d\u001B[0m "+
@@ -90,24 +135,66 @@ type logger interface {
 }
 
 // Logging is a middleware which logs response status and time in milliseconds along with other data.
+//
+// The StatusResponseWriter wrapper allocated per request is pooled in a
+// closure-owned sync.Pool — the pool is constructed once per Logging()
+// invocation (typically once per app) and tied to this middleware's
+// lifetime, not the package, so we avoid a shared global. Reset() zeros
+// the writer fields before Put so a stale ResponseWriter pointer can
+// never leak across requests.
 func Logging(probes LogProbes, logger logger) func(inner http.Handler) http.Handler {
+	pool := sync.Pool{
+		New: func() any { return &StatusResponseWriter{} },
+	}
+
 	return func(inner http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			start := time.Now()
-			srw := &StatusResponseWriter{ResponseWriter: w}
-			traceID := trace.SpanFromContext(r.Context()).SpanContext().TraceID().String()
-			spanID := trace.SpanFromContext(r.Context()).SpanContext().SpanID().String()
+			srw := pool.Get().(*StatusResponseWriter)
+			srw.ResponseWriter = w
+			srw.status = 0
+			srw.wroteHeader = false
+
+			// Only the ResponseWriter pointer is cleared on Put — leaving it
+			// dangling would keep the previous request's writer (and its
+			// underlying *http.response, headers, etc.) alive until the pool
+			// entry is next claimed. status/wroteHeader are reset on the next
+			// Get above; resetting them here too is redundant.
+			defer func() {
+				srw.ResponseWriter = nil
+				pool.Put(srw)
+			}()
+
+			// Fetch SpanContext once and resolve trace/span IDs to strings only
+			// when they are valid. Under a noop tracer (the default after PR-1
+			// when no exporter is configured) the SpanContext is invalid and
+			// the IDs are all-zeros — calling .String() on those is wasted
+			// allocation. Substitute the precomputed zero-string constants so
+			// the log line and the X-Correlation-ID response header carry
+			// byte-identical values to the pre-PR-7 wire shape.
+			sc := trace.SpanFromContext(r.Context()).SpanContext()
+
+			var traceID, spanID string
+			if sc.IsValid() {
+				traceID = sc.TraceID().String()
+				spanID = sc.SpanID().String()
+			} else {
+				traceID = zeroTraceID
+				spanID = zeroSpanID
+			}
 
 			srw.Header().Set("X-Correlation-ID", traceID)
 
 			defer func() { panicRecovery(recover(), srw, logger) }()
 
-			// Skip logging for default probe paths if log probes are disabled
+			// Skip logging for default probe paths if log probes are disabled.
+			// time.Now() (vDSO call) is deferred past this so probe paths do
+			// not pay for a timestamp that is then thrown away.
 			if isLogProbeDisabled(probes, r.URL.Path) {
 				inner.ServeHTTP(w, r)
 				return
 			}
 
+			start := time.Now()
 			defer handleRequestLog(srw, r, start, traceID, spanID, logger)
 
 			inner.ServeHTTP(srw, r)
@@ -116,6 +203,8 @@ func Logging(probes LogProbes, logger logger) func(inner http.Handler) http.Hand
 }
 
 func handleRequestLog(srw *StatusResponseWriter, r *http.Request, start time.Time, traceID, spanID string, logger logger) {
+	status := srw.Status()
+
 	l := &RequestLog{
 		TraceID:      traceID,
 		SpanID:       spanID,
@@ -125,11 +214,11 @@ func handleRequestLog(srw *StatusResponseWriter, r *http.Request, start time.Tim
 		UserAgent:    r.UserAgent(),
 		IP:           getIPAddress(r),
 		URI:          r.RequestURI,
-		Response:     srw.status,
+		Response:     status,
 	}
 
 	if logger != nil {
-		if srw.status >= http.StatusInternalServerError {
+		if status >= http.StatusInternalServerError {
 			logger.Error(l)
 		} else {
 			logger.Log(l)
@@ -180,6 +269,7 @@ func panicRecovery(re any, w http.ResponseWriter, logger logger) {
 	}
 
 	var e string
+
 	switch t := re.(type) {
 	case string:
 		e = t
@@ -196,6 +286,10 @@ func panicRecovery(re any, w http.ResponseWriter, logger logger) {
 
 	w.WriteHeader(http.StatusInternalServerError)
 
-	res := map[string]any{"code": http.StatusInternalServerError, "status": "ERROR", "message": "Some unexpected error has occurred"}
+	res := map[string]any{
+		envelopeCodeKey:    http.StatusInternalServerError,
+		envelopeStatusKey:  "ERROR",
+		envelopeMessageKey: "Some unexpected error has occurred",
+	}
 	_ = json.NewEncoder(w).Encode(res)
 }
