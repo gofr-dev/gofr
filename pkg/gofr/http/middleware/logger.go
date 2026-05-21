@@ -53,6 +53,7 @@ type RequestLog struct {
 	SpanID       string `json:"span_id,omitempty"`
 	StartTime    string `json:"start_time,omitempty"`
 	ResponseTime int64  `json:"response_time,omitempty"`
+	ResponseUnit string `json:"latencyUnit,omitempty"`
 	Method       string `json:"method,omitempty"`
 	UserAgent    string `json:"user_agent,omitempty"`
 	IP           string `json:"ip,omitempty"`
@@ -121,6 +122,7 @@ func handleRequestLog(srw *StatusResponseWriter, r *http.Request, start time.Tim
 		SpanID:       spanID,
 		StartTime:    start.Format("2006-01-02T15:04:05.999999999-07:00"),
 		ResponseTime: time.Since(start).Nanoseconds() / 1000,
+		ResponseUnit: "µs",
 		Method:       r.Method,
 		UserAgent:    r.UserAgent(),
 		IP:           getIPAddress(r),

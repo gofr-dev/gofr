@@ -44,6 +44,7 @@ type gRPCLog struct {
 	ID           string `json:"id"`
 	StartTime    string `json:"startTime"`
 	ResponseTime int64  `json:"responseTime"`
+	ResponseUnit string `json:"responseUnit"`
 	Method       string `json:"method"`
 	StatusCode   int32  `json:"statusCode"`
 	StreamType   string `json:"streamType,omitempty"`
@@ -212,6 +213,7 @@ func logStreamRPC(ctx context.Context, logger Logger, metrics Metrics, start tim
 		ID:           getTraceID(ctx),
 		StartTime:    start.Format("2006-01-02T15:04:05.999999999-07:00"),
 		ResponseTime: duration.Microseconds(),
+		ResponseUnit: "µs",
 		Method:       method,
 		StreamType:   streamType,
 	}
@@ -235,6 +237,7 @@ func logRPC(ctx context.Context, logger Logger, metrics Metrics, start time.Time
 		ID:           trace.SpanFromContext(ctx).SpanContext().TraceID().String(),
 		StartTime:    start.Format("2006-01-02T15:04:05.999999999-07:00"),
 		ResponseTime: duration.Microseconds(),
+		ResponseUnit: "µs",
 		Method:       method,
 	}
 
