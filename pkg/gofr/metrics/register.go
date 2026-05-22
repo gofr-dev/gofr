@@ -228,6 +228,28 @@ func (m *metricsManager) RecordHistogram(ctx context.Context, name string, value
 	histogram.Record(ctx, value, metric.WithAttributes(m.getAttributes(name, labels...)...))
 }
 
+// RecordHistogramAttrs records a histogram observation with pre-built
+// attribute.KeyValue slices, skipping the string→KeyValue conversion that
+// RecordHistogram performs from its label varargs. Hot-path callers that
+// can cache the attribute slice per dimension combination (e.g. the
+// middleware caching one slice per (route, method)) get to avoid the
+// per-request allocation.
+//
+// Not part of the public metrics.Manager interface — middleware that
+// wants the fast path type-asserts on this concrete method. External
+// implementers of metrics.Manager are unaffected; they keep using
+// RecordHistogram.
+func (m *metricsManager) RecordHistogramAttrs(ctx context.Context, name string, value float64, attrs ...attribute.KeyValue) {
+	histogram, err := m.store.getHistogram(name)
+	if err != nil {
+		m.logger.Error(err)
+
+		return
+	}
+
+	histogram.Record(ctx, value, metric.WithAttributes(attrs...))
+}
+
 // SetGauge gets the value and sets the metric to the specified value.
 // Unlike counters, gauges do not track the last value for the metric. This method allows us to
 // directly set the value of the gauge to the specified value.

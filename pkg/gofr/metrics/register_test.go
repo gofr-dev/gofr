@@ -160,3 +160,29 @@ func Test_NewMetricsManagerLabelHighCardinality(t *testing.T) {
 
 	assert.Contains(t, log, `metrics counter-test has high cardinality: 24`, "TEST Failed. high cardinality of metrics")
 }
+
+// BenchmarkAttrBuild_HTTP measures the per-request cost of building the
+// 3-label attribute slice for an HTTP metric: {path, method, status}.
+// Every request hits this function via the HTTP metrics middleware.
+//
+// PR-9 target: precompute the route-static portion ({path, method}) at
+// route registration time and append only `status` per request. Should
+// drop B/op and allocs/op substantially after that PR.
+func BenchmarkAttrBuild_HTTP(b *testing.B) {
+	mgr := NewMetricsManager(
+		exporters.Prometheus("bench", "v0.0.0"),
+		logging.NewMockLogger(logging.ERROR),
+	).(*metricsManager)
+
+	b.ReportAllocs()
+	b.ResetTimer()
+
+	for i := 0; i < b.N; i++ {
+		_ = mgr.getAttributes(
+			"app_http_response",
+			"path", "/users/{id}",
+			"method", "GET",
+			"status", "200",
+		)
+	}
+}
