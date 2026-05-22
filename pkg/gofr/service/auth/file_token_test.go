@@ -15,9 +15,10 @@ import (
 	"gofr.dev/pkg/gofr/datasource/file"
 	"gofr.dev/pkg/gofr/logging"
 	"gofr.dev/pkg/gofr/service"
+	"gofr.dev/pkg/gofr/testutil"
 )
 
-func testLogger() service.Logger {
+func testLogger() logging.Logger {
 	return logging.NewMockLogger(logging.ERROR)
 }
 
@@ -54,7 +55,7 @@ func TestNewFileTokenAuthConfig(t *testing.T) {
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			cfg, err := NewFileTokenAuthConfig(tc.fs, tc.path, tc.interval)
+			cfg, err := NewFileTokenAuthConfig(tc.fs, testLogger(), tc.path, tc.interval)
 			if tc.expectError {
 				require.Error(t, err)
 				assert.Nil(t, cfg)
@@ -77,7 +78,7 @@ func TestNewFileTokenAuthConfig(t *testing.T) {
 func TestFileTokenAuthConfig_CloseIsIdempotent(t *testing.T) {
 	path := writeTokenFile(t, "tok")
 
-	cfg, err := NewFileTokenAuthConfig(testFS(), path, 50*time.Millisecond)
+	cfg, err := NewFileTokenAuthConfig(testFS(), testLogger(), path, 50*time.Millisecond)
 	require.NoError(t, err)
 
 	assert.NoError(t, cfg.Close())
@@ -87,7 +88,7 @@ func TestFileTokenAuthConfig_CloseIsIdempotent(t *testing.T) {
 func TestFileTokenAuthConfig_RefreshPicksUpRotation(t *testing.T) {
 	path := writeTokenFile(t, "token-v1")
 
-	cfg, err := NewFileTokenAuthConfig(testFS(), path, 20*time.Millisecond)
+	cfg, err := NewFileTokenAuthConfig(testFS(), testLogger(), path, 20*time.Millisecond)
 	require.NoError(t, err)
 
 	t.Cleanup(func() { _ = cfg.Close() })
@@ -112,7 +113,7 @@ func TestFileTokenAuthConfig_InjectsBearerHeader(t *testing.T) {
 
 	path := writeTokenFile(t, "secret-token")
 
-	cfg, err := NewFileTokenAuthConfig(testFS(), path, time.Hour)
+	cfg, err := NewFileTokenAuthConfig(testFS(), testLogger(), path, time.Hour)
 	require.NoError(t, err)
 
 	t.Cleanup(func() { _ = cfg.Close() })
@@ -136,7 +137,7 @@ func TestFileTokenAuthConfig_RejectsExistingAuthHeader(t *testing.T) {
 
 	path := writeTokenFile(t, "tok")
 
-	cfg, err := NewFileTokenAuthConfig(testFS(), path, time.Hour)
+	cfg, err := NewFileTokenAuthConfig(testFS(), testLogger(), path, time.Hour)
 	require.NoError(t, err)
 
 	t.Cleanup(func() { _ = cfg.Close() })
@@ -148,9 +149,88 @@ func TestFileTokenAuthConfig_RejectsExistingAuthHeader(t *testing.T) {
 	})
 	require.Error(t, err)
 
+	// The error must carry service.AuthErr (parity with BasicAuth/OAuth/APIKey)
+	// while still exposing the underlying sentinel through the wrap.
+	var authErr service.AuthErr
+	require.ErrorAs(t, err, &authErr)
+	require.ErrorIs(t, err, errAuthHeaderPresent)
+
 	if resp != nil {
 		_ = resp.Body.Close()
 	}
+}
+
+func TestFileTokenAuthConfig_InjectsBearerHeaderAllVerbs(t *testing.T) {
+	var seenAuth string
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		seenAuth = r.Header.Get("Authorization")
+
+		w.WriteHeader(http.StatusOK)
+	}))
+	t.Cleanup(srv.Close)
+
+	path := writeTokenFile(t, "verb-token")
+
+	cfg, err := NewFileTokenAuthConfig(testFS(), testLogger(), path, time.Hour)
+	require.NoError(t, err)
+
+	t.Cleanup(func() { _ = cfg.Close() })
+
+	svc := service.NewHTTPService(srv.URL, testLogger(), nil, cfg)
+	ctx := context.Background()
+
+	tests := []struct {
+		name string
+		call func() (*http.Response, error)
+	}{
+		{"GET", func() (*http.Response, error) { return svc.Get(ctx, "", nil) }},
+		{"POST", func() (*http.Response, error) { return svc.Post(ctx, "", nil, nil) }},
+		{"PUT", func() (*http.Response, error) { return svc.Put(ctx, "", nil, nil) }},
+		{"PATCH", func() (*http.Response, error) { return svc.Patch(ctx, "", nil, nil) }},
+		{"DELETE", func() (*http.Response, error) { return svc.Delete(ctx, "", nil) }},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			seenAuth = ""
+
+			resp, err := tc.call()
+			require.NoError(t, err)
+
+			_ = resp.Body.Close()
+
+			assert.Equal(t, "Bearer verb-token", seenAuth)
+		})
+	}
+}
+
+// TestFileTokenAuthConfig_RefreshFailureLogsWarning verifies that a failed
+// background refresh is surfaced to the logger instead of being swallowed
+// silently (the cached token continues to serve).
+func TestFileTokenAuthConfig_RefreshFailureLogsWarning(t *testing.T) {
+	path := writeTokenFile(t, "token-v1")
+
+	out := testutil.StdoutOutputForFunc(func() {
+		cfg, err := NewFileTokenAuthConfig(testFS(), logging.NewMockLogger(logging.WARN), path, 20*time.Millisecond)
+		require.NoError(t, err)
+
+		t.Cleanup(func() { _ = cfg.Close() })
+
+		// Remove the token file so the next refresh tick fails to read it.
+		require.NoError(t, os.Remove(path))
+
+		assert.Eventually(t, func() bool {
+			// Cached token must remain available despite refresh failures.
+			tok, tokErr := cfg.currentToken()
+			return tokErr == nil && tok == "token-v1"
+		}, time.Second, 20*time.Millisecond)
+
+		// Give the refresh loop time to log at least one warning.
+		time.Sleep(100 * time.Millisecond)
+	})
+
+	assert.Contains(t, out, "failed to refresh token")
 }
 
 // TestFileTokenAuthConfig_WorksWithConnectionPoolConfig locks in the regression
@@ -167,7 +247,7 @@ func TestFileTokenAuthConfig_WorksWithConnectionPoolConfig(t *testing.T) {
 
 	path := writeTokenFile(t, "combo-token")
 
-	cfg, err := NewFileTokenAuthConfig(testFS(), path, time.Hour)
+	cfg, err := NewFileTokenAuthConfig(testFS(), testLogger(), path, time.Hour)
 	require.NoError(t, err)
 
 	t.Cleanup(func() { _ = cfg.Close() })

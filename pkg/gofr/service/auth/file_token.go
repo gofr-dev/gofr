@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"gofr.dev/pkg/gofr/datasource/file"
+	"gofr.dev/pkg/gofr/logging"
 	"gofr.dev/pkg/gofr/service"
 )
 
@@ -38,6 +39,7 @@ var (
 // the background refresh goroutine; it is safe to call Close multiple times.
 type FileTokenAuthConfig struct {
 	fs              file.FileSystem
+	logger          logging.Logger
 	tokenFilePath   string
 	refreshInterval time.Duration
 
@@ -52,8 +54,11 @@ type FileTokenAuthConfig struct {
 // the supplied file.FileSystem. If tokenFilePath is empty it defaults to
 // DefaultTokenFilePath. If refreshInterval is <= 0 it defaults to 30s.
 //
+// logger is used to report background token-refresh failures at WARN level; pass
+// app.Logger(). It may be nil, in which case refresh failures are not logged.
+//
 // Callers typically obtain fs via file.NewLocalFileSystem(app.Logger()).
-func NewFileTokenAuthConfig(fs file.FileSystem, tokenFilePath string,
+func NewFileTokenAuthConfig(fs file.FileSystem, logger logging.Logger, tokenFilePath string,
 	refreshInterval time.Duration) (*FileTokenAuthConfig, error) {
 	if fs == nil {
 		return nil, errNilFileSystem
@@ -74,6 +79,7 @@ func NewFileTokenAuthConfig(fs file.FileSystem, tokenFilePath string,
 
 	f := &FileTokenAuthConfig{
 		fs:              fs,
+		logger:          logger,
 		tokenFilePath:   tokenFilePath,
 		refreshInterval: refreshInterval,
 		token:           token,
@@ -121,6 +127,13 @@ func (f *FileTokenAuthConfig) refreshLoop() {
 		case <-ticker.C:
 			token, err := readToken(f.fs, f.tokenFilePath)
 			if err != nil {
+				// Keep serving the cached token, but surface the failure so a
+				// vanished/locked token file does not stay invisible until an
+				// upstream 401.
+				if f.logger != nil {
+					f.logger.Warnf("file token auth: failed to refresh token from %s: %v", f.tokenFilePath, err)
+				}
+
 				continue
 			}
 
@@ -170,7 +183,7 @@ func (d *fileTokenDecorator) inject(headers map[string]string) (map[string]strin
 	}
 
 	if existing, ok := headers[service.AuthHeader]; ok && existing != "" {
-		return nil, errAuthHeaderPresent
+		return nil, service.AuthErr{Err: errAuthHeaderPresent, Message: "authorization header already set on request"}
 	}
 
 	token, err := d.source.currentToken()

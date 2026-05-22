@@ -16,6 +16,7 @@ func main() {
 
 	tokenCfg, err := auth.NewFileTokenAuthConfig(
 		fs,
+		app.Logger(),
 		auth.DefaultTokenFilePath,
 		30*time.Second,
 	)
@@ -23,6 +24,10 @@ func main() {
 		app.Logger().Fatalf("failed to initialize file token auth: %v", err)
 	}
 
+	// tokenCfg runs a background refresh goroutine for the lifetime of the
+	// process; AddHTTPService keeps it alive until the app exits, so there is no
+	// need to call tokenCfg.Close() here. Call Close() only if you build a
+	// config that outlives the service that uses it.
 	app.AddHTTPService("upstream", "https://example.com", tokenCfg)
 
 	app.GET("/proxy", Proxy)
