@@ -39,7 +39,7 @@ func registerServerWithGofr(app *gofr.App, srv any, registerFunc func(grpc.Servi
 
 	// Register metrics and health server only once
 	if !healthServerRegistered {
-		gRPCBuckets := []float64{0.005, 0.01, .05, .075, .1, .125, .15, .2, .3, .5, .75, 1, 2, 3, 4, 5, 7.5, 10}
+		gRPCBuckets := []float64{0.005, 0.01, .05, .075, .1, .125, .15, .2, .3, .5, .75, 1, 2, 3, 4, 5, 7.5, 10, 25, 50, 100, 250, 500, 1000, 5000, 10000, 30000}
 		app.Metrics().NewHistogram("app_gRPC-Server_stats", "Response time of gRPC server in milliseconds.", gRPCBuckets...)
 		app.Metrics().NewHistogram("app_gRPC-Stream_stats", "Duration of gRPC stream in milliseconds.", gRPCBuckets...)
 

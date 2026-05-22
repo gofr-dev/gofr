@@ -22,7 +22,7 @@ import (
 
 var (
 	metricsOnce sync.Once
-	gRPCBuckets = []float64{0.005, 0.01, .05, .075, .1, .125, .15, .2, .3, .5, .75, 1, 2, 3, 4, 5, 7.5, 10}
+	gRPCBuckets = []float64{0.005, 0.01, .05, .075, .1, .125, .15, .2, .3, .5, .75, 1, 2, 3, 4, 5, 7.5, 10, 25, 50, 100, 250, 500, 1000, 5000, 10000, 30000}
 )
 
 type HealthClient interface {
