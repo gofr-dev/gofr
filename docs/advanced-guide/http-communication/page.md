@@ -169,6 +169,7 @@ echo -n "your-password" | base64
 ```
 
 - **OAuthConfig** - This option allows the user to add `OAuth` as default auth for downstream HTTP Service.
+- **FileTokenAuthConfig** (`gofr.dev/pkg/gofr/service/auth`) - This option reads a bearer token from a file and refreshes it periodically, injecting an `Authorization: Bearer <token>` header on every outgoing call. It is intended for Kubernetes projected service account tokens, which are rotated on disk. See [File-Based Token Authentication](#file-based-token-authentication) below.
 - **CircuitBreakerConfig** - This option allows the user to configure the GoFr Circuit Breaker's `threshold` and `interval` for the failing downstream HTTP Service calls. If the failing calls exceeds the threshold the circuit breaker will automatically be enabled.
 - **DefaultHeaders** - This option allows the user to set some default headers that will be propagated to the downstream HTTP Service every time it is being called.
 - **HealthConfig** - This option allows the user to add the `HealthEndpoint` along with `Timeout` to enable and perform the timely health checks for downstream HTTP Service.
@@ -235,6 +236,56 @@ a.AddHTTPService("cat-facts", "https://catfact.ninja",
 - For distributed systems: It is strongly recommended to use Redis-based store (`NewRedisRateLimiterStore`) to ensure consistent rate limiting across multiple instances of your application.
 - For single-instance applications: The default in-memory store (`NewLocalRateLimiterStore`) is sufficient and provides better performance.
 - Rate configuration: Set Burst higher than Requests to allow short traffic bursts while maintaining average rate limits.
+
+### File-Based Token Authentication
+
+`FileTokenAuthConfig` (in `gofr.dev/pkg/gofr/service/auth`) authenticates outgoing
+HTTP calls with a bearer token read from a file, re-reading it on a configurable
+interval so rotated tokens are picked up without restarting the process. The common
+use case is a Kubernetes [projected service account token](https://kubernetes.io/docs/tasks/configure-pod-container/configure-service-account/#serviceaccount-token-volume-projection),
+mounted by default at `/var/run/secrets/kubernetes.io/serviceaccount/token`.
+
+The constructor takes a `file.FileSystem`, a logger (used to report background
+refresh failures at WARN level — the cached token keeps serving until the next
+successful read), the token file path (empty defaults to the standard mount path),
+and the refresh interval (`<= 0` defaults to 30s).
+
+```go
+package main
+
+import (
+	"time"
+
+	"gofr.dev/pkg/gofr"
+	"gofr.dev/pkg/gofr/datasource/file"
+	"gofr.dev/pkg/gofr/service/auth"
+)
+
+func main() {
+	app := gofr.New()
+
+	fs := file.NewLocalFileSystem(app.Logger())
+
+	tokenCfg, err := auth.NewFileTokenAuthConfig(
+		fs,
+		app.Logger(),
+		auth.DefaultTokenFilePath, // or "" for the default K8s mount path
+		30*time.Second,
+	)
+	if err != nil {
+		app.Logger().Fatalf("failed to initialize file token auth: %v", err)
+	}
+
+	app.AddHTTPService("upstream", "https://example.com", tokenCfg)
+
+	app.Run()
+}
+```
+
+`tokenCfg` runs a background refresh goroutine for the lifetime of the process;
+registering it with `AddHTTPService` keeps it alive until the app exits, so there
+is no need to call `tokenCfg.Close()`. Call `Close()` only if you construct a config
+that outlives the service using it.
 
 ## Metrics
 
