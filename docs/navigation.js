@@ -1,12 +1,12 @@
 export const navigation = [
     {
         title: 'Quick Start Guide',
-        desc: "Get started with GoFR through our Quick Start Guide. Learn to build scalable applications with easy-to-follow instructions on server setup, database connections, configuration management, and more. Boost your productivity and streamline your development process.",
+        desc: "Get started with GoFr through our Quick Start Guide. Learn to build scalable applications with easy-to-follow instructions on server setup, database connections, configuration management, and more. Boost your productivity and streamline your development process.",
         links: [
             {
                 title: 'Hello Server',
                 href: '/docs/quick-start/introduction',
-                desc: "Getting started with how to write a server using GoFR with basic examples and explanations. Boost your productivity with efficient coding practices and learn to build scalable applications quickly."
+                desc: "Getting started with how to write a server using GoFr with basic examples and explanations. Boost your productivity with efficient coding practices and learn to build scalable applications quickly."
             },
 
             {
@@ -17,12 +17,12 @@ export const navigation = [
             {
                 title: 'Connecting Redis',
                 href: '/docs/quick-start/connecting-redis',
-                desc: "Discover how to connect your GoFR application to Redis for fast in-memory data storage."
+                desc: "Discover how to connect your GoFr application to Redis for fast in-memory data storage."
             },
             {
                 title: 'Connecting MySQL',
                 href: '/docs/quick-start/connecting-mysql',
-                desc: "Step-by-step guide on integrating MySQL with your GoFR application. With managed database connections and new methods for increasing your productivity."
+                desc: "Step-by-step guide on integrating MySQL with your GoFr application. With managed database connections and new methods for increasing your productivity."
             },
             {
                 title: 'Observability',
@@ -82,7 +82,7 @@ export const navigation = [
             {
                 title: 'Authentication',
                 href: '/docs/advanced-guide/authentication',
-                desc: "Implement various authentication methods to secure your GoFR application and protect sensitive endpoints across HTTP and gRPC."
+                desc: "Implement various authentication methods to secure your GoFr application and protect sensitive endpoints across HTTP and gRPC."
             },
             {
                 title: 'Role-Based Access Control (RBAC)',
@@ -358,12 +358,12 @@ export const navigation = [
             {
                 title: 'Context',
                 href: '/docs/references/context',
-                desc: "Discover the GoFR context, an injected object that simplifies request-specific data handling for HTTP, gRPC, and Pub/Sub calls. Learn how it extends Go's context, providing easy access to dependencies like databases, loggers, and HTTP clients. Explore features for reading HTTP requests, binding data, and accessing query and path parameters efficiently, all while reducing application complexity."
+                desc: "Discover the GoFr context, an injected object that simplifies request-specific data handling for HTTP, gRPC, and Pub/Sub calls. Learn how it extends Go's context, providing easy access to dependencies like databases, loggers, and HTTP clients. Explore features for reading HTTP requests, binding data, and accessing query and path parameters efficiently, all while reducing application complexity."
             },
             {
                 title: 'Configs',
                 href: '/docs/references/configs',
-                desc: "Learn how to manage configuration settings in your GoFR applications, including default values for environment variables. This section provides a comprehensive list of all available configurations to streamline your setup."
+                desc: "Learn how to manage configuration settings in your GoFr applications, including default values for environment variables. This section provides a comprehensive list of all available configurations to streamline your setup."
             },
             {
                 title: 'Testing',

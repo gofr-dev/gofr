@@ -6,7 +6,7 @@ nextjs:
     description: "Build gRPC servers and clients in GoFr for high-performance RPC. Generate handlers from .proto files with built-in tracing, metrics, and structured logging."
 ---
 
-# gRPC with Gofr
+# gRPC with GoFr
 
 We have already seen how GoFr can help ease the development of HTTP servers, but there are cases where performance is primarily required sacrificing flexibility. In these types of scenarios gRPC protocol comes into picture. {% new-tab-link title="gRPC" href="https://grpc.io/docs/what-is-grpc/introduction/" /%} is an open-source RPC(Remote Procedure Call) framework initially developed by Google.
 
@@ -128,7 +128,7 @@ that of the specified proto file.
   - Bind the request payload using `ctx.Bind(&<SERVICE_REQUEST>)`.
   - Process the request and generate a response.
 
-## Registering the gRPC Service with Gofr
+## Registering the gRPC Service with GoFr
 
 **1. Import Necessary Packages:**
 
