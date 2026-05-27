@@ -13,8 +13,27 @@ import (
 	"go.uber.org/mock/gomock"
 	"gofr.dev/pkg/gofr/datasource"
 	"gofr.dev/pkg/gofr/testutil"
+	"go.openelemetry.io/otel"
+	"go.openelemetry.io/otel/propagation"
+	"go.openelemetry.io/otel/trace"
 )
-
+//In Publish:
+ctx,span:= otel.Tracer("eventhub").Start(ctx,"eventHub.Publish")
+defer span.End()
+//Inject trace context into message headers
+carrier:= propagation.MapCarrier{}
+otel.GetTextMapPropagator().Inject(ctx, carrier)
+//Set carrier valuees into event.Properties (map[string]any)
+for k,v:=range carrier {
+event.Properties[k]=v
+}
+//Extract trace context from recieved event
+carrier := propogation.MapCarrier{}
+for k,v:=range event.Properties {
+if s, ok := v.(string); ok {
+carrier[k] = s
+}
+}
 func TestConnect(t *testing.T) {
 	ctrl := gomock.NewController(t)
 
