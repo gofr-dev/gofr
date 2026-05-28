@@ -294,6 +294,25 @@ func Test_ReadDir(t *testing.T) {
 				}, nil)
 			},
 		},
+		{
+			name:    "Returns only one-level entries using common prefixes",
+			dirPath: "abc",
+			expectedResults: []result{
+				{"root.txt", 10, false},
+				{"efg", 0, true},
+			},
+			setupMock: func() {
+				mocks.mockS3.EXPECT().ListObjectsV2(gomock.Any(), gomock.Any()).Return(&s3.ListObjectsV2Output{
+					Contents: []types.Object{
+						{Key: aws.String("abc/"), Size: aws.Int64(0), LastModified: aws.Time(time.Now())},
+						{Key: aws.String("abc/root.txt"), Size: aws.Int64(10), LastModified: aws.Time(time.Now())},
+					},
+					CommonPrefixes: []types.CommonPrefix{
+						{Prefix: aws.String("abc/efg/")},
+					},
+				}, nil)
+			},
+		},
 	}
 
 	for _, tt := range tests {
