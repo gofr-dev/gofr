@@ -11,8 +11,9 @@ import (
 )
 
 var (
-	errNotImplemented = errors.New("not implemented")
-	errSigningFailed  = errors.New("signing failed")
+	errNotImplemented     = errors.New("not implemented")
+	errSigningFailed      = errors.New("signing failed")
+	errWriterCreationFail = errors.New("writer creation failed")
 )
 
 // basicProviderWithoutSignedURL implements only StorageProvider, NOT SignedURLProvider.
@@ -25,8 +26,8 @@ func (*basicProviderWithoutSignedURL) NewReader(_ context.Context, _ string) (io
 func (*basicProviderWithoutSignedURL) NewRangeReader(_ context.Context, _ string, _, _ int64) (io.ReadCloser, error) {
 	return nil, errNotImplemented
 }
-func (*basicProviderWithoutSignedURL) NewWriter(_ context.Context, _ string) io.WriteCloser {
-	return &nopWriteCloser{}
+func (*basicProviderWithoutSignedURL) NewWriter(_ context.Context, _ string) (io.WriteCloser, error) {
+	return &nopWriteCloser{}, nil
 }
 func (*basicProviderWithoutSignedURL) DeleteObject(_ context.Context, _ string) error { return nil }
 func (*basicProviderWithoutSignedURL) CopyObject(_ context.Context, _, _ string) error {
@@ -64,8 +65,8 @@ func (*fakeProvider) NewRangeReader(_ context.Context, _ string, _, _ int64) (io
 	return nil, errNotImplemented
 }
 
-func (*fakeProvider) NewWriter(_ context.Context, _ string) io.WriteCloser {
-	return &nopWriteCloser{}
+func (*fakeProvider) NewWriter(_ context.Context, _ string) (io.WriteCloser, error) {
+	return &nopWriteCloser{}, nil
 }
 func (*fakeProvider) DeleteObject(_ context.Context, _ string) error  { return nil }
 func (*fakeProvider) CopyObject(_ context.Context, _, _ string) error { return nil }
@@ -78,15 +79,15 @@ func (*fakeProvider) ListDir(_ context.Context, _ string) ([]file.ObjectInfo, []
 }
 
 // MetadataWriter.
-func (f *fakeProvider) NewWriterWithOptions(_ context.Context, _ string, opts *file.FileOptions) io.WriteCloser {
+func (f *fakeProvider) NewWriterWithOptions(_ context.Context, _ string, opts *file.FileOptions) (io.WriteCloser, error) {
 	f.calledNewWriterWithOptions = true
 	f.lastOpts = opts
 
 	if f.returnNilWriter {
-		return nil
+		return nil, errWriterCreationFail
 	}
 
-	return &nopWriteCloser{}
+	return &nopWriteCloser{}, nil
 }
 
 func (f *fakeProvider) SignedURL(_ context.Context, _ string, _ time.Duration, _ *file.FileOptions) (string, error) {

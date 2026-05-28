@@ -179,9 +179,9 @@ func (s *storageAdapter) NewRangeReader(ctx context.Context, name string, offset
 // NewWriter creates a writer for the given file.
 // Automatically creates parent directories to ensure they appear in listings
 // (Azure File Storage requires explicit directory creation for directories to be visible).
-func (s *storageAdapter) NewWriter(ctx context.Context, name string) io.WriteCloser {
+func (s *storageAdapter) NewWriter(ctx context.Context, name string) (io.WriteCloser, error) {
 	if name == "" {
-		return &failWriter{err: errEmptyObjectName}
+		return nil, errEmptyObjectName
 	}
 
 	// Ensure parent directories exist (Azure requires explicit directory creation for listings)
@@ -193,7 +193,7 @@ func (s *storageAdapter) NewWriter(ctx context.Context, name string) io.WriteClo
 
 	fileClient, err := s.getFileClient(name)
 	if err != nil {
-		return &failWriter{err: err}
+		return nil, err
 	}
 
 	// Detect content type based on file extension (matches S3 behavior)
@@ -216,20 +216,7 @@ func (s *storageAdapter) NewWriter(ctx context.Context, name string) io.WriteClo
 		fileClient: fileClient,
 		name:       name,
 		buffer:     make([]byte, 0),
-	}
-}
-
-// failWriter is a helper for NewWriter validation errors.
-type failWriter struct {
-	err error
-}
-
-func (fw *failWriter) Write([]byte) (int, error) {
-	return 0, fw.err
-}
-
-func (fw *failWriter) Close() error {
-	return fw.err
+	}, nil
 }
 
 // azureWriter implements io.WriteCloser for Azure File Storage.

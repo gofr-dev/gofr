@@ -154,13 +154,13 @@ type limitedReadCloser struct {
 }
 
 // NewWriter creates a writer for the given object.
-func (s *storageAdapter) NewWriter(_ context.Context, name string) io.WriteCloser {
+func (s *storageAdapter) NewWriter(_ context.Context, name string) (io.WriteCloser, error) {
 	if name == "" {
-		return &failWriter{err: errEmptyObjectName}
+		return nil, errEmptyObjectName
 	}
 
 	if s.conn == nil {
-		return &failWriter{err: errFTPClientNotInitialized}
+		return nil, errFTPClientNotInitialized
 	}
 
 	objectPath := s.buildPath(name)
@@ -169,7 +169,7 @@ func (s *storageAdapter) NewWriter(_ context.Context, name string) io.WriteClose
 		conn:       s.conn,
 		objectPath: objectPath,
 		buffer:     &bytes.Buffer{},
-	}
+	}, nil
 }
 
 // ftpWriter buffers writes and uploads on Close.
@@ -200,19 +200,6 @@ func (fw *ftpWriter) Close() error {
 	}
 
 	return nil
-}
-
-// failWriter is a helper for NewWriter validation errors.
-type failWriter struct {
-	err error
-}
-
-func (fw *failWriter) Write([]byte) (int, error) {
-	return 0, fw.err
-}
-
-func (fw *failWriter) Close() error {
-	return fw.err
 }
 
 // DeleteObject deletes the object with the given name.

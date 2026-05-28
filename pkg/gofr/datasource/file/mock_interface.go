@@ -505,11 +505,12 @@ func (mr *MockStorageProviderMockRecorder) NewReader(ctx, name any) *gomock.Call
 }
 
 // NewWriter mocks base method.
-func (m *MockStorageProvider) NewWriter(ctx context.Context, name string) io.WriteCloser {
+func (m *MockStorageProvider) NewWriter(ctx context.Context, name string) (io.WriteCloser, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "NewWriter", ctx, name)
 	ret0, _ := ret[0].(io.WriteCloser)
-	return ret0
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
 }
 
 // NewWriter indicates an expected call of NewWriter.
