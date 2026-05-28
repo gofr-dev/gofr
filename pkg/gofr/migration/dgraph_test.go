@@ -2,9 +2,11 @@ package migration
 
 import (
 	"context"
+	"errors"
 	"testing"
 	"time"
 
+	"github.com/dgraph-io/dgo/v210/protos/api"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
@@ -12,6 +14,103 @@ import (
 	"gofr.dev/pkg/gofr/container"
 	"gofr.dev/pkg/gofr/testutil"
 )
+
+func Test_DGraphCommitMigration_InvalidTxn(t *testing.T) {
+	migratorWithDGraph, mockDGraph, mockContainer := dgraphSetup(t)
+
+	td := transactionData{
+		StartTime:       time.Now(),
+		MigrationNumber: 42,
+	}
+
+	mockDGraph.EXPECT().NewTxn().Return(&fakeNotTxn{})
+
+	err := migratorWithDGraph.commitMigration(mockContainer, td)
+
+	assert.Equal(t, errInvalidDgraphTxn, err)
+}
+
+type fakeNotTxn struct{}
+
+type mockDgraphTxn2 struct {
+	mutateErr    error
+	commitErr    error
+	discarded    bool
+	commitCalled bool
+}
+
+func (m *mockDgraphTxn2) Mutate(context.Context, *api.Mutation) (*api.Response, error) {
+	return nil, m.mutateErr
+}
+
+func (m *mockDgraphTxn2) Commit(context.Context) error {
+	m.commitCalled = true
+	return m.commitErr
+}
+
+func (m *mockDgraphTxn2) Discard(context.Context) error {
+	m.discarded = true
+	return nil
+}
+
+func Test_DGraphCommitMigration_MutateError(t *testing.T) {
+	migratorWithDGraph, mockDGraph, mockContainer := dgraphSetup(t)
+
+	td := transactionData{
+		StartTime:       time.Now(),
+		MigrationNumber: 43,
+	}
+
+	txn := &mockDgraphTxn2{mutateErr: errors.New("mutation failed")}
+	mockDGraph.EXPECT().NewTxn().Return(txn)
+
+	err := migratorWithDGraph.commitMigration(mockContainer, td)
+
+	assert.EqualError(t, err, "mutation failed")
+	assert.True(t, txn.discarded)
+	assert.False(t, txn.commitCalled)
+}
+
+func Test_DGraphCommitMigration_CommitError(t *testing.T) {
+	migratorWithDGraph, mockDGraph, mockContainer := dgraphSetup(t)
+
+	td := transactionData{
+		StartTime:       time.Now(),
+		MigrationNumber: 44,
+	}
+
+	txn := &mockDgraphTxn2{commitErr: errors.New("commit failed")}
+	mockDGraph.EXPECT().NewTxn().Return(txn)
+
+	err := migratorWithDGraph.commitMigration(mockContainer, td)
+
+	assert.EqualError(t, err, "commit failed")
+	assert.True(t, txn.discarded)
+	assert.True(t, txn.commitCalled)
+}
+
+type mockDgraphTxn struct {
+	mutateErr  error
+	commitErr  error
+	commitDone bool
+	discarded  bool
+}
+
+func (m *mockDgraphTxn) Mutate(context.Context, *api.Mutation) (*api.Response, error) {
+	return nil, m.mutateErr
+}
+
+func (m *mockDgraphTxn) Commit(context.Context) error {
+	m.commitDone = true
+
+	return m.commitErr
+}
+
+func (m *mockDgraphTxn) Discard(context.Context) error {
+	m.discarded = true
+
+	return nil
+}
 
 func dgraphSetup(t *testing.T) (migrator, *container.MockDgraph, *container.Container) {
 	t.Helper()
@@ -99,11 +198,14 @@ func Test_DGraphCommitMigration(t *testing.T) {
 	timeNow := time.Now()
 
 	testCases := []struct {
-		desc string
-		err  error
+		desc      string
+		mutateErr error
+		commitErr error
+		err       error
 	}{
-		{"success", nil},
-		{"mutation failed", context.DeadlineExceeded},
+		{"success", nil, nil, nil},
+		{"mutation failed", context.DeadlineExceeded, nil, context.DeadlineExceeded},
+		{"commit failed", nil, context.Canceled, context.Canceled},
 	}
 
 	td := transactionData{
@@ -113,11 +215,19 @@ func Test_DGraphCommitMigration(t *testing.T) {
 	}
 
 	for i, tc := range testCases {
-		mockDGraph.EXPECT().Mutate(gomock.Any(), gomock.Any()).Return(nil, tc.err)
+		tx := &mockDgraphTxn{mutateErr: tc.mutateErr, commitErr: tc.commitErr}
+		mockDGraph.EXPECT().NewTxn().Return(tx)
 
 		err := migratorWithDGraph.commitMigration(mockContainer, td)
 
 		assert.Equal(t, tc.err, err, "TEST[%v]\n %v Failed!", i, tc.desc)
+		assert.True(t, tx.discarded, "TEST[%v]\n %v Failed!", i, tc.desc)
+
+		if tc.mutateErr == nil {
+			assert.True(t, tx.commitDone, "TEST[%v]\n %v Failed!", i, tc.desc)
+		} else {
+			assert.False(t, tx.commitDone, "TEST[%v]\n %v Failed!", i, tc.desc)
+		}
 	}
 }
 
