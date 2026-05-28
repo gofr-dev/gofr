@@ -89,6 +89,16 @@ as unnecessary database drivers are not being compiled and added to the build.
 - ✅
 - ✅
 
+## Why Pluggable Datasources?
+
+GoFr allows developers to inject only the required database drivers into their applications. This helps reduce application build size and improves build performance by avoiding unnecessary dependencies.
+
+This approach also provides flexibility for integrating custom datasource implementations while maintaining compatibility with GoFr interfaces.
+
+## Supported Databases
+
+> We are planning to provide custom drivers for most common databases, and is in the pipeline for upcoming releases!
+
 ---
 
 -  DGraph
