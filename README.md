@@ -30,7 +30,7 @@ GoFr is designed to **simplify microservice development**, with a key focus on *
 2. **REST Standards by Default**
 3. **Configuration Management**
 4. **[Observability](https://gofr.dev/docs/quick-start/observability)** (Logs, Traces, Metrics)
-5. **Inbuilt [Auth Middleware](https://gofr.dev/docs/advanced-guide/http-authentication)** & Custom Middleware Support
+5. ****Built-in [Auth Middleware]**(https://gofr.dev/docs/advanced-guide/http-authentication)** & Custom Middleware Support
 6. **[gRPC Support](https://gofr.dev/docs/advanced-guide/grpc)**
 7. **[HTTP Service](https://gofr.dev/docs/advanced-guide/http-communication)** with Circuit Breaker Support
 8. **[Pub/Sub](https://gofr.dev/docs/advanced-guide/using-publisher-subscriber)**
