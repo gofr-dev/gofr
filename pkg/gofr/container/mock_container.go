@@ -95,6 +95,7 @@ func NewMockContainer(t *testing.T, options ...options) (*Container, *Mocks) {
 
 	container := &Container{}
 	container.Logger = logging.NewLogger(logging.DEBUG)
+	container.healthCache = newHealthCache(defaultHealthCacheTTL)
 
 	ctrl := gomock.NewController(t)
 

@@ -77,6 +77,8 @@ type Container struct {
 	KVStore KVStore
 
 	File file.FileSystem
+
+	healthCache *healthCache
 }
 
 func NewContainer(conf config.Config) *Container {
@@ -139,6 +141,8 @@ func (c *Container) Create(conf config.Config) {
 	c.File = file.NewLocalFileSystem(c.Logger)
 
 	c.WSManager = websocket.New()
+
+	c.healthCache = newHealthCache(defaultHealthCacheTTL)
 }
 
 func (c *Container) createPubSub(conf config.Config) {
