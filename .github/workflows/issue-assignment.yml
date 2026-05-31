@@ -1,0 +1,85 @@
+---
+name: Issue Assignment Bot
+on:
+  issue_comment:
+    types: [created]
+
+permissions:
+  issues: write
+
+jobs:
+  assign:
+    name: Assign Issue
+    runs-on: ubuntu-latest
+    if: >
+      github.event.issue.pull_request == null &&
+      startsWith(github.event.comment.body, '/assign')
+    steps:
+      - name: Check if comment is exactly /assign
+        id: check_command
+        run: |
+          comment="${{ github.event.comment.body }}"
+          if [ "$comment" != "/assign" ]; then
+            echo "is_assign=false" >> $GITHUB_OUTPUT
+          else
+            echo "is_assign=true" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Assign user
+        if: steps.check_command.outputs.is_assign == 'true'
+        run: |
+          assignee="${{ github.event.comment.user.login }}"
+          issue_number="${{ github.event.issue.number }}"
+          repo="${{ github.repository }}"
+
+          # Check if issue is already assigned
+          current_assignees=$(gh api repos/$repo/issues/$issue_number --jq '.assignees[].login')
+          if echo "$current_assignees" | grep -q "^${assignee}$"; then
+            echo "Issue is already assigned to @$assignee"
+            gh issue comment $issue_number --body "@$assignee is already assigned to this issue."
+            exit 0
+          fi
+
+          # Assign the user
+          gh issue edit $issue_number --add-assigner "$assignee"
+          gh issue comment $issue_number --body "✅ @$assignee has been assigned to this issue."
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  unassign:
+    name: Unassign Issue
+    runs-on: ubuntu-latest
+    if: >
+      github.event.issue.pull_request == null &&
+      startsWith(github.event.comment.body, '/unassign')
+    steps:
+      - name: Check if comment is exactly /unassign
+        id: check_command
+        run: |
+          comment="${{ github.event.comment.body }}"
+          if [ "$comment" != "/unassign" ]; then
+            echo "is_unassign=false" >> $GITHUB_OUTPUT
+          else
+            echo "is_unassign=true" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Unassign user
+        if: steps.check_command.outputs.is_unassign == 'true'
+        run: |
+          assignee="${{ github.event.comment.user.login }}"
+          issue_number="${{ github.event.issue.number }}"
+          repo="${{ github.repository }}"
+
+          # Check if user is actually assigned
+          current_assignees=$(gh api repos/$repo/issues/$issue_number --jq '.assignees[].login')
+          if ! echo "$current_assignees" | grep -q "^${assignee}$"; then
+            echo "@$assignee is not assigned to this issue"
+            gh issue comment $issue_number --body "@$assignee is not currently assigned to this issue."
+            exit 0
+          fi
+
+          # Unassign the user
+          gh issue edit $issue_number --remove-assigner "$assignee"
+          gh issue comment $issue_number --body "❌ @$assignee has been unassigned from this issue."
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
