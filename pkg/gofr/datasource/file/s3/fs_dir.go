@@ -178,12 +178,10 @@ func (f *FileSystem) ReadDir(name string) ([]file.FileInfo, error) {
 		filePath = ""
 	}
 
-	// TODO: Enhance the implementation to fetch only data that is one level deep.
-	// Currently, the system retrieves metadata of all files matching the prefix,
-	// which may include files in nested directories. This takes more memory.
 	entries, err := f.conn.ListObjectsV2(context.TODO(), &s3.ListObjectsV2Input{
-		Bucket: aws.String(f.config.BucketName),
-		Prefix: aws.String(filePath),
+		Bucket:    aws.String(f.config.BucketName),
+		Prefix:    aws.String(filePath),
+		Delimiter: aws.String("/"),
 	})
 	if err != nil {
 		msg = fmt.Sprintf("Error retrieving objects: %v", err)
