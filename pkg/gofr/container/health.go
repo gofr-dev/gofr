@@ -7,6 +7,8 @@ import (
 	"sync/atomic"
 
 	"golang.org/x/sync/errgroup"
+
+	"gofr.dev/pkg/gofr/datasource"
 )
 
 func (c *Container) Health(ctx context.Context) any {
@@ -26,7 +28,7 @@ func (c *Container) Health(ctx context.Context) any {
 			mu.Lock()
 			healthMap["sql"] = health
 			mu.Unlock()
-			if health.Status == "DOWN" {
+			if health.Status == datasource.StatusDown {
 				downCount.Add(1)
 			}
 			return nil
@@ -39,7 +41,7 @@ func (c *Container) Health(ctx context.Context) any {
 			mu.Lock()
 			healthMap["redis"] = health
 			mu.Unlock()
-			if health.Status == "DOWN" {
+			if health.Status == datasource.StatusDown {
 				downCount.Add(1)
 			}
 			return nil
@@ -52,7 +54,7 @@ func (c *Container) Health(ctx context.Context) any {
 			mu.Lock()
 			healthMap["pubsub"] = health
 			mu.Unlock()
-			if health.Status == "DOWN" {
+			if health.Status == datasource.StatusDown {
 				downCount.Add(1)
 			}
 			return nil
@@ -71,7 +73,7 @@ func (c *Container) Health(ctx context.Context) any {
 			mu.Lock()
 			healthMap[name] = health
 			mu.Unlock()
-			if health.Status == "DOWN" {
+			if health.Status == datasource.StatusDown {
 				downCount.Add(1)
 			}
 		}
@@ -139,7 +141,7 @@ func (c *Container) appHealth(healthMap map[string]any, downCount int) {
 	healthMap["version"] = c.GetAppVersion()
 
 	if downCount == 0 {
-		healthMap["status"] = "UP"
+		healthMap["status"] = datasource.StatusUp
 	} else {
 		healthMap["status"] = "DEGRADED"
 	}
