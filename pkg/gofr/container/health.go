@@ -3,60 +3,93 @@ package container
 import (
 	"context"
 	"reflect"
+	"sync"
+	"sync/atomic"
+
+	"golang.org/x/sync/errgroup"
+
+	"gofr.dev/pkg/gofr/datasource"
 )
 
 func (c *Container) Health(ctx context.Context) any {
-	var (
-		healthMap = make(map[string]any)
-		downCount int
-	)
+	if cached, ok := c.healthCache.get(); ok {
+		return cached
+	}
 
-	const statusDown = "DOWN"
+	healthMap := make(map[string]any)
+	var mu sync.Mutex
+	var downCount atomic.Int64
+
+	g, _ := errgroup.WithContext(ctx)
 
 	if !isNil(c.SQL) {
-		health := c.SQL.HealthCheck()
-		if health.Status == statusDown {
-			downCount++
-		}
-
-		healthMap["sql"] = health
+		g.Go(func() error {
+			health := c.SQL.HealthCheck()
+			mu.Lock()
+			healthMap["sql"] = health
+			mu.Unlock()
+			if health.Status == datasource.StatusDown {
+				downCount.Add(1)
+			}
+			return nil
+		})
 	}
 
 	if !isNil(c.Redis) {
-		health := c.Redis.HealthCheck()
-		if health.Status == statusDown {
-			downCount++
-		}
-
-		healthMap["redis"] = health
+		g.Go(func() error {
+			health := c.Redis.HealthCheck()
+			mu.Lock()
+			healthMap["redis"] = health
+			mu.Unlock()
+			if health.Status == datasource.StatusDown {
+				downCount.Add(1)
+			}
+			return nil
+		})
 	}
 
 	if c.PubSub != nil {
-		health := c.PubSub.Health()
-		if health.Status == statusDown {
-			downCount++
-		}
-
-		healthMap["pubsub"] = health
+		g.Go(func() error {
+			health := c.PubSub.Health()
+			mu.Lock()
+			healthMap["pubsub"] = health
+			mu.Unlock()
+			if health.Status == datasource.StatusDown {
+				downCount.Add(1)
+			}
+			return nil
+		})
 	}
 
-	downCount += checkExternalDBHealth(ctx, c, healthMap)
+	g.Go(func() error {
+		count := checkExternalDBHealth(ctx, c, healthMap, &mu)
+		downCount.Add(int64(count))
+		return nil
+	})
 
-	for name, svc := range c.Services {
-		health := svc.HealthCheck(ctx)
-		if health.Status == statusDown {
-			downCount++
+	g.Go(func() error {
+		for name, svc := range c.Services {
+			health := svc.HealthCheck(ctx)
+			mu.Lock()
+			healthMap[name] = health
+			mu.Unlock()
+			if health.Status == datasource.StatusDown {
+				downCount.Add(1)
+			}
 		}
+		return nil
+	})
 
-		healthMap[name] = health
-	}
+	_ = g.Wait()
 
-	c.appHealth(healthMap, downCount)
+	c.appHealth(healthMap, int(downCount.Load()))
+
+	c.healthCache.set(healthMap)
 
 	return healthMap
 }
 
-func checkExternalDBHealth(ctx context.Context, c *Container, healthMap map[string]any) (downCount int) {
+func checkExternalDBHealth(ctx context.Context, c *Container, healthMap map[string]any, mu *sync.Mutex) int {
 	services := map[string]interface {
 		HealthCheck(context.Context) (any, error)
 	}{
@@ -72,16 +105,33 @@ func checkExternalDBHealth(ctx context.Context, c *Container, healthMap map[stri
 		"influx":        c.InfluxDB,
 	}
 
+	var (
+		wg        sync.WaitGroup
+		localMu   sync.Mutex
+		downCount int
+	)
+
 	for name, service := range services {
 		if !isNil(service) {
-			health, err := service.HealthCheck(ctx)
-			if err != nil {
-				downCount++
-			}
+			wg.Add(1)
 
-			healthMap[name] = health
+			go func(n string, s interface {
+				HealthCheck(context.Context) (any, error)
+			}) {
+				defer wg.Done()
+
+				health, err := s.HealthCheck(ctx)
+				localMu.Lock()
+				healthMap[n] = health
+				if err != nil {
+					downCount++
+				}
+				localMu.Unlock()
+			}(name, service)
 		}
 	}
+
+	wg.Wait()
 
 	return downCount
 }
@@ -91,16 +141,14 @@ func (c *Container) appHealth(healthMap map[string]any, downCount int) {
 	healthMap["version"] = c.GetAppVersion()
 
 	if downCount == 0 {
-		healthMap["status"] = "UP"
+		healthMap["status"] = datasource.StatusUp
 	} else {
 		healthMap["status"] = "DEGRADED"
 	}
 }
 
 func isNil(i any) bool {
-	// Get the value of the interface
 	val := reflect.ValueOf(i)
 
-	// If the interface is not assigned or is nil, return true
 	return !val.IsValid() || val.IsNil()
 }
