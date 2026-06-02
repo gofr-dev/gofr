@@ -179,32 +179,29 @@ func (cb *CircuitBreakerConfig) AddOption(h HTTP) HTTP {
 
 func (cb *circuitBreaker) tryCircuitRecovery() bool {
 	cb.mu.Lock()
-
 	if cb.state == ClosedState {
 		cb.mu.Unlock()
 		return true
 	}
 
 	if time.Since(cb.lastChecked) > cb.interval {
-		// Update lastChecked to prevent busy loop of health checks from other requests
 		cb.lastChecked = time.Now()
-		cb.mu.Unlock()
+		cb.mu.Unlock() // CRITICAL FIX: Release the write-lock BEFORE blocking network I/O
 
-		if cb.healthCheck(context.TODO()) {
+		// Synchronous network I/O executes concurrently without blocking other RLocks
+		success := cb.healthCheck(context.TODO())
+
+		if success {
 			cb.mu.Lock()
-			defer cb.mu.Unlock()
-
-			if cb.state == OpenState {
-				cb.resetCircuit()
-			}
-
+			cb.resetCircuit()
+			cb.mu.Unlock()
 			return true
 		}
 
 		return false
 	}
-
 	cb.mu.Unlock()
+
 	return false
 }
 
