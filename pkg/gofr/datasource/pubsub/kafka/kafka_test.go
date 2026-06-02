@@ -446,7 +446,7 @@ func TestKafkaClient_Close(t *testing.T) {
 	mockReader := NewMockReader(ctrl)
 	mockConn := NewMockConnection(ctrl)
 
-	k := kafkaClient{reader: map[string]Reader{"test-topic": mockReader}, writer: mockWriter, conn: &multiConn{
+	k := kafkaClient{mu: &sync.RWMutex{}, reader: map[string]Reader{"test-topic": mockReader}, writer: mockWriter, conn: &multiConn{
 		conns: []Connection{
 			mockConn,
 		},
@@ -471,7 +471,7 @@ func TestKafkaClient_CloseError(t *testing.T) {
 	defer ctrl.Finish()
 
 	mockWriter := NewMockWriter(ctrl)
-	k := kafkaClient{writer: mockWriter}
+	k := kafkaClient{mu: &sync.RWMutex{}, writer: mockWriter}
 
 	mockWriter.EXPECT().Close().Return(errClose)
 
