@@ -3,12 +3,22 @@ package container
 import (
 	"context"
 	"fmt"
+	"io"
+	"net/http"
+	"net/http/httptest"
 	"os"
+	"sort"
+	"strings"
 	"testing"
 
 	"github.com/gorilla/websocket"
+	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
+	"github.com/prometheus/otlptranslator"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	otelprom "go.opentelemetry.io/otel/exporters/prometheus"
+	sdkmetric "go.opentelemetry.io/otel/sdk/metric"
 	"go.uber.org/mock/gomock"
 
 	"gofr.dev/pkg/gofr/config"
@@ -16,6 +26,7 @@ import (
 	gofrRedis "gofr.dev/pkg/gofr/datasource/redis"
 	gofrSql "gofr.dev/pkg/gofr/datasource/sql"
 	"gofr.dev/pkg/gofr/logging"
+	"gofr.dev/pkg/gofr/metrics"
 	"gofr.dev/pkg/gofr/service"
 	ws "gofr.dev/pkg/gofr/websocket"
 )
@@ -530,4 +541,202 @@ func TestContainer_Close_ClosesWebsocketConnections(t *testing.T) {
 	require.NoError(t, err)
 
 	require.Empty(t, c.WSManager.ListConnections())
+}
+
+// TestFrameworkMetricsSnapshot pins the set of framework metrics that
+// GoFr registers by default: names, types, and HELP strings. These are
+// the contract that user-built Grafana dashboards and alerts depend on.
+//
+// If a metric is added, renamed, or has its type/help changed, this test
+// fails and the change has to be acknowledged by updating the expected
+// list AND mentioning the dashboard impact in the PR body.
+//
+// Implementation: wires a fresh prometheus.Registry into an isolated
+// MeterProvider so the global default registry (polluted by other tests
+// in this package) does not interfere. Calls the production
+// registerFrameworkMetrics() so the contract is asserted against real
+// code, not a mirror.
+func TestFrameworkMetricsSnapshot(t *testing.T) {
+	c, reg := newSnapshotContainer(t)
+	touchAllFrameworkMetrics(t.Context(), c.Metrics())
+
+	got := scrapeMetricsContract(t, reg)
+
+	want := frameworkMetricContract()
+
+	missing := []string{}
+	mismatched := []string{}
+
+	for name, exp := range want {
+		actual, ok := got[name]
+		if !ok {
+			missing = append(missing, name)
+			continue
+		}
+
+		if actual.help != exp.help || actual.typ != exp.typ {
+			mismatched = append(mismatched,
+				fmt.Sprintf("%s: want (help=%q, type=%q) got (help=%q, type=%q)",
+					name, exp.help, exp.typ, actual.help, actual.typ))
+		}
+	}
+
+	sort.Strings(missing)
+	sort.Strings(mismatched)
+
+	assert.Empty(t, missing, "framework metrics missing from /metrics output")
+	assert.Empty(t, mismatched, "framework metric definitions drifted")
+}
+
+// metricContract pairs a metric's HELP text with its TYPE — the part of
+// the Prometheus exposition format that constitutes the public contract
+// for consumers.
+type metricContract struct {
+	help string
+	typ  string
+}
+
+// newSnapshotContainer wires a Container backed by an isolated
+// MeterProvider whose Prometheus exporter writes into the returned
+// registry. Isolated so global registry pollution from other tests in
+// this package does not interfere with the assertion. Calls the
+// production registerFrameworkMetrics() so the contract is asserted
+// against real code.
+func newSnapshotContainer(t *testing.T) (*Container, *prometheus.Registry) {
+	t.Helper()
+
+	reg := prometheus.NewRegistry()
+
+	// Mirror exporters.Prometheus's configuration so the emitted names
+	// match what users see (NoTranslation keeps OTel from rewriting
+	// counter names that already end in _total etc).
+	promExp, err := otelprom.New(
+		otelprom.WithRegisterer(reg),
+		otelprom.WithoutTargetInfo(),
+		otelprom.WithTranslationStrategy(otlptranslator.NoTranslation),
+	)
+	require.NoError(t, err)
+
+	meter := sdkmetric.NewMeterProvider(sdkmetric.WithReader(promExp)).Meter("snapshot-test")
+
+	c := &Container{
+		appName:        "snapshot-test",
+		appVersion:     "v0.0.0",
+		Logger:         logging.NewMockLogger(logging.ERROR),
+		metricsManager: metrics.NewMetricsManager(meter, logging.NewMockLogger(logging.ERROR)),
+	}
+	c.registerFrameworkMetrics()
+
+	return c, reg
+}
+
+// touchAllFrameworkMetrics writes a single no-op observation to every
+// framework metric so its definition appears in the Prometheus output.
+// OTel's Prometheus exporter only emits HELP/TYPE lines for metrics that
+// have at least one observation.
+func touchAllFrameworkMetrics(ctx context.Context, m metrics.Manager) {
+	counters := []string{
+		"app_http_retry_count",
+		"app_pubsub_publish_total_count",
+		"app_pubsub_publish_success_count",
+		"app_pubsub_subscribe_total_count",
+		"app_pubsub_subscribe_success_count",
+	}
+	for _, name := range counters {
+		m.IncrementCounter(ctx, name)
+	}
+
+	histograms := []string{
+		"app_http_response",
+		"app_http_service_response",
+		"app_redis_stats",
+		"app_sql_stats",
+	}
+	for _, name := range histograms {
+		m.RecordHistogram(ctx, name, 0)
+	}
+
+	gauges := []string{
+		"app_info",
+		"app_go_routines",
+		"app_sys_memory_alloc",
+		"app_sys_total_alloc",
+		"app_go_numGC",
+		"app_go_sys",
+		"app_http_circuit_breaker_state",
+		"app_sql_open_connections",
+		"app_sql_inUse_connections",
+	}
+	for _, name := range gauges {
+		m.SetGauge(name, 0)
+	}
+}
+
+// scrapeMetricsContract fetches /metrics from a registry-backed test
+// server and parses out the {name → (help, type)} pairs. Value lines
+// vary by run and are intentionally discarded.
+func scrapeMetricsContract(t *testing.T, reg *prometheus.Registry) map[string]metricContract {
+	t.Helper()
+
+	srv := httptest.NewServer(promhttp.HandlerFor(reg, promhttp.HandlerOpts{}))
+	t.Cleanup(srv.Close)
+
+	req, err := http.NewRequestWithContext(t.Context(), http.MethodGet, srv.URL, http.NoBody)
+	require.NoError(t, err)
+
+	resp, err := http.DefaultClient.Do(req)
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = resp.Body.Close() })
+
+	body, err := io.ReadAll(resp.Body)
+	require.NoError(t, err)
+
+	out := map[string]metricContract{}
+
+	for _, line := range strings.Split(string(body), "\n") {
+		switch {
+		case strings.HasPrefix(line, "# HELP "):
+			parts := strings.SplitN(strings.TrimPrefix(line, "# HELP "), " ", 2)
+			require.Len(t, parts, 2, "malformed HELP line: %q", line)
+
+			entry := out[parts[0]]
+			entry.help = parts[1]
+			out[parts[0]] = entry
+		case strings.HasPrefix(line, "# TYPE "):
+			parts := strings.SplitN(strings.TrimPrefix(line, "# TYPE "), " ", 2)
+			require.Len(t, parts, 2, "malformed TYPE line: %q", line)
+
+			entry := out[parts[0]]
+			entry.typ = parts[1]
+			out[parts[0]] = entry
+		}
+	}
+
+	return out
+}
+
+// frameworkMetricContract returns the expected (help, type) pair for
+// every framework metric. Any drift here is the contract change a
+// reviewer must acknowledge in the PR description.
+func frameworkMetricContract() map[string]metricContract {
+	return map[string]metricContract{
+		"app_info":                           {"Info for app_name, app_version and framework_version.", "gauge"},
+		"app_go_routines":                    {"Number of Go routines running.", "gauge"},
+		"app_sys_memory_alloc":               {"Number of bytes allocated for heap objects.", "gauge"},
+		"app_sys_total_alloc":                {"Number of cumulative bytes allocated for heap objects.", "gauge"},
+		"app_go_numGC":                       {"Number of completed Garbage Collector cycles.", "gauge"},
+		"app_go_sys":                         {"Number of total bytes of memory.", "gauge"},
+		"app_http_response":                  {"Response time of HTTP requests in seconds.", "histogram"},
+		"app_http_service_response":          {"Response time of HTTP service requests in seconds.", "histogram"},
+		"app_http_retry_count":               {"Total number of retry events", "counter"},
+		"app_http_circuit_breaker_state":     {"Current state of the circuit breaker (0 for Closed, 1 for Open)", "gauge"},
+		"app_redis_stats":                    {"Response time of Redis commands in milliseconds.", "histogram"},
+		"app_sql_stats":                      {"Response time of SQL queries in milliseconds.", "histogram"},
+		"app_sql_open_connections":           {"Number of open SQL connections.", "gauge"},
+		"app_sql_inUse_connections":          {"Number of inUse SQL connections.", "gauge"},
+		"app_pubsub_publish_total_count":     {"Number of total publish operations.", "counter"},
+		"app_pubsub_publish_success_count":   {"Number of successful publish operations.", "counter"},
+		"app_pubsub_subscribe_total_count":   {"Number of total subscribe operations.", "counter"},
+		"app_pubsub_subscribe_success_count": {"Number of successful subscribe operations.", "counter"},
+	}
 }

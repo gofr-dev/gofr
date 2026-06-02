@@ -1,3 +1,11 @@
+---
+description: "Use SurrealDB with GoFr through the framework's datasource interface. Insert, query, and update records with traces and metrics emitted automatically."
+nextjs:
+  metadata:
+    title: "SurrealDB in GoFr — Multi-Model Datasource Integration"
+    description: "Use SurrealDB with GoFr through the framework's datasource interface. Insert, query, and update records with traces and metrics emitted automatically."
+---
+
 # SurrealDB
 
 ## Configuration

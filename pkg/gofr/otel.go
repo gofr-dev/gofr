@@ -18,6 +18,48 @@ import (
 )
 
 func (a *App) initTracer() {
+	// Install GoFr's default W3C TraceContext + Baggage propagator only if
+	// the user has not already configured one (e.g. B3, Jaeger). Detect the
+	// default OTel propagator by its empty Fields() — every user-configured
+	// propagator advertises at least one header field.
+	if existing := otel.GetTextMapPropagator(); len(existing.Fields()) == 0 {
+		otel.SetTextMapPropagator(propagation.NewCompositeTextMapPropagator(
+			propagation.TraceContext{}, propagation.Baggage{},
+		))
+	} else {
+		a.container.Logger.Warnf(
+			"custom OTel TextMap propagator already installed (fields=%v); GoFr will not override it",
+			existing.Fields(),
+		)
+	}
+
+	otel.SetErrorHandler(&otelErrorHandler{
+		logger: a.container.Logger,
+	})
+
+	traceExporter := a.Config.Get("TRACE_EXPORTER")
+	tracerURL := a.Config.Get("TRACER_URL")
+
+	// deprecated : tracer_host and tracer_port are deprecated and will be removed in upcoming versions.
+	tracerHost := a.Config.Get("TRACER_HOST")
+	tracerPort := a.Config.GetOrDefault("TRACER_PORT", "9411")
+
+	if !isValidConfig(a.Logger(), traceExporter, tracerURL, tracerHost, tracerPort) {
+		// No exporter configured — install a minimal SDK provider with
+		// NeverSample. Spans get a valid TraceID/SpanID so X-Correlation-ID
+		// and the trace_id log field stay unique per request, but the SDK
+		// short-circuits at the sampler: no attributes/events stored, no
+		// batch processor, no exporter. A previous attempt to install a
+		// pure noop provider here zeroed out correlation IDs across every
+		// request on the default (no-exporter) deployment.
+		tp := sdktrace.NewTracerProvider(
+			sdktrace.WithSampler(sdktrace.NeverSample()),
+		)
+		otel.SetTracerProvider(tp)
+
+		return
+	}
+
 	traceRatio, err := strconv.ParseFloat(a.Config.GetOrDefault("TRACER_RATIO", "1"), 64)
 	if err != nil {
 		a.container.Error(err)
@@ -31,21 +73,6 @@ func (a *App) initTracer() {
 		sdktrace.WithSampler(sdktrace.ParentBased(sdktrace.TraceIDRatioBased(traceRatio))),
 	)
 	otel.SetTracerProvider(tp)
-	otel.SetTextMapPropagator(propagation.NewCompositeTextMapPropagator(propagation.TraceContext{}, propagation.Baggage{}))
-	otel.SetErrorHandler(&otelErrorHandler{
-		logger: a.container.Logger,
-	})
-
-	traceExporter := a.Config.Get("TRACE_EXPORTER")
-	tracerURL := a.Config.Get("TRACER_URL")
-
-	// deprecated : tracer_host and tracer_port are deprecated and will be removed in upcoming versions.
-	tracerHost := a.Config.Get("TRACER_HOST")
-	tracerPort := a.Config.GetOrDefault("TRACER_PORT", "9411")
-
-	if !isValidConfig(a.Logger(), traceExporter, tracerURL, tracerHost, tracerPort) {
-		return
-	}
 
 	exporter, err := a.getExporter(traceExporter, tracerHost, tracerPort, tracerURL)
 	if err != nil {

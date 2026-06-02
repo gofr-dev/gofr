@@ -1,3 +1,11 @@
+---
+description: "GoFr ships built-in observability: structured JSON logs, OpenTelemetry traces, and Prometheus metrics from server start, with no extra configuration required."
+nextjs:
+  metadata:
+    title: "Observability in GoFr — Logs, Traces, Metrics"
+    description: "GoFr ships built-in observability: structured JSON logs, OpenTelemetry traces, and Prometheus metrics from server start, with no extra configuration required."
+---
+
 # Observability
 
 GoFr, by default, manages observability in different ways once the server starts:
@@ -317,25 +325,27 @@ When a request enters your GoFr application, GoFr automatically generates a corr
 to the response headers. This correlation ID is then propagated to all downstream requests. This means that user can track
 a request as it travels through your distributed system by simply looking at the correlation ID in the request headers.
 
+**Pub/Sub Tracing:**
+
+Tracing automatically extends across pub/sub boundaries. Every `Publish` injects the active trace context into the outgoing message (Kafka headers, NATS headers, Google Pub/Sub / SQS attributes, etc.) and every `Subscribe` extracts it to start the consumer span as a child of the producer — so an `HTTP → publish → subscribe → publish → subscribe` flow shows up as one connected trace. See {% new-tab-link newtab=false title="Publisher Subscriber → Distributed Tracing" href="/docs/advanced-guide/using-publisher-subscriber#distributed-tracing" /%} for details.
+
 ### Configuration & Usage:
 
-GoFr has support for following trace-exporters:
-#### 1. [Zipkin](https://zipkin.io/):
+GoFr has support for following trace-exporters. Pick **one** — don't run all of them at once.
 
-To see the traces install zipkin image using the following Docker command:
+#### 1. [OpenTelemetry Protocol](https://opentelemetry.io/docs/specs/otlp/) (recommended):
 
-```bash
-docker run --name gofr-zipkin -p 2005:9411 -d openzipkin/zipkin:latest
-```
+OTLP over gRPC is the current OpenTelemetry standard and works with any OTLP-compatible backend (Jaeger 1.35+, Tempo, Honeycomb, the OpenTelemetry Collector, etc.).
 
-Add Tracer configs in `.env` file, your .env will be updated to
+Add OTLP configs in `.env` file, your `.env` will be updated to:
 
 ```dotenv
 APP_NAME=test-service
-HTTP_PORT=9000
+HTTP_PORT=8000
 
 REDIS_HOST=localhost
-REDIS_PORT=6379
+REDIS_PORT=2002
+REDIS_PASSWORD=password
 
 DB_HOST=localhost
 DB_USER=root
@@ -344,18 +354,15 @@ DB_NAME=test_db
 DB_PORT=3306
 
 # tracing configs
-TRACE_EXPORTER=zipkin
-TRACER_URL=http://localhost:2005/api/v2/spans
-TRACER_RATIO=0.1
+TRACE_EXPORTER=otlp
+TRACER_URL=localhost:4317
+TRACER_RATIO=1.0
 
 LOG_LEVEL=DEBUG
 ```
 
 > [!NOTE]
-> If the value of `TRACER_PORT` is not provided, GoFr uses port `9411` by default.
-
-Open {% new-tab-link title="zipkin" href="http://localhost:2005/zipkin/" /%} and search by TraceID (correlationID) to see the trace.
-{% figure src="/quick-start-trace.png" alt="Zipkin traces" /%}
+> `TRACER_RATIO=1.0` samples 100% of traces — convenient for local development so a single `curl` produces a visible trace. In production lower this (e.g. `0.05` for 5%) to keep export volume manageable.
 
 #### 2. [Jaeger](https://www.jaegertracing.io/):
 
@@ -370,32 +377,43 @@ docker run -d --name jaeger \
 	jaegertracing/all-in-one:1.41
 ```
 
-Add Jaeger Tracer configs in `.env` file, your .env will be updated to
+Add Jaeger Tracer configs in `.env` file, your `.env` will be updated to:
 ```dotenv
 # ... no change in other env variables
 
 # tracing configs
 TRACE_EXPORTER=jaeger
 TRACER_URL=localhost:14317
-TRACER_RATIO=0.1
+TRACER_RATIO=1.0
 ```
 
 Open {% new-tab-link title="jaeger" href="http://localhost:16686/trace/" /%} and search by TraceID (correlationID) to see the trace.
 {% figure src="/jaeger-traces.png" alt="Jaeger traces" /%}
 
-#### 3. [OpenTelemetry Protocol](https://opentelemetry.io/docs/specs/otlp/):
+#### 3. [Zipkin](https://zipkin.io/) (legacy):
 
-The OpenTelemetry Protocol (OTLP)  underlying gRPC is one of general-purpose telemetry data delivery protocol designed in the scope of the OpenTelemetry project.
+> [!NOTE]
+> `TRACE_EXPORTER=zipkin` is deprecated and will be removed in a future release. Zipkin v2.24+ supports OTLP natively — prefer the OTLP exporter above. The Zipkin exporter remains for users on older Zipkin servers.
 
-Add OTLP configs in `.env` file, your .env will be updated to
+To see the traces install zipkin image using the following Docker command:
+
+```bash
+docker run --name gofr-zipkin -p 2005:9411 -d openzipkin/zipkin:latest
+```
+
+Add Tracer configs in `.env` file:
+
 ```dotenv
 # ... no change in other env variables
 
-# tracing configs 
-TRACE_EXPORTER=otlp
-TRACER_URL=localhost:4317
-TRACER_RATIO=0.1
+# tracing configs
+TRACE_EXPORTER=zipkin
+TRACER_URL=http://localhost:2005/api/v2/spans
+TRACER_RATIO=1.0
 ```
+
+Open {% new-tab-link title="zipkin" href="http://localhost:2005/zipkin/" /%} and search by TraceID (correlationID) to see the trace.
+{% figure src="/quick-start-trace.png" alt="Zipkin traces" /%}
 
 
 

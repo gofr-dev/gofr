@@ -10,243 +10,319 @@ import (
 
 	"gofr.dev/pkg/gofr/container"
 	"gofr.dev/pkg/gofr/datasource/file"
+	gofrSql "gofr.dev/pkg/gofr/datasource/sql"
 	"gofr.dev/pkg/gofr/testutil"
 )
 
-func TestApp_AddKVStore(t *testing.T) {
-	t.Run("Adding KV-Store", func(t *testing.T) {
-		testutil.NewServerConfigs(t)
+func Test_tracerName(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
 
-		app := New()
+	tests := []struct {
+		name     string
+		ds       any
+		expected string
+	}{
+		{"Mongo", container.NewMockMongo(ctrl), "gofr-mongo"},
+		{"ArangoDB", container.NewMockArangoDB(ctrl), "gofr-arangodb"},
+		{"Clickhouse", container.NewMockClickhouse(ctrl), "gofr-clickhouse"},
+		{"Oracle", container.NewMockOracleDB(ctrl), "gofr-oracle"},
+		{"Cassandra", container.NewMockCassandraWithContext(ctrl), "gofr-cassandra"},
+		{"KVStore", container.NewMockKVStore(ctrl), "gofr-kvstore"},
+		{"Solr", container.NewMockSolr(ctrl), "gofr-solr"},
+		{"ScyllaDB", container.NewMockScyllaDB(ctrl), "gofr-scylladb"},
+		{"SurrealDB", container.NewMockSurrealDB(ctrl), "gofr-surrealdb"},
+		{"Elasticsearch", container.NewMockElasticsearch(ctrl), "gofr-elasticsearch"},
+		{"Couchbase", container.NewMockCouchbase(ctrl), "gofr-couchbase"},
+		{"InfluxDB", container.NewMockInfluxDB(ctrl), "gofr-influxdb"},
+		{"DBResolver", &fakeDBResolverProvider{}, "gofr-dbresolver"},
+		{"Unknown", "not-a-datasource", ""},
+	}
 
-		ctrl := gomock.NewController(t)
-		defer ctrl.Finish()
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			assert.Equal(t, tt.expected, tracerName(tt.ds))
+		})
+	}
+}
 
-		mock := container.NewMockKVStoreProvider(ctrl)
+func Test_instrumentDatasource(t *testing.T) {
+	testutil.NewServerConfigs(t)
 
-		mock.EXPECT().UseLogger(app.Logger())
-		mock.EXPECT().UseMetrics(app.Metrics())
-		mock.EXPECT().UseTracer(otel.GetTracerProvider().Tracer("gofr-kvstore"))
-		mock.EXPECT().Connect()
+	app := New()
 
-		app.AddKVStore(mock)
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
 
-		assert.Equal(t, mock, app.container.KVStore)
-	})
+	// MockMongoProvider implements UseLogger/UseMetrics/UseTracer/Connect via provider interface
+	mock := container.NewMockMongoProvider(ctrl)
+	mock.EXPECT().UseLogger(app.Logger())
+	mock.EXPECT().UseMetrics(app.Metrics())
+	mock.EXPECT().UseTracer(otel.GetTracerProvider().Tracer("gofr-mongo"))
+	mock.EXPECT().Connect()
+
+	app.instrumentDatasource(mock)
+}
+
+func Test_instrumentDatasource_PartialImplementation(t *testing.T) {
+	testutil.NewServerConfigs(t)
+
+	app := New()
+
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	// FileSystemProvider has UseLogger/UseMetrics/Connect but no UseTracer
+	mock := file.NewMockFileSystemProvider(ctrl)
+	mock.EXPECT().UseLogger(app.Logger())
+	mock.EXPECT().UseMetrics(app.Metrics())
+	mock.EXPECT().Connect()
+
+	// Should not panic — UseTracer is simply skipped
+	app.instrumentDatasource(mock)
 }
 
 func TestApp_AddMongo(t *testing.T) {
-	t.Run("Adding MongoDB", func(t *testing.T) {
-		testutil.NewServerConfigs(t)
+	testutil.NewServerConfigs(t)
 
-		app := New()
+	app := New()
 
-		ctrl := gomock.NewController(t)
-		defer ctrl.Finish()
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
 
-		mock := container.NewMockMongoProvider(ctrl)
+	mock := container.NewMockMongoProvider(ctrl)
+	mock.EXPECT().UseLogger(app.Logger())
+	mock.EXPECT().UseMetrics(app.Metrics())
+	mock.EXPECT().UseTracer(gomock.Any())
+	mock.EXPECT().Connect()
 
-		mock.EXPECT().UseLogger(app.Logger())
-		mock.EXPECT().UseMetrics(app.Metrics())
-		mock.EXPECT().UseTracer(gomock.Any())
-		mock.EXPECT().Connect()
+	app.AddMongo(mock)
 
-		app.AddMongo(mock)
-
-		assert.Equal(t, mock, app.container.Mongo)
-	})
-}
-
-func TestApp_AddCassandra(t *testing.T) {
-	t.Run("Adding Cassandra", func(t *testing.T) {
-		testutil.NewServerConfigs(t)
-
-		app := New()
-
-		ctrl := gomock.NewController(t)
-		defer ctrl.Finish()
-
-		mock := container.NewMockCassandraProvider(ctrl)
-
-		mock.EXPECT().UseLogger(app.Logger())
-		mock.EXPECT().UseMetrics(app.Metrics())
-		mock.EXPECT().UseTracer(otel.GetTracerProvider().Tracer("gofr-cassandra"))
-		mock.EXPECT().Connect()
-
-		app.AddCassandra(mock)
-
-		assert.Equal(t, mock, app.container.Cassandra)
-	})
-}
-
-func TestApp_AddClickhouse(t *testing.T) {
-	t.Run("Adding Clickhouse", func(t *testing.T) {
-		testutil.NewServerConfigs(t)
-
-		app := New()
-
-		ctrl := gomock.NewController(t)
-		defer ctrl.Finish()
-
-		mock := container.NewMockClickhouseProvider(ctrl)
-
-		mock.EXPECT().UseLogger(app.Logger())
-		mock.EXPECT().UseMetrics(app.Metrics())
-		mock.EXPECT().UseTracer(otel.GetTracerProvider().Tracer("gofr-clickhouse"))
-		mock.EXPECT().Connect()
-
-		app.AddClickhouse(mock)
-
-		assert.Equal(t, mock, app.container.Clickhouse)
-	})
-}
-
-func TestApp_AddOracle(t *testing.T) {
-	t.Run("Adding OracleDB", func(t *testing.T) {
-		testutil.NewServerConfigs(t)
-
-		app := New()
-
-		ctrl := gomock.NewController(t)
-		defer ctrl.Finish()
-
-		mock := container.NewMockOracleProvider(ctrl)
-
-		mock.EXPECT().UseLogger(app.Logger())
-		mock.EXPECT().UseMetrics(app.Metrics())
-		mock.EXPECT().UseTracer(otel.GetTracerProvider().Tracer("gofr-oracle"))
-		mock.EXPECT().Connect()
-
-		app.AddOracle(mock)
-
-		assert.Equal(t, mock, app.container.Oracle)
-	})
-}
-
-func TestApp_AddFTP(t *testing.T) {
-	t.Run("Adding FTP", func(t *testing.T) {
-		testutil.NewServerConfigs(t)
-
-		app := New()
-
-		ctrl := gomock.NewController(t)
-		defer ctrl.Finish()
-
-		mock := file.NewMockFileSystemProvider(ctrl)
-
-		mock.EXPECT().UseLogger(app.Logger())
-		mock.EXPECT().UseMetrics(app.Metrics())
-		mock.EXPECT().Connect()
-
-		app.AddFTP(mock)
-
-		assert.Equal(t, mock, app.container.File)
-	})
-
-	t.Run("Adding FTP", func(t *testing.T) {
-		testutil.NewServerConfigs(t)
-
-		app := New()
-
-		ctrl := gomock.NewController(t)
-		defer ctrl.Finish()
-
-		mock := file.NewMockFileSystemProvider(ctrl)
-
-		mock.EXPECT().UseLogger(app.Logger())
-		mock.EXPECT().UseMetrics(app.Metrics())
-		mock.EXPECT().Connect()
-
-		app.AddFileStore(mock)
-
-		assert.Equal(t, mock, app.container.File)
-	})
-}
-
-func TestApp_AddS3(t *testing.T) {
-	t.Run("Adding S3", func(t *testing.T) {
-		testutil.NewServerConfigs(t)
-
-		app := New()
-
-		ctrl := gomock.NewController(t)
-		defer ctrl.Finish()
-
-		mock := file.NewMockFileSystemProvider(ctrl)
-
-		mock.EXPECT().UseLogger(app.Logger())
-		mock.EXPECT().UseMetrics(app.Metrics())
-		mock.EXPECT().Connect()
-
-		app.AddFileStore(mock)
-
-		assert.Equal(t, mock, app.container.File)
-	})
-}
-
-func TestApp_AddOpenTSDB(t *testing.T) {
-	t.Run("Adding OpenTSDB", func(t *testing.T) {
-		testutil.NewServerConfigs(t)
-
-		app := New()
-
-		ctrl := gomock.NewController(t)
-		defer ctrl.Finish()
-
-		mock := container.NewMockOpenTSDBProvider(ctrl)
-
-		mock.EXPECT().UseLogger(app.Logger())
-		mock.EXPECT().UseMetrics(app.Metrics())
-		mock.EXPECT().UseTracer(gomock.Any())
-		mock.EXPECT().Connect()
-
-		app.AddOpenTSDB(mock)
-
-		assert.Equal(t, mock, app.container.OpenTSDB)
-	})
-}
-
-func TestApp_AddScyllaDB(t *testing.T) {
-	t.Run("Adding ScyllaDB", func(t *testing.T) {
-		testutil.NewServerConfigs(t)
-
-		app := New()
-
-		ctrl := gomock.NewController(t)
-		defer ctrl.Finish()
-
-		mock := container.NewMockScyllaDBProvider(ctrl)
-
-		mock.EXPECT().UseLogger(app.Logger())
-		mock.EXPECT().UseMetrics(app.Metrics())
-		mock.EXPECT().UseTracer(gomock.Any())
-		mock.EXPECT().Connect()
-
-		app.AddScyllaDB(mock)
-
-		assert.Equal(t, mock, app.container.ScyllaDB)
-	})
+	assert.Equal(t, mock, app.container.Mongo)
 }
 
 func TestApp_AddArangoDB(t *testing.T) {
-	t.Run("Adding ArangoDB", func(t *testing.T) {
-		port := testutil.GetFreePort(t)
-		t.Setenv("METRICS_PORT", strconv.Itoa(port))
+	port := testutil.GetFreePort(t)
+	t.Setenv("METRICS_PORT", strconv.Itoa(port))
 
-		app := New()
+	app := New()
 
-		ctrl := gomock.NewController(t)
-		defer ctrl.Finish()
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
 
-		mock := container.NewMockArangoDBProvider(ctrl)
+	mock := container.NewMockArangoDBProvider(ctrl)
+	mock.EXPECT().UseLogger(app.Logger())
+	mock.EXPECT().UseMetrics(app.Metrics())
+	mock.EXPECT().UseTracer(otel.GetTracerProvider().Tracer("gofr-arangodb"))
+	mock.EXPECT().Connect()
 
-		mock.EXPECT().UseLogger(app.Logger())
-		mock.EXPECT().UseMetrics(app.Metrics())
-		mock.EXPECT().UseTracer(otel.GetTracerProvider().Tracer("gofr-arangodb"))
-		mock.EXPECT().Connect()
+	app.AddArangoDB(mock)
 
-		app.AddArangoDB(mock)
+	assert.Equal(t, mock, app.container.ArangoDB)
+}
 
-		assert.Equal(t, mock, app.container.ArangoDB)
-	})
+func TestApp_AddClickhouse(t *testing.T) {
+	testutil.NewServerConfigs(t)
+
+	app := New()
+
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	mock := container.NewMockClickhouseProvider(ctrl)
+	mock.EXPECT().UseLogger(app.Logger())
+	mock.EXPECT().UseMetrics(app.Metrics())
+	mock.EXPECT().UseTracer(otel.GetTracerProvider().Tracer("gofr-clickhouse"))
+	mock.EXPECT().Connect()
+
+	app.AddClickhouse(mock)
+
+	assert.Equal(t, mock, app.container.Clickhouse)
+}
+
+func TestApp_AddCassandra(t *testing.T) {
+	testutil.NewServerConfigs(t)
+
+	app := New()
+
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	mock := container.NewMockCassandraProvider(ctrl)
+	mock.EXPECT().UseLogger(app.Logger())
+	mock.EXPECT().UseMetrics(app.Metrics())
+	mock.EXPECT().UseTracer(otel.GetTracerProvider().Tracer("gofr-cassandra"))
+	mock.EXPECT().Connect()
+
+	app.AddCassandra(mock)
+
+	assert.Equal(t, mock, app.container.Cassandra)
+}
+
+func TestApp_AddOracle(t *testing.T) {
+	testutil.NewServerConfigs(t)
+
+	app := New()
+
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	mock := container.NewMockOracleProvider(ctrl)
+	mock.EXPECT().UseLogger(app.Logger())
+	mock.EXPECT().UseMetrics(app.Metrics())
+	mock.EXPECT().UseTracer(otel.GetTracerProvider().Tracer("gofr-oracle"))
+	mock.EXPECT().Connect()
+
+	app.AddOracle(mock)
+
+	assert.Equal(t, mock, app.container.Oracle)
+}
+
+func TestApp_AddKVStore(t *testing.T) {
+	testutil.NewServerConfigs(t)
+
+	app := New()
+
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	mock := container.NewMockKVStoreProvider(ctrl)
+	mock.EXPECT().UseLogger(app.Logger())
+	mock.EXPECT().UseMetrics(app.Metrics())
+	mock.EXPECT().UseTracer(otel.GetTracerProvider().Tracer("gofr-kvstore"))
+	mock.EXPECT().Connect()
+
+	app.AddKVStore(mock)
+
+	assert.Equal(t, mock, app.container.KVStore)
+}
+
+func TestApp_AddSolr(t *testing.T) {
+	testutil.NewServerConfigs(t)
+
+	app := New()
+
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	mock := container.NewMockSolrProvider(ctrl)
+	mock.EXPECT().UseLogger(app.Logger())
+	mock.EXPECT().UseMetrics(app.Metrics())
+	mock.EXPECT().UseTracer(gomock.Any())
+	mock.EXPECT().Connect()
+
+	app.AddSolr(mock)
+
+	assert.Equal(t, mock, app.container.Solr)
+}
+
+func TestApp_AddFTP(t *testing.T) {
+	testutil.NewServerConfigs(t)
+
+	app := New()
+
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	mock := file.NewMockFileSystemProvider(ctrl)
+	mock.EXPECT().UseLogger(app.Logger())
+	mock.EXPECT().UseMetrics(app.Metrics())
+	mock.EXPECT().Connect()
+
+	app.AddFTP(mock)
+
+	assert.Equal(t, mock, app.container.File)
+}
+
+func TestApp_AddFileStore(t *testing.T) {
+	testutil.NewServerConfigs(t)
+
+	app := New()
+
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	mock := file.NewMockFileSystemProvider(ctrl)
+	mock.EXPECT().UseLogger(app.Logger())
+	mock.EXPECT().UseMetrics(app.Metrics())
+	mock.EXPECT().Connect()
+
+	app.AddFileStore(mock)
+
+	assert.Equal(t, mock, app.container.File)
+}
+
+// fakeDBResolverProvider satisfies container.DBResolverProvider without importing
+// the dbresolver package (which would create an import cycle through pkg/gofr).
+type fakeDBResolverProvider struct {
+	logger     any
+	metrics    any
+	tracer     any
+	connected  bool
+	resolverDB container.DB
+}
+
+func (f *fakeDBResolverProvider) UseLogger(l any)           { f.logger = l }
+func (f *fakeDBResolverProvider) UseMetrics(m any)          { f.metrics = m }
+func (f *fakeDBResolverProvider) UseTracer(t any)           { f.tracer = t }
+func (f *fakeDBResolverProvider) Connect()                  { f.connected = true }
+func (f *fakeDBResolverProvider) GetResolver() container.DB { return f.resolverDB }
+
+func TestApp_AddDBResolver_WiresTracing(t *testing.T) {
+	testutil.NewServerConfigs(t)
+
+	app := New()
+
+	db, _, _ := gofrSql.NewSQLMocksWithConfig(t, &gofrSql.DBConfig{Dialect: "mysql"})
+	defer db.Close()
+
+	app.container.SQL = db
+
+	resolved := &fakeDBResolverProvider{resolverDB: db}
+
+	app.AddDBResolver(resolved)
+
+	assert.Equal(t, app.Logger(), resolved.logger)
+	assert.Equal(t, app.Metrics(), resolved.metrics)
+	assert.Equal(t, otel.GetTracerProvider().Tracer("gofr-dbresolver"), resolved.tracer)
+	assert.True(t, resolved.connected)
+	assert.Equal(t, container.DB(db), app.container.SQL)
+}
+
+func TestApp_AddOpenTSDB(t *testing.T) {
+	testutil.NewServerConfigs(t)
+
+	app := New()
+
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	mock := container.NewMockOpenTSDBProvider(ctrl)
+	mock.EXPECT().UseLogger(app.Logger())
+	mock.EXPECT().UseMetrics(app.Metrics())
+	mock.EXPECT().UseTracer(gomock.Any())
+	mock.EXPECT().Connect()
+
+	app.AddOpenTSDB(mock)
+
+	assert.Equal(t, mock, app.container.OpenTSDB)
+}
+
+func TestApp_AddScyllaDB(t *testing.T) {
+	testutil.NewServerConfigs(t)
+
+	app := New()
+
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	mock := container.NewMockScyllaDBProvider(ctrl)
+	mock.EXPECT().UseLogger(app.Logger())
+	mock.EXPECT().UseMetrics(app.Metrics())
+	mock.EXPECT().UseTracer(gomock.Any())
+	mock.EXPECT().Connect()
+
+	app.AddScyllaDB(mock)
+
+	assert.Equal(t, mock, app.container.ScyllaDB)
 }

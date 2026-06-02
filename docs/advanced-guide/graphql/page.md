@@ -1,3 +1,11 @@
+---
+description: "Build GraphQL APIs in GoFr with a schema-first workflow. Define queries and mutations in a .graphql file; GoFr handles execution, validation, and observability."
+nextjs:
+  metadata:
+    title: "GraphQL in GoFr — Schema-First APIs in Go"
+    description: "Build GraphQL APIs in GoFr with a schema-first workflow. Define queries and mutations in a .graphql file; GoFr handles execution, validation, and observability."
+---
+
 # GraphQL in GoFr
 
 GoFr provides a **Schema-First** approach to building GraphQL APIs. This means you define your API contract in a standard GraphQL schema file, and GoFr handles the execution, validation, and observability.
@@ -143,7 +151,7 @@ The `/graphql` endpoint accepts a JSON body with the following fields:
 curl -X POST \
   -H "Content-Type: application/json" \
   -d '{"query": "{ user(id: 1) { name } }"}' \
-  http://localhost:9091/graphql
+  http://localhost:8000/graphql
 ```
 
 **Named operation with variables:**
@@ -151,7 +159,7 @@ curl -X POST \
 curl -X POST \
   -H "Content-Type: application/json" \
   -d '{"query": "query GetUser($id: Int) { user(id: $id) { name } }", "operationName": "GetUser", "variables": {"id": 1}}' \
-  http://localhost:9091/graphql
+  http://localhost:8000/graphql
 ```
 
 ---
