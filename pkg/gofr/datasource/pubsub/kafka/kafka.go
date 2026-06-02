@@ -266,7 +266,16 @@ func (k *kafkaClient) Subscribe(ctx context.Context, topic string) (*pubsub.Mess
 }
 
 func (k *kafkaClient) Close() (err error) {
+	k.mu.RLock()
+
+	readers := make([]Reader, 0, len(k.reader))
 	for _, r := range k.reader {
+		readers = append(readers, r)
+	}
+
+	k.mu.RUnlock()
+
+	for _, r := range readers {
 		err = errors.Join(err, r.Close())
 	}
 
