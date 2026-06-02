@@ -196,3 +196,28 @@ func TestMetrics_StaticFileWithQueryParam(t *testing.T) {
 	mockMetrics.AssertCalled(t, "RecordHistogram", mock.Anything, "app_http_response", mock.Anything,
 		[]string{"path", "/static/example.js", "method", "GET", "status", "200"})
 }
+
+func TestMetrics_NonUTF8Path(t *testing.T) {
+	mockMetrics := &mockMetrics{}
+
+	mockMetrics.On("RecordHistogram", mock.Anything, "app_http_response", mock.Anything,
+		[]string{"path", "/<invalid_utf8>", "method", "GET", "status", "404"}).Return(nil)
+
+	router := mux.NewRouter()
+	// Register a catch-all so gorilla/mux routes the request and the middleware fires.
+	router.PathPrefix("/").HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusNotFound)
+	}).Name("catch-all")
+
+	router.Use(Metrics(mockMetrics))
+
+	// \xc0\x2e is an invalid UTF-8 sequence (over-long encoding).
+	req := httptest.NewRequest(http.MethodGet, "/\xc0\x2e\xc0\x2e/winnt/win.ini", http.NoBody)
+	rr := httptest.NewRecorder()
+
+	// Must not panic.
+	router.ServeHTTP(rr, req)
+
+	mockMetrics.AssertCalled(t, "RecordHistogram", mock.Anything, "app_http_response", mock.Anything,
+		[]string{"path", "/<invalid_utf8>", "method", "GET", "status", "404"})
+}

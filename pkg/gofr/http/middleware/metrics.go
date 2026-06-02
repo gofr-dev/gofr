@@ -9,6 +9,7 @@ import (
 	"strings"
 	"sync"
 	"time"
+	"unicode/utf8"
 
 	"github.com/gorilla/mux"
 	"go.opentelemetry.io/otel/attribute"
@@ -111,6 +112,10 @@ func Metrics(metrics metrics) func(inner http.Handler) http.Handler {
 
 			if path == "/" || strings.HasPrefix(path, "/static") {
 				path = r.URL.Path
+			}
+
+			if !utf8.ValidString(path) {
+				path = "/<invalid_utf8>"
 			}
 
 			path = strings.TrimSuffix(path, "/")
