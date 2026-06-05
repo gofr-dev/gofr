@@ -18,6 +18,8 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/trace/noop"
 
 	"gofr.dev/pkg/gofr/config"
 	"gofr.dev/pkg/gofr/container"
@@ -815,6 +817,56 @@ func Test_initTracer_invalidConfig(t *testing.T) {
 
 		assert.Contains(t, logMessage, tc.expectedLogMessage, "TEST[%d], Failed.\n%s", i, tc.desc)
 	}
+}
+
+// Test_initTracer_NoSamplingButValidIDs asserts that initTracer installs a
+// non-recording SDK provider (NeverSample) when no TRACE_EXPORTER is
+// configured. Spans must NOT record, but their SpanContext must be valid
+// and carry a unique TraceID/SpanID per call. That guarantee keeps the
+// X-Correlation-ID response header and the request-log trace_id field
+// unique per request even on a deployment with tracing turned off.
+func Test_initTracer_NoSamplingButValidIDs(t *testing.T) {
+	mockContainer, _ := container.NewMockContainer(t)
+	a := App{
+		Config:    config.NewMockConfig(nil),
+		container: mockContainer,
+	}
+
+	a.initTracer()
+
+	tr := otel.Tracer("gofr-test")
+	_, span1 := tr.Start(context.Background(), "probe-1")
+	_, span2 := tr.Start(context.Background(), "probe-2")
+
+	defer span1.End()
+	defer span2.End()
+
+	sc1, sc2 := span1.SpanContext(), span2.SpanContext()
+
+	require.False(t, span1.IsRecording(), "spans must be non-recording when no exporter is configured")
+	require.True(t, sc1.IsValid(), "SpanContext must be valid so trace_id / correlation IDs stay unique")
+	require.NotEqual(t, sc1.TraceID(), sc2.TraceID(), "TraceIDs must differ across spans for correlation")
+}
+
+// Test_initTracer_SDKWhenExporterSet asserts that initTracer installs the recording
+// SDK tracer provider when TRACE_EXPORTER is configured. Pair of Test_initTracer_NoSamplingButValidIDs.
+func Test_initTracer_SDKWhenExporterSet(t *testing.T) {
+	mockContainer, _ := container.NewMockContainer(t)
+	a := App{
+		Config: config.NewMockConfig(map[string]string{
+			"TRACE_EXPORTER": "gofr",
+		}),
+		container: mockContainer,
+	}
+
+	a.initTracer()
+	t.Cleanup(func() { otel.SetTracerProvider(noop.NewTracerProvider()) })
+
+	_, span := otel.Tracer("gofr-test").Start(context.Background(), "probe")
+	defer span.End()
+
+	require.True(t, span.IsRecording(),
+		"expected recording span when TRACE_EXPORTER=gofr; SDK provider should be installed")
 }
 
 func Test_UseMiddleware(t *testing.T) {
