@@ -119,7 +119,18 @@ func (c *Container) Create(conf config.Config) {
 
 	c.Logger.Debug("Container is being created")
 
-	c.metricsManager = metrics.NewMetricsManager(exporters.Prometheus(c.GetAppName(), c.GetAppVersion()), c.Logger)
+	cardinalityLimit := exporters.DefaultCardinalityLimit
+
+	if v := conf.Get("METRICS_CARDINALITY_LIMIT"); v != "" {
+		if limit, err := strconv.Atoi(v); err == nil {
+			cardinalityLimit = limit
+		} else {
+			c.Logger.Errorf("invalid METRICS_CARDINALITY_LIMIT %q, using default of %d", v, exporters.DefaultCardinalityLimit)
+		}
+	}
+
+	c.metricsManager = metrics.NewMetricsManager(
+		exporters.Prometheus(c.GetAppName(), c.GetAppVersion(), exporters.WithCardinalityLimit(cardinalityLimit)), c.Logger)
 
 	exporters.SendFrameworkStartupTelemetry(c.GetAppName(), c.GetAppVersion())
 

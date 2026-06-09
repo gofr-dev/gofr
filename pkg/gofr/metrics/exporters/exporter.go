@@ -12,7 +12,35 @@ import (
 	"gofr.dev/pkg/gofr/version"
 )
 
-func Prometheus(appName, appVersion string) metric.Meter {
+// DefaultCardinalityLimit is the per-instrument attribute-set limit applied to
+// the metrics MeterProvider. It mirrors the OpenTelemetry SDK default (2000):
+// once an instrument exceeds this many distinct attribute sets in a collection
+// cycle, further series are aggregated into a single overflow series labeled
+// otel.metric.overflow=true. Set METRICS_CARDINALITY_LIMIT to override it
+// (0 or negative = unlimited).
+const DefaultCardinalityLimit = 2000
+
+type promConfig struct {
+	cardinalityLimit int
+}
+
+// Option configures the Prometheus meter.
+type Option func(*promConfig)
+
+// WithCardinalityLimit sets the per-instrument cardinality limit. A value of 0
+// or below disables the limit (unlimited cardinality).
+func WithCardinalityLimit(limit int) Option {
+	return func(c *promConfig) {
+		c.cardinalityLimit = limit
+	}
+}
+
+func Prometheus(appName, appVersion string, opts ...Option) metric.Meter {
+	cfg := promConfig{cardinalityLimit: DefaultCardinalityLimit}
+	for _, opt := range opts {
+		opt(&cfg)
+	}
+
 	exporter, err := prometheus.New(
 		prometheus.WithoutTargetInfo(),
 		prometheus.WithTranslationStrategy(otlptranslator.NoTranslation))
@@ -22,6 +50,7 @@ func Prometheus(appName, appVersion string) metric.Meter {
 
 	meter := metricSdk.NewMeterProvider(
 		metricSdk.WithReader(exporter),
+		metricSdk.WithCardinalityLimit(cfg.cardinalityLimit),
 		metricSdk.WithResource(resource.NewWithAttributes(
 			semconv.SchemaURL,
 			semconv.ServiceNameKey.String(appName),

@@ -43,6 +43,34 @@ type routeMethodKey struct {
 // metrics, so recording app_http_response for it would double-count.
 const graphqlPath = "/graphql"
 
+// staticAssetPath and unmatchedPath are bounded sentinel values for the
+// app_http_response "path" label. Requests that don't resolve to a registered
+// route template would otherwise carry their raw URL as the label — unbounded
+// for static files (one series per filename) and for unmatched 404s (one per
+// URL a client invents) — inflating cardinality on this single instrument and
+// the routeAttrs cache. Collapsing them to fixed labels keeps app_http_response
+// bounded regardless of traffic.
+const (
+	staticAssetPath = "/static/*"
+	unmatchedPath   = "/*"
+)
+
+// isStaticAsset reports whether urlPath is a static-asset request whose raw
+// path should be collapsed to staticAssetPath.
+func isStaticAsset(urlPath string) bool {
+	if strings.HasPrefix(urlPath, "/static") {
+		return true
+	}
+
+	switch strings.ToLower(filepath.Ext(urlPath)) {
+	case ".css", ".js", ".png", ".jpg", ".jpeg", ".gif", ".ico", ".svg",
+		".txt", ".html", ".json", ".woff", ".woff2", ".ttf", ".eot", ".pdf":
+		return true
+	default:
+		return false
+	}
+}
+
 // Metrics is a middleware that records request response time metrics using the provided metrics interface.
 func Metrics(metrics metrics) func(inner http.Handler) http.Handler {
 	// Per-middleware-instance caches (closure-owned, not package globals):
@@ -89,31 +117,26 @@ func Metrics(metrics metrics) func(inner http.Handler) http.Handler {
 				srw = &StatusResponseWriter{ResponseWriter: w}
 			}
 
-			// mux.CurrentRoute is nil for unmatched routes (404), and even
-			// when matched, GetPathTemplate can return "" for routes built
-			// without an explicit Path() (e.g. PathPrefix-only handlers).
-			// Fall back to r.URL.Path in both cases so the metric carries a
-			// usable path label instead of caching an empty key.
+			// Resolve the "path" label. Prefer the registered route template
+			// (bounded by the number of routes). mux.CurrentRoute is nil for
+			// unmatched routes (404), and GetPathTemplate returns "" for routes
+			// without an explicit Path() (e.g. PathPrefix-only handlers). Rather
+			// than fall back to the raw URL — which is unbounded and explodes
+			// cardinality — collapse static assets and unmatched requests to
+			// bounded sentinels.
 			var path string
 			if cr := mux.CurrentRoute(r); cr != nil {
 				path, _ = cr.GetPathTemplate()
 			}
 
-			if path == "" {
-				path = r.URL.Path
+			switch {
+			case isStaticAsset(r.URL.Path):
+				path = staticAssetPath
+			case path == "":
+				path = unmatchedPath
+			default:
+				path = strings.TrimSuffix(path, "/")
 			}
-
-			ext := strings.ToLower(filepath.Ext(r.URL.Path))
-			switch ext {
-			case ".css", ".js", ".png", ".jpg", ".jpeg", ".gif", ".ico", ".svg", ".txt", ".html", ".json", ".woff", ".woff2", ".ttf", ".eot", ".pdf":
-				path = r.URL.Path
-			}
-
-			if path == "/" || strings.HasPrefix(path, "/static") {
-				path = r.URL.Path
-			}
-
-			path = strings.TrimSuffix(path, "/")
 
 			// Skip recording for /graphql — it has its own dedicated metrics
 			// (app_graphql_*). time.Now() (vDSO call) is deferred past this

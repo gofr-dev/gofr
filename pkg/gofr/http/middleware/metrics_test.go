@@ -61,7 +61,7 @@ func TestMetrics_StaticFile(t *testing.T) {
 	mockMetrics := &mockMetrics{}
 
 	mockMetrics.On("RecordHistogram", mock.Anything, "app_http_response", mock.Anything,
-		[]string{"path", "/static/example.js", "method", "GET", "status", "200"}).Return(nil)
+		[]string{"path", "/static/*", "method", "GET", "status", "200"}).Return(nil)
 
 	// Create a temporary static file for the test
 	tempDir := t.TempDir()
@@ -87,7 +87,7 @@ func TestMetrics_StaticFile(t *testing.T) {
 	}
 
 	mockMetrics.AssertCalled(t, "RecordHistogram", mock.Anything, "app_http_response", mock.Anything,
-		[]string{"path", "/static/example.js", "method", "GET", "status", "200"})
+		[]string{"path", "/static/*", "method", "GET", "status", "200"})
 }
 
 // TestMetrics_GraphQLSkipsRootOnly asserts that the Metrics middleware
@@ -164,11 +164,35 @@ func TestMetrics_UnmatchedRouteDoesNotPanic(t *testing.T) {
 	require.Equal(t, http.StatusNotFound, rr.Code, "404 handler still ran end-to-end")
 }
 
+// TestMetrics_UnmatchedRouteBoundedLabel asserts that a request hitting no
+// registered route records app_http_response with the bounded unmatchedPath
+// sentinel rather than the raw URL. Using the raw URL would make the path
+// label unbounded (one series per invented URL), inflating cardinality on a
+// single instrument — the regression this guards against.
+func TestMetrics_UnmatchedRouteBoundedLabel(t *testing.T) {
+	mockMetrics := &mockMetrics{}
+
+	mockMetrics.On("RecordHistogram", mock.Anything, "app_http_response", mock.Anything,
+		[]string{"path", unmatchedPath, "method", "GET", "status", "404"}).Return(nil)
+
+	notFound := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusNotFound)
+	})
+
+	handler := Metrics(mockMetrics)(notFound)
+
+	req := httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/no/such/route", http.NoBody)
+	handler.ServeHTTP(httptest.NewRecorder(), req)
+
+	mockMetrics.AssertCalled(t, "RecordHistogram", mock.Anything, "app_http_response", mock.Anything,
+		[]string{"path", unmatchedPath, "method", "GET", "status", "404"})
+}
+
 func TestMetrics_StaticFileWithQueryParam(t *testing.T) {
 	mockMetrics := &mockMetrics{}
 
 	mockMetrics.On("RecordHistogram", mock.Anything, "app_http_response", mock.Anything,
-		[]string{"path", "/static/example.js", "method", "GET", "status", "200"}).Return(nil)
+		[]string{"path", "/static/*", "method", "GET", "status", "200"}).Return(nil)
 
 	// Create a temporary static file for the test
 	tempDir := t.TempDir()
@@ -194,5 +218,5 @@ func TestMetrics_StaticFileWithQueryParam(t *testing.T) {
 	}
 
 	mockMetrics.AssertCalled(t, "RecordHistogram", mock.Anything, "app_http_response", mock.Anything,
-		[]string{"path", "/static/example.js", "method", "GET", "status", "200"})
+		[]string{"path", "/static/*", "method", "GET", "status", "200"})
 }
