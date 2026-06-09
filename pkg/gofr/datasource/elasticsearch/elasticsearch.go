@@ -96,9 +96,12 @@ func (c *Client) Connect() {
 
 	c.client = client
 
-	var responseTimeBuckets = []float64{0.05, 0.1, 0.2, 0.5, 1.0, 2.0, 5.0, 10.0}
+	var responseTimeBuckets = []float64{
+		50, 75, 100, 125, 150, 200, 300, 500, 750, 1000, 2000, 3000, 5000, 7500, 10000, // 50µs-10ms
+		25000, 50000, 100000, 250000, 500000, 1000000, 5000000, 10000000, 30000000, 60000000, 120000000, 180000000, // 25ms-3min
+	}
 
-	c.metrics.NewHistogram("es_request_duration_ms", "Duration of Elasticsearch requests in ms", responseTimeBuckets...)
+	c.metrics.NewHistogram("es_request_duration_us", "Duration of Elasticsearch requests in microseconds", responseTimeBuckets...)
 
 	if _, err := c.HealthCheck(context.Background()); err != nil {
 		c.logger.Errorf("Elasticsearch health check failed: %v", err)
@@ -360,7 +363,7 @@ func (c *Client) sendOperationStats(start time.Time,
 		span.End()
 	}
 
-	c.metrics.RecordHistogram(context.Background(), "es_request_duration_ms", float64(duration))
+	c.metrics.RecordHistogram(context.Background(), "es_request_duration_us", float64(duration))
 
 	// Structured log
 	ql := QueryLog{

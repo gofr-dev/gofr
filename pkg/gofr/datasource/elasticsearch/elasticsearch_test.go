@@ -73,8 +73,8 @@ func setupTest(t *testing.T) (*Client, *mockTransport) {
 	client.UseTracer(otel.GetTracerProvider().Tracer("gofr-elasticsearch"))
 
 	// Setup common expectations for metrics and logging
-	mockMetrics.EXPECT().NewHistogram("es_request_duration_ms", gomock.Any(), gomock.Any()).AnyTimes()
-	mockMetrics.EXPECT().RecordHistogram(gomock.Any(), "es_request_duration_ms", gomock.Any()).AnyTimes()
+	mockMetrics.EXPECT().NewHistogram("es_request_duration_us", gomock.Any(), gomock.Any()).AnyTimes()
+	mockMetrics.EXPECT().RecordHistogram(gomock.Any(), "es_request_duration_us", gomock.Any()).AnyTimes()
 	mockLogger.EXPECT().Debug(gomock.Any()).AnyTimes()
 	mockLogger.EXPECT().Debugf(gomock.Any(), gomock.Any()).AnyTimes()
 	mockLogger.EXPECT().Logf(gomock.Any(), gomock.Any()).AnyTimes()
