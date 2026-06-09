@@ -7,13 +7,12 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"io"
 	"net/http"
+	"os"
 	"strings"
 	"sync"
 	"time"
 
-	"gofr.dev/pkg/gofr/datasource/file"
 	"gofr.dev/pkg/gofr/logging"
 	"gofr.dev/pkg/gofr/service"
 )
@@ -29,19 +28,20 @@ var (
 	errEmptyTokenFile    = errors.New("token file is empty")
 	errTokenUnavailable  = errors.New("no token available")
 	errAuthHeaderPresent = errors.New("authorization header already set on request")
-	errNilFileSystem     = errors.New("file system is required")
 )
 
-// FileTokenAuthConfig reads a bearer token from a file and periodically re-reads it
-// to support token rotation (e.g. Kubernetes projected service account tokens).
+// FileTokenAuthConfig reads a bearer token from a local file and periodically
+// re-reads it to support token rotation (e.g. Kubernetes projected service
+// account tokens).
 //
-// The returned value implements service.Options and io.Closer. Call Close to stop
-// the background refresh goroutine; it is safe to call Close multiple times.
+// The returned value implements service.Options, service.Observable and
+// io.Closer. Call Close to stop the background refresh goroutine; it is safe
+// to call Close multiple times.
 type FileTokenAuthConfig struct {
-	fs              file.FileSystem
-	logger          logging.Logger
 	tokenFilePath   string
 	refreshInterval time.Duration
+
+	logger logging.Logger
 
 	mu    sync.RWMutex
 	token string
@@ -50,41 +50,59 @@ type FileTokenAuthConfig struct {
 	closeOnce sync.Once
 }
 
-// NewFileTokenAuthConfig constructs a FileTokenAuthConfig that reads tokens through
-// the supplied file.FileSystem. If tokenFilePath is empty it defaults to
-// DefaultTokenFilePath. If refreshInterval is <= 0 it defaults to 30s.
+// Option configures a FileTokenAuthConfig at construction time. Pass options to
+// NewFileTokenAuthConfig to override the defaults (Kubernetes projected SA
+// token path, 30s refresh interval).
+type Option func(*FileTokenAuthConfig)
+
+// WithTokenFilePath overrides the path the bearer token is read from. The
+// default is the standard Kubernetes projected service account token mount at
+// DefaultTokenFilePath. Empty values are ignored.
+func WithTokenFilePath(path string) Option {
+	return func(f *FileTokenAuthConfig) {
+		if path != "" {
+			f.tokenFilePath = path
+		}
+	}
+}
+
+// WithRefreshInterval overrides how often the token file is re-read. Values
+// <= 0 are ignored and the default (30s) is used.
+func WithRefreshInterval(d time.Duration) Option {
+	return func(f *FileTokenAuthConfig) {
+		if d > 0 {
+			f.refreshInterval = d
+		}
+	}
+}
+
+// NewFileTokenAuthConfig constructs a FileTokenAuthConfig. With no options it
+// reads tokens from DefaultTokenFilePath and refreshes every 30s — the common
+// case for Kubernetes projected service account tokens. Override with
+// WithTokenFilePath / WithRefreshInterval.
 //
-// logger is used to report background token-refresh failures at WARN level; pass
-// app.Logger(). It may be nil, in which case refresh failures are not logged.
-//
-// Callers typically obtain fs via file.NewLocalFileSystem(app.Logger()).
-func NewFileTokenAuthConfig(fs file.FileSystem, logger logging.Logger, tokenFilePath string,
-	refreshInterval time.Duration) (*FileTokenAuthConfig, error) {
-	if fs == nil {
-		return nil, errNilFileSystem
-	}
-
-	if tokenFilePath == "" {
-		tokenFilePath = DefaultTokenFilePath
-	}
-
-	if refreshInterval <= 0 {
-		refreshInterval = defaultRefreshInterval
-	}
-
-	token, err := readToken(fs, tokenFilePath)
-	if err != nil {
-		return nil, fmt.Errorf("failed to read token from %s: %w", tokenFilePath, err)
-	}
-
+// The token file is read eagerly: a missing or empty file returns an error so
+// misconfiguration is caught at startup rather than at the first upstream call.
+// The logger is supplied automatically by NewHTTPService via the
+// service.Observable hook; until it arrives, background-refresh failures are
+// silent.
+func NewFileTokenAuthConfig(opts ...Option) (*FileTokenAuthConfig, error) {
 	f := &FileTokenAuthConfig{
-		fs:              fs,
-		logger:          logger,
-		tokenFilePath:   tokenFilePath,
-		refreshInterval: refreshInterval,
-		token:           token,
+		tokenFilePath:   DefaultTokenFilePath,
+		refreshInterval: defaultRefreshInterval,
 		done:            make(chan struct{}),
 	}
+
+	for _, opt := range opts {
+		opt(f)
+	}
+
+	token, err := readToken(f.tokenFilePath)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read token from %s: %w", f.tokenFilePath, err)
+	}
+
+	f.token = token
 
 	go f.refreshLoop()
 
@@ -95,6 +113,24 @@ func NewFileTokenAuthConfig(fs file.FileSystem, logger logging.Logger, tokenFile
 func (f *FileTokenAuthConfig) AddOption(h service.HTTP) service.HTTP {
 	return &fileTokenDecorator{source: f, HTTP: h}
 }
+
+// SetLogger implements service.Observable. NewHTTPService calls this with the
+// HTTP service's logger so background-refresh failures can be surfaced at WARN
+// level. If l does not satisfy logging.Logger (the richer interface with
+// Warnf), the logger stays unset and refresh failures remain silent rather
+// than panicking.
+func (f *FileTokenAuthConfig) SetLogger(l service.Logger) {
+	if rich, ok := l.(logging.Logger); ok {
+		f.mu.Lock()
+		f.logger = rich
+		f.mu.Unlock()
+	}
+}
+
+// SetMetrics implements service.Observable. FileTokenAuthConfig does not emit
+// metrics today; the no-op satisfies the interface so the framework can inject
+// uniformly.
+func (*FileTokenAuthConfig) SetMetrics(service.Metrics) {}
 
 // Close stops the background refresh goroutine. It is safe to call multiple times.
 func (f *FileTokenAuthConfig) Close() error {
@@ -125,13 +161,17 @@ func (f *FileTokenAuthConfig) refreshLoop() {
 		case <-f.done:
 			return
 		case <-ticker.C:
-			token, err := readToken(f.fs, f.tokenFilePath)
+			token, err := readToken(f.tokenFilePath)
 			if err != nil {
 				// Keep serving the cached token, but surface the failure so a
 				// vanished/locked token file does not stay invisible until an
 				// upstream 401.
-				if f.logger != nil {
-					f.logger.Warnf("file token auth: failed to refresh token from %s: %v", f.tokenFilePath, err)
+				f.mu.RLock()
+				log := f.logger
+				f.mu.RUnlock()
+
+				if log != nil {
+					log.Warnf("file token auth: failed to refresh token from %s: %v", f.tokenFilePath, err)
 				}
 
 				continue
@@ -144,15 +184,12 @@ func (f *FileTokenAuthConfig) refreshLoop() {
 	}
 }
 
-func readToken(fs file.FileSystem, path string) (string, error) {
-	f, err := fs.Open(path)
-	if err != nil {
-		return "", err
-	}
-
-	defer func() { _ = f.Close() }()
-
-	data, err := io.ReadAll(f)
+// readToken loads the bearer token from a local file. K8s projected SA tokens
+// always live on disk at a known mount path, so we read directly via os.ReadFile
+// rather than going through a file.FileSystem abstraction — the indirection was
+// not earning its keep for this use case.
+func readToken(path string) (string, error) {
+	data, err := os.ReadFile(path) // #nosec G304 -- path is operator-supplied config, not user input
 	if err != nil {
 		return "", err
 	}

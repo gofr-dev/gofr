@@ -245,33 +245,26 @@ interval so rotated tokens are picked up without restarting the process. The com
 use case is a Kubernetes [projected service account token](https://kubernetes.io/docs/tasks/configure-pod-container/configure-service-account/#serviceaccount-token-volume-projection),
 mounted by default at `/var/run/secrets/kubernetes.io/serviceaccount/token`.
 
-The constructor takes a `file.FileSystem`, a logger (used to report background
-refresh failures at WARN level — the cached token keeps serving until the next
-successful read), the token file path (empty defaults to the standard mount path),
-and the refresh interval (`<= 0` defaults to 30s).
+The constructor is zero-config for the common K8s case — `auth.NewFileTokenAuthConfig()`
+reads from the default mount path and refreshes every 30s. Override either via
+functional options: `auth.WithTokenFilePath(path)` and
+`auth.WithRefreshInterval(d)`. The logger used to report background refresh
+failures at WARN level is injected automatically by `AddHTTPService` — you do
+not have to plumb it through. The cached token keeps serving until the next
+successful read.
 
 ```go
 package main
 
 import (
-	"time"
-
 	"gofr.dev/pkg/gofr"
-	"gofr.dev/pkg/gofr/datasource/file"
 	"gofr.dev/pkg/gofr/service/auth"
 )
 
 func main() {
 	app := gofr.New()
 
-	fs := file.NewLocalFileSystem(app.Logger())
-
-	tokenCfg, err := auth.NewFileTokenAuthConfig(
-		fs,
-		app.Logger(),
-		auth.DefaultTokenFilePath, // or "" for the default K8s mount path
-		30*time.Second,
-	)
+	tokenCfg, err := auth.NewFileTokenAuthConfig()
 	if err != nil {
 		app.Logger().Fatalf("failed to initialize file token auth: %v", err)
 	}
@@ -280,6 +273,15 @@ func main() {
 
 	app.Run()
 }
+```
+
+To override defaults:
+
+```go
+tokenCfg, err := auth.NewFileTokenAuthConfig(
+    auth.WithTokenFilePath("/var/run/custom/token"),
+    auth.WithRefreshInterval(15*time.Second),
+)
 ```
 
 `tokenCfg` runs a background refresh goroutine for the lifetime of the process;

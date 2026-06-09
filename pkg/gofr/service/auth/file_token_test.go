@@ -12,7 +12,6 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"gofr.dev/pkg/gofr/datasource/file"
 	"gofr.dev/pkg/gofr/logging"
 	"gofr.dev/pkg/gofr/service"
 	"gofr.dev/pkg/gofr/testutil"
@@ -20,10 +19,6 @@ import (
 
 func testLogger() logging.Logger {
 	return logging.NewMockLogger(logging.ERROR)
-}
-
-func testFS() file.FileSystem {
-	return file.NewLocalFileSystem(logging.NewMockLogger(logging.ERROR))
 }
 
 func writeTokenFile(t *testing.T, content string) string {
@@ -37,25 +32,24 @@ func writeTokenFile(t *testing.T, content string) string {
 
 func TestNewFileTokenAuthConfig(t *testing.T) {
 	validPath := writeTokenFile(t, "initial-token")
-	fs := testFS()
+	missingPath := filepath.Join(t.TempDir(), "does-not-exist")
+	emptyPath := writeTokenFile(t, "   \n\t ")
 
 	tests := []struct {
 		name        string
-		fs          file.FileSystem
-		path        string
-		interval    time.Duration
+		opts        []Option
 		expectError bool
 	}{
-		{"valid token", fs, validPath, 0, false},
-		{"nil file system", nil, validPath, 0, true},
-		{"missing file", fs, filepath.Join(t.TempDir(), "does-not-exist"), 0, true},
-		{"empty file", fs, writeTokenFile(t, "   \n\t "), 0, true},
-		{"negative interval defaults to 30s", fs, validPath, -1 * time.Second, false},
+		{"valid token", []Option{WithTokenFilePath(validPath)}, false},
+		{"missing file", []Option{WithTokenFilePath(missingPath)}, true},
+		{"empty file", []Option{WithTokenFilePath(emptyPath)}, true},
+		{"negative interval is ignored", []Option{WithTokenFilePath(validPath), WithRefreshInterval(-1 * time.Second)}, false},
+		{"empty path option is ignored (falls back to default, which won't exist)", []Option{WithTokenFilePath("")}, true},
 	}
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			cfg, err := NewFileTokenAuthConfig(tc.fs, testLogger(), tc.path, tc.interval)
+			cfg, err := NewFileTokenAuthConfig(tc.opts...)
 			if tc.expectError {
 				require.Error(t, err)
 				assert.Nil(t, cfg)
@@ -78,7 +72,7 @@ func TestNewFileTokenAuthConfig(t *testing.T) {
 func TestFileTokenAuthConfig_CloseIsIdempotent(t *testing.T) {
 	path := writeTokenFile(t, "tok")
 
-	cfg, err := NewFileTokenAuthConfig(testFS(), testLogger(), path, 50*time.Millisecond)
+	cfg, err := NewFileTokenAuthConfig(WithTokenFilePath(path), WithRefreshInterval(50*time.Millisecond))
 	require.NoError(t, err)
 
 	assert.NoError(t, cfg.Close())
@@ -88,7 +82,7 @@ func TestFileTokenAuthConfig_CloseIsIdempotent(t *testing.T) {
 func TestFileTokenAuthConfig_RefreshPicksUpRotation(t *testing.T) {
 	path := writeTokenFile(t, "token-v1")
 
-	cfg, err := NewFileTokenAuthConfig(testFS(), testLogger(), path, 20*time.Millisecond)
+	cfg, err := NewFileTokenAuthConfig(WithTokenFilePath(path), WithRefreshInterval(20*time.Millisecond))
 	require.NoError(t, err)
 
 	t.Cleanup(func() { _ = cfg.Close() })
@@ -113,7 +107,7 @@ func TestFileTokenAuthConfig_InjectsBearerHeader(t *testing.T) {
 
 	path := writeTokenFile(t, "secret-token")
 
-	cfg, err := NewFileTokenAuthConfig(testFS(), testLogger(), path, time.Hour)
+	cfg, err := NewFileTokenAuthConfig(WithTokenFilePath(path), WithRefreshInterval(time.Hour))
 	require.NoError(t, err)
 
 	t.Cleanup(func() { _ = cfg.Close() })
@@ -137,7 +131,7 @@ func TestFileTokenAuthConfig_RejectsExistingAuthHeader(t *testing.T) {
 
 	path := writeTokenFile(t, "tok")
 
-	cfg, err := NewFileTokenAuthConfig(testFS(), testLogger(), path, time.Hour)
+	cfg, err := NewFileTokenAuthConfig(WithTokenFilePath(path), WithRefreshInterval(time.Hour))
 	require.NoError(t, err)
 
 	t.Cleanup(func() { _ = cfg.Close() })
@@ -172,7 +166,7 @@ func TestFileTokenAuthConfig_InjectsBearerHeaderAllVerbs(t *testing.T) {
 
 	path := writeTokenFile(t, "verb-token")
 
-	cfg, err := NewFileTokenAuthConfig(testFS(), testLogger(), path, time.Hour)
+	cfg, err := NewFileTokenAuthConfig(WithTokenFilePath(path), WithRefreshInterval(time.Hour))
 	require.NoError(t, err)
 
 	t.Cleanup(func() { _ = cfg.Close() })
@@ -205,17 +199,20 @@ func TestFileTokenAuthConfig_InjectsBearerHeaderAllVerbs(t *testing.T) {
 	}
 }
 
-// TestFileTokenAuthConfig_RefreshFailureLogsWarning verifies that a failed
-// background refresh is surfaced to the logger instead of being swallowed
-// silently (the cached token continues to serve).
+// TestFileTokenAuthConfig_RefreshFailureLogsWarning verifies that the logger
+// injected via service.Observable receives WARN-level entries when background
+// refresh fails (cached token continues to serve).
 func TestFileTokenAuthConfig_RefreshFailureLogsWarning(t *testing.T) {
 	path := writeTokenFile(t, "token-v1")
 
 	out := testutil.StdoutOutputForFunc(func() {
-		cfg, err := NewFileTokenAuthConfig(testFS(), logging.NewMockLogger(logging.WARN), path, 20*time.Millisecond)
+		cfg, err := NewFileTokenAuthConfig(WithTokenFilePath(path), WithRefreshInterval(20*time.Millisecond))
 		require.NoError(t, err)
 
 		t.Cleanup(func() { _ = cfg.Close() })
+
+		// Inject the logger the way NewHTTPService would via the Observable hook.
+		cfg.SetLogger(logging.NewMockLogger(logging.WARN))
 
 		// Remove the token file so the next refresh tick fails to read it.
 		require.NoError(t, os.Remove(path))
@@ -227,6 +224,30 @@ func TestFileTokenAuthConfig_RefreshFailureLogsWarning(t *testing.T) {
 		}, time.Second, 20*time.Millisecond)
 
 		// Give the refresh loop time to log at least one warning.
+		time.Sleep(100 * time.Millisecond)
+	})
+
+	assert.Contains(t, out, "failed to refresh token")
+}
+
+// TestFileTokenAuthConfig_ObservableInjectionViaNewHTTPService verifies that
+// NewHTTPService wires the logger automatically via the Observable hook — the
+// user no longer has to plumb it through the constructor.
+func TestFileTokenAuthConfig_ObservableInjectionViaNewHTTPService(t *testing.T) {
+	path := writeTokenFile(t, "token-v1")
+
+	out := testutil.StdoutOutputForFunc(func() {
+		cfg, err := NewFileTokenAuthConfig(WithTokenFilePath(path), WithRefreshInterval(20*time.Millisecond))
+		require.NoError(t, err)
+
+		t.Cleanup(func() { _ = cfg.Close() })
+
+		// Registering the option through NewHTTPService is what should inject
+		// the logger — no explicit SetLogger call here.
+		_ = service.NewHTTPService("http://example.invalid", logging.NewMockLogger(logging.WARN), nil, cfg)
+
+		require.NoError(t, os.Remove(path))
+
 		time.Sleep(100 * time.Millisecond)
 	})
 
@@ -247,7 +268,7 @@ func TestFileTokenAuthConfig_WorksWithConnectionPoolConfig(t *testing.T) {
 
 	path := writeTokenFile(t, "combo-token")
 
-	cfg, err := NewFileTokenAuthConfig(testFS(), testLogger(), path, time.Hour)
+	cfg, err := NewFileTokenAuthConfig(WithTokenFilePath(path), WithRefreshInterval(time.Hour))
 	require.NoError(t, err)
 
 	t.Cleanup(func() { _ = cfg.Close() })
