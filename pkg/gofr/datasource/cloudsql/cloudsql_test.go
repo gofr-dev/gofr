@@ -140,9 +140,29 @@ func TestSettings_connectorOptions(t *testing.T) {
 	}
 }
 
+// TestNew_ReturnsUsableDB verifies the public constructor returns a container.DB
+// whose lifecycle hooks (the ones App.AddSQLDB drives) are wired, without leaking
+// the concrete type.
+func TestNew_ReturnsUsableDB(t *testing.T) {
+	db := New(config.NewMockConfig(map[string]string{
+		"DB_DIALECT":  "sqlite",
+		"DB_NAME":     filepath.Join(t.TempDir(), "test"),
+		"DB_IAM_AUTH": "false",
+	}))
+	require.NotNil(t, db)
+
+	// App.AddSQLDB reaches the lifecycle via duck typing; confirm New's value exposes it.
+	db.(interface{ UseLogger(any) }).UseLogger(logging.NewMockLogger(logging.DEBUG))
+	db.(interface{ UseMetrics(any) }).UseMetrics(noopMetrics{})
+	db.(interface{ Connect() }).Connect()
+	t.Cleanup(func() { _ = db.Close() })
+
+	assert.Equal(t, "sqlite", db.Dialect())
+}
+
 // TestClient_Connect_StandardSQL verifies the unified behavior: with IAM auth off,
 // Connect delegates to GoFr's standard SQL datasource (here SQLite) rather than the
-// Cloud SQL connector — the same Client/AddSQLDB usage works without IAM.
+// Cloud SQL connector — the same datasource/AddSQLDB usage works without IAM.
 func TestClient_Connect_StandardSQL(t *testing.T) {
 	conf := config.NewMockConfig(map[string]string{
 		"DB_DIALECT":  "sqlite",
@@ -150,7 +170,7 @@ func TestClient_Connect_StandardSQL(t *testing.T) {
 		"DB_IAM_AUTH": "false",
 	})
 
-	c := New(conf)
+	c := newClient(conf)
 	c.UseLogger(logging.NewMockLogger(logging.DEBUG))
 	c.UseMetrics(noopMetrics{})
 
@@ -175,7 +195,7 @@ func TestClient_Connect_IAMValidation(t *testing.T) {
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			c := New(config.NewMockConfig(tc.configs))
+			c := newClient(config.NewMockConfig(tc.configs))
 			c.UseLogger(logging.NewMockLogger(logging.DEBUG))
 			c.UseMetrics(noopMetrics{})
 

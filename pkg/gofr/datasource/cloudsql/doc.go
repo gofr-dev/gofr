@@ -11,10 +11,11 @@ package cloudsql
 //
 // The contract is three steps:
 //
-//  1. Expose a Client that embeds *gofrSQL.DB and implements UseLogger, UseMetrics,
-//     Connect and Close — the hooks App.AddSQLDB calls. Embedding *gofrSQL.DB
-//     promotes the whole container.DB interface, so the Client is used like any
-//     other GoFr SQL connection.
+//  1. Define a datasource type that embeds *gofrSQL.DB and implements UseLogger,
+//     UseMetrics, Connect and Close — the hooks App.AddSQLDB calls. Embedding
+//     *gofrSQL.DB promotes the whole container.DB interface, so it is used like any
+//     other GoFr SQL connection. Keep the type unexported and return container.DB
+//     from the constructor (see New), so the module's public surface stays minimal.
 //
 //  2. In Connect, when cloud auth is NOT requested, delegate to gofrSQL.NewSQL —
 //     the standard username/password datasource. This is what lets the SAME
