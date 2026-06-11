@@ -151,8 +151,8 @@ func NewSQL(configs config.Config, logger datasource.Logger, metrics Metrics) *D
 // for pluggable SQL datasources (for example GCP Cloud SQL with IAM auth) that are
 // wired in via App.AddSQLDB.
 //
-// config supplies the dialect plus the labels and pool sizing used in logs,
-// metrics and health output. A nil config or db returns nil.
+// conf supplies the dialect plus the labels and pool sizing used in logs,
+// metrics and health output. A nil conf or db returns nil.
 //
 // Because it accepts any opened *sql.DB, this is the provider-agnostic seam for
 // managed-database authentication: GCP Cloud SQL passes a connector-backed handle,
@@ -160,12 +160,12 @@ func NewSQL(configs config.Config, logger datasource.Logger, metrics Metrics) *D
 // whose connector mints a fresh short-lived token per connection. Each such
 // provider lives in its own published module so its cloud SDK stays out of core.
 // See gofr.dev/pkg/gofr/datasource/cloudsql for the reference implementation.
-func NewSQLFromDB(db *sql.DB, config *DBConfig, logger datasource.Logger, metrics Metrics) *DB {
-	if db == nil || config == nil {
+func NewSQLFromDB(db *sql.DB, conf *DBConfig, logger datasource.Logger, metrics Metrics) *DB {
+	if db == nil || conf == nil {
 		return nil
 	}
 
-	database := &DB{DB: db, config: config, logger: logger, metrics: metrics, stopSignal: make(chan struct{})}
+	database := &DB{DB: db, config: conf, logger: logger, metrics: metrics, stopSignal: make(chan struct{})}
 
 	printConnectionSuccessLog("connecting", database.config, logger)
 

@@ -850,10 +850,14 @@ func TestDBConfig_String_RedactsPassword(t *testing.T) {
 		},
 	}
 
+	// wrapper mimics the realistic leak vector: a DBConfig logged as a field of a
+	// larger struct, where %+v recurses into DBConfig.String().
+	type wrapper struct{ Cfg DBConfig }
+
 	for _, tc := range tests {
 		t.Run(tc.desc, func(t *testing.T) {
-			// Cover both direct String() and the fmt verbs that callers would use to log config.
-			for _, got := range []string{tc.config.String(), fmt.Sprintf("%v", tc.config), fmt.Sprintf("%+v", &tc.config)} {
+			// Cover the direct String() call and printing the config as a struct field.
+			for _, got := range []string{tc.config.String(), fmt.Sprintf("%+v", wrapper{Cfg: tc.config})} {
 				assert.Contains(t, got, tc.wantContains)
 				assert.NotContains(t, got, tc.wantNotContains)
 			}
