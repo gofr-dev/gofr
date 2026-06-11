@@ -816,3 +816,47 @@ func cleanupCerts(certPaths map[string]string) {
 		os.Remove(path)
 	}
 }
+
+func TestDBConfig_String_RedactsPassword(t *testing.T) {
+	tests := []struct {
+		desc            string
+		config          DBConfig
+		wantContains    string
+		wantNotContains string
+	}{
+		{
+			desc: "password is redacted, never printed raw",
+			config: DBConfig{
+				Dialect:  "postgres",
+				HostName: "localhost",
+				User:     "user",
+				Password: "super-secret",
+				Port:     "5432",
+				Database: "app",
+			},
+			wantContains:    "Password:*****",
+			wantNotContains: "super-secret",
+		},
+		{
+			desc: "empty password stays empty, no mask",
+			config: DBConfig{
+				Dialect:  "postgres",
+				HostName: "localhost",
+				User:     "user",
+				Database: "app",
+			},
+			wantContains:    "Password: ",
+			wantNotContains: "*****",
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.desc, func(t *testing.T) {
+			// Cover both direct String() and the fmt verbs that callers would use to log config.
+			for _, got := range []string{tc.config.String(), fmt.Sprintf("%v", tc.config), fmt.Sprintf("%+v", &tc.config)} {
+				assert.Contains(t, got, tc.wantContains)
+				assert.NotContains(t, got, tc.wantNotContains)
+			}
+		})
+	}
+}

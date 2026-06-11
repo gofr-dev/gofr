@@ -48,6 +48,22 @@ type DBConfig struct {
 	Charset     string
 }
 
+// String implements fmt.Stringer so that logging a DBConfig — directly or as part
+// of a larger struct, with %v or %+v — never leaks the raw password. The Password
+// field is redacted to a fixed mask while every other field is preserved, keeping
+// the output useful for diagnosing connection issues.
+func (c DBConfig) String() string {
+	password := ""
+	if c.Password != "" {
+		password = "*****"
+	}
+
+	return fmt.Sprintf("{Dialect:%s HostName:%s User:%s Password:%s Port:%s Database:%s "+
+		"SSLMode:%s MaxIdleConn:%d MaxOpenConn:%d Charset:%s}",
+		c.Dialect, c.HostName, c.User, password, c.Port, c.Database,
+		c.SSLMode, c.MaxIdleConn, c.MaxOpenConn, c.Charset)
+}
+
 func setupSupabaseDefaults(dbConfig *DBConfig, configs config.Config, logger datasource.Logger) {
 	if dbConfig.HostName == "" {
 		projectRef := configs.Get("SUPABASE_PROJECT_REF")
