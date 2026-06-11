@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"net/http"
-	"path/filepath"
 	"strconv"
 	"strings"
 	"sync"
@@ -42,36 +41,6 @@ type routeMethodKey struct {
 // middleware skips — GraphQL has its own dedicated app_graphql_*
 // metrics, so recording app_http_response for it would double-count.
 const graphqlPath = "/graphql"
-
-// staticAssetPath and unmatchedPath are bounded sentinel values for the
-// app_http_response "path" label. Requests that don't resolve to a registered
-// route template would otherwise carry their raw URL as the label — unbounded
-// for static files (one series per filename) and for unmatched 404s (one per
-// URL a client invents) — inflating cardinality on this single instrument and
-// the routeAttrs cache. Collapsing them to fixed labels keeps app_http_response
-// bounded regardless of traffic.
-const (
-	staticAssetPath = "/static/*"
-	unmatchedPath   = "/*"
-)
-
-// isStaticAsset reports whether urlPath is a static-asset request whose raw
-// path should be collapsed to staticAssetPath. The "/static/" prefix is matched
-// with its trailing slash so unrelated routes like "/static-report" are not
-// swept in.
-func isStaticAsset(urlPath string) bool {
-	if strings.HasPrefix(urlPath, "/static/") {
-		return true
-	}
-
-	switch strings.ToLower(filepath.Ext(urlPath)) {
-	case ".css", ".js", ".png", ".jpg", ".jpeg", ".gif", ".ico", ".svg",
-		".txt", ".html", ".json", ".woff", ".woff2", ".ttf", ".eot", ".pdf":
-		return true
-	default:
-		return false
-	}
-}
 
 // Metrics is a middleware that records request response time metrics using the provided metrics interface.
 func Metrics(metrics metrics) func(inner http.Handler) http.Handler {
@@ -119,31 +88,23 @@ func Metrics(metrics metrics) func(inner http.Handler) http.Handler {
 				srw = &StatusResponseWriter{ResponseWriter: w}
 			}
 
-			// Resolve the "path" label. A registered route template takes
-			// precedence and is used verbatim — it is bounded by the number of
-			// routes and stays accurate even when the URL looks static (e.g.
-			// /openapi.json, /static-api/...). Only when no template matched —
-			// mux.CurrentRoute is nil for unmatched routes (404), and
-			// GetPathTemplate returns "" for routes without an explicit Path()
-			// (e.g. PathPrefix-only static handlers) — does the raw URL come into
-			// play, and that is unbounded, so collapse it to a bounded sentinel.
+			// Use the matched route's path template as the label. This is
+			// bounded by the number of registered routes and never the raw URL,
+			// so app_http_response cardinality (and the routeAttrs cache) cannot
+			// grow with arbitrary client input. In GoFr every request matches a
+			// route — specific routes give their template (e.g. /customer/{id}),
+			// static files match the /static/ prefix handler ("/static"), and
+			// everything else falls through to the catch-all PathPrefix("/")
+			// ("/"). The empty-template fallback to "/" guards the same bound for
+			// any router lacking that catch-all.
 			var path string
 			if cr := mux.CurrentRoute(r); cr != nil {
 				path, _ = cr.GetPathTemplate()
 			}
 
-			switch {
-			case path != "":
-				// Trim a trailing slash for consistency, but keep "/" for the
-				// root route instead of emitting an empty label.
-				path = strings.TrimSuffix(path, "/")
-				if path == "" {
-					path = "/"
-				}
-			case isStaticAsset(r.URL.Path):
-				path = staticAssetPath
-			default:
-				path = unmatchedPath
+			path = strings.TrimSuffix(path, "/")
+			if path == "" {
+				path = "/"
 			}
 
 			// Skip recording for /graphql — it has its own dedicated metrics

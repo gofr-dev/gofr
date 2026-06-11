@@ -59,8 +59,8 @@ func TestMetrics(t *testing.T) {
 
 // TestMetrics_MatchedRouteWithStaticExtension guards that a registered route
 // whose URL ends in a static-looking extension keeps its route template as the
-// path label and is NOT collapsed to the /static/* sentinel — the sentinel is
-// only for requests that resolve to no route template.
+// path label (e.g. /openapi.json stays /openapi.json) rather than being
+// reclassified by extension.
 func TestMetrics_MatchedRouteWithStaticExtension(t *testing.T) {
 	mockMetrics := &mockMetrics{}
 
@@ -101,26 +101,6 @@ func TestMetrics_RootRouteLabel(t *testing.T) {
 
 	mockMetrics.AssertCalled(t, "RecordHistogram", mock.Anything, "app_http_response", mock.Anything,
 		[]string{"path", "/", "method", "GET", "status", "200"})
-}
-
-// TestIsStaticAsset guards the static-asset classification, in particular that
-// the "/static/" prefix is matched with its trailing slash so unrelated routes
-// like "/static-report" are not swept into the static sentinel.
-func TestIsStaticAsset(t *testing.T) {
-	cases := map[string]bool{
-		"/static/app.js":   true,
-		"/static/":         true,
-		"/assets/logo.png": true,
-		"/index.html":      true,
-		"/static-report":   false,
-		"/static":          false,
-		"/v1/users":        false,
-		"/report":          false,
-	}
-
-	for urlPath, want := range cases {
-		require.Equalf(t, want, isStaticAsset(urlPath), "isStaticAsset(%q)", urlPath)
-	}
 }
 
 func TestMetrics_StaticFile(t *testing.T) {
@@ -230,16 +210,17 @@ func TestMetrics_UnmatchedRouteDoesNotPanic(t *testing.T) {
 	require.Equal(t, http.StatusNotFound, rr.Code, "404 handler still ran end-to-end")
 }
 
-// TestMetrics_UnmatchedRouteBoundedLabel asserts that a request hitting no
-// registered route records app_http_response with the bounded unmatchedPath
-// sentinel rather than the raw URL. Using the raw URL would make the path
-// label unbounded (one series per invented URL), inflating cardinality on a
-// single instrument — the regression this guards against.
-func TestMetrics_UnmatchedRouteBoundedLabel(t *testing.T) {
+// TestMetrics_NoTemplateFallsBackToRoot asserts the empty-template guard: when
+// no route resolves (mux.CurrentRoute is nil) the path label is "/" rather than
+// the raw URL. Raw URLs would make the label unbounded (one series per invented
+// URL); "/" keeps it bounded. (In a full GoFr app the catch-all PathPrefix("/")
+// already supplies "/" — see TestMetrics_GoFrRouterTopology — this guards the
+// same bound for any router without that catch-all.)
+func TestMetrics_NoTemplateFallsBackToRoot(t *testing.T) {
 	mockMetrics := &mockMetrics{}
 
 	mockMetrics.On("RecordHistogram", mock.Anything, "app_http_response", mock.Anything,
-		[]string{"path", unmatchedPath, "method", "GET", "status", "404"}).Return(nil)
+		[]string{"path", "/", "method", "GET", "status", "404"}).Return(nil)
 
 	notFound := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusNotFound)
@@ -251,31 +232,65 @@ func TestMetrics_UnmatchedRouteBoundedLabel(t *testing.T) {
 	handler.ServeHTTP(httptest.NewRecorder(), req)
 
 	mockMetrics.AssertCalled(t, "RecordHistogram", mock.Anything, "app_http_response", mock.Anything,
-		[]string{"path", unmatchedPath, "method", "GET", "status", "404"})
+		[]string{"path", "/", "method", "GET", "status", "404"})
 }
 
-// TestMetrics_UnmatchedStaticAssetSentinel guards the /static/* sentinel: a
-// static-looking request that resolves to no route template (e.g. a file served
-// outside a registered route) is collapsed to staticAssetPath rather than its
-// raw URL.
-func TestMetrics_UnmatchedStaticAssetSentinel(t *testing.T) {
-	mockMetrics := &mockMetrics{}
+// TestMetrics_GoFrRouterTopology exercises the real GoFr router topology — a
+// specific route, the static-files PathPrefix("/static/"), and the catch-all
+// PathPrefix("/") that GoFr registers (gofr.go) — and asserts the path label is
+// always a bounded route template, never the raw URL:
+//   - specific route        -> its template (/customer/{id})
+//   - static asset           -> "/static" (the static prefix template)
+//   - static-looking 404     -> "/" (catch-all), NOT a per-file series
+//   - arbitrary invented 404 -> "/" (catch-all)
+func TestMetrics_GoFrRouterTopology(t *testing.T) {
+	pathFor := func(t *testing.T, target string) string {
+		t.Helper()
 
-	mockMetrics.On("RecordHistogram", mock.Anything, "app_http_response", mock.Anything,
-		[]string{"path", staticAssetPath, "method", "GET", "status", "200"}).Return(nil)
+		var got string
 
-	// No router, so mux.CurrentRoute is nil and no template is resolved.
-	ok := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		w.WriteHeader(http.StatusOK)
-	})
+		m := &mockMetrics{}
+		m.On("RecordHistogram", mock.Anything, "app_http_response", mock.Anything, mock.Anything).
+			Run(func(args mock.Arguments) {
+				labels := args.Get(3).([]string)
+				for i := 0; i+1 < len(labels); i += 2 {
+					if labels[i] == "path" {
+						got = labels[i+1]
+					}
+				}
+			}).Return(nil)
 
-	handler := Metrics(mockMetrics)(ok)
+		router := mux.NewRouter()
+		router.HandleFunc("/customer/{id}", func(w http.ResponseWriter, _ *http.Request) {
+			w.WriteHeader(http.StatusOK)
+		}).Methods(http.MethodGet)
+		router.PathPrefix("/static/").Handler(
+			http.StripPrefix("/static/", http.FileServer(http.Dir(t.TempDir())))).Name("/static/")
+		// GoFr's unconditional catch-all (gofr.go).
+		router.PathPrefix("/").Handler(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+			w.WriteHeader(http.StatusNotFound)
+		}))
+		router.Use(Metrics(m))
 
-	req := httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/assets/logo.png", http.NoBody)
-	handler.ServeHTTP(httptest.NewRecorder(), req)
+		router.ServeHTTP(httptest.NewRecorder(), httptest.NewRequestWithContext(t.Context(), http.MethodGet, target, http.NoBody))
 
-	mockMetrics.AssertCalled(t, "RecordHistogram", mock.Anything, "app_http_response", mock.Anything,
-		[]string{"path", staticAssetPath, "method", "GET", "status", "200"})
+		return got
+	}
+
+	tests := []struct {
+		desc   string
+		target string
+		want   string
+	}{
+		{"specific route", "/customer/42", "/customer/{id}"},
+		{"static asset", "/static/app.js", "/static"},
+		{"static-looking 404", "/images/missing.png", "/"},
+		{"invented 404", "/totally/unknown", "/"},
+	}
+
+	for i, tc := range tests {
+		require.Equalf(t, tc.want, pathFor(t, tc.target), "TEST[%d] %s", i, tc.desc)
+	}
 }
 
 func TestMetrics_StaticFileWithQueryParam(t *testing.T) {
