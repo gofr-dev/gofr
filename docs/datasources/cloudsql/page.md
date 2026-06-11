@@ -8,9 +8,8 @@ nextjs:
 
 # Cloud SQL
 
-The `cloudsql` datasource connects GoFr to **Google Cloud SQL** (Postgres and MySQL).
-It is built on top of GoFr's standard SQL datasource — it does not reimplement any
-SQL behavior — and adds **IAM database authentication** via the
+The `cloudsql` datasource connects GoFr to **Google Cloud SQL** (Postgres and MySQL)
+using **IAM database authentication** via the
 [Cloud SQL Go Connector](https://github.com/GoogleCloudPlatform/cloud-sql-go-connector).
 
 The connector mints short-lived credentials and opens a secure tunnel to the
@@ -18,8 +17,9 @@ instance, so **no static database password and no Cloud SQL Auth Proxy sidecar**
 required. Credentials resolve via Application Default Credentials, which supports
 Workload Identity Federation on GKE and Cloud Run.
 
-Because it is a separate, opt-in module, the GCP SDK dependencies are only pulled in
-by applications that actually use Cloud SQL — the GoFr core stays lean.
+It is a separate, opt-in module, so you only add the GCP dependencies when you
+actually use Cloud SQL. Once added, it behaves like any other GoFr SQL connection —
+`ctx.SQL`, query logging, metrics, health checks and transactions all work the same.
 
 ## The same code locally and on GCP
 
@@ -116,3 +116,9 @@ func main() {
 
 A runnable example is available at
 [`examples/using-cloudsql`](https://github.com/gofr-dev/gofr/tree/development/examples/using-cloudsql).
+
+---
+
+Contributing to GoFr and want to add another cloud provider's managed SQL (AWS
+RDS/Aurora, Azure Database)? See the developer guide in
+[`pkg/gofr/datasource/cloudsql/doc.go`](https://github.com/gofr-dev/gofr/blob/development/pkg/gofr/datasource/cloudsql/doc.go).
