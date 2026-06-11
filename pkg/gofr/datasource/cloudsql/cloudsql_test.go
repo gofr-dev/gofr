@@ -70,7 +70,10 @@ func TestIAMRequested(t *testing.T) {
 		{"true", "true", true},
 		{"true mixed case", "TRUE", true},
 		{"true padded", "  true  ", true},
+		{"numeric one", "1", true},
+		{"single char t", "t", true},
 		{"false", "false", false},
+		{"numeric zero", "0", false},
 		{"empty", "", false},
 		{"garbage", "yes", false},
 	}

@@ -2,6 +2,7 @@ package cloudsql
 
 import (
 	"fmt"
+	"strconv"
 	"strings"
 
 	"cloud.google.com/go/cloudsqlconn"
@@ -54,7 +55,11 @@ func parseSettings(conf config.Config) settings {
 // standard SQL datasource (username/password) — so the same code and the same
 // AddSQLDB call work locally and on GCP, with only configuration changing.
 func iamRequested(conf config.Config) bool {
-	return strings.EqualFold(strings.TrimSpace(conf.Get("DB_IAM_AUTH")), "true")
+	// ParseBool accepts the conventional spellings (1/t/T/true/TRUE), matching how
+	// the rest of GoFr reads boolean config; TrimSpace tolerates padded values and
+	// an unset/invalid value parses as false.
+	enabled, _ := strconv.ParseBool(strings.TrimSpace(conf.Get("DB_IAM_AUTH")))
+	return enabled
 }
 
 // connectorOptions assembles the Cloud SQL connector options: IAM auth plus the
