@@ -144,7 +144,7 @@ func (c *Container) Create(conf config.Config) {
 }
 
 // cardinalityLimit resolves the per-instrument metrics cardinality limit from
-// METRICS_CARDINALITY_LIMIT. It returns the default when unset or unparseable
+// METRICS_CARDINALITY_LIMIT. It returns the default when unset or unparsable
 // (logging the bad value); 0 or negative means unlimited.
 func (c *Container) cardinalityLimit(conf config.Config) int {
 	v := conf.Get("METRICS_CARDINALITY_LIMIT")
