@@ -57,11 +57,77 @@ func TestMetrics(t *testing.T) {
 		[]string{"path", "/test", "method", "GET", "status", "200"})
 }
 
+// TestMetrics_MatchedRouteWithStaticExtension guards that a registered route
+// whose URL ends in a static-looking extension keeps its route template as the
+// path label and is NOT collapsed to the /static/* sentinel — the sentinel is
+// only for requests that resolve to no route template.
+func TestMetrics_MatchedRouteWithStaticExtension(t *testing.T) {
+	mockMetrics := &mockMetrics{}
+
+	mockMetrics.On("RecordHistogram", mock.Anything, "app_http_response", mock.Anything,
+		[]string{"path", "/openapi.json", "method", "GET", "status", "200"}).Return(nil)
+
+	router := mux.NewRouter()
+	router.HandleFunc("/openapi.json", func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}).Methods(http.MethodGet).Name("/openapi.json")
+
+	router.Use(Metrics(mockMetrics))
+
+	req := httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/openapi.json", http.NoBody)
+	router.ServeHTTP(httptest.NewRecorder(), req)
+
+	mockMetrics.AssertCalled(t, "RecordHistogram", mock.Anything, "app_http_response", mock.Anything,
+		[]string{"path", "/openapi.json", "method", "GET", "status", "200"})
+}
+
+// TestMetrics_RootRouteLabel guards that the root route "/" keeps a "/" path
+// label rather than being trimmed to an empty string.
+func TestMetrics_RootRouteLabel(t *testing.T) {
+	mockMetrics := &mockMetrics{}
+
+	mockMetrics.On("RecordHistogram", mock.Anything, "app_http_response", mock.Anything,
+		[]string{"path", "/", "method", "GET", "status", "200"}).Return(nil)
+
+	router := mux.NewRouter()
+	router.HandleFunc("/", func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}).Methods(http.MethodGet).Name("/")
+
+	router.Use(Metrics(mockMetrics))
+
+	req := httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/", http.NoBody)
+	router.ServeHTTP(httptest.NewRecorder(), req)
+
+	mockMetrics.AssertCalled(t, "RecordHistogram", mock.Anything, "app_http_response", mock.Anything,
+		[]string{"path", "/", "method", "GET", "status", "200"})
+}
+
+// TestIsStaticAsset guards the static-asset classification, in particular that
+// the "/static/" prefix is matched with its trailing slash so unrelated routes
+// like "/static-report" are not swept into the static sentinel.
+func TestIsStaticAsset(t *testing.T) {
+	cases := map[string]bool{
+		"/static/app.js":   true,
+		"/static/":         true,
+		"/assets/logo.png": true,
+		"/index.html":      true,
+		"/static-report":   false,
+		"/static":          false,
+		"/v1/users":        false,
+		"/report":          false,
+	}
+
+	for urlPath, want := range cases {
+		require.Equalf(t, want, isStaticAsset(urlPath), "isStaticAsset(%q)", urlPath)
+	}
+}
+
 func TestMetrics_StaticFile(t *testing.T) {
 	mockMetrics := &mockMetrics{}
 
 	mockMetrics.On("RecordHistogram", mock.Anything, "app_http_response", mock.Anything,
-		[]string{"path", "/static/*", "method", "GET", "status", "200"}).Return(nil)
+		[]string{"path", "/static", "method", "GET", "status", "200"}).Return(nil)
 
 	// Create a temporary static file for the test
 	tempDir := t.TempDir()
@@ -87,7 +153,7 @@ func TestMetrics_StaticFile(t *testing.T) {
 	}
 
 	mockMetrics.AssertCalled(t, "RecordHistogram", mock.Anything, "app_http_response", mock.Anything,
-		[]string{"path", "/static/*", "method", "GET", "status", "200"})
+		[]string{"path", "/static", "method", "GET", "status", "200"})
 }
 
 // TestMetrics_GraphQLSkipsRootOnly asserts that the Metrics middleware
@@ -188,11 +254,35 @@ func TestMetrics_UnmatchedRouteBoundedLabel(t *testing.T) {
 		[]string{"path", unmatchedPath, "method", "GET", "status", "404"})
 }
 
+// TestMetrics_UnmatchedStaticAssetSentinel guards the /static/* sentinel: a
+// static-looking request that resolves to no route template (e.g. a file served
+// outside a registered route) is collapsed to staticAssetPath rather than its
+// raw URL.
+func TestMetrics_UnmatchedStaticAssetSentinel(t *testing.T) {
+	mockMetrics := &mockMetrics{}
+
+	mockMetrics.On("RecordHistogram", mock.Anything, "app_http_response", mock.Anything,
+		[]string{"path", staticAssetPath, "method", "GET", "status", "200"}).Return(nil)
+
+	// No router, so mux.CurrentRoute is nil and no template is resolved.
+	ok := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	})
+
+	handler := Metrics(mockMetrics)(ok)
+
+	req := httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/assets/logo.png", http.NoBody)
+	handler.ServeHTTP(httptest.NewRecorder(), req)
+
+	mockMetrics.AssertCalled(t, "RecordHistogram", mock.Anything, "app_http_response", mock.Anything,
+		[]string{"path", staticAssetPath, "method", "GET", "status", "200"})
+}
+
 func TestMetrics_StaticFileWithQueryParam(t *testing.T) {
 	mockMetrics := &mockMetrics{}
 
 	mockMetrics.On("RecordHistogram", mock.Anything, "app_http_response", mock.Anything,
-		[]string{"path", "/static/*", "method", "GET", "status", "200"}).Return(nil)
+		[]string{"path", "/static", "method", "GET", "status", "200"}).Return(nil)
 
 	// Create a temporary static file for the test
 	tempDir := t.TempDir()
@@ -218,5 +308,5 @@ func TestMetrics_StaticFileWithQueryParam(t *testing.T) {
 	}
 
 	mockMetrics.AssertCalled(t, "RecordHistogram", mock.Anything, "app_http_response", mock.Anything,
-		[]string{"path", "/static/*", "method", "GET", "status", "200"})
+		[]string{"path", "/static", "method", "GET", "status", "200"})
 }

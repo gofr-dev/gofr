@@ -56,9 +56,11 @@ const (
 )
 
 // isStaticAsset reports whether urlPath is a static-asset request whose raw
-// path should be collapsed to staticAssetPath.
+// path should be collapsed to staticAssetPath. The "/static/" prefix is matched
+// with its trailing slash so unrelated routes like "/static-report" are not
+// swept in.
 func isStaticAsset(urlPath string) bool {
-	if strings.HasPrefix(urlPath, "/static") {
+	if strings.HasPrefix(urlPath, "/static/") {
 		return true
 	}
 
@@ -117,25 +119,31 @@ func Metrics(metrics metrics) func(inner http.Handler) http.Handler {
 				srw = &StatusResponseWriter{ResponseWriter: w}
 			}
 
-			// Resolve the "path" label. Prefer the registered route template
-			// (bounded by the number of routes). mux.CurrentRoute is nil for
-			// unmatched routes (404), and GetPathTemplate returns "" for routes
-			// without an explicit Path() (e.g. PathPrefix-only handlers). Rather
-			// than fall back to the raw URL — which is unbounded and explodes
-			// cardinality — collapse static assets and unmatched requests to
-			// bounded sentinels.
+			// Resolve the "path" label. A registered route template takes
+			// precedence and is used verbatim — it is bounded by the number of
+			// routes and stays accurate even when the URL looks static (e.g.
+			// /openapi.json, /static-api/...). Only when no template matched —
+			// mux.CurrentRoute is nil for unmatched routes (404), and
+			// GetPathTemplate returns "" for routes without an explicit Path()
+			// (e.g. PathPrefix-only static handlers) — does the raw URL come into
+			// play, and that is unbounded, so collapse it to a bounded sentinel.
 			var path string
 			if cr := mux.CurrentRoute(r); cr != nil {
 				path, _ = cr.GetPathTemplate()
 			}
 
 			switch {
+			case path != "":
+				// Trim a trailing slash for consistency, but keep "/" for the
+				// root route instead of emitting an empty label.
+				path = strings.TrimSuffix(path, "/")
+				if path == "" {
+					path = "/"
+				}
 			case isStaticAsset(r.URL.Path):
 				path = staticAssetPath
-			case path == "":
-				path = unmatchedPath
 			default:
-				path = strings.TrimSuffix(path, "/")
+				path = unmatchedPath
 			}
 
 			// Skip recording for /graphql — it has its own dedicated metrics

@@ -1,6 +1,7 @@
 package exporters
 
 import (
+	promclient "github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/otlptranslator"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/exporters/prometheus"
@@ -41,7 +42,16 @@ func Prometheus(appName, appVersion string, opts ...Option) metric.Meter {
 		opt(&cfg)
 	}
 
+	return newPrometheusMeter(appName, appVersion, cfg, promclient.DefaultRegisterer)
+}
+
+// newPrometheusMeter builds the Prometheus-backed meter against the given
+// registerer. Splitting this out lets tests scrape an isolated registry to
+// assert the cardinality limit is actually applied; production uses the
+// default registerer via Prometheus.
+func newPrometheusMeter(appName, appVersion string, cfg promConfig, registerer promclient.Registerer) metric.Meter {
 	exporter, err := prometheus.New(
+		prometheus.WithRegisterer(registerer),
 		prometheus.WithoutTargetInfo(),
 		prometheus.WithTranslationStrategy(otlptranslator.NoTranslation))
 	if err != nil {

@@ -278,6 +278,10 @@ GoFr publishes metrics to port: _2121_ on _/metrics_ endpoint in Prometheus form
 
 {% /table %}
 
+> **Note on `app_http_response` labels and cardinality.** The `path` label uses the matched route template (e.g. `/customer/{id}`). Requests that match no route template are bounded to avoid unbounded cardinality: static-asset requests collapse to `/static/*` and unmatched (404) requests to `/*`, instead of carrying the raw URL. If you have dashboards or alerts that relied on raw paths for static/unmatched requests, update them accordingly.
+>
+> Each metric instrument is also subject to a cardinality limit (default `2000`, configurable via `METRICS_CARDINALITY_LIMIT`); series beyond the limit are aggregated into an `otel.metric.overflow="true"` series. Set `METRICS_CARDINALITY_LIMIT=0` to disable the limit. See the [configuration reference](/docs/references/configs).
+
 For example: When running the application locally, we can access the /metrics endpoint on port 2121 from: {% new-tab-link title="http://localhost:2121/metrics" href="http://localhost:2121/metrics" /%}
 
 GoFr also supports creating {% new-tab-link newtab=false title="custom metrics" href="/docs/advanced-guide/publishing-custom-metrics" /%}.

@@ -27,6 +27,7 @@ import (
 	gofrSql "gofr.dev/pkg/gofr/datasource/sql"
 	"gofr.dev/pkg/gofr/logging"
 	"gofr.dev/pkg/gofr/metrics"
+	"gofr.dev/pkg/gofr/metrics/exporters"
 	"gofr.dev/pkg/gofr/service"
 	ws "gofr.dev/pkg/gofr/websocket"
 )
@@ -751,5 +752,26 @@ func frameworkMetricContract() map[string]metricContract {
 		"app_pubsub_publish_success_count":   {"Number of successful publish operations.", "counter"},
 		"app_pubsub_subscribe_total_count":   {"Number of total subscribe operations.", "counter"},
 		"app_pubsub_subscribe_success_count": {"Number of successful subscribe operations.", "counter"},
+	}
+}
+
+func TestContainer_cardinalityLimit(t *testing.T) {
+	tests := []struct {
+		desc    string
+		configs map[string]string
+		want    int
+	}{
+		{"unset uses default", map[string]string{}, exporters.DefaultCardinalityLimit},
+		{"valid value", map[string]string{"METRICS_CARDINALITY_LIMIT": "5000"}, 5000},
+		{"zero means unlimited", map[string]string{"METRICS_CARDINALITY_LIMIT": "0"}, 0},
+		{"invalid falls back to default", map[string]string{"METRICS_CARDINALITY_LIMIT": "not-a-number"}, exporters.DefaultCardinalityLimit},
+	}
+
+	c := &Container{Logger: logging.NewMockLogger(logging.ERROR)}
+
+	for i, tc := range tests {
+		got := c.cardinalityLimit(config.NewMockConfig(tc.configs))
+
+		require.Equal(t, tc.want, got, "TEST[%d], %s", i, tc.desc)
 	}
 }
