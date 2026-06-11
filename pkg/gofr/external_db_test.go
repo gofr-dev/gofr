@@ -82,6 +82,20 @@ func Test_instrumentDatasource_PartialImplementation(t *testing.T) {
 	app.instrumentDatasource(mock)
 }
 
+func TestApp_AddSQLDB(t *testing.T) {
+	testutil.NewServerConfigs(t)
+
+	app := New()
+
+	// A pluggable SQL datasource (here built from the standard wrapper, as Cloud SQL
+	// does) must replace whatever env-configured SQL connection the container holds.
+	db, _, _ := gofrSql.NewSQLMocks(t)
+
+	app.AddSQLDB(db)
+
+	assert.Equal(t, db, app.container.SQL)
+}
+
 func TestApp_AddMongo(t *testing.T) {
 	testutil.NewServerConfigs(t)
 

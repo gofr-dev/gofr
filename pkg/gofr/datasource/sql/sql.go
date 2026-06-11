@@ -125,19 +125,54 @@ func NewSQL(configs config.Config, logger datasource.Logger, metrics Metrics) *D
 		return database
 	}
 
+	return finalizeConnection(database)
+}
+
+// NewSQLFromDB wraps an already-opened *database/sql.DB in gofr's SQL datasource,
+// adding query logging, metrics, health checks and the same background
+// connection-retry/metrics goroutines used by NewSQL. Driver registration, DSN
+// building and sql.Open are the caller's responsibility; this is the entry point
+// for pluggable SQL datasources (for example GCP Cloud SQL with IAM auth) that are
+// wired in via App.AddSQLDB.
+//
+// config supplies the dialect plus the labels and pool sizing used in logs,
+// metrics and health output. A nil config or db returns nil.
+//
+// Because it accepts any opened *sql.DB, this is the provider-agnostic seam for
+// managed-database authentication: GCP Cloud SQL passes a connector-backed handle,
+// while AWS RDS/Aurora IAM and Azure Entra ID modules pass a sql.OpenDB(connector)
+// whose connector mints a fresh short-lived token per connection. Each such
+// provider lives in its own published module so its cloud SDK stays out of core.
+// See gofr.dev/pkg/gofr/datasource/cloudsql for the reference implementation.
+func NewSQLFromDB(db *sql.DB, config *DBConfig, logger datasource.Logger, metrics Metrics) *DB {
+	if db == nil || config == nil {
+		return nil
+	}
+
+	database := &DB{DB: db, config: config, logger: logger, metrics: metrics, stopSignal: make(chan struct{})}
+
+	printConnectionSuccessLog("connecting", database.config, logger)
+
+	return finalizeConnection(database)
+}
+
+// finalizeConnection applies pool limits, verifies connectivity and starts the
+// background retry + metrics goroutines. Shared by NewSQL and NewSQLFromDB so both
+// connection paths get identical post-open behavior.
+func finalizeConnection(database *DB) *DB {
 	// We are not setting idle connection timeout because we are checking for connection
 	// every 10 seconds which would need a connection, moreover if connection expires it is
 	// automatically closed by the database/sql package.
-	database.DB.SetMaxIdleConns(dbConfig.MaxIdleConn)
+	database.DB.SetMaxIdleConns(database.config.MaxIdleConn)
 	// We are not setting max open connection because any connection which is expired,
 	// it is closed automatically.
-	database.DB.SetMaxOpenConns(dbConfig.MaxOpenConn)
+	database.DB.SetMaxOpenConns(database.config.MaxOpenConn)
 
 	database = pingToTestConnection(database)
 
 	go retryConnection(database)
 
-	go pushDBMetrics(database, metrics)
+	go pushDBMetrics(database, database.metrics)
 
 	return database
 }

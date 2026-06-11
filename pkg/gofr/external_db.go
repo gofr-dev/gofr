@@ -190,6 +190,16 @@ func (a *App) AddInfluxDB(db container.InfluxDB) {
 	a.container.InfluxDB = db
 }
 
+// AddSQLDB sets a pluggable SQL datasource on the app's container, replacing any
+// SQL connection configured from environment variables. The provided db must
+// satisfy the container.DB interface; official implementations that build on the
+// standard SQL wrapper (for example GCP Cloud SQL with IAM auth) live in published
+// modules such as gofr.dev/pkg/gofr/datasource/cloudsql.
+func (a *App) AddSQLDB(db container.DB) {
+	a.instrumentDatasource(db)
+	a.container.SQL = db
+}
+
 // GetSQL returns the SQL datasource from the container.
 func (a *App) GetSQL() container.DB {
 	return a.container.SQL
