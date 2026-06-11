@@ -17,6 +17,10 @@ const (
 	dialectPostgres = "postgres"
 	dialectMySQL    = "mysql"
 
+	// Accepted input aliases that normalize to dialectPostgres.
+	aliasPostgreSQL = "postgresql"
+	aliasPgx        = "pgx"
+
 	defaultMaxIdleConn = 2
 )
 
@@ -108,9 +112,9 @@ func (s *settings) mysqlDSN(net string) string {
 
 func normalizeDialect(d string) string {
 	switch strings.ToLower(strings.TrimSpace(d)) {
-	case "postgres", "postgresql", "pgx":
+	case dialectPostgres, aliasPostgreSQL, aliasPgx:
 		return dialectPostgres
-	case "mysql":
+	case dialectMySQL:
 		return dialectMySQL
 	default:
 		return ""
