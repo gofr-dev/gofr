@@ -834,7 +834,7 @@ func TestDBConfig_String_RedactsPassword(t *testing.T) {
 				Port:     "5432",
 				Database: "app",
 			},
-			wantContains:    "Password:*****",
+			wantContains:    "Password:" + redactedPassword,
 			wantNotContains: "super-secret",
 		},
 		{
@@ -846,7 +846,7 @@ func TestDBConfig_String_RedactsPassword(t *testing.T) {
 				Database: "app",
 			},
 			wantContains:    "Password: ",
-			wantNotContains: "*****",
+			wantNotContains: redactedPassword,
 		},
 	}
 

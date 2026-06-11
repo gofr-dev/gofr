@@ -48,6 +48,10 @@ type DBConfig struct {
 	Charset     string
 }
 
+// redactedPassword is the fixed mask substituted for a non-empty password whenever
+// a DBConfig is stringified, so the raw secret is never printed.
+const redactedPassword = "*****"
+
 // String implements fmt.Stringer so that logging a DBConfig — directly or as part
 // of a larger struct, with %v or %+v — never leaks the raw password. The Password
 // field is redacted to a fixed mask while every other field is preserved, keeping
@@ -55,7 +59,7 @@ type DBConfig struct {
 func (c DBConfig) String() string {
 	password := ""
 	if c.Password != "" {
-		password = "*****"
+		password = redactedPassword
 	}
 
 	return fmt.Sprintf("{Dialect:%s HostName:%s User:%s Password:%s Port:%s Database:%s "+
