@@ -4,7 +4,7 @@ import (
 	"io"
 
 	"gofr.dev/pkg/gofr"
-	"gofr.dev/pkg/gofr/service/auth"
+	"gofr.dev/pkg/gofr/service"
 )
 
 func main() {
@@ -12,8 +12,8 @@ func main() {
 
 	// Zero-config: reads from the standard K8s projected SA token mount
 	// (/var/run/secrets/kubernetes.io/serviceaccount/token) and refreshes every 30s.
-	// Override with auth.WithTokenFilePath / auth.WithRefreshInterval if needed.
-	tokenCfg, err := auth.NewFileTokenAuthConfig()
+	// Override with service.WithTokenFilePath / service.WithRefreshInterval if needed.
+	tokenCfg, err := service.NewFileTokenAuthConfig()
 	if err != nil {
 		app.Logger().Fatalf("failed to initialize file token auth: %v", err)
 	}

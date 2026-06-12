@@ -1,7 +1,4 @@
-// Package auth provides authentication options for outgoing HTTP service calls
-// that live outside the core service package. New authentication types should
-// be added here as service.Options implementations.
-package auth
+package service
 
 import (
 	"context"
@@ -14,7 +11,6 @@ import (
 	"time"
 
 	"gofr.dev/pkg/gofr/logging"
-	"gofr.dev/pkg/gofr/service"
 )
 
 const (
@@ -34,7 +30,7 @@ var (
 // re-reads it to support token rotation (e.g. Kubernetes projected service
 // account tokens).
 //
-// The returned value implements service.Options, service.Observable and
+// The returned value implements Options, Observable and
 // io.Closer. Call Close to stop the background refresh goroutine; it is safe
 // to call Close multiple times.
 type FileTokenAuthConfig struct {
@@ -50,15 +46,15 @@ type FileTokenAuthConfig struct {
 	closeOnce sync.Once
 }
 
-// Option configures a FileTokenAuthConfig at construction time. Pass options to
+// FileTokenAuthOption configures a FileTokenAuthConfig at construction time. Pass options to
 // NewFileTokenAuthConfig to override the defaults (Kubernetes projected SA
 // token path, 30s refresh interval).
-type Option func(*FileTokenAuthConfig)
+type FileTokenAuthOption func(*FileTokenAuthConfig)
 
 // WithTokenFilePath overrides the path the bearer token is read from. The
 // default is the standard Kubernetes projected service account token mount at
 // DefaultTokenFilePath. Empty values are ignored.
-func WithTokenFilePath(path string) Option {
+func WithTokenFilePath(path string) FileTokenAuthOption {
 	return func(f *FileTokenAuthConfig) {
 		if path != "" {
 			f.tokenFilePath = path
@@ -68,7 +64,7 @@ func WithTokenFilePath(path string) Option {
 
 // WithRefreshInterval overrides how often the token file is re-read. Values
 // <= 0 are ignored and the default (30s) is used.
-func WithRefreshInterval(d time.Duration) Option {
+func WithRefreshInterval(d time.Duration) FileTokenAuthOption {
 	return func(f *FileTokenAuthConfig) {
 		if d > 0 {
 			f.refreshInterval = d
@@ -84,9 +80,9 @@ func WithRefreshInterval(d time.Duration) Option {
 // The token file is read eagerly: a missing or empty file returns an error so
 // misconfiguration is caught at startup rather than at the first upstream call.
 // The logger is supplied automatically by NewHTTPService via the
-// service.Observable hook; until it arrives, background-refresh failures are
+// Observable hook; until it arrives, background-refresh failures are
 // silent.
-func NewFileTokenAuthConfig(opts ...Option) (*FileTokenAuthConfig, error) {
+func NewFileTokenAuthConfig(opts ...FileTokenAuthOption) (*FileTokenAuthConfig, error) {
 	f := &FileTokenAuthConfig{
 		tokenFilePath:   DefaultTokenFilePath,
 		refreshInterval: defaultRefreshInterval,
@@ -109,17 +105,17 @@ func NewFileTokenAuthConfig(opts ...Option) (*FileTokenAuthConfig, error) {
 	return f, nil
 }
 
-// AddOption implements service.Options.
-func (f *FileTokenAuthConfig) AddOption(h service.HTTP) service.HTTP {
+// AddOption implements Options.
+func (f *FileTokenAuthConfig) AddOption(h HTTP) HTTP {
 	return &fileTokenDecorator{source: f, HTTP: h}
 }
 
-// SetLogger implements service.Observable. NewHTTPService calls this with the
+// SetLogger implements Observable. NewHTTPService calls this with the
 // HTTP service's logger so background-refresh failures can be surfaced at WARN
 // level. If l does not satisfy logging.Logger (the richer interface with
 // Warnf), the logger stays unset and refresh failures remain silent rather
 // than panicking.
-func (f *FileTokenAuthConfig) SetLogger(l service.Logger) {
+func (f *FileTokenAuthConfig) SetLogger(l Logger) {
 	if rich, ok := l.(logging.Logger); ok {
 		f.mu.Lock()
 		f.logger = rich
@@ -127,10 +123,10 @@ func (f *FileTokenAuthConfig) SetLogger(l service.Logger) {
 	}
 }
 
-// SetMetrics implements service.Observable. FileTokenAuthConfig does not emit
+// SetMetrics implements Observable. FileTokenAuthConfig does not emit
 // metrics today; the no-op satisfies the interface so the framework can inject
 // uniformly.
-func (*FileTokenAuthConfig) SetMetrics(service.Metrics) {}
+func (*FileTokenAuthConfig) SetMetrics(Metrics) {}
 
 // Close stops the background refresh goroutine. It is safe to call multiple times.
 func (f *FileTokenAuthConfig) Close() error {
@@ -202,15 +198,15 @@ func readToken(path string) (string, error) {
 	return token, nil
 }
 
-// fileTokenDecorator wraps a service.HTTP and injects a bearer token read from a file.
+// fileTokenDecorator wraps an HTTP service and injects a bearer token read from a file.
 // It exposes Unwrap so that ConnectionPoolConfig / CircuitBreakerConfig / RetryConfig
-// can reach the underlying *httpService through the service package's extractHTTPService.
+// can reach the underlying *httpService through extractHTTPService.
 type fileTokenDecorator struct {
 	source *FileTokenAuthConfig
-	service.HTTP
+	HTTP
 }
 
-func (d *fileTokenDecorator) Unwrap() service.HTTP {
+func (d *fileTokenDecorator) Unwrap() HTTP {
 	return d.HTTP
 }
 
@@ -219,8 +215,8 @@ func (d *fileTokenDecorator) inject(headers map[string]string) (map[string]strin
 		headers = make(map[string]string)
 	}
 
-	if existing, ok := headers[service.AuthHeader]; ok && existing != "" {
-		return nil, service.AuthErr{Err: errAuthHeaderPresent, Message: "authorization header already set on request"}
+	if existing, ok := headers[AuthHeader]; ok && existing != "" {
+		return nil, AuthErr{Err: errAuthHeaderPresent, Message: "authorization header already set on request"}
 	}
 
 	token, err := d.source.currentToken()
@@ -228,7 +224,7 @@ func (d *fileTokenDecorator) inject(headers map[string]string) (map[string]strin
 		return nil, err
 	}
 
-	headers[service.AuthHeader] = "Bearer " + token
+	headers[AuthHeader] = "Bearer " + token
 
 	return headers, nil
 }

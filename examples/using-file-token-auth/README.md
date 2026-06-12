@@ -1,6 +1,6 @@
 # using-file-token-auth
 
-Demonstrates `auth.FileTokenAuthConfig` — an HTTP service option that reads a
+Demonstrates `service.FileTokenAuthConfig` — an HTTP service option that reads a
 bearer token from a file and periodically re-reads it so token rotation is
 picked up automatically. The primary use case is Kubernetes projected service
 account tokens, where the kubelet writes a fresh JWT to a mounted file every
@@ -9,13 +9,9 @@ few minutes.
 ## How it works
 
 ```go
-fs := file.NewLocalFileSystem(app.Logger())
-
-tokenCfg, err := auth.NewFileTokenAuthConfig(
-    fs,
-    auth.DefaultTokenFilePath, // /var/run/secrets/kubernetes.io/serviceaccount/token
-    30*time.Second,
-)
+// Zero-config: reads from the standard K8s projected SA token mount
+// (/var/run/secrets/kubernetes.io/serviceaccount/token) and refreshes every 30s.
+tokenCfg, err := service.NewFileTokenAuthConfig()
 ...
 app.AddHTTPService("upstream", "https://example.com", tokenCfg)
 ```
@@ -32,10 +28,13 @@ together to `AddHTTPService`.
 ## Run locally
 
 The default token path only exists inside a Kubernetes pod. To try the example
-on a local machine, point it at a file you control:
+on a local machine, point it at a file you control via functional options:
 
 ```go
-tokenCfg, err := auth.NewFileTokenAuthConfig(fs, "/tmp/my-token", 30*time.Second)
+tokenCfg, err := service.NewFileTokenAuthConfig(
+    service.WithTokenFilePath("/tmp/my-token"),
+    service.WithRefreshInterval(30*time.Second),
+)
 ```
 
 Then:

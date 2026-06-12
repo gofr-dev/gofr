@@ -1,4 +1,4 @@
-package auth
+package service
 
 import (
 	"context"
@@ -13,7 +13,6 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"gofr.dev/pkg/gofr/logging"
-	"gofr.dev/pkg/gofr/service"
 	"gofr.dev/pkg/gofr/testutil"
 )
 
@@ -37,14 +36,14 @@ func TestNewFileTokenAuthConfig(t *testing.T) {
 
 	tests := []struct {
 		name        string
-		opts        []Option
+		opts        []FileTokenAuthOption
 		expectError bool
 	}{
-		{"valid token", []Option{WithTokenFilePath(validPath)}, false},
-		{"missing file", []Option{WithTokenFilePath(missingPath)}, true},
-		{"empty file", []Option{WithTokenFilePath(emptyPath)}, true},
-		{"negative interval is ignored", []Option{WithTokenFilePath(validPath), WithRefreshInterval(-1 * time.Second)}, false},
-		{"empty path option is ignored (falls back to default, which won't exist)", []Option{WithTokenFilePath("")}, true},
+		{"valid token", []FileTokenAuthOption{WithTokenFilePath(validPath)}, false},
+		{"missing file", []FileTokenAuthOption{WithTokenFilePath(missingPath)}, true},
+		{"empty file", []FileTokenAuthOption{WithTokenFilePath(emptyPath)}, true},
+		{"negative interval is ignored", []FileTokenAuthOption{WithTokenFilePath(validPath), WithRefreshInterval(-1 * time.Second)}, false},
+		{"empty path option is ignored (falls back to default, which won't exist)", []FileTokenAuthOption{WithTokenFilePath("")}, true},
 	}
 
 	for _, tc := range tests {
@@ -112,7 +111,7 @@ func TestFileTokenAuthConfig_InjectsBearerHeader(t *testing.T) {
 
 	t.Cleanup(func() { _ = cfg.Close() })
 
-	svc := service.NewHTTPService(srv.URL, testLogger(), nil, cfg)
+	svc := NewHTTPService(srv.URL, testLogger(), nil, cfg)
 
 	resp, err := svc.Get(context.Background(), "", nil)
 	require.NoError(t, err)
@@ -136,16 +135,16 @@ func TestFileTokenAuthConfig_RejectsExistingAuthHeader(t *testing.T) {
 
 	t.Cleanup(func() { _ = cfg.Close() })
 
-	svc := service.NewHTTPService(srv.URL, testLogger(), nil, cfg)
+	svc := NewHTTPService(srv.URL, testLogger(), nil, cfg)
 
 	resp, err := svc.GetWithHeaders(context.Background(), "", nil, map[string]string{
 		"Authorization": "Bearer pre-existing",
 	})
 	require.Error(t, err)
 
-	// The error must carry service.AuthErr (parity with BasicAuth/OAuth/APIKey)
+	// The error must carry AuthErr (parity with BasicAuth/OAuth/APIKey)
 	// while still exposing the underlying sentinel through the wrap.
-	var authErr service.AuthErr
+	var authErr AuthErr
 	require.ErrorAs(t, err, &authErr)
 	require.ErrorIs(t, err, errAuthHeaderPresent)
 
@@ -171,7 +170,7 @@ func TestFileTokenAuthConfig_InjectsBearerHeaderAllVerbs(t *testing.T) {
 
 	t.Cleanup(func() { _ = cfg.Close() })
 
-	svc := service.NewHTTPService(srv.URL, testLogger(), nil, cfg)
+	svc := NewHTTPService(srv.URL, testLogger(), nil, cfg)
 	ctx := context.Background()
 
 	tests := []struct {
@@ -200,7 +199,7 @@ func TestFileTokenAuthConfig_InjectsBearerHeaderAllVerbs(t *testing.T) {
 }
 
 // TestFileTokenAuthConfig_RefreshFailureLogsWarning verifies that the logger
-// injected via service.Observable receives WARN-level entries when background
+// injected via Observable receives WARN-level entries when background
 // refresh fails (cached token continues to serve).
 func TestFileTokenAuthConfig_RefreshFailureLogsWarning(t *testing.T) {
 	path := writeTokenFile(t, "token-v1")
@@ -244,7 +243,7 @@ func TestFileTokenAuthConfig_ObservableInjectionViaNewHTTPService(t *testing.T) 
 
 		// Registering the option through NewHTTPService is what should inject
 		// the logger — no explicit SetLogger call here.
-		_ = service.NewHTTPService("http://example.invalid", logging.NewMockLogger(logging.WARN), nil, cfg)
+		_ = NewHTTPService("http://example.invalid", logging.NewMockLogger(logging.WARN), nil, cfg)
 
 		require.NoError(t, os.Remove(path))
 
@@ -273,13 +272,13 @@ func TestFileTokenAuthConfig_WorksWithConnectionPoolConfig(t *testing.T) {
 
 	t.Cleanup(func() { _ = cfg.Close() })
 
-	pool := &service.ConnectionPoolConfig{
+	pool := &ConnectionPoolConfig{
 		MaxIdleConns:        10,
 		MaxIdleConnsPerHost: 5,
 		IdleConnTimeout:     30 * time.Second,
 	}
 
-	svc := service.NewHTTPService(srv.URL, testLogger(), nil, cfg, pool)
+	svc := NewHTTPService(srv.URL, testLogger(), nil, cfg, pool)
 
 	resp, err := svc.Get(context.Background(), "", nil)
 	require.NoError(t, err)

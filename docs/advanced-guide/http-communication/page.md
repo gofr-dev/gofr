@@ -169,7 +169,7 @@ echo -n "your-password" | base64
 ```
 
 - **OAuthConfig** - This option allows the user to add `OAuth` as default auth for downstream HTTP Service.
-- **FileTokenAuthConfig** (`gofr.dev/pkg/gofr/service/auth`) - This option reads a bearer token from a file and refreshes it periodically, injecting an `Authorization: Bearer <token>` header on every outgoing call. It is intended for Kubernetes projected service account tokens, which are rotated on disk. See [File-Based Token Authentication](#file-based-token-authentication) below.
+- **FileTokenAuthConfig** - This option reads a bearer token from a file and refreshes it periodically, injecting an `Authorization: Bearer <token>` header on every outgoing call. It is intended for Kubernetes projected service account tokens, which are rotated on disk. See [File-Based Token Authentication](#file-based-token-authentication) below.
 - **CircuitBreakerConfig** - This option allows the user to configure the GoFr Circuit Breaker's `threshold` and `interval` for the failing downstream HTTP Service calls. If the failing calls exceeds the threshold the circuit breaker will automatically be enabled.
 - **DefaultHeaders** - This option allows the user to set some default headers that will be propagated to the downstream HTTP Service every time it is being called.
 - **HealthConfig** - This option allows the user to add the `HealthEndpoint` along with `Timeout` to enable and perform the timely health checks for downstream HTTP Service.
@@ -239,16 +239,16 @@ a.AddHTTPService("cat-facts", "https://catfact.ninja",
 
 ### File-Based Token Authentication
 
-`FileTokenAuthConfig` (in `gofr.dev/pkg/gofr/service/auth`) authenticates outgoing
+`FileTokenAuthConfig` (in `gofr.dev/pkg/gofr/service`) authenticates outgoing
 HTTP calls with a bearer token read from a file, re-reading it on a configurable
 interval so rotated tokens are picked up without restarting the process. The common
 use case is a Kubernetes [projected service account token](https://kubernetes.io/docs/tasks/configure-pod-container/configure-service-account/#serviceaccount-token-volume-projection),
 mounted by default at `/var/run/secrets/kubernetes.io/serviceaccount/token`.
 
-The constructor is zero-config for the common K8s case — `auth.NewFileTokenAuthConfig()`
+The constructor is zero-config for the common K8s case — `service.NewFileTokenAuthConfig()`
 reads from the default mount path and refreshes every 30s. Override either via
-functional options: `auth.WithTokenFilePath(path)` and
-`auth.WithRefreshInterval(d)`. The logger used to report background refresh
+functional options: `service.WithTokenFilePath(path)` and
+`service.WithRefreshInterval(d)`. The logger used to report background refresh
 failures at WARN level is injected automatically by `AddHTTPService` — you do
 not have to plumb it through. The cached token keeps serving until the next
 successful read.
@@ -258,13 +258,13 @@ package main
 
 import (
 	"gofr.dev/pkg/gofr"
-	"gofr.dev/pkg/gofr/service/auth"
+	"gofr.dev/pkg/gofr/service"
 )
 
 func main() {
 	app := gofr.New()
 
-	tokenCfg, err := auth.NewFileTokenAuthConfig()
+	tokenCfg, err := service.NewFileTokenAuthConfig()
 	if err != nil {
 		app.Logger().Fatalf("failed to initialize file token auth: %v", err)
 	}
@@ -278,9 +278,9 @@ func main() {
 To override defaults:
 
 ```go
-tokenCfg, err := auth.NewFileTokenAuthConfig(
-    auth.WithTokenFilePath("/var/run/custom/token"),
-    auth.WithRefreshInterval(15*time.Second),
+tokenCfg, err := service.NewFileTokenAuthConfig(
+    service.WithTokenFilePath("/var/run/custom/token"),
+    service.WithRefreshInterval(15*time.Second),
 )
 ```
 
