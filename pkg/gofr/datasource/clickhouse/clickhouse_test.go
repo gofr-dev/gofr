@@ -31,6 +31,40 @@ func getClickHouseTestConnection(t *testing.T) (*MockConn, *MockMetrics, *MockLo
 	return mockConn, mockMetric, mockLogger, c
 }
 
+func Test_ClickHouse_Options_PoolConfigPassedThrough(t *testing.T) {
+	opts := clickHouseOptions(Config{
+		Hosts:           "host-a:9000,host-b:9000",
+		Username:        "user",
+		Password:        "pass",
+		Database:        "test",
+		MaxOpenConns:    30,
+		MaxIdleConns:    10,
+		DialTimeout:     7 * time.Second,
+		ConnMaxLifetime: 15 * time.Minute,
+	})
+
+	assert.Equal(t, []string{"host-a:9000", "host-b:9000"}, opts.Addr)
+	assert.Equal(t, "test", opts.Auth.Database)
+	assert.Equal(t, "user", opts.Auth.Username)
+	assert.Equal(t, "pass", opts.Auth.Password)
+	assert.Equal(t, 30, opts.MaxOpenConns)
+	assert.Equal(t, 10, opts.MaxIdleConns)
+	assert.Equal(t, 7*time.Second, opts.DialTimeout)
+	assert.Equal(t, 15*time.Minute, opts.ConnMaxLifetime)
+}
+
+func Test_ClickHouse_Options_ZeroPoolConfigLeavesDefaultsToDriver(t *testing.T) {
+	// Unset pool fields must pass through as zero so clickhouse-go applies its
+	// own defaults — i.e. behaviour is identical to before this option existed.
+	opts := clickHouseOptions(Config{Hosts: "localhost:9000", Database: "test"})
+
+	assert.Equal(t, []string{"localhost:9000"}, opts.Addr)
+	assert.Zero(t, opts.MaxOpenConns)
+	assert.Zero(t, opts.MaxIdleConns)
+	assert.Zero(t, opts.DialTimeout)
+	assert.Zero(t, opts.ConnMaxLifetime)
+}
+
 func Test_ClickHouse_ConnectAndMetricRegistrationAndPingFailure(t *testing.T) {
 	_, mockMetric, mockLogger, _ := getClickHouseTestConnection(t)
 
