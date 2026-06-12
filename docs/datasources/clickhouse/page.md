@@ -16,7 +16,7 @@ To connect to `ClickHouse`, you need to provide the following environment variab
 - `DATABASE`: The name of the database to connect to.
 
 ### Connection pool tuning (optional)
-The following `Config` fields tune the connection pool and dial behaviour. Each is optional — leaving it unset (zero) keeps the underlying driver default, so existing applications are unaffected:
+The following `Config` fields tune the connection pool and dial behavior. Each is optional — leaving it unset (zero) keeps the underlying driver default, so existing applications are unaffected:
 
 - `MaxOpenConns`: Maximum number of open connections to the pool. Default `MaxIdleConns + 5`. Raise this when your service issues many concurrent queries and sees `acquire conn timeout` (every pooled connection was busy).
 - `MaxIdleConns`: Maximum number of idle connections kept in the pool. Default `5`.
