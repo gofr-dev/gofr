@@ -52,6 +52,8 @@ var errStatusDown = errors.New("status down")
 //	client.UseMetrics(Metrics())
 //
 //	client.Connect()
+//
+//nolint:gocritic // Configs do not need to be passed by reference
 func New(config Config) *Client {
 	return &Client{config: config}
 }
@@ -79,7 +81,7 @@ func (c *Client) UseTracer(tracer any) {
 
 // clickHouseOptions builds clickhouse-go options from the Config. Pool/dial
 // fields pass straight through; clickhouse-go applies its defaults for any zero.
-func clickHouseOptions(config Config) *clickhouse.Options {
+func clickHouseOptions(config *Config) *clickhouse.Options {
 	return &clickhouse.Options{
 		Addr: strings.Split(config.Hosts, ","),
 		Auth: clickhouse.Auth{
@@ -108,7 +110,7 @@ func (c *Client) Connect() {
 
 	ctx := context.Background()
 
-	c.conn, err = clickhouse.Open(clickHouseOptions(c.config))
+	c.conn, err = clickhouse.Open(clickHouseOptions(&c.config))
 	if err != nil {
 		c.logger.Errorf("error while connecting to Clickhouse %v", err)
 

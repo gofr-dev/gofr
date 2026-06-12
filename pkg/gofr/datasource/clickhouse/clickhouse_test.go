@@ -32,7 +32,7 @@ func getClickHouseTestConnection(t *testing.T) (*MockConn, *MockMetrics, *MockLo
 }
 
 func Test_ClickHouse_Options_PoolConfigPassedThrough(t *testing.T) {
-	opts := clickHouseOptions(Config{
+	opts := clickHouseOptions(&Config{
 		Hosts:           "host-a:9000,host-b:9000",
 		Username:        "user",
 		Password:        "pass",
@@ -56,7 +56,7 @@ func Test_ClickHouse_Options_PoolConfigPassedThrough(t *testing.T) {
 func Test_ClickHouse_Options_ZeroPoolConfigLeavesDefaultsToDriver(t *testing.T) {
 	// Unset pool fields must pass through as zero so clickhouse-go applies its
 	// own defaults — i.e. behavior is identical to before this option existed.
-	opts := clickHouseOptions(Config{Hosts: "localhost:9000", Database: "test"})
+	opts := clickHouseOptions(&Config{Hosts: "localhost:9000", Database: "test"})
 
 	assert.Equal(t, []string{"localhost:9000"}, opts.Addr)
 	assert.Zero(t, opts.MaxOpenConns)
