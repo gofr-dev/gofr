@@ -222,7 +222,7 @@ func isNilDatasource(i any) bool {
 
 	val := reflect.ValueOf(i)
 
-	return val.Kind() == reflect.Ptr && val.IsNil()
+	return val.Kind() == reflect.Pointer && val.IsNil()
 }
 
 // GetSQL returns the SQL datasource from the container.
