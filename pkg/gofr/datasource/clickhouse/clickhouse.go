@@ -24,18 +24,12 @@ type Config struct {
 	Password string // Password used for authentication.
 	Database string // Name of the database to connect to.
 
-	// Connection-pool and dial tuning. All optional — a zero value keeps the
-	// underlying clickhouse-go default, so existing configs are unaffected:
-	//   MaxOpenConns    default MaxIdleConns + 5
-	//   MaxIdleConns    default 5
-	//   DialTimeout     default 30s
-	//   ConnMaxLifetime default 1h
-	// Raise MaxOpenConns when a service issues many concurrent queries and sees
-	// "acquire conn timeout"; that error means every pooled connection was busy.
-	MaxOpenConns    int           // Maximum number of open connections to the pool.
-	MaxIdleConns    int           // Maximum number of idle connections kept in the pool.
-	DialTimeout     time.Duration // Timeout for establishing a connection.
-	ConnMaxLifetime time.Duration // Maximum amount of time a connection may be reused.
+	// Optional pool/dial tuning. A zero value uses the clickhouse-go default,
+	// so existing configs are unaffected.
+	MaxOpenConns    int           // Max open connections (default MaxIdleConns+5).
+	MaxIdleConns    int           // Max idle connections (default 5).
+	DialTimeout     time.Duration // Connection dial timeout (default 30s).
+	ConnMaxLifetime time.Duration // Max connection reuse time (default 1h).
 }
 
 // Client is a ClickHouse client implementation that wraps a Conn interface.
@@ -83,11 +77,8 @@ func (c *Client) UseTracer(tracer any) {
 	}
 }
 
-// clickHouseOptions builds the clickhouse-go options from the GoFr Config. The
-// pool/dial fields are passed straight through: clickhouse-go applies its own
-// defaults for any zero value (MaxIdleConns 5, MaxOpenConns MaxIdleConns+5,
-// DialTimeout 30s, ConnMaxLifetime 1h), so an unset Config behaves exactly as
-// before this option existed.
+// clickHouseOptions builds clickhouse-go options from the Config. Pool/dial
+// fields pass straight through; clickhouse-go applies its defaults for any zero.
 func clickHouseOptions(config Config) *clickhouse.Options {
 	return &clickhouse.Options{
 		Addr: strings.Split(config.Hosts, ","),
