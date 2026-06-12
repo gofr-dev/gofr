@@ -96,6 +96,45 @@ func TestApp_AddSQLDB(t *testing.T) {
 	assert.Equal(t, db, app.container.SQL)
 }
 
+// TestApp_AddSQLDB_ClosesExisting verifies AddSQLDB closes the env-configured SQL
+// connection that container.Create opens eagerly, before swapping in the new one —
+// otherwise its pool and background retry/metrics goroutines leak.
+func TestApp_AddSQLDB_ClosesExisting(t *testing.T) {
+	testutil.NewServerConfigs(t)
+
+	app := New()
+
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	existing := container.NewMockDB(ctrl)
+	existing.EXPECT().Close().Return(nil)
+	app.container.SQL = existing
+
+	db, _, _ := gofrSql.NewSQLMocks(t)
+	app.AddSQLDB(db)
+
+	assert.Equal(t, db, app.container.SQL)
+}
+
+// TestApp_AddSQLDB_NilExisting verifies AddSQLDB is safe when the container holds a
+// typed-nil SQL datasource (container.Create leaves one when DB_DIALECT is unset) —
+// it must not attempt to Close it.
+func TestApp_AddSQLDB_NilExisting(t *testing.T) {
+	testutil.NewServerConfigs(t)
+
+	app := New()
+
+	var nilDB *gofrSql.DB
+
+	app.container.SQL = nilDB // typed-nil interface value
+
+	db, _, _ := gofrSql.NewSQLMocks(t)
+
+	assert.NotPanics(t, func() { app.AddSQLDB(db) })
+	assert.Equal(t, db, app.container.SQL)
+}
+
 func TestApp_AddMongo(t *testing.T) {
 	testutil.NewServerConfigs(t)
 

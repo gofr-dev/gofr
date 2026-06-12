@@ -1,6 +1,8 @@
 package gofr
 
 import (
+	"reflect"
+
 	"go.opentelemetry.io/otel"
 
 	"gofr.dev/pkg/gofr/container"
@@ -195,9 +197,32 @@ func (a *App) AddInfluxDB(db container.InfluxDB) {
 // satisfy the container.DB interface; official implementations that build on the
 // standard SQL wrapper (for example GCP Cloud SQL with IAM auth) live in published
 // modules such as gofr.dev/pkg/gofr/datasource/cloudsql.
+//
+// container.Create already opens an env-configured SQL connection eagerly whenever
+// DB_DIALECT is set, so an existing datasource is closed first — otherwise its
+// connection pool and the background retry/metrics goroutines would leak.
 func (a *App) AddSQLDB(db container.DB) {
+	if old := a.container.SQL; !isNilDatasource(old) {
+		if err := old.Close(); err != nil {
+			a.Logger().Errorf("failed to close the existing SQL datasource: %v", err)
+		}
+	}
+
 	a.instrumentDatasource(db)
 	a.container.SQL = db
+}
+
+// isNilDatasource reports whether a container datasource interface is nil or holds
+// a typed-nil pointer (as container.Create can leave SQL when the dialect is unset),
+// so AddSQLDB never calls Close on a nil value.
+func isNilDatasource(i any) bool {
+	if i == nil {
+		return true
+	}
+
+	val := reflect.ValueOf(i)
+
+	return val.Kind() == reflect.Ptr && val.IsNil()
 }
 
 // GetSQL returns the SQL datasource from the container.

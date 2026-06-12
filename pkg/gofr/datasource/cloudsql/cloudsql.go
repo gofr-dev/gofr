@@ -119,6 +119,12 @@ func (c *client) Connect() {
 
 // connectIAM connects through the Cloud SQL connector using IAM authentication and
 // wraps the opened connection in GoFr's standard SQL datasource.
+//
+// Connect is one-shot per client: it registers a process-global database/sql driver
+// (and an otelsql wrapper) under a unique name. database/sql has no unregister, so a
+// client is meant to be connected once over its lifetime — App.AddSQLDB drives that.
+// driverSeq keeps the names unique, so repeated use across clients never collides,
+// but a client should not be reconnected in a loop (otelsql caps at 1000 drivers).
 func (c *client) connectIAM(s *settings) {
 	if s.dialect == "" {
 		c.logger.Errorf("cloudsql: unsupported dialect %q; supported are postgres and mysql", c.conf.Get("DB_DIALECT"))
@@ -189,6 +195,19 @@ func (c *client) register(s *settings, driverName string) (string, error) {
 	default:
 		return "", errUnsupportedDialect
 	}
+}
+
+// HealthCheck reports the datasource health. When a connect attempt failed, c.DB
+// is nil even though the client is installed as container.SQL; the embedded
+// *gofrSQL.DB.HealthCheck would dereference its config before its own nil guard and
+// panic, so guard here and report down instead. Otherwise delegate to the standard
+// SQL datasource. Mirrors the nil guard in Close.
+func (c *client) HealthCheck() *datasource.Health {
+	if c.DB == nil {
+		return &datasource.Health{Status: datasource.StatusDown, Details: map[string]any{}}
+	}
+
+	return c.DB.HealthCheck()
 }
 
 // Close closes the underlying connection and, on the IAM path, tears down the

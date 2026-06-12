@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"cloud.google.com/go/cloudsqlconn"
+	"github.com/go-sql-driver/mysql"
 	"gofr.dev/pkg/gofr/config"
 	gofrSQL "gofr.dev/pkg/gofr/datasource/sql"
 )
@@ -102,17 +103,53 @@ func (s *settings) dbConfig() *gofrSQL.DBConfig {
 
 // postgresDSN builds the pgx DSN for IAM auth. TLS and credentials are handled by
 // the connector at the dialer layer, so no password is set and sslmode is disabled
-// on the driver itself.
+// on the driver itself. Values are quoted per libpq rules so a value containing a
+// space or quote can't break out and inject another keyword.
 func (s *settings) postgresDSN() string {
 	return fmt.Sprintf("host=%s user=%s dbname=%s sslmode=disable",
-		s.instanceConnectionName, s.user, s.database)
+		quotePGValue(s.instanceConnectionName), quotePGValue(s.user), quotePGValue(s.database))
 }
 
-// mysqlDSN builds the go-sql-driver DSN for IAM auth. net must match the registered
+// mysqlDSN builds the go-sql-driver DSN for IAM auth via mysql.Config.FormatDSN,
+// which escapes the user/database/address fields. net must match the registered
 // connector driver name; no password is set for IAM auth.
 func (s *settings) mysqlDSN(net string) string {
-	return fmt.Sprintf("%s@%s(%s)/%s?parseTime=true",
-		s.user, net, s.instanceConnectionName, s.database)
+	// NewConfig seeds the driver's real defaults so FormatDSN omits them, keeping the
+	// DSN to the fields we set (a zero Config would emit allowNativePasswords, etc.).
+	cfg := mysql.NewConfig()
+	cfg.User = s.user
+	cfg.Net = net
+	cfg.Addr = s.instanceConnectionName
+	cfg.DBName = s.database
+	cfg.ParseTime = true
+
+	return cfg.FormatDSN()
+}
+
+// quotePGValue renders a libpq connection-string value. Values without a space,
+// single quote or backslash are returned as-is (keeping the common case readable);
+// otherwise the value is single-quoted with backslash escaping, so it stays a single
+// token and can't inject further keywords.
+func quotePGValue(v string) string {
+	if v != "" && !strings.ContainsAny(v, " '\\") {
+		return v
+	}
+
+	var b strings.Builder
+
+	b.WriteByte('\'')
+
+	for _, r := range v {
+		if r == '\\' || r == '\'' {
+			b.WriteByte('\\')
+		}
+
+		b.WriteRune(r)
+	}
+
+	b.WriteByte('\'')
+
+	return b.String()
 }
 
 func normalizeDialect(d string) string {
@@ -138,10 +175,11 @@ func normalizeIPType(ipType string) string {
 }
 
 func intOrZero(s string) int {
-	n := 0
 	// Ignore parse errors: an unset or invalid value falls back to the standard
-	// SQL datasource defaults, matching getDBConfig in the core SQL package.
-	_, _ = fmt.Sscanf(strings.TrimSpace(s), "%d", &n)
+	// SQL datasource defaults, matching getDBConfig in the core SQL package. Atoi
+	// (not Sscanf) is used so "5abc" is rejected rather than parsed as 5, keeping
+	// this path strict like the core config reader.
+	n, _ := strconv.Atoi(strings.TrimSpace(s))
 
 	return n
 }

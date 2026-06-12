@@ -68,6 +68,23 @@ func (c DBConfig) String() string {
 		c.SSLMode, c.MaxIdleConn, c.MaxOpenConn, c.Charset)
 }
 
+// GoString implements fmt.GoStringer so that the %#v verb — which bypasses Stringer
+// and would otherwise print the raw struct, password included — also redacts the
+// password. It mirrors String's redaction so no formatting verb leaks the secret.
+//
+//nolint:gocritic // value receiver required so GoStringer is in the value's method set, matching String
+func (c DBConfig) GoString() string {
+	password := ""
+	if c.Password != "" {
+		password = redactedPassword
+	}
+
+	return fmt.Sprintf("sql.DBConfig{Dialect:%q, HostName:%q, User:%q, Password:%q, Port:%q, "+
+		"Database:%q, SSLMode:%q, MaxIdleConn:%d, MaxOpenConn:%d, Charset:%q}",
+		c.Dialect, c.HostName, c.User, password, c.Port, c.Database,
+		c.SSLMode, c.MaxIdleConn, c.MaxOpenConn, c.Charset)
+}
+
 func setupSupabaseDefaults(dbConfig *DBConfig, configs config.Config, logger datasource.Logger) {
 	if dbConfig.HostName == "" {
 		projectRef := configs.Get("SUPABASE_PROJECT_REF")

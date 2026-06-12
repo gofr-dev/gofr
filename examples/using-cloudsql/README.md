@@ -1,10 +1,15 @@
 # Using Cloud SQL
 
-This GoFr example connects to a Google Cloud SQL instance (Postgres or MySQL)
-using the [`cloudsql`](../../pkg/gofr/datasource/cloudsql) datasource. On GCP it
+This GoFr example connects to a Google Cloud SQL instance using the
+[`cloudsql`](../../pkg/gofr/datasource/cloudsql) datasource. On GCP it
 authenticates with **IAM database authentication** — no static database password
 and no Cloud SQL Auth Proxy sidecar — while still supporting ordinary
 username/password auth for local development.
+
+> The `cloudsql` datasource supports both Postgres and MySQL. This example is
+> written for **Postgres** (it uses a `$1` placeholder and a `SERIAL` schema). To
+> run it against MySQL, change the placeholder to `?` and use an `AUTO_INCREMENT`
+> schema.
 
 The Cloud SQL datasource is plugged in with `app.AddSQLDB`, so `app.SQL()` /
 `ctx.SQL` and all of GoFr's SQL logging, metrics and health checks work exactly

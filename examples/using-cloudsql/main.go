@@ -1,8 +1,12 @@
 // Package main demonstrates connecting a GoFr application to Google Cloud SQL
-// (Postgres or MySQL) using the cloudsql datasource. On GCP the connection uses
-// IAM database authentication (no static password); locally you can use built-in
+// using the cloudsql datasource. On GCP the connection uses IAM database
+// authentication (no static password); locally you can use built-in
 // username/password auth by setting DB_IAM_AUTH=false. Configuration is read from
 // environment variables — see configs/.env.
+//
+// The cloudsql datasource itself supports both Postgres and MySQL, but this example
+// is written for Postgres: it uses a "$1" placeholder and a SERIAL schema. To run it
+// against MySQL, switch the placeholder to "?" and the schema to AUTO_INCREMENT.
 package main
 
 import (
@@ -57,6 +61,7 @@ func addCustomer(ctx *gofr.Context) (any, error) {
 		return nil, err
 	}
 
+	// Postgres placeholder; for MySQL use "?" instead of "$1".
 	_, err := ctx.SQL.ExecContext(ctx, "INSERT INTO customers (name) VALUES ($1)", c.Name)
 	if err != nil {
 		return nil, err
