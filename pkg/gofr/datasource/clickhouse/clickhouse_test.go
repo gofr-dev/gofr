@@ -53,6 +53,27 @@ func Test_ClickHouse_Options_PoolConfigPassedThrough(t *testing.T) {
 	assert.Equal(t, 15*time.Minute, opts.ConnMaxLifetime)
 }
 
+func Test_ClickHouse_Options_HostsTrimmedAndEmptiesDropped(t *testing.T) {
+	tests := []struct {
+		name  string
+		hosts string
+		want  []string
+	}{
+		{"spaces after comma", "host-a:9000, host-b:9000", []string{"host-a:9000", "host-b:9000"}},
+		{"trailing comma", "host-a:9000,", []string{"host-a:9000"}},
+		{"surrounding and interior blanks", " host-a:9000 , , host-b:9000 ", []string{"host-a:9000", "host-b:9000"}},
+		{"single host", "localhost:9000", []string{"localhost:9000"}},
+		{"empty string", "", []string{}},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			opts := clickHouseOptions(&Config{Hosts: tc.hosts, Database: "test"})
+			assert.Equal(t, tc.want, opts.Addr)
+		})
+	}
+}
+
 func Test_ClickHouse_Options_ZeroPoolConfigLeavesDefaultsToDriver(t *testing.T) {
 	// Unset pool fields must pass through as zero so clickhouse-go applies its
 	// own defaults — i.e. behavior is identical to before this option existed.

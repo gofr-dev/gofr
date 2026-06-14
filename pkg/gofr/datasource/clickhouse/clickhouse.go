@@ -79,11 +79,28 @@ func (c *Client) UseTracer(tracer any) {
 	}
 }
 
+// parseHosts splits the comma-separated Hosts config into addresses, trimming
+// surrounding whitespace and dropping empty entries. This keeps a value like
+// "host-a:9000, host-b:9000" or one with a trailing comma from producing blank
+// or space-padded addresses that fail to dial.
+func parseHosts(hosts string) []string {
+	parts := strings.Split(hosts, ",")
+	addrs := make([]string, 0, len(parts))
+
+	for _, p := range parts {
+		if p = strings.TrimSpace(p); p != "" {
+			addrs = append(addrs, p)
+		}
+	}
+
+	return addrs
+}
+
 // clickHouseOptions builds clickhouse-go options from the Config. Pool/dial
 // fields pass straight through; clickhouse-go applies its defaults for any zero.
 func clickHouseOptions(config *Config) *clickhouse.Options {
 	return &clickhouse.Options{
-		Addr: strings.Split(config.Hosts, ","),
+		Addr: parseHosts(config.Hosts),
 		Auth: clickhouse.Auth{
 			Database: config.Database,
 			Username: config.Username,
