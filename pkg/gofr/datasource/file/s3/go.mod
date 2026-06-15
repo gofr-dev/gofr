@@ -3,7 +3,7 @@ module gofr.dev/pkg/gofr/datasource/file/s3
 go 1.26.0
 
 require (
-	github.com/aws/aws-sdk-go-v2 v1.41.11
+	github.com/aws/aws-sdk-go-v2 v1.42.0
 	github.com/aws/aws-sdk-go-v2/config v1.32.22
 	github.com/aws/aws-sdk-go-v2/credentials v1.19.21
 	github.com/aws/aws-sdk-go-v2/service/s3 v1.101.0
@@ -26,13 +26,14 @@ require (
 	github.com/aws/aws-sdk-go-v2/service/sso v1.31.1 // indirect
 	github.com/aws/aws-sdk-go-v2/service/ssooidc v1.36.4 // indirect
 	github.com/aws/aws-sdk-go-v2/service/sts v1.43.1 // indirect
-	github.com/aws/smithy-go v1.27.0 // indirect
+	github.com/aws/smithy-go v1.27.1 // indirect
 	github.com/davecgh/go-spew v1.1.2-0.20180830191138-d8f796af33cc // indirect
 	github.com/joho/godotenv v1.5.1 // indirect
 	github.com/kr/pretty v0.3.1 // indirect
 	github.com/pkg/errors v0.9.1 // indirect
 	github.com/pmezard/go-difflib v1.0.1-0.20181226105442-5d4384ee4fb2 // indirect
 	github.com/rogpeppe/go-internal v1.14.1 // indirect
+	go.opentelemetry.io/otel/trace v1.44.0 // indirect
 	golang.org/x/sys v0.45.0 // indirect
 	google.golang.org/api v0.280.0 // indirect
 	gopkg.in/check.v1 v1.0.0-20201130134442-10cb98267c6c // indirect
