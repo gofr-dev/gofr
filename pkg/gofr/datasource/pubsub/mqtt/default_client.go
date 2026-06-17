@@ -1,12 +1,13 @@
 package mqtt
 
 import (
-	"fmt"
-	"math"
+	"context"
+	"net/url"
+	"strconv"
 	"sync"
-	"time"
 
-	mqtt "github.com/eclipse/paho.mqtt.golang"
+	"github.com/eclipse/paho.golang/autopaho"
+	"github.com/eclipse/paho.golang/paho"
 	"github.com/google/uuid"
 )
 
@@ -23,70 +24,94 @@ func getDefaultClient(config *Config, logger Logger, metrics Metrics) *MQTT {
 		host = "broker.hivemq.com"
 	}
 
-	opts := mqtt.NewClientOptions()
-	opts.AddBroker(fmt.Sprintf("tcp://%s:%d", host, port))
-	opts.SetClientID(clientID)
-	opts.SetAutoReconnect(true)
-	opts.SetKeepAlive(config.KeepAlive)
-
-	subscriptions := make(map[string]subscription)
-	mu := new(sync.RWMutex)
-
-	opts.SetOnConnectHandler(createReconnectHandler(mu, config, subscriptions, logger))
-	opts.SetConnectionLostHandler(createConnectionLostHandler(logger))
-	opts.SetReconnectingHandler(createReconnectingHandler(logger, config))
-
-	client := mqtt.NewClient(opts)
-
-	mqttClient := &MQTT{
-		Client:        client,
-		config:        config,
-		logger:        logger,
-		subscriptions: subscriptions,
-		mu:            mu,
-		metrics:       metrics,
-	}
-
-	if token := client.Connect(); token.Wait() && token.Error() != nil {
-		logger.Errorf("could not connect to MQTT at '%v:%v', error: %v", config.Hostname, config.Port, token.Error())
-
-		go retryDefaultConnect(client, config, logger, opts)
-
-		return mqttClient
-	}
-
 	config.Hostname = host
 	config.Port = port
 	config.ClientID = clientID
 
-	msg := make(map[string]subscription)
+	subs := make(map[string]subscription)
+	mu := new(sync.RWMutex)
+	ctx, cancel := context.WithCancel(context.Background())
 
-	logger.Infof("connected to MQTT at '%v:%v' with clientID '%v'", config.Hostname, config.Port, clientID)
-
-	return &MQTT{Client: client, config: config, logger: logger, subscriptions: msg, mu: new(sync.RWMutex), metrics: metrics}
-}
-
-func getMQTTClientOptions(config *Config) *mqtt.ClientOptions {
-	options := mqtt.NewClientOptions()
-	options.AddBroker(fmt.Sprintf("%s://%s:%d", config.Protocol, config.Hostname, config.Port))
-
-	clientID := getClientID(config.ClientID)
-	options.SetClientID(clientID)
-
-	if config.Username != "" {
-		options.SetUsername(config.Username)
+	m := &MQTT{
+		config:        config,
+		logger:        logger,
+		subscriptions: subs,
+		mu:            mu,
+		metrics:       metrics,
+		ctx:           ctx,
+		cancel:        cancel,
 	}
 
-	if config.Password != "" {
-		options.SetPassword(config.Password)
+	logger.Debugf("connecting to default MQTT at '%v:%v' with clientID '%v'", host, port, clientID)
+
+	var urls []*url.URL
+	serverURL, err := url.Parse("tcp://" + host + ":" + strconv.Itoa(port))
+	if err != nil {
+		logger.Errorf("invalid MQTT URL: %v", err)
+	} else {
+		urls = append(urls, serverURL)
 	}
 
-	options.SetOrderMatters(config.Order)
-	options.SetResumeSubs(config.RetrieveRetained)
-	options.SetAutoReconnect(true)
-	options.SetKeepAlive(config.KeepAlive)
+	cliCfg := autopaho.ClientConfig{
+		ServerUrls:                    urls,
+		KeepAlive:                     uint16(config.KeepAlive.Seconds()),
+		ConnectUsername:               config.Username,
+		ConnectPassword:               []byte(config.Password),
+		CleanStartOnInitialConnection: true,
+		SessionExpiryInterval:         0,
+		OnConnectionUp: func(cm *autopaho.ConnectionManager, connAck *paho.Connack) {
+			logger.Infof("connected to MQTT at '%v:%v' with clientID '%v'", config.Hostname, config.Port, config.ClientID)
 
-	return options
+			// Resubscribe to all topics
+			m.mu.RLock()
+			defer m.mu.RUnlock()
+
+			for topic := range m.subscriptions {
+				_, subErr := cm.Subscribe(context.Background(), &paho.Subscribe{
+					Subscriptions: []paho.SubscribeOptions{
+						{Topic: topic, QoS: config.QoS},
+					},
+				})
+				if subErr != nil {
+					logger.Debugf("failed to resubscribe to topic %s: %v", topic, subErr)
+				} else {
+					logger.Debugf("resubscribed to topic %s successfully", topic)
+				}
+			}
+		},
+		OnConnectError: func(err error) {
+			logger.Errorf("could not connect to MQTT at '%v:%v', error: %v", config.Hostname, config.Port, err)
+		},
+		ClientConfig: paho.ClientConfig{
+			ClientID: config.ClientID,
+			OnPublishReceived: []func(paho.PublishReceived) (bool, error){
+				func(pr paho.PublishReceived) (bool, error) {
+					// Route to query handlers if any
+					m.mu.RLock()
+					for _, handler := range m.queryHandlers {
+						handled, err := handler(pr)
+						if handled || err != nil {
+							m.mu.RUnlock()
+							return handled, err
+						}
+					}
+					m.mu.RUnlock()
+
+					// Route to normal subscriptions
+					return m.handlePublishReceived(pr)
+				},
+			},
+		},
+	}
+
+	cm, err := autopaho.NewConnection(ctx, cliCfg)
+	if err != nil {
+		logger.Errorf("could not initialize MQTT connection manager: %v", err)
+	}
+
+	m.cm = cm
+
+	return m
 }
 
 func getClientID(clientID string) string {
@@ -100,21 +125,4 @@ func getClientID(clientID string) string {
 	}
 
 	return id.String() + clientID
-}
-
-func retryDefaultConnect(client mqtt.Client, config *Config, logger Logger, options *mqtt.ClientOptions) {
-	backoff := defaultRetryTimeout
-
-	for {
-		token := client.Connect()
-		if token.Wait() && token.Error() == nil {
-			logger.Infof("connected to MQTT at '%v:%v' with clientID '%v'", config.Hostname, config.Port, options.ClientID)
-
-			return
-		}
-
-		logger.Errorf("could not connect to MQTT at '%v:%v', error: %v", config.Hostname, config.Port, token.Error())
-		time.Sleep(backoff)
-		backoff = time.Duration(math.Min(float64(backoff*backoffMultiplier), float64(maxRetryTimeout)))
-	}
 }

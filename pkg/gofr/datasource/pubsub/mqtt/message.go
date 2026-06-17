@@ -1,11 +1,13 @@
 package mqtt
 
-import mqtt "github.com/eclipse/paho.mqtt.golang"
+import "github.com/eclipse/paho.golang/paho"
 
 type message struct {
-	msg mqtt.Message
+	msg *paho.Publish
 }
 
 func (m *message) Commit() {
-	m.msg.Ack()
+	// MQTT v5 QoS acknowledgment is handled by the autopaho library automatically.
+	// For QoS 0: no ack needed.
+	// For QoS 1/2: autopaho sends PUBACK/PUBREC automatically.
 }

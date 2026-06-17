@@ -8,6 +8,7 @@ require (
 	github.com/XSAM/otelsql v0.43.0
 	github.com/alicebob/miniredis/v2 v2.38.0
 	github.com/dgraph-io/dgo/v210 v210.0.0-20230328113526-b66f8ae53a2d
+	github.com/eclipse/paho.golang v0.23.0
 	github.com/eclipse/paho.mqtt.golang v1.5.1
 	github.com/go-redis/redismock/v9 v9.2.0
 	github.com/go-sql-driver/mysql v1.10.0

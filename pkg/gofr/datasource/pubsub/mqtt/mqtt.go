@@ -3,11 +3,13 @@ package mqtt
 import (
 	"context"
 	"errors"
+	"net/url"
+	"strconv"
 	"sync"
 	"time"
 
-	mqtt "github.com/eclipse/paho.mqtt.golang"
-	"go.opentelemetry.io/otel"
+	"github.com/eclipse/paho.golang/autopaho"
+	"github.com/eclipse/paho.golang/paho"
 
 	"gofr.dev/pkg/gofr/datasource"
 	"gofr.dev/pkg/gofr/datasource/pubsub"
@@ -16,11 +18,8 @@ import (
 const (
 	publicBroker               = "broker.emqx.io"
 	messageBuffer              = 10
-	defaultRetryTimeout        = 10 * time.Second
-	maxRetryTimeout            = 1 * time.Minute
 	defaultQueryMessageLimit   = 10
 	defaultQueryCollectTimeout = 5 * time.Second
-	unsubscribeOpTimeout       = 2 * time.Second
 )
 
 var (
@@ -36,15 +35,18 @@ type SubscribeFunc func(*pubsub.Message) error
 // MQTT is the struct that implements PublisherSubscriber interface to
 // provide functionality for the MQTT as a pubsub.
 type MQTT struct {
-	// contains filtered or unexported fields
-	mqtt.Client
+	cm *autopaho.ConnectionManager
 
 	logger  Logger
 	metrics Metrics
 
 	config        *Config
 	subscriptions map[string]subscription
+	queryHandlers []func(paho.PublishReceived) (bool, error)
 	mu            *sync.RWMutex
+
+	ctx    context.Context
+	cancel context.CancelFunc
 }
 
 type Config struct {
@@ -62,8 +64,7 @@ type Config struct {
 }
 
 type subscription struct {
-	msgs    chan *pubsub.Message
-	handler func(_ mqtt.Client, msg mqtt.Message)
+	msgs chan *pubsub.Message
 }
 
 // New establishes a connection to MQTT Broker using the configs and return pubsub.MqttPublisherSubscriber
@@ -73,33 +74,107 @@ func New(config *Config, logger Logger, metrics Metrics) *MQTT {
 		return getDefaultClient(config, logger, metrics)
 	}
 
-	options := getMQTTClientOptions(config)
 	subs := make(map[string]subscription)
 	mu := new(sync.RWMutex)
+	ctx, cancel := context.WithCancel(context.Background())
+
+	m := &MQTT{
+		config:        config,
+		logger:        logger,
+		subscriptions: subs,
+		mu:            mu,
+		metrics:       metrics,
+		ctx:           ctx,
+		cancel:        cancel,
+	}
 
 	logger.Debugf("connecting to MQTT at '%v:%v' with clientID '%v'", config.Hostname, config.Port, config.ClientID)
 
-	options.SetOnConnectHandler(createReconnectHandler(mu, config, subs, logger))
-	options.SetConnectionLostHandler(createConnectionLostHandler(logger))
-	options.SetReconnectingHandler(createReconnectingHandler(logger, config))
-	// create the client using the options above
-	client := mqtt.NewClient(options)
-
-	if token := client.Connect(); token.Wait() && token.Error() != nil {
-		logger.Errorf("could not connect to MQTT at '%v:%v', error: %v", config.Hostname, config.Port, token.Error())
-
-		go retryConnect(client, config, logger, options)
+	var urls []*url.URL
+	serverURL, err := url.Parse(config.Protocol + "://" + config.Hostname + ":" + strconv.Itoa(config.Port))
+	if err != nil {
+		logger.Errorf("invalid MQTT URL: %v", err)
 	} else {
-		logger.Infof("connected to MQTT at '%v:%v' with clientID '%v'", config.Hostname, config.Port, options.ClientID)
+		urls = append(urls, serverURL)
 	}
 
-	return &MQTT{Client: client, config: config, logger: logger, subscriptions: subs, mu: mu, metrics: metrics}
+	cliCfg := autopaho.ClientConfig{
+		ServerUrls:                    urls,
+		KeepAlive:                     uint16(config.KeepAlive.Seconds()),
+		ConnectUsername:               config.Username,
+		ConnectPassword:               []byte(config.Password),
+		CleanStartOnInitialConnection: true,
+		SessionExpiryInterval:         0,
+		OnConnectionUp: func(cm *autopaho.ConnectionManager, connAck *paho.Connack) {
+			logger.Infof("connected to MQTT at '%v:%v' with clientID '%v'", config.Hostname, config.Port, config.ClientID)
+
+			// Resubscribe to all topics
+			m.mu.RLock()
+			defer m.mu.RUnlock()
+
+			for topic := range m.subscriptions {
+				_, subErr := cm.Subscribe(context.Background(), &paho.Subscribe{
+					Subscriptions: []paho.SubscribeOptions{
+						{Topic: topic, QoS: config.QoS},
+					},
+				})
+				if subErr != nil {
+					logger.Debugf("failed to resubscribe to topic %s: %v", topic, subErr)
+				} else {
+					logger.Debugf("resubscribed to topic %s successfully", topic)
+				}
+			}
+		},
+		OnConnectError: func(err error) {
+			logger.Errorf("could not connect to MQTT at '%v:%v', error: %v", config.Hostname, config.Port, err)
+		},
+		ClientConfig: paho.ClientConfig{
+			ClientID: config.ClientID,
+			OnPublishReceived: []func(paho.PublishReceived) (bool, error){
+				func(pr paho.PublishReceived) (bool, error) {
+					// Route to query handlers if any
+					m.mu.RLock()
+					for _, handler := range m.queryHandlers {
+						handled, err := handler(pr)
+						if handled || err != nil {
+							m.mu.RUnlock()
+							return handled, err
+						}
+					}
+					m.mu.RUnlock()
+
+					// Route to normal subscriptions
+					return m.handlePublishReceived(pr)
+				},
+			},
+		},
+	}
+
+	cm, err := autopaho.NewConnection(ctx, cliCfg)
+	if err != nil {
+		logger.Errorf("could not initialize MQTT connection manager: %v", err)
+	}
+
+	m.cm = cm
+
+	// Optional initial wait, autopaho will keep trying in background anyway
+	if cm != nil {
+		waitCtx, waitCancel := context.WithTimeout(ctx, 2*time.Second)
+		defer waitCancel()
+		_ = cm.AwaitConnection(waitCtx)
+	}
+
+	return m
 }
 
 func (m *MQTT) Subscribe(ctx context.Context, topic string) (*pubsub.Message, error) {
-	if !m.Client.IsConnected() {
-		time.Sleep(defaultRetryTimeout)
+	if m.cm == nil {
+		return nil, errClientNotConnected
+	}
 
+	waitCtx, cancel := context.WithTimeout(ctx, 2*time.Second)
+	defer cancel()
+	if err := m.cm.AwaitConnection(waitCtx); err != nil {
 		return nil, errClientNotConnected
 	}
 
@@ -109,14 +184,17 @@ func (m *MQTT) Subscribe(ctx context.Context, topic string) (*pubsub.Message, er
 	subs, ok := m.subscriptions[topic]
 	if !ok {
 		subs.msgs = make(chan *pubsub.Message, messageBuffer)
-		subs.handler = m.createMqttHandler(ctx, topic, subs.msgs)
-		token := m.Client.Subscribe(topic, m.config.QoS, subs.handler)
 
-		if token.Wait() && token.Error() != nil {
+		_, err := m.cm.Subscribe(ctx, &paho.Subscribe{
+			Subscriptions: []paho.SubscribeOptions{
+				{Topic: topic, QoS: m.config.QoS},
+			},
+		})
+
+		if err != nil {
 			m.mu.Unlock()
-			m.logger.Errorf("error getting a message from MQTT, error: %v", token.Error())
-
-			return nil, token.Error()
+			m.logger.Errorf("error getting a message from MQTT, error: %v", err)
+			return nil, err
 		}
 
 		m.subscriptions[topic] = subs
@@ -128,7 +206,6 @@ func (m *MQTT) Subscribe(ctx context.Context, topic string) (*pubsub.Message, er
 	// blocks if there are no messages in the channel
 	case msg := <-subs.msgs:
 		m.metrics.IncrementCounter(msg.Context(), "app_pubsub_subscribe_success_count", "topic", msg.Topic)
-
 		return msg, nil
 	case <-ctx.Done():
 		return nil, nil
@@ -137,7 +214,12 @@ func (m *MQTT) Subscribe(ctx context.Context, topic string) (*pubsub.Message, er
 
 // Query retrieves messages from a topic, waiting up to a specified duration and message limit.
 func (m *MQTT) Query(ctx context.Context, query string, args ...any) ([]byte, error) {
-	if !m.Client.IsConnected() {
+	if m.cm == nil {
+		return nil, errClientNotConnected
+	}
+	waitCtx, cancelPing := context.WithTimeout(ctx, 2*time.Second)
+	defer cancelPing()
+	if err := m.cm.AwaitConnection(waitCtx); err != nil {
 		return nil, errClientNotConnected
 	}
 
@@ -155,9 +237,11 @@ func (m *MQTT) Query(ctx context.Context, query string, args ...any) ([]byte, er
 	}
 
 	defer func() {
-		unsubToken := m.Client.Unsubscribe(query)
-		if !unsubToken.WaitTimeout(unsubscribeOpTimeout) {
-			m.logger.Warnf("Query: timed out unsubscribing from topic %s", query)
+		unsubCtx, cancelUnsub := context.WithTimeout(context.Background(), 2*time.Second)
+		defer cancelUnsub()
+		_, err := m.cm.Unsubscribe(unsubCtx, &paho.Unsubscribe{Topics: []string{query}})
+		if err != nil {
+			m.logger.Warnf("Query: timed out or error unsubscribing from topic %s: %v", query, err)
 		}
 	}()
 
@@ -177,21 +261,30 @@ func (m *MQTT) Query(ctx context.Context, query string, args ...any) ([]byte, er
 }
 
 func (m *MQTT) Publish(ctx context.Context, topic string, message []byte) error {
-	_, span := otel.GetTracerProvider().Tracer("gofr").Start(ctx, "mqtt-publish")
+	if m.cm == nil {
+		return errClientNotConnected
+	}
+
+	ctx, span, userProps := startPublishSpan(ctx, topic)
 	defer span.End()
 
 	m.metrics.IncrementCounter(ctx, "app_pubsub_publish_total_count", "topic", topic)
 
 	s := time.Now()
 
-	token := m.Client.Publish(topic, m.config.QoS, m.config.RetrieveRetained, message)
+	_, err := m.cm.Publish(ctx, &paho.Publish{
+		Topic:   topic,
+		QoS:     m.config.QoS,
+		Retain:  m.config.RetrieveRetained,
+		Payload: message,
+		Properties: &paho.PublishProperties{
+			User: userProps,
+		},
+	})
 
-	// Check for errors during publishing (More on error reporting
-	// https://pkg.go.dev/github.com/eclipse/paho.mqtt.golang#readme-error-handling)
-	if token.Wait() && token.Error() != nil {
-		m.logger.Errorf("error while publishing message, error: %v", token.Error())
-
-		return token.Error()
+	if err != nil {
+		m.logger.Errorf("error while publishing message, error: %v", err)
+		return err
 	}
 
 	t := time.Since(s)
@@ -220,16 +313,14 @@ func (m *MQTT) Health() datasource.Health {
 		},
 	}
 
-	if m.Client == nil {
+	if m.cm == nil {
 		m.logger.Errorf("%v", "datasource not initialized")
-
 		return res
 	}
 
 	err := m.Ping()
 	if err != nil {
 		m.logger.Errorf("%v", "health check failed")
-
 		return res
 	}
 
@@ -238,14 +329,21 @@ func (m *MQTT) Health() datasource.Health {
 	return res
 }
 
-func (m *MQTT) CreateTopic(_ context.Context, topic string) error {
-	token := m.Client.Publish(topic, m.config.QoS, false, []byte("topic creation"))
-	token.Wait()
+func (m *MQTT) CreateTopic(ctx context.Context, topic string) error {
+	if m.cm == nil {
+		return errClientNotConnected
+	}
 
-	if token.Error() != nil {
-		m.logger.Errorf("unable to create topic '%s', error: %v", topic, token.Error())
+	_, err := m.cm.Publish(ctx, &paho.Publish{
+		Topic:   topic,
+		QoS:     m.config.QoS,
+		Retain:  false,
+		Payload: []byte("topic creation"),
+	})
 
-		return token.Error()
+	if err != nil {
+		m.logger.Errorf("unable to create topic '%s', error: %v", topic, err)
+		return err
 	}
 
 	return nil
@@ -261,10 +359,38 @@ func (*MQTT) DeleteTopic(_ context.Context, _ string) error {
 
 // SubscribeWithFunction subscribe with a subscribing function, called whenever broker publishes a message.
 func (m *MQTT) SubscribeWithFunction(topic string, subscribeFunc SubscribeFunc) error {
-	token := m.Client.Subscribe(topic, 1, getHandler(subscribeFunc))
+	if m.cm == nil {
+		return errClientNotConnected
+	}
 
-	if token.Wait() && token.Error() != nil {
-		return token.Error()
+	// We can't easily append to OnPublishReceived dynamically after connection is established with autopaho
+	// if we don't have a slice that we synchronize. However, in our ClientConfig, we route to queryHandlers
+	// and subscriptions. For SubscribeWithFunction we should either map it to normal subscriptions or handle it explicitly.
+	// Since GoFr currently just uses token.Subscribe with a specific handler, we'll append to queryHandlers for now,
+	// or create a specific map for functional subscriptions. Let's append to queryHandlers.
+
+	handler := getHandler(subscribeFunc)
+
+	m.mu.Lock()
+	m.queryHandlers = append(m.queryHandlers, func(pr paho.PublishReceived) (bool, error) {
+		if pr.Packet.Topic == topic || topicMatch(topic, pr.Packet.Topic) {
+			return handler(pr)
+		}
+		return false, nil
+	})
+	m.mu.Unlock()
+
+	ctx, cancel := context.WithTimeout(m.ctx, 5*time.Second)
+	defer cancel()
+
+	_, err := m.cm.Subscribe(ctx, &paho.Subscribe{
+		Subscriptions: []paho.SubscribeOptions{
+			{Topic: topic, QoS: 1}, // default was 1 in previous implementation
+		},
+	})
+
+	if err != nil {
+		return err
 	}
 
 	return nil
