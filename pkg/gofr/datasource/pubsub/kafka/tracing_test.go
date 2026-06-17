@@ -43,11 +43,11 @@ func TestInjectTraceContext(t *testing.T) {
 	otel.SetTextMapPropagator(propagation.TraceContext{})
 
 	defer func() {
-		_ = tp.Shutdown(t.Context())
+		_ = tp.Shutdown(context.Background())
 	}()
 
 	// Create a span
-	ctx, span := tp.Tracer("test").Start(t.Context(), "test-span")
+	ctx, span := tp.Tracer("test").Start(context.Background(), "test-span")
 	defer span.End()
 
 	// Inject trace context into headers
@@ -75,11 +75,11 @@ func TestStartPublishSpan(t *testing.T) {
 	otel.SetTextMapPropagator(propagation.TraceContext{})
 
 	defer func() {
-		_ = tp.Shutdown(t.Context())
+		_ = tp.Shutdown(context.Background())
 	}()
 
 	// Start publish span
-	ctx, span, headers := startPublishSpan(t.Context(), "test-topic")
+	ctx, span, headers := startPublishSpan(context.Background(), "test-topic")
 	defer span.End()
 
 	// Verify span created
@@ -110,15 +110,15 @@ func TestStartSubscribeSpan_WithLinks(t *testing.T) {
 	otel.SetTextMapPropagator(propagation.TraceContext{})
 
 	defer func() {
-		_ = tp.Shutdown(t.Context())
+		_ = tp.Shutdown(context.Background())
 	}()
 
 	// Create producer span and get headers
-	_, producerSpan, headers := startPublishSpan(t.Context(), "test-topic")
+	_, producerSpan, headers := startPublishSpan(context.Background(), "test-topic")
 	producerSpan.End()
 
 	// Start subscribe span with headers
-	_, subscribeSpan := startSubscribeSpan(t.Context(), "test-topic", headers)
+	_, subscribeSpan := startSubscribeSpan(context.Background(), "test-topic", headers)
 	subscribeSpan.End()
 
 	// Get recorded spans
@@ -162,11 +162,11 @@ func TestStartSubscribeSpan_NoLinks(t *testing.T) {
 	otel.SetTextMapPropagator(propagation.TraceContext{})
 
 	defer func() {
-		_ = tp.Shutdown(t.Context())
+		_ = tp.Shutdown(context.Background())
 	}()
 
 	// Start subscribe span without headers (orphan span)
-	_, subscribeSpan := startSubscribeSpan(t.Context(), "test-topic", nil)
+	_, subscribeSpan := startSubscribeSpan(context.Background(), "test-topic", nil)
 	subscribeSpan.End()
 
 	// Get recorded spans
@@ -186,12 +186,12 @@ func TestStartSubscribeSpan_InvalidTraceparent(t *testing.T) {
 	otel.SetTextMapPropagator(propagation.TraceContext{})
 
 	defer func() {
-		_ = tp.Shutdown(t.Context())
+		_ = tp.Shutdown(context.Background())
 	}()
 
 	headers := []kafka.Header{{Key: "traceparent", Value: []byte("not-a-valid-traceparent")}}
 
-	_, subscribeSpan := startSubscribeSpan(t.Context(), "test-topic", headers)
+	_, subscribeSpan := startSubscribeSpan(context.Background(), "test-topic", headers)
 	subscribeSpan.End()
 
 	spans := exporter.GetSpans()

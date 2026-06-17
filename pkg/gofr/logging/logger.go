@@ -149,6 +149,7 @@ func (l *logger) Fatal(args ...any) {
 		_ = l.file.Sync() // Ignore sync error as we're about to exit
 	}
 
+	//nolint:revive // exit status is 1 as it denotes failure as signified by Fatal log
 	os.Exit(1)
 }
 
@@ -160,6 +161,7 @@ func (l *logger) Fatalf(format string, args ...any) {
 		_ = l.file.Sync() // Ignore sync error as we're about to exit
 	}
 
+	//nolint:revive // exit status is 1 as it denotes failure as signified by Fatal log
 	os.Exit(1)
 }
 

@@ -446,7 +446,7 @@ func TestKafkaClient_Close(t *testing.T) {
 	mockReader := NewMockReader(ctrl)
 	mockConn := NewMockConnection(ctrl)
 
-	k := kafkaClient{mu: &sync.RWMutex{}, reader: map[string]Reader{"test-topic": mockReader}, writer: mockWriter, conn: &multiConn{
+	k := kafkaClient{reader: map[string]Reader{"test-topic": mockReader}, writer: mockWriter, conn: &multiConn{
 		conns: []Connection{
 			mockConn,
 		},
@@ -471,7 +471,7 @@ func TestKafkaClient_CloseError(t *testing.T) {
 	defer ctrl.Finish()
 
 	mockWriter := NewMockWriter(ctrl)
-	k := kafkaClient{mu: &sync.RWMutex{}, writer: mockWriter}
+	k := kafkaClient{writer: mockWriter}
 
 	mockWriter.EXPECT().Close().Return(errClose)
 
@@ -996,7 +996,7 @@ func TestKafkaClient_Subscribe_RaceDetector(t *testing.T) {
 
 	client.reader["race-test-topic"] = mockReader
 
-	ctx := t.Context()
+	ctx := context.Background()
 	numGoroutines := 100
 
 	var wg sync.WaitGroup

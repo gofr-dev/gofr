@@ -29,6 +29,7 @@ func (g *googleClient) Health() (health datasource.Health) {
 	return health
 }
 
+//nolint:dupl // getWriterDetails provides the publishing details for current google publishers.
 func (g *googleClient) getWriterDetails() (status string, details map[string]any) {
 	const contextTimeoutDuration = 50
 
@@ -61,6 +62,7 @@ func (g *googleClient) getWriterDetails() (status string, details map[string]any
 	return status, details
 }
 
+//nolint:dupl // getReaderDetails provides the subscription details for current google subscriptions.
 func (g *googleClient) getReaderDetails() (status string, details map[string]any) {
 	const contextTimeoutDuration = 50
 

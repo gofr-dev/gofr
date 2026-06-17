@@ -1,7 +1,6 @@
 package mqtt
 
 import (
-	"context"
 	"testing"
 
 	"github.com/eclipse/paho.golang/paho"
