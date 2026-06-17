@@ -41,10 +41,10 @@ func TestInjectTraceContext(t *testing.T) {
 	otel.SetTextMapPropagator(propagation.TraceContext{})
 
 	defer func() {
-		_ = tp.Shutdown(context.Background())
+		_ = tp.Shutdown(t.Context())
 	}()
 
-	ctx, span := tp.Tracer("test").Start(context.Background(), "test-span")
+	ctx, span := tp.Tracer("test").Start(t.Context(), "test-span")
 	defer span.End()
 
 	attrs := injectTraceContext(ctx, nil)
@@ -63,10 +63,10 @@ func TestInjectTraceContext_PreservesExistingAttributes(t *testing.T) {
 	otel.SetTextMapPropagator(propagation.TraceContext{})
 
 	defer func() {
-		_ = tp.Shutdown(context.Background())
+		_ = tp.Shutdown(t.Context())
 	}()
 
-	ctx, span := tp.Tracer("test").Start(context.Background(), "test-span")
+	ctx, span := tp.Tracer("test").Start(t.Context(), "test-span")
 	defer span.End()
 
 	existing := map[string]string{
@@ -88,10 +88,10 @@ func TestStartPublishSpan(t *testing.T) {
 	otel.SetTextMapPropagator(propagation.TraceContext{})
 
 	defer func() {
-		_ = tp.Shutdown(context.Background())
+		_ = tp.Shutdown(t.Context())
 	}()
 
-	ctx, span, attrs := startPublishSpan(context.Background(), "test-topic")
+	ctx, span, attrs := startPublishSpan(t.Context(), "test-topic")
 	defer span.End()
 
 	require.NotNil(t, span)
@@ -109,13 +109,13 @@ func TestStartSubscribeSpan_WithLinks(t *testing.T) {
 	otel.SetTextMapPropagator(propagation.TraceContext{})
 
 	defer func() {
-		_ = tp.Shutdown(context.Background())
+		_ = tp.Shutdown(t.Context())
 	}()
 
-	_, producerSpan, attrs := startPublishSpan(context.Background(), "test-topic")
+	_, producerSpan, attrs := startPublishSpan(t.Context(), "test-topic")
 	producerSpan.End()
 
-	_, subscribeSpan := startSubscribeSpan(context.Background(), "test-topic", attrs)
+	_, subscribeSpan := startSubscribeSpan(t.Context(), "test-topic", attrs)
 	subscribeSpan.End()
 
 	spans := exporter.GetSpans()
@@ -155,10 +155,10 @@ func TestStartSubscribeSpan_NoLinks(t *testing.T) {
 	otel.SetTextMapPropagator(propagation.TraceContext{})
 
 	defer func() {
-		_ = tp.Shutdown(context.Background())
+		_ = tp.Shutdown(t.Context())
 	}()
 
-	_, subscribeSpan := startSubscribeSpan(context.Background(), "test-topic", nil)
+	_, subscribeSpan := startSubscribeSpan(t.Context(), "test-topic", nil)
 	subscribeSpan.End()
 
 	spans := exporter.GetSpans()
@@ -176,12 +176,12 @@ func TestStartSubscribeSpan_InvalidTraceparent(t *testing.T) {
 	otel.SetTextMapPropagator(propagation.TraceContext{})
 
 	defer func() {
-		_ = tp.Shutdown(context.Background())
+		_ = tp.Shutdown(t.Context())
 	}()
 
 	attrs := map[string]string{"traceparent": "not-a-valid-traceparent"}
 
-	_, subscribeSpan := startSubscribeSpan(context.Background(), "test-topic", attrs)
+	_, subscribeSpan := startSubscribeSpan(t.Context(), "test-topic", attrs)
 	subscribeSpan.End()
 
 	spans := exporter.GetSpans()

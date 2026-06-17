@@ -21,7 +21,7 @@ func setupTestTracer(t *testing.T) *sdktrace.TracerProvider {
 	otel.SetTextMapPropagator(propagation.TraceContext{})
 
 	t.Cleanup(func() {
-		_ = tp.Shutdown(context.Background())
+		_ = tp.Shutdown(t.Context())
 	})
 
 	return tp
@@ -67,7 +67,7 @@ func Test_userPropertyCarrier_NilProps(t *testing.T) {
 func Test_injectTraceContext(t *testing.T) {
 	setupTestTracer(t)
 
-	ctx, span := otel.GetTracerProvider().Tracer("test").Start(context.Background(), "test-span")
+	ctx, span := otel.GetTracerProvider().Tracer("test").Start(t.Context(), "test-span")
 	defer span.End()
 
 	props := injectTraceContext(ctx, nil)
@@ -81,7 +81,7 @@ func Test_injectTraceContext(t *testing.T) {
 func Test_injectTraceContext_WithExistingProps(t *testing.T) {
 	setupTestTracer(t)
 
-	ctx, span := otel.GetTracerProvider().Tracer("test").Start(context.Background(), "test-span")
+	ctx, span := otel.GetTracerProvider().Tracer("test").Start(t.Context(), "test-span")
 	defer span.End()
 
 	existingProps := paho.UserProperties{
@@ -102,7 +102,7 @@ func Test_injectTraceContext_WithExistingProps(t *testing.T) {
 func Test_startPublishSpan(t *testing.T) {
 	setupTestTracer(t)
 
-	ctx, span, userProps := startPublishSpan(context.Background(), "test/topic")
+	ctx, span, userProps := startPublishSpan(t.Context(), "test/topic")
 	defer span.End()
 
 	// Span should be valid
@@ -125,7 +125,7 @@ func Test_startSubscribeSpan_WithValidContext(t *testing.T) {
 	setupTestTracer(t)
 
 	// Simulate publisher side
-	pubCtx, pubSpan, userProps := startPublishSpan(context.Background(), "test/topic")
+	pubCtx, pubSpan, userProps := startPublishSpan(t.Context(), "test/topic")
 	_ = pubCtx
 
 	pubTraceID := pubSpan.SpanContext().TraceID()
@@ -133,7 +133,7 @@ func Test_startSubscribeSpan_WithValidContext(t *testing.T) {
 	pubSpan.End()
 
 	// Simulate subscriber side
-	subCtx, subSpan := startSubscribeSpan(context.Background(), "test/topic", userProps)
+	subCtx, subSpan := startSubscribeSpan(t.Context(), "test/topic", userProps)
 	defer subSpan.End()
 
 	// Subscriber span should be in the same trace as publisher
@@ -159,7 +159,7 @@ func Test_startSubscribeSpan_WithoutContext(t *testing.T) {
 	setupTestTracer(t)
 
 	// Subscribe with empty User Properties (no trace context)
-	_, subSpan := startSubscribeSpan(context.Background(), "test/topic", nil)
+	_, subSpan := startSubscribeSpan(t.Context(), "test/topic", nil)
 	defer subSpan.End()
 
 	// Span should still be valid
@@ -176,7 +176,7 @@ func Test_startSubscribeSpan_WithEmptyUserProps(t *testing.T) {
 
 	emptyProps := paho.UserProperties{}
 
-	_, subSpan := startSubscribeSpan(context.Background(), "test/topic", emptyProps)
+	_, subSpan := startSubscribeSpan(t.Context(), "test/topic", emptyProps)
 	defer subSpan.End()
 
 	assert.True(t, subSpan.SpanContext().IsValid())

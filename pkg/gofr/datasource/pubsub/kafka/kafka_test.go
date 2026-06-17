@@ -996,7 +996,7 @@ func TestKafkaClient_Subscribe_RaceDetector(t *testing.T) {
 
 	client.reader["race-test-topic"] = mockReader
 
-	ctx := context.Background()
+	ctx := t.Context()
 	numGoroutines := 100
 
 	var wg sync.WaitGroup

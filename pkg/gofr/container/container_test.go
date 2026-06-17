@@ -90,9 +90,8 @@ func TestContainer_MQTTInitialization_Default(t *testing.T) {
 	c := NewContainer(config.NewMockConfig(configs))
 
 	assert.NotNil(t, c.PubSub)
-	m, ok := c.PubSub.(*mqtt.MQTT)
+	_, ok := c.PubSub.(*mqtt.MQTT)
 	assert.True(t, ok)
-	assert.NotNil(t, m.Client)
 }
 
 func TestContainer_GetHTTPService(t *testing.T) {

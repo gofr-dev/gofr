@@ -94,7 +94,6 @@ func isValidConfig(logger logging.Logger, name, url, host, port string) bool {
 		return false
 	}
 
-	//nolint:revive // early-return is not possible here, as below is the intentional logging flow
 	if url == "" && name != "" && !strings.EqualFold(name, "gofr") {
 		if host != "" && port != "" {
 			logger.Warn("TRACER_HOST and TRACER_PORT are deprecated, use TRACER_URL instead")

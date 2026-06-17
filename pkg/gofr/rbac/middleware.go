@@ -80,7 +80,7 @@ var (
 // Middleware creates an HTTP middleware function that enforces RBAC authorization.
 // It extracts the user's role and checks if the role is allowed for the requested route.
 //
-//nolint:gocognit,gocyclo // Middleware complexity is acceptable due to multiple authorization paths
+//nolint:gocognit // Middleware complexity is acceptable due to multiple authorization paths
 func Middleware(config *Config) func(handler http.Handler) http.Handler {
 	return func(handler http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

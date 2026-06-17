@@ -54,7 +54,7 @@ func TestMQTT_Query_InvalidTopic(t *testing.T) {
 	m := New(cfg, logger, metrics)
 
 	// Since we are not connected, AwaitConnection will fail
-	_, err := m.Query(context.Background(), "test/topic")
+	_, err := m.Query(t.Context(), "test/topic")
 	assert.ErrorIs(t, err, errClientNotConnected)
 }
 
@@ -72,7 +72,7 @@ func TestMQTT_Publish_NotConnected(t *testing.T) {
 	m := New(cfg, logger, metrics)
 
 	// Force connection wait timeout to trigger context cancellation
-	ctx, cancel := context.WithTimeout(context.Background(), time.Millisecond*100)
+	ctx, cancel := context.WithTimeout(t.Context(), time.Millisecond*100)
 	defer cancel()
 
 	err := m.Publish(ctx, "test", []byte("message"))
@@ -92,7 +92,7 @@ func TestMQTT_Subscribe_NotConnected(t *testing.T) {
 
 	m := New(cfg, logger, metrics)
 
-	ctx := context.Background()
+	ctx := t.Context()
 
 	_, err := m.Subscribe(ctx, "test")
 	assert.ErrorIs(t, err, errClientNotConnected)
@@ -167,7 +167,7 @@ func TestMQTT_CreateTopic(t *testing.T) {
 
 	m := New(cfg, logger, metrics)
 
-	ctx, cancel := context.WithTimeout(context.Background(), time.Millisecond*100)
+	ctx, cancel := context.WithTimeout(t.Context(), time.Millisecond*100)
 	defer cancel()
 
 	err := m.CreateTopic(ctx, "new-topic")
@@ -180,7 +180,7 @@ func TestMQTT_DeleteTopic(t *testing.T) {
 
 	m := New(&Config{Hostname: "127.0.0.1"}, logger, metrics)
 
-	err := m.DeleteTopic(context.Background(), "topic")
+	err := m.DeleteTopic(t.Context(), "topic")
 	assert.NoError(t, err) // DeleteTopic is a no-op
 }
 
