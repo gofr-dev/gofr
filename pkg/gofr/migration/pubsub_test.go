@@ -153,6 +153,7 @@ func Test_PubSub_NoEntryAdded(t *testing.T) {
 	data := pm.beginTransaction(c)
 	data.MigrationNumber = 20240304
 	data.StartTime = time.Now()
+	data.UsedDatasources = map[string]bool{dsRedis: true}
 
 	err := pm.commitMigration(c, data)
 	require.NoError(t, err)

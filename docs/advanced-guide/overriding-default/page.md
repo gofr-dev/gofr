@@ -1,3 +1,11 @@
+---
+description: "Override GoFr's default logger and config provider to plug in your own implementations while keeping the framework's observability and lifecycle behavior."
+nextjs:
+  metadata:
+    title: "Overriding Defaults in GoFr — Custom Logger and Configs"
+    description: "Override GoFr's default logger and config provider to plug in your own implementations while keeping the framework's observability and lifecycle behavior."
+---
+
 # Overriding Default
 
 GoFr allows overriding default behavior of its features.

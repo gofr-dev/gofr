@@ -3,9 +3,11 @@ package middleware
 import (
 	"bufio"
 	"bytes"
+	"encoding/json"
 	"net"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 
@@ -268,6 +270,30 @@ func Test_StatusResponseWriter_WriteHeader_DuplicateCalls(t *testing.T) {
 	require.Equal(t, http.StatusOK, rr.Code, "expected recorder status 200")
 }
 
+// Test_StatusResponseWriter_ImplicitOK asserts that calling Write
+// without first calling WriteHeader records status=200 — matching
+// net/http's implicit-200 wire behavior. The common idiomatic handler
+// pattern is `w.Write([]byte("..."))` without an explicit WriteHeader;
+// before the Write() method on StatusResponseWriter was added, logs and
+// metrics for those handlers recorded status=0.
+func Test_StatusResponseWriter_ImplicitOK(t *testing.T) {
+	rr := httptest.NewRecorder()
+	srw := &StatusResponseWriter{ResponseWriter: rr}
+
+	_, err := srw.Write([]byte("ok"))
+	require.NoError(t, err)
+
+	require.Equal(t, http.StatusOK, srw.status,
+		"Write before WriteHeader must record status=200 (matches net/http implicit-200)")
+	require.True(t, srw.wroteHeader, "wroteHeader must be set after first Write")
+
+	// A subsequent explicit WriteHeader must be ignored (matches existing
+	// duplicate-call guard) so we cannot upgrade an already-implicit 200
+	// into something else after bytes have been written.
+	srw.WriteHeader(http.StatusInternalServerError)
+	require.Equal(t, http.StatusOK, srw.status, "explicit WriteHeader after Write must not overwrite")
+}
+
 func Test_StatusResponseWriter_Hijack_Supported(t *testing.T) {
 	rr := httptest.NewRecorder()
 	srw := &StatusResponseWriter{ResponseWriter: rr}
@@ -320,3 +346,70 @@ type mockAddr struct{}
 
 func (*mockAddr) Network() string { return "tcp" }
 func (*mockAddr) String() string  { return "127.0.0.1:8080" }
+
+// TestRequestLogSchemaSnapshot pins the JSON field set that the request
+// log line emits per HTTP request. Log aggregators and dashboards built
+// on top of these field names will break if we rename or drop one.
+//
+// We do not pin field VALUES (timestamps, IDs, durations vary by run) —
+// we pin the field NAMES. Both the tracing-on and tracing-off paths
+// emit the same field set; trace_id / span_id default to the zero
+// strings ("00...0") when no SpanContext is in scope so log
+// aggregators always see the keys.
+func TestRequestLogSchemaSnapshot(t *testing.T) {
+	out := testutil.StdoutOutputForFunc(func() {
+		req, _ := http.NewRequestWithContext(t.Context(), http.MethodGet, "http://dummy/users/42?x=1", http.NoBody)
+		req.Header.Set("User-Agent", "snapshot-test")
+		// NewRequestWithContext leaves these fields empty (the real HTTP
+		// server sets them on incoming requests). Set them explicitly so
+		// all RequestLog fields populate.
+		req.RequestURI = "/users/42?x=1"
+		req.RemoteAddr = "1.2.3.4:5678"
+
+		rr := httptest.NewRecorder()
+
+		handler := Logging(LogProbes{}, logging.NewLogger(logging.INFO))(http.HandlerFunc(
+			func(w http.ResponseWriter, _ *http.Request) {
+				// Sleep so response_time is non-zero — the field has
+				// json:omitempty and is dropped on zero-duration handlers.
+				time.Sleep(time.Microsecond)
+				w.WriteHeader(http.StatusOK)
+			},
+		))
+
+		handler.ServeHTTP(rr, req)
+	})
+
+	// One log line per request; locate the JSON object.
+	idx := strings.Index(out, "{")
+	require.Greater(t, idx, -1, "expected JSON log line, got: %q", out)
+	end := strings.LastIndex(out, "}")
+	require.Greater(t, end, idx, "malformed JSON log line: %q", out)
+
+	var entry map[string]any
+
+	require.NoError(t, json.Unmarshal([]byte(out[idx:end+1]), &entry))
+
+	// The logger framing fields (level, time, gofrVersion, message).
+	for _, k := range []string{"level", "time", "gofrVersion", "message"} {
+		assert.Contains(t, entry, k, "log entry missing framing field %q", k)
+	}
+
+	// The request-log fields are nested under "message" as an object.
+	msg, ok := entry["message"].(map[string]any)
+	require.True(t, ok, "message is not an object: %T", entry["message"])
+
+	wantFields := []string{
+		"trace_id", "span_id", "start_time", "response_time",
+		"method", "user_agent", "ip", "uri", "response",
+	}
+	for _, k := range wantFields {
+		assert.Contains(t, msg, k, "request log missing field %q", k)
+	}
+
+	// Spot-check that two of the fields hold the values we set, to
+	// guard against accidental rename + same field count.
+	assert.Equal(t, "GET", msg["method"])
+	assert.Equal(t, "/users/42?x=1", msg["uri"])
+	assert.Equal(t, "snapshot-test", msg["user_agent"])
+}

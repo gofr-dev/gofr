@@ -1,3 +1,11 @@
+---
+description: "Use GoFr's errors package for structured HTTP and database errors. Predefined types plus custom errors with context simplify error responses and observability."
+nextjs:
+  metadata:
+    title: "Error Handling in GoFr — Structured HTTP and DB Errors"
+    description: "Use GoFr's errors package for structured HTTP and database errors. Predefined types plus custom errors with context simplify error responses and observability."
+---
+
 # Error Handling
 
 GoFr provides a structured error handling approach to simplify error management in your applications. 

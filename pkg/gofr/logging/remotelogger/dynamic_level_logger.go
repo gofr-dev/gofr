@@ -225,17 +225,17 @@ func logLevelChange(r *remoteLogger, oldLevel, newLevel logging.Level) {
 
 	switch logLevel {
 	case logging.FATAL:
-		r.Warnf(message)
+		r.Warnf("%s", message)
 	case logging.ERROR:
-		r.Errorf(message)
+		r.Errorf("%s", message)
 	case logging.WARN:
-		r.Warnf(message)
+		r.Warnf("%s", message)
 	case logging.NOTICE:
-		r.Noticef(message)
+		r.Noticef("%s", message)
 	case logging.INFO:
-		r.Infof(message)
+		r.Infof("%s", message)
 	case logging.DEBUG:
-		r.Infof(message) // Using Info for DEBUG to ensure visibility
+		r.Infof("%s", message) // Using Info for DEBUG to ensure visibility
 	}
 }
 

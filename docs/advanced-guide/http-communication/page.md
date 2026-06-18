@@ -1,3 +1,11 @@
+---
+description: "Call other services from a GoFr handler with AddHTTPService. The instrumented client adds traces, metrics, retries, and circuit breakers to outbound HTTP calls."
+nextjs:
+  metadata:
+    title: "Inter-Service HTTP in GoFr — AddHTTPService Client"
+    description: "Call other services from a GoFr handler with AddHTTPService. The instrumented client adds traces, metrics, retries, and circuit breakers to outbound HTTP calls."
+---
+
 # Inter-Service HTTP Calls
 
 GoFr promotes microservice architecture and to facilitate the same, it provides the support to initialize HTTP services
@@ -161,6 +169,7 @@ echo -n "your-password" | base64
 ```
 
 - **OAuthConfig** - This option allows the user to add `OAuth` as default auth for downstream HTTP Service.
+- **FileTokenAuthConfig** - This option reads a bearer token from a file and refreshes it periodically, injecting an `Authorization: Bearer <token>` header on every outgoing call. It is intended for Kubernetes projected service account tokens, which are rotated on disk. See [File-Based Token Authentication](#file-based-token-authentication) below.
 - **CircuitBreakerConfig** - This option allows the user to configure the GoFr Circuit Breaker's `threshold` and `interval` for the failing downstream HTTP Service calls. If the failing calls exceeds the threshold the circuit breaker will automatically be enabled.
 - **DefaultHeaders** - This option allows the user to set some default headers that will be propagated to the downstream HTTP Service every time it is being called.
 - **HealthConfig** - This option allows the user to add the `HealthEndpoint` along with `Timeout` to enable and perform the timely health checks for downstream HTTP Service.
@@ -228,6 +237,58 @@ a.AddHTTPService("cat-facts", "https://catfact.ninja",
 - For single-instance applications: The default in-memory store (`NewLocalRateLimiterStore`) is sufficient and provides better performance.
 - Rate configuration: Set Burst higher than Requests to allow short traffic bursts while maintaining average rate limits.
 
+### File-Based Token Authentication
+
+`FileTokenAuthConfig` (in `gofr.dev/pkg/gofr/service`) authenticates outgoing
+HTTP calls with a bearer token read from a file, re-reading it on a configurable
+interval so rotated tokens are picked up without restarting the process. The common
+use case is a Kubernetes [projected service account token](https://kubernetes.io/docs/tasks/configure-pod-container/configure-service-account/#serviceaccount-token-volume-projection),
+mounted by default at `/var/run/secrets/kubernetes.io/serviceaccount/token`.
+
+The constructor is zero-config for the common K8s case — `service.NewFileTokenAuthConfig()`
+reads from the default mount path and refreshes every 30s. Override either via
+functional options: `service.WithTokenFilePath(path)` and
+`service.WithRefreshInterval(d)`. The logger used to report background refresh
+failures at WARN level is injected automatically by `AddHTTPService` — you do
+not have to plumb it through. The cached token keeps serving until the next
+successful read.
+
+```go
+package main
+
+import (
+	"gofr.dev/pkg/gofr"
+	"gofr.dev/pkg/gofr/service"
+)
+
+func main() {
+	app := gofr.New()
+
+	tokenCfg, err := service.NewFileTokenAuthConfig()
+	if err != nil {
+		app.Logger().Fatalf("failed to initialize file token auth: %v", err)
+	}
+
+	app.AddHTTPService("upstream", "https://example.com", tokenCfg)
+
+	app.Run()
+}
+```
+
+To override defaults:
+
+```go
+tokenCfg, err := service.NewFileTokenAuthConfig(
+    service.WithTokenFilePath("/var/run/custom/token"),
+    service.WithRefreshInterval(15*time.Second),
+)
+```
+
+`tokenCfg` runs a background refresh goroutine for the lifetime of the process;
+registering it with `AddHTTPService` keeps it alive until the app exits, so there
+is no need to call `tokenCfg.Close()`. Call `Close()` only if you construct a config
+that outlives the service using it.
+
 ## Metrics
 
 GoFr publishes the following metrics for HTTP service communication:
@@ -235,3 +296,6 @@ GoFr publishes the following metrics for HTTP service communication:
 - `app_http_retry_count`: Total number of retry events. (labels: `service`)
 - `app_http_circuit_breaker_state`: Current state of the circuit breaker (0 for Closed, 1 for Open). (labels: `service`)
 - `app_http_service_response`: Response time of HTTP service requests in seconds (histogram). (labels: `service`, `path`, `method`, `status`)
+## Related production guides
+
+- **Distributed Tracing**: [Trace inter-service HTTP calls end-to-end](/docs/guides/distributed-tracing) — context propagation across GoFr's HTTP client.

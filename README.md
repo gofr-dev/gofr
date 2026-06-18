@@ -20,7 +20,7 @@
 </div>
 
 ## 🎯 **Goal**
-GoFr is designed to **simplify microservice development**, with key focuses on **Kubernetes deployment** and **out-of-the-box observability**. While capable of building generic applications, **microservices** remain at its core.
+GoFr is designed to **simplify microservice development**, with a key focus on **Kubernetes deployment** and **out-of-the-box observability**. While capable of building generic applications, **microservices** remain at its core.
 
 ---
 
@@ -137,4 +137,4 @@ If your PR is merged, or if you contribute by writing articles or promoting GoFr
 
 ### Partners
 
-<img src="https://resources.jetbrains.com/storage/products/company/brand/logos/jetbrains.png" alt="JetBrains logo" width="200">
+<img src="https://resources.jetbrains.com/storage/products/company/brand/logos/jetbrains.png" alt="JetBrains logo" width="200"> 

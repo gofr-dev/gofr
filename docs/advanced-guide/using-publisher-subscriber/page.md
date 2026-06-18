@@ -1,3 +1,11 @@
+---
+description: "Build pub/sub services in GoFr with Kafka, NATS, Google Pub/Sub, MQTT, and more. Decouple producers and consumers for scalable async event-driven architectures."
+nextjs:
+  metadata:
+    title: "Publisher-Subscriber in GoFr — Async Messaging Patterns"
+    description: "Build pub/sub services in GoFr with Kafka, NATS, Google Pub/Sub, MQTT, and more. Decouple producers and consumers for scalable async event-driven architectures."
+---
+
 # Publisher Subscriber
 
 Publisher Subscriber is an architectural design pattern for asynchronous communication between different entities.
@@ -10,7 +18,7 @@ scaled and maintained according to its own requirement.
 ## Design choice
 
 In GoFr application if a user wants to use the Publisher-Subscriber design, it supports several message brokers,
-including Apache Kafka, Google PubSub, MQTT, NATS JetStream, and Redis Pub/Sub.
+including Apache Kafka, Google PubSub, MQTT, NATS JetStream, Redis Pub/Sub, Azure Event Hubs, and Amazon SQS.
 The initialization of the PubSub is done in an IoC container which handles the PubSub client dependency.
 With this, the control lies with the framework and thus promotes modularity, testability, and re-usability.
 Users can do publish and subscribe to multiple topics in a single application, by providing the topic name.
@@ -186,6 +194,7 @@ KAFKA_TLS_CERT_FILE=/path/to/cert.pem
 KAFKA_TLS_KEY_FILE=/path/to/key.pem
 KAFKA_TLS_CA_CERT_FILE=/path/to/ca.pem
 KAFKA_TLS_INSECURE_SKIP_VERIFY=true
+```
 
 #### Docker setup
 ```shell
@@ -283,7 +292,7 @@ To set up NATS JetStream, follow these steps:
 1. Import the external driver for NATS JetStream:
 
 ```bash
-go get gofr.dev/pkg/gofr/datasources/pubsub/nats
+go get gofr.dev/pkg/gofr/datasource/pubsub/nats
 ```
 
 2. Use the `AddPubSub` method to add the NATS JetStream driver to your application:
@@ -475,7 +484,8 @@ The following configs apply specifically to Redis Pub/Sub behavior. For base Red
 - Message limit for Query operations
 - `10`
 - `50`
-  {% /table %}
+
+{% /table %}
 
 For Redis with TLS:
 
@@ -653,6 +663,39 @@ func main() {
 
 > **Note**: SQS queues must be created before publishing or subscribing. Use AWS CLI, AWS Console, or the `CreateTopic` method in migrations to create queues programmatically. GoFr supports Standard Queues by default—FIFO queues are not currently supported. Advanced features like Dead Letter Queues (DLQ) and Broadcast (SNS) can be configured at the infrastructure level.
 
+#### LocalStack setup (local development)
+
+[LocalStack](https://localstack.cloud/) emulates AWS services locally, making it ideal for development and testing without an AWS account.
+
+```shell
+docker run -d \
+	--name localstack \
+	-p 4566:4566 \
+	-e SERVICES=sqs \
+	localstack/localstack:latest
+```
+
+After LocalStack is running, create queues using the AWS CLI:
+
+```shell
+aws --endpoint-url=http://localhost:4566 --region us-east-1 \
+	sqs create-queue --queue-name order-logs
+
+aws --endpoint-url=http://localhost:4566 --region us-east-1 \
+	sqs create-queue --queue-name products
+```
+
+When using LocalStack, set the `Endpoint` field in `sqs.Config` to point at LocalStack and use dummy credentials:
+
+```go
+app.AddPubSub(sqs.New(&sqs.Config{
+    Region:          "us-east-1",
+    Endpoint:        "http://localhost:4566",
+    AccessKeyID:     "test",
+    SecretAccessKey: "test",
+}))
+```
+
 
 ## Subscribing
 Adding a subscriber is similar to adding an HTTP handler, which makes it easier to develop scalable applications,
@@ -668,7 +711,7 @@ func (ctx *gofr.Context) error
 ```
 
 `Subscribe` method of GoFr App will continuously read a message from the configured `PUBSUB_BACKEND` which
-can be `KAFKA`, `GOOGLE`, `MQTT`, `NATS`, `REDIS`, or `AZURE_EVENTHUB`. These can be configured in the configs folder under `.env`
+can be `KAFKA`, `GOOGLE`, `MQTT`, `NATS`, `REDIS`, or `AZURE_EVENTHUB`. For external providers like NATS JetStream, Azure Event Hubs, and Amazon SQS, use `app.AddPubSub()` instead. These can be configured in the configs folder under `.env`
 
 > The returned error determines which messages are to be committed and which ones are to be consumed again.
 
@@ -777,3 +820,39 @@ func order(ctx *gofr.Context) (any, error) {
 > #### Check out the following examples on how to publish/subscribe to given topics:
 > ##### [Subscribing Topics](https://github.com/gofr-dev/gofr/blob/main/examples/using-subscriber/main.go)
 > ##### [Publishing Topics](https://github.com/gofr-dev/gofr/blob/main/examples/using-publisher/main.go)
+
+## Distributed Tracing
+
+GoFr automatically traces every publish and subscribe call across Kafka, NATS JetStream, Google Pub/Sub, and Amazon SQS. **No user code is required**: as long as `TRACE_EXPORTER` is configured (see {% new-tab-link newtab=false title="Observability → Tracing" href="/docs/quick-start/observability#tracing" /%}), the framework wires everything in.
+
+### How it works
+
+When you call `ctx.GetPublisher().Publish(ctx, topic, msg)`, GoFr:
+
+1. Starts a span named `<backend>-publish` (for example `kafka-publish`) with `SpanKind=Producer` and attributes `messaging.system`, `messaging.destination.name`, `messaging.operation=publish`.
+2. Injects the current trace context into the outgoing message using the W3C Trace Context propagator. For Kafka this rides in message headers; for Google Pub/Sub and SQS in message attributes; for NATS in message headers; and so on.
+
+When the message is delivered to a subscriber registered with `app.Subscribe(topic, handler)`, GoFr:
+
+1. Extracts the producer's trace context from the incoming message.
+2. Starts a span named `<backend>-subscribe` with `SpanKind=Consumer`, **as a child of the producer's span**. This means the consumer span shares the same `TraceID` as the publisher and lists the publisher's span as its parent.
+3. Also attaches an OpenTelemetry **span link** to the producer span. The link preserves fan-out semantics — a single message may be consumed by multiple consumer groups — for tools that surface them (Jaeger, Tempo, etc.).
+
+The result is that an end-to-end flow such as `HTTP → publish → subscribe → publish → subscribe` shows up as **one connected trace** in any tracing UI, with the full waterfall visible:
+
+```text
+[api-gateway          ] POST /order         (root)
+[api-gateway          ] kafka-publish       child of POST /order
+[order-service        ] kafka-subscribe     child of api-gateway's publish   [+1 link]
+[order-service        ] kafka-publish       child of order-service's subscribe
+[notification-service ] kafka-subscribe     child of order-service's publish [+1 link]
+```
+
+### Sampling and scale
+
+GoFr's tracer uses `ParentBased(TraceIDRatioBased(TRACER_RATIO))` (see `pkg/gofr/otel.go`). Because the consumer span inherits the producer's sampling decision, head-based sampling via `TRACER_RATIO` is consistent across the entire chain — if the producer is sampled out, every downstream consumer span is dropped at creation as well.
+
+For high-throughput pipelines, set `TRACER_RATIO` below `1.0` (for example `0.1` for 10% sampling) to keep trace volume manageable. For very long-lived async sagas (where one trace stays open for hours), prefer tail-based sampling at the OpenTelemetry Collector tier.
+
+> [!NOTE]
+> Distributed tracing for pub/sub is fully transparent — the existing examples in {% new-tab-link title="examples/using-publisher" href="https://github.com/gofr-dev/gofr/tree/main/examples/using-publisher" /%} and {% new-tab-link title="examples/using-subscriber" href="https://github.com/gofr-dev/gofr/tree/main/examples/using-subscriber" /%} already produce connected traces without any tracing-specific code.

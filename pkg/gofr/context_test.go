@@ -197,6 +197,18 @@ func testWebSocketConnection(t *testing.T, wsURL string, messageChan chan string
 	time.Sleep(10 * time.Millisecond)
 }
 
+func TestContext_WriteMessageToSocket_NilConnection(t *testing.T) {
+	testContainer, _ := container.NewMockContainer(t)
+
+	testReq := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/ws", http.NoBody)
+	gofrReq := gofrHTTP.NewRequest(testReq)
+	ctx := newContext(gofrHTTP.NewResponder(httptest.NewRecorder(), http.MethodGet), gofrReq, testContainer)
+
+	err := ctx.WriteMessageToSocket("test message")
+
+	assert.ErrorIs(t, err, ErrConnectionNotFound)
+}
+
 func TestContext_WriteMessageToService(t *testing.T) {
 	if testing.Short() {
 		t.Skip("skipping test in short mode")
@@ -361,4 +373,27 @@ func TestContext_GetCorrelationID(t *testing.T) {
 		expected := "00000000000000000000000000000000"
 		assert.Equal(t, expected, correlationID, "Expected empty TraceID when no span present")
 	})
+}
+
+// BenchmarkContext_New measures the cost of constructing a fresh
+// *gofr.Context per request via newContext. Today this allocates the
+// Context struct itself plus a ContextLogger that re-extracts the
+// traceID from the request context via trace.SpanFromContext.
+//
+// Future targets that move this number:
+//   - PR-7 (cache traceID once on Context) — avoids re-extraction.
+//   - Pool *gofr.Context (deferred — see FIXES.md Open Question).
+func BenchmarkContext_New(b *testing.B) {
+	c := container.NewContainer(config.NewMockConfig(map[string]string{"LOG_LEVEL": "ERROR"}))
+
+	req := httptest.NewRequestWithContext(b.Context(), http.MethodGet, "/bench", http.NoBody)
+	r := gofrHTTP.NewRequest(req)
+	w := gofrHTTP.NewResponder(httptest.NewRecorder(), http.MethodGet)
+
+	b.ReportAllocs()
+	b.ResetTimer()
+
+	for i := 0; i < b.N; i++ {
+		_ = newContext(w, r, c)
+	}
 }

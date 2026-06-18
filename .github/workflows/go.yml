@@ -31,7 +31,7 @@ jobs:
     # Define a matrix strategy to test against multiple Go versions
     strategy:
       matrix:
-        go-version: ['1.25','1.24', '1.23']
+        go-version: ['1.26','1.25', '1.24']
       # Continue with other jobs if one version fails
       fail-fast: false
 
@@ -95,7 +95,7 @@ jobs:
       # Run tests with automatic retry on failures
       - name: Test with Retry Logic
         id: test
-        uses: nick-fields/retry@v3
+        uses: nick-fields/retry@v4
         with:
           timeout_minutes: 5  # Maximum time for the tests to run
           max_attempts: 2      # Retry up to 2 times if tests fail
@@ -122,7 +122,7 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        go-version: ['1.25','1.24', '1.23']
+        go-version: ['1.26','1.25', '1.24']
       fail-fast: false
 
     steps:
@@ -144,7 +144,7 @@ jobs:
       # Run pkg tests with automatic retry logic
       - name: Test with Retry Logic
         id: test
-        uses: nick-fields/retry@v3
+        uses: nick-fields/retry@v4
         with:
           timeout_minutes: 5
           max_attempts: 2
@@ -235,7 +235,7 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        go-version:  ['1.25','1.24', '1.23']
+        go-version:  ['1.26','1.25', '1.24']
       fail-fast: false
 
     steps:
@@ -261,7 +261,7 @@ jobs:
       # Test all submodules in parallel with retry logic
       - name: Test Submodules with Retry and Parallelism
         id: test_submodules
-        uses: nick-fields/retry@v3
+        uses: nick-fields/retry@v4
         with:
           timeout_minutes: 5
           max_attempts: 2
@@ -364,7 +364,7 @@ jobs:
       - name: Set up Go environment
         uses: actions/setup-go@v5
         with:
-          go-version: '1.25'
+          go-version: '1.26'
           cache: false
 
       - name: Get dependencies
@@ -375,7 +375,7 @@ jobs:
       - name: Lint Root Module
         uses: golangci/golangci-lint-action@v9
         with:
-          version: v2.4.0
+          version: v2.12.2
           only-new-issues: true
           args: --timeout=5m
 
@@ -460,7 +460,7 @@ jobs:
       - name: Set up Go environment
         uses: actions/setup-go@v5
         with:
-          go-version: '1.25'
+          go-version: '1.26'
           cache: false
 
       - name: Download dependencies for ${{ matrix.module }}
@@ -471,7 +471,7 @@ jobs:
       - name: Lint ${{ matrix.module }}
         uses: golangci/golangci-lint-action@v9
         with:
-          version: v2.4.0
+          version: v2.12.2
           working-directory: ${{ matrix.module }}
           only-new-issues: true
           args: --timeout=9m
@@ -487,7 +487,7 @@ jobs:
       - name: Set up Go environment
         uses: actions/setup-go@v5
         with:
-          go-version: 1.25
+          go-version: 1.26
 
       # Check file naming conventions using ls-lint
       - name: Check for file names errors

@@ -2,6 +2,7 @@ package service
 
 import (
 	"bytes"
+	"context"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -1113,4 +1114,95 @@ func TestCircuitBreaker_MixedHTTPMethods(t *testing.T) {
 
 	// All 5 methods should complete in ~1s (parallel)
 	assert.Less(t, totalTime, 2*time.Second, "Different HTTP methods should execute in parallel")
+}
+
+// TestCircuitBreaker_SlowHealthCheckDoesNotBlock asserts that while tryCircuitRecovery's
+// health probe is in-flight, other circuit-breaker operations are not blocked by the
+// exclusive lock. Regression guard for the fix in tryCircuitRecovery that releases
+// cb.mu before calling healthCheck.
+//
+// Built directly on the unexported circuitBreaker struct (without NewCircuitBreaker)
+// so the background health-check ticker doesn't introduce timing races.
+func TestCircuitBreaker_SlowHealthCheckDoesNotBlock(t *testing.T) {
+	healthEntered := make(chan struct{}, 1)
+	releaseHealth := make(chan struct{})
+
+	ctrl := gomock.NewController(t)
+	mockHTTP := NewMockHTTP(ctrl)
+
+	mockHTTP.EXPECT().
+		HealthCheck(gomock.Any()).
+		DoAndReturn(func(_ context.Context) *Health {
+			select {
+			case healthEntered <- struct{}{}:
+			default:
+			}
+
+			<-releaseHealth
+
+			return &Health{Status: serviceUp}
+		}).
+		AnyTimes()
+
+	cb := &circuitBreaker{
+		state:       OpenState,
+		threshold:   1,
+		interval:    50 * time.Millisecond,
+		lastChecked: time.Now().Add(-1 * time.Hour), // stale, so time.Since > interval
+		HTTP:        mockHTTP,
+	}
+
+	// Goroutine A triggers recovery; its HealthCheck will block until releaseHealth is closed.
+	aDone := make(chan bool, 1)
+
+	go func() {
+		aDone <- cb.tryCircuitRecovery()
+	}()
+
+	// Wait until the health check is actually in-flight (lock has been released by A).
+	select {
+	case <-healthEntered:
+	case <-time.After(2 * time.Second):
+		t.Fatal("HealthCheck never invoked")
+	}
+
+	// Goroutine B issues independent operations. With the fix, none should be blocked
+	// by A's in-flight health check. Without the fix, isOpen()/tryCircuitRecovery would
+	// wait on cb.mu held by A across the slow HealthCheck call.
+	type bResult struct {
+		isOpen    bool
+		recovered bool
+	}
+
+	bDone := make(chan bResult, 1)
+
+	go func() {
+		open := cb.isOpen()
+		recovered := cb.tryCircuitRecovery()
+
+		bDone <- bResult{isOpen: open, recovered: recovered}
+	}()
+
+	select {
+	case r := <-bDone:
+		assert.True(t, r.isOpen, "circuit should still report open while health check is in-flight")
+		assert.False(t, r.recovered, "second tryCircuitRecovery must short-circuit, not block")
+	case <-time.After(500 * time.Millisecond):
+		t.Fatal("concurrent operations were blocked by the in-flight health check")
+	}
+
+	// Unblock A and verify recovery completed successfully.
+	close(releaseHealth)
+
+	select {
+	case ok := <-aDone:
+		require.True(t, ok, "tryCircuitRecovery should succeed after healthy probe")
+	case <-time.After(2 * time.Second):
+		t.Fatal("tryCircuitRecovery never returned")
+	}
+
+	cb.mu.RLock()
+	state := cb.state
+	cb.mu.RUnlock()
+	assert.Equal(t, ClosedState, state, "circuit should be closed after successful recovery")
 }

@@ -1,3 +1,11 @@
+---
+description: "Reference of every GoFr configuration variable, grouped by category: HTTP, gRPC, datasources, observability, auth, and more — with defaults and value formats."
+nextjs:
+  metadata:
+    title: "GoFr Configuration Reference — Env Vars and Defaults"
+    description: "Reference of every GoFr configuration variable, grouped by category: HTTP, gRPC, datasources, observability, auth, and more — with defaults and value formats."
+---
+
 # GoFr Configuration Options
 
 This document lists all the configuration options supported by the GoFr framework. The configurations are grouped by category for better organization.
@@ -156,6 +164,47 @@ This document lists all the configuration options supported by the GoFr framewor
 
 {% /table %}
 
+### CORS
+
+{% table %}
+
+- Name
+- Description
+- Default Value
+
+---
+
+- ACCESS_CONTROL_ALLOW_ORIGIN
+- Allowed origin(s) for cross-origin requests. Supports comma-separated values for multiple origins (e.g., `https://app.example.com,https://admin.example.com`).
+- `*`
+
+---
+
+- ACCESS_CONTROL_ALLOW_HEADERS
+- Allowed request headers for cross-origin requests.
+- Authorization, Content-Type, x-requested-with, origin, true-client-ip, X-Correlation-ID
+
+---
+
+- ACCESS_CONTROL_ALLOW_METHODS
+- Allowed HTTP methods. Automatically set from registered routes if not provided.
+
+---
+
+- ACCESS_CONTROL_ALLOW_CREDENTIALS
+- Allow credentials (cookies, HTTP authentication) in cross-origin requests.
+
+---
+
+- ACCESS_CONTROL_EXPOSE_HEADERS
+- Additional headers exposed to the client in cross-origin responses.
+
+---
+
+- ACCESS_CONTROL_MAX_AGE
+- Maximum time (in seconds) browsers can cache preflight responses.
+
+{% /table %}
 
 ## Datasource
 
@@ -253,7 +302,7 @@ This document lists all the configuration options supported by the GoFr framewor
 
 ---
 
-- DB_REPLICA_PASSWORDS_
+- DB_REPLICA_PASSWORDS
 - Comma-separated list of replica database passwords. Used for read replicas.
 - None
 
@@ -453,8 +502,8 @@ This document lists all the configuration options supported by the GoFr framewor
 ---
 
 -  PUBSUB_BACKEND
--  Pub/Sub message broker backend
--  kafka, google, mqtt, nats, redis
+-  Pub/Sub message broker backend wired automatically by `gofr.New()`. Accepted values: `kafka`, `google`, `mqtt`, `redis` (case-insensitive). Other backends (NATS JetStream, AWS SQS, Azure Event Hub) are wired explicitly via `app.AddPubSub(...)`.
+-  
 
 {% /table %}
 
@@ -656,7 +705,7 @@ This document lists all the configuration options supported by the GoFr framewor
 ---
 
 -  NATS_SERVER
--  URL of the NATS server
+-  URL of the NATS server. The NATS driver is wired explicitly via `app.AddPubSub(...)`; this row is a convention only — the actual env-var name is whatever you read from `app.Config.Get(...)` and pass into `nats.Config.Server`.
 -  nats://localhost:4222
 
 ---
@@ -668,3 +717,7 @@ This document lists all the configuration options supported by the GoFr framewor
 {% /table %}
 
 
+
+## Related production guides
+
+- **12-Factor Configuration**: [Env-driven config, secrets, and environment parity](/docs/guides/twelve-factor-config) — apply 12-factor methodology to the configs documented above.

@@ -35,6 +35,9 @@ type Crontab struct {
 	container *container.Container
 
 	mu sync.RWMutex
+
+	done chan struct{}
+	once sync.Once
 }
 
 type job struct {
@@ -64,17 +67,30 @@ func NewCron(cntnr *container.Container) *Crontab {
 		ticker:    time.NewTicker(time.Second),
 		container: cntnr,
 		jobs:      make([]*job, 0),
+		done:      make(chan struct{}),
 	}
 
 	c.registerMetrics()
 
 	go func() {
-		for t := range c.ticker.C {
-			c.runScheduled(t)
+		for {
+			select {
+			case t := <-c.ticker.C:
+				c.runScheduled(t)
+			case <-c.done:
+				return
+			}
 		}
 	}()
 
 	return c
+}
+
+func (c *Crontab) Stop() {
+	c.once.Do(func() {
+		c.ticker.Stop()
+		close(c.done)
+	})
 }
 
 func (c *Crontab) runScheduled(t time.Time) {
@@ -106,10 +122,10 @@ func (j *job) run(cntnr *container.Container) {
 	start := time.Now()
 
 	defer func() {
-		duration := time.Since(start).Seconds()
+		duration := time.Since(start)
 
 		if m := cntnr.Metrics(); m != nil {
-			m.RecordHistogram(ctx, "app_cron_job_duration", float64(duration), "job", j.name)
+			m.RecordHistogram(ctx, "app_cron_job_duration", duration.Seconds(), "job", j.name)
 
 			if r := recover(); r != nil {
 				c.Errorf("Panic in cron job %s: %v", j.name, r)

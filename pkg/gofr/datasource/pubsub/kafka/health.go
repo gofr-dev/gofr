@@ -15,6 +15,11 @@ func (k *kafkaClient) Health() datasource.Health {
 		Details: make(map[string]any),
 	}
 
+	// Hold connMu across the whole health probe so reconnectAdmin cannot
+	// swap and close the conn we are reading from underneath us.
+	k.connMu.RLock()
+	defer k.connMu.RUnlock()
+
 	if k.conn == nil {
 		health.Details["error"] = "invalid connection type"
 		return health
@@ -120,7 +125,7 @@ func (k *kafkaClient) getWriterStatsAsMap() map[string]any {
 	return writerStats
 }
 
-// convertStructToMap tries to convert any struct to a map representation by first marshaling it to JSON, then unmarshalling into a map.
+// convertStructToMap tries to convert any struct to a map representation by first marshaling it to JSON, then unmarshaling into a map.
 func convertStructToMap(input, output any) error {
 	body, err := json.Marshal(input)
 	if err != nil {
