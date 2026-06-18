@@ -94,8 +94,16 @@ func NewHTTPService(serviceAddress string, logger Logger, metrics Metrics, optio
 
 	svc = h
 
-	// if options are given, then add them to the httpService struct
+	// if options are given, then add them to the httpService struct.
+	// Options that implement Observable receive the logger and metrics
+	// before AddOption so they can wire up out-of-band observability
+	// (e.g. background goroutines) without taking these from the caller.
 	for _, o := range options {
+		if obs, ok := o.(Observable); ok {
+			obs.SetLogger(logger)
+			obs.SetMetrics(metrics)
+		}
+
 		svc = o.AddOption(svc)
 	}
 
