@@ -97,11 +97,11 @@ func (c *Client) Connect() {
 	c.client = client
 
 	var responseTimeBuckets = []float64{
-		50, 75, 100, 125, 150, 200, 300, 500, 750, 1000, 2000, 3000, 5000, 7500, 10000, // 50µs-10ms
-		25000, 50000, 100000, 250000, 500000, 1000000, 5000000, 10000000, 30000000, 60000000, 120000000, 180000000, // 25ms-3min
+		.05, .075, .1, .125, .15, .2, .3, .5, .75, 1, 2, 3, 5, 7.5, 10, // 50µs-10ms
+		25, 50, 100, 250, 500, 1000, 5000, 10000, 30000, 60000, 120000, 180000, // 25ms-3min
 	}
 
-	c.metrics.NewHistogram("es_request_duration_us", "Duration of Elasticsearch requests in microseconds", responseTimeBuckets...)
+	c.metrics.NewHistogram("es_request_duration_ms", "Duration of Elasticsearch requests in milliseconds", responseTimeBuckets...)
 
 	if _, err := c.HealthCheck(context.Background()); err != nil {
 		c.logger.Errorf("Elasticsearch health check failed: %v", err)
@@ -347,7 +347,7 @@ func (c *Client) addTrace(ctx context.Context, method string, indices []string,
 
 func (c *Client) sendOperationStats(start time.Time,
 	operation string, indices []string, documentID string, request any, span trace.Span) {
-	duration := time.Since(start).Microseconds()
+	duration := time.Since(start).Milliseconds()
 
 	if span != nil {
 		span.SetAttributes(
@@ -363,7 +363,7 @@ func (c *Client) sendOperationStats(start time.Time,
 		span.End()
 	}
 
-	c.metrics.RecordHistogram(context.Background(), "es_request_duration_us", float64(duration))
+	c.metrics.RecordHistogram(context.Background(), "es_request_duration_ms", float64(duration))
 
 	// Structured log
 	ql := QueryLog{
