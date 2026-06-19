@@ -69,7 +69,10 @@ func (c *Client) UseTracer(tracer any) {
 func (c *Client) Connect() {
 	c.logger.Debugf("connecting to NATS-KV Store at %v with bucket %q", c.configs.Server, c.configs.Bucket)
 
-	natsBuckets := []float64{.05, .075, .1, .125, .15, .2, .3, .5, .75, 1, 2, 3, 4, 5, 7.5, 10}
+	natsBuckets := []float64{
+		.05, .075, .1, .125, .15, .2, .3, .5, .75, 1, 2, 3, 5, 7.5, 10, // 50µs-10ms
+		25, 50, 100, 250, 500, 1000, 5000, 10000, 30000, 60000, 120000, 180000, // 25ms-3min
+	}
 	c.metrics.NewHistogram("app_nats_kv_stats", "Response time of NATS KV operations in milliseconds.", natsBuckets...)
 
 	nc, err := nats.Connect(c.configs.Server)
