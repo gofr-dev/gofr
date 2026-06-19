@@ -487,6 +487,7 @@ func TestContainer_registerFrameworkMetrics_RegistersExpectedMetrics(t *testing.
 
 	httpBuckets := []float64{.001, .003, .005, .01, .02, .03, .05, .1, .2, .3, .5, .75, 1, 2, 3, 5, 10, 30}
 	dsBuckets := getDefaultDatasourceBuckets()
+	dsMicrosecondBuckets := getDefaultDatasourceMicrosecondBuckets()
 
 	histograms := []struct {
 		name    string
@@ -494,7 +495,7 @@ func TestContainer_registerFrameworkMetrics_RegistersExpectedMetrics(t *testing.
 	}{
 		{name: "app_http_response", buckets: httpBuckets},
 		{name: "app_http_service_response", buckets: httpBuckets},
-		{name: "app_redis_stats", buckets: dsBuckets},
+		{name: "app_redis_stats", buckets: dsMicrosecondBuckets},
 		{name: "app_sql_stats", buckets: dsBuckets},
 	}
 
@@ -520,7 +521,19 @@ func TestGetDefaultDatasourceBuckets(t *testing.T) {
 	require.NotEmpty(t, buckets)
 
 	assert.InDelta(t, 0.05, buckets[0], 1e-12)
-	assert.InDelta(t, 30000.0, buckets[len(buckets)-1], 1e-12)
+	assert.InDelta(t, 180000.0, buckets[len(buckets)-1], 1e-12)
+
+	for i := 1; i < len(buckets); i++ {
+		assert.Greater(t, buckets[i], buckets[i-1])
+	}
+}
+
+func TestGetDefaultDatasourceMicrosecondBuckets(t *testing.T) {
+	buckets := getDefaultDatasourceMicrosecondBuckets()
+	require.NotEmpty(t, buckets)
+
+	assert.InDelta(t, 50.0, buckets[0], 1e-12)
+	assert.InDelta(t, 180000000.0, buckets[len(buckets)-1], 1e-12)
 
 	for i := 1; i < len(buckets); i++ {
 		assert.Greater(t, buckets[i], buckets[i-1])
@@ -730,7 +743,7 @@ func frameworkMetricContract() map[string]metricContract {
 		"app_http_service_response":          {"Response time of HTTP service requests in seconds.", "histogram"},
 		"app_http_retry_count":               {"Total number of retry events", "counter"},
 		"app_http_circuit_breaker_state":     {"Current state of the circuit breaker (0 for Closed, 1 for Open)", "gauge"},
-		"app_redis_stats":                    {"Response time of Redis commands in milliseconds.", "histogram"},
+		"app_redis_stats":                    {"Response time of Redis commands in microseconds.", "histogram"},
 		"app_sql_stats":                      {"Response time of SQL queries in milliseconds.", "histogram"},
 		"app_sql_open_connections":           {"Number of open SQL connections.", "gauge"},
 		"app_sql_inUse_connections":          {"Number of inUse SQL connections.", "gauge"},
