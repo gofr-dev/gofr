@@ -74,7 +74,10 @@ func (c *Client) Connect() {
 		return
 	}
 
-	scyllaBuckets := []float64{.05, .075, .1, .125, .15, .2, .3, .5, .75, 1, 2, 3, 4, 5, 7.5, 10}
+	scyllaBuckets := []float64{
+		50, 75, 100, 125, 150, 200, 300, 500, 750, 1000, 2000, 3000, 5000, 7500, 10000, // 50µs-10ms
+		25000, 50000, 100000, 250000, 500000, 1000000, 5000000, 10000000, 30000000, 60000000, 120000000, 180000000, // 25ms-3min
+	}
 	c.metrics.NewHistogram("app_scylla_stats", "Response time of ScyllaDB queries in microseconds", scyllaBuckets...)
 
 	c.logger.Logf("connected to '%s' keyspace at host '%s' and port '%d'", c.config.Keyspace, c.config.Host, c.config.Port)
