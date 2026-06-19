@@ -1,59 +1,26 @@
 package cloudsql
 
 import (
-	"context"
-	"database/sql"
-	"database/sql/driver"
-	"errors"
-	"path/filepath"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"gofr.dev/pkg/gofr/config"
-	"gofr.dev/pkg/gofr/datasource"
-	gofrSQL "gofr.dev/pkg/gofr/datasource/sql"
-	"gofr.dev/pkg/gofr/logging"
 )
 
-// fakeConnector is a database/sql connector that opens a real *sql.DB handle whose
-// connections always fail. It lets tests drive the IAM-path wrapping (NewSQLFromDB),
-// Close/cleanup and HealthCheck without a live Cloud SQL instance — the parts the
-// connector itself can't be exercised without GCP.
-var (
-	errFakeNoConn  = errors.New("fake: connection not available in tests")
-	errFakeCleanup = errors.New("connector cleanup failed")
-)
+// fakeConfig is a minimal Config implementation for tests. It satisfies the local
+// Config interface without importing GoFr — the whole point of this module is that
+// it (and its tests) carry no gofr.dev dependency.
+type fakeConfig map[string]string
 
-type fakeConnector struct{}
+func (f fakeConfig) Get(key string) string { return f[key] }
 
-func (fakeConnector) Connect(context.Context) (driver.Conn, error) { return nil, errFakeNoConn }
-func (fakeConnector) Driver() driver.Driver                        { return fakeDriver{} }
+func (f fakeConfig) GetOrDefault(key, defaultValue string) string {
+	if v, ok := f[key]; ok && v != "" {
+		return v
+	}
 
-type fakeDriver struct{}
-
-func (fakeDriver) Open(string) (driver.Conn, error) { return nil, errFakeNoConn }
-
-// iamWrappedClient builds a client whose embedded DB wraps a fake connection,
-// mirroring what connectIAM produces on success without needing a real connector.
-func iamWrappedClient(t *testing.T) *client {
-	t.Helper()
-
-	c := newClient(config.NewMockConfig(nil))
-	c.UseLogger(logging.NewMockLogger(logging.DEBUG))
-	c.UseMetrics(noopMetrics{})
-	c.DB = gofrSQL.NewSQLFromDB(sql.OpenDB(fakeConnector{}),
-		&gofrSQL.DBConfig{Dialect: dialectPostgres, HostName: "proj:reg:inst", Database: "app"},
-		c.logger, c.metrics)
-
-	return c
+	return defaultValue
 }
-
-// noopMetrics satisfies gofrSQL.Metrics for tests that exercise a real connection.
-type noopMetrics struct{}
-
-func (noopMetrics) RecordHistogram(_ context.Context, _ string, _ float64, _ ...string) {}
-func (noopMetrics) SetGauge(_ string, _ float64, _ ...string)                           {}
 
 func TestNormalizeDialect(t *testing.T) {
 	tests := []struct {
@@ -118,13 +85,33 @@ func TestIAMRequested(t *testing.T) {
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			conf := config.NewMockConfig(map[string]string{"DB_IAM_AUTH": tc.value})
-			assert.Equal(t, tc.want, iamRequested(conf))
+			assert.Equal(t, tc.want, iamRequested(fakeConfig{"DB_IAM_AUTH": tc.value}))
 		})
 	}
 }
 
-func TestSettings_DSN(t *testing.T) {
+func TestParseSettings(t *testing.T) {
+	s := parseSettings(fakeConfig{
+		"DB_HOST":             "proj:us-central1:inst",
+		"DB_DIALECT":          "postgresql", // alias normalizes to postgres
+		"DB_NAME":             "app",
+		"DB_USER":             "app-sa@proj.iam",
+		"DB_CLOUDSQL_IP_TYPE": "private",
+	})
+
+	assert.Equal(t, "proj:us-central1:inst", s.instanceConnectionName)
+	assert.Equal(t, dialectPostgres, s.dialect)
+	assert.Equal(t, "app", s.database)
+	assert.Equal(t, "app-sa@proj.iam", s.user)
+	assert.Equal(t, ipTypePrivate, s.ipType)
+}
+
+func TestParseSettings_DefaultIPType(t *testing.T) {
+	s := parseSettings(fakeConfig{"DB_DIALECT": "mysql"})
+	assert.Equal(t, ipTypePublic, s.ipType, "ip type defaults to public when unset")
+}
+
+func TestSettings_PostgresDSN(t *testing.T) {
 	s := settings{
 		instanceConnectionName: "proj:us-central1:inst",
 		user:                   "app-sa@proj.iam",
@@ -134,17 +121,11 @@ func TestSettings_DSN(t *testing.T) {
 	assert.Equal(t,
 		"host=proj:us-central1:inst user=app-sa@proj.iam dbname=app sslmode=disable",
 		s.postgresDSN())
-
-	assert.Equal(t,
-		"app-sa@proj.iam@cloudsql-mysql-1(proj:us-central1:inst)/app?parseTime=true",
-		s.mysqlDSN("cloudsql-mysql-1"))
 }
 
-// TestSettings_DSN_Escaping verifies values that contain DSN-significant characters
-// are quoted/escaped instead of breaking out into additional keywords.
-func TestSettings_DSN_Escaping(t *testing.T) {
-	// A database name carrying a space and a quote must not inject another libpq
-	// keyword (e.g. sslmode=require); it stays a single quoted token.
+// TestSettings_PostgresDSN_Escaping verifies values containing DSN-significant
+// characters are quoted instead of breaking out into additional libpq keywords.
+func TestSettings_PostgresDSN_Escaping(t *testing.T) {
 	s := settings{
 		instanceConnectionName: "proj:us-central1:inst",
 		user:                   "app-sa@proj.iam",
@@ -154,48 +135,9 @@ func TestSettings_DSN_Escaping(t *testing.T) {
 	assert.Equal(t,
 		`host=proj:us-central1:inst user=app-sa@proj.iam dbname='ap p\' sslmode=require' sslmode=disable`,
 		s.postgresDSN())
-
-	// go-sql-driver's FormatDSN owns MySQL escaping; confirm the database name is
-	// not silently concatenated into the DSN unescaped.
-	dsn := s.mysqlDSN("cloudsql-mysql-1")
-	assert.Contains(t, dsn, "parseTime=true")
-	assert.NotContains(t, dsn, "/ap p' sslmode=require?", "raw db name must not appear unescaped")
 }
 
-func TestSettings_dbConfig(t *testing.T) {
-	tests := []struct {
-		name        string
-		settings    settings
-		wantMaxIdle int
-		wantMaxOpen int
-	}{
-		{
-			name:        "defaults idle connections when unset",
-			settings:    settings{instanceConnectionName: "proj:reg:inst", dialect: dialectPostgres, database: "app", user: "u"},
-			wantMaxIdle: defaultMaxIdleConn,
-			wantMaxOpen: 0,
-		},
-		{
-			name:        "respects explicit pool sizing",
-			settings:    settings{instanceConnectionName: "proj:reg:inst", dialect: dialectMySQL, maxIdleConn: 5, maxOpenConn: 10},
-			wantMaxIdle: 5,
-			wantMaxOpen: 10,
-		},
-	}
-
-	for _, tc := range tests {
-		t.Run(tc.name, func(t *testing.T) {
-			got := tc.settings.dbConfig()
-
-			assert.Equal(t, tc.settings.dialect, got.Dialect)
-			assert.Equal(t, tc.settings.instanceConnectionName, got.HostName)
-			assert.Equal(t, tc.wantMaxIdle, got.MaxIdleConn)
-			assert.Equal(t, tc.wantMaxOpen, got.MaxOpenConn)
-		})
-	}
-}
-
-func TestSettings_connectorOptions(t *testing.T) {
+func TestSettings_ConnectorOptions(t *testing.T) {
 	// IAM auth plus exactly one IP-type dial option, for every IP type.
 	for _, ip := range []string{ipTypePublic, ipTypePrivate, ipTypePSC, ""} {
 		s := settings{ipType: normalizeIPType(ip)}
@@ -203,127 +145,50 @@ func TestSettings_connectorOptions(t *testing.T) {
 	}
 }
 
-// TestNew_ReturnsUsableDB verifies the public constructor returns a container.DB
-// whose lifecycle hooks (the ones App.AddSQLDB drives) are wired, without leaking
-// the concrete type.
-func TestNew_ReturnsUsableDB(t *testing.T) {
-	db := New(config.NewMockConfig(map[string]string{
-		"DB_DIALECT":  "sqlite",
-		"DB_NAME":     filepath.Join(t.TempDir(), "test"),
-		"DB_IAM_AUTH": "false",
-	}))
-	require.NotNil(t, db)
-
-	// App.AddSQLDB reaches the lifecycle via duck typing; confirm New's value exposes it.
-	db.(interface{ UseLogger(any) }).UseLogger(logging.NewMockLogger(logging.DEBUG))
-	db.(interface{ UseMetrics(any) }).UseMetrics(noopMetrics{})
-	db.(interface{ Connect() }).Connect()
-	t.Cleanup(func() { _ = db.Close() })
-
-	assert.Equal(t, "sqlite", db.Dialect())
+func TestNew(t *testing.T) {
+	c := New(fakeConfig{"DB_IAM_AUTH": "false"})
+	require.NotNil(t, c)
 }
 
-// TestClient_Connect_StandardSQL verifies the unified behavior: with IAM auth off,
-// Connect delegates to GoFr's standard SQL datasource (here SQLite) rather than the
-// Cloud SQL connector — the same datasource/AddSQLDB usage works without IAM.
-func TestClient_Connect_StandardSQL(t *testing.T) {
-	conf := config.NewMockConfig(map[string]string{
-		"DB_DIALECT":  "sqlite",
-		"DB_NAME":     filepath.Join(t.TempDir(), "test"),
-		"DB_IAM_AUTH": "false",
-	})
+// TestConnector_Connect_Defers verifies that without IAM auth, Connect returns a nil
+// connector (and nil cleanup/error), signaling App.AddSQLDB to keep GoFr's standard
+// env-configured SQL connection.
+func TestConnector_Connect_Defers(t *testing.T) {
+	connector, cleanup, err := New(fakeConfig{"DB_IAM_AUTH": "false"}).Connect()
 
-	c := newClient(conf)
-	c.UseLogger(logging.NewMockLogger(logging.DEBUG))
-	c.UseMetrics(noopMetrics{})
-
-	c.Connect()
-	t.Cleanup(func() { _ = c.Close() })
-
-	require.NotNil(t, c.DB, "non-IAM Connect must produce a standard SQL connection")
-	assert.Equal(t, "sqlite", c.DB.Dialect())
-	assert.Nil(t, c.cleanup, "standard path must not register a connector")
+	require.NoError(t, err)
+	assert.Nil(t, connector, "non-IAM Connect must not build a connector")
+	assert.Nil(t, cleanup)
 }
 
-// TestClient_Close_RunsCleanupAndJoinsErrors covers the IAM-path teardown that
-// can't be reached without a live connector: Close closes the wrapped DB and runs
-// the connector cleanup, joining both errors, and runCleanup is one-shot.
-func TestClient_Close_RunsCleanupAndJoinsErrors(t *testing.T) {
-	c := iamWrappedClient(t)
-
-	calls := 0
-	c.cleanup = func() error {
-		calls++
-		return errFakeCleanup
-	}
-
-	err := c.Close()
-
-	require.ErrorIs(t, err, errFakeCleanup, "Close must surface the connector cleanup error")
-	assert.Equal(t, 1, calls, "cleanup runs exactly once")
-	assert.Nil(t, c.cleanup, "runCleanup clears the cleanup func so it can't run twice")
-
-	require.NoError(t, c.runCleanup(), "runCleanup is a no-op once cleanup is cleared")
-	assert.Equal(t, 1, calls, "cleared cleanup is not invoked again")
-}
-
-// TestClient_Close_NilCleanup verifies Close is safe on the standard path, where no
-// connector was registered (cleanup is nil).
-func TestClient_Close_NilCleanup(t *testing.T) {
-	c := iamWrappedClient(t)
-	c.cleanup = nil
-
-	assert.NoError(t, c.Close())
-}
-
-// TestClient_HealthCheck verifies the nil-DB guard added for the failed-connect
-// case: a client installed as container.SQL with a nil embedded DB must report down
-// instead of panicking in the promoted HealthCheck, and otherwise delegate.
-func TestClient_HealthCheck(t *testing.T) {
-	t.Run("nil DB reports down without panicking", func(t *testing.T) {
-		c := newClient(config.NewMockConfig(nil))
-
-		h := c.HealthCheck()
-
-		require.NotNil(t, h)
-		assert.Equal(t, datasource.StatusDown, h.Status)
-	})
-
-	t.Run("delegates to the wrapped DB when connected", func(t *testing.T) {
-		c := iamWrappedClient(t)
-		t.Cleanup(func() { _ = c.Close() })
-
-		h := c.HealthCheck()
-
-		require.NotNil(t, h)
-		// The fake connection can't ping, so it's down — but it reaches the embedded
-		// DB's health logic (host detail populated) rather than the nil guard above.
-		assert.Equal(t, datasource.StatusDown, h.Status)
-		assert.Contains(t, h.Details, "host")
-	})
-}
-
-// TestClient_Connect_IAMValidation verifies the IAM path validates configuration
-// and fails safe (no panic, no connection) instead of registering a connector.
-func TestClient_Connect_IAMValidation(t *testing.T) {
+// TestConnector_Connect_IAMValidation verifies the IAM path validates configuration
+// and fails (no connector) instead of attempting to dial, for the cases reachable
+// without a live GCP instance.
+func TestConnector_Connect_IAMValidation(t *testing.T) {
 	tests := []struct {
 		name    string
-		configs map[string]string
+		configs fakeConfig
+		wantErr error
 	}{
-		{"unsupported dialect", map[string]string{"DB_IAM_AUTH": "true", "DB_DIALECT": "mongo", "DB_HOST": "p:r:i"}},
-		{"missing instance connection name", map[string]string{"DB_IAM_AUTH": "true", "DB_DIALECT": "postgres"}},
+		{
+			name:    "unsupported dialect",
+			configs: fakeConfig{"DB_IAM_AUTH": "true", "DB_DIALECT": "mongo", "DB_HOST": "p:r:i"},
+			wantErr: errUnsupportedDialect,
+		},
+		{
+			name:    "missing instance connection name",
+			configs: fakeConfig{"DB_IAM_AUTH": "true", "DB_DIALECT": "postgres"},
+			wantErr: errMissingInstance,
+		},
 	}
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			c := newClient(config.NewMockConfig(tc.configs))
-			c.UseLogger(logging.NewMockLogger(logging.DEBUG))
-			c.UseMetrics(noopMetrics{})
+			connector, cleanup, err := New(tc.configs).Connect()
 
-			c.Connect()
-
-			assert.Nil(t, c.DB)
-			assert.Nil(t, c.cleanup)
+			require.ErrorIs(t, err, tc.wantErr)
+			assert.Nil(t, connector)
+			assert.Nil(t, cleanup)
 		})
 	}
 }

@@ -1,6 +1,7 @@
 package gofr
 
 import (
+	"database/sql/driver"
 	"reflect"
 
 	"go.opentelemetry.io/otel"
@@ -8,6 +9,7 @@ import (
 	"gofr.dev/pkg/gofr/container"
 	"gofr.dev/pkg/gofr/datasource/file"
 	"gofr.dev/pkg/gofr/datasource/pubsub"
+	"gofr.dev/pkg/gofr/datasource/sql"
 )
 
 // tracerName returns the OpenTelemetry tracer name for a datasource,
@@ -192,24 +194,63 @@ func (a *App) AddInfluxDB(db container.InfluxDB) {
 	a.container.InfluxDB = db
 }
 
-// AddSQLDB sets a pluggable SQL datasource on the app's container, replacing any
-// SQL connection configured from environment variables. The provided db must
-// satisfy the container.DB interface; official implementations that build on the
-// standard SQL wrapper (for example GCP Cloud SQL with IAM auth) live in published
-// modules such as gofr.dev/pkg/gofr/datasource/cloudsql.
+// SQLConnector is implemented by pluggable SQL datasource providers (for example
+// GCP Cloud SQL with IAM auth, in module gofr.dev/pkg/gofr/datasource/cloudsql).
+// It constructs only a driver.Connector from configuration, keeping its cloud SDK
+// out of core; AddSQLDB does the SQL wrapping so logging, metrics, health checks
+// and transactions behave identically to a normal gofr SQL connection.
+type SQLConnector interface {
+	// Connect returns the driver.Connector to open, a cleanup to run on Close, and
+	// an error. A nil connector with a nil error means the provider defers to the
+	// standard environment-configured SQL connection (which container.Create has
+	// already opened from the DB_* config), so AddSQLDB leaves that in place.
+	Connect() (driver.Connector, func() error, error)
+}
+
+// AddSQLDB installs a pluggable SQL datasource built from c, opening it through
+// gofr's standard SQL datasource (gofrSQL.NewSQLFromConnector) so ctx.SQL and all
+// of gofr's SQL logging, metrics, health checks and transactions behave identically
+// to an env-configured connection. Official implementations live in published
+// modules such as gofr.dev/pkg/gofr/datasource/cloudsql:
 //
-// container.Create already opens an env-configured SQL connection eagerly whenever
-// DB_DIALECT is set, so an existing datasource is closed first — otherwise its
-// connection pool and the background retry/metrics goroutines would leak.
-func (a *App) AddSQLDB(db container.DB) {
+//	app.AddSQLDB(cloudsql.New(app.Config))
+//
+// container.Create eagerly opens an env-configured SQL connection whenever
+// DB_DIALECT is set, so the existing one is closed before being replaced —
+// otherwise its pool and the background retry/metrics goroutines leak. When the
+// provider defers (nil connector), that env-configured connection is kept as-is.
+func (a *App) AddSQLDB(c SQLConnector) {
+	connector, cleanup, err := c.Connect()
+	if err != nil {
+		// Connector setup failed. Tear down the env-configured SQL the container
+		// opened (on the IAM path it is dialing the instance-connection-name as a
+		// literal host and would retry forever) and leave SQL unset, so health
+		// reports down rather than using a broken connection.
+		a.closeExistingSQL()
+		a.container.SQL = nil
+		a.Logger().Errorf("failed to initialize SQL connector: %v", err)
+
+		return
+	}
+
+	if connector == nil {
+		// Provider defers to the standard env-configured SQL connection; keep it.
+		return
+	}
+
+	a.closeExistingSQL()
+	a.container.SQL = sql.NewSQLFromConnector(connector, a.Config, a.Logger(), a.Metrics(), cleanup)
+}
+
+// closeExistingSQL closes the container's current SQL datasource if one is set, so
+// AddSQLDB never leaks the env-configured pool and its background goroutines when
+// it replaces or discards the connection.
+func (a *App) closeExistingSQL() {
 	if old := a.container.SQL; !isNilDatasource(old) {
 		if err := old.Close(); err != nil {
 			a.Logger().Errorf("failed to close the existing SQL datasource: %v", err)
 		}
 	}
-
-	a.instrumentDatasource(db)
-	a.container.SQL = db
 }
 
 // isNilDatasource reports whether a container datasource interface is nil or holds

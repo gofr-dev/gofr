@@ -1,10 +1,14 @@
 package gofr
 
 import (
+	"context"
+	"database/sql/driver"
+	"errors"
 	"strconv"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"go.opentelemetry.io/otel"
 	"go.uber.org/mock/gomock"
 
@@ -13,6 +17,31 @@ import (
 	gofrSql "gofr.dev/pkg/gofr/datasource/sql"
 	"gofr.dev/pkg/gofr/testutil"
 )
+
+var errNoTestConn = errors.New("test: connection not available")
+
+// fakeSQLConnector is a test SQLConnector that returns preset values from Connect.
+type fakeSQLConnector struct {
+	connector driver.Connector
+	cleanup   func() error
+	err       error
+}
+
+func (f fakeSQLConnector) Connect() (driver.Connector, func() error, error) {
+	return f.connector, f.cleanup, f.err
+}
+
+// failingConnector is a driver.Connector whose connections always fail, so AddSQLDB
+// wraps it through NewSQLFromConnector (logging a failed ping) without needing a
+// live database — enough to assert the wiring.
+type failingConnector struct{}
+
+func (failingConnector) Connect(context.Context) (driver.Conn, error) { return nil, errNoTestConn }
+func (failingConnector) Driver() driver.Driver                        { return failingDriver{} }
+
+type failingDriver struct{}
+
+func (failingDriver) Open(string) (driver.Conn, error) { return nil, errNoTestConn }
 
 func Test_tracerName(t *testing.T) {
 	ctrl := gomock.NewController(t)
@@ -87,17 +116,19 @@ func TestApp_AddSQLDB(t *testing.T) {
 
 	app := New()
 
-	// A pluggable SQL datasource (here built from the standard wrapper, as Cloud SQL
-	// does) must replace whatever env-configured SQL connection the container holds.
-	db, _, _ := gofrSql.NewSQLMocks(t)
+	// A pluggable SQL provider (here a fake connector, as Cloud SQL supplies) must be
+	// opened through the standard SQL wrapper and installed as the container's SQL.
+	app.AddSQLDB(fakeSQLConnector{connector: failingConnector{}})
+	t.Cleanup(func() { _ = app.container.SQL.Close() })
 
-	app.AddSQLDB(db)
+	require.NotNil(t, app.container.SQL)
 
-	assert.Equal(t, db, app.container.SQL)
+	_, ok := app.container.SQL.(*gofrSql.DB)
+	assert.True(t, ok, "AddSQLDB must wrap the connector in the standard SQL datasource")
 }
 
 // TestApp_AddSQLDB_ClosesExisting verifies AddSQLDB closes the env-configured SQL
-// connection that container.Create opens eagerly, before swapping in the new one —
+// connection that container.Create opens eagerly, before swapping in the connector —
 // otherwise its pool and background retry/metrics goroutines leak.
 func TestApp_AddSQLDB_ClosesExisting(t *testing.T) {
 	testutil.NewServerConfigs(t)
@@ -111,10 +142,11 @@ func TestApp_AddSQLDB_ClosesExisting(t *testing.T) {
 	existing.EXPECT().Close().Return(nil)
 	app.container.SQL = existing
 
-	db, _, _ := gofrSql.NewSQLMocks(t)
-	app.AddSQLDB(db)
+	app.AddSQLDB(fakeSQLConnector{connector: failingConnector{}})
+	t.Cleanup(func() { _ = app.container.SQL.Close() })
 
-	assert.Equal(t, db, app.container.SQL)
+	require.NotNil(t, app.container.SQL)
+	assert.NotEqual(t, existing, app.container.SQL)
 }
 
 // TestApp_AddSQLDB_NilExisting verifies AddSQLDB is safe when the container holds a
@@ -129,10 +161,51 @@ func TestApp_AddSQLDB_NilExisting(t *testing.T) {
 
 	app.container.SQL = nilDB // typed-nil interface value
 
-	db, _, _ := gofrSql.NewSQLMocks(t)
+	assert.NotPanics(t, func() { app.AddSQLDB(fakeSQLConnector{connector: failingConnector{}}) })
+	t.Cleanup(func() { _ = app.container.SQL.Close() })
 
-	assert.NotPanics(t, func() { app.AddSQLDB(db) })
-	assert.Equal(t, db, app.container.SQL)
+	require.NotNil(t, app.container.SQL)
+}
+
+// TestApp_AddSQLDB_DefersWhenNoConnector verifies that when the provider returns a
+// nil connector (e.g. IAM auth not requested), AddSQLDB leaves the standard
+// env-configured SQL connection in place rather than tearing it down.
+func TestApp_AddSQLDB_DefersWhenNoConnector(t *testing.T) {
+	testutil.NewServerConfigs(t)
+
+	app := New()
+
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	// No Close expectation: deferring must not close the existing connection.
+	existing := container.NewMockDB(ctrl)
+	app.container.SQL = existing
+
+	app.AddSQLDB(fakeSQLConnector{}) // nil connector, nil error
+
+	assert.Equal(t, existing, app.container.SQL, "a nil connector must keep the env SQL connection")
+}
+
+// TestApp_AddSQLDB_ClosesExistingOnError verifies that a connector setup error tears
+// down the env-configured SQL (which on the IAM path is dialing the wrong host and
+// would retry forever) and leaves SQL unset, so health reports down instead of using
+// a broken connection.
+func TestApp_AddSQLDB_ClosesExistingOnError(t *testing.T) {
+	testutil.NewServerConfigs(t)
+
+	app := New()
+
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	existing := container.NewMockDB(ctrl)
+	existing.EXPECT().Close().Return(nil)
+	app.container.SQL = existing
+
+	app.AddSQLDB(fakeSQLConnector{err: errNoTestConn})
+
+	assert.Nil(t, app.container.SQL)
 }
 
 func TestApp_AddMongo(t *testing.T) {

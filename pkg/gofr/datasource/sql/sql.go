@@ -5,6 +5,7 @@ import (
 	"crypto/tls"
 	"crypto/x509"
 	"database/sql"
+	"database/sql/driver"
 	"fmt"
 	"os"
 	"strconv"
@@ -187,6 +188,48 @@ func NewSQLFromDB(db *sql.DB, conf *DBConfig, logger datasource.Logger, metrics 
 	}
 
 	database := &DB{DB: db, config: conf, logger: logger, metrics: metrics, stopSignal: make(chan struct{})}
+
+	printConnectionSuccessLog("connecting", database.config, logger)
+
+	return finalizeConnection(database)
+}
+
+// NewSQLFromConnector wraps a driver.Connector in gofr's SQL datasource. It opens
+// the connection with otelsql (so queries are traced, exactly as NewSQL does) and
+// then shares the standard post-open path — query logging, metrics, health checks
+// and the background retry/metrics goroutines — via NewSQLFromDB's finalize logic.
+//
+// This is the seam for pluggable, connector-based SQL providers where credentials
+// or routing are owned by the connector rather than a DSN: GCP Cloud SQL with IAM
+// auth supplies a Cloud SQL connector; AWS RDS/Aurora IAM and Azure Entra ID can
+// supply a token-minting connector the same way. Each such provider lives in its
+// own module and constructs only the driver.Connector, so its cloud SDK stays out
+// of core; core does the wrapping here. See gofr.dev/pkg/gofr/datasource/cloudsql.
+//
+// conf supplies the dialect plus the labels and pool sizing used in logs, metrics
+// and health output. cleanup, if non-nil, is run on Close to tear down resources
+// database/sql does not own (for Cloud SQL, the connector's dialer and its
+// background credential refresh). A nil connector returns nil.
+func NewSQLFromConnector(connector driver.Connector, conf config.Config,
+	logger datasource.Logger, metrics Metrics, cleanup func() error) *DB {
+	if connector == nil {
+		return nil
+	}
+
+	dbConfig := getDBConfig(conf)
+
+	// The connector owns routing (host/port/TLS), so a port label is meaningless on
+	// this path; clear it so connection logs don't print a dangling ':' after the host.
+	dbConfig.Port = ""
+
+	database := &DB{
+		DB:         otelsql.OpenDB(connector),
+		config:     dbConfig,
+		logger:     logger,
+		metrics:    metrics,
+		stopSignal: make(chan struct{}),
+		cleanup:    cleanup,
+	}
 
 	printConnectionSuccessLog("connecting", database.config, logger)
 
@@ -395,7 +438,7 @@ func printConnectionSuccessLog(status string, dbconfig *DBConfig, logger datasou
 	if dbconfig.Dialect == sqlite {
 		logFunc("%s to '%s' database", status, dbconfig.Database)
 	} else {
-		logFunc("%s to '%s' user to '%s' database at '%s:%s'", status, dbconfig.User, dbconfig.Database, dbconfig.HostName, dbconfig.Port)
+		logFunc("%s to '%s' user to '%s' database at '%s'", status, dbconfig.User, dbconfig.Database, hostEndpoint(dbconfig))
 	}
 }
 
@@ -403,9 +446,21 @@ func printConnectionFailureLog(action string, dbconfig *DBConfig, logger datasou
 	if dbconfig.Dialect == sqlite {
 		logger.Errorf("could not %s database '%s', error: %v", action, dbconfig.Database, err)
 	} else {
-		logger.Errorf("could not %s '%s' user to '%s' database at '%s:%s', error: %v",
-			action, dbconfig.User, dbconfig.Database, dbconfig.HostName, dbconfig.Port, err)
+		logger.Errorf("could not %s '%s' user to '%s' database at '%s', error: %v",
+			action, dbconfig.User, dbconfig.Database, hostEndpoint(dbconfig), err)
 	}
+}
+
+// hostEndpoint renders the "host:port" connection endpoint for logs, omitting the
+// ":port" suffix when no port is set. Connector-based datasources (e.g. Cloud SQL
+// with IAM auth) leave Port empty because the connector owns routing, so this keeps
+// their logs from printing a dangling ':' after the host.
+func hostEndpoint(dbconfig *DBConfig) string {
+	if dbconfig.Port == "" {
+		return dbconfig.HostName
+	}
+
+	return dbconfig.HostName + ":" + dbconfig.Port
 }
 
 // getMySQLTLSParam converts the generic DB_SSL_MODE to MySQL-specific TLS parameter.

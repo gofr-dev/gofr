@@ -1,7 +1,10 @@
-// Package cloudsql provides a GoFr SQL datasource for Google Cloud SQL (Postgres
-// and MySQL). It is built on top of GoFr's standard SQL datasource — it does not
-// reimplement any SQL behavior — and adds IAM database authentication via the
-// Cloud SQL Go Connector.
+// Package cloudsql provides a Google Cloud SQL (Postgres and MySQL) connector for
+// GoFr that authenticates with IAM database authentication via the Cloud SQL Go
+// Connector. It builds only a database/sql driver.Connector and hands it to GoFr —
+// it does not import GoFr core, so the GCP SDK stays out of any app that does not
+// use it. GoFr's App.AddSQLDB opens the connector through GoFr's standard SQL
+// datasource, so logging, metrics, health checks and transactions behave exactly as
+// for any other GoFr SQL connection.
 //
 // A single configuration switch, DB_IAM_AUTH, selects the connection mode:
 //
@@ -9,7 +12,8 @@
 //     Credentials resolve via Application Default Credentials (which supports
 //     Workload Identity Federation), so no static password and no Cloud SQL Auth
 //     Proxy sidecar are required.
-//   - otherwise         → use GoFr's standard SQL datasource (host:port with
+//   - otherwise         → Connect returns a nil connector, so App.AddSQLDB keeps
+//     GoFr's standard env-configured SQL datasource (host:port with
 //     username/password), exactly as gofr.New() would on its own.
 //
 // Because the mode is chosen from configuration, application code is identical in
@@ -21,214 +25,151 @@
 //
 // Set username/password locally and DB_IAM_AUTH=true on GCP; the code does not
 // change. In both cases app.SQL()/ctx.SQL and all of GoFr's SQL logging, metrics,
-// health checks and transactions behave identically, because the underlying
-// connection is always GoFr's standard SQL wrapper.
+// health checks and transactions behave identically, because GoFr always wraps the
+// connection in its standard SQL datasource.
 package cloudsql
 
 import (
-	"database/sql"
+	"context"
+	"database/sql/driver"
 	"errors"
 	"fmt"
+	"net"
 	"sync/atomic"
 
-	cloudmysql "cloud.google.com/go/cloudsqlconn/mysql/mysql"
-	"cloud.google.com/go/cloudsqlconn/postgres/pgxv5"
-	"github.com/XSAM/otelsql"
-	"gofr.dev/pkg/gofr/config"
-	"gofr.dev/pkg/gofr/container"
-	"gofr.dev/pkg/gofr/datasource"
-	gofrSQL "gofr.dev/pkg/gofr/datasource/sql"
+	"cloud.google.com/go/cloudsqlconn"
+	"github.com/go-sql-driver/mysql"
+	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/stdlib"
 )
 
-// driverSeq makes every registered connector driver name unique so multiple client
-// instances (or repeated Connect calls) never collide on a driver registration.
+// netSeq makes every MySQL dial-context registration name unique so multiple
+// connectors never collide on a registration. go-sql-driver has no unregister, so
+// the name must be unique per connector rather than reused.
 //
-//nolint:gochecknoglobals // process-wide counter for unique driver registration names
-var driverSeq atomic.Uint64
+//nolint:gochecknoglobals // process-wide counter for unique dial-context registration names
+var netSeq atomic.Uint64
 
-var errUnsupportedDialect = errors.New("cloudsql: unsupported dialect; supported dialects are postgres and mysql")
+var (
+	errUnsupportedDialect = errors.New("cloudsql: unsupported dialect; supported dialects are postgres and mysql")
+	errMissingInstance    = errors.New(
+		"cloudsql: DB_HOST (instance connection name 'project:region:instance') is required for IAM auth")
+)
 
-// client is a GoFr SQL datasource backed by Cloud SQL. It is added to an
-// application with App.AddSQLDB, which injects the logger and metrics and then
-// calls Connect. The embedded *gofrSQL.DB — GoFr's standard SQL datasource — is
-// populated by Connect and promotes the full container.DB interface, so the
-// datasource is used exactly like any other GoFr SQL connection.
-//
-// It is unexported on purpose: callers only ever hold the container.DB returned by
-// New and hand it to App.AddSQLDB, which drives the UseLogger/UseMetrics/Connect
-// lifecycle. Keeping the type private keeps the module's public surface to just New.
-type client struct {
-	*gofrSQL.DB // GoFr's standard SQL wrapper; promotes the container.DB methods
-
-	conf    config.Config
-	logger  datasource.Logger
-	metrics gofrSQL.Metrics
-	cleanup func() error // tears down the Cloud SQL connector registration (IAM path only)
+// Config is the read-only configuration accessor cloudsql needs. It is defined
+// locally — rather than importing GoFr's config package — so this module never
+// depends on GoFr core. GoFr's app.Config satisfies it, so the one-liner
+// app.AddSQLDB(cloudsql.New(app.Config)) compiles unchanged.
+type Config interface {
+	Get(key string) string
+	GetOrDefault(key, defaultValue string) string
 }
 
-// New returns a Cloud SQL datasource that reads its configuration (the DB_* keys)
-// from conf. The connection is not established until Connect is called, which
-// App.AddSQLDB does automatically after wiring the logger and metrics — so the
-// return value is only meaningful once passed to App.AddSQLDB:
+// Connector builds a database/sql driver.Connector for a Cloud SQL instance from
+// configuration. It is handed to GoFr's App.AddSQLDB, which calls Connect and wraps
+// the result in GoFr's standard SQL datasource. Keeping this module's output a plain
+// driver.Connector is what keeps GoFr core (and every other app) free of the GCP SDK.
+type Connector struct {
+	conf Config
+}
+
+// New returns a Cloud SQL Connector that reads its configuration (the DB_* keys)
+// from conf. No connection is established here; App.AddSQLDB calls Connect:
 //
 //	app.AddSQLDB(cloudsql.New(app.Config))
-func New(conf config.Config) container.DB {
-	return newClient(conf)
+func New(conf Config) *Connector {
+	return &Connector{conf: conf}
 }
 
-// newClient builds the concrete datasource. New wraps it as a container.DB for
-// callers; tests use it directly to drive the lifecycle and inspect internals.
-func newClient(conf config.Config) *client {
-	return &client{conf: conf}
-}
-
-// UseLogger sets the logger, satisfying GoFr's datasource instrumentation hook.
-func (c *client) UseLogger(l any) {
-	if logger, ok := l.(datasource.Logger); ok {
-		c.logger = logger
-	}
-}
-
-// UseMetrics sets the metrics recorder, satisfying GoFr's instrumentation hook.
-func (c *client) UseMetrics(m any) {
-	if metrics, ok := m.(gofrSQL.Metrics); ok {
-		c.metrics = metrics
-	}
-}
-
-// Connect establishes the connection. When IAM auth is not requested it delegates
-// entirely to GoFr's standard SQL datasource (username/password over host:port).
-// When DB_IAM_AUTH=true it connects through the Cloud SQL connector with IAM auth
-// and wraps the result in that same standard datasource, so no SQL behavior is
-// duplicated. Failures are logged and leave the datasource disconnected rather
-// than panicking, matching the core SQL datasource.
-func (c *client) Connect() {
+// Connect builds the driver.Connector for IAM auth and a cleanup that tears down the
+// Cloud SQL dialer (stopping its background credential refresh). When IAM auth is not
+// requested it returns a nil connector and nil cleanup, signaling App.AddSQLDB to
+// keep GoFr's standard env-configured SQL connection — so the same code and the same
+// AddSQLDB call work locally and on GCP, with only configuration changing.
+//
+// Connect is one-shot per Connector. The MySQL path registers a process-global
+// dial-context under a unique name (database/sql/go-sql-driver have no unregister),
+// so a Connector should be connected once over its lifetime rather than reconnected
+// in a loop; the Postgres path registers nothing global.
+func (c *Connector) Connect() (driver.Connector, func() error, error) {
 	if !iamRequested(c.conf) {
-		c.logger.Debugf("cloudsql: DB_IAM_AUTH not enabled; using standard SQL connection")
-
-		// Reuse the core SQL datasource verbatim — this IS the existing connection
-		// path, not a copy of it.
-		c.DB = gofrSQL.NewSQL(c.conf, c.logger, c.metrics)
-
-		return
+		return nil, nil, nil
 	}
 
 	s := parseSettings(c.conf)
-	c.connectIAM(&s)
-}
 
-// connectIAM connects through the Cloud SQL connector using IAM authentication and
-// wraps the opened connection in GoFr's standard SQL datasource.
-//
-// Connect is one-shot per client: it registers a process-global database/sql driver
-// (and an otelsql wrapper) under a unique name. database/sql has no unregister, so a
-// client is meant to be connected once over its lifetime — App.AddSQLDB drives that.
-// driverSeq keeps the names unique, so repeated use across clients never collides,
-// but a client should not be reconnected in a loop (otelsql caps at 1000 drivers).
-func (c *client) connectIAM(s *settings) {
 	if s.dialect == "" {
-		c.logger.Errorf("cloudsql: unsupported dialect %q; supported are postgres and mysql", c.conf.Get("DB_DIALECT"))
-		return
+		return nil, nil, errUnsupportedDialect
 	}
 
 	if s.instanceConnectionName == "" {
-		c.logger.Errorf("cloudsql: DB_HOST (instance connection name 'project:region:instance') is required for IAM auth")
-		return
+		return nil, nil, errMissingInstance
 	}
 
-	c.logger.Debugf("cloudsql: connecting to %s instance %q via IAM auth (ipType=%s)",
-		s.dialect, s.instanceConnectionName, s.ipType)
-
-	driverName := fmt.Sprintf("cloudsql-%s-%d", s.dialect, driverSeq.Add(1))
-
-	dsn, err := c.register(s, driverName)
-	if err != nil {
-		c.logger.Errorf("cloudsql: failed to register %s connector: %v", s.dialect, err)
-		return
-	}
-
-	openName := driverName
-
-	// Wrap the connector driver with otelsql so queries are traced, matching the
-	// core SQL datasource. Tracing is best-effort: on failure we fall back to the
-	// untraced driver rather than failing the connection.
-	if traced, terr := otelsql.Register(driverName); terr == nil {
-		openName = traced
-	} else {
-		c.logger.Warnf("cloudsql: tracing disabled, could not register otel driver: %v", terr)
-	}
-
-	db, err := sql.Open(openName, dsn)
-	if err != nil {
-		c.logger.Errorf("cloudsql: failed to open connection: %v", err)
-		_ = c.runCleanup()
-
-		return
-	}
-
-	c.DB = gofrSQL.NewSQLFromDB(db, s.dbConfig(), c.logger, c.metrics)
-}
-
-// register registers the Cloud SQL connector driver for the dialect under
-// driverName, stores the connector cleanup function on the client and returns the
-// DSN to open the connection with.
-func (c *client) register(s *settings, driverName string) (string, error) {
 	switch s.dialect {
 	case dialectPostgres:
-		cleanup, err := pgxv5.RegisterDriver(driverName, s.connectorOptions()...)
-		if err != nil {
-			return "", err
-		}
-
-		c.cleanup = cleanup
-
-		return s.postgresDSN(), nil
+		return postgresConnector(&s)
 	case dialectMySQL:
-		cleanup, err := cloudmysql.RegisterDriver(driverName, s.connectorOptions()...)
-		if err != nil {
-			return "", err
-		}
-
-		c.cleanup = cleanup
-
-		return s.mysqlDSN(driverName), nil
+		return mysqlConnector(&s)
 	default:
-		return "", errUnsupportedDialect
+		return nil, nil, errUnsupportedDialect
 	}
 }
 
-// HealthCheck reports the datasource health. When a connect attempt failed, c.DB
-// is nil even though the client is installed as container.SQL; the embedded
-// *gofrSQL.DB.HealthCheck would dereference its config before its own nil guard and
-// panic, so guard here and report down instead. Otherwise delegate to the standard
-// SQL datasource. Mirrors the nil guard in Close.
-func (c *client) HealthCheck() *datasource.Health {
-	if c.DB == nil {
-		return &datasource.Health{Status: datasource.StatusDown, Details: map[string]any{}}
+// postgresConnector builds a pgx driver.Connector that dials through the Cloud SQL
+// connector. It mirrors what cloudsqlconn's pgxv5 driver does internally (parse a
+// config, route its DialFunc through the dialer) but yields a connector for
+// sql.OpenDB instead of registering a process-global database/sql driver.
+func postgresConnector(s *settings) (driver.Connector, func() error, error) {
+	dialer, err := cloudsqlconn.NewDialer(context.Background(), s.connectorOptions()...)
+	if err != nil {
+		return nil, nil, fmt.Errorf("cloudsql: create dialer: %w", err)
 	}
 
-	return c.DB.HealthCheck()
+	cfg, err := pgx.ParseConfig(s.postgresDSN())
+	if err != nil {
+		_ = dialer.Close()
+
+		return nil, nil, fmt.Errorf("cloudsql: parse postgres config: %w", err)
+	}
+
+	icn := s.instanceConnectionName
+	cfg.DialFunc = func(ctx context.Context, _, _ string) (net.Conn, error) {
+		return dialer.Dial(ctx, icn)
+	}
+
+	return stdlib.GetConnector(*cfg), dialer.Close, nil
 }
 
-// Close closes the underlying connection and, on the IAM path, tears down the
-// connector registration (which stops its background credential refresh).
-func (c *client) Close() error {
-	var err error
-
-	if c.DB != nil {
-		err = c.DB.Close()
+// mysqlConnector builds a go-sql-driver driver.Connector that dials through the
+// Cloud SQL connector. go-sql-driver dials by a registered network name, so a unique
+// dial-context routing through the dialer is registered per connector.
+func mysqlConnector(s *settings) (driver.Connector, func() error, error) {
+	dialer, err := cloudsqlconn.NewDialer(context.Background(), s.connectorOptions()...)
+	if err != nil {
+		return nil, nil, fmt.Errorf("cloudsql: create dialer: %w", err)
 	}
 
-	return errors.Join(err, c.runCleanup())
-}
+	icn := s.instanceConnectionName
 
-func (c *client) runCleanup() error {
-	if c.cleanup == nil {
-		return nil
+	netName := fmt.Sprintf("cloudsql-mysql-%d", netSeq.Add(1))
+	mysql.RegisterDialContext(netName, func(ctx context.Context, _ string) (net.Conn, error) {
+		return dialer.Dial(ctx, icn)
+	})
+
+	cfg := mysql.NewConfig()
+	cfg.User = s.user
+	cfg.Net = netName
+	cfg.Addr = icn
+	cfg.DBName = s.database
+	cfg.ParseTime = true
+
+	connector, err := mysql.NewConnector(cfg)
+	if err != nil {
+		_ = dialer.Close()
+
+		return nil, nil, fmt.Errorf("cloudsql: create mysql connector: %w", err)
 	}
 
-	cleanup := c.cleanup
-	c.cleanup = nil
-
-	return cleanup()
+	return connector, dialer.Close, nil
 }

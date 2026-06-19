@@ -61,13 +61,19 @@ including query logging, metrics and health checks.
 
 ## How it works
 
-`New` returns a `*Client` that GoFr instruments via `AddSQLDB`: it injects the
-logger and metrics and calls `Connect`. When `DB_IAM_AUTH` is not `true`, `Connect`
-delegates to GoFr's standard SQL datasource (`sql.NewSQL`). When IAM auth is
-requested, it registers the Cloud SQL connector driver, opens the connection and
-wraps it with that same standard datasource via `sql.NewSQLFromDB` — so no SQL
-behavior is duplicated. `Close` closes the connection and tears down the connector
-registration (stopping its background credential refresh).
+`New` returns a `*Connector` that GoFr drives via `AddSQLDB`, which calls its
+`Connect` method. When `DB_IAM_AUTH` is not `true`, `Connect` returns a nil
+connector, so `AddSQLDB` keeps GoFr's standard env-configured SQL datasource
+(username/password) untouched. When IAM auth is requested, `Connect` builds a
+`database/sql` `driver.Connector` that dials through the Cloud SQL connector
+(Postgres via pgx, MySQL via go-sql-driver) plus a cleanup that tears down the
+dialer's background credential refresh.
+
+GoFr core does the wrapping: `AddSQLDB` opens the connector through GoFr's standard
+SQL datasource (`sql.NewSQLFromConnector`), so logging, metrics, health checks and
+transactions behave identically and no SQL behavior is duplicated. Crucially this
+module imports only `database/sql/driver` and the GCP SDK — never `gofr.dev` — so
+the cloud SDK stays out of apps that don't use it.
 
 ## Extending to other cloud providers
 
