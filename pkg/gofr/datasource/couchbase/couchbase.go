@@ -130,8 +130,11 @@ func (c *Client) Connect() {
 		return
 	}
 
-	couchbaseBuckets := []float64{.05, .075, .1, .125, .15, .2, .3, .5, .75, 1, 2, 3, 4, 5, 7.5, 10}
-	c.metrics.NewHistogram("app_couchbase_stats", "Response time of Couchbase queries in milliseconds.", couchbaseBuckets...)
+	couchbaseBuckets := []float64{
+		50, 75, 100, 125, 150, 200, 300, 500, 750, 1000, 2000, 3000, 5000, 7500, 10000, // 50µs-10ms
+		25000, 50000, 100000, 250000, 500000, 1000000, 5000000, 10000000, 30000000, 60000000, 120000000, 180000000, // 25ms-3min
+	}
+	c.metrics.NewHistogram("app_couchbase_stats", "Response time of Couchbase queries in microseconds.", couchbaseBuckets...)
 
 	c.logger.Logf("connected to Couchbase at %v to bucket %v", c.config.Host, c.config.Bucket)
 }
