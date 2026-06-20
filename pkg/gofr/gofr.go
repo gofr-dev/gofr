@@ -411,7 +411,14 @@ func (a *App) AddStaticFiles(endpoint, filePath string) {
 
 	// update file path based on current directory if it starts with ./
 	if strings.HasPrefix(filePath, "./") {
-		currentWorkingDir, _ := os.Getwd()
+		currentWorkingDir, err := os.Getwd()
+		if err != nil {
+			a.container.Logger.Errorf("error in registering '%s' static endpoint, "+
+				"failed to get current working directory: %v", endpoint, err)
+
+			return
+		}
+
 		filePath = filepath.Join(currentWorkingDir, filePath)
 	}
 
