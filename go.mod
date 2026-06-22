@@ -44,7 +44,7 @@ require (
 	golang.org/x/text v0.37.0
 	golang.org/x/time v0.15.0
 	google.golang.org/api v0.284.0
-	google.golang.org/genproto/googleapis/rpc v0.0.0-20260526163538-3dc84a4a5aaa
+	google.golang.org/genproto/googleapis/rpc v0.0.0-20260622175928-b703f567277d
 	google.golang.org/grpc v1.81.1
 	google.golang.org/protobuf v1.36.11
 	gopkg.in/yaml.v3 v3.0.1
