@@ -105,7 +105,7 @@ docker run -it --rm -p 4443:4443 -e STORAGE_EMULATOR_HOST=0.0.0.0:4443 fsouza/fa
 ```
 
 > [!NOTE]
-> Please note that the recommended local port for the services are different from the actual ports. This is done to avoid conflict with the local installation on developer machines. This method also allows a developer to work on multiple projects which uses the same services but bound on different ports. One can choose to change the port for these services. Just remember to add the same in configs/.local.env, if you decide to do that.
+> Please note that the recommended local ports for the services are different from the actual ports. This is done to avoid conflict with the local installation on developer machines. This method also allows a developer to work on multiple projects which uses the same services but bound on different ports. One can choose to change the port for these services. Just remember to add the same in configs/.local.env, if you decide to do that.
 
 
 ### Coding Guidelines
@@ -114,7 +114,7 @@ docker run -it --rm -p 4443:4443 -e STORAGE_EMULATOR_HOST=0.0.0.0:4443 fsouza/fa
 * No magic. So, no init. In a large project, it becomes difficult to track which package is doing what at the
   initialization step.
 * Exported functions must have an associated godoc.
-* Sensitive data(username, password, keys) should not be pushed. Always use environment variables.
+* Sensitive data (username, password, keys) should not be pushed. Always use environment variables.
 * Take interfaces and return concrete types.
     - Lean interfaces - take 'exactly' what you need, not more. Onus of interface definition is on the package who is
       using it. so, it should be as lean as possible. This makes it easier to test.
