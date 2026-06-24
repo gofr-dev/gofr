@@ -61,7 +61,7 @@ This document lists all the configuration options supported by the GoFr framewor
 ---
 
 -  METRICS_CARDINALITY_LIMIT
--  Maximum number of distinct attribute sets recorded per metric instrument in a collection cycle. Beyond this, new series overflow into a single `otel.metric.overflow=true` series (OpenTelemetry SDK default since v1.44). Set to **0** (or a negative value) to disable the limit (unlimited cardinality).
+-  Maximum number of distinct attribute sets recorded per metric instrument in a collection cycle. Beyond this, new series overflow into a single `otel.metric.overflow=true` series (OpenTelemetry SDK default since v1.44). Set to **0** (or a negative value) to disable the limit (unlimited cardinality). Overrides `OTEL_GO_X_CARDINALITY_LIMIT` if both are set.
 -  2000
 
 ---

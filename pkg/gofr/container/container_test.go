@@ -764,6 +764,7 @@ func TestContainer_cardinalityLimit(t *testing.T) {
 		{"unset uses default", map[string]string{}, exporters.DefaultCardinalityLimit},
 		{"valid value", map[string]string{"METRICS_CARDINALITY_LIMIT": "5000"}, 5000},
 		{"zero means unlimited", map[string]string{"METRICS_CARDINALITY_LIMIT": "0"}, 0},
+		{"negative means unlimited", map[string]string{"METRICS_CARDINALITY_LIMIT": "-1"}, -1},
 		{"invalid falls back to default", map[string]string{"METRICS_CARDINALITY_LIMIT": "not-a-number"}, exporters.DefaultCardinalityLimit},
 	}
 
