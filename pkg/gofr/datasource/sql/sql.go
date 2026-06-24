@@ -5,6 +5,7 @@ import (
 	"crypto/tls"
 	"crypto/x509"
 	"database/sql"
+	"database/sql/driver"
 	"fmt"
 	"os"
 	"strconv"
@@ -46,6 +47,43 @@ type DBConfig struct {
 	MaxIdleConn int
 	MaxOpenConn int
 	Charset     string
+}
+
+// redactedPassword is the fixed mask substituted for a non-empty password whenever
+// a DBConfig is stringified, so the raw secret is never printed.
+const redactedPassword = "*****"
+
+// String implements fmt.Stringer so that logging a DBConfig — directly or as part
+// of a larger struct, with %v or %+v — never leaks the raw password. The Password
+// field is redacted to a fixed mask while every other field is preserved, keeping
+// the output useful for diagnosing connection issues.
+func (c DBConfig) String() string {
+	password := ""
+	if c.Password != "" {
+		password = redactedPassword
+	}
+
+	return fmt.Sprintf("{Dialect:%s HostName:%s User:%s Password:%s Port:%s Database:%s "+
+		"SSLMode:%s MaxIdleConn:%d MaxOpenConn:%d Charset:%s}",
+		c.Dialect, c.HostName, c.User, password, c.Port, c.Database,
+		c.SSLMode, c.MaxIdleConn, c.MaxOpenConn, c.Charset)
+}
+
+// GoString implements fmt.GoStringer so that the %#v verb — which bypasses Stringer
+// and would otherwise print the raw struct, password included — also redacts the
+// password. It mirrors String's redaction so no formatting verb leaks the secret.
+//
+//nolint:gocritic // value receiver required so GoStringer is in the value's method set, matching String
+func (c DBConfig) GoString() string {
+	password := ""
+	if c.Password != "" {
+		password = redactedPassword
+	}
+
+	return fmt.Sprintf("sql.DBConfig{Dialect:%q, HostName:%q, User:%q, Password:%q, Port:%q, "+
+		"Database:%q, SSLMode:%q, MaxIdleConn:%d, MaxOpenConn:%d, Charset:%q}",
+		c.Dialect, c.HostName, c.User, password, c.Port, c.Database,
+		c.SSLMode, c.MaxIdleConn, c.MaxOpenConn, c.Charset)
 }
 
 func setupSupabaseDefaults(dbConfig *DBConfig, configs config.Config, logger datasource.Logger) {
@@ -125,19 +163,96 @@ func NewSQL(configs config.Config, logger datasource.Logger, metrics Metrics) *D
 		return database
 	}
 
+	return finalizeConnection(database)
+}
+
+// NewSQLFromDB wraps an already-opened *database/sql.DB in gofr's SQL datasource,
+// adding query logging, metrics, health checks and the same background
+// connection-retry/metrics goroutines used by NewSQL. Driver registration, DSN
+// building and sql.Open are the caller's responsibility; this is the entry point
+// for pluggable SQL datasources (for example GCP Cloud SQL with IAM auth) that are
+// wired in via App.AddSQLDB.
+//
+// conf supplies the dialect plus the labels and pool sizing used in logs,
+// metrics and health output. A nil conf or db returns nil.
+//
+// Because it accepts any opened *sql.DB, this is the provider-agnostic seam for
+// managed-database authentication: GCP Cloud SQL passes a connector-backed handle,
+// while AWS RDS/Aurora IAM and Azure Entra ID modules pass a sql.OpenDB(connector)
+// whose connector mints a fresh short-lived token per connection. Each such
+// provider lives in its own published module so its cloud SDK stays out of core.
+// See gofr.dev/pkg/gofr/datasource/cloudsql for the reference implementation.
+func NewSQLFromDB(db *sql.DB, conf *DBConfig, logger datasource.Logger, metrics Metrics) *DB {
+	if db == nil || conf == nil {
+		return nil
+	}
+
+	database := &DB{DB: db, config: conf, logger: logger, metrics: metrics, stopSignal: make(chan struct{})}
+
+	printConnectionSuccessLog("connecting", database.config, logger)
+
+	return finalizeConnection(database)
+}
+
+// NewSQLFromConnector wraps a driver.Connector in gofr's SQL datasource. It opens
+// the connection with otelsql (so queries are traced, exactly as NewSQL does) and
+// then shares the standard post-open path — query logging, metrics, health checks
+// and the background retry/metrics goroutines — via NewSQLFromDB's finalize logic.
+//
+// This is the seam for pluggable, connector-based SQL providers where credentials
+// or routing are owned by the connector rather than a DSN: GCP Cloud SQL with IAM
+// auth supplies a Cloud SQL connector; AWS RDS/Aurora IAM and Azure Entra ID can
+// supply a token-minting connector the same way. Each such provider lives in its
+// own module and constructs only the driver.Connector, so its cloud SDK stays out
+// of core; core does the wrapping here. See gofr.dev/pkg/gofr/datasource/cloudsql.
+//
+// conf supplies the dialect plus the labels and pool sizing used in logs, metrics
+// and health output. cleanup, if non-nil, is run on Close to tear down resources
+// database/sql does not own (for Cloud SQL, the connector's dialer and its
+// background credential refresh). A nil connector returns nil.
+func NewSQLFromConnector(connector driver.Connector, conf config.Config,
+	logger datasource.Logger, metrics Metrics, cleanup func() error) *DB {
+	if connector == nil {
+		return nil
+	}
+
+	dbConfig := getDBConfig(conf)
+
+	// The connector owns routing (host/port/TLS), so a port label is meaningless on
+	// this path; clear it so connection logs don't print a dangling ':' after the host.
+	dbConfig.Port = ""
+
+	database := &DB{
+		DB:         otelsql.OpenDB(connector),
+		config:     dbConfig,
+		logger:     logger,
+		metrics:    metrics,
+		stopSignal: make(chan struct{}),
+		cleanup:    cleanup,
+	}
+
+	printConnectionSuccessLog("connecting", database.config, logger)
+
+	return finalizeConnection(database)
+}
+
+// finalizeConnection applies pool limits, verifies connectivity and starts the
+// background retry + metrics goroutines. Shared by NewSQL and NewSQLFromDB so both
+// connection paths get identical post-open behavior.
+func finalizeConnection(database *DB) *DB {
 	// We are not setting idle connection timeout because we are checking for connection
 	// every 10 seconds which would need a connection, moreover if connection expires it is
 	// automatically closed by the database/sql package.
-	database.DB.SetMaxIdleConns(dbConfig.MaxIdleConn)
+	database.DB.SetMaxIdleConns(database.config.MaxIdleConn)
 	// We are not setting max open connection because any connection which is expired,
 	// it is closed automatically.
-	database.DB.SetMaxOpenConns(dbConfig.MaxOpenConn)
+	database.DB.SetMaxOpenConns(database.config.MaxOpenConn)
 
 	database = pingToTestConnection(database)
 
 	go retryConnection(database)
 
-	go pushDBMetrics(database, metrics)
+	go pushDBMetrics(database, database.metrics)
 
 	return database
 }
@@ -323,7 +438,7 @@ func printConnectionSuccessLog(status string, dbconfig *DBConfig, logger datasou
 	if dbconfig.Dialect == sqlite {
 		logFunc("%s to '%s' database", status, dbconfig.Database)
 	} else {
-		logFunc("%s to '%s' user to '%s' database at '%s:%s'", status, dbconfig.User, dbconfig.Database, dbconfig.HostName, dbconfig.Port)
+		logFunc("%s to '%s' user to '%s' database at '%s'", status, dbconfig.User, dbconfig.Database, hostEndpoint(dbconfig))
 	}
 }
 
@@ -331,9 +446,21 @@ func printConnectionFailureLog(action string, dbconfig *DBConfig, logger datasou
 	if dbconfig.Dialect == sqlite {
 		logger.Errorf("could not %s database '%s', error: %v", action, dbconfig.Database, err)
 	} else {
-		logger.Errorf("could not %s '%s' user to '%s' database at '%s:%s', error: %v",
-			action, dbconfig.User, dbconfig.Database, dbconfig.HostName, dbconfig.Port, err)
+		logger.Errorf("could not %s '%s' user to '%s' database at '%s', error: %v",
+			action, dbconfig.User, dbconfig.Database, hostEndpoint(dbconfig), err)
 	}
+}
+
+// hostEndpoint renders the "host:port" connection endpoint for logs, omitting the
+// ":port" suffix when no port is set. Connector-based datasources (e.g. Cloud SQL
+// with IAM auth) leave Port empty because the connector owns routing, so this keeps
+// their logs from printing a dangling ':' after the host.
+func hostEndpoint(dbconfig *DBConfig) string {
+	if dbconfig.Port == "" {
+		return dbconfig.HostName
+	}
+
+	return dbconfig.HostName + ":" + dbconfig.Port
 }
 
 // getMySQLTLSParam converts the generic DB_SSL_MODE to MySQL-specific TLS parameter.
