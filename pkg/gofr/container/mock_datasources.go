@@ -3810,6 +3810,20 @@ func (mr *MockRedisMockRecorder) GetSet(ctx, key, value any) *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetSet", reflect.TypeOf((*MockRedis)(nil).GetSet), ctx, key, value)
 }
 
+// GetToBuffer mocks base method.
+func (m *MockRedis) GetToBuffer(ctx context.Context, key string, buf []byte) *redis.ZeroCopyStringCmd {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetToBuffer", ctx, key, buf)
+	ret0, _ := ret[0].(*redis.ZeroCopyStringCmd)
+	return ret0
+}
+
+// GetToBuffer indicates an expected call of GetToBuffer.
+func (mr *MockRedisMockRecorder) GetToBuffer(ctx, key, buf any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetToBuffer", reflect.TypeOf((*MockRedis)(nil).GetToBuffer), ctx, key, buf)
+}
+
 // HDel mocks base method.
 func (m *MockRedis) HDel(ctx context.Context, key string, fields ...string) *redis.IntCmd {
 	m.ctrl.T.Helper()
@@ -6451,6 +6465,20 @@ func (m *MockRedis) SetEx(ctx context.Context, key string, value any, expiration
 func (mr *MockRedisMockRecorder) SetEx(ctx, key, value, expiration any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetEx", reflect.TypeOf((*MockRedis)(nil).SetEx), ctx, key, value, expiration)
+}
+
+// SetFromBuffer mocks base method.
+func (m *MockRedis) SetFromBuffer(ctx context.Context, key string, buf []byte) *redis.StatusCmd {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "SetFromBuffer", ctx, key, buf)
+	ret0, _ := ret[0].(*redis.StatusCmd)
+	return ret0
+}
+
+// SetFromBuffer indicates an expected call of SetFromBuffer.
+func (mr *MockRedisMockRecorder) SetFromBuffer(ctx, key, buf any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetFromBuffer", reflect.TypeOf((*MockRedis)(nil).SetFromBuffer), ctx, key, buf)
 }
 
 // SetIFDEQ mocks base method.
