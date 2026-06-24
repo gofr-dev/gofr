@@ -6,6 +6,7 @@ package sql
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
 	"io"
 	"reflect"
@@ -26,6 +27,11 @@ type DB struct {
 	metrics    Metrics
 	stopSignal chan struct{}
 	closeOnce  sync.Once
+	// cleanup, when non-nil, tears down resources owned by the datasource that
+	// database/sql does not close itself — e.g. the Cloud SQL connector's dialer
+	// and its background credential refresh. It is set by NewSQLFromConnector and
+	// run once on Close.
+	cleanup func() error
 }
 
 type Log struct {
@@ -130,11 +136,21 @@ func (d *DB) Close() error {
 		close(d.stopSignal)
 	})
 
+	var err error
+
 	if d.DB != nil {
-		return d.DB.Close()
+		err = d.DB.Close()
 	}
 
-	return nil
+	// Run any datasource-owned teardown (e.g. the Cloud SQL connector's dialer)
+	// after closing the pool, joining its error so neither is masked.
+	if d.cleanup != nil {
+		cleanup := d.cleanup
+		d.cleanup = nil
+		err = errors.Join(err, cleanup())
+	}
+
+	return err
 }
 
 type Tx struct {
