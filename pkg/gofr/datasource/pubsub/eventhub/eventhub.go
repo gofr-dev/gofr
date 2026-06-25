@@ -461,9 +461,34 @@ func (c *Client) Publish(ctx context.Context, topic string, message []byte) erro
 }
 
 func (c *Client) Health() datasource.Health {
-	c.logger.Error("health-check not implemented for Event Hub")
+	health := datasource.Health{
+		Status: datasource.StatusDown,
+		Details: map[string]any{
+			"backend":  "EVENT_HUB",
+			"eventHub": c.cfg.EventhubName,
+		},
+	}
 
-	return datasource.Health{}
+	if c.consumer == nil {
+		health.Details["error"] = "client not connected"
+
+		return health
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), eventHubPropsTimeout)
+	defer cancel()
+
+	props, err := c.consumer.GetEventHubProperties(ctx, nil)
+	if err != nil {
+		health.Details["error"] = err.Error()
+
+		return health
+	}
+
+	health.Status = datasource.StatusUp
+	health.Details["partitionCount"] = len(props.PartitionIDs)
+
+	return health
 }
 
 func (c *Client) CreateTopic(_ context.Context, name string) error {

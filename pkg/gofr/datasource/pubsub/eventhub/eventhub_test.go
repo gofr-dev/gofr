@@ -228,16 +228,22 @@ func Test_HealthCheck(t *testing.T) {
 	mockLogger.EXPECT().Debug("Event Hub processor running successfully").AnyTimes()
 	mockLogger.EXPECT().Debugf("Using default consumer group: %s", azeventhubs.DefaultConsumerGroup)
 	mockLogger.EXPECT().Debug("Event Hub client initialization complete")
-	mockLogger.EXPECT().Error("health-check not implemented for Event Hub")
 
 	client.UseLogger(mockLogger)
 	client.UseMetrics(mockMetrics)
 
 	client.Connect()
 
-	_ = client.Health()
+	health := client.Health()
 
-	require.True(t, mockLogger.ctrl.Satisfied(), "Event Hub Topic Deletion not allowed failed")
+	// The test connection string points to a non-existent namespace, so the connectivity
+	// probe fails and the health check must report the backend as down.
+	require.Equal(t, datasource.StatusDown, health.Status, "Event Hub health should be down when the namespace is unreachable")
+	require.Equal(t, "EVENT_HUB", health.Details["backend"])
+	require.Equal(t, client.cfg.EventhubName, health.Details["eventHub"])
+	require.Contains(t, health.Details, "error", "an unreachable Event Hub should report the probe error")
+
+	require.True(t, mockLogger.ctrl.Satisfied(), "Event Hub Health Check Failed")
 }
 
 func getTestConfigs() Config {
@@ -393,11 +399,12 @@ func Test_Health(t *testing.T) {
 	client := New(getTestConfigs())
 	client.UseLogger(mockLogger)
 
-	mockLogger.EXPECT().Error("health-check not implemented for Event Hub")
-
+	// Without Connect() the consumer is nil, so the health check should short-circuit to down.
 	health := client.Health()
 
-	require.Equal(t, datasource.Health{}, health, "Health should return an empty datasource.Health struct")
+	require.Equal(t, datasource.StatusDown, health.Status, "Health should be down when the client is not connected")
+	require.Equal(t, "EVENT_HUB", health.Details["backend"])
+	require.Equal(t, "client not connected", health.Details["error"])
 }
 
 func TestCreateTopic_ForMigrations(t *testing.T) {
