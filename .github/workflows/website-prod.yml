@@ -6,6 +6,11 @@ on:
   push:
     tags:
       - "v*.*.*"
+  # Manual escape hatch — trigger a prod website rebuild without cutting a
+  # new framework release. Useful when only the website repo changed (new
+  # datasource pages, navigation fixes, etc.) and gofr.dev needs to be
+  # updated independently.
+  workflow_dispatch:
 
 env:
   APP_NAME: gofr-website
