@@ -1,0 +1,99 @@
+---
+name: Tag Datasource Modules
+permissions:
+  contents: write
+
+on:
+  push:
+    tags:
+      - 'v[0-9]+.[0-9]+.[0-9]+'
+
+jobs:
+  tag-datasources:
+    name: Tag Datasource Modules
+    runs-on: ubuntu-latest
+    # Only run on the upstream repo, not forks
+    if: github.repository == 'gofr-dev/gofr'
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Configure git
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+      - name: Tag changed datasource modules
+        env:
+          RELEASE_SHA: ${{ github.sha }}
+        run: |
+          set -e
+
+          tagged_any=false
+
+          # Find all datasource modules (directories with go.mod under pkg/gofr/datasource)
+          while IFS= read -r gomod; do
+            module=$(dirname "$gomod")
+
+            # Get the latest tag for this module (path-prefixed format)
+            latest_tag=$(git tag -l "${module}/v*" | sort -V | tail -1)
+
+            if [ -z "$latest_tag" ]; then
+              # Never tagged before — first release
+              new_version="v0.1.0"
+              echo "📦 ${module}: no previous tag found, will tag as ${new_version}"
+            else
+              # Check for commits to this module's directory since the last tag
+              changes=$(git log "${latest_tag}..${RELEASE_SHA}" --oneline -- "${module}/" 2>/dev/null || true)
+
+              if [ -z "$changes" ]; then
+                echo "✅ ${module}: no changes since ${latest_tag}, skipping"
+                continue
+              fi
+
+              # Parse current version
+              current_version=$(echo "$latest_tag" | grep -oE 'v[0-9]+\.[0-9]+\.[0-9]+$')
+              major=$(echo "$current_version" | cut -d. -f1 | tr -d 'v')
+              minor=$(echo "$current_version" | cut -d. -f2)
+              patch=$(echo "$current_version" | cut -d. -f3)
+
+              # Determine bump type from conventional commit messages
+              # Breaking change → minor bump (pre-1.0 semver: breaking changes bump minor)
+              # feat → minor bump
+              # everything else (fix, chore, build, deps) → patch bump
+              if echo "$changes" | grep -qE ' .+(\(.+\))?!: |BREAKING[- ]CHANGE'; then
+                minor=$((minor + 1))
+                patch=0
+                bump="minor (breaking change)"
+              elif echo "$changes" | grep -qE ' feat(\(.+\))?: '; then
+                minor=$((minor + 1))
+                patch=0
+                bump="minor (new feature)"
+              else
+                patch=$((patch + 1))
+                bump="patch"
+              fi
+
+              new_version="v${major}.${minor}.${patch}"
+              echo "📦 ${module}: ${current_version} → ${new_version} (${bump})"
+              echo "   Recent changes:"
+              echo "$changes" | head -5 | sed 's/^/     /'
+            fi
+
+            new_tag="${module}/${new_version}"
+            git tag -a "${new_tag}" "${RELEASE_SHA}" -m "Release ${new_version}"
+            tagged_any=true
+
+          done < <(find pkg/gofr/datasource -name "go.mod" | sort)
+
+          if [ "$tagged_any" = true ]; then
+            echo ""
+            echo "Pushing datasource tags..."
+            git push origin --tags
+            echo "✅ All datasource tags pushed."
+          else
+            echo "✅ No datasource modules needed tagging."
+          fi
