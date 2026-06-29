@@ -16,7 +16,7 @@ GoFr is an opinionated Go framework for production microservices. It bundles HTT
 
 ## Prerequisites
 
-- Go 1.25 or above. Check with `go version`.
+Go 1.25 or later. Verify your installation by running `go version`.
 - Familiarity with Go syntax — the {% new-tab-link title="Golang Tour" href="https://tour.golang.org/" /%} is a good 30-minute primer if you're new.
 
 ## Write your first GoFr API
@@ -56,8 +56,7 @@ func main() {
 }
 ```
 
-Before starting the server, run the following command in your terminal to ensure you have downloaded and synchronized all required dependencies for your project.
-
+Before starting the server, run the following command to download and synchronize your project's dependencies.
 ```bash
 go mod tidy
 ```
@@ -68,8 +67,7 @@ Once the dependencies are synchronized, start the GoFr server using the followin
 go run main.go
 ```
 
-This would start the server at 8000 port, `/greet` endpoint can be accessed from your browser at {% new-tab-link title="http://localhost:8000/greet" href="http://localhost:8000/greet" /%}, you would be able to see the output as following with _Status Code 200_ as per REST Standard.
-
+TThis would start the server at 8000 port, /greet endpoint can be accessed from your browser at {% new-tab-link title="http://localhost:8000/greet" href="http://localhost:8000/greet" /%}, you would be able to see the output as following with Status Code 200 as per REST Standard.
 ```json
 {"data":"Hello World!"}
 ```
