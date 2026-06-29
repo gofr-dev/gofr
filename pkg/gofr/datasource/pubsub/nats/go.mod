@@ -3,7 +3,7 @@ module gofr.dev/pkg/gofr/datasource/pubsub/nats
 go 1.26.0
 
 require (
-	github.com/nats-io/nats-server/v2 v2.14.2
+	github.com/nats-io/nats-server/v2 v2.14.3
 	github.com/nats-io/nats.go v1.52.0
 	github.com/stretchr/testify v1.11.1
 	go.opentelemetry.io/otel v1.44.0
