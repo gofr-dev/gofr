@@ -67,7 +67,11 @@ func toSnakeCase(str string) string {
 	var builder strings.Builder
 
 	for i, char := range str {
-		if char >= 'a' {
+		// Only uppercase ASCII letters are lowercased (and possibly underscore-
+		// separated); all other runes, including digits, pass through unchanged.
+		// The earlier `char >= 'a'` guard mis-routed digits into the branch
+		// below, corrupting identifiers such as "User1" into "user_Q".
+		if char < 'A' || char > 'Z' {
 			builder.WriteRune(char)
 			continue
 		}

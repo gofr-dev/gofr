@@ -26,6 +26,10 @@ func Test_toSnakeCase(t *testing.T) {
 		{desc: "single lowercase char", input: "a", expected: "a"},
 		{desc: "single uppercase char", input: "A", expected: "a"},
 		{desc: "multiple uppercase sequence", input: "UserID", expected: "user_id"},
+		{desc: "trailing digit", input: "User1", expected: "user1"},
+		{desc: "digit after leading acronym", input: "S3Bucket", expected: "s3_bucket"},
+		{desc: "digits within a word", input: "Base64Encoder", expected: "base64_encoder"},
+		{desc: "digit between words", input: "User2Name", expected: "user2_name"},
 	}
 
 	for _, tc := range tests {
