@@ -95,6 +95,16 @@ func Test_InsertQuery_Error(t *testing.T) {
 				"age": {NotNull: true},
 			},
 		},
+		{
+			name:       "NotNull Validation Error (unsigned int)",
+			dialect:    "mysql",
+			tableName:  "user",
+			fieldNames: []string{"views"},
+			values:     []any{uint(0)},
+			constraints: map[string]FieldConstraints{
+				"views": {NotNull: true},
+			},
+		},
 	}
 
 	for _, tc := range tests {
@@ -245,4 +255,12 @@ func Test_validateNotNull_Error(t *testing.T) {
 			require.EqualError(t, err, tt.expectedErr)
 		})
 	}
+}
+
+func Test_validateNotNull_UnsignedInt(t *testing.T) {
+	// reflect.Value.Int() panics on unsigned kinds, so unsigned integers must be
+	// validated via reflect.Value.Uint(). These calls previously panicked.
+	require.NoError(t, validateNotNull("views", uint(5), true))
+	require.NoError(t, validateNotNull("views", uint64(9), true))
+	require.EqualError(t, validateNotNull("views", uint(0), true), "field cannot be zero: views")
 }

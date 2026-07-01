@@ -96,8 +96,10 @@ func validateNotNull(fieldName string, value any, isNotNull bool) error {
 	switch v := value.(type) {
 	case string:
 		return validateStringNotNull(fieldName, v)
-	case int, int8, int16, int32, int64, uint, uint8, uint16, uint32, uint64:
+	case int, int8, int16, int32, int64:
 		return validateIntNotNull(fieldName, v)
+	case uint, uint8, uint16, uint32, uint64:
+		return validateUintNotNull(fieldName, v)
 	case float32, float64:
 		return validateFloatNotNull(fieldName, v)
 	default:
@@ -115,6 +117,16 @@ func validateStringNotNull(fieldName, value string) error {
 
 func validateIntNotNull(fieldName string, value any) error {
 	if reflect.ValueOf(value).Int() == 0 {
+		return fmt.Errorf("%w: %s", errFieldCannotBeZero, fieldName)
+	}
+
+	return nil
+}
+
+// validateUintNotNull handles the unsigned integer kinds. reflect.Value.Int()
+// panics for unsigned values, so these must use reflect.Value.Uint().
+func validateUintNotNull(fieldName string, value any) error {
+	if reflect.ValueOf(value).Uint() == 0 {
 		return fmt.Errorf("%w: %s", errFieldCannotBeZero, fieldName)
 	}
 
