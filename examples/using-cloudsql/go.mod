@@ -3,7 +3,7 @@ module gofr.dev/examples/using-cloudsql
 go 1.26.0
 
 require (
-	gofr.dev v1.56.6
+	gofr.dev v1.57.0
 	gofr.dev/pkg/gofr/datasource/cloudsql v0.0.0
 )
 
@@ -20,7 +20,6 @@ require (
 	github.com/DATA-DOG/go-sqlmock v1.5.2 // indirect
 	github.com/XSAM/otelsql v0.42.0 // indirect
 	github.com/agnivade/levenshtein v1.2.1 // indirect
-	github.com/alicebob/miniredis/v2 v2.38.0 // indirect
 	github.com/beorn7/perks v1.0.1 // indirect
 	github.com/cenkalti/backoff/v5 v5.0.3 // indirect
 	github.com/cespare/xxhash/v2 v2.3.0 // indirect
