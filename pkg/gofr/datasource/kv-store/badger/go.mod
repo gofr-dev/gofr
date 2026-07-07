@@ -3,7 +3,7 @@ module gofr.dev/pkg/gofr/datasource/kv-store/badger
 go 1.26.0
 
 require (
-	github.com/dgraph-io/badger/v4 v4.9.2
+	github.com/dgraph-io/badger/v4 v4.9.3
 	github.com/stretchr/testify v1.11.1
 	go.opentelemetry.io/otel v1.44.0
 	go.opentelemetry.io/otel/trace v1.44.0
