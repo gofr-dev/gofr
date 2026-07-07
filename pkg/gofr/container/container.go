@@ -249,8 +249,9 @@ func (c *Container) registerFrameworkMetrics() {
 	}
 
 	{ // Redis metrics
-		redisBuckets := getDefaultDatasourceBuckets()
-		c.Metrics().NewHistogram("app_redis_stats", "Response time of Redis commands in milliseconds.", redisBuckets...)
+		// Redis records latency in microseconds (see datasource/redis hook), so it uses the microsecond buckets.
+		redisBuckets := getDefaultDatasourceMicrosecondBuckets()
+		c.Metrics().NewHistogram("app_redis_stats", "Response time of Redis commands in microseconds.", redisBuckets...)
 	}
 
 	{ // SQL metrics
@@ -317,13 +318,23 @@ func (c *Container) RemoveConnection(connID string) {
 	c.WSManager.CloseConnection(connID)
 }
 
-// getDefaultDatasourceBuckets returns the standard histogram buckets for all datasource operations in milliseconds.
-// Covers 0-30s range to align with typical request timeout boundaries and provide consistent observability
-// across SQL, Redis, MongoDB, Cassandra, and other datasources.
+// getDefaultDatasourceBuckets returns the standard histogram buckets, in milliseconds, for datasources
+// that record latency in milliseconds (e.g. SQL). Covers 50µs-3min to span everything from fast
+// in-memory hits to long-running queries near request-timeout boundaries, giving consistent
+// observability across SQL and other millisecond-based datasources.
 func getDefaultDatasourceBuckets() []float64 {
 	return []float64{
-		.05, .075, .1, .125, .15, .2, .3, .5, .75, 1, 2, 3, 5, 7.5, 10, // 0-10ms: fast operations
-		25, 50, 100, 250, 500, 1000, 5000, 10000, 30000, // 10ms-30s: slower operations
+		.05, .075, .1, .125, .15, .2, .3, .5, .75, 1, 2, 3, 5, 7.5, 10, // 50µs-10ms
+		25, 50, 100, 250, 500, 1000, 5000, 10000, 30000, 60000, 120000, 180000, // 25ms-3min
+	}
+}
+
+// getDefaultDatasourceMicrosecondBuckets mirrors getDefaultDatasourceBuckets scaled to microseconds,
+// for datasources that record latency in microseconds (e.g. Redis). Covers 50µs-3min.
+func getDefaultDatasourceMicrosecondBuckets() []float64 {
+	return []float64{
+		50, 75, 100, 125, 150, 200, 300, 500, 750, 1000, 2000, 3000, 5000, 7500, 10000, // 50µs-10ms
+		25000, 50000, 100000, 250000, 500000, 1000000, 5000000, 10000000, 30000000, 60000000, 120000000, 180000000, // 25ms-3min
 	}
 }
 

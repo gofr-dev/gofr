@@ -74,7 +74,7 @@ jobs:
     # Steps to execute for this job
     steps:
       - name: Checkout code into go module directory
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
         with:
           fetch-depth: 0  # Full git history for accurate testing
 
@@ -127,7 +127,7 @@ jobs:
 
     steps:
       - name: Checkout code into go module directory
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
         with:
           fetch-depth: 0
 
@@ -199,7 +199,7 @@ jobs:
     needs: [ Example-Unit-Testing,PKG-Unit-Testing ]
     steps:
       - name: Check out code into the Go module directory
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
 
       # Download coverage reports from previous jobs
       - name: Download Coverage Report
@@ -240,7 +240,7 @@ jobs:
 
     steps:
       - name: Checkout code into go module directory
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
         with:
           fetch-depth: 0
 
@@ -316,7 +316,7 @@ jobs:
     if: ${{ github.repository == 'gofr-dev/gofr' && github.event_name == 'push' && github.ref == 'refs/heads/development'}}
     steps:
       - name: Check out code into the Go module directory
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
 
       - name: Install qlty CLI
         run: |
@@ -357,7 +357,7 @@ jobs:
       has_modules: ${{ steps.changed-submodules.outputs.has_modules }}
     steps:
       - name: Check out code into the Go module directory
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
         with:
           fetch-depth: 0  # Full history needed for proper diff analysis
 
@@ -453,7 +453,7 @@ jobs:
       fail-fast: false
     steps:
       - name: Check out code
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
         with:
           fetch-depth: 0
 
@@ -482,7 +482,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Check out code
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
 
       - name: Set up Go environment
         uses: actions/setup-go@v5
