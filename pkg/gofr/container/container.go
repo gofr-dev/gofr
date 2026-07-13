@@ -20,7 +20,9 @@ import (
 	"time"
 
 	_ "github.com/go-sql-driver/mysql" // This is required to be blank import
+	"go.opentelemetry.io/otel"
 
+	"gofr.dev/pkg/gofr/ai"
 	"gofr.dev/pkg/gofr/config"
 	"gofr.dev/pkg/gofr/datasource/file"
 	"gofr.dev/pkg/gofr/datasource/pubsub"
@@ -77,6 +79,9 @@ type Container struct {
 	KVStore KVStore
 
 	File file.FileSystem
+
+	llm     ai.Model
+	llmMock ai.LLM // set only by NewMockContainer so handler tests can inject a mock LLM
 }
 
 func NewContainer(conf config.Config) *Container {
@@ -229,6 +234,36 @@ func (c *Container) GetHTTPService(serviceName string) service.HTTP {
 
 func (c *Container) Metrics() metrics.Manager {
 	return c.metricsManager
+}
+
+// SetLLM stores the LLM model added via app.AddLLM.
+func (c *Container) SetLLM(m ai.Model) {
+	c.llm = m
+}
+
+// LLMModel returns the raw model stored via app.AddLLM, or nil if none was added. Prefer LLM() in
+// handlers; this exposes the uninstrumented provider for advanced use.
+func (c *Container) LLMModel() ai.Model {
+	return c.llm
+}
+
+// LLM returns the configured model wrapped with instrumentation and tool access, or nil if no
+// model was added. The wrapper is built per call so the tracer is resolved after the provider is
+// installed by Run; the cost is a struct allocation and is negligible next to a model call.
+func (c *Container) LLM() ai.LLM {
+	if c.llmMock != nil {
+		return c.llmMock
+	}
+
+	if c.llm == nil {
+		return nil
+	}
+
+	return ai.NewLLM(c.llm, ai.Deps{
+		Metrics: c.metricsManager,
+		Tracer:  otel.GetTracerProvider().Tracer("gofr-llm"),
+		Logger:  c.Logger,
+	})
 }
 
 func (c *Container) registerFrameworkMetrics() {

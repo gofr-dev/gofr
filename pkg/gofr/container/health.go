@@ -40,6 +40,15 @@ func (c *Container) Health(ctx context.Context) any {
 		healthMap["pubsub"] = health
 	}
 
+	if c.llm != nil {
+		health := c.llm.HealthCheck(ctx)
+		if health.Status == statusDown {
+			downCount++
+		}
+
+		healthMap["llm"] = health
+	}
+
 	downCount += checkExternalDBHealth(ctx, c, healthMap)
 
 	for name, svc := range c.Services {

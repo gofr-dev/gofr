@@ -53,6 +53,7 @@ type App struct {
 	graphqlManager      *graphQLManager
 	onStartHooks        []func(ctx *Context) error
 	mu                  sync.Mutex
+	llmMetricsOnce      sync.Once
 }
 
 func (a *App) runOnStartHooks(ctx context.Context) error {

@@ -6,6 +6,7 @@ import (
 
 	"go.opentelemetry.io/otel"
 
+	"gofr.dev/pkg/gofr/ai"
 	"gofr.dev/pkg/gofr/container"
 	"gofr.dev/pkg/gofr/datasource/file"
 	"gofr.dev/pkg/gofr/datasource/pubsub"
@@ -19,6 +20,7 @@ func tracerName(ds any) string {
 		match func(any) bool
 		name  string
 	}{
+		{func(d any) bool { _, ok := d.(ai.Model); return ok }, "gofr-llm"},
 		{func(d any) bool { _, ok := d.(container.Mongo); return ok }, "gofr-mongo"},
 		{func(d any) bool { _, ok := d.(container.ArangoDB); return ok }, "gofr-arangodb"},
 		{func(d any) bool { _, ok := d.(container.Clickhouse); return ok }, "gofr-clickhouse"},
@@ -65,6 +67,10 @@ func (a *App) instrumentDatasource(ds any) {
 		}
 	}
 
+	if cfg, ok := ds.(interface{ UseConfig(any) }); ok {
+		cfg.UseConfig(a.Config)
+	}
+
 	if c, ok := ds.(interface{ Connect() }); ok {
 		c.Connect()
 	}
@@ -74,6 +80,29 @@ func (a *App) instrumentDatasource(ds any) {
 func (a *App) AddMongo(db container.Mongo) {
 	a.instrumentDatasource(db)
 	a.container.Mongo = db
+}
+
+// LLMOption configures how a model is registered. It is reserved for forward-compatible options
+// such as naming a model in a multi-model setup.
+type LLMOption func(*llmOptions)
+
+type llmOptions struct{}
+
+// AddLLM registers an LLM model on the app. The model becomes reachable in handlers via
+// ctx.LLM(), its reachability is reported on the health endpoint, and its request and token
+// metrics are registered on first use. A nil or typed-nil model is ignored.
+func (a *App) AddLLM(m ai.Model, _ ...LLMOption) {
+	if m == nil {
+		return
+	}
+
+	if v := reflect.ValueOf(m); v.Kind() == reflect.Pointer && v.IsNil() {
+		return
+	}
+
+	a.instrumentDatasource(m)
+	a.llmMetricsOnce.Do(func() { ai.RegisterMetrics(a.Metrics()) })
+	a.container.SetLLM(m)
 }
 
 // AddFTP sets the FTP datasource in the app's container.
