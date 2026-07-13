@@ -40,7 +40,7 @@ require (
 	go.uber.org/mock v0.6.0
 	golang.org/x/oauth2 v0.36.0
 	golang.org/x/sync v0.21.0
-	golang.org/x/term v0.44.0
+	golang.org/x/term v0.45.0
 	golang.org/x/text v0.38.0
 	golang.org/x/time v0.15.0
 	google.golang.org/api v0.287.0
@@ -80,7 +80,7 @@ require (
 	github.com/munnerz/goautoneg v0.0.0-20191010083416-a7dc8b61c822 // indirect
 	github.com/ncruces/go-strftime v1.0.0 // indirect
 	github.com/openzipkin/zipkin-go v0.4.3 // indirect
-	github.com/pierrec/lz4/v4 v4.1.25 // indirect
+	github.com/pierrec/lz4/v4 v4.1.27 // indirect
 	github.com/pmezard/go-difflib v1.0.1-0.20181226105442-5d4384ee4fb2 // indirect
 	github.com/prometheus/client_model v0.6.2 // indirect
 	github.com/prometheus/common v0.67.5 // indirect
@@ -103,7 +103,7 @@ require (
 	go.yaml.in/yaml/v2 v2.4.4 // indirect
 	golang.org/x/crypto v0.53.0 // indirect
 	golang.org/x/net v0.56.0 // indirect
-	golang.org/x/sys v0.46.0 // indirect
+	golang.org/x/sys v0.47.0 // indirect
 	google.golang.org/genproto v0.0.0-20260519071638-aa98bba5eb94 // indirect
 	google.golang.org/genproto/googleapis/api v0.0.0-20260615183401-62b3387ff324 // indirect
 	modernc.org/libc v1.73.4 // indirect
