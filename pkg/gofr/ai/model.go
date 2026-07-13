@@ -26,9 +26,11 @@ type StreamingModel interface {
 }
 
 // Descriptor is an optional interface a provider implements to report distinct provider and model
-// labels for metrics and traces. Without it, Name() is used as the provider label.
+// labels for metrics and traces. Without it, Name() is used for both labels. The methods are named
+// ProviderName/ModelName (not Provider/Model) so a provider can expose Provider and Model as
+// exported struct fields, which Go forbids alongside methods of the same name.
 type Descriptor interface {
-	Provider() string
+	ProviderName() string
 	ModelName() string
 }
 

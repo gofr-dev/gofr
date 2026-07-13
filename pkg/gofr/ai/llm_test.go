@@ -39,8 +39,8 @@ func (s streamModel) Stream(context.Context, []Message, ...Option) (Streamer, er
 
 type descModel struct{ *fakeModel }
 
-func (d descModel) Provider() string  { return d.provider }
-func (d descModel) ModelName() string { return d.modelName }
+func (d descModel) ProviderName() string { return d.provider }
+func (d descModel) ModelName() string    { return d.modelName }
 
 func TestNewLLM_Nil(t *testing.T) {
 	assert.Nil(t, NewLLM(nil, Deps{}))

@@ -17,7 +17,7 @@ func NewLLM(m Model, d Deps) LLM {
 
 	provider, model := m.Name(), m.Name()
 	if desc, ok := m.(Descriptor); ok {
-		provider, model = desc.Provider(), desc.ModelName()
+		provider, model = desc.ProviderName(), desc.ModelName()
 	}
 
 	return &llm{model: m, deps: d, providerLabel: provider, modelLabel: model}
