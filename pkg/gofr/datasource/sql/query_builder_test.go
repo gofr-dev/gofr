@@ -2,6 +2,7 @@ package sql
 
 import (
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -259,8 +260,33 @@ func Test_validateNotNull_Error(t *testing.T) {
 
 func Test_validateNotNull_UnsignedInt(t *testing.T) {
 	// reflect.Value.Int() panics on unsigned kinds, so unsigned integers must be
-	// validated via reflect.Value.Uint(). These calls previously panicked.
+	// validated via reflect.Value.Uint(). These calls previously panicked. Every
+	// uint width listed in the type switch is exercised so none regress to the
+	// default path.
 	require.NoError(t, validateNotNull("views", uint(5), true))
-	require.NoError(t, validateNotNull("views", uint64(9), true))
+	require.NoError(t, validateNotNull("views", uint8(5), true))
+	require.NoError(t, validateNotNull("views", uint16(5), true))
+	require.NoError(t, validateNotNull("views", uint32(5), true))
+	require.NoError(t, validateNotNull("views", uint64(5), true))
+
 	require.EqualError(t, validateNotNull("views", uint(0), true), "field cannot be zero: views")
+	require.EqualError(t, validateNotNull("views", uint8(0), true), "field cannot be zero: views")
+	require.EqualError(t, validateNotNull("views", uint16(0), true), "field cannot be zero: views")
+	require.EqualError(t, validateNotNull("views", uint32(0), true), "field cannot be zero: views")
+	require.EqualError(t, validateNotNull("views", uint64(0), true), "field cannot be zero: views")
+}
+
+func Test_validateNotNull_NonNillableKinds(t *testing.T) {
+	// reflect.Value.IsNil() panics on non-nillable kinds, so the default path
+	// must guard against them. These kinds can never be null and previously
+	// panicked; they are now accepted for a NOT NULL field.
+	require.NoError(t, validateNotNull("active", true, true))
+	require.NoError(t, validateNotNull("active", false, true))
+	require.NoError(t, validateNotNull("createdAt", time.Time{}, true))
+	require.NoError(t, validateNotNull("offset", uintptr(0), true))
+
+	// A genuinely nil value for a NOT NULL field is still reported as null.
+	require.EqualError(t, validateNotNull("data", []byte(nil), true), "field cannot be null: data")
+	require.EqualError(t, validateNotNull("meta", map[string]int(nil), true), "field cannot be null: meta")
+	require.EqualError(t, validateNotNull("value", nil, true), "field cannot be null: value")
 }

@@ -142,9 +142,33 @@ func validateFloatNotNull(fieldName string, value any) error {
 }
 
 func validateDefaultNotNull(fieldName string, value any) error {
-	if reflect.ValueOf(value).IsNil() {
+	v := reflect.ValueOf(value)
+
+	// An untyped-nil interface has no underlying value at all, which for a
+	// NOT NULL column is a null.
+	if v.Kind() == reflect.Invalid {
+		return fmt.Errorf("%w: %s", errFieldCannotBeNull, fieldName)
+	}
+
+	// reflect.Value.IsNil panics on non-nillable kinds (bool, struct such as
+	// time.Time, array, uintptr, complex, ...). Those can never be nil, so the
+	// nil check only runs for the kinds where IsNil is defined.
+	if isNillableKind(v.Kind()) && v.IsNil() {
 		return fmt.Errorf("%w: %s", errFieldCannotBeNull, fieldName)
 	}
 
 	return nil
+}
+
+// isNillableKind reports whether reflect.Value.IsNil is defined for k. Calling
+// IsNil on any other kind panics.
+//
+//nolint:exhaustive // every non-nillable kind is intentionally handled by the default.
+func isNillableKind(k reflect.Kind) bool {
+	switch k {
+	case reflect.Chan, reflect.Func, reflect.Interface, reflect.Map, reflect.Pointer, reflect.Slice:
+		return true
+	default:
+		return false
+	}
 }
