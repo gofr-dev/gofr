@@ -81,7 +81,8 @@ type Container struct {
 	File file.FileSystem
 
 	llm     ai.Model
-	llmMock ai.LLM // set only by NewMockContainer so handler tests can inject a mock LLM
+	llmMock ai.LLM   // set only by NewMockContainer so handler tests can inject a mock LLM
+	tools   ai.Tools // set by app.EnableMCP so ctx.LLM().Tools() exposes the service's own handlers
 }
 
 func NewContainer(conf config.Config) *Container {
@@ -247,6 +248,11 @@ func (c *Container) LLMModel() ai.Model {
 	return c.llm
 }
 
+// SetTools installs the agent-tool provider exposed to handlers via ctx.LLM().Tools().
+func (c *Container) SetTools(t ai.Tools) {
+	c.tools = t
+}
+
 // LLM returns the configured model wrapped with instrumentation and tool access, or nil if no
 // model was added. The wrapper is built per call so the tracer is resolved after the provider is
 // installed by Run; the cost is a struct allocation and is negligible next to a model call.
@@ -263,6 +269,7 @@ func (c *Container) LLM() ai.LLM {
 		Metrics: c.metricsManager,
 		Tracer:  otel.GetTracerProvider().Tracer("gofr-llm"),
 		Logger:  c.Logger,
+		Tools:   c.tools,
 	})
 }
 

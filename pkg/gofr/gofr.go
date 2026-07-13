@@ -40,6 +40,7 @@ type App struct {
 	grpcServer   *grpcServer
 	httpServer   *httpServer
 	metricServer *metricServer
+	mcpServer    *mcpServer
 
 	cmd  *cmd
 	cron *Crontab
@@ -110,6 +111,10 @@ func (a *App) Shutdown(ctx context.Context) error {
 
 	if a.metricServer != nil {
 		err = errors.Join(err, a.metricServer.Shutdown(ctx))
+	}
+
+	if a.mcpServer != nil {
+		err = errors.Join(err, a.mcpServer.Shutdown(ctx))
 	}
 
 	if a.container != nil {
