@@ -12,6 +12,10 @@ import (
 	file "gofr.dev/pkg/gofr/datasource/file"
 )
 
+// defaultContentDisposition serves objects as an attachment (download) unless the
+// caller overrides it, matching Create's behavior.
+const defaultContentDisposition = "attachment"
+
 // CreateWithOptions creates an empty object at name, applying the metadata carried
 // in opts. It mirrors Create but lets the caller override the Content-Type and
 // Content-Disposition and attach user metadata, which is why the S3 provider
@@ -34,7 +38,7 @@ func (f *FileSystem) CreateWithOptions(ctx context.Context, name string, opts *f
 	contentType := mime.TypeByExtension(path.Ext(name))
 	// Default to attachment so the file must be downloaded before being opened,
 	// matching Create's behavior.
-	contentDisposition := "attachment"
+	contentDisposition := defaultContentDisposition
 
 	var metadata map[string]string
 

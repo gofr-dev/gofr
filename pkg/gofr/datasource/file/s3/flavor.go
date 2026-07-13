@@ -39,6 +39,9 @@ const (
 	FlavorGeneric Flavor = "generic"
 )
 
+// regionAuto is the fixed signing region required by some providers (e.g. Cloudflare R2).
+const regionAuto = "auto"
+
 // profile holds the presign- and client-affecting defaults for a Flavor.
 type profile struct {
 	// usePathStyle selects path-style addressing (host/bucket/key) over
@@ -65,7 +68,7 @@ type profile struct {
 func profileFor(flavor Flavor) profile {
 	switch flavor {
 	case FlavorR2:
-		return profile{usePathStyle: true, signingRegion: "auto", disableUploadChecksum: true}
+		return profile{usePathStyle: true, signingRegion: regionAuto, disableUploadChecksum: true}
 	case FlavorMinIO:
 		return profile{usePathStyle: true, disableUploadChecksum: true}
 	case FlavorSpaces:

@@ -27,9 +27,9 @@ func Test_resolveProfile(t *testing.T) {
 			name:                "R2 signs with auto region and disables checksum",
 			config:              &Config{Flavor: FlavorR2, Region: "us-east-1"},
 			wantPathStyle:       true,
-			wantSigningRegion:   "auto",
+			wantSigningRegion:   regionAuto,
 			wantDisableChecksum: true,
-			wantEffectiveRegion: "auto",
+			wantEffectiveRegion: regionAuto,
 		},
 		{
 			name:                "MinIO uses path-style and disables checksum",
