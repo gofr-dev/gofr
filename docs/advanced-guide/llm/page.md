@@ -53,6 +53,21 @@ Switching provider is a one-field change — `Provider: llm.OpenAI` and the matc
 `OPENAI_API_KEY` — because every provider satisfies the same `ai.Model` interface. Set `BaseURL` to
 point at any other OpenAI-compatible endpoint.
 
+### Zero-config from the environment
+
+Like Redis and SQL, an OpenAI-compatible model is wired automatically when its configuration is
+present — no `AddLLM` call needed:
+
+```dotenv
+LLM_PROVIDER=groq
+LLM_MODEL=llama-3.3-70b-versatile
+GROQ_API_KEY=your-key-here
+# LLM_BASE_URL=...   # optional override for any OpenAI-compatible endpoint
+```
+
+`app.AddLLM` stays available for a custom `ai.Model`, programmatic configuration, or to override the
+model wired from the environment.
+
 ## Calling the model
 
 `ctx.LLM()` returns the model wrapped with GoFr's instrumentation. It offers:

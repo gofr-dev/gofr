@@ -8,6 +8,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"gofr.dev/pkg/gofr/ai"
+	"gofr.dev/pkg/gofr/ai/llm"
 	"gofr.dev/pkg/gofr/datasource"
 	"gofr.dev/pkg/gofr/testutil"
 )
@@ -95,4 +96,36 @@ func TestApp_LLM_NilWhenNotAdded(t *testing.T) {
 	app := New()
 
 	assert.Nil(t, app.container.LLM())
+}
+
+func TestNew_AutoInitsLLMFromEnv(t *testing.T) {
+	testutil.NewServerConfigs(t)
+	t.Setenv("LLM_PROVIDER", "groq")
+	t.Setenv("LLM_MODEL", "llama-3.3-70b-versatile")
+
+	app := New()
+
+	require.NotNil(t, app.container.LLM(), "an LLM configured via env is wired without app.AddLLM")
+
+	client, ok := app.container.LLMModel().(*llm.Client)
+	require.True(t, ok)
+	assert.Equal(t, llm.Groq, client.Provider)
+	assert.Equal(t, "llama-3.3-70b-versatile", client.Model)
+}
+
+func TestNew_NoLLMWhenProviderUnset(t *testing.T) {
+	testutil.NewServerConfigs(t)
+
+	app := New()
+
+	assert.Nil(t, app.container.LLM())
+}
+
+func TestNew_SkipsLLMWhenModelMissing(t *testing.T) {
+	testutil.NewServerConfigs(t)
+	t.Setenv("LLM_PROVIDER", "groq") // no LLM_MODEL
+
+	app := New()
+
+	assert.Nil(t, app.container.LLM(), "provider without a model is skipped, not a panic")
 }
