@@ -20,6 +20,6 @@ require (
 	github.com/rogpeppe/go-internal v1.14.1 // indirect
 	golang.org/x/net v0.56.0 // indirect
 	golang.org/x/text v0.38.0 // indirect
-	google.golang.org/api v0.287.0 // indirect
+	google.golang.org/api v0.288.0 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 )
