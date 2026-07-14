@@ -62,6 +62,13 @@ type Streamer interface {
 	Close() error
 }
 
+// ToolCallStreamer is an optional Streamer capability. A stream that carried tool calls assembles
+// them from the provider's deltas and returns them here once Next has returned false. Read it after
+// the stream is drained: any completed tool calls, or nil.
+type ToolCallStreamer interface {
+	ToolCalls() []ToolCall
+}
+
 // Response is a single model completion.
 type Response struct {
 	Content   string

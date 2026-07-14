@@ -123,6 +123,18 @@ func chat(c *gofr.Context) (any, error) {
 `response.Stream` also accepts `Format: response.NDJSON` and a `Heartbeat` interval, and works for
 any streaming source — progress updates or log tailing — not just LLMs.
 
+If the model streams tool calls, they are assembled from the provider's deltas and available once the
+stream is drained:
+
+```go
+stream, _ := ctx.LLM().Stream(ctx, messages, ai.WithTools(tools))
+for { v, ok := stream.Next(); if !ok { break }; /* handle content token v */ }
+
+if tc, ok := stream.(ai.ToolCallStreamer); ok {
+	for _, call := range tc.ToolCalls() { /* run each assembled tool call */ }
+}
+```
+
 ## What you get for free
 
 Every call is observable the same way a normal GoFr request is, joined by the correlation ID:

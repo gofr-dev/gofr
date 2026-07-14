@@ -91,11 +91,24 @@ type streamChunk struct {
 }
 
 type streamChoice struct {
-	Delta streamDelta `json:"delta"`
+	Delta        streamDelta `json:"delta"`
+	FinishReason string      `json:"finish_reason"`
 }
 
 type streamDelta struct {
-	Content string `json:"content"`
+	Content   string                `json:"content"`
+	ToolCalls []streamToolCallDelta `json:"tool_calls"`
+}
+
+// streamToolCallDelta is a partial tool call: fields arrive across chunks, keyed by Index, and the
+// Function.Arguments string is concatenated fragment by fragment.
+type streamToolCallDelta struct {
+	Index    int    `json:"index"`
+	ID       string `json:"id"`
+	Function struct {
+		Name      string `json:"name"`
+		Arguments string `json:"arguments"`
+	} `json:"function"`
 }
 
 func toWireMessages(messages []ai.Message) []wireMessage {

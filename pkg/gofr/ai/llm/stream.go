@@ -19,20 +19,18 @@ const (
 	doneMarker = "[DONE]"
 )
 
-var _ ai.Streamer = (*streamer)(nil)
+var (
+	_ ai.Streamer         = (*streamer)(nil)
+	_ ai.ToolCallStreamer = (*streamer)(nil)
+)
 
 // Stream sends a streaming completion request and returns a lazily-consumed Streamer over the
-// server-sent event chunks, each yielding the incremental content string. The response body stays
-// open until Close is called. Streaming with tools is not yet supported and returns an error rather
-// than silently dropping tool-call deltas.
+// server-sent event chunks, each Next yielding the incremental content string. Tool calls streamed
+// as deltas are assembled and available via ToolCalls once the stream is drained. The response body
+// stays open until Close is called.
 func (c *Client) Stream(ctx context.Context, messages []ai.Message, opts ...ai.Option) (ai.Streamer, error) {
 	if c.svc == nil {
 		return nil, errNotConnected
-	}
-
-	if len(ai.ApplyOptions(opts...).Tools) > 0 {
-		// Streamed tool-call deltas are not assembled yet; reject rather than silently drop them.
-		return nil, errStreamToolsUnsup
 	}
 
 	body, err := c.buildRequest(messages, opts, true)
@@ -70,13 +68,17 @@ type streamer struct {
 	err     error
 	done    bool
 	usage   ai.Usage
+
+	// tool calls are assembled from deltas keyed by index; toolOrder preserves first-seen order.
+	toolAcc   map[int]*ai.ToolCall
+	toolOrder []int
 }
 
 func newStreamer(body io.ReadCloser) *streamer {
 	scanner := bufio.NewScanner(body)
 	scanner.Buffer(make([]byte, 0, streamBufferInit), streamBufferMax)
 
-	return &streamer{body: body, scanner: scanner}
+	return &streamer{body: body, scanner: scanner, toolAcc: make(map[int]*ai.ToolCall)}
 }
 
 // Next pulls the next incremental content delta. It returns the delta string and true, or nil and
@@ -136,11 +138,65 @@ func (s *streamer) handleLine(raw string) (string, lineStatus) {
 		s.usage = ai.Usage{PromptTokens: chunk.Usage.PromptTokens, CompletionTokens: chunk.Usage.CompletionTokens}
 	}
 
-	if len(chunk.Choices) == 0 || chunk.Choices[0].Delta.Content == "" {
+	if len(chunk.Choices) == 0 {
+		return "", lineSkip
+	}
+
+	s.accumulateToolCalls(chunk.Choices[0].Delta.ToolCalls)
+
+	if chunk.Choices[0].Delta.Content == "" {
 		return "", lineSkip
 	}
 
 	return chunk.Choices[0].Delta.Content, lineEmit
+}
+
+// accumulateToolCalls merges a chunk's tool-call deltas into the per-index accumulator: id and name
+// arrive once, arguments are concatenated fragment by fragment.
+func (s *streamer) accumulateToolCalls(deltas []streamToolCallDelta) {
+	for i := range deltas {
+		d := &deltas[i]
+
+		acc := s.toolAcc[d.Index]
+		if acc == nil {
+			acc = &ai.ToolCall{}
+			s.toolAcc[d.Index] = acc
+			s.toolOrder = append(s.toolOrder, d.Index)
+		}
+
+		if d.ID != "" {
+			acc.ID = d.ID
+		}
+
+		if d.Function.Name != "" {
+			acc.Name = d.Function.Name
+		}
+
+		acc.Args = append(acc.Args, d.Function.Arguments...)
+	}
+}
+
+// ToolCalls returns the tool calls assembled during the stream, or nil if none. Empty arguments are
+// normalized to an empty JSON object so the result is always valid JSON.
+func (s *streamer) ToolCalls() []ai.ToolCall {
+	if len(s.toolOrder) == 0 {
+		return nil
+	}
+
+	out := make([]ai.ToolCall, 0, len(s.toolOrder))
+
+	for _, idx := range s.toolOrder {
+		tc := s.toolAcc[idx]
+
+		args := tc.Args
+		if len(args) == 0 {
+			args = json.RawMessage("{}")
+		}
+
+		out = append(out, ai.ToolCall{ID: tc.ID, Name: tc.Name, Args: args})
+	}
+
+	return out
 }
 
 func (s *streamer) finish() {

@@ -47,12 +47,86 @@ func TestClient_Chat_EmptyChoices(t *testing.T) {
 	assert.Empty(t, resp.Content)
 }
 
-func TestClient_Stream_RejectsTools(t *testing.T) {
-	c := testClient(t, OpenAI, "http://example.invalid")
+// Tool calls streamed as deltas (name in one chunk, arguments fragmented across several) must be
+// assembled and returned via ToolCalls after the stream is drained.
+func TestClient_Stream_AssemblesFragmentedToolCall(t *testing.T) {
+	calls := drainToolCalls(t, []string{
+		`data: {"choices":[{"delta":{"tool_calls":[{"index":0,"id":"c1","function":{"name":"search"}}]}}]}`,
+		`data: {"choices":[{"delta":{"tool_calls":[{"index":0,"function":{"arguments":"{\"q\":"}}]}}]}`,
+		`data: {"choices":[{"delta":{"tool_calls":[{"index":0,"function":{"arguments":"\"gofr\"}"}}]}}]}`,
+		`data: {"choices":[{"delta":{},"finish_reason":"tool_calls"}]}`,
+		`data: [DONE]`,
+	})
 
-	_, err := c.Stream(t.Context(), []ai.Message{{Role: ai.RoleUser, Content: "hi"}},
-		ai.WithTools([]ai.ToolSpec{{Name: "search"}}))
-	require.ErrorIs(t, err, errStreamToolsUnsup)
+	require.Len(t, calls, 1)
+	assert.Equal(t, "c1", calls[0].ID)
+	assert.Equal(t, "search", calls[0].Name)
+	assert.JSONEq(t, `{"q":"gofr"}`, string(calls[0].Args))
+}
+
+func TestClient_Stream_MultipleToolCallsByIndex(t *testing.T) {
+	calls := drainToolCalls(t, []string{
+		`data: {"choices":[{"delta":{"tool_calls":[{"index":0,"id":"a","function":{"name":"one","arguments":"{}"}}]}}]}`,
+		`data: {"choices":[{"delta":{"tool_calls":[{"index":1,"id":"b","function":{"name":"two","arguments":"{}"}}]}}]}`,
+		`data: [DONE]`,
+	})
+
+	require.Len(t, calls, 2)
+	assert.Equal(t, "one", calls[0].Name)
+	assert.Equal(t, "two", calls[1].Name)
+}
+
+func TestClient_Stream_EmptyToolArgsNormalized(t *testing.T) {
+	calls := drainToolCalls(t, []string{
+		`data: {"choices":[{"delta":{"tool_calls":[{"index":0,"id":"c1","function":{"name":"noargs"}}]}}]}`,
+		`data: [DONE]`,
+	})
+
+	require.Len(t, calls, 1)
+	assert.JSONEq(t, `{}`, string(calls[0].Args))
+}
+
+func TestClient_Stream_ContentThenToolCall(t *testing.T) {
+	srv := sseServer(t, http.StatusOK, []string{
+		`data: {"choices":[{"delta":{"content":"thinking"}}]}`,
+		`data: {"choices":[{"delta":{"tool_calls":[{"index":0,"id":"c1","function":{"name":"go","arguments":"{}"}}]}}]}`,
+		`data: [DONE]`,
+	})
+	defer srv.Close()
+
+	s, err := testClient(t, OpenAI, srv.URL).Stream(t.Context(), []ai.Message{{Role: ai.RoleUser, Content: "x"}})
+	require.NoError(t, err)
+
+	defer s.Close()
+
+	assert.Equal(t, []string{"thinking"}, collect(t, s))
+	require.NoError(t, s.Err())
+
+	tc, ok := s.(ai.ToolCallStreamer)
+	require.True(t, ok)
+	require.Len(t, tc.ToolCalls(), 1)
+	assert.Equal(t, "go", tc.ToolCalls()[0].Name)
+}
+
+func drainToolCalls(t *testing.T, lines []string) []ai.ToolCall {
+	t.Helper()
+
+	srv := sseServer(t, http.StatusOK, lines)
+	defer srv.Close()
+
+	s, err := testClient(t, OpenAI, srv.URL).Stream(t.Context(), []ai.Message{{Role: ai.RoleUser, Content: "x"}})
+	require.NoError(t, err)
+
+	defer s.Close()
+
+	collect(t, s) // drain content
+
+	require.NoError(t, s.Err())
+
+	tc, ok := s.(ai.ToolCallStreamer)
+	require.True(t, ok)
+
+	return tc.ToolCalls()
 }
 
 func TestClient_Stream_ErrorChunkSurfaces(t *testing.T) {

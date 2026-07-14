@@ -103,6 +103,15 @@ func (s *instrumentedStream) Close() error {
 	return err
 }
 
+// ToolCalls forwards assembled tool calls from the underlying stream, or nil if it has none.
+func (s *instrumentedStream) ToolCalls() []ToolCall {
+	if tc, ok := s.Streamer.(ToolCallStreamer); ok {
+		return tc.ToolCalls()
+	}
+
+	return nil
+}
+
 func (s *instrumentedStream) finish() {
 	s.once.Do(func() {
 		var u Usage
