@@ -477,3 +477,21 @@ func TestClient_Connect_UnknownProviderNoBaseURL(t *testing.T) {
 	_, err := c.Chat(context.Background(), []ai.Message{{Role: ai.RoleUser, Content: "hi"}})
 	require.ErrorIs(t, err, errNotConnected)
 }
+
+func TestClient_ResolveBaseURLFromConfig(t *testing.T) {
+	t.Setenv("LLM_BASE_URL", "http://proxy.example/v1")
+
+	c := &Client{Provider: Groq, Model: "m"}
+	c.UseConfig(envConfig{})
+
+	assert.Equal(t, "http://proxy.example/v1", c.baseURL)
+}
+
+func TestClient_BaseURLFieldWinsOverConfig(t *testing.T) {
+	t.Setenv("LLM_BASE_URL", "http://from-env")
+
+	c := &Client{Provider: Groq, Model: "m", BaseURL: "http://from-field"}
+	c.UseConfig(envConfig{})
+
+	assert.Equal(t, "http://from-field", c.baseURL)
+}

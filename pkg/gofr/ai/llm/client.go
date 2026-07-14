@@ -124,7 +124,13 @@ func (c *Client) Connect() {
 func (c *Client) resolve() {
 	def, ok := providerDefaults(c.Provider)
 
+	// Precedence for the endpoint: the BaseURL field, then LLM_BASE_URL from config, then the
+	// provider default.
 	c.baseURL = c.BaseURL
+	if c.baseURL == "" && c.config != nil {
+		c.baseURL = c.config.Get(envBaseURL)
+	}
+
 	if c.baseURL == "" && ok {
 		c.baseURL = def.baseURL
 	}

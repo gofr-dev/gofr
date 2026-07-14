@@ -16,6 +16,8 @@ const (
 const (
 	// envAPIKey is the provider-agnostic key, preferred over the provider-specific ones below.
 	envAPIKey = "LLM_API_KEY" //nolint:gosec // G101: env var name, not a credential
+	// envBaseURL overrides the endpoint from configuration when Client.BaseURL is not set.
+	envBaseURL = "LLM_BASE_URL"
 
 	envOpenAI   = "OPENAI_API_KEY"
 	envGroq     = "GROQ_API_KEY"
