@@ -13,9 +13,28 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"go.uber.org/goleak"
 
 	resTypes "gofr.dev/pkg/gofr/http/response"
 )
+
+// TestStream_Goleak is a definitive goroutine-leak check: after a normal drain and a mid-stream
+// client disconnect, goleak (with its default retry/backoff) asserts no reader goroutine remains.
+func TestStream_Goleak(t *testing.T) {
+	// Ignore long-lived background goroutines started by transitive deps (not the stream's).
+	defer goleak.VerifyNone(t,
+		goleak.IgnoreTopFunction("go.opencensus.io/stats/view.(*worker).start"),
+		goleak.IgnoreAnyFunction("go.opencensus.io/stats/view.(*worker).start"),
+	)
+
+	// clean completion
+	NewResponder(httptest.NewRecorder(), http.MethodGet).
+		Respond(resTypes.Stream{Source: &sliceSource{items: []any{"a", "b"}}}, nil)
+
+	// mid-stream client disconnect (reader is blocked in Next; teardown must release it)
+	NewResponder(&erroringWriter{header: make(http.Header)}, http.MethodGet).
+		Respond(resTypes.Stream{Source: newBlockingSource(), Heartbeat: 5 * time.Millisecond}, nil)
+}
 
 var errClientGone = errors.New("client gone")
 

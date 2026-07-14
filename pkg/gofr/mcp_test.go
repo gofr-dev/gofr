@@ -249,7 +249,10 @@ func TestRouterTools_Only(t *testing.T) {
 	only := rt.Only("get_a")
 	assert.Equal(t, []string{"get_a"}, toolNames(only.List()))
 
-	_, err := only.Call(t.Context(), "get_b", nil)
+	_, err := only.Call(t.Context(), "get_a", nil) // whitelisted -> dispatches
+	require.NoError(t, err)
+
+	_, err = only.Call(t.Context(), "get_b", nil) // not whitelisted -> rejected
 	require.ErrorIs(t, err, ai.ErrToolNotFound)
 }
 
@@ -268,6 +271,49 @@ func TestEnableMCP_BeforeRoutesStillExposesThem(t *testing.T) {
 	tools := app.container.LLM().Tools()
 	assert.Contains(t, toolNames(tools.List()), "get_late",
 		"a route registered after EnableMCP is still discovered")
+}
+
+func TestEnableMCP_WithWriteToolsOption(t *testing.T) {
+	testutil.NewServerConfigs(t)
+	t.Setenv("MCP_PORT", "0")
+
+	app := New()
+	app.AddLLM(&testLLM{})
+	app.POST("/orders", func(*Context) (any, error) { return nil, nil })
+	app.EnableMCP(WithWriteTools())
+
+	assert.Contains(t, toolNames(app.container.LLM().Tools().List()), "post_orders")
+}
+
+func TestEnableMCP_WithExcludedRoutesOption(t *testing.T) {
+	testutil.NewServerConfigs(t)
+	t.Setenv("MCP_PORT", "0")
+
+	app := New()
+	app.AddLLM(&testLLM{})
+	app.GET("/secret", func(*Context) (any, error) { return nil, nil })
+	app.GET("/public", func(*Context) (any, error) { return nil, nil })
+	app.EnableMCP(WithExcludedRoutes("/secret"))
+
+	names := toolNames(app.container.LLM().Tools().List())
+	assert.NotContains(t, names, "get_secret")
+	assert.Contains(t, names, "get_public")
+}
+
+type richInput struct {
+	Score float64  `json:"score"`
+	Tags  []string `json:"tags"`
+	Plain string   // no json tag -> field name is used
+}
+
+func TestWithInput_SchemaTypes(t *testing.T) {
+	app, rt := testRouterTools(t, true)
+	app.POST("/x", func(*Context) (any, error) { return nil, nil }, WithInput[richInput]())
+
+	schema := schemaFor(rt.List(), "post_x")
+	assert.Contains(t, schema, `"score":{"type":"number"}`)
+	assert.Contains(t, schema, `"tags":{"type":"array"}`)
+	assert.Contains(t, schema, `"Plain"`) // untagged field keeps its Go name
 }
 
 func TestEnableMCP_ExposesToolsViaLLM(t *testing.T) {
