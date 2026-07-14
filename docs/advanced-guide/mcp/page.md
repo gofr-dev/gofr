@@ -46,6 +46,10 @@ type CreateOrder struct {
 app.POST("/orders", createOrder, gofr.WithInput[CreateOrder]())
 ```
 
+When a tool is called, its arguments are dispatched like a real request: path parameters fill the
+route, and for read handlers the remaining arguments become query values while for write handlers
+they become the JSON body.
+
 ### Read-only by default
 
 Only safe-to-retry handlers (`GET`, `HEAD`, `OPTIONS`) are exposed by default, so an agent cannot

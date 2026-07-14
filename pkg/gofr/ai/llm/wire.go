@@ -195,9 +195,10 @@ func toToolCalls(calls []wireResponseTool) []ai.ToolCall {
 	out := make([]ai.ToolCall, len(calls))
 
 	for i := range calls {
+		// Keep Args valid JSON: empty (zero-arg tools) or malformed arguments normalize to {}.
 		args := calls[i].Function.Arguments
-		if args == "" {
-			args = "{}" // some providers send empty arguments for zero-arg tools
+		if args == "" || !json.Valid([]byte(args)) {
+			args = "{}"
 		}
 
 		out[i] = ai.ToolCall{

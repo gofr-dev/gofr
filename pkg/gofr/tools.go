@@ -218,14 +218,18 @@ func toolName(method, pathTemplate string) string {
 // fields declared via WithInput on the route, if any.
 func (rt *routerTools) toolSchema(method, pathTemplate string) json.RawMessage {
 	props := map[string]any{}
+	isPathParam := map[string]bool{}
 
 	params := pathParams(pathTemplate)
 	for _, p := range params {
 		props[p] = map[string]string{schemaKeyType: schemaTypeString}
+		isPathParam[p] = true
 	}
 
 	if inputType := rt.app.routeInputs[method+" "+pathTemplate]; inputType != nil {
-		addStructProps(props, inputType)
+		// A body field named like a path param stays a path param at dispatch, so it keeps the
+		// path-param schema entry.
+		addStructProps(props, inputType, isPathParam)
 	}
 
 	if len(props) == 0 {
@@ -243,8 +247,9 @@ func (rt *routerTools) toolSchema(method, pathTemplate string) json.RawMessage {
 }
 
 // addStructProps adds one JSON-Schema property per exported field of a struct type, using json tags
-// for names.
-func addStructProps(props map[string]any, t reflect.Type) {
+// for names and skipping names already claimed by a path parameter. T is expected to be a struct (or
+// pointer to one); any other kind adds nothing.
+func addStructProps(props map[string]any, t reflect.Type, skip map[string]bool) {
 	for t.Kind() == reflect.Pointer {
 		t = t.Elem()
 	}
@@ -260,7 +265,7 @@ func addStructProps(props map[string]any, t reflect.Type) {
 		}
 
 		name := jsonFieldName(&f)
-		if name == "-" {
+		if name == "-" || skip[name] {
 			continue
 		}
 
@@ -389,13 +394,28 @@ func splitArgs(method, pathTemplate string, fields map[string]json.RawMessage,
 			// Escape so a value like "../admin" or "a/b" cannot break out of its path segment.
 			substituteSegment(segs, key, url.PathEscape(scalar(raw)))
 		case accessForMethod(method) == ai.ReadOnly:
-			query.Set(key, scalar(raw))
+			addQueryValue(query, key, raw)
 		default:
 			body[key] = raw
 		}
 	}
 
 	return strings.Join(segs, "/"), query, body
+}
+
+// addQueryValue maps a JSON argument to query values: an array becomes repeated key=value pairs so
+// ctx.Params returns each element; a scalar becomes a single value.
+func addQueryValue(query url.Values, key string, raw json.RawMessage) {
+	var arr []json.RawMessage
+	if err := json.Unmarshal(raw, &arr); err == nil {
+		for _, elem := range arr {
+			query.Add(key, scalar(elem))
+		}
+
+		return
+	}
+
+	query.Set(key, scalar(raw))
 }
 
 func substituteSegment(segs []string, name, value string) {

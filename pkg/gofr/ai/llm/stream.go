@@ -188,8 +188,10 @@ func (s *streamer) ToolCalls() []ai.ToolCall {
 	for _, idx := range s.toolOrder {
 		tc := s.toolAcc[idx]
 
+		// Keep Args valid JSON: empty (zero-arg tools) and any truncated/invalid assembly from a
+		// broken stream both normalize to an empty object rather than emitting invalid JSON.
 		args := tc.Args
-		if len(args) == 0 {
+		if len(args) == 0 || !json.Valid(args) {
 			args = json.RawMessage("{}")
 		}
 

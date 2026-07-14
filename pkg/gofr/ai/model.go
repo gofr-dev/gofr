@@ -63,8 +63,11 @@ type Streamer interface {
 }
 
 // ToolCallStreamer is an optional Streamer capability. A stream that carried tool calls assembles
-// them from the provider's deltas and returns them here once Next has returned false. Read it after
-// the stream is drained: any completed tool calls, or nil.
+// them from the provider's deltas and returns them here once Next has returned false. Call ToolCalls
+// from the same goroutine that drained Next, after Next has returned false; it returns the completed
+// tool calls, or nil if there were none. Note the stream returned by ctx.LLM().Stream always exposes
+// this method (returning nil when unsupported), so treat a nil result — not the type assertion — as
+// "no tool calls".
 type ToolCallStreamer interface {
 	ToolCalls() []ToolCall
 }

@@ -14,8 +14,8 @@ type routeConfig struct {
 }
 
 // WithInput declares the request body type T for a route so that, when the route is exposed as an
-// MCP tool via EnableMCP, its input schema describes the body's fields and types instead of only the
-// path parameters.
+// MCP tool via EnableMCP, its input schema describes the body's fields and types in addition to the
+// path parameters. T is expected to be a struct (or pointer to one); other kinds add no body schema.
 func WithInput[T any]() RouteOption {
 	return func(c *routeConfig) { c.inputType = reflect.TypeFor[T]() }
 }
