@@ -2,9 +2,10 @@ package response
 
 import "time"
 
-// Streamer is a pull iterator over a sequence of values produced over time. It is structurally
-// identical to ai.Streamer so a model stream can be returned directly as a Stream source without
-// coupling this transport package to the ai package.
+// Streamer is a generic pull iterator over a sequence of values produced over time, consumed by a
+// Stream response to write to the client incrementally. It is a transport-level primitive and
+// depends on nothing above this package; higher-level producers (an LLM stream, a log tail) conform
+// to it.
 //
 // Concurrency contract: the responder calls Next on one goroutine and may call Close on another
 // while Next is blocked. Close must cause a blocked Next to return (nil, false) promptly;

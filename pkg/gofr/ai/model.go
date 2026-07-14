@@ -53,8 +53,9 @@ type Tools interface {
 	Call(ctx context.Context, name string, args json.RawMessage) (Result, error)
 }
 
-// Streamer is a generic pull iterator. It is structurally identical to http/response.Streamer so
-// a stream can flow from provider to client without importing across the transport boundary.
+// Streamer is a generic pull iterator. It conforms to the http/response.Streamer transport
+// primitive so a model stream can be returned directly as a response.Stream source, without either
+// package importing the other.
 type Streamer interface {
 	Next() (any, bool)
 	Err() error
