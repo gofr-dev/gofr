@@ -222,6 +222,23 @@ func TestRouterTools_Only(t *testing.T) {
 	require.ErrorIs(t, err, ai.ErrToolNotFound)
 }
 
+// EnableMCP may be called before routes are registered: tools are discovered lazily, so a route
+// added afterwards is still exposed. This guards against a regression to eager route snapshotting.
+func TestEnableMCP_BeforeRoutesStillExposesThem(t *testing.T) {
+	testutil.NewServerConfigs(t)
+	t.Setenv("MCP_PORT", "0")
+
+	app := New()
+	app.AddLLM(&testLLM{})
+	app.EnableMCP() // called first, before any route exists
+
+	app.GET("/late", func(*Context) (any, error) { return nil, nil })
+
+	tools := app.container.LLM().Tools()
+	assert.Contains(t, toolNames(tools.List()), "get_late",
+		"a route registered after EnableMCP is still discovered")
+}
+
 func TestEnableMCP_ExposesToolsViaLLM(t *testing.T) {
 	testutil.NewServerConfigs(t)
 	t.Setenv("MCP_PORT", "0") // disable the network server; in-process tools still work
