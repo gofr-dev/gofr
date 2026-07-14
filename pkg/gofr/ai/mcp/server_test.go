@@ -99,6 +99,19 @@ func TestServer_Initialize(t *testing.T) {
 	assert.False(t, got.Capabilities.Tools.ListChanged)
 }
 
+func TestServer_Ping(t *testing.T) {
+	s := NewServer(&fakeTools{})
+
+	rec := post(t, s, `{"jsonrpc":"2.0","id":7,"method":"ping"}`)
+
+	require.Equal(t, http.StatusOK, rec.Code)
+
+	resp := decode(t, rec)
+	require.Nil(t, resp.Error)
+	assert.Equal(t, "7", string(resp.ID))
+	assert.NotNil(t, resp.Result)
+}
+
 func TestServer_ToolsList(t *testing.T) {
 	s := NewServer(&fakeTools{specs: []ai.ToolSpec{readTool(), writeTool()}})
 

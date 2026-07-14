@@ -93,6 +93,8 @@ func (s *Server) dispatch(ctx context.Context, req *rpcRequest) (any, *rpcError)
 		return s.handleToolsList(), nil
 	case methodToolsCall:
 		return s.handleToolsCall(ctx, req.Params)
+	case methodPing:
+		return struct{}{}, nil // MCP ping: an empty result confirms liveness.
 	default:
 		return nil, &rpcError{Code: codeMethodNotFound, Message: "method not found"}
 	}

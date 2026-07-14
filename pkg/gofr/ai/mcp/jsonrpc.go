@@ -12,6 +12,7 @@ const (
 	methodInitialize = "initialize"
 	methodToolsList  = "tools/list"
 	methodToolsCall  = "tools/call"
+	methodPing       = "ping"
 
 	contentTypeText = "text"
 	defaultSchema   = `{"type":"object"}`
