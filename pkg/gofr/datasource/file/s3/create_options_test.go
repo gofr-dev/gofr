@@ -97,6 +97,24 @@ func Test_CreateWithOptions_NilOptsUsesDefaults(t *testing.T) {
 	require.NoError(t, err)
 }
 
+func Test_CreateWithOptions_InvalidContentType(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	mocks := setupTestMocks(ctrl)
+	fs := setupTestFileSystem(mocks, nil)
+
+	mocks.mockLogger.EXPECT().Debug(gomock.Any()).AnyTimes()
+	mocks.mockLogger.EXPECT().Errorf(gomock.Any(), gomock.Any()).AnyTimes()
+
+	// A malformed Content-Type is rejected up front, for parity with the
+	// signed-URL path. No PutObject expectation is set, so any S3 call fails the test.
+	_, err := fs.CreateWithOptions(context.Background(), "a.csv", &file.FileOptions{
+		ContentType: "notavalidtype",
+	})
+	require.ErrorIs(t, err, errInvalidContentType)
+}
+
 func Test_CreateWithOptions_PutError(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()

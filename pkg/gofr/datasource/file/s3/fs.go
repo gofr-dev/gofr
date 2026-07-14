@@ -129,19 +129,7 @@ func (f *FileSystem) Connect() {
 	}
 
 	// Create the S3 client from config
-	s3Client := s3.NewFromConfig(cfg,
-		func(o *s3.Options) {
-			o.UsePathStyle = prof.usePathStyle
-			o.BaseEndpoint = &f.config.EndPoint
-
-			// Several S3-compatible providers reject the CRC32 checksum that
-			// aws-sdk-go-v2 adds to uploads by default; only calculate it when the
-			// request actually requires one.
-			if prof.disableUploadChecksum {
-				o.RequestChecksumCalculation = aws.RequestChecksumCalculationWhenRequired
-			}
-		},
-	)
+	s3Client := s3.NewFromConfig(cfg, applyClientOptions(prof, f.config.EndPoint))
 
 	f.conn = client{s3Client}
 	f.presigner = s3.NewPresignClient(s3Client)
@@ -149,6 +137,24 @@ func (f *FileSystem) Connect() {
 	msg = "S3 Client connected."
 
 	f.logger.Logf("connected to S3 bucket %s", f.config.BucketName)
+}
+
+// applyClientOptions returns the s3.Options mutator that translates a resolved
+// Flavor profile into concrete client settings: addressing style, base endpoint,
+// and upload-checksum behavior. It is separated from Connect so the flavor→SDK
+// wiring can be asserted in a unit test without a live S3 endpoint.
+func applyClientOptions(prof profile, endpoint string) func(*s3.Options) {
+	return func(o *s3.Options) {
+		o.UsePathStyle = prof.usePathStyle
+		o.BaseEndpoint = &endpoint
+
+		// Several S3-compatible providers reject the CRC32 checksum that
+		// aws-sdk-go-v2 adds to uploads by default; only calculate it when the
+		// request actually requires one.
+		if prof.disableUploadChecksum {
+			o.RequestChecksumCalculation = aws.RequestChecksumCalculationWhenRequired
+		}
+	}
 }
 
 // Create creates a new file in the S3 bucket.

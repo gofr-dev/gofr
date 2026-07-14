@@ -121,11 +121,25 @@ func validateSignedURLInput(name string, expiry time.Duration, opts *file.FileOp
 		return errExpiryMustBePositive
 	}
 
-	if opts != nil && opts.ContentType != "" {
-		parts := strings.SplitN(opts.ContentType, "/", contentTypePartsCount)
-		if len(parts) != contentTypePartsCount || parts[0] == "" || parts[1] == "" {
-			return fmt.Errorf("%w: %q", errInvalidContentType, opts.ContentType)
-		}
+	if opts != nil {
+		return validateContentType(opts.ContentType)
+	}
+
+	return nil
+}
+
+// validateContentType returns an error when contentType is non-empty and not a
+// well-formed "type/subtype" value. An empty contentType is valid: callers fall
+// back to a sniffed or default type. It is shared by the signed-URL and
+// CreateWithOptions paths so both reject malformed Content-Type values alike.
+func validateContentType(contentType string) error {
+	if contentType == "" {
+		return nil
+	}
+
+	parts := strings.SplitN(contentType, "/", contentTypePartsCount)
+	if len(parts) != contentTypePartsCount || parts[0] == "" || parts[1] == "" {
+		return fmt.Errorf("%w: %q", errInvalidContentType, contentType)
 	}
 
 	return nil

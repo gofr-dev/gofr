@@ -43,6 +43,13 @@ func (f *FileSystem) CreateWithOptions(ctx context.Context, name string, opts *f
 	var metadata map[string]string
 
 	if opts != nil {
+		if err := validateContentType(opts.ContentType); err != nil {
+			f.logger.Errorf("invalid content type for %q: %v", name, err)
+			msg = err.Error()
+
+			return nil, err
+		}
+
 		if opts.ContentType != "" {
 			contentType = opts.ContentType
 		}
