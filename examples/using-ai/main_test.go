@@ -55,7 +55,7 @@ func writeSSE(w http.ResponseWriter) {
 	w.Header().Set("Content-Type", "text/event-stream")
 
 	flusher, _ := w.(http.Flusher)
-	for _, chunk := range []string{"Hel", "lo", " world"} {
+	for _, chunk := range []string{"hello ", "world"} {
 		fmt.Fprintf(w, "data: {\"choices\":[{\"delta\":{\"content\":%q}}]}\n\n", chunk)
 
 		if flusher != nil {
@@ -105,7 +105,7 @@ func TestIntegration_UsingAI(t *testing.T) {
 
 	t.Run("stream returns SSE tokens then done", func(t *testing.T) {
 		out := post(t, base+"/stream", `{"prompt":"hi"}`)
-		assert.Contains(t, out, "Hel")
+		assert.Contains(t, out, "hello")
 		assert.Contains(t, out, "world")
 		assert.Contains(t, out, "[DONE]")
 	})
