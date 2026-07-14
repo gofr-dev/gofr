@@ -265,6 +265,56 @@ func TestEnableMCP_ServerConfigured(t *testing.T) {
 	assert.Equal(t, defaultMCPPort, app.mcpServer.port)
 }
 
+type orderInput struct {
+	Item     string `json:"item"`
+	Quantity int    `json:"qty"`
+	Rush     bool   `json:"rush"`
+	Internal string `json:"-"`
+}
+
+func schemaFor(specs []ai.ToolSpec, name string) string {
+	for _, s := range specs {
+		if s.Name == name {
+			return string(s.InputSchema)
+		}
+	}
+
+	return ""
+}
+
+func TestWithInput_EnrichesToolSchema(t *testing.T) {
+	app, rt := testRouterTools(t, true)
+	app.POST("/orders", func(*Context) (any, error) { return nil, nil }, WithInput[orderInput]())
+
+	schema := schemaFor(rt.List(), "post_orders")
+	require.NotEmpty(t, schema)
+	assert.Contains(t, schema, `"item"`)
+	assert.Contains(t, schema, `"qty"`)
+	assert.Contains(t, schema, `"integer"`)   // qty
+	assert.Contains(t, schema, `"boolean"`)   // rush
+	assert.NotContains(t, schema, "Internal") // json:"-" field skipped
+}
+
+func TestWithInput_MergesPathParamsAndBody(t *testing.T) {
+	app, rt := testRouterTools(t, true)
+	app.PUT("/orders/{id}", func(*Context) (any, error) { return nil, nil }, WithInput[orderInput]())
+
+	schema := schemaFor(rt.List(), "put_orders_id")
+	require.NotEmpty(t, schema)
+	assert.Contains(t, schema, `"id"`)   // path param
+	assert.Contains(t, schema, `"item"`) // body field
+	assert.Contains(t, schema, `"required":["id"]`)
+}
+
+func TestWithInput_AbsentIsPathParamsOnly(t *testing.T) {
+	app, rt := testRouterTools(t, false)
+	app.GET("/orders/{id}", func(*Context) (any, error) { return nil, nil })
+
+	schema := schemaFor(rt.List(), "get_orders_id")
+	assert.Contains(t, schema, `"id"`)
+	assert.NotContains(t, schema, `"item"`)
+}
+
 func TestHelpers(t *testing.T) {
 	assert.Equal(t, "get_users_id", toolName(http.MethodGet, "/users/{id}"))
 	assert.Equal(t, ai.ReadOnly, accessForMethod(http.MethodGet))

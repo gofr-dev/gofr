@@ -9,6 +9,7 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"reflect"
 	"strings"
 
 	"github.com/gorilla/mux"
@@ -120,7 +121,7 @@ func (rt *routerTools) specFor(method, pathTemplate string) (ai.ToolSpec, bool) 
 	return ai.ToolSpec{
 		Name:        toolName(method, pathTemplate),
 		Description: method + " " + pathTemplate,
-		InputSchema: pathParamSchema(pathTemplate),
+		InputSchema: rt.toolSchema(method, pathTemplate),
 		Access:      access,
 	}, true
 }
@@ -213,24 +214,94 @@ func toolName(method, pathTemplate string) string {
 	return b.String()
 }
 
-func pathParamSchema(pathTemplate string) json.RawMessage {
-	params := pathParams(pathTemplate)
-	if len(params) == 0 {
-		return nil
-	}
+// toolSchema builds the JSON Schema for a tool's arguments: path parameters (always) plus the body
+// fields declared via WithInput on the route, if any.
+func (rt *routerTools) toolSchema(method, pathTemplate string) json.RawMessage {
+	props := map[string]any{}
 
-	props := make(map[string]any, len(params))
+	params := pathParams(pathTemplate)
 	for _, p := range params {
 		props[p] = map[string]string{schemaKeyType: schemaTypeString}
 	}
 
-	schema, _ := json.Marshal(map[string]any{
-		schemaKeyType: schemaTypeObject,
-		"properties":  props,
-		"required":    params,
-	})
+	if inputType := rt.app.routeInputs[method+" "+pathTemplate]; inputType != nil {
+		addStructProps(props, inputType)
+	}
 
-	return schema
+	if len(props) == 0 {
+		return nil
+	}
+
+	schema := map[string]any{schemaKeyType: schemaTypeObject, "properties": props}
+	if len(params) > 0 {
+		schema["required"] = params // path params are always required; body fields are optional
+	}
+
+	out, _ := json.Marshal(schema)
+
+	return out
+}
+
+// addStructProps adds one JSON-Schema property per exported field of a struct type, using json tags
+// for names.
+func addStructProps(props map[string]any, t reflect.Type) {
+	for t.Kind() == reflect.Pointer {
+		t = t.Elem()
+	}
+
+	if t.Kind() != reflect.Struct {
+		return
+	}
+
+	for i := range t.NumField() {
+		f := t.Field(i)
+		if !f.IsExported() {
+			continue
+		}
+
+		name := jsonFieldName(&f)
+		if name == "-" {
+			continue
+		}
+
+		props[name] = map[string]string{schemaKeyType: jsonSchemaType(f.Type)}
+	}
+}
+
+func jsonFieldName(f *reflect.StructField) string {
+	tag := f.Tag.Get("json")
+	if tag == "" {
+		return f.Name
+	}
+
+	if name, _, _ := strings.Cut(tag, ","); name != "" {
+		return name
+	}
+
+	return f.Name
+}
+
+//nolint:exhaustive // the default arm covers every remaining reflect.Kind
+func jsonSchemaType(t reflect.Type) string {
+	for t.Kind() == reflect.Pointer {
+		t = t.Elem()
+	}
+
+	switch t.Kind() {
+	case reflect.String:
+		return schemaTypeString
+	case reflect.Bool:
+		return "boolean"
+	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64,
+		reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
+		return "integer"
+	case reflect.Float32, reflect.Float64:
+		return "number"
+	case reflect.Slice, reflect.Array:
+		return "array"
+	default:
+		return schemaTypeObject
+	}
 }
 
 func pathParams(pathTemplate string) []string {

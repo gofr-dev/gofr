@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strconv"
 	"strings"
 	"sync"
@@ -55,6 +56,7 @@ type App struct {
 	onStartHooks        []func(ctx *Context) error
 	mu                  sync.Mutex
 	llmMetricsOnce      sync.Once
+	routeInputs         map[string]reflect.Type // route (method+pattern) -> body type for MCP schemas
 }
 
 func (a *App) runOnStartHooks(ctx context.Context) error {

@@ -33,7 +33,18 @@ func main() {
 }
 ```
 
-The input schema for each tool is derived from the route, so there is nothing extra to define.
+The input schema for each tool is derived from the route's path parameters. For a handler that binds
+a JSON body, declare its type with `gofr.WithInput[T]()` so the tool schema also describes the body's
+fields and types:
+
+```go
+type CreateOrder struct {
+	Item string `json:"item"`
+	Qty  int    `json:"qty"`
+}
+
+app.POST("/orders", createOrder, gofr.WithInput[CreateOrder]())
+```
 
 ### Read-only by default
 
