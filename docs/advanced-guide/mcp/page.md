@@ -22,11 +22,12 @@ stopping conditions and memory belong.
 func main() {
 	app := gofr.New()
 
+	// Enable MCP up front — handlers are discovered lazily, so routes registered afterwards are
+	// exposed too. The server runs on MCP_PORT (default 8200).
+	app.EnableMCP()
+
 	app.GET("/products/{id}", getProduct)
 	app.POST("/products", createProduct)
-
-	// Read-only handlers become tools. The server runs on MCP_PORT (default 8200).
-	app.EnableMCP()
 
 	app.Run()
 }

@@ -20,7 +20,6 @@ func tracerName(ds any) string {
 		match func(any) bool
 		name  string
 	}{
-		{func(d any) bool { _, ok := d.(ai.Model); return ok }, "gofr-llm"},
 		{func(d any) bool { _, ok := d.(container.Mongo); return ok }, "gofr-mongo"},
 		{func(d any) bool { _, ok := d.(container.ArangoDB); return ok }, "gofr-arangodb"},
 		{func(d any) bool { _, ok := d.(container.Clickhouse); return ok }, "gofr-clickhouse"},

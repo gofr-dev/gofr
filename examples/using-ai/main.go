@@ -17,17 +17,18 @@ const maxTurns = 5
 func main() {
 	app := gofr.New()
 
-	// GROQ_API_KEY is read from the environment.
+	// LLM_API_KEY (or GROQ_API_KEY) is read from the environment.
 	app.AddLLM(&llm.Client{Provider: llm.Groq, Model: "llama-3.3-70b-versatile"})
 
-	// A plain data endpoint — also exposed to agents as a read-only tool by EnableMCP.
+	// Enable MCP up front; it discovers handlers lazily, so routes registered below are exposed too.
+	app.EnableMCP()
+
+	// A plain data endpoint — also exposed to agents as a read-only tool.
 	app.GET("/inventory/{sku}", inventory)
 
 	app.POST("/ask", ask)       // one-shot completion
 	app.POST("/stream", stream) // streamed completion
 	app.POST("/agent", agent)   // agent loop using the service's own tools
-
-	app.EnableMCP()
 
 	app.Run()
 }
