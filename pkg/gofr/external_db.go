@@ -61,8 +61,11 @@ func (a *App) instrumentDatasource(ds any) {
 		if name := tracerName(ds); name != "" {
 			t.UseTracer(otel.GetTracerProvider().Tracer(name))
 		} else {
-			a.Logger().Warnf("datasource %T implements UseTracer but has no tracer name registered in tracerName(); "+
-				"tracing will be skipped — add a matcher arm in pkg/gofr/external_db.go", ds)
+			// Log only the type (never the datasource value, which may hold secrets) so tracing gaps
+			// are visible without risking sensitive fields in logs.
+			a.Logger().Warnf("datasource %s implements UseTracer but has no tracer name registered in "+
+				"tracerName(); tracing will be skipped — add a matcher arm in pkg/gofr/external_db.go",
+				reflect.TypeOf(ds))
 		}
 	}
 
