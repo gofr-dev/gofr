@@ -69,11 +69,12 @@ func TestLLM_Chat_Delegates(t *testing.T) {
 }
 
 type fakeStreamer struct {
-	items  []any
-	idx    int
-	err    error
-	closed bool
-	usage  Usage
+	items     []any
+	idx       int
+	err       error
+	closed    bool
+	usage     Usage
+	toolCalls []ToolCall
 }
 
 func (f *fakeStreamer) Next() (any, bool) {
@@ -87,9 +88,25 @@ func (f *fakeStreamer) Next() (any, bool) {
 	return v, true
 }
 
-func (f *fakeStreamer) Err() error   { return f.err }
-func (f *fakeStreamer) Close() error { f.closed = true; return nil }
-func (f *fakeStreamer) Usage() Usage { return f.usage }
+func (f *fakeStreamer) Err() error            { return f.err }
+func (f *fakeStreamer) Close() error          { f.closed = true; return nil }
+func (f *fakeStreamer) Usage() Usage          { return f.usage }
+func (f *fakeStreamer) ToolCalls() []ToolCall { return f.toolCalls }
+
+// The instrumented wrapper returned by ctx.LLM().Stream must forward assembled tool calls from the
+// provider stream.
+func TestLLM_Stream_ForwardsToolCalls(t *testing.T) {
+	fs := &fakeStreamer{toolCalls: []ToolCall{{ID: "c1", Name: "search"}}}
+	l := NewLLM(streamModel{&fakeModel{stream: fs}}, Deps{})
+
+	s, err := l.Stream(t.Context(), nil)
+	require.NoError(t, err)
+
+	tc, ok := s.(ToolCallStreamer)
+	require.True(t, ok, "the stream must expose ToolCallStreamer")
+	require.Len(t, tc.ToolCalls(), 1)
+	assert.Equal(t, "search", tc.ToolCalls()[0].Name)
+}
 
 func TestLLM_Stream_UnsupportedRecordsError(t *testing.T) {
 	m := &fakeMetrics{}

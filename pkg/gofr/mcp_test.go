@@ -128,6 +128,37 @@ func TestRouterTools_Call_WriteBody(t *testing.T) {
 	assert.Contains(t, string(body), "book")
 }
 
+// A WithInput route dispatched as a tool must deliver the body args to ctx.Bind, end to end.
+func TestRouterTools_Call_WithInputBodyReachesBind(t *testing.T) {
+	app, rt := testRouterTools(t, true)
+	app.POST("/orders", func(c *Context) (any, error) {
+		var in orderInput
+
+		require.NoError(t, c.Bind(&in))
+
+		return map[string]any{"item": in.Item, "qty": in.Quantity}, nil
+	}, WithInput[orderInput]())
+
+	res, err := rt.Call(t.Context(), "post_orders", json.RawMessage(`{"item":"book","qty":3}`))
+	require.NoError(t, err)
+
+	body, _ := res.JSON()
+	assert.Contains(t, string(body), "book")
+	assert.Contains(t, string(body), "3")
+}
+
+// An array argument to a read tool must arrive as repeated query values so ctx.Params returns each.
+func TestRouterTools_Call_ArrayQueryParam(t *testing.T) {
+	app, rt := testRouterTools(t, false)
+	app.GET("/search", func(c *Context) (any, error) { return c.Params("tag"), nil })
+
+	res, err := rt.Call(t.Context(), "get_search", json.RawMessage(`{"tag":["a","b","c"]}`))
+	require.NoError(t, err)
+
+	body, _ := res.JSON()
+	assert.Contains(t, string(body), `["a","b","c"]`)
+}
+
 func TestRouterTools_Call_UnknownTool(t *testing.T) {
 	_, rt := testRouterTools(t, false)
 
@@ -304,6 +335,23 @@ func TestWithInput_MergesPathParamsAndBody(t *testing.T) {
 	assert.Contains(t, schema, `"id"`)   // path param
 	assert.Contains(t, schema, `"item"`) // body field
 	assert.Contains(t, schema, `"required":["id"]`)
+}
+
+type orderWithID struct {
+	ID   int    `json:"id"`
+	Item string `json:"item"`
+}
+
+// A body field whose name collides with a path parameter keeps the path-param schema (string),
+// because at dispatch the value is used as the path segment, not the body.
+func TestWithInput_PathParamWinsOverBodyField(t *testing.T) {
+	app, rt := testRouterTools(t, true)
+	app.PUT("/orders/{id}", func(*Context) (any, error) { return nil, nil }, WithInput[orderWithID]())
+
+	schema := schemaFor(rt.List(), "put_orders_id")
+	assert.Contains(t, schema, `"id":{"type":"string"}`)
+	assert.NotContains(t, schema, `"id":{"type":"integer"}`)
+	assert.Contains(t, schema, `"item"`)
 }
 
 func TestWithInput_AbsentIsPathParamsOnly(t *testing.T) {
