@@ -40,8 +40,8 @@ func (c *Container) Health(ctx context.Context) any {
 		healthMap["pubsub"] = health
 	}
 
-	if c.llm != nil {
-		health := c.llm.HealthCheck(ctx)
+	if c.llmModel != nil {
+		health := c.llmModel.HealthCheck(ctx)
 		if health.Status == statusDown {
 			downCount++
 		}

@@ -44,7 +44,7 @@ trigger a write it was not explicitly granted. Opt into write handlers deliberat
 app.EnableMCP(gofr.WithWriteTools())   // also expose POST/PUT/PATCH/DELETE handlers
 ```
 
-Drop specific routes with `gofr.MCPExclude("/internal/{id}")`. Framework `/.well-known/*` probes are
+Drop specific routes with `gofr.WithExcludedRoutes("/internal/{id}")`. Framework `/.well-known/*` probes are
 never exposed. Access is enforced at call time, not just in the tool listing — a hidden write tool
 cannot be invoked by guessing its name.
 

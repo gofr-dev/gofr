@@ -14,6 +14,7 @@ package container
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"strconv"
 	"strings"
@@ -80,9 +81,9 @@ type Container struct {
 
 	File file.FileSystem
 
-	llm     ai.Model
-	llmMock ai.LLM   // set only by NewMockContainer so handler tests can inject a mock LLM
-	tools   ai.Tools // set by app.EnableMCP so ctx.LLM().Tools() exposes the service's own handlers
+	llm      ai.LLM   // the instrumented surface returned by LLM(); a mock container sets it directly
+	llmModel ai.Model // the raw provider added via AddLLM, exposed by LLMModel()
+	tools    ai.Tools // set by app.EnableMCP so ctx.LLM().Tools() exposes the service's own handlers
 }
 
 func NewContainer(conf config.Config) *Container {
@@ -237,15 +238,23 @@ func (c *Container) Metrics() metrics.Manager {
 	return c.metricsManager
 }
 
-// SetLLM stores the LLM model added via app.AddLLM.
+// SetLLM stores the model added via app.AddLLM, building the instrumented ai.LLM once. The tracer
+// is available here because initTracer runs before any AddLLM; the tool provider is resolved lazily
+// so tools registered later (by EnableMCP) are still visible via ctx.LLM().Tools().
 func (c *Container) SetLLM(m ai.Model) {
-	c.llm = m
+	c.llmModel = m
+	c.llm = ai.NewLLM(m, ai.Deps{
+		Metrics: c.metricsManager,
+		Tracer:  otel.GetTracerProvider().Tracer("gofr-llm"),
+		Logger:  c.Logger,
+		Tools:   lazyTools{c},
+	})
 }
 
 // LLMModel returns the raw model stored via app.AddLLM, or nil if none was added. Prefer LLM() in
 // handlers; this exposes the uninstrumented provider for advanced use.
 func (c *Container) LLMModel() ai.Model {
-	return c.llm
+	return c.llmModel
 }
 
 // SetTools installs the agent-tool provider exposed to handlers via ctx.LLM().Tools().
@@ -253,24 +262,38 @@ func (c *Container) SetTools(t ai.Tools) {
 	c.tools = t
 }
 
-// LLM returns the configured model wrapped with instrumentation and tool access, or nil if no
-// model was added. The wrapper is built per call so the tracer is resolved after the provider is
-// installed by Run; the cost is a struct allocation and is negligible next to a model call.
+// LLM returns the instrumented model exposed to handlers, or nil if none was added. A mock
+// container injects its mock through the same field, so there is no test-only branch here.
 func (c *Container) LLM() ai.LLM {
-	if c.llmMock != nil {
-		return c.llmMock
-	}
+	return c.llm
+}
 
-	if c.llm == nil {
+// lazyTools resolves the container's tool provider at call time, so tools registered after the LLM
+// (for example by EnableMCP) are still visible via ctx.LLM().Tools().
+type lazyTools struct{ c *Container }
+
+func (l lazyTools) List() []ai.ToolSpec {
+	if l.c.tools == nil {
 		return nil
 	}
 
-	return ai.NewLLM(c.llm, ai.Deps{
-		Metrics: c.metricsManager,
-		Tracer:  otel.GetTracerProvider().Tracer("gofr-llm"),
-		Logger:  c.Logger,
-		Tools:   c.tools,
-	})
+	return l.c.tools.List()
+}
+
+func (l lazyTools) Only(names ...string) ai.Tools {
+	if l.c.tools == nil {
+		return l
+	}
+
+	return l.c.tools.Only(names...)
+}
+
+func (l lazyTools) Call(ctx context.Context, name string, args json.RawMessage) (ai.Result, error) {
+	if l.c.tools == nil {
+		return ai.Result{}, ai.ErrToolNotFound
+	}
+
+	return l.c.tools.Call(ctx, name, args)
 }
 
 func (c *Container) registerFrameworkMetrics() {

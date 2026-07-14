@@ -38,6 +38,10 @@ func RegisterMetrics(r MetricRegistrar) {
 // Instrument runs fn as a single LLM call, recording the span, metrics and log around it. It never
 // records prompt or completion content — only counts and low-cardinality labels. fn receives the
 // span-scoped context so the provider's own spans nest under this call.
+//
+// Instrument, StartCall and Recorder are the sanctioned extension points for provider modules that
+// wrap or implement a Model and want their calls recorded with GoFr's LLM observability; the
+// ctx.LLM() wrapper uses them internally.
 func Instrument(ctx context.Context, info *CallInfo,
 	fn func(ctx context.Context) (*Response, error)) (*Response, error) {
 	ctx, span := tracerOf(info).Start(ctx, "llm."+info.Op)

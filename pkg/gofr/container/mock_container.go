@@ -151,7 +151,7 @@ func NewMockContainer(t *testing.T, options ...options) (*Container, *Mocks) {
 	container.metricsManager = mockMetrics
 
 	mockLLM := ai.NewMockLLM(ctrl)
-	container.llmMock = mockLLM
+	container.llm = mockLLM
 
 	mocks := Mocks{
 		Redis:         container.Redis.(*MockRedis),

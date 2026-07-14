@@ -13,7 +13,6 @@ import (
 	"io"
 	"net"
 	"net/http"
-	"os"
 	"strconv"
 	"strings"
 	"sync"
@@ -142,14 +141,14 @@ func (c *Client) resolve() {
 	}
 }
 
+// lookupKey reads a key through the injected config only. GoFr's config is env-backed, so this
+// still resolves environment variables without the client reaching for os.Getenv itself.
 func (c *Client) lookupKey(env string) string {
-	if c.config != nil {
-		if v := c.config.Get(env); v != "" {
-			return v
-		}
+	if c.config == nil {
+		return ""
 	}
 
-	return os.Getenv(env)
+	return c.config.Get(env)
 }
 
 // Name returns the provider label used as the health key and tracer name.
