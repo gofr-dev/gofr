@@ -130,6 +130,13 @@ func (c *Client) resolve() {
 		c.baseURL = def.baseURL
 	}
 
+	if c.apiKey != "" {
+		return
+	}
+
+	// Prefer the generic LLM_API_KEY (consistent with LLM_PROVIDER/LLM_MODEL) and fall back to the
+	// provider-specific key (OPENAI_API_KEY, GROQ_API_KEY, ...) so existing conventions still work.
+	c.apiKey = c.lookupKey(envAPIKey)
 	if c.apiKey == "" && ok {
 		c.apiKey = c.lookupKey(def.envVar)
 	}

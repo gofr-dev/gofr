@@ -164,6 +164,34 @@ func TestCloneHealth_DetailsNotShared(t *testing.T) {
 	assert.Equal(t, "openai", orig.Details["host"])
 }
 
+func TestClient_ResolveGenericAPIKey(t *testing.T) {
+	t.Setenv("LLM_API_KEY", "generic-key")
+
+	c := &Client{Provider: Groq, Model: "m"}
+	c.UseConfig(envConfig{})
+
+	assert.Equal(t, "generic-key", c.apiKey)
+}
+
+func TestClient_ResolveProviderKeyFallback(t *testing.T) {
+	t.Setenv("GROQ_API_KEY", "groq-specific") // no LLM_API_KEY set
+
+	c := &Client{Provider: Groq, Model: "m"}
+	c.UseConfig(envConfig{})
+
+	assert.Equal(t, "groq-specific", c.apiKey)
+}
+
+func TestClient_GenericKeyPreferredOverProviderKey(t *testing.T) {
+	t.Setenv("LLM_API_KEY", "generic")
+	t.Setenv("GROQ_API_KEY", "specific")
+
+	c := &Client{Provider: Groq, Model: "m"}
+	c.UseConfig(envConfig{})
+
+	assert.Equal(t, "generic", c.apiKey)
+}
+
 func TestClient_Connect_UnknownProviderNoBaseURL(t *testing.T) {
 	c := &Client{Provider: Provider("nope")}
 	c.UseLogger(nopLogger{})

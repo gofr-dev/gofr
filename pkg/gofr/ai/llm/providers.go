@@ -14,6 +14,9 @@ const (
 )
 
 const (
+	// envAPIKey is the provider-agnostic key, preferred over the provider-specific ones below.
+	envAPIKey = "LLM_API_KEY" //nolint:gosec // G101: env var name, not a credential
+
 	envOpenAI   = "OPENAI_API_KEY"
 	envGroq     = "GROQ_API_KEY"
 	envDeepSeek = "DEEPSEEK_API_KEY"

@@ -15,7 +15,9 @@ token metrics, structured logs and health checks happen automatically.
 ## Registering a model
 
 Add a model with `app.AddLLM`. The bundled `llm.Client` is OpenAI-compatible and works with any
-provider that speaks that API — OpenAI, Groq, DeepSeek, Together and Ollama are built in.
+provider that speaks that API. Built-in providers are `llm.OpenAI`, `llm.Groq`, `llm.DeepSeek`,
+`llm.Together` and `llm.Ollama`; set `BaseURL` to reach any other OpenAI-compatible endpoint (a local
+model, a gateway, an aggregator).
 
 ```go
 package main
@@ -59,11 +61,15 @@ Like Redis and SQL, an OpenAI-compatible model is wired automatically when its c
 present — no `AddLLM` call needed:
 
 ```dotenv
-LLM_PROVIDER=groq
+LLM_PROVIDER=groq                    # openai | groq | deepseek | together | ollama
 LLM_MODEL=llama-3.3-70b-versatile
-GROQ_API_KEY=your-key-here
-# LLM_BASE_URL=...   # optional override for any OpenAI-compatible endpoint
+LLM_API_KEY=your-key-here            # generic key, used for whichever provider is selected
+# LLM_BASE_URL=...                   # optional override for any OpenAI-compatible endpoint
 ```
+
+The key is read from the generic `LLM_API_KEY` first, then the provider-specific variable
+(`OPENAI_API_KEY`, `GROQ_API_KEY`, `DEEPSEEK_API_KEY`, `TOGETHER_API_KEY`, `OLLAMA_API_KEY`) — so an
+existing `OPENAI_API_KEY` in your environment is honored without renaming.
 
 `app.AddLLM` stays available for a custom `ai.Model`, programmatic configuration, or to override the
 model wired from the environment.
