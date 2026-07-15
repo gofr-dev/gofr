@@ -102,6 +102,7 @@ func TestInstrument_RecordsCachedAndReasoningTokens(t *testing.T) {
 	require.NoError(t, err)
 
 	byType := map[string]float64{}
+
 	for _, h := range m.histograms {
 		assert.Equal(t, metricTokensPerRequest, h.name)
 		byType[labelValue(h.labels, "token_type")] = h.value

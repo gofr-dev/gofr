@@ -9,7 +9,7 @@ import (
 	"gofr.dev/pkg/gofr/ai"
 )
 
-func defaultUsage(s string) ai.Usage { return mapUsage(UsageFields{}, json.RawMessage(s)) }
+func defaultUsage(s string) ai.Usage { return mapUsage(nil, json.RawMessage(s)) }
 
 // The OpenAI/Groq shape reports cache-read and reasoning counts under the *_details objects.
 func TestMapUsage_OpenAIShape(t *testing.T) {
@@ -73,7 +73,7 @@ func TestMapUsage_SubsetInvariant(t *testing.T) {
 	got := defaultUsage(`{"prompt_tokens":10,"prompt_cache_hit_tokens":50}`)
 	assert.Equal(t, 10, got.CachedTokens, "cached clamped to prompt")
 
-	custom := UsageFields{CachedTokens: "total_tokens"}.extract(json.RawMessage(`{"prompt_tokens":8,"total_tokens":999}`))
+	custom := (&UsageFields{CachedTokens: "total_tokens"}).extract(json.RawMessage(`{"prompt_tokens":8,"total_tokens":999}`))
 	assert.Equal(t, 8, custom.CachedTokens, "misconfigured cached path clamped to prompt")
 }
 
@@ -90,7 +90,7 @@ func TestMapUsage_PartialTypeError(t *testing.T) {
 func TestMapUsage_NonObject(t *testing.T) {
 	for _, s := range []string{`[1,2]`, `"lots"`, `null`, `{}`, `{`} {
 		assert.Equal(t, ai.Usage{}, defaultUsage(s), s)
-		assert.Equal(t, ai.Usage{}, UsageFields{CachedTokens: "x"}.extract(json.RawMessage(s)), s)
+		assert.Equal(t, ai.Usage{}, (&UsageFields{CachedTokens: "x"}).extract(json.RawMessage(s)), s)
 	}
 }
 
@@ -112,7 +112,7 @@ func TestUsageFields_ExtractCustomPaths(t *testing.T) {
 
 	got := fields.extract(raw)
 
-	assert.Equal(t, 5000, got.PromptTokens)   // default path
+	assert.Equal(t, 5000, got.PromptTokens)    // default path
 	assert.Equal(t, 400, got.CompletionTokens) // default path
 	assert.Equal(t, 5400, got.TotalTokens)     // default path
 	assert.Equal(t, 4096, got.CachedTokens)    // custom nested path
@@ -141,8 +141,8 @@ func TestUsageFields_MissingPath(t *testing.T) {
 }
 
 func TestUsageFields_IsSet(t *testing.T) {
-	assert.False(t, UsageFields{}.isSet())
-	assert.True(t, UsageFields{CachedTokens: "x"}.isSet())
+	assert.False(t, (&UsageFields{}).isSet())
+	assert.True(t, (&UsageFields{CachedTokens: "x"}).isSet())
 }
 
 // A provider that reports no usage details yields a zero-valued, non-panicking Usage.

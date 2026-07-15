@@ -209,7 +209,7 @@ func (c *Client) Chat(ctx context.Context, messages []ai.Message, opts ...ai.Opt
 	out := toResponse(&cr)
 
 	if c.UsageFields.isSet() {
-		out.Usage = mapUsage(c.UsageFields, cr.Usage)
+		out.Usage = mapUsage(&c.UsageFields, cr.Usage)
 	}
 
 	return out, nil

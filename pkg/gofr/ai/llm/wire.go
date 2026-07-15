@@ -10,6 +10,12 @@ import (
 
 const functionType = "function"
 
+// emptyJSONObject is the normalized value for empty or invalid tool-call arguments.
+const emptyJSONObject = "{}"
+
+// jsonNull is the literal JSON null, checked so an absent/null usage doesn't overwrite captured usage.
+const jsonNull = "null"
+
 type chatRequest struct {
 	Model         string         `json:"model"`
 	Messages      []wireMessage  `json:"messages"`
@@ -96,7 +102,7 @@ const (
 	pathPromptTokens     = "prompt_tokens"
 	pathCompletionTokens = "completion_tokens"
 	pathTotalTokens      = "total_tokens"
-	pathCachedTokens     = "prompt_tokens_details.cached_tokens"
+	pathCachedTokens     = "prompt_tokens_details.cached_tokens" //nolint:gosec // G101: JSON field path, not a credential
 	pathReasoningTokens  = "completion_tokens_details.reasoning_tokens"
 	pathDeepSeekCached   = "prompt_cache_hit_tokens"
 	// input_tokens / output_tokens are the OpenAI Responses-API and Anthropic names for prompt /
@@ -118,13 +124,13 @@ type UsageFields struct {
 	ReasoningTokens  string
 }
 
-func (f UsageFields) isSet() bool { return f != UsageFields{} }
+func (f *UsageFields) isSet() bool { return *f != UsageFields{} }
 
 // extract reads token counts from a raw usage object by path, falling back to the OpenAI defaults for
 // any unset field. Each count is clamped to a sane range by intAtPath, and cached/reasoning are
 // clamped to their supersets (prompt/completion) so a malformed or misconfigured payload cannot make
 // a cache-hit rate exceed 100% or a billable-token count go negative.
-func (f UsageFields) extract(rawUsage json.RawMessage) ai.Usage {
+func (f *UsageFields) extract(rawUsage json.RawMessage) ai.Usage {
 	if len(rawUsage) == 0 {
 		return ai.Usage{}
 	}
@@ -161,7 +167,7 @@ func (f UsageFields) extract(rawUsage json.RawMessage) ai.Usage {
 		PromptTokens:     prompt,
 		CompletionTokens: completion,
 		TotalTokens:      at(f.TotalTokens, pathTotalTokens),
-		CachedTokens:     min(cached, prompt),          // cached is a subset of prompt
+		CachedTokens:     min(cached, prompt),                                         // cached is a subset of prompt
 		ReasoningTokens:  min(at(f.ReasoningTokens, pathReasoningTokens), completion), // subset of completion
 	}
 }
@@ -171,9 +177,13 @@ func (f UsageFields) extract(rawUsage json.RawMessage) ai.Usage {
 // absent or JSON-null usage yields the zero value, so a trailing "usage": null chunk never overwrites
 // a previously captured usage. Both paths go through the same map-based, field-tolerant, clamped
 // extraction, so one mistyped field can never zero out the counts that did parse.
-func mapUsage(fields UsageFields, raw json.RawMessage) ai.Usage {
-	if len(raw) == 0 || string(raw) == "null" {
+func mapUsage(fields *UsageFields, raw json.RawMessage) ai.Usage {
+	if len(raw) == 0 || string(raw) == jsonNull {
 		return ai.Usage{}
+	}
+
+	if fields == nil {
+		fields = &UsageFields{}
 	}
 
 	return fields.extract(raw)
@@ -294,7 +304,7 @@ func toWireTools(tools []ai.ToolSpec) []wireTool {
 func toResponse(cr *chatResponse) *ai.Response {
 	resp := &ai.Response{
 		Model: cr.Model,
-		Usage: mapUsage(UsageFields{}, cr.Usage),
+		Usage: mapUsage(nil, cr.Usage),
 	}
 
 	if len(cr.Choices) == 0 {
@@ -318,7 +328,7 @@ func toToolCalls(calls []wireResponseTool) []ai.ToolCall {
 		// Keep Args valid JSON: empty (zero-arg tools) or malformed arguments normalize to {}.
 		args := calls[i].Function.Arguments
 		if args == "" || !json.Valid([]byte(args)) {
-			args = "{}"
+			args = emptyJSONObject
 		}
 
 		out[i] = ai.ToolCall{

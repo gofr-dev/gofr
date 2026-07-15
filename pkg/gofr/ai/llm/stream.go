@@ -52,7 +52,7 @@ func (c *Client) Stream(ctx context.Context, messages []ai.Message, opts ...ai.O
 		return nil, c.statusError(resp.StatusCode, data)
 	}
 
-	return newStreamer(resp.Body, c.UsageFields), nil
+	return newStreamer(resp.Body, &c.UsageFields), nil
 }
 
 type lineStatus int
@@ -70,14 +70,14 @@ type streamer struct {
 	err         error
 	done        bool
 	usage       ai.Usage
-	usageFields UsageFields
+	usageFields *UsageFields
 
 	// tool calls are assembled from deltas keyed by index; toolOrder preserves first-seen order.
 	toolAcc   map[int]*ai.ToolCall
 	toolOrder []int
 }
 
-func newStreamer(body io.ReadCloser, fields UsageFields) *streamer {
+func newStreamer(body io.ReadCloser, fields *UsageFields) *streamer {
 	scanner := bufio.NewScanner(body)
 	scanner.Buffer(make([]byte, 0, streamBufferInit), streamBufferMax)
 
