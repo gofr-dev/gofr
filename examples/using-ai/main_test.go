@@ -99,6 +99,14 @@ func TestIntegration_UsingAI(t *testing.T) {
 		assert.Contains(t, get(t, base+"/inventory/ABC"), "ABC")
 	})
 
+	t.Run("health reports the LLM datasource", func(t *testing.T) {
+		out := get(t, base+"/.well-known/health")
+		assert.Contains(t, out, `"llm"`)
+		assert.Contains(t, out, `"status":"UP"`)
+		assert.Contains(t, out, `"provider":"groq"`)
+		assert.NotContains(t, out, "test-key", "the API key must never appear in health details")
+	})
+
 	t.Run("ask calls the LLM", func(t *testing.T) {
 		assert.Contains(t, post(t, base+"/ask", `{"prompt":"hi"}`), "a concise summary")
 	})
