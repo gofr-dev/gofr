@@ -51,6 +51,38 @@ func Test_ExportSpansError(t *testing.T) {
 	require.Error(t, err, "Expected error for failed request")
 }
 
+// Any 2xx is a successful export (Zipkin-compatible collectors return 202); non-2xx is an error.
+func Test_ExportSpans_Accepts2xx(t *testing.T) {
+	tests := []struct {
+		status  int
+		wantErr bool
+	}{
+		{http.StatusOK, false},
+		{http.StatusCreated, false},
+		{http.StatusAccepted, false},
+		{http.StatusNoContent, false},
+		{http.StatusBadRequest, true},
+		{http.StatusInternalServerError, true},
+	}
+
+	for _, tc := range tests {
+		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+			w.WriteHeader(tc.status)
+		}))
+
+		exporter := NewExporter(server.URL, logging.NewLogger(logging.INFO))
+		err := exporter.ExportSpans(t.Context(), provideSampleSpan(t))
+
+		if tc.wantErr {
+			require.Error(t, err, "status %d should be an error", tc.status)
+		} else {
+			require.NoError(t, err, "status %d should succeed", tc.status)
+		}
+
+		server.Close()
+	}
+}
+
 // A root span must not carry a parentId; a child span must reference its parent.
 func Test_convertSpans_RootParentIDOmitted(t *testing.T) {
 	tp := sdktrace.NewTracerProvider()

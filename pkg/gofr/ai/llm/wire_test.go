@@ -5,19 +5,19 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
+
+	"gofr.dev/pkg/gofr/ai"
 )
 
+func defaultUsage(s string) ai.Usage { return mapUsage(UsageFields{}, json.RawMessage(s)) }
+
 // The OpenAI/Groq shape reports cache-read and reasoning counts under the *_details objects.
-func TestWireUsage_ToAI_OpenAIShape(t *testing.T) {
-	var u wireUsage
-	require.NoError(t, json.Unmarshal([]byte(`{
+func TestMapUsage_OpenAIShape(t *testing.T) {
+	got := defaultUsage(`{
 		"prompt_tokens":2000,"completion_tokens":300,"total_tokens":2306,
 		"prompt_tokens_details":{"cached_tokens":1920},
 		"completion_tokens_details":{"reasoning_tokens":128}
-	}`), &u))
-
-	got := u.toAI()
+	}`)
 
 	assert.Equal(t, 2000, got.PromptTokens)
 	assert.Equal(t, 300, got.CompletionTokens)
@@ -27,22 +27,53 @@ func TestWireUsage_ToAI_OpenAIShape(t *testing.T) {
 }
 
 // DeepSeek reports cache hits at the top level instead of under prompt_tokens_details.
-func TestWireUsage_ToAI_DeepSeekCacheHit(t *testing.T) {
-	var u wireUsage
-	require.NoError(t, json.Unmarshal([]byte(`{
+func TestMapUsage_DeepSeekCacheHit(t *testing.T) {
+	got := defaultUsage(`{
 		"prompt_tokens":2000,"completion_tokens":10,"total_tokens":2010,
 		"prompt_cache_hit_tokens":1536,"prompt_cache_miss_tokens":464
-	}`), &u))
+	}`)
 
-	assert.Equal(t, 1536, u.toAI().CachedTokens)
+	assert.Equal(t, 1536, got.CachedTokens)
 }
 
 // When both are present, the standard details field wins over the DeepSeek alias.
-func TestWireUsage_ToAI_DetailsPreferredOverAlias(t *testing.T) {
-	u := wireUsage{PromptCacheHitTokens: 100}
-	u.PromptTokensDetails.CachedTokens = 900
+func TestMapUsage_DetailsPreferredOverAlias(t *testing.T) {
+	got := defaultUsage(`{"prompt_tokens":2000,"prompt_tokens_details":{"cached_tokens":900},"prompt_cache_hit_tokens":100}`)
 
-	assert.Equal(t, 900, u.toAI().CachedTokens)
+	assert.Equal(t, 900, got.CachedTokens)
+}
+
+// Negative and out-of-range counts are clamped to 0 on the default path, not fed to metrics.
+func TestMapUsage_ClampsOutOfRange(t *testing.T) {
+	assert.Zero(t, defaultUsage(`{"completion_tokens":-5}`).CompletionTokens)
+	assert.Zero(t, defaultUsage(`{"prompt_tokens":9000000000000000000}`).PromptTokens)
+	assert.Zero(t, defaultUsage(`{"prompt_tokens":2147483648}`).PromptTokens)
+}
+
+// cached is clamped to prompt and reasoning to completion, so a bad payload can't exceed 100%.
+func TestMapUsage_SubsetInvariant(t *testing.T) {
+	got := defaultUsage(`{"prompt_tokens":10,"prompt_cache_hit_tokens":50}`)
+	assert.Equal(t, 10, got.CachedTokens, "cached clamped to prompt")
+
+	custom := UsageFields{CachedTokens: "total_tokens"}.extract(json.RawMessage(`{"prompt_tokens":8,"total_tokens":999}`))
+	assert.Equal(t, 8, custom.CachedTokens, "misconfigured cached path clamped to prompt")
+}
+
+// A single mistyped field (a quoted number) must not zero the fields that did parse.
+func TestMapUsage_PartialTypeError(t *testing.T) {
+	got := defaultUsage(`{"prompt_tokens":"1200","completion_tokens":30,"total_tokens":1230}`)
+
+	assert.Equal(t, 30, got.CompletionTokens)
+	assert.Equal(t, 1230, got.TotalTokens)
+	assert.Zero(t, got.PromptTokens, "quoted number is not coerced, but does not poison the rest")
+}
+
+// Usage as a non-object (array/string) or malformed JSON yields a zero Usage, never a panic.
+func TestMapUsage_NonObject(t *testing.T) {
+	for _, s := range []string{`[1,2]`, `"lots"`, `null`, `{}`, `{`} {
+		assert.Equal(t, ai.Usage{}, defaultUsage(s), s)
+		assert.Equal(t, ai.Usage{}, UsageFields{CachedTokens: "x"}.extract(json.RawMessage(s)), s)
+	}
 }
 
 // A custom provider whose usage object uses non-standard field names is mapped via UsageFields.
@@ -97,11 +128,8 @@ func TestUsageFields_IsSet(t *testing.T) {
 }
 
 // A provider that reports no usage details yields a zero-valued, non-panicking Usage.
-func TestWireUsage_ToAI_Absent(t *testing.T) {
-	var u wireUsage
-	require.NoError(t, json.Unmarshal([]byte(`{"prompt_tokens":5,"completion_tokens":2}`), &u))
-
-	got := u.toAI()
+func TestMapUsage_Absent(t *testing.T) {
+	got := defaultUsage(`{"prompt_tokens":5,"completion_tokens":2}`)
 
 	assert.Equal(t, 5, got.PromptTokens)
 	assert.Zero(t, got.CachedTokens)

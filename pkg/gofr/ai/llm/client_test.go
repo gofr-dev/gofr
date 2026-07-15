@@ -117,6 +117,19 @@ func TestClient_Chat_CustomUsageFields(t *testing.T) {
 	assert.Equal(t, 210, resp.Usage.ReasoningTokens)
 }
 
+// Streaming requests must ask for the final usage chunk; non-streaming requests must not.
+func TestClient_BuildRequest_StreamRequestsUsage(t *testing.T) {
+	c := &Client{Model: "m"}
+
+	streamed, err := c.buildRequest([]ai.Message{{Role: ai.RoleUser, Content: "hi"}}, nil, true)
+	require.NoError(t, err)
+	assert.Contains(t, string(streamed), `"stream_options":{"include_usage":true}`)
+
+	plain, err := c.buildRequest([]ai.Message{{Role: ai.RoleUser, Content: "hi"}}, nil, false)
+	require.NoError(t, err)
+	assert.NotContains(t, string(plain), "stream_options")
+}
+
 func TestClient_Chat_MissingUsage(t *testing.T) {
 	srv := chatServer(t, http.StatusOK, `{"choices":[{"message":{"content":"ok"}}]}`)
 

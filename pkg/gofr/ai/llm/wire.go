@@ -11,12 +11,19 @@ import (
 const functionType = "function"
 
 type chatRequest struct {
-	Model       string        `json:"model"`
-	Messages    []wireMessage `json:"messages"`
-	Temperature *float64      `json:"temperature,omitempty"`
-	MaxTokens   *int          `json:"max_tokens,omitempty"`
-	Tools       []wireTool    `json:"tools,omitempty"`
-	Stream      bool          `json:"stream,omitempty"`
+	Model         string         `json:"model"`
+	Messages      []wireMessage  `json:"messages"`
+	Temperature   *float64       `json:"temperature,omitempty"`
+	MaxTokens     *int           `json:"max_tokens,omitempty"`
+	Tools         []wireTool     `json:"tools,omitempty"`
+	Stream        bool           `json:"stream,omitempty"`
+	StreamOptions *streamOptions `json:"stream_options,omitempty"`
+}
+
+// streamOptions requests a final usage chunk on a streaming response. OpenAI, Together and Ollama
+// only emit stream usage when include_usage is set; providers that ignore it are unaffected.
+type streamOptions struct {
+	IncludeUsage bool `json:"include_usage"`
 }
 
 type wireMessage struct {
@@ -81,46 +88,10 @@ type wireResponseFunc struct {
 	Arguments string `json:"arguments"`
 }
 
-// wireUsage covers the OpenAI Chat Completions usage shape used by every provider GoFr supports
-// (OpenAI, Groq, DeepSeek, Together, Ollama). Cache-read and reasoning counts live under the
-// *_details objects; DeepSeek instead reports cache hits at the top level, handled in toAI.
-type wireUsage struct {
-	PromptTokens     int `json:"prompt_tokens"`
-	CompletionTokens int `json:"completion_tokens"`
-	TotalTokens      int `json:"total_tokens"`
-
-	PromptTokensDetails struct {
-		CachedTokens int `json:"cached_tokens"`
-	} `json:"prompt_tokens_details"`
-
-	CompletionTokensDetails struct {
-		ReasoningTokens int `json:"reasoning_tokens"`
-	} `json:"completion_tokens_details"`
-
-	// PromptCacheHitTokens is DeepSeek's top-level cache-read count (its equivalent of
-	// prompt_tokens_details.cached_tokens).
-	PromptCacheHitTokens int `json:"prompt_cache_hit_tokens"`
-}
-
-// toAI maps the wire usage to ai.Usage, resolving cache-read tokens from whichever field the
-// provider used.
-func (u wireUsage) toAI() ai.Usage {
-	cached := u.PromptTokensDetails.CachedTokens
-	if cached == 0 {
-		cached = u.PromptCacheHitTokens
-	}
-
-	return ai.Usage{
-		PromptTokens:     u.PromptTokens,
-		CompletionTokens: u.CompletionTokens,
-		TotalTokens:      u.TotalTokens,
-		CachedTokens:     cached,
-		ReasoningTokens:  u.CompletionTokensDetails.ReasoningTokens,
-	}
-}
-
 // Default JSON paths for token usage, matching the OpenAI Chat Completions shape used by every
-// built-in provider. A custom provider overrides only the fields whose names differ.
+// built-in provider (OpenAI, Groq, DeepSeek, Together, Ollama). Cache-read and reasoning counts live
+// under the *_details objects; DeepSeek instead reports cache hits at the top level. A custom
+// provider overrides only the fields whose names differ.
 const (
 	pathPromptTokens     = "prompt_tokens"
 	pathCompletionTokens = "completion_tokens"
@@ -132,9 +103,9 @@ const (
 
 // UsageFields remaps the JSON paths GoFr reads token counts from, for OpenAI-compatible providers
 // whose usage object deviates from the standard shape. Each field is a dot-separated path into the
-// response's usage object (e.g. "usage_metadata.cached_content_token_count"). Every empty field
-// keeps its built-in default, so a custom provider sets only what differs and the popular providers
-// need no configuration at all.
+// response's usage object (e.g. "usage_metadata.cached_content_token_count"); a key that literally
+// contains a dot is not addressable. Every empty field keeps its built-in default, so a custom
+// provider sets only what differs and the popular providers need no configuration at all.
 type UsageFields struct {
 	PromptTokens     string
 	CompletionTokens string
@@ -145,9 +116,10 @@ type UsageFields struct {
 
 func (f UsageFields) isSet() bool { return f != UsageFields{} }
 
-// extract reads token counts from a raw usage object using the configured paths, falling back to the
-// OpenAI defaults for any unset field. It is used only when a client configures custom UsageFields;
-// the default path parses via wireUsage.toAI.
+// extract reads token counts from a raw usage object by path, falling back to the OpenAI defaults for
+// any unset field. Each count is clamped to a sane range by intAtPath, and cached/reasoning are
+// clamped to their supersets (prompt/completion) so a malformed or misconfigured payload cannot make
+// a cache-hit rate exceed 100% or a billable-token count go negative.
 func (f UsageFields) extract(rawUsage json.RawMessage) ai.Usage {
 	if len(rawUsage) == 0 {
 		return ai.Usage{}
@@ -166,38 +138,34 @@ func (f UsageFields) extract(rawUsage json.RawMessage) ai.Usage {
 		return intAtPath(m, def)
 	}
 
+	prompt := at(f.PromptTokens, pathPromptTokens)
+	completion := at(f.CompletionTokens, pathCompletionTokens)
+
 	cached := at(f.CachedTokens, pathCachedTokens)
 	if cached == 0 && f.CachedTokens == "" {
 		cached = intAtPath(m, pathDeepSeekCached) // DeepSeek alias, only in default mode
 	}
 
 	return ai.Usage{
-		PromptTokens:     at(f.PromptTokens, pathPromptTokens),
-		CompletionTokens: at(f.CompletionTokens, pathCompletionTokens),
+		PromptTokens:     prompt,
+		CompletionTokens: completion,
 		TotalTokens:      at(f.TotalTokens, pathTotalTokens),
-		CachedTokens:     cached,
-		ReasoningTokens:  at(f.ReasoningTokens, pathReasoningTokens),
+		CachedTokens:     min(cached, prompt),          // cached is a subset of prompt
+		ReasoningTokens:  min(at(f.ReasoningTokens, pathReasoningTokens), completion), // subset of completion
 	}
 }
 
-// mapUsage turns a raw usage object into ai.Usage: the custom UsageFields paths when configured, the
-// built-in OpenAI mapping otherwise. An absent or JSON-null usage yields the zero value, so a
-// trailing "usage": null chunk never overwrites a previously captured usage.
+// mapUsage turns a raw usage object into ai.Usage using the custom UsageFields paths when configured
+// or the built-in OpenAI mapping otherwise (an empty UsageFields resolves to the default paths). An
+// absent or JSON-null usage yields the zero value, so a trailing "usage": null chunk never overwrites
+// a previously captured usage. Both paths go through the same map-based, field-tolerant, clamped
+// extraction, so one mistyped field can never zero out the counts that did parse.
 func mapUsage(fields UsageFields, raw json.RawMessage) ai.Usage {
 	if len(raw) == 0 || string(raw) == "null" {
 		return ai.Usage{}
 	}
 
-	if fields.isSet() {
-		return fields.extract(raw)
-	}
-
-	var u wireUsage
-	if err := json.Unmarshal(raw, &u); err != nil {
-		return ai.Usage{}
-	}
-
-	return u.toAI()
+	return fields.extract(raw)
 }
 
 // intAtPath walks a dot-separated path through nested JSON objects and returns the integer leaf, or

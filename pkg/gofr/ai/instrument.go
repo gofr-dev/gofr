@@ -105,9 +105,10 @@ func record(ctx context.Context, info *CallInfo, span trace.Span, resp *Response
 		m.IncrementCounter(ctx, metricRequestCount,
 			"provider", info.Provider, "model", info.Model, "operation", info.Op, "status", status)
 
-		// Tokens are recorded only on success so the histogram _count aligns with the
-		// success request count; both entry points (Instrument and Recorder.Finish) skip
-		// token samples when the call errored.
+		// Tokens are recorded only on success (both entry points skip samples on error), and only
+		// for token types the provider actually reported (recordTokens skips zeros). So a token
+		// type's histogram _count tracks successful requests that reported that type — it can be
+		// below the success request count when a provider omits usage.
 		if err == nil && resp != nil {
 			recordTokens(ctx, m, info, resp.Usage)
 		}

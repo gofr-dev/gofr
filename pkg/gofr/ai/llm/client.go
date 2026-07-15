@@ -279,6 +279,11 @@ func (c *Client) buildRequest(messages []ai.Message, opts []ai.Option, stream bo
 		Stream:      stream,
 	}
 
+	// Ask for the final usage chunk; many providers omit it from streams unless requested.
+	if stream {
+		req.StreamOptions = &streamOptions{IncludeUsage: true}
+	}
+
 	body, err := json.Marshal(req)
 	if err != nil {
 		return nil, fmt.Errorf("%w: %w", errEncodeRequest, err)

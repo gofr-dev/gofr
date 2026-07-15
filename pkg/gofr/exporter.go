@@ -84,7 +84,9 @@ func (e *Exporter) processSpans(ctx context.Context, logger logging.Logger, span
 	}
 	defer resp.Body.Close()
 
-	if resp.StatusCode != http.StatusCreated {
+	// Accept any 2xx: the hosted tracer returns 201, but Zipkin-compatible collectors (a valid
+	// TRACER_URL target) return 202 Accepted.
+	if resp.StatusCode < http.StatusOK || resp.StatusCode >= http.StatusMultipleChoices {
 		// Log as well as return: the batch processor swallows the returned error, so without this a
 		// misconfigured or rejecting endpoint drops every trace with no signal to the operator.
 		err := fmt.Errorf("failed to post spans on '%v', %w: '%d'", e.endpoint, errUnexpectedStatusCode, resp.StatusCode)

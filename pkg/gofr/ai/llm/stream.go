@@ -44,7 +44,9 @@ func (c *Client) Stream(ctx context.Context, messages []ai.Message, opts ...ai.O
 	}
 
 	if !isSuccess(resp.StatusCode) {
-		data, _ := io.ReadAll(resp.Body)
+		// Bound the error body: statusError truncates for the message, but read a capped amount so a
+		// misbehaving endpoint streaming an endless error body cannot exhaust memory.
+		data, _ := io.ReadAll(io.LimitReader(resp.Body, maxErrBodyLen+1))
 		_ = resp.Body.Close()
 
 		return nil, c.statusError(resp.StatusCode, data)

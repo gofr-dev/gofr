@@ -106,6 +106,31 @@ func TestClient_Stream_NullUsageDoesNotWipe(t *testing.T) {
 	assert.Equal(t, ai.Usage{PromptTokens: 9, CompletionTokens: 4}, u.Usage())
 }
 
+// A later chunk carrying garbage usage (negative counts → clamped to zero) must not overwrite the
+// usage captured on the finish chunk.
+func TestClient_Stream_GarbageUsageDoesNotOverwrite(t *testing.T) {
+	lines := []string{
+		`data: {"choices":[],"usage":{"prompt_tokens":9,"completion_tokens":4}}`,
+		`data: {"choices":[{"delta":{}}],"usage":{"prompt_tokens":-1,"completion_tokens":-1}}`,
+		`data: [DONE]`,
+	}
+	srv := sseServer(t, http.StatusOK, lines)
+
+	defer srv.Close()
+
+	c := testClient(t, OpenAI, srv.URL)
+
+	s, err := c.Stream(t.Context(), []ai.Message{{Role: ai.RoleUser, Content: "hi"}})
+	require.NoError(t, err)
+
+	defer func() { require.NoError(t, s.Close()) }()
+
+	collect(t, s)
+
+	u := s.(interface{ Usage() ai.Usage })
+	assert.Equal(t, ai.Usage{PromptTokens: 9, CompletionTokens: 4}, u.Usage())
+}
+
 // Custom UsageFields also apply on the streaming path, mapped from the final chunk's usage object.
 func TestClient_Stream_CustomUsageFields(t *testing.T) {
 	lines := []string{
