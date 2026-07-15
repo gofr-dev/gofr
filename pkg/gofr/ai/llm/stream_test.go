@@ -79,6 +79,60 @@ func TestClient_Stream_Success(t *testing.T) {
 	assert.Equal(t, ai.Usage{PromptTokens: 5, CompletionTokens: 2}, u.Usage())
 }
 
+// A trailing chunk carrying "usage": null (sent by some gateways after the finish chunk) must not
+// wipe the usage captured earlier.
+func TestClient_Stream_NullUsageDoesNotWipe(t *testing.T) {
+	lines := []string{
+		`data: {"choices":[{"delta":{"content":"hi"}}],"usage":null}`,
+		`data: {"choices":[],"usage":{"prompt_tokens":9,"completion_tokens":4}}`,
+		`data: {"choices":[{"delta":{},"finish_reason":"stop"}],"usage":null}`,
+		`data: [DONE]`,
+	}
+	srv := sseServer(t, http.StatusOK, lines)
+
+	defer srv.Close()
+
+	c := testClient(t, OpenAI, srv.URL)
+
+	s, err := c.Stream(t.Context(), []ai.Message{{Role: ai.RoleUser, Content: "hi"}})
+	require.NoError(t, err)
+
+	defer func() { require.NoError(t, s.Close()) }()
+
+	collect(t, s)
+	require.NoError(t, s.Err())
+
+	u := s.(interface{ Usage() ai.Usage })
+	assert.Equal(t, ai.Usage{PromptTokens: 9, CompletionTokens: 4}, u.Usage())
+}
+
+// Custom UsageFields also apply on the streaming path, mapped from the final chunk's usage object.
+func TestClient_Stream_CustomUsageFields(t *testing.T) {
+	lines := []string{
+		`data: {"choices":[{"delta":{"content":"hi"}}]}`,
+		`data: {"choices":[],"usage":{"prompt_tokens":100,"usage_metadata":{"cached_content_token_count":64}}}`,
+		`data: [DONE]`,
+	}
+	srv := sseServer(t, http.StatusOK, lines)
+
+	defer srv.Close()
+
+	c := testClient(t, OpenAI, srv.URL)
+	c.UsageFields = UsageFields{CachedTokens: "usage_metadata.cached_content_token_count"}
+
+	s, err := c.Stream(t.Context(), []ai.Message{{Role: ai.RoleUser, Content: "hi"}})
+	require.NoError(t, err)
+
+	defer func() { require.NoError(t, s.Close()) }()
+
+	collect(t, s)
+	require.NoError(t, s.Err())
+
+	u := s.(interface{ Usage() ai.Usage })
+	assert.Equal(t, 100, u.Usage().PromptTokens)
+	assert.Equal(t, 64, u.Usage().CachedTokens)
+}
+
 func TestClient_Stream_MalformedChunk(t *testing.T) {
 	srv := sseServer(t, http.StatusOK, []string{`data: {broken`})
 
@@ -147,7 +201,7 @@ func (c *closeTracker) Close() error {
 
 func TestStreamer_CloseClosesBody(t *testing.T) {
 	ct := &closeTracker{Reader: strings.NewReader(`data: [DONE]` + "\n")}
-	s := newStreamer(ct)
+	s := newStreamer(ct, UsageFields{})
 
 	_, ok := s.Next()
 	assert.False(t, ok)

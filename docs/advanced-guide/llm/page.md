@@ -141,9 +141,9 @@ Every call is observable the same way a normal GoFr request is, joined by the co
 
 | Signal | Detail |
 |---|---|
-| Metrics | `app_llm_request_count` (provider, model, operation, status) and `app_llm_tokens_per_request` histogram (provider, model, token_type). The histogram's Prometheus `_sum` is the cumulative token count. |
-| Traces | A span per call (`llm.chat` / `llm.generate` / `llm.stream`) with provider, model and token attributes — child of the request span, parent of the provider's HTTP span. |
-| Logs | A structured line per call with provider, model, operation, tokens and status. Prompt and completion text are never logged. |
+| Metrics | `app_llm_request_count` (provider, model, operation, status) and `app_llm_tokens_per_request` histogram (provider, model, token_type). `token_type` is one of `prompt`, `completion`, `cached` or `reasoning` — the latter two, reported when the provider supports prompt caching or reasoning, are subsets of `prompt` and `completion`. The histogram's Prometheus `_sum` per `token_type` is the cumulative token count, so a cache-hit rate is `sum(cached) / sum(prompt)`. |
+| Traces | A span per call (`llm.chat` / `llm.generate` / `llm.stream`) with provider, model and token attributes (`llm.tokens.prompt/completion/total/cached/reasoning`) — child of the request span, parent of the provider's HTTP span. |
+| Logs | A structured line per call with provider, model, operation, token counts (including cached and reasoning when reported) and status. Prompt and completion text are never logged. |
 | Health | The model registers as a datasource, so its reachability is reported on the health endpoint alongside your databases. |
 
 Metrics are low-cardinality by design — prompts, session IDs and run IDs live on traces, never on
@@ -157,3 +157,25 @@ mechanism to learn:
 ```dotenv
 GROQ_API_KEY=your-key-here
 ```
+
+### Custom token-usage fields
+
+Token counts are read from the OpenAI usage shape, which every built-in provider uses, so caching and
+reasoning tokens are captured with no configuration. For an OpenAI-compatible provider whose `usage`
+object names those fields differently, set `UsageFields` — a dot-separated path per field, where any
+empty field keeps its default:
+
+```go
+app.AddLLM(&llm.Client{
+	Provider: llm.OpenAI,
+	Model:    "custom-model",
+	BaseURL:  "https://my-gateway.example.com/v1",
+	UsageFields: llm.UsageFields{
+		// only override what differs; prompt/completion/total keep their defaults
+		CachedTokens:    "usage_metadata.cached_content_token_count",
+		ReasoningTokens: "usage_metadata.thoughts_token_count",
+	},
+})
+```
+
+The mapped counts flow into the same metrics, span attributes and logs as the built-in providers.

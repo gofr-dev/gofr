@@ -93,6 +93,30 @@ func TestClient_Chat_ToolCalls(t *testing.T) {
 	assert.JSONEq(t, `{"q":"x"}`, string(resp.ToolCalls[0].Args))
 }
 
+// A custom provider whose usage uses non-standard field names is mapped end-to-end via UsageFields.
+func TestClient_Chat_CustomUsageFields(t *testing.T) {
+	body := `{"model":"m","choices":[{"message":{"content":"ok"}}],` +
+		`"usage":{"prompt_tokens":5000,"completion_tokens":400,"total_tokens":5400,` +
+		`"usage_metadata":{"cached_content_token_count":4096,"thoughts_token_count":210}}}`
+	srv := chatServer(t, http.StatusOK, body)
+
+	defer srv.Close()
+
+	c := testClient(t, OpenAI, srv.URL)
+	c.UsageFields = UsageFields{
+		CachedTokens:    "usage_metadata.cached_content_token_count",
+		ReasoningTokens: "usage_metadata.thoughts_token_count",
+	}
+
+	resp, err := c.Chat(t.Context(), []ai.Message{{Role: ai.RoleUser, Content: "hi"}})
+	require.NoError(t, err)
+	assert.Equal(t, 5000, resp.Usage.PromptTokens)
+	assert.Equal(t, 400, resp.Usage.CompletionTokens)
+	assert.Equal(t, 5400, resp.Usage.TotalTokens)
+	assert.Equal(t, 4096, resp.Usage.CachedTokens)
+	assert.Equal(t, 210, resp.Usage.ReasoningTokens)
+}
+
 func TestClient_Chat_MissingUsage(t *testing.T) {
 	srv := chatServer(t, http.StatusOK, `{"choices":[{"message":{"content":"ok"}}]}`)
 

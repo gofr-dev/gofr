@@ -50,7 +50,7 @@ func (c *Client) Stream(ctx context.Context, messages []ai.Message, opts ...ai.O
 		return nil, c.statusError(resp.StatusCode, data)
 	}
 
-	return newStreamer(resp.Body), nil
+	return newStreamer(resp.Body, c.UsageFields), nil
 }
 
 type lineStatus int
@@ -63,22 +63,23 @@ const (
 )
 
 type streamer struct {
-	body    io.ReadCloser
-	scanner *bufio.Scanner
-	err     error
-	done    bool
-	usage   ai.Usage
+	body        io.ReadCloser
+	scanner     *bufio.Scanner
+	err         error
+	done        bool
+	usage       ai.Usage
+	usageFields UsageFields
 
 	// tool calls are assembled from deltas keyed by index; toolOrder preserves first-seen order.
 	toolAcc   map[int]*ai.ToolCall
 	toolOrder []int
 }
 
-func newStreamer(body io.ReadCloser) *streamer {
+func newStreamer(body io.ReadCloser, fields UsageFields) *streamer {
 	scanner := bufio.NewScanner(body)
 	scanner.Buffer(make([]byte, 0, streamBufferInit), streamBufferMax)
 
-	return &streamer{body: body, scanner: scanner, toolAcc: make(map[int]*ai.ToolCall)}
+	return &streamer{body: body, scanner: scanner, usageFields: fields, toolAcc: make(map[int]*ai.ToolCall)}
 }
 
 // Next pulls the next incremental content delta. It returns the delta string and true, or nil and
@@ -134,8 +135,10 @@ func (s *streamer) handleLine(raw string) (string, lineStatus) {
 		return "", lineError
 	}
 
-	if chunk.Usage != nil {
-		s.usage = ai.Usage{PromptTokens: chunk.Usage.PromptTokens, CompletionTokens: chunk.Usage.CompletionTokens}
+	// A usage-bearing chunk updates usage; mapUsage ignores an absent or JSON-null usage so a
+	// trailing keep-alive chunk cannot wipe a value captured on the finish chunk.
+	if u := mapUsage(s.usageFields, chunk.Usage); u != (ai.Usage{}) {
+		s.usage = u
 	}
 
 	if len(chunk.Choices) == 0 {

@@ -87,6 +87,65 @@ func TestInstrument_Success(t *testing.T) {
 	assert.Equal(t, "llm.chat", spans[0].Name())
 }
 
+// Cached and reasoning tokens are recorded as their own token_type series, in addition to prompt
+// and completion, and surfaced on the span.
+func TestInstrument_RecordsCachedAndReasoningTokens(t *testing.T) {
+	deps, m, l, sr := testDeps()
+	info := &CallInfo{Deps: deps, Provider: "deepseek", Model: "deepseek-chat", Op: "chat"}
+
+	_, err := Instrument(t.Context(), info, func(context.Context) (*Response, error) {
+		return &Response{Usage: Usage{
+			PromptTokens: 2000, CompletionTokens: 300, TotalTokens: 2306,
+			CachedTokens: 1920, ReasoningTokens: 128,
+		}}, nil
+	})
+	require.NoError(t, err)
+
+	byType := map[string]float64{}
+	for _, h := range m.histograms {
+		assert.Equal(t, metricTokensPerRequest, h.name)
+		byType[labelValue(h.labels, "token_type")] = h.value
+	}
+
+	assert.InDelta(t, 2000, byType[tokenTypePrompt], 0)
+	assert.InDelta(t, 300, byType[tokenTypeCompletion], 0)
+	assert.InDelta(t, 1920, byType[tokenTypeCached], 0)
+	assert.InDelta(t, 128, byType[tokenTypeReasoning], 0)
+
+	assert.Len(t, l.debug, 1)
+
+	spans := sr.Ended()
+	require.Len(t, spans, 1)
+
+	attrs := map[string]int64{}
+	for _, kv := range spans[0].Attributes() {
+		attrs[string(kv.Key)] = kv.Value.AsInt64()
+	}
+
+	assert.Equal(t, int64(1920), attrs["llm.tokens.cached"])
+	assert.Equal(t, int64(128), attrs["llm.tokens.reasoning"])
+	assert.Equal(t, int64(2306), attrs["llm.tokens.total"])
+}
+
+// Token types the provider did not report produce no histogram sample (no zero-valued noise).
+func TestInstrument_OmitsAbsentTokenTypes(t *testing.T) {
+	deps, m, _, _ := testDeps()
+	info := &CallInfo{Deps: deps, Provider: "groq", Model: "llama", Op: "chat"}
+
+	_, err := Instrument(t.Context(), info, func(context.Context) (*Response, error) {
+		return &Response{Usage: Usage{PromptTokens: 10, CompletionTokens: 5}}, nil
+	})
+	require.NoError(t, err)
+
+	for _, h := range m.histograms {
+		tt := labelValue(h.labels, "token_type")
+		assert.NotEqual(t, tokenTypeCached, tt, "no cached sample when unreported")
+		assert.NotEqual(t, tokenTypeReasoning, tt, "no reasoning sample when unreported")
+	}
+
+	assert.Len(t, m.histograms, 2)
+}
+
 func TestInstrument_Error(t *testing.T) {
 	deps, m, l, sr := testDeps()
 	info := &CallInfo{Deps: deps, Provider: "groq", Model: "llama", Op: "chat"}

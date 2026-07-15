@@ -22,17 +22,29 @@ const (
 
 	tokenTypePrompt     = "prompt"
 	tokenTypeCompletion = "completion"
+	// cached and reasoning are subsets of prompt and completion respectively, recorded as their own
+	// token_type series so a cache-hit rate (cached / prompt) can be derived without double-counting.
+	tokenTypeCached    = "cached"
+	tokenTypeReasoning = "reasoning"
 )
 
 // RegisterMetrics defines the LLM metrics. It is safe to call more than once; the framework manager
-// logs and skips duplicate names. The tokens histogram's Prometheus _sum yields cumulative token
-// usage, so no separate additive counter is needed.
+// logs and skips duplicate names.
+//
+// The tokens histogram carries a token_type label of prompt, completion, cached or reasoning, and
+// its Prometheus _sum per token_type is the cumulative count for that type. Because cached is a
+// subset of prompt and reasoning a subset of completion, a sum across all token types double-counts;
+// filter to token_type=~"prompt|completion" for billable totals. Cost is
+// (sum(prompt) - sum(cached))*in_rate + sum(cached)*cached_rate + sum(completion)*out_rate, and the
+// cache-hit rate is sum(cached) / sum(prompt).
 func RegisterMetrics(r MetricRegistrar) {
 	// Buckets span single-token replies to very large context windows.
 	tokenBuckets := []float64{1, 5, 10, 25, 50, 100, 250, 500, 1000, 2500, 5000, 10000, 25000, 50000, 100000}
 
 	r.NewCounter(metricRequestCount, "Number of LLM requests by provider, model, operation and status.")
-	r.NewHistogram(metricTokensPerRequest, "Distribution of tokens per LLM request.", tokenBuckets...)
+	r.NewHistogram(metricTokensPerRequest,
+		"Tokens per LLM request by token_type (prompt, completion, cached⊆prompt, reasoning⊆completion).",
+		tokenBuckets...)
 }
 
 // Instrument runs fn as a single LLM call, recording the span, metrics and log around it. It never
@@ -105,6 +117,9 @@ func record(ctx context.Context, info *CallInfo, span trace.Span, resp *Response
 		span.SetAttributes(
 			attribute.Int("llm.tokens.prompt", resp.Usage.PromptTokens),
 			attribute.Int("llm.tokens.completion", resp.Usage.CompletionTokens),
+			attribute.Int("llm.tokens.total", resp.Usage.TotalTokens),
+			attribute.Int("llm.tokens.cached", resp.Usage.CachedTokens),
+			attribute.Int("llm.tokens.reasoning", resp.Usage.ReasoningTokens),
 		)
 	}
 
@@ -112,15 +127,17 @@ func record(ctx context.Context, info *CallInfo, span trace.Span, resp *Response
 }
 
 func recordTokens(ctx context.Context, m Metrics, info *CallInfo, u Usage) {
-	if u.PromptTokens > 0 {
-		m.RecordHistogram(ctx, metricTokensPerRequest, float64(u.PromptTokens),
-			"provider", info.Provider, "model", info.Model, "token_type", tokenTypePrompt)
+	emit := func(tokenType string, value int) {
+		if value > 0 {
+			m.RecordHistogram(ctx, metricTokensPerRequest, float64(value),
+				"provider", info.Provider, "model", info.Model, "token_type", tokenType)
+		}
 	}
 
-	if u.CompletionTokens > 0 {
-		m.RecordHistogram(ctx, metricTokensPerRequest, float64(u.CompletionTokens),
-			"provider", info.Provider, "model", info.Model, "token_type", tokenTypeCompletion)
-	}
+	emit(tokenTypePrompt, u.PromptTokens)
+	emit(tokenTypeCompletion, u.CompletionTokens)
+	emit(tokenTypeCached, u.CachedTokens)
+	emit(tokenTypeReasoning, u.ReasoningTokens)
 }
 
 func writeLog(info *CallInfo, resp *Response, err error, status string) {
@@ -133,6 +150,9 @@ func writeLog(info *CallInfo, resp *Response, err error, status string) {
 	if resp != nil {
 		entry.PromptTokens = resp.Usage.PromptTokens
 		entry.CompletionTokens = resp.Usage.CompletionTokens
+		entry.TotalTokens = resp.Usage.TotalTokens
+		entry.CachedTokens = resp.Usage.CachedTokens
+		entry.ReasoningTokens = resp.Usage.ReasoningTokens
 	}
 
 	if err != nil {
@@ -168,4 +188,7 @@ type Log struct {
 	Status           string `json:"status"`
 	PromptTokens     int    `json:"promptTokens"`
 	CompletionTokens int    `json:"completionTokens"`
+	TotalTokens      int    `json:"totalTokens,omitempty"`
+	CachedTokens     int    `json:"cachedTokens,omitempty"`
+	ReasoningTokens  int    `json:"reasoningTokens,omitempty"`
 }

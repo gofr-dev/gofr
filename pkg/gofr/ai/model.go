@@ -80,10 +80,24 @@ type Response struct {
 	Model     string
 }
 
-// Usage reports token consumption for a call.
+// Usage reports token consumption for a call. PromptTokens and CompletionTokens are the input and
+// output counts; the remaining fields are populated when the provider reports them and are zero
+// otherwise. CachedTokens and ReasoningTokens are subsets of PromptTokens and CompletionTokens
+// respectively, not additions to them.
 type Usage struct {
-	PromptTokens     int
+	// PromptTokens is the number of input (prompt) tokens.
+	PromptTokens int
+	// CompletionTokens is the number of output (completion) tokens.
 	CompletionTokens int
+	// TotalTokens is the provider-reported total; it may exceed PromptTokens+CompletionTokens when
+	// the provider counts extras. Zero if not reported.
+	TotalTokens int
+	// CachedTokens is the subset of PromptTokens served from the provider's prompt cache (a
+	// cache-read hit), billed at a lower rate. Zero if not reported or unsupported.
+	CachedTokens int
+	// ReasoningTokens is the subset of CompletionTokens spent on internal reasoning by reasoning
+	// models. Zero if not reported.
+	ReasoningTokens int
 }
 
 // Message roles.

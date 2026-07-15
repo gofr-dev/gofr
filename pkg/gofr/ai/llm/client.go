@@ -62,6 +62,10 @@ type Client struct {
 	Model string
 	// BaseURL overrides the provider default endpoint; leave empty to use the provider default.
 	BaseURL string
+	// UsageFields optionally remaps the JSON paths token counts are read from, for OpenAI-compatible
+	// providers whose usage object deviates from the standard shape. The zero value uses the built-in
+	// mapping (OpenAI/Groq/DeepSeek), so the popular providers need no configuration.
+	UsageFields UsageFields
 
 	apiKey  string
 	baseURL string
@@ -202,7 +206,13 @@ func (c *Client) Chat(ctx context.Context, messages []ai.Message, opts ...ai.Opt
 		return nil, fmt.Errorf("%w: %s", errProvider, cr.Error.Message)
 	}
 
-	return toResponse(&cr), nil
+	out := toResponse(&cr)
+
+	if c.UsageFields.isSet() {
+		out.Usage = mapUsage(c.UsageFields, cr.Usage)
+	}
+
+	return out, nil
 }
 
 // HealthCheck reports provider reachability, caching the result for a short TTL. The API key is
