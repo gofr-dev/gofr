@@ -43,6 +43,24 @@ func TestMapUsage_DetailsPreferredOverAlias(t *testing.T) {
 	assert.Equal(t, 900, got.CachedTokens)
 }
 
+// input_tokens / output_tokens (Responses-API / Anthropic naming) are accepted as default aliases
+// for prompt / completion, with no custom UsageFields.
+func TestMapUsage_InputOutputAliases(t *testing.T) {
+	got := defaultUsage(`{"input_tokens":2000,"output_tokens":300,"total_tokens":2300}`)
+
+	assert.Equal(t, 2000, got.PromptTokens)
+	assert.Equal(t, 300, got.CompletionTokens)
+	assert.Equal(t, 2300, got.TotalTokens)
+}
+
+// When both the standard field and the alias are present, the standard field wins.
+func TestMapUsage_StandardWinsOverInputAlias(t *testing.T) {
+	got := defaultUsage(`{"prompt_tokens":10,"completion_tokens":4,"input_tokens":999,"output_tokens":999}`)
+
+	assert.Equal(t, 10, got.PromptTokens)
+	assert.Equal(t, 4, got.CompletionTokens)
+}
+
 // Negative and out-of-range counts are clamped to 0 on the default path, not fed to metrics.
 func TestMapUsage_ClampsOutOfRange(t *testing.T) {
 	assert.Zero(t, defaultUsage(`{"completion_tokens":-5}`).CompletionTokens)

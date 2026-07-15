@@ -160,10 +160,12 @@ GROQ_API_KEY=your-key-here
 
 ### Custom token-usage fields
 
-Token counts are read from the OpenAI usage shape, which every built-in provider uses, so caching and
-reasoning tokens are captured with no configuration. For an OpenAI-compatible provider whose `usage`
-object names those fields differently, set `UsageFields` — a dot-separated path per field, where any
-empty field keeps its default:
+Token counts are read from the OpenAI usage shape, which every built-in provider uses, so input
+(`prompt_tokens`), output (`completion_tokens`), total, caching and reasoning tokens are captured with
+no configuration. The Responses-API / Anthropic names `input_tokens` and `output_tokens` are accepted
+as default aliases for prompt and completion. For an OpenAI-compatible provider whose `usage` object
+names fields differently still, set `UsageFields` — a dot-separated path per field, where any empty
+field keeps its default:
 
 ```go
 app.AddLLM(&llm.Client{

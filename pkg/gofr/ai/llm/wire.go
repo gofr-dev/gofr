@@ -99,6 +99,10 @@ const (
 	pathCachedTokens     = "prompt_tokens_details.cached_tokens"
 	pathReasoningTokens  = "completion_tokens_details.reasoning_tokens"
 	pathDeepSeekCached   = "prompt_cache_hit_tokens"
+	// input_tokens / output_tokens are the OpenAI Responses-API and Anthropic names for prompt /
+	// completion; accepted as fallback aliases so those gateways work without custom UsageFields.
+	pathInputTokens  = "input_tokens"
+	pathOutputTokens = "output_tokens"
 )
 
 // UsageFields remaps the JSON paths GoFr reads token counts from, for OpenAI-compatible providers
@@ -139,7 +143,14 @@ func (f UsageFields) extract(rawUsage json.RawMessage) ai.Usage {
 	}
 
 	prompt := at(f.PromptTokens, pathPromptTokens)
+	if prompt == 0 && f.PromptTokens == "" {
+		prompt = intAtPath(m, pathInputTokens) // input_tokens alias (Responses-API / Anthropic naming)
+	}
+
 	completion := at(f.CompletionTokens, pathCompletionTokens)
+	if completion == 0 && f.CompletionTokens == "" {
+		completion = intAtPath(m, pathOutputTokens) // output_tokens alias
+	}
 
 	cached := at(f.CachedTokens, pathCachedTokens)
 	if cached == 0 && f.CachedTokens == "" {
