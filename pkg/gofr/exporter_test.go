@@ -10,6 +10,7 @@ import (
 	"github.com/stretchr/testify/require"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/sdk/resource"
 	sdktrace "go.opentelemetry.io/otel/sdk/trace"
 
 	"gofr.dev/pkg/gofr/logging"
@@ -48,6 +49,50 @@ func Test_ExportSpansError(t *testing.T) {
 
 	err := exporter.ExportSpans(t.Context(), provideSampleSpan(t))
 	require.Error(t, err, "Expected error for failed request")
+}
+
+// A root span must not carry a parentId; a child span must reference its parent.
+func Test_convertSpans_RootParentIDOmitted(t *testing.T) {
+	tp := sdktrace.NewTracerProvider()
+	defer func() { _ = tp.Shutdown(t.Context()) }()
+
+	tracer := tp.Tracer("test")
+
+	ctx, root := tracer.Start(t.Context(), "root")
+	_, child := tracer.Start(ctx, "child")
+	child.End()
+	root.End()
+
+	got := convertSpans([]sdktrace.ReadOnlySpan{
+		root.(sdktrace.ReadOnlySpan),
+		child.(sdktrace.ReadOnlySpan),
+	})
+
+	require.Len(t, got, 2)
+	assert.Empty(t, got[0].ParentID, "root span must have no parentId")
+	assert.Equal(t, got[0].ID, got[1].ParentID, "child span must reference the root")
+}
+
+// Each span's localEndpoint carries its own service name, not the first span's — matters when one
+// exporter batches spans from more than one service.
+func Test_convertSpans_PerSpanServiceName(t *testing.T) {
+	spanFor := func(svc string) sdktrace.ReadOnlySpan {
+		tp := sdktrace.NewTracerProvider(
+			sdktrace.WithResource(resource.NewSchemaless(attribute.String("service.name", svc))),
+		)
+		defer func() { _ = tp.Shutdown(t.Context()) }()
+
+		_, span := tp.Tracer("test").Start(t.Context(), "s")
+		span.End()
+
+		return span.(sdktrace.ReadOnlySpan)
+	}
+
+	got := convertSpans([]sdktrace.ReadOnlySpan{spanFor("svc-a"), spanFor("svc-b")})
+
+	require.Len(t, got, 2)
+	assert.Equal(t, "svc-a", got[0].LocalEndpoint["serviceName"])
+	assert.Equal(t, "svc-b", got[1].LocalEndpoint["serviceName"], "second span must keep its own service name")
 }
 
 func provideSampleSpan(t *testing.T) []sdktrace.ReadOnlySpan {

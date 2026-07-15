@@ -85,7 +85,12 @@ func (e *Exporter) processSpans(ctx context.Context, logger logging.Logger, span
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusCreated {
-		return fmt.Errorf("failed to post spans on '%v', %w: '%d'", e.endpoint, errUnexpectedStatusCode, resp.StatusCode)
+		// Log as well as return: the batch processor swallows the returned error, so without this a
+		// misconfigured or rejecting endpoint drops every trace with no signal to the operator.
+		err := fmt.Errorf("failed to post spans on '%v', %w: '%d'", e.endpoint, errUnexpectedStatusCode, resp.StatusCode)
+		logger.Errorf("%v", err)
+
+		return err
 	}
 
 	return nil
@@ -95,15 +100,21 @@ func (e *Exporter) processSpans(ctx context.Context, logger logging.Logger, span
 func convertSpans(spans []sdktrace.ReadOnlySpan) []Span {
 	convertedSpans := make([]Span, 0, len(spans))
 
-	for i, s := range spans {
+	for _, s := range spans {
 		convertedSpan := Span{
 			TraceID:   s.SpanContext().TraceID().String(),
 			ID:        s.SpanContext().SpanID().String(),
-			ParentID:  s.Parent().SpanID().String(),
 			Name:      s.Name(),
 			Timestamp: s.StartTime().UnixNano() / int64(time.Microsecond),
 			Duration:  s.EndTime().Sub(s.StartTime()).Nanoseconds() / int64(time.Microsecond),
 			Tags:      make(map[string]string, len(s.Attributes())+len(s.Resource().Attributes())),
+		}
+
+		// A root span has no parent; emit parentId only when the parent span ID is valid, so the
+		// field is omitted rather than sent as an all-zero ID that a backend reads as a dangling
+		// parent (which can prevent it from assembling the trace).
+		if parent := s.Parent(); parent.SpanID().IsValid() {
+			convertedSpan.ParentID = parent.SpanID().String()
 		}
 
 		for _, kv := range s.Attributes() {
@@ -116,9 +127,10 @@ func convertSpans(spans []sdktrace.ReadOnlySpan) []Span {
 			convertedSpan.Tags[k] = v
 		}
 
-		convertedSpans = append(convertedSpans, convertedSpan)
+		// Each span carries its own service name, not the batch's first span's.
+		convertedSpan.LocalEndpoint = map[string]string{"serviceName": convertedSpan.Tags["service.name"]}
 
-		convertedSpans[i].LocalEndpoint = map[string]string{"serviceName": convertedSpans[0].Tags["service.name"]}
+		convertedSpans = append(convertedSpans, convertedSpan)
 	}
 
 	return convertedSpans
