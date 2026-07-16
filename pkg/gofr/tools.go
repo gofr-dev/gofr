@@ -230,7 +230,7 @@ func (rt *routerTools) toolSchema(method, pathTemplate string) json.RawMessage {
 		isPathParam[p] = true
 	}
 
-	if inputType := rt.app.routeInputs[method+" "+pathTemplate]; inputType != nil {
+	if inputType := rt.cfg.inputs[method+" "+pathTemplate]; inputType != nil {
 		// A body field named like a path param stays a path param at dispatch, so it keeps the
 		// path-param schema entry.
 		addStructProps(props, inputType, isPathParam)

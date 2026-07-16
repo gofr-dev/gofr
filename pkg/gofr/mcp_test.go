@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"reflect"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -25,7 +26,9 @@ func testRouterTools(t *testing.T, write bool, exclude ...string) (*App, *router
 		ex[e] = true
 	}
 
-	return app, &routerTools{app: app, cfg: &mcpConfig{writeTools: write, exclude: ex}}
+	cfg := &mcpConfig{writeTools: write, exclude: ex, inputs: make(map[string]reflect.Type)}
+
+	return app, &routerTools{app: app, cfg: cfg}
 }
 
 func toolNames(specs []ai.ToolSpec) []string {
@@ -138,7 +141,8 @@ func TestRouterTools_Call_WithInputBodyReachesBind(t *testing.T) {
 		require.NoError(t, c.Bind(&in))
 
 		return map[string]any{"item": in.Item, "qty": in.Quantity}, nil
-	}, WithInput[orderInput]())
+	})
+	WithInput[orderInput]("POST", "/orders")(rt.cfg)
 
 	res, err := rt.Call(t.Context(), "post_orders", json.RawMessage(`{"item":"book","qty":3}`))
 	require.NoError(t, err)
@@ -339,7 +343,8 @@ type richInput struct {
 
 func TestWithInput_SchemaTypes(t *testing.T) {
 	app, rt := testRouterTools(t, true)
-	app.POST("/x", func(*Context) (any, error) { return nil, nil }, WithInput[richInput]())
+	app.POST("/x", func(*Context) (any, error) { return nil, nil })
+	WithInput[richInput]("POST", "/x")(rt.cfg)
 
 	schema := schemaFor(rt.List(), "post_x")
 	assert.Contains(t, schema, `"score":{"type":"number"}`)
@@ -392,7 +397,8 @@ func schemaFor(specs []ai.ToolSpec, name string) string {
 
 func TestWithInput_EnrichesToolSchema(t *testing.T) {
 	app, rt := testRouterTools(t, true)
-	app.POST("/orders", func(*Context) (any, error) { return nil, nil }, WithInput[orderInput]())
+	app.POST("/orders", func(*Context) (any, error) { return nil, nil })
+	WithInput[orderInput]("POST", "/orders")(rt.cfg)
 
 	schema := schemaFor(rt.List(), "post_orders")
 	require.NotEmpty(t, schema)
@@ -405,7 +411,8 @@ func TestWithInput_EnrichesToolSchema(t *testing.T) {
 
 func TestWithInput_MergesPathParamsAndBody(t *testing.T) {
 	app, rt := testRouterTools(t, true)
-	app.PUT("/orders/{id}", func(*Context) (any, error) { return nil, nil }, WithInput[orderInput]())
+	app.PUT("/orders/{id}", func(*Context) (any, error) { return nil, nil })
+	WithInput[orderInput]("PUT", "/orders/{id}")(rt.cfg)
 
 	schema := schemaFor(rt.List(), "put_orders_id")
 	require.NotEmpty(t, schema)
@@ -423,7 +430,8 @@ type orderWithID struct {
 // because at dispatch the value is used as the path segment, not the body.
 func TestWithInput_PathParamWinsOverBodyField(t *testing.T) {
 	app, rt := testRouterTools(t, true)
-	app.PUT("/orders/{id}", func(*Context) (any, error) { return nil, nil }, WithInput[orderWithID]())
+	app.PUT("/orders/{id}", func(*Context) (any, error) { return nil, nil })
+	WithInput[orderWithID]("PUT", "/orders/{id}")(rt.cfg)
 
 	schema := schemaFor(rt.List(), "put_orders_id")
 	assert.Contains(t, schema, `"id":{"type":"string"}`)

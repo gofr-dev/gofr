@@ -1,51 +1,36 @@
 package gofr
 
 import (
-	"reflect"
 	"strconv"
 	"time"
 )
 
-// RouteOption configures how a route is registered.
-type RouteOption func(*routeConfig)
-
-type routeConfig struct {
-	inputType reflect.Type
-}
-
-// WithInput declares the request body type T for a route so that, when the route is exposed as an
-// MCP tool via EnableMCP, its input schema describes the body's fields and types in addition to the
-// path parameters. T is expected to be a struct (or pointer to one); other kinds add no body schema.
-func WithInput[T any]() RouteOption {
-	return func(c *routeConfig) { c.inputType = reflect.TypeFor[T]() }
-}
-
 // GET adds a Handler for HTTP GET method for a route pattern.
-func (a *App) GET(pattern string, handler Handler, opts ...RouteOption) {
-	a.add("GET", pattern, handler, opts...)
+func (a *App) GET(pattern string, handler Handler) {
+	a.add("GET", pattern, handler)
 }
 
 // PUT adds a Handler for HTTP PUT method for a route pattern.
-func (a *App) PUT(pattern string, handler Handler, opts ...RouteOption) {
-	a.add("PUT", pattern, handler, opts...)
+func (a *App) PUT(pattern string, handler Handler) {
+	a.add("PUT", pattern, handler)
 }
 
 // POST adds a Handler for HTTP POST method for a route pattern.
-func (a *App) POST(pattern string, handler Handler, opts ...RouteOption) {
-	a.add("POST", pattern, handler, opts...)
+func (a *App) POST(pattern string, handler Handler) {
+	a.add("POST", pattern, handler)
 }
 
 // DELETE adds a Handler for HTTP DELETE method for a route pattern.
-func (a *App) DELETE(pattern string, handler Handler, opts ...RouteOption) {
-	a.add("DELETE", pattern, handler, opts...)
+func (a *App) DELETE(pattern string, handler Handler) {
+	a.add("DELETE", pattern, handler)
 }
 
 // PATCH adds a Handler for HTTP PATCH method for a route pattern.
-func (a *App) PATCH(pattern string, handler Handler, opts ...RouteOption) {
-	a.add("PATCH", pattern, handler, opts...)
+func (a *App) PATCH(pattern string, handler Handler) {
+	a.add("PATCH", pattern, handler)
 }
 
-func (a *App) add(method, pattern string, h Handler, opts ...RouteOption) {
+func (a *App) add(method, pattern string, h Handler) {
 	if !a.httpRegistered && !isPortAvailable(a.httpServer.port) {
 		a.container.Logger.Fatalf("http port %d is blocked or unreachable", a.httpServer.port)
 	}
@@ -57,32 +42,11 @@ func (a *App) add(method, pattern string, h Handler, opts ...RouteOption) {
 		reqTimeout = 0
 	}
 
-	a.registerRouteConfig(method, pattern, opts)
-
 	a.httpServer.router.Add(method, pattern, handler{
 		function:       h,
 		container:      a.container,
 		requestTimeout: time.Duration(reqTimeout) * time.Second,
 	})
-}
-
-func (a *App) registerRouteConfig(method, pattern string, opts []RouteOption) {
-	if len(opts) == 0 {
-		return
-	}
-
-	var cfg routeConfig
-	for _, o := range opts {
-		o(&cfg)
-	}
-
-	if cfg.inputType != nil {
-		if a.routeInputs == nil {
-			a.routeInputs = make(map[string]reflect.Type)
-		}
-
-		a.routeInputs[method+" "+pattern] = cfg.inputType
-	}
 }
 
 // AddRESTHandlers creates and registers CRUD routes for the given struct, the struct should always be passed by reference.

@@ -34,8 +34,8 @@ func main() {
 ```
 
 The input schema for each tool is derived from the route's path parameters. For a handler that binds
-a JSON body, declare its type with `gofr.WithInput[T]()` so the tool schema also describes the body's
-fields and types:
+a JSON body, declare its type with `gofr.WithInput[T](method, path)` on `EnableMCP` so the tool
+schema also describes the body's fields and types:
 
 ```go
 type CreateOrder struct {
@@ -43,7 +43,8 @@ type CreateOrder struct {
 	Qty  int    `json:"qty"`
 }
 
-app.POST("/orders", createOrder, gofr.WithInput[CreateOrder]())
+app.POST("/orders", createOrder)
+app.EnableMCP(gofr.WithWriteTools(), gofr.WithInput[CreateOrder]("POST", "/orders"))
 ```
 
 When a tool is called, its arguments are dispatched like a real request: path parameters fill the
