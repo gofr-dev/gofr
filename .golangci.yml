@@ -153,7 +153,6 @@ linters:
       - linters:
           - dupl
           - goconst
-          - gosec
           - mnd
         path: _test\.go
       - linters:

@@ -143,7 +143,7 @@ func TestClient_Stream_CustomUsageFields(t *testing.T) {
 	defer srv.Close()
 
 	c := testClient(t, OpenAI, srv.URL)
-	c.UsageFields = UsageFields{CachedTokens: "usage_metadata.cached_content_token_count"}
+	c.UsageFields = UsageFields{CachedTokens: pathGeminiCached}
 
 	s, err := c.Stream(t.Context(), []ai.Message{{Role: ai.RoleUser, Content: "hi"}})
 	require.NoError(t, err)

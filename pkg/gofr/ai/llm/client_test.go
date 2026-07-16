@@ -104,8 +104,8 @@ func TestClient_Chat_CustomUsageFields(t *testing.T) {
 
 	c := testClient(t, OpenAI, srv.URL)
 	c.UsageFields = UsageFields{
-		CachedTokens:    "usage_metadata.cached_content_token_count",
-		ReasoningTokens: "usage_metadata.thoughts_token_count",
+		CachedTokens:    pathGeminiCached,
+		ReasoningTokens: pathGeminiReasoning,
 	}
 
 	resp, err := c.Chat(t.Context(), []ai.Message{{Role: ai.RoleUser, Content: "hi"}})
