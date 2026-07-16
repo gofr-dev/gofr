@@ -2,6 +2,7 @@ package gofr
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"testing"
 
@@ -209,6 +210,36 @@ func TestRouterTools_Call_WellKnownRejected(t *testing.T) {
 
 	_, err := rt.Call(t.Context(), toolName(http.MethodGet, "/.well-known/secret"), nil)
 	require.ErrorIs(t, err, ai.ErrToolNotFound)
+}
+
+// A path parameter that could break out of its segment is rejected, so an allowed tool cannot be
+// steered into another route. Regression test for the MCP path-traversal fix.
+func TestRouterTools_Call_PathTraversalRejected(t *testing.T) {
+	app, rt := testRouterTools(t, false)
+	app.GET("/public/{id}", func(c *Context) (any, error) { return c.PathParam("id"), nil })
+
+	for _, bad := range []string{"../secret", "a/b", "..", ".", "a/../b", ""} {
+		_, err := rt.Call(t.Context(), "get_public_id", json.RawMessage(fmt.Sprintf(`{"id":%q}`, bad)))
+		require.ErrorIsf(t, err, errUnsafePathParam, "value %q must be rejected", bad)
+	}
+
+	// A normal segment value still resolves.
+	res, err := rt.Call(t.Context(), "get_public_id", json.RawMessage(`{"id":"WIDGET-1"}`))
+	require.NoError(t, err)
+
+	body, _ := res.JSON()
+	assert.Contains(t, string(body), "WIDGET-1")
+}
+
+// The framework-registered favicon route is never exposed as an agent tool.
+func TestRouterTools_List_ExcludesFavicon(t *testing.T) {
+	app, rt := testRouterTools(t, false)
+	app.GET("/favicon.ico", func(*Context) (any, error) { return nil, nil })
+	app.GET("/items", func(*Context) (any, error) { return nil, nil })
+
+	names := toolNames(rt.List())
+	assert.NotContains(t, names, "get_favicon.ico")
+	assert.Contains(t, names, "get_items")
 }
 
 func TestRouterTools_Call_AuthRequiredWithoutHeaderFails(t *testing.T) {

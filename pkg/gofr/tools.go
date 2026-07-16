@@ -9,6 +9,7 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"path"
 	"reflect"
 	"strings"
 
@@ -20,7 +21,10 @@ import (
 	"gofr.dev/pkg/gofr/http/middleware"
 )
 
-var errToolStatus = errors.New("tool returned an error status")
+var (
+	errToolStatus      = errors.New("tool returned an error status")
+	errUnsafePathParam = errors.New("unsafe path parameter")
+)
 
 const (
 	schemaKeyType    = "type"
@@ -109,7 +113,7 @@ func (rt *routerTools) Call(ctx context.Context, name string, args json.RawMessa
 }
 
 func (rt *routerTools) specFor(method, pathTemplate string) (ai.ToolSpec, bool) {
-	if rt.cfg.exclude[pathTemplate] || strings.HasPrefix(pathTemplate, "/.well-known") {
+	if rt.cfg.exclude[pathTemplate] || isFrameworkRoute(pathTemplate) {
 		return ai.ToolSpec{}, false
 	}
 
@@ -347,12 +351,17 @@ func buildToolRequest(ctx context.Context, method, pathTemplate string, args jso
 		}
 	}
 
-	path, query, body := splitArgs(method, pathTemplate, fields)
+	reqPath, query, body, err := splitArgs(method, pathTemplate, fields)
+	if err != nil {
+		return nil, err
+	}
 
 	var reader io.Reader
 
 	if len(body) > 0 {
-		encoded, err := json.Marshal(body)
+		var encoded []byte
+
+		encoded, err = json.Marshal(body)
 		if err != nil {
 			return nil, err
 		}
@@ -360,7 +369,7 @@ func buildToolRequest(ctx context.Context, method, pathTemplate string, args jso
 		reader = bytes.NewReader(encoded)
 	}
 
-	target := path
+	target := reqPath
 	if enc := query.Encode(); enc != "" {
 		target += "?" + enc
 	}
@@ -378,7 +387,7 @@ func buildToolRequest(ctx context.Context, method, pathTemplate string, args jso
 }
 
 func splitArgs(method, pathTemplate string, fields map[string]json.RawMessage,
-) (path string, query url.Values, body map[string]json.RawMessage) {
+) (reqPath string, query url.Values, body map[string]json.RawMessage, err error) {
 	params := make(map[string]bool)
 	for _, p := range pathParams(pathTemplate) {
 		params[p] = true
@@ -391,8 +400,16 @@ func splitArgs(method, pathTemplate string, fields map[string]json.RawMessage,
 	for key, raw := range fields {
 		switch {
 		case params[key]:
-			// Escape so a value like "../admin" or "a/b" cannot break out of its path segment.
-			substituteSegment(segs, key, url.PathEscape(scalar(raw)))
+			// A path parameter must stay within its own segment. Escaping alone is not enough:
+			// url.PathEscape leaves "." intact, so "../secret" would survive as "..%2Fsecret" and the
+			// router's path.Clean could still collapse it out of the intended route. Reject any value
+			// that is not a single safe segment before it is placed in the path.
+			val := scalar(raw)
+			if !safePathSegment(val) {
+				return "", nil, nil, fmt.Errorf("%w: %q=%q", errUnsafePathParam, key, val)
+			}
+
+			substituteSegment(segs, key, url.PathEscape(val))
 		case accessForMethod(method) == ai.ReadOnly:
 			addQueryValue(query, key, raw)
 		default:
@@ -400,7 +417,24 @@ func splitArgs(method, pathTemplate string, fields map[string]json.RawMessage,
 		}
 	}
 
-	return strings.Join(segs, "/"), query, body
+	return strings.Join(segs, "/"), query, body, nil
+}
+
+// isFrameworkRoute reports whether a route is registered by the framework itself (health/liveness
+// probes, the favicon) rather than the application, so it is never exposed as an agent tool.
+func isFrameworkRoute(pathTemplate string) bool {
+	return pathTemplate == "/favicon.ico" || strings.HasPrefix(pathTemplate, "/.well-known")
+}
+
+// safePathSegment reports whether a value is a single path segment safe to substitute into a route:
+// non-empty, containing no separator, and unchanged by path.Clean (which rejects "." and ".."
+// traversal tokens, since path.Clean("/.") and path.Clean("/..") both collapse to "/").
+func safePathSegment(v string) bool {
+	if v == "" || strings.ContainsAny(v, "/\\") {
+		return false
+	}
+
+	return path.Clean("/"+v) == "/"+v
 }
 
 // addQueryValue maps a JSON argument to query values: an array becomes repeated key=value pairs so
