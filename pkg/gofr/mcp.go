@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
-	"reflect"
 	"strconv"
 	"time"
 
@@ -19,20 +18,6 @@ type MCPOption func(*mcpConfig)
 type mcpConfig struct {
 	writeTools bool
 	exclude    map[string]bool
-	inputs     map[string]reflect.Type // "METHOD /path" -> request body type, for richer tool schemas
-}
-
-// WithInput declares the request body type T for the route method+path, so that when the route is
-// exposed as an MCP tool its input schema describes the body's fields and types in addition to the
-// path parameters. T is expected to be a struct (or pointer to one); other kinds add no body schema.
-//
-// It is an EnableMCP option rather than a route option so registering routes (app.POST, ...) keeps
-// its original signature:
-//
-//	app.POST("/orders", createOrder)
-//	app.EnableMCP(gofr.WithInput[CreateOrder]("POST", "/orders"))
-func WithInput[T any](method, path string) MCPOption {
-	return func(c *mcpConfig) { c.inputs[method+" "+path] = reflect.TypeFor[T]() }
 }
 
 // WithWriteTools also exposes write handlers (POST/PUT/PATCH/DELETE) as tools. By default only
@@ -55,7 +40,7 @@ func WithExcludedRoutes(paths ...string) MCPOption {
 // exposed by default; pass WithWriteTools to also expose write handlers. The tools are also reachable
 // in handlers via ctx.LLM().Tools() regardless of whether the server is enabled.
 func (a *App) EnableMCP(opts ...MCPOption) {
-	cfg := &mcpConfig{exclude: make(map[string]bool), inputs: make(map[string]reflect.Type)}
+	cfg := &mcpConfig{exclude: make(map[string]bool)}
 	for _, o := range opts {
 		o(cfg)
 	}

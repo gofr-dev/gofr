@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
-	"reflect"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -26,9 +25,7 @@ func testRouterTools(t *testing.T, write bool, exclude ...string) (*App, *router
 		ex[e] = true
 	}
 
-	cfg := &mcpConfig{writeTools: write, exclude: ex, inputs: make(map[string]reflect.Type)}
-
-	return app, &routerTools{app: app, cfg: cfg}
+	return app, &routerTools{app: app, cfg: &mcpConfig{writeTools: write, exclude: ex}}
 }
 
 func toolNames(specs []ai.ToolSpec) []string {
@@ -132,8 +129,8 @@ func TestRouterTools_Call_WriteBody(t *testing.T) {
 	assert.Contains(t, string(body), "book")
 }
 
-// A WithInput route dispatched as a tool must deliver the body args to ctx.Bind, end to end.
-func TestRouterTools_Call_WithInputBodyReachesBind(t *testing.T) {
+// A write tool's body args are dispatched to ctx.Bind end to end (independent of any input schema).
+func TestRouterTools_Call_BodyReachesBind(t *testing.T) {
 	app, rt := testRouterTools(t, true)
 	app.POST("/orders", func(c *Context) (any, error) {
 		var in orderInput
@@ -142,7 +139,6 @@ func TestRouterTools_Call_WithInputBodyReachesBind(t *testing.T) {
 
 		return map[string]any{"item": in.Item, "qty": in.Quantity}, nil
 	})
-	WithInput[orderInput]("POST", "/orders")(rt.cfg)
 
 	res, err := rt.Call(t.Context(), "post_orders", json.RawMessage(`{"item":"book","qty":3}`))
 	require.NoError(t, err)
@@ -335,23 +331,6 @@ func TestEnableMCP_WithExcludedRoutesOption(t *testing.T) {
 	assert.Contains(t, names, "get_public")
 }
 
-type richInput struct {
-	Score float64  `json:"score"`
-	Tags  []string `json:"tags"`
-	Plain string   // no json tag -> field name is used
-}
-
-func TestWithInput_SchemaTypes(t *testing.T) {
-	app, rt := testRouterTools(t, true)
-	app.POST("/x", func(*Context) (any, error) { return nil, nil })
-	WithInput[richInput]("POST", "/x")(rt.cfg)
-
-	schema := schemaFor(rt.List(), "post_x")
-	assert.Contains(t, schema, `"score":{"type":"number"}`)
-	assert.Contains(t, schema, `"tags":{"type":"array"}`)
-	assert.Contains(t, schema, `"Plain"`) // untagged field keeps its Go name
-}
-
 func TestEnableMCP_ExposesToolsViaLLM(t *testing.T) {
 	testutil.NewServerConfigs(t)
 	t.Setenv("MCP_PORT", "0") // disable the network server; in-process tools still work
@@ -395,56 +374,15 @@ func schemaFor(specs []ai.ToolSpec, name string) string {
 	return ""
 }
 
-func TestWithInput_EnrichesToolSchema(t *testing.T) {
-	app, rt := testRouterTools(t, true)
-	app.POST("/orders", func(*Context) (any, error) { return nil, nil })
-	WithInput[orderInput]("POST", "/orders")(rt.cfg)
-
-	schema := schemaFor(rt.List(), "post_orders")
-	require.NotEmpty(t, schema)
-	assert.Contains(t, schema, `"item"`)
-	assert.Contains(t, schema, `"qty"`)
-	assert.Contains(t, schema, `"integer"`)   // qty
-	assert.Contains(t, schema, `"boolean"`)   // rush
-	assert.NotContains(t, schema, "Internal") // json:"-" field skipped
-}
-
-func TestWithInput_MergesPathParamsAndBody(t *testing.T) {
-	app, rt := testRouterTools(t, true)
-	app.PUT("/orders/{id}", func(*Context) (any, error) { return nil, nil })
-	WithInput[orderInput]("PUT", "/orders/{id}")(rt.cfg)
-
-	schema := schemaFor(rt.List(), "put_orders_id")
-	require.NotEmpty(t, schema)
-	assert.Contains(t, schema, `"id"`)   // path param
-	assert.Contains(t, schema, `"item"`) // body field
-	assert.Contains(t, schema, `"required":["id"]`)
-}
-
-type orderWithID struct {
-	ID   int    `json:"id"`
-	Item string `json:"item"`
-}
-
-// A body field whose name collides with a path parameter keeps the path-param schema (string),
-// because at dispatch the value is used as the path segment, not the body.
-func TestWithInput_PathParamWinsOverBodyField(t *testing.T) {
-	app, rt := testRouterTools(t, true)
-	app.PUT("/orders/{id}", func(*Context) (any, error) { return nil, nil })
-	WithInput[orderWithID]("PUT", "/orders/{id}")(rt.cfg)
-
-	schema := schemaFor(rt.List(), "put_orders_id")
-	assert.Contains(t, schema, `"id":{"type":"string"}`)
-	assert.NotContains(t, schema, `"id":{"type":"integer"}`)
-	assert.Contains(t, schema, `"item"`)
-}
-
-func TestWithInput_AbsentIsPathParamsOnly(t *testing.T) {
+// A route's tool schema describes its path parameters (and nothing else — body fields are not
+// described in v1, though they are still dispatched to the handler).
+func TestToolSchema_PathParamsOnly(t *testing.T) {
 	app, rt := testRouterTools(t, false)
 	app.GET("/orders/{id}", func(*Context) (any, error) { return nil, nil })
 
 	schema := schemaFor(rt.List(), "get_orders_id")
 	assert.Contains(t, schema, `"id"`)
+	assert.Contains(t, schema, `"required":["id"]`)
 	assert.NotContains(t, schema, `"item"`)
 }
 

@@ -10,7 +10,6 @@ import (
 	"net/http"
 	"net/url"
 	"path"
-	"reflect"
 	"strings"
 
 	"github.com/gorilla/mux"
@@ -125,7 +124,7 @@ func (rt *routerTools) specFor(method, pathTemplate string) (ai.ToolSpec, bool) 
 	return ai.ToolSpec{
 		Name:        toolName(method, pathTemplate),
 		Description: method + " " + pathTemplate,
-		InputSchema: rt.toolSchema(method, pathTemplate),
+		InputSchema: toolSchema(pathTemplate),
 		Access:      access,
 	}, true
 }
@@ -218,99 +217,29 @@ func toolName(method, pathTemplate string) string {
 	return b.String()
 }
 
-// toolSchema builds the JSON Schema for a tool's arguments: path parameters (always) plus the body
-// fields declared via WithInput on the route, if any.
-func (rt *routerTools) toolSchema(method, pathTemplate string) json.RawMessage {
-	props := map[string]any{}
-	isPathParam := map[string]bool{}
-
+// toolSchema builds the JSON Schema for a tool's arguments from the route's path parameters. A route
+// with no path parameters gets no schema (nil); body fields are dispatched to the handler at call
+// time but are not described here.
+func toolSchema(pathTemplate string) json.RawMessage {
 	params := pathParams(pathTemplate)
-	for _, p := range params {
-		props[p] = map[string]string{schemaKeyType: schemaTypeString}
-		isPathParam[p] = true
-	}
-
-	if inputType := rt.cfg.inputs[method+" "+pathTemplate]; inputType != nil {
-		// A body field named like a path param stays a path param at dispatch, so it keeps the
-		// path-param schema entry.
-		addStructProps(props, inputType, isPathParam)
-	}
-
-	if len(props) == 0 {
+	if len(params) == 0 {
 		return nil
 	}
 
-	schema := map[string]any{schemaKeyType: schemaTypeObject, "properties": props}
-	if len(params) > 0 {
-		schema["required"] = params // path params are always required; body fields are optional
+	props := map[string]any{}
+	for _, p := range params {
+		props[p] = map[string]string{schemaKeyType: schemaTypeString}
+	}
+
+	schema := map[string]any{
+		schemaKeyType: schemaTypeObject,
+		"properties":  props,
+		"required":    params, // path params are always required
 	}
 
 	out, _ := json.Marshal(schema)
 
 	return out
-}
-
-// addStructProps adds one JSON-Schema property per exported field of a struct type, using json tags
-// for names and skipping names already claimed by a path parameter. T is expected to be a struct (or
-// pointer to one); any other kind adds nothing.
-func addStructProps(props map[string]any, t reflect.Type, skip map[string]bool) {
-	for t.Kind() == reflect.Pointer {
-		t = t.Elem()
-	}
-
-	if t.Kind() != reflect.Struct {
-		return
-	}
-
-	for i := range t.NumField() {
-		f := t.Field(i)
-		if !f.IsExported() {
-			continue
-		}
-
-		name := jsonFieldName(&f)
-		if name == "-" || skip[name] {
-			continue
-		}
-
-		props[name] = map[string]string{schemaKeyType: jsonSchemaType(f.Type)}
-	}
-}
-
-func jsonFieldName(f *reflect.StructField) string {
-	tag := f.Tag.Get("json")
-	if tag == "" {
-		return f.Name
-	}
-
-	if name, _, _ := strings.Cut(tag, ","); name != "" {
-		return name
-	}
-
-	return f.Name
-}
-
-//nolint:exhaustive // the default arm covers every remaining reflect.Kind
-func jsonSchemaType(t reflect.Type) string {
-	for t.Kind() == reflect.Pointer {
-		t = t.Elem()
-	}
-
-	switch t.Kind() {
-	case reflect.String:
-		return schemaTypeString
-	case reflect.Bool:
-		return "boolean"
-	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64,
-		reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
-		return "integer"
-	case reflect.Float32, reflect.Float64:
-		return "number"
-	case reflect.Slice, reflect.Array:
-		return "array"
-	default:
-		return schemaTypeObject
-	}
 }
 
 func pathParams(pathTemplate string) []string {
