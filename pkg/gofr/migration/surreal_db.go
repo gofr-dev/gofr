@@ -55,21 +55,17 @@ const (
 
 func getMigrationTableQueries() []string {
 	return []string{
-		"DEFINE TABLE gofr_migrations SCHEMAFULL;",
-		"DEFINE FIELD id ON gofr_migrations TYPE string;",
-		"DEFINE FIELD version ON gofr_migrations TYPE number;",
-		"DEFINE FIELD method ON gofr_migrations TYPE string;",
-		"DEFINE FIELD start_time ON gofr_migrations TYPE datetime;",
-		"DEFINE FIELD duration ON gofr_migrations TYPE number;",
-		"DEFINE INDEX version_method ON gofr_migrations COLUMNS version, method UNIQUE;",
+		"DEFINE TABLE IF NOT EXISTS gofr_migrations SCHEMAFULL;",
+		"DEFINE FIELD IF NOT EXISTS id ON gofr_migrations TYPE string;",
+		"DEFINE FIELD IF NOT EXISTS version ON gofr_migrations TYPE number;",
+		"DEFINE FIELD IF NOT EXISTS method ON gofr_migrations TYPE string;",
+		"DEFINE FIELD IF NOT EXISTS start_time ON gofr_migrations TYPE datetime;",
+		"DEFINE FIELD IF NOT EXISTS duration ON gofr_migrations TYPE number;",
+		"DEFINE INDEX IF NOT EXISTS version_method ON gofr_migrations COLUMNS version, method UNIQUE;",
 	}
 }
 
 func (s surrealMigrator) checkAndCreateMigrationTable(c *container.Container) error {
-	if _, err := s.SurrealDB.Query(context.Background(), "USE NS test DB test", nil); err != nil {
-		return err
-	}
-
 	// Create migration table directly
 	for _, q := range getMigrationTableQueries() {
 		if _, err := s.SurrealDB.Query(context.Background(), q, nil); err != nil {
@@ -89,7 +85,7 @@ func (s surrealMigrator) getLastMigration(c *container.Container) (int64, error)
 	}
 
 	if len(result) > 0 {
-		if version, ok := result[0].(map[string]any)["version"].(float64); ok {
+		if version, ok := result[0].(map[string]any)["version"].(int); ok {
 			lastMigration = int64(version)
 		}
 	}
