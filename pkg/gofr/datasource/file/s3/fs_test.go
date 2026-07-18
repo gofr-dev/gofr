@@ -67,6 +67,65 @@ func setupTestFileSystem(mocks *testMocks, config *Config) *FileSystem {
 	}
 }
 
+// Test_applyClientOptions asserts the flavor→SDK wiring that Connect relies on:
+// each resolved profile must set path-style addressing, the base endpoint, and the
+// upload-checksum behavior on the concrete *s3.Options. This is what an
+// end-to-end connect would otherwise silently depend on.
+func Test_applyClientOptions(t *testing.T) {
+	const endpoint = "https://example.r2.cloudflarestorage.com"
+
+	tests := []struct {
+		name                string
+		config              *Config
+		wantPathStyle       bool
+		wantChecksumWhenReq bool
+	}{
+		{
+			name:                "AWS default keeps path-style and default checksum",
+			config:              &Config{Region: "us-east-1"},
+			wantPathStyle:       true,
+			wantChecksumWhenReq: false,
+		},
+		{
+			name:                "R2 disables upload checksum",
+			config:              &Config{Flavor: FlavorR2, Region: "us-east-1"},
+			wantPathStyle:       true,
+			wantChecksumWhenReq: true,
+		},
+		{
+			name:                "Spaces uses virtual-hosted addressing",
+			config:              &Config{Flavor: FlavorSpaces, Region: "nyc3"},
+			wantPathStyle:       false,
+			wantChecksumWhenReq: false,
+		},
+		{
+			name:                "explicit UsePathStyle override wins",
+			config:              &Config{Flavor: FlavorSpaces, Region: "nyc3", UsePathStyle: boolPtr(true)},
+			wantPathStyle:       true,
+			wantChecksumWhenReq: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			o := &s3.Options{}
+			applyClientOptions(resolveProfile(tt.config), endpoint)(o)
+
+			assert.Equal(t, tt.wantPathStyle, o.UsePathStyle, "UsePathStyle")
+			require.NotNil(t, o.BaseEndpoint)
+			assert.Equal(t, endpoint, *o.BaseEndpoint, "BaseEndpoint")
+
+			if tt.wantChecksumWhenReq {
+				assert.Equal(t, aws.RequestChecksumCalculationWhenRequired, o.RequestChecksumCalculation,
+					"checksum should be calculated only when required")
+			} else {
+				assert.NotEqual(t, aws.RequestChecksumCalculationWhenRequired, o.RequestChecksumCalculation,
+					"checksum behavior should stay at the SDK default")
+			}
+		})
+	}
+}
+
 func Test_CreateFile_TxtFile_Success(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()

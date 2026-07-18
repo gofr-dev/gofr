@@ -3,6 +3,7 @@ package s3
 import (
 	"context"
 
+	v4 "github.com/aws/aws-sdk-go-v2/aws/signer/v4"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 )
 
@@ -23,6 +24,13 @@ type s3Client interface {
 	DeleteObject(ctx context.Context, params *s3.DeleteObjectInput, optFns ...func(*s3.Options)) (*s3.DeleteObjectOutput, error)
 	DeleteObjects(ctx context.Context, params *s3.DeleteObjectsInput, optFns ...func(*s3.Options)) (*s3.DeleteObjectsOutput, error)
 	CopyObject(ctx context.Context, params *s3.CopyObjectInput, optFns ...func(*s3.Options)) (*s3.CopyObjectOutput, error)
+}
+
+// s3Presigner is the subset of *s3.PresignClient used to generate signed URLs.
+// It is defined as an interface so the signing path can be mocked in tests.
+type s3Presigner interface {
+	PresignGetObject(ctx context.Context, params *s3.GetObjectInput,
+		optFns ...func(*s3.PresignOptions)) (*v4.PresignedHTTPRequest, error)
 }
 
 type Metrics interface {
