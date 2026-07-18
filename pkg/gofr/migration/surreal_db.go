@@ -76,6 +76,23 @@ func (s surrealMigrator) checkAndCreateMigrationTable(c *container.Container) er
 	return s.migrator.checkAndCreateMigrationTable(c)
 }
 
+// surrealVersionToInt64 converts the `version` field returned by SurrealDB into an int64.
+// The SurrealDB driver decodes a `number` column into different Go types depending on the
+// stored value and driver version (e.g. int or int64 over CBOR, or float64 for JSON-based
+// responses), so we handle each numeric type explicitly. Unknown/absent values default to 0.
+func surrealVersionToInt64(v any) int64 {
+	switch n := v.(type) {
+	case int64:
+		return n
+	case int:
+		return int64(n)
+	case float64:
+		return int64(n)
+	default:
+		return 0
+	}
+}
+
 func (s surrealMigrator) getLastMigration(c *container.Container) (int64, error) {
 	var lastMigration int64
 
@@ -85,8 +102,8 @@ func (s surrealMigrator) getLastMigration(c *container.Container) (int64, error)
 	}
 
 	if len(result) > 0 {
-		if version, ok := result[0].(map[string]any)["version"].(int); ok {
-			lastMigration = int64(version)
+		if row, ok := result[0].(map[string]any); ok {
+			lastMigration = surrealVersionToInt64(row["version"])
 		}
 	}
 
