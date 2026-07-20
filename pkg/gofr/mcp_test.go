@@ -14,7 +14,7 @@ import (
 	"gofr.dev/pkg/gofr/testutil"
 )
 
-func testRouterTools(t *testing.T, write bool, exclude ...string) (*App, *routerTools) {
+func testRouterTools(t *testing.T, exclude ...string) (*App, *routerTools) {
 	t.Helper()
 	testutil.NewServerConfigs(t)
 
@@ -25,7 +25,7 @@ func testRouterTools(t *testing.T, write bool, exclude ...string) (*App, *router
 		ex[e] = true
 	}
 
-	return app, &routerTools{app: app, cfg: &mcpConfig{writeTools: write, exclude: ex}}
+	return app, &routerTools{app: app, cfg: &mcpConfig{exclude: ex}}
 }
 
 func toolNames(specs []ai.ToolSpec) []string {
@@ -38,7 +38,7 @@ func toolNames(specs []ai.ToolSpec) []string {
 }
 
 func TestRouterTools_List_ReadOnlyByDefault(t *testing.T) {
-	app, rt := testRouterTools(t, false)
+	app, rt := testRouterTools(t)
 	app.GET("/items", func(*Context) (any, error) { return nil, nil })
 	app.POST("/items", func(*Context) (any, error) { return nil, nil })
 
@@ -47,18 +47,8 @@ func TestRouterTools_List_ReadOnlyByDefault(t *testing.T) {
 	assert.NotContains(t, names, "post_items", "write handlers are not exposed by default")
 }
 
-func TestRouterTools_List_WithWriteTools(t *testing.T) {
-	app, rt := testRouterTools(t, true)
-	app.GET("/items", func(*Context) (any, error) { return nil, nil })
-	app.POST("/items", func(*Context) (any, error) { return nil, nil })
-
-	names := toolNames(rt.List())
-	assert.Contains(t, names, "get_items")
-	assert.Contains(t, names, "post_items")
-}
-
 func TestRouterTools_List_Excludes(t *testing.T) {
-	app, rt := testRouterTools(t, false, "/secret")
+	app, rt := testRouterTools(t, "/secret")
 	app.GET("/secret", func(*Context) (any, error) { return nil, nil })
 	app.GET("/public", func(*Context) (any, error) { return nil, nil })
 
@@ -68,7 +58,7 @@ func TestRouterTools_List_Excludes(t *testing.T) {
 }
 
 func TestRouterTools_List_ReadOnlyAccess(t *testing.T) {
-	app, rt := testRouterTools(t, true)
+	app, rt := testRouterTools(t)
 	app.GET("/items", func(*Context) (any, error) { return nil, nil })
 
 	specs := rt.List()
@@ -77,7 +67,7 @@ func TestRouterTools_List_ReadOnlyAccess(t *testing.T) {
 }
 
 func TestRouterTools_Call_DispatchesThroughRouter(t *testing.T) {
-	app, rt := testRouterTools(t, false)
+	app, rt := testRouterTools(t)
 	app.GET("/ping", func(*Context) (any, error) { return "pong", nil })
 
 	res, err := rt.Call(t.Context(), "get_ping", nil)
@@ -89,7 +79,7 @@ func TestRouterTools_Call_DispatchesThroughRouter(t *testing.T) {
 }
 
 func TestRouterTools_Call_PathParam(t *testing.T) {
-	app, rt := testRouterTools(t, false)
+	app, rt := testRouterTools(t)
 	app.GET("/echo/{id}", func(c *Context) (any, error) { return c.PathParam("id"), nil })
 
 	res, err := rt.Call(t.Context(), "get_echo_id", json.RawMessage(`{"id":"42"}`))
@@ -100,7 +90,7 @@ func TestRouterTools_Call_PathParam(t *testing.T) {
 }
 
 func TestRouterTools_Call_QueryParam(t *testing.T) {
-	app, rt := testRouterTools(t, false)
+	app, rt := testRouterTools(t)
 	app.GET("/search", func(c *Context) (any, error) { return c.Param("q"), nil })
 
 	res, err := rt.Call(t.Context(), "get_search", json.RawMessage(`{"q":"gofr"}`))
@@ -110,47 +100,9 @@ func TestRouterTools_Call_QueryParam(t *testing.T) {
 	assert.Contains(t, string(body), "gofr")
 }
 
-func TestRouterTools_Call_WriteBody(t *testing.T) {
-	app, rt := testRouterTools(t, true)
-	app.POST("/orders", func(c *Context) (any, error) {
-		var in struct {
-			Item string `json:"item"`
-		}
-
-		_ = c.Bind(&in)
-
-		return in.Item, nil
-	})
-
-	res, err := rt.Call(t.Context(), "post_orders", json.RawMessage(`{"item":"book"}`))
-	require.NoError(t, err)
-
-	body, _ := res.JSON()
-	assert.Contains(t, string(body), "book")
-}
-
-// A write tool's body args are dispatched to ctx.Bind end to end (independent of any input schema).
-func TestRouterTools_Call_BodyReachesBind(t *testing.T) {
-	app, rt := testRouterTools(t, true)
-	app.POST("/orders", func(c *Context) (any, error) {
-		var in orderInput
-
-		require.NoError(t, c.Bind(&in))
-
-		return map[string]any{"item": in.Item, "qty": in.Quantity}, nil
-	})
-
-	res, err := rt.Call(t.Context(), "post_orders", json.RawMessage(`{"item":"book","qty":3}`))
-	require.NoError(t, err)
-
-	body, _ := res.JSON()
-	assert.Contains(t, string(body), "book")
-	assert.Contains(t, string(body), "3")
-}
-
 // An array argument to a read tool must arrive as repeated query values so ctx.Params returns each.
 func TestRouterTools_Call_ArrayQueryParam(t *testing.T) {
-	app, rt := testRouterTools(t, false)
+	app, rt := testRouterTools(t)
 	app.GET("/search", func(c *Context) (any, error) { return c.Params("tag"), nil })
 
 	res, err := rt.Call(t.Context(), "get_search", json.RawMessage(`{"tag":["a","b","c"]}`))
@@ -161,14 +113,14 @@ func TestRouterTools_Call_ArrayQueryParam(t *testing.T) {
 }
 
 func TestRouterTools_Call_UnknownTool(t *testing.T) {
-	_, rt := testRouterTools(t, false)
+	_, rt := testRouterTools(t)
 
 	_, err := rt.Call(t.Context(), "get_missing", nil)
 	require.ErrorIs(t, err, ai.ErrToolNotFound)
 }
 
 func TestRouterTools_Call_PropagatesAuthHeader(t *testing.T) {
-	app, rt := testRouterTools(t, false)
+	app, rt := testRouterTools(t)
 
 	var gotAuth string
 
@@ -187,9 +139,10 @@ func TestRouterTools_Call_PropagatesAuthHeader(t *testing.T) {
 	assert.Equal(t, "Bearer tok-123", gotAuth, "the caller's auth header reaches the dispatched handler")
 }
 
-// Gating must hold at Call time, not only in List — a guessed name must not reach a hidden tool.
-func TestRouterTools_Call_WriteToolRejectedWhenReadOnly(t *testing.T) {
-	app, rt := testRouterTools(t, false)
+// Gating must hold at Call time, not only in List — a guessed write-tool name must not dispatch,
+// since write handlers are never exposed.
+func TestRouterTools_Call_WriteToolAlwaysRejected(t *testing.T) {
+	app, rt := testRouterTools(t)
 	app.POST("/orders", func(*Context) (any, error) { return "made", nil })
 
 	_, err := rt.Call(t.Context(), "post_orders", json.RawMessage(`{}`))
@@ -197,7 +150,7 @@ func TestRouterTools_Call_WriteToolRejectedWhenReadOnly(t *testing.T) {
 }
 
 func TestRouterTools_Call_ExcludedRejected(t *testing.T) {
-	app, rt := testRouterTools(t, false, "/secret")
+	app, rt := testRouterTools(t, "/secret")
 	app.GET("/secret", func(*Context) (any, error) { return "shh", nil })
 
 	_, err := rt.Call(t.Context(), "get_secret", nil)
@@ -205,7 +158,7 @@ func TestRouterTools_Call_ExcludedRejected(t *testing.T) {
 }
 
 func TestRouterTools_Call_WellKnownRejected(t *testing.T) {
-	app, rt := testRouterTools(t, false)
+	app, rt := testRouterTools(t)
 	app.GET("/.well-known/secret", func(*Context) (any, error) { return "shh", nil })
 
 	_, err := rt.Call(t.Context(), toolName(http.MethodGet, "/.well-known/secret"), nil)
@@ -215,7 +168,7 @@ func TestRouterTools_Call_WellKnownRejected(t *testing.T) {
 // A path parameter that could break out of its segment is rejected, so an allowed tool cannot be
 // steered into another route. Regression test for the MCP path-traversal fix.
 func TestRouterTools_Call_PathTraversalRejected(t *testing.T) {
-	app, rt := testRouterTools(t, false)
+	app, rt := testRouterTools(t)
 	app.GET("/public/{id}", func(c *Context) (any, error) { return c.PathParam("id"), nil })
 
 	for _, bad := range []string{"../secret", "a/b", "..", ".", "a/../b", ""} {
@@ -233,7 +186,7 @@ func TestRouterTools_Call_PathTraversalRejected(t *testing.T) {
 
 // The framework-registered favicon route is never exposed as an agent tool.
 func TestRouterTools_List_ExcludesFavicon(t *testing.T) {
-	app, rt := testRouterTools(t, false)
+	app, rt := testRouterTools(t)
 	app.GET("/favicon.ico", func(*Context) (any, error) { return nil, nil })
 	app.GET("/items", func(*Context) (any, error) { return nil, nil })
 
@@ -243,7 +196,7 @@ func TestRouterTools_List_ExcludesFavicon(t *testing.T) {
 }
 
 func TestRouterTools_Call_AuthRequiredWithoutHeaderFails(t *testing.T) {
-	app, rt := testRouterTools(t, false)
+	app, rt := testRouterTools(t)
 
 	app.UseMiddleware(func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -263,7 +216,7 @@ func TestRouterTools_Call_AuthRequiredWithoutHeaderFails(t *testing.T) {
 }
 
 func TestFilteredTools_OnlyIntersects(t *testing.T) {
-	app, rt := testRouterTools(t, false)
+	app, rt := testRouterTools(t)
 	app.GET("/a", func(*Context) (any, error) { return nil, nil })
 	app.GET("/b", func(*Context) (any, error) { return nil, nil })
 
@@ -273,7 +226,7 @@ func TestFilteredTools_OnlyIntersects(t *testing.T) {
 }
 
 func TestRouterTools_Only(t *testing.T) {
-	app, rt := testRouterTools(t, false)
+	app, rt := testRouterTools(t)
 	app.GET("/a", func(*Context) (any, error) { return nil, nil })
 	app.GET("/b", func(*Context) (any, error) { return nil, nil })
 
@@ -302,18 +255,6 @@ func TestEnableMCP_BeforeRoutesStillExposesThem(t *testing.T) {
 	tools := app.container.LLM().Tools()
 	assert.Contains(t, toolNames(tools.List()), "get_late",
 		"a route registered after EnableMCP is still discovered")
-}
-
-func TestEnableMCP_WithWriteToolsOption(t *testing.T) {
-	testutil.NewServerConfigs(t)
-	t.Setenv("MCP_PORT", "0")
-
-	app := New()
-	app.AddLLM(&testLLM{})
-	app.POST("/orders", func(*Context) (any, error) { return nil, nil })
-	app.EnableMCP(WithWriteTools())
-
-	assert.Contains(t, toolNames(app.container.LLM().Tools().List()), "post_orders")
 }
 
 func TestEnableMCP_WithExcludedRoutesOption(t *testing.T) {
@@ -357,13 +298,6 @@ func TestEnableMCP_ServerConfigured(t *testing.T) {
 	assert.Equal(t, defaultMCPPort, app.mcpServer.port)
 }
 
-type orderInput struct {
-	Item     string `json:"item"`
-	Quantity int    `json:"qty"`
-	Rush     bool   `json:"rush"`
-	Internal string `json:"-"`
-}
-
 func schemaFor(specs []ai.ToolSpec, name string) string {
 	for _, s := range specs {
 		if s.Name == name {
@@ -374,10 +308,10 @@ func schemaFor(specs []ai.ToolSpec, name string) string {
 	return ""
 }
 
-// A route's tool schema describes its path parameters (and nothing else — body fields are not
-// described in v1, though they are still dispatched to the handler).
+// A route's tool schema describes its path parameters. Only read-only handlers become tools, so
+// there is no request body to describe.
 func TestToolSchema_PathParamsOnly(t *testing.T) {
-	app, rt := testRouterTools(t, false)
+	app, rt := testRouterTools(t)
 	app.GET("/orders/{id}", func(*Context) (any, error) { return nil, nil })
 
 	schema := schemaFor(rt.List(), "get_orders_id")
@@ -388,8 +322,8 @@ func TestToolSchema_PathParamsOnly(t *testing.T) {
 
 func TestHelpers(t *testing.T) {
 	assert.Equal(t, "get_users_id", toolName(http.MethodGet, "/users/{id}"))
-	assert.Equal(t, ai.ReadOnly, accessForMethod(http.MethodGet))
-	assert.Equal(t, ai.Write, accessForMethod(http.MethodPost))
+	assert.True(t, isReadOnlyMethod(http.MethodGet))
+	assert.False(t, isReadOnlyMethod(http.MethodPost))
 	assert.Equal(t, []string{"id"}, pathParams("/users/{id:[0-9]+}"))
 	assert.Equal(t, "42", scalar(json.RawMessage(`"42"`)))
 	assert.Equal(t, "true", scalar(json.RawMessage(`true`)))

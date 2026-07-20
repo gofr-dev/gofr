@@ -33,26 +33,20 @@ func main() {
 }
 ```
 
-The input schema for each tool is derived from the route's path parameters. A handler's request body
-is still dispatched to it when the tool is called, but the body's fields are not described in the
-tool schema.
+The input schema for each tool is derived from the route's path parameters.
 
 When a tool is called, its arguments are dispatched like a real request: path parameters fill the
-route, and for read handlers the remaining arguments become query values while for write handlers
-they become the JSON body.
+route and the remaining arguments become query values.
 
-### Read-only by default
+### Read-only
 
-Only safe-to-retry handlers (`GET`, `HEAD`, `OPTIONS`) are exposed by default, so an agent cannot
-trigger a write it was not explicitly granted. Opt into write handlers deliberately:
-
-```go
-app.EnableMCP(gofr.WithWriteTools())   // also expose POST/PUT/PATCH/DELETE handlers
-```
+Only safe-to-retry handlers (`GET`, `HEAD`, `OPTIONS`) are exposed as tools. Write handlers
+(`POST`/`PUT`/`PATCH`/`DELETE`) are never exposed, so an agent cannot mutate state through this
+surface.
 
 Drop specific routes with `gofr.WithExcludedRoutes("/internal/{id}")`. Framework `/.well-known/*` probes are
-never exposed. Access is enforced at call time, not just in the tool listing — a hidden write tool
-cannot be invoked by guessing its name.
+never exposed. The read-only rule is enforced at call time, not just in the tool listing — a write
+route cannot be invoked by guessing its tool name.
 
 ### Safety
 

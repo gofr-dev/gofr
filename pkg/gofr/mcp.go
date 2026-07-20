@@ -16,14 +16,7 @@ import (
 type MCPOption func(*mcpConfig)
 
 type mcpConfig struct {
-	writeTools bool
-	exclude    map[string]bool
-}
-
-// WithWriteTools also exposes write handlers (POST/PUT/PATCH/DELETE) as tools. By default only
-// read-only handlers are exposed so an agent cannot mutate state it was not explicitly granted.
-func WithWriteTools() MCPOption {
-	return func(c *mcpConfig) { c.writeTools = true }
+	exclude map[string]bool
 }
 
 // WithExcludedRoutes drops the given route path templates (e.g. "/internal/{id}") from the tools.
@@ -35,10 +28,10 @@ func WithExcludedRoutes(paths ...string) MCPOption {
 	}
 }
 
-// EnableMCP exposes the app's registered HTTP handlers as agent-callable tools over an MCP server on
-// its own port (MCP_PORT, default 8200; MCP_PORT=0 disables the server). Read-only handlers are
-// exposed by default; pass WithWriteTools to also expose write handlers. The tools are also reachable
-// in handlers via ctx.LLM().Tools() regardless of whether the server is enabled.
+// EnableMCP exposes the app's read-only HTTP handlers (GET/HEAD/OPTIONS) as agent-callable tools over
+// an MCP server on its own port (MCP_PORT, default 8200; MCP_PORT=0 disables the server). Write
+// handlers are never exposed, so an agent cannot mutate state through this surface. The tools are also
+// reachable in handlers via ctx.LLM().Tools() regardless of whether the server is enabled.
 func (a *App) EnableMCP(opts ...MCPOption) {
 	cfg := &mcpConfig{exclude: make(map[string]bool)}
 	for _, o := range opts {

@@ -1,12 +1,10 @@
 package gofr
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
 	"net/http"
 	"net/url"
 	"path"
@@ -116,8 +114,9 @@ func (rt *routerTools) specFor(method, pathTemplate string) (ai.ToolSpec, bool) 
 		return ai.ToolSpec{}, false
 	}
 
-	access := accessForMethod(method)
-	if access == ai.Write && !rt.cfg.writeTools {
+	// Only read-only handlers (GET/HEAD/OPTIONS) are exposed as tools; write handlers are never
+	// exposed, so an agent cannot mutate state through the MCP surface.
+	if !isReadOnlyMethod(method) {
 		return ai.ToolSpec{}, false
 	}
 
@@ -125,7 +124,7 @@ func (rt *routerTools) specFor(method, pathTemplate string) (ai.ToolSpec, bool) 
 		Name:        toolName(method, pathTemplate),
 		Description: method + " " + pathTemplate,
 		InputSchema: toolSchema(pathTemplate),
-		Access:      access,
+		Access:      ai.ReadOnly,
 	}, true
 }
 
@@ -191,12 +190,12 @@ func (f *filteredTools) Call(ctx context.Context, name string, args json.RawMess
 	return f.tools.Call(ctx, name, args)
 }
 
-func accessForMethod(method string) ai.Access {
+func isReadOnlyMethod(method string) bool {
 	switch method {
 	case http.MethodGet, http.MethodHead, http.MethodOptions:
-		return ai.ReadOnly
+		return true
 	default:
-		return ai.Write
+		return false
 	}
 }
 
@@ -218,8 +217,8 @@ func toolName(method, pathTemplate string) string {
 }
 
 // toolSchema builds the JSON Schema for a tool's arguments from the route's path parameters. A route
-// with no path parameters gets no schema (nil); body fields are dispatched to the handler at call
-// time but are not described here.
+// with no path parameters gets no schema (nil). Only read-only handlers become tools, so there is no
+// request body to describe.
 func toolSchema(pathTemplate string) json.RawMessage {
 	params := pathParams(pathTemplate)
 	if len(params) == 0 {
@@ -280,22 +279,9 @@ func buildToolRequest(ctx context.Context, method, pathTemplate string, args jso
 		}
 	}
 
-	reqPath, query, body, err := splitArgs(method, pathTemplate, fields)
+	reqPath, query, err := splitArgs(pathTemplate, fields)
 	if err != nil {
 		return nil, err
-	}
-
-	var reader io.Reader
-
-	if len(body) > 0 {
-		var encoded []byte
-
-		encoded, err = json.Marshal(body)
-		if err != nil {
-			return nil, err
-		}
-
-		reader = bytes.NewReader(encoded)
 	}
 
 	target := reqPath
@@ -303,20 +289,15 @@ func buildToolRequest(ctx context.Context, method, pathTemplate string, args jso
 		target += "?" + enc
 	}
 
-	req, err := http.NewRequestWithContext(ctx, method, target, reader)
-	if err != nil {
-		return nil, err
-	}
-
-	if reader != nil {
-		req.Header.Set("Content-Type", "application/json")
-	}
-
-	return req, nil
+	// Read-only tools carry no request body.
+	return http.NewRequestWithContext(ctx, method, target, http.NoBody)
 }
 
-func splitArgs(method, pathTemplate string, fields map[string]json.RawMessage,
-) (reqPath string, query url.Values, body map[string]json.RawMessage, err error) {
+// splitArgs maps a tool's arguments to a path and query string. Path parameters are substituted into
+// their route segment; every other argument becomes a query value. Only read-only tools are exposed,
+// so there is no request body.
+func splitArgs(pathTemplate string, fields map[string]json.RawMessage,
+) (reqPath string, query url.Values, err error) {
 	params := make(map[string]bool)
 	for _, p := range pathParams(pathTemplate) {
 		params[p] = true
@@ -324,29 +305,26 @@ func splitArgs(method, pathTemplate string, fields map[string]json.RawMessage,
 
 	segs := strings.Split(pathTemplate, "/")
 	query = url.Values{}
-	body = map[string]json.RawMessage{}
 
 	for key, raw := range fields {
-		switch {
-		case params[key]:
-			// A path parameter must stay within its own segment. Escaping alone is not enough:
-			// url.PathEscape leaves "." intact, so "../secret" would survive as "..%2Fsecret" and the
-			// router's path.Clean could still collapse it out of the intended route. Reject any value
-			// that is not a single safe segment before it is placed in the path.
-			val := scalar(raw)
-			if !safePathSegment(val) {
-				return "", nil, nil, fmt.Errorf("%w: %q=%q", errUnsafePathParam, key, val)
-			}
-
-			substituteSegment(segs, key, url.PathEscape(val))
-		case accessForMethod(method) == ai.ReadOnly:
+		if !params[key] {
 			addQueryValue(query, key, raw)
-		default:
-			body[key] = raw
+			continue
 		}
+
+		// A path parameter must stay within its own segment. Escaping alone is not enough:
+		// url.PathEscape leaves "." intact, so "../secret" would survive as "..%2Fsecret" and the
+		// router's path.Clean could still collapse it out of the intended route. Reject any value
+		// that is not a single safe segment before it is placed in the path.
+		val := scalar(raw)
+		if !safePathSegment(val) {
+			return "", nil, fmt.Errorf("%w: %q=%q", errUnsafePathParam, key, val)
+		}
+
+		substituteSegment(segs, key, url.PathEscape(val))
 	}
 
-	return strings.Join(segs, "/"), query, body, nil
+	return strings.Join(segs, "/"), query, nil
 }
 
 // isFrameworkRoute reports whether a route is registered by the framework itself (health/liveness
