@@ -124,7 +124,7 @@ func record(ctx context.Context, info *CallInfo, span trace.Span, resp *Response
 		)
 	}
 
-	writeLog(info, resp, err, status)
+	writeLog(span, info, resp, err, status)
 }
 
 func recordTokens(ctx context.Context, m Metrics, info *CallInfo, u Usage) {
@@ -141,13 +141,21 @@ func recordTokens(ctx context.Context, m Metrics, info *CallInfo, u Usage) {
 	emit(tokenTypeReasoning, u.ReasoningTokens)
 }
 
-func writeLog(info *CallInfo, resp *Response, err error, status string) {
+func writeLog(span trace.Span, info *CallInfo, resp *Response, err error, status string) {
 	l := info.Deps.Logger
 	if l == nil {
 		return
 	}
 
 	entry := Log{Provider: info.Provider, Model: info.Model, Operation: info.Op, Status: status}
+
+	// Correlate the LLM log with its trace, like every other GoFr log path. The span is the LLM
+	// call span opened in record()'s caller; a noop tracer yields an invalid context, so the field
+	// is omitted rather than logged as a zero trace ID.
+	if sc := span.SpanContext(); sc.IsValid() {
+		entry.TraceID = sc.TraceID().String()
+	}
+
 	if resp != nil {
 		entry.PromptTokens = resp.Usage.PromptTokens
 		entry.CompletionTokens = resp.Usage.CompletionTokens
@@ -187,6 +195,7 @@ type Log struct {
 	Model            string `json:"model"`
 	Operation        string `json:"operation"`
 	Status           string `json:"status"`
+	TraceID          string `json:"traceId,omitempty"`
 	PromptTokens     int    `json:"promptTokens"`
 	CompletionTokens int    `json:"completionTokens"`
 	TotalTokens      int    `json:"totalTokens,omitempty"`

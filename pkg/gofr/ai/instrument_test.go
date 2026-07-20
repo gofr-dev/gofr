@@ -87,6 +87,45 @@ func TestInstrument_Success(t *testing.T) {
 	assert.Equal(t, "llm.chat", spans[0].Name())
 }
 
+// The LLM log line carries the trace ID of its call span, so it can be joined to the request,
+// handler and trace it belongs to — like every other GoFr log path.
+func TestInstrument_LogCarriesTraceID(t *testing.T) {
+	deps, _, l, sr := testDeps()
+	info := &CallInfo{Deps: deps, Provider: "groq", Model: "llama-3.3-70b", Op: "chat"}
+
+	_, err := Instrument(t.Context(), info, func(context.Context) (*Response, error) {
+		return &Response{Content: "hi"}, nil
+	})
+	require.NoError(t, err)
+
+	spans := sr.Ended()
+	require.Len(t, spans, 1)
+
+	require.Len(t, l.debug, 1)
+	entry, ok := l.debug[0].(Log)
+	require.True(t, ok)
+	assert.NotEmpty(t, entry.TraceID)
+	assert.Equal(t, spans[0].SpanContext().TraceID().String(), entry.TraceID,
+		"the log line must carry its call span's trace ID")
+}
+
+// With no tracer configured, the span context is invalid, so the trace ID is omitted rather than
+// logged as an all-zero value.
+func TestInstrument_LogTraceIDOmittedWithoutTracer(t *testing.T) {
+	l := &fakeLogger{}
+	info := &CallInfo{Deps: Deps{Logger: l}, Provider: "groq", Model: "m", Op: "chat"}
+
+	_, err := Instrument(t.Context(), info, func(context.Context) (*Response, error) {
+		return &Response{}, nil
+	})
+	require.NoError(t, err)
+
+	require.Len(t, l.debug, 1)
+	entry, ok := l.debug[0].(Log)
+	require.True(t, ok)
+	assert.Empty(t, entry.TraceID)
+}
+
 // Cached and reasoning tokens are recorded as their own token_type series, in addition to prompt
 // and completion, and surfaced on the span.
 func TestInstrument_RecordsCachedAndReasoningTokens(t *testing.T) {
