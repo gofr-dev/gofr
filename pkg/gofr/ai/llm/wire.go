@@ -109,6 +109,11 @@ const (
 	// completion; accepted as fallback aliases so those gateways work without custom UsageFields.
 	pathInputTokens  = "input_tokens"
 	pathOutputTokens = "output_tokens"
+	// The same Responses-API / Anthropic shape nests cache-read and reasoning counts under
+	// input_tokens_details / output_tokens_details rather than prompt_tokens_details /
+	// completion_tokens_details; accepted as fallbacks so cached/reasoning aren't lost either.
+	pathInputCachedTokens     = "input_tokens_details.cached_tokens" //nolint:gosec // G101: JSON field path, not a credential
+	pathOutputReasoningTokens = "output_tokens_details.reasoning_tokens"
 )
 
 // UsageFields remaps the JSON paths GoFr reads token counts from, for OpenAI-compatible providers
@@ -160,15 +165,24 @@ func (f *UsageFields) extract(rawUsage json.RawMessage) ai.Usage {
 
 	cached := at(f.CachedTokens, pathCachedTokens)
 	if cached == 0 && f.CachedTokens == "" {
-		cached = intAtPath(m, pathDeepSeekCached) // DeepSeek alias, only in default mode
+		// Default-mode fallbacks: DeepSeek reports cache hits at the top level; the Responses-API /
+		// Anthropic shape nests them under input_tokens_details.
+		if cached = intAtPath(m, pathDeepSeekCached); cached == 0 {
+			cached = intAtPath(m, pathInputCachedTokens)
+		}
+	}
+
+	reasoning := at(f.ReasoningTokens, pathReasoningTokens)
+	if reasoning == 0 && f.ReasoningTokens == "" {
+		reasoning = intAtPath(m, pathOutputReasoningTokens) // Responses-API / Anthropic nesting
 	}
 
 	return ai.Usage{
 		PromptTokens:     prompt,
 		CompletionTokens: completion,
 		TotalTokens:      at(f.TotalTokens, pathTotalTokens),
-		CachedTokens:     min(cached, prompt),                                         // cached is a subset of prompt
-		ReasoningTokens:  min(at(f.ReasoningTokens, pathReasoningTokens), completion), // subset of completion
+		CachedTokens:     min(cached, prompt),        // cached is a subset of prompt
+		ReasoningTokens:  min(reasoning, completion), // subset of completion
 	}
 }
 

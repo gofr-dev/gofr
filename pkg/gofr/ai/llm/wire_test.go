@@ -68,6 +68,29 @@ func TestMapUsage_StandardWinsOverInputAlias(t *testing.T) {
 	assert.Equal(t, 4, got.CompletionTokens)
 }
 
+// The Responses-API / Anthropic shape nests cache-read and reasoning under input_tokens_details /
+// output_tokens_details; these are captured as fallbacks alongside the input/output aliases.
+func TestMapUsage_ResponsesAPIDetailsNesting(t *testing.T) {
+	got := defaultUsage(`{"input_tokens":100,"output_tokens":40,` +
+		`"input_tokens_details":{"cached_tokens":30},"output_tokens_details":{"reasoning_tokens":12}}`)
+
+	assert.Equal(t, 100, got.PromptTokens)
+	assert.Equal(t, 40, got.CompletionTokens)
+	assert.Equal(t, 30, got.CachedTokens)
+	assert.Equal(t, 12, got.ReasoningTokens)
+}
+
+// The standard prompt_tokens_details / completion_tokens_details nesting still wins over the
+// Responses-API input_tokens_details / output_tokens_details fallback when both are present.
+func TestMapUsage_StandardDetailsWinOverResponsesAPI(t *testing.T) {
+	got := defaultUsage(`{"prompt_tokens":100,"completion_tokens":40,` +
+		`"prompt_tokens_details":{"cached_tokens":40},"completion_tokens_details":{"reasoning_tokens":8},` +
+		`"input_tokens_details":{"cached_tokens":999},"output_tokens_details":{"reasoning_tokens":999}}`)
+
+	assert.Equal(t, 40, got.CachedTokens)
+	assert.Equal(t, 8, got.ReasoningTokens)
+}
+
 // Negative and out-of-range counts are clamped to 0 on the default path, not fed to metrics.
 func TestMapUsage_ClampsOutOfRange(t *testing.T) {
 	assert.Zero(t, defaultUsage(`{"completion_tokens":-5}`).CompletionTokens)

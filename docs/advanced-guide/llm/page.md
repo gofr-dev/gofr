@@ -202,9 +202,11 @@ GROQ_API_KEY=your-key-here
 Token counts are read from the OpenAI usage shape, which every built-in provider uses, so input
 (`prompt_tokens`), output (`completion_tokens`), total, caching and reasoning tokens are captured with
 no configuration. The Responses-API / Anthropic names `input_tokens` and `output_tokens` are accepted
-as default aliases for prompt and completion. For an OpenAI-compatible provider whose `usage` object
-names fields differently still, set `UsageFields` — a dot-separated path per field, where any empty
-field keeps its default:
+as default aliases for prompt and completion, and their `input_tokens_details.cached_tokens` /
+`output_tokens_details.reasoning_tokens` nesting is accepted for cached and reasoning; the standard
+`prompt_tokens_details` / `completion_tokens_details` shape wins when both are present. For an
+OpenAI-compatible provider whose `usage` object names fields differently still, set `UsageFields` — a
+dot-separated path per field, where any empty field keeps its default:
 
 ```go
 app.AddLLM(&llm.Client{
