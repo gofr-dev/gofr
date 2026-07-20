@@ -114,9 +114,9 @@ and the resolved `Model`.
 
 ## Streaming responses
 
-For a chat UI, stream tokens to the client as the model produces them by returning a
-`response.Stream`. GoFr writes them as server-sent events, flushing after each and applying
-backpressure so a slow client throttles the producer instead of buffering in memory.
+For a chat UI, stream tokens to the client as the model produces them. `ctx.LLM().Stream(...)`
+returns a streamer that a handler returns as a [`response.Stream`](/docs/advanced-guide/streaming) —
+the same general streaming response GoFr uses for progress and log tailing:
 
 ```go
 func chat(c *gofr.Context) (any, error) {
@@ -137,8 +137,8 @@ func chat(c *gofr.Context) (any, error) {
 }
 ```
 
-`response.Stream` also accepts `Format: response.NDJSON` and a `Heartbeat` interval, and works for
-any streaming source — progress updates or log tailing — not just LLMs.
+See [Streaming Responses](/docs/advanced-guide/streaming) for the SSE and NDJSON formats, heartbeats
+and backpressure.
 
 If the model streams tool calls, they are assembled from the provider's deltas and available once the
 stream is drained:

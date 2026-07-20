@@ -155,6 +155,11 @@ export const navigation = [
                 desc: "Explore how GoFr eases the process of WebSocket communication in your Golang application for real-time data exchange."
             },
             {
+                title: 'Streaming Responses',
+                href: '/docs/advanced-guide/streaming',
+                desc: "Stream data to clients incrementally as Server-Sent Events or NDJSON with response.Stream — for progress, log tailing or LLM tokens — with backpressure and heartbeats."
+            },
+            {
                 title: 'Calling LLMs',
                 href: '/docs/advanced-guide/llm',
                 desc: "Call large language models from a handler with app.AddLLM and ctx.LLM(), getting tracing, token metrics, health checks and streaming for free."
