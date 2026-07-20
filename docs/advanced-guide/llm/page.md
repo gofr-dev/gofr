@@ -152,19 +152,38 @@ if tc, ok := stream.(ai.ToolCallStreamer); ok {
 }
 ```
 
-## What you get for free
+## Built-in Observability
 
-Every call is observable the same way a normal GoFr request is, joined by the correlation ID:
+Every call is observable the same way a normal GoFr request is, joined by the correlation ID.
 
-| Signal | Detail |
-|---|---|
-| Metrics | `app_llm_request_count` (provider, model, operation, status) and `app_llm_tokens_per_request` histogram (provider, model, token_type). `token_type` is one of `prompt`, `completion`, `cached` or `reasoning` — the latter two, reported when the provider supports prompt caching or reasoning, are subsets of `prompt` and `completion`. The histogram's Prometheus `_sum` per `token_type` is the cumulative token count, so a cache-hit rate is `sum(cached) / sum(prompt)`. |
-| Traces | A span per call (`llm.chat` / `llm.generate` / `llm.stream`) with provider, model and token attributes (`llm.tokens.prompt/completion/total/cached/reasoning`) — child of the request span, parent of the provider's HTTP span. |
-| Logs | A structured line per call with provider, model, operation, token counts (including cached and reasoning when reported) and status. Prompt and completion text are never logged. |
-| Health | The model registers as a datasource, so its reachability is reported on the health endpoint alongside your databases. |
+### Metrics
+
+- **`app_llm_request_count`** — a counter labelled `provider`, `model`, `operation` and `status`.
+- **`app_llm_tokens_per_request`** — a histogram labelled `provider`, `model` and `token_type`,
+  where `token_type` is `prompt`, `completion`, `cached` or `reasoning`. `cached` and `reasoning`
+  are reported when the provider supports prompt caching or reasoning, and are subsets of `prompt`
+  and `completion`. The Prometheus `_sum` per `token_type` is the cumulative token count, so a
+  cache-hit rate is `sum(cached) / sum(prompt)`.
 
 Metrics are low-cardinality by design — prompts, session IDs and run IDs live on traces, never on
-metric labels. The API key never appears in a log, error, span or health detail.
+metric labels.
+
+### Traces
+
+A span per call (`llm.chat` / `llm.generate` / `llm.stream`) carrying provider, model and token
+attributes (`llm.tokens.prompt/completion/total/cached/reasoning`) — a child of the request span and
+the parent of the provider's HTTP span.
+
+### Logs
+
+A structured line per call with provider, model, operation, token counts (including cached and
+reasoning when reported) and status. Prompt and completion text are never logged, and the API key
+never appears in a log, error, span or health detail.
+
+### Health
+
+The model registers as a datasource, so its reachability is reported on the health endpoint
+alongside your databases.
 
 ## Configuration
 
