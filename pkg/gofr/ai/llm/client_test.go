@@ -395,7 +395,7 @@ func TestClient_Chat_ProviderErrorInBody(t *testing.T) {
 
 	resp, err := c.Chat(t.Context(), []ai.Message{{Role: ai.RoleUser, Content: "hi"}})
 	require.ErrorIs(t, err, errProvider)
-	assert.ErrorContains(t, err, "quota exceeded")
+	require.ErrorContains(t, err, "quota exceeded")
 	require.NotNil(t, resp, "usage from a billed 200-error must be returned, not dropped")
 	assert.Equal(t, 8, resp.Usage.PromptTokens)
 }
