@@ -106,3 +106,5 @@ agent request produces one coherent trace.
 > **Why no built-in agent loop?** Turns, stopping conditions, streaming and memory vary too much per
 > application. GoFr ships the primitives — `ctx.LLM()`, `ctx.LLM().Tools()` — the observability and
 > the plumbing; the decision logic stays in your code.
+
+> #### Check out the example on how to expose handlers to agents and build an agent loop in GoFr: [Visit GitHub](https://github.com/gofr-dev/gofr/blob/main/examples/using-ai/main.go)

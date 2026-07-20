@@ -8,12 +8,12 @@ nextjs:
 
 # Streaming Responses
 
-Most handlers return a single value that GoFr sends once the handler returns. Some responses are
-produced over time — a long job's progress, a tail of log lines, or tokens from a language model.
-For these, a handler returns a `response.Stream`, and GoFr writes each value to the client as soon as
-it is produced.
+Most handlers return a single value, which GoFr sends when the handler returns. But some responses
+are produced over time — a long job's progress, a tail of log lines, or tokens from a language model.
+For those, GoFr gives you `response.Stream`: return it from a handler and GoFr writes each value to
+the client the moment it is produced, instead of buffering the whole response in memory.
 
-`response.Stream` is a transport primitive, not tied to any one producer: the same type carries
+`response.Stream` is a transport primitive, not tied to any one producer — the same type carries
 progress events, log lines and LLM tokens.
 
 ## Returning a stream
@@ -89,3 +89,5 @@ alongside a `Stream` is ignored.
 Streaming a language model's output is one use of this same type: `ctx.LLM().Stream(...)` returns a
 `response.Streamer`, so a handler streams tokens by returning it as the `Source`. See
 [Calling LLMs](/docs/advanced-guide/llm) for the AI-specific details.
+
+> #### Check out the example on how to stream a response to the client in GoFr: [Visit GitHub](https://github.com/gofr-dev/gofr/blob/main/examples/using-ai/main.go)

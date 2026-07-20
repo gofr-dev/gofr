@@ -198,3 +198,5 @@ app.AddLLM(&llm.Client{
 ```
 
 The mapped counts flow into the same metrics, span attributes and logs as the built-in providers.
+
+> #### Check out the example on how to call an LLM from a handler in GoFr: [Visit GitHub](https://github.com/gofr-dev/gofr/blob/main/examples/using-ai/main.go)
