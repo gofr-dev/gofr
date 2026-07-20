@@ -159,11 +159,14 @@ Every call is observable the same way a normal GoFr request is, joined by the co
 ### Metrics
 
 - **`app_llm_request_count`** — a counter labeled `provider`, `model`, `operation` and `status`.
-- **`app_llm_tokens_per_request`** — a histogram labeled `provider`, `model` and `token_type`,
-  where `token_type` is `prompt`, `completion`, `cached` or `reasoning`. `cached` and `reasoning`
-  are reported when the provider supports prompt caching or reasoning, and are subsets of `prompt`
-  and `completion`. The Prometheus `_sum` per `token_type` is the cumulative token count, so a
-  cache-hit rate is `sum(cached) / sum(prompt)`.
+- **`app_llm_tokens_per_request`** — a histogram labeled `provider`, `model`, `token_type` and
+  `status`, where `token_type` is `prompt`, `completion`, `cached` or `reasoning`. `cached` and
+  `reasoning` are reported when the provider supports prompt caching or reasoning, and are subsets of
+  `prompt` and `completion`. Tokens are recorded whenever the provider reported them — including on a
+  failed call that was still billed (a `200`-with-error-object, or a stream that fails mid-drain) —
+  under `status="error"`, so failed-but-billed spend stays visible. The Prometheus `_sum` per
+  `token_type` is the cumulative token count; a cache-hit rate is
+  `sum(cached) / sum(prompt)` (add `status="success"` to either sum to scope it to successful calls).
 
 Metrics are low-cardinality by design — prompts, session IDs and run IDs live on traces, never on
 metric labels.

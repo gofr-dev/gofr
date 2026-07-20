@@ -78,6 +78,7 @@ func TestInstrument_Success(t *testing.T) {
 	require.Len(t, m.histograms, 2)
 	assert.InDelta(t, 12, m.histograms[0].value, 0)
 	assert.InDelta(t, 7, m.histograms[1].value, 0)
+	assert.Equal(t, statusSuccess, labelValue(m.histograms[0].labels, "status"))
 
 	assert.Len(t, l.debug, 1)
 	assert.Empty(t, l.errs)
@@ -85,6 +86,37 @@ func TestInstrument_Success(t *testing.T) {
 	spans := sr.Ended()
 	require.Len(t, spans, 1)
 	assert.Equal(t, "llm.chat", spans[0].Name())
+}
+
+// A failed call that still reported usage records its tokens under status="error", so
+// failed-but-billed spend (e.g. a 200-with-error-object or a stream that fails mid-drain) is not
+// invisible. recordTokens still skips zeros, so an error reporting nothing adds no series.
+func TestInstrument_RecordsTokensOnError(t *testing.T) {
+	deps, m, _, _ := testDeps()
+	info := &CallInfo{Deps: deps, Provider: "groq", Model: "m", Op: "generate"}
+
+	_, err := Instrument(t.Context(), info, func(context.Context) (*Response, error) {
+		return &Response{Usage: Usage{PromptTokens: 9}}, errCall
+	})
+	require.ErrorIs(t, err, errCall)
+
+	require.Len(t, m.histograms, 1, "the reported prompt tokens are recorded even though the call failed")
+	assert.Equal(t, metricTokensPerRequest, m.histograms[0].name)
+	assert.InDelta(t, 9, m.histograms[0].value, 0)
+	assert.Equal(t, tokenTypePrompt, labelValue(m.histograms[0].labels, "token_type"))
+	assert.Equal(t, statusError, labelValue(m.histograms[0].labels, "status"))
+}
+
+// An error that reported no usage records no token series.
+func TestInstrument_ErrorWithoutUsageRecordsNoTokens(t *testing.T) {
+	deps, m, _, _ := testDeps()
+	info := &CallInfo{Deps: deps, Provider: "groq", Model: "m", Op: "chat"}
+
+	_, err := Instrument(t.Context(), info, func(context.Context) (*Response, error) {
+		return nil, errCall
+	})
+	require.ErrorIs(t, err, errCall)
+	assert.Empty(t, m.histograms)
 }
 
 // The LLM log line carries the trace ID of its call span, so it can be joined to the request,
@@ -267,7 +299,13 @@ func TestStartCall_FinishError(t *testing.T) {
 
 	require.Len(t, m.counters, 1)
 	assert.Equal(t, statusError, labelValue(m.counters[0].labels, "status"))
-	assert.Empty(t, m.histograms, "no token histogram on a failed stream")
+
+	// A stream that fails mid-drain still consumed billable tokens, so the usage it reported is
+	// recorded under status="error" rather than dropped.
+	require.Len(t, m.histograms, 1)
+	assert.InDelta(t, 4, m.histograms[0].value, 0)
+	assert.Equal(t, tokenTypePrompt, labelValue(m.histograms[0].labels, "token_type"))
+	assert.Equal(t, statusError, labelValue(m.histograms[0].labels, "status"))
 
 	spans := sr.Ended()
 	require.Len(t, spans, 1)

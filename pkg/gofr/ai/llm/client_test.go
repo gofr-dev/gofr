@@ -385,14 +385,19 @@ var (
 )
 
 func TestClient_Chat_ProviderErrorInBody(t *testing.T) {
-	srv := chatServer(t, http.StatusOK, `{"error":{"message":"quota exceeded"}}`)
+	// A 200-with-error-object that also reports usage: the request was likely billed, so the usage
+	// must be returned alongside the error, not dropped.
+	srv := chatServer(t, http.StatusOK,
+		`{"error":{"message":"quota exceeded"},"usage":{"prompt_tokens":8,"completion_tokens":0}}`)
 	defer srv.Close()
 
 	c := testClient(t, OpenAI, srv.URL)
 
-	_, err := c.Chat(t.Context(), []ai.Message{{Role: ai.RoleUser, Content: "hi"}})
+	resp, err := c.Chat(t.Context(), []ai.Message{{Role: ai.RoleUser, Content: "hi"}})
 	require.ErrorIs(t, err, errProvider)
 	assert.ErrorContains(t, err, "quota exceeded")
+	require.NotNil(t, resp, "usage from a billed 200-error must be returned, not dropped")
+	assert.Equal(t, 8, resp.Usage.PromptTokens)
 }
 
 func TestClient_Chat_EmptyChoices(t *testing.T) {

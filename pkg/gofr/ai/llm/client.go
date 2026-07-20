@@ -201,15 +201,17 @@ func (c *Client) Chat(ctx context.Context, messages []ai.Message, opts ...ai.Opt
 		return nil, fmt.Errorf("%w: %w", errDecodeResponse, err)
 	}
 
-	if cr.Error != nil {
-		// Some OpenAI-compatible gateways report failures with HTTP 200 and an error object.
-		return nil, fmt.Errorf("%w: %s", errProvider, cr.Error.Message)
-	}
-
 	out := toResponse(&cr)
 
 	if c.UsageFields.isSet() {
 		out.Usage = mapUsage(&c.UsageFields, cr.Usage)
+	}
+
+	if cr.Error != nil {
+		// Some OpenAI-compatible gateways report failures with HTTP 200 and an error object. Return
+		// the usage they reported (the request was likely still billed) alongside the error so it is
+		// recorded against the error status instead of being silently dropped.
+		return &ai.Response{Usage: out.Usage}, fmt.Errorf("%w: %s", errProvider, cr.Error.Message)
 	}
 
 	return out, nil

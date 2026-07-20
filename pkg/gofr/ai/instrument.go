@@ -43,7 +43,7 @@ func RegisterMetrics(r MetricRegistrar) {
 
 	r.NewCounter(metricRequestCount, "Number of LLM requests by provider, model, operation and status.")
 	r.NewHistogram(metricTokensPerRequest,
-		"Tokens per LLM request by token_type (prompt, completion, cached⊆prompt, reasoning⊆completion).",
+		"Tokens per LLM request by token_type (prompt, completion, cached⊆prompt, reasoning⊆completion) and status.",
 		tokenBuckets...)
 }
 
@@ -105,12 +105,13 @@ func record(ctx context.Context, info *CallInfo, span trace.Span, resp *Response
 		m.IncrementCounter(ctx, metricRequestCount,
 			"provider", info.Provider, "model", info.Model, "operation", info.Op, "status", status)
 
-		// Tokens are recorded only on success (both entry points skip samples on error), and only
-		// for token types the provider actually reported (recordTokens skips zeros). So a token
-		// type's histogram _count tracks successful requests that reported that type — it can be
-		// below the success request count when a provider omits usage.
-		if err == nil && resp != nil {
-			recordTokens(ctx, m, info, resp.Usage)
+		// Tokens are recorded whenever the provider reported them, tagged with the call's status, so
+		// failed-but-billed spend (a 200-with-error-object, or a stream that fails mid-drain) stays
+		// visible instead of being dropped. token_type="prompt",status="success" keeps its original
+		// meaning and _count semantics; billable totals sum across statuses. recordTokens skips
+		// zeros, so an error that reported no usage adds no series.
+		if resp != nil {
+			recordTokens(ctx, m, info, resp.Usage, status)
 		}
 	}
 
@@ -127,11 +128,11 @@ func record(ctx context.Context, info *CallInfo, span trace.Span, resp *Response
 	writeLog(span, info, resp, err, status)
 }
 
-func recordTokens(ctx context.Context, m Metrics, info *CallInfo, u Usage) {
+func recordTokens(ctx context.Context, m Metrics, info *CallInfo, u Usage, status string) {
 	emit := func(tokenType string, value int) {
 		if value > 0 {
 			m.RecordHistogram(ctx, metricTokensPerRequest, float64(value),
-				"provider", info.Provider, "model", info.Model, "token_type", tokenType)
+				"provider", info.Provider, "model", info.Model, "token_type", tokenType, "status", status)
 		}
 	}
 
