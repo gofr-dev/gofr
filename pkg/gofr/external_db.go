@@ -84,16 +84,22 @@ func (a *App) AddMongo(db container.Mongo) {
 	a.container.Mongo = db
 }
 
-// LLMOption configures how a model is registered. It is reserved for forward-compatible options
-// such as naming a model in a multi-model setup.
+// LLMOption configures how a model is registered.
 type LLMOption func(*llmOptions)
 
-type llmOptions struct{}
+type llmOptions struct{ name string }
+
+// WithName registers the model under a name so a handler can select it via ctx.LLM(name).
+// Without it, the model is the default one, returned by ctx.LLM().
+func WithName(name string) LLMOption {
+	return func(o *llmOptions) { o.name = name }
+}
 
 // AddLLM registers an LLM model on the app. The model becomes reachable in handlers via
-// ctx.LLM(), its reachability is reported on the health endpoint, and its request and token
-// metrics are registered on first use. A nil or typed-nil model is ignored.
-func (a *App) AddLLM(m ai.Model, _ ...LLMOption) {
+// ctx.LLM() (or ctx.LLM(name) when registered with WithName), its reachability is reported on
+// the health endpoint, and its request and token metrics are registered on first use. A nil or
+// typed-nil model is ignored.
+func (a *App) AddLLM(m ai.Model, opts ...LLMOption) {
 	if m == nil {
 		return
 	}
@@ -102,9 +108,21 @@ func (a *App) AddLLM(m ai.Model, _ ...LLMOption) {
 		return
 	}
 
+	var o llmOptions
+	for _, opt := range opts {
+		opt(&o)
+	}
+
+	// LLM metrics are opt-in and registered here (like GraphQL/gRPC/cron), only when the first
+	// model is added. AddLLM can run more than once (env auto-wire, an explicit override, or
+	// additional named models), so guard on the first registration to avoid a duplicate-metric
+	// warning; this runs in the single-threaded setup phase, so no synchronization is needed.
+	if !a.container.HasLLM() {
+		ai.RegisterMetrics(a.Metrics())
+	}
+
 	a.instrumentDatasource(m)
-	a.llmMetricsOnce.Do(func() { ai.RegisterMetrics(a.Metrics()) })
-	a.container.SetLLM(m)
+	a.container.SetLLM(m, o.name)
 }
 
 // AddFTP sets the FTP datasource in the app's container.

@@ -74,6 +74,23 @@ existing `OPENAI_API_KEY` in your environment is honored without renaming.
 `app.AddLLM` stays available for a custom `ai.Model`, programmatic configuration, or to override the
 model wired from the environment.
 
+### Multiple models
+
+Register more than one model with `gofr.WithName` and select it in a handler with `ctx.LLM(name)`.
+A model added without a name is the default, returned by `ctx.LLM()`:
+
+```go
+app.AddLLM(&llm.Client{Provider: llm.Groq, Model: "llama-3.3-70b-versatile"})              // default
+app.AddLLM(&llm.Client{Provider: llm.OpenAI, Model: "gpt-4o-mini"}, gofr.WithName("fast")) // named
+
+// in a handler
+resp, _ := c.LLM().Generate(c, prompt)          // default model
+quick, _ := c.LLM("fast").Generate(c, prompt)   // the "fast" model
+```
+
+Each model is reported separately on the health endpoint (`llm` for the default, `llm_<name>` for a
+named one) and its metrics carry the model's own `provider`/`model` labels.
+
 ## Calling the model
 
 `ctx.LLM()` returns the model wrapped with GoFr's instrumentation. It offers:

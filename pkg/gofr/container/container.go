@@ -81,9 +81,9 @@ type Container struct {
 
 	File file.FileSystem
 
-	llm      ai.LLM   // the instrumented surface returned by LLM(); a mock container sets it directly
-	llmModel ai.Model // the raw provider added via AddLLM, exposed by LLMModel()
-	tools    ai.Tools // set by app.EnableMCP so ctx.LLM().Tools() exposes the service's own handlers
+	llms      map[string]ai.LLM   // instrumented models by name ("" = default); a mock sets the default directly
+	llmModels map[string]ai.Model // raw providers by name, for uninstrumented health probes
+	tools     ai.Tools            // set by app.EnableMCP so ctx.LLM().Tools() exposes the service's own handlers
 }
 
 func NewContainer(conf config.Config) *Container {
@@ -241,9 +241,15 @@ func (c *Container) Metrics() metrics.Manager {
 // SetLLM stores the model added via app.AddLLM, building the instrumented ai.LLM once. The tracer
 // is available here because initTracer runs before any AddLLM; the tool provider is resolved lazily
 // so tools registered later (by EnableMCP) are still visible via ctx.LLM().Tools().
-func (c *Container) SetLLM(m ai.Model) {
-	c.llmModel = m
-	c.llm = ai.NewLLM(m, ai.Deps{
+func (c *Container) SetLLM(m ai.Model, name ...string) {
+	if c.llmModels == nil {
+		c.llmModels = map[string]ai.Model{}
+		c.llms = map[string]ai.LLM{}
+	}
+
+	n := llmName(name)
+	c.llmModels[n] = m
+	c.llms[n] = ai.NewLLM(m, ai.Deps{
 		Metrics: c.metricsManager,
 		Tracer:  otel.GetTracerProvider().Tracer("gofr-llm"),
 		Logger:  c.Logger,
@@ -251,10 +257,26 @@ func (c *Container) SetLLM(m ai.Model) {
 	})
 }
 
-// LLMModel returns the raw model stored via app.AddLLM, or nil if none was added. Prefer LLM() in
-// handlers; this exposes the uninstrumented provider for advanced use.
-func (c *Container) LLMModel() ai.Model {
-	return c.llmModel
+// LLMModel returns the raw model added via app.AddLLM (the default, or the one named by WithName),
+// or nil if none was added. Prefer LLM() in handlers; this exposes the uninstrumented provider for
+// advanced use.
+func (c *Container) LLMModel(name ...string) ai.Model {
+	return c.llmModels[llmName(name)]
+}
+
+// HasLLM reports whether any model has been registered (under any name). Used to register the LLM
+// metrics exactly once, on the first model added.
+func (c *Container) HasLLM() bool {
+	return len(c.llms) > 0
+}
+
+// llmName resolves the optional variadic model name to the default ("") when omitted.
+func llmName(name []string) string {
+	if len(name) > 0 {
+		return name[0]
+	}
+
+	return ""
 }
 
 // SetTools installs the agent-tool provider exposed to handlers via ctx.LLM().Tools().
@@ -264,8 +286,8 @@ func (c *Container) SetTools(t ai.Tools) {
 
 // LLM returns the instrumented model exposed to handlers, or nil if none was added. A mock
 // container injects its mock through the same field, so there is no test-only branch here.
-func (c *Container) LLM() ai.LLM {
-	return c.llm
+func (c *Container) LLM(name ...string) ai.LLM {
+	return c.llms[llmName(name)]
 }
 
 // lazyTools resolves the container's tool provider at call time, so tools registered after the LLM
