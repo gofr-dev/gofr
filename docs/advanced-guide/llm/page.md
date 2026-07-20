@@ -158,8 +158,8 @@ Every call is observable the same way a normal GoFr request is, joined by the co
 
 ### Metrics
 
-- **`app_llm_request_count`** — a counter labelled `provider`, `model`, `operation` and `status`.
-- **`app_llm_tokens_per_request`** — a histogram labelled `provider`, `model` and `token_type`,
+- **`app_llm_request_count`** — a counter labeled `provider`, `model`, `operation` and `status`.
+- **`app_llm_tokens_per_request`** — a histogram labeled `provider`, `model` and `token_type`,
   where `token_type` is `prompt`, `completion`, `cached` or `reasoning`. `cached` and `reasoning`
   are reported when the provider supports prompt caching or reasoning, and are subsets of `prompt`
   and `completion`. The Prometheus `_sum` per `token_type` is the cumulative token count, so a
