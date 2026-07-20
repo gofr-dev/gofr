@@ -11,6 +11,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strconv"
 	"sync"
 	"testing"
@@ -1232,6 +1233,28 @@ func TestStaticHandlerInvalidFilePath(t *testing.T) {
 
 	assert.Contains(t, logs, "no such file or directory")
 	assert.Contains(t, logs, "error in registering '/gofrTest' static endpoint")
+}
+
+func TestAddStaticFilesGetwdError(t *testing.T) {
+	if runtime.GOOS != "linux" {
+		t.Skip("removing the current working directory only breaks os.Getwd on linux")
+	}
+
+	testutil.NewServerConfigs(t)
+
+	deletedDir := t.TempDir()
+
+	t.Chdir(deletedDir)
+
+	require.NoError(t, os.RemoveAll(deletedDir))
+
+	logs := testutil.StderrOutputForFunc(func() {
+		app := New()
+
+		app.AddStaticFiles("gofrTest", "testdir")
+	})
+
+	assert.Contains(t, logs, "error resolving current working directory")
 }
 
 func TestNewSetsHTTPRegisteredWhenStaticDirExists(t *testing.T) {
