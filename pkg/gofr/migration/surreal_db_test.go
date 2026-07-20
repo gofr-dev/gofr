@@ -61,8 +61,9 @@ func Test_SurrealGetLastMigration(t *testing.T) {
 	}{
 		// The SurrealDB driver decodes a `number` column as int for real connections,
 		// but may yield int64/float64 depending on value and driver version.
-		{"int version", int(20260717211450), nil, 20260717211450},
+		{"int version", int(2147483600), nil, 2147483600},
 		{"int64 version", int64(20260717211450), nil, 20260717211450},
+		{"uint64 version", uint64(20260717211450), nil, 20260717211450},
 		{"float64 version", float64(1), nil, 1},
 		{"query failed", nil, context.DeadlineExceeded, -1},
 	}
