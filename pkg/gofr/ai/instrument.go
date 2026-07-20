@@ -64,6 +64,13 @@ func Instrument(ctx context.Context, info *CallInfo,
 	resp, err := fn(ctx)
 	record(ctx, info, span, resp, err)
 
+	// On error the handler gets no response. Usage from a failed-but-billed call has already been
+	// recorded to metrics above; a partial/empty response must not additionally leak into the
+	// caller's HTTP body (which GoFr would otherwise render as 206 Partial Content beside the error).
+	if err != nil {
+		return nil, err
+	}
+
 	return resp, err
 }
 

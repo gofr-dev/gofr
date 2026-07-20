@@ -107,6 +107,21 @@ func TestInstrument_RecordsTokensOnError(t *testing.T) {
 	assert.Equal(t, statusError, labelValue(m.histograms[0].labels, "status"))
 }
 
+// On error the instrumented call returns no response to the handler, even when the provider reported
+// usage: that usage is recorded to metrics, but must not leak into the caller's HTTP body (which GoFr
+// would otherwise serve as 206 Partial Content beside the error).
+func TestInstrument_ReturnsNilResponseOnError(t *testing.T) {
+	deps, m, _, _ := testDeps()
+	info := &CallInfo{Deps: deps, Provider: "groq", Model: "m", Op: "generate"}
+
+	resp, err := Instrument(t.Context(), info, func(context.Context) (*Response, error) {
+		return &Response{Usage: Usage{PromptTokens: 9}}, errCall
+	})
+	require.ErrorIs(t, err, errCall)
+	assert.Nil(t, resp, "no response leaks to the handler on error")
+	require.Len(t, m.histograms, 1, "but the billed usage is still recorded to metrics")
+}
+
 // An error that reported no usage records no token series.
 func TestInstrument_ErrorWithoutUsageRecordsNoTokens(t *testing.T) {
 	deps, m, _, _ := testDeps()
