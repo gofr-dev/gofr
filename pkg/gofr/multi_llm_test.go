@@ -31,7 +31,7 @@ func TestApp_AddLLM_Named(t *testing.T) {
 
 	assert.NotNil(t, app.container.LLM())
 	assert.NotNil(t, app.container.LLM("fast"))
-	assert.Nil(t, app.container.LLM("nonexistent"))
+	assert.NotNil(t, app.container.LLM("nonexistent"), "an unknown name returns an error-yielding LLM, not nil")
 
 	details, ok := app.container.Health(context.Background()).(map[string]any)
 	assert.True(t, ok)

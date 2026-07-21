@@ -87,15 +87,38 @@ func TestApp_AddLLM_NilIgnored(t *testing.T) {
 		app.AddLLM(nil)
 		app.AddLLM(typedNil)
 	})
-	assert.Nil(t, app.container.LLM(), "a nil or typed-nil model is not installed")
+	assert.False(t, app.container.HasLLM(), "a nil or typed-nil model is not installed")
 }
 
-func TestApp_LLM_NilWhenNotAdded(t *testing.T) {
+// With no model registered, ctx.LLM() returns an error-yielding LLM (not nil), so a handler that
+// calls it gets a clear ai.ErrLLMNotConfigured instead of a nil-pointer panic.
+func TestApp_LLM_NoneRegisteredReturnsError(t *testing.T) {
 	testutil.NewServerConfigs(t)
 
 	app := New()
 
-	assert.Nil(t, app.container.LLM())
+	l := app.container.LLM()
+	require.NotNil(t, l)
+
+	_, err := l.Generate(t.Context(), "hi")
+	require.ErrorIs(t, err, ai.ErrLLMNotConfigured)
+}
+
+// A typo'd or absent model name returns an error-yielding LLM instead of a nil interface, so
+// ctx.LLM("typo").Generate(...) is a clear error, not a nil-pointer panic. Tools stay resolvable.
+func TestApp_LLM_UnknownNameReturnsError(t *testing.T) {
+	testutil.NewServerConfigs(t)
+
+	app := New()
+	app.AddLLM(&testLLM{}, WithName("fast"))
+
+	l := app.container.LLM("does-not-exist")
+	require.NotNil(t, l)
+
+	_, err := l.Generate(t.Context(), "hi")
+	require.ErrorIs(t, err, ai.ErrLLMNotConfigured)
+
+	assert.NotPanics(t, func() { _ = l.Tools() }, "Tools stays nil-safe on a not-configured LLM")
 }
 
 func TestNew_AutoInitsLLMFromEnv(t *testing.T) {
@@ -118,7 +141,7 @@ func TestNew_NoLLMWhenProviderUnset(t *testing.T) {
 
 	app := New()
 
-	assert.Nil(t, app.container.LLM())
+	assert.False(t, app.container.HasLLM())
 }
 
 func TestNew_SkipsLLMWhenModelMissing(t *testing.T) {
@@ -127,5 +150,5 @@ func TestNew_SkipsLLMWhenModelMissing(t *testing.T) {
 
 	app := New()
 
-	assert.Nil(t, app.container.LLM(), "provider without a model is skipped, not a panic")
+	assert.False(t, app.container.HasLLM(), "provider without a model is skipped, not a panic")
 }

@@ -25,6 +25,7 @@ import (
 
 	"gofr.dev/pkg/gofr/ai"
 	"gofr.dev/pkg/gofr/config"
+	"gofr.dev/pkg/gofr/datasource"
 	"gofr.dev/pkg/gofr/datasource/file"
 	"gofr.dev/pkg/gofr/datasource/pubsub"
 	"gofr.dev/pkg/gofr/datasource/pubsub/google"
@@ -284,11 +285,44 @@ func (c *Container) SetTools(t ai.Tools) {
 	c.tools = t
 }
 
-// LLM returns the instrumented model exposed to handlers, or nil if none was added. A mock
-// container injects its mock through the same field, so there is no test-only branch here.
+// LLM returns the instrumented model exposed to handlers. For an unknown or absent model name it
+// returns a not-configured LLM whose calls fail with ai.ErrLLMNotConfigured, rather than a nil
+// interface, so a typo'd or missing name gives a clear error instead of a nil-pointer panic. A mock
+// container injects its mock through the same field.
 func (c *Container) LLM(name ...string) ai.LLM {
-	return c.llms[llmName(name)]
+	if llm := c.llms[llmName(name)]; llm != nil {
+		return llm
+	}
+
+	return notConfiguredLLM{c: c}
 }
+
+// notConfiguredLLM is the nil-safe LLM returned by LLM(name) for an unknown or absent model name. The
+// model calls fail with ai.ErrLLMNotConfigured; Tools() still resolves the service's own tools, which
+// are independent of any registered model.
+type notConfiguredLLM struct{ c *Container }
+
+func (notConfiguredLLM) Chat(context.Context, []ai.Message, ...ai.Option) (*ai.Response, error) {
+	return nil, ai.ErrLLMNotConfigured
+}
+
+func (notConfiguredLLM) Generate(context.Context, string, ...ai.Option) (*ai.Response, error) {
+	return nil, ai.ErrLLMNotConfigured
+}
+
+func (notConfiguredLLM) Stream(context.Context, []ai.Message, ...ai.Option) (ai.Streamer, error) {
+	return nil, ai.ErrLLMNotConfigured
+}
+
+func (notConfiguredLLM) HealthCheck(context.Context) datasource.Health {
+	return datasource.Health{Status: datasource.StatusDown}
+}
+
+func (notConfiguredLLM) Name() string { return "" }
+
+// Tools resolves the service's own tools, which exist independently of any model. notConfiguredLLM
+// and lazyTools both wrap only *Container, so the conversion reuses that late-binding plumbing.
+func (n notConfiguredLLM) Tools() ai.Tools { return lazyTools(n) }
 
 // lazyTools resolves the container's tool provider at call time, so tools registered after the LLM
 // (for example by EnableMCP) are still visible via ctx.LLM().Tools().

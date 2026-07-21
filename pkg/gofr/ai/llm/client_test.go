@@ -418,6 +418,19 @@ func TestRetryDelay_CapsRetryAfter(t *testing.T) {
 	assert.Equal(t, maxRetryAfter, retryDelay(resp, 0))
 }
 
+// A huge Retry-After (which overflows int64 when multiplied by 1e9) or a negative value must not
+// yield a negative or runaway delay — it is clamped into [0, maxRetryAfter] before conversion.
+func TestRetryDelay_ClampsOverflowAndNegative(t *testing.T) {
+	for _, v := range []string{"10000000000", "99999999999999", "-5"} {
+		resp := &http.Response{Header: http.Header{}}
+		resp.Header.Set("Retry-After", v)
+
+		d := retryDelay(resp, 0)
+		assert.GreaterOrEqual(t, d.Milliseconds(), int64(0), "Retry-After %q must not be negative", v)
+		assert.LessOrEqual(t, d, maxRetryAfter, "Retry-After %q must stay within the cap", v)
+	}
+}
+
 func TestClient_HealthCheck_Concurrent(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusOK)

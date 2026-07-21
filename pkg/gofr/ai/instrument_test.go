@@ -50,6 +50,20 @@ func testDeps() (Deps, *fakeMetrics, *fakeLogger, *tracetest.SpanRecorder) {
 	return Deps{Metrics: m, Logger: l, Tracer: tp.Tracer("test")}, m, l, sr
 }
 
+// traceIDFrom finds the trace ID GoFr's logger lifts to a top-level trace_id field: a map arg
+// carrying the "__trace_id__" marker.
+func traceIDFrom(args []any) (string, bool) {
+	for _, a := range args {
+		if m, ok := a.(map[string]any); ok {
+			if tid, ok := m["__trace_id__"].(string); ok {
+				return tid, true
+			}
+		}
+	}
+
+	return "", false
+}
+
 func labelValue(labels []string, key string) string {
 	for i := 0; i+1 < len(labels); i += 2 {
 		if labels[i] == key {
@@ -80,7 +94,7 @@ func TestInstrument_Success(t *testing.T) {
 	assert.InDelta(t, 7, m.histograms[1].value, 0)
 	assert.Equal(t, statusSuccess, labelValue(m.histograms[0].labels, "status"))
 
-	assert.Len(t, l.debug, 1)
+	assert.NotEmpty(t, l.debug)
 	assert.Empty(t, l.errs)
 
 	spans := sr.Ended()
@@ -148,16 +162,16 @@ func TestInstrument_LogCarriesTraceID(t *testing.T) {
 	spans := sr.Ended()
 	require.Len(t, spans, 1)
 
-	require.Len(t, l.debug, 1)
-	entry, ok := l.debug[0].(Log)
+	_, ok := l.debug[0].(Log)
 	require.True(t, ok)
-	assert.NotEmpty(t, entry.TraceID)
-	assert.Equal(t, spans[0].SpanContext().TraceID().String(), entry.TraceID,
-		"the log line must carry its call span's trace ID")
+	tid, ok := traceIDFrom(l.debug)
+	require.True(t, ok, "a __trace_id__ marker must be emitted so GoFr lifts it to a top-level trace_id")
+	assert.Equal(t, spans[0].SpanContext().TraceID().String(), tid,
+		"the log must carry its call span's trace ID under GoFr's trace marker")
 }
 
-// With no tracer configured, the span context is invalid, so the trace ID is omitted rather than
-// logged as an all-zero value.
+// With no tracer configured, the span context is invalid, so no trace marker is emitted rather than
+// an all-zero trace ID.
 func TestInstrument_LogTraceIDOmittedWithoutTracer(t *testing.T) {
 	l := &fakeLogger{}
 	info := &CallInfo{Deps: Deps{Logger: l}, Provider: "groq", Model: "m", Op: "chat"}
@@ -167,10 +181,12 @@ func TestInstrument_LogTraceIDOmittedWithoutTracer(t *testing.T) {
 	})
 	require.NoError(t, err)
 
-	require.Len(t, l.debug, 1)
-	entry, ok := l.debug[0].(Log)
+	require.Len(t, l.debug, 1, "only the log entry, no trace marker")
+	_, ok := l.debug[0].(Log)
 	require.True(t, ok)
-	assert.Empty(t, entry.TraceID)
+
+	_, hasTID := traceIDFrom(l.debug)
+	assert.False(t, hasTID, "no __trace_id__ marker without a valid span")
 }
 
 // Cached and reasoning tokens are recorded as their own token_type series, in addition to prompt
@@ -199,7 +215,7 @@ func TestInstrument_RecordsCachedAndReasoningTokens(t *testing.T) {
 	assert.InDelta(t, 1920, byType[tokenTypeCached], 0)
 	assert.InDelta(t, 128, byType[tokenTypeReasoning], 0)
 
-	assert.Len(t, l.debug, 1)
+	assert.NotEmpty(t, l.debug)
 
 	spans := sr.Ended()
 	require.Len(t, spans, 1)
@@ -247,7 +263,7 @@ func TestInstrument_Error(t *testing.T) {
 	assert.Equal(t, statusError, labelValue(m.counters[0].labels, "status"))
 
 	assert.Empty(t, m.histograms, "no token histogram when the call fails")
-	assert.Len(t, l.errs, 1)
+	assert.NotEmpty(t, l.errs)
 
 	spans := sr.Ended()
 	require.Len(t, spans, 1)

@@ -378,7 +378,11 @@ func retryDelay(resp *http.Response, attempt int) time.Duration {
 		// server-supplied delay is capped so a large Retry-After cannot stall the caller for minutes.
 		if v := resp.Header.Get("Retry-After"); v != "" {
 			if secs, err := strconv.Atoi(v); err == nil {
-				return min(time.Duration(secs)*time.Second, maxRetryAfter)
+				// Clamp before converting to a Duration: secs*1e9 overflows int64 (wrapping negative)
+				// for a large Retry-After, and a negative header must not yield a negative delay. The
+				// delay is capped at maxRetryAfter regardless, so bounding secs to that loses nothing.
+				secs = max(0, min(secs, int(maxRetryAfter/time.Second)))
+				return time.Duration(secs) * time.Second
 			}
 		}
 	}

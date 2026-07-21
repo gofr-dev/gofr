@@ -16,6 +16,10 @@ const (
 	statusSuccess = "success"
 	statusError   = "error"
 
+	// traceIDMarker is the key GoFr's logger lifts to a top-level trace_id field, so an LLM log line
+	// correlates to its request through the same key as GoFr's request and error logs.
+	traceIDMarker = "__trace_id__"
+
 	opGenerate = "generate"
 	opChat     = "chat"
 	opStream   = "stream"
@@ -156,14 +160,6 @@ func writeLog(span trace.Span, info *CallInfo, resp *Response, err error, status
 	}
 
 	entry := Log{Provider: info.Provider, Model: info.Model, Operation: info.Op, Status: status}
-
-	// Correlate the LLM log with its trace, like every other GoFr log path. The span is the LLM
-	// call span opened in record()'s caller; a noop tracer yields an invalid context, so the field
-	// is omitted rather than logged as a zero trace ID.
-	if sc := span.SpanContext(); sc.IsValid() {
-		entry.TraceID = sc.TraceID().String()
-	}
-
 	if resp != nil {
 		entry.PromptTokens = resp.Usage.PromptTokens
 		entry.CompletionTokens = resp.Usage.CompletionTokens
@@ -172,12 +168,22 @@ func writeLog(span trace.Span, info *CallInfo, resp *Response, err error, status
 		entry.ReasoningTokens = resp.Usage.ReasoningTokens
 	}
 
+	args := []any{entry}
+
+	// Emit the trace ID the way every other GoFr log line does: as a __trace_id__ marker that the
+	// framework logger lifts to a top-level trace_id field, so an LLM log correlates to its request
+	// through the same key as GoFr's request and error logs. A noop tracer yields an invalid span
+	// context, so the marker is omitted rather than emitting a zero trace ID.
+	if sc := span.SpanContext(); sc.IsValid() {
+		args = append(args, map[string]any{traceIDMarker: sc.TraceID().String()})
+	}
+
 	if err != nil {
-		l.Error(entry)
+		l.Error(args...)
 		return
 	}
 
-	l.Debug(entry)
+	l.Debug(args...)
 }
 
 func setBaseAttributes(span trace.Span, info *CallInfo) {
@@ -203,7 +209,6 @@ type Log struct {
 	Model            string `json:"model"`
 	Operation        string `json:"operation"`
 	Status           string `json:"status"`
-	TraceID          string `json:"traceId,omitempty"`
 	PromptTokens     int    `json:"promptTokens"`
 	CompletionTokens int    `json:"completionTokens"`
 	TotalTokens      int    `json:"totalTokens,omitempty"`
