@@ -140,17 +140,6 @@ func (f *FileSystem) RemoveAll(name string) error {
 	return nil
 }
 
-func getRelativepath(key, filePath string) string {
-	relativepath := strings.TrimPrefix(key, filePath)
-	oneLevelDeepPathIndex := strings.Index(relativepath, string(filepath.Separator))
-
-	if oneLevelDeepPathIndex != -1 {
-		relativepath = relativepath[:oneLevelDeepPathIndex+1]
-	}
-
-	return relativepath
-}
-
 // ReadDir lists the files and directories within the specified directory in the S3 bucket.
 //
 // This method retrieves and returns information about the files and directories located under the specified path
@@ -217,7 +206,7 @@ func (f *FileSystem) ReadDir(name string) ([]file.FileInfo, error) {
 			metrics: f.metrics,
 			size:    0,
 			name:    f.config.BucketName + string(filepath.Separator) + *entries.CommonPrefixes[i].Prefix,
-		}
+		})
 	}
 
 	st = statusSuccess
