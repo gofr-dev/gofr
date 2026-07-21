@@ -133,7 +133,7 @@ func (*MQTT) handleContextDone(queryCtx context.Context, topicName string, buffe
 
 	return buffer, collected, nil
 }
-func (m *MQTT) createMqttHandler(_ context.Context, topic string, msgs chan *pubsub.Message) mqtt.MessageHandler {
+func (m *MQTT) createMqttHandler(_ context.Context, _ string, msgs chan *pubsub.Message) mqtt.MessageHandler {
 	return func(_ mqtt.Client, msg mqtt.Message) {
 		ctx := context.Background()
 

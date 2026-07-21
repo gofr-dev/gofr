@@ -527,41 +527,30 @@ func TestReconnectHandler(t *testing.T) {
 }
 
 func TestMQTT_createMqttHandler(t *testing.T) {
-	var (
-		out  string
-		msgs = make(chan *pubsub.Message)
-		wg   = sync.WaitGroup{}
-	)
+	// The handler now only converts an incoming MQTT message into a pubsub.Message and pushes
+	// it onto the channel. Span, metrics and the "SUB" log were moved to Subscribe (the consume
+	// point, so links attach to the propagated trace context) and are covered by
+	// TestMQTT_SubscribeSuccess.
+	ctrl, client, _, _, _ := getMockMQTT(t, mockConfigs)
+	defer ctrl.Finish()
 
-	wg.Add(1)
+	msgs := make(chan *pubsub.Message, 1)
 
-	go func() {
-		defer wg.Done()
+	handler := client.createMqttHandler(t.Context(), "test/topic", msgs)
 
-		out = testutil.StdoutOutputForFunc(func() {
-			ctrl, client, _, mockMetrics, _ := getMockMQTT(t, mockConfigs)
-			defer ctrl.Finish()
-
-			mockMetrics.EXPECT().IncrementCounter(gomock.Any(), "app_pubsub_subscribe_total_count", "topic", "test/topic")
-
-			handler := client.createMqttHandler(t.Context(), "test/topic", msgs)
-
-			handler(nil, mockMessage{false, 1, false, "test/topic", 123, "hello world"})
-		})
-	}()
+	handler(nil, mockMessage{false, 1, false, "test/topic", 123, "hello world"})
 
 	m := <-msgs
-	close(msgs)
 
-	assert.NotNil(t, m)
-	assert.Equal(t, m.Value, msg)
+	require.NotNil(t, m)
+	assert.Equal(t, "test/topic", m.Topic)
+	assert.Equal(t, msg, m.Value)
+	assert.NotNil(t, m.Committer)
 
-	// wait for the goroutine test to finish writing log to out
-	wg.Wait()
-	assert.Contains(t, out, "SUB")
-	assert.Contains(t, out, "hello world")
-	assert.Contains(t, out, "test/topic")
-	assert.Contains(t, out, "MQTT")
+	meta, ok := m.MetaData.(map[string]string)
+	require.True(t, ok, "MetaData should be a map[string]string")
+	assert.Equal(t, "123", meta["messageID"])
+	assert.Equal(t, "false", meta["retained"])
 }
 
 func getMockMQTT(t *testing.T, conf *Config) (*gomock.Controller, *MQTT, *MockClient, *MockMetrics, *MockToken) {
