@@ -531,12 +531,10 @@ func TestMQTT_createMqttHandler(t *testing.T) {
 	// it onto the channel. Span, metrics and the "SUB" log were moved to Subscribe (the consume
 	// point, so links attach to the propagated trace context) and are covered by
 	// TestMQTT_SubscribeSuccess.
-	ctrl, client, _, _, _ := getMockMQTT(t, mockConfigs)
-	defer ctrl.Finish()
-
 	msgs := make(chan *pubsub.Message, 1)
 
-	handler := client.createMqttHandler(t.Context(), "test/topic", msgs)
+	// createMqttHandler no longer reads any client state, so a bare *MQTT is enough here.
+	handler := (&MQTT{}).createMqttHandler(t.Context(), "test/topic", msgs)
 
 	handler(nil, mockMessage{false, 1, false, "test/topic", 123, "hello world"})
 

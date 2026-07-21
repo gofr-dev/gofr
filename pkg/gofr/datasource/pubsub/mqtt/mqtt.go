@@ -21,6 +21,7 @@ const (
 	defaultQueryMessageLimit   = 10
 	defaultQueryCollectTimeout = 5 * time.Second
 	unsubscribeOpTimeout       = 2 * time.Second
+	mqttBackend                = "MQTT"
 )
 
 var (
@@ -142,7 +143,7 @@ func (m *MQTT) Subscribe(ctx context.Context, topic string) (*pubsub.Message, er
 			MessageValue:  string(msg.Value),
 			Topic:         msg.Topic,
 			Host:          m.config.Hostname,
-			PubSubBackend: "MQTT",
+			PubSubBackend: mqttBackend,
 		})
 
 		return msg, nil

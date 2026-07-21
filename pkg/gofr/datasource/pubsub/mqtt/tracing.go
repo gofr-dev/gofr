@@ -84,6 +84,7 @@ func extractMessageAttrs(metaData any) map[string]string {
 // startSubscribeSpan creates a new span for subscribing.
 func startSubscribeSpan(ctx context.Context, topic string, msgAttrs map[string]string) (context.Context, trace.Span) {
 	parentCtx := ctx
+
 	var links []trace.Link
 
 	if len(msgAttrs) > 0 {
