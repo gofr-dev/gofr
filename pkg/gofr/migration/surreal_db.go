@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"math"
 	"time"
 
 	"gofr.dev/pkg/gofr/container"
@@ -87,6 +88,10 @@ func surrealVersionToInt64(v any) int64 {
 	case int:
 		return int64(n)
 	case uint64:
+		if n > math.MaxInt64 {
+			return 0
+		}
+
 		return int64(n)
 	case float64:
 		return int64(n)
