@@ -75,6 +75,11 @@ func (r Responder) handleSpecialResponseTypes(data any, err error) bool {
 	statusCode := r.getStatusCodeForSpecialResponse(data, err)
 
 	switch v := data.(type) {
+	case resTypes.Stream:
+		r.handleStream(v)
+
+		return true
+
 	case resTypes.File:
 		r.w.Header().Set("Content-Type", v.ContentType)
 		r.w.WriteHeader(statusCode)

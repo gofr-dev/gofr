@@ -413,3 +413,15 @@ func TestRequestLogSchemaSnapshot(t *testing.T) {
 	assert.Equal(t, "/users/42?x=1", msg["uri"])
 	assert.Equal(t, "snapshot-test", msg["user_agent"])
 }
+
+// A streaming response reaches the connection's flusher only if StatusResponseWriter forwards
+// through Unwrap; without it http.NewResponseController returns ErrNotSupported.
+func TestStatusResponseWriter_UnwrapEnablesFlush(t *testing.T) {
+	rec := httptest.NewRecorder()
+	srw := &StatusResponseWriter{ResponseWriter: rec}
+
+	assert.Equal(t, rec, srw.Unwrap())
+
+	rc := http.NewResponseController(srw)
+	require.NoError(t, rc.Flush(), "Unwrap must let ResponseController reach the underlying Flusher")
+}
