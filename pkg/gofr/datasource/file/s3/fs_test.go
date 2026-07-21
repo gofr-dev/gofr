@@ -5,6 +5,7 @@ import (
 	"errors"
 	"io"
 	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -361,15 +362,25 @@ func Test_ReadDir(t *testing.T) {
 				{"efg", 0, true},
 			},
 			setupMock: func() {
-				mocks.mockS3.EXPECT().ListObjectsV2(gomock.Any(), gomock.Any()).Return(&s3.ListObjectsV2Output{
-					Contents: []types.Object{
-						{Key: aws.String("abc/"), Size: aws.Int64(0), LastModified: aws.Time(time.Now())},
-						{Key: aws.String("abc/root.txt"), Size: aws.Int64(10), LastModified: aws.Time(time.Now())},
-					},
-					CommonPrefixes: []types.CommonPrefix{
-						{Prefix: aws.String("abc/efg/")},
-					},
-				}, nil)
+				mocks.mockS3.EXPECT().ListObjectsV2(gomock.Any(), gomock.Any()).
+					DoAndReturn(func(_ context.Context, in *s3.ListObjectsV2Input,
+						_ ...func(*s3.Options)) (*s3.ListObjectsV2Output, error) {
+						// The fix must request a one-level listing: a delimiter is set so nested
+						// keys are collapsed into CommonPrefixes instead of streaming every object.
+						require.NotNil(t, in.Delimiter, "ReadDir must set a Delimiter for one-level listing")
+						require.Equal(t, string(filepath.Separator), *in.Delimiter)
+						require.Equal(t, "abc/", *in.Prefix)
+
+						return &s3.ListObjectsV2Output{
+							Contents: []types.Object{
+								{Key: aws.String("abc/"), Size: aws.Int64(0), LastModified: aws.Time(time.Now())},
+								{Key: aws.String("abc/root.txt"), Size: aws.Int64(10), LastModified: aws.Time(time.Now())},
+							},
+							CommonPrefixes: []types.CommonPrefix{
+								{Prefix: aws.String("abc/efg/")},
+							},
+						}, nil
+					})
 			},
 		},
 	}
