@@ -54,17 +54,23 @@ func Test_SurrealGetLastMigration(t *testing.T) {
 	migratorWithSurreal, mockSurreal, mockContainer := surrealSetup(t)
 
 	testCases := []struct {
-		desc string
-		err  error
-		resp int64
+		desc    string
+		version any
+		err     error
+		resp    int64
 	}{
-		{"no error", nil, 1},
-		{"query failed", context.DeadlineExceeded, -1},
+		// The SurrealDB driver decodes a `number` column as int for real connections,
+		// but may yield int64/float64 depending on value and driver version.
+		{"int version", int(2147483600), nil, 2147483600},
+		{"int64 version", int64(20260717211450), nil, 20260717211450},
+		{"uint64 version", uint64(20260717211450), nil, 20260717211450},
+		{"float64 version", float64(1), nil, 1},
+		{"query failed", nil, context.DeadlineExceeded, -1},
 	}
 
 	for i, tc := range testCases {
 		mockSurreal.EXPECT().Query(gomock.Any(), getLastSurrealDBGoFrMigration, nil).Return([]any{
-			map[string]any{"version": float64(tc.resp)},
+			map[string]any{"version": tc.version},
 		}, tc.err)
 
 		resp, err := migratorWithSurreal.getLastMigration(mockContainer)
@@ -76,6 +82,15 @@ func Test_SurrealGetLastMigration(t *testing.T) {
 		} else {
 			assert.NoError(t, err, "TEST[%v]\n %v Failed! ", i, tc.desc)
 		}
+	}
+}
+
+// Test_SurrealMigrationTableQueriesAreIdempotent guards the fix for #3725: every DEFINE
+// statement used to create the migration table must use "IF NOT EXISTS" so that
+// re-running an app against an existing gofr_migrations table does not fail.
+func Test_SurrealMigrationTableQueriesAreIdempotent(t *testing.T) {
+	for _, q := range getMigrationTableQueries() {
+		assert.Contains(t, q, "IF NOT EXISTS", "migration query must be idempotent: %q", q)
 	}
 }
 
