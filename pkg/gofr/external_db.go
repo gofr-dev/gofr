@@ -6,6 +6,7 @@ import (
 
 	"go.opentelemetry.io/otel"
 
+	"gofr.dev/pkg/gofr/ai"
 	"gofr.dev/pkg/gofr/container"
 	"gofr.dev/pkg/gofr/datasource/file"
 	"gofr.dev/pkg/gofr/datasource/pubsub"
@@ -60,9 +61,16 @@ func (a *App) instrumentDatasource(ds any) {
 		if name := tracerName(ds); name != "" {
 			t.UseTracer(otel.GetTracerProvider().Tracer(name))
 		} else {
-			a.Logger().Warnf("datasource %T implements UseTracer but has no tracer name registered in tracerName(); "+
-				"tracing will be skipped — add a matcher arm in pkg/gofr/external_db.go", ds)
+			// Log only the type (never the datasource value, which may hold secrets) so tracing gaps
+			// are visible without risking sensitive fields in logs.
+			a.Logger().Warnf("datasource %s implements UseTracer but has no tracer name registered in "+
+				"tracerName(); tracing will be skipped — add a matcher arm in pkg/gofr/external_db.go",
+				reflect.TypeOf(ds))
 		}
+	}
+
+	if cfg, ok := ds.(interface{ UseConfig(any) }); ok {
+		cfg.UseConfig(a.Config)
 	}
 
 	if c, ok := ds.(interface{ Connect() }); ok {
@@ -74,6 +82,47 @@ func (a *App) instrumentDatasource(ds any) {
 func (a *App) AddMongo(db container.Mongo) {
 	a.instrumentDatasource(db)
 	a.container.Mongo = db
+}
+
+// LLMOption configures how a model is registered.
+type LLMOption func(*llmOptions)
+
+type llmOptions struct{ name string }
+
+// WithName registers the model under a name so a handler can select it via ctx.LLM(name).
+// Without it, the model is the default one, returned by ctx.LLM().
+func WithName(name string) LLMOption {
+	return func(o *llmOptions) { o.name = name }
+}
+
+// AddLLM registers an LLM model on the app. The model becomes reachable in handlers via
+// ctx.LLM() (or ctx.LLM(name) when registered with WithName), its reachability is reported on
+// the health endpoint, and its request and token metrics are registered on first use. A nil or
+// typed-nil model is ignored.
+func (a *App) AddLLM(m ai.Model, opts ...LLMOption) {
+	if m == nil {
+		return
+	}
+
+	if v := reflect.ValueOf(m); v.Kind() == reflect.Pointer && v.IsNil() {
+		return
+	}
+
+	var o llmOptions
+	for _, opt := range opts {
+		opt(&o)
+	}
+
+	// LLM metrics are opt-in and registered here (like GraphQL/gRPC/cron), only when the first
+	// model is added. AddLLM can run more than once (env auto-wire, an explicit override, or
+	// additional named models), so guard on the first registration to avoid a duplicate-metric
+	// warning; this runs in the single-threaded setup phase, so no synchronization is needed.
+	if !a.container.HasLLM() {
+		ai.RegisterMetrics(a.Metrics())
+	}
+
+	a.instrumentDatasource(m)
+	a.container.SetLLM(m, o.name)
 }
 
 // AddFTP sets the FTP datasource in the app's container.
