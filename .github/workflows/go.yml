@@ -85,6 +85,11 @@ jobs:
           go-version: ${{ matrix.go-version }}
         id: Go
 
+      # setup-go@v7 defaults GOTOOLCHAIN=local; go.work requires go>=1.26, so
+      # allow the toolchain to auto-upgrade for the older matrix versions.
+      - name: Allow Go toolchain auto-upgrade
+        run: echo "GOTOOLCHAIN=auto" >> "$GITHUB_ENV"
+
       - name: Get dependencies
         run: |
           go mod download
@@ -136,6 +141,11 @@ jobs:
         with:
           go-version: ${{ matrix.go-version }}
         id: Go
+
+      # setup-go@v7 defaults GOTOOLCHAIN=local; go.work requires go>=1.26, so
+      # allow the toolchain to auto-upgrade for the older matrix versions.
+      - name: Allow Go toolchain auto-upgrade
+        run: echo "GOTOOLCHAIN=auto" >> "$GITHUB_ENV"
 
       - name: Get dependencies
         run: |
@@ -249,6 +259,11 @@ jobs:
         with:
           go-version: ${{ matrix.go-version }}
         id: Go
+
+      # setup-go@v7 defaults GOTOOLCHAIN=local; go.work requires go>=1.26, so
+      # allow the toolchain to auto-upgrade for the older matrix versions.
+      - name: Allow Go toolchain auto-upgrade
+        run: echo "GOTOOLCHAIN=auto" >> "$GITHUB_ENV"
 
       # Find all submodules (directories with go.mod files) in the pkg directory
       - name: Detect Submodules
