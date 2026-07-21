@@ -15,5 +15,6 @@
   { "title": "File Handling", "description": "Upload, download, and manage files with local, S3, GCS, or FTP backends.", "tags": ["Files", "Storage"], "href": "https://github.com/gofr-dev/gofr/tree/main/examples/using-add-filestore" },
   { "title": "File Binding", "description": "Bind uploaded files directly to structs for type-safe file processing.", "tags": ["Files", "Data Binding"], "href": "https://github.com/gofr-dev/gofr/tree/main/examples/using-file-bind" },
   { "title": "HTML Templates", "description": "Serve server-rendered HTML pages with Go template support.", "tags": ["Templates", "Frontend"], "href": "https://github.com/gofr-dev/gofr/tree/main/examples/using-html-template" },
-  { "title": "CLI Application", "description": "Build command-line tools with subcommands, flags, and structured output.", "tags": ["CLI", "Tools"], "href": "https://github.com/gofr-dev/gofr/tree/main/examples/sample-cmd" }
+  { "title": "CLI Application", "description": "Build command-line tools with subcommands, flags, and structured output.", "tags": ["CLI", "Tools"], "href": "https://github.com/gofr-dev/gofr/tree/main/examples/sample-cmd" },
+  { "title": "AI: LLM, Streaming, MCP and Agents", "description": "One service showing the whole GoFr AI surface: LLM calls, token-streaming, exposing handlers as MCP tools, and a userland agent loop over ctx.LLM().Tools().", "tags": ["AI", "LLM", "MCP", "Agents"], "href": "https://github.com/gofr-dev/gofr/tree/main/examples/using-ai", "featured": true }
 ]

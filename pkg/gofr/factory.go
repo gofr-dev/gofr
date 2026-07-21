@@ -5,6 +5,7 @@ import (
 	"path/filepath"
 	"strconv"
 
+	"gofr.dev/pkg/gofr/ai/llm"
 	"gofr.dev/pkg/gofr/cmd/terminal"
 	"gofr.dev/pkg/gofr/container"
 	"gofr.dev/pkg/gofr/http/middleware"
@@ -19,6 +20,7 @@ func New() *App {
 
 	app.initTracer()
 	app.initMetricsServer()
+	app.initLLM()
 
 	// HTTP Server
 	port, err := strconv.Atoi(app.Config.Get("HTTP_PORT"))
@@ -76,6 +78,28 @@ func NewCMD() *App {
 	app.initTracer()
 
 	return app
+}
+
+// initLLM registers an OpenAI-compatible LLM from configuration when LLM_PROVIDER is set, mirroring
+// the zero-config wiring of Redis and SQL. The API key is read from <PROVIDER>_API_KEY. Call
+// app.AddLLM to register a custom model or override this one.
+func (a *App) initLLM() {
+	provider := a.Config.Get("LLM_PROVIDER")
+	if provider == "" {
+		return
+	}
+
+	model := a.Config.Get("LLM_MODEL")
+	if model == "" {
+		a.container.Logger.Errorf("LLM_PROVIDER is set but LLM_MODEL is empty; skipping LLM setup")
+		return
+	}
+
+	a.AddLLM(&llm.Client{
+		Provider: llm.Provider(provider),
+		Model:    model,
+		BaseURL:  a.Config.Get("LLM_BASE_URL"),
+	})
 }
 
 // initMetricsServer initializes the metrics server based on configuration.
