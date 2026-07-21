@@ -63,7 +63,10 @@ func (d *Client) Connect() {
 		return
 	}
 
-	var responseTimeBuckets = []float64{0.05, 0.1, 0.2, 0.5, 1.0, 2.0, 5.0, 10.0}
+	var responseTimeBuckets = []float64{
+		50, 75, 100, 125, 150, 200, 300, 500, 750, 1000, 2000, 3000, 5000, 7500, 10000, // 50µs-10ms
+		25000, 50000, 100000, 250000, 500000, 1000000, 5000000, 10000000, 30000000, 60000000, 120000000, 180000000, // 25ms-3min
+	}
 
 	// Register metrics
 	d.metrics.NewHistogram("dgraph_query_duration", "Response time of Dgraph queries in microseconds.", responseTimeBuckets...)

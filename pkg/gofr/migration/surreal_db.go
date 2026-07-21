@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"math"
 	"time"
 
 	"gofr.dev/pkg/gofr/container"
@@ -55,21 +56,17 @@ const (
 
 func getMigrationTableQueries() []string {
 	return []string{
-		"DEFINE TABLE gofr_migrations SCHEMAFULL;",
-		"DEFINE FIELD id ON gofr_migrations TYPE string;",
-		"DEFINE FIELD version ON gofr_migrations TYPE number;",
-		"DEFINE FIELD method ON gofr_migrations TYPE string;",
-		"DEFINE FIELD start_time ON gofr_migrations TYPE datetime;",
-		"DEFINE FIELD duration ON gofr_migrations TYPE number;",
-		"DEFINE INDEX version_method ON gofr_migrations COLUMNS version, method UNIQUE;",
+		"DEFINE TABLE IF NOT EXISTS gofr_migrations SCHEMAFULL;",
+		"DEFINE FIELD IF NOT EXISTS id ON gofr_migrations TYPE string;",
+		"DEFINE FIELD IF NOT EXISTS version ON gofr_migrations TYPE number;",
+		"DEFINE FIELD IF NOT EXISTS method ON gofr_migrations TYPE string;",
+		"DEFINE FIELD IF NOT EXISTS start_time ON gofr_migrations TYPE datetime;",
+		"DEFINE FIELD IF NOT EXISTS duration ON gofr_migrations TYPE number;",
+		"DEFINE INDEX IF NOT EXISTS version_method ON gofr_migrations COLUMNS version, method UNIQUE;",
 	}
 }
 
 func (s surrealMigrator) checkAndCreateMigrationTable(c *container.Container) error {
-	if _, err := s.SurrealDB.Query(context.Background(), "USE NS test DB test", nil); err != nil {
-		return err
-	}
-
 	// Create migration table directly
 	for _, q := range getMigrationTableQueries() {
 		if _, err := s.SurrealDB.Query(context.Background(), q, nil); err != nil {
@@ -78,6 +75,29 @@ func (s surrealMigrator) checkAndCreateMigrationTable(c *container.Container) er
 	}
 
 	return s.migrator.checkAndCreateMigrationTable(c)
+}
+
+// surrealVersionToInt64 converts the `version` field returned by SurrealDB into an int64.
+// The SurrealDB driver decodes a `number` column into different Go types depending on the
+// stored value and driver version (e.g. int or int64 or uint64 or float64 over CBOR
+// responses), so we handle each numeric type explicitly. Unknown/absent values default to 0.
+func surrealVersionToInt64(v any) int64 {
+	switch n := v.(type) {
+	case int64:
+		return n
+	case int:
+		return int64(n)
+	case uint64:
+		if n > math.MaxInt64 {
+			return 0
+		}
+
+		return int64(n)
+	case float64:
+		return int64(n)
+	default:
+		return 0
+	}
 }
 
 func (s surrealMigrator) getLastMigration(c *container.Container) (int64, error) {
@@ -89,8 +109,8 @@ func (s surrealMigrator) getLastMigration(c *container.Container) (int64, error)
 	}
 
 	if len(result) > 0 {
-		if version, ok := result[0].(map[string]any)["version"].(float64); ok {
-			lastMigration = int64(version)
+		if row, ok := result[0].(map[string]any); ok {
+			lastMigration = surrealVersionToInt64(row["version"])
 		}
 	}
 

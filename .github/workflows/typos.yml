@@ -9,6 +9,6 @@ jobs:
       contents: read
     steps:
       - name: Checkout Code
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
       - name: typos-action
-        uses: crate-ci/typos@v1.46.3
+        uses: crate-ci/typos@v1.48.0

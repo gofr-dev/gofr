@@ -3,9 +3,11 @@ go 1.26.0
 use (
 	.
 	./examples/using-add-filestore
+	./examples/using-cloudsql
 	./pkg/gofr/datasource/arangodb
 	./pkg/gofr/datasource/cassandra
 	./pkg/gofr/datasource/clickhouse
+	./pkg/gofr/datasource/cloudsql
 	./pkg/gofr/datasource/couchbase
 	./pkg/gofr/datasource/dbresolver
 	./pkg/gofr/datasource/dgraph

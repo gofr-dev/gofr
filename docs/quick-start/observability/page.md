@@ -196,7 +196,7 @@ GoFr publishes metrics to port: _2121_ on _/metrics_ endpoint in Prometheus form
 
 - app_redis_stats
 - histogram
-- Response time of Redis commands in milliseconds
+- Response time of Redis commands in microseconds
 
 ---
 

@@ -32,11 +32,12 @@ type client struct {
 }
 
 type FileSystem struct {
-	s3File  S3File
-	conn    s3Client
-	config  *Config
-	logger  Logger
-	metrics Metrics
+	s3File    S3File
+	conn      s3Client
+	presigner s3Presigner
+	config    *Config
+	logger    Logger
+	metrics   Metrics
 }
 
 // Config represents the s3 configuration.
@@ -46,10 +47,33 @@ type Config struct {
 	Region          string // AWS Region
 	AccessKeyID     string // Aws configs
 	SecretAccessKey string // Aws configs
+
+	// SessionToken is an optional temporary-credentials session token (e.g. AWS STS
+	// credentials or scoped Cloudflare R2 API tokens). Leave empty for long-lived
+	// access keys.
+	SessionToken string
+
+	// Flavor selects provider-specific defaults for S3-compatible services such as
+	// Cloudflare R2, MinIO, DigitalOcean Spaces, and Backblaze B2. An empty Flavor
+	// targets Amazon S3. See flavor.go for the available presets.
+	Flavor Flavor
+
+	// UsePathStyle overrides the Flavor's addressing-style default when non-nil.
+	// Path-style addresses objects as host/bucket/key; virtual-hosted-style uses
+	// bucket.host/key.
+	UsePathStyle *bool
 }
 
-// New initializes a new instance of FTP fileSystem with provided configuration.
-func New(config *Config) file.FileSystemProvider {
+// New initializes a new instance of the S3 fileSystem with the provided configuration.
+//
+// It returns a file.CloudFileSystem, so callers get compile-time access to the
+// cloud-specific capabilities (GenerateSignedURL, CreateWithOptions) in addition to
+// the standard FileSystem operations.
+func New(config *Config) file.CloudFileSystem {
+	if config == nil {
+		config = &Config{}
+	}
+
 	return &FileSystem{config: config}
 }
 
@@ -86,14 +110,18 @@ func (f *FileSystem) Connect() {
 
 	f.logger.Debugf("connecting to S3 bucket: %s", f.config.BucketName)
 
+	// Resolve provider-specific defaults (addressing style, signing region, checksum
+	// behavior) for the configured Flavor before building the client.
+	prof := resolveProfile(f.config)
+
 	// Load the AWS configuration
 	cfg, err := awsConfig.LoadDefaultConfig(context.TODO(),
-		awsConfig.WithRegion(f.config.Region),
+		awsConfig.WithRegion(prof.region(f.config)),
 		awsConfig.WithCredentialsProvider(
 			credentials.NewStaticCredentialsProvider(
 				f.config.AccessKeyID,
 				f.config.SecretAccessKey,
-				"")), // "" is the session token. Currently, we do not handle connections through session token.
+				f.config.SessionToken)),
 	)
 	if err != nil {
 		f.logger.Errorf("failed to load configuration: %v", err)
@@ -101,18 +129,32 @@ func (f *FileSystem) Connect() {
 	}
 
 	// Create the S3 client from config
-	s3Client := s3.NewFromConfig(cfg,
-		func(o *s3.Options) {
-			o.UsePathStyle = true
-			o.BaseEndpoint = &f.config.EndPoint
-		},
-	)
+	s3Client := s3.NewFromConfig(cfg, applyClientOptions(prof, f.config.EndPoint))
 
 	f.conn = client{s3Client}
+	f.presigner = s3.NewPresignClient(s3Client)
 	st = statusSuccess
 	msg = "S3 Client connected."
 
 	f.logger.Logf("connected to S3 bucket %s", f.config.BucketName)
+}
+
+// applyClientOptions returns the s3.Options mutator that translates a resolved
+// Flavor profile into concrete client settings: addressing style, base endpoint,
+// and upload-checksum behavior. It is separated from Connect so the flavor→SDK
+// wiring can be asserted in a unit test without a live S3 endpoint.
+func applyClientOptions(prof profile, endpoint string) func(*s3.Options) {
+	return func(o *s3.Options) {
+		o.UsePathStyle = prof.usePathStyle
+		o.BaseEndpoint = &endpoint
+
+		// Several S3-compatible providers reject the CRC32 checksum that
+		// aws-sdk-go-v2 adds to uploads by default; only calculate it when the
+		// request actually requires one.
+		if prof.disableUploadChecksum {
+			o.RequestChecksumCalculation = aws.RequestChecksumCalculationWhenRequired
+		}
+	}
 }
 
 // Create creates a new file in the S3 bucket.

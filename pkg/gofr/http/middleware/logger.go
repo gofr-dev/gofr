@@ -74,6 +74,12 @@ func (w *StatusResponseWriter) Status() int {
 	return w.status
 }
 
+// Unwrap returns the wrapped ResponseWriter so http.NewResponseController can reach the underlying
+// connection for Flush and SetWriteDeadline — needed for streaming responses.
+func (w *StatusResponseWriter) Unwrap() http.ResponseWriter {
+	return w.ResponseWriter
+}
+
 // Hijack implements the http.Hijacker interface. So that we are able to upgrade to a websocket
 // connection that requires the responseWriter implementation to implement this method.
 func (w *StatusResponseWriter) Hijack() (net.Conn, *bufio.ReadWriter, error) {

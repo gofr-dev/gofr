@@ -23,6 +23,13 @@ type Config struct {
 	Username string // Username used for authentication.
 	Password string // Password used for authentication.
 	Database string // Name of the database to connect to.
+
+	// Optional pool/dial tuning. A zero value uses the clickhouse-go default,
+	// so existing configs are unaffected.
+	MaxOpenConns    int           // Max open connections (default MaxIdleConns+5).
+	MaxIdleConns    int           // Max idle connections (default 5).
+	DialTimeout     time.Duration // Connection dial timeout (default 30s).
+	ConnMaxLifetime time.Duration // Max connection reuse time (default 1h).
 }
 
 // Client is a ClickHouse client implementation that wraps a Conn interface.
@@ -45,6 +52,8 @@ var errStatusDown = errors.New("status down")
 //	client.UseMetrics(Metrics())
 //
 //	client.Connect()
+//
+//nolint:gocritic // Configs do not need to be passed by reference
 func New(config Config) *Client {
 	return &Client{config: config}
 }
@@ -70,30 +79,58 @@ func (c *Client) UseTracer(tracer any) {
 	}
 }
 
+// parseHosts splits the comma-separated Hosts config into addresses, trimming
+// surrounding whitespace and dropping empty entries. This keeps a value like
+// "host-a:9000, host-b:9000" or one with a trailing comma from producing blank
+// or space-padded addresses that fail to dial.
+func parseHosts(hosts string) []string {
+	parts := strings.Split(hosts, ",")
+	addrs := make([]string, 0, len(parts))
+
+	for _, p := range parts {
+		if p = strings.TrimSpace(p); p != "" {
+			addrs = append(addrs, p)
+		}
+	}
+
+	return addrs
+}
+
+// clickHouseOptions builds clickhouse-go options from the Config. Pool/dial
+// fields pass straight through; clickhouse-go applies its defaults for any zero.
+func clickHouseOptions(config *Config) *clickhouse.Options {
+	return &clickhouse.Options{
+		Addr: parseHosts(config.Hosts),
+		Auth: clickhouse.Auth{
+			Database: config.Database,
+			Username: config.Username,
+			Password: config.Password,
+		},
+		MaxOpenConns:    config.MaxOpenConns,
+		MaxIdleConns:    config.MaxIdleConns,
+		DialTimeout:     config.DialTimeout,
+		ConnMaxLifetime: config.ConnMaxLifetime,
+	}
+}
+
 // Connect establishes a connection to ClickHouse and registers metrics using the provided configuration when the client was Created.
 func (c *Client) Connect() {
 	var err error
 
 	c.logger.Debugf("connecting to Clickhouse db at %v to database %v", c.config.Hosts, c.config.Database)
 
-	clickHouseBuckets := []float64{.05, .075, .1, .125, .15, .2, .3, .5, .75, 1, 2, 3, 4, 5, 7.5, 10}
+	clickHouseBuckets := []float64{
+		50, 75, 100, 125, 150, 200, 300, 500, 750, 1000, 2000, 3000, 5000, 7500, 10000, // 50µs-10ms
+		25000, 50000, 100000, 250000, 500000, 1000000, 5000000, 10000000, 30000000, 60000000, 120000000, 180000000, // 25ms-3min
+	}
 	c.metrics.NewHistogram("app_clickhouse_stats", "Response time of Clickhouse queries in microseconds.", clickHouseBuckets...)
 
 	c.metrics.NewGauge("app_clickhouse_open_connections", "Number of open Clickhouse connections.")
 	c.metrics.NewGauge("app_clickhouse_idle_connections", "Number of idle Clickhouse connections.")
 
-	addresses := strings.Split(c.config.Hosts, ",")
-
 	ctx := context.Background()
 
-	c.conn, err = clickhouse.Open(&clickhouse.Options{
-		Addr: addresses,
-		Auth: clickhouse.Auth{
-			Database: c.config.Database,
-			Username: c.config.Username,
-			Password: c.config.Password,
-		},
-	})
+	c.conn, err = clickhouse.Open(clickHouseOptions(&c.config))
 	if err != nil {
 		c.logger.Errorf("error while connecting to Clickhouse %v", err)
 

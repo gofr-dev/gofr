@@ -74,16 +74,21 @@ jobs:
     # Steps to execute for this job
     steps:
       - name: Checkout code into go module directory
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
         with:
           fetch-depth: 0  # Full git history for accurate testing
 
       # Set up the Go environment with the specified version
       - name: Set up Go ${{ matrix.go-version }}
-        uses: actions/setup-go@v5
+        uses: actions/setup-go@v7
         with:
           go-version: ${{ matrix.go-version }}
         id: Go
+
+      # setup-go@v7 defaults GOTOOLCHAIN=local; go.work requires go>=1.26, so
+      # allow the toolchain to auto-upgrade for the older matrix versions.
+      - name: Allow Go toolchain auto-upgrade
+        run: echo "GOTOOLCHAIN=auto" >> "$GITHUB_ENV"
 
       - name: Get dependencies
         run: |
@@ -127,15 +132,20 @@ jobs:
 
     steps:
       - name: Checkout code into go module directory
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
         with:
           fetch-depth: 0
 
       - name: Set up Go ${{ matrix.go-version }}
-        uses: actions/setup-go@v5
+        uses: actions/setup-go@v7
         with:
           go-version: ${{ matrix.go-version }}
         id: Go
+
+      # setup-go@v7 defaults GOTOOLCHAIN=local; go.work requires go>=1.26, so
+      # allow the toolchain to auto-upgrade for the older matrix versions.
+      - name: Allow Go toolchain auto-upgrade
+        run: echo "GOTOOLCHAIN=auto" >> "$GITHUB_ENV"
 
       - name: Get dependencies
         run: |
@@ -199,7 +209,7 @@ jobs:
     needs: [ Example-Unit-Testing,PKG-Unit-Testing ]
     steps:
       - name: Check out code into the Go module directory
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
 
       # Download coverage reports from previous jobs
       - name: Download Coverage Report
@@ -240,15 +250,20 @@ jobs:
 
     steps:
       - name: Checkout code into go module directory
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
         with:
           fetch-depth: 0
 
       - name: Set up Go ${{ matrix.go-version }}
-        uses: actions/setup-go@v5
+        uses: actions/setup-go@v7
         with:
           go-version: ${{ matrix.go-version }}
         id: Go
+
+      # setup-go@v7 defaults GOTOOLCHAIN=local; go.work requires go>=1.26, so
+      # allow the toolchain to auto-upgrade for the older matrix versions.
+      - name: Allow Go toolchain auto-upgrade
+        run: echo "GOTOOLCHAIN=auto" >> "$GITHUB_ENV"
 
       # Find all submodules (directories with go.mod files) in the pkg directory
       - name: Detect Submodules
@@ -316,7 +331,7 @@ jobs:
     if: ${{ github.repository == 'gofr-dev/gofr' && github.event_name == 'push' && github.ref == 'refs/heads/development'}}
     steps:
       - name: Check out code into the Go module directory
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
 
       - name: Install qlty CLI
         run: |
@@ -357,12 +372,12 @@ jobs:
       has_modules: ${{ steps.changed-submodules.outputs.has_modules }}
     steps:
       - name: Check out code into the Go module directory
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
         with:
           fetch-depth: 0  # Full history needed for proper diff analysis
 
       - name: Set up Go environment
-        uses: actions/setup-go@v5
+        uses: actions/setup-go@v7
         with:
           go-version: '1.26'
           cache: false
@@ -453,12 +468,12 @@ jobs:
       fail-fast: false
     steps:
       - name: Check out code
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
         with:
           fetch-depth: 0
 
       - name: Set up Go environment
-        uses: actions/setup-go@v5
+        uses: actions/setup-go@v7
         with:
           go-version: '1.26'
           cache: false
@@ -482,10 +497,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Check out code
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
 
       - name: Set up Go environment
-        uses: actions/setup-go@v5
+        uses: actions/setup-go@v7
         with:
           go-version: 1.26
 

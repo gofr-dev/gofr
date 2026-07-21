@@ -816,3 +816,76 @@ func cleanupCerts(certPaths map[string]string) {
 		os.Remove(path)
 	}
 }
+
+func TestDBConfig_String_RedactsPassword(t *testing.T) {
+	tests := []struct {
+		desc            string
+		config          DBConfig
+		wantContains    string
+		wantNotContains string
+	}{
+		{
+			desc: "password is redacted, never printed raw",
+			config: DBConfig{
+				Dialect:  "postgres",
+				HostName: "localhost",
+				User:     "user",
+				Password: "super-secret",
+				Port:     "5432",
+				Database: "app",
+			},
+			wantContains:    "Password:" + redactedPassword,
+			wantNotContains: "super-secret",
+		},
+		{
+			desc: "empty password stays empty, no mask",
+			config: DBConfig{
+				Dialect:  "postgres",
+				HostName: "localhost",
+				User:     "user",
+				Database: "app",
+			},
+			wantContains:    "Password: ",
+			wantNotContains: redactedPassword,
+		},
+	}
+
+	// wrapper mimics the realistic leak vector: a DBConfig logged as a field of a
+	// larger struct, where %+v recurses into DBConfig.String().
+	type wrapper struct{ Cfg DBConfig }
+
+	for _, tc := range tests {
+		t.Run(tc.desc, func(t *testing.T) {
+			// Cover the direct String() call and printing the config as a struct field.
+			for _, got := range []string{tc.config.String(), fmt.Sprintf("%+v", wrapper{Cfg: tc.config})} {
+				assert.Contains(t, got, tc.wantContains)
+				assert.NotContains(t, got, tc.wantNotContains)
+			}
+		})
+	}
+}
+
+// TestDBConfig_GoString_RedactsPassword guards the %#v verb, which bypasses Stringer
+// and would otherwise print the raw password. GoString must redact it identically.
+func TestDBConfig_GoString_RedactsPassword(t *testing.T) {
+	cfg := DBConfig{
+		Dialect:  "postgres",
+		HostName: "localhost",
+		User:     "user",
+		Password: "super-secret",
+		Port:     "5432",
+		Database: "app",
+	}
+
+	type wrapper struct{ Cfg DBConfig }
+
+	// Direct %#v and %#v as a nested struct field both route through GoString.
+	for _, got := range []string{
+		fmt.Sprintf("%#v", cfg),
+		cfg.GoString(),
+		fmt.Sprintf("%#v", wrapper{Cfg: cfg}),
+	} {
+		assert.Contains(t, got, redactedPassword)
+		assert.NotContains(t, got, "super-secret")
+	}
+}

@@ -14,14 +14,18 @@ package container
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"strconv"
 	"strings"
 	"time"
 
 	_ "github.com/go-sql-driver/mysql" // This is required to be blank import
+	"go.opentelemetry.io/otel"
 
+	"gofr.dev/pkg/gofr/ai"
 	"gofr.dev/pkg/gofr/config"
+	"gofr.dev/pkg/gofr/datasource"
 	"gofr.dev/pkg/gofr/datasource/file"
 	"gofr.dev/pkg/gofr/datasource/pubsub"
 	"gofr.dev/pkg/gofr/datasource/pubsub/google"
@@ -77,6 +81,10 @@ type Container struct {
 	KVStore KVStore
 
 	File file.FileSystem
+
+	llms      map[string]ai.LLM   // instrumented models by name ("" = default); a mock sets the default directly
+	llmModels map[string]ai.Model // raw providers by name, for uninstrumented health probes
+	tools     ai.Tools            // set by app.EnableMCP so ctx.LLM().Tools() exposes the service's own handlers
 }
 
 func NewContainer(conf config.Config) *Container {
@@ -231,6 +239,119 @@ func (c *Container) Metrics() metrics.Manager {
 	return c.metricsManager
 }
 
+// SetLLM stores the model added via app.AddLLM, building the instrumented ai.LLM once. The tracer
+// is available here because initTracer runs before any AddLLM; the tool provider is resolved lazily
+// so tools registered later (by EnableMCP) are still visible via ctx.LLM().Tools().
+func (c *Container) SetLLM(m ai.Model, name ...string) {
+	if c.llmModels == nil {
+		c.llmModels = map[string]ai.Model{}
+		c.llms = map[string]ai.LLM{}
+	}
+
+	n := llmName(name)
+	c.llmModels[n] = m
+	c.llms[n] = ai.NewLLM(m, ai.Deps{
+		Metrics: c.metricsManager,
+		Tracer:  otel.GetTracerProvider().Tracer("gofr-llm"),
+		Logger:  c.Logger,
+		Tools:   lazyTools{c},
+	})
+}
+
+// LLMModel returns the raw model added via app.AddLLM (the default, or the one named by WithName),
+// or nil if none was added. Prefer LLM() in handlers; this exposes the uninstrumented provider for
+// advanced use.
+func (c *Container) LLMModel(name ...string) ai.Model {
+	return c.llmModels[llmName(name)]
+}
+
+// HasLLM reports whether any model has been registered (under any name). Used to register the LLM
+// metrics exactly once, on the first model added.
+func (c *Container) HasLLM() bool {
+	return len(c.llms) > 0
+}
+
+// llmName resolves the optional variadic model name to the default ("") when omitted.
+func llmName(name []string) string {
+	if len(name) > 0 {
+		return name[0]
+	}
+
+	return ""
+}
+
+// SetTools installs the agent-tool provider exposed to handlers via ctx.LLM().Tools().
+func (c *Container) SetTools(t ai.Tools) {
+	c.tools = t
+}
+
+// LLM returns the instrumented model exposed to handlers. For an unknown or absent model name it
+// returns a not-configured LLM whose calls fail with ai.ErrLLMNotConfigured, rather than a nil
+// interface, so a typo'd or missing name gives a clear error instead of a nil-pointer panic. A mock
+// container injects its mock through the same field.
+func (c *Container) LLM(name ...string) ai.LLM {
+	if llm := c.llms[llmName(name)]; llm != nil {
+		return llm
+	}
+
+	return notConfiguredLLM{c: c}
+}
+
+// notConfiguredLLM is the nil-safe LLM returned by LLM(name) for an unknown or absent model name. The
+// model calls fail with ai.ErrLLMNotConfigured; Tools() still resolves the service's own tools, which
+// are independent of any registered model.
+type notConfiguredLLM struct{ c *Container }
+
+func (notConfiguredLLM) Chat(context.Context, []ai.Message, ...ai.Option) (*ai.Response, error) {
+	return nil, ai.ErrLLMNotConfigured
+}
+
+func (notConfiguredLLM) Generate(context.Context, string, ...ai.Option) (*ai.Response, error) {
+	return nil, ai.ErrLLMNotConfigured
+}
+
+func (notConfiguredLLM) Stream(context.Context, []ai.Message, ...ai.Option) (ai.Streamer, error) {
+	return nil, ai.ErrLLMNotConfigured
+}
+
+func (notConfiguredLLM) HealthCheck(context.Context) datasource.Health {
+	return datasource.Health{Status: datasource.StatusDown}
+}
+
+func (notConfiguredLLM) Name() string { return "" }
+
+// Tools resolves the service's own tools, which exist independently of any model. notConfiguredLLM
+// and lazyTools both wrap only *Container, so the conversion reuses that late-binding plumbing.
+func (n notConfiguredLLM) Tools() ai.Tools { return lazyTools(n) }
+
+// lazyTools resolves the container's tool provider at call time, so tools registered after the LLM
+// (for example by EnableMCP) are still visible via ctx.LLM().Tools().
+type lazyTools struct{ c *Container }
+
+func (l lazyTools) List() []ai.ToolSpec {
+	if l.c.tools == nil {
+		return nil
+	}
+
+	return l.c.tools.List()
+}
+
+func (l lazyTools) Only(names ...string) ai.Tools {
+	if l.c.tools == nil {
+		return l
+	}
+
+	return l.c.tools.Only(names...)
+}
+
+func (l lazyTools) Call(ctx context.Context, name string, args json.RawMessage) (ai.Result, error) {
+	if l.c.tools == nil {
+		return ai.Result{}, ai.ErrToolNotFound
+	}
+
+	return l.c.tools.Call(ctx, name, args)
+}
+
 func (c *Container) registerFrameworkMetrics() {
 	// system info metrics
 	c.Metrics().NewGauge("app_info", "Info for app_name, app_version and framework_version.")
@@ -249,8 +370,9 @@ func (c *Container) registerFrameworkMetrics() {
 	}
 
 	{ // Redis metrics
-		redisBuckets := getDefaultDatasourceBuckets()
-		c.Metrics().NewHistogram("app_redis_stats", "Response time of Redis commands in milliseconds.", redisBuckets...)
+		// Redis records latency in microseconds (see datasource/redis hook), so it uses the microsecond buckets.
+		redisBuckets := getDefaultDatasourceMicrosecondBuckets()
+		c.Metrics().NewHistogram("app_redis_stats", "Response time of Redis commands in microseconds.", redisBuckets...)
 	}
 
 	{ // SQL metrics
@@ -317,13 +439,23 @@ func (c *Container) RemoveConnection(connID string) {
 	c.WSManager.CloseConnection(connID)
 }
 
-// getDefaultDatasourceBuckets returns the standard histogram buckets for all datasource operations in milliseconds.
-// Covers 0-30s range to align with typical request timeout boundaries and provide consistent observability
-// across SQL, Redis, MongoDB, Cassandra, and other datasources.
+// getDefaultDatasourceBuckets returns the standard histogram buckets, in milliseconds, for datasources
+// that record latency in milliseconds (e.g. SQL). Covers 50µs-3min to span everything from fast
+// in-memory hits to long-running queries near request-timeout boundaries, giving consistent
+// observability across SQL and other millisecond-based datasources.
 func getDefaultDatasourceBuckets() []float64 {
 	return []float64{
-		.05, .075, .1, .125, .15, .2, .3, .5, .75, 1, 2, 3, 5, 7.5, 10, // 0-10ms: fast operations
-		25, 50, 100, 250, 500, 1000, 5000, 10000, 30000, // 10ms-30s: slower operations
+		.05, .075, .1, .125, .15, .2, .3, .5, .75, 1, 2, 3, 5, 7.5, 10, // 50µs-10ms
+		25, 50, 100, 250, 500, 1000, 5000, 10000, 30000, 60000, 120000, 180000, // 25ms-3min
+	}
+}
+
+// getDefaultDatasourceMicrosecondBuckets mirrors getDefaultDatasourceBuckets scaled to microseconds,
+// for datasources that record latency in microseconds (e.g. Redis). Covers 50µs-3min.
+func getDefaultDatasourceMicrosecondBuckets() []float64 {
+	return []float64{
+		50, 75, 100, 125, 150, 200, 300, 500, 750, 1000, 2000, 3000, 5000, 7500, 10000, // 50µs-10ms
+		25000, 50000, 100000, 250000, 500000, 1000000, 5000000, 10000000, 30000000, 60000000, 120000000, 180000000, // 25ms-3min
 	}
 }
 
