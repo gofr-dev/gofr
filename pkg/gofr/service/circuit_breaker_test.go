@@ -1271,6 +1271,7 @@ func TestCircuitBreaker_ConcurrentRecovery_OnlyOneResetsCircuit(t *testing.T) {
 	for i := 0; i < numGoroutines; i++ {
 		go func() {
 			defer wg.Done()
+
 			cb.tryCircuitRecovery()
 		}()
 	}
