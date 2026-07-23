@@ -136,6 +136,7 @@ func TestHttpService_GetCBOpenRequests(t *testing.T) {
 		if !tc.expectErr {
 			time.Sleep(60 * time.Millisecond)
 		}
+
 		resp, err := service.Get(t.Context(), tc.path, nil)
 
 		if tc.expectErr {
@@ -170,6 +171,7 @@ func TestHttpService_GetWithHeaderCBOpenRequests(t *testing.T) {
 		if !tc.expectErr {
 			time.Sleep(60 * time.Millisecond)
 		}
+
 		resp, err := service.GetWithHeaders(t.Context(), tc.path, nil, nil)
 
 		if tc.expectErr {
@@ -254,6 +256,7 @@ func TestHttpService_PutCBOpenRequests(t *testing.T) {
 		if !tc.expectErr {
 			time.Sleep(60 * time.Millisecond)
 		}
+
 		resp, err := service.Put(t.Context(), tc.path, nil, nil)
 
 		if tc.expectErr {
@@ -288,6 +291,7 @@ func TestHttpService_PutWithHeaderCBOpenRequests(t *testing.T) {
 		if !tc.expectErr {
 			time.Sleep(60 * time.Millisecond)
 		}
+
 		resp, err := service.PutWithHeaders(t.Context(), tc.path, nil, nil, nil)
 
 		if tc.expectErr {
@@ -372,6 +376,7 @@ func TestHttpService_PatchCBOpenRequests(t *testing.T) {
 		if !tc.expectErr {
 			time.Sleep(60 * time.Millisecond)
 		}
+
 		resp, err := service.Patch(t.Context(), tc.path, nil, nil)
 
 		if tc.expectErr {
@@ -406,6 +411,7 @@ func TestHttpService_PatchWithHeaderCBOpenRequests(t *testing.T) {
 		if !tc.expectErr {
 			time.Sleep(60 * time.Millisecond)
 		}
+
 		resp, err := service.PatchWithHeaders(t.Context(), tc.path, nil, nil, nil)
 
 		if tc.expectErr {
@@ -490,6 +496,7 @@ func TestHttpService_PostCBOpenRequests(t *testing.T) {
 		if !tc.expectErr {
 			time.Sleep(60 * time.Millisecond)
 		}
+
 		resp, err := service.Post(t.Context(), tc.path, nil, nil)
 
 		if tc.expectErr {
@@ -524,6 +531,7 @@ func TestHttpService_PostWithHeaderCBOpenRequests(t *testing.T) {
 		if !tc.expectErr {
 			time.Sleep(60 * time.Millisecond)
 		}
+
 		resp, err := service.PostWithHeaders(t.Context(), tc.path, nil, nil, nil)
 
 		if tc.expectErr {
@@ -608,6 +616,7 @@ func TestHttpService_DeleteCBOpenRequests(t *testing.T) {
 		if !tc.expectErr {
 			time.Sleep(60 * time.Millisecond)
 		}
+
 		resp, err := service.Delete(t.Context(), tc.path, nil)
 
 		if tc.expectErr {
@@ -642,6 +651,7 @@ func TestHttpService_DeleteWithHeaderCBOpenRequests(t *testing.T) {
 		if !tc.expectErr {
 			time.Sleep(60 * time.Millisecond)
 		}
+
 		resp, err := service.DeleteWithHeaders(t.Context(), tc.path, nil, nil)
 
 		if tc.expectErr {
@@ -1241,10 +1251,20 @@ func TestCircuitBreaker_SlowHealthCheckDoesNotBlock(t *testing.T) {
 // TestCircuitBreaker_ConcurrentRecovery_OnlyOneResetsCircuit verifies that when N
 // goroutines simultaneously discover the circuit is open and the recovery interval has
 // elapsed, exactly ONE goroutine fires the health check and resets the circuit.
+// The test is deterministic: the mock health check blocks until all N-1 "loser"
+// goroutines have returned from tryCircuitRecovery, proving they were turned away
+// without calling HealthCheck. If two goroutines won the race the othersDone channel
+// would never close and the test would fail with a timeout error.
 func TestCircuitBreaker_ConcurrentRecovery_OnlyOneResetsCircuit(t *testing.T) {
 	const numGoroutines = 20
 
 	var healthCallCount int64
+
+	var returned int64
+
+	othersDone := make(chan struct{})
+
+	var once sync.Once
 
 	ctrl := gomock.NewController(t)
 	mockHTTP := NewMockHTTP(ctrl)
@@ -1253,6 +1273,13 @@ func TestCircuitBreaker_ConcurrentRecovery_OnlyOneResetsCircuit(t *testing.T) {
 		HealthCheck(gomock.Any()).
 		DoAndReturn(func(_ context.Context) *Health {
 			atomic.AddInt64(&healthCallCount, 1)
+
+			select {
+			case <-othersDone:
+			case <-time.After(2 * time.Second): // Bounded wait so the test fails instead of hanging on mutants
+				t.Error("test timed out waiting for losers to finish")
+			}
+
 			return &Health{Status: serviceUp}
 		}).
 		AnyTimes()
@@ -1260,10 +1287,12 @@ func TestCircuitBreaker_ConcurrentRecovery_OnlyOneResetsCircuit(t *testing.T) {
 	cb := &circuitBreaker{
 		state:       OpenState,
 		threshold:   1,
-		interval:    50 * time.Millisecond,
-		lastChecked: time.Now().Add(-1 * time.Hour), // Force interval to have elapsed
+		interval:    time.Hour,
+		lastChecked: time.Now().Add(-2 * time.Hour), // Force interval to have elapsed
 		HTTP:        mockHTTP,
 	}
+
+	startCh := make(chan struct{})
 
 	var wg sync.WaitGroup
 	wg.Add(numGoroutines)
@@ -1272,14 +1301,19 @@ func TestCircuitBreaker_ConcurrentRecovery_OnlyOneResetsCircuit(t *testing.T) {
 		go func() {
 			defer wg.Done()
 
+			<-startCh
+
 			cb.tryCircuitRecovery()
+
+			if atomic.AddInt64(&returned, 1) == numGoroutines-1 {
+				once.Do(func() { close(othersDone) })
+			}
 		}()
 	}
 
-	wg.Wait()
+	close(startCh)
 
-	// Wait for the asynchronous healthCheck goroutine to complete
-	time.Sleep(100 * time.Millisecond)
+	wg.Wait()
 
 	assert.Equal(t, int64(1), atomic.LoadInt64(&healthCallCount), "health check should be called exactly once")
 
