@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -55,7 +56,7 @@ func setupHTTPServiceTestServerForCircuitBreaker(t *testing.T) (*httptest.Server
 	// Circuit breaker configuration
 	cbConfig := CircuitBreakerConfig{
 		Threshold: 1,
-		Interval:  1,
+		Interval:  50 * time.Millisecond,
 	}
 
 	// Apply circuit breaker option to the HTTP service
@@ -78,7 +79,7 @@ func TestHttpService_GetSuccessRequests(t *testing.T) {
 
 	service := NewHTTPService(server.URL, logging.NewMockLogger(logging.DEBUG), mockMetric, &CircuitBreakerConfig{
 		Threshold: 1,
-		Interval:  1,
+		Interval:  50 * time.Millisecond,
 	})
 
 	resp, err := service.Get(t.Context(), "test", nil)
@@ -103,7 +104,7 @@ func TestHttpService_GetWithHeaderSuccessRequests(t *testing.T) {
 
 	service := NewHTTPService(server.URL, logging.NewMockLogger(logging.DEBUG), mockMetric, &CircuitBreakerConfig{
 		Threshold: 1,
-		Interval:  1,
+		Interval:  50 * time.Millisecond,
 	})
 
 	resp, err := service.GetWithHeaders(t.Context(), "test", nil, nil)
@@ -132,6 +133,9 @@ func TestHttpService_GetCBOpenRequests(t *testing.T) {
 
 	// Perform test cases
 	for _, tc := range testCases {
+		if !tc.expectErr {
+			time.Sleep(60 * time.Millisecond)
+		}
 		resp, err := service.Get(t.Context(), tc.path, nil)
 
 		if tc.expectErr {
@@ -163,6 +167,9 @@ func TestHttpService_GetWithHeaderCBOpenRequests(t *testing.T) {
 
 	// Perform test cases
 	for _, tc := range testCases {
+		if !tc.expectErr {
+			time.Sleep(60 * time.Millisecond)
+		}
 		resp, err := service.GetWithHeaders(t.Context(), tc.path, nil, nil)
 
 		if tc.expectErr {
@@ -190,7 +197,7 @@ func TestHttpService_PutSuccessRequests(t *testing.T) {
 
 	service := NewHTTPService(server.URL, logging.NewMockLogger(logging.DEBUG), mockMetric, &CircuitBreakerConfig{
 		Threshold: 1,
-		Interval:  1,
+		Interval:  50 * time.Millisecond,
 	})
 
 	resp, err := service.Put(t.Context(), "test", nil, nil)
@@ -215,7 +222,7 @@ func TestHttpService_PutWithHeaderSuccessRequests(t *testing.T) {
 
 	service := NewHTTPService(server.URL, logging.NewMockLogger(logging.DEBUG), mockMetric, &CircuitBreakerConfig{
 		Threshold: 1,
-		Interval:  1,
+		Interval:  50 * time.Millisecond,
 	})
 
 	resp, err := service.PutWithHeaders(t.Context(), "test", nil, nil, nil)
@@ -244,6 +251,9 @@ func TestHttpService_PutCBOpenRequests(t *testing.T) {
 
 	// Perform test cases
 	for _, tc := range testCases {
+		if !tc.expectErr {
+			time.Sleep(60 * time.Millisecond)
+		}
 		resp, err := service.Put(t.Context(), tc.path, nil, nil)
 
 		if tc.expectErr {
@@ -275,6 +285,9 @@ func TestHttpService_PutWithHeaderCBOpenRequests(t *testing.T) {
 
 	// Perform test cases
 	for _, tc := range testCases {
+		if !tc.expectErr {
+			time.Sleep(60 * time.Millisecond)
+		}
 		resp, err := service.PutWithHeaders(t.Context(), tc.path, nil, nil, nil)
 
 		if tc.expectErr {
@@ -302,7 +315,7 @@ func TestHttpService_PatchSuccessRequests(t *testing.T) {
 
 	service := NewHTTPService(server.URL, logging.NewMockLogger(logging.DEBUG), mockMetric, &CircuitBreakerConfig{
 		Threshold: 1,
-		Interval:  1,
+		Interval:  50 * time.Millisecond,
 	})
 
 	resp, err := service.Get(t.Context(), "test", nil)
@@ -327,7 +340,7 @@ func TestHttpService_PatchWithHeaderSuccessRequests(t *testing.T) {
 
 	service := NewHTTPService(server.URL, logging.NewMockLogger(logging.DEBUG), mockMetric, &CircuitBreakerConfig{
 		Threshold: 1,
-		Interval:  1,
+		Interval:  50 * time.Millisecond,
 	})
 
 	resp, err := service.GetWithHeaders(t.Context(), "test", nil, nil)
@@ -356,6 +369,9 @@ func TestHttpService_PatchCBOpenRequests(t *testing.T) {
 
 	// Perform test cases
 	for _, tc := range testCases {
+		if !tc.expectErr {
+			time.Sleep(60 * time.Millisecond)
+		}
 		resp, err := service.Patch(t.Context(), tc.path, nil, nil)
 
 		if tc.expectErr {
@@ -387,6 +403,9 @@ func TestHttpService_PatchWithHeaderCBOpenRequests(t *testing.T) {
 
 	// Perform test cases
 	for _, tc := range testCases {
+		if !tc.expectErr {
+			time.Sleep(60 * time.Millisecond)
+		}
 		resp, err := service.PatchWithHeaders(t.Context(), tc.path, nil, nil, nil)
 
 		if tc.expectErr {
@@ -414,7 +433,7 @@ func TestHttpService_PostSuccessRequests(t *testing.T) {
 
 	service := NewHTTPService(server.URL, logging.NewMockLogger(logging.DEBUG), mockMetric, &CircuitBreakerConfig{
 		Threshold: 1,
-		Interval:  1,
+		Interval:  50 * time.Millisecond,
 	})
 
 	resp, err := service.Post(t.Context(), "test", nil, nil)
@@ -439,7 +458,7 @@ func TestHttpService_PostWithHeaderSuccessRequests(t *testing.T) {
 
 	service := NewHTTPService(server.URL, logging.NewMockLogger(logging.DEBUG), mockMetric, &CircuitBreakerConfig{
 		Threshold: 1,
-		Interval:  1,
+		Interval:  50 * time.Millisecond,
 	})
 
 	resp, err := service.PostWithHeaders(t.Context(), "test", nil, nil, nil)
@@ -468,6 +487,9 @@ func TestHttpService_PostCBOpenRequests(t *testing.T) {
 
 	// Perform test cases
 	for _, tc := range testCases {
+		if !tc.expectErr {
+			time.Sleep(60 * time.Millisecond)
+		}
 		resp, err := service.Post(t.Context(), tc.path, nil, nil)
 
 		if tc.expectErr {
@@ -499,6 +521,9 @@ func TestHttpService_PostWithHeaderCBOpenRequests(t *testing.T) {
 
 	// Perform test cases
 	for _, tc := range testCases {
+		if !tc.expectErr {
+			time.Sleep(60 * time.Millisecond)
+		}
 		resp, err := service.PostWithHeaders(t.Context(), tc.path, nil, nil, nil)
 
 		if tc.expectErr {
@@ -526,7 +551,7 @@ func TestHttpService_DeleteSuccessRequests(t *testing.T) {
 
 	service := NewHTTPService(server.URL, logging.NewMockLogger(logging.DEBUG), mockMetric, &CircuitBreakerConfig{
 		Threshold: 1,
-		Interval:  1,
+		Interval:  50 * time.Millisecond,
 	})
 
 	resp, err := service.Delete(t.Context(), "test", nil)
@@ -551,7 +576,7 @@ func TestHttpService_DeleteWithHeaderSuccessRequests(t *testing.T) {
 
 	service := NewHTTPService(server.URL, logging.NewMockLogger(logging.DEBUG), mockMetric, &CircuitBreakerConfig{
 		Threshold: 1,
-		Interval:  1,
+		Interval:  50 * time.Millisecond,
 	})
 
 	resp, err := service.DeleteWithHeaders(t.Context(), "test", nil, nil)
@@ -580,6 +605,9 @@ func TestHttpService_DeleteCBOpenRequests(t *testing.T) {
 
 	// Perform test cases
 	for _, tc := range testCases {
+		if !tc.expectErr {
+			time.Sleep(60 * time.Millisecond)
+		}
 		resp, err := service.Delete(t.Context(), tc.path, nil)
 
 		if tc.expectErr {
@@ -611,6 +639,9 @@ func TestHttpService_DeleteWithHeaderCBOpenRequests(t *testing.T) {
 
 	// Perform test cases
 	for _, tc := range testCases {
+		if !tc.expectErr {
+			time.Sleep(60 * time.Millisecond)
+		}
 		resp, err := service.DeleteWithHeaders(t.Context(), tc.path, nil, nil)
 
 		if tc.expectErr {
@@ -1200,6 +1231,56 @@ func TestCircuitBreaker_SlowHealthCheckDoesNotBlock(t *testing.T) {
 	case <-time.After(2 * time.Second):
 		t.Fatal("tryCircuitRecovery never returned")
 	}
+
+	cb.mu.RLock()
+	state := cb.state
+	cb.mu.RUnlock()
+	assert.Equal(t, ClosedState, state, "circuit should be closed after successful recovery")
+}
+
+// TestCircuitBreaker_ConcurrentRecovery_OnlyOneResetsCircuit verifies that when N
+// goroutines simultaneously discover the circuit is open and the recovery interval has
+// elapsed, exactly ONE goroutine fires the health check and resets the circuit.
+func TestCircuitBreaker_ConcurrentRecovery_OnlyOneResetsCircuit(t *testing.T) {
+	const numGoroutines = 20
+
+	var healthCallCount int64
+
+	ctrl := gomock.NewController(t)
+	mockHTTP := NewMockHTTP(ctrl)
+
+	mockHTTP.EXPECT().
+		HealthCheck(gomock.Any()).
+		DoAndReturn(func(_ context.Context) *Health {
+			atomic.AddInt64(&healthCallCount, 1)
+			return &Health{Status: serviceUp}
+		}).
+		AnyTimes()
+
+	cb := &circuitBreaker{
+		state:       OpenState,
+		threshold:   1,
+		interval:    50 * time.Millisecond,
+		lastChecked: time.Now().Add(-1 * time.Hour), // Force interval to have elapsed
+		HTTP:        mockHTTP,
+	}
+
+	var wg sync.WaitGroup
+	wg.Add(numGoroutines)
+
+	for i := 0; i < numGoroutines; i++ {
+		go func() {
+			defer wg.Done()
+			cb.tryCircuitRecovery()
+		}()
+	}
+
+	wg.Wait()
+
+	// Wait for the asynchronous healthCheck goroutine to complete
+	time.Sleep(100 * time.Millisecond)
+
+	assert.Equal(t, int64(1), atomic.LoadInt64(&healthCallCount), "health check should be called exactly once")
 
 	cb.mu.RLock()
 	state := cb.state
