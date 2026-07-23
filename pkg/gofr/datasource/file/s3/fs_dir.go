@@ -140,17 +140,6 @@ func (f *FileSystem) RemoveAll(name string) error {
 	return nil
 }
 
-func getRelativepath(key, filePath string) string {
-	relativepath := strings.TrimPrefix(key, filePath)
-	oneLevelDeepPathIndex := strings.Index(relativepath, string(filepath.Separator))
-
-	if oneLevelDeepPathIndex != -1 {
-		relativepath = relativepath[:oneLevelDeepPathIndex+1]
-	}
-
-	return relativepath
-}
-
 // ReadDir lists the files and directories within the specified directory in the S3 bucket.
 //
 // This method retrieves and returns information about the files and directories located under the specified path
@@ -178,33 +167,22 @@ func (f *FileSystem) ReadDir(name string) ([]file.FileInfo, error) {
 		filePath = ""
 	}
 
-	// TODO: Enhance the implementation to fetch only data that is one level deep.
-	// Currently, the system retrieves metadata of all files matching the prefix,
-	// which may include files in nested directories. This takes more memory.
 	entries, err := f.conn.ListObjectsV2(context.TODO(), &s3.ListObjectsV2Input{
-		Bucket: aws.String(f.config.BucketName),
-		Prefix: aws.String(filePath),
+		Bucket:    aws.String(f.config.BucketName),
+		Prefix:    aws.String(filePath),
+		Delimiter: aws.String(string(filepath.Separator)),
 	})
 	if err != nil {
 		msg = fmt.Sprintf("Error retrieving objects: %v", err)
 		return nil, err
 	}
 
-	fileInfo := make([]file.FileInfo, 0)
+	fileInfo := make([]file.FileInfo, 0, len(entries.CommonPrefixes)+len(entries.Contents))
 
 	for i := range entries.Contents {
-		if i == 0 && filePath != "" {
+		// Skip current directory marker object, if present.
+		if *entries.Contents[i].Key == filePath {
 			continue
-		}
-
-		relativepath := getRelativepath(*entries.Contents[i].Key, filePath)
-
-		if len(fileInfo) > 0 {
-			temp, ok := fileInfo[len(fileInfo)-1].(*S3File)
-
-			if ok && relativepath == path.Base(temp.name)+string(filepath.Separator) {
-				continue
-			}
 		}
 
 		fileInfo = append(fileInfo, &S3File{
@@ -214,6 +192,20 @@ func (f *FileSystem) ReadDir(name string) ([]file.FileInfo, error) {
 			size:         *entries.Contents[i].Size,
 			name:         f.config.BucketName + string(filepath.Separator) + *entries.Contents[i].Key,
 			lastModified: *entries.Contents[i].LastModified,
+		})
+	}
+
+	for i := range entries.CommonPrefixes {
+		if entries.CommonPrefixes[i].Prefix == nil {
+			continue
+		}
+
+		fileInfo = append(fileInfo, &S3File{
+			conn:    f.conn,
+			logger:  f.logger,
+			metrics: f.metrics,
+			size:    0,
+			name:    f.config.BucketName + string(filepath.Separator) + *entries.CommonPrefixes[i].Prefix,
 		})
 	}
 
