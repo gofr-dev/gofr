@@ -105,7 +105,7 @@ func New(config *Config, logger Logger, metrics Metrics) *MQTT {
 		ConnectPassword:               []byte(config.Password),
 		CleanStartOnInitialConnection: true,
 		SessionExpiryInterval:         0,
-		OnConnectionUp: func(cm *autopaho.ConnectionManager, connAck *paho.Connack) {
+		OnConnectionUp: func(cm *autopaho.ConnectionManager, _ *paho.Connack) {
 			logger.Infof("connected to MQTT at '%v:%v' with clientID '%v'", config.Hostname, config.Port, config.ClientID)
 
 			// Resubscribe to all topics
@@ -159,7 +159,7 @@ func New(config *Config, logger Logger, metrics Metrics) *MQTT {
 
 	// Optional initial wait, autopaho will keep trying in background anyway
 	if cm != nil {
-		waitCtx, waitCancel := context.WithTimeout(ctx, 2*time.Second)
+		waitCtx, waitCancel := context.WithTimeout(ctx, connectionTimeout)
 		defer waitCancel()
 		_ = cm.AwaitConnection(waitCtx)
 	}
@@ -172,7 +172,7 @@ func (m *MQTT) Subscribe(ctx context.Context, topic string) (*pubsub.Message, er
 		return nil, errClientNotConnected
 	}
 
-	waitCtx, cancel := context.WithTimeout(ctx, 2*time.Second)
+	waitCtx, cancel := context.WithTimeout(ctx, connectionTimeout)
 	defer cancel()
 	if err := m.cm.AwaitConnection(waitCtx); err != nil {
 		return nil, errClientNotConnected
@@ -380,7 +380,7 @@ func (m *MQTT) SubscribeWithFunction(topic string, subscribeFunc SubscribeFunc) 
 	})
 	m.mu.Unlock()
 
-	ctx, cancel := context.WithTimeout(m.ctx, 5*time.Second)
+	ctx, cancel := context.WithTimeout(m.ctx, defaultTimeout)
 	defer cancel()
 
 	_, err := m.cm.Subscribe(ctx, &paho.Subscribe{

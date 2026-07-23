@@ -450,7 +450,7 @@ func TestKafkaClient_Close(t *testing.T) {
 		conns: []Connection{
 			mockConn,
 		},
-	}}
+	}, mu: &sync.RWMutex{}}
 
 	mockWriter.EXPECT().Close().Return(nil)
 	mockReader.EXPECT().Close().Return(nil)
@@ -471,7 +471,7 @@ func TestKafkaClient_CloseError(t *testing.T) {
 	defer ctrl.Finish()
 
 	mockWriter := NewMockWriter(ctrl)
-	k := kafkaClient{writer: mockWriter}
+	k := kafkaClient{writer: mockWriter, mu: &sync.RWMutex{}}
 
 	mockWriter.EXPECT().Close().Return(errClose)
 

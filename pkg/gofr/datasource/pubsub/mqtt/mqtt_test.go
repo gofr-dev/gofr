@@ -11,15 +11,15 @@ import (
 
 type mockLogger struct{}
 
-func (m mockLogger) Infof(format string, args ...any)  {}
-func (m mockLogger) Debug(args ...any)                 {}
-func (m mockLogger) Debugf(format string, args ...any) {}
-func (m mockLogger) Warnf(format string, args ...any)  {}
-func (m mockLogger) Errorf(format string, args ...any) {}
+func (_ mockLogger) Infof(format string, args ...any)  {}
+func (_ mockLogger) Debug(args ...any)                 {}
+func (_ mockLogger) Debugf(format string, args ...any) {}
+func (_ mockLogger) Warnf(format string, args ...any)  {}
+func (_ mockLogger) Errorf(format string, args ...any) {}
 
 type mockMetrics struct{}
 
-func (m mockMetrics) IncrementCounter(ctx context.Context, name string, labels ...string) {}
+func (_ mockMetrics) IncrementCounter(ctx context.Context, name string, labels ...string) {}
 
 func TestMQTT_Health(t *testing.T) {
 	logger := mockLogger{}

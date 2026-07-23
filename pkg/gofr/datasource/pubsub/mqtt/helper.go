@@ -14,9 +14,11 @@ import (
 )
 
 const (
-	backendMQTT  = "MQTT"
-	metaQoS      = "qos"
-	metaRetained = "retained"
+	metaQoS           = "qos"
+	metaRetained      = "retained"
+	backendMQTT       = "MQTT"
+	defaultTimeout    = 5 * time.Second
+	connectionTimeout = 2 * time.Second
 )
 
 // parseQueryArgs extracts collectTimeout and messageLimit from variadic arguments.
@@ -248,7 +250,7 @@ func (m *MQTT) Unsubscribe(topic string) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
-	ctx, cancel := context.WithTimeout(m.ctx, 5*time.Second)
+	ctx, cancel := context.WithTimeout(m.ctx, defaultTimeout)
 	defer cancel()
 
 	_, err := m.cm.Unsubscribe(ctx, &paho.Unsubscribe{
@@ -319,7 +321,7 @@ func (m *MQTT) Ping() error {
 		return errClientNotConnected
 	}
 
-	ctx, cancel := context.WithTimeout(m.ctx, 2*time.Second)
+	ctx, cancel := context.WithTimeout(m.ctx, connectionTimeout)
 	defer cancel()
 
 	err := m.cm.AwaitConnection(ctx)

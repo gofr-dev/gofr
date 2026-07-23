@@ -59,7 +59,7 @@ func getDefaultClient(config *Config, logger Logger, metrics Metrics) *MQTT {
 		ConnectPassword:               []byte(config.Password),
 		CleanStartOnInitialConnection: true,
 		SessionExpiryInterval:         0,
-		OnConnectionUp: func(cm *autopaho.ConnectionManager, connAck *paho.Connack) {
+		OnConnectionUp: func(cm *autopaho.ConnectionManager, _ *paho.Connack) {
 			logger.Infof("connected to MQTT at '%v:%v' with clientID '%v'", config.Hostname, config.Port, config.ClientID)
 
 			// Resubscribe to all topics
