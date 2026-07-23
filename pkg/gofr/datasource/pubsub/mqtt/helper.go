@@ -9,7 +9,14 @@ import (
 	"time"
 
 	"github.com/eclipse/paho.golang/paho"
+
 	"gofr.dev/pkg/gofr/datasource/pubsub"
+)
+
+const (
+	backendMQTT  = "MQTT"
+	metaQoS      = "qos"
+	metaRetained = "retained"
 )
 
 // parseQueryArgs extracts collectTimeout and messageLimit from variadic arguments.
@@ -84,8 +91,8 @@ func (m *MQTT) handlePublishReceived(pr paho.PublishReceived) (bool, error) {
 	messg.Topic = pub.Topic
 	messg.Value = pub.Payload
 	messg.MetaData = map[string]string{
-		"qos":      strconv.Itoa(int(pub.QoS)),
-		"retained": strconv.FormatBool(pub.Retain),
+		metaQoS:      strconv.Itoa(int(pub.QoS)),
+		metaRetained: strconv.FormatBool(pub.Retain),
 	}
 
 	messg.Committer = &message{msg: pub}
@@ -103,13 +110,13 @@ func (m *MQTT) handlePublishReceived(pr paho.PublishReceived) (bool, error) {
 		MessageValue:  string(pub.Payload),
 		Topic:         pub.Topic,
 		Host:          m.config.Hostname,
-		PubSubBackend: "MQTT",
+		PubSubBackend: backendMQTT,
 	})
 
 	return true, nil
 }
 
-// topicMatch implements simple MQTT topic matching (+ and # wildcards)
+// topicMatch implements simple MQTT topic matching (+ and # wildcards).
 func topicMatch(sub, topic string) bool {
 	if sub == topic {
 		return true
@@ -121,7 +128,8 @@ func topicMatch(sub, topic string) bool {
 	return false
 }
 
-func (m *MQTT) createQueryMessageHandler(ctx context.Context, msgChan chan<- *pubsub.Message, topicForLogging string) func(paho.PublishReceived) (bool, error) {
+func (m *MQTT) createQueryMessageHandler(ctx context.Context, msgChan chan<- *pubsub.Message,
+	topicForLogging string) func(paho.PublishReceived) (bool, error) {
 	return func(pr paho.PublishReceived) (bool, error) {
 		pub := pr.Packet
 		if pub.Topic != topicForLogging && !topicMatch(topicForLogging, pub.Topic) {
@@ -134,8 +142,8 @@ func (m *MQTT) createQueryMessageHandler(ctx context.Context, msgChan chan<- *pu
 		message.Topic = pub.Topic
 		message.Value = pub.Payload
 		message.MetaData = map[string]string{
-			"qos":      strconv.Itoa(int(pub.QoS)),
-			"retained": strconv.FormatBool(pub.Retain),
+			metaQoS:      strconv.Itoa(int(pub.QoS)),
+			metaRetained: strconv.FormatBool(pub.Retain),
 		}
 
 		select {
@@ -148,7 +156,8 @@ func (m *MQTT) createQueryMessageHandler(ctx context.Context, msgChan chan<- *pu
 	}
 }
 
-func (m *MQTT) subscribeToTopicForQuery(ctx context.Context, topicName string, timeout time.Duration, handler func(paho.PublishReceived) (bool, error)) error {
+func (m *MQTT) subscribeToTopicForQuery(ctx context.Context, topicName string, timeout time.Duration,
+	handler func(paho.PublishReceived) (bool, error)) error {
 	// Add temporary handler
 	m.mu.Lock()
 	m.queryHandlers = append(m.queryHandlers, handler)
@@ -225,8 +234,8 @@ func getHandler(subscribeFunc SubscribeFunc) func(paho.PublishReceived) (bool, e
 			Topic: pub.Topic,
 			Value: pub.Payload,
 			MetaData: map[string]string{
-				"qos":      strconv.Itoa(int(pub.QoS)),
-				"retained": strconv.FormatBool(pub.Retain),
+				metaQoS:      strconv.Itoa(int(pub.QoS)),
+				metaRetained: strconv.FormatBool(pub.Retain),
 			},
 		}
 

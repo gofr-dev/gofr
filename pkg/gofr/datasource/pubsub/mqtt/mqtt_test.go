@@ -76,7 +76,7 @@ func TestMQTT_Publish_NotConnected(t *testing.T) {
 	defer cancel()
 
 	err := m.Publish(ctx, "test", []byte("message"))
-	assert.Error(t, err) // autopaho returns error if context cancelled during publish wait
+	assert.Error(t, err) // autopaho returns error if context canceled during publish wait
 }
 
 func TestMQTT_Subscribe_NotConnected(t *testing.T) {

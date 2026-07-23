@@ -89,10 +89,10 @@ func getDefaultClient(config *Config, logger Logger, metrics Metrics) *MQTT {
 					// Route to query handlers if any
 					m.mu.RLock()
 					for _, handler := range m.queryHandlers {
-						handled, err := handler(pr)
-						if handled || err != nil {
+						handled, handlerErr := handler(pr)
+						if handled || handlerErr != nil {
 							m.mu.RUnlock()
-							return handled, err
+							return handled, handlerErr
 						}
 					}
 					m.mu.RUnlock()

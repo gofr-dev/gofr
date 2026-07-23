@@ -135,10 +135,10 @@ func New(config *Config, logger Logger, metrics Metrics) *MQTT {
 					// Route to query handlers if any
 					m.mu.RLock()
 					for _, handler := range m.queryHandlers {
-						handled, err := handler(pr)
-						if handled || err != nil {
+						handled, handlerErr := handler(pr)
+						if handled || handlerErr != nil {
 							m.mu.RUnlock()
-							return handled, err
+							return handled, handlerErr
 						}
 					}
 					m.mu.RUnlock()
@@ -295,7 +295,7 @@ func (m *MQTT) Publish(ctx context.Context, topic string, message []byte) error 
 		MessageValue:  string(message),
 		Topic:         topic,
 		Host:          m.config.Hostname,
-		PubSubBackend: "MQTT",
+		PubSubBackend: backendMQTT,
 		Time:          t.Microseconds(),
 	})
 
