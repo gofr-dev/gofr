@@ -5,9 +5,11 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"net/url"
 	"strconv"
 	"time"
 
+	"github.com/eclipse/paho.golang/autopaho"
 	"github.com/eclipse/paho.golang/paho"
 
 	"gofr.dev/pkg/gofr/datasource/pubsub"
@@ -60,17 +62,22 @@ func (m *MQTT) handlePublishReceived(pr paho.PublishReceived) (bool, error) {
 		// For simplicity, GoFr typically uses exact topics. Let's do a fallback loop if exact doesn't match:
 		// (In v3 it was per-topic handler, so exact matches)
 		matched := false
+
 		m.mu.RLock()
+
 		for subTopic, s := range m.subscriptions {
 			// We can do proper MQTT topic matching here if needed.
 			// For now, if subTopic == pub.Topic, we route it.
 			if subTopic == pub.Topic || topicMatch(subTopic, pub.Topic) {
 				sub = s
 				matched = true
+
 				break
 			}
 		}
+
 		m.mu.RUnlock()
+
 		if !matched {
 			return false, nil // let other handlers process it
 		}
@@ -83,6 +90,7 @@ func (m *MQTT) handlePublishReceived(pr paho.PublishReceived) (bool, error) {
 
 	// Create a new context and extract span context from MQTT user properties
 	ctx := context.Background()
+
 	ctx, span := startSubscribeSpan(ctx, pub.Topic, userProps)
 	defer span.End()
 
@@ -173,11 +181,11 @@ func (m *MQTT) subscribeToTopicForQuery(ctx context.Context, topicName string, t
 			{Topic: topicName, QoS: m.config.QoS},
 		},
 	})
-
 	if err != nil {
 		if errors.Is(err, context.DeadlineExceeded) {
 			return fmt.Errorf("%w for topic '%s'", errSubscriptionTimeout, topicName)
 		}
+
 		return fmt.Errorf("%w to '%s': %w", errSubscriptionFailed, topicName, err)
 	}
 
@@ -203,6 +211,7 @@ func (m *MQTT) collectMessages(queryCtx context.Context, msgChan <-chan *pubsub.
 			}
 
 			m.addMessageToBuffer(&resultBuffer, msg)
+
 			messagesCollected++
 
 		case <-queryCtx.Done():
@@ -242,6 +251,7 @@ func getHandler(subscribeFunc SubscribeFunc) func(paho.PublishReceived) (bool, e
 		}
 
 		_ = subscribeFunc(pubsubMsg)
+
 		return true, nil
 	}
 }
@@ -256,7 +266,6 @@ func (m *MQTT) Unsubscribe(topic string) error {
 	_, err := m.cm.Unsubscribe(ctx, &paho.Unsubscribe{
 		Topics: []string{topic},
 	})
-
 	if err != nil {
 		m.logger.Errorf("error while unsubscribing from topic '%s', error: %v", topic, err)
 		return err
@@ -330,4 +339,60 @@ func (m *MQTT) Ping() error {
 	}
 
 	return nil
+}
+
+func getClientConfig(config *Config, logger Logger, m *MQTT, urls []*url.URL) autopaho.ClientConfig {
+	return autopaho.ClientConfig{
+		ServerUrls:                    urls,
+		KeepAlive:                     uint16(config.KeepAlive.Seconds()),
+		ConnectUsername:               config.Username,
+		ConnectPassword:               []byte(config.Password),
+		CleanStartOnInitialConnection: true,
+		SessionExpiryInterval:         0,
+		OnConnectionUp: func(cm *autopaho.ConnectionManager, _ *paho.Connack) {
+			logger.Infof("connected to MQTT at '%v:%v' with clientID '%v'", config.Hostname, config.Port, config.ClientID)
+
+			// Resubscribe to all topics
+			m.mu.RLock()
+			defer m.mu.RUnlock()
+
+			for topic := range m.subscriptions {
+				_, subErr := cm.Subscribe(context.Background(), &paho.Subscribe{
+					Subscriptions: []paho.SubscribeOptions{
+						{Topic: topic, QoS: config.QoS},
+					},
+				})
+				if subErr != nil {
+					logger.Debugf("failed to resubscribe to topic %s: %v", topic, subErr)
+				} else {
+					logger.Debugf("resubscribed to topic %s successfully", topic)
+				}
+			}
+		},
+		OnConnectError: func(err error) {
+			logger.Errorf("could not connect to MQTT at '%v:%v', error: %v", config.Hostname, config.Port, err)
+		},
+		ClientConfig: paho.ClientConfig{
+			ClientID: config.ClientID,
+			OnPublishReceived: []func(paho.PublishReceived) (bool, error){
+				func(pr paho.PublishReceived) (bool, error) {
+					// Route to query handlers if any
+					m.mu.RLock()
+
+					for _, handler := range m.queryHandlers {
+						handled, handlerErr := handler(pr)
+						if handled || handlerErr != nil {
+							m.mu.RUnlock()
+							return handled, handlerErr
+						}
+					}
+
+					m.mu.RUnlock()
+
+					// Route to normal subscriptions
+					return m.handlePublishReceived(pr)
+				},
+			},
+		},
+	}
 }

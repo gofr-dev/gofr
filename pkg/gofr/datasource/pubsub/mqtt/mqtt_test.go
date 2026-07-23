@@ -6,20 +6,21 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/assert"
+
 	"gofr.dev/pkg/gofr/datasource/pubsub"
 )
 
 type mockLogger struct{}
 
-func (_ mockLogger) Infof(format string, args ...any)  {}
-func (_ mockLogger) Debug(args ...any)                 {}
-func (_ mockLogger) Debugf(format string, args ...any) {}
-func (_ mockLogger) Warnf(format string, args ...any)  {}
-func (_ mockLogger) Errorf(format string, args ...any) {}
+func (mockLogger) Infof(_ string, _ ...any)  {}
+func (mockLogger) Debug(_ ...any)            {}
+func (mockLogger) Debugf(_ string, _ ...any) {}
+func (mockLogger) Warnf(_ string, _ ...any)  {}
+func (mockLogger) Errorf(_ string, _ ...any) {}
 
 type mockMetrics struct{}
 
-func (_ mockMetrics) IncrementCounter(ctx context.Context, name string, labels ...string) {}
+func (mockMetrics) IncrementCounter(_ context.Context, _ string, _ ...string) {}
 
 func TestMQTT_Health(t *testing.T) {
 	logger := mockLogger{}
@@ -112,11 +113,9 @@ func TestMQTT_Close(t *testing.T) {
 
 	m := New(cfg, logger, metrics)
 
-	err := m.Close()
-	// When connection is not established, disconnect might return a context deadline error or canceled.
-	// Since we only want to ensure it doesn't panic and returns, we'll just check it doesn't panic.
-	// `autopaho` might return an error when Disconnect is called while it's dialing.
-	_ = err
+	assert.NotPanics(t, func() {
+		_ = m.Close()
+	})
 }
 
 func TestMQTT_GetDefaultClient(t *testing.T) {
@@ -190,7 +189,7 @@ func TestMQTT_SubscribeWithFunction(t *testing.T) {
 
 	m := New(&Config{Hostname: "127.0.0.1"}, logger, metrics)
 
-	err := m.SubscribeWithFunction("test/topic", func(msg *pubsub.Message) error {
+	err := m.SubscribeWithFunction("test/topic", func(_ *pubsub.Message) error {
 		return nil
 	})
 

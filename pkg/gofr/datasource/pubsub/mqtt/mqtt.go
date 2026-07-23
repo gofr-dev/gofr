@@ -91,6 +91,7 @@ func New(config *Config, logger Logger, metrics Metrics) *MQTT {
 	logger.Debugf("connecting to MQTT at '%v:%v' with clientID '%v'", config.Hostname, config.Port, config.ClientID)
 
 	var urls []*url.URL
+
 	serverURL, err := url.Parse(config.Protocol + "://" + config.Hostname + ":" + strconv.Itoa(config.Port))
 	if err != nil {
 		logger.Errorf("invalid MQTT URL: %v", err)
@@ -98,57 +99,7 @@ func New(config *Config, logger Logger, metrics Metrics) *MQTT {
 		urls = append(urls, serverURL)
 	}
 
-	cliCfg := autopaho.ClientConfig{
-		ServerUrls:                    urls,
-		KeepAlive:                     uint16(config.KeepAlive.Seconds()),
-		ConnectUsername:               config.Username,
-		ConnectPassword:               []byte(config.Password),
-		CleanStartOnInitialConnection: true,
-		SessionExpiryInterval:         0,
-		OnConnectionUp: func(cm *autopaho.ConnectionManager, _ *paho.Connack) {
-			logger.Infof("connected to MQTT at '%v:%v' with clientID '%v'", config.Hostname, config.Port, config.ClientID)
-
-			// Resubscribe to all topics
-			m.mu.RLock()
-			defer m.mu.RUnlock()
-
-			for topic := range m.subscriptions {
-				_, subErr := cm.Subscribe(context.Background(), &paho.Subscribe{
-					Subscriptions: []paho.SubscribeOptions{
-						{Topic: topic, QoS: config.QoS},
-					},
-				})
-				if subErr != nil {
-					logger.Debugf("failed to resubscribe to topic %s: %v", topic, subErr)
-				} else {
-					logger.Debugf("resubscribed to topic %s successfully", topic)
-				}
-			}
-		},
-		OnConnectError: func(err error) {
-			logger.Errorf("could not connect to MQTT at '%v:%v', error: %v", config.Hostname, config.Port, err)
-		},
-		ClientConfig: paho.ClientConfig{
-			ClientID: config.ClientID,
-			OnPublishReceived: []func(paho.PublishReceived) (bool, error){
-				func(pr paho.PublishReceived) (bool, error) {
-					// Route to query handlers if any
-					m.mu.RLock()
-					for _, handler := range m.queryHandlers {
-						handled, handlerErr := handler(pr)
-						if handled || handlerErr != nil {
-							m.mu.RUnlock()
-							return handled, handlerErr
-						}
-					}
-					m.mu.RUnlock()
-
-					// Route to normal subscriptions
-					return m.handlePublishReceived(pr)
-				},
-			},
-		},
-	}
+	cliCfg := getClientConfig(config, logger, m, urls)
 
 	cm, err := autopaho.NewConnection(ctx, cliCfg)
 	if err != nil {
@@ -161,6 +112,7 @@ func New(config *Config, logger Logger, metrics Metrics) *MQTT {
 	if cm != nil {
 		waitCtx, waitCancel := context.WithTimeout(ctx, connectionTimeout)
 		defer waitCancel()
+
 		_ = cm.AwaitConnection(waitCtx)
 	}
 
@@ -174,6 +126,7 @@ func (m *MQTT) Subscribe(ctx context.Context, topic string) (*pubsub.Message, er
 
 	waitCtx, cancel := context.WithTimeout(ctx, connectionTimeout)
 	defer cancel()
+
 	if err := m.cm.AwaitConnection(waitCtx); err != nil {
 		return nil, errClientNotConnected
 	}
@@ -190,10 +143,10 @@ func (m *MQTT) Subscribe(ctx context.Context, topic string) (*pubsub.Message, er
 				{Topic: topic, QoS: m.config.QoS},
 			},
 		})
-
 		if err != nil {
 			m.mu.Unlock()
 			m.logger.Errorf("error getting a message from MQTT, error: %v", err)
+
 			return nil, err
 		}
 
@@ -217,8 +170,10 @@ func (m *MQTT) Query(ctx context.Context, query string, args ...any) ([]byte, er
 	if m.cm == nil {
 		return nil, errClientNotConnected
 	}
-	waitCtx, cancelPing := context.WithTimeout(ctx, 2*time.Second)
+
+	waitCtx, cancelPing := context.WithTimeout(ctx, connectionTimeout)
 	defer cancelPing()
+
 	if err := m.cm.AwaitConnection(waitCtx); err != nil {
 		return nil, errClientNotConnected
 	}
@@ -237,8 +192,9 @@ func (m *MQTT) Query(ctx context.Context, query string, args ...any) ([]byte, er
 	}
 
 	defer func() {
-		unsubCtx, cancelUnsub := context.WithTimeout(context.Background(), 2*time.Second)
+		unsubCtx, cancelUnsub := context.WithTimeout(context.Background(), connectionTimeout)
 		defer cancelUnsub()
+
 		_, err := m.cm.Unsubscribe(unsubCtx, &paho.Unsubscribe{Topics: []string{query}})
 		if err != nil {
 			m.logger.Warnf("Query: timed out or error unsubscribing from topic %s: %v", query, err)
@@ -281,7 +237,6 @@ func (m *MQTT) Publish(ctx context.Context, topic string, message []byte) error 
 			User: userProps,
 		},
 	})
-
 	if err != nil {
 		m.logger.Errorf("error while publishing message, error: %v", err)
 		return err
@@ -340,7 +295,6 @@ func (m *MQTT) CreateTopic(ctx context.Context, topic string) error {
 		Retain:  false,
 		Payload: []byte("topic creation"),
 	})
-
 	if err != nil {
 		m.logger.Errorf("unable to create topic '%s', error: %v", topic, err)
 		return err
@@ -376,6 +330,7 @@ func (m *MQTT) SubscribeWithFunction(topic string, subscribeFunc SubscribeFunc) 
 		if pr.Packet.Topic == topic || topicMatch(topic, pr.Packet.Topic) {
 			return handler(pr)
 		}
+
 		return false, nil
 	})
 	m.mu.Unlock()
@@ -388,7 +343,6 @@ func (m *MQTT) SubscribeWithFunction(topic string, subscribeFunc SubscribeFunc) 
 			{Topic: topic, QoS: 1}, // default was 1 in previous implementation
 		},
 	})
-
 	if err != nil {
 		return err
 	}

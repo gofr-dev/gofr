@@ -12,7 +12,7 @@ import (
 	"go.opentelemetry.io/otel/trace"
 )
 
-func setupTestTracer(t *testing.T) *sdktrace.TracerProvider {
+func setupTestTracer(t *testing.T) {
 	t.Helper()
 
 	tp := sdktrace.NewTracerProvider()
@@ -22,8 +22,6 @@ func setupTestTracer(t *testing.T) *sdktrace.TracerProvider {
 	t.Cleanup(func() {
 		_ = tp.Shutdown(t.Context())
 	})
-
-	return tp
 }
 
 func Test_userPropertyCarrier_GetSetKeys(t *testing.T) {
@@ -37,7 +35,7 @@ func Test_userPropertyCarrier_GetSetKeys(t *testing.T) {
 	// Test Get
 	assert.Equal(t, "value1", carrier.Get("key1"))
 	assert.Equal(t, "value2", carrier.Get("key2"))
-	assert.Equal(t, "", carrier.Get("nonexistent"))
+	assert.Empty(t, carrier.Get("nonexistent"))
 
 	// Test Keys
 	keys := carrier.Keys()
@@ -56,7 +54,7 @@ func Test_userPropertyCarrier_GetSetKeys(t *testing.T) {
 func Test_userPropertyCarrier_NilProps(t *testing.T) {
 	carrier := &userPropertyCarrier{props: nil}
 
-	assert.Equal(t, "", carrier.Get("key"))
+	assert.Empty(t, carrier.Get("key"))
 	assert.Nil(t, carrier.Keys())
 
 	// Set on nil should not panic

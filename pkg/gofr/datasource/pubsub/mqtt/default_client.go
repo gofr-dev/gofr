@@ -7,11 +7,8 @@ import (
 	"sync"
 
 	"github.com/eclipse/paho.golang/autopaho"
-	"github.com/eclipse/paho.golang/paho"
 	"github.com/google/uuid"
 )
-
-const backoffMultiplier = 2
 
 func getDefaultClient(config *Config, logger Logger, metrics Metrics) *MQTT {
 	var (
@@ -45,6 +42,7 @@ func getDefaultClient(config *Config, logger Logger, metrics Metrics) *MQTT {
 	logger.Debugf("connecting to default MQTT at '%v:%v' with clientID '%v'", host, port, clientID)
 
 	var urls []*url.URL
+
 	serverURL, err := url.Parse("tcp://" + host + ":" + strconv.Itoa(port))
 	if err != nil {
 		logger.Errorf("invalid MQTT URL: %v", err)
@@ -52,57 +50,7 @@ func getDefaultClient(config *Config, logger Logger, metrics Metrics) *MQTT {
 		urls = append(urls, serverURL)
 	}
 
-	cliCfg := autopaho.ClientConfig{
-		ServerUrls:                    urls,
-		KeepAlive:                     uint16(config.KeepAlive.Seconds()),
-		ConnectUsername:               config.Username,
-		ConnectPassword:               []byte(config.Password),
-		CleanStartOnInitialConnection: true,
-		SessionExpiryInterval:         0,
-		OnConnectionUp: func(cm *autopaho.ConnectionManager, _ *paho.Connack) {
-			logger.Infof("connected to MQTT at '%v:%v' with clientID '%v'", config.Hostname, config.Port, config.ClientID)
-
-			// Resubscribe to all topics
-			m.mu.RLock()
-			defer m.mu.RUnlock()
-
-			for topic := range m.subscriptions {
-				_, subErr := cm.Subscribe(context.Background(), &paho.Subscribe{
-					Subscriptions: []paho.SubscribeOptions{
-						{Topic: topic, QoS: config.QoS},
-					},
-				})
-				if subErr != nil {
-					logger.Debugf("failed to resubscribe to topic %s: %v", topic, subErr)
-				} else {
-					logger.Debugf("resubscribed to topic %s successfully", topic)
-				}
-			}
-		},
-		OnConnectError: func(err error) {
-			logger.Errorf("could not connect to MQTT at '%v:%v', error: %v", config.Hostname, config.Port, err)
-		},
-		ClientConfig: paho.ClientConfig{
-			ClientID: config.ClientID,
-			OnPublishReceived: []func(paho.PublishReceived) (bool, error){
-				func(pr paho.PublishReceived) (bool, error) {
-					// Route to query handlers if any
-					m.mu.RLock()
-					for _, handler := range m.queryHandlers {
-						handled, handlerErr := handler(pr)
-						if handled || handlerErr != nil {
-							m.mu.RUnlock()
-							return handled, handlerErr
-						}
-					}
-					m.mu.RUnlock()
-
-					// Route to normal subscriptions
-					return m.handlePublishReceived(pr)
-				},
-			},
-		},
-	}
+	cliCfg := getClientConfig(config, logger, m, urls)
 
 	cm, err := autopaho.NewConnection(ctx, cliCfg)
 	if err != nil {
