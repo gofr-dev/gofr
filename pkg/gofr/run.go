@@ -17,6 +17,10 @@ func (a *App) Run() {
 	if a.cmd != nil {
 		a.cmd.Run(a.container)
 
+		if a.container != nil {
+			_ = a.container.ShutdownMetrics(context.Background())
+		}
+
 		if closer, ok := a.container.Logger.(io.Closer); ok {
 			closer.Close()
 		}

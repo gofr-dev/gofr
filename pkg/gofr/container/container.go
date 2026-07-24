@@ -22,6 +22,7 @@ import (
 
 	_ "github.com/go-sql-driver/mysql" // This is required to be blank import
 	"go.opentelemetry.io/otel"
+	metricSdk "go.opentelemetry.io/otel/sdk/metric"
 
 	"gofr.dev/pkg/gofr/ai"
 	"gofr.dev/pkg/gofr/config"
@@ -55,9 +56,10 @@ type Container struct {
 	appName    string
 	appVersion string
 
-	Services       map[string]service.HTTP
-	metricsManager metrics.Manager
-	PubSub         pubsub.Client
+	Services        map[string]service.HTTP
+	metricsManager  metrics.Manager
+	metricsProvider *metricSdk.MeterProvider
+	PubSub          pubsub.Client
 
 	WSManager *websocket.Manager
 
@@ -127,7 +129,10 @@ func (c *Container) Create(conf config.Config) {
 
 	c.Logger.Debug("Container is being created")
 
-	c.metricsManager = metrics.NewMetricsManager(exporters.Prometheus(c.GetAppName(), c.GetAppVersion()), c.Logger)
+	metricsCfg := metricsExporterConfig(conf, c.GetAppName(), c.GetAppVersion())
+	mp, meter := exporters.Build(context.Background(), &metricsCfg, c.Logger)
+	c.metricsProvider = mp
+	c.metricsManager = metrics.NewMetricsManager(meter, c.Logger)
 
 	exporters.SendFrameworkStartupTelemetry(c.GetAppName(), c.GetAppVersion())
 
@@ -160,6 +165,17 @@ func (c *Container) createPubSub(conf config.Config) {
 	case "REDIS":
 		c.createRedisPubSub(conf)
 	}
+}
+
+// ShutdownMetrics flushes pending metrics and shuts down the metrics provider.
+// It is safe to call when no provider was configured. Push exporters (e.g. OTLP)
+// rely on this to emit their final window before the process exits.
+func (c *Container) ShutdownMetrics(ctx context.Context) error {
+	if c.metricsProvider == nil {
+		return nil
+	}
+
+	return errors.Join(c.metricsProvider.ForceFlush(ctx), c.metricsProvider.Shutdown(ctx))
 }
 
 func (c *Container) Close() error {
