@@ -17,21 +17,36 @@ const (
 // metricsExporterConfig resolves the METRICS_* configuration into an
 // exporters.Config. METRICS_PORT is handled separately (it controls the pull
 // server), so it is intentionally absent here.
-func metricsExporterConfig(conf config.Config, appName, appVersion string) exporters.Config {
+//
+// METRICS_INSECURE defaults to false (secure by default, matching the OTel
+// SDK): a schemeless METRICS_URL (host:port) connects over TLS unless
+// METRICS_INSECURE=true is set explicitly. A METRICS_URL with an explicit
+// http:// or https:// scheme derives security from the scheme instead,
+// regardless of METRICS_INSECURE (see exporters/otlp.go).
+func metricsExporterConfig(conf config.Config, appName, appVersion string, logger exporters.Logger) exporters.Config {
 	interval := defaultMetricsExportInterval
 
 	if v := conf.Get("METRICS_EXPORT_INTERVAL"); v != "" {
 		if n, err := strconv.Atoi(v); err == nil && n > 0 {
 			interval = n
+		} else if logger != nil {
+			logger.Warnf("invalid METRICS_EXPORT_INTERVAL %q; defaulting to %ds", v, defaultMetricsExportInterval)
 		}
 	}
 
-	insecure := true
+	insecure := false
 
 	if v := conf.Get("METRICS_INSECURE"); v != "" {
 		if b, err := strconv.ParseBool(v); err == nil {
 			insecure = b
 		}
+	}
+
+	headers := metricsHeaders(conf)
+
+	if insecure && len(headers) > 0 && logger != nil {
+		logger.Warnf("METRICS_INSECURE=true with credentials/headers configured: " +
+			"headers (including auth credentials) will be sent in plaintext")
 	}
 
 	return exporters.Config{
@@ -42,7 +57,7 @@ func metricsExporterConfig(conf config.Config, appName, appVersion string) expor
 		Protocol:    conf.GetOrDefault("METRICS_PROTOCOL", "grpc"),
 		Interval:    time.Duration(interval) * time.Second,
 		Temporality: conf.GetOrDefault("METRICS_TEMPORALITY", "cumulative"),
-		Headers:     metricsHeaders(conf),
+		Headers:     headers,
 		Insecure:    insecure,
 	}
 }

@@ -129,7 +129,7 @@ func (c *Container) Create(conf config.Config) {
 
 	c.Logger.Debug("Container is being created")
 
-	metricsCfg := metricsExporterConfig(conf, c.GetAppName(), c.GetAppVersion())
+	metricsCfg := metricsExporterConfig(conf, c.GetAppName(), c.GetAppVersion(), c.Logger)
 	mp, meter := exporters.Build(context.Background(), &metricsCfg, c.Logger)
 	c.metricsProvider = mp
 	c.metricsManager = metrics.NewMetricsManager(meter, c.Logger)
