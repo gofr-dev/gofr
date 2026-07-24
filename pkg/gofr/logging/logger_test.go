@@ -8,6 +8,7 @@ import (
 	"os"
 	"os/exec"
 	"strings"
+	"sync"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -299,4 +300,167 @@ func TestNewFileLogger_Close(t *testing.T) {
 	// verify that subsequent Close calls do not panic
 	err = closer.Close()
 	assert.ErrorIs(t, err, os.ErrClosed)
+}
+
+// newBufLogger builds a JSON-mode logger writing to out (isTerminal=false).
+func newBufLogger(out io.Writer) *logger {
+	return &logger{level: DEBUG, normalOut: out, errorOut: out}
+}
+
+// wireLog decodes a JSON log line for assertions. It mirrors the production
+// logEntry but types level as a string, because Level.MarshalJSON emits the
+// level name ("INFO") and there is no matching UnmarshalJSON to read it back
+// into a Level. Decoding here is exactly what an external log consumer does.
+type wireLog struct {
+	Level       string `json:"level"`
+	Message     any    `json:"message"`
+	TraceID     string `json:"trace_id"`
+	GofrVersion string `json:"gofrVersion"`
+}
+
+// TestLogger_JSONWireFormat_Unchanged asserts the pooled-buffer write path
+// produces the same JSON shape as before: a single object per line, trailing
+// newline, with level/message/gofrVersion fields intact.
+func TestLogger_JSONWireFormat_Unchanged(t *testing.T) {
+	buf := &bytes.Buffer{}
+	l := newBufLogger(buf)
+
+	l.Info("request handled successfully")
+
+	out := buf.String()
+
+	require.True(t, strings.HasPrefix(out, "{"), "line must be a JSON object")
+	require.True(t, strings.HasSuffix(out, "}\n"), "line must end with a single newline")
+	require.Equal(t, 1, strings.Count(out, "\n"), "exactly one trailing newline, no double newline")
+
+	var e wireLog
+	require.NoError(t, json.Unmarshal([]byte(out), &e))
+	assert.Equal(t, "INFO", e.Level)
+	assert.Equal(t, "request handled successfully", e.Message)
+	assert.NotEmpty(t, e.GofrVersion, "gofrVersion field must still be populated")
+}
+
+// TestLogger_Infof_Unchanged verifies the formatted path is unaffected.
+func TestLogger_Infof_Unchanged(t *testing.T) {
+	buf := &bytes.Buffer{}
+	l := newBufLogger(buf)
+
+	l.Infof("handled %s in %d us", "GET /users", 1234)
+
+	var e wireLog
+	require.NoError(t, json.Unmarshal(buf.Bytes(), &e))
+	assert.Equal(t, "handled GET /users in 1234 us", e.Message)
+}
+
+// syncWriter is a concurrency-safe io.Writer, matching production where the
+// logger's sink is an *os.File (whose Write is safe for concurrent use).
+type syncWriter struct {
+	mu  sync.Mutex
+	buf bytes.Buffer
+}
+
+func (w *syncWriter) Write(p []byte) (int, error) {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+
+	return w.buf.Write(p)
+}
+
+func (w *syncWriter) String() string {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+
+	return w.buf.String()
+}
+
+// TestLogger_ConcurrentWrites_NoInterleave stresses concurrent logging: many
+// goroutines share one logger writing to one concurrency-safe sink. Every
+// emitted line must remain a well-formed, complete JSON object — proof that a
+// per-call encoder does not corrupt or interleave output when the sink is safe.
+func TestLogger_ConcurrentWrites_NoInterleave(t *testing.T) {
+	buf := &syncWriter{}
+	l := newBufLogger(buf)
+
+	const goroutines, perG = 50, 200
+
+	var wg sync.WaitGroup
+
+	wg.Add(goroutines)
+
+	for g := 0; g < goroutines; g++ {
+		go func() {
+			defer wg.Done()
+
+			for i := 0; i < perG; i++ {
+				l.Info("msg")
+			}
+		}()
+	}
+
+	wg.Wait()
+
+	lines := strings.Split(strings.TrimRight(buf.String(), "\n"), "\n")
+	require.Len(t, lines, goroutines*perG, "no lines lost or merged")
+
+	for i, line := range lines {
+		var e wireLog
+		require.NoErrorf(t, json.Unmarshal([]byte(line), &e), "line %d is not valid JSON: %q", i, line)
+		assert.Equal(t, "msg", e.Message)
+	}
+}
+
+// TestExtractTraceID_FastPath_NoMarker confirms the zero-alloc fast path
+// returns the args slice untouched when no trace marker is present.
+func TestExtractTraceID_FastPath_NoMarker(t *testing.T) {
+	args := []any{"a", 1, map[string]any{"k": "v"}}
+
+	tid, filtered := extractTraceIDAndFilterArgs(args)
+
+	assert.Empty(t, tid)
+	assert.Equal(t, args, filtered)
+}
+
+// TestExtractTraceID_SlowPath_Marker confirms the marker is extracted and
+// stripped exactly as before, preserving the __trace_id__ contract.
+func TestExtractTraceID_SlowPath_Marker(t *testing.T) {
+	args := []any{"a", map[string]any{"__trace_id__": "abc123"}, "b"}
+
+	tid, filtered := extractTraceIDAndFilterArgs(args)
+
+	assert.Equal(t, "abc123", tid)
+	assert.Equal(t, []any{"a", "b"}, filtered, "marker map must be filtered out of the message args")
+}
+
+// newBenchLogger builds a logger writing to out with the JSON (non-terminal)
+// path, matching production behavior where stdout is not a TTY.
+func newBenchLogger(out io.Writer) *logger {
+	return &logger{
+		level:     INFO,
+		normalOut: out,
+		errorOut:  out,
+	}
+}
+
+// BenchmarkLoggerInfoJSON measures the single-string JSON log hot path.
+func BenchmarkLoggerInfoJSON(b *testing.B) {
+	l := newBenchLogger(io.Discard)
+
+	b.ReportAllocs()
+	b.ResetTimer()
+
+	for i := 0; i < b.N; i++ {
+		l.Info("request handled successfully")
+	}
+}
+
+// BenchmarkLoggerInfofJSON measures the formatted JSON log hot path.
+func BenchmarkLoggerInfofJSON(b *testing.B) {
+	l := newBenchLogger(io.Discard)
+
+	b.ReportAllocs()
+	b.ResetTimer()
+
+	for i := 0; i < b.N; i++ {
+		l.Infof("handled %s in %d us", "GET /users", 1234)
+	}
 }
