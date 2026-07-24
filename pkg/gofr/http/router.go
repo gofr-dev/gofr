@@ -9,6 +9,7 @@ import (
 	"path"
 	"path/filepath"
 	"strings"
+	"sync"
 
 	"github.com/gorilla/mux"
 
@@ -30,6 +31,31 @@ var errReadPermissionDenied = fmt.Errorf("file does not have read permission: %w
 type Router struct {
 	mux.Router
 	RegisteredRoutes *[]string
+
+	// useTrie selects the O(path) trie matcher (GOFR_ROUTER=trie) over mux's
+	// default O(n) linear scan. When false, ServeHTTP delegates to mux exactly
+	// as before, so the default behavior is byte-for-byte unchanged.
+	useTrie bool
+	// idx is the trie index. It is built once, lazily, on the first request,
+	// from the routes registered up to that point. This is correct for GoFr's
+	// lifecycle: every route is registered during startup (app.GET/POST/...,
+	// the GraphQL route, the static/catch-all handlers) before the server
+	// accepts its first request, and GoFr does not add routes afterwards. A
+	// route registered after the first request would not be reflected in the
+	// trie index — a deliberate trade for a lock-free steady state, matching
+	// GoFr's static-routing model. buildIdx guards that one-time build.
+	idx      *routeIndex
+	buildIdx sync.Once
+	// mws mirrors the middleware chain registered via Use, so the trie matcher
+	// can apply it itself when it bypasses mux's ServeHTTP. In mux mode it is
+	// unused (mux owns the chain) but kept in sync, costing nothing.
+	//
+	// Invariant: every middleware MUST be registered through (*Router).Use (or
+	// UseMiddleware, which calls it). A direct call to the embedded
+	// mux.Router.Use would bypass this slice and be silently dropped in trie
+	// mode. All framework registration paths go through (*Router).Use, and the
+	// MiddlewareParity differential test guards the resulting behavior.
+	mws []mux.MiddlewareFunc
 }
 
 type Middleware func(handler http.Handler) http.Handler
@@ -41,43 +67,148 @@ func NewRouter() *Router {
 	r := &Router{
 		Router:           *muxRouter,
 		RegisteredRoutes: &routes,
+		useTrie:          strings.EqualFold(os.Getenv("GOFR_ROUTER"), "trie"),
 	}
-
-	r.Router = *muxRouter
 
 	return r
 }
 
 // ServeHTTP implements [http.Handler] interface with path normalization.
 func (rou *Router) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	// Normalize the path before routing to handle double slashes
+	normalizePath(r)
+
+	if rou.useTrie {
+		rou.serveTrie(w, r)
+
+		return
+	}
+
+	// Delegate to the underlying Gorilla Mux router.
+	rou.Router.ServeHTTP(w, r)
+}
+
+// normalizePath canonicalizes r.URL.Path in place so routing sees a clean path
+// (no "//", "/.", "/.." or non-root trailing slash), matching the behavior both
+// the mux and trie matchers rely on.
+func normalizePath(r *http.Request) {
 	originalPath := r.URL.Path
 
 	// Fast path: the vast majority of incoming paths are already canonical
 	// ("/users/42", "/api/v1/things"). Skip the path.Clean + string ops in
 	// that case so they only run for inputs that actually need normalizing.
-	if !isCleanPath(originalPath) {
-		normalizedPath := path.Clean(originalPath)
-
-		// path.Clean returns "." for empty paths, convert to "/" for HTTP routing
-		if normalizedPath == "." {
-			normalizedPath = "/"
-		}
-
-		// Ensure path starts with "/" for HTTP routing
-		normalizedPath = "/" + strings.TrimLeft(normalizedPath, "/")
-
-		// Only modify if path changed
-		if originalPath != normalizedPath {
-			r.URL.Path = normalizedPath
-			if r.URL.RawPath != "" {
-				r.URL.RawPath = normalizedPath
-			}
-		}
+	if isCleanPath(originalPath) {
+		return
 	}
 
-	// Delegate to the underlying Gorilla Mux router
-	rou.Router.ServeHTTP(w, r)
+	normalizedPath := path.Clean(originalPath)
+
+	// path.Clean returns "." for empty paths, convert to "/" for HTTP routing
+	if normalizedPath == "." {
+		normalizedPath = "/"
+	}
+
+	// Ensure path starts with "/" for HTTP routing
+	normalizedPath = "/" + strings.TrimLeft(normalizedPath, "/")
+
+	// Only modify if path changed
+	if originalPath != normalizedPath {
+		r.URL.Path = normalizedPath
+		if r.URL.RawPath != "" {
+			r.URL.RawPath = normalizedPath
+		}
+	}
+}
+
+// serveTrie handles a request using the trie matcher: it matches (delegating the
+// real decision to mux's Route.Match), restores the path params and route
+// template that mux's own ServeHTTP would have set, then runs the matched
+// handler through GoFr's middleware chain.
+//
+// The middleware chain wraps the matched handler ONLY. mux builds its chain
+// inside Match, guarded by MatchErr == nil, so it never wraps the NotFound or
+// MethodNotAllowed handlers — a 404/405 request is served by mux without the
+// Tracer/Logging/CORS/Metrics chain running. serveTrie mirrors that exactly, so
+// unmatched requests are not logged, measured, or CORS-answered (and the metrics
+// path label is never populated from a raw, unbounded request path).
+func (rou *Router) serveTrie(w http.ResponseWriter, r *http.Request) {
+	rou.buildIdx.Do(func() {
+		idx := newRouteIndex()
+		idx.build(&rou.Router)
+		rou.idx = idx
+	})
+
+	var match mux.RouteMatch
+
+	if rou.idx.match(r, &match) && match.Handler != nil {
+		// Reinstate what mux.Router.ServeHTTP would have populated so that
+		// mux.Vars(r) (used by request.go and user handlers) and the route
+		// template (used by the tracer/metrics middleware) keep working.
+		if match.Vars != nil {
+			r = mux.SetURLVars(r, match.Vars)
+		}
+
+		if match.Route != nil {
+			if tmpl, err := match.Route.GetPathTemplate(); err == nil {
+				r = withRouteTemplate(r, tmpl)
+			}
+		}
+
+		composeMiddleware(rou.mws, match.Handler).ServeHTTP(w, r)
+
+		return
+	}
+
+	// Unmatched: serve mux's NotFound/MethodNotAllowed handler directly, WITHOUT
+	// the middleware chain — matching mux, which applies middleware only on a
+	// successful match.
+	if errors.Is(match.MatchErr, mux.ErrMethodMismatch) {
+		rou.methodNotAllowed().ServeHTTP(w, r)
+
+		return
+	}
+
+	rou.notFound().ServeHTTP(w, r)
+}
+
+// Use registers mux middlewares. It records them in GoFr's own chain — so the
+// trie matcher can apply them when it bypasses mux's ServeHTTP — and delegates
+// to the embedded mux router, leaving the default (mux) path unchanged. It
+// shadows mux.Router.Use for calls made on *Router.
+func (rou *Router) Use(mwf ...mux.MiddlewareFunc) {
+	rou.mws = append(rou.mws, mwf...)
+	rou.Router.Use(mwf...)
+}
+
+// notFound returns the handler mux would use for an unmatched route, honoring a
+// custom NotFoundHandler if one was set.
+func (rou *Router) notFound() http.Handler {
+	if rou.NotFoundHandler != nil {
+		return rou.NotFoundHandler
+	}
+
+	return http.NotFoundHandler()
+}
+
+// methodNotAllowed returns the handler mux would use when the path matches but
+// the method does not, honoring a custom MethodNotAllowedHandler if set.
+func (rou *Router) methodNotAllowed() http.Handler {
+	if rou.MethodNotAllowedHandler != nil {
+		return rou.MethodNotAllowedHandler
+	}
+
+	return http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusMethodNotAllowed)
+	})
+}
+
+// composeMiddleware wraps h with mws so that mws[0] is the outermost layer,
+// matching the order in which mux applies its middleware chain.
+func composeMiddleware(mws []mux.MiddlewareFunc, h http.Handler) http.Handler {
+	for i := len(mws) - 1; i >= 0; i-- {
+		h = mws[i](h)
+	}
+
+	return h
 }
 
 // isCleanPath reports whether p is already canonical — starts with "/", no
