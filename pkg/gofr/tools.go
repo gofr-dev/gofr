@@ -1,10 +1,12 @@
 package gofr
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"net/http"
 	"net/url"
 	"path"
@@ -27,6 +29,11 @@ const (
 	schemaKeyType    = "type"
 	schemaTypeString = "string"
 	schemaTypeObject = "object"
+
+	// methodQuery is the HTTP QUERY method (RFC 10008). Go's net/http has no such constant yet.
+	methodQuery = "QUERY"
+	// bodyKey is the tool argument that carries a QUERY request body (the query payload).
+	bodyKey = "body"
 
 	maxToolResponseBytes = 4 << 20 // cap a captured tool response at 4 MiB
 )
@@ -114,16 +121,17 @@ func (rt *routerTools) specFor(method, pathTemplate string) (ai.ToolSpec, bool) 
 		return ai.ToolSpec{}, false
 	}
 
-	// Only read-only handlers (GET/HEAD/OPTIONS) are exposed as tools; write handlers are never
+	// Only safe handlers are exposed as tools: read-only methods (GET/HEAD/OPTIONS) and QUERY
+	// (RFC 10008), which is safe and idempotent. Write handlers (POST/PUT/PATCH/DELETE) are never
 	// exposed, so an agent cannot mutate state through the MCP surface.
-	if !isReadOnlyMethod(method) {
+	if !isExposableMethod(method) {
 		return ai.ToolSpec{}, false
 	}
 
 	return ai.ToolSpec{
 		Name:        toolName(method, pathTemplate),
 		Description: method + " " + pathTemplate,
-		InputSchema: toolSchema(pathTemplate),
+		InputSchema: toolSchema(method, pathTemplate),
 		Access:      ai.ReadOnly,
 	}, true
 }
@@ -199,6 +207,13 @@ func isReadOnlyMethod(method string) bool {
 	}
 }
 
+// isExposableMethod reports whether a route's method may be exposed as an agent tool. Read-only
+// methods (GET/HEAD/OPTIONS) and QUERY (RFC 10008 — safe and idempotent, carrying its input in the
+// request body) qualify; write methods never do.
+func isExposableMethod(method string) bool {
+	return isReadOnlyMethod(method) || method == methodQuery
+}
+
 func toolName(method, pathTemplate string) string {
 	var b strings.Builder
 
@@ -216,24 +231,37 @@ func toolName(method, pathTemplate string) string {
 	return b.String()
 }
 
-// toolSchema builds the JSON Schema for a tool's arguments from the route's path parameters. A route
-// with no path parameters gets no schema (nil). Only read-only handlers become tools, so there is no
-// request body to describe.
-func toolSchema(pathTemplate string) json.RawMessage {
+// toolSchema builds the JSON Schema for a tool's arguments from the route's path parameters, plus a
+// required "body" object for QUERY tools (RFC 10008 carries the query in the request body). A route
+// with no path parameters and no body gets no schema (nil).
+func toolSchema(method, pathTemplate string) json.RawMessage {
 	params := pathParams(pathTemplate)
-	if len(params) == 0 {
+	needsBody := method == methodQuery
+
+	if len(params) == 0 && !needsBody {
 		return nil
 	}
 
 	props := map[string]any{}
+	required := make([]string, 0, len(params)+1)
+
 	for _, p := range params {
 		props[p] = map[string]string{schemaKeyType: schemaTypeString}
+		required = append(required, p) // path params are always required
+	}
+
+	if needsBody {
+		props[bodyKey] = map[string]any{
+			schemaKeyType: schemaTypeObject,
+			"description": "The QUERY request body (RFC 10008): the query payload sent to the endpoint.",
+		}
+		required = append(required, bodyKey)
 	}
 
 	schema := map[string]any{
 		schemaKeyType: schemaTypeObject,
 		"properties":  props,
-		"required":    params, // path params are always required
+		"required":    required,
 	}
 
 	out, _ := json.Marshal(schema)
@@ -279,6 +307,22 @@ func buildToolRequest(ctx context.Context, method, pathTemplate string, args jso
 		}
 	}
 
+	// QUERY tools carry the query payload in the request body; extract it before the remaining
+	// arguments are mapped to path/query so it is not double-counted as a query value.
+	var (
+		body    io.Reader = http.NoBody
+		hasBody bool
+	)
+
+	if method == methodQuery {
+		if raw, ok := fields[bodyKey]; ok {
+			delete(fields, bodyKey)
+
+			body = bytes.NewReader(raw)
+			hasBody = true
+		}
+	}
+
 	reqPath, query, err := splitArgs(pathTemplate, fields)
 	if err != nil {
 		return nil, err
@@ -289,13 +333,21 @@ func buildToolRequest(ctx context.Context, method, pathTemplate string, args jso
 		target += "?" + enc
 	}
 
-	// Read-only tools carry no request body.
-	return http.NewRequestWithContext(ctx, method, target, http.NoBody)
+	req, err := http.NewRequestWithContext(ctx, method, target, body)
+	if err != nil {
+		return nil, err
+	}
+
+	if hasBody {
+		req.Header.Set("Content-Type", "application/json")
+	}
+
+	return req, nil
 }
 
 // splitArgs maps a tool's arguments to a path and query string. Path parameters are substituted into
-// their route segment; every other argument becomes a query value. Only read-only tools are exposed,
-// so there is no request body.
+// their route segment; every other argument becomes a query value. For QUERY tools the body argument
+// is extracted by the caller before this runs, so only path and query values remain here.
 func splitArgs(pathTemplate string, fields map[string]json.RawMessage,
 ) (reqPath string, query url.Values, err error) {
 	params := make(map[string]bool)

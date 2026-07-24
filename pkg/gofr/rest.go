@@ -37,7 +37,7 @@ func (a *App) PATCH(pattern string, handler Handler) {
 // with 400; gofr does not enforce this automatically, so validate it in the handler
 // when required.
 func (a *App) QUERY(pattern string, handler Handler) {
-	a.add("QUERY", pattern, handler)
+	a.add(methodQuery, pattern, handler)
 }
 
 func (a *App) add(method, pattern string, h Handler) {
