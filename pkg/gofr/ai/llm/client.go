@@ -38,6 +38,7 @@ const (
 	maxErrBodyLen      = 512
 
 	chatCompletionsPath = "chat/completions"
+	embeddingsPath      = "embeddings"
 	modelsPath          = "models"
 
 	headerContentType   = "Content-Type"
@@ -50,6 +51,7 @@ const (
 var (
 	_ ai.Model          = (*Client)(nil)
 	_ ai.StreamingModel = (*Client)(nil)
+	_ ai.Embedder       = (*Client)(nil)
 	_ ai.Descriptor     = (*Client)(nil)
 )
 
@@ -181,19 +183,9 @@ func (c *Client) Chat(ctx context.Context, messages []ai.Message, opts ...ai.Opt
 		return nil, err
 	}
 
-	resp, err := c.post(ctx, chatCompletionsPath, body)
+	data, err := c.postJSON(ctx, chatCompletionsPath, body)
 	if err != nil {
 		return nil, err
-	}
-	defer drain(resp)
-
-	data, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return nil, fmt.Errorf("%w: %w", errRequestFailed, err)
-	}
-
-	if !isSuccess(resp.StatusCode) {
-		return nil, c.statusError(resp.StatusCode, data)
 	}
 
 	var cr chatResponse
@@ -212,6 +204,43 @@ func (c *Client) Chat(ctx context.Context, messages []ai.Message, opts ...ai.Opt
 		// the usage they reported (the request was likely still billed) alongside the error so it is
 		// recorded against the error status instead of being silently dropped.
 		return &ai.Response{Usage: out.Usage}, fmt.Errorf("%w: %s", errProvider, cr.Error.Message)
+	}
+
+	return out, nil
+}
+
+// Embed satisfies ai.Embedder: it posts the input texts to the OpenAI-compatible /embeddings
+// endpoint and returns one vector per input, in the same order. It rides the same instrumented
+// HTTP service, retry and error handling as Chat.
+func (c *Client) Embed(ctx context.Context, input []string, _ ...ai.Option) (*ai.EmbeddingResponse, error) {
+	if c.svc == nil {
+		return nil, errNotConnected
+	}
+
+	body, err := json.Marshal(embeddingsRequest{Model: c.Model, Input: input})
+	if err != nil {
+		return nil, fmt.Errorf("%w: %w", errEncodeRequest, err)
+	}
+
+	data, err := c.postJSON(ctx, embeddingsPath, body)
+	if err != nil {
+		return nil, err
+	}
+
+	var er embeddingsResponse
+	if err := json.Unmarshal(data, &er); err != nil {
+		return nil, fmt.Errorf("%w: %w", errDecodeResponse, err)
+	}
+
+	if er.Error != nil {
+		return nil, fmt.Errorf("%w: %s", errProvider, er.Error.Message)
+	}
+
+	out := &ai.EmbeddingResponse{Model: er.Model, Usage: mapUsage(&c.UsageFields, er.Usage)}
+	out.Embeddings = make([][]float32, len(er.Data))
+
+	for i := range er.Data {
+		out.Embeddings[i] = er.Data[i].Embedding
 	}
 
 	return out, nil
@@ -332,6 +361,28 @@ func (c *Client) post(ctx context.Context, path string, body []byte) (*http.Resp
 	}
 
 	return nil, errRequestFailed
+}
+
+// postJSON sends a JSON body to path and returns the raw success-response bytes, mapping transport,
+// body-read and non-2xx status failures to errors. Decoding the success body is left to the caller,
+// so Chat and Embed share it; Stream reads its body incrementally and does not.
+func (c *Client) postJSON(ctx context.Context, path string, body []byte) ([]byte, error) {
+	resp, err := c.post(ctx, path, body)
+	if err != nil {
+		return nil, err
+	}
+	defer drain(resp)
+
+	data, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("%w: %w", errRequestFailed, err)
+	}
+
+	if !isSuccess(resp.StatusCode) {
+		return nil, c.statusError(resp.StatusCode, data)
+	}
+
+	return data, nil
 }
 
 func shouldRetry(ctx context.Context, resp *http.Response, err error) bool {

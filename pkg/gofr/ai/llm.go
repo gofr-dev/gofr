@@ -64,6 +64,29 @@ func (l *llm) Stream(ctx context.Context, messages []Message, opts ...Option) (S
 	return &instrumentedStream{Streamer: s, rec: rec}, nil
 }
 
+// Embed turns text into embedding vectors, recording the call with the same observability as Chat
+// and Stream. It returns ErrEmbedNotSupported when the underlying provider does not implement the
+// Embedder capability (e.g. a chat-only model), mirroring how Stream reports ErrStreamNotSupported.
+func (l *llm) Embed(ctx context.Context, input []string, opts ...Option) (*EmbeddingResponse, error) {
+	rec := StartCall(ctx, &CallInfo{Deps: l.deps, Provider: l.providerLabel, Model: l.modelLabel, Op: opEmbed})
+
+	e, ok := l.model.(Embedder)
+	if !ok {
+		rec.Finish(Usage{}, ErrEmbedNotSupported)
+		return nil, ErrEmbedNotSupported
+	}
+
+	resp, err := e.Embed(rec.Context(), input, opts...)
+	if err != nil {
+		rec.Finish(Usage{}, err)
+		return nil, err
+	}
+
+	rec.Finish(resp.Usage, nil)
+
+	return resp, nil
+}
+
 func (l *llm) Tools() Tools {
 	if l.deps.Tools != nil {
 		return l.deps.Tools
