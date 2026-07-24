@@ -98,6 +98,7 @@ named one) and its metrics carry the model's own `provider`/`model` labels.
 - `Generate(ctx, prompt, ...opts)` — a convenience over a single-message chat.
 - `Chat(ctx, messages, ...opts)` — a multi-turn conversation using `ai.Message` values.
 - `Stream(ctx, messages, ...opts)` — an incremental token stream (see below).
+- `Embed(ctx, input, ...opts)` — turn text into embedding vectors for semantic search or memory (see below).
 - `Tools()` — the service's own handlers as agent-callable tools (see [Building AI Agents](/docs/advanced-guide/mcp)).
 
 Options are applied per call: `ai.WithTemperature(0.2)`, `ai.WithMaxTokens(512)`, `ai.WithTools(...)`.
@@ -151,6 +152,33 @@ if tc, ok := stream.(ai.ToolCallStreamer); ok {
 	for _, call := range tc.ToolCalls() { /* run each assembled tool call */ }
 }
 ```
+
+## Embeddings
+
+`ctx.LLM().Embed` turns text into vectors — the primitive behind semantic search and agent memory:
+embed text on write, embed a query on read, and rank stored vectors by similarity. It rides the same
+tracing and token metrics as `Chat`.
+
+Embeddings are usually a *different* model from your chat model, so register one with a name and
+select it per call:
+
+```go
+app.AddLLM(&llm.Client{Provider: llm.OpenAI, Model: "gpt-4o-mini"})                                     // chat (default)
+app.AddLLM(&llm.Client{Provider: llm.OpenAI, Model: "text-embedding-3-small"}, gofr.WithName("embed")) // embeddings
+```
+
+```go
+resp, err := c.LLM("embed").Embed(c, []string{"the quick brown fox", "a fast auburn fox"})
+if err != nil {
+	return nil, err
+}
+
+vectors := resp.Embeddings // one []float32 per input, in order; resp.Usage carries the prompt tokens
+```
+
+Not every model can embed — a chat-only model has none. `Embed` reports that gracefully with
+`ai.ErrEmbedNotSupported` (mirroring how `Stream` returns `ai.ErrStreamNotSupported`), so a
+misconfiguration fails clearly instead of panicking.
 
 ## Built-in Observability
 

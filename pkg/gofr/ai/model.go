@@ -25,6 +25,26 @@ type StreamingModel interface {
 	Stream(ctx context.Context, messages []Message, opts ...Option) (Streamer, error)
 }
 
+// Embedder is the model-side optional capability a provider implements to turn text into embedding
+// vectors — the peer of StreamingModel for streaming. It is not every provider's capability (a
+// chat-only model has no embeddings, an embedding model has no chat), so callers do not implement or
+// assert it directly: they call LLM.Embed, which reports ErrEmbedNotSupported when the underlying
+// provider does not implement Embedder. Embeddings power semantic search and agent memory: embed
+// text on write, embed a query on read, and rank stored vectors by similarity.
+type Embedder interface {
+	Embed(ctx context.Context, input []string, opts ...Option) (*EmbeddingResponse, error)
+}
+
+// EmbeddingResponse is the result of an Embed call.
+type EmbeddingResponse struct {
+	// Embeddings holds one vector per input string, in the same order as the input.
+	Embeddings [][]float32
+	// Usage reports token consumption; embeddings bill input (prompt) tokens only.
+	Usage Usage
+	// Model is the resolved model that produced the vectors.
+	Model string
+}
+
 // Descriptor is an optional interface a provider implements to report distinct provider and model
 // labels for metrics and traces. Without it, Name() is used for both labels. The methods are named
 // ProviderName/ModelName (not Provider/Model) so a provider can expose Provider and Model as
@@ -34,14 +54,17 @@ type Descriptor interface {
 	ModelName() string
 }
 
-// LLM is what ctx.LLM() returns. Like Model it is frozen: new capabilities are added through new
-// optional interfaces retrieved by type assertion, never by adding methods here, so hand-written
-// fakes and third-party wrappers keep compiling across minor versions. Generate is a convenience
-// over a single-message Chat.
+// LLM is what ctx.LLM() returns — a thin, instrumented wrapper over a provider Model. Alongside the
+// universal Chat/Generate, it declares the optional capability methods Stream and Embed directly,
+// rather than behind a caller-side type assertion, so every caller reaches them the same way; each
+// returns its *NotSupported error (ErrStreamNotSupported / ErrEmbedNotSupported) when the underlying
+// provider lacks that capability. Grow this only for a genuine new capability, gated the same
+// graceful way. Generate is a convenience over a single-message Chat.
 type LLM interface {
 	Model
 	Generate(ctx context.Context, prompt string, opts ...Option) (*Response, error)
 	Stream(ctx context.Context, messages []Message, opts ...Option) (Streamer, error)
+	Embed(ctx context.Context, input []string, opts ...Option) (*EmbeddingResponse, error)
 	Tools() Tools
 }
 

@@ -314,6 +314,10 @@ func (notConfiguredLLM) Stream(context.Context, []ai.Message, ...ai.Option) (ai.
 	return nil, ai.ErrLLMNotConfigured
 }
 
+func (notConfiguredLLM) Embed(context.Context, []string, ...ai.Option) (*ai.EmbeddingResponse, error) {
+	return nil, ai.ErrLLMNotConfigured
+}
+
 func (notConfiguredLLM) HealthCheck(context.Context) datasource.Health {
 	return datasource.Health{Status: datasource.StatusDown}
 }
