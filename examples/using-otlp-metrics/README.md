@@ -41,7 +41,8 @@ curl -XPOST localhost:9016/order
 ```
 
 Watch them arrive in the collector's logs, or browse Prometheus at
-`localhost:9090` (query `orders_processed`).
+`localhost:9090` (query `orders_processed`). If nothing shows up, confirm
+`METRICS_EXPORTER=otlp` is set — without it the app only serves the pull endpoint.
 
 ## Backend recipes (env only — no code changes)
 
