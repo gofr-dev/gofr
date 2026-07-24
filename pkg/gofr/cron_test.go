@@ -214,6 +214,14 @@ func TestCronTab_AddJob(t *testing.T) {
 	mocks.Metrics.EXPECT().NewCounter("app_cron_job_success", gomock.Any()).AnyTimes()
 	mocks.Metrics.EXPECT().NewCounter("app_cron_job_failures", gomock.Any()).AnyTimes()
 
+	// The "* * * * *" job can fire on a scheduler tick during or shortly after the test; its run
+	// emits runtime metrics from a background goroutine. Allow those calls so a late emission does
+	// not hit the mock as an unexpected call and panic ("Fail in goroutine after test completed").
+	mocks.Metrics.EXPECT().RecordHistogram(gomock.Any(), "app_cron_job_duration", gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
+	mocks.Metrics.EXPECT().IncrementCounter(gomock.Any(), "app_cron_job_total", gomock.Any(), gomock.Any()).AnyTimes()
+	mocks.Metrics.EXPECT().IncrementCounter(gomock.Any(), "app_cron_job_success", gomock.Any(), gomock.Any()).AnyTimes()
+	mocks.Metrics.EXPECT().IncrementCounter(gomock.Any(), "app_cron_job_failures", gomock.Any(), gomock.Any()).AnyTimes()
+
 	c := NewCron(mockContainer)
 
 	for _, tc := range testCases {
