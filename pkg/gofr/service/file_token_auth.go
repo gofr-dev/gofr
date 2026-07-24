@@ -301,3 +301,18 @@ func (d *fileTokenDecorator) DeleteWithHeaders(ctx context.Context, path string,
 
 	return d.HTTP.DeleteWithHeaders(ctx, path, body, headers)
 }
+
+func (d *fileTokenDecorator) Query(ctx context.Context, path string, queryParams map[string]any,
+	body []byte) (*http.Response, error) {
+	return d.QueryWithHeaders(ctx, path, queryParams, body, nil)
+}
+
+func (d *fileTokenDecorator) QueryWithHeaders(ctx context.Context, path string, queryParams map[string]any,
+	body []byte, headers map[string]string) (*http.Response, error) {
+	headers, err := d.inject(headers)
+	if err != nil {
+		return nil, err
+	}
+
+	return d.HTTP.QueryWithHeaders(ctx, path, queryParams, body, headers)
+}

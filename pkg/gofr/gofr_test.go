@@ -12,6 +12,7 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -1867,4 +1868,56 @@ func Test_HTTPMethods(t *testing.T) {
 			assert.True(t, a.httpRegistered)
 		})
 	}
+}
+
+// Test_QUERY_Registration verifies that app.QUERY registers a route for the HTTP
+// QUERY method (RFC 10008) and that the handler can read the request body via Bind.
+func Test_QUERY_Registration(t *testing.T) {
+	port := testutil.GetFreePort(t)
+
+	c := container.NewContainer(config.NewMockConfig(nil))
+
+	app := &App{
+		httpServer: &httpServer{
+			router: gofrHTTP.NewRouter(),
+			port:   port,
+		},
+		container: c,
+		Config: config.NewMockConfig(map[string]string{
+			"REQUEST_TIMEOUT":       "5",
+			"SHUTDOWN_GRACE_PERIOD": "1s",
+		}),
+	}
+
+	app.QUERY("/search", func(ctx *Context) (any, error) {
+		body := struct {
+			Filter string `json:"filter"`
+		}{}
+		if err := ctx.Bind(&body); err != nil {
+			return nil, err
+		}
+
+		return map[string]string{"filter": body.Filter}, nil
+	})
+
+	go app.Run()
+
+	time.Sleep(100 * time.Millisecond)
+
+	netClient := &http.Client{Timeout: 500 * time.Millisecond}
+
+	req, _ := http.NewRequestWithContext(t.Context(), "QUERY",
+		fmt.Sprintf("http://localhost:%d/search", port), strings.NewReader(`{"filter":"title"}`))
+	req.Header.Set("Content-Type", "application/json")
+
+	resp, err := netClient.Do(req)
+	require.NoError(t, err)
+
+	defer resp.Body.Close()
+
+	assert.Equal(t, http.StatusOK, resp.StatusCode)
+
+	respBody, err := io.ReadAll(resp.Body)
+	require.NoError(t, err)
+	assert.Contains(t, string(respBody), `"filter":"title"`)
 }

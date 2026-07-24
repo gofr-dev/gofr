@@ -28,6 +28,10 @@ func main() {
 	a.GET("/trace", TraceHandler)
 	a.GET("/mysql", MysqlHandler)
 
+	// QUERY (RFC 10008): a safe, idempotent method that carries the query in the
+	// request body. Read the body via ctx.Bind, the same as a POST.
+	a.QUERY("/search", SearchHandler)
+
 	// Run the application
 	a.Run()
 }
@@ -44,6 +48,20 @@ func HelloHandler(c *gofr.Context) (any, error) {
 
 func ErrorHandler(c *gofr.Context) (any, error) {
 	return nil, errors.New("some error occurred")
+}
+
+// SearchHandler demonstrates the HTTP QUERY method: the search criteria arrive in
+// the request body and are echoed back as the query result.
+func SearchHandler(c *gofr.Context) (any, error) {
+	criteria := struct {
+		Filter string `json:"filter"`
+	}{}
+
+	if err := c.Bind(&criteria); err != nil {
+		return nil, err
+	}
+
+	return map[string]string{"matched": criteria.Filter}, nil
 }
 
 func RedisHandler(c *gofr.Context) (any, error) {

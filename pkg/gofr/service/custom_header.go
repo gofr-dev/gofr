@@ -80,6 +80,18 @@ func (a *customHeader) DeleteWithHeaders(ctx context.Context, path string, body 
 	return a.HTTP.DeleteWithHeaders(ctx, path, body, headers)
 }
 
+func (a *customHeader) Query(ctx context.Context, path string, queryParams map[string]any, body []byte) (
+	*http.Response, error) {
+	return a.QueryWithHeaders(ctx, path, queryParams, body, nil)
+}
+
+func (a *customHeader) QueryWithHeaders(ctx context.Context, path string, queryParams map[string]any, body []byte,
+	headers map[string]string) (*http.Response, error) {
+	headers = setCustomHeader(headers, a.Headers)
+
+	return a.HTTP.QueryWithHeaders(ctx, path, queryParams, body, headers)
+}
+
 func setCustomHeader(headers, customHeader map[string]string) map[string]string {
 	if headers == nil {
 		headers = make(map[string]string)

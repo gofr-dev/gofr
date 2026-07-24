@@ -24,6 +24,10 @@ const (
 	metricLabelService = "service"
 )
 
+// methodQuery is the HTTP QUERY method (RFC 10008). Go's net/http does not yet
+// define an http.MethodQuery constant, so it is declared here.
+const methodQuery = "QUERY"
+
 type httpService struct {
 	*http.Client
 	trace.Tracer
@@ -76,6 +80,13 @@ type httpClient interface {
 	Delete(ctx context.Context, api string, body []byte) (*http.Response, error)
 	// DeleteWithHeaders performs an HTTP DELETE request with custom headers.
 	DeleteWithHeaders(ctx context.Context, api string, body []byte, headers map[string]string) (*http.Response, error)
+
+	// Query performs an HTTP QUERY request (RFC 10008). QUERY is a safe, idempotent
+	// method that carries the query in the request body.
+	Query(ctx context.Context, path string, queryParams map[string]any, body []byte) (*http.Response, error)
+	// QueryWithHeaders performs an HTTP QUERY request with custom headers.
+	QueryWithHeaders(ctx context.Context, path string, queryParams map[string]any, body []byte,
+		headers map[string]string) (*http.Response, error)
 }
 
 // NewHTTPService function creates a new instance of the httpService struct, which implements the HTTP interface.
@@ -154,6 +165,16 @@ func (h *httpService) Delete(ctx context.Context, path string, body []byte) (*ht
 
 func (h *httpService) DeleteWithHeaders(ctx context.Context, path string, body []byte, headers map[string]string) (*http.Response, error) {
 	return h.createAndSendRequest(ctx, http.MethodDelete, path, nil, body, headers)
+}
+
+func (h *httpService) Query(ctx context.Context, path string, queryParams map[string]any,
+	body []byte) (*http.Response, error) {
+	return h.QueryWithHeaders(ctx, path, queryParams, body, nil)
+}
+
+func (h *httpService) QueryWithHeaders(ctx context.Context, path string, queryParams map[string]any,
+	body []byte, headers map[string]string) (*http.Response, error) {
+	return h.createAndSendRequest(ctx, methodQuery, path, queryParams, body, headers)
 }
 
 func (h *httpService) createAndSendRequest(ctx context.Context, method string, path string,

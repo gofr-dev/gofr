@@ -182,6 +182,7 @@ func TestFileTokenAuthConfig_InjectsBearerHeaderAllVerbs(t *testing.T) {
 		{"PUT", func() (*http.Response, error) { return svc.Put(ctx, "", nil, nil) }},
 		{"PATCH", func() (*http.Response, error) { return svc.Patch(ctx, "", nil, nil) }},
 		{"DELETE", func() (*http.Response, error) { return svc.Delete(ctx, "", nil) }},
+		{"QUERY", func() (*http.Response, error) { return svc.Query(ctx, "", nil, nil) }},
 	}
 
 	for _, tc := range tests {

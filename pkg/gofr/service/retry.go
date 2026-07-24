@@ -100,6 +100,20 @@ func (rp *retryProvider) DeleteWithHeaders(ctx context.Context, path string, bod
 	})
 }
 
+func (rp *retryProvider) Query(ctx context.Context, path string, queryParams map[string]any, body []byte) (
+	*http.Response, error) {
+	return rp.doWithRetry(func() (*http.Response, error) {
+		return rp.HTTP.Query(ctx, path, queryParams, body)
+	})
+}
+
+func (rp *retryProvider) QueryWithHeaders(ctx context.Context, path string, queryParams map[string]any, body []byte,
+	headers map[string]string) (*http.Response, error) {
+	return rp.doWithRetry(func() (*http.Response, error) {
+		return rp.HTTP.QueryWithHeaders(ctx, path, queryParams, body, headers)
+	})
+}
+
 func (rp *retryProvider) doWithRetry(reqFunc func() (*http.Response, error)) (*http.Response, error) {
 	var (
 		resp *http.Response

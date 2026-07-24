@@ -1206,3 +1206,66 @@ func TestCircuitBreaker_SlowHealthCheckDoesNotBlock(t *testing.T) {
 	cb.mu.RUnlock()
 	assert.Equal(t, ClosedState, state, "circuit should be closed after successful recovery")
 }
+
+func TestHttpService_QuerySuccessRequests(t *testing.T) {
+	server := testServer()
+	defer server.Close()
+
+	ctrl := gomock.NewController(t)
+	mockMetric := NewMockMetrics(ctrl)
+
+	mockMetric.EXPECT().RecordHistogram(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
+	mockMetric.EXPECT().NewCounter(gomock.Any(), gomock.Any()).AnyTimes()
+	mockMetric.EXPECT().NewGauge(gomock.Any(), gomock.Any()).AnyTimes()
+	mockMetric.EXPECT().SetGauge(gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
+
+	service := NewHTTPService(server.URL, logging.NewMockLogger(logging.DEBUG), mockMetric, &CircuitBreakerConfig{
+		Threshold: 1,
+		Interval:  1,
+	})
+
+	resp, err := service.Query(t.Context(), "test", nil, []byte(`{"q":"x"}`))
+
+	require.NoError(t, err)
+	assert.Equal(t, http.StatusOK, resp.StatusCode)
+
+	_ = resp.Body.Close()
+}
+
+func TestHttpService_QueryWithHeaderSuccessRequests(t *testing.T) {
+	server := testServer()
+	defer server.Close()
+
+	ctrl := gomock.NewController(t)
+	mockMetric := NewMockMetrics(ctrl)
+
+	mockMetric.EXPECT().RecordHistogram(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
+	mockMetric.EXPECT().NewCounter(gomock.Any(), gomock.Any()).AnyTimes()
+	mockMetric.EXPECT().NewGauge(gomock.Any(), gomock.Any()).AnyTimes()
+	mockMetric.EXPECT().SetGauge(gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
+
+	service := NewHTTPService(server.URL, logging.NewMockLogger(logging.DEBUG), mockMetric, &CircuitBreakerConfig{
+		Threshold: 1,
+		Interval:  1,
+	})
+
+	resp, err := service.QueryWithHeaders(t.Context(), "test", nil, []byte(`{"q":"x"}`),
+		map[string]string{"content-type": "application/json"})
+
+	require.NoError(t, err)
+	assert.Equal(t, http.StatusOK, resp.StatusCode)
+
+	_ = resp.Body.Close()
+}
+
+// TestCircuitBreaker_doRequest_UnsupportedMethod verifies the default case:
+// an unknown method must return ErrUnsupportedMethod instead of a nil response.
+func TestCircuitBreaker_doRequest_UnsupportedMethod(t *testing.T) {
+	cb := &circuitBreaker{state: ClosedState, interval: time.Second}
+
+	//nolint:bodyclose // the unsupported-method path returns a nil response, nothing to close
+	resp, err := cb.doRequest(t.Context(), "TRACE", "test", nil, nil, nil)
+
+	require.ErrorIs(t, err, ErrUnsupportedMethod)
+	assert.Nil(t, resp)
+}
