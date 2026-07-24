@@ -68,7 +68,13 @@ func pushReader(ctx context.Context, cfg *Config, logger Logger) metricSdk.Reade
 
 	build, ok := lookup(name)
 	if !ok {
-		logger.Errorf("unsupported METRICS_EXPORTER %q; using prometheus-only metrics", cfg.Exporter)
+		if importPath, known := knownExternalExporters[name]; known {
+			logger.Errorf("METRICS_EXPORTER=%q is not registered: add a blank import to enable it "+
+				"(import _ %q); using prometheus-only metrics until then", cfg.Exporter, importPath)
+		} else {
+			logger.Errorf("unsupported METRICS_EXPORTER %q; using prometheus-only metrics", cfg.Exporter)
+		}
+
 		return nil
 	}
 

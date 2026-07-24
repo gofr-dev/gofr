@@ -29,6 +29,16 @@ func Register(name string, b Builder) {
 	registry[name] = b
 }
 
+// knownExternalExporters maps exporter names that live in optional submodules to
+// their import path, so a missing blank import yields an actionable error rather
+// than a misleading "unsupported" one. Plain strings only — no dependency on the
+// submodules is introduced.
+//
+//nolint:gochecknoglobals // static hint table.
+var knownExternalExporters = map[string]string{
+	exporterGCP: "gofr.dev/pkg/gofr/metrics/exporters/gcp",
+}
+
 func lookup(name string) (Builder, bool) {
 	registryMu.RLock()
 	defer registryMu.RUnlock()

@@ -3,11 +3,13 @@ package exporters
 import (
 	"context"
 	"errors"
+	"strings"
 	"testing"
 
 	metricSdk "go.opentelemetry.io/otel/sdk/metric"
 
 	"gofr.dev/pkg/gofr/logging"
+	"gofr.dev/pkg/gofr/testutil"
 )
 
 var errBuilderFailed = errors.New("builder failed")
@@ -49,5 +51,26 @@ func TestBuild(t *testing.T) {
 
 			_ = mp.Shutdown(context.Background())
 		})
+	}
+}
+
+func TestBuild_missingSubmoduleImportHint(t *testing.T) {
+	cfg := Config{AppName: "app", Exporter: "gcp"} // "gcp" is not blank-imported in this test binary
+
+	out := testutil.StderrOutputForFunc(func() {
+		mp, meter := Build(context.Background(), &cfg, logging.NewMockLogger(logging.ERROR))
+		if meter == nil {
+			t.Error("expected a usable meter on fallback")
+		}
+
+		_ = mp.Shutdown(context.Background())
+	})
+
+	if !strings.Contains(out, "gofr.dev/pkg/gofr/metrics/exporters/gcp") {
+		t.Errorf("expected the import path in the error, got: %q", out)
+	}
+
+	if !strings.Contains(out, "blank import") {
+		t.Errorf("expected actionable 'blank import' guidance, got: %q", out)
 	}
 }

@@ -4,6 +4,7 @@ package exporters
 // used across the exporters package.
 const (
 	exporterPrometheus = "prometheus"
+	exporterGCP        = "gcp"
 
 	protocolGRPC = "grpc"
 	protocolHTTP = "http"
