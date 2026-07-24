@@ -82,6 +82,72 @@ func Test_metricsExporterConfig(t *testing.T) {
 	}
 }
 
+// Test_metricsExporterConfig_otelFallback covers interval/temporality falling
+// back to the OpenTelemetry standard env vars, with METRICS_* taking precedence.
+func Test_metricsExporterConfig_otelFallback(t *testing.T) {
+	tests := []struct {
+		name string
+		env  map[string]string
+		want exporters.Config
+	}{
+		{
+			name: "OTEL interval (ms) used when METRICS_EXPORT_INTERVAL unset",
+			env:  map[string]string{"OTEL_METRIC_EXPORT_INTERVAL": "5000"},
+			want: exporters.Config{
+				AppName: "app", AppVersion: "v1",
+				Protocol: "grpc", Interval: 5 * time.Second, Temporality: "cumulative", Insecure: false,
+			},
+		},
+		{
+			name: "METRICS_EXPORT_INTERVAL wins over OTEL interval",
+			env: map[string]string{
+				"METRICS_EXPORT_INTERVAL": "15", "OTEL_METRIC_EXPORT_INTERVAL": "5000",
+			},
+			want: exporters.Config{
+				AppName: "app", AppVersion: "v1",
+				Protocol: "grpc", Interval: 15 * time.Second, Temporality: "cumulative", Insecure: false,
+			},
+		},
+		{
+			name: "invalid METRICS interval falls back to OTEL interval",
+			env: map[string]string{
+				"METRICS_EXPORT_INTERVAL": "not-a-number", "OTEL_METRIC_EXPORT_INTERVAL": "5000",
+			},
+			want: exporters.Config{
+				AppName: "app", AppVersion: "v1",
+				Protocol: "grpc", Interval: 5 * time.Second, Temporality: "cumulative", Insecure: false,
+			},
+		},
+		{
+			name: "OTEL temporality preference used when METRICS_TEMPORALITY unset",
+			env:  map[string]string{"OTEL_EXPORTER_OTLP_METRICS_TEMPORALITY_PREFERENCE": "delta"},
+			want: exporters.Config{
+				AppName: "app", AppVersion: "v1",
+				Protocol: "grpc", Interval: 30 * time.Second, Temporality: "delta", Insecure: false,
+			},
+		},
+		{
+			name: "METRICS_TEMPORALITY wins over OTEL preference",
+			env: map[string]string{
+				"METRICS_TEMPORALITY": "cumulative", "OTEL_EXPORTER_OTLP_METRICS_TEMPORALITY_PREFERENCE": "delta",
+			},
+			want: exporters.Config{
+				AppName: "app", AppVersion: "v1",
+				Protocol: "grpc", Interval: 30 * time.Second, Temporality: "cumulative", Insecure: false,
+			},
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			got := metricsExporterConfig(config.NewMockConfig(tc.env), "app", "v1", logging.NewMockLogger(logging.ERROR))
+			if !reflect.DeepEqual(got, tc.want) {
+				t.Errorf("metricsExporterConfig() =\n%+v\nwant\n%+v", got, tc.want)
+			}
+		})
+	}
+}
+
 func Test_metricsExporterConfig_headers(t *testing.T) {
 	tests := []struct {
 		name string
