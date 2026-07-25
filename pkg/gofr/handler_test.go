@@ -906,17 +906,19 @@ func TestHandler_Char_ResponseCustomHeadersCanOverrideContentType(t *testing.T) 
 	assert.Equal(t, "{\"data\":\"x\"}\n", w.Body.String())
 }
 
-// TestHandler_Char_ResponsePointerHeadersIgnored pins that returning a POINTER
-// to response.Response neither applies the custom headers nor takes the special
-// Response envelope path — the type assertion in ServeHTTP is by value.
-func TestHandler_Char_ResponsePointerHeadersIgnored(t *testing.T) {
+// TestHandler_Char_ResponsePointerHeadersApplied pins the fix: returning a
+// POINTER to response.Response now applies the custom headers and takes the
+// Response envelope path, exactly like the value form. Previously the type
+// assertion in ServeHTTP was by value, so the headers were silently dropped and
+// the struct was serialized as ordinary data. WIRE-FORMAT CHANGE.
+func TestHandler_Char_ResponsePointerHeadersApplied(t *testing.T) {
 	w := charServe(t, charHandler(func(*Context) (any, error) {
 		return &response.Response{Data: "x", Headers: map[string]string{"X-One": "1"}}, nil
 	}, 0), http.MethodGet)
 
-	assert.Empty(t, w.Header().Get("X-One"), "custom headers are only applied for a value Response")
+	assert.Equal(t, "1", w.Header().Get("X-One"), "custom headers apply to a *Response too")
 	//nolint:testifylint // exact bytes are the contract.
-	assert.Equal(t, "{\"data\":{\"data\":\"x\"}}\n", w.Body.String())
+	assert.Equal(t, "{\"data\":\"x\"}\n", w.Body.String())
 }
 
 // TestHandler_Char_SpecialResponseTypes pins that the special response types

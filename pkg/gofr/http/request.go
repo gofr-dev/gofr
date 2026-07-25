@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"mime"
 	"net/http"
 	"reflect"
 	"strings"
@@ -56,8 +57,14 @@ func (r *Request) PathParam(key string) string {
 
 // Bind parses the request body and binds it to the provided interface.
 func (r *Request) Bind(i any) error {
-	v := r.req.Header.Get("Content-Type")
-	contentType := strings.Split(v, ";")[0]
+	// Binding into a non-pointer would unmarshal into a throwaway copy and leave
+	// the caller's value untouched, so reject it up front instead of silently
+	// doing nothing.
+	if rv := reflect.ValueOf(i); rv.Kind() != reflect.Pointer {
+		return errNonPointerBind
+	}
+
+	contentType := mediaType(r.req.Header.Get("Content-Type"))
 
 	switch contentType {
 	case "application/json":
@@ -76,6 +83,21 @@ func (r *Request) Bind(i any) error {
 	}
 
 	return nil
+}
+
+// mediaType extracts the bare media type from a Content-Type header value.
+// Per RFC 9110 the media type is case-insensitive and may be followed by
+// parameters and arbitrary optional whitespace, so `Application/JSON` and
+// `application/json ; charset=utf-8` must both resolve to `application/json`.
+func mediaType(header string) string {
+	parsed, _, err := mime.ParseMediaType(header)
+	if err != nil && parsed == "" {
+		// The header is malformed beyond a bad parameter list; fall back to a
+		// best-effort parse rather than losing an otherwise usable media type.
+		return strings.ToLower(strings.TrimSpace(strings.Split(header, ";")[0]))
+	}
+
+	return parsed
 }
 
 // HostName retrieves the hostname from the request.

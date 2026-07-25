@@ -3,16 +3,11 @@ package http
 import (
 	"bytes"
 	"encoding/json"
-	"errors"
 	"net/http"
 	"reflect"
 	"sync"
 
 	resTypes "gofr.dev/pkg/gofr/http/response"
-)
-
-var (
-	errEmptyResponse = errors.New("internal server error")
 )
 
 // maxRespPooledBuf caps the capacity of a response buffer returned to the pool
@@ -49,6 +44,10 @@ type Responder struct {
 // Respond sends a response with the given data and handles potential errors, setting appropriate
 // status codes and formatting responses as JSON or raw data as needed.
 func (r Responder) Respond(data any, err error) {
+	// A pointer to a special response type must behave exactly like its value form,
+	// otherwise it silently falls through to the JSON envelope below.
+	data = derefSpecialResponse(data)
+
 	if r.handleSpecialResponseTypes(data, err) {
 		return
 	}
@@ -59,7 +58,14 @@ func (r Responder) Respond(data any, err error) {
 
 	switch v := data.(type) {
 	case resTypes.Raw:
-		resp = v.Data
+		// Raw normally bypasses the envelope, but an error must never be dropped:
+		// when one is present we fall back to the standard envelope so the client
+		// is told what failed instead of receiving a bare partial payload.
+		if errorObj != nil {
+			resp = response{Data: v.Data, Error: errorObj}
+		} else {
+			resp = v.Data
+		}
 	case resTypes.Response:
 		resp = response{Data: v.Data, Metadata: v.Metadata, Error: errorObj}
 	default:
@@ -114,6 +120,42 @@ func putRespBuf(buf *bytes.Buffer) {
 	if buf.Cap() <= maxRespPooledBuf {
 		respBufPool.Put(buf)
 	}
+}
+
+// derefSpecialResponse unwraps a pointer to one of the special response types
+// into its value form, so *resTypes.Redirect is redirected, *resTypes.Template
+// is rendered and so on, exactly like their value counterparts. Anything else —
+// including a nil pointer — is returned untouched.
+func derefSpecialResponse(data any) any {
+	switch v := data.(type) {
+	case *resTypes.Stream:
+		return derefResponseValue(v)
+	case *resTypes.File:
+		return derefResponseValue(v)
+	case *resTypes.Template:
+		return derefResponseValue(v)
+	case *resTypes.XML:
+		return derefResponseValue(v)
+	case *resTypes.Redirect:
+		return derefResponseValue(v)
+	case *resTypes.Raw:
+		return derefResponseValue(v)
+	case *resTypes.Response:
+		return derefResponseValue(v)
+	}
+
+	return data
+}
+
+// derefResponseValue returns the value p points to. A nil pointer is returned
+// as-is — still typed, so the existing typed-nil handling in isNil and the
+// method-based status mapping behave exactly as they did before.
+func derefResponseValue[T any](p *T) any {
+	if p != nil {
+		return *p
+	}
+
+	return p
 }
 
 // handleSpecialResponseTypes handles special response types that bypass JSON encoding.
@@ -209,9 +251,12 @@ func handleSuccessStatusCode(method string, data any) int {
 }
 
 func (r Responder) determineResponse(data any, err error) (statusCode int, errObj any) {
-	// Handle empty struct case first
+	// A zero-valued struct carries no information, so alongside an error it is
+	// treated as absent data: the error's own status code wins over 206 Partial
+	// Content. The caller's error is always reported as-is — it is never replaced
+	// by a generic one.
 	if err != nil && isEmptyStruct(data) {
-		return http.StatusInternalServerError, createErrorResponse(errEmptyResponse)
+		data = nil
 	}
 
 	statusCode, errorObj := getStatusCode(r.method, data, err)
@@ -245,10 +290,12 @@ func isEmptyStruct(data any) bool {
 		return false
 	}
 
-	// Compare against a zero value of the same type
+	// Compare against a zero value of the same type. The comparison must use the
+	// dereferenced value v, not the original data: comparing a pointer against a
+	// zero struct is never equal, which made *T and T diverge.
 	zero := reflect.Zero(v.Type()).Interface()
 
-	return reflect.DeepEqual(data, zero)
+	return reflect.DeepEqual(v.Interface(), zero)
 }
 
 // getStatusCode returns corresponding HTTP status codes.

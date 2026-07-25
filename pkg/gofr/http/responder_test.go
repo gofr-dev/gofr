@@ -1062,20 +1062,22 @@ func TestResponder_Char_RawEnvelope(t *testing.T) {
 		{"raw-nil-data-get", http.MethodGet, resTypes.Raw{}, nil, http.StatusOK, "application/json", "null\n"},
 		{"raw-nil-data-post", http.MethodPost, resTypes.Raw{Data: "x"}, nil, http.StatusCreated, "application/json", "\"x\"\n"},
 
-		// LATENT BUG (pinned as-is): when a handler returns a Raw alongside an
-		// error, the status becomes 206 Partial Content but the error object is
-		// silently DROPPED from the body — the client gets only Raw.Data and no
-		// indication of what failed.
+		// FIXED (was: 206 with the error silently DROPPED, body just `"partial"`).
+		// Raw bypasses the envelope only on the success path; when an error is
+		// present Respond falls back to the standard envelope so the client is
+		// actually told what failed. WIRE-FORMAT CHANGE for Raw-plus-error.
 		{
-			"raw-with-error-drops-error", http.MethodGet, resTypes.Raw{Data: "partial"}, errCharPlain,
-			http.StatusPartialContent, "application/json", "\"partial\"\n",
+			"raw-with-error-uses-envelope", http.MethodGet, resTypes.Raw{Data: "partial"}, errCharPlain,
+			http.StatusPartialContent, "application/json",
+			"{\"error\":{\"message\":\"plain failure\"},\"data\":\"partial\"}\n",
 		},
-		// LATENT BUG (pinned as-is): Raw{} is an empty struct, so isEmptyStruct
-		// fires and the status becomes 500 with errEmptyResponse — but the body
-		// is still the raw `null`, not the error envelope.
+		// FIXED (was: 500 with body `null`, no error at all). Raw{} is a zero
+		// struct, so it is treated as absent data: the error's own status applies
+		// (500 here, the plain-error default) and the caller's real error — not a
+		// generic "internal server error" — is reported.
 		{
 			"raw-empty-with-error", http.MethodGet, resTypes.Raw{}, errCharPlain,
-			http.StatusInternalServerError, "application/json", "null\n",
+			http.StatusInternalServerError, "application/json", "{\"error\":{\"message\":\"plain failure\"}}\n",
 		},
 	})
 }
@@ -1113,13 +1115,14 @@ func TestResponder_Char_ResponseEnvelope(t *testing.T) {
 			resTypes.Response{Data: "d", Headers: map[string]string{"X-A": "b"}}, nil,
 			http.StatusOK, "application/json", "{\"data\":\"d\"}\n",
 		},
-		// LATENT QUIRK (pinned as-is): resTypes.Response{} is a zero struct, so
-		// isEmptyStruct fires: the status becomes 500 AND the caller's real
-		// error is replaced by the generic "internal server error".
+		// FIXED (was: the caller's error replaced by "internal server error").
+		// resTypes.Response{} is a zero struct and so counts as absent data, but
+		// the caller's real error is now reported verbatim. The status is still
+		// 500 because a plain error carries no status code of its own.
 		{
 			"response-empty-with-error", http.MethodGet,
 			resTypes.Response{}, errCharPlain,
-			http.StatusInternalServerError, "application/json", "{\"error\":{\"message\":\"internal server error\"}}\n",
+			http.StatusInternalServerError, "application/json", "{\"error\":{\"message\":\"plain failure\"}}\n",
 		},
 	})
 }
@@ -1260,30 +1263,33 @@ func TestResponder_Char_ErrorEnvelopeEdges(t *testing.T) {
 		},
 
 		// --- empty-struct short circuit ---------------------------------------
-		// LATENT QUIRK (pinned as-is): when data is a zero-valued struct AND an
-		// error is present, determineResponse replaces the status with 500 and
-		// the error object with the generic "internal server error" — the real
-		// error is lost. The zero struct is still serialized into `data`.
+		// FIXED (was: 500 with the generic "internal server error", the caller's
+		// real error lost). A zero-valued struct carries no information, so it is
+		// treated as absent data and the ERROR's own status code applies — 404
+		// here — while the caller's error is reported verbatim. The zero struct is
+		// still serialized into `data`.
 		{
 			"empty-struct-plus-error", http.MethodGet, charStruct{}, ErrorEntityNotFound{Name: "id", Value: "1"},
-			http.StatusInternalServerError, "application/json",
-			"{\"error\":{\"message\":\"internal server error\"},\"data\":{\"id\":0,\"name\":\"\"}}\n",
+			http.StatusNotFound, "application/json",
+			"{\"error\":{\"message\":\"No entity found with id: 1\"},\"data\":{\"id\":0,\"name\":\"\"}}\n",
 		},
-		// ...but a POINTER to a zero struct escapes the short circuit, because
-		// isEmptyStruct dereferences for the Kind check yet compares the
-		// original pointer against a zero STRUCT. Different behavior for
-		// semantically identical data.
+		// FIXED (was: 206, because isEmptyStruct dereferenced for the Kind check
+		// but compared the original POINTER against a zero struct, so *T never
+		// matched). A pointer to a zero struct is now byte-for-byte identical to
+		// the value form above.
 		{
 			"pointer-to-empty-struct-plus-error", http.MethodGet, &charStruct{}, ErrorEntityNotFound{Name: "id", Value: "1"},
-			http.StatusPartialContent, "application/json",
+			http.StatusNotFound, "application/json",
 			"{\"error\":{\"message\":\"No entity found with id: 1\"},\"data\":{\"id\":0,\"name\":\"\"}}\n",
 		},
 		// A zero struct whose fields are all omitempty still serializes as `{}`
 		// under `data`, so the client cannot distinguish it from "no data".
+		// FIXED: the caller's error is no longer replaced by a generic one; the
+		// status stays 500 only because a plain error has no status of its own.
 		{
 			"empty-omitempty-struct-plus-error", http.MethodGet, charOmit{}, errCharPlain,
 			http.StatusInternalServerError, "application/json",
-			"{\"error\":{\"message\":\"internal server error\"},\"data\":{}}\n",
+			"{\"error\":{\"message\":\"plain failure\"},\"data\":{}}\n",
 		},
 	})
 }
@@ -1644,35 +1650,51 @@ func TestResponder_Char_Template(t *testing.T) {
 	}
 }
 
-// TestResponder_Char_TemplatePointerIsNotSpecial pins a sharp edge: the type
-// switch matches resTypes.Template by VALUE, so returning *resTypes.Template
-// falls through to the JSON envelope instead of rendering. Reported, not fixed.
-func TestResponder_Char_TemplatePointerIsNotSpecial(t *testing.T) {
+// TestResponder_Char_TemplatePointerIsRendered pins the fix for a sharp edge:
+// the type switch used to match resTypes.Template by VALUE only, so a
+// *resTypes.Template was JSON-serialized instead of rendered. It is now
+// dereferenced first and renders exactly like the value form.
+func TestResponder_Char_TemplatePointerIsRendered(t *testing.T) {
+	createTemplateFile(t, "./templates/char.html", "<h1>{{.Title}}</h1>")
+
+	defer removeTemplateDir(t)
+
 	w := httptest.NewRecorder()
 
-	NewResponder(w, http.MethodGet).Respond(&resTypes.Template{Name: "char.html", Data: "x"}, nil)
+	NewResponder(w, http.MethodGet).Respond(&resTypes.Template{
+		Name: "char.html", Data: map[string]string{"Title": "Hi"},
+	}, nil)
 
 	assert.Equal(t, http.StatusOK, w.Code)
-	assert.Equal(t, "application/json", w.Header().Get("Content-Type"))
-	//nolint:testifylint // exact bytes are the contract.
-	assert.Equal(t, "{\"data\":{\"Data\":\"x\",\"Name\":\"char.html\"}}\n", w.Body.String())
+	assert.Equal(t, "text/html", w.Header().Get("Content-Type"))
+	assert.Equal(t, "<h1>Hi</h1>", w.Body.String())
 }
 
-// TestResponder_Char_SpecialTypePointersFallThrough pins that every special
-// response type is matched by value only; a pointer to one is JSON-encoded.
-func TestResponder_Char_SpecialTypePointersFallThrough(t *testing.T) {
+// TestResponder_Char_SpecialTypePointersAreDereferenced pins the fix: every
+// special response type is now matched through a pointer too, so *T behaves
+// byte-for-byte like T. Previously each of these fell through to the JSON
+// envelope — a redirect returned 200 with a serialized struct and no Location
+// header, a file was base64-encoded, and so on. WIRE-FORMAT CHANGE for anyone
+// who returned a pointer to a special response type.
+func TestResponder_Char_SpecialTypePointersAreDereferenced(t *testing.T) {
 	tests := []struct {
-		name     string
-		data     any
-		wantBody string
+		name       string
+		data       any
+		wantStatus int
+		wantCType  string
+		wantBody   string
+		wantLoc    string
 	}{
 		{"file-ptr", &resTypes.File{Content: []byte("ab"), ContentType: "text/plain"},
-			"{\"data\":{\"Content\":\"YWI=\",\"ContentType\":\"text/plain\"}}\n"},
+			http.StatusOK, "text/plain", "ab", ""},
 		{"xml-ptr", &resTypes.XML{Content: []byte("<a/>")},
-			"{\"data\":{\"Content\":\"PGEvPg==\",\"ContentType\":\"\"}}\n"},
-		{"redirect-ptr", &resTypes.Redirect{URL: "/x"}, "{\"data\":{\"URL\":\"/x\"}}\n"},
-		{"raw-ptr", &resTypes.Raw{Data: "x"}, "{\"data\":{\"Data\":\"x\"}}\n"},
-		{"response-ptr", &resTypes.Response{Data: "x"}, "{\"data\":{\"data\":\"x\"}}\n"},
+			http.StatusOK, "application/xml", "<a/>", ""},
+		{"redirect-ptr", &resTypes.Redirect{URL: "/x"},
+			http.StatusFound, "", "", "/x"},
+		{"raw-ptr", &resTypes.Raw{Data: "x"},
+			http.StatusOK, "application/json", "\"x\"\n", ""},
+		{"response-ptr", &resTypes.Response{Data: "x"},
+			http.StatusOK, "application/json", "{\"data\":\"x\"}\n", ""},
 	}
 
 	for _, tc := range tests {
@@ -1681,10 +1703,29 @@ func TestResponder_Char_SpecialTypePointersFallThrough(t *testing.T) {
 
 			NewResponder(w, http.MethodGet).Respond(tc.data, nil)
 
-			assert.Equal(t, http.StatusOK, w.Code)
-			assert.Equal(t, "application/json", w.Header().Get("Content-Type"))
+			assert.Equal(t, tc.wantStatus, w.Code)
+			assert.Equal(t, tc.wantCType, w.Header().Get("Content-Type"))
 			assert.Equal(t, tc.wantBody, w.Body.String())
+			assert.Equal(t, tc.wantLoc, w.Header().Get("Location"))
 		})
+	}
+}
+
+// TestResponder_Char_SpecialTypeNilPointers pins that a typed NIL pointer to a
+// special response type is still not dereferenced — it collapses to the ordinary
+// empty JSON envelope rather than panicking.
+func TestResponder_Char_SpecialTypeNilPointers(t *testing.T) {
+	for _, data := range []any{
+		(*resTypes.File)(nil), (*resTypes.XML)(nil), (*resTypes.Redirect)(nil),
+		(*resTypes.Raw)(nil), (*resTypes.Response)(nil), (*resTypes.Template)(nil),
+		(*resTypes.Stream)(nil),
+	} {
+		w := httptest.NewRecorder()
+
+		NewResponder(w, http.MethodGet).Respond(data, nil)
+
+		assert.Equal(t, http.StatusOK, w.Code)
+		assert.Equal(t, "{}\n", w.Body.String())
 	}
 }
 
