@@ -1,4 +1,4 @@
-FROM golang:1.24
+FROM golang:1.26
 
 RUN mkdir -p /go/src/gofr.dev
 WORKDIR /go/src/gofr.dev
