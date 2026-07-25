@@ -896,3 +896,862 @@ func BenchmarkResponderRespond(b *testing.B) {
 		r.Respond(data, nil)
 	}
 }
+
+// ---------------------------------------------------------------------------
+// Characterization suite.
+//
+// Everything below pins the CURRENT observable wire contract of Responder:
+// exact status code, exact Content-Type, exact body bytes. It is deliberately
+// exhaustive and deliberately literal — no Contains, no "not empty". A refactor
+// that changes any byte a client sees must fail here.
+// ---------------------------------------------------------------------------
+
+var (
+	errCharPlain = errors.New("plain failure")
+)
+
+// charError is an error carrying an arbitrary status code, used to pin the
+// StatusCodeResponder branch without depending on a concrete GoFr error type.
+type charError struct {
+	msg  string
+	code int
+}
+
+func (e charError) Error() string   { return e.msg }
+func (e charError) StatusCode() int { return e.code }
+
+// charMarshallerError implements both StatusCodeResponder and ResponseMarshaller
+// so the merge behavior of createErrorResponse is pinned by value type (the
+// existing CustomError is a pointer type).
+type charMarshallerError struct{}
+
+func (charMarshallerError) Error() string   { return "validation failed" }
+func (charMarshallerError) StatusCode() int { return http.StatusBadRequest }
+func (charMarshallerError) Response() map[string]any {
+	return map[string]any{"field": "email", "reason": "bad format"}
+}
+
+type charStruct struct {
+	ID   int    `json:"id"`
+	Name string `json:"name"`
+}
+
+type charOmit struct {
+	ID   int    `json:"id,omitempty"`
+	Name string `json:"name,omitempty"`
+}
+
+// respondCase is one exact-bytes expectation for Respond.
+type respondCase struct {
+	name       string
+	method     string
+	data       any
+	err        error
+	wantStatus int
+	wantCType  string
+	wantBody   string
+}
+
+func runRespondCases(t *testing.T, cases []respondCase) {
+	t.Helper()
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			w := httptest.NewRecorder()
+
+			NewResponder(w, tc.method).Respond(tc.data, tc.err)
+
+			assert.Equal(t, tc.wantStatus, w.Code, "status code")
+			assert.Equal(t, tc.wantCType, w.Header().Get("Content-Type"), "Content-Type")
+			assert.Equal(t, tc.wantBody, w.Body.String(), "body bytes")
+		})
+	}
+}
+
+// TestResponder_Char_SuccessEnvelope pins the success-path envelope for every
+// shape of data GoFr allows a handler to return, across every HTTP method whose
+// status mapping differs.
+func TestResponder_Char_SuccessEnvelope(t *testing.T) {
+	runRespondCases(t, []respondCase{
+		// --- nil data, per method -------------------------------------------
+		{"nil-get", http.MethodGet, nil, nil, http.StatusOK, "application/json", "{}\n"},
+		{"nil-post", http.MethodPost, nil, nil, http.StatusAccepted, "application/json", "{}\n"},
+		{"nil-put", http.MethodPut, nil, nil, http.StatusOK, "application/json", "{}\n"},
+		{"nil-patch", http.MethodPatch, nil, nil, http.StatusOK, "application/json", "{}\n"},
+		{"nil-delete", http.MethodDelete, nil, nil, http.StatusNoContent, "application/json", "{}\n"},
+		{"nil-head", http.MethodHead, nil, nil, http.StatusOK, "application/json", "{}\n"},
+		{"nil-options", http.MethodOptions, nil, nil, http.StatusOK, "application/json", "{}\n"},
+		{"nil-empty-method", "", nil, nil, http.StatusOK, "application/json", "{}\n"},
+
+		// --- primitives ------------------------------------------------------
+		{"string", http.MethodGet, "hello", nil, http.StatusOK, "application/json", "{\"data\":\"hello\"}\n"},
+		// NOTE: `data` carries `omitempty`, but its Go type is `any`, so only a
+		// nil INTERFACE is omitted. A zero-valued primitive is still emitted.
+		{"empty-string", http.MethodGet, "", nil, http.StatusOK, "application/json", "{\"data\":\"\"}\n"},
+		{"int", http.MethodGet, 42, nil, http.StatusOK, "application/json", "{\"data\":42}\n"},
+		{"zero-int", http.MethodGet, 0, nil, http.StatusOK, "application/json", "{\"data\":0}\n"},
+		{"negative-int", http.MethodGet, -7, nil, http.StatusOK, "application/json", "{\"data\":-7}\n"},
+		{"float", http.MethodGet, 3.5, nil, http.StatusOK, "application/json", "{\"data\":3.5}\n"},
+		{"bool-true", http.MethodGet, true, nil, http.StatusOK, "application/json", "{\"data\":true}\n"},
+		{"bool-false", http.MethodGet, false, nil, http.StatusOK, "application/json", "{\"data\":false}\n"},
+
+		// --- structs ----------------------------------------------------------
+		{
+			"struct", http.MethodGet, charStruct{ID: 1, Name: "a"}, nil,
+			http.StatusOK, "application/json", "{\"data\":{\"id\":1,\"name\":\"a\"}}\n",
+		},
+		{
+			"zero-struct-no-omitempty", http.MethodGet, charStruct{}, nil,
+			http.StatusOK, "application/json", "{\"data\":{\"id\":0,\"name\":\"\"}}\n",
+		},
+		{
+			"zero-struct-all-omitempty", http.MethodGet, charOmit{}, nil,
+			http.StatusOK, "application/json", "{\"data\":{}}\n",
+		},
+		{
+			"pointer-to-struct", http.MethodGet, &charStruct{ID: 2, Name: "b"}, nil,
+			http.StatusOK, "application/json", "{\"data\":{\"id\":2,\"name\":\"b\"}}\n",
+		},
+		// A typed nil pointer inside the interface: isNil() collapses it to nil
+		// for the BODY, but handleSuccess sees a non-nil interface, so a POST
+		// still reports 201 Created rather than 202 Accepted.
+		{"typed-nil-ptr-get", http.MethodGet, newNilTemp(), nil, http.StatusOK, "application/json", "{}\n"},
+		{"typed-nil-ptr-post", http.MethodPost, newNilTemp(), nil, http.StatusCreated, "application/json", "{}\n"},
+
+		// --- slices / arrays / maps -------------------------------------------
+		{"slice-of-int", http.MethodGet, []int{1, 2, 3}, nil, http.StatusOK, "application/json", "{\"data\":[1,2,3]}\n"},
+		{"empty-slice", http.MethodGet, []int{}, nil, http.StatusOK, "application/json", "{\"data\":[]}\n"},
+		// A nil SLICE is a non-nil interface, so it survives omitempty and the
+		// client sees an explicit `null` — unlike a nil POINTER, which isNil()
+		// collapses to an absent `data` key. Two ways to say "nothing".
+		{"nil-slice", http.MethodGet, []int(nil), nil, http.StatusOK, "application/json", "{\"data\":null}\n"},
+		{
+			"slice-of-struct", http.MethodGet, []charStruct{{ID: 1, Name: "a"}, {ID: 2, Name: "b"}}, nil,
+			http.StatusOK, "application/json", "{\"data\":[{\"id\":1,\"name\":\"a\"},{\"id\":2,\"name\":\"b\"}]}\n",
+		},
+		{"array", http.MethodGet, [2]int{9, 8}, nil, http.StatusOK, "application/json", "{\"data\":[9,8]}\n"},
+		{
+			"map-string-string", http.MethodGet, map[string]string{"k": "v"}, nil,
+			http.StatusOK, "application/json", "{\"data\":{\"k\":\"v\"}}\n",
+		},
+		{"empty-map", http.MethodGet, map[string]string{}, nil, http.StatusOK, "application/json", "{\"data\":{}}\n"},
+		{"nil-map", http.MethodGet, map[string]string(nil), nil, http.StatusOK, "application/json", "{\"data\":null}\n"},
+		// Map keys are emitted in sorted order by encoding/json, so this is
+		// deterministic despite Go's randomized map iteration.
+		{
+			"map-key-ordering", http.MethodGet, map[string]int{"z": 1, "a": 2, "m": 3}, nil,
+			http.StatusOK, "application/json", "{\"data\":{\"a\":2,\"m\":3,\"z\":1}}\n",
+		},
+	})
+}
+
+// TestResponder_Char_RawEnvelope pins resTypes.Raw: the envelope is bypassed
+// entirely and Data is written as the whole body.
+func TestResponder_Char_RawEnvelope(t *testing.T) {
+	runRespondCases(t, []respondCase{
+		{
+			"raw-map", http.MethodGet, resTypes.Raw{Data: map[string]string{"k": "v"}}, nil,
+			http.StatusOK, "application/json", "{\"k\":\"v\"}\n",
+		},
+		{"raw-string", http.MethodGet, resTypes.Raw{Data: "plain"}, nil, http.StatusOK, "application/json", "\"plain\"\n"},
+		{
+			"raw-slice", http.MethodGet, resTypes.Raw{Data: []int{1, 2}}, nil,
+			http.StatusOK, "application/json", "[1,2]\n",
+		},
+		// Raw{} is a zero struct, so a POST sees non-nil data and reports 201.
+		{"raw-nil-data-get", http.MethodGet, resTypes.Raw{}, nil, http.StatusOK, "application/json", "null\n"},
+		{"raw-nil-data-post", http.MethodPost, resTypes.Raw{Data: "x"}, nil, http.StatusCreated, "application/json", "\"x\"\n"},
+
+		// LATENT BUG (pinned as-is): when a handler returns a Raw alongside an
+		// error, the status becomes 206 Partial Content but the error object is
+		// silently DROPPED from the body — the client gets only Raw.Data and no
+		// indication of what failed.
+		{
+			"raw-with-error-drops-error", http.MethodGet, resTypes.Raw{Data: "partial"}, errCharPlain,
+			http.StatusPartialContent, "application/json", "\"partial\"\n",
+		},
+		// LATENT BUG (pinned as-is): Raw{} is an empty struct, so isEmptyStruct
+		// fires and the status becomes 500 with errEmptyResponse — but the body
+		// is still the raw `null`, not the error envelope.
+		{
+			"raw-empty-with-error", http.MethodGet, resTypes.Raw{}, errCharPlain,
+			http.StatusInternalServerError, "application/json", "null\n",
+		},
+	})
+}
+
+// TestResponder_Char_ResponseEnvelope pins resTypes.Response, including the
+// Metadata field and the fixed JSON field ordering (error, metadata, data).
+func TestResponder_Char_ResponseEnvelope(t *testing.T) {
+	runRespondCases(t, []respondCase{
+		{
+			"response-data-only", http.MethodGet,
+			resTypes.Response{Data: map[string]string{"k": "v"}}, nil,
+			http.StatusOK, "application/json", "{\"data\":{\"k\":\"v\"}}\n",
+		},
+		{
+			"response-with-metadata", http.MethodGet,
+			resTypes.Response{Data: "d", Metadata: map[string]any{"page": 1}}, nil,
+			http.StatusOK, "application/json", "{\"metadata\":{\"page\":1},\"data\":\"d\"}\n",
+		},
+		// Field order in the envelope is error, then metadata, then data.
+		{
+			"response-metadata-and-error-ordering", http.MethodGet,
+			resTypes.Response{Data: "d", Metadata: map[string]any{"page": 1}}, errCharPlain,
+			http.StatusPartialContent, "application/json",
+			"{\"error\":{\"message\":\"plain failure\"},\"metadata\":{\"page\":1},\"data\":\"d\"}\n",
+		},
+		{
+			"response-empty-metadata-omitted", http.MethodGet,
+			resTypes.Response{Data: "d", Metadata: map[string]any{}}, nil,
+			http.StatusOK, "application/json", "{\"data\":\"d\"}\n",
+		},
+		// Headers are declared `json:"-"` and are applied by the caller
+		// (handler.ServeHTTP), never by Respond.
+		{
+			"response-headers-not-serialized", http.MethodGet,
+			resTypes.Response{Data: "d", Headers: map[string]string{"X-A": "b"}}, nil,
+			http.StatusOK, "application/json", "{\"data\":\"d\"}\n",
+		},
+		// LATENT QUIRK (pinned as-is): resTypes.Response{} is a zero struct, so
+		// isEmptyStruct fires: the status becomes 500 AND the caller's real
+		// error is replaced by the generic "internal server error".
+		{
+			"response-empty-with-error", http.MethodGet,
+			resTypes.Response{}, errCharPlain,
+			http.StatusInternalServerError, "application/json", "{\"error\":{\"message\":\"internal server error\"}}\n",
+		},
+	})
+}
+
+// TestResponder_Char_ResponseHeadersNotApplied pins that Respond does NOT apply
+// resTypes.Response.Headers to the writer — that is handler.ServeHTTP's job.
+func TestResponder_Char_ResponseHeadersNotApplied(t *testing.T) {
+	w := httptest.NewRecorder()
+
+	NewResponder(w, http.MethodGet).Respond(resTypes.Response{
+		Data:    "d",
+		Headers: map[string]string{"X-Custom": "v"},
+	}, nil)
+
+	assert.Empty(t, w.Header().Get("X-Custom"), "Respond must not set Response.Headers")
+}
+
+// TestResponder_Char_ErrorEnvelope pins the exact `{"error":{...}}` envelope and
+// status code for every error type GoFr maps, plus the generic branches.
+func TestResponder_Char_ErrorEnvelope(t *testing.T) {
+	runRespondCases(t, []respondCase{
+		// --- plain error (no StatusCodeResponder) -> 500 ----------------------
+		{
+			"plain-error", http.MethodGet, nil, errCharPlain,
+			http.StatusInternalServerError, "application/json", "{\"error\":{\"message\":\"plain failure\"}}\n",
+		},
+		// The method-based success mapping is NOT consulted on the error path:
+		// a failed DELETE is 500, not 204.
+		{
+			"plain-error-delete", http.MethodDelete, nil, errCharPlain,
+			http.StatusInternalServerError, "application/json", "{\"error\":{\"message\":\"plain failure\"}}\n",
+		},
+		{
+			"plain-error-post", http.MethodPost, nil, errCharPlain,
+			http.StatusInternalServerError, "application/json", "{\"error\":{\"message\":\"plain failure\"}}\n",
+		},
+
+		// --- GoFr status-coded errors ----------------------------------------
+		{
+			"entity-not-found", http.MethodGet, nil, ErrorEntityNotFound{Name: "id", Value: "2"},
+			http.StatusNotFound, "application/json", "{\"error\":{\"message\":\"No entity found with id: 2\"}}\n",
+		},
+		{
+			"entity-not-found-zero", http.MethodGet, nil, ErrorEntityNotFound{},
+			http.StatusNotFound, "application/json", "{\"error\":{\"message\":\"No entity found with : \"}}\n",
+		},
+		{
+			"entity-already-exists", http.MethodGet, nil, ErrorEntityAlreadyExist{},
+			http.StatusConflict, "application/json", "{\"error\":{\"message\":\"entity already exists\"}}\n",
+		},
+		// NOTE: ErrorInvalidParam has a `json:"param,omitempty"` tag, but it does
+		// NOT implement ResponseMarshaller, so the param list never reaches the
+		// wire — the client only ever sees the rendered message string.
+		{
+			"invalid-param", http.MethodGet, nil, ErrorInvalidParam{Params: []string{"a", "b"}},
+			http.StatusBadRequest, "application/json", "{\"error\":{\"message\":\"'2' invalid parameter(s): a, b\"}}\n",
+		},
+		{
+			"invalid-param-empty", http.MethodGet, nil, ErrorInvalidParam{},
+			http.StatusBadRequest, "application/json", "{\"error\":{\"message\":\"'0' invalid parameter(s): \"}}\n",
+		},
+		{
+			"missing-param", http.MethodGet, nil, ErrorMissingParam{Params: []string{"id"}},
+			http.StatusBadRequest, "application/json", "{\"error\":{\"message\":\"'1' missing parameter(s): id\"}}\n",
+		},
+		{
+			"invalid-route", http.MethodGet, nil, ErrorInvalidRoute{},
+			http.StatusNotFound, "application/json", "{\"error\":{\"message\":\"route not registered\"}}\n",
+		},
+		{
+			"request-timeout", http.MethodGet, nil, ErrorRequestTimeout{},
+			http.StatusRequestTimeout, "application/json", "{\"error\":{\"message\":\"request timed out\"}}\n",
+		},
+		{
+			"client-closed-request", http.MethodGet, nil, ErrorClientClosedRequest{},
+			StatusClientClosedRequest, "application/json", "{\"error\":{\"message\":\"client closed request\"}}\n",
+		},
+		{
+			"panic-recovery", http.MethodGet, nil, ErrorPanicRecovery{},
+			http.StatusInternalServerError, "application/json", "{\"error\":{\"message\":\"Internal Server Error\"}}\n",
+		},
+		{
+			"too-many-requests", http.MethodGet, nil, ErrorTooManyRequests{},
+			http.StatusTooManyRequests, "application/json", "{\"error\":{\"message\":\"rate limit exceeded\"}}\n",
+		},
+		{
+			"service-unavailable-bare", http.MethodGet, nil, ErrorServiceUnavailable{},
+			http.StatusServiceUnavailable, "application/json", "{\"error\":{\"message\":\"Service Unavailable\"}}\n",
+		},
+		{
+			"service-unavailable-detailed", http.MethodGet, nil,
+			ErrorServiceUnavailable{Dependency: "redis", ErrorMessage: "dial fail"},
+			http.StatusServiceUnavailable, "application/json",
+			"{\"error\":{\"message\":\"Service unavailable due to error: dial fail from dependency redis\"}}\n",
+		},
+	})
+}
+
+// TestResponder_Char_ErrorEnvelopeEdges pins the remaining error-path branches:
+// arbitrary status codes, the ResponseMarshaller merge, the 206 partial-content
+// rule and the empty-struct short circuit.
+func TestResponder_Char_ErrorEnvelopeEdges(t *testing.T) {
+	runRespondCases(t, []respondCase{
+		// --- arbitrary status-coded error ------------------------------------
+		{
+			"custom-status-code", http.MethodGet, nil, charError{msg: "teapot", code: http.StatusTeapot},
+			http.StatusTeapot, "application/json", "{\"error\":{\"message\":\"teapot\"}}\n",
+		},
+		// A StatusCodeResponder reporting 0 is normalized to 500 by
+		// determineResponse.
+		{
+			"zero-status-code-normalized-to-500", http.MethodGet, nil, charError{msg: "zero", code: 0},
+			http.StatusInternalServerError, "application/json", "{\"error\":{\"message\":\"zero\"}}\n",
+		},
+
+		// --- ResponseMarshaller merge ----------------------------------------
+		// Extra fields are merged in alongside "message"; keys are emitted in
+		// sorted order because the error object is a map.
+		{
+			"response-marshaller-merge", http.MethodGet, nil, charMarshallerError{},
+			http.StatusBadRequest, "application/json",
+			"{\"error\":{\"field\":\"email\",\"message\":\"validation failed\",\"reason\":\"bad format\"}}\n",
+		},
+
+		// --- data + error -> 206 Partial Content ------------------------------
+		// NOTE: the error's own StatusCode() is ignored entirely when data is
+		// non-nil; a 404 alongside partial data is reported as 206.
+		{
+			"data-plus-statuscoded-error-is-206", http.MethodGet, map[string]string{"k": "v"},
+			ErrorEntityNotFound{Name: "id", Value: "9"},
+			http.StatusPartialContent, "application/json",
+			"{\"error\":{\"message\":\"No entity found with id: 9\"},\"data\":{\"k\":\"v\"}}\n",
+		},
+		// A typed nil pointer counts as nil here, so the error's status wins.
+		{
+			"typed-nil-data-plus-error-uses-error-status", http.MethodGet, newNilTemp(), ErrorEntityNotFound{},
+			http.StatusNotFound, "application/json", "{\"error\":{\"message\":\"No entity found with : \"}}\n",
+		},
+
+		// --- empty-struct short circuit ---------------------------------------
+		// LATENT QUIRK (pinned as-is): when data is a zero-valued struct AND an
+		// error is present, determineResponse replaces the status with 500 and
+		// the error object with the generic "internal server error" — the real
+		// error is lost. The zero struct is still serialized into `data`.
+		{
+			"empty-struct-plus-error", http.MethodGet, charStruct{}, ErrorEntityNotFound{Name: "id", Value: "1"},
+			http.StatusInternalServerError, "application/json",
+			"{\"error\":{\"message\":\"internal server error\"},\"data\":{\"id\":0,\"name\":\"\"}}\n",
+		},
+		// ...but a POINTER to a zero struct escapes the short circuit, because
+		// isEmptyStruct dereferences for the Kind check yet compares the
+		// original pointer against a zero STRUCT. Different behavior for
+		// semantically identical data.
+		{
+			"pointer-to-empty-struct-plus-error", http.MethodGet, &charStruct{}, ErrorEntityNotFound{Name: "id", Value: "1"},
+			http.StatusPartialContent, "application/json",
+			"{\"error\":{\"message\":\"No entity found with id: 1\"},\"data\":{\"id\":0,\"name\":\"\"}}\n",
+		},
+		// A zero struct whose fields are all omitempty still serializes as `{}`
+		// under `data`, so the client cannot distinguish it from "no data".
+		{
+			"empty-omitempty-struct-plus-error", http.MethodGet, charOmit{}, errCharPlain,
+			http.StatusInternalServerError, "application/json",
+			"{\"error\":{\"message\":\"internal server error\"},\"data\":{}}\n",
+		},
+	})
+}
+
+// TestResponder_Char_JSONEscaping pins encoding/json's default HTML escaping.
+// GoFr uses json.Encoder without SetEscapeHTML(false), so <, > and & become
+// \u003c, \u003e and \u0026 on the wire, and U+2028/U+2029 are escaped too.
+func TestResponder_Char_JSONEscaping(t *testing.T) {
+	runRespondCases(t, []respondCase{
+		{
+			"html-angle-brackets", http.MethodGet, "<script>alert(1)</script>", nil,
+			http.StatusOK, "application/json",
+			"{\"data\":\"\\u003cscript\\u003ealert(1)\\u003c/script\\u003e\"}\n",
+		},
+		{
+			"ampersand", http.MethodGet, "a & b", nil,
+			http.StatusOK, "application/json", "{\"data\":\"a \\u0026 b\"}\n",
+		},
+		{
+			"double-quote-and-backslash", http.MethodGet, `he said "hi" \ bye`, nil,
+			http.StatusOK, "application/json", "{\"data\":\"he said \\\"hi\\\" \\\\ bye\"}\n",
+		},
+		{
+			"control-chars", http.MethodGet, "line1\nline2\ttab", nil,
+			http.StatusOK, "application/json", "{\"data\":\"line1\\nline2\\ttab\"}\n",
+		},
+		// Non-ASCII is emitted as raw UTF-8, not \u escapes.
+		{
+			"unicode-passthrough", http.MethodGet, "héllo 世界 🚀", nil,
+			http.StatusOK, "application/json", "{\"data\":\"héllo 世界 🚀\"}\n",
+		},
+		// U+2028 LINE SEPARATOR / U+2029 PARAGRAPH SEPARATOR are escaped so the
+		// body is safe to embed in a <script> tag.
+		{
+			"line-separator-escaped", http.MethodGet, "a\u2028b\u2029c", nil,
+			http.StatusOK, "application/json", "{\"data\":\"a\\u2028b\\u2029c\"}\n",
+		},
+		// Escaping applies to map KEYS too.
+		{
+			"escaped-map-key", http.MethodGet, map[string]string{"<k>": "&v"}, nil,
+			http.StatusOK, "application/json", "{\"data\":{\"\\u003ck\\u003e\":\"\\u0026v\"}}\n",
+		},
+		// ...and to the error message.
+		{
+			//nolint:err113 // characterizing a caller-supplied ad-hoc error.
+			"escaped-error-message", http.MethodGet, nil, errors.New("bad <input> & stuff"),
+			http.StatusInternalServerError, "application/json",
+			"{\"error\":{\"message\":\"bad \\u003cinput\\u003e \\u0026 stuff\"}}\n",
+		},
+		// Raw bypasses the envelope but NOT the escaping.
+		{
+			"raw-is-still-escaped", http.MethodGet, resTypes.Raw{Data: "<b>"}, nil,
+			http.StatusOK, "application/json", "\"\\u003cb\\u003e\"\n",
+		},
+	})
+}
+
+// TestResponder_Char_ContentTypeNotOverwritten pins that a Content-Type already
+// set on the writer is preserved — Respond only defaults it when unset.
+func TestResponder_Char_ContentTypeNotOverwritten(t *testing.T) {
+	tests := []struct {
+		name    string
+		preset  string
+		wantCTy string
+	}{
+		{"unset-defaults-to-json", "", "application/json"},
+		{"preset-preserved", "application/vnd.api+json", "application/vnd.api+json"},
+		{"preset-text-preserved", "text/plain", "text/plain"},
+		{"preset-with-charset-preserved", "application/json; charset=utf-8", "application/json; charset=utf-8"},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			w := httptest.NewRecorder()
+			if tc.preset != "" {
+				w.Header().Set("Content-Type", tc.preset)
+			}
+
+			NewResponder(w, http.MethodGet).Respond("x", nil)
+
+			assert.Equal(t, tc.wantCTy, w.Header().Get("Content-Type"))
+			// The body is unaffected by the Content-Type; it is always JSON.
+			assert.JSONEq(t, `{"data":"x"}`, w.Body.String())
+		})
+	}
+}
+
+// TestResponder_Char_EncodeFailure pins the fallback written when the payload
+// cannot be JSON-encoded. Note the body has a space after "message": and the
+// status is written AFTER Content-Type has already been set to application/json.
+func TestResponder_Char_EncodeFailure(t *testing.T) {
+	tests := []struct {
+		name string
+		data any
+	}{
+		{"channel", make(chan int)},
+		{"func", func() {}},
+		{"nan", math.NaN()},
+		{"inf", math.Inf(1)},
+		{"map-with-unencodable-value", map[string]any{"c": make(chan int)}},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			w := httptest.NewRecorder()
+
+			NewResponder(w, http.MethodGet).Respond(tc.data, nil)
+
+			assert.Equal(t, http.StatusInternalServerError, w.Code)
+			assert.Equal(t, "application/json", w.Header().Get("Content-Type"))
+			//nolint:testifylint // exact bytes are the contract: note the space after the colon.
+			assert.Equal(t, "{\"error\":{\"message\": \"failed to encode response as JSON\"}}\n", w.Body.String())
+		})
+	}
+}
+
+// TestResponder_Char_File pins the File special response type.
+func TestResponder_Char_File(t *testing.T) {
+	tests := []struct {
+		name       string
+		method     string
+		file       resTypes.File
+		err        error
+		wantStatus int
+		wantCType  string
+		wantBody   string
+	}{
+		{
+			"png-get", http.MethodGet,
+			resTypes.File{Content: []byte{0x89, 'P', 'N', 'G'}, ContentType: "image/png"}, nil,
+			http.StatusOK, "image/png", "\x89PNG",
+		},
+		{
+			"post-is-201", http.MethodPost,
+			resTypes.File{Content: []byte("x"), ContentType: "text/csv"}, nil,
+			http.StatusCreated, "text/csv", "x",
+		},
+		{
+			"delete-is-204", http.MethodDelete,
+			resTypes.File{Content: []byte("x"), ContentType: "text/csv"}, nil,
+			http.StatusNoContent, "text/csv", "x",
+		},
+		// Empty ContentType is written verbatim as an empty header value rather
+		// than being defaulted or sniffed.
+		{
+			"empty-content-type", http.MethodGet,
+			resTypes.File{Content: []byte("x")}, nil,
+			http.StatusOK, "", "x",
+		},
+		{
+			"empty-content", http.MethodGet,
+			resTypes.File{ContentType: "text/plain"}, nil,
+			http.StatusOK, "text/plain", "",
+		},
+		// With an error the status comes from the error, NOT 206 — and the body
+		// is still the file bytes, so the client gets no error detail at all.
+		{
+			"with-status-coded-error", http.MethodGet,
+			resTypes.File{Content: []byte("x"), ContentType: "text/plain"}, ErrorEntityNotFound{Name: "id", Value: "1"},
+			http.StatusNotFound, "text/plain", "x",
+		},
+		{
+			"with-plain-error", http.MethodGet,
+			resTypes.File{Content: []byte("x"), ContentType: "text/plain"}, errCharPlain,
+			http.StatusInternalServerError, "text/plain", "x",
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			w := httptest.NewRecorder()
+
+			NewResponder(w, tc.method).Respond(tc.file, tc.err)
+
+			assert.Equal(t, tc.wantStatus, w.Code, "status code")
+			assert.Equal(t, tc.wantCType, w.Header().Get("Content-Type"), "Content-Type")
+			assert.Equal(t, tc.wantBody, w.Body.String(), "body bytes")
+		})
+	}
+}
+
+// TestResponder_Char_XML pins the XML special response type, including the
+// application/xml default and the "no write for empty content" branch.
+func TestResponder_Char_XML(t *testing.T) {
+	tests := []struct {
+		name       string
+		method     string
+		xml        resTypes.XML
+		err        error
+		wantStatus int
+		wantCType  string
+		wantBody   string
+	}{
+		{
+			"default-content-type", http.MethodGet,
+			resTypes.XML{Content: []byte("<a>1</a>")}, nil,
+			http.StatusOK, "application/xml", "<a>1</a>",
+		},
+		{
+			"explicit-content-type", http.MethodGet,
+			resTypes.XML{Content: []byte("<a/>"), ContentType: "application/rss+xml"}, nil,
+			http.StatusOK, "application/rss+xml", "<a/>",
+		},
+		{
+			"empty-content-writes-nothing", http.MethodGet,
+			resTypes.XML{}, nil,
+			http.StatusOK, "application/xml", "",
+		},
+		{
+			"post-is-201", http.MethodPost,
+			resTypes.XML{Content: []byte("<a/>")}, nil,
+			http.StatusCreated, "application/xml", "<a/>",
+		},
+		{
+			"delete-is-204", http.MethodDelete,
+			resTypes.XML{Content: []byte("<a/>")}, nil,
+			http.StatusNoContent, "application/xml", "<a/>",
+		},
+		// XML content is written verbatim — no escaping, no envelope.
+		{
+			"content-written-verbatim", http.MethodGet,
+			resTypes.XML{Content: []byte("<a>&amp; \"x\" <b/></a>")}, nil,
+			http.StatusOK, "application/xml", "<a>&amp; \"x\" <b/></a>",
+		},
+		{
+			"with-status-coded-error", http.MethodGet,
+			resTypes.XML{Content: []byte("<a/>")}, ErrorInvalidParam{Params: []string{"p"}},
+			http.StatusBadRequest, "application/xml", "<a/>",
+		},
+		{
+			"with-plain-error", http.MethodGet,
+			resTypes.XML{Content: []byte("<a/>")}, errCharPlain,
+			http.StatusInternalServerError, "application/xml", "<a/>",
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			w := httptest.NewRecorder()
+
+			NewResponder(w, tc.method).Respond(tc.xml, tc.err)
+
+			assert.Equal(t, tc.wantStatus, w.Code, "status code")
+			assert.Equal(t, tc.wantCType, w.Header().Get("Content-Type"), "Content-Type")
+			assert.Equal(t, tc.wantBody, w.Body.String(), "body bytes")
+		})
+	}
+}
+
+// TestResponder_Char_Redirect pins the Redirect special response type. The
+// status depends ONLY on the HTTP method, never on the error, and no body is
+// written.
+func TestResponder_Char_Redirect(t *testing.T) {
+	tests := []struct {
+		name       string
+		method     string
+		url        string
+		err        error
+		wantStatus int
+	}{
+		{"get-is-302", http.MethodGet, "/target", nil, http.StatusFound},
+		{"head-is-302", http.MethodHead, "/target", nil, http.StatusFound},
+		{"delete-is-302", http.MethodDelete, "/target", nil, http.StatusFound},
+		{"options-is-302", http.MethodOptions, "/target", nil, http.StatusFound},
+		{"post-is-303", http.MethodPost, "/target", nil, http.StatusSeeOther},
+		{"put-is-303", http.MethodPut, "/target", nil, http.StatusSeeOther},
+		{"patch-is-303", http.MethodPatch, "/target", nil, http.StatusSeeOther},
+		// The error is ignored completely for redirects.
+		{"get-with-error-still-302", http.MethodGet, "/target", ErrorEntityNotFound{}, http.StatusFound},
+		{"post-with-error-still-303", http.MethodPost, "/target", errCharPlain, http.StatusSeeOther},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			w := httptest.NewRecorder()
+
+			NewResponder(w, tc.method).Respond(resTypes.Redirect{URL: tc.url}, tc.err)
+
+			assert.Equal(t, tc.wantStatus, w.Code, "status code")
+			assert.Equal(t, tc.url, w.Header().Get("Location"), "Location")
+			assert.Empty(t, w.Body.String(), "redirect must write no body")
+			// Content-Type is never set for a redirect.
+			assert.Empty(t, w.Header().Get("Content-Type"), "Content-Type")
+		})
+	}
+}
+
+// TestResponder_Char_RedirectURLVerbatim pins that the Location header is the
+// URL string exactly as given — no normalization, no escaping, no validation.
+func TestResponder_Char_RedirectURLVerbatim(t *testing.T) {
+	for _, url := range []string{
+		"",
+		"https://example.com/a?b=c&d=e#frag",
+		"/relative path with spaces",
+		"javascript:alert(1)",
+	} {
+		w := httptest.NewRecorder()
+
+		NewResponder(w, http.MethodGet).Respond(resTypes.Redirect{URL: url}, nil)
+
+		assert.Equal(t, url, w.Header().Get("Location"))
+	}
+}
+
+// TestResponder_Char_Template pins the Template special response type: the
+// Content-Type is always text/html (never charset-qualified) and the rendered
+// bytes are html/template output with its own contextual escaping.
+func TestResponder_Char_Template(t *testing.T) {
+	createTemplateFile(t, "./templates/char.html", "<h1>{{.Title}}</h1>")
+
+	defer removeTemplateDir(t)
+
+	tests := []struct {
+		name       string
+		method     string
+		data       any
+		err        error
+		wantStatus int
+		wantBody   string
+	}{
+		{"get-is-200", http.MethodGet, map[string]string{"Title": "Hi"}, nil, http.StatusOK, "<h1>Hi</h1>"},
+		{"post-is-201", http.MethodPost, map[string]string{"Title": "Hi"}, nil, http.StatusCreated, "<h1>Hi</h1>"},
+		// LATENT BUG (pinned as-is): a Template returned from a DELETE handler
+		// gets status 204, and the HTTP layer rejects a body on a 204. Because
+		// html/template writes incrementally and Render discards Execute's
+		// error, the client receives a TRUNCATED page (only the first text
+		// node) rather than either the full page or an error.
+		{"delete-is-204", http.MethodDelete, map[string]string{"Title": "Hi"}, nil, http.StatusNoContent, "<h1>"},
+		{
+			"with-status-coded-error", http.MethodGet, map[string]string{"Title": "Hi"},
+			ErrorEntityNotFound{}, http.StatusNotFound, "<h1>Hi</h1>",
+		},
+		{
+			"with-plain-error", http.MethodGet, map[string]string{"Title": "Hi"},
+			errCharPlain, http.StatusInternalServerError, "<h1>Hi</h1>",
+		},
+		// html/template applies contextual escaping of its own — this is NOT the
+		// JSON \u003c escaping used by the envelope path.
+		{
+			"html-escaped-by-html-template", http.MethodGet, map[string]string{"Title": "<b>&x</b>"},
+			nil, http.StatusOK, "<h1>&lt;b&gt;&amp;x&lt;/b&gt;</h1>",
+		},
+		// A missing field renders as the literal Go zero-value marker.
+		{"missing-field", http.MethodGet, map[string]string{}, nil, http.StatusOK, "<h1></h1>"},
+		{"nil-data", http.MethodGet, nil, nil, http.StatusOK, "<h1></h1>"},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			w := httptest.NewRecorder()
+
+			NewResponder(w, tc.method).Respond(resTypes.Template{Name: "char.html", Data: tc.data}, tc.err)
+
+			assert.Equal(t, tc.wantStatus, w.Code, "status code")
+			assert.Equal(t, "text/html", w.Header().Get("Content-Type"), "Content-Type")
+			assert.Equal(t, tc.wantBody, w.Body.String(), "body bytes")
+		})
+	}
+}
+
+// TestResponder_Char_TemplatePointerIsNotSpecial pins a sharp edge: the type
+// switch matches resTypes.Template by VALUE, so returning *resTypes.Template
+// falls through to the JSON envelope instead of rendering. Reported, not fixed.
+func TestResponder_Char_TemplatePointerIsNotSpecial(t *testing.T) {
+	w := httptest.NewRecorder()
+
+	NewResponder(w, http.MethodGet).Respond(&resTypes.Template{Name: "char.html", Data: "x"}, nil)
+
+	assert.Equal(t, http.StatusOK, w.Code)
+	assert.Equal(t, "application/json", w.Header().Get("Content-Type"))
+	//nolint:testifylint // exact bytes are the contract.
+	assert.Equal(t, "{\"data\":{\"Data\":\"x\",\"Name\":\"char.html\"}}\n", w.Body.String())
+}
+
+// TestResponder_Char_SpecialTypePointersFallThrough pins that every special
+// response type is matched by value only; a pointer to one is JSON-encoded.
+func TestResponder_Char_SpecialTypePointersFallThrough(t *testing.T) {
+	tests := []struct {
+		name     string
+		data     any
+		wantBody string
+	}{
+		{"file-ptr", &resTypes.File{Content: []byte("ab"), ContentType: "text/plain"},
+			"{\"data\":{\"Content\":\"YWI=\",\"ContentType\":\"text/plain\"}}\n"},
+		{"xml-ptr", &resTypes.XML{Content: []byte("<a/>")},
+			"{\"data\":{\"Content\":\"PGEvPg==\",\"ContentType\":\"\"}}\n"},
+		{"redirect-ptr", &resTypes.Redirect{URL: "/x"}, "{\"data\":{\"URL\":\"/x\"}}\n"},
+		{"raw-ptr", &resTypes.Raw{Data: "x"}, "{\"data\":{\"Data\":\"x\"}}\n"},
+		{"response-ptr", &resTypes.Response{Data: "x"}, "{\"data\":{\"data\":\"x\"}}\n"},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			w := httptest.NewRecorder()
+
+			NewResponder(w, http.MethodGet).Respond(tc.data, nil)
+
+			assert.Equal(t, http.StatusOK, w.Code)
+			assert.Equal(t, "application/json", w.Header().Get("Content-Type"))
+			assert.Equal(t, tc.wantBody, w.Body.String())
+		})
+	}
+}
+
+// TestResponder_Char_StreamHeaders pins the full header set and status of a
+// Stream response, and that an error returned alongside a Stream is ignored.
+func TestResponder_Char_StreamHeaders(t *testing.T) {
+	t.Run("sse", func(t *testing.T) {
+		w := httptest.NewRecorder()
+
+		NewResponder(w, http.MethodPost).
+			Respond(resTypes.Stream{Source: &sliceSource{items: []any{"a"}}}, ErrorEntityNotFound{})
+
+		// Always 200, even for POST and even with an error present.
+		assert.Equal(t, http.StatusOK, w.Code)
+		assert.Equal(t, "text/event-stream", w.Header().Get("Content-Type"))
+		assert.Equal(t, "no-cache", w.Header().Get("Cache-Control"))
+		assert.Equal(t, "keep-alive", w.Header().Get("Connection"))
+		assert.Equal(t, "data: \"a\"\n\ndata: [DONE]\n\n", w.Body.String())
+	})
+
+	t.Run("ndjson", func(t *testing.T) {
+		w := httptest.NewRecorder()
+
+		NewResponder(w, http.MethodGet).
+			Respond(resTypes.Stream{Source: &sliceSource{items: []any{"a"}}, Format: resTypes.NDJSON}, nil)
+
+		assert.Equal(t, http.StatusOK, w.Code)
+		assert.Equal(t, "application/x-ndjson", w.Header().Get("Content-Type"))
+		// NDJSON does NOT set Cache-Control / Connection.
+		assert.Empty(t, w.Header().Get("Cache-Control"))
+		assert.Empty(t, w.Header().Get("Connection"))
+		// NDJSON has no [DONE] terminator.
+		assert.Equal(t, "\"a\"\n", w.Body.String())
+	})
+
+	t.Run("nil-source", func(t *testing.T) {
+		w := httptest.NewRecorder()
+
+		NewResponder(w, http.MethodGet).Respond(resTypes.Stream{}, nil)
+
+		assert.Equal(t, http.StatusInternalServerError, w.Code)
+		// No Content-Type is set on the nil-source path.
+		assert.Empty(t, w.Header().Get("Content-Type"))
+		//nolint:testifylint // exact bytes are the contract.
+		assert.Equal(t, "{\"error\":{\"message\":\"stream source is nil\"}}\n", w.Body.String())
+	})
+}
+
+// TestResponder_Char_NoBodyForDeleteIsStillWritten pins that GoFr writes a JSON
+// body even with 204 No Content, which is a protocol violation net/http will
+// suppress on a real connection but which the responder itself does emit.
+func TestResponder_Char_NoBodyForDeleteIsStillWritten(t *testing.T) {
+	w := httptest.NewRecorder()
+
+	NewResponder(w, http.MethodDelete).Respond(map[string]string{"k": "v"}, nil)
+
+	assert.Equal(t, http.StatusNoContent, w.Code)
+	//nolint:testifylint // exact bytes are the contract.
+	assert.Equal(t, "{\"data\":{\"k\":\"v\"}}\n", w.Body.String())
+}
+
+// TestResponder_Char_MethodCaseSensitivity pins that method matching is exact —
+// a lowercase "post" does not get the 201 mapping.
+func TestResponder_Char_MethodCaseSensitivity(t *testing.T) {
+	w := httptest.NewRecorder()
+
+	NewResponder(w, "post").Respond("x", nil)
+
+	assert.Equal(t, http.StatusOK, w.Code)
+}
