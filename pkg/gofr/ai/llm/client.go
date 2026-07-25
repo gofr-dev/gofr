@@ -68,6 +68,12 @@ type Client struct {
 	// providers whose usage object deviates from the standard shape. The zero value uses the built-in
 	// mapping (OpenAI/Groq/DeepSeek), so the popular providers need no configuration.
 	UsageFields UsageFields
+	// MaxConcurrentRequests caps the number of in-flight requests to the provider. When the cap is
+	// reached, further Chat/Embed/Stream calls block until a slot frees (or their context is done) —
+	// backpressure so a burst of concurrent agent calls cannot pile onto a provider that serializes
+	// internally and turn every request's tail latency pathological. HealthCheck is never limited.
+	// Zero (the default) means unlimited.
+	MaxConcurrentRequests int
 
 	apiKey  string
 	baseURL string
@@ -75,10 +81,28 @@ type Client struct {
 	logger  service.Logger
 	metrics service.Metrics
 	config  config.Config
+	sem     chan struct{} // in-flight limiter; nil when MaxConcurrentRequests <= 0
 
 	healthMu     sync.Mutex
 	healthExpiry time.Time
 	healthCache  datasource.Health
+}
+
+// acquire blocks until an in-flight slot is free (or ctx is done) when a concurrency cap is set, and
+// returns a release that frees the slot. Both are no-ops when no cap is configured. The returned
+// release is idempotent, so a streamer may call it on both exhaustion and Close.
+func (c *Client) acquire(ctx context.Context) (release func(), err error) {
+	if c.sem == nil {
+		return func() {}, nil
+	}
+
+	select {
+	case c.sem <- struct{}{}:
+		var once sync.Once
+		return func() { once.Do(func() { <-c.sem }) }, nil
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	}
 }
 
 // UseLogger wires the framework logger into the underlying HTTP service.
@@ -115,6 +139,10 @@ func (c *Client) Connect() {
 		}
 
 		return
+	}
+
+	if c.MaxConcurrentRequests > 0 {
+		c.sem = make(chan struct{}, c.MaxConcurrentRequests)
 	}
 
 	c.svc = service.NewHTTPService(c.baseURL, c.logger, c.metrics,
@@ -178,6 +206,12 @@ func (c *Client) Chat(ctx context.Context, messages []ai.Message, opts ...ai.Opt
 		return nil, errNotConnected
 	}
 
+	release, err := c.acquire(ctx)
+	if err != nil {
+		return nil, err
+	}
+	defer release()
+
 	body, err := c.buildRequest(messages, opts, false)
 	if err != nil {
 		return nil, err
@@ -216,6 +250,12 @@ func (c *Client) Embed(ctx context.Context, input []string, _ ...ai.Option) (*ai
 	if c.svc == nil {
 		return nil, errNotConnected
 	}
+
+	release, err := c.acquire(ctx)
+	if err != nil {
+		return nil, err
+	}
+	defer release()
 
 	body, err := json.Marshal(embeddingsRequest{Model: c.Model, Input: input})
 	if err != nil {
