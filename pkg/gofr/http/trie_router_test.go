@@ -194,29 +194,69 @@ func TestTrieDifferential_SlashSpanningParams(t *testing.T) {
 	runDifferential(t, "slash_spanning", routes, cases)
 }
 
-// TestTrieDifferential_MixedLiteralParamSegments covers segments that mix a
-// literal with a parameter ("/{name}.txt", "/user-{id}", "/v{ver}/x"). The trie
-// keys whole segments, so these can't be indexed and must fall through to mux
-// via the fallback list — the router must not drop them.
-func TestTrieDifferential_MixedLiteralParamSegments(t *testing.T) {
-	routes := []routeDef{
-		{http.MethodGet, "/files/{name}.txt"}, // param with a literal suffix
-		{http.MethodGet, "/user-{id}"},        // literal prefix + param
-		{http.MethodGet, "/v{ver}/x"},         // literal+param, then a static segment
-		{http.MethodGet, "/{lang}-{region}"},  // two params + a literal separator
-		{http.MethodGet, "/pure/{id}"},        // control: pure param stays trie-indexed
+// mixedSegmentRoutes exercises every single-segment pattern shape mux supports:
+// a param with a literal suffix, prefix, or both; regex params with an affix;
+// adjacent and multi params; and a pure literal sharing a position with a mixed
+// one. All match exactly one path segment, so the trie indexes each as a param
+// slot and mux validates the intra-segment pattern.
+func mixedSegmentRoutes() []routeDef {
+	return []routeDef{
+		{http.MethodGet, "/files/{name}.txt"},         // literal suffix
+		{http.MethodGet, "/files/pinned.txt"},         // pure literal at the SAME position
+		{http.MethodGet, "/user-{id}"},                // literal prefix
+		{http.MethodGet, "/pre-{x}-post"},             // literal on both sides
+		{http.MethodGet, "/v{ver}/x"},                 // mixed, then a static segment
+		{http.MethodGet, "/{a}.{b}"},                  // two params + a literal separator
+		{http.MethodGet, "/{lang}-{region}"},          // two params, whole-segment braces
+		{http.MethodGet, "/img/{id:[0-9]+}.png"},      // regex param + literal suffix
+		{http.MethodGet, "/mix/{y:[a-z]+}.json/tail"}, // regex+suffix, then static
+		{http.MethodGet, "/plain/{id}"},               // control: pure param
 	}
+}
 
+// TestTrieDifferential_MixedLiteralParamSegments covers segments that mix a
+// literal with a parameter. These match exactly one path segment, so the trie
+// indexes them as a parameter slot (mux validates the exact pattern) — they are
+// NOT deferred to the fallback list. Verified byte-identical to mux across a
+// battery of affix / regex / adjacency / overlap / negative cases.
+func TestTrieDifferential_MixedLiteralParamSegments(t *testing.T) {
 	cases := []reqCase{
 		{http.MethodGet, "/files/report.txt"}, // vars{name:report}
-		{http.MethodGet, "/files/report.csv"}, // wrong suffix -> 404 in both
+		{http.MethodGet, "/files/report.csv"}, // wrong suffix -> 404 both
+		{http.MethodGet, "/files/pinned.txt"}, // literal wins by registration order
+		{http.MethodGet, "/files/a.b.txt"},    // dots inside the param value
 		{http.MethodGet, "/user-42"},          // vars{id:42}
+		{http.MethodGet, "/user-"},            // empty param -> 404 both
+		{http.MethodGet, "/admin-42"},         // wrong prefix -> 404 both
+		{http.MethodGet, "/pre-mid-post"},     // vars{x:mid}
 		{http.MethodGet, "/v2/x"},             // vars{ver:2}
+		{http.MethodGet, "/v/x"},              // empty param -> 404 both
+		{http.MethodGet, "/x.y"},              // vars{a:x,b:y}
 		{http.MethodGet, "/en-US"},            // vars{lang:en,region:US}
-		{http.MethodGet, "/pure/9"},
+		{http.MethodGet, "/img/123.png"},      // regex passes
+		{http.MethodGet, "/img/12a.png"},      // regex fails -> 404 both
+		{http.MethodGet, "/mix/abc.json/tail"},
+		{http.MethodGet, "/mix/ab1.json/tail"}, // regex fails -> 404 both
+		{http.MethodGet, "/plain/9"},
+		{http.MethodGet, "/plain/9/extra"}, // extra segment -> 404 both
 	}
 
-	runDifferential(t, "mixed_seg", routes, cases)
+	runDifferential(t, "mixed_seg", mixedSegmentRoutes(), cases)
+}
+
+// TestTrieRouter_MixedSegmentsAreIndexed asserts the mixed/param routes are
+// actually trie-indexed (not sitting in the linearly-scanned fallback list), so
+// the O(path) property holds for them too.
+func TestTrieRouter_MixedSegmentsAreIndexed(t *testing.T) {
+	r := buildRouter(mixedSegmentRoutes(), true)
+
+	r.buildIdx.Do(func() {
+		idx := newRouteIndex()
+		idx.build(&r.Router)
+		r.idx = idx
+	})
+
+	assert.Empty(t, r.idx.fallback, "all slash-free mixed/param routes must be trie-indexed, not in fallback")
 }
 
 // TestTrieDifferential_KnownMethodMismatchDivergence pins the ONE intentional,
@@ -341,7 +381,7 @@ func benchmarkRouterMatch(b *testing.B, useTrie bool) {
 		w.WriteHeader(http.StatusOK)
 	})
 
-	for _, n := range []int{10, 100, 1000} {
+	for _, n := range []int{1, 10, 20, 50, 100, 200} {
 		b.Run(fmt.Sprintf("routes=%d", n), func(b *testing.B) {
 			r := NewRouter()
 			r.useTrie = useTrie
@@ -350,9 +390,16 @@ func benchmarkRouterMatch(b *testing.B, useTrie bool) {
 				r.Add(http.MethodGet, fmt.Sprintf("/resource-%d/{id}", i), handler)
 			}
 
-			// Match the LAST-registered route: worst case for a linear scan,
-			// unaffected by position for a trie.
-			target := fmt.Sprintf("/resource-%d/42", n-1)
+			// Every GoFr app registers a PathPrefix("/") catch-all, which lands
+			// in the fallback list and is therefore scanned on every request.
+			// Include it so the numbers reflect a real route table.
+			r.Router.NewRoute().PathPrefix("/").Handler(handler)
+
+			// Match the MIDDLE route. mux's scan cost is linear in registration
+			// position, so hitting the last route measures its worst case rather
+			// than what real traffic sees; the middle route is the average case.
+			// The trie is unaffected by position either way.
+			target := fmt.Sprintf("/resource-%d/42", n/2)
 			req := httptest.NewRequestWithContext(context.Background(), http.MethodGet, target, http.NoBody)
 			w := httptest.NewRecorder()
 
@@ -372,3 +419,239 @@ func BenchmarkRouterMatchMux(b *testing.B) { benchmarkRouterMatch(b, false) }
 // BenchmarkRouterMatchTrie is the trie matcher (GOFR_ROUTER=trie); its cost
 // should stay flat as the route count grows.
 func BenchmarkRouterMatchTrie(b *testing.B) { benchmarkRouterMatch(b, true) }
+
+// This file pins the router edge cases found by adversarial review. Each test
+// names the shape that previously diverged from mux, so a regression is
+// self-describing.
+
+// TestTrieDifferential_EmptyMatchingParams covers params whose regex can match
+// the empty string ("{s:[a-z]*}"). Such a template segment can vanish, so the
+// template's segment count no longer equals the request's and a segment-by-
+// segment walk cannot locate it — the route must go to the fallback list.
+//
+// This previously produced a SILENT WRONG ROUTE in the real GoFr shape: with the
+// PathPrefix("/") catch-all also registered, a request for "/" returned 200 from
+// both routers but ran the catch-all under the trie instead of the user handler.
+func TestTrieDifferential_EmptyMatchingParams(t *testing.T) {
+	routes := []routeDef{
+		{http.MethodGet, "/{s:[a-z]*}"},   // may match ""
+		{http.MethodGet, "/n/{n:[0-9]*}"}, // may match ""
+		{http.MethodGet, "/o/{a:(?:x)?}"}, // optional group
+		{http.MethodGet, "/r/{l:[a-z]{0,2}}"},
+		{http.MethodGet, "/ok/{id}"}, // control: cannot match ""
+	}
+
+	cases := []reqCase{
+		{http.MethodGet, "/"},      // the empty-match case
+		{http.MethodGet, "/abc"},   // non-empty
+		{http.MethodGet, "/n/"},    // trailing empty after normalization
+		{http.MethodGet, "/n/123"}, //
+		{http.MethodGet, "/o/"},    //
+		{http.MethodGet, "/o/x"},   //
+		{http.MethodGet, "/r/ab"},  //
+		{http.MethodGet, "/ok/7"},  // control
+	}
+
+	runDifferential(t, "empty_param", routes, cases)
+}
+
+// TestTrieDifferential_EmptyParamWithCatchAll reproduces the silent-wrong-route
+// shape directly: the user route and GoFr's default PathPrefix("/") catch-all
+// both match "/", so the status is 200 either way and only the BODY reveals
+// which handler ran.
+func TestTrieDifferential_EmptyParamWithCatchAll(t *testing.T) {
+	build := func(useTrie bool) *Router {
+		r := NewRouter()
+		r.useTrie = useTrie
+		r.Add(http.MethodGet, "/{s:[a-z]*}", echoHandler("user-handler"))
+		r.Router.NewRoute().PathPrefix("/").Handler(echoHandler("catch-all"))
+
+		return r
+	}
+
+	_, muxBody := serve(build(false), http.MethodGet, "/")
+	_, trieBody := serve(build(true), http.MethodGet, "/")
+
+	assert.Equal(t, muxBody, trieBody, "the same handler must run under both routers")
+}
+
+// TestTrieRouter_PrefixEndingInLiteralDollar covers a PathPrefix whose template
+// ends in a literal "$". mux QuoteMeta-escapes it, so the UNANCHORED prefix
+// regexp still ends in the byte "$" — a naive HasSuffix(rx, "$") check would
+// wrongly treat it as an exact path and index it.
+func TestTrieRouter_PrefixEndingInLiteralDollar(t *testing.T) {
+	build := func(useTrie bool) *Router {
+		r := NewRouter()
+		r.useTrie = useTrie
+		r.Router.NewRoute().PathPrefix("/p$").Handler(echoHandler("prefix"))
+
+		return r
+	}
+
+	muxStatus, muxBody := serve(build(false), http.MethodGet, "/p$/q")
+	trieStatus, trieBody := serve(build(true), http.MethodGet, "/p$/q")
+
+	require.Equal(t, muxStatus, trieStatus, "prefix route ending in a literal $ must still match")
+	assert.Equal(t, muxBody, trieBody)
+}
+
+// TestTrieRouter_SubrouterMiddlewareRuns guards the security-relevant case: a
+// subrouter's own middleware must run under the trie router too. It previously
+// did not when the parent prefix was misclassified as an exact path, so auth or
+// CORS registered via Subrouter().Use() was silently skipped.
+func TestTrieRouter_SubrouterMiddlewareRuns(t *testing.T) {
+	build := func(useTrie bool) *Router {
+		r := NewRouter()
+		r.useTrie = useTrie
+
+		sub := r.Router.PathPrefix("/api$").Subrouter()
+		sub.Use(func(next http.Handler) http.Handler {
+			return http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+				w.Header().Set("X-Sub", "yes")
+				next.ServeHTTP(w, req)
+			})
+		})
+		sub.Path("/users").Handler(echoHandler("sub-users"))
+
+		return r
+	}
+
+	do := func(router *Router) (int, string) {
+		req := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/api$/users", http.NoBody)
+		rec := httptest.NewRecorder()
+		router.ServeHTTP(rec, req)
+
+		return rec.Code, rec.Header().Get("X-Sub")
+	}
+
+	muxCode, muxHdr := do(build(false))
+	trieCode, trieHdr := do(build(true))
+
+	require.Equal(t, muxCode, trieCode)
+	assert.Equal(t, muxHdr, trieHdr, "subrouter middleware must run under both routers")
+}
+
+// TestTrieRouter_SubrouterNotFoundHandler covers a subrouter carrying its own
+// NotFoundHandler. mux reports a SUCCESSFUL match with MatchErr == ErrNotFound
+// and the subrouter's handler in the match; requiring MatchErr == nil would skip
+// it and fall through to an unrelated route.
+func TestTrieRouter_SubrouterNotFoundHandler(t *testing.T) {
+	build := func(useTrie bool) *Router {
+		r := NewRouter()
+		r.useTrie = useTrie
+
+		sub := r.Router.PathPrefix("/api").Subrouter()
+		sub.NotFoundHandler = echoHandler("SUB404")
+		sub.Path("/users").Handler(echoHandler("sub-users"))
+
+		r.Add(http.MethodGet, "/api/other", echoHandler("top-other"))
+
+		return r
+	}
+
+	muxR, trieR := build(false), build(true)
+
+	for _, target := range []string{"/api/other", "/api/zzz", "/api/users"} {
+		muxStatus, muxBody := serve(muxR, http.MethodGet, target)
+		trieStatus, trieBody := serve(trieR, http.MethodGet, target)
+
+		require.Equalf(t, muxStatus, trieStatus, "status differs for %s", target)
+		assert.Equalf(t, muxBody, trieBody, "handler differs for %s", target)
+	}
+}
+
+// TestTrieRouter_UseEncodedPath covers a router in UseEncodedPath mode, where
+// mux matches the ESCAPED path. The decoded and escaped forms can split into
+// different segment counts, so the trie walks both and unions the candidates.
+func TestTrieRouter_UseEncodedPath(t *testing.T) {
+	build := func(useTrie bool) *Router {
+		r := NewRouter()
+		r.useTrie = useTrie
+		r.Router.UseEncodedPath()
+		r.Router.NewRoute().Methods(http.MethodGet).Path("/a/{v}").Handler(echoHandler("one"))
+		r.Router.NewRoute().Methods(http.MethodGet).Path("/a/{x}/{y}").Handler(echoHandler("two"))
+
+		return r
+	}
+
+	muxR, trieR := build(false), build(true)
+
+	for _, target := range []string{"/a/x%2Fy", "/a/plain", "/a/p/q"} {
+		muxStatus, muxBody := serve(muxR, http.MethodGet, target)
+		trieStatus, trieBody := serve(trieR, http.MethodGet, target)
+
+		require.Equalf(t, muxStatus, trieStatus, "status differs for %s", target)
+		assert.Equalf(t, muxBody, trieBody, "handler/vars differ for %s", target)
+	}
+}
+
+// TestTrieRouter_IndexInvariant is the structural gate behind every other test:
+// for every request, no route that mux would match may be absent from the
+// candidate set the trie produces. Over-producing candidates is safe (mux
+// filters them); dropping one is the failure mode that causes silent 404s and
+// wrong handlers. This asserts the invariant directly rather than relying on a
+// particular request happening to expose a gap.
+func TestTrieRouter_IndexInvariant(t *testing.T) {
+	templates := []string{
+		"/", "/users", "/users/{id}", "/users/{id}/posts", "/{a}/{b}",
+		"/files/{name}.txt", "/user-{id}", "/{a}.{b}", "/img/{id:[0-9]+}.png",
+		"/files/{path:.*}", "/proxy/{rest:.+}", "/opt/{s:[a-z]*}", "/n/{n:[0-9]*}",
+		"/static/x", "/deep/a/b/c/d",
+	}
+
+	r := NewRouter()
+	r.useTrie = true
+
+	for i, tpl := range templates {
+		r.Add(http.MethodGet, tpl, echoHandler(fmt.Sprintf("h%d", i)))
+	}
+
+	r.Router.NewRoute().PathPrefix("/").Handler(echoHandler("catch-all"))
+
+	idx := newRouteIndex()
+	idx.build(&r.Router)
+
+	paths := []string{
+		"/", "/users", "/users/42", "/users/42/posts", "/a/b", "/files/x.txt",
+		"/user-9", "/x.y", "/img/12.png", "/files/a/b/c", "/proxy/z", "/opt/",
+		"/opt/abc", "/n/", "/n/5", "/static/x", "/deep/a/b/c/d", "/unknown/path",
+	}
+
+	for _, p := range paths {
+		req := httptest.NewRequestWithContext(context.Background(), http.MethodGet, p, http.NoBody)
+		normalizePath(req)
+
+		// Every route mux itself would match must be among the candidates.
+		cands := make([]*routeEntry, 0, len(idx.fallback))
+
+		idx.root.collect(pathTrimForTest(req.URL.Path), &cands)
+		cands = append(cands, idx.fallback...)
+
+		inCandidates := make(map[*mux.Route]bool, len(cands))
+		for _, c := range cands {
+			inCandidates[c.route] = true
+		}
+
+		_ = r.Router.Walk(func(route *mux.Route, _ *mux.Router, _ []*mux.Route) error {
+			var m mux.RouteMatch
+			if route.Match(req, &m) {
+				assert.Truef(t, inCandidates[route],
+					"path %q: mux matches a route the trie never offered as a candidate", p)
+			}
+
+			return nil
+		})
+	}
+}
+
+func pathTrimForTest(p string) string {
+	for p != "" && p[0] == '/' {
+		p = p[1:]
+	}
+
+	for p != "" && p[len(p)-1] == '/' {
+		p = p[:len(p)-1]
+	}
+
+	return p
+}
