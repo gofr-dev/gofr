@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"net/http"
-	"path/filepath"
 	"strconv"
 	"strings"
 	"sync"
@@ -89,31 +88,24 @@ func Metrics(metrics metrics) func(inner http.Handler) http.Handler {
 				srw = &StatusResponseWriter{ResponseWriter: w}
 			}
 
-			// mux.CurrentRoute is nil for unmatched routes (404), and even
-			// when matched, GetPathTemplate can return "" for routes built
-			// without an explicit Path() (e.g. PathPrefix-only handlers).
-			// Fall back to r.URL.Path in both cases so the metric carries a
-			// usable path label instead of caching an empty key.
+			// Use the matched route's path template as the label. This is
+			// bounded by the number of registered routes and never the raw URL,
+			// so app_http_response cardinality (and the routeAttrs cache) cannot
+			// grow with arbitrary client input. In GoFr every request matches a
+			// route — specific routes give their template (e.g. /customer/{id}),
+			// static files match the /static/ prefix handler ("/static"), and
+			// everything else falls through to the catch-all PathPrefix("/")
+			// ("/"). The empty-template fallback to "/" guards the same bound for
+			// any router lacking that catch-all.
 			var path string
 			if cr := mux.CurrentRoute(r); cr != nil {
 				path, _ = cr.GetPathTemplate()
 			}
 
-			if path == "" {
-				path = r.URL.Path
-			}
-
-			ext := strings.ToLower(filepath.Ext(r.URL.Path))
-			switch ext {
-			case ".css", ".js", ".png", ".jpg", ".jpeg", ".gif", ".ico", ".svg", ".txt", ".html", ".json", ".woff", ".woff2", ".ttf", ".eot", ".pdf":
-				path = r.URL.Path
-			}
-
-			if path == "/" || strings.HasPrefix(path, "/static") {
-				path = r.URL.Path
-			}
-
 			path = strings.TrimSuffix(path, "/")
+			if path == "" {
+				path = "/"
+			}
 
 			// Skip recording for /graphql — it has its own dedicated metrics
 			// (app_graphql_*). time.Now() (vDSO call) is deferred past this

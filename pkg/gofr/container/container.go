@@ -127,7 +127,9 @@ func (c *Container) Create(conf config.Config) {
 
 	c.Logger.Debug("Container is being created")
 
-	c.metricsManager = metrics.NewMetricsManager(exporters.Prometheus(c.GetAppName(), c.GetAppVersion()), c.Logger)
+	c.metricsManager = metrics.NewMetricsManager(
+		exporters.Prometheus(c.GetAppName(), c.GetAppVersion(),
+			exporters.WithCardinalityLimit(c.cardinalityLimit(conf))), c.Logger)
 
 	exporters.SendFrameworkStartupTelemetry(c.GetAppName(), c.GetAppVersion())
 
@@ -147,6 +149,25 @@ func (c *Container) Create(conf config.Config) {
 	c.File = file.NewLocalFileSystem(c.Logger)
 
 	c.WSManager = websocket.New()
+}
+
+// cardinalityLimit resolves the per-instrument metrics cardinality limit from
+// METRICS_CARDINALITY_LIMIT. It returns the default when unset or unparsable
+// (logging that it is invalid); 0 or negative means unlimited.
+func (c *Container) cardinalityLimit(conf config.Config) int {
+	v := conf.Get("METRICS_CARDINALITY_LIMIT")
+	if v == "" {
+		return exporters.DefaultCardinalityLimit
+	}
+
+	limit, err := strconv.Atoi(v)
+	if err != nil {
+		c.Logger.Errorf("invalid METRICS_CARDINALITY_LIMIT, using default of %d", exporters.DefaultCardinalityLimit)
+
+		return exporters.DefaultCardinalityLimit
+	}
+
+	return limit
 }
 
 func (c *Container) createPubSub(conf config.Config) {
