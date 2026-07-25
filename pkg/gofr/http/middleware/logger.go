@@ -263,11 +263,16 @@ func getIPAddress(r *http.Request) string {
 		ipAddress = xff[:i]
 	}
 
+	// Trim before testing for emptiness: a first entry of only whitespace
+	// ("X-Forwarded-For: " or " , 1.2.3.4") is no address at all and must fall
+	// back to RemoteAddr. Testing first would return "", which omitempty then
+	// drops from the log line, losing the client address entirely.
+	ipAddress = strings.TrimSpace(ipAddress)
 	if ipAddress == "" {
-		ipAddress = r.RemoteAddr
+		ipAddress = strings.TrimSpace(r.RemoteAddr)
 	}
 
-	return strings.TrimSpace(ipAddress)
+	return ipAddress
 }
 
 type panicLog struct {

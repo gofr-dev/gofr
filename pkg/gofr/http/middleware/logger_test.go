@@ -453,16 +453,19 @@ func TestGetIPAddress_BackwardCompatible(t *testing.T) {
 		xff        string
 		setXFF     bool
 		remoteAddr string
+		// divergesFromOld marks inputs where the current implementation
+		// intentionally differs from the pre-optimization behavior.
+		divergesFromOld bool
 	}{
-		{"no header falls back to RemoteAddr", "", false, "10.0.0.1:1234"},
-		{"empty header falls back to RemoteAddr", "", true, "10.0.0.1:1234"},
-		{"single ip", "203.0.113.5", true, "10.0.0.1:1234"},
-		{"multiple ips takes first", "203.0.113.5, 70.41.3.18, 150.172.238.178", true, "10.0.0.1:1234"},
-		{"leading spaces trimmed", "  203.0.113.5 , 70.41.3.18", true, "10.0.0.1:1234"},
-		{"leading comma falls back to RemoteAddr", ", 70.41.3.18", true, "10.0.0.1:1234"},
-		{"single ip with trailing comma", "203.0.113.5,", true, "10.0.0.1:1234"},
-		{"only whitespace", "   ", true, "10.0.0.1:1234"},
-		{"ipv6", "2001:db8::1, 70.41.3.18", true, "10.0.0.1:1234"},
+		{"no header falls back to RemoteAddr", "", false, "10.0.0.1:1234", false},
+		{"empty header falls back to RemoteAddr", "", true, "10.0.0.1:1234", false},
+		{"single ip", "203.0.113.5", true, "10.0.0.1:1234", false},
+		{"multiple ips takes first", "203.0.113.5, 70.41.3.18, 150.172.238.178", true, "10.0.0.1:1234", false},
+		{"leading spaces trimmed", "  203.0.113.5 , 70.41.3.18", true, "10.0.0.1:1234", false},
+		{"leading comma falls back to RemoteAddr", ", 70.41.3.18", true, "10.0.0.1:1234", false},
+		{"single ip with trailing comma", "203.0.113.5,", true, "10.0.0.1:1234", false},
+		{"only whitespace", "   ", true, "10.0.0.1:1234", true},
+		{"ipv6", "2001:db8::1, 70.41.3.18", true, "10.0.0.1:1234", false},
 	}
 
 	for _, tc := range cases {
@@ -476,6 +479,18 @@ func TestGetIPAddress_BackwardCompatible(t *testing.T) {
 
 			got := getIPAddress(req)
 			want := getIPAddressOld(req)
+
+			if tc.divergesFromOld {
+				// Deliberate divergence: the original tested for emptiness
+				// BEFORE trimming, so a whitespace-only first entry produced ""
+				// instead of falling back to RemoteAddr — and omitempty then
+				// dropped the client address from the log line entirely.
+				assert.NotEqualf(t, want, got, "expected a deliberate divergence for input %q", tc.xff)
+				assert.Equalf(t, strings.TrimSpace(req.RemoteAddr), got,
+					"whitespace-only XFF must fall back to RemoteAddr for input %q", tc.xff)
+
+				return
+			}
 
 			assert.Equalf(t, want, got, "optimized getIPAddress diverged from the original for input %q", tc.xff)
 		})
@@ -1421,8 +1436,8 @@ func Test_LoggingContract_GetIPAddress(t *testing.T) {
 		{"XFF with a port keeps the port", "192.168.0.1:8080", "192.168.0.1:8080"},
 		{"lone comma falls back to RemoteAddr", ",", remote},
 		{"leading comma falls back to RemoteAddr", ",203.0.113.5", remote},
-		{"whitespace-only XFF yields the empty string, NOT RemoteAddr", " ", ""},
-		{"whitespace before a comma yields the empty string", " , 203.0.113.5", ""},
+		{"whitespace-only XFF falls back to RemoteAddr", " ", remote},
+		{"whitespace before a comma falls back to RemoteAddr", " , 203.0.113.5", remote},
 		{"IPv6 entry", "2001:db8::1, 203.0.113.5", "2001:db8::1"},
 		{"trailing comma keeps the first entry", "203.0.113.5,", "203.0.113.5"},
 	}
@@ -1447,11 +1462,14 @@ func Test_LoggingContract_EmptyIPIsOmittedFromWire(t *testing.T) {
 	rec := &logCharRecorder{}
 	req := logCharNewRequest(t, http.MethodGet, "http://dummy/ip")
 	req.RequestURI = "/ip"
-	req.RemoteAddr = "10.0.0.9:54321"
+	req.RemoteAddr = ""
 	req.Header.Set("X-Forwarded-For", " ")
 
 	logCharServe(t, LogProbes{}, rec, logCharStatusHandler(http.StatusOK), req)
 
+	// A whitespace-only XFF now falls back to RemoteAddr, so the only way to
+	// reach an empty ip is for RemoteAddr to be empty too. omitempty then drops
+	// the field from the wire.
 	rl := rec.requestLog(t, 0)
 	assert.Empty(t, rl.IP)
 
