@@ -109,11 +109,15 @@ func Metrics(metrics metrics) func(inner http.Handler) http.Handler {
 				path = r.URL.Path
 			}
 
-			if path == "/" || strings.HasPrefix(path, "/static") {
+			if path == "/" || isStaticAssetPath(path) {
 				path = r.URL.Path
 			}
 
-			path = strings.TrimSuffix(path, "/")
+			// Trim a trailing slash, but never reduce the root to "". Doing so
+			// recorded every request to "/" under an empty path label.
+			if path != "/" {
+				path = strings.TrimSuffix(path, "/")
+			}
 
 			// Skip recording for /graphql — it has its own dedicated metrics
 			// (app_graphql_*). time.Now() (vDSO call) is deferred past this
@@ -165,4 +169,17 @@ func Metrics(metrics metrics) func(inner http.Handler) http.Handler {
 			inner.ServeHTTP(srw, r)
 		})
 	}
+}
+
+// isStaticAssetPath reports whether path is the static-asset mount point or
+// something beneath it.
+//
+// It matches "/static" as a complete path segment. A plain
+// strings.HasPrefix(path, "/static") also matched unrelated routes such as
+// "/staticfiles/{id}" or "/statically/{id}", forcing them onto the raw request
+// URL and so giving those routes unbounded metric label cardinality.
+func isStaticAssetPath(path string) bool {
+	const staticPrefix = "/static"
+
+	return path == staticPrefix || strings.HasPrefix(path, staticPrefix+"/")
 }

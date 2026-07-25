@@ -190,18 +190,28 @@ func Logging(probes LogProbes, logger logger) func(inner http.Handler) http.Hand
 
 			srw.Header().Set("X-Correlation-ID", traceID)
 
-			defer func() { panicRecovery(recover(), srw, logger) }()
-
 			// Skip logging for default probe paths if log probes are disabled.
-			// time.Now() (vDSO call) is deferred past this so probe paths do
-			// not pay for a timestamp that is then thrown away.
-			if isLogProbeDisabled(probes, r.URL.Path) {
-				inner.ServeHTTP(w, r)
-				return
+			// time.Now() (vDSO call) is skipped with it so probe paths do not
+			// pay for a timestamp that is then thrown away.
+			skipLog := isLogProbeDisabled(probes, r.URL.Path)
+
+			var start time.Time
+			if !skipLog {
+				start = time.Now()
 			}
 
-			start := time.Now()
-			defer handleRequestLog(srw, r, start, traceID, spanID, logger)
+			// Recovery and the access log share one deferred call so that the
+			// panic is handled FIRST and the log then observes the status it
+			// wrote. As separate defers the log ran first (defers unwind LIFO),
+			// so a panicking request was recorded as a 200 at Log level while
+			// the client actually received the 500 written afterwards.
+			defer func() {
+				panicRecovery(recover(), srw, logger)
+
+				if !skipLog {
+					handleRequestLog(srw, r, start, traceID, spanID, logger)
+				}
+			}()
 
 			inner.ServeHTTP(srw, r)
 		})

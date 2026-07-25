@@ -1097,11 +1097,23 @@ func logCharAssertPanicRecord(t *testing.T, rec *logCharRecorder, wantErr string
 	records := rec.all()
 	require.NotEmpty(t, records)
 
-	last := records[len(records)-1]
-	assert.Equal(t, "ERROR", last.level)
+	// The panic record is emitted BEFORE the access log (recovery runs first),
+	// so locate it by type rather than by position.
+	var (
+		pl    panicLog
+		ok    bool
+		level string
+	)
 
-	pl, ok := last.arg.(panicLog)
-	require.True(t, ok, "panic record is %T, want panicLog", last.arg)
+	for _, rec := range records {
+		if p, isPanic := rec.arg.(panicLog); isPanic {
+			pl, ok, level = p, true, rec.level
+			break
+		}
+	}
+
+	require.True(t, ok, "no panicLog record was emitted; got %d records", len(records))
+	assert.Equal(t, "ERROR", level)
 	assert.Equal(t, wantErr, pl.Error)
 	assert.NotEmpty(t, pl.StackTrace)
 
@@ -1139,7 +1151,7 @@ func Test_LoggingContract_PanicLogJSONShape(t *testing.T) {
 // So on a panic the REQUEST log is emitted BEFORE the panic log, and because
 // panicRecovery has not yet written the 500 at that point, the request log
 // records response 200 for a request the client sees as a 500.
-func Test_LoggingContract_PanicAlsoEmitsRequestLogFirst(t *testing.T) {
+func Test_LoggingContract_PanicLogPrecedesRequestLog(t *testing.T) {
 	rec := &logCharRecorder{}
 	req := logCharNewRequest(t, http.MethodGet, "http://dummy/panic")
 
@@ -1148,17 +1160,18 @@ func Test_LoggingContract_PanicAlsoEmitsRequestLogFirst(t *testing.T) {
 	}, req)
 
 	records := rec.all()
-	require.Len(t, records, 2, "a panic emits both a request log and a panic log")
+	require.Len(t, records, 2, "a panic emits both a panic log and a request log")
 
-	rl, ok := records[0].arg.(*RequestLog)
-	require.True(t, ok, "the request log comes FIRST")
-	assert.Equal(t, "LOG", records[0].level,
-		"request log is routed to Log, not Error, because Status() is still 200 when it runs")
-	assert.Equal(t, http.StatusOK, rl.Response,
-		"request log reports 200 even though the client receives 500")
+	_, ok := records[0].arg.(panicLog)
+	require.True(t, ok, "the panic log comes FIRST, so recovery has written the 500")
+	assert.Equal(t, "ERROR", records[0].level)
 
-	_, ok = records[1].arg.(panicLog)
-	assert.True(t, ok, "the panic log comes SECOND")
+	rl, ok := records[1].arg.(*RequestLog)
+	require.True(t, ok, "the request log comes SECOND")
+	assert.Equal(t, http.StatusInternalServerError, rl.Response,
+		"the access log must report the 500 the client actually received")
+	assert.Equal(t, "ERROR", records[1].level,
+		"a 5xx access log is routed to Error, not Log")
 
 	assert.Equal(t, http.StatusInternalServerError, rr.Code)
 }
@@ -1180,7 +1193,9 @@ func Test_LoggingContract_PanicAfterWriteKeepsFirstStatus(t *testing.T) {
 
 	assert.Equal(t, http.StatusTeapot, rr.Code, "the first WriteHeader wins; no superfluous-header panic")
 	assert.Equal(t, "partial"+logCharPanicEnvelope, rr.Body.String())
-	assert.Equal(t, http.StatusTeapot, rec.requestLog(t, 0).Response)
+	// Records are [panicLog, RequestLog]: recovery runs before the access log.
+	assert.Equal(t, http.StatusTeapot, rec.requestLog(t, 1).Response,
+		"the status already written by the handler is preserved in the access log")
 }
 
 // Test_LoggingContract_PanicOnProbePathSkipsRequestLog pins that the probe-skip
@@ -1272,7 +1287,8 @@ func Test_LoggingContract_ProbePathPassesRawWriterToHandler(t *testing.T) {
 	logCharServe(t, probes, &logCharRecorder{}, handler(&normalIsWrapped),
 		logCharNewRequest(t, http.MethodGet, "http://dummy/api/users"))
 
-	assert.False(t, skippedIsWrapped, "probe path hands the handler the RAW ResponseWriter")
+	assert.True(t, skippedIsWrapped,
+		"probe path hands the handler the same wrapped writer as any other path")
 	assert.True(t, normalIsWrapped, "normal path hands the handler the pooled *StatusResponseWriter")
 }
 

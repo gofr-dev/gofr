@@ -608,17 +608,17 @@ func Test_MetricsContractTrailingSlashTrimming(t *testing.T) {
 			wantPath: "/raw/path",
 		},
 		{
-			name:     "root route yields an EMPTY path label (latent bug)",
+			name:     "root route is labeled \"/\", never the empty string",
 			route:    "/",
 			method:   http.MethodGet,
 			target:   "/",
-			wantPath: "",
+			wantPath: "/",
 		},
 		{
-			name:     "root request without a router also yields an EMPTY path label",
+			name:     "root request without a router is also labeled \"/\"",
 			method:   http.MethodGet,
 			target:   "/",
-			wantPath: "",
+			wantPath: "/",
 		},
 	})
 }
@@ -627,8 +627,9 @@ func Test_MetricsContractTrailingSlashTrimming(t *testing.T) {
 // strings.HasPrefix(path, "/static")` branch.
 //
 // Note the check is applied to the RESOLVED path (usually the route TEMPLATE),
-// not to r.URL.Path — and "/staticfiles" also satisfies HasPrefix("/static"),
-// which is a very likely unintended prefix match.
+// not to r.URL.Path. "/static" is matched as a whole path segment, so sibling
+// routes such as "/staticfiles/{id}" keep their template and therefore keep
+// bounded metric label cardinality.
 func Test_MetricsContractStaticPrefixForcesRawPath(t *testing.T) {
 	metCharRunPathCases(t, []metCharPathCase{
 		{
@@ -639,18 +640,18 @@ func Test_MetricsContractStaticPrefixForcesRawPath(t *testing.T) {
 			wantPath: "/static/bundle",
 		},
 		{
-			name:     "template /staticfiles also matches HasPrefix /static (unintended)",
+			name:     "template /staticfiles is NOT treated as a static asset path",
 			route:    "/staticfiles/{id}",
 			method:   http.MethodGet,
 			target:   "/staticfiles/42",
-			wantPath: "/staticfiles/42",
+			wantPath: "/staticfiles/{id}",
 		},
 		{
-			name:     "template /statically also matches HasPrefix /static (unintended)",
+			name:     "template /statically is NOT treated as a static asset path",
 			route:    "/statically/{id}",
 			method:   http.MethodGet,
 			target:   "/statically/9",
-			wantPath: "/statically/9",
+			wantPath: "/statically/{id}",
 		},
 		{
 			name:     "url under /static but template elsewhere keeps the template",

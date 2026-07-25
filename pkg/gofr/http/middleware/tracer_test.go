@@ -634,8 +634,9 @@ func Test_TracerContract_StatusCodeAttribute(t *testing.T) {
 	}
 }
 
-// Test_TracerContract_SpanKindStatusAndEvents pins that the middleware emits
-// an Internal span with an Unset status and no events — even for a 5xx.
+// Test_TracerContract_SpanKindStatusAndEvents pins that the middleware emits an
+// Internal span with no events, and that its status is Error for a 5xx and
+// Unset otherwise.
 func Test_TracerContract_SpanKindStatusAndEvents(t *testing.T) {
 	for _, status := range []int{http.StatusOK, http.StatusInternalServerError} {
 		t.Run(http.StatusText(status), func(t *testing.T) {
@@ -654,8 +655,17 @@ func Test_TracerContract_SpanKindStatusAndEvents(t *testing.T) {
 			got := spans[0]
 			assert.Equal(t, otelTrace.SpanKindInternal, got.SpanKind(),
 				"middleware never calls trace.WithSpanKind, so the SDK default (Internal) applies")
-			assert.Equal(t, codes.Unset, got.Status().Code, "no SetStatus call anywhere in the middleware")
-			assert.Empty(t, got.Status().Description)
+			// A 5xx marks the span Error (OTel HTTP semconv); everything
+			// below 500 — including 4xx, which is a client mistake rather
+			// than a server failure — stays Unset.
+			if status >= http.StatusInternalServerError {
+				assert.Equal(t, codes.Error, got.Status().Code)
+				assert.Equal(t, http.StatusText(status), got.Status().Description)
+			} else {
+				assert.Equal(t, codes.Unset, got.Status().Code)
+				assert.Empty(t, got.Status().Description)
+			}
+
 			assert.Empty(t, got.Events(), "middleware records no events (no RecordError)")
 			assert.Empty(t, got.Links())
 			assert.True(t, got.EndTime().After(got.StartTime()) || got.EndTime().Equal(got.StartTime()))
@@ -994,7 +1004,8 @@ func Test_TracerContract_StatusFlowsThroughLoggingChain(t *testing.T) {
 
 	attrs := tracerCharAttrs(spans[0])
 	assert.Equal(t, int64(http.StatusServiceUnavailable), attrs[1].Value.AsInt64())
-	assert.Equal(t, codes.Unset, spans[0].Status().Code, "5xx does not mark the span as errored")
+	assert.Equal(t, codes.Error, spans[0].Status().Code, "a 5xx marks the span as errored")
+	assert.Equal(t, http.StatusText(http.StatusServiceUnavailable), spans[0].Status().Description)
 
 	require.Len(t, lg.errors, 1, "5xx is logged via Error")
 	assert.Equal(t, http.StatusServiceUnavailable, lg.errors[0].Response)

@@ -8,6 +8,7 @@ import (
 	"github.com/gorilla/mux"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/codes"
 	"go.opentelemetry.io/otel/propagation"
 	"go.opentelemetry.io/otel/trace"
 
@@ -104,7 +105,17 @@ func Tracer(inner http.Handler) http.Handler {
 		// implicit 200 in that case, so the span attribute must report 200
 		// rather than be omitted (or worse, recorded as 0).
 		defer func(s trace.Span, rw *StatusResponseWriter) {
-			s.SetAttributes(attribute.Int("http.response.status_code", rw.Status()))
+			status := rw.Status()
+			s.SetAttributes(attribute.Int("http.response.status_code", status))
+
+			// OTel HTTP semconv: a server span MUST be marked Error for a 5xx.
+			// 4xx is left Unset — it describes a client mistake, not a failure
+			// of this server. Without this a failing request is
+			// indistinguishable from a successful one in any trace UI or
+			// error-rate query.
+			if status >= http.StatusInternalServerError {
+				s.SetStatus(codes.Error, http.StatusText(status))
+			}
 		}(span, srw)
 
 		inner.ServeHTTP(w, r.WithContext(ctxOut))
