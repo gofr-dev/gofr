@@ -54,8 +54,9 @@ GMP requires.
 ## Local run
 
 Locally, ADC comes from `gcloud auth application-default login`. To avoid a real
-backend, prefer the collector-based `examples/using-otlp-metrics` for local
-development, and use this example for GCP deployment.
+backend, prefer the collector-based OTLP setup in `examples/using-custom-metrics`
+(see its "Exporting via OTLP" section) for local development, and use this example
+for GCP deployment.
 
 ## Alternative: collector sidecar (fully GA)
 
