@@ -90,9 +90,15 @@ func (h handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		result, err = h.serveWithGoroutine(c, traceID, r)
 	}
 
-	// Handle custom headers if 'result' is a 'Response'.
-	if resp, ok := result.(response.Response); ok {
+	// Handle custom headers if 'result' is a 'Response'. A pointer is handled
+	// equivalently to the value form, otherwise its Headers are silently dropped.
+	switch resp := result.(type) {
+	case response.Response:
 		resp.SetCustomHeaders(w)
+	case *response.Response:
+		if resp != nil {
+			resp.SetCustomHeaders(w)
+		}
 	}
 
 	c.responder.Respond(result, err)

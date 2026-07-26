@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"mime"
 	"net/http"
 	"reflect"
 	"strings"
@@ -23,7 +24,11 @@ const (
 var (
 	errNoFileFound    = errors.New("no files were bounded")
 	errNonPointerBind = errors.New("bind error, cannot bind to a non pointer type")
-	errNonSliceBind   = errors.New("bind error: input is not a pointer to a byte slice")
+	// errUnsupportedContentType is returned when a request carries a body whose
+	// Content-Type Bind has no decoder for. Reported rather than ignored so the
+	// body is never silently discarded.
+	errUnsupportedContentType = errors.New("bind error, unsupported content type")
+	errNonSliceBind           = errors.New("bind error: input is not a pointer to a byte slice")
 )
 
 // Request is an abstraction over the underlying http.Request. This abstraction is useful because it allows us
@@ -58,8 +63,14 @@ func (r *Request) PathParam(key string) string {
 
 // Bind parses the request body and binds it to the provided interface.
 func (r *Request) Bind(i any) error {
-	v := r.req.Header.Get("Content-Type")
-	contentType := strings.Split(v, ";")[0]
+	// Binding into a non-pointer would unmarshal into a throwaway copy and leave
+	// the caller's value untouched, so reject it up front instead of silently
+	// doing nothing.
+	if rv := reflect.ValueOf(i); rv.Kind() != reflect.Pointer {
+		return errNonPointerBind
+	}
+
+	contentType := mediaType(r.req.Header.Get("Content-Type"))
 
 	switch contentType {
 	case contentTypeJSON:
@@ -77,7 +88,39 @@ func (r *Request) Bind(i any) error {
 		return r.bindBinary(i)
 	}
 
+	// An unrecognized media type means the body cannot be decoded. Returning nil
+	// would leave the caller's target zeroed with no error — the same silent
+	// no-op the non-pointer check above rejects, and the likelier one in
+	// practice (a client that posts a body but omits Content-Type).
+	//
+	// Only a request that actually carries a body is rejected: with no body
+	// there is nothing to decode and nothing lost, so binding stays a no-op for
+	// callers that Bind defensively on bodyless requests.
+	body, err := r.body()
+	if err != nil {
+		return err
+	}
+
+	if len(body) > 0 {
+		return fmt.Errorf("%w: %q", errUnsupportedContentType, contentType)
+	}
+
 	return nil
+}
+
+// mediaType extracts the bare media type from a Content-Type header value.
+// Per RFC 9110 the media type is case-insensitive and may be followed by
+// parameters and arbitrary optional whitespace, so `Application/JSON` and
+// `application/json ; charset=utf-8` must both resolve to `application/json`.
+func mediaType(header string) string {
+	parsed, _, err := mime.ParseMediaType(header)
+	if err != nil && parsed == "" {
+		// The header is malformed beyond a bad parameter list; fall back to a
+		// best-effort parse rather than losing an otherwise usable media type.
+		return strings.ToLower(strings.TrimSpace(strings.Split(header, ";")[0]))
+	}
+
+	return parsed
 }
 
 // HostName retrieves the hostname from the request.

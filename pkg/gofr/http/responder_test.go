@@ -1644,35 +1644,51 @@ func TestResponder_Char_Template(t *testing.T) {
 	}
 }
 
-// TestResponder_Char_TemplatePointerIsNotSpecial pins a sharp edge: the type
-// switch matches resTypes.Template by VALUE, so returning *resTypes.Template
-// falls through to the JSON envelope instead of rendering. Reported, not fixed.
-func TestResponder_Char_TemplatePointerIsNotSpecial(t *testing.T) {
+// TestResponder_Char_TemplatePointerIsRendered pins the fix for a sharp edge:
+// the type switch used to match resTypes.Template by VALUE only, so a
+// *resTypes.Template was JSON-serialized instead of rendered. It is now
+// dereferenced first and renders exactly like the value form.
+func TestResponder_Char_TemplatePointerIsRendered(t *testing.T) {
+	createTemplateFile(t, "./templates/char.html", "<h1>{{.Title}}</h1>")
+
+	defer removeTemplateDir(t)
+
 	w := httptest.NewRecorder()
 
-	NewResponder(w, http.MethodGet).Respond(&resTypes.Template{Name: "char.html", Data: "x"}, nil)
+	NewResponder(w, http.MethodGet).Respond(&resTypes.Template{
+		Name: "char.html", Data: map[string]string{"Title": "Hi"},
+	}, nil)
 
 	assert.Equal(t, http.StatusOK, w.Code)
-	assert.Equal(t, "application/json", w.Header().Get("Content-Type"))
-	//nolint:testifylint // exact bytes are the contract.
-	assert.Equal(t, "{\"data\":{\"Data\":\"x\",\"Name\":\"char.html\"}}\n", w.Body.String())
+	assert.Equal(t, "text/html", w.Header().Get("Content-Type"))
+	assert.Equal(t, "<h1>Hi</h1>", w.Body.String())
 }
 
-// TestResponder_Char_SpecialTypePointersFallThrough pins that every special
-// response type is matched by value only; a pointer to one is JSON-encoded.
-func TestResponder_Char_SpecialTypePointersFallThrough(t *testing.T) {
+// TestResponder_Char_SpecialTypePointersAreDereferenced pins the fix: every
+// special response type is now matched through a pointer too, so *T behaves
+// byte-for-byte like T. Previously each of these fell through to the JSON
+// envelope — a redirect returned 200 with a serialized struct and no Location
+// header, a file was base64-encoded, and so on. WIRE-FORMAT CHANGE for anyone
+// who returned a pointer to a special response type.
+func TestResponder_Char_SpecialTypePointersAreDereferenced(t *testing.T) {
 	tests := []struct {
-		name     string
-		data     any
-		wantBody string
+		name       string
+		data       any
+		wantStatus int
+		wantCType  string
+		wantBody   string
+		wantLoc    string
 	}{
 		{"file-ptr", &resTypes.File{Content: []byte("ab"), ContentType: "text/plain"},
-			"{\"data\":{\"Content\":\"YWI=\",\"ContentType\":\"text/plain\"}}\n"},
+			http.StatusOK, "text/plain", "ab", ""},
 		{"xml-ptr", &resTypes.XML{Content: []byte("<a/>")},
-			"{\"data\":{\"Content\":\"PGEvPg==\",\"ContentType\":\"\"}}\n"},
-		{"redirect-ptr", &resTypes.Redirect{URL: "/x"}, "{\"data\":{\"URL\":\"/x\"}}\n"},
-		{"raw-ptr", &resTypes.Raw{Data: "x"}, "{\"data\":{\"Data\":\"x\"}}\n"},
-		{"response-ptr", &resTypes.Response{Data: "x"}, "{\"data\":{\"data\":\"x\"}}\n"},
+			http.StatusOK, "application/xml", "<a/>", ""},
+		{"redirect-ptr", &resTypes.Redirect{URL: "/x"},
+			http.StatusFound, "", "", "/x"},
+		{"raw-ptr", &resTypes.Raw{Data: "x"},
+			http.StatusOK, "application/json", "\"x\"\n", ""},
+		{"response-ptr", &resTypes.Response{Data: "x"},
+			http.StatusOK, "application/json", "{\"data\":\"x\"}\n", ""},
 	}
 
 	for _, tc := range tests {
@@ -1681,10 +1697,37 @@ func TestResponder_Char_SpecialTypePointersFallThrough(t *testing.T) {
 
 			NewResponder(w, http.MethodGet).Respond(tc.data, nil)
 
-			assert.Equal(t, http.StatusOK, w.Code)
-			assert.Equal(t, "application/json", w.Header().Get("Content-Type"))
+			assert.Equal(t, tc.wantStatus, w.Code)
+			assert.Equal(t, tc.wantCType, w.Header().Get("Content-Type"))
 			assert.Equal(t, tc.wantBody, w.Body.String())
+			assert.Equal(t, tc.wantLoc, w.Header().Get("Location"))
 		})
+	}
+}
+
+// TestResponder_Char_SpecialTypeNilPointers pins that a typed NIL pointer to a
+// special response type is NOT dereferenced: it collapses to the ordinary empty
+// JSON envelope (200 "{}") rather than panicking.
+//
+// Note the sharp edge this leaves. Non-nil pointers now perform their response,
+// so a nil *Redirect returns 200 with a JSON body instead of redirecting — the
+// same symptom the pointer-dereference fix removed, reachable via a typed nil.
+// Dereferencing a nil pointer here would panic, and inventing a zero value would
+// invent a response the handler never asked for, so collapsing to the envelope
+// is the least-bad option and matches how a nil interface is already treated
+// throughout this file. Pinned deliberately, not by accident.
+func TestResponder_Char_SpecialTypeNilPointers(t *testing.T) {
+	for _, data := range []any{
+		(*resTypes.File)(nil), (*resTypes.XML)(nil), (*resTypes.Redirect)(nil),
+		(*resTypes.Raw)(nil), (*resTypes.Response)(nil), (*resTypes.Template)(nil),
+		(*resTypes.Stream)(nil),
+	} {
+		w := httptest.NewRecorder()
+
+		NewResponder(w, http.MethodGet).Respond(data, nil)
+
+		assert.Equal(t, http.StatusOK, w.Code)
+		assert.Equal(t, "{}\n", w.Body.String())
 	}
 }
 

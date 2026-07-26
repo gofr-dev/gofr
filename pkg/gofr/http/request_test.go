@@ -318,14 +318,24 @@ func TestBind_BinaryOctetStream_NotPointerToByteSlice(t *testing.T) {
 	}
 	req.req.Header.Set("Content-Type", "binary/octet-stream")
 
-	err := req.Bind("invalid input")
+	// A non-pointer target is now rejected up front by Bind with errNonPointerBind
+	// rather than reaching bindBinary — binding into a value could never have
+	// worked, and it used to be silent for every other content type.
+	if err := req.Bind("invalid input"); !errors.Is(err, errNonPointerBind) {
+		t.Fatalf("Expected error: %v, got: %v", errNonPointerBind, err)
+	}
+
+	// A pointer to something that is not a []byte still reaches bindBinary.
+	var notBytes string
+
+	err := req.Bind(&notBytes)
 
 	if !errors.Is(err, errNonSliceBind) {
 		t.Fatalf("Expected error: %v, got: %v", errNonSliceBind, err)
 	}
 
-	if !strings.Contains(err.Error(), "input is not a pointer to a byte slice: invalid input") {
-		t.Errorf("Expected error to contain: input is not a pointer to a byte slice: invalid input, got: %v", err)
+	if !strings.Contains(err.Error(), "input is not a pointer to a byte slice") {
+		t.Errorf("Expected error to contain: input is not a pointer to a byte slice, got: %v", err)
 	}
 }
 
@@ -392,7 +402,9 @@ func TestBind_UnsupportedContentType(t *testing.T) {
 
 	err := r.Bind(&struct{}{})
 
-	assert.NoError(t, err)
+	// A body the framework cannot decode is reported rather than silently
+	// discarded; binding a bodyless request stays a no-op.
+	require.ErrorIs(t, err, errUnsupportedContentType)
 }
 
 func TestParam_NonExistent(t *testing.T) {
@@ -594,10 +606,10 @@ func TestRequest_Char_BindJSON(t *testing.T) {
 		{"valid", "application/json", `{"a":"x","b":5}`, "", charBindTarget{A: "x", B: 5}},
 		// The content type is split on ";", so parameters are tolerated.
 		{"with-charset", "application/json; charset=utf-8", `{"a":"x"}`, "", charBindTarget{A: "x"}},
-		// SHARP EDGE (pinned as-is): the content type is split on ";" but never
-		// trimmed, so `application/json ; charset=utf-8` yields "application/json "
-		// (trailing space) which matches nothing — Bind silently does nothing.
-		{"with-space-before-semicolon-is-a-noop", "application/json ; charset=utf-8", `{"a":"x"}`, "", charBindTarget{}},
+		// FIXED (was a silent no-op): the header used to be split on ";" without
+		// trimming, so `application/json ; charset=utf-8` yielded "application/json "
+		// and matched nothing. mime.ParseMediaType now handles the whitespace.
+		{"with-space-before-semicolon", "application/json ; charset=utf-8", `{"a":"x"}`, "", charBindTarget{A: "x"}},
 		// Unknown JSON keys are silently ignored.
 		{"unknown-keys-ignored", "application/json", `{"a":"x","zz":1}`, "", charBindTarget{A: "x"}},
 		// Absent keys leave the target's existing (zero) value untouched.
@@ -662,20 +674,25 @@ func TestRequest_Char_BindJSON(t *testing.T) {
 	}
 }
 
-// TestRequest_Char_BindJSONNonPointerIsSilentNoOp pins a sharp edge: Bind takes
-// `any` and unmarshals into `&i`, so passing a non-pointer value binds into a
-// throwaway copy of the interface. No error is returned and the caller's value
-// is untouched — a typo like `c.Bind(target)` fails completely silently.
-func TestRequest_Char_BindJSONNonPointerIsSilentNoOp(t *testing.T) {
-	req := newCharRequest(t, "/x", "application/json", `{"a":"x","b":5}`)
+// TestRequest_Char_BindNonPointerErrors pins the fix for a sharp edge: Bind
+// takes `any` and used to unmarshal into `&i`, so a non-pointer target bound
+// into a throwaway copy of the interface and a typo like `c.Bind(target)` failed
+// completely silently. It now reports errNonPointerBind for every content type,
+// matching what the form/multipart paths already did.
+func TestRequest_Char_BindNonPointerErrors(t *testing.T) {
+	for _, ct := range []string{"application/json", "binary/octet-stream", "text/plain", ""} {
+		t.Run("ct="+ct, func(t *testing.T) {
+			req := newCharRequest(t, "/x", ct, `{"a":"x","b":5}`)
 
-	target := charBindTarget{}
+			target := charBindTarget{}
 
-	// Deliberately binding to a non-pointer to characterize the silent no-op.
-	err := req.Bind(target)
+			err := req.Bind(target)
 
-	require.NoError(t, err, "no error is reported for a non-pointer target")
-	assert.Equal(t, charBindTarget{}, target, "the caller's value is left untouched")
+			require.ErrorIs(t, err, errNonPointerBind)
+			assert.Equal(t, "bind error, cannot bind to a non pointer type", err.Error())
+			assert.Equal(t, charBindTarget{}, target, "the caller's value is still left untouched")
+		})
+	}
 }
 
 // TestRequest_Char_BindJSONIntoNonStructTargets pins binding into the
@@ -719,21 +736,15 @@ func TestRequest_Char_BindJSONIntoNonStructTargets(t *testing.T) {
 }
 
 // TestRequest_Char_BindUnhandledContentTypes pins that Bind is a NO-OP that
-// returns nil for any content type it does not recognize — including a missing
-// header and a differently-cased one. A handler that ignores Bind's error sees
-// an all-zero struct rather than a failure.
+// returns nil for any content type it does not recognize. A handler that ignores
+// Bind's error sees an all-zero struct rather than a failure.
 func TestRequest_Char_BindUnhandledContentTypes(t *testing.T) {
 	for _, ct := range []string{
 		"",
 		"text/plain",
 		"application/xml",
-		"application/JSON",  // matching is case SENSITIVE
-		"Application/json",  // ...in both halves
-		"application/json ", // a trailing space is not trimmed
-		" application/json", // nor a leading one
 		"application/jsonx", // no prefix matching
 		"text/json",
-		"application/x-www-form-urlencoded ", // trailing space again defeats the match
 	} {
 		t.Run("ct="+ct, func(t *testing.T) {
 			req := newCharRequest(t, "/x", ct, `{"a":"x","b":5}`)
@@ -742,10 +753,68 @@ func TestRequest_Char_BindUnhandledContentTypes(t *testing.T) {
 
 			err := req.Bind(&got)
 
-			require.NoError(t, err, "unhandled content types must not error")
-			assert.Equal(t, charBindTarget{}, got, "unhandled content types must not bind")
+			// A body that cannot be decoded is reported. Leaving the target
+			// zeroed and returning nil was the same silent no-op the
+			// non-pointer check rejects, and the likelier one in practice.
+			require.ErrorIs(t, err, errUnsupportedContentType)
+			assert.Equal(t, charBindTarget{}, got, "nothing is bound from an unhandled content type")
 		})
 	}
+}
+
+// TestRequest_Char_BindUnhandledContentTypeWithoutBody pins the carve-out: with
+// no body there is nothing to decode and nothing lost, so binding an unhandled
+// content type stays a no-op rather than erroring. This keeps handlers that Bind
+// defensively on bodyless requests working.
+func TestRequest_Char_BindUnhandledContentTypeWithoutBody(t *testing.T) {
+	for _, ct := range []string{"", "text/plain", "application/xml"} {
+		t.Run("ct="+ct, func(t *testing.T) {
+			req := newCharRequest(t, "/x", ct, "")
+
+			var got charBindTarget
+
+			require.NoError(t, req.Bind(&got))
+			assert.Equal(t, charBindTarget{}, got)
+		})
+	}
+}
+
+// TestRequest_Char_BindContentTypeIsNormalized pins the fix for case-sensitive,
+// untrimmed content-type matching. Every spelling below used to fall through to
+// the unhandled branch and silently leave the target all-zero; the media type is
+// now parsed per RFC 9110, so case and surrounding whitespace are irrelevant.
+func TestRequest_Char_BindContentTypeIsNormalized(t *testing.T) {
+	for _, ct := range []string{
+		"application/json",
+		"application/JSON",
+		"Application/json",
+		"APPLICATION/JSON",
+		"application/json ",
+		" application/json",
+		"application/json;charset=utf-8",
+		"application/json ; charset=UTF-8",
+	} {
+		t.Run("ct="+ct, func(t *testing.T) {
+			req := newCharRequest(t, "/x", ct, `{"a":"x","b":5}`)
+
+			var got charBindTarget
+
+			require.NoError(t, req.Bind(&got))
+			assert.Equal(t, charBindTarget{A: "x", B: 5}, got)
+		})
+	}
+
+	// The same normalization applies to the form path.
+	t.Run("form-urlencoded-trailing-space", func(t *testing.T) {
+		type target struct{ Name string }
+
+		req := newCharRequest(t, "/x", "application/x-www-form-urlencoded ", "Name=alice")
+
+		var got target
+
+		require.NoError(t, req.Bind(&got))
+		assert.Equal(t, target{Name: "alice"}, got)
+	})
 }
 
 // TestRequest_Char_BindFormURLEncoded pins the form-urlencoded path, including

@@ -49,6 +49,10 @@ type Responder struct {
 // Respond sends a response with the given data and handles potential errors, setting appropriate
 // status codes and formatting responses as JSON or raw data as needed.
 func (r Responder) Respond(data any, err error) {
+	// A pointer to a special response type must behave exactly like its value form,
+	// otherwise it silently falls through to the JSON envelope below.
+	data = derefSpecialResponse(data)
+
 	if r.handleSpecialResponseTypes(data, err) {
 		return
 	}
@@ -114,6 +118,42 @@ func putRespBuf(buf *bytes.Buffer) {
 	if buf.Cap() <= maxRespPooledBuf {
 		respBufPool.Put(buf)
 	}
+}
+
+// derefSpecialResponse unwraps a pointer to one of the special response types
+// into its value form, so *resTypes.Redirect is redirected, *resTypes.Template
+// is rendered and so on, exactly like their value counterparts. Anything else —
+// including a nil pointer — is returned untouched.
+func derefSpecialResponse(data any) any {
+	switch v := data.(type) {
+	case *resTypes.Stream:
+		return derefResponseValue(v)
+	case *resTypes.File:
+		return derefResponseValue(v)
+	case *resTypes.Template:
+		return derefResponseValue(v)
+	case *resTypes.XML:
+		return derefResponseValue(v)
+	case *resTypes.Redirect:
+		return derefResponseValue(v)
+	case *resTypes.Raw:
+		return derefResponseValue(v)
+	case *resTypes.Response:
+		return derefResponseValue(v)
+	}
+
+	return data
+}
+
+// derefResponseValue returns the value p points to. A nil pointer is returned
+// as-is — still typed, so the existing typed-nil handling in isNil and the
+// method-based status mapping behave exactly as they did before.
+func derefResponseValue[T any](p *T) any {
+	if p != nil {
+		return *p
+	}
+
+	return p
 }
 
 // handleSpecialResponseTypes handles special response types that bypass JSON encoding.
