@@ -81,7 +81,7 @@ Response example:
 
 > You may return these response types either by value or as a pointer — `response.Raw{...}` and
 > `&response.Raw{...}` behave identically. The same applies to `response.File`, `response.XML`,
-> `response.Template`, `response.Redirect` and `response.Response`.
+> `response.Template`, `response.Redirect`, `response.Stream` and `response.Response`.
 >
 > A **nil** typed pointer is the exception: it produces the ordinary empty JSON response rather
 > than performing the special response, so return the value (or a non-nil pointer) rather than a

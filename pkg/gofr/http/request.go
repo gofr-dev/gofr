@@ -155,6 +155,14 @@ func (r *Request) Params(key string) []string {
 }
 
 func (r *Request) body() ([]byte, error) {
+	// A server-received request always has a non-nil Body, but one built by
+	// hand — as in a handler unit test — may not, and io.ReadAll(nil) panics.
+	// Treat an absent body as an empty one so callers get an ordinary decode
+	// error (or, for a type with no decoder, a no-op) instead of a crash.
+	if r.req.Body == nil {
+		return nil, nil
+	}
+
 	bodyBytes, err := io.ReadAll(r.req.Body)
 	if err != nil {
 		return nil, err

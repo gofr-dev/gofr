@@ -739,12 +739,11 @@ func Test_TracerContract_ReusesStatusResponseWriter(t *testing.T) {
 		req := httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/double", http.NoBody)
 		handler.ServeHTTP(rr, req)
 
-		// LATENT: production wires r.Use(Tracer, Logging, ...) so Tracer is the
-		// OUTER middleware and its type assertion always fails -> it wraps
-		// locally, and Logging then wraps that wrapper again. Two
-		// StatusResponseWriter layers are live on every production request,
-		// contradicting the "we are not after Logging ... uncommon" comment in
-		// tracer.go.
+		// Production wires r.Use(Tracer, Logging, ...), so Tracer is the OUTER
+		// middleware: its type assertion always fails, it wraps locally, and
+		// Logging then wraps that wrapper again. Two StatusResponseWriter
+		// layers are therefore live on every production request — which is what
+		// tracer.go's comment now describes.
 		require.Len(t, layers, 3, "expected raw recorder wrapped by two StatusResponseWriters")
 		assert.IsType(t, &StatusResponseWriter{}, layers[0])
 		assert.IsType(t, &StatusResponseWriter{}, layers[1])

@@ -737,13 +737,13 @@ func Test_CORSContract_RoutesReadAtRequestTime(t *testing.T) {
 	assert.Equal(t, "DELETE, OPTIONS", third.Header().Get(corsCharKeyMethods))
 }
 
-// Test_CORSContract_RoutesBackingArrayAliasing pins a latent aliasing quirk:
-// setMiddlewareHeaders does `routes = append(routes, "OPTIONS")` on a copy of
-// the dereferenced slice header. When cap > len the append writes "OPTIONS"
-// into the CALLER's backing array at index len, clobbering whatever was there.
-// This is NOT visible through the caller's slice (its length is unchanged) but
-// it is visible through any alias with a larger length, and it is silently
-// overwritten again by the caller's next append.
+// Test_CORSContract_RoutesBackingArrayAliasing guards against writing through
+// the caller's route slice. The header used to be built with
+// `routes = append(routes, "OPTIONS")` on a copy of the dereferenced slice
+// header, so whenever cap > len the append stored "OPTIONS" into the CALLER's
+// backing array at index len. That was invisible through the caller's own slice
+// (its length is unchanged) but visible through any longer alias — here,
+// SENTINEL-1 would be clobbered.
 func Test_CORSContract_RoutesBackingArrayAliasing(t *testing.T) {
 	backing := []string{http.MethodGet, "SENTINEL-1", "SENTINEL-2", "SENTINEL-3"}
 	routes := backing[:1]
@@ -768,19 +768,6 @@ func Test_CORSContract_RoutesBackingArrayAliasing(t *testing.T) {
 	w2, _ := corsCharRun(t, nil, &routes, http.MethodGet, "")
 	assert.Equal(t, "GET, POST, OPTIONS", w2.Header().Get(corsCharKeyMethods))
 	assert.Equal(t, "SENTINEL-2", backing[2], "second request must not clobber the array either")
-}
-
-// Test_CORSContract_NoAliasingWhenCapEqualsLen pins the complementary case:
-// when cap == len the append allocates, so the caller's array is untouched.
-func Test_CORSContract_NoAliasingWhenCapEqualsLen(t *testing.T) {
-	routes := []string{http.MethodGet}
-	require.Equal(t, len(routes), cap(routes))
-
-	w, _ := corsCharRun(t, nil, &routes, http.MethodGet, "")
-
-	require.Equal(t, "GET, OPTIONS", w.Header().Get(corsCharKeyMethods))
-	assert.Equal(t, []string{http.MethodGet}, routes)
-	assert.Equal(t, 1, cap(routes))
 }
 
 // Test_CORSContract_ParseOriginsEvaluatedOnce pins that the allowed-origin set

@@ -1048,3 +1048,47 @@ func TestRequest_Char_BodyIsReplayable(t *testing.T) {
 	//nolint:testifylint // exact bytes are the contract.
 	assert.Equal(t, `{"a":"x","b":5}`, string(rest))
 }
+
+// TestRequest_Char_BindNilBodyDoesNotPanic pins that a request built without a
+// body — the standard handler unit-test construction, where http.NewRequest
+// leaves Body nil — never panics.
+//
+// io.ReadAll(nil) panics, so every path that reads the body has to tolerate an
+// absent one. A decodable content type reports an ordinary decode error and one
+// with no decoder stays a no-op, matching the documented "no body, nothing
+// lost" rule.
+func TestRequest_Char_BindNilBodyDoesNotPanic(t *testing.T) {
+	for _, tc := range []struct {
+		contentType string
+		wantErr     bool
+	}{
+		{"application/json", true}, // empty input is a JSON decode error
+		{"text/plain", false},      // no decoder, no body: nothing to do
+		{"", false},
+	} {
+		t.Run("ct="+tc.contentType, func(t *testing.T) {
+			// nil, not http.NoBody: a nil Body is exactly what this pins.
+			//nolint:gocritic // httpNoBody — the nil body IS the case under test.
+			req, err := http.NewRequestWithContext(t.Context(), http.MethodGet, "http://dummy/x", nil)
+			require.NoError(t, err)
+			require.Nil(t, req.Body, "precondition: the request carries no body")
+
+			if tc.contentType != "" {
+				req.Header.Set("Content-Type", tc.contentType)
+			}
+
+			var got charBindTarget
+
+			require.NotPanics(t, func() {
+				bindErr := NewRequest(req).Bind(&got)
+				if tc.wantErr {
+					require.Error(t, bindErr)
+				} else {
+					require.NoError(t, bindErr)
+				}
+			})
+
+			assert.Equal(t, charBindTarget{}, got)
+		})
+	}
+}
