@@ -79,6 +79,14 @@ Response example:
 ]
 ```
 
+> You may return these response types either by value or as a pointer — `response.Raw{...}` and
+> `&response.Raw{...}` behave identically. The same applies to `response.File`, `response.XML`,
+> `response.Template`, `response.Redirect` and `response.Response`.
+>
+> A **nil** typed pointer is the exception: it produces the ordinary empty JSON response rather
+> than performing the special response, so return the value (or a non-nil pointer) rather than a
+> pointer variable that might be nil.
+
 ### XML responses
 
 If you need to respond with XML without JSON encoding, return `response.XML`. It bypasses JSON encoding just like `response.File` or `response.Template` and writes the bytes directly to the client. The `ContentType` defaults to `application/xml` but can be overridden.
