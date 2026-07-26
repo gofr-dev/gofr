@@ -168,14 +168,23 @@ func (c *Container) createPubSub(conf config.Config) {
 }
 
 // ShutdownMetrics flushes pending metrics and shuts down the metrics provider.
-// It is safe to call when no provider was configured. Push exporters (e.g. OTLP)
-// rely on this to emit their final window before the process exits.
+// It is safe to call when no provider was configured, and idempotent. Push
+// exporters (e.g. OTLP) rely on this to emit their final window before the
+// process exits — MeterProvider.Shutdown flushes pending telemetry itself (via
+// the reader's Shutdown), so no separate ForceFlush is needed. The provider's
+// Shutdown is internally guarded by sync.Once and returns ErrReaderShutdown on
+// any call after the first; since App.Shutdown is public a manual call plus the
+// signal handler can invoke this twice, so that sentinel is treated as a no-op.
 func (c *Container) ShutdownMetrics(ctx context.Context) error {
 	if c.metricsProvider == nil {
 		return nil
 	}
 
-	return errors.Join(c.metricsProvider.ForceFlush(ctx), c.metricsProvider.Shutdown(ctx))
+	if err := c.metricsProvider.Shutdown(ctx); err != nil && !errors.Is(err, metricSdk.ErrReaderShutdown) {
+		return err
+	}
+
+	return nil
 }
 
 func (c *Container) Close() error {

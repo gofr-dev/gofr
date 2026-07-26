@@ -10,6 +10,11 @@ import (
 // Builder constructs a metric Reader for a single push-export destination.
 // Built-in exporters (otlp) and optional submodules (gcp) self-register via
 // Register in an init() function; Build then selects one by name.
+//
+// Experimental: this is a new public extension point and its shape (returning a
+// metricSdk.Reader, the Config/Logger arguments) may change in a future minor
+// release as more vendor exporters land. Pin your GoFr version if you register
+// custom exporters against it.
 type Builder func(ctx context.Context, cfg *Config, logger Logger) (metricSdk.Reader, error)
 
 //nolint:gochecknoglobals // package-level registry is the intended extension point, guarded by a mutex.

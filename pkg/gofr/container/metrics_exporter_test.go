@@ -258,4 +258,11 @@ func TestContainer_ShutdownMetrics(t *testing.T) {
 	if err := c.ShutdownMetrics(context.Background()); err != nil {
 		t.Errorf("configured provider: expected nil error, got %v", err)
 	}
+
+	// Idempotent: a second call is a no-op returning the first result, not the
+	// MeterProvider's ErrReaderShutdown. App.Shutdown is public, so a manual call
+	// plus the signal handler can legitimately invoke this twice.
+	if err := c.ShutdownMetrics(context.Background()); err != nil {
+		t.Errorf("repeat call: expected nil error from idempotent shutdown, got %v", err)
+	}
 }

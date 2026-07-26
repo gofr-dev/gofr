@@ -62,6 +62,10 @@ func buildReader(ctx context.Context, cfg *exporters.Config, logger exporters.Lo
 	opts := []otlpmetricgrpc.Option{
 		otlpmetricgrpc.WithEndpoint(endpoint),
 		otlpmetricgrpc.WithTLSCredentials(credentials.NewTLS(nil)),
+		// Pin cumulative explicitly. GMP only ingests cumulative; the SDK default
+		// happens to be cumulative, but setting it here makes the invariant a code
+		// fact a future edit must consciously change rather than a silent default.
+		otlpmetricgrpc.WithTemporalitySelector(metricSdk.DefaultTemporalitySelector),
 		otlpmetricgrpc.WithDialOption(
 			grpc.WithPerRPCCredentials(oauth.TokenSource{TokenSource: creds.TokenSource}),
 		),
