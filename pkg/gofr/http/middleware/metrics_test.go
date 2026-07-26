@@ -422,7 +422,12 @@ func Test_MetricsContractNoOtherMetricsEmitted(t *testing.T) {
 
 	metCharServe(t, handler, http.MethodGet, "/ping")
 
-	for _, c := range rec.all() {
+	calls := rec.all()
+	// Guard the loop: with no recorded calls the assertions below would not run
+	// at all and the test would pass even if the middleware emitted nothing.
+	require.Len(t, calls, 1, "exactly one metric is emitted per request")
+
+	for _, c := range calls {
 		require.Equal(t, metCharKindHistogram, c.kind, "only RecordHistogram may be called")
 		require.Equal(t, metCharMetricName, c.name)
 	}

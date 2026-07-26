@@ -136,9 +136,10 @@ func TestBind_NoContentType(t *testing.T) {
 		B int    `json:"b"`
 	}{}
 
-	_ = req.Bind(&x)
+	// A body with no Content-Type is now reported rather than silently ignored.
+	require.ErrorIs(t, req.Bind(&x), errUnsupportedContentType)
 
-	// The data won't bind so zero values are expected
+	// The data still does not bind, so zero values are expected.
 	if x.A != "" || x.B != 0 {
 		t.Errorf("Bind error. Got: %v", x)
 	}
@@ -320,7 +321,8 @@ func TestBind_BinaryOctetStream_NotPointerToByteSlice(t *testing.T) {
 
 	// A non-pointer target is now rejected up front by Bind with errNonPointerBind
 	// rather than reaching bindBinary — binding into a value could never have
-	// worked, and it used to be silent for every other content type.
+	// worked, and it used to be silent for the JSON and binary paths (the
+	// form and multipart paths already returned errNonPointerBind).
 	if err := req.Bind("invalid input"); !errors.Is(err, errNonPointerBind) {
 		t.Fatalf("Expected error: %v, got: %v", errNonPointerBind, err)
 	}
@@ -604,7 +606,7 @@ func TestRequest_Char_BindJSON(t *testing.T) {
 		want        charBindTarget
 	}{
 		{"valid", "application/json", `{"a":"x","b":5}`, "", charBindTarget{A: "x", B: 5}},
-		// The content type is split on ";", so parameters are tolerated.
+		// Parameters are tolerated: the media type is parsed, not string-split.
 		{"with-charset", "application/json; charset=utf-8", `{"a":"x"}`, "", charBindTarget{A: "x"}},
 		// FIXED (was a silent no-op): the header used to be split on ";" without
 		// trimming, so `application/json ; charset=utf-8` yielded "application/json "
@@ -675,7 +677,7 @@ func TestRequest_Char_BindJSON(t *testing.T) {
 }
 
 // TestRequest_Char_BindNonPointerErrors pins the fix for a sharp edge: Bind
-// takes `any` and used to unmarshal into `&i`, so a non-pointer target bound
+// takes `any` and unmarshals into `&i`, so a non-pointer target used to bind
 // into a throwaway copy of the interface and a typo like `c.Bind(target)` failed
 // completely silently. It now reports errNonPointerBind for every content type,
 // matching what the form/multipart paths already did.
@@ -735,9 +737,10 @@ func TestRequest_Char_BindJSONIntoNonStructTargets(t *testing.T) {
 	})
 }
 
-// TestRequest_Char_BindUnhandledContentTypes pins that Bind is a NO-OP that
-// returns nil for any content type it does not recognize. A handler that ignores
-// Bind's error sees an all-zero struct rather than a failure.
+// TestRequest_Char_BindUnhandledContentTypes pins that a body Bind cannot decode
+// is REPORTED rather than discarded. Returning nil here left the caller's target
+// all-zero with no failure — the same silent no-op the non-pointer check rejects.
+// A request with no body is the documented exception, covered separately below.
 func TestRequest_Char_BindUnhandledContentTypes(t *testing.T) {
 	for _, ct := range []string{
 		"",
@@ -780,8 +783,9 @@ func TestRequest_Char_BindUnhandledContentTypeWithoutBody(t *testing.T) {
 }
 
 // TestRequest_Char_BindContentTypeIsNormalized pins the fix for case-sensitive,
-// untrimmed content-type matching. Every spelling below used to fall through to
-// the unhandled branch and silently leave the target all-zero; the media type is
+// untrimmed content-type matching. The case- and whitespace-variant spellings
+// below used to fall through to the unhandled branch and silently leave the
+// target all-zero (the exactly-canonical ones always worked); the media type is
 // now parsed per RFC 9110, so case and surrounding whitespace are irrelevant.
 func TestRequest_Char_BindContentTypeIsNormalized(t *testing.T) {
 	for _, ct := range []string{
