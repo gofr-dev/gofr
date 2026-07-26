@@ -8,9 +8,9 @@ import (
 const (
 	allowedHeaders = "Authorization, Content-Type, x-requested-with, origin, true-client-ip, X-Correlation-ID"
 
+	headerAccessControlAllowOrigin  = "Access-Control-Allow-Origin"
 	headerAccessControlAllowMethods = "Access-Control-Allow-Methods"
 	headerAccessControlAllowHeaders = "Access-Control-Allow-Headers"
-	headerAccessControlAllowOrigin  = "Access-Control-Allow-Origin"
 )
 
 // CORS is a middleware that adds CORS (Cross-Origin Resource Sharing) headers to the response.
@@ -38,8 +38,6 @@ func CORS(middlewareConfigs map[string]string, routes *[]string) func(inner http
 func setMiddlewareHeaders(middlewareConfigs map[string]string, routes []string,
 	w http.ResponseWriter, origin string, allowedOrigins map[string]bool,
 ) {
-	routes = append(routes, "OPTIONS")
-
 	// Handle Access-Control-Allow-Origin separately for dynamic matching.
 	if allowedOrigins["*"] {
 		w.Header().Set(headerAccessControlAllowOrigin, "*")
@@ -48,30 +46,57 @@ func setMiddlewareHeaders(middlewareConfigs map[string]string, routes []string,
 		w.Header().Add("Vary", "Origin")
 	}
 
-	// Set default headers (excluding origin, handled above)
-	defaultHeaders := map[string]string{
-		headerAccessControlAllowMethods: strings.Join(routes, ", "),
-		headerAccessControlAllowHeaders: allowedHeaders,
-	}
+	// Walk the configuration once, classifying each entry by its CANONICAL
+	// header name. Header names are case-insensitive and Header.Set canonicalizes
+	// whatever it is given, so matching on the raw key would let a
+	// differently-cased spelling reach a header it was never checked against —
+	// replacing the origin negotiated above, or overwriting the default
+	// allow-list instead of extending it.
+	var customMethods, customHeaders string
 
-	for header, defaultValue := range defaultHeaders {
-		if customValue, ok := middlewareConfigs[header]; ok && customValue != "" {
-			if header == headerAccessControlAllowHeaders {
-				w.Header().Set(header, defaultValue+", "+customValue)
-			} else {
-				w.Header().Set(header, customValue)
-			}
-		} else {
-			w.Header().Set(header, defaultValue)
+	for key, value := range middlewareConfigs {
+		switch http.CanonicalHeaderKey(key) {
+		case headerAccessControlAllowOrigin:
+			// Always negotiated against the configured allow-list above; never
+			// overridable from here.
+		case headerAccessControlAllowMethods:
+			customMethods = value
+		case headerAccessControlAllowHeaders:
+			customHeaders = value
+		default:
+			w.Header().Set(key, value)
 		}
 	}
 
-	// Handle additional custom headers (not part of defaultHeaders or origin)
-	for header, customValue := range middlewareConfigs {
-		if _, ok := defaultHeaders[header]; !ok && header != headerAccessControlAllowOrigin {
-			w.Header().Set(header, customValue)
-		}
+	// A configured method list replaces the derived one; configured headers
+	// EXTEND the defaults rather than replacing them, so the framework's own
+	// required headers (Authorization, Content-Type, X-Correlation-ID, ...)
+	// cannot be dropped by adding one of your own.
+	if customMethods == "" {
+		customMethods = joinAllowedMethods(routes)
 	}
+
+	allowHeaderValue := allowedHeaders
+	if customHeaders != "" {
+		allowHeaderValue = allowedHeaders + ", " + customHeaders
+	}
+
+	w.Header().Set(headerAccessControlAllowMethods, customMethods)
+	w.Header().Set(headerAccessControlAllowHeaders, allowHeaderValue)
+}
+
+// joinAllowedMethods renders the Access-Control-Allow-Methods value: the
+// registered routes plus OPTIONS.
+//
+// It deliberately does not append to routes. That slice shares its backing
+// array with the caller's (the router's RegisteredRoutes), so appending in
+// place writes "OPTIONS" over the caller's next element whenever cap > len.
+func joinAllowedMethods(routes []string) string {
+	if len(routes) == 0 {
+		return http.MethodOptions
+	}
+
+	return strings.Join(routes, ", ") + ", " + http.MethodOptions
 }
 
 // parseOrigins splits a comma-separated origin string into a set.

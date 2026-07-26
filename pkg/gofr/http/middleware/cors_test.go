@@ -602,10 +602,17 @@ func corsCharGarbageKeyCases() []corsCharCase {
 			expCode:  http.StatusFound, expBody: corsCharBody, expInner: 1,
 		},
 		{
-			name:   "lower cased allow-headers key bypasses the concat branch and replaces the defaults",
+			// A differently-cased allow-headers key EXTENDS the defaults, exactly
+			// like the canonical spelling. Matching the raw key previously made
+			// it miss the concat branch and replace the list instead, silently
+			// dropping Authorization, Content-Type and X-Correlation-ID.
+			name:   "lower cased allow-headers key extends the defaults, like the canonical key",
 			config: map[string]string{"access-control-allow-headers": "only-this"}, method: http.MethodGet, routes: twoRoutes,
-			expLines: []string{corsCharKeyHeaders + ": only-this", baseMethods, corsCharOriginLine("*")},
-			expCode:  http.StatusFound, expBody: corsCharBody, expInner: 1,
+			expLines: []string{
+				corsCharKeyHeaders + ": " + corsCharDefaultAllowHeaders + ", only-this",
+				baseMethods, corsCharOriginLine("*"),
+			},
+			expCode: http.StatusFound, expBody: corsCharBody, expInner: 1,
 		},
 		{
 			name:   "upper cased allow-methods key overwrites the routes derived value",
@@ -621,21 +628,27 @@ func corsCharGarbageKeyCases() []corsCharCase {
 			},
 			expCode: http.StatusFound, expBody: corsCharBody, expInner: 1,
 		},
+		// The two cases below guard the origin-override fix. A config key is
+		// compared on its canonical header form, so a differently-cased
+		// spelling can no longer reach Access-Control-Allow-Origin through the
+		// custom-header loop and replace the negotiated value.
 		{
-			name:   "lower cased origin key escapes the guard and overwrites the negotiated origin",
+			name:   "lower cased origin key cannot inject an origin through the custom header loop",
 			config: map[string]string{"access-control-allow-origin": corsCharOriginEvil}, method: http.MethodGet, routes: twoRoutes,
-			expLines: []string{corsCharAllowHeadersLine, baseMethods, corsCharOriginLine(corsCharOriginEvil)},
+			// No origin was negotiated (the allow-list is unset, so it is the
+			// "*" default) and the custom loop must not emit one of its own.
+			expLines: []string{corsCharAllowHeadersLine, baseMethods, corsCharOriginLine("*")},
 			expCode:  http.StatusFound, expBody: corsCharBody, expInner: 1,
 		},
 		{
-			name: "lower cased origin key overwrites a properly negotiated origin but Vary survives",
+			name: "lower cased origin key cannot overwrite a properly negotiated origin",
 			config: map[string]string{
 				corsCharKeyOrigin:             corsCharOriginA,
 				"access-control-allow-origin": corsCharOriginEvil,
 			},
 			method: http.MethodGet, origin: corsCharOriginA, routes: twoRoutes,
 			expLines: []string{
-				corsCharAllowHeadersLine, baseMethods, corsCharOriginLine(corsCharOriginEvil), corsCharVaryLine,
+				corsCharAllowHeadersLine, baseMethods, corsCharOriginLine(corsCharOriginA), corsCharVaryLine,
 			},
 			expCode: http.StatusFound, expBody: corsCharBody, expInner: 1,
 		},
@@ -739,21 +752,22 @@ func Test_CORSContract_RoutesBackingArrayAliasing(t *testing.T) {
 	w, _ := corsCharRun(t, nil, &routes, http.MethodGet, "")
 	require.Equal(t, "GET, OPTIONS", w.Header().Get(corsCharKeyMethods))
 
-	// The caller's slice length is untouched...
-	assert.Equal(t, []string{http.MethodGet}, routes)
-	// ...but index 1 of the shared backing array was overwritten in place.
-	assert.Equal(t, []string{http.MethodGet, "OPTIONS", "SENTINEL-2", "SENTINEL-3"}, backing)
-	assert.Equal(t, "OPTIONS", backing[1], "SENTINEL-1 was clobbered by the middleware")
+	// The middleware must not write through the shared backing array. It used to
+	// build the header with append(routes, "OPTIONS"), which stores into the
+	// caller's array whenever cap > len — silently replacing the element after
+	// the caller's length. Here that would clobber SENTINEL-1.
+	assert.Equal(t, []string{http.MethodGet}, routes, "caller's slice must be untouched")
+	assert.Equal(t, []string{http.MethodGet, "SENTINEL-1", "SENTINEL-2", "SENTINEL-3"}, backing,
+		"the caller's backing array must be left intact")
 
-	// A later caller-side append overwrites the injected "OPTIONS" again, so the
-	// caller never observes corruption of its own logical contents.
+	// A caller-side append still behaves normally afterwards, and the next
+	// request reflects the newly registered route.
 	routes = append(routes, http.MethodPost)
 	assert.Equal(t, []string{http.MethodGet, http.MethodPost}, routes)
-	assert.Equal(t, http.MethodPost, backing[1])
 
 	w2, _ := corsCharRun(t, nil, &routes, http.MethodGet, "")
 	assert.Equal(t, "GET, POST, OPTIONS", w2.Header().Get(corsCharKeyMethods))
-	assert.Equal(t, "OPTIONS", backing[2], "SENTINEL-2 clobbered on the second request")
+	assert.Equal(t, "SENTINEL-2", backing[2], "second request must not clobber the array either")
 }
 
 // Test_CORSContract_NoAliasingWhenCapEqualsLen pins the complementary case:
