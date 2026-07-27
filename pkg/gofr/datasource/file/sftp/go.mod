@@ -3,7 +3,7 @@ module gofr.dev/pkg/gofr/datasource/file/sftp
 go 1.26.0
 
 require (
-	github.com/pkg/sftp v1.13.10
+	github.com/pkg/sftp v1.13.11
 	github.com/stretchr/testify v1.11.1
 	go.uber.org/mock v0.6.0
 	gofr.dev v1.57.0
