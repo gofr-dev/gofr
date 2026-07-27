@@ -279,15 +279,31 @@ func GetLogLevelForError(err error) Level {
 	return level
 }
 
+// traceIDMarkerKey is the map key under which ContextLogger smuggles a trace ID
+// through the log args for extractTraceIDAndFilterArgs to lift out here. It is
+// an internal producer/consumer contract within this package (asserted by the
+// logging tests); the marker is stripped before formatting and never reaches
+// the wire, so the exact key only needs to stay consistent between the two.
+const traceIDMarkerKey = "__trace_id__"
+
 // extractTraceIDAndFilterArgs checks if any of the arguments contain a trace ID
 // under the key "__trace_id__" and returns the extracted trace ID along with
 // the remaining arguments excluding the trace metadata.
 func extractTraceIDAndFilterArgs(args []any) (traceID string, filtered []any) {
+	// Fast path: the vast majority of log calls carry no trace-ID marker
+	// (framework logs, the per-request access log, plain user logs). Detect
+	// that with a read-only scan and return the args slice untouched — no
+	// allocation. Only when a marker is actually present do we pay for the
+	// filtered copy below.
+	if !hasTraceMarker(args) {
+		return "", args
+	}
+
 	filtered = make([]any, 0, len(args))
 
 	for _, arg := range args {
 		if m, ok := arg.(map[string]any); ok {
-			if tid, exists := m["__trace_id__"].(string); exists && traceID == "" {
+			if tid, exists := m[traceIDMarkerKey].(string); exists && traceID == "" {
 				traceID = tid
 
 				continue
@@ -298,4 +314,18 @@ func extractTraceIDAndFilterArgs(args []any) (traceID string, filtered []any) {
 	}
 
 	return traceID, filtered
+}
+
+// hasTraceMarker reports whether any arg is a map carrying the "__trace_id__"
+// key. Read-only: it allocates nothing.
+func hasTraceMarker(args []any) bool {
+	for _, arg := range args {
+		if m, ok := arg.(map[string]any); ok {
+			if _, exists := m[traceIDMarkerKey]; exists {
+				return true
+			}
+		}
+	}
+
+	return false
 }
