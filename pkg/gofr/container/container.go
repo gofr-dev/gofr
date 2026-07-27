@@ -22,7 +22,6 @@ import (
 
 	_ "github.com/go-sql-driver/mysql" // This is required to be blank import
 	"go.opentelemetry.io/otel"
-	metricSdk "go.opentelemetry.io/otel/sdk/metric"
 
 	"gofr.dev/pkg/gofr/ai"
 	"gofr.dev/pkg/gofr/config"
@@ -58,7 +57,7 @@ type Container struct {
 
 	Services        map[string]service.HTTP
 	metricsManager  metrics.Manager
-	metricsProvider *metricSdk.MeterProvider
+	shutdownMetrics exporters.ShutdownFunc
 	PubSub          pubsub.Client
 
 	WSManager *websocket.Manager
@@ -130,8 +129,8 @@ func (c *Container) Create(conf config.Config) {
 	c.Logger.Debug("Container is being created")
 
 	metricsCfg := metricsExporterConfig(conf, c.GetAppName(), c.GetAppVersion(), c.Logger)
-	mp, meter := exporters.Build(context.Background(), &metricsCfg, c.Logger)
-	c.metricsProvider = mp
+	shutdown, meter := exporters.Build(context.Background(), &metricsCfg, c.Logger)
+	c.shutdownMetrics = shutdown
 	c.metricsManager = metrics.NewMetricsManager(meter, c.Logger)
 
 	exporters.SendFrameworkStartupTelemetry(c.GetAppName(), c.GetAppVersion())
@@ -168,23 +167,15 @@ func (c *Container) createPubSub(conf config.Config) {
 }
 
 // ShutdownMetrics flushes pending metrics and shuts down the metrics provider.
-// It is safe to call when no provider was configured, and idempotent. Push
-// exporters (e.g. OTLP) rely on this to emit their final window before the
-// process exits — MeterProvider.Shutdown flushes pending telemetry itself (via
-// the reader's Shutdown), so no separate ForceFlush is needed. The provider's
-// Shutdown is internally guarded by sync.Once and returns ErrReaderShutdown on
-// any call after the first; since App.Shutdown is public a manual call plus the
-// signal handler can invoke this twice, so that sentinel is treated as a no-op.
+// It is safe to call when no provider was configured, and idempotent (see
+// exporters.Build for the flush/idempotency guarantees). Push exporters (e.g.
+// OTLP) rely on this to emit their final window before the process exits.
 func (c *Container) ShutdownMetrics(ctx context.Context) error {
-	if c.metricsProvider == nil {
+	if c.shutdownMetrics == nil {
 		return nil
 	}
 
-	if err := c.metricsProvider.Shutdown(ctx); err != nil && !errors.Is(err, metricSdk.ErrReaderShutdown) {
-		return err
-	}
-
-	return nil
+	return c.shutdownMetrics(ctx)
 }
 
 func (c *Container) Close() error {

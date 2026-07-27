@@ -2,6 +2,7 @@ package exporters
 
 import (
 	"context"
+	"errors"
 	"strings"
 
 	"github.com/prometheus/otlptranslator"
@@ -15,15 +16,28 @@ import (
 	"gofr.dev/pkg/gofr/version"
 )
 
+// ShutdownFunc flushes pending metrics and shuts down the underlying
+// MeterProvider. It is safe to call more than once (later calls are no-ops).
+type ShutdownFunc func(ctx context.Context) error
+
 // Build assembles the application MeterProvider from the always-on Prometheus
-// pull reader plus any push reader selected by cfg.Exporter, and returns the
-// provider handle so the caller can flush and shut it down on exit.
+// pull reader plus any push reader selected by cfg.Exporter, and returns a
+// ShutdownFunc so the caller can flush and shut it down on exit.
+//
+// The concrete *MeterProvider (and the OTel SDK's internal ErrReaderShutdown
+// sentinel) stays encapsulated here: the caller holds an opaque ShutdownFunc and
+// never imports the SDK. The closure flushes pending telemetry — push exporters
+// (e.g. OTLP) rely on it to emit their final window before the process exits —
+// and is idempotent: MeterProvider.Shutdown is internally sync.Once guarded and
+// returns ErrReaderShutdown on any call after the first (App.Shutdown is public,
+// so a manual call plus the signal handler can invoke it twice), so that sentinel
+// is swallowed as a no-op.
 //
 // Multiple readers share the same instruments with no double-counting, so the
 // Prometheus /metrics endpoint and an OTLP push exporter can run together.
-// Build never returns a nil MeterProvider; failures degrade to a working
-// provider (Prometheus-only, or no readers) rather than crashing app start.
-func Build(ctx context.Context, cfg *Config, logger Logger) (*metricSdk.MeterProvider, metric.Meter) {
+// Build never returns a nil ShutdownFunc; failures degrade to a working provider
+// (Prometheus-only, or no readers) rather than crashing app start.
+func Build(ctx context.Context, cfg *Config, logger Logger) (ShutdownFunc, metric.Meter) {
 	opts := []metricSdk.Option{metricSdk.WithResource(buildResource(cfg))}
 
 	if r := prometheusReader(logger); r != nil {
@@ -37,7 +51,15 @@ func Build(ctx context.Context, cfg *Config, logger Logger) (*metricSdk.MeterPro
 	mp := metricSdk.NewMeterProvider(opts...)
 	meter := mp.Meter(cfg.AppName, metric.WithInstrumentationVersion(cfg.AppVersion))
 
-	return mp, meter
+	shutdown := func(shutdownCtx context.Context) error {
+		if err := mp.Shutdown(shutdownCtx); err != nil && !errors.Is(err, metricSdk.ErrReaderShutdown) {
+			return err
+		}
+
+		return nil
+	}
+
+	return shutdown, meter
 }
 
 func buildResource(cfg *Config) *resource.Resource {

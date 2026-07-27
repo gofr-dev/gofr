@@ -35,10 +35,10 @@ func TestBuild(t *testing.T) {
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			mp, meter := Build(context.Background(), &tc.cfg, logging.NewMockLogger(logging.INFO))
+			shutdown, meter := Build(context.Background(), &tc.cfg, logging.NewMockLogger(logging.INFO))
 
-			if mp == nil {
-				t.Fatal("expected non-nil MeterProvider")
+			if shutdown == nil {
+				t.Fatal("expected non-nil ShutdownFunc")
 			}
 
 			if meter == nil {
@@ -49,7 +49,7 @@ func TestBuild(t *testing.T) {
 				t.Errorf("meter should be usable, got error: %v", err)
 			}
 
-			_ = mp.Shutdown(context.Background())
+			_ = shutdown(context.Background())
 		})
 	}
 }
@@ -58,12 +58,12 @@ func TestBuild_missingSubmoduleImportHint(t *testing.T) {
 	cfg := Config{AppName: "app", Exporter: "gcp"} // "gcp" is not blank-imported in this test binary
 
 	out := testutil.StderrOutputForFunc(func() {
-		mp, meter := Build(context.Background(), &cfg, logging.NewMockLogger(logging.ERROR))
+		shutdown, meter := Build(context.Background(), &cfg, logging.NewMockLogger(logging.ERROR))
 		if meter == nil {
 			t.Error("expected a usable meter on fallback")
 		}
 
-		_ = mp.Shutdown(context.Background())
+		_ = shutdown(context.Background())
 	})
 
 	if !strings.Contains(out, "gofr.dev/pkg/gofr/metrics/exporters/gcp") {

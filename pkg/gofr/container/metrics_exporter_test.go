@@ -252,8 +252,8 @@ func TestContainer_ShutdownMetrics(t *testing.T) {
 	// A configured provider flushes and shuts down without error.
 	cfg := exporters.Config{AppName: "t"}
 
-	mp, _ := exporters.Build(context.Background(), &cfg, logging.NewMockLogger(logging.INFO))
-	c = &Container{metricsProvider: mp}
+	shutdown, _ := exporters.Build(context.Background(), &cfg, logging.NewMockLogger(logging.INFO))
+	c = &Container{shutdownMetrics: shutdown}
 
 	if err := c.ShutdownMetrics(context.Background()); err != nil {
 		t.Errorf("configured provider: expected nil error, got %v", err)
