@@ -74,7 +74,9 @@ func newConcurrentStdoutCapture(t *testing.T) *stdoutCapture {
 	t.Cleanup(func() {
 		os.Stdout = old
 		_ = w.Close()
+
 		<-done
+
 		_ = r.Close()
 	})
 
