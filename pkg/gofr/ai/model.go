@@ -28,9 +28,10 @@ type StreamingModel interface {
 // Embedder is the model-side optional capability a provider implements to turn text into embedding
 // vectors — the peer of StreamingModel for streaming. It is not every provider's capability (a
 // chat-only model has no embeddings, an embedding model has no chat), so callers do not implement or
-// assert it directly: they call LLM.Embed, which reports ErrEmbedNotSupported when the underlying
-// provider does not implement Embedder. Embeddings power semantic search and agent memory: embed
-// text on write, embed a query on read, and rank stored vectors by similarity.
+// assert it directly: they assert EmbeddingLLM on ctx.LLM(), whose Embed reports
+// ErrEmbedNotSupported when the underlying provider does not implement Embedder. Embeddings power
+// semantic search and agent memory: embed text on write, embed a query on read, and rank stored
+// vectors by similarity.
 type Embedder interface {
 	Embed(ctx context.Context, input []string, opts ...Option) (*EmbeddingResponse, error)
 }
@@ -54,18 +55,34 @@ type Descriptor interface {
 	ModelName() string
 }
 
-// LLM is what ctx.LLM() returns — a thin, instrumented wrapper over a provider Model. Alongside the
-// universal Chat/Generate, it declares the optional capability methods Stream and Embed directly,
-// rather than behind a caller-side type assertion, so every caller reaches them the same way; each
-// returns its *NotSupported error (ErrStreamNotSupported / ErrEmbedNotSupported) when the underlying
-// provider lacks that capability. Grow this only for a genuine new capability, gated the same
-// graceful way. Generate is a convenience over a single-message Chat.
+// LLM is what ctx.LLM() returns. Like Model it is frozen: new capabilities are added through new
+// optional interfaces retrieved by type assertion, never by adding methods here, so hand-written
+// fakes and third-party wrappers keep compiling across minor versions. Generate is a convenience
+// over a single-message Chat.
 type LLM interface {
 	Model
 	Generate(ctx context.Context, prompt string, opts ...Option) (*Response, error)
 	Stream(ctx context.Context, messages []Message, opts ...Option) (Streamer, error)
-	Embed(ctx context.Context, input []string, opts ...Option) (*EmbeddingResponse, error)
 	Tools() Tools
+}
+
+// EmbeddingLLM is the caller-side optional capability for embeddings — the first interface added
+// under LLM's freeze, and the pattern for every capability after it. The LLM returned by ctx.LLM()
+// always implements it, so the assertion never fails in a handler; Embed then reports
+// ErrEmbedNotSupported when the configured provider is chat-only, and ErrLLMNotConfigured when no
+// model is registered.
+//
+//	e, ok := ctx.LLM().(ai.EmbeddingLLM)
+//	if !ok {
+//		return nil, errors.New("embeddings unavailable")
+//	}
+//
+//	resp, err := e.Embed(ctx, []string{"hello"})
+//
+// It is asserted rather than declared on LLM so that adding embeddings does not break the
+// hand-written fakes and third-party wrappers LLM promises to keep compiling.
+type EmbeddingLLM interface {
+	Embed(ctx context.Context, input []string, opts ...Option) (*EmbeddingResponse, error)
 }
 
 // Tools is the set of the service's own handlers exposed as agent-callable tools. It is frozen on

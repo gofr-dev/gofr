@@ -318,6 +318,11 @@ func (c *Container) LLM(name ...string) ai.LLM {
 // are independent of any registered model.
 type notConfiguredLLM struct{ c *Container }
 
+// Every LLM returned from the container must satisfy the optional capability interfaces, so a
+// handler's type assertion succeeds whether or not a model is configured — the absence is then
+// reported as ai.ErrLLMNotConfigured from the call itself, not as a failed assertion.
+var _ ai.EmbeddingLLM = notConfiguredLLM{}
+
 func (notConfiguredLLM) Chat(context.Context, []ai.Message, ...ai.Option) (*ai.Response, error) {
 	return nil, ai.ErrLLMNotConfigured
 }

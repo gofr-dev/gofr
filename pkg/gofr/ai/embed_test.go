@@ -24,8 +24,21 @@ func (e *embedModel) Embed(_ context.Context, input []string, _ ...Option) (*Emb
 	return e.embResp, e.embErr
 }
 
-// ctx.LLM().Embed forwards the input to the model, returns its vectors, and records exactly one
-// successful call — no caller-side type assertion.
+// embedderOf builds the LLM GoFr hands to a handler and asserts EmbeddingLLM on it, exactly as a
+// handler does. The assertion is part of what is under test: the LLM returned by ctx.LLM() must
+// always satisfy EmbeddingLLM, so the capability is reachable without the caller knowing whether
+// the configured provider happens to support it.
+func embedderOf(t *testing.T, m Model, d Deps) EmbeddingLLM {
+	t.Helper()
+
+	e, ok := NewLLM(m, d).(EmbeddingLLM)
+	require.True(t, ok, "the LLM returned by GoFr must always implement EmbeddingLLM")
+
+	return e
+}
+
+// Embed forwards the input to the model, returns its vectors, and records exactly one successful
+// call.
 func TestLLM_Embed_Delegates(t *testing.T) {
 	m := &fakeMetrics{}
 	em := &embedModel{
@@ -36,9 +49,9 @@ func TestLLM_Embed_Delegates(t *testing.T) {
 			Model:      "embed-model",
 		},
 	}
-	l := NewLLM(em, Deps{Metrics: m})
+	e := embedderOf(t, em, Deps{Metrics: m})
 
-	resp, err := l.Embed(t.Context(), []string{"hello", "world"})
+	resp, err := e.Embed(t.Context(), []string{"hello", "world"})
 	require.NoError(t, err)
 	assert.Equal(t, [][]float32{{0.1, 0.2}, {0.3, 0.4}}, resp.Embeddings)
 	assert.Equal(t, "embed-model", resp.Model)
@@ -53,9 +66,9 @@ func TestLLM_Embed_Delegates(t *testing.T) {
 // an error call, mirroring the Stream unsupported path.
 func TestLLM_Embed_UnsupportedRecordsError(t *testing.T) {
 	m := &fakeMetrics{}
-	l := NewLLM(&fakeModel{}, Deps{Metrics: m})
+	e := embedderOf(t, &fakeModel{}, Deps{Metrics: m})
 
-	_, err := l.Embed(t.Context(), []string{"x"})
+	_, err := e.Embed(t.Context(), []string{"x"})
 	require.ErrorIs(t, err, ErrEmbedNotSupported)
 	require.Len(t, m.counters, 1)
 	assert.Equal(t, statusError, labelValue(m.counters[0].labels, "status"))
@@ -65,9 +78,9 @@ func TestLLM_Embed_UnsupportedRecordsError(t *testing.T) {
 func TestLLM_Embed_ModelErrorRecordsError(t *testing.T) {
 	m := &fakeMetrics{}
 	em := &embedModel{fakeModel: &fakeModel{}, embErr: errProviderDown}
-	l := NewLLM(em, Deps{Metrics: m})
+	e := embedderOf(t, em, Deps{Metrics: m})
 
-	_, err := l.Embed(t.Context(), []string{"x"})
+	_, err := e.Embed(t.Context(), []string{"x"})
 	require.ErrorIs(t, err, errProviderDown)
 	require.Len(t, m.counters, 1)
 	assert.Equal(t, statusError, labelValue(m.counters[0].labels, "status"))
