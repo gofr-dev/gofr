@@ -12,10 +12,25 @@ import (
 	"time"
 )
 
+// metricsFlushTimeout bounds the metrics flush/shutdown performed after a CMD
+// app's handler returns, so a CLI invocation cannot hang indefinitely waiting
+// on an unreachable metrics collector.
+const metricsFlushTimeout = 10 * time.Second
+
 // Run starts the application. If it is an HTTP server, it will start the server.
 func (a *App) Run() {
 	if a.cmd != nil {
 		a.cmd.Run(a.container)
+
+		if a.container != nil {
+			flushCtx, cancel := context.WithTimeout(context.Background(), metricsFlushTimeout)
+
+			if err := a.container.ShutdownMetrics(flushCtx); err != nil {
+				a.Logger().Errorf("failed to flush metrics: %v", err)
+			}
+
+			cancel()
+		}
 
 		if closer, ok := a.container.Logger.(io.Closer); ok {
 			closer.Close()

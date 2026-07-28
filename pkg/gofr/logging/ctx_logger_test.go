@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"io"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -221,4 +222,80 @@ func TestContextLogger_ChangeLevel(t *testing.T) {
 	ctxLogger.ChangeLevel(DEBUG)
 
 	assert.Equal(t, DEBUG, baseLogger.level)
+}
+
+// TestContextLogger_TraceID_SurfacedAndReused verifies that a request-scoped
+// ContextLogger lifts the trace ID to the top-level trace_id field on every
+// call, and that reusing the precomputed marker map across calls is correct.
+func TestContextLogger_TraceID_SurfacedAndReused(t *testing.T) {
+	buf := &bytes.Buffer{}
+	base := newBufLogger(buf)
+
+	sc := trace.NewSpanContext(trace.SpanContextConfig{
+		TraceID:    trace.TraceID{0x1, 0x2, 0x3, 0x4, 0x5, 0x6, 0x7, 0x8, 0x9, 0xa, 0xb, 0xc, 0xd, 0xe, 0xf, 0x10},
+		SpanID:     trace.SpanID{0x1, 0x2, 0x3, 0x4, 0x5, 0x6, 0x7, 0x8},
+		TraceFlags: trace.FlagsSampled,
+	})
+	ctx := trace.ContextWithSpanContext(context.Background(), sc)
+
+	cl := NewContextLogger(ctx, base)
+	cl.Info("first")
+	cl.Info("second")
+
+	lines := strings.Split(strings.TrimRight(buf.String(), "\n"), "\n")
+	require.Len(t, lines, 2)
+
+	want := "0102030405060708090a0b0c0d0e0f10"
+
+	for i, line := range lines {
+		var e wireLog
+		require.NoError(t, json.Unmarshal([]byte(line), &e))
+		assert.Equalf(t, want, e.TraceID, "line %d must carry the trace_id", i)
+		// The __trace_id__ marker map must never leak into the message.
+		assert.NotContains(t, line, "__trace_id__", "internal marker must not appear on the wire")
+	}
+}
+
+// TestContextLogger_NoTrace_NoMarker verifies that without a valid span, no
+// trace marker is attached and no trace_id is emitted.
+func TestContextLogger_NoTrace_NoMarker(t *testing.T) {
+	buf := &bytes.Buffer{}
+	base := newBufLogger(buf)
+
+	cl := NewContextLogger(context.Background(), base)
+	assert.Nil(t, cl.traceArg, "no precomputed marker when there is no valid trace")
+
+	cl.Info("x")
+
+	var e wireLog
+	require.NoError(t, json.Unmarshal(buf.Bytes(), &e))
+	assert.Empty(t, e.TraceID)
+	assert.Equal(t, "x", e.Message)
+}
+
+// benchSpanContext returns a context carrying a valid sampled SpanContext so
+// the ContextLogger takes its trace-ID path.
+func benchSpanContext() context.Context {
+	sc := trace.NewSpanContext(trace.SpanContextConfig{
+		TraceID:    trace.TraceID{0x1, 0x2, 0x3, 0x4, 0x5, 0x6, 0x7, 0x8, 0x9, 0xa, 0xb, 0xc, 0xd, 0xe, 0xf, 0x10},
+		SpanID:     trace.SpanID{0x1, 0x2, 0x3, 0x4, 0x5, 0x6, 0x7, 0x8},
+		TraceFlags: trace.FlagsSampled,
+	})
+
+	return trace.ContextWithSpanContext(context.Background(), sc)
+}
+
+// BenchmarkContextLoggerInfo measures a request-scoped log that carries a trace
+// ID. The ContextLogger is built once (as it is per request) and used for many
+// log calls — exactly the pattern the precomputed marker map optimizes.
+func BenchmarkContextLoggerInfo(b *testing.B) {
+	base := newBenchLogger(io.Discard)
+	cl := NewContextLogger(benchSpanContext(), base)
+
+	b.ReportAllocs()
+	b.ResetTimer()
+
+	for i := 0; i < b.N; i++ {
+		cl.Info("request handled successfully")
+	}
 }

@@ -55,9 +55,10 @@ type Container struct {
 	appName    string
 	appVersion string
 
-	Services       map[string]service.HTTP
-	metricsManager metrics.Manager
-	PubSub         pubsub.Client
+	Services        map[string]service.HTTP
+	metricsManager  metrics.Manager
+	shutdownMetrics exporters.ShutdownFunc
+	PubSub          pubsub.Client
 
 	WSManager *websocket.Manager
 
@@ -127,7 +128,10 @@ func (c *Container) Create(conf config.Config) {
 
 	c.Logger.Debug("Container is being created")
 
-	c.metricsManager = metrics.NewMetricsManager(exporters.Prometheus(c.GetAppName(), c.GetAppVersion()), c.Logger)
+	metricsCfg := metricsExporterConfig(conf, c.GetAppName(), c.GetAppVersion(), c.Logger)
+	shutdown, meter := exporters.Build(context.Background(), &metricsCfg, c.Logger)
+	c.shutdownMetrics = shutdown
+	c.metricsManager = metrics.NewMetricsManager(meter, c.Logger)
 
 	exporters.SendFrameworkStartupTelemetry(c.GetAppName(), c.GetAppVersion())
 
@@ -160,6 +164,18 @@ func (c *Container) createPubSub(conf config.Config) {
 	case "REDIS":
 		c.createRedisPubSub(conf)
 	}
+}
+
+// ShutdownMetrics flushes pending metrics and shuts down the metrics provider.
+// It is safe to call when no provider was configured, and idempotent (see
+// exporters.Build for the flush/idempotency guarantees). Push exporters (e.g.
+// OTLP) rely on this to emit their final window before the process exits.
+func (c *Container) ShutdownMetrics(ctx context.Context) error {
+	if c.shutdownMetrics == nil {
+		return nil
+	}
+
+	return c.shutdownMetrics(ctx)
 }
 
 func (c *Container) Close() error {
