@@ -117,6 +117,7 @@ func (a *App) Shutdown(ctx context.Context) error {
 	}
 
 	if a.container != nil {
+		err = errors.Join(err, a.container.ShutdownMetrics(ctx))
 		err = errors.Join(err, a.container.Close())
 	}
 
