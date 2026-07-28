@@ -214,7 +214,16 @@ func TestCronTab_AddJob(t *testing.T) {
 	mocks.Metrics.EXPECT().NewCounter("app_cron_job_success", gomock.Any()).AnyTimes()
 	mocks.Metrics.EXPECT().NewCounter("app_cron_job_failures", gomock.Any()).AnyTimes()
 
+	// The "* * * * *" job fires at second 0 of every minute. If the package run
+	// crosses a minute boundary while the ticker goroutine is alive, the job runs
+	// and records runtime metrics, so allow those calls any number of times.
+	mocks.Metrics.EXPECT().IncrementCounter(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
+	mocks.Metrics.EXPECT().RecordHistogram(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
+
 	c := NewCron(mockContainer)
+	// Stop the background ticker so a leaked goroutine cannot fire "test-job"
+	// after the test completes and panic via t.Fatalf on the mock controller.
+	defer c.Stop()
 
 	for _, tc := range testCases {
 		err := c.AddJob(tc.schedule, "test-job", fn)
@@ -253,6 +262,7 @@ func TestCronTab_runScheduled(t *testing.T) {
 	mocks.Metrics.EXPECT().RecordHistogram(gomock.Any(), "app_cron_job_duration", gomock.Any(), "job", "test-job").Times(1)
 
 	c := NewCron(mockContainer)
+	defer c.Stop()
 
 	// Populate the job array for cron table
 	c.jobs = []*job{j}
@@ -700,6 +710,7 @@ func TestCronTab_runScheduled_Panic(t *testing.T) {
 				var c *Crontab
 				if tc.expectMetricsCalls {
 					c = NewCron(cntnr)
+					defer c.Stop()
 					c.jobs = []*job{j}
 				} else {
 					c = &Crontab{
