@@ -281,10 +281,10 @@ func TestFileTokenAuthConfig_RefreshFailureLogsWarning(t *testing.T) {
 	// Remove the token file so the next refresh tick fails to read it.
 	require.NoError(t, os.Remove(path))
 
-	// Cached token must remain available despite refresh failures.
+	// Before any refresh runs, the eagerly-read cached token is available.
 	tok, tokErr := cfg.currentToken()
 	require.NoError(t, tokErr)
-	assert.Equal(t, "token-v1", tok)
+	require.Equal(t, "token-v1", tok)
 
 	// Wait until a refresh failure is actually logged. This passes the moment the
 	// warning appears and only fails if it never appears within the ceiling, so a
@@ -292,6 +292,12 @@ func TestFileTokenAuthConfig_RefreshFailureLogsWarning(t *testing.T) {
 	assert.Eventually(t, func() bool {
 		return strings.Contains(logs.String(), "failed to refresh token")
 	}, 2*time.Second, 10*time.Millisecond)
+
+	// After repeated failed refreshes, the cached token must still be served —
+	// a vanished token file must not clear what was already loaded.
+	tok, tokErr = cfg.currentToken()
+	require.NoError(t, tokErr)
+	assert.Equal(t, "token-v1", tok)
 }
 
 // TestFileTokenAuthConfig_ObservableInjectionViaNewHTTPService verifies that

@@ -214,15 +214,19 @@ func TestCronTab_AddJob(t *testing.T) {
 	mocks.Metrics.EXPECT().NewCounter("app_cron_job_success", gomock.Any()).AnyTimes()
 	mocks.Metrics.EXPECT().NewCounter("app_cron_job_failures", gomock.Any()).AnyTimes()
 
-	// The "* * * * *" job fires at second 0 of every minute. If the package run
-	// crosses a minute boundary while the ticker goroutine is alive, the job runs
-	// and records runtime metrics, so allow those calls any number of times.
+	// These AnyTimes() runtime expectations are load-bearing, not merely
+	// defensive: Stop() below halts only *future* ticks, it does not join a job
+	// goroutine that a tick already dispatched (Crontab fires `go j.run(...)` with
+	// no WaitGroup). The "* * * * *" job fires at second 0 of every minute, so a
+	// job dispatched just before Stop can still call the metrics mock after the
+	// test returns; without these expectations that call is gomock's
+	// t.Fatalf-on-finished-test -> panic. `defer c.Stop()` narrows the window but
+	// cannot close it — deterministic joining needs a framework change to Stop
+	// (tracked in gofr-dev/gofr#3801). Do not remove these believing Stop covers it.
 	mocks.Metrics.EXPECT().IncrementCounter(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
 	mocks.Metrics.EXPECT().RecordHistogram(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
 
 	c := NewCron(mockContainer)
-	// Stop the background ticker so a leaked goroutine cannot fire "test-job"
-	// after the test completes and panic via t.Fatalf on the mock controller.
 	defer c.Stop()
 
 	for _, tc := range testCases {
