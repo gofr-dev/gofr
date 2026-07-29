@@ -79,6 +79,43 @@ func TestNewCMD_FileLoggerClosedAfterRun(t *testing.T) {
 	assert.ErrorIs(t, err, os.ErrClosed)
 }
 
+// TestNewCMD_ShutdownMetricsCalledAfterRun pins the CMD flush path in
+// Run(): after a.cmd.Run returns, Run() must flush and shut down the
+// metrics provider (via Container.ShutdownMetrics) before the process
+// exits, so a short-lived CLI invocation does not lose buffered metrics.
+// It also exercises the bounded flush context added to guard against an
+// unreachable collector hanging a CLI invocation indefinitely.
+func TestNewCMD_ShutdownMetricsCalledAfterRun(t *testing.T) {
+	originalArgs := os.Args
+	os.Args = []string{"", "test-flush"}
+
+	t.Cleanup(func() { os.Args = originalArgs })
+
+	a := NewCMD()
+
+	handlerCalled := false
+
+	a.SubCommand("test-flush", func(_ *Context) (any, error) {
+		handlerCalled = true
+		return "ok", nil
+	})
+
+	done := make(chan struct{})
+
+	go func() {
+		a.Run()
+		close(done)
+	}()
+
+	select {
+	case <-done:
+	case <-time.After(metricsFlushTimeout + 5*time.Second):
+		t.Fatal("a.Run() did not return; CMD metrics flush appears to have hung")
+	}
+
+	assert.True(t, handlerCalled, "expected the subcommand handler to run")
+}
+
 func TestGofr_readConfig(t *testing.T) {
 	app := App{}
 
