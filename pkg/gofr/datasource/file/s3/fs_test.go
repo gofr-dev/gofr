@@ -5,6 +5,7 @@ import (
 	"errors"
 	"io"
 	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -64,6 +65,65 @@ func setupTestFileSystem(mocks *testMocks, config *Config) *FileSystem {
 		logger:  mocks.mockLogger,
 		config:  config,
 		metrics: mocks.mockMetrics,
+	}
+}
+
+// Test_applyClientOptions asserts the flavor→SDK wiring that Connect relies on:
+// each resolved profile must set path-style addressing, the base endpoint, and the
+// upload-checksum behavior on the concrete *s3.Options. This is what an
+// end-to-end connect would otherwise silently depend on.
+func Test_applyClientOptions(t *testing.T) {
+	const endpoint = "https://example.r2.cloudflarestorage.com"
+
+	tests := []struct {
+		name                string
+		config              *Config
+		wantPathStyle       bool
+		wantChecksumWhenReq bool
+	}{
+		{
+			name:                "AWS default keeps path-style and default checksum",
+			config:              &Config{Region: "us-east-1"},
+			wantPathStyle:       true,
+			wantChecksumWhenReq: false,
+		},
+		{
+			name:                "R2 disables upload checksum",
+			config:              &Config{Flavor: FlavorR2, Region: "us-east-1"},
+			wantPathStyle:       true,
+			wantChecksumWhenReq: true,
+		},
+		{
+			name:                "Spaces uses virtual-hosted addressing",
+			config:              &Config{Flavor: FlavorSpaces, Region: "nyc3"},
+			wantPathStyle:       false,
+			wantChecksumWhenReq: false,
+		},
+		{
+			name:                "explicit UsePathStyle override wins",
+			config:              &Config{Flavor: FlavorSpaces, Region: "nyc3", UsePathStyle: boolPtr(true)},
+			wantPathStyle:       true,
+			wantChecksumWhenReq: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			o := &s3.Options{}
+			applyClientOptions(resolveProfile(tt.config), endpoint)(o)
+
+			assert.Equal(t, tt.wantPathStyle, o.UsePathStyle, "UsePathStyle")
+			require.NotNil(t, o.BaseEndpoint)
+			assert.Equal(t, endpoint, *o.BaseEndpoint, "BaseEndpoint")
+
+			if tt.wantChecksumWhenReq {
+				assert.Equal(t, aws.RequestChecksumCalculationWhenRequired, o.RequestChecksumCalculation,
+					"checksum should be calculated only when required")
+			} else {
+				assert.NotEqual(t, aws.RequestChecksumCalculationWhenRequired, o.RequestChecksumCalculation,
+					"checksum behavior should stay at the SDK default")
+			}
+		})
 	}
 }
 
@@ -292,6 +352,35 @@ func Test_ReadDir(t *testing.T) {
 						{Key: aws.String("abc/efg/"), Size: aws.Int64(0), LastModified: aws.Time(time.Now())},
 					},
 				}, nil)
+			},
+		},
+		{
+			name:    "Returns only one-level entries using common prefixes",
+			dirPath: "abc",
+			expectedResults: []result{
+				{"root.txt", 10, false},
+				{"efg", 0, true},
+			},
+			setupMock: func() {
+				mocks.mockS3.EXPECT().ListObjectsV2(gomock.Any(), gomock.Any()).
+					DoAndReturn(func(_ context.Context, in *s3.ListObjectsV2Input,
+						_ ...func(*s3.Options)) (*s3.ListObjectsV2Output, error) {
+						// The fix must request a one-level listing: a delimiter is set so nested
+						// keys are collapsed into CommonPrefixes instead of streaming every object.
+						require.NotNil(t, in.Delimiter, "ReadDir must set a Delimiter for one-level listing")
+						require.Equal(t, string(filepath.Separator), *in.Delimiter)
+						require.Equal(t, "abc/", *in.Prefix)
+
+						return &s3.ListObjectsV2Output{
+							Contents: []types.Object{
+								{Key: aws.String("abc/"), Size: aws.Int64(0), LastModified: aws.Time(time.Now())},
+								{Key: aws.String("abc/root.txt"), Size: aws.Int64(10), LastModified: aws.Time(time.Now())},
+							},
+							CommonPrefixes: []types.CommonPrefix{
+								{Prefix: aws.String("abc/efg/")},
+							},
+						}, nil
+					})
 			},
 		},
 	}

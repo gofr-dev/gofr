@@ -974,7 +974,10 @@ func TestOperationLog_PrettyPrint(t *testing.T) {
 
 // Test DefaultHistogramBuckets returns expected bucket values.
 func TestDefaultHistogramBuckets(t *testing.T) {
-	exp := []float64{0.1, 1, 10, 100, 1000}
+	exp := []float64{
+		50, 75, 100, 125, 150, 200, 300, 500, 750, 1000, 2000, 3000, 5000, 7500, 10000,
+		25000, 50000, 100000, 250000, 500000, 1000000, 5000000, 10000000, 30000000, 60000000, 120000000, 180000000,
+	}
 	got := DefaultHistogramBuckets()
 
 	assert.Equal(t, exp, got)

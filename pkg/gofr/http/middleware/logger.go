@@ -74,6 +74,12 @@ func (w *StatusResponseWriter) Status() int {
 	return w.status
 }
 
+// Unwrap returns the wrapped ResponseWriter so http.NewResponseController can reach the underlying
+// connection for Flush and SetWriteDeadline — needed for streaming responses.
+func (w *StatusResponseWriter) Unwrap() http.ResponseWriter {
+	return w.ResponseWriter
+}
+
 // Hijack implements the http.Hijacker interface. So that we are able to upgrade to a websocket
 // connection that requires the responseWriter implementation to implement this method.
 func (w *StatusResponseWriter) Hijack() (net.Conn, *bufio.ReadWriter, error) {
@@ -245,11 +251,17 @@ func isLogProbeDisabled(probes LogProbes, urlPath string) bool {
 }
 
 func getIPAddress(r *http.Request) string {
-	ips := strings.Split(r.Header.Get("X-Forwarded-For"), ",")
-
 	// According to GCLB Documentation (https://cloud.google.com/load-balancing/docs/https/), IPs are added in following sequence.
 	// X-Forwarded-For: <unverified IP(s)>, <immediate client IP>, <global forwarding rule external IP>, <proxies running in GCP>
-	ipAddress := ips[0]
+	//
+	// We only need the first entry, so take it with IndexByte instead of
+	// strings.Split, which would allocate a []string on every request.
+	xff := r.Header.Get("X-Forwarded-For")
+
+	ipAddress := xff
+	if i := strings.IndexByte(xff, ','); i >= 0 {
+		ipAddress = xff[:i]
+	}
 
 	if ipAddress == "" {
 		ipAddress = r.RemoteAddr

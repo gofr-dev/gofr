@@ -55,8 +55,52 @@ This document lists all the configuration options supported by the GoFr framewor
 ---
 
 -  METRICS_PORT
--  Port on which the application exposes metrics
+-  Port on which the application exposes the Prometheus pull endpoint. Set to 0 to disable it (e.g. push-only serverless).
 -  2121
+
+---
+
+-  METRICS_EXPORTER
+-  Enables push-based metrics export alongside the pull endpoint. Supported values: otlp, gcp. Unset (or prometheus) keeps pull-only behavior.
+
+---
+
+-  METRICS_URL
+-  Endpoint of the OTLP metrics collector/backend. host:port for gRPC, full URL for HTTP. Required when METRICS_EXPORTER is otlp (gcp defaults to telemetry.googleapis.com:443).
+
+---
+
+-  METRICS_PROTOCOL
+-  OTLP transport for pushed metrics. Supported values: grpc, http.
+-  grpc
+
+---
+
+-  METRICS_EXPORT_INTERVAL
+-  Interval (in seconds) at which metrics are pushed to the collector/backend.
+-  30
+
+---
+
+-  METRICS_TEMPORALITY
+-  OTLP temporality preference. Supported values: cumulative, delta, lowmemory. Use delta for Datadog; cumulative for Prometheus/GMP/Grafana.
+-  cumulative
+
+---
+
+-  METRICS_HEADERS
+-  Custom headers for metric export requests in comma-separated key=value format (e.g., "dd-api-key=secret"). Takes priority over METRICS_AUTH_KEY.
+
+---
+
+-  METRICS_AUTH_KEY
+-  Authorization header value for metric export requests. Used when METRICS_HEADERS is unset.
+
+---
+
+-  METRICS_INSECURE
+-  Disables transport security for the OTLP metrics connection. Set to false for managed backends over TLS. Ignored by the gcp exporter (always TLS).
+-  true
 
 ---
 

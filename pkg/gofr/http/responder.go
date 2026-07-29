@@ -1,10 +1,12 @@
 package http
 
 import (
+	"bytes"
 	"encoding/json"
 	"errors"
 	"net/http"
 	"reflect"
+	"sync"
 
 	resTypes "gofr.dev/pkg/gofr/http/response"
 )
@@ -12,6 +14,26 @@ import (
 var (
 	errEmptyResponse = errors.New("internal server error")
 )
+
+// maxRespPooledBuf caps the capacity of a response buffer returned to the pool
+// so an occasional very large response does not permanently inflate every
+// pooled buffer.
+const maxRespPooledBuf = 64 << 10
+
+// initialRespBufCap is the starting capacity of a freshly minted pooled buffer,
+// sized to hold a typical small JSON response without a reslice.
+const initialRespBufCap = 512
+
+// respBufPool holds reusable buffers for encoding JSON response bodies. Encoding
+// into a pooled buffer avoids the fresh []byte json.Marshal returns on every
+// response and collapses the body + trailing newline into a single Write. A
+// process-wide pool is the idiomatic shape for this and is safe for concurrent
+// use by construction.
+//
+//nolint:gochecknoglobals // process-wide pool of reusable response-encode buffers.
+var respBufPool = sync.Pool{
+	New: func() any { return bytes.NewBuffer(make([]byte, 0, initialRespBufCap)) },
+}
 
 // NewResponder creates a new Responder instance from the given http.ResponseWriter.
 func NewResponder(w http.ResponseWriter, method string) *Responder {
@@ -53,8 +75,15 @@ func (r Responder) Respond(data any, err error) {
 		r.w.Header().Set("Content-Type", "application/json")
 	}
 
-	jsonData, encodeErr := json.Marshal(resp)
-	if encodeErr != nil {
+	buf := getRespBuf()
+
+	// json.Encoder.Encode appends a trailing newline, exactly matching the
+	// previous json.Marshal(resp) followed by a separate Write of "\n". It also
+	// uses the same default HTML escaping as json.Marshal, so the bytes on the
+	// wire are identical to before.
+	if encodeErr := json.NewEncoder(buf).Encode(resp); encodeErr != nil {
+		putRespBuf(buf)
+
 		r.w.WriteHeader(http.StatusInternalServerError)
 
 		_, _ = r.w.Write([]byte(`{"error":{"message": "failed to encode response as JSON"}}` + "\n"))
@@ -63,8 +92,28 @@ func (r Responder) Respond(data any, err error) {
 	}
 
 	r.w.WriteHeader(statusCode)
-	_, _ = r.w.Write(jsonData)
-	_, _ = r.w.Write([]byte("\n"))
+	_, _ = r.w.Write(buf.Bytes())
+
+	putRespBuf(buf)
+}
+
+// getRespBuf takes a reset buffer from the pool, ready to encode into. It is the
+// counterpart to putRespBuf, keeping the pool's type assertion in one place. The
+// assertion is safe: respBufPool is private and only ever holds *bytes.Buffer.
+func getRespBuf() *bytes.Buffer {
+	buf := respBufPool.Get().(*bytes.Buffer)
+	buf.Reset()
+
+	return buf
+}
+
+// putRespBuf returns buf to the pool unless it has grown past maxRespPooledBuf,
+// so one oversized response cannot permanently inflate every pooled buffer. All
+// return-to-pool paths go through here to keep that cap invariant in one place.
+func putRespBuf(buf *bytes.Buffer) {
+	if buf.Cap() <= maxRespPooledBuf {
+		respBufPool.Put(buf)
+	}
 }
 
 // handleSpecialResponseTypes handles special response types that bypass JSON encoding.
@@ -75,6 +124,11 @@ func (r Responder) handleSpecialResponseTypes(data any, err error) bool {
 	statusCode := r.getStatusCodeForSpecialResponse(data, err)
 
 	switch v := data.(type) {
+	case resTypes.Stream:
+		r.handleStream(v)
+
+		return true
+
 	case resTypes.File:
 		r.w.Header().Set("Content-Type", v.ContentType)
 		r.w.WriteHeader(statusCode)

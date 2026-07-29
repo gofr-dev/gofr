@@ -6,6 +6,7 @@ import (
 
 	"go.uber.org/mock/gomock"
 
+	"gofr.dev/pkg/gofr/ai"
 	"gofr.dev/pkg/gofr/datasource"
 	"gofr.dev/pkg/gofr/datasource/file"
 	"gofr.dev/pkg/gofr/datasource/pubsub"
@@ -36,6 +37,7 @@ type Mocks struct {
 	Metrics      *MockMetrics
 	Oracle       *MockOracleDB
 	ScyllaDB     *MockScyllaDB
+	LLM          *ai.MockLLM
 }
 
 type options func(c *Container, ctrl *gomock.Controller) any
@@ -148,6 +150,9 @@ func NewMockContainer(t *testing.T, options ...options) (*Container, *Mocks) {
 	mockMetrics := NewMockMetrics(ctrl)
 	container.metricsManager = mockMetrics
 
+	mockLLM := ai.NewMockLLM(ctrl)
+	container.llms = map[string]ai.LLM{"": mockLLM}
+
 	mocks := Mocks{
 		Redis:         container.Redis.(*MockRedis),
 		SQL:           sqlMockWrapper,
@@ -168,6 +173,7 @@ func NewMockContainer(t *testing.T, options ...options) (*Container, *Mocks) {
 		Oracle:        container.Oracle.(*MockOracleDB),
 		ScyllaDB:      container.ScyllaDB.(*MockScyllaDB),
 		Couchbase:     container.Couchbase.(*MockCouchbase),
+		LLM:           mockLLM,
 	}
 
 	container.metricsManager = mocks.Metrics

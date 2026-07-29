@@ -3,6 +3,7 @@ package middleware
 import (
 	"bufio"
 	"bytes"
+	"context"
 	"encoding/json"
 	"net"
 	"net/http"
@@ -412,4 +413,81 @@ func TestRequestLogSchemaSnapshot(t *testing.T) {
 	assert.Equal(t, "GET", msg["method"])
 	assert.Equal(t, "/users/42?x=1", msg["uri"])
 	assert.Equal(t, "snapshot-test", msg["user_agent"])
+}
+
+// A streaming response reaches the connection's flusher only if StatusResponseWriter forwards
+// through Unwrap; without it http.NewResponseController returns ErrNotSupported.
+func TestStatusResponseWriter_UnwrapEnablesFlush(t *testing.T) {
+	rec := httptest.NewRecorder()
+	srw := &StatusResponseWriter{ResponseWriter: rec}
+
+	assert.Equal(t, rec, srw.Unwrap())
+
+	rc := http.NewResponseController(srw)
+	require.NoError(t, rc.Flush(), "Unwrap must let ResponseController reach the underlying Flusher")
+}
+
+// getIPAddressOld is the pre-optimization implementation, kept here purely as a
+// reference oracle so the optimized getIPAddress can be proven byte-for-byte
+// equivalent across a range of inputs.
+func getIPAddressOld(r *http.Request) string {
+	ips := strings.Split(r.Header.Get("X-Forwarded-For"), ",")
+
+	ipAddress := ips[0]
+	if ipAddress == "" {
+		ipAddress = r.RemoteAddr
+	}
+
+	return strings.TrimSpace(ipAddress)
+}
+
+func TestGetIPAddress_BackwardCompatible(t *testing.T) {
+	cases := []struct {
+		name       string
+		xff        string
+		setXFF     bool
+		remoteAddr string
+	}{
+		{"no header falls back to RemoteAddr", "", false, "10.0.0.1:1234"},
+		{"empty header falls back to RemoteAddr", "", true, "10.0.0.1:1234"},
+		{"single ip", "203.0.113.5", true, "10.0.0.1:1234"},
+		{"multiple ips takes first", "203.0.113.5, 70.41.3.18, 150.172.238.178", true, "10.0.0.1:1234"},
+		{"leading spaces trimmed", "  203.0.113.5 , 70.41.3.18", true, "10.0.0.1:1234"},
+		{"leading comma falls back to RemoteAddr", ", 70.41.3.18", true, "10.0.0.1:1234"},
+		{"single ip with trailing comma", "203.0.113.5,", true, "10.0.0.1:1234"},
+		{"only whitespace", "   ", true, "10.0.0.1:1234"},
+		{"ipv6", "2001:db8::1, 70.41.3.18", true, "10.0.0.1:1234"},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			req := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/", http.NoBody)
+			req.RemoteAddr = tc.remoteAddr
+
+			if tc.setXFF {
+				req.Header.Set("X-Forwarded-For", tc.xff)
+			}
+
+			got := getIPAddress(req)
+			want := getIPAddressOld(req)
+
+			assert.Equalf(t, want, got, "optimized getIPAddress diverged from the original for input %q", tc.xff)
+		})
+	}
+}
+
+// BenchmarkGetIPAddress measures the per-request X-Forwarded-For parse, which
+// the IndexByte change targets (it avoids the []string strings.Split allocates
+// on every request just to read the first entry).
+func BenchmarkGetIPAddress(b *testing.B) {
+	req, _ := http.NewRequestWithContext(context.Background(), http.MethodGet, "/", http.NoBody)
+	req.Header.Set("X-Forwarded-For", "203.0.113.7, 198.51.100.4, 192.0.2.1")
+	req.RemoteAddr = "10.0.0.1:12345"
+
+	b.ReportAllocs()
+	b.ResetTimer()
+
+	for i := 0; i < b.N; i++ {
+		_ = getIPAddress(req)
+	}
 }
