@@ -214,9 +214,10 @@ metric labels.
 
 ### Traces
 
-A span per call (`llm.chat` / `llm.generate` / `llm.stream`) carrying provider, model and token
-attributes (`llm.tokens.prompt/completion/total/cached/reasoning`) — a child of the request span and
-the parent of the provider's HTTP span.
+A span per call (`llm.chat` / `llm.generate` / `llm.stream` / `llm.embed`) carrying provider, model
+and token attributes (`llm.tokens.prompt/completion/total/cached/reasoning`) — a child of the request
+span and the parent of the provider's HTTP span. On `llm.embed` only the prompt tokens are non-zero,
+since embeddings bill input alone.
 
 ### Logs
 

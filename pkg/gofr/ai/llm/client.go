@@ -212,6 +212,16 @@ func (c *Client) Chat(ctx context.Context, messages []ai.Message, opts ...ai.Opt
 // Embed satisfies ai.Embedder: it posts the input texts to the OpenAI-compatible /embeddings
 // endpoint and returns one vector per input, in the same order. It rides the same instrumented
 // HTTP service, retry and error handling as Chat.
+//
+// Options are accepted for signature parity with Chat and Stream but none currently apply, so they
+// are deliberately ignored rather than silently half-honored: the options GoFr defines today
+// (WithTemperature, WithMaxTokens, WithTools) are all completion parameters with no meaning for an
+// embeddings request. The request body is therefore fixed at {model, input}.
+//
+// The ceiling that implies: the provider-side embedding parameters — notably `dimensions`, which
+// drives Matryoshka truncation on text-embedding-3-*, and `encoding_format` — cannot be set through
+// this client. Supporting them needs embedding-specific options plus the matching fields on
+// embeddingsRequest; tracked in gofr-dev/gofr#3803.
 func (c *Client) Embed(ctx context.Context, input []string, _ ...ai.Option) (*ai.EmbeddingResponse, error) {
 	if c.svc == nil {
 		return nil, errNotConnected
