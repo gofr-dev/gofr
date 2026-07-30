@@ -96,25 +96,39 @@ func (f *S3File) Read(p []byte) (n int, err error) {
 		return 0, fmt.Errorf("%w: S3 file is empty", ErrNilResponse)
 	}
 
-	buffer := make([]byte, len(p)+int(f.offset))
+	// GetObject returns the whole object; discard the bytes preceding the
+	// current offset so the read resumes from where the last one stopped.
+	if f.offset > 0 {
+		if _, err = io.CopyN(io.Discard, f.body, f.offset); err != nil {
+			if errors.Is(err, io.EOF) {
+				return 0, io.EOF
+			}
 
-	n, err = f.body.Read(buffer)
-	if err != nil && !errors.Is(err, io.EOF) {
+			f.logger.Errorf("Error advancing to offset in file %q: %v", fileName, err)
+
+			return 0, err
+		}
+	}
+
+	// io.ReadFull fills p completely unless the object ends first. A short
+	// fill is reported as io.EOF along with the count actually read, honoring
+	// the io.Reader contract that n reflects the real number of bytes read.
+	n, err = io.ReadFull(f.body, p)
+	if errors.Is(err, io.ErrUnexpectedEOF) || errors.Is(err, io.EOF) {
+		err = io.EOF
+	} else if err != nil {
 		f.logger.Errorf("Error reading file %q: %v", fileName, err)
 		return n, err
 	}
 
-	buffer = buffer[f.offset:]
-	copy(p, buffer)
-
-	f.offset += int64(len(buffer))
+	f.offset += int64(n)
 
 	st = statusSuccess
 	msg = fmt.Sprintf("Read %v bytes from file at path %q in bucket %q", n, fileName, bucketName)
 
-	f.logger.Logf("%v bytes read successfully)", len(p))
+	f.logger.Logf("%v bytes read successfully", n)
 
-	return len(p), err
+	return n, err
 }
 
 // ReadAt reads data from the file at a specified offset into the provided byte slice.
@@ -159,26 +173,33 @@ func (f *S3File) ReadAt(p []byte, offset int64) (n int, err error) {
 	}
 
 	if int64(len(p))+offset+1 > f.size {
-		msg = fmt.Sprintf("Offset %v out of range", f.offset)
+		msg = fmt.Sprintf("Offset %v out of range", offset)
 		return 0, fmt.Errorf("%w: reading out of range, fetching from the offset. Use Seek to reset offset", ErrOutOfRange)
 	}
 
-	buffer := make([]byte, len(p)+int(offset)+1)
-
-	n, err = f.body.Read(buffer)
-	if err != nil && !errors.Is(err, io.EOF) {
-		return n, err
+	// GetObject returns the whole object; discard the bytes before the
+	// requested offset without touching the file's own offset.
+	if offset > 0 {
+		if _, err = io.CopyN(io.Discard, f.body, offset); err != nil {
+			return 0, err
+		}
 	}
 
-	buffer = buffer[offset:]
-	copy(p, buffer)
+	// io.ReadFull reports the count actually read; a short fill surfaces as
+	// io.EOF instead of silently claiming len(p) bytes were read.
+	n, err = io.ReadFull(f.body, p)
+	if errors.Is(err, io.ErrUnexpectedEOF) || errors.Is(err, io.EOF) {
+		err = io.EOF
+	} else if err != nil {
+		return n, err
+	}
 
 	st = statusSuccess
 	msg = fmt.Sprintf("Read %v bytes at an offset of %v from file at path %q in bucket %q", n, offset, fileName, bucketName)
 
-	f.logger.Logf("%v bytes read successfully.")
+	f.logger.Logf("%v bytes read successfully.", n)
 
-	return len(p), nil
+	return n, err
 }
 
 // Write writes data to the file at the current offset and updates the file offset.

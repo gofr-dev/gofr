@@ -9,6 +9,7 @@ import (
 	"os"
 	"strings"
 	"testing"
+	"testing/iotest"
 	"time"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
@@ -270,6 +271,64 @@ func TestS3File_Read_Failure(t *testing.T) {
 			assert.Equal(t, tc.expectedN, n, "Expected bytes read %d, got %d", tc.expectedN, n)
 		})
 	}
+}
+
+// TestS3File_Read_PartialBody_FillsBuffer guards the defect-1 fix. An HTTP
+// response body hands back one buffered chunk per Read, so a single body.Read
+// only fills a few bytes of a large buffer. Read must keep reading until p is
+// full (or the object ends) and must report the true byte count — never
+// len(p) with the tail left as zeros. iotest.OneByteReader reproduces the
+// worst-case single-byte chunking.
+func TestS3File_Read_PartialBody_FillsBuffer(t *testing.T) {
+	bucketName := "test-bucket"
+	fileName := "big.bin"
+	fullPath := bucketName + "/" + fileName
+	content := strings.Repeat("gofr-s3-", 8192) // 64 KiB, larger than any single chunk
+
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	f := newTestS3File(t, ctrl, fullPath, int64(len(content)), 0)
+	m := f.conn.(*Mocks3Client)
+
+	m.EXPECT().GetObject(gomock.Any(), gomock.Any()).Return(&s3.GetObjectOutput{
+		Body:          io.NopCloser(iotest.OneByteReader(strings.NewReader(content))),
+		ContentLength: aws.Int64(int64(len(content))),
+	}, nil)
+
+	p := make([]byte, len(content))
+	n, err := f.Read(p)
+
+	require.NoError(t, err, "reading a full buffer worth of data should not error")
+	assert.Equal(t, len(content), n, "Read must return the actual byte count, not len(p) blindly")
+	assert.Equal(t, content, string(p), "the whole object must round-trip without zero-fill corruption")
+	assert.Equal(t, int64(len(content)), f.offset, "offset must advance by the bytes actually read")
+}
+
+// TestS3File_Read_ShortObject_ReturnsActualNAndEOF guards the io.ReadAll case
+// from the issue: a 40-byte object read into an oversized (512-byte) buffer
+// must report exactly 40 bytes and io.EOF, so io.ReadAll returns 40 bytes and
+// not 40 real bytes padded with zeros.
+func TestS3File_Read_ShortObject_ReturnsActualNAndEOF(t *testing.T) {
+	bucketName := "test-bucket"
+	fileName := "small.bin"
+	fullPath := bucketName + "/" + fileName
+	content := strings.Repeat("a", 40)
+
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	f := newTestS3File(t, ctrl, fullPath, int64(len(content)), 0)
+	m := f.conn.(*Mocks3Client)
+
+	m.EXPECT().GetObject(gomock.Any(), gomock.Any()).Return(getObjectOutput(content), nil)
+
+	p := make([]byte, 512)
+	n, err := f.Read(p)
+
+	require.ErrorIs(t, err, io.EOF, "a short fill must surface io.EOF")
+	assert.Equal(t, len(content), n, "n must be the real byte count, not the buffer length")
+	assert.Equal(t, content, string(p[:n]), "the read bytes must match the object content")
 }
 
 // TestS3File_ReadAt_Success tests the successful ReadAt operations of S3File.

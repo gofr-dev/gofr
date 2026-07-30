@@ -1,0 +1,172 @@
+package main
+
+import (
+	"bytes"
+	"context"
+	"encoding/json"
+	"fmt"
+	"net"
+	"net/http"
+	"net/url"
+	"os"
+	"strings"
+	"testing"
+	"time"
+
+	"github.com/aws/aws-sdk-go-v2/aws"
+	awsConfig "github.com/aws/aws-sdk-go-v2/config"
+	"github.com/aws/aws-sdk-go-v2/credentials"
+	"github.com/aws/aws-sdk-go-v2/service/s3"
+	"github.com/stretchr/testify/require"
+
+	"gofr.dev/pkg/gofr/testutil"
+)
+
+// Defaults mirror examples/using-s3-filestore/configs/.env. S3_ENDPOINT can be
+// overridden (e.g. to reach a MinIO container by service name) so the same test
+// runs against localhost in CI and container-to-container locally.
+const (
+	testBucket    = "gofr-bucket"
+	testAccessKey = "minioadmin"
+	testSecretKey = "minioadmin"
+	testRegion    = "us-east-1"
+)
+
+func testEndpoint() string {
+	if e := os.Getenv("S3_ENDPOINT"); e != "" {
+		return e
+	}
+
+	return "http://localhost:9000"
+}
+
+// TestS3FileStore_RoundTrip drives the example end to end against a real MinIO
+// backend. It exists to catch two classes of bug that the s3 datasource's
+// mock-based unit tests structurally cannot:
+//
+//   - a large object read back over a real HTTP body (Read must not truncate /
+//     zero-fill — gofr-dev/gofr#3804 defect 1), and
+//   - the first write under a brand-new prefix (Create must not require a
+//     pre-existing parent — defect 2).
+func TestS3FileStore_RoundTrip(t *testing.T) {
+	skipIfMinIOUnreachable(t)
+
+	sdk := newSDKClient(t)
+	ensureBucket(t, sdk)
+
+	configs := testutil.NewServerConfigs(t)
+	t.Setenv("GOFR_TELEMETRY", "false")
+
+	go main()
+	time.Sleep(200 * time.Millisecond) // give the server time to start
+
+	// Defect 1: an object larger than one HTTP transport chunk must round-trip
+	// byte-for-byte. The pre-fix Read filled only the first few KB of the buffer.
+	large := strings.Repeat("gofr-s3-filestore-", 12000) // ~216 KiB
+	upload(t, configs.HTTPHost, "big.txt", large)
+	require.Equal(t, large, download(t, configs.HTTPHost, "big.txt"),
+		"large object must round-trip without truncation or zero-fill")
+
+	// A small object must also come back exactly, with no trailing zeros.
+	upload(t, configs.HTTPHost, "small.txt", "hello gofr")
+	require.Equal(t, "hello gofr", download(t, configs.HTTPHost, "small.txt"))
+
+	// Defect 2: the first object under a never-before-used prefix must succeed.
+	freshKey := fmt.Sprintf("uploads/%d/report.txt", time.Now().UnixNano())
+	upload(t, configs.HTTPHost, freshKey, "under a fresh prefix")
+	require.Equal(t, "under a fresh prefix", download(t, configs.HTTPHost, freshKey),
+		"create under a fresh prefix must succeed and round-trip")
+}
+
+// upload POSTs content to /files?name=<name> and asserts a 2xx response.
+func upload(t *testing.T, host, name, content string) {
+	t.Helper()
+
+	body, err := json.Marshal(fileContent{Content: content})
+	require.NoError(t, err)
+
+	req, err := http.NewRequest(http.MethodPost,
+		host+"/files?name="+url.QueryEscape(name), bytes.NewReader(body))
+	require.NoError(t, err)
+
+	req.Header.Set("Content-Type", "application/json")
+
+	resp, err := http.DefaultClient.Do(req)
+	require.NoError(t, err, "upload request failed")
+
+	defer resp.Body.Close()
+
+	require.Less(t, resp.StatusCode, http.StatusBadRequest,
+		"upload of %q should succeed, got status %d", name, resp.StatusCode)
+}
+
+// download GETs /files?name=<name> and returns the object's content.
+func download(t *testing.T, host, name string) string {
+	t.Helper()
+
+	resp, err := http.Get(host + "/files?name=" + url.QueryEscape(name))
+	require.NoError(t, err, "download request failed")
+
+	defer resp.Body.Close()
+
+	require.Equal(t, http.StatusOK, resp.StatusCode, "download of %q should return 200", name)
+
+	var env struct {
+		Data fileContent `json:"data"`
+	}
+
+	require.NoError(t, json.NewDecoder(resp.Body).Decode(&env))
+
+	return env.Data.Content
+}
+
+// newSDKClient builds a raw S3 client used only for test setup (bucket
+// creation), independent of the code under test.
+func newSDKClient(t *testing.T) *s3.Client {
+	t.Helper()
+
+	cfg, err := awsConfig.LoadDefaultConfig(context.Background(),
+		awsConfig.WithRegion(testRegion),
+		awsConfig.WithCredentialsProvider(
+			credentials.NewStaticCredentialsProvider(testAccessKey, testSecretKey, "")))
+	require.NoError(t, err)
+
+	return s3.NewFromConfig(cfg, func(o *s3.Options) {
+		o.UsePathStyle = true
+		o.BaseEndpoint = aws.String(testEndpoint())
+	})
+}
+
+// ensureBucket creates the test bucket if it does not already exist.
+func ensureBucket(t *testing.T, sdk *s3.Client) {
+	t.Helper()
+
+	_, err := sdk.CreateBucket(context.Background(),
+		&s3.CreateBucketInput{Bucket: aws.String(testBucket)})
+	if err != nil && !strings.Contains(err.Error(), "BucketAlreadyOwnedByYou") &&
+		!strings.Contains(err.Error(), "BucketAlreadyExists") {
+		require.NoError(t, err, "failed to create test bucket")
+	}
+}
+
+// skipIfMinIOUnreachable keeps local `go test` runs green when no MinIO is
+// running. In CI the MinIO service container is always up, so the test runs
+// for real; the skip only fires on developer machines without the backend.
+func skipIfMinIOUnreachable(t *testing.T) {
+	t.Helper()
+
+	u, err := url.Parse(testEndpoint())
+	require.NoError(t, err)
+
+	host := u.Host
+	if u.Port() == "" {
+		host = net.JoinHostPort(u.Hostname(), "9000")
+	}
+
+	conn, err := net.DialTimeout("tcp", host, 500*time.Millisecond)
+	if err != nil {
+		t.Skipf("MinIO not reachable at %s, skipping integration test: %v", host, err)
+	}
+
+	_ = conn.Close()
+}

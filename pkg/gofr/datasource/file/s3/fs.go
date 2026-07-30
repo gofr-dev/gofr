@@ -174,24 +174,8 @@ func (f *FileSystem) Create(name string) (file.File, error) {
 		Message:   &msg,
 	}, time.Now())
 
-	parentPath := path.Dir(name)
-
-	// if parentPath is not empty, we check if it exists or not.
-	if parentPath != "." {
-		res2, err := f.conn.ListObjectsV2(context.TODO(), &s3.ListObjectsV2Input{
-			Bucket: aws.String(f.config.BucketName),
-			Prefix: aws.String(parentPath + "/"),
-		})
-		if err != nil {
-			return nil, err
-		}
-
-		if len(res2.Contents) == 0 {
-			f.logger.Errorf("Parentpath %q does not exist", parentPath)
-			return nil, fmt.Errorf("%w: create parent path before creating a file", ErrOperationNotPermitted)
-		}
-	}
-
+	// S3 has no directories: a prefix comes into existence with the first
+	// object stored under it, so no parent path needs to pre-exist.
 	_, err := f.conn.PutObject(context.TODO(), &s3.PutObjectInput{
 		Bucket:      aws.String(f.config.BucketName),
 		Key:         aws.String(name),
@@ -219,16 +203,36 @@ func (f *FileSystem) Create(name string) (file.File, error) {
 
 	f.logger.Logf("File with name %s created.", name)
 
-	return &S3File{
-		conn:         f.conn,
-		name:         path.Join(f.config.BucketName, name),
-		logger:       f.logger,
-		metrics:      f.metrics,
-		body:         res.Body,
-		contentType:  *res.ContentType,
-		lastModified: *res.LastModified,
-		size:         *res.ContentLength,
-	}, nil
+	return f.newS3File(name, res), nil
+}
+
+// newS3File builds an S3File from a GetObject response. ContentType,
+// LastModified and ContentLength are modeled by the SDK as pointers because
+// the corresponding response headers are optional; S3-compatible backends
+// (e.g. Cloudflare R2) may omit them, so each is dereferenced only when set to
+// avoid a nil-pointer panic.
+func (f *FileSystem) newS3File(name string, res *s3.GetObjectOutput) *S3File {
+	s3File := &S3File{
+		conn:    f.conn,
+		name:    path.Join(f.config.BucketName, name),
+		logger:  f.logger,
+		metrics: f.metrics,
+		body:    res.Body,
+	}
+
+	if res.ContentType != nil {
+		s3File.contentType = *res.ContentType
+	}
+
+	if res.LastModified != nil {
+		s3File.lastModified = *res.LastModified
+	}
+
+	if res.ContentLength != nil {
+		s3File.size = *res.ContentLength
+	}
+
+	return s3File
 }
 
 // Remove deletes a file from the S3 bucket.
@@ -292,16 +296,7 @@ func (f *FileSystem) Open(name string) (file.File, error) {
 	st = statusSuccess
 	msg = fmt.Sprintf("File with path %q retrieved successfully", name)
 
-	return &S3File{
-		conn:         f.conn,
-		name:         path.Join(f.config.BucketName, name),
-		logger:       f.logger,
-		metrics:      f.metrics,
-		body:         res.Body,
-		contentType:  *res.ContentType,
-		lastModified: *res.LastModified,
-		size:         *res.ContentLength,
-	}, nil
+	return f.newS3File(name, res), nil
 }
 
 // OpenFile is a wrapper for the Open method to comply with the generic FileSystem interface.

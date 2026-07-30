@@ -4,6 +4,7 @@ use (
 	.
 	./examples/using-add-filestore
 	./examples/using-cloudsql
+	./examples/using-s3-filestore
 	./examples/using-gcp-metrics
 	./pkg/gofr/datasource/arangodb
 	./pkg/gofr/datasource/cassandra

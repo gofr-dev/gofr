@@ -97,6 +97,21 @@ jobs:
       - name: Start Zipkin
         run: docker run -d -p 2005:9411 openzipkin/zipkin:latest
 
+      # MinIO can't run as a GitHub Actions `services:` container because the
+      # stock image needs a `server /data` command, which services can't set.
+      # Run it explicitly (same pattern as Zipkin above) and wait for readiness.
+      - name: Start MinIO
+        run: |
+          docker run -d --name minio -p 9000:9000 \
+            -e MINIO_ROOT_USER=minioadmin -e MINIO_ROOT_PASSWORD=minioadmin \
+            minio/minio server /data
+          for i in $(seq 1 30); do
+            if curl -fs http://localhost:9000/minio/health/live >/dev/null; then
+              echo "MinIO is ready"; break
+            fi
+            echo "waiting for MinIO... ($i)"; sleep 2
+          done
+
       # Run tests with automatic retry on failures
       - name: Test with Retry Logic
         id: test
@@ -112,6 +127,16 @@ jobs:
             grep -vE '(/client/|grpc-.+-client/main\.go|_client\.go|_gofr\.go|_grpc\.pb\.go|\.pb\.go|\.proto|health_.*\.go)' packageWithpbgo.cov > profile.cov
             # Display coverage statistics
             go tool cover -func profile.cov
+
+      # The S3 example is its own submodule (it depends on the s3 datasource
+      # submodule), so it is not covered by `go test ./examples/...` above.
+      # Run it explicitly against the MinIO service — this is the integration
+      # guard for the s3 datasource (gofr-dev/gofr#3804).
+      - name: Test using-s3-filestore example against MinIO
+        working-directory: examples/using-s3-filestore
+        env:
+          S3_ENDPOINT: "http://localhost:9000"
+        run: go test -v ./...
 
       # Upload coverage report for the 1.24 Go version only
       - name: Upload Test Coverage
