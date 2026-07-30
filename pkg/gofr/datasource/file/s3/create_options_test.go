@@ -97,6 +97,34 @@ func Test_CreateWithOptions_NilOptsUsesDefaults(t *testing.T) {
 	require.NoError(t, err)
 }
 
+// Test_CreateWithOptions_NilOptionalMetadata_NoPanic guards the defect-3 fix on
+// the third construction site. ContentType, LastModified and ContentLength are
+// optional response headers a backend such as Cloudflare R2 may omit; building the
+// handle must nil-check them (via newS3File) rather than dereference unconditionally.
+func Test_CreateWithOptions_NilOptionalMetadata_NoPanic(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	mocks := setupTestMocks(ctrl)
+	fs := setupTestFileSystem(mocks, nil)
+
+	mocks.mockLogger.EXPECT().Logf(gomock.Any(), gomock.Any()).AnyTimes()
+	// A nil Content-Length is surfaced as a warning so the degraded handle is diagnosable.
+	mocks.mockLogger.EXPECT().Warnf(gomock.Any(), gomock.Any()).AnyTimes()
+	mocks.mockLogger.EXPECT().Debug(gomock.Any()).AnyTimes()
+
+	mocks.mockS3.EXPECT().PutObject(gomock.Any(), gomock.Any()).Return(&s3.PutObjectOutput{}, nil)
+	mocks.mockS3.EXPECT().GetObject(gomock.Any(), gomock.Any()).Return(&s3.GetObjectOutput{
+		Body: io.NopCloser(strings.NewReader("")),
+		// ContentType, LastModified and ContentLength deliberately left nil.
+	}, nil)
+
+	f, err := fs.CreateWithOptions(context.Background(), "no-ext-key", nil)
+	require.NoError(t, err, "CreateWithOptions must not panic when optional metadata is absent")
+	assert.Empty(t, f.(*S3File).contentType, "missing content type defaults to empty string")
+	assert.Zero(t, f.(*S3File).size, "missing content length defaults to zero")
+}
+
 func Test_CreateWithOptions_InvalidContentType(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()

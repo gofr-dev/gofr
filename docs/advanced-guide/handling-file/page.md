@@ -157,6 +157,11 @@ app.AddFileStore(s3.New(&s3.Config{
 > - `Config.UsePathStyle` (a `*bool`) overrides the flavor's addressing default when set; leave it `nil` to use the flavor default.
 > - Signed URLs (see [Cloud-Specific Operations](#cloud-specific-operations)) work across all flavors — the URL host follows the resolved addressing style so links resolve correctly.
 
+> **S3 semantics to be aware of:**
+> - **`Create` does not require a parent "directory".** S3 has no real directories — a prefix comes into existence with the first object stored under it — so `Create("uploads/2026/report.txt")` succeeds even when nothing else exists under `uploads/`. Unlike the local filesystem, no parent-directory check is performed and no `ErrOperationNotPermitted` is returned for a missing parent.
+> - **A file handle is for streaming reads _or_ `ReadAll()`, not both.** `Read`/`ReadAt` stream bytes from the object, while `ReadAll()` decodes the whole object as CSV/JSON/text. Mixing them on the same handle — e.g. a `Read` followed by `ReadAll()` — is not supported, because `ReadAll()` consumes from wherever the last `Read` left off. Open a fresh handle for each mode.
+> - **Backends that omit `Content-Length`.** Some S3-compatible responses (notably certain Cloudflare R2 responses) omit the object size. Such a handle streams fine via `Read`, but offset-bounded operations (`ReadAt`, `Seek`) treat it as empty because the size is unknown; a warning is logged when this happens.
+
 ### Google Cloud Storage (GCS) Bucket as File-Store
 
 **Local Setup with fake-gcs-server:**

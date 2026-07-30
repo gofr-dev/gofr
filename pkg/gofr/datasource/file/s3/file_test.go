@@ -9,6 +9,7 @@ import (
 	"os"
 	"strings"
 	"testing"
+	"testing/iotest"
 	"time"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
@@ -40,6 +41,7 @@ func newTestS3FileWithTime(_ *testing.T, ctrl *gomock.Controller, name string, s
 	mockLogger := NewMockLogger(ctrl)
 
 	mockLogger.EXPECT().Logf(gomock.Any(), gomock.Any()).AnyTimes()
+	mockLogger.EXPECT().Warnf(gomock.Any(), gomock.Any()).AnyTimes()
 	mockLogger.EXPECT().Debug(gomock.Any()).AnyTimes()
 	mockLogger.EXPECT().Errorf(gomock.Any(), gomock.Any()).AnyTimes()
 
@@ -60,6 +62,16 @@ func getObjectOutput(content string) *s3.GetObjectOutput {
 		Body:          io.NopCloser(bytes.NewReader([]byte(content))),
 		ContentLength: aws.Int64(int64(len(content))),
 	}
+}
+
+// getRangeObjectOutput mirrors a range response: a compliant backend echoes the
+// served window in Content-Range, which Read/ReadAt require to be sure the range
+// was honored rather than the whole object returned from byte 0.
+func getRangeObjectOutput(content, contentRange string) *s3.GetObjectOutput {
+	out := getObjectOutput(content)
+	out.ContentRange = aws.String(contentRange)
+
+	return out
 }
 
 // Helper to create a successful PutObjectOutput.
@@ -158,10 +170,13 @@ func TestS3File_Read_Success(t *testing.T) {
 			offset:    5,
 			bufferLen: 4,
 			mockGetObject: func(m *Mocks3ClientMockRecorder) {
+				// A non-zero offset must be served with a Range request and the
+				// backend returns only the bytes from that offset onward.
 				m.GetObject(gomock.Any(), gomock.Eq(&s3.GetObjectInput{
 					Bucket: aws.String(bucketName),
 					Key:    aws.String(fileName),
-				})).Return(getObjectOutput(content), nil)
+					Range:  aws.String("bytes=5-"),
+				})).Return(getRangeObjectOutput(content[5:], "bytes 5-27/28"), nil)
 			},
 			expectedN:   4,
 			expectedP:   "is a",
@@ -272,6 +287,64 @@ func TestS3File_Read_Failure(t *testing.T) {
 	}
 }
 
+// TestS3File_Read_PartialBody_FillsBuffer guards the defect-1 fix. An HTTP
+// response body hands back one buffered chunk per Read, so a single body.Read
+// only fills a few bytes of a large buffer. Read must keep reading until p is
+// full (or the object ends) and must report the true byte count — never
+// len(p) with the tail left as zeros. iotest.OneByteReader reproduces the
+// worst-case single-byte chunking.
+func TestS3File_Read_PartialBody_FillsBuffer(t *testing.T) {
+	bucketName := "test-bucket"
+	fileName := "big.bin"
+	fullPath := bucketName + "/" + fileName
+	content := strings.Repeat("gofr-s3-", 8192) // 64 KiB, larger than any single chunk
+
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	f := newTestS3File(t, ctrl, fullPath, int64(len(content)), 0)
+	m := f.conn.(*Mocks3Client)
+
+	m.EXPECT().GetObject(gomock.Any(), gomock.Any()).Return(&s3.GetObjectOutput{
+		Body:          io.NopCloser(iotest.OneByteReader(strings.NewReader(content))),
+		ContentLength: aws.Int64(int64(len(content))),
+	}, nil)
+
+	p := make([]byte, len(content))
+	n, err := f.Read(p)
+
+	require.NoError(t, err, "reading a full buffer worth of data should not error")
+	assert.Equal(t, len(content), n, "Read must return the actual byte count, not len(p) blindly")
+	assert.Equal(t, content, string(p), "the whole object must round-trip without zero-fill corruption")
+	assert.Equal(t, int64(len(content)), f.offset, "offset must advance by the bytes actually read")
+}
+
+// TestS3File_Read_ShortObject_ReturnsActualNAndEOF guards the io.ReadAll case
+// from the issue: a 40-byte object read into an oversized (512-byte) buffer
+// must report exactly 40 bytes and io.EOF, so io.ReadAll returns 40 bytes and
+// not 40 real bytes padded with zeros.
+func TestS3File_Read_ShortObject_ReturnsActualNAndEOF(t *testing.T) {
+	bucketName := "test-bucket"
+	fileName := "small.bin"
+	fullPath := bucketName + "/" + fileName
+	content := strings.Repeat("a", 40)
+
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	f := newTestS3File(t, ctrl, fullPath, int64(len(content)), 0)
+	m := f.conn.(*Mocks3Client)
+
+	m.EXPECT().GetObject(gomock.Any(), gomock.Any()).Return(getObjectOutput(content), nil)
+
+	p := make([]byte, 512)
+	n, err := f.Read(p)
+
+	require.ErrorIs(t, err, io.EOF, "a short fill must surface io.EOF")
+	assert.Equal(t, len(content), n, "n must be the real byte count, not the buffer length")
+	assert.Equal(t, content, string(p[:n]), "the read bytes must match the object content")
+}
+
 // TestS3File_ReadAt_Success tests the successful ReadAt operations of S3File.
 func TestS3File_ReadAt_Success(t *testing.T) {
 	bucketName := "test-bucket"
@@ -286,7 +359,13 @@ func TestS3File_ReadAt_Success(t *testing.T) {
 	f := newTestS3File(t, ctrl, fullPath, fileSize, 10)
 	m := f.conn.(*Mocks3Client)
 
-	m.EXPECT().GetObject(gomock.Any(), gomock.Any()).Return(getObjectOutput(content), nil)
+	// ReadAt must request exactly [offset, offset+len(p)-1] and never download
+	// the whole object; the backend returns only those bytes.
+	m.EXPECT().GetObject(gomock.Any(), gomock.Eq(&s3.GetObjectInput{
+		Bucket: aws.String(bucketName),
+		Key:    aws.String(fileName),
+		Range:  aws.String("bytes=5-8"),
+	})).Return(getRangeObjectOutput(content[5:9], "bytes 5-8/28"), nil)
 
 	p := make([]byte, 4)
 	n, err := f.ReadAt(p, 5)
@@ -334,14 +413,23 @@ func TestS3File_ReadAt_Failure(t *testing.T) {
 			expectedErr: io.EOF,
 		},
 		{
-			name:         "Failure_OutOfRange",
-			readAtOffset: 25,
+			name:         "Failure_NegativeOffset",
+			readAtOffset: -1,
 			bufferLen:    4,
-			mockGetObject: func(m *Mocks3ClientMockRecorder) {
-				m.GetObject(gomock.Any(), gomock.Any()).Return(getObjectOutput(content), nil)
-			},
-			expectedN:   0,
-			expectedErr: ErrOutOfRange,
+			// A negative offset is rejected before any request.
+			mockGetObject: func(_ *Mocks3ClientMockRecorder) {},
+			expectedN:     0,
+			expectedErr:   ErrOutOfRange,
+		},
+		{
+			name:         "Failure_OffsetAtEOF",
+			readAtOffset: fileSize,
+			bufferLen:    4,
+			// A read starting at or past EOF returns io.EOF without a request; a
+			// read that merely straddles EOF is valid and handled elsewhere.
+			mockGetObject: func(_ *Mocks3ClientMockRecorder) {},
+			expectedN:     0,
+			expectedErr:   io.EOF,
 		},
 	}
 
@@ -363,6 +451,164 @@ func TestS3File_ReadAt_Failure(t *testing.T) {
 			assert.Equal(t, tc.expectedN, n, "Expected bytes read %d, got %d", tc.expectedN, n)
 		})
 	}
+}
+
+// TestS3File_Read_OffsetAtEOF_ReturnsEOF guards the io.Copy termination path. Once
+// the offset reaches a known object size, Read must report io.EOF without issuing a
+// GetObject — otherwise, for an object whose size is an exact multiple of the
+// caller's buffer, the final Read would send an unsatisfiable "bytes=<size>-" Range
+// and surface a 416 error instead of a clean end of stream.
+func TestS3File_Read_OffsetAtEOF_ReturnsEOF(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	f := newTestS3File(t, ctrl, "test-bucket/exact.bin", 32, 32)
+
+	// No GetObject expectation: reaching EOF must not hit the network.
+	n, err := f.Read(make([]byte, 16))
+
+	require.ErrorIs(t, err, io.EOF, "reading at or past a known size must return io.EOF")
+	assert.Zero(t, n, "no bytes are read at EOF")
+}
+
+// TestS3File_ReadAt_Boundaries guards the dropped-"+1" fix: a ReadAt that ends
+// exactly at EOF — including reading the final byte, or the whole object in one
+// call — is valid and must not be rejected as out of range.
+func TestS3File_ReadAt_Boundaries(t *testing.T) {
+	bucketName := "test-bucket"
+	fileName := "ten.bin"
+	fullPath := bucketName + "/" + fileName
+	content := "0123456789" // 10 bytes
+	fileSize := int64(len(content))
+
+	testCases := []struct {
+		name       string
+		offset     int64
+		bufferLen  int
+		wantRange  string
+		wantCRange string
+		wantBody   string
+	}{
+		{name: "WholeObject", offset: 0, bufferLen: 10, wantRange: "bytes=0-9", wantCRange: "bytes 0-9/10", wantBody: content},
+		{name: "LastByte", offset: 9, bufferLen: 1, wantRange: "bytes=9-9", wantCRange: "bytes 9-9/10", wantBody: content[9:]},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+			defer ctrl.Finish()
+
+			f := newTestS3File(t, ctrl, fullPath, fileSize, 0)
+			m := f.conn.(*Mocks3Client)
+
+			m.EXPECT().GetObject(gomock.Any(), gomock.Eq(&s3.GetObjectInput{
+				Bucket: aws.String(bucketName),
+				Key:    aws.String(fileName),
+				Range:  aws.String(tc.wantRange),
+			})).Return(getRangeObjectOutput(tc.wantBody, tc.wantCRange), nil)
+
+			p := make([]byte, tc.bufferLen)
+			n, err := f.ReadAt(p, tc.offset)
+
+			require.NoError(t, err, "a read ending exactly at EOF must be in range")
+			assert.Equal(t, tc.bufferLen, n)
+			assert.Equal(t, tc.wantBody, string(p[:n]))
+		})
+	}
+}
+
+// TestS3File_Read_RangeIgnored_Refuses guards the silent-corruption path: when a
+// non-zero offset triggers a Range request but the backend answers with the whole
+// object (no Content-Range), filling p from byte 0 would serve the wrong bytes.
+// Read must refuse with ErrRangeNotHonored rather than return bogus data.
+func TestS3File_Read_RangeIgnored_Refuses(t *testing.T) {
+	bucketName := "test-bucket"
+	fileName := "test-file.txt"
+	fullPath := bucketName + "/" + fileName
+	content := "This is a test file content."
+
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	f := newTestS3File(t, ctrl, fullPath, int64(len(content)), 5)
+	m := f.conn.(*Mocks3Client)
+
+	// Range requested, but the backend returns the whole object with no
+	// Content-Range — the ignored-Range case.
+	m.EXPECT().GetObject(gomock.Any(), gomock.Any()).Return(getObjectOutput(content), nil)
+
+	n, err := f.Read(make([]byte, 4))
+
+	require.ErrorIs(t, err, ErrRangeNotHonored, "a backend ignoring Range must be refused, not silently served wrong bytes")
+	assert.Zero(t, n, "no bytes may be reported when the range was not honored")
+}
+
+// TestS3File_ReadAt_RangeIgnored_Refuses is the ReadAt counterpart: ReadAt always
+// sends a Range, so a missing Content-Range means the backend served from byte 0.
+func TestS3File_ReadAt_RangeIgnored_Refuses(t *testing.T) {
+	bucketName := "test-bucket"
+	fileName := "test-file.txt"
+	fullPath := bucketName + "/" + fileName
+	content := "This is a test file content."
+
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	f := newTestS3File(t, ctrl, fullPath, int64(len(content)), 0)
+	m := f.conn.(*Mocks3Client)
+
+	m.EXPECT().GetObject(gomock.Any(), gomock.Any()).Return(getObjectOutput(content), nil)
+
+	n, err := f.ReadAt(make([]byte, 4), 5)
+
+	require.ErrorIs(t, err, ErrRangeNotHonored, "a backend ignoring Range must be refused")
+	assert.Zero(t, n, "no bytes may be reported when the range was not honored")
+}
+
+// TestS3File_ReadAt_StraddlesEOF covers a read that begins before EOF but extends
+// past it: the available bytes are returned along with io.EOF and the real count,
+// per the io.ReaderAt contract — not a zero-byte ErrOutOfRange.
+func TestS3File_ReadAt_StraddlesEOF(t *testing.T) {
+	bucketName := "test-bucket"
+	fileName := "ten.bin"
+	fullPath := bucketName + "/" + fileName
+	content := "0123456789" // 10 bytes
+	fileSize := int64(len(content))
+
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	f := newTestS3File(t, ctrl, fullPath, fileSize, 0)
+	m := f.conn.(*Mocks3Client)
+
+	// Requesting [8, 11] against a 10-byte object: S3 returns only bytes 8-9.
+	m.EXPECT().GetObject(gomock.Any(), gomock.Eq(&s3.GetObjectInput{
+		Bucket: aws.String(bucketName),
+		Key:    aws.String(fileName),
+		Range:  aws.String("bytes=8-11"),
+	})).Return(getRangeObjectOutput(content[8:], "bytes 8-9/10"), nil)
+
+	p := make([]byte, 4)
+	n, err := f.ReadAt(p, 8)
+
+	require.ErrorIs(t, err, io.EOF, "a read past EOF must surface io.EOF")
+	assert.Equal(t, 2, n, "only the available bytes are read")
+	assert.Equal(t, content[8:], string(p[:n]))
+}
+
+// TestS3File_ReadAt_EmptyBuffer verifies a zero-length destination reads nothing
+// and costs no request.
+func TestS3File_ReadAt_EmptyBuffer(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	f := newTestS3File(t, ctrl, "test-bucket/any.bin", 10, 0)
+	// No GetObject expectation: an empty read must not hit the network.
+
+	n, err := f.ReadAt(make([]byte, 0), 3)
+
+	require.NoError(t, err, "an empty read is a no-op, not an error")
+	assert.Zero(t, n)
 }
 
 // TestS3File_Write_Success tests the successful Write operations of S3File.
