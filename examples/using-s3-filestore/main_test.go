@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net"
 	"net/http"
 	"net/url"
@@ -20,6 +21,9 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/stretchr/testify/require"
 
+	"gofr.dev/pkg/gofr/datasource/file"
+	gofrS3 "gofr.dev/pkg/gofr/datasource/file/s3"
+	"gofr.dev/pkg/gofr/logging"
 	"gofr.dev/pkg/gofr/testutil"
 )
 
@@ -77,6 +81,83 @@ func TestS3FileStore_RoundTrip(t *testing.T) {
 	upload(t, configs.HTTPHost, freshKey, "under a fresh prefix")
 	require.Equal(t, "under a fresh prefix", download(t, configs.HTTPHost, freshKey),
 		"create under a fresh prefix must succeed and round-trip")
+}
+
+// TestS3FileStore_CopyAndReadAt exercises the read paths the HTTP round-trip
+// (io.ReadAll) doesn't. io.Copy drives sequential Read calls, each issuing a
+// byte-range request from a growing offset, and ReadAt fetches an exact window.
+// Both run against real MinIO — the transport the mock unit tests can't provide —
+// so a regression in the range logic (e.g. gofr-dev/gofr#3805 item 1, a backend
+// answer that ignores Range) surfaces here rather than as silent corruption.
+func TestS3FileStore_CopyAndReadAt(t *testing.T) {
+	skipIfMinIOUnreachable(t)
+
+	sdk := newSDKClient(t)
+	ensureBucket(t, sdk)
+
+	fs := newFileStore()
+
+	// An object spanning many transport chunks so io.Copy makes several ranged
+	// Read calls rather than a single one.
+	content := strings.Repeat("gofr-range-", 20000) // ~220 KiB
+	key := fmt.Sprintf("copy/%d/data.txt", time.Now().UnixNano())
+
+	w, err := fs.Create(key)
+	require.NoError(t, err)
+	_, err = w.Write([]byte(content))
+	require.NoError(t, err)
+	require.NoError(t, w.Close())
+
+	// io.Copy: sequential ranged reads must reassemble the object byte-for-byte
+	// and terminate cleanly at EOF (never loop, never zero-fill).
+	r, err := fs.Open(key)
+	require.NoError(t, err)
+
+	defer r.Close()
+
+	var buf bytes.Buffer
+
+	n, err := io.Copy(&buf, r)
+	require.NoError(t, err, "io.Copy over a real HTTP body must not error or hang")
+	require.Equal(t, int64(len(content)), n)
+	require.Equal(t, content, buf.String(), "io.Copy must reassemble the object byte-for-byte")
+
+	// ReadAt: an exact window in the middle of the object must return exactly
+	// those bytes.
+	ra, err := fs.Open(key)
+	require.NoError(t, err)
+
+	defer ra.Close()
+
+	const off, size = 1000, 500
+
+	window := make([]byte, size)
+
+	got, err := ra.ReadAt(window, off)
+	require.NoError(t, err)
+	require.Equal(t, size, got)
+	require.Equal(t, content[off:off+size], string(window), "ReadAt must return the requested window")
+}
+
+// newFileStore builds the gofr S3 file store the example uses, wired to the test
+// MinIO backend, so a test can drive File methods (io.Copy, ReadAt) directly
+// rather than only through the HTTP handlers.
+func newFileStore() file.CloudFileSystem {
+	endpoint := testEndpoint()
+
+	fs := gofrS3.New(&gofrS3.Config{
+		EndPoint:        endpoint,
+		BucketName:      testBucket,
+		Region:          testRegion,
+		AccessKeyID:     testAccessKey,
+		SecretAccessKey: testSecretKey,
+		Flavor:          gofrS3.FlavorMinIO,
+	})
+
+	fs.UseLogger(logging.NewLogger(logging.ERROR))
+	fs.Connect()
+
+	return fs
 }
 
 // upload POSTs content to /files?name=<name> and asserts a 2xx response.

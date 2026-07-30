@@ -237,7 +237,7 @@ func (f *FileSystem) newS3File(name string, res *s3.GetObjectOutput) *S3File {
 		// leaves size at 0, which makes offset-bounded operations such as ReadAt
 		// and Seek treat the handle as empty. Surface it so the degraded handle is
 		// diagnosable rather than silently unusable.
-		f.logger.Logf("S3 object %q returned no Content-Length; size is unknown and "+
+		f.logger.Warnf("S3 object %q returned no Content-Length; size is unknown and "+
 			"offset-bounded reads (ReadAt/Seek) will treat it as empty", name)
 	}
 

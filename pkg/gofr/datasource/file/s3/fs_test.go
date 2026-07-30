@@ -635,6 +635,8 @@ func Test_Open_NilOptionalMetadata_NoPanic(t *testing.T) {
 	fs := setupTestFileSystem(mocks, nil)
 
 	mocks.mockLogger.EXPECT().Logf(gomock.Any(), gomock.Any()).AnyTimes()
+	// A nil Content-Length is surfaced as a warning so the degraded handle is diagnosable.
+	mocks.mockLogger.EXPECT().Warnf(gomock.Any(), gomock.Any()).AnyTimes()
 	mocks.mockLogger.EXPECT().Debug(gomock.Any()).AnyTimes()
 
 	mocks.mockS3.EXPECT().GetObject(gomock.Any(), gomock.Any()).Return(&s3.GetObjectOutput{
@@ -658,6 +660,8 @@ func Test_CreateFile_NilOptionalMetadata_NoPanic(t *testing.T) {
 	fs := setupTestFileSystem(mocks, nil)
 
 	mocks.mockLogger.EXPECT().Logf(gomock.Any(), gomock.Any()).AnyTimes()
+	// A nil Content-Length is surfaced as a warning so the degraded handle is diagnosable.
+	mocks.mockLogger.EXPECT().Warnf(gomock.Any(), gomock.Any()).AnyTimes()
 	mocks.mockLogger.EXPECT().Debug(gomock.Any()).AnyTimes()
 
 	mocks.mockS3.EXPECT().PutObject(gomock.Any(), gomock.Any()).Return(&s3.PutObjectOutput{}, nil)
