@@ -198,10 +198,6 @@ func (h handler) serveWithGoroutine(c *Context, traceID string, r *http.Request)
 	return result, err
 }
 
-func healthHandler(c *Context) (any, error) {
-	return c.Health(c), nil
-}
-
 func liveHandler(*Context) (any, error) {
 	return struct {
 		Status string `json:"status"`

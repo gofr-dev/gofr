@@ -36,98 +36,69 @@ To override this endpoint, pass the following option while registering HTTP Serv
 		}
 ```
 
-### 2. Health-Check - /.well-known/health
+### 2. Readiness - /.well-known/health
 
-It is an endpoint which returns whether the service is UP or DOWN along with stats, host, status about the dependent datasources and services.
+It is an unauthenticated endpoint that reports whether the service is ready to receive traffic. It
+aggregates the health of every registered datasource and service into a single status and returns
+**only** the application `name` and that aggregate `status` — `UP` when all dependencies are healthy,
+`DEGRADED` when one or more are down.
 
-Sample response of how it appears when all the services, and connected data sources are UP:
+To avoid leaking infrastructure details on an unauthenticated port, this endpoint intentionally does
+**not** expose per-dependency information (hosts, ports, database/keyspace/bucket names, connection
+pool stats, usernames, or raw error strings). The full detailed map is still computed internally and
+remains available to ops tooling via `Container.Health`.
+
+Sample response when the service is ready (HTTP 200):
 ```json
 {
   "data": {
-    "anotherService": {
-      "status": "UP",
-      "details": {
-        "host": "localhost:9000"
-      }
-    },
-    "redis": {
-      "status": "UP",
-      "details": {
-        "host": "localhost:2002",
-        "stats": {
-          "active_defrag_hits": "0",
-          "active_defrag_key_hits": "0",
-          "active_defrag_key_misses": "0",
-          "active_defrag_misses": "0",
-          "current_active_defrag_time": "0",
-          "current_eviction_exceeded_time": "0",
-          "dump_payload_sanitizations": "0",
-          "evicted_clients": "0",
-          "evicted_keys": "0",
-          "expire_cycle_cpu_milliseconds": "1",
-          "expired_keys": "0",
-          "expired_stale_perc": "0.00",
-          "expired_time_cap_reached_count": "0",
-          "instantaneous_input_kbps": "0.00",
-          "instantaneous_input_repl_kbps": "0.00",
-          "instantaneous_ops_per_sec": "0",
-          "instantaneous_output_kbps": "0.00",
-          "instantaneous_output_repl_kbps": "0.00",
-          "io_threaded_reads_processed": "0",
-          "io_threaded_writes_processed": "0",
-          "keyspace_hits": "0",
-          "keyspace_misses": "0",
-          "latest_fork_usec": "0",
-          "migrate_cached_sockets": "0",
-          "pubsub_channels": "0",
-          "pubsub_patterns": "0",
-          "pubsubshard_channels": "0",
-          "rejected_connections": "0",
-          "reply_buffer_expands": "0",
-          "reply_buffer_shrinks": "1",
-          "slave_expires_tracked_keys": "0",
-          "sync_full": "0",
-          "sync_partial_err": "0",
-          "sync_partial_ok": "0",
-          "total_active_defrag_time": "0",
-          "total_commands_processed": "2",
-          "total_connections_received": "1",
-          "total_error_replies": "2",
-          "total_eviction_exceeded_time": "0",
-          "total_forks": "0",
-          "total_net_input_bytes": "183",
-          "total_net_output_bytes": "257",
-          "total_net_repl_input_bytes": "0",
-          "total_net_repl_output_bytes": "0",
-          "total_reads_processed": "5",
-          "total_writes_processed": "4",
-          "tracking_total_items": "0",
-          "tracking_total_keys": "0",
-          "tracking_total_prefixes": "0",
-          "unexpected_error_replies": "0"
-        }
-      }
-    },
-    "sql": {
-      "status": "UP",
-      "details": {
-        "host": "localhost:2001/test",
-        "stats": {
-          "maxOpenConnections": 0,
-          "openConnections": 1,
-          "inUse": 0,
-          "idle": 1,
-          "waitCount": 0,
-          "waitDuration": 0,
-          "maxIdleClosed": 0,
-          "maxIdleTimeClosed": 0,
-          "maxLifetimeClosed": 0
-        }
-      }
-    }
+    "name": "sample-service",
+    "status": "UP"
   }
 }
 ```
+
+#### Controlling readiness with `SetHealthCheck`
+
+By default the endpoint always responds with HTTP `200` (readiness probes keep working unchanged).
+To hold a pod out of service until its critical dependencies are ready, register a readiness closure.
+It receives the request context and the container — so critical datasources can be probed — and
+returns the status string to report along with the HTTP status code to respond with:
+
+```go
+package main
+
+import (
+	"context"
+	"net/http"
+
+	"gofr.dev/pkg/gofr"
+	"gofr.dev/pkg/gofr/container"
+)
+
+func main() {
+	app := gofr.New()
+
+	app.SetHealthCheck(func(ctx context.Context, c *container.Container) (status string, statusCode int) {
+		// Keep the pod out of service until Redis is reachable.
+		if c.Redis == nil || c.Redis.Ping(ctx).Err() != nil {
+			return "DOWN", http.StatusServiceUnavailable
+		}
+
+		return "UP", http.StatusOK
+	})
+
+	app.Run()
+}
+```
+
+When the closure returns a non-`200` code, `/.well-known/health` responds with that code so
+Kubernetes readiness probes stop routing traffic to the pod. Returning `("UP", http.StatusOK)`
+(or no closure at all) preserves the default behavior.
+
+> **Note:** The detailed per-dependency health map is being moved to the metrics server
+> (`METRICS_PORT`), behind the same network boundary as `/metrics` and `/debug/pprof`. Track that
+> work in #3806.
 
 ## Related production guides
 
