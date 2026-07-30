@@ -12,6 +12,7 @@ type Logger interface {
 	Debug(args ...any)
 	Debugf(pattern string, args ...any)
 	Logf(pattern string, args ...any)
+	Warnf(pattern string, args ...any)
 	Errorf(pattern string, args ...any)
 }
 
