@@ -62,8 +62,10 @@ Sample response when the service is ready (HTTP 200):
 
 By default the endpoint always responds with HTTP `200` (readiness probes keep working unchanged).
 To hold a pod out of service until its critical dependencies are ready, register a readiness closure.
-It receives the request context and the container — so critical datasources can be probed — and
-returns the status string to report along with the HTTP status code to respond with:
+It receives the request context and the container and returns the status string to report along
+with the HTTP status code to respond with. The closure is **not limited to datasources** — it can
+combine any checks that define "ready" for your service: datasources on the container, registered
+HTTP services, or fully custom logic.
 
 ```go
 package main
@@ -79,9 +81,18 @@ import (
 func main() {
 	app := gofr.New()
 
+	// A downstream HTTP dependency this service must be able to reach before it is ready.
+	app.AddHTTPService("payment", "https://payment.internal")
+
 	app.SetHealthCheck(func(ctx context.Context, c *container.Container) (status string, statusCode int) {
-		// Keep the pod out of service until Redis is reachable.
+		// A datasource on the container.
 		if c.Redis == nil || c.Redis.Ping(ctx).Err() != nil {
+			return "DOWN", http.StatusServiceUnavailable
+		}
+
+		// A registered HTTP service — the closure can gate readiness on any dependency,
+		// including one reached over HTTP, not just the datasource fields on the container.
+		if h := c.GetHTTPService("payment").HealthCheck(ctx); h == nil || h.Status != "UP" {
 			return "DOWN", http.StatusServiceUnavailable
 		}
 
