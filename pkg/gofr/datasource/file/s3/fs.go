@@ -159,9 +159,11 @@ func applyClientOptions(prof profile, endpoint string) func(*s3.Options) {
 
 // Create creates a new file in the S3 bucket.
 //
-// This method creates an empty file at the specified path in the S3 bucket. It first checks if the parent directory exists;
-// if the parent directory does not exist, it returns an error. After creating the file, it retrieves the file metadata
-// and returns a `file` object representing the newly created file.
+// This method creates an empty file at the specified path in the S3 bucket. S3 has no real
+// directories — a prefix springs into existence with the first object stored under it — so the
+// parent path is not required to pre-exist and no parent-directory check is performed. After
+// creating the file, it retrieves the file metadata and returns a `file` object representing the
+// newly created file.
 func (f *FileSystem) Create(name string) (file.File, error) {
 	var msg string
 
@@ -230,6 +232,13 @@ func (f *FileSystem) newS3File(name string, res *s3.GetObjectOutput) *S3File {
 
 	if res.ContentLength != nil {
 		s3File.size = *res.ContentLength
+	} else {
+		// A backend that omits Content-Length (e.g. some Cloudflare R2 responses)
+		// leaves size at 0, which makes offset-bounded operations such as ReadAt
+		// and Seek treat the handle as empty. Surface it so the degraded handle is
+		// diagnosable rather than silently unusable.
+		f.logger.Logf("S3 object %q returned no Content-Length; size is unknown and "+
+			"offset-bounded reads (ReadAt/Seek) will treat it as empty", name)
 	}
 
 	return s3File

@@ -55,6 +55,15 @@ func (f *S3File) Close() error {
 	return nil
 }
 
+// closeBody closes a previously opened response body (if any) before it is
+// replaced by a fresh read, so a re-read on the same handle does not leak the
+// earlier HTTP connection.
+func (f *S3File) closeBody() {
+	if f.body != nil {
+		_ = f.body.Close()
+	}
+}
+
 // Read reads data into the provided byte slice.
 //
 // It attempts to fill the entire slice with data from the file. If the number of bytes read is less than the length of the slice,
@@ -81,33 +90,43 @@ func (f *S3File) Read(p []byte) (n int, err error) {
 		Message:   &msg,
 	}, time.Now())
 
-	res, err := f.conn.GetObject(context.TODO(), &s3.GetObjectInput{
+	// Once the offset has reached (or passed) a known object size there is
+	// nothing left to read. Returning io.EOF here also keeps io.Copy from
+	// issuing an unsatisfiable Range request when the object size is an exact
+	// multiple of the caller's buffer.
+	if f.size > 0 && f.offset >= f.size {
+		st = statusSuccess
+		return 0, io.EOF
+	}
+
+	input := &s3.GetObjectInput{
 		Bucket: aws.String(bucketName),
 		Key:    aws.String(fileName),
-	})
+	}
+
+	// Ask S3 for only the bytes from the current offset onward instead of
+	// downloading the whole object and discarding the prefix on every call.
+	// That keeps a full-file read linear in the object size rather than
+	// quadratic. A zero offset fetches the whole object (no Range header), so
+	// empty objects and backends that reject "bytes=0-" behave as before.
+	if f.offset > 0 {
+		input.Range = aws.String(fmt.Sprintf("bytes=%d-", f.offset))
+	}
+
+	res, err := f.conn.GetObject(context.TODO(), input)
 	if err != nil {
 		msg = fmt.Sprintf("Failed to retrieve %q: %v", fileName, err)
 		return 0, err
 	}
 
+	// Close the body from any previous read before replacing it, otherwise the
+	// earlier HTTP connection leaks.
+	f.closeBody()
+
 	f.body = res.Body
 	if f.body == nil {
 		msg = fmt.Sprintf("File %q is nil", fileName)
 		return 0, fmt.Errorf("%w: S3 file is empty", ErrNilResponse)
-	}
-
-	// GetObject returns the whole object; discard the bytes preceding the
-	// current offset so the read resumes from where the last one stopped.
-	if f.offset > 0 {
-		if _, err = io.CopyN(io.Discard, f.body, f.offset); err != nil {
-			if errors.Is(err, io.EOF) {
-				return 0, io.EOF
-			}
-
-			f.logger.Errorf("Error advancing to offset in file %q: %v", fileName, err)
-
-			return 0, err
-		}
 	}
 
 	// io.ReadFull fills p completely unless the object ends first. A short
@@ -155,34 +174,36 @@ func (f *S3File) ReadAt(p []byte, offset int64) (n int, err error) {
 		fileName = f.name[index+1:]
 	}
 
+	// A read of len(p) bytes starting at offset ends at offset+len(p)-1, so it
+	// is in range as long as offset+len(p) <= size. The bound is checked before
+	// fetching so an out-of-range call costs no request.
+	if int64(len(p))+offset > f.size {
+		msg = fmt.Sprintf("Offset %v out of range", offset)
+		return 0, fmt.Errorf("%w: reading out of range, fetching from the offset. Use Seek to reset offset", ErrOutOfRange)
+	}
+
 	var res *s3.GetObjectOutput
 
+	// Request exactly the [offset, offset+len(p)-1] byte range instead of the
+	// whole object, so ReadAt is linear in len(p) rather than in the object size.
 	res, err = f.conn.GetObject(context.TODO(), &s3.GetObjectInput{
 		Bucket: aws.String(bucketName),
 		Key:    aws.String(fileName),
+		Range:  aws.String(fmt.Sprintf("bytes=%d-%d", offset, offset+int64(len(p))-1)),
 	})
 	if err != nil {
 		msg = fmt.Sprintf("Failed to retrieve file %q: %v", fileName, err)
 		return 0, err
 	}
 
+	// Close the body from any previous read before replacing it to avoid leaking
+	// the earlier HTTP connection.
+	f.closeBody()
+
 	f.body = res.Body
 	if f.body == nil {
 		msg = fmt.Sprintf("File %q is nil", fileName)
 		return 0, io.EOF
-	}
-
-	if int64(len(p))+offset+1 > f.size {
-		msg = fmt.Sprintf("Offset %v out of range", offset)
-		return 0, fmt.Errorf("%w: reading out of range, fetching from the offset. Use Seek to reset offset", ErrOutOfRange)
-	}
-
-	// GetObject returns the whole object; discard the bytes before the
-	// requested offset without touching the file's own offset.
-	if offset > 0 {
-		if _, err = io.CopyN(io.Discard, f.body, offset); err != nil {
-			return 0, err
-		}
 	}
 
 	// io.ReadFull reports the count actually read; a short fill surfaces as

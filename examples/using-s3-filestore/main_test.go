@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -150,8 +151,10 @@ func ensureBucket(t *testing.T, sdk *s3.Client) {
 }
 
 // skipIfMinIOUnreachable keeps local `go test` runs green when no MinIO is
-// running. In CI the MinIO service container is always up, so the test runs
-// for real; the skip only fires on developer machines without the backend.
+// running. On developer machines the backend is optional and the test skips.
+// CI sets S3_REQUIRE_MINIO so an unreachable backend fails the test instead of
+// skipping — otherwise a broken MinIO would silently turn the #3804 integration
+// guard into a no-op that still reports success.
 func skipIfMinIOUnreachable(t *testing.T) {
 	t.Helper()
 
@@ -165,6 +168,10 @@ func skipIfMinIOUnreachable(t *testing.T) {
 
 	conn, err := net.DialTimeout("tcp", host, 500*time.Millisecond)
 	if err != nil {
+		if required, _ := strconv.ParseBool(os.Getenv("S3_REQUIRE_MINIO")); required {
+			require.NoError(t, err, "S3_REQUIRE_MINIO is set but MinIO is unreachable at %s", host)
+		}
+
 		t.Skipf("MinIO not reachable at %s, skipping integration test: %v", host, err)
 	}
 

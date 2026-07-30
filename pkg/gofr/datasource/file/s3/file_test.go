@@ -159,10 +159,13 @@ func TestS3File_Read_Success(t *testing.T) {
 			offset:    5,
 			bufferLen: 4,
 			mockGetObject: func(m *Mocks3ClientMockRecorder) {
+				// A non-zero offset must be served with a Range request and the
+				// backend returns only the bytes from that offset onward.
 				m.GetObject(gomock.Any(), gomock.Eq(&s3.GetObjectInput{
 					Bucket: aws.String(bucketName),
 					Key:    aws.String(fileName),
-				})).Return(getObjectOutput(content), nil)
+					Range:  aws.String("bytes=5-"),
+				})).Return(getObjectOutput(content[5:]), nil)
 			},
 			expectedN:   4,
 			expectedP:   "is a",
@@ -345,7 +348,13 @@ func TestS3File_ReadAt_Success(t *testing.T) {
 	f := newTestS3File(t, ctrl, fullPath, fileSize, 10)
 	m := f.conn.(*Mocks3Client)
 
-	m.EXPECT().GetObject(gomock.Any(), gomock.Any()).Return(getObjectOutput(content), nil)
+	// ReadAt must request exactly [offset, offset+len(p)-1] and never download
+	// the whole object; the backend returns only those bytes.
+	m.EXPECT().GetObject(gomock.Any(), gomock.Eq(&s3.GetObjectInput{
+		Bucket: aws.String(bucketName),
+		Key:    aws.String(fileName),
+		Range:  aws.String("bytes=5-8"),
+	})).Return(getObjectOutput(content[5:9]), nil)
 
 	p := make([]byte, 4)
 	n, err := f.ReadAt(p, 5)
@@ -396,11 +405,11 @@ func TestS3File_ReadAt_Failure(t *testing.T) {
 			name:         "Failure_OutOfRange",
 			readAtOffset: 25,
 			bufferLen:    4,
-			mockGetObject: func(m *Mocks3ClientMockRecorder) {
-				m.GetObject(gomock.Any(), gomock.Any()).Return(getObjectOutput(content), nil)
-			},
-			expectedN:   0,
-			expectedErr: ErrOutOfRange,
+			// The bound is checked before any request, so GetObject is never
+			// called on an out-of-range read.
+			mockGetObject: func(_ *Mocks3ClientMockRecorder) {},
+			expectedN:     0,
+			expectedErr:   ErrOutOfRange,
 		},
 	}
 
@@ -420,6 +429,69 @@ func TestS3File_ReadAt_Failure(t *testing.T) {
 			require.Error(t, err, "Expected an error")
 			require.ErrorIs(t, err, tc.expectedErr, "Expected error %v, got %v", tc.expectedErr, err)
 			assert.Equal(t, tc.expectedN, n, "Expected bytes read %d, got %d", tc.expectedN, n)
+		})
+	}
+}
+
+// TestS3File_Read_OffsetAtEOF_ReturnsEOF guards the io.Copy termination path. Once
+// the offset reaches a known object size, Read must report io.EOF without issuing a
+// GetObject — otherwise, for an object whose size is an exact multiple of the
+// caller's buffer, the final Read would send an unsatisfiable "bytes=<size>-" Range
+// and surface a 416 error instead of a clean end of stream.
+func TestS3File_Read_OffsetAtEOF_ReturnsEOF(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	f := newTestS3File(t, ctrl, "test-bucket/exact.bin", 32, 32)
+
+	// No GetObject expectation: reaching EOF must not hit the network.
+	n, err := f.Read(make([]byte, 16))
+
+	require.ErrorIs(t, err, io.EOF, "reading at or past a known size must return io.EOF")
+	assert.Zero(t, n, "no bytes are read at EOF")
+}
+
+// TestS3File_ReadAt_Boundaries guards the dropped-"+1" fix: a ReadAt that ends
+// exactly at EOF — including reading the final byte, or the whole object in one
+// call — is valid and must not be rejected as out of range.
+func TestS3File_ReadAt_Boundaries(t *testing.T) {
+	bucketName := "test-bucket"
+	fileName := "ten.bin"
+	fullPath := bucketName + "/" + fileName
+	content := "0123456789" // 10 bytes
+	fileSize := int64(len(content))
+
+	testCases := []struct {
+		name      string
+		offset    int64
+		bufferLen int
+		wantRange string
+		wantBody  string
+	}{
+		{name: "WholeObject", offset: 0, bufferLen: 10, wantRange: "bytes=0-9", wantBody: content},
+		{name: "LastByte", offset: 9, bufferLen: 1, wantRange: "bytes=9-9", wantBody: content[9:]},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+			defer ctrl.Finish()
+
+			f := newTestS3File(t, ctrl, fullPath, fileSize, 0)
+			m := f.conn.(*Mocks3Client)
+
+			m.EXPECT().GetObject(gomock.Any(), gomock.Eq(&s3.GetObjectInput{
+				Bucket: aws.String(bucketName),
+				Key:    aws.String(fileName),
+				Range:  aws.String(tc.wantRange),
+			})).Return(getObjectOutput(tc.wantBody), nil)
+
+			p := make([]byte, tc.bufferLen)
+			n, err := f.ReadAt(p, tc.offset)
+
+			require.NoError(t, err, "a read ending exactly at EOF must be in range")
+			assert.Equal(t, tc.bufferLen, n)
+			assert.Equal(t, tc.wantBody, string(p[:n]))
 		})
 	}
 }

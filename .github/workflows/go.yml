@@ -107,10 +107,16 @@ jobs:
             minio/minio server /data
           for i in $(seq 1 30); do
             if curl -fs http://localhost:9000/minio/health/live >/dev/null; then
-              echo "MinIO is ready"; break
+              echo "MinIO is ready"; exit 0
             fi
             echo "waiting for MinIO... ($i)"; sleep 2
           done
+          # If MinIO never became ready (image-pull failure, registry rate-limit,
+          # crash) fail loudly here. Otherwise the integration test for #3804 would
+          # silently skip and the job would still report success.
+          echo "::error::MinIO failed to become ready after 60s"
+          docker logs minio || true
+          exit 1
 
       # Run tests with automatic retry on failures
       - name: Test with Retry Logic
@@ -136,6 +142,10 @@ jobs:
         working-directory: examples/using-s3-filestore
         env:
           S3_ENDPOINT: "http://localhost:9000"
+          # Treat the s3 integration test as required, not optional: if MinIO is
+          # unreachable the test must fail rather than skip, so a broken backend
+          # can never turn the #3804 guard into a silent no-op.
+          S3_REQUIRE_MINIO: "true"
         run: go test -v ./...
 
       # Upload coverage report for the 1.24 Go version only
