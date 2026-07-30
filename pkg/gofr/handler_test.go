@@ -311,6 +311,12 @@ func TestHandler_healthHandler_SetHealthCheck(t *testing.T) {
 			wantStatus: "DOWN",
 			wantCode:   http.StatusServiceUnavailable,
 		},
+		{
+			name:       "empty status with 200 derives UP",
+			check:      func(context.Context, *container.Container) (string, int) { return "", http.StatusOK },
+			wantStatus: "UP",
+			wantCode:   0,
+		},
 	}
 
 	for _, tc := range tests {
