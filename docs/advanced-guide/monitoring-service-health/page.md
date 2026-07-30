@@ -63,16 +63,20 @@ Sample response when the service is ready (HTTP 200):
 By default the endpoint always responds with HTTP `200` (readiness probes keep working unchanged).
 To hold a pod out of service until its critical dependencies are ready, register a readiness closure.
 It receives the request context and the container and returns the status string to report along
-with the HTTP status code to respond with. The closure is **not limited to datasources** — it can
-combine any checks that define "ready" for your service: datasources on the container, registered
-HTTP services, or fully custom logic.
+with the HTTP status code to respond with. The closure is **not limited to the container** — because
+it is a closure it can also *capture* and probe dependencies GoFr never registered (a datasource you
+opened yourself, a third-party SDK client, a warm-up flag). It can combine any checks that define
+"ready" for your service:
 
 ```go
 package main
 
 import (
 	"context"
+	"database/sql"
 	"net/http"
+
+	_ "github.com/lib/pq" // driver for the app-managed datasource below
 
 	"gofr.dev/pkg/gofr"
 	"gofr.dev/pkg/gofr/container"
@@ -84,15 +88,24 @@ func main() {
 	// A downstream HTTP dependency this service must be able to reach before it is ready.
 	app.AddHTTPService("payment", "https://payment.internal")
 
+	// An external datasource the app connects to itself — GoFr's container has no handle on it.
+	// The closure below captures it, showing readiness can gate on dependencies that live
+	// entirely outside the framework.
+	licenseDB := openLicenseStore(app)
+
 	app.SetHealthCheck(func(ctx context.Context, c *container.Container) (status string, statusCode int) {
-		// A datasource on the container.
+		// 1. A datasource on the container.
 		if c.Redis == nil || c.Redis.Ping(ctx).Err() != nil {
 			return "DOWN", http.StatusServiceUnavailable
 		}
 
-		// A registered HTTP service — the closure can gate readiness on any dependency,
-		// including one reached over HTTP, not just the datasource fields on the container.
+		// 2. A registered HTTP service — reached over HTTP, not a datasource field.
 		if h := c.GetHTTPService("payment").HealthCheck(ctx); h == nil || h.Status != "UP" {
+			return "DOWN", http.StatusServiceUnavailable
+		}
+
+		// 3. An external datasource captured by the closure — not on the container at all.
+		if err := licenseDB.PingContext(ctx); err != nil {
 			return "DOWN", http.StatusServiceUnavailable
 		}
 
@@ -100,6 +113,16 @@ func main() {
 	})
 
 	app.Run()
+}
+
+// openLicenseStore connects to a datasource the application manages directly, outside GoFr.
+func openLicenseStore(app *gofr.App) *sql.DB {
+	db, err := sql.Open("postgres", app.Config.Get("LICENSE_DB_DSN"))
+	if err != nil {
+		app.Logger().Fatalf("license store: %v", err)
+	}
+
+	return db
 }
 ```
 
