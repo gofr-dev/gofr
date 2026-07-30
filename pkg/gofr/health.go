@@ -7,6 +7,11 @@ import (
 	"gofr.dev/pkg/gofr/container"
 )
 
+const (
+	statusUp   = "UP"
+	statusDown = "DOWN"
+)
+
 // HealthCheckFunc lets an application decide the readiness reported by the public, unauthenticated
 // /.well-known/health endpoint. It receives the request context and the container — so critical
 // datasources such as c.Redis or c.SQL can be probed — and returns the status string to report in
@@ -80,8 +85,8 @@ func (a *App) readiness(c *Context) (status string, code int) {
 
 func statusFromCode(code int) string {
 	if code == http.StatusOK {
-		return "UP"
+		return statusUp
 	}
 
-	return "DOWN"
+	return statusDown
 }
