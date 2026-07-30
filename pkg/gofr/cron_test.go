@@ -274,6 +274,7 @@ func TestCronTab_runScheduled(t *testing.T) {
 	mocks.Metrics.EXPECT().RecordHistogram(gomock.Any(), "app_cron_job_duration", gomock.Any(), "job", "test-job").Times(1)
 
 	c := NewCron(mockContainer)
+	defer c.Stop()
 
 	// Populate the job array for cron table
 	c.jobs = []*job{j}
@@ -721,6 +722,7 @@ func TestCronTab_runScheduled_Panic(t *testing.T) {
 				var c *Crontab
 				if tc.expectMetricsCalls {
 					c = NewCron(cntnr)
+					defer c.Stop()
 					c.jobs = []*job{j}
 				} else {
 					c = &Crontab{

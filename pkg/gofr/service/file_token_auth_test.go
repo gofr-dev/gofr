@@ -1,11 +1,14 @@
 package service
 
 import (
+	"bytes"
 	"context"
 	"net/http"
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -13,7 +16,6 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"gofr.dev/pkg/gofr/logging"
-	"gofr.dev/pkg/gofr/testutil"
 )
 
 func testLogger() logging.Logger {
@@ -27,6 +29,65 @@ func writeTokenFile(t *testing.T, content string) string {
 	require.NoError(t, os.WriteFile(path, []byte(content), 0o600))
 
 	return path
+}
+
+// stdoutCapture redirects os.Stdout to a pipe and drains it in a background
+// goroutine, so callers can poll String() while a concurrent writer is still
+// emitting — unlike testutil.StdoutOutputForFunc, which only returns the output
+// after the function under test has fully returned.
+type stdoutCapture struct {
+	mu  sync.Mutex
+	buf bytes.Buffer
+}
+
+func newConcurrentStdoutCapture(t *testing.T) *stdoutCapture {
+	t.Helper()
+
+	r, w, err := os.Pipe()
+	require.NoError(t, err)
+
+	old := os.Stdout
+	os.Stdout = w
+
+	c := &stdoutCapture{}
+	done := make(chan struct{})
+
+	go func() {
+		defer close(done)
+
+		b := make([]byte, 1024)
+
+		for {
+			n, readErr := r.Read(b)
+			if n > 0 {
+				c.mu.Lock()
+				c.buf.Write(b[:n])
+				c.mu.Unlock()
+			}
+
+			if readErr != nil {
+				return
+			}
+		}
+	}()
+
+	t.Cleanup(func() {
+		os.Stdout = old
+		_ = w.Close()
+
+		<-done
+
+		_ = r.Close()
+	})
+
+	return c
+}
+
+func (c *stdoutCapture) String() string {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	return c.buf.String()
 }
 
 func TestNewFileTokenAuthConfig(t *testing.T) {
@@ -205,29 +266,39 @@ func TestFileTokenAuthConfig_InjectsBearerHeaderAllVerbs(t *testing.T) {
 func TestFileTokenAuthConfig_RefreshFailureLogsWarning(t *testing.T) {
 	path := writeTokenFile(t, "token-v1")
 
-	out := testutil.StdoutOutputForFunc(func() {
-		cfg, err := NewFileTokenAuthConfig(WithTokenFilePath(path), WithRefreshInterval(20*time.Millisecond))
-		require.NoError(t, err)
+	// Capture stdout concurrently so we can wait until the warning is actually
+	// observed rather than sleeping a fixed interval and hoping the background
+	// refresh goroutine was scheduled in time (which is only heuristic).
+	logs := newConcurrentStdoutCapture(t)
 
-		t.Cleanup(func() { _ = cfg.Close() })
+	cfg, err := NewFileTokenAuthConfig(WithTokenFilePath(path), WithRefreshInterval(10*time.Millisecond))
+	require.NoError(t, err)
 
-		// Inject the logger the way NewHTTPService would via the Observable hook.
-		cfg.SetLogger(logging.NewMockLogger(logging.WARN))
+	t.Cleanup(func() { _ = cfg.Close() })
 
-		// Remove the token file so the next refresh tick fails to read it.
-		require.NoError(t, os.Remove(path))
+	// Inject the logger the way NewHTTPService would via the Observable hook.
+	cfg.SetLogger(logging.NewMockLogger(logging.WARN))
 
-		assert.Eventually(t, func() bool {
-			// Cached token must remain available despite refresh failures.
-			tok, tokErr := cfg.currentToken()
-			return tokErr == nil && tok == "token-v1"
-		}, time.Second, 20*time.Millisecond)
+	// Remove the token file so the next refresh tick fails to read it.
+	require.NoError(t, os.Remove(path))
 
-		// Give the refresh loop time to log at least one warning.
-		time.Sleep(100 * time.Millisecond)
-	})
+	// Before any refresh runs, the eagerly-read cached token is available.
+	tok, tokErr := cfg.currentToken()
+	require.NoError(t, tokErr)
+	require.Equal(t, "token-v1", tok)
 
-	assert.Contains(t, out, "failed to refresh token")
+	// Wait until a refresh failure is actually logged. This passes the moment the
+	// warning appears and only fails if it never appears within the ceiling, so a
+	// briefly-starved goroutine no longer flakes the test.
+	assert.Eventually(t, func() bool {
+		return strings.Contains(logs.String(), "failed to refresh token")
+	}, 2*time.Second, 10*time.Millisecond)
+
+	// After repeated failed refreshes, the cached token must still be served —
+	// a vanished token file must not clear what was already loaded.
+	tok, tokErr = cfg.currentToken()
+	require.NoError(t, tokErr)
+	assert.Equal(t, "token-v1", tok)
 }
 
 // TestFileTokenAuthConfig_ObservableInjectionViaNewHTTPService verifies that
@@ -236,22 +307,24 @@ func TestFileTokenAuthConfig_RefreshFailureLogsWarning(t *testing.T) {
 func TestFileTokenAuthConfig_ObservableInjectionViaNewHTTPService(t *testing.T) {
 	path := writeTokenFile(t, "token-v1")
 
-	out := testutil.StdoutOutputForFunc(func() {
-		cfg, err := NewFileTokenAuthConfig(WithTokenFilePath(path), WithRefreshInterval(20*time.Millisecond))
-		require.NoError(t, err)
+	logs := newConcurrentStdoutCapture(t)
 
-		t.Cleanup(func() { _ = cfg.Close() })
+	cfg, err := NewFileTokenAuthConfig(WithTokenFilePath(path), WithRefreshInterval(10*time.Millisecond))
+	require.NoError(t, err)
 
-		// Registering the option through NewHTTPService is what should inject
-		// the logger — no explicit SetLogger call here.
-		_ = NewHTTPService("http://example.invalid", logging.NewMockLogger(logging.WARN), nil, cfg)
+	t.Cleanup(func() { _ = cfg.Close() })
 
-		require.NoError(t, os.Remove(path))
+	// Registering the option through NewHTTPService is what should inject
+	// the logger — no explicit SetLogger call here.
+	_ = NewHTTPService("http://example.invalid", logging.NewMockLogger(logging.WARN), nil, cfg)
 
-		time.Sleep(100 * time.Millisecond)
-	})
+	require.NoError(t, os.Remove(path))
 
-	assert.Contains(t, out, "failed to refresh token")
+	// Wait until the auto-injected logger actually surfaces a refresh failure,
+	// rather than sleeping a fixed interval and hoping the goroutine was scheduled.
+	assert.Eventually(t, func() bool {
+		return strings.Contains(logs.String(), "failed to refresh token")
+	}, 2*time.Second, 10*time.Millisecond)
 }
 
 // TestFileTokenAuthConfig_WorksWithConnectionPoolConfig locks in the regression

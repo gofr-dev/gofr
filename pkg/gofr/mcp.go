@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/http"
 	"strconv"
+	"sync"
 	"time"
 
 	"gofr.dev/pkg/gofr/ai/mcp"
@@ -76,6 +77,7 @@ func (a *App) mcpPort() (int, bool) {
 type mcpServer struct {
 	port    int
 	handler http.Handler
+	srvMu   sync.Mutex // guards srv, written by Run on the serve goroutine and read by Shutdown on the caller goroutine
 	srv     *http.Server
 }
 
@@ -88,23 +90,33 @@ func (m *mcpServer) Run(c *container.Container) {
 
 	// Bind to loopback: the MCP transport authenticates only by passing through per-handler auth,
 	// so it must not become a second network-reachable ingress to the service's handlers.
-	m.srv = &http.Server{
+	// Assign under the lock, then serve on the local copy so the blocking
+	// ListenAndServe call never holds it while Shutdown reads srv.
+	srv := &http.Server{
 		Addr:              fmt.Sprintf("127.0.0.1:%d", m.port),
 		Handler:           m.handler,
 		ReadHeaderTimeout: 5 * time.Second,
 	}
 
-	if err := m.srv.ListenAndServe(); !errors.Is(err, http.ErrServerClosed) {
+	m.srvMu.Lock()
+	m.srv = srv
+	m.srvMu.Unlock()
+
+	if err := srv.ListenAndServe(); !errors.Is(err, http.ErrServerClosed) {
 		c.Errorf("error while listening to MCP server, err: %v", err)
 	}
 }
 
 func (m *mcpServer) Shutdown(ctx context.Context) error {
-	if m.srv == nil {
+	m.srvMu.Lock()
+	srv := m.srv
+	m.srvMu.Unlock()
+
+	if srv == nil {
 		return nil
 	}
 
 	return ShutdownWithContext(ctx, func(ctx context.Context) error {
-		return m.srv.Shutdown(ctx)
+		return srv.Shutdown(ctx)
 	}, nil)
 }
