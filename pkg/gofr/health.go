@@ -5,6 +5,7 @@ import (
 	"net/http"
 
 	"gofr.dev/pkg/gofr/container"
+	"gofr.dev/pkg/gofr/logging"
 )
 
 const (
@@ -46,6 +47,12 @@ type errHealthNotReady struct {
 
 func (e errHealthNotReady) Error() string   { return e.status }
 func (e errHealthNotReady) StatusCode() int { return e.code }
+
+// LogLevel keeps a not-ready readiness at WARN rather than ERROR. A 503 is expected during startup
+// and rolling deploys — Kubernetes probes it repeatedly — so it should not flood logs as an error.
+func (errHealthNotReady) LogLevel() logging.Level { return logging.WARN }
+
+var _ logging.LogLevelResponder = errHealthNotReady{}
 
 // healthHandler serves the public, unauthenticated /.well-known/health endpoint. It reports only
 // the application name and aggregate status — no hosts, ports, credentials, or connection stats.
