@@ -10,6 +10,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"gofr.dev/pkg/gofr/service"
 	"gofr.dev/pkg/gofr/testutil"
 )
 
@@ -18,11 +19,33 @@ func TestMain(m *testing.M) {
 	m.Run()
 }
 
+// waitForServer waits until the example is serving. On a datastore that has not seen this example
+// before, the migrations run at startup and a fixed sleep is not long enough to cover them.
+func waitForServer(t *testing.T, host string) {
+	t.Helper()
+
+	require.Eventually(t, func() bool {
+		req, err := http.NewRequestWithContext(t.Context(), http.MethodGet, host+service.AlivePath, nil)
+		if err != nil {
+			return false
+		}
+
+		resp, err := http.DefaultClient.Do(req)
+		if err != nil {
+			return false
+		}
+
+		defer resp.Body.Close()
+
+		return resp.StatusCode == http.StatusOK
+	}, 30*time.Second, 100*time.Millisecond, "server did not start in time")
+}
+
 func TestIntegration_AddRESTHandlers(t *testing.T) {
 	configs := testutil.NewServerConfigs(t)
 
 	go main()
-	time.Sleep(100 * time.Millisecond) // Giving some time to start the server
+	waitForServer(t, configs.HTTPHost)
 
 	tests := []struct {
 		desc       string
