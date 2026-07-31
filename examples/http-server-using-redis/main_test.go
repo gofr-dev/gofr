@@ -101,7 +101,7 @@ func TestRedisPipelineHandler(t *testing.T) {
 	mock.ClearExpect()
 
 	// configs.HTTPHost is already "http://localhost:<port>"; prefixing it with
-	// another "http://localhost:" produced an unparseable URL, so the ignored
+	// another "http://localhost:" produced an unparsable URL, so the ignored
 	// error left req nil and the next line panicked before the handler ever ran.
 	req, err := http.NewRequestWithContext(context.Background(), http.MethodGet,
 		configs.HTTPHost+"/handle", bytes.NewBuffer([]byte(`{"key":"value"}`)))
