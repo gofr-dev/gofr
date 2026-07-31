@@ -69,7 +69,7 @@ func TestRedisSetHandler(t *testing.T) {
 	logger := logging.NewLogger(logging.DEBUG)
 	redisClient, mock := redismock.NewClientMock()
 
-	rc := redis.NewClient(config.NewMockConfig(map[string]string{"REDIS_HOST": "localhost", "REDIS_PORT": "2001"}), logger, a.Metrics())
+	rc := redis.NewClient(config.NewMockConfig(map[string]string{"REDIS_HOST": "localhost", "REDIS_PORT": "2002"}), logger, a.Metrics())
 	rc.Client = redisClient
 
 	mock.ExpectSet("key", "value", 5*time.Minute).SetErr(testutil.CustomError{ErrorMessage: "redis get error"})
@@ -94,13 +94,19 @@ func TestRedisPipelineHandler(t *testing.T) {
 	logger := logging.NewLogger(logging.DEBUG)
 	redisClient, mock := redismock.NewClientMock()
 
-	rc := redis.NewClient(config.NewMockConfig(map[string]string{"REDIS_HOST": "localhost", "REDIS_PORT": "2001"}), logger, a.Metrics())
+	rc := redis.NewClient(config.NewMockConfig(map[string]string{"REDIS_HOST": "localhost", "REDIS_PORT": "2002"}), logger, a.Metrics())
 	rc.Client = redisClient
 
 	mock.ExpectSet("testKey1", "testValue1", time.Minute*5).SetErr(testutil.CustomError{ErrorMessage: "redis get error"})
 	mock.ClearExpect()
 
-	req, _ := http.NewRequestWithContext(context.Background(), http.MethodGet, fmt.Sprint("http://localhost:", configs.HTTPHost, "/handle"), bytes.NewBuffer([]byte(`{"key":"value"}`)))
+	// configs.HTTPHost is already "http://localhost:<port>"; prefixing it with
+	// another "http://localhost:" produced an unparseable URL, so the ignored
+	// error left req nil and the next line panicked before the handler ever ran.
+	req, err := http.NewRequestWithContext(context.Background(), http.MethodGet,
+		configs.HTTPHost+"/handle", bytes.NewBuffer([]byte(`{"key":"value"}`)))
+	require.NoError(t, err)
+
 	req.Header.Set("content-type", "application/json")
 
 	gofrReq := gofrHTTP.NewRequest(req)
