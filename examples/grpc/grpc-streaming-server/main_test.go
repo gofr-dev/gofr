@@ -5,9 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"net"
 	"os"
-	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -19,45 +17,28 @@ import (
 	"google.golang.org/grpc/status"
 
 	"gofr.dev/examples/grpc/grpc-streaming-server/server"
+	"gofr.dev/pkg/gofr/testutil"
 )
 
-// grpcHost is the address the example server under test listens on.
-//
-// The example's configs/.env pins GRPC_PORT=9000 for documentation purposes,
-// but the test must not inherit it: `go test ./examples/...` runs packages
-// concurrently and CI additionally binds host port 9000 (MinIO), so a fixed
-// port makes the server fail to bind and the whole package abort with
-// "gRPC port 9000 is blocked or unreachable". Reserve free ports instead —
-// the same thing testutil.NewServerConfigs does for tests that have a
-// *testing.T to attach the env cleanup to, which TestMain does not.
+// grpcHost is the address the example's gRPC server listens on, assigned in TestMain.
 var grpcHost string
 
 func TestMain(m *testing.M) {
 	os.Setenv("GOFR_TELEMETRY", "false")
 
-	grpcPort, err := reserveFreePort()
+	// Point the example at free ports rather than the fixed ones its configs/.env asks for. A
+	// fixed port is a hazard in a test: gofr.New() reports an already-taken port with Fatalf,
+	// which exits the process, so the whole package dies before a single test runs. configs/.env
+	// asks for GRPC_PORT 9000 — the port MinIO serves on, including in the CI job that runs these
+	// very tests. The system environment takes precedence over the config file, so what is set
+	// here is what the example uses.
+	configs, err := testutil.ReserveServerPorts()
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "could not reserve a free gRPC port: %v\n", err)
+		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
 	}
 
-	httpPort, err := reserveFreePort()
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "could not reserve a free HTTP port: %v\n", err)
-		os.Exit(1)
-	}
-
-	metricsPort, err := reserveFreePort()
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "could not reserve a free metrics port: %v\n", err)
-		os.Exit(1)
-	}
-
-	os.Setenv("GRPC_PORT", strconv.Itoa(grpcPort))
-	os.Setenv("HTTP_PORT", strconv.Itoa(httpPort))
-	os.Setenv("METRICS_PORT", strconv.Itoa(metricsPort))
-
-	grpcHost = fmt.Sprintf("localhost:%d", grpcPort)
+	grpcHost = configs.GRPCHost
 
 	go main()
 
@@ -67,21 +48,6 @@ func TestMain(m *testing.M) {
 	}
 
 	os.Exit(m.Run())
-}
-
-// reserveFreePort asks the kernel for a free port and releases it immediately
-// so the server under test can bind it.
-func reserveFreePort() (int, error) {
-	lc := net.ListenConfig{}
-
-	listener, err := lc.Listen(context.Background(), "tcp", "localhost:0")
-	if err != nil {
-		return 0, err
-	}
-
-	port := listener.Addr().(*net.TCPAddr).Port
-
-	return port, listener.Close()
 }
 
 // waitForServer blocks until a gRPC connection to addr is ready, so the tests below do not race
