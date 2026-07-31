@@ -90,6 +90,8 @@ func (a *App) readiness(c *Context) (status string, code int) {
 	return status, code
 }
 
+// statusFromCode derives a status string when the closure returned a code but no status: 200 maps
+// to UP and any other code to DOWN, so the body still reports a status consistent with the code.
 func statusFromCode(code int) string {
 	if code == http.StatusOK {
 		return statusUp
