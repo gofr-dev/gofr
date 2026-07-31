@@ -109,6 +109,23 @@ func (mr *MockLoggerMockRecorder) Logf(pattern any, args ...any) *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Logf", reflect.TypeOf((*MockLogger)(nil).Logf), varargs...)
 }
 
+// Warnf mocks base method.
+func (m *MockLogger) Warnf(pattern string, args ...any) {
+	m.ctrl.T.Helper()
+	varargs := []any{pattern}
+	for _, a := range args {
+		varargs = append(varargs, a)
+	}
+	m.ctrl.Call(m, "Warnf", varargs...)
+}
+
+// Warnf indicates an expected call of Warnf.
+func (mr *MockLoggerMockRecorder) Warnf(pattern any, args ...any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	varargs := append([]any{pattern}, args...)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Warnf", reflect.TypeOf((*MockLogger)(nil).Warnf), varargs...)
+}
+
 // Mocks3Client is a mock of s3Client interface.
 type Mocks3Client struct {
 	ctrl     *gomock.Controller

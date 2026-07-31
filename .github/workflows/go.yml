@@ -97,6 +97,30 @@ jobs:
       - name: Start Zipkin
         run: docker run -d -p 2005:9411 openzipkin/zipkin:latest
 
+      # MinIO can't run as a GitHub Actions `services:` container because the
+      # stock image needs a `server /data` command, which services can't set.
+      # Run it explicitly (same pattern as Zipkin above) and wait for readiness.
+      - name: Start MinIO
+        run: |
+          # Pinned by digest now that this step is required: an unexpected image
+          # change can't silently alter the integration guard for #3804.
+          docker run -d --name minio -p 9000:9000 \
+            -e MINIO_ROOT_USER=minioadmin -e MINIO_ROOT_PASSWORD=minioadmin \
+            minio/minio:RELEASE.2025-09-07T16-13-09Z@sha256:14cea493d9a34af32f524e538b8346cf79f3321eff8e708c1e2960462bd8936e \
+            server /data
+          for i in $(seq 1 30); do
+            if curl -fs http://localhost:9000/minio/health/live >/dev/null; then
+              echo "MinIO is ready"; exit 0
+            fi
+            echo "waiting for MinIO... ($i)"; sleep 2
+          done
+          # If MinIO never became ready (image-pull failure, registry rate-limit,
+          # crash) fail loudly here. Otherwise the integration test for #3804 would
+          # silently skip and the job would still report success.
+          echo "::error::MinIO failed to become ready after 60s"
+          docker logs minio || true
+          exit 1
+
       # Run tests with automatic retry on failures
       - name: Test with Retry Logic
         id: test
@@ -112,6 +136,20 @@ jobs:
             grep -vE '(/client/|grpc-.+-client/main\.go|_client\.go|_gofr\.go|_grpc\.pb\.go|\.pb\.go|\.proto|health_.*\.go)' packageWithpbgo.cov > profile.cov
             # Display coverage statistics
             go tool cover -func profile.cov
+
+      # The S3 example is its own submodule (it depends on the s3 datasource
+      # submodule), so it is not covered by `go test ./examples/...` above.
+      # Run it explicitly against the MinIO service — this is the integration
+      # guard for the s3 datasource (gofr-dev/gofr#3804).
+      - name: Test using-s3-filestore example against MinIO
+        working-directory: examples/using-s3-filestore
+        env:
+          S3_ENDPOINT: "http://localhost:9000"
+          # Treat the s3 integration test as required, not optional: if MinIO is
+          # unreachable the test must fail rather than skip, so a broken backend
+          # can never turn the #3804 guard into a silent no-op.
+          S3_REQUIRE_MINIO: "true"
+        run: go test -v ./...
 
       # Upload coverage report for the 1.24 Go version only
       - name: Upload Test Coverage
