@@ -63,7 +63,7 @@ func TestS3FileStore_RoundTrip(t *testing.T) {
 	t.Setenv("GOFR_TELEMETRY", "false")
 
 	go main()
-	time.Sleep(200 * time.Millisecond) // give the server time to start
+	testutil.WaitForHTTPServer(t, configs.HTTPHost)
 
 	// Defect 1: an object larger than one HTTP transport chunk must round-trip
 	// byte-for-byte. The pre-fix Read filled only the first few KB of the buffer.

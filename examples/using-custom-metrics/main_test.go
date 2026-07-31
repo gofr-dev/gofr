@@ -6,7 +6,6 @@ import (
 	"net/http"
 	"os"
 	"testing"
-	"time"
 
 	"github.com/stretchr/testify/assert"
 
@@ -22,7 +21,7 @@ func TestIntegration(t *testing.T) {
 	configs := testutil.NewServerConfigs(t)
 
 	go main()
-	time.Sleep(100 * time.Millisecond) // Giving some time to start the server
+	testutil.WaitForHTTPServer(t, configs.HTTPHost)
 
 	c := http.Client{}
 

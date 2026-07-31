@@ -6,7 +6,6 @@ import (
 	"os"
 	"strings"
 	"testing"
-	"time"
 
 	"gofr.dev/pkg/gofr"
 	"gofr.dev/pkg/gofr/container"
@@ -21,10 +20,16 @@ func TestMain(m *testing.M) {
 }
 
 func TestMainInitialization(t *testing.T) {
+	configs := testutil.NewServerConfigs(t)
+
 	log := testutil.StdoutOutputForFunc(func() {
+		// gofr.New() connects to Kafka — writing the line asserted below — before app.Run()
+		// starts the HTTP server, so a server answering its liveness probe means the log has
+		// already been written. If the connection instead fails and retries in the background,
+		// the assertion below reports that rather than a timeout here.
 		go main()
 
-		time.Sleep(200 * time.Millisecond)
+		testutil.WaitForHTTPServer(t, configs.HTTPHost)
 	})
 
 	expectedLog := "connected to 1 Kafka brokers"

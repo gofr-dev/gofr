@@ -14,6 +14,8 @@ import (
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/connectivity"
+	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/status"
 
 	"gofr.dev/examples/grpc/grpc-streaming-server/server"
@@ -58,7 +60,11 @@ func TestMain(m *testing.M) {
 	grpcHost = fmt.Sprintf("localhost:%d", grpcPort)
 
 	go main()
-	time.Sleep(300 * time.Millisecond) // wait for server to boot
+
+	if err := waitForServer(grpcHost); err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		os.Exit(1)
+	}
 
 	os.Exit(m.Run())
 }
@@ -76,6 +82,33 @@ func reserveFreePort() (int, error) {
 	port := listener.Addr().(*net.TCPAddr).Port
 
 	return port, listener.Close()
+}
+
+// waitForServer blocks until a gRPC connection to addr is ready, so the tests below do not race
+// the server's boot. It mirrors testutil.WaitForGRPCServer, which cannot be used here: TestMain
+// gets a *testing.M and has no *testing.T to fail. A bare TCP dial would not do — the kernel
+// accepts connections from the moment the listener exists, whereas reaching the ready state means
+// the HTTP/2 handshake completed and the server is really serving.
+func waitForServer(addr string) error {
+	conn, err := grpc.NewClient(addr, grpc.WithTransportCredentials(insecure.NewCredentials()))
+	if err != nil {
+		return fmt.Errorf("failed to create a gRPC client for %s: %w", addr, err)
+	}
+
+	defer conn.Close()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	conn.Connect()
+
+	for state := conn.GetState(); state != connectivity.Ready; state = conn.GetState() {
+		if !conn.WaitForStateChange(ctx, state) {
+			return fmt.Errorf("gRPC server at %s did not start in time", addr)
+		}
+	}
+
+	return nil
 }
 
 func TestServerStream(t *testing.T) {
@@ -160,8 +193,9 @@ func TestBiDiStream(t *testing.T) {
 	messages := []string{"msg1", "msg2", "msg3"}
 	go func() {
 		for _, msg := range messages {
+			// No pacing needed: the server handles this stream's messages one at a time and
+			// replies in order, so the responses stay ordered regardless of send timing.
 			_ = stream.Send(&server.Request{Message: msg})
-			time.Sleep(100 * time.Millisecond)
 		}
 		_ = stream.CloseSend()
 	}()
@@ -220,10 +254,9 @@ func TestServerStream_ContextCancellation(t *testing.T) {
 
 		if !receivedFirst {
 			receivedFirst = true
-			// Cancel context to trigger cancellation handling
+			// Cancel context to trigger cancellation handling. The next Recv then fails with
+			// Canceled off the client's own context — nothing to wait for the server on.
 			cancel()
-			// Give server time to detect cancellation
-			time.Sleep(200 * time.Millisecond)
 		}
 
 		_ = resp // Use response to avoid unused variable
@@ -267,10 +300,9 @@ func TestClientStream_ContextCancellation(t *testing.T) {
 		t.Fatalf("Send failed: %v", err)
 	}
 
-	// Cancel context
+	// Cancel context. The call below fails with Canceled off the client's own context, so there
+	// is nothing to wait for the server to notice.
 	cancel()
-	// Give server time to detect cancellation
-	time.Sleep(200 * time.Millisecond)
 
 	// Try to close and receive - should get cancellation error
 	_, err = stream.CloseAndRecv()
@@ -357,10 +389,9 @@ func TestBiDiStream_ContextCancellation(t *testing.T) {
 		t.Errorf("Unexpected response: got %q, want %q", resp.GetMessage(), "Echo: test")
 	}
 
-	// Cancel context
+	// Cancel context. The call below fails with Canceled off the client's own context, so there
+	// is nothing to wait for the server to notice.
 	cancel()
-	// Give server time to detect cancellation
-	time.Sleep(200 * time.Millisecond)
 
 	// Try to receive - should get cancellation error
 	_, err = stream.Recv()
