@@ -87,8 +87,35 @@ jobs:
 
       # setup-go@v7 defaults GOTOOLCHAIN=local; go.work requires go>=1.26, so
       # allow the toolchain to auto-upgrade for the older matrix versions.
+      #
+      # GOTOOLCHAIN=auto on its own is not enough for this job. Left to itself
+      # the go command satisfies the upgrade by downloading a *toolchain
+      # module* into the read-only module cache. Go 1.26 no longer ships
+      # `covdata` prebuilt in pkg/tool — it builds the tool into GOROOT on
+      # demand — and a toolchain-module GOROOT does not permit that, so the
+      # `go test -coverpkg` below fails with `go: no such tool "covdata"` for
+      # every package that has no test files. Installing the version go.work
+      # asks for as a real SDK first makes the toolchain switch resolve it from
+      # PATH instead, against a normal writable GOROOT.
       - name: Allow Go toolchain auto-upgrade
-        run: echo "GOTOOLCHAIN=auto" >> "$GITHUB_ENV"
+        run: |
+          set -eo pipefail
+          echo "GOTOOLCHAIN=auto" >> "$GITHUB_ENV"
+
+          required=$(awk '$1 == "go" { print $2; exit }' go.work)
+          current=$(go env GOVERSION); current=${current#go}
+
+          # Nothing to do when setup-go already gave us a new enough SDK.
+          if [ "$current" = "$required" ] || \
+             [ "$(printf '%s\n%s\n' "$required" "$current" | sort -V | head -1)" = "$required" ]; then
+            echo "installed Go $current already satisfies go.work ($required)"
+            exit 0
+          fi
+
+          echo "materialising Go $required as a real SDK for the toolchain switch"
+          GOTOOLCHAIN=local go install "golang.org/dl/go$required@latest"
+          "$(go env GOPATH)/bin/go$required" download
+          echo "$(go env GOPATH)/bin" >> "$GITHUB_PATH"
 
       - name: Get dependencies
         run: |
