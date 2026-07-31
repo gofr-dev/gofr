@@ -362,6 +362,99 @@ func Test_StaticFileServing_Static(t *testing.T) {
 	runStaticFileTests(t, tempDir, testCases)
 }
 
+// Test_StaticFileServing_EndpointRoot covers requests for the root of a static endpoint, as opposed
+// to a file beneath it. The root resolves to the served directory itself, which both the
+// containment check and the routing have to admit without also admitting a sibling endpoint.
+func Test_StaticFileServing_EndpointRoot(t *testing.T) {
+	tempDir := t.TempDir()
+
+	testCases := []struct {
+		name             string
+		setupFiles       func() error
+		path             string
+		staticServerPath string
+		expectedCode     int
+		expectedBody     string
+	}{
+		{
+			// The endpoint root resolves to the served directory itself, which the containment
+			// check must admit — see Test_isRestrictedFile.
+			name: "Serve index.html at the root endpoint's root",
+			setupFiles: func() error {
+				return os.WriteFile(filepath.Join(tempDir, "index.html"), []byte("<html>Index</html>"), 0600)
+			},
+			path:             "/",
+			staticServerPath: "/",
+			expectedCode:     http.StatusOK,
+			expectedBody:     "<html>Index</html>",
+		},
+		{
+			// Router.ServeHTTP cleans the trailing slash off "/static/", so the endpoint root
+			// arrives as "/static" and must be routed by something.
+			name: "Serve index.html at a non-root endpoint's root, with trailing slash",
+			setupFiles: func() error {
+				return os.WriteFile(filepath.Join(tempDir, "index.html"), []byte("<html>Index</html>"), 0600)
+			},
+			path:             "/static/",
+			staticServerPath: "/static",
+			expectedCode:     http.StatusOK,
+			expectedBody:     "<html>Index</html>",
+		},
+		{
+			name: "Serve index.html at a non-root endpoint's root, without trailing slash",
+			setupFiles: func() error {
+				return os.WriteFile(filepath.Join(tempDir, "index.html"), []byte("<html>Index</html>"), 0600)
+			},
+			path:             "/static",
+			staticServerPath: "/static",
+			expectedCode:     http.StatusOK,
+			expectedBody:     "<html>Index</html>",
+		},
+		{
+			// Without an index file the directory must not be handed to http.FileServer, which
+			// would answer with a listing of its contents.
+			name: "Endpoint root without an index file is not listed",
+			setupFiles: func() error {
+				return os.Remove(filepath.Join(tempDir, "index.html"))
+			},
+			path:             "/static",
+			staticServerPath: "/static",
+			expectedCode:     http.StatusNotFound,
+			expectedBody:     "404 Not Found",
+		},
+		{
+			// A subdirectory is served through its index file too, and must not answer with the
+			// redirect-to-trailing-slash that path.Clean would strip straight back off.
+			name: "Serve index.html from a subdirectory",
+			setupFiles: func() error {
+				if err := os.MkdirAll(filepath.Join(tempDir, "sub"), 0750); err != nil {
+					return err
+				}
+
+				return os.WriteFile(filepath.Join(tempDir, "sub", "index.html"), []byte("<html>Sub</html>"), 0600)
+			},
+			path:             "/static/sub",
+			staticServerPath: "/static",
+			expectedCode:     http.StatusOK,
+			expectedBody:     "<html>Sub</html>",
+		},
+		{
+			// The prefix route must keep its trailing separator: a sibling endpoint sharing the
+			// prefix is not this endpoint and must not be served from its directory.
+			name: "Sibling endpoint sharing the prefix is not served",
+			setupFiles: func() error {
+				return os.WriteFile(filepath.Join(tempDir, "index.html"), []byte("<html>Index</html>"), 0600)
+			},
+			path:             "/staticother/index.html",
+			staticServerPath: "/static",
+			expectedCode:     http.StatusNotFound,
+			expectedBody:     "404 page not found",
+		},
+	}
+
+	runStaticFileTests(t, tempDir, testCases)
+}
+
 func Test_isRestrictedFile(t *testing.T) {
 	tests := []struct {
 		name          string
@@ -403,6 +496,15 @@ func Test_isRestrictedFile(t *testing.T) {
 			directoryName: "/app/public",
 			url:           "/sub/page.html",
 			absPath:       "/app/public/sub/page.html",
+			expected:      false,
+		},
+		{
+			// A request for the endpoint root resolves to the directory itself, with no trailing
+			// separator. It is the directory being served, not an escape from it.
+			name:          "static directory itself is not restricted",
+			directoryName: "/app/public",
+			url:           "/",
+			absPath:       "/app/public",
 			expected:      false,
 		},
 	}

@@ -1198,8 +1198,17 @@ func TestStaticHandler(t *testing.T) {
 			expectedResponseHeaderType: "text/html; charset=utf-8", expectedBody: string(htmlContent),
 		},
 		{
+			// The endpoint root serves the directory's index.html, which pkg/gofr/static has
+			// (it is the bundled swagger-ui page, already reachable at /static/index.html).
+			// It answered 404 before the endpoint root was routable at all.
 			desc: "check public endpoint", method: http.MethodGet,
-			path: "/" + defaultPublicStaticDir, statusCode: http.StatusNotFound,
+			path: "/" + defaultPublicStaticDir, statusCode: http.StatusOK,
+		},
+		{
+			// "testdir" has no index.html, so its root stays a 404 rather than becoming a
+			// listing of the directory's contents.
+			desc: "check public endpoint of a directory without an index file", method: http.MethodGet,
+			path: "/" + "gofrTest", statusCode: http.StatusNotFound,
 		},
 		{
 			desc: "check file content index.html in custom dir", method: http.MethodGet, path: "/" + "gofrTest" + "/" + indexHTML,

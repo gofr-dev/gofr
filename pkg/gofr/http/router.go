@@ -16,6 +16,7 @@ import (
 const (
 	DefaultSwaggerFileName       = "openapi.json"
 	staticServerNotFoundFileName = "404.html"
+	staticServerIndexFileName    = "index.html"
 )
 
 var errReadPermissionDenied = fmt.Errorf("file does not have read permission")
@@ -164,14 +165,25 @@ func (rou *Router) AddStaticFiles(logger logging.Logger, endpoint, dirName strin
 	cfg := staticFileConfig{directoryName: dirName, logger: logger}
 
 	fileServer := http.FileServer(http.Dir(cfg.directoryName))
+	handler := cfg.staticHandler(fileServer)
 
-	if endpoint != "/" {
-		endpoint += "/"
+	if endpoint == "/" {
+		rou.Router.NewRoute().PathPrefix(endpoint).Handler(http.StripPrefix(endpoint, handler))
+
+		logger.Logf("registered static files at endpoint %v from directory %v", endpoint, dirName)
+
+		return
 	}
 
-	rou.Router.NewRoute().PathPrefix(endpoint).Handler(http.StripPrefix(endpoint, cfg.staticHandler(fileServer)))
+	// The prefix route keeps its trailing separator so that a sibling endpoint sharing the prefix
+	// ("/staticother" against "/static") does not match. That leaves the endpoint's own root
+	// unrouted: ServeHTTP normalizes with path.Clean, which drops the trailing slash, so a request
+	// for "/static/" arrives as "/static" and matches neither the prefix nor anything else. Register
+	// the bare endpoint as an exact path to serve it.
+	rou.Router.NewRoute().Path(endpoint).Handler(http.StripPrefix(endpoint, handler))
+	rou.Router.NewRoute().PathPrefix(endpoint + "/").Handler(http.StripPrefix(endpoint+"/", handler))
 
-	logger.Logf("registered static files at endpoint %v from directory %v", endpoint, dirName)
+	logger.Logf("registered static files at endpoint %v from directory %v", endpoint+"/", dirName)
 }
 
 func (staticConfig staticFileConfig) staticHandler(fileServer http.Handler) http.Handler {
@@ -191,8 +203,21 @@ func (staticConfig staticFileConfig) staticHandler(fileServer http.Handler) http
 			return
 		}
 
-		if err := staticConfig.validateFile(absPath); err != nil {
+		resolvedPath, err := staticConfig.validateFile(absPath)
+		if err != nil {
 			staticConfig.respondWithFileError(w, r, absPath, err)
+			return
+		}
+
+		// A directory is served through its index file, read directly rather than handed to
+		// fileServer. http.FileServer answers a directory with a redirect to the trailing-slash
+		// form of the URL, and answers ".../index.html" with a redirect back to "./" — and
+		// ServeHTTP's path.Clean strips the trailing slash off both, so the client is sent in a
+		// loop it can never satisfy. http.ServeFile does no such redirecting.
+		if resolvedPath != absPath {
+			staticConfig.logger.Debugf("serving file: %s", resolvedPath)
+			http.ServeFile(w, r, resolvedPath)
+
 			return
 		}
 
@@ -206,22 +231,47 @@ func (staticConfig staticFileConfig) staticHandler(fileServer http.Handler) http
 func (staticConfig staticFileConfig) isRestrictedFile(url, absPath string) bool {
 	fileName := filepath.Base(url)
 
-	return !strings.HasPrefix(absPath, staticConfig.directoryName+string(os.PathSeparator)) || fileName == DefaultSwaggerFileName
+	return !staticConfig.isWithinDirectory(absPath) || fileName == DefaultSwaggerFileName
 }
 
-// Validates file existence and permissions.
-func (staticFileConfig) validateFile(absPath string) error {
+// isWithinDirectory reports whether absPath is the served directory itself or a path inside it.
+//
+// The trailing separator is what keeps a sibling directory with a shared prefix out — /app/public
+// must not admit /app/publicother. But it also excludes the directory's own path, which carries no
+// trailing separator, and that is the path a request for the endpoint root resolves to. Comparing
+// against the directory as well lets the root be served without letting a sibling in.
+func (staticConfig staticFileConfig) isWithinDirectory(absPath string) bool {
+	return absPath == staticConfig.directoryName ||
+		strings.HasPrefix(absPath, staticConfig.directoryName+string(os.PathSeparator))
+}
+
+// Validates file existence and permissions, and resolves a directory to the file that represents
+// it. The returned path is absPath for an ordinary file, and absPath's index file for a directory.
+func (staticFileConfig) validateFile(absPath string) (resolvedPath string, err error) {
 	fileInfo, err := os.Stat(absPath)
 	if err != nil {
-		return err
+		return "", err
+	}
+
+	// A directory is served only through its index file. Handing the directory itself to
+	// http.FileServer would render a listing of its contents, which a static endpoint has no
+	// business disclosing. Without an index, os.Stat reports the same not-exist error a missing
+	// file gives, so the request takes the ordinary 404 path.
+	if fileInfo.IsDir() {
+		absPath = filepath.Join(absPath, staticServerIndexFileName)
+
+		fileInfo, err = os.Stat(absPath)
+		if err != nil {
+			return "", err
+		}
 	}
 
 	// Ensure file has at least read (`r--`) permission
 	if fileInfo.Mode().Perm()&0444 == 0 {
-		return errReadPermissionDenied
+		return "", errReadPermissionDenied
 	}
 
-	return nil
+	return absPath, nil
 }
 
 // Handles different file-related errors.
