@@ -439,6 +439,19 @@ func Test_StaticFileServing_EndpointRoot(t *testing.T) {
 			expectedBody:     "<html>Sub</html>",
 		},
 		{
+			// An explicit request for the index file is served as the plain file it is.
+			// http.FileServer used to answer this with a redirect to "./", which path.Clean
+			// resolved back to the directory — the other half of the redirect loop.
+			name: "Explicit index.html is served without redirecting",
+			setupFiles: func() error {
+				return os.WriteFile(filepath.Join(tempDir, "index.html"), []byte("<html>Index</html>"), 0600)
+			},
+			path:             "/static/index.html",
+			staticServerPath: "/static",
+			expectedCode:     http.StatusOK,
+			expectedBody:     "<html>Index</html>",
+		},
+		{
 			// The prefix route must keep its trailing separator: a sibling endpoint sharing the
 			// prefix is not this endpoint and must not be served from its directory.
 			name: "Sibling endpoint sharing the prefix is not served",

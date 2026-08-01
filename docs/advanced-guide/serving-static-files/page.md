@@ -14,6 +14,11 @@ web application. We want to have a mechanism to serve that static content withou
 GoFr provides a default mechanism where if a `static` folder is available in the directory of the application,
 it automatically provides an endpoint with `/static/<filename>`, here filename refers to the file we want to get static content to be served. 
 
+The endpoint's root — `/static` — serves that folder's `index.html`, as does the root of any
+subdirectory beneath it (`/static/docs` serves `static/docs/index.html`). A directory without an
+`index.html` returns 404 rather than a listing of its contents, so nothing is disclosed that was not
+deliberately published; if the served folder has a `404.html`, that page is returned as the body.
+
 Example project structure:
 
 ```dotenv
@@ -84,3 +89,4 @@ func main() {
 ```
 
 In the above example, both endpoints `/public` and `/static` are available for the app to render the static content.
+`/public` serves `public/index.html`, while `/static` — whose folder has no `index.html` — returns 404.

@@ -164,8 +164,7 @@ type staticFileConfig struct {
 func (rou *Router) AddStaticFiles(logger logging.Logger, endpoint, dirName string) {
 	cfg := staticFileConfig{directoryName: dirName, logger: logger}
 
-	fileServer := http.FileServer(http.Dir(cfg.directoryName))
-	handler := cfg.staticHandler(fileServer)
+	handler := cfg.staticHandler()
 
 	if endpoint == "/" {
 		rou.Router.NewRoute().PathPrefix(endpoint).Handler(http.StripPrefix(endpoint, handler))
@@ -186,7 +185,7 @@ func (rou *Router) AddStaticFiles(logger logging.Logger, endpoint, dirName strin
 	logger.Logf("registered static files at endpoint %v from directory %v", endpoint+"/", dirName)
 }
 
-func (staticConfig staticFileConfig) staticHandler(fileServer http.Handler) http.Handler {
+func (staticConfig staticFileConfig) staticHandler() http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		url := r.URL.Path
 
@@ -209,21 +208,14 @@ func (staticConfig staticFileConfig) staticHandler(fileServer http.Handler) http
 			return
 		}
 
-		// A directory is served through its index file, read directly rather than handed to
-		// fileServer. http.FileServer answers a directory with a redirect to the trailing-slash
-		// form of the URL, and answers ".../index.html" with a redirect back to "./" — and
-		// ServeHTTP's path.Clean strips the trailing slash off both, so the client is sent in a
-		// loop it can never satisfy. http.ServeFile does no such redirecting.
-		if resolvedPath != absPath {
-			staticConfig.logger.Debugf("serving file: %s", resolvedPath)
-			http.ServeFile(w, r, resolvedPath)
+		// validateFile has already resolved a directory to its index file, so what is served here
+		// is always a plain file. That is what breaks the redirect loop: http.FileServer answers a
+		// directory with a redirect to the trailing-slash form of the URL, and ServeHTTP's
+		// path.Clean strips that slash straight back off, so the client is sent in a circle it can
+		// never satisfy. Serving the index file itself never reaches that redirect.
+		staticConfig.logger.Debugf("serving file: %s", resolvedPath)
 
-			return
-		}
-
-		staticConfig.logger.Debugf("serving file: %s", absPath)
-
-		fileServer.ServeHTTP(w, r)
+		http.ServeFile(w, r, resolvedPath)
 	})
 }
 
