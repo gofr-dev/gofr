@@ -319,34 +319,48 @@ jobs:
           timeout_minutes: 5
           max_attempts: 2
           command: |
+            # The retry action runs this block with a plain shell (no errexit),
+            # unlike native `run:` steps that default to `bash -eo pipefail` (#3812).
+            set -eo pipefail
             export APP_ENV=test
-            # Create a directory for coverage reports
+
+            # Create a directory for coverage reports. Resolve it to an absolute path:
+            # each worker below cds into its own module, which sits at a different depth
+            # (pkg/gofr/datasource/mongo vs pkg/gofr/datasource/file/s3), so no single
+            # relative path reaches this directory from all of them (#3824).
             mkdir -p coverage_reports
-            
+            export COVERAGE_DIR="$PWD/coverage_reports"
+
             # Get the list of submodules
             SUBMODULES='${{ steps.detect_submodules.outputs.submodules }}'
-            
-            # Process each submodule in parallel with a maximum of 4 parallel jobs
-            echo $SUBMODULES | jq -c '.[]' | xargs -I{} -P 4 bash -c '
-              module={}
+
+            # Process each submodule in parallel with a maximum of 4 parallel jobs.
+            # `jq -r` and the positional argument matter: xargs substitutes {} into the
+            # script *text* before bash parses it, so an interpolated module path would be
+            # re-parsed as shell source rather than passed as data.
+            echo "$SUBMODULES" | jq -r '.[]' | xargs -I{} -P 4 bash -c '
+              # Without errexit the worker runs to completion regardless, and its exit
+              # status is that of its last command — so a failing `go test` was invisible
+              # and the job reported green on red tests (#3824).
+              set -eo pipefail
+
+              module="$1"
               echo "Testing module: $module"
-              cd $module
-            
+              cd "$module"
+
               # Extract module name (replace / with _)
-              module_name=$(echo $module | tr "/" "_")
-            
+              module_name=$(echo "$module" | tr "/" "_")
+
               # Download dependencies for the submodule
               go mod download
               go mod tidy
-            
+
               # Run tests with a focus on failed tests first
-              go test ./... -v -short -coverprofile=${module_name}.cov -coverpkg=./...
-            
+              go test ./... -v -short -coverprofile="${module_name}.cov" -coverpkg=./...
+
               # Copy coverage file to the coverage_reports directory
-              cp ${module_name}.cov ../../../coverage_reports/
-            
-              cd -
-            '
+              cp "${module_name}.cov" "$COVERAGE_DIR/"
+            ' _ {}
 
       # Upload submodule coverage reports as an artifact
       - name: Upload Coverage Reports

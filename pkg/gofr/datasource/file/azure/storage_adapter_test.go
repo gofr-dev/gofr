@@ -789,33 +789,36 @@ func TestNewWriter_SetsContentType(t *testing.T) {
 }
 
 // TestContentTypeDetection_Logic tests the content type detection logic directly.
+//
+// The exact type a known extension maps to is not ours to assert: mime.TypeByExtension merges
+// Go's builtin table with the host's mime database (/etc/mime.types on Linux, the registry on
+// Windows), so the same extension answers differently per platform — .xml is application/xml on
+// macOS and text/xml on an Ubuntu runner, and .yaml/.yml resolve on Ubuntu but not on macOS.
+// Pinning those values made this test assert the CI image's mailcap package. What belongs to
+// this package is the fallback for an extension the host does not know, and the stripping of any
+// parameters off the returned type, so those are what this asserts.
 func TestContentTypeDetection_Logic(t *testing.T) {
 	testCases := []struct {
-		name           string
-		expectedBaseCT string
-		description    string
+		name        string
+		known       bool
+		description string
 	}{
-		{"file.json", "application/json", "JSON files"},
-		{"file.txt", "text/plain", "Text files"},
-		{"file.csv", "text/csv", "CSV files"},
-		{"file.xml", "application/xml", "XML files (mime returns application/xml)"},
-		{"file.html", "text/html", "HTML files"},
-		{"file.pdf", "application/pdf", "PDF files"},
-		{"file.js", "text/javascript", "JavaScript files (mime returns text/javascript)"},
-		{"file.css", "text/css", "CSS files"},
-		{"file.yaml", "application/octet-stream", "YAML files (not in standard mime types)"},
-		{"file.yml", "application/octet-stream", "YAML files (.yml, not in standard mime types)"},
-		{"file.unknown", "application/octet-stream", "Unknown extensions"},
-		{"noextension", "application/octet-stream", "Files without extensions"},
-		{"dir/subdir/file.json", "application/json", "Nested paths"},
-		{"dir/subdir/file.txt", "text/plain", "Nested paths"},
+		// Only extensions from Go's own builtin table are asserted as known: anything else
+		// depends on a mime database the host may not have.
+		{"file.json", true, "JSON files"},
+		{"file.html", true, "HTML files"},
+		{"file.pdf", true, "PDF files"},
+		{"file.css", true, "CSS files"},
+		{"file.unknown", false, "Unknown extensions"},
+		{"noextension", false, "Files without extensions"},
+		{"dir/subdir/file.json", true, "Nested paths"},
 	}
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			contentType := mime.TypeByExtension(filepath.Ext(tc.name))
 			if contentType == "" {
-				contentType = "application/octet-stream"
+				contentType = contentTypeOctetStream
 			}
 
 			baseContentType := contentType
@@ -823,8 +826,16 @@ func TestContentTypeDetection_Logic(t *testing.T) {
 				baseContentType = contentType[:idx]
 			}
 
-			assert.Equal(t, tc.expectedBaseCT, baseContentType, tc.description)
 			assert.NotEmpty(t, contentType, "Content type should not be empty")
+			assert.NotContains(t, baseContentType, ";", "Parameters should be stripped, %s", tc.description)
+
+			if tc.known {
+				assert.NotEqual(t, contentTypeOctetStream, baseContentType,
+					"A known extension should resolve to a real type, %s", tc.description)
+			} else {
+				assert.Equal(t, contentTypeOctetStream, baseContentType,
+					"An unknown extension should fall back to octet-stream, %s", tc.description)
+			}
 		})
 	}
 }
