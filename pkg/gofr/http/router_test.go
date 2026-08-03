@@ -423,35 +423,6 @@ func Test_StaticFileServing_EndpointRoot(t *testing.T) {
 			expectedBody:     "404 Not Found",
 		},
 		{
-			// A subdirectory is served through its index file too, and must not answer with the
-			// redirect-to-trailing-slash that path.Clean would strip straight back off.
-			name: "Serve index.html from a subdirectory",
-			setupFiles: func() error {
-				if err := os.MkdirAll(filepath.Join(tempDir, "sub"), 0750); err != nil {
-					return err
-				}
-
-				return os.WriteFile(filepath.Join(tempDir, "sub", "index.html"), []byte("<html>Sub</html>"), 0600)
-			},
-			path:             "/static/sub",
-			staticServerPath: "/static",
-			expectedCode:     http.StatusOK,
-			expectedBody:     "<html>Sub</html>",
-		},
-		{
-			// An explicit request for the index file is served as the plain file it is.
-			// http.FileServer used to answer this with a redirect to "./", which path.Clean
-			// resolved back to the directory — the other half of the redirect loop.
-			name: "Explicit index.html is served without redirecting",
-			setupFiles: func() error {
-				return os.WriteFile(filepath.Join(tempDir, "index.html"), []byte("<html>Index</html>"), 0600)
-			},
-			path:             "/static/index.html",
-			staticServerPath: "/static",
-			expectedCode:     http.StatusOK,
-			expectedBody:     "<html>Index</html>",
-		},
-		{
 			// The prefix route must keep its trailing separator: a sibling endpoint sharing the
 			// prefix is not this endpoint and must not be served from its directory.
 			name: "Sibling endpoint sharing the prefix is not served",
@@ -462,6 +433,101 @@ func Test_StaticFileServing_EndpointRoot(t *testing.T) {
 			staticServerPath: "/static",
 			expectedCode:     http.StatusNotFound,
 			expectedBody:     "404 page not found",
+		},
+		{
+			// A root without an index file takes the ordinary not-found path, so the directory's own
+			// 404.html answers it — the same page a missing file gets, not a mux default.
+			name: "Endpoint root without an index file serves 404.html",
+			setupFiles: func() error {
+				if err := os.Remove(filepath.Join(tempDir, "index.html")); err != nil {
+					return err
+				}
+
+				return os.WriteFile(filepath.Join(tempDir, "404.html"), []byte("<html>404 Not Found</html>"), 0600)
+			},
+			path:             "/static",
+			staticServerPath: "/static",
+			expectedCode:     http.StatusNotFound,
+			expectedBody:     "<html>404 Not Found</html>",
+		},
+	}
+
+	runStaticFileTests(t, tempDir, testCases)
+}
+
+// Test_StaticFileServing_NoRedirect covers the paths a file server answers with a redirect rather
+// than content. Every such redirect points at a trailing-slash or "./" form of the URL, and
+// Router.ServeHTTP's path.Clean strips that form straight back off, so the client is sent in a
+// circle it can never satisfy. runStaticFileTests asserts no Location header on every case; these
+// are the requests that produce one if the serving path ever goes back through http.FileServer or
+// http.ServeFile.
+func Test_StaticFileServing_NoRedirect(t *testing.T) {
+	tempDir := t.TempDir()
+
+	setupSub := func() error {
+		if err := os.MkdirAll(filepath.Join(tempDir, "sub"), 0750); err != nil {
+			return err
+		}
+
+		return os.WriteFile(filepath.Join(tempDir, "sub", "index.html"), []byte("<html>Sub</html>"), 0600)
+	}
+
+	testCases := []struct {
+		name             string
+		setupFiles       func() error
+		path             string
+		staticServerPath string
+		expectedCode     int
+		expectedBody     string
+	}{
+		{
+			// http.FileServer answers a directory with "301 Location: sub/".
+			name:             "Subdirectory is served through its index file",
+			setupFiles:       setupSub,
+			path:             "/static/sub",
+			staticServerPath: "/static",
+			expectedCode:     http.StatusOK,
+			expectedBody:     "<html>Sub</html>",
+		},
+		{
+			// The endpoint's own index file. After StripPrefix the request path is "index.html",
+			// which misses http.ServeFile's "/index.html" suffix rule — but http.FileServer, which
+			// sees the unstripped path, answered this with "301 Location: ./".
+			name: "Explicit index.html at the endpoint root",
+			setupFiles: func() error {
+				return os.WriteFile(filepath.Join(tempDir, "index.html"), []byte("<html>Index</html>"), 0600)
+			},
+			path:             "/static/index.html",
+			staticServerPath: "/static",
+			expectedCode:     http.StatusOK,
+			expectedBody:     "<html>Index</html>",
+		},
+		{
+			// The one path that trips http.ServeFile's rule as well: after StripPrefix the request
+			// path is "sub/index.html", which does end in "/index.html". http.ServeContent, which
+			// is handed an open file rather than a URL, has no such rule.
+			name:             "Explicit index.html in a subdirectory",
+			setupFiles:       setupSub,
+			path:             "/static/sub/index.html",
+			staticServerPath: "/static",
+			expectedCode:     http.StatusOK,
+			expectedBody:     "<html>Sub</html>",
+		},
+		{
+			// A miss whose own path ends in "/index.html" must still get the 404 page, not a
+			// redirect issued on the way to serving it.
+			name: "Missing index.html in a subdirectory serves 404.html",
+			setupFiles: func() error {
+				if err := os.MkdirAll(filepath.Join(tempDir, "empty"), 0750); err != nil {
+					return err
+				}
+
+				return os.WriteFile(filepath.Join(tempDir, "404.html"), []byte("<html>404 Not Found</html>"), 0600)
+			},
+			path:             "/static/empty/index.html",
+			staticServerPath: "/static",
+			expectedCode:     http.StatusNotFound,
+			expectedBody:     "<html>404 Not Found</html>",
 		},
 	}
 
@@ -559,6 +625,11 @@ func runStaticFileTests(t *testing.T, tempDir string, testCases []struct {
 
 			assert.Equal(t, tc.expectedCode, w.Code)
 			assert.Equal(t, tc.expectedBody, strings.TrimSpace(w.Body.String()))
+
+			// A static endpoint never redirects. Every redirect the file server used to issue
+			// pointed at a trailing-slash or "./" form that Router.ServeHTTP's path.Clean undoes,
+			// so any Location here is a client loop waiting to happen.
+			assert.Empty(t, w.Header().Get("Location"), "static file serving must not redirect")
 		})
 	}
 }

@@ -19,6 +19,9 @@ subdirectory beneath it (`/static/docs` serves `static/docs/index.html`). A dire
 `index.html` returns 404 rather than a listing of its contents, so nothing is disclosed that was not
 deliberately published; if the served folder has a `404.html`, that page is returned as the body.
 
+Every one of these forms is answered with the file itself — `/static`, `/static/`, and
+`/static/index.html` all return the same page, and none of them redirects.
+
 Example project structure:
 
 ```dotenv

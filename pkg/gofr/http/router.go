@@ -204,19 +204,45 @@ func (staticConfig staticFileConfig) staticHandler() http.Handler {
 
 		resolvedPath, err := staticConfig.validateFile(absPath)
 		if err != nil {
-			staticConfig.respondWithFileError(w, r, absPath, err)
+			staticConfig.respondWithFileError(w, absPath, err)
 			return
 		}
 
-		// validateFile has already resolved a directory to its index file, so what is served here
-		// is always a plain file. That is what breaks the redirect loop: http.FileServer answers a
-		// directory with a redirect to the trailing-slash form of the URL, and ServeHTTP's
-		// path.Clean strips that slash straight back off, so the client is sent in a circle it can
-		// never satisfy. Serving the index file itself never reaches that redirect.
 		staticConfig.logger.Debugf("serving file: %s", resolvedPath)
 
-		http.ServeFile(w, r, resolvedPath)
+		if err := staticConfig.serveFile(w, r, resolvedPath); err != nil {
+			staticConfig.respondWithFileError(w, resolvedPath, err)
+		}
 	})
+}
+
+// serveFile writes the contents of path to w.
+//
+// This is what breaks the redirects. http.FileServer answers a directory with a redirect to the
+// trailing-slash form of the URL, and ".../index.html" with a redirect back to "./" — and
+// ServeHTTP's path.Clean strips the slash straight back off, so the directory case sends the
+// client in a circle it can never satisfy. http.ServeFile carries the same index.html rule.
+// http.ServeContent has neither: it writes the bytes it is handed and never redirects. Combined
+// with validateFile resolving a directory to its index file, every request either gets content or
+// an error.
+//
+// It also re-uses the open file's own FileInfo rather than stat-ing the path a second time.
+func (staticFileConfig) serveFile(w http.ResponseWriter, r *http.Request, filePath string) error {
+	file, err := os.Open(filePath)
+	if err != nil {
+		return err
+	}
+
+	defer file.Close()
+
+	fileInfo, err := file.Stat()
+	if err != nil {
+		return err
+	}
+
+	http.ServeContent(w, r, filepath.Base(filePath), fileInfo.ModTime(), file)
+
+	return nil
 }
 
 // Checks if the file is restricted.
@@ -267,21 +293,28 @@ func (staticFileConfig) validateFile(absPath string) (resolvedPath string, err e
 }
 
 // Handles different file-related errors.
-func (staticConfig staticFileConfig) respondWithFileError(w http.ResponseWriter, r *http.Request, absPath string, err error) {
+func (staticConfig staticFileConfig) respondWithFileError(w http.ResponseWriter, absPath string, err error) {
 	if os.IsNotExist(err) {
 		staticConfig.logger.Debugf("requested file not found: %s", absPath)
 
-		w.WriteHeader(http.StatusNotFound)
-
-		// Serve custom 404.html if available
+		// Serve custom 404.html if available. The body is written out here rather than handed to
+		// http.ServeFile because the status has to be 404, not the 200 a file server writes — and
+		// because ServeFile would answer a request whose own path ends in "/index.html" with a
+		// redirect instead of the page.
 		notFoundPath, _ := filepath.Abs(filepath.Join(staticConfig.directoryName, staticServerNotFoundFileName))
-		if _, err = os.Stat(notFoundPath); err == nil {
+
+		if page, readErr := os.ReadFile(notFoundPath); readErr == nil {
 			staticConfig.logger.Debugf("serving custom 404 page: %s", notFoundPath)
 
-			http.ServeFile(w, r, notFoundPath)
+			w.Header().Set("Content-Type", "text/html; charset=utf-8")
+			w.WriteHeader(http.StatusNotFound)
+
+			_, _ = w.Write(page)
 
 			return
 		}
+
+		w.WriteHeader(http.StatusNotFound)
 
 		_, _ = w.Write([]byte("404 Not Found"))
 
