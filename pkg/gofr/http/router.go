@@ -162,14 +162,25 @@ type staticFileConfig struct {
 }
 
 func (rou *Router) AddStaticFiles(logger logging.Logger, endpoint, dirName string) {
-	cfg := staticFileConfig{directoryName: dirName, logger: logger}
+	// staticHandler resolves each request to an absolute, cleaned path and the containment check
+	// compares it against directoryName as a string, so the two have to be in the same form.
+	// Resolving once here covers a relative name and an absolute one carrying a trailing separator
+	// — both of which would otherwise match nothing and answer every request with 403.
+	absDir, err := filepath.Abs(dirName)
+	if err != nil {
+		logger.Errorf("error in registering '%v' static endpoint, cannot resolve directory %v: %v", endpoint, dirName, err)
+
+		return
+	}
+
+	cfg := staticFileConfig{directoryName: absDir, logger: logger}
 
 	handler := cfg.staticHandler()
 
 	if endpoint == "/" {
 		rou.Router.NewRoute().PathPrefix(endpoint).Handler(http.StripPrefix(endpoint, handler))
 
-		logger.Logf("registered static files at endpoint %v from directory %v", endpoint, dirName)
+		logger.Logf("registered static files at endpoint %v from directory %v", endpoint, absDir)
 
 		return
 	}
@@ -182,7 +193,7 @@ func (rou *Router) AddStaticFiles(logger logging.Logger, endpoint, dirName strin
 	rou.Router.NewRoute().Path(endpoint).Handler(http.StripPrefix(endpoint, handler))
 	rou.Router.NewRoute().PathPrefix(endpoint + "/").Handler(http.StripPrefix(endpoint+"/", handler))
 
-	logger.Logf("registered static files at endpoint %v from directory %v", endpoint+"/", dirName)
+	logger.Logf("registered static files at endpoint %v from directory %v", endpoint+"/", absDir)
 }
 
 func (staticConfig staticFileConfig) staticHandler() http.Handler {

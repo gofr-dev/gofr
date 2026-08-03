@@ -10,6 +10,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"gofr.dev/pkg/gofr/config"
 	"gofr.dev/pkg/gofr/container"
@@ -453,6 +454,53 @@ func Test_StaticFileServing_EndpointRoot(t *testing.T) {
 	}
 
 	runStaticFileTests(t, tempDir, testCases)
+}
+
+// Test_StaticFileServing_DirectoryNameForms covers the forms a caller can give the served
+// directory in. staticHandler builds the requested path with filepath.Abs, so the containment
+// check compares an absolute, cleaned path against directoryName as it was handed in: a relative
+// name, or an absolute one carrying a trailing separator, never matches and every request under
+// the endpoint — root or not — is answered with 403. App.AddStaticFiles resolves "./x" and "x"
+// against the working directory but leaves an absolute name untouched, so the trailing-separator
+// form reaches here from the public API.
+func Test_StaticFileServing_DirectoryNameForms(t *testing.T) {
+	tempDir := t.TempDir()
+
+	require.NoError(t, os.WriteFile(filepath.Join(tempDir, "index.html"), []byte("<html>Index</html>"), 0600))
+
+	workingDir, err := os.Getwd()
+	require.NoError(t, err)
+
+	relativeDir, err := filepath.Rel(workingDir, tempDir)
+	require.NoError(t, err)
+
+	sep := string(os.PathSeparator)
+
+	tests := []struct {
+		name    string
+		dirName string
+	}{
+		{"absolute", tempDir},
+		{"absolute with trailing separator", tempDir + sep},
+		{"absolute unclean", tempDir + sep + "." + sep},
+		{"relative", relativeDir},
+		{"relative with dot prefix", "." + sep + relativeDir},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			for _, path := range []string{"/static", "/static/index.html"} {
+				router := NewRouter()
+				router.AddStaticFiles(logging.NewMockLogger(logging.DEBUG), "/static", tc.dirName)
+
+				w := httptest.NewRecorder()
+				router.ServeHTTP(w, httptest.NewRequest(http.MethodGet, path, http.NoBody))
+
+				assert.Equal(t, http.StatusOK, w.Code, "GET %s", path)
+				assert.Equal(t, "<html>Index</html>", strings.TrimSpace(w.Body.String()), "GET %s", path)
+			}
+		})
+	}
 }
 
 // Test_StaticFileServing_NoRedirect covers the paths a file server answers with a redirect rather
