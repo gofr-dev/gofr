@@ -22,6 +22,11 @@ deliberately published; if the served folder has a `404.html`, that page is retu
 Every one of these forms is answered with the file itself — `/static`, `/static/`, and
 `/static/index.html` all return the same page, and none of them redirects.
 
+Only regular files are served. A path that resolves to anything else — a directory, a named pipe —
+is treated as not found, and an `openapi.json` in a served folder returns 403 in any capitalisation;
+the API specification is reachable only through `/.well-known/swagger` and
+`/.well-known/openapi.json`.
+
 Example project structure:
 
 ```dotenv

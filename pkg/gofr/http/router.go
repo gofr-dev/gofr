@@ -2,6 +2,7 @@ package http
 
 import (
 	"fmt"
+	"io/fs"
 	"net/http"
 	"os"
 	"path"
@@ -257,10 +258,15 @@ func (staticFileConfig) serveFile(w http.ResponseWriter, r *http.Request, filePa
 }
 
 // Checks if the file is restricted.
+//
+// The name is compared case-insensitively because the filesystem underneath may be. On a
+// case-insensitive one — every macOS machine, and Windows — "/static/openapi.JSON" opens the very
+// file an exact comparison refuses to serve, leaving the restriction only as strong as the one
+// spelling it knows.
 func (staticConfig staticFileConfig) isRestrictedFile(url, absPath string) bool {
 	fileName := filepath.Base(url)
 
-	return !staticConfig.isWithinDirectory(absPath) || fileName == DefaultSwaggerFileName
+	return !staticConfig.isWithinDirectory(absPath) || strings.EqualFold(fileName, DefaultSwaggerFileName)
 }
 
 // isWithinDirectory reports whether absPath is the served directory itself or a path inside it.
@@ -293,6 +299,15 @@ func (staticFileConfig) validateFile(absPath string) (resolvedPath string, err e
 		if err != nil {
 			return "", err
 		}
+	}
+
+	// Only regular files are servable. Dropping http.FileServer left nothing else checking the
+	// type of the resolved path, and a non-regular one reaches http.ServeContent, which writes a
+	// Content-Length from its FileInfo and then no body (a directory named index.html — a 200 the
+	// client reads as an unexpected EOF), or blocks forever in os.Open (a fifo). fs.ErrNotExist
+	// puts both on the ordinary 404 path, the same one the no-index case takes.
+	if !fileInfo.Mode().IsRegular() {
+		return "", fs.ErrNotExist
 	}
 
 	// Ensure file has at least read (`r--`) permission

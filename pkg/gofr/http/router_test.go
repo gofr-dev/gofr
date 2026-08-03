@@ -349,6 +349,20 @@ func Test_StaticFileServing_Static(t *testing.T) {
 			expectedBody:     "403 Forbidden",
 		},
 		{
+			// The name is matched case-insensitively: on a case-insensitive filesystem this URL
+			// opens the very file the exact comparison refused. The restriction is applied before
+			// the file is resolved, so the case that is served is not what decides it and this
+			// holds on a case-sensitive filesystem too.
+			name: "Access forbidden OpenAPI JSON in a different case",
+			setupFiles: func() error {
+				return os.WriteFile(filepath.Join(tempDir, DefaultSwaggerFileName), []byte(`{"openapi": "3.0.0"}`), 0600)
+			},
+			path:             "/static/openapi.JSON",
+			staticServerPath: "/static",
+			expectedCode:     http.StatusForbidden,
+			expectedBody:     "403 Forbidden",
+		},
+		{
 			name: "Serving File with no Read permission",
 			setupFiles: func() error {
 				return os.WriteFile(filepath.Join(tempDir, "restricted.txt"), []byte("Restricted content"), 0000)
@@ -412,18 +426,6 @@ func Test_StaticFileServing_EndpointRoot(t *testing.T) {
 			expectedBody:     "<html>Index</html>",
 		},
 		{
-			// Without an index file the directory must not be handed to http.FileServer, which
-			// would answer with a listing of its contents.
-			name: "Endpoint root without an index file is not listed",
-			setupFiles: func() error {
-				return os.Remove(filepath.Join(tempDir, "index.html"))
-			},
-			path:             "/static",
-			staticServerPath: "/static",
-			expectedCode:     http.StatusNotFound,
-			expectedBody:     "404 Not Found",
-		},
-		{
 			// The prefix route must keep its trailing separator: a sibling endpoint sharing the
 			// prefix is not this endpoint and must not be served from its directory.
 			name: "Sibling endpoint sharing the prefix is not served",
@@ -435,12 +437,71 @@ func Test_StaticFileServing_EndpointRoot(t *testing.T) {
 			expectedCode:     http.StatusNotFound,
 			expectedBody:     "404 page not found",
 		},
+	}
+
+	runStaticFileTests(t, tempDir, testCases)
+}
+
+// Test_StaticFileServing_EndpointRootWithoutServableIndex covers an endpoint root that resolves to
+// a directory holding no file the handler can serve. None of these may be answered with a listing
+// of the directory's contents, and none may reach http.ServeContent: with http.FileServer gone,
+// validateFile's file type check is the only thing standing between a non-regular path and a 200
+// whose body never arrives.
+func Test_StaticFileServing_EndpointRootWithoutServableIndex(t *testing.T) {
+	tempDir := t.TempDir()
+
+	testCases := []struct {
+		name             string
+		setupFiles       func() error
+		path             string
+		staticServerPath string
+		expectedCode     int
+		expectedBody     string
+	}{
+		{
+			// Without an index file the directory must not be handed to http.FileServer, which
+			// would answer with a listing of its contents.
+			name: "Endpoint root without an index file is not listed",
+			setupFiles: func() error {
+				return os.RemoveAll(filepath.Join(tempDir, "index.html"))
+			},
+			path:             "/static",
+			staticServerPath: "/static",
+			expectedCode:     http.StatusNotFound,
+			expectedBody:     "404 Not Found",
+		},
+		{
+			// Nothing checks the type of the resolved path once http.FileServer is gone, so a
+			// directory named index.html would reach http.ServeContent — which writes a
+			// Content-Length from the directory's FileInfo and then no body, a 200 the client
+			// reads as an unexpected EOF. It has to take the not-found path instead.
+			name: "Endpoint root whose index.html is a directory is not served",
+			setupFiles: func() error {
+				return os.MkdirAll(filepath.Join(tempDir, "index.html"), 0750)
+			},
+			path:             "/static",
+			staticServerPath: "/static",
+			expectedCode:     http.StatusNotFound,
+			expectedBody:     "404 Not Found",
+		},
+		{
+			// A subdirectory root resolves to a directory the same way the endpoint root does, and
+			// is likewise answered rather than listed when it holds no index file.
+			name: "Subdirectory without an index file is not listed",
+			setupFiles: func() error {
+				return os.MkdirAll(filepath.Join(tempDir, "sub"), 0750)
+			},
+			path:             "/static/sub",
+			staticServerPath: "/static",
+			expectedCode:     http.StatusNotFound,
+			expectedBody:     "404 Not Found",
+		},
 		{
 			// A root without an index file takes the ordinary not-found path, so the directory's own
 			// 404.html answers it — the same page a missing file gets, not a mux default.
 			name: "Endpoint root without an index file serves 404.html",
 			setupFiles: func() error {
-				if err := os.Remove(filepath.Join(tempDir, "index.html")); err != nil {
+				if err := os.RemoveAll(filepath.Join(tempDir, "index.html")); err != nil {
 					return err
 				}
 
@@ -494,7 +555,7 @@ func Test_StaticFileServing_DirectoryNameForms(t *testing.T) {
 				router.AddStaticFiles(logging.NewMockLogger(logging.DEBUG), "/static", tc.dirName)
 
 				w := httptest.NewRecorder()
-				router.ServeHTTP(w, httptest.NewRequest(http.MethodGet, path, http.NoBody))
+				router.ServeHTTP(w, httptest.NewRequestWithContext(t.Context(), http.MethodGet, path, http.NoBody))
 
 				assert.Equal(t, http.StatusOK, w.Code, "GET %s", path)
 				assert.Equal(t, "<html>Index</html>", strings.TrimSpace(w.Body.String()), "GET %s", path)
@@ -602,6 +663,15 @@ func Test_isRestrictedFile(t *testing.T) {
 			directoryName: "/app/public",
 			url:           "/openapi.json",
 			absPath:       "/app/public/openapi.json",
+			expected:      true,
+		},
+		{
+			// A case-insensitive filesystem opens the same spec for this name, so the restriction
+			// has to cover every spelling of it rather than the one canonical form.
+			name:          "openapi.json in a different case is restricted",
+			directoryName: "/app/public",
+			url:           "/openapi.JSON",
+			absPath:       "/app/public/openapi.JSON",
 			expected:      true,
 		},
 		{
