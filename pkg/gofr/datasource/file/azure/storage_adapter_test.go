@@ -797,6 +797,11 @@ func TestNewWriter_SetsContentType(t *testing.T) {
 // Pinning those values made this test assert the CI image's mailcap package. What belongs to
 // this package is the fallback for an extension the host does not know, and the stripping of any
 // parameters off the returned type, so those are what this asserts.
+//
+// The known/unknown granularity is deliberate rather than a shortcut for the three extensions
+// above: on unix mime.loadMimeFile overwrites whatever initMime put in the builtin table, so the
+// host database can change the value of any extension listed below, not just the ones dropped.
+// What is stable is that a builtin extension resolves to something other than the fallback.
 func TestContentTypeDetection_Logic(t *testing.T) {
 	testCases := []struct {
 		name        string
@@ -809,6 +814,9 @@ func TestContentTypeDetection_Logic(t *testing.T) {
 		{"file.html", true, "HTML files"},
 		{"file.pdf", true, "PDF files"},
 		{"file.css", true, "CSS files"},
+		{"file.txt", true, "Text files"},
+		{"file.csv", true, "CSV files"},
+		{"file.js", true, "JavaScript files"},
 		{"file.unknown", false, "Unknown extensions"},
 		{"noextension", false, "Files without extensions"},
 		{"dir/subdir/file.json", true, "Nested paths"},

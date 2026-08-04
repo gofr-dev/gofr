@@ -368,6 +368,9 @@ jobs:
         with:
           name: submodule-coverage-reports
           path: coverage_reports/*.cov
+          # upload-artifact defaults to `warn`, which is how an empty coverage_reports/
+          # stayed green for months while the cp above never landed a file (#3824).
+          if-no-files-found: error
 
   # Job for uploading coverage to external services (qlty.sh)
   upload_coverage:
