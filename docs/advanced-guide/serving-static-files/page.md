@@ -22,6 +22,14 @@ deliberately published; if the served folder has a `404.html`, that page is retu
 Every one of these forms is answered with the file itself — `/static`, `/static/`, and
 `/static/index.html` all return the same page, and none of them redirects.
 
+Because `/static` is answered directly rather than redirected to `/static/`, a relative URL in a page
+served at the endpoint root resolves against the parent path: `<img src="logo.png">` requests
+`/logo.png` from `/static` and `/static/logo.png` from `/static/`. HTML served at an endpoint root
+should use root-relative URLs (`/static/logo.png`) or declare a `<base href="/static/">`.
+
+Only `GET` and `HEAD` are served. Any other method returns 405 with an `Allow: GET, HEAD` header. A
+file the process cannot read returns 403.
+
 Only regular files are served. A path that resolves to anything else — a directory, a named pipe —
 is treated as not found, and an `openapi.json` in a served folder returns 403 in any capitalization;
 the API specification is reachable only through `/.well-known/swagger` and
@@ -57,8 +65,8 @@ func main() {
 
 Additionally, if we want to serve more static endpoints, we have a dedicated function called `AddStaticFiles()`
 which takes 2 parameters `endpoint` and the `filepath` of the static folder which we want to serve. If the folder 
-contains a `404.html` file, GoFr automatically serves it for any missing URL, redirecting all "Not Found" requests 
-to this page.
+contains a `404.html` file, GoFr returns that page as the body of any "Not Found" response. The `filepath` must be a
+directory; anything else is refused at registration and the endpoint is not served.
 
 Example project structure:
 
