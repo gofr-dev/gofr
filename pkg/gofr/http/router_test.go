@@ -363,14 +363,17 @@ func Test_StaticFileServing_Static(t *testing.T) {
 			expectedBody:     "403 Forbidden",
 		},
 		{
+			// An unreadable file is the caller being refused, not the server failing — the mapping
+			// net/http's own toHTTPError makes. This asserted 500 before, which tells a monitor the
+			// application is broken when what it has is a file mode.
 			name: "Serving File with no Read permission",
 			setupFiles: func() error {
 				return os.WriteFile(filepath.Join(tempDir, "restricted.txt"), []byte("Restricted content"), 0000)
 			},
 			path:             "/static/restricted.txt",
 			staticServerPath: "/static",
-			expectedCode:     http.StatusInternalServerError,
-			expectedBody:     "500 Internal Server Error",
+			expectedCode:     http.StatusForbidden,
+			expectedBody:     "403 Forbidden",
 		},
 	}
 
@@ -559,6 +562,150 @@ func Test_StaticFileServing_DirectoryNameForms(t *testing.T) {
 
 				assert.Equal(t, http.StatusOK, w.Code, "GET %s", path)
 				assert.Equal(t, "<html>Index</html>", strings.TrimSpace(w.Body.String()), "GET %s", path)
+			}
+		})
+	}
+}
+
+// Test_StaticFileServing_MethodNotAllowed covers the methods a static endpoint does not implement.
+// The routes carry no .Methods() matcher — deliberately, because restricting them there drops the
+// request to the catch-all and answers 404, which contradicts the 200 the same path gives for GET —
+// so the handler is the only thing standing between a DELETE and a 200 carrying the file's content.
+func Test_StaticFileServing_MethodNotAllowed(t *testing.T) {
+	tempDir := t.TempDir()
+
+	require.NoError(t, os.WriteFile(filepath.Join(tempDir, "index.html"), []byte("<html>Index</html>"), 0600))
+
+	tests := []struct {
+		name          string
+		method        string
+		path          string
+		expectedCode  int
+		expectedBody  string
+		expectedAllow string
+	}{
+		{"GET at the endpoint root is served", http.MethodGet, "/static", http.StatusOK, "<html>Index</html>", ""},
+		{"GET of a file is served", http.MethodGet, "/static/index.html", http.StatusOK, "<html>Index</html>", ""},
+		// HEAD is a GET without the body: http.ServeContent writes the headers and omits it.
+		{"HEAD at the endpoint root is served", http.MethodHead, "/static", http.StatusOK, "", ""},
+		{"POST is refused", http.MethodPost, "/static", http.StatusMethodNotAllowed, "405 Method Not Allowed", "GET, HEAD"},
+		{"PUT is refused", http.MethodPut, "/static/index.html", http.StatusMethodNotAllowed, "405 Method Not Allowed", "GET, HEAD"},
+		{"PATCH is refused", http.MethodPatch, "/static", http.StatusMethodNotAllowed, "405 Method Not Allowed", "GET, HEAD"},
+		// The one that reads as an outright lie without this: "200, deleted, here it is."
+		{"DELETE is refused", http.MethodDelete, "/static", http.StatusMethodNotAllowed, "405 Method Not Allowed", "GET, HEAD"},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			router := NewRouter()
+			router.AddStaticFiles(logging.NewMockLogger(logging.DEBUG), "/static", tempDir)
+
+			w := httptest.NewRecorder()
+			router.ServeHTTP(w, httptest.NewRequestWithContext(t.Context(), tc.method, tc.path, http.NoBody))
+
+			assert.Equal(t, tc.expectedCode, w.Code)
+			assert.Equal(t, tc.expectedBody, strings.TrimSpace(w.Body.String()))
+
+			// RFC 9110 §15.5.6 requires Allow on a 405, and requires it absent nowhere else here.
+			assert.Equal(t, tc.expectedAllow, w.Header().Get("Allow"))
+		})
+	}
+}
+
+// Test_StaticFileServing_PermissionDenied covers a path the process is not allowed to read. It is
+// the caller being refused rather than the server failing, which is the mapping net/http's own
+// toHTTPError makes and the one nginx and Apache make; 500 would tell a monitor the application is
+// broken when what it has is a file mode. Two routes reach it — validateFile's own
+// errReadPermissionDenied, and a real EACCES from os.Stat — and they must not answer differently.
+func Test_StaticFileServing_PermissionDenied(t *testing.T) {
+	if os.Geteuid() == 0 {
+		t.Skip("running as root: the permission bits under test are not enforced")
+	}
+
+	tempDir := t.TempDir()
+
+	testCases := []struct {
+		name             string
+		setupFiles       func() error
+		path             string
+		staticServerPath string
+		expectedCode     int
+		expectedBody     string
+	}{
+		{
+			// Caught by validateFile's mode check, which returns errReadPermissionDenied — an error
+			// that has to satisfy fs.ErrPermission to be mapped rather than fall through to 500.
+			name: "Unreadable file is forbidden, not a server error",
+			setupFiles: func() error {
+				return os.WriteFile(filepath.Join(tempDir, "noread.txt"), []byte("secret"), 0000)
+			},
+			path:             "/static/noread.txt",
+			staticServerPath: "/static",
+			expectedCode:     http.StatusForbidden,
+			expectedBody:     "403 Forbidden",
+		},
+		{
+			// The other route: the mode check never runs, because os.Stat of the index file inside an
+			// untraversable directory fails with a real EACCES first.
+			name: "Untraversable directory is forbidden, not a server error",
+			setupFiles: func() error {
+				nodir := filepath.Join(tempDir, "nodir")
+				if err := os.MkdirAll(nodir, 0750); err != nil {
+					return err
+				}
+
+				if err := os.WriteFile(filepath.Join(nodir, "index.html"), []byte("<html>X</html>"), 0600); err != nil {
+					return err
+				}
+
+				return os.Chmod(nodir, 0000)
+			},
+			path:             "/static/nodir",
+			staticServerPath: "/static",
+			expectedCode:     http.StatusForbidden,
+			expectedBody:     "403 Forbidden",
+		},
+	}
+
+	// t.TempDir's cleanup cannot walk a directory it has no permission to enter.
+	t.Cleanup(func() {
+		_ = os.Chmod(filepath.Join(tempDir, "nodir"), 0750)
+	})
+
+	runStaticFileTests(t, tempDir, testCases)
+}
+
+// Test_StaticFileServing_NonDirectoryDirName covers a served path that is not a directory.
+// App.AddStaticFiles only stats it, so a regular file passes registration, and the containment
+// check admits the served path itself now that the endpoint root has to resolve to it — together
+// that would serve the file verbatim at the endpoint. The old prefix-only comparison failed closed
+// here by accident, and registration has to keep it closed on purpose.
+func Test_StaticFileServing_NonDirectoryDirName(t *testing.T) {
+	tempDir := t.TempDir()
+
+	configFile := filepath.Join(tempDir, "config.yaml")
+	require.NoError(t, os.WriteFile(configFile, []byte("db_password: hunter2"), 0600))
+
+	tests := []struct {
+		name    string
+		dirName string
+	}{
+		{"regular file", configFile},
+		{"path that does not exist", filepath.Join(tempDir, "absent")},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			router := NewRouter()
+			router.AddStaticFiles(logging.NewMockLogger(logging.DEBUG), "/data", tc.dirName)
+
+			for _, path := range []string{"/data", "/data/"} {
+				w := httptest.NewRecorder()
+				router.ServeHTTP(w, httptest.NewRequestWithContext(t.Context(), http.MethodGet, path, http.NoBody))
+
+				// Nothing was registered, so the request is unrouted rather than refused by the handler.
+				assert.Equal(t, http.StatusNotFound, w.Code, "GET %s", path)
+				assert.NotContains(t, w.Body.String(), "hunter2", "GET %s", path)
 			}
 		})
 	}

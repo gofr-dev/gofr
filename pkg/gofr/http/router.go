@@ -1,6 +1,7 @@
 package http
 
 import (
+	"errors"
 	"fmt"
 	"io/fs"
 	"net/http"
@@ -20,7 +21,10 @@ const (
 	staticServerIndexFileName    = "index.html"
 )
 
-var errReadPermissionDenied = fmt.Errorf("file does not have read permission")
+// errReadPermissionDenied wraps fs.ErrPermission so that a file whose mode carries no read bit is
+// reported the same way a real EACCES from os.Open is — the two reach respondWithFileError by
+// different routes and must not answer differently.
+var errReadPermissionDenied = fmt.Errorf("file does not have read permission: %w", fs.ErrPermission)
 
 // Router is responsible for routing HTTP request.
 type Router struct {
@@ -174,6 +178,16 @@ func (rou *Router) AddStaticFiles(logger logging.Logger, endpoint, dirName strin
 		return
 	}
 
+	// App.AddStaticFiles only stats the path, so a regular file passes registration. The containment
+	// check admits the served path itself now that the endpoint root has to resolve to it, which
+	// would turn that misconfiguration into the file being served verbatim at the endpoint. Refusing
+	// to register a non-directory keeps that guard closed where the prefix comparison used to.
+	if info, statErr := os.Stat(absDir); statErr != nil || !info.IsDir() {
+		logger.Errorf("error in registering '%v' static endpoint, %v is not a directory", endpoint, absDir)
+
+		return
+	}
+
 	cfg := staticFileConfig{directoryName: absDir, logger: logger}
 
 	handler := cfg.staticHandler()
@@ -200,6 +214,18 @@ func (rou *Router) AddStaticFiles(logger logging.Logger, endpoint, dirName strin
 func (staticConfig staticFileConfig) staticHandler() http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		url := r.URL.Path
+
+		// A static endpoint only reads. Without this every method reaches the file and a DELETE is
+		// answered "200, here is the content" — nothing was deleted. Restricting the routes with
+		// .Methods() instead would drop the request to the catch-all and answer 404, which is its own
+		// lie when GET on the same path is a 200; the check belongs here, with the Allow header
+		// RFC 9110 §15.5.6 requires alongside a 405.
+		if r.Method != http.MethodGet && r.Method != http.MethodHead {
+			w.Header().Set("Allow", "GET, HEAD")
+			staticConfig.respondWithError(w, "method not allowed on static endpoint", url, nil, http.StatusMethodNotAllowed)
+
+			return
+		}
 
 		absPath, err := filepath.Abs(filepath.Join(staticConfig.directoryName, url))
 		if err != nil {
@@ -310,7 +336,14 @@ func (staticFileConfig) validateFile(absPath string) (resolvedPath string, err e
 		return "", fs.ErrNotExist
 	}
 
-	// Ensure file has at least read (`r--`) permission
+	// Ensure file has at least read (`r--`) permission.
+	//
+	// This asks whether anyone holds a read bit, not whether this process can read the file, so it
+	// is not the authority on the question: os.Open in serveFile is, and its EACCES covers the cases
+	// the mode bits cannot (a file readable only by another user, a directory in the path that
+	// cannot be traversed). Both now answer 403, so this only decides which route reports it — it is
+	// kept because it refuses a mode-0000 file identically whatever user the process runs as, where
+	// os.Open alone would serve it to root.
 	if fileInfo.Mode().Perm()&0444 == 0 {
 		return "", errReadPermissionDenied
 	}
@@ -320,7 +353,17 @@ func (staticFileConfig) validateFile(absPath string) (resolvedPath string, err e
 
 // Handles different file-related errors.
 func (staticConfig staticFileConfig) respondWithFileError(w http.ResponseWriter, absPath string, err error) {
-	if os.IsNotExist(err) {
+	// An unreadable file is the caller being refused, not the server failing: net/http's own
+	// toHTTPError maps fs.ErrPermission to 403, as do nginx and Apache. Answering 500 tells a monitor
+	// the application is broken when what it has is a file mode. Both routes here satisfy
+	// fs.ErrPermission — a real EACCES from os.Stat/os.Open, and validateFile's own
+	// errReadPermissionDenied, which wraps it.
+	if errors.Is(err, fs.ErrPermission) {
+		staticConfig.respondWithError(w, "no read permission for file", absPath, err, http.StatusForbidden)
+		return
+	}
+
+	if errors.Is(err, fs.ErrNotExist) {
 		staticConfig.logger.Debugf("requested file not found: %s", absPath)
 
 		// Serve custom 404.html if available. The body is written out here rather than handed to
