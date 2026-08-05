@@ -79,7 +79,7 @@ func TestMetrics_ServerErrorIncrementsCounter(t *testing.T) {
 
 	router.Use(Metrics(mockMetrics))
 
-	req := httptest.NewRequest(http.MethodGet, "/fail", http.NoBody)
+	req := httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/fail", http.NoBody)
 	rr := httptest.NewRecorder()
 
 	router.ServeHTTP(rr, req)
@@ -101,7 +101,7 @@ func TestMetrics_ClientErrorDoesNotIncrementServerErrorCounter(t *testing.T) {
 
 	router.Use(Metrics(mockMetrics))
 
-	req := httptest.NewRequest(http.MethodGet, "/notfound", http.NoBody)
+	req := httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/notfound", http.NoBody)
 	rr := httptest.NewRecorder()
 
 	router.ServeHTTP(rr, req)
