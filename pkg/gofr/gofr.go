@@ -53,6 +53,7 @@ type App struct {
 	subscriptionManager SubscriptionManager
 	graphqlManager      *graphQLManager
 	onStartHooks        []func(ctx *Context) error
+	healthCheck         HealthCheckFunc
 	mu                  sync.Mutex
 }
 
@@ -156,7 +157,7 @@ func (a *App) httpServerSetup() {
 	}
 
 	// Register default routes - these are only added when HTTP server is actually starting
-	a.add(http.MethodGet, service.HealthPath, healthHandler)
+	a.add(http.MethodGet, service.HealthPath, a.healthHandler)
 	a.add(http.MethodGet, service.AlivePath, liveHandler)
 	a.add(http.MethodGet, "/favicon.ico", faviconHandler)
 

@@ -45,7 +45,9 @@ aggregates the health of every registered datasource and service into a single s
 
 Note that the endpoint answers `200` in both cases: a `DEGRADED` aggregate does **not** produce a
 non-2xx response, so a probe wired directly to the status code will always see the service as ready.
-A caller that wants to act on degradation must read the `status` field itself.
+A caller that wants to act on degradation must read the `status` field itself, or register a
+readiness closure with [`SetHealthCheck`](#controlling-readiness-with-sethealthcheck) to decide the
+status code the endpoint answers with.
 
 To avoid leaking infrastructure details on an unauthenticated port, this endpoint intentionally does
 **not** expose per-dependency information (hosts, ports, database/keyspace/bucket names, connection
@@ -68,6 +70,79 @@ Sample response when the service is ready (HTTP 200):
   }
 }
 ```
+
+#### Controlling readiness with `SetHealthCheck`
+
+By default the endpoint always responds with HTTP `200` (readiness probes keep working unchanged).
+To hold a pod out of service until its critical dependencies are ready, register a readiness closure.
+It receives the request context and the container and returns the status string to report along
+with the HTTP status code to respond with. The closure is **not limited to the container** — because
+it is a closure it can also *capture* and probe dependencies GoFr never registered (a datasource you
+opened yourself, a third-party SDK client, a warm-up flag). It can combine any checks that define
+"ready" for your service:
+
+```go
+package main
+
+import (
+	"context"
+	"database/sql"
+	"net/http"
+
+	_ "github.com/lib/pq" // driver for the app-managed datasource below
+
+	"gofr.dev/pkg/gofr"
+	"gofr.dev/pkg/gofr/container"
+)
+
+func main() {
+	app := gofr.New()
+
+	// A downstream HTTP dependency this service must be able to reach before it is ready.
+	app.AddHTTPService("payment", "https://payment.internal")
+
+	// An external datasource the app connects to itself — GoFr's container has no handle on it.
+	// The closure below captures it, showing readiness can gate on dependencies that live
+	// entirely outside the framework.
+	licenseDB := openLicenseStore(app)
+
+	app.SetHealthCheck(func(ctx context.Context, c *container.Container) (status string, statusCode int) {
+		// 1. A datasource on the container.
+		if c.Redis == nil || c.Redis.Ping(ctx).Err() != nil {
+			return "DOWN", http.StatusServiceUnavailable
+		}
+
+		// 2. A registered HTTP service — reached over HTTP, not a datasource field.
+		if h := c.GetHTTPService("payment").HealthCheck(ctx); h == nil || h.Status != "UP" {
+			return "DOWN", http.StatusServiceUnavailable
+		}
+
+		// 3. An external datasource captured by the closure — not on the container at all.
+		if err := licenseDB.PingContext(ctx); err != nil {
+			return "DOWN", http.StatusServiceUnavailable
+		}
+
+		return "UP", http.StatusOK
+	})
+
+	app.Run()
+}
+
+// openLicenseStore connects to a datasource the application manages directly, outside GoFr.
+func openLicenseStore(app *gofr.App) *sql.DB {
+	db, err := sql.Open("postgres", app.Config.Get("LICENSE_DB_DSN"))
+	if err != nil {
+		app.Logger().Fatalf("license store: %v", err)
+	}
+
+	return db
+}
+```
+
+When the closure returns a non-`200` code, `/.well-known/health` responds with that code so
+Kubernetes readiness probes stop routing traffic to the pod. Returning `("UP", http.StatusOK)`
+(or no closure at all) preserves the default behavior. A not-ready `503` is logged at `WARN`, not
+`ERROR` — it is expected during startup and rolling deploys.
 
 > **Note:** The detailed per-dependency health map is being moved to the metrics server
 > (`METRICS_PORT`), behind the same network boundary as `/metrics` and `/debug/pprof`. Track that

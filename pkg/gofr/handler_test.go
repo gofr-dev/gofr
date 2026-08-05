@@ -261,7 +261,7 @@ func TestHandler_healthHandler(t *testing.T) {
 
 	ctx := newContext(nil, r, a.container)
 
-	h, err := healthHandler(ctx)
+	h, err := a.healthHandler(ctx)
 
 	require.NoError(t, err)
 	require.NotNil(t, h)
@@ -314,6 +314,80 @@ func TestHandler_aggregateStatus(t *testing.T) {
 
 		// Only the aggregate string survives — never a per-dependency details map.
 		assert.Equal(t, tc.want, aggregateStatus(ctx), "TEST[%d], Failed.\n%s", i, tc.desc)
+	}
+}
+
+func TestHandler_healthHandler_SetHealthCheck(t *testing.T) {
+	testutil.NewServerConfigs(t)
+
+	tests := []struct {
+		name       string
+		check      HealthCheckFunc
+		wantStatus string
+		wantCode   int // 0 => handler returns (body, nil), i.e. 200
+	}{
+		{
+			name:       "ready overrides status but keeps 200",
+			check:      func(context.Context, *container.Container) (string, int) { return "UP", http.StatusOK },
+			wantStatus: "UP",
+			wantCode:   0,
+		},
+		{
+			name: "not ready returns caller status code",
+			check: func(context.Context, *container.Container) (string, int) {
+				return "DOWN", http.StatusServiceUnavailable
+			},
+			wantStatus: "DOWN",
+			wantCode:   http.StatusServiceUnavailable,
+		},
+		{
+			name:       "zero code falls back to 200",
+			check:      func(context.Context, *container.Container) (string, int) { return "UP", 0 },
+			wantStatus: "UP",
+			wantCode:   0,
+		},
+		{
+			name:       "empty status derived from code",
+			check:      func(context.Context, *container.Container) (string, int) { return "", http.StatusServiceUnavailable },
+			wantStatus: "DOWN",
+			wantCode:   http.StatusServiceUnavailable,
+		},
+		{
+			name:       "empty status with 200 derives UP",
+			check:      func(context.Context, *container.Container) (string, int) { return "", http.StatusOK },
+			wantStatus: "UP",
+			wantCode:   0,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			a := New()
+			a.SetHealthCheck(tc.check)
+
+			req, _ := http.NewRequestWithContext(t.Context(), http.MethodGet, "", http.NoBody)
+			ctx := newContext(nil, gofrHTTP.NewRequest(req), a.container)
+
+			h, err := a.healthHandler(ctx)
+
+			if tc.wantCode == 0 {
+				require.NoError(t, err)
+
+				resp, ok := h.(healthResponse)
+				require.True(t, ok, "expected healthResponse, got %T", h)
+				assert.Equal(t, tc.wantStatus, resp.Status)
+
+				return
+			}
+
+			require.Nil(t, h)
+
+			var sc interface{ StatusCode() int }
+
+			require.ErrorAs(t, err, &sc)
+			assert.Equal(t, tc.wantCode, sc.StatusCode())
+			assert.Equal(t, tc.wantStatus, err.Error())
+		})
 	}
 }
 
