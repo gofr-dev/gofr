@@ -133,6 +133,11 @@ func Metrics(metrics metrics) func(inner http.Handler) http.Handler {
 				duration := time.Since(start)
 				status := res.Status()
 
+				if status >= http.StatusInternalServerError {
+					metrics.IncrementCounter(context.Background(), "app_server_error",
+						"path", path, "method", req.Method, "status", strconv.Itoa(status))
+				}
+
 				if hasAttrer {
 					// Fast path: copy the cached (path, method) attribute pair
 					// into a fixed 3-element local array and add the

@@ -57,6 +57,51 @@ func TestMetrics(t *testing.T) {
 		[]string{"path", "/test", "method", "GET", "status", "200"})
 }
 
+func TestMetrics_ServerErrorIncrementsCounter(t *testing.T) {
+	mockMetrics := &mockMetrics{}
+
+	mockMetrics.On("RecordHistogram", mock.Anything, mock.Anything, mock.Anything, mock.Anything).
+		Return(nil)
+	mockMetrics.On("IncrementCounter", mock.Anything, "app_server_error",
+		[]string{"path", "/fail", "method", "GET", "status", "500"}).Return(nil)
+
+	router := mux.NewRouter()
+	router.HandleFunc("/fail", func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusInternalServerError)
+	}).Methods(http.MethodGet).Name("/fail")
+
+	router.Use(Metrics(mockMetrics))
+
+	req := httptest.NewRequest(http.MethodGet, "/fail", http.NoBody)
+	rr := httptest.NewRecorder()
+
+	router.ServeHTTP(rr, req)
+
+	mockMetrics.AssertCalled(t, "IncrementCounter", mock.Anything, "app_server_error",
+		[]string{"path", "/fail", "method", "GET", "status", "500"})
+}
+
+func TestMetrics_ClientErrorDoesNotIncrementServerErrorCounter(t *testing.T) {
+	mockMetrics := &mockMetrics{}
+
+	mockMetrics.On("RecordHistogram", mock.Anything, mock.Anything, mock.Anything, mock.Anything).
+		Return(nil)
+
+	router := mux.NewRouter()
+	router.HandleFunc("/notfound", func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusNotFound)
+	}).Methods(http.MethodGet).Name("/notfound")
+
+	router.Use(Metrics(mockMetrics))
+
+	req := httptest.NewRequest(http.MethodGet, "/notfound", http.NoBody)
+	rr := httptest.NewRecorder()
+
+	router.ServeHTTP(rr, req)
+
+	mockMetrics.AssertNotCalled(t, "IncrementCounter", mock.Anything, "app_server_error", mock.Anything)
+}
+
 func TestMetrics_StaticFile(t *testing.T) {
 	mockMetrics := &mockMetrics{}
 
