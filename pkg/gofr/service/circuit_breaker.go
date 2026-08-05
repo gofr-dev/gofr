@@ -135,6 +135,7 @@ func (cb *circuitBreaker) openCircuit() {
 
 	if cb.metrics != nil {
 		cb.metrics.SetGauge("app_http_circuit_breaker_state", 1, "service", cb.serviceName)
+		cb.metrics.IncrementCounter(context.Background(), "app_circuit_open_count", "service", cb.serviceName)
 	}
 }
 
