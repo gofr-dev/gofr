@@ -6,9 +6,11 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"maps"
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"slices"
 	"strconv"
 	"strings"
 	"sync"
@@ -259,7 +261,7 @@ func TestHandler_healthHandler(t *testing.T) {
 
 	ctx := newContext(nil, r, a.container)
 
-	h, err := a.healthHandler(ctx)
+	h, err := healthHandler(ctx)
 
 	require.NoError(t, err)
 	require.NotNil(t, h)
@@ -272,82 +274,13 @@ func TestHandler_healthHandler(t *testing.T) {
 
 	body, err := json.Marshal(resp)
 	require.NoError(t, err)
-	assert.NotContains(t, string(body), "details")
-	assert.NotContains(t, string(body), "host")
-}
 
-func TestHandler_healthHandler_SetHealthCheck(t *testing.T) {
-	testutil.NewServerConfigs(t)
+	var got map[string]any
+	require.NoError(t, json.Unmarshal(body, &got))
 
-	tests := []struct {
-		name       string
-		check      HealthCheckFunc
-		wantStatus string
-		wantCode   int // 0 => handler returns (body, nil), i.e. 200
-	}{
-		{
-			name:       "ready overrides status but keeps 200",
-			check:      func(context.Context, *container.Container) (string, int) { return "UP", http.StatusOK },
-			wantStatus: "UP",
-			wantCode:   0,
-		},
-		{
-			name: "not ready returns caller status code",
-			check: func(context.Context, *container.Container) (string, int) {
-				return "DOWN", http.StatusServiceUnavailable
-			},
-			wantStatus: "DOWN",
-			wantCode:   http.StatusServiceUnavailable,
-		},
-		{
-			name:       "zero code falls back to 200",
-			check:      func(context.Context, *container.Container) (string, int) { return "UP", 0 },
-			wantStatus: "UP",
-			wantCode:   0,
-		},
-		{
-			name:       "empty status derived from code",
-			check:      func(context.Context, *container.Container) (string, int) { return "", http.StatusServiceUnavailable },
-			wantStatus: "DOWN",
-			wantCode:   http.StatusServiceUnavailable,
-		},
-		{
-			name:       "empty status with 200 derives UP",
-			check:      func(context.Context, *container.Container) (string, int) { return "", http.StatusOK },
-			wantStatus: "UP",
-			wantCode:   0,
-		},
-	}
-
-	for _, tc := range tests {
-		t.Run(tc.name, func(t *testing.T) {
-			a := New()
-			a.SetHealthCheck(tc.check)
-
-			req, _ := http.NewRequestWithContext(t.Context(), http.MethodGet, "", http.NoBody)
-			ctx := newContext(nil, gofrHTTP.NewRequest(req), a.container)
-
-			h, err := a.healthHandler(ctx)
-
-			if tc.wantCode == 0 {
-				require.NoError(t, err)
-
-				resp, ok := h.(healthResponse)
-				require.True(t, ok, "expected healthResponse, got %T", h)
-				assert.Equal(t, tc.wantStatus, resp.Status)
-
-				return
-			}
-
-			require.Nil(t, h)
-
-			var sc interface{ StatusCode() int }
-
-			require.ErrorAs(t, err, &sc)
-			assert.Equal(t, tc.wantCode, sc.StatusCode())
-			assert.Equal(t, tc.wantStatus, err.Error())
-		})
-	}
+	// Pin the exact key set rather than blocklisting known-bad keys, so any future field added to
+	// the public body — an ES username, a port, a version — fails this test instead of leaking.
+	assert.Equal(t, []string{"name", "status"}, slices.Sorted(maps.Keys(got)))
 }
 
 func TestHandler_ServeHTTP_ContextCanceled(t *testing.T) {

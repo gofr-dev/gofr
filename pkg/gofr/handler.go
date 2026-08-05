@@ -201,7 +201,7 @@ func (h handler) serveWithGoroutine(c *Context, traceID string, r *http.Request)
 func liveHandler(*Context) (any, error) {
 	return struct {
 		Status string `json:"status"`
-	}{Status: statusUp}, nil
+	}{Status: "UP"}, nil
 }
 
 func faviconHandler(*Context) (any, error) {
