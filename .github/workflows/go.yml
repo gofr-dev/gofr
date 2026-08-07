@@ -85,10 +85,11 @@ jobs:
           go-version: ${{ matrix.go-version }}
         id: Go
 
-      # setup-go@v7 defaults GOTOOLCHAIN=local; go.work requires go>=1.26, so
-      # allow the toolchain to auto-upgrade for the older matrix versions.
+      # go.work pins a newer Go than the older matrix versions install, and a
+      # plain GOTOOLCHAIN=auto resolves that to a read-only toolchain module.
+      # See the action for why that breaks coverage builds.
       - name: Allow Go toolchain auto-upgrade
-        run: echo "GOTOOLCHAIN=auto" >> "$GITHUB_ENV"
+        uses: ./.github/actions/setup-go-toolchain
 
       - name: Get dependencies
         run: |
@@ -129,6 +130,12 @@ jobs:
           timeout_minutes: 5  # Maximum time for the tests to run
           max_attempts: 2      # Retry up to 2 times if tests fail
           command: |
+            # The retry action runs this block with a plain shell (no errexit),
+            # unlike native `run:` steps that default to `bash -eo pipefail`.
+            # Without `set -e` a failing `go test` (below) is swallowed because
+            # the block's exit code is that of its last command (`go tool cover`,
+            # which returns 0), so the job goes green on red tests (#3812).
+            set -eo pipefail
             export APP_ENV=test
             # Run tests for the examples directory with coverage
             go test ./examples/... -v -short -covermode=atomic -coverprofile packageWithpbgo.cov -coverpkg=./examples/...
@@ -180,10 +187,11 @@ jobs:
           go-version: ${{ matrix.go-version }}
         id: Go
 
-      # setup-go@v7 defaults GOTOOLCHAIN=local; go.work requires go>=1.26, so
-      # allow the toolchain to auto-upgrade for the older matrix versions.
+      # go.work pins a newer Go than the older matrix versions install, and a
+      # plain GOTOOLCHAIN=auto resolves that to a read-only toolchain module.
+      # See the action for why that breaks coverage builds.
       - name: Allow Go toolchain auto-upgrade
-        run: echo "GOTOOLCHAIN=auto" >> "$GITHUB_ENV"
+        uses: ./.github/actions/setup-go-toolchain
 
       - name: Get dependencies
         run: |
@@ -198,12 +206,18 @@ jobs:
           max_attempts: 2
           retry_on: error
           command: |
+            # The retry action runs this block with a plain shell (no errexit),
+            # so a bare `go test` failure would be swallowed by a later 0-exit
+            # command (#3812). `set -e` guards the coverage-combine lines below;
+            # the `|| exit_code=$?` captures keep the explicit panic (exit 2)
+            # detection working instead of aborting on the first test failure.
+            set -eo pipefail
             export APP_ENV=test
 
             # Run tests for root gofr package
+            exit_code=0
             go test -v -short -covermode=atomic \
-              -coverpkg=./pkg/gofr -coverprofile=gofr_only.cov ./pkg/gofr
-            exit_code=$?
+              -coverpkg=./pkg/gofr -coverprofile=gofr_only.cov ./pkg/gofr || exit_code=$?
             if [ $exit_code -eq 2 ]; then
               echo "::error::Panic detected in root gofr package tests"
               exit 2
@@ -213,9 +227,9 @@ jobs:
             fi
 
             # Run tests for sub-packages
+            exit_code=0
             go test -v -covermode=atomic \
-              -coverpkg=./pkg/gofr -coverprofile=submodules.cov ./pkg/gofr/...
-            exit_code=$?
+              -coverpkg=./pkg/gofr -coverprofile=submodules.cov ./pkg/gofr/... || exit_code=$?
             if [ $exit_code -eq 2 ]; then
               echo "::error::Panic detected in gofr sub-packages tests"
               exit 2
@@ -298,10 +312,11 @@ jobs:
           go-version: ${{ matrix.go-version }}
         id: Go
 
-      # setup-go@v7 defaults GOTOOLCHAIN=local; go.work requires go>=1.26, so
-      # allow the toolchain to auto-upgrade for the older matrix versions.
+      # go.work pins a newer Go than the older matrix versions install, and a
+      # plain GOTOOLCHAIN=auto resolves that to a read-only toolchain module.
+      # See the action for why that breaks coverage builds.
       - name: Allow Go toolchain auto-upgrade
-        run: echo "GOTOOLCHAIN=auto" >> "$GITHUB_ENV"
+        uses: ./.github/actions/setup-go-toolchain
 
       # Find all submodules (directories with go.mod files) in the pkg directory
       - name: Detect Submodules
