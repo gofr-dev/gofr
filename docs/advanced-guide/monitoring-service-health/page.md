@@ -36,12 +36,16 @@ To override this endpoint, pass the following option while registering HTTP Serv
 		}
 ```
 
-### 2. Readiness - /.well-known/health
+### 2. Health-Check - /.well-known/health
 
-It is an unauthenticated endpoint that reports whether the service is ready to receive traffic. It
+It is an unauthenticated endpoint that reports an **aggregate status** for the application. It
 aggregates the health of every registered datasource and service into a single status and returns
 **only** the application `name` and that aggregate `status` — `UP` when all dependencies are healthy,
 `DEGRADED` when one or more are down.
+
+Note that the endpoint answers `200` in both cases: a `DEGRADED` aggregate does **not** produce a
+non-2xx response, so a probe wired directly to the status code will always see the service as ready.
+A caller that wants to act on degradation must read the `status` field itself.
 
 To avoid leaking infrastructure details on an unauthenticated port, this endpoint intentionally does
 **not** expose per-dependency information (hosts, ports, database/keyspace/bucket names, connection
@@ -50,7 +54,10 @@ change — `Container.Health` still computes it for in-process ops tooling.
 
 > **Changed response shape:** this endpoint previously returned the full per-dependency map. It now
 > returns `{name, status}` only. The HTTP status code is unchanged (`200`), so existing readiness
-> probes keep working; anything parsing the body for dependency details must be updated.
+> probes keep working; anything parsing the body for dependency details must be updated. The
+> framework `version` field is also gone — it is exactly what an attacker enumerating known CVEs
+> wants from an unauthenticated endpoint, so dropping it is part of the fix, but it is also the
+> field most likely to be on an existing dashboard.
 
 Sample response when the service is ready (HTTP 200):
 ```json

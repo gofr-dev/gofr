@@ -70,10 +70,12 @@ func (c *Container) Health(ctx context.Context) any {
 	return healthMap
 }
 
-// HealthStatus runs the aggregate health check and returns only the overall status
-// ("UP" or "DEGRADED"), discarding the per-dependency details that Health exposes. It backs the
-// public, unauthenticated /.well-known/health endpoint, which must not leak dependency hosts,
-// ports, credentials, or connection stats.
+// HealthStatus runs the aggregate health check and returns only the overall status, discarding the
+// per-dependency details that Health exposes. The aggregation yields "UP" when every dependency is
+// healthy and "DEGRADED" when one or more are down; "DOWN" is the fail-closed fallback returned if
+// the aggregate status is ever missing or not a string. It backs the public, unauthenticated
+// /.well-known/health endpoint, which must not leak dependency hosts, ports, credentials, or
+// connection stats.
 func (c *Container) HealthStatus(ctx context.Context) string {
 	const statusDown = "DOWN"
 
