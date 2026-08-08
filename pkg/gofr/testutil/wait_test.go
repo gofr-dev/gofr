@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net"
 	"net/http"
+	"os"
 	"testing"
 	"time"
 
@@ -86,6 +87,30 @@ func TestWaitForHTTPServer(t *testing.T) {
 		resp.Body.Close()
 
 		require.Equal(t, http.StatusOK, resp.StatusCode, "TEST[%d], Failed.\n%s", i, tc.desc)
+	}
+}
+
+func TestWaitForStdoutContains(t *testing.T) {
+	tests := []struct {
+		desc      string
+		writeWait time.Duration
+	}{
+		{"line already written when f returns", 0},
+		{"line written well after f returns", 300 * time.Millisecond},
+	}
+
+	for i, tc := range tests {
+		out := WaitForStdoutContains(t, "ready", func() {
+			go func() {
+				time.Sleep(tc.writeWait)
+
+				fmt.Fprintln(os.Stdout, "starting up\nready to serve")
+			}()
+		})
+
+		require.Contains(t, out, "ready to serve", "TEST[%d], Failed.\n%s", i, tc.desc)
+		// Everything written before the awaited line is returned as well.
+		require.Contains(t, out, "starting up", "TEST[%d], Failed.\n%s", i, tc.desc)
 	}
 }
 
