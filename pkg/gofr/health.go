@@ -13,5 +13,29 @@ type healthResponse struct {
 // for in-process ops tooling, and #3806 tracks exposing it on the metrics server (METRICS_PORT),
 // behind the same network boundary as /metrics and /debug/pprof.
 func healthHandler(c *Context) (any, error) {
-	return healthResponse{Name: c.GetAppName(), Status: c.HealthStatus(c)}, nil
+	return healthResponse{Name: c.GetAppName(), Status: aggregateStatus(c)}, nil
+}
+
+// aggregateStatus runs the full health check and keeps only the overall status, discarding every
+// per-dependency detail. The aggregation in Container.appHealth yields "UP" when all dependencies
+// are healthy and "DEGRADED" when one or more are down; "DOWN" is a fail-closed default for the
+// unreachable case where the aggregate key is missing or not a string.
+//
+// This stays unexported here rather than being a method on Container: Context embeds
+// *container.Container, so an exported method would be promoted onto every handler's ctx, and
+// Health does no caching — a per-request call would sweep every datasource in the hot path.
+func aggregateStatus(c *Context) string {
+	const statusDown = "DOWN"
+
+	m, ok := c.Health(c).(map[string]any)
+	if !ok {
+		return statusDown
+	}
+
+	status, ok := m["status"].(string)
+	if !ok {
+		return statusDown
+	}
+
+	return status
 }

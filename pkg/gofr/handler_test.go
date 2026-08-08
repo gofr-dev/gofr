@@ -283,6 +283,40 @@ func TestHandler_healthHandler(t *testing.T) {
 	assert.Equal(t, []string{"name", "status"}, slices.Sorted(maps.Keys(got)))
 }
 
+func TestHandler_aggregateStatus(t *testing.T) {
+	live := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer live.Close()
+
+	dead := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusInternalServerError)
+	}))
+	defer dead.Close()
+
+	tests := []struct {
+		desc string
+		url  string
+		want string
+	}{
+		{"all dependencies healthy", live.URL, "UP"},
+		{"a dependency down", dead.URL, "DEGRADED"},
+	}
+
+	for i, tc := range tests {
+		testutil.NewServerConfigs(t)
+
+		a := New()
+		a.AddHTTPService("test-service", tc.url)
+
+		req, _ := http.NewRequestWithContext(t.Context(), http.MethodGet, "", http.NoBody)
+		ctx := newContext(nil, gofrHTTP.NewRequest(req), a.container)
+
+		// Only the aggregate string survives — never a per-dependency details map.
+		assert.Equal(t, tc.want, aggregateStatus(ctx), "TEST[%d], Failed.\n%s", i, tc.desc)
+	}
+}
+
 func TestHandler_ServeHTTP_ContextCanceled(t *testing.T) {
 	w := httptest.NewRecorder()
 	r := httptest.NewRequest(http.MethodGet, "/", http.NoBody)

@@ -53,39 +53,6 @@ func TestContainer_Health(t *testing.T) {
 	}
 }
 
-func TestContainer_HealthStatus(t *testing.T) {
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		w.WriteHeader(http.StatusOK)
-	}))
-	defer srv.Close()
-
-	logger := logging.NewMockLogger(logging.ERROR)
-
-	tests := []struct {
-		desc             string
-		datasourceHealth string
-		want             string
-	}{
-		{"all dependencies UP", "UP", "UP"},
-		{"a dependency DOWN", "DOWN", "DEGRADED"},
-	}
-
-	for i, tc := range tests {
-		c, mocks := NewMockContainer(t)
-
-		registerMocks(mocks, tc.datasourceHealth)
-
-		c.appName = "test-app"
-		c.appVersion = "test"
-		c.Services = map[string]service.HTTP{"test-service": service.NewHTTPService(srv.URL, logger, nil)}
-
-		status := c.HealthStatus(t.Context())
-
-		// HealthStatus must yield only the aggregate status string, never a details map.
-		assert.Equal(t, tc.want, status, "TEST[%d], Failed.\n%s", i, tc.desc)
-	}
-}
-
 func registerMocks(mocks *Mocks, health string) {
 	mocks.SQL.ExpectHealthCheck().WillReturnHealthCheck(&datasource.Health{
 		Status: health,

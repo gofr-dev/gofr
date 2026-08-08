@@ -70,27 +70,6 @@ func (c *Container) Health(ctx context.Context) any {
 	return healthMap
 }
 
-// HealthStatus runs the aggregate health check and returns only the overall status, discarding the
-// per-dependency details that Health exposes. The aggregation yields "UP" when every dependency is
-// healthy and "DEGRADED" when one or more are down; "DOWN" is the fail-closed fallback returned if
-// the aggregate status is ever missing or not a string. It backs the public, unauthenticated
-// /.well-known/health endpoint, which must not leak dependency hosts, ports, credentials, or
-// connection stats.
-func (c *Container) HealthStatus(ctx context.Context) string {
-	const statusDown = "DOWN"
-
-	m, ok := c.Health(ctx).(map[string]any)
-	if !ok {
-		return statusDown
-	}
-
-	if status, ok := m["status"].(string); ok {
-		return status
-	}
-
-	return statusDown
-}
-
 func checkExternalDBHealth(ctx context.Context, c *Container, healthMap map[string]any) (downCount int) {
 	services := map[string]interface {
 		HealthCheck(context.Context) (any, error)
@@ -121,6 +100,9 @@ func checkExternalDBHealth(ctx context.Context, c *Container, healthMap map[stri
 	return downCount
 }
 
+// appHealth writes the aggregate keys onto the map. The "status" key is read back out by
+// healthHandler in package gofr, which serves it as the entire public body — renaming it here means
+// changing that reader too.
 func (c *Container) appHealth(healthMap map[string]any, downCount int) {
 	healthMap["name"] = c.GetAppName()
 	healthMap["version"] = c.GetAppVersion()
