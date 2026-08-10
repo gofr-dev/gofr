@@ -22,3 +22,18 @@ vendor/
 # IDE Cache
 .vscode
 .DS_Store
+
+# Compiled example binaries. `go build` inside an example directory emits an
+# extensionless executable named after that directory, which none of the rules
+# above match (they cover .exe/.so/.dylib/.test).
+/examples/*/using-*
+/examples/*/http-server*
+/examples/*/sample-cmd
+/examples/grpc/*/grpc-*
+!/examples/**/*.go
+!/examples/**/*.md
+!/examples/**/*.mod
+!/examples/**/*.sum
+!/examples/**/*.yaml
+!/examples/**/*.yml
+!/examples/**/*.json
