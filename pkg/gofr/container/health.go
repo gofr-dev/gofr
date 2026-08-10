@@ -100,6 +100,9 @@ func checkExternalDBHealth(ctx context.Context, c *Container, healthMap map[stri
 	return downCount
 }
 
+// appHealth writes the aggregate keys onto the map. The "status" key is read back out by
+// healthHandler in package gofr, which serves it as the entire public body — renaming it here means
+// changing that reader too.
 func (c *Container) appHealth(healthMap map[string]any, downCount int) {
 	healthMap["name"] = c.GetAppName()
 	healthMap["version"] = c.GetAppVersion()

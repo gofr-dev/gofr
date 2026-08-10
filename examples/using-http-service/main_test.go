@@ -51,12 +51,10 @@ func Test_main(t *testing.T) {
 			statusCode:  200,
 		},
 		{
-			desc: "health check",
-			path: "/.well-known/health",
-			expectedRes: `{"data":{"cat-facts":{"status":"UP","details":{"host":"catfact.ninja"}},` +
-				`"fact-checker":{"status":"DOWN","details":{"error":"service down","host":"catfact.ninja"}},` +
-				`"name":"using-http-service","status":"DEGRADED","version":"dev"}}` + "\n",
-			statusCode: 200,
+			desc:        "health check",
+			path:        "/.well-known/health",
+			expectedRes: `{"data":{"name":"using-http-service","status":"DEGRADED"}}` + "\n",
+			statusCode:  200,
 		},
 	}
 
