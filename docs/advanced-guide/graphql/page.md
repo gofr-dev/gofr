@@ -191,7 +191,7 @@ GoFr exports several GraphQL-specific metrics, all tagged by `operation_name`, `
 Even when building a GraphQL-first application, GoFr's standard **RESTful health check endpoints** remain the primary way to monitor service availability. These are automatically registered and publicly accessible:
 
 - **Aliveness**: `/.well-known/alive` (Returns `200 OK` if the server is running)
-- **Health**: `/.well-known/health` (Returns detailed dependency status)
+- **Health**: `/.well-known/health` (Returns the aggregate service status)
 
 GoFr does **not** inject an automatic `health` query into your GraphQL schema. This avoids redundancy and keeps your GraphQL contract focused on business logic.
 
