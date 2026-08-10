@@ -2,6 +2,7 @@ package gofr
 
 import (
 	"fmt"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -771,7 +772,8 @@ func TestCronTab_runScheduled_NilLoggerAndContainer(t *testing.T) {
 
 func TestCrontab_Stop_JoinsInFlightJobs(t *testing.T) {
 	release := make(chan struct{})
-	finished := make(chan struct{})
+
+	var runs atomic.Int64
 
 	c := &Crontab{
 		ticker:    time.NewTicker(time.Second),
@@ -786,8 +788,8 @@ func TestCrontab_Stop_JoinsInFlightJobs(t *testing.T) {
 			dayOfWeek: map[int]struct{}{1: {}},
 			name:      "slow-job",
 			fn: func(*Context) {
+				runs.Add(1)
 				<-release
-				close(finished)
 			},
 		}},
 	}
@@ -811,14 +813,18 @@ func TestCrontab_Stop_JoinsInFlightJobs(t *testing.T) {
 
 	select {
 	case <-stopped:
-		<-finished
 	case <-time.After(time.Second):
 		t.Fatal("Stop did not return after the job finished")
 	}
 
-	// A tick that lands after Stop must not dispatch anything more.
+	require.Equal(t, int64(1), runs.Load(), "Stop must return only after the dispatched job has run")
+
+	// A tick that lands after Stop must not dispatch anything more. The second Stop joins
+	// whatever that tick dispatched, so the count below is read after any such job has finished.
 	c.runScheduled(time.Date(2024, 1, 1, 1, 1, 1, 1, time.Local))
 	c.Stop()
+
+	require.Equal(t, int64(1), runs.Load(), "a tick after Stop must not dispatch a job")
 }
 
 func TestCrontab_Stop(t *testing.T) {
