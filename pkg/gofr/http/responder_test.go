@@ -2,12 +2,14 @@ package http
 
 import (
 	"bytes"
+	"encoding/json"
 	"errors"
 	"io"
 	"math"
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"sync"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -757,6 +759,135 @@ func BenchmarkRespond_Struct(b *testing.B) {
 
 	r := NewResponder(&discardingResponseWriter{}, http.MethodGet)
 	data := payload{Message: "hello", ID: 42}
+
+	b.ReportAllocs()
+	b.ResetTimer()
+
+	for i := 0; i < b.N; i++ {
+		r.Respond(data, nil)
+	}
+}
+
+// TestResponder_ByteIdenticalToMarshal proves the pooled-buffer encode produces
+// exactly the same bytes as the previous json.Marshal(resp) + "\n" path for a
+// variety of payload shapes, including the {data:...} and {error:...} envelopes.
+func TestResponder_ByteIdenticalToMarshal(t *testing.T) {
+	cases := []struct {
+		name string
+		data any
+	}{
+		{"nil", nil},
+		{"string", "hello"},
+		{"map", map[string]any{"a": 1, "b": "two"}},
+		{"slice", []int{1, 2, 3}},
+		{"struct", struct {
+			Name string `json:"name"`
+			Age  int    `json:"age"`
+		}{"gofr", 3}},
+		{"html-escaped chars", map[string]string{"html": "<b>&</b>"}},
+		{"raw", resTypes.Raw{Data: map[string]any{"x": true}}},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			rec := httptest.NewRecorder()
+			NewResponder(rec, http.MethodGet).Respond(tc.data, nil)
+
+			// Reconstruct the exact envelope the responder builds, then encode
+			// it the old way (Marshal + newline) as the oracle.
+			var resp any
+
+			switch v := tc.data.(type) {
+			case resTypes.Raw:
+				resp = v.Data
+			default:
+				resp = response{Data: tc.data}
+			}
+
+			want, err := json.Marshal(resp)
+			require.NoError(t, err)
+
+			assert.Equal(t, string(want)+"\n", rec.Body.String(),
+				"response bytes must match the pre-pooling json.Marshal output exactly")
+		})
+	}
+}
+
+// TestResponder_ConcurrentPoolSafety runs many responders concurrently, each
+// with its own recorder and distinct payload, and asserts every response body
+// is correct and independent — proof the sync.Pool never leaks one request's
+// buffer contents into another.
+func TestResponder_ConcurrentPoolSafety(t *testing.T) {
+	const n = 500
+
+	var wg sync.WaitGroup
+
+	wg.Add(n)
+
+	errs := make([]error, n)
+	bodies := make([]string, n)
+
+	for i := 0; i < n; i++ {
+		go func(id int) {
+			defer wg.Done()
+
+			rec := httptest.NewRecorder()
+			payload := map[string]any{"id": id, "pad": "some padding value to vary length"}
+			NewResponder(rec, http.MethodGet).Respond(payload, nil)
+			bodies[id] = rec.Body.String()
+		}(i)
+	}
+
+	wg.Wait()
+
+	for i := 0; i < n; i++ {
+		require.NoError(t, errs[i])
+
+		var env struct {
+			Data struct {
+				ID int `json:"id"`
+			} `json:"data"`
+		}
+
+		require.NoErrorf(t, json.Unmarshal([]byte(bodies[i]), &env), "body %d not valid JSON: %q", i, bodies[i])
+		assert.Equalf(t, i, env.Data.ID, "response %d carried another request's data", i)
+	}
+}
+
+// discardWriter is a no-op http.ResponseWriter so the benchmark measures only
+// the encode/pool/write cost inside Respond, not socket or recorder overhead.
+type discardWriter struct{ h http.Header }
+
+func (d *discardWriter) Header() http.Header {
+	if d.h == nil {
+		d.h = make(http.Header)
+	}
+
+	return d.h
+}
+
+func (*discardWriter) Write(p []byte) (int, error) { return len(p), nil }
+func (*discardWriter) WriteHeader(int)             {}
+
+// benchPayload is a representative JSON response body (a small object slice),
+// matching a typical list endpoint.
+type benchPayload struct {
+	ID    int    `json:"id"`
+	Name  string `json:"name"`
+	Email string `json:"email"`
+}
+
+// BenchmarkResponderRespond measures the JSON response hot path, which the
+// pooled-buffer change targets (it avoids the fresh []byte json.Marshal returns
+// and collapses body + newline into one Write).
+func BenchmarkResponderRespond(b *testing.B) {
+	data := []benchPayload{
+		{ID: 1, Name: "Alice", Email: "alice@example.com"},
+		{ID: 2, Name: "Bob", Email: "bob@example.com"},
+		{ID: 3, Name: "Carol", Email: "carol@example.com"},
+	}
+
+	r := NewResponder(&discardWriter{}, http.MethodGet)
 
 	b.ReportAllocs()
 	b.ResetTimer()

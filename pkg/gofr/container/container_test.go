@@ -601,6 +601,33 @@ func TestFrameworkMetricsSnapshot(t *testing.T) {
 	assert.Empty(t, mismatched, "framework metric definitions drifted")
 }
 
+// TestFrameworkMetrics_NoTargetInfo pins the WithoutTargetInfo() invariant
+// on the Prometheus exporter (exporters/telemetry.go prometheusReader):
+// the OTel Prometheus bridge emits a synthetic `target_info` gauge carrying
+// resource attributes by default, which is redundant with app_info and
+// would silently reappear in scrapes if WithoutTargetInfo() were ever
+// dropped from prometheusReader.
+func TestFrameworkMetrics_NoTargetInfo(t *testing.T) {
+	c, reg := newSnapshotContainer(t)
+	touchAllFrameworkMetrics(t.Context(), c.Metrics())
+
+	srv := httptest.NewServer(promhttp.HandlerFor(reg, promhttp.HandlerOpts{}))
+	t.Cleanup(srv.Close)
+
+	req, err := http.NewRequestWithContext(t.Context(), http.MethodGet, srv.URL, http.NoBody)
+	require.NoError(t, err)
+
+	resp, err := http.DefaultClient.Do(req)
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = resp.Body.Close() })
+
+	body, err := io.ReadAll(resp.Body)
+	require.NoError(t, err)
+
+	assert.NotContains(t, string(body), "target_info",
+		"/metrics scrape must not contain target_info; WithoutTargetInfo() may have been dropped")
+}
+
 // metricContract pairs a metric's HELP text with its TYPE — the part of
 // the Prometheus exposition format that constitutes the public contract
 // for consumers.

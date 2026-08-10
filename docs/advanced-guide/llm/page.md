@@ -98,8 +98,12 @@ named one) and its metrics carry the model's own `provider`/`model` labels.
 - `Generate(ctx, prompt, ...opts)` — a convenience over a single-message chat.
 - `Chat(ctx, messages, ...opts)` — a multi-turn conversation using `ai.Message` values.
 - `Stream(ctx, messages, ...opts)` — an incremental token stream (see below).
-- `Embed(ctx, input, ...opts)` — turn text into embedding vectors for semantic search or memory (see below).
 - `Tools()` — the service's own handlers as agent-callable tools (see [Building AI Agents](/docs/advanced-guide/mcp)).
+
+Capabilities beyond these are reached by asserting an optional interface on `ctx.LLM()` — currently
+`ai.EmbeddingLLM` for [embeddings](#embeddings). They are kept off the `ai.LLM` interface on purpose:
+`ai.LLM` is frozen so that your own test fakes and wrappers keep compiling when GoFr adds a
+capability.
 
 Options are applied per call: `ai.WithTemperature(0.2)`, `ai.WithMaxTokens(512)`, `ai.WithTools(...)`.
 
@@ -155,9 +159,26 @@ if tc, ok := stream.(ai.ToolCallStreamer); ok {
 
 ## Embeddings
 
-`ctx.LLM().Embed` turns text into vectors — the primitive behind semantic search and agent memory:
-embed text on write, embed a query on read, and rank stored vectors by similarity. It rides the same
-tracing and token metrics as `Chat`.
+Embeddings turn text into vectors — the primitive behind semantic search and agent memory: embed text
+on write, embed a query on read, and rank stored vectors by similarity. They ride the same tracing and
+token metrics as `Chat`.
+
+Embed is reached by asserting `ai.EmbeddingLLM` on the LLM. The assertion always succeeds on the LLM
+GoFr hands your handler, so treat a failure as a programming error rather than a missing provider:
+
+```go
+e, ok := c.LLM("embed").(ai.EmbeddingLLM)
+if !ok {
+	return nil, errors.New("embeddings unavailable")
+}
+
+resp, err := e.Embed(c, []string{"the quick brown fox", "a fast auburn fox"})
+if err != nil {
+	return nil, err
+}
+
+vectors := resp.Embeddings // one []float32 per input, in order; resp.Usage carries the prompt tokens
+```
 
 Embeddings are usually a *different* model from your chat model, so register one with a name and
 select it per call:
@@ -167,18 +188,10 @@ app.AddLLM(&llm.Client{Provider: llm.OpenAI, Model: "gpt-4o-mini"})             
 app.AddLLM(&llm.Client{Provider: llm.OpenAI, Model: "text-embedding-3-small"}, gofr.WithName("embed")) // embeddings
 ```
 
-```go
-resp, err := c.LLM("embed").Embed(c, []string{"the quick brown fox", "a fast auburn fox"})
-if err != nil {
-	return nil, err
-}
-
-vectors := resp.Embeddings // one []float32 per input, in order; resp.Usage carries the prompt tokens
-```
-
-Not every model can embed — a chat-only model has none. `Embed` reports that gracefully with
-`ai.ErrEmbedNotSupported` (mirroring how `Stream` returns `ai.ErrStreamNotSupported`), so a
-misconfiguration fails clearly instead of panicking.
+Not every model can embed — a chat-only model has none. That is reported by `Embed` itself, not by a
+failed assertion: it returns `ai.ErrEmbedNotSupported` (mirroring how `Stream` returns
+`ai.ErrStreamNotSupported`), so a misconfiguration fails clearly instead of panicking. If no model is
+registered at all, `Embed` returns `ai.ErrLLMNotConfigured`.
 
 ## Limiting concurrency
 
@@ -220,9 +233,10 @@ metric labels.
 
 ### Traces
 
-A span per call (`llm.chat` / `llm.generate` / `llm.stream`) carrying provider, model and token
-attributes (`llm.tokens.prompt/completion/total/cached/reasoning`) — a child of the request span and
-the parent of the provider's HTTP span.
+A span per call (`llm.chat` / `llm.generate` / `llm.stream` / `llm.embed`) carrying provider, model
+and token attributes (`llm.tokens.prompt/completion/total/cached/reasoning`) — a child of the request
+span and the parent of the provider's HTTP span. On `llm.embed` only the prompt tokens are non-zero,
+since embeddings bill input alone.
 
 ### Logs
 
