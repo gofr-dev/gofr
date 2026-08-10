@@ -114,7 +114,7 @@ So a fresh `app := gofr.New(); app.Run()` is reachable at:
 
 - `http://localhost:8000/<your-routes>`
 - `http://localhost:8000/.well-known/alive` → `200 OK` (use this for K8s liveness probes)
-- `http://localhost:8000/.well-known/health` → JSON status of registered datasources (use this for readiness probes)
+- `http://localhost:8000/.well-known/health` → JSON aggregate status of the app and its registered datasources (use this for readiness probes)
 - `http://localhost:2121/metrics` → Prometheus metrics
 
 All `/.well-known/*` paths are auth-exempt by default, so health probes don't need credentials.

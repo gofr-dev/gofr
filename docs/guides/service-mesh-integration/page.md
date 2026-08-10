@@ -77,7 +77,7 @@ readinessProbe:
     port: 8000
 ```
 
-`/.well-known/alive` is the liveness signal; `/.well-known/health` includes dependency status and may be slower.
+`/.well-known/alive` is the liveness signal; `/.well-known/health` reflects dependency status in its aggregate and may be slower.
 
 {% faq %}
 {% faq-item question="Do I need to change GoFr code to enable mTLS via Istio or Linkerd?" %}

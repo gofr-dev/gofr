@@ -275,7 +275,7 @@ curl -s http://localhost:2121/metrics | head
 
 {% faq %}
 {% faq-item question="My pod is CrashLoopBackOff right after deploy — how do I tell if it's a probe issue?" %}
-`kubectl describe pod` shows the last container exit reason and recent probe failures. If liveness fired before the app finished initializing, raise `startupProbe.failureThreshold` (each unit is `periodSeconds`, so `30 * 2s = 60s` of grace). If readiness keeps failing, port-forward to the pod and `curl /.well-known/health` directly — the JSON body lists which dependency is down.
+`kubectl describe pod` shows the last container exit reason and recent probe failures. If liveness fired before the app finished initializing, raise `startupProbe.failureThreshold` (each unit is `periodSeconds`, so `30 * 2s = 60s` of grace). If readiness keeps failing, port-forward to the pod and `curl /.well-known/health` directly — a `DEGRADED` status means at least one dependency is unreachable. The body is deliberately aggregate-only, so check the pod's logs to see which one.
 {% /faq-item %}
 {% faq-item question="Should I run the metrics server on the same port as HTTP?" %}
 GoFr binds metrics on `METRICS_PORT` (default `2121`) separately from `HTTP_PORT` (default `8000`). Keep them split so you can apply different `NetworkPolicy` rules — for example, only allow Prometheus to reach `2121`.
