@@ -8,13 +8,15 @@
 # Test binary, built with `go test -c`
 *.test
 
-# Compiled example binaries: `go build` inside examples/<name>/ emits a binary
-# named after the directory (no extension). These are build artifacts, never
-# commit them. Keep sources, Dockerfiles, and subdirectories (configs/, static/).
-examples/**/*
-!examples/**/*.*
-!examples/**/*/
-!examples/**/Dockerfile
+# Compiled example binaries: `go build` inside an example directory emits an
+# extensionless executable named after that directory. Narrow, prefix-matched
+# rules — a new binary that doesn't match fails loudly (shows as untracked and
+# is caught by CI's check-binaries.sh) rather than being silently ignored, which
+# a blanket examples/**/* rule would do to future files like Makefile/LICENSE.
+/examples/using-*/using-*
+/examples/http-server*/http-server*
+/examples/sample-cmd/sample-cmd
+/examples/grpc/*/grpc-*
 
 
 # Output of the go coverage tool, specifically when used with LiteIDE
