@@ -30,7 +30,7 @@ GoFr is designed to **simplify microservice development**, with a key focus on *
 2. **REST Standards by Default**
 3. **Configuration Management**
 4. **[Observability](https://gofr.dev/docs/quick-start/observability)** (Logs, Traces, Metrics)
-5. **Inbuilt [Auth Middleware](https://gofr.dev/docs/advanced-guide/http-authentication)** & Custom Middleware Support
+5. **Inbuilt [Auth Middleware](https://gofr.dev/docs/advanced-guide/authentication)** & [Custom Middleware](https://gofr.dev/docs/advanced-guide/middlewares) Support
 6. **[gRPC Support](https://gofr.dev/docs/advanced-guide/grpc)**
 7. **[HTTP Service](https://gofr.dev/docs/advanced-guide/http-communication)** with Circuit Breaker Support
 8. **[Pub/Sub](https://gofr.dev/docs/advanced-guide/using-publisher-subscriber)**
@@ -47,7 +47,7 @@ GoFr is designed to **simplify microservice development**, with a key focus on *
 ## 🚀 **Getting Started**
 
 ### **Prerequisites**
-- GoFr requires **[Go](https://go.dev/)** version **[1.24](https://go.dev/doc/devel/release#go1.24.0)** or above.
+- GoFr requires **[Go](https://go.dev/)** version **[1.26](https://go.dev/doc/devel/release#go1.26.0)** or above.
 
 ### **Installation**
 To get started with GoFr, add the following import to your code and use Go’s module support to automatically fetch dependencies:
