@@ -11,10 +11,10 @@
 # Compiled example binaries: `go build` inside examples/<name>/ emits a binary
 # named after the directory (no extension). These are build artifacts, never
 # commit them. Keep sources, Dockerfiles, and subdirectories (configs/, static/).
-examples/*/*
-!examples/*/*.*
-!examples/*/*/
-!examples/*/Dockerfile
+examples/**/*
+!examples/**/*.*
+!examples/**/*/
+!examples/**/Dockerfile
 
 
 # Output of the go coverage tool, specifically when used with LiteIDE

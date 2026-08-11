@@ -580,16 +580,8 @@ jobs:
         with:
           config: .ls-lint.yml
 
-  # Job to block compiled binaries from being committed (see .pre-commit-config.yaml)
-  block_binaries:
-    name: Block Committed Binaries🚫
-    runs-on: ubuntu-latest
-    steps:
-      - name: Check out code
-        uses: actions/checkout@v7
-
-      - name: Set up Python
-        uses: actions/setup-python@v5
-
-      - name: Run pre-commit (forbid-binary)
-        uses: pre-commit/action@v3.0.1
+      # Block compiled executables (extensionless Go binaries, ELF/Mach-O/PE)
+      # from being committed anywhere in the repo — content- and mode-based, so
+      # it can't be defeated by a path or extension. See the script for details.
+      - name: No committed executables
+        run: bash .github/scripts/check-binaries.sh
