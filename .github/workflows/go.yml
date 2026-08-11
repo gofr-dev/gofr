@@ -579,3 +579,9 @@ jobs:
         uses: ls-lint/action@v2.3.1
         with:
           config: .ls-lint.yml
+
+      # Block compiled executables (extensionless Go binaries, ELF/Mach-O/PE)
+      # from being committed anywhere in the repo — content- and mode-based, so
+      # it can't be defeated by a path or extension. See the script for details.
+      - name: No committed executables
+        run: bash .github/scripts/check-binaries.sh
