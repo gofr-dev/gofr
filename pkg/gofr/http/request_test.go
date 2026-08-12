@@ -2,6 +2,7 @@ package http
 
 import (
 	"bytes"
+	"encoding/json"
 	"errors"
 	"io"
 	"mime/multipart"
@@ -250,9 +251,14 @@ func Test_Params(t *testing.T) {
 
 	assert.ElementsMatch(t, expectedCategories, r.Params("category"), "expected all values of 'category' to match")
 	assert.ElementsMatch(t, expectedTags, r.Params("tag"), "expected all values of 'tag' to match")
-	// Nil, not merely empty: a handler may return this directly, and nil marshals to `null` where
-	// an empty slice marshals to `[]`. assert.Empty alone would pass for both.
+	// Nil, not merely empty: assert.Empty alone would pass for both.
 	assert.Nil(t, r.Params("nonexistent"), "absent key must return a nil slice")
+
+	// The contract users actually observe is the response body. Pin it at that layer too, since a
+	// handler may return Params directly and an empty slice would serialize as `[]`, not `null`.
+	body, err := json.Marshal(r.Params("nonexistent"))
+	require.NoError(t, err)
+	assert.JSONEq(t, `null`, string(body), "an absent key must serialize as null in a response body")
 }
 
 func TestBind_FormURLEncoded(t *testing.T) {

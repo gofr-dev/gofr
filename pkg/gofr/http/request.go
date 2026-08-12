@@ -90,14 +90,17 @@ func (r *Request) HostName() string {
 	return fmt.Sprintf("%s://%s", proto, r.req.Host)
 }
 
-// Params returns a slice of strings containing the values associated with the given query parameter key.
-// If the parameter is not present, a nil slice is returned.
+// Params returns the values associated with the given query parameter key. Each value is
+// additionally split on commas, so ?tag=a,b&tag=c yields []string{"a", "b", "c"}.
+//
+// If the key is absent, a nil slice is returned. A handler may return this value directly, and a
+// nil slice marshals to `null` in the response body where an empty one marshals to `[]`.
 func (r *Request) Params(key string) []string {
 	values := r.req.URL.Query()[key]
 
-	// Deliberately not preallocated. A handler may return this slice directly, and a nil slice
-	// marshals to `null` where an empty one marshals to `[]`. Preallocating would silently change
-	// that response body for every absent key, so the allocation hint is declined here.
+	// Deliberately not preallocated: that would return an empty slice for an absent key and
+	// silently change the response body from `null` to `[]`. The hint is also a poor estimate,
+	// since len(values) under-counts as soon as any value contains a comma.
 	//nolint:prealloc // preserves the nil return for an absent key; see comment above
 	var result []string
 
