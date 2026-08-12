@@ -250,8 +250,9 @@ func Test_Params(t *testing.T) {
 
 	assert.ElementsMatch(t, expectedCategories, r.Params("category"), "expected all values of 'category' to match")
 	assert.ElementsMatch(t, expectedTags, r.Params("tag"), "expected all values of 'tag' to match")
-	assert.Empty(t, r.Params("nonexistent"), "expected empty slice for non-existent query param")
-	assert.Nil(t, r.Params("nonexistent"), "absent key must return nil so a handler returning it responds `null`, not `[]`")
+	// Nil, not merely empty: a handler may return this directly, and nil marshals to `null` where
+	// an empty slice marshals to `[]`. assert.Empty alone would pass for both.
+	assert.Nil(t, r.Params("nonexistent"), "absent key must return a nil slice")
 }
 
 func TestBind_FormURLEncoded(t *testing.T) {
