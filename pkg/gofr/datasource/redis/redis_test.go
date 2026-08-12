@@ -198,7 +198,6 @@ func getMockPEM() string {
 }
 
 func getMockKey() string {
-	//nolint:gosec // dummy private key for test only, not used in production
 	const mockKey = `-----BEGIN RSA PRIVATE KEY-----\nMIIEpAIBAAKCAQEAnzQw\n-----END RSA PRIVATE KEY-----`
 
 	return mockKey

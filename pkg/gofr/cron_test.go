@@ -715,6 +715,7 @@ func TestCronTab_runScheduled_Panic(t *testing.T) {
 				if tc.expectMetricsCalls {
 					c = NewCron(cntnr)
 					defer c.Stop()
+
 					c.jobs = []*job{j}
 				} else {
 					c = &Crontab{

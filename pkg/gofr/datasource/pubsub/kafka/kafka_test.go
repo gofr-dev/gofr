@@ -923,6 +923,7 @@ func TestKafkaClient_Query_ContextHandling(t *testing.T) {
 				t.Helper()
 				ctx, cancel := context.WithCancel(t.Context())
 				cancel()
+
 				return ctx, func() {}
 			},
 			description: "Should handle canceled context",
@@ -987,6 +988,7 @@ func TestKafkaClient_Subscribe_RaceDetector(t *testing.T) {
 		func(_ context.Context) (kafka.Message, error) {
 			// Add small delay to increase chance of race
 			time.Sleep(time.Microsecond)
+
 			return kafka.Message{
 				Topic: "race-test-topic",
 				Value: []byte("test"),

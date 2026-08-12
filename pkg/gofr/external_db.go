@@ -126,6 +126,7 @@ func (a *App) AddLLM(m ai.Model, opts ...LLMOption) {
 }
 
 // AddFTP sets the FTP datasource in the app's container.
+//
 // Deprecated: Use the AddFileStore method instead.
 func (a *App) AddFTP(fs file.FileSystemProvider) {
 	a.instrumentDatasource(fs)
@@ -159,6 +160,7 @@ func (a *App) AddOracle(db container.OracleDB) {
 }
 
 // UseMongo sets the Mongo datasource in the app's container.
+//
 // Deprecated: Use the AddMongo method instead.
 func (a *App) UseMongo(db container.Mongo) {
 	a.container.Mongo = db
