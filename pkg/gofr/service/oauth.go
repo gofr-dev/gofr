@@ -11,11 +11,13 @@ import (
 )
 
 const (
+	msgClientIDMandatory     = "client id is mandatory"
 	msgClientSecretMandatory = "client secret is mandatory" // #nosec G101
 	msgTokenURLMandatory     = "token url is mandatory"     // #nosec G101
 	msgEmptyHost             = "empty host"
 	msgInvalidHostDotDot     = "invalid host pattern, contains `..`"
 	msgInvalidHostEndsDot    = "invalid host pattern, ends with `.`"
+	msgInvalidScheme         = "invalid scheme, allowed http and https only"
 )
 
 // OAuthConfig describes a 2-legged OAuth2 flow, with both the
@@ -48,7 +50,7 @@ func (c *OAuthConfig) AddOption(svc HTTP) HTTP {
 
 func NewOAuthConfig(clientID, secret, tokenURL string, scopes []string, params url.Values, authStyle oauth2.AuthStyle) (Options, error) {
 	if clientID == "" {
-		return nil, AuthErr{nil, "client id is mandatory"}
+		return nil, AuthErr{nil, msgClientIDMandatory}
 	}
 
 	if secret == "" {
@@ -88,7 +90,7 @@ func validateTokenURL(tokenURL string) error {
 	case strings.HasSuffix(u.Host, "."):
 		return AuthErr{nil, msgInvalidHostEndsDot}
 	case u.Scheme != methodHTTP && u.Scheme != methodHTTPS:
-		return AuthErr{nil, "invalid scheme, allowed http and https only"}
+		return AuthErr{nil, msgInvalidScheme}
 	default:
 		return nil
 	}

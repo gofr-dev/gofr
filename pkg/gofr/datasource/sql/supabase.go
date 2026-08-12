@@ -17,7 +17,9 @@ const (
 	transactionPoolerPort    = "6543"
 	minConnectionStringParts = 2
 
-	connTypeDirect = "direct"
+	connTypeDirect      = "direct"
+	connTypeSession     = "session"
+	connTypeTransaction = "transaction"
 )
 
 // SupabaseConfig extends DBConfig to include Supabase-specific configuration.
@@ -96,14 +98,14 @@ func configureSupabaseConnection(supaConfig *SupabaseConfig, logger datasource.L
 		supaConfig.Port = directPort
 		logger.Debugf("Configured direct connection to Supabase at %s:%s", supaConfig.HostName, supaConfig.Port)
 
-	case "session":
+	case connTypeSession:
 		// Format: postgres.[PROJECT_REF]@aws-0-[REGION].pooler.supabase.co
 		supaConfig.HostName = fmt.Sprintf(supabasePoolerHost, supaConfig.Region)
 		supaConfig.User = fmt.Sprintf("postgres.%s", supaConfig.ProjectRef)
 		supaConfig.Port = sessionPoolerPort
 		logger.Debugf("Configured session pooler connection to Supabase at %s:%s", supaConfig.HostName, supaConfig.Port)
 
-	case "transaction":
+	case connTypeTransaction:
 		// Format: postgres.[PROJECT_REF]@aws-0-[REGION].pooler.supabase.co
 		supaConfig.HostName = fmt.Sprintf(supabasePoolerHost, supaConfig.Region)
 		supaConfig.User = fmt.Sprintf("postgres.%s", supaConfig.ProjectRef)
