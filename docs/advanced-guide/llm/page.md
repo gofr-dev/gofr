@@ -193,6 +193,25 @@ failed assertion: it returns `ai.ErrEmbedNotSupported` (mirroring how `Stream` r
 `ai.ErrStreamNotSupported`), so a misconfiguration fails clearly instead of panicking. If no model is
 registered at all, `Embed` returns `ai.ErrLLMNotConfigured`.
 
+## Limiting concurrency
+
+By default the client sends every request straight to the provider. When many handlers call the model
+at once and the provider serializes internally (a single local model, or a tight rate-limit tier),
+that burst piles up and tail latency spikes. Set `MaxConcurrentRequests` to cap in-flight calls —
+excess `Chat`/`Embed`/`Stream` calls block (honoring their context deadline) until a slot frees:
+
+```go
+app.AddLLM(&llm.Client{
+	Provider:              llm.Ollama,
+	Model:                 "llama3.2:1b",
+	MaxConcurrentRequests: 4, // at most 4 requests in flight; 0 (the default) is unlimited
+})
+```
+
+This is backpressure, not parallelism — it keeps a burst from overwhelming the provider, but the
+provider's own throughput (and, for a hosted API, your rate-limit tier) still governs how fast
+requests complete.
+
 ## Built-in Observability
 
 Every call is observable the same way a normal GoFr request is, joined by the correlation ID.
