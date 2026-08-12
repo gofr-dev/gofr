@@ -91,11 +91,15 @@ func (r *Request) HostName() string {
 }
 
 // Params returns a slice of strings containing the values associated with the given query parameter key.
-// If the parameter is not present, an empty slice is returned.
+// If the parameter is not present, a nil slice is returned.
 func (r *Request) Params(key string) []string {
 	values := r.req.URL.Query()[key]
 
-	result := make([]string, 0, len(values))
+	// Deliberately not preallocated. A handler may return this slice directly, and a nil slice
+	// marshals to `null` where an empty one marshals to `[]`. Preallocating would silently change
+	// that response body for every absent key, so the allocation hint is declined here.
+	//nolint:prealloc // preserves the nil return for an absent key; see comment above
+	var result []string
 
 	for _, value := range values {
 		result = append(result, strings.Split(value, ",")...)

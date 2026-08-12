@@ -251,7 +251,7 @@ func Test_Params(t *testing.T) {
 	assert.ElementsMatch(t, expectedCategories, r.Params("category"), "expected all values of 'category' to match")
 	assert.ElementsMatch(t, expectedTags, r.Params("tag"), "expected all values of 'tag' to match")
 	assert.Empty(t, r.Params("nonexistent"), "expected empty slice for non-existent query param")
-	assert.NotNil(t, r.Params("nonexistent"), "absent key must return an empty non-nil slice, not nil")
+	assert.Nil(t, r.Params("nonexistent"), "absent key must return nil so a handler returning it responds `null`, not `[]`")
 }
 
 func TestBind_FormURLEncoded(t *testing.T) {
