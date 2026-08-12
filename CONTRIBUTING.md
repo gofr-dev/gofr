@@ -126,7 +126,7 @@ docker run -it --rm -p 4443:4443 -e STORAGE_EMULATOR_HOST=0.0.0.0:4443 fsouza/fa
       conflict.
 * External Library uses:
     - A little copying is better than a little dependency.
-    - All external dependencies should go through the same careful consideration, we would have done to our own written
+    - All external dependencies should go through the same careful consideration, we would have done for our own written
       code. We need to test the functionality we are going to use from an external library, as sometimes library
       implementation may change.
     - All dependencies must be abstracted as an interface. This will make it easier to switch libraries at later point
