@@ -58,7 +58,7 @@ func TestGetSupabaseConfig(t *testing.T) {
 		},
 		{
 			name: "With DB_URL",
-			configs: map[string]string{ //nolint:gosec // test fixture connection string, not a real credential
+			configs: map[string]string{
 				"DB_DIALECT":  "supabase",
 				"DB_PASSWORD": "password",
 				"DB_SSL_MODE": "disable", // should be overridden to require
@@ -411,12 +411,12 @@ func TestExtractProjectRefFromConnStr(t *testing.T) {
 		connStr     string
 		expectedRef string
 	}{
-		{ //nolint:gosec // test fixture connection string, not a real credential
+		{
 			name:        "Valid Supabase Connection String",
 			connStr:     "postgresql://postgres:password@db.abc123.supabase.co:5432/postgres",
 			expectedRef: "abc123",
 		},
-		{ //nolint:gosec // test fixture connection string, not a real credential
+		{
 			name:        "Valid Connection String With Extra Parts",
 			connStr:     "postgresql://postgres:password@db.xyz789.supabase.co:5432/postgres?sslmode=require",
 			expectedRef: "xyz789",

@@ -17,10 +17,7 @@ const (
 	transactionPoolerPort    = "6543"
 	minConnectionStringParts = 2
 
-	connTypeDirect      = "direct"
-	connTypeSession     = "session"
-	connTypeTransaction = "transaction"
-	dbSegment           = "db"
+	connTypeDirect = "direct"
 )
 
 // SupabaseConfig extends DBConfig to include Supabase-specific configuration.
@@ -99,14 +96,14 @@ func configureSupabaseConnection(supaConfig *SupabaseConfig, logger datasource.L
 		supaConfig.Port = directPort
 		logger.Debugf("Configured direct connection to Supabase at %s:%s", supaConfig.HostName, supaConfig.Port)
 
-	case connTypeSession:
+	case "session":
 		// Format: postgres.[PROJECT_REF]@aws-0-[REGION].pooler.supabase.co
 		supaConfig.HostName = fmt.Sprintf(supabasePoolerHost, supaConfig.Region)
 		supaConfig.User = fmt.Sprintf("postgres.%s", supaConfig.ProjectRef)
 		supaConfig.Port = sessionPoolerPort
 		logger.Debugf("Configured session pooler connection to Supabase at %s:%s", supaConfig.HostName, supaConfig.Port)
 
-	case connTypeTransaction:
+	case "transaction":
 		// Format: postgres.[PROJECT_REF]@aws-0-[REGION].pooler.supabase.co
 		supaConfig.HostName = fmt.Sprintf(supabasePoolerHost, supaConfig.Region)
 		supaConfig.User = fmt.Sprintf("postgres.%s", supaConfig.ProjectRef)
@@ -140,7 +137,7 @@ func extractProjectRefFromConnStr(connStr string) string {
 	hostSegments := strings.Split(hostPart, ".")
 
 	// Looking for the segment between "db." and ".supabase.co"
-	if len(hostSegments) >= 3 && hostSegments[0] == dbSegment && strings.Contains(hostPart, "supabase.co") {
+	if len(hostSegments) >= 3 && hostSegments[0] == "db" && strings.Contains(hostPart, "supabase.co") {
 		return hostSegments[1]
 	}
 

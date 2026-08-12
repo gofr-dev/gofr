@@ -55,7 +55,7 @@ func (ps *PubSub) publishToChannel(ctx context.Context, topic string, message []
 
 	addr := fmt.Sprintf("%s:%d", ps.config.HostName, ps.config.Port)
 	ps.logger.Debug(&pubsub.Log{
-		Mode:          modePub,
+		Mode:          "PUB",
 		CorrelationID: span.SpanContext().TraceID().String(),
 		MessageValue:  string(message),
 		Topic:         topic,
@@ -91,7 +91,7 @@ func (ps *PubSub) publishToStream(ctx context.Context, topic string, message []b
 
 	addr := fmt.Sprintf("%s:%d", ps.config.HostName, ps.config.Port)
 	ps.logger.Debug(&pubsub.Log{
-		Mode:          modePub,
+		Mode:          "PUB",
 		CorrelationID: span.SpanContext().TraceID().String(),
 		MessageValue:  string(message),
 		Topic:         topic,

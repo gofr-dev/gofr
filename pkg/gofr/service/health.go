@@ -12,8 +12,6 @@ const (
 	serviceDown    = "DOWN"
 	defaultTimeout = 5
 
-	errServiceDown = "service down"
-
 	AlivePath  = "/.well-known/alive"
 	HealthPath = "/.well-known/health"
 )
@@ -58,7 +56,7 @@ func (h *httpService) getHealthResponseForEndpoint(ctx context.Context, endpoint
 	}
 
 	healthResponse.Status = serviceDown
-	healthResponse.Details["error"] = errServiceDown
+	healthResponse.Details["error"] = "service down"
 
 	return &healthResponse
 }

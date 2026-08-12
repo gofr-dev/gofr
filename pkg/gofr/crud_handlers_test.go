@@ -276,6 +276,8 @@ func Test_CreateHandler(t *testing.T) {
 			if tc.expectedErr != nil {
 				var target *json.UnmarshalTypeError
 				assert.ErrorAs(t, err, &target, "TEST[%d], Failed.\n%s", i, tc.desc)
+			} else {
+				assert.NoError(t, err, "TEST[%d], Failed.\n%s", i, tc.desc)
 			}
 		})
 	}

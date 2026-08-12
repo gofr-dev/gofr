@@ -25,7 +25,6 @@ const (
 	defaultPubSubQueryTimeout = 5 * time.Second
 	redisBackend              = "REDIS"
 	trueValue                 = "true"
-	modePub                   = "PUB"
 	payloadKey                = "payload"
 	queryPipeline             = "pipeline"
 )

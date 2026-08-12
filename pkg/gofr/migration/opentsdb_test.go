@@ -94,14 +94,14 @@ func getEnhancedTestCases() []struct {
 	verifyFunc      func(t *testing.T, filePath string)
 	cleanupFunc     func(t *testing.T, filePath string)
 } {
-	cases := make([]struct {
+	var cases []struct { //nolint:prealloc // cap would count append calls, not elements
 		desc            string
 		setupFunc       func(t *testing.T, filePath string)
 		expectedErr     string
 		shouldFileExist bool
 		verifyFunc      func(t *testing.T, filePath string)
 		cleanupFunc     func(t *testing.T, filePath string)
-	}, 0, 4)
+	}
 
 	cases = append(cases, getSuccessTestCases()...)
 	cases = append(cases, getFilePermissionTestCases()...)
@@ -997,14 +997,14 @@ func getValidateExistingFileTestCases() []struct {
 	shouldLogDebug bool
 	debugMessage   string
 } {
-	cases := make([]struct {
+	var cases []struct { //nolint:prealloc // cap would count append calls, not elements
 		desc           string
 		setupFunc      func(t *testing.T, filePath string)
 		expectedErr    string
 		shouldLogError bool
 		shouldLogDebug bool
 		debugMessage   string
-	}, 0, 3)
+	}
 
 	cases = append(cases, getValidJSONTestCases()...)
 	cases = append(cases, getInvalidJSONTestCases()...)

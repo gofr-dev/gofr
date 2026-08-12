@@ -27,15 +27,10 @@ const (
 	defaultDBPort     = 3306
 	requireSSLMode    = "require"
 	tlsSkipVerify     = "tls=skip-verify"
-	statusConnected   = "connected"
 	sslModeDisable    = "disable"
-	sslModePreferred  = "preferred"
-	tlsPreferred      = "tls=preferred"
 	sslModeVerifyCA   = "verify-ca"
 	sslModeVerifyFull = "verify-full"
 	tlsCustom         = "tls=custom"
-	loopbackIP        = "127.0.0.1"
-	loopbackIPv6      = "::1"
 	localhost         = "localhost"
 )
 
@@ -287,7 +282,7 @@ func pingToTestConnection(database *DB) *DB {
 		return database
 	}
 
-	printConnectionSuccessLog(statusConnected, database.config, database.logger)
+	printConnectionSuccessLog("connected", database.config, database.logger)
 
 	return database
 }
@@ -330,7 +325,7 @@ func attemptReconnection(database *DB, retryDuration time.Duration) bool {
 
 		err := database.DB.PingContext(context.Background())
 		if err == nil {
-			printConnectionSuccessLog(statusConnected, database.config, database.logger)
+			printConnectionSuccessLog("connected", database.config, database.logger)
 
 			return true
 		}
@@ -441,7 +436,7 @@ func pushDBMetrics(database *DB, metrics Metrics) {
 
 func printConnectionSuccessLog(status string, dbconfig *DBConfig, logger datasource.Logger) {
 	logFunc := logger.Infof
-	if status != statusConnected {
+	if status != "connected" {
 		logFunc = logger.Debugf
 	}
 
@@ -479,8 +474,8 @@ func getMySQLTLSParam(sslMode string) string {
 	switch strings.ToLower(sslMode) {
 	case sslModeDisable, "false":
 		return "" // No TLS - insecure
-	case sslModePreferred:
-		return tlsPreferred // Try TLS, fallback to plain
+	case "preferred":
+		return "tls=preferred" // Try TLS, fallback to plain
 	case requireSSLMode, "true":
 		return tlsSkipVerify // TLS required but no cert validation
 	case "skip-verify":
@@ -553,7 +548,7 @@ func registerMySQLTLSConfig(dbConfig *DBConfig, logger datasource.Logger) error 
 
 func getServerName(hostname string) string {
 	// For localhost/127.0.0.1, use "localhost" explicitly
-	if hostname == loopbackIP || hostname == loopbackIPv6 {
+	if hostname == "127.0.0.1" || hostname == "::1" {
 		return localhost
 	}
 

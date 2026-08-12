@@ -59,8 +59,8 @@ linters:
       lines: 100
       statements: 50
     goconst:
-      min-len: 2
-      min-occurrences: 2
+      min-len: 3
+      min-occurrences: 3
     gocritic:
       disabled-checks:
         - dupImport # https://github.com/go-critic/go-critic/issues/845
@@ -154,6 +154,10 @@ linters:
           - dupl
           - goconst
           - mnd
+        path: _test\.go
+      - linters:
+          - gosec
+        text: "G101"
         path: _test\.go
       - linters:
           - revive

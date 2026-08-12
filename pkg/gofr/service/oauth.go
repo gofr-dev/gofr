@@ -11,13 +11,11 @@ import (
 )
 
 const (
-	errClientIDMandatory     = "client id is mandatory"
-	errClientSecretMandatory = "client secret is mandatory" // #nosec G101
-	errTokenURLMandatory     = "token url is mandatory"     // #nosec G101
-	errEmptyHost             = "empty host"
-	errInvalidHostDotDot     = "invalid host pattern, contains `..`"
-	errInvalidHostEndsDot    = "invalid host pattern, ends with `.`"
-	errInvalidScheme         = "invalid scheme, allowed http and https only"
+	msgClientSecretMandatory = "client secret is mandatory" // #nosec G101
+	msgTokenURLMandatory     = "token url is mandatory"     // #nosec G101
+	msgEmptyHost             = "empty host"
+	msgInvalidHostDotDot     = "invalid host pattern, contains `..`"
+	msgInvalidHostEndsDot    = "invalid host pattern, ends with `.`"
 )
 
 // OAuthConfig describes a 2-legged OAuth2 flow, with both the
@@ -50,11 +48,11 @@ func (c *OAuthConfig) AddOption(svc HTTP) HTTP {
 
 func NewOAuthConfig(clientID, secret, tokenURL string, scopes []string, params url.Values, authStyle oauth2.AuthStyle) (Options, error) {
 	if clientID == "" {
-		return nil, AuthErr{nil, errClientIDMandatory}
+		return nil, AuthErr{nil, "client id is mandatory"}
 	}
 
 	if secret == "" {
-		return nil, AuthErr{nil, errClientSecretMandatory}
+		return nil, AuthErr{nil, msgClientSecretMandatory}
 	}
 
 	if err := validateTokenURL(tokenURL); err != nil {
@@ -75,7 +73,7 @@ func NewOAuthConfig(clientID, secret, tokenURL string, scopes []string, params u
 
 func validateTokenURL(tokenURL string) error {
 	if tokenURL == "" {
-		return AuthErr{nil, errTokenURLMandatory}
+		return AuthErr{nil, msgTokenURLMandatory}
 	}
 
 	u, err := url.Parse(tokenURL)
@@ -84,13 +82,13 @@ func validateTokenURL(tokenURL string) error {
 	case err != nil:
 		return AuthErr{err, "error in token URL"}
 	case u.Host == "" || u.Scheme == "":
-		return AuthErr{err, errEmptyHost}
+		return AuthErr{err, msgEmptyHost}
 	case strings.Contains(u.Host, ".."):
-		return AuthErr{nil, errInvalidHostDotDot}
+		return AuthErr{nil, msgInvalidHostDotDot}
 	case strings.HasSuffix(u.Host, "."):
-		return AuthErr{nil, errInvalidHostEndsDot}
+		return AuthErr{nil, msgInvalidHostEndsDot}
 	case u.Scheme != methodHTTP && u.Scheme != methodHTTPS:
-		return AuthErr{nil, errInvalidScheme}
+		return AuthErr{nil, "invalid scheme, allowed http and https only"}
 	default:
 		return nil
 	}
