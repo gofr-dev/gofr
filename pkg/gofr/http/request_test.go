@@ -2,7 +2,6 @@ package http
 
 import (
 	"bytes"
-	"encoding/json"
 	"errors"
 	"io"
 	"mime/multipart"
@@ -254,11 +253,13 @@ func Test_Params(t *testing.T) {
 	// Nil, not merely empty: assert.Empty alone would pass for both.
 	assert.Nil(t, r.Params("nonexistent"), "absent key must return a nil slice")
 
-	// The contract users actually observe is the response body. Pin it at that layer too, since a
-	// handler may return Params directly and an empty slice would serialize as `[]`, not `null`.
-	body, err := json.Marshal(r.Params("nonexistent"))
-	require.NoError(t, err)
-	assert.JSONEq(t, `null`, string(body), "an absent key must serialize as null in a response body")
+	// Pin the actual response body, not just the marshaled value: a handler may return Params
+	// directly, and this is what its client receives. Going through Responder means a future change
+	// to how it normalizes nil values cannot silently alter the wire shape while this test passes.
+	rec := httptest.NewRecorder()
+	NewResponder(rec, http.MethodGet).Respond(r.Params("nonexistent"), nil)
+	assert.JSONEq(t, `{"data":null}`, rec.Body.String(),
+		"an absent key must reach the client as null, not [] or an omitted field")
 }
 
 func TestBind_FormURLEncoded(t *testing.T) {
