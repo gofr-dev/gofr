@@ -4,6 +4,8 @@ import (
 	"fmt"
 )
 
+const errUnknown = "unknown error"
+
 type AuthErr struct {
 	Err     error
 	Message string
@@ -12,7 +14,7 @@ type AuthErr struct {
 func (o AuthErr) Error() string {
 	switch {
 	case o.Message == "" && o.Err == nil:
-		return "unknown error"
+		return errUnknown
 	case o.Message == "":
 		return o.Err.Error()
 	case o.Err == nil:

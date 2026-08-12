@@ -55,12 +55,12 @@ func (ps *PubSub) publishToChannel(ctx context.Context, topic string, message []
 
 	addr := fmt.Sprintf("%s:%d", ps.config.HostName, ps.config.Port)
 	ps.logger.Debug(&pubsub.Log{
-		Mode:          "PUB",
+		Mode:          modePub,
 		CorrelationID: span.SpanContext().TraceID().String(),
 		MessageValue:  string(message),
 		Topic:         topic,
 		Host:          addr,
-		PubSubBackend: "REDIS",
+		PubSubBackend: redisBackend,
 		Time:          end.Microseconds(),
 	})
 	ps.metrics.IncrementCounter(ctx, "app_pubsub_publish_success_count", "topic", topic)
@@ -72,7 +72,7 @@ func (ps *PubSub) publishToChannel(ctx context.Context, topic string, message []
 func (ps *PubSub) publishToStream(ctx context.Context, topic string, message []byte, span trace.Span) error {
 	args := &redis.XAddArgs{
 		Stream: topic,
-		Values: map[string]any{"payload": message},
+		Values: map[string]any{payloadKey: message},
 	}
 
 	if ps.config.PubSubStreamsConfig != nil && ps.config.PubSubStreamsConfig.MaxLen > 0 {
@@ -91,12 +91,12 @@ func (ps *PubSub) publishToStream(ctx context.Context, topic string, message []b
 
 	addr := fmt.Sprintf("%s:%d", ps.config.HostName, ps.config.Port)
 	ps.logger.Debug(&pubsub.Log{
-		Mode:          "PUB",
+		Mode:          modePub,
 		CorrelationID: span.SpanContext().TraceID().String(),
 		MessageValue:  string(message),
 		Topic:         topic,
 		Host:          addr,
-		PubSubBackend: "REDIS",
+		PubSubBackend: redisBackend,
 		Time:          end.Microseconds(),
 	})
 	ps.metrics.IncrementCounter(ctx, "app_pubsub_publish_success_count", "topic", topic)
@@ -284,7 +284,7 @@ func (ps *PubSub) waitForMessage(ctx context.Context, spanCtx context.Context, s
 				MessageValue:  string(msg.Value),
 				Topic:         topic,
 				Host:          addr,
-				PubSubBackend: "REDIS",
+				PubSubBackend: redisBackend,
 				Time:          end.Microseconds(),
 			})
 		}
@@ -691,7 +691,7 @@ func (ps *PubSub) handleStreamMessage(ctx context.Context, topic string, msg *re
 	m.Committer = newStreamMessage(ps.client, topic, group, msg.ID, ps.logger)
 
 	// Extract payload
-	if val, ok := msg.Values["payload"]; ok {
+	if val, ok := msg.Values[payloadKey]; ok {
 		switch v := val.(type) {
 		case string:
 			m.Value = []byte(v)
@@ -1072,10 +1072,11 @@ func (ps *PubSub) queryStream(ctx context.Context, stream string, args ...any) (
 	}
 
 	var result []byte
+
 	for _, msg := range vals {
 		var payload []byte
 
-		if val, ok := msg.Values["payload"]; ok {
+		if val, ok := msg.Values[payloadKey]; ok {
 			switch v := val.(type) {
 			case string:
 				payload = []byte(v)

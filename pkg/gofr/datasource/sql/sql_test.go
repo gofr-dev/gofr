@@ -457,6 +457,7 @@ func TestRegisterMySQLTLSConfig_WithValidCA(t *testing.T) {
 				t.Helper()
 				caCertPath := createValidCACert(t)
 				t.Setenv("DB_TLS_CA_CERT", caCertPath)
+
 				return map[string]string{"ca": caCertPath}
 			},
 			sslMode: "verify-ca",
@@ -468,6 +469,7 @@ func TestRegisterMySQLTLSConfig_WithValidCA(t *testing.T) {
 				t.Helper()
 				caCertPath := createValidCACert(t)
 				t.Setenv("DB_TLS_CA_CERT", caCertPath)
+
 				return map[string]string{"ca": caCertPath}
 			},
 			sslMode: "verify-full",
@@ -479,6 +481,7 @@ func TestRegisterMySQLTLSConfig_WithValidCA(t *testing.T) {
 				t.Helper()
 				caCertPath := createValidCACert(t)
 				t.Setenv("DB_TLS_CA_CERT", caCertPath)
+
 				return map[string]string{"ca": caCertPath}
 			},
 			sslMode: "verify-ca",
@@ -490,6 +493,7 @@ func TestRegisterMySQLTLSConfig_WithValidCA(t *testing.T) {
 				t.Helper()
 				caCertPath := createValidCACert(t)
 				t.Setenv("DB_TLS_CA_CERT", caCertPath)
+
 				return map[string]string{"ca": caCertPath}
 			},
 			sslMode: "verify-ca",
@@ -532,6 +536,7 @@ func TestRegisterMySQLTLSConfig_WithMutualTLS(t *testing.T) {
 				t.Setenv("DB_TLS_CA_CERT", caCertPath)
 				t.Setenv("DB_TLS_CLIENT_CERT", clientCertPath)
 				t.Setenv("DB_TLS_CLIENT_KEY", clientKeyPath)
+
 				return map[string]string{"ca": caCertPath, "cert": clientCertPath, "key": clientKeyPath}
 			},
 			sslMode: "verify-ca",
@@ -546,6 +551,7 @@ func TestRegisterMySQLTLSConfig_WithMutualTLS(t *testing.T) {
 				t.Setenv("DB_TLS_CA_CERT", caCertPath)
 				t.Setenv("DB_TLS_CLIENT_CERT", clientCertPath)
 				t.Setenv("DB_TLS_CLIENT_KEY", clientKeyPath)
+
 				return map[string]string{"ca": caCertPath, "cert": clientCertPath, "key": clientKeyPath}
 			},
 			sslMode: "verify-full",
@@ -587,6 +593,7 @@ func TestRegisterMySQLTLSConfig_PartialClientCert(t *testing.T) {
 				clientCertPath, _ := createValidClientCert(t)
 				t.Setenv("DB_TLS_CA_CERT", caCertPath)
 				t.Setenv("DB_TLS_CLIENT_CERT", clientCertPath)
+
 				return map[string]string{"ca": caCertPath, "cert": clientCertPath}
 			},
 			sslMode: "verify-ca",
@@ -600,6 +607,7 @@ func TestRegisterMySQLTLSConfig_PartialClientCert(t *testing.T) {
 				_, clientKeyPath := createValidClientCert(t)
 				t.Setenv("DB_TLS_CA_CERT", caCertPath)
 				t.Setenv("DB_TLS_CLIENT_KEY", clientKeyPath)
+
 				return map[string]string{"ca": caCertPath, "key": clientKeyPath}
 			},
 			sslMode: "verify-ca",
@@ -643,6 +651,7 @@ func TestRegisterMySQLTLSConfig_InvalidClientCert(t *testing.T) {
 				t.Setenv("DB_TLS_CA_CERT", caCertPath)
 				t.Setenv("DB_TLS_CLIENT_CERT", invalidCertPath)
 				t.Setenv("DB_TLS_CLIENT_KEY", clientKeyPath)
+
 				return map[string]string{"ca": caCertPath, "cert": invalidCertPath, "key": clientKeyPath}
 			},
 			sslMode: "verify-ca",
@@ -658,6 +667,7 @@ func TestRegisterMySQLTLSConfig_InvalidClientCert(t *testing.T) {
 				t.Setenv("DB_TLS_CA_CERT", caCertPath)
 				t.Setenv("DB_TLS_CLIENT_CERT", clientCertPath)
 				t.Setenv("DB_TLS_CLIENT_KEY", invalidKeyPath)
+
 				return map[string]string{"ca": caCertPath, "cert": clientCertPath, "key": invalidKeyPath}
 			},
 			sslMode: "verify-ca",

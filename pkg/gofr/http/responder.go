@@ -232,7 +232,7 @@ func isEmptyStruct(data any) bool {
 	v := reflect.ValueOf(data)
 
 	// Handle pointers by dereferencing them
-	if v.Kind() == reflect.Ptr {
+	if v.Kind() == reflect.Pointer {
 		if v.IsNil() {
 			return false // nil pointer isn't an empty struct
 		}
@@ -328,5 +328,5 @@ func isNil(i any) bool {
 
 	v := reflect.ValueOf(i)
 
-	return v.Kind() == reflect.Ptr && v.IsNil()
+	return v.Kind() == reflect.Pointer && v.IsNil()
 }

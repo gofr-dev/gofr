@@ -16,6 +16,8 @@ import (
 
 const (
 	defaultMaxMemory = 32 << 20 // 32 MB
+
+	contentTypeJSON = "application/json"
 )
 
 var (
@@ -60,7 +62,7 @@ func (r *Request) Bind(i any) error {
 	contentType := strings.Split(v, ";")[0]
 
 	switch contentType {
-	case "application/json":
+	case contentTypeJSON:
 		body, err := r.body()
 		if err != nil {
 			return err
@@ -93,7 +95,7 @@ func (r *Request) HostName() string {
 func (r *Request) Params(key string) []string {
 	values := r.req.URL.Query()[key]
 
-	var result []string
+	result := make([]string, 0, len(values))
 
 	for _, value := range values {
 		result = append(result, strings.Split(value, ",")...)
@@ -123,7 +125,7 @@ func (r *Request) bindFormURLEncoded(ptr any) error {
 
 func (r *Request) bindForm(ptr any, isMultipart bool) error {
 	ptrVal := reflect.ValueOf(ptr)
-	if ptrVal.Kind() != reflect.Ptr {
+	if ptrVal.Kind() != reflect.Pointer {
 		return errNonPointerBind
 	}
 

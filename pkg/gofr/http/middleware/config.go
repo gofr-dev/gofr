@@ -11,6 +11,12 @@ import (
 	"gofr.dev/pkg/gofr/service"
 )
 
+const (
+	envAccessControlAllowOrigin      = "ACCESS_CONTROL_ALLOW_ORIGIN"
+	envAccessControlAllowHeaders     = "ACCESS_CONTROL_ALLOW_HEADERS"
+	envAccessControlAllowCredentials = "ACCESS_CONTROL_ALLOW_CREDENTIALS"
+)
+
 type Config struct {
 	CorsHeaders map[string]string
 	LogProbes   LogProbes
@@ -27,10 +33,10 @@ func GetConfigs(c config.Config) Config {
 	}
 
 	allowedCORSHeaders := []string{
-		"ACCESS_CONTROL_ALLOW_ORIGIN",
+		envAccessControlAllowOrigin,
 		"ACCESS_CONTROL_ALLOW_METHODS",
-		"ACCESS_CONTROL_ALLOW_HEADERS",
-		"ACCESS_CONTROL_ALLOW_CREDENTIALS",
+		envAccessControlAllowHeaders,
+		envAccessControlAllowCredentials,
 		"ACCESS_CONTROL_EXPOSE_HEADERS",
 		"ACCESS_CONTROL_MAX_AGE",
 	}

@@ -14,6 +14,9 @@ import (
 )
 
 const (
+	levelDebug = "DEBUG"
+	levelError = "ERROR"
+
 	requestTimeout = 5 * time.Second
 	// ANSI color codes for terminal output.
 	colorBlue   = 34  // For successful responses (2xx)
@@ -266,7 +269,7 @@ func fetchAndUpdateLogLevel(remoteService service.HTTP, currentLevel logging.Lev
 		return currentLevel, err
 	}
 
-	logLevels := []string{"DEBUG", "INFO", "NOTICE", "WARN", "ERROR", "FATAL"}
+	logLevels := []string{levelDebug, "INFO", "NOTICE", "WARN", levelError, "FATAL"}
 
 	if slices.Contains(logLevels, response.Data.Level) && response.Data.ServiceName != "" {
 		newLevel := logging.GetLevelFromString(response.Data.Level)

@@ -94,14 +94,14 @@ func getEnhancedTestCases() []struct {
 	verifyFunc      func(t *testing.T, filePath string)
 	cleanupFunc     func(t *testing.T, filePath string)
 } {
-	var cases []struct {
+	cases := make([]struct {
 		desc            string
 		setupFunc       func(t *testing.T, filePath string)
 		expectedErr     string
 		shouldFileExist bool
 		verifyFunc      func(t *testing.T, filePath string)
 		cleanupFunc     func(t *testing.T, filePath string)
-	}
+	}, 0, 4)
 
 	cases = append(cases, getSuccessTestCases()...)
 	cases = append(cases, getFilePermissionTestCases()...)
@@ -136,6 +136,7 @@ func getSuccessTestCases() []struct {
 			shouldFileExist: true,
 			verifyFunc: func(t *testing.T, filePath string) {
 				t.Helper()
+
 				content, err := os.ReadFile(filePath)
 				require.NoError(t, err)
 				assert.Equal(t, "[]", string(content), "File should contain empty JSON array")
@@ -145,6 +146,7 @@ func getSuccessTestCases() []struct {
 			desc: "file already exists with valid JSON",
 			setupFunc: func(t *testing.T, filePath string) {
 				t.Helper()
+
 				dir := filepath.Dir(filePath)
 				err := os.MkdirAll(dir, dirPerm)
 				require.NoError(t, err)
@@ -162,10 +164,12 @@ func getSuccessTestCases() []struct {
 			shouldFileExist: true,
 			verifyFunc: func(t *testing.T, filePath string) {
 				t.Helper()
+
 				content, err := os.ReadFile(filePath)
 				require.NoError(t, err)
 
 				var migrations []tsdbMigrationRecord
+
 				err = json.Unmarshal(content, &migrations)
 				require.NoError(t, err)
 				require.Len(t, migrations, 1)
@@ -195,6 +199,7 @@ func getFilePermissionTestCases() []struct {
 			desc: "file exists but contains invalid JSON",
 			setupFunc: func(t *testing.T, filePath string) {
 				t.Helper()
+
 				dir := filepath.Dir(filePath)
 				err := os.MkdirAll(dir, dirPerm)
 				require.NoError(t, err)
@@ -208,6 +213,7 @@ func getFilePermissionTestCases() []struct {
 			desc: "file exists but cannot be opened (permission denied)",
 			setupFunc: func(t *testing.T, filePath string) {
 				t.Helper()
+
 				dir := filepath.Dir(filePath)
 				err := os.MkdirAll(dir, dirPerm)
 				require.NoError(t, err)
@@ -228,6 +234,7 @@ func getFilePermissionTestCases() []struct {
 			desc: "file creation fails due to permission denied on directory",
 			setupFunc: func(t *testing.T, filePath string) {
 				t.Helper()
+
 				dir := filepath.Dir(filePath)
 				// Create directory with no write permissions
 				err := os.MkdirAll(dir, dirPerm)
@@ -266,6 +273,7 @@ func getDirectoryTestCases() []struct {
 			desc: "directory creation fails due to existing file with same name",
 			setupFunc: func(t *testing.T, filePath string) {
 				t.Helper()
+
 				dir := filepath.Dir(filePath)
 				parentDir := filepath.Dir(dir)
 				err := os.MkdirAll(parentDir, dirPerm)
@@ -281,6 +289,7 @@ func getDirectoryTestCases() []struct {
 			desc: "directory creation fails due to permission denied on parent",
 			setupFunc: func(t *testing.T, filePath string) {
 				t.Helper()
+
 				dir := filepath.Dir(filePath)
 				parentDir := filepath.Dir(dir)
 
@@ -322,6 +331,7 @@ func getEdgeCaseTestCases() []struct {
 			desc: "migration file path is a directory",
 			setupFunc: func(t *testing.T, filePath string) {
 				t.Helper()
+
 				dir := filepath.Dir(filePath)
 				err := os.MkdirAll(dir, dirPerm)
 				require.NoError(t, err)
@@ -344,6 +354,7 @@ func getEdgeCaseTestCases() []struct {
 			shouldFileExist: true,
 			verifyFunc: func(t *testing.T, filePath string) {
 				t.Helper()
+
 				content, err := os.ReadFile(filePath)
 				require.NoError(t, err)
 				assert.Equal(t, "[]", string(content))
@@ -986,14 +997,14 @@ func getValidateExistingFileTestCases() []struct {
 	shouldLogDebug bool
 	debugMessage   string
 } {
-	var cases []struct {
+	cases := make([]struct {
 		desc           string
 		setupFunc      func(t *testing.T, filePath string)
 		expectedErr    string
 		shouldLogError bool
 		shouldLogDebug bool
 		debugMessage   string
-	}
+	}, 0, 3)
 
 	cases = append(cases, getValidJSONTestCases()...)
 	cases = append(cases, getInvalidJSONTestCases()...)
@@ -1022,6 +1033,7 @@ func getValidJSONTestCases() []struct {
 			desc: "valid empty JSON array",
 			setupFunc: func(t *testing.T, filePath string) {
 				t.Helper()
+
 				err := os.MkdirAll(filepath.Dir(filePath), dirPerm)
 				require.NoError(t, err)
 				err = os.WriteFile(filePath, []byte("[]"), 0600)
@@ -1079,6 +1091,7 @@ func getInvalidJSONTestCases() []struct {
 			desc: "invalid JSON - malformed",
 			setupFunc: func(t *testing.T, filePath string) {
 				t.Helper()
+
 				err := os.MkdirAll(filepath.Dir(filePath), dirPerm)
 				require.NoError(t, err)
 				err = os.WriteFile(filePath, []byte("invalid json content"), 0600)
@@ -1092,6 +1105,7 @@ func getInvalidJSONTestCases() []struct {
 			desc: "invalid JSON - incomplete array",
 			setupFunc: func(t *testing.T, filePath string) {
 				t.Helper()
+
 				err := os.MkdirAll(filepath.Dir(filePath), dirPerm)
 				require.NoError(t, err)
 				err = os.WriteFile(filePath, []byte("[{\"version\": 1"), 0600)
@@ -1105,6 +1119,7 @@ func getInvalidJSONTestCases() []struct {
 			desc: "invalid JSON - wrong structure",
 			setupFunc: func(t *testing.T, filePath string) {
 				t.Helper()
+
 				err := os.MkdirAll(filepath.Dir(filePath), dirPerm)
 				require.NoError(t, err)
 				err = os.WriteFile(filePath, []byte("{\"not\": \"an array\"}"), 0600)
@@ -1118,6 +1133,7 @@ func getInvalidJSONTestCases() []struct {
 			desc: "empty file",
 			setupFunc: func(t *testing.T, filePath string) {
 				t.Helper()
+
 				err := os.MkdirAll(filepath.Dir(filePath), dirPerm)
 				require.NoError(t, err)
 				err = os.WriteFile(filePath, []byte(""), 0600)
@@ -1150,6 +1166,7 @@ func getFileAccessTestCases() []struct {
 			desc: "file exists but cannot be opened (permission denied)",
 			setupFunc: func(t *testing.T, filePath string) {
 				t.Helper()
+
 				err := os.MkdirAll(filepath.Dir(filePath), dirPerm)
 				require.NoError(t, err)
 				err = os.WriteFile(filePath, []byte("[]"), 0000) // No read permissions

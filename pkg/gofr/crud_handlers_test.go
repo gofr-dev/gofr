@@ -273,7 +273,10 @@ func Test_CreateHandler(t *testing.T) {
 
 			assert.Equal(t, tc.expectedResp, resp, "TEST[%d], Failed.\n%s", i, tc.desc)
 
-			assert.IsType(t, tc.expectedErr, err, "TEST[%d], Failed.\n%s", i, tc.desc)
+			if tc.expectedErr != nil {
+				var target *json.UnmarshalTypeError
+				assert.ErrorAs(t, err, &target, "TEST[%d], Failed.\n%s", i, tc.desc)
+			}
 		})
 	}
 }

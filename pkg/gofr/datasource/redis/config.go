@@ -23,6 +23,11 @@ const (
 	defaultPubSubBufferSize   = 100
 	defaultPubSubQueryLimit   = 10
 	defaultPubSubQueryTimeout = 5 * time.Second
+	redisBackend              = "REDIS"
+	trueValue                 = "true"
+	modePub                   = "PUB"
+	payloadKey                = "payload"
+	queryPipeline             = "pipeline"
 )
 
 // getRedisConfig builds the Redis Config struct from the provided [Config].
@@ -62,11 +67,11 @@ func getRedisConfig(c config.Config, logger datasource.Logger) *Config {
 	options.DB = redisConfig.DB
 
 	// Parse PubSub config if PUBSUB_BACKEND=REDIS
-	if strings.EqualFold(c.Get("PUBSUB_BACKEND"), "REDIS") {
+	if strings.EqualFold(c.Get("PUBSUB_BACKEND"), redisBackend) {
 		parsePubSubConfig(c, redisConfig)
 	}
 
-	if c.Get("REDIS_TLS_ENABLED") != "true" {
+	if c.Get("REDIS_TLS_ENABLED") != trueValue {
 		redisConfig.Options = options
 		return redisConfig
 	}
@@ -165,6 +170,7 @@ func configStreams(c config.Config, redisConfig *Config) {
 	}
 
 	streamsConfig.Block = 1 * time.Second // default - reduced from 5s for better responsiveness
+
 	if blockStr := c.Get("REDIS_STREAMS_BLOCK_TIMEOUT"); blockStr != "" {
 		if block, err := time.ParseDuration(blockStr); err == nil {
 			streamsConfig.Block = block

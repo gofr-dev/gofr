@@ -11,6 +11,9 @@ import (
 // #nosec G101
 const xAPIKeyHeader = "X-Api-Key"
 
+// #nosec G101
+const errAPIKeyRequired = "non empty api key is required"
+
 type APIKeyConfig struct {
 	APIKey string
 }
@@ -22,7 +25,7 @@ func (a *APIKeyConfig) AddOption(h HTTP) HTTP {
 func NewAPIKeyConfig(apiKey string) (Options, error) {
 	apiKey = strings.TrimSpace(apiKey)
 	if apiKey == "" {
-		return nil, AuthErr{Message: "non empty api key is required"}
+		return nil, AuthErr{Message: errAPIKeyRequired}
 	}
 
 	return &APIKeyConfig{APIKey: apiKey}, nil

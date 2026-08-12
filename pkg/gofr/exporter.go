@@ -138,6 +138,7 @@ func convertSpans(spans []sdktrace.ReadOnlySpan) []Span {
 	return convertedSpans
 }
 
+//nolint:gocyclo // exhaustive switch over all attribute.Type values keeps this flat and readable
 func attributeToStringPair(kv attribute.KeyValue) (key, value string) {
 	switch kv.Value.Type() {
 	// For slice attributes, serialize as JSON list string.
@@ -161,9 +162,11 @@ func attributeToStringPair(kv attribute.KeyValue) (key, value string) {
 		return string(kv.Key), strconv.FormatFloat(kv.Value.AsFloat64(), 'f', -1, 64)
 	case attribute.STRING:
 		return string(kv.Key), kv.Value.AsString()
-	case attribute.INVALID:
+	case attribute.EMPTY:
 		return string(kv.Key), "invalid"
+	case attribute.BYTESLICE, attribute.SLICE:
+		return string(kv.Key), kv.Value.String()
 	default:
-		return string(kv.Key), kv.Value.Emit()
+		return string(kv.Key), kv.Value.String()
 	}
 }

@@ -27,6 +27,9 @@ type grpcServer struct {
 	config             config.Config
 }
 
+// defaultInterceptorCount is the number of interceptors registered by default (recovery + observability).
+const defaultInterceptorCount = 2
+
 var (
 	errNonAddressable     = errors.New("cannot inject container as it is not addressable or is nil")
 	errInvalidPort        = errors.New("invalid port number")
@@ -93,12 +96,12 @@ func newGRPCServer(c *container.Container, port int, cfg config.Config) (*grpcSe
 
 	registerGRPCMetrics(c)
 
-	middleware := make([]grpc.UnaryServerInterceptor, 0)
+	middleware := make([]grpc.UnaryServerInterceptor, 0, defaultInterceptorCount)
 	middleware = append(middleware,
 		grpc_recovery.UnaryServerInterceptor(),
 		gofr_grpc.ObservabilityInterceptor(c.Logger, c.Metrics()))
 
-	streamMiddleware := make([]grpc.StreamServerInterceptor, 0)
+	streamMiddleware := make([]grpc.StreamServerInterceptor, 0, defaultInterceptorCount)
 	streamMiddleware = append(streamMiddleware,
 		grpc_recovery.StreamServerInterceptor(),
 		gofr_grpc.StreamObservabilityInterceptor(c.Logger, c.Metrics()))

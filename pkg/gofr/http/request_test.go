@@ -20,14 +20,14 @@ import (
 )
 
 func TestParam(t *testing.T) {
-	req := NewRequest(httptest.NewRequest(http.MethodGet, "/abc?a=b", http.NoBody))
+	req := NewRequest(httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/abc?a=b", http.NoBody))
 	if req.Param("a") != "b" {
 		t.Error("Can not parse the request params")
 	}
 }
 
 func TestBind(t *testing.T) {
-	r := httptest.NewRequest(http.MethodPost, "/abc", strings.NewReader(`{"a": "b", "b": 5}`))
+	r := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/abc", strings.NewReader(`{"a": "b", "b": 5}`))
 	r.Header.Set("Content-Type", "application/json")
 	req := NewRequest(r)
 
@@ -129,7 +129,7 @@ func TestBind_FileSuccess(t *testing.T) {
 }
 
 func TestBind_NoContentType(t *testing.T) {
-	req := NewRequest(httptest.NewRequest(http.MethodPost, "/abc", strings.NewReader(`{"a": "b", "b": 5}`)))
+	req := NewRequest(httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/abc", strings.NewReader(`{"a": "b", "b": 5}`)))
 	x := struct {
 		A string `json:"a"`
 		B int    `json:"b"`
