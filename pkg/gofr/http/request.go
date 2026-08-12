@@ -94,7 +94,7 @@ func (r *Request) HostName() string {
 // additionally split on commas, so ?tag=a,b&tag=c yields []string{"a", "b", "c"}.
 //
 // If the key is absent, a nil slice is returned. A handler may return this value directly, and a
-// nil slice marshals to `null` in the response body where an empty one marshals to `[]`.
+// nil slice reaches the client as "null" in the response body where an empty one reaches it as "[]".
 func (r *Request) Params(key string) []string {
 	values := r.req.URL.Query()[key]
 
