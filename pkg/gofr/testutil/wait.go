@@ -89,11 +89,16 @@ func waitForGRPC(ctx context.Context, addr string) error {
 	ctx, cancel := context.WithTimeout(ctx, serverStartTimeout)
 	defer cancel()
 
+	start := time.Now()
+
 	conn.Connect()
 
 	for state := conn.GetState(); state != connectivity.Ready; state = conn.GetState() {
 		if !conn.WaitForStateChange(ctx, state) {
-			return fmt.Errorf("%w: gRPC server at %s did not start in %s", errServerNotReady, addr, serverStartTimeout)
+			// The elapsed time rather than serverStartTimeout: the caller's own context can
+			// expire first, and a message naming the constant would then overstate the wait.
+			return fmt.Errorf("%w: gRPC server at %s did not start in %s",
+				errServerNotReady, addr, time.Since(start).Round(time.Millisecond))
 		}
 	}
 
