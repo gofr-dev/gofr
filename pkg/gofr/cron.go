@@ -35,6 +35,14 @@ type Crontab struct {
 	container *container.Container
 
 	mu sync.RWMutex
+	// stopped is set under mu before done is closed, so a tick that is already
+	// inside runScheduled cannot dispatch a new job goroutine after Stop has
+	// begun waiting for the in-flight ones.
+	stopped bool
+	// wg tracks the job goroutines dispatched by runScheduled so Stop can join
+	// them instead of leaving them to log/record metrics after their owner
+	// (an App, or a test's container) has been torn down.
+	wg sync.WaitGroup
 
 	done chan struct{}
 	once sync.Once
@@ -86,30 +94,78 @@ func NewCron(cntnr *container.Container) *Crontab {
 	return c
 }
 
+// Stop halts the scheduler and blocks until every job goroutine it already
+// dispatched has returned. Joining matters as much as halting: a job that fired
+// on the tick just before Stop keeps logging and recording metrics against a
+// container that the caller is about to tear down.
 func (c *Crontab) Stop() {
+	c.stop(nil)
+}
+
+// stop is Stop with an optional abort channel for the join, so an application
+// shutdown is never held open past its own deadline by a long-running job.
+func (c *Crontab) stop(abort <-chan struct{}) {
 	c.once.Do(func() {
 		c.ticker.Stop()
+
+		c.mu.Lock()
+		c.stopped = true
+		c.mu.Unlock()
+
 		close(c.done)
 	})
+
+	joined := make(chan struct{})
+
+	go func() {
+		c.wg.Wait()
+		close(joined)
+	}()
+
+	select {
+	case <-joined:
+	case <-abort:
+	}
 }
 
 func (c *Crontab) runScheduled(t time.Time) {
+	// The lock is held across dispatch so that Stop cannot slip between the
+	// stopped check and wg.Add. Dispatch only spawns goroutines, and a job that
+	// calls back into AddJob does so from its own goroutine, so this cannot
+	// deadlock.
 	c.mu.Lock()
+	defer c.mu.Unlock()
 
-	n := len(c.jobs)
-	jb := make([]*job, n)
-	copy(jb, c.jobs)
+	if c.stopped {
+		return
+	}
 
-	c.mu.Unlock()
+	tk := getTick(t)
 
-	for _, j := range jb {
-		if j.tick(getTick(t)) {
-			go j.run(c.container)
+	for _, j := range c.jobs {
+		if !j.tick(tk) {
+			continue
 		}
+
+		c.wg.Add(1)
+
+		go func(j *job) {
+			defer c.wg.Done()
+
+			j.run(c.container)
+		}(j)
 	}
 }
 
 func (j *job) run(cntnr *container.Container) {
+	// A job runs on its own goroutine, detached from whoever scheduled it, so a
+	// container that is nil or half-built (no logger) has to be handled here
+	// rather than assumed away — every log below would otherwise nil-panic on a
+	// background goroutine and take the whole process down.
+	if cntnr == nil || cntnr.Logger == nil {
+		return
+	}
+
 	ctx, span := otel.GetTracerProvider().Tracer("gofr-"+version.Framework).
 		Start(context.Background(), j.name)
 	defer span.End()
