@@ -1832,8 +1832,10 @@ func TestStartGRPCServer_Registered(t *testing.T) {
 	// Give it a moment to start then shut down
 	time.Sleep(50 * time.Millisecond)
 
-	if app.grpcServer != nil && app.grpcServer.server != nil {
-		app.grpcServer.server.Stop()
+	// Read through getServer rather than the field: createServer publishes it from the serve
+	// goroutine, so an unguarded read here races that write.
+	if app.grpcServer != nil {
+		app.grpcServer.forceStop()
 	}
 
 	wg.Wait()

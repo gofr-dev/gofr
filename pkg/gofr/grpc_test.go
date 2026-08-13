@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net"
 	"strconv"
+	"sync"
 	"testing"
 	"time"
 
@@ -373,6 +374,44 @@ func TestGRPC_Shutdown_BeforeStart_ContextCanceled(t *testing.T) {
 			_ = g.Shutdown(ctx)
 		}, "Shutdown must not panic when server was never created")
 	}
+}
+
+// TestGRPC_ConcurrentRunAndShutdown guards against a regression of the data race the
+// srvMu guard closes: createServer publishes g.server from the serve goroutine while
+// Shutdown reads it on the caller's. Meaningful under -race; without the guard the
+// detector reports both the field itself and the CAS inside grpc-go's Server.Stop.
+func TestGRPC_ConcurrentRunAndShutdown(t *testing.T) {
+	c, _, g := setupTestGRPCServer(t, testutil.GetFreePort(t), false)
+
+	var wg sync.WaitGroup
+
+	wg.Add(1)
+
+	go func() {
+		defer wg.Done()
+
+		g.Run(c)
+	}()
+
+	// No sleep: racing Shutdown against Run's publish of g.server is the point.
+	require.NoError(t, g.Shutdown(t.Context()))
+
+	// That Shutdown may legitimately have observed no server yet and returned a no-op —
+	// Run is free to publish afterwards and keep serving. That lost-shutdown gap is
+	// nil-check-as-started, tracked in #3801, and is deliberately not what this test
+	// asserts; stop whatever Run ended up publishing so Run returns either way.
+	require.Eventually(t, func() bool {
+		srv := g.getServer()
+		if srv == nil {
+			return false
+		}
+
+		srv.Stop()
+
+		return true
+	}, time.Second, 10*time.Millisecond, "Run never published a server to stop")
+
+	wg.Wait()
 }
 
 func TestGRPC_ServerRun_WithInterceptorAndOptions(t *testing.T) {
