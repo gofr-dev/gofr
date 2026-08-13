@@ -45,6 +45,11 @@ import (
 const (
 	redisPubSubModeStreams = "streams"
 	redisPubSubModePubSub  = "pubsub"
+
+	pubSubBackendKafka  = "KAFKA"
+	pubSubBackendGoogle = "GOOGLE"
+	pubSubBackendMQTT   = "MQTT"
+	pubSubBackendRedis  = "REDIS"
 )
 
 // Container is a collection of all common application level concerns. Things like Logger, Connection Pool for Redis
@@ -155,13 +160,13 @@ func (c *Container) Create(conf config.Config) {
 
 func (c *Container) createPubSub(conf config.Config) {
 	switch strings.ToUpper(conf.Get("PUBSUB_BACKEND")) {
-	case "KAFKA":
+	case pubSubBackendKafka:
 		c.createKafkaPubSub(conf)
-	case "GOOGLE":
+	case pubSubBackendGoogle:
 		c.createGooglePubSub(conf)
-	case "MQTT":
+	case pubSubBackendMQTT:
 		c.PubSub = c.createMqttPubSub(conf)
-	case "REDIS":
+	case pubSubBackendRedis:
 		c.createRedisPubSub(conf)
 	}
 }

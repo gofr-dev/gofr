@@ -26,6 +26,7 @@ func TestEnableRBAC(t *testing.T) {
 			setupFiles: func() (string, error) {
 				content := `{"roles":[{"name":"admin","permissions":["admin:read"]}],` +
 					`"endpoints":[{"path":"/api","methods":["GET"],"requiredPermissions":["admin:read"]}]}`
+
 				return createTestConfigFile("test_rbac.json", content)
 			},
 			cleanupFiles: func(path string) {

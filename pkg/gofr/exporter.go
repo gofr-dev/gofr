@@ -161,9 +161,9 @@ func attributeToStringPair(kv attribute.KeyValue) (key, value string) {
 		return string(kv.Key), strconv.FormatFloat(kv.Value.AsFloat64(), 'f', -1, 64)
 	case attribute.STRING:
 		return string(kv.Key), kv.Value.AsString()
-	case attribute.INVALID:
+	case attribute.EMPTY:
 		return string(kv.Key), "invalid"
 	default:
-		return string(kv.Key), kv.Value.Emit()
+		return string(kv.Key), kv.Value.String()
 	}
 }

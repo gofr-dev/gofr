@@ -82,6 +82,7 @@ func (s *SubscriptionManager) handleSubscription(ctx context.Context, topic stri
 	if errors.Is(err, errSubscriberHandlerPanic) {
 		return nil
 	}
+
 	if err != nil {
 		s.container.Logger.Errorf("error in handler for topic %s: %v", topic, err)
 		return err
@@ -106,6 +107,7 @@ func panicRecovery(re any, log logging.Logger) {
 	}
 
 	var e string
+
 	switch t := re.(type) {
 	case string:
 		e = t

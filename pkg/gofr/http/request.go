@@ -16,6 +16,8 @@ import (
 
 const (
 	defaultMaxMemory = 32 << 20 // 32 MB
+
+	contentTypeJSON = "application/json"
 )
 
 var (
@@ -60,7 +62,7 @@ func (r *Request) Bind(i any) error {
 	contentType := strings.Split(v, ";")[0]
 
 	switch contentType {
-	case "application/json":
+	case contentTypeJSON:
 		body, err := r.body()
 		if err != nil {
 			return err
@@ -88,11 +90,18 @@ func (r *Request) HostName() string {
 	return fmt.Sprintf("%s://%s", proto, r.req.Host)
 }
 
-// Params returns a slice of strings containing the values associated with the given query parameter key.
-// If the parameter is not present, an empty slice is returned.
+// Params returns the values associated with the given query parameter key. Each value is
+// additionally split on commas, so ?tag=a,b&tag=c yields []string{"a", "b", "c"}.
+//
+// If the key is absent, a nil slice is returned. A handler may return this value directly, and a
+// nil slice reaches the client as "null" in the response body where an empty one reaches it as "[]".
 func (r *Request) Params(key string) []string {
 	values := r.req.URL.Query()[key]
 
+	// Deliberately not preallocated: that would return an empty slice for an absent key and
+	// silently change the response body from `null` to `[]`. The hint is also a poor estimate,
+	// since len(values) under-counts as soon as any value contains a comma.
+	//nolint:prealloc // preserves the nil return for an absent key; see comment above
 	var result []string
 
 	for _, value := range values {
@@ -123,7 +132,7 @@ func (r *Request) bindFormURLEncoded(ptr any) error {
 
 func (r *Request) bindForm(ptr any, isMultipart bool) error {
 	ptrVal := reflect.ValueOf(ptr)
-	if ptrVal.Kind() != reflect.Ptr {
+	if ptrVal.Kind() != reflect.Pointer {
 		return errNonPointerBind
 	}
 

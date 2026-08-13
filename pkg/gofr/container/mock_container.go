@@ -48,6 +48,7 @@ func WithMockHTTPService(httpServiceNames ...string) options { //nolint:revive /
 		// Create a separate mock instance for each service name
 		// This allows different services to have different expectations
 		serviceMocks := make(map[string]*service.MockHTTP)
+
 		for _, s := range httpServiceNames {
 			mockservice := service.NewMockHTTP(ctrl)
 			c.Services[s] = mockservice
