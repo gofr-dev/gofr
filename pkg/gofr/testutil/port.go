@@ -85,22 +85,25 @@ func NewServerConfigs(t *testing.T) *ServiceConfigs {
 // error, and sets the ports with os.Setenv rather than t.Setenv, there being no test scope to
 // restore them at the end of. Prefer NewServerConfigs wherever a *testing.T is in hand.
 func ReserveServerPorts() (*ServiceConfigs, error) {
-	ports := map[string]int{httpPortEnv: 0, metricsPortEnv: 0, grpcPortEnv: 0}
+	// A slice rather than a map: the order the ports are reserved in, and the name that appears in
+	// an error, are then the same on every run.
+	names := []string{httpPortEnv, metricsPortEnv, grpcPortEnv}
+	ports := make([]int, len(names))
 
-	for name := range ports {
+	for i, name := range names {
 		port, err := reserveFreePort(context.Background())
 		if err != nil {
 			return nil, fmt.Errorf("failed to reserve a free %s: %w", name, err)
 		}
 
-		ports[name] = port
+		ports[i] = port
 
 		if err := os.Setenv(name, strconv.Itoa(port)); err != nil {
 			return nil, fmt.Errorf("failed to set %s: %w", name, err)
 		}
 	}
 
-	return newServiceConfigs(ports[httpPortEnv], ports[metricsPortEnv], ports[grpcPortEnv]), nil
+	return newServiceConfigs(ports[0], ports[1], ports[2]), nil
 }
 
 func newServiceConfigs(httpPort, metricsPort, grpcPort int) *ServiceConfigs {
