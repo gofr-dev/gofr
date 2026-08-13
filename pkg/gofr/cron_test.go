@@ -2,6 +2,7 @@ package gofr
 
 import (
 	"fmt"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -214,15 +215,10 @@ func TestCronTab_AddJob(t *testing.T) {
 	mocks.Metrics.EXPECT().NewCounter("app_cron_job_success", gomock.Any()).AnyTimes()
 	mocks.Metrics.EXPECT().NewCounter("app_cron_job_failures", gomock.Any()).AnyTimes()
 
-	// These AnyTimes() runtime expectations are load-bearing, not merely
-	// defensive: Stop() below halts only *future* ticks, it does not join a job
-	// goroutine that a tick already dispatched (Crontab fires `go j.run(...)` with
-	// no WaitGroup). The "* * * * *" job fires at second 0 of every minute, so a
-	// job dispatched just before Stop can still call the metrics mock after the
-	// test returns; without these expectations that call is gomock's
-	// t.Fatalf-on-finished-test -> panic. `defer c.Stop()` narrows the window but
-	// cannot close it — deterministic joining needs a framework change to Stop
-	// (tracked in gofr-dev/gofr#3801). Do not remove these believing Stop covers it.
+	// Stop() now joins the job goroutines a tick already dispatched, so a job can
+	// no longer reach the metrics mock after the test returns. These AnyTimes()
+	// expectations remain because the "* * * * *" job can legitimately fire at
+	// second 0 of a minute *during* the test, and the count is timing-dependent.
 	mocks.Metrics.EXPECT().IncrementCounter(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
 	mocks.Metrics.EXPECT().RecordHistogram(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
 
@@ -733,6 +729,102 @@ func TestCronTab_runScheduled_Panic(t *testing.T) {
 			assert.Contains(t, logs, tc.panicMessage)
 		})
 	}
+}
+
+func TestCronTab_runScheduled_NilLoggerAndContainer(t *testing.T) {
+	tests := []struct {
+		desc  string
+		cntnr *container.Container
+	}{
+		{"nil container", nil},
+		{"container without logger", &container.Container{}},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.desc, func(t *testing.T) {
+			ran := make(chan struct{}, 1)
+
+			c := &Crontab{
+				ticker:    time.NewTicker(time.Second),
+				container: tc.cntnr,
+				done:      make(chan struct{}),
+				jobs: []*job{{
+					sec:       map[int]struct{}{1: {}},
+					min:       map[int]struct{}{1: {}},
+					hour:      map[int]struct{}{1: {}},
+					day:       map[int]struct{}{1: {}},
+					month:     map[int]struct{}{1: {}},
+					dayOfWeek: map[int]struct{}{1: {}},
+					name:      "nil-logger-job",
+					fn:        func(*Context) { ran <- struct{}{} },
+				}},
+			}
+
+			// A panic here happens on the job's own goroutine and kills the test
+			// binary, so reaching Stop at all is the assertion.
+			c.runScheduled(time.Date(2024, 1, 1, 1, 1, 1, 1, time.Local))
+			c.Stop()
+
+			assert.Empty(t, ran, "job must be skipped when it cannot log")
+		})
+	}
+}
+
+func TestCrontab_Stop_JoinsInFlightJobs(t *testing.T) {
+	release := make(chan struct{})
+
+	var runs atomic.Int64
+
+	c := &Crontab{
+		ticker:    time.NewTicker(time.Second),
+		container: &container.Container{Logger: logging.NewMockLogger(logging.ERROR)},
+		done:      make(chan struct{}),
+		jobs: []*job{{
+			sec:       map[int]struct{}{1: {}},
+			min:       map[int]struct{}{1: {}},
+			hour:      map[int]struct{}{1: {}},
+			day:       map[int]struct{}{1: {}},
+			month:     map[int]struct{}{1: {}},
+			dayOfWeek: map[int]struct{}{1: {}},
+			name:      "slow-job",
+			fn: func(*Context) {
+				runs.Add(1)
+				<-release
+			},
+		}},
+	}
+
+	c.runScheduled(time.Date(2024, 1, 1, 1, 1, 1, 1, time.Local))
+
+	stopped := make(chan struct{})
+
+	go func() {
+		c.Stop()
+		close(stopped)
+	}()
+
+	select {
+	case <-stopped:
+		t.Fatal("Stop returned while a job was still running")
+	case <-time.After(50 * time.Millisecond):
+	}
+
+	close(release)
+
+	select {
+	case <-stopped:
+	case <-time.After(time.Second):
+		t.Fatal("Stop did not return after the job finished")
+	}
+
+	require.Equal(t, int64(1), runs.Load(), "Stop must return only after the dispatched job has run")
+
+	// A tick that lands after Stop must not dispatch anything more. The second Stop joins
+	// whatever that tick dispatched, so the count below is read after any such job has finished.
+	c.runScheduled(time.Date(2024, 1, 1, 1, 1, 1, 1, time.Local))
+	c.Stop()
+
+	require.Equal(t, int64(1), runs.Load(), "a tick after Stop must not dispatch a job")
 }
 
 func TestCrontab_Stop(t *testing.T) {
