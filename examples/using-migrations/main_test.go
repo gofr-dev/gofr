@@ -8,6 +8,7 @@ import (
 	"net"
 	"net/http"
 	"os"
+	"strconv"
 	"testing"
 
 	_ "github.com/go-sql-driver/mysql"
@@ -23,12 +24,22 @@ import (
 const (
 	configFolder = "./configs"
 
-	// testDatabase is created and dropped by the test run. The example's own configs point at the
+	// testDatabase is the MySQL database this test owns. The example's own configs point at the
 	// shared `test` database, which every other example migrates into as well - migration
 	// bookkeeping there is keyed by version only, so the highest version any example has run wins
 	// and the others get skipped. Migrating into a database this test owns keeps the run
 	// independent of the other examples and of what previous runs left behind.
+	//
+	// It is dropped and re-created at the start of every run rather than dropped at the end, so a
+	// failing run leaves its data behind to be inspected.
 	testDatabase = "test_using_migrations"
+
+	// testRedisDB is the logical Redis database this test owns, and is the same idea as
+	// testDatabase: the migrator uses the container's client, so pointing the example at a
+	// database the test flushes first means no previous run's bookkeeping can make this one skip
+	// its migrations. Namespacing rather than deleting a known list of keys - the list would go
+	// stale, silently, the first time a Redis migration writes a key nobody thought to add to it.
+	testRedisDB = 1
 )
 
 func TestMain(m *testing.M) {
@@ -41,10 +52,8 @@ func TestMain(m *testing.M) {
 		os.Exit(1)
 	}
 
-	// Redis has no per-test namespace here, so clear the keys this example writes instead. Left
-	// behind, the migration bookkeeping makes the runner skip the migrations on the next run.
-	if err := resetRedis(c); err != nil {
-		fmt.Fprintf(os.Stderr, "could not reset redis: %v\n", err)
+	if err := setupRedis(c); err != nil {
+		fmt.Fprintf(os.Stderr, "could not set up the test redis database: %v\n", err)
 		os.Exit(1)
 	}
 
@@ -74,14 +83,23 @@ func setupSQL(c config.Config) error {
 	return os.Setenv("DB_NAME", testDatabase)
 }
 
-func resetRedis(c config.Config) error {
-	client := redis.NewClient(&redis.Options{Addr: net.JoinHostPort(c.Get("REDIS_HOST"), c.Get("REDIS_PORT"))})
+// setupRedis empties the logical Redis database this test migrates into and points the example at
+// it. GoFr reads REDIS_DB (pkg/gofr/datasource/redis/config.go), and the Redis migrator runs on
+// that same client, so the selection covers the migration bookkeeping as well as the data.
+func setupRedis(c config.Config) error {
+	client := redis.NewClient(&redis.Options{
+		Addr: net.JoinHostPort(c.Get("REDIS_HOST"), c.Get("REDIS_PORT")),
+		DB:   testRedisDB,
+	})
 
 	defer client.Close()
 
-	// gofr_migrations holds the bookkeeping, gofr_migrations_lock the migration lock, and
-	// Umang is the key the Redis migration writes.
-	return client.Del(context.Background(), "gofr_migrations", "gofr_migrations_lock", "Umang").Err()
+	if err := client.FlushDB(context.Background()).Err(); err != nil {
+		return err
+	}
+
+	// The config files are read again by gofr.New(), which does not override what is already set.
+	return os.Setenv("REDIS_DB", strconv.Itoa(testRedisDB))
 }
 
 func TestExampleMigration(t *testing.T) {
