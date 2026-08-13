@@ -122,13 +122,17 @@ jobs:
           docker logs minio || true
           exit 1
 
-      # Run tests with automatic retry on failures
-      - name: Test with Retry Logic
+      - name: Test
         id: test
         uses: nick-fields/retry@v4
         with:
           timeout_minutes: 5  # Maximum time for the tests to run
-          max_attempts: 2      # Retry up to 2 times if tests fail
+          # No retry. The example tests used to race their own server's boot — every one of them
+          # slept a fixed 100ms after `go main()` and hoped — and a retry turned that into a green
+          # tick. It equally hid a real regression that happened to pass on the second attempt.
+          # They now wait on a readiness signal (testutil.WaitFor*), so a failure here is a
+          # failure. The action is kept for its timeout_minutes.
+          max_attempts: 1
           command: |
             # The retry action runs this block with a plain shell (no errexit),
             # unlike native `run:` steps that default to `bash -eo pipefail`.
