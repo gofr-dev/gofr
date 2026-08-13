@@ -250,8 +250,16 @@ func Test_Params(t *testing.T) {
 
 	assert.ElementsMatch(t, expectedCategories, r.Params("category"), "expected all values of 'category' to match")
 	assert.ElementsMatch(t, expectedTags, r.Params("tag"), "expected all values of 'tag' to match")
-	assert.Empty(t, r.Params("nonexistent"), "expected empty slice for non-existent query param")
-	assert.NotNil(t, r.Params("nonexistent"), "absent key must return an empty non-nil slice, not nil")
+	// Nil, not merely empty: assert.Empty alone would pass for both.
+	assert.Nil(t, r.Params("nonexistent"), "absent key must return a nil slice")
+
+	// Pin the actual response body, not just the marshaled value: a handler may return Params
+	// directly, and this is what its client receives. Going through Responder means a future change
+	// to how it normalizes nil values cannot silently alter the wire shape while this test passes.
+	rec := httptest.NewRecorder()
+	NewResponder(rec, http.MethodGet).Respond(r.Params("nonexistent"), nil)
+	assert.JSONEq(t, `{"data":null}`, rec.Body.String(),
+		"an absent key must reach the client as null, not [] or an omitted field")
 }
 
 func TestBind_FormURLEncoded(t *testing.T) {
