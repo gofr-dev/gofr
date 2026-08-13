@@ -40,9 +40,9 @@ func TestMain(m *testing.M) {
 
 	go main()
 
-	// AwaitGRPCServer rather than WaitForGRPCServer: TestMain gets a *testing.M and has no
+	// WaitForGRPCServerE rather than WaitForGRPCServer: TestMain gets a *testing.M and has no
 	// *testing.T for require to fail on, so it takes the error-returning variant of the same wait.
-	if err := testutil.AwaitGRPCServer(grpcHost); err != nil {
+	if err := testutil.WaitForGRPCServerE(grpcHost); err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
 	}

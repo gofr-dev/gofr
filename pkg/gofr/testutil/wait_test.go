@@ -144,7 +144,7 @@ func TestWaitForGRPCServer(t *testing.T) {
 	}
 }
 
-func TestAwaitGRPCServer(t *testing.T) {
+func TestWaitForGRPCServerE(t *testing.T) {
 	tests := []struct {
 		desc       string
 		startDelay time.Duration
@@ -156,12 +156,12 @@ func TestAwaitGRPCServer(t *testing.T) {
 	for i, tc := range tests {
 		addr := startGRPCServerAfter(t, tc.startDelay)
 
-		require.NoError(t, AwaitGRPCServer(addr), "TEST[%d], Failed.\n%s", i, tc.desc)
+		require.NoError(t, WaitForGRPCServerE(addr), "TEST[%d], Failed.\n%s", i, tc.desc)
 	}
 }
 
 // TestWaitForGRPC_Timeout covers the failure path the exported wrappers share. It exercises
-// waitForGRPC rather than WaitForGRPCServer or AwaitGRPCServer so the deadline can be a short one:
+// waitForGRPC rather than WaitForGRPCServer or WaitForGRPCServerE so the deadline can be a short one:
 // the wrappers hardcode serverStartTimeout, and a test is not going to wait 30s to see it.
 func TestWaitForGRPC_Timeout(t *testing.T) {
 	// A port reserved and released: nothing is listening, so the wait cannot succeed.

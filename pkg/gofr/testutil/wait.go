@@ -68,15 +68,16 @@ func WaitForGRPCServer(t *testing.T, addr string) {
 	require.NoError(t, waitForGRPC(t.Context(), addr))
 }
 
-// AwaitGRPCServer is WaitForGRPCServer for a caller that has no *testing.T to fail on — a
+// WaitForGRPCServerE is WaitForGRPCServer for a caller that has no *testing.T to fail on — a
 // TestMain, which gets only a *testing.M, is the usual one. It reports a failure by returning an
-// error. Prefer WaitForGRPCServer wherever a *testing.T is in hand.
-func AwaitGRPCServer(addr string) error {
+// error. The E suffix is the Foo/FooE convention for exactly this pair; prefer WaitForGRPCServer
+// wherever a *testing.T is in hand.
+func WaitForGRPCServerE(addr string) error {
 	return waitForGRPC(context.Background(), addr)
 }
 
 // waitForGRPC blocks until a gRPC connection to addr reaches the ready state. It is the plumbing
-// behind WaitForGRPCServer and AwaitGRPCServer, which differ only in how they report a failure.
+// behind WaitForGRPCServer and WaitForGRPCServerE, which differ only in how they report a failure.
 func waitForGRPC(ctx context.Context, addr string) error {
 	conn, err := grpc.NewClient(addr, grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
