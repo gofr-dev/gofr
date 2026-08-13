@@ -211,7 +211,7 @@ func download(t *testing.T, host, name string) string {
 // This directory is a separate module whose go.mod requires the released
 // gofr.dev v1.57.0 with no `replace`, and that release's testutil has no
 // WaitForHTTPServer. Calling the shared one would compile only inside the
-// workspace and break `GOWORK=off go build ./...` here. Drop this in favour of
+// workspace and break `GOWORK=off go build ./...` here. Drop this in favor of
 // testutil.WaitForHTTPServer once this module's gofr.dev requirement moves to a
 // release that carries it.
 func waitForHTTPServer(t *testing.T, host string) {
