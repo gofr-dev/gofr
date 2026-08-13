@@ -1389,19 +1389,20 @@ func Test_Shutdown(t *testing.T) {
 	assert.Contains(t, logs, "Application shutdown complete", "Test_Shutdown Failed!")
 }
 
+var errFakeShutdown = errors.New("fake telemetry shutdown error")
+
 // Test_Shutdown_DrainsTelemetry pins the fix for #3771: App.Shutdown must
 // drain every func registered in telemetryShutdown (metrics provider, tracer
 // provider, and anything else registered the same way), not just close the
 // container. A fake shutdown func standing in for a telemetry provider must
 // be invoked exactly once, and its error must surface in Shutdown's result.
 func Test_Shutdown_DrainsTelemetry(t *testing.T) {
-	errFakeShutdown := errors.New("fake telemetry shutdown error")
-
 	testutil.NewServerConfigs(t)
 
 	g := New()
 
 	calls := 0
+
 	g.telemetryShutdown = append(g.telemetryShutdown, func(context.Context) error {
 		calls++
 		return errFakeShutdown

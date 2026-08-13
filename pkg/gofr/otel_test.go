@@ -34,7 +34,7 @@ func (r *recordingExporter) ExportSpans(_ context.Context, spans []sdktrace.Read
 	return nil
 }
 
-func (r *recordingExporter) Shutdown(context.Context) error { return nil }
+func (*recordingExporter) Shutdown(context.Context) error { return nil }
 
 func (r *recordingExporter) exportedCount() int {
 	r.mu.Lock()
