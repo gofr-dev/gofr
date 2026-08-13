@@ -6,9 +6,11 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"maps"
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"slices"
 	"strconv"
 	"strings"
 	"sync"
@@ -262,7 +264,57 @@ func TestHandler_healthHandler(t *testing.T) {
 	h, err := healthHandler(ctx)
 
 	require.NoError(t, err)
-	assert.NotNil(t, h)
+	require.NotNil(t, h)
+
+	// The public endpoint must expose only {name, status} and never per-dependency details
+	// (hosts, ports, credentials, connection stats). See issue #3802.
+	resp, ok := h.(healthResponse)
+	require.True(t, ok, "expected redacted healthResponse, got %T", h)
+	assert.NotEmpty(t, resp.Status)
+
+	body, err := json.Marshal(resp)
+	require.NoError(t, err)
+
+	var got map[string]any
+	require.NoError(t, json.Unmarshal(body, &got))
+
+	// Pin the exact key set rather than blocklisting known-bad keys, so any future field added to
+	// the public body — an ES username, a port, a version — fails this test instead of leaking.
+	assert.Equal(t, []string{"name", "status"}, slices.Sorted(maps.Keys(got)))
+}
+
+func TestHandler_aggregateStatus(t *testing.T) {
+	live := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer live.Close()
+
+	dead := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusInternalServerError)
+	}))
+	defer dead.Close()
+
+	tests := []struct {
+		desc string
+		url  string
+		want string
+	}{
+		{"all dependencies healthy", live.URL, "UP"},
+		{"a dependency down", dead.URL, "DEGRADED"},
+	}
+
+	for i, tc := range tests {
+		testutil.NewServerConfigs(t)
+
+		a := New()
+		a.AddHTTPService("test-service", tc.url)
+
+		req, _ := http.NewRequestWithContext(t.Context(), http.MethodGet, "", http.NoBody)
+		ctx := newContext(nil, gofrHTTP.NewRequest(req), a.container)
+
+		// Only the aggregate string survives — never a per-dependency details map.
+		assert.Equal(t, tc.want, aggregateStatus(ctx), "TEST[%d], Failed.\n%s", i, tc.desc)
+	}
 }
 
 func TestHandler_ServeHTTP_ContextCanceled(t *testing.T) {

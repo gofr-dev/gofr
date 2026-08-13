@@ -45,6 +45,11 @@ import (
 const (
 	redisPubSubModeStreams = "streams"
 	redisPubSubModePubSub  = "pubsub"
+
+	pubSubBackendKafka  = "KAFKA"
+	pubSubBackendGoogle = "GOOGLE"
+	pubSubBackendMQTT   = "MQTT"
+	pubSubBackendRedis  = "REDIS"
 )
 
 // Container is a collection of all common application level concerns. Things like Logger, Connection Pool for Redis
@@ -55,9 +60,10 @@ type Container struct {
 	appName    string
 	appVersion string
 
-	Services       map[string]service.HTTP
-	metricsManager metrics.Manager
-	PubSub         pubsub.Client
+	Services        map[string]service.HTTP
+	metricsManager  metrics.Manager
+	shutdownMetrics exporters.ShutdownFunc
+	PubSub          pubsub.Client
 
 	WSManager *websocket.Manager
 
@@ -127,7 +133,10 @@ func (c *Container) Create(conf config.Config) {
 
 	c.Logger.Debug("Container is being created")
 
-	c.metricsManager = metrics.NewMetricsManager(exporters.Prometheus(c.GetAppName(), c.GetAppVersion()), c.Logger)
+	metricsCfg := metricsExporterConfig(conf, c.GetAppName(), c.GetAppVersion(), c.Logger)
+	shutdown, meter := exporters.Build(context.Background(), &metricsCfg, c.Logger)
+	c.shutdownMetrics = shutdown
+	c.metricsManager = metrics.NewMetricsManager(meter, c.Logger)
 
 	exporters.SendFrameworkStartupTelemetry(c.GetAppName(), c.GetAppVersion())
 
@@ -151,15 +160,27 @@ func (c *Container) Create(conf config.Config) {
 
 func (c *Container) createPubSub(conf config.Config) {
 	switch strings.ToUpper(conf.Get("PUBSUB_BACKEND")) {
-	case "KAFKA":
+	case pubSubBackendKafka:
 		c.createKafkaPubSub(conf)
-	case "GOOGLE":
+	case pubSubBackendGoogle:
 		c.createGooglePubSub(conf)
-	case "MQTT":
+	case pubSubBackendMQTT:
 		c.PubSub = c.createMqttPubSub(conf)
-	case "REDIS":
+	case pubSubBackendRedis:
 		c.createRedisPubSub(conf)
 	}
+}
+
+// ShutdownMetrics flushes pending metrics and shuts down the metrics provider.
+// It is safe to call when no provider was configured, and idempotent (see
+// exporters.Build for the flush/idempotency guarantees). Push exporters (e.g.
+// OTLP) rely on this to emit their final window before the process exits.
+func (c *Container) ShutdownMetrics(ctx context.Context) error {
+	if c.shutdownMetrics == nil {
+		return nil
+	}
+
+	return c.shutdownMetrics(ctx)
 }
 
 func (c *Container) Close() error {

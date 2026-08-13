@@ -14,6 +14,13 @@ import (
 type ContextLogger struct {
 	base    Logger
 	traceID string
+	// traceArg is the precomputed {"__trace_id__": traceID} marker map, built
+	// once when the ContextLogger is constructed (i.e. once per request) rather
+	// than on every log call. It is read-only downstream (the base logger only
+	// reads the key out and drops the map), so sharing the single instance
+	// across all log calls of this request is safe. nil when no valid trace ID
+	// is in scope.
+	traceArg map[string]any
 }
 
 // NewContextLogger creates a new ContextLogger that wraps the provided base logger
@@ -28,14 +35,22 @@ func NewContextLogger(ctx context.Context, base Logger) *ContextLogger {
 		traceID = sc.TraceID().String()
 	}
 
-	return &ContextLogger{base: base, traceID: traceID}
+	cl := &ContextLogger{base: base, traceID: traceID}
+
+	if traceID != "" {
+		cl.traceArg = map[string]any{traceIDMarkerKey: traceID}
+	}
+
+	return cl
 }
 
 // withTraceInfo appends the trace ID from the context (if available).
 // This allows trace IDs to be extracted later during formatting or filtering.
+// The marker map is precomputed once per ContextLogger, so this only pays for
+// the slice append, not a fresh map allocation on every call.
 func (l *ContextLogger) withTraceInfo(args ...any) []any {
-	if l.traceID != "" {
-		return append(args, map[string]any{"__trace_id__": l.traceID})
+	if l.traceArg != nil {
+		return append(args, l.traceArg)
 	}
 
 	return args

@@ -78,6 +78,43 @@ func TestNewCMD_FileLoggerClosedAfterRun(t *testing.T) {
 	assert.ErrorIs(t, err, os.ErrClosed)
 }
 
+// TestNewCMD_ShutdownMetricsCalledAfterRun pins the CMD flush path in
+// Run(): after a.cmd.Run returns, Run() must flush and shut down the
+// metrics provider (via Container.ShutdownMetrics) before the process
+// exits, so a short-lived CLI invocation does not lose buffered metrics.
+// It also exercises the bounded flush context added to guard against an
+// unreachable collector hanging a CLI invocation indefinitely.
+func TestNewCMD_ShutdownMetricsCalledAfterRun(t *testing.T) {
+	originalArgs := os.Args
+	os.Args = []string{"", "test-flush"}
+
+	t.Cleanup(func() { os.Args = originalArgs })
+
+	a := NewCMD()
+
+	handlerCalled := false
+
+	a.SubCommand("test-flush", func(_ *Context) (any, error) {
+		handlerCalled = true
+		return "ok", nil
+	})
+
+	done := make(chan struct{})
+
+	go func() {
+		a.Run()
+		close(done)
+	}()
+
+	select {
+	case <-done:
+	case <-time.After(metricsFlushTimeout + 5*time.Second):
+		t.Fatal("a.Run() did not return; CMD metrics flush appears to have hung")
+	}
+
+	assert.True(t, handlerCalled, "expected the subcommand handler to run")
+}
+
 func TestGofr_readConfig(t *testing.T) {
 	app := App{}
 
@@ -1123,9 +1160,17 @@ func setupTestEnvironment(t *testing.T) (host string, htmlContent []byte) {
 
 	createPublicDirectory(t, "testdir", htmlContent)
 
+	// A directory the test owns end to end, so that the endpoint-root case does not depend on the
+	// swagger-ui index.html checked in under pkg/gofr/static.
+	indexDir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(indexDir, "index.html"), htmlContent, 0600); err != nil {
+		t.Fatalf("Couldn't create index.html in %s, error: %s", indexDir, err)
+	}
+
 	app := New()
 
 	app.AddStaticFiles("gofrTest", "testdir")
+	app.AddStaticFiles("gofrTestIndex", indexDir)
 
 	app.httpServer.port = configs.HTTPPort
 
@@ -1161,8 +1206,17 @@ func TestStaticHandler(t *testing.T) {
 			expectedResponseHeaderType: "text/html; charset=utf-8", expectedBody: string(htmlContent),
 		},
 		{
+			// The endpoint root serves the directory's index.html. It answered 404 before the
+			// endpoint root was routable at all. This one depends on the checked-in
+			// pkg/gofr/static/index.html (the bundled swagger-ui page); the case below covers
+			// the same behavior with a directory the test writes itself.
 			desc: "check public endpoint", method: http.MethodGet,
-			path: "/" + defaultPublicStaticDir, statusCode: http.StatusNotFound,
+			path: "/" + defaultPublicStaticDir, statusCode: http.StatusOK,
+		},
+		{
+			desc: "check endpoint root of a directory with an index file", method: http.MethodGet,
+			path: "/" + "gofrTestIndex", statusCode: http.StatusOK,
+			expectedResponseHeaderType: "text/html; charset=utf-8", expectedBody: string(htmlContent),
 		},
 		{
 			desc: "check file content index.html in custom dir", method: http.MethodGet, path: "/" + "gofrTest" + "/" + indexHTML,
@@ -1170,6 +1224,8 @@ func TestStaticHandler(t *testing.T) {
 			expectedResponseHeaderType: "text/html; charset=utf-8", expectedBody: string(htmlContent),
 		},
 		{
+			// "testdir" has no index.html, so its root stays a 404 rather than becoming a
+			// listing of the directory's contents.
 			desc: "check public endpoint in custom dir", method: http.MethodGet, path: "/" + "gofrTest",
 			statusCode: http.StatusNotFound,
 		},

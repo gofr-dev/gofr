@@ -7,6 +7,10 @@ import (
 
 const (
 	allowedHeaders = "Authorization, Content-Type, x-requested-with, origin, true-client-ip, X-Correlation-ID"
+
+	headerAccessControlAllowMethods = "Access-Control-Allow-Methods"
+	headerAccessControlAllowHeaders = "Access-Control-Allow-Headers"
+	headerAccessControlAllowOrigin  = "Access-Control-Allow-Origin"
 )
 
 // CORS is a middleware that adds CORS (Cross-Origin Resource Sharing) headers to the response.
@@ -15,7 +19,7 @@ const (
 // the middleware dynamically matches the request's Origin header and responds
 // with the matched origin, adding a Vary: Origin header for correct caching.
 func CORS(middlewareConfigs map[string]string, routes *[]string) func(inner http.Handler) http.Handler {
-	allowedOrigins := parseOrigins(middlewareConfigs["Access-Control-Allow-Origin"])
+	allowedOrigins := parseOrigins(middlewareConfigs[headerAccessControlAllowOrigin])
 
 	return func(inner http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -38,21 +42,21 @@ func setMiddlewareHeaders(middlewareConfigs map[string]string, routes []string,
 
 	// Handle Access-Control-Allow-Origin separately for dynamic matching.
 	if allowedOrigins["*"] {
-		w.Header().Set("Access-Control-Allow-Origin", "*")
+		w.Header().Set(headerAccessControlAllowOrigin, "*")
 	} else if allowedOrigins[origin] {
-		w.Header().Set("Access-Control-Allow-Origin", origin)
+		w.Header().Set(headerAccessControlAllowOrigin, origin)
 		w.Header().Add("Vary", "Origin")
 	}
 
 	// Set default headers (excluding origin, handled above)
 	defaultHeaders := map[string]string{
-		"Access-Control-Allow-Methods": strings.Join(routes, ", "),
-		"Access-Control-Allow-Headers": allowedHeaders,
+		headerAccessControlAllowMethods: strings.Join(routes, ", "),
+		headerAccessControlAllowHeaders: allowedHeaders,
 	}
 
 	for header, defaultValue := range defaultHeaders {
 		if customValue, ok := middlewareConfigs[header]; ok && customValue != "" {
-			if header == "Access-Control-Allow-Headers" {
+			if header == headerAccessControlAllowHeaders {
 				w.Header().Set(header, defaultValue+", "+customValue)
 			} else {
 				w.Header().Set(header, customValue)
@@ -64,7 +68,7 @@ func setMiddlewareHeaders(middlewareConfigs map[string]string, routes []string,
 
 	// Handle additional custom headers (not part of defaultHeaders or origin)
 	for header, customValue := range middlewareConfigs {
-		if _, ok := defaultHeaders[header]; !ok && header != "Access-Control-Allow-Origin" {
+		if _, ok := defaultHeaders[header]; !ok && header != headerAccessControlAllowOrigin {
 			w.Header().Set(header, customValue)
 		}
 	}

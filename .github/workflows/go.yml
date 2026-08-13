@@ -85,10 +85,11 @@ jobs:
           go-version: ${{ matrix.go-version }}
         id: Go
 
-      # setup-go@v7 defaults GOTOOLCHAIN=local; go.work requires go>=1.26, so
-      # allow the toolchain to auto-upgrade for the older matrix versions.
+      # go.work pins a newer Go than the older matrix versions install, and a
+      # plain GOTOOLCHAIN=auto resolves that to a read-only toolchain module.
+      # See the action for why that breaks coverage builds.
       - name: Allow Go toolchain auto-upgrade
-        run: echo "GOTOOLCHAIN=auto" >> "$GITHUB_ENV"
+        uses: ./.github/actions/setup-go-toolchain
 
       - name: Get dependencies
         run: |
@@ -96,6 +97,30 @@ jobs:
 
       - name: Start Zipkin
         run: docker run -d -p 2005:9411 openzipkin/zipkin:latest
+
+      # MinIO can't run as a GitHub Actions `services:` container because the
+      # stock image needs a `server /data` command, which services can't set.
+      # Run it explicitly (same pattern as Zipkin above) and wait for readiness.
+      - name: Start MinIO
+        run: |
+          # Pinned by digest now that this step is required: an unexpected image
+          # change can't silently alter the integration guard for #3804.
+          docker run -d --name minio -p 9000:9000 \
+            -e MINIO_ROOT_USER=minioadmin -e MINIO_ROOT_PASSWORD=minioadmin \
+            minio/minio:RELEASE.2025-09-07T16-13-09Z@sha256:14cea493d9a34af32f524e538b8346cf79f3321eff8e708c1e2960462bd8936e \
+            server /data
+          for i in $(seq 1 30); do
+            if curl -fs http://localhost:9000/minio/health/live >/dev/null; then
+              echo "MinIO is ready"; exit 0
+            fi
+            echo "waiting for MinIO... ($i)"; sleep 2
+          done
+          # If MinIO never became ready (image-pull failure, registry rate-limit,
+          # crash) fail loudly here. Otherwise the integration test for #3804 would
+          # silently skip and the job would still report success.
+          echo "::error::MinIO failed to become ready after 60s"
+          docker logs minio || true
+          exit 1
 
       # Run tests with automatic retry on failures
       - name: Test with Retry Logic
@@ -105,6 +130,12 @@ jobs:
           timeout_minutes: 5  # Maximum time for the tests to run
           max_attempts: 2      # Retry up to 2 times if tests fail
           command: |
+            # The retry action runs this block with a plain shell (no errexit),
+            # unlike native `run:` steps that default to `bash -eo pipefail`.
+            # Without `set -e` a failing `go test` (below) is swallowed because
+            # the block's exit code is that of its last command (`go tool cover`,
+            # which returns 0), so the job goes green on red tests (#3812).
+            set -eo pipefail
             export APP_ENV=test
             # Run tests for the examples directory with coverage
             go test ./examples/... -v -short -covermode=atomic -coverprofile packageWithpbgo.cov -coverpkg=./examples/...
@@ -112,6 +143,20 @@ jobs:
             grep -vE '(/client/|grpc-.+-client/main\.go|_client\.go|_gofr\.go|_grpc\.pb\.go|\.pb\.go|\.proto|health_.*\.go)' packageWithpbgo.cov > profile.cov
             # Display coverage statistics
             go tool cover -func profile.cov
+
+      # The S3 example is its own submodule (it depends on the s3 datasource
+      # submodule), so it is not covered by `go test ./examples/...` above.
+      # Run it explicitly against the MinIO service — this is the integration
+      # guard for the s3 datasource (gofr-dev/gofr#3804).
+      - name: Test using-s3-filestore example against MinIO
+        working-directory: examples/using-s3-filestore
+        env:
+          S3_ENDPOINT: "http://localhost:9000"
+          # Treat the s3 integration test as required, not optional: if MinIO is
+          # unreachable the test must fail rather than skip, so a broken backend
+          # can never turn the #3804 guard into a silent no-op.
+          S3_REQUIRE_MINIO: "true"
+        run: go test -v ./...
 
       # Upload coverage report for the 1.24 Go version only
       - name: Upload Test Coverage
@@ -142,10 +187,11 @@ jobs:
           go-version: ${{ matrix.go-version }}
         id: Go
 
-      # setup-go@v7 defaults GOTOOLCHAIN=local; go.work requires go>=1.26, so
-      # allow the toolchain to auto-upgrade for the older matrix versions.
+      # go.work pins a newer Go than the older matrix versions install, and a
+      # plain GOTOOLCHAIN=auto resolves that to a read-only toolchain module.
+      # See the action for why that breaks coverage builds.
       - name: Allow Go toolchain auto-upgrade
-        run: echo "GOTOOLCHAIN=auto" >> "$GITHUB_ENV"
+        uses: ./.github/actions/setup-go-toolchain
 
       - name: Get dependencies
         run: |
@@ -160,12 +206,18 @@ jobs:
           max_attempts: 2
           retry_on: error
           command: |
+            # The retry action runs this block with a plain shell (no errexit),
+            # so a bare `go test` failure would be swallowed by a later 0-exit
+            # command (#3812). `set -e` guards the coverage-combine lines below;
+            # the `|| exit_code=$?` captures keep the explicit panic (exit 2)
+            # detection working instead of aborting on the first test failure.
+            set -eo pipefail
             export APP_ENV=test
 
             # Run tests for root gofr package
+            exit_code=0
             go test -v -short -covermode=atomic \
-              -coverpkg=./pkg/gofr -coverprofile=gofr_only.cov ./pkg/gofr
-            exit_code=$?
+              -coverpkg=./pkg/gofr -coverprofile=gofr_only.cov ./pkg/gofr || exit_code=$?
             if [ $exit_code -eq 2 ]; then
               echo "::error::Panic detected in root gofr package tests"
               exit 2
@@ -175,9 +227,9 @@ jobs:
             fi
 
             # Run tests for sub-packages
+            exit_code=0
             go test -v -covermode=atomic \
-              -coverpkg=./pkg/gofr -coverprofile=submodules.cov ./pkg/gofr/...
-            exit_code=$?
+              -coverpkg=./pkg/gofr -coverprofile=submodules.cov ./pkg/gofr/... || exit_code=$?
             if [ $exit_code -eq 2 ]; then
               echo "::error::Panic detected in gofr sub-packages tests"
               exit 2
@@ -260,10 +312,11 @@ jobs:
           go-version: ${{ matrix.go-version }}
         id: Go
 
-      # setup-go@v7 defaults GOTOOLCHAIN=local; go.work requires go>=1.26, so
-      # allow the toolchain to auto-upgrade for the older matrix versions.
+      # go.work pins a newer Go than the older matrix versions install, and a
+      # plain GOTOOLCHAIN=auto resolves that to a read-only toolchain module.
+      # See the action for why that breaks coverage builds.
       - name: Allow Go toolchain auto-upgrade
-        run: echo "GOTOOLCHAIN=auto" >> "$GITHUB_ENV"
+        uses: ./.github/actions/setup-go-toolchain
 
       # Find all submodules (directories with go.mod files) in the pkg directory
       - name: Detect Submodules
@@ -281,34 +334,48 @@ jobs:
           timeout_minutes: 5
           max_attempts: 2
           command: |
+            # The retry action runs this block with a plain shell (no errexit),
+            # unlike native `run:` steps that default to `bash -eo pipefail` (#3812).
+            set -eo pipefail
             export APP_ENV=test
-            # Create a directory for coverage reports
+
+            # Create a directory for coverage reports. Resolve it to an absolute path:
+            # each worker below cds into its own module, which sits at a different depth
+            # (pkg/gofr/datasource/mongo vs pkg/gofr/datasource/file/s3), so no single
+            # relative path reaches this directory from all of them (#3824).
             mkdir -p coverage_reports
-            
+            export COVERAGE_DIR="$PWD/coverage_reports"
+
             # Get the list of submodules
             SUBMODULES='${{ steps.detect_submodules.outputs.submodules }}'
-            
-            # Process each submodule in parallel with a maximum of 4 parallel jobs
-            echo $SUBMODULES | jq -c '.[]' | xargs -I{} -P 4 bash -c '
-              module={}
+
+            # Process each submodule in parallel with a maximum of 4 parallel jobs.
+            # `jq -r` and the positional argument matter: xargs substitutes {} into the
+            # script *text* before bash parses it, so an interpolated module path would be
+            # re-parsed as shell source rather than passed as data.
+            echo "$SUBMODULES" | jq -r '.[]' | xargs -I{} -P 4 bash -c '
+              # Without errexit the worker runs to completion regardless, and its exit
+              # status is that of its last command — so a failing `go test` was invisible
+              # and the job reported green on red tests (#3824).
+              set -eo pipefail
+
+              module="$1"
               echo "Testing module: $module"
-              cd $module
-            
+              cd "$module"
+
               # Extract module name (replace / with _)
-              module_name=$(echo $module | tr "/" "_")
-            
+              module_name=$(echo "$module" | tr "/" "_")
+
               # Download dependencies for the submodule
               go mod download
               go mod tidy
-            
+
               # Run tests with a focus on failed tests first
-              go test ./... -v -short -coverprofile=${module_name}.cov -coverpkg=./...
-            
+              go test ./... -v -short -coverprofile="${module_name}.cov" -coverpkg=./...
+
               # Copy coverage file to the coverage_reports directory
-              cp ${module_name}.cov ../../../coverage_reports/
-            
-              cd -
-            '
+              cp "${module_name}.cov" "$COVERAGE_DIR/"
+            ' _ {}
 
       # Upload submodule coverage reports as an artifact
       - name: Upload Coverage Reports
@@ -316,6 +383,9 @@ jobs:
         with:
           name: submodule-coverage-reports
           path: coverage_reports/*.cov
+          # upload-artifact defaults to `warn`, which is how an empty coverage_reports/
+          # stayed green for months while the cp above never landed a file (#3824).
+          if-no-files-found: error
 
   # Job for uploading coverage to external services (qlty.sh)
   upload_coverage:
@@ -509,3 +579,9 @@ jobs:
         uses: ls-lint/action@v2.3.1
         with:
           config: .ls-lint.yml
+
+      # Block compiled executables (extensionless Go binaries, ELF/Mach-O/PE)
+      # from being committed anywhere in the repo — content- and mode-based, so
+      # it can't be defeated by a path or extension. See the script for details.
+      - name: No committed executables
+        run: bash .github/scripts/check-binaries.sh

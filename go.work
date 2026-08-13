@@ -4,6 +4,8 @@ use (
 	.
 	./examples/using-add-filestore
 	./examples/using-cloudsql
+	./examples/using-gcp-metrics
+	./examples/using-s3-filestore
 	./pkg/gofr/datasource/arangodb
 	./pkg/gofr/datasource/cassandra
 	./pkg/gofr/datasource/clickhouse
@@ -30,4 +32,5 @@ use (
 	./pkg/gofr/datasource/scylladb
 	./pkg/gofr/datasource/solr
 	./pkg/gofr/datasource/surrealdb
+	./pkg/gofr/metrics/exporters/gcp
 )

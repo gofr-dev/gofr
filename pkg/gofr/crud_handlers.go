@@ -70,7 +70,7 @@ func scanEntity(object any) (*entity, error) {
 	}
 
 	objType := reflect.TypeOf(object)
-	if objType.Kind() != reflect.Ptr {
+	if objType.Kind() != reflect.Pointer {
 		return nil, fmt.Errorf("failed to register routes for '%s' struct, %w", objType.Name(), errNonPointerObject)
 	}
 

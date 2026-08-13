@@ -159,6 +159,7 @@ func TestOracleMigration_RunMigrationSuccess(t *testing.T) {
 			*results = []map[string]any{
 				{"LAST_MIGRATION": int64(0)},
 			}
+
 			return nil
 		}).Times(2)
 

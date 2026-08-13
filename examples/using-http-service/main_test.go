@@ -51,12 +51,10 @@ func Test_main(t *testing.T) {
 			statusCode:  200,
 		},
 		{
-			desc: "health check",
-			path: "/.well-known/health",
-			expectedRes: `{"data":{"cat-facts":{"status":"UP","details":{"host":"catfact.ninja"}},` +
-				`"fact-checker":{"status":"DOWN","details":{"error":"service down","host":"catfact.ninja"}},` +
-				`"name":"using-http-service","status":"DEGRADED","version":"dev"}}` + "\n",
-			statusCode: 200,
+			desc:        "health check",
+			path:        "/.well-known/health",
+			expectedRes: `{"data":{"name":"using-http-service","status":"DEGRADED"}}` + "\n",
+			statusCode:  200,
 		},
 	}
 
@@ -83,14 +81,22 @@ func TestHTTPHandlerURLError(t *testing.T) {
 		fmt.Sprint("http://localhost:", port, "/handle"), bytes.NewBuffer([]byte(`{"key":"value"}`)))
 	gofrReq := gofrHTTP.NewRequest(req)
 
-	mockContainer, mocks := container.NewMockContainer(t)
+	mockContainer, _ := container.NewMockContainer(t)
 
 	ctx := &gofr.Context{Context: context.Background(), Request: gofrReq, Container: mockContainer}
 
-	ctx.Container.Services = map[string]service.HTTP{"cat-facts": service.NewHTTPService("http://invalid", ctx.Logger, mockContainer.Metrics())}
-
-	mocks.Metrics.EXPECT().RecordHistogram(gomock.Any(), "app_http_service_response", gomock.Any(), gomock.Any(),
+	// The histogram assertion deliberately uses a dedicated mock rather than
+	// mockContainer.Metrics(): NewMockContainer pre-registers a catch-all
+	// RecordHistogram(...).AnyTimes() expectation on its own metrics mock, and
+	// gomock matches the first non-exhausted expectation, so a specific
+	// expectation added afterwards can never be satisfied.
+	metrics := service.NewMockMetrics(gomock.NewController(t))
+	metrics.EXPECT().RecordHistogram(gomock.Any(), "app_http_service_response", gomock.Any(), gomock.Any(),
 		"http://invalid", "method", "GET", "status", gomock.Any())
+
+	ctx.Container.Services = map[string]service.HTTP{
+		"cat-facts": service.NewHTTPService("http://invalid", ctx.Logger, metrics),
+	}
 
 	resp, err := Handler(ctx)
 

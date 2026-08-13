@@ -20,10 +20,10 @@ applies to both your HTTP and gRPC services.
 By default, the authentication middleware exempts every path under `/.well-known/*` from authentication (the middleware's `isWellKnown` check uses `strings.HasPrefix(path, "/.well-known")`). This includes:
 
 - `/.well-known/alive` — liveness probe
-- `/.well-known/health` — readiness/health probe with datasource status
+- `/.well-known/health` — readiness/health probe with the aggregate service status
 - `/.well-known/swagger` — Swagger UI (when an `openapi.json` is present in `static/`)
 
-If `/.well-known/health` exposes sensitive details about your datasources, scope its visibility at the network layer (private listener, mesh policy, or ingress rule) rather than expecting the auth middleware to gate it — the framework will not.
+`/.well-known/health` returns only `{"name", "status"}` — no hosts, ports, credentials, or per-datasource detail — so it is safe to leave unauthenticated for probes. If you still want it off the public internet, scope its visibility at the network layer (private listener, mesh policy, or ingress rule) rather than expecting the auth middleware to gate it — the framework will not.
 
 ## 1. Basic Auth
 *Basic Authentication* is a simple authentication scheme where the user's credentials (username and password) are 

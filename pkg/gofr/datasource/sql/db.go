@@ -241,7 +241,7 @@ func (d *DB) Select(ctx context.Context, data any, query string, args ...any) {
 
 	// First confirm that what we got in v is a pointer else it won't be settable
 	rvo := reflect.ValueOf(data)
-	if rvo.Kind() != reflect.Ptr {
+	if rvo.Kind() != reflect.Pointer {
 		d.logger.Error("we did not get a pointer. data is not settable.")
 		return
 	}
@@ -314,7 +314,7 @@ func (d *DB) selectStruct(ctx context.Context, query string, args []any, rv refl
 
 func (*DB) rowsToStruct(rows *sql.Rows, vo reflect.Value) {
 	v := vo
-	if vo.Kind() == reflect.Ptr {
+	if vo.Kind() == reflect.Pointer {
 		v = vo.Elem()
 	}
 

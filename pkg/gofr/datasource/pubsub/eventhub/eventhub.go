@@ -407,6 +407,10 @@ func closePartitionResources(ctx context.Context, partitionClient *azeventhubs.P
 }
 
 func (c *Client) Publish(ctx context.Context, topic string, message []byte) error {
+	if c.producer == nil {
+		return errClientNotConnected
+	}
+
 	if topic != c.cfg.EventhubName {
 		return ErrTopicMismatch
 	}

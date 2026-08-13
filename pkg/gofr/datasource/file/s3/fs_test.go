@@ -5,6 +5,7 @@ import (
 	"errors"
 	"io"
 	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -148,7 +149,11 @@ func Test_CreateFile_TxtFile_Success(t *testing.T) {
 	require.NoError(t, err, "Failed to create file")
 }
 
-func Test_CreateFile_WithExistingDirectory_Success(t *testing.T) {
+// Test_CreateFile_FreshPrefix_Success guards the defect-2 fix: creating the
+// first object under a brand-new prefix must succeed without any parent
+// "directory" existing. S3 prefixes need not pre-exist, so Create must not
+// probe with ListObjectsV2 — it writes the object directly.
+func Test_CreateFile_FreshPrefix_Success(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
@@ -158,17 +163,7 @@ func Test_CreateFile_WithExistingDirectory_Success(t *testing.T) {
 	mocks.mockLogger.EXPECT().Logf(gomock.Any(), gomock.Any()).AnyTimes()
 	mocks.mockLogger.EXPECT().Debug(gomock.Any()).AnyTimes()
 
-	mocks.mockS3.EXPECT().
-		ListObjectsV2(gomock.Any(), gomock.Any()).
-		Return(&s3.ListObjectsV2Output{
-			Contents: []types.Object{
-				{
-					Key:  aws.String("abc.txt"),
-					Size: aws.Int64(1),
-				},
-			},
-		}, nil)
-
+	// No ListObjectsV2 expectation: Create must not check for a parent prefix.
 	mocks.mockS3.EXPECT().PutObject(gomock.Any(), gomock.Any()).Return(&s3.PutObjectOutput{}, nil)
 	mocks.mockS3.EXPECT().GetObject(gomock.Any(), gomock.Any()).Return(&s3.GetObjectOutput{
 		Body:          io.NopCloser(strings.NewReader("test file content")),
@@ -177,26 +172,8 @@ func Test_CreateFile_WithExistingDirectory_Success(t *testing.T) {
 		LastModified:  aws.Time(time.Now()),
 	}, nil)
 
-	_, err := fs.Create("abc/efg.txt")
-	require.NoError(t, err, "Failed to create file with existing directory")
-}
-
-func Test_CreateFile_Error(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
-
-	mocks := setupTestMocks(ctrl)
-	fs := setupTestFileSystem(mocks, nil)
-
-	mocks.mockLogger.EXPECT().Logf(gomock.Any(), gomock.Any()).AnyTimes()
-	mocks.mockLogger.EXPECT().Debug(gomock.Any()).AnyTimes()
-
-	mocks.mockS3.EXPECT().
-		ListObjectsV2(gomock.Any(), gomock.Any()).
-		Return(nil, errMock)
-
-	_, err := fs.Create("abc/abc.txt")
-	require.Error(t, err, "Expected error during file creation with invalid path")
+	_, err := fs.Create("uploads/3f2a-uuid/report.pdf")
+	require.NoError(t, err, "Create under a fresh prefix should succeed")
 }
 
 func Test_OpenFile(t *testing.T) {
@@ -351,6 +328,35 @@ func Test_ReadDir(t *testing.T) {
 						{Key: aws.String("abc/efg/"), Size: aws.Int64(0), LastModified: aws.Time(time.Now())},
 					},
 				}, nil)
+			},
+		},
+		{
+			name:    "Returns only one-level entries using common prefixes",
+			dirPath: "abc",
+			expectedResults: []result{
+				{"root.txt", 10, false},
+				{"efg", 0, true},
+			},
+			setupMock: func() {
+				mocks.mockS3.EXPECT().ListObjectsV2(gomock.Any(), gomock.Any()).
+					DoAndReturn(func(_ context.Context, in *s3.ListObjectsV2Input,
+						_ ...func(*s3.Options)) (*s3.ListObjectsV2Output, error) {
+						// The fix must request a one-level listing: a delimiter is set so nested
+						// keys are collapsed into CommonPrefixes instead of streaming every object.
+						require.NotNil(t, in.Delimiter, "ReadDir must set a Delimiter for one-level listing")
+						require.Equal(t, string(filepath.Separator), *in.Delimiter)
+						require.Equal(t, "abc/", *in.Prefix)
+
+						return &s3.ListObjectsV2Output{
+							Contents: []types.Object{
+								{Key: aws.String("abc/"), Size: aws.Int64(0), LastModified: aws.Time(time.Now())},
+								{Key: aws.String("abc/root.txt"), Size: aws.Int64(10), LastModified: aws.Time(time.Now())},
+							},
+							CommonPrefixes: []types.CommonPrefix{
+								{Prefix: aws.String("abc/efg/")},
+							},
+						}, nil
+					})
 			},
 		},
 	}
@@ -574,15 +580,6 @@ func Test_CreateFile_PutObjectFails_Error(t *testing.T) {
 	mocks.mockLogger.EXPECT().Debug(gomock.Any()).AnyTimes()
 	mocks.mockLogger.EXPECT().Errorf(gomock.Any(), gomock.Any()).AnyTimes()
 
-	mocks.mockS3.EXPECT().ListObjectsV2(gomock.Any(), gomock.Any()).Return(&s3.ListObjectsV2Output{
-		Contents: []types.Object{
-			{
-				Key:  aws.String("folder/"),
-				Size: aws.Int64(0),
-			},
-		},
-	}, nil)
-
 	mocks.mockS3.EXPECT().PutObject(gomock.Any(), gomock.Any()).Return(nil, errMock)
 
 	_, err := fs.Create("folder/test.txt")
@@ -599,15 +596,6 @@ func Test_CreateFile_GetObjectFails_Error(t *testing.T) {
 	mocks.mockLogger.EXPECT().Logf(gomock.Any(), gomock.Any()).AnyTimes()
 	mocks.mockLogger.EXPECT().Debug(gomock.Any()).AnyTimes()
 	mocks.mockLogger.EXPECT().Errorf(gomock.Any(), gomock.Any()).AnyTimes()
-
-	mocks.mockS3.EXPECT().ListObjectsV2(gomock.Any(), gomock.Any()).Return(&s3.ListObjectsV2Output{
-		Contents: []types.Object{
-			{
-				Key:  aws.String("folder/"),
-				Size: aws.Int64(0),
-			},
-		},
-	}, nil)
 
 	mocks.mockS3.EXPECT().PutObject(gomock.Any(), gomock.Any()).Return(&s3.PutObjectOutput{}, nil)
 	mocks.mockS3.EXPECT().GetObject(gomock.Any(), gomock.Any()).Return(nil, errMock)
@@ -633,6 +621,57 @@ func Test_Open_Success(t *testing.T) {
 
 	_, err := fs.Open("test.json")
 	require.NoError(t, err, "Unexpected error when opening file")
+}
+
+// Test_Open_NilOptionalMetadata_NoPanic guards the defect-3 fix. ContentType,
+// LastModified and ContentLength are optional response headers; a backend such
+// as Cloudflare R2 may omit them, leaving the SDK's pointers nil. Open must not
+// dereference them unconditionally.
+func Test_Open_NilOptionalMetadata_NoPanic(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	mocks := setupTestMocks(ctrl)
+	fs := setupTestFileSystem(mocks, nil)
+
+	mocks.mockLogger.EXPECT().Logf(gomock.Any(), gomock.Any()).AnyTimes()
+	// A nil Content-Length is surfaced as a warning so the degraded handle is diagnosable.
+	mocks.mockLogger.EXPECT().Warnf(gomock.Any(), gomock.Any()).AnyTimes()
+	mocks.mockLogger.EXPECT().Debug(gomock.Any()).AnyTimes()
+
+	mocks.mockS3.EXPECT().GetObject(gomock.Any(), gomock.Any()).Return(&s3.GetObjectOutput{
+		Body: io.NopCloser(strings.NewReader("content")),
+		// ContentType, LastModified and ContentLength deliberately left nil.
+	}, nil)
+
+	f, err := fs.Open("no-metadata.bin")
+	require.NoError(t, err, "Open must not panic when optional metadata is absent")
+	assert.Empty(t, f.(*S3File).contentType, "missing content type defaults to empty string")
+	assert.Zero(t, f.(*S3File).size, "missing content length defaults to zero")
+}
+
+// Test_CreateFile_NilOptionalMetadata_NoPanic is the Create-side counterpart to
+// Test_Open_NilOptionalMetadata_NoPanic.
+func Test_CreateFile_NilOptionalMetadata_NoPanic(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	mocks := setupTestMocks(ctrl)
+	fs := setupTestFileSystem(mocks, nil)
+
+	mocks.mockLogger.EXPECT().Logf(gomock.Any(), gomock.Any()).AnyTimes()
+	// A nil Content-Length is surfaced as a warning so the degraded handle is diagnosable.
+	mocks.mockLogger.EXPECT().Warnf(gomock.Any(), gomock.Any()).AnyTimes()
+	mocks.mockLogger.EXPECT().Debug(gomock.Any()).AnyTimes()
+
+	mocks.mockS3.EXPECT().PutObject(gomock.Any(), gomock.Any()).Return(&s3.PutObjectOutput{}, nil)
+	mocks.mockS3.EXPECT().GetObject(gomock.Any(), gomock.Any()).Return(&s3.GetObjectOutput{
+		Body: io.NopCloser(strings.NewReader("")),
+		// ContentType, LastModified and ContentLength deliberately left nil.
+	}, nil)
+
+	_, err := fs.Create("no-ext-key")
+	require.NoError(t, err, "Create must not panic when optional metadata is absent")
 }
 
 func Test_Open_GetObjectFails_Error(t *testing.T) {

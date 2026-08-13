@@ -22,7 +22,7 @@ Three authentication categories are exposed on the App, all verified in `pkg/gof
 - `EnableAPIKeyAuthWithValidator(fn)` — custom validator.
 - `EnableOAuth(jwksEndpoint, refreshIntervalSeconds, options ...jwt.ParserOption)` — JWT validation with periodic JWKS refresh.
 
-A single call enables auth on both HTTP and gRPC. The entire `/.well-known/*` prefix (including `/.well-known/alive` and `/.well-known/health`) is auth-exempt by default — see `pkg/gofr/http/middleware/validate.go`. Re-protect `health` if you publish it externally.
+A single call enables auth on both HTTP and gRPC. The entire `/.well-known/*` prefix (including `/.well-known/alive` and `/.well-known/health`) is auth-exempt by default — see `pkg/gofr/http/middleware/validate.go`. Both endpoints are deliberately minimal, so the exemption does not expose anything sensitive.
 
 For full code examples, see [Authentication](/docs/advanced-guide/authentication).
 
@@ -90,7 +90,7 @@ Kubernetes liveness probes fire from the kubelet without credentials. GoFr exemp
 
 ## Health endpoint
 
-`/.well-known/health` is exempted by default but reveals dependency status. In production, re-enable auth on it (or restrict via NetworkPolicy to your monitoring namespace) so it is not enumerable from the public internet.
+`/.well-known/health` is exempted from auth by default so readiness probes reach it without credentials. Its body is limited to `{"name", "status"}` — the aggregate `UP` / `DEGRADED` roll-up, with no datasource hosts, names, or connection details — so an unauthenticated caller cannot enumerate your backends from it.
 
 ## TLS
 

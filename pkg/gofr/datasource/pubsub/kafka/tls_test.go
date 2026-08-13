@@ -84,7 +84,6 @@ IFi4oUxW0wLNUmTJFSIrFRE3eYWy56XiI8jPs7U94It8YwjhDSeHwslMKbGwogqI
 Om59HA==
 -----END CERTIFICATE-----`
 
-	//nolint:gosec // This is a test certificate
 	clientKeyContent := `-----BEGIN RSA PRIVATE KEY-----
 MIIEogIBAAKCAQEAsAUmtRCpuhnlYVOQJutQXDc2duyFVll5xg3PERRdz3iThkDn
 w+sSRWa3vxUEnKsWVHFNYK41P3xUV01ktHnzJ3hHjxDnB2t8GeSHDZvJzWfX1yBb

@@ -38,6 +38,7 @@ type Redis interface {
 }
 
 // Cassandra is an interface representing a cassandra database
+//
 // Deprecated: Cassandra interface is deprecated and will be removed in future releases, users must use CassandraWithContext.
 type Cassandra interface {
 	// Deprecated: Query method is deprecated and will be removed in future releases, users must use QueryWithCtx.

@@ -99,11 +99,13 @@ func TestIntegration_UsingAI(t *testing.T) {
 		assert.Contains(t, get(t, base+"/inventory/ABC"), "ABC")
 	})
 
-	t.Run("health reports the LLM datasource", func(t *testing.T) {
+	t.Run("health reports only the redacted aggregate status", func(t *testing.T) {
 		out := get(t, base+"/.well-known/health")
-		assert.Contains(t, out, `"llm"`)
 		assert.Contains(t, out, `"status":"UP"`)
-		assert.Contains(t, out, `"provider":"groq"`)
+		// The unauthenticated endpoint must expose only {name, status} — never per-dependency
+		// details such as the datasource name, provider, or credentials.
+		assert.NotContains(t, out, `"llm"`)
+		assert.NotContains(t, out, `"provider":"groq"`)
 		assert.NotContains(t, out, "test-key", "the API key must never appear in health details")
 	})
 
