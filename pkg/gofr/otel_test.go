@@ -3,6 +3,7 @@ package gofr
 import (
 	"context"
 	"errors"
+	"sync"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -14,6 +15,56 @@ import (
 	"gofr.dev/pkg/gofr/config"
 	"gofr.dev/pkg/gofr/logging"
 )
+
+// recordingExporter is a minimal sdktrace.SpanExporter that appends every
+// exported span and does nothing on Shutdown, unlike
+// tracetest.InMemoryExporter (whose Shutdown clears its own recorded spans,
+// which would mask the very flush this test needs to observe).
+type recordingExporter struct {
+	mu    sync.Mutex
+	spans []sdktrace.ReadOnlySpan
+}
+
+func (r *recordingExporter) ExportSpans(_ context.Context, spans []sdktrace.ReadOnlySpan) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	r.spans = append(r.spans, spans...)
+
+	return nil
+}
+
+func (r *recordingExporter) Shutdown(context.Context) error { return nil }
+
+func (r *recordingExporter) exportedCount() int {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	return len(r.spans)
+}
+
+// Test_BatchSpanProcessor_FlushesOnShutdown documents/guards the underlying
+// guarantee the #3771 fix depends on: a span still sitting in a
+// BatchSpanProcessor's buffer (i.e. not yet exported by its background
+// timer) is flushed to the exporter when the TracerProvider is shut down,
+// rather than dropped. initTracer relies on this by registering tp.Shutdown
+// into App.telemetryShutdown instead of letting spans age out on their own.
+func Test_BatchSpanProcessor_FlushesOnShutdown(t *testing.T) {
+	exporter := &recordingExporter{}
+	tp := sdktrace.NewTracerProvider(
+		sdktrace.WithSampler(sdktrace.AlwaysSample()),
+		sdktrace.WithSpanProcessor(sdktrace.NewBatchSpanProcessor(exporter)),
+	)
+
+	_, span := tp.Tracer("test").Start(t.Context(), "buffered-span")
+	span.End()
+
+	require.Equal(t, 0, exporter.exportedCount(), "span should still be buffered, not yet exported")
+
+	require.NoError(t, tp.Shutdown(t.Context()))
+
+	require.Equal(t, 1, exporter.exportedCount(), "Shutdown must flush the buffered span instead of dropping it")
+}
 
 func TestParseHeaders(t *testing.T) {
 	tests := []struct {

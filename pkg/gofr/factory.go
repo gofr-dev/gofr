@@ -17,6 +17,7 @@ func New() *App {
 	app := &App{}
 	app.readConfig(false)
 	app.container = container.NewContainer(app.Config)
+	app.telemetryShutdown = append(app.telemetryShutdown, app.container.ShutdownMetrics)
 
 	app.initTracer()
 	app.initMetricsServer()
@@ -75,6 +76,8 @@ func NewCMD() *App {
 	}
 
 	app.container.Create(app.Config)
+	app.telemetryShutdown = append(app.telemetryShutdown, app.container.ShutdownMetrics)
+
 	app.initTracer()
 
 	return app

@@ -56,6 +56,7 @@ func (a *App) initTracer() {
 			sdktrace.WithSampler(sdktrace.NeverSample()),
 		)
 		otel.SetTracerProvider(tp)
+		a.telemetryShutdown = append(a.telemetryShutdown, tp.Shutdown)
 
 		return
 	}
@@ -81,6 +82,7 @@ func (a *App) initTracer() {
 
 	batcher := sdktrace.NewBatchSpanProcessor(exporter)
 	tp.RegisterSpanProcessor(batcher)
+	a.telemetryShutdown = append(a.telemetryShutdown, tp.Shutdown)
 }
 
 func isValidConfig(logger logging.Logger, name, url, host, port string) bool {

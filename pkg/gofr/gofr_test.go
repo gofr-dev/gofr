@@ -108,7 +108,7 @@ func TestNewCMD_ShutdownMetricsCalledAfterRun(t *testing.T) {
 
 	select {
 	case <-done:
-	case <-time.After(metricsFlushTimeout + 5*time.Second):
+	case <-time.After(telemetryFlushTimeout + 5*time.Second):
 		t.Fatal("a.Run() did not return; CMD metrics flush appears to have hung")
 	}
 
@@ -885,6 +885,24 @@ func Test_initTracer_NoSamplingButValidIDs(t *testing.T) {
 	require.NotEqual(t, sc1.TraceID(), sc2.TraceID(), "TraceIDs must differ across spans for correlation")
 }
 
+// Test_initTracer_RegistersShutdown_NoExporter pins the fix for #3771: even
+// on the no-exporter (NeverSample) path, initTracer must register the
+// TracerProvider's Shutdown func so App.Shutdown/Run drain it like any other
+// telemetry provider.
+func Test_initTracer_RegistersShutdown_NoExporter(t *testing.T) {
+	mockContainer, _ := container.NewMockContainer(t)
+	a := App{
+		Config:    config.NewMockConfig(nil),
+		container: mockContainer,
+	}
+
+	a.initTracer()
+	t.Cleanup(func() { otel.SetTracerProvider(noop.NewTracerProvider()) })
+
+	require.Len(t, a.telemetryShutdown, 1, "initTracer must register exactly one shutdown func")
+	require.NoError(t, a.telemetryShutdown[0](t.Context()))
+}
+
 // Test_initTracer_SDKWhenExporterSet asserts that initTracer installs the recording
 // SDK tracer provider when TRACE_EXPORTER is configured. Pair of Test_initTracer_NoSamplingButValidIDs.
 func Test_initTracer_SDKWhenExporterSet(t *testing.T) {
@@ -904,6 +922,25 @@ func Test_initTracer_SDKWhenExporterSet(t *testing.T) {
 
 	require.True(t, span.IsRecording(),
 		"expected recording span when TRACE_EXPORTER=gofr; SDK provider should be installed")
+}
+
+// Test_initTracer_RegistersShutdown_WithExporter pins the fix for #3771 on the
+// SDK path: initTracer must register the TracerProvider's Shutdown func so
+// App.Shutdown/Run flush buffered spans instead of dropping them.
+func Test_initTracer_RegistersShutdown_WithExporter(t *testing.T) {
+	mockContainer, _ := container.NewMockContainer(t)
+	a := App{
+		Config: config.NewMockConfig(map[string]string{
+			"TRACE_EXPORTER": "gofr",
+		}),
+		container: mockContainer,
+	}
+
+	a.initTracer()
+	t.Cleanup(func() { otel.SetTracerProvider(noop.NewTracerProvider()) })
+
+	require.Len(t, a.telemetryShutdown, 1, "initTracer must register exactly one shutdown func")
+	require.NoError(t, a.telemetryShutdown[0](t.Context()))
 }
 
 func Test_UseMiddleware(t *testing.T) {
@@ -1350,6 +1387,34 @@ func Test_Shutdown(t *testing.T) {
 	})
 
 	assert.Contains(t, logs, "Application shutdown complete", "Test_Shutdown Failed!")
+}
+
+// Test_Shutdown_DrainsTelemetry pins the fix for #3771: App.Shutdown must
+// drain every func registered in telemetryShutdown (metrics provider, tracer
+// provider, and anything else registered the same way), not just close the
+// container. A fake shutdown func standing in for a telemetry provider must
+// be invoked exactly once, and its error must surface in Shutdown's result.
+func Test_Shutdown_DrainsTelemetry(t *testing.T) {
+	errFakeShutdown := errors.New("fake telemetry shutdown error")
+
+	testutil.NewServerConfigs(t)
+
+	g := New()
+
+	calls := 0
+	g.telemetryShutdown = append(g.telemetryShutdown, func(context.Context) error {
+		calls++
+		return errFakeShutdown
+	})
+
+	go g.Run()
+
+	time.Sleep(10 * time.Millisecond)
+
+	err := g.Shutdown(t.Context())
+
+	assert.Equal(t, 1, calls, "expected the registered telemetry shutdown func to be invoked exactly once")
+	require.ErrorIs(t, err, errFakeShutdown)
 }
 
 func TestShutdown_StopsCron(t *testing.T) {
