@@ -63,7 +63,7 @@ func TestS3FileStore_RoundTrip(t *testing.T) {
 	t.Setenv("GOFR_TELEMETRY", "false")
 
 	go main()
-	testutil.WaitForHTTPServer(t, configs.HTTPHost)
+	waitForHTTPServer(t, configs.HTTPHost)
 
 	// Defect 1: an object larger than one HTTP transport chunk must round-trip
 	// byte-for-byte. The pre-fix Read filled only the first few KB of the buffer.
@@ -200,6 +200,38 @@ func download(t *testing.T, host, name string) string {
 	require.NoError(t, json.NewDecoder(resp.Body).Decode(&env))
 
 	return env.Data.Content
+}
+
+// waitForHTTPServer blocks until the server at host answers its liveness probe,
+// and fails the test if it never does. It replaces a fixed sleep after
+// `go main()`: a sleep long enough for a loaded CI runner is wasted on every
+// other run, and one short enough to be cheap races the listener.
+//
+// pkg/gofr/testutil has the same helper, and this is a copy of it — deliberately.
+// This directory is a separate module whose go.mod requires the released
+// gofr.dev v1.57.0 with no `replace`, and that release's testutil has no
+// WaitForHTTPServer. Calling the shared one would compile only inside the
+// workspace and break `GOWORK=off go build ./...` here. Drop this in favour of
+// testutil.WaitForHTTPServer once this module's gofr.dev requirement moves to a
+// release that carries it.
+func waitForHTTPServer(t *testing.T, host string) {
+	t.Helper()
+
+	require.Eventually(t, func() bool {
+		req, err := http.NewRequestWithContext(t.Context(), http.MethodGet, host+"/.well-known/alive", http.NoBody)
+		if err != nil {
+			return false
+		}
+
+		resp, err := http.DefaultClient.Do(req)
+		if err != nil {
+			return false
+		}
+
+		defer resp.Body.Close()
+
+		return resp.StatusCode == http.StatusOK
+	}, 30*time.Second, 100*time.Millisecond, "HTTP server at %s did not start in time", host)
 }
 
 // newSDKClient builds a raw S3 client used only for test setup (bucket
