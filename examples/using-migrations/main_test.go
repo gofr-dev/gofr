@@ -86,6 +86,12 @@ func setupSQL(c config.Config) error {
 // setupRedis empties the logical Redis database this test migrates into and points the example at
 // it. GoFr reads REDIS_DB (pkg/gofr/datasource/redis/config.go), and the Redis migrator runs on
 // that same client, so the selection covers the migration bookkeeping as well as the data.
+//
+// FLUSHDB, not a list of the keys the example writes: a list has to be kept in step with
+// migrations/, and the next Redis migration that writes a key nobody remembered to add would
+// silently make this example non-repeatable again. The cost is that this empties logical database
+// testRedisDB in full — safe against the throwaway container the test job runs, worth knowing
+// before pointing REDIS_HOST/REDIS_PORT at a Redis that holds anything else.
 func setupRedis(c config.Config) error {
 	client := redis.NewClient(&redis.Options{
 		Addr: net.JoinHostPort(c.Get("REDIS_HOST"), c.Get("REDIS_PORT")),
