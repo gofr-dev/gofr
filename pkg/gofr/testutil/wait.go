@@ -2,6 +2,8 @@ package testutil
 
 import (
 	"context"
+	"errors"
+	"fmt"
 	"net/http"
 	"os"
 	"strings"
@@ -26,6 +28,10 @@ const (
 	// stdoutReadBuffer is the chunk size the stdout capture reads with; a log line is far shorter.
 	stdoutReadBuffer = 4096
 )
+
+// errServerNotReady is what the error-returning wait variants wrap, so a caller can tell a
+// readiness timeout apart from a failure to set the wait up at all.
+var errServerNotReady = errors.New("server did not become ready in time")
 
 // WaitForHTTPServer blocks until the server at host answers its liveness probe, and fails the
 // test if it never does. Use it instead of sleeping a fixed duration after `go main()`: a sleep
@@ -59,19 +65,38 @@ func WaitForHTTPServer(t *testing.T, host string) {
 func WaitForGRPCServer(t *testing.T, addr string) {
 	t.Helper()
 
+	require.NoError(t, waitForGRPC(t.Context(), addr))
+}
+
+// AwaitGRPCServer is WaitForGRPCServer for a caller that has no *testing.T to fail on — a
+// TestMain, which gets only a *testing.M, is the usual one. It reports a failure by returning an
+// error. Prefer WaitForGRPCServer wherever a *testing.T is in hand.
+func AwaitGRPCServer(addr string) error {
+	return waitForGRPC(context.Background(), addr)
+}
+
+// waitForGRPC blocks until a gRPC connection to addr reaches the ready state. It is the plumbing
+// behind WaitForGRPCServer and AwaitGRPCServer, which differ only in how they report a failure.
+func waitForGRPC(ctx context.Context, addr string) error {
 	conn, err := grpc.NewClient(addr, grpc.WithTransportCredentials(insecure.NewCredentials()))
-	require.NoError(t, err, "failed to create a gRPC client for %s", addr)
+	if err != nil {
+		return fmt.Errorf("failed to create a gRPC client for %s: %w", addr, err)
+	}
 
 	defer conn.Close()
 
-	ctx, cancel := context.WithTimeout(t.Context(), serverStartTimeout)
+	ctx, cancel := context.WithTimeout(ctx, serverStartTimeout)
 	defer cancel()
 
 	conn.Connect()
 
 	for state := conn.GetState(); state != connectivity.Ready; state = conn.GetState() {
-		require.True(t, conn.WaitForStateChange(ctx, state), "gRPC server at %s did not start in time", addr)
+		if !conn.WaitForStateChange(ctx, state) {
+			return fmt.Errorf("%w: gRPC server at %s did not start in %s", errServerNotReady, addr, serverStartTimeout)
+		}
 	}
+
+	return nil
 }
 
 // WaitForStdoutContains runs f with os.Stdout captured and blocks until the captured output
@@ -134,7 +159,13 @@ func captureUntil(r *os.File, substr string, mu *sync.Mutex, out *strings.Builde
 	found := make(chan struct{})
 
 	go func() {
-		var once sync.Once
+		var (
+			once sync.Once
+			// scanned is how much of out has already been searched. Rescanning the whole builder
+			// on every read would be quadratic in the captured output — free when the signal
+			// arrives in the first read or two, but not on the timeout path against a chatty app.
+			scanned int
+		)
 
 		buf := make([]byte, stdoutReadBuffer)
 
@@ -144,7 +175,13 @@ func captureUntil(r *os.File, substr string, mu *sync.Mutex, out *strings.Builde
 			if n > 0 {
 				mu.Lock()
 				out.Write(buf[:n])
-				hit := strings.Contains(out.String(), substr)
+
+				// Carry over len(substr)-1 bytes so a match straddling a read boundary is found.
+				from := max(scanned-len(substr)+1, 0)
+				// strings.Builder.String does not copy, so this stays linear overall.
+				s := out.String()
+				hit := strings.Contains(s[from:], substr)
+				scanned = len(s)
 				mu.Unlock()
 
 				if hit {

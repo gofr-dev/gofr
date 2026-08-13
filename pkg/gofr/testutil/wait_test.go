@@ -94,9 +94,14 @@ func TestWaitForStdoutContains(t *testing.T) {
 	tests := []struct {
 		desc      string
 		writeWait time.Duration
+		// writes are logged in order, with a pause between them so each lands in its own read.
+		// Splitting the awaited substring across two of them puts it across a read boundary, which
+		// the incremental scan has to carry over rather than miss.
+		writes []string
 	}{
-		{"line already written when f returns", 0},
-		{"line written well after f returns", 300 * time.Millisecond},
+		{"line already written when f returns", 0, []string{"starting up\nready to serve\n"}},
+		{"line written well after f returns", 300 * time.Millisecond, []string{"starting up\nready to serve\n"}},
+		{"substring straddles a read boundary", 0, []string{"starting up\nrea", "dy to serve\n"}},
 	}
 
 	for i, tc := range tests {
@@ -104,7 +109,11 @@ func TestWaitForStdoutContains(t *testing.T) {
 			go func() {
 				time.Sleep(tc.writeWait)
 
-				fmt.Fprintln(os.Stdout, "starting up\nready to serve")
+				for _, w := range tc.writes {
+					fmt.Fprint(os.Stdout, w)
+					// Long enough for the reader to drain what has been written so far.
+					time.Sleep(100 * time.Millisecond)
+				}
 			}()
 		})
 
@@ -133,4 +142,36 @@ func TestWaitForGRPCServer(t *testing.T) {
 
 		require.NoError(t, conn.Close(), "TEST[%d], Failed.\n%s", i, tc.desc)
 	}
+}
+
+func TestAwaitGRPCServer(t *testing.T) {
+	tests := []struct {
+		desc       string
+		startDelay time.Duration
+	}{
+		{"server already listening", 0},
+		{"server starts after the first probe", 300 * time.Millisecond},
+	}
+
+	for i, tc := range tests {
+		addr := startGRPCServerAfter(t, tc.startDelay)
+
+		require.NoError(t, AwaitGRPCServer(addr), "TEST[%d], Failed.\n%s", i, tc.desc)
+	}
+}
+
+// TestWaitForGRPC_Timeout covers the failure path the exported wrappers share. It exercises
+// waitForGRPC rather than WaitForGRPCServer or AwaitGRPCServer so the deadline can be a short one:
+// the wrappers hardcode serverStartTimeout, and a test is not going to wait 30s to see it.
+func TestWaitForGRPC_Timeout(t *testing.T) {
+	// A port reserved and released: nothing is listening, so the wait cannot succeed.
+	addr := fmt.Sprintf("localhost:%d", GetFreePort(t))
+
+	ctx, cancel := context.WithTimeout(t.Context(), 200*time.Millisecond)
+	defer cancel()
+
+	err := waitForGRPC(ctx, addr)
+
+	require.ErrorIs(t, err, errServerNotReady)
+	require.ErrorContains(t, err, addr, "the error should name the server that did not come up")
 }
