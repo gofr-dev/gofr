@@ -106,7 +106,9 @@ func (a *App) Shutdown(ctx context.Context) error {
 	}
 
 	if a.cron != nil {
-		a.cron.Stop()
+		// Joins the in-flight cron jobs, but only until the shutdown deadline —
+		// a job that outlives it must not hold the whole shutdown open.
+		a.cron.stop(ctx.Done())
 	}
 
 	if a.metricServer != nil {
