@@ -580,7 +580,9 @@ jobs:
 
       # Check file naming conventions using ls-lint
       - name: Check for file names errors
-        uses: ls-lint/action@v2.3.1
+        # Pinned to main: v2.3.1 still declares the deprecated node20 runtime.
+        # 0c7f19c ("chore: run on the node24 runtime") is not in a tagged release yet.
+        uses: ls-lint/action@0c7f19c04594e52a801dec991aae70a7ae5c6665 # main, node24 runtime
         with:
           config: .ls-lint.yml
 

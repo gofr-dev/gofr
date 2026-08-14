@@ -1123,6 +1123,10 @@ func Test_AddCronJob_Fail(t *testing.T) {
 		})
 	})
 
+	// AddCronJob starts the scheduler even when the schedule itself is rejected;
+	// without this the ticker goroutine outlives the test.
+	a.cron.Stop()
+
 	assert.Contains(t, stderr, "error adding cron job")
 	assert.NotContains(t, stderr, "test-job-fail")
 }
@@ -1130,12 +1134,17 @@ func Test_AddCronJob_Fail(t *testing.T) {
 func Test_AddCronJob_Success(t *testing.T) {
 	pass := false
 	a := App{
-		container: &container.Container{},
+		container: &container.Container{Logger: logging.NewMockLogger(logging.ERROR)},
 	}
 
 	a.AddCronJob("* * * * *", "test-job", func(ctx *Context) {
 		ctx.Logger.Info("test-job-success")
 	})
+
+	// "* * * * *" fires at second 0 of every minute. Left running, this scheduler
+	// outlives the test and its job goroutine logs against a container the test
+	// no longer owns — the nil-logger panic seen in gofr-dev/gofr#3813.
+	defer a.cron.Stop()
 
 	assert.Len(t, a.cron.jobs, 1)
 
