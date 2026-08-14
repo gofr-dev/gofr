@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"reflect"
@@ -68,6 +69,41 @@ func Test_WebSocket_Success(t *testing.T) {
 	// Close the client connection
 	err = ws.Close()
 	require.NoError(t, err)
+}
+
+// Test_WebSocket_PlainHTTPRequestDoesNotPanic pins the fix for #3862: a plain
+// HTTP request to a route registered via app.WebSocket (no Upgrade headers,
+// so no WSConnectionKey is ever set on the request context) must get a clean
+// error response instead of panicking. Before the fix, the unsafe type
+// assertion on WSConnectionKey panicked; the panic-recovery middleware then
+// converted that into a generic "Internal Server Error" response, which is
+// indistinguishable by status code alone (both paths return 500) from the
+// websocket.ErrorConnection this handler is supposed to return on its own.
+// The response body's message is checked instead, since only the
+// panic-recovery path produces the generic message.
+func Test_WebSocket_PlainHTTPRequestDoesNotPanic(t *testing.T) {
+	testutil.NewServerConfigs(t)
+
+	app := New()
+
+	server := httptest.NewServer(app.httpServer.router)
+	defer server.Close()
+
+	app.WebSocket("/ws", func(*Context) (any, error) {
+		return "unreachable: handler must not run without a WebSocket connection", nil
+	})
+
+	resp, err := http.Get(server.URL + "/ws")
+	require.NoError(t, err)
+
+	defer resp.Body.Close()
+
+	body, err := io.ReadAll(resp.Body)
+	require.NoError(t, err)
+
+	assert.Equal(t, http.StatusInternalServerError, resp.StatusCode)
+	assert.Contains(t, string(body), "couldn't establish connection to web socket",
+		"expected the websocket.ErrorConnection message, not a panic-recovery response")
 }
 
 func Test_AddWSService(t *testing.T) {
