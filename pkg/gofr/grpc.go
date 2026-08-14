@@ -20,7 +20,7 @@ import (
 )
 
 type grpcServer struct {
-	// srvMu guards server, which createServer writes on the serve goroutine and Shutdown reads on the caller goroutine.
+	// srvMu guards server, which ensureServer writes on the serve goroutine and Shutdown reads on the caller goroutine.
 	srvMu              sync.Mutex
 	server             *grpc.Server
 	interceptors       []grpc.UnaryServerInterceptor
@@ -125,14 +125,30 @@ func registerGRPCMetrics(c *container.Container) {
 	c.Metrics().NewCounter("app_grpc_rate_limit_exceeded_total", "Total gRPC requests rejected by rate limiter")
 }
 
-func (g *grpcServer) createServer() error {
+// ensureServer returns the server, creating it on first call. The check and the publish happen
+// under a single hold — mirroring httpServer.run — so two concurrent callers cannot both observe
+// nil and both build one, leaving the loser to Serve a server no later getServer sees and no
+// Shutdown stops. The hold also covers the append to g.options.
+//
+// Building under the lock is safe: grpc.NewServer and reflection.Register do not block. The
+// server is published only once fully set up, so a concurrent Shutdown sees either no server or
+// a ready one, never a partially registered one. Callers use the returned copy for blocking
+// calls such as Serve, which must never hold srvMu.
+func (g *grpcServer) ensureServer() (*grpc.Server, error) {
+	g.srvMu.Lock()
+	defer g.srvMu.Unlock()
+
+	if g.server != nil {
+		return g.server, nil
+	}
+
 	interceptorOption := grpc.ChainUnaryInterceptor(g.interceptors...)
 	streamOpt := grpc.ChainStreamInterceptor(g.streamInterceptors...)
 	g.options = append(g.options, interceptorOption, streamOpt)
 
 	srv := grpc.NewServer(g.options...)
 	if srv == nil {
-		return errFailedCreateServer
+		return nil, errFailedCreateServer
 	}
 
 	enabled := strings.ToLower(g.config.GetOrDefault("GRPC_ENABLE_REFLECTION", "false"))
@@ -140,13 +156,9 @@ func (g *grpcServer) createServer() error {
 		reflection.Register(srv)
 	}
 
-	// Publish under the lock, and only after the server is fully set up, so a concurrent
-	// Shutdown either sees no server at all or one that is ready to be stopped.
-	g.srvMu.Lock()
 	g.server = srv
-	g.srvMu.Unlock()
 
-	return nil
+	return srv, nil
 }
 
 // getServer returns the current server under the lock. Callers operate on the returned
@@ -159,16 +171,12 @@ func (g *grpcServer) getServer() *grpc.Server {
 }
 
 func (g *grpcServer) Run(c *container.Container) {
-	srv := g.getServer()
-	if srv == nil {
-		if err := g.createServer(); err != nil {
-			c.Logger.Fatalf("failed to create gRPC server: %v", err)
-			c.Metrics().IncrementCounter(context.Background(), "grpc_server_errors_total")
+	srv, err := g.ensureServer()
+	if err != nil {
+		c.Logger.Fatalf("failed to create gRPC server: %v", err)
+		c.Metrics().IncrementCounter(context.Background(), "grpc_server_errors_total")
 
-			return
-		}
-
-		srv = g.getServer()
+		return
 	}
 
 	if !isPortAvailable(g.port) {
@@ -236,19 +244,18 @@ func (g *grpcServer) forceStop() {
 
 // RegisterService adds a gRPC service to the GoFr application.
 func (a *App) RegisterService(desc *grpc.ServiceDesc, impl any) {
-	if !a.grpcRegistered {
-		if err := a.grpcServer.createServer(); err != nil {
-			a.container.Logger.Errorf("failed to create gRPC server for service %s: %v", desc.ServiceName, err)
-			return
-		}
+	srv, err := a.grpcServer.ensureServer()
+	if err != nil {
+		a.container.Logger.Errorf("failed to create gRPC server for service %s: %v", desc.ServiceName, err)
+		return
 	}
 
 	a.container.Logger.Infof("registering gRPC Service: %s", desc.ServiceName)
-	a.grpcServer.getServer().RegisterService(desc, impl)
+	srv.RegisterService(desc, impl)
 
 	a.container.Metrics().IncrementCounter(context.Background(), "grpc_services_registered_total")
 
-	err := injectContainer(impl, a.container)
+	err = injectContainer(impl, a.container)
 	if err != nil {
 		a.container.Logger.Fatalf("failed to inject container into gRPC service %s: %v", desc.ServiceName, err)
 	}
