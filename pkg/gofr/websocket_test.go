@@ -93,7 +93,10 @@ func Test_WebSocket_PlainHTTPRequestDoesNotPanic(t *testing.T) {
 		return "unreachable: handler must not run without a WebSocket connection", nil
 	})
 
-	resp, err := http.Get(server.URL + "/ws")
+	req, err := http.NewRequestWithContext(t.Context(), http.MethodGet, server.URL+"/ws", http.NoBody)
+	require.NoError(t, err)
+
+	resp, err := http.DefaultClient.Do(req)
 	require.NoError(t, err)
 
 	defer resp.Body.Close()
