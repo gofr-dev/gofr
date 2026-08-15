@@ -140,6 +140,18 @@ type logger interface {
 	Error(...any)
 }
 
+// logEnabler is the optional fast-path interface. Building a request-log entry
+// costs a struct, a formatted timestamp and a client-IP lookup, all before the
+// logger gets to decide whether the entry is emitted at all. A logger that can
+// answer that question first lets the middleware skip the work entirely.
+//
+// It is deliberately expressed without the logging package's Level type so this
+// middleware keeps its minimal logger contract. An implementation that does not
+// provide it behaves exactly as before.
+type logEnabler interface {
+	LogEnabled() bool
+}
+
 // Logging is a middleware which logs response status and time in milliseconds along with other data.
 //
 // The StatusResponseWriter wrapper allocated per request is pooled in a
@@ -210,6 +222,14 @@ func Logging(probes LogProbes, logger logger) func(inner http.Handler) http.Hand
 
 func handleRequestLog(srw *StatusResponseWriter, r *http.Request, start time.Time, traceID, spanID string, logger logger) {
 	status := srw.Status()
+
+	// A server error is reported through Error, which is emitted at every level
+	// this logger supports, so only the informational path can be skipped.
+	if status < http.StatusInternalServerError {
+		if e, ok := logger.(logEnabler); ok && !e.LogEnabled() {
+			return
+		}
+	}
 
 	l := &RequestLog{
 		TraceID:      traceID,

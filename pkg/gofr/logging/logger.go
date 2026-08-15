@@ -129,6 +129,17 @@ func (l *logger) Log(args ...any) {
 	l.logf(INFO, "", args...)
 }
 
+// LogEnabled reports whether an entry written through Log would be emitted at
+// the configured level.
+//
+// It lets a caller that must BUILD an entry before logging it -- the request
+// logger assembles a struct, formats a timestamp and resolves the client IP --
+// skip that work when the entry would be discarded. Callers that already have
+// their arguments to hand gain nothing from it and should just call Log.
+func (l *logger) LogEnabled() bool {
+	return INFO >= l.level
+}
+
 func (l *logger) Logf(format string, args ...any) {
 	l.logf(INFO, format, args...)
 }
