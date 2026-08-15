@@ -116,6 +116,17 @@ func Tracer(inner http.Handler) http.Handler {
 		// implicit 200 in that case, so the span attribute must report 200
 		// rather than be omitted (or worse, recorded as 0).
 		defer func(s trace.Span, rw *StatusResponseWriter) {
+			// A non-recording span discards SetAttributes by contract, but the
+			// call still builds the variadic []attribute.KeyValue to hand it.
+			// On the default deployment every span is non-recording — GoFr
+			// installs an SDK provider with NeverSample when no TRACE_EXPORTER
+			// is set — so that slice was allocated and thrown away on every
+			// request. Recording spans are unaffected; see
+			// TestTracerStatusAttributeStillRecorded.
+			if !s.IsRecording() {
+				return
+			}
+
 			s.SetAttributes(attribute.Int("http.response.status_code", rw.Status()))
 		}(span, srw)
 

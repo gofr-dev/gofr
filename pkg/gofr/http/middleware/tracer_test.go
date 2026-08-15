@@ -394,3 +394,57 @@ func BenchmarkBuildSpanName(b *testing.B) {
 		spanNameSink = buildSpanName(method, route)
 	}
 }
+
+// TestTracerStatusAttributeStillRecorded is the guard against "optimizing" by
+// silently dropping telemetry: a sampled span must still carry the status code.
+func TestTracerStatusAttributeStillRecorded(t *testing.T) {
+	exporter := tracetest.NewInMemoryExporter()
+	otel.SetTracerProvider(trace.NewTracerProvider(trace.WithSyncer(exporter)))
+
+	router := mux.NewRouter()
+	router.Use(Tracer)
+	router.NewRoute().Methods(http.MethodGet).Path("/teapot").
+		HandlerFunc(func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(http.StatusTeapot) })
+
+	router.ServeHTTP(httptest.NewRecorder(),
+		httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/teapot", http.NoBody))
+
+	spans := exporter.GetSpans()
+	require.Len(t, spans, 1)
+
+	var found bool
+
+	for _, a := range spans[0].Attributes {
+		if a.Key == "http.response.status_code" {
+			require.Equal(t, int64(http.StatusTeapot), a.Value.AsInt64())
+
+			found = true
+		}
+	}
+
+	require.True(t, found, "a sampled span must still record http.response.status_code")
+}
+
+// TestTracerImplicit200StillRecorded pins the normalization PR #3431 established:
+// a handler that never calls WriteHeader still reports 200, not 0.
+func TestTracerImplicit200StillRecorded(t *testing.T) {
+	exporter := tracetest.NewInMemoryExporter()
+	otel.SetTracerProvider(trace.NewTracerProvider(trace.WithSyncer(exporter)))
+
+	router := mux.NewRouter()
+	router.Use(Tracer)
+	router.NewRoute().Methods(http.MethodGet).Path("/silent").
+		HandlerFunc(func(_ http.ResponseWriter, _ *http.Request) {})
+
+	router.ServeHTTP(httptest.NewRecorder(),
+		httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/silent", http.NoBody))
+
+	spans := exporter.GetSpans()
+	require.Len(t, spans, 1)
+
+	for _, a := range spans[0].Attributes {
+		if a.Key == "http.response.status_code" {
+			require.Equal(t, int64(http.StatusOK), a.Value.AsInt64())
+		}
+	}
+}
