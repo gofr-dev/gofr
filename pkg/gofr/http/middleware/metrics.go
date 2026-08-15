@@ -124,7 +124,7 @@ const optCacheLimit = 4096
 // accepts an already-built measurement option lets this middleware build each
 // (path, method, status) option once instead of on every request.
 type metricsOptRecorder interface {
-	RecordHistogramOpt(ctx context.Context, name string, value float64, opt metric.MeasurementOption)
+	RecordHistogramOpt(ctx context.Context, name string, value float64, opts ...metric.RecordOption)
 }
 
 // statusRouteKey identifies a (path, method, status) triple.
@@ -186,7 +186,7 @@ func newStatusAttrCache() func(int) attribute.KeyValue {
 type optionRecorder struct {
 	rec        metricsOptRecorder
 	statusAttr func(int) attribute.KeyValue
-	cache      sync.Map // map[statusRouteKey]metric.MeasurementOption
+	cache      sync.Map // map[statusRouteKey][]metric.RecordOption
 	count      atomic.Int64
 }
 
@@ -194,25 +194,27 @@ func (o *optionRecorder) record(path, method string, status int, seconds float64
 	key := statusRouteKey{path: path, method: method, status: status}
 
 	if v, ok := o.cache.Load(key); ok {
-		opt, _ := v.(metric.MeasurementOption)
-		o.rec.RecordHistogramOpt(context.Background(), histogramName, seconds, opt)
+		opts, _ := v.([]metric.RecordOption)
+		o.rec.RecordHistogramOpt(context.Background(), histogramName, seconds, opts...)
 
 		return
 	}
 
-	opt := metric.WithAttributes(
+	// Cache the option slice, not the option: passing a lone option into the
+	// variadic would allocate a one-element slice on every request.
+	opts := []metric.RecordOption{metric.WithAttributes(
 		attribute.String("path", path),
 		attribute.String("method", method),
 		o.statusAttr(status),
-	)
+	)}
 
 	if o.count.Load() < optCacheLimit {
-		if _, loaded := o.cache.LoadOrStore(key, opt); !loaded {
+		if _, loaded := o.cache.LoadOrStore(key, opts); !loaded {
 			o.count.Add(1)
 		}
 	}
 
-	o.rec.RecordHistogramOpt(context.Background(), histogramName, seconds, opt)
+	o.rec.RecordHistogramOpt(context.Background(), histogramName, seconds, opts...)
 }
 
 // attrsRecorder caches the (path, method) attribute pair and copies it into a

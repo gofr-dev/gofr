@@ -259,8 +259,13 @@ func (m *metricsManager) RecordHistogramAttrs(ctx context.Context, name string, 
 // small fixed set -- a request metric keyed by route, method and status -- that
 // work produces the same option over and over, so the option is better built
 // once by the caller and reused.
+//
+// The options are taken as a slice rather than a single value so a caller can
+// hand over one it already holds: passing a cached slice through with opts...
+// reuses it, whereas passing a lone option would allocate a fresh one-element
+// slice for the variadic on every observation.
 func (m *metricsManager) RecordHistogramOpt(ctx context.Context, name string, value float64,
-	opt metric.MeasurementOption) {
+	opts ...metric.RecordOption) {
 	histogram, err := m.store.getHistogram(name)
 	if err != nil {
 		m.logger.Error(err)
@@ -268,7 +273,7 @@ func (m *metricsManager) RecordHistogramOpt(ctx context.Context, name string, va
 		return
 	}
 
-	histogram.Record(ctx, value, opt)
+	histogram.Record(ctx, value, opts...)
 }
 
 // SetGauge gets the value and sets the metric to the specified value.

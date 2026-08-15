@@ -219,7 +219,7 @@ func (noopMetrics) DeltaUpDownCounter(context.Context, string, float64, ...strin
 func (noopMetrics) RecordHistogram(context.Context, string, float64, ...string)    {}
 func (noopMetrics) SetGauge(string, float64, ...string)                            {}
 
-func (m *mockOptRecorder) RecordHistogramOpt(_ context.Context, _ string, v float64, _ metric.MeasurementOption) {
+func (m *mockOptRecorder) RecordHistogramOpt(_ context.Context, _ string, v float64, _ ...metric.RecordOption) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
