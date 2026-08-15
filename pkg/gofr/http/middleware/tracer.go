@@ -211,40 +211,32 @@ func Tracer(inner http.Handler) http.Handler {
 		ctxOut, span := tr.Start(ctx, meta.name, meta.startOpts...)
 		defer span.End()
 
-		// http.response.status_code is set after the handler returns via
-		// the StatusResponseWriter wrap shared with Logging.
-
-		// Capture the response status via a StatusResponseWriter. Reuse an
-		// existing wrap if some outer middleware already provided one;
-		// otherwise wrap locally.
+		// The response status is only ever read to put it on the span, so the
+		// writer is only wrapped when the span will keep it.
 		//
-		// In GoFr's default chain Tracer is registered FIRST, i.e. outermost,
-		// so nothing has wrapped w yet and the local wrap is what actually
-		// happens on every request — Logging then wraps this one in turn.
-		srw, ok := w.(*StatusResponseWriter)
-		if !ok {
-			srw = &StatusResponseWriter{ResponseWriter: w}
-			w = srw
-		}
-
-		// rw.Status() normalizes the zero-default to http.StatusOK when the
-		// handler called neither WriteHeader nor Write — net/http emits an
-		// implicit 200 in that case, so the span attribute must report 200
-		// rather than be omitted (or worse, recorded as 0).
-		defer func(s trace.Span, rw *StatusResponseWriter) {
-			// A non-recording span discards SetAttributes by contract, but the
-			// call still builds the variadic []attribute.KeyValue to hand it.
-			// On the default deployment every span is non-recording — GoFr
-			// installs an SDK provider with NeverSample when no TRACE_EXPORTER
-			// is set — so that slice was allocated and thrown away on every
-			// request. Recording spans are unaffected; see
-			// TestTracerStatusAttributeStillRecorded.
-			if !s.IsRecording() {
-				return
+		// Tracer is the outermost middleware, so the wrapper Logging installs
+		// does not exist yet and this type assertion always failed -- meaning a
+		// StatusResponseWriter was allocated on every request and, on the
+		// default deployment, never read. GoFr installs an SDK provider with
+		// NeverSample when no TRACE_EXPORTER is configured, so no span records.
+		//
+		// Recording spans are unaffected: they still get the wrapper and the
+		// attribute, pinned by TestTracerStatusAttributeStillRecorded.
+		if span.IsRecording() {
+			srw, ok := w.(*StatusResponseWriter)
+			if !ok {
+				srw = &StatusResponseWriter{ResponseWriter: w}
+				w = srw
 			}
 
-			s.SetAttributes(attribute.Int("http.response.status_code", rw.Status()))
-		}(span, srw)
+			// Status() normalizes the zero-default to http.StatusOK when the
+			// handler called neither WriteHeader nor Write -- net/http emits an
+			// implicit 200 in that case, so the span attribute must report 200
+			// rather than be omitted, or worse recorded as 0.
+			defer func(s trace.Span, rw *StatusResponseWriter) {
+				s.SetAttributes(attribute.Int("http.response.status_code", rw.Status()))
+			}(span, srw)
+		}
 
 		inner.ServeHTTP(w, r.WithContext(ctxOut))
 	})
