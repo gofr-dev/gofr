@@ -69,6 +69,12 @@ type spanKey struct {
 type spanMeta struct {
 	name  string
 	attrs []attribute.KeyValue
+	// startOpts is the fully built []trace.SpanStartOption handed to Start.
+	// trace.WithAttributes allocates an option wrapper AND the variadic option
+	// slice on every call, so caching the attribute slice alone still left two
+	// allocations per request. The option is immutable once constructed, so it
+	// is safe to share.
+	startOpts []trace.SpanStartOption
 }
 
 // tracerSpanCache maps spanKey -> *spanMeta.
@@ -105,12 +111,15 @@ func spanMetaFor(method, route string, templated bool) *spanMeta {
 }
 
 func newSpanMeta(method, route string) *spanMeta {
+	attrs := []attribute.KeyValue{
+		methodKV(method),
+		attribute.String("http.route", route),
+	}
+
 	return &spanMeta{
-		name: buildSpanName(method, route),
-		attrs: []attribute.KeyValue{
-			methodKV(method),
-			attribute.String("http.route", route),
-		},
+		name:      buildSpanName(method, route),
+		attrs:     attrs,
+		startOpts: []trace.SpanStartOption{trace.WithAttributes(attrs...)},
 	}
 }
 
@@ -153,7 +162,7 @@ func Tracer(inner http.Handler) http.Handler {
 		// The attribute slice is passed to Start, not applied afterwards: a
 		// sampler can read attributes when deciding, so moving them after the
 		// span exists would change sampling for anyone sampling on http.route.
-		ctxOut, span := tr.Start(ctx, meta.name, trace.WithAttributes(meta.attrs...))
+		ctxOut, span := tr.Start(ctx, meta.name, meta.startOpts...)
 		defer span.End()
 
 		// http.response.status_code is set after the handler returns via
