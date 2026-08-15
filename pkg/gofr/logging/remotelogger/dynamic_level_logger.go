@@ -161,6 +161,25 @@ type remoteLogger struct {
 	logging.Logger
 }
 
+// LogEnabled reports whether an entry written through Log survives the level
+// currently in force.
+//
+// The embedded logger is the authority: this type only tracks the level so it
+// can push changes down via ChangeLevel, so asking the logger itself stays
+// correct even between a remote update and the level being applied. An embedded
+// logger that cannot answer is treated as enabled, which preserves the previous
+// behavior of always building the entry.
+func (r *remoteLogger) LogEnabled() bool {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+
+	if e, ok := r.Logger.(interface{ LogEnabled() bool }); ok {
+		return e.LogEnabled()
+	}
+
+	return true
+}
+
 // UpdateLogLevel continuously fetches the log level from the remote configuration URL at the specified interval
 // and updates the underlying log level if it has changed.
 func (r *remoteLogger) UpdateLogLevel() {
