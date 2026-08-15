@@ -125,6 +125,10 @@ type Config struct {
 	publicEndpointsMap    map[string]bool             `json:"-" yaml:"-"` // Key: "METHOD:/path", Value: true if public
 	endpointMap           map[string]*EndpointMapping `json:"-" yaml:"-"` // Key: "METHOD:/path", Value: endpoint object
 	muxRouter             *mux.Router                 `json:"-" yaml:"-"` // Used for mux pattern matching
+
+	// rules holds every (method, path) rule ordered most-specific-first, and is the
+	// single source of truth for resolving a request that no exact key matches.
+	rules []endpointRule `json:"-" yaml:"-"`
 }
 
 // LoadPermissions loads RBAC configuration from a JSON or YAML file.
@@ -289,18 +293,23 @@ func (c *Config) buildRolePermissionsMap() {
 	}
 }
 
-// buildEndpointPermissionMap builds the endpoint permission map from Endpoints.
+// buildEndpointPermissionMap builds the endpoint permission map and the ordered rule list
+// from Endpoints.
 func (c *Config) buildEndpointPermissionMap() error {
-	for _, endpoint := range c.Endpoints {
+	for i := range c.Endpoints {
+		endpoint := &c.Endpoints[i]
+
 		methods := endpoint.Methods
 		if len(methods) == 0 {
 			methods = []string{"*"}
 		}
 
-		if err := c.processEndpointMethods(&endpoint, methods); err != nil {
+		if err := c.processEndpointMethods(endpoint, methods); err != nil {
 			return err
 		}
 	}
+
+	c.rules = buildEndpointRules(c.Endpoints)
 
 	return nil
 }
@@ -393,16 +402,15 @@ func (c *Config) GetRolePermissions(role string) []string {
 // Returns all required permissions (user needs ANY of them - OR logic).
 // Config is read-only after initialization, so no mutex is needed.
 func (c *Config) GetEndpointPermission(method, path string) ([]string, bool) {
-	methodUpper := strings.ToUpper(method)
-	key := fmt.Sprintf("%s:%s", methodUpper, path)
-
-	// Try exact match first
-	if perms, isPublic := c.checkExactMatch(key); isPublic || len(perms) > 0 {
-		return perms, isPublic
+	endpoint, isPublic := c.resolve(strings.ToUpper(method), path)
+	if endpoint == nil || isPublic {
+		return nil, isPublic
 	}
 
-	// Try pattern and regex matching
-	return c.checkPatternMatch(methodUpper, path)
+	permissions := make([]string, len(endpoint.RequiredPermissions))
+	copy(permissions, endpoint.RequiredPermissions)
+
+	return permissions, false
 }
 
 // getExactEndpoint returns the endpoint for an exact key match (O(1) lookup).
@@ -414,72 +422,4 @@ func (c *Config) getExactEndpoint(key string) (*EndpointMapping, bool) {
 	}
 
 	return nil, false
-}
-
-// checkExactMatch checks for an exact endpoint match.
-func (c *Config) checkExactMatch(key string) (permissions []string, isPublic bool) {
-	if public, ok := c.publicEndpointsMap[key]; ok && public {
-		return nil, true
-	}
-
-	if perms, ok := c.endpointPermissionMap[key]; ok {
-		return perms, false
-	}
-
-	return nil, false
-}
-
-// findEndpointByPattern finds an endpoint by pattern matching (wildcards/regex).
-// Only used when exact match fails, so this is O(n) but only for patterns.
-// Config is read-only after initialization, so no mutex is needed.
-func (c *Config) findEndpointByPattern(methodUpper, path string) (*EndpointMapping, bool) {
-	// Try pattern matching for wildcards/regex
-	// Iterate over endpointMap to find matching patterns
-	for key, endpoint := range c.endpointMap {
-		if c.matchesKey(key, methodUpper, path) {
-			isPublic := c.publicEndpointsMap[key]
-			return endpoint, isPublic
-		}
-	}
-
-	return nil, false
-}
-
-// checkPatternMatch checks for pattern and regex matches.
-// Config is read-only after initialization, so no mutex is needed.
-func (c *Config) checkPatternMatch(methodUpper, path string) (permissions []string, isPublic bool) {
-	// Try pattern matching for wildcards
-	for key, perms := range c.endpointPermissionMap {
-		if c.matchesKey(key, methodUpper, path) {
-			return perms, false
-		}
-	}
-
-	// Check public endpoints with pattern/regex
-	for key := range c.publicEndpointsMap {
-		if c.matchesKey(key, methodUpper, path) {
-			return nil, true
-		}
-	}
-
-	return nil, false
-}
-
-// matchesKey checks if a key matches the given method and path.
-// Keys are built by buildEndpointKey which uses Path (may contain mux patterns).
-// Uses mux Route.Match() for mux patterns, exact match for non-pattern paths.
-func (c *Config) matchesKey(key, methodUpper, path string) bool {
-	if !strings.HasPrefix(key, methodUpper+":") {
-		return false
-	}
-
-	pattern := strings.TrimPrefix(key, methodUpper+":")
-
-	// For exact paths (no variables), use string comparison
-	if !isMuxPattern(pattern) {
-		return pattern == path
-	}
-
-	// For mux patterns, use Route.Match() from endpoint_matcher
-	return matchMuxPattern(pattern, methodUpper, path, c.muxRouter)
 }

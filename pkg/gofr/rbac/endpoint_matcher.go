@@ -25,36 +25,16 @@ const (
 var (
 	// errUnbalancedBraces is returned when a mux pattern has unbalanced braces.
 	errUnbalancedBraces = errors.New("unbalanced braces in pattern")
+
+	// errInvalidPattern is returned when mux cannot compile a pattern.
+	errInvalidPattern = errors.New("invalid mux pattern")
 )
 
 // matchEndpoint checks if the request matches an endpoint configuration.
 // This is the primary authorization check using the unified Endpoints configuration.
 // Returns the matched endpoint and whether it's public.
 func matchEndpoint(method, route string, endpoints []EndpointMapping, config *Config) (*EndpointMapping, bool) {
-	for i := range endpoints {
-		endpoint := &endpoints[i]
-
-		// Check if endpoint is public
-		if endpoint.Public {
-			if matchesEndpointPattern(endpoint, route, config) {
-				return endpoint, true
-			}
-
-			continue
-		}
-
-		// Check method match
-		if !matchesHTTPMethod(method, endpoint.Methods) {
-			continue
-		}
-
-		// Check route match
-		if matchesEndpointPattern(endpoint, route, config) {
-			return endpoint, false
-		}
-	}
-
-	return nil, false
+	return resolveEndpoint(strings.ToUpper(method), route, buildEndpointRules(endpoints), config)
 }
 
 // matchesHTTPMethod checks if the HTTP method matches the endpoint's allowed methods.
@@ -127,8 +107,13 @@ func validateMuxPattern(pattern string) error {
 		return fmt.Errorf("%w: %s", errUnbalancedBraces, pattern)
 	}
 
-	// Basic validation: check that braces are properly formatted
-	// More detailed validation would require parsing, which mux will do anyway
+	// Let mux compile the pattern. A pattern mux cannot parse - an unterminated character
+	// class, for example - would otherwise load cleanly and then never match any request,
+	// leaving the endpoint it was meant to govern unguarded.
+	if err := mux.NewRouter().NewRoute().Path(pattern).GetError(); err != nil {
+		return fmt.Errorf("%w: %s: %w", errInvalidPattern, pattern, err)
+	}
+
 	return nil
 }
 
@@ -197,17 +182,7 @@ func getEndpointForRequest(r *http.Request, config *Config) (*EndpointMapping, b
 		return nil, false
 	}
 
-	method := strings.ToUpper(r.Method)
-	path := r.URL.Path
-	key := fmt.Sprintf("%s:%s", method, path)
-
-	// Try exact match first (O(1) lookup)
-	if endpoint, isPublic := config.getExactEndpoint(key); endpoint != nil {
-		return endpoint, isPublic
-	}
-
-	// Try pattern matching (O(n) but only for patterns, not exact matches)
-	return config.findEndpointByPattern(method, path)
+	return config.resolve(strings.ToUpper(r.Method), r.URL.Path)
 }
 
 // ResolveRBACConfigPath resolves the RBAC config file path.

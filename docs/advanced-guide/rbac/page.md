@@ -206,6 +206,46 @@ For endpoints that need to match multiple paths, use mux patterns:
 - **Middle variable**: Use `"/api/{category}/posts"` instead of `"/api/*/posts"`
     - Matches: `/api/tech/posts`, `/api/news/posts`
 
+### Rule Resolution
+
+More than one endpoint entry can match the same request — a broad pattern and a narrow one, for
+example. GoFr resolves this by **most specific wins**, independent of the order the entries appear
+in the config file.
+
+Specificity is compared segment by segment, and the first segment where two patterns differ decides:
+
+1. A literal segment (`users`) is more specific than
+2. a single-segment variable (`{id}`, `{id:[0-9]+}`), which is more specific than
+3. a multi-segment catch-all (`{path:.*}`).
+
+If the paths are equally specific, an entry that names its methods explicitly wins over one
+declared with `["*"]`.
+
+```json
+{
+  "endpoints": [
+    {
+      "path": "/admin/{path:.*}",
+      "methods": ["*"],
+      "requiredPermissions": ["admin:read"]
+    },
+    {
+      "path": "/admin/orgs/{org_id}",
+      "methods": ["DELETE"],
+      "requiredPermissions": ["admin:write"]
+    }
+  ]
+}
+```
+
+`DELETE /admin/orgs/123` matches both entries, and the second one governs it — so `admin:write` is
+required. `GET /admin/settings` matches only the first, so `admin:read` is required.
+
+> **Note**: `"methods": ["*"]` — and omitting `methods` entirely, which means the same thing —
+> matches **every** HTTP method, including methods GoFr does not otherwise know about. Since an
+> entry states what a caller must have in order to be let through, covering an unrecognised method
+> tightens enforcement rather than relaxing it.
+
 ## JWT-Based RBAC
 
 For production/public APIs, use JWT-based role extraction:
