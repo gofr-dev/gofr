@@ -3,6 +3,7 @@ package gofr
 import (
 	"context"
 	"fmt"
+	"net/http"
 
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/gorilla/websocket"
@@ -11,6 +12,7 @@ import (
 
 	"gofr.dev/pkg/gofr/cmd/terminal"
 	"gofr.dev/pkg/gofr/container"
+	gofrHTTP "gofr.dev/pkg/gofr/http"
 	"gofr.dev/pkg/gofr/http/middleware"
 	"gofr.dev/pkg/gofr/logging"
 )
@@ -159,6 +161,36 @@ func (a *authInfo) GetAPIKey() string {
 //	c.Context = nil
 //	// c.Logger = nil // For now, all loggers are same. So, no need to set nil.
 // }
+
+// httpContext bundles a Context with the concrete HTTP Request and Responder it
+// uses. All three are created together, live for exactly one request and die
+// together, so giving them one allocation instead of three changes nothing
+// observable -- Context still holds them through the same interfaces.
+type httpContext struct {
+	ctx  Context
+	req  gofrHTTP.Request
+	resp gofrHTTP.Responder
+}
+
+// newHTTPContext builds the request Context for the HTTP server in a single
+// allocation. The other transports (CMD, GraphQL, cron, subscribers) supply
+// their own Request implementations and keep using newContext.
+func newHTTPContext(w http.ResponseWriter, r *http.Request, c *container.Container) *Context {
+	a := &httpContext{
+		req:  gofrHTTP.RequestFor(r),
+		resp: gofrHTTP.ResponderFor(w, r.Method),
+	}
+
+	a.ctx = Context{
+		Context:       r.Context(),
+		Request:       &a.req,
+		responder:     &a.resp,
+		Container:     c,
+		ContextLogger: logging.ContextLoggerFor(r.Context(), c.Logger),
+	}
+
+	return &a.ctx
+}
 
 func newContext(w Responder, r Request, c *container.Container) *Context {
 	return &Context{

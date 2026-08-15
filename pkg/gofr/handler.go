@@ -63,7 +63,7 @@ func (el *ErrorLogEntry) PrettyPrint(writer io.Writer) {
 }
 
 func (h handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	c := newContext(gofrHTTP.NewResponder(w, r.Method), gofrHTTP.NewRequest(r), h.container)
+	c := newHTTPContext(w, r, h.container)
 
 	// Carry the SpanContext (a value type, no allocation) rather than eagerly
 	// formatting the trace ID. TraceID().String() allocates a 32-character
