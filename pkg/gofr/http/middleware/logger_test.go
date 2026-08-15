@@ -14,6 +14,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"go.opentelemetry.io/otel/trace"
 
 	"gofr.dev/pkg/gofr/logging"
 	"gofr.dev/pkg/gofr/testutil"
@@ -511,7 +512,7 @@ func TestRequestLogEmittedWhenLevelAllows(t *testing.T) {
 	srw := &StatusResponseWriter{ResponseWriter: httptest.NewRecorder(), status: http.StatusOK}
 
 	handleRequestLog(srw, httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/x", http.NoBody),
-		time.Now(), "tid", "sid", lg)
+		time.Now(), "tid", trace.SpanContext{}, lg)
 
 	require.Equal(t, 1, lg.logCalls, "an allowed level must still emit the request log")
 }
@@ -522,7 +523,7 @@ func TestRequestLogSkippedWhenLevelDiscards(t *testing.T) {
 	srw := &StatusResponseWriter{ResponseWriter: httptest.NewRecorder(), status: http.StatusOK}
 
 	handleRequestLog(srw, httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/x", http.NoBody),
-		time.Now(), "tid", "sid", lg)
+		time.Now(), "tid", trace.SpanContext{}, lg)
 
 	require.Zero(t, lg.logCalls, "a discarded level must not be handed an entry")
 }
@@ -534,7 +535,7 @@ func TestRequestLogAlwaysEmittedForServerErrors(t *testing.T) {
 	srw := &StatusResponseWriter{ResponseWriter: httptest.NewRecorder(), status: http.StatusInternalServerError}
 
 	handleRequestLog(srw, httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/x", http.NoBody),
-		time.Now(), "tid", "sid", lg)
+		time.Now(), "tid", trace.SpanContext{}, lg)
 
 	require.Equal(t, 1, lg.errCalls, "a server error must be logged regardless of the informational level")
 }
@@ -546,7 +547,7 @@ func TestRequestLogUngatedLoggerUnaffected(t *testing.T) {
 	srw := &StatusResponseWriter{ResponseWriter: httptest.NewRecorder(), status: http.StatusOK}
 
 	handleRequestLog(srw, httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/x", http.NoBody),
-		time.Now(), "tid", "sid", lg)
+		time.Now(), "tid", trace.SpanContext{}, lg)
 
 	require.Equal(t, 1, lg.logCalls, "a logger without the gate must still receive the entry")
 }

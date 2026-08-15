@@ -191,13 +191,14 @@ func Logging(probes LogProbes, logger logger) func(inner http.Handler) http.Hand
 			// byte-identical values to the pre-PR-7 wire shape.
 			sc := trace.SpanFromContext(r.Context()).SpanContext()
 
-			var traceID, spanID string
+			// Only the trace ID is needed before the handler runs, for the
+			// X-Correlation-ID response header. The span ID is used solely
+			// inside the log entry, so it is resolved in handleRequestLog --
+			// after the level gate -- and costs nothing on a request whose
+			// entry is discarded.
+			traceID := zeroTraceID
 			if sc.IsValid() {
 				traceID = sc.TraceID().String()
-				spanID = sc.SpanID().String()
-			} else {
-				traceID = zeroTraceID
-				spanID = zeroSpanID
 			}
 
 			srw.Header().Set("X-Correlation-ID", traceID)
@@ -213,14 +214,15 @@ func Logging(probes LogProbes, logger logger) func(inner http.Handler) http.Hand
 			}
 
 			start := time.Now()
-			defer handleRequestLog(srw, r, start, traceID, spanID, logger)
+			defer handleRequestLog(srw, r, start, traceID, sc, logger)
 
 			inner.ServeHTTP(srw, r)
 		})
 	}
 }
 
-func handleRequestLog(srw *StatusResponseWriter, r *http.Request, start time.Time, traceID, spanID string, logger logger) {
+func handleRequestLog(srw *StatusResponseWriter, r *http.Request, start time.Time, traceID string,
+	sc trace.SpanContext, logger logger) {
 	status := srw.Status()
 
 	// A server error is reported through Error, which is emitted at every level
@@ -229,6 +231,11 @@ func handleRequestLog(srw *StatusResponseWriter, r *http.Request, start time.Tim
 		if e, ok := logger.(logEnabler); ok && !e.LogEnabled() {
 			return
 		}
+	}
+
+	spanID := zeroSpanID
+	if sc.IsValid() {
+		spanID = sc.SpanID().String()
 	}
 
 	l := &RequestLog{
