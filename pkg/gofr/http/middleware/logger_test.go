@@ -556,3 +556,14 @@ type plainLogger struct{ logCalls int }
 
 func (l *plainLogger) Log(...any) { l.logCalls++ }
 func (*plainLogger) Error(...any) {}
+
+// TestCorrelationIDHeaderSpellingUnchanged pins that assigning the canonical key
+// directly still produces the header clients read today.
+func TestCorrelationIDHeaderSpellingUnchanged(t *testing.T) {
+	h := http.Header{}
+	h[canonicalCorrelationID] = []string{"abc123"}
+
+	require.Equal(t, "abc123", h.Get("X-Correlation-ID"), "lookup by the documented name must work")
+	require.Equal(t, "abc123", h.Get("X-Correlation-Id"), "and by the canonical form")
+	require.Equal(t, "X-Correlation-Id", canonicalCorrelationID)
+}

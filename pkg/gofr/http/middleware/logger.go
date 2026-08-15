@@ -8,6 +8,7 @@ import (
 	"io"
 	"net"
 	"net/http"
+	"net/textproto"
 	"runtime/debug"
 	"strings"
 	"sync"
@@ -135,6 +136,12 @@ func colorForStatusCode(status int) int {
 	return 0
 }
 
+// canonicalCorrelationID is the canonical spelling of the correlation-ID header,
+// resolved once so no request pays to build it.
+//
+//nolint:gochecknoglobals // immutable, process-wide header constant.
+var canonicalCorrelationID = textproto.CanonicalMIMEHeaderKey("X-Correlation-ID")
+
 type logger interface {
 	Log(...any)
 	Error(...any)
@@ -201,7 +208,12 @@ func Logging(probes LogProbes, logger logger) func(inner http.Handler) http.Hand
 				traceID = sc.TraceID().String()
 			}
 
-			srw.Header().Set("X-Correlation-ID", traceID)
+			// Assigned rather than Set: Header.Set canonicalizes its key on
+			// every call, and "X-Correlation-ID" is not already in canonical
+			// form ("Id", not "ID"), so each request paid for building the
+			// canonical string. The wire format is unchanged -- net/http emits
+			// the canonical spelling either way.
+			srw.Header()[canonicalCorrelationID] = []string{traceID}
 
 			defer func() { panicRecovery(recover(), srw, logger) }()
 
