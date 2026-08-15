@@ -243,7 +243,7 @@ required. `GET /admin/settings` matches only the first, so `admin:read` is requi
 
 > **Note**: `"methods": ["*"]` — and omitting `methods` entirely, which means the same thing —
 > matches **every** HTTP method, including methods GoFr does not otherwise know about. Since an
-> entry states what a caller must have in order to be let through, covering an unrecognised method
+> entry states what a caller must have in order to be let through, covering an unrecognized method
 > tightens enforcement rather than relaxing it.
 
 ## JWT-Based RBAC
