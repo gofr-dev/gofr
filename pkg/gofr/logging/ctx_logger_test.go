@@ -108,12 +108,9 @@ func TestContextLogger_WithTraceInfo_WithTraceID(t *testing.T) {
 
 	assert.Len(t, result, 2)
 
-	traceMap, ok := result[1].(map[string]any)
-	require.True(t, ok, "Expected a map with trace ID")
-
-	traceID, ok := traceMap["__trace_id__"].(string)
-	require.True(t, ok, "Expected a string trace ID")
-	assert.Equal(t, expectedTraceID, traceID)
+	marker, ok := result[1].(traceIDMarker)
+	require.True(t, ok, "Expected a traceIDMarker carrying the trace ID")
+	assert.Equal(t, expectedTraceID, string(marker))
 }
 
 func TestContextLogger_LoggingMethods_NoTrace(t *testing.T) {
@@ -153,23 +150,17 @@ func TestContextLogger_LoggingMethods_WithTrace(t *testing.T) {
 	require.True(t, ok, "Expected message to be []any")
 	require.Len(t, infoMsg, 2)
 
-	traceMap, ok := infoMsg[1].(map[string]any)
-	require.True(t, ok, "Expected a map with trace ID")
-
-	traceID, ok := traceMap["__trace_id__"].(string)
-	require.True(t, ok, "Expected a string trace ID")
-	assert.Equal(t, expectedTraceID, traceID)
+	marker, ok := infoMsg[1].(traceIDMarker)
+	require.True(t, ok, "Expected a traceIDMarker carrying the trace ID")
+	assert.Equal(t, expectedTraceID, string(marker))
 
 	errorMsg, ok := baseLogger.logs[1].Message.([]any)
 	require.True(t, ok, "Expected message to be []any")
 	require.Len(t, errorMsg, 2)
 
-	traceMap, ok = errorMsg[1].(map[string]any)
-	require.True(t, ok, "Expected a map with trace ID")
-
-	traceID, ok = traceMap["__trace_id__"].(string)
-	require.True(t, ok, "Expected a string trace ID")
-	assert.Equal(t, expectedTraceID, traceID)
+	marker, ok = errorMsg[1].(traceIDMarker)
+	require.True(t, ok, "Expected a traceIDMarker carrying the trace ID")
+	assert.Equal(t, expectedTraceID, string(marker))
 }
 
 func TestContextLogger_Integration(t *testing.T) {

@@ -297,6 +297,14 @@ func GetLogLevelForError(err error) Level {
 // the wire, so the exact key only needs to stay consistent between the two.
 const traceIDMarkerKey = "__trace_id__"
 
+// traceIDMarker is the cheaper carrier for the same contract. A one-entry
+// map[string]any costs two allocations (the header and its bucket); a named
+// string costs one when boxed into any.
+//
+// The map form remains accepted because it is a cross-package contract --
+// pkg/gofr/ai emits it too -- so this is an additional shape, not a replacement.
+type traceIDMarker string
+
 // extractTraceIDAndFilterArgs checks if any of the arguments contain a trace ID
 // under the key "__trace_id__" and returns the extracted trace ID along with
 // the remaining arguments excluding the trace metadata.
@@ -313,6 +321,14 @@ func extractTraceIDAndFilterArgs(args []any) (traceID string, filtered []any) {
 	filtered = make([]any, 0, len(args))
 
 	for _, arg := range args {
+		if tid, ok := arg.(traceIDMarker); ok {
+			if traceID == "" {
+				traceID = string(tid)
+			}
+
+			continue
+		}
+
 		if m, ok := arg.(map[string]any); ok {
 			if tid, exists := m[traceIDMarkerKey].(string); exists && traceID == "" {
 				traceID = tid
@@ -331,6 +347,10 @@ func extractTraceIDAndFilterArgs(args []any) (traceID string, filtered []any) {
 // key. Read-only: it allocates nothing.
 func hasTraceMarker(args []any) bool {
 	for _, arg := range args {
+		if _, ok := arg.(traceIDMarker); ok {
+			return true
+		}
+
 		if m, ok := arg.(map[string]any); ok {
 			if _, exists := m[traceIDMarkerKey]; exists {
 				return true

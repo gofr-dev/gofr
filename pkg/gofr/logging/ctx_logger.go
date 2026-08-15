@@ -20,7 +20,7 @@ type ContextLogger struct {
 	// reads the key out and drops the map), so sharing the single instance
 	// across all log calls of this request is safe. nil when no valid trace ID
 	// is in scope.
-	traceArg map[string]any
+	traceArg any
 }
 
 // NewContextLogger creates a new ContextLogger that wraps the provided base logger
@@ -38,7 +38,7 @@ func NewContextLogger(ctx context.Context, base Logger) *ContextLogger {
 	cl := &ContextLogger{base: base, traceID: traceID}
 
 	if traceID != "" {
-		cl.traceArg = map[string]any{traceIDMarkerKey: traceID}
+		cl.traceArg = traceIDMarker(traceID)
 	}
 
 	return cl
