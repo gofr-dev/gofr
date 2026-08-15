@@ -515,3 +515,50 @@ func TestSpanMetaConcurrent(t *testing.T) {
 
 	require.Zero(t, bad.Load(), "cache returned an incomplete spanMeta under contention")
 }
+
+// TestHeaderCarrierMatchesHeaderCarrier pins that the carrier resolves exactly
+// what propagation.HeaderCarrier resolves, for the propagation headers and for
+// an unrecognized key that must fall through to the ordinary lookup.
+func TestHeaderCarrierMatchesHeaderCarrier(t *testing.T) {
+	h := http.Header{}
+	// Set with the canonical spellings; the carrier is still queried with the
+	// lowercase names the propagators actually use, which is the point.
+	h.Set("Traceparent", "00-"+w3cFixtureTraceID+"-"+w3cFixtureParentSpan+"-01")
+	h.Set("Tracestate", "vendor=value")
+	h.Set("Baggage", "k=v")
+	h.Set("X-Custom-Propagator", "custom")
+
+	ours := headerCarrier(h)
+	theirs := propagation.HeaderCarrier(h)
+
+	for _, key := range []string{"traceparent", "tracestate", "baggage", "X-Custom-Propagator", "absent"} {
+		require.Equal(t, theirs.Get(key), ours.Get(key), "key %q must resolve identically", key)
+	}
+
+	require.ElementsMatch(t, theirs.Keys(), ours.Keys())
+}
+
+// TestTracerPropagatesIncomingTraceContext is the feature guard: an incoming
+// traceparent must still be adopted as the parent of the server span.
+func TestTracerPropagatesIncomingTraceContext(t *testing.T) {
+	exporter := tracetest.NewInMemoryExporter()
+	otel.SetTracerProvider(trace.NewTracerProvider(trace.WithSyncer(exporter)))
+	otel.SetTextMapPropagator(propagation.TraceContext{})
+
+	router := mux.NewRouter()
+	router.Use(Tracer)
+	router.NewRoute().Methods(http.MethodGet).Path("/x").
+		HandlerFunc(func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(http.StatusOK) })
+
+	req := httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/x", http.NoBody)
+	req.Header.Set("Traceparent", "00-"+w3cFixtureTraceID+"-"+w3cFixtureParentSpan+"-01")
+
+	router.ServeHTTP(httptest.NewRecorder(), req)
+
+	spans := exporter.GetSpans()
+	require.Len(t, spans, 1)
+	require.Equal(t, w3cFixtureTraceID, spans[0].SpanContext.TraceID().String(),
+		"the incoming trace ID must be adopted")
+	require.Equal(t, w3cFixtureParentSpan, spans[0].Parent.SpanID().String(),
+		"the incoming span must become the parent")
+}

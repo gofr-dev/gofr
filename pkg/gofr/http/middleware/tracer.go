@@ -2,12 +2,12 @@ package middleware
 
 import (
 	"net/http"
+	"net/textproto"
 	"strings"
 	"sync"
 
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
-	"go.opentelemetry.io/otel/propagation"
 	"go.opentelemetry.io/otel/trace"
 
 	gofrhttp "gofr.dev/pkg/gofr/http"
@@ -123,6 +123,52 @@ func newSpanMeta(method, route string) *spanMeta {
 	}
 }
 
+// canonicalPropagationKeys maps the lowercase header names the W3C propagators
+// look up to their canonical spellings.
+//
+// http.Header.Get canonicalizes whatever key it is handed, and none of these
+// names is already canonical, so each lookup allocated the canonical string --
+// on every request, whether or not the header was even present. The spellings
+// are constants, so they are resolved once here.
+//
+//nolint:gochecknoglobals // immutable, process-wide header constants.
+var canonicalPropagationKeys = map[string]string{
+	"traceparent": textproto.CanonicalMIMEHeaderKey("traceparent"),
+	"tracestate":  textproto.CanonicalMIMEHeaderKey("tracestate"),
+	"baggage":     textproto.CanonicalMIMEHeaderKey("baggage"),
+}
+
+// headerCarrier adapts http.Header for the OTel propagators without paying to
+// canonicalize the lookup key on every request.
+//
+// A key it does not recognize falls through to the ordinary lookup, so a custom
+// propagator using its own header names keeps working unchanged.
+type headerCarrier http.Header
+
+func (c headerCarrier) Get(key string) string {
+	canonical, ok := canonicalPropagationKeys[key]
+	if !ok {
+		return http.Header(c).Get(key)
+	}
+
+	if v := c[canonical]; len(v) > 0 {
+		return v[0]
+	}
+
+	return ""
+}
+
+func (c headerCarrier) Set(key, value string) { http.Header(c).Set(key, value) }
+
+func (c headerCarrier) Keys() []string {
+	keys := make([]string, 0, len(c))
+	for k := range c {
+		keys = append(keys, k)
+	}
+
+	return keys
+}
+
 // Tracer is a middleware that starts a new OpenTelemetry trace span for each
 // request and records http.request.method, http.route, and
 // http.response.status_code attributes on it, following the current OTel
@@ -149,7 +195,7 @@ func Tracer(inner http.Handler) http.Handler {
 		// extract the traceID and spanID from the headers and create a new context for the same
 		// this context will make a new span using the traceID and link the incoming SpanID as
 		// its parentID, thus connecting two spans
-		ctx = otel.GetTextMapPropagator().Extract(ctx, propagation.HeaderCarrier(r.Header))
+		ctx = otel.GetTextMapPropagator().Extract(ctx, headerCarrier(r.Header))
 
 		method := strings.ToUpper(r.Method)
 		// Prefer the gorilla/mux route template (e.g. "/users/{id}") so the
