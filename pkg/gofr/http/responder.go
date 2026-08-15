@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
+	"net/textproto"
 	"reflect"
 	"sync"
 
@@ -43,6 +44,15 @@ var respBufPool = sync.Pool{
 		return &respEncoder{buf: buf, enc: json.NewEncoder(buf)}
 	},
 }
+
+// Canonical key and shared value for the JSON content type, resolved once so no
+// response pays for canonicalization or a value-slice allocation.
+//
+//nolint:gochecknoglobals // immutable, process-wide header constants.
+var (
+	canonicalContentType = textproto.CanonicalMIMEHeaderKey("Content-Type")
+	jsonContentType      = []string{"application/json"}
+)
 
 // respEncoder pairs a reusable buffer with the encoder bound to it, plus the
 // response envelope itself.
@@ -86,8 +96,13 @@ func (r Responder) Respond(data any, err error) {
 
 	statusCode, errorObj := r.determineResponse(data, err)
 
-	if r.w.Header().Get("Content-Type") == "" {
-		r.w.Header().Set("Content-Type", "application/json")
+	// Assigned rather than Set: Header.Set canonicalizes the key and allocates a
+	// fresh []string for the value on every response, and both are constant here.
+	// Sharing the value slice is safe because it has len == cap == 1, so a later
+	// Header.Add appends into a new array instead of mutating it.
+	header := r.w.Header()
+	if _, ok := header[canonicalContentType]; !ok {
+		header[canonicalContentType] = jsonContentType
 	}
 
 	re := getRespBuf()

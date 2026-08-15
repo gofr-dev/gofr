@@ -1950,3 +1950,30 @@ func TestRespondEnvelopeErrorDoesNotLeak(t *testing.T) {
 }
 
 var errTestResponder = errors.New("responder pool guard")
+
+// TestContentTypeSharedValueSurvivesAdd is the safety proof for assigning the
+// shared Content-Type value slice: a later Header.Add must not mutate it.
+func TestContentTypeSharedValueSurvivesAdd(t *testing.T) {
+	before := append([]string(nil), jsonContentType...)
+
+	for range 3 {
+		w := httptest.NewRecorder()
+		NewResponder(w, http.MethodGet).Respond(map[string]string{"v": "x"}, nil)
+
+		w.Header().Add("Content-Type", "text/plain")
+	}
+
+	require.Equal(t, before, jsonContentType, "the shared Content-Type value must never be mutated")
+	require.Len(t, jsonContentType, 1)
+}
+
+// TestContentTypeNotOverriddenWhenAlreadySet pins that an already-set
+// Content-Type still wins, as it did with the previous Get/Set pair.
+func TestContentTypeNotOverriddenWhenAlreadySet(t *testing.T) {
+	w := httptest.NewRecorder()
+	w.Header().Set("Content-Type", "application/custom")
+
+	NewResponder(w, http.MethodGet).Respond(map[string]string{"v": "x"}, nil)
+
+	require.Equal(t, "application/custom", w.Header().Get("Content-Type"))
+}
