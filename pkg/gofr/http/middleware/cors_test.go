@@ -281,7 +281,7 @@ func TestCORSDoesNotMutateRegisteredRoutes(t *testing.T) {
 
 	_, methods := buildFixedHeaders(map[string]string{}, routes)
 
-	require.Equal(t, "GET, POST, OPTIONS", methods)
+	require.Equal(t, []string{"GET, POST, OPTIONS"}, methods)
 	require.Equal(t, []string{http.MethodGet, http.MethodPost}, routes,
 		"the caller's slice must be unchanged")
 	require.Equal(t, "sentinel", backing[2], "nothing may be written past the caller's length")
@@ -320,3 +320,36 @@ func TestCORSHeadersStableAcrossRequests(t *testing.T) {
 	require.Equal(t, "custom", first.Get("X-Custom-Header"))
 	require.Contains(t, first.Get("Access-Control-Allow-Headers"), "Authorization")
 }
+
+// TestSharedHeaderValueSurvivesAdd is the safety proof for assigning a shared
+// one-element value slice straight into the header map: a later Header.Add must
+// append into a new array rather than mutating the slice every response shares.
+func TestSharedHeaderValueSurvivesAdd(t *testing.T) {
+	routes := []string{http.MethodGet}
+	fixed, methods := buildFixedHeaders(map[string]string{}, routes)
+
+	before := append([]string(nil), methods...)
+
+	for range 3 {
+		h := http.Header{}
+		setMiddlewareHeaders(h2w(h), "", map[string]bool{"*": true}, fixed, methods)
+
+		h.Add("Access-Control-Allow-Methods", "PATCH")
+		h.Add("Access-Control-Allow-Headers", "X-Extra")
+	}
+
+	require.Equal(t, before, methods, "the shared methods slice must never be mutated")
+
+	for _, f := range fixed {
+		require.Len(t, f.value, 1, "a shared header value must stay single-element")
+	}
+}
+
+// h2w adapts a bare Header to the ResponseWriter setMiddlewareHeaders expects.
+type headerOnlyWriter struct{ h http.Header }
+
+func (w headerOnlyWriter) Header() http.Header     { return w.h }
+func (headerOnlyWriter) Write([]byte) (int, error) { return 0, nil }
+func (headerOnlyWriter) WriteHeader(int)           {}
+
+func h2w(h http.Header) http.ResponseWriter { return headerOnlyWriter{h: h} }
