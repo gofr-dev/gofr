@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net"
 	"strconv"
+	"sync"
 	"testing"
 	"time"
 
@@ -126,23 +127,28 @@ func TestGRPCServer_AddUnaryInterceptors(t *testing.T) {
 func TestGRPCServer_CreateServer(t *testing.T) {
 	_, _, g := setupTestGRPCServer(t, 9999, false)
 
-	err := g.createServer()
+	srv, err := g.ensureServer()
 	require.NoError(t, err)
-	assert.NotNil(t, g.server)
+	assert.NotNil(t, srv)
+
+	// Second call must return the same server, not build another one.
+	again, err := g.ensureServer()
+	require.NoError(t, err)
+	assert.Same(t, srv, again)
 }
 
 func TestGRPCServer_RegisterService(t *testing.T) {
 	_, _, g := setupTestGRPCServer(t, 9999, false)
 
-	err := g.createServer()
+	srv, err := g.ensureServer()
 	require.NoError(t, err)
 
 	healthServer := health.NewServer()
 	desc := &grpc_health_v1.Health_ServiceDesc
 
-	g.server.RegisterService(desc, healthServer)
+	srv.RegisterService(desc, healthServer)
 
-	services := g.server.GetServiceInfo()
+	services := srv.GetServiceInfo()
 	_, ok := services["grpc.health.v1.Health"]
 	assert.True(t, ok, "health service should be registered")
 }
@@ -165,8 +171,7 @@ func TestGRPC_ServerRun(t *testing.T) {
 			}
 
 			// Create the server first
-			err := g.createServer()
-			if err != nil {
+			if _, err := g.ensureServer(); err != nil {
 				t.Fatalf("Failed to create server: %v", err)
 			}
 
@@ -228,8 +233,7 @@ func TestGRPC_ServerRun(t *testing.T) {
 			}
 
 			// Create the server first
-			err := g.createServer()
-			if err != nil {
+			if _, err := g.ensureServer(); err != nil {
 				t.Fatalf("Failed to create server: %v", err)
 			}
 
@@ -375,6 +379,88 @@ func TestGRPC_Shutdown_BeforeStart_ContextCanceled(t *testing.T) {
 	}
 }
 
+// TestGRPC_ConcurrentRunAndShutdown guards against a regression of the data race the
+// srvMu guard closes: ensureServer publishes g.server from the serve goroutine while
+// Shutdown reads it on the caller's. Meaningful under -race; without the guard the
+// detector reports both the field itself and the CAS inside grpc-go's Server.Stop.
+func TestGRPC_ConcurrentRunAndShutdown(t *testing.T) {
+	c, _, g := setupTestGRPCServer(t, testutil.GetFreePort(t), false)
+
+	var wg sync.WaitGroup
+
+	wg.Add(1)
+
+	go func() {
+		defer wg.Done()
+
+		g.Run(c)
+	}()
+
+	// No sleep: racing Shutdown against Run's publish of g.server is the point.
+	require.NoError(t, g.Shutdown(t.Context()))
+
+	// That Shutdown may legitimately have observed no server yet and returned a no-op —
+	// Run is free to publish afterwards and keep serving. That lost-shutdown gap is
+	// nil-check-as-started, tracked in #3801, and is deliberately not what this test
+	// asserts; stop whatever Run ended up publishing so Run returns either way.
+	require.Eventually(t, func() bool {
+		srv := g.getServer()
+		if srv == nil {
+			return false
+		}
+
+		srv.Stop()
+
+		return true
+	}, time.Second, 10*time.Millisecond, "Run never published a server to stop")
+
+	wg.Wait()
+}
+
+// TestGRPC_ConcurrentEnsureServer guards the check-then-act half: with the check and the publish
+// under one hold, concurrent callers all get the same server. Split across separate holds, two
+// callers can both observe nil and both build one — the loser then serves a server no getServer
+// returns and no Shutdown stops. The options length also pins the append inside ensureServer,
+// which the same hold covers.
+func TestGRPC_ConcurrentEnsureServer(t *testing.T) {
+	const callers = 8
+
+	_, _, g := setupTestGRPCServer(t, testutil.GetFreePort(t), false)
+
+	var (
+		wg      sync.WaitGroup
+		servers = make([]*grpc.Server, callers)
+		errs    = make([]error, callers)
+		start   = make(chan struct{})
+	)
+
+	for i := range callers {
+		wg.Add(1)
+
+		go func() {
+			defer wg.Done()
+
+			<-start
+
+			servers[i], errs[i] = g.ensureServer()
+		}()
+	}
+
+	close(start)
+	wg.Wait()
+
+	for i := range callers {
+		require.NoError(t, errs[i])
+		require.NotNil(t, servers[i])
+		assert.Samef(t, servers[0], servers[i], "caller %d got a different server: two were created", i)
+	}
+
+	// Exactly one build happened: the unary and stream interceptor options, appended once.
+	assert.Len(t, g.options, 2)
+
+	servers[0].Stop()
+}
+
 func TestGRPC_ServerRun_WithInterceptorAndOptions(t *testing.T) {
 	freePort := testutil.GetFreePort(t)
 	c, _, g := setupTestGRPCServer(t, freePort, false)
@@ -405,7 +491,7 @@ func TestGRPC_ServerRun_WithInterceptorAndOptions(t *testing.T) {
 	app.AddGRPCUnaryInterceptors(interceptor1, interceptor2)
 
 	// Create the server first
-	err := app.grpcServer.createServer()
+	srv, err := app.grpcServer.ensureServer()
 	require.NoError(t, err)
 
 	// Start the server in a goroutine
@@ -423,7 +509,7 @@ func TestGRPC_ServerRun_WithInterceptorAndOptions(t *testing.T) {
 	require.NoError(t, err)
 
 	// Verify that the server was created with the interceptors and options
-	assert.NotNil(t, app.grpcServer.server)
+	assert.NotNil(t, srv)
 	assert.Len(t, app.grpcServer.interceptors, 4) // 2 default + 2 test interceptors
 	assert.Len(t, app.grpcServer.options, 4)      // 2 test options + 2 default (interceptor) options
 }
@@ -435,10 +521,10 @@ func TestApp_WithReflection(t *testing.T) {
 	app.container = c
 	app.grpcServer = g
 
-	err := app.grpcServer.createServer()
+	srv, err := app.grpcServer.ensureServer()
 	require.NoError(t, err)
 
-	services := app.grpcServer.server.GetServiceInfo()
+	services := srv.GetServiceInfo()
 	_, ok := services["grpc.reflection.v1alpha.ServerReflection"]
 	assert.True(t, ok, "reflection service should be registered")
 }
