@@ -51,7 +51,7 @@ var respBufPool = sync.Pool{
 //nolint:gochecknoglobals // immutable, process-wide header constants.
 var (
 	canonicalContentType = textproto.CanonicalMIMEHeaderKey("Content-Type")
-	jsonContentType      = []string{"application/json"}
+	jsonContentType      = []string{contentTypeJSON}
 )
 
 // respEncoder pairs a reusable buffer with the encoder bound to it, plus the
