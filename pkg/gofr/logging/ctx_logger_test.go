@@ -254,7 +254,7 @@ func TestContextLogger_NoTrace_NoMarker(t *testing.T) {
 	base := newBufLogger(buf)
 
 	cl := NewContextLogger(context.Background(), base)
-	assert.Nil(t, cl.traceArg, "no precomputed marker when there is no valid trace")
+	assert.False(t, cl.spanCtx.IsValid(), "no valid span means no marker will be attached")
 
 	cl.Info("x")
 
@@ -289,4 +289,66 @@ func BenchmarkContextLoggerInfo(b *testing.B) {
 	for i := 0; i < b.N; i++ {
 		cl.Info("request handled successfully")
 	}
+}
+
+// TestContextLoggerForMatchesPointerConstructor pins that the value constructor
+// and the pointer constructor produce identical loggers, so the per-request
+// construction site can use either.
+func TestContextLoggerForMatchesPointerConstructor(t *testing.T) {
+	ctx := benchSpanContext()
+	base := newBufLogger(&bytes.Buffer{})
+
+	ptr := NewContextLogger(ctx, base)
+	val := ContextLoggerFor(ctx, base)
+
+	require.Equal(t, ptr.spanCtx, val.spanCtx)
+	require.True(t, val.spanCtx.IsValid())
+	require.Equal(t, ptr.withTraceInfo("m"), val.withTraceInfo("m"),
+		"both constructors must attach the same marker")
+}
+
+// TestContextLoggerForNoTrace covers the no-span case: no trace ID, no marker.
+func TestContextLoggerForNoTrace(t *testing.T) {
+	val := ContextLoggerFor(context.Background(), newBufLogger(&bytes.Buffer{}))
+
+	require.False(t, val.spanCtx.IsValid())
+	require.Equal(t, []any{"m"}, val.withTraceInfo("m"), "no marker without a valid span")
+}
+
+// TestContextLoggerForStillLogsTraceID is the feature guard: the trace ID must
+// still reach the emitted log line.
+func TestContextLoggerForStillLogsTraceID(t *testing.T) {
+	buf := &bytes.Buffer{}
+	val := ContextLoggerFor(benchSpanContext(), newBufLogger(buf))
+
+	val.Info("hello")
+
+	require.Contains(t, buf.String(), "0102030405060708090a0b0c0d0e0f10")
+}
+
+// TestContextLoggerSilentRequestIsFree pins the point of deferring the trace ID:
+// building a logger for a request that never logs must allocate nothing.
+func TestContextLoggerSilentRequestIsFree(t *testing.T) {
+	ctx := benchSpanContext()
+	base := newBufLogger(&bytes.Buffer{})
+
+	got := testing.AllocsPerRun(1000, func() {
+		ctxLoggerSink = ContextLoggerFor(ctx, base)
+	})
+
+	require.Zero(t, got, "a request that never logs must not pay for a trace ID")
+}
+
+//nolint:gochecknoglobals // standard Go benchmarking idiom; a local would be optimized away.
+var ctxLoggerSink ContextLogger
+
+// TestContextLoggerStillEmitsTraceIDWhenLogging is the feature guard: deferring
+// must not lose the trace ID from an emitted line.
+func TestContextLoggerStillEmitsTraceIDWhenLogging(t *testing.T) {
+	buf := &bytes.Buffer{}
+	cl := ContextLoggerFor(benchSpanContext(), newBufLogger(buf))
+
+	cl.Info("hello")
+
+	require.Contains(t, buf.String(), "0102030405060708090a0b0c0d0e0f10")
 }
