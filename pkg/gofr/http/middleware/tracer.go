@@ -3,6 +3,7 @@ package middleware
 import (
 	"net/http"
 	"strings"
+	"sync"
 
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
@@ -40,17 +41,77 @@ func methodKV(method string) attribute.KeyValue {
 	return attribute.String("http.request.method", method)
 }
 
-// routeTemplate returns the matched route template (e.g. "/users/{id}") for
-// the request, otherwise the raw URL path. Used for the span name and
-// http.route attribute so tracing cardinality stays bounded by route count,
-// not request count. gofrhttp.RouteTemplate resolves the template under both
-// the trie and the default mux router.
-func routeTemplate(r *http.Request) string {
+// routeTemplate returns the matched route template (e.g. "/users/{id}") for the request, otherwise
+// the raw URL path. Used for the span name and http.route attribute so tracing cardinality stays
+// bounded by route count, not request count.
+//
+// The bool reports whether a template was resolved, which is what makes the span-name cache safe:
+// only a templated route may be cached, since a raw path is unbounded and would grow the cache once
+// per distinct request. gofrhttp.RouteTemplate resolves the template under both the trie and the
+// default mux router.
+func routeTemplate(r *http.Request) (route string, templated bool) {
 	if t := gofrhttp.RouteTemplate(r); t != "" {
-		return t
+		return t, true
 	}
 
-	return r.URL.Path
+	return r.URL.Path, false
+}
+
+// spanKey identifies a (method, route-template) pair.
+type spanKey struct {
+	method, route string
+}
+
+// spanMeta is the immutable per-route span data: the semconv span name and the
+// attribute slice handed to trace.WithAttributes. Both are pure functions of
+// (method, route), so they are provider-independent and safe to share process
+// wide even across TracerProvider replacement.
+type spanMeta struct {
+	name  string
+	attrs []attribute.KeyValue
+}
+
+// tracerSpanCache maps spanKey -> *spanMeta.
+//
+// Keyed on the ROUTE TEMPLATE ("/users/{id}"), never a concrete path, so it is
+// bounded by routes x methods — the same bound metrics.go relies on for its
+// routeAttrs cache. Unmatched requests carry a raw path, which is attacker
+// controlled and unbounded, so spanMetaFor deliberately does not cache those.
+//
+// Router.Match), so a closure-owned cache would be discarded every request.
+//
+//nolint:gochecknoglobals // mux rebuilds the middleware chain per request (see
+var tracerSpanCache sync.Map
+
+// spanMetaFor returns the span name and attributes for a route, building them on
+// first use. templated reports whether route came from a matched route template;
+// when false the value is a raw request path and must not enter the cache.
+func spanMetaFor(method, route string, templated bool) *spanMeta {
+	if !templated {
+		return newSpanMeta(method, route)
+	}
+
+	key := spanKey{method: method, route: route}
+	if v, ok := tracerSpanCache.Load(key); ok {
+		meta, _ := v.(*spanMeta)
+
+		return meta
+	}
+
+	meta := newSpanMeta(method, route)
+	tracerSpanCache.Store(key, meta)
+
+	return meta
+}
+
+func newSpanMeta(method, route string) *spanMeta {
+	return &spanMeta{
+		name: buildSpanName(method, route),
+		attrs: []attribute.KeyValue{
+			methodKV(method),
+			attribute.String("http.route", route),
+		},
+	}
 }
 
 // Tracer is a middleware that starts a new OpenTelemetry trace span for each
@@ -86,13 +147,13 @@ func Tracer(inner http.Handler) http.Handler {
 		// span name and http.route attribute do not explode to one unique
 		// value per concrete path (e.g. "/users/42"). Fall back to URL.Path
 		// when no route matched (404 / unknown route).
-		route := routeTemplate(r)
-		spanName := buildSpanName(method, route)
+		route, templated := routeTemplate(r)
+		meta := spanMetaFor(method, route, templated)
 
-		ctxOut, span := tr.Start(ctx, spanName, trace.WithAttributes(
-			methodKV(method),
-			attribute.String("http.route", route),
-		))
+		// The attribute slice is passed to Start, not applied afterwards: a
+		// sampler can read attributes when deciding, so moving them after the
+		// span exists would change sampling for anyone sampling on http.route.
+		ctxOut, span := tr.Start(ctx, meta.name, trace.WithAttributes(meta.attrs...))
 		defer span.End()
 
 		// http.response.status_code is set after the handler returns via

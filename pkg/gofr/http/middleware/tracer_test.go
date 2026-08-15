@@ -4,6 +4,9 @@ import (
 	"context"
 	"net/http"
 	"net/http/httptest"
+	"strconv"
+	"sync"
+	"sync/atomic"
 	"testing"
 
 	"github.com/gorilla/mux"
@@ -447,4 +450,68 @@ func TestTracerImplicit200StillRecorded(t *testing.T) {
 			require.Equal(t, int64(http.StatusOK), a.Value.AsInt64())
 		}
 	}
+}
+
+// TestSpanMetaCacheIsBounded is the safety property for the cache: a route
+// template must produce ONE entry no matter how many concrete paths hit it, and
+// an unmatched (attacker-controlled) path must produce none at all.
+func TestSpanMetaCacheIsBounded(t *testing.T) {
+	tracerSpanCache.Range(func(k, _ any) bool { tracerSpanCache.Delete(k); return true })
+
+	for i := range 500 {
+		spanMetaFor(http.MethodGet, "/users/{id}", true)
+		spanMetaFor(http.MethodGet, "/attacker/"+strconv.Itoa(i), false)
+	}
+
+	var n int
+
+	tracerSpanCache.Range(func(_, _ any) bool { n++; return true })
+
+	require.Equal(t, 1, n,
+		"one template must yield one entry, and unmatched paths must never be cached")
+}
+
+// TestSpanMetaContentIsCorrect pins that caching did not change what is emitted.
+func TestSpanMetaContentIsCorrect(t *testing.T) {
+	meta := spanMetaFor(http.MethodPost, "/orders/{id}", true)
+
+	require.Equal(t, "POST /orders/{id}", meta.name)
+	require.Len(t, meta.attrs, 2)
+	require.Equal(t, attribute.Key("http.request.method"), meta.attrs[0].Key)
+	require.Equal(t, "POST", meta.attrs[0].Value.AsString())
+	require.Equal(t, attribute.Key("http.route"), meta.attrs[1].Key)
+	require.Equal(t, "/orders/{id}", meta.attrs[1].Value.AsString())
+
+	// A second call must return the identical cached instance.
+	require.Same(t, meta, spanMetaFor(http.MethodPost, "/orders/{id}", true))
+}
+
+// TestSpanMetaConcurrent runs the cache under contention; the race detector is
+// the point of this test.
+func TestSpanMetaConcurrent(t *testing.T) {
+	var (
+		wg  sync.WaitGroup
+		bad atomic.Int64
+	)
+
+	// require calls FailNow, which must only run on the test goroutine, so the
+	// workers record failures and the assertion happens after Wait.
+	for g := range 16 {
+		wg.Add(1)
+
+		go func(g int) {
+			defer wg.Done()
+
+			for range 100 {
+				m := spanMetaFor(http.MethodGet, "/c/"+strconv.Itoa(g%4)+"/{id}", true)
+				if m == nil || m.name == "" || len(m.attrs) != 2 {
+					bad.Add(1)
+				}
+			}
+		}(g)
+	}
+
+	wg.Wait()
+
+	require.Zero(t, bad.Load(), "cache returned an incomplete spanMeta under contention")
 }
