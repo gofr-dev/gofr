@@ -22,12 +22,29 @@ on:
       - 'docs/**'  # Ignore changes to docs folder
       - '**/*.md'
 
+# One in-flight run per ref. Pushing twice to a PR branch otherwise starts a
+# second full 14-job matrix — including the Kafka/Redis/MySQL services and the
+# Zipkin/MinIO containers — while the first is still running, and only the
+# newer result is ever looked at.
+#
+# Cancellation is limited to pull_request on purpose. On `development` the runs
+# are serialized merges rather than rapid re-pushes, so there is little to save,
+# and `upload_coverage` publishes to qlty per push — cancelling that loses the
+# coverage data point for a commit that will not be built again.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 # Define the jobs that this workflow will run
 jobs:
   # Job for testing the examples directory
   Example-Unit-Testing:
     name: Example Unit Testing (v${{ matrix.go-version }})🛠
     runs-on: ubuntu-latest
+    # Bounds a hung job at 30m instead of GitHub's 6h default. The retry action
+    # below caps the test step itself (5m x 2 attempts), but `Get dependencies`,
+    # the MinIO readiness poll and the s3 example test are otherwise unbounded.
+    timeout-minutes: 30
     # Define a matrix strategy to test against multiple Go versions
     strategy:
       matrix:
@@ -125,7 +142,7 @@ jobs:
       # Run tests with automatic retry on failures
       - name: Test with Retry Logic
         id: test
-        uses: nick-fields/retry@v4
+        uses: nick-fields/retry@ad984534de44a9489a53aefd81eb77f87c70dc60 # v4.0.0
         with:
           timeout_minutes: 5  # Maximum time for the tests to run
           max_attempts: 2      # Retry up to 2 times if tests fail
@@ -170,6 +187,7 @@ jobs:
   PKG-Unit-Testing:
     name: PKG Unit Testing (v${{ matrix.go-version }})🛠
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     strategy:
       matrix:
         go-version: ['1.26','1.25', '1.24']
@@ -200,7 +218,7 @@ jobs:
       # Run pkg tests with automatic retry logic
       - name: Test with Retry Logic
         id: test
-        uses: nick-fields/retry@v4
+        uses: nick-fields/retry@ad984534de44a9489a53aefd81eb77f87c70dc60 # v4.0.0
         with:
           timeout_minutes: 5
           max_attempts: 2
@@ -257,6 +275,7 @@ jobs:
   parse_coverage:
     name: Code Coverage
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     # This job runs after both Example and PKG testing are complete
     needs: [ Example-Unit-Testing,PKG-Unit-Testing ]
     steps:
@@ -295,6 +314,7 @@ jobs:
   Submodule-Unit-Testing:
     name: Submodule Unit Testing (v${{ matrix.go-version }})🛠
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     strategy:
       matrix:
         go-version:  ['1.26','1.25', '1.24']
@@ -329,7 +349,7 @@ jobs:
       # Test all submodules in parallel with retry logic
       - name: Test Submodules with Retry and Parallelism
         id: test_submodules
-        uses: nick-fields/retry@v4
+        uses: nick-fields/retry@ad984534de44a9489a53aefd81eb77f87c70dc60 # v4.0.0
         with:
           timeout_minutes: 5
           max_attempts: 2
@@ -391,6 +411,7 @@ jobs:
   upload_coverage:
     name: Upload Coverage📊
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     env:
       QLTY_TOKEN: ${{ secrets.QLTY_TOKEN }}
       QLTY_COVERAGE_TOKEN: ${{ secrets.QLTY_TOKEN }}
@@ -437,6 +458,9 @@ jobs:
   code_quality:
     name: Code Quality🎖️
     runs-on: ubuntu-latest
+    # golangci-lint gets --timeout=5m below; this bounds checkout, module
+    # download and the changed-files scan around it.
+    timeout-minutes: 20
     outputs:
       modules: ${{ steps.changed-submodules.outputs.modules }}
       has_modules: ${{ steps.changed-submodules.outputs.has_modules }}
@@ -458,7 +482,7 @@ jobs:
       # Use the official golangci-lint action for the root module
       # This action automatically detects changed files and only reports new issues
       - name: Lint Root Module
-        uses: golangci/golangci-lint-action@v9
+        uses: golangci/golangci-lint-action@ba0d7d2ec06a0ea1cb5fa41b2e4a3ab91d21278a # v9.3.0
         with:
           version: v2.12.2
           only-new-issues: true
@@ -468,7 +492,7 @@ jobs:
       # This implements a changed-files based approach as suggested by the maintainer
       - name: Get Changed Files
         id: changed-files
-        uses: tj-actions/changed-files@v47
+        uses: tj-actions/changed-files@24d32ffd492484c1d75e0c0b894501ddb9d30d62 # v47.0.0
         with:
           files: |
             pkg/**/*.go
@@ -530,6 +554,9 @@ jobs:
   lint_changed_submodules:
     name: Lint Submodules🔍
     runs-on: ubuntu-latest
+    # Must exceed the --timeout=9m passed to golangci-lint below, so a genuine
+    # lint timeout still reports as a lint failure rather than a killed job.
+    timeout-minutes: 20
     needs: code_quality
     if: needs.code_quality.outputs.has_modules == 'true'
     strategy:
@@ -554,7 +581,7 @@ jobs:
 
       # Use the official golangci-lint action for this submodule
       - name: Lint ${{ matrix.module }}
-        uses: golangci/golangci-lint-action@v9
+        uses: golangci/golangci-lint-action@ba0d7d2ec06a0ea1cb5fa41b2e4a3ab91d21278a # v9.3.0
         with:
           version: v2.12.2
           working-directory: ${{ matrix.module }}
@@ -565,6 +592,7 @@ jobs:
   linting_party:
     name: Linting Party🥳
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - name: Check out code
         uses: actions/checkout@v7

@@ -1,14 +1,30 @@
 name: Typos Check
+# Mirrors go.yml's trigger block. The previous bare `push:`/`pull_request:` had
+# no branch filter, so a PR raised from a branch in this repo ran the check
+# twice — once for the push, once for the pull_request. Unlike go.yml there is
+# no paths-ignore: prose is exactly what this check is for.
 on:
   push:
+    branches:
+      - main
+      - development
   pull_request:
+    branches:
+      - main
+      - development
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 jobs:
   typos:
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     permissions:
       contents: read
     steps:
       - name: Checkout Code
         uses: actions/checkout@v7
       - name: typos-action
-        uses: crate-ci/typos@v1.48.0
+        uses: crate-ci/typos@bee27e3a4fd1ea2111cf90ab89cd076c870fce14 # v1.48.0
