@@ -3,14 +3,19 @@ package gofr
 import (
 	"encoding/json"
 	"fmt"
+	"net"
 	"net/http"
+	"strconv"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"gofr.dev/pkg/gofr/ai"
 	"gofr.dev/pkg/gofr/ai/mcp"
+	"gofr.dev/pkg/gofr/config"
+	"gofr.dev/pkg/gofr/container"
 	"gofr.dev/pkg/gofr/testutil"
 )
 
@@ -288,14 +293,79 @@ func TestEnableMCP_ExposesToolsViaLLM(t *testing.T) {
 }
 
 func TestEnableMCP_ServerConfigured(t *testing.T) {
-	testutil.NewServerConfigs(t) // provides a free HTTP port; MCP_PORT defaults to 8200
+	testutil.NewServerConfigs(t) // provides a free HTTP port; MCP_PORT is left unset
 
 	app := New()
 	app.GET("/ping", func(*Context) (any, error) { return "pong", nil })
 	app.EnableMCP()
 
-	require.NotNil(t, app.mcpServer, "EnableMCP configures the server when the port is available")
+	// The assertion pins the default port, so this test cannot be handed a free one. That is only
+	// safe because EnableMCP does no network I/O: whether 8200 happens to be occupied on the machine
+	// running the suite is now irrelevant to the outcome.
+	require.NotNil(t, app.mcpServer, "EnableMCP configures the server from config alone")
 	assert.Equal(t, defaultMCPPort, app.mcpServer.port)
+}
+
+// TestEnableMCP_OccupiedPortStillConfigures is the regression test for the process exit.
+//
+// EnableMCP used to probe the port and call Logger.Fatalf when something held it, and that Fatalf
+// calls os.Exit(1) — from library code, during setup. Any service whose MCP port was taken died at
+// startup instead of serving, and in the test suite it killed the test binary mid-run, reporting
+// every remaining test in the package as failed with nothing to identify the culprit.
+func TestEnableMCP_OccupiedPortStillConfigures(t *testing.T) {
+	testutil.NewServerConfigs(t)
+
+	// A real listener, so the port is genuinely unavailable rather than assumed to be.
+	occupied, err := (&net.ListenConfig{}).Listen(t.Context(), "tcp", "127.0.0.1:0")
+	require.NoError(t, err)
+
+	t.Cleanup(func() { _ = occupied.Close() })
+
+	port := occupied.Addr().(*net.TCPAddr).Port
+	t.Setenv("MCP_PORT", strconv.Itoa(port))
+
+	app := New()
+	app.GET("/ping", func(*Context) (any, error) { return "pong", nil })
+
+	// Reaching the next line at all is the assertion: before the fix, this call exited the process.
+	app.EnableMCP()
+
+	require.NotNil(t, app.mcpServer, "an occupied port must not prevent configuration")
+	assert.Equal(t, port, app.mcpServer.port)
+}
+
+// TestMCPServer_Run_OccupiedPortLogsAndReturns covers the other half: the bind failure has to be
+// reported, and Run has to return so the waitgroup in startMCPServer is released and the rest of the
+// application keeps serving.
+func TestMCPServer_Run_OccupiedPortLogsAndReturns(t *testing.T) {
+	occupied, err := (&net.ListenConfig{}).Listen(t.Context(), "tcp", "127.0.0.1:0")
+	require.NoError(t, err)
+
+	t.Cleanup(func() { _ = occupied.Close() })
+
+	port := occupied.Addr().(*net.TCPAddr).Port
+	done := make(chan struct{})
+
+	// ERROR goes to the logger's errorOut, which is os.Stderr — and the logger captures it at
+	// construction, so the container has to be built inside the capture.
+	logs := testutil.StderrOutputForFunc(func() {
+		c := container.NewContainer(config.NewMockConfig(map[string]string{"LOG_LEVEL": "ERROR"}))
+
+		go func() {
+			defer close(done)
+
+			newMCPServer(port, http.NotFoundHandler()).Run(c)
+		}()
+
+		select {
+		case <-done:
+		case <-time.After(5 * time.Second):
+			t.Error("Run did not return after failing to bind; startMCPServer would hang on the waitgroup")
+		}
+	})
+
+	assert.Contains(t, logs, "is not serving")
+	assert.Contains(t, logs, "address already in use")
 }
 
 func schemaFor(specs []ai.ToolSpec, name string) string {

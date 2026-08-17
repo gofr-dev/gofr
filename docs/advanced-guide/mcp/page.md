@@ -57,6 +57,22 @@ as for a normal HTTP call. The caller's `Authorization` / `X-Api-Key` headers pr
 `ctx.GetAuthInfo()` works inside a tool call and a secured endpoint stays secured. Set `MCP_PORT=0`
 to disable the server while keeping in-process tools available.
 
+### If the port is unavailable
+
+The MCP transport is optional, so it is never allowed to take the service down with it. If
+`MCP_PORT` cannot be bound — most often because something already holds it — GoFr logs an error and
+carries on serving:
+
+```
+ERROR  MCP server on port 8200 is not serving, err: listen tcp 127.0.0.1:8200: bind: address
+       already in use — the rest of the application is unaffected and tools remain available in-process
+```
+
+Your HTTP handlers are unaffected, and `ctx.LLM().Tools()` still works, because in-process tool
+registration is independent of the transport. Only external MCP clients lose their connection point.
+If you need MCP to be present, treat that log line as fatal in your own monitoring rather than
+expecting the process to exit.
+
 ## Building an agent
 
 `ctx.LLM().Tools()` gives a handler the same tools — your own service's endpoints — so you can run

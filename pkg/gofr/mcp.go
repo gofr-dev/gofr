@@ -33,6 +33,10 @@ func WithExcludedRoutes(paths ...string) MCPOption {
 // an MCP server on its own port (MCP_PORT, default 8200; MCP_PORT=0 disables the server). Write
 // handlers are never exposed, so an agent cannot mutate state through this surface. The tools are also
 // reachable in handlers via ctx.LLM().Tools() regardless of whether the server is enabled.
+//
+// It performs no network I/O: the port is only resolved here, and bound later when the server runs.
+// If it cannot be bound, the failure is logged and the application carries on without the MCP
+// transport (see mcpServer.Run).
 func (a *App) EnableMCP(opts ...MCPOption) {
 	cfg := &mcpConfig{exclude: make(map[string]bool)}
 	for _, o := range opts {
@@ -53,6 +57,14 @@ func (a *App) EnableMCP(opts ...MCPOption) {
 	a.mcpServer = newMCPServer(port, server)
 }
 
+// mcpPort resolves the port to serve MCP on from configuration. It reports false only when the
+// server is switched off outright with MCP_PORT=0.
+//
+// It deliberately does not check whether the port can be bound. A dial-based probe cannot answer
+// that question — it reports whether something is currently listening, which is neither the same as
+// being able to bind (the address may be bound without listening, or reserved) nor stable, since the
+// port can be taken in the window between the probe and the Listen. The authoritative answer is
+// ListenAndServe's own error, which mcpServer.Run already reports.
 func (a *App) mcpPort() (int, bool) {
 	portStr := a.Config.Get("MCP_PORT")
 	if portStr == "0" {
@@ -63,10 +75,6 @@ func (a *App) mcpPort() (int, bool) {
 	port, err := strconv.Atoi(portStr)
 	if err != nil || port <= 0 {
 		port = defaultMCPPort
-	}
-
-	if !isPortAvailable(port) {
-		a.container.Logger.Fatalf("MCP port %d is blocked or unreachable", port)
 	}
 
 	return port, true
@@ -100,8 +108,14 @@ func (m *mcpServer) Run(c *container.Container) {
 	m.srv = srv
 	m.srvMu.Unlock()
 
-	if err := srv.ListenAndServe(); !errors.Is(err, http.ErrServerClosed) {
-		c.Errorf("error while listening to MCP server, err: %v", err)
+	// A bind failure — most often the port already being in use — takes MCP down and nothing else.
+	// The service's own HTTP surface is unaffected and the tools stay callable in-process through
+	// ctx.LLM().Tools(), so this is reported and the application keeps serving rather than exiting:
+	// an optional agent transport is not worth the whole process. The message names the port because
+	// the error alone does not distinguish which of a service's listeners failed.
+	if err := srv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
+		c.Errorf("MCP server on port %d is not serving, err: %v — the rest of the application is "+
+			"unaffected and tools remain available in-process", m.port, err)
 	}
 }
 
