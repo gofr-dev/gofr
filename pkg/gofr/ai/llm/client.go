@@ -38,6 +38,7 @@ const (
 	maxErrBodyLen      = 512
 
 	chatCompletionsPath = "chat/completions"
+	embeddingsPath      = "embeddings"
 	modelsPath          = "models"
 
 	headerContentType   = "Content-Type"
@@ -50,6 +51,7 @@ const (
 var (
 	_ ai.Model          = (*Client)(nil)
 	_ ai.StreamingModel = (*Client)(nil)
+	_ ai.Embedder       = (*Client)(nil)
 	_ ai.Descriptor     = (*Client)(nil)
 )
 
@@ -66,6 +68,12 @@ type Client struct {
 	// providers whose usage object deviates from the standard shape. The zero value uses the built-in
 	// mapping (OpenAI/Groq/DeepSeek), so the popular providers need no configuration.
 	UsageFields UsageFields
+	// MaxConcurrentRequests caps the number of in-flight requests to the provider. When the cap is
+	// reached, further Chat/Embed/Stream calls block until a slot frees (or their context is done) —
+	// backpressure so a burst of concurrent agent calls cannot pile onto a provider that serializes
+	// internally and turn every request's tail latency pathological. HealthCheck is never limited.
+	// Zero (the default) means unlimited.
+	MaxConcurrentRequests int
 
 	apiKey  string
 	baseURL string
@@ -73,10 +81,28 @@ type Client struct {
 	logger  service.Logger
 	metrics service.Metrics
 	config  config.Config
+	sem     chan struct{} // in-flight limiter; nil when MaxConcurrentRequests <= 0
 
 	healthMu     sync.Mutex
 	healthExpiry time.Time
 	healthCache  datasource.Health
+}
+
+// acquire blocks until an in-flight slot is free (or ctx is done) when a concurrency cap is set, and
+// returns a release that frees the slot. Both are no-ops when no cap is configured. The returned
+// release is idempotent, so a streamer may call it on both exhaustion and Close.
+func (c *Client) acquire(ctx context.Context) (release func(), err error) {
+	if c.sem == nil {
+		return func() {}, nil
+	}
+
+	select {
+	case c.sem <- struct{}{}:
+		var once sync.Once
+		return func() { once.Do(func() { <-c.sem }) }, nil
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	}
 }
 
 // UseLogger wires the framework logger into the underlying HTTP service.
@@ -113,6 +139,10 @@ func (c *Client) Connect() {
 		}
 
 		return
+	}
+
+	if c.MaxConcurrentRequests > 0 {
+		c.sem = make(chan struct{}, c.MaxConcurrentRequests)
 	}
 
 	c.svc = service.NewHTTPService(c.baseURL, c.logger, c.metrics,
@@ -176,24 +206,20 @@ func (c *Client) Chat(ctx context.Context, messages []ai.Message, opts ...ai.Opt
 		return nil, errNotConnected
 	}
 
+	release, err := c.acquire(ctx)
+	if err != nil {
+		return nil, err
+	}
+	defer release()
+
 	body, err := c.buildRequest(messages, opts, false)
 	if err != nil {
 		return nil, err
 	}
 
-	resp, err := c.post(ctx, chatCompletionsPath, body)
+	data, err := c.postJSON(ctx, chatCompletionsPath, body)
 	if err != nil {
 		return nil, err
-	}
-	defer drain(resp)
-
-	data, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return nil, fmt.Errorf("%w: %w", errRequestFailed, err)
-	}
-
-	if !isSuccess(resp.StatusCode) {
-		return nil, c.statusError(resp.StatusCode, data)
 	}
 
 	var cr chatResponse
@@ -217,8 +243,117 @@ func (c *Client) Chat(ctx context.Context, messages []ai.Message, opts ...ai.Opt
 	return out, nil
 }
 
+// Embed satisfies ai.Embedder: it posts the input texts to the OpenAI-compatible /embeddings
+// endpoint and returns one vector per input, in the same order. It rides the same instrumented
+// HTTP service, retry and error handling as Chat.
+//
+// Options are accepted for signature parity with Chat and Stream but none currently apply, so they
+// are deliberately ignored rather than silently half-honored: the options GoFr defines today
+// (WithTemperature, WithMaxTokens, WithTools) are all completion parameters with no meaning for an
+// embeddings request. The request body is therefore fixed at {model, input}.
+//
+// The ceiling that implies: the provider-side embedding parameters — notably `dimensions`, which
+// drives Matryoshka truncation on text-embedding-3-*, and `encoding_format` — cannot be set through
+// this client. Supporting them needs embedding-specific options plus the matching fields on
+// embeddingsRequest; tracked in gofr-dev/gofr#3803.
+func (c *Client) Embed(ctx context.Context, input []string, _ ...ai.Option) (*ai.EmbeddingResponse, error) {
+	if c.svc == nil {
+		return nil, errNotConnected
+	}
+
+	release, err := c.acquire(ctx)
+	if err != nil {
+		return nil, err
+	}
+	defer release()
+
+	body, err := json.Marshal(embeddingsRequest{Model: c.Model, Input: input})
+	if err != nil {
+		return nil, fmt.Errorf("%w: %w", errEncodeRequest, err)
+	}
+
+	data, err := c.postJSON(ctx, embeddingsPath, body)
+	if err != nil {
+		return nil, err
+	}
+
+	var er embeddingsResponse
+	if err = json.Unmarshal(data, &er); err != nil {
+		return nil, fmt.Errorf("%w: %w", errDecodeResponse, err)
+	}
+
+	if er.Error != nil {
+		return nil, fmt.Errorf("%w: %s", errProvider, er.Error.Message)
+	}
+
+	embeddings, err := placeEmbeddings(er.Data, len(input))
+	if err != nil {
+		return nil, err
+	}
+
+	return &ai.EmbeddingResponse{
+		Model:      er.Model,
+		Usage:      mapUsage(&c.UsageFields, er.Usage),
+		Embeddings: embeddings,
+	}, nil
+}
+
+// placeEmbeddings maps the response data array onto one vector per input, honoring each entry's
+// "index" rather than its array position. The distinction only shows up on a provider that returns
+// the array out of order — which the index field exists to allow — and there, positional mapping
+// hands every input someone else's vector with nothing to signal it. That is a bad failure for
+// embeddings: a wrong vector is still a valid vector, so semantic search and agent memory degrade
+// silently instead of erroring.
+//
+// A missing index falls back to the entry's position, so providers that omit the field keep working.
+// An index outside the input range, or one claimed twice, means the response cannot be mapped at all,
+// and is reported instead of guessed at.
+//
+// Everything is validated against inputs — the number of texts sent — rather than against the length
+// of the response, so a short response is caught for what it is. The embeddings endpoint returns one
+// entry per input and reports failures for the whole request, so a count that disagrees is a broken
+// response, and mapping it anyway would hand the caller a slice shorter than the inputs it was built
+// from: an out-of-range panic for a caller indexing by input, or a silently skipped document for one
+// ranging over the result.
+func placeEmbeddings(data []embeddingDatum, inputs int) ([][]float32, error) {
+	if len(data) != inputs {
+		return nil, fmt.Errorf("%w: provider returned %d embeddings for %d inputs",
+			errDecodeResponse, len(data), inputs)
+	}
+
+	out := make([][]float32, inputs)
+	seen := make([]bool, inputs)
+
+	for i := range data {
+		pos := i
+		if data[i].Index != nil {
+			pos = *data[i].Index
+		}
+
+		if pos < 0 || pos >= inputs {
+			return nil, fmt.Errorf("%w: embedding index %d outside the %d inputs sent",
+				errDecodeResponse, pos, inputs)
+		}
+
+		if seen[pos] {
+			return nil, fmt.Errorf("%w: embedding index %d returned more than once", errDecodeResponse, pos)
+		}
+
+		seen[pos] = true
+		out[pos] = data[i].Embedding
+	}
+
+	return out, nil
+}
+
 // HealthCheck reports provider reachability, caching the result for a short TTL. The API key is
 // never included in the returned details.
+//
+// The lock is deliberately held across the probe rather than released around it: that makes the
+// probe single-flight, so a burst of concurrent health checks on a cold cache costs the provider one
+// request instead of one per caller. The cost is that concurrent callers wait for the in-flight probe
+// (bounded by healthProbeTimeout) instead of racing their own — the right trade for a call that is
+// polled by /.well-known/health rather than served on a request path.
 func (c *Client) HealthCheck(ctx context.Context) datasource.Health {
 	c.healthMu.Lock()
 	defer c.healthMu.Unlock()
@@ -332,6 +467,28 @@ func (c *Client) post(ctx context.Context, path string, body []byte) (*http.Resp
 	}
 
 	return nil, errRequestFailed
+}
+
+// postJSON sends a JSON body to path and returns the raw success-response bytes, mapping transport,
+// body-read and non-2xx status failures to errors. Decoding the success body is left to the caller,
+// so Chat and Embed share it; Stream reads its body incrementally and does not.
+func (c *Client) postJSON(ctx context.Context, path string, body []byte) ([]byte, error) {
+	resp, err := c.post(ctx, path, body)
+	if err != nil {
+		return nil, err
+	}
+	defer drain(resp)
+
+	data, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("%w: %w", errRequestFailed, err)
+	}
+
+	if !isSuccess(resp.StatusCode) {
+		return nil, c.statusError(resp.StatusCode, data)
+	}
+
+	return data, nil
 }
 
 func shouldRetry(ctx context.Context, resp *http.Response, err error) bool {
