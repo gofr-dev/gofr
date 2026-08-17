@@ -180,6 +180,13 @@ if err != nil {
 vectors := resp.Embeddings // one []float32 per input, in order; resp.Usage carries the prompt tokens
 ```
 
+`vectors[i]` is the embedding of `input[i]`. That is guaranteed, not assumed: the client places each
+vector by the `index` the provider reports rather than by its position in the response, so an
+OpenAI-compatible backend that returns the array out of order cannot silently pair an input with
+someone else's vector. A response that cannot be mapped — a vector count that disagrees with the
+inputs sent, an index outside them, or one claimed twice — is returned as an error rather than
+half-mapped, so `len(resp.Embeddings) == len(input)` holds whenever `err` is nil.
+
 Embeddings are usually a *different* model from your chat model, so register one with a name and
 select it per call:
 

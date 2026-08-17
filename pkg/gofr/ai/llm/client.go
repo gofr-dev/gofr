@@ -278,7 +278,7 @@ func (c *Client) Embed(ctx context.Context, input []string, _ ...ai.Option) (*ai
 	}
 
 	var er embeddingsResponse
-	if err := json.Unmarshal(data, &er); err != nil {
+	if err = json.Unmarshal(data, &er); err != nil {
 		return nil, fmt.Errorf("%w: %w", errDecodeResponse, err)
 	}
 
@@ -286,11 +286,61 @@ func (c *Client) Embed(ctx context.Context, input []string, _ ...ai.Option) (*ai
 		return nil, fmt.Errorf("%w: %s", errProvider, er.Error.Message)
 	}
 
-	out := &ai.EmbeddingResponse{Model: er.Model, Usage: mapUsage(&c.UsageFields, er.Usage)}
-	out.Embeddings = make([][]float32, len(er.Data))
+	embeddings, err := placeEmbeddings(er.Data, len(input))
+	if err != nil {
+		return nil, err
+	}
 
-	for i := range er.Data {
-		out.Embeddings[i] = er.Data[i].Embedding
+	return &ai.EmbeddingResponse{
+		Model:      er.Model,
+		Usage:      mapUsage(&c.UsageFields, er.Usage),
+		Embeddings: embeddings,
+	}, nil
+}
+
+// placeEmbeddings maps the response data array onto one vector per input, honoring each entry's
+// "index" rather than its array position. The distinction only shows up on a provider that returns
+// the array out of order — which the index field exists to allow — and there, positional mapping
+// hands every input someone else's vector with nothing to signal it. That is a bad failure for
+// embeddings: a wrong vector is still a valid vector, so semantic search and agent memory degrade
+// silently instead of erroring.
+//
+// A missing index falls back to the entry's position, so providers that omit the field keep working.
+// An index outside the input range, or one claimed twice, means the response cannot be mapped at all,
+// and is reported instead of guessed at.
+//
+// Everything is validated against inputs — the number of texts sent — rather than against the length
+// of the response, so a short response is caught for what it is. The embeddings endpoint returns one
+// entry per input and reports failures for the whole request, so a count that disagrees is a broken
+// response, and mapping it anyway would hand the caller a slice shorter than the inputs it was built
+// from: an out-of-range panic for a caller indexing by input, or a silently skipped document for one
+// ranging over the result.
+func placeEmbeddings(data []embeddingDatum, inputs int) ([][]float32, error) {
+	if len(data) != inputs {
+		return nil, fmt.Errorf("%w: provider returned %d embeddings for %d inputs",
+			errDecodeResponse, len(data), inputs)
+	}
+
+	out := make([][]float32, inputs)
+	seen := make([]bool, inputs)
+
+	for i := range data {
+		pos := i
+		if data[i].Index != nil {
+			pos = *data[i].Index
+		}
+
+		if pos < 0 || pos >= inputs {
+			return nil, fmt.Errorf("%w: embedding index %d outside the %d inputs sent",
+				errDecodeResponse, pos, inputs)
+		}
+
+		if seen[pos] {
+			return nil, fmt.Errorf("%w: embedding index %d returned more than once", errDecodeResponse, pos)
+		}
+
+		seen[pos] = true
+		out[pos] = data[i].Embedding
 	}
 
 	return out, nil
@@ -298,6 +348,12 @@ func (c *Client) Embed(ctx context.Context, input []string, _ ...ai.Option) (*ai
 
 // HealthCheck reports provider reachability, caching the result for a short TTL. The API key is
 // never included in the returned details.
+//
+// The lock is deliberately held across the probe rather than released around it: that makes the
+// probe single-flight, so a burst of concurrent health checks on a cold cache costs the provider one
+// request instead of one per caller. The cost is that concurrent callers wait for the in-flight probe
+// (bounded by healthProbeTimeout) instead of racing their own — the right trade for a call that is
+// polled by /.well-known/health rather than served on a request path.
 func (c *Client) HealthCheck(ctx context.Context) datasource.Health {
 	c.healthMu.Lock()
 	defer c.healthMu.Unlock()
