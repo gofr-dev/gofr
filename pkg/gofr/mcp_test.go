@@ -3,6 +3,7 @@ package gofr
 import (
 	"encoding/json"
 	"fmt"
+	"io"
 	"net"
 	"net/http"
 	"strconv"
@@ -334,38 +335,123 @@ func TestEnableMCP_OccupiedPortStillConfigures(t *testing.T) {
 	assert.Equal(t, port, app.mcpServer.port)
 }
 
-// TestMCPServer_Run_OccupiedPortLogsAndReturns covers the other half: the bind failure has to be
-// reported, and Run has to return so the waitgroup in startMCPServer is released and the rest of the
-// application keeps serving.
-func TestMCPServer_Run_OccupiedPortLogsAndReturns(t *testing.T) {
+// TestBindMCPServer_OccupiedPortAbortsStartup covers the other half of the policy: EnableMCP was
+// called, so MCP was asked for, and a port that cannot be claimed has to stop the run rather than
+// leave the service up without the transport it was configured to expose.
+//
+// The abort is a false return, not an os.Exit, so Run unwinds like a failed OnStart hook.
+func TestBindMCPServer_OccupiedPortAbortsStartup(t *testing.T) {
+	testutil.NewServerConfigs(t)
+
 	occupied, err := (&net.ListenConfig{}).Listen(t.Context(), "tcp", "127.0.0.1:0")
 	require.NoError(t, err)
 
 	t.Cleanup(func() { _ = occupied.Close() })
 
 	port := occupied.Addr().(*net.TCPAddr).Port
-	done := make(chan struct{})
+	t.Setenv("MCP_PORT", strconv.Itoa(port))
+
+	var proceed bool
 
 	// ERROR goes to the logger's errorOut, which is os.Stderr — and the logger captures it at
-	// construction, so the container has to be built inside the capture.
+	// construction, so the app has to be built inside the capture.
 	logs := testutil.StderrOutputForFunc(func() {
-		c := container.NewContainer(config.NewMockConfig(map[string]string{"LOG_LEVEL": "ERROR"}))
+		app := New()
+		app.GET("/ping", func(*Context) (any, error) { return "pong", nil })
+		app.EnableMCP()
 
-		go func() {
-			defer close(done)
-
-			newMCPServer(port, http.NotFoundHandler()).Run(c)
-		}()
-
-		select {
-		case <-done:
-		case <-time.After(5 * time.Second):
-			t.Error("Run did not return after failing to bind; startMCPServer would hang on the waitgroup")
-		}
+		proceed = app.bindMCPServer(t.Context())
 	})
 
-	assert.Contains(t, logs, "is not serving")
+	assert.False(t, proceed, "startup must not continue when the MCP port cannot be claimed")
+	assert.Contains(t, logs, "MCP server cannot start on port")
 	assert.Contains(t, logs, "address already in use")
+	// The message has to be actionable: a bare error leaves the operator guessing at the remedy.
+	assert.Contains(t, logs, "MCP_PORT=0")
+}
+
+// TestBindMCPServer_FreePortProceeds is the counterpart, and also pins that bind actually claims the
+// port rather than reporting on it: the address must be occupied afterwards.
+func TestBindMCPServer_FreePortProceeds(t *testing.T) {
+	testutil.NewServerConfigs(t)
+	t.Setenv("MCP_PORT", strconv.Itoa(testutil.GetFreePort(t)))
+
+	app := New()
+	app.GET("/ping", func(*Context) (any, error) { return "pong", nil })
+	app.EnableMCP()
+
+	require.True(t, app.bindMCPServer(t.Context()))
+	require.NotNil(t, app.mcpServer.listener)
+
+	t.Cleanup(func() { _ = app.mcpServer.listener.Close() })
+
+	// A second bind of the same port must now fail, which is only true if the first one took it.
+	_, err := (&net.ListenConfig{}).Listen(t.Context(), "tcp",
+		fmt.Sprintf("127.0.0.1:%d", app.mcpServer.port))
+	require.Error(t, err, "bind must claim the port, not merely check it")
+}
+
+// TestBindMCPServer_NoServerIsNotAFailure — MCP_PORT=0, or EnableMCP never called, leaves no server
+// to bind, and that must not be mistaken for a startup failure.
+func TestBindMCPServer_NoServerIsNotAFailure(t *testing.T) {
+	testutil.NewServerConfigs(t)
+	t.Setenv("MCP_PORT", "0")
+
+	app := New()
+	app.EnableMCP()
+
+	require.Nil(t, app.mcpServer)
+	assert.True(t, app.bindMCPServer(t.Context()))
+}
+
+// TestMCPServer_Run_ServesOnTheBoundListener pins that Run serves the listener bind claimed, rather
+// than binding a second time from the address.
+func TestMCPServer_Run_ServesOnTheBoundListener(t *testing.T) {
+	m := newMCPServer(testutil.GetFreePort(t), http.HandlerFunc(
+		func(w http.ResponseWriter, _ *http.Request) { _, _ = w.Write([]byte("mcp-up")) }))
+
+	require.NoError(t, m.bind(t.Context()))
+
+	done := make(chan struct{})
+
+	go func() {
+		defer close(done)
+
+		m.Run(container.NewContainer(config.NewMockConfig(map[string]string{"LOG_LEVEL": "ERROR"})))
+	}()
+
+	require.Eventually(t, func() bool {
+		resp, err := http.Get(fmt.Sprintf("http://127.0.0.1:%d/", m.port)) //nolint:noctx // readiness probe
+		if err != nil {
+			return false
+		}
+
+		defer resp.Body.Close()
+
+		body, _ := io.ReadAll(resp.Body)
+
+		return string(body) == "mcp-up"
+	}, 5*time.Second, 20*time.Millisecond)
+
+	require.NoError(t, m.Shutdown(t.Context()))
+
+	select {
+	case <-done:
+	case <-time.After(5 * time.Second):
+		t.Error("Run did not return after Shutdown; startMCPServer would hang on the waitgroup")
+	}
+}
+
+// TestMCPServer_Run_WithoutBindRefusesToServe guards the ordering the design depends on. Run is only
+// ever reached after bindMCPServer succeeds, so an unbound server reaching it means the sequence in
+// (*App).Run was broken — it must say so rather than silently serve nothing or panic.
+func TestMCPServer_Run_WithoutBindRefusesToServe(t *testing.T) {
+	logs := testutil.StderrOutputForFunc(func() {
+		c := container.NewContainer(config.NewMockConfig(map[string]string{"LOG_LEVEL": "ERROR"}))
+		newMCPServer(9999, http.NotFoundHandler()).Run(c)
+	})
+
+	assert.Contains(t, logs, "was not bound")
 }
 
 func schemaFor(specs []ai.ToolSpec, name string) string {

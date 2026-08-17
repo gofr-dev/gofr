@@ -47,6 +47,10 @@ func (a *App) Run() {
 		return
 	}
 
+	if !a.bindMCPServer(ctx) {
+		return
+	}
+
 	timeout, err := getShutdownTimeoutFromConfig(a.Config)
 	if err != nil {
 		a.Logger().Errorf("error parsing value of shutdown timeout from config: %v. Setting default timeout of 30 sec.", err)
@@ -115,6 +119,33 @@ func (a *App) startAllServers(ctx context.Context) {
 	a.startSubscriptionManager(ctx, &wg)
 
 	wg.Wait()
+}
+
+// bindMCPServer claims the MCP port and reports whether startup may continue.
+//
+// It runs before any server goroutine is launched. A port that cannot be claimed is a startup
+// failure: EnableMCP was called, so MCP was asked for, and a service that silently comes up without
+// a transport it was configured to expose is worse than one that refuses to start. Returning false
+// aborts Run the same way a failed OnStart hook does — nothing is serving yet, so there is nothing to
+// unwind, and no os.Exit is involved.
+//
+// Doing this here rather than inside mcpServer.Run is deliberate: the servers run as concurrent
+// goroutines under a shared waitgroup, so a failure raised from inside one of them would race the
+// others' startup rather than cleanly stopping it.
+func (a *App) bindMCPServer(ctx context.Context) bool {
+	if a.mcpServer == nil {
+		return true
+	}
+
+	if err := a.mcpServer.bind(ctx); err != nil {
+		a.Logger().Errorf("MCP server cannot start on port %d: %v. Set MCP_PORT to a free port, or "+
+			"MCP_PORT=0 to run without the MCP transport while keeping tools available in-process.",
+			a.mcpServer.port, err)
+
+		return false
+	}
+
+	return true
 }
 
 // startMCPServer starts the MCP server if app.EnableMCP was called.

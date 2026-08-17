@@ -59,19 +59,26 @@ to disable the server while keeping in-process tools available.
 
 ### If the port is unavailable
 
-The MCP transport is optional, so it is never allowed to take the service down with it. If
-`MCP_PORT` cannot be bound — most often because something already holds it — GoFr logs an error and
-carries on serving:
+Calling `app.EnableMCP()` says you want the MCP transport, so GoFr treats a port it cannot claim as
+a startup failure rather than coming up without it. `app.Run()` reports the problem and returns
+instead of serving:
 
 ```
-ERROR  MCP server on port 8200 is not serving, err: listen tcp 127.0.0.1:8200: bind: address
-       already in use — the rest of the application is unaffected and tools remain available in-process
+ERROR  MCP server cannot start on port 8200: listen tcp 127.0.0.1:8200: bind: address already in
+       use. Set MCP_PORT to a free port, or MCP_PORT=0 to run without the MCP transport while
+       keeping tools available in-process.
 ```
 
-Your HTTP handlers are unaffected, and `ctx.LLM().Tools()` still works, because in-process tool
-registration is independent of the transport. Only external MCP clients lose their connection point.
-If you need MCP to be present, treat that log line as fatal in your own monitoring rather than
-expecting the process to exit.
+A service that started successfully and quietly lacked a transport it was configured to expose would
+be the worse outcome — an orchestrator would report it healthy while agents could not reach it.
+
+Note the default is `8200`, which is also [HashiCorp Vault](https://developer.hashicorp.com/vault)'s
+default port. If you run Vault locally, set `MCP_PORT` to something else.
+
+The port is claimed before any server starts, so this decision is made while nothing is yet serving
+and shutdown hooks and datasource cleanup are unaffected. If you would rather run without the
+transport, `MCP_PORT=0` is the explicit way to say so — tools stay callable in-process through
+`ctx.LLM().Tools()`, because registration is independent of the transport.
 
 ## Building an agent
 
