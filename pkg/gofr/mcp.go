@@ -60,11 +60,13 @@ func (a *App) EnableMCP(opts ...MCPOption) {
 // mcpPort resolves the port to serve MCP on from configuration. It reports false only when the
 // server is switched off outright with MCP_PORT=0.
 //
-// It deliberately does not check whether the port can be bound. A dial-based probe cannot answer
-// that question — it reports whether something is currently listening, which is neither the same as
-// being able to bind (the address may be bound without listening, or reserved) nor stable, since the
-// port can be taken in the window between the probe and the Listen. The authoritative answer is
-// ListenAndServe's own error, which mcpServer.Run already reports.
+// It deliberately does not check whether the port can be bound. The previous dial-based probe was
+// redundant — ListenAndServe answers the same question authoritatively a moment later, and
+// mcpServer.Run already reports its error — and answering it wrongly was expensive, because the
+// response was Logger.Fatalf, i.e. os.Exit from library code. A dial reports whether something is
+// currently listening, which is neither stable (the port can be taken between the probe and the
+// Listen) nor the same question: a wildcard listener elsewhere on the port makes the dial succeed
+// while binding 127.0.0.1 would still have worked, so a healthy service could be killed at startup.
 func (a *App) mcpPort() (int, bool) {
 	portStr := a.Config.Get("MCP_PORT")
 	if portStr == "0" {
