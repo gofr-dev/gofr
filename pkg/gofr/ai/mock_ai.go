@@ -134,6 +134,50 @@ func (mr *MockStreamingModelMockRecorder) Stream(ctx, messages any, opts ...any)
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Stream", reflect.TypeOf((*MockStreamingModel)(nil).Stream), varargs...)
 }
 
+// MockEmbedder is a mock of Embedder interface.
+type MockEmbedder struct {
+	ctrl     *gomock.Controller
+	recorder *MockEmbedderMockRecorder
+	isgomock struct{}
+}
+
+// MockEmbedderMockRecorder is the mock recorder for MockEmbedder.
+type MockEmbedderMockRecorder struct {
+	mock *MockEmbedder
+}
+
+// NewMockEmbedder creates a new mock instance.
+func NewMockEmbedder(ctrl *gomock.Controller) *MockEmbedder {
+	mock := &MockEmbedder{ctrl: ctrl}
+	mock.recorder = &MockEmbedderMockRecorder{mock}
+	return mock
+}
+
+// EXPECT returns an object that allows the caller to indicate expected use.
+func (m *MockEmbedder) EXPECT() *MockEmbedderMockRecorder {
+	return m.recorder
+}
+
+// Embed mocks base method.
+func (m *MockEmbedder) Embed(ctx context.Context, input []string, opts ...Option) (*EmbeddingResponse, error) {
+	m.ctrl.T.Helper()
+	varargs := []any{ctx, input}
+	for _, a := range opts {
+		varargs = append(varargs, a)
+	}
+	ret := m.ctrl.Call(m, "Embed", varargs...)
+	ret0, _ := ret[0].(*EmbeddingResponse)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// Embed indicates an expected call of Embed.
+func (mr *MockEmbedderMockRecorder) Embed(ctx, input any, opts ...any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	varargs := append([]any{ctx, input}, opts...)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Embed", reflect.TypeOf((*MockEmbedder)(nil).Embed), varargs...)
+}
+
 // MockDescriptor is a mock of Descriptor interface.
 type MockDescriptor struct {
 	ctrl     *gomock.Controller
@@ -172,18 +216,18 @@ func (mr *MockDescriptorMockRecorder) ModelName() *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ModelName", reflect.TypeOf((*MockDescriptor)(nil).ModelName))
 }
 
-// Provider mocks base method.
-func (m *MockDescriptor) Provider() string {
+// ProviderName mocks base method.
+func (m *MockDescriptor) ProviderName() string {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "Provider")
+	ret := m.ctrl.Call(m, "ProviderName")
 	ret0, _ := ret[0].(string)
 	return ret0
 }
 
-// Provider indicates an expected call of Provider.
-func (mr *MockDescriptorMockRecorder) Provider() *gomock.Call {
+// ProviderName indicates an expected call of ProviderName.
+func (mr *MockDescriptorMockRecorder) ProviderName() *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Provider", reflect.TypeOf((*MockDescriptor)(nil).Provider))
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ProviderName", reflect.TypeOf((*MockDescriptor)(nil).ProviderName))
 }
 
 // MockLLM is a mock of LLM interface.
@@ -228,6 +272,26 @@ func (mr *MockLLMMockRecorder) Chat(ctx, messages any, opts ...any) *gomock.Call
 	mr.mock.ctrl.T.Helper()
 	varargs := append([]any{ctx, messages}, opts...)
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Chat", reflect.TypeOf((*MockLLM)(nil).Chat), varargs...)
+}
+
+// Embed mocks base method.
+func (m *MockLLM) Embed(ctx context.Context, input []string, opts ...Option) (*EmbeddingResponse, error) {
+	m.ctrl.T.Helper()
+	varargs := []any{ctx, input}
+	for _, a := range opts {
+		varargs = append(varargs, a)
+	}
+	ret := m.ctrl.Call(m, "Embed", varargs...)
+	ret0, _ := ret[0].(*EmbeddingResponse)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// Embed indicates an expected call of Embed.
+func (mr *MockLLMMockRecorder) Embed(ctx, input any, opts ...any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	varargs := append([]any{ctx, input}, opts...)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Embed", reflect.TypeOf((*MockLLM)(nil).Embed), varargs...)
 }
 
 // Generate mocks base method.
@@ -448,4 +512,42 @@ func (m *MockStreamer) Next() (any, bool) {
 func (mr *MockStreamerMockRecorder) Next() *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Next", reflect.TypeOf((*MockStreamer)(nil).Next))
+}
+
+// MockToolCallStreamer is a mock of ToolCallStreamer interface.
+type MockToolCallStreamer struct {
+	ctrl     *gomock.Controller
+	recorder *MockToolCallStreamerMockRecorder
+	isgomock struct{}
+}
+
+// MockToolCallStreamerMockRecorder is the mock recorder for MockToolCallStreamer.
+type MockToolCallStreamerMockRecorder struct {
+	mock *MockToolCallStreamer
+}
+
+// NewMockToolCallStreamer creates a new mock instance.
+func NewMockToolCallStreamer(ctrl *gomock.Controller) *MockToolCallStreamer {
+	mock := &MockToolCallStreamer{ctrl: ctrl}
+	mock.recorder = &MockToolCallStreamerMockRecorder{mock}
+	return mock
+}
+
+// EXPECT returns an object that allows the caller to indicate expected use.
+func (m *MockToolCallStreamer) EXPECT() *MockToolCallStreamerMockRecorder {
+	return m.recorder
+}
+
+// ToolCalls mocks base method.
+func (m *MockToolCallStreamer) ToolCalls() []ToolCall {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "ToolCalls")
+	ret0, _ := ret[0].([]ToolCall)
+	return ret0
+}
+
+// ToolCalls indicates an expected call of ToolCalls.
+func (mr *MockToolCallStreamerMockRecorder) ToolCalls() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ToolCalls", reflect.TypeOf((*MockToolCallStreamer)(nil).ToolCalls))
 }
