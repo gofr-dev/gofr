@@ -49,7 +49,7 @@ Two further caveats worth setting expectations against:
 
 ## What stays the same
 
-Routing behaviour is unchanged, and that is a property the framework tests for rather than a hope.
+Routing behavior is unchanged, and that is a property the framework tests for rather than a hope.
 The trie only *narrows* the set of routes worth considering; `mux`'s own `Route.Match` still decides
 every request, so method matching, `{id:[0-9]+}` constraints, header and query matchers, route
 ordering and path cleaning all behave exactly as they do by default. Anything the trie cannot index
