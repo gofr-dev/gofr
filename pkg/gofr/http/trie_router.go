@@ -1,7 +1,6 @@
 package http
 
 import (
-	"errors"
 	"net/http"
 	"regexp/syntax"
 	"strings"
@@ -296,7 +295,7 @@ func (idx *routeIndex) insert(tpl string, e *routeEntry) {
 	cur.routes = append(cur.routes, e)
 }
 
-// candidates gathers every route whose template structurally lines up with path
+// collect gathers every route whose template structurally lines up with path
 // by exploring both the literal and the parameter branch at each segment
 // (backtracking). This is O(path length × small branching), never O(route
 // count). A route the trie omits here could not have matched path anyway, so
@@ -329,16 +328,12 @@ func (n *trieNode) collect(rest string, out *[]*routeEntry) {
 // candidate that fully matches — identical to what stock mux would pick, only
 // without scanning every registered route.
 //
-// It reports true and fills rm on a full match. On no match it returns false;
-// if some candidate matched the path but not the method, rm.MatchErr is set to
-// mux.ErrMethodMismatch so the caller can render 405 rather than 404.
-//
-// Note: inside a running GoFr app this 405 path is effectively unreachable. GoFr
-// registers a PathPrefix("/") catch-all (see gofr.go) that matches any method,
-// so a wrong-method request to an existing path is a FULL match on the catch-all
-// and returns before methodMismatch is consulted — yielding the same 404 as mux.
-// The 405 result only surfaces on a bare Router with no catch-all (e.g. unit
-// tests), which is why the documented 404->405 divergence is framework-moot.
+// It reports true and fills rm on a full match, and false otherwise — nothing
+// more. It deliberately does NOT classify a non-match as 404 or 405: that
+// distinction depends on state which routes that do not match the request path
+// still mutate (see serveTrie), so it cannot be derived from the narrowed
+// candidate set. serveTrie hands every non-match to mux's own ServeHTTP, which
+// decides it by the full scan, exactly as it would without the index.
 func (idx *routeIndex) match(req *http.Request, rm *mux.RouteMatch) bool {
 	var buf [12]*routeEntry
 
@@ -360,8 +355,6 @@ func (idx *routeIndex) match(req *http.Request, rm *mux.RouteMatch) bool {
 
 	sortByRegistrationOrder(cands)
 
-	methodMismatch := false
-
 	for _, e := range cands {
 		// Match writes into rm directly; reset it between candidates so a
 		// failed attempt cannot leak state into the next one. This avoids a
@@ -377,17 +370,11 @@ func (idx *routeIndex) match(req *http.Request, rm *mux.RouteMatch) bool {
 		if e.route.Match(req, rm) {
 			return true
 		}
-
-		if errors.Is(rm.MatchErr, mux.ErrMethodMismatch) {
-			methodMismatch = true
-		}
 	}
 
+	// Leave nothing behind for the caller to misread as a partial verdict: the
+	// request is going to mux, which starts from a clean RouteMatch of its own.
 	*rm = mux.RouteMatch{}
-
-	if methodMismatch {
-		rm.MatchErr = mux.ErrMethodMismatch
-	}
 
 	return false
 }

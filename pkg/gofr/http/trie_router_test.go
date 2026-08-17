@@ -259,19 +259,23 @@ func TestTrieRouter_MixedSegmentsAreIndexed(t *testing.T) {
 	assert.Empty(t, r.idx.fallback, "all slash-free mixed/param routes must be trie-indexed, not in fallback")
 }
 
-// TestTrieDifferential_KnownMethodMismatchDivergence pins the ONE intentional,
-// documented behavior difference between the two routers (see trie_router.go and
-// the plan's characterization notes).
+// TestTrieDifferential_MethodMismatchParity pins the case that used to be the
+// one documented divergence between the routers, and now is not.
 //
-// When a request's method is wrong for a path that DOES exist, mux's status is
-// registration-order dependent: a later route whose path does not match resets
-// mux's internal ErrMethodMismatch, so mux can report 404 instead of 405. The
-// trie decides method-mismatch over the narrowed candidate set and therefore
-// reports the more correct 405. This affects only the status code (404 vs 405)
-// of wrong-method requests to existing paths; it never changes which handler a
-// valid request reaches, nor its params or body. It is inert by default because
-// the trie router is opt-in (GOFR_ROUTER=trie).
-func TestTrieDifferential_KnownMethodMismatchDivergence(t *testing.T) {
+// mux's 404-vs-405 for a wrong-method request is registration-order dependent.
+// In gorilla/mux's Route.Match, a matcher that SUCCEEDS clears any
+// ErrMethodMismatch a previous route left behind, and GoFr registers routes as
+// Methods(m).Path(p) — method matcher first. So below, the later GET /a/b clears
+// the mismatch recorded by POST /a/{id} purely because its method matches, even
+// though its path does not, and mux answers 404.
+//
+// That makes the 405 decision depend on routes whose path does not match the
+// request — precisely the routes the trie exists to skip — so no amount of
+// bookkeeping over the narrowed candidate set can reproduce it. serveTrie
+// therefore does not try: it hands every non-match to mux's own ServeHTTP, which
+// resolves it by the full scan. The two routers agree here by construction, not
+// by coincidence.
+func TestTrieDifferential_MethodMismatchParity(t *testing.T) {
 	routes := []routeDef{
 		{http.MethodPost, "/a/{id}"}, // only POST on this path
 		{http.MethodGet, "/a/b"},     // a later, non-overlapping path
@@ -280,13 +284,37 @@ func TestTrieDifferential_KnownMethodMismatchDivergence(t *testing.T) {
 	muxR := buildRouter(routes, false)
 	trieR := buildRouter(routes, true)
 
-	// GET /a/xyz: path matches /a/{id} (wrong method). mux resets its
-	// method-mismatch via the later /a/b route -> 404; trie -> 405.
+	// GET /a/xyz: the path matches /a/{id}, the method does not.
 	muxStatus, _ := serve(muxR, http.MethodGet, "/a/xyz")
 	trieStatus, _ := serve(trieR, http.MethodGet, "/a/xyz")
 
 	assert.Equal(t, http.StatusNotFound, muxStatus, "mux baseline: registration-order 404")
-	assert.Equal(t, http.StatusMethodNotAllowed, trieStatus, "trie: more-correct 405 for existing path, wrong method")
+	assert.Equal(t, muxStatus, trieStatus, "trie must reproduce mux's order-dependent status, not a 405")
+}
+
+// TestTrieRouter_UnmatchedFallsBackToMux asserts the safety property that the
+// delegation buys: a route missing from the trie index is still served.
+//
+// The index is normally built by serveTrie from the router's own routes, so this
+// installs a deliberately blind one — every route diverted to neither the trie
+// nor the fallback list — to simulate the worst outcome a classifier bug could
+// produce. Without the delegation this request 404s even though the route is
+// registered and matches; with it, mux's full scan finds the route and serves it,
+// so a classifier bug costs speed rather than correctness.
+func TestTrieRouter_UnmatchedFallsBackToMux(t *testing.T) {
+	r := NewRouter()
+	r.useTrie = true
+	r.Add(http.MethodGet, "/users/{id}", echoHandler("real-handler"))
+
+	// Pre-seed an empty index so the lazy build in serveTrie is skipped and the
+	// trie can match nothing at all.
+	r.buildIdx.Do(func() { r.idx = newRouteIndex() })
+
+	status, body := serve(r, http.MethodGet, "/users/42")
+
+	require.Equal(t, http.StatusOK, status, "an unindexed but registered route must still be served by mux")
+	assert.Contains(t, body, "real-handler")
+	assert.Contains(t, body, `"42"`, "mux must populate the path params it always would")
 }
 
 // TestTrieDifferential_MiddlewareParity asserts the middleware chain runs the

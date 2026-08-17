@@ -20,6 +20,16 @@ const (
 	DefaultSwaggerFileName       = "openapi.json"
 	staticServerNotFoundFileName = "404.html"
 	staticServerIndexFileName    = "index.html"
+
+	// RouterEnvVar selects the route matcher. Unset (or any unrecognized value)
+	// means MatcherMux, so the default behavior is unchanged.
+	RouterEnvVar = "GOFR_ROUTER"
+
+	// MatcherMux is gorilla/mux's linear scan — the default.
+	MatcherMux = "mux"
+	// MatcherTrie is the opt-in segment-trie index, O(path length) in the number
+	// of registered routes.
+	MatcherTrie = "trie"
 )
 
 // errReadPermissionDenied wraps fs.ErrPermission so that a file whose mode carries no read bit is
@@ -67,7 +77,7 @@ func NewRouter() *Router {
 	r := &Router{
 		Router:           *muxRouter,
 		RegisteredRoutes: &routes,
-		useTrie:          strings.EqualFold(os.Getenv("GOFR_ROUTER"), "trie"),
+		useTrie:          strings.EqualFold(os.Getenv(RouterEnvVar), MatcherTrie),
 	}
 
 	return r
@@ -130,6 +140,9 @@ func normalizePath(r *http.Request) {
 // Tracer/Logging/CORS/Metrics chain running. serveTrie mirrors that exactly, so
 // unmatched requests are not logged, measured, or CORS-answered (and the metrics
 // path label is never populated from a raw, unbounded request path).
+//
+// Anything the trie does not match is handed to mux's own ServeHTTP rather than
+// resolved here — see the comment on that call for why.
 func (rou *Router) serveTrie(w http.ResponseWriter, r *http.Request) {
 	rou.buildIdx.Do(func() {
 		idx := newRouteIndex()
@@ -158,16 +171,31 @@ func (rou *Router) serveTrie(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Unmatched: serve mux's NotFound/MethodNotAllowed handler directly, WITHOUT
-	// the middleware chain — matching mux, which applies middleware only on a
-	// successful match.
-	if errors.Is(match.MatchErr, mux.ErrMethodMismatch) {
-		rou.methodNotAllowed().ServeHTTP(w, r)
-
-		return
-	}
-
-	rou.notFound().ServeHTTP(w, r)
+	// Unmatched by the trie: hand the request to mux's own ServeHTTP instead of
+	// deciding 404-vs-405 here. This is the cold path — the response is already
+	// an error — so mux's linear scan costs nothing that matters, and it buys two
+	// things that reimplementing the decision cannot.
+	//
+	// Exactness. mux's 405 depends on state that routes which do NOT match the
+	// request path still mutate: a later route whose method matcher succeeds
+	// clears an ErrMethodMismatch left by an earlier one (gorilla/mux route.go),
+	// and GoFr registers routes as Methods(m).Path(p), so the method matcher runs
+	// first. Reproducing that outcome therefore requires visiting routes the trie
+	// exists to skip. Delegating gets it exactly right instead of approximately.
+	// The custom NotFoundHandler / MethodNotAllowedHandler and subrouter
+	// semantics come along for free, and mux applies no middleware on this path,
+	// so the parity the chain relies on is mux's own by construction.
+	//
+	// Safety. It also makes the index self-healing: if isIndexablePathRegexp ever
+	// admitted a shape it should not have and the trie dropped a route that does
+	// match, mux's full scan finds it here and serves it correctly. That turns the
+	// one catastrophic failure mode of this design — a live route silently
+	// 404ing — into a request that is merely slower, leaving the trie strictly an
+	// accelerator.
+	//
+	// Inside a GoFr app this is unreachable: the PathPrefix("/") catch-all matches
+	// every path and method, so the trie always has a candidate that matches.
+	rou.Router.ServeHTTP(w, r)
 }
 
 // Use registers mux middlewares. It records them in GoFr's own chain — so the
@@ -179,26 +207,20 @@ func (rou *Router) Use(mwf ...mux.MiddlewareFunc) {
 	rou.Router.Use(mwf...)
 }
 
-// notFound returns the handler mux would use for an unmatched route, honoring a
-// custom NotFoundHandler if one was set.
-func (rou *Router) notFound() http.Handler {
-	if rou.NotFoundHandler != nil {
-		return rou.NotFoundHandler
+// Matcher reports which route matcher this router uses: MatcherTrie for the
+// opt-in index, MatcherMux for the default linear scan.
+//
+// It is exported so the server can state the active matcher at startup. The
+// choice is made from the environment inside NewRouter, and an unrecognized
+// GOFR_ROUTER value falls back to mux — which is indistinguishable, from the
+// outside, from not setting the variable at all. Reporting the resolved matcher
+// is what lets the caller tell a typo from a default.
+func (rou *Router) Matcher() string {
+	if rou.useTrie {
+		return MatcherTrie
 	}
 
-	return http.NotFoundHandler()
-}
-
-// methodNotAllowed returns the handler mux would use when the path matches but
-// the method does not, honoring a custom MethodNotAllowedHandler if set.
-func (rou *Router) methodNotAllowed() http.Handler {
-	if rou.MethodNotAllowedHandler != nil {
-		return rou.MethodNotAllowedHandler
-	}
-
-	return http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		w.WriteHeader(http.StatusMethodNotAllowed)
-	})
+	return MatcherMux
 }
 
 // composeMiddleware wraps h with mws so that mws[0] is the outermost layer,
