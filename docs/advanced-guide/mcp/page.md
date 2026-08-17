@@ -72,8 +72,8 @@ ERROR  MCP server cannot start on port 8200: listen tcp 127.0.0.1:8200: bind: ad
 A service that started successfully and quietly lacked a transport it was configured to expose would
 be the worse outcome — an orchestrator would report it healthy while agents could not reach it.
 
-Note the default is `8200`, which is also [HashiCorp Vault](https://developer.hashicorp.com/vault)'s
-default port. If you run Vault locally, set `MCP_PORT` to something else.
+Note the default is `8200`, which is also [Vault](https://developer.hashicorp.com/vault)'s default
+port. If you run Vault locally, set `MCP_PORT` to something else.
 
 The port is claimed before any server starts, so this decision is made while nothing is yet serving
 and shutdown hooks and datasource cleanup are unaffected. If you would rather run without the
