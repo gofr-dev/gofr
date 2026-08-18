@@ -25,6 +25,7 @@ import (
 	"gofr.dev/pkg/gofr/config"
 	"gofr.dev/pkg/gofr/container"
 	gofrHTTP "gofr.dev/pkg/gofr/http"
+	"gofr.dev/pkg/gofr/http/middleware"
 	"gofr.dev/pkg/gofr/http/response"
 	"gofr.dev/pkg/gofr/logging"
 	"gofr.dev/pkg/gofr/testutil"
@@ -596,3 +597,41 @@ func TestLogErrorStillCarriesTraceID(t *testing.T) {
 }
 
 var errTraceIDGuard = errors.New("trace id guard")
+
+// buildRealPathRouter mirrors what a GoFr application actually serves: the handler is wrapped in
+// gofr's own handler{}, so newHTTPContext builds the Context/Request/Responder, the trace ID is
+// resolved, and the result goes back through responder.Respond as a JSON envelope.
+//
+// The existing BenchmarkRequest_FullChain family registers raw http.HandlerFunc values straight on
+// the router, so none of that code runs there — it measures the middleware chain only.
+func buildRealPathRouter(c *container.Container) http.Handler {
+	r := gofrHTTP.NewRouter()
+
+	r.Use(
+		middleware.Tracer,
+		middleware.Logging(middleware.LogProbes{}, c.Logger),
+		middleware.CORS(map[string]string{}, r.RegisteredRoutes),
+		middleware.Metrics(c.Metrics()),
+	)
+
+	r.Add(http.MethodGet, "/real/{id}", handler{
+		function:  func(ctx *Context) (any, error) { return map[string]string{"id": ctx.PathParam("id")}, nil },
+		container: c,
+	})
+
+	return r
+}
+
+func BenchmarkRequest_RealHandlerPath(b *testing.B) {
+	c := container.NewContainer(config.NewMockConfig(map[string]string{"LOG_LEVEL": "ERROR"}))
+	h := buildRealPathRouter(c)
+	req := httptest.NewRequestWithContext(b.Context(), http.MethodGet, "/real/42", http.NoBody)
+	w := &benchDiscardResponseWriter{}
+
+	b.ReportAllocs()
+	b.ResetTimer()
+
+	for range b.N {
+		h.ServeHTTP(w, req)
+	}
+}
