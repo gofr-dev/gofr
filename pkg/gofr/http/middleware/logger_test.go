@@ -12,6 +12,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/gorilla/mux"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.opentelemetry.io/otel/trace"
@@ -566,4 +567,39 @@ func TestCorrelationIDHeaderSpellingUnchanged(t *testing.T) {
 	require.Equal(t, "abc123", h.Get("X-Correlation-ID"), "lookup by the documented name must work")
 	require.Equal(t, "abc123", h.Get("X-Correlation-Id"), "and by the canonical form")
 	require.Equal(t, "X-Correlation-Id", canonicalCorrelationID)
+}
+
+// loggingBenchWriter keeps a header map and discards the rest, so the benchmark measures the
+// middleware rather than a recorder.
+type loggingBenchWriter struct{ h http.Header }
+
+func (w *loggingBenchWriter) Header() http.Header       { return w.h }
+func (*loggingBenchWriter) Write(b []byte) (int, error) { return len(b), nil }
+func (*loggingBenchWriter) WriteHeader(int)             {}
+
+// BenchmarkLogging measures the middleware at a level that DISCARDS the entry.
+//
+// This is the case that matters in production: services run at INFO or above, so the per-request
+// log built at DEBUG is assembled and then thrown away. Anything spent building it is pure waste,
+// which is what the change targets — hence allocations, not wall clock, are the metric here.
+func BenchmarkLogging(b *testing.B) {
+	logger := logging.NewMockLogger(logging.ERROR)
+
+	router := mux.NewRouter()
+	router.Use(Logging(LogProbes{}, logger))
+	router.NewRoute().Methods(http.MethodGet).Path("/users/{id}").
+		Handler(http.HandlerFunc(func(http.ResponseWriter, *http.Request) {}))
+
+	req := httptest.NewRequestWithContext(b.Context(), http.MethodGet, "/users/42", http.NoBody)
+	req.RemoteAddr = "192.0.2.10:5555"
+
+	w := &loggingBenchWriter{h: make(http.Header, 4)}
+
+	b.ReportAllocs()
+	b.ResetTimer()
+
+	for range b.N {
+		clear(w.h)
+		router.ServeHTTP(w, req)
+	}
 }

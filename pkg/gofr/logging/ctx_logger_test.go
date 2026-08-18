@@ -352,3 +352,37 @@ func TestContextLoggerStillEmitsTraceIDWhenLogging(t *testing.T) {
 
 	require.Contains(t, buf.String(), "0102030405060708090a0b0c0d0e0f10")
 }
+
+// BenchmarkContextLogger_PerRequest is the cost a request pays for its own logger: one is built per
+// request, and then used a handful of times.
+//
+// Both halves are measured together because that is how it is used, and because the change moves
+// work between them — the trace marker is no longer materialized when the logger is constructed,
+// only when an entry is actually built.
+func BenchmarkContextLogger_PerRequest(b *testing.B) {
+	base := NewMockLogger(ERROR)
+	ctx := context.Background()
+
+	b.ReportAllocs()
+	b.ResetTimer()
+
+	for range b.N {
+		l := NewContextLogger(ctx, base)
+		l.Debug("request served")
+		l.Debugf("status %d", 200)
+	}
+}
+
+// BenchmarkContextLogger_Discarded is the production shape: the service runs above DEBUG, so the
+// entry is assembled and then dropped. Anything spent building it is waste.
+func BenchmarkContextLogger_Discarded(b *testing.B) {
+	base := NewMockLogger(ERROR)
+	l := NewContextLogger(context.Background(), base)
+
+	b.ReportAllocs()
+	b.ResetTimer()
+
+	for range b.N {
+		l.Debug("this entry is below the configured level")
+	}
+}
