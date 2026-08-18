@@ -303,9 +303,19 @@ func TestNewFileLogger_Close(t *testing.T) {
 	assert.ErrorIs(t, err, os.ErrClosed)
 }
 
+// newLoggerAt builds a logger at a level. It exists because level is atomic --
+// so that ChangeLevel is safe to call from the remote logger's polling
+// goroutine -- and so cannot be given in a struct literal.
+func newLoggerAt(level Level, normalOut, errorOut io.Writer) *logger {
+	l := &logger{normalOut: normalOut, errorOut: errorOut, lock: make(chan struct{}, 1)}
+	l.level.Store(int64(level))
+
+	return l
+}
+
 // newBufLogger builds a JSON-mode logger writing to out (isTerminal=false).
 func newBufLogger(out io.Writer) *logger {
-	return &logger{level: DEBUG, normalOut: out, errorOut: out}
+	return newLoggerAt(DEBUG, out, out)
 }
 
 // wireLog decodes a JSON log line for assertions. It mirrors the production
@@ -435,11 +445,7 @@ func TestExtractTraceID_SlowPath_Marker(t *testing.T) {
 // newBenchLogger builds a logger writing to out with the JSON (non-terminal)
 // path, matching production behavior where stdout is not a TTY.
 func newBenchLogger(out io.Writer) *logger {
-	return &logger{
-		level:     INFO,
-		normalOut: out,
-		errorOut:  out,
-	}
+	return newLoggerAt(INFO, out, out)
 }
 
 // BenchmarkLoggerInfoJSON measures the single-string JSON log hot path.
@@ -487,4 +493,61 @@ func TestTraceMarkerTypeFormAccepted(t *testing.T) {
 
 	require.Equal(t, want, traceID)
 	require.Equal(t, []any{"msg"}, filtered)
+}
+
+// TestLoggerLogEnabledMatchesLevel is the direct test of the gate the request
+// middleware consults. Log writes at INFO, so the answer must be true exactly
+// when an INFO entry would be emitted -- notably including the DEFAULT level,
+// where the gate deliberately does not fire.
+func TestLoggerLogEnabledMatchesLevel(t *testing.T) {
+	tests := []struct {
+		level Level
+		want  bool
+	}{
+		{DEBUG, true},
+		{INFO, true},
+		{NOTICE, false},
+		{WARN, false},
+		{ERROR, false},
+		{FATAL, false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.level.String(), func(t *testing.T) {
+			l, ok := NewLogger(tt.level).(*logger)
+			require.True(t, ok)
+
+			assert.Equal(t, tt.want, l.LogEnabled())
+		})
+	}
+}
+
+// TestLoggerLogEnabledAgreesWithLog is the anti-drift guard: whatever the gate
+// answers must match whether Log actually writes anything.
+func TestLoggerLogEnabledAgreesWithLog(t *testing.T) {
+	for _, level := range []Level{DEBUG, INFO, NOTICE, WARN, ERROR, FATAL} {
+		t.Run(level.String(), func(t *testing.T) {
+			buf := &bytes.Buffer{}
+			l := newLoggerAt(level, buf, buf)
+
+			l.Log("entry")
+
+			assert.Equal(t, l.LogEnabled(), buf.Len() > 0,
+				"LogEnabled must predict whether Log emits")
+		})
+	}
+}
+
+// TestLoggerLogEnabledFollowsChangeLevel pins that the gate tracks a level
+// changed at runtime -- the remote logger does exactly this.
+func TestLoggerLogEnabledFollowsChangeLevel(t *testing.T) {
+	l, ok := NewLogger(INFO).(*logger)
+	require.True(t, ok)
+	require.True(t, l.LogEnabled())
+
+	l.ChangeLevel(WARN)
+	assert.False(t, l.LogEnabled(), "raising the level must close the gate")
+
+	l.ChangeLevel(DEBUG)
+	assert.True(t, l.LogEnabled(), "lowering it must reopen it")
 }

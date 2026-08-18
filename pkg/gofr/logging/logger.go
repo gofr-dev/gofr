@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"sync/atomic"
 	"time"
 
 	"golang.org/x/term"
@@ -42,7 +43,12 @@ type Logger interface {
 }
 
 type logger struct {
-	level      Level
+	// level is atomic because ChangeLevel is called from the remote logger's
+	// polling goroutine while requests read it -- logf on every log call, and
+	// LogEnabled once per request. An atomic load is a plain load on every
+	// architecture GoFr targets, so this costs nothing the unsynchronized read
+	// did not, and closes the race the two readers would otherwise report.
+	level      atomic.Int64
 	normalOut  io.Writer
 	errorOut   io.Writer
 	isTerminal bool
@@ -58,8 +64,17 @@ type logEntry struct {
 	GofrVersion string    `json:"gofrVersion"`
 }
 
+// enabled reports whether an entry written at level survives the configured
+// level. It is the single definition of the gate: logf consults it before
+// building an entry, and LogEnabled exposes it so a caller that must ASSEMBLE
+// an entry can ask the same question first. Keeping one predicate is what stops
+// the two from drifting apart and silently dropping entries logf would emit.
+func (l *logger) enabled(level Level) bool {
+	return level >= Level(l.level.Load())
+}
+
 func (l *logger) logf(level Level, format string, args ...any) {
-	if level < l.level {
+	if !l.enabled(level) {
 		return
 	}
 
@@ -130,14 +145,18 @@ func (l *logger) Log(args ...any) {
 }
 
 // LogEnabled reports whether an entry written through Log would be emitted at
-// the configured level.
+// the configured level. Log writes at INFO, so this answers for INFO.
 //
 // It lets a caller that must BUILD an entry before logging it -- the request
 // logger assembles a struct, formats a timestamp and resolves the client IP --
 // skip that work when the entry would be discarded. Callers that already have
 // their arguments to hand gain nothing from it and should just call Log.
+//
+// Note the reach: the default level is INFO (GetLevelFromString("") returns it),
+// and INFO passes its own gate, so this returns true on a service that has not
+// raised LOG_LEVEL. It returns false only from NOTICE upward.
 func (l *logger) LogEnabled() bool {
-	return INFO >= l.level
+	return l.enabled(INFO)
 }
 
 func (l *logger) Logf(format string, args ...any) {
@@ -213,7 +232,7 @@ func NewLogger(level Level) Logger {
 		lock:      make(chan struct{}, 1),
 	}
 
-	l.level = level
+	l.level.Store(int64(level))
 
 	l.isTerminal = checkIfTerminal(l.normalOut)
 
@@ -269,7 +288,7 @@ func checkIfTerminal(w io.Writer) bool {
 // ChangeLevel changes the log level of the logger.
 // This allows dynamic adjustment of the logging verbosity.
 func (l *logger) ChangeLevel(level Level) {
-	l.level = level
+	l.level.Store(int64(level))
 }
 
 // LogLevelResponder provides a method to get the log level.
@@ -301,8 +320,11 @@ const traceIDMarkerKey = "__trace_id__"
 // map[string]any costs two allocations (the header and its bucket); a named
 // string costs one when boxed into any.
 //
-// The map form remains accepted because it is a cross-package contract --
-// pkg/gofr/ai emits it too -- so this is an additional shape, not a replacement.
+// The map form remains accepted because it is a cross-package contract:
+// pkg/gofr/ai/instrument.go emits map[string]any{"__trace_id__": traceID} on
+// every instrumented LLM call, and it cannot use this type because traceIDMarker
+// is unexported. So this is an additional shape, not a replacement -- both
+// branches of extractTraceIDAndFilterArgs and hasTraceMarker must stay.
 type traceIDMarker string
 
 // extractTraceIDAndFilterArgs checks if any of the arguments contain a trace ID
@@ -330,8 +352,10 @@ func extractTraceIDAndFilterArgs(args []any) (traceID string, filtered []any) {
 		}
 
 		if m, ok := arg.(map[string]any); ok {
-			if tid, exists := m[traceIDMarkerKey].(string); exists && traceID == "" {
-				traceID = tid
+			if tid, exists := m[traceIDMarkerKey].(string); exists {
+				if traceID == "" {
+					traceID = tid
+				}
 
 				continue
 			}
@@ -343,8 +367,10 @@ func extractTraceIDAndFilterArgs(args []any) (traceID string, filtered []any) {
 	return traceID, filtered
 }
 
-// hasTraceMarker reports whether any arg is a map carrying the "__trace_id__"
-// key. Read-only: it allocates nothing.
+// hasTraceMarker reports whether any arg is a trace-ID marker -- either the
+// typed traceIDMarker that ContextLogger emits, or the map[string]any carrying
+// the "__trace_id__" key that pkg/gofr/ai emits. Read-only: it allocates
+// nothing.
 func hasTraceMarker(args []any) bool {
 	for _, arg := range args {
 		if _, ok := arg.(traceIDMarker); ok {

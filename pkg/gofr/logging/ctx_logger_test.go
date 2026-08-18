@@ -166,13 +166,7 @@ func TestContextLogger_LoggingMethods_WithTrace(t *testing.T) {
 func TestContextLogger_Integration(t *testing.T) {
 	buf := &bytes.Buffer{}
 
-	realLogger := &logger{
-		level:      DEBUG,
-		normalOut:  buf,
-		errorOut:   buf,
-		isTerminal: false,
-		lock:       make(chan struct{}, 1),
-	}
+	realLogger := newLoggerAt(DEBUG, buf, buf)
 
 	ctx, expectedTraceID := mockTracedContext()
 
@@ -199,20 +193,14 @@ func TestContextLogger_Integration(t *testing.T) {
 }
 
 func TestContextLogger_ChangeLevel(t *testing.T) {
-	baseLogger := &logger{
-		level:      INFO,
-		normalOut:  io.Discard,
-		errorOut:   io.Discard,
-		isTerminal: false,
-		lock:       make(chan struct{}, 1),
-	}
+	baseLogger := newLoggerAt(INFO, io.Discard, io.Discard)
 
 	ctx := t.Context()
 	ctxLogger := NewContextLogger(ctx, baseLogger)
 
 	ctxLogger.ChangeLevel(DEBUG)
 
-	assert.Equal(t, DEBUG, baseLogger.level)
+	assert.Equal(t, DEBUG, Level(baseLogger.level.Load()))
 }
 
 // TestContextLogger_TraceID_SurfacedAndReused verifies that a request-scoped
@@ -361,13 +349,17 @@ func TestContextLoggerStillEmitsTraceIDWhenLogging(t *testing.T) {
 // only when an entry is actually built.
 func BenchmarkContextLogger_PerRequest(b *testing.B) {
 	base := NewMockLogger(ERROR)
-	ctx := context.Background()
+	// A traced context and the value constructor, because that is the production
+	// call site (pkg/gofr/context.go uses ContextLoggerFor). context.Background()
+	// carries no valid span, so neither the deferred trace-ID formatting nor the
+	// avoided wrapper allocation would be exercised.
+	ctx := benchSpanContext()
 
 	b.ReportAllocs()
 	b.ResetTimer()
 
 	for range b.N {
-		l := NewContextLogger(ctx, base)
+		l := ContextLoggerFor(ctx, base)
 		l.Debug("request served")
 		l.Debugf("status %d", 200)
 	}
@@ -377,7 +369,9 @@ func BenchmarkContextLogger_PerRequest(b *testing.B) {
 // entry is assembled and then dropped. Anything spent building it is waste.
 func BenchmarkContextLogger_Discarded(b *testing.B) {
 	base := NewMockLogger(ERROR)
-	l := NewContextLogger(context.Background(), base)
+	// Traced, so the per-call trace-ID formatting this PR moves here is actually
+	// measured -- this is the cost side of the trade, and it must be visible.
+	l := ContextLoggerFor(benchSpanContext(), base)
 
 	b.ReportAllocs()
 	b.ResetTimer()
