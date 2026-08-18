@@ -353,3 +353,34 @@ func (headerOnlyWriter) Write([]byte) (int, error) { return 0, nil }
 func (headerOnlyWriter) WriteHeader(int)           {}
 
 func h2w(h http.Header) http.ResponseWriter { return headerOnlyWriter{h: h} }
+
+// corsBenchWriter is a ResponseWriter that keeps a header map and discards everything else, so a
+// benchmark measures the middleware rather than the recorder.
+type corsBenchWriter struct{ h http.Header }
+
+func (w *corsBenchWriter) Header() http.Header       { return w.h }
+func (*corsBenchWriter) Write(b []byte) (int, error) { return len(b), nil }
+func (*corsBenchWriter) WriteHeader(int)             {}
+
+// BenchmarkCORS measures the middleware on the path every request takes: the CORS headers are
+// written before the handler runs, on every response, matched or not.
+//
+// Allocations are the metric that matters here. The header set is constant for the lifetime of the
+// server, so building it per request was pure waste.
+func BenchmarkCORS(b *testing.B) {
+	routes := []string{"GET /users", "POST /users", "GET /users/{id}"}
+	h := CORS(map[string]string{}, &routes)(http.HandlerFunc(func(http.ResponseWriter, *http.Request) {}))
+
+	req := httptest.NewRequestWithContext(b.Context(), http.MethodGet, "/users", http.NoBody)
+	req.Header.Set("Origin", "https://example.com")
+
+	w := &corsBenchWriter{h: make(http.Header, 8)}
+
+	b.ReportAllocs()
+	b.ResetTimer()
+
+	for range b.N {
+		clear(w.h)
+		h.ServeHTTP(w, req)
+	}
+}
