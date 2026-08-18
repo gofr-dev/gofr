@@ -26,6 +26,10 @@ import (
 // the heap (verified via go build -gcflags='-m=2'). Factoring the
 // constructor into its own function does not avoid the alloc — it is
 // still useful as a single source of truth for the attribute key.
+func methodKV(method string) attribute.KeyValue {
+	return attribute.String("http.request.method", method)
+}
+
 // buildSpanName renders the OTel HTTP semconv span name ("GET /users/{id}").
 //
 // Concatenation rather than fmt.Sprintf. Both cost the one unavoidable
@@ -35,10 +39,6 @@ import (
 // 44.3 ns/op -> 22.6 ns/op, both at 16 B/op and 1 alloc/op.
 func buildSpanName(method, route string) string {
 	return method + " " + route
-}
-
-func methodKV(method string) attribute.KeyValue {
-	return attribute.String("http.request.method", method)
 }
 
 // routeTemplate returns the matched route template (e.g. "/users/{id}") for the request, otherwise
