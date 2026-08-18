@@ -456,3 +456,65 @@ func BenchmarkRequest_FullChain_SDK(b *testing.B) {
 		h.ServeHTTP(w, req)
 	}
 }
+
+// TestLogRouterChoice covers the three shapes GOFR_ROUTER can take at startup.
+// The unrecognized case is the one that earns the log: it falls back to mux,
+// which is indistinguishable from leaving the variable unset, so without a
+// warning a typo costs the opt-in silently.
+func TestLogRouterChoice(t *testing.T) {
+	// The logger emits JSON, so quotes inside a message come back escaped — want
+	// is a fragment chosen to survive that.
+	cases := []struct {
+		name      string
+		env       string
+		want      string
+		wantLevel string
+	}{
+		{"unset stays quiet", "", "", ""},
+		{"trie is announced", gofrHTTP.MatcherTrie, "HTTP route matcher: trie", "INFO"},
+		{"typo is warned about", "tri", "unrecognized GOFR_ROUTER value", "WARN"},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			// Always set it, empty included: the suite itself may be run with
+			// GOFR_ROUTER exported, and the "unset" case has to mean unset.
+			t.Setenv(gofrHTTP.RouterEnvVar, tc.env)
+
+			logs := testutil.StdoutOutputForFunc(func() {
+				c := container.NewContainer(config.NewMockConfig(map[string]string{"LOG_LEVEL": "INFO"}))
+				logRouterChoice(c.Logger, gofrHTTP.NewRouter())
+			})
+
+			if tc.wantLevel == "" {
+				assert.NotContains(t, logs, "route matcher")
+				assert.NotContains(t, logs, gofrHTTP.RouterEnvVar)
+
+				return
+			}
+
+			assert.Contains(t, logs, tc.want)
+			assert.Contains(t, logs, `"level":"`+tc.wantLevel+`"`)
+		})
+	}
+}
+
+// TestRouter_Matcher pins the accessor the startup log reads: it must report
+// what NewRouter actually resolved from the environment, including the fallback
+// to mux for a value that is not understood.
+func TestRouter_Matcher(t *testing.T) {
+	cases := map[string]string{
+		"":     gofrHTTP.MatcherMux,
+		"mux":  gofrHTTP.MatcherMux,
+		"trie": gofrHTTP.MatcherTrie,
+		"TRIE": gofrHTTP.MatcherTrie, // the lookup is case-insensitive
+		"tri":  gofrHTTP.MatcherMux,  // unrecognized falls back
+	}
+
+	for env, want := range cases {
+		t.Run("GOFR_ROUTER="+env, func(t *testing.T) {
+			t.Setenv(gofrHTTP.RouterEnvVar, env)
+			assert.Equal(t, want, gofrHTTP.NewRouter().Matcher())
+		})
+	}
+}
