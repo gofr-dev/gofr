@@ -153,20 +153,7 @@ func (rou *Router) serveTrie(w http.ResponseWriter, r *http.Request) {
 	var match mux.RouteMatch
 
 	if rou.idx.match(r, &match) && match.Handler != nil {
-		// Reinstate what mux.Router.ServeHTTP would have populated so that
-		// mux.Vars(r) (used by request.go and user handlers) and the route
-		// template (used by the tracer/metrics middleware) keep working.
-		if match.Vars != nil {
-			r = mux.SetURLVars(r, match.Vars)
-		}
-
-		if match.Route != nil {
-			if tmpl, err := match.Route.GetPathTemplate(); err == nil {
-				r = withRouteTemplate(r, tmpl)
-			}
-		}
-
-		composeMiddleware(rou.mws, match.Handler).ServeHTTP(w, r)
+		rou.serveMatched(w, r, &match)
 
 		return
 	}
@@ -196,6 +183,37 @@ func (rou *Router) serveTrie(w http.ResponseWriter, r *http.Request) {
 	// Inside a GoFr app this is unreachable: the PathPrefix("/") catch-all matches
 	// every path and method, so the trie always has a candidate that matches.
 	rou.Router.ServeHTTP(w, r)
+}
+
+// serveMatched runs a handler the trie matched, after restoring the request state that mux's own
+// ServeHTTP would have populated.
+func (rou *Router) serveMatched(w http.ResponseWriter, r *http.Request, match *mux.RouteMatch) {
+	// Reinstate what mux.Router.ServeHTTP would have populated so that mux.Vars(r) (used by
+	// request.go and user handlers) and the route template (used by the tracer/metrics middleware)
+	// keep working.
+	if match.Vars != nil {
+		r = mux.SetURLVars(r, match.Vars)
+	}
+
+	if match.Route != nil {
+		if tmpl, err := match.Route.GetPathTemplate(); err == nil {
+			r = withRouteTemplate(r, tmpl)
+		}
+	}
+
+	// mux builds its middleware chain inside Match, guarded by MatchErr == nil, so a route that
+	// matches while REPORTING an error is served WITHOUT the chain. A subrouter carrying its own
+	// NotFoundHandler is exactly that case: it reports a successful match with ErrNotFound. Running
+	// the chain here would log, trace, meter and CORS-answer a request mux does not — and with no
+	// path template on a PathPrefix route, the metrics label would fall back to the raw request
+	// path, the unbounded-cardinality outcome this router is otherwise careful to avoid.
+	if match.MatchErr != nil {
+		match.Handler.ServeHTTP(w, r)
+
+		return
+	}
+
+	composeMiddleware(rou.mws, match.Handler).ServeHTTP(w, r)
 }
 
 // Use registers mux middlewares. It records them in GoFr's own chain — so the

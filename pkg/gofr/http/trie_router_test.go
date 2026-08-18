@@ -564,7 +564,7 @@ func TestTrieRouter_SubrouterMiddlewareRuns(t *testing.T) {
 // and the subrouter's handler in the match; requiring MatchErr == nil would skip
 // it and fall through to an unrelated route.
 func TestTrieRouter_SubrouterNotFoundHandler(t *testing.T) {
-	build := func(useTrie bool) *Router {
+	build := func(useTrie bool, mwRuns *int) *Router {
 		r := NewRouter()
 		r.useTrie = useTrie
 
@@ -574,17 +574,33 @@ func TestTrieRouter_SubrouterNotFoundHandler(t *testing.T) {
 
 		r.Add(http.MethodGet, "/api/other", echoHandler("top-other"))
 
+		r.UseMiddleware(func(next http.Handler) http.Handler {
+			return http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+				*mwRuns++
+
+				next.ServeHTTP(w, req)
+			})
+		})
+
 		return r
 	}
 
-	muxR, trieR := build(false), build(true)
-
+	// The middleware count is asserted, not just the status and body. This case is why: a subrouter
+	// NotFoundHandler answers 200 through mux and through the trie alike, so status and body agree
+	// while the chain does not. mux builds its chain only when MatchErr == nil, and this match carries
+	// ErrNotFound, so mux runs NO middleware here. The trie ran it, which meant such a request was
+	// logged, traced, metered and CORS-answered when mux would not have -- and with no path template
+	// on a PathPrefix route, the metrics label fell back to the raw request path.
 	for _, target := range []string{"/api/other", "/api/zzz", "/api/users"} {
-		muxStatus, muxBody := serve(muxR, http.MethodGet, target)
-		trieStatus, trieBody := serve(trieR, http.MethodGet, target)
+		var muxN, trieN int
+
+		muxStatus, muxBody := serve(build(false, &muxN), http.MethodGet, target)
+		trieStatus, trieBody := serve(build(true, &trieN), http.MethodGet, target)
 
 		require.Equalf(t, muxStatus, trieStatus, "status differs for %s", target)
 		assert.Equalf(t, muxBody, trieBody, "handler differs for %s", target)
+		assert.Equalf(t, muxN, trieN, "middleware invocation count differs for %s (mux=%d trie=%d)",
+			target, muxN, trieN)
 	}
 }
 
