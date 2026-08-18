@@ -16,9 +16,11 @@ import (
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/baggage"
 	"go.opentelemetry.io/otel/propagation"
+	"go.opentelemetry.io/otel/sdk/resource"
 	"go.opentelemetry.io/otel/sdk/trace"
 	"go.opentelemetry.io/otel/sdk/trace/tracetest"
 	otelTrace "go.opentelemetry.io/otel/trace"
+	"go.opentelemetry.io/otel/trace/noop"
 )
 
 // W3C TraceContext fixture values reused across the propagation tests.
@@ -561,4 +563,66 @@ func TestTracerPropagatesIncomingTraceContext(t *testing.T) {
 		"the incoming trace ID must be adopted")
 	require.Equal(t, w3cFixtureParentSpan, spans[0].Parent.SpanID().String(),
 		"the incoming span must become the parent")
+}
+
+// tracerBenchWriter keeps a header map and discards the rest, so the benchmark measures the
+// middleware rather than a recorder.
+type tracerBenchWriter struct{ h http.Header }
+
+func (w *tracerBenchWriter) Header() http.Header       { return w.h }
+func (*tracerBenchWriter) Write(b []byte) (int, error) { return len(b), nil }
+func (*tracerBenchWriter) WriteHeader(int)             {}
+
+// BenchmarkTracer measures the tracing middleware on the path every request takes.
+//
+// The default provider is non-recording, which is the common production case for a service that
+// samples: the span is still started on every request, so whatever the middleware builds up front is
+// paid for whether or not anything records it. Allocations are the metric that matters.
+func BenchmarkTracer(b *testing.B) {
+	router := mux.NewRouter()
+	router.Use(Tracer)
+	router.NewRoute().Methods(http.MethodGet).Path("/users/{id}").
+		Handler(http.HandlerFunc(func(http.ResponseWriter, *http.Request) {}))
+
+	req := httptest.NewRequestWithContext(b.Context(), http.MethodGet, "/users/42", http.NoBody)
+	w := &tracerBenchWriter{h: make(http.Header, 4)}
+
+	b.ReportAllocs()
+	b.ResetTimer()
+
+	for range b.N {
+		clear(w.h)
+		router.ServeHTTP(w, req)
+	}
+}
+
+// BenchmarkTracer_Recording is the case the per-route cache targets: a provider that actually
+// records, so the span name and attributes built by the middleware are used rather than discarded.
+//
+// BenchmarkTracer above covers the opposite case, a non-recording provider, because a sampling
+// service runs both and the middleware must not be quietly worse in either.
+func BenchmarkTracer_Recording(b *testing.B) {
+	tp := trace.NewTracerProvider(
+		trace.WithResource(resource.Empty()),
+		trace.WithSampler(trace.AlwaysSample()),
+	)
+	otel.SetTracerProvider(tp)
+
+	b.Cleanup(func() { otel.SetTracerProvider(noop.NewTracerProvider()) })
+
+	router := mux.NewRouter()
+	router.Use(Tracer)
+	router.NewRoute().Methods(http.MethodGet).Path("/users/{id}").
+		Handler(http.HandlerFunc(func(http.ResponseWriter, *http.Request) {}))
+
+	req := httptest.NewRequestWithContext(b.Context(), http.MethodGet, "/users/42", http.NoBody)
+	w := &tracerBenchWriter{h: make(http.Header, 4)}
+
+	b.ReportAllocs()
+	b.ResetTimer()
+
+	for range b.N {
+		clear(w.h)
+		router.ServeHTTP(w, req)
+	}
 }

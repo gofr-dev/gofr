@@ -84,9 +84,11 @@ type spanMeta struct {
 // routeAttrs cache. Unmatched requests carry a raw path, which is attacker
 // controlled and unbounded, so spanMetaFor deliberately does not cache those.
 //
-// Router.Match), so a closure-owned cache would be discarded every request.
+// It is package level because the middleware chain is rebuilt around the matched
+// handler on every request, so a cache owned by the closure would be discarded
+// each time and never serve a second request.
 //
-//nolint:gochecknoglobals // mux rebuilds the middleware chain per request (see
+//nolint:gochecknoglobals // rationale above: a per-closure cache would never be reused.
 var tracerSpanCache sync.Map
 
 // spanMetaFor returns the span name and attributes for a route, building them on
