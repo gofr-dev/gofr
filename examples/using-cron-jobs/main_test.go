@@ -5,7 +5,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"gofr.dev/pkg/gofr/testutil"
 )
@@ -19,16 +19,17 @@ func Test_UserPurgeCron(t *testing.T) {
 	configs := testutil.NewServerConfigs(t)
 
 	go main()
-	time.Sleep(1100 * time.Millisecond)
 
-	expected := 1
+	// The job is scheduled every second. Waiting on the counter it increments covers both the
+	// server's startup and the first tick, neither of which fits a fixed duration: a sleep long
+	// enough for a loaded runner also lets the job fire more than once, which the old
+	// assert.Equal(1, n) would then fail on.
+	require.Eventually(t, func() bool {
+		mu.RLock()
+		defer mu.RUnlock()
 
-	var m int
+		return n > 0
+	}, 30*time.Second, 100*time.Millisecond, "cron job did not run in time")
 
-	mu.Lock()
-	m = n
-	mu.Unlock()
-
-	assert.Equal(t, expected, m)
 	t.Logf("Metrics server running at: %s", configs.MetricsHost)
 }

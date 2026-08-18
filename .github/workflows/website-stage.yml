@@ -50,10 +50,13 @@ jobs:
           # "Last updated" byline.
           fetch-depth: 0
 
+      # Same rationale as website-prod.yml — 24.x is the active LTS and
+      # only covers the runner-side `yarn install` / `yarn refresh-data`
+      # steps. Kept in lockstep with prod so the two don't drift.
       - name: Setup Node.js
         uses: actions/setup-node@v7
         with:
-          node-version: 18.x
+          node-version: 24.x
 
       - name: Install website deps
         working-directory: ./website-src

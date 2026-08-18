@@ -5,9 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"net"
 	"os"
-	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -17,65 +15,39 @@ import (
 	"google.golang.org/grpc/status"
 
 	"gofr.dev/examples/grpc/grpc-streaming-server/server"
+	"gofr.dev/pkg/gofr/testutil"
 )
 
-// grpcHost is the address the example server under test listens on.
-//
-// The example's configs/.env pins GRPC_PORT=9000 for documentation purposes,
-// but the test must not inherit it: `go test ./examples/...` runs packages
-// concurrently and CI additionally binds host port 9000 (MinIO), so a fixed
-// port makes the server fail to bind and the whole package abort with
-// "gRPC port 9000 is blocked or unreachable". Reserve free ports instead —
-// the same thing testutil.NewServerConfigs does for tests that have a
-// *testing.T to attach the env cleanup to, which TestMain does not.
+// grpcHost is the address the example's gRPC server listens on, assigned in TestMain.
 var grpcHost string
 
 func TestMain(m *testing.M) {
 	os.Setenv("GOFR_TELEMETRY", "false")
 
-	grpcPort, err := reserveFreePort()
+	// Point the example at free ports rather than the fixed ones its configs/.env asks for. A
+	// fixed port is a hazard in a test: gofr.New() reports an already-taken port with Fatalf,
+	// which exits the process, so the whole package dies before a single test runs. configs/.env
+	// asks for GRPC_PORT 9000 — the port MinIO serves on, including in the CI job that runs these
+	// very tests. The system environment takes precedence over the config file, so what is set
+	// here is what the example uses.
+	configs, err := testutil.ReserveServerPorts()
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "could not reserve a free gRPC port: %v\n", err)
+		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
 	}
 
-	httpPort, err := reserveFreePort()
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "could not reserve a free HTTP port: %v\n", err)
-		os.Exit(1)
-	}
-
-	metricsPort, err := reserveFreePort()
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "could not reserve a free metrics port: %v\n", err)
-		os.Exit(1)
-	}
-
-	os.Setenv("GRPC_PORT", strconv.Itoa(grpcPort))
-	os.Setenv("HTTP_PORT", strconv.Itoa(httpPort))
-	os.Setenv("METRICS_PORT", strconv.Itoa(metricsPort))
-
-	grpcHost = fmt.Sprintf("localhost:%d", grpcPort)
+	grpcHost = configs.GRPCHost
 
 	go main()
-	time.Sleep(300 * time.Millisecond) // wait for server to boot
 
-	os.Exit(m.Run())
-}
-
-// reserveFreePort asks the kernel for a free port and releases it immediately
-// so the server under test can bind it.
-func reserveFreePort() (int, error) {
-	lc := net.ListenConfig{}
-
-	listener, err := lc.Listen(context.Background(), "tcp", "localhost:0")
-	if err != nil {
-		return 0, err
+	// WaitForGRPCServerE rather than WaitForGRPCServer: TestMain gets a *testing.M and has no
+	// *testing.T for require to fail on, so it takes the error-returning variant of the same wait.
+	if err := testutil.WaitForGRPCServerE(grpcHost); err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		os.Exit(1)
 	}
 
-	port := listener.Addr().(*net.TCPAddr).Port
-
-	return port, listener.Close()
+	os.Exit(m.Run())
 }
 
 func TestServerStream(t *testing.T) {
@@ -160,8 +132,9 @@ func TestBiDiStream(t *testing.T) {
 	messages := []string{"msg1", "msg2", "msg3"}
 	go func() {
 		for _, msg := range messages {
+			// No pacing needed: the server handles this stream's messages one at a time and
+			// replies in order, so the responses stay ordered regardless of send timing.
 			_ = stream.Send(&server.Request{Message: msg})
-			time.Sleep(100 * time.Millisecond)
 		}
 		_ = stream.CloseSend()
 	}()
@@ -220,10 +193,9 @@ func TestServerStream_ContextCancellation(t *testing.T) {
 
 		if !receivedFirst {
 			receivedFirst = true
-			// Cancel context to trigger cancellation handling
+			// Cancel context to trigger cancellation handling. The next Recv then fails with
+			// Canceled off the client's own context — nothing to wait for the server on.
 			cancel()
-			// Give server time to detect cancellation
-			time.Sleep(200 * time.Millisecond)
 		}
 
 		_ = resp // Use response to avoid unused variable
@@ -267,10 +239,9 @@ func TestClientStream_ContextCancellation(t *testing.T) {
 		t.Fatalf("Send failed: %v", err)
 	}
 
-	// Cancel context
+	// Cancel context. The call below fails with Canceled off the client's own context, so there
+	// is nothing to wait for the server to notice.
 	cancel()
-	// Give server time to detect cancellation
-	time.Sleep(200 * time.Millisecond)
 
 	// Try to close and receive - should get cancellation error
 	_, err = stream.CloseAndRecv()
@@ -357,10 +328,9 @@ func TestBiDiStream_ContextCancellation(t *testing.T) {
 		t.Errorf("Unexpected response: got %q, want %q", resp.GetMessage(), "Echo: test")
 	}
 
-	// Cancel context
+	// Cancel context. The call below fails with Canceled off the client's own context, so there
+	// is nothing to wait for the server to notice.
 	cancel()
-	// Give server time to detect cancellation
-	time.Sleep(200 * time.Millisecond)
 
 	// Try to receive - should get cancellation error
 	_, err = stream.Recv()

@@ -33,6 +33,22 @@ func (c *Client) Stream(ctx context.Context, messages []ai.Message, opts ...ai.O
 		return nil, errNotConnected
 	}
 
+	// Hold an in-flight slot for the whole stream: acquire here, and hand release to the streamer so
+	// it frees the slot when the stream terminates (exhaustion or Close). On any early error the
+	// deferred guard frees it instead — once the streamer owns it, streaming flips true.
+	release, err := c.acquire(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	streaming := false
+
+	defer func() {
+		if !streaming {
+			release()
+		}
+	}()
+
 	body, err := c.buildRequest(messages, opts, true)
 	if err != nil {
 		return nil, err
@@ -52,7 +68,9 @@ func (c *Client) Stream(ctx context.Context, messages []ai.Message, opts ...ai.O
 		return nil, c.statusError(resp.StatusCode, data)
 	}
 
-	return newStreamer(resp.Body, &c.UsageFields), nil
+	streaming = true
+
+	return newStreamer(resp.Body, &c.UsageFields, release), nil
 }
 
 type lineStatus int
@@ -71,17 +89,24 @@ type streamer struct {
 	done        bool
 	usage       ai.Usage
 	usageFields *UsageFields
+	// release frees the client's in-flight concurrency slot when the stream terminates (exhaustion or
+	// Close). It is idempotent, so calling it from more than one termination point is safe.
+	release func()
 
 	// tool calls are assembled from deltas keyed by index; toolOrder preserves first-seen order.
 	toolAcc   map[int]*ai.ToolCall
 	toolOrder []int
 }
 
-func newStreamer(body io.ReadCloser, fields *UsageFields) *streamer {
+func newStreamer(body io.ReadCloser, fields *UsageFields, release func()) *streamer {
+	if release == nil {
+		release = func() {}
+	}
+
 	scanner := bufio.NewScanner(body)
 	scanner.Buffer(make([]byte, 0, streamBufferInit), streamBufferMax)
 
-	return &streamer{body: body, scanner: scanner, usageFields: fields, toolAcc: make(map[int]*ai.ToolCall)}
+	return &streamer{body: body, scanner: scanner, usageFields: fields, release: release, toolAcc: make(map[int]*ai.ToolCall)}
 }
 
 // Next pulls the next incremental content delta. It returns the delta string and true, or nil and
@@ -99,9 +124,12 @@ func (s *streamer) Next() (any, bool) {
 			return content, true
 		case lineDone:
 			s.done = true
+			s.release()
 
 			return nil, false
 		case lineError:
+			s.release() // errored mid-stream — free the slot here too (idempotent), not only on Close
+
 			return nil, false
 		case lineSkip:
 			continue
@@ -207,6 +235,8 @@ func (s *streamer) ToolCalls() []ai.ToolCall {
 }
 
 func (s *streamer) finish() {
+	s.release() // stream exhausted — free the in-flight slot (idempotent)
+
 	if err := s.scanner.Err(); err != nil {
 		s.err = fmt.Errorf("%w: %w", errStreamRead, err)
 
@@ -220,7 +250,11 @@ func (s *streamer) finish() {
 func (s *streamer) Err() error { return s.err }
 
 // Close closes the underlying response body.
-func (s *streamer) Close() error { return s.body.Close() }
+func (s *streamer) Close() error {
+	s.release() // free the in-flight slot even if the stream wasn't fully consumed (idempotent)
+
+	return s.body.Close()
+}
 
 // Usage returns token usage reported by the final chunk, or the zero value if none was sent.
 func (s *streamer) Usage() ai.Usage { return s.usage }
