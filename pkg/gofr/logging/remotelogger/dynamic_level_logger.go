@@ -139,11 +139,17 @@ The remote configuration URL is expected to be a JSON endpoint that returns the 
 The level fetch interval determines how often the logger checks for updates to the remote configuration.
 */
 func New(level logging.Level, remoteConfigURL string, loggerFetchInterval time.Duration) logging.Logger {
+	base := logging.NewLogger(level)
+
 	l := &remoteLogger{
 		remoteURL:          remoteConfigURL,
-		Logger:             logging.NewLogger(level),
+		Logger:             base,
 		levelFetchInterval: loggerFetchInterval,
 		currentLevel:       level,
+	}
+
+	if e, ok := base.(logEnabler); ok {
+		l.enabler = e
 	}
 
 	if remoteConfigURL != "" {
@@ -153,31 +159,48 @@ func New(level logging.Level, remoteConfigURL string, loggerFetchInterval time.D
 	return l
 }
 
+// logEnabler is the optional interface a logger implements when it can report,
+// without being handed an entry, whether an entry written through Log would be
+// emitted. It mirrors the middleware's own contract.
+type logEnabler interface {
+	LogEnabled() bool
+}
+
 type remoteLogger struct {
 	remoteURL          string
 	levelFetchInterval time.Duration
 	mu                 sync.RWMutex
 	currentLevel       logging.Level
+	// enabler is the embedded logger's LogEnabled, resolved once in New. nil
+	// when the embedded logger does not implement it.
+	enabler logEnabler
 	logging.Logger
 }
 
 // LogEnabled reports whether an entry written through Log survives the level
 // currently in force.
 //
-// The embedded logger is the authority: this type only tracks the level so it
-// can push changes down via ChangeLevel, so asking the logger itself stays
-// correct even between a remote update and the level being applied. An embedded
+// The embedded logger is the authority: this type only tracks currentLevel so
+// it can push changes down via ChangeLevel, and the logger applies them
+// immediately, so asking the logger itself is both correct and current.
+//
+// No lock is taken. r.mu guards currentLevel, which this method never reads,
+// and ChangeLevel is called outside r.mu anyway -- so an RLock here would give
+// no ordering against a level change while adding a process-wide atomic to
+// every request. The gate is advisory: the worst a racing level change can do
+// is build one entry that is then discarded, or skip one at the instant the
+// level is lowered.
+//
+// The embedded logger is assigned once in New and never reassigned, so the
+// logEnabler assertion is resolved there rather than per request. An embedded
 // logger that cannot answer is treated as enabled, which preserves the previous
 // behavior of always building the entry.
 func (r *remoteLogger) LogEnabled() bool {
-	r.mu.RLock()
-	defer r.mu.RUnlock()
-
-	if e, ok := r.Logger.(interface{ LogEnabled() bool }); ok {
-		return e.LogEnabled()
+	if r.enabler == nil {
+		return true
 	}
 
-	return true
+	return r.enabler.LogEnabled()
 }
 
 // UpdateLogLevel continuously fetches the log level from the remote configuration URL at the specified interval
