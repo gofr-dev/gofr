@@ -8,7 +8,6 @@ import (
 	"io"
 	"net"
 	"net/http"
-	"net/textproto"
 	"runtime/debug"
 	"strings"
 	"sync"
@@ -136,11 +135,11 @@ func colorForStatusCode(status int) int {
 	return 0
 }
 
-// canonicalCorrelationID is the canonical spelling of the correlation-ID header,
-// resolved once so no request pays to build it.
-//
-//nolint:gochecknoglobals // immutable, process-wide header constant.
-var canonicalCorrelationID = textproto.CanonicalMIMEHeaderKey("X-Correlation-ID")
+// canonicalCorrelationID is the canonical spelling of the correlation-ID header
+// -- textproto.CanonicalMIMEHeaderKey("X-Correlation-ID") -- written out so no
+// request pays to build it and nothing can reassign it. The equivalence is
+// pinned by TestCorrelationIDHeaderSpellingUnchanged.
+const canonicalCorrelationID = "X-Correlation-Id"
 
 type logger interface {
 	Log(...any)
@@ -237,8 +236,9 @@ func handleRequestLog(srw *StatusResponseWriter, r *http.Request, start time.Tim
 	sc trace.SpanContext, logger logger) {
 	status := srw.Status()
 
-	// A server error is reported through Error, which is emitted at every level
-	// this logger supports, so only the informational path can be skipped.
+	// A server error is reported through Error, which survives every level below
+	// FATAL, so gating it on the informational level would be wrong. Only the
+	// informational path can be skipped.
 	if status < http.StatusInternalServerError {
 		if e, ok := logger.(logEnabler); ok && !e.LogEnabled() {
 			return
