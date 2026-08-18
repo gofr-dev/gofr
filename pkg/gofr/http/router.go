@@ -203,10 +203,14 @@ func (rou *Router) serveMatched(w http.ResponseWriter, r *http.Request, match *m
 
 	// mux builds its middleware chain inside Match, guarded by MatchErr == nil, so a route that
 	// matches while REPORTING an error is served WITHOUT the chain. A subrouter carrying its own
-	// NotFoundHandler is exactly that case: it reports a successful match with ErrNotFound. Running
-	// the chain here would log, trace, meter and CORS-answer a request mux does not — and with no
-	// path template on a PathPrefix route, the metrics label would fall back to the raw request
-	// path, the unbounded-cardinality outcome this router is otherwise careful to avoid.
+	// NotFoundHandler is that case: it reports a successful match with ErrNotFound. Running the chain
+	// here would log, trace, meter and CORS-answer a request mux leaves uninstrumented — a silent
+	// difference, since the status and body are identical either way.
+	//
+	// The mirror only needs this one guard. A subrouter's MethodNotAllowedHandler also matches
+	// successfully, but mux clears ErrMethodMismatch as soon as one of the route's matchers succeeds
+	// (the else arm of the matcher loop in gorilla/mux route.go), so that case arrives here with a nil
+	// MatchErr and correctly DOES get the chain.
 	if match.MatchErr != nil {
 		match.Handler.ServeHTTP(w, r)
 

@@ -317,6 +317,54 @@ func TestTrieRouter_UnmatchedFallsBackToMux(t *testing.T) {
 	assert.Contains(t, body, `"42"`, "mux must populate the path params it always would")
 }
 
+// TestTrieRouter_SubrouterMethodNotAllowedHandler is the other half of the match-with-error family,
+// and it is deliberately the OPPOSITE expectation from the NotFoundHandler case above: here the
+// middleware chain MUST run.
+//
+// A subrouter's MethodNotAllowedHandler also reports a successful match, but mux clears
+// ErrMethodMismatch the moment one of the route's matchers succeeds (the else arm of the matcher loop
+// in gorilla/mux route.go), so the match arrives with a nil MatchErr and mux builds its chain. A
+// blanket "skip the chain whenever the handler came from an error path" would be wrong here, which is
+// why the guard keys on MatchErr rather than on the kind of handler.
+func TestTrieRouter_SubrouterMethodNotAllowedHandler(t *testing.T) {
+	build := func(useTrie bool, mwRuns *int) *Router {
+		r := NewRouter()
+		r.useTrie = useTrie
+
+		sub := r.Router.PathPrefix("/mna").Subrouter()
+		sub.MethodNotAllowedHandler = echoHandler("SUB405")
+		sub.Path("/only-post").Methods(http.MethodPost).Handler(echoHandler("mna-post"))
+
+		r.UseMiddleware(func(next http.Handler) http.Handler {
+			return http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+				*mwRuns++
+
+				next.ServeHTTP(w, req)
+			})
+		})
+
+		return r
+	}
+
+	for _, c := range []struct {
+		method, target string
+	}{
+		{http.MethodPost, "/mna/only-post"},   // the real route
+		{http.MethodDelete, "/mna/only-post"}, // wrong method -> the subrouter's 405 handler
+		{http.MethodGet, "/mna/absent"},       // no inner route at all
+	} {
+		var muxN, trieN int
+
+		muxStatus, muxBody := serve(build(false, &muxN), c.method, c.target)
+		trieStatus, trieBody := serve(build(true, &trieN), c.method, c.target)
+
+		require.Equalf(t, muxStatus, trieStatus, "status differs for %s %s", c.method, c.target)
+		assert.Equalf(t, muxBody, trieBody, "handler differs for %s %s", c.method, c.target)
+		assert.Equalf(t, muxN, trieN, "middleware count differs for %s %s (mux=%d trie=%d)",
+			c.method, c.target, muxN, trieN)
+	}
+}
+
 // TestTrieDifferential_MiddlewareParity asserts the middleware chain runs the
 // same number of times under both routers for matched, 404, and 405 requests.
 // mux applies its chain only on a successful match (never around NotFound /
