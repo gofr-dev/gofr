@@ -1977,3 +1977,29 @@ func TestContentTypeNotOverriddenWhenAlreadySet(t *testing.T) {
 
 	require.Equal(t, "application/custom", w.Header().Get("Content-Type"))
 }
+
+// responderBenchWriter keeps a header map and discards the body, so the benchmark measures the
+// responder rather than a recorder or the network.
+type responderBenchWriter struct{ h http.Header }
+
+func (w *responderBenchWriter) Header() http.Header       { return w.h }
+func (*responderBenchWriter) Write(b []byte) (int, error) { return len(b), nil }
+func (*responderBenchWriter) WriteHeader(int)             {}
+
+// BenchmarkResponder_Respond measures writing one successful JSON response, which is how the vast
+// majority of requests to a GoFr service end.
+//
+// Allocations are the metric. The envelope and its encoder have the same shape on every response and
+// the Content-Type is a constant, so anything allocated per response here is repeated work.
+func BenchmarkResponder_Respond(b *testing.B) {
+	payload := map[string]any{"id": "42", "name": "widget", "in_stock": true}
+	w := &responderBenchWriter{h: make(http.Header, 4)}
+
+	b.ReportAllocs()
+	b.ResetTimer()
+
+	for range b.N {
+		clear(w.h)
+		NewResponder(w, http.MethodGet).Respond(payload, nil)
+	}
+}
