@@ -5,12 +5,12 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/gorilla/mux"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/propagation"
 	"go.opentelemetry.io/otel/trace"
 
+	gofrhttp "gofr.dev/pkg/gofr/http"
 	"gofr.dev/pkg/gofr/version"
 )
 
@@ -31,14 +31,13 @@ func methodKV(method string) attribute.KeyValue {
 }
 
 // routeTemplate returns the matched route template (e.g. "/users/{id}") for
-// the request when gorilla/mux has resolved one, otherwise the raw URL path.
-// Used for the span name and http.route attribute so tracing cardinality
-// stays bounded by route count, not request count.
+// the request, otherwise the raw URL path. Used for the span name and
+// http.route attribute so tracing cardinality stays bounded by route count,
+// not request count. gofrhttp.RouteTemplate resolves the template under both
+// the trie and the default mux router.
 func routeTemplate(r *http.Request) string {
-	if route := mux.CurrentRoute(r); route != nil {
-		if t, err := route.GetPathTemplate(); err == nil && t != "" {
-			return t
-		}
+	if t := gofrhttp.RouteTemplate(r); t != "" {
+		return t
 	}
 
 	return r.URL.Path
