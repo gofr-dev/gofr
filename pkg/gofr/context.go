@@ -166,6 +166,13 @@ func (a *authInfo) GetAPIKey() string {
 // uses. All three are created together, live for exactly one request and die
 // together, so giving them one allocation instead of three changes nothing
 // observable -- Context still holds them through the same interfaces.
+//
+// One consequence is worth knowing: sharing an allocation means they are now
+// reachable as a unit, so a handler that retains any one of them past the
+// request keeps the other two -- including the ResponseWriter -- alive with it.
+// Retaining any of them after the handler returns was already a bug, since
+// net/http forbids using the ResponseWriter then, but the cost of doing it is
+// larger now.
 type httpContext struct {
 	ctx  Context
 	req  gofrHTTP.Request
