@@ -135,7 +135,7 @@ docker run -it --rm -p 4443:4443 -e STORAGE_EMULATOR_HOST=0.0.0.0:4443 fsouza/fa
 
 ### Documentation
 * After adding or modifying existing code, update the documentation too - [development/docs](https://github.com/gofr-dev/gofr/tree/development/docs).
-* When you consider a new documentation page is needed, start by adding a new file and writing your new documentation. Then - add a reference to it in [navigation.js](https://gofr.dev/docs/navigation.js).
+* When you consider a new documentation page is needed, start by adding a new file and writing your new documentation. Then - add a reference to it in [navigation.js](https://github.com/gofr-dev/gofr/blob/development/docs/navigation.js).
 * If needed, update or add proper code examples for your changes.
 * In case images are needed, add it to [docs/public](./docs/public) folder.
 * Make sure you don't break existing links and references.
