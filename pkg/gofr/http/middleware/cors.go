@@ -45,6 +45,10 @@ func CORS(middlewareConfigs map[string]string, routes *[]string) func(inner http
 		methods []string
 	)
 
+	// Built on the first request rather than here: routes is still being appended to while handlers
+	// register, and CORS is constructed before that finishes. GoFr registers every route during
+	// startup, before the server accepts a request, so the set is complete by the time this runs --
+	// the same lifecycle the router's own index relies on.
 	build := func() {
 		fixed, methods = buildFixedHeaders(middlewareConfigs, *routes)
 	}
@@ -131,6 +135,13 @@ func joinAllowedMethods(routes []string) string {
 
 // setMiddlewareHeaders writes the CORS headers for one response. Only
 // Allow-Origin depends on the request; everything else was built once.
+// setMiddlewareHeaders writes the CORS headers for one response.
+//
+// The value slices are shared process-wide rather than copied per response, which is safe only
+// because each has len == cap == 1: a later Header.Add on the same key appends into a NEWLY
+// allocated array instead of writing into the shared one. TestSharedHeaderValueSurvivesAdd pins
+// that. Anything added here must keep that property -- a slice with spare capacity would let one
+// response scribble on every other response's header.
 func setMiddlewareHeaders(w http.ResponseWriter, origin string, allowedOrigins map[string]bool,
 	fixed []headerValue, methods []string) {
 	header := w.Header()
