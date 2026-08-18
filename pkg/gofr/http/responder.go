@@ -38,11 +38,7 @@ const initialRespBufCap = 512
 //
 //nolint:gochecknoglobals // process-wide pool of reusable response encoders.
 var respBufPool = sync.Pool{
-	New: func() any {
-		buf := bytes.NewBuffer(make([]byte, 0, initialRespBufCap))
-
-		return &respEncoder{buf: buf, enc: json.NewEncoder(buf)}
-	},
+	New: func() any { return newRespEncoder() },
 }
 
 // Canonical key and shared value for the JSON content type, resolved once so no
@@ -149,8 +145,23 @@ func (r Responder) Respond(data any, err error) {
 // getRespBuf takes a reset buffer from the pool, ready to encode into. It is the
 // counterpart to putRespBuf, keeping the pool's type assertion in one place. The
 // assertion is safe: respBufPool is private and only ever holds *respEncoder.
+// newRespEncoder builds an encoder bound to its own buffer. A json.Encoder is tied to the writer it
+// was constructed with, so the two are only ever created and pooled as a pair.
+func newRespEncoder() *respEncoder {
+	buf := bytes.NewBuffer(make([]byte, 0, initialRespBufCap))
+
+	return &respEncoder{buf: buf, enc: json.NewEncoder(buf)}
+}
+
 func getRespBuf() *respEncoder {
-	re, _ := respBufPool.Get().(*respEncoder)
+	// The pool is private and New only ever yields *respEncoder, so this cannot fail. It is written
+	// to recover rather than to discard the result: ignoring it would turn an impossible failure into
+	// a nil dereference on the next line, which says nothing about what went wrong.
+	re, ok := respBufPool.Get().(*respEncoder)
+	if !ok {
+		re = newRespEncoder()
+	}
+
 	re.buf.Reset()
 
 	return re
