@@ -96,8 +96,14 @@ func (r Responder) Respond(data any, err error) {
 	// fresh []string for the value on every response, and both are constant here.
 	// Sharing the value slice is safe because it has len == cap == 1, so a later
 	// Header.Add appends into a new array instead of mutating it.
+	//
+	// The guard is a VALUE check, not a presence check. Header().Get returns ""
+	// both for an absent key and for a key explicitly set to "", and the default
+	// has to apply in both cases: a caller that pre-set Content-Type to "" would
+	// otherwise ship a JSON body with a blank Content-Type, since the present-but-
+	// empty entry also suppresses net/http's own sniffing.
 	header := r.w.Header()
-	if _, ok := header[canonicalContentType]; !ok {
+	if v := header[canonicalContentType]; len(v) == 0 || v[0] == "" {
 		header[canonicalContentType] = jsonContentType
 	}
 

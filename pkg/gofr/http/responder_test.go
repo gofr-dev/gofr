@@ -2003,3 +2003,83 @@ func BenchmarkResponder_Respond(b *testing.B) {
 		NewResponder(w, http.MethodGet).Respond(payload, nil)
 	}
 }
+
+// TestRespondContentTypeDefaultAppliesToPresentButEmpty pins that the default
+// applies when Content-Type is present with an empty value, not only when the
+// key is absent.
+//
+// The pre-pool guard was Header().Get("Content-Type") == "", which is a value
+// check: Get returns "" for an absent key AND for a key set to "". Replacing it
+// with a presence check silently changed that. A caller doing
+// header["Content-Type"] = []string{""} then shipped a JSON body with a blank
+// Content-Type, because the present-but-empty entry also suppresses net/http's
+// own content sniffing.
+func TestRespondContentTypeDefaultAppliesToPresentButEmpty(t *testing.T) {
+	tests := []struct {
+		name  string
+		seed  func(http.Header)
+		want  string
+		notes string
+	}{
+		{
+			name: "absent",
+			seed: func(http.Header) {},
+			want: "application/json",
+		},
+		{
+			name: "present but empty",
+			seed: func(h http.Header) { h["Content-Type"] = []string{""} },
+			want: "application/json",
+		},
+		{
+			name: "present but empty slice",
+			seed: func(h http.Header) { h["Content-Type"] = []string{} },
+			want: "application/json",
+		},
+		{
+			name: "already set is preserved",
+			seed: func(h http.Header) { h.Set("Content-Type", "application/vnd.api+json") },
+			want: "application/vnd.api+json",
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			w := httptest.NewRecorder()
+			tc.seed(w.Header())
+
+			NewResponder(w, http.MethodGet).Respond(map[string]string{"a": "b"}, nil)
+
+			assert.Equal(t, tc.want, w.Header().Get("Content-Type"))
+		})
+	}
+}
+
+// TestPutRespBufClearsTheEnvelope is the real guard for the pooled envelope.
+//
+// The three "envelope does not leak" tests stay green even with putRespBuf's
+// `re.resp = response{}` deleted, because every JSON path fully reassigns re.resp
+// via a composite literal before encoding — so the clear is only load-bearing for
+// GC retention, which none of them assert. A future refactor that stopped fully
+// reassigning re.resp on some path would leak the previous response's metadata or
+// error into the next one, and those tests would not catch it.
+//
+// This one holds the pooled encoder and inspects it directly, so deleting the
+// clear fails.
+func TestPutRespBufClearsTheEnvelope(t *testing.T) {
+	re := getRespBuf()
+
+	// A fully populated envelope, so every field has something to leak.
+	re.resp = response{
+		Data:     map[string]string{"secret": "value"},
+		Metadata: map[string]any{"tenant": "acme"},
+		Error:    map[string]any{"message": "boom"},
+	}
+
+	putRespBuf(re)
+
+	assert.Nil(t, re.resp.Data, "a payload must not outlive its response inside the pool")
+	assert.Nil(t, re.resp.Metadata, "metadata must not outlive its response inside the pool")
+	assert.Nil(t, re.resp.Error, "an error must not outlive its response inside the pool")
+	assert.Equal(t, response{}, re.resp, "the whole envelope must be zeroed")
+}
