@@ -308,11 +308,22 @@ jobs:
   parse_coverage:
     name: Code Coverage
     runs-on: ubuntu-latest
-    # This job runs after both Example and PKG testing are complete
-    needs: [ Example-Unit-Testing,PKG-Unit-Testing ]
+    # Now also needs the submodule job. Without it this job did not merely miss
+    # the submodule artifact — it did not wait for it either, and started before
+    # those uploads had finished.
+    needs: [ Example-Unit-Testing,PKG-Unit-Testing,Submodule-Unit-Testing ]
     steps:
       - name: Check out code into the Go module directory
         uses: actions/checkout@v7
+
+      # `go tool cover` below needs a Go toolchain. This job previously ran it
+      # with no setup-go step at all, silently depending on whatever Go the
+      # ubuntu-latest image happened to ship.
+      - name: Set up Go environment
+        uses: actions/setup-go@v7
+        with:
+          go-version: '1.26'
+          cache: false
 
       # Download coverage reports from previous jobs
       - name: Download Coverage Report
@@ -320,14 +331,31 @@ jobs:
         with:
           path: artifacts
 
-      # Merge the coverage reports from Example and PKG tests
+      # Merge the coverage reports from Example, PKG and submodule tests.
+      # The submodule profiles were previously produced and then read by
+      # nothing, so the published figure covered neither pkg/gofr/datasource/*
+      # nor pkg/gofr/metrics/exporters/* while appearing to be a whole-repo
+      # number. The glob is quoted-safe and fails loudly if it matches nothing.
       - name: Merge Coverage Files
         working-directory: artifacts
         run: |
+          shopt -s nullglob
+          submodule_profiles=(./submodule-coverage-reports/*.cov)
+          if [ ${#submodule_profiles[@]} -eq 0 ]; then
+            echo "::error::no submodule coverage profiles found — the merged figure would silently exclude them"
+            exit 1
+          fi
+          echo "Merging ${#submodule_profiles[@]} submodule profile(s) with Example and PKG"
           echo "mode: atomic" > merged_profile.cov
-          grep -h -v "mode:" ./Example-Test-Report/profile.cov ./PKG-Coverage-Report/profile.cov >> merged_profile.cov
+          grep -h -v "mode:" \
+            ./Example-Test-Report/profile.cov \
+            ./PKG-Coverage-Report/profile.cov \
+            "${submodule_profiles[@]}" >> merged_profile.cov
 
-      # Calculate and output the total code coverage percentage
+      # Calculate and output the total code coverage percentage.
+      # This is written to the job summary rather than only echoed into a log —
+      # previously the value went to $GITHUB_ENV and was read by nobody, since
+      # its only consumer (a 92% threshold gate) was commented out.
       - name: Parse code-coverage value
         working-directory: artifacts
         run: |
@@ -335,12 +363,21 @@ jobs:
           codeCoverage=${codeCoverage%?}
           echo "CODE_COVERAGE=$codeCoverage" >> $GITHUB_ENV
           echo "✅ Total Code Coverage: $codeCoverage%"
+          {
+            echo "### Code coverage"
+            echo ""
+            echo "**${codeCoverage}%** across examples, pkg/gofr and the submodules."
+            echo ""
+            echo "Includes the datasource and metrics-exporter submodules, which"
+            echo "were excluded from this figure before #3866."
+          } >> "$GITHUB_STEP_SUMMARY"
 
-  #      - name: Check if code-coverage is greater than threshold
-  #        run: |
-  #          codeCoverage=${{ env.CODE_COVERAGE }}
-  #          codeCoverage=${codeCoverage%??}
-  #          if [[ $codeCoverage -lt 92 ]]; then echo "code coverage cannot be less than 92%, currently its ${{ env.CODE_COVERAGE }}%" && exit 1; fi;
+  # NOTE: a coverage threshold gate belongs here, and used to exist as a
+  # commented-out 92% check. It is deliberately not restored in this PR: this
+  # change moves the reported number for the first time in a long while, by
+  # folding in submodules that were never counted, and the correct floor can
+  # only be chosen once a run has published the post-merge figure. Pick the
+  # threshold from that number, then add the gate.
 
   # Job for testing submodules inside the pkg directory
   Submodule-Unit-Testing:
@@ -421,15 +458,27 @@ jobs:
               go mod download
               go mod tidy
 
-              # Run tests with a focus on failed tests first
-              go test ./... -v -short -coverprofile="${module_name}.cov" -coverpkg=./...
+              # Run tests with a focus on failed tests first.
+              # -covermode=atomic matches the Example and PKG jobs. These
+              # profiles are now merged with those into one report, and the
+              # merged file declares "mode: atomic"; without this flag the
+              # submodule profiles were written in the default "set" mode, so
+              # the merge combined 0/1 flags with hit counts under an atomic
+              # header.
+              go test ./... -v -short -covermode=atomic -coverprofile="${module_name}.cov" -coverpkg=./...
 
               # Copy coverage file to the coverage_reports directory
               cp "${module_name}.cov" "$COVERAGE_DIR/"
             ' _ {}
 
-      # Upload submodule coverage reports as an artifact
+      # Upload submodule coverage reports as an artifact.
+      # Gated on a single matrix leg, like the Example and PKG uploads. Without
+      # this all three legs uploaded under the same artifact name — v7 permits
+      # duplicate names where v4 would have rejected them, so it produced three
+      # identical artifacts and no error. Uses the same '1.24' gate as the other
+      # two jobs so #3859 can move all three together rather than twice.
       - name: Upload Coverage Reports
+        if: ${{ matrix.go-version == '1.24'}}
         uses: actions/upload-artifact@v7
         with:
           name: submodule-coverage-reports
@@ -446,13 +495,22 @@ jobs:
       QLTY_TOKEN: ${{ secrets.QLTY_TOKEN }}
       QLTY_COVERAGE_TOKEN: ${{ secrets.QLTY_TOKEN }}
 
-    # This job only needs example and pkg test results, not submodules
-    needs: [Example-Unit-Testing, PKG-Unit-Testing]
+    # Needs the submodule results too — what qlty publishes should be the same
+    # figure parse_coverage reports, and both were missing the submodules.
+    needs: [Example-Unit-Testing, PKG-Unit-Testing, Submodule-Unit-Testing]
     # Only run this job on pushes to the development branch
     if: ${{ github.repository == 'gofr-dev/gofr' && github.event_name == 'push' && github.ref == 'refs/heads/development'}}
     steps:
       - name: Check out code into the Go module directory
         uses: actions/checkout@v7
+
+      # Same reason as parse_coverage: the merge step below runs `go tool cover`
+      # and had no Go toolchain of its own.
+      - name: Set up Go environment
+        uses: actions/setup-go@v7
+        with:
+          go-version: '1.26'
+          cache: false
 
       - name: Install qlty CLI
         run: |
@@ -465,12 +523,24 @@ jobs:
         with:
           path: artifacts
 
-      # Merge coverage from example and pkg tests only
+      # Merge coverage from example, pkg and submodule tests. Kept identical to
+      # the merge in parse_coverage so the number published to qlty and the
+      # number reported on the PR cannot drift apart.
       - name: Merge Coverage Files
         working-directory: artifacts
         run: |
+          shopt -s nullglob
+          submodule_profiles=(./submodule-coverage-reports/*.cov)
+          if [ ${#submodule_profiles[@]} -eq 0 ]; then
+            echo "::error::no submodule coverage profiles found — refusing to publish a figure that silently excludes them"
+            exit 1
+          fi
+          echo "Merging ${#submodule_profiles[@]} submodule profile(s) with Example and PKG"
           echo "mode: atomic" > merged_profile.cov
-          grep -h -v "mode:" ./Example-Test-Report/profile.cov ./PKG-Coverage-Report/profile.cov >> merged_profile.cov
+          grep -h -v "mode:" \
+            ./Example-Test-Report/profile.cov \
+            ./PKG-Coverage-Report/profile.cov \
+            "${submodule_profiles[@]}" >> merged_profile.cov
 
           # Generate and print total coverage percentage
           echo "Total Coverage:"
