@@ -55,6 +55,14 @@ jobs:
     # Define service containers that tests depend on
     services:
       # Kafka service
+      #
+      # NOTE: the `bitnamilegacy` namespace is a frozen archive — Bitnami state
+      # it receives no further updates and "may be removed in the future". This
+      # image therefore still needs to move (to apache/kafka, or a mirror under
+      # gofr-dev), which is tracked separately in #3868: that migration rewrites
+      # the whole KAFKA_CFG_* block below, since those names are a Bitnami
+      # convention, and it cannot be validated without a live CI run. Kept here
+      # deliberately so this PR stays reviewable.
       kafka:
         image: bitnamilegacy/kafka:3.4.1
         ports:
@@ -71,13 +79,30 @@ jobs:
           KAFKA_CFG_CONTROLLER_QUORUM_VOTERS: 1@127.0.0.1:9093
           ALLOW_PLAINTEXT_LISTENER: yes
           KAFKA_CFG_NODE_ID: 1
+        # kafka-topics.sh is on PATH in this image (/opt/bitnami/kafka/bin) and
+        # returns non-zero until the broker accepts connections. The 10s
+        # timeout is deliberate — the check starts a JVM, so the 5s used for
+        # redis/mysql would risk timing out on a broker that is actually fine.
+        options: >-
+          --health-cmd "kafka-topics.sh --bootstrap-server 127.0.0.1:9092 --list"
+          --health-interval=10s
+          --health-timeout=10s
+          --health-retries=10
 
       # Redis service
       redis:
         image: redis:7.0.5
         ports:
           - "2002:6379"
-        options: "--entrypoint redis-server"
+        # Without a health check the runner waits for the container to start,
+        # not for the service inside it to accept connections. The health
+        # options are appended to the existing --entrypoint override.
+        options: >-
+          --entrypoint redis-server
+          --health-cmd "redis-cli ping"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=5
 
       # MySQL service
       mysql:
@@ -87,6 +112,14 @@ jobs:
         env:
           MYSQL_ROOT_PASSWORD: "password"
           MYSQL_DATABASE: "test"
+        # MySQL is the one that takes meaningfully long to accept connections
+        # after the container starts, so it is the one most likely to have been
+        # racing the tests.
+        options: >-
+          --health-cmd "mysqladmin ping -h 127.0.0.1 -ppassword"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=10
 
     # Steps to execute for this job
     steps:
@@ -112,8 +145,22 @@ jobs:
         run: |
           go mod download
 
+      # Same treatment as the MinIO step below: pin the image and wait for the
+      # service, not for `docker run -d` to return. `:latest` also meant the
+      # image could change under the repo without any commit.
       - name: Start Zipkin
-        run: docker run -d -p 2005:9411 openzipkin/zipkin:latest
+        run: |
+          docker run -d --name zipkin -p 2005:9411 \
+            openzipkin/zipkin:3.6.1@sha256:d17e856dcbba7ffeefbbfc252f89ab78a4ab6faed47e646d46daad78f91b5ee2
+          for i in $(seq 1 30); do
+            if curl -fs http://localhost:2005/health >/dev/null; then
+              echo "Zipkin is ready"; exit 0
+            fi
+            echo "waiting for Zipkin... ($i)"; sleep 2
+          done
+          echo "::error::Zipkin failed to become ready after 60s"
+          docker logs zipkin || true
+          exit 1
 
       # MinIO can't run as a GitHub Actions `services:` container because the
       # stock image needs a `server /data` command, which services can't set.
@@ -139,13 +186,17 @@ jobs:
           docker logs minio || true
           exit 1
 
-      # Run tests with automatic retry on failures
-      - name: Test with Retry Logic
+      - name: Test
         id: test
         uses: nick-fields/retry@ad984534de44a9489a53aefd81eb77f87c70dc60 # v4.0.0
         with:
           timeout_minutes: 5  # Maximum time for the tests to run
-          max_attempts: 2      # Retry up to 2 times if tests fail
+          # No retry. The example tests used to race their own server's boot — every one of them
+          # slept a fixed 100ms after `go main()` and hoped — and a retry turned that into a green
+          # tick. It equally hid a real regression that happened to pass on the second attempt.
+          # They now wait on a readiness signal (testutil.WaitFor*), so a failure here is a
+          # failure. The action is kept for its timeout_minutes.
+          max_attempts: 1
           command: |
             # The retry action runs this block with a plain shell (no errexit),
             # unlike native `run:` steps that default to `bash -eo pipefail`.

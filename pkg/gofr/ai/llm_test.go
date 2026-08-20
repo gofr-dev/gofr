@@ -204,5 +204,8 @@ func TestMockModel_SatisfiesInterfaces(t *testing.T) {
 		_ Model          = NewMockModel(ctrl)
 		_ LLM            = NewMockLLM(ctrl)
 		_ StreamingModel = NewMockStreamingModel(ctrl)
+		// MockLLM stands in for the real *llm wrapper in handler tests, so it has to satisfy the
+		// optional capabilities a handler asserts on the LLM as well, not just LLM itself.
+		_ EmbeddingLLM = NewMockLLM(ctrl)
 	)
 }
