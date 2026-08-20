@@ -1091,7 +1091,7 @@ func TestCORS_OriginAllowListMatchedByCanonicalKey(t *testing.T) {
 				http.HandlerFunc(func(http.ResponseWriter, *http.Request) {}))
 
 			unlisted := httptest.NewRecorder()
-			req := httptest.NewRequest(http.MethodGet, "/", http.NoBody)
+			req := httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/", http.NoBody)
 			req.Header.Set("Origin", "https://evil.com")
 			handler.ServeHTTP(unlisted, req)
 
@@ -1099,7 +1099,7 @@ func TestCORS_OriginAllowListMatchedByCanonicalKey(t *testing.T) {
 				"an unlisted origin must not be granted access under any spelling of the config key")
 
 			listed := httptest.NewRecorder()
-			req = httptest.NewRequest(http.MethodGet, "/", http.NoBody)
+			req = httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/", http.NoBody)
 			req.Header.Set("Origin", "https://trusted.com")
 			handler.ServeHTTP(listed, req)
 
@@ -1125,7 +1125,7 @@ func TestCORS_DuplicateSpellingsResolveDeterministically(t *testing.T) {
 	// Many requests, because the bug this guards was probabilistic.
 	for range 50 {
 		w := httptest.NewRecorder()
-		handler.ServeHTTP(w, httptest.NewRequest(http.MethodGet, "/", http.NoBody))
+		handler.ServeHTTP(w, httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/", http.NoBody))
 
 		assert.Equal(t, allowedHeaders+", X-Canonical", w.Header().Get(headerAccessControlAllowHeaders),
 			"the exactly-canonical spelling must win, on every request")

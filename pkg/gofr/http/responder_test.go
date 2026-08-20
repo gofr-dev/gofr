@@ -1810,7 +1810,7 @@ func TestResponder_Char_MethodCaseSensitivity(t *testing.T) {
 // fell to the default branch and the error was carried in the envelope.
 //
 // *Response{} + error: isEmptyStruct compares against the zero value with
-// reflect.DeepEqual, and a *Response never equalled a zero Response. The value
+// reflect.DeepEqual, and a *Response never equaled a zero Response. The value
 // form does, so determineResponse substitutes the generic errEmptyResponse and
 // the caller's real message is replaced by a 500.
 //

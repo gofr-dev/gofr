@@ -1099,7 +1099,7 @@ func TestRequest_Char_BindNilBodyDoesNotPanic(t *testing.T) {
 // so it fell through getStatusCode to 500 and drove the server's error-rate
 // alerting and SLO burn for a fault the server did not commit.
 func TestBind_UnsupportedContentTypeIsClientFault(t *testing.T) {
-	req := httptest.NewRequest(http.MethodPost, "/", strings.NewReader("some body"))
+	req := httptest.NewRequestWithContext(t.Context(), http.MethodPost, "/", strings.NewReader("some body"))
 	req.Header.Set("Content-Type", "text/plain")
 
 	var target struct{}
@@ -1123,7 +1123,7 @@ func TestBind_UnsupportedContentTypeIsClientFault(t *testing.T) {
 func TestBind_OctetStreamSpellings(t *testing.T) {
 	for _, ct := range []string{"binary/octet-stream", "application/octet-stream"} {
 		t.Run(ct, func(t *testing.T) {
-			req := httptest.NewRequest(http.MethodPost, "/", strings.NewReader("payload"))
+			req := httptest.NewRequestWithContext(t.Context(), http.MethodPost, "/", strings.NewReader("payload"))
 			req.Header.Set("Content-Type", ct)
 
 			var target []byte
@@ -1147,7 +1147,7 @@ func TestBind_RejectPathDoesNotBufferTheWholeBody(t *testing.T) {
 
 	cr := &countingReader{remaining: size}
 
-	req := httptest.NewRequest(http.MethodPost, "/", cr)
+	req := httptest.NewRequestWithContext(t.Context(), http.MethodPost, "/", cr)
 	req.Header.Set("Content-Type", "text/plain")
 
 	var target struct{}
@@ -1162,7 +1162,7 @@ func TestBind_RejectPathDoesNotBufferTheWholeBody(t *testing.T) {
 // back: a caller that reads the body after a failed Bind must still see all of
 // it.
 func TestBind_RejectPathLeavesTheBodyReadable(t *testing.T) {
-	req := httptest.NewRequest(http.MethodPost, "/", strings.NewReader("hello world"))
+	req := httptest.NewRequestWithContext(t.Context(), http.MethodPost, "/", strings.NewReader("hello world"))
 	req.Header.Set("Content-Type", "text/plain")
 
 	var target struct{}
@@ -1186,7 +1186,7 @@ func TestBind_EmptyBodyWithUnsupportedTypeIsNoOp(t *testing.T) {
 		{"empty reader", strings.NewReader("")},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			req := httptest.NewRequest(http.MethodPost, "/", tc.body)
+			req := httptest.NewRequestWithContext(t.Context(), http.MethodPost, "/", tc.body)
 			req.Header.Set("Content-Type", "text/plain")
 
 			var target struct{}
