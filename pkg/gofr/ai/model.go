@@ -25,6 +25,27 @@ type StreamingModel interface {
 	Stream(ctx context.Context, messages []Message, opts ...Option) (Streamer, error)
 }
 
+// Embedder is the model-side optional capability a provider implements to turn text into embedding
+// vectors — the peer of StreamingModel for streaming. It is not every provider's capability (a
+// chat-only model has no embeddings, an embedding model has no chat), so callers do not implement or
+// assert it directly: they assert EmbeddingLLM on ctx.LLM(), whose Embed reports
+// ErrEmbedNotSupported when the underlying provider does not implement Embedder. Embeddings power
+// semantic search and agent memory: embed text on write, embed a query on read, and rank stored
+// vectors by similarity.
+type Embedder interface {
+	Embed(ctx context.Context, input []string, opts ...Option) (*EmbeddingResponse, error)
+}
+
+// EmbeddingResponse is the result of an Embed call.
+type EmbeddingResponse struct {
+	// Embeddings holds one vector per input string, in the same order as the input.
+	Embeddings [][]float32
+	// Usage reports token consumption; embeddings bill input (prompt) tokens only.
+	Usage Usage
+	// Model is the resolved model that produced the vectors.
+	Model string
+}
+
 // Descriptor is an optional interface a provider implements to report distinct provider and model
 // labels for metrics and traces. Without it, Name() is used for both labels. The methods are named
 // ProviderName/ModelName (not Provider/Model) so a provider can expose Provider and Model as
@@ -43,6 +64,25 @@ type LLM interface {
 	Generate(ctx context.Context, prompt string, opts ...Option) (*Response, error)
 	Stream(ctx context.Context, messages []Message, opts ...Option) (Streamer, error)
 	Tools() Tools
+}
+
+// EmbeddingLLM is the caller-side optional capability for embeddings — the first interface added
+// under LLM's freeze, and the pattern for every capability after it. The LLM returned by ctx.LLM()
+// always implements it, so the assertion never fails in a handler; Embed then reports
+// ErrEmbedNotSupported when the configured provider is chat-only, and ErrLLMNotConfigured when no
+// model is registered.
+//
+//	e, ok := ctx.LLM().(ai.EmbeddingLLM)
+//	if !ok {
+//		return nil, errors.New("embeddings unavailable")
+//	}
+//
+//	resp, err := e.Embed(ctx, []string{"hello"})
+//
+// It is asserted rather than declared on LLM so that adding embeddings does not break the
+// hand-written fakes and third-party wrappers LLM promises to keep compiling.
+type EmbeddingLLM interface {
+	Embed(ctx context.Context, input []string, opts ...Option) (*EmbeddingResponse, error)
 }
 
 // Tools is the set of the service's own handlers exposed as agent-callable tools. It is frozen on

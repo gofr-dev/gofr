@@ -80,6 +80,11 @@ export const navigation = [
                 desc: "Get familiar with making HTTP requests and handling responses within your GoFr application to facilitate seamless communication."
             },
             {
+                title: 'Routing Performance',
+                href: '/docs/advanced-guide/routing-performance',
+                desc: "Opt into the trie router with GOFR_ROUTER=trie to keep route matching flat as your route table grows, instead of scaling with the number of routes."
+            },
+            {
                 title: 'Authentication',
                 href: '/docs/advanced-guide/authentication',
                 desc: "Implement various authentication methods to secure your GoFR application and protect sensitive endpoints across HTTP and gRPC."
