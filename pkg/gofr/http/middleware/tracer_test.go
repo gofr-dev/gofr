@@ -458,19 +458,102 @@ func TestTracerImplicit200StillRecorded(t *testing.T) {
 // template must produce ONE entry no matter how many concrete paths hit it, and
 // an unmatched (attacker-controlled) path must produce none at all.
 func TestSpanMetaCacheIsBounded(t *testing.T) {
-	tracerSpanCache.Range(func(k, _ any) bool { tracerSpanCache.Delete(k); return true })
+	tracerSpanCache.reset()
 
 	for i := range 500 {
 		spanMetaFor(http.MethodGet, "/users/{id}", true)
 		spanMetaFor(http.MethodGet, "/attacker/"+strconv.Itoa(i), false)
 	}
 
-	var n int
-
-	tracerSpanCache.Range(func(_, _ any) bool { n++; return true })
-
-	require.Equal(t, 1, n,
+	require.Equal(t, int64(1), tracerSpanCache.len(),
 		"one template must yield one entry, and unmatched paths must never be cached")
+}
+
+// TestSpanMetaCacheRejectsUndefinedMethods is the regression test for a
+// remotely-triggerable unbounded-memory DoS.
+//
+// The cache's safety argument was "only bounded route templates are cached", and
+// that argument was dead in a real GoFr app. gofr.go registers a
+// PathPrefix("/") catch-all, so mux.CurrentRoute is set for every request and
+// GetPathTemplate() returns "/" even for a path nothing matched -- making the
+// templated guard true always. net/http then accepts any RFC 7230 token as a
+// method, so an unauthenticated client streaming M00001, M00002, ... minted a
+// permanent *spanMeta each and grew resident memory without bound. The
+// pre-cache fmt.Sprintf path retained no state at all, so this was introduced
+// by the cache, not inherited.
+func TestSpanMetaCacheRejectsUndefinedMethods(t *testing.T) {
+	tracerSpanCache.reset()
+
+	// The exact attack: distinct made-up methods against the catch-all template.
+	for i := range 5000 {
+		spanMetaFor("M"+strconv.Itoa(i), "/", true)
+	}
+
+	require.Zero(t, tracerSpanCache.len(),
+		"an undefined method must never mint a cache entry")
+
+	// The requests still work -- they just rebuild, as every request did before
+	// the cache existed.
+	meta := spanMetaFor("M00001", "/", true)
+	require.Equal(t, "M00001 /", meta.name)
+}
+
+// TestSpanMetaCacheStillCachesStandardMethods pins that the method filter did
+// not break the optimization it protects.
+func TestSpanMetaCacheStillCachesStandardMethods(t *testing.T) {
+	tracerSpanCache.reset()
+
+	for _, m := range []string{
+		http.MethodGet, http.MethodHead, http.MethodPost, http.MethodPut,
+		http.MethodPatch, http.MethodDelete, http.MethodConnect,
+		http.MethodOptions, http.MethodTrace,
+	} {
+		first := spanMetaFor(m, "/users/{id}", true)
+		require.Same(t, first, spanMetaFor(m, "/users/{id}", true),
+			"a standard method must still be served from the cache")
+	}
+
+	require.Equal(t, int64(9), tracerSpanCache.len())
+}
+
+// TestRouteCacheStopsAtItsLimit pins the backstop. The method filter is the
+// primary bound, but it is an argument about reachability; the cap is a number,
+// and process memory should rest on the number too.
+func TestRouteCacheStopsAtItsLimit(t *testing.T) {
+	var c routeCache
+
+	for i := range routeCacheLimit + 500 {
+		c.store(routeKey{method: http.MethodGet, route: "/r/" + strconv.Itoa(i)}, i)
+	}
+
+	require.Equal(t, int64(routeCacheLimit), c.len(),
+		"the cache must refuse to grow past its limit")
+
+	// Past the cap, a miss is a miss -- the caller rebuilds rather than erroring.
+	_, ok := c.load(routeKey{method: http.MethodGet, route: "/r/" + strconv.Itoa(routeCacheLimit+100)})
+	require.False(t, ok)
+}
+
+// TestTracerNonRecordingPathSkipsTheWriterWrapper covers the branch this PR
+// optimizes, which had no test at all: with a non-recording provider the
+// StatusResponseWriter must not be allocated, and the handler must see the
+// writer the server handed in.
+func TestTracerNonRecordingPathSkipsTheWriterWrapper(t *testing.T) {
+	otel.SetTracerProvider(noop.NewTracerProvider())
+
+	var got http.ResponseWriter
+
+	router := mux.NewRouter()
+	router.Use(Tracer)
+	router.NewRoute().Methods(http.MethodGet).Path("/x").
+		HandlerFunc(func(w http.ResponseWriter, _ *http.Request) { got = w })
+
+	rec := httptest.NewRecorder()
+	router.ServeHTTP(rec, httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/x", http.NoBody))
+
+	require.NotNil(t, got)
+	assert.IsType(t, &httptest.ResponseRecorder{}, got,
+		"a non-recording span must not pay for the status-capturing wrapper")
 }
 
 // TestSpanMetaContentIsCorrect pins that caching did not change what is emitted.
@@ -547,6 +630,17 @@ func TestTracerPropagatesIncomingTraceContext(t *testing.T) {
 	otel.SetTracerProvider(trace.NewTracerProvider(trace.WithSyncer(exporter)))
 	otel.SetTextMapPropagator(propagation.TraceContext{})
 
+	// Both globals are restored. Without this the recording provider and the
+	// Baggage-less propagator leak into every later test and benchmark in the
+	// package -- tests run before benchmarks, so BenchmarkTracer would measure
+	// the RECORDING path while documenting the non-recording one, and feed this
+	// exporter for the rest of the run.
+	t.Cleanup(func() {
+		otel.SetTracerProvider(noop.NewTracerProvider())
+		otel.SetTextMapPropagator(propagation.NewCompositeTextMapPropagator(
+			propagation.TraceContext{}, propagation.Baggage{}))
+	})
+
 	router := mux.NewRouter()
 	router.Use(Tracer)
 	router.NewRoute().Methods(http.MethodGet).Path("/x").
@@ -579,6 +673,13 @@ func (*tracerBenchWriter) WriteHeader(int)             {}
 // samples: the span is still started on every request, so whatever the middleware builds up front is
 // paid for whether or not anything records it. Allocations are the metric that matters.
 func BenchmarkTracer(b *testing.B) {
+	// Pin the non-recording provider this benchmark is about. Package state is
+	// shared and tests run first, so inheriting whatever a previous test left
+	// installed would silently measure the recording path instead.
+	otel.SetTracerProvider(noop.NewTracerProvider())
+
+	b.Cleanup(func() { otel.SetTracerProvider(noop.NewTracerProvider()) })
+
 	router := mux.NewRouter()
 	router.Use(Tracer)
 	router.NewRoute().Methods(http.MethodGet).Path("/users/{id}").

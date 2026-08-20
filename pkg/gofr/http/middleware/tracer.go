@@ -4,7 +4,6 @@ import (
 	"net/http"
 	"net/textproto"
 	"strings"
-	"sync"
 
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
@@ -35,8 +34,10 @@ func methodKV(method string) attribute.KeyValue {
 // Concatenation rather than fmt.Sprintf. Both cost the one unavoidable
 // allocation for the result string, so this is a CPU saving only, not an
 // allocation saving: Sprintf walks a format string and boxes two arguments that
-// are already strings. Measured by BenchmarkBuildSpanName on this call site:
-// 44.3 ns/op -> 22.6 ns/op, both at 16 B/op and 1 alloc/op.
+// are already strings.
+//
+// No before/after figure is quoted here: the fmt.Sprintf baseline it would be
+// measured against is gone, so nothing in the tree can reproduce one.
 func buildSpanName(method, route string) string {
 	return method + " " + route
 }
@@ -57,11 +58,6 @@ func routeTemplate(r *http.Request) (route string, templated bool) {
 	return r.URL.Path, false
 }
 
-// spanKey identifies a (method, route-template) pair.
-type spanKey struct {
-	method, route string
-}
-
 // spanMeta is the immutable per-route span data: the semconv span name and the
 // attribute slice handed to trace.WithAttributes. Both are pure functions of
 // (method, route), so they are provider-independent and safe to share process
@@ -77,37 +73,43 @@ type spanMeta struct {
 	startOpts []trace.SpanStartOption
 }
 
-// tracerSpanCache maps spanKey -> *spanMeta.
+// tracerSpanCache maps routeKey -> *spanMeta.
 //
-// Keyed on the ROUTE TEMPLATE ("/users/{id}"), never a concrete path, so it is
-// bounded by routes x methods — the same bound metrics.go relies on for its
-// routeAttrs cache. Unmatched requests carry a raw path, which is attacker
-// controlled and unbounded, so spanMetaFor deliberately does not cache those.
+// Keyed on the ROUTE TEMPLATE ("/users/{id}"), never a concrete path. That alone
+// was once believed to bound it by routes x methods, but neither half of that
+// product is bounded by itself in a real GoFr app -- see cacheableMethod, and
+// routeCache for the cap that backs the argument up.
 //
 // It is package level because the middleware chain is rebuilt around the matched
 // handler on every request, so a cache owned by the closure would be discarded
 // each time and never serve a second request.
 //
 //nolint:gochecknoglobals // rationale above: a per-closure cache would never be reused.
-var tracerSpanCache sync.Map
+var tracerSpanCache routeCache
 
 // spanMetaFor returns the span name and attributes for a route, building them on
-// first use. templated reports whether route came from a matched route template;
-// when false the value is a raw request path and must not enter the cache.
+// first use.
+//
+// templated reports whether route came from a matched route template; when false
+// the value is a raw request path and must not enter the cache. That guard is
+// necessary but NOT sufficient -- GoFr's catch-all makes it true for every
+// request, including ones no route matched -- so the method is filtered too, and
+// the cache itself is capped. An entry that cannot be cached is simply rebuilt,
+// which is what every request did before this cache existed.
 func spanMetaFor(method, route string, templated bool) *spanMeta {
-	if !templated {
+	if !templated || !cacheableMethod(method) {
 		return newSpanMeta(method, route)
 	}
 
-	key := spanKey{method: method, route: route}
-	if v, ok := tracerSpanCache.Load(key); ok {
+	key := routeKey{method: method, route: route}
+	if v, ok := tracerSpanCache.load(key); ok {
 		meta, _ := v.(*spanMeta)
 
 		return meta
 	}
 
 	meta := newSpanMeta(method, route)
-	tracerSpanCache.Store(key, meta)
+	tracerSpanCache.store(key, meta)
 
 	return meta
 }
