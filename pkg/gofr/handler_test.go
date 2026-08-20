@@ -791,6 +791,14 @@ func TestHandler_Char_InlineDeadlineExceeded(t *testing.T) {
 
 // TestHandler_Char_ClientCanceled pins client cancellation on both paths: the
 // non-standard 499 with the "client closed request" envelope.
+//
+// The goroutine path needs the handler to stay in flight for the assertion to
+// mean anything. serveWithGoroutine selects over c.Context.Done() and the
+// handler's done channel, and a handler that returns immediately makes BOTH
+// ready on an already-canceled context — Go then picks uniformly at random, so
+// asserting 499 would be a coin flip that fails on loaded CI about half the
+// time. Blocking the handler until the test releases it leaves Done() as the
+// only ready case, which is the path this test is about.
 func TestHandler_Char_ClientCanceled(t *testing.T) {
 	for _, tc := range []struct {
 		name    string
@@ -803,7 +811,21 @@ func TestHandler_Char_ClientCanceled(t *testing.T) {
 			ctx, cancel := context.WithCancel(t.Context())
 			cancel()
 
-			h := charHandler(func(*Context) (any, error) { return "ignored", nil }, tc.timeout)
+			// Buffered and closed on cleanup, so the handler goroutine on the
+			// goroutine path always drains rather than leaking into later tests.
+			release := make(chan struct{})
+
+			t.Cleanup(func() { close(release) })
+
+			h := charHandler(func(*Context) (any, error) {
+				// The inline path runs this on the calling goroutine, where the
+				// context is already canceled and nothing would release it.
+				if tc.timeout > 0 {
+					<-release
+				}
+
+				return "ignored", nil
+			}, tc.timeout)
 
 			w := httptest.NewRecorder()
 			h.ServeHTTP(w, httptest.NewRequestWithContext(ctx, http.MethodGet, "/", http.NoBody))

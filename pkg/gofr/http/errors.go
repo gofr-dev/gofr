@@ -190,6 +190,7 @@ var (
 	_ StatusCodeResponder = ErrorServiceUnavailable{}
 	_ StatusCodeResponder = ErrorClientClosedRequest{}
 	_ StatusCodeResponder = ErrorTooManyRequests{}
+	_ StatusCodeResponder = ErrUnsupportedContentType{}
 
 	_ logging.LogLevelResponder = ErrorClientClosedRequest{}
 	_ logging.LogLevelResponder = ErrorEntityNotFound{}
@@ -202,3 +203,19 @@ var (
 	_ logging.LogLevelResponder = ErrorServiceUnavailable{}
 	_ logging.LogLevelResponder = ErrorTooManyRequests{}
 )
+
+// ErrUnsupportedContentType is returned by Bind when a request carries a body
+// whose Content-Type it has no decoder for.
+//
+// It models 415 rather than falling through to 500 because the motivating case
+// — a client that posts a body and omits Content-Type — is a client fault, and
+// a 5xx for it would drive the server's error-rate alerting and SLO burn.
+type ErrUnsupportedContentType struct{}
+
+func (ErrUnsupportedContentType) Error() string {
+	return "bind error, unsupported content type"
+}
+
+func (ErrUnsupportedContentType) StatusCode() int {
+	return http.StatusUnsupportedMediaType
+}

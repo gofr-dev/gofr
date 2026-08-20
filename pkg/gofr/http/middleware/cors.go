@@ -19,11 +19,12 @@ const (
 // the middleware dynamically matches the request's Origin header and responds
 // with the matched origin, adding a Vary: Origin header for correct caching.
 func CORS(middlewareConfigs map[string]string, routes *[]string) func(inner http.Handler) http.Handler {
-	allowedOrigins := parseOrigins(middlewareConfigs[headerAccessControlAllowOrigin])
+	configs := canonicalizeConfig(middlewareConfigs)
+	allowedOrigins := parseOrigins(configs[headerAccessControlAllowOrigin])
 
 	return func(inner http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			setMiddlewareHeaders(middlewareConfigs, *routes, w, r.Header.Get("Origin"), allowedOrigins)
+			setMiddlewareHeaders(configs, *routes, w, r.Header.Get("Origin"), allowedOrigins)
 
 			if r.Method == http.MethodOptions {
 				w.WriteHeader(http.StatusOK)
@@ -46,16 +47,14 @@ func setMiddlewareHeaders(middlewareConfigs map[string]string, routes []string,
 		w.Header().Add("Vary", "Origin")
 	}
 
-	// Walk the configuration once, classifying each entry by its CANONICAL
-	// header name. Header names are case-insensitive and Header.Set canonicalizes
-	// whatever it is given, so matching on the raw key would let a
-	// differently-cased spelling reach a header it was never checked against —
-	// replacing the origin negotiated above, or overwriting the default
-	// allow-list instead of extending it.
+	// The keys arrive canonicalized from canonicalizeConfig, so a differently-cased
+	// spelling cannot reach a header it was never checked against — replacing the
+	// origin negotiated above, or overwriting the default allow-list instead of
+	// extending it.
 	var customMethods, customHeaders string
 
 	for key, value := range middlewareConfigs {
-		switch http.CanonicalHeaderKey(key) {
+		switch key {
 		case headerAccessControlAllowOrigin:
 			// Always negotiated against the configured allow-list above; never
 			// overridable from here.
@@ -97,6 +96,48 @@ func joinAllowedMethods(routes []string) string {
 	}
 
 	return strings.Join(routes, ", ") + ", " + http.MethodOptions
+}
+
+// canonicalizeConfig folds the caller's configuration onto canonical header keys, once, at setup.
+//
+// Two things depend on this. The allow-list read by parseOrigins used a raw literal lookup while the
+// per-request walk classified by canonical name, so the two disagreed: a caller who spelled the key
+// "access-control-allow-origin" had it dropped by the classifier AND missed by parseOrigins, which
+// then fell through to its wildcard default — turning a config that restricted the origin into one
+// that echoed "*" to an unlisted origin. CORS is exported, so callers do build this map themselves.
+//
+// The other is determinism. Header names are case-insensitive, so two spellings are one header, and
+// a map has no order — resolving the collision during the per-request walk meant the winner was
+// whichever key map iteration reached last, and a different value could be sent on different
+// requests within a single process. Precedence is explicit here instead: an exactly-canonical
+// spelling always wins, and among the rest the lexicographically smallest key does.
+func canonicalizeConfig(cfg map[string]string) map[string]string {
+	canonical := make(map[string]string, len(cfg))
+
+	// Track which raw key won each canonical slot, so precedence does not depend on iteration order.
+	winner := make(map[string]string, len(cfg))
+
+	for key, value := range cfg {
+		ck := http.CanonicalHeaderKey(key)
+
+		if prev, ok := winner[ck]; ok && !better(key, prev, ck) {
+			continue
+		}
+
+		winner[ck] = key
+		canonical[ck] = value
+	}
+
+	return canonical
+}
+
+// better reports whether raw key a should beat b for the canonical slot ck.
+func better(a, b, ck string) bool {
+	if (a == ck) != (b == ck) {
+		return a == ck
+	}
+
+	return a < b
 }
 
 // parseOrigins splits a comma-separated origin string into a set.

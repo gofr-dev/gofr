@@ -1798,3 +1798,70 @@ func TestResponder_Char_MethodCaseSensitivity(t *testing.T) {
 
 	assert.Equal(t, http.StatusOK, w.Code)
 }
+
+// TestResponder_Char_SpecialTypePointersWithError pins the pointer paths that
+// carry a NON-NIL error, which is where dereferencing changes the outcome most
+// sharply. Both results below are inherited from the value forms — the deref
+// does not invent them — but it does route pointer callers into them for the
+// first time, so they are pinned here rather than left to be discovered.
+//
+// *Raw + error: the Raw branch of the switch has no error field at all, so the
+// error is dropped and a success-shaped body is served. Previously the pointer
+// fell to the default branch and the error was carried in the envelope.
+//
+// *Response{} + error: isEmptyStruct compares against the zero value with
+// reflect.DeepEqual, and a *Response never equalled a zero Response. The value
+// form does, so determineResponse substitutes the generic errEmptyResponse and
+// the caller's real message is replaced by a 500.
+//
+// Neither is being endorsed here. They are the value forms' pre-existing quirks
+// and fixing them would change behavior for existing value callers, which is
+// out of scope for this PR; see the behavior table in the PR description.
+func TestResponder_Char_SpecialTypePointersWithError(t *testing.T) {
+	errBoom := errCharBoom
+
+	tests := []struct {
+		name       string
+		data       any
+		wantStatus int
+		wantBody   string
+	}{
+		{
+			name: "raw-ptr-with-error drops the error",
+			data: &resTypes.Raw{Data: map[string]string{"a": "b"}},
+			// The value form behaves identically; the pointer used to land in
+			// the default branch and emit {"error":...,"data":...} at 206.
+			wantStatus: http.StatusPartialContent,
+			wantBody:   "{\"a\":\"b\"}\n",
+		},
+		{
+			name: "empty-response-ptr-with-error becomes a generic 500",
+			data: &resTypes.Response{},
+			// The pointer used to escape isEmptyStruct and emit 206 with the
+			// real message.
+			wantStatus: http.StatusInternalServerError,
+			wantBody:   "{\"error\":{\"message\":\"internal server error\"}}\n",
+		},
+		{
+			name:       "non-empty-response-ptr-with-error keeps the caller's message",
+			data:       &resTypes.Response{Data: "x"},
+			wantStatus: http.StatusPartialContent,
+			wantBody:   "{\"error\":{\"message\":\"boom\"},\"data\":\"x\"}\n",
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			w := httptest.NewRecorder()
+
+			NewResponder(w, http.MethodGet).Respond(tc.data, errBoom)
+
+			assert.Equal(t, tc.wantStatus, w.Code)
+			assert.Equal(t, tc.wantBody, w.Body.String())
+		})
+	}
+}
+
+// errCharBoom is the stand-in error for the characterization tests above; a
+// package-level static error keeps err113 satisfied.
+var errCharBoom = errors.New("boom")

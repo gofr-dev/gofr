@@ -1092,3 +1092,129 @@ func TestRequest_Char_BindNilBodyDoesNotPanic(t *testing.T) {
 		})
 	}
 }
+
+// TestBind_UnsupportedContentTypeIsClientFault pins the status class. The
+// motivating case for the reject path — a client that posts a body and omits
+// Content-Type — is a client mistake, and a plain errors.New carries no status,
+// so it fell through getStatusCode to 500 and drove the server's error-rate
+// alerting and SLO burn for a fault the server did not commit.
+func TestBind_UnsupportedContentTypeIsClientFault(t *testing.T) {
+	req := httptest.NewRequest(http.MethodPost, "/", strings.NewReader("some body"))
+	req.Header.Set("Content-Type", "text/plain")
+
+	var target struct{}
+
+	err := NewRequest(req).Bind(&target)
+
+	require.Error(t, err)
+	require.ErrorIs(t, err, errUnsupportedContentType)
+
+	var coder StatusCodeResponder
+
+	require.ErrorAs(t, err, &coder, "the error must model its own status like every other client fault here")
+	assert.Equal(t, http.StatusUnsupportedMediaType, coder.StatusCode())
+}
+
+// TestBind_OctetStreamSpellings pins that both spellings decode. GoFr's own
+// "binary/octet-stream" is non-standard; "application/octet-stream" is the RFC
+// 2046 one and the likelier thing a client sends. Before the reject path
+// existed the RFC spelling was a silent no-op, so rejecting it would have
+// turned a naming gap into a hard error for the commoner spelling.
+func TestBind_OctetStreamSpellings(t *testing.T) {
+	for _, ct := range []string{"binary/octet-stream", "application/octet-stream"} {
+		t.Run(ct, func(t *testing.T) {
+			req := httptest.NewRequest(http.MethodPost, "/", strings.NewReader("payload"))
+			req.Header.Set("Content-Type", ct)
+
+			var target []byte
+
+			require.NoError(t, NewRequest(req).Bind(&target))
+			assert.Equal(t, []byte("payload"), target)
+		})
+	}
+}
+
+// TestBind_RejectPathDoesNotBufferTheWholeBody is the regression test for the
+// amplification vector. The question on the reject path is only "is there a
+// body?", but it was answered with an unbounded io.ReadAll first. Ordinary
+// routes have no body cap, so a client could send an arbitrarily large body
+// with an undecodable Content-Type to any handler that calls Bind and make the
+// server buffer all of it purely to refuse it.
+//
+// countingReader reports how much was actually pulled off the wire.
+func TestBind_RejectPathDoesNotBufferTheWholeBody(t *testing.T) {
+	const size = 1 << 20
+
+	cr := &countingReader{remaining: size}
+
+	req := httptest.NewRequest(http.MethodPost, "/", cr)
+	req.Header.Set("Content-Type", "text/plain")
+
+	var target struct{}
+
+	err := NewRequest(req).Bind(&target)
+
+	require.ErrorIs(t, err, errUnsupportedContentType)
+	assert.LessOrEqual(t, cr.read, 1, "only one byte is needed to answer whether a body exists")
+}
+
+// TestBind_RejectPathLeavesTheBodyReadable pins that the probe puts its byte
+// back: a caller that reads the body after a failed Bind must still see all of
+// it.
+func TestBind_RejectPathLeavesTheBodyReadable(t *testing.T) {
+	req := httptest.NewRequest(http.MethodPost, "/", strings.NewReader("hello world"))
+	req.Header.Set("Content-Type", "text/plain")
+
+	var target struct{}
+
+	require.Error(t, NewRequest(req).Bind(&target))
+
+	rest, err := io.ReadAll(req.Body)
+	require.NoError(t, err)
+	assert.Equal(t, "hello world", string(rest), "the probed byte must be pushed back in front of the stream")
+}
+
+// TestBind_EmptyBodyWithUnsupportedTypeIsNoOp pins the other half: with nothing
+// to decode there is nothing lost, so Bind stays a no-op for callers that bind
+// defensively on bodyless requests.
+func TestBind_EmptyBodyWithUnsupportedTypeIsNoOp(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		body io.Reader
+	}{
+		{"no body", http.NoBody},
+		{"empty reader", strings.NewReader("")},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			req := httptest.NewRequest(http.MethodPost, "/", tc.body)
+			req.Header.Set("Content-Type", "text/plain")
+
+			var target struct{}
+
+			assert.NoError(t, NewRequest(req).Bind(&target))
+		})
+	}
+}
+
+// countingReader yields `remaining` zero bytes and records how many were read.
+type countingReader struct {
+	remaining int
+	read      int
+}
+
+func (c *countingReader) Read(p []byte) (int, error) {
+	if c.remaining == 0 {
+		return 0, io.EOF
+	}
+
+	n := min(len(p), c.remaining)
+
+	for i := range n {
+		p[i] = 'x'
+	}
+
+	c.remaining -= n
+	c.read += n
+
+	return n, nil
+}

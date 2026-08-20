@@ -633,11 +633,18 @@ func corsCharGarbageKeyCases() []corsCharCase {
 		// spelling can no longer reach Access-Control-Allow-Origin through the
 		// custom-header loop and replace the negotiated value.
 		{
-			name:   "lower cased origin key cannot inject an origin through the custom header loop",
+			name:   "lower cased origin key configures the allow-list and emits nothing for an unlisted origin",
 			config: map[string]string{"access-control-allow-origin": corsCharOriginEvil}, method: http.MethodGet, routes: twoRoutes,
-			// No origin was negotiated (the allow-list is unset, so it is the
-			// "*" default) and the custom loop must not emit one of its own.
-			expLines: []string{corsCharAllowHeadersLine, baseMethods, corsCharOriginLine("*")},
+			// The key is folded to its canonical spelling, so this IS the
+			// allow-list — it restricts origins to corsCharOriginEvil. The
+			// request carries no Origin, which is not on that list, so nothing
+			// is negotiated and the custom loop must not emit one of its own.
+			//
+			// This case previously expected "*". That was the bug: the
+			// allow-list was read with a raw literal lookup and missed the key
+			// entirely, so parseOrigins fell back to its wildcard default and a
+			// config that restricted the origin echoed "*" instead.
+			expLines: []string{corsCharAllowHeadersLine, baseMethods},
 			expCode:  http.StatusFound, expBody: corsCharBody, expInner: 1,
 		},
 		{
@@ -803,10 +810,17 @@ func Test_CORSContract_ParseOriginsEvaluatedOnce(t *testing.T) {
 	}), corsCharHeaderLines(fresh.Header()))
 }
 
-// Test_CORSContract_ConfigMutationAffectsHeaderLoop pins the other half: the
-// custom-header loop DOES read the map per request, so keys added after
-// construction show up immediately.
-func Test_CORSContract_ConfigMutationAffectsHeaderLoop(t *testing.T) {
+// Test_CORSContract_ConfigMutationIsIgnoredAfterConstruction pins the other
+// half. The configuration is folded onto canonical header keys once, inside
+// CORS, so a caller that mutates the map afterwards changes nothing.
+//
+// The custom-header loop used to read the map on every request, which made
+// post-construction keys appear immediately. That was never a feature worth
+// keeping: the map is read from every serving goroutine, so a caller mutating
+// it while requests are in flight is a data race, and the origin allow-list had
+// already been resolved once at construction — so the two halves of the same
+// config disagreed about when it was read.
+func Test_CORSContract_ConfigMutationIsIgnoredAfterConstruction(t *testing.T) {
 	cfg := map[string]string{}
 	routes := []string{http.MethodGet}
 	handler := CORS(cfg, &routes)(&corsCharSpyHandler{})
@@ -825,11 +839,8 @@ func Test_CORSContract_ConfigMutationAffectsHeaderLoop(t *testing.T) {
 	handler.ServeHTTP(after, httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/hello", http.NoBody))
 
 	assert.Equal(t, corsCharSorted([]string{
-		corsCharAllowHeadersLine + ", clientid",
-		corsCharMethodsLine("GET, PATCH"),
-		corsCharOriginLine("*"),
-		"Access-Control-Max-Age: 42",
-	}), corsCharHeaderLines(after.Header()))
+		corsCharAllowHeadersLine, corsCharMethodsLine("GET, OPTIONS"), corsCharOriginLine("*"),
+	}), corsCharHeaderLines(after.Header()), "the response must be identical to the one before the mutation")
 }
 
 // Test_CORSContract_CustomHeaderLoopIsOrderIndependent pins that Go's random
@@ -1054,6 +1065,109 @@ func Test_CORSContract_SetMiddlewareHeadersDirectSnapshot(t *testing.T) {
 			setMiddlewareHeaders(tc.config, tc.routes, w, tc.origin, tc.allowed)
 
 			assert.Equal(t, corsCharSorted(tc.expLines), corsCharHeaderLines(w.Header()))
+		})
+	}
+}
+
+// TestCORS_OriginAllowListMatchedByCanonicalKey is the regression test for a config that restricted
+// the origin being turned into one that echoed a wildcard.
+//
+// setMiddlewareHeaders classifies config entries by canonical header name, but the allow-list was
+// read with a raw literal lookup. A caller spelling the key "access-control-allow-origin" — CORS is
+// exported, so callers do build this map — had it dropped by the classifier and missed by
+// parseOrigins, which then fell back to its wildcard default and sent "*" to an unlisted origin.
+func TestCORS_OriginAllowListMatchedByCanonicalKey(t *testing.T) {
+	spellings := []string{
+		"Access-Control-Allow-Origin",
+		"access-control-allow-origin",
+		"ACCESS-CONTROL-ALLOW-ORIGIN",
+		"Access-control-allow-origin",
+	}
+
+	for _, spelling := range spellings {
+		t.Run(spelling, func(t *testing.T) {
+			routes := []string{http.MethodGet}
+			handler := CORS(map[string]string{spelling: "https://trusted.com"}, &routes)(
+				http.HandlerFunc(func(http.ResponseWriter, *http.Request) {}))
+
+			unlisted := httptest.NewRecorder()
+			req := httptest.NewRequest(http.MethodGet, "/", http.NoBody)
+			req.Header.Set("Origin", "https://evil.com")
+			handler.ServeHTTP(unlisted, req)
+
+			assert.Empty(t, unlisted.Header().Get(headerAccessControlAllowOrigin),
+				"an unlisted origin must not be granted access under any spelling of the config key")
+
+			listed := httptest.NewRecorder()
+			req = httptest.NewRequest(http.MethodGet, "/", http.NoBody)
+			req.Header.Set("Origin", "https://trusted.com")
+			handler.ServeHTTP(listed, req)
+
+			assert.Equal(t, "https://trusted.com", listed.Header().Get(headerAccessControlAllowOrigin))
+			assert.Equal(t, "Origin", listed.Header().Get("Vary"),
+				"a negotiated origin must not be cached across origins")
+		})
+	}
+}
+
+// TestCORS_DuplicateSpellingsResolveDeterministically pins the precedence rule. Two spellings of one
+// header are one header, and the map they arrive in has no order, so resolving the collision during
+// the per-request walk let map iteration decide the winner — a different value could be sent on
+// different requests within a single process.
+func TestCORS_DuplicateSpellingsResolveDeterministically(t *testing.T) {
+	routes := []string{http.MethodGet}
+	handler := CORS(map[string]string{
+		"Access-Control-Allow-Headers": "X-Canonical",
+		"access-control-allow-headers": "x-lower",
+		"ACCESS-CONTROL-ALLOW-HEADERS": "X-UPPER",
+	}, &routes)(http.HandlerFunc(func(http.ResponseWriter, *http.Request) {}))
+
+	// Many requests, because the bug this guards was probabilistic.
+	for range 50 {
+		w := httptest.NewRecorder()
+		handler.ServeHTTP(w, httptest.NewRequest(http.MethodGet, "/", http.NoBody))
+
+		assert.Equal(t, allowedHeaders+", X-Canonical", w.Header().Get(headerAccessControlAllowHeaders),
+			"the exactly-canonical spelling must win, on every request")
+	}
+}
+
+// TestCanonicalizeConfig_Precedence covers the fold directly, including the tie-break among
+// non-canonical spellings where no key is the canonical one.
+func TestCanonicalizeConfig_Precedence(t *testing.T) {
+	tests := []struct {
+		name string
+		in   map[string]string
+		want map[string]string
+	}{
+		{
+			name: "canonical spelling beats every other",
+			in:   map[string]string{"x-custom": "lower", "X-Custom": "canonical", "X-CUSTOM": "upper"},
+			want: map[string]string{"X-Custom": "canonical"},
+		},
+		{
+			name: "without a canonical spelling the smallest key wins",
+			in:   map[string]string{"x-custom": "lower", "X-CUSTOM": "upper"},
+			want: map[string]string{"X-Custom": "upper"},
+		},
+		{
+			name: "distinct headers are all kept",
+			in:   map[string]string{"x-one": "1", "X-Two": "2"},
+			want: map[string]string{"X-One": "1", "X-Two": "2"},
+		},
+		{
+			name: "empty config stays empty",
+			in:   map[string]string{},
+			want: map[string]string{},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Repeated, because the property under test is independence from map iteration order.
+			for range 50 {
+				assert.Equal(t, tt.want, canonicalizeConfig(tt.in))
+			}
 		})
 	}
 }
