@@ -1,28 +1,46 @@
 package testutil
 
 import (
+	"context"
 	"fmt"
 	"net"
+	"os"
 	"strconv"
 	"testing"
 
 	"github.com/stretchr/testify/require"
 )
 
+// Environment variables the framework reads its listen ports from.
+const (
+	httpPortEnv    = "HTTP_PORT"
+	metricsPortEnv = "METRICS_PORT"
+	grpcPortEnv    = "GRPC_PORT"
+)
+
 // GetFreePort asks the kernel for a free open port that is ready to use for tests.
 func GetFreePort(t *testing.T) int {
 	t.Helper()
 
-	lc := net.ListenConfig{}
-	listener, err := lc.Listen(t.Context(), "tcp", "localhost:0")
-	require.NoError(t, err, "Failed to get a free port.")
-
-	port := listener.Addr().(*net.TCPAddr).Port
-
-	err = listener.Close()
+	port, err := reserveFreePort(t.Context())
 	require.NoError(t, err, "Failed to get a free port.")
 
 	return port
+}
+
+// reserveFreePort asks the kernel for a free open port. It is the plumbing behind GetFreePort and
+// ReserveServerPorts, which differ only in how they report a failure.
+func reserveFreePort(ctx context.Context) (int, error) {
+	lc := net.ListenConfig{}
+
+	listener, err := lc.Listen(ctx, "tcp", "localhost:0")
+	if err != nil {
+		return 0, err
+	}
+
+	port := listener.Addr().(*net.TCPAddr).Port
+
+	return port, listener.Close()
 }
 
 // ServiceConfigs holds the configuration details for different server components.
@@ -55,10 +73,40 @@ func NewServerConfigs(t *testing.T) *ServiceConfigs {
 	metricsPort := GetFreePort(t)
 	grpcPort := GetFreePort(t)
 
-	t.Setenv("HTTP_PORT", strconv.Itoa(httpPort))
-	t.Setenv("METRICS_PORT", strconv.Itoa(metricsPort))
-	t.Setenv("GRPC_PORT", strconv.Itoa(grpcPort))
+	t.Setenv(httpPortEnv, strconv.Itoa(httpPort))
+	t.Setenv(metricsPortEnv, strconv.Itoa(metricsPort))
+	t.Setenv(grpcPortEnv, strconv.Itoa(grpcPort))
 
+	return newServiceConfigs(httpPort, metricsPort, grpcPort)
+}
+
+// ReserveServerPorts is NewServerConfigs for a caller that has no *testing.T to fail on — a
+// TestMain, which gets only a *testing.M, is the usual one. It reports a failure by returning an
+// error, and sets the ports with os.Setenv rather than t.Setenv, there being no test scope to
+// restore them at the end of. Prefer NewServerConfigs wherever a *testing.T is in hand.
+func ReserveServerPorts() (*ServiceConfigs, error) {
+	// A slice rather than a map: the order the ports are reserved in, and the name that appears in
+	// an error, are then the same on every run.
+	names := []string{httpPortEnv, metricsPortEnv, grpcPortEnv}
+	ports := make([]int, len(names))
+
+	for i, name := range names {
+		port, err := reserveFreePort(context.Background())
+		if err != nil {
+			return nil, fmt.Errorf("failed to reserve a free %s: %w", name, err)
+		}
+
+		ports[i] = port
+
+		if err := os.Setenv(name, strconv.Itoa(port)); err != nil {
+			return nil, fmt.Errorf("failed to set %s: %w", name, err)
+		}
+	}
+
+	return newServiceConfigs(ports[0], ports[1], ports[2]), nil
+}
+
+func newServiceConfigs(httpPort, metricsPort, grpcPort int) *ServiceConfigs {
 	return &ServiceConfigs{
 		HTTPPort:    httpPort,
 		HTTPHost:    fmt.Sprintf("http://localhost:%d", httpPort),

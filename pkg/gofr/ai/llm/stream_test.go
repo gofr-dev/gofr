@@ -226,7 +226,7 @@ func (c *closeTracker) Close() error {
 
 func TestStreamer_CloseClosesBody(t *testing.T) {
 	ct := &closeTracker{Reader: strings.NewReader(`data: [DONE]` + "\n")}
-	s := newStreamer(ct, &UsageFields{})
+	s := newStreamer(ct, &UsageFields{}, nil)
 
 	_, ok := s.Next()
 	assert.False(t, ok)
