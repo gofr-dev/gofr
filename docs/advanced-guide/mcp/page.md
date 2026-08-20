@@ -75,10 +75,16 @@ be the worse outcome — an orchestrator would report it healthy while agents co
 Note the default is `8200`, which is also [Vault](https://developer.hashicorp.com/vault)'s default
 port. If you run Vault locally, set `MCP_PORT` to something else.
 
-The port is claimed before any server starts, so this decision is made while nothing is yet serving
-and shutdown hooks and datasource cleanup are unaffected. If you would rather run without the
-transport, `MCP_PORT=0` is the explicit way to say so — tools stay callable in-process through
-`ctx.LLM().Tools()`, because registration is independent of the transport.
+The port is claimed before any server starts, so this decision is made while nothing is yet serving.
+The startup hooks have already run by then, so GoFr runs shutdown on the way out to release the
+datasources they opened. If you would rather run without the transport, `MCP_PORT=0` is the explicit
+way to say so — tools stay callable in-process through `ctx.LLM().Tools()`, because registration is
+independent of the transport.
+
+`MCP_PORT` is read as a number, so `0`, `00`, `+0` and ` 0 ` all disable the transport. A value that
+is not a number, or one outside the valid port range `1`–`65535`, is reported and falls back to the
+default `8200` — an unbindable port would otherwise stop the whole service, every transport
+included, with a message about occupancy that does not describe the problem.
 
 ## Building an agent
 

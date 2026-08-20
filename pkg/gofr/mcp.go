@@ -7,6 +7,7 @@ import (
 	"net"
 	"net/http"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 
@@ -61,6 +62,12 @@ func (a *App) EnableMCP(opts ...MCPOption) {
 // mcpPort resolves the port to serve MCP on from configuration. It reports false only when the
 // server is switched off outright with MCP_PORT=0.
 //
+// Every other malformed value resolves to the default rather than aborting: the port is claimed for
+// real later, in mcpServer.bind, and a value that could never be bound (a typo, an out-of-range
+// number) would otherwise turn into a permanent startup failure that the bind-time remedy - "set
+// MCP_PORT to a free port" - does not describe. Folding loudly keeps the failure at the one place
+// that can distinguish a busy port from an impossible one.
+//
 // It deliberately does not check whether the port can be bound. The previous dial-based probe did,
 // and answered with Logger.Fatalf — os.Exit from library code, during setup, with no chance to clean
 // up and no way for a test to survive it. The probe was also the wrong instrument: a dial reports
@@ -71,15 +78,42 @@ func (a *App) EnableMCP(opts ...MCPOption) {
 // mcpServer.bind takes the port for real instead, and does it where a failure can abort the run
 // properly.
 func (a *App) mcpPort() (int, bool) {
-	portStr := a.Config.Get("MCP_PORT")
-	if portStr == "0" {
+	portStr := strings.TrimSpace(a.Config.Get("MCP_PORT"))
+	if portStr == "" {
+		return defaultMCPPort, true
+	}
+
+	// The configured value is deliberately not echoed back. It comes from Config.Get, which CodeQL
+	// treats as a potentially sensitive source - a config store holds secrets as well as ports - and
+	// a log line is the wrong place to reproduce one. The operator knows what they set; what they
+	// need from this message is which variable was rejected and what happened instead.
+	port, err := strconv.Atoi(portStr)
+	if err != nil {
+		a.container.Logger.Errorf("MCP_PORT is not a number; serving MCP on the default port %d instead. "+
+			"Set MCP_PORT to a valid port, or MCP_PORT=0 to run without the MCP transport while keeping "+
+			"tools available in-process.", defaultMCPPort)
+
+		return defaultMCPPort, true
+	}
+
+	// Comparing the parsed number rather than the raw string is what makes "00", "+0" and " 0 " mean
+	// the same thing as "0". An operator who wrote one of those meant to switch the transport off;
+	// the string compare this replaces fell through to the default instead and silently enabled it on
+	// 8200 - the very port the default is documented to collide with.
+	if port == 0 {
+		// The literal, not portStr: the parsed value is known to be zero, and this avoids echoing
+		// the raw config value for the reason given above.
 		a.container.Logger.Logf("MCP server is disabled (MCP_PORT=0)")
+
 		return 0, false
 	}
 
-	port, err := strconv.Atoi(portStr)
-	if err != nil || port <= 0 {
-		port = defaultMCPPort
+	if port < minTCPPort || port > maxTCPPort {
+		a.container.Logger.Errorf("MCP_PORT=%d is outside the valid port range %d-%d; serving MCP on the "+
+			"default port %d instead. Set MCP_PORT=0 to run without the MCP transport while keeping tools "+
+			"available in-process.", port, minTCPPort, maxTCPPort, defaultMCPPort)
+
+		return defaultMCPPort, true
 	}
 
 	return port, true
@@ -116,6 +150,16 @@ func newMCPServer(port int, handler http.Handler) *mcpServer {
 // Bind to loopback: the MCP transport authenticates only by passing through per-handler auth, so it
 // must not become a second network-reachable ingress to the service's handlers.
 func (m *mcpServer) bind(ctx context.Context) error {
+	// Check cancellation before listening rather than leaving it to ListenConfig. Listen only
+	// observes the context while resolving a name, and the address here is a literal 127.0.0.1, so
+	// there is no resolver step and a signal arriving in this window would otherwise go unnoticed -
+	// the bind would succeed and startup would continue on a context that is already done. Measured:
+	// Listen with an already-canceled context returns a live listener for "127.0.0.1:0" and
+	// context.Canceled only for "localhost:0".
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+
 	l, err := (&net.ListenConfig{}).Listen(ctx, "tcp", fmt.Sprintf("127.0.0.1:%d", m.port))
 	if err != nil {
 		return err
