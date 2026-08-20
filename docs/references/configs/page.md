@@ -171,6 +171,12 @@ This document lists all the configuration options supported by the GoFr framewor
 
 ---
 
+-  GOFR_ROUTER
+-  Route matcher for the HTTP server. Set to `trie` to opt into the O(path length) trie index instead of the default linear scan — see [Routing Performance](/docs/advanced-guide/routing-performance). Any other value falls back to `mux`.
+-  mux
+
+---
+
 -  LOG_DISABLE_PROBES
 -  Disable log probes for health checks
 -  false

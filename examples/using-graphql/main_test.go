@@ -8,31 +8,12 @@ import (
 	"net/http"
 	"strconv"
 	"testing"
-	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"gofr.dev/pkg/gofr"
 	"gofr.dev/pkg/gofr/testutil"
 )
-
-func waitForReady(t *testing.T, host string) {
-	t.Helper()
-	client := &http.Client{Timeout: 1 * time.Second}
-	deadline := time.Now().Add(10 * time.Second)
-
-	for time.Now().Before(deadline) {
-		resp, err := client.Get(host + "/.well-known/alive")
-		if err == nil {
-			resp.Body.Close()
-			if resp.StatusCode == http.StatusOK {
-				return
-			}
-		}
-		time.Sleep(100 * time.Millisecond)
-	}
-	t.Fatalf("Server at %s not ready after 10s", host)
-}
 
 // newTestApp creates a GoFr application configured for integration testing.
 func newTestApp(t *testing.T) (*gofr.App, string) {
@@ -93,7 +74,7 @@ func TestIntegration_GraphQL(t *testing.T) {
 
 	go app.Run()
 
-	waitForReady(t, host)
+	testutil.WaitForHTTPServer(t, host)
 
 	t.Run("hello query", func(t *testing.T) {
 		query := `{"query": "{ hello }"}`
