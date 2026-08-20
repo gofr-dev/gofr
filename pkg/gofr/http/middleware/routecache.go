@@ -51,7 +51,14 @@ type routeKey struct {
 	method, route string
 }
 
-// routeCache is a bounded, concurrent cache keyed on routeKey.
+// routeCache is a bounded, concurrent cache keyed on any comparable per-route
+// key.
+//
+// The key is `any` rather than routeKey because the caches sharing this bound do
+// not share a key shape: the tracer keys on (method, route) while the metrics
+// recorders key on (path, method, status) and (path, method). What they DO share
+// is the exposure - all three are fed from the same attacker-influenced method
+// and path - so the bound is what belongs in one place, not the key type.
 //
 // Reads stay on sync.Map's lock-free path. Writes stop at routeCacheLimit rather
 // than evicting: the entries are pure functions of their key and are all equally
@@ -65,7 +72,7 @@ type routeCache struct {
 }
 
 // load returns the cached value for key, if present.
-func (c *routeCache) load(key routeKey) (any, bool) {
+func (c *routeCache) load(key any) (any, bool) {
 	return c.entries.Load(key)
 }
 
@@ -74,7 +81,7 @@ func (c *routeCache) load(key routeKey) (any, bool) {
 // The count is advisory: concurrent stores can race past the cap by the number of
 // goroutines in flight, which is bounded and harmless. What matters is that the
 // cache cannot grow without limit.
-func (c *routeCache) store(key routeKey, value any) {
+func (c *routeCache) store(key, value any) {
 	if c.count.Load() >= routeCacheLimit {
 		return
 	}
