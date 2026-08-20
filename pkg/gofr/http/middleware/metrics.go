@@ -10,8 +10,9 @@ import (
 	"sync"
 	"time"
 
-	"github.com/gorilla/mux"
 	"go.opentelemetry.io/otel/attribute"
+
+	gofrhttp "gofr.dev/pkg/gofr/http"
 )
 
 type metrics interface {
@@ -89,16 +90,13 @@ func Metrics(metrics metrics) func(inner http.Handler) http.Handler {
 				srw = &StatusResponseWriter{ResponseWriter: w}
 			}
 
-			// mux.CurrentRoute is nil for unmatched routes (404), and even
-			// when matched, GetPathTemplate can return "" for routes built
-			// without an explicit Path() (e.g. PathPrefix-only handlers).
-			// Fall back to r.URL.Path in both cases so the metric carries a
-			// usable path label instead of caching an empty key.
-			var path string
-			if cr := mux.CurrentRoute(r); cr != nil {
-				path, _ = cr.GetPathTemplate()
-			}
-
+			// Resolve the route template for the metric label via the
+			// router-agnostic accessor (it reads the trie router's context key
+			// or mux.CurrentRoute, whichever applies). It is "" for unmatched
+			// routes and for routes built without an explicit Path() (e.g.
+			// PathPrefix-only handlers), so fall back to r.URL.Path there to
+			// keep a usable path label rather than an empty key.
+			path := gofrhttp.RouteTemplate(r)
 			if path == "" {
 				path = r.URL.Path
 			}

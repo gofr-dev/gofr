@@ -125,3 +125,38 @@ func TestServiceConfigs_GetOrDefault(t *testing.T) {
 		})
 	}
 }
+
+func TestReserveServerPorts(t *testing.T) {
+	// os.Setenv rather than t.Setenv, so restore what this test displaces.
+	for _, key := range []string{"HTTP_PORT", "METRICS_PORT", "GRPC_PORT"} {
+		t.Setenv(key, os.Getenv(key))
+	}
+
+	configs, err := ReserveServerPorts()
+	require.NoError(t, err, "ReserveServerPorts should not fail")
+
+	tests := []struct {
+		desc     string
+		envKey   string
+		port     int
+		host     string
+		expected string
+	}{
+		{"http", "HTTP_PORT", configs.HTTPPort, configs.HTTPHost, "http://localhost:"},
+		{"metrics", "METRICS_PORT", configs.MetricsPort, configs.MetricsHost, "http://localhost:"},
+		{"grpc", "GRPC_PORT", configs.GRPCPort, configs.GRPCHost, "localhost:"},
+	}
+
+	for i, tc := range tests {
+		assert.NotZero(t, tc.port, "TEST[%d], Failed.\n%s", i, tc.desc)
+		assert.Equal(t, strconv.Itoa(tc.port), os.Getenv(tc.envKey), "TEST[%d], Failed.\n%s", i, tc.desc)
+		assert.Equal(t, tc.expected+strconv.Itoa(tc.port), tc.host, "TEST[%d], Failed.\n%s", i, tc.desc)
+
+		// The reserved port must actually be bindable.
+		lc := net.ListenConfig{}
+
+		listener, err := lc.Listen(t.Context(), "tcp", fmt.Sprintf("localhost:%d", tc.port))
+		require.NoError(t, err, "TEST[%d], Failed.\n%s", i, tc.desc)
+		require.NoError(t, listener.Close(), "TEST[%d], Failed.\n%s", i, tc.desc)
+	}
+}
