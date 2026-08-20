@@ -22,8 +22,23 @@ const (
 var (
 	canonicalAllowOrigin  = textproto.CanonicalMIMEHeaderKey(headerAccessControlAllowOrigin)
 	canonicalAllowMethods = textproto.CanonicalMIMEHeaderKey(headerAccessControlAllowMethods)
-	wildcardOrigin        = []string{"*"}
+	canonicalAllowHeaders = textproto.CanonicalMIMEHeaderKey(headerAccessControlAllowHeaders)
+	wildcardOrigin        = sharedValue("*")
 )
+
+// sharedValue builds a header value slice that is safe to share across every
+// response.
+//
+// The safety rests entirely on len == cap == 1, which a one-element composite
+// literal guarantees: a later Header.Add on the same key sees no spare capacity
+// and appends into a NEWLY allocated array instead of writing into this one.
+// Every shared value goes through this function so the invariant has a single
+// place to be stated, and TestSharedHeaderValuesHaveNoSpareCapacity asserts it
+// for all of them -- a slice with room to grow would let one response scribble
+// on every other response's headers, process-wide.
+func sharedValue(v string) []string {
+	return []string{v}
+}
 
 // CORS is a middleware that adds CORS (Cross-Origin Resource Sharing) headers to the response.
 // It supports multiple allowed origins via comma-separated values in the
@@ -31,7 +46,8 @@ var (
 // the middleware dynamically matches the request's Origin header and responds
 // with the matched origin, adding a Vary: Origin header for correct caching.
 func CORS(middlewareConfigs map[string]string, routes *[]string) func(inner http.Handler) http.Handler {
-	allowedOrigins := parseOrigins(middlewareConfigs[headerAccessControlAllowOrigin])
+	configs := canonicalizeConfig(middlewareConfigs)
+	allowedOrigins := parseOrigins(configs[headerAccessControlAllowOrigin])
 
 	// Every header this middleware writes, apart from Allow-Origin, is a pure
 	// function of the configuration and the registered route set. Both are fixed
@@ -50,7 +66,7 @@ func CORS(middlewareConfigs map[string]string, routes *[]string) func(inner http
 	// startup, before the server accepts a request, so the set is complete by the time this runs --
 	// the same lifecycle the router's own index relies on.
 	build := func() {
-		fixed, methods = buildFixedHeaders(middlewareConfigs, *routes)
+		fixed, methods = buildFixedHeaders(configs, *routes)
 	}
 
 	return func(inner http.Handler) http.Handler {
@@ -85,6 +101,14 @@ type headerValue struct {
 // are registered. It returns them alongside the Access-Control-Allow-Methods
 // value, which is kept separate only because it is the one derived from routes.
 //
+// middlewareConfigs arrives already folded onto canonical header keys by
+// canonicalizeConfig. That matters for more than tidiness: this function
+// classifies entries by key and writes everything it does not recognize into
+// fixed, and fixed is applied AFTER the per-request origin negotiation. Matching
+// on the raw key would send a config spelled "access-control-allow-origin" to the
+// default branch, where it would be canonicalized into the very header the
+// allow-list just negotiated and overwrite it.
+//
 // The method list is joined without appending to the caller's slice: that slice
 // is the router's RegisteredRoutes, and appending in place would write into it
 // whenever its capacity exceeded its length.
@@ -94,7 +118,7 @@ func buildFixedHeaders(middlewareConfigs map[string]string, routes []string) (fi
 		allowMethods = custom
 	}
 
-	methods = []string{allowMethods}
+	methods = sharedValue(allowMethods)
 
 	allowHeaders := allowedHeaders
 	if custom, ok := middlewareConfigs[headerAccessControlAllowHeaders]; ok && custom != "" {
@@ -102,8 +126,8 @@ func buildFixedHeaders(middlewareConfigs map[string]string, routes []string) (fi
 	}
 
 	fixed = append(fixed, headerValue{
-		key:   textproto.CanonicalMIMEHeaderKey(headerAccessControlAllowHeaders),
-		value: []string{allowHeaders},
+		key:   canonicalAllowHeaders,
+		value: sharedValue(allowHeaders),
 	})
 
 	// Any other configured header is passed through unchanged. Allow-Origin is
@@ -113,10 +137,7 @@ func buildFixedHeaders(middlewareConfigs map[string]string, routes []string) (fi
 		case headerAccessControlAllowOrigin, headerAccessControlAllowMethods, headerAccessControlAllowHeaders:
 			continue
 		default:
-			fixed = append(fixed, headerValue{
-				key:   textproto.CanonicalMIMEHeaderKey(header),
-				value: []string{value},
-			})
+			fixed = append(fixed, headerValue{key: header, value: sharedValue(value)})
 		}
 	}
 
@@ -135,7 +156,6 @@ func joinAllowedMethods(routes []string) string {
 
 // setMiddlewareHeaders writes the CORS headers for one response. Only
 // Allow-Origin depends on the request; everything else was built once.
-// setMiddlewareHeaders writes the CORS headers for one response.
 //
 // The value slices are shared process-wide rather than copied per response, which is safe only
 // because each has len == cap == 1: a later Header.Add on the same key appends into a NEWLY
@@ -159,6 +179,50 @@ func setMiddlewareHeaders(w http.ResponseWriter, origin string, allowedOrigins m
 	for _, h := range fixed {
 		header[h.key] = h.value
 	}
+}
+
+// canonicalizeConfig folds the caller's configuration onto canonical header keys,
+// once, at construction.
+//
+// Header names are case-insensitive and net/http canonicalizes whatever it is
+// given, so two spellings are one header. Without this fold the allow-list read
+// by parseOrigins used a raw literal lookup while buildFixedHeaders classified by
+// its own raw key, and the two disagreed: a caller spelling the key
+// "access-control-allow-origin" -- CORS is exported, so callers do build this map
+// -- had it missed by parseOrigins, which fell back to its wildcard default, AND
+// routed to buildFixedHeaders' default branch, which canonicalizes it into fixed.
+// Since fixed is applied after origin negotiation, that config both lost its
+// allow-list and overwrote the negotiated header.
+//
+// Precedence is explicit rather than left to map iteration order, which would
+// otherwise let two spellings of one header resolve differently on different
+// requests within a single process: an exactly-canonical spelling always wins,
+// and among the rest the lexicographically smallest key does.
+func canonicalizeConfig(cfg map[string]string) map[string]string {
+	canonical := make(map[string]string, len(cfg))
+	winner := make(map[string]string, len(cfg))
+
+	for key, value := range cfg {
+		ck := http.CanonicalHeaderKey(key)
+
+		if prev, ok := winner[ck]; ok && !better(key, prev, ck) {
+			continue
+		}
+
+		winner[ck] = key
+		canonical[ck] = value
+	}
+
+	return canonical
+}
+
+// better reports whether raw key a should beat b for the canonical slot ck.
+func better(a, b, ck string) bool {
+	if (a == ck) != (b == ck) {
+		return a == ck
+	}
+
+	return a < b
 }
 
 // parseOrigins splits a comma-separated origin string into a set.
