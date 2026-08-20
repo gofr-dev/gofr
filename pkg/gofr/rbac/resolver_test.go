@@ -63,6 +63,11 @@ func TestGetEndpointForRequest_MostSpecificWins(t *testing.T) {
 	narrow := EndpointMapping{Path: "/admin/orgs/{org_id}", Methods: []string{"DELETE"}, RequiredPermissions: []string{"admin:write"}}
 	literal := EndpointMapping{Path: "/admin/orgs/global", Methods: []string{"DELETE"}, RequiredPermissions: []string{"admin:super"}}
 
+	// A constrained variable admits fewer paths than a free one, so it has to outrank it -
+	// otherwise these two score equally and the sort falls through to declaration order.
+	free := EndpointMapping{Path: "/users/{id}", Methods: []string{"*"}, RequiredPermissions: []string{"users:read"}}
+	constrained := EndpointMapping{Path: "/users/{id:[0-9]+}", Methods: []string{"*"}, RequiredPermissions: []string{"users:write"}}
+
 	testCases := []struct {
 		desc      string
 		endpoints []EndpointMapping
@@ -73,6 +78,9 @@ func TestGetEndpointForRequest_MostSpecificWins(t *testing.T) {
 		{"declaration order is irrelevant", []EndpointMapping{narrow, broad}, "/admin/orgs/123", "/admin/orgs/{org_id}"},
 		{"literal wins over param", []EndpointMapping{broad, narrow, literal}, "/admin/orgs/global", "/admin/orgs/global"},
 		{"broad wins when it is the only match", []EndpointMapping{broad, narrow}, "/admin/settings", "/admin/{path:.*}"},
+		{"constrained variable wins over free one", []EndpointMapping{free, constrained}, "/users/42", "/users/{id:[0-9]+}"},
+		{"constrained variable wins in either declaration order", []EndpointMapping{constrained, free}, "/users/42", "/users/{id:[0-9]+}"},
+		{"free variable still matches what the constraint rejects", []EndpointMapping{constrained, free}, "/users/me", "/users/{id}"},
 	}
 
 	for _, tc := range testCases {
@@ -178,11 +186,11 @@ func TestMiddleware_WildcardMethodEnforcement(t *testing.T) {
 	}
 }
 
-func TestLoadPermissions_InvalidMuxPattern(t *testing.T) {
+func TestLoadPermissions_UncompilablePatternIsNonFatal(t *testing.T) {
 	testCases := []struct {
 		desc      string
 		path      string
-		expectErr bool
+		expectLog bool
 	}{
 		{"unparsable regex constraint", "/api/{id:[}", true},
 		{"unbalanced parenthesis in constraint", "/api/{id:(}", true},
@@ -203,15 +211,56 @@ func TestLoadPermissions_InvalidMuxPattern(t *testing.T) {
 
 			defer os.Remove(path)
 
-			config, err := LoadPermissions("test_pattern_config.json", nil, nil, nil)
+			logger := &mockLogger{}
 
-			if tc.expectErr {
-				require.Error(t, err)
-				assert.Nil(t, config)
+			config, err := LoadPermissions("test_pattern_config.json", logger, nil, nil)
+
+			// A pattern mux cannot compile does not stop the app from booting - it is logged loudly
+			// instead, because the endpoint it governs will silently never match.
+			require.NoError(t, err)
+			require.NotNil(t, config)
+
+			if tc.expectLog {
+				require.Len(t, logger.errorLogs, 1)
+				assert.Contains(t, logger.errorLogs[0], tc.path)
+				assert.Contains(t, logger.errorLogs[0], "NOT enforced")
 			} else {
-				require.NoError(t, err)
-				assert.NotNil(t, config)
+				assert.Empty(t, logger.errorLogs)
 			}
 		})
 	}
+}
+
+func TestLoadPermissions_UncompilablePatternWithoutLogger(t *testing.T) {
+	fileContent := `{
+		"roles": [{"name": "admin", "permissions": ["admin:read"]}],
+		"endpoints": [{"path": "/api/{id:[}", "methods": ["GET"], "requiredPermissions": ["admin:read"]}]
+	}`
+
+	path, err := createTestConfigFile("test_pattern_nolog_config.json", fileContent)
+	require.NoError(t, err)
+
+	defer os.Remove(path)
+
+	config, err := LoadPermissions("test_pattern_nolog_config.json", nil, nil, nil)
+
+	require.NoError(t, err)
+	assert.NotNil(t, config)
+}
+
+func TestLoadPermissions_UnbalancedBracesStillFails(t *testing.T) {
+	fileContent := `{
+		"roles": [{"name": "admin", "permissions": ["admin:read"]}],
+		"endpoints": [{"path": "/api/{id}}", "methods": ["GET"], "requiredPermissions": ["admin:read"]}]
+	}`
+
+	path, err := createTestConfigFile("test_pattern_braces_config.json", fileContent)
+	require.NoError(t, err)
+
+	defer os.Remove(path)
+
+	config, err := LoadPermissions("test_pattern_braces_config.json", nil, nil, nil)
+
+	require.ErrorIs(t, err, errUnbalancedBraces)
+	assert.Nil(t, config)
 }

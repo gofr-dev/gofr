@@ -6,12 +6,14 @@ import (
 )
 
 // Segment specificity scores, compared segment by segment to order overlapping rules.
-// A literal segment constrains a path more than a single-segment variable, which in turn
-// constrains it more than a multi-segment catch-all.
+// Each level constrains the set of paths a segment can match more tightly than the one below it:
+// a literal matches one string, a constrained variable matches one segment drawn from a regex,
+// a free variable matches any one segment, and a catch-all matches any number of them.
 const (
-	segCatchAll = iota + 1 // {path:.*} - matches any number of segments
-	segVariable            // {id} or {id:[0-9]+} - matches exactly one segment
-	segLiteral             // users - matches itself
+	segCatchAll    = iota + 1 // {path:.*} - matches any number of segments
+	segVariable               // {id} - matches exactly one segment, unconstrained
+	segConstrained            // {id:[0-9]+} - matches exactly one segment, and only some of them
+	segLiteral                // users - matches itself
 )
 
 // endpointRule is one (path, method) pair from the config, pre-scored so that overlapping
@@ -122,6 +124,8 @@ func pathSpecificity(pattern string) []int {
 			scores = append(scores, segLiteral)
 		case isCatchAllVariable(segment):
 			scores = append(scores, segCatchAll)
+		case strings.Contains(segment, ":"):
+			scores = append(scores, segConstrained)
 		default:
 			scores = append(scores, segVariable)
 		}
@@ -131,8 +135,15 @@ func pathSpecificity(pattern string) []int {
 }
 
 // isCatchAllVariable reports whether a "{name:regex}" segment can span multiple path
-// segments. Only the documented catch-all forms are treated as such; any other constraint
-// is assumed to stay within one segment.
+// segments. Only the documented catch-all forms - ".*" and ".+" - are recognized as such;
+// any other constraint is assumed to stay within one segment.
+//
+// The assumption is not always true. A constraint that admits "/" itself, such as
+// "{path:[a-z/]+}", spans multiple segments but is scored as a single-segment variable, so a
+// pattern using one can outrank a narrower pattern it fully contains and end up governing a
+// request the narrower entry was written for. Recognizing those in general means parsing the
+// constraint, which is not worth the machinery; write multi-segment matches as "{path:.*}"
+// or "{path:.+}", which are the documented forms, and the ordering holds.
 func isCatchAllVariable(segment string) bool {
 	inner := segment[1 : len(segment)-1]
 

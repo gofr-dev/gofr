@@ -225,6 +225,9 @@ func (c *Config) validateEndpointPath(path string, index int) error {
 		if err := validateMuxPattern(path); err != nil {
 			return fmt.Errorf("endpoint[%d]: invalid mux pattern: %w", index, err)
 		}
+
+		// Non-fatal: a pattern mux cannot compile loads, but never matches, so say so loudly.
+		c.logUncompilablePattern(path, index)
 	}
 
 	return nil
