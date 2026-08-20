@@ -173,6 +173,15 @@ func (a *authInfo) GetAPIKey() string {
 // Retaining any of them after the handler returns was already a bug, since
 // net/http forbids using the ResponseWriter then, but the cost of doing it is
 // larger now.
+//
+// The framework itself has one such path, and it is not a user bug: App.WebSocket
+// assigns ctx.Request = conn and then loops in handleWebSocketConnection for as
+// long as the socket lives. Reassigning that interface field used to make the
+// *gofrHTTP.Request unreachable, so the underlying *http.Request -- headers, URL,
+// the pathParams map -- could be collected while the connection stayed open. It
+// now shares an allocation with the still-live Context, so it is retained for the
+// connection's whole lifetime. Small per connection, but it scales with the number
+// of concurrent long-lived sockets.
 type httpContext struct {
 	ctx  Context
 	req  gofrHTTP.Request

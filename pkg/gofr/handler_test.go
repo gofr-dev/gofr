@@ -25,7 +25,6 @@ import (
 	"gofr.dev/pkg/gofr/config"
 	"gofr.dev/pkg/gofr/container"
 	gofrHTTP "gofr.dev/pkg/gofr/http"
-	"gofr.dev/pkg/gofr/http/middleware"
 	"gofr.dev/pkg/gofr/http/response"
 	"gofr.dev/pkg/gofr/logging"
 	"gofr.dev/pkg/gofr/testutil"
@@ -586,8 +585,11 @@ func TestLogErrorStillCarriesTraceID(t *testing.T) {
 			container: c,
 		}
 
+		// Chain from t.Context(), not context.Background(): the chained WithContext replaces the
+		// one NewRequestWithContext installed, so backgrounding it here would silently drop the
+		// test's cancellation and make the NewRequestWithContext call pointless.
 		req := httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/x", http.NoBody).
-			WithContext(trace.ContextWithSpanContext(context.Background(), sc))
+			WithContext(trace.ContextWithSpanContext(t.Context(), sc))
 
 		h.ServeHTTP(httptest.NewRecorder(), req)
 	})
@@ -599,20 +601,18 @@ func TestLogErrorStillCarriesTraceID(t *testing.T) {
 var errTraceIDGuard = errors.New("trace id guard")
 
 // buildRealPathRouter mirrors what a GoFr application actually serves: the handler is wrapped in
-// gofr's own handler{}, so newHTTPContext builds the Context/Request/Responder, the trace ID is
-// resolved, and the result goes back through responder.Respond as a JSON envelope.
+// gofr's own handler{}, so newHTTPContext builds the Context/Request/Responder and the result goes
+// back through responder.Respond as a JSON envelope.
 //
 // The existing BenchmarkRequest_FullChain family registers raw http.HandlerFunc values straight on
 // the router, so none of that code runs there — it measures the middleware chain only.
+//
+// The chain itself comes from useGoFrMiddleware rather than being rebuilt here, so there is one
+// definition to keep in sync with newHTTPServer.
 func buildRealPathRouter(c *container.Container) http.Handler {
 	r := gofrHTTP.NewRouter()
 
-	r.Use(
-		middleware.Tracer,
-		middleware.Logging(middleware.LogProbes{}, c.Logger),
-		middleware.CORS(map[string]string{}, r.RegisteredRoutes),
-		middleware.Metrics(c.Metrics()),
-	)
+	useGoFrMiddleware(r, c)
 
 	r.Add(http.MethodGet, "/real/{id}", handler{
 		function:  func(ctx *Context) (any, error) { return map[string]string{"id": ctx.PathParam("id")}, nil },
@@ -622,6 +622,12 @@ func buildRealPathRouter(c *container.Container) http.Handler {
 	return r
 }
 
+// BenchmarkRequest_RealHandlerPath measures the per-request allocations of the wrapped-handler path.
+//
+// Note what it does NOT exercise: the handler always returns a nil error, and the mock config
+// installs no real TracerProvider, so the span context is invalid. After this PR TraceID().String()
+// runs only inside logError, on the error path — so no trace ID is formatted here. The alloc delta
+// this reports is the Context/Request/Responder bundling alone, which is what the PR claims.
 func BenchmarkRequest_RealHandlerPath(b *testing.B) {
 	c := container.NewContainer(config.NewMockConfig(map[string]string{"LOG_LEVEL": "ERROR"}))
 	h := buildRealPathRouter(c)
