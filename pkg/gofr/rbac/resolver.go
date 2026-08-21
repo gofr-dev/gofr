@@ -196,8 +196,8 @@ func splitPatternSegments(pattern string) []string {
 }
 
 // isCatchAllVariable reports whether a "{name:regex}" segment can span multiple path
-// segments. Two forms qualify: the documented catch-alls ".*" and ".+", and any constraint
-// that admits "/" itself, such as "{path:[a-z/]+}" - it matches "/files/a/b/c" just as a
+// segments. Two kinds qualify: the documented ".*" and ".+" forms, and any constraint that
+// admits "/" itself, such as "{path:[a-z/]+}" - it matches "/files/a/b/c" just as a
 // catch-all would, so scoring it as a single-segment variable would let the loosest pattern in
 // the config outrank a narrower one it fully contains.
 //
