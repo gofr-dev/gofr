@@ -3,6 +3,11 @@ version: 2
 updates:
   - package-ecosystem: "gomod"
     open-pull-requests-limit: 10  # avoid spam, if no one reacts
+    # The tree has 32 go.mod directories. The globs below must cover all of
+    # them — `pkg/gofr/metrics/exporters/gcp` was matched by none of the
+    # original entries and so received no dependency updates at all, despite
+    # vendoring the GCP client libraries. When adding a module outside these
+    # paths, add its glob here too; nothing fails loudly when one is missed.
     directories:
       - "/"
       - "/examples/*"
@@ -10,6 +15,7 @@ updates:
       - "/pkg/gofr/datasource/file/*"
       - "/pkg/gofr/datasource/kv-store/*"
       - "/pkg/gofr/datasource/pubsub/*"
+      - "/pkg/gofr/metrics/exporters/*"
     schedule:
       interval: "weekly"
 
@@ -21,6 +27,24 @@ updates:
       interval: "weekly"
     groups:
       actions:
+        update-types:
+          - "minor"
+          - "patch"
+
+  # Base images were previously unmanaged entirely, which is how
+  # examples/http-server sat on alpine:3.14 — end-of-support 2023-05-01, so no
+  # musl/busybox/OpenSSL patches for over three years. Grouped so a weekly
+  # patch bump across the 11 Dockerfiles arrives as one PR rather than 11.
+  - package-ecosystem: "docker"
+    open-pull-requests-limit: 10  # avoid spam, if no one reacts
+    directories:
+      - "/"
+      - "/docs"
+      - "/examples/*"
+    schedule:
+      interval: "weekly"
+    groups:
+      docker:
         update-types:
           - "minor"
           - "patch"
