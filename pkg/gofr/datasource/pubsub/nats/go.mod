@@ -4,7 +4,7 @@ go 1.26.0
 
 require (
 	github.com/nats-io/nats-server/v2 v2.14.5
-	github.com/nats-io/nats.go v1.52.0
+	github.com/nats-io/nats.go v1.53.1
 	github.com/stretchr/testify v1.11.1
 	go.opentelemetry.io/otel v1.44.0
 	go.opentelemetry.io/otel/sdk v1.44.0
