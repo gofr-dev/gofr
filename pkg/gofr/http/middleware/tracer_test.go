@@ -727,3 +727,111 @@ func BenchmarkTracer_Recording(b *testing.B) {
 		router.ServeHTTP(w, req)
 	}
 }
+
+// TestHeaderCarrierIsAFaithfulValuesGetter is the regression test for silent
+// baggage loss.
+//
+// headerCarrier replaces propagation.HeaderCarrier to avoid canonicalizing the
+// lookup key on every request. The stdlib type it replaces satisfies
+// propagation.ValuesGetter, and propagation.Baggage.Extract type-asserts to that
+// interface to combine ALL values of the Baggage header. Implementing only
+// Get/Set/Keys failed the assertion, so Extract fell back to the single-value Get
+// and dropped every baggage member after the first -- silently, and only when a
+// request carried more than one Baggage header, which is legal per W3C and is
+// what proxies and service meshes commonly emit.
+//
+// The pre-existing equivalence test only compared Get and Keys, so it could not
+// catch this.
+func TestHeaderCarrierIsAFaithfulValuesGetter(t *testing.T) {
+	require.Implements(t, (*propagation.ValuesGetter)(nil), headerCarrier{},
+		"a carrier replacing propagation.HeaderCarrier must satisfy every interface it does")
+
+	tests := []struct {
+		name    string
+		values  []string
+		wantLen int
+	}{
+		{"multiple Baggage headers", []string{"k1=v1", "k2=v2", "k3=v3"}, 3},
+		{"two Baggage headers", []string{"a=1", "b=2"}, 2},
+		{"single header carrying several members", []string{"a=1,b=2"}, 2},
+		{"single header single member", []string{"only=1"}, 1},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			h := http.Header{}
+			for _, v := range tt.values {
+				h.Add("Baggage", v)
+			}
+
+			prop := propagation.Baggage{}
+
+			std := baggage.FromContext(prop.Extract(t.Context(), propagation.HeaderCarrier(h)))
+			got := baggage.FromContext(prop.Extract(t.Context(), headerCarrier(h)))
+
+			require.Len(t, std.Members(), tt.wantLen, "sanity: the stdlib carrier must see every member")
+			assert.Len(t, got.Members(), tt.wantLen,
+				"headerCarrier must extract exactly what the stdlib carrier does")
+
+			// Compare member-by-member, since Baggage.String() ordering is not stable.
+			for _, m := range std.Members() {
+				assert.Equal(t, m.Value(), got.Member(m.Key()).Value(),
+					"member %q must survive extraction", m.Key())
+			}
+		})
+	}
+}
+
+// TestHeaderCarrierValuesMatchesStdlib pins Values itself across the key shapes
+// the propagators actually use, including the canonicalization fast path.
+func TestHeaderCarrierValuesMatchesStdlib(t *testing.T) {
+	h := http.Header{}
+	h.Add("Baggage", "a=1")
+	h.Add("Baggage", "b=2")
+	h.Set("Traceparent", "00-"+w3cFixtureTraceID+"-"+w3cFixtureParentSpan+"-01")
+	h.Add("X-Custom", "one")
+	h.Add("X-Custom", "two")
+
+	for _, key := range []string{headerBaggage, headerTraceparent, headerTracestate, "x-custom", "absent"} {
+		assert.Equal(t, propagation.HeaderCarrier(h).Values(key), headerCarrier(h).Values(key),
+			"Values(%q) must match the stdlib carrier", key)
+	}
+}
+
+// BenchmarkTracer_WithPropagationHeaders is the variant that actually exercises
+// headerCarrier.
+//
+// BenchmarkTracer and BenchmarkTracer_Recording send a bare request, so the
+// propagators find nothing and the canonicalization this PR avoids never runs --
+// their alloc delta comes from the per-route cache and the IsRecording gate
+// alone. A request carrying traceparent/tracestate/baggage is what a service
+// behind a mesh or an upstream GoFr service actually receives, and it is the only
+// shape where the carrier's saving is visible.
+func BenchmarkTracer_WithPropagationHeaders(b *testing.B) {
+	otel.SetTracerProvider(noop.NewTracerProvider())
+	otel.SetTextMapPropagator(propagation.NewCompositeTextMapPropagator(
+		propagation.TraceContext{}, propagation.Baggage{}))
+
+	b.Cleanup(func() { otel.SetTracerProvider(noop.NewTracerProvider()) })
+
+	router := mux.NewRouter()
+	router.Use(Tracer)
+	router.NewRoute().Methods(http.MethodGet).Path("/users/{id}").
+		Handler(http.HandlerFunc(func(http.ResponseWriter, *http.Request) {}))
+
+	req := httptest.NewRequestWithContext(b.Context(), http.MethodGet, "/users/42", http.NoBody)
+	req.Header.Set("Traceparent", "00-"+w3cFixtureTraceID+"-"+w3cFixtureParentSpan+"-01")
+	req.Header.Set("Tracestate", "vendor=value")
+	req.Header.Add("Baggage", "tenant=acme")
+	req.Header.Add("Baggage", "region=eu")
+
+	w := &tracerBenchWriter{h: make(http.Header, 4)}
+
+	b.ReportAllocs()
+	b.ResetTimer()
+
+	for range b.N {
+		clear(w.h)
+		router.ServeHTTP(w, req)
+	}
+}

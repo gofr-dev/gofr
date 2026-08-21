@@ -127,6 +127,14 @@ func newSpanMeta(method, route string) *spanMeta {
 	}
 }
 
+// The lowercase header names the W3C propagators look up. They are the keys the
+// propagators pass to the carrier, not the spellings that go on the wire.
+const (
+	headerTraceparent = "traceparent"
+	headerTracestate  = "tracestate"
+	headerBaggage     = "baggage"
+)
+
 // canonicalPropagationKeys maps the lowercase header names the W3C propagators
 // look up to their canonical spellings.
 //
@@ -137,9 +145,9 @@ func newSpanMeta(method, route string) *spanMeta {
 //
 //nolint:gochecknoglobals // immutable, process-wide header constants.
 var canonicalPropagationKeys = map[string]string{
-	"traceparent": textproto.CanonicalMIMEHeaderKey("traceparent"),
-	"tracestate":  textproto.CanonicalMIMEHeaderKey("tracestate"),
-	"baggage":     textproto.CanonicalMIMEHeaderKey("baggage"),
+	headerTraceparent: textproto.CanonicalMIMEHeaderKey(headerTraceparent),
+	headerTracestate:  textproto.CanonicalMIMEHeaderKey(headerTracestate),
+	headerBaggage:     textproto.CanonicalMIMEHeaderKey(headerBaggage),
 }
 
 // headerCarrier adapts http.Header for the OTel propagators without paying to
@@ -163,6 +171,25 @@ func (c headerCarrier) Get(key string) string {
 }
 
 func (c headerCarrier) Set(key, value string) { http.Header(c).Set(key, value) }
+
+// Values returns every value for key, satisfying propagation.ValuesGetter.
+//
+// Not optional. propagation.Baggage.Extract type-asserts the carrier to
+// ValuesGetter and, when it matches, combines ALL values of the Baggage header;
+// the stdlib propagation.HeaderCarrier this type replaces satisfies it. Without
+// this method the assertion fails and Extract silently falls back to the
+// single-value Get, dropping every baggage member after the first whenever a
+// request carries more than one Baggage header -- which is legal per W3C and is
+// what proxies and service meshes commonly emit. GoFr installs
+// propagation.Baggage in its default composite propagator, so that path is live.
+//
+// Measured against the stdlib carrier with three Baggage headers: stdlib
+// extracted 3 members, this carrier extracted 1 before the method existed.
+//
+// The canonical-key fast path is deliberately not used here. Baggage is not one
+// of the keys canonicalPropagationKeys covers, and a carrier that replaces a
+// stdlib one has to be a faithful drop-in first and an optimization second.
+func (c headerCarrier) Values(key string) []string { return http.Header(c).Values(key) }
 
 func (c headerCarrier) Keys() []string {
 	keys := make([]string, 0, len(c))
