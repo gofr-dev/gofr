@@ -55,24 +55,35 @@ func CORS(middlewareConfigs map[string]string, routes *[]string) func(inner http
 	// LIFECYCLE CONTRACT: the configuration map AND the route slice are both read
 	// exactly once, on the first request, and never again.
 	//
-	// "On the first request" rather than here, because the route list is still
-	// being appended to while handlers register and CORS is constructed before
-	// that finishes. GoFr completes registration in httpServerSetup, which runs
-	// synchronously before the serve goroutine starts and assigns the final method
-	// list, so the set is complete by the time this runs -- the same lifecycle the
-	// router's own index relies on.
+	// "On the first request" rather than here, because the route set does not exist
+	// yet when this runs. CORS is constructed inside App.New, and RegisteredRoutes
+	// is EMPTY at that point -- registering handlers does not fill it, since
+	// Router.Add does not touch it. The only write in the tree is a single
+	// assignment in httpServerSetup (gofr.go), which walks the finished router and
+	// assigns the complete method list. Reading routes at construction would
+	// therefore emit "Access-Control-Allow-Methods: OPTIONS" and nothing else.
+	// Verified: after New() and after registering GET+POST the slice is still [];
+	// only after httpServerSetup is it [GET POST].
 	//
-	// The config is read at the same moment, deliberately. Reading it at
-	// construction instead would freeze the two halves of the same configuration at
-	// two different instants, which is a difference nothing documents and nobody
-	// would expect. One instant, one rule.
+	// httpServerSetup runs synchronously in Run, before the serve goroutine starts,
+	// so by the first request the set is final and never changes again. The Once is
+	// a lazy stand-in for that point -- it costs an atomic load (~0.02 ns against a
+	// ~49 ns hot path) and avoids handing the middleware an explicit freeze hook.
 	//
-	// A caller that mutates either input after the first request served will not
-	// see the change. That is not a regression to be fixed by reading them per
-	// request: these are read from every serving goroutine, so a caller mutating
-	// them concurrently is a data race regardless of when we read. Freezing makes
-	// the race impossible instead of merely unlikely. TestCORSLifecycleContract
-	// pins all of it.
+	// The config is read at the same moment even though it IS complete at
+	// construction (GetConfigs builds the map fully before newHTTPServer passes it
+	// here). Reading the two halves of one configuration at two different instants
+	// is a distinction nothing documents and nobody would expect; one instant is
+	// easier to state and to test.
+	//
+	// A caller that mutates either input after the first request is served will not
+	// see the change. Inside GoFr that is unreachable -- neither input is ever
+	// mutated after httpServerSetup -- so this only concerns direct callers of the
+	// exported CORS. For them it is still the right behavior: both inputs are read
+	// from every serving goroutine, so mutating them concurrently is a data race
+	// whenever the read happens. Freezing makes that race impossible rather than
+	// merely unlikely. TestCORSLifecycleContract and
+	// TestCORSLifecycleFrozenAfterFirstRequest pin all of it.
 	var (
 		once           sync.Once
 		allowedOrigins map[string]bool
