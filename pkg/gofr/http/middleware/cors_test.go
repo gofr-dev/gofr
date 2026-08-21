@@ -3,7 +3,9 @@ package middleware
 import (
 	"net/http"
 	"net/http/httptest"
+	"sort"
 	"strconv"
+	"strings"
 	"sync"
 	"testing"
 
@@ -678,4 +680,727 @@ func TestCORSLifecycleFrozenAfterFirstRequest(t *testing.T) {
 		assert.Equal(t, map[string]int{"GET, POST, OPTIONS": n}, seen,
 			"every concurrent first request must observe the same fully-built header set")
 	})
+}
+
+// Characterization suite: pins the EXACT observable output of the CORS
+// middleware. Every helper/type/const below is prefixed with `corsChar` and
+// every test with `Test_CORSContract` to stay collision-free.
+//
+// These tests describe CURRENT behavior, including behavior that looks like a
+// latent bug. They must be updated only when a behavior change is intentional.
+// ---------------------------------------------------------------------------
+
+// corsCharDefaultAllowHeaders is the literal Access-Control-Allow-Headers
+// value GoFr puts on the wire. It is spelled out here on purpose rather than
+// referencing the production `allowedHeaders` constant: a characterization
+// test that reuses the constant under test would silently follow any edit to
+// it. Test_CORSContract_DefaultAllowHeadersLiteral asserts the two agree, so
+// changing the production spelling (including its casing or its comma-space
+// separators) fails loudly here.
+const corsCharDefaultAllowHeaders = "Authorization, Content-Type, x-requested-with, " +
+	"origin, true-client-ip, X-Correlation-ID"
+
+// Test_CORSContract_DefaultAllowHeadersLiteral pins the exact bytes of the
+// default Access-Control-Allow-Headers value.
+
+// Test_CORSContract_DefaultAllowHeadersLiteral pins the exact bytes of the
+// default Access-Control-Allow-Headers value.
+func Test_CORSContract_DefaultAllowHeadersLiteral(t *testing.T) {
+	assert.Equal(t, corsCharDefaultAllowHeaders, allowedHeaders)
+}
+
+const (
+	corsCharBody             = "Sample Response"
+	corsCharOriginA          = "https://a.com"
+	corsCharOriginB          = "https://b.com"
+	corsCharOriginEvil       = "https://evil.com"
+	corsCharKeyOrigin        = "Access-Control-Allow-Origin"
+	corsCharKeyMethods       = "Access-Control-Allow-Methods"
+	corsCharKeyHeaders       = "Access-Control-Allow-Headers"
+	corsCharAllowHeadersLine = corsCharKeyHeaders + ": " + corsCharDefaultAllowHeaders
+	corsCharVaryLine         = "Vary: Origin"
+)
+
+// corsCharSpyHandler records whether the inner handler was reached.
+
+// corsCharSpyHandler records whether the inner handler was reached.
+type corsCharSpyHandler struct {
+	called int
+}
+
+func (h *corsCharSpyHandler) ServeHTTP(w http.ResponseWriter, _ *http.Request) {
+	h.called++
+
+	w.WriteHeader(http.StatusFound)
+	_, _ = w.Write([]byte(corsCharBody))
+}
+
+// corsCharHeaderLines renders a whole http.Header into a deterministic, sorted
+// slice of "Key: v1, v2" lines so a full snapshot can be compared exactly.
+
+// corsCharHeaderLines renders a whole http.Header into a deterministic, sorted
+// slice of "Key: v1, v2" lines so a full snapshot can be compared exactly.
+func corsCharHeaderLines(h http.Header) []string {
+	lines := make([]string, 0, len(h))
+	for k, v := range h {
+		lines = append(lines, k+": "+strings.Join(v, ", "))
+	}
+
+	sort.Strings(lines)
+
+	return lines
+}
+
+func corsCharSorted(in []string) []string {
+	out := make([]string, len(in))
+	copy(out, in)
+	sort.Strings(out)
+
+	return out
+}
+
+func corsCharMethodsLine(v string) string { return corsCharKeyMethods + ": " + v }
+
+func corsCharOriginLine(v string) string { return corsCharKeyOrigin + ": " + v }
+
+// corsCharRun drives the middleware once and returns the recorder plus the spy.
+
+// corsCharRun drives the middleware once and returns the recorder plus the spy.
+func corsCharRun(t *testing.T, cfg map[string]string, routes *[]string,
+	method, origin string,
+) (*httptest.ResponseRecorder, *corsCharSpyHandler) {
+	t.Helper()
+
+	spy := &corsCharSpyHandler{}
+	handler := CORS(cfg, routes)(spy)
+
+	req := httptest.NewRequestWithContext(t.Context(), method, "/hello", http.NoBody)
+	if origin != "" {
+		req.Header.Set("Origin", origin)
+	}
+
+	w := httptest.NewRecorder()
+	handler.ServeHTTP(w, req)
+
+	return w, spy
+}
+
+type corsCharCase struct {
+	name     string
+	config   map[string]string
+	method   string
+	origin   string
+	routes   []string
+	expLines []string
+	expCode  int
+	expBody  string
+	expInner int
+}
+
+func corsCharBaselineCases() []corsCharCase {
+	twoRoutes := []string{http.MethodGet, http.MethodPost}
+	baseMethods := corsCharMethodsLine("GET, POST, OPTIONS")
+
+	return []corsCharCase{
+		{
+			name: "nil config GET no origin", config: nil, method: http.MethodGet,
+			routes:   twoRoutes,
+			expLines: []string{corsCharAllowHeadersLine, baseMethods, corsCharOriginLine("*")},
+			expCode:  http.StatusFound, expBody: corsCharBody, expInner: 1,
+		},
+		{
+			name: "empty config POST no origin", config: map[string]string{}, method: http.MethodPost,
+			routes:   twoRoutes,
+			expLines: []string{corsCharAllowHeadersLine, baseMethods, corsCharOriginLine("*")},
+			expCode:  http.StatusFound, expBody: corsCharBody, expInner: 1,
+		},
+		{
+			name: "empty config OPTIONS short circuits", config: map[string]string{}, method: http.MethodOptions,
+			routes:   twoRoutes,
+			expLines: []string{corsCharAllowHeadersLine, baseMethods, corsCharOriginLine("*")},
+			expCode:  http.StatusOK, expBody: "", expInner: 0,
+		},
+		{
+			name:   "empty origin config value falls back to wildcard",
+			config: map[string]string{corsCharKeyOrigin: ""}, method: http.MethodGet, origin: corsCharOriginA,
+			routes:   twoRoutes,
+			expLines: []string{corsCharAllowHeadersLine, baseMethods, corsCharOriginLine("*")},
+			expCode:  http.StatusFound, expBody: corsCharBody, expInner: 1,
+		},
+		{
+			name:   "explicit wildcard never adds Vary",
+			config: map[string]string{corsCharKeyOrigin: "*"}, method: http.MethodGet, origin: corsCharOriginA,
+			routes:   twoRoutes,
+			expLines: []string{corsCharAllowHeadersLine, baseMethods, corsCharOriginLine("*")},
+			expCode:  http.StatusFound, expBody: corsCharBody, expInner: 1,
+		},
+		{
+			name:   "wildcard OPTIONS with origin",
+			config: map[string]string{corsCharKeyOrigin: "*"}, method: http.MethodOptions, origin: corsCharOriginA,
+			routes:   twoRoutes,
+			expLines: []string{corsCharAllowHeadersLine, baseMethods, corsCharOriginLine("*")},
+			expCode:  http.StatusOK, expBody: "", expInner: 0,
+		},
+	}
+}
+
+func corsCharOriginMatchingCases() []corsCharCase {
+	twoRoutes := []string{http.MethodGet, http.MethodPost}
+	baseMethods := corsCharMethodsLine("GET, POST, OPTIONS")
+
+	return []corsCharCase{
+		{
+			name:   "single origin matched adds Vary",
+			config: map[string]string{corsCharKeyOrigin: corsCharOriginA}, method: http.MethodGet, origin: corsCharOriginA,
+			routes:   twoRoutes,
+			expLines: []string{corsCharAllowHeadersLine, baseMethods, corsCharOriginLine(corsCharOriginA), corsCharVaryLine},
+			expCode:  http.StatusFound, expBody: corsCharBody, expInner: 1,
+		},
+		{
+			name:   "single origin not matched drops origin and Vary",
+			config: map[string]string{corsCharKeyOrigin: corsCharOriginA}, method: http.MethodGet, origin: corsCharOriginEvil,
+			routes:   twoRoutes,
+			expLines: []string{corsCharAllowHeadersLine, baseMethods},
+			expCode:  http.StatusFound, expBody: corsCharBody, expInner: 1,
+		},
+		{
+			name:   "single origin with no Origin request header drops origin",
+			config: map[string]string{corsCharKeyOrigin: corsCharOriginA}, method: http.MethodGet,
+			routes:   twoRoutes,
+			expLines: []string{corsCharAllowHeadersLine, baseMethods},
+			expCode:  http.StatusFound, expBody: corsCharBody, expInner: 1,
+		},
+		{
+			name:   "single origin OPTIONS not matched still short circuits",
+			config: map[string]string{corsCharKeyOrigin: corsCharOriginA}, method: http.MethodOptions, origin: corsCharOriginEvil,
+			routes:   twoRoutes,
+			expLines: []string{corsCharAllowHeadersLine, baseMethods},
+			expCode:  http.StatusOK, expBody: "", expInner: 0,
+		},
+		{
+			name:   "comma list without spaces",
+			config: map[string]string{corsCharKeyOrigin: corsCharOriginA + "," + corsCharOriginB},
+			method: http.MethodGet, origin: corsCharOriginB, routes: twoRoutes,
+			expLines: []string{corsCharAllowHeadersLine, baseMethods, corsCharOriginLine(corsCharOriginB), corsCharVaryLine},
+			expCode:  http.StatusFound, expBody: corsCharBody, expInner: 1,
+		},
+		{
+			name:   "comma list with spaces",
+			config: map[string]string{corsCharKeyOrigin: corsCharOriginA + " , " + corsCharOriginB},
+			method: http.MethodGet, origin: corsCharOriginA, routes: twoRoutes,
+			expLines: []string{corsCharAllowHeadersLine, baseMethods, corsCharOriginLine(corsCharOriginA), corsCharVaryLine},
+			expCode:  http.StatusFound, expBody: corsCharBody, expInner: 1,
+		},
+		{
+			name:   "comma list with empty entry is skipped",
+			config: map[string]string{corsCharKeyOrigin: corsCharOriginA + ", ," + corsCharOriginB},
+			method: http.MethodGet, origin: corsCharOriginB, routes: twoRoutes,
+			expLines: []string{corsCharAllowHeadersLine, baseMethods, corsCharOriginLine(corsCharOriginB), corsCharVaryLine},
+			expCode:  http.StatusFound, expBody: corsCharBody, expInner: 1,
+		},
+		{
+			name:   "only separators degrades to wildcard",
+			config: map[string]string{corsCharKeyOrigin: ", , ,"}, method: http.MethodGet, origin: corsCharOriginEvil,
+			routes:   twoRoutes,
+			expLines: []string{corsCharAllowHeadersLine, baseMethods, corsCharOriginLine("*")},
+			expCode:  http.StatusFound, expBody: corsCharBody, expInner: 1,
+		},
+		{
+			name:   "origin match is exact and untrimmed",
+			config: map[string]string{corsCharKeyOrigin: corsCharOriginA}, method: http.MethodGet, origin: corsCharOriginA + " ",
+			routes:   twoRoutes,
+			expLines: []string{corsCharAllowHeadersLine, baseMethods},
+			expCode:  http.StatusFound, expBody: corsCharBody, expInner: 1,
+		},
+		{
+			name:   "origin match is case sensitive",
+			config: map[string]string{corsCharKeyOrigin: corsCharOriginA}, method: http.MethodGet, origin: "HTTPS://A.COM",
+			routes:   twoRoutes,
+			expLines: []string{corsCharAllowHeadersLine, baseMethods},
+			expCode:  http.StatusFound, expBody: corsCharBody, expInner: 1,
+		},
+	}
+}
+
+func corsCharCustomHeaderCases() []corsCharCase {
+	twoRoutes := []string{http.MethodGet, http.MethodPost}
+	baseMethods := corsCharMethodsLine("GET, POST, OPTIONS")
+
+	return []corsCharCase{
+		{
+			name:   "custom allow-headers is concatenated onto the defaults",
+			config: map[string]string{corsCharKeyHeaders: "clientid"}, method: http.MethodGet, routes: twoRoutes,
+			expLines: []string{corsCharAllowHeadersLine + ", clientid", baseMethods, corsCharOriginLine("*")},
+			expCode:  http.StatusFound, expBody: corsCharBody, expInner: 1,
+		},
+		{
+			name:   "empty custom allow-headers keeps the defaults",
+			config: map[string]string{corsCharKeyHeaders: ""}, method: http.MethodGet, routes: twoRoutes,
+			expLines: []string{corsCharAllowHeadersLine, baseMethods, corsCharOriginLine("*")},
+			expCode:  http.StatusFound, expBody: corsCharBody, expInner: 1,
+		},
+		{
+			name:   "custom allow-methods fully replaces routes derived value",
+			config: map[string]string{corsCharKeyMethods: "GET, PUT"}, method: http.MethodGet, routes: twoRoutes,
+			expLines: []string{corsCharAllowHeadersLine, corsCharMethodsLine("GET, PUT"), corsCharOriginLine("*")},
+			expCode:  http.StatusFound, expBody: corsCharBody, expInner: 1,
+		},
+		{
+			name:   "empty custom allow-methods keeps routes derived value",
+			config: map[string]string{corsCharKeyMethods: ""}, method: http.MethodGet, routes: twoRoutes,
+			expLines: []string{corsCharAllowHeadersLine, baseMethods, corsCharOriginLine("*")},
+			expCode:  http.StatusFound, expBody: corsCharBody, expInner: 1,
+		},
+		{
+			name: "credentials max-age and expose-headers pass through",
+			config: map[string]string{
+				"Access-Control-Allow-Credentials": "true",
+				"Access-Control-Max-Age":           "600",
+				"Access-Control-Expose-Headers":    "X-Foo, X-Bar",
+			},
+			method: http.MethodGet, routes: twoRoutes,
+			expLines: []string{
+				"Access-Control-Allow-Credentials: true",
+				corsCharAllowHeadersLine,
+				baseMethods,
+				corsCharOriginLine("*"),
+				"Access-Control-Expose-Headers: X-Foo, X-Bar",
+				"Access-Control-Max-Age: 600",
+			},
+			expCode: http.StatusFound, expBody: corsCharBody, expInner: 1,
+		},
+		{
+			name:   "empty valued custom header is still emitted with an empty value",
+			config: map[string]string{"Access-Control-Max-Age": ""}, method: http.MethodGet, routes: twoRoutes,
+			expLines: []string{
+				corsCharAllowHeadersLine, baseMethods, corsCharOriginLine("*"), "Access-Control-Max-Age: ",
+			},
+			expCode: http.StatusFound, expBody: corsCharBody, expInner: 1,
+		},
+		{
+			name: "everything combined",
+			config: map[string]string{
+				corsCharKeyOrigin:                  corsCharOriginA + ", " + corsCharOriginB,
+				corsCharKeyHeaders:                 "clientid",
+				corsCharKeyMethods:                 "GET, DELETE",
+				"Access-Control-Allow-Credentials": "true",
+				"Access-Control-Max-Age":           "86400",
+			},
+			method: http.MethodOptions, origin: corsCharOriginB, routes: twoRoutes,
+			expLines: []string{
+				"Access-Control-Allow-Credentials: true",
+				corsCharAllowHeadersLine + ", clientid",
+				corsCharMethodsLine("GET, DELETE"),
+				corsCharOriginLine(corsCharOriginB),
+				"Access-Control-Max-Age: 86400",
+				corsCharVaryLine,
+			},
+			expCode: http.StatusOK, expBody: "", expInner: 0,
+		},
+	}
+}
+
+// corsCharGarbageKeyCases pins what happens for config keys that are not the
+// canonical, exactly-cased header names the implementation compares against.
+
+// corsCharGarbageKeyCases pins what happens for config keys that are not the
+// canonical, exactly-cased header names the implementation compares against.
+func corsCharGarbageKeyCases() []corsCharCase {
+	twoRoutes := []string{http.MethodGet, http.MethodPost}
+	baseMethods := corsCharMethodsLine("GET, POST, OPTIONS")
+
+	return []corsCharCase{
+		{
+			name:   "arbitrary key is blindly set and canonicalized",
+			config: map[string]string{"x-garbage": "boom"}, method: http.MethodGet, routes: twoRoutes,
+			expLines: []string{corsCharAllowHeadersLine, baseMethods, corsCharOriginLine("*"), "X-Garbage: boom"},
+			expCode:  http.StatusFound, expBody: corsCharBody, expInner: 1,
+		},
+		{
+			name:   "key with a space is not canonicalizable and is stored verbatim",
+			config: map[string]string{"Bad Key": "v"}, method: http.MethodGet, routes: twoRoutes,
+			expLines: []string{corsCharAllowHeadersLine, "Bad Key: v", baseMethods, corsCharOriginLine("*")},
+			expCode:  http.StatusFound, expBody: corsCharBody, expInner: 1,
+		},
+		{
+			name:   "underscore is a token char so only the first letter is upper cased",
+			config: map[string]string{"x_under_score": "v"}, method: http.MethodGet, routes: twoRoutes,
+			expLines: []string{corsCharAllowHeadersLine, baseMethods, corsCharOriginLine("*"), "X_under_score: v"},
+			expCode:  http.StatusFound, expBody: corsCharBody, expInner: 1,
+		},
+		{
+			// A differently-cased allow-headers key EXTENDS the defaults, exactly
+			// like the canonical spelling. Matching the raw key previously made
+			// it miss the concat branch and replace the list instead, silently
+			// dropping Authorization, Content-Type and X-Correlation-ID.
+			name:   "lower cased allow-headers key extends the defaults, like the canonical key",
+			config: map[string]string{"access-control-allow-headers": "only-this"}, method: http.MethodGet, routes: twoRoutes,
+			expLines: []string{
+				corsCharKeyHeaders + ": " + corsCharDefaultAllowHeaders + ", only-this",
+				baseMethods, corsCharOriginLine("*"),
+			},
+			expCode: http.StatusFound, expBody: corsCharBody, expInner: 1,
+		},
+		{
+			name:   "upper cased allow-methods key overwrites the routes derived value",
+			config: map[string]string{"ACCESS-CONTROL-ALLOW-METHODS": "TRACE"}, method: http.MethodGet, routes: twoRoutes,
+			expLines: []string{corsCharAllowHeadersLine, corsCharMethodsLine("TRACE"), corsCharOriginLine("*")},
+			expCode:  http.StatusFound, expBody: corsCharBody, expInner: 1,
+		},
+		{
+			name:   "mixed case max-age key is canonicalized",
+			config: map[string]string{"ACCESS-CONTROL-MAX-AGE": "60"}, method: http.MethodGet, routes: twoRoutes,
+			expLines: []string{
+				corsCharAllowHeadersLine, baseMethods, corsCharOriginLine("*"), "Access-Control-Max-Age: 60",
+			},
+			expCode: http.StatusFound, expBody: corsCharBody, expInner: 1,
+		},
+		// The two cases below guard the origin-override fix. A config key is
+		// compared on its canonical header form, so a differently-cased
+		// spelling can no longer reach Access-Control-Allow-Origin through the
+		// custom-header loop and replace the negotiated value.
+		{
+			name:   "lower cased origin key configures the allow-list and emits nothing for an unlisted origin",
+			config: map[string]string{"access-control-allow-origin": corsCharOriginEvil}, method: http.MethodGet, routes: twoRoutes,
+			// The key is folded to its canonical spelling, so this IS the
+			// allow-list — it restricts origins to corsCharOriginEvil. The
+			// request carries no Origin, which is not on that list, so nothing
+			// is negotiated and the custom loop must not emit one of its own.
+			//
+			// This case previously expected "*". That was the bug: the
+			// allow-list was read with a raw literal lookup and missed the key
+			// entirely, so parseOrigins fell back to its wildcard default and a
+			// config that restricted the origin echoed "*" instead.
+			expLines: []string{corsCharAllowHeadersLine, baseMethods},
+			expCode:  http.StatusFound, expBody: corsCharBody, expInner: 1,
+		},
+		{
+			name: "lower cased origin key cannot overwrite a properly negotiated origin",
+			config: map[string]string{
+				corsCharKeyOrigin:             corsCharOriginA,
+				"access-control-allow-origin": corsCharOriginEvil,
+			},
+			method: http.MethodGet, origin: corsCharOriginA, routes: twoRoutes,
+			expLines: []string{
+				corsCharAllowHeadersLine, baseMethods, corsCharOriginLine(corsCharOriginA), corsCharVaryLine,
+			},
+			expCode: http.StatusFound, expBody: corsCharBody, expInner: 1,
+		},
+	}
+}
+
+func corsCharAllCases() []corsCharCase {
+	cases := corsCharBaselineCases()
+	cases = append(cases, corsCharOriginMatchingCases()...)
+	cases = append(cases, corsCharCustomHeaderCases()...)
+	cases = append(cases, corsCharGarbageKeyCases()...)
+
+	return cases
+}
+
+func Test_CORSContract_ResponseSnapshot(t *testing.T) {
+	cases := corsCharAllCases()
+
+	for i := range cases {
+		tc := &cases[i]
+
+		t.Run(tc.name, func(t *testing.T) {
+			routes := tc.routes
+			w, spy := corsCharRun(t, tc.config, &routes, tc.method, tc.origin)
+
+			assert.Equal(t, corsCharSorted(tc.expLines), corsCharHeaderLines(w.Header()))
+			assert.Equal(t, tc.expCode, w.Code)
+			assert.Equal(t, tc.expBody, w.Body.String())
+			assert.Equal(t, tc.expInner, spy.called)
+		})
+	}
+}
+
+func Test_CORSContract_AllowMethodsJoin(t *testing.T) {
+	cases := []struct {
+		name   string
+		routes []string
+		exp    string
+	}{
+		{name: "nil slice", routes: nil, exp: "OPTIONS"},
+		{name: "empty slice", routes: []string{}, exp: "OPTIONS"},
+		{name: "single element", routes: []string{http.MethodGet}, exp: "GET, OPTIONS"},
+		{name: "two elements", routes: []string{http.MethodGet, http.MethodPut}, exp: "GET, PUT, OPTIONS"},
+		{name: "element already containing commas", routes: []string{"GET,POST"}, exp: "GET,POST, OPTIONS"},
+		{name: "element already containing OPTIONS is duplicated", routes: []string{"OPTIONS"}, exp: "OPTIONS, OPTIONS"},
+		{name: "empty string element", routes: []string{""}, exp: ", OPTIONS"},
+		{name: "whitespace preserved", routes: []string{" GET "}, exp: " GET , OPTIONS"},
+	}
+
+	for i := range cases {
+		tc := &cases[i]
+
+		t.Run(tc.name, func(t *testing.T) {
+			routes := tc.routes
+			w, _ := corsCharRun(t, nil, &routes, http.MethodGet, "")
+
+			assert.Equal(t, corsCharSorted([]string{
+				corsCharAllowHeadersLine, corsCharMethodsLine(tc.exp), corsCharOriginLine("*"),
+			}), corsCharHeaderLines(w.Header()))
+		})
+	}
+}
+
+// Test_CORSContract_RoutesReadAtRequestTime pins that the routes slice is
+// dereferenced per request, so routes registered after the middleware was
+// constructed do show up in Access-Control-Allow-Methods.
+
+// Test_CORSContract_RoutesBackingArrayAliasing guards against writing through
+// the caller's route slice. The header used to be built with
+// `routes = append(routes, "OPTIONS")` on a copy of the dereferenced slice
+// header, so whenever cap > len the append stored "OPTIONS" into the CALLER's
+// backing array at index len. That was invisible through the caller's own slice
+// (its length is unchanged) but visible through any longer alias — here,
+// SENTINEL-1 would be clobbered.
+func Test_CORSContract_RoutesBackingArrayAliasing(t *testing.T) {
+	backing := []string{http.MethodGet, "SENTINEL-1", "SENTINEL-2", "SENTINEL-3"}
+	routes := backing[:1]
+	require.Equal(t, 4, cap(routes), "precondition: cap must exceed len for aliasing to be observable")
+
+	w, _ := corsCharRun(t, nil, &routes, http.MethodGet, "")
+	require.Equal(t, "GET, OPTIONS", w.Header().Get(corsCharKeyMethods))
+
+	// The middleware must not write through the shared backing array. It used to
+	// build the header with append(routes, "OPTIONS"), which stores into the
+	// caller's array whenever cap > len — silently replacing the element after
+	// the caller's length. Here that would clobber SENTINEL-1.
+	assert.Equal(t, []string{http.MethodGet}, routes, "caller's slice must be untouched")
+	assert.Equal(t, []string{http.MethodGet, "SENTINEL-1", "SENTINEL-2", "SENTINEL-3"}, backing,
+		"the caller's backing array must be left intact")
+
+	// A caller-side append still behaves normally afterwards, and the next
+	// request reflects the newly registered route.
+	routes = append(routes, http.MethodPost)
+	assert.Equal(t, []string{http.MethodGet, http.MethodPost}, routes)
+
+	w2, _ := corsCharRun(t, nil, &routes, http.MethodGet, "")
+	assert.Equal(t, "GET, POST, OPTIONS", w2.Header().Get(corsCharKeyMethods))
+	assert.Equal(t, "SENTINEL-2", backing[2], "second request must not clobber the array either")
+}
+func Test_CORSContract_CustomHeaderLoopIsOrderIndependent(t *testing.T) {
+	cfg := map[string]string{
+		corsCharKeyOrigin:                  corsCharOriginA,
+		corsCharKeyHeaders:                 "clientid",
+		corsCharKeyMethods:                 "GET, PATCH",
+		"Access-Control-Allow-Credentials": "true",
+		"Access-Control-Expose-Headers":    "X-A, X-B",
+		"Access-Control-Max-Age":           "600",
+		"X-Custom-One":                     "1",
+		"X-Custom-Two":                     "2",
+		"x-custom-three":                   "3",
+	}
+
+	expected := corsCharSorted([]string{
+		"Access-Control-Allow-Credentials: true",
+		corsCharAllowHeadersLine + ", clientid",
+		corsCharMethodsLine("GET, PATCH"),
+		corsCharOriginLine(corsCharOriginA),
+		"Access-Control-Expose-Headers: X-A, X-B",
+		"Access-Control-Max-Age: 600",
+		"X-Custom-One: 1",
+		"X-Custom-Three: 3",
+		"X-Custom-Two: 2",
+		corsCharVaryLine,
+	})
+
+	for range 50 {
+		routes := []string{http.MethodGet}
+		w, _ := corsCharRun(t, cfg, &routes, http.MethodGet, corsCharOriginA)
+
+		require.Equal(t, expected, corsCharHeaderLines(w.Header()))
+	}
+}
+
+// Test_CORSContract_VaryIsAddedNotSet pins that Vary is added once per request
+// and that repeated requests on fresh recorders never accumulate values.
+
+// Test_CORSContract_VaryIsAddedNotSet pins that Vary is added once per request
+// and that repeated requests on fresh recorders never accumulate values.
+func Test_CORSContract_VaryIsAddedNotSet(t *testing.T) {
+	cfg := map[string]string{corsCharKeyOrigin: corsCharOriginA}
+	routes := []string{http.MethodGet}
+	handler := CORS(cfg, &routes)(&corsCharSpyHandler{})
+
+	for range 3 {
+		w := httptest.NewRecorder()
+		req := httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/hello", http.NoBody)
+		req.Header.Set("Origin", corsCharOriginA)
+		handler.ServeHTTP(w, req)
+
+		assert.Equal(t, []string{"Origin"}, w.Header().Values("Vary"))
+	}
+}
+
+// Test_CORSContract_VaryAccumulatesOnSharedResponseWriter pins that the
+// middleware uses Add (not Set) for Vary, so a pre-existing Vary value is
+// preserved and appended to.
+
+// Test_CORSContract_VaryAccumulatesOnSharedResponseWriter pins that the
+// middleware uses Add (not Set) for Vary, so a pre-existing Vary value is
+// preserved and appended to.
+func Test_CORSContract_VaryAccumulatesOnSharedResponseWriter(t *testing.T) {
+	cfg := map[string]string{corsCharKeyOrigin: corsCharOriginA}
+	routes := []string{http.MethodGet}
+	handler := CORS(cfg, &routes)(&corsCharSpyHandler{})
+
+	w := httptest.NewRecorder()
+	w.Header().Add("Vary", "Accept-Encoding")
+
+	req := httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/hello", http.NoBody)
+	req.Header.Set("Origin", corsCharOriginA)
+	handler.ServeHTTP(w, req)
+
+	assert.Equal(t, []string{"Accept-Encoding", "Origin"}, w.Header().Values("Vary"))
+	assert.Equal(t, "Vary: Accept-Encoding, Origin", corsCharHeaderLines(w.Header())[3])
+}
+
+func Test_CORSContract_ParseOriginsExact(t *testing.T) {
+	cases := []struct {
+		name string
+		in   string
+		exp  map[string]bool
+	}{
+		{name: "empty", in: "", exp: map[string]bool{"*": true}},
+		{name: "single space", in: " ", exp: map[string]bool{"*": true}},
+		{name: "single comma", in: ",", exp: map[string]bool{"*": true}},
+		{name: "wildcard with spaces", in: "  *  ", exp: map[string]bool{"*": true}},
+		{name: "wildcard mixed with explicit origins", in: "*," + corsCharOriginA,
+			exp: map[string]bool{"*": true, corsCharOriginA: true}},
+		{name: "duplicates collapse", in: corsCharOriginA + "," + corsCharOriginA,
+			exp: map[string]bool{corsCharOriginA: true}},
+		{name: "tabs and newlines are trimmed", in: "\t" + corsCharOriginA + "\n",
+			exp: map[string]bool{corsCharOriginA: true}},
+		{name: "empty entries dropped", in: corsCharOriginA + ", ," + corsCharOriginB,
+			exp: map[string]bool{corsCharOriginA: true, corsCharOriginB: true}},
+		{name: "semicolons are not separators", in: corsCharOriginA + ";" + corsCharOriginB,
+			exp: map[string]bool{corsCharOriginA + ";" + corsCharOriginB: true}},
+		{name: "trailing comma", in: corsCharOriginA + ",", exp: map[string]bool{corsCharOriginA: true}},
+	}
+
+	for i := range cases {
+		tc := &cases[i]
+
+		t.Run(tc.name, func(t *testing.T) {
+			assert.Equal(t, tc.exp, parseOrigins(tc.in))
+		})
+	}
+}
+
+// Test_CORSContract_WildcardBeatsExplicitMatch pins that a "*" entry anywhere in
+// the list short-circuits dynamic matching and suppresses Vary entirely.
+
+// Test_CORSContract_WildcardBeatsExplicitMatch pins that a "*" entry anywhere in
+// the list short-circuits dynamic matching and suppresses Vary entirely.
+func Test_CORSContract_WildcardBeatsExplicitMatch(t *testing.T) {
+	routes := []string{http.MethodGet}
+	cfg := map[string]string{corsCharKeyOrigin: corsCharOriginA + ",*"}
+
+	w, _ := corsCharRun(t, cfg, &routes, http.MethodGet, corsCharOriginA)
+
+	assert.Equal(t, corsCharSorted([]string{
+		corsCharAllowHeadersLine, corsCharMethodsLine("GET, OPTIONS"), corsCharOriginLine("*"),
+	}), corsCharHeaderLines(w.Header()))
+	assert.Empty(t, w.Header().Values("Vary"))
+}
+
+// Test_CORSContract_OptionsSkipsInnerHandlerForEveryConfig pins that OPTIONS
+// short-circuits regardless of configuration or origin match.
+
+// Test_CORSContract_OptionsSkipsInnerHandlerForEveryConfig pins that OPTIONS
+// short-circuits regardless of configuration or origin match.
+func Test_CORSContract_OptionsSkipsInnerHandlerForEveryConfig(t *testing.T) {
+	configs := []map[string]string{
+		nil,
+		{},
+		{corsCharKeyOrigin: "*"},
+		{corsCharKeyOrigin: corsCharOriginA},
+		{corsCharKeyOrigin: corsCharOriginA, corsCharKeyMethods: "GET"},
+		{"x-garbage": "boom"},
+	}
+
+	origins := []string{"", corsCharOriginA, corsCharOriginEvil}
+
+	for i, cfg := range configs {
+		for _, origin := range origins {
+			routes := []string{http.MethodGet}
+			w, spy := corsCharRun(t, cfg, &routes, http.MethodOptions, origin)
+
+			assert.Equal(t, http.StatusOK, w.Code, "config %d origin %q", i, origin)
+			assert.Empty(t, w.Body.String(), "config %d origin %q", i, origin)
+			assert.Equal(t, 0, spy.called, "config %d origin %q", i, origin)
+		}
+	}
+}
+
+// Test_CORSContract_NonOptionsMethodsAlwaysReachInner pins that every
+// non-OPTIONS method falls through to the inner handler unchanged.
+
+// Test_CORSContract_NonOptionsMethodsAlwaysReachInner pins that every
+// non-OPTIONS method falls through to the inner handler unchanged.
+func Test_CORSContract_NonOptionsMethodsAlwaysReachInner(t *testing.T) {
+	methods := []string{
+		http.MethodGet, http.MethodPost, http.MethodPut, http.MethodPatch,
+		http.MethodDelete, http.MethodHead, http.MethodTrace, http.MethodConnect,
+	}
+
+	for _, m := range methods {
+		routes := []string{http.MethodGet}
+		w, spy := corsCharRun(t, map[string]string{corsCharKeyOrigin: "*"}, &routes, m, corsCharOriginA)
+
+		assert.Equal(t, http.StatusFound, w.Code, "method %s", m)
+		assert.Equal(t, corsCharBody, w.Body.String(), "method %s", m)
+		assert.Equal(t, 1, spy.called, "method %s", m)
+		assert.Equal(t, corsCharSorted([]string{
+			corsCharAllowHeadersLine, corsCharMethodsLine("GET, OPTIONS"), corsCharOriginLine("*"),
+		}), corsCharHeaderLines(w.Header()), "method %s", m)
+	}
+}
+
+// Test_CORSContract_SetMiddlewareHeadersDirectSnapshot pins the unexported
+// helper directly, including the case where the passed allowedOrigins set
+// disagrees with the config map (which the exported CORS wrapper cannot do).
+
+// TestCanonicalizeConfig_Precedence covers the fold directly, including the tie-break among
+// non-canonical spellings where no key is the canonical one.
+func TestCanonicalizeConfig_Precedence(t *testing.T) {
+	tests := []struct {
+		name string
+		in   map[string]string
+		want map[string]string
+	}{
+		{
+			name: "canonical spelling beats every other",
+			in:   map[string]string{"x-custom": "lower", "X-Custom": "canonical", "X-CUSTOM": "upper"},
+			want: map[string]string{"X-Custom": "canonical"},
+		},
+		{
+			name: "without a canonical spelling the smallest key wins",
+			in:   map[string]string{"x-custom": "lower", "X-CUSTOM": "upper"},
+			want: map[string]string{"X-Custom": "upper"},
+		},
+		{
+			name: "distinct headers are all kept",
+			in:   map[string]string{"x-one": "1", "X-Two": "2"},
+			want: map[string]string{"X-One": "1", "X-Two": "2"},
+		},
+		{
+			name: "empty config stays empty",
+			in:   map[string]string{},
+			want: map[string]string{},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Repeated, because the property under test is independence from map iteration order.
+			for range 50 {
+				assert.Equal(t, tt.want, canonicalizeConfig(tt.in))
+			}
+		})
+	}
 }
