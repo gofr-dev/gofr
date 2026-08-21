@@ -46,26 +46,46 @@ func sharedValue(v string) []string {
 // the middleware dynamically matches the request's Origin header and responds
 // with the matched origin, adding a Vary: Origin header for correct caching.
 func CORS(middlewareConfigs map[string]string, routes *[]string) func(inner http.Handler) http.Handler {
-	configs := canonicalizeConfig(middlewareConfigs)
-	allowedOrigins := parseOrigins(configs[headerAccessControlAllowOrigin])
-
 	// Every header this middleware writes, apart from Allow-Origin, is a pure
 	// function of the configuration and the registered route set. Both are fixed
 	// before the first request, yet they were recomputed on every one: a map
 	// literal, a strings.Join over the route list, and an append into the
-	// caller's slice. They are built once here instead, on the first request,
-	// because the route list is still being populated when CORS is constructed.
+	// caller's slice.
+	//
+	// LIFECYCLE CONTRACT: the configuration map AND the route slice are both read
+	// exactly once, on the first request, and never again.
+	//
+	// "On the first request" rather than here, because the route list is still
+	// being appended to while handlers register and CORS is constructed before
+	// that finishes. GoFr completes registration in httpServerSetup, which runs
+	// synchronously before the serve goroutine starts and assigns the final method
+	// list, so the set is complete by the time this runs -- the same lifecycle the
+	// router's own index relies on.
+	//
+	// The config is read at the same moment, deliberately. Reading it at
+	// construction instead would freeze the two halves of the same configuration at
+	// two different instants, which is a difference nothing documents and nobody
+	// would expect. One instant, one rule.
+	//
+	// A caller that mutates either input after the first request served will not
+	// see the change. That is not a regression to be fixed by reading them per
+	// request: these are read from every serving goroutine, so a caller mutating
+	// them concurrently is a data race regardless of when we read. Freezing makes
+	// the race impossible instead of merely unlikely. TestCORSLifecycleContract
+	// pins all of it.
 	var (
-		once    sync.Once
-		fixed   []headerValue
-		methods []string
+		once           sync.Once
+		allowedOrigins map[string]bool
+		fixed          []headerValue
+		methods        []string
 	)
 
-	// Built on the first request rather than here: routes is still being appended to while handlers
-	// register, and CORS is constructed before that finishes. GoFr registers every route during
-	// startup, before the server accepts a request, so the set is complete by the time this runs --
-	// the same lifecycle the router's own index relies on.
+	// sync.Once establishes happens-before between this build and every later
+	// request that observes it, so the assignments below are safely published to
+	// all serving goroutines without a further lock.
 	build := func() {
+		configs := canonicalizeConfig(middlewareConfigs)
+		allowedOrigins = parseOrigins(configs[headerAccessControlAllowOrigin])
 		fixed, methods = buildFixedHeaders(configs, *routes)
 	}
 

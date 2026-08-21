@@ -4,6 +4,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"strconv"
+	"sync"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -536,4 +537,145 @@ func TestCORS_WildcardPathIsAllocationFree(t *testing.T) {
 	})
 
 	assert.Zero(t, allocs, "the wildcard path must write its headers without allocating")
+}
+
+// corsLifecycleServe issues one request through h and returns the response headers.
+func corsLifecycleServe(t *testing.T, h http.Handler, origin string) http.Header {
+	t.Helper()
+
+	w := httptest.NewRecorder()
+	req := httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/x", http.NoBody)
+
+	if origin != "" {
+		req.Header.Set("Origin", origin)
+	}
+
+	h.ServeHTTP(w, req)
+
+	return w.Header()
+}
+
+func corsLifecycleNoop() http.Handler {
+	return http.HandlerFunc(func(http.ResponseWriter, *http.Request) {})
+}
+
+// TestCORSLifecycleContract pins WHEN the configuration and the route set are
+// read, which is the one behavioral difference this PR introduces against the
+// per-request build it replaces.
+//
+// The contract is a single rule: BOTH inputs are read exactly once, on the first
+// request, and never again. The rule matters because the two halves used to
+// freeze at different instants -- the config at construction, the routes at the
+// first request -- a split nothing documented and nobody would expect. Anything
+// completed before the first request is therefore still honored, which is what
+// this test covers; TestCORSLifecycleFrozenAfterFirstRequest covers the other
+// half.
+func TestCORSLifecycleContract(t *testing.T) {
+	t.Run("config completed before the first request is observed", func(t *testing.T) {
+		cfg := map[string]string{}
+		routes := []string{http.MethodGet}
+		h := CORS(cfg, &routes)(corsLifecycleNoop())
+
+		cfg["Access-Control-Max-Age"] = "99"
+		cfg[headerAccessControlAllowOrigin] = "https://late.com"
+
+		got := corsLifecycleServe(t, h, "https://late.com")
+
+		assert.Equal(t, "99", got.Get("Access-Control-Max-Age"),
+			"a config completed after CORS() but before serving must still be honored")
+		assert.Equal(t, "https://late.com", got.Get(headerAccessControlAllowOrigin),
+			"the allow-list must be built from the same snapshot as the fixed headers")
+	})
+
+	t.Run("routes appended before the first request are observed", func(t *testing.T) {
+		routes := make([]string, 0, 3)
+		routes = append(routes, http.MethodGet)
+
+		h := CORS(map[string]string{}, &routes)(corsLifecycleNoop())
+
+		// Exactly what handler registration does: finish the route list, then serve.
+		routes = append(routes, http.MethodPatch, http.MethodDelete)
+
+		assert.Equal(t, "GET, PATCH, DELETE, OPTIONS",
+			corsLifecycleServe(t, h, "").Get(headerAccessControlAllowMethods))
+	})
+
+	t.Run("routes replaced through the pointer before serving are observed", func(t *testing.T) {
+		// gofr.go assigns rather than appends: *RegisteredRoutes = registeredMethods.
+		routes := []string{http.MethodGet}
+		h := CORS(map[string]string{}, &routes)(corsLifecycleNoop())
+
+		routes = []string{http.MethodPost, http.MethodPut}
+
+		assert.Equal(t, "POST, PUT, OPTIONS",
+			corsLifecycleServe(t, h, "").Get(headerAccessControlAllowMethods))
+	})
+}
+
+// TestCORSLifecycleFrozenAfterFirstRequest pins the other half of the contract.
+//
+// Mutating either input after the first request is served is unsupported, and
+// deliberately so: both are read from every serving goroutine, so a caller
+// mutating them concurrently races regardless of when the read happens. Freezing
+// makes that race impossible rather than merely unlikely. GoFr never does it --
+// GetConfigs builds the map fully before handing it to CORS, and httpServerSetup
+// assigns the final route list synchronously before the serve goroutine starts.
+func TestCORSLifecycleFrozenAfterFirstRequest(t *testing.T) {
+	t.Run("both inputs are frozen once a request has been served", func(t *testing.T) {
+		cfg := map[string]string{"Access-Control-Max-Age": "600"}
+		routes := make([]string, 0, 2)
+		routes = append(routes, http.MethodGet)
+
+		h := CORS(cfg, &routes)(corsLifecycleNoop())
+
+		before := corsLifecycleServe(t, h, "")
+		require.Equal(t, "600", before.Get("Access-Control-Max-Age"))
+		require.Equal(t, "GET, OPTIONS", before.Get(headerAccessControlAllowMethods))
+
+		cfg["Access-Control-Max-Age"] = "1"
+		cfg[headerAccessControlAllowHeaders] = "clientid"
+
+		routes = append(routes, http.MethodDelete)
+
+		after := corsLifecycleServe(t, h, "")
+
+		assert.Equal(t, "600", after.Get("Access-Control-Max-Age"),
+			"config is frozen after the first request")
+		assert.Equal(t, allowedHeaders, after.Get(headerAccessControlAllowHeaders),
+			"config is frozen after the first request")
+		assert.Equal(t, "GET, OPTIONS", after.Get(headerAccessControlAllowMethods),
+			"routes are frozen after the first request")
+	})
+
+	t.Run("the freeze happens exactly once under concurrent first requests", func(t *testing.T) {
+		routes := []string{http.MethodGet, http.MethodPost}
+		h := CORS(map[string]string{"Access-Control-Max-Age": "600"}, &routes)(corsLifecycleNoop())
+
+		const n = 200
+
+		var (
+			wg   sync.WaitGroup
+			mu   sync.Mutex
+			seen = map[string]int{}
+		)
+
+		for range n {
+			wg.Add(1)
+
+			go func() {
+				defer wg.Done()
+
+				got := corsLifecycleServe(t, h, "").Get(headerAccessControlAllowMethods)
+
+				mu.Lock()
+				seen[got]++
+				mu.Unlock()
+			}()
+		}
+
+		wg.Wait()
+
+		assert.Equal(t, map[string]int{"GET, POST, OPTIONS": n}, seen,
+			"every concurrent first request must observe the same fully-built header set")
+	})
 }
