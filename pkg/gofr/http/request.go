@@ -37,6 +37,9 @@ var (
 	// to 500 would drive error-rate alerting and SLO burn on the server for a
 	// mistake the server did not make. Every other client-fault error in this
 	// package models its status the same way.
+	//
+	// Kept as a sentinel for errors.Is; Bind returns a value carrying the
+	// offending media type.
 	errUnsupportedContentType error = ErrUnsupportedContentType{}
 	errNonSliceBind                 = errors.New("bind error: input is not a pointer to a byte slice")
 )
@@ -117,7 +120,7 @@ func (r *Request) Bind(i any) error {
 	}
 
 	if hasBody {
-		return fmt.Errorf("%w: %q", errUnsupportedContentType, contentType)
+		return ErrUnsupportedContentType{ContentType: contentType}
 	}
 
 	return nil

@@ -1218,3 +1218,35 @@ func (c *countingReader) Read(p []byte) (int, error) {
 
 	return n, nil
 }
+
+// TestBind_UnsupportedContentTypeStatusThroughResponder asserts the status a
+// CLIENT actually receives, by driving Respond rather than inspecting the error.
+//
+// This is the assertion that matters, and its absence hid a real defect: the
+// error used to be wrapped with fmt.Errorf("%w: %q", ...), and determineResponse
+// resolves the status with a direct type assertion rather than errors.As. The
+// wrapper has no StatusCode method, so the status was silently lost and the
+// client got 500 -- while a test asserting only errors.As on the returned error
+// passed, because errors.As unwraps and the type assertion does not.
+func TestBind_UnsupportedContentTypeStatusThroughResponder(t *testing.T) {
+	for _, ct := range []string{"", "text/plain", "application/xml"} {
+		t.Run("content-type="+ct, func(t *testing.T) {
+			req := httptest.NewRequestWithContext(t.Context(), http.MethodPost, "/", strings.NewReader("some body"))
+			if ct != "" {
+				req.Header.Set("Content-Type", ct)
+			}
+
+			var target struct{}
+
+			err := NewRequest(req).Bind(&target)
+			require.Error(t, err)
+
+			w := httptest.NewRecorder()
+			NewResponder(w, http.MethodPost).Respond(nil, err)
+
+			assert.Equal(t, http.StatusUnsupportedMediaType, w.Code,
+				"a client fault must reach the client as 415, not 500")
+			assert.Contains(t, w.Body.String(), "unsupported content type")
+		})
+	}
+}
