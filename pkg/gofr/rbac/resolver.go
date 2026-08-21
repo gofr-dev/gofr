@@ -53,7 +53,10 @@ func (r *endpointRule) matches(methodUpper, path string, config *Config) bool {
 }
 
 // buildEndpointRules expands endpoints into one rule per declared method and orders them
-// most-specific-first, so that resolution does not depend on declaration order.
+// most-specific-first, so that a narrower rule governs a request even when a broader one is
+// declared ahead of it. Rules that score identically - two patterns of the same shape, such as
+// "/{a}/{b}" and "/{x}/{y}" - keep their declaration order, which is the one case where the
+// order entries are written in still decides the outcome.
 //
 // Duplicate (method, path) declarations collapse to the last one, matching how the lookup
 // maps are built, so both resolution paths always agree.
@@ -103,7 +106,14 @@ func buildEndpointRules(endpoints []EndpointMapping) []endpointRule {
 			return cmp > 0
 		}
 
-		return rules[i].methodScore > rules[j].methodScore
+		if rules[i].methodScore != rules[j].methodScore {
+			return rules[i].methodScore > rules[j].methodScore
+		}
+
+		// Nothing about the patterns separates them, so fall back on the safer outcome: a rule
+		// that requires permissions outranks a public one. A tie is a config the operator did not
+		// intend either way, and enforcing is the recoverable half of that mistake.
+		return !rules[i].isPublic && rules[j].isPublic
 	})
 
 	return rules
@@ -115,7 +125,7 @@ func pathSpecificity(pattern string) []int {
 		return nil
 	}
 
-	segments := strings.Split(strings.Trim(pattern, "/"), "/")
+	segments := splitPatternSegments(strings.Trim(pattern, "/"))
 	scores := make([]int, 0, len(segments))
 
 	for _, segment := range segments {
@@ -134,16 +144,46 @@ func pathSpecificity(pattern string) []int {
 	return scores
 }
 
+// splitPatternSegments splits a path pattern on "/", ignoring separators that sit inside a
+// "{name:regex}" constraint - "{path:[a-z/]+}" is one segment, not three. Splitting naively
+// would shatter such a constraint into fragments that each look like a literal, scoring the
+// loosest pattern in the config as the most specific one.
+func splitPatternSegments(pattern string) []string {
+	var (
+		segments []string
+		depth    int
+		start    int
+	)
+
+	for i, r := range pattern {
+		switch r {
+		case '{':
+			depth++
+		case '}':
+			if depth > 0 {
+				depth--
+			}
+		case '/':
+			if depth == 0 {
+				segments = append(segments, pattern[start:i])
+				start = i + 1
+			}
+		}
+	}
+
+	return append(segments, pattern[start:])
+}
+
 // isCatchAllVariable reports whether a "{name:regex}" segment can span multiple path
-// segments. Only the documented catch-all forms - ".*" and ".+" - are recognized as such;
-// any other constraint is assumed to stay within one segment.
+// segments. Two forms qualify: the documented catch-alls ".*" and ".+", and any constraint
+// that admits "/" itself, such as "{path:[a-z/]+}" - it matches "/files/a/b/c" just as a
+// catch-all would, so scoring it as a single-segment variable would let the loosest pattern in
+// the config outrank a narrower one it fully contains.
 //
-// The assumption is not always true. A constraint that admits "/" itself, such as
-// "{path:[a-z/]+}", spans multiple segments but is scored as a single-segment variable, so a
-// pattern using one can outrank a narrower pattern it fully contains and end up governing a
-// request the narrower entry was written for. Recognizing those in general means parsing the
-// constraint, which is not worth the machinery; write multi-segment matches as "{path:.*}"
-// or "{path:.+}", which are the documented forms, and the ordering holds.
+// Whether the constraint can *actually* produce a "/" is not decided here; a "/" appearing
+// anywhere in it is enough. Deciding it properly means parsing the regex, and the conservative
+// answer only ever moves a pattern down the ordering, which is the safe direction: it can lose
+// to a narrower rule, never shadow one.
 func isCatchAllVariable(segment string) bool {
 	inner := segment[1 : len(segment)-1]
 
@@ -152,12 +192,9 @@ func isCatchAllVariable(segment string) bool {
 		return false
 	}
 
-	switch strings.TrimSpace(inner[idx+1:]) {
-	case ".*", ".+":
-		return true
-	default:
-		return false
-	}
+	constraint := strings.TrimSpace(inner[idx+1:])
+
+	return constraint == ".*" || constraint == ".+" || strings.Contains(constraint, "/")
 }
 
 // compareSpecificity orders two segment score vectors, most specific first.

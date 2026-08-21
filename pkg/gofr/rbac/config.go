@@ -338,15 +338,23 @@ func buildEndpointKey(endpoint *EndpointMapping, methodUpper string) string {
 	return fmt.Sprintf("%s:%s", methodUpper, pattern)
 }
 
-// storeEndpointMapping stores an endpoint mapping.
+// storeEndpointMapping stores an endpoint mapping. A duplicate (method, path) declaration
+// overwrites the earlier one entirely - including the public flag and the permission list, which
+// live in separate maps. Leaving either behind would mix the two declarations together: a public
+// entry followed by a protected one for the same key would keep serving the route unauthenticated
+// while reporting the protected endpoint.
 func (c *Config) storeEndpointMapping(endpoint *EndpointMapping, key, methodUpper string) error {
 	// Store endpoint object for fast lookup
 	c.endpointMap[key] = endpoint
 
 	if endpoint.Public {
 		c.publicEndpointsMap[key] = true
+		delete(c.endpointPermissionMap, key)
+
 		return nil
 	}
+
+	delete(c.publicEndpointsMap, key)
 
 	if len(endpoint.RequiredPermissions) == 0 {
 		return fmt.Errorf("%w: %s %s", ErrEndpointMissingPermissions, methodUpper, endpoint.Path)

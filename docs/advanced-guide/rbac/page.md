@@ -255,16 +255,26 @@ be strict enough to stand on its own.
 
 #### Where the ordering is not decided
 
-Two limits are worth knowing, because in both the outcome falls back to the order the entries are
-written in:
+**Two patterns that score identically** — `/{a}/{b}` and `/{x}/{y}` are the same shape, so nothing
+about the patterns separates them. One thing still does: an entry that **requires permissions wins
+over a public one**, because a tie is a config that did not express an intent either way and
+enforcing is the recoverable half of that mistake. Past that, the first entry declared wins. Avoid
+writing two entries that overlap without one being plainly narrower than the other.
 
-- **Two patterns that score identically.** `/{a}/{b}` and `/{x}/{y}` are the same shape, so nothing
-  separates them and the first one declared wins. Avoid writing two entries that overlap without
-  one being plainly narrower than the other.
-- **A constraint that spans segments without being a catch-all.** Only `.*` and `.+` are recognized
-  as multi-segment. `{path:[a-z/]+}` matches `/files/a/b/c` but is scored as a single-segment
-  variable, so it can outrank a narrower pattern it fully contains. Write multi-segment matches as
-  `{path:.*}` or `{path:.+}`.
+**A constraint that can span segments** — a constraint containing `/`, such as `{path:[a-z/]+}`,
+matches `/files/a/b/c` the way a catch-all does, so it is scored as one: least specific, losing to
+any narrower entry it overlaps. That is decided by the `/` appearing in the constraint at all, not
+by whether the regex can really produce one — `{id:[0-9]+/}` is scored as a catch-all even though
+it is anchored to a single segment. The effect is only ever to move an entry *down* the ordering,
+so it can lose to a narrower rule but never shadow one. Write multi-segment matches as `{path:.*}`
+or `{path:.+}` and the scoring is exact.
+
+#### Declaring the same path twice
+
+Two entries with the same method and path are one entry: **the last one declared wins, in full**.
+That includes the `public` flag — a public entry followed by a protected one for the same key is
+protected, not public. Duplicates are not rejected, so it is worth checking for them in a config
+assembled from more than one source.
 
 #### A pattern that cannot compile
 
