@@ -1,5 +1,5 @@
 # Build stage
-FROM golang:1.25-alpine AS build
+FROM golang:1.26-alpine AS build
 RUN apk add --no-cache build-base
 
 WORKDIR /src
@@ -16,7 +16,7 @@ WORKDIR /src/examples/http-server
 RUN CGO_ENABLED=0 go build -a -o /app/main .
 
 # Final stage
-FROM alpine:3.14
+FROM alpine:3.24
 RUN apk add --no-cache tzdata ca-certificates
 COPY --from=build /app/main /main
 COPY --from=build /src/examples/http-server/configs /configs
