@@ -380,6 +380,416 @@ func Test_StaticFileServing_Static(t *testing.T) {
 	runStaticFileTests(t, tempDir, testCases)
 }
 
+// Test_StaticFileServing_EndpointRoot covers requests for the root of a static endpoint, as opposed
+// to a file beneath it. The root resolves to the served directory itself, which both the
+// containment check and the routing have to admit without also admitting a sibling endpoint.
+func Test_StaticFileServing_EndpointRoot(t *testing.T) {
+	tempDir := t.TempDir()
+
+	testCases := []struct {
+		name             string
+		setupFiles       func() error
+		path             string
+		staticServerPath string
+		expectedCode     int
+		expectedBody     string
+	}{
+		{
+			// The endpoint root resolves to the served directory itself, which the containment
+			// check must admit — see Test_isRestrictedFile.
+			name: "Serve index.html at the root endpoint's root",
+			setupFiles: func() error {
+				return os.WriteFile(filepath.Join(tempDir, "index.html"), []byte("<html>Index</html>"), 0600)
+			},
+			path:             "/",
+			staticServerPath: "/",
+			expectedCode:     http.StatusOK,
+			expectedBody:     "<html>Index</html>",
+		},
+		{
+			// Router.ServeHTTP cleans the trailing slash off "/static/", so the endpoint root
+			// arrives as "/static" and must be routed by something.
+			name: "Serve index.html at a non-root endpoint's root, with trailing slash",
+			setupFiles: func() error {
+				return os.WriteFile(filepath.Join(tempDir, "index.html"), []byte("<html>Index</html>"), 0600)
+			},
+			path:             "/static/",
+			staticServerPath: "/static",
+			expectedCode:     http.StatusOK,
+			expectedBody:     "<html>Index</html>",
+		},
+		{
+			name: "Serve index.html at a non-root endpoint's root, without trailing slash",
+			setupFiles: func() error {
+				return os.WriteFile(filepath.Join(tempDir, "index.html"), []byte("<html>Index</html>"), 0600)
+			},
+			path:             "/static",
+			staticServerPath: "/static",
+			expectedCode:     http.StatusOK,
+			expectedBody:     "<html>Index</html>",
+		},
+		{
+			// The prefix route must keep its trailing separator: a sibling endpoint sharing the
+			// prefix is not this endpoint and must not be served from its directory.
+			name: "Sibling endpoint sharing the prefix is not served",
+			setupFiles: func() error {
+				return os.WriteFile(filepath.Join(tempDir, "index.html"), []byte("<html>Index</html>"), 0600)
+			},
+			path:             "/staticother/index.html",
+			staticServerPath: "/static",
+			expectedCode:     http.StatusNotFound,
+			expectedBody:     "404 page not found",
+		},
+	}
+
+	runStaticFileTests(t, tempDir, testCases)
+}
+
+// Test_StaticFileServing_EndpointRootWithoutServableIndex covers an endpoint root that resolves to
+// a directory holding no file the handler can serve. None of these may be answered with a listing
+// of the directory's contents, and none may reach http.ServeContent: with http.FileServer gone,
+// validateFile's file type check is the only thing standing between a non-regular path and a 200
+// whose body never arrives.
+func Test_StaticFileServing_EndpointRootWithoutServableIndex(t *testing.T) {
+	tempDir := t.TempDir()
+
+	testCases := []struct {
+		name             string
+		setupFiles       func() error
+		path             string
+		staticServerPath string
+		expectedCode     int
+		expectedBody     string
+	}{
+		{
+			// Without an index file the directory must not be handed to http.FileServer, which
+			// would answer with a listing of its contents.
+			name: "Endpoint root without an index file is not listed",
+			setupFiles: func() error {
+				return os.RemoveAll(filepath.Join(tempDir, "index.html"))
+			},
+			path:             "/static",
+			staticServerPath: "/static",
+			expectedCode:     http.StatusNotFound,
+			expectedBody:     "404 Not Found",
+		},
+		{
+			// Nothing checks the type of the resolved path once http.FileServer is gone, so a
+			// directory named index.html would reach http.ServeContent — which writes a
+			// Content-Length from the directory's FileInfo and then no body, a 200 the client
+			// reads as an unexpected EOF. It has to take the not-found path instead.
+			name: "Endpoint root whose index.html is a directory is not served",
+			setupFiles: func() error {
+				return os.MkdirAll(filepath.Join(tempDir, "index.html"), 0750)
+			},
+			path:             "/static",
+			staticServerPath: "/static",
+			expectedCode:     http.StatusNotFound,
+			expectedBody:     "404 Not Found",
+		},
+		{
+			// A subdirectory root resolves to a directory the same way the endpoint root does, and
+			// is likewise answered rather than listed when it holds no index file.
+			name: "Subdirectory without an index file is not listed",
+			setupFiles: func() error {
+				return os.MkdirAll(filepath.Join(tempDir, "sub"), 0750)
+			},
+			path:             "/static/sub",
+			staticServerPath: "/static",
+			expectedCode:     http.StatusNotFound,
+			expectedBody:     "404 Not Found",
+		},
+		{
+			// A root without an index file takes the ordinary not-found path, so the directory's own
+			// 404.html answers it — the same page a missing file gets, not a mux default.
+			name: "Endpoint root without an index file serves 404.html",
+			setupFiles: func() error {
+				if err := os.RemoveAll(filepath.Join(tempDir, "index.html")); err != nil {
+					return err
+				}
+
+				return os.WriteFile(filepath.Join(tempDir, "404.html"), []byte("<html>404 Not Found</html>"), 0600)
+			},
+			path:             "/static",
+			staticServerPath: "/static",
+			expectedCode:     http.StatusNotFound,
+			expectedBody:     "<html>404 Not Found</html>",
+		},
+	}
+
+	runStaticFileTests(t, tempDir, testCases)
+}
+
+// Test_StaticFileServing_DirectoryNameForms covers the forms a caller can give the served
+// directory in. staticHandler builds the requested path with filepath.Abs, so the containment
+// check compares an absolute, cleaned path against directoryName as it was handed in: a relative
+// name, or an absolute one carrying a trailing separator, never matches and every request under
+// the endpoint — root or not — is answered with 403. App.AddStaticFiles resolves "./x" and "x"
+// against the working directory but leaves an absolute name untouched, so the trailing-separator
+// form reaches here from the public API.
+func Test_StaticFileServing_DirectoryNameForms(t *testing.T) {
+	tempDir := t.TempDir()
+
+	require.NoError(t, os.WriteFile(filepath.Join(tempDir, "index.html"), []byte("<html>Index</html>"), 0600))
+
+	workingDir, err := os.Getwd()
+	require.NoError(t, err)
+
+	relativeDir, err := filepath.Rel(workingDir, tempDir)
+	require.NoError(t, err)
+
+	sep := string(os.PathSeparator)
+
+	tests := []struct {
+		name    string
+		dirName string
+	}{
+		{"absolute", tempDir},
+		{"absolute with trailing separator", tempDir + sep},
+		{"absolute unclean", tempDir + sep + "." + sep},
+		{"relative", relativeDir},
+		{"relative with dot prefix", "." + sep + relativeDir},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			for _, path := range []string{"/static", "/static/index.html"} {
+				router := NewRouter()
+				router.AddStaticFiles(logging.NewMockLogger(logging.DEBUG), "/static", tc.dirName)
+
+				w := httptest.NewRecorder()
+				router.ServeHTTP(w, httptest.NewRequestWithContext(t.Context(), http.MethodGet, path, http.NoBody))
+
+				assert.Equal(t, http.StatusOK, w.Code, "GET %s", path)
+				assert.Equal(t, "<html>Index</html>", strings.TrimSpace(w.Body.String()), "GET %s", path)
+			}
+		})
+	}
+}
+
+// Test_StaticFileServing_MethodNotAllowed covers the methods a static endpoint does not implement.
+// The routes carry no .Methods() matcher — deliberately, because restricting them there drops the
+// request to the catch-all and answers 404, which contradicts the 200 the same path gives for GET —
+// so the handler is the only thing standing between a DELETE and a 200 carrying the file's content.
+func Test_StaticFileServing_MethodNotAllowed(t *testing.T) {
+	tempDir := t.TempDir()
+
+	require.NoError(t, os.WriteFile(filepath.Join(tempDir, "index.html"), []byte("<html>Index</html>"), 0600))
+
+	tests := []struct {
+		name          string
+		method        string
+		path          string
+		expectedCode  int
+		expectedBody  string
+		expectedAllow string
+	}{
+		{"GET at the endpoint root is served", http.MethodGet, "/static", http.StatusOK, "<html>Index</html>", ""},
+		{"GET of a file is served", http.MethodGet, "/static/index.html", http.StatusOK, "<html>Index</html>", ""},
+		// HEAD is a GET without the body: http.ServeContent writes the headers and omits it.
+		{"HEAD at the endpoint root is served", http.MethodHead, "/static", http.StatusOK, "", ""},
+		{"POST is refused", http.MethodPost, "/static", http.StatusMethodNotAllowed, "405 Method Not Allowed", "GET, HEAD"},
+		{"PUT is refused", http.MethodPut, "/static/index.html", http.StatusMethodNotAllowed, "405 Method Not Allowed", "GET, HEAD"},
+		{"PATCH is refused", http.MethodPatch, "/static", http.StatusMethodNotAllowed, "405 Method Not Allowed", "GET, HEAD"},
+		// The one that reads as an outright lie without this: "200, deleted, here it is."
+		{"DELETE is refused", http.MethodDelete, "/static", http.StatusMethodNotAllowed, "405 Method Not Allowed", "GET, HEAD"},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			router := NewRouter()
+			router.AddStaticFiles(logging.NewMockLogger(logging.DEBUG), "/static", tempDir)
+
+			w := httptest.NewRecorder()
+			router.ServeHTTP(w, httptest.NewRequestWithContext(t.Context(), tc.method, tc.path, http.NoBody))
+
+			assert.Equal(t, tc.expectedCode, w.Code)
+			assert.Equal(t, tc.expectedBody, strings.TrimSpace(w.Body.String()))
+
+			// RFC 9110 §15.5.6 requires Allow on a 405, and requires it absent nowhere else here.
+			assert.Equal(t, tc.expectedAllow, w.Header().Get("Allow"))
+		})
+	}
+}
+
+// Test_StaticFileServing_PermissionDenied covers a path the process is not allowed to read. It is
+// the caller being refused rather than the server failing, which is the mapping net/http's own
+// toHTTPError makes and the one nginx and Apache make; 500 would tell a monitor the application is
+// broken when what it has is a file mode. Two routes reach it — validateFile's own
+// errReadPermissionDenied, and a real EACCES from os.Stat — and they must not answer differently.
+func Test_StaticFileServing_PermissionDenied(t *testing.T) {
+	if os.Geteuid() == 0 {
+		t.Skip("running as root: the permission bits under test are not enforced")
+	}
+
+	tempDir := t.TempDir()
+
+	testCases := []struct {
+		name             string
+		setupFiles       func() error
+		path             string
+		staticServerPath string
+		expectedCode     int
+		expectedBody     string
+	}{
+		{
+			// Caught by validateFile's mode check, which returns errReadPermissionDenied — an error
+			// that has to satisfy fs.ErrPermission to be mapped rather than fall through to 500.
+			name: "Unreadable file is forbidden, not a server error",
+			setupFiles: func() error {
+				return os.WriteFile(filepath.Join(tempDir, "noread.txt"), []byte("secret"), 0000)
+			},
+			path:             "/static/noread.txt",
+			staticServerPath: "/static",
+			expectedCode:     http.StatusForbidden,
+			expectedBody:     "403 Forbidden",
+		},
+		{
+			// The other route: the mode check never runs, because os.Stat of the index file inside an
+			// untraversable directory fails with a real EACCES first.
+			name: "Untraversable directory is forbidden, not a server error",
+			setupFiles: func() error {
+				nodir := filepath.Join(tempDir, "nodir")
+				if err := os.MkdirAll(nodir, 0750); err != nil {
+					return err
+				}
+
+				if err := os.WriteFile(filepath.Join(nodir, "index.html"), []byte("<html>X</html>"), 0600); err != nil {
+					return err
+				}
+
+				return os.Chmod(nodir, 0000)
+			},
+			path:             "/static/nodir",
+			staticServerPath: "/static",
+			expectedCode:     http.StatusForbidden,
+			expectedBody:     "403 Forbidden",
+		},
+	}
+
+	// t.TempDir's cleanup cannot walk a directory it has no permission to enter.
+	t.Cleanup(func() {
+		_ = os.Chmod(filepath.Join(tempDir, "nodir"), 0750)
+	})
+
+	runStaticFileTests(t, tempDir, testCases)
+}
+
+// Test_StaticFileServing_NonDirectoryDirName covers a served path that is not a directory.
+// App.AddStaticFiles only stats it, so a regular file passes registration, and the containment
+// check admits the served path itself now that the endpoint root has to resolve to it — together
+// that would serve the file verbatim at the endpoint. The old prefix-only comparison failed closed
+// here by accident, and registration has to keep it closed on purpose.
+func Test_StaticFileServing_NonDirectoryDirName(t *testing.T) {
+	tempDir := t.TempDir()
+
+	configFile := filepath.Join(tempDir, "config.yaml")
+	require.NoError(t, os.WriteFile(configFile, []byte("db_password: hunter2"), 0600))
+
+	tests := []struct {
+		name    string
+		dirName string
+	}{
+		{"regular file", configFile},
+		{"path that does not exist", filepath.Join(tempDir, "absent")},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			router := NewRouter()
+			router.AddStaticFiles(logging.NewMockLogger(logging.DEBUG), "/data", tc.dirName)
+
+			for _, path := range []string{"/data", "/data/"} {
+				w := httptest.NewRecorder()
+				router.ServeHTTP(w, httptest.NewRequestWithContext(t.Context(), http.MethodGet, path, http.NoBody))
+
+				// Nothing was registered, so the request is unrouted rather than refused by the handler.
+				assert.Equal(t, http.StatusNotFound, w.Code, "GET %s", path)
+				assert.NotContains(t, w.Body.String(), "hunter2", "GET %s", path)
+			}
+		})
+	}
+}
+
+// Test_StaticFileServing_NoRedirect covers the paths a file server answers with a redirect rather
+// than content. Every such redirect points at a trailing-slash or "./" form of the URL, and
+// Router.ServeHTTP's path.Clean strips that form straight back off, so the client is sent in a
+// circle it can never satisfy. runStaticFileTests asserts no Location header on every case; these
+// are the requests that produce one if the serving path ever goes back through http.FileServer or
+// http.ServeFile.
+func Test_StaticFileServing_NoRedirect(t *testing.T) {
+	tempDir := t.TempDir()
+
+	setupSub := func() error {
+		if err := os.MkdirAll(filepath.Join(tempDir, "sub"), 0750); err != nil {
+			return err
+		}
+
+		return os.WriteFile(filepath.Join(tempDir, "sub", "index.html"), []byte("<html>Sub</html>"), 0600)
+	}
+
+	testCases := []struct {
+		name             string
+		setupFiles       func() error
+		path             string
+		staticServerPath string
+		expectedCode     int
+		expectedBody     string
+	}{
+		{
+			// http.FileServer answers a directory with "301 Location: sub/".
+			name:             "Subdirectory is served through its index file",
+			setupFiles:       setupSub,
+			path:             "/static/sub",
+			staticServerPath: "/static",
+			expectedCode:     http.StatusOK,
+			expectedBody:     "<html>Sub</html>",
+		},
+		{
+			// The endpoint's own index file. After StripPrefix the request path is "index.html",
+			// which misses http.ServeFile's "/index.html" suffix rule — but http.FileServer, which
+			// sees the unstripped path, answered this with "301 Location: ./".
+			name: "Explicit index.html at the endpoint root",
+			setupFiles: func() error {
+				return os.WriteFile(filepath.Join(tempDir, "index.html"), []byte("<html>Index</html>"), 0600)
+			},
+			path:             "/static/index.html",
+			staticServerPath: "/static",
+			expectedCode:     http.StatusOK,
+			expectedBody:     "<html>Index</html>",
+		},
+		{
+			// The one path that trips http.ServeFile's rule as well: after StripPrefix the request
+			// path is "sub/index.html", which does end in "/index.html". http.ServeContent, which
+			// is handed an open file rather than a URL, has no such rule.
+			name:             "Explicit index.html in a subdirectory",
+			setupFiles:       setupSub,
+			path:             "/static/sub/index.html",
+			staticServerPath: "/static",
+			expectedCode:     http.StatusOK,
+			expectedBody:     "<html>Sub</html>",
+		},
+		{
+			// A miss whose own path ends in "/index.html" must still get the 404 page, not a
+			// redirect issued on the way to serving it.
+			name: "Missing index.html in a subdirectory serves 404.html",
+			setupFiles: func() error {
+				if err := os.MkdirAll(filepath.Join(tempDir, "empty"), 0750); err != nil {
+					return err
+				}
+
+				return os.WriteFile(filepath.Join(tempDir, "404.html"), []byte("<html>404 Not Found</html>"), 0600)
+			},
+			path:             "/static/empty/index.html",
+			staticServerPath: "/static",
+			expectedCode:     http.StatusNotFound,
+			expectedBody:     "<html>404 Not Found</html>",
+		},
+	}
+
+	runStaticFileTests(t, tempDir, testCases)
+}
+
 func Test_isRestrictedFile(t *testing.T) {
 	tests := []struct {
 		name          string
