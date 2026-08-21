@@ -3,6 +3,8 @@ package rbac
 import (
 	"sort"
 	"strings"
+
+	"github.com/gorilla/mux"
 )
 
 // Segment specificity scores, compared segment by segment to order overlapping rules.
@@ -24,6 +26,9 @@ type endpointRule struct {
 	// pattern is the endpoint path, which may contain mux variables.
 	pattern string
 
+	// route is pattern compiled once at load time, or nil when pattern is a literal path.
+	route *mux.Route
+
 	// method is the upper-cased declared method, or "*" for all methods.
 	method string
 
@@ -44,12 +49,27 @@ type endpointRule struct {
 // permission requirement rather than granting access, covering an unknown verb tightens
 // enforcement rather than loosening it.
 func (r *endpointRule) matchesMethod(methodUpper string) bool {
-	return matchesHTTPMethod(methodUpper, []string{r.method})
+	return r.method == "*" || strings.EqualFold(r.method, methodUpper)
+}
+
+// matchesPath reports whether the rule's path covers the request carried by mc, which is shared
+// across the whole scan.
+func (r *endpointRule) matchesPath(path string, mc *matchContext) bool {
+	if r.pattern == "" {
+		return false
+	}
+
+	// A literal path is compared directly; only mux patterns carry a compiled route.
+	if r.route == nil {
+		return r.pattern == path
+	}
+
+	return mc.matches(r.route)
 }
 
 // matches reports whether the rule covers the given request.
-func (r *endpointRule) matches(methodUpper, path string, config *Config) bool {
-	return r.matchesMethod(methodUpper) && matchesEndpointPattern(r.endpoint, path, config)
+func (r *endpointRule) matches(methodUpper, path string, mc *matchContext) bool {
+	return r.matchesMethod(methodUpper) && r.matchesPath(path, mc)
 }
 
 // buildEndpointRules expands endpoints into one rule per declared method and orders them
@@ -88,6 +108,7 @@ func buildEndpointRules(endpoints []EndpointMapping) []endpointRule {
 			byKey[key] = endpointRule{
 				endpoint:    endpoint,
 				pattern:     endpoint.Path,
+				route:       compilePattern(endpoint.Path),
 				method:      methodUpper,
 				isPublic:    endpoint.Public,
 				pathScore:   pathSpecificity(endpoint.Path),
@@ -211,9 +232,11 @@ func compareSpecificity(a, b []int) int {
 }
 
 // resolveEndpoint returns the most specific rule covering the request, and whether it is public.
-func resolveEndpoint(methodUpper, path string, rules []endpointRule, config *Config) (*EndpointMapping, bool) {
+func resolveEndpoint(methodUpper, path string, rules []endpointRule) (*EndpointMapping, bool) {
+	mc := newMatchContext(methodUpper, path)
+
 	for i := range rules {
-		if rules[i].matches(methodUpper, path, config) {
+		if rules[i].matches(methodUpper, path, mc) {
 			return rules[i].endpoint, rules[i].isPublic
 		}
 	}
@@ -235,5 +258,5 @@ func (c *Config) resolve(methodUpper, path string) (*EndpointMapping, bool) {
 		return endpoint, isPublic
 	}
 
-	return resolveEndpoint(methodUpper, path, c.rules, c)
+	return resolveEndpoint(methodUpper, path, c.rules)
 }

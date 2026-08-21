@@ -7,7 +7,6 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/gorilla/mux"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -100,60 +99,6 @@ func TestConfig_resolve_Cases(t *testing.T) {
 	}
 }
 
-func TestMatchesHTTPMethod(t *testing.T) {
-	testCases := []struct {
-		desc           string
-		method         string
-		allowedMethods []string
-		expected       bool
-	}{
-		{
-			desc:           "matches exact method",
-			method:         "GET",
-			allowedMethods: []string{"GET"},
-			expected:       true,
-		},
-		{
-			desc:           "matches case-insensitive method",
-			method:         "get",
-			allowedMethods: []string{"GET"},
-			expected:       true,
-		},
-		{
-			desc:           "matches wildcard method",
-			method:         "POST",
-			allowedMethods: []string{"*"},
-			expected:       true,
-		},
-		{
-			desc:           "matches empty methods as all",
-			method:         "DELETE",
-			allowedMethods: []string{},
-			expected:       true,
-		},
-		{
-			desc:           "does not match different method",
-			method:         "POST",
-			allowedMethods: []string{"GET"},
-			expected:       false,
-		},
-		{
-			desc:           "matches one of multiple methods",
-			method:         "PUT",
-			allowedMethods: []string{"GET", "PUT", "POST"},
-			expected:       true,
-		},
-	}
-
-	for i, tc := range testCases {
-		t.Run(tc.desc, func(t *testing.T) {
-			result := matchesHTTPMethod(tc.method, tc.allowedMethods)
-
-			assert.Equal(t, tc.expected, result, "TEST[%d], Failed.\n%s", i, tc.desc)
-		})
-	}
-}
-
 func TestMatchesEndpointPattern(t *testing.T) {
 	testCases := []struct {
 		desc     string
@@ -227,12 +172,14 @@ func TestMatchesEndpointPattern(t *testing.T) {
 		},
 	}
 
-	config := &Config{}
-	_ = config.processUnifiedConfig()
-
 	for i, tc := range testCases {
 		t.Run(tc.desc, func(t *testing.T) {
-			result := matchesEndpointPattern(tc.endpoint, tc.route, config)
+			rule := endpointRule{
+				pattern: tc.endpoint.Path,
+				route:   compilePattern(tc.endpoint.Path),
+			}
+
+			result := rule.matchesPath(tc.route, newMatchContext(http.MethodGet, tc.route))
 
 			assert.Equal(t, tc.expected, result, "TEST[%d], Failed.\n%s", i, tc.desc)
 		})
@@ -523,85 +470,58 @@ func TestIsMuxPattern(t *testing.T) {
 	}
 }
 
-func TestMatchMuxPattern(t *testing.T) {
-	router := mux.NewRouter()
-
+func TestCompilePattern(t *testing.T) {
 	testCases := []struct {
 		desc     string
 		pattern  string
-		method   string
 		path     string
+		compiled bool
 		expected bool
 	}{
-		{
-			desc:     "matches single variable",
-			pattern:  "/api/users/{id}",
-			method:   "GET",
-			path:     "/api/users/123",
-			expected: true,
-		},
-		{
-			desc:     "matches variable with constraint",
-			pattern:  "/api/users/{id:[0-9]+}",
-			method:   "GET",
-			path:     "/api/users/123",
-			expected: true,
-		},
-		{
-			desc:     "does not match constraint violation",
-			pattern:  "/api/users/{id:[0-9]+}",
-			method:   "GET",
-			path:     "/api/users/abc",
-			expected: false,
-		},
-		{
-			desc:     "matches multi-level pattern",
-			pattern:  "/api/{path:.*}",
-			method:   "GET",
-			path:     "/api/users/123",
-			expected: true,
-		},
-		{
-			desc:     "matches middle variable",
-			pattern:  "/api/{category}/posts",
-			method:   "GET",
-			path:     "/api/tech/posts",
-			expected: true,
-		},
-		{
-			desc:     "matches multiple variables",
-			pattern:  "/api/{category}/posts/{id:[0-9]+}",
-			method:   "GET",
-			path:     "/api/tech/posts/123",
-			expected: true,
-		},
-		{
-			desc:     "does not match different path",
-			pattern:  "/api/users/{id}",
-			method:   "GET",
-			path:     "/api/posts/123",
-			expected: false,
-		},
-		{
-			desc:     "returns false for nil router",
-			pattern:  "/api/users/{id}",
-			method:   "GET",
-			path:     "/api/users/123",
-			expected: false,
-		},
+		{"matches single variable", "/api/users/{id}", "/api/users/123", true, true},
+		{"matches variable with constraint", "/api/users/{id:[0-9]+}", "/api/users/123", true, true},
+		{"does not match constraint violation", "/api/users/{id:[0-9]+}", "/api/users/abc", true, false},
+		{"matches multi-level pattern", "/api/{path:.*}", "/api/users/123", true, true},
+		{"matches middle variable", "/api/{category}/posts", "/api/tech/posts", true, true},
+		{"matches multiple variables", "/api/{category}/posts/{id:[0-9]+}", "/api/tech/posts/123", true, true},
+		{"does not match different path", "/api/users/{id}", "/api/posts/123", true, false},
+		{"literal path is not compiled", "/api/users", "/api/users", false, false},
+		{"empty path is not compiled", "", "/api/users", false, false},
+		{"uncompilable pattern matches nothing", "/api/{id:[}", "/api/users", true, false},
 	}
 
 	for _, tc := range testCases {
 		t.Run(tc.desc, func(t *testing.T) {
-			var testRouter *mux.Router
+			route := compilePattern(tc.pattern)
 
-			if tc.desc != "returns false for nil router" {
-				testRouter = router
+			if !tc.compiled {
+				assert.Nil(t, route, "a literal path carries no compiled route")
+
+				return
 			}
 
-			result := matchMuxPattern(tc.pattern, tc.method, tc.path, testRouter)
-			assert.Equal(t, tc.expected, result)
+			require.NotNil(t, route)
+			assert.Equal(t, tc.expected, newMatchContext(http.MethodGet, tc.path).matches(route))
 		})
+	}
+}
+
+// TestCompilePattern_routeIsNotShared pins the fix for the unbounded router growth: compiling a
+// pattern must not append to any router that outlives the call.
+func TestCompilePattern_routeIsNotShared(t *testing.T) {
+	const pattern = "/api/users/{id}"
+
+	first, second := compilePattern(pattern), compilePattern(pattern)
+
+	require.NotNil(t, first)
+	require.NotNil(t, second)
+	assert.NotSame(t, first, second, "each pattern must compile onto a router of its own")
+
+	mc := newMatchContext(http.MethodGet, "/api/users/123")
+
+	// Matching repeatedly must be a pure read - the same answer, every time.
+	for range 3 {
+		assert.True(t, mc.matches(first))
 	}
 }
 
