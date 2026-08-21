@@ -22,11 +22,16 @@ import (
 )
 
 const (
-	sqlite         = "sqlite"
-	cockroachDB    = "cockroachdb"
-	defaultDBPort  = 3306
-	requireSSLMode = "require"
-	tlsSkipVerify  = "tls=skip-verify"
+	sqlite            = "sqlite"
+	cockroachDB       = "cockroachdb"
+	defaultDBPort     = 3306
+	requireSSLMode    = "require"
+	tlsSkipVerify     = "tls=skip-verify"
+	sslModeDisable    = "disable"
+	sslModeVerifyCA   = "verify-ca"
+	sslModeVerifyFull = "verify-full"
+	tlsCustom         = "tls=custom"
+	localhost         = "localhost"
 )
 
 var (
@@ -366,14 +371,14 @@ func getDBConfig(configs config.Config) *DBConfig {
 		MaxOpenConn: maxOpenConn,
 		MaxIdleConn: maxIdleConn,
 		// Supported for postgres, supabase, cockroachdb, and mysql
-		SSLMode: configs.GetOrDefault("DB_SSL_MODE", "disable"),
+		SSLMode: configs.GetOrDefault("DB_SSL_MODE", sslModeDisable),
 		Charset: configs.Get("DB_CHARSET"),
 	}
 }
 
 func getDBConnectionString(dbConfig *DBConfig) (string, error) {
 	switch dbConfig.Dialect {
-	case "mysql":
+	case dialectMysql:
 		if dbConfig.Charset == "" {
 			dbConfig.Charset = "utf8"
 		}
@@ -467,16 +472,16 @@ func hostEndpoint(dbconfig *DBConfig) string {
 // For custom CA certificates, use DB_TLS_CA_CERT environment variable.
 func getMySQLTLSParam(sslMode string) string {
 	switch strings.ToLower(sslMode) {
-	case "disable", "false":
+	case sslModeDisable, "false":
 		return "" // No TLS - insecure
 	case "preferred":
 		return "tls=preferred" // Try TLS, fallback to plain
-	case "require", "true":
+	case requireSSLMode, "true":
 		return tlsSkipVerify // TLS required but no cert validation
 	case "skip-verify":
 		return tlsSkipVerify // Explicit skip verification
-	case "verify-ca", "verify-full":
-		return "tls=custom" // Use custom TLS config with CA verification
+	case sslModeVerifyCA, sslModeVerifyFull:
+		return tlsCustom // Use custom TLS config with CA verification
 	default:
 		return "" // Default to no TLS
 	}
@@ -507,7 +512,7 @@ func registerMySQLTLSConfig(dbConfig *DBConfig, logger datasource.Logger) error 
 	}
 
 	// Load custom CA certificate
-	caCert, err := os.ReadFile(caCertPath)
+	caCert, err := os.ReadFile(caCertPath) //nolint:gosec // caCertPath is an operator-supplied configuration path, not user input
 	if err != nil {
 		return fmt.Errorf("failed to read CA certificate from %s: %w", caCertPath, err)
 	}
@@ -544,7 +549,7 @@ func registerMySQLTLSConfig(dbConfig *DBConfig, logger datasource.Logger) error 
 func getServerName(hostname string) string {
 	// For localhost/127.0.0.1, use "localhost" explicitly
 	if hostname == "127.0.0.1" || hostname == "::1" {
-		return "localhost"
+		return localhost
 	}
 
 	return hostname

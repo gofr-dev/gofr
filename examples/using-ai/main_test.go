@@ -24,15 +24,20 @@ func TestMain(m *testing.M) {
 	os.Exit(m.Run())
 }
 
-// mockProvider is an in-test OpenAI-compatible server: it answers /models (health), returns a
-// streamed reply when the request asks for one, drives one agent turn (tool call then final answer)
-// when tools are present, and otherwise returns a plain completion.
+// mockProvider is an in-test OpenAI-compatible server: it answers /models (health) and /embeddings,
+// returns a streamed reply when the request asks for one, drives one agent turn (tool call then
+// final answer) when tools are present, and otherwise returns a plain completion.
 func mockProvider(t *testing.T) *httptest.Server {
 	t.Helper()
 
 	return httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/models" {
 			_, _ = io.WriteString(w, `{"data":[]}`)
+			return
+		}
+
+		if r.URL.Path == "/embeddings" {
+			_, _ = io.WriteString(w, embeddingsJSON())
 			return
 		}
 
@@ -72,6 +77,17 @@ func chatJSON(content string) string {
 			`"usage":{"prompt_tokens":5,"completion_tokens":3}}`, content)
 }
 
+// embeddingsJSON answers with the two vectors deliberately out of order — index 1 before index 0.
+// The wire contract permits any order, which is exactly what the "index" field is for, so this is a
+// response a real OpenAI-compatible backend is allowed to send. The handler must still hand each
+// input the vector computed from it, which is what the assertion below pins.
+func embeddingsJSON() string {
+	return `{"model":"mock","data":[` +
+		`{"embedding":[0.3,0.4],"index":1},` +
+		`{"embedding":[0.1,0.2],"index":0}],` +
+		`"usage":{"prompt_tokens":5}}`
+}
+
 func toolCallJSON() string {
 	return `{"model":"mock","choices":[{"message":{"role":"assistant","tool_calls":` +
 		`[{"id":"c1","type":"function","function":{"name":"get_inventory_sku",` +
@@ -99,11 +115,13 @@ func TestIntegration_UsingAI(t *testing.T) {
 		assert.Contains(t, get(t, base+"/inventory/ABC"), "ABC")
 	})
 
-	t.Run("health reports the LLM datasource", func(t *testing.T) {
+	t.Run("health reports only the redacted aggregate status", func(t *testing.T) {
 		out := get(t, base+"/.well-known/health")
-		assert.Contains(t, out, `"llm"`)
 		assert.Contains(t, out, `"status":"UP"`)
-		assert.Contains(t, out, `"provider":"groq"`)
+		// The unauthenticated endpoint must expose only {name, status} — never per-dependency
+		// details such as the datasource name, provider, or credentials.
+		assert.NotContains(t, out, `"llm"`)
+		assert.NotContains(t, out, `"provider":"groq"`)
 		assert.NotContains(t, out, "test-key", "the API key must never appear in health details")
 	})
 
@@ -120,6 +138,13 @@ func TestIntegration_UsingAI(t *testing.T) {
 
 	t.Run("agent runs a tool loop", func(t *testing.T) {
 		assert.Contains(t, post(t, base+"/agent", `{"task":"stock?"}`), "final answer")
+	})
+
+	t.Run("embed returns one vector per input, in input order", func(t *testing.T) {
+		out := post(t, base+"/embed", `{"inputs":["the quick brown fox","a fast auburn fox"]}`)
+		// The provider answered index 1 first. Pairing by array position would return these
+		// swapped, and nothing downstream would notice — a wrong vector is still a valid vector.
+		assert.Contains(t, out, `[[0.1,0.2],[0.3,0.4]]`)
 	})
 
 	t.Run("no goroutine leak under repeated streaming", func(t *testing.T) {

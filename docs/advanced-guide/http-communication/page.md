@@ -85,6 +85,7 @@ The HTTP service client provides methods for making requests to downstream servi
 
 - `Query(ctx, path, queryParams, body)`
 
+
 **For scenarios requiring custom header propagation (authentication, multi-tenancy, user identity propagation), use the `WithHeaders` variants:**
 
 - `GetWithHeaders(ctx, path, queryParams, headers)`
@@ -102,6 +103,7 @@ The HTTP service client provides methods for making requests to downstream servi
 > **QUERY** (RFC 10008) is a safe, idempotent method that carries the query in the
 > request body — bridging the gap between GET (no body) and POST (not safe/idempotent).
 > Like GET, QUERY calls are wrapped by the circuit-breaker and retry options when configured.
+
 
 ```go
 func Customer(ctx *gofr.Context) (any, error) {

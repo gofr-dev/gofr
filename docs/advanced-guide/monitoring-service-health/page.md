@@ -38,96 +38,40 @@ To override this endpoint, pass the following option while registering HTTP Serv
 
 ### 2. Health-Check - /.well-known/health
 
-It is an endpoint which returns whether the service is UP or DOWN along with stats, host, status about the dependent datasources and services.
+It is an unauthenticated endpoint that reports an **aggregate status** for the application. It
+aggregates the health of every registered datasource and service into a single status and returns
+**only** the application `name` and that aggregate `status` — `UP` when all dependencies are healthy,
+`DEGRADED` when one or more are down.
 
-Sample response of how it appears when all the services, and connected data sources are UP:
+Note that the endpoint answers `200` in both cases: a `DEGRADED` aggregate does **not** produce a
+non-2xx response, so a probe wired directly to the status code will always see the service as ready.
+A caller that wants to act on degradation must read the `status` field itself.
+
+To avoid leaking infrastructure details on an unauthenticated port, this endpoint intentionally does
+**not** expose per-dependency information (hosts, ports, database/keyspace/bucket names, connection
+pool stats, usernames, or raw error strings). No HTTP route serves the detailed map after this
+change — `Container.Health` still computes it for in-process ops tooling.
+
+> **Changed response shape:** this endpoint previously returned the full per-dependency map. It now
+> returns `{name, status}` only. The HTTP status code is unchanged (`200`), so existing readiness
+> probes keep working; anything parsing the body for dependency details must be updated. The
+> framework `version` field is also gone — it is exactly what an attacker enumerating known CVEs
+> wants from an unauthenticated endpoint, so dropping it is part of the fix, but it is also the
+> field most likely to be on an existing dashboard.
+
+Sample response when the service is ready (HTTP 200):
 ```json
 {
   "data": {
-    "anotherService": {
-      "status": "UP",
-      "details": {
-        "host": "localhost:9000"
-      }
-    },
-    "redis": {
-      "status": "UP",
-      "details": {
-        "host": "localhost:2002",
-        "stats": {
-          "active_defrag_hits": "0",
-          "active_defrag_key_hits": "0",
-          "active_defrag_key_misses": "0",
-          "active_defrag_misses": "0",
-          "current_active_defrag_time": "0",
-          "current_eviction_exceeded_time": "0",
-          "dump_payload_sanitizations": "0",
-          "evicted_clients": "0",
-          "evicted_keys": "0",
-          "expire_cycle_cpu_milliseconds": "1",
-          "expired_keys": "0",
-          "expired_stale_perc": "0.00",
-          "expired_time_cap_reached_count": "0",
-          "instantaneous_input_kbps": "0.00",
-          "instantaneous_input_repl_kbps": "0.00",
-          "instantaneous_ops_per_sec": "0",
-          "instantaneous_output_kbps": "0.00",
-          "instantaneous_output_repl_kbps": "0.00",
-          "io_threaded_reads_processed": "0",
-          "io_threaded_writes_processed": "0",
-          "keyspace_hits": "0",
-          "keyspace_misses": "0",
-          "latest_fork_usec": "0",
-          "migrate_cached_sockets": "0",
-          "pubsub_channels": "0",
-          "pubsub_patterns": "0",
-          "pubsubshard_channels": "0",
-          "rejected_connections": "0",
-          "reply_buffer_expands": "0",
-          "reply_buffer_shrinks": "1",
-          "slave_expires_tracked_keys": "0",
-          "sync_full": "0",
-          "sync_partial_err": "0",
-          "sync_partial_ok": "0",
-          "total_active_defrag_time": "0",
-          "total_commands_processed": "2",
-          "total_connections_received": "1",
-          "total_error_replies": "2",
-          "total_eviction_exceeded_time": "0",
-          "total_forks": "0",
-          "total_net_input_bytes": "183",
-          "total_net_output_bytes": "257",
-          "total_net_repl_input_bytes": "0",
-          "total_net_repl_output_bytes": "0",
-          "total_reads_processed": "5",
-          "total_writes_processed": "4",
-          "tracking_total_items": "0",
-          "tracking_total_keys": "0",
-          "tracking_total_prefixes": "0",
-          "unexpected_error_replies": "0"
-        }
-      }
-    },
-    "sql": {
-      "status": "UP",
-      "details": {
-        "host": "localhost:2001/test",
-        "stats": {
-          "maxOpenConnections": 0,
-          "openConnections": 1,
-          "inUse": 0,
-          "idle": 1,
-          "waitCount": 0,
-          "waitDuration": 0,
-          "maxIdleClosed": 0,
-          "maxIdleTimeClosed": 0,
-          "maxLifetimeClosed": 0
-        }
-      }
-    }
+    "name": "sample-service",
+    "status": "UP"
   }
 }
 ```
+
+> **Note:** The detailed per-dependency health map is being moved to the metrics server
+> (`METRICS_PORT`), behind the same network boundary as `/metrics` and `/debug/pprof`. Track that
+> work in #3806.
 
 ## Related production guides
 

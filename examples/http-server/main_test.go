@@ -56,7 +56,7 @@ func TestIntegration_SimpleAPIServer(t *testing.T) {
 	host := fmt.Sprintf("http://localhost:%d", httpPort)
 
 	go main()
-	time.Sleep(100 * time.Millisecond) // Giving some time to start the server
+	testutil.WaitForHTTPServer(t, host)
 
 	tests := []struct {
 		desc string
@@ -128,6 +128,7 @@ func TestIntegration_QueryHandler(t *testing.T) {
 	assert.Equal(t, "golang", data.Data["matched"])
 }
 
+
 func TestIntegration_SimpleAPIServer_Errors(t *testing.T) {
 	httpPort := testutil.GetFreePort(t)
 	port := testutil.GetFreePort(t)
@@ -138,7 +139,7 @@ func TestIntegration_SimpleAPIServer_Errors(t *testing.T) {
 	host := fmt.Sprintf("http://localhost:%d", httpPort)
 
 	go main()
-	time.Sleep(100 * time.Millisecond) // Giving some time to start the server
+	testutil.WaitForHTTPServer(t, host)
 
 	tests := []struct {
 		desc       string
@@ -203,7 +204,7 @@ func TestIntegration_SimpleAPIServer_Health(t *testing.T) {
 	host := fmt.Sprintf("http://localhost:%d", httpPort)
 
 	go main()
-	time.Sleep(100 * time.Millisecond) // Giving some time to start the server
+	testutil.WaitForHTTPServer(t, host)
 
 	tests := []struct {
 		desc       string
@@ -378,16 +379,8 @@ func TestTraceHandler(t *testing.T) {
 	// Redis expectations
 	mocks.Redis.EXPECT().Ping(gomock.Any()).Return(nil).Times(5)
 
-	// Create the test context FIRST
 	ctx := createTestContext(http.MethodGet, "/trace", mockContainer)
 
-	// TraceHandler calls Trace() twice, which modifies ctx.Context each time:
-	// 1. defer c.Trace("traceHandler").End() - modifies ctx.Context
-	// 2. span2 := c.Trace("some-sample-work") - modifies ctx.Context again
-	// We need to simulate this exact sequence to get the actual context that will be used
-	defer ctx.Trace("traceHandler").End()  // First Trace() call (same as TraceHandler)
-	span2 := ctx.Trace("some-sample-work") // Second Trace() call (same as TraceHandler)
-	defer span2.End()
 
 	// HTTP service mock - use mocks.HTTPServices["serviceName"] to access the specific service
 	// Important: Use the map keyed by service name, not mocks.HTTPService (singular)
@@ -396,12 +389,14 @@ func TestTraceHandler(t *testing.T) {
 		Body:       io.NopCloser(strings.NewReader(`{"data":"mock data"}`)),
 	}
 
-	// Now ctx.Context has been modified by both Trace() calls, matching what TraceHandler does
-	// TraceHandler calls: c.GetHTTPService("anotherService").Get(c, "redis", nil)
-	// When passing 'c' (*gofr.Context) to Get(), Go uses the embedded context.Context
-	// which is now the modified context after both Trace() calls
+	// TraceHandler calls c.GetHTTPService("anotherService").Get(c, "redis", nil) — it
+	// passes the *gofr.Context itself as the context argument, and c.Trace() swaps
+	// c.Context out on every call along the way. Neither the concrete type nor the
+	// identity of that argument is something the handler contract guarantees, so it
+	// is matched with gomock.Any(); the path and query params are what this test
+	// actually asserts on.
 	mocks.HTTPServices["anotherService"].EXPECT().Get(
-		ctx.Context, // Use the context after both Trace() calls (use gomock.Any to avoid this!)
+		gomock.Any(),
 		"redis",
 		nil, // queryParams is nil in TraceHandler
 	).Return(mockResp, nil)

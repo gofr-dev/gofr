@@ -2,7 +2,6 @@ package http
 
 import (
 	"bytes"
-	"context"
 	"errors"
 	"io"
 	"mime/multipart"
@@ -20,14 +19,14 @@ import (
 )
 
 func TestParam(t *testing.T) {
-	req := NewRequest(httptest.NewRequest(http.MethodGet, "/abc?a=b", http.NoBody))
+	req := NewRequest(httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/abc?a=b", http.NoBody))
 	if req.Param("a") != "b" {
 		t.Error("Can not parse the request params")
 	}
 }
 
 func TestBind(t *testing.T) {
-	r := httptest.NewRequest(http.MethodPost, "/abc", strings.NewReader(`{"a": "b", "b": 5}`))
+	r := httptest.NewRequestWithContext(t.Context(), http.MethodPost, "/abc", strings.NewReader(`{"a": "b", "b": 5}`))
 	r.Header.Set("Content-Type", "application/json")
 	req := NewRequest(r)
 
@@ -129,7 +128,7 @@ func TestBind_FileSuccess(t *testing.T) {
 }
 
 func TestBind_NoContentType(t *testing.T) {
-	req := NewRequest(httptest.NewRequest(http.MethodPost, "/abc", strings.NewReader(`{"a": "b", "b": 5}`)))
+	req := NewRequest(httptest.NewRequestWithContext(t.Context(), http.MethodPost, "/abc", strings.NewReader(`{"a": "b", "b": 5}`)))
 	x := struct {
 		A string `json:"a"`
 		B int    `json:"b"`
@@ -251,7 +250,16 @@ func Test_Params(t *testing.T) {
 
 	assert.ElementsMatch(t, expectedCategories, r.Params("category"), "expected all values of 'category' to match")
 	assert.ElementsMatch(t, expectedTags, r.Params("tag"), "expected all values of 'tag' to match")
-	assert.Empty(t, r.Params("nonexistent"), "expected empty slice for non-existent query param")
+	// Nil, not merely empty: assert.Empty alone would pass for both.
+	assert.Nil(t, r.Params("nonexistent"), "absent key must return a nil slice")
+
+	// Pin the actual response body, not just the marshaled value: a handler may return Params
+	// directly, and this is what its client receives. Going through Responder means a future change
+	// to how it normalizes nil values cannot silently alter the wire shape while this test passes.
+	rec := httptest.NewRecorder()
+	NewResponder(rec, http.MethodGet).Respond(r.Params("nonexistent"), nil)
+	assert.JSONEq(t, `{"data":null}`, rec.Body.String(),
+		"an absent key must reach the client as null, not [] or an omitted field")
 }
 
 func TestBind_FormURLEncoded(t *testing.T) {
@@ -320,7 +328,7 @@ func TestBind_BinaryOctetStream_NotPointerToByteSlice(t *testing.T) {
 }
 
 func TestHostName_DefaultProto(t *testing.T) {
-	req := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "http://example.com/test", http.NoBody)
+	req := httptest.NewRequestWithContext(t.Context(), http.MethodGet, "http://example.com/test", http.NoBody)
 	r := NewRequest(req)
 
 	hostname := r.HostName()
@@ -329,7 +337,7 @@ func TestHostName_DefaultProto(t *testing.T) {
 }
 
 func TestHostName_WithForwardedProto(t *testing.T) {
-	req := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "http://example.com/test", http.NoBody)
+	req := httptest.NewRequestWithContext(t.Context(), http.MethodGet, "http://example.com/test", http.NoBody)
 	req.Header.Set("X-Forwarded-Proto", "https")
 
 	r := NewRequest(req)
@@ -340,7 +348,7 @@ func TestHostName_WithForwardedProto(t *testing.T) {
 }
 
 func TestPathParam_NonExistent(t *testing.T) {
-	req := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/test", http.NoBody)
+	req := httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/test", http.NoBody)
 	r := NewRequest(req)
 
 	result := r.PathParam("nonexistent")
@@ -350,7 +358,7 @@ func TestPathParam_NonExistent(t *testing.T) {
 
 func TestBody_MultipleReads(t *testing.T) {
 	bodyContent := `{"key":"value"}`
-	req := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/test", strings.NewReader(bodyContent))
+	req := httptest.NewRequestWithContext(t.Context(), http.MethodPost, "/test", strings.NewReader(bodyContent))
 	r := NewRequest(req)
 
 	// First read
@@ -365,7 +373,7 @@ func TestBody_MultipleReads(t *testing.T) {
 }
 
 func TestBody_EmptyBody(t *testing.T) {
-	req := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/test", http.NoBody)
+	req := httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/test", http.NoBody)
 	r := NewRequest(req)
 
 	body, err := r.body()
@@ -375,7 +383,7 @@ func TestBody_EmptyBody(t *testing.T) {
 }
 
 func TestBind_UnsupportedContentType(t *testing.T) {
-	req := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/test", strings.NewReader("data"))
+	req := httptest.NewRequestWithContext(t.Context(), http.MethodPost, "/test", strings.NewReader("data"))
 	req.Header.Set("Content-Type", "text/plain")
 
 	r := NewRequest(req)
@@ -386,7 +394,7 @@ func TestBind_UnsupportedContentType(t *testing.T) {
 }
 
 func TestParam_NonExistent(t *testing.T) {
-	req := NewRequest(httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/test", http.NoBody))
+	req := NewRequest(httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/test", http.NoBody))
 
 	result := req.Param("missing")
 
@@ -394,7 +402,7 @@ func TestParam_NonExistent(t *testing.T) {
 }
 
 func TestContext_ReturnsRequestContext(t *testing.T) {
-	httpReq := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/test", http.NoBody)
+	httpReq := httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/test", http.NoBody)
 	r := NewRequest(httpReq)
 
 	ctx := r.Context()

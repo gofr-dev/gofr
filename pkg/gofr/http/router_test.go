@@ -10,6 +10,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"gofr.dev/pkg/gofr/config"
 	"gofr.dev/pkg/gofr/container"
@@ -348,14 +349,31 @@ func Test_StaticFileServing_Static(t *testing.T) {
 			expectedBody:     "403 Forbidden",
 		},
 		{
+			// The name is matched case-insensitively: on a case-insensitive filesystem this URL
+			// opens the very file the exact comparison refused. The restriction is applied before
+			// the file is resolved, so the case that is served is not what decides it and this
+			// holds on a case-sensitive filesystem too.
+			name: "Access forbidden OpenAPI JSON in a different case",
+			setupFiles: func() error {
+				return os.WriteFile(filepath.Join(tempDir, DefaultSwaggerFileName), []byte(`{"openapi": "3.0.0"}`), 0600)
+			},
+			path:             "/static/openapi.JSON",
+			staticServerPath: "/static",
+			expectedCode:     http.StatusForbidden,
+			expectedBody:     "403 Forbidden",
+		},
+		{
+			// An unreadable file is the caller being refused, not the server failing — the mapping
+			// net/http's own toHTTPError makes. This asserted 500 before, which tells a monitor the
+			// application is broken when what it has is a file mode.
 			name: "Serving File with no Read permission",
 			setupFiles: func() error {
 				return os.WriteFile(filepath.Join(tempDir, "restricted.txt"), []byte("Restricted content"), 0000)
 			},
 			path:             "/static/restricted.txt",
 			staticServerPath: "/static",
-			expectedCode:     http.StatusInternalServerError,
-			expectedBody:     "500 Internal Server Error",
+			expectedCode:     http.StatusForbidden,
+			expectedBody:     "403 Forbidden",
 		},
 	}
 
@@ -385,6 +403,15 @@ func Test_isRestrictedFile(t *testing.T) {
 			expected:      true,
 		},
 		{
+			// A case-insensitive filesystem opens the same spec for this name, so the restriction
+			// has to cover every spelling of it rather than the one canonical form.
+			name:          "openapi.json in a different case is restricted",
+			directoryName: "/app/public",
+			url:           "/openapi.JSON",
+			absPath:       "/app/public/openapi.JSON",
+			expected:      true,
+		},
+		{
 			name:          "file outside static directory is restricted",
 			directoryName: "/app/public",
 			url:           "/secret.txt",
@@ -403,6 +430,15 @@ func Test_isRestrictedFile(t *testing.T) {
 			directoryName: "/app/public",
 			url:           "/sub/page.html",
 			absPath:       "/app/public/sub/page.html",
+			expected:      false,
+		},
+		{
+			// A request for the endpoint root resolves to the directory itself, with no trailing
+			// separator. It is the directory being served, not an escape from it.
+			name:          "static directory itself is not restricted",
+			directoryName: "/app/public",
+			url:           "/",
+			absPath:       "/app/public",
 			expected:      false,
 		},
 	}
@@ -444,6 +480,11 @@ func runStaticFileTests(t *testing.T, tempDir string, testCases []struct {
 
 			assert.Equal(t, tc.expectedCode, w.Code)
 			assert.Equal(t, tc.expectedBody, strings.TrimSpace(w.Body.String()))
+
+			// A static endpoint never redirects. Every redirect the file server used to issue
+			// pointed at a trailing-slash or "./" form that Router.ServeHTTP's path.Clean undoes,
+			// so any Location here is a client loop waiting to happen.
+			assert.Empty(t, w.Header().Get("Location"), "static file serving must not redirect")
 		})
 	}
 }

@@ -201,7 +201,7 @@ spec:
 
 A few choices worth calling out:
 
-- The probe paths are GoFr's built-in endpoints. `/.well-known/alive` is cheap and exempt from auth by default; `/.well-known/health` includes dependency status and is more truthful for readiness.
+- The probe paths are GoFr's built-in endpoints. `/.well-known/alive` is cheap and exempt from auth by default; `/.well-known/health` reflects dependency status in its aggregate and is more truthful for readiness.
 - Env vars `HTTP_PORT`, `GRPC_PORT`, `METRICS_PORT` are set explicitly so the container ports and probe ports always agree with what GoFr actually binds.
 - The Prometheus scrape annotations point to `metricsPort`. If your platform uses ServiceMonitor/PodMonitor instead, drop the annotations and add a separate template.
 - `terminationGracePeriodSeconds: 30` gives GoFr's graceful shutdown time to drain in-flight requests.
@@ -261,7 +261,7 @@ Tune per service.
 No. This is reference material to copy into your service repo. A future `gofr-dev/gofr-k8s-starter` repo could host a maintained chart.
 {% /faq-item %}
 {% faq-item question="Why probe `/.well-known/health` instead of `/.well-known/alive` for readiness?" %}
-`/health` includes dependency status, so a pod with a broken DB connection will be removed from service endpoints. `/alive` only confirms the process is running, which is what you want for liveness.
+`/health` folds dependency status into its aggregate, so a pod with a broken DB connection reports `DEGRADED` rather than `UP`. `/alive` only confirms the process is running, which is what you want for liveness.
 {% /faq-item %}
 {% faq-item question="Do I need separate Service ports for HTTP, gRPC, and metrics?" %}
 Yes if you want all three reachable. They listen on different ports (8000/9000/2121 by default) and need separate Service entries.

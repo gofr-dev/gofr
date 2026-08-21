@@ -28,7 +28,7 @@ type QueryLog struct {
 }
 
 func (ql *QueryLog) PrettyPrint(writer io.Writer) {
-	if ql.Query == "pipeline" {
+	if ql.Query == queryPipeline {
 		fmt.Fprintf(writer, "\u001B[38;5;8m%-32s \u001B[38;5;24m%-6s\u001B[0m %8d\u001B[38;5;8mµs\u001B[0m %s\n",
 			clean(ql.Query), "REDIS", ql.Duration,
 			ql.String()[1:len(ql.String())-1])
@@ -98,7 +98,7 @@ func (r *redisHook) ProcessPipelineHook(next redis.ProcessPipelineHook) redis.Pr
 	return func(ctx context.Context, cmds []redis.Cmder) error {
 		start := time.Now()
 		err := next(ctx, cmds)
-		r.sendOperationStats(start, "pipeline", cmds[:len(cmds)-1])
+		r.sendOperationStats(start, queryPipeline, cmds[:len(cmds)-1])
 
 		return err
 	}

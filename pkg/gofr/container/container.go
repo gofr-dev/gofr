@@ -45,6 +45,11 @@ import (
 const (
 	redisPubSubModeStreams = "streams"
 	redisPubSubModePubSub  = "pubsub"
+
+	pubSubBackendKafka  = "KAFKA"
+	pubSubBackendGoogle = "GOOGLE"
+	pubSubBackendMQTT   = "MQTT"
+	pubSubBackendRedis  = "REDIS"
 )
 
 // Container is a collection of all common application level concerns. Things like Logger, Connection Pool for Redis
@@ -155,13 +160,13 @@ func (c *Container) Create(conf config.Config) {
 
 func (c *Container) createPubSub(conf config.Config) {
 	switch strings.ToUpper(conf.Get("PUBSUB_BACKEND")) {
-	case "KAFKA":
+	case pubSubBackendKafka:
 		c.createKafkaPubSub(conf)
-	case "GOOGLE":
+	case pubSubBackendGoogle:
 		c.createGooglePubSub(conf)
-	case "MQTT":
+	case pubSubBackendMQTT:
 		c.PubSub = c.createMqttPubSub(conf)
-	case "REDIS":
+	case pubSubBackendRedis:
 		c.createRedisPubSub(conf)
 	}
 }
@@ -318,6 +323,11 @@ func (c *Container) LLM(name ...string) ai.LLM {
 // are independent of any registered model.
 type notConfiguredLLM struct{ c *Container }
 
+// Every LLM returned from the container must satisfy the optional capability interfaces, so a
+// handler's type assertion succeeds whether or not a model is configured — the absence is then
+// reported as ai.ErrLLMNotConfigured from the call itself, not as a failed assertion.
+var _ ai.EmbeddingLLM = notConfiguredLLM{}
+
 func (notConfiguredLLM) Chat(context.Context, []ai.Message, ...ai.Option) (*ai.Response, error) {
 	return nil, ai.ErrLLMNotConfigured
 }
@@ -327,6 +337,10 @@ func (notConfiguredLLM) Generate(context.Context, string, ...ai.Option) (*ai.Res
 }
 
 func (notConfiguredLLM) Stream(context.Context, []ai.Message, ...ai.Option) (ai.Streamer, error) {
+	return nil, ai.ErrLLMNotConfigured
+}
+
+func (notConfiguredLLM) Embed(context.Context, []string, ...ai.Option) (*ai.EmbeddingResponse, error) {
 	return nil, ai.ErrLLMNotConfigured
 }
 

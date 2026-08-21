@@ -81,6 +81,7 @@ func (*mockHTTP) QueryWithHeaders(_ context.Context, _ string, _ map[string]any,
 	return &http.Response{StatusCode: http.StatusOK, Body: http.NoBody}, nil
 }
 
+
 // Helper to create a retry HTTP instance.
 func newRetryHTTP() HTTP {
 	mockHTTP := &mockHTTP{}
@@ -161,6 +162,7 @@ func TestRetryProvider_QueryWithHeaders(t *testing.T) {
 
 	assert.Equal(t, http.StatusOK, resp.StatusCode)
 }
+
 
 func TestRetryProvider_Put(t *testing.T) {
 	retryHTTP := newRetryHTTP()

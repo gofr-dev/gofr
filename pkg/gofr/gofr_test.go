@@ -1124,6 +1124,10 @@ func Test_AddCronJob_Fail(t *testing.T) {
 		})
 	})
 
+	// AddCronJob starts the scheduler even when the schedule itself is rejected;
+	// without this the ticker goroutine outlives the test.
+	a.cron.Stop()
+
 	assert.Contains(t, stderr, "error adding cron job")
 	assert.NotContains(t, stderr, "test-job-fail")
 }
@@ -1131,12 +1135,17 @@ func Test_AddCronJob_Fail(t *testing.T) {
 func Test_AddCronJob_Success(t *testing.T) {
 	pass := false
 	a := App{
-		container: &container.Container{},
+		container: &container.Container{Logger: logging.NewMockLogger(logging.ERROR)},
 	}
 
 	a.AddCronJob("* * * * *", "test-job", func(ctx *Context) {
 		ctx.Logger.Info("test-job-success")
 	})
+
+	// "* * * * *" fires at second 0 of every minute. Left running, this scheduler
+	// outlives the test and its job goroutine logs against a container the test
+	// no longer owns — the nil-logger panic seen in gofr-dev/gofr#3813.
+	defer a.cron.Stop()
 
 	assert.Len(t, a.cron.jobs, 1)
 
@@ -1161,9 +1170,17 @@ func setupTestEnvironment(t *testing.T) (host string, htmlContent []byte) {
 
 	createPublicDirectory(t, "testdir", htmlContent)
 
+	// A directory the test owns end to end, so that the endpoint-root case does not depend on the
+	// swagger-ui index.html checked in under pkg/gofr/static.
+	indexDir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(indexDir, "index.html"), htmlContent, 0600); err != nil {
+		t.Fatalf("Couldn't create index.html in %s, error: %s", indexDir, err)
+	}
+
 	app := New()
 
 	app.AddStaticFiles("gofrTest", "testdir")
+	app.AddStaticFiles("gofrTestIndex", indexDir)
 
 	app.httpServer.port = configs.HTTPPort
 
@@ -1199,8 +1216,17 @@ func TestStaticHandler(t *testing.T) {
 			expectedResponseHeaderType: "text/html; charset=utf-8", expectedBody: string(htmlContent),
 		},
 		{
+			// The endpoint root serves the directory's index.html. It answered 404 before the
+			// endpoint root was routable at all. This one depends on the checked-in
+			// pkg/gofr/static/index.html (the bundled swagger-ui page); the case below covers
+			// the same behavior with a directory the test writes itself.
 			desc: "check public endpoint", method: http.MethodGet,
-			path: "/" + defaultPublicStaticDir, statusCode: http.StatusNotFound,
+			path: "/" + defaultPublicStaticDir, statusCode: http.StatusOK,
+		},
+		{
+			desc: "check endpoint root of a directory with an index file", method: http.MethodGet,
+			path: "/" + "gofrTestIndex", statusCode: http.StatusOK,
+			expectedResponseHeaderType: "text/html; charset=utf-8", expectedBody: string(htmlContent),
 		},
 		{
 			desc: "check file content index.html in custom dir", method: http.MethodGet, path: "/" + "gofrTest" + "/" + indexHTML,
@@ -1208,6 +1234,8 @@ func TestStaticHandler(t *testing.T) {
 			expectedResponseHeaderType: "text/html; charset=utf-8", expectedBody: string(htmlContent),
 		},
 		{
+			// "testdir" has no index.html, so its root stays a 404 rather than becoming a
+			// listing of the directory's contents.
 			desc: "check public endpoint in custom dir", method: http.MethodGet, path: "/" + "gofrTest",
 			statusCode: http.StatusNotFound,
 		},
@@ -1814,8 +1842,10 @@ func TestStartGRPCServer_Registered(t *testing.T) {
 	// Give it a moment to start then shut down
 	time.Sleep(50 * time.Millisecond)
 
-	if app.grpcServer != nil && app.grpcServer.server != nil {
-		app.grpcServer.server.Stop()
+	// Read through getServer rather than the field: createServer publishes it from the serve
+	// goroutine, so an unguarded read here races that write.
+	if app.grpcServer != nil {
+		app.grpcServer.forceStop()
 	}
 
 	wg.Wait()

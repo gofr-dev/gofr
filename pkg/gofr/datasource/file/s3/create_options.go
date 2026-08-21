@@ -92,14 +92,8 @@ func (f *FileSystem) CreateWithOptions(ctx context.Context, name string, opts *f
 
 	f.logger.Logf("file with name %s created with options", name)
 
-	return &S3File{
-		conn:         f.conn,
-		name:         path.Join(f.config.BucketName, name),
-		logger:       f.logger,
-		metrics:      f.metrics,
-		body:         res.Body,
-		contentType:  *res.ContentType,
-		lastModified: *res.LastModified,
-		size:         *res.ContentLength,
-	}, nil
+	// newS3File nil-checks the optional Content-Type/Last-Modified/Content-Length
+	// headers, which S3-compatible backends (e.g. Cloudflare R2) may omit; building
+	// S3File inline here would dereference them unconditionally and panic.
+	return f.newS3File(name, res), nil
 }

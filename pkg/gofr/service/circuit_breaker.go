@@ -208,6 +208,7 @@ func (cb *circuitBreaker) tryCircuitRecovery() bool {
 	}
 
 	cb.mu.Unlock()
+
 	return false
 }
 

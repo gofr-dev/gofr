@@ -15,20 +15,44 @@ import (
 	"google.golang.org/grpc/status"
 
 	"gofr.dev/examples/grpc/grpc-streaming-server/server"
+	"gofr.dev/pkg/gofr/testutil"
 )
+
+// grpcHost is the address the example's gRPC server listens on, assigned in TestMain.
+var grpcHost string
 
 func TestMain(m *testing.M) {
 	os.Setenv("GOFR_TELEMETRY", "false")
 
-	go main()
-	time.Sleep(300 * time.Millisecond) // wait for server to boot
+	// Point the example at free ports rather than the fixed ones its configs/.env asks for. A
+	// fixed port is a hazard in a test: gofr.New() reports an already-taken port with Fatalf,
+	// which exits the process, so the whole package dies before a single test runs. configs/.env
+	// asks for GRPC_PORT 9000 — the port MinIO serves on, including in the CI job that runs these
+	// very tests. The system environment takes precedence over the config file, so what is set
+	// here is what the example uses.
+	configs, err := testutil.ReserveServerPorts()
+	if err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		os.Exit(1)
+	}
 
-	m.Run()
+	grpcHost = configs.GRPCHost
+
+	go main()
+
+	// WaitForGRPCServerE rather than WaitForGRPCServer: TestMain gets a *testing.M and has no
+	// *testing.T for require to fail on, so it takes the error-returning variant of the same wait.
+	if err := testutil.WaitForGRPCServerE(grpcHost); err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		os.Exit(1)
+	}
+
+	os.Exit(m.Run())
 }
 
 func TestServerStream(t *testing.T) {
 	ctx := context.Background()
-	conn, err := grpc.Dial("localhost:9000", grpc.WithInsecure())
+	conn, err := grpc.Dial(grpcHost, grpc.WithInsecure())
 	if err != nil {
 		t.Fatalf("Failed to dial: %v", err)
 	}
@@ -62,7 +86,7 @@ func TestServerStream(t *testing.T) {
 
 func TestClientStream(t *testing.T) {
 	ctx := context.Background()
-	conn, err := grpc.Dial("localhost:9000", grpc.WithInsecure())
+	conn, err := grpc.Dial(grpcHost, grpc.WithInsecure())
 	if err != nil {
 		t.Fatalf("Dial failed: %v", err)
 	}
@@ -93,7 +117,7 @@ func TestClientStream(t *testing.T) {
 
 func TestBiDiStream(t *testing.T) {
 	ctx := context.Background()
-	conn, err := grpc.Dial("localhost:9000", grpc.WithInsecure())
+	conn, err := grpc.Dial(grpcHost, grpc.WithInsecure())
 	if err != nil {
 		t.Fatalf("Dial failed: %v", err)
 	}
@@ -108,8 +132,9 @@ func TestBiDiStream(t *testing.T) {
 	messages := []string{"msg1", "msg2", "msg3"}
 	go func() {
 		for _, msg := range messages {
+			// No pacing needed: the server handles this stream's messages one at a time and
+			// replies in order, so the responses stay ordered regardless of send timing.
 			_ = stream.Send(&server.Request{Message: msg})
-			time.Sleep(100 * time.Millisecond)
 		}
 		_ = stream.CloseSend()
 	}()
@@ -138,7 +163,7 @@ func TestBiDiStream(t *testing.T) {
 // TestServerStream_ContextCancellation tests that server-side streaming
 // properly handles context cancellation
 func TestServerStream_ContextCancellation(t *testing.T) {
-	conn, err := grpc.Dial("localhost:9000", grpc.WithInsecure())
+	conn, err := grpc.Dial(grpcHost, grpc.WithInsecure())
 	if err != nil {
 		t.Fatalf("Failed to dial: %v", err)
 	}
@@ -168,10 +193,9 @@ func TestServerStream_ContextCancellation(t *testing.T) {
 
 		if !receivedFirst {
 			receivedFirst = true
-			// Cancel context to trigger cancellation handling
+			// Cancel context to trigger cancellation handling. The next Recv then fails with
+			// Canceled off the client's own context — nothing to wait for the server on.
 			cancel()
-			// Give server time to detect cancellation
-			time.Sleep(200 * time.Millisecond)
 		}
 
 		_ = resp // Use response to avoid unused variable
@@ -193,7 +217,7 @@ func TestServerStream_ContextCancellation(t *testing.T) {
 // TestClientStream_ContextCancellation tests that client-side streaming
 // properly handles context cancellation
 func TestClientStream_ContextCancellation(t *testing.T) {
-	conn, err := grpc.Dial("localhost:9000", grpc.WithInsecure())
+	conn, err := grpc.Dial(grpcHost, grpc.WithInsecure())
 	if err != nil {
 		t.Fatalf("Dial failed: %v", err)
 	}
@@ -215,10 +239,9 @@ func TestClientStream_ContextCancellation(t *testing.T) {
 		t.Fatalf("Send failed: %v", err)
 	}
 
-	// Cancel context
+	// Cancel context. The call below fails with Canceled off the client's own context, so there
+	// is nothing to wait for the server to notice.
 	cancel()
-	// Give server time to detect cancellation
-	time.Sleep(200 * time.Millisecond)
 
 	// Try to close and receive - should get cancellation error
 	_, err = stream.CloseAndRecv()
@@ -237,7 +260,7 @@ func TestClientStream_ContextCancellation(t *testing.T) {
 // TestClientStream_EOFHandling tests that client-side streaming
 // properly handles EOF when client closes the stream
 func TestClientStream_EOFHandling(t *testing.T) {
-	conn, err := grpc.Dial("localhost:9000", grpc.WithInsecure())
+	conn, err := grpc.Dial(grpcHost, grpc.WithInsecure())
 	if err != nil {
 		t.Fatalf("Dial failed: %v", err)
 	}
@@ -273,7 +296,7 @@ func TestClientStream_EOFHandling(t *testing.T) {
 // TestBiDiStream_ContextCancellation tests that bidirectional streaming
 // properly handles context cancellation
 func TestBiDiStream_ContextCancellation(t *testing.T) {
-	conn, err := grpc.Dial("localhost:9000", grpc.WithInsecure())
+	conn, err := grpc.Dial(grpcHost, grpc.WithInsecure())
 	if err != nil {
 		t.Fatalf("Dial failed: %v", err)
 	}
@@ -305,10 +328,9 @@ func TestBiDiStream_ContextCancellation(t *testing.T) {
 		t.Errorf("Unexpected response: got %q, want %q", resp.GetMessage(), "Echo: test")
 	}
 
-	// Cancel context
+	// Cancel context. The call below fails with Canceled off the client's own context, so there
+	// is nothing to wait for the server to notice.
 	cancel()
-	// Give server time to detect cancellation
-	time.Sleep(200 * time.Millisecond)
 
 	// Try to receive - should get cancellation error
 	_, err = stream.Recv()
@@ -330,7 +352,7 @@ func TestBiDiStream_ContextCancellation(t *testing.T) {
 
 // TestServerStream_ErrorHandling tests error handling in server-side streaming
 func TestServerStream_ErrorHandling(t *testing.T) {
-	conn, err := grpc.Dial("localhost:9000", grpc.WithInsecure())
+	conn, err := grpc.Dial(grpcHost, grpc.WithInsecure())
 	if err != nil {
 		t.Fatalf("Failed to dial: %v", err)
 	}
@@ -365,7 +387,7 @@ func TestServerStream_ErrorHandling(t *testing.T) {
 
 // TestBiDiStream_ErrorHandling tests error handling in bidirectional streaming
 func TestBiDiStream_ErrorHandling(t *testing.T) {
-	conn, err := grpc.Dial("localhost:9000", grpc.WithInsecure())
+	conn, err := grpc.Dial(grpcHost, grpc.WithInsecure())
 	if err != nil {
 		t.Fatalf("Dial failed: %v", err)
 	}
@@ -412,7 +434,7 @@ func TestBiDiStream_ErrorHandling(t *testing.T) {
 
 // TestServerStream_Timeout tests server-side streaming with timeout
 func TestServerStream_Timeout(t *testing.T) {
-	conn, err := grpc.Dial("localhost:9000", grpc.WithInsecure())
+	conn, err := grpc.Dial(grpcHost, grpc.WithInsecure())
 	if err != nil {
 		t.Fatalf("Failed to dial: %v", err)
 	}

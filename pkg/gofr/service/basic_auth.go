@@ -7,6 +7,12 @@ import (
 	"strings"
 )
 
+const (
+	msgUsernameRequired  = "username is required"
+	msgPasswordRequired  = "password is required"
+	msgPasswordNotBase64 = "password should be base64 encoded"
+)
+
 type BasicAuthConfig struct {
 	UserName string
 	Password string
@@ -21,16 +27,16 @@ func NewBasicAuthConfig(username, password string) (Options, error) {
 	password = strings.TrimSpace(password)
 
 	if username == "" {
-		return nil, AuthErr{Message: "username is required"}
+		return nil, AuthErr{Message: msgUsernameRequired}
 	}
 
 	if password == "" {
-		return nil, AuthErr{Message: "password is required"}
+		return nil, AuthErr{Message: msgPasswordRequired}
 	}
 
 	decodedPassword, err := base64.StdEncoding.DecodeString(password)
 	if err != nil || string(decodedPassword) == password {
-		return nil, AuthErr{Err: err, Message: "password should be base64 encoded"}
+		return nil, AuthErr{Err: err, Message: msgPasswordNotBase64}
 	}
 
 	return &BasicAuthConfig{username, string(decodedPassword)}, nil

@@ -40,6 +40,7 @@ func (a *App) QUERY(pattern string, handler Handler) {
 	a.add(methodQuery, pattern, handler)
 }
 
+
 func (a *App) add(method, pattern string, h Handler) {
 	if !a.httpRegistered && !isPortAvailable(a.httpServer.port) {
 		a.container.Logger.Fatalf("http port %d is blocked or unreachable", a.httpServer.port)

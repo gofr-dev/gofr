@@ -189,6 +189,9 @@ func Test_Exec(t *testing.T) {
 
 	client, mockDeps := initTest(t)
 
+	// Exec forwards its variadic values with `values...`, so a call with no values reaches
+	// the session as Query(stmt) with nothing after it. Expecting Query(stmt, nil) makes
+	// gomock look for a variadic argument that is never passed, and matches nothing.
 	testCases := []struct {
 		desc     string
 		mockCall func()
@@ -196,12 +199,12 @@ func Test_Exec(t *testing.T) {
 	}{
 		{"success case", func() {
 			mockDeps.mockLogger.EXPECT().Debug(gomock.AssignableToTypeOf(&QueryLog{}))
-			mockDeps.mockSession.EXPECT().Query(query, nil).Return(mockDeps.mockQuery).AnyTimes()
+			mockDeps.mockSession.EXPECT().Query(query).Return(mockDeps.mockQuery).AnyTimes()
 			mockDeps.mockQuery.EXPECT().Exec().Return(nil).Times(1)
 		}, nil},
 		{"failure case", func() {
 			mockDeps.mockLogger.EXPECT().Debug(gomock.AssignableToTypeOf(&QueryLog{}))
-			mockDeps.mockSession.EXPECT().Query(query, nil).Return(mockDeps.mockQuery).AnyTimes()
+			mockDeps.mockSession.EXPECT().Query(query).Return(mockDeps.mockQuery).AnyTimes()
 			mockDeps.mockQuery.EXPECT().Exec().Return(errMock).Times(1)
 		}, errMock},
 	}
