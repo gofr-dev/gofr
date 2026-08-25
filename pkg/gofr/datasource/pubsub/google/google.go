@@ -168,51 +168,13 @@ func (g *googleClient) Subscribe(ctx context.Context, topic string) (*pubsub.Mes
 
 	g.metrics.IncrementCounter(ctx, "app_pubsub_subscribe_total_count", "topic", topic, "subscription_name", g.Config.SubscriptionName)
 
-	if _, ok := g.subStarted[topic]; !ok {
-		t, err := g.getTopic(ctx, topic)
-		if err != nil {
-			return nil, err
-		}
-
-		subscription, err := g.getSubscription(ctx, t)
-		if err != nil {
-			return nil, err
-		}
-
-		start := time.Now()
-
-		processMessage := func(ctx context.Context, msg *gcPubSub.Message) {
-			m := pubsub.NewMessage(ctx)
-			end = time.Since(start)
-
-			m.Topic = topic
-			m.Value = msg.Data
-			m.MetaData = msg.Attributes
-			m.Committer = newGoogleMessage(msg)
-
-			g.mu.Lock()
-			defer g.mu.Unlock()
-
-			g.receiveChan[topic] <- m
-		}
-
-		// initialize the channel before we can start receiving on it
-		g.mu.Lock()
-		g.receiveChan[topic] = make(chan *pubsub.Message)
-		g.mu.Unlock()
-
-		go func() {
-			err = subscription.Receive(ctx, processMessage)
-			if err != nil {
-				g.logger.Errorf("error getting a message from google: %s", err.Error())
-			}
-		}()
-
-		g.subStarted[topic] = struct{}{}
+	receiveChan, err := g.startTopicSubscriber(ctx, topic, &end)
+	if err != nil {
+		return nil, err
 	}
 
 	select {
-	case m := <-g.receiveChan[topic]:
+	case m := <-receiveChan:
 		// Create span with links to producer span from message attributes
 		spanCtx, span := startSubscribeSpan(ctx, topic, extractMessageAttrs(m.MetaData))
 		defer span.End()
@@ -234,6 +196,66 @@ func (g *googleClient) Subscribe(ctx context.Context, topic string) (*pubsub.Mes
 	case <-ctx.Done():
 		return nil, nil
 	}
+}
+
+// startTopicSubscriber lazily starts a receiver goroutine for the topic and returns its channel.
+// Access to the shared receiveChan and subStarted maps is guarded by g.mu so that concurrent
+// subscribers for different topics do not trigger a "concurrent map writes" fatal error.
+func (g *googleClient) startTopicSubscriber(ctx context.Context, topic string, end *time.Duration) (chan *pubsub.Message, error) {
+	g.mu.RLock()
+	receiveChan, started := g.receiveChan[topic], false
+
+	if _, ok := g.subStarted[topic]; ok {
+		started = true
+	}
+
+	g.mu.RUnlock()
+
+	if started {
+		return receiveChan, nil
+	}
+
+	t, err := g.getTopic(ctx, topic)
+	if err != nil {
+		return nil, err
+	}
+
+	subscription, err := g.getSubscription(ctx, t)
+	if err != nil {
+		return nil, err
+	}
+
+	start := time.Now()
+
+	receiveChan = make(chan *pubsub.Message)
+
+	g.mu.Lock()
+	g.receiveChan[topic] = receiveChan
+	g.subStarted[topic] = struct{}{}
+	g.mu.Unlock()
+
+	processMessage := func(ctx context.Context, msg *gcPubSub.Message) {
+		m := pubsub.NewMessage(ctx)
+		*end = time.Since(start)
+
+		m.Topic = topic
+		m.Value = msg.Data
+		m.MetaData = msg.Attributes
+		m.Committer = newGoogleMessage(msg)
+
+		select {
+		case receiveChan <- m:
+		case <-ctx.Done():
+		}
+	}
+
+	go func() {
+		if recErr := subscription.Receive(ctx, processMessage); recErr != nil {
+			g.logger.Errorf("error getting a message from google: %s", recErr.Error())
+		}
+	}()
+
+	return receiveChan, nil
 }
 
 func (g *googleClient) Query(ctx context.Context, query string, args ...any) ([]byte, error) {
@@ -368,6 +390,9 @@ func (g *googleClient) Close() error {
 	if g.client != nil {
 		return g.client.Close()
 	}
+
+	g.mu.Lock()
+	defer g.mu.Unlock()
 
 	for _, c := range g.receiveChan {
 		close(c)
