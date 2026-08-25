@@ -3,10 +3,10 @@ module gofr.dev/pkg/gofr/datasource/pubsub/sqs
 go 1.26.0
 
 require (
-	github.com/aws/aws-sdk-go-v2 v1.43.6
+	github.com/aws/aws-sdk-go-v2 v1.43.7
 	github.com/aws/aws-sdk-go-v2/config v1.32.37
 	github.com/aws/aws-sdk-go-v2/credentials v1.19.36
-	github.com/aws/aws-sdk-go-v2/service/sqs v1.45.1
+	github.com/aws/aws-sdk-go-v2/service/sqs v1.46.7
 	github.com/stretchr/testify v1.11.1
 	go.opentelemetry.io/otel v1.44.0
 	go.opentelemetry.io/otel/sdk v1.44.0
@@ -16,8 +16,8 @@ require (
 
 require (
 	github.com/aws/aws-sdk-go-v2/feature/ec2/imds v1.18.37 // indirect
-	github.com/aws/aws-sdk-go-v2/internal/configsources v1.4.37 // indirect
-	github.com/aws/aws-sdk-go-v2/internal/endpoints/v2 v2.7.37 // indirect
+	github.com/aws/aws-sdk-go-v2/internal/configsources v1.4.38 // indirect
+	github.com/aws/aws-sdk-go-v2/internal/endpoints/v2 v2.7.38 // indirect
 	github.com/aws/aws-sdk-go-v2/internal/v4a v1.4.38 // indirect
 	github.com/aws/aws-sdk-go-v2/service/internal/accept-encoding v1.13.17 // indirect
 	github.com/aws/aws-sdk-go-v2/service/internal/presigned-url v1.13.37 // indirect
