@@ -50,7 +50,6 @@ func TestGetConfigs_ValidCORSValueIsKept(t *testing.T) {
 		{"zero max age", keyAccessControlMaxAge, "0", "Access-Control-Max-Age"},
 		{"positive max age", keyAccessControlMaxAge, "600", "Access-Control-Max-Age"},
 		{"credentials true", keyAccessControlAllowCredentials, "true", "Access-Control-Allow-Credentials"},
-		{"credentials false", keyAccessControlAllowCredentials, "false", "Access-Control-Allow-Credentials"},
 	}
 
 	for _, tc := range tests {
@@ -79,7 +78,11 @@ func TestGetConfigs_InvalidCORSValueIsDroppedAndLogged(t *testing.T) {
 		{"max age with a seconds suffix", keyAccessControlMaxAge, "600s", "Access-Control-Max-Age"},
 		{"negative max age", keyAccessControlMaxAge, "-1", "Access-Control-Max-Age"},
 		{"non numeric max age", keyAccessControlMaxAge, "abc", "Access-Control-Max-Age"},
+		{"signed max age", keyAccessControlMaxAge, "+600", "Access-Control-Max-Age"},
+		{"zero padded max age", keyAccessControlMaxAge, "0600", "Access-Control-Max-Age"},
 		{"non boolean credentials", keyAccessControlAllowCredentials, "yes", "Access-Control-Allow-Credentials"},
+		{"numeric credentials", keyAccessControlAllowCredentials, "1", "Access-Control-Allow-Credentials"},
+		{"upper case credentials", keyAccessControlAllowCredentials, "TRUE", "Access-Control-Allow-Credentials"},
 	}
 
 	for _, tc := range tests {
@@ -105,4 +108,33 @@ func TestGetConfigs_InvalidCORSValueWithoutLogger(t *testing.T) {
 	middlewareConfigs := GetConfigs(mockConfig, nil)
 
 	assert.NotContains(t, middlewareConfigs.CorsHeaders, "Access-Control-Max-Age")
+}
+
+// A browser honors Access-Control-Allow-Credentials only when it is exactly "true",
+// so "false" is satisfied by omitting the header. That is an explicit opt-out rather
+// than a misconfiguration, and must not be reported as one.
+func TestGetConfigs_CredentialsFalseIsOmittedWithoutWarning(t *testing.T) {
+	mockConfig := config.NewMockConfig(map[string]string{keyAccessControlAllowCredentials: "false"})
+
+	logs := testutil.StdoutOutputForFunc(func() {
+		middlewareConfigs := GetConfigs(mockConfig, logging.NewMockLogger(logging.WARN))
+
+		assert.NotContains(t, middlewareConfigs.CorsHeaders, "Access-Control-Allow-Credentials")
+	})
+
+	assert.Empty(t, logs, "an explicit opt-out must not be reported as a misconfiguration")
+}
+
+// The logger is variadic so that existing callers of the exported GetConfigs keep
+// compiling; an invalid value is still dropped when no logger is supplied.
+func TestGetConfigs_WithoutLoggerArgument(t *testing.T) {
+	mockConfig := config.NewMockConfig(map[string]string{
+		keyAccessControlMaxAge:        "10m",
+		"ACCESS_CONTROL_ALLOW_ORIGIN": "*",
+	})
+
+	middlewareConfigs := GetConfigs(mockConfig)
+
+	assert.NotContains(t, middlewareConfigs.CorsHeaders, "Access-Control-Max-Age")
+	assert.Equal(t, "*", middlewareConfigs.CorsHeaders["Access-Control-Allow-Origin"])
 }

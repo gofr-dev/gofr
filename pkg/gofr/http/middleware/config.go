@@ -35,11 +35,16 @@ type configLogger interface {
 }
 
 // GetConfigs reads the middleware configuration from c. CORS values with a defined
-// syntax are validated; an invalid one is dropped and reported through logger
-// instead of being emitted as a malformed response header.
-func GetConfigs(c config.Config, logger configLogger) Config {
+// syntax are validated; an invalid one is dropped and reported through the optional
+// logger instead of being emitted as a malformed response header.
+func GetConfigs(c config.Config, logger ...configLogger) Config {
 	middlewareConfigs := Config{
 		CorsHeaders: make(map[string]string),
+	}
+
+	var warnLogger configLogger
+	if len(logger) > 0 {
+		warnLogger = logger[0]
 	}
 
 	allowedCORSHeaders := []string{
@@ -53,7 +58,7 @@ func GetConfigs(c config.Config, logger configLogger) Config {
 
 	for _, v := range allowedCORSHeaders {
 		val := c.Get(v)
-		if val == "" || !isValidCORSValue(v, val, logger) {
+		if val == "" || !shouldEmitCORSHeader(v, val, warnLogger) {
 			continue
 		}
 
@@ -73,27 +78,39 @@ func GetConfigs(c config.Config, logger configLogger) Config {
 	return middlewareConfigs
 }
 
-// isValidCORSValue reports whether val is usable for the given CORS configuration
-// key. A browser discards a malformed CORS header and falls back to its own
-// default, so an invalid value is dropped and reported rather than sent — left in
-// place it is invisible in the logs and looks present in the response. Keys
-// without a defined value syntax are accepted unchanged.
-func isValidCORSValue(key, val string, logger configLogger) bool {
+// shouldEmitCORSHeader reports whether val should be sent as the response header
+// for the given CORS configuration key, warning when the value is malformed. A
+// browser discards a malformed CORS header and falls back to its own default, so
+// an invalid value is dropped and reported rather than sent — left in place it is
+// invisible in the logs and looks present in the response. Keys without a defined
+// value syntax are emitted unchanged.
+func shouldEmitCORSHeader(key, val string, logger configLogger) bool {
 	var expected string
 
 	switch key {
 	case keyAccessControlMaxAge:
-		if seconds, err := strconv.Atoi(val); err == nil && seconds >= 0 {
+		// Only a canonical decimal count of seconds is accepted. strconv.Atoi alone would
+		// also admit "+600" and "0600", which are stored verbatim and would reach the
+		// browser in a form the Fetch standard does not define.
+		if seconds, err := strconv.Atoi(val); err == nil && seconds >= 0 && val == strconv.Itoa(seconds) {
 			return true
 		}
 
 		expected = "a non-negative number of seconds"
 	case keyAccessControlAllowCredentials:
-		if _, err := strconv.ParseBool(val); err == nil {
+		// The Fetch standard matches this header against the literal "true", so the other
+		// spellings strconv.ParseBool accepts (1, t, TRUE) are discarded by the browser.
+		if val == "true" {
 			return true
 		}
 
-		expected = "a boolean"
+		// "false" is an explicit opt-out rather than a mistake, so it is not reported:
+		// omitting the header is exactly what the browser does with that value anyway.
+		if val == "false" {
+			return false
+		}
+
+		expected = `exactly "true" or "false"`
 	default:
 		return true
 	}

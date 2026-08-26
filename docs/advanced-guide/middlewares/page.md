@@ -31,9 +31,10 @@ The CORS middleware provides the following overridable configs:
 
 > Note: GoFr automatically interprets the registered route methods and based on that sets the value of `ACCESS_CONTROL_ALLOW_METHODS`
 
-> Note: `ACCESS_CONTROL_MAX_AGE` must be a non-negative number of seconds, and `ACCESS_CONTROL_ALLOW_CREDENTIALS` must be a
-> boolean. GoFr validates both at startup — a value that does not parse is reported as a warning and the header is omitted,
-> instead of being sent in a form browsers discard.
+> Note: `ACCESS_CONTROL_MAX_AGE` must be a non-negative number of seconds, and `ACCESS_CONTROL_ALLOW_CREDENTIALS` must be
+> exactly `true` or `false` — a browser honors the credentials header only for the literal `true`. GoFr validates both at
+> startup: an invalid value is reported as a warning and the header is omitted, instead of being sent in a form the browser
+> would discard. Setting `ACCESS_CONTROL_ALLOW_CREDENTIALS` to `false` omits the header, which is what it means anyway.
 
 
 ## Adding Custom Middleware in GoFr
