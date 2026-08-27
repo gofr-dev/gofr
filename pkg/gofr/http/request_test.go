@@ -428,7 +428,7 @@ func TestValidateQueryContentType(t *testing.T) {
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			r := httptest.NewRequest(MethodQuery, "/search", http.NoBody)
+			r := httptest.NewRequestWithContext(t.Context(), MethodQuery, "/search", http.NoBody)
 			if tc.contentType != "" {
 				r.Header.Set("Content-Type", tc.contentType)
 			}

@@ -17,23 +17,18 @@ import (
 const (
 	defaultMaxMemory = 32 << 20 // 32 MB
 
-	contentTypeJSON = "application/json"
+	// The request media types Bind can decode; also the set a QUERY request may
+	// carry (see ValidateQueryContentType).
+	contentTypeJSON           = "application/json"
+	contentTypeMultipartForm  = "multipart/form-data"
+	contentTypeFormURLEncoded = "application/x-www-form-urlencoded"
+	contentTypeBinary         = "binary/octet-stream"
 
 	// MethodQuery is the HTTP QUERY method (RFC 10008). Go's net/http has no such
 	// constant yet, so GoFr exports it here for use in routing, middleware, RBAC
 	// method lists, and method comparisons.
 	MethodQuery = "QUERY"
 )
-
-// queryBindableContentTypes are the request media types Bind can decode. Per
-// RFC 10008 a QUERY request MUST carry a Content-Type the server can interpret;
-// this is the set ValidateQueryContentType accepts.
-var queryBindableContentTypes = map[string]bool{
-	contentTypeJSON:                     true,
-	"multipart/form-data":               true,
-	"application/x-www-form-urlencoded": true,
-	"binary/octet-stream":               true,
-}
 
 // ValidateQueryContentType enforces RFC 10008's requirement that a QUERY request
 // carry a Content-Type the server can interpret. A missing Content-Type yields a
@@ -43,15 +38,15 @@ var queryBindableContentTypes = map[string]bool{
 // binding to a zero value. POST and the other verbs never call this.
 func ValidateQueryContentType(r *http.Request) error {
 	ct := strings.TrimSpace(strings.Split(r.Header.Get("Content-Type"), ";")[0])
-	if ct == "" {
-		return ErrorMissingParam{Params: []string{"Content-Type"}}
-	}
 
-	if !queryBindableContentTypes[ct] {
+	switch ct {
+	case "":
+		return ErrorMissingParam{Params: []string{"Content-Type"}}
+	case contentTypeJSON, contentTypeMultipartForm, contentTypeFormURLEncoded, contentTypeBinary:
+		return nil
+	default:
 		return ErrorUnsupportedMediaType{ContentType: ct}
 	}
-
-	return nil
 }
 
 var (
@@ -103,11 +98,11 @@ func (r *Request) Bind(i any) error {
 		}
 
 		return json.Unmarshal(body, &i)
-	case "multipart/form-data":
+	case contentTypeMultipartForm:
 		return r.bindMultipart(i)
-	case "application/x-www-form-urlencoded":
+	case contentTypeFormURLEncoded:
 		return r.bindFormURLEncoded(i)
-	case "binary/octet-stream":
+	case contentTypeBinary:
 		return r.bindBinary(i)
 	}
 
