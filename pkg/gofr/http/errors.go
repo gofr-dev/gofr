@@ -190,7 +190,6 @@ var (
 	_ StatusCodeResponder = ErrorServiceUnavailable{}
 	_ StatusCodeResponder = ErrorClientClosedRequest{}
 	_ StatusCodeResponder = ErrorTooManyRequests{}
-	_ StatusCodeResponder = ErrUnsupportedContentType{}
 
 	_ logging.LogLevelResponder = ErrorClientClosedRequest{}
 	_ logging.LogLevelResponder = ErrorEntityNotFound{}
@@ -203,36 +202,3 @@ var (
 	_ logging.LogLevelResponder = ErrorServiceUnavailable{}
 	_ logging.LogLevelResponder = ErrorTooManyRequests{}
 )
-
-// ErrUnsupportedContentType is returned by Bind when a request carries a body
-// whose Content-Type it has no decoder for.
-//
-// It models 415 rather than falling through to 500 because the motivating case
-// — a client that posts a body and omits Content-Type — is a client fault, and
-// a 5xx for it would drive the server's error-rate alerting and SLO burn.
-//
-// The offending media type is a FIELD rather than something the caller wraps on
-// with fmt.Errorf("%w: ..."). determineResponse and getStatusCode resolve the
-// status with a direct type assertion, not errors.As, so a wrapped error loses
-// its status and falls through to 500 — which is exactly the outcome this type
-// exists to prevent. Keeping the detail inside the error keeps the status
-// attached to it.
-type ErrUnsupportedContentType struct {
-	ContentType string
-}
-
-func (e ErrUnsupportedContentType) Error() string {
-	return fmt.Sprintf("bind error, unsupported content type: %q", e.ContentType)
-}
-
-func (ErrUnsupportedContentType) StatusCode() int {
-	return http.StatusUnsupportedMediaType
-}
-
-// Is reports any ErrUnsupportedContentType as matching, whatever media type it
-// carries, so errors.Is against a bare ErrUnsupportedContentType{} works.
-func (ErrUnsupportedContentType) Is(target error) bool {
-	_, ok := target.(ErrUnsupportedContentType)
-
-	return ok
-}

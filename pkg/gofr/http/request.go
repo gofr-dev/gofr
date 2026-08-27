@@ -27,21 +27,7 @@ const (
 var (
 	errNoFileFound    = errors.New("no files were bounded")
 	errNonPointerBind = errors.New("bind error, cannot bind to a non pointer type")
-	// errUnsupportedContentType is returned when a request carries a body whose
-	// Content-Type Bind has no decoder for. Reported rather than ignored so the
-	// body is never silently discarded.
-	//
-	// It is an ErrUnsupportedContentType rather than a bare errors.New so it
-	// carries a status: the motivating case is a client that posts a body and
-	// omits Content-Type, which is a client fault. Falling through getStatusCode
-	// to 500 would drive error-rate alerting and SLO burn on the server for a
-	// mistake the server did not make. Every other client-fault error in this
-	// package models its status the same way.
-	//
-	// Kept as a sentinel for errors.Is; Bind returns a value carrying the
-	// offending media type.
-	errUnsupportedContentType error = ErrUnsupportedContentType{}
-	errNonSliceBind                 = errors.New("bind error: input is not a pointer to a byte slice")
+	errNonSliceBind   = errors.New("bind error: input is not a pointer to a byte slice")
 )
 
 // Request is an abstraction over the underlying http.Request. This abstraction is useful because it allows us
@@ -106,56 +92,17 @@ func (r *Request) Bind(i any) error {
 		return r.bindBinary(i)
 	}
 
-	// An unrecognized media type means the body cannot be decoded. Returning nil
-	// would leave the caller's target zeroed with no error — the same silent
-	// no-op the non-pointer check above rejects, and the likelier one in
-	// practice (a client that posts a body but omits Content-Type).
+	// An unrecognized media type is a no-op: the target is left as it was and no
+	// error is reported.
 	//
-	// Only a request that actually carries a body is rejected: with no body
-	// there is nothing to decode and nothing lost, so binding stays a no-op for
-	// callers that Bind defensively on bodyless requests.
-	hasBody, err := r.hasBody()
-	if err != nil {
-		return err
-	}
-
-	if hasBody {
-		return ErrUnsupportedContentType{ContentType: contentType}
-	}
-
+	// This silently discards a body the caller probably meant to bind, and an
+	// earlier revision of this PR rejected it with 415 for exactly that reason.
+	// That is a breaking change and it is not a quiet one: fetch(url, {method:
+	// "POST", body: str}) with no headers sends text/plain, so a handler that
+	// returns the Bind error would start answering 415 to a very common client
+	// shape. Those requests bind nothing today, but services that do not need
+	// the body work, and they would stop working. Left as it is deliberately.
 	return nil
-}
-
-// hasBody reports whether the request carries at least one byte, without
-// consuming it.
-//
-// The question on the reject path is only "is there anything here?", and
-// answering it with r.body() meant an unbounded io.ReadAll first. Ordinary
-// routes have no body cap — the only http.MaxBytesReader calls in the tree are
-// in graphql.go and ai/mcp/server.go — so a client could send an arbitrarily
-// large body with an undecodable Content-Type to any handler that calls Bind
-// and make the server buffer all of it just to refuse it. One byte answers the
-// question; pushing it back in front of the remaining stream leaves the body
-// intact for anything that reads it later.
-func (r *Request) hasBody() (bool, error) {
-	if r.req.Body == nil {
-		return false, nil
-	}
-
-	first := make([]byte, 1)
-
-	n, err := io.ReadFull(r.req.Body, first)
-	if err != nil && !errors.Is(err, io.EOF) && !errors.Is(err, io.ErrUnexpectedEOF) {
-		return false, err
-	}
-
-	if n == 0 {
-		return false, nil
-	}
-
-	r.req.Body = io.NopCloser(io.MultiReader(bytes.NewReader(first[:n]), r.req.Body))
-
-	return true, nil
 }
 
 // mediaType extracts the bare media type from a Content-Type header value.

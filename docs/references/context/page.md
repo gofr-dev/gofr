@@ -77,10 +77,11 @@ The `Content-Type` header selects how the body is decoded. It is matched case-in
 any parameters are ignored, so `application/json`, `Application/JSON` and
 `application/json; charset=utf-8` are all treated the same.
 
-If a request carries a body whose `Content-Type` GoFr has no decoder for, `Bind` returns an
-error rather than leaving your target zeroed — so a client that posts a body but omits the
-header fails loudly instead of silently. A request with no body is unaffected: there is nothing
-to decode, so `Bind` remains a no-op.
+If a request carries a body whose `Content-Type` GoFr has no decoder for — `text/plain`,
+`application/xml`, or no header at all — `Bind` is a **no-op**: it returns no error and leaves
+your target zeroed, and the body is discarded. Check the `Content-Type` your clients actually
+send. `fetch(url, {method: "POST", body: str})` with no headers sends `text/plain`, not JSON, so
+a request that looks correct can bind nothing.
 
 - `Binding multipart-form data / urlencoded form data `
   - To bind multipart-form data or url-encoded form, we can use the Bind method similarly. The struct fields should be tagged appropriately

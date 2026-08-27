@@ -136,10 +136,15 @@ func TestBind_NoContentType(t *testing.T) {
 		B int    `json:"b"`
 	}{}
 
-	// A body with no Content-Type is now reported rather than silently ignored.
-	require.ErrorIs(t, req.Bind(&x), errUnsupportedContentType)
+	// A body with no Content-Type is a NO-OP: no error, and nothing bound.
+	//
+	// Rejecting it with 415 is tempting - the body is silently discarded - but
+	// fetch(url, {method:"POST", body: str}) with no headers sends text/plain,
+	// so a handler that returns the Bind error would start answering 415 to a
+	// very common client shape. Pinned as-is deliberately.
+	require.NoError(t, req.Bind(&x))
 
-	// The data still does not bind, so zero values are expected.
+	// The data does not bind, so zero values are expected.
 	if x.A != "" || x.B != 0 {
 		t.Errorf("Bind error. Got: %v", x)
 	}
@@ -404,9 +409,10 @@ func TestBind_UnsupportedContentType(t *testing.T) {
 
 	err := r.Bind(&struct{}{})
 
-	// A body the framework cannot decode is reported rather than silently
-	// discarded; binding a bodyless request stays a no-op.
-	require.ErrorIs(t, err, errUnsupportedContentType)
+	// A body the framework cannot decode is silently discarded: Bind is a no-op
+	// and reports no error. See TestBind_NoContentType for why this is not
+	// changed to a 415.
+	require.NoError(t, err)
 }
 
 func TestParam_NonExistent(t *testing.T) {
@@ -756,10 +762,9 @@ func TestRequest_Char_BindUnhandledContentTypes(t *testing.T) {
 
 			err := req.Bind(&got)
 
-			// A body that cannot be decoded is reported. Leaving the target
-			// zeroed and returning nil was the same silent no-op the
-			// non-pointer check rejects, and the likelier one in practice.
-			require.ErrorIs(t, err, errUnsupportedContentType)
+			// A body that cannot be decoded is silently discarded: the target
+			// is left zeroed and no error is reported.
+			require.NoError(t, err)
 			assert.Equal(t, charBindTarget{}, got, "nothing is bound from an unhandled content type")
 		})
 	}
@@ -1093,28 +1098,6 @@ func TestRequest_Char_BindNilBodyDoesNotPanic(t *testing.T) {
 	}
 }
 
-// TestBind_UnsupportedContentTypeIsClientFault pins the status class. The
-// motivating case for the reject path — a client that posts a body and omits
-// Content-Type — is a client mistake, and a plain errors.New carries no status,
-// so it fell through getStatusCode to 500 and drove the server's error-rate
-// alerting and SLO burn for a fault the server did not commit.
-func TestBind_UnsupportedContentTypeIsClientFault(t *testing.T) {
-	req := httptest.NewRequestWithContext(t.Context(), http.MethodPost, "/", strings.NewReader("some body"))
-	req.Header.Set("Content-Type", "text/plain")
-
-	var target struct{}
-
-	err := NewRequest(req).Bind(&target)
-
-	require.Error(t, err)
-	require.ErrorIs(t, err, errUnsupportedContentType)
-
-	var coder StatusCodeResponder
-
-	require.ErrorAs(t, err, &coder, "the error must model its own status like every other client fault here")
-	assert.Equal(t, http.StatusUnsupportedMediaType, coder.StatusCode())
-}
-
 // TestBind_OctetStreamSpellings pins that both spellings decode. GoFr's own
 // "binary/octet-stream" is non-standard; "application/octet-stream" is the RFC
 // 2046 one and the likelier thing a client sends. Before the reject path
@@ -1132,46 +1115,6 @@ func TestBind_OctetStreamSpellings(t *testing.T) {
 			assert.Equal(t, []byte("payload"), target)
 		})
 	}
-}
-
-// TestBind_RejectPathDoesNotBufferTheWholeBody is the regression test for the
-// amplification vector. The question on the reject path is only "is there a
-// body?", but it was answered with an unbounded io.ReadAll first. Ordinary
-// routes have no body cap, so a client could send an arbitrarily large body
-// with an undecodable Content-Type to any handler that calls Bind and make the
-// server buffer all of it purely to refuse it.
-//
-// countingReader reports how much was actually pulled off the wire.
-func TestBind_RejectPathDoesNotBufferTheWholeBody(t *testing.T) {
-	const size = 1 << 20
-
-	cr := &countingReader{remaining: size}
-
-	req := httptest.NewRequestWithContext(t.Context(), http.MethodPost, "/", cr)
-	req.Header.Set("Content-Type", "text/plain")
-
-	var target struct{}
-
-	err := NewRequest(req).Bind(&target)
-
-	require.ErrorIs(t, err, errUnsupportedContentType)
-	assert.LessOrEqual(t, cr.read, 1, "only one byte is needed to answer whether a body exists")
-}
-
-// TestBind_RejectPathLeavesTheBodyReadable pins that the probe puts its byte
-// back: a caller that reads the body after a failed Bind must still see all of
-// it.
-func TestBind_RejectPathLeavesTheBodyReadable(t *testing.T) {
-	req := httptest.NewRequestWithContext(t.Context(), http.MethodPost, "/", strings.NewReader("hello world"))
-	req.Header.Set("Content-Type", "text/plain")
-
-	var target struct{}
-
-	require.Error(t, NewRequest(req).Bind(&target))
-
-	rest, err := io.ReadAll(req.Body)
-	require.NoError(t, err)
-	assert.Equal(t, "hello world", string(rest), "the probed byte must be pushed back in front of the stream")
 }
 
 // TestBind_EmptyBodyWithUnsupportedTypeIsNoOp pins the other half: with nothing
@@ -1192,61 +1135,6 @@ func TestBind_EmptyBodyWithUnsupportedTypeIsNoOp(t *testing.T) {
 			var target struct{}
 
 			assert.NoError(t, NewRequest(req).Bind(&target))
-		})
-	}
-}
-
-// countingReader yields `remaining` zero bytes and records how many were read.
-type countingReader struct {
-	remaining int
-	read      int
-}
-
-func (c *countingReader) Read(p []byte) (int, error) {
-	if c.remaining == 0 {
-		return 0, io.EOF
-	}
-
-	n := min(len(p), c.remaining)
-
-	for i := range n {
-		p[i] = 'x'
-	}
-
-	c.remaining -= n
-	c.read += n
-
-	return n, nil
-}
-
-// TestBind_UnsupportedContentTypeStatusThroughResponder asserts the status a
-// CLIENT actually receives, by driving Respond rather than inspecting the error.
-//
-// This is the assertion that matters, and its absence hid a real defect: the
-// error used to be wrapped with fmt.Errorf("%w: %q", ...), and determineResponse
-// resolves the status with a direct type assertion rather than errors.As. The
-// wrapper has no StatusCode method, so the status was silently lost and the
-// client got 500 -- while a test asserting only errors.As on the returned error
-// passed, because errors.As unwraps and the type assertion does not.
-func TestBind_UnsupportedContentTypeStatusThroughResponder(t *testing.T) {
-	for _, ct := range []string{"", "text/plain", "application/xml"} {
-		t.Run("content-type="+ct, func(t *testing.T) {
-			req := httptest.NewRequestWithContext(t.Context(), http.MethodPost, "/", strings.NewReader("some body"))
-			if ct != "" {
-				req.Header.Set("Content-Type", ct)
-			}
-
-			var target struct{}
-
-			err := NewRequest(req).Bind(&target)
-			require.Error(t, err)
-
-			w := httptest.NewRecorder()
-			NewResponder(w, http.MethodPost).Respond(nil, err)
-
-			assert.Equal(t, http.StatusUnsupportedMediaType, w.Code,
-				"a client fault must reach the client as 415, not 500")
-			assert.Contains(t, w.Body.String(), "unsupported content type")
 		})
 	}
 }
