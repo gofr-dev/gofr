@@ -1067,8 +1067,10 @@ func TestHandler_Char_ResponsePointerHeadersApplied(t *testing.T) {
 	}, 0), http.MethodGet)
 
 	assert.Equal(t, "1", w.Header().Get("X-One"), "custom headers apply to a *Response too")
+	// The BODY is still double-enveloped, because the pointer is not
+	// dereferenced: only SetCustomHeaders is reached through the pointer.
 	//nolint:testifylint // exact bytes are the contract.
-	assert.Equal(t, "{\"data\":\"x\"}\n", w.Body.String())
+	assert.Equal(t, "{\"data\":{\"data\":\"x\"}}\n", w.Body.String())
 }
 
 // TestHandler_Char_SpecialResponseTypes pins that the special response types
